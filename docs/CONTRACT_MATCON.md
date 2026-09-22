@@ -78,7 +78,7 @@ Client de referência: `services/matconApi.ts` (tipos e rotas abaixo já estão 
 Job diário: `open` com `valid_until < hoje` → `expired`.
 
 ### `deliveries` (entregas)
-`id`, `company_id`, `sale_id`, `sequence` (1ª, 2ª entrega do mesmo pedido), `stage` ∈ `separating | ready | out | delivered`, `scheduled_for` date, `delivered_by` **texto livre** (decisão 22/09/2026), `customer_name`/`customer_phone`/`address`, `total` (da venda), `has_pending`, `public_token`, `items[] {sale_item_id, name, unit, quantity, sold_quantity, delivered_before}`, `out_at`, `delivered_at`, timestamps.
+`id`, `company_id`, `sale_id`, `sequence` (1ª, 2ª entrega do mesmo pedido), `stage` ∈ `separating | ready | out | delivered`, `scheduled_for` date, `delivered_by` **texto livre** (decisão 22/09/2026), `customer_name`/`customer_phone`/`address`, `total` (da venda), `has_pending`, `public_token`, `items[] {sale_item_id, product_id, name, unit, quantity, unit_price (da venda), sold_quantity, delivered_before, lot_code?}`, `out_at`, `delivered_at`, timestamps.
 
 | Rota | Faz |
 |---|---|
@@ -101,6 +101,7 @@ Client de referência: `services/matconApi.ts` (seção Profissionais). A calcul
 | Chave | Tipo | Default | Frase na config |
 |---|---|---|---|
 | `matcon_club_enabled` | boolean | `true` | "Tenho clube do profissional **[on]**" — desliga o chip do Caixa e a tela sem desligar o Matcon |
+| `matcon_lots_enabled` | boolean | `false` | M4: "Controlo lote e tonalidade nos produtos vendidos em m² e m³" |
 | `matcon_points_per_100` | integer | `10` | "A cada R$ **100** em compras indicadas, o profissional ganha **10** pontos." |
 | `matcon_points_to_coupon` | integer | `100` | "**100** pontos viram um cupom de R$ **10** para ele usar na loja." |
 | `matcon_coupon_value` | number | `10` | idem |
@@ -127,8 +128,67 @@ A lista de clientes (`GET /companies/:id/customers`) passa a devolver, com o tog
 
 WhatsApp: o front abre o wa.me com o extrato ("você tem N pontos — já dá um cupom de R$ X"); o backend não envia nada no M3.
 
-## M2 — Fiscal do Simples (cabeçalho; fecha após o piloto)
-`products.cest`, `products.origem` (0–8), `products.icms_st_paid` boolean (→ CSOSN 500 vs 102 na emissão); NF-e com bloco `transp` (peso a partir de `weight_kg`, volumes, transportadora "própria" default) gerado a partir de uma `delivery`.
+## M2 — Fiscal do Simples
+
+O varejista do Simples Nacional **não calcula ST na venda**: o imposto já veio recolhido do distribuidor. O que ele precisa é marcar o item certo e informar o CEST. Motor de ST (MVA, base, FCP) para Lucro Presumido/Real fica fora.
+
+### `products`
+| Coluna | Tipo | Regra |
+|---|---|---|
+| `cest` | `char(7)` nullable | obrigatório na NFC-e/NF-e de item com ST; validado por formato (7 dígitos). O front sugere pelo NCM (`utils/ncm.ts`). |
+| `origem` | `smallint` nullable | 0–8 (tabela SEFAZ); `NULL` = 0 na emissão |
+| `icms_st_paid` | boolean nullable | "o imposto já veio recolhido na nota do fornecedor?" → na emissão, CSOSN **500** quando `true`, **102** quando `false`/`NULL` (empresa do Simples). Empresa fora do Simples ignora (usa a config fiscal atual). |
+| `weight_kg` | já existe (M0) | peso por unidade de venda, para o bloco de transporte |
+
+Payload igual ao de hoje (`POST/PATCH /products`): `cest`, `origem`, `icms_st_paid` — `undefined` não toca, `null` limpa. `GET /products` devolve os três. Endpoint auxiliar: `GET /companies/:id/products/fiscal-gaps` → `{ sem_cest: N, sem_ncm: N, ids[] }` para o aviso "12 produtos com NCM de cimento/tinta sem CEST" (o front pode calcular a partir da lista; o endpoint evita puxar 20 mil itens).
+
+### Emissão (`POST /companies/:id/nfce/emit`)
+- `items[]` ganha `cest`, `origem`, `icms_st_paid` (o backend também pode buscar do produto por `product_id`; o item enviado prevalece).
+- `delivery_id` (nullable): a nota nasce de uma entrega — o backend copia destinatário/endereço da venda e preenche `<transp>`.
+- `transporte` (`NfeTransporte`, ver `services/nfceApi.ts`): `modalidade` 0 (frete próprio) / 1 (por conta do cliente) / 9 (retira); `volumes`, `peso_bruto_kg`, `peso_liquido_kg` (default: soma de `weight_kg × quantity` dos itens), `transportadora_nome` ("própria" = dados da própria empresa), `cnpj`, `placa`, `uf_placa`. Nuvem Fiscal já aceita tudo isso; é mapeamento.
+- A emissão a partir de uma entrega grava `deliveries.nfe_emission_id`; a esteira mostra "NF-e #N" no card e o rastreio público ganha o link do DANFE (`dados.danfe_url`).
+
+### Config fiscal da empresa
+`nfce_config.regime` ∈ `simples | presumido | real` (se ainda não existir): decide CSOSN vs CST. Front mostra a pergunta "imposto já veio recolhido" só quando `regime = simples` (default quando ausente).
+
+## M4 — Profundidade (lote/tonalidade, devolução de sobra, compras)
+
+Mockup: `docs/mockups/matcon-m4-profundidade.html`. Fora, de propósito: multi-depósito, kits/composições, cotação com vários fornecedores, alçada de desconto, classe A/B/C, inventário com coletor.
+
+### Lote / tonalidade
+Gate: `pdv_settings.matcon_lots_enabled` (boolean, default `false`) — "Controlo lote e tonalidade nos produtos vendidos em m² e m³". Só produtos com `unit` ∈ `m²`, `m³`.
+
+`product_lots`: `id`, `company_id`, `product_id`, `lot_code` (texto livre: "27B"), `shade` (tonalidade, texto livre, nullable), `caliber` (bitola, texto livre, nullable), `qty` numeric(12,3) (saldo do lote na unidade de venda), `received_at`, `source_invoice` (número do XML), timestamps.
+
+| Rota | Faz |
+|---|---|
+| `GET /companies/:id/products/:pid/lots` | lotes com saldo > 0, do mais antigo para o mais novo |
+| `POST .../products/:pid/lots` | `{lot_code, shade?, caliber?, qty, source_invoice?}` — criado pela conferência do XML (`DanfeImportModal`) |
+| `PATCH .../lots/:lid` | ajuste de saldo/tonalidade |
+| venda (`POST /pdv/sale`) | `items[].lot_allocations[] {lot_id, quantity}` opcional; o backend baixa por lote e, sem alocação, baixa do mais antigo (FIFO). Soma das alocações = `quantity`. |
+| entrega | `deliveries.items[].lot_code` derivado das alocações (o romaneio mostra o lote) |
+| devolução | item devolvido com `lot_id` volta ao saldo daquele lote |
+
+`GET /products` devolve `lots_summary: { count, lots: [{id, lot_code, qty}] }` quando o gate está ligado (a lista mostra "148,48 m² em 2 lotes").
+
+### Devolução de sobra de obra (delta no wizard de troca)
+- `returns.items[].quantity` aceita numeric(12,3); item de unidade fracionada com `purchase_factor`: só múltiplos de caixa fechada voltam ao estoque — `restock_qty = floor(quantity / purchase_factor) × purchase_factor`; o resto é `not_restocked_qty` (R$ 0, registrado para auditoria). Sem fator: volta tudo.
+- `returns.items[].lot_id` opcional (volta ao lote de origem).
+- Fluxo "não vai levar nada": a troca fecha sem itens novos com `settlement` ∈ `store_credit | refund` (o crédito na loja é o vale que já existe no crediário). Nada novo de tabela além das colunas acima.
+
+### Compras
+Chave de módulo `matcon.compras` (Negócio). Fornecedor = `supplier_name`/`supplier_cnpj` do último XML importado daquele produto (`products.last_supplier_name`, `last_supplier_cnpj`, `last_purchase_unit_cost`, `last_purchase_at` — gravados pelo import).
+
+`GET /companies/:id/matcon/purchase-suggestions` → `{ suggestions: [{ product_id, name, unit, stock, min_stock, weekly_sales (últimos 30 dias ÷ 4,3), suggested_qty, est_cost, supplier_name, supplier_cnpj, days_to_stockout }], summary: { total_est_cost, items_below_min, suppliers } }`. Regra da sugestão: `suggested_qty = max(min_stock × 1,5, weekly_sales × 3) − stock`, arredondada para cima na unidade de compra quando houver `purchase_factor`.
+
+`purchase_orders`: `id`, `company_id`, `number` ("C-0042"), `status` ∈ `draft | sent | received | cancelled`, `supplier_name`, `supplier_cnpj`, `supplier_phone`, `items[] {product_id, name, unit, quantity, unit_cost_est, received_qty}`, `total_est`, `sent_at`, `received_at`, `received_invoice` (número do XML), timestamps.
+
+| Rota | Faz |
+|---|---|
+| `GET .../purchase-orders?status=` | lista + `summary {draft, sent, received_7d}` `{count, total}` |
+| `POST .../purchase-orders` | cria de uma seleção de sugestões (status `draft`) |
+| `PATCH .../purchase-orders/:oid` | itens/quantidades, `status: sent` grava `sent_at` (o WhatsApp é aberto pelo front com o texto do pedido) |
+| import de XML | quando o XML tem `supplier_cnpj` igual ao de um pedido `sent`, o backend casa itens por `product_id`, grava `received_qty`, e fecha (`received`) quando tudo chegou; parcial fica `sent` com `received_qty` |
 
 ## Checklist de aceite do backend (M0)
 

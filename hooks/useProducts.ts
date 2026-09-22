@@ -53,6 +53,10 @@ function mapApiProduct(p: any): Product {
     purchaseUnit: p.purchase_unit ?? null,
     purchaseFactor: p.purchase_factor === null || p.purchase_factor === undefined ? null : (parseFloat(p.purchase_factor) || null),
     weightKg: p.weight_kg === null || p.weight_kg === undefined ? null : (parseFloat(p.weight_kg) || null),
+    // 22/09/2026 (Matcon M2): fiscal do Simples.
+    cest: p.cest ?? null,
+    origem: p.origem === null || p.origem === undefined ? null : (parseInt(p.origem, 10) || 0),
+    icmsStPaid: p.icms_st_paid === null || p.icms_st_paid === undefined ? null : p.icms_st_paid === true,
     brand: p.brand || "",
     notes: p.notes || p.description || "",
     material: p.material || "",
@@ -121,6 +125,10 @@ export function useProducts() {
       purchase_unit: (product as any).purchaseUnit ?? undefined,
       purchase_factor: (product as any).purchaseFactor ?? undefined,
       weight_kg: (product as any).weightKg ?? undefined,
+      // 22/09/2026 (Matcon M2): mesmo tratamento -- undefined nao toca, null limpa.
+      cest: (product as any).cest ?? undefined,
+      origem: (product as any).origem ?? undefined,
+      icms_st_paid: (product as any).icmsStPaid ?? undefined,
       // Migration 305 — ficha tecnica. String vazia LIMPA o campo; por
       // isso nao usa `|| undefined`, que deixaria o valor antigo no banco
       // quando a lojista apagasse o texto.

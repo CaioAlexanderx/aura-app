@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aura — Matcon M2: fiscal do Simples</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&family=Instrument+Serif:ital@0;1&display=swap" />
+<style>
+  /* ============================================================
+     Mockup standalone — Matcon M2, 22/09/2026.
+     Regra 4 do CLAUDE.md: mockup antes do código.
+     Base: docs/matcon-faseamento-po-ux.md (§3 M2, §4b) e
+     docs/CONTRACT_MATCON.md ("M2 — Fiscal do Simples"). Molde visual:
+     docs/mockups/matcon-modulo.html — mesmos tokens, mesma linguagem,
+     mesmo shell de varejo. Sem paleta própria, sem ícone novo.
+
+     O momento "olha isso" do M2: em vez de CSOSN 500 / CST 60, UMA
+     PERGUNTA — "o imposto desse produto já veio recolhido na nota do
+     fornecedor?" — com o sistema sugerindo a resposta pelo NCM. O
+     concorrente joga a tabela do contador na cara do lojista; aqui o
+     lojista responde sim ou não e a Aura escolhe o código sozinha.
+     Nenhuma sigla de contador aparece na tela: o mapeamento
+     CSOSN 500/102, CFOP e origem 0–8 vive no backend (ver contrato).
+
+     Cinco telas, e as decisões que cada uma existe para validar:
+
+     1. CADASTRO › CÓDIGOS E FISCAL (SecaoCodigos) — os três campos de
+        hoje (SKU, código de barras, NCM com sugestão e selo
+        "✓ OK / 3/8 / vazio") ficam intactos e na mesma ordem. Com o
+        toggle on nascem ABAIXO: o código fiscal do produto (CEST) no
+        MESMO desenho do NCM — input mono, selo, botão Gerar, sugestão
+        pelo NCM —, a pergunta do imposto com Sim/Não já sugerido, e
+        "Fabricado no Brasil? Sim / Importado". A pergunta é o rótulo:
+        se precisar de tooltip para explicar, está errado (regra 1 §4b).
+
+     2. ESTOQUE › AVISO FISCAL — o aviso não é uma tela nova: entra ao
+        lado dos alertas de estoque mínimo, no mesmo card empilhado,
+        porque é o mesmo hábito ("o que está me atrapalhando hoje?").
+        Diz a consequência, não a regra: "a nota deles pode ser
+        recusada". "Resolver agora" abre uma lista curta com a sugestão
+        pronta por linha e um "Aceitar todas" — 12 produtos em dois
+        toques, não 12 cadastros abertos um a um. Alimentado por
+        GET /products/fiscal-gaps.
+
+     3. ENTREGAS › EMITIR NF-e — a nota nasce da entrega (delivery_id),
+        não de um formulário em branco: destinatário, itens e peso já
+        vêm preenchidos. O bloco de transporte é FRASE, não formulário
+        ("Entrego com meu caminhão", "São 3 volumes com 412 kg"). Se
+        faltar código fiscal em algum item, o aviso âmbar aparece ANTES
+        do botão, com o caminho para resolver — nunca depois, na
+        recusa. Emitida, a esteira mostra "NF-e #1.204 · autorizada" e
+        "Ver DANFE" (deliveries.nfe_emission_id).
+
+     4. CONFIG FISCAL — uma frase a mais em Configurações › NF-e:
+        "Minha empresa é do [Simples Nacional]". É ela que decide como
+        a nota sai e se a pergunta do imposto aparece no cadastro. Só a
+        frase; o resto da tela de NF-e de hoje não muda.
+
+     5. RASTREIO PÚBLICO (bônus) — a tela do celular do cliente do M1
+        ganha UMA linha: "Nota fiscal · ver DANFE". O cliente que pede
+        a nota para o pedreiro prestar conta da obra resolve sozinho.
+
+     Fora, de propósito: motor de substituição tributária (MVA, base,
+     FCP) para Lucro Presumido e Real, DIFAL de venda interestadual,
+     MDF-e, CT-e e SPED. O varejista do Simples não calcula ST — o
+     imposto já veio recolhido do distribuidor; ele só precisa marcar o
+     item certo e informar o CEST (§3 M2). Fora também: tabela de
+     origem 1–8 aberta (importado direto vs. adquirido no mercado
+     interno), peso por unidade obrigatório e lote/tonalidade (M4).
+     ============================================================ */
+  :root {
+    --bg: #060816; --bg2: #090c1a; --bg3: #0e1228; --bg4: #141830;
+    --border: rgba(255,255,255,0.07); --border2: rgba(120,100,240,0.22);
+    --ink: #f0edff; --ink2: rgba(220,215,255,0.75); --ink3: rgba(170,160,235,0.65);
+    --violet: #7c3aed; --violet3: #a78bfa; --violetD: rgba(109,40,217,0.14);
+    --green: #34d399; --greenD: rgba(52,211,153,0.10);
+    --red: #f87171; --redD: rgba(248,113,113,0.10);
+    --amber: #fbbf24; --amberD: rgba(251,191,36,0.10);
+    --serif: 'Instrument Serif', Georgia, serif;
+    --sans: 'DM Sans', system-ui, sans-serif;
+    --mono: 'DM Mono', ui-monospace, monospace;
+  }
+  html[data-tema="claro"] {
+    --bg: #e6e4f0; --bg2: #fafbff; --bg3: #ffffff; --bg4: #e3dff0;
+    --border: rgba(109,40,217,0.22); --border2: rgba(120,100,240,0.30);
+    --ink: #18172b; --ink2: #3b3461; --ink3: #6a608e;
+    --violet: #7c3aed; --violet3: #6d28d9; --violetD: rgba(109,40,217,0.06);
+    --green: #059669; --greenD: rgba(5,150,105,0.08);
+    --red: #dc2626; --redD: rgba(220,38,38,0.06);
+    --amber: #d97706; --amberD: rgba(217,119,6,0.06);
+  }
+  * { box-sizing: border-box; font-variant-numeric: tabular-nums; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  a { color: var(--violet3); text-decoration: none; }
+  .topbar { position: sticky; top: 0; z-index: 5; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 16px; background: var(--bg2); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--ink3); }
+  .topbar b { color: var(--ink); }
+  .topbar nav { display: flex; gap: 8px; flex-wrap: wrap; }
+  .topbar nav a { font-family: var(--mono); font-size: 11px; padding: 3px 7px; border-radius: 6px; background: var(--bg3); border: 1px solid var(--border); }
+  .topbar button { margin-left: auto; font: inherit; color: var(--ink); background: var(--bg3); border: 1px solid var(--border2); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+  .screen { max-width: 980px; margin: 0 auto; padding: 28px 16px 64px; min-width: 0; }
+  .screen + .screen { border-top: 1px dashed var(--border2); }
+  .mock-label { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--violet3); margin-bottom: 18px; }
+
+  .eyebrow { display: flex; align-items: center; gap: 10px; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink3); margin-bottom: 12px; }
+  .eyebrow .glyph { width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle, var(--violet) 0 25%, rgba(124,58,237,.35) 26% 100%); }
+  .eyebrow .pill { padding: 3px 8px; border-radius: 999px; background: rgba(124,58,237,.08); color: var(--violet); font-size: 10px; letter-spacing: .08em; }
+  .hero { display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
+  .hero h1 { font-family: var(--serif); font-weight: 400; font-size: 52px; line-height: .95; letter-spacing: -.025em; margin: 0; flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
+  .hero h1 i { color: var(--violet); font-style: normal; }
+  .hero .actions { display: flex; gap: 8px; padding-bottom: 6px; flex-wrap: wrap; }
+  .sub { font-size: 14px; color: var(--ink3); margin: 10px 0 0; max-width: 720px; line-height: 21px; overflow-wrap: anywhere; }
+  .sub em { font-style: normal; color: var(--amber); }
+  .btn { font: inherit; font-size: 13px; font-weight: 700; border-radius: 10px; padding: 10px 14px; border: 1px solid var(--border2); background: var(--bg3); color: var(--ink); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; min-width: 0; }
+  .btn.primary { background: var(--violet); border-color: var(--violet); color: #fff; }
+  .btn.ghost { background: transparent; }
+  .btn.sm { padding: 6px 10px; font-size: 12px; }
+  .btn.amber { border-color: rgba(251,191,36,.45); color: var(--amber); }
+  .btn.block { width: 100%; justify-content: center; }
+  .ico { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; opacity: .8; }
+
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .chip { padding: 7px 12px; border-radius: 999px; border: 1px solid var(--border2); background: var(--bg2); color: var(--ink3); font-size: 12px; font-weight: 600; }
+  .chip.on { background: rgba(124,58,237,.13); border-color: var(--violet); color: var(--violet3); }
+
+  .section { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ink3); margin: 18px 0 8px; }
+  .box { background: var(--bg3); border: 1px solid var(--border); border-radius: 14px; padding: 14px; min-width: 0; }
+  .box + .box { margin-top: 8px; }
+  .note { font-size: 11px; color: var(--ink3); margin-top: 10px; }
+  .note b { color: var(--ink2); }
+  .divider { height: 1px; background: var(--border); margin: 14px 0; }
+  .cols { display: grid; grid-template-columns: 1.2fr .8fr; gap: 14px; }
+  .cols > * { min-width: 0; }
+
+  /* frase com valor editável no meio — a linguagem do Matcon */
+  .frase { font-size: 15px; line-height: 2.1; color: var(--ink2); }
+  .frase + .frase { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px; }
+  .edit { display: inline-block; font-family: var(--mono); font-weight: 500; color: var(--ink); background: var(--bg2); border: 1px solid var(--border2); border-bottom: 2px solid var(--violet); border-radius: 8px; padding: 3px 9px; margin: 0 2px; }
+  .edit.sel::after { content: " ▾"; color: var(--ink3); font-size: 10px; }
+  .edit.vazio { color: var(--ink3); }
+  .sw { width: 44px; height: 26px; border-radius: 999px; background: var(--bg4); border: 1px solid var(--border); position: relative; flex-shrink: 0; }
+  .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--ink3); transition: .2s; }
+  .sw.on { background: rgba(124,58,237,.40); border-color: var(--violet); }
+  .sw.on::after { left: 21px; background: var(--violet); }
+  .frase .sw { display: inline-block; vertical-align: -8px; margin: 0 4px; }
+
+  /* campo do cadastro (Campo + Entrada + selo + MiniBtn de hoje) */
+  .campo { margin-bottom: 14px; min-width: 0; }
+  .campo:last-child { margin-bottom: 0; }
+  .lbl { font-size: 11px; font-weight: 700; color: var(--ink2); margin-bottom: 6px; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+  .lbl span { font-weight: 500; color: var(--ink3); }
+  .fld { display: flex; gap: 8px; align-items: stretch; min-width: 0; }
+  .inp { flex: 1 1 auto; display: flex; align-items: center; gap: 8px; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 8px 10px 12px; font-size: 13px; color: var(--ink); min-width: 0; }
+  .inp .v { flex: 1; font-family: var(--mono); overflow-wrap: anywhere; }
+  .inp .v.ph { color: var(--ink3); }
+  .selo { font-size: 10px; font-weight: 700; color: var(--ink3); background: var(--bg4); border: 1px solid var(--border); border-radius: 5px; padding: 3px 7px; white-space: nowrap; }
+  .selo.ok { color: var(--green); border-color: rgba(52,211,153,.30); background: var(--greenD); }
+  .selo.meio { color: var(--amber); }
+  .mini { font: inherit; font-size: 12px; font-weight: 700; color: var(--violet3); background: var(--bg3); border: 1px solid var(--border2); border-radius: 10px; padding: 0 12px; cursor: pointer; white-space: nowrap; }
+  .hint { font-size: 11.5px; color: var(--ink3); margin-top: 6px; line-height: 1.6; }
+  .hint .link { color: var(--violet3); }
+  .hint.ok { color: var(--green); }
+  .aviso { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; background: var(--amberD); border: 1px solid rgba(251,191,36,.35); font-size: 12.5px; color: var(--ink2); flex-wrap: wrap; }
+  .aviso b { color: var(--amber); }
+  .aviso .btn { margin-left: auto; }
+
+  /* a pergunta do imposto — o coração do M2 */
+  .perg { border: 1px solid var(--border2); background: var(--violetD); border-radius: 14px; padding: 14px; min-width: 0; }
+  .perg .q { font-size: 16px; font-weight: 700; color: var(--ink); line-height: 1.35; overflow-wrap: anywhere; }
+  .opts { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .opt { flex: 1 1 140px; text-align: left; background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; font: inherit; color: var(--ink2); cursor: pointer; min-width: 0; }
+  .opt .t { font-size: 14px; font-weight: 700; color: var(--ink); }
+  .opt .d { font-size: 11px; color: var(--ink3); margin-top: 2px; }
+  .opt.on { border-color: var(--violet); background: rgba(124,58,237,.16); }
+  .opt.on .t { color: var(--violet3); }
+  .sugest { display: flex; gap: 8px; align-items: baseline; margin-top: 10px; font-size: 12px; color: var(--ink3); flex-wrap: wrap; }
+  .sugest b { color: var(--ink2); }
+
+  /* alertas do estoque + lacunas fiscais */
+  .arow { display: flex; align-items: center; gap: 10px; padding: 12px 10px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .arow:last-child { border-bottom: 0; }
+  .arow .ic { width: 28px; height: 28px; border-radius: 8px; background: var(--redD); color: var(--red); display: grid; place-items: center; font-weight: 800; font-size: 13px; flex: 0 0 auto; }
+  .arow .ic.f { background: var(--amberD); color: var(--amber); }
+  .arow .nm { flex: 1 1 160px; font-size: 13px; font-weight: 600; min-width: 0; }
+  .arow .nm .d { font-size: 11px; color: var(--ink3); font-weight: 400; margin-top: 2px; }
+  .arow .cod { font-family: var(--mono); font-size: 11.5px; color: var(--ink2); white-space: nowrap; }
+  .arow .cod b { color: var(--violet3); font-weight: 500; }
+  /* regra 7: nada de hover-reveal — a ação da linha já está visível no touch */
+  .arow .btn { flex: 0 0 auto; }
+  .head { border-radius: 12px; padding: 12px 14px; font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+  .head.red { background: var(--redD); color: var(--red); }
+  .empty { border: 1px dashed var(--border2); border-radius: 14px; padding: 22px 18px; text-align: center; color: var(--ink3); font-size: 13px; }
+  .empty .big { font-family: var(--serif); font-size: 22px; color: var(--ink); display: block; margin-bottom: 6px; }
+
+  /* card da esteira de entregas (M1) */
+  .list { display: flex; flex-direction: column; gap: 8px; }
+  /* flex, não grid: com o card dentro da coluna estreita de apoio, a trilha
+     "auto" dos botões comia a largura e o texto quebrava palavra por palavra.
+     Agora o bloco de texto cresce e o bloco da direita desce inteiro. */
+  .card { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 14px; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+  .card > * { min-width: 0; }
+  .card > :first-child { flex: 1 1 240px; }
+  .card .who { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .card .meta { font-size: 12px; color: var(--ink3); margin-top: 3px; }
+  .card .meta b { color: var(--ink2); font-weight: 600; }
+  .card .right { flex: 0 1 auto; margin-left: auto; text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; min-width: 0; }
+  .card .tot { font-family: var(--mono); font-size: 17px; font-weight: 500; white-space: nowrap; }
+  .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 100%; }
+  .badge { border: 1px solid; border-radius: 999px; padding: 2px 8px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; white-space: nowrap; }
+  .b-open { color: var(--violet3); border-color: var(--violet3); }
+  .b-due { color: var(--amber); border-color: var(--amber); background: var(--amberD); }
+  .b-ok { color: var(--green); border-color: var(--green); background: var(--greenD); }
+  .itens { margin: 10px 0 0; display: flex; flex-direction: column; gap: 6px; }
+  .il { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--ink2); flex-wrap: wrap; }
+  .il .nm { flex: 1 1 160px; min-width: 0; }
+  .il .q { font-family: var(--mono); color: var(--ink); white-space: nowrap; }
+
+  /* folha da NF-e (ResponsiveSheet: bottom sheet no touch, popover no desktop) */
+  .sheet { max-width: 380px; border: 1px solid var(--border2); border-radius: 22px 22px 18px 18px; background: var(--bg2); padding: 8px 16px 18px; min-width: 0; }
+  .sheet .grab { width: 44px; height: 4px; border-radius: 999px; background: var(--border2); margin: 6px auto 12px; }
+  .sheet h3 { font-family: var(--serif); font-weight: 400; font-size: 23px; margin: 0 0 2px; }
+  .sheet .lede { font-size: 12px; color: var(--ink3); margin: 0 0 12px; }
+  .sheet .tot { display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid var(--border); margin-top: 12px; padding-top: 10px; font-size: 13px; color: var(--ink3); }
+  .sheet .tot b { font-family: var(--mono); font-size: 20px; font-weight: 700; color: var(--ink); }
+
+  /* tela pública no celular (M1) */
+  .pub { max-width: 340px; margin: 0 auto; border: 1px solid var(--border2); border-radius: 26px; background: var(--bg2); padding: 18px 16px 22px; }
+  .pub .brand { display: flex; align-items: center; gap: 10px; justify-content: center; }
+  .pub .logo { height: 44px; border-radius: 12px; display: flex; align-items: center; padding: 0 14px; background: #f3e9dd; color: #7a3f22; font-family: var(--serif); font-size: 18px; }
+  .pub h2 { font-family: var(--serif); font-weight: 400; font-size: 26px; line-height: 1.1; text-align: center; margin: 16px 0 4px; }
+  .pub .ped { text-align: center; font-family: var(--mono); font-size: 11px; color: var(--ink3); }
+  .tl { display: grid; grid-template-columns: 22px 1fr; gap: 12px; align-items: start; padding: 8px 0; }
+  .tl .dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border2); margin-top: 4px; background: var(--bg3); }
+  .tl.done .dot { background: var(--violet); border-color: var(--violet); }
+  .tl.now .dot { border-color: var(--violet); box-shadow: 0 0 0 4px var(--violetD); }
+  .tl .t { font-weight: 600; font-size: 13px; }
+  .tl.now .t { color: var(--violet3); }
+  .tl .d { font-size: 11.5px; color: var(--ink3); }
+  .nfline { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 11px 12px; border-radius: 12px; background: var(--bg3); border: 1px solid var(--border2); font-size: 13px; flex-wrap: wrap; }
+  .nfline .n { font-family: var(--mono); font-size: 11.5px; color: var(--ink3); }
+  .nfline .go { margin-left: auto; color: var(--violet3); font-weight: 700; font-size: 12.5px; white-space: nowrap; }
+
+  @media (max-width: 860px) {
+    .cols { grid-template-columns: 1fr; }
+    .hero { flex-direction: column; align-items: stretch; gap: 12px; }
+    .hero h1 { font-size: 34px; flex: none; width: 100%; }
+    .hero .actions { padding-bottom: 0; }
+    .hero .actions .btn { flex: 1 1 150px; justify-content: center; }
+    .card > :first-child, .card .right { flex: 1 1 100%; }
+    .card .right { align-items: stretch; text-align: left; width: 100%; margin-left: 0; }
+    .card .tot { text-align: left; }
+    .card .right > .badge { align-self: flex-start; }
+    .acts { justify-content: flex-start; width: 100%; }
+    .acts .btn { flex: 1 1 150px; justify-content: center; }
+    .sheet, .pub { max-width: none; }
+    .aviso .btn { margin-left: 0; }
+    .arow .btn { flex: 1 1 100%; justify-content: center; }
+    .arow .cod { flex: 1 1 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="topbar">Mockup · Matcon <b>M2</b> · fiscal do Simples · 5 telas · shell de varejo, violeta <span class="ico">#7c3aed</span>
+  <nav><a href="#cadastro">1 cadastro</a><a href="#estoque">2 aviso</a><a href="#nfe">3 nf-e da entrega</a><a href="#config">4 regime</a><a href="#publico">5 público</a></nav>
+  <button onclick="document.documentElement.dataset.tema = document.documentElement.dataset.tema === 'claro' ? '' : 'claro'">Tema claro/escuro</button>
+</div>
+
+<!-- ===================== 1. CADASTRO › CÓDIGOS E FISCAL ===================== -->
+<section class="screen" id="cadastro">
+  <div class="mock-label">1 · Cadastro de item › seção "Códigos e fiscal" (SecaoCodigos)</div>
+  <div class="eyebrow"><span class="glyph"></span> Aura<span style="color:var(--violet)">.</span> · Matcon <span class="pill">M2</span></div>
+  <div class="hero"><h1>Uma pergunta, não uma tabela<i>.</i></h1></div>
+  <p class="sub">O lojista não escolhe código de contador: ele responde <em>"o imposto deste produto já veio recolhido na nota do fornecedor?"</em> — e a Aura já chega com a resposta sugerida pelo próprio produto. O resto da seção é a de hoje, na mesma ordem.</p>
+
+  <div class="cols">
+    <div>
+      <div class="section">Códigos e fiscal · Cimento CP-II 50 kg</div>
+      <div class="box">
+        <div class="aviso" style="margin-bottom:14px"><span><b>Você emite nota fiscal.</b> Sem NCM a venda deste produto não gera nota.</span></div>
+
+        <div class="campo">
+          <div class="lbl">Código interno (SKU)</div>
+          <div class="fld"><div class="inp"><span class="v">CIM-050</span></div><button class="mini">Gerar</button></div>
+        </div>
+
+        <div class="campo">
+          <div class="lbl">Código de barras</div>
+          <div class="fld"><div class="inp"><span class="v">7896451102309</span></div><button class="mini">Etiqueta</button></div>
+        </div>
+
+        <div class="campo">
+          <div class="lbl">NCM <span>necessário para a nota</span></div>
+          <div class="fld"><div class="inp"><span class="v">2523.29.10</span><span class="selo ok">✓ OK</span></div><button class="mini">Gerar</button></div>
+          <div class="hint ok">✓ Cimento Portland comum</div>
+        </div>
+
+        <div class="campo">
+          <div class="lbl">Código fiscal do produto (CEST) <span>7 dígitos</span></div>
+          <div class="fld"><div class="inp"><span class="v ph">00.000.00</span><span class="selo">vazio</span></div><button class="mini">Gerar</button></div>
+          <div class="hint">Pelo NCM 2523.29.10: <span class="link">cimento</span> · <span class="link">05.001.00</span>. Toque em Gerar.</div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="perg">
+          <div class="q">O imposto deste produto já veio recolhido na nota do fornecedor?</div>
+          <div class="opts">
+            <button class="opt on"><div class="t">Sim, já veio</div><div class="d">o distribuidor pagou antes</div></button>
+            <button class="opt"><div class="t">Não</div><div class="d">pago na minha venda</div></button>
+          </div>
+          <div class="sugest"><span class="ico">percent</span> <span>Cimento, tinta e ferragem costumam vir com o imposto recolhido — sugerimos <b>Sim</b>.</span></div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="frase" style="margin:0">Fabricado no Brasil?
+          <span class="edit sel">Sim</span> <span style="color:var(--ink3);font-size:13px">ou</span> <span class="edit vazio">Importado</span>
+        </div>
+        <p class="note" style="margin-top:2px">Duas respostas, não uma lista de oito linhas. Quem importa direto ajusta no detalhe depois — o balcão nunca precisa saber que existe uma tabela.</p>
+      </div>
+    </div>
+
+    <div>
+      <div class="section">O que a Aura faz com a resposta</div>
+      <div class="box">
+        <p class="note" style="margin:0 0 10px"><b>Sim</b> e <b>Não</b> viram, na hora de emitir, o código que o contador esperaria ver na nota. O lojista <b>nunca digita esse código</b> e ele não aparece em lugar nenhum da tela — vive no backend, junto com o regime da empresa.</p>
+        <p class="note" style="margin:0">A pergunta só existe quando a empresa é do <b>Simples Nacional</b> (tela 4). Fora do Simples a seção volta a ser a de hoje: a conta é outra e não é esta fase que a resolve.</p>
+      </div>
+
+      <div class="section">O CEST no desenho do NCM</div>
+      <div class="box">
+        <p class="note" style="margin:0 0 10px">Mesmo input mono, mesmo selo <span class="selo">vazio</span> <span class="selo meio">3/7</span> <span class="selo ok">✓ OK</span>, mesmo botão <b>Gerar</b>, mesma frase de sugestão logo abaixo. Quem já preencheu NCM uma vez não aprende nada novo.</p>
+        <div class="box" style="background:var(--bg2)">
+          <div class="fld"><div class="inp"><span class="v">05.001.00</span><span class="selo ok">✓ OK</span></div></div>
+          <div class="hint ok" style="margin-bottom:0">✓ Cimento · sugerido pelo NCM</div>
+        </div>
+        <p class="note">Depois de Gerar. A sugestão vem da mesma tabela que já alimenta <span class="ico">suggestNcm</span>; a tela só oferece — aceitar é do lojista.</p>
+      </div>
+
+      <div class="section">Fora desta fase</div>
+      <div class="box"><p class="note" style="margin:0">Cálculo de imposto para empresa fora do Simples, venda para outro estado e documentos de transporte da carga. Nada disso bloqueia emitir a nota do cimento hoje.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 2. ESTOQUE › AVISO FISCAL ===================== -->
+<section class="screen" id="estoque">
+  <div class="mock-label">2 · Estoque › Alertas (AlertsList) — o aviso fiscal entra ao lado</div>
+  <a href="#cadastro" style="font-size:12px;font-weight:600">‹ Cadastro</a>
+  <div class="hero" style="margin-top:8px"><h1 style="font-size:38px">O aviso chega antes da recusa<i>.</i></h1></div>
+  <p class="sub">O lojista descobre que faltava o código fiscal quando a nota volta recusada, na frente do cliente. Aqui ele descobre de manhã, <em>na mesma tela em que já olha o estoque mínimo</em> — e resolve os 12 de uma vez.</p>
+
+  <div class="cols">
+    <div>
+      <div class="section">Estoque › Alertas</div>
+      <div class="head red">3 produtos abaixo do estoque mínimo</div>
+      <div class="box" style="padding:6px">
+        <div class="arow"><div class="ic">!</div><div class="nm">Cimento CP-II 50 kg<div class="d">Atual: 12 sc / Mínimo: 40 sc</div></div><span class="badge b-due">Repor 28 sc</span></div>
+        <div class="arow"><div class="ic">!</div><div class="nm">Argamassa AC-III 20 kg<div class="d">Atual: 9 sc / Mínimo: 25 sc</div></div><span class="badge b-due">Repor 16 sc</span></div>
+        <div class="arow"><div class="ic">!</div><div class="nm">Porcelanato Bianco 60×60<div class="d">Atual: 14,50 m² / Mínimo: 20 m²</div></div><span class="badge b-due">Repor 5,50 m²</span></div>
+      </div>
+
+      <div class="section">Logo abaixo, o aviso fiscal</div>
+      <div class="box" style="border-color:rgba(251,191,36,.35)">
+        <div class="arow" style="border-bottom:0;padding:2px">
+          <div class="ic f">!</div>
+          <div class="nm">12 produtos de cimento, tinta e ferragem sem o código fiscal (CEST)
+            <div class="d">A nota deles pode ser recusada.</div>
+          </div>
+          <button class="btn sm amber">Resolver agora</button>
+        </div>
+      </div>
+      <p class="note">Mesmo card, mesma pilha, mesma linguagem de consequência dos alertas de estoque ("Repor 28 sc" / "a nota pode ser recusada"). Só aparece com o módulo ligado e com a empresa emitindo nota — quem não emite não vê nada disso.</p>
+
+      <div class="section">Resolver agora — a lista curta</div>
+      <div class="box" style="padding:6px 12px">
+        <div class="arow" style="border-top:0">
+          <div class="nm">Cimento CP-II 50 kg<div class="d">NCM 2523.29.10 · cimento</div></div>
+          <div class="cod">sugestão <b>05.001.00</b></div>
+          <button class="btn sm">Aceitar sugestão</button>
+        </div>
+        <div class="arow">
+          <div class="nm">Argamassa AC-III 20 kg<div class="d">NCM 3214.90.00 · argamassa</div></div>
+          <div class="cod">sugestão <b>10.026.00</b></div>
+          <button class="btn sm">Aceitar sugestão</button>
+        </div>
+        <div class="arow">
+          <div class="nm">Tinta acrílica fosca 18 L<div class="d">NCM 3209.10.10 · tinta</div></div>
+          <div class="cod">sugestão <b>24.001.00</b></div>
+          <button class="btn sm">Aceitar sugestão</button>
+        </div>
+        <div class="arow">
+          <div class="nm">Porcelanato Bianco 60×60<div class="d">NCM 6907.21.00 · revestimento</div></div>
+          <div class="cod">sugestão <b>10.032.00</b></div>
+          <button class="btn sm">Aceitar sugestão</button>
+        </div>
+        <div class="arow">
+          <div class="nm" style="color:var(--ink3);font-weight:400">e mais 8 produtos com sugestão pronta</div>
+          <button class="btn sm primary">Aceitar todas (12)</button>
+        </div>
+      </div>
+      <p class="note">Ação visível em cada linha e no rodapé, sem hover e sem menu escondido (regra 7): no celular o dedo acerta o botão da linha. Quem não confia na sugestão abre o produto pelo nome e resolve na tela 1.</p>
+
+      <div class="section">Quando não há o que resolver</div>
+      <div class="empty">
+        <span class="big">Todos os produtos com código fiscal.</span>
+        <span>As notas de cimento, tinta e ferragem saem sem susto.</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="section">De onde vem o número</div>
+      <div class="box"><p class="note" style="margin:0"><span class="ico">clipboard</span> <b>GET /products/fiscal-gaps</b> devolve quantos produtos estão sem código fiscal e sem NCM, e os ids — a tela não puxa 20 mil itens para contar. E a frase diz a consequência, não a regra: é o que o concorrente esconde num aviso técnico que ninguém lê.</p></div>
+      <div class="section">Multi-CNPJ</div>
+      <div class="box"><p class="note" style="margin:0">O aviso é por empresa selecionada, como o alerta de estoque. No consolidado ele some — código fiscal se resolve no cadastro de cada CNPJ, e emendar as duas listas só confundiria.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 3. ENTREGAS › EMITIR NF-e ===================== -->
+<section class="screen" id="nfe">
+  <div class="mock-label">3 · /matcon/entregas › card da entrega → folha "Emitir NF-e"</div>
+  <a href="#estoque" style="font-size:12px;font-weight:600">‹ Estoque</a>
+  <div class="hero" style="margin-top:8px">
+    <h1 style="font-size:38px">A nota nasce da entrega<i>.</i></h1>
+    <div class="actions"><button class="btn ghost">Orçamentos</button><button class="btn primary"><span class="ico">truck</span> Nova entrega</button></div>
+  </div>
+  <p class="sub">Destinatário, itens, peso e volumes já vêm da entrega que está no caminhão. O vendedor confere <em>três frases</em> e emite — não preenche um formulário fiscal em branco no fim do dia.</p>
+
+  <div class="section">O card do M1 ganha um botão — só em Pronto e Saiu</div>
+  <div class="list">
+    <div class="card">
+      <div>
+        <div class="who">Marlene Souza</div>
+        <div class="meta"><b>Pedido #1204</b> · Rua das Acácias, 233 · Jardim Paulista · (11) 98765-4321</div>
+        <div class="itens">
+          <div class="il"><span class="nm">Porcelanato Bianco 60×60</span><span class="q">13,92 m²</span></div>
+          <div class="il"><span class="nm">Cimento CP-II 50 kg</span><span class="q">10 sc</span></div>
+          <div class="il"><span class="nm">Areia média</span><span class="q">2 m³</span></div>
+        </div>
+      </div>
+      <div class="right">
+        <span class="badge b-open">Pronto</span>
+        <span class="tot">R$ 1.220,58</span>
+        <div class="acts">
+          <button class="btn sm">Marcar que saiu</button>
+          <button class="btn sm primary"><span class="ico">file_text</span> Emitir NF-e</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="note">Em <b>Separando</b> o botão não existe: material que ainda não foi conferido não vira nota. Entrega parcial emite a nota do que foi — a segunda viagem gera a sua.</p>
+
+  <div class="cols" style="margin-top:20px">
+    <div>
+      <div class="section">Tocou em Emitir NF-e</div>
+      <div class="sheet">
+        <div class="grab"></div>
+        <h3>NF-e da entrega #1204</h3>
+        <p class="lede">Marlene Souza · Rua das Acácias, 233 · hoje, 22/09</p>
+
+        <div class="aviso">
+          <span><b>2 itens sem código fiscal</b> — a nota pode ser recusada.</span>
+          <button class="btn sm amber">Resolver</button>
+        </div>
+
+        <div class="section">Itens da entrega</div>
+        <div class="itens">
+          <div class="il"><span class="nm">Porcelanato Bianco 60×60 <span class="badge b-due" style="margin-left:4px">sem código</span></span><span class="q">13,92 m²</span></div>
+          <div class="il"><span class="nm">Cimento CP-II 50 kg <span class="badge b-due" style="margin-left:4px">sem código</span></span><span class="q">10 sc</span></div>
+          <div class="il"><span class="nm">Areia média</span><span class="q">2 m³</span></div>
+        </div>
+
+        <div class="section">Para quem</div>
+        <div class="box" style="background:var(--bg3);padding:12px">
+          <div style="font-size:13px;font-weight:600">Marlene Souza</div>
+          <div class="hint" style="margin-top:4px">123.456.789-00 · Rua das Acácias, 233 · Jardim Paulista · São Paulo/SP · CEP 01415-000</div>
+        </div>
+        <p class="note" style="margin-top:6px">Veio da venda. Dá para corrigir aqui sem voltar ao cadastro.</p>
+
+        <div class="section">Como vai o material</div>
+        <div class="box" style="background:var(--bg3);padding:12px">
+          <div class="frase" style="font-size:14px;line-height:2">Entrego com meu caminhão <span class="sw on"></span></div>
+          <p class="hint" style="margin:0 0 8px">Desligado, pergunta quem leva: o cliente retira ou a transportadora.</p>
+          <div class="frase" style="font-size:14px;line-height:2">São <span class="edit">3</span> volumes com <span class="edit">412</span> kg.</div>
+          <div class="frase" style="font-size:14px;line-height:2">Placa <span class="edit">ABC-1D23</span> · <span class="edit sel">SP</span> <span style="font-size:12px;color:var(--ink3)">(opcional)</span></div>
+        </div>
+
+        <div class="tot"><span>Total da nota</span><b>R$ 1.220,58</b></div>
+        <button class="btn primary block" style="margin-top:12px"><span class="ico">file_text</span> Emitir NF-e</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="section">Por que frase e não formulário</div>
+      <div class="box">
+        <p class="note" style="margin:0 0 10px">Volumes e peso já vêm somados dos itens que têm peso no cadastro; os que não têm ficam de fora — por isso o número é <b>editável</b> e o vendedor corrige olhando o caminhão. Placa e estado só entram se o lojista quiser.</p>
+        <p class="note" style="margin:0">"Entrego com meu caminhão" é o caso de 9 em 10 entregas do depósito de bairro, então é o padrão ligado. Nada aqui pede o nome de um campo que só o contador conhece.</p>
+      </div>
+
+      <div class="section">Depois de autorizada</div>
+      <div class="list" style="margin-top:8px">
+        <div class="card">
+          <div>
+            <div class="who">Marlene Souza <span class="badge b-ok">NF-e #1.204 · autorizada</span></div>
+            <div class="meta"><b>Pedido #1204</b> · saiu 13:40 · com Seu Nivaldo</div>
+            <div class="meta">nota autorizada às 13:38 · 3 volumes · 412 kg</div>
+          </div>
+          <div class="right">
+            <span class="tot">R$ 1.220,58</span>
+            <div class="acts">
+              <button class="btn sm"><span class="ico">file_text</span> Ver DANFE</button>
+              <button class="btn sm primary">Marcar como entregue</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="note">O vínculo fica na entrega: o card mostra o número e o link do documento, e o rastreio público ganha a mesma linha (tela 5). Recusada, o card mostra o motivo em português e o botão vira "Tentar de novo" — a tela de NF-e de hoje já faz isso. Romaneio, rota e documento de transporte da carga seguem fora, como o M1 decidiu.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 4. CONFIG FISCAL ===================== -->
+<section class="screen" id="config">
+  <div class="mock-label">4 · Configurações › NF-e — uma frase a mais</div>
+  <a href="#nfe" style="font-size:12px;font-weight:600">‹ NF-e da entrega</a>
+  <div class="hero" style="margin-top:8px"><h1 style="font-size:38px">Uma frase decide tudo<i>.</i></h1></div>
+  <p class="sub">A tela de NF-e de hoje continua igual — certificado, série, ambiente. Ganha <em>uma linha</em>, no padrão de frase do Matcon, e é ela que decide como a nota sai.</p>
+
+  <div class="box" style="max-width:620px">
+    <div class="frase" style="margin:0">Minha empresa é do <span class="edit sel">Simples Nacional</span>.</div>
+    <p class="note" style="margin-top:2px">É isso que decide como a nota sai. No Simples, a pergunta "o imposto já veio recolhido?" aparece no cadastro do produto (tela 1); nos outros regimes a Aura usa a configuração fiscal que você já tem aqui e o cadastro não muda.</p>
+  </div>
+  <p class="note" style="max-width:620px">Só a frase. Sem aba nova, sem painel de regras, sem tabela — se a empresa mudar de regime, o contador avisa uma vez por ano e o lojista troca aqui em dois toques.</p>
+</section>
+
+<!-- ===================== 5. RASTREIO PÚBLICO COM DANFE ===================== -->
+<section class="screen" id="publico">
+  <div class="mock-label">5 · /acompanhar/[token] — a linha da nota (bônus)</div>
+  <div class="hero"><h1 style="font-size:38px">O cliente também quer a nota<i>.</i></h1></div>
+  <p class="sub">A mesma tela do M1, com <em>uma linha a mais</em>. O pedreiro que precisa prestar conta da obra abre o link que já recebeu e baixa o documento sozinho — sem ligar para a loja no sábado.</p>
+
+  <div class="pub">
+    <div class="brand"><div class="logo">Depósito Santa Rita</div></div>
+    <h2>Seu pedido saiu para entrega</h2>
+    <div class="ped">PEDIDO #1204 · 22/09/2026</div>
+    <div style="margin:16px 0 4px">
+      <div class="tl done"><div class="dot"></div><div><div class="t">Pedido aprovado</div><div class="d">22/09 · 09:14</div></div></div>
+      <div class="tl done"><div class="dot"></div><div><div class="t">Pronto para carregar</div><div class="d">22/09 · 12:30</div></div></div>
+      <div class="tl now"><div class="dot"></div><div><div class="t">Saiu para entrega</div><div class="d">22/09 · 13:40 · com Seu Nivaldo</div></div></div>
+      <div class="tl"><div class="dot"></div><div><div class="t">Entregue</div><div class="d">chega hoje até as 17h</div></div></div>
+    </div>
+    <div class="nfline">
+      <span class="ico">file_text</span>
+      <span>Nota fiscal <span class="n">#1.204</span></span>
+      <span class="go">ver DANFE ›</span>
+    </div>
+    <div class="box" style="background:var(--bg3);padding:12px;margin-top:10px">
+      <div class="il" style="justify-content:space-between"><span>Porcelanato Bianco 60×60</span><span class="q">13,92 m²</span></div>
+      <div class="il" style="justify-content:space-between;margin-top:6px"><span>Cimento CP-II 50 kg</span><span class="q">10 sc</span></div>
+      <div class="il" style="justify-content:space-between;margin-top:6px"><span>Areia média</span><span class="q">2 m³</span></div>
+      <div class="note" style="margin-top:8px">3 volumes · 412 kg · R$ 1.220,58</div>
+    </div>
+    <button class="btn block" style="margin-top:12px;border-color:rgba(52,211,153,.45);color:var(--green)"><span class="ico">send</span> Falar com a loja</button>
+    <p class="note" style="text-align:center">Depósito Santa Rita · (11) 3322-1100 · Av. das Indústrias, 870</p>
+  </div>
+  <p class="note" style="text-align:center;max-width:520px;margin:16px auto 0">A linha só aparece quando a nota está autorizada. Sem nota, a tela é a do M1 — nenhum espaço vazio esperando algo que talvez não venha.</p>
+</section>
+</body>
+</html>

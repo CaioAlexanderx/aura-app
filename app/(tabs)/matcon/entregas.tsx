@@ -62,6 +62,8 @@ import {
 import {
   agruparPorDia, progressoDoItem, rotuloProgresso, seloSaldo, proximaEtapa, seloEstacao,
 } from "@/components/matcon/deliveriesUtil";
+import { EmitirNfeEntregaSheet } from "@/components/matcon/EmitirNfeEntregaSheet";
+import { STATUS_MAP, openDanfe, openDanfeTermica } from "@/components/screens/nfe/shared";
 
 const fmtMoney = (n: number | string | null | undefined) =>
   `R$ ${Number(n || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -99,6 +101,11 @@ function MatconEntregasScreen() {
   const [stage, setStage] = useState<DeliveryStage | "all">("all");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [parcialDe, setParcialDe] = useState<Delivery | null>(null);
+  // Matcon M2 (fiscal do Simples): sheet "Emitir NF-e" — montada só quando
+  // o vendedor toca no botão (ver comentário no topo de
+  // EmitirNfeEntregaSheet.tsx sobre por que não fica sempre montada).
+  const [emitirDe, setEmitirDe] = useState<Delivery | null>(null);
+  const [danfeBusyId, setDanfeBusyId] = useState<string | null>(null);
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ["matcon-deliveries", company?.id, dia, stage],
@@ -155,6 +162,23 @@ function MatconEntregasScreen() {
       invalidate();
     } catch (e: any) {
       toast.error(e?.data?.error || "Não deu para salvar quem entregou");
+    }
+  }
+
+  async function verDanfe(delivery: Delivery) {
+    if (!company?.id || danfeBusyId) return;
+    if (delivery.danfe_url) {
+      openDanfe(delivery.danfe_url);
+      return;
+    }
+    if (!delivery.nfe_emission_id) return;
+    setDanfeBusyId(delivery.id);
+    try {
+      await openDanfeTermica(company.id, delivery.nfe_emission_id);
+    } catch (e: any) {
+      toast.error(e?.message || "Não foi possível abrir o DANFE");
+    } finally {
+      setDanfeBusyId(null);
     }
   }
 
@@ -267,9 +291,12 @@ function MatconEntregasScreen() {
                     key={delivery.id}
                     delivery={delivery}
                     busy={busyId === delivery.id}
+                    danfeBusy={danfeBusyId === delivery.id}
                     onAvancar={() => avancarEtapa(delivery)}
                     onParcial={() => setParcialDe(delivery)}
                     onSalvarQuemEntregou={(texto) => salvarQuemEntregou(delivery, texto)}
+                    onEmitirNfe={() => setEmitirDe(delivery)}
+                    onVerDanfe={() => verDanfe(delivery)}
                   />
                 ))}
               </View>
@@ -285,23 +312,47 @@ function MatconEntregasScreen() {
         onClose={() => setParcialDe(null)}
         onConfirm={confirmarParcial}
       />
+
+      {emitirDe && company?.id && (
+        <EmitirNfeEntregaSheet
+          delivery={emitirDe}
+          companyId={company.id}
+          onClose={() => setEmitirDe(null)}
+        />
+      )}
     </ScrollView>
   );
 }
 
 // ── Card de entrega ─────────────────────────────────────────
-function DeliveryCard({ delivery, busy, onAvancar, onParcial, onSalvarQuemEntregou }: {
+function DeliveryCard({ delivery, busy, danfeBusy, onAvancar, onParcial, onSalvarQuemEntregou, onEmitirNfe, onVerDanfe }: {
   delivery: Delivery;
   busy: boolean;
+  danfeBusy: boolean;
   onAvancar: () => void;
   onParcial: () => void;
   onSalvarQuemEntregou: (texto: string) => void;
+  onEmitirNfe: () => void;
+  onVerDanfe: () => void;
 }) {
   const entregue = delivery.stage === "delivered";
   const proxima = proximaEtapa(delivery.stage);
   const selo = seloEstacao(delivery);
   const corSelo = delivery.stage === "out" ? Colors.amber : delivery.stage === "delivered" ? Colors.green : Colors.violet3;
   const segundaViagem = delivery.sequence > 1;
+
+  // Matcon M2 (fiscal do Simples): "Emitir NF-e" só existe em Pronto/Saiu —
+  // material que nem foi conferido não vira nota. Nota recusada mostra o
+  // motivo em português e o mesmo botão vira "Tentar de novo".
+  const emStagePermitido = delivery.stage === "ready" || delivery.stage === "out";
+  const temNota = !!delivery.nfe_emission_id;
+  const notaAutorizada = delivery.nfe_status === "autorizada";
+  const notaFalhou = delivery.nfe_status === "rejeitada" || delivery.nfe_status === "erro";
+  const podeEmitirNfe = emStagePermitido && (!temNota || notaFalhou);
+  const corNota = notaAutorizada ? Colors.green : notaFalhou ? Colors.red : Colors.violet3;
+  const statusNotaLabel = delivery.nfe_status
+    ? (STATUS_MAP[delivery.nfe_status]?.label || delivery.nfe_status).toUpperCase()
+    : "PROCESSANDO";
 
   const meta = [
     `Pedido #${delivery.sale_number ?? "—"}`,
@@ -334,6 +385,20 @@ function DeliveryCard({ delivery, busy, onAvancar, onParcial, onSalvarQuemEntreg
                 <Text style={st.miniBtnText}>Entrega parcial</Text>
               </Pressable>
             )}
+            {temNota && notaAutorizada && (
+              danfeBusy ? <ActivityIndicator size="small" color={Colors.violet3} /> : (
+                <Pressable onPress={onVerDanfe} style={st.miniBtn} testID={`matcon-ver-danfe-${delivery.id}`}>
+                  <Icon name="file_text" size={13} color={Colors.ink} />
+                  <Text style={st.miniBtnText}>Ver DANFE</Text>
+                </Pressable>
+              )
+            )}
+            {podeEmitirNfe && (
+              <Pressable onPress={onEmitirNfe} style={[st.miniBtn, st.miniBtnPrimary]} testID={`matcon-emitir-nfe-${delivery.id}`}>
+                <Icon name="file_text" size={13} color="#fff" />
+                <Text style={[st.miniBtnText, { color: "#fff" }]}>{notaFalhou ? "Tentar de novo" : "Emitir NF-e"}</Text>
+              </Pressable>
+            )}
             {!!proxima && (
               <Pressable onPress={onAvancar} style={[st.miniBtn, st.miniBtnPrimary]} testID={`matcon-avancar-${delivery.id}`}>
                 <Text style={[st.miniBtnText, { color: "#fff" }]}>{proxima.label}</Text>
@@ -350,7 +415,19 @@ function DeliveryCard({ delivery, busy, onAvancar, onParcial, onSalvarQuemEntreg
             <Text style={[st.badgeText, { color: Colors.violet3 }]}>SALDO A ENTREGAR</Text>
           </View>
         )}
+        {temNota && (
+          <View style={[st.badge, { borderColor: corNota }]} testID={`matcon-selo-nfe-${delivery.id}`}>
+            <Text style={[st.badgeText, { color: corNota }]}>
+              NF-E #{delivery.nfe_number ?? "—"} · {statusNotaLabel}
+            </Text>
+          </View>
+        )}
       </View>
+      {notaFalhou && (
+        <Text style={[st.meta, { color: Colors.red, marginTop: 2 }]}>
+          A nota fiscal foi recusada — toque em &quot;Tentar de novo&quot; para reemitir.
+        </Text>
+      )}
       <Text style={st.meta} numberOfLines={2}>{linhaSequencia}</Text>
 
       <View style={{ marginTop: 8, gap: 6 }}>

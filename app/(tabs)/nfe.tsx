@@ -14,7 +14,10 @@ import { Icon } from "@/components/Icon";
 import { TABS, STATUS_MAP, EmissionRow, fmt, ns, openDanfeTermica, isFailedStatus } from "@/components/screens/nfe/shared";
 import { EmitNfseForm } from "@/components/screens/nfe/EmitNfseForm";
 import { EmitNfceForm, type NfcePrefill } from "@/components/screens/nfe/EmitNfceForm";
+import { RegimeFiscal } from "@/components/screens/nfe/TabConfig";
 import { RequireCompanyScope } from "@/components/RequireCompanyScope";
+import { usePdvSettings } from "@/hooks/usePdvSettings";
+import { readMatconSettings, type MatconSettings } from "@/constants/matcon";
 
 // IS_NARROW: breakpoint para KPI cards compactos em telas estreitas (<500px)
 const IS_NARROW = typeof window !== "undefined" ? window.innerWidth < 500 : false;
@@ -38,6 +41,14 @@ function NfeScreenInner({ embedded }: { embedded?: boolean }) {
   const { company, isDemo } = useAuthStore();
   const qc = useQueryClient();
   const [tab, setTab] = useState(0);
+
+  // 22/09/2026 (Matcon M2 — fiscal do Simples, docs/CONTRACT_MATCON.md
+  // §M2): a config da NF-e (nfce_config) não tem tela própria hoje — só
+  // a frase do regime fiscal entra aqui, num card no topo de "Emitir
+  // NF-e", e só pra quem tem o módulo Matcon ligado (é essa loja que
+  // precisa decidir o regime pra ver a pergunta do CEST no cadastro).
+  const { settings: pdvSettings } = usePdvSettings();
+  const matconEnabled = readMatconSettings(pdvSettings as Partial<MatconSettings>).matcon_enabled;
   const [cancelTarget, setCancelTarget] = useState<NfceEmission | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [tipoFilter, setTipoFilter] = useState<"all" | "nfce" | "nfe">("all");
@@ -352,6 +363,11 @@ function NfeScreenInner({ embedded }: { embedded?: boolean }) {
       )}
 
       {tab === 1 && company?.id && <EmitNfseForm companyId={company.id} />}
+      {tab === 2 && company?.id && matconEnabled && (
+        <View style={s.regimeCard} testID="nfe-regime-card">
+          <RegimeFiscal companyId={company.id} />
+        </View>
+      )}
       {tab === 2 && company?.id && (
         <EmitNfceForm
           // key força remount quando o usuário inicia outra reemissão,
@@ -418,6 +434,13 @@ export default function NfeScreen({ embedded }: { embedded?: boolean } = {}) {
 const s = StyleSheet.create({
   scr: { flex: 1 },
   cnt: { padding: IS_WIDE ? 32 : 20, paddingBottom: 48, maxWidth: 960, alignSelf: "center", width: "100%" },
+  // Matcon M2: card pequeno da frase de regime fiscal, no topo de "Emitir
+  // NF-e" — mesmo cartão visual do resto da tela (bg3/border), só menor
+  // que ns.formCard pra não competir com o form logo abaixo.
+  regimeCard: {
+    backgroundColor: Colors.bg3, borderRadius: 16, padding: 16,
+    borderWidth: 1, borderColor: Colors.border, marginBottom: 16,
+  },
   headerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   // Quando embutida (Studio), o título some e só sobra o botão de refresh —
   // alinha ele à direita como já era visualmente antes.

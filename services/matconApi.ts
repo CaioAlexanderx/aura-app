@@ -97,6 +97,11 @@ export type DeliveryStage = "separating" | "ready" | "out" | "delivered";
 
 export type DeliveryItem = {
   sale_item_id: string;
+  // 22/09/2026 (M2): a NF-e da entrega precisa do produto e do preco DA
+  // VENDA (nao o preco atual do cadastro). Vem da sale_item.
+  product_id: string | null;
+  unit_price: number;
+  lot_code?: string | null; // M4: lote alocado (romaneio mostra)
   name: string;
   unit: string | null;
   quantity: number;         // nesta entrega
@@ -122,6 +127,15 @@ export type Delivery = {
   out_at?: string | null;
   delivered_at?: string | null;
   created_at: string;
+  // 22/09/2026 (Matcon M2 — fiscal do Simples, docs/CONTRACT_MATCON.md §M2):
+  // a NF-e nasce da entrega (POST /nfce/emit com delivery_id). Ausentes =
+  // entrega sem nota emitida ainda (comportamento de hoje). Quando
+  // nfe_emission_id existe, o card troca o botão "Emitir NF-e" pelo selo
+  // "NF-E #N · status" + "Ver DANFE".
+  nfe_emission_id?: string | null;
+  nfe_number?: number | null;
+  nfe_status?: "processando" | "autorizada" | "rejeitada" | "cancelada" | "erro" | null;
+  danfe_url?: string | null;
 };
 
 export type DeliveryListFilters = {
@@ -193,6 +207,79 @@ export type ProfessionalListResponse = {
   summary: { referred_total_month: number; active_count: number; pending_redeems: number };
 };
 
+
+// ── M4: lotes, sugestoes de compra e pedidos de compra ──────
+// docs/CONTRACT_MATCON.md secao M4. Gate dos lotes: pdv_settings.
+// matcon_lots_enabled; compras: chave de modulo matcon.compras.
+export type ProductLot = {
+  id: string;
+  product_id: string;
+  lot_code: string;         // "27B"
+  shade?: string | null;    // tonalidade
+  caliber?: string | null;  // bitola
+  qty: number;              // saldo na unidade de venda
+  received_at: string;
+  source_invoice?: string | null;
+};
+
+// Alocacao por lote no item da venda (soma = quantity do item).
+export type LotAllocation = { lot_id: string; lot_code: string; quantity: number };
+
+export type PurchaseSuggestion = {
+  product_id: string;
+  name: string;
+  unit: string | null;
+  stock: number;
+  min_stock: number;
+  weekly_sales: number;
+  suggested_qty: number;
+  est_cost: number;
+  supplier_name: string | null;
+  supplier_cnpj: string | null;
+  supplier_phone?: string | null;
+  days_to_stockout: number | null;
+};
+
+export type PurchaseSuggestionsResponse = {
+  suggestions: PurchaseSuggestion[];
+  summary: { total_est_cost: number; items_below_min: number; suppliers: number };
+};
+
+export type PurchaseOrderStatus = "draft" | "sent" | "received" | "cancelled";
+
+export type PurchaseOrderItem = {
+  product_id: string;
+  name: string;
+  unit: string | null;
+  quantity: number;
+  unit_cost_est: number;
+  received_qty: number;
+};
+
+export type PurchaseOrder = {
+  id: string;
+  number: string;           // "C-0042"
+  status: PurchaseOrderStatus;
+  supplier_name: string | null;
+  supplier_cnpj: string | null;
+  supplier_phone?: string | null;
+  items: PurchaseOrderItem[];
+  total_est: number;
+  sent_at?: string | null;
+  received_at?: string | null;
+  received_invoice?: string | null;
+  created_at: string;
+};
+
+export type PurchaseOrderListResponse = {
+  orders: PurchaseOrder[];
+  summary: {
+    draft: { count: number; total: number };
+    sent: { count: number; total: number };
+    received_7d: { count: number; total: number };
+  };
+};
+
 function qs(params: Record<string, string | number | undefined>): string {
   var parts: string[] = [];
   Object.keys(params).forEach(function (k) {
@@ -258,5 +345,29 @@ export var matconApi = {
   // cupons existente) no valor de matcon_coupon_value.
   redeemProfessional: function (companyId: string, professionalId: string) {
     return request<{ coupon_code: string; points_balance: number }>("/companies/" + companyId + "/matcon/professionals/" + professionalId + "/redeem", { method: "POST", retry: 0 });
+  },
+  // Lotes (M4)
+  listLots: function (companyId: string, productId: string) {
+    return request<{ lots: ProductLot[] }>("/companies/" + companyId + "/products/" + productId + "/lots", { retry: 1 });
+  },
+  createLot: function (companyId: string, productId: string, body: { lot_code: string; shade?: string | null; caliber?: string | null; qty: number; source_invoice?: string | null }) {
+    return request<{ lot: ProductLot }>("/companies/" + companyId + "/products/" + productId + "/lots", { method: "POST", body: body, retry: 0 });
+  },
+  updateLot: function (companyId: string, productId: string, lotId: string, body: Partial<{ qty: number; shade: string | null; caliber: string | null }>) {
+    return request<{ lot: ProductLot }>("/companies/" + companyId + "/products/" + productId + "/lots/" + lotId, { method: "PATCH", body: body, retry: 0 });
+  },
+
+  // Compras (M4)
+  purchaseSuggestions: function (companyId: string) {
+    return request<PurchaseSuggestionsResponse>("/companies/" + companyId + "/matcon/purchase-suggestions", { retry: 1 });
+  },
+  listPurchaseOrders: function (companyId: string, f: { status?: PurchaseOrderStatus | "all" } = {}) {
+    return request<PurchaseOrderListResponse>("/companies/" + companyId + "/matcon/purchase-orders" + qs({ status: f.status }), { retry: 1 });
+  },
+  createPurchaseOrder: function (companyId: string, body: { supplier_name: string | null; supplier_cnpj: string | null; supplier_phone?: string | null; items: Array<{ product_id: string; quantity: number }> }) {
+    return request<{ order: PurchaseOrder }>("/companies/" + companyId + "/matcon/purchase-orders", { method: "POST", body: body, retry: 0 });
+  },
+  updatePurchaseOrder: function (companyId: string, orderId: string, body: Partial<{ status: PurchaseOrderStatus; items: Array<{ product_id: string; quantity: number }> }>) {
+    return request<{ order: PurchaseOrder }>("/companies/" + companyId + "/matcon/purchase-orders/" + orderId, { method: "PATCH", body: body, retry: 0 });
   },
 };

@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aura — Matcon M4 (lote, devolução de sobra e compras)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&family=Instrument+Serif:ital@0;1&display=swap" />
+<style>
+  /* ============================================================
+     Mockup standalone — Matcon M4 (profundidade), 22/09/2026.
+     Regra 4 do CLAUDE.md: mockup antes do código.
+     Base: docs/matcon-pesquisa-mercado-gap.md §5.9, §5.11 e §5.12 +
+     docs/matcon-faseamento-po-ux.md §3 (M4) e §4b.
+     Molde visual: docs/mockups/matcon-modulo.html (M0/M1).
+
+     Três frentes, uma regra comum: M4 não inventa tela quando já existe
+     fluxo. Lote entra na entrada do XML e no carrinho que já existem;
+     devolução de sobra é um CAMINHO dentro do wizard de troca (regra 5 —
+     TrocaModal é a DNA de wizard, não se cria outro); só compras ganha
+     rota nova, /matcon/compras, com chave própria (regra 3).
+
+     Seis telas, e o que cada uma existe para validar:
+
+     1. ENTRADA DO XML COM LOTE (DanfeImportModal) — a linha do piso ganha
+        "lote/tonalidade [27B] · bitola [03]", texto livre, ao lado da
+        conversão "10 cx → 23,2 m²" do M0. Cimento não pede lote.
+     2. PRODUTO COM SALDO POR LOTE (Estoque) — o saldo vira "148,48 m² em
+        2 lotes", que expande. É o que o vendedor olha antes de prometer o
+        ambiente inteiro.
+     3. CARRINHO COM LOTE — o item em m² mostra o lote escolhido e, quando
+        a quantidade não cabe nele, o aviso ÂMBAR por forma + texto (nunca
+        só cor). Piso de tom diferente no mesmo ambiente é a troca mais
+        cara do setor.
+     4. TROCA › DEVOLUÇÃO DE SOBRA — mesmo wizard de hoje. Passo 2 ganha
+        quantidade DECIMAL ("voltaram 4,64 m² = 2 caixas fechadas") e a
+        regra "só caixa fechada volta ao estoque"; Passo 3 ganha o atalho
+        "não vai levar nada". O crédito sai em vale, padrão da casa.
+     5. COMPRAS › SUGESTÃO — esteira Sugestão → Pedido enviado → Recebido,
+        com o dinheiro em cada estação. A sugestão nasce do alerta de
+        estoque mínimo de hoje, cruzado com o giro de 30 dias e agrupado
+        por fornecedor (que vem do último XML).
+     6. COMPRAS › PEDIDO — itens editáveis, texto pronto para o WhatsApp,
+        "Marcar como enviado". O pedido fecha sozinho quando o XML daquela
+        compra é importado.
+
+     Fora, de propósito: multi-depósito, kits/composições, cotação com
+     vários fornecedores, alçada de desconto, classe A/B/C, inventário com
+     coletor. Bitola fica como texto livre, nunca como regra que bloqueia.
+     ============================================================ */
+  :root {
+    --bg: #060816; --bg2: #090c1a; --bg3: #0e1228; --bg4: #141830;
+    --border: rgba(255,255,255,0.07); --border2: rgba(120,100,240,0.22);
+    --ink: #f0edff; --ink2: rgba(220,215,255,0.75); --ink3: rgba(170,160,235,0.65);
+    --violet: #7c3aed; --violet3: #a78bfa; --violetD: rgba(109,40,217,0.14);
+    --green: #34d399; --greenD: rgba(52,211,153,0.10);
+    --amber: #fbbf24; --amberD: rgba(251,191,36,0.10);
+    --serif: 'Instrument Serif', Georgia, serif;
+    --sans: 'DM Sans', system-ui, sans-serif;
+    --mono: 'DM Mono', ui-monospace, monospace;
+  }
+  html[data-tema="claro"] {
+    --bg: #e6e4f0; --bg2: #fafbff; --bg3: #ffffff; --bg4: #e3dff0;
+    --border: rgba(109,40,217,0.22); --border2: rgba(120,100,240,0.30);
+    --ink: #18172b; --ink2: #3b3461; --ink3: #6a608e;
+    --violet: #7c3aed; --violet3: #6d28d9; --violetD: rgba(109,40,217,0.06);
+    --green: #059669; --greenD: rgba(5,150,105,0.08);
+    --amber: #d97706; --amberD: rgba(217,119,6,0.06);
+  }
+  * { box-sizing: border-box; font-variant-numeric: tabular-nums; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  a { color: var(--violet3); text-decoration: none; }
+  .topbar { position: sticky; top: 0; z-index: 5; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 16px; background: var(--bg2); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--ink3); }
+  .topbar b { color: var(--ink); } .topbar nav { display: flex; gap: 8px; flex-wrap: wrap; }
+  .topbar nav a { font-family: var(--mono); font-size: 11px; padding: 3px 7px; border-radius: 6px; background: var(--bg3); border: 1px solid var(--border); }
+  .topbar button { margin-left: auto; font: inherit; color: var(--ink); background: var(--bg3); border: 1px solid var(--border2); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+  .screen { max-width: 980px; margin: 0 auto; padding: 28px 16px 64px; min-width: 0; }
+  .screen + .screen { border-top: 1px dashed var(--border2); }
+  .mock-label { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--violet3); margin-bottom: 18px; }
+
+  /* ScreenHero */
+  .eyebrow { display: flex; align-items: center; gap: 10px; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink3); margin-bottom: 12px; }
+  .eyebrow .glyph { width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle, var(--violet) 0 25%, rgba(124,58,237,.35) 26% 100%); }
+  .eyebrow .pill { padding: 3px 8px; border-radius: 999px; background: rgba(124,58,237,.08); color: var(--violet); font-size: 10px; letter-spacing: .08em; }
+  .hero { display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
+  .hero h1 { font-family: var(--serif); font-weight: 400; font-size: 56px; line-height: .95; letter-spacing: -.025em; margin: 0; flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
+  .hero h1 i { color: var(--violet); font-style: normal; }
+  .hero .actions { display: flex; gap: 8px; padding-bottom: 6px; flex-wrap: wrap; }
+  .sub { font-size: 14px; color: var(--ink3); margin: 10px 0 0; max-width: 720px; line-height: 21px; overflow-wrap: anywhere; }
+  .sub em { font-style: normal; color: var(--amber); }
+  .btn { font: inherit; font-size: 13px; font-weight: 700; border-radius: 10px; padding: 10px 14px; border: 1px solid var(--border2); background: var(--bg3); color: var(--ink); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; min-width: 0; }
+  .btn.primary { background: var(--violet); border-color: var(--violet); color: #fff; } .btn.ghost { background: transparent; }
+  .btn.sm { padding: 6px 10px; font-size: 12px; } .btn.wa { border-color: rgba(52,211,153,.45); color: var(--green); }
+  .btn.amber { border-color: rgba(251,191,36,.5); color: var(--amber); }
+  .ico { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; opacity: .8; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .chip { padding: 7px 12px; border-radius: 999px; border: 1px solid var(--border2); background: var(--bg2); color: var(--ink3); font-size: 12px; font-weight: 600; }
+  .chip.on { background: rgba(124,58,237,.13); border-color: var(--violet); color: var(--violet3); }
+
+  /* caixas, seções */
+  .section { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ink3); margin: 18px 0 8px; }
+  .box { background: var(--bg3); border: 1px solid var(--border); border-radius: 14px; padding: 14px; } .box + .box { margin-top: 8px; }
+  .note { font-size: 11px; color: var(--ink3); margin-top: 10px; } .note b { color: var(--ink2); }
+  .divider { height: 1px; background: var(--border); margin: 14px 0; }
+  .cols { display: grid; grid-template-columns: 1.2fr .8fr; gap: 14px; } .cols > * { min-width: 0; }
+  .sw { width: 44px; height: 26px; border-radius: 999px; background: var(--bg4); border: 1px solid var(--border); position: relative; flex-shrink: 0; }
+  .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--ink3); }
+  .sw.on { background: rgba(124,58,237,.40); border-color: var(--violet); } .sw.on::after { left: 21px; background: var(--violet); }
+
+  /* frase com número editável no meio (molde M0) */
+  .frase { font-size: 15px; line-height: 2.1; color: var(--ink2); } .frase.sm { font-size: 13px; line-height: 2; }
+  .edit { display: inline-block; font-family: var(--mono); font-weight: 500; color: var(--ink); background: var(--bg2); border: 1px solid var(--border2); border-bottom: 2px solid var(--violet); border-radius: 8px; padding: 3px 9px; margin: 0 2px; }
+  .frase .sw { display: inline-block; vertical-align: -8px; margin: 0 4px; }
+
+  /* esteira */
+  .rail { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 18px 0 20px; }
+  .station { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; position: relative; }
+  .station .n { font-family: var(--serif); font-size: 34px; line-height: 1; }
+  .station .l { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink3); margin-top: 6px; }
+  .station .money { font-family: var(--mono); font-size: 12px; color: var(--ink2); margin-top: 6px; }
+  .station.on { border-color: var(--violet); background: var(--violetD); }
+  .station.warn { border-color: rgba(251,191,36,.45); } .station.warn .n, .station.warn .money { color: var(--amber); }
+  .station.ready { border-color: rgba(52,211,153,.4); } .station.ready .n { color: var(--green); }
+  .station::after { content: "›"; position: absolute; right: -9px; top: 50%; transform: translateY(-50%); color: var(--ink3); font-size: 18px; }
+  .station:last-child::after { content: ""; }
+
+  .list { display: flex; flex-direction: column; gap: 8px; }
+  .card { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 14px; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; }
+  .card > * { min-width: 0; } .card .who { font-weight: 700; font-size: 15px; }
+  .card .meta { font-size: 12px; color: var(--ink3); margin-top: 3px; } .card .meta b { color: var(--ink2); font-weight: 600; }
+  .card .right { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; min-width: 0; }
+  .card .tot { font-family: var(--mono); font-size: 17px; font-weight: 500; }
+  .card.warn { border-left: 3px solid var(--amber); } .card.ok { border-left: 3px solid var(--green); }
+  /* regra 7: nada de hover-reveal. Ações sempre visíveis no card. */
+  .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 100%; }
+  .badge { border: 1px solid; border-radius: 999px; padding: 2px 8px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; white-space: nowrap; }
+  .b-open { color: var(--violet3); border-color: var(--violet3); } .b-due { color: var(--amber); border-color: var(--amber); } .b-ok { color: var(--green); border-color: var(--green); }
+  .empty { border: 1px dashed var(--border2); border-radius: 14px; padding: 26px 18px; text-align: center; color: var(--ink3); font-size: 13px; }
+  .empty .big { font-family: var(--serif); font-size: 24px; color: var(--ink); display: block; margin-bottom: 6px; } .empty .one { color: var(--ink2); }
+
+  /* carrinho do Caixa */
+  .cart { border-radius: 18px; border: 1px solid var(--border2); background: var(--bg3); overflow: hidden; max-width: 420px; }
+  .carthead { padding: 16px 18px; background: linear-gradient(135deg, rgba(124,58,237,.85), rgba(109,40,217,.75)); color: #fff; }
+  .carthead .k { font-size: 9px; letter-spacing: 1.2px; text-transform: uppercase; color: rgba(255,255,255,.65); font-weight: 700; }
+  .carthead .tot { font-size: 30px; font-weight: 800; letter-spacing: -1px; margin-top: 2px; }
+  .carthead .who { font-size: 12px; color: rgba(255,255,255,.85); margin-top: 6px; }
+  .cartbody { padding: 10px 16px; } .ci { padding: 11px 0; border-bottom: 1px solid var(--border); }
+  .ci .l1 { display: flex; align-items: center; gap: 10px; }
+  .ci .av { width: 28px; height: 28px; border-radius: 8px; background: var(--violetD); border: 1px solid var(--border2); display: grid; place-items: center; font-weight: 800; font-size: 12px; color: var(--violet3); flex-shrink: 0; }
+  .ci .nm { flex: 1; font-size: 13px; font-weight: 600; min-width: 0; } .ci .vl { font-family: var(--mono); font-size: 13px; }
+  .ci .l2 { display: flex; align-items: center; gap: 10px; margin-top: 8px; padding-left: 38px; flex-wrap: wrap; }
+  .ci .un { font-size: 11px; color: var(--ink3); font-family: var(--mono); } .ci .sp { flex: 1; }
+  .dec { display: inline-flex; align-items: center; gap: 6px; background: var(--bg2); border: 1px solid var(--violet); border-radius: 10px; padding: 6px 10px; }
+  .dec .v { font-family: var(--mono); font-size: 15px; font-weight: 500; color: var(--ink); width: 58px; text-align: right; }
+  .dec .u { font-family: var(--mono); font-size: 12px; color: var(--ink3); }
+  .step { display: inline-flex; align-items: center; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .step b { width: 30px; height: 32px; display: grid; place-items: center; color: var(--violet3); font-size: 15px; }
+  .step .v { font-family: var(--mono); font-size: 15px; min-width: 34px; text-align: center; }
+  .hint { display: flex; align-items: center; gap: 8px; margin: 8px 0 0 38px; padding: 7px 10px; border-radius: 10px; background: var(--violetD); border: 1px solid var(--border2); font-size: 12px; color: var(--ink2); flex-wrap: wrap; }
+  .hint .m { font-family: var(--mono); color: var(--violet3); }
+  .sum { font-size: 12.5px; padding: 10px 0 2px; } .sum div { display: flex; justify-content: space-between; padding: 3px 0; color: var(--ink3); }
+  .sum .t { color: var(--ink); font-weight: 700; font-size: 14px; border-top: 1px solid var(--border); padding-top: 7px; margin-top: 4px; } .sum .v { font-family: var(--mono); }
+  .cartfoot { padding: 12px 16px 16px; border-top: 1px solid var(--border); }
+  .fin { width: 100%; height: 48px; border-radius: 12px; border: 0; background: var(--violet); color: #fff; font-size: 15px; font-weight: 800; cursor: pointer; }
+
+  /* aviso âmbar: forma + texto, nunca só cor */
+  .aviso { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0 0 38px; padding: 9px 11px; border-radius: 10px; background: var(--amberD); border: 1px solid rgba(251,191,36,.45); font-size: 12px; color: var(--ink2); line-height: 1.5; flex-wrap: wrap; }
+  .aviso .s { color: var(--amber); font-weight: 800; flex-shrink: 0; } .aviso.flat { margin-left: 0; }
+  .okline { display: flex; gap: 8px; align-items: flex-start; padding: 9px 11px; border-radius: 10px; background: var(--greenD); border: 1px solid rgba(52,211,153,.4); font-size: 12px; color: var(--ink2); }
+  .okline .s { color: var(--green); font-weight: 800; }
+  .mini { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; color: var(--ink3); }
+
+  /* lote / tonalidade */
+  .lt { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; border: 1px solid var(--border2); border-radius: 999px; padding: 3px 9px; background: var(--bg2); color: var(--ink2); }
+  .lt.on { border-color: var(--violet); color: var(--violet3); background: var(--violetD); } .lt.amber { border-color: rgba(251,191,36,.5); color: var(--amber); background: var(--amberD); }
+  .lotes { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .lrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink2); padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg2); }
+  .lrow .q { font-family: var(--mono); color: var(--ink); } .lrow .d { font-size: 11px; color: var(--ink3); } .lrow .sp { flex: 1; }
+
+  /* linha da conferência do XML */
+  .xrow { border: 1px solid var(--border); border-radius: 12px; background: var(--bg2); padding: 12px; } .xrow + .xrow { margin-top: 8px; }
+  .xrow .l1 { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .xrow .nm { font-weight: 600; font-size: 13.5px; flex: 1 1 180px; min-width: 0; } .xrow .cv { font-family: var(--mono); font-size: 12px; color: var(--violet3); }
+
+  /* wizard — DNA do TrocaModal (regra 5): mesmo cabeçalho, mesma barra de
+     passos numerados, mesmo rodapé voltar/continuar. */
+  .wz { border: 1px solid var(--border2); border-radius: 18px; background: var(--bg3); overflow: hidden; max-width: 560px; }
+  .wzh { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  .wzh .ic { width: 30px; height: 30px; border-radius: 9px; background: var(--violetD); border: 1px solid var(--border2); display: grid; place-items: center; color: var(--violet3); flex-shrink: 0; }
+  .wzh .t { font-weight: 700; font-size: 14px; } .wzh .s { font-size: 11.5px; color: var(--ink3); } .wzh .x { margin-left: auto; color: var(--ink3); }
+  .stepbar { display: flex; gap: 8px; padding: 11px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .stp { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ink3); min-width: 0; }
+  .stp .d { width: 19px; height: 19px; border-radius: 50%; background: var(--bg4); border: 1px solid var(--border); display: grid; place-items: center; font-size: 10px; font-weight: 800; flex-shrink: 0; }
+  .stp.done .d { background: var(--violet); border-color: var(--violet); color: #fff; }
+  .stp.on { color: var(--violet3); font-weight: 700; } .stp.on .d { background: var(--violet); border-color: var(--violet); color: #fff; box-shadow: 0 0 0 3px var(--violetD); }
+  .wzb { padding: 14px 16px; } .wzb h4 { margin: 0 0 4px; font-size: 14px; } .wzb .h4s { font-size: 12px; color: var(--ink3); margin-bottom: 12px; }
+  .wzf { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: space-between; flex-wrap: wrap; } .wzf .btn { flex: 1 1 160px; justify-content: center; }
+  .irow { display: flex; align-items: center; gap: 10px; padding: 11px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .irow .nm { font-size: 13px; font-weight: 600; } .irow .mt { font-size: 11px; color: var(--ink3); font-weight: 400; margin-top: 2px; }
+  .dest { border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: var(--bg2); display: flex; gap: 10px; align-items: flex-start; } .dest + .dest { margin-top: 8px; }
+  .dest.on { border-color: var(--violet); background: var(--violetD); }
+  .dest .rd { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--border2); flex-shrink: 0; margin-top: 2px; }
+  .dest.on .rd { border-color: var(--violet); background: var(--violet); box-shadow: inset 0 0 0 3px var(--bg3); }
+  .dest .t { font-weight: 700; font-size: 13.5px; } .dest .d { font-size: 11.5px; color: var(--ink3); margin-top: 2px; }
+  .vale { border: 1px dashed var(--border2); border-radius: 14px; padding: 16px; text-align: center; background: var(--bg2); }
+  .vale .k { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ink3); }
+  .vale .v { font-family: var(--serif); font-size: 38px; line-height: 1.1; color: var(--green); } .vale .c { font-family: var(--mono); font-size: 12px; color: var(--ink3); }
+
+  /* pedido de compra */
+  .prow { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .prow .nm { font-size: 13px; font-weight: 600; } .prow .sug { font-size: 11px; color: var(--ink3); font-weight: 400; margin-top: 2px; } .prow .vl { font-family: var(--mono); font-size: 13px; }
+  .wamsg { background: var(--bg2); border: 1px solid rgba(52,211,153,.35); border-radius: 12px; padding: 12px 14px; font-size: 12.5px; line-height: 1.7; color: var(--ink2); white-space: pre-line; }
+
+  @media (max-width: 860px) {
+    .cols { grid-template-columns: 1fr; }
+    .hero { flex-direction: column; align-items: stretch; gap: 12px; }
+    .hero h1 { font-size: 36px; flex: none; width: 100%; }
+    .hero .actions { padding-bottom: 0; } .hero .actions .btn { flex: 1 1 150px; justify-content: center; }
+    .card { grid-template-columns: 1fr; }
+    .card .right { align-items: stretch; text-align: left; width: 100%; } .card .tot { text-align: left; } .card .right > .badge { align-self: flex-start; }
+    .acts { justify-content: flex-start; width: 100%; } .acts .btn { flex: 1 1 150px; justify-content: center; }
+    /* esteiras viram colunas roláveis horizontalmente; a PÁGINA não rola de lado */
+    .rail { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; margin-left: -16px; margin-right: -16px; padding: 0 16px 4px; }
+    .station { flex: 0 0 62%; scroll-snap-align: start; } .station::after { content: ""; }
+    .cart, .wz { max-width: none; } .hint, .aviso { margin-left: 0; }
+    .stepbar { gap: 6px; } .stp .lbl { display: none; } .stp.on .lbl { display: inline; }
+  }
+</style>
+</head>
+<body>
+<div class="topbar">Mockup · Matcon <b>M4 — profundidade</b> · 6 telas · lote/tonalidade, devolução de sobra e compras
+  <nav><a href="#entrada">1 entrada</a><a href="#lotes">2 lotes</a><a href="#carrinho">3 carrinho</a><a href="#troca">4 troca</a><a href="#compras">5 compras</a><a href="#pedido">6 pedido</a></nav>
+  <button onclick="document.documentElement.dataset.tema = document.documentElement.dataset.tema === 'claro' ? '' : 'claro'">Tema claro/escuro</button>
+</div>
+
+<!-- ===================== 1. ENTRADA DO XML COM LOTE ===================== -->
+<section class="screen" id="entrada">
+  <div class="mock-label">1 · Estoque › importar XML da nota (DanfeImportModal) — o lote entra aqui</div>
+  <div class="eyebrow"><span class="glyph"></span> Aura<span style="color:var(--violet)">.</span> · Matcon <span class="pill">M4</span></div>
+  <div class="hero"><h1>O lote entra na porta<i>.</i></h1></div>
+  <p class="sub">Ninguém digita lote no balcão. Ele chega junto com a nota do fornecedor — <em>uma vez, na conferência do XML</em>, do lado da conversão de caixas que o M0 já mostra.</p>
+
+  <div class="cols">
+    <div>
+      <div class="section">Conferir produtos da nota</div>
+      <div class="box">
+        <div style="font-size:12px;color:var(--ink3);margin-bottom:12px">Nota <b style="color:var(--ink2)">12.884</b> · Cerâmica Elizabeth · chegou hoje, 22/09</div>
+
+        <div class="xrow">
+          <div class="l1"><div class="nm">Porcelanato Bianco 60×60 acetinado <span class="mini">· produto existente</span></div> <div class="cv">10 cx → 23,2 m²</div></div>
+          <div class="frase sm">lote/tonalidade <span class="edit">27B</span> · bitola <span class="edit">03</span></div>
+        </div>
+
+        <div class="xrow">
+          <div class="l1"><div class="nm">Porcelanato Cinza Concreto 60×60 <span class="mini">· produto existente</span></div> <div class="cv">30 cx → 69,6 m²</div></div>
+          <div class="frase sm">lote/tonalidade <span class="edit">14A</span> · bitola <span class="edit">02</span></div>
+        </div>
+
+        <div class="xrow">
+          <div class="l1"><div class="nm">Cimento CP-II 50 kg</div> <div class="cv">100 sc → 100 sc</div></div>
+          <p class="note" style="margin-top:6px">Saco de cimento não tem tonalidade — a linha nem mostra os campos.</p>
+        </div>
+
+        <div class="divider"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost">Cancelar</button><button class="btn primary" style="flex:1;justify-content:center"><span class="ico">box</span> Guardar no estoque</button></div>
+      </div>
+      <p class="note">Campo livre, do jeito que vem impresso na caixa: <b>27B</b>, <b>V2-A</b>, <b>L-0925</b>. A Aura não valida, não tabela, não inventa código — só carrega o que o vendedor vai repetir para o cliente.</p>
+    </div>
+
+    <div>
+      <div class="section">Quando os campos aparecem</div>
+      <div class="box">
+        <div class="frase sm">Controlo lote e tonalidade nos produtos vendidos em m² e m³ <span class="sw on"></span></div>
+        <p class="note" style="margin-top:2px">Uma frase em <span class="ico">/matcon/config</span>, como todas as outras. Desligada, a conferência do XML é exatamente a de hoje. Ligada, só piso, revestimento e pedra ganham os dois campos — quem vende só cimento e areia nunca vê.</p>
+      </div>
+
+      <div class="section">Por que isso importa</div>
+      <div class="box"><p class="note" style="margin:0">Caixas do mesmo porcelanato, em lotes diferentes, saem com tom e medida diferentes. Vendidas para o mesmo ambiente, viram a troca mais cara do setor: o piso já está assentado. <b>Fora desta fase:</b> bitola como regra de bloqueio, classe A/B/C, validade por lote e inventário com coletor — aqui bitola é só texto que acompanha o lote.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 2. PRODUTO COM SALDO POR LOTE ===================== -->
+<section class="screen" id="lotes">
+  <div class="mock-label">2 · Estoque › ficha do produto — saldo por lote</div>
+  <a href="#entrada" style="font-size:12px;font-weight:600">‹ Entrada do XML</a>
+  <div class="hero" style="margin-top:8px"><h1 style="font-size:38px">148,48 m² em 2 lotes<i>.</i></h1></div>
+  <p class="sub">O saldo deixa de ser um número e passa a contar uma história. <em>É o que o vendedor olha antes de prometer o ambiente inteiro.</em></p>
+
+  <div class="cols">
+    <div>
+      <div class="box">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:15px">Porcelanato Bianco 60×60 acetinado</div><div class="note" style="margin-top:2px">R$ 54,90 / m² · caixa de 2,32 m² · avisar abaixo de 20 m²</div></div>
+          <div style="text-align:right"><div style="font-family:var(--mono);font-size:20px">148,48 m²</div><div class="note" style="margin-top:0">= 64 caixas</div></div>
+        </div>
+
+        <div class="lotes">
+          <div class="lrow">
+            <span class="lt on"><span class="ico">layers</span> lote 27B</span>
+            <span class="q">95,12 m²</span>
+            <span class="d">41 cx · bitola 03 · entrou 12/09</span>
+            <span class="sp"></span>
+            <button class="btn sm ghost">Vender deste lote</button>
+          </div>
+          <div class="lrow">
+            <span class="lt"><span class="ico">layers</span> lote 28A</span>
+            <span class="q">53,36 m²</span>
+            <span class="d">23 cx · bitola 03 · entrou 22/09</span>
+            <span class="sp"></span>
+            <button class="btn sm ghost">Vender deste lote</button>
+          </div>
+        </div>
+        <p class="note">Toque na linha do produto para abrir e fechar os lotes. Sem lote controlado, a ficha é a de hoje: um número e pronto.</p>
+      </div>
+
+      <div class="section">Outro produto, mesma lista</div>
+      <div class="box">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:15px">Cimento CP-II 50 kg</div><div class="note" style="margin-top:2px">R$ 32,90 / sc · avisar abaixo de 40 sc</div></div>
+          <div style="text-align:right"><div style="font-family:var(--mono);font-size:20px;color:var(--amber)">12 sc</div><div class="note" style="margin-top:0">abaixo do mínimo</div></div>
+        </div>
+        <div class="aviso flat" style="margin-top:10px"><span class="s">⚠</span><span>Abaixo do mínimo de 40 sc. Esse mesmo alerta vira a primeira linha da sugestão de compra (tela 5).</span></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section">O que o vendedor faz com isso</div>
+      <div class="box">
+        <p class="note" style="margin:0 0 10px">A dona Marlene precisa de 100 m² para a sala e o corredor. O maior lote tem 95,12 m². <b>O vendedor descobre isso antes de vender</b>, não depois que o pedreiro abriu a quinta caixa.</p>
+        <p class="note" style="margin:0">Duas saídas honestas: vender os 95,12 m² do 27B e completar com o 28A avisando o cliente, ou segurar o ambiente e pedir mais do 27B no próximo pedido de compra. "Lote", "tonalidade" e "bitola" são as palavras impressas na caixa e as que o pedreiro usa — nada de "rastreabilidade" nem "partida".</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 3. CARRINHO COM LOTE ===================== -->
+<section class="screen" id="carrinho">
+  <div class="mock-label">3 · Caixa › carrinho (CartPanel) — o lote no item em m²</div>
+  <a href="#lotes" style="font-size:12px;font-weight:600">‹ Saldo por lote</a>
+  <div class="hero" style="margin-top:8px"><h1 style="font-size:38px">O aviso que evita a obra parada<i>.</i></h1></div>
+  <p class="sub">O item em m² ganha uma linha: de qual lote está saindo. Se a quantidade não cabe nele, o carrinho avisa <em>com símbolo e com frase</em> — nunca só com a cor.</p>
+
+  <div class="cols">
+    <div>
+      <div class="cart">
+        <div class="carthead">
+          <div class="k">Total da venda</div>
+          <div class="tot">R$ 5.819,00</div>
+          <div class="who">Marlene Souza · obra Rua das Acácias · Vendedor: Davi</div>
+        </div>
+        <div class="cartbody">
+          <div class="ci">
+            <div class="l1"><div class="av">P</div><div class="nm">Porcelanato Bianco 60×60 acetinado</div><div class="vl">5.490,00</div></div>
+            <div class="l2">
+              <span class="un">R$ 54,90 / m²</span><span class="sp"></span>
+              <span class="dec"><span class="v">100,00</span><span class="u">m²</span></span>
+            </div>
+            <div class="hint">
+              <span class="m"><span class="ico">layers</span> lote 27B · 95,12 m² disponíveis</span>
+              <button class="btn sm" style="margin-left:auto">trocar lote</button>
+            </div>
+            <div class="aviso">
+              <span class="s">⚠</span>
+              <span>Precisa de 2 lotes: <b>27B (95,12 m²)</b> + <b>28A (4,88 m²)</b>. Lotes diferentes podem ter tom diferente — avise o cliente ou escolha outro lote.</span>
+            </div>
+          </div>
+          <div class="ci">
+            <div class="l1"><div class="av">C</div><div class="nm">Cimento CP-II 50 kg</div><div class="vl">329,00</div></div>
+            <div class="l2">
+              <span class="un">R$ 32,90 / sc</span><span class="sp"></span>
+              <span class="step"><b>−</b><span class="v">10</span><b>+</b></span>
+            </div>
+          </div>
+          <div class="sum">
+            <div><span>2 itens · 100 m² + 10 sc</span><span class="v">R$ 5.819,00</span></div>
+            <div class="t"><span>Total</span><span class="v">R$ 5.819,00</span></div>
+          </div>
+        </div>
+        <div class="cartfoot"><button class="fin">Finalizar venda</button></div>
+      </div>
+      <p class="note">Arredondar para caixa cheia está desligado nesta venda, então o rateio entre os lotes é em m² limpos. Com o arredondamento ligado, a linha "= 44 caixas" do M0 aparece acima e o rateio é recalculado em cima dela.</p>
+    </div>
+
+    <div>
+      <div class="section">Três estados do mesmo item</div>
+      <div class="box">
+        <div class="okline"><span class="s">✓</span><span>Cabe no lote escolhido — só a linha violeta com "lote 27B · 95,12 m² disponíveis".</span></div>
+        <div class="aviso flat" style="margin-top:8px"><span class="s">⚠</span><span>Não cabe — a frase dos 2 lotes, e o vendedor decide na frente do cliente.</span></div>
+        <div class="aviso flat" style="margin-top:8px"><span class="s">⚠</span><span>Nenhum lote sozinho dá conta — "o maior lote tem 95,12 m². Dá para separar 3 lotes ou pedir mais do 27B."</span></div>
+        <p class="note">Nunca bloqueia a venda. Material de construção se vende conversando; o sistema informa, quem decide é o balcão.</p>
+      </div>
+
+      <div class="section">Na entrega</div>
+      <div class="box">
+        <div style="font-size:12.5px;color:var(--ink2)"><b style="color:var(--ink)">Pedido #1211 · separando</b></div>
+        <div class="lrow" style="margin-top:8px"><span style="flex:1 1 150px;min-width:0">Porcelanato Bianco 60×60</span><span class="q">95,12 m²</span><span class="lt on">lote 27B</span></div>
+        <div class="lrow" style="margin-top:6px"><span style="flex:1 1 150px;min-width:0">Porcelanato Bianco 60×60</span><span class="q">4,88 m²</span><span class="lt amber">lote 28A</span></div>
+        <p class="note">Quem carrega o caminhão lê o lote na lista de separação e pega as caixas certas da pilha certa. Sem isso o aviso do carrinho não vale nada.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 4. TROCA › DEVOLUÇÃO DE SOBRA ===================== -->
+<section class="screen" id="troca">
+  <div class="mock-label">4 · Caixa › Trocar / Devolver (TrocaModal) — o caminho "sobrou material da obra"</div>
+  <a href="#carrinho" style="font-size:12px;font-weight:600">‹ Carrinho</a>
+  <div class="hero" style="margin-top:8px"><h1 style="font-size:38px">A obra acabou e sobrou<i>.</i></h1></div>
+  <p class="sub">Não é wizard novo (regra 5): é o mesmo de hoje, com dois deltas. O Passo 2 passa a aceitar <em>quantidade com vírgula</em> quando a unidade é fracionada, e o Passo 3 ganha um atalho para quem não vai levar nada.</p>
+
+  <div class="section">Passo 2 — o que voltou</div>
+  <div class="wz">
+    <div class="wzh">
+      <div class="ic"><span class="ico">tag</span></div><div><div class="t">Trocar / Devolver</div><div class="s">Marque o que o cliente está devolvendo</div></div>
+      <div class="x">✕</div>
+    </div>
+    <div class="stepbar"><div class="stp done"><span class="d">✓</span><span class="lbl">Venda</span></div><div class="stp on"><span class="d">2</span><span class="lbl">Devolver</span></div>
+      <div class="stp"><span class="d">3</span><span class="lbl">Levar (opcional)</span></div><div class="stp"><span class="d">4</span><span class="lbl">Finalizar</span></div></div>
+    <div class="wzb">
+      <h4>O que o cliente está devolvendo?</h4>
+      <div class="h4s">Compra de 05/09 · 14:20 · vendedor Davi · R$ 5.819,00</div>
+
+      <div class="irow"><div style="flex:1 1 200px;min-width:0"><div class="nm">Porcelanato Bianco 60×60 acetinado</div><div class="mt">R$ 54,90 / m² · levou 100 m² · saiu do lote 27B</div></div>
+        <span class="dec"><span class="v">4,64</span><span class="u">m²</span></span>
+      </div>
+      <div class="okline" style="margin-top:10px"><span class="s">✓</span><span><b>2 caixas fechadas</b> — 4,64 m² voltam ao estoque, no lote 27B. Crédito de R$ 254,74.</span></div>
+
+      <div class="irow" style="margin-top:6px"><div style="flex:1 1 200px;min-width:0"><div class="nm">Porcelanato Bianco 60×60 <span class="mini" style="color:var(--amber)">caixa aberta</span></div><div class="mt">o pedreiro abriu e usou metade</div></div>
+        <span class="dec"><span class="v">1,16</span><span class="u">m²</span></span>
+      </div>
+      <div class="aviso flat" style="margin-top:10px"><span class="s">⚠</span><span>Caixa aberta <b>não volta ao estoque</b> e vale R$ 0. Peça fechada ninguém compra, e o tom já não bate com o lote. A loja pode aceitar por fora, mas o estoque não conta com ela.</span></div>
+
+      <div class="irow" style="margin-top:6px"><div style="flex:1 1 200px;min-width:0"><div class="nm">Cimento CP-II 50 kg</div><div class="mt">R$ 32,90 / sc · levou 10 sc</div></div>
+        <span class="step"><b>−</b><span class="v">0</span><b>+</b></span>
+      </div>
+      <p class="note">O porcelanato é m² → campo com vírgula, e ao lado o sistema conta as caixas. O cimento é sc → o − 0 + de sempre. Mesma regra do carrinho: quem manda é a unidade do produto.</p>
+    </div>
+    <div class="wzf"><button class="btn ghost">‹ Voltar</button><button class="btn primary">Continuar · R$ 254,74 ›</button></div>
+  </div>
+
+  <div class="section" style="margin-top:26px">Passo 3 — "não vai levar nada"</div>
+  <div class="wz">
+    <div class="wzh">
+      <div class="ic"><span class="ico">tag</span></div><div><div class="t">Trocar / Devolver</div><div class="s">Adicione itens novos ou pule para fazer só a devolução</div></div>
+      <div class="x">✕</div>
+    </div>
+    <div class="stepbar"><div class="stp done"><span class="d">✓</span><span class="lbl">Venda</span></div><div class="stp done"><span class="d">✓</span><span class="lbl">Devolver</span></div>
+      <div class="stp on"><span class="d">3</span><span class="lbl">Levar (opcional)</span></div><div class="stp"><span class="d">4</span><span class="lbl">Finalizar</span></div></div>
+    <div class="wzb">
+      <div class="aviso flat" style="margin-bottom:12px">
+        <span class="s">i</span>
+        <span style="flex:1">Este passo é <b>opcional</b>. Sobra de obra quase nunca vira outra compra no mesmo dia.</span>
+        <button class="btn sm amber" style="flex-shrink:0">Não vai levar nada — devolver o valor ›</button>
+      </div>
+      <div class="dest on"><div class="rd"></div><div><div class="t">Levar outro produto</div><div class="d">Escolhe no balcão e a diferença entra no caixa</div></div></div>
+      <div class="dest"><div class="rd"></div><div><div class="t">Crédito na loja</div><div class="d">Vale de R$ 254,74, usado na próxima compra ou abatido no crediário</div></div></div>
+      <div class="dest"><div class="rd"></div><div><div class="t">Devolver o dinheiro</div><div class="d">Estorno em dinheiro, Pix ou na máquina do cartão</div></div></div>
+      <p class="note">O botão âmbar pula direto para a confirmação com o destino já em <b>Crédito na loja</b> — é o caminho do dia a dia da obra. Os três cards continuam ali para quem precisa dos outros dois.</p>
+    </div>
+    <div class="wzf"><button class="btn ghost">‹ Voltar</button><button class="btn primary">Continuar ›</button></div>
+  </div>
+
+  <div class="section" style="margin-top:26px">Confirmação e sucesso</div>
+  <div class="cols">
+    <div>
+      <div class="wz" style="max-width:none">
+        <div class="wzh">
+          <div class="ic"><span class="ico">check</span></div><div><div class="t">Concluído</div><div class="s">Vale emitido · Estoque atualizado · Caixa registrado</div></div>
+        </div>
+        <div class="wzb" style="text-align:center">
+          <div class="vale">
+            <div class="k">Devolução registrada</div>
+            <div class="v">R$ 254,74</div>
+            <div class="c">vale #V-0117 · Marlene Souza · vale por 12 meses</div>
+          </div>
+          <div class="okline" style="margin-top:12px;text-align:left"><span class="s">✓</span><span>Estoque <b>+2 cx no lote 27B</b> — o porcelanato voltou para a pilha certa e já aparece para a próxima venda.</span></div>
+          <div class="acts" style="justify-content:center;margin-top:14px">
+            <button class="btn sm wa"><span class="ico">send</span> Mandar o vale no WhatsApp</button><button class="btn sm"><span class="ico">clipboard</span> Imprimir comprovante</button><button class="btn sm primary">Nova troca</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="section">Por que vale, e não dinheiro</div>
+      <div class="box">
+        <p class="note" style="margin:0 0 10px">Crédito em vale ou abatido no crediário já é o padrão da casa no wizard de hoje. Em obra é ainda mais verdadeiro: sempre falta um rejunte, um saco de cimento, um metro de rodapé: <b>o dinheiro fica na loja e volta como venda</b>. "Devolver o dinheiro" continua a um toque de distância — quem escolhe é o vendedor.</p>
+      </div>
+      <div class="section">O delta no wizard</div>
+      <div class="box">
+        <p class="note" style="margin:0 0 8px"><b>Passo 2:</b> o − 1 + vira campo com vírgula quando a unidade é fracionada, com o teto na quantidade que o cliente levou; abaixo, a conta de caixas fechadas e a linha de "não volta ao estoque".</p>
+        <p class="note" style="margin:0 0 8px"><b>Passo 3:</b> um botão a mais no aviso de passo opcional, que já existe, com o destino pré-escolhido.</p>
+        <p class="note" style="margin:0"><b>Sucesso:</b> uma linha a mais dizendo em qual lote o material voltou. Cabeçalho, barra de passos e rodapé: intocados.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 5. COMPRAS › SUGESTÃO ===================== -->
+<section class="screen" id="compras">
+  <div class="mock-label">5 · /matcon/compras (chave matcon.compras) — esteira de compra</div>
+  <div class="eyebrow"><span class="glyph"></span> Aura<span style="color:var(--violet)">.</span> · Matcon <span class="pill">M4</span></div>
+  <div class="hero">
+    <h1>Compras<i>.</i></h1>
+    <div class="actions"><button class="btn ghost">Estoque</button><button class="btn primary"><span class="ico">package</span> Novo pedido</button></div>
+  </div>
+  <p class="sub">R$ 11.080 de material faltando para a loja voltar ao mínimo · <em>11 itens abaixo do mínimo em 4 fornecedores</em> · 2 pedidos a caminho</p>
+
+  <div class="rail">
+    <div class="station on"><div class="n">11</div><div class="l">Sugestão</div><div class="money">R$ 11.080</div></div>
+    <div class="station warn"><div class="n">2</div><div class="l">Pedido enviado</div><div class="money">R$ 6.310</div></div>
+    <div class="station ready"><div class="n">3</div><div class="l">Recebido · 7 dias</div><div class="money">R$ 9.840</div></div>
+  </div>
+
+  <div class="chips"><span class="chip on">Todos os fornecedores</span><span class="chip">Cimentos Ipê</span><span class="chip">Cerâmica Elizabeth</span><span class="chip">Aço Norte</span><span class="chip">Tintas Vale</span></div>
+
+  <div class="list">
+    <div class="card">
+      <div>
+        <div class="who">Cimentos Ipê Distribuidora</div>
+        <div class="meta">fornecedor da última nota destes itens · (11) 4002-8922</div>
+        <div class="lotes">
+          <div class="lrow"><span style="flex:1 1 100%;min-width:0"><b style="color:var(--ink)">Cimento CP-II 50 kg</b> · tem 12 sc, mínimo 40, vende 18/semana → <b style="color:var(--violet3)">sugerimos 60 sc</b> <span class="d">(~R$ 1.974)</span></span></div>
+          <div class="lrow"><span style="flex:1 1 100%;min-width:0"><b style="color:var(--ink)">Argamassa AC-III 20 kg</b> · tem 18 sc, mínimo 50, vende 22/semana → <b style="color:var(--violet3)">sugerimos 80 sc</b> <span class="d">(~R$ 1.512)</span></span></div>
+          <div class="lrow"><span class="d" style="flex:1 1 100%">mais 2 itens deste fornecedor · ~R$ 640</span></div>
+        </div>
+      </div>
+      <div class="right">
+        <span class="badge b-open">4 itens</span> <span class="tot">R$ 4.126</span>
+        <div class="acts">
+          <button class="btn sm ghost">Ver itens</button><button class="btn sm primary"><span class="ico">clipboard</span> Montar pedido</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card warn">
+      <div>
+        <div class="who">Cerâmica Elizabeth</div>
+        <div class="meta">fornecedor da última nota destes itens · pedido mínimo de 20 caixas</div>
+        <div class="lotes">
+          <div class="lrow"><span style="flex:1 1 100%;min-width:0"><b style="color:var(--ink)">Porcelanato Cinza Concreto 60×60</b> · tem 9,28 m² (4 cx), mínimo 40 m², vende 23 m²/semana → <b style="color:var(--violet3)">sugerimos 30 cx</b> <span class="d">(69,60 m² · ~R$ 2.088)</span></span></div>
+          <div class="lrow"><span class="d" style="flex:1 1 100%">mais 1 item deste fornecedor · ~R$ 430</span></div>
+        </div>
+        <div class="aviso flat" style="margin-top:10px"><span class="s">⚠</span><span>Acaba em 3 dias no ritmo de venda de hoje. O Bianco 60×60 tem 148,48 m² e não entra na lista.</span></div>
+      </div>
+      <div class="right">
+        <span class="badge b-due">Acaba em 3 dias</span> <span class="tot">R$ 2.518</span>
+        <div class="acts">
+          <button class="btn sm ghost">Ver itens</button><button class="btn sm primary"><span class="ico">clipboard</span> Montar pedido</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="who">Aço Norte</div>
+        <div class="meta">fornecedor da última nota destes itens · entrega em 5 dias úteis</div>
+        <div class="lotes">
+          <div class="lrow"><span style="flex:1 1 100%;min-width:0"><b style="color:var(--ink)">Vergalhão 10 mm</b> · tem 6 br, mínimo 40, vende 28/semana → <b style="color:var(--violet3)">sugerimos 90 br</b> <span class="d">(~R$ 3.150)</span></span></div>
+          <div class="lrow"><span class="d" style="flex:1 1 100%">mais 3 itens deste fornecedor · ~R$ 1.286</span></div>
+        </div>
+      </div>
+      <div class="right">
+        <span class="badge b-open">4 itens</span> <span class="tot">R$ 4.436</span>
+        <div class="acts">
+          <button class="btn sm ghost">Ver itens</button><button class="btn sm primary"><span class="ico">clipboard</span> Montar pedido</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">Primeiro dia — a esteira vazia ensina</div>
+  <div class="empty">
+    <span class="big">Nada faltando hoje.</span>
+    <span class="one">Quando um produto passar do estoque mínimo, ele aparece aqui com a quantidade sugerida — e você monta o pedido em um toque.</span>
+  </div>
+  <p class="note">A sugestão é o alerta de estoque mínimo que já existe ("repor 28 sc ~R$ 921"), agora com o giro dos últimos 30 dias por cima e agrupado por fornecedor. O fornecedor vem do último XML importado daquele produto, sem cadastro novo. Nada é comprado sozinho: a lista sugere, o dono corta e aprova. Ações sempre visíveis, sem hover (regra 7).</p>
+</section>
+
+<!-- ===================== 6. COMPRAS › PEDIDO ===================== -->
+<section class="screen" id="pedido">
+  <div class="mock-label">6 · /matcon/compras › pedido de compra</div>
+  <a href="#compras" style="font-size:12px;font-weight:600">‹ Sugestão</a>
+  <div class="hero" style="margin-top:8px"><h1 style="font-size:38px">O pedido sai pelo WhatsApp<i>.</i></h1></div>
+  <p class="sub">É assim que a loja de bairro compra hoje — só que de cabeça, no meio do expediente. <em>A Aura escreve o texto pronto e guarda o que foi pedido.</em></p>
+
+  <div class="cols">
+    <div>
+      <div class="section">Pedido de compra #C-0042 · Cimentos Ipê Distribuidora</div>
+      <div class="box">
+        <div class="prow"><div style="flex:1 1 200px;min-width:0"><div class="nm">Cimento CP-II 50 kg</div><div class="sug">sugerido 60 sc · tem 12, mínimo 40</div></div>
+          <span class="step"><b>−</b><span class="v">60</span><b>+</b></span> <span class="vl">R$ 1.974,00</span>
+        </div>
+        <div class="prow"><div style="flex:1 1 200px;min-width:0"><div class="nm">Argamassa AC-III 20 kg</div><div class="sug">sugerido 80 sc · tem 18, mínimo 50</div></div>
+          <span class="step"><b>−</b><span class="v">80</span><b>+</b></span> <span class="vl">R$ 1.512,00</span>
+        </div>
+        <div class="prow"><div style="flex:1 1 200px;min-width:0"><div class="nm">Cal hidratada CH-III 20 kg</div><div class="sug">sugerido 30 sc</div></div>
+          <span class="step"><b>−</b><span class="v">30</span><b>+</b></span> <span class="vl">R$ 390,00</span>
+        </div>
+        <div class="prow" style="border-bottom:0"><div style="flex:1 1 200px;min-width:0"><div class="nm">Rejunte flexível 5 kg</div><div class="sug">sugerido 25 un</div></div>
+          <span class="step"><b>−</b><span class="v">25</span><b>+</b></span> <span class="vl">R$ 250,00</span>
+        </div>
+        <div class="sum">
+          <div><span>4 itens</span><span class="v">R$ 4.126,00</span></div>
+          <div class="t"><span>Total do pedido</span><span class="v">R$ 4.126,00</span></div>
+        </div>
+        <p class="note">Quantidade editável item a item, e o item que o dono não quiser sai do pedido. O preço é o da última nota daquele fornecedor — serve de referência, não de promessa.</p>
+      </div>
+
+      <div class="section">Texto pronto para o fornecedor</div>
+      <div class="wamsg">Bom dia! Aqui é do Depósito Santa Rita.
+Preciso de:
+· 60 sc de Cimento CP-II 50 kg
+· 80 sc de Argamassa AC-III 20 kg
+· 30 sc de Cal hidratada CH-III 20 kg
+· 25 un de Rejunte flexível 5 kg
+Consegue entregar esta semana? Obrigado!</div>
+      <div class="acts" style="justify-content:flex-start;margin-top:10px">
+        <button class="btn wa"><span class="ico">send</span> Enviar no WhatsApp para o fornecedor</button><button class="btn"><span class="ico">check</span> Marcar como enviado</button>
+      </div>
+      <p class="note">"Marcar como enviado" é para quem prefere ligar. O pedido sai da Sugestão e vai para "Pedido enviado" do mesmo jeito.</p>
+    </div>
+
+    <div>
+      <div class="section">Recebido — como o card fecha sozinho</div>
+      <div class="card ok" style="grid-template-columns:1fr">
+        <div>
+          <div class="who">Cimentos Ipê Distribuidora</div>
+          <div class="meta"><b>Pedido #C-0039</b> · enviado no WhatsApp em 19/09</div>
+          <div class="okline" style="margin-top:10px"><span class="s">✓</span><span><b>XML importado em 25/09 · 60 sc conferidos</b> — o pedido fechou sozinho quando a nota daquela compra entrou no estoque.</span></div>
+          <div class="acts" style="justify-content:flex-start;margin-top:10px">
+            <span class="badge b-ok">Recebido</span>
+            <button class="btn sm ghost">Ver o que chegou</button>
+          </div>
+        </div>
+      </div>
+      <p class="note">Ninguém dá baixa em pedido de compra à mão. Quando o XML daquele fornecedor entra com os produtos do pedido, a Aura casa os dois e fecha. Se vier menos do que foi pedido, o card mostra o que faltou e continua em "Pedido enviado".</p>
+
+      <div class="section">Três estações, e por quê</div>
+      <div class="box">
+        <p class="note" style="margin:0"><b>Sugestão</b> é o dinheiro que a loja precisa gastar para não perder venda; <b>Pedido enviado</b> é o dinheiro a caminho; <b>Recebido</b> é o que chegou na semana. Mesma leitura das esteiras de orçamento e entrega: o dono abre de manhã, olha três números e sabe o que fazer.</p>
+      </div>
+
+      <div class="section">Fora desta fase</div>
+      <div class="box"><p class="note" style="margin:0">Cotação com vários fornecedores, aprovação por alçada, rateio de frete no custo, multi-depósito e kits. Um depósito de bairro compra do fornecedor que atende — quando pedir cotação, a esteira já tem onde encaixar.</p></div>
+    </div>
+  </div>
+</section>
+</body>
+</html>

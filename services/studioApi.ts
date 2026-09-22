@@ -179,6 +179,8 @@ export type PublicTrack = {
   // 22/09/2026 (Matcon M1): data (YYYY-MM-DD) da próxima entrega quando há
   // saldo a entregar. Nullable/ausente = sem viagem seguinte agendada.
   proxima_entrega?: string | null;
+  // 22/09/2026 (Matcon M2): link do DANFE quando a entrega tem NF-e autorizada.
+  danfe_url?: string | null;
 };
 
 export type StudioOrderItem = {
