@@ -27,6 +27,7 @@ import type { SaleResult } from "@/hooks/useCart";
 import { PAYMENTS } from "@/hooks/useCart";
 import { NfceActions, type NfceActionsItem } from "./NfceActions";
 import { OsActions } from "./OsActions";
+import { quantidadeParaContar } from "./matconQty";
 import { openPrintWindow } from "@/services/printWindow";
 import type { NfcePaymentEntry } from "@/services/nfceApi";
 
@@ -62,9 +63,12 @@ type Props = {
   /** Se true, dispara nfceApi.emit() automaticamente no mount.
       Lido de nfce_config.auto_emit_nfce pela tela do PDV. */
   autoEmit?: boolean;
+  /** 22/09/2026 (QA Matcon): tijolo em milheiro conta em peças no
+   *  "N produtos" — 500 tijolos, não "0.5 produtos". Opcional, default off. */
+  matconEnabled?: boolean;
 };
 
-export function SaleComplete({ sale, onNewSale, autoEmit }: Props) {
+export function SaleComplete({ sale, onNewSale, autoEmit, matconEnabled = false }: Props) {
   const { company, token } = useAuthStore();
   const subtotal = sale.items.reduce((s, i) => s + i.price * i.qty, 0);
   const hasCoupon = !!(sale.couponCode && sale.couponDiscount && sale.couponDiscount > 0);
@@ -81,7 +85,7 @@ export function SaleComplete({ sale, onNewSale, autoEmit }: Props) {
     unit_price: i.price,
   }));
 
-  const totalItens = sale.items.reduce((acc, i) => acc + i.qty, 0);
+  const totalItens = sale.items.reduce((acc, i) => acc + quantidadeParaContar(matconEnabled, i.qty, i.unit), 0);
 
   // 01/09/2026 — número de venda de verdade. Vem sequencial POR EMPRESA, então
   // é o que o lojista dita no balcão. Quando vier null (venda de ambiente não

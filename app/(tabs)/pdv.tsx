@@ -165,11 +165,11 @@ function CaixaScreenInner() {
         <View style={s.root}>
           <CaixaDesignStyle />
           <CaixaBackdrop />
-          <SaleComplete sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} />
+          <SaleComplete sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} matconEnabled={st.matconEnabled} />
         </View>
       );
     }
-    return <SaleComplete sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} />;
+    return <SaleComplete sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} matconEnabled={st.matconEnabled} />;
   }
 
   function StockToggle() {
@@ -216,6 +216,7 @@ function CaixaScreenInner() {
           minCard={minCard}
           compact={vp.compact}
           dense={dense}
+          matconEnabled={st.matconEnabled}
         />
         <Pagination page={page} totalPages={totalPages} total={filteredTotal}
           pageSize={PAGE_SIZE} onPage={goTo} />

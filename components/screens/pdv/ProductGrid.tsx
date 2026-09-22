@@ -17,6 +17,8 @@ import { View, Text, Pressable, StyleSheet, Platform, Image } from "react-native
 import { Colors, Glass } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { IS_WEB, webOnly, accentForProduct, productLetter, fmtCurrency } from "./types";
+import { usaPecasNoMilheiro, milheiroParaUnidades } from "./matconQty";
+import { fmtQty } from "@/utils/matconUnits";
 
 // "EST. 11 UN" era abreviação de sistema: o `Est.` vinha do código e o
 // uppercase do estilo. Vira frase — "11 em estoque" — e a unidade só aparece
@@ -24,9 +26,15 @@ import { IS_WEB, webOnly, accentForProduct, productLetter, fmtCurrency } from ".
 // 16/09/2026 (Fase 0 · I0.3).
 const UNIDADES_IMPLICITAS = ["", "un", "und", "uni", "unid", "unidade", "unidades", "pc", "pç"];
 
-export function stockLabel(stock?: number | null, unit?: string | null): string {
+// 22/09/2026 (QA Matcon): tijolo em milheiro soma as peças ao lado —
+// "20 mlh em estoque · 20.000 un" —, que é como o vendedor vai digitar no
+// carrinho. Só com o toggle ligado (`matconEnabled`).
+export function stockLabel(stock?: number | null, unit?: string | null, matconEnabled?: boolean): string {
   const u = String(unit || "").trim();
   if (stock == null) return u;
+  if (usaPecasNoMilheiro(!!matconEnabled, u)) {
+    return fmtQty(stock) + " " + u + " em estoque · " + fmtQty(milheiroParaUnidades(stock)) + " un";
+  }
   const implicita = UNIDADES_IMPLICITAS.indexOf(u.toLowerCase()) >= 0;
   return implicita ? stock + " em estoque" : stock + " " + u + " em estoque";
 }
@@ -56,9 +64,11 @@ type Props = {
   /** Mobile portrait: densidade ainda menor, pra caber DOIS pares de produtos
    *  na primeira dobra de um 390×780 (Fase 0 · I0.3). */
   dense?: boolean;
+  /** 22/09/2026 (Matcon): milheiro mostra peças no estoque e no selo. */
+  matconEnabled?: boolean;
 };
 
-export function ProductGrid({ products, qtyById, onAdd, columns = 4, minCard, compact = false, dense = false }: Props) {
+export function ProductGrid({ products, qtyById, onAdd, columns = 4, minCard, compact = false, dense = false, matconEnabled = false }: Props) {
   const gap = dense ? 12 : compact ? 10 : 14;
   const webGrid = IS_WEB
     ? (minCard
@@ -80,13 +90,14 @@ export function ProductGrid({ products, qtyById, onAdd, columns = 4, minCard, co
           onAdd={onAdd}
           compact={compact}
           dense={dense}
+          matconEnabled={matconEnabled}
         />
       ))}
     </View>
   );
 }
 
-function ProdCard({ product, qty, index, onAdd, compact = false, dense = false }: { product: GridProduct; qty: number; index: number; onAdd: Props["onAdd"]; compact?: boolean; dense?: boolean }) {
+function ProdCard({ product, qty, index, onAdd, compact = false, dense = false, matconEnabled = false }: { product: GridProduct; qty: number; index: number; onAdd: Props["onAdd"]; compact?: boolean; dense?: boolean; matconEnabled?: boolean }) {
   const accent = accentForProduct(product.id);
   const letter = productLetter(product.name);
   const inCart = qty > 0;
@@ -170,7 +181,10 @@ function ProdCard({ product, qty, index, onAdd, compact = false, dense = false }
 
       {qty > 0 && (
         <View style={[s.badge, IS_WEB && ({ animation: "caixaBadgePop 0.35s cubic-bezier(0.4,0,0.2,1)" } as any)]}>
-          <Text style={s.badgeTxt}>×{qty}</Text>
+          {/* Milheiro no carrinho aparece em peças: ×500, não ×0.5. */}
+          <Text style={s.badgeTxt}>
+            ×{usaPecasNoMilheiro(matconEnabled, product.unit) ? fmtQty(milheiroParaUnidades(qty)) : qty}
+          </Text>
         </View>
       )}
 
@@ -198,7 +212,7 @@ function ProdCard({ product, qty, index, onAdd, compact = false, dense = false }
 
       <Text numberOfLines={2} style={[s.name, { fontSize: nameSz, minHeight: nameMinH }]}>{product.name}</Text>
       {(product.stock != null || product.unit) && (
-        <Text style={s.stock}>{stockLabel(product.stock, product.unit)}</Text>
+        <Text style={s.stock}>{stockLabel(product.stock, product.unit, matconEnabled)}</Text>
       )}
 
       <View style={s.foot}>

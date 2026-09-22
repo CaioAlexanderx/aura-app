@@ -880,5 +880,8 @@ export function usePdvState() {
     cartHeadRef, cartProps, orderLabel,
     subtotal, discountAmount, totalFinal, discountLabel,
     requiredHints, activeSellerValue, activeCustomerValue, displayItems,
+    // 22/09/2026 (QA Matcon): o grid e o fim da venda mostram o milheiro em
+    // peças ("20 mlh em estoque · 20.000 un", "500 produtos").
+    matconEnabled: matcon.matcon_enabled,
   };
 }

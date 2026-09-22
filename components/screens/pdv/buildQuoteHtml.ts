@@ -8,7 +8,7 @@
 // o numero cru como sempre imprimiu.
 // ============================================================
 
-import { fmtQty } from "@/utils/matconUnits";
+import { fmtQty, ehMilheiro, PECAS_POR_MILHEIRO } from "@/utils/matconUnits";
 
 export type QuoteItem = {
   name: string;
@@ -46,6 +46,9 @@ export function buildQuoteHtml(opts: QuoteOptions): string {
   var itemsHtml = opts.items.map(function(item, i) {
     var lineTotal = item.qty * item.unitPrice;
     var qtyStr = item.unit ? fmtQty(item.qty, String(item.unit)) : String(item.qty);
+    // Milheiro: "0,5 mlh (500 un)" — o preço é por milheiro, a conta fecha
+    // com a coluna ao lado, e o cliente lê quantos tijolos vêm.
+    if (ehMilheiro(item.unit)) qtyStr += " (" + fmtQty(Math.round(item.qty * PECAS_POR_MILHEIRO)) + " un)";
     return '<tr>' +
       '<td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#1f2937">' + (i + 1) + '</td>' +
       '<td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#1f2937;font-weight:500">' + escHtml(item.name) + '</td>' +
