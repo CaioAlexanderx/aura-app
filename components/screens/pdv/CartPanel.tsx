@@ -38,8 +38,16 @@
 //     sem os botões − +, porque ninguém clica 25 vezes pra chegar em 12,5 m².
 //     Qualquer outro caso → o stepper de sempre.
 //   · Com o toggle on, o teto do stepper sobe de 3 pra 6 dígitos (1.200
-//     tijolos cabem). Com o toggle OFF nada muda: stepper, parseInt,
-//     replace(/\D/g,"") e maxLength 3, item por item, unidade por unidade.
+//     tijolos cabem). Com o toggle OFF nada muda: stepper e maxLength 3,
+//     item por item, unidade por unidade.
+//   · QA em produção (22/09): o campo inteiro apagava a vírgula ("0,5" → 5,
+//     "12,5" → 125). Agora guarda o separador e, ao sair do campo, corta ali
+//     ("12,5" → 12, "0,5" → 0 = não muda) — em toda loja, com ou sem Matcon
+//     (parseInteiroDigitado em ./matconQty).
+//   · Milheiro (mlh, tijolo/bloco) com o toggle on: o vendedor digita PEÇAS
+//     ("500", sufixo "un", sem − e +) e o item guarda milheiro (0,5), que é o
+//     que estoque, venda e nota usam. A linha 3 mostra a conta:
+//     "500 un = 0,5 mlh · R$ 890,00/mlh → R$ 445,00". Decisão do Caio.
 //   · Abaixo do campo decimal, e só quando "arredondar para embalagem" está
 //     ligado na config e o produto tem fator de compra, entra a linha
 //     "= 6 caixas · 13,92 m² · sobra 1,42 m²". Ela INFORMA — não mexe na
@@ -72,7 +80,11 @@ import { validateCpf, maskCpf, onlyDigits } from "@/lib/validators";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { readMatconSettings } from "@/constants/matcon";
 import { parseQtyInput, fmtQty } from "@/utils/matconUnits";
-import { usaCampoDecimal, qtyMaxLength, fraseDeEmbalagem, usaCalculadoraAmbiente, usaLoteNoItem } from "./matconQty";
+import {
+  usaCampoDecimal, qtyMaxLength, fraseDeEmbalagem, usaCalculadoraAmbiente, usaLoteNoItem,
+  usaPecasNoMilheiro, unidadesParaMilheiro, milheiroParaUnidades, parseInteiroDigitado,
+  fraseDoMilheiro, quantidadeParaContar,
+} from "./matconQty";
 import { CalculadoraAmbiente } from "@/components/matcon/CalculadoraAmbiente";
 import { LoteDoItem } from "@/components/matcon/LotePicker";
 import type { LotAllocation } from "@/services/matconApi";
@@ -289,8 +301,13 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           <View>
             <Text style={s.metaK}>Itens</Text>
             {/* Com unidade fracionada a soma vira 22,5 — fmtQty escreve em
-                pt-BR. Fora do Matcon fica o número cru de sempre. */}
-            <Text style={s.metaV}>{matcon.matcon_enabled ? fmtQty(itemCount) : itemCount}</Text>
+                pt-BR. Tijolo em milheiro conta em peças (500, não 0,5).
+                Fora do Matcon fica o número cru de sempre. */}
+            <Text style={s.metaV}>
+              {matcon.matcon_enabled
+                ? fmtQty(items.reduce((acc, it) => acc + quantidadeParaContar(true, it.qty, it.unit), 0))
+                : itemCount}
+            </Text>
           </View>
           <View>
             <Text style={s.metaK}>Desconto</Text>
@@ -820,6 +837,12 @@ function CartItem({
   // dos lotes) só existe quando o gate está ligado E o produto é vendido em
   // m²/m³ — cimento em "sc" nunca vê nada disso.
   const temLote = usaLoteNoItem(!!matconEnabled, !!lotsEnabled, item.unit);
+  // QA 22/09/2026: tijolo em milheiro. O vendedor digita PEÇAS ("500"), o
+  // item guarda milheiro (0,5) e a linha 3 mostra a conta inteira:
+  // "500 un = 0,5 mlh · R$ 890,00/mlh → R$ 445,00". Só com o toggle ligado.
+  const pecasMilheiro = usaPecasNoMilheiro(!!matconEnabled, item.unit);
+  const fraseMilheiro = pecasMilheiro ? fraseDoMilheiro(item.qty, item.price) : null;
+  const fraseApoio = fraseEmbalagem || fraseMilheiro;
 
   // Buffer pra edição de qty
   const [inputVal, setInputVal] = useState<string | null>(null);
@@ -836,7 +859,12 @@ function CartItem({
   function handleFocus() {
     // No campo decimal o buffer abre já em pt-BR ("12,5"), que é o que o
     // vendedor vê — e o parseQtyInput lê de volta a vírgula sem reclamar.
-    setInputVal(decimalQty ? fmtQty(item.qty) : String(item.qty));
+    // No milheiro o buffer abre em peças ("500"), que é o que se digita.
+    setInputVal(
+      pecasMilheiro ? String(milheiroParaUnidades(item.qty))
+        : decimalQty ? fmtQty(item.qty)
+        : String(item.qty)
+    );
   }
 
   function handleCommit() {
@@ -847,9 +875,13 @@ function CartItem({
         const dec = parseQtyInput(inputVal);
         if (dec !== null && dec !== item.qty) onQtySet(dec);
       } else {
-        const n = parseInt(inputVal, 10);
-        if (!isNaN(n) && n > 0 && n !== item.qty) {
-          onQtySet(n);
+        // Inteiro: "12,5" corta em 12 e "0,5" em 0 (QA 22/09/2026 — antes a
+        // vírgula sumia e "0,5" virava 5). Zero ou vazio não muda nada,
+        // como sempre foi; "1.500" é mil e quinhentos.
+        const n = parseInteiroDigitado(inputVal);
+        if (n !== null && n > 0) {
+          const nova = pecasMilheiro ? unidadesParaMilheiro(n) : n;
+          if (nova !== item.qty) onQtySet(nova);
         }
       }
     }
@@ -992,6 +1024,29 @@ function CartItem({
             />
             <Text style={s.decUnit}>{item.unit}</Text>
           </View>
+        ) : pecasMilheiro ? (
+          /* Milheiro: só o campo, em peças inteiras, com "un" ao lado. Sem
+             − e + — de 1 em 1 ou de 100 em 100 ninguém chega a 3.500
+             tijolos clicando; o número se digita, como no campo decimal. */
+          <View style={s.decCtrl}>
+            <TextInput
+              testID={"carrinho-qty-" + item.productId}
+              accessibilityLabel={"Quantas peças de " + item.name}
+              style={[
+                s.decVal,
+                IS_WEB && (webOnly({ outline: "none", cursor: "text" }) as any),
+              ]}
+              value={isEditing ? inputVal! : fmtQty(milheiroParaUnidades(item.qty))}
+              onFocus={handleFocus}
+              onChangeText={v => setInputVal(v.replace(/[^\d.,]/g, ""))}
+              onBlur={handleCommit}
+              onSubmitEditing={handleCommit}
+              keyboardType="number-pad"
+              selectTextOnFocus
+              maxLength={qtyMaxLen}
+            />
+            <Text style={s.decUnit}>un</Text>
+          </View>
         ) : (
           <View style={s.qtyCtrl}>
             <Pressable testID={"carrinho-dec-" + item.productId} onPress={onDec} style={s.qtyBtn}>
@@ -1005,7 +1060,10 @@ function CartItem({
               ]}
               value={isEditing ? inputVal! : String(item.qty)}
               onFocus={handleFocus}
-              onChangeText={v => setInputVal(v.replace(/\D/g, ""))}
+              // Guarda vírgula e ponto até sair do campo: é o
+              // parseInteiroDigitado que corta "12,5" em 12. Apagar aqui
+              // era o que fazia "0,5" virar 5.
+              onChangeText={v => setInputVal(v.replace(/[^\d.,]/g, ""))}
               onBlur={handleCommit}
               onSubmitEditing={handleCommit}
               keyboardType="number-pad"
@@ -1021,13 +1079,19 @@ function CartItem({
 
       {/* Linha 3 (só Matcon): "= 6 caixas · 13,92 m² · sobra 1,42 m²".
           É o momento "olha isso" do M0 (§4b do doc) — e é só informação:
-          a venda continua sendo os 12,5 m² que o vendedor digitou. */}
-      {fraseEmbalagem || temCalculadora ? (
+          a venda continua sendo os 12,5 m² que o vendedor digitou.
+          No milheiro a mesma linha mostra a conta das peças:
+          "500 un = 0,5 mlh · R$ 890,00/mlh → R$ 445,00". */}
+      {fraseApoio || temCalculadora ? (
         <View style={s.itemRow3}>
           <View style={s.itemIndent} />
-          {fraseEmbalagem ? (
-            <Text testID={"carrinho-embalagem-" + item.productId} style={s.pkgHint} numberOfLines={2}>
-              {fraseEmbalagem}
+          {fraseApoio ? (
+            <Text
+              testID={(fraseMilheiro ? "carrinho-milheiro-" : "carrinho-embalagem-") + item.productId}
+              style={s.pkgHint}
+              numberOfLines={2}
+            >
+              {fraseApoio}
             </Text>
           ) : (
             <View style={{ flex: 1, minWidth: 0 }} />

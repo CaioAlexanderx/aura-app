@@ -11,6 +11,8 @@
 //     com teto de 6 dígitos (1.200 tijolos cabem).
 //   - digitar "2,5" no campo decimal e sair do campo chama onSetQty(id, 2.5)
 //     — nada de parseInt no caminho.
+//   - QA 22/09/2026: milheiro (mlh) com toggle ON pede peças ("500") e grava
+//     milheiro (0,5); o campo inteiro corta no separador ("0,5" nunca vira 5).
 //
 // Icon é mockado porque react-native-svg não passa pelo transformIgnorePatterns
 // do projeto (mesma razão de __tests__/components/pdv/ActionToolbar.test.tsx).
@@ -59,6 +61,14 @@ const CIMENTO: CartDisplayItem = {
   productId: "prod-cimento", productBaseId: "prod-cimento",
   name: "Cimento CP-II 50 kg", price: 32.9, qty: 10, listPrice: 32.9,
   unit: "sc", purchaseUnit: null, purchaseFactor: null,
+};
+
+// QA em produção 22/09/2026: tijolo em milheiro (R$ 890/mlh). 0,5 mlh =
+// 500 tijolos — o que o vendedor digita.
+const TIJOLO: CartDisplayItem = {
+  productId: "prod-tijolo", productBaseId: "prod-tijolo",
+  name: "Tijolo 6 furos 9x14x19", price: 890, qty: 0.5, listPrice: 890,
+  unit: "mlh", purchaseUnit: null, purchaseFactor: null,
 };
 
 function montar(items: CartDisplayItem[], onSetQty = jest.fn()) {
@@ -165,6 +175,79 @@ describe("CartPanel · Matcon M0 — quantidade dirigida pela unidade", () => {
     expect(onSetQty).toHaveBeenCalledWith("prod-piso", 2.5);
 
     tree.unmount();
+  });
+
+  // Digita no campo como o vendedor: foco, texto, sai do campo.
+  function digitar(tree: renderer.ReactTestRenderer, produto: string, texto: string) {
+    const input = qtyInput(tree, produto);
+    act(() => { input.props.onFocus(); });
+    act(() => { qtyInput(tree, produto).props.onChangeText(texto); });
+    act(() => { qtyInput(tree, produto).props.onBlur(); });
+  }
+
+  it("milheiro com toggle ON: campo de peças sem − e +, '500' na tela e a conta embaixo", () => {
+    mockPdvSettings = { matcon_enabled: true, matcon_round_to_package: true };
+    const { tree } = montar([TIJOLO]);
+
+    expect(temStepper(tree, "prod-tijolo")).toBe(false);
+    const input = qtyInput(tree, "prod-tijolo");
+    expect(input.props.value).toBe("500");
+    expect(input.props.keyboardType).toBe("number-pad");
+    expect(input.props.maxLength).toBe(9);
+
+    const texto = flattenText(tree.toJSON());
+    expect(texto).toContain("500 un = 0,5 mlh · R$ 890,00/mlh → R$ 445,00");
+    // O total da linha é o de 500 tijolos, não o de 500 milheiros.
+    expect(texto).toContain("R$ 445,00");
+    expect(texto).not.toContain("445.000");
+
+    tree.unmount();
+  });
+
+  it("milheiro: digitar 500 grava 0,5 mlh; '1.500' grava 1,5 mlh; '0,5' não muda nada", () => {
+    mockPdvSettings = { matcon_enabled: true };
+    const onSetQty = jest.fn();
+    const { tree } = montar([{ ...TIJOLO, qty: 1 }], onSetQty);
+
+    digitar(tree, "prod-tijolo", "500");
+    expect(onSetQty).toHaveBeenLastCalledWith("prod-tijolo", 0.5);
+
+    digitar(tree, "prod-tijolo", "1.500");
+    expect(onSetQty).toHaveBeenLastCalledWith("prod-tijolo", 1.5);
+
+    onSetQty.mockClear();
+    digitar(tree, "prod-tijolo", "0,5");
+    expect(onSetQty).not.toHaveBeenCalled();
+
+    tree.unmount();
+  });
+
+  it("milheiro com toggle OFF: o stepper de sempre, sem linha de peças", () => {
+    mockPdvSettings = { matcon_enabled: false };
+    const { tree } = montar([{ ...TIJOLO, qty: 2 }]);
+
+    expect(temStepper(tree, "prod-tijolo")).toBe(true);
+    expect(qtyInput(tree, "prod-tijolo").props.value).toBe("2");
+    expect(flattenText(tree.toJSON())).not.toContain("un =");
+
+    tree.unmount();
+  });
+
+  it("campo inteiro corta no separador: '12,5' -> 12 e '0,5' não vira 5 (com e sem Matcon)", () => {
+    [false, true].forEach(ligado => {
+      mockPdvSettings = { matcon_enabled: ligado };
+      const onSetQty = jest.fn();
+      const { tree } = montar([CIMENTO], onSetQty);
+
+      digitar(tree, "prod-cimento", "12,5");
+      expect(onSetQty).toHaveBeenLastCalledWith("prod-cimento", 12);
+
+      onSetQty.mockClear();
+      digitar(tree, "prod-cimento", "0,5");
+      expect(onSetQty).not.toHaveBeenCalled();
+
+      tree.unmount();
+    });
   });
 
   it("decimal e stepper convivem na mesma venda (piso em m² + cimento em sc)", () => {
