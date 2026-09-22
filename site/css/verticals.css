@@ -37,6 +37,13 @@
   --v-bg-deep: #04120a;
   --v-bg-soft: #ecfdf5;
 }
+[data-vertical="matcon"] {
+  --v-accent: #F59E0B;
+  --v-accent-2: #FBBF24;
+  --v-glow: rgba(245,158,11,0.32);
+  --v-bg-deep: #120c04;
+  --v-bg-soft: #fffbeb;
+}
 
 /* =========================================================
    VERTICAIS GRID — clean rebuild

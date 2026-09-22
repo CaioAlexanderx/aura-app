@@ -34,6 +34,10 @@
           <span class="v-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="9" r="1.6"/><circle cx="16" cy="9" r="1.6"/><circle cx="6" cy="14" r="1.4"/><circle cx="18" cy="14" r="1.4"/><path d="M12 13c-3 0-5.5 2.5-5.5 4.8 0 1.5 1 2.2 2.5 2.2h6c1.5 0 2.5-.7 2.5-2.2 0-2.3-2.5-4.8-5.5-4.8z"/></svg></span>
           <span><div class="v-name">Aura Pet</div><div class="v-tag">Pet shops, banho e tosa, vets</div></span>
         </a>
+        <a class="nav-dropdown-item" href="matcon.html" style="--v-accent:#F59E0B; --v-glow:rgba(245,158,11,0.4)">
+          <span class="v-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 11h2M13 11h2"/></svg></span>
+          <span><div class="v-name">Aura Matcon</div><div class="v-tag">Materiais de construção</div></span>
+        </a>
         <a class="nav-dropdown-item" href="planos.html" style="--v-accent:#a78bfa; --v-glow:rgba(167,139,250,0.4)">
           <span class="v-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="6" width="16" height="14" rx="2"/><path d="M4 11h16M9 6V4M15 6V4"/></svg></span>
           <span><div class="v-name">Comparar verticais</div><div class="v-tag">Veja todas lado a lado</div></span>
@@ -83,6 +87,7 @@
         <a href="beauty.html">Aura Beauty</a>
         <a href="food.html">Aura Food</a>
         <a href="pet.html">Aura Pet</a>
+        <a href="matcon.html">Aura Matcon</a>
       </div>
       <div>
         <h5>Produto</h5>
