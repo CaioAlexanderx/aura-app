@@ -13,6 +13,7 @@ import { hexToName } from "@/utils/colorNames";
 import { Campo, Entrada, Secao, IS_WEB, s } from "./ui";
 import { CategoriaSeletor } from "./CategorySelector";
 import { nomeDoTipo, statusItem, type ItemType } from "./types";
+import { PERFIL_PADRAO, type PerfilDoCadastro } from "./perfis";
 
 export type DuplicataRow = {
   id: string; name: string; sku?: string; barcode?: string;
@@ -32,11 +33,15 @@ type Props = {
   onSubmit: () => void;
   autoFocus: boolean;
   narrow: boolean;
+  // 22/09/2026 — perfil de cadastro (item-form/perfis.ts). Opcional; o
+  // default é o padrão, com os textos de hoje.
+  perfil?: PerfilDoCadastro;
 };
 
 export function SecaoItem({
   type, nome, onNome, duplicatas, onDupMerge, onDupNao,
   categoriaRotulo, categoriaUltimaUsada, onAbrirCategoria, onSubmit, autoFocus, narrow,
+  perfil = PERFIL_PADRAO,
 }: Props) {
   const isProduto = type === "product";
   const nomeRef = useRef<any>(null);
@@ -63,10 +68,11 @@ export function SecaoItem({
           onChangeText={onNome}
           onSubmitEditing={onSubmit}
           returnKeyType="done"
-          placeholder={isProduto ? "Ex.: Vestido midi floral" : "Ex.: Corte feminino, Manicure, Consultoria"}
+          placeholder={isProduto ? perfil.item.exemploDoNome : "Ex.: Corte feminino, Manicure, Consultoria"}
           autoComplete="off"
           style={s.inputGrande}
         />
+        {isProduto && perfil.item.dicaDoNome ? <Text style={s.hint}>{perfil.item.dicaDoNome}</Text> : null}
       </Campo>
 
       {duplicatas.length > 0 && (
@@ -79,7 +85,7 @@ export function SecaoItem({
             </Text>
           </View>
           <Text style={st.dupSub}>
-            Se for o mesmo produto em outra cor ou tamanho, adicione lá em vez de criar outro.
+            {"Se for o mesmo produto em outra " + perfil.item.eixoDaDuplicata + ", adicione lá em vez de criar outro."}
           </Text>
           <View style={{ marginTop: 6, gap: 4 }}>
             {duplicatas.slice(0, 4).map((d, i) => (
@@ -101,7 +107,7 @@ export function SecaoItem({
           <View style={st.dupAcoes}>
             <Pressable onPress={() => onDupMerge(duplicatas[0])} style={st.dupGo}>
               <Icon name="layers" size={13} color="#fff" />
-              <Text style={st.dupGoTxt}>Adicionar como cor ou tamanho dele</Text>
+              <Text style={st.dupGoTxt}>{"Adicionar como " + perfil.item.eixoDaDuplicata + " dele"}</Text>
             </Pressable>
             <Pressable onPress={onDupNao} hitSlop={6}>
               <Text style={st.dupNao}>Não, é outro produto</Text>

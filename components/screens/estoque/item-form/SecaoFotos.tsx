@@ -17,6 +17,7 @@
 import { View, Text, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Campo, Secao, StoreNote, s } from "./ui";
+import { PERFIL_PADRAO, type PerfilDoCadastro } from "./perfis";
 import { LinhaDaGaleria, LinhaDaGaleriaLocal, type useGaleriaDoProduto } from "./GaleriaDeFotos";
 import {
   chaveDaCor, fotosDaCor, nomeDoTipo, seloDeFotos,
@@ -37,10 +38,13 @@ type Props = {
   cores: CorDoItem[];
   /** Edição: cores que já existem no servidor (chaveDaCor). */
   coresSalvas?: string[];
+  // 22/09/2026 (perfil de cadastro): textos neutros no Matcon. Opcional.
+  perfil?: PerfilDoCadastro;
 };
 
 export function SecaoFotos(p: Props) {
   const isProduto = p.type === "product";
+  const perfil = p.perfil || PERFIL_PADRAO;
   const cores = isProduto ? p.cores : [];
 
   // As contagens saem da galeria do servidor (edição) ou da fila em
@@ -64,10 +68,15 @@ export function SecaoFotos(p: Props) {
 
   return (
     <Secao icon="camera" titulo="Fotos" selo={seloDeFotos(qtdPrincipal, contagens)}>
-      <StoreNote
-        texto={"Aparece na página " + (isProduto ? "do produto" : "do serviço") +
-          " e no catálogo do WhatsApp. Até 4 por cor; duas já resolvem."}
-      />
+      {perfil.fotos.lojaOnline ? (
+        <StoreNote
+          texto={"Aparece na página " + (isProduto ? "do produto" : "do serviço") +
+            " e no catálogo do WhatsApp. Até 4 por cor; duas já resolvem."}
+        />
+      ) : (
+        // Perfil Matcon: texto neutro, sem loja online nem catálogo.
+        <StoreNote texto={perfil.fotos.aviso || ""} lojaOnline={false} />
+      )}
 
       <Campo
         label="Fotos principais"
@@ -149,11 +158,13 @@ export function SecaoFotos(p: Props) {
           </View>
           <Text style={s.hint}>Sem foto própria, a cor usa a foto principal.</Text>
         </Campo>
-      ) : (
+      ) : perfil.fotos.lojaOnline ? (
         <Text style={s.hint}>
           Tem cores? Marque "por cor e tamanho" em Estoque e cada cor ganha sua fileira aqui.
         </Text>
-      ))}
+      ) : perfil.fotos.dica ? (
+        <Text style={s.hint}>{perfil.fotos.dica}</Text>
+      ) : null)}
 
       {!p.persistido && (
         <Text style={s.hint}>
