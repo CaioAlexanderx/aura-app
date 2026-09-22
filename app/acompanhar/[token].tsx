@@ -29,7 +29,7 @@
 // Sem esses campos a tela é exatamente a de hoje ("oculos"/encomenda).
 // ============================================================
 import { useEffect, useState } from "react";
-import { View, Text, Image, ScrollView, Pressable, ActivityIndicator, Platform } from "react-native";
+import { View, Text, Image, ScrollView, Pressable, ActivityIndicator, Platform, Linking } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
@@ -37,7 +37,18 @@ import { studioApi, type PublicTrack } from "@/services/studioApi";
 import { copyToClipboard } from "@/utils/clipboard";
 import {
   tituloAcompanhamento, rotuloSaldo, rotuloItens, rodapePedido, textoItemEntrega,
+  LABEL_NOTA_FISCAL, LABEL_VER_DANFE,
 } from "@/utils/acompanharTextos";
+
+// 22/09/2026 (Matcon M2 — fiscal do Simples, docs/CONTRACT_MATCON.md §M2):
+// linha "Nota fiscal · ver DANFE", mockup
+// docs/mockups/matcon-m2-fiscal.html#publico. `danfe_url` já é tipado em
+// PublicTrack (services/studioApi.ts) — opcional, ausente = tela de hoje
+// (M1); presente só quando a NF-e da entrega está autorizada.
+function abrirDanfe(url: string) {
+  if (Platform.OS === "web" && typeof window !== "undefined") window.open(url, "_blank");
+  else Linking.openURL(url);
+}
 
 const money = (v: number) =>
   "R$ " + (Number(v) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -206,6 +217,25 @@ export default function AcompanharEncomenda() {
             Entrega combinada para <Text style={{ fontWeight: "800", color: C.ink }}>{dataPorExtenso(dados.entrega_combinada)}</Text>
           </Text>
         </View>
+      ) : null}
+
+      {/* Matcon M2: só aparece quando a NF-e da entrega está autorizada —
+          sem espaço vazio esperando algo que talvez não venha. */}
+      {dados.danfe_url ? (
+        <Pressable
+          onPress={() => abrirDanfe(dados.danfe_url as string)}
+          style={{
+            flexDirection: "row", alignItems: "center", gap: 10, marginTop: 14,
+            backgroundColor: C.card, borderWidth: 1, borderColor: C.line, borderRadius: 12,
+            paddingHorizontal: 14, paddingVertical: 12,
+            ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : {}),
+          }}
+          testID="acompanhar-nota-fiscal"
+        >
+          <Icon name="file_text" size={17} color={C.accent} />
+          <Text style={{ fontSize: 15, color: C.ink, fontWeight: "600", flex: 1 }}>{LABEL_NOTA_FISCAL}</Text>
+          <Text style={{ fontSize: 13, color: C.accent, fontWeight: "700" }}>{LABEL_VER_DANFE}</Text>
+        </Pressable>
       ) : null}
 
       {/* Saldo — só aparece quando existe. Cobrança sem constrangimento: o

@@ -92,6 +92,11 @@ export type NfceConfig = {
   csc_id: string | null;
   /** Se true, o PDV emite NFC-e automaticamente após finalizar a venda. */
   auto_emit_nfce: boolean;
+  // 22/09/2026 (Matcon M2 — fiscal do Simples, docs/CONTRACT_MATCON.md §M2):
+  // decide CSOSN vs CST na emissão. Ausente = "simples" (é a empresa mais
+  // comum no varejo de bairro). Só quando "simples" o cadastro do produto
+  // mostra a pergunta "o imposto já veio recolhido do fornecedor?".
+  regime?: "simples" | "presumido" | "real";
 };
 
 export type NfceConfigResponse = {
@@ -107,6 +112,7 @@ export type NfceConfigUpdateBody = Partial<{
   csc_id: string | null;
   csc_token: string | null;
   auto_emit_nfce: boolean;
+  regime: "simples" | "presumido" | "real";
 }>;
 
 export type EmitBody = {

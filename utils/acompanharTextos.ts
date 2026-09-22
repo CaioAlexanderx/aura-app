@@ -64,6 +64,15 @@ export function rodapePedido(tipo: TipoAcompanhamento, pedido: string): string {
   return `Pedido #${pedido} · feito com Aura Studio`;
 }
 
+// 22/09/2026 (Matcon M2 — fiscal do Simples, docs/CONTRACT_MATCON.md §M2):
+// linha "Nota fiscal · ver DANFE" do rastreio público. Igual nos três
+// tipos (oculos/entrega/encomenda) — o texto vive aqui, junto dos outros
+// textos da tela, e não é condicionado a `tipo` como os de cima: só
+// aparece quando o backend manda `danfe_url` (nota autorizada), qualquer
+// que seja o tipo de acompanhamento.
+export const LABEL_NOTA_FISCAL = "Nota fiscal";
+export const LABEL_VER_DANFE = "ver DANFE ›";
+
 // pt-BR sem zero à direita: "4", "1,5" — mesma regra de fmtQty
 // (utils/matconUnits.ts), sem importar daqui pra manter este arquivo sem
 // dependência do Matcon "de verdade" (só dos textos).

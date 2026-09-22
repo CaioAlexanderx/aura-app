@@ -1,14 +1,103 @@
 import { useState } from "react";
 import { View, Text, TextInput, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth";
 import { nfeApi } from "@/services/api";
+import { nfceApi, type NfceConfig } from "@/services/nfceApi";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { ns } from "./shared";
 
+// 22/09/2026 (Matcon M2 — fiscal do Simples, docs/CONTRACT_MATCON.md §M2):
+// "Minha empresa é do [Simples Nacional]" — uma frase a mais no padrão do
+// Matcon, mockup docs/mockups/matcon-m2-fiscal.html#config. É ela que
+// decide CSOSN vs CST na emissão e se a pergunta "o imposto já veio
+// recolhido?" aparece no cadastro do produto (só regime=simples). Sem
+// nfce_config ainda (empresa nova), o default é "simples" — o mais comum
+// no varejo de bairro que este módulo atende.
+const REGIMES: { key: NonNullable<NfceConfig["regime"]>; label: string }[] = [
+  { key: "simples", label: "Simples Nacional" },
+  { key: "presumido", label: "Lucro presumido" },
+  { key: "real", label: "Lucro real" },
+];
+
+// Exportado: TabConfig não está montado em nenhuma tela hoje (a aba
+// "Configuração" saiu do TABS de app/(tabs)/nfe.tsx antes desta mudança —
+// comentário abaixo, em TabConfig). Pra frase não ficar invisível,
+// app/(tabs)/nfe.tsx reusa este mesmo componente num card pequeno no topo
+// da aba "Emitir NF-e", só com matcon_enabled.
+export function RegimeFiscal({ companyId }: { companyId: string }) {
+  const qc = useQueryClient();
+  const { data } = useQuery({
+    queryKey: ["nfce-config", companyId],
+    queryFn: () => nfceApi.getConfig(companyId),
+    enabled: !!companyId,
+    staleTime: 60_000,
+  });
+  const regimeAtual = data?.config?.regime || "simples";
+  const [aberto, setAberto] = useState(false);
+
+  const salvarMut = useMutation({
+    mutationFn: (regime: NonNullable<NfceConfig["regime"]>) => nfceApi.saveConfig(companyId, { regime }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["nfce-config", companyId] });
+      toast.success("Regime fiscal atualizado");
+    },
+    onError: (e: any) => toast.error(e?.message || "Não deu para salvar o regime fiscal"),
+  });
+
+  const rotuloAtual = REGIMES.find((r) => r.key === regimeAtual)?.label || "Simples Nacional";
+
+  return (
+    <View style={{ marginBottom: 16 }} testID="nfe-config-regime">
+      <Text style={{ fontSize: 15, color: Colors.ink, lineHeight: 24 }}>
+        Minha empresa é do{" "}
+        <Pressable
+          onPress={() => setAberto((v) => !v)}
+          style={{
+            flexDirection: "row", alignItems: "center", gap: 4,
+            backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.violet3 + "66",
+            borderRadius: 8, paddingHorizontal: 10, paddingVertical: 3,
+          }}
+          testID="nfe-config-regime-abrir"
+        >
+          <Text style={{ fontSize: 14, fontWeight: "700", color: Colors.ink }}>{rotuloAtual}</Text>
+          <Icon name={aberto ? "chevron_up" : "chevron_down"} size={12} color={Colors.ink3} />
+        </Pressable>
+        .
+      </Text>
+      <Text style={{ fontSize: 11.5, color: Colors.ink3, marginTop: 4, lineHeight: 16 }}>
+        É isso que decide como a nota sai. No Simples, a pergunta &quot;o imposto já veio recolhido?&quot; aparece
+        no cadastro do produto; nos outros regimes o cadastro não muda.
+      </Text>
+      {aberto && (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+          {REGIMES.map((r) => (
+            <Pressable
+              key={r.key}
+              onPress={() => { setAberto(false); if (r.key !== regimeAtual) salvarMut.mutate(r.key); }}
+              disabled={salvarMut.isPending}
+              style={[ns.chip, r.key === regimeAtual && ns.chipActive]}
+              testID={`nfe-config-regime-${r.key}`}
+            >
+              <Text style={[ns.chipText, r.key === regimeAtual && ns.chipTextActive]}>{r.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
 // P2 #13: Nuvem Fiscal references removed — generic "provedor fiscal"
+//
+// 22/09/2026: este componente não é montado em nenhuma tela hoje (a aba
+// "Configuração" foi removida do TABS de app/(tabs)/nfe.tsx antes desta
+// mudança — ver comentário "Aba Configuração some" logo abaixo). A frase
+// do regime fiscal (RegimeFiscal, exportado acima) por isso também é
+// renderizada direto em app/(tabs)/nfe.tsx, num card no topo da aba
+// "Emitir NF-e" — é a única tela onde a config da NF-e existe hoje.
 export function TabConfig({ companyId }: { companyId: string }) {
   const { company } = useAuthStore();
   const [certFile, setCertFile] = useState("");
@@ -50,6 +139,8 @@ export function TabConfig({ companyId }: { companyId: string }) {
     <View>
       <View style={ns.formCard}>
         <Text style={ns.formTitle}>Configuração fiscal</Text>
+        <RegimeFiscal companyId={companyId} />
+        <View style={ns.divider} />
         <View style={ns.configItem}>
           <Icon name={hasCnpj ? "check" : "alert"} size={16} color={hasCnpj ? Colors.green : Colors.amber} />
           <Text style={ns.configLabel}>CNPJ cadastrado</Text>
