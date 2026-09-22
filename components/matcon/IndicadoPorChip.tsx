@@ -1,5 +1,5 @@
 // ============================================================
-// AURA. — Matcon M3: IndicadoPorChip — "Indicado por" do Caixa
+// AURA. — Matcon M3: IndicadoPorChip — "Quem indicou?" do Caixa
 //
 // 22/09/2026 (docs/CONTRACT_MATCON.md, seção M3 · mockup
 // docs/mockups/matcon-m3-clube-calculadora.html #caixa). Fica na barra de
@@ -7,14 +7,18 @@
 // é obrigatório: a venda fecha sem ele — é um convite, nunca um campo
 // travando o "Finalizar venda".
 //
+// 22/09/2026 (revisão de texto): o convite era "+ indicar profissional" e
+// ninguém do balcão entendia. Virou "+ quem indicou?", e o rodapé fala
+// "Cadastrar pedreiro novo" / "Escolher um cliente já cadastrado".
+//
 // Dois estados:
-//   - sem profissional: chip "+ indicar profissional" abre a busca (nome,
-//     telefone ou ofício); o rodapé oferece "Cadastrar profissional"
-//     (QuickCustomerModal, o mesmo cadastro rápido de sempre — e depois o
-//     ofício, reaproveitando o chipset de MarcarProfissionalModal com
-//     presetCustomer) e "Marcar um cliente que já existe"
+//   - sem profissional: chip "+ quem indicou?" abre a busca (nome,
+//     telefone ou profissão); o rodapé oferece "Cadastrar pedreiro novo"
+//     (QuickCustomerModal, o mesmo cadastro rápido de sempre — e depois a
+//     profissão, reaproveitando o chipset de MarcarProfissionalModal com
+//     presetCustomer) e "Escolher um cliente já cadastrado"
 //     (MarcarProfissionalModal sem preset, com busca própria).
-//   - com profissional: chip "Indicado por: Nome · ofício ×" + o card
+//   - com profissional: chip "Indicado por: Nome · profissão ×" + o card
 //     "Nome ganha N pontos com esta venda de R$ X" (N = pontosPrevistos do
 //     useMatconReferral, sempre calculado sobre o total ATUAL do carrinho).
 //
@@ -116,7 +120,7 @@ export function IndicadoPorChip({ referral, saleTotal, matconOn }: Props) {
         </View>
       ) : (
         <Pressable style={s.chipInvite} onPress={openSheet} testID="indicadopor-abrir">
-          <Text style={s.chipInviteText}>+ indicar profissional</Text>
+          <Text style={s.chipInviteText}>+ quem indicou?</Text>
         </Pressable>
       )}
 
@@ -134,7 +138,7 @@ export function IndicadoPorChip({ referral, saleTotal, matconOn }: Props) {
             autoFocus
             value={query}
             onChangeText={handleQueryChange}
-            placeholder="Nome, telefone ou ofício"
+            placeholder="Nome, telefone ou profissão"
             placeholderTextColor={Colors.ink3}
             style={s.searchInput}
             testID="indicadopor-busca"
@@ -144,7 +148,7 @@ export function IndicadoPorChip({ referral, saleTotal, matconOn }: Props) {
         <ScrollView style={s.results} contentContainerStyle={{ paddingBottom: 4 }} keyboardShouldPersistTaps="handled">
           {referral.searching && <Text style={s.hint}>Buscando…</Text>}
           {!referral.searching && query.trim().length > 0 && referral.results.length === 0 && (
-            <Text style={s.hint}>Nenhum profissional encontrado</Text>
+            <Text style={s.hint}>Ninguém do clube com esse nome</Text>
           )}
           {referral.results.map(p => (
             <Pressable key={p.id} style={s.row} onPress={() => handlePick(p)} testID={`indicadopor-resultado-${p.id}`}>
@@ -164,14 +168,14 @@ export function IndicadoPorChip({ referral, saleTotal, matconOn }: Props) {
         <View style={s.footer}>
           <Pressable style={s.footerBtn} onPress={handleCadastrar} testID="indicadopor-cadastrar">
             <Icon name="users" size={13} color={Colors.violet3} />
-            <Text style={s.footerBtnText}>Cadastrar profissional</Text>
+            <Text style={s.footerBtnText}>Cadastrar pedreiro novo</Text>
           </Pressable>
           <Pressable style={[s.footerBtn, s.footerBtnGhost]} onPress={handleMarcarExistente} testID="indicadopor-marcar-existente">
-            <Text style={s.footerBtnGhostText}>Marcar um cliente que já existe</Text>
+            <Text style={s.footerBtnGhostText}>Escolher um cliente já cadastrado</Text>
           </Pressable>
         </View>
         <Text style={s.note}>
-          Cadastrar aqui abre o mesmo cadastro rápido de cliente de sempre, com um campo a mais: o ofício.
+          É o mesmo cadastro rápido de cliente de sempre, só perguntando também o que ele faz.
         </Text>
       </ResponsiveSheet>
 

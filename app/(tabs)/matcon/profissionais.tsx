@@ -1,11 +1,18 @@
 // ============================================================
-// AURA. — Matcon: ranking do Clube do Profissional (M3)
+// AURA. — Matcon: ranking do Clube do Pedreiro (M3)
 //
 // 22/09/2026. Não é um cadastro: é um RANKING DO MÊS, como as esteiras de
 // Orçamentos e Entregas mostram dinheiro parado em vez de uma lista fria
 // (docs/matcon-faseamento-po-ux.md §4b regra 2). O dono abre pra saber
-// "quanto os profissionais trouxeram este mês e quem está com resgate
-// parado" — por isso o hero mostra o dinheiro antes de qualquer nome.
+// "quanto os pedreiros trouxeram este mês e quem já tem cupom pra tirar"
+// — por isso o hero mostra o dinheiro antes de qualquer nome.
+//
+// 22/09/2026 (revisão de texto): a tela chamava "Profissionais" e nem o
+// dono da loja entendia o nome. Agora é "Clube do pedreiro" no menu, no
+// título e em todo botão — a rota, a chave de módulo e a API continuam
+// `profissionais`/`professionals` (o nome técnico não aparece pra ninguém).
+// Vale para pintor, eletricista, arquiteto e quem mais a loja marcar; o
+// "pedreiro" é o jeito que o balcão fala, não uma restrição.
 //
 // Mockup aprovado: docs/mockups/matcon-m3-clube-calculadora.html
 // #profissionais. Molde de código: app/(tabs)/matcon/orcamentos.tsx
@@ -22,10 +29,10 @@
 //     UMA loja (pontos, cupom), então <RequireCompanyScope> força escolher
 //     a empresa antes de renderizar, como Orçamentos e Entregas fazem.
 //   · Regra 7: os botões do card ficam sempre visíveis, sem hover.
-//   · A criação de profissional (marcar um cliente) mora na ficha do
-//     cliente (MarcarProfissionalModal — outra frente em paralelo). Esta
-//     tela só lista; por isso o estado vazio manda o dono pra lá, e não
-//     para um botão "+ Profissional" aqui.
+//   · A entrada no clube (marcar um cliente) mora na ficha do cliente
+//     (MarcarProfissionalModal — outra frente em paralelo). Esta tela só
+//     lista; por isso o estado vazio manda o dono pra lá, e não para um
+//     botão "+ Pedreiro" aqui.
 //   · A lista (GET .../professionals) não traz "últimas indicações" por
 //     profissional — isso só existe no detalhe (getProfessional), que
 //     custaria uma chamada por card. Por isso o card mostra o resumo do
@@ -46,7 +53,7 @@ import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { matconApi, TRADE_LABELS, type Professional } from "@/services/matconApi";
 import { readMatconSettings, type MatconSettings } from "@/constants/matcon";
 import { openWhatsApp } from "@/utils/whatsapp";
-import { EsteiraMatcon, EsteiraCard, EsteiraVazia, type EsteiraEstacao } from "@/components/matcon/EsteiraMatcon";
+import { EsteiraMatcon, EsteiraCard, EsteiraVazia, EsteiraVaziaDestaque, type EsteiraEstacao } from "@/components/matcon/EsteiraMatcon";
 import {
   cupomPossivel, rotuloResumo, textoExtratoWhatsApp, textoChamarDeVolta, textoCupomGerado,
   diasSemCompra, ehNovo, fmtMoneyCurto, fmtPontos,
@@ -63,7 +70,7 @@ const CHIPS: { key: Filtro; label: string }[] = [
 export default function MatconProfissionaisRoute() {
   // Multi-CNPJ: no modo consolidado o picker aparece antes do ranking.
   return (
-    <RequireCompanyScope context="matcon" actionLabel="ver os profissionais">
+    <RequireCompanyScope context="matcon" actionLabel="ver o clube do pedreiro">
       <MatconProfissionaisScreen />
     </RequireCompanyScope>
   );
@@ -99,8 +106,8 @@ function MatconProfissionaisScreen() {
 
   const estacoes: EsteiraEstacao[] = resumo ? [
     { key: "vendido", label: "Vendido por indicação", count: null, money: fmtMoneyCurto(resumo.referred_total_month), tone: "violet" },
-    { key: "ativos", label: "Profissionais ativos", count: resumo.active_count, money: null, tone: "violet" },
-    { key: "resgates", label: "Resgates pendentes", count: resumo.pending_redeems, money: null, tone: resumo.pending_redeems > 0 ? "amber" : "violet" },
+    { key: "ativos", label: "Ativos no clube", count: resumo.active_count, money: null, tone: "violet" },
+    { key: "resgates", label: "Cupons pra gerar", count: resumo.pending_redeems, money: null, tone: resumo.pending_redeems > 0 ? "amber" : "violet" },
   ] : [];
 
   // ── Ações do card ─────────────────────────────────────────
@@ -143,11 +150,11 @@ function MatconProfissionaisScreen() {
   if (!matcon.matcon_enabled) {
     return (
       <ScrollView style={st.screen} contentContainerStyle={st.content}>
-        <ScreenHero eyebrow="Matcon" title="Profissionais" />
+        <ScreenHero eyebrow="Matcon" title="Clube do pedreiro" />
         <View style={st.gate} testID="matcon-profissionais-desligado">
           <View style={st.gateIcon}><Icon name="lock" size={20} color={Colors.violet3} /></View>
           <Text style={st.gateTitle}>Ligue &quot;Materiais de construção&quot; em Configurações › Caixa</Text>
-          <Text style={st.gateDesc}>O ranking de profissionais só existe para lojas com o módulo ativo.</Text>
+          <Text style={st.gateDesc}>O clube do pedreiro só aparece para lojas com o módulo ligado.</Text>
           <Pressable onPress={() => router.push("/configuracoes" as any)} style={st.gateBtn} testID="matcon-profissionais-ir-config">
             <Text style={st.gateBtnText}>Abrir Configurações</Text>
             <Icon name="chevron_right" size={14} color="#fff" />
@@ -160,11 +167,11 @@ function MatconProfissionaisScreen() {
   if (!matcon.matcon_club_enabled) {
     return (
       <ScrollView style={st.screen} contentContainerStyle={st.content}>
-        <ScreenHero eyebrow="Matcon" title="Profissionais" />
+        <ScreenHero eyebrow="Matcon" title="Clube do pedreiro" />
         <View style={st.gate} testID="matcon-profissionais-clube-desligado">
           <View style={st.gateIcon}><Icon name="users" size={20} color={Colors.violet3} /></View>
-          <Text style={st.gateTitle}>Ligue o clube do profissional nas configurações do Matcon</Text>
-          <Text style={st.gateDesc}>É a frase &quot;Tenho clube do profissional&quot;, em Matcon › Configurações — sem ela não há pontos nem ranking.</Text>
+          <Text style={st.gateTitle}>Ligue o clube do pedreiro nas configurações do Matcon</Text>
+          <Text style={st.gateDesc}>É a frase &quot;Tenho clube do pedreiro&quot;, em Matcon › Configurações. Sem ela não tem pontos nem cupom.</Text>
           <Pressable onPress={() => router.push("/matcon/config" as any)} style={st.gateBtn} testID="matcon-profissionais-ir-matcon-config">
             <Text style={st.gateBtnText}>Abrir configurações do Matcon</Text>
             <Icon name="chevron_right" size={14} color="#fff" />
@@ -178,14 +185,14 @@ function MatconProfissionaisScreen() {
     <ScrollView style={st.screen} contentContainerStyle={st.content}>
       <ScreenHero
         eyebrow="Matcon"
-        title="Profissionais"
+        title="Clube do pedreiro"
         live
         subtitle={
-          !resumo ? "Carregando o ranking…" : (
+          !resumo ? "Carregando…" : (
             <Text>
-              {fmtMoneyCurto(resumo.referred_total_month)} vendidos por indicação este mês · {resumo.active_count} {resumo.active_count === 1 ? "profissional ativo" : "profissionais ativos"}
+              {fmtMoneyCurto(resumo.referred_total_month)} vendidos por indicação este mês · {resumo.active_count} {resumo.active_count === 1 ? "ativo no clube" : "ativos no clube"}
               {resumo.pending_redeems > 0 && (
-                <Text style={{ color: Colors.amber, fontWeight: "700" }}> · {resumo.pending_redeems} {resumo.pending_redeems === 1 ? "resgate pendente" : "resgates pendentes"}</Text>
+                <Text style={{ color: Colors.amber, fontWeight: "700" }}> · {resumo.pending_redeems} {resumo.pending_redeems === 1 ? "cupom pra gerar" : "cupons pra gerar"}</Text>
               )}
             </Text>
           )
@@ -207,7 +214,7 @@ function MatconProfissionaisScreen() {
           value={busca}
           onChangeText={setBusca}
           onSubmitEditing={() => setQ(busca.trim())}
-          placeholder="Nome, telefone ou ofício"
+          placeholder="Nome, telefone ou profissão"
           placeholderTextColor={Colors.ink3}
           returnKeyType="search"
           testID="matcon-prof-busca"
@@ -232,12 +239,12 @@ function MatconProfissionaisScreen() {
       ) : profissionais.length === 0 ? (
         <EsteiraVazia
           testID="matcon-profissionais-vazio"
-          titulo={q ? "Nada encontrado." : "Nenhum profissional ainda."}
+          titulo={q ? "Nada encontrado." : "Ninguém no clube ainda."}
           frase={
-            q ? "Confira o nome, o telefone ou o ofício, ou tente outra busca."
+            q ? "Confira o nome, o telefone ou a profissão, ou tente outra busca."
               : filtro === "inactive_60d" ? "Ninguém parado há 60 dias sem compra — sinal bom."
-                : filtro === "new" ? "Ninguém marcado nos últimos 30 dias."
-                  : "Marque um pedreiro como profissional na ficha dele e indique-o na próxima venda — ele aparece aqui."
+                : filtro === "new" ? "Ninguém entrou no clube nos últimos 30 dias."
+                  : <Text>Abra a ficha do pedreiro em Clientes, toque em <EsteiraVaziaDestaque>Colocar no clube do pedreiro</EsteiraVaziaDestaque> e diga que foi ele quem indicou na próxima venda — ele aparece aqui.</Text>
           }
         />
       ) : (
@@ -291,11 +298,11 @@ function ProfessionalCard({ p, matcon, busy, onWhats, onGerarCupom, onChamarDeVo
           <>
             <Pressable onPress={onWhats} style={[st.miniBtn, st.miniBtnWa]} testID={`matcon-whats-${p.id}`}>
               <Icon name="whatsapp" size={13} color={Colors.green} />
-              <Text style={[st.miniBtnText, { color: Colors.green }]}>Avisar no WhatsApp</Text>
+              <Text style={[st.miniBtnText, { color: Colors.green }]}>Mandar pontos no WhatsApp</Text>
             </Pressable>
             <Pressable onPress={onGerarCupom} style={[st.miniBtn, cupons > 0 && st.miniBtnPrimary]} testID={`matcon-cupom-${p.id}`}>
               <Icon name="percent" size={13} color={cupons > 0 ? "#fff" : Colors.ink} />
-              <Text style={[st.miniBtnText, { color: cupons > 0 ? "#fff" : Colors.ink }]}>Gerar cupom de resgate</Text>
+              <Text style={[st.miniBtnText, { color: cupons > 0 ? "#fff" : Colors.ink }]}>Trocar pontos por cupom</Text>
             </Pressable>
           </>
         )
