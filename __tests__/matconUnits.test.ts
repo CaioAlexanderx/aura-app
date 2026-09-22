@@ -11,11 +11,13 @@ import { UNITS } from "@/components/screens/estoque/types";
 import {
   MATCON_UNITS,
   FRACTIONAL_UNITS,
+  PURCHASE_UNITS,
   isFractionalUnit,
   unitsForProduct,
   parseQtyInput,
   fmtQty,
   toPackages,
+  convertPurchaseToSale,
 } from "@/utils/matconUnits";
 
 describe("isFractionalUnit", () => {
@@ -122,6 +124,30 @@ describe("toPackages", () => {
   test("factor <= 0 -> tudo zerado, sem dividir por zero", () => {
     expect(toPackages(10, 0)).toEqual({ packages: 0, covered: 0, leftover: 0 });
     expect(toPackages(10, -1)).toEqual({ packages: 0, covered: 0, leftover: 0 });
+  });
+});
+
+describe("convertPurchaseToSale", () => {
+  test("10 cx de 2,32 m² a R$ 58,00/cx -> 23,2 m² a R$ 25,00/m²", () => {
+    expect(convertPurchaseToSale(10, 58.0, 2.32)).toEqual({ qty: 23.2, unitCost: 25 });
+  });
+
+  test("fator invalido (<=0, NaN, null, undefined) -> passa-through arredondado", () => {
+    expect(convertPurchaseToSale(10, 58.0, 0)).toEqual({ qty: 10, unitCost: 58 });
+    expect(convertPurchaseToSale(10, 58.0, -1)).toEqual({ qty: 10, unitCost: 58 });
+    expect(convertPurchaseToSale(10, 58.0, NaN)).toEqual({ qty: 10, unitCost: 58 });
+    expect(convertPurchaseToSale(10, 58.0, null)).toEqual({ qty: 10, unitCost: 58 });
+    expect(convertPurchaseToSale(10, 58.0, undefined)).toEqual({ qty: 10, unitCost: 58 });
+  });
+
+  test("arredonda custo a 2 casas e quantidade a 3", () => {
+    expect(convertPurchaseToSale(3, 10, 3)).toEqual({ qty: 9, unitCost: 3.33 });
+  });
+});
+
+describe("PURCHASE_UNITS", () => {
+  test("lista fechada do M0", () => {
+    expect(PURCHASE_UNITS).toEqual(["cx", "pct", "sc", "rolo", "lata", "balde", "mlh", "un"]);
   });
 });
 

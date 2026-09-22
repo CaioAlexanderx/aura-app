@@ -6,6 +6,11 @@ import type { Product } from "./types";
 import { fmt } from "./types";
 import { minutosParaRotulo } from "./item-form/types";
 import { useValoresOcultos } from "@/stores/valoresOcultos";
+// 22/09/2026 (Matcon M0): a concatenação crua `{product.stock}` já mostrava
+// decimal se houvesse um (JS não trunca), mas sem separador de milhar
+// pt-BR nem limite de casas. fmtQty é neutro pra estoque inteiro (a
+// imensa maioria hoje) e correto pra fracionado.
+import { fmtQty } from "@/utils/matconUnits";
 
 var COLOR_NAMES: Record<string, string> = {
   '#000000':'Preto','#ffffff':'Branco','#ff0000':'Vermelho','#c0c0c0':'Prata',
@@ -98,7 +103,7 @@ export function ProductRow({
             </View>
           ) : (
             <View style={s.stockRow}>
-              <Text style={[s.stock, isLow && { color: Colors.red }]}>{product.stock} {product.unit}</Text>
+              <Text style={[s.stock, isLow && { color: Colors.red }]}>{fmtQty(product.stock)} {product.unit}</Text>
               {isLow && <View style={s.alertDot} />}
             </View>
           )}
@@ -112,7 +117,7 @@ export function ProductRow({
             <View style={s.detailPhotoRow}>
               <ProductImageUpload productId={product.id} imageUrl={product.image_url} compact />
               <View style={s.detailGrid}>
-                {[["Custo", m(fmt(product.cost))], ["Margem", margin + "%"], ["Valor estoque", m(fmt(product.stock * product.cost))], ["Estoque mínimo", product.minStock + " " + product.unit]].map(([l, v]) =>
+                {[["Custo", m(fmt(product.cost))], ["Margem", margin + "%"], ["Valor estoque", m(fmt(product.stock * product.cost))], ["Estoque mínimo", fmtQty(product.minStock) + " " + product.unit]].map(([l, v]) =>
                   <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text style={[s.detailValue, l === "Margem" && { color: Colors.green }]}>{v}</Text></View>
                 )}
               </View>

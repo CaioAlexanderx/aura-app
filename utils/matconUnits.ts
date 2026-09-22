@@ -91,3 +91,31 @@ export function toPackages(qty: number, factor: number): { packages: number; cov
   var leftover = round3(covered - qty);
   return { packages: packages, covered: covered, leftover: leftover };
 }
+
+// Unidades em que a loja pode comprar do fornecedor (frase "Compro por
+// [x] de [n] m²" no cadastro, §2/§4b do doc). Lista fechada do M0 —
+// crescer isto é decisão de PO, não digitação livre.
+export const PURCHASE_UNITS = ["cx", "pct", "sc", "rolo", "lata", "balde", "mlh", "un"] as const;
+
+// Importacao de XML (M0, docs/matcon-faseamento-po-ux.md secao 3): a nota
+// do fornecedor vem na unidade de COMPRA (ex.: 10 caixas); o produto vende
+// na unidade de VENDA (ex.: m²). `factor` e quantas unidades de venda cabem
+// em 1 unidade de compra (a mesma conta de toPackages, ao contrario).
+// qty vira qty*factor (estoque que entra), unit_cost vira unit_cost/factor
+// (custo por unidade de venda). Custo arredonda a 2 casas (dinheiro), qty a
+// 3 (mesma precisao de parseQtyInput). factor invalido (<=0, nao finito,
+// null/undefined) -> passa-through: os numeros da nota saem do jeito que
+// entraram, so arredondados — e o comportamento de hoje pra quem nao tem
+// purchase_factor cadastrado.
+export function convertPurchaseToSale(
+  qty: number,
+  unitCost: number,
+  factor: number | null | undefined
+): { qty: number; unitCost: number } {
+  var round2 = function (n: number) { return Math.round(n * 100) / 100; };
+  var round3 = function (n: number) { return Math.round(n * 1000) / 1000; };
+  if (!factor || factor <= 0 || !isFinite(factor)) {
+    return { qty: round3(qty), unitCost: round2(unitCost) };
+  }
+  return { qty: round3(qty * factor), unitCost: round2(unitCost / factor) };
+}

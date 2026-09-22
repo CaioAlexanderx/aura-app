@@ -18,10 +18,14 @@ import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import type { Product } from "@/components/screens/estoque/types";
 import { useValoresOcultos } from "@/stores/valoresOcultos";
+// 22/09/2026 (Matcon M0): fmtInt (Math.round + toLocaleString) arredondava
+// SEMPRE pra inteiro — estoque fracionado (12,5 m²) virava "13". fmtQty só
+// mostra decimais quando existem, então pra quem tem estoque inteiro (a
+// imensa maioria, hoje) o texto sai idêntico: neutro fora do Matcon.
+import { fmtQty } from "@/utils/matconUnits";
 
 const fmtBRL = (n: number) =>
   "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtInt = (n: number) => Math.round(n).toLocaleString("pt-BR");
 
 type Props = {
   items: Product[];
@@ -179,7 +183,7 @@ export function ProductGridWeb({ items, onEdit, onDelete, onLink, bulkMode, bulk
                 <span style={{
                   fontSize: 12, fontFamily: Fonts.mono, fontWeight: 600,
                   color: low ? (isDark ? "#f87171" : "#dc2626") : C.ink3,
-                } as any}>{fmtInt(p.stock)}{p.unit || "un"}</span>
+                } as any}>{fmtQty(p.stock)}{p.unit || "un"}</span>
               </div>
             </div>
           </div>

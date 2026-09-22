@@ -46,6 +46,9 @@ import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { useProducts } from "@/hooks/useProducts";
 import { useCategories } from "@/hooks/useCategories";
+import { usePdvSettings } from "@/hooks/usePdvSettings";
+import { readMatconSettings } from "@/constants/matcon";
+import { parseQtyInput, fmtQty, isFractionalUnit } from "@/utils/matconUnits";
 import { companiesApi } from "@/services/api";
 import { nfceApi } from "@/services/nfceApi";
 import { productImagesApi } from "@/services/productImagesApi";
@@ -108,6 +111,11 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   const { products, addProduct, updateProduct } = useProducts();
   const { byId: categoriaPorId, assignProductCategories } = useCategories();
   const breadcrumbLabel = useBreadcrumbLabel();
+  // 22/09/2026 (Matcon M0): única leitura das configs do módulo neste
+  // modal. Loja sem o toggle nunca lê matconUnits/purchaseUnit — os
+  // props ficam undefined e SecaoEstoque renderiza exatamente como hoje.
+  const { settings: pdvSettings } = usePdvSettings();
+  const matcon = readMatconSettings(pdvSettings);
 
   // Alvo da edição: vem da prop, mas o banner de duplicata pode TROCAR
   // pra edição do produto que já existe sem fechar o modal.
@@ -123,6 +131,10 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   const [stockMode, setStockMode] = useState<StockMode>("single");
   const [estoqueTxt, setEstoqueTxt] = useState("");
   const [minimoTxt, setMinimoTxt] = useState("");
+  // 22/09/2026 (Matcon M0): "Compro por [x] de [n] u." — null/"" = compra
+  // na mesma unidade que vende (comportamento de hoje pra quem não mexe).
+  const [purchaseUnit, setPurchaseUnit] = useState<string | null>(null);
+  const [purchaseFactorTxt, setPurchaseFactorTxt] = useState("");
   const [duracao, setDuracao] = useState("");
   const [descricao, setDescricao] = useState("");
   const [material, setMaterial] = useState("");
@@ -260,8 +272,15 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     setPreco(prod ? mascaraDeValor(prod.price) : "");
     setCusto(prod ? mascaraDeValor(prod.cost) : "");
     setUnidade(prod && prod.unit && prod.unit !== "srv" ? prod.unit : "un");
-    setEstoqueTxt(prod ? String(prod.stock) : "");
-    setMinimoTxt(prod ? String(prod.minStock) : "");
+    // Matcon M0: estoque/mínimo em decimal com vírgula quando a unidade é
+    // fracionada e o toggle está ligado — senão, o mesmo String(inteiro)
+    // de sempre (fmtQty de um inteiro sem unit é só o número).
+    const unidadeSemente = prod && prod.unit && prod.unit !== "srv" ? prod.unit : "un";
+    const decimalNaSemente = matcon.matcon_enabled && isFractionalUnit(unidadeSemente);
+    setEstoqueTxt(prod ? (decimalNaSemente ? fmtQty(prod.stock) : String(prod.stock)) : "");
+    setMinimoTxt(prod ? (decimalNaSemente ? fmtQty(prod.minStock) : String(prod.minStock)) : "");
+    setPurchaseUnit((prod as any)?.purchaseUnit ?? null);
+    setPurchaseFactorTxt((prod as any)?.purchaseFactor != null ? fmtQty((prod as any).purchaseFactor) : "");
     const bruto = prod?.notes || "";
     if (t === "service") {
       // A coluna manda; sem coluna, o sufixo antigo da descrição é lido e
@@ -311,7 +330,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       setLegado(u?.legado || "");
       setUltimaUsada(!!u && (!!u.primaryCategoryId || !!u.legado));
     }
-  }, [company?.id]);
+  }, [company?.id, matcon.matcon_enabled]);
 
   useEffect(() => {
     if (!visible) return;
@@ -368,6 +387,14 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     const estoqueDaGrade = vaiGravarGrade
       ? totalDaMatriz(matrizDaGrade(cores, tamanhos, celulas, normalizarMapaDaGrade<number>(variacoesRef.current?.matrix), matrixKey))
       : 0;
+    // 22/09/2026 (Matcon M0): unidade fracionada (m², kg…) com o toggle
+    // ligado aceita decimal (parseQtyInput, vírgula BR); qualquer outro
+    // caso continua parseInt — igual a hoje, inclusive pra quem não é
+    // Matcon (a unidade decide, não a loja).
+    const estoqueFracionado = matcon.matcon_enabled && isFractionalUnit(unidade);
+    const estoqueSimples = estoqueFracionado ? (parseQtyInput(estoqueTxt) ?? 0) : (parseInt(estoqueTxt, 10) || 0);
+    const minimoSimples = estoqueFracionado ? (parseQtyInput(minimoTxt) ?? 0) : (parseInt(minimoTxt, 10) || 0);
+    const fatorCompra = purchaseFactorTxt.trim() ? parseQtyInput(purchaseFactorTxt) : null;
     return {
       id,
       name: nome.trim(),
@@ -382,9 +409,14 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       // Com variações e grade que NÃO vai ser gravada, stock fica undefined
       // e some do JSON: o PATCH não toca no estoque do pai, que é a soma
       // das variações gravada pelo último PUT (auditoria 10/09).
-      stock: !isProduto ? 0 : (temVariantes ? (vaiGravarGrade ? estoqueDaGrade : (undefined as any)) : (parseInt(estoqueTxt, 10) || 0)),
-      minStock: isProduto ? (parseInt(minimoTxt, 10) || 0) : 0,
+      stock: !isProduto ? 0 : (temVariantes ? (vaiGravarGrade ? estoqueDaGrade : (undefined as any)) : estoqueSimples),
+      minStock: isProduto ? minimoSimples : 0,
       unit: isProduto ? unidade : "srv",
+      // 22/09/2026 (Matcon M0): "Compro por [x] de [n] u." — fator vazio
+      // vira null NOS DOIS (limpa a conversão inteira), nunca undefined:
+      // undefined some do PATCH e deixaria uma conversão antiga presa.
+      purchaseUnit: isProduto && fatorCompra != null ? (purchaseUnit || null) : null,
+      purchaseFactor: isProduto ? (fatorCompra ?? null) : null,
       brand: alvo?.brand || "",
       // A descrição é só a descrição. A duração tem coluna própria desde
       // a migration 323 — e gravar aqui SEM o sufixo é o que tira o
@@ -769,6 +801,10 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       celulas={celulas} onCelula={(k, v) => { setCelulas((c) => ({ ...c, [k]: v })); gradeTocadaRef.current = true; setGradeSuja(true); setSujo(true); }}
       barras={barras} onBarra={(k, v) => { setBarras((b) => ({ ...b, [k]: v })); gradeTocadaRef.current = true; setGradeSuja(true); setSujo(true); }}
       onSubmit={() => { if (!modoEdicao) salvar(false); }}
+      matconEnabled={matcon.matcon_enabled}
+      matconUnits={matcon.matcon_units}
+      purchaseUnit={purchaseUnit} onPurchaseUnit={(v) => { setPurchaseUnit(v); setSujo(true); }}
+      purchaseFactor={purchaseFactorTxt} onPurchaseFactor={(v) => { setPurchaseFactorTxt(v); setSujo(true); }}
     />
   ) : null;
 
