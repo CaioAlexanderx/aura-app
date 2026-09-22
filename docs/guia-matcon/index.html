@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guia rápido · Aura Matcon</title>
+<meta name="description" content="Guia rápido do módulo Matcon (materiais de construção) da Aura: ligar, cadastrar, vender por m², orçar, entregar, emitir NF-e, clube do profissional e compras.">
+<style>
+  :root {
+    --ink: #17131f; --ink2: #3b3547; --ink3: #6f6880; --line: #e6e1f0;
+    --bg: #ffffff; --bg2: #f7f5fb; --violet: #7c3aed; --violet-soft: #efe9fd;
+    --amber: #b45309; --amber-soft: #fef3c7; --green: #047857; --green-soft: #d1fae5;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 -apple-system, "Segoe UI", Inter, Roboto, sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero { padding: 40px 0 28px; border-bottom: 1px solid var(--line); margin-bottom: 28px; }
+  .eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink3); font-weight: 700; }
+  .eyebrow b { color: var(--violet); }
+  h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 400; font-size: clamp(38px, 6vw, 60px); line-height: .98; letter-spacing: -.02em; margin: 10px 0 14px; }
+  h1 .dot { color: var(--violet); }
+  .lead { font-size: 18px; color: var(--ink2); max-width: 62ch; margin: 0 0 18px; }
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill { font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 999px; background: var(--violet-soft); color: var(--violet); }
+  nav.toc { background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; margin-bottom: 36px; }
+  nav.toc strong { display: block; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink3); margin-bottom: 8px; }
+  nav.toc ol { margin: 0; padding-left: 20px; columns: 2; column-gap: 32px; }
+  nav.toc li { break-inside: avoid; margin: 3px 0; }
+  nav.toc a { color: var(--ink); text-decoration: none; }
+  nav.toc a:hover { color: var(--violet); }
+  section { margin: 0 0 56px; }
+  h2 { font-family: Georgia, "Times New Roman", serif; font-weight: 400; font-size: 32px; letter-spacing: -.015em; margin: 0 0 6px; }
+  h2 small { display: block; font: 600 12px/1 -apple-system, "Segoe UI", sans-serif; letter-spacing: .12em; text-transform: uppercase; color: var(--violet); margin-bottom: 10px; }
+  .where { font-size: 14px; color: var(--ink3); margin: 0 0 16px; }
+  .where code { background: var(--bg2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-size: 13px; color: var(--ink2); }
+  ol.steps { padding-left: 22px; margin: 0 0 18px; }
+  ol.steps li { margin: 6px 0; }
+  ol.steps li::marker { color: var(--violet); font-weight: 700; }
+  figure { margin: 18px 0 8px; }
+  figure img { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 30px rgba(23,19,31,.08); }
+  figure.phone { max-width: 320px; }
+  figure.crop img { box-shadow: none; }
+  figcaption { font-size: 13px; color: var(--ink3); margin-top: 8px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: start; }
+  .callout { border-left: 4px solid var(--violet); background: var(--violet-soft); border-radius: 0 10px 10px 0; padding: 12px 16px; margin: 16px 0; font-size: 15px; }
+  .callout.tip { border-color: var(--green); background: var(--green-soft); }
+  .callout.warn { border-color: var(--amber); background: var(--amber-soft); }
+  .callout b { display: inline-block; margin-right: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 12px 0 4px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); }
+  footer { border-top: 1px solid var(--line); padding-top: 18px; font-size: 13px; color: var(--ink3); }
+  @media (max-width: 720px) { .grid2, .grid3 { grid-template-columns: 1fr; } nav.toc ol { columns: 1; } }
+  @media print {
+    body { font-size: 12.5px; }
+    .wrap { max-width: none; padding: 0; }
+    section { break-inside: avoid-page; margin-bottom: 28px; }
+    figure img { box-shadow: none; }
+    nav.toc { break-after: page; }
+    a { color: inherit; text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">Aura<b>.</b> · Guia rápido</div>
+  <h1>Matcon<span class="dot">.</span></h1>
+  <p class="lead">O jeito Aura de vender material de construção: metro, metro quadrado, saco e milheiro no Caixa de sempre — mais orçamento que vira pedido, entrega parcial, NF-e da entrega, clube do profissional e compras por fornecedor. Tudo desligado por padrão; liga quem precisa.</p>
+  <div class="pills">
+    <span class="pill">Ligar em 1 toque</span><span class="pill">Venda por m² e kg</span><span class="pill">Calculadora de ambiente</span>
+    <span class="pill">Orçamento → pedido</span><span class="pill">Entrega parcial</span><span class="pill">NF-e da entrega</span>
+    <span class="pill">Clube do profissional</span><span class="pill">Compras por fornecedor</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <strong>Neste guia</strong>
+  <ol>
+    <li><a href="#ligar">Ligar o Matcon</a></li>
+    <li><a href="#ajustar">Ajustar em dois minutos</a></li>
+    <li><a href="#cadastrar">Cadastrar o que se vende por m², kg ou metro</a></li>
+    <li><a href="#vender">Vender no Caixa</a></li>
+    <li><a href="#orcar">Orçamento que vira pedido</a></li>
+    <li><a href="#entregar">Entregas e entrega parcial</a></li>
+    <li><a href="#nfe">NF-e da entrega (Simples Nacional)</a></li>
+    <li><a href="#clube">Clube do profissional</a></li>
+    <li><a href="#compras">Compras e DANFE do fornecedor</a></li>
+    <li><a href="#celular">No celular</a></li>
+    <li><a href="#mapa">Onde fica cada coisa</a></li>
+  </ol>
+</nav>
+
+<section id="ligar">
+  <h2><small>Passo 1</small>Ligar o Matcon</h2>
+  <p class="where">Onde: <code>Configurações</code> → card <code>PDV e Caixa</code> → chave <code>Materiais de construção</code></p>
+  <ol class="steps">
+    <li>Abra <b>Configurações</b> no rodapé do menu.</li>
+    <li>Role até <b>Materiais de construção</b> e ligue a chave.</li>
+    <li>Pronto: aparece a seção <b>Matcon</b> no menu (Orçamentos, Entregas, Profissionais, Compras) e o Caixa passa a aceitar quantidade decimal.</li>
+  </ol>
+  <figure class="crop"><img src="img/desktop-02-recorte-toggle.jpg" alt="Chave Materiais de construção nas configurações"><figcaption>A chave fica ao lado de Ordem de Serviço e Ótica. Desligada, nada do Matcon aparece para a loja.</figcaption></figure>
+  <div class="grid2">
+    <figure><img src="img/desktop-04-menu-matcon.jpg" alt="Seção Matcon no menu lateral"><figcaption>Com a chave ligada, a seção Matcon entra no menu, entre Clientes e Equipe.</figcaption></figure>
+    <figure class="phone"><img src="img/mobile-04-menu-matcon.jpg" alt="Seção Matcon no menu do celular"><figcaption>No celular, a seção fica em <b>Mais</b>, na barra de baixo.</figcaption></figure>
+  </div>
+  <div class="callout tip"><b>Dica.</b> A chave não muda nada para quem vende roupa, ração ou remédio: o Caixa, o Estoque e os relatórios continuam iguais. Só a loja de material vê os campos novos.</div>
+  <div class="grid2">
+    <figure><img src="img/desktop-13b-menu-sem-matcon.jpg" alt="Menu sem a seção Matcon"><figcaption>Chave desligada: o menu volta ao de sempre, sem a seção Matcon.</figcaption></figure>
+    <figure><img src="img/desktop-13c-caixa-sem-matcon.jpg" alt="Caixa sem os campos do Matcon"><figcaption>E o Caixa volta ao stepper inteiro — o mesmo piso, sem campo decimal nem calculadora.</figcaption></figure>
+  </div>
+</section>
+
+<section id="ajustar">
+  <h2><small>Passo 2</small>Ajustar em dois minutos</h2>
+  <p class="where">Onde: <code>Configurações</code> → link <code>Unidades, entrega e clube</code> (ou menu <code>Matcon</code> → engrenagem)</p>
+  <p>Cinco frases, sem jargão. Cada uma tem um valor padrão que já funciona; mexa só no que for diferente na sua loja.</p>
+  <table>
+    <tr><th>Frase</th><th>O que muda</th></tr>
+    <tr><td>Minha loja vende em <b>m, m², m³, sc, br, ton, mlh, pç…</b></td><td>Quais unidades aparecem no cadastro de produto.</td></tr>
+    <tr><td>Em piso e revestimento, considero <b>10%</b> de perda</td><td>Perda por quebra e recorte que a calculadora de ambiente já soma.</td></tr>
+    <tr><td>Quando o cliente pede menos que uma embalagem fechada, <b>arredondo para a caixa cheia</b></td><td>O Caixa mostra "= 6 cx · 15 m² · sobra 1,4 m²" embaixo da quantidade.</td></tr>
+    <tr><td>Controlo <b>lote e tonalidade</b> nos produtos em m² e m³</td><td>Liga o lote no Caixa, na entrega e na importação da DANFE.</td></tr>
+    <tr><td>Prometo a entrega para <b>2</b> dias · orçamentos valem <b>7</b> dias e avisam <b>2</b> dias antes</td><td>Data sugerida da entrega e o alerta "vence amanhã" da esteira de orçamentos.</td></tr>
+    <tr><td>Tenho <b>clube do profissional</b></td><td>Pontos por indicação e cupom de resgate (Passo 8).</td></tr>
+  </table>
+  <figure><img src="img/desktop-03-matcon-config.jpg" alt="Tela de ajustes do Matcon"><figcaption>Tela Materiais de construção: cada linha é uma frase completa, como o dono explicaria para um funcionário novo.</figcaption></figure>
+</section>
+
+<section id="cadastrar">
+  <h2><small>Passo 3</small>Cadastrar o que se vende por m², kg ou metro</h2>
+  <p class="where">Onde: <code>Estoque</code> → <code>+ Produto</code> (ou toque em um produto para editar)</p>
+  <ol class="steps">
+    <li>Em <b>Unidade de venda</b>, escolha na fileira <b>Materiais</b>: m², m³, kg, m, sc, br, ton…</li>
+    <li>Se você compra em outra unidade, preencha <b>Compro por</b>: "cx de 2,5 m²", "pallet de 60 sc", "rolo de 100 m". O Caixa e a Compras usam isso para converter.</li>
+    <li>Com unidade fracionada, o estoque aceita decimal: <b>187,5 m²</b>.</li>
+    <li>Em <b>Códigos e fiscal</b>, informe o <b>CEST</b> (7 dígitos) e responda: <b>o imposto já veio recolhido na nota do fornecedor?</b> Cimento, tinta, tubo e piso normalmente sim (substituição tributária).</li>
+  </ol>
+  <div class="grid2">
+    <figure><img src="img/desktop-05c-produto-unidade-compra.jpg" alt="Unidade de venda e Compro por"><figcaption>Piso em m², comprado em caixa de 2,5 m².</figcaption></figure>
+    <figure><img src="img/desktop-05d-produto-fiscal.jpg" alt="CEST e imposto recolhido"><figcaption>CEST validado e a pergunta do ST em português de balcão.</figcaption></figure>
+  </div>
+  <div class="callout"><b>Por que isso importa.</b> No Simples Nacional, produto com imposto já recolhido sai na nota com CSOSN 500; sem isso a nota sai com 102 e a SEFAZ pode recusar ou você paga imposto duas vezes. A Aura decide sozinha a partir dessa resposta.</div>
+</section>
+
+<section id="vender">
+  <h2><small>Passo 4</small>Vender no Caixa</h2>
+  <p class="where">Onde: <code>Caixa</code> — o mesmo de sempre</p>
+  <ol class="steps">
+    <li>Toque no produto. Se ele é em m², kg ou m, o campo de quantidade aceita <b>vírgula</b>: 12,5 m².</li>
+    <li>Embaixo aparece a conta da embalagem: <b>= 5 cx · 12,5 m²</b>, com a sobra quando não fecha caixa.</li>
+    <li>Não sabe a metragem? Toque em <b>calcular ambiente</b>: largura × comprimento por cômodo, perda de quebra já somada, e escolha "Usar 20,00 m²" ou "Usar 8 cx fechadas".</li>
+    <li>Com lote ligado, o Caixa mostra o <b>lote e a tonalidade</b> e avisa quando a venda vai precisar de dois lotes.</li>
+    <li>Cliente veio indicado por um pedreiro? Toque em <b>+ indicar profissional</b> e busque pelo nome: os pontos aparecem na hora.</li>
+  </ol>
+  <figure><img src="img/desktop-06b-caixa-fracionado.jpg" alt="Carrinho com quantidade decimal"><figcaption>Quantidade decimal, frase da embalagem e lote, sem sair do Caixa.</figcaption></figure>
+  <div class="grid2">
+    <figure><img src="img/desktop-06c-calculadora-ambiente.jpg" alt="Calculadora de ambiente"><figcaption>Sala 3,2 × 4,5 + cozinha 2,1 × 1,8 → 18,18 m² + 10% = 20 m² = 8 caixas.</figcaption></figure>
+    <figure><img src="img/desktop-06d-caixa-indicado-por.jpg" alt="Indicado por profissional"><figcaption>"João Batista ganha 54 pontos com esta venda" — o clube sem planilha.</figcaption></figure>
+  </div>
+</section>
+
+<section id="orcar">
+  <h2><small>Passo 5</small>Orçamento que vira pedido</h2>
+  <p class="where">Onde: <code>Caixa</code> → <code>Salvar orçamento</code> · esteira em <code>Matcon</code> → <code>Orçamentos</code></p>
+  <ol class="steps">
+    <li>Monte o carrinho normalmente e toque em <b>Salvar orçamento</b>. Ele ganha número, validade e um link.</li>
+    <li><b>Enviar no WhatsApp</b> manda o link; o cliente vê os itens e toca em <b>Aceitar orçamento</b> pelo celular.</li>
+    <li>Na esteira, cada card mostra o valor e quando vence. <b>Vencendo</b> destaca o que precisa de ligação hoje.</li>
+    <li><b>Converter em pedido</b> abre o Caixa com tudo preenchido: a venda nasce do jeito de sempre e a primeira entrega já aparece na esteira de Entregas.</li>
+  </ol>
+  <figure><img src="img/desktop-06f-caixa-orcamento-salvo.jpg" alt="Orçamento salvo no Caixa"><figcaption>Orçamento salvo: enviar no WhatsApp ou ver na esteira.</figcaption></figure>
+  <div class="grid2">
+    <figure><img src="img/desktop-07-orcamentos.jpg" alt="Esteira de orçamentos"><figcaption>Abertos, vencendo, aprovados, perdidos — com o dinheiro parado em cada estação.</figcaption></figure>
+    <figure><img src="img/desktop-07c-orcamento-publico.jpg" alt="Página pública do orçamento"><figcaption>O que o cliente recebe no WhatsApp, com a marca da loja.</figcaption></figure>
+  </div>
+</section>
+
+<section id="entregar">
+  <h2><small>Passo 6</small>Entregas e entrega parcial</h2>
+  <p class="where">Onde: <code>Matcon</code> → <code>Entregas</code></p>
+  <ol class="steps">
+    <li>Toda venda com entrega aparece em <b>Separando</b>. Os botões avançam: <b>Marcar pronto</b> → <b>Saiu para entrega</b> → <b>Marcar como entregue</b>.</li>
+    <li><b>Quem entregou</b> é um campo livre: "Zé (caminhão 3/4)". Sem cadastro de motorista.</li>
+    <li>Não coube tudo no caminhão? <b>Entrega parcial</b>: digite o que foi e a Aura cria a próxima viagem com o saldo.</li>
+    <li>O cliente acompanha pelo link <b>/acompanhar</b>: etapa atual, o que já foi e quando vai o resto.</li>
+  </ol>
+  <figure><img src="img/desktop-08-entregas.jpg" alt="Esteira de entregas"><figcaption>Separando, pronto, saiu, entregue hoje — e os pedidos com saldo a entregar.</figcaption></figure>
+  <div class="grid2">
+    <figure><img src="img/desktop-08f-entregas-parcial.jpg" alt="Entrega parcial"><figcaption>"Foi 1.000 de 1.500 tijolos": o resto vira a próxima entrega.</figcaption></figure>
+    <figure><img src="img/desktop-08h-acompanhar-publico.jpg" alt="Página de acompanhamento"><figcaption>O cliente vê "os 500 restantes vão dia 24/09, na próxima viagem".</figcaption></figure>
+  </div>
+</section>
+
+<section id="nfe">
+  <h2><small>Passo 7</small>NF-e da entrega (Simples Nacional)</h2>
+  <p class="where">Onde: card da entrega → <code>Emitir NF-e</code> · notas em <code>NF-e</code></p>
+  <ol class="steps">
+    <li>A nota nasce da <b>entrega</b>, não da venda: cada viagem leva a sua, com os itens e o preço da venda.</li>
+    <li>Se algum item está sem CEST, a folha avisa <b>antes</b> de emitir e leva você ao cadastro em um toque (<b>Resolver</b>).</li>
+    <li>Preencha para quem é, e como vai o material: <b>meu caminhão</b> (volumes, peso, placa) ou <b>cliente retira / transportadora</b>.</li>
+    <li>Emitiu: o card da entrega ganha o selo <b>NF-e #1043 · autorizada</b> e o botão <b>Ver DANFE</b>. O cliente também vê o DANFE na página de acompanhamento.</li>
+  </ol>
+  <div class="grid2">
+    <figure><img src="img/desktop-08c-entregas-emitir-nfe.jpg" alt="Folha Emitir NF-e"><figcaption>Aviso de item sem código fiscal, destinatário e transporte em uma folha só.</figcaption></figure>
+    <figure><img src="img/desktop-08e-entregas-nfe-emitida.jpg" alt="Entrega com NF-e autorizada"><figcaption>Selo da nota no card e "Ver DANFE" no lugar de "Emitir".</figcaption></figure>
+  </div>
+  <div class="callout warn"><b>Atenção.</b> O regime da empresa fica em NF-e → Configurações. O Matcon foi desenhado para o Simples (CSOSN); Lucro Presumido e Real usam a emissão de sempre.</div>
+</section>
+
+<section id="clube">
+  <h2><small>Passo 8</small>Clube do profissional</h2>
+  <p class="where">Onde: <code>Clientes</code> → ficha → <code>Marcar como profissional</code> · <code>Matcon</code> → <code>Profissionais</code></p>
+  <ol class="steps">
+    <li>Profissional é um <b>cliente marcado</b>, não um segundo cadastro: abra a ficha, toque em <b>Marcar como profissional</b> e escolha o ofício (pedreiro, eletricista, arquiteto…).</li>
+    <li>No Caixa, <b>+ indicar profissional</b> credita pontos: 1 ponto a cada R$ 100 (ajustável).</li>
+    <li>Em <b>Profissionais</b>, quem tem pontos para resgatar aparece em destaque. <b>Gerar cupom de resgate</b> cria um cupom de R$ 50 e <b>Avisar no WhatsApp</b> manda o extrato.</li>
+    <li>O filtro <b>Sem compra há 60 dias</b> mostra quem sumiu; <b>Chamar de volta</b> abre o WhatsApp com a mensagem pronta.</li>
+  </ol>
+  <div class="grid2">
+    <figure><img src="img/desktop-10b-clientes-marcar-profissional.jpg" alt="Marcar como profissional"><figcaption>Tocou, escolheu o ofício, pronto.</figcaption></figure>
+    <figure><img src="img/desktop-09c-profissional-cupom.jpg" alt="Cupom de resgate gerado"><figcaption>Cupom gerado e saldo de pontos debitado na hora.</figcaption></figure>
+  </div>
+</section>
+
+<section id="compras">
+  <h2><small>Passo 9</small>Compras e DANFE do fornecedor</h2>
+  <p class="where">Onde: <code>Matcon</code> → <code>Compras</code> · <code>Estoque</code> → <code>Importar DANFE</code></p>
+  <ol class="steps">
+    <li>A Aura olha o mínimo e o ritmo de venda e sugere a compra <b>por fornecedor</b>: "tem 21 sc, mínimo 30, vende 18/semana → sugerimos 80 sc".</li>
+    <li><b>Montar pedido</b> cria o rascunho com as quantidades editáveis. <b>Enviar no WhatsApp para o fornecedor</b> manda a lista; <b>Marcar como enviado</b> é para quem prefere ligar.</li>
+    <li>Chegou o material? <b>Importar DANFE</b> lê o XML da nota, casa os produtos e, com lote ligado, pede <b>lote e tonalidade</b> de cada piso.</li>
+    <li>O pedido vai para <b>Recebido</b> e o estoque entra convertido: 30 caixas viram 75 m².</li>
+  </ol>
+  <figure><img src="img/desktop-11-compras.jpg" alt="Sugestões de compra por fornecedor"><figcaption>Sugestão, pedido enviado, recebido: a mesma esteira das outras telas.</figcaption></figure>
+  <div class="grid2">
+    <figure><img src="img/desktop-11b-compras-pedido-montado.jpg" alt="Pedido montado"><figcaption>Rascunho com quantidade editável e envio pelo WhatsApp.</figcaption></figure>
+    <figure><img src="img/desktop-12b-importar-danfe.jpg" alt="Importar DANFE"><figcaption>XML da NF-e do fornecedor vira entrada de estoque.</figcaption></figure>
+  </div>
+</section>
+
+<section id="celular">
+  <h2><small>Passo 10</small>No celular</h2>
+  <p>Tudo acima funciona no celular do vendedor, com o mesmo desenho: título grande, botões abaixo do título e cards em coluna única.</p>
+  <div class="grid3">
+    <figure class="phone"><img src="img/mobile-07-orcamentos.jpg" alt="Orçamentos no celular"><figcaption>Esteira de orçamentos.</figcaption></figure>
+    <figure class="phone"><img src="img/mobile-08-entregas.jpg" alt="Entregas no celular"><figcaption>Entregas com quem entregou.</figcaption></figure>
+    <figure class="phone"><img src="img/mobile-06b-caixa-fracionado.jpg" alt="Caixa no celular"><figcaption>Caixa com quantidade decimal.</figcaption></figure>
+  </div>
+</section>
+
+<section id="mapa">
+  <h2><small>Referência</small>Onde fica cada coisa</h2>
+  <table>
+    <tr><th>Quero…</th><th>Vou em…</th></tr>
+    <tr><td>Ligar ou desligar o Matcon</td><td>Configurações → Materiais de construção</td></tr>
+    <tr><td>Mudar unidades, perda, prazo de entrega, validade do orçamento, clube</td><td>Configurações → Unidades, entrega e clube</td></tr>
+    <tr><td>Vender por m², kg ou metro</td><td>Caixa (o produto precisa ter unidade fracionada no cadastro)</td></tr>
+    <tr><td>Calcular quantas caixas de piso</td><td>Caixa → item → calcular ambiente</td></tr>
+    <tr><td>Salvar um orçamento</td><td>Caixa → Salvar orçamento</td></tr>
+    <tr><td>Ver o que está para vencer</td><td>Matcon → Orçamentos → Vencendo</td></tr>
+    <tr><td>Registrar que o caminhão saiu</td><td>Matcon → Entregas → Saiu para entrega</td></tr>
+    <tr><td>Entregar uma parte hoje e o resto depois</td><td>Matcon → Entregas → Entrega parcial</td></tr>
+    <tr><td>Emitir a nota de uma entrega</td><td>Matcon → Entregas → Emitir NF-e</td></tr>
+    <tr><td>Marcar um pedreiro como profissional</td><td>Clientes → ficha → Marcar como profissional</td></tr>
+    <tr><td>Gerar cupom de pontos</td><td>Matcon → Profissionais → Gerar cupom de resgate</td></tr>
+    <tr><td>Saber o que comprar esta semana</td><td>Matcon → Compras</td></tr>
+    <tr><td>Dar entrada em nota de fornecedor</td><td>Estoque → Importar DANFE</td></tr>
+  </table>
+</section>
+
+<footer>
+  Aura Matcon · guia rápido gerado a partir do QA de 22/09/2026 (telas capturadas em ambiente de demonstração, loja fictícia "Depósito Santa Rita"). As telas reais podem variar com o plano e as chaves ligadas.
+</footer>
+
+</div>
+</body>
+</html>
