@@ -25,7 +25,7 @@ Tudo abaixo já existe e foi validado pelo PR #878. Matcon repete, trocando o no
 | Peça | Como a Ótica fez | Matcon |
 |---|---|---|
 | **Opt-in** | `pdv_settings.otica_enabled` (migration 334 no backend), tipo em `services/authApi.ts:113` | `pdv_settings.matcon_enabled` — **migration no backend primeiro** (convenção do CLAUDE.md) |
-| **Menu** | Seção "Ótica" no `NAV` com `oticaToggle: true`; `_layout.tsx:240` filtra quando o toggle está off | Seção **"Construção"** com `matconToggle: true`; mesma linha de filtro |
+| **Menu** | Seção "Ótica" no `NAV` com `oticaToggle: true`; `_layout.tsx:240` filtra quando o toggle está off | Seção **"Matcon"** com `matconToggle: true`; mesma linha de filtro |
 | **Chaves de módulo** | `otica.laboratorio` / `otica.receitas` (Negócio), `otica.config` (Essencial) em `MODULE_PLAN_MAP` | `matcon.orcamentos` / `matcon.entregas` / `matcon.profissionais` (Negócio), `matcon.config` (Essencial) |
 | **Permissão de membro** | umbrella `otica.access` em `PERM_TO_MODULES`; `MembersSection.tsx:214` só mostra o grupo com `onlyWhen: "otica"` e toggle on | umbrella `matcon.access`; `onlyWhen: "matcon"` |
 | **Configuração** | Linha com Switch + links no `PdvSettingsCard.tsx:226-262`; tela própria `/otica/config` | Linha "Materiais de construção" + links "Abrir orçamentos" / "Unidades, entrega e clube" → `/matcon/config` |
@@ -77,7 +77,7 @@ O teto de 999 (`maxLength={3}`) vira `maxLength={6}` **só com o toggle on** (1.
 - `CartPanel`: campo decimal para unidade fracionada (§2); hint abaixo do campo quando "arredondar para embalagem" está ligado: `12,5 m² → 6 cx (13,92 m²)`.
 - Importação de XML (`DanfeImportModal`): quantidade da nota entra pela unidade de compra e converte pelo fator → estoque na unidade de venda; custo unitário recalculado. Só com toggle on; sem toggle, fluxo de hoje.
 - Data layer: `parseInt` → `parseFloat` em `mapApiProduct` (neutro para inteiros); `fmtInt` → `fmtQty` que só mostra decimais quando existem.
-- NAV: seção "Construção" nasce **vazia nesta fase** (só a config via PdvSettingsCard). Sem tela nova → sem risco de tela vazia.
+- NAV: a seção "Matcon" **só entra no menu com as telas do M1**. Em M0 o único acesso é a linha do PdvSettingsCard (toggle + link para `/matcon/config`). Sem item de menu apontando para rota inexistente.
 
 **Fora, de propósito:** orçamento, entrega, fiscal, clube.
 
@@ -146,14 +146,14 @@ Lote/tonalidade/bitola (campo de lote na entrada + alerta "lote misturado" na ve
 
 | Decisão | Escolha | Por quê |
 |---|---|---|
-| Nome da seção no menu | **"Construção"** | Substantivo do segmento, como "Ótica". "Materiais" é genérico; "Obra" é do cliente, não da loja. |
+| Nome da seção no menu | **"Matcon"** (decisão 22/09/2026) | Jargão do setor, curto, com cara de startup. O toggle em Configurações continua "Materiais de construção", que é como o dono descreve a loja. |
 | Nome do toggle em Configurações | "Materiais de construção" | É como o dono descreve a loja. |
 | Rotas / chaves | `/matcon/*`, `matcon.*` | Curto, sem acento, igual `otica`. |
 | Paleta | **Nenhuma própria** — shell de varejo, violeta `#7c3aed` | Ótica também não tem. Só Food tem paleta própria porque tem shell próprio. Matcon **é** varejo. |
 | Ícones | já existem: `truck` (entregas), `calculator` (calculadora), `clipboard` (orçamentos), `building`/`tool` (config/profissionais) | Zero ícone novo no M0–M2. Talvez `hard_hat` no M3 — 1 ícone, como a Ótica adicionou 2. |
 | Esteira vs. lista | Orçamentos e Entregas são **esteiras** com contagem por estação | Mesmo raciocínio do Laboratório: o dono quer "quantos e quais atrasaram" numa olhada. |
 | Quantidade fracionada | Campo decimal mono tabular, vírgula como separador, sem stepper | Igual à grade OD/OE da Ótica: número que se digita, não que se clica. |
-| Mobile | Itens de "Construção" entram no menu "Mais", como a Ótica; calculadora em bottom sheet; esteiras viram colunas roláveis horizontalmente | Não mexer em `MORE_PRIORIDADE`. |
+| Mobile | Itens de "Matcon" entram no menu "Mais", como a Ótica; calculadora em bottom sheet; esteiras viram colunas roláveis horizontalmente | Não mexer em `MORE_PRIORIDADE`. |
 | Touch | Nenhum hover-reveal novo (regra 7). Ações da esteira sempre visíveis no card. | |
 | Tema | Mockup e telas com `data-tema="claro"` como a Ótica | O padrão da casa. |
 | Estados vazios | `VerticalEmptyState` já existe; texto de cada esteira vazia ensina o primeiro passo ("Faça um orçamento no Caixa e ele aparece aqui") | Tela vazia no dia 1 é onde o cliente desiste. |
@@ -197,8 +197,8 @@ Regras que sustentam isso (e que o mockup precisa provar):
 1. **Backend é o caminho crítico.** M0 depende de 4 migrations e do `services/modules.js` conhecer `matcon.*` (hoje `os`, `cupons` e `clientes.reativacao` ainda não são conhecidos e ficam fora do catálogo do ClientsAdmin — matcon não pode nascer com essa dívida). Precisa de PR de backend **antes** de cada PR de front.
 2. **`stock_qty` para numeric** é a migration mais delicada: toca variantes (`variants_stock_total`), relatórios e curva ABC. Precisa de teste de regressão no backend nas somas.
 3. **Piloto antes do M2.** Sugiro 3–5 lojas rodando M0+M1 por 30 dias antes de fechar o escopo do M2/M3. As lojas decidem se o próximo é fiscal ou clube.
-4. **Nome "Construção"** — aprovar ou trocar antes do mockup, porque ele aparece em menu, config, testes e rotas.
-5. **Motoristas**: campo livre (minha recomendação) ou reaproveitar entregadores do Food?
+4. ~~Nome da seção~~ — **decidido: "Matcon"** (22/09/2026).
+5. ~~Motoristas~~ — **decidido: campo livre "quem entregou"** (22/09/2026).
 
 ---
 
