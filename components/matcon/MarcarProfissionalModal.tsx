@@ -59,8 +59,6 @@ export function MarcarProfissionalModal({ visible, onClose, onMarked, presetCust
     setQuery("");
   }, [visible, presetCustomer]);
 
-  if (!visible) return null;
-
   const results = useMemo(() => {
     const q = normalizeText(query.trim());
     const qDigits = query.replace(/\D/g, "");
@@ -72,6 +70,13 @@ export function MarcarProfissionalModal({ visible, onClose, onMarked, presetCust
       )
       .slice(0, 20);
   }, [customers, query]);
+
+  // 22/09/2026 (QA Matcon): o `return null` ficava ANTES do useMemo acima e
+  // quebrava a ordem dos hooks ao abrir ("Rendered more hooks than during
+  // the previous render") — o modal caía no ErrorBoundary no primeiro
+  // toque em "Marcar como profissional". Hooks sempre rodam; o early
+  // return vem depois de todos.
+  if (!visible) return null;
 
   async function handleConfirm() {
     if (!selected || !trade || !company?.id) return;

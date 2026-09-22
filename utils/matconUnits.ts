@@ -27,11 +27,25 @@ var FRACTIONAL_UNITS_LOWER = new Set(
   Array.from(FRACTIONAL_UNITS).map(function (u) { return u.toLowerCase(); })
 );
 
-// Case-insensitive, tolera espaco nas pontas. undefined/"" -> false (produto
-// sem unidade cadastrada nunca cai no campo decimal).
-export function isFractionalUnit(unit: string | null | undefined): boolean {
-  if (!unit) return false;
+// 22/09/2026 (QA Matcon): a lista base UNITS do cadastro ja oferecia "m2" e
+// "m3" em ASCII, lado a lado das "m²"/"m³" do Matcon. Pro lojista sao a
+// mesma coisa; pro codigo nao eram — piso salvo em "m2" caia no stepper
+// inteiro, sem calculadora e sem "Compro por". A NF-e do fornecedor tambem
+// escreve "M2"/"M3"/"KG"/"LT". Normaliza aqui, uma vez, e todo mundo
+// (carrinho, calculadora, ficha, lotes) enxerga a unidade certa.
+var UNIT_ALIASES: Record<string, string> = { m2: "m²", m3: "m³", lt: "l", litro: "l" };
+
+export function normalizeUnit(unit: string | null | undefined): string {
+  if (!unit) return "";
   var norm = unit.trim().toLowerCase();
+  return UNIT_ALIASES[norm] || norm;
+}
+
+// Case-insensitive, tolera espaco nas pontas e as grafias ASCII (m2, m3).
+// undefined/"" -> false (produto sem unidade cadastrada nunca cai no campo
+// decimal).
+export function isFractionalUnit(unit: string | null | undefined): boolean {
+  var norm = normalizeUnit(unit);
   if (!norm) return false;
   return FRACTIONAL_UNITS_LOWER.has(norm);
 }
