@@ -5,8 +5,8 @@
 //
 // 22/09/2026. Isola tudo que o botão "Salvar orçamento" do CartPanel
 // precisa: a mutation createQuote, o estado do card "Orçamento #N salvo" e
-// os dois botões do card ("Enviar no WhatsApp" → markQuoteSent, "Ver na
-// esteira" → /matcon/orcamentos). O CartPanel só recebe onSaveQuote/
+// os dois botões do card ("Enviar no WhatsApp" → markQuoteSent, "Ver
+// orçamentos" → /matcon/orcamentos). O CartPanel só recebe onSaveQuote/
 // savingQuote/savedQuote (props opcionais, ver components/screens/pdv/
 // CartPanel.tsx) — nenhuma chamada de API mora lá.
 //
@@ -93,7 +93,7 @@ export function useMatconQuote(params: UseMatconQuoteParams) {
       setLastQuote(quote);
       toast.success("Orçamento #" + quote.number + " salvo");
     } catch (e: any) {
-      toast.error(e?.message || "Erro ao salvar orçamento");
+      toast.error(e?.message || "Não deu para salvar o orçamento");
     } finally {
       setSaving(false);
     }
@@ -108,7 +108,7 @@ export function useMatconQuote(params: UseMatconQuoteParams) {
     const texto = saudacao + "Segue seu orçamento #" + lastQuote.number + " — " + valor + ". " + url;
     const opened = openWhatsApp(lastQuote.customer_phone, texto);
     if (!opened) {
-      toast.error("Cliente sem WhatsApp cadastrado — copie o link do orçamento na esteira");
+      toast.error("Cliente sem WhatsApp cadastrado — abra o orçamento em Orçamentos e mande o link por lá");
       return;
     }
     // Best-effort: o envio em si já aconteceu (wa.me abriu); markQuoteSent

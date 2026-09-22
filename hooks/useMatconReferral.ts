@@ -1,5 +1,5 @@
 // ============================================================
-// AURA. — Matcon M3: Clube do Profissional — "Indicado por" do Caixa
+// AURA. — Matcon M3: Profissionais Parceiros — "Indicado por" do Caixa
 //
 // 22/09/2026. Isola a busca de profissionais (matconApi.searchProfessionals)
 // e a seleção do "indicado por" da venda — docs/CONTRACT_MATCON.md (seção

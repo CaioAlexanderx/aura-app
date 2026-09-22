@@ -1,17 +1,22 @@
 // ============================================================
-// AURA. — Matcon M3: MarcarProfissionalModal
+// AURA. — Matcon M3: MarcarProfissionalModal ("Marcar como parceiro")
 //
 // 22/09/2026 (docs/CONTRACT_MATCON.md, seção M3 · mockup
 // docs/mockups/matcon-m3-clube-calculadora.html #ficha, "Tocou — escolher
 // o ofício e pronto"). Marca um cliente já cadastrado como profissional
-// do clube: `POST .../matcon/professionals {customer_id, trade}`.
+// parceiro: `POST .../matcon/professionals {customer_id, trade}`.
+//
+// 22/09/2026 (revisão de texto): na tela o programa chama "Profissionais
+// Parceiros"; o botão é "Marcar como parceiro" e o título do modal,
+// "Marcar como profissional parceiro" — nada de "clube" nem "ofício" na
+// cara do lojista. O nome do arquivo e da API não mudam.
 //
 // Dois chamadores:
-//   - CustomerRow.tsx ("Marcar como profissional" na ficha) já sabe QUEM
-//     é o cliente — passa `presetCustomer` e o modal pula direto pro
-//     chipset de ofício.
-//   - IndicadoPorChip.tsx ("Marcar um cliente que já existe" no rodapé da
-//     busca do Caixa) não tem cliente nenhum ainda — o modal abre com a
+//   - CustomerRow.tsx ("Marcar como parceiro" na ficha) já sabe
+//     QUEM é o cliente — passa `presetCustomer` e o modal pula direto pro
+//     chipset de profissão.
+//   - IndicadoPorChip.tsx ("Escolher um cliente já cadastrado" no rodapé
+//     da busca do Caixa) não tem cliente nenhum ainda — o modal abre com a
 //     busca (mesmo filtro local de nome/telefone que useCustomers já
 //     carrega, sem rota nova).
 //
@@ -85,11 +90,11 @@ export function MarcarProfissionalModal({ visible, onClose, onMarked, presetCust
       const { professional } = await matconApi.createProfessional(company.id, {
         customer_id: selected.id, trade,
       });
-      toast.success(selected.name + " agora é profissional do clube");
+      toast.success(selected.name + " agora é profissional parceiro");
       onMarked(professional);
       onClose();
     } catch (e: any) {
-      toast.error(e?.message || "Erro ao marcar profissional");
+      toast.error(e?.message || "Não deu para marcar como parceiro");
     } finally {
       setSaving(false);
     }
@@ -98,7 +103,7 @@ export function MarcarProfissionalModal({ visible, onClose, onMarked, presetCust
   return (
     <ResponsiveSheet visible={visible} onClose={onClose} maxWidth={440}>
       <View style={s.header}>
-        <Text style={s.title}>Marcar como profissional</Text>
+        <Text style={s.title}>Marcar como profissional parceiro</Text>
         <Pressable onPress={onClose} hitSlop={10} accessibilityLabel="Fechar">
           <Icon name="x" size={18} color={Colors.ink3} />
         </Pressable>
@@ -144,7 +149,7 @@ export function MarcarProfissionalModal({ visible, onClose, onMarked, presetCust
               )}
             </View>
 
-            <Text style={s.label}>Qual é o ofício dele?</Text>
+            <Text style={s.label}>O que ele faz?</Text>
             <View style={s.chipset}>
               {(Object.keys(TRADE_LABELS) as ProfessionalTrade[]).map(key => {
                 const on = trade === key;
@@ -169,13 +174,13 @@ export function MarcarProfissionalModal({ visible, onClose, onMarked, presetCust
           <Text style={s.cancelText}>Cancelar</Text>
         </Pressable>
         <Button
-          title="Marcar como profissional"
+          title="Marcar como parceiro"
           variant="primary"
           onPress={handleConfirm}
           disabled={!selected || !trade}
           loading={saving}
           full
-          accessibilityLabel="Confirmar marcação como profissional"
+          accessibilityLabel="Confirmar profissional parceiro"
         />
       </View>
     </ResponsiveSheet>

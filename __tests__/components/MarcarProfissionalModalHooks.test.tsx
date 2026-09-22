@@ -5,7 +5,7 @@
 // useMemo dos resultados, entao o primeiro render (fechado) rodava 5 hooks
 // e o segundo (aberto) rodava 6 — React derrubava o modal no ErrorBoundary
 // com "Rendered more hooks than during the previous render" no primeiro
-// toque em "Marcar como profissional". Este teste abre o modal a partir do
+// toque em "Marcar como parceiro". Este teste abre o modal a partir do
 // estado fechado, que e exatamente o caminho que quebrava.
 // ============================================================
 import React from "react";
@@ -55,9 +55,9 @@ describe("MarcarProfissionalModal — abre a partir do estado fechado", () => {
     }).not.toThrow();
 
     const t = textos(tree);
-    expect(t).toContain("Marcar como profissional");
+    expect(t).toContain("Marcar como profissional parceiro");
     expect(t).toContain("Maria Souza");
-    expect(t).toContain("Qual é o ofício dele?");
+    expect(t).toContain("O que ele faz?");
   });
 
   test("fechado -> aberto sem cliente mostra a busca e filtra por nome", () => {

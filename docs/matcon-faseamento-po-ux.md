@@ -28,7 +28,7 @@ Tudo abaixo já existe e foi validado pelo PR #878. Matcon repete, trocando o no
 | **Menu** | Seção "Ótica" no `NAV` com `oticaToggle: true`; `_layout.tsx:240` filtra quando o toggle está off | Seção **"Matcon"** com `matconToggle: true`; mesma linha de filtro |
 | **Chaves de módulo** | `otica.laboratorio` / `otica.receitas` (Negócio), `otica.config` (Essencial) em `MODULE_PLAN_MAP` | `matcon.orcamentos` / `matcon.entregas` / `matcon.profissionais` (Negócio), `matcon.config` (Essencial) |
 | **Permissão de membro** | umbrella `otica.access` em `PERM_TO_MODULES`; `MembersSection.tsx:214` só mostra o grupo com `onlyWhen: "otica"` e toggle on | umbrella `matcon.access`; `onlyWhen: "matcon"` |
-| **Configuração** | Linha com Switch + links no `PdvSettingsCard.tsx:226-262`; tela própria `/otica/config` | Linha "Materiais de construção" + links "Abrir orçamentos" / "Unidades, entrega e clube" → `/matcon/config` |
+| **Configuração** | Linha com Switch + links no `PdvSettingsCard.tsx:226-262`; tela própria `/otica/config` | Linha "Materiais de construção" + links "Abrir orçamentos" / "Unidades, entrega e parceiros" → `/matcon/config` |
 | **Ficha do cliente** | Botão "Receitas (ótica)" em `CustomerRow.tsx:222`, condicionado ao toggle | Botão "Profissional" / "Orçamentos", condicionados ao toggle |
 | **Reuso de tela pública** | `/acompanhar/[token]` ganhou `tipo === "oculos"` (textos mudam, layout não) | ganha `tipo === "entrega"` ("Seu pedido saiu para entrega") |
 | **Reuso de OS** | `kind: "reparo" \| "otica"`; a lista `/os` filtra só reparo | `kind: "corte"` (vidro/madeira/tubo) — **opcional, M4** |
@@ -73,7 +73,7 @@ O teto de 999 (`maxLength={3}`) vira `maxLength={6}` **só com o toggle on** (1.
 | M1 · Orçamento → Pedido → Entrega | ✅ mergeado | [#929](https://github.com/CaioAlexanderx/aura-app/pull/929) |
 | M3 · Clube do Profissional + calculadora | ✅ mergeado | [#930](https://github.com/CaioAlexanderx/aura-app/pull/930) |
 | M2 · Fiscal do Simples | ✅ mergeado | [#931](https://github.com/CaioAlexanderx/aura-app/pull/931) |
-| M4 · Profundidade (lote/tonalidade, devolução de sobra, compras) | ✅ código no PR | [#932](https://github.com/CaioAlexanderx/aura-app/pull/932) |
+| M4 · Profundidade (lote/tonalidade, devolução de sobra, compras) | ✅ mergeado | [#932](https://github.com/CaioAlexanderx/aura-app/pull/932) |
 
 Roteiro de QA e o que depende do backend: `docs/matcon-handoff-qa.md`.
 
@@ -163,6 +163,7 @@ Lote/tonalidade/bitola (campo de lote na entrada + alerta "lote misturado" na ve
 | Nome da seção no menu | **"Matcon"** (decisão 22/09/2026) | Jargão do setor, curto, com cara de startup. O toggle em Configurações continua "Materiais de construção", que é como o dono descreve a loja. |
 | Nome do toggle em Configurações | "Materiais de construção" | É como o dono descreve a loja. |
 | Rotas / chaves | `/matcon/*`, `matcon.*` | Curto, sem acento, igual `otica`. |
+| Nome do programa de indicação (M3) | **"Profissionais Parceiros"** na tela (decisão do Caio, 22/09/2026); em frase corrida, "profissionais parceiros"; na ficha, "Marcar como parceiro" | Descartados: "Profissionais", "Clube do pedreiro", "Clube do profissional", "Indicações". Rota, chave de módulo e API mantêm o nome técnico (`/matcon/profissionais`, `matcon.profissionais`, `/matcon/professionals`). |
 | Paleta | **Nenhuma própria** — shell de varejo, violeta `#7c3aed` | Ótica também não tem. Só Food tem paleta própria porque tem shell próprio. Matcon **é** varejo. |
 | Ícones | já existem: `truck` (entregas), `calculator` (calculadora), `clipboard` (orçamentos), `building`/`tool` (config/profissionais) | Zero ícone novo no M0–M2. Talvez `hard_hat` no M3 — 1 ícone, como a Ótica adicionou 2. |
 | Esteira vs. lista | Orçamentos e Entregas são **esteiras** com contagem por estação | Mesmo raciocínio do Laboratório: o dono quer "quantos e quais atrasaram" numa olhada. |

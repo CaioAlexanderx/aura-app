@@ -528,7 +528,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
                 <Text style={s.quoteCardWaTxt} numberOfLines={1}>Enviar no WhatsApp</Text>
               </Pressable>
               <Pressable onPress={savedQuote.onViewEsteira} style={s.quoteCardGhostBtn}>
-                <Text style={s.quoteCardGhostTxt} numberOfLines={1}>Ver na esteira</Text>
+                <Text style={s.quoteCardGhostTxt} numberOfLines={1}>Ver orçamentos</Text>
               </Pressable>
             </View>
           </View>

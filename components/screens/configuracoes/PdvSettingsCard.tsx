@@ -271,7 +271,7 @@ export function PdvSettingsCard() {
           22/09/2026: a descrição só promete o que o M0 entrega (regra do
           produto, §4b do doc — a tela não vende o que não existe). Ela
           cresce a cada fase: M1 acrescenta "orçamento que vira pedido,
-          entrega parcial"; M3 acrescenta "clube do profissional". */}
+          entrega parcial"; M3 acrescenta "profissionais parceiros". */}
       <View style={s.row}>
         <View style={{ flex: 1 }}>
           <Text style={s.rowLabel}>Materiais de construção</Text>
@@ -293,7 +293,7 @@ export function PdvSettingsCard() {
         // pra embalagem, prazo de entrega padrão). Link já fica pronto.
         <Pressable onPress={function() { router.push("/matcon/config" as any); }} style={s.caixaLink}>
           <Icon name="settings" size={14} color={Colors.violet3} />
-          <Text style={s.caixaLinkText}>Unidades, entrega e clube</Text>
+          <Text style={s.caixaLinkText}>Unidades, entrega e parceiros</Text>
           <Icon name="chevron_right" size={14} color={Colors.ink3} />
         </Pressable>
       )}

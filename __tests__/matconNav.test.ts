@@ -2,19 +2,21 @@
 // Matcon M1/M3/M4 — a seção "Matcon" no menu (22/09/2026).
 //
 // A seção nasceu no M1, junto com as esteiras; o M3 acrescenta
-// "Profissionais" (ranking do Clube do Profissional) e o M4 acrescenta
-// "Compras" (esteira Sugestão → Pedido enviado → Recebido) — a única tela
-// nova de M4, já que lote e devolução de sobra entram em telas que já
-// existem (docs/CONTRACT_MATCON.md §M4). O que este teste segura:
+// "Profissionais Parceiros" (ranking dos parceiros — rota /matcon/profissionais; o
+// rótulo era "Profissionais" e foi trocado em 22/09/2026 porque não dizia
+// nada pro dono da loja) e o M4 acrescenta "Compras" (esteira Falta
+// comprar → Pedido enviado → Recebido) — a única tela nova de M4, já que
+// lote e devolução de sobra entram em telas que já existem
+// (docs/CONTRACT_MATCON.md §M4). O que este teste segura:
 //   1. a seção existe, com os QUATRO itens (M1 + M3 + M4) e logo depois da
 //      "Ótica", que é a semi-vertical irmã;
 //   2. cada item é opt-in pelo toggle (`matconToggle: true`) e tem `mod`
 //      PRÓPRIO — regra 3 do CLAUDE.md: nunca herdar o `mod` de outra tela;
 //   3. o filtro do toggle continua no buildRawNav, o único caminho comum
-//      da Sidebar (web), da MBar (mobile) e do SidebarEditor — o item de
-//      Profissionais e o de Compras somem com matcon_enabled desligado,
-//      mesmo caminho dos outros dois (o gate fino do clube fica dentro da
-//      própria tela, o de Compras também);
+//      da Sidebar (web), da MBar (mobile) e do SidebarEditor — o item dos
+//      Profissionais Parceiros e o de Compras somem com matcon_enabled
+//      desligado, mesmo caminho dos outros dois (o gate fino de
+//      matcon_club_enabled fica dentro da própria tela, o de Compras também);
 //   4. MORE_PRIORIDADE não muda: no celular o Matcon cai no menu "Mais",
 //      como a Ótica (§4 do faseamento).
 //
@@ -63,7 +65,9 @@ describe("a seção Matcon existe no menu", () => {
   test("com os quatro itens (M1 + M3 + M4), na ordem do mockup", () => {
     const itens = itensDaSecao("Matcon");
     expect(itens.map((i) => i.r)).toEqual(["/matcon/orcamentos", "/matcon/entregas", "/matcon/profissionais", "/matcon/compras"]);
-    expect(itens.map((i) => i.l)).toEqual(["Orçamentos", "Entregas", "Profissionais", "Compras"]);
+    // Rótulos na língua do dono da loja: "Profissionais Parceiros", nunca
+    // "Profissionais" (revisão de texto de 22/09/2026).
+    expect(itens.map((i) => i.l)).toEqual(["Orçamentos", "Entregas", "Profissionais Parceiros", "Compras"]);
     // Ícones que já existem em components/Icon.tsx — zero ícone novo.
     expect(itens.map((i) => i.ic)).toEqual(["clipboard", "truck", "building", "package"]);
   });
@@ -78,12 +82,12 @@ describe("a seção Matcon existe no menu", () => {
     expect(matcon).toBeLessThan(equipe);
   });
 
-  test("Profissionais entra logo depois de Entregas", () => {
+  test("Profissionais Parceiros entra logo depois de Entregas", () => {
     const itens = itensDaSecao("Matcon").map((i) => i.r);
     expect(itens.indexOf("/matcon/profissionais")).toBe(itens.indexOf("/matcon/entregas") + 1);
   });
 
-  test("Compras entra logo depois de Profissionais", () => {
+  test("Compras entra logo depois de Profissionais Parceiros", () => {
     const itens = itensDaSecao("Matcon").map((i) => i.r);
     expect(itens.indexOf("/matcon/compras")).toBe(itens.indexOf("/matcon/profissionais") + 1);
   });

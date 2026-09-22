@@ -170,7 +170,7 @@ export type DeliverySplitBody = {
 export type DeliverySplitResponse = { delivered: Delivery; next: Delivery | null };
 
 
-// ── Profissionais (M3 — Clube do Profissional) ──────────────
+// ── Profissionais (M3 — Profissionais Parceiros) ────────────
 export type ProfessionalTrade =
   | "pedreiro" | "mestre_de_obras" | "eletricista" | "encanador" | "pintor"
   | "gesseiro" | "azulejista" | "arquiteto" | "engenheiro" | "marceneiro" | "outro";

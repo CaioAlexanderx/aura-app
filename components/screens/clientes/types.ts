@@ -21,9 +21,9 @@ export type Customer = {
   // > 0 = cliente deve; <= 0 = quitado/credito.
   creditBalance: number;
   // 22/09/2026 (Matcon M3 — docs/CONTRACT_MATCON.md, seção M3): GET
-  // /companies/:id/customers devolve `professional` com o toggle do clube
-  // ligado — a ficha usa isso pra mostrar "Profissional · pedreiro · 1.240
-  // pontos" sem uma segunda chamada. `null`/ausente = cliente comum.
+  // /companies/:id/customers devolve `professional` com o toggle
+  // matcon_club_enabled ligado — a ficha usa isso pra mostrar "Parceiro ·
+  // pedreiro · 1.240 pontos" sem uma segunda chamada. `null`/ausente = cliente comum.
   professional?: { id: string; trade: string; points_balance: number; referrals_count?: number } | null;
 };
 

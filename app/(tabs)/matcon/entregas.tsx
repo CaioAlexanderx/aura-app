@@ -7,6 +7,10 @@
 // recebeu tudo" — por isso a estação mostra a contagem E o dinheiro
 // (docs/matcon-faseamento-po-ux.md §3/M1 e §4b regra 2).
 //
+// "Esteira" é nome NOSSO; na tela o lojista lê "entregas" (revisão de
+// texto de 22/09/2026 — §4b regra 4, zero jargão). O campo "quem
+// entregou" também parou de explicar decisão de produto no placeholder.
+//
 // Mockup aprovado: docs/mockups/matcon-modulo.html#entregas.
 // Esteira, card e estado vazio vêm de components/matcon/EsteiraMatcon.tsx
 // (compartilhados com /matcon/orcamentos); as contas de progresso e de
@@ -81,6 +85,11 @@ const CHIPS: { key: DiaFiltro; label: string }[] = [
   { key: "late", label: "Atrasadas" },
 ];
 
+// Placeholder do campo livre "quem entregou": só o que o vendedor precisa
+// saber pra preencher. A decisão de não ter cadastro de motorista fica no
+// comentário do topo, não na tela.
+const QUEM_ENTREGOU_PLACEHOLDER = "Nome de quem levou";
+
 export default function MatconEntregasRoute() {
   // Multi-CNPJ: no modo consolidado o picker aparece antes da esteira.
   return (
@@ -125,7 +134,7 @@ function MatconEntregasScreen() {
   const estacoes: EsteiraEstacao[] = [
     { key: "separating", label: "Separando", count: resumo ? resumo.separating.count : null, money: resumo ? fmtMoneyCurto(resumo.separating.total) : null, tone: "violet", active: stage === "separating", onPress: () => alternarEstacao("separating") },
     { key: "ready", label: "Pronto", count: resumo ? resumo.ready.count : null, money: resumo ? fmtMoneyCurto(resumo.ready.total) : null, tone: "violet", active: stage === "ready", onPress: () => alternarEstacao("ready") },
-    { key: "out", label: "Saiu", count: resumo ? resumo.out.count : null, money: resumo ? fmtMoneyCurto(resumo.out.total) : null, tone: "amber", active: stage === "out", onPress: () => alternarEstacao("out") },
+    { key: "out", label: "Saiu pra entrega", count: resumo ? resumo.out.count : null, money: resumo ? fmtMoneyCurto(resumo.out.total) : null, tone: "amber", active: stage === "out", onPress: () => alternarEstacao("out") },
     { key: "delivered", label: "Entregue hoje", count: resumo ? resumo.delivered_today.count : null, money: resumo ? fmtMoneyCurto(resumo.delivered_today.total) : null, tone: "green", active: stage === "delivered", onPress: () => alternarEstacao("delivered") },
   ];
 
@@ -176,7 +185,7 @@ function MatconEntregasScreen() {
     try {
       await openDanfeTermica(company.id, delivery.nfe_emission_id);
     } catch (e: any) {
-      toast.error(e?.message || "Não foi possível abrir o DANFE");
+      toast.error(e?.message || "Não foi possível abrir a nota");
     } finally {
       setDanfeBusyId(null);
     }
@@ -208,7 +217,7 @@ function MatconEntregasScreen() {
         <View style={st.gate} testID="matcon-entregas-desligado">
           <View style={st.gateIcon}><Icon name="lock" size={20} color={Colors.violet3} /></View>
           <Text style={st.gateTitle}>Ligue &quot;Materiais de construção&quot; em Configurações › Caixa</Text>
-          <Text style={st.gateDesc}>A esteira de entregas só existe para lojas com o módulo ativo.</Text>
+          <Text style={st.gateDesc}>As entregas só aparecem para lojas com o módulo ligado.</Text>
           <Pressable onPress={() => router.push("/configuracoes" as any)} style={st.gateBtn} testID="matcon-entregas-ir-config">
             <Text style={st.gateBtnText}>Abrir Configurações</Text>
             <Icon name="chevron_right" size={14} color="#fff" />
@@ -228,7 +237,7 @@ function MatconEntregasScreen() {
         title="Entregas"
         live
         subtitle={
-          !resumo ? "Carregando a esteira…" : (
+          !resumo ? "Carregando…" : (
             <Text>
               {fmtMoneyCurto(materialParado)} em material vendido esperando caminhão ·{" "}
               <Text style={{ color: pedidosComSaldo > 0 ? Colors.amber : Colors.ink3, fontWeight: pedidosComSaldo > 0 ? "700" : "400" }}>
@@ -268,7 +277,7 @@ function MatconEntregasScreen() {
           }
           frase={
             dia === "today" ? (
-              <Text>Converta um orçamento em pedido e a entrega aparece aqui, em <EsteiraVaziaDestaque>Separando</EsteiraVaziaDestaque>.</Text>
+              <Text>Quando um orçamento virar pedido, a entrega aparece aqui, em <EsteiraVaziaDestaque>Separando</EsteiraVaziaDestaque>.</Text>
             ) : dia === "tomorrow" ? "Quando uma entrega for agendada para amanhã, ela aparece aqui."
               : dia === "pending" ? "Toda entrega dividida em duas viagens aparece aqui até fechar o saldo."
                 : "Nenhuma entrega atrasada agora — ótimo sinal."
@@ -324,7 +333,7 @@ function MatconEntregasScreen() {
   );
 }
 
-// ── Card de entrega ─────────────────────────────────────────
+// ── Card de entrega ───────────────────────────────────────────
 function DeliveryCard({ delivery, busy, danfeBusy, onAvancar, onParcial, onSalvarQuemEntregou, onEmitirNfe, onVerDanfe }: {
   delivery: Delivery;
   busy: boolean;
@@ -389,7 +398,7 @@ function DeliveryCard({ delivery, busy, danfeBusy, onAvancar, onParcial, onSalva
               danfeBusy ? <ActivityIndicator size="small" color={Colors.violet3} /> : (
                 <Pressable onPress={onVerDanfe} style={st.miniBtn} testID={`matcon-ver-danfe-${delivery.id}`}>
                   <Icon name="file_text" size={13} color={Colors.ink} />
-                  <Text style={st.miniBtnText}>Ver DANFE</Text>
+                  <Text style={st.miniBtnText}>Ver nota</Text>
                 </Pressable>
               )
             )}
@@ -425,7 +434,7 @@ function DeliveryCard({ delivery, busy, danfeBusy, onAvancar, onParcial, onSalva
       </View>
       {notaFalhou && (
         <Text style={[st.meta, { color: Colors.red, marginTop: 2 }]}>
-          A nota fiscal foi recusada — toque em &quot;Tentar de novo&quot; para reemitir.
+          A nota fiscal foi recusada — toque em &quot;Tentar de novo&quot; para emitir outra vez.
         </Text>
       )}
       <Text style={st.meta} numberOfLines={2}>{linhaSequencia}</Text>
@@ -475,7 +484,7 @@ function QuemEntregou({ valorInicial, onSalvar }: { valorInicial: string; onSalv
         value={texto}
         onChangeText={setTexto}
         onBlur={() => onSalvar(texto)}
-        placeholder="o vendedor escreve na hora — sem cadastro de motorista"
+        placeholder={QUEM_ENTREGOU_PLACEHOLDER}
         placeholderTextColor={Colors.ink3}
         testID="matcon-quem-entregou"
       />
@@ -483,7 +492,7 @@ function QuemEntregou({ valorInicial, onSalvar }: { valorInicial: string; onSalv
   );
 }
 
-// ── Entrega parcial ──────────────────────────────────────────
+// ── Entrega parcial ────────────────────────────────────────────
 function EntregaParcialSheet({ delivery, busy, onClose, onConfirm }: {
   delivery: Delivery | null;
   busy: boolean;
@@ -569,7 +578,7 @@ function EntregaParcialSheet({ delivery, busy, onClose, onConfirm }: {
             style={st.quemInput}
             value={deliveredBy}
             onChangeText={setDeliveredBy}
-            placeholder="o vendedor escreve na hora — sem cadastro de motorista"
+            placeholder={QUEM_ENTREGOU_PLACEHOLDER}
             placeholderTextColor={Colors.ink3}
           />
 
