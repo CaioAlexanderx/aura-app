@@ -169,12 +169,26 @@ describe("offline.html", () => {
 });
 
 describe("Fase 2: nova versão, iPhone instalado e medição", () => {
-  test("GlobalOverlays monta a barra de nova versão e a folha de impressão do iPhone", () => {
+  test("GlobalOverlays monta a folha de impressão do iPhone e registra o service worker para todos", () => {
     const g = ler("components", "GlobalOverlays.tsx");
-    expect(g).toMatch(/<NovaVersaoBanner \/>/);
     expect(g).toMatch(/<ImpressaoNoIphoneSheet \/>/);
-    const layout = ler("app", "(tabs)", "_layout.tsx");
-    expect((layout.match(/<GlobalOverlays \/>/g) || []).length).toBeGreaterThanOrEqual(2);
+    expect(g).toMatch(/registrarServiceWorker\(\)/);
+    // Sem uma segunda copia do aviso de nova versao: UpdateBanner ja existe
+    // no raiz, desligado de proposito em 11/07/2026 (ruido entre verticais).
+    expect(g).not.toMatch(/NovaVersao/);
+    expect(fs.existsSync(path.join(RAIZ, "components", "NovaVersaoBanner.tsx"))).toBe(false);
+  });
+
+  test("GlobalOverlays fica no layout RAIZ, uma vez, e nao mais no das abas (verticais tem shell proprio)", () => {
+    const raiz = ler("app", "_layout.tsx");
+    expect((raiz.match(/<GlobalOverlays \/>/g) || []).length).toBe(1);
+    expect(raiz).toMatch(/import \{ GlobalOverlays \} from "@\/components\/GlobalOverlays";/);
+    const abas = ler("app", "(tabs)", "_layout.tsx");
+    expect(abas).not.toMatch(/GlobalOverlays/);
+  });
+
+  test("UpdateBanner segue desligado: a decisao de 11/07 nao foi revertida por tabela", () => {
+    expect(ler("components", "UpdateBanner.tsx")).toMatch(/^const ENABLED = false;/m);
   });
 
   test("openPrintWindow desvia para o aviso no iPhone instalado, antes de abrir janela", () => {

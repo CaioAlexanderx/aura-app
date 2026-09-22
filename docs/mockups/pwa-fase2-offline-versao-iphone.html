@@ -169,7 +169,7 @@
 
     <!-- B · NOVA VERSÃO -->
     <div>
-      <div class="rotulo violet">B · Nova versão — barra fixa embaixo, sem cobrir o que importa</div>
+      <div class="rotulo amber">B · Nova versão — EM ESPERA (ver nota abaixo)</div>
       <div class="fone">
         <div class="status"><span>9:41</span><span>▲▲ ▮▮▮ 87%</span></div>
         <div class="conteudo">
@@ -191,9 +191,10 @@
           </div>
         </div>
       </div>
-      <p class="legenda">O app instalado fica aberto por dias. A cada 10 minutos, com a tela visível, ele compara a versão do
-        servidor com a que está rodando. Se mudou, a barra aparece <b>uma vez</b> e fica até o toque. Atualizar é recarregar.
-        Nunca recarrega sozinho: no meio de uma venda seria um desastre.</p>
+      <p class="legenda"><b>Não entrou na Fase 2.</b> Já existe <code>components/UpdateBanner.tsx</code> fazendo exatamente isto, montado no
+        layout raiz e <b>desligado de propósito em 11/07/2026</b>: o bundle é um só para toda a Aura, e cada deploy do Karatê avisava o
+        lojista de varejo o dia inteiro. Religar exige o backend dizer se o deploy é relevante para quem está logado (um <code>/version</code>
+        com a vertical afetada). Fica registrado aqui o desenho; a decisão de quando religar é de produto, não de código.</p>
     </div>
 
     <!-- C · IPHONE: IMPRIMIR E BAIXAR -->
@@ -251,7 +252,7 @@
   <div class="secao">Decisões</div>
   <div class="grid-dec">
     <div class="dec"><b>Cache: só a página offline</b> O service worker ganha um handler de <code>fetch</code> que <b>só olha navegações</b> e <b>só age quando a rede falha</b>. Requisição que dá certo passa reto, sem tocar em cache. O teste trava: a lista de arquivos cacheados é exatamente <code>offline.html</code> e o ícone.</div>
-    <div class="dec"><b>Nova versão sem servidor novo</b> O <code>index.html</code> exportado aponta para um script com hash no nome. Comparar o hash do servidor com o da página em execução diz se houve deploy. Sem rota nova, sem arquivo de versão para esquecer de atualizar.</div>
+    <div class="dec alerta"><b>Nova versão: em espera</b> O mecanismo (comparar o hash do script exportado) já existe em <code>UpdateBanner</code> e está desligado por decisão de 11/07: sem saber QUAL vertical mudou, todo deploy vira ruído para quem não foi afetado. Precisa de um <code>/version</code> no backend com a vertical afetada antes de religar.</div>
     <div class="dec"><b>Um helper de download</b> Hoje são quatro funções quase iguais espalhadas. Viram uma, <code>utils/salvarArquivo.ts</code>, que no celular com suporte usa a folha de compartilhar e no resto baixa como sempre. As quatro passam a chamar ela.</div>
     <div class="dec alerta"><b>Impressão: aviso honesto, não milagre</b> Sem PDF no servidor, imprimir no iPhone instalado continua impossível. O que muda é que <code>openPrintWindow</code> e as etiquetas param de abrir uma janela morta e mostram o caminho. As outras impressões (karatê, holerite) ficam para depois; a de cupom e etiqueta é a que acontece no balcão.</div>
     <div class="dec"><b>Medir sem tabela nova</b> Toda requisição do app instalado leva um cabeçalho <code>X-Aura-App: standalone</code>. O backend grava isso no login, na tabela que já guarda o navegador de quem entrou. Contar quem usa pelo app vira uma consulta, não uma feature.</div>

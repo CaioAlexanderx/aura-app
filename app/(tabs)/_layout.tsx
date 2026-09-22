@@ -15,7 +15,6 @@ import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { useSidebarLayout, applyLayoutToNav } from "@/hooks/useSidebarLayout";
 import { moduloEstaOculto } from "@/constants/modulosOcultos";
 import { SidebarEditor } from "@/components/SidebarEditor";
-import { GlobalOverlays } from "@/components/GlobalOverlays";
 import { CompanySwitcher } from "@/components/CompanySwitcher"; // M1-06: Multi-CNPJ switcher
 import { NotificationBell } from "@/components/NotificationBell";
 
@@ -903,7 +902,6 @@ export default function TabsLayout() {
         <PageTransition><Slot /></PageTransition>
       </div>
       <MBar />
-      <GlobalOverlays />
     </div>
   );
 
@@ -919,7 +917,6 @@ export default function TabsLayout() {
         <ToastContainer />
         <PageTransition><Slot /></PageTransition>
       </div>
-      <GlobalOverlays />
     </div>
   );
 
@@ -936,7 +933,6 @@ export default function TabsLayout() {
           <PageTransition><Slot /></PageTransition>
         </View>
         <MBar />
-        <GlobalOverlays />
       </View>
     </ErrorBoundary>
   );
