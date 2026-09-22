@@ -118,7 +118,11 @@ const NAV: NavSection[] = [
   // o item so some com matconToggle (Matcon desligado), nunca so porque o
   // clube esta desligado. No celular estes itens caem no menu "Mais", como
   // a Otica: MORE_PRIORIDADE nao muda (§4 do faseamento).
-  { s: "Matcon", i: [{ r: "/matcon/orcamentos", l: "Orçamentos", ic: "clipboard", mod: "matcon.orcamentos", matconToggle: true },{ r: "/matcon/entregas", l: "Entregas", ic: "truck", mod: "matcon.entregas", matconToggle: true },{ r: "/matcon/profissionais", l: "Profissionais", ic: "building", mod: "matcon.profissionais", matconToggle: true }]},
+  // 22/09/2026 (M4) — "Compras" entra depois de Profissionais: e a unica
+  // tela nova de M4 (lote e devolucao de sobra entram em telas que ja
+  // existem, docs/CONTRACT_MATCON.md §M4). Mesmo desenho: mod PROPRIO
+  // (matcon.compras, ja em MODULE_PLAN_MAP/PERM_TO_MODULES) e matconToggle.
+  { s: "Matcon", i: [{ r: "/matcon/orcamentos", l: "Orçamentos", ic: "clipboard", mod: "matcon.orcamentos", matconToggle: true },{ r: "/matcon/entregas", l: "Entregas", ic: "truck", mod: "matcon.entregas", matconToggle: true },{ r: "/matcon/profissionais", l: "Profissionais", ic: "building", mod: "matcon.profissionais", matconToggle: true },{ r: "/matcon/compras", l: "Compras", ic: "package", mod: "matcon.compras", matconToggle: true }]},
   { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", mod: "folha" },{ r: "/agendamento", l: "Agenda", ic: "calendar", mod: "agendamento" }]},
   { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", mod: "agentes" }]},
   { s: "Admin", i: [{ r: "/gestao-aura", l: "Gestão Aura", ic: "shield", staff: true }]},

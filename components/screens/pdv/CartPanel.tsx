@@ -67,8 +67,10 @@ import { validateCpf, maskCpf, onlyDigits } from "@/lib/validators";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { readMatconSettings } from "@/constants/matcon";
 import { parseQtyInput, fmtQty } from "@/utils/matconUnits";
-import { usaCampoDecimal, qtyMaxLength, fraseDeEmbalagem, usaCalculadoraAmbiente } from "./matconQty";
+import { usaCampoDecimal, qtyMaxLength, fraseDeEmbalagem, usaCalculadoraAmbiente, usaLoteNoItem } from "./matconQty";
 import { CalculadoraAmbiente } from "@/components/matcon/CalculadoraAmbiente";
+import { LoteDoItem } from "@/components/matcon/LotePicker";
+import type { LotAllocation } from "@/services/matconApi";
 
 export type CartDisplayItem = {
   productId: string;
@@ -123,6 +125,11 @@ type Props = {
   onClear: () => void;
   onFinalize: () => void;
   onGenerateQuote?: () => void;
+  /** 22/09/2026 (Matcon M4). Devolve as alocações por lote do item — vira
+   *  `items[].lot_allocations` no POST /pdv/sale (useCart.setLotAllocations).
+   *  Opcional: sem ele a linha do lote continua aparecendo, só não viaja
+   *  na venda (o backend baixa FIFO, que é o default do contrato). */
+  onLotAllocations?: (id: string, allocations: LotAllocation[]) => void;
   showOrcamento?: boolean;
   // 22/09/2026 (Matcon M1). Todos opcionais — sem eles o rodapé é o de hoje.
   onSaveQuote?: () => void;
@@ -166,6 +173,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     orderNumber, items, subtotal, discountAmount, total, itemCount,
     payMethods, activePay, onPay,
     onInc, onDec, onSetQty, onPriceChange, onRemove, onClear, onFinalize, onGenerateQuote,
+    onLotAllocations,
     showOrcamento, onSaveQuote, savingQuote, savedQuote,
     discountLabel, isProcessing, finalizeDisabled, requiredHints,
     emptyCta, headerSubtitle, compact, fill,
@@ -325,6 +333,8 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
               matconEnabled={matcon.matcon_enabled}
               roundToPackage={matcon.matcon_round_to_package}
               defaultWastePct={matcon.matcon_default_waste_pct}
+              lotsEnabled={matcon.matcon_lots_enabled}
+              onLotAllocations={onLotAllocations}
             />
           ))
         )}
@@ -758,7 +768,7 @@ function parseCurrencyInput(raw: string): number | null {
 
 function CartItem({
   item, onInc, onDec, onRemove, onQtySet, onPriceChange,
-  matconEnabled, roundToPackage, defaultWastePct,
+  matconEnabled, roundToPackage, defaultWastePct, lotsEnabled, onLotAllocations,
 }: {
   item: CartDisplayItem;
   onInc: () => void;
@@ -773,6 +783,11 @@ function CartItem({
   /** 22/09/2026 (Matcon M3). Perda padrão da config, sugerida na
    *  calculadora de ambiente. Só chega aqui com o toggle ligado. */
   defaultWastePct?: number;
+  /** 22/09/2026 (Matcon M4). Frase da config "Controlo lote e tonalidade…".
+   *  Sem ela (o default de toda loja) o item não tem linha de lote nem
+   *  dispara a busca dos lotes. */
+  lotsEnabled?: boolean;
+  onLotAllocations?: (id: string, allocations: LotAllocation[]) => void;
 }) {
   // Campo decimal só quando toggle on E a unidade é fracionada (§2 do doc).
   const decimalQty = usaCampoDecimal(!!matconEnabled, item.unit);
@@ -790,6 +805,11 @@ function CartItem({
   // ele não aparece: ninguém calcula ambiente de saco.
   const temCalculadora = usaCalculadoraAmbiente(!!matconEnabled, item.unit);
   const [calcAberta, setCalcAberta] = useState(false);
+  // 22/09/2026 (Matcon M4, mockup #carrinho): a linha "lote 27B · 95,12 m²
+  // disponíveis" + o aviso dos lotes. Todo o componente (inclusive a busca
+  // dos lotes) só existe quando o gate está ligado E o produto é vendido em
+  // m²/m³ — cimento em "sc" nunca vê nada disso.
+  const temLote = usaLoteNoItem(!!matconEnabled, !!lotsEnabled, item.unit);
 
   // Buffer pra edição de qty
   const [inputVal, setInputVal] = useState<string | null>(null);
@@ -1016,6 +1036,20 @@ function CartItem({
             </Pressable>
           ) : null}
         </View>
+      ) : null}
+
+      {/* Linha 4 (só M4): de qual lote sai o material, e o aviso quando a
+          quantidade não cabe em um lote só. Nunca bloqueia a venda. */}
+      {temLote ? (
+        <LoteDoItem
+          productId={item.productBaseId}
+          productName={item.name}
+          unit={item.unit || ""}
+          qty={item.qty}
+          purchaseFactor={item.purchaseFactor}
+          purchaseUnit={item.purchaseUnit}
+          onAllocations={onLotAllocations ? (allocs => onLotAllocations(item.productId, allocs)) : undefined}
+        />
       ) : null}
 
       {/* A folha do M3: sobe no celular, vira balão no computador. Devolve a

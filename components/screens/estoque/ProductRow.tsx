@@ -11,6 +11,10 @@ import { useValoresOcultos } from "@/stores/valoresOcultos";
 // pt-BR nem limite de casas. fmtQty é neutro pra estoque inteiro (a
 // imensa maioria hoje) e correto pra fracionado.
 import { fmtQty } from "@/utils/matconUnits";
+// 22/09/2026 (Matcon M4): "148,48 m² em 2 lotes" no lugar do número solto,
+// com a lista dos lotes abrindo no TOQUE (regra 7 do CLAUDE.md — nada de
+// hover-reveal). Produto sem lots_summary não muda em nada.
+import { resumoDeLotes } from "@/utils/matconLots";
 
 var COLOR_NAMES: Record<string, string> = {
   '#000000':'Preto','#ffffff':'Branco','#ff0000':'Vermelho','#c0c0c0':'Prata',
@@ -46,6 +50,7 @@ export function ProductRow({
 }) {
   const [hovered, setHovered] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [lotesAbertos, setLotesAbertos] = useState(false);
   const { m } = useValoresOcultos();
   const isWeb = Platform.OS === "web";
   const isService = isServiceProduct(product);
@@ -60,6 +65,10 @@ export function ProductRow({
   // M-STOCKLINK: vínculo Multi-CNPJ não faz sentido pra serviços
   // (não há "estoque do mesmo serviço em outra empresa" pra somar).
   const showLinkBtn = !!onLink && !isService;
+
+  // Matcon M4: só existe quando o backend mandou lots_summary (gate ligado).
+  const lotes = product.lotsSummary && product.lotsSummary.lots.length > 0 ? product.lotsSummary.lots : null;
+  const resumoLotes = resumoDeLotes(product.lotsSummary, product.unit);
 
   return (
     <View>
@@ -102,14 +111,42 @@ export function ProductRow({
               <Text style={s.serviceTagText}>Serviço</Text>
             </View>
           ) : (
-            <View style={s.stockRow}>
-              <Text style={[s.stock, isLow && { color: Colors.red }]}>{fmtQty(product.stock)} {product.unit}</Text>
-              {isLow && <View style={s.alertDot} />}
+            <View style={{ alignItems: "flex-end" }}>
+              <View style={s.stockRow}>
+                <Text style={[s.stock, isLow && { color: Colors.red }]}>{fmtQty(product.stock)} {product.unit}</Text>
+                {isLow && <View style={s.alertDot} />}
+              </View>
+              {lotes ? (
+                <Pressable
+                  onPress={() => setLotesAbertos(v => !v)}
+                  style={s.lotesChip}
+                  testID={"estoque-lotes-" + product.id}
+                  accessibilityLabel={resumoLotes || undefined}
+                >
+                  <Text style={s.lotesChipTxt}>
+                    {"em " + lotes.length + (lotes.length === 1 ? " lote" : " lotes")}
+                  </Text>
+                  <Text style={s.lotesChipSeta}>{lotesAbertos ? "▴" : "▾"}</Text>
+                </Pressable>
+              ) : null}
             </View>
           )}
           <Text style={s.price}>{m(fmt(product.price))}</Text>
         </View>
       </Pressable>
+      {/* Matcon M4 (mockup #lotes): "148,48 m² em 2 lotes" abre a pilha —
+          lote, saldo e nada de jargão. Toque, nunca hover. */}
+      {lotes && lotesAbertos ? (
+        <View style={s.lotesBox} testID={"estoque-lotes-lista-" + product.id}>
+          <Text style={s.lotesResumo}>{resumoLotes}</Text>
+          {lotes.map(l => (
+            <View key={l.id} style={s.loteLinha}>
+              <Text style={s.loteCod} numberOfLines={1}>lote {l.lot_code}</Text>
+              <Text style={s.loteQty}>{fmtQty(l.qty, product.unit)}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
       {expanded && !onSelect && (
         <View style={s.detail}>
           {/* Photo upload in detail (produtos apenas) */}
@@ -197,6 +234,15 @@ const s = StyleSheet.create({
   stock: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
   alertDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.red },
   price: { fontSize: 11, color: Colors.ink3 },
+  // Matcon M4 — chip "em 2 lotes" e a pilha que ele abre.
+  lotesChip: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2, paddingVertical: 2, paddingHorizontal: 6, borderRadius: 6, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
+  lotesChipTxt: { fontSize: 10, color: Colors.violet3, fontWeight: "700" },
+  lotesChipSeta: { fontSize: 8, color: Colors.violet3 },
+  lotesBox: { backgroundColor: Colors.bg4, borderRadius: 12, padding: 12, marginHorizontal: 8, marginBottom: 8, borderWidth: 1, borderColor: Colors.border, gap: 6 },
+  lotesResumo: { fontSize: 12, color: Colors.ink2, fontWeight: "700" },
+  loteLinha: { flexDirection: "row", alignItems: "center", gap: 8 },
+  loteCod: { flex: 1, minWidth: 0, fontSize: 12, color: Colors.violet3, fontWeight: "600" },
+  loteQty: { fontSize: 12, color: Colors.ink2, fontWeight: "600" },
   detail: { backgroundColor: Colors.bg4, borderRadius: 12, padding: 14, marginHorizontal: 8, marginBottom: 8, borderWidth: 1, borderColor: Colors.border },
   detailPhotoRow: { flexDirection: "row", gap: 14, alignItems: "flex-start" },
   detailGrid: { flexDirection: "row", flexWrap: "wrap", gap: 4, flex: 1 },

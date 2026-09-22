@@ -1,17 +1,20 @@
 // ============================================================
-// Matcon M1/M3 — a seção "Matcon" no menu (22/09/2026).
+// Matcon M1/M3/M4 — a seção "Matcon" no menu (22/09/2026).
 //
 // A seção nasceu no M1, junto com as esteiras; o M3 acrescenta
-// "Profissionais" (ranking do Clube do Profissional). O que este teste
-// segura:
-//   1. a seção existe, com os TRÊS itens (M1 + M3) e logo depois da
+// "Profissionais" (ranking do Clube do Profissional) e o M4 acrescenta
+// "Compras" (esteira Sugestão → Pedido enviado → Recebido) — a única tela
+// nova de M4, já que lote e devolução de sobra entram em telas que já
+// existem (docs/CONTRACT_MATCON.md §M4). O que este teste segura:
+//   1. a seção existe, com os QUATRO itens (M1 + M3 + M4) e logo depois da
 //      "Ótica", que é a semi-vertical irmã;
 //   2. cada item é opt-in pelo toggle (`matconToggle: true`) e tem `mod`
 //      PRÓPRIO — regra 3 do CLAUDE.md: nunca herdar o `mod` de outra tela;
 //   3. o filtro do toggle continua no buildRawNav, o único caminho comum
 //      da Sidebar (web), da MBar (mobile) e do SidebarEditor — o item de
-//      Profissionais some com matcon_enabled desligado, mesmo caminho dos
-//      outros dois (o gate fino do clube fica dentro da própria tela);
+//      Profissionais e o de Compras somem com matcon_enabled desligado,
+//      mesmo caminho dos outros dois (o gate fino do clube fica dentro da
+//      própria tela, o de Compras também);
 //   4. MORE_PRIORIDADE não muda: no celular o Matcon cai no menu "Mais",
 //      como a Ótica (§4 do faseamento).
 //
@@ -57,12 +60,12 @@ function itensDaSecao(nome: string): { r: string; l: string; ic: string; mod?: s
 }
 
 describe("a seção Matcon existe no menu", () => {
-  test("com os três itens (M1 + M3), na ordem do mockup", () => {
+  test("com os quatro itens (M1 + M3 + M4), na ordem do mockup", () => {
     const itens = itensDaSecao("Matcon");
-    expect(itens.map((i) => i.r)).toEqual(["/matcon/orcamentos", "/matcon/entregas", "/matcon/profissionais"]);
-    expect(itens.map((i) => i.l)).toEqual(["Orçamentos", "Entregas", "Profissionais"]);
+    expect(itens.map((i) => i.r)).toEqual(["/matcon/orcamentos", "/matcon/entregas", "/matcon/profissionais", "/matcon/compras"]);
+    expect(itens.map((i) => i.l)).toEqual(["Orçamentos", "Entregas", "Profissionais", "Compras"]);
     // Ícones que já existem em components/Icon.tsx — zero ícone novo.
-    expect(itens.map((i) => i.ic)).toEqual(["clipboard", "truck", "building"]);
+    expect(itens.map((i) => i.ic)).toEqual(["clipboard", "truck", "building", "package"]);
   });
 
   test("logo depois da Ótica, a semi-vertical irmã", () => {
@@ -79,30 +82,36 @@ describe("a seção Matcon existe no menu", () => {
     const itens = itensDaSecao("Matcon").map((i) => i.r);
     expect(itens.indexOf("/matcon/profissionais")).toBe(itens.indexOf("/matcon/entregas") + 1);
   });
+
+  test("Compras entra logo depois de Profissionais", () => {
+    const itens = itensDaSecao("Matcon").map((i) => i.r);
+    expect(itens.indexOf("/matcon/compras")).toBe(itens.indexOf("/matcon/profissionais") + 1);
+  });
 });
 
 describe("cada item é opt-in pelo toggle e tem módulo próprio", () => {
-  test("matconToggle: true nos três", () => {
+  test("matconToggle: true nos quatro", () => {
     itensDaSecao("Matcon").forEach((i) => expect(i.matconToggle).toBe(true));
   });
 
   test("mod próprio por tela, nunca herdado (regra 3)", () => {
     const itens = itensDaSecao("Matcon");
-    expect(itens.map((i) => i.mod)).toEqual(["matcon.orcamentos", "matcon.entregas", "matcon.profissionais"]);
+    expect(itens.map((i) => i.mod)).toEqual(["matcon.orcamentos", "matcon.entregas", "matcon.profissionais", "matcon.compras"]);
 
     // E nenhuma outra tela do NAV usa essas chaves.
     const todosOsMods = Array.from(corpoDoNav().matchAll(/\{ r: "\/[^"]*"[^}]*mod: "([^"]+)"/g)).map((m) => m[1]);
-    ["matcon.orcamentos", "matcon.entregas", "matcon.profissionais"].forEach((mod) => {
+    ["matcon.orcamentos", "matcon.entregas", "matcon.profissionais", "matcon.compras"].forEach((mod) => {
       expect(todosOsMods.filter((m) => m === mod).length).toBe(1);
     });
   });
 
-  test("as três chaves já estão nos mapas de plano e de permissão", () => {
+  test("as quatro chaves já estão nos mapas de plano e de permissão", () => {
     expect(MODULE_PLAN_MAP["matcon.orcamentos"]).toBe("negocio");
     expect(MODULE_PLAN_MAP["matcon.entregas"]).toBe("negocio");
     expect(MODULE_PLAN_MAP["matcon.profissionais"]).toBe("negocio");
+    expect(MODULE_PLAN_MAP["matcon.compras"]).toBe("negocio");
     expect(PERM_TO_MODULES["matcon.access"]).toEqual(
-      expect.arrayContaining(["matcon.orcamentos", "matcon.entregas", "matcon.profissionais"]),
+      expect.arrayContaining(["matcon.orcamentos", "matcon.entregas", "matcon.profissionais", "matcon.compras"]),
     );
   });
 });

@@ -71,9 +71,9 @@ O teto de 999 (`maxLength={3}`) vira `maxLength={6}` **só com o toggle on** (1.
 |---|---|---|
 | M0 · Fundação gated | ✅ mergeado | [#927](https://github.com/CaioAlexanderx/aura-app/pull/927) |
 | M1 · Orçamento → Pedido → Entrega | ✅ mergeado | [#929](https://github.com/CaioAlexanderx/aura-app/pull/929) |
-| M3 · Clube do Profissional + calculadora | ✅ código no PR | [#930](https://github.com/CaioAlexanderx/aura-app/pull/930) |
-| M2 · Fiscal do Simples | 📋 | — |
-| M4 · Profundidade | 📋 só após 5 pilotos | — |
+| M3 · Clube do Profissional + calculadora | ✅ mergeado | [#930](https://github.com/CaioAlexanderx/aura-app/pull/930) |
+| M2 · Fiscal do Simples | ✅ mergeado | [#931](https://github.com/CaioAlexanderx/aura-app/pull/931) |
+| M4 · Profundidade (lote/tonalidade, devolução de sobra, compras) | ✅ código no PR | [#932](https://github.com/CaioAlexanderx/aura-app/pull/932) |
 
 Roteiro de QA e o que depende do backend: `docs/matcon-handoff-qa.md`.
 

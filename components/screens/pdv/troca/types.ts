@@ -23,9 +23,24 @@ import type { SaleDetailsItem } from "@/services/api";
 export type Step1SearchMode = "text" | "order" | "barcode" | "qr";
 export type Step3SearchMode = "text" | "barcode" | "qr";
 
+// 22/09/2026 — M4 (docs/CONTRACT_MATCON.md §"Devolução de sobra de obra
+// (delta no wizard de troca)" + §M4 "Lote/tonalidade"): o item da venda
+// pode trazer, além dos campos de sempre, o lote de origem (lot_code
+// legível + lot_id pra gravar na devolução) e a unidade/fator de compra
+// do produto (unit/purchase_factor), usados pelo Step2Returns pra decidir
+// entre o stepper de sempre e o campo decimal + restockDeDevolucao. Tudo
+// opcional — undefined em vendas antigas ou produto sem Matcon cai no
+// comportamento de hoje.
+export type ReturnableSaleItemExtra = {
+  lot_code?: string | null;
+  lot_id?: string | null;
+  unit?: string | null;
+  purchase_factor?: number | null;
+};
+
 // ─── Sale selection (Step 1 → Step 2) ──────────────────────────
 export type SelectedSaleRow = SaleForTroca & {
-  items: SaleForTroca["items"];
+  items: Array<SaleForTroca["items"][number] & ReturnableSaleItemExtra>;
 };
 
 // ─── Return entries (Step 2) ───────────────────────────────────
@@ -34,7 +49,7 @@ export type ReturnEntry = {
   saleDate: string;
   saleCompanyName: string;
   sellerName: string | null;
-  item: SaleDetailsItem;
+  item: SaleDetailsItem & ReturnableSaleItemExtra;
   returnQty: number;
   previouslyReturnedQty: number;
 };

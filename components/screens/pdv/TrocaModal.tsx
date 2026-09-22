@@ -39,6 +39,22 @@
 //     NaN como 0) e o netAmount NaN desarmava o gate de pagamento da
 //     diferença. Novo fallback: total_price ausente/não-numérico → usa
 //     unit_price. Caso real: troca Nike 249,99 → crédito "R$ 0,00".
+//
+// 22/09/2026 (Matcon M4 — "devolução de sobra de obra", docs/
+// CONTRACT_MATCON.md §"Devolução de sobra de obra (delta no wizard de
+// troca)"):
+//   - returned_items[] ganha lot_id (quando o item devolvido veio de um
+//     lote) — quantity decimal já viajava como e.returnQty, sem mudança.
+//   - Payload ganha settlement ∈ store_credit | refund (inferSettlement),
+//     derivado do refundSplits[0].method que o Step4Confirm já mantém —
+//     nenhum campo novo de UI, só o que já existia.
+//   - devolverValor: estado explícito (era sinal de módulo em
+//     troca/types.ts) — o botão âmbar do Step3 ("Não vai levar nada —
+//     devolver o valor") passa por onDevolverValor aqui, que limpa
+//     newEntries, marca devolverValor e avança; Step4Confirm recebe o
+//     boolean e pré-seleciona "Crédito na loja" no mount.
+//   - products passa também pro Step2Returns (opcional) — fallback de
+//     unit/purchase_factor quando o item da venda não os traz.
 // ============================================================
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
@@ -108,6 +124,24 @@ function effectiveUnitPrice(item: { unit_price: number; total_price?: number | n
   return total / qty;
 }
 
+// 22/09/2026 (M4 — docs/CONTRACT_MATCON.md §"Devolução de sobra de obra
+// (delta no wizard de troca)"): settlement ∈ store_credit | refund só
+// existe quando a troca DEVOLVE valor ao cliente (netAmount < 0) — troca
+// par-a-par ou cliente pagando diferença não tem settlement, a chave nem
+// entra no payload. crediario_credito no Step4Confirm é o "Crédito na
+// loja" (vale do crediário) -> store_credit; qualquer outro método de
+// estorno (dinheiro/pix/cartao_estorno/vale) é dinheiro saindo do caixa
+// -> refund.
+function inferSettlement(
+  netAmount: number,
+  refundSplits: RefundSplit[]
+): "store_credit" | "refund" | undefined {
+  if (netAmount >= 0) return undefined;
+  const method = refundSplits[0]?.method;
+  if (!method) return undefined;
+  return method === "crediario_credito" ? "store_credit" : "refund";
+}
+
 export function TrocaModal({
   visible, companyId, products, onClose, onSuccess,
 }: Props) {
@@ -122,6 +156,11 @@ export function TrocaModal({
   const [customerAddress, setCustomerAddress] = useState<CustomerAddress>(EMPTY_ADDRESS);
   // idempotency_key: gerado uma vez por abertura do modal.
   const [idempotencyKey, setIdempotencyKey] = useState<string>("");
+  // 22/09/2026 (M4) — true quando o cliente veio pelo botão âmbar "Não vai
+  // levar nada — devolver o valor" do Step3. Step4Confirm usa isso pra
+  // pré-selecionar "Crédito na loja" no mount. Estado explícito do wizard
+  // (era sinal de módulo em troca/types.ts).
+  const [devolverValor, setDevolverValor] = useState(false);
 
   const [successResult, setSuccessResult] = useState<any | null>(null);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -152,6 +191,7 @@ export function TrocaModal({
       setSubmitting(false);
       setShowExitConfirm(false);
       setIdempotencyKey("");
+      setDevolverValor(false);
     } else {
       // Gera chave uma unica vez ao abrir.
       setIdempotencyKey(genIdempotencyKey());
@@ -162,6 +202,13 @@ export function TrocaModal({
     const ids = new Set(selectedSales.map((s) => s.id));
     setReturnEntries((prev) => prev.filter((e) => ids.has(e.saleId)));
   }, [selectedSales]);
+
+  // 22/09/2026 (M4) — se o cliente marcou "não vai levar nada" e depois
+  // volta pro Step3 e acaba levando algo, o destino "Crédito na loja" não
+  // faz mais sentido pré-selecionado; solta a flag.
+  useEffect(() => {
+    if (newEntries.length > 0 && devolverValor) setDevolverValor(false);
+  }, [newEntries.length, devolverValor]);
 
   const canAdvance = useCallback((): boolean => {
     if (step === 1) return selectedSales.length > 0;
@@ -189,6 +236,16 @@ export function TrocaModal({
   const prev = useCallback(() => {
     setStep((s) => (Math.max(1, s - 1) as StepV3));
   }, []);
+
+  // 22/09/2026 (M4) — botão âmbar do Step3 ("Não vai levar nada —
+  // devolver o valor"): limpa o carrinho da troca (mesmo efeito dos
+  // cards "Crédito"/"Dinheiro"), marca devolverValor e avança pro
+  // Step4Confirm, que pré-seleciona "Crédito na loja".
+  const handleDevolverValor = useCallback(() => {
+    setNewEntries((prev) => (prev.length > 0 ? [] : prev));
+    setDevolverValor(true);
+    next();
+  }, [next]);
 
   function shouldUseV2(): boolean {
     if (selectedSales.length > 1) return true;
@@ -252,6 +309,10 @@ export function TrocaModal({
             // Depois: effectiveUnitPrice({ unit_price, total_price, quantity })
             unit_price: effectiveUnitPrice(e.item),
             product_name_snapshot: (e.item as any).product_name || e.item.product_name_snapshot,
+            // 22/09/2026 (M4): volta ao saldo do lote de origem quando a
+            // venda/devolução trouxer lot_id (troca/types.ts,
+            // ReturnableSaleItemExtra). Omitido (não null) quando ausente.
+            lot_id: (e.item as any).lot_id || undefined,
           })),
           new_items: newEntries.map((n) => ({
             product_id: n.product_id,
@@ -266,6 +327,8 @@ export function TrocaModal({
           customer_address: undefined,
           nfce_strategy: anyHasNfce ? "per_origin" : "none",
           idempotency_key: iKey,
+          // 22/09/2026 (M4): ver inferSettlement acima.
+          settlement: inferSettlement(netAmount, refundSplits),
         } as any);
       } else {
         const sale = selectedSales[0];
@@ -287,6 +350,8 @@ export function TrocaModal({
             // Depois: effectiveUnitPrice({ unit_price, total_price, quantity })
             unit_price: effectiveUnitPrice(e.item),
             product_name_snapshot: (e.item as any).product_name || e.item.product_name_snapshot,
+            // 22/09/2026 (M4): ver comentário na v2 acima.
+            lot_id: (e.item as any).lot_id || undefined,
           })),
           new_items: newEntries.map((n) => ({
             product_id: n.product_id,
@@ -302,6 +367,8 @@ export function TrocaModal({
             : "none",
           customer_address: undefined,
           idempotency_key: iKey,
+          // 22/09/2026 (M4): ver inferSettlement acima.
+          settlement: inferSettlement(netAmount, refundSplits),
         } as any);
       }
 
@@ -426,6 +493,10 @@ export function TrocaModal({
               selectedSales={selectedSales}
               returnEntries={returnEntries}
               onChangeEntries={setReturnEntries}
+              // 22/09/2026 (M4): fallback de unit/purchase_factor quando o
+              // item da venda não os traz — Step2Returns busca por
+              // product_id só quando o item não tem o campo (ver ali).
+              products={products}
             />
           )}
           {step === 3 && (
@@ -437,6 +508,8 @@ export function TrocaModal({
               newValue={newValue}
               netAmount={netAmount}
               onSkip={next}
+              // 22/09/2026 (M4): botão âmbar "Não vai levar nada".
+              onDevolverValor={handleDevolverValor}
             />
           )}
           {step === 4 && (
@@ -453,6 +526,8 @@ export function TrocaModal({
               onChangePaymentSplits={setPaymentSplits}
               onChangeRefundSplits={setRefundSplits}
               onChangeAddress={setCustomerAddress}
+              // 22/09/2026 (M4): pré-seleciona "Crédito na loja" no mount.
+              devolverValor={devolverValor}
             />
           )}
           {step === 5 && successResult && (

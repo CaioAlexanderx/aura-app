@@ -49,6 +49,12 @@ import { suggestNcm } from "@/utils/ncm";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { readMatconSettings } from "@/constants/matcon";
 import { convertPurchaseToSale, fmtQty } from "@/utils/matconUnits";
+// 22/09/2026 (Matcon M4, docs/CONTRACT_MATCON.md secao M4): "o lote entra
+// na porta" (mockup #entrada). Ninguem digita lote no balcao — ele chega
+// com a nota do fornecedor, uma vez, aqui na conferencia. So em linha
+// vinculada a produto vendido em m²/m³; saco de cimento nem mostra o campo.
+import { matconApi } from "@/services/matconApi";
+import { usaLote } from "@/utils/matconLots";
 
 const IS_WEB = Platform.OS === "web";
 
@@ -78,6 +84,10 @@ interface EditableItem extends DanfeItem {
   linkedProductUnit: string | null;   // unidade de VENDA do produto (m², kg…)
   purchaseUnitLabel: string | null;   // unidade de COMPRA cadastrada (cx, sc…)
   purchaseFactor: number | null;      // quantas unidades de venda por unidade de compra
+  // 22/09/2026 (Matcon M4): texto livre, do jeito que vem impresso na
+  // caixa ("27B", "V2-A", "L-0925"). A Aura nao valida nem tabela.
+  lotCode: string;
+  caliber: string;
 }
 
 interface DanfeImportModalProps {
@@ -126,7 +136,11 @@ export function DanfeImportModal({
   // 22/09/2026 (Matcon M0). Catálogo atual só é buscado com o toggle
   // ligado — loja sem Matcon nunca dispara esta query.
   const { settings: pdvSettings } = usePdvSettings();
-  const matconEnabled = readMatconSettings(pdvSettings as any).matcon_enabled;
+  const matcon = readMatconSettings(pdvSettings as any);
+  const matconEnabled = matcon.matcon_enabled;
+  // Numero da nota (nNF): vira `source_invoice` do lote, pra ficha do
+  // produto poder dizer de qual nota aquela pilha veio.
+  const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null);
   const { data: catalogoRaw } = useQuery({
     queryKey: ["danfe-import-catalogo", companyId],
     queryFn: () => companiesApi.products(companyId),
@@ -179,6 +193,7 @@ export function DanfeImportModal({
       try {
         const xmlText = evt.target?.result as string;
         const parsed = parseDanfeXml(xmlText);
+        setInvoiceNumber(parseDanfeInvoiceNumber(xmlText));
         if (!parsed.length) {
           setError("Nenhum item encontrado no XML. Verifique se é um arquivo NF-e válido.");
           return;
@@ -204,6 +219,8 @@ export function DanfeImportModal({
               linkedProductUnit: vinculado ? (vinculado.unit || null) : null,
               purchaseUnitLabel: vinculado ? (vinculado.purchase_unit || null) : null,
               purchaseFactor: fator && fator > 0 ? fator : null,
+              lotCode: "",
+              caliber: "",
             };
           })
         );
@@ -243,6 +260,23 @@ export function DanfeImportModal({
             stock_qty: Math.round((estoqueAtual + conv.qty) * 1000) / 1000,
             cost_price: conv.unitCost,
           });
+          // Matcon M4: alem do estoque, a pilha. A quantidade do lote e a
+          // JA convertida (10 cx -> 23,2 m²), porque o saldo do lote vive
+          // na unidade de venda (contrato, M4). Lote em branco = a loja nao
+          // quis controlar aquela linha: nada e criado.
+          if (usaLote(matcon, it.linkedProductUnit) && it.lotCode.trim()) {
+            try {
+              await matconApi.createLot(companyId, it.linkedProductId, {
+                lot_code: it.lotCode.trim(),
+                caliber: it.caliber.trim() || null,
+                qty: conv.qty,
+                source_invoice: invoiceNumber || undefined,
+              });
+            } catch {
+              // O estoque ja entrou: falha ao gravar o lote nao derruba a
+              // importacao da nota inteira.
+            }
+          }
         } else {
           await companiesApi.createProduct(companyId, {
             name: it.name,
@@ -268,6 +302,7 @@ export function DanfeImportModal({
   function handleClose() {
     setStep("upload");
     setItems([]);
+    setInvoiceNumber(null);
     setError(null);
     setMarkupPct("");
     setImportedCount(0);
@@ -447,6 +482,34 @@ export function DanfeImportModal({
                           em vez de criar um duplicado. */}
                       {matconEnabled && it.linkedProductId ? (
                         <Text style={s.matconLinkedTxt}>produto existente</Text>
+                      ) : null}
+                      {/* 22/09/2026 (Matcon M4, mockup #entrada): so em linha
+                          vinculada a produto vendido em m²/m³ E com conversao
+                          cadastrada — que e exatamente a linha que soma no
+                          estoque do produto existente (a unica em que o lote
+                          tem onde nascer). Campo livre: a Aura carrega o que
+                          o vendedor vai repetir pro cliente. */}
+                      {it.linkedProductId && it.purchaseFactor && usaLote(matcon, it.linkedProductUnit) ? (
+                        <View style={s.loteRow}>
+                          <Text style={s.loteLabel}>lote/tonalidade</Text>
+                          <TextInput
+                            testID={"danfe-lote-" + idx}
+                            value={it.lotCode}
+                            onChangeText={v => updateItem(idx, "lotCode", v.slice(0, 20))}
+                            placeholder="27B"
+                            placeholderTextColor={Colors.ink3}
+                            style={s.loteInput}
+                          />
+                          <Text style={s.loteLabel}>· bitola</Text>
+                          <TextInput
+                            testID={"danfe-bitola-" + idx}
+                            value={it.caliber}
+                            onChangeText={v => updateItem(idx, "caliber", v.slice(0, 10))}
+                            placeholder="03"
+                            placeholderTextColor={Colors.ink3}
+                            style={[s.loteInput, { minWidth: 44 }]}
+                          />
+                        </View>
                       ) : null}
                     </View>
 
@@ -642,6 +705,19 @@ function parseDanfeXml(xmlText: string): DanfeItem[] {
   return items;
 }
 
+// Numero da nota (ide/nNF). Usado como `source_invoice` do lote — o mesmo
+// numero que a lojista ve no papel ("Nota 12.884").
+function parseDanfeInvoiceNumber(xmlText: string): string | null {
+  try {
+    const doc = new DOMParser().parseFromString(xmlText, "text/xml");
+    const nNF = doc.querySelector("ide > nNF") || doc.querySelector("nNF");
+    const v = nNF?.textContent?.trim();
+    return v || null;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Estilos ──────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
@@ -804,6 +880,15 @@ const s = StyleSheet.create({
   // unidade de compra -> venda na conferência do XML.
   matconLinkedTxt: { fontSize: 10, color: Colors.violet, fontWeight: "700", marginTop: 2 },
   matconConvTxt: { fontSize: 10, color: Colors.violet, marginTop: 2, textAlign: "center" },
+  // Matcon M4 — "lote/tonalidade [27B] · bitola [03]" embaixo do nome.
+  loteRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 4, marginTop: 4 },
+  loteLabel: { fontSize: 10, color: Colors.ink3 },
+  loteInput: {
+    fontSize: 11, fontWeight: "700", color: Colors.ink, minWidth: 54,
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
+    backgroundColor: IS_DARK_MODE ? "rgba(255,255,255,0.04)" : "rgba(109,40,217,0.05)",
+    borderWidth: 1, borderColor: "rgba(124,58,237,0.30)",
+  } as any,
 
   // NCM badge
   ncmBadgeCell: {

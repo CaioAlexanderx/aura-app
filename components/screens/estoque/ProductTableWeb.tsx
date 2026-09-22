@@ -5,6 +5,7 @@
 // Reaproveita os mesmos handlers que ProductRow (onEdit, onDelete,
 // onLink, onSelect) — paridade total de funcionalidade.
 // ============================================================
+import { Fragment, useState } from "react";
 import { Platform } from "react-native";
 import { useColors, useThemeStore } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
@@ -16,6 +17,9 @@ import { useValoresOcultos } from "@/stores/valoresOcultos";
 // mostra decimais quando existem, então pra quem tem estoque inteiro (a
 // imensa maioria, hoje) o texto sai idêntico: neutro fora do Matcon.
 import { fmtQty } from "@/utils/matconUnits";
+// 22/09/2026 (Matcon M4): com lots_summary o estoque vira "148,48 m² em 2
+// lotes" e a pilha abre no clique — nunca no hover (regra 7 do CLAUDE.md).
+import { resumoDeLotes } from "@/utils/matconLots";
 
 const fmtBRL = (n: number) =>
   "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -35,7 +39,10 @@ export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bul
   const C = useColors();
   const { isDark } = useThemeStore();
   const { m } = useValoresOcultos();
+  const [lotesAbertos, setLotesAbertos] = useState<Record<string, boolean>>({});
   if (Platform.OS !== "web") return null;
+
+  const colSpan = bulkMode ? 8 : 7;
 
   const accent = C.violet;
   const surface = isDark ? "rgba(20,14,38,0.55)" : "rgba(255,255,255,0.70)";
@@ -91,8 +98,11 @@ export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bul
             const sku = (p as any).sku || p.code || (p as any).barcode || "—";
             const variant = [p.color, p.size].filter(Boolean).join(" · ") || p.unit || "—";
             const isSelected = bulkSelected.has(p.id);
+            // Matcon M4: só chega aqui com o gate dos lotes ligado.
+            const lotes = p.lotsSummary && p.lotsSummary.lots.length > 0 ? p.lotsSummary.lots : null;
             return (
-              <tr key={p.id} className="aura-est-row" style={{
+              <Fragment key={p.id}>
+              <tr className="aura-est-row" style={{
                 borderBottom: "1px solid " + border,
                 background: isSelected ? accent + "12" : "transparent",
               } as any}>
@@ -165,6 +175,21 @@ export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bul
                     color: low ? (isDark ? "#f87171" : "#dc2626") : C.ink,
                     fontVariantNumeric: "tabular-nums",
                   } as any}>{fmtQty(p.stock)}<span style={{ fontSize: 11, opacity: 0.7, marginLeft: 2 } as any}>{p.unit || "un"}</span></span>
+                  {lotes && (
+                    <div>
+                      <button
+                        onClick={(e: any) => { e.stopPropagation(); setLotesAbertos(prev => ({ ...prev, [p.id]: !prev[p.id] })); }}
+                        title={resumoDeLotes(p.lotsSummary, p.unit) || undefined}
+                        style={{
+                          marginTop: 4, padding: "2px 7px", borderRadius: 6, cursor: "pointer",
+                          border: "1px solid " + border, background: isDark ? "rgba(120,100,240,0.12)" : "rgba(124,58,237,0.07)",
+                          color: accent, fontSize: 10.5, fontWeight: 700,
+                        } as any}
+                      >
+                        {"em " + lotes.length + (lotes.length === 1 ? " lote" : " lotes") + (lotesAbertos[p.id] ? " ▴" : " ▾")}
+                      </button>
+                    </div>
+                  )}
                   {p.unit !== "srv" && (
                     <div style={{ marginTop: 5, height: 3, borderRadius: 3, background: border, overflow: "hidden" } as any}>
                       <div style={{
@@ -214,6 +239,29 @@ export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bul
                   </div>
                 </td>
               </tr>
+              {lotes && lotesAbertos[p.id] && (
+                <tr style={{ borderBottom: "1px solid " + border } as any}>
+                  <td colSpan={colSpan} style={{ padding: "0 14px 14px" } as any}>
+                    <div style={{
+                      display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center",
+                      fontSize: 12, color: C.ink2,
+                    } as any}>
+                      <span style={{ fontWeight: 700 } as any}>{resumoDeLotes(p.lotsSummary, p.unit)}</span>
+                      {lotes.map(l => (
+                        <span key={l.id} style={{
+                          padding: "3px 9px", borderRadius: 999,
+                          border: "1px solid " + border,
+                          background: isDark ? "rgba(120,100,240,0.10)" : "rgba(124,58,237,0.06)",
+                        } as any}>
+                          <b style={{ color: accent } as any}>lote {l.lot_code}</b>
+                          <span style={{ fontFamily: Fonts.mono, marginLeft: 6 } as any}>{fmtQty(l.qty, p.unit)}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             );
           })}
         </tbody>

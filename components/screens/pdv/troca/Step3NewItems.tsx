@@ -32,6 +32,14 @@
 //   • Botão "Só devolver — pular este passo" (outline laranja) aparece
 //     abaixo do banner, permitindo avançar sem adicionar itens novos.
 //   • onSkip prop chamada pelo botão (TrocaModal passa next() diretamente).
+//
+// 22/09/2026 (Matcon M4 — "devolução de sobra de obra", docs/mockups/
+// matcon-m4-profundidade.html §"Passo 3 — 'não vai levar nada'"):
+//   • Com matcon_enabled, o botão do banner opcional vira "Não vai levar
+//     nada — devolver o valor ›" (âmbar): chama onDevolverValor (prop do
+//     TrocaModal.tsx, que limpa o carrinho, marca o estado devolverValor
+//     e avança pro Step4Confirm com o destino já em "Crédito na loja").
+//     Toggle off, ou sem onDevolverValor passado: texto de sempre.
 // ============================================================
 import { useState, useMemo, useEffect, useRef } from "react";
 import {
@@ -44,6 +52,8 @@ import { toast } from "@/components/Toast";
 import { VariantPickerModal, type VariantChoice } from "@/components/VariantPickerModal";
 import { useAuthStore } from "@/stores/auth";
 import { pdvApi } from "@/services/pdvApi";
+import { usePdvSettings } from "@/hooks/usePdvSettings";
+import { readMatconSettings } from "@/constants/matcon";
 import type { NewEntry } from "./types";
 import { fmtBRL } from "./types";
 
@@ -62,6 +72,10 @@ type Props = {
   netAmount: number;
   /** Chamado pelo botão "Só devolver" para pular o passo de itens novos. */
   onSkip?: () => void;
+  /** 22/09/2026 (M4): botão âmbar "Não vai levar nada — devolver o valor"
+   *  — só aparece com matcon_enabled. TrocaModal.tsx limpa o carrinho,
+   *  marca devolverValor e avança. */
+  onDevolverValor?: () => void;
 };
 
 type Dest = "outro" | "credito" | "dinheiro";
@@ -69,9 +83,13 @@ type Dest = "outro" | "credito" | "dinheiro";
 export function Step3NewItems({
   products, newEntries, onChangeEntries,
   returnedValue, newValue, netAmount,
-  onSkip,
+  onSkip, onDevolverValor,
 }: Props) {
   const { company } = useAuthStore();
+  // 22/09/2026 (M4): mesma leitura de pdv_settings que Step2Returns já
+  // faz — sem prop nova do TrocaModal.
+  const { settings: pdvSettings } = usePdvSettings();
+  const matcon = useMemo(() => readMatconSettings(pdvSettings), [pdvSettings]);
   const [dest, setDest] = useState<Dest>("outro");
   const [query, setQuery] = useState("");
   const [scanBuffer, setScanBuffer] = useState("");
@@ -270,9 +288,15 @@ export function Step3NewItems({
               Se o cliente só quer devolver, pule direto.
             </Text>
             {onSkip && (
-              <Pressable onPress={onSkip} style={s.skipBtn}>
-                <Text style={s.skipBtnTxt}>Só devolver →</Text>
-              </Pressable>
+              matcon.matcon_enabled && onDevolverValor ? (
+                <Pressable onPress={onDevolverValor} style={s.skipBtnAmber}>
+                  <Text style={s.skipBtnAmberTxt}>Não vai levar nada — devolver o valor ›</Text>
+                </Pressable>
+              ) : (
+                <Pressable onPress={onSkip} style={s.skipBtn}>
+                  <Text style={s.skipBtnTxt}>Só devolver →</Text>
+                </Pressable>
+              )
             )}
           </View>
         )}
@@ -549,6 +573,13 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(249,115,22,0.10)",
   },
   skipBtnTxt: { color: "#fb923c", fontSize: 12, fontWeight: "700" },
+  // 22/09/2026 (M4) — variante âmbar do botão de pular, só com matcon_enabled.
+  skipBtnAmber: {
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
+    borderWidth: 1.5, borderColor: "#f59e0b",
+    backgroundColor: "rgba(245,158,11,0.14)",
+  },
+  skipBtnAmberTxt: { color: "#fbbf24", fontSize: 12, fontWeight: "700" },
   destGrid: { flexDirection: "row", gap: 10, marginBottom: 18 },
   destCard: {
     flex: 1,
