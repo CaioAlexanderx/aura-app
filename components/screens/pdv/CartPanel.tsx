@@ -49,13 +49,18 @@
 //
 // 22/09/2026 (Matcon M1 — docs/matcon-faseamento-po-ux.md §3, mockup
 // docs/mockups/matcon-modulo.html #carrinho "Salvar orçamento"):
-//   · Botão "Salvar orçamento" ao lado de "Imprimir orçamento", só com
-//     matcon_enabled (mesma leitura de pdv_settings que já existe aqui em
-//     cima). `onSaveQuote`/`savedQuote`/`savingQuote` são OPCIONAIS — quem
-//     monta o CartPanel sem passar nada continua com o rodapé de hoje. Toda
-//     a chamada de API/wa.me/markQuoteSent vive em hooks/useMatconQuote.ts;
+//   · QA em produção (22/09, decisão do Caio): o quarto botão do M1 sobrecarregava
+//     o rodapé (4 CTAs numa linha só, "Salvar orç…" truncando). Voltou a três
+//     botões sempre — Limpar / Orçamento / Finalizar venda. Com matcon_enabled
+//     + onSaveQuote, o botão "Orçamento" passa a SALVAR (onSaveQuote) em vez de
+//     imprimir; sem Matcon ele continua imprimindo (onGenerateQuote), igual
+//     sempre foi. `onSaveQuote`/`savedQuote`/`savingQuote` continuam OPCIONAIS.
+//     Toda a chamada de API/wa.me/markQuoteSent vive em hooks/useMatconQuote.ts;
 //     este componente só dispara o handler e mostra o card de sucesso.
 //   · Carrinho vazio desabilita o botão (mesma regra do "Finalizar venda").
+//   · O card "Orçamento #N salvo" ganhou "Imprimir" (onGenerateQuote, o
+//     gerador de sempre) ao lado de "Enviar no WhatsApp" e "Ver orçamentos"
+//     (era "Ver na esteira" — texto de tela é língua do lojista).
 // ============================================================
 import { Fragment, forwardRef, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator, TextInput } from "react-native";
@@ -527,6 +532,11 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
                 <Icon name="send" size={12} color="#fff" />
                 <Text style={s.quoteCardWaTxt} numberOfLines={1}>Enviar no WhatsApp</Text>
               </Pressable>
+              {onGenerateQuote && (
+                <Pressable testID="matcon-orcamento-imprimir" onPress={onGenerateQuote} style={s.quoteCardGhostBtn}>
+                  <Text style={s.quoteCardGhostTxt} numberOfLines={1}>Imprimir</Text>
+                </Pressable>
+              )}
               <Pressable onPress={savedQuote.onViewEsteira} style={s.quoteCardGhostBtn}>
                 <Text style={s.quoteCardGhostTxt} numberOfLines={1}>Ver orçamentos</Text>
               </Pressable>
@@ -572,31 +582,33 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
               <Text style={s.ctaSecTxt} numberOfLines={1}>Limpar</Text>
             </Pressable>
           );
-          const quoteBtn = showOrcamento && onGenerateQuote ? (
-            <Pressable onPress={onGenerateQuote} disabled={!!isProcessing} style={[s.ctaAlt, isProcessing && { opacity: 0.5 }]}>
-              <Icon name="file_text" size={15} color={Colors.violet3} />
-              <Text style={s.ctaAltTxt} numberOfLines={1}>Orçamento</Text>
-            </Pressable>
-          ) : null;
-          // 22/09/2026 (Matcon M1): "Salvar orçamento" ao lado de "Imprimir
-          // orçamento" — só com o toggle ligado (matcon.matcon_enabled, lido
-          // aqui em cima) e desabilitado com o carrinho vazio, igual ao
-          // "Finalizar venda".
-          const saveQuoteBtn = matcon.matcon_enabled && onSaveQuote ? (
+          // 22/09/2026 (Matcon M1, revisto no QA de 22/09): um botão só,
+          // "Orçamento". Com matcon_enabled + onSaveQuote ele SALVA (mesma
+          // regra de desabilitar do "Finalizar venda": carrinho vazio ou
+          // savingQuote — spinner no lugar do texto). Sem Matcon, ou sem
+          // onSaveQuote, ele continua imprimindo via onGenerateQuote, do
+          // jeito que sempre foi.
+          const quoteSaveMode = matcon.matcon_enabled && !!onSaveQuote;
+          const quoteBtn = quoteSaveMode ? (
             <Pressable
               testID="cta-salvar-orcamento"
               onPress={onSaveQuote}
               disabled={!!savingQuote || items.length === 0}
-              style={[s.ctaSaveQuote, (savingQuote || items.length === 0) && { opacity: 0.5 }]}
+              style={[s.ctaAlt, (savingQuote || items.length === 0) && { opacity: 0.5 }]}
             >
               {savingQuote ? (
-                <ActivityIndicator color="#fff" size="small" />
+                <ActivityIndicator color={Colors.violet3} size="small" />
               ) : (
                 <>
-                  <Icon name="clipboard" size={15} color="#fff" />
-                  <Text style={s.ctaSaveQuoteTxt} numberOfLines={1}>Salvar orçamento</Text>
+                  <Icon name="clipboard" size={15} color={Colors.violet3} />
+                  <Text style={s.ctaAltTxt} numberOfLines={1}>Orçamento</Text>
                 </>
               )}
+            </Pressable>
+          ) : showOrcamento && onGenerateQuote ? (
+            <Pressable onPress={onGenerateQuote} disabled={!!isProcessing} style={[s.ctaAlt, isProcessing && { opacity: 0.5 }]}>
+              <Icon name="file_text" size={15} color={Colors.violet3} />
+              <Text style={s.ctaAltTxt} numberOfLines={1}>Orçamento</Text>
             </Pressable>
           ) : null;
           const finalizeBtn = (
@@ -662,7 +674,6 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
                   {clearBtn}
                   {quoteBtn}
                 </View>
-                {saveQuoteBtn}
                 {finalizeBtn}
               </View>
             );
@@ -671,7 +682,6 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
             <View style={s.ctaRow}>
               {clearBtn}
               {quoteBtn}
-              {saveQuoteBtn}
               {finalizeBtn}
             </View>
           );
@@ -1301,10 +1311,6 @@ const s = StyleSheet.create({
   ctaSecTxt: { fontSize: 13, color: Colors.ink, fontWeight: "700" },
   ctaAlt: { flex: 1.3, height: 46, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Glass.lineFaint, borderWidth: 1, borderColor: "rgba(124,58,237,0.3)" },
   ctaAltTxt: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
-  // 22/09/2026 (Matcon M1): "Salvar orçamento" — primário, mesma altura dos
-  // outros CTAs do rodapé (mockup .btn.primary do #carrinho).
-  ctaSaveQuote: { flex: 1.3, height: 46, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.violet, borderWidth: 1, borderColor: "rgba(124,58,237,0.5)" },
-  ctaSaveQuoteTxt: { fontSize: 13, color: "#fff", fontWeight: "700" },
   // Card "Orçamento #N salvo" — mockup docs/mockups/matcon-modulo.html
   // (bloco "Salvar orçamento" do #carrinho).
   quoteCard: {
@@ -1314,14 +1320,16 @@ const s = StyleSheet.create({
   quoteCardHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   quoteCardTitle: { fontSize: 12.5, color: Colors.ink, fontWeight: "800", flex: 1 },
   quoteCardSub: { fontSize: 11.5, color: Colors.ink2, fontWeight: "500" },
-  quoteCardActs: { flexDirection: "row", gap: 8, marginTop: 2 },
+  // 22/09/2026 (QA): três ações agora (Enviar/Imprimir/Ver orçamentos) — em
+  // carrinho estreito não cabem numa linha só, então quebra com flexWrap.
+  quoteCardActs: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 2 },
   quoteCardWaBtn: {
-    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5,
+    flexGrow: 1, flexBasis: 150, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5,
     height: 34, borderRadius: 8, backgroundColor: "#25D366",
   },
   quoteCardWaTxt: { fontSize: 11.5, color: "#fff", fontWeight: "700" },
   quoteCardGhostBtn: {
-    flex: 1, alignItems: "center", justifyContent: "center", height: 34, borderRadius: 8,
+    flexGrow: 1, flexBasis: 90, minWidth: 80, alignItems: "center", justifyContent: "center", height: 34, borderRadius: 8,
     backgroundColor: Glass.lineFaint, borderWidth: 1, borderColor: Glass.lineBorderCard,
   },
   quoteCardGhostTxt: { fontSize: 11.5, color: Colors.ink, fontWeight: "700" },
