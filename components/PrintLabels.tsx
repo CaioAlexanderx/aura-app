@@ -5,6 +5,8 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { companiesApi, pdvSettingsApi } from "@/services/api";
+import { ehIphoneInstalado } from "@/services/instalarApp";
+import { avisarImpressaoNoIphone } from "@/components/ImpressaoNoIphone";
 import { hexToName } from "@/utils/colorNames";
 import { buildLabelHtml, buildLabelName, validateLabelItems, isValidEAN13, generateEAN13, LABEL_SIZE_PRESETS, DEFAULT_LABEL_SIZE } from "@/components/screens/estoque/labels/buildLabelHtml";
 import type { LabelItem, InvalidCodeItem, LabelSizeKey } from "@/components/screens/estoque/labels/buildLabelHtml";
@@ -251,6 +253,9 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   function doPrint(items: LabelItem[]) {
     var html = buildLabelHtml(items, { mode: mode, storeName: storeName, showStoreName: showStoreName, labelSize: labelSize, offsetMm: labelOffsetMm });
     try {
+      // 22/09/2026 (PWA Fase 2): no iPhone com a Aura instalada a janela de
+      // impressão é morta; explica o caminho pelo Safari em vez de abrir nada.
+      if (ehIphoneInstalado()) { avisarImpressaoNoIphone(); return; }
       var blob = new Blob([html], { type: "text/html;charset=utf-8" });
       var url = URL.createObjectURL(blob);
       var w = window.open(url, "_blank");

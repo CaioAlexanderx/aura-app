@@ -5,6 +5,7 @@
 // ============================================================
 import { Platform } from "react-native";
 import { toast } from "@/components/Toast";
+import { salvarTexto } from "@/utils/salvarArquivo";
 
 // -- Export --
 const SEP = ";";
@@ -19,12 +20,13 @@ export function arrayToCSV(rows: Record<string, any>[], columns: { key: string; 
 
 export function downloadCSV(csv: string, filename: string) {
   if (Platform.OS !== "web") { toast.info("Export disponivel apenas na versao web"); return; }
-  const BOM = "\uFEFF";
-  const blob = new Blob([BOM + csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
-  toast.success(`${filename} exportado!`);
+  // 22/09/2026 (PWA Fase 2): um helper so para entregar arquivo. No iPhone
+  // com a Aura instalada vira a folha de compartilhar (la nao ha pasta de
+  // downloads); no resto, o download de sempre. O BOM do Excel fica por
+  // conta dele. "cancelado" e a pessoa fechando a folha: sem toast.
+  void salvarTexto(csv, filename, "text/csv;charset=utf-8").then((r) => {
+    if (r === "baixado" || r === "compartilhado") toast.success(`${filename} exportado!`);
+  });
 }
 
 // -- Import --

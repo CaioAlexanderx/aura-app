@@ -66,6 +66,16 @@ export function ehIos(ua: string, maxTouchPoints: number = 0, platform: string =
   return /Mac/i.test(platform) && maxTouchPoints > 1;
 }
 
+/**
+ * iPhone/iPad com a Aura instalada: onde imprimir por janela nova e baixar
+ * por <a download> não funcionam (Fase 2 usa isto para desviar o caminho).
+ */
+export function ehIphoneInstalado(w: any = temJanela() ? window : undefined): boolean {
+  if (!w) return false;
+  const nav: any = w.navigator || {};
+  return ehIos(nav.userAgent || "", nav.maxTouchPoints || 0, nav.platform || "") && estaInstalado(w);
+}
+
 /** Abriu como app (tela cheia), não como aba. */
 export function estaInstalado(w: any = temJanela() ? window : undefined): boolean {
   if (!w) return false;

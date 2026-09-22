@@ -15,6 +15,7 @@ import { LGPDConsent } from "@/components/LGPDConsent";
 import { startAutoSync } from "@/services/offlineSync";
 import { StudioThemeProvider } from "@/contexts/StudioThemeMode";
 import { UpdateBanner } from "@/components/UpdateBanner";
+import { GlobalOverlays } from "@/components/GlobalOverlays";
 import { KarateLoginTransition } from "@/components/karate/KarateLoginTransition";
 import { useKarateIntro } from "@/stores/karateIntro";
 
@@ -306,6 +307,9 @@ export default function RootLayout() {
           <AuthGuard />
           <LGPDConsent />
           <UpdateBanner />
+          {/* 22/09/2026 (PWA Fase 2): aqui, e nao no _layout das abas, para
+              alcancar Food, Odonto, Studio e Karate, que tem shell proprio. */}
+          <GlobalOverlays />
         </StudioThemeProvider>
       </QueryClientProvider>
     </ErrorBoundary>
