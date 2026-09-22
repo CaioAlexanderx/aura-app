@@ -30,7 +30,7 @@ import { statusEstoque, type CorDoItem, type StockMode } from "./types";
 // grupo "Materiais" + frase "Compro por" + estoque decimal — tudo atras
 // de `matconEnabled`. Sem ele, nenhuma destas importacoes muda o render:
 // UNITS continua a unica fonte dos 9 chips de hoje.
-import { MATCON_UNITS, PURCHASE_UNITS, isFractionalUnit, parseQtyInput, toPackages, rotuloEmbalagem } from "@/utils/matconUnits";
+import { MATCON_UNITS, PURCHASE_UNITS, estoqueEmDecimal, ehMilheiro, parseQtyInput, toPackages, rotuloEmbalagem } from "@/utils/matconUnits";
 
 const PRESET_COLORS = [
   "#ef4444", "#f97316", "#eab308", "#22c55e",
@@ -172,7 +172,10 @@ export function SecaoEstoque(p: Props) {
   // (m², sc, br…) — um produto em "un" não precisa de conversão.
   const ehUnidadeMaterial = MATCON_UNITS.indexOf(p.unidade as any) >= 0;
   const mostrarCompraPor = matconOn && ehUnidadeMaterial;
-  const fracionado = matconOn && isFractionalUnit(p.unidade);
+  // Milheiro também vai em decimal aqui: vender 500 tijolos deixa 19,5 mlh
+  // no estoque, e a ficha precisa ler e salvar o "19,5" (QA 22/09/2026).
+  const fracionado = matconOn && estoqueEmDecimal(p.unidade);
+  const milheiro = matconOn && ehMilheiro(p.unidade);
   const fatorNum = p.purchaseFactor ? parseQtyInput(p.purchaseFactor) : null;
   const estoqueNum = parseQtyInput(p.estoque || "") || 0;
   const pacotes = fatorNum ? toPackages(estoqueNum, fatorNum) : null;
@@ -207,6 +210,11 @@ export function SecaoEstoque(p: Props) {
                 <Chip key={u} label={u} active={p.unidade === u} onPress={() => p.onUnidade(u)} />
               ))}
             </View>
+          ) : null}
+          {milheiro ? (
+            <Text style={s.hint} testID="ficha-milheiro-dica">
+              1 milheiro = 1.000 unidades. No Caixa o vendedor digita a quantidade de peças.
+            </Text>
           ) : null}
         </Campo>
       ) : null}

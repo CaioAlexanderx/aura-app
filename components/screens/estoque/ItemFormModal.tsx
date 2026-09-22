@@ -48,7 +48,7 @@ import { useProducts } from "@/hooks/useProducts";
 import { useCategories } from "@/hooks/useCategories";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { readMatconSettings } from "@/constants/matcon";
-import { parseQtyInput, fmtQty, isFractionalUnit } from "@/utils/matconUnits";
+import { parseQtyInput, fmtQty, estoqueEmDecimal } from "@/utils/matconUnits";
 import { companiesApi } from "@/services/api";
 import { nfceApi } from "@/services/nfceApi";
 import { productImagesApi } from "@/services/productImagesApi";
@@ -283,7 +283,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     // fracionada e o toggle está ligado — senão, o mesmo String(inteiro)
     // de sempre (fmtQty de um inteiro sem unit é só o número).
     const unidadeSemente = prod && prod.unit && prod.unit !== "srv" ? prod.unit : "un";
-    const decimalNaSemente = matcon.matcon_enabled && isFractionalUnit(unidadeSemente);
+    const decimalNaSemente = matcon.matcon_enabled && estoqueEmDecimal(unidadeSemente);
     setEstoqueTxt(prod ? (decimalNaSemente ? fmtQty(prod.stock) : String(prod.stock)) : "");
     setMinimoTxt(prod ? (decimalNaSemente ? fmtQty(prod.minStock) : String(prod.minStock)) : "");
     setPurchaseUnit((prod as any)?.purchaseUnit ?? null);
@@ -401,7 +401,10 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     // ligado aceita decimal (parseQtyInput, vírgula BR); qualquer outro
     // caso continua parseInt — igual a hoje, inclusive pra quem não é
     // Matcon (a unidade decide, não a loja).
-    const estoqueFracionado = matcon.matcon_enabled && isFractionalUnit(unidade);
+    // Milheiro entra junto (estoqueEmDecimal): depois de vender 500 tijolos
+    // o estoque fica em 19,5 mlh, e o parseInt salvaria 19 — 500 tijolos a
+    // menos a cada vez que alguém mexe no preço (QA 22/09/2026).
+    const estoqueFracionado = matcon.matcon_enabled && estoqueEmDecimal(unidade);
     const estoqueSimples = estoqueFracionado ? (parseQtyInput(estoqueTxt) ?? 0) : (parseInt(estoqueTxt, 10) || 0);
     const minimoSimples = estoqueFracionado ? (parseQtyInput(minimoTxt) ?? 0) : (parseInt(minimoTxt, 10) || 0);
     const fatorCompra = purchaseFactorTxt.trim() ? parseQtyInput(purchaseFactorTxt) : null;
