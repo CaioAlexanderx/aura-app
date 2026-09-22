@@ -25,6 +25,12 @@ export type NfceEmissionItem = {
   unit?: string;
   barcode?: string | null;
   discount?: number;
+  // 22/09/2026 (Matcon M2): fiscal do Simples por item. O backend mapeia
+  // icms_st_paid -> CSOSN 500 (ST ja recolhida) ou 102; cest vai no <CEST>;
+  // origem no <orig>. Ausentes = comportamento de hoje.
+  cest?: string | null;
+  origem?: number | null;
+  icms_st_paid?: boolean | null;
 };
 
 // Pagamento individual da NFC-e (usado em multi-pagamento).
@@ -118,6 +124,24 @@ export type EmitBody = {
   sale_id?: string;
   transaction_id?: string;
   observacoes?: string;
+  // 22/09/2026 (Matcon M2): NF-e emitida a partir de uma entrega. O backend
+  // preenche o bloco <transp> (modFrete, volumes, pesos, transportadora) e
+  // vincula a nota a delivery. `transporte` permite ajustar antes de emitir.
+  delivery_id?: string | null;
+  transporte?: NfeTransporte | null;
+};
+
+// modalidade: 0 = por conta do emitente (frete proprio da loja), 1 = por
+// conta do destinatario, 9 = sem frete (retira no balcao).
+export type NfeTransporte = {
+  modalidade: 0 | 1 | 9;
+  volumes?: number | null;
+  peso_bruto_kg?: number | null;
+  peso_liquido_kg?: number | null;
+  transportadora_nome?: string | null;   // "própria" quando a loja entrega
+  transportadora_cnpj?: string | null;
+  placa?: string | null;
+  uf_placa?: string | null;
 };
 
 export type EmitResponse = {

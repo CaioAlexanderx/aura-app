@@ -127,8 +127,28 @@ A lista de clientes (`GET /companies/:id/customers`) passa a devolver, com o tog
 
 WhatsApp: o front abre o wa.me com o extrato ("você tem N pontos — já dá um cupom de R$ X"); o backend não envia nada no M3.
 
-## M2 — Fiscal do Simples (cabeçalho; fecha após o piloto)
-`products.cest`, `products.origem` (0–8), `products.icms_st_paid` boolean (→ CSOSN 500 vs 102 na emissão); NF-e com bloco `transp` (peso a partir de `weight_kg`, volumes, transportadora "própria" default) gerado a partir de uma `delivery`.
+## M2 — Fiscal do Simples
+
+O varejista do Simples Nacional **não calcula ST na venda**: o imposto já veio recolhido do distribuidor. O que ele precisa é marcar o item certo e informar o CEST. Motor de ST (MVA, base, FCP) para Lucro Presumido/Real fica fora.
+
+### `products`
+| Coluna | Tipo | Regra |
+|---|---|---|
+| `cest` | `char(7)` nullable | obrigatório na NFC-e/NF-e de item com ST; validado por formato (7 dígitos). O front sugere pelo NCM (`utils/ncm.ts`). |
+| `origem` | `smallint` nullable | 0–8 (tabela SEFAZ); `NULL` = 0 na emissão |
+| `icms_st_paid` | boolean nullable | "o imposto já veio recolhido na nota do fornecedor?" → na emissão, CSOSN **500** quando `true`, **102** quando `false`/`NULL` (empresa do Simples). Empresa fora do Simples ignora (usa a config fiscal atual). |
+| `weight_kg` | já existe (M0) | peso por unidade de venda, para o bloco de transporte |
+
+Payload igual ao de hoje (`POST/PATCH /products`): `cest`, `origem`, `icms_st_paid` — `undefined` não toca, `null` limpa. `GET /products` devolve os três. Endpoint auxiliar: `GET /companies/:id/products/fiscal-gaps` → `{ sem_cest: N, sem_ncm: N, ids[] }` para o aviso "12 produtos com NCM de cimento/tinta sem CEST" (o front pode calcular a partir da lista; o endpoint evita puxar 20 mil itens).
+
+### Emissão (`POST /companies/:id/nfce/emit`)
+- `items[]` ganha `cest`, `origem`, `icms_st_paid` (o backend também pode buscar do produto por `product_id`; o item enviado prevalece).
+- `delivery_id` (nullable): a nota nasce de uma entrega — o backend copia destinatário/endereço da venda e preenche `<transp>`.
+- `transporte` (`NfeTransporte`, ver `services/nfceApi.ts`): `modalidade` 0 (frete próprio) / 1 (por conta do cliente) / 9 (retira); `volumes`, `peso_bruto_kg`, `peso_liquido_kg` (default: soma de `weight_kg × quantity` dos itens), `transportadora_nome` ("própria" = dados da própria empresa), `cnpj`, `placa`, `uf_placa`. Nuvem Fiscal já aceita tudo isso; é mapeamento.
+- A emissão a partir de uma entrega grava `deliveries.nfe_emission_id`; a esteira mostra "NF-e #N" no card e o rastreio público ganha o link do DANFE (`dados.danfe_url`).
+
+### Config fiscal da empresa
+`nfce_config.regime` ∈ `simples | presumido | real` (se ainda não existir): decide CSOSN vs CST. Front mostra a pergunta "imposto já veio recolhido" só quando `regime = simples` (default quando ausente).
 
 ## Checklist de aceite do backend (M0)
 

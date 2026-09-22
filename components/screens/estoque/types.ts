@@ -16,6 +16,14 @@ export type Product = {
   purchaseUnit?: string | null;
   purchaseFactor?: number | null;
   weightKg?: number | null;
+  // 22/09/2026 (Matcon M2, docs/CONTRACT_MATCON.md §M2): fiscal do Simples.
+  // cest: 7 dígitos, obrigatório na NFC-e de item com ST. origem: 0–8 (tabela
+  // SEFAZ; 0 = nacional). icmsStPaid: "o imposto já veio recolhido na nota
+  // do fornecedor?" -> CSOSN 500 na emissão (senão 102). Só o cadastro com
+  // matcon_enabled escreve aqui.
+  cest?: string | null;
+  origem?: number | null;
+  icmsStPaid?: boolean | null;
   brand: string;
   notes: string;
   // Migration 305 — ficha tecnica. Opcionais: a maioria dos catalogos
