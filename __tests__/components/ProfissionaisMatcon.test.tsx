@@ -1,5 +1,5 @@
 // ============================================================
-// Matcon M3 — /matcon/profissionais (22/09/2026).
+// Matcon M3 — /matcon/profissionais, a tela "Clube do pedreiro" (22/09/2026).
 //
 // Mesmo padrão de mocks de __tests__/components/EntregasMatcon.test.tsx:
 // a tela lê o toggle do PDV, a empresa ativa e o ranking — nada disso
@@ -10,8 +10,8 @@
 //     ligado): a tela é só o recado curto de como ligar o clube, sem
 //     esteira nem lista.
 //   - clube ligado, 1 profissional ativo: nome, pontos e os dois botões
-//     "Avisar no WhatsApp" e "Gerar cupom de resgate" (regra 7 — sempre
-//     visíveis, sem hover).
+//     "Mandar pontos no WhatsApp" e "Trocar pontos por cupom" (regra 7 —
+//     sempre visíveis, sem hover).
 // ============================================================
 import React from "react";
 import renderer, { act } from "react-test-renderer";
@@ -81,7 +81,7 @@ describe("/matcon/profissionais — clube desligado", () => {
     const texto = flatten(tree.toJSON());
 
     expect(tree.root.findAllByProps({ testID: "matcon-profissionais-clube-desligado" }).length).toBeGreaterThan(0);
-    expect(texto).toContain("Ligue o clube do profissional");
+    expect(texto).toContain("Ligue o clube do pedreiro");
     expect(tree.root.findAllByProps({ testID: "matcon-esteira-profissionais" }).length).toBe(0);
     expect(tree.root.findAllByProps({ testID: "matcon-lista-profissionais" }).length).toBe(0);
 
@@ -117,6 +117,8 @@ describe("/matcon/profissionais — clube ligado, 1 profissional ativo", () => {
     expect(tree.root.findAllByProps({ testID: "matcon-profissionais-clube-desligado" }).length).toBe(0);
     expect(tree.root.findAllByProps({ testID: "matcon-esteira-profissionais" }).length).toBeGreaterThan(0);
 
+    // O título da tela é o nome que o dono da loja entende.
+    expect(texto).toContain("Clube do pedreiro");
     expect(texto).toContain("Nivaldo Pereira");
     expect(texto).toContain("1.240 pts");
     expect(texto).toContain("pedreiro");
@@ -126,8 +128,8 @@ describe("/matcon/profissionais — clube ligado, 1 profissional ativo", () => {
     expect(tree.root.findAllByProps({ testID: "matcon-profissional-prof-1-acoes" }).length).toBeGreaterThan(0);
     expect(tree.root.findAllByProps({ testID: "matcon-whats-prof-1" }).length).toBeGreaterThan(0);
     expect(tree.root.findAllByProps({ testID: "matcon-cupom-prof-1" }).length).toBeGreaterThan(0);
-    expect(texto).toContain("Avisar no WhatsApp");
-    expect(texto).toContain("Gerar cupom de resgate");
+    expect(texto).toContain("Mandar pontos no WhatsApp");
+    expect(texto).toContain("Trocar pontos por cupom");
 
     tree.unmount();
   });
@@ -146,7 +148,7 @@ describe("/matcon/profissionais — clube ligado, 1 profissional ativo", () => {
 
     expect(texto).toContain("730 pts");
     expect(texto).toContain("Chamar de volta");
-    expect(texto).not.toContain("Gerar cupom de resgate");
+    expect(texto).not.toContain("Trocar pontos por cupom");
     expect(tree.root.findAllByProps({ testID: "matcon-chamar-prof-2" }).length).toBeGreaterThan(0);
 
     tree.unmount();
