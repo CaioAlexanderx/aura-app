@@ -100,6 +100,7 @@ Client de referência: `services/matconApi.ts` (seção Profissionais). A calcul
 ### `pdv_settings` (novas chaves, merge parcial)
 | Chave | Tipo | Default | Frase na config |
 |---|---|---|---|
+| `matcon_club_enabled` | boolean | `true` | "Tenho clube do profissional **[on]**" — desliga o chip do Caixa e a tela sem desligar o Matcon |
 | `matcon_points_per_100` | integer | `10` | "A cada R$ **100** em compras indicadas, o profissional ganha **10** pontos." |
 | `matcon_points_to_coupon` | integer | `100` | "**100** pontos viram um cupom de R$ **10** para ele usar na loja." |
 | `matcon_coupon_value` | number | `10` | idem |
@@ -108,6 +109,8 @@ Client de referência: `services/matconApi.ts` (seção Profissionais). A calcul
 `id`, `company_id`, `customer_id` (1:1 com o cliente — o profissional **é** um cliente marcado), `trade` ∈ `pedreiro | mestre_de_obras | eletricista | encanador | pintor | gesseiro | azulejista | arquiteto | engenheiro | marceneiro | outro`, `points_balance` integer, `points_earned_total`, `referrals_count`, `referred_sales_total` numeric, `last_referral_at`, `active` boolean, timestamps.
 
 ### Venda indicada
+A lista de clientes (`GET /companies/:id/customers`) passa a devolver, com o toggle ligado, `professional: { id, trade, points_balance } | null` por cliente — a ficha usa isso para mostrar "Profissional · pedreiro · 1.240 pontos" sem segunda chamada.
+
 `sales.referred_by_professional_id` nullable (o Caixa manda `referred_by_professional_id` no POST da venda). Ao gravar: pontos = `floor(total / 100) × matcon_points_per_100`, creditados no profissional com um lançamento em `professional_points_ledger` (`professional_id`, `sale_id` nullable, `delta`, `reason` ∈ `sale | redeem | adjust`, `created_at`). Cancelamento da venda estorna.
 
 ### Resgate
