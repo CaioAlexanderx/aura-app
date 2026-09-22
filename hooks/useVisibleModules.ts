@@ -91,8 +91,8 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   // desenho da Otica acima: sem shell proprio, itens entram no NAV do
   // varejo e o opt-in e o toggle pdv_settings.matcon_enabled (filtrado
   // no _layout, como a OS e a Otica). Orcamentos/Entregas/Profissionais
-  // sao Negocio (matcon vive de crediario e WhatsApp pro clube do
-  // profissional, que ja sao Negocio); Config e Essencial pra qualquer
+  // sao Negocio (matcon vive de crediario e WhatsApp pros profissionais
+  // parceiros, que ja sao Negocio); Config e Essencial pra qualquer
   // plano conseguir abrir /matcon/config e ligar/desligar o modulo. Cada
   // tela com chave PROPRIA (regra 3 do CLAUDE.md) -- nenhuma herda de
   // outra. Ver docs/matcon-faseamento-po-ux.md secao 1 (contrato de zero

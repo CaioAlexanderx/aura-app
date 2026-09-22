@@ -83,10 +83,10 @@ export function CustomerRow({
     : `última compra há ${pluralize(diasUltimaCompra, "dia")}`;
   const { settings: pdvSettings } = usePdvSettings();
   const oticaEnabled = pdvSettings.otica_enabled === true;
-  // 22/09/2026 (Matcon M3): "Colocar no clube do pedreiro" e a linha
-  // "No clube · ..." só existem com o clube ligado — matcon_club_enabled
-  // desliga só o clube sem desligar o resto do Matcon (docs/CONTRACT_MATCON.md).
-  // Na tela o clube chama "clube do pedreiro"; o nome técnico (professional)
+  // 22/09/2026 (Matcon M3): "Marcar como parceiro" e a linha
+  // "Parceiro · ..." só existem com matcon_club_enabled ligado — ele
+  // desliga só os parceiros sem desligar o resto do Matcon (docs/CONTRACT_MATCON.md).
+  // Na tela o programa chama "profissionais parceiros"; o nome técnico (professional)
   // fica no código e na API.
   const matcon = readMatconSettings(pdvSettings);
   const matconClubOn = matcon.matcon_enabled && matcon.matcon_club_enabled;
@@ -199,14 +199,14 @@ export function CustomerRow({
             )}
           </View>
           {/* 22/09/2026 — Matcon M3: `c.professional` vem do GET
-              /companies/:id/customers com o clube ligado (docs/CONTRACT_MATCON.md,
+              /companies/:id/customers com matcon_club_enabled ligado (docs/CONTRACT_MATCON.md,
               "Venda indicada") — sem chamada extra. referrals_count é opcional
               hoje (contrato só promete id/trade/points_balance); some do texto
               quando o backend ainda não manda. */}
           {c.professional && (
             <View style={s.professionalLine} testID={`cliente-profissional-${c.id}`}>
               <Text style={s.professionalText}>
-                <Text style={s.professionalStrong}>No clube</Text>
+                <Text style={s.professionalStrong}>Parceiro</Text>
                 {" · " + (TRADE_LABELS[c.professional.trade as ProfessionalTrade] || c.professional.trade)}
                 {" · " + c.professional.points_balance.toLocaleString("pt-BR") + " pontos"}
                 {typeof c.professional.referrals_count === "number"
@@ -260,11 +260,11 @@ export function CustomerRow({
               </Pressable>
             )}
             {/* 22/09/2026 — Matcon M3: profissional é um cliente marcado, não
-                um segundo cadastro. Some quando já está no clube (a linha
-                acima já mostra o status; colocar de novo não faz sentido). */}
+                um segundo cadastro. Some quando já é parceiro (a linha
+                acima já mostra o status; marcar de novo não faz sentido). */}
             {matconClubOn && !c.professional && (
               <Pressable onPress={() => setShowMarcarProfissional(true)} style={s.actionBtn} testID={`cliente-marcar-profissional-${c.id}`}>
-                <Text style={s.actionText}>Colocar no clube do pedreiro</Text>
+                <Text style={s.actionText}>Marcar como parceiro</Text>
               </Pressable>
             )}
             {onEdit && <Pressable onPress={() => onEdit(c)} style={s.editBtn}><Text style={s.editText}>Editar cliente</Text></Pressable>}
@@ -350,7 +350,7 @@ const s = StyleSheet.create({
   detailItem: { width: "30%", minWidth: 100, paddingVertical: 6, gap: 3 },
   detailLabel: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5 },
   detailValue: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
-  // Matcon M3 — linha "No clube · ofício · N pontos · M indicações"
+  // Matcon M3 — linha "Parceiro · ofício · N pontos · M indicações"
   professionalLine: {
     marginTop: 10, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8,
     backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2,

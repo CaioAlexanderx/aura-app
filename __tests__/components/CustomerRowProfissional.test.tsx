@@ -1,13 +1,13 @@
 // ============================================================
-// Matcon M3 — CustomerRow · "Colocar no clube do pedreiro"
+// Matcon M3 — CustomerRow · "Marcar como parceiro"
 // (docs/CONTRACT_MATCON.md, seção M3 · mockup
 // docs/mockups/matcon-m3-clube-calculadora.html #ficha).
 //
 // Cobre:
-//   - clube desligado: sem botão "Colocar no clube do pedreiro" nem linha
-//   - clube ligado, cliente comum: botão aparece, sem linha
-//   - clube ligado, `c.professional` presente: some o botão, aparece a
-//     linha "No clube · ofício · N pontos · M indicações"
+//   - matcon_club_enabled desligado: sem botão "Marcar como parceiro" nem linha
+//   - matcon_club_enabled ligado, cliente comum: botão aparece, sem linha
+//   - matcon_club_enabled ligado, `c.professional` presente: some o botão,
+//     aparece a linha "Parceiro · profissão · N pontos · M indicações"
 // ============================================================
 import React from "react";
 import renderer, { act } from "react-test-renderer";
@@ -59,10 +59,10 @@ const CLIENTE_BASE: Customer = {
   visits: 5, firstVisit: "01/01/2026", notes: "", rating: null, creditBalance: 0,
 };
 
-describe("CustomerRow — Matcon M3 (clube do pedreiro)", () => {
+describe("CustomerRow — Matcon M3 (profissionais parceiros)", () => {
   afterEach(() => { mockPdvSettings = { otica_enabled: false }; });
 
-  it("clube desligado: sem botão e sem linha do clube", () => {
+  it("matcon_club_enabled desligado: sem botão e sem linha de parceiro", () => {
     mockPdvSettings = { otica_enabled: false, matcon_enabled: false, matcon_club_enabled: true };
     let tree: any;
     act(() => { tree = montar(CLIENTE_BASE); });
@@ -73,19 +73,19 @@ describe("CustomerRow — Matcon M3 (clube do pedreiro)", () => {
     tree.unmount();
   });
 
-  it("clube ligado, cliente comum: botão 'Colocar no clube do pedreiro' aparece", () => {
+  it("matcon_club_enabled ligado, cliente comum: botão 'Marcar como parceiro' aparece", () => {
     mockPdvSettings = { otica_enabled: false, matcon_enabled: true, matcon_club_enabled: true };
     let tree: any;
     act(() => { tree = montar(CLIENTE_BASE); });
 
     expect(achar(tree, "cliente-marcar-profissional-cli-9").length).toBeGreaterThan(0);
-    expect(JSON.stringify(tree.toJSON())).toContain("Colocar no clube do pedreiro");
+    expect(JSON.stringify(tree.toJSON())).toContain("Marcar como parceiro");
     expect(achar(tree, "cliente-profissional-cli-9").length).toBe(0);
 
     tree.unmount();
   });
 
-  it("clube ligado, cliente já no clube: some o botão e mostra a linha com ofício e pontos", () => {
+  it("matcon_club_enabled ligado, cliente já parceiro: some o botão e mostra a linha com profissão e pontos", () => {
     mockPdvSettings = { otica_enabled: false, matcon_enabled: true, matcon_club_enabled: true };
     const cliente: Customer = {
       ...CLIENTE_BASE,
@@ -98,7 +98,7 @@ describe("CustomerRow — Matcon M3 (clube do pedreiro)", () => {
     expect(achar(tree, "cliente-profissional-cli-9").length).toBeGreaterThan(0);
 
     const texto = JSON.stringify(tree.toJSON());
-    expect(texto).toContain("No clube");
+    expect(texto).toContain("Parceiro");
     expect(texto).toContain("pedreiro");
     expect(texto).toContain("1.240 pontos");
     expect(texto).toContain("9 indicações");

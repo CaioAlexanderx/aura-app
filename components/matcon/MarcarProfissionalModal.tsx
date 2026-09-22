@@ -1,17 +1,18 @@
 // ============================================================
-// AURA. — Matcon M3: MarcarProfissionalModal ("Colocar no clube do pedreiro")
+// AURA. — Matcon M3: MarcarProfissionalModal ("Marcar como parceiro")
 //
 // 22/09/2026 (docs/CONTRACT_MATCON.md, seção M3 · mockup
 // docs/mockups/matcon-m3-clube-calculadora.html #ficha, "Tocou — escolher
 // o ofício e pronto"). Marca um cliente já cadastrado como profissional
-// do clube: `POST .../matcon/professionals {customer_id, trade}`.
+// parceiro: `POST .../matcon/professionals {customer_id, trade}`.
 //
-// 22/09/2026 (revisão de texto): na tela o clube chama "Clube do pedreiro"
-// e a ação é "Colocar no clube" — nada de "marcar como profissional" nem
-// "ofício" na cara do lojista. O nome do arquivo e da API não mudam.
+// 22/09/2026 (revisão de texto): na tela o programa chama "Profissionais
+// Parceiros"; o botão é "Marcar como parceiro" e o título do modal,
+// "Marcar como profissional parceiro" — nada de "clube" nem "ofício" na
+// cara do lojista. O nome do arquivo e da API não mudam.
 //
 // Dois chamadores:
-//   - CustomerRow.tsx ("Colocar no clube do pedreiro" na ficha) já sabe
+//   - CustomerRow.tsx ("Marcar como parceiro" na ficha) já sabe
 //     QUEM é o cliente — passa `presetCustomer` e o modal pula direto pro
 //     chipset de profissão.
 //   - IndicadoPorChip.tsx ("Escolher um cliente já cadastrado" no rodapé
@@ -89,11 +90,11 @@ export function MarcarProfissionalModal({ visible, onClose, onMarked, presetCust
       const { professional } = await matconApi.createProfessional(company.id, {
         customer_id: selected.id, trade,
       });
-      toast.success(selected.name + " entrou no clube do pedreiro");
+      toast.success(selected.name + " agora é profissional parceiro");
       onMarked(professional);
       onClose();
     } catch (e: any) {
-      toast.error(e?.message || "Não deu para colocar no clube");
+      toast.error(e?.message || "Não deu para marcar como parceiro");
     } finally {
       setSaving(false);
     }
@@ -102,7 +103,7 @@ export function MarcarProfissionalModal({ visible, onClose, onMarked, presetCust
   return (
     <ResponsiveSheet visible={visible} onClose={onClose} maxWidth={440}>
       <View style={s.header}>
-        <Text style={s.title}>Colocar no clube do pedreiro</Text>
+        <Text style={s.title}>Marcar como profissional parceiro</Text>
         <Pressable onPress={onClose} hitSlop={10} accessibilityLabel="Fechar">
           <Icon name="x" size={18} color={Colors.ink3} />
         </Pressable>
@@ -173,13 +174,13 @@ export function MarcarProfissionalModal({ visible, onClose, onMarked, presetCust
           <Text style={s.cancelText}>Cancelar</Text>
         </Pressable>
         <Button
-          title="Colocar no clube"
+          title="Marcar como parceiro"
           variant="primary"
           onPress={handleConfirm}
           disabled={!selected || !trade}
           loading={saving}
           full
-          accessibilityLabel="Confirmar entrada no clube do pedreiro"
+          accessibilityLabel="Confirmar profissional parceiro"
         />
       </View>
     </ResponsiveSheet>

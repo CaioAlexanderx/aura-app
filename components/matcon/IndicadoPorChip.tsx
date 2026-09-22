@@ -9,11 +9,11 @@
 //
 // 22/09/2026 (revisão de texto): o convite era "+ indicar profissional" e
 // ninguém do balcão entendia. Virou "+ quem indicou?", e o rodapé fala
-// "Cadastrar pedreiro novo" / "Escolher um cliente já cadastrado".
+// "Cadastrar profissional novo" / "Escolher um cliente já cadastrado".
 //
 // Dois estados:
 //   - sem profissional: chip "+ quem indicou?" abre a busca (nome,
-//     telefone ou profissão); o rodapé oferece "Cadastrar pedreiro novo"
+//     telefone ou profissão); o rodapé oferece "Cadastrar profissional novo"
 //     (QuickCustomerModal, o mesmo cadastro rápido de sempre — e depois a
 //     profissão, reaproveitando o chipset de MarcarProfissionalModal com
 //     presetCustomer) e "Escolher um cliente já cadastrado"
@@ -148,7 +148,7 @@ export function IndicadoPorChip({ referral, saleTotal, matconOn }: Props) {
         <ScrollView style={s.results} contentContainerStyle={{ paddingBottom: 4 }} keyboardShouldPersistTaps="handled">
           {referral.searching && <Text style={s.hint}>Buscando…</Text>}
           {!referral.searching && query.trim().length > 0 && referral.results.length === 0 && (
-            <Text style={s.hint}>Ninguém do clube com esse nome</Text>
+            <Text style={s.hint}>Nenhum parceiro com esse nome</Text>
           )}
           {referral.results.map(p => (
             <Pressable key={p.id} style={s.row} onPress={() => handlePick(p)} testID={`indicadopor-resultado-${p.id}`}>
@@ -168,7 +168,7 @@ export function IndicadoPorChip({ referral, saleTotal, matconOn }: Props) {
         <View style={s.footer}>
           <Pressable style={s.footerBtn} onPress={handleCadastrar} testID="indicadopor-cadastrar">
             <Icon name="users" size={13} color={Colors.violet3} />
-            <Text style={s.footerBtnText}>Cadastrar pedreiro novo</Text>
+            <Text style={s.footerBtnText}>Cadastrar profissional novo</Text>
           </Pressable>
           <Pressable style={[s.footerBtn, s.footerBtnGhost]} onPress={handleMarcarExistente} testID="indicadopor-marcar-existente">
             <Text style={s.footerBtnGhostText}>Escolher um cliente já cadastrado</Text>

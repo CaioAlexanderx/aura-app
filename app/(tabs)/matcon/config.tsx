@@ -9,8 +9,8 @@
 //
 // 22/09/2026 (revisão de texto): o subtítulo e a nota de rodapé falavam
 // com a gente ("sem jargão de ERP", "fator de conversão"), não com o dono
-// da loja. Agora só dizem o que ele precisa saber. O clube chama "clube do
-// pedreiro" aqui e em todo o Matcon.
+// da loja. Agora só dizem o que ele precisa saber. O programa chama "profissionais
+// parceiros" aqui e em todo o Matcon.
 //
 // Fonte única de defaults: constants/matcon.ts (readMatconSettings). O PUT
 // de pdv_settings faz merge parcial (services/authApi.ts) — salvamos só as
@@ -50,7 +50,7 @@ type Draft = {
   deliveryDays: string;
   quoteValidDays: string;
   quoteWarnDays: string;
-  // M3 — Clube do Profissional (docs/mockups/matcon-m3-clube-calculadora.html#config).
+  // M3 — Profissionais Parceiros (docs/mockups/matcon-m3-clube-calculadora.html#config).
   clubEnabled: boolean;
   pointsPer100: string;
   pointsToCoupon: string;
@@ -190,7 +190,7 @@ export default function MatconConfigScreen() {
         <Text style={st.backText}>Voltar</Text>
       </Pressable>
       <Text style={st.pageTitle}>Materiais de construção<Text style={{ color: Colors.violet }}>.</Text></Text>
-      <Text style={st.pageSubtitle}>Unidades, perda por quebra, embalagem fechada, entrega, orçamento e clube do pedreiro. Cada ajuste é uma frase: mexa só no número.</Text>
+      <Text style={st.pageSubtitle}>Unidades, perda por quebra, embalagem fechada, entrega, orçamento e profissionais parceiros. Cada ajuste é uma frase: mexa só no número.</Text>
 
       {!enabled ? (
         <View style={st.gate}>
@@ -328,10 +328,10 @@ export default function MatconConfigScreen() {
 
             <View style={st.divider} />
 
-            {/* ── Clube do pedreiro (M3) ── */}
+            {/* ── Profissionais Parceiros (M3) ── */}
             <View style={st.frase}>
               <Text style={st.fraseText}>
-                Tenho clube do pedreiro{" "}
+                Tenho profissionais parceiros{" "}
                 <Switch
                   value={draft.clubEnabled}
                   onValueChange={(v) => set({ clubEnabled: v })}
@@ -349,7 +349,7 @@ export default function MatconConfigScreen() {
 
                 <View style={st.frase}>
                   <Text style={st.fraseText}>
-                    A cada R$ 100 em compras indicadas, o pedreiro ganha{" "}
+                    A cada R$ 100 em compras indicadas, o parceiro ganha{" "}
                     <TextInput
                       style={st.editSmall}
                       value={draft.pointsPer100}

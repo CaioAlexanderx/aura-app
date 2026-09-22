@@ -1,5 +1,5 @@
 // ============================================================
-// AURA. — Matcon: contas do Clube do Profissional (M3)
+// AURA. — Matcon: contas dos Profissionais Parceiros (M3)
 //
 // 22/09/2026. Puro de propósito, como quotesUtil.ts e deliveriesUtil.ts:
 // é aqui que mora a conta que o vendedor não pode errar no balcão — "quantos

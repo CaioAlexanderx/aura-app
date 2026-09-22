@@ -1,18 +1,18 @@
 // ============================================================
-// AURA. — Matcon: ranking do Clube do Pedreiro (M3)
+// AURA. — Matcon: ranking dos Profissionais Parceiros (M3)
 //
 // 22/09/2026. Não é um cadastro: é um RANKING DO MÊS, como as esteiras de
 // Orçamentos e Entregas mostram dinheiro parado em vez de uma lista fria
 // (docs/matcon-faseamento-po-ux.md §4b regra 2). O dono abre pra saber
-// "quanto os pedreiros trouxeram este mês e quem já tem cupom pra tirar"
+// "quanto os parceiros trouxeram este mês e quem já tem cupom pra tirar"
 // — por isso o hero mostra o dinheiro antes de qualquer nome.
 //
 // 22/09/2026 (revisão de texto): a tela chamava "Profissionais" e nem o
-// dono da loja entendia o nome. Agora é "Clube do pedreiro" no menu, no
+// dono da loja entendia o nome. Agora é "Profissionais Parceiros" no menu, no
 // título e em todo botão — a rota, a chave de módulo e a API continuam
 // `profissionais`/`professionals` (o nome técnico não aparece pra ninguém).
-// Vale para pintor, eletricista, arquiteto e quem mais a loja marcar; o
-// "pedreiro" é o jeito que o balcão fala, não uma restrição.
+// Vale para pedreiro, pintor, eletricista, arquiteto e quem mais a loja
+// marcar — "parceiro" não restringe a profissão.
 //
 // Mockup aprovado: docs/mockups/matcon-m3-clube-calculadora.html
 // #profissionais. Molde de código: app/(tabs)/matcon/orcamentos.tsx
@@ -22,17 +22,17 @@
 //   · Chave de módulo PRÓPRIA `matcon.profissionais` (regra 3 do
 //     CLAUDE.md), já cadastrada em hooks/useVisibleModules.ts.
 //   · Gate em DOIS níveis: sem matcon_enabled, o mesmo recado curto das
-//     outras telas do Matcon; com o Matcon ligado mas o clube desligado
+//     outras telas do Matcon; com o Matcon ligado mas os parceiros desligados
 //     (matcon_club_enabled === false), um recado próprio apontando para
-//     Matcon › Configurações — a tela não existe sem o clube.
+//     Matcon › Configurações — a tela não existe sem essa frase ligada.
 //   · Multi-CNPJ (armadilha 2): profissional é vínculo de UM cliente com
 //     UMA loja (pontos, cupom), então <RequireCompanyScope> força escolher
 //     a empresa antes de renderizar, como Orçamentos e Entregas fazem.
 //   · Regra 7: os botões do card ficam sempre visíveis, sem hover.
-//   · A entrada no clube (marcar um cliente) mora na ficha do cliente
+//   · Marcar um cliente como parceiro é na ficha do cliente
 //     (MarcarProfissionalModal — outra frente em paralelo). Esta tela só
 //     lista; por isso o estado vazio manda o dono pra lá, e não para um
-//     botão "+ Pedreiro" aqui.
+//     botão "+ Parceiro" aqui.
 //   · A lista (GET .../professionals) não traz "últimas indicações" por
 //     profissional — isso só existe no detalhe (getProfessional), que
 //     custaria uma chamada por card. Por isso o card mostra o resumo do
@@ -70,7 +70,7 @@ const CHIPS: { key: Filtro; label: string }[] = [
 export default function MatconProfissionaisRoute() {
   // Multi-CNPJ: no modo consolidado o picker aparece antes do ranking.
   return (
-    <RequireCompanyScope context="matcon" actionLabel="ver o clube do pedreiro">
+    <RequireCompanyScope context="matcon" actionLabel="ver os profissionais parceiros">
       <MatconProfissionaisScreen />
     </RequireCompanyScope>
   );
@@ -106,7 +106,7 @@ function MatconProfissionaisScreen() {
 
   const estacoes: EsteiraEstacao[] = resumo ? [
     { key: "vendido", label: "Vendido por indicação", count: null, money: fmtMoneyCurto(resumo.referred_total_month), tone: "violet" },
-    { key: "ativos", label: "Ativos no clube", count: resumo.active_count, money: null, tone: "violet" },
+    { key: "ativos", label: "Parceiros ativos", count: resumo.active_count, money: null, tone: "violet" },
     { key: "resgates", label: "Cupons pra gerar", count: resumo.pending_redeems, money: null, tone: resumo.pending_redeems > 0 ? "amber" : "violet" },
   ] : [];
 
@@ -150,11 +150,11 @@ function MatconProfissionaisScreen() {
   if (!matcon.matcon_enabled) {
     return (
       <ScrollView style={st.screen} contentContainerStyle={st.content}>
-        <ScreenHero eyebrow="Matcon" title="Clube do pedreiro" />
+        <ScreenHero eyebrow="Matcon" title="Profissionais Parceiros" />
         <View style={st.gate} testID="matcon-profissionais-desligado">
           <View style={st.gateIcon}><Icon name="lock" size={20} color={Colors.violet3} /></View>
           <Text style={st.gateTitle}>Ligue &quot;Materiais de construção&quot; em Configurações › Caixa</Text>
-          <Text style={st.gateDesc}>O clube do pedreiro só aparece para lojas com o módulo ligado.</Text>
+          <Text style={st.gateDesc}>Os profissionais parceiros só aparecem para lojas com o módulo ligado.</Text>
           <Pressable onPress={() => router.push("/configuracoes" as any)} style={st.gateBtn} testID="matcon-profissionais-ir-config">
             <Text style={st.gateBtnText}>Abrir Configurações</Text>
             <Icon name="chevron_right" size={14} color="#fff" />
@@ -167,11 +167,11 @@ function MatconProfissionaisScreen() {
   if (!matcon.matcon_club_enabled) {
     return (
       <ScrollView style={st.screen} contentContainerStyle={st.content}>
-        <ScreenHero eyebrow="Matcon" title="Clube do pedreiro" />
+        <ScreenHero eyebrow="Matcon" title="Profissionais Parceiros" />
         <View style={st.gate} testID="matcon-profissionais-clube-desligado">
           <View style={st.gateIcon}><Icon name="users" size={20} color={Colors.violet3} /></View>
-          <Text style={st.gateTitle}>Ligue o clube do pedreiro nas configurações do Matcon</Text>
-          <Text style={st.gateDesc}>É a frase &quot;Tenho clube do pedreiro&quot;, em Matcon › Configurações. Sem ela não tem pontos nem cupom.</Text>
+          <Text style={st.gateTitle}>Ligue os profissionais parceiros nas configurações do Matcon</Text>
+          <Text style={st.gateDesc}>É a frase &quot;Tenho profissionais parceiros&quot;, em Matcon › Configurações. Sem ela não tem pontos nem cupom.</Text>
           <Pressable onPress={() => router.push("/matcon/config" as any)} style={st.gateBtn} testID="matcon-profissionais-ir-matcon-config">
             <Text style={st.gateBtnText}>Abrir configurações do Matcon</Text>
             <Icon name="chevron_right" size={14} color="#fff" />
@@ -185,12 +185,12 @@ function MatconProfissionaisScreen() {
     <ScrollView style={st.screen} contentContainerStyle={st.content}>
       <ScreenHero
         eyebrow="Matcon"
-        title="Clube do pedreiro"
+        title="Profissionais Parceiros"
         live
         subtitle={
           !resumo ? "Carregando…" : (
             <Text>
-              {fmtMoneyCurto(resumo.referred_total_month)} vendidos por indicação este mês · {resumo.active_count} {resumo.active_count === 1 ? "ativo no clube" : "ativos no clube"}
+              {fmtMoneyCurto(resumo.referred_total_month)} vendidos por indicação este mês · {resumo.active_count} {resumo.active_count === 1 ? "parceiro ativo" : "parceiros ativos"}
               {resumo.pending_redeems > 0 && (
                 <Text style={{ color: Colors.amber, fontWeight: "700" }}> · {resumo.pending_redeems} {resumo.pending_redeems === 1 ? "cupom pra gerar" : "cupons pra gerar"}</Text>
               )}
@@ -239,12 +239,12 @@ function MatconProfissionaisScreen() {
       ) : profissionais.length === 0 ? (
         <EsteiraVazia
           testID="matcon-profissionais-vazio"
-          titulo={q ? "Nada encontrado." : "Ninguém no clube ainda."}
+          titulo={q ? "Nada encontrado." : "Nenhum parceiro ainda."}
           frase={
             q ? "Confira o nome, o telefone ou a profissão, ou tente outra busca."
               : filtro === "inactive_60d" ? "Ninguém parado há 60 dias sem compra — sinal bom."
-                : filtro === "new" ? "Ninguém entrou no clube nos últimos 30 dias."
-                  : <Text>Abra a ficha do pedreiro em Clientes, toque em <EsteiraVaziaDestaque>Colocar no clube do pedreiro</EsteiraVaziaDestaque> e diga que foi ele quem indicou na próxima venda — ele aparece aqui.</Text>
+                : filtro === "new" ? "Nenhum parceiro novo nos últimos 30 dias."
+                  : <Text>Abra a ficha do profissional em Clientes, toque em <EsteiraVaziaDestaque>Marcar como parceiro</EsteiraVaziaDestaque> e diga que foi ele quem indicou na próxima venda — ele aparece aqui.</Text>
           }
         />
       ) : (

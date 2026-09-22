@@ -1,5 +1,5 @@
 // ============================================================
-// Matcon M3 — as contas do Clube do Profissional (22/09/2026).
+// Matcon M3 — as contas dos Profissionais Parceiros (22/09/2026).
 //
 // components/matcon/profissionaisUtil.ts é puro de propósito: é onde mora
 // a conta "quantos cupons esses pontos já cobrem" (docs/mockups/

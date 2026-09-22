@@ -25,8 +25,8 @@ export type MatconSettings = {
   // em "Vencendo" (M1).
   matcon_quote_valid_days: number;
   matcon_quote_warn_days: number;
-  // M3 — regras do Clube do Profissional (docs/CONTRACT_MATCON.md, M3).
-  // Liga/desliga o clube sem desligar o Matcon (frase da config no mockup M3).
+  // M3 — regras dos Profissionais Parceiros (docs/CONTRACT_MATCON.md, M3).
+  // Liga/desliga os parceiros sem desligar o Matcon (frase da config no mockup M3).
   matcon_club_enabled: boolean;
   // M4: "Controlo lote e tonalidade nos produtos vendidos em m² e m³".
   matcon_lots_enabled: boolean;

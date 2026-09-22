@@ -34,7 +34,7 @@ const MODULE_GROUPS = [
       // matcon.access -> orcamentos, entregas, profissionais, config). Só
       // aparece com o módulo ligado na loja (mesmo filtro de onlyWhen que a
       // Ótica usa, generalizado abaixo em ModuleGroupSelector).
-      { key: "matcon.access", label: "Matcon",    hint: "Orçamentos, entregas, clube do pedreiro e compras", onlyWhen: "matcon" as const },
+      { key: "matcon.access", label: "Matcon",    hint: "Orçamentos, entregas, profissionais parceiros e compras", onlyWhen: "matcon" as const },
     ],
   },
   {
