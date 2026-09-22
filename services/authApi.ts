@@ -126,6 +126,9 @@ export type PdvSettings = {
   matcon_default_delivery_days?: number;
   matcon_quote_valid_days?: number;
   matcon_quote_warn_days?: number;
+  matcon_points_per_100?: number;
+  matcon_points_to_coupon?: number;
+  matcon_coupon_value?: number;
 };
 
 export var authApi = {
