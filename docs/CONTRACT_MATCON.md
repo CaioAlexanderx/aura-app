@@ -72,7 +72,7 @@ Client de referência: `services/matconApi.ts` (tipos e rotas abaixo já estão 
 | `POST .../quotes` | cria (`QuoteCreateBody`) |
 | `PATCH .../quotes/:qid` | status/itens/validade |
 | `POST .../quotes/:qid/sent` | grava `sent_at` (o wa.me é aberto pelo front) |
-| `POST .../quotes/:qid/convert` | cria a venda/pedido, reserva estoque, `status=approved`, devolve `{sale_id, cart[]}` |
+| `POST .../quotes/:qid/convert` | `status=approved` + reserva de estoque; devolve `{quote, cart[]}`. **Não cria a venda**: ela nasce no Caixa (POST da venda leva `quote_id`; o backend grava `converted_sale_id`, baixa a reserva e cria a 1ª `delivery`). Decisão 22/09/2026 — evita pedido duplicado. |
 | `GET /orcamento/:token` (público) | mesmo formato `PublicQuote` do Studio + `kind: "matcon"`, `shop.*`; `POST /orcamento/:token/respond` aceita/recusa |
 
 Job diário: `open` com `valid_until < hoje` → `expired`.
@@ -83,7 +83,7 @@ Job diário: `open` com `valid_until < hoje` → `expired`.
 | Rota | Faz |
 |---|---|
 | `GET /companies/:id/matcon/deliveries?day=today|tomorrow|late|pending&stage=` | lista + `summary {separating, ready, out, delivered_today}` `{count,total}` + `pending_orders` |
-| `POST .../deliveries` | `{sale_id, scheduled_for?}` — 1ª entrega de um pedido (o `convert` do orçamento cria sozinho) |
+| `POST .../deliveries` | `{sale_id, scheduled_for?}` — 1ª entrega de um pedido (a venda com `quote_id` cria sozinha; venda avulsa no Caixa pode criar por aqui) |
 | `PATCH .../deliveries/:did` | `stage`, `delivered_by`, `scheduled_for`; `stage=out` grava `out_at`, `delivered` grava `delivered_at` |
 | `POST .../deliveries/:did/split` | entrega parcial: `{items[{sale_item_id, quantity}], delivered_by?}` → marca esta como `delivered` com o que foi e cria a próxima (`sequence+1`) com o saldo; devolve `{delivered, next}` |
 | `GET /acompanhar/:token` (público) | `tipo: "entrega"`, `etapas` = aprovado/separando/pronto/saiu/entregue, `itens[] {nome, entregue, total, unidade}`, `proxima_entrega` date nullable |

@@ -43,9 +43,21 @@
 // hook pede useCustomers({ sort: "recent" }) e o servidor ordena por
 // last_purchase_at DESC NULLS LAST, name ASC. Sobrou só a contagem de quantos
 // clientes do topo entram no bloco "Atendidos recentemente".
+//
+// 22/09/2026 (Matcon M1 — docs/matcon-faseamento-po-ux.md §3):
+//   · "Salvar orçamento": useMatconQuote monta a mutation + o card de
+//     sucesso; aqui só compomos os dados do carrinho/cliente/vendedora e
+//     colamos o resultado em cartProps (onSaveQuote/savingQuote/savedQuote).
+//   · `?quote={id}` na rota do Caixa (com o toggle ligado): busca o
+//     orçamento com matconApi.getQuote e povoa o carrinho via
+//     addToCart+setQty (mesmo par que o campo decimal do CartPanel usa),
+//     identifica o cliente se houver customer_id, e tira o `quote` da URL
+//     pra não recarregar de novo num refresh/voltar. Sem `?quote`, nada
+//     muda — é só mais um useEffect que nunca dispara.
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { router, useLocalSearchParams } from "expo-router";
 
 import { useAuthStore } from "@/stores/auth";
 import { useProducts } from "@/hooks/useProducts";
@@ -62,6 +74,9 @@ import { useCaixa } from "@/hooks/useCaixa";
 import { couponsApi, employeesApi, pdvApi } from "@/services/api";
 import { nfceApi } from "@/services/nfceApi";
 import { creditApi } from "@/services/creditApi";
+import { matconApi } from "@/services/matconApi";
+import { readMatconSettings } from "@/constants/matcon";
+import { useMatconQuote } from "@/hooks/useMatconQuote";
 
 import { toast } from "@/components/Toast";
 import { flyToCart } from "@/components/screens/pdv/flyToCart";
@@ -120,6 +135,9 @@ export function usePdvState() {
   // ?sort=recent: o seletor de cliente do balcão abre pelo último atendido.
   const { customers } = useCustomers({ sort: "recent" });
   const { settings: pdvSettings } = usePdvSettings();
+  // 22/09/2026 (Matcon M1): única leitura do toggle neste hook — "Salvar
+  // orçamento" e o `?quote=` abaixo dependem só de matcon.matcon_enabled.
+  const matcon = useMemo(() => readMatconSettings(pdvSettings), [pdvSettings]);
 
   // ── Plano / módulos ─────────────────────────────────────────────────────────
   const plan = (company?.plan || "essencial").toLowerCase();
@@ -196,7 +214,8 @@ export function usePdvState() {
     cart, payment, setPayment, lastSale, total: totalRaw, totalAfterCoupon,
     itemCount, isProcessing,
     addToCart, setQty, updateQty, setUnitPrice, removeItem, finalizeSale, newSale,
-    selectedCustomerId, selectedCustomerName, selectCustomer,
+    setQuoteId,
+    selectedCustomerId, selectedCustomerName, selectedCustomerPhone, selectCustomer,
     selectedEmployeeId, selectedEmployeeName, selectEmployee,
     sellerName, setSellerName,
     couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
@@ -206,6 +225,62 @@ export function usePdvState() {
     splitPayments, addSplitPayment, updateSplitPayment, removeSplitPayment,
     splitRemaining, splitIsBalanced,
   } = useCart();
+
+  // ── Matcon M1 — "Salvar orçamento" ──────────────────────────────────────
+  // useMatconQuote é quem sabe montar o QuoteCreateBody e falar com
+  // matconApi; aqui só passamos o retrato atual do carrinho/cliente/
+  // vendedora. `discount` é o desconto EFETIVO da venda (cupom + manual),
+  // mesma soma que já alimenta o resumo do carrinho mais abaixo.
+  const matconQuoteDiscount = (couponApplied?.discount || 0) + (manualDiscountAmount || 0);
+  const matconQuote = useMatconQuote({
+    companyId: company?.id,
+    matconEnabled: matcon.matcon_enabled,
+    cart: cart.map(i => ({ productId: i.productId, name: i.name, price: i.price, qty: i.qty, unit: i.unit })),
+    customerId: selectedCustomerId,
+    customerName: selectedCustomerName,
+    customerPhone: selectedCustomerPhone,
+    sellerId: selectedEmployeeId,
+    discount: matconQuoteDiscount,
+  });
+
+  // ── Matcon M1 — Caixa abre orçamento convertido (`?quote={id}`) ─────────
+  // A esteira de Orçamentos (fora deste PR) manda pra cá com `?quote=<id>`
+  // depois de "Converter em pedido". Só roda com o toggle ligado; sem
+  // `?quote` este efeito nunca dispara — zero impacto pra quem não tem
+  // Matcon. `quoteLoadedRef` evita recarregar o mesmo orçamento a cada
+  // re-render, e o `router.setParams` tira o `quote` da URL depois de
+  // povoar o carrinho (senão um refresh/voltar duplicaria os itens).
+  const quoteRouteParams = useLocalSearchParams<{ quote?: string }>();
+  const quoteLoadedRef = useRef<string | null>(null);
+  useEffect(() => {
+    const quoteId = quoteRouteParams.quote ? String(quoteRouteParams.quote) : null;
+    if (!quoteId || !matcon.matcon_enabled || !company?.id) return;
+    if (quoteLoadedRef.current === quoteId) return;
+    quoteLoadedRef.current = quoteId;
+
+    matconApi.getQuote(company.id, quoteId)
+      .then(({ quote }) => {
+        quote.items.forEach((it, idx) => {
+          // Item sem product_id (avulso, digitado no orçamento) ganha uma
+          // chave sintética só pra existir no carrinho — não bate com
+          // nenhum produto do catálogo, então não soma quantidade com
+          // nada que já esteja lá.
+          const key = it.product_id || ("orcamento-" + quote.id + "-" + idx);
+          addToCart({ id: key, name: it.name, price: it.unit_price, unit: it.unit || undefined });
+          setQty(key, it.quantity);
+        });
+        if (quote.customer_id) {
+          selectCustomer(quote.customer_id, quote.customer_name || null, quote.customer_phone || null);
+        }
+        setQuoteId(quote.id); // vai como quote_id no POST da venda (M1)
+        toast.success("Orçamento #" + quote.number + " carregado no carrinho");
+        try { router.setParams({ quote: undefined } as any); } catch {}
+      })
+      .catch(() => {
+        toast.error("Não foi possível carregar o orçamento");
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quoteRouteParams.quote, matcon.matcon_enabled, company?.id]);
 
   // ── Viewport ──────────────────────────────────────────────────────────────
   const vp         = useViewport();
@@ -693,6 +768,9 @@ export function usePdvState() {
     onFinalize:        handleFinalize,
     onGenerateQuote:   handleGenerateQuote,
     showOrcamento:     true,
+    onSaveQuote:       matconQuote.saveQuote,
+    savingQuote:       matconQuote.saving,
+    savedQuote:        matconQuote.savedQuote,
     discountLabel,
     isProcessing,
     // Bloqueio por requisito. O CartPanel usa isso só pra APARÊNCIA (opacidade

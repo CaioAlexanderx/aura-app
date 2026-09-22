@@ -11,6 +11,8 @@ import { openPrintWindow } from "@/services/printWindow";
 import { DevolucaoModal } from "@/components/crediario/DevolucaoModal";
 import { router } from "expo-router";
 import { ROTA_TROCA_PDV, rotuloDevolvido, mensagemCancelamento, avisoRetornosAtivos } from "@/utils/devolucaoOuTroca";
+import { usePdvSettings } from "@/hooks/usePdvSettings";
+import { readMatconSettings } from "@/constants/matcon";
 
 // ============================================================
 // AURA. — Modal de detalhes da venda (Item 3 Eryca)
@@ -112,6 +114,9 @@ export function SaleDetailModal({
   const { reemitTrocaFiscal, isReemitting } = useReemitTrocaFiscal(companyId);
   const { company } = useAuthStore();
   const effectiveCompanyId = companyId || company?.id;
+  // 22/09/2026 (Matcon M1): selo "saldo a entregar" — só com o toggle ligado.
+  const { settings: pdvSettings } = usePdvSettings();
+  const matcon = readMatconSettings(pdvSettings);
 
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
@@ -348,6 +353,20 @@ export function SaleDetailModal({
                 <View style={s.companyBadge}>
                   <Text style={s.companyBadgeText} numberOfLines={1}>{companyName}</Text>
                 </View>
+              )}
+              {/* 22/09/2026 (Matcon M1, docs/CONTRACT_MATCON.md §M1): selo
+                  "saldo a entregar" — só com o toggle ligado e a venda
+                  trazendo has_pending_delivery=true (campo novo e opcional
+                  em SaleDetailFull; ausente = nada aparece). */}
+              {matcon.matcon_enabled && sale?.has_pending_delivery === true && (
+                <Pressable
+                  onPress={() => { onClose(); router.push("/matcon/entregas" as any); }}
+                  style={s.pendingDeliveryBadge}
+                >
+                  <Icon name="truck" size={10} color={Colors.amber} />
+                  <Text style={s.pendingDeliveryText}>saldo a entregar</Text>
+                  <Text style={s.pendingDeliveryLink}>· Ver entregas</Text>
+                </Pressable>
               )}
             </View>
             {sale && <Text style={s.headerDate}>{fmtDateTime(sale.created_at)}</Text>}
@@ -879,6 +898,15 @@ const s = StyleSheet.create({
   trocaBadgeText: { fontSize: 9, color: TROCA_ORANGE, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase" },
   companyBadge: { backgroundColor: Colors.violetD, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: "rgba(124,58,237,0.28)", maxWidth: 200 },
   companyBadgeText: { fontSize: 9, color: Colors.violet3, fontWeight: "700", letterSpacing: 0.4 },
+  // 22/09/2026 (Matcon M1): selo "saldo a entregar", âmbar, com link.
+  pendingDeliveryBadge: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: Colors.amberD, borderRadius: 6,
+    paddingHorizontal: 8, paddingVertical: 3,
+    borderWidth: 1, borderColor: "rgba(251,191,36,0.4)",
+  },
+  pendingDeliveryText: { fontSize: 9, color: Colors.amber, fontWeight: "700", letterSpacing: 0.4, textTransform: "uppercase" },
+  pendingDeliveryLink: { fontSize: 9, color: Colors.amber, fontWeight: "700", textDecorationLine: "underline" },
   closeBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" },
   closeText: { fontSize: 16, color: Colors.ink3, fontWeight: "600" },
 

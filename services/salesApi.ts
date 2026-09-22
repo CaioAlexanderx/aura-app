@@ -181,6 +181,10 @@ export type SaleDetailFull = {
     cash_tendered: number | null;
     coupon_code: string | null;
     transaction_id: string | null;
+    // 22/09/2026 (Matcon M1, docs/CONTRACT_MATCON.md §M1 "regras" — a venda
+    // expõe has_pending_delivery pro selo "saldo a entregar" do detalhe).
+    // Opcional: ausente/false = nenhuma diferença, mesmo com o toggle ligado.
+    has_pending_delivery?: boolean;
   };
   customer: { id: string; name: string; phone: string | null; email: string | null } | null;
   seller: { id: string | null; name: string | null };

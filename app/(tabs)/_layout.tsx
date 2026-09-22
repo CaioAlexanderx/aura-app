@@ -107,12 +107,16 @@ const NAV: NavSection[] = [
   // 15/09/2026 — semi-vertical Ótica: dois itens com chave própria, ligados
   // pelo toggle pdv_settings.otica_enabled (como a OS). Sem shell dedicado.
   { s: "Ótica", i: [{ r: "/otica", l: "Laboratório", ic: "glasses", mod: "otica.laboratorio", oticaToggle: true },{ r: "/otica/receitas", l: "Receitas", ic: "eye", mod: "otica.receitas", oticaToggle: true }]},
-  // 22/09/2026 — semi-vertical Matcon: a secao "Matcon" do NAV entra
-  // junto com as telas de orcamentos/entregas/profissionais (M1/M3,
-  // docs/matcon-faseamento-po-ux.md). Em M0 nao ha rota pra apontar, entao
-  // NAO ha item de menu ainda — o unico acesso e o toggle + link em
-  // Configuracoes (PdvSettingsCard). `matconToggle` ja existe no tipo e no
-  // filtro de buildRawNav abaixo pra quando a secao nascer.
+  // 22/09/2026 (M1) — semi-vertical Matcon: a secao "Matcon" nasce com as
+  // duas esteiras de M1 (docs/matcon-faseamento-po-ux.md §3). Mesmo desenho
+  // da Otica: opt-in por pdv_settings.matcon_enabled (`matconToggle`, filtrado
+  // em buildRawNav), sem shell nem paleta propria. Cada item com `mod`
+  // PROPRIO (regra 3 do CLAUDE.md), ja cadastrado em MODULE_PLAN_MAP e em
+  // PERM_TO_MODULES sob a umbrella matcon.access. Profissionais e M3 e por
+  // isso ainda nao esta aqui — rota que nao existe nao vira item de menu.
+  // No celular estes itens caem no menu "Mais", como a Otica: MORE_PRIORIDADE
+  // nao muda (§4 do faseamento).
+  { s: "Matcon", i: [{ r: "/matcon/orcamentos", l: "Orçamentos", ic: "clipboard", mod: "matcon.orcamentos", matconToggle: true },{ r: "/matcon/entregas", l: "Entregas", ic: "truck", mod: "matcon.entregas", matconToggle: true }]},
   { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", mod: "folha" },{ r: "/agendamento", l: "Agenda", ic: "calendar", mod: "agendamento" }]},
   { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", mod: "agentes" }]},
   { s: "Admin", i: [{ r: "/gestao-aura", l: "Gestão Aura", ic: "shield", staff: true }]},
@@ -244,9 +248,9 @@ function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical:
       // 15/09/2026 — mesmo desenho para a Otica (pdv_settings.otica_enabled).
       if (item.oticaToggle && oticaEnabled !== true) return false;
       // 22/09/2026 — mesmo desenho para o Matcon (pdv_settings.
-      // matcon_enabled). Sem item no NAV ainda em M0 (nenhum `matconToggle:
-      // true` declarado acima), mas o filtro ja existe pra quando a secao
-      // "Matcon" nascer em M1.
+      // matcon_enabled). Desde M1 a secao "Matcon" existe no NAV acima com
+      // os dois itens marcados `matconToggle: true`: loja sem o toggle nao
+      // ve secao nenhuma.
       if (item.matconToggle && matconEnabled !== true) return false;
       // 21/09/2026 — feature que ainda nao esta operante fica fora do
       // menu (constants/modulosOcultos.ts). Filtro de APRESENTACAO: o

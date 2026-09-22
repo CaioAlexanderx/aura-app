@@ -21,6 +21,20 @@
 //   - Subtotal / desconto / total / sinal
 //   - Status: aceite / recusa / expirado
 //   - Botões: "Aceitar orçamento" + "Recusar" + WhatsApp
+//
+// 22/09/2026 (Matcon M1 — docs/matcon-faseamento-po-ux.md §4b regra 3 "o
+// cliente final também vê algo bonito"; docs/CONTRACT_MATCON.md §M1):
+// o mesmo endpoint GET /orcamento/:token devolve orçamentos do Matcon com
+// `kind: "matcon"` (PublicQuote.kind, opcional — ausente = Studio, nada
+// muda). Com `kind === "matcon"`:
+//   - sem o bloco de "Personalização" do item (é jargão de encomenda sob
+//     medida; matcon vende m²/sc, não tem customization);
+//   - a quantidade mostra a UNIDADE (`fmtQty`: "13,92 m²", "10 sc") em vez
+//     do "N×" de peça avulsa;
+//   - subtítulo de validade vira "Vale até DD/MM" (curto, sem o nome da
+//     loja repetido — já está na marca no topo);
+//   - rodapé "feito com Aura" (sem "Studio").
+// "Aceitar orçamento" e o resto do fluxo (recusa, expirado, sinal) não mudam.
 // ============================================================
 import { useEffect, useState } from "react";
 import {
@@ -30,6 +44,7 @@ import {
 import { useLocalSearchParams } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { studioApi, type PublicQuote } from "@/services/studioApi";
+import { fmtQty } from "@/utils/matconUnits";
 import { Fonts, GOOGLE_FONTS_CSS } from "@/constants/fonts";
 
 import { tipografiaDaLoja, cssDaVitrine } from "@/constants/fonts";
@@ -40,6 +55,14 @@ const FALLBACK_SECONDARY = "#EC4899";
 
 function isHexColor(v: unknown): v is string {
   return typeof v === "string" && /^#[0-9a-fA-F]{3,8}$/.test(v.trim());
+}
+
+// "DD/MM" — mesmo `new Date()` que o resto do arquivo já usa em expires_at
+// (é datetime ISO completo, não data pura tipo "YYYY-MM-DD" do acompanhar).
+function fmtDiaMesCurto(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0");
 }
 
 // Página pública standalone: injeta as fontes Aura no web
@@ -108,6 +131,9 @@ export default function OrcamentoPublico() {
   const fmtCurrency = (v: number) =>
     "R$ " + (v || 0).toFixed(2).replace(".", ",");
 
+  // 22/09/2026 (Matcon M1). Ausente (Studio de sempre) = false.
+  const isMatcon = data?.kind === "matcon";
+
   // ── Marca da loja (cores + logo + contato) ──────────────────
   const primary = isHexColor(data?.shop?.primary_color) ? data!.shop.primary_color!.trim() : FALLBACK_PRIMARY;
   const secondary = isHexColor(data?.shop?.secondary_color) ? data!.shop.secondary_color!.trim() : FALLBACK_SECONDARY;
@@ -166,7 +192,9 @@ export default function OrcamentoPublico() {
   ) : null;
 
   const Footer = (
-    <Text style={s.footerNote}>✦ Orçamento criado com Aura Studio</Text>
+    <Text style={s.footerNote}>
+      {isMatcon ? "✦ Orçamento criado com Aura" : "✦ Orçamento criado com Aura Studio"}
+    </Text>
   );
 
   // ─── Loading ─────────────────────────────────────────────────
@@ -293,17 +321,23 @@ export default function OrcamentoPublico() {
         <View style={s.itemsCard}>
           <Text style={s.itemsLabel}>ITENS DO ORÇAMENTO</Text>
           {data.items.map((it, i) => {
+            // Matcon não tem "Personalização" de item — é jargão de
+            // encomenda sob medida, e o orçamento de material não tem
+            // customization nenhuma.
             const custEntries =
-              it.customization && typeof it.customization === "object"
+              !isMatcon && it.customization && typeof it.customization === "object"
                 ? Object.entries(it.customization as Record<string, any>)
                     .filter(([, v]) => v != null && String(v).trim() !== "")
                     .slice(0, 4)
                 : [];
+            // Matcon mostra a unidade ("13,92 m²", "10 sc") em vez do "N×"
+            // de peça avulsa do Studio.
+            const qtyLabel = isMatcon ? fmtQty(it.quantity, it.unit || undefined) : it.quantity + "×";
             return (
               <View key={i} style={[s.itemBlock, i > 0 && s.itemBlockBorder]}>
                 <View style={s.itemRow}>
                   <View style={[s.itemQtyBadge, { backgroundColor: primary + "14" }]}>
-                    <Text style={[s.itemQtyTxt, { color: primary }]}>{it.quantity}×</Text>
+                    <Text style={[s.itemQtyTxt, { color: primary }]}>{qtyLabel}</Text>
                   </View>
                   <Text style={s.itemName} numberOfLines={3}>{it.description}</Text>
                   <Text style={s.itemPrice}>{fmtCurrency(it.unit_price * it.quantity)}</Text>
@@ -358,9 +392,12 @@ export default function OrcamentoPublico() {
           ) : null}
         </View>
 
-        {/* Validade */}
+        {/* Validade — Matcon (mockup #carrinho): "Vale até DD/MM", curto,
+            sem repetir o nome da loja (já está na marca no topo). */}
         <Text style={s.validityNote}>
-          Válido até {new Date(data.expires_at).toLocaleDateString("pt-BR")} · {data.shop.name}
+          {isMatcon
+            ? `Vale até ${fmtDiaMesCurto(data.expires_at)}`
+            : `Válido até ${new Date(data.expires_at).toLocaleDateString("pt-BR")} · ${data.shop.name}`}
         </Text>
 
         {/* Botões de ação */}

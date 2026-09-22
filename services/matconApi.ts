@@ -82,9 +82,13 @@ export type QuoteListResponse = {
   };
 };
 
+// Decisão 22/09/2026: converter NÃO cria a venda no servidor (senão o
+// Caixa, ao finalizar, criaria o pedido de novo). O convert aprova o
+// orçamento e reserva o estoque; a venda nasce no Caixa como sempre, com
+// `quote_id` no POST da venda — o backend grava converted_sale_id e cria a
+// 1ª entrega. `cart` é o carrinho pronto para o Caixa abrir.
 export type QuoteConvertResponse = {
-  sale_id: string;
-  // Carrinho pronto para o Caixa abrir com os itens do orçamento.
+  quote: Quote;
   cart: Array<{ product_id: string | null; name: string; unit: string | null; quantity: number; unit_price: number }>;
 };
 

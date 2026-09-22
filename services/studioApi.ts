@@ -159,11 +159,26 @@ export type PublicTrack = {
   criado_em?: string;
   entrega_combinada?: string | null;
   imagem?: string | null;
-  itens?: { nome: string; qtd: number }[];
+  // 22/09/2026 (Matcon M1, docs/CONTRACT_MATCON.md §M1): "entrega" ao lado
+  // de "oculos" — textos por tipo/etapa em utils/acompanharTextos.ts.
+  // Opcional/ausente = encomenda, comportamento de hoje.
+  tipo?: "oculos" | "entrega" | string;
+  itens?: {
+    nome: string;
+    qtd: number;
+    // 22/09/2026 (Matcon M1): entrega parcial — "6 de 10 sc". Ausentes =
+    // item comum de encomenda/óculos, mostra só nome × qtd de sempre.
+    entregue?: number | null;
+    total?: number | null;
+    unidade?: string | null;
+  }[];
   total?: number;
   etapa_atual?: number;
   etapas?: { key: string; label: string }[];
   saldo?: { valor: number; vencimento: string; pix: string | null } | null;
+  // 22/09/2026 (Matcon M1): data (YYYY-MM-DD) da próxima entrega quando há
+  // saldo a entregar. Nullable/ausente = sem viagem seguinte agendada.
+  proxima_entrega?: string | null;
 };
 
 export type StudioOrderItem = {
@@ -492,6 +507,11 @@ export type PublicQuote = {
   token: string;
   status: StudioQuoteStatus;
   expires_at: string;
+  // 22/09/2026 (Matcon M1, docs/CONTRACT_MATCON.md §M1 "GET /orcamento/:token"):
+  // o mesmo endpoint devolve orçamentos do Matcon com `kind: "matcon"`.
+  // Opcional — AUSENTE = Studio, comportamento de hoje. Ver app/orcamento/
+  // [token].tsx para o que muda por kind.
+  kind?: "studio" | "matcon";
   // 19/08/2026 — marca do lojista (digital_channel_config) no orçamento público
   shop: {
     name: string;
@@ -510,6 +530,9 @@ export type PublicQuote = {
     quantity: number;
     unit_price: number;
     customization: any;
+    // 22/09/2026 (Matcon M1): unidade de venda do item ("m²", "sc"...).
+    // Opcional — ausente/null em orçamento do Studio, que não tem unidade.
+    unit?: string | null;
   }>;
   deposit_pct?: number | null;
   deposit_amount?: number | null;

@@ -46,6 +46,16 @@
 //     quantidade vendida (decisão de produto, registrada no contrato).
 //   · O botão "calcular ambiente" do mockup é M3. Não está aqui, nem como
 //     placeholder.
+//
+// 22/09/2026 (Matcon M1 — docs/matcon-faseamento-po-ux.md §3, mockup
+// docs/mockups/matcon-modulo.html #carrinho "Salvar orçamento"):
+//   · Botão "Salvar orçamento" ao lado de "Imprimir orçamento", só com
+//     matcon_enabled (mesma leitura de pdv_settings que já existe aqui em
+//     cima). `onSaveQuote`/`savedQuote`/`savingQuote` são OPCIONAIS — quem
+//     monta o CartPanel sem passar nada continua com o rodapé de hoje. Toda
+//     a chamada de API/wa.me/markQuoteSent vive em hooks/useMatconQuote.ts;
+//     este componente só dispara o handler e mostra o card de sucesso.
+//   · Carrinho vazio desabilita o botão (mesma regra do "Finalizar venda").
 // ============================================================
 import { Fragment, forwardRef, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator, TextInput } from "react-native";
@@ -75,6 +85,18 @@ export type CartDisplayItem = {
 
 export type PayChip = { key: string; label: string; icon: string };
 
+/** 22/09/2026 (Matcon M1). Card "Orçamento #N salvo" do rodapé — monta e
+ *  controla em hooks/useMatconQuote.ts, o CartPanel só renderiza. */
+export type SavedQuoteCard = {
+  number: number;
+  /** "29/09" — já formatado (o CartPanel não sabe de fuso/parse de data). */
+  validUntilLabel: string;
+  total: number;
+  onSendWhatsApp: () => void;
+  onViewEsteira: () => void;
+  onDismiss?: () => void;
+};
+
 /** Aviso de bloqueio do rodapé. Quando traz `onPress`, o aviso vira botão e
  *  leva direto ao seletor que resolve a pendência (29/08/2026). */
 export type RequiredHint = { label: string; onPress?: () => void };
@@ -101,6 +123,10 @@ type Props = {
   onFinalize: () => void;
   onGenerateQuote?: () => void;
   showOrcamento?: boolean;
+  // 22/09/2026 (Matcon M1). Todos opcionais — sem eles o rodapé é o de hoje.
+  onSaveQuote?: () => void;
+  savingQuote?: boolean;
+  savedQuote?: SavedQuoteCard | null;
   discountLabel?: string | null;
   isProcessing?: boolean;
   /** Bloqueio "de requisito" (cliente/vendedora/caixa). Deixa o botão com
@@ -139,7 +165,8 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     orderNumber, items, subtotal, discountAmount, total, itemCount,
     payMethods, activePay, onPay,
     onInc, onDec, onSetQty, onPriceChange, onRemove, onClear, onFinalize, onGenerateQuote,
-    showOrcamento, discountLabel, isProcessing, finalizeDisabled, requiredHints,
+    showOrcamento, onSaveQuote, savingQuote, savedQuote,
+    discountLabel, isProcessing, finalizeDisabled, requiredHints,
     emptyCta, headerSubtitle, compact, fill,
     cpfNaNota, onCpfNaNotaChange,
     splitMode, splitPayments, splitRemaining, splitIsBalanced,
@@ -465,6 +492,36 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
             29/08/2026: cada aviso com `onPress` vira botão e abre o seletor que
             resolve a pendência. Nada de hover-reveal (CLAUDE.md #7): o chip já
             nasce visível, com borda e seta, e é tocável direto no dedo. */}
+        {/* 22/09/2026 (Matcon M1): card "Orçamento #N salvo" — só com o
+            toggle ligado e depois de salvar. Fica ACIMA dos hints/CTAs pra
+            não sumir atrás do aviso de bloqueio. */}
+        {matcon.matcon_enabled && savedQuote && (
+          <View style={s.quoteCard} testID="matcon-orcamento-salvo-card">
+            <View style={s.quoteCardHead}>
+              <Text style={s.quoteCardTitle} numberOfLines={1}>
+                Orçamento #{savedQuote.number} salvo.
+              </Text>
+              {savedQuote.onDismiss && (
+                <Pressable onPress={savedQuote.onDismiss} hitSlop={8}>
+                  <Icon name="x" size={13} color={Colors.violet3} />
+                </Pressable>
+              )}
+            </View>
+            <Text style={s.quoteCardSub}>
+              Vale até {savedQuote.validUntilLabel} · {fmtCurrency(savedQuote.total)}
+            </Text>
+            <View style={s.quoteCardActs}>
+              <Pressable onPress={savedQuote.onSendWhatsApp} style={s.quoteCardWaBtn}>
+                <Icon name="send" size={12} color="#fff" />
+                <Text style={s.quoteCardWaTxt} numberOfLines={1}>Enviar no WhatsApp</Text>
+              </Pressable>
+              <Pressable onPress={savedQuote.onViewEsteira} style={s.quoteCardGhostBtn}>
+                <Text style={s.quoteCardGhostTxt} numberOfLines={1}>Ver na esteira</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
         {hints.length > 0 && (
           <View style={s.hintsBox}>
             <Icon name="alert" size={11} color={Colors.amber} />
@@ -507,6 +564,27 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
             <Pressable onPress={onGenerateQuote} disabled={!!isProcessing} style={[s.ctaAlt, isProcessing && { opacity: 0.5 }]}>
               <Icon name="file_text" size={15} color={Colors.violet3} />
               <Text style={s.ctaAltTxt} numberOfLines={1}>Orçamento</Text>
+            </Pressable>
+          ) : null;
+          // 22/09/2026 (Matcon M1): "Salvar orçamento" ao lado de "Imprimir
+          // orçamento" — só com o toggle ligado (matcon.matcon_enabled, lido
+          // aqui em cima) e desabilitado com o carrinho vazio, igual ao
+          // "Finalizar venda".
+          const saveQuoteBtn = matcon.matcon_enabled && onSaveQuote ? (
+            <Pressable
+              testID="cta-salvar-orcamento"
+              onPress={onSaveQuote}
+              disabled={!!savingQuote || items.length === 0}
+              style={[s.ctaSaveQuote, (savingQuote || items.length === 0) && { opacity: 0.5 }]}
+            >
+              {savingQuote ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <Icon name="clipboard" size={15} color="#fff" />
+                  <Text style={s.ctaSaveQuoteTxt} numberOfLines={1}>Salvar orçamento</Text>
+                </>
+              )}
             </Pressable>
           ) : null;
           const finalizeBtn = (
@@ -572,6 +650,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
                   {clearBtn}
                   {quoteBtn}
                 </View>
+                {saveQuoteBtn}
                 {finalizeBtn}
               </View>
             );
@@ -580,6 +659,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
             <View style={s.ctaRow}>
               {clearBtn}
               {quoteBtn}
+              {saveQuoteBtn}
               {finalizeBtn}
             </View>
           );
@@ -1134,6 +1214,30 @@ const s = StyleSheet.create({
   ctaSecTxt: { fontSize: 13, color: Colors.ink, fontWeight: "700" },
   ctaAlt: { flex: 1.3, height: 46, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Glass.lineFaint, borderWidth: 1, borderColor: "rgba(124,58,237,0.3)" },
   ctaAltTxt: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
+  // 22/09/2026 (Matcon M1): "Salvar orçamento" — primário, mesma altura dos
+  // outros CTAs do rodapé (mockup .btn.primary do #carrinho).
+  ctaSaveQuote: { flex: 1.3, height: 46, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.violet, borderWidth: 1, borderColor: "rgba(124,58,237,0.5)" },
+  ctaSaveQuoteTxt: { fontSize: 13, color: "#fff", fontWeight: "700" },
+  // Card "Orçamento #N salvo" — mockup docs/mockups/matcon-modulo.html
+  // (bloco "Salvar orçamento" do #carrinho).
+  quoteCard: {
+    backgroundColor: Colors.violetD, borderRadius: 10, borderWidth: 1, borderColor: "rgba(124,58,237,0.35)",
+    padding: 10, marginBottom: 10, gap: 6,
+  },
+  quoteCardHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  quoteCardTitle: { fontSize: 12.5, color: Colors.ink, fontWeight: "800", flex: 1 },
+  quoteCardSub: { fontSize: 11.5, color: Colors.ink2, fontWeight: "500" },
+  quoteCardActs: { flexDirection: "row", gap: 8, marginTop: 2 },
+  quoteCardWaBtn: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5,
+    height: 34, borderRadius: 8, backgroundColor: "#25D366",
+  },
+  quoteCardWaTxt: { fontSize: 11.5, color: "#fff", fontWeight: "700" },
+  quoteCardGhostBtn: {
+    flex: 1, alignItems: "center", justifyContent: "center", height: 34, borderRadius: 8,
+    backgroundColor: Glass.lineFaint, borderWidth: 1, borderColor: Glass.lineBorderCard,
+  },
+  quoteCardGhostTxt: { fontSize: 11.5, color: Colors.ink, fontWeight: "700" },
   ctaPri: { height: 46, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   ctaPriTxt: { fontSize: 13, color: "#fff", fontWeight: "700", letterSpacing: 0.3 },
 });
