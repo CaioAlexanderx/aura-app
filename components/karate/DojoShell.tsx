@@ -84,6 +84,8 @@ import { DojoLogo } from "@/components/karate/DojoLogo";
 import { BottomTabBar } from "@/components/karate/BottomTabBar";
 import { useAuthStore } from "@/stores/auth";
 import { NotificationBell } from "@/components/NotificationBell";
+import { InstalarKarateCard } from "@/components/karate/InstalarKarateCard";
+import { useCorDaBarraDeStatus } from "@/hooks/useCorDaBarraDeStatus";
 
 interface DojoNavItem {
   label: string;
@@ -406,6 +408,11 @@ function BottomTabNav() {
 
 export function DojoShell() {
   useShojiFonts(); // mount point próprio de karatê — carrega as fontes Shoji
+  // PWA 2b.1 (22/09/2026): o manifesto declara theme_color escuro (o painel
+  // de varejo). No app instalado o Android pinta a barra de status com ela, e
+  // uma faixa preta sobre o papel do Karatê parece defeito. Vale enquanto o
+  // shell estiver montado; sai dele e volta ao escuro.
+  useCorDaBarraDeStatus(ShojiPalette.paperWarm);
   const { width } = useWindowDimensions();
   const { dojoName, dojoLogoUrl } = useKarateDojo();
   const isWide = Platform.OS === "web" && width >= BREAKPOINT_SIDEBAR;
@@ -451,6 +458,11 @@ export function DojoShell() {
           <NotificationBell />
         </View>
         <TrialBanner />
+        {/* PWA 2b.1 (22/09/2026): convite para instalar o app. O Karatê tem
+            shell próprio e não passa pelo Painel das abas, onde o card da
+            Fase 1 vive — sem isto, quem só usa o dojô nunca o veria. O
+            componente decide sozinho quando aparecer. */}
+        <InstalarKarateCard contexto="dojo" />
         <View style={styles.content}>
           <PageTransition>
             <Slot />
