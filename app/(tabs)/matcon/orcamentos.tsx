@@ -7,6 +7,10 @@
 // tem parado ali" — por isso cada estação mostra a contagem E o dinheiro
 // (docs/matcon-faseamento-po-ux.md §3/M1 e §4b regra 2).
 //
+// "Esteira" é nome NOSSO (código, mockup, docs). Na tela o lojista nunca
+// lê essa palavra: é "orçamentos", "carregando", "virar pedido"
+// (revisão de texto de 22/09/2026 — §4b regra 4, zero jargão).
+//
 // Mockup aprovado: docs/mockups/matcon-modulo.html#orcamentos.
 // Esteira, card e estado vazio vêm de components/matcon/EsteiraMatcon.tsx
 // (compartilhados com /matcon/entregas); as contas de vencimento, de
@@ -132,7 +136,7 @@ function MatconOrcamentosScreen() {
 
   const estacoes: EsteiraEstacao[] = [
     { key: "abertos", label: "Abertos", count: resumo ? resumo.open.count : null, money: resumo ? fmtMoneyCurto(resumo.open.total) : null, tone: "violet", active: filtro === "abertos", onPress: () => setFiltro("abertos") },
-    { key: "vencendo", label: `Vencendo ≤ ${warnDays} dias`, count: resumo ? resumo.expiring.count : null, money: resumo ? fmtMoneyCurto(resumo.expiring.total) : null, tone: "amber", active: filtro === "vencendo", onPress: () => setFiltro("vencendo") },
+    { key: "vencendo", label: `Vencendo em ${warnDays} ${warnDays === 1 ? "dia" : "dias"}`, count: resumo ? resumo.expiring.count : null, money: resumo ? fmtMoneyCurto(resumo.expiring.total) : null, tone: "amber", active: filtro === "vencendo", onPress: () => setFiltro("vencendo") },
     { key: "aprovados", label: "Aprovados", count: resumo ? resumo.approved.count : null, money: resumo ? fmtMoneyCurto(resumo.approved.total) : null, tone: "green", active: filtro === "aprovados", onPress: () => setFiltro("aprovados") },
     { key: "perdidos", label: "Perdidos", count: resumo ? resumo.lost.count : null, money: resumo ? fmtMoneyCurto(resumo.lost.total) : null, tone: "muted", active: filtro === "perdidos", onPress: () => setFiltro("perdidos") },
   ];
@@ -186,7 +190,7 @@ function MatconOrcamentosScreen() {
       // o `cart` da resposta por estado de navegação: quem manda é o id.
       router.push(`/pdv?quote=${quote.id}` as any);
     } catch (e: any) {
-      toast.error(e?.data?.error || "Não deu para converter o orçamento");
+      toast.error(e?.data?.error || "Não deu para virar pedido");
     } finally {
       setBusyId(null);
     }
@@ -224,7 +228,7 @@ function MatconOrcamentosScreen() {
         <View style={st.gate} testID="matcon-orcamentos-desligado">
           <View style={st.gateIcon}><Icon name="lock" size={20} color={Colors.violet3} /></View>
           <Text style={st.gateTitle}>Ligue &quot;Materiais de construção&quot; em Configurações › Caixa</Text>
-          <Text style={st.gateDesc}>A esteira de orçamentos só existe para lojas com o módulo ativo.</Text>
+          <Text style={st.gateDesc}>Os orçamentos só aparecem para lojas com o módulo ligado.</Text>
           <Pressable onPress={() => router.push("/configuracoes" as any)} style={st.gateBtn} testID="matcon-orcamentos-ir-config">
             <Text style={st.gateBtnText}>Abrir Configurações</Text>
             <Icon name="chevron_right" size={14} color="#fff" />
@@ -241,7 +245,7 @@ function MatconOrcamentosScreen() {
         title="Orçamentos"
         live
         subtitle={
-          !resumo ? "Carregando a esteira…" : (
+          !resumo ? "Carregando…" : (
             <Text>
               {fmtMoneyCurto(resumo.open.total)} em orçamentos abertos ·{" "}
               <Text style={{ color: resumo.expiring.count > 0 ? Colors.amber : Colors.ink3, fontWeight: resumo.expiring.count > 0 ? "700" : "400" }}>
@@ -259,7 +263,7 @@ function MatconOrcamentosScreen() {
             </Pressable>
             <Pressable onPress={() => router.push("/pdv" as any)} style={st.newBtn} testID="matcon-novo-orcamento">
               <Icon name="plus" size={14} color="#fff" />
-              <Text style={st.newBtnText}>Orçamento no Caixa</Text>
+              <Text style={st.newBtnText}>Novo orçamento</Text>
             </Pressable>
           </>
         }
@@ -311,7 +315,7 @@ function MatconOrcamentosScreen() {
             !q && filtro !== "aprovados" && filtro !== "perdidos" ? (
               <Pressable onPress={() => router.push("/pdv" as any)} style={st.newBtn} testID="matcon-vazio-ir-caixa">
                 <Icon name="plus" size={14} color="#fff" />
-                <Text style={st.newBtnText}>Orçamento no Caixa</Text>
+                <Text style={st.newBtnText}>Novo orçamento</Text>
               </Pressable>
             ) : undefined
           }
@@ -386,7 +390,7 @@ function QuoteCard({ quote, warnDays, busy, onWhats, onConverter, onRefazer }: {
             )}
             {!perdido && !convertido && (
               <Pressable onPress={onConverter} style={[st.miniBtn, st.miniBtnPrimary]} testID={`matcon-converter-${quote.number}`}>
-                <Text style={[st.miniBtnText, { color: "#fff" }]}>Converter em pedido</Text>
+                <Text style={[st.miniBtnText, { color: "#fff" }]}>Virar pedido</Text>
               </Pressable>
             )}
             {perdido && (
