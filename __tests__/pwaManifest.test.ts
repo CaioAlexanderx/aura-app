@@ -106,18 +106,107 @@ describe("index.html", () => {
   });
 });
 
-describe("sw.js continua só com Web Push (decisão de 10/09)", () => {
+// ------------------------------------------------------------
+// Fase 2 (22/09/2026): o sw.js ganhou a página "sem conexão", e SÓ ela. A
+// decisão de 10/09 (nada do painel em cache) continua, agora com o
+// contorno exato travado aqui: o handler de fetch só olha navegações, só
+// age quando a rede falha, e o cache contém exatamente dois arquivos.
+// ------------------------------------------------------------
+describe("sw.js: Web Push + página offline, e nada do painel em cache", () => {
   const sw = ler("public", "sw.js");
 
-  test("sem handler de fetch e sem Cache Storage", () => {
-    expect(sw).not.toMatch(/addEventListener\(\s*['"]fetch['"]/);
-    expect(sw).not.toMatch(/caches\.(open|match|keys|delete)/);
-  });
-
-  test("os handlers que já existiam seguem lá", () => {
-    for (const ev of ["install", "activate", "push", "notificationclick"]) {
+  test("os handlers de push que já existiam seguem lá", () => {
+    for (const ev of ["install", "activate", "push", "notificationclick", "fetch"]) {
       expect(sw).toMatch(new RegExp(`addEventListener\\(\\s*['"]${ev}['"]`));
     }
+  });
+
+  test("o cache tem exatamente a página offline e o ícone, e os dois existem", () => {
+    const m = sw.match(/var ARQUIVOS_OFFLINE = \[([^\]]+)\]/);
+    expect(m).not.toBeNull();
+    const lista = Array.from(m![1].matchAll(/'([^']+)'/g)).map((x) => x[1]).sort();
+    expect(lista).toEqual(["/aura-icone-192.png", "/offline.html"]);
+    for (const a of lista) expect(fs.existsSync(path.join(PUBLIC, a.replace(/^\//, "")))).toBe(true);
+  });
+
+  test("o fetch só olha navegação e só responde do cache quando a rede FALHA", () => {
+    const i = sw.indexOf("addEventListener('fetch'");
+    const corpo = sw.slice(i, sw.indexOf("addEventListener('push'"));
+    expect(corpo).toMatch(/if \(event\.request\.mode !== 'navigate'\) return;/);
+    expect(corpo).toMatch(/fetch\(event\.request\)\.catch\(/);
+    expect(corpo).toMatch(/caches\.match\('\/offline\.html'\)/);
+    // Nunca serve o painel do cache nem guarda nada em runtime.
+    expect(corpo).not.toMatch(/caches\.match\(event\.request/);
+    expect(sw).not.toMatch(/cache\.put\(/);
+    expect(sw).not.toMatch(/_expo/);
+  });
+
+  test("a versão do cache tem prefixo próprio e a ativação só limpa os deste worker", () => {
+    expect(sw).toMatch(/var CACHE_OFFLINE = 'aura-offline-v\d+'/);
+    expect(sw).toMatch(/k\.indexOf\('aura-offline-'\) === 0 && k !== CACHE_OFFLINE/);
+  });
+});
+
+describe("offline.html", () => {
+  const html = ler("public", "offline.html");
+
+  test("é autossuficiente: nenhum recurso externo, só o ícone local", () => {
+    expect(html).not.toMatch(/https?:\/\//);
+    expect(html).toMatch(/src="\/aura-icone-192\.png"/);
+    expect(html).not.toMatch(/<link\s[^>]*rel="stylesheet"/);
+  });
+
+  test("tem o botão, tenta reconectar sozinha e volta para onde a pessoa estava", () => {
+    expect(html).toMatch(/Tentar de novo/);
+    expect(html).toMatch(/method: 'HEAD', cache: 'no-store'/);
+    expect(html).toMatch(/addEventListener\('online'/);
+    expect(html).toMatch(/get\('de'\)/);
+  });
+
+  test("sem 'verificando a conexão' piscando (pedido de 22/09)", () => {
+    expect(html).not.toMatch(/Verificando/);
+  });
+});
+
+describe("Fase 2: nova versão, iPhone instalado e medição", () => {
+  test("GlobalOverlays monta a barra de nova versão e a folha de impressão do iPhone", () => {
+    const g = ler("components", "GlobalOverlays.tsx");
+    expect(g).toMatch(/<NovaVersaoBanner \/>/);
+    expect(g).toMatch(/<ImpressaoNoIphoneSheet \/>/);
+    const layout = ler("app", "(tabs)", "_layout.tsx");
+    expect((layout.match(/<GlobalOverlays \/>/g) || []).length).toBeGreaterThanOrEqual(2);
+  });
+
+  test("openPrintWindow desvia para o aviso no iPhone instalado, antes de abrir janela", () => {
+    const p = ler("services", "printWindow.ts");
+    expect(p).toMatch(/if \(ehIphoneInstalado\(\)\) \{ avisarImpressaoNoIphone\(\); return "iphone_app"; \}/);
+    expect(p.indexOf("ehIphoneInstalado()")).toBeLessThan(p.indexOf('window.open("", "_blank", features)'));
+    expect(p).toMatch(/"iphone_app"/);
+  });
+
+  test("etiquetas (PrintLabels) fazem o mesmo desvio", () => {
+    const l = ler("components", "PrintLabels.tsx");
+    expect(l).toMatch(/if \(ehIphoneInstalado\(\)\) \{ avisarImpressaoNoIphone\(\); return; \}/);
+    expect(l.indexOf("ehIphoneInstalado()")).toBeLessThan(l.indexOf('window.open(url, "_blank")'));
+  });
+
+  test("download: os quatro pontos antigos passaram a usar utils/salvarArquivo", () => {
+    const arquivos = [
+      ["utils", "csv.ts"],
+      ["components", "screens", "financeiro", "v2", "abcShared.tsx"],
+      ["components", "karate", "saude-rede", "shared.tsx"],
+      ["components", "studio", "baixarArquivo.ts"],
+    ];
+    for (const a of arquivos) {
+      const src = ler(...a);
+      expect(src).toMatch(/from "@\/utils\/salvarArquivo"/);
+      expect(src).not.toMatch(/createObjectURL/);
+    }
+  });
+
+  test("api.ts manda X-Aura-App só quando instalado", () => {
+    const api = ler("services", "api.ts");
+    expect(api).toMatch(/if \(estaInstalado\(\)\) \(headers as Record<string, string>\)\["X-Aura-App"\] = "standalone";/);
   });
 });
 

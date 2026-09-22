@@ -15,6 +15,7 @@ import {
 } from "@/constants/karateTheme";
 import { useAuthStore } from "@/stores/auth";
 import { karateNetworkHealthApi } from "@/services/karateNetworkHealthApi";
+import { salvarBlob, salvarTexto } from "@/utils/salvarArquivo";
 
 // ── helpers ───────────────────────────────────────────────────
 
@@ -86,15 +87,9 @@ export function exportRowsToCsv(
     ...rows.map((r) => r.map(escape).join(",")),
   ];
   const csv = BOM + lines.join("\r\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename.endsWith(".csv") ? filename : `${filename}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // 22/09/2026 (PWA Fase 2): utils/salvarArquivo.ts decide entre download e
+  // folha de compartilhar (iPhone com a Aura instalada).
+  void salvarTexto(csv, filename.endsWith(".csv") ? filename : `${filename}.csv`, "text/csv;charset=utf-8;");
 }
 
 // ── CSV export server-side (download autenticado) ───────────────
@@ -114,14 +109,7 @@ export async function downloadCsv(federationId: string, indicator: string): Prom
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) throw new Error(`Erro ${res.status}`);
     const blob = await res.blob();
-    const blobUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = blobUrl;
-    a.download = `saude-rede_${indicator}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(blobUrl);
+    await salvarBlob(blob, `saude-rede_${indicator}.csv`);
   } catch (err) {
     console.error("[saúde-rede] downloadCsv error:", err);
   }

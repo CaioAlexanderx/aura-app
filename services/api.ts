@@ -3,6 +3,11 @@
 // Cada domínio de API fica em seu próprio arquivo em services/.
 // Os re-exports abaixo mantêm compatibilidade com imports existentes de "@/services/api".
 
+// 22/09/2026 (PWA Fase 2): o app instalado se identifica em toda requisicao
+// (cabecalho X-Aura-App). Sem react-native em instalarApp.ts, este import
+// e seguro aqui, que e carregado antes de tudo.
+import { estaInstalado } from "@/services/instalarApp";
+
 var BASE_URL =
   (typeof process !== "undefined" && process.env?.EXPO_PUBLIC_API_URL) ||
   "https://aura-backend-production-f805.up.railway.app/api/v1";
@@ -83,6 +88,13 @@ export async function request<T>(path: string, opts: RequestOpts = {}): Promise<
     // A3-FE: spread custom headers first so Authorization always overrides them.
     var headers: HeadersInit = { "Content-Type": "application/json", ...(opts.headers || {}) };
     if (token) headers["Authorization"] = "Bearer " + token;
+    // 22/09/2026 (PWA Fase 2): quem abriu pelo icone do app instalado avisa o
+    // backend, que grava no login (refresh_tokens.app_mode, migration 349)
+    // para medir o uso pelo app. So vai quando e standalone: no navegador
+    // comum nao ha cabecalho extra nem preflight a mais. DEPENDE do backend
+    // aceitar X-Aura-App em allowedHeaders (src/app.js) -- sem isso, o
+    // preflight recusa e nada funciona pelo app. Backend primeiro.
+    if (estaInstalado()) (headers as Record<string, string>)["X-Aura-App"] = "standalone";
 
     try {
       var controller = typeof AbortController !== "undefined" ? new AbortController() : null;

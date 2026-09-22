@@ -12,6 +12,7 @@
 // rota publica.
 // ============================================================
 import { Linking, Platform } from "react-native";
+import { salvarBlob } from "@/utils/salvarArquivo";
 
 /** Extensao a partir da URL (sem query). Cai em "png" quando nao da para saber. */
 export function extensaoDaUrl(url: string): string {
@@ -41,14 +42,10 @@ export async function baixarArquivo(url: string, nome: string): Promise<"baixado
     const r = await fetch(url, { mode: "cors" });
     if (!r.ok) throw new Error(String(r.status));
     const blob = await r.blob();
-    const objeto = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = objeto;
-    a.download = nome;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(objeto), 4000);
+    // 22/09/2026 (PWA Fase 2): no iPhone com a Aura instalada vira a folha de
+    // compartilhar (Salvar em Arquivos, WhatsApp); no resto, o download de
+    // sempre. Quem fechou a folha nao quer a aba por cima: conta como feito.
+    await salvarBlob(blob, nome);
     return "baixado";
   } catch {
     window.open(url, "_blank", "noopener");

@@ -11,6 +11,7 @@
 // ============================================================
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
+import { salvarBlob } from "@/utils/salvarArquivo";
 
 export const ABC_COLORS = ["#10b981", "#fbbf24", "#6b7280"];
 
@@ -75,11 +76,9 @@ export function downloadCsv(filename: string, headers: string[], rows: string[][
   if (Platform.OS !== "web" || typeof document === "undefined") return;
   const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
   const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename; document.body.appendChild(a);
-  a.click(); document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  // 22/09/2026 (PWA Fase 2): no iPhone com a Aura instalada vira a folha de
+  // compartilhar; no resto, o download de sempre (utils/salvarArquivo.ts).
+  void salvarBlob(blob, filename);
 }
 
 type PaginatorProps = {

@@ -29,12 +29,18 @@
 // depois de um await) — o window.open acontece antes do primeiro await.
 // ============================================================
 import { Platform } from "react-native";
+import { ehIphoneInstalado } from "@/services/instalarApp";
+import { avisarImpressaoNoIphone } from "@/components/ImpressaoNoIphone";
 
 export type PrintFetchResult =
   | { ok: true; html?: string; url?: string }
   | { ok: false; error?: string };
 
-export type PrintOutcome = "ok" | "blocked" | "error";
+// 22/09/2026 (PWA Fase 2): "iphone_app" = iPhone com a Aura instalada. Ali a
+// janela de impressão é uma janela morta (sem visualização de impressão), e
+// abrir uma para nada é pior que explicar. O aviso já foi mostrado por
+// avisarImpressaoNoIphone(); quem chama não precisa de toast.
+export type PrintOutcome = "ok" | "blocked" | "error" | "iphone_app";
 
 const PLACEHOLDER = `<!doctype html><html><head><meta charset="utf-8"><title>Imprimindo…</title>
 <style>body{font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:90vh;color:#666;font-size:15px}</style>
@@ -55,6 +61,7 @@ export async function openPrintWindow(
   features: string = "width=420,height=700,scrollbars=yes",
 ): Promise<PrintOutcome> {
   if (Platform.OS !== "web" || typeof window === "undefined") return "error";
+  if (ehIphoneInstalado()) { avisarImpressaoNoIphone(); return "iphone_app"; }
 
   // SÍNCRONO — ainda dentro da user activation do clique.
   const win = window.open("", "_blank", features);
