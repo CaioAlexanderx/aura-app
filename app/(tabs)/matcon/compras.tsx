@@ -10,6 +10,10 @@
 // (docs/mockups/matcon-m4-profundidade.html #compras/#pedido,
 // docs/CONTRACT_MATCON.md §M4 Compras).
 //
+// "Esteira" e "XML" são nomes NOSSOS; na tela o lojista lê "falta
+// comprar", "pedido enviado", "nota do fornecedor entrou" (revisão de
+// texto de 22/09/2026 — §4b regra 4, zero jargão).
+//
 // Mockup aprovado: docs/mockups/matcon-m4-profundidade.html #compras e
 // #pedido. Esteira, card e estado vazio vêm de
 // components/matcon/EsteiraMatcon.tsx (mesma peça das outras duas); as
@@ -24,8 +28,8 @@
 //   · Multi-CNPJ (armadilha 2): compra é de UMA loja (estoque, pedido),
 //     então <RequireCompanyScope> força escolher a empresa antes de
 //     renderizar.
-//   · A estação Sugestão é a lista de purchaseSuggestions AGRUPADA por
-//     fornecedor (comprasUtil.agruparPorFornecedor); "Pedido enviado" e
+//   · A estação "Falta comprar" é a lista de purchaseSuggestions AGRUPADA
+//     por fornecedor (comprasUtil.agruparPorFornecedor); "Pedido enviado" e
 //     "Recebido" vêm de listPurchaseOrders. Nada é comprado sozinho: a
 //     lista sugere, "Montar pedido" cria o rascunho, o dono aprova as
 //     quantidades no pedido antes de enviar.
@@ -151,7 +155,7 @@ function MatconComprasScreen() {
 
   const estacoes: EsteiraEstacao[] = [
     {
-      key: "sugestao", label: "Sugestão",
+      key: "sugestao", label: "Falta comprar",
       count: resumoSugestao ? resumoSugestao.items_below_min : null,
       money: resumoSugestao ? fmtMoneyCurto(resumoSugestao.total_est_cost) : null,
       tone: "violet", active: estacao === "sugestao", onPress: () => setEstacao("sugestao"),
@@ -201,7 +205,7 @@ function MatconComprasScreen() {
         <View style={st.gate} testID="matcon-compras-desligado">
           <View style={st.gateIcon}><Icon name="lock" size={20} color={Colors.violet3} /></View>
           <Text style={st.gateTitle}>Ligue &quot;Materiais de construção&quot; em Configurações › Caixa</Text>
-          <Text style={st.gateDesc}>A esteira de compras só existe para lojas com o módulo ativo.</Text>
+          <Text style={st.gateDesc}>As compras só aparecem para lojas com o módulo ligado.</Text>
           <Pressable onPress={() => router.push("/configuracoes" as any)} style={st.gateBtn} testID="matcon-compras-ir-config">
             <Text style={st.gateBtnText}>Abrir Configurações</Text>
             <Icon name="chevron_right" size={14} color="#fff" />
@@ -222,7 +226,7 @@ function MatconComprasScreen() {
         title="Compras"
         live
         subtitle={
-          !resumoSugestao || !resumoPedidos ? "Carregando a esteira…" : (
+          !resumoSugestao || !resumoPedidos ? "Carregando…" : (
             <Text>
               {fmtMoneyCurto(resumoSugestao.total_est_cost)} de material faltando para a loja voltar ao mínimo ·{" "}
               <Text style={{ color: itensAbaixoDoMinimo > 0 ? Colors.amber : Colors.ink3, fontWeight: itensAbaixoDoMinimo > 0 ? "700" : "400" }}>
@@ -287,7 +291,7 @@ function MatconComprasScreen() {
               <EsteiraVazia
                 testID="matcon-compras-enviado-vazio"
                 titulo="Nenhum pedido enviado."
-                frase={<Text>Toque em <EsteiraVaziaDestaque>Montar pedido</EsteiraVaziaDestaque> numa sugestão para começar um.</Text>}
+                frase={<Text>Toque em <EsteiraVaziaDestaque>Montar pedido</EsteiraVaziaDestaque> num item que falta comprar para começar um.</Text>}
               />
             ) : (
               <View style={{ gap: 8 }} testID="matcon-lista-enviado">
@@ -303,7 +307,7 @@ function MatconComprasScreen() {
               <EsteiraVazia
                 testID="matcon-compras-recebido-vazio"
                 titulo="Nada recebido nos últimos 7 dias."
-                frase="Quando o XML do fornecedor entrar no estoque, o pedido fecha sozinho e aparece aqui."
+                frase="Quando a nota do fornecedor der entrada no estoque, o pedido fecha sozinho e aparece aqui."
               />
             ) : (
               <View style={{ gap: 8 }} testID="matcon-lista-recebido">
@@ -329,7 +333,7 @@ function MatconComprasScreen() {
   );
 }
 
-// ── Card da sugestão, por fornecedor ────────────────────────
+// ── Card da sugestão, por fornecedor ────────────────────────────────
 function FornecedorCard({ grupo, expandido, onVerItens, onMontarPedido, busy }: {
   grupo: FornecedorSugestoes;
   expandido: boolean;
@@ -343,7 +347,7 @@ function FornecedorCard({ grupo, expandido, onVerItens, onMontarPedido, busy }: 
   const acabando = grupo.min_days_to_stockout !== null && grupo.min_days_to_stockout <= 3;
   const nItens = grupo.items.length;
 
-  const meta = ["fornecedor da última nota destes itens", grupo.supplier_phone || ""].filter(Boolean).join(" · ");
+  const meta = ["quem vendeu esses itens na última nota", grupo.supplier_phone || ""].filter(Boolean).join(" · ");
 
   return (
     <EsteiraCard
@@ -463,14 +467,14 @@ function PedidoRecebidoCard({ order }: { order: PurchaseOrder }) {
       <View style={st.okline}>
         <Text style={st.okS}>✓</Text>
         <Text style={st.okTexto}>
-          XML importado em {fmtDiaMesDeTimestamp(order.received_at)} · {conferidos}
+          Nota do fornecedor entrou em {fmtDiaMesDeTimestamp(order.received_at)} · {conferidos}
         </Text>
       </View>
     </EsteiraCard>
   );
 }
 
-// ── Sheet do pedido (M4 #pedido) ─────────────────────────────
+// ── Sheet do pedido (M4 #pedido) ─────────────────────────────────
 function PedidoSheet({ order, companyId, nomeDaLoja, onClose, onSalvo }: {
   order: PurchaseOrder | null;
   companyId: string | null;
@@ -560,7 +564,7 @@ function PedidoSheet({ order, companyId, nomeDaLoja, onClose, onSalvo }: {
         <View style={st.sheetHeader}>
           <View>
             <Text style={st.sheetTitle}>Pedido {order ? `#${order.number}` : ""} · {order?.supplier_name || "Fornecedor não identificado"}</Text>
-            <Text style={st.sheetSub}>Quantidade editável item a item</Text>
+            <Text style={st.sheetSub}>Ajuste a quantidade de cada item antes de mandar</Text>
           </View>
           <Pressable onPress={onClose} style={st.sheetClose} testID="matcon-pedido-fechar">
             <Icon name="x" size={16} color={Colors.ink3} />
@@ -616,7 +620,7 @@ function PedidoSheet({ order, companyId, nomeDaLoja, onClose, onSalvo }: {
               )}
             </Pressable>
           </View>
-          <Text style={st.sheetNota}>&quot;Marcar como enviado&quot; é para quem prefere ligar — o pedido sai da Sugestão e vai para &quot;Pedido enviado&quot; do mesmo jeito.</Text>
+          <Text style={st.sheetNota}>&quot;Marcar como enviado&quot; é para quem prefere ligar — o pedido sai de &quot;Falta comprar&quot; e vai para &quot;Pedido enviado&quot; do mesmo jeito.</Text>
         </ScrollView>
       </>
     </ResponsiveSheet>

@@ -7,6 +7,11 @@
 // classes .frase/.edit/.sw). Molde de código: app/(tabs)/otica/config.tsx
 // (header, dirty/saving, toast, estilos Colors/Fonts).
 //
+// 22/09/2026 (revisão de texto): o subtítulo e a nota de rodapé falavam
+// com a gente ("sem jargão de ERP", "fator de conversão"), não com o dono
+// da loja. Agora só dizem o que ele precisa saber. O clube chama "clube do
+// pedreiro" aqui e em todo o Matcon.
+//
 // Fonte única de defaults: constants/matcon.ts (readMatconSettings). O PUT
 // de pdv_settings faz merge parcial (services/authApi.ts) — salvamos só as
 // chaves que mudaram.
@@ -170,7 +175,7 @@ export default function MatconConfigScreen() {
       qc.invalidateQueries({ queryKey: ["pdv-settings", company.id] });
       invalidate();
       setDirty(false);
-      toast.success("Configurações do Matcon salvas");
+      toast.success("Configurações salvas");
     } catch (e: any) {
       toast.error(e?.data?.error || "Não deu para salvar");
     } finally {
@@ -185,13 +190,13 @@ export default function MatconConfigScreen() {
         <Text style={st.backText}>Voltar</Text>
       </Pressable>
       <Text style={st.pageTitle}>Materiais de construção<Text style={{ color: Colors.violet }}>.</Text></Text>
-      <Text style={st.pageSubtitle}>Unidades, perda por quebra, embalagem fechada, entrega e orçamento — cinco ajustes, sem jargão de ERP.</Text>
+      <Text style={st.pageSubtitle}>Unidades, perda por quebra, embalagem fechada, entrega, orçamento e clube do pedreiro. Cada ajuste é uma frase: mexa só no número.</Text>
 
       {!enabled ? (
         <View style={st.gate}>
           <View style={st.gateIcon}><Icon name="lock" size={20} color={Colors.violet3} /></View>
           <Text style={st.gateTitle}>Ligue &quot;Materiais de construção&quot; em Configurações › Caixa</Text>
-          <Text style={st.gateDesc}>Essas configurações só valem depois que o módulo estiver ativo para esta loja.</Text>
+          <Text style={st.gateDesc}>Essas configurações só valem depois que o módulo estiver ligado para esta loja.</Text>
           <Pressable onPress={() => router.push("/configuracoes" as any)} style={st.gateBtn} testID="matcon-cfg-ir-config">
             <Text style={st.gateBtnText}>Abrir Configurações</Text>
             <Icon name="chevron_right" size={14} color="#fff" />
@@ -323,10 +328,10 @@ export default function MatconConfigScreen() {
 
             <View style={st.divider} />
 
-            {/* ── Clube do profissional (M3) ── */}
+            {/* ── Clube do pedreiro (M3) ── */}
             <View style={st.frase}>
               <Text style={st.fraseText}>
-                Tenho clube do profissional{" "}
+                Tenho clube do pedreiro{" "}
                 <Switch
                   value={draft.clubEnabled}
                   onValueChange={(v) => set({ clubEnabled: v })}
@@ -334,7 +339,7 @@ export default function MatconConfigScreen() {
                   thumbColor={draft.clubEnabled ? Colors.violet : Colors.ink3}
                   testID="matcon-cfg-clube"
                 />{" "}
-                e ele vale para pedreiro, pintor, eletricista e quem mais eu marcar.
+                e ele vale também para pintor, eletricista, arquiteto e quem mais eu colocar nele.
               </Text>
             </View>
 
@@ -344,7 +349,7 @@ export default function MatconConfigScreen() {
 
                 <View style={st.frase}>
                   <Text style={st.fraseText}>
-                    A cada R$ 100 em compras indicadas, o profissional ganha{" "}
+                    A cada R$ 100 em compras indicadas, o pedreiro ganha{" "}
                     <TextInput
                       style={st.editSmall}
                       value={draft.pointsPer100}
@@ -385,7 +390,7 @@ export default function MatconConfigScreen() {
             )}
           </View>
 
-          <Text style={st.note}>Sem "fator de conversão", sem "unidade de compra". Se precisasse de um manual, estaria errado.</Text>
+          <Text style={st.note}>Mudou de ideia? É só voltar aqui e trocar o número. Vale a partir da próxima venda.</Text>
 
           <Pressable onPress={save} style={[st.saveBtn, (!dirty || saving) && { opacity: 0.6 }]} disabled={!dirty || saving} testID="matcon-cfg-salvar">
             {saving ? <Text style={st.saveText}>Salvando…</Text> : <Text style={st.saveText}>{dirty ? "Salvar configurações" : "Tudo salvo"}</Text>}
