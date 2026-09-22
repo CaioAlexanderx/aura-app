@@ -65,6 +65,18 @@ O teto de 999 (`maxLength={3}`) vira `maxLength={6}` **só com o toggle on** (1.
 
 ---
 
+## Status (atualizado 22/09/2026)
+
+| Fase | Estado | PR |
+|---|---|---|
+| M0 · Fundação gated | ✅ mergeado | [#927](https://github.com/CaioAlexanderx/aura-app/pull/927) |
+| M1 · Orçamento → Pedido → Entrega | ✅ mergeado | [#929](https://github.com/CaioAlexanderx/aura-app/pull/929) |
+| M3 · Clube do Profissional + calculadora | 🎨 mockup em produção | — |
+| M2 · Fiscal do Simples | 📋 | — |
+| M4 · Profundidade | 📋 só após 5 pilotos | — |
+
+Backend: nenhuma das migrations de `docs/CONTRACT_MATCON.md` foi aplicada ainda. Com o toggle desligado (default) nada muda para nenhum cliente; ligado, o módulo só opera de verdade depois do backend.
+
 ## 3. Faseamento revisado — cada fase é um PR, no tamanho do PR da Ótica
 
 ### M0 · Fundação gated — "vender piso por m² e tijolo por milheiro sem errar o estoque"
