@@ -40,15 +40,21 @@ export const MATCON_SETTINGS_DEFAULTS: MatconSettings = {
 // Lê as configurações do Matcon de um pdv_settings parcial, aplicando os
 // defaults acima. `matcon_enabled` só é true com `=== true` (mesma regra do
 // os_enabled/otica_enabled no _layout).
+// Numero valido = number finito (typeof NaN === "number", entao `typeof`
+// sozinho deixaria NaN passar -- achado do teste de matconSettings).
+function num(v: unknown, fallback: number): number {
+  return typeof v === "number" && isFinite(v) ? v : fallback;
+}
+
 export function readMatconSettings(pdv: Partial<MatconSettings> | null | undefined): MatconSettings {
   var p = pdv || {};
   return {
     matcon_enabled: p.matcon_enabled === true,
     matcon_units: Array.isArray(p.matcon_units) && p.matcon_units.length > 0 ? p.matcon_units : MATCON_SETTINGS_DEFAULTS.matcon_units,
-    matcon_default_waste_pct: typeof p.matcon_default_waste_pct === "number" ? p.matcon_default_waste_pct : MATCON_SETTINGS_DEFAULTS.matcon_default_waste_pct,
+    matcon_default_waste_pct: num(p.matcon_default_waste_pct, MATCON_SETTINGS_DEFAULTS.matcon_default_waste_pct),
     matcon_round_to_package: p.matcon_round_to_package === undefined ? MATCON_SETTINGS_DEFAULTS.matcon_round_to_package : p.matcon_round_to_package === true,
-    matcon_default_delivery_days: typeof p.matcon_default_delivery_days === "number" ? p.matcon_default_delivery_days : MATCON_SETTINGS_DEFAULTS.matcon_default_delivery_days,
-    matcon_quote_valid_days: typeof p.matcon_quote_valid_days === "number" ? p.matcon_quote_valid_days : MATCON_SETTINGS_DEFAULTS.matcon_quote_valid_days,
-    matcon_quote_warn_days: typeof p.matcon_quote_warn_days === "number" ? p.matcon_quote_warn_days : MATCON_SETTINGS_DEFAULTS.matcon_quote_warn_days,
+    matcon_default_delivery_days: num(p.matcon_default_delivery_days, MATCON_SETTINGS_DEFAULTS.matcon_default_delivery_days),
+    matcon_quote_valid_days: num(p.matcon_quote_valid_days, MATCON_SETTINGS_DEFAULTS.matcon_quote_valid_days),
+    matcon_quote_warn_days: num(p.matcon_quote_warn_days, MATCON_SETTINGS_DEFAULTS.matcon_quote_warn_days),
   };
 }
