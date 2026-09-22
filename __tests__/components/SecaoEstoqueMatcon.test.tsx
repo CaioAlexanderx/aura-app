@@ -1,13 +1,19 @@
 // ============================================================
-// Matcon M0 (22/09/2026) — contrato de zero impacto em SecaoEstoque.
+// SecaoEstoque — contrato de zero impacto e o perfil Matcon.
 //
-// Toggle off: renderiza exatamente os 9 chips de UNITS de hoje, sem o
-// grupo "Materiais" e sem a frase "Compro por" (docs/matcon-faseamento-
-// po-ux.md §1 e §3, regra 3 do CLAUDE.md).
-// Toggle on: o grupo "Materiais" mostra as unidades habilitadas na
-// config (matcon_units, na ordem dela) + o chip "+ …" com o resto de
-// MATCON_UNITS; escolher uma unidade de material revela a frase "Compro
-// por" (a conversão de compra só faz sentido pra unidade de material).
+// 22/09/2026 (Matcon M0): o grupo "Materiais" e a frase "Compro por"
+// nasceram aqui. No mesmo dia, o cadastro por perfil
+// (docs/mockups/matcon-cadastro-produto.html) levou a unidade e a compra
+// para o card "Como você vende" (SecaoPreco — ver SecaoPrecoMatcon.test)
+// e deixou no Estoque só o controle:
+//
+//   - sem perfil (loja sem Matcon): os 9 chips de UNITS, "Quantidade
+//     única / Por cor e tamanho" e as duas caixas de hoje. Nada de lote,
+//     nada de "Compro por";
+//   - perfil Matcon: sem chips de unidade, a frase "Tenho … em estoque",
+//     vírgula só em unidade fracionada, e a unidade decide a 2ª opção:
+//     lote (m²/m³ com lote ligado) OU "Por cor e medida" — nunca as duas;
+//   - lote desligado: a opção nem aparece (nada desabilitado).
 //
 // Padrão de mocks/renderização: __tests__/components/CustomerRowBotoes.test.tsx.
 // ============================================================
@@ -17,25 +23,35 @@ import renderer, { act } from "react-test-renderer";
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
 
 import { SecaoEstoque } from "@/components/screens/estoque/item-form/SecaoEstoque";
+import { PERFIL_MATCON } from "@/components/screens/estoque/item-form/perfis";
+import { novaLinhaDeLote, type LinhaDeLote, type StockMode } from "@/components/screens/estoque/item-form/types";
 import { UNITS } from "@/components/screens/estoque/types";
 
-// Wrapper controlado: SecaoEstoque é 100% controlado por props, então o
-// teste precisa de um dono de estado pra simular a lojista clicando num
-// chip (igual ao ItemFormModal faria).
-function Harness({ matconEnabled, matconUnits }: { matconEnabled?: boolean; matconUnits?: string[] }) {
-  const [unidade, setUnidade] = useState("un");
-  const [estoque, setEstoque] = useState("");
+type HarnessProps = {
+  matcon?: boolean;
+  unidade?: string;
+  lotesDisponiveis?: boolean;
+  modo?: StockMode;
+  lotesIniciais?: LinhaDeLote[];
+  purchaseFactor?: string;
+  estoqueInicial?: string;
+};
+
+// SecaoEstoque é controlada por props; o Harness faz o papel do modal.
+function Harness(h: HarnessProps) {
+  const [unidade, setUnidade] = useState(h.unidade || "un");
+  const [stockMode, setStockMode] = useState<StockMode>(h.modo || "single");
+  const [estoque, setEstoque] = useState(h.estoqueInicial || "");
   const [minimo, setMinimo] = useState("");
-  const [purchaseUnit, setPurchaseUnit] = useState<string | null>(null);
-  const [purchaseFactor, setPurchaseFactor] = useState("");
+  const [lotes, setLotes] = useState<LinhaDeLote[]>(h.lotesIniciais || []);
   return (
     <SecaoEstoque
       narrow={false}
       modoEdicao={false}
       unidade={unidade}
       onUnidade={setUnidade}
-      stockMode="single"
-      onStockMode={() => {}}
+      stockMode={stockMode}
+      onStockMode={(v) => { if (v === "lots" && lotes.length === 0) setLotes([novaLinhaDeLote()]); setStockMode(v); }}
       estoque={estoque}
       onEstoque={setEstoque}
       minimo={minimo}
@@ -49,12 +65,12 @@ function Harness({ matconEnabled, matconUnits }: { matconEnabled?: boolean; matc
       barras={{}}
       onBarra={() => {}}
       onSubmit={() => {}}
-      matconEnabled={matconEnabled}
-      matconUnits={matconUnits}
-      purchaseUnit={purchaseUnit}
-      onPurchaseUnit={setPurchaseUnit}
-      purchaseFactor={purchaseFactor}
-      onPurchaseFactor={setPurchaseFactor}
+      perfil={h.matcon ? PERFIL_MATCON : undefined}
+      purchaseUnit={null}
+      purchaseFactor={h.purchaseFactor}
+      lotesDisponiveis={h.lotesDisponiveis}
+      lotes={lotes}
+      onLotes={setLotes}
     />
   );
 }
@@ -63,62 +79,126 @@ function texto(tree: any): string {
   return JSON.stringify(tree.toJSON());
 }
 
-function chip(tree: any, label: string): any {
+function porLabel(tree: any, label: string): any {
   return tree.root.findAllByProps({ accessibilityLabel: label })[0];
 }
 
-describe("SecaoEstoque — Matcon M0: contrato de zero impacto", () => {
-  it("toggle off: só os 9 chips de UNITS, sem grupo Materiais nem frase Compro por", () => {
+describe("SecaoEstoque — sem perfil (loja sem Matcon): a seção de hoje", () => {
+  it("9 chips de UNITS, 'Por cor e tamanho', sem lote nem 'Compro por'", () => {
     let tree: any;
     act(() => { tree = renderer.create(<Harness />); });
 
-    UNITS.forEach((u) => expect(chip(tree, u)).toBeTruthy());
-    expect(texto(tree)).not.toContain("Materiais");
-    expect(texto(tree)).not.toContain("Compro por");
+    UNITS.forEach((u) => expect(porLabel(tree, u)).toBeTruthy());
+    const t = texto(tree);
+    expect(t).toContain("Unidade de venda");
+    expect(t).toContain("Por cor e tamanho");
+    expect(t).toContain("Quantidade atual");
+    expect(t).not.toContain("Materiais");
+    expect(t).not.toContain("Compro por");
+    expect(t).not.toContain("lote");
+    expect(t).not.toContain("medida");
+    expect(t).not.toContain("Tenho");
 
     tree.unmount();
   });
 
-  it("toggle off explícito (matconEnabled=false) tem o mesmo resultado", () => {
+  it("lotesDisponiveis sem o perfil não muda nada", () => {
     let tree: any;
-    act(() => { tree = renderer.create(<Harness matconEnabled={false} />); });
+    act(() => { tree = renderer.create(<Harness unidade="m²" lotesDisponiveis />); });
+    expect(texto(tree)).not.toContain("Por lote e tonalidade");
+    tree.unmount();
+  });
+});
 
-    expect(texto(tree)).not.toContain("Materiais");
-    expect(texto(tree)).not.toContain("Compro por");
+describe("SecaoEstoque — perfil Matcon", () => {
+  it("sem chips de unidade (moraram no 'Vendo por') e com a frase 'Tenho … em estoque'", () => {
+    let tree: any;
+    act(() => { tree = renderer.create(<Harness matcon unidade="sc" />); });
+
+    const t = texto(tree);
+    expect(t).not.toContain("Unidade de venda");
+    expect(t).toContain("Tenho");
+    expect(t).toContain("sc em estoque");
+    expect(t).toContain("Por cor e medida");
+    expect(t).not.toContain("Por lote e tonalidade");
 
     tree.unmount();
   });
 
-  it("toggle on: grupo Materiais mostra m² e sc (matcon_units) + chip '+'; ainda sem 'Compro por'", () => {
+  it("saco é inteiro: o campo não aceita vírgula; m² aceita", () => {
+    let tree: any;
+    act(() => { tree = renderer.create(<Harness matcon unidade="sc" />); });
+    act(() => { porLabel(tree, "Quanto tenho em estoque").props.onChangeText("12,5"); });
+    expect(porLabel(tree, "Quanto tenho em estoque").props.value).toBe("125");
+    tree.unmount();
+
+    act(() => { tree = renderer.create(<Harness matcon unidade="m²" />); });
+    act(() => { porLabel(tree, "Quanto tenho em estoque").props.onChangeText("12,5"); });
+    expect(porLabel(tree, "Quanto tenho em estoque").props.value).toBe("12,5");
+    tree.unmount();
+  });
+
+  it("'(≈ 64 caixas)' ao lado do estoque com a frase 'Compro por'", () => {
     let tree: any;
     act(() => {
-      tree = renderer.create(<Harness matconEnabled matconUnits={["m²", "sc"]} />);
+      tree = renderer.create(<Harness matcon unidade="m²" purchaseFactor="2,32" estoqueInicial="148,48" />);
     });
+    expect(texto(tree)).toContain("(≈ 64 caixas)");
+    tree.unmount();
+  });
 
-    expect(texto(tree)).toContain("Materiais");
-    expect(chip(tree, "m²")).toBeTruthy();
-    expect(chip(tree, "sc")).toBeTruthy();
+  it("m² com lote ligado: 'Por lote e tonalidade' no lugar de 'Por cor e medida'", () => {
+    let tree: any;
+    act(() => { tree = renderer.create(<Harness matcon unidade="m²" lotesDisponiveis />); });
 
-    const chipMais = tree.root.findAll(
-      (node: any) => typeof node.props.accessibilityLabel === "string" && node.props.accessibilityLabel.indexOf("+ ") === 0
-    );
-    expect(chipMais.length).toBeGreaterThan(0);
-
-    // Unidade inicial é "un": a frase de conversão ainda não aparece.
-    expect(texto(tree)).not.toContain("Compro por");
+    const t = texto(tree);
+    expect(t).toContain("Por lote e tonalidade");
+    expect(t).not.toContain("Por cor e medida");
 
     tree.unmount();
   });
 
-  it("toggle on: escolher m² no grupo Materiais mostra a frase 'Compro por'", () => {
+  it("lote desligado: a opção nem aparece (nada desabilitado)", () => {
     let tree: any;
-    act(() => {
-      tree = renderer.create(<Harness matconEnabled matconUnits={["m²", "sc"]} />);
-    });
+    act(() => { tree = renderer.create(<Harness matcon unidade="m²" lotesDisponiveis={false} />); });
 
-    act(() => { chip(tree, "m²").props.onPress(); });
+    const t = texto(tree);
+    expect(t).not.toContain("lote");
+    expect(t).toContain("Por cor e medida");
 
-    expect(texto(tree)).toContain("Compro por");
+    tree.unmount();
+  });
+
+  it("por lote: tabela com as pilhas, total e caixas; '+ outro lote na prateleira'", () => {
+    let tree: any;
+    act(() => { tree = renderer.create(<Harness matcon unidade="m²" lotesDisponiveis purchaseFactor="2,32" />); });
+
+    act(() => { porLabel(tree, "Por lote e tonalidade").props.onPress(); });
+    act(() => { porLabel(tree, "Lote da linha 1").props.onChangeText("27B"); });
+    act(() => { porLabel(tree, "Quanto tenho na linha 1").props.onChangeText("95,12"); });
+    act(() => { porLabel(tree, "+ outro lote na prateleira").props.onPress(); });
+    act(() => { porLabel(tree, "Lote da linha 2").props.onChangeText("28A"); });
+    act(() => { porLabel(tree, "Quanto tenho na linha 2").props.onChangeText("53,36"); });
+
+    const t = texto(tree);
+    expect(t).toContain("Total 148,48 m² em 2 lotes");
+    expect(t).toContain("(= 64 caixas)");
+    expect(t).toContain("41 caixas");
+    expect(t).toContain("Me avise abaixo de");
+    expect(t).toContain("o lote entra sozinho");
+
+    tree.unmount();
+  });
+
+  it("'Por cor e medida' abre a grade com 'Medidas' e '+ Medida'", () => {
+    let tree: any;
+    act(() => { tree = renderer.create(<Harness matcon unidade="rolo" />); });
+    act(() => { porLabel(tree, "Por cor e medida").props.onPress(); });
+
+    const t = texto(tree);
+    expect(t).toContain("Medidas");
+    expect(porLabel(tree, "+ Medida")).toBeTruthy();
+    expect(t).not.toContain("Tamanhos");
 
     tree.unmount();
   });

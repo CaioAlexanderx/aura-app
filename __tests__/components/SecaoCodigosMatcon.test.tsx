@@ -1,15 +1,15 @@
 // ============================================================
-// SecaoCodigos — contrato de zero impacto do Matcon M2 (22/09/2026,
-// docs/CONTRACT_MATCON.md §M2).
+// SecaoCodigos / SecaoNotaFiscal — Matcon M2 (22/09/2026,
+// docs/CONTRACT_MATCON.md §M2) no cadastro por perfil
+// (docs/mockups/matcon-cadastro-produto.html, ponto ⑦).
 //
-// Sem matconOn a seção é IDÊNTICA à de hoje: nenhum texto de código
-// fiscal (CEST) nem da pergunta do imposto aparece. Com matconOn, a
-// pergunta e o campo CEST entram no mesmo desenho do NCM (selo, botão
-// Gerar, frase de sugestão) — regra 7 do CLAUDE.md (zero jargão: nunca
-// CSOSN/CST/ST/CFOP em texto de usuário).
+// Sem perfil, "Códigos e fiscal" é IDÊNTICA à de hoje: nenhum texto de
+// CEST nem da pergunta do imposto. Com o perfil Matcon o card se divide:
+// "Nota fiscal" (as três perguntas numeradas, selo "N de 3") e "Códigos"
+// (barras + código interno com exemplo tirado do nome). Zero jargão:
+// nunca CSOSN/CST/CFOP/SKU em texto de usuário.
 //
-// Padrão de mocks/renderização: __tests__/components/CustomerRowBotoes.test.tsx
-// (mesmo do SecaoEstoqueMatcon.test.tsx, que cobre a seção irmã).
+// Padrão de mocks/renderização: __tests__/components/CustomerRowBotoes.test.tsx.
 // ============================================================
 import React, { useState } from "react";
 import renderer, { act } from "react-test-renderer";
@@ -17,27 +17,42 @@ import { Text, Pressable } from "react-native";
 
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
 
-import { SecaoCodigos } from "@/components/screens/estoque/item-form/SecaoCodigos";
+import { SecaoCodigos, SecaoNotaFiscal } from "@/components/screens/estoque/item-form/SecaoCodigos";
+import { PERFIL_MATCON } from "@/components/screens/estoque/item-form/perfis";
 
-function Harness({ matconOn, ncmInicial = "" }: { matconOn?: boolean; ncmInicial?: string }) {
-  const [ncm, setNcm] = useState(ncmInicial);
-  const [cest, setCest] = useState("");
-  const [icmsStPaid, setIcmsStPaid] = useState<boolean | null>(null);
-  const [origem, setOrigem] = useState<number | null>(null);
+function Codigos({ matcon, nome = "Cimento CP-II 50kg" }: { matcon?: boolean; nome?: string }) {
+  const [ncm, setNcm] = useState("");
+  const [sku, setSku] = useState("");
   return (
     <SecaoCodigos
       type="product"
       emiteNota={false}
-      nome="Cimento CP-II 50kg"
+      nome={nome}
       preco={30}
       categoriaEscolhida={null}
       material=""
       cores={[]}
       tamanhos={[]}
-      sku="" onSku={() => {}}
+      sku={sku} onSku={setSku}
       barcode="" onBarcode={() => {}}
       ncm={ncm} onNcm={setNcm}
-      matconOn={matconOn}
+      perfil={matcon ? PERFIL_MATCON : undefined}
+    />
+  );
+}
+
+function Nota({ ncmInicial = "", emiteNota = false }: { ncmInicial?: string; emiteNota?: boolean }) {
+  const [ncm, setNcm] = useState(ncmInicial);
+  const [cest, setCest] = useState("");
+  const [icmsStPaid, setIcmsStPaid] = useState<boolean | null>(null);
+  const [origem, setOrigem] = useState<number | null>(null);
+  return (
+    <SecaoNotaFiscal
+      emiteNota={emiteNota}
+      nome="Cimento CP-II 50kg"
+      categoriaEscolhida={null}
+      material=""
+      ncm={ncm} onNcm={setNcm}
       cest={cest} onCest={setCest}
       icmsStPaid={icmsStPaid} onIcmsStPaid={setIcmsStPaid}
       origem={origem} onOrigem={setOrigem}
@@ -53,86 +68,108 @@ function porLabel(tree: any, label: string): any {
   return tree.root.findAllByProps({ accessibilityLabel: label })[0];
 }
 
-describe("SecaoCodigos — Matcon M2: contrato de zero impacto", () => {
-  test("sem matconOn: nenhum texto de código fiscal nem de imposto", () => {
+describe("SecaoCodigos — sem perfil: a seção de hoje", () => {
+  test("'Códigos e fiscal' com SKU e NCM; nenhum texto de CEST nem de imposto", () => {
     let tree: any;
-    act(() => { tree = renderer.create(<Harness />); });
+    act(() => { tree = renderer.create(<Codigos />); });
 
     const t = texto(tree);
-    expect(t).not.toContain("código fiscal");
+    expect(t).toContain("Códigos e fiscal");
+    expect(t).toContain("Código interno (SKU)");
+    expect(t).toContain("VES-001");
+    expect(t).not.toContain("CEST");
     expect(t).not.toContain("imposto");
     expect(t).not.toContain("Fabricado no Brasil");
 
     tree.unmount();
   });
+});
 
-  test("matconOn=false explícito tem o mesmo resultado", () => {
+describe("SecaoCodigos — perfil Matcon: 'Códigos' num card próprio", () => {
+  test("barras e código interno, sem SKU e sem NCM; exemplo nasce do nome", () => {
     let tree: any;
-    act(() => { tree = renderer.create(<Harness matconOn={false} />); });
+    act(() => { tree = renderer.create(<Codigos matcon nome="Porcelanato Bianco 60x60" />); });
 
     const t = texto(tree);
-    expect(t).not.toContain("código fiscal");
-    expect(t).not.toContain("imposto");
+    expect(t).toContain("Códigos");
+    expect(t).not.toContain("Códigos e fiscal");
+    expect(t).toContain("Código interno");
+    expect(t).toContain("o seu código de prateleira");
+    expect(t).toContain("POR-001");
+    expect(t).not.toContain("SKU");
+    expect(t).not.toContain("NCM");
+    expect(t).not.toContain("VES-001");
 
     tree.unmount();
   });
+});
 
-  test("com matconOn: mostra a pergunta e o campo CEST", () => {
+describe("SecaoNotaFiscal — as três perguntas", () => {
+  test("três perguntas numeradas, 'Fabricado no Brasil?' e selo '0 de 3'", () => {
     let tree: any;
-    act(() => { tree = renderer.create(<Harness matconOn />); });
+    act(() => { tree = renderer.create(<Nota />); });
 
     const t = texto(tree);
-    expect(t).toContain("Código fiscal do produto (CEST)");
-    expect(t).toContain("O imposto deste produto já veio recolhido na nota do fornecedor?");
+    expect(t).toContain("Nota fiscal");
+    expect(t).toContain("Código do produto na nota (NCM)");
+    expect(t).toContain("Código do imposto antecipado (CEST)");
+    expect(t).toContain("O imposto deste produto já veio pago na nota do fornecedor?");
     expect(t).toContain("Fabricado no Brasil?");
+    expect(t).toContain("0 de 3");
     expect(porLabel(tree, "Sim, já veio")).toBeTruthy();
     expect(porLabel(tree, "Não")).toBeTruthy();
 
     tree.unmount();
   });
 
-  test("zero jargão: nunca CSOSN/CST/ST/CFOP em texto de usuário", () => {
+  test("zero jargão: nunca CSOSN/CFOP/substituição tributária", () => {
     let tree: any;
-    act(() => { tree = renderer.create(<Harness matconOn />); });
+    act(() => { tree = renderer.create(<Nota emiteNota />); });
 
     const t = texto(tree).toUpperCase();
     expect(t).not.toContain("CSOSN");
     expect(t).not.toContain("CFOP");
     expect(t).not.toContain("SUBSTITUIÇÃO TRIBUTÁRIA");
+    expect(t).not.toContain("SKU");
 
     tree.unmount();
   });
 
-  test('"Gerar" do CEST com NCM 2523.29.10 (cimento) chama onCest("0500100")', () => {
+  test('"Gerar" do CEST com NCM de cimento preenche 0500100 e o selo sobe', () => {
     let tree: any;
-    act(() => { tree = renderer.create(<Harness matconOn ncmInicial="25232910" />); });
+    act(() => { tree = renderer.create(<Nota ncmInicial="25232910" />); });
+    expect(texto(tree)).toContain("1 de 3");
 
-    // Vários botões "Gerar" na tela (SKU, código de barras, NCM, CEST).
-    // O do NCM fica desabilitado ("Cimento" não sugere nada pelo nome —
-    // suggestNcm é o dicionário de roupas); o do CEST é o ÚLTIMO habilitado,
-    // porque suggestCest("25232910") acha a família cimento.
+    // O NCM ("Cimento" não sugere pelo nome) fica desabilitado; o do CEST é
+    // o último "Gerar" habilitado.
     const botoesGerar = tree.root.findAllByType(Pressable).filter((n: any) => {
       if (n.props.disabled) return false;
       const textos = n.findAllByType(Text).map((t: any) => t.props.children);
       return textos.includes("Gerar");
     });
     expect(botoesGerar.length).toBeGreaterThan(0);
+    act(() => { botoesGerar[botoesGerar.length - 1].props.onPress(); });
 
-    const botaoCest = botoesGerar[botoesGerar.length - 1];
-    act(() => { botaoCest.props.onPress(); });
-
-    expect(tree.toJSON()).toBeTruthy();
     expect(texto(tree)).toContain("0500100");
+    expect(texto(tree)).toContain("2 de 3");
+
+    act(() => { porLabel(tree, "Sim, já veio").props.onPress(); });
+    expect(texto(tree)).toContain("3 de 3 ✓");
 
     tree.unmount();
   });
 
-  test("sugestão de imposto recolhido aparece pra NCM de cimento sem resposta ainda", () => {
+  test("sugestão 'já veio pago' aparece para NCM de cimento sem resposta", () => {
     let tree: any;
-    act(() => { tree = renderer.create(<Harness matconOn ncmInicial="25232910" />); });
-
+    act(() => { tree = renderer.create(<Nota ncmInicial="25232910" />); });
     expect(texto(tree)).toContain("sugerimos");
+    tree.unmount();
+  });
 
+  test("quem emite nota vê o aviso das três respostas", () => {
+    let tree: any;
+    act(() => { tree = renderer.create(<Nota emiteNota />); });
+    expect(texto(tree)).toContain("Sem estas três respostas");
     tree.unmount();
   });
 });
