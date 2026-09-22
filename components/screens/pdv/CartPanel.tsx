@@ -206,7 +206,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     cpfState === "invalid" ? "rgba(239,68,68,0.55)" :
     Glass.lineBorderCard;
 
-  // ── Bloqueio do "Finalizar venda" em DOIS níveis (29/08/2026) ──────────
+  // ── Bloqueio do "Finalizar venda" em DOIS níveis (29/08/2026) ──────────────
   // 1) HARD (`disabled` de verdade no Pressable): estados em que apertar não
   //    tem resposta útil e ainda pode fazer estrago — venda em processamento
   //    (duplo POST), carrinho vazio, split que não fecha com o total. O
