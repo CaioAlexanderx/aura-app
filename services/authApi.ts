@@ -111,6 +111,12 @@ export type PdvSettings = {
   // 15/09/2026, migration 334 — semi-vertical Otica (receituario, OS de
   // laboratorio, sinal na abertura). Mesmo modelo de opt-in da OS.
   otica_enabled?: boolean;
+  // 22/09/2026 — semi-vertical Matcon (materiais de construcao). Mesmo
+  // modelo de opt-in da OS/Otica: desligado, o modulo inteiro (menu, telas,
+  // campos no carrinho) fica invisivel. Migration do backend ainda a
+  // definir -- ver docs/CONTRACT_MATCON.md (M0 depende dela antes do PR
+  // de front poder ser fechado; ate la o campo so existe no tipo).
+  matcon_enabled?: boolean;
 };
 
 export var authApi = {

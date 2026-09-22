@@ -30,6 +30,11 @@ const MODULE_GROUPS = [
       // otica.access -> laboratório, receitas, config). Só aparece com o
       // módulo ligado na loja (filtro em ModuleGroupSelector).
       { key: "otica.access", label: "Ótica",      hint: "Laboratório, receitas e OS de óculos", onlyWhen: "otica" as const },
+      // 22/09/2026 — umbrella da semi-vertical Matcon (useVisibleModules:
+      // matcon.access -> orcamentos, entregas, profissionais, config). Só
+      // aparece com o módulo ligado na loja (mesmo filtro de onlyWhen que a
+      // Ótica usa, generalizado abaixo em ModuleGroupSelector).
+      { key: "matcon.access", label: "Matcon",    hint: "Orçamentos, entregas e profissionais da obra", onlyWhen: "matcon" as const },
     ],
   },
   {
@@ -205,13 +210,19 @@ function ModuleGroupSelector({ value, onChange }: {
 }) {
   const { settings: pdvSettings } = usePdvSettings();
   const oticaOn = pdvSettings.otica_enabled === true;
+  // 22/09/2026 — Matcon entra no mesmo esquema de onlyWhen da Ótica, lendo
+  // o toggle do mesmo usePdvSettings. Generalizado pra aceitar as duas
+  // chaves sem quebrar o comportamento atual (nenhuma outra onlyWhen
+  // existe hoje, então isto é neutro pra quem não é otica nem matcon).
+  const matconOn = pdvSettings.matcon_enabled === true;
+  const TOGGLE_ON: Record<string, boolean> = { otica: oticaOn, matcon: matconOn };
   return (
     <View style={{ gap: 12 }}>
       {MODULE_GROUPS.map(group => (
         <View key={group.label}>
           <Text style={s.groupHeader}>{group.label}</Text>
           <View style={s.groupBody}>
-            {group.modules.filter(m => !(m as any).onlyWhen || ((m as any).onlyWhen === "otica" && oticaOn)).map(m => (
+            {group.modules.filter(m => !(m as any).onlyWhen || TOGGLE_ON[(m as any).onlyWhen] === true).map(m => (
               <ModuleToggleRow
                 key={m.key}
                 moduleKey={m.key}
