@@ -143,6 +143,13 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   const [sku, setSku] = useState("");
   const [barcode, setBarcode] = useState("");
   const [ncm, setNcm] = useState("");
+  // 22/09/2026 (Matcon M2, docs/CONTRACT_MATCON.md §M2): fiscal do Simples.
+  // Só a seção lê `matcon.matcon_enabled` (SecaoCodigos com matconOn); a
+  // semente/gravação abaixo é neutra pra loja sem o módulo (ncm/cest
+  // seguem o mesmo padrão: string vazia no estado, null no PATCH).
+  const [cest, setCest] = useState("");
+  const [icmsStPaid, setIcmsStPaid] = useState<boolean | null>(null);
+  const [origem, setOrigem] = useState<number | null>(null);
   const [cores, setCores] = useState<CorDoItem[]>([]);
   const [tamanhos, setTamanhos] = useState<string[]>([]);
   const [celulas, setCelulas] = useState<Record<string, string>>({});
@@ -300,6 +307,9 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     setSku(prod && prod.code && prod.code !== "---" ? prod.code : "");
     setBarcode(prod?.barcode || "");
     setNcm(prod?.ncm || "");
+    setCest((prod as any)?.cest || "");
+    setIcmsStPaid((prod as any)?.icmsStPaid ?? null);
+    setOrigem((prod as any)?.origem ?? null);
     setCores([]);
     setTamanhos([]);
     setCelulas({});
@@ -431,6 +441,12 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       color: alvo?.color || "",
       size: alvo?.size || "",
       ncm: isProduto ? ncm : "",
+      // 22/09/2026 (Matcon M2): vazio vira null (limpa), nunca undefined —
+      // undefined sumiria do PATCH e deixaria um valor antigo preso
+      // (mesma regra do purchaseUnit/purchaseFactor do M0, useProducts.buildBody).
+      cest: isProduto && cest.trim() ? cest.trim() : null,
+      icmsStPaid: isProduto ? icmsStPaid : null,
+      origem: isProduto ? origem : null,
     } as Product;
   }
 
@@ -618,7 +634,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     return {
       preco: precoNum, custo: valorDaMascara(custo), pendentes: pendentes.length,
       cores: cores.length, tamanhos: tamanhos.length, estoque: estoqueTxt,
-      descricao, sku, barcode, ncm, duracao,
+      descricao, sku, barcode, ncm, duracao, cest,
     };
   }
   // Na edição, foto de cor nova esperando na fila também é algo a perder.
@@ -855,6 +871,10 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       sku={sku} onSku={(v) => { setSku(v); setSujo(true); }}
       barcode={barcode} onBarcode={(v) => { setBarcode(v); setSujo(true); }}
       ncm={ncm} onNcm={(v) => { setNcm(v); setSujo(true); }}
+      matconOn={matcon.matcon_enabled}
+      cest={cest} onCest={(v) => { setCest(v); setSujo(true); }}
+      icmsStPaid={icmsStPaid} onIcmsStPaid={(v) => { setIcmsStPaid(v); setSujo(true); }}
+      origem={origem} onOrigem={(v) => { setOrigem(v); setSujo(true); }}
     />
   ) : null;
 

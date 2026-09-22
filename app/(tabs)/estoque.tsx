@@ -47,6 +47,11 @@ import { EstoqueKpiStrip } from "@/components/screens/estoque/EstoqueKpiStrip";
 import { CategoryDropdownWeb } from "@/components/screens/estoque/CategoryDropdownWeb";
 import { ProductTableWeb } from "@/components/screens/estoque/ProductTableWeb";
 import { ProductGridWeb } from "@/components/screens/estoque/ProductGridWeb";
+// 22/09/2026 (Matcon M2, docs/CONTRACT_MATCON.md §M2): aviso fiscal do
+// Estoque só liga com matcon_enabled + empresa emitindo nota fiscal.
+import { readMatconSettings } from "@/constants/matcon";
+import { usePdvSettings } from "@/hooks/usePdvSettings";
+import { nfceApi } from "@/services/nfceApi";
 // import { EstoqueRightRail } from "@/components/screens/estoque/EstoqueRightRail"; // Phase 2 — right rail
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
@@ -256,12 +261,27 @@ const agg = StyleSheet.create({
 export default function EstoqueScreen() {
   useEstoquePremiumStyles();
   const { m } = useValoresOcultos();
-  const { products, categories, isLoading, isDemo, deleteProduct, bulkDeleteProducts, mergeSuggestion, clearMergeSuggestion } = useProducts();
+  const { products, categories, isLoading, isDemo, deleteProduct, bulkDeleteProducts, mergeSuggestion, clearMergeSuggestion, updateProduct } = useProducts();
   // D2 (F0): `flattened` alimenta o filtro hierarquico. O vinculo de
   // categoria do produto recem-criado passou para o ItemFormModal.
   const { flattened: categoriasFlat } = useCategories();
   const { categoryNames: managedCategoryNames } = useProductCategories();
   const { company, availableCompanies, consolidatedView } = useAuthStore();
+  // 22/09/2026 (Matcon M2): aviso fiscal (CEST) da aba Alertas. Loja sem o
+  // módulo nunca lê nfce_config aqui — o aviso nem calcula (AlertsList).
+  const { settings: pdvSettings } = usePdvSettings();
+  const matcon = readMatconSettings(pdvSettings);
+  const { data: nfceCfgEstoque } = useQuery({
+    queryKey: ["nfce-config", company?.id],
+    queryFn: () => nfceApi.getConfig(company!.id),
+    enabled: !!company?.id && matcon.matcon_enabled,
+    staleTime: 300_000,
+    retry: 1,
+  });
+  const emiteNotaEstoque = !!(nfceCfgEstoque as any)?.config?.is_active;
+  // Multi-CNPJ: no consolidado (sem empresa selecionada) o aviso some —
+  // código fiscal se resolve no cadastro de cada CNPJ.
+  const matconFiscalOn = matcon.matcon_enabled && !consolidatedView && !!company?.id;
   const qc = useQueryClient();
   const scrollRef = useRef<any>(null);
   const C = useColors();
@@ -810,7 +830,14 @@ export default function EstoqueScreen() {
         )}
 
         {/* Aba 1: Alertas (era 2 antes da Curva ABC migrar) */}
-        {activeTab === 1 && <AlertsList products={products} />}
+        {activeTab === 1 && (
+          <AlertsList
+            products={products}
+            matconOn={matconFiscalOn}
+            emiteNota={emiteNotaEstoque}
+            onUpdateCest={(product, cest) => updateProduct({ ...product, cest })}
+          />
+        )}
         {/* Aba 2: Etiquetas (era 3 antes da Curva ABC migrar) */}
         {activeTab === 2 && <PrintLabels products={products} selectedIds={labelSelection} onSelectionChange={setLabelSelection} />}
 

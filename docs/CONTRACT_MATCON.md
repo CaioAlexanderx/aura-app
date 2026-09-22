@@ -78,7 +78,7 @@ Client de referência: `services/matconApi.ts` (tipos e rotas abaixo já estão 
 Job diário: `open` com `valid_until < hoje` → `expired`.
 
 ### `deliveries` (entregas)
-`id`, `company_id`, `sale_id`, `sequence` (1ª, 2ª entrega do mesmo pedido), `stage` ∈ `separating | ready | out | delivered`, `scheduled_for` date, `delivered_by` **texto livre** (decisão 22/09/2026), `customer_name`/`customer_phone`/`address`, `total` (da venda), `has_pending`, `public_token`, `items[] {sale_item_id, name, unit, quantity, sold_quantity, delivered_before}`, `out_at`, `delivered_at`, timestamps.
+`id`, `company_id`, `sale_id`, `sequence` (1ª, 2ª entrega do mesmo pedido), `stage` ∈ `separating | ready | out | delivered`, `scheduled_for` date, `delivered_by` **texto livre** (decisão 22/09/2026), `customer_name`/`customer_phone`/`address`, `total` (da venda), `has_pending`, `public_token`, `items[] {sale_item_id, product_id, name, unit, quantity, unit_price (da venda), sold_quantity, delivered_before, lot_code?}`, `out_at`, `delivered_at`, timestamps.
 
 | Rota | Faz |
 |---|---|
@@ -101,6 +101,7 @@ Client de referência: `services/matconApi.ts` (seção Profissionais). A calcul
 | Chave | Tipo | Default | Frase na config |
 |---|---|---|---|
 | `matcon_club_enabled` | boolean | `true` | "Tenho clube do profissional **[on]**" — desliga o chip do Caixa e a tela sem desligar o Matcon |
+| `matcon_lots_enabled` | boolean | `false` | M4: "Controlo lote e tonalidade nos produtos vendidos em m² e m³" |
 | `matcon_points_per_100` | integer | `10` | "A cada R$ **100** em compras indicadas, o profissional ganha **10** pontos." |
 | `matcon_points_to_coupon` | integer | `100` | "**100** pontos viram um cupom de R$ **10** para ele usar na loja." |
 | `matcon_coupon_value` | number | `10` | idem |
