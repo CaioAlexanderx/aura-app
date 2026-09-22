@@ -107,16 +107,18 @@ const NAV: NavSection[] = [
   // 15/09/2026 — semi-vertical Ótica: dois itens com chave própria, ligados
   // pelo toggle pdv_settings.otica_enabled (como a OS). Sem shell dedicado.
   { s: "Ótica", i: [{ r: "/otica", l: "Laboratório", ic: "glasses", mod: "otica.laboratorio", oticaToggle: true },{ r: "/otica/receitas", l: "Receitas", ic: "eye", mod: "otica.receitas", oticaToggle: true }]},
-  // 22/09/2026 (M1) — semi-vertical Matcon: a secao "Matcon" nasce com as
+  // 22/09/2026 (M1/M3) — semi-vertical Matcon: a secao "Matcon" nasce com as
   // duas esteiras de M1 (docs/matcon-faseamento-po-ux.md §3). Mesmo desenho
   // da Otica: opt-in por pdv_settings.matcon_enabled (`matconToggle`, filtrado
   // em buildRawNav), sem shell nem paleta propria. Cada item com `mod`
   // PROPRIO (regra 3 do CLAUDE.md), ja cadastrado em MODULE_PLAN_MAP e em
-  // PERM_TO_MODULES sob a umbrella matcon.access. Profissionais e M3 e por
-  // isso ainda nao esta aqui — rota que nao existe nao vira item de menu.
-  // No celular estes itens caem no menu "Mais", como a Otica: MORE_PRIORIDADE
-  // nao muda (§4 do faseamento).
-  { s: "Matcon", i: [{ r: "/matcon/orcamentos", l: "Orçamentos", ic: "clipboard", mod: "matcon.orcamentos", matconToggle: true },{ r: "/matcon/entregas", l: "Entregas", ic: "truck", mod: "matcon.entregas", matconToggle: true }]},
+  // PERM_TO_MODULES sob a umbrella matcon.access. "Profissionais" (M3,
+  // ranking do Clube do Profissional) entra depois de Entregas — o gate
+  // fino de matcon_club_enabled fica dentro da propria tela, nao aqui:
+  // o item so some com matconToggle (Matcon desligado), nunca so porque o
+  // clube esta desligado. No celular estes itens caem no menu "Mais", como
+  // a Otica: MORE_PRIORIDADE nao muda (§4 do faseamento).
+  { s: "Matcon", i: [{ r: "/matcon/orcamentos", l: "Orçamentos", ic: "clipboard", mod: "matcon.orcamentos", matconToggle: true },{ r: "/matcon/entregas", l: "Entregas", ic: "truck", mod: "matcon.entregas", matconToggle: true },{ r: "/matcon/profissionais", l: "Profissionais", ic: "building", mod: "matcon.profissionais", matconToggle: true }]},
   { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", mod: "folha" },{ r: "/agendamento", l: "Agenda", ic: "calendar", mod: "agendamento" }]},
   { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", mod: "agentes" }]},
   { s: "Admin", i: [{ r: "/gestao-aura", l: "Gestão Aura", ic: "shield", staff: true }]},
