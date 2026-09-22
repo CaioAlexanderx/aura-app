@@ -43,6 +43,13 @@ describe("stockLabel", () => {
     expect(stockLabel(null)).toBe("");
     expect(stockLabel(undefined)).toBe("");
   });
+
+  it("milheiro com Matcon ligado soma as peças: '20 mlh em estoque · 20.000 un'", () => {
+    expect(stockLabel(20, "mlh", true)).toBe("20 mlh em estoque · 20.000 un");
+    expect(stockLabel(19.5, "mlh", true)).toBe("19,5 mlh em estoque · 19.500 un");
+    // Sem Matcon, a frase de sempre.
+    expect(stockLabel(20, "mlh")).toBe("20 mlh em estoque");
+  });
 });
 
 describe("ProductGrid — card mostra a frase, não a abreviação", () => {
