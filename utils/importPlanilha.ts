@@ -48,16 +48,32 @@ function parseCSVLine(line: string, sep: string): string[] {
  *  ainda qual linha é o cabeçalho — isso é trabalho do detectHeaderRowIndex,
  *  compartilhado com o caminho do .xlsx. */
 export function csvTextToMatrix(text: string): string[][] {
+  return csvTextToMatrixComLinhas(text).matriz;
+}
+
+/** Igual ao csvTextToMatrix, mas diz também em que linha do ARQUIVO está
+ *  cada linha da matriz (1 = primeira linha). As linhas vazias saem da
+ *  matriz, então o índice da matriz não é mais a linha do arquivo — e a
+ *  prévia da importação precisa apontar "linha 235" do jeito que o
+ *  lojista vê no Excel/bloco de notas. */
+export function csvTextToMatrixComLinhas(text: string): { matriz: string[][]; linhas: number[] } {
   const clean = text.replace(/^﻿/, ""); // remove BOM
-  const lines = clean.split(/\r?\n/).filter(l => l.trim() !== "");
-  if (lines.length === 0) return [];
+  const todas = clean.split(/\r?\n/);
+  const lines: string[] = [];
+  const linhas: number[] = [];
+  todas.forEach((l, i) => {
+    if (l.trim() === "") return;
+    lines.push(l);
+    linhas.push(i + 1);
+  });
+  if (lines.length === 0) return { matriz: [], linhas: [] };
   const semicolons = (lines[0].match(/;/g) || []).length;
   const commas = (lines[0].match(/,/g) || []).length;
   const tabs = (lines[0].match(/\t/g) || []).length;
   let sep = ",";
   if (tabs > semicolons && tabs > commas) sep = "\t";
   else if (semicolons > commas) sep = ";";
-  return lines.map(line => parseCSVLine(line, sep));
+  return { matriz: lines.map(line => parseCSVLine(line, sep)), linhas };
 }
 
 function normalizeText(v: unknown): string {
@@ -157,14 +173,39 @@ function cellToRowValue(v: unknown): string {
  *  ignora linhas totalmente vazias e linhas sem valor na coluna de
  *  nome (quando ela existe). */
 export function rowsFromMatrix(matrix: unknown[][]): Record<string, string>[] {
-  if (!matrix || matrix.length === 0) return [];
+  return lerLinhasDaMatriz(matrix).rows;
+}
+
+export type LinhasLidas = {
+  /** Linhas prontas pro backend (cabeçalho -> valor). */
+  rows: Record<string, string>[];
+  /** linhas[i] = número da linha no arquivo (1 = primeira) de rows[i].
+   *  É o que converte o `index` que o backend devolve em "linha 235". */
+  linhas: number[];
+  /** Cabeçalhos não vazios, na ordem da planilha. */
+  cabecalho: string[];
+  /** Linha do arquivo onde está o cabeçalho (0 se a matriz veio vazia). */
+  linhaCabecalho: number;
+};
+
+/** O mesmo que rowsFromMatrix, guardando de que linha do arquivo veio
+ *  cada row. `linhaDoArquivo(i)` diz a linha do arquivo do índice i da
+ *  matriz — no .xlsx é i + 1 (+ o início do intervalo da aba); no CSV,
+ *  que descarta linhas vazias, vem de csvTextToMatrixComLinhas. */
+export function lerLinhasDaMatriz(
+  matrix: unknown[][],
+  linhaDoArquivo: (i: number) => number = i => i + 1,
+): LinhasLidas {
+  if (!matrix || matrix.length === 0) return { rows: [], linhas: [], cabecalho: [], linhaCabecalho: 0 };
   const headerIdx = detectHeaderRowIndex(matrix);
   const headerRow = (matrix[headerIdx] || []) as unknown[];
   const headers = headerRow.map(normalizeText);
   const nameColIdx = findNameColumnIndex(headers);
 
   const rows: Record<string, string>[] = [];
-  for (const raw of matrix.slice(headerIdx + 1)) {
+  const linhas: number[] = [];
+  for (let k = headerIdx + 1; k < matrix.length; k++) {
+    const raw = matrix[k];
     if (!raw || raw.length === 0) continue;
     const allEmpty = raw.every(c => normalizeText(c) === "");
     if (allEmpty) continue;
@@ -172,9 +213,12 @@ export function rowsFromMatrix(matrix: unknown[][]): Record<string, string>[] {
 
     const row: Record<string, string> = {};
     headers.forEach((h, i) => { if (h) row[h] = cellToRowValue(raw[i]); });
-    if (Object.values(row).some(v => v !== "")) rows.push(row);
+    if (Object.values(row).some(v => v !== "")) {
+      rows.push(row);
+      linhas.push(linhaDoArquivo(k));
+    }
   }
-  return rows;
+  return { rows, linhas, cabecalho: Array.from(new Set(headers.filter(Boolean))), linhaCabecalho: linhaDoArquivo(headerIdx) };
 }
 
 // -- Resumo opcional do dry_run/import: unidades desconhecidas, --
