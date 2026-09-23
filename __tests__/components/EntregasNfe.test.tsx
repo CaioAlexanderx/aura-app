@@ -128,7 +128,7 @@ describe("/matcon/entregas — botão Emitir NF-e (Matcon M2)", () => {
     expect(texto).toContain("NF-E #1204");
     expect(texto).toContain("AUTORIZADA");
     expect(tree.root.findAllByProps({ testID: "matcon-ver-danfe-entrega-1" }).length).toBeGreaterThan(0);
-    expect(texto).toContain("Ver DANFE");
+    expect(texto).toContain("Ver nota");
     expect(tree.root.findAllByProps({ testID: "matcon-emitir-nfe-entrega-1" }).length).toBe(0);
 
     tree.unmount();
