@@ -21,6 +21,12 @@
 // dinheiro (R$ 201,60) sobre o subtotal rateado e o banco gravava R$ 216,02.
 // O desconto manual ganhou a própria linha — subtotal − cupom − desconto =
 // total, sempre.
+//
+// 23/09/2026 (QA Matcon, com o backend no ar) — a venda de orçamento diz
+// "Entrega nº 1 criada para 25/09 — acompanhe em Entregas" (toque abre
+// /matcon/entregas) e a venda indicada diz "Abbey ganhou 10 pontos com
+// esta venda". As frases vêm de ./matconDaVenda.ts a partir de
+// `sale.matcon` (resposta do POST); sem `matcon`, nada muda na tela.
 // ============================================================
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -36,6 +42,8 @@ import { NfceActions, type NfceActionsItem } from "./NfceActions";
 import { OsActions } from "./OsActions";
 import { openPrintWindow } from "@/services/printWindow";
 import type { NfcePaymentEntry } from "@/services/nfceApi";
+import { router } from "expo-router";
+import { frasesMatconDaVenda } from "./matconDaVenda";
 
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
@@ -72,10 +80,18 @@ type Props = {
   /** 22/09/2026 (QA Matcon). Sem uso desde 23/09/2026 — "N produtos"
    *  conta linhas, em qualquer loja. Mantido para não mexer em quem chama. */
   matconEnabled?: boolean;
+  /** pdv_settings.matcon_default_delivery_days — data da entrega criada. */
+  matconDeliveryDays?: number;
+  /** Nome de quem indicou (a resposta da venda não traz). */
+  referralName?: string | null;
 };
 
-export function SaleComplete({ sale, onNewSale, autoEmit }: Props) {
+export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, referralName }: Props) {
   const { company, token } = useAuthStore();
+  const matconFrases = frasesMatconDaVenda(sale.matcon, {
+    diasDeEntrega: matconDeliveryDays ?? 2,
+    nomeDoIndicado: referralName,
+  });
   const cupom = sale.couponDiscount && sale.couponDiscount > 0 ? sale.couponDiscount : 0;
   const manual = sale.manualDiscount && sale.manualDiscount > 0 ? sale.manualDiscount : 0;
   const desconto = sale.discount != null ? sale.discount : cupom + manual;
@@ -196,6 +212,28 @@ export function SaleComplete({ sale, onNewSale, autoEmit }: Props) {
           </View>
         )}
 
+        {(matconFrases.entrega || matconFrases.pontos) && (
+          <View style={s.matconBox}>
+            {matconFrases.entrega && (
+              <Pressable
+                onPress={() => router.push("/matcon/entregas" as any)}
+                style={s.matconLinha}
+                accessibilityRole="link"
+                testID="venda-matcon-entrega"
+              >
+                <Icon name="truck" size={14} color={Colors.violet3} />
+                <Text style={s.matconTexto}>{matconFrases.entrega}</Text>
+              </Pressable>
+            )}
+            {matconFrases.pontos && (
+              <View style={s.matconLinha} testID="venda-matcon-pontos">
+                <Icon name="tag" size={14} color={Colors.violet3} />
+                <Text style={s.matconTexto}>{matconFrases.pontos}</Text>
+              </View>
+            )}
+          </View>
+        )}
+
         <View style={s.divider} />
 
         {company?.id && (
@@ -250,6 +288,9 @@ const s = StyleSheet.create({
   couponBadge: { backgroundColor: Colors.green + "22", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
   couponBadgeText: { fontSize: 11, color: Colors.green, fontWeight: "800", letterSpacing: 1 },
   couponDiscount: { fontSize: 14, color: Colors.green, fontWeight: "700", flex: 1, textAlign: "right" },
+  matconBox: { width: "100%", gap: 6, marginTop: 8 },
+  matconLinha: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.violetD, borderRadius: 10, borderWidth: 1, borderColor: Colors.border2, paddingHorizontal: 12, paddingVertical: 9 },
+  matconTexto: { flex: 1, fontSize: 13, color: Colors.ink, fontWeight: "600", lineHeight: 18 },
   divider: { height: 1, backgroundColor: Colors.border, width: "100%", marginVertical: 16 },
   actions: { flexDirection: "row", gap: 10, width: "100%" },
   secondaryBtn: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 12, paddingVertical: 13, alignItems: "center", borderWidth: 1, borderColor: Colors.border },

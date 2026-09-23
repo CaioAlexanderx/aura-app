@@ -8,7 +8,7 @@
 // parcial por item ("6 de 10 sc" + a frase do saldo).
 // ============================================================
 import {
-  tituloAcompanhamento, rotuloSaldo, rotuloItens, rodapePedido, textoItemEntrega,
+  tituloAcompanhamento, rotuloSaldo, rotuloItens, rodapePedido, textoItemEntrega, qtdDoItemPublico,
 } from "@/utils/acompanharTextos";
 
 describe("tituloAcompanhamento", () => {
@@ -77,18 +77,18 @@ describe("textoItemEntrega", () => {
     expect(textoItemEntrega({})).toEqual({ progresso: null, saldoFrase: null });
   });
 
-  it("entrega parcial: '6 de 10 sc' + frase do saldo restante", () => {
+  it("entrega parcial: '6 de 10 sacos' + frase do saldo restante (sem sigla — QA 23/09)", () => {
     const r = textoItemEntrega({ entregue: 6, total: 10, unidade: "sc" });
-    expect(r.progresso).toBe("6 de 10 sc");
+    expect(r.progresso).toBe("6 de 10 sacos");
     expect(r.saldoFrase).toBe(
-      "Os 4 sc restantes vão na próxima viagem. Você não paga nada a mais por isso."
+      "Os 4 sacos restantes vão na próxima viagem. Você não paga nada a mais por isso."
     );
   });
 
   it("com proxima_entrega: a frase inclui a data", () => {
     const r = textoItemEntrega({ entregue: 6, total: 10, unidade: "sc" }, "2026-09-23");
     expect(r.saldoFrase).toBe(
-      "Os 4 sc restantes vão no dia 23/09, na próxima viagem. Você não paga nada a mais por isso."
+      "Os 4 sacos restantes vão no dia 23/09, na próxima viagem. Você não paga nada a mais por isso."
     );
   });
 
@@ -101,5 +101,17 @@ describe("textoItemEntrega", () => {
   it("item sem unidade: progresso sem sufixo", () => {
     const r = textoItemEntrega({ entregue: 1, total: 3 });
     expect(r.progresso).toBe("1 de 3");
+  });
+});
+
+describe("qtdDoItemPublico (QA 23/09/2026)", () => {
+  it("com unidade: '1 milheiro', '1 m²', '2 sacos'", () => {
+    expect(qtdDoItemPublico({ qtd: 1, unidade: "mlh" })).toBe("1 milheiro");
+    expect(qtdDoItemPublico({ qtd: 1, unidade: "m²" })).toBe("1 m²");
+    expect(qtdDoItemPublico({ qtd: 2, unidade: "sc" })).toBe("2 sacos");
+  });
+  it("sem unidade: o '1×' de sempre", () => {
+    expect(qtdDoItemPublico({ qtd: 1 })).toBe("1×");
+    expect(qtdDoItemPublico({ qtd: 3, unidade: null })).toBe("3×");
   });
 });

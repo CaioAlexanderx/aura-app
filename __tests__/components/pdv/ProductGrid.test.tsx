@@ -44,11 +44,20 @@ describe("stockLabel", () => {
     expect(stockLabel(undefined)).toBe("");
   });
 
-  it("milheiro com Matcon ligado soma as peças: '20 mlh em estoque · 20.000 un'", () => {
-    expect(stockLabel(20, "mlh", true)).toBe("20 mlh em estoque · 20.000 un");
-    expect(stockLabel(19.5, "mlh", true)).toBe("19,5 mlh em estoque · 19.500 un");
-    // Sem Matcon, a frase de sempre.
+  it("milheiro com Matcon ligado, por extenso: '18,5 milheiros em estoque (18.500 peças)'", () => {
+    expect(stockLabel(18.5, "mlh", true)).toBe("18,5 milheiros em estoque (18.500 peças)");
+    expect(stockLabel(20, "mlh", true)).toBe("20 milheiros em estoque (20.000 peças)");
+    expect(stockLabel(1, "mlh", true)).toBe("1 milheiro em estoque (1.000 peças)");
+    // Sem Matcon, "mlh" não é milheiro no Caixa: fica como estava.
     expect(stockLabel(20, "mlh")).toBe("20 mlh em estoque");
+  });
+
+  it("Matcon ligado: unidade por extenso e no plural certo (QA 23/09/2026)", () => {
+    expect(stockLabel(16, "sc", true)).toBe("16 sacos em estoque");
+    expect(stockLabel(12.5, "m²", true)).toBe("12,5 m² em estoque");
+    expect(stockLabel(11, "un", true)).toBe("11 em estoque");
+    // Loja sem Matcon: exatamente o de antes.
+    expect(stockLabel(16, "sc")).toBe("16 sc em estoque");
   });
 });
 

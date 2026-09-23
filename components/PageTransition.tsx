@@ -1,25 +1,22 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { View, Animated, Platform, StyleSheet } from "react-native";
 import { usePathname } from "expo-router";
 
 type Props = { children: React.ReactNode };
 
 // Web: CSS fade + slide-up animation
+//
+// QA 23/09/2026 (Caixa aberto com ?quote=): a `key` do conteúdo mudava 150 ms
+// DEPOIS da troca de rota, com uma animação de saída no meio. Só que o <Slot>
+// já renderiza a rota nova no mesmo instante — então a animação de "saída"
+// era da página NOVA, e ao trocar a key ela desmontava e montava de novo.
+// Toda tela montava duas vezes a cada navegação (efeitos, buscas e avisos
+// em dobro: "Orçamento #1 carregado no carrinho" ×2). Agora a key é o
+// próprio pathname: a tela nova monta uma vez só e entra com a animação.
 function WebTransition({ children }: Props) {
   const pathname = usePathname();
-  const [key, setKey] = useState(pathname);
-  const [animClass, setAnimClass] = useState("aura-page-enter");
-
-  useEffect(() => {
-    if (pathname !== key) {
-      setAnimClass("aura-page-exit");
-      const t = setTimeout(() => {
-        setKey(pathname);
-        setAnimClass("aura-page-enter");
-      }, 150);
-      return () => clearTimeout(t);
-    }
-  }, [pathname]);
+  const key = pathname;
+  const animClass = "aura-page-enter";
 
   return (
     <>

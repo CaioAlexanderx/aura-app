@@ -7,7 +7,7 @@
 //     certo → confirmação e o botão vira "Ver entregas"; falhou (404) →
 //     frase simples, nunca "Rota nao encontrada".
 //   - has_pending_delivery true (o campo do contrato): selo "saldo a
-//     entregar" que abre Entregas em "Com saldo a entregar"; sem botão de
+//     entregar" que abre Entregas em "A entregar"; sem botão de
 //     criar.
 //   - Matcon desligado: nada disso aparece.
 // ============================================================
@@ -103,7 +103,7 @@ test("criar entrega falhou (404): frase simples, o botão continua", async () =>
   tree.unmount();
 });
 
-test("has_pending_delivery: selo abre Entregas em 'Com saldo a entregar', sem 'Criar entrega'", () => {
+test("has_pending_delivery: selo abre Entregas em 'A entregar', sem 'Criar entrega'", () => {
   mockDetail = detalhe({ has_pending_delivery: true });
   const tree = montar();
   expect(flatten(tree.toJSON())).toContain("saldo a entregar");

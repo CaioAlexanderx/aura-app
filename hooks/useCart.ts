@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { pdvApi } from "@/services/api";
 import type { PdvSaleResponse } from "@/services/salesApi";
+import type { MatconDaVenda } from "@/components/screens/pdv/matconDaVenda";
 import type { LotAllocation } from "@/services/matconApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
@@ -103,6 +104,10 @@ export type SaleResult = {
   subtotal?: number;
   discount?: number;
   cpfNaNota?: string;       // CPF do consumidor (opcional, pra NFC-e)
+  // QA 23/09/2026 (Matcon): o `matcon` da resposta do POST /pdv/sale —
+  // entrega criada pela venda de orçamento e pontos da indicação. Ausente
+  // em loja sem Matcon/venda de balcão; a tela final só lê se vier.
+  matcon?: MatconDaVenda | null;
 };
 
 // Crediário (F1 29/05/2026): venda fica como "a receber" no ledger do cliente
@@ -792,7 +797,7 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
       };
     }
 
-    function buildLastSale(saleId: string, saleNumber?: number | null, venda?: any): SaleResult {
+    function buildLastSale(saleId: string, saleNumber?: number | null, venda?: any, matcon?: any): SaleResult {
       // Com a resposta do servidor, vale o que ele gravou.
       var conta = contaComOServidor(contaLocal, venda);
       return {
@@ -814,6 +819,7 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
         subtotal: conta.subtotal,
         discount: conta.desconto,
         cpfNaNota: cleanCpf || undefined,
+        matcon: matcon && typeof matcon === "object" ? (matcon as MatconDaVenda) : null,
       };
     }
 
@@ -825,7 +831,7 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
           // sale_number pode vir null (venda de ambiente nao migrado) — o
           // recibo cai no UUID encurtado nesse caso.
           var saleNumber = typeof res?.sale?.sale_number === "number" ? res.sale.sale_number : null;
-          setLastSale(buildLastSale(String(saleId), saleNumber, res?.sale));
+          setLastSale(buildLastSale(String(saleId), saleNumber, res?.sale, res?.matcon));
           setCart([]); setQuoteId(null); setReferredProfessionalId(null); clearLotAllocations(); toast.success("Venda registrada!"); setIsProcessing(false); clearCoupon(); clearDiscount();
           setSellerName("");
           setCpfNaNota("");

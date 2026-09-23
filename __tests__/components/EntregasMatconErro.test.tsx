@@ -6,7 +6,7 @@
 //     de novo", uma chamada só, nunca "Nenhuma entrega hoje".
 //   - vazio de verdade: explica que a entrega nasce da venda (orçamento
 //     que virou pedido, ou "Criar entrega" no detalhe da venda).
-//   - `?dia=pending` abre em "Com saldo a entregar" (link do detalhe da
+//   - `?dia=pending` abre em "A entregar" (link do detalhe da
 //     venda).
 // ============================================================
 import React from "react";
@@ -89,7 +89,8 @@ test("sem internet: erro que manda conferir a conexão, com 'Tentar de novo'", a
   await act(async () => { botao.props.onPress(); });
   await esperar(tree, "matcon-entregas-vazio");
   const depois = flatten(tree.toJSON());
-  expect(depois).toContain("Nenhuma entrega hoje.");
+  // Aba padrão desde o QA de 23/09 (backend no ar): "A entregar".
+  expect(depois).toContain("Nada para entregar.");
   expect(depois).toContain("orçamento");
   expect(depois).toContain("Criar entrega");
 
@@ -97,13 +98,13 @@ test("sem internet: erro que manda conferir a conexão, com 'Tentar de novo'", a
   qc.clear();
 });
 
-test("?dia=pending abre em 'Com saldo a entregar'", async () => {
+test("?dia=pending abre em 'A entregar'", async () => {
   mockParams = { dia: "pending" };
   mockListDeliveries.mockResolvedValue({ deliveries: [], summary: RESUMO_ZERO });
   const { tree, qc } = await montar();
   await esperar(tree, "matcon-entregas-vazio");
   expect(mockListDeliveries.mock.calls[0][1]).toMatchObject({ day: "pending" });
-  expect(flatten(tree.toJSON())).toContain("Nenhum pedido com saldo a entregar.");
+  expect(flatten(tree.toJSON())).toContain("Nada para entregar.");
 
   tree.unmount();
   qc.clear();

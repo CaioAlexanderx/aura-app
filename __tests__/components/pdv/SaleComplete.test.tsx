@@ -3,6 +3,8 @@
 // QA 23/09/2026: subtotal − desconto tem de dar o total na tela, com os
 // números que o servidor gravou (venda nº 176: R$ 1.440,15 − R$ 216,02 =
 // R$ 1.224,13), e "N produtos" conta linhas, não soma m² com tijolo.
+// QA 23/09/2026 (Matcon): com `matcon` na resposta, a entrega criada e os
+// pontos da indicação aparecem; sem `matcon`, a tela não muda nem quebra.
 // Mocks do padrão do repo (expo-font, FpktLogo); testID + deep:false.
 // ============================================================
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
@@ -16,6 +18,7 @@ jest.mock("@/components/screens/pdv/NfceActions", () => ({ NfceActions: () => nu
 jest.mock("@/components/screens/pdv/OsActions", () => ({ OsActions: () => null }));
 jest.mock("@/services/printWindow", () => ({ openPrintWindow: jest.fn() }));
 jest.mock("@/utils/clipboard", () => ({ copyText: jest.fn() }));
+jest.mock("expo-router", () => ({ router: { push: jest.fn() } }));
 
 import React from "react";
 import renderer, { act } from "react-test-renderer";
@@ -110,6 +113,72 @@ describe("tela final da venda", () => {
     });
     expect(reais(textoDe(tree, "venda-subtotal"))).toBe(200);
     expect(reais(textoDe(tree, "venda-cupom"))).toBe(10);
+    tree.unmount();
+  });
+});
+
+describe("tela final da venda — Matcon", () => {
+  const { router } = require("expo-router");
+
+  function montarMatcon(sale: SaleResult, extra: any = {}) {
+    let tree!: renderer.ReactTestRenderer;
+    act(() => {
+      tree = renderer.create(
+        <SaleComplete sale={sale} onNewSale={jest.fn()} matconEnabled matconDeliveryDays={2} {...extra} />,
+      );
+    });
+    return tree;
+  }
+
+  function dataDaquiA(dias: number): string {
+    const d = new Date();
+    const alvo = new Date(d.getFullYear(), d.getMonth(), d.getDate() + dias);
+    return String(alvo.getDate()).padStart(2, "0") + "/" + String(alvo.getMonth() + 1).padStart(2, "0");
+  }
+
+  test("sem `matcon` na resposta: nenhuma linha nova e a tela segue de pé", () => {
+    const tree = montarMatcon(VENDA_176);
+    expect(textoDe(tree, "venda-matcon-entrega")).toBe("");
+    expect(textoDe(tree, "venda-matcon-pontos")).toBe("");
+    expect(reais(textoDe(tree, "venda-total"))).toBe(1224.13);
+    tree.unmount();
+
+    const nulo = montarMatcon({ ...VENDA_176, matcon: null });
+    expect(textoDe(nulo, "venda-matcon-entrega")).toBe("");
+    nulo.unmount();
+  });
+
+  test("venda de orçamento: 'Entrega nº 1 criada para DD/MM — acompanhe em Entregas', toque abre Entregas", () => {
+    const tree = montarMatcon({
+      ...VENDA_176,
+      matcon: { quote_id: "q-1", delivery_id: "d-1", delivery_token: "tok" },
+    });
+    expect(textoDe(tree, "venda-matcon-entrega")).toBe(
+      "Entrega nº 1 criada para " + dataDaquiA(2) + " — acompanhe em Entregas",
+    );
+    expect(textoDe(tree, "venda-matcon-pontos")).toBe("");
+    const linha = tree.root.findAll((n) => n.props && n.props.testID === "venda-matcon-entrega", { deep: false })[0];
+    act(() => { linha.props.onPress(); });
+    expect(router.push).toHaveBeenCalledWith("/matcon/entregas");
+    tree.unmount();
+  });
+
+  test("venda indicada: 'Abbey ganhou 10 pontos com esta venda' (nome do chip)", () => {
+    const tree = montarMatcon(
+      { ...VENDA_176, matcon: { referral: { credited: true, points: 10, points_balance: 40, professional_id: "pro-1" } } },
+      { referralName: "Abbey" },
+    );
+    expect(textoDe(tree, "venda-matcon-pontos")).toBe("Abbey ganhou 10 pontos com esta venda");
+    expect(textoDe(tree, "venda-matcon-entrega")).toBe("");
+    tree.unmount();
+  });
+
+  test("indicação que não creditou (clube desligado etc.): nada sobre pontos", () => {
+    const tree = montarMatcon(
+      { ...VENDA_176, matcon: { referral: { credited: false, reason: "CLUB_DISABLED" } } },
+      { referralName: "Abbey" },
+    );
+    expect(textoDe(tree, "venda-matcon-pontos")).toBe("");
     tree.unmount();
   });
 });

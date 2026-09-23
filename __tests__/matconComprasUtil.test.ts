@@ -8,6 +8,7 @@
 // ============================================================
 import {
   agruparPorFornecedor, fraseDaSugestao, textoPedidoWhatsApp, progressoDoPedido,
+  produtosJaPedidos, fraseJaPedido,
 } from "@/components/matcon/comprasUtil";
 import type { PurchaseOrder, PurchaseSuggestion } from "@/services/matconApi";
 
@@ -104,6 +105,42 @@ describe("fraseDaSugestao", () => {
   test("arredonda o custo estimado, sem centavos", () => {
     const frase = fraseDaSugestao(sugestao({ est_cost: 2087.6 }));
     expect(frase).toContain("~R$ 2.088");
+  });
+});
+
+describe("fraseDaSugestao — motivo do backend (QA 23/09/2026, regra do Estoque)", () => {
+  test("zerado sem mínimo: nada de 'mínimo 0'", () => {
+    const frase = fraseDaSugestao(sugestao({ reason: "zerado_sem_minimo", stock: 0, min_stock: 0, unit: "cx", suggested_qty: 1, est_cost: 49.9 }));
+    expect(frase).toBe("estoque zerado · sem mínimo cadastrado — sugiro 1 caixa (~R$ 50)");
+    expect(frase).not.toContain("mínimo 0");
+  });
+
+  test("vai acabar: 'acaba em N dias no ritmo atual'", () => {
+    const frase = fraseDaSugestao(sugestao({ reason: "vai_acabar", days_to_stockout: 4 }));
+    expect(frase).toBe("tem 12 sacos, acaba em 4 dias no ritmo atual → sugerimos 60 sacos (~R$ 1.974)");
+    expect(fraseDaSugestao(sugestao({ reason: "vai_acabar", days_to_stockout: 1 }))).toContain("acaba em 1 dia no ritmo atual");
+  });
+
+  test("abaixo do mínimo ou sem motivo: a frase de sempre", () => {
+    const deSempre = "tem 12 sc, mínimo 40, vende 18/semana → sugerimos 60 sc (~R$ 1.974)";
+    expect(fraseDaSugestao(sugestao({ reason: "abaixo_do_minimo" }))).toBe(deSempre);
+    expect(fraseDaSugestao(sugestao())).toBe(deSempre);
+  });
+});
+
+describe("produtosJaPedidos — o que já está num pedido enviado", () => {
+  test("só pedido enviado, e só o item que ainda não chegou inteiro", () => {
+    const mapa = produtosJaPedidos([
+      pedido({ id: "o1", number: "C-0001", status: "sent", items: [
+        { product_id: "p1", name: "Cimento", unit: "sc", quantity: 60, unit_cost_est: 32.9, received_qty: 0 },
+        { product_id: "p2", name: "Areia", unit: "m³", quantity: 5, unit_cost_est: 120, received_qty: 5 },
+      ] }),
+      pedido({ id: "o2", number: "C-0002", status: "draft", items: [
+        { product_id: "p3", name: "Brita", unit: "m³", quantity: 3, unit_cost_est: 110, received_qty: 0 },
+      ] }),
+    ]);
+    expect(mapa).toEqual({ p1: "C-0001" });
+    expect(fraseJaPedido(mapa.p1)).toBe("já pedido no C-0001, chega em breve");
   });
 });
 

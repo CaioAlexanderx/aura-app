@@ -29,7 +29,7 @@ import { Colors, Glass } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { IS_WEB, webOnly, accentForProduct, productLetter, fmtCurrency } from "./types";
 import { usaPecasNoMilheiro, milheiroParaUnidades } from "./matconQty";
-import { fmtQty } from "@/utils/matconUnits";
+import { fmtQty, qtdComUnidade } from "@/utils/matconUnits";
 
 // "EST. 11 UN" era abreviação de sistema: o `Est.` vinha do código e o
 // uppercase do estilo. Vira frase — "11 em estoque" — e a unidade só aparece
@@ -37,17 +37,24 @@ import { fmtQty } from "@/utils/matconUnits";
 // 16/09/2026 (Fase 0 · I0.3).
 const UNIDADES_IMPLICITAS = ["", "un", "und", "uni", "unid", "unidade", "unidades", "pc", "pç"];
 
-// 22/09/2026 (QA Matcon): tijolo em milheiro soma as peças ao lado —
-// "20 mlh em estoque · 20.000 un" —, que é como o vendedor vai digitar no
-// carrinho. Só com o toggle ligado (`matconEnabled`).
+// 22/09/2026 (QA Matcon): tijolo em milheiro soma as peças ao lado, que é
+// como o vendedor vai digitar no carrinho. Só com o toggle ligado
+// (`matconEnabled`).
+// 23/09/2026 (QA Matcon, zero sigla): "18,5 mlh em estoque · 18.500 un"
+// virou "18,5 milheiros em estoque (18.500 peças)", e com o Matcon ligado
+// as outras unidades também saem por extenso e no plural certo ("16 sacos
+// em estoque") — utils/matconUnits.qtdComUnidade. Sem Matcon, nada muda.
 export function stockLabel(stock?: number | null, unit?: string | null, matconEnabled?: boolean): string {
   const u = String(unit || "").trim();
   if (stock == null) return u;
   if (usaPecasNoMilheiro(!!matconEnabled, u)) {
-    return fmtQty(stock) + " " + u + " em estoque · " + fmtQty(milheiroParaUnidades(stock)) + " un";
+    const pecas = milheiroParaUnidades(stock);
+    return qtdComUnidade(stock, u) + " em estoque (" + qtdComUnidade(pecas, "pç") + ")";
   }
   const implicita = UNIDADES_IMPLICITAS.indexOf(u.toLowerCase()) >= 0;
-  return implicita ? stock + " em estoque" : stock + " " + u + " em estoque";
+  if (implicita) return (matconEnabled ? fmtQty(stock) : stock) + " em estoque";
+  if (matconEnabled) return qtdComUnidade(stock, u) + " em estoque";
+  return stock + " " + u + " em estoque";
 }
 
 export type GridProduct = {
