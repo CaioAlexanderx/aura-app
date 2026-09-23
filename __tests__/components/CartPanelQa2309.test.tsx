@@ -101,6 +101,72 @@ describe("par de totais (preço no cartão)", () => {
   });
 });
 
+describe("dividido: métodos numa linha e a conta em frase de balcão", () => {
+  function montarDividido(fill: boolean) {
+    return montar({
+      fill,
+      splitMode: true, splitIsBalanced: true, splitRemaining: 0,
+      splitPayments: [{ method: "pix", value: 400 }, { method: "cartao", value: 824.13, auto: true }],
+      splitNote: "Faltam R$ 742,40. No cartão fica R$ 824,13 (11% a mais).",
+      splitStatusText: "Pronto · a conta fecha em R$ 1.224,13",
+    });
+  }
+  function estilo(node: any) {
+    const st = node.props.style;
+    return Object.assign({}, ...(Array.isArray(st) ? st.flat(5) : [st]).filter(Boolean));
+  }
+
+  test("cada pagamento: os cinco métodos numa faixa só, sem quebrar, com o nome inteiro", () => {
+    const tree = montarDividido(false);
+    const faixas = porTestID(tree, "carrinho-dividido-metodos");
+    expect(faixas).toHaveLength(2);
+    for (const faixa of faixas) {
+      expect(estilo(faixa).flexWrap).toBe("nowrap");
+      expect(flattenText(faixa.children)).toBe("DinheiroPIXDébitoCréditoCrediário");
+    }
+    tree.unmount();
+  });
+
+  test("a conta é uma frase, sem equação", () => {
+    const tree = montarDividido(false);
+    expect(textoDe(tree, "carrinho-dividido-conta")).toBe("Faltam R$ 742,40. No cartão fica R$ 824,13 (11% a mais).");
+    expect(textoDe(tree, "carrinho-dividido-falta")).toBe("o que falta, com o acréscimo do cartão");
+    expect(textoDe(tree, "carrinho-pagamento")).toBe("Dividido em 2");
+    tree.unmount();
+  });
+
+  test("painel de altura limitada: ligar o dividido rola o corpo até a conta", () => {
+    jest.useFakeTimers();
+    // Nó "de verdade" para o ScrollView do react-native-web: o scrollToEnd
+    // dele termina em node.scroll({ top: scrollHeight }).
+    const scroll = jest.fn();
+    const opcoes = {
+      createNodeMock: () => ({
+        scrollHeight: 900, scrollWidth: 0, scroll,
+        addEventListener: () => {}, removeEventListener: () => {},
+      }),
+    };
+    const base = {
+      splitMode: true, splitIsBalanced: true, splitRemaining: 0,
+      splitPayments: [{ method: "pix", value: 400 }, { method: "cartao", value: 824.13, auto: true }],
+      splitNote: "Faltam R$ 742,40. No cartão fica R$ 824,13 (11% a mais).",
+    };
+    let tree!: renderer.ReactTestRenderer;
+    act(() => { tree = renderer.create(<CartPanel {...props({ ...base, fill: true })} />, opcoes); });
+    act(() => { jest.runOnlyPendingTimers(); });
+    expect(scroll).toHaveBeenCalledWith(expect.objectContaining({ top: 900 }));
+    tree.unmount();
+
+    // Sem fill (celular: a página rola inteira), nada de rolar o corpo.
+    scroll.mockClear();
+    act(() => { tree = renderer.create(<CartPanel {...props({ ...base, fill: false })} />, opcoes); });
+    act(() => { jest.runOnlyPendingTimers(); });
+    expect(scroll).not.toHaveBeenCalled();
+    tree.unmount();
+    jest.useRealTimers();
+  });
+});
+
 describe("Pagamento no topo", () => {
   test.each([
     ["cartao", "Crédito"], ["debito", "Débito"], ["crediario", "Crediário"], ["dinheiro", "Dinheiro"], ["pix", "PIX"],

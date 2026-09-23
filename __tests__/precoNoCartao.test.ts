@@ -102,8 +102,26 @@ describe("pagamento dividido (tela 4)", () => {
     expect(dv.total).toBe(1066);
     expect(dv.equilibrado).toBe(true);
     expect(statusDoDividido(dv)).toBe("Pronto · a conta fecha em R$ 1.066,00");
-    expect(fraseDaConta([{ method: "pix", value: 400 }, { method: "cartao", value: 0, auto: true }], 1000, dv))
-      .toBe("R$ 1.000,00 no dinheiro − R$ 400,00 no PIX = faltam R$ 600,00. No crédito, com o acréscimo desta venda (11%): R$ 600,00 × 1,11 = R$ 666,00.");
+    expect(fraseDaConta(dv)).toBe("Faltam R$ 600,00. No cartão fica R$ 666,00 (11% a mais).");
+  });
+
+  test("frase de balcão (QA 23/09): o exemplo da venda nº 176", () => {
+    const dv = resolverDividido([{ method: "pix", value: 400 }, { method: "cartao", value: 0, auto: true }], 1142.4, 1268.16);
+    expect(fraseDaConta(dv)).toBe("Faltam R$ 742,40. No cartão fica R$ 824,13 (11% a mais).");
+    expect(fraseDaConta(dv)).not.toMatch(/÷|×|=/);
+  });
+
+  test("frase: 'o que falta' no PIX; nada faltando; cartão mais barato", () => {
+    const pix = resolverDividido([{ method: "cartao", value: 333 }, { method: "pix", value: 0, auto: true }], 1000, 1110);
+    expect(fraseDaConta(pix)).toBe("Faltam R$ 700,00 no PIX.");
+    const pronto = resolverDividido([{ method: "pix", value: 1000 }, { method: "cartao", value: 0, auto: true }], 1000, 1110);
+    expect(fraseDaConta(pronto)).toBe("");
+    const semAuto = resolverDividido([{ method: "pix", value: 400 }], 1000, 1110);
+    expect(fraseDaConta(semAuto)).toBe("");
+    const maisBarato = resolverDividido([{ method: "cartao", value: 0, auto: true }], 1000, 970);
+    expect(fraseDaConta(maisBarato)).toBe("Faltam R$ 1.000,00. No cartão fica R$ 970,00 (3% a menos).");
+    const igual = resolverDividido([{ method: "debito", value: 0, auto: true }], 1000, 1000);
+    expect(fraseDaConta(igual)).toBe("Faltam R$ 1.000,00. No cartão fica R$ 1.000,00.");
   });
 
   test("tudo num método só dá exatamente o preço daquele método", () => {

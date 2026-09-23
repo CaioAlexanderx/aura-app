@@ -331,32 +331,24 @@ const NOME_DO_METODO: Record<string, string> = {
   dinheiro: "dinheiro", pix: "PIX", debito: "débito", cartao: "crédito", crediario: "crediário",
 };
 
-/** "R$ 1.000,00 no dinheiro − R$ 400,00 no PIX = faltam R$ 600,00. No
- *  crédito, com o acréscimo desta venda (11%): R$ 600,00 × 1,11 = R$ 666,00." */
-export function fraseDaConta(entradas: EntradaDividida[], base: number, dv: Dividido): string {
-  const fatorTxt = dv.fator.toFixed(2).replace(".", ",");
-  let partes = fmtReais(base) + " no dinheiro";
-  entradas.forEach((e) => {
-    if (e.auto) return;
-    const nome = NOME_DO_METODO[e.method] || e.method;
-    if (ehCartao(e.method)) {
-      partes += " − " + fmtReais(e.value) + " no " + nome + " (÷ " + fatorTxt + " = " + fmtReais(e.value / dv.fator) + ")";
-    } else {
-      partes += " − " + fmtReais(e.value) + " no " + nome;
-    }
-  });
+/**
+ * A conta do dividido numa frase de balcão (QA 23/09/2026 — antes era a
+ * equação "R$ 1.142,40 no dinheiro − R$ 1.268,16 no crédito (÷ 1,11 = …)"):
+ *   · "o que falta" no cartão → "Faltam R$ 742,40. No cartão fica
+ *     R$ 824,13 (11% a mais)."
+ *   · no dinheiro/PIX/crediário → "Faltam R$ 600,00 no PIX."
+ * Nada faltando (ou sem a linha "o que falta") → "" — o status já diz.
+ */
+export function fraseDaConta(dv: Dividido): string {
   const auto = dv.entradas.find((e) => e.auto);
-  const faltaBase = auto
-    ? (ehCartao(auto.method) ? r2(auto.value / dv.fator) : auto.value)
-    : Math.max(0, dv.falta);
-  partes += " = faltam " + fmtReais(faltaBase);
-  if (auto && ehCartao(auto.method)) {
-    return partes + ". No " + (NOME_DO_METODO[auto.method] || auto.method) +
-      ", com o acréscimo desta venda (" + fmtPct((dv.fator - 1) * 100) + "%): " +
-      fmtReais(faltaBase) + " × " + fatorTxt + " = " + fmtReais(auto.value) + ".";
-  }
-  if (auto) return partes + ", pagos no " + (NOME_DO_METODO[auto.method] || auto.method) + " sem acréscimo.";
-  return partes + ".";
+  if (!auto) return "";
+  const noCartao = ehCartao(auto.method);
+  const faltaBase = noCartao ? r2(auto.value / dv.fator) : r2(auto.value);
+  if (!(faltaBase > 0.005)) return "";
+  if (!noCartao) return "Faltam " + fmtReais(faltaBase) + " no " + (NOME_DO_METODO[auto.method] || auto.method) + ".";
+  const pct = Math.round((dv.fator - 1) * 1000) / 10;
+  const diferenca = pct > 0 ? " (" + fmtPct(pct) + "% a mais)" : pct < 0 ? " (" + fmtPct(-pct) + "% a menos)" : "";
+  return "Faltam " + fmtReais(faltaBase) + ". No cartão fica " + fmtReais(auto.value) + diferenca + ".";
 }
 
 /** Status do dividido nas duas línguas (dinheiro e cartão). */

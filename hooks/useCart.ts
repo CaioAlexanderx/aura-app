@@ -338,8 +338,8 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
   // O que a venda cobra: no dividido com preço no cartão, a soma dos
   // pagamentos (+ o que falta, no dinheiro, enquanto não fecha).
   const totalDaVenda = dividido && splitMode ? r2(dividido.total + Math.max(0, dividido.falta)) : totalAfterCoupon;
-  const splitNote = dividido && splitMode && precoNoCartao && splitPayments.length > 0
-    ? fraseDaConta(splitPayments, precoNoCartao.totalDinheiro, dividido)
+  const splitNote = dividido && splitMode && splitPayments.length > 0
+    ? (fraseDaConta(dividido) || null)
     : null;
   const splitStatus = dividido && splitMode ? statusDoDividido(dividido) : null;
 

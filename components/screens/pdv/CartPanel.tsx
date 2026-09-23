@@ -81,7 +81,7 @@
 //   · card do orçamento salvo com os dois totais.
 // Sem essas props o painel é byte a byte o de antes.
 // ============================================================
-import { Fragment, forwardRef, useMemo, useRef, useState } from "react";
+import { Fragment, forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator, TextInput } from "react-native";
 import { Colors, Glass, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -268,6 +268,22 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
   //    propósito: handleFinalize mostra o toast explicando o que falta. Se
   //    desabilitássemos o Pressable, o lojista clicaria e não aconteceria
   //    absolutamente nada — pior do que o bug original.
+  // QA 23/09/2026: no dividido a conta ("Faltam R$ 742,40. No cartão fica
+  // …") e o status ficavam atrás do rodapé fixo até rolar. No painel de
+  // altura limitada (fill/desktop), ligar o dividido ou mudar o número de
+  // pagamentos rola o corpo até o fim — o painel do dividido, a frase e o
+  // resumo ficam logo acima do "Finalizar venda". No celular a página rola
+  // inteira e o rodapé não é fixo: nada muda.
+  const bodyRef = useRef<ScrollView | null>(null);
+  const linhasDoDividido = splitOn ? (splitPayments || []).length : 0;
+  useEffect(() => {
+    if (!fill || !splitOn) return;
+    const t = setTimeout(() => {
+      try { (bodyRef.current as any)?.scrollToEnd?.({ animated: true }); } catch {}
+    }, 0);
+    return () => clearTimeout(t);
+  }, [fill, splitOn, linhasDoDividido]);
+
   const finalizeHardBlocked = !!isProcessing || items.length === 0 || (splitOn && !splitIsBalanced);
   const finalizeInactive = finalizeHardBlocked || !!finalizeDisabled;
 
@@ -379,7 +395,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
       {/* BODY — rola tudo que pode crescer: itens + pagamento + divisão +
           resumo + CPF. O "Finalizar venda" fica fixo no FOOT, sempre visível.
           Só ancora o checkout no fundo (espaçador) quando fill (desktop). */}
-      <ScrollView style={s.body} contentContainerStyle={fill ? { padding: 14, paddingHorizontal: 16, flexGrow: 1 } : { padding: 14, paddingHorizontal: 16 }}>
+      <ScrollView ref={bodyRef} style={s.body} contentContainerStyle={fill ? { padding: 14, paddingHorizontal: 16, flexGrow: 1 } : { padding: 14, paddingHorizontal: 16 }}>
         {items.length === 0 ? (
           <View style={s.empty}>
             {/* 16/09/2026 (Fase 0 · I0.3): é aqui que a marca da loja fica em
@@ -794,60 +810,63 @@ function SplitRow({
     setBuf(null);
   }
 
-  const row = (
-    <View style={s.splitRow}>
-      {/* Mini chips de método */}
-      <View style={s.splitChips}>
+  // QA 23/09/2026: os cinco métodos e o valor na mesma linha quebravam em
+  // três linhas no painel estreito. Agora cada pagamento tem duas linhas
+  // fixas: os métodos numa faixa só (rótulo curto, sem ícone, dividindo a
+  // largura) e, embaixo, o valor — com "o que falta" à esquerda.
+  const autoTag = entry.auto
+    ? "o que falta" + (entry.method === "cartao" || entry.method === "debito" ? ", com o acréscimo do cartão" : "")
+    : null;
+  return (
+    <View style={s.splitEntry}>
+      <View style={s.splitChips} testID="carrinho-dividido-metodos">
         {methods.map(m => {
           const active = entry.method === m.key;
           return (
             <Pressable
               key={m.key}
               onPress={() => onChangeMethod(m.key)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
               style={[s.splitChip, active && s.splitChipActive]}
             >
-              <Icon name={m.icon as any} size={11} color={active ? Colors.violet : Colors.ink3} />
-              <Text style={[s.splitChipTxt, active && { color: Colors.violet, fontWeight: "700" }]}>{m.label}</Text>
+              <Text style={[s.splitChipTxt, active && { color: Colors.violet, fontWeight: "700" }]} numberOfLines={1}>{m.label}</Text>
             </Pressable>
           );
         })}
       </View>
 
-      {/* Valor */}
-      <View style={entry.auto ? [s.splitValBox, s.splitValBoxAuto] : s.splitValBox}>
-        <Text style={s.splitValPrefix}>R$</Text>
-        <TextInput
-          style={s.splitValInput}
-          value={display}
-          onFocus={() => setBuf(entry.value.toFixed(2).replace(".", ","))}
-          onChangeText={(v) => setBuf(v.replace(/[^\d,.]/g, ""))}
-          onBlur={handleCommit}
-          onSubmitEditing={handleCommit}
-          keyboardType="decimal-pad"
-          selectTextOnFocus
-        />
+      <View style={s.splitRow}>
+        {autoTag ? (
+          <Text testID="carrinho-dividido-falta" style={s.splitAutoTag} numberOfLines={2}>{autoTag}</Text>
+        ) : (
+          <View style={{ flex: 1 }} />
+        )}
+
+        {/* Valor */}
+        <View style={entry.auto ? [s.splitValBox, s.splitValBoxAuto] : s.splitValBox}>
+          <Text style={s.splitValPrefix}>R$</Text>
+          <TextInput
+            style={s.splitValInput}
+            value={display}
+            onFocus={() => setBuf(entry.value.toFixed(2).replace(".", ","))}
+            onChangeText={(v) => setBuf(v.replace(/[^\d,.]/g, ""))}
+            onBlur={handleCommit}
+            onSubmitEditing={handleCommit}
+            keyboardType="decimal-pad"
+            selectTextOnFocus
+          />
+        </View>
+
+        {/* Remover */}
+        {canRemove ? (
+          <Pressable onPress={onRemove} style={s.splitRemove} accessibilityLabel="Tirar este pagamento">
+            <Icon name="x" size={12} color={Colors.ink3} />
+          </Pressable>
+        ) : (
+          <View style={s.splitRemove} />
+        )}
       </View>
-
-      {/* Remover */}
-      {canRemove ? (
-        <Pressable onPress={onRemove} style={s.splitRemove}>
-          <Icon name="x" size={12} color={Colors.ink3} />
-        </Pressable>
-      ) : (
-        <View style={s.splitRemove} />
-      )}
-    </View>
-  );
-
-  if (!entry.auto) return row;
-  // Preço no cartão: a linha "o que falta" ganha o rótulo e a borda
-  // tracejada (tela 4 do mockup). Sempre visível, sem hover.
-  return (
-    <View style={s.splitRowWrap}>
-      <Text testID="carrinho-dividido-falta" style={s.splitAutoTag}>
-        {"o que falta" + (entry.method === "cartao" || entry.method === "debito" ? ", com o acréscimo do cartão" : "")}
-      </Text>
-      {row}
     </View>
   );
 }
@@ -1365,24 +1384,28 @@ const s = StyleSheet.create({
   // Painel de splits
   splitPanel: {
     marginBottom: 12,
-    padding: 10,
+    padding: 8,
     backgroundColor: Glass.lineFaint,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: Glass.lineBorderCard,
     gap: 8,
   },
+  // Um pagamento do dividido: faixa de métodos + linha do valor.
+  splitEntry: { gap: 5 },
   splitRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  splitChips: { flex: 1, flexDirection: "row", flexWrap: "wrap", gap: 4 },
+  // Os métodos dividem a largura numa linha só (nunca quebram): em 320px de
+  // carrinho cada um tem ≈ 48px, o suficiente para "Crediário" em 10px.
+  splitChips: { flexDirection: "row", flexWrap: "nowrap", gap: 3 },
   splitChip: {
-    flexDirection: "row", alignItems: "center", gap: 3,
-    paddingVertical: 4, paddingHorizontal: 7,
+    flex: 1, minWidth: 0, alignItems: "center", justifyContent: "center",
+    paddingVertical: 6, paddingHorizontal: 2,
     borderRadius: 6,
     backgroundColor: Glass.lineSoft,
     borderWidth: 1, borderColor: "transparent",
   },
   splitChipActive: { backgroundColor: Colors.violetD, borderColor: "rgba(124,58,237,0.4)" },
-  splitChipTxt: { fontSize: 9, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.4 },
+  splitChipTxt: { fontSize: 10, color: Colors.ink3, fontWeight: "600" },
   splitValBox: {
     flexDirection: "row", alignItems: "center", gap: 4,
     backgroundColor: Colors.bg, borderRadius: 6,
@@ -1408,8 +1431,7 @@ const s = StyleSheet.create({
   },
   splitAddTxt: { fontSize: 11, color: Colors.violet3, fontWeight: "700" },
   // Preço no cartão: linha "o que falta" (tracejada, violeta) e a conta.
-  splitRowWrap: { gap: 4 },
-  splitAutoTag: { fontSize: 10, color: Colors.violet3, fontWeight: "700" },
+  splitAutoTag: { flex: 1, minWidth: 0, fontSize: 10, color: Colors.violet3, fontWeight: "700" },
   splitValBoxAuto: { borderStyle: "dashed" as any, borderColor: Colors.violet },
   splitNote: {
     fontSize: 11, color: Colors.ink2, lineHeight: 16,
