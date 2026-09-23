@@ -173,6 +173,30 @@ export function calcMargem(preco: number, custo: number): Margem {
   return { estado: "ok", motivo: null, pct: Math.round((lucro / p) * 100), lucro };
 }
 
+// ── preço no cartão (22/09/2026) ────────────────────────────
+// docs/mockups/preco-no-cartao.html, tela 2. A margem do cartão sai
+// DEPOIS da taxa da maquininha quando ela está ligada — é a pergunta do
+// lojista ("vale a pena cobrar só 5% nesse?").
+export function calcMargemNoCartao(precoCartao: number, custo: number, taxaPct: number): { pct: number; lucro: number } | null {
+  const p = Number(precoCartao) || 0;
+  const c = Number(custo) || 0;
+  if (p <= 0 || c <= 0) return null;
+  const liquido = p * (1 - Math.max(0, Number(taxaPct) || 0) / 100);
+  const lucro = liquido - c;
+  return { pct: Math.round((lucro / p) * 100), lucro };
+}
+
+/**
+ * O que o Salvar grava em card_price: undefined com a opção desligada
+ * (o PATCH não toca na coluna — religou, o ajustado volta), null no
+ * automático, o número quando foi ajustado à mão.
+ */
+export function gravacaoDoPrecoNoCartao(ligado: boolean, manual: boolean, valor: number): number | null | undefined {
+  if (!ligado) return undefined;
+  if (!manual) return null;
+  return valor > 0 ? valor : null;
+}
+
 // ── matriz de variações ─────────────────────────────────────
 // Mesmo formato de services/productsVariationsApi.matrixKey; a função
 // real é injetável (keyFn) pra que o modal use a do serviço e este

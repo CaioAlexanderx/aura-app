@@ -55,6 +55,7 @@ import { useProducts } from "@/hooks/useProducts";
 import { useCategories } from "@/hooks/useCategories";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { readMatconSettings } from "@/constants/matcon";
+import { lerConfigDoCartao } from "@/utils/precoNoCartao";
 import { parseQtyInput, fmtQty, estoqueEmDecimal } from "@/utils/matconUnits";
 import { companiesApi } from "@/services/api";
 import { nfceApi } from "@/services/nfceApi";
@@ -82,6 +83,7 @@ import {
   nomeDoTipo, ordenarFilaDeFotos, preservarValores, resumoDoItem, rotuloDoBotaoSalvar,
   rotuloDoProgresso, subtituloDoModal, textoDeEdicao, textoDoBloqueio, tituloDoModal,
   usaDuasColunas, valorDaMascara, novaLinhaDeLote, lotesParaGravar, totalDosLotes,
+  gravacaoDoPrecoNoCartao,
   type CorDoItem, type FotoPendente, type ItemType, type LinhaDeLote, type StockMode,
 } from "./item-form/types";
 
@@ -145,6 +147,11 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   // PERFIL_PADRAO, e o modal é o de hoje. Vem do pdv_settings da empresa
   // ativa (usePdvSettings), então no multi-CNPJ cada loja tem a sua cara.
   const perfilDaLoja = perfilDoCadastro(pdvSettings);
+  // 22/09/2026 (preço no cartão, docs/mockups/preco-no-cartao.html tela 2).
+  // Desligada: `cartaoCfg.enabled` false, a seção Preço é a de hoje e o
+  // Salvar nem manda card_price (undefined some do PATCH).
+  const cartaoCfg = lerConfigDoCartao(pdvSettings);
+  const taxaDoCredito = pdvSettings.card_fee_enabled === true ? Number(pdvSettings.card_fee_credit_pct || 0) : 0;
 
   // Alvo da edição: vem da prop, mas o banner de duplicata pode TROCAR
   // pra edição do produto que já existe sem fechar o modal.
@@ -155,6 +162,10 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   const [type, setType] = useState<ItemType>(initialType);
   const [nome, setNome] = useState("");
   const [preco, setPreco] = useState("");
+  // Preço no cartão: o texto só vale quando `cartaoManual` (ajustado à mão);
+  // no automático o campo mostra o que o % da loja dá e o Salvar grava null.
+  const [cartaoTxt, setCartaoTxt] = useState("");
+  const [cartaoManual, setCartaoManual] = useState(false);
   const [custo, setCusto] = useState("");
   const [unidade, setUnidade] = useState("un");
   const [stockMode, setStockMode] = useState<StockMode>("single");
@@ -316,6 +327,9 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     setType(t);
     setNome(prod?.name || "");
     setPreco(prod ? mascaraDeValor(prod.price) : "");
+    const cardPrice = prod && prod.cardPrice != null && prod.cardPrice > 0 ? prod.cardPrice : null;
+    setCartaoManual(cardPrice != null);
+    setCartaoTxt(cardPrice != null ? mascaraDeValor(cardPrice) : "");
     setCusto(prod ? mascaraDeValor(prod.cost) : "");
     setUnidade(manter ? manter.unidade : (prod && prod.unit && prod.unit !== "srv" ? prod.unit : "un"));
     // Matcon M0: estoque/mínimo em decimal com vírgula quando a unidade é
@@ -462,6 +476,9 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       barcode: barcode.trim(),
       category: categoriaFinal,
       price: precoNum,
+      // Preço no cartão: undefined com a opção desligada (não toca na
+      // coluna), null no automático, o valor quando ajustado à mão.
+      cardPrice: gravacaoDoPrecoNoCartao(cartaoCfg.enabled, cartaoManual, valorDaMascara(cartaoTxt)),
       cost: valorDaMascara(custo),
       // Produto com variantes guarda o estoque NAS variantes (migration
       // que zerou products.stock_qty do pai). Reescrever o total aqui
@@ -897,6 +914,14 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       unidadesDaLoja={matcon.matcon_units}
       purchaseUnit={purchaseUnit} onPurchaseUnit={(v) => { setPurchaseUnit(v); setSujo(true); }}
       purchaseFactor={purchaseFactorTxt} onPurchaseFactor={(v) => { setPurchaseFactorTxt(v); setSujo(true); }}
+      cartao={cartaoCfg.enabled ? {
+        pct: cartaoCfg.pct,
+        valor: cartaoTxt,
+        manual: cartaoManual,
+        onValor: (v) => { setCartaoTxt(v); setCartaoManual(true); setSujo(true); },
+        onVoltar: () => { setCartaoManual(false); setCartaoTxt(""); setSujo(true); },
+        taxaPct: taxaDoCredito,
+      } : null}
     />
   );
 
