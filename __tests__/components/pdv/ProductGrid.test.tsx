@@ -73,3 +73,31 @@ describe("ProductGrid — card mostra a frase, não a abreviação", () => {
     expect(text).not.toMatch(/EST\./i);
   });
 });
+
+// QA 23/09/2026: duas "MANTA ALUMINIZADA 10CM" (Dryko e Denver) idênticas no
+// grid. Com marca, uma linha pequena debaixo do nome; sem marca, o card de
+// sempre (nada de linha vazia, mesma altura mínima do nome).
+describe("ProductGrid — marca no card", () => {
+  function porTestID(t: renderer.ReactTestRenderer, id: string) {
+    return t.root.findAll((n) => n.props && n.props.testID === id, { deep: false });
+  }
+  const DRYKO: GridProduct = { id: "m1", name: "MANTA ALUMINIZADA 10CM", price: 39.9, stock: 16, unit: "rolo", brand: "Dryko" };
+  const DENVER: GridProduct = { id: "m2", name: "MANTA ALUMINIZADA 10CM", price: 42.5, stock: 8, unit: "rolo", brand: "Denver" };
+  const SEM: GridProduct = { id: "m3", name: "MANTA ALUMINIZADA 10CM", price: 42.5, stock: 8, unit: "rolo", brand: "  " };
+
+  it("mostra a marca de cada um", () => {
+    let t!: renderer.ReactTestRenderer;
+    act(() => { t = renderer.create(<ProductGrid products={[DRYKO, DENVER]} qtyById={{}} onAdd={jest.fn()} />); });
+    expect(flattenText(porTestID(t, "grid-marca-m1")[0].children)).toBe("Dryko");
+    expect(flattenText(porTestID(t, "grid-marca-m2")[0].children)).toBe("Denver");
+    t.unmount();
+  });
+
+  it("sem marca (vazia ou só espaço): nenhuma linha a mais", () => {
+    let t!: renderer.ReactTestRenderer;
+    act(() => { t = renderer.create(<ProductGrid products={[SEM, { ...SEM, id: "m4", brand: undefined }]} qtyById={{}} onAdd={jest.fn()} />); });
+    expect(porTestID(t, "grid-marca-m3")).toHaveLength(0);
+    expect(porTestID(t, "grid-marca-m4")).toHaveLength(0);
+    t.unmount();
+  });
+});
