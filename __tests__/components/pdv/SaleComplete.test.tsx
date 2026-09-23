@@ -73,6 +73,15 @@ describe("tela final da venda", () => {
     tree.unmount();
   });
 
+  test("'N produtos' conta linhas: 10 m² + 500 tijolos = 2 produtos", () => {
+    const tree = montar(VENDA_176);
+    expect(textoDe(tree, "venda-produtos")).toBe("2 produtos");
+    tree.unmount();
+    const um = montar({ ...VENDA_176, items: [VENDA_176.items[0]] }, false);
+    expect(textoDe(um, "venda-produtos")).toBe("1 produto");
+    um.unmount();
+  });
+
   test("cupom + desconto manual: cada um na sua linha e a conta fecha", () => {
     const tree = montar({
       ...VENDA_176, total: 170, subtotal: 200, discount: 30, couponCode: "DEZ", couponDiscount: 20, manualDiscount: 10,

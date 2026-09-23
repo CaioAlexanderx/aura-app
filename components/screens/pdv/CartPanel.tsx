@@ -94,7 +94,7 @@ import { parseQtyInput, fmtQty } from "@/utils/matconUnits";
 import {
   usaCampoDecimal, qtyMaxLength, fraseDeEmbalagem, usaCalculadoraAmbiente, usaLoteNoItem,
   usaPecasNoMilheiro, unidadesParaMilheiro, milheiroParaUnidades, parseInteiroDigitado,
-  fraseDoMilheiro, quantidadeParaContar,
+  fraseDoMilheiro,
 } from "./matconQty";
 import { rotuloDoPagamento } from "./rotulosDoCaixa";
 import { CalculadoraAmbiente } from "@/components/matcon/CalculadoraAmbiente";
@@ -152,6 +152,8 @@ type Props = {
   subtotal: number;
   discountAmount: number;
   total: number;
+  /** Soma das quantidades. Mantido por compatibilidade; o topo conta
+   *  produtos (linhas) desde o QA de 23/09/2026. */
   itemCount: number;
   payMethods: PayChip[];
   activePay: string;
@@ -217,7 +219,7 @@ const HEAD_INK_DIMMER = "rgba(255,255,255,0.55)";
 
 export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRef) {
   const {
-    orderNumber, items, subtotal, discountAmount, total, itemCount,
+    orderNumber, items, subtotal, discountAmount, total,
     payMethods, activePay, onPay,
     onInc, onDec, onSetQty, onPriceChange, onRemove, onClear, onFinalize, onGenerateQuote,
     onLotAllocations,
@@ -343,15 +345,11 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
         ) : null}
         <View style={s.meta}>
           <View>
-            <Text style={s.metaK}>Itens</Text>
-            {/* Com unidade fracionada a soma vira 22,5 — fmtQty escreve em
-                pt-BR. Tijolo em milheiro conta em peças (500, não 0,5).
-                Fora do Matcon fica o número cru de sempre. */}
-            <Text style={s.metaV}>
-              {matcon.matcon_enabled
-                ? fmtQty(items.reduce((acc, it) => acc + quantidadeParaContar(true, it.qty, it.unit), 0))
-                : itemCount}
-            </Text>
+            <Text style={s.metaK}>Produtos</Text>
+            {/* QA 23/09/2026: conta as LINHAS do carrinho. Somar
+                quantidades misturava unidades (10 m² de piso + 500 tijolos
+                = "510"). */}
+            <Text testID="carrinho-produtos" style={s.metaV}>{items.length}</Text>
           </View>
           <View>
             <Text style={s.metaK}>Desconto</Text>

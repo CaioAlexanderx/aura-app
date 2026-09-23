@@ -34,7 +34,6 @@ import type { SaleResult } from "@/hooks/useCart";
 import { PAYMENTS } from "@/hooks/useCart";
 import { NfceActions, type NfceActionsItem } from "./NfceActions";
 import { OsActions } from "./OsActions";
-import { quantidadeParaContar } from "./matconQty";
 import { openPrintWindow } from "@/services/printWindow";
 import type { NfcePaymentEntry } from "@/services/nfceApi";
 
@@ -70,12 +69,12 @@ type Props = {
   /** Se true, dispara nfceApi.emit() automaticamente no mount.
       Lido de nfce_config.auto_emit_nfce pela tela do PDV. */
   autoEmit?: boolean;
-  /** 22/09/2026 (QA Matcon): tijolo em milheiro conta em peças no
-   *  "N produtos" — 500 tijolos, não "0.5 produtos". Opcional, default off. */
+  /** 22/09/2026 (QA Matcon). Sem uso desde 23/09/2026 — "N produtos"
+   *  conta linhas, em qualquer loja. Mantido para não mexer em quem chama. */
   matconEnabled?: boolean;
 };
 
-export function SaleComplete({ sale, onNewSale, autoEmit, matconEnabled = false }: Props) {
+export function SaleComplete({ sale, onNewSale, autoEmit }: Props) {
   const { company, token } = useAuthStore();
   const cupom = sale.couponDiscount && sale.couponDiscount > 0 ? sale.couponDiscount : 0;
   const manual = sale.manualDiscount && sale.manualDiscount > 0 ? sale.manualDiscount : 0;
@@ -98,7 +97,9 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconEnabled = false 
     unit_price: i.price,
   }));
 
-  const totalItens = sale.items.reduce((acc, i) => acc + quantidadeParaContar(matconEnabled, i.qty, i.unit), 0);
+  // QA 23/09/2026: conta PRODUTOS (linhas) — somar quantidades misturava
+  // unidades (10 m² + 500 tijolos = "510 produtos").
+  const totalProdutos = sale.items.length;
 
   // 01/09/2026 — número de venda de verdade. Vem sequencial POR EMPRESA, então
   // é o que o lojista dita no balcão. Quando vier null (venda de ambiente não
@@ -174,7 +175,7 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconEnabled = false 
         )}
         <View style={s.row}>
           <Text style={s.label}>Itens</Text>
-          <Text style={s.meta}>{pluralize(totalItens, "produto")}</Text>
+          <Text testID="venda-produtos" style={s.meta}>{pluralize(totalProdutos, "produto")}</Text>
         </View>
         {sale.customerName && (
           <View style={s.row}>

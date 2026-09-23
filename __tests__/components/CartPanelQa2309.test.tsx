@@ -69,6 +69,17 @@ function montar(extra: Record<string, any> = {}) {
 
 beforeEach(() => { mockPdvSettings = {}; });
 
+describe("Produtos no topo", () => {
+  test("10 m² de piso + 500 tijolos = 2 produtos (não 510), com ou sem Matcon", () => {
+    for (const cfg of [{}, { matcon_enabled: true }]) {
+      mockPdvSettings = cfg;
+      const tree = montar();
+      expect(textoDe(tree, "carrinho-produtos")).toBe("2");
+      tree.unmount();
+    }
+  });
+});
+
 describe("Pagamento no topo", () => {
   test.each([
     ["cartao", "Crédito"], ["debito", "Débito"], ["crediario", "Crediário"], ["dinheiro", "Dinheiro"], ["pix", "PIX"],

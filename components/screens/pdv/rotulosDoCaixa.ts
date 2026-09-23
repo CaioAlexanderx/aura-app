@@ -48,9 +48,3 @@ export function rotuloDoLadoDinheiro(activePay: string, dividido: boolean): stri
 export function fraseDoCupomAplicado(code: string, valor: number | null | undefined): string {
   return "Cupom " + code + " aplicado" + (valor != null && valor > 0 ? " · −" + fmtReais(valor) : "");
 }
-
-/** "1 produto" · "2 produtos" — conta as LINHAS do carrinho (10 m² de piso
- *  e 500 tijolos são 2 produtos, não 510). */
-export function fraseDeProdutos(linhas: number): string {
-  return linhas + (linhas === 1 ? " produto" : " produtos");
-}

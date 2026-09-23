@@ -3,7 +3,7 @@
 // QA 23/09/2026: nada de "CARTAO", "1× SPLIT", "!" no toast do cupom.
 // ============================================================
 import {
-  fraseDeProdutos, fraseDoCupomAplicado, nomeDoPagamento, rotuloDoLadoDinheiro, rotuloDoPagamento,
+  fraseDoCupomAplicado, nomeDoPagamento, rotuloDoLadoDinheiro, rotuloDoPagamento,
 } from "@/components/screens/pdv/rotulosDoCaixa";
 
 describe("toast do cupom", () => {
@@ -40,13 +40,5 @@ describe("par de totais", () => {
     expect(rotuloDoLadoDinheiro("cartao", false)).toBe("Dinheiro ou PIX");
     expect(rotuloDoLadoDinheiro("crediario", false)).toBe("Dinheiro, PIX ou crediário");
     expect(rotuloDoLadoDinheiro("crediario", true)).toBe("Dinheiro ou PIX");
-  });
-});
-
-describe("produtos", () => {
-  test("conta linhas, com plural", () => {
-    expect(fraseDeProdutos(1)).toBe("1 produto");
-    expect(fraseDeProdutos(2)).toBe("2 produtos");
-    expect(fraseDeProdutos(0)).toBe("0 produtos");
   });
 });
