@@ -24,6 +24,8 @@ import {
   estoqueEmDecimal,
   PECAS_POR_MILHEIRO,
   nomeDaUnidade,
+  unidadeParaQuantidade,
+  qtdComUnidade,
 } from "@/utils/matconUnits";
 
 describe("isFractionalUnit", () => {
@@ -285,5 +287,50 @@ describe("nomeDaUnidade — nome por extenso pra tela, sigla continua gravada", 
     expect(nomeDaUnidade("xyz")).toBe("xyz");
     expect(nomeDaUnidade(null)).toBe("");
     expect(nomeDaUnidade(undefined)).toBe("");
+  });
+});
+
+// 23/09/2026 (QA final Matcon): "16 rolo" na lista do Estoque. A unidade que
+// é palavra concorda com a quantidade; medida abreviada e "un" não flexionam.
+describe("qtdComUnidade / unidadeParaQuantidade — plural da unidade", () => {
+  test("casos do QA", () => {
+    expect(qtdComUnidade(16, "rolo")).toBe("16 rolos");
+    expect(qtdComUnidade(1, "rolo")).toBe("1 rolo");
+    expect(qtdComUnidade(2, "sc")).toBe("2 sacos");
+    expect(qtdComUnidade(3, "pç")).toBe("3 peças");
+  });
+
+  test("siglas viram palavra, no singular ou no plural", () => {
+    expect(qtdComUnidade(1, "sc")).toBe("1 saco");
+    expect(qtdComUnidade(4, "br")).toBe("4 barras");
+    expect(qtdComUnidade(1, "mlh")).toBe("1 milheiro");
+    expect(qtdComUnidade(19.5, "mlh")).toBe("19,5 milheiros");
+    expect(qtdComUnidade(0.5, "mlh")).toBe("0,5 milheiro");
+    expect(qtdComUnidade(1.5, "ton")).toBe("1,5 tonelada");
+    expect(qtdComUnidade(2, "par")).toBe("2 pares");
+    expect(qtdComUnidade(10, "cx")).toBe("10 caixas");
+    expect(qtdComUnidade(1, "pct")).toBe("1 pacote");
+  });
+
+  test("zero e negativo seguem o número (0 rolos, -1 rolo)", () => {
+    expect(qtdComUnidade(0, "rolo")).toBe("0 rolos");
+    expect(qtdComUnidade(-1, "rolo")).toBe("-1 rolo");
+  });
+
+  test("m, m², m³, kg, g, ml, L e un não flexionam", () => {
+    expect(qtdComUnidade(12.5, "m²")).toBe("12,5 m²");
+    expect(qtdComUnidade(0, "m")).toBe("0 m");
+    ["m", "m²", "m³", "kg", "g", "ml", "L", "un"].forEach((u) => {
+      expect(unidadeParaQuantidade(1, u)).toBe(u);
+      expect(unidadeParaQuantidade(16, u)).toBe(u);
+    });
+  });
+
+  test("maiúscula e espaço nas pontas; unidade desconhecida volta como veio", () => {
+    expect(qtdComUnidade(2, " Rolo ")).toBe("2 rolos");
+    expect(qtdComUnidade(2, "SC")).toBe("2 sacos");
+    expect(qtdComUnidade(2, "xyz")).toBe("2 xyz");
+    expect(qtdComUnidade(7, null)).toBe("7");
+    expect(qtdComUnidade(1200, undefined)).toBe("1.200");
   });
 });

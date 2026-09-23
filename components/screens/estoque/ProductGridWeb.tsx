@@ -22,7 +22,8 @@ import { useValoresOcultos } from "@/stores/valoresOcultos";
 // SEMPRE pra inteiro — estoque fracionado (12,5 m²) virava "13". fmtQty só
 // mostra decimais quando existem, então pra quem tem estoque inteiro (a
 // imensa maioria, hoje) o texto sai idêntico: neutro fora do Matcon.
-import { fmtQty } from "@/utils/matconUnits";
+// 23/09/2026 (QA final Matcon): "16 rolo" -> "16 rolos", "2 sc" -> "2 sacos".
+import { fmtQty, unidadeParaQuantidade, nomeDaUnidade } from "@/utils/matconUnits";
 
 const fmtBRL = (n: number) =>
   "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -93,7 +94,7 @@ export function ProductGridWeb({ items, onEdit, onDelete, onLink, bulkMode, bulk
         const low = p.stock <= p.minStock && p.unit !== "srv";
         const sku = (p as any).sku || p.code || "—";
         const isSelected = bulkSelected.has(p.id);
-        const variant = [p.color, p.size].filter(Boolean).join(" · ") || p.unit;
+        const variant = [p.color, p.size].filter(Boolean).join(" · ") || nomeDaUnidade(p.unit);
         return (
           <div key={p.id}
             onClick={() => { if (bulkMode) onSelect(p.id); else if (onEdit) onEdit(p); }}
@@ -188,7 +189,7 @@ export function ProductGridWeb({ items, onEdit, onDelete, onLink, bulkMode, bulk
                   {/* 23/09/2026 (QA producao, item 3): "16rolo", "0m" — sem
                       espaço e a unidade herdando a fonte mono do número.
                       Espaço de verdade + fonte normal pra unidade. */}
-                  {" "}<span style={{ fontFamily: Fonts.body, fontWeight: 400 } as any}>{p.unit || "un"}</span>
+                  {" "}<span style={{ fontFamily: Fonts.body, fontWeight: 400 } as any}>{unidadeParaQuantidade(p.stock, p.unit || "un")}</span>
                 </span>
               </div>
             </div>

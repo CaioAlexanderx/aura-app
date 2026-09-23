@@ -16,7 +16,8 @@ import { useValoresOcultos } from "@/stores/valoresOcultos";
 // SEMPRE pra inteiro — estoque fracionado (12,5 m²) virava "13". fmtQty só
 // mostra decimais quando existem, então pra quem tem estoque inteiro (a
 // imensa maioria, hoje) o texto sai idêntico: neutro fora do Matcon.
-import { fmtQty } from "@/utils/matconUnits";
+// 23/09/2026 (QA final Matcon): "16 rolo" -> "16 rolos", "2 sc" -> "2 sacos".
+import { fmtQty, unidadeParaQuantidade, qtdComUnidade, nomeDaUnidade } from "@/utils/matconUnits";
 // 22/09/2026 (Matcon M4): com lots_summary o estoque vira "148,48 m² em 2
 // lotes" e a pilha abre no clique — nunca no hover (regra 7 do CLAUDE.md).
 import { resumoDeLotes } from "@/utils/matconLots";
@@ -97,7 +98,7 @@ export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bul
             const margin = computeMargin(price, p.cost);
             const low = p.stock <= p.minStock && p.unit !== "srv";
             const sku = (p as any).sku || p.code || (p as any).barcode || "—";
-            const variant = [p.color, p.size].filter(Boolean).join(" · ") || p.unit || "—";
+            const variant = [p.color, p.size].filter(Boolean).join(" · ") || nomeDaUnidade(p.unit) || "—";
             const isSelected = bulkSelected.has(p.id);
             // Matcon M4: só chega aqui com o gate dos lotes ligado.
             const lotes = p.lotsSummary && p.lotsSummary.lots.length > 0 ? p.lotsSummary.lots : null;
@@ -175,7 +176,7 @@ export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bul
                     fontFamily: Fonts.mono, fontSize: 14, fontWeight: 600,
                     color: low ? (isDark ? "#f87171" : "#dc2626") : C.ink,
                     fontVariantNumeric: "tabular-nums",
-                  } as any}>{fmtQty(p.stock)}{" "}<span style={{ fontFamily: Fonts.body, fontSize: 11, fontWeight: 400, opacity: 0.7 } as any}>{p.unit || "un"}</span></span>
+                  } as any}>{fmtQty(p.stock)}{" "}<span style={{ fontFamily: Fonts.body, fontSize: 11, fontWeight: 400, opacity: 0.7 } as any}>{unidadeParaQuantidade(p.stock, p.unit || "un")}</span></span>
                   {lotes && (
                     <div>
                       <button
@@ -268,7 +269,7 @@ export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bul
                           background: isDark ? "rgba(120,100,240,0.10)" : "rgba(124,58,237,0.06)",
                         } as any}>
                           <b style={{ color: accent } as any}>lote {l.lot_code}</b>
-                          <span style={{ fontFamily: Fonts.mono, marginLeft: 6 } as any}>{fmtQty(l.qty, p.unit)}</span>
+                          <span style={{ fontFamily: Fonts.mono, marginLeft: 6 } as any}>{qtdComUnidade(l.qty, p.unit)}</span>
                         </span>
                       ))}
                     </div>

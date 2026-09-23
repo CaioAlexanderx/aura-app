@@ -57,7 +57,8 @@ import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { nfceApi } from "@/services/nfceApi";
 // 23/09/2026 (QA producao, item 5): estoque consolidado (AggregatedView)
 // usava "un" fixo e Math.round — errado pra produto fracionado (m², kg).
-import { fmtQty } from "@/utils/matconUnits";
+// 23/09/2026 (QA final Matcon): unidade no plural certo ("16 rolos").
+import { fmtQty, qtdComUnidade, unidadeParaQuantidade } from "@/utils/matconUnits";
 // 23/09/2026 (QA producao, item 10): "Ultimos adicionados" ordenava alfabetico.
 import { compareByRecent } from "@/utils/productSort";
 // import { EstoqueRightRail } from "@/components/screens/estoque/EstoqueRightRail"; // Phase 2 — right rail
@@ -215,7 +216,7 @@ function AggregatedView() {
                           unidade do grupo, com fmtQty pra nao truncar
                           estoque fracionado ("12,5 m²" em vez de "12"). */}
                       <Text style={agg.itemChipText}>
-                        {item.company_name}: {fmtQty(item.stock_qty, g.unit || "un")}
+                        {item.company_name}: {qtdComUnidade(item.stock_qty, g.unit || "un")}
                       </Text>
                     </View>
                   ))}
@@ -227,7 +228,7 @@ function AggregatedView() {
                   Math.round — estoque fracionado (m², kg) nao pode virar
                   inteiro truncado. */}
               <Text style={agg.totalStock}>{fmtQty(g.total_stock)}</Text>
-              <Text style={agg.totalStockLabel}>{g.unit || "un"}</Text>
+              <Text style={agg.totalStockLabel}>{unidadeParaQuantidade(g.total_stock, g.unit || "un")}</Text>
               <Text style={agg.price}>{m(fmt(g.avg_price))}</Text>
             </View>
           </View>
