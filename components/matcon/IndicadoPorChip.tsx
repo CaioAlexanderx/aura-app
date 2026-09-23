@@ -24,6 +24,9 @@
 //
 // Toda a lógica de busca/seleção mora em useMatconReferral (prop
 // `referral`); este componente só renderiza e abre os modais.
+//
+// QA 23/09/2026: busca que falhou mostra frase simples (não "Nenhum
+// parceiro com esse nome"); "pts" virou "pontos".
 // ============================================================
 import { useState } from "react";
 import { View, Text, StyleSheet, Pressable, TextInput, ScrollView } from "react-native";
@@ -147,8 +150,13 @@ export function IndicadoPorChip({ referral, saleTotal, matconOn }: Props) {
 
         <ScrollView style={s.results} contentContainerStyle={{ paddingBottom: 4 }} keyboardShouldPersistTaps="handled">
           {referral.searching && <Text style={s.hint}>Buscando…</Text>}
-          {!referral.searching && query.trim().length > 0 && referral.results.length === 0 && (
-            <Text style={s.hint}>Nenhum parceiro com esse nome</Text>
+          {!referral.searching && referral.searchError && (
+            <Text style={[s.hint, s.hintErro]} testID="indicadopor-erro">
+              Não consegui procurar os parceiros agora. Confira a internet e digite de novo daqui a pouco.
+            </Text>
+          )}
+          {!referral.searching && !referral.searchError && query.trim().length > 0 && referral.results.length === 0 && (
+            <Text style={s.hint}>Nenhum parceiro com esse nome. Se ele ainda não é parceiro, use um dos botões abaixo.</Text>
           )}
           {referral.results.map(p => (
             <Pressable key={p.id} style={s.row} onPress={() => handlePick(p)} testID={`indicadopor-resultado-${p.id}`}>
@@ -160,7 +168,7 @@ export function IndicadoPorChip({ referral, saleTotal, matconOn }: Props) {
                   {" · " + p.referrals_count + (p.referrals_count === 1 ? " indicação" : " indicações")}
                 </Text>
               </View>
-              <Text style={s.rowPoints}>{p.points_balance} pts</Text>
+              <Text style={s.rowPoints}>{p.points_balance} {p.points_balance === 1 ? "ponto" : "pontos"}</Text>
             </Pressable>
           ))}
         </ScrollView>
@@ -229,6 +237,7 @@ const s = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 13, color: Colors.ink },
   results: { maxHeight: 260, marginHorizontal: 18 },
   hint: { fontSize: 12, color: Colors.ink3, paddingVertical: 10, textAlign: "center" },
+  hintErro: { color: Colors.amber, fontWeight: "600" },
   row: {
     flexDirection: "row", alignItems: "center", gap: 8,
     paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: Colors.border,

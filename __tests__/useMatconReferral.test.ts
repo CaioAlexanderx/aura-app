@@ -50,4 +50,25 @@ describe("useMatconReferral", () => {
     act(() => { result.current.search("nivaldo"); });
     expect(mockSearchProfessionals).not.toHaveBeenCalled();
   });
+
+  // QA 23/09/2026: busca que falha ≠ busca sem resultado.
+  it("busca que falhou liga searchError; a próxima busca e o clear desligam", async () => {
+    jest.useFakeTimers();
+    mockSearchProfessionals.mockRejectedValueOnce(Object.assign(new Error("Rota nao encontrada"), { status: 404 }));
+    const { result } = renderHook(() =>
+      useMatconReferral({ companyId: "empresa-1", matconEnabled: true, clubEnabled: true, pointsPer100: 10 })
+    );
+    act(() => { result.current.search("nivaldo"); });
+    await act(async () => { jest.advanceTimersByTime(350); });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(result.current.searchError).toBe(true);
+    expect(result.current.searching).toBe(false);
+    expect(result.current.results).toEqual([]);
+
+    act(() => { result.current.search("niv"); });
+    expect(result.current.searchError).toBe(false);
+    act(() => { result.current.clear(); });
+    expect(result.current.searchError).toBe(false);
+    jest.useRealTimers();
+  });
 });

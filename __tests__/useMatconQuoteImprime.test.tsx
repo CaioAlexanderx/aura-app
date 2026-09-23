@@ -1,10 +1,16 @@
 // ============================================================
-// QA 23/09/2026 — "Orçamento" com o Matcon ligado não imprimia.
+// "Orçamento" do Caixa com o Matcon ligado: IMPRIME E SALVA no mesmo
+// clique (QA final 23/09/2026).
 //
-// POST /matcon/quotes ainda não existe no backend (404, "Rota nao
-// encontrada"). Salvar que falha tem de imprimir pelo caminho de sempre
-// (onSaveFailed), sem mostrar o texto do sistema; e depois de um 404 o
-// botão volta a imprimir direto (saveQuote some).
+//   - imprime ANTES de esperar a API (o navegador só abre a janela de
+//     impressão dentro do clique) — o `onPrint` roda de forma síncrona,
+//     antes de o createQuote responder;
+//   - salvou: card "Orçamento #N salvo" (savedQuote) e toast "impresso e
+//     salvo";
+//   - salvar falhou (404 "Rota nao encontrada", 500, rede): o papel já
+//     saiu, o toast diz em português simples que não ficou guardado —
+//     nunca o texto do sistema — e o salvar continua disponível no
+//     próximo clique (o backend pode chegar no meio do dia).
 // ============================================================
 import React from "react";
 import renderer, { act } from "react-test-renderer";
@@ -26,66 +32,106 @@ import { useMatconQuote } from "@/hooks/useMatconQuote";
 import { ehRotaAusente, textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
 
 let api: ReturnType<typeof useMatconQuote>;
-function Harness({ onSaveFailed }: { onSaveFailed?: () => void }) {
+function Harness({ onPrint, cart }: { onPrint?: () => void; cart?: any[] }) {
   api = useMatconQuote({
     companyId: "empresa-1",
     matconEnabled: true,
-    cart: [{ productId: "p1", name: "Cimento", price: 38, qty: 10, unit: "sc" }],
-    onSaveFailed,
+    cart: cart ?? [{ productId: "p1__v1", name: "Cimento", price: 38, qty: 10, unit: "sc" }],
+    onPrint,
   });
   return null;
 }
-function montar(onSaveFailed?: () => void) {
+function montar(onPrint?: () => void, cart?: any[]) {
   let tree!: renderer.ReactTestRenderer;
-  act(() => { tree = renderer.create(<Harness onSaveFailed={onSaveFailed} />); });
+  act(() => { tree = renderer.create(<Harness onPrint={onPrint} cart={cart} />); });
   return tree;
 }
 function erroDaApi(status: number, message: string) {
   return Object.assign(new Error(message), { status, data: { error: message }, isNetworkError: false });
 }
+const QUOTE = { id: "q1", number: 12, total: 380, valid_until: "2026-09-30", public_token: "tok", customer_name: null };
 
 beforeEach(() => { jest.clearAllMocks(); });
 
-describe("salvar falhou → imprime", () => {
-  test("404 (rota ainda não existe): imprime, nada de 'Rota nao encontrada', e o botão passa a imprimir direto", async () => {
-    mockCreateQuote.mockRejectedValueOnce(erroDaApi(404, "Rota nao encontrada"));
+describe("um clique = imprime e salva", () => {
+  test("imprime no clique, ANTES da resposta da API; salvou → card e toast 'impresso e salvo'", async () => {
+    let responder!: (v: any) => void;
+    mockCreateQuote.mockImplementationOnce(() => new Promise((r) => { responder = r; }));
     const imprimir = jest.fn();
     const tree = montar(imprimir);
-    expect(typeof api.saveQuote).toBe("function");
-    await act(async () => { await api.saveQuote!(); });
+
+    let promessa!: Promise<void>;
+    act(() => { promessa = api.saveQuote!(); });
+    // A API ainda não respondeu e o papel já saiu.
     expect(imprimir).toHaveBeenCalledTimes(1);
-    expect(toast.error).not.toHaveBeenCalled();
-    expect(api.saveQuote).toBeUndefined();
+    expect(mockCreateQuote).toHaveBeenCalledTimes(1);
+    expect(api.saving).toBe(true);
+    expect(imprimir.mock.invocationCallOrder[0]).toBeLessThan(mockCreateQuote.mock.invocationCallOrder[0]);
+
+    await act(async () => { responder({ quote: QUOTE }); await promessa; });
+    expect(api.savedQuote?.number).toBe(12);
+    expect(api.savedQuote?.validUntilLabel).toBe("30/09");
     expect(api.saving).toBe(false);
+    expect(toast.success).toHaveBeenCalledWith("Orçamento #12 impresso e salvo em Orçamentos");
+    // product_id sem o sufixo da variante.
+    expect(mockCreateQuote.mock.calls[0][1].items[0]).toMatchObject({ product_id: "p1", quantity: 10, unit_price: 38, unit: "sc" });
     tree.unmount();
   });
 
-  test("outro erro (500, rede): imprime também, e o salvar continua disponível", async () => {
+  test("404 (rota ainda não existe): imprimiu, avisa sem jargão e o salvar continua disponível", async () => {
+    mockCreateQuote.mockRejectedValueOnce(erroDaApi(404, "Rota nao encontrada"));
+    const imprimir = jest.fn();
+    const tree = montar(imprimir);
+    await act(async () => { await api.saveQuote!(); });
+
+    expect(imprimir).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith("O orçamento foi impresso, mas não ficou guardado em Orçamentos. Tente de novo daqui a pouco.");
+    expect(JSON.stringify((toast.error as jest.Mock).mock.calls)).not.toContain("Rota");
+    expect(api.savedQuote).toBeNull();
+    expect(typeof api.saveQuote).toBe("function");
+    expect(api.saving).toBe(false);
+
+    // O backend chegou: o próximo clique imprime e salva.
+    mockCreateQuote.mockResolvedValueOnce({ quote: QUOTE });
+    await act(async () => { await api.saveQuote!(); });
+    expect(imprimir).toHaveBeenCalledTimes(2);
+    expect(api.savedQuote?.number).toBe(12);
+    tree.unmount();
+  });
+
+  test("500 e rede também imprimem, com a frase simples", async () => {
     mockCreateQuote.mockRejectedValueOnce(erroDaApi(500, "Internal Server Error"));
     const imprimir = jest.fn();
     const tree = montar(imprimir);
     await act(async () => { await api.saveQuote!(); });
     expect(imprimir).toHaveBeenCalledTimes(1);
-    expect(toast.error).not.toHaveBeenCalled();
-    expect(typeof api.saveQuote).toBe("function");
+    expect(toast.error).toHaveBeenCalledWith("O orçamento foi impresso, mas não ficou guardado em Orçamentos. Tente de novo daqui a pouco.");
     tree.unmount();
   });
 
-  test("salvou: não imprime sozinho", async () => {
-    mockCreateQuote.mockResolvedValueOnce({ quote: { id: "q1", number: 12, total: 380, valid_until: "2026-09-30" } });
+  test("frase do backend para o lojista passa como veio", async () => {
+    mockCreateQuote.mockRejectedValueOnce(erroDaApi(400, "Cliente bloqueado para orçamento"));
+    const tree = montar(jest.fn());
+    await act(async () => { await api.saveQuote!(); });
+    expect(toast.error).toHaveBeenCalledWith("Cliente bloqueado para orçamento");
+    tree.unmount();
+  });
+
+  test("carrinho vazio: nem imprime nem chama a API", async () => {
     const imprimir = jest.fn();
-    const tree = montar(imprimir);
+    const tree = montar(imprimir, []);
     await act(async () => { await api.saveQuote!(); });
     expect(imprimir).not.toHaveBeenCalled();
-    expect(api.savedQuote?.number).toBe(12);
+    expect(mockCreateQuote).not.toHaveBeenCalled();
+    expect(toast.info).toHaveBeenCalled();
     tree.unmount();
   });
 
-  test("sem onSaveFailed: o toast é neutro, nunca o texto do sistema", async () => {
+  test("sem onPrint: só salva, e o erro é neutro", async () => {
     mockCreateQuote.mockRejectedValueOnce(erroDaApi(404, "Rota nao encontrada"));
     const tree = montar();
     await act(async () => { await api.saveQuote!(); });
-    expect(toast.error).toHaveBeenCalledWith("Não deu para salvar o orçamento");
+    expect(toast.error).toHaveBeenCalledWith("Não consegui salvar o orçamento. Tente de novo daqui a pouco.");
     tree.unmount();
   });
 });

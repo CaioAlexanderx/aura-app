@@ -294,6 +294,9 @@ export function CustomerRow({
               onClose={() => setShowMarcarProfissional(false)}
               onMarked={handleProfessionalMarked}
               presetCustomer={{ id: c.id, name: c.name, phone: c.phone }}
+              // Multi-CNPJ: o parceiro nasce na empresa onde o cliente foi
+              // cadastrado (a mesma do crediário/histórico acima).
+              companyId={targetCompanyId || null}
             />
           )}
         </View>
