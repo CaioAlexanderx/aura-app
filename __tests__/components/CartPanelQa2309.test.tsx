@@ -80,6 +80,27 @@ describe("Produtos no topo", () => {
   });
 });
 
+describe("par de totais (preço no cartão)", () => {
+  const PAR = { cash: 1142.4, card: 1268.16, active: "cash" as const };
+  test("'Dinheiro ou PIX' e 'Cartão'", () => {
+    const tree = montar({ pricePair: PAR });
+    expect(textoDe(tree, "carrinho-par-dinheiro")).toBe("Dinheiro ou PIX");
+    expect(textoDe(tree, "carrinho-par-cartao")).toBe("Cartão");
+    tree.unmount();
+  });
+  test("com Crediário o destaque cita o crediário", () => {
+    const tree = montar({ activePay: "crediario", pricePair: PAR });
+    expect(textoDe(tree, "carrinho-par-dinheiro")).toBe("Dinheiro, PIX ou crediário");
+    tree.unmount();
+  });
+  test("sem pricePair (opção desligada): nada do par", () => {
+    const tree = montar({ activePay: "crediario" });
+    expect(porTestID(tree, "carrinho-par-dinheiro")).toHaveLength(0);
+    expect(flattenText(tree.toJSON())).not.toMatch(/Dinheiro ou PIX|Dinheiro, PIX/);
+    tree.unmount();
+  });
+});
+
 describe("Pagamento no topo", () => {
   test.each([
     ["cartao", "Crédito"], ["debito", "Débito"], ["crediario", "Crediário"], ["dinheiro", "Dinheiro"], ["pix", "PIX"],

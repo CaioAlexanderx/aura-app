@@ -72,7 +72,7 @@
 //
 // 22/09/2026 (preço no cartão — docs/mockups/preco-no-cartao.html, telas 3
 // e 5). Tudo opcional e só com a opção da loja ligada:
-//   · `pricePair`: o par "dinheiro e PIX · cartão" dentro do bloco violeta,
+//   · `pricePair`: o par "Dinheiro ou PIX · Cartão" dentro do bloco violeta,
 //     logo abaixo do total — o vendedor responde "e no cartão?" sem tocar
 //     em nada. O lado do chip escolhido acende. No celular é a única linha
 //     a mais (≈ 36px); o rodapé continua Limpar · Orçamento · Finalizar.
@@ -96,7 +96,7 @@ import {
   usaPecasNoMilheiro, unidadesParaMilheiro, milheiroParaUnidades, parseInteiroDigitado,
   fraseDoMilheiro,
 } from "./matconQty";
-import { rotuloDoPagamento } from "./rotulosDoCaixa";
+import { rotuloDoLadoDinheiro, rotuloDoPagamento } from "./rotulosDoCaixa";
 import { CalculadoraAmbiente } from "@/components/matcon/CalculadoraAmbiente";
 import { LoteDoItem } from "@/components/matcon/LotePicker";
 import type { LotAllocation } from "@/services/matconApi";
@@ -333,12 +333,18 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
         </View>
         {pricePair ? (
           <View style={s.par} testID="carrinho-par-precos">
+            {/* QA 23/09/2026: "Dinheiro ou PIX" (o mesmo do papel e da
+                etiqueta). Com Crediário o destaque cai deste lado, então o
+                rótulo cita o crediário — e pode quebrar em 2 linhas no
+                carrinho estreito em vez de cortar. */}
             <View style={[s.parItem, pricePair.active === "cash" && s.parItemOn]}>
-              <Text style={s.parK} numberOfLines={1}>dinheiro e PIX</Text>
+              <Text testID="carrinho-par-dinheiro" style={s.parK} numberOfLines={2}>
+                {rotuloDoLadoDinheiro(activePay, splitOn)}
+              </Text>
               <Text style={s.parV} numberOfLines={1}>{fmtCurrency(pricePair.cash)}</Text>
             </View>
             <View style={[s.parItem, pricePair.active === "card" && s.parItemOn]}>
-              <Text style={s.parK} numberOfLines={1}>cartão</Text>
+              <Text testID="carrinho-par-cartao" style={s.parK} numberOfLines={1}>Cartão</Text>
               <Text style={s.parV} numberOfLines={1}>{fmtCurrency(pricePair.card)}</Text>
             </View>
           </View>
@@ -1236,7 +1242,7 @@ const s = StyleSheet.create({
   metaK: { fontSize: 9, fontWeight: "700", color: HEAD_INK_DIMMER, letterSpacing: 1, textTransform: "uppercase" },
   metaV: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 12, color: HEAD_INK, fontWeight: "700", marginTop: 3 },
   subtitle: { fontSize: 10, color: HEAD_INK_DIMMER, marginTop: 10 },
-  // Par "dinheiro e PIX · cartão" (preço no cartão). Cabe no bloco violeta
+  // Par "Dinheiro ou PIX · Cartão" (preço no cartão). Cabe no bloco violeta
   // do celular em ≈ 36px: rótulo 10 + valor 13 + respiro.
   par: { flexDirection: "row", gap: 6, marginBottom: 8 },
   parItem: {
