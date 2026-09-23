@@ -55,6 +55,7 @@ import { useAuthStore } from "@/stores/auth";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { matconApi, type Quote, type QuoteStatus } from "@/services/matconApi";
 import { readMatconSettings, type MatconSettings } from "@/constants/matcon";
+import { chaveDoOrcamento } from "@/hooks/useOrcamentoNoCaixa";
 import { openWhatsApp } from "@/utils/whatsapp";
 import { EsteiraMatcon, EsteiraCard, EsteiraVazia, EsteiraVaziaDestaque, EsteiraErro, type EsteiraEstacao } from "@/components/matcon/EsteiraMatcon";
 import { RETRY_DA_TELA, fraseDoErroDeCarga, textoDoErro } from "@/components/matcon/erroMatcon";
@@ -77,6 +78,15 @@ const fmtMoney = (n: number | string | null | undefined) =>
 /** Dinheiro da esteira e da linha-resumo: sem centavos, que é o que se lê de longe. */
 const fmtMoneyCurto = (n: number | string | null | undefined) =>
   `R$ ${Math.round(Number(n || 0)).toLocaleString("pt-BR")}`;
+
+/**
+ * A linha-resumo do topo (QA 23/09/2026): com um orçamento de R$ 979,90 ela
+ * dizia "R$ 980" e o card logo abaixo "R$ 979,90" — parecia conta errada.
+ * Abaixo de R$ 10 mil vai com centavos, igual ao card; acima disso o
+ * arredondado lê melhor e ninguém confunde com o card.
+ */
+const fmtMoneyResumo = (n: number | string | null | undefined) =>
+  Math.abs(Number(n || 0)) < 10_000 ? fmtMoney(n) : fmtMoneyCurto(n);
 
 function primeiroNome(nome: string | null | undefined): string {
   const t = (nome || "").trim();
@@ -199,11 +209,12 @@ function MatconOrcamentosScreen() {
     try {
       const res = await matconApi.convertQuote(company.id, quote.id);
       invalidate();
-      toast.success(`Orçamento #${quote.number} virou pedido — o Caixa abre com ${res.cart.length} ${res.cart.length === 1 ? "item" : "itens"}`);
-      // O Caixa lê `quote` da URL e monta o carrinho sozinho
-      // (hooks/usePdvState.ts, efeito "Caixa abre orçamento convertido"),
-      // mesmo desenho do `troca` que /pdv já aceita. Por isso não passamos
-      // o `cart` da resposta por estado de navegação: quem manda é o id.
+      // QA 23/09/2026: sem aviso aqui — quem avisa é o Caixa, uma vez só,
+      // quando o carrinho já está montado ("Orçamento #1 no carrinho — 2
+      // itens", hooks/useOrcamentoNoCaixa.ts). O orçamento convertido fica
+      // no cache na mesma chave que o Caixa lê, então lá ele nem precisa
+      // buscar de novo; quem manda continua sendo o `quote` da URL.
+      qc.setQueryData(chaveDoOrcamento(company.id, quote.id), { quote: res.quote });
       router.push(`/pdv?quote=${quote.id}` as any);
     } catch (e: any) {
       toast.error(textoDoErro(e, "Não consegui virar o orçamento em pedido. Tente de novo em instantes."));
@@ -263,9 +274,9 @@ function MatconOrcamentosScreen() {
         subtitle={
           !resumo ? (falhou ? "Não consegui carregar os orçamentos agora." : isLoading ? "Carregando…" : undefined) : (
             <Text>
-              {fmtMoneyCurto(resumo.open.total)} em orçamentos abertos ·{" "}
+              {fmtMoneyResumo(resumo.open.total)} em orçamentos abertos ·{" "}
               <Text style={{ color: resumo.expiring.count > 0 ? Colors.amber : Colors.ink3, fontWeight: resumo.expiring.count > 0 ? "700" : "400" }}>
-                {fmtMoneyCurto(resumo.expiring.total)} {resumo.expiring.count === 1 ? "vence" : "vencem"} em até {warnDays} {warnDays === 1 ? "dia" : "dias"}
+                {fmtMoneyResumo(resumo.expiring.total)} {resumo.expiring.count === 1 ? "vence" : "vencem"} em até {warnDays} {warnDays === 1 ? "dia" : "dias"}
               </Text>
               {" "}· {resumo.approved.count} {resumo.approved.count === 1 ? "aprovado" : "aprovados"}
             </Text>

@@ -67,7 +67,7 @@ import { ProductGrid } from "@/components/screens/pdv/ProductGrid";
 import { CartPanel } from "@/components/screens/pdv/CartPanel";
 import { CaixaButton } from "@/components/screens/pdv/CaixaButton";
 import { PdvModals } from "@/components/screens/pdv/PdvModals";
-import { IndicadoPorChip } from "@/components/matcon/IndicadoPorChip";
+import { IndicadoPorChip, IndicadoPorPontos } from "@/components/matcon/IndicadoPorChip";
 
 import { usePdvState } from "@/hooks/usePdvState";
 import { querAbrirTroca } from "@/utils/devolucaoOuTroca";
@@ -165,11 +165,11 @@ function CaixaScreenInner() {
         <View style={s.root}>
           <CaixaDesignStyle />
           <CaixaBackdrop />
-          <SaleComplete sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} matconEnabled={st.matconEnabled} />
+          <SaleComplete sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} matconEnabled={st.matconEnabled} matconDeliveryDays={st.matconDeliveryDays} referralName={st.referralName} />
         </View>
       );
     }
-    return <SaleComplete sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} matconEnabled={st.matconEnabled} />;
+    return <SaleComplete sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} matconEnabled={st.matconEnabled} matconDeliveryDays={st.matconDeliveryDays} referralName={st.referralName} />;
   }
 
   function StockToggle() {
@@ -328,6 +328,9 @@ function CaixaScreenInner() {
                 <View style={{ flex: 1, minWidth: 8 }} />
                 <ActBarcode onScan={handleScan} listening={scannerListening} lastCode={lastScannedCode} />
               </View>
+              {/* A frase dos pontos da indicação mora abaixo da barra, numa
+                  linha própria — dentro dela desalinhava os chips (QA 23/09). */}
+              <IndicadoPorPontos referral={referral} saleTotal={totalFinal} matconOn={referral.active} />
 
               <View style={s.catRow}>
                 <View style={{ flex: 1, minWidth: 0 }}>
@@ -439,6 +442,7 @@ function CaixaScreenInner() {
             lastCode={lastScannedCode}
           />
         </View>
+        <IndicadoPorPontos referral={referral} saleTotal={totalFinal} matconOn={referral.active} />
 
         <View style={[s.catRow, { marginBottom: 8 }]}>
           <View style={{ flex: 1, minWidth: 0 }}>

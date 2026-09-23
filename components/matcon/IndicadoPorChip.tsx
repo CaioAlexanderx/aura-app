@@ -27,6 +27,14 @@
 //
 // QA 23/09/2026: busca que falhou mostra frase simples (não "Nenhum
 // parceiro com esse nome"); "pts" virou "pontos".
+//
+// QA 23/09/2026 (Caixa com profissional escolhido): o chip preenchido era
+// um bloco de duas linhas (chip + card dos pontos) DENTRO da barra de
+// ações, e empurrava Cliente/Vendedora/Cupom para duas linhas
+// desalinhadas. Agora o chip tem a mesma altura dos outros (40 px, como o
+// ActPerson) e diz "Indicado por Abbey · pedreiro ×"; a frase dos pontos
+// virou <IndicadoPorPontos>, que o Caixa põe numa linha logo abaixo da
+// barra de chips.
 // ============================================================
 import { useState } from "react";
 import { View, Text, StyleSheet, Pressable, TextInput, ScrollView } from "react-native";
@@ -96,30 +104,18 @@ export function IndicadoPorChip({ referral, saleTotal, matconOn }: Props) {
   }
 
   const referred = referral.referred;
-  const pontos = referred ? referral.pontosPrevistos(saleTotal) : 0;
 
   return (
     <View style={s.wrap}>
       {referred ? (
-        <View style={s.wrap}>
-          <View style={s.chipFilled} testID="indicadopor-chip">
-            <Text style={s.chipLabel} numberOfLines={1}>
-              Indicado por: <Text style={s.chipStrong}>{referred.customer_name}</Text>
-              {" · " + (TRADE_LABELS[referred.trade] || referred.trade)}
-            </Text>
-            <Pressable onPress={referral.clear} hitSlop={8} accessibilityLabel="Remover indicação" testID="indicadopor-remover">
-              <Text style={s.chipClose}>×</Text>
-            </Pressable>
-          </View>
-          {pontos > 0 && (
-            <View style={s.pointsCard} testID="indicadopor-pontos">
-              <Icon name="tag" size={13} color={Colors.violet3} />
-              <Text style={s.pointsText}>
-                <Text style={s.pointsStrong}>{referred.customer_name} ganha {pontos} pontos</Text>
-                {" com esta venda de " + fmtCurrency(saleTotal) + "."}
-              </Text>
-            </View>
-          )}
+        <View style={s.chipFilled} testID="indicadopor-chip">
+          <Text style={s.chipLabel} numberOfLines={1}>
+            Indicado por <Text style={s.chipStrong}>{referred.customer_name}</Text>
+            {" · " + (TRADE_LABELS[referred.trade] || referred.trade)}
+          </Text>
+          <Pressable onPress={referral.clear} hitSlop={8} accessibilityLabel="Remover indicação" testID="indicadopor-remover">
+            <Text style={s.chipClose}>×</Text>
+          </Pressable>
         </View>
       ) : (
         <Pressable style={s.chipInvite} onPress={openSheet} testID="indicadopor-abrir">
@@ -202,29 +198,52 @@ export function IndicadoPorChip({ referral, saleTotal, matconOn }: Props) {
   );
 }
 
+/**
+ * "Abbey ganha 10 pontos com esta venda de R$ 1.093,21." — numa linha só,
+ * abaixo da barra de chips do Caixa (app/(tabs)/pdv.tsx). Some sem
+ * profissional escolhido, com clube desligado ou quando a venda não soma
+ * pontos.
+ */
+export function IndicadoPorPontos({ referral, saleTotal, matconOn }: Props) {
+  if (!matconOn) return null;
+  const referred = referral.referred;
+  if (!referred) return null;
+  const pontos = referral.pontosPrevistos(saleTotal);
+  if (pontos <= 0) return null;
+  return (
+    <View style={s.pointsLine} testID="indicadopor-pontos">
+      <Icon name="tag" size={13} color={Colors.violet3} />
+      <Text style={s.pointsText} numberOfLines={1}>
+        <Text style={s.pointsStrong}>{referred.customer_name} ganha {pontos} {pontos === 1 ? "ponto" : "pontos"}</Text>
+        {" com esta venda de " + fmtCurrency(saleTotal) + "."}
+      </Text>
+    </View>
+  );
+}
+
 const s = StyleSheet.create({
-  wrap: { gap: 8 },
+  // Só o chip ocupa a barra; as folhas abaixo são modais e não pesam.
+  wrap: { alignSelf: "flex-start" },
   chipInvite: {
-    paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10,
+    height: 40, justifyContent: "center",
+    paddingHorizontal: 12, borderRadius: 10,
     borderWidth: 1, borderColor: Colors.border2, backgroundColor: "transparent",
   },
   chipInviteText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
   chipFilled: {
     flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10,
+    height: 40, paddingHorizontal: 12, borderRadius: 10,
     borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.violetD,
     maxWidth: 320,
   },
   chipLabel: { fontSize: 12, color: Colors.ink2, fontWeight: "500", flexShrink: 1 },
   chipStrong: { fontWeight: "700", color: Colors.ink },
   chipClose: { fontSize: 14, color: Colors.ink3, fontWeight: "700", paddingHorizontal: 2 },
-  pointsCard: {
-    flexDirection: "row", alignItems: "flex-start", gap: 6,
-    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10,
-    backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2,
-    maxWidth: 380,
+  pointsLine: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    marginTop: -4, marginBottom: 12,
   },
-  pointsText: { fontSize: 11.5, color: Colors.ink2, flex: 1, lineHeight: 16 },
+  pointsText: { fontSize: 12, color: Colors.ink2, flexShrink: 1 },
   pointsStrong: { fontWeight: "700", color: Colors.ink },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 18, paddingBottom: 10 },
   title: { fontSize: 15, fontWeight: "700", color: Colors.ink },

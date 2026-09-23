@@ -49,7 +49,7 @@
 //     sucesso; aqui só compomos os dados do carrinho/cliente/vendedora e
 //     colamos o resultado em cartProps (onSaveQuote/savingQuote/savedQuote).
 //   · `?quote={id}` na rota do Caixa (com o toggle ligado): busca o
-//     orçamento com matconApi.getQuote e povoa o carrinho via
+//     orçamento (hooks/useOrcamentoNoCaixa) e povoa o carrinho via
 //     addToCart+setQty (mesmo par que o campo decimal do CartPanel usa),
 //     identifica o cliente se houver customer_id, e tira o `quote` da URL
 //     pra não recarregar de novo num refresh/voltar. Sem `?quote`, nada
@@ -57,7 +57,7 @@
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 
 import { useAuthStore } from "@/stores/auth";
 import { useProducts } from "@/hooks/useProducts";
@@ -74,10 +74,10 @@ import { useCaixa } from "@/hooks/useCaixa";
 import { couponsApi, employeesApi, pdvApi } from "@/services/api";
 import { nfceApi } from "@/services/nfceApi";
 import { creditApi } from "@/services/creditApi";
-import { matconApi } from "@/services/matconApi";
 import { readMatconSettings } from "@/constants/matcon";
 import { useMatconQuote } from "@/hooks/useMatconQuote";
 import { useMatconReferral } from "@/hooks/useMatconReferral";
+import { useOrcamentoNoCaixa } from "@/hooks/useOrcamentoNoCaixa";
 
 import { toast } from "@/components/Toast";
 import { flyToCart } from "@/components/screens/pdv/flyToCart";
@@ -285,8 +285,14 @@ export function usePdvState() {
     clubEnabled: matcon.matcon_club_enabled,
     pointsPer100: matcon.matcon_points_per_100,
   });
+  // QA 23/09/2026: a tela final diz "Abbey ganhou 10 pontos com esta venda",
+  // mas a resposta da venda não traz o nome e o chip some logo depois da
+  // venda. Guarda o último profissional escolhido: a tela final só consulta
+  // quando a resposta diz que houve indicação, e aí ele é o que foi na venda.
+  const ultimoIndicadoRef = useRef<string | null>(null);
   useEffect(() => {
     setReferredProfessionalId(matconReferral.referred?.id || null);
+    if (matconReferral.referred) ultimoIndicadoRef.current = matconReferral.referred.customer_name || null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matconReferral.referred]);
   // QA final 23/09: venda registrada → o chip "Indicado por" some. O
@@ -313,51 +319,40 @@ export function usePdvState() {
   }
 
   // ── Matcon M1 — Caixa abre orçamento convertido (`?quote={id}`) ─────────
-  // A esteira de Orçamentos (fora deste PR) manda pra cá com `?quote=<id>`
-  // depois de "Converter em pedido". Só roda com o toggle ligado; sem
-  // `?quote` este efeito nunca dispara — zero impacto pra quem não tem
-  // Matcon. `quoteLoadedRef` evita recarregar o mesmo orçamento a cada
-  // re-render, e o `router.setParams` tira o `quote` da URL depois de
-  // povoar o carrinho (senão um refresh/voltar duplicaria os itens).
+  // A esteira de Orçamentos manda pra cá com `?quote=<id>` depois de
+  // "Virar pedido". A busca, a proteção contra montar duas vezes e o aviso
+  // único moram em hooks/useOrcamentoNoCaixa.ts (QA 23/09/2026: eram 4
+  // avisos e um GET /quotes/undefined); aqui só dizemos COMO o orçamento
+  // vira carrinho. Sem Matcon ou sem `?quote`, nada acontece.
   const quoteRouteParams = useLocalSearchParams<{ quote?: string }>();
-  const quoteLoadedRef = useRef<string | null>(null);
-  useEffect(() => {
-    const quoteId = quoteRouteParams.quote ? String(quoteRouteParams.quote) : null;
-    if (!quoteId || !matcon.matcon_enabled || !company?.id) return;
-    if (quoteLoadedRef.current === quoteId) return;
-    quoteLoadedRef.current = quoteId;
-
-    matconApi.getQuote(company.id, quoteId)
-      .then(({ quote }) => {
-        quote.items.forEach((it, idx) => {
-          // Item sem product_id (avulso, digitado no orçamento) ganha uma
-          // chave sintética só pra existir no carrinho — não bate com
-          // nenhum produto do catálogo, então não soma quantidade com
-          // nada que já esteja lá.
-          const key = it.product_id || ("orcamento-" + quote.id + "-" + idx);
-          // Preço no cartão: o unit_price do orçamento é o preço no
-          // dinheiro; o do cartão sai do card_price/% do produto (mesma
-          // proporção quando o preço do orçamento é outro).
-          const doCatalogo = it.product_id ? products.find(p => p.id === it.product_id) : undefined;
-          addToCart({
-            id: key, name: it.name, price: it.unit_price, unit: it.unit || undefined,
-            cardPrice: doCatalogo?.cardPrice ?? null,
-            refPrice: doCatalogo ? doCatalogo.price : undefined,
-          });
-          setQty(key, it.quantity);
+  useOrcamentoNoCaixa({
+    quoteParam: quoteRouteParams.quote,
+    companyId: company?.id,
+    enabled: matcon.matcon_enabled,
+    aplicar: (quote) => {
+      quote.items.forEach((it, idx) => {
+        // Item sem product_id (avulso, digitado no orçamento) ganha uma
+        // chave sintética só pra existir no carrinho — não bate com
+        // nenhum produto do catálogo, então não soma quantidade com
+        // nada que já esteja lá.
+        const key = it.product_id || ("orcamento-" + quote.id + "-" + idx);
+        // Preço no cartão: o unit_price do orçamento é o preço no
+        // dinheiro; o do cartão sai do card_price/% do produto (mesma
+        // proporção quando o preço do orçamento é outro).
+        const doCatalogo = it.product_id ? products.find(p => p.id === it.product_id) : undefined;
+        addToCart({
+          id: key, name: it.name, price: it.unit_price, unit: it.unit || undefined,
+          cardPrice: doCatalogo?.cardPrice ?? null,
+          refPrice: doCatalogo ? doCatalogo.price : undefined,
         });
-        if (quote.customer_id) {
-          selectCustomer(quote.customer_id, quote.customer_name || null, quote.customer_phone || null);
-        }
-        setQuoteId(quote.id); // vai como quote_id no POST da venda (M1)
-        toast.success("Orçamento #" + quote.number + " carregado no carrinho");
-        try { router.setParams({ quote: undefined } as any); } catch {}
-      })
-      .catch(() => {
-        toast.error("Não foi possível carregar o orçamento");
+        setQty(key, it.quantity);
       });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quoteRouteParams.quote, matcon.matcon_enabled, company?.id]);
+      if (quote.customer_id) {
+        selectCustomer(quote.customer_id, quote.customer_name || null, quote.customer_phone || null);
+      }
+      setQuoteId(quote.id); // vai como quote_id no POST da venda (M1)
+    },
+  });
 
   // ── Viewport ──────────────────────────────────────────────────────────────
   const vp         = useViewport();
@@ -1014,6 +1009,10 @@ export function usePdvState() {
     // 22/09/2026 (QA Matcon): o grid e o fim da venda mostram o milheiro em
     // peças ("20 mlh em estoque · 20.000 un", "500 produtos").
     matconEnabled: matcon.matcon_enabled,
+    // Tela final (SaleComplete): prazo da entrega criada pela venda e o nome
+    // de quem indicou (QA 23/09/2026).
+    matconDeliveryDays: matcon.matcon_default_delivery_days,
+    referralName: matconReferral.referred?.customer_name || ultimoIndicadoRef.current,
     // Preço no cartão: o grid mostra "cartão R$ X" embaixo do preço.
     cardPriceOn,
     gridCardPrice: (p: { price: number; cardPrice?: number | null }) => precoNoCartaoDoProduto(p, cardCfg),
