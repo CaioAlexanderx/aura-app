@@ -44,6 +44,9 @@ jest.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
 }));
 
+// A folha do pedido usa o Modal do RNW (portal): fora do teste de render.
+jest.mock("@/components/ResponsiveSheet", () => ({ ResponsiveSheet: () => null }));
+
 jest.mock("@/components/RequireCompanyScope", () => ({
   RequireCompanyScope: ({ children }: any) => children,
 }));
@@ -154,6 +157,47 @@ describe("/matcon/compras — toggle ligado, 1 sugestão", () => {
     texto = flatten(tree.toJSON());
     expect(texto).toContain("Cal hidratada CH-III 20 kg");
 
+    tree.unmount();
+  });
+});
+
+// QA 23/09/2026: produto que já está num pedido ENVIADO continuava em
+// "Falta comprar" como se ninguém tivesse pedido.
+describe("/matcon/compras — item já pedido", () => {
+  const { request } = require("@/services/api");
+
+  test("a linha diz 'já pedido no C-0001, chega em breve' e o pedido novo leva só o resto", async () => {
+    mockPdvSettings = { matcon_enabled: true };
+    const ARGAMASSA = { ...SUGESTAO_CIMENTO, product_id: "prod-argamassa", name: "Argamassa AC-III 20 kg", suggested_qty: 80, est_cost: 1512 };
+    mockSuggestions = {
+      suggestions: [SUGESTAO_CIMENTO, ARGAMASSA],
+      summary: { total_est_cost: 3486, items_below_min: 2, suppliers: 1 },
+    };
+    mockOrders = {
+      orders: [{
+        id: "pedido-1", number: "C-0001", status: "sent",
+        supplier_name: "Cimentos Ipê Distribuidora", supplier_cnpj: "11.111.111/0001-11",
+        items: [{ product_id: "prod-cimento", name: "Cimento CP-II 50 kg", unit: "sc", quantity: 60, unit_cost_est: 32.9, received_qty: 0 }],
+        total_est: 1974, sent_at: "2026-09-22T10:00:00Z", created_at: "2026-09-22T09:00:00Z",
+      }],
+      summary: { draft: { count: 0, total: 0 }, sent: { count: 1, total: 1974 }, received_7d: { count: 0, total: 0 } },
+    };
+    (request as jest.Mock).mockResolvedValue({ order: { id: "novo", number: "C-0002", status: "draft", items: [], total_est: 0, created_at: "" } });
+
+    const tree = montar();
+    const linha = tree.root.findAll((n) => n.props && n.props.testID === "matcon-ja-pedido-prod-cimento", { deep: false });
+    expect(linha.length).toBe(1);
+    expect(flatten(linha[0].children)).toContain("já pedido no C-0001, chega em breve");
+    // A argamassa continua com a frase da sugestão.
+    expect(flatten(tree.toJSON())).toContain("sugerimos 80 sc");
+
+    const botao = tree.root.findAll((n) => n.props && typeof n.props.testID === "string" && n.props.testID.startsWith("matcon-montar-pedido-"), { deep: false })[0];
+    expect(flatten(botao.children)).toContain("Montar pedido");
+    await act(async () => { botao.props.onPress(); });
+
+    const chamada = (request as jest.Mock).mock.calls.find((c: any[]) => String(c[0]).endsWith("/matcon/purchase-orders") && c[1]?.method === "POST");
+    expect(chamada).toBeTruthy();
+    expect(chamada[1].body.items).toEqual([{ product_id: "prod-argamassa", quantity: 80 }]);
     tree.unmount();
   });
 });

@@ -139,6 +139,8 @@ export type Delivery = {
 };
 
 export type DeliveryListFilters = {
+  // "pending" = tudo o que ainda não foi entregue, de qualquer dia (QA
+  // 23/09/2026; antes era só o saldo de entrega dividida).
   day?: "today" | "tomorrow" | "late" | "pending" | "all";
   stage?: DeliveryStage | "all";
   limit?: number;
@@ -151,7 +153,7 @@ export type DeliveryListResponse = {
     ready: { count: number; total: number };
     out: { count: number; total: number };
     delivered_today: { count: number; total: number };
-    pending_orders: number;   // pedidos com saldo a entregar
+    pending_orders: number;   // pedidos com entrega ainda não entregue
   };
 };
 
@@ -238,7 +240,13 @@ export type PurchaseSuggestion = {
   supplier_cnpj: string | null;
   supplier_phone?: string | null;
   days_to_stockout: number | null;
+  // QA 23/09/2026 (decisão do Caio): Compras segue a regra do Estoque —
+  // estoque <= mínimo, inclusive zerado com mínimo 0. Campo aditivo do
+  // backend: por que o item entrou na lista. Ausente = backend antigo.
+  reason?: PurchaseSuggestionReason;
 };
+
+export type PurchaseSuggestionReason = "abaixo_do_minimo" | "zerado_sem_minimo" | "vai_acabar";
 
 export type PurchaseSuggestionsResponse = {
   suggestions: PurchaseSuggestion[];

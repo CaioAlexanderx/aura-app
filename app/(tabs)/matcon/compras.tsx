@@ -54,6 +54,15 @@
 //   · Pedido montado e não enviado (`draft`, que o contrato já devolve)
 //     aparece no topo de "Falta comprar" com "Continuar pedido" — antes ele
 //     sumia ao fechar a folha e o dono montava outro por cima.
+//
+// QA 23/09/2026, com o backend no ar:
+//   · Produto que já está num pedido ENVIADO (e ainda não chegou inteiro)
+//     continuava em "Falta comprar" como se ninguém tivesse pedido. A linha
+//     agora diz "já pedido no C-0001, chega em breve" e fica FORA do
+//     "Montar pedido" — se todos os itens do fornecedor já foram pedidos, o
+//     botão vira "Pedir de novo mesmo assim" (aí vai tudo, de propósito).
+//   · Compras segue a regra do Estoque (decisão do Caio): a frase do item
+//     segue o `reason` do backend (comprasUtil.fraseDaSugestao).
 // ============================================================
 import { useMemo, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, TextInput } from "react-native";
@@ -81,7 +90,7 @@ import {
 import { RETRY_DA_TELA, fraseDoErroDeCarga, textoDoErro } from "@/components/matcon/erroMatcon";
 import {
   agruparPorFornecedor, fraseDaSugestao, textoPedidoWhatsApp, progressoDoPedido,
-  fmtMoneyApprox, type FornecedorSugestoes,
+  fmtMoneyApprox, produtosJaPedidos, fraseJaPedido, type FornecedorSugestoes,
 } from "@/components/matcon/comprasUtil";
 
 const fmtMoneyCurto = (n: number | string | null | undefined) =>
@@ -169,6 +178,12 @@ function MatconComprasScreen() {
     [ordersQuery.data],
   );
 
+  // product_id → "C-0001": o que já foi pedido e ainda não chegou.
+  const jaPedidos = useMemo(
+    () => produtosJaPedidos((ordersQuery.data?.orders || []) as PurchaseOrder[]),
+    [ordersQuery.data],
+  );
+
   const pedidosRecebidos = useMemo(() => {
     const agora = Date.now();
     return ((ordersQuery.data?.orders || []) as PurchaseOrder[]).filter((o) => {
@@ -202,13 +217,17 @@ function MatconComprasScreen() {
   // ── Ações ────────────────────────────────────────────────
   async function montarPedido(grupo: FornecedorSugestoes) {
     if (!company?.id || busyKey) return;
+    // O que já está num pedido enviado fica de fora; se TUDO já foi pedido,
+    // o toque é o "Pedir de novo mesmo assim" e vai tudo.
+    const naoPedidos = grupo.items.filter((it: PurchaseSuggestion) => !jaPedidos[it.product_id]);
+    const itens = naoPedidos.length > 0 ? naoPedidos : grupo.items;
     setBusyKey(grupo.key);
     try {
       const res = await matconApi.createPurchaseOrder(company.id, {
         supplier_name: grupo.supplier_name === "Sem fornecedor identificado" ? null : grupo.supplier_name,
         supplier_cnpj: grupo.supplier_cnpj,
         supplier_phone: grupo.supplier_phone,
-        items: grupo.items.map((s: PurchaseSuggestion) => ({ product_id: s.product_id, quantity: s.suggested_qty })),
+        items: itens.map((s: PurchaseSuggestion) => ({ product_id: s.product_id, quantity: s.suggested_qty })),
       });
       invalidate();
       setPedidoAberto(res.order);
@@ -328,6 +347,7 @@ function MatconComprasScreen() {
                   <FornecedorCard
                     key={grupo.key}
                     grupo={grupo}
+                    jaPedidos={jaPedidos}
                     expandido={!!expandidos[grupo.key]}
                     onVerItens={() => setExpandidos((prev) => ({ ...prev, [grupo.key]: !prev[grupo.key] }))}
                     onMontarPedido={() => montarPedido(grupo)}
@@ -396,8 +416,9 @@ function MatconComprasScreen() {
 }
 
 // ── Card da sugestão, por fornecedor ────────────────────────────────
-function FornecedorCard({ grupo, expandido, onVerItens, onMontarPedido, busy }: {
+function FornecedorCard({ grupo, jaPedidos, expandido, onVerItens, onMontarPedido, busy }: {
   grupo: FornecedorSugestoes;
+  jaPedidos: Record<string, string>;
   expandido: boolean;
   onVerItens: () => void;
   onMontarPedido: () => void;
@@ -408,6 +429,7 @@ function FornecedorCard({ grupo, expandido, onVerItens, onMontarPedido, busy }: 
   const somaOcultos = ocultos.reduce((acc, s) => acc + (Number(s.est_cost) || 0), 0);
   const acabando = grupo.min_days_to_stockout !== null && grupo.min_days_to_stockout <= 3;
   const nItens = grupo.items.length;
+  const tudoJaPedido = grupo.items.length > 0 && grupo.items.every((it) => !!jaPedidos[it.product_id]);
 
   const meta = ["quem vendeu esses itens na última nota", grupo.supplier_phone || ""].filter(Boolean).join(" · ");
 
@@ -435,7 +457,7 @@ function FornecedorCard({ grupo, expandido, onVerItens, onMontarPedido, busy }: 
             )}
             <Pressable onPress={onMontarPedido} style={[st.miniBtn, st.miniBtnPrimary]} testID={`matcon-montar-pedido-${grupo.key}`}>
               <Icon name="clipboard" size={13} color="#fff" />
-              <Text style={[st.miniBtnText, { color: "#fff" }]}>Montar pedido</Text>
+              <Text style={[st.miniBtnText, { color: "#fff" }]}>{tudoJaPedido ? "Pedir de novo mesmo assim" : "Montar pedido"}</Text>
             </Pressable>
           </>
         )
@@ -445,11 +467,18 @@ function FornecedorCard({ grupo, expandido, onVerItens, onMontarPedido, busy }: 
       <Text style={st.meta} numberOfLines={2}>{meta}</Text>
 
       <View style={{ marginTop: 8, gap: 4 }}>
-        {visiveis.map((item) => (
-          <Text key={item.product_id} style={st.itemFrase}>
-            <Text style={st.itemNomeInline}>{item.name}</Text> · {fraseDaSugestao(item)}
-          </Text>
-        ))}
+        {visiveis.map((item) => {
+          const pedido = jaPedidos[item.product_id];
+          return pedido ? (
+            <Text key={item.product_id} style={[st.itemFrase, st.itemJaPedido]} testID={`matcon-ja-pedido-${item.product_id}`}>
+              <Text style={st.itemNomeInline}>{item.name}</Text> · {fraseJaPedido(pedido)}
+            </Text>
+          ) : (
+            <Text key={item.product_id} style={st.itemFrase}>
+              <Text style={st.itemNomeInline}>{item.name}</Text> · {fraseDaSugestao(item)}
+            </Text>
+          );
+        })}
         {!expandido && ocultos.length > 0 && (
           <Text style={st.itemMais}>
             mais {ocultos.length} {ocultos.length === 1 ? "item" : "itens"} deste fornecedor · {fmtMoneyApprox(somaOcultos)}
@@ -743,6 +772,7 @@ const st = StyleSheet.create({
 
   itemFrase: { fontSize: 12.5, color: Colors.ink2, lineHeight: 18 },
   itemNomeInline: { color: Colors.ink, fontWeight: "600" },
+  itemJaPedido: { color: Colors.ink3 },
   itemMais: { fontSize: 12, color: Colors.ink3, marginTop: 2 },
 
   aviso: { flexDirection: "row", gap: 8, alignItems: "flex-start", marginTop: 10, padding: 9, borderRadius: 10, backgroundColor: Colors.amberD, borderWidth: 1, borderColor: Colors.amber + "73" },

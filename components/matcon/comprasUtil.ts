@@ -21,7 +21,7 @@
 //      (pedido fica em "Pedido enviado" até fechar sozinho com o XML).
 // ============================================================
 import type { PurchaseOrder, PurchaseOrderItem, PurchaseSuggestion } from "@/services/matconApi";
-import { fmtQty } from "@/utils/matconUnits";
+import { fmtQty, qtdComUnidade } from "@/utils/matconUnits";
 
 function round3(n: number | null | undefined): number {
   return Math.round((Number(n) || 0) * 1000) / 1000;
@@ -87,16 +87,61 @@ export function agruparPorFornecedor(suggestions: PurchaseSuggestion[]): Fornece
 /**
  * "tem 12 sc, mínimo 40, vende 18/semana → sugerimos 60 sc (~R$ 1.974)" —
  * a frase que o card mostra por item, do jeito que o balcão fala.
+ *
+ * QA 23/09/2026 (decisão do Caio — Compras segue a regra do Estoque): o
+ * backend diz por que o item entrou (`reason`):
+ *   · "zerado_sem_minimo": "mínimo 0" não diz nada ao lojista →
+ *     "estoque zerado · sem mínimo cadastrado — sugiro 1 caixa (~R$ 50)";
+ *   · "vai_acabar": o mínimo não é o motivo → "tem 12 sacos, acaba em 4
+ *     dias no ritmo atual → sugerimos 60 sacos (~R$ 1.974)".
+ * Sem `reason` (ou "abaixo_do_minimo"), a frase de sempre.
  */
 export function fraseDaSugestao(s: PurchaseSuggestion): string {
+  const custo = " (" + fmtMoneyApprox(s.est_cost) + ")";
+  if (s.reason === "zerado_sem_minimo") {
+    return "estoque zerado · sem mínimo cadastrado — sugiro " + qtdComUnidade(s.suggested_qty, s.unit) + custo;
+  }
+  if (s.reason === "vai_acabar" && s.days_to_stockout !== null && s.days_to_stockout !== undefined) {
+    const dias = Math.max(0, Math.round(Number(s.days_to_stockout) || 0));
+    return (
+      "tem " + qtdComUnidade(s.stock, s.unit) +
+      ", acaba em " + dias + (dias === 1 ? " dia" : " dias") + " no ritmo atual" +
+      " → sugerimos " + qtdComUnidade(s.suggested_qty, s.unit) + custo
+    );
+  }
   const unidade = s.unit ? " " + s.unit : "";
   return (
     "tem " + fmtQty(s.stock) + unidade +
     ", mínimo " + fmtQty(s.min_stock) +
     ", vende " + fmtQty(s.weekly_sales) + "/semana" +
     " → sugerimos " + fmtQty(s.suggested_qty) + unidade +
-    " (" + fmtMoneyApprox(s.est_cost) + ")"
+    custo
   );
+}
+
+// ── Item que já está num pedido enviado ─────────────────────
+
+/**
+ * product_id → número do pedido ENVIADO que ainda espera esse produto
+ * (o item não chegou inteiro). QA 23/09/2026: o produto pedido continuava
+ * em "Falta comprar" como se ninguém tivesse pedido; agora a linha diz
+ * "já pedido no C-0001, chega em breve" e fica fora do pedido novo.
+ */
+export function produtosJaPedidos(orders: PurchaseOrder[]): Record<string, string> {
+  const mapa: Record<string, string> = {};
+  (orders || []).forEach((o) => {
+    if (o.status !== "sent") return;
+    (o.items || []).forEach((it) => {
+      if (round3(it.received_qty) >= round3(it.quantity)) return;
+      if (!mapa[it.product_id]) mapa[it.product_id] = o.number;
+    });
+  });
+  return mapa;
+}
+
+/** "já pedido no C-0001, chega em breve" */
+export function fraseJaPedido(numeroDoPedido: string): string {
+  return "já pedido no " + numeroDoPedido + ", chega em breve";
 }
 
 // ── O texto pronto para o WhatsApp do fornecedor ────────────
