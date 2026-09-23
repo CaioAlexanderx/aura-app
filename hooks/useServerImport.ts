@@ -24,7 +24,7 @@ import { Platform } from "react-native";
 import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { BASE_URL } from "@/services/api";
-import { buildImportExtras, csvTextToMatrix, rowsFromMatrix } from "@/utils/importPlanilha";
+import { buildImportExtras, csvTextToMatrix, escolherAba, rowsFromMatrix, type AbaPlanilha } from "@/utils/importPlanilha";
 
 export type ServerImportEntity = "products" | "customers" | "transactions";
 
@@ -39,22 +39,37 @@ const ROUTE_MAP: Record<string, string> = {
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_ROWS = 6000; // mesmo limite do backend
 
-async function readFileAsMatrix(file: File): Promise<unknown[][]> {
+type LeituraPlanilha = { matrix: unknown[][]; nomeAba?: string; primeiraAba?: boolean };
+
+async function readFileAsMatrix(file: File): Promise<LeituraPlanilha> {
   const name = file.name.toLowerCase();
   if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
     const buf = await file.arrayBuffer();
     const xlsxLib = await import("xlsx");
     const wb = xlsxLib.read(buf, { type: "array" });
-    const sheetName = wb.SheetNames[0];
-    if (!sheetName) return [];
-    const ws = wb.Sheets[sheetName];
-    // raw:true preserva número como número (preço 7.44 não vira "7,44"
-    // de texto formatado errado); defval:'' pra célula vazia não sumir
-    // e a matriz manter o mesmo número de colunas em toda linha.
-    return xlsxLib.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" }) as unknown[][];
+    // Planilha real de cliente veio com 3 abas — "Gráf1" (gráfico, 1
+    // linha), "Gráf2" (2 mil linhas só de número) e só a 3ª com os
+    // dados de verdade. Ler sempre SheetNames[0] importava a aba de
+    // gráfico e não trazia produto nenhum — monta a matriz de TODAS as
+    // abas e deixa escolherAba decidir qual usar (ver utils/importPlanilha).
+    const abas: AbaPlanilha[] = wb.SheetNames.map(nome => ({
+      nome,
+      // raw:true preserva número como número (preço 7.44 não vira
+      // "7,44" de texto formatado errado); defval:'' pra célula vazia
+      // não sumir e a matriz manter o mesmo número de colunas em
+      // toda linha.
+      matriz: xlsxLib.utils.sheet_to_json(wb.Sheets[nome], { header: 1, raw: true, defval: "" }) as unknown[][],
+    }));
+    const escolhida = escolherAba(abas);
+    if (!escolhida) return { matrix: [] };
+    return {
+      matrix: escolhida.matriz,
+      nomeAba: escolhida.nome,
+      primeiraAba: wb.SheetNames[0] === escolhida.nome,
+    };
   }
   const text = await file.text();
-  return csvTextToMatrix(text);
+  return { matrix: csvTextToMatrix(text) };
 }
 
 export function useServerImport(entity: ServerImportEntity, onComplete?: (result: ServerImportResult) => void) {
@@ -82,15 +97,15 @@ export function useServerImport(entity: ServerImportEntity, onComplete?: (result
 
       setLoading(true);
       try {
-        let matrix: unknown[][];
+        let leitura: LeituraPlanilha;
         try {
-          matrix = await readFileAsMatrix(file);
+          leitura = await readFileAsMatrix(file);
         } catch {
           toast.error("Não conseguimos ler essa planilha. Confira se é um arquivo Excel (.xlsx) ou CSV válido.");
           return;
         }
 
-        const rows = rowsFromMatrix(matrix);
+        const rows = rowsFromMatrix(leitura.matrix);
         if (rows.length === 0) {
           toast.error("Não encontramos dados pra importar. Confira se a planilha tem um cabeçalho com os nomes das colunas.");
           return;
@@ -98,6 +113,13 @@ export function useServerImport(entity: ServerImportEntity, onComplete?: (result
         if (rows.length > MAX_ROWS) {
           toast.error(`A planilha tem ${rows.length} linhas; o limite por importação é ${MAX_ROWS}. Divida em partes menores.`);
           return;
+        }
+
+        // Planilha com mais de uma aba (gráfico, rascunho...) e os
+        // dados não estavam na primeira — avisa qual aba foi lida,
+        // pra não parecer mágica quando o resumo bater com outra coisa.
+        if (leitura.nomeAba && !leitura.primeiraAba) {
+          toast.info(`Lemos a aba "${leitura.nomeAba}"`);
         }
 
         const route = ROUTE_MAP[entity] || `${entity}/import`;

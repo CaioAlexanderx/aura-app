@@ -22,8 +22,10 @@ import {
   csvTextToMatrix,
   describeSuggestedMap,
   detectHeaderRowIndex,
+  escolherAba,
   isLikelyHeaderRow,
   rowsFromMatrix,
+  type AbaPlanilha,
 } from "@/utils/importPlanilha";
 
 describe("detectHeaderRowIndex", () => {
@@ -118,6 +120,58 @@ describe("rowsFromMatrix — CSV comum", () => {
     const matrix = csvTextToMatrix("nome;preco;estoque\nCabo 2,5mm;12,90;40\n");
     const rows = rowsFromMatrix(matrix);
     expect(rows).toEqual([{ nome: "Cabo 2,5mm", preco: "12,90", estoque: "40" }]);
+  });
+});
+
+describe("escolherAba — planilha com abas de gráfico antes dos dados", () => {
+  // Planilha real de uma cliente: 3 abas, nesta ordem — "Gráf1" (ref
+  // A1:H1, 1 linha [1,1,1,1,1,1,1,1]), "Gráf2" (só números, sem
+  // cabeçalho nenhum) e "relatório geral de custo " (nome com espaço
+  // no fim, como veio da cliente) com os dados de verdade: 3 linhas de
+  // título + cabeçalho no índice 3. Ler sempre SheetNames[0] pegava
+  // "Gráf1" e não importava nada.
+  const grafico1: AbaPlanilha = { nome: "Gráf1", matriz: [[1, 1, 1, 1, 1, 1, 1, 1]] };
+  const grafico2: AbaPlanilha = {
+    nome: "Gráf2",
+    matriz: Array.from({ length: 50 }, (_, i) => [i, i * 2, i * 3]),
+  };
+  const dados: AbaPlanilha = {
+    nome: "relatório geral de custo ",
+    matriz: [
+      ["ATUALIZADO EM: 20/09/2026"],
+      ["TABELA DE PREÇO"],
+      [],
+      ["ITEM", "NOME", "UNID.", "MARCA", "CUSTO", "VALOR DIN", "VALOR CART", "ESTOQUE", "TOTAL VEND/EST", "TOTAL C/E"],
+      ["1", "ABRAC TIPO D C/CUNHA 1/2''", "UN", "", 2, 3.5, 3.9, 100, "350", "390"],
+    ],
+  };
+
+  it("pula as abas de gráfico e escolhe a aba com o cabeçalho de verdade", () => {
+    const escolhida = escolherAba([grafico1, grafico2, dados]);
+    expect(escolhida?.nome).toBe("relatório geral de custo ");
+  });
+
+  it("a ordem das abas não importa — acha a mesma independente de onde ela está na lista", () => {
+    const escolhida = escolherAba([grafico2, dados, grafico1]);
+    expect(escolhida?.nome).toBe("relatório geral de custo ");
+  });
+
+  it("rowsFromMatrix na aba escolhida traz os produtos, não os números do gráfico", () => {
+    const escolhida = escolherAba([grafico1, grafico2, dados])!;
+    const rows = rowsFromMatrix(escolhida.matriz);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]["NOME"]).toBe("ABRAC TIPO D C/CUNHA 1/2''");
+  });
+
+  it("sem nenhuma aba com cabeçalho detectável, cai pra aba com mais linhas não vazias (não a de gráfico com 1 linha)", () => {
+    const semCabecalho1: AbaPlanilha = { nome: "A", matriz: [["x"]] };
+    const semCabecalho2: AbaPlanilha = { nome: "B", matriz: [["1", "2"], ["3", "4"], ["5", "6"]] };
+    const escolhida = escolherAba([semCabecalho1, semCabecalho2]);
+    expect(escolhida?.nome).toBe("B");
+  });
+
+  it("lista vazia devolve null", () => {
+    expect(escolherAba([])).toBeNull();
   });
 });
 

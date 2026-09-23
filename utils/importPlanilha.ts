@@ -104,6 +104,37 @@ export function detectHeaderRowIndex(matrix: unknown[][]): number {
   return 0;
 }
 
+export type AbaPlanilha = { nome: string; matriz: unknown[][] };
+
+/** Planilha real de uma cliente veio com 3 abas: "Gráf1" (1 linha de
+ *  gráfico), "Gráf2" (2 mil linhas só de número, sem cabeçalho) e só a
+ *  3ª, "relatório geral de custo ", com os dados de verdade. Ler sempre
+ *  a 1ª aba (SheetNames[0]) importava a aba de gráfico e não trazia
+ *  produto nenhum.
+ *
+ *  Escolhe a primeira aba em que isLikelyHeaderRow acha cabeçalho nas
+ *  10 primeiras linhas; se nenhuma bater (planilha de aba única, sem
+ *  coluna de nome), cai pra aba com mais linhas não vazias — nunca
+ *  pra aba de gráfico com 1 linha. */
+export function escolherAba(abas: AbaPlanilha[]): AbaPlanilha | null {
+  if (!abas || abas.length === 0) return null;
+
+  for (const aba of abas) {
+    const limit = Math.min(aba.matriz.length, 10);
+    for (let i = 0; i < limit; i++) {
+      if (isLikelyHeaderRow(aba.matriz[i] || [])) return aba;
+    }
+  }
+
+  let melhor = abas[0];
+  let melhorCount = -1;
+  for (const aba of abas) {
+    const count = aba.matriz.filter(row => (row || []).some(c => normalizeText(c) !== "")).length;
+    if (count > melhorCount) { melhorCount = count; melhor = aba; }
+  }
+  return melhor;
+}
+
 function findNameColumnIndex(headers: string[]): number {
   const priority = ["nome", "produto", "descricao", "item"];
   for (const kw of priority) {
