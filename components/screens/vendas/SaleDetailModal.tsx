@@ -384,7 +384,7 @@ export function SaleDetailModal({
                   em SaleDetailFull; ausente = nada aparece). */}
               {matcon.matcon_enabled && sale?.has_pending_delivery === true && (
                 <Pressable
-                  // Abre Entregas já em "Com saldo a entregar".
+                  // Abre Entregas já em "A entregar".
                   onPress={() => { onClose(); router.push("/matcon/entregas?dia=pending" as any); }}
                   style={s.pendingDeliveryBadge}
                   testID="venda-saldo-a-entregar"

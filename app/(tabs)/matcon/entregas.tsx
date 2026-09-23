@@ -27,8 +27,8 @@
 //     renderizar.
 //   · Duas dimensões de filtro, do jeito que a API já modela
 //     (services/matconApi.ts DeliveryListFilters): os CHIPS filtram por
-//     `day` (Hoje/Amanhã/Com saldo a entregar/Atrasadas — decisão
-//     22/09/2026); tocar numa estação do rail filtra por `stage`
+//     `day` (A entregar/Hoje/Amanhã/Atrasadas — decisão 22/09/2026,
+//     revista no QA de 23/09); tocar numa estação do rail filtra por `stage`
 //     (alterna: tocar de novo limpa). As duas chegam juntas na mesma
 //     query.
 //   · "Quem entregou" é campo livre (decisão 22/09/2026 do faseamento:
@@ -50,9 +50,23 @@
 //     partir de um orçamento, ou do botão "Criar entrega" no detalhe da
 //     venda (components/screens/vendas/SaleDetailModal.tsx, POST
 //     .../deliveries do contrato).
-//   · `?dia=pending` na URL abre direto em "Com saldo a entregar" — é o
-//     destino do selo "saldo a entregar" do detalhe da venda.
+//   · `?dia=pending` na URL abre direto em "A entregar" — é o destino do
+//     selo "saldo a entregar" do detalhe da venda.
 //   · "NF-e" virou "nota fiscal" no card (texto sem sigla).
+//
+// QA 23/09/2026, depois do backend no ar: a 1ª entrega nasce para daqui a
+// `matcon_default_delivery_days` dias (2 por padrão) e não aparecia em
+// nenhum filtro — o cabeçalho dizia "1 separando" e a lista "Nenhuma
+// entrega hoje". Agora:
+//   · A aba PADRÃO (e a primeira) é "A entregar": tudo o que ainda não foi
+//     entregue, de qualquer dia (`day=pending`, que o backend passou a ler
+//     assim). Hoje, Amanhã e Atrasadas continuam como filtros.
+//   · "Com saldo a entregar" saiu: a entrega da 2ª viagem também está "a
+//     entregar". `?dia=pending` (selo do detalhe da venda) cai nela.
+//   · Hoje vazio diz quantas entregas estão marcadas para os próximos dias
+//     e oferece o botão para "A entregar".
+//   · A lista vem agrupada e ordenada pela data combinada
+//     (deliveriesUtil.agruparPorDia).
 // ============================================================
 import { useMemo, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, TextInput } from "react-native";
@@ -77,7 +91,7 @@ import {
 } from "@/components/matcon/EsteiraMatcon";
 import { RETRY_DA_TELA, fraseDoErroDeCarga, textoDoErro } from "@/components/matcon/erroMatcon";
 import {
-  agruparPorDia, progressoDoItem, rotuloProgresso, seloSaldo, proximaEtapa, seloEstacao,
+  agruparPorDia, progressoDoItem, rotuloProgresso, seloSaldo, proximaEtapa, seloEstacao, contarProximosDias,
 } from "@/components/matcon/deliveriesUtil";
 import { EmitirNfeEntregaSheet } from "@/components/matcon/EmitirNfeEntregaSheet";
 import { STATUS_MAP, openDanfe, openDanfeTermica } from "@/components/screens/nfe/shared";
@@ -91,15 +105,18 @@ const fmtMoneyCurto = (n: number | string | null | undefined) =>
 
 type DiaFiltro = "today" | "tomorrow" | "pending" | "late";
 
+/** Filtro inicial: o da URL quando é um dos quatro; senão "A entregar". */
 function diaDaUrl(v: unknown): DiaFiltro {
   const s = Array.isArray(v) ? v[0] : v;
-  return s === "tomorrow" || s === "pending" || s === "late" ? s : "today";
+  return s === "today" || s === "tomorrow" || s === "late" || s === "pending" ? s : "pending";
 }
 
+// "A entregar" primeiro e padrão: é onde a entrega nova aparece, seja qual
+// for o dia combinado.
 const CHIPS: { key: DiaFiltro; label: string }[] = [
+  { key: "pending", label: "A entregar" },
   { key: "today", label: "Hoje" },
   { key: "tomorrow", label: "Amanhã" },
-  { key: "pending", label: "Com saldo a entregar" },
   { key: "late", label: "Atrasadas" },
 ];
 
@@ -151,7 +168,30 @@ function MatconEntregasScreen() {
   const falhou = isError && !data;
 
   const resumo = data?.summary;
-  const grupos = useMemo(() => agruparPorDia(data?.deliveries || []), [data]);
+  // "A entregar" é o que ainda não foi entregue — mesmo que o backend
+  // devolva alguma entrega já fechada, ela não entra nesta aba.
+  const grupos = useMemo(() => {
+    const lista = data?.deliveries || [];
+    return agruparPorDia(dia === "pending" ? lista.filter((d) => d.stage !== "delivered") : lista);
+  }, [data, dia]);
+
+  // Hoje vazio: quantas entregas estão marcadas para os próximos dias. Usa a
+  // mesma consulta da aba "A entregar" (mesma chave = mesmo cache), e só
+  // roda quando a lista de hoje voltou vazia.
+  const hojeVazio = dia === "today" && !!data && grupos.length === 0;
+  const aEntregar = useQuery({
+    queryKey: ["matcon-deliveries", company?.id, "pending", stage],
+    queryFn: () =>
+      matconApi.listDeliveries(company!.id, {
+        day: "pending",
+        stage: stage === "all" ? undefined : stage,
+        limit: 200,
+      } as DeliveryListFilters),
+    enabled: !!company?.id && enabled && hojeVazio,
+    staleTime: 15_000,
+    retry: RETRY_DA_TELA,
+  });
+  const proximosDias = hojeVazio && aEntregar.data ? contarProximosDias(aEntregar.data.deliveries || []) : null;
 
   const estacoes: EsteiraEstacao[] = [
     { key: "separating", label: "Separando", count: resumo ? resumo.separating.count : null, money: resumo ? fmtMoneyCurto(resumo.separating.total) : null, tone: "violet", active: stage === "separating", onPress: () => alternarEstacao("separating") },
@@ -263,7 +303,7 @@ function MatconEntregasScreen() {
             <Text>
               {fmtMoneyCurto(materialParado)} em material vendido esperando caminhão ·{" "}
               <Text style={{ color: pedidosComSaldo > 0 ? Colors.amber : Colors.ink3, fontWeight: pedidosComSaldo > 0 ? "700" : "400" }}>
-                {pedidosComSaldo} {pedidosComSaldo === 1 ? "pedido" : "pedidos"} com saldo a entregar
+                {pedidosComSaldo} {pedidosComSaldo === 1 ? "pedido" : "pedidos"} a entregar
               </Text>
             </Text>
           )
@@ -300,23 +340,33 @@ function MatconEntregasScreen() {
         <EsteiraVazia
           testID="matcon-entregas-vazio"
           titulo={
-            dia === "today" ? "Nenhuma entrega hoje."
-              : dia === "tomorrow" ? "Nenhuma entrega amanhã."
-                : dia === "pending" ? "Nenhum pedido com saldo a entregar."
+            dia === "pending" ? "Nada para entregar."
+              : dia === "today" ? "Nenhuma entrega hoje."
+                : dia === "tomorrow" ? "Nenhuma entrega amanhã."
                   : "Nenhuma entrega atrasada."
           }
           frase={
-            dia === "today" ? (
+            dia === "pending" ? (
               <Text>A entrega nasce da venda: quando a venda sai de um orçamento que virou pedido, ou quando você toca em <EsteiraVaziaDestaque>Criar entrega</EsteiraVaziaDestaque> no detalhe da venda, em Vendas. Ela aparece aqui, em <EsteiraVaziaDestaque>Separando</EsteiraVaziaDestaque>.</Text>
+            ) : dia === "today" ? (
+              proximosDias === null ? "Nada marcado para hoje."
+                : proximosDias === 0 ? "Nada marcado para hoje nem para os próximos dias."
+                  : <Text>Há <EsteiraVaziaDestaque>{proximosDias} {proximosDias === 1 ? "entrega marcada" : "entregas marcadas"}</EsteiraVaziaDestaque> para os próximos dias.</Text>
             ) : dia === "tomorrow" ? "Quando uma entrega for marcada para amanhã, ela aparece aqui."
-              : dia === "pending" ? "Toda entrega dividida em duas viagens aparece aqui até fechar o saldo."
-                : "Tudo o que estava marcado para antes de hoje já saiu."
+              : "Tudo o que estava marcado para antes de hoje já saiu."
           }
           acao={
-            <Pressable onPress={() => router.push("/matcon/orcamentos" as any)} style={st.newBtn} testID="matcon-vazio-ir-orcamentos">
-              <Icon name="clipboard" size={14} color="#fff" />
-              <Text style={st.newBtnText}>Ver orçamentos</Text>
-            </Pressable>
+            dia === "pending" ? (
+              <Pressable onPress={() => router.push("/matcon/orcamentos" as any)} style={st.newBtn} testID="matcon-vazio-ir-orcamentos">
+                <Icon name="clipboard" size={14} color="#fff" />
+                <Text style={st.newBtnText}>Ver orçamentos</Text>
+              </Pressable>
+            ) : (
+              <Pressable onPress={() => setDia("pending")} style={st.newBtn} testID="matcon-vazio-ir-a-entregar">
+                <Icon name="truck" size={14} color="#fff" />
+                <Text style={st.newBtnText}>Ver tudo que falta entregar</Text>
+              </Pressable>
+            )
           }
         />
       ) : (

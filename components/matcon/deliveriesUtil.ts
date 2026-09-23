@@ -120,6 +120,20 @@ export function agruparPorDia(deliveries: Delivery[], agora?: Date): GrupoDeEntr
   });
 }
 
+/**
+ * Quantas entregas ainda não entregues estão marcadas para DEPOIS de hoje
+ * (amanhã em diante). É o número que o estado vazio de "Hoje" mostra —
+ * "Há 1 entrega marcada para os próximos dias" — para a entrega nova, que
+ * nasce para daqui a 2 dias, não parecer perdida (QA 23/09/2026).
+ */
+export function contarProximosDias(deliveries: Delivery[], agora?: Date): number {
+  return (deliveries || []).filter(function (d) {
+    if (d.stage === "delivered") return false;
+    var dias = diasAteData(d.scheduled_for, agora);
+    return dias !== null && dias > 0;
+  }).length;
+}
+
 export type ProgressoItem = {
   entregue: number;
   total: number;
