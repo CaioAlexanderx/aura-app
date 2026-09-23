@@ -97,6 +97,13 @@ export type PdvSettings = {
   card_fee_enabled?: boolean;
   card_fee_credit_pct?: number;
   card_fee_debit_pct?: number;
+  // 22/09/2026 (preco no cartao, backend #738 / migration 351): a loja
+  // cobra mais no debito/credito. Todos os planos, desligado por padrao —
+  // desligado, nenhuma tela mostra nada novo. card_price_pct e o % padrao
+  // (0..100; null = ainda nao definido); o preco por produto mora em
+  // products.card_price. Leitura so por utils/precoNoCartao.lerConfigDoCartao.
+  card_price_enabled?: boolean;
+  card_price_pct?: number | null;
   // 26/08/2026: calibracao da impressao de etiquetas por loja. O offset
   // compensa a margem fisica do driver da impressora (pode ser negativo,
   // faixa -8..5). 0 = neutro (comportamento historico). O PUT do backend

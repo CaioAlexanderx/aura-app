@@ -1,14 +1,16 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { View, Text, StyleSheet, Switch, ActivityIndicator, Pressable, TextInput, Platform } from "react-native";
+import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
-import { pdvSettingsApi, type PdvSettings } from "@/services/api";
+import { pdvSettingsApi, companiesApi, type PdvSettings } from "@/services/api";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { Card } from "@/components/screens/configuracoes/shared";
 import { CardFeeSection, type CardFeePalette } from "@/components/screens/configuracoes/CardFeeSection";
+import { CardPriceSection } from "@/components/screens/configuracoes/CardPriceSection";
 
 // ============================================================
 // AURA. — Configurações do Caixa (PDV) por empresa
@@ -20,6 +22,7 @@ import { CardFeeSection, type CardFeePalette } from "@/components/screens/config
 //   - Ativar Crediário (fiado por cliente) — 09/05/2026
 //   - Modal de troco em venda dinheiro — 12/05/2026
 //   - Taxa da maquininha (crédito/débito) — 17/08/2026
+//   - Cobro mais no cartão (preço no cartão) — 22/09/2026
 //   - Restaurante (Fase 7): NFC-e manual, comanda auto-print, taxa servico
 //
 // Persistido em companies.pdv_settings (jsonb).
@@ -51,6 +54,25 @@ export function PdvSettingsCard() {
   // Usa pendingSettings durante save (optimistic), senao usa o do server
   const display = pendingSettings || serverSettings;
   const isFoodVertical = (company as any)?.vertical_active === "food";
+
+  // 22/09/2026 (preço no cartão): "342 produtos seguem os 11% · 18 com preço
+  // no cartão ajustado à mão". Mesma chave do useProducts (cache
+  // compartilhado com o Estoque) e só busca com a opção ligada — desligada,
+  // esta tela não faz requisição nenhuma a mais.
+  const cartaoLigado = display.card_price_enabled === true;
+  const { data: produtosData } = useQuery({
+    queryKey: ["products", company?.id],
+    queryFn: () => companiesApi.products(company!.id),
+    enabled: !!company?.id && cartaoLigado,
+    staleTime: 30000,
+  });
+  const contagemDoCartao = useMemo(() => {
+    const arr: any = (produtosData as any)?.products || (produtosData as any)?.rows || produtosData;
+    if (!Array.isArray(arr)) return null;
+    let manual = 0;
+    arr.forEach((p: any) => { const c = parseFloat(p?.card_price); if (isFinite(c) && c > 0) manual++; });
+    return { auto: arr.length - manual, manual };
+  }, [produtosData]);
 
   async function toggle(key: keyof PdvSettings, value: boolean | number) {
     if (!company?.id || saving) return;
@@ -308,7 +330,19 @@ export function PdvSettingsCard() {
           despesa a parte, na data da venda (competencia, nao repasse).
           18/08/2026: secao extraida pra CardFeeSection — o Studio renderiza
           a mesma secao com tokens proprios em app/studio/(estudio)/configuracoes. */}
+      <Text style={s.groupHeader}>Cartão</Text>
       <CardFeeSection display={display} saving={saving} onToggle={toggle} palette={CARD_FEE_PALETTE} />
+
+      {/* 22/09/2026: preço no cartão (docs/mockups/preco-no-cartao.html,
+          tela 1). Mora junto da taxa da maquininha, no quadro "Cartão" —
+          uma não liga a outra. Todos os planos; desligada = só esta linha. */}
+      <CardPriceSection
+        display={display}
+        saving={saving}
+        onToggle={toggle}
+        palette={CARD_FEE_PALETTE}
+        contagem={cartaoLigado ? contagemDoCartao : null}
+      />
 
       {/* Fase 7 (Restaurante): so aparece se vertical_active === "food" */}
       {isFoodVertical && (
@@ -408,6 +442,7 @@ const s = StyleSheet.create({
   rowLabel:    { fontSize: 13, color: Colors.ink, fontWeight: "600" },
   rowDesc:     { fontSize: 11, color: Colors.ink3, marginTop: 2, lineHeight: 15 },
   divider:     { height: 1, backgroundColor: Colors.border, marginVertical: 2 },
+  groupHeader: { fontSize: 10, color: Colors.ink3, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase", marginTop: 6 },
   caixaLink:   {
     flexDirection: "row", alignItems: "center", gap: 8,
     marginTop: 10, paddingTop: 12,
