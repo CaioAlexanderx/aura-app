@@ -13,6 +13,8 @@ import {
   resultadoCalculadora,
   fmtArea,
   rotuloEmbalagem,
+  valorDaOpcao,
+  fraseDoValor,
 } from "@/components/matcon/calculadoraUtil";
 
 describe("areaDoAmbiente — largura × comprimento, 3 casas", () => {
@@ -123,5 +125,28 @@ describe("rótulos em português", () => {
     expect(rotuloEmbalagem(7)).toBe("7 caixas");
     expect(rotuloEmbalagem(1)).toBe("1 caixa");
     expect(rotuloEmbalagem(7, "cx")).toBe("7 cx");
+  });
+});
+
+describe("quanto sai cada opção (QA 23/09/2026)", () => {
+  it("quantidade × preço, no centavo — a mesma conta da linha do carrinho", () => {
+    // 18,56 m² × R$ 64,80 = R$ 1.202,688 → R$ 1.202,69
+    expect(valorDaOpcao(18.56, 64.8)).toBe(1202.69);
+    expect(valorDaOpcao(0, 64.8)).toBeNull();
+    expect(valorDaOpcao(18.56, 0)).toBeNull();
+    expect(valorDaOpcao(18.56, null)).toBeNull();
+  });
+
+  it("a frase: só o preço do carrinho, ou os dois métodos com o preço no cartão", () => {
+    expect(fraseDoValor({ qty: 18.56, precoUnitario: 64.8 })).toBe("R$ 1.202,69");
+    expect(fraseDoValor({ qty: 18.56, precoUnitario: 64.8, outroPrecoUnitario: 71.93, outroRotulo: "cartão" }))
+      .toBe("R$ 1.202,69 · cartão R$ 1.335,02");
+    expect(fraseDoValor({ qty: 10, precoUnitario: 71.93, outroPrecoUnitario: 64.8, outroRotulo: "dinheiro" }))
+      .toBe("R$ 719,30 · dinheiro R$ 648,00");
+  });
+
+  it("sem preço não inventa valor; outro método igual não repete", () => {
+    expect(fraseDoValor({ qty: 18.56 })).toBe("");
+    expect(fraseDoValor({ qty: 10, precoUnitario: 50, outroPrecoUnitario: 50, outroRotulo: "cartão" })).toBe("R$ 500,00");
   });
 });

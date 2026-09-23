@@ -127,6 +127,41 @@ function reloadAfterSwitch() {
 // é resetado no início do login/register/hydrate (próxima sessão limpa).
 let _logoutInProgress = false;
 
+// ── /auth/me: uma chamada por vez, e nada de repetir logo em seguida ──
+// QA 23/09/2026: abrir o app chamava /auth/me DUAS vezes. hydrate() lê o
+// token do storage e chama /me; quando termina, grava o token no estado, o
+// layout das abas reage ao token e o seu "refetch no mount" (armadilha 1 do
+// CLAUDE.md — plano stale no JWT) chama refreshMe(): outra ida ao servidor,
+// milissegundos depois, com a mesma resposta. Agora:
+//   · a mesma chamada em voo é compartilhada (mesmo token = mesma promise);
+//   · refreshMe() não repete um /me que TERMINOU há menos de JANELA_DO_ME_MS
+//     com o mesmo token — o estado acabou de ser gravado com ele.
+// Todo refreshMe() do app é "revalidar no mount"; nenhum depende de pular
+// essa janela (pagamento/upgrade recarregam a página ou esperam o backend
+// por outro caminho).
+export const JANELA_DO_ME_MS = 3000;
+let _meEmVoo: { token: string; promessa: Promise<any> } | null = null;
+let _ultimoMe: { token: string; em: number } | null = null;
+
+function buscarMe(token: string): Promise<any> {
+  if (_meEmVoo && _meEmVoo.token === token) return _meEmVoo.promessa;
+  const promessa: Promise<any> = authApi.me(token)
+    .then((res: any) => { _ultimoMe = { token, em: Date.now() }; return res; })
+    .finally(() => { if (_meEmVoo && _meEmVoo.promessa === promessa) _meEmVoo = null; });
+  _meEmVoo = { token, promessa };
+  return promessa;
+}
+
+function meAcabouDeVoltar(token: string): boolean {
+  return !!_ultimoMe && _ultimoMe.token === token && Date.now() - _ultimoMe.em < JANELA_DO_ME_MS;
+}
+
+/** Só para testes: zera o controle do /auth/me entre casos. */
+export function __zerarControleDoMe(): void {
+  _meEmVoo = null;
+  _ultimoMe = null;
+}
+
 export const useAuthStore = create<AuthState>((set, get) => {
   setTokenGetter(() => get().token);
 
@@ -204,7 +239,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
       }
 
       try {
-        const meRes: any = await authApi.me(token);
+        const meRes: any = await buscarMe(token);
         const { user, company } = meRes;
         // MULTICNPJ Sessao 1: API agora devolve consolidated_view e company_count direto.
         // Quando consolidated_view=true, company vem como null e nao devemos tentar
@@ -327,8 +362,11 @@ export const useAuthStore = create<AuthState>((set, get) => {
     refreshMe: async () => {
       const tk = get().token;
       if (!tk) return;
+      // Acabou de voltar um /me com este token (o do hydrate, na abertura):
+      // o estado já está fresco. Se houver um em voo, espera o mesmo.
+      if (!_meEmVoo && meAcabouDeVoltar(tk)) return;
       try {
-        const meRes: any = await authApi.me(tk);
+        const meRes: any = await buscarMe(tk);
         const { user, company } = meRes;
         const consolidatedFromApi = !!meRes.consolidated_view;
         const companyCount = meRes.company_count || get().companyCount || 0;

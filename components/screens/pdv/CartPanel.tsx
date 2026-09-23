@@ -274,15 +274,21 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
   // pagamentos rola o corpo até o fim — o painel do dividido, a frase e o
   // resumo ficam logo acima do "Finalizar venda". No celular a página rola
   // inteira e o rodapé não é fixo: nada muda.
+  // QA 23/09/2026 (Matcon): rolar a cada mudança no número de pagamentos
+  // fazia o painel andar por baixo do cursor enquanto o lojista digitava —
+  // a linha "o que falta" entra e sai sozinha conforme o valor digitado.
+  // Agora rola UMA vez, ao ligar o dividido; depois quem rola é o lojista.
   const bodyRef = useRef<ScrollView | null>(null);
-  const linhasDoDividido = splitOn ? (splitPayments || []).length : 0;
+  const divididoJaRolou = useRef(false);
   useEffect(() => {
-    if (!fill || !splitOn) return;
+    if (!splitOn) { divididoJaRolou.current = false; return; }
+    if (!fill || divididoJaRolou.current) return;
     const t = setTimeout(() => {
+      divididoJaRolou.current = true;
       try { (bodyRef.current as any)?.scrollToEnd?.({ animated: true }); } catch {}
     }, 0);
     return () => clearTimeout(t);
-  }, [fill, splitOn, linhasDoDividido]);
+  }, [fill, splitOn]);
 
   const finalizeHardBlocked = !!isProcessing || items.length === 0 || (splitOn && !splitIsBalanced);
   const finalizeInactive = finalizeHardBlocked || !!finalizeDisabled;
@@ -496,7 +502,11 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
                 <Text style={s.splitAddTxt}>Adicionar pagamento</Text>
               </Pressable>
 
-              {splitNote ? (
+              {/* QA 23/09/2026: uma frase por vez. Quem chama com o preço no
+                  cartão manda só o status (que já explica o valor no
+                  cartão); a nota avulsa, se vier, nunca aparece junto do
+                  "Pronto". */}
+              {splitNote && !splitIsBalanced ? (
                 <Text testID="carrinho-dividido-conta" style={s.splitNote}>{splitNote}</Text>
               ) : null}
 
@@ -1235,6 +1245,11 @@ function CartItem({
           purchaseFactor={item.purchaseFactor}
           defaultWastePct={defaultWastePct ?? 0}
           onUse={qty => onQtySet(qty)}
+          // QA 23/09/2026: cada opção mostra quanto custa, no preço da
+          // linha (o do chip escolhido) e, com o preço no cartão, no outro.
+          unitPrice={item.price}
+          otherUnitPrice={item.otherPrice}
+          otherLabel={item.otherLabel}
         />
       ) : null}
     </View>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { pdvApi } from "@/services/api";
 import type { PdvSaleResponse } from "@/services/salesApi";
@@ -6,8 +6,9 @@ import type { LotAllocation } from "@/services/matconApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
+import { aoRecarregar, guardarVenda, recuperarVenda } from "@/utils/vendaGuardada";
 import {
-  CARTAO_DESLIGADO, contaComOServidor, ehCartao, editarPrecoNoDividido, editarPrecoProporcional, fraseDaConta, linhasNoMetodo, linhasRateadas,
+  CARTAO_DESLIGADO, contaComOServidor, ehCartao, editarPrecoNoDividido, editarPrecoProporcional, linhasNoMetodo, linhasRateadas,
   precoNoCartaoDoItem, r2, resolverDividido, statusDoDividido, totalComoNoServidor,
   type ConfigDoCartao, type ContaDaVenda, type DescontosDaVenda, type LinhaDoPayload, type PrecosDaLinha, type RegraDoCupom,
 } from "@/utils/precoNoCartao";
@@ -50,6 +51,29 @@ export type PaymentEntry = {
   // falta" — se preenche sozinha pela regra do dividido até alguém digitar
   // nela. Nunca vai no POST.
   auto?: boolean;
+};
+
+/** A venda em andamento, como vai para o sessionStorage antes de a página
+ *  recarregar (troca de tema — utils/vendaGuardada). */
+type VendaGuardada = {
+  cart: CartItem[];
+  payment: string;
+  selectedCustomerId: string | null;
+  selectedCustomerName: string | null;
+  selectedCustomerPhone: string | null;
+  selectedEmployeeId: string | null;
+  selectedEmployeeName: string | null;
+  sellerName: string;
+  couponCode: string;
+  couponApplied: { code: string; discount: number } | null;
+  couponRule: (RegraDoCupom & { code: string }) | null;
+  discountType: "%" | "R$";
+  discountValue: string;
+  cpfNaNota: string;
+  splitMode: boolean;
+  splitPayments: PaymentEntry[];
+  quoteId: string | null;
+  lotAllocations: Record<string, LotAllocation[]>;
 };
 
 export type SaleResult = {
@@ -203,6 +227,57 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
   const [splitMode, setSplitMode] = useState(false);
   const [splitPayments, setSplitPayments] = useState<PaymentEntry[]>([]);
 
+  // ── A venda sobrevive à troca de tema (QA 23/09/2026) ───────────
+  // Trocar claro/escuro recarrega a página (as cores são congeladas na
+  // importação) e o carrinho sumia sem aviso. Antes da recarga o toggle
+  // chama guardarAntesDeRecarregar(); aqui a venda em andamento vai para o
+  // sessionStorage desta aba e, ao voltar, é recuperada — só na mesma
+  // empresa e só uma vez (utils/vendaGuardada). O "indicado por" não
+  // viaja: quem manda nele é o chip do usePdvState.
+  const vendaAtual: VendaGuardada | null = cart.length === 0 ? null : {
+    cart, payment,
+    selectedCustomerId, selectedCustomerName, selectedCustomerPhone,
+    selectedEmployeeId, selectedEmployeeName, sellerName,
+    couponCode, couponApplied, couponRule,
+    discountType, discountValue, cpfNaNota,
+    splitMode, splitPayments,
+    quoteId, lotAllocations,
+  };
+  const vendaRef = useRef<VendaGuardada | null>(vendaAtual);
+  vendaRef.current = vendaAtual;
+  const empresaRef = useRef(companyId);
+  empresaRef.current = companyId;
+  useEffect(() => aoRecarregar(() => {
+    if (vendaRef.current) guardarVenda(empresaRef.current, vendaRef.current);
+  }), []);
+
+  const jaRecuperou = useRef(false);
+  useEffect(() => {
+    if (jaRecuperou.current || !companyId) return;
+    jaRecuperou.current = true;
+    const v = recuperarVenda<VendaGuardada>(companyId);
+    if (!v || !Array.isArray(v.cart) || v.cart.length === 0) return;
+    setCart(v.cart);
+    if (v.payment) setPayment(v.payment);
+    setSelectedCustomerId(v.selectedCustomerId ?? null);
+    setSelectedCustomerName(v.selectedCustomerName ?? null);
+    setSelectedCustomerPhone(v.selectedCustomerPhone ?? null);
+    setSelectedEmployeeId(v.selectedEmployeeId ?? null);
+    setSelectedEmployeeName(v.selectedEmployeeName ?? null);
+    setSellerName(v.sellerName || "");
+    setCouponCode(v.couponCode || "");
+    setCouponApplied(v.couponApplied ?? null);
+    setCouponRule(v.couponRule ?? null);
+    setDiscountType(v.discountType === "R$" ? "R$" : "%");
+    setDiscountValue(v.discountValue || "");
+    setCpfNaNota(v.cpfNaNota || "");
+    setSplitMode(!!v.splitMode);
+    setSplitPayments(Array.isArray(v.splitPayments) ? v.splitPayments : []);
+    setQuoteId(v.quoteId ?? null);
+    setLotAllocationsMap(v.lotAllocations && typeof v.lotAllocations === "object" ? v.lotAllocations : {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId]);
+
   const saleMutation = useMutation({
     mutationFn: (body: any) => pdvApi.createSale(companyId!, body),
     onSuccess: () => {
@@ -338,9 +413,10 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
   // O que a venda cobra: no dividido com preço no cartão, a soma dos
   // pagamentos (+ o que falta, no dinheiro, enquanto não fecha).
   const totalDaVenda = dividido && splitMode ? r2(dividido.total + Math.max(0, dividido.falta)) : totalAfterCoupon;
-  const splitNote = dividido && splitMode && splitPayments.length > 0
-    ? (fraseDaConta(dividido) || null)
-    : null;
+  // QA 23/09/2026: uma frase só. A explicação do valor no cartão ("os
+  // R$ 742,40 que faltavam ficam R$ 824,13") vai DENTRO do "Pronto · a
+  // conta fecha" — antes era uma segunda frase começando com "Faltam",
+  // embaixo do "Pronto", e as duas se contradiziam.
   const splitStatus = dividido && splitMode ? statusDoDividido(dividido) : null;
 
   // ── Preço no cartão: a vista do DIVIDIDO (QA 23/09/2026) ─────────
@@ -811,8 +887,8 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
     splitMode, toggleSplitMode,
     splitPayments: splitPaymentsVista, addSplitPayment, updateSplitPayment, removeSplitPayment, clearSplitPayments,
     splitTotal, splitRemaining, splitIsBalanced,
-    // Preço no cartão: a conta do dividido numa linha e o status nas duas
-    // línguas (null com a opção desligada).
-    splitNote, splitStatus,
+    // Preço no cartão: a conta do dividido numa frase só, nas duas línguas
+    // (null com a opção desligada).
+    splitStatus,
   };
 }

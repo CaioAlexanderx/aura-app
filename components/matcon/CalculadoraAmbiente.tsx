@@ -22,20 +22,37 @@
 //
 // Sem hover-reveal (regra 7 do CLAUDE.md): "remover" e "+ ambiente" são
 // botões sempre visíveis, tocáveis no celular.
+//
+// QA 23/09/2026 (Matcon, produção, computador):
+//   · No computador o balão tem ALTURA FIXA. Antes ele se recentralizava a
+//     cada linha que o resultado ganhava e o botão "Usar…" fugia do mouse.
+//     Agora o que cresce rola por dentro; cabeçalho e botões não se mexem.
+//     No celular a folha já é ancorada embaixo — os botões nunca pulam.
+//   · "considero [10] % de perda" fica numa linha só: o campo tem largura
+//     fixa (o <input> do navegador tinha ~170px de largura natural e
+//     empurrava a frase para baixo) e só o fim da frase pode descer.
+//   · Cada opção diz quanto custa ("18,56 m² · R$ 1.202,69"), no preço que
+//     o carrinho está usando — e, com o preço no cartão ligado, o do outro
+//     método também, igual à linha do item.
 // ============================================================
 
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, TextInput, ScrollView, StyleSheet, Platform } from "react-native";
+import { View, Text, Pressable, TextInput, ScrollView, StyleSheet, Platform, useWindowDimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { ResponsiveSheet } from "@/components/ResponsiveSheet";
+import { ResponsiveSheet, SHEET_NARROW_BP } from "@/components/ResponsiveSheet";
 import { parseQtyInput } from "@/utils/matconUnits";
 import {
   resultadoCalculadora,
   areaDoAmbiente,
   fmtArea,
   rotuloEmbalagem,
+  fraseDoValor,
 } from "./calculadoraUtil";
+
+/** Altura do balão no computador. Cabem três ambientes sem rolar; a partir
+ *  daí rola por dentro — o balão não cresce e os botões não saem do lugar. */
+export const ALTURA_DA_CALCULADORA = 600;
 
 // Nomes sugeridos na ordem em que a obra acontece. São SUGESTÕES: o campo
 // é editável (tem cliente que chama de "varanda", "edícula", "loja").
@@ -76,6 +93,13 @@ export type CalculadoraAmbienteProps = {
   defaultWastePct: number;
   /** Devolve a quantidade ao carrinho. A folha fecha em seguida. */
   onUse: (qty: number) => void;
+  /** Preço por unidade de venda (por m²) que o carrinho está usando — o do
+   *  chip escolhido. Sem ele as opções não mostram valor. */
+  unitPrice?: number | null;
+  /** Preço no cartão: o preço no OUTRO método e o nome dele ("cartão" /
+   *  "dinheiro"), como a linha do item mostra. */
+  otherUnitPrice?: number | null;
+  otherLabel?: string;
 };
 
 export function CalculadoraAmbiente({
@@ -87,7 +111,15 @@ export function CalculadoraAmbiente({
   purchaseFactor,
   defaultWastePct,
   onUse,
+  unitPrice,
+  otherUnitPrice,
+  otherLabel,
 }: CalculadoraAmbienteProps) {
+  const { width: larguraJanela, height: alturaJanela } = useWindowDimensions();
+  // Balão centralizado (computador): altura travada. O teto é o mesmo do
+  // ResponsiveSheet (92% da janela), para caber em notebook de 720p.
+  const noComputador = larguraJanela >= SHEET_NARROW_BP;
+  const alturaFixa = noComputador ? Math.min(ALTURA_DA_CALCULADORA, Math.round(alturaJanela * 0.92)) : null;
   const [linhas, setLinhas] = useState<LinhaAmbiente[]>([novaLinha(1, 0)]);
   const [perdaBuf, setPerdaBuf] = useState<string>(String(defaultWastePct ?? 0));
   const proximoId = React.useRef(2);
@@ -151,8 +183,22 @@ export function CalculadoraAmbiente({
       ? productName + " · " + embalagemLabel + " com " + fmtArea(purchaseFactor, unit)
       : productName;
 
+  // Quanto sai cada opção, no preço do carrinho (e no outro método, com o
+  // preço no cartão ligado). "" sem preço: a linha de valor some.
+  const precos = { precoUnitario: unitPrice, outroPrecoUnitario: otherUnitPrice, outroRotulo: otherLabel };
+  const valorArea = temResultado ? fraseDoValor({ qty: res.areaComPerda, ...precos }) : "";
+  const valorCaixas = temCaixas ? fraseDoValor({ qty: res.areaCaixasFechadas, ...precos }) : "";
+  const detalheCaixas = temCaixas
+    ? fmtArea(res.areaCaixasFechadas as number, unit) + (valorCaixas ? " · " + valorCaixas : "")
+    : "";
+
   return (
-    <ResponsiveSheet visible={visible} onClose={onClose} maxWidth={420} sheetStyle={{ backgroundColor: Colors.bg2 }}>
+    <ResponsiveSheet
+      visible={visible}
+      onClose={onClose}
+      maxWidth={420}
+      sheetStyle={alturaFixa != null ? { backgroundColor: Colors.bg2, height: alturaFixa } : { backgroundColor: Colors.bg2 }}
+    >
       <View style={s.head}>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={s.titulo} testID="matcon-calc-titulo">Calcular ambiente</Text>
@@ -163,7 +209,12 @@ export function CalculadoraAmbiente({
         </Pressable>
       </View>
 
-      <ScrollView style={s.body} contentContainerStyle={{ paddingBottom: 4 }} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        testID="matcon-calc-corpo"
+        style={alturaFixa != null ? [s.body, s.bodyFixo] : s.body}
+        contentContainerStyle={{ paddingBottom: 4 }}
+        keyboardShouldPersistTaps="handled"
+      >
         {linhas.map((l, i) => {
           const area = areaDoAmbiente(parseQtyInput(l.largura), parseQtyInput(l.comprimento));
           return (
@@ -233,20 +284,26 @@ export function CalculadoraAmbiente({
           ) : null}
         </View>
 
-        {/* A frase da config, do jeito que a config escreve. */}
+        {/* A frase da config, do jeito que a config escreve. QA 23/09/2026:
+            "considero [10] % de perda" nunca quebra (grupo nowrap, campo de
+            largura fixa); só "por quebra e recorte." desce quando falta
+            espaço — o mesmo arranjo da linha do ambiente. */}
         <View style={s.frase}>
-          <Text style={s.fraseTxt}>considero </Text>
-          <TextInput
-            testID="matcon-calc-perda"
-            style={s.fraseEdit}
-            value={perdaBuf}
-            onChangeText={v => setPerdaBuf(v.replace(/[^\d,.]/g, ""))}
-            keyboardType="decimal-pad"
-            maxLength={5}
-            selectTextOnFocus
-            accessibilityLabel="Perda por quebra e recorte, em porcento"
-          />
-          <Text style={s.fraseTxt}> % de perda por quebra e recorte.</Text>
+          <View style={s.fraseCore} testID="matcon-calc-perda-linha">
+            <Text style={s.fraseTxt}>considero </Text>
+            <TextInput
+              testID="matcon-calc-perda"
+              style={s.fraseEdit}
+              value={perdaBuf}
+              onChangeText={v => setPerdaBuf(v.replace(/[^\d,.]/g, ""))}
+              keyboardType="decimal-pad"
+              maxLength={5}
+              selectTextOnFocus
+              accessibilityLabel="Perda por quebra e recorte, em porcento"
+            />
+            <Text style={s.fraseTxt}> % de perda</Text>
+          </View>
+          <Text style={s.fraseTxt}> por quebra e recorte.</Text>
         </View>
 
         {/* O resultado grande — é o que o vendedor mostra pro cliente. */}
@@ -283,18 +340,22 @@ export function CalculadoraAmbiente({
           onPress={() => usar(res.areaComPerda)}
           disabled={!temResultado}
           style={[s.btn, s.btnPrimary, !temResultado && s.btnOff]}
-          accessibilityLabel={"Usar " + fmtArea(res.areaComPerda, unit)}
+          accessibilityLabel={"Usar " + fmtArea(res.areaComPerda, unit) + (valorArea ? ", " + valorArea : "")}
         >
           <Text style={s.btnPrimaryTxt}>Usar {fmtArea(res.areaComPerda, unit)}</Text>
+          {valorArea ? (
+            <Text style={s.btnPrimarySub} testID="matcon-calc-valor-area" numberOfLines={1}>{valorArea}</Text>
+          ) : null}
         </Pressable>
         {temCaixas ? (
           <Pressable
             testID="matcon-calc-usar-caixas"
             onPress={() => usar(res.areaCaixasFechadas)}
             style={[s.btn, s.btnGhost]}
-            accessibilityLabel={"Usar " + rotuloEmbalagem(res.caixas as number, purchaseUnitLabel) + " fechadas"}
+            accessibilityLabel={"Usar " + rotuloEmbalagem(res.caixas as number, purchaseUnitLabel) + " fechadas, " + detalheCaixas}
           >
             <Text style={s.btnGhostTxt}>Usar {rotuloEmbalagem(res.caixas as number, purchaseUnitLabel)} fechadas</Text>
+            <Text style={s.btnGhostSub} testID="matcon-calc-valor-caixas" numberOfLines={1}>{detalheCaixas}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -318,6 +379,9 @@ const s = StyleSheet.create({
   },
 
   body: { flexGrow: 0, flexShrink: 1, paddingHorizontal: 16 },
+  // Balão de altura fixa: o corpo ocupa o que sobra e o rodapé fica colado
+  // embaixo, sempre no mesmo lugar.
+  bodyFixo: { flexGrow: 1, flexBasis: 0, minHeight: 0 },
 
   // .amb do mockup: uma linha em português. QA 22/09/2026 — em 390px o
   // rótulo e os dois campos nunca podem quebrar entre si (formulário
@@ -371,10 +435,13 @@ const s = StyleSheet.create({
     paddingTop: 8, paddingBottom: 4,
     borderTopWidth: 1, borderTopColor: Colors.border,
   },
-  fraseTxt: { fontSize: 14, color: Colors.ink2, lineHeight: 26 },
+  fraseCore: { flexDirection: "row", alignItems: "center", flexWrap: "nowrap", flexShrink: 0 },
+  fraseTxt: { fontSize: 14, color: Colors.ink2, lineHeight: 26, flexShrink: 0 },
+  // Largura FIXA: sem ela o <input> do navegador fica com a largura
+  // natural (~20 caracteres) e a frase quebra no meio. 52px cabem "12,5".
   fraseEdit: {
     fontFamily: MONO, fontSize: 13, fontWeight: "600", color: Colors.ink,
-    minWidth: 44, textAlign: "center",
+    width: 52, flexShrink: 0, textAlign: "center",
     paddingHorizontal: 8, paddingVertical: 3, marginHorizontal: 2,
     backgroundColor: Colors.bg3, borderRadius: 8,
     borderWidth: 1, borderColor: Colors.border2,
@@ -400,8 +467,10 @@ const s = StyleSheet.create({
   },
   btnPrimary: { backgroundColor: Colors.violet, borderColor: Colors.violet },
   btnPrimaryTxt: { fontSize: 14, fontWeight: "700", color: "#fff" },
+  btnPrimarySub: { fontFamily: MONO, fontSize: 12, fontWeight: "600", color: "rgba(255,255,255,0.85)", marginTop: 2 },
   btnGhost: { backgroundColor: Colors.bg3 },
   btnGhostTxt: { fontSize: 14, fontWeight: "700", color: Colors.ink },
+  btnGhostSub: { fontFamily: MONO, fontSize: 12, fontWeight: "600", color: Colors.ink2, marginTop: 2 },
   btnOff: { opacity: 0.45 },
 });
 

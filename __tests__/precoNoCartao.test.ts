@@ -101,27 +101,52 @@ describe("pagamento dividido (tela 4)", () => {
     expect(dv.entradas[1].value).toBe(666);
     expect(dv.total).toBe(1066);
     expect(dv.equilibrado).toBe(true);
-    expect(statusDoDividido(dv)).toBe("Pronto · a conta fecha em R$ 1.066,00");
-    expect(fraseDaConta(dv)).toBe("Faltam R$ 600,00. No cartão fica R$ 666,00 (11% a mais).");
+    // QA 23/09/2026 (Matcon): uma frase só — o "Pronto" já traz o porquê
+    // do valor no cartão. Nada de "Faltam" junto com "Pronto".
+    expect(statusDoDividido(dv)).toBe(
+      "Pronto · a conta fecha em R$ 1.066,00. No cartão, os R$ 600,00 que faltavam ficam R$ 666,00 (11% a mais).",
+    );
+    expect(fraseDaConta(dv)).toBe("No cartão, os R$ 600,00 que faltavam ficam R$ 666,00 (11% a mais).");
   });
 
   test("frase de balcão (QA 23/09): o exemplo da venda nº 176", () => {
     const dv = resolverDividido([{ method: "pix", value: 400 }, { method: "cartao", value: 0, auto: true }], 1142.4, 1268.16);
-    expect(fraseDaConta(dv)).toBe("Faltam R$ 742,40. No cartão fica R$ 824,13 (11% a mais).");
+    expect(fraseDaConta(dv)).toBe("No cartão, os R$ 742,40 que faltavam ficam R$ 824,13 (11% a mais).");
     expect(fraseDaConta(dv)).not.toMatch(/÷|×|=/);
+    expect(statusDoDividido(dv)).toBe(
+      "Pronto · a conta fecha em R$ 1.224,13. No cartão, os R$ 742,40 que faltavam ficam R$ 824,13 (11% a mais).",
+    );
   });
 
-  test("frase: 'o que falta' no PIX; nada faltando; cartão mais barato", () => {
+  test("frase: 'o que falta' no PIX; nada faltando; cartão mais barato; sem diferença", () => {
+    // No PIX não há acréscimo a explicar: só o "Pronto".
     const pix = resolverDividido([{ method: "cartao", value: 333 }, { method: "pix", value: 0, auto: true }], 1000, 1110);
-    expect(fraseDaConta(pix)).toBe("Faltam R$ 700,00 no PIX.");
+    expect(fraseDaConta(pix)).toBe("");
+    expect(statusDoDividido(pix)).toBe("Pronto · a conta fecha em R$ 1.033,00");
     const pronto = resolverDividido([{ method: "pix", value: 1000 }, { method: "cartao", value: 0, auto: true }], 1000, 1110);
     expect(fraseDaConta(pronto)).toBe("");
+    expect(statusDoDividido(pronto)).toBe("Pronto · a conta fecha em R$ 1.000,00");
     const semAuto = resolverDividido([{ method: "pix", value: 400 }], 1000, 1110);
     expect(fraseDaConta(semAuto)).toBe("");
     const maisBarato = resolverDividido([{ method: "cartao", value: 0, auto: true }], 1000, 970);
-    expect(fraseDaConta(maisBarato)).toBe("Faltam R$ 1.000,00. No cartão fica R$ 970,00 (3% a menos).");
+    expect(fraseDaConta(maisBarato)).toBe("No cartão, os R$ 1.000,00 que faltavam ficam R$ 970,00 (3% a menos).");
     const igual = resolverDividido([{ method: "debito", value: 0, auto: true }], 1000, 1000);
-    expect(fraseDaConta(igual)).toBe("Faltam R$ 1.000,00. No cartão fica R$ 1.000,00.");
+    expect(fraseDaConta(igual)).toBe("");
+    expect(statusDoDividido(igual)).toBe("Pronto · a conta fecha em R$ 1.000,00");
+  });
+
+  test("uma frase por vez: 'Faltam' e 'Pronto' nunca juntos", () => {
+    const casos = [
+      resolverDividido([{ method: "pix", value: 400 }, { method: "cartao", value: 0, auto: true }], 1142.4, 1268.16),
+      resolverDividido([{ method: "cartao", value: 333 }, { method: "pix", value: 0, auto: true }], 1000, 1110),
+      resolverDividido([{ method: "pix", value: 400 }], 1000, 1110),
+      resolverDividido([{ method: "pix", value: 1200 }, { method: "cartao", value: 0, auto: true }], 1000, 1110),
+    ];
+    for (const dv of casos) {
+      const st = statusDoDividido(dv);
+      expect(/Pronto/.test(st) && /Faltam/.test(st)).toBe(false);
+      if (dv.equilibrado) expect(st.startsWith("Pronto")).toBe(true);
+    }
   });
 
   test("tudo num método só dá exatamente o preço daquele método", () => {
