@@ -12,7 +12,13 @@
 //   - `tipo: "entrega"` no retorno de GET /acompanhar/:token
 //   - `itens[].entregue`, `itens[].total`, `itens[].unidade`
 //   - `proxima_entrega` (data 'YYYY-MM-DD', nullable)
+//
+// QA 23/09/2026: quem lê esta página é o cliente final — nada de sigla. A
+// unidade sai por extenso e no plural certo (utils/matconUnits:
+// "6 de 10 sacos", "1 milheiro", "2 m²"); item sem entregue/total mas com
+// `unidade` mostra "2 sacos" em vez de "2×" (`qtdDoItemPublico`).
 // ============================================================
+import { unidadeParaQuantidade, qtdComUnidade } from "@/utils/matconUnits";
 
 export type TipoAcompanhamento = "oculos" | "entrega" | string | null | undefined;
 
@@ -111,14 +117,26 @@ export function textoItemEntrega(item: {
   if (item.entregue == null || item.total == null) {
     return { progresso: null, saldoFrase: null };
   }
-  const sufixoUnidade = item.unidade ? " " + item.unidade : "";
-  const progresso = `${fmtNumero(item.entregue)} de ${fmtNumero(item.total)}${sufixoUnidade}`;
+  const uTotal = unidadeParaQuantidade(item.total, item.unidade);
+  const progresso = `${fmtNumero(item.entregue)} de ${fmtNumero(item.total)}${uTotal ? " " + uTotal : ""}`;
 
   const restante = Math.round((item.total - item.entregue) * 1000) / 1000;
   if (restante <= 0) return { progresso, saldoFrase: null };
+  const uRestante = unidadeParaQuantidade(restante, item.unidade);
+  const sufixoUnidade = uRestante ? " " + uRestante : "";
 
   const quando = proximaEntrega ? `no dia ${fmtDiaMes(proximaEntrega)}, na próxima viagem` : "na próxima viagem";
   const saldoFrase =
     `Os ${fmtNumero(restante)}${sufixoUnidade} restantes vão ${quando}. Você não paga nada a mais por isso.`;
   return { progresso, saldoFrase };
+}
+
+/**
+ * A quantidade do item quando não há entrega parcial: "1 milheiro",
+ * "12,5 m²", "2 sacos". Sem unidade, o "2×" de sempre (óculos/encomenda).
+ */
+export function qtdDoItemPublico(item: { qtd: number; unidade?: string | null }): string {
+  const u = String(item.unidade || "").trim();
+  if (!u) return `${item.qtd}×`;
+  return qtdComUnidade(Number(item.qtd) || 0, u);
 }

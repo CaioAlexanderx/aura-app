@@ -36,7 +36,7 @@ import { toast } from "@/components/Toast";
 import { studioApi, type PublicTrack } from "@/services/studioApi";
 import { copyToClipboard } from "@/utils/clipboard";
 import {
-  tituloAcompanhamento, rotuloSaldo, rotuloItens, rodapePedido, textoItemEntrega,
+  tituloAcompanhamento, rotuloSaldo, rotuloItens, rodapePedido, textoItemEntrega, qtdDoItemPublico,
   LABEL_NOTA_FISCAL, LABEL_VER_DANFE,
 } from "@/utils/acompanharTextos";
 
@@ -282,16 +282,16 @@ export default function AcompanharEncomenda() {
         <View style={{ backgroundColor: C.card, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 20, marginTop: 18 }}>
           <Text style={{ fontSize: 12.5, color: C.ink3, fontWeight: "700", letterSpacing: 0.4 }}>{rotuloItens(tipo)}</Text>
           {dados.itens.map((it, i) => {
-            // Matcon (entrega parcial): "6 de 10 sc" no lugar de "10×", e a
-            // frase do saldo quando entregue < total. Item sem
-            // entregue/total (óculos/encomenda de sempre) cai no "N×" de
-            // sempre — progresso/saldoFrase vêm null.
+            // Matcon (entrega parcial): "6 de 10 sacos" no lugar de "10×",
+            // e a frase do saldo quando entregue < total. Sem entregue/
+            // total: "1 milheiro" quando vem `unidade` (QA 23/09/2026), e o
+            // "N×" de sempre sem ela (óculos/encomenda).
             const { progresso, saldoFrase } = textoItemEntrega(it, dados.proxima_entrega);
             return (
               <View key={i} style={{ marginTop: 10 }}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
                   <Text style={{ fontSize: 15, color: C.ink, flex: 1 }}>{it.nome}</Text>
-                  <Text style={{ fontSize: 15, color: C.ink2, fontWeight: "700" }}>{progresso ?? `${it.qtd}×`}</Text>
+                  <Text style={{ fontSize: 15, color: C.ink2, fontWeight: "700" }}>{progresso ?? qtdDoItemPublico(it)}</Text>
                 </View>
                 {saldoFrase ? (
                   <Text style={{ fontSize: 12.5, color: C.warn, marginTop: 4, lineHeight: 17 }}>{saldoFrase}</Text>
