@@ -23,6 +23,14 @@
 // Profissional é um cliente marcado, não um segundo cadastro — por isso
 // não existe endpoint de busca de "clientes elegíveis": a lista é a mesma
 // de sempre, filtrada aqui.
+//
+// QA 23/09/2026: com a rota ainda em 404 o modal mostrava o toast técnico
+// "Rota nao encontrada". Agora a falha vira frase simples (textoDoErro),
+// dita também DENTRO do modal — que continua aberto, com o cliente e a
+// profissão escolhidos, pronto para "Tentar de novo". A frase lembra que o
+// cliente continua salvo (no Caixa ele pode ter acabado de ser cadastrado).
+// Multi-CNPJ: `companyId` (opcional) vence a empresa da sessão — a ficha
+// passa a empresa onde o cliente foi cadastrado.
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, Pressable, TextInput, ScrollView } from "react-native";
@@ -33,6 +41,7 @@ import { ResponsiveSheet } from "@/components/ResponsiveSheet";
 import { useAuthStore } from "@/stores/auth";
 import { useCustomers } from "@/hooks/useCustomers";
 import { toast } from "@/components/Toast";
+import { textoDoErro } from "@/components/matcon/erroMatcon";
 import { normalizeText } from "@/utils/productSearch";
 import {
   matconApi, TRADE_LABELS, type Professional, type ProfessionalTrade,
@@ -46,22 +55,27 @@ type Props = {
   onMarked: (professional: Professional) => void;
   /** Cliente já escolhido (ficha do cliente) — pula a etapa de busca. */
   presetCustomer?: MarcarProfissionalCustomer | null;
+  /** Empresa do cliente (multi-CNPJ). Sem ela, a empresa da sessão. */
+  companyId?: string | null;
 };
 
-export function MarcarProfissionalModal({ visible, onClose, onMarked, presetCustomer }: Props) {
+export function MarcarProfissionalModal({ visible, onClose, onMarked, presetCustomer, companyId }: Props) {
   const { company } = useAuthStore();
+  const empresaId = companyId || company?.id || null;
   const { customers } = useCustomers();
 
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<MarcarProfissionalCustomer | null>(presetCustomer || null);
   const [trade, setTrade] = useState<ProfessionalTrade | null>(null);
   const [saving, setSaving] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) return;
     setSelected(presetCustomer || null);
     setTrade(null);
     setQuery("");
+    setErro(null);
   }, [visible, presetCustomer]);
 
   const results = useMemo(() => {
@@ -84,17 +98,23 @@ export function MarcarProfissionalModal({ visible, onClose, onMarked, presetCust
   if (!visible) return null;
 
   async function handleConfirm() {
-    if (!selected || !trade || !company?.id) return;
+    if (!selected || !trade || !empresaId || saving) return;
     setSaving(true);
+    setErro(null);
     try {
-      const { professional } = await matconApi.createProfessional(company.id, {
+      const { professional } = await matconApi.createProfessional(empresaId, {
         customer_id: selected.id, trade,
       });
-      toast.success(selected.name + " agora é profissional parceiro");
+      toast.success(selected.name + " agora é profissional parceiro. As vendas que ele indicar dão pontos para ele.");
       onMarked(professional);
       onClose();
     } catch (e: any) {
-      toast.error(e?.message || "Não deu para marcar como parceiro");
+      const msg = textoDoErro(
+        e,
+        "Não consegui marcar " + selected.name + " como parceiro agora. O cadastro de cliente continua salvo — toque em Tentar de novo daqui a pouco.",
+      );
+      setErro(msg);
+      toast.error(msg);
     } finally {
       setSaving(false);
     }
@@ -143,7 +163,7 @@ export function MarcarProfissionalModal({ visible, onClose, onMarked, presetCust
             <View style={s.selectedBox}>
               <Text style={s.selectedName}>{selected.name}</Text>
               {!presetCustomer && (
-                <Pressable onPress={() => setSelected(null)} testID="marcarprof-trocar-cliente">
+                <Pressable onPress={() => { setSelected(null); setErro(null); }} testID="marcarprof-trocar-cliente">
                   <Text style={s.trocar}>Trocar cliente</Text>
                 </Pressable>
               )}
@@ -156,7 +176,7 @@ export function MarcarProfissionalModal({ visible, onClose, onMarked, presetCust
                 return (
                   <Pressable
                     key={key}
-                    onPress={() => setTrade(key)}
+                    onPress={() => { setTrade(key); setErro(null); }}
                     style={[s.chip, on && s.chipOn]}
                     testID={`marcarprof-oficio-${key}`}
                   >
@@ -167,6 +187,9 @@ export function MarcarProfissionalModal({ visible, onClose, onMarked, presetCust
             </View>
           </>
         )}
+        {!!erro && (
+          <Text style={s.erro} testID="marcarprof-erro" accessibilityRole="alert">{erro}</Text>
+        )}
       </ScrollView>
 
       <View style={s.footer}>
@@ -174,7 +197,7 @@ export function MarcarProfissionalModal({ visible, onClose, onMarked, presetCust
           <Text style={s.cancelText}>Cancelar</Text>
         </Pressable>
         <Button
-          title="Marcar como parceiro"
+          title={erro ? "Tentar de novo" : "Marcar como parceiro"}
           variant="primary"
           onPress={handleConfirm}
           disabled={!selected || !trade}
@@ -197,6 +220,10 @@ const s = StyleSheet.create({
     backgroundColor: Colors.bg3,
   },
   empty: { fontSize: 12, color: Colors.ink3, paddingVertical: 10, textAlign: "center" },
+  erro: {
+    fontSize: 12, color: Colors.ink, lineHeight: 17, padding: 10, borderRadius: 10,
+    backgroundColor: Colors.amberD, borderWidth: 1, borderColor: Colors.amber + "73",
+  },
   row: {
     paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: Colors.border,
   },

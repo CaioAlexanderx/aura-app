@@ -16,6 +16,11 @@
 // `select`/`clear` só mexem no estado local (quem é o profissional
 // exibido no chip); é quem chama (usePdvState) que sincroniza isso com
 // useCart.setReferredProfessionalId — o hook não conhece o carrinho.
+//
+// QA 23/09/2026: a busca que FALHA (rota ainda não existia, sem internet)
+// caía no mesmo lugar da busca sem resultado — o balcão lia "Nenhum
+// parceiro com esse nome" e cadastrava o pedreiro de novo. Agora
+// `searchError` separa os dois casos.
 // ============================================================
 import { useRef, useState } from "react";
 import { matconApi, type Professional } from "@/services/matconApi";
@@ -37,6 +42,8 @@ export function useMatconReferral(params: UseMatconReferralParams) {
   const [referred, setReferred] = useState<Professional | null>(null);
   const [results, setResults] = useState<Professional[]>([]);
   const [searching, setSearching] = useState(false);
+  // A última busca falhou (≠ busca sem resultado).
+  const [searchError, setSearchError] = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Descarta resposta de uma busca anterior que chegou depois da mais
@@ -52,10 +59,12 @@ export function useMatconReferral(params: UseMatconReferralParams) {
     if (!active || !companyId || query.length === 0) {
       setResults([]);
       setSearching(false);
+      setSearchError(false);
       return;
     }
 
     setSearching(true);
+    setSearchError(false);
     const seq = ++requestSeqRef.current;
     debounceRef.current = setTimeout(() => {
       matconApi.searchProfessionals(companyId, query)
@@ -66,6 +75,7 @@ export function useMatconReferral(params: UseMatconReferralParams) {
         .catch(() => {
           if (requestSeqRef.current !== seq) return;
           setResults([]);
+          setSearchError(true);
         })
         .finally(() => {
           if (requestSeqRef.current === seq) setSearching(false);
@@ -76,11 +86,13 @@ export function useMatconReferral(params: UseMatconReferralParams) {
   function select(p: Professional) {
     setReferred(p);
     setResults([]);
+    setSearchError(false);
   }
 
   function clear() {
     setReferred(null);
     setResults([]);
+    setSearchError(false);
   }
 
   // pontos = floor(total / 100) × matcon_points_per_100
@@ -95,7 +107,7 @@ export function useMatconReferral(params: UseMatconReferralParams) {
   return {
     active,
     referred, select, clear,
-    search, results, searching,
+    search, results, searching, searchError,
     pontosPrevistos,
   };
 }

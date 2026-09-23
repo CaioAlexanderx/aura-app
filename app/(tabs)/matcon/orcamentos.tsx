@@ -28,6 +28,18 @@
 //   · Regra 7: ações sempre visíveis no card, sem hover.
 //   · Vencendo é marcado por forma + texto ("▲ vence amanhã"), nunca só
 //     por cor.
+//
+// QA 23/09/2026 (a rota ainda respondia 404 em produção):
+//   · Sem tentativas por cima do client (RETRY_DA_TELA): nada de 10 s
+//     girando. "Carregando…" só enquanto carrega; falhou → <EsteiraErro>
+//     com "Tentar de novo" — o erro nunca vira "Nenhum orçamento ainda".
+//   · O estado vazio nomeia o botão que existe de verdade no Caixa:
+//     "Orçamento" (ele imprime E guarda o orçamento aqui).
+//   · Contrato (docs/CONTRACT_MATCON.md §M1): orçamento que venceu vira
+//     `expired`, não `lost`. "Perdidos" é só o que o cliente recusou; o
+//     vencido ganha "Refazer com preço de hoje" em vez de "Virar pedido".
+//     O resumo `approved` não tem período no contrato — o subtítulo não
+//     promete "este mês".
 // ============================================================
 import { useMemo, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, TextInput } from "react-native";
@@ -44,7 +56,8 @@ import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { matconApi, type Quote, type QuoteStatus } from "@/services/matconApi";
 import { readMatconSettings, type MatconSettings } from "@/constants/matcon";
 import { openWhatsApp } from "@/utils/whatsapp";
-import { EsteiraMatcon, EsteiraCard, EsteiraVazia, EsteiraVaziaDestaque, type EsteiraEstacao } from "@/components/matcon/EsteiraMatcon";
+import { EsteiraMatcon, EsteiraCard, EsteiraVazia, EsteiraVaziaDestaque, EsteiraErro, type EsteiraEstacao } from "@/components/matcon/EsteiraMatcon";
+import { RETRY_DA_TELA, fraseDoErroDeCarga, textoDoErro } from "@/components/matcon/erroMatcon";
 import { diasAteVencer, estaVencendo, fmtDiaMes, rotuloVencimento, rotuloAutoria, seloVencimento } from "@/components/matcon/quotesUtil";
 
 // Mesmo endereço público do orçamento do Studio (app/orcamento/[token].tsx).
@@ -111,12 +124,15 @@ function MatconOrcamentosScreen() {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const status = statusDoFiltro(filtro);
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
     queryKey: ["matcon-quotes", company?.id, status, q],
     queryFn: () => matconApi.listQuotes(company!.id, { status, q: q || undefined, limit: 200 }),
     enabled: !!company?.id && enabled,
     staleTime: 30_000,
+    retry: RETRY_DA_TELA,
   });
+  // Falhou e não há nada guardado para mostrar: bloco de erro, não lista vazia.
+  const falhou = isError && !data;
 
   const resumo = data?.summary;
 
@@ -171,7 +187,7 @@ function MatconOrcamentosScreen() {
       invalidate();
       toast.success(`Orçamento #${quote.number} marcado como enviado`);
     } catch (e: any) {
-      toast.error(e?.data?.error || "O WhatsApp abriu, mas não deu para marcar o envio");
+      toast.error(textoDoErro(e, "O WhatsApp abriu, mas não consegui marcar o orçamento como enviado. Tente de novo em instantes."));
     } finally {
       setBusyId(null);
     }
@@ -190,7 +206,7 @@ function MatconOrcamentosScreen() {
       // o `cart` da resposta por estado de navegação: quem manda é o id.
       router.push(`/pdv?quote=${quote.id}` as any);
     } catch (e: any) {
-      toast.error(e?.data?.error || "Não deu para virar pedido");
+      toast.error(textoDoErro(e, "Não consegui virar o orçamento em pedido. Tente de novo em instantes."));
     } finally {
       setBusyId(null);
     }
@@ -214,7 +230,7 @@ function MatconOrcamentosScreen() {
       setFiltro("abertos");
       toast.success(`Orçamento #${res.quote.number} aberto a partir do #${quote.number} — confira os preços antes de enviar`);
     } catch (e: any) {
-      toast.error(e?.data?.error || "Não deu para refazer o orçamento");
+      toast.error(textoDoErro(e, "Não consegui refazer o orçamento. Tente de novo em instantes."));
     } finally {
       setBusyId(null);
     }
@@ -243,15 +259,15 @@ function MatconOrcamentosScreen() {
       <ScreenHero
         eyebrow="Matcon"
         title="Orçamentos"
-        live
+        live={!!resumo}
         subtitle={
-          !resumo ? "Carregando…" : (
+          !resumo ? (falhou ? "Não consegui carregar os orçamentos agora." : isLoading ? "Carregando…" : undefined) : (
             <Text>
               {fmtMoneyCurto(resumo.open.total)} em orçamentos abertos ·{" "}
               <Text style={{ color: resumo.expiring.count > 0 ? Colors.amber : Colors.ink3, fontWeight: resumo.expiring.count > 0 ? "700" : "400" }}>
                 {fmtMoneyCurto(resumo.expiring.total)} {resumo.expiring.count === 1 ? "vence" : "vencem"} em até {warnDays} {warnDays === 1 ? "dia" : "dias"}
               </Text>
-              {" "}· {resumo.approved.count} {resumo.approved.count === 1 ? "aprovado" : "aprovados"} este mês
+              {" "}· {resumo.approved.count} {resumo.approved.count === 1 ? "aprovado" : "aprovados"}
             </Text>
           )
         }
@@ -299,8 +315,16 @@ function MatconOrcamentosScreen() {
       </View>
 
       {isLoading ? (
-        <View style={st.loadingBox}><ActivityIndicator color={Colors.violet3} /></View>
-      ) : quotes.length === 0 ? (
+        <View style={st.loadingBox} testID="matcon-orcamentos-carregando"><ActivityIndicator color={Colors.violet3} /></View>
+      ) : falhou ? (
+        <EsteiraErro
+          testID="matcon-orcamentos-erro"
+          titulo="Não consegui carregar os orçamentos."
+          frase={fraseDoErroDeCarga(error)}
+          onTentarDeNovo={() => { refetch(); }}
+          tentando={isFetching}
+        />
+      ) : !data ? null : quotes.length === 0 ? (
         <EsteiraVazia
           testID="matcon-orcamentos-vazio"
           titulo={q ? "Nada encontrado." : filtro === "vencendo" ? "Nenhum orçamento vencendo." : filtro === "aprovados" ? "Nenhum orçamento aprovado ainda." : filtro === "perdidos" ? "Nenhum orçamento perdido." : "Nenhum orçamento ainda."}
@@ -308,8 +332,8 @@ function MatconOrcamentosScreen() {
             q ? "Confira o número do orçamento, ou tente pelo nome do cliente ou pela obra."
               : filtro === "vencendo" ? `Nenhum orçamento vence nos próximos ${warnDays} ${warnDays === 1 ? "dia" : "dias"} — quando algum entrar nessa conta, ele aparece aqui.`
                 : filtro === "aprovados" ? <Text>Quando o cliente aprovar pelo link, o card pula para <EsteiraVaziaDestaque>Aprovados</EsteiraVaziaDestaque> sozinho.</Text>
-                  : filtro === "perdidos" ? "Orçamento que venceu sem resposta cai aqui — dá para refazer com o preço de hoje."
-                    : <Text>Monte o carrinho no Caixa e toque em <EsteiraVaziaDestaque>Salvar orçamento</EsteiraVaziaDestaque> — ele aparece aqui, em Abertos.</Text>
+                  : filtro === "perdidos" ? "Orçamento que o cliente recusou cai aqui — dá para refazer com o preço de hoje."
+                    : <Text>Monte o carrinho no Caixa e toque em <EsteiraVaziaDestaque>Orçamento</EsteiraVaziaDestaque>. Ele é impresso e fica guardado aqui, em Abertos.</Text>
           }
           acao={
             !q && filtro !== "aprovados" && filtro !== "perdidos" ? (
@@ -349,6 +373,7 @@ function QuoteCard({ quote, warnDays, busy, onWhats, onConverter, onRefazer }: {
   onRefazer: () => void;
 }) {
   const perdido = quote.status === "lost";
+  const vencido = quote.status === "expired";
   const aprovado = quote.status === "approved";
   const aberto = quote.status === "open";
   const vencendo = aberto && estaVencendo(quote.valid_until, warnDays);
@@ -370,7 +395,7 @@ function QuoteCard({ quote, warnDays, busy, onWhats, onConverter, onRefazer }: {
     <EsteiraCard
       testID={`matcon-orcamento-${quote.number}`}
       tone={vencendo ? "amber" : undefined}
-      dim={perdido}
+      dim={perdido || vencido}
       right={
         <>
           <View style={[st.badge, { borderColor: corSelo }]}>
@@ -382,18 +407,18 @@ function QuoteCard({ quote, warnDays, busy, onWhats, onConverter, onRefazer }: {
       actions={
         busy ? <ActivityIndicator size="small" color={Colors.violet3} /> : (
           <>
-            {(aberto || quote.status === "expired") && (
+            {aberto && (
               <Pressable onPress={onWhats} style={[st.miniBtn, st.miniBtnWa]} testID={`matcon-whats-${quote.number}`}>
                 <Icon name="whatsapp" size={13} color={Colors.green} />
                 <Text style={[st.miniBtnText, { color: Colors.green }]}>{quote.sent_at ? "Cobrar no WhatsApp" : "Enviar no WhatsApp"}</Text>
               </Pressable>
             )}
-            {!perdido && !convertido && (
+            {(aberto || aprovado) && !convertido && (
               <Pressable onPress={onConverter} style={[st.miniBtn, st.miniBtnPrimary]} testID={`matcon-converter-${quote.number}`}>
                 <Text style={[st.miniBtnText, { color: "#fff" }]}>Virar pedido</Text>
               </Pressable>
             )}
-            {perdido && (
+            {(perdido || vencido) && (
               <Pressable onPress={onRefazer} style={st.miniBtn} testID={`matcon-refazer-${quote.number}`}>
                 <Text style={st.miniBtnText}>Refazer com preço de hoje</Text>
               </Pressable>
@@ -407,7 +432,7 @@ function QuoteCard({ quote, warnDays, busy, onWhats, onConverter, onRefazer }: {
       {!!linhaPrazo && (
         // Vencendo por FORMA + TEXTO: o "▲" e a palavra "vence" contam a
         // história mesmo para quem não distingue a cor âmbar.
-        <Text style={[st.meta, vencendo && st.metaAlerta, perdido && st.metaPerdido]} numberOfLines={2}>
+        <Text style={[st.meta, vencendo && st.metaAlerta, (perdido || vencido) && st.metaPerdido]} numberOfLines={2}>
           {vencendo ? "▲ " : ""}{linhaPrazo}
         </Text>
       )}

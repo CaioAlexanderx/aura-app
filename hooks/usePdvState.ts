@@ -266,9 +266,11 @@ export function usePdvState() {
     customerPhone: selectedCustomerPhone,
     sellerId: selectedEmployeeId,
     discount: matconQuoteDiscount,
-    // QA 23/09: salvar falhou (o backend ainda não tem a rota) — imprime
-    // pelo caminho de sempre, com um aviso curto e sem jargão.
-    onSaveFailed: () => handleGenerateQuote("Orçamento aberto para imprimir."),
+    // QA final 23/09: um clique no "Orçamento" IMPRIME (já, dentro do
+    // clique — o navegador bloqueia a janela depois de esperar a API) e
+    // SALVA em seguida. O toast é do useMatconQuote ("impresso e salvo" ou
+    // "impresso, mas não ficou guardado"), por isso aqui a impressão é muda.
+    onPrint: () => handleGenerateQuote(null),
   });
 
   // ── Matcon M3 — "Indicado por" (chip do Caixa) ───────────────────────────
@@ -287,6 +289,17 @@ export function usePdvState() {
     setReferredProfessionalId(matconReferral.referred?.id || null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matconReferral.referred]);
+  // QA final 23/09: venda registrada → o chip "Indicado por" some. O
+  // useCart já zera referredProfessionalId no sucesso, mas o chip ficava
+  // mostrando o profissional até "Nova venda" — e a próxima venda saía SEM
+  // a indicação apesar do chip na tela. Uma vez por venda (id).
+  const referralClearedForSaleRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!lastSale || lastSale.id === referralClearedForSaleRef.current) return;
+    referralClearedForSaleRef.current = lastSale.id;
+    matconReferral.clear();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastSale]);
   // "Nova venda" reabre o balcão do zero — o chip "Indicado por" some junto
   // com cliente/vendedora/cupom (setCart/setQuoteId já zeram
   // referredProfessionalId dentro de useCart; aqui só falta esquecer QUEM
@@ -703,7 +716,8 @@ export function usePdvState() {
     }
   }
 
-  function handleGenerateQuote(avisoAoAbrir: string = "Orçamento gerado") {
+  // `avisoAoAbrir` null = imprime sem toast (quem chamou avisa).
+  function handleGenerateQuote(avisoAoAbrir: string | null = "Orçamento gerado") {
     if (cart.length === 0) {
       toast.info("Adicione produtos ao carrinho antes de gerar orçamento");
       return;
@@ -736,7 +750,7 @@ export function usePdvState() {
         companyPhone:       profile.phone || null,
         companyAddress:     profile.address || null,
       });
-      toast.success(avisoAoAbrir);
+      if (avisoAoAbrir) toast.success(avisoAoAbrir);
       return;
     }
     const items: QuoteItem[] = cart.map(i => ({ name: i.name, qty: i.qty, unitPrice: i.price, unit: i.unit }));
@@ -754,7 +768,7 @@ export function usePdvState() {
       companyPhone:       profile.phone || null,
       companyAddress:     profile.address || null,
     });
-    toast.success(avisoAoAbrir);
+    if (avisoAoAbrir) toast.success(avisoAoAbrir);
   }
 
   // ── Scanner gate ──────────────────────────────────────────────────────────

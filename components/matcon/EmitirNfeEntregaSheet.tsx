@@ -34,6 +34,7 @@ import type { Delivery } from "@/services/matconApi";
 import {
   formInicialNfeEntrega, itensSemCest, montarEmitBody, type NfeEntregaForm,
 } from "@/components/matcon/nfeEntregaUtil";
+import { textoDoErro } from "@/components/matcon/erroMatcon";
 
 const fmtMoney = (n: number | string | null | undefined) =>
   `R$ ${Number(n || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -84,10 +85,12 @@ export function EmitirNfeEntregaSheet({ delivery, companyId, onClose }: {
       const res = await nfceApi.emit(companyId, body);
       qc.invalidateQueries({ queryKey: ["matcon-deliveries"] });
       const labelStatus = res.nfce.status === "autorizada" ? "autorizada!" : res.nfce.status;
-      toast.success(`NF-e #${res.nfce.numero} ${labelStatus}`);
+      toast.success(`Nota fiscal #${res.nfce.numero} ${labelStatus}`);
       onClose();
     } catch (e: any) {
-      const msg = e?.data?.error || e?.message || "Não foi possível emitir a nota. Tente de novo.";
+      // QA 23/09/2026: texto de sistema ("Rota nao encontrada", rede) vira
+      // frase simples; a frase da SEFAZ/backend para o lojista passa.
+      const msg = textoDoErro(e, "Não consegui emitir a nota fiscal. Tente de novo em instantes.");
       setErro(msg);
       toast.error(msg);
     } finally {
@@ -103,7 +106,7 @@ export function EmitirNfeEntregaSheet({ delivery, companyId, onClose }: {
       <>
         <View style={st.header}>
           <View style={{ flex: 1 }}>
-            <Text style={st.title}>NF-e da entrega #{delivery.sale_number ?? "—"}</Text>
+            <Text style={st.title}>{delivery.sale_number != null ? `Nota fiscal do pedido #${delivery.sale_number}` : "Nota fiscal da entrega"}</Text>
             <Text style={st.lede} numberOfLines={2}>{lede}</Text>
           </View>
           <Pressable onPress={onClose} style={st.closeBtn} testID="matcon-nfe-fechar">
@@ -283,7 +286,7 @@ export function EmitirNfeEntregaSheet({ delivery, companyId, onClose }: {
             {emitindo ? <ActivityIndicator size="small" color="#fff" /> : (
               <>
                 <Icon name="file_text" size={15} color="#fff" />
-                <Text style={st.emitBtnText}>{erro ? "Tentar de novo" : "Emitir NF-e"}</Text>
+                <Text style={st.emitBtnText}>{erro ? "Tentar de novo" : "Emitir nota fiscal"}</Text>
               </>
             )}
           </Pressable>

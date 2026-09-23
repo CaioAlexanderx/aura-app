@@ -120,7 +120,7 @@ describe("/matcon/profissionais — matcon_club_enabled ligado, 1 profissional a
     // O título da tela é o nome que o dono da loja entende.
     expect(texto).toContain("Profissionais Parceiros");
     expect(texto).toContain("Nivaldo Pereira");
-    expect(texto).toContain("1.240 pts");
+    expect(texto).toContain("1.240 pontos");
     expect(texto).toContain("pedreiro");
 
     // Regra 7 do CLAUDE.md: os dois botões vivem no bloco de ações do
@@ -146,7 +146,7 @@ describe("/matcon/profissionais — matcon_club_enabled ligado, 1 profissional a
     const tree = montar();
     const texto = flatten(tree.toJSON());
 
-    expect(texto).toContain("730 pts");
+    expect(texto).toContain("730 pontos");
     expect(texto).toContain("Chamar de volta");
     expect(texto).not.toContain("Trocar pontos por cupom");
     expect(tree.root.findAllByProps({ testID: "matcon-chamar-prof-2" }).length).toBeGreaterThan(0);
