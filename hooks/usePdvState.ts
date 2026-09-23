@@ -291,9 +291,12 @@ export function usePdvState() {
   // com cliente/vendedora/cupom (setCart/setQuoteId já zeram
   // referredProfessionalId dentro de useCart; aqui só falta esquecer QUEM
   // era o profissional exibido no chip).
+  // QA 23/09/2026: a busca também recomeça vazia (o "Tijolo" da venda
+  // anterior grudava no "Piso" da próxima: "TijoloPiso").
   function newSale() {
     matconReferral.clear();
     rawNewSale();
+    setQuery("");
   }
 
   // ── Matcon M1 — Caixa abre orçamento convertido (`?quote={id}`) ─────────

@@ -178,6 +178,34 @@ describe("dividido: o topo e as linhas fecham com o total mostrado", () => {
   });
 });
 
+describe("venda nova começa limpa", () => {
+  test("depois de finalizar no dividido: sem dividido e no PIX", () => {
+    const tree = montar(LIGADO);
+    carrinhoDoQa();
+    act(() => { api.setPayment("cartao"); });
+    divididoDoQa();
+    act(() => { api.finalizeSale(); });
+    expect(api.lastSale?.payments?.length).toBe(2);
+    act(() => { api.newSale(); });
+    expect(api.splitMode).toBe(false);
+    expect(api.splitPayments).toEqual([]);
+    expect(api.payment).toBe("pix");
+    expect(api.cart).toEqual([]);
+    tree.unmount();
+  });
+
+  test("newSale no meio da venda também volta ao PIX", () => {
+    const tree = montar();
+    act(() => { api.addToCart({ id: "p1", name: "Camiseta", price: 100 }); });
+    act(() => { api.setPayment("debito"); });
+    act(() => { api.toggleSplitMode(); });
+    act(() => { api.newSale(); });
+    expect(api.splitMode).toBe(false);
+    expect(api.payment).toBe("pix");
+    tree.unmount();
+  });
+});
+
 describe("erro da venda nunca mostra texto de sistema", () => {
   test("404 'Rota nao encontrada' vira frase neutra", () => {
     mockFalha = Object.assign(new Error("Rota nao encontrada"), { status: 404, data: { error: "Rota nao encontrada" } });

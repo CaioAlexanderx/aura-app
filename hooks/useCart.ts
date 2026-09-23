@@ -744,8 +744,9 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
           setCart([]); setQuoteId(null); setReferredProfessionalId(null); clearLotAllocations(); toast.success("Venda registrada!"); setIsProcessing(false); clearCoupon(); clearDiscount();
           setSellerName("");
           setCpfNaNota("");
-          // Não desativa splitMode automaticamente — usuário decide se mantém
-          if (splitMode) setSplitPayments([]);
+          // QA 23/09/2026 (decisão do Caio): a próxima venda começa limpa —
+          // sem dividido e no PIX (antes herdava "0× SPLIT" e o método).
+          voltarAoPagamentoInicial();
         },
         onError: function(err: any) {
           // F3-3A (29/05/2026): trata 422 CREDIARIO_REQUIRES_CUSTOMER com mensagem acionavel.
@@ -762,8 +763,15 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
     } else {
       setLastSale(buildLastSale(Date.now().toString(36).toUpperCase().slice(-6)));
       setCart([]); setQuoteId(null); setReferredProfessionalId(null); clearLotAllocations(); setIsProcessing(false);
-      if (splitMode) setSplitPayments([]);
+      voltarAoPagamentoInicial();
     }
+  }
+
+  // Venda nova: sem dividido e no PIX (QA 23/09/2026, decisão do Caio).
+  function voltarAoPagamentoInicial() {
+    setSplitMode(false);
+    setSplitPayments([]);
+    setPayment("pix");
   }
 
   function newSale() {
@@ -773,8 +781,9 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
     setSellerName("");
     setCpfNaNota("");
     clearCoupon(); clearDiscount();
-    // mantém splitMode entre vendas (workflow de loja)
-    setSplitPayments([]);
+    // QA 23/09/2026: não herda mais o dividido nem o método da venda
+    // anterior ("0× SPLIT" com carrinho vazio, preços no cartão).
+    voltarAoPagamentoInicial();
   }
 
   return {
