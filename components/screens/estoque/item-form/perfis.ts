@@ -160,7 +160,11 @@ export const PERFIL_MATCON: PerfilDoCadastro = {
       { campo: "cuidados", rotulo: "Onde usar e rendimento", placeholder: "Ex.: piso interno, área molhada" },
     ],
     subRotulos: true,
-    dicaDaFicha: 'Rendimento de piso não precisa digitar: sai da frase "Compro por". Tinta e argamassa escrevem aqui ("rende 250 m² por demão").',
+    // 23/09/2026 (QA em produção): a dica citava a frase "Compro por" mesmo
+    // quando ela não está na tela (produto "do mesmo jeito que vendo") — o
+    // trecho condicional mora em SecaoDescricao.tsx, que sabe se "Compro
+    // por" está visível. Aqui fica só o texto que vale sempre.
+    dicaDaFicha: 'Para tinta e argamassa, escreva o rendimento aqui: "rende 250 m² por demão".',
     fichaAutomatica: true,
   },
   manterNoProximo: true,

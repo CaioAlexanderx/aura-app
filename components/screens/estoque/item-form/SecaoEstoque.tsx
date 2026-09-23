@@ -40,7 +40,7 @@ import {
   type CorDoItem, type LinhaDeLote, type StockMode,
 } from "./types";
 import { PERFIL_PADRAO, type PerfilDoCadastro } from "./perfis";
-import { estoqueEmDecimal, parseQtyInput, toPackages, rotuloEmbalagem, fmtQty } from "@/utils/matconUnits";
+import { estoqueEmDecimal, parseQtyInput, toPackages, rotuloEmbalagem, fmtQty, nomeDaUnidade } from "@/utils/matconUnits";
 
 const PRESET_COLORS = [
   "#ef4444", "#f97316", "#eab308", "#22c55e",
@@ -164,6 +164,10 @@ export function SecaoEstoque(p: Props) {
   // 22/09/2026 (perfil de cadastro). Perfil padrão: nada abaixo muda o
   // render — os 9 chips de UNITS, as duas opções e as duas caixas de hoje.
   const matcon = perfil.vendoPorNoPreco;
+  // 23/09/2026 (QA em produção): "un" nas frases do estoque vira "unidade"
+  // por extenso — as outras (sc, m²…) já se leem bem do jeito que a loja
+  // usa no dia a dia.
+  const unidadeFrase = p.unidade === "un" ? "unidade" : p.unidade;
   // Milheiro também vai em decimal aqui: vender 500 tijolos deixa 19,5 mlh
   // no estoque, e a ficha precisa ler e salvar o "19,5" (QA 22/09/2026).
   const fracionado = matcon && estoqueEmDecimal(p.unidade);
@@ -253,7 +257,7 @@ export function SecaoEstoque(p: Props) {
                 <Text style={[st.cab, { flex: 1 }]}>Lote</Text>
                 <Text style={[st.cab, { flex: 1 }]}>Tonalidade</Text>
                 <Text style={[st.cab, { flex: 0.8 }]}>Bitola</Text>
-                <Text style={[st.cab, { flex: 1.1, textAlign: "right" }]}>{"Tenho (" + p.unidade + ")"}</Text>
+                <Text style={[st.cab, { flex: 1.1, textAlign: "right" }]}>{"Tenho (" + unidadeFrase + ")"}</Text>
                 <View style={{ width: 22 }} />
               </View>
             )}
@@ -316,7 +320,7 @@ export function SecaoEstoque(p: Props) {
             </View>
             <View style={st.loteTotal}>
               <Text style={fr.fraseTxt}>
-                {"Total " + fmtQty(totalLotes, p.unidade) + " em " + lotesValidos.length + (lotesValidos.length === 1 ? " lote" : " lotes")}
+                {"Total " + fmtQty(totalLotes, unidadeFrase) + " em " + lotesValidos.length + (lotesValidos.length === 1 ? " lote" : " lotes")}
               </Text>
               {caixasDosLotes ? <Text style={fr.fraseMono}>{"(= " + caixasDosLotes + ")"}</Text> : null}
             </View>
@@ -324,7 +328,7 @@ export function SecaoEstoque(p: Props) {
           <View style={[fr.frase, { marginTop: 8 }]}>
             <Text style={fr.fraseTxt}>Me avise abaixo de</Text>
             {minimoNaFrase}
-            <Text style={fr.fraseTxt}>{p.unidade + "."}</Text>
+            <Text style={fr.fraseTxt}>{unidadeFrase + "."}</Text>
           </View>
           <Text style={s.hint}>
             Só o que já está na prateleira hoje. Daqui pra frente o lote entra sozinho quando você importa a nota do fornecedor.
@@ -346,13 +350,17 @@ export function SecaoEstoque(p: Props) {
                 accessibilityLabel="Quanto tenho em estoque"
                 style={fr.fraseInput}
               />
-              <Text style={fr.fraseTxt}>{p.unidade + " em estoque"}</Text>
+              {/* 23/09/2026 (QA em produção): a vírgula ia num Text à parte,
+                  e o gap da frase (flex row) abria um espaço visível antes
+                  dela ("em estoque , e me avise"). A vírgula agora fecha o
+                  texto anterior — do estoque ou da caixa — sem esse espaço. */}
+              <Text style={fr.fraseTxt}>{unidadeFrase + " em estoque" + (caixasDoEstoque ? "" : ",")}</Text>
               {caixasDoEstoque ? (
-                <Text style={fr.fraseMono}>{"(≈ " + caixasDoEstoque + ")"}</Text>
+                <Text style={fr.fraseMono}>{"(≈ " + caixasDoEstoque + "),"}</Text>
               ) : null}
-              <Text style={fr.fraseTxt}>, e me avise abaixo de</Text>
+              <Text style={fr.fraseTxt}>e me avise abaixo de</Text>
               {minimoNaFrase}
-              <Text style={fr.fraseTxt}>{p.unidade + "."}</Text>
+              <Text style={fr.fraseTxt}>{unidadeFrase + "."}</Text>
             </View>
             <Text style={s.hint}>Estoque mínimo. Aparece na aba Alertas.</Text>
           </View>

@@ -77,6 +77,17 @@ export function SecaoDescricao(p: Props) {
     ? fichaAutomatica({ unidade, purchaseUnit: p.purchaseUnit, purchaseFactor: p.purchaseFactor, peso: p.peso })
     : [];
 
+  // 23/09/2026 (QA em produção): a dica da ficha só pode citar "Compro
+  // por" quando essa frase está de fato visível na tela — ou seja, o
+  // produto veio "Em caixa, saco ou fardo" (SecaoPreco.tsx, `emEmbalagem`).
+  const compraVisivel = !!p.purchaseUnit || !!(p.purchaseFactor && p.purchaseFactor.trim());
+  const dicaDaFicha = [
+    matcon && perfil.descricao.fichaAutomatica && compraVisivel
+      ? 'Rendimento de piso não precisa digitar: sai da frase "Compro por".'
+      : null,
+    perfil.descricao.dicaDaFicha,
+  ].filter(Boolean).join(" ");
+
   // Prévia do preço: "R$ 54,90 / m² · R$ 127,37 a caixa" no Matcon.
   let precoDaPrevia = fmtBRL(p.preco);
   if (matcon) {
@@ -134,7 +145,7 @@ export function SecaoDescricao(p: Props) {
               </View>
             ))}
           </View>
-          {perfil.descricao.dicaDaFicha ? <Text style={s.hint}>{perfil.descricao.dicaDaFicha}</Text> : null}
+          {dicaDaFicha ? <Text style={s.hint}>{dicaDaFicha}</Text> : null}
         </Campo>
       )}
 

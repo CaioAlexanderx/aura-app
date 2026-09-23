@@ -127,7 +127,7 @@ export function SecaoCodigos(p: Props) {
             <Selinho status={ncmStatus} texto={ncmBadge} />
           </View>
           <MiniBtn
-            label="Gerar"
+            label="Sugerir"
             disabled={!sugestao}
             onPress={() => { if (sugestao) p.onNcm(sugestao.ncm); }}
           />
@@ -269,7 +269,7 @@ export function SecaoNotaFiscal(p: PropsDaNota) {
             />
             <Selinho status={ncmStatus} texto={ncmBadge} />
           </View>
-          <MiniBtn label="Gerar" disabled={!sugestao} onPress={() => { if (sugestao) p.onNcm(sugestao.ncm); }} />
+          <MiniBtn label="Sugerir" disabled={!sugestao} onPress={() => { if (sugestao) p.onNcm(sugestao.ncm); }} />
         </View>
         {ncmStatus === "empty" && sugestao ? (
           <Text style={s.hint}>
@@ -299,7 +299,7 @@ export function SecaoNotaFiscal(p: PropsDaNota) {
             />
             <Selinho status={cestStatus} texto={cestBadge} />
           </View>
-          <MiniBtn label="Gerar" disabled={!cestSug} onPress={() => { if (cestSug) p.onCest(cestSug.cest); }} />
+          <MiniBtn label="Sugerir" disabled={!cestSug} onPress={() => { if (cestSug) p.onCest(cestSug.cest); }} />
         </View>
         {cestStatus === "empty" && cestSug ? (
           <Text style={s.hint}>
@@ -362,11 +362,11 @@ export function SecaoNotaFiscal(p: PropsDaNota) {
           accessibilityRole="button"
           style={[st.origemOpt, !!p.origem && p.origem > 0 && st.origemOptOn]}
         >
-          Importado
+          Não, importado
         </Text>
       </Text>
       <Text style={s.hint}>
-        Cadastrando pela nota do fornecedor (Estoque › Importar nota), o código do produto já vem preenchido. Na dúvida, mostre esta tela ao seu contador.
+        Cadastrando pela nota do fornecedor (Estoque › Importar › Nota do fornecedor), o código do produto já vem preenchido. Na dúvida, mostre esta tela ao seu contador.
       </Text>
     </Secao>
   );

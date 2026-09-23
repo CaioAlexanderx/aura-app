@@ -11,6 +11,7 @@
 // ============================================================
 import React, { useState } from "react";
 import renderer, { act } from "react-test-renderer";
+import { Text } from "react-native";
 
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
 
@@ -48,6 +49,13 @@ function porLabel(tree: any, label: string): any {
   return tree.root.findAllByProps({ accessibilityLabel: label })[0];
 }
 
+function textoDoNode(node: any): string {
+  return node.findAllByType(Text).map((t: any) => {
+    const c = t.props.children;
+    return Array.isArray(c) ? c.join("") : String(c ?? "");
+  }).join(" ");
+}
+
 describe("SecaoPreco — sem perfil", () => {
   test("'Preço' de hoje: sem 'Vendo por' e sem 'Como chega do fornecedor'", () => {
     let tree: any;
@@ -76,6 +84,19 @@ describe("SecaoPreco — perfil Matcon: 'Como você vende'", () => {
     act(() => { porLabel(tree, "+ outras").props.onPress(); });
     expect(porLabel(tree, "kg")).toBeTruthy();
     expect(porLabel(tree, "rolo")).toBeTruthy();
+    tree.unmount();
+  });
+
+  // 23/09/2026 (QA em produção): o chip de "sc" mostrava a sigla crua. O
+  // rótulo de acessibilidade (achado por porLabel acima) continua a sigla
+  // gravada; o texto visível na tela agora é o nome por extenso.
+  test("chip de unidade mostra o nome por extenso; o valor gravado continua a sigla", () => {
+    let tree: any;
+    act(() => { tree = renderer.create(<Harness matcon />); });
+    const chipSc = porLabel(tree, "sc");
+    expect(chipSc).toBeTruthy();
+    expect(textoDoNode(chipSc)).toContain("saco");
+    expect(textoDoNode(chipSc)).not.toContain("sc");
     tree.unmount();
   });
 

@@ -24,7 +24,7 @@ import { View, Text, Pressable } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { maskCurrency } from "@/utils/masks";
-import { MATCON_UNITS, PURCHASE_UNITS, ehMilheiro, fmtQty, parseQtyInput } from "@/utils/matconUnits";
+import { MATCON_UNITS, PURCHASE_UNITS, ehMilheiro, fmtQty, nomeDaUnidade, parseQtyInput } from "@/utils/matconUnits";
 import { UNITS } from "../types";
 import { Campo, Chip, Entrada, Radio, Secao, fr, s } from "./ui";
 import { PERFIL_PADRAO, nomeDaEmbalagem, type PerfilDoCadastro } from "./perfis";
@@ -123,7 +123,7 @@ function CaixaDeMargem({ preco, custo, isProduto, porUnidade, cartao }: { preco:
           <Text style={st.margemForte}>{mc.pct + "%"}</Text> no cartão
           {temTaxa ? ", já tirada a taxa da maquininha (" + fmtPct(cartao.taxaPct as number) + "%)" : ""} · lucro{" "}
           <Text style={st.margemForte}>{fmtBRL(m.lucro)}</Text> /{" "}
-          <Text style={st.margemForte}>{fmtBRL(mc.lucro)}</Text> por {isProduto ? (porUnidade || "un.") : "atendimento"}
+          <Text style={st.margemForte}>{fmtBRL(mc.lucro)}</Text> por {isProduto ? (porUnidade ? nomeDaUnidade(porUnidade) : "un.") : "atendimento"}
         </Text>
       </View>
     );
@@ -157,7 +157,7 @@ function CaixaDeMargem({ preco, custo, isProduto, porUnidade, cartao }: { preco:
       <Icon name="check" size={14} color={Colors.green} />
       <Text style={st.margemTxt}>
         Margem <Text style={st.margemForte}>{m.pct + "%"}</Text> · lucro{" "}
-        <Text style={st.margemForte}>{fmtBRL(m.lucro)}</Text> por {isProduto ? (porUnidade || "un.") : "atendimento"}
+        <Text style={st.margemForte}>{fmtBRL(m.lucro)}</Text> por {isProduto ? (porUnidade ? nomeDaUnidade(porUnidade) : "un.") : "atendimento"}
       </Text>
     </View>
   );
@@ -195,9 +195,9 @@ function CampoDoCartao({ preco, c, sufixo, onSubmit }: { preco: string; c: Preco
           onSubmitEditing={onSubmit}
           placeholder="0,00"
           keyboardType="number-pad"
-          style={[{ paddingLeft: 34 }, sufixo ? { paddingRight: 64 } : null, c.manual ? st.inputMao : st.inputAuto]}
+          style={[{ paddingLeft: 34 }, sufixo ? { paddingRight: 92 } : null, c.manual ? st.inputMao : st.inputAuto]}
         />
-        {sufixo ? <Text style={st.sufixoTxt} numberOfLines={1}>{"por " + sufixo}</Text> : null}
+        {sufixo ? <Text style={st.sufixoTxt} numberOfLines={1}>{"por " + nomeDaUnidade(sufixo)}</Text> : null}
       </View>
     </View>
   );
@@ -208,7 +208,10 @@ function DicaDoCartao({ preco, c }: { preco: string; c: PrecoNoCartaoDoForm }) {
   const valor = valorDoCartaoNoForm(preco, c);
   return (
     <>
-      <Text style={[s.hint, { marginTop: -6, marginBottom: 10 }]} testID="preco-cartao-dica">
+      {/* 23/09/2026 (QA em produção) — altura mínima de duas linhas pra
+          "Voltar aos X%" não colapsar a caixa e derrubar o scroll do modal
+          quando o texto muda de "ajustado à mão" pra "automático". */}
+      <Text style={[s.hint, { marginTop: -6, marginBottom: 10, minHeight: 30 }]} testID="preco-cartao-dica">
         {c.manual ? (
           <>
             {"Não segue mais os " + fmtPct(c.pct) + "% da loja. "}
@@ -355,7 +358,9 @@ function ComoVoceVende(p: Props) {
   const custoNum = valorDaMascara(p.custo);
 
   function chipDeUnidade(u: string) {
-    return <Chip key={u} label={u} active={unidade === u} onPress={() => p.onUnidade?.(u)} />;
+    // Chip mostra o nome por extenso ("saco"); o valor gravado e o rótulo
+    // de acessibilidade continuam a sigla ("sc") — 23/09/2026, QA em produção.
+    return <Chip key={u} label={nomeDaUnidade(u)} accessibilityLabel={u} active={unidade === u} onPress={() => p.onUnidade?.(u)} />;
   }
 
   function campoDeValor(label: string, valor: string, onValor: (v: string) => void, obrigatorio: boolean) {
@@ -369,9 +374,9 @@ function ComoVoceVende(p: Props) {
             onSubmitEditing={p.onSubmit}
             placeholder="0,00"
             keyboardType="number-pad"
-            style={{ paddingLeft: 34, paddingRight: 64 }}
+            style={{ paddingLeft: 34, paddingRight: 92 }}
           />
-          <Text style={st.sufixoTxt} numberOfLines={1}>{"por " + unidade}</Text>
+          <Text style={st.sufixoTxt} numberOfLines={1}>{"por " + nomeDaUnidade(unidade)}</Text>
         </View>
       </Campo>
     );
@@ -435,7 +440,7 @@ function ComoVoceVende(p: Props) {
           <Radio
             ativo={!emEmbalagem}
             titulo="Do mesmo jeito que vendo"
-            descricao={"compro e vendo em " + unidade}
+            descricao={"compro e vendo em " + nomeDaUnidade(unidade)}
             onPress={() => { p.onPurchaseUnit?.(null); p.onPurchaseFactor?.(""); setAbrirEmbalagem(false); }}
           />
           <Radio
@@ -455,7 +460,7 @@ function ComoVoceVende(p: Props) {
                 style={fr.fraseChip}
                 accessibilityLabel="Escolher unidade de compra"
               >
-                <Text style={fr.fraseChipTxt}>{unidadeCompra + " ▾"}</Text>
+                <Text style={fr.fraseChipTxt}>{nomeDaEmbalagem(unidadeCompra).nome + " ▾"}</Text>
               </Pressable>
               <Text style={fr.fraseTxt}>de</Text>
               <Entrada
@@ -467,14 +472,15 @@ function ComoVoceVende(p: Props) {
                 dataSet={ENTER_LOCAL}
                 style={fr.fraseInput}
               />
-              <Text style={fr.fraseTxt}>{unidade + "."}</Text>
+              <Text style={fr.fraseTxt}>{nomeDaUnidade(unidade) + "."}</Text>
             </View>
             {abrirEmbalagem ? (
               <View style={[s.chips, { marginTop: 8 }]}>
                 {PURCHASE_UNITS.map((u) => (
                   <Chip
                     key={u}
-                    label={u}
+                    label={nomeDaEmbalagem(u).nome}
+                    accessibilityLabel={u}
                     active={unidadeCompra === u}
                     onPress={() => { p.onPurchaseUnit?.(u); setAbrirEmbalagem(false); }}
                   />
@@ -505,7 +511,9 @@ const st = {
     fontSize: 12.5, color: Colors.ink3, fontWeight: "700" as const,
   },
   sufixoTxt: {
-    position: "absolute" as any, right: 10, zIndex: 2, maxWidth: 60,
+    // 23/09/2026: nomes por extenso ("milheiro", "tonelada") são mais
+    // largos que a sigla — a caixa cresceu (era maxWidth 60) pra caber.
+    position: "absolute" as any, right: 10, zIndex: 2, maxWidth: 88,
     fontSize: 11, color: Colors.ink3,
   },
   margem: {
