@@ -54,7 +54,21 @@ import { convertPurchaseToSale, fmtQty } from "@/utils/matconUnits";
 // com a nota do fornecedor, uma vez, aqui na conferencia. So em linha
 // vinculada a produto vendido em m²/m³; saco de cimento nem mostra o campo.
 import { matconApi } from "@/services/matconApi";
+import type { PurchaseOrder } from "@/services/matconApi";
 import { usaLote } from "@/utils/matconLots";
+// 23/09/2026 (Matcon M4 › Compras, Aura-backend#741): depois que o estoque
+// entra, avisa o backend UMA vez ("a nota do fornecedor entrou") para gravar
+// o ultimo fornecedor do produto e fechar o pedido de compra enviado. Falha
+// aqui nunca desfaz o que ja entrou — vira um aviso no resumo.
+import {
+  frasesDosPedidos,
+  lerNotaDoFornecedor,
+  montarEntradaDaNota,
+  NOTA_VAZIA,
+  registrarEntradaDaNota,
+  type EntradaDeItem,
+  type NotaDoFornecedor,
+} from "@/utils/matconPurchaseReceipt";
 
 const IS_WEB = Platform.OS === "web";
 
@@ -141,6 +155,12 @@ export function DanfeImportModal({
   // Numero da nota (nNF): vira `source_invoice` do lote, pra ficha do
   // produto poder dizer de qual nota aquela pilha veio.
   const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null);
+  // Emitente da nota (nome/CNPJ/telefone) + numero: corpo da entrada da
+  // compra no Matcon. Os pedidos que a nota fechou e o aviso de falha
+  // aparecem no resumo ("done").
+  const [nota, setNota] = useState<NotaDoFornecedor>(NOTA_VAZIA);
+  const [pedidosRecebidos, setPedidosRecebidos] = useState<PurchaseOrder[]>([]);
+  const [avisoEntrada, setAvisoEntrada] = useState<string | null>(null);
   const { data: catalogoRaw } = useQuery({
     queryKey: ["danfe-import-catalogo", companyId],
     queryFn: () => companiesApi.products(companyId),
@@ -193,7 +213,9 @@ export function DanfeImportModal({
       try {
         const xmlText = evt.target?.result as string;
         const parsed = parseDanfeXml(xmlText);
-        setInvoiceNumber(parseDanfeInvoiceNumber(xmlText));
+        const lida = lerNotaDoFornecedor(xmlText);
+        setNota(lida);
+        setInvoiceNumber(lida.invoice_number);
         if (!parsed.length) {
           setError("Nenhum item encontrado no XML. Verifique se é um arquivo NF-e válido.");
           return;
@@ -237,7 +259,13 @@ export function DanfeImportModal({
     if (!selected.length) return;
     setImporting(true);
     setStep("importing");
+    setPedidosRecebidos([]);
+    setAvisoEntrada(null);
     let count = 0;
+    // Matcon: o que virou estoque de um produto, do jeito que esta na nota
+    // (unidade de COMPRA, sem converter). Linha desmarcada nunca entra; a
+    // que falhou ao gravar tambem nao.
+    const entradas: EntradaDeItem[] = [];
     for (const it of selected) {
       try {
         // Fix #4: usa custo editado; Fix NCM: usa ncm_edit
@@ -277,8 +305,9 @@ export function DanfeImportModal({
               // importacao da nota inteira.
             }
           }
+          entradas.push({ product_id: it.linkedProductId, quantity: it.quantity, unit_cost: cost });
         } else {
-          await companiesApi.createProduct(companyId, {
+          const criado: any = await companiesApi.createProduct(companyId, {
             name: it.name,
             price,
             cost,
@@ -287,12 +316,25 @@ export function DanfeImportModal({
             category: it.category || null,
             stock: it.quantity,
           });
+          // Produto novo tambem ganha "quem vendeu e por quanto" — a
+          // sugestao de compra da proxima vez ja sabe a quem pedir.
+          if (matconEnabled) {
+            entradas.push({ product_id: criado?.id || criado?.product?.id, quantity: it.quantity, unit_cost: cost });
+          }
         }
         count++;
         setImportedCount(count);
       } catch {
         // silencia erros individuais — continua importando os demais
       }
+    }
+    // Matcon M4: uma chamada so, para a MESMA empresa dos PATCH acima
+    // (multi-CNPJ: a compra e da loja que recebeu a mercadoria). Nunca
+    // lanca; em falha, o estoque fica como esta e o resumo avisa.
+    if (matconEnabled) {
+      const resultado = await registrarEntradaDaNota(companyId, montarEntradaDaNota(nota, entradas));
+      setPedidosRecebidos(resultado.orders);
+      setAvisoEntrada(resultado.aviso);
     }
     setImporting(false);
     setStep("done");
@@ -303,6 +345,9 @@ export function DanfeImportModal({
     setStep("upload");
     setItems([]);
     setInvoiceNumber(null);
+    setNota(NOTA_VAZIA);
+    setPedidosRecebidos([]);
+    setAvisoEntrada(null);
     setError(null);
     setMarkupPct("");
     setImportedCount(0);
@@ -631,6 +676,7 @@ export function DanfeImportModal({
               <Text style={s.cancelBtnTxt}>Cancelar</Text>
             </Pressable>
             <Pressable
+              testID="danfe-importar"
               style={[s.importBtn, selectedCount === 0 && s.importBtnDisabled]}
               onPress={selectedCount > 0 ? handleImport : undefined}
             >
@@ -663,6 +709,14 @@ export function DanfeImportModal({
               {importedCount !== 1 ? "s" : ""}
             </Text>
             <Text style={s.doneSub}>O estoque foi atualizado com sucesso.</Text>
+            {frasesDosPedidos(pedidosRecebidos).map((frase, i) => (
+              <Text key={i} testID={"danfe-pedido-" + i} style={s.donePedido}>{frase}</Text>
+            ))}
+            {avisoEntrada ? (
+              <View testID="danfe-aviso-entrada" style={s.doneAviso}>
+                <Text style={s.doneAvisoTxt}>{avisoEntrada}</Text>
+              </View>
+            ) : null}
             <Pressable style={s.importBtn} onPress={handleSuccess}>
               <Text style={s.importBtnTxt}>Fechar</Text>
             </Pressable>
@@ -705,18 +759,9 @@ function parseDanfeXml(xmlText: string): DanfeItem[] {
   return items;
 }
 
-// Numero da nota (ide/nNF). Usado como `source_invoice` do lote — o mesmo
-// numero que a lojista ve no papel ("Nota 12.884").
-function parseDanfeInvoiceNumber(xmlText: string): string | null {
-  try {
-    const doc = new DOMParser().parseFromString(xmlText, "text/xml");
-    const nNF = doc.querySelector("ide > nNF") || doc.querySelector("nNF");
-    const v = nNF?.textContent?.trim();
-    return v || null;
-  } catch {
-    return null;
-  }
-}
+// Numero da nota (ide/nNF) e emitente: utils/matconPurchaseReceipt.ts
+// (lerNotaDoFornecedor). O numero vira `source_invoice` do lote — o mesmo
+// que a lojista ve no papel ("Nota 12.884").
 
 // ─── Estilos ──────────────────────────────────────────────────────────────────
 
@@ -955,4 +1000,15 @@ const s = StyleSheet.create({
   doneIcon: { fontSize: 40 },
   doneTitle: { fontSize: 18, fontWeight: "700", color: Colors.ink, textAlign: "center" },
   doneSub: { fontSize: 13, color: Colors.ink3, textAlign: "center" },
+  // Matcon M4: "Pedido de compra C-0042 recebido por completo".
+  donePedido: { fontSize: 13, color: Colors.violet, fontWeight: "700", textAlign: "center" },
+  doneAviso: {
+    backgroundColor: "rgba(251,191,36,0.12)",
+    borderRadius: 8,
+    padding: 10,
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.35)",
+  },
+  doneAvisoTxt: { fontSize: 12, color: Colors.ink, textAlign: "center", lineHeight: 18 },
 });
