@@ -115,6 +115,9 @@ describe("SecaoNotaFiscal — as três perguntas", () => {
     expect(t).toContain("Código do imposto antecipado (CEST)");
     expect(t).toContain("O imposto deste produto já veio pago na nota do fornecedor?");
     expect(t).toContain("Fabricado no Brasil?");
+    // 23/09/2026: resposta coerente com a pergunta ("Importado" sozinho não
+    // respondia "Fabricado no Brasil?").
+    expect(t).toContain("Não, importado");
     expect(t).toContain("0 de 3");
     expect(porLabel(tree, "Sim, já veio")).toBeTruthy();
     expect(porLabel(tree, "Não")).toBeTruthy();
@@ -135,17 +138,18 @@ describe("SecaoNotaFiscal — as três perguntas", () => {
     tree.unmount();
   });
 
-  test('"Gerar" do CEST com NCM de cimento preenche 0500100 e o selo sobe', () => {
+  test('"Sugerir" do CEST com NCM de cimento preenche 0500100 e o selo sobe', () => {
     let tree: any;
     act(() => { tree = renderer.create(<Nota ncmInicial="25232910" />); });
     expect(texto(tree)).toContain("1 de 3");
 
     // O NCM ("Cimento" não sugere pelo nome) fica desabilitado; o do CEST é
-    // o último "Gerar" habilitado.
+    // o último "Sugerir" habilitado. (23/09/2026: "Gerar" virou "Sugerir" —
+    // o botão sugere um código, não inventa um.)
     const botoesGerar = tree.root.findAllByType(Pressable).filter((n: any) => {
       if (n.props.disabled) return false;
       const textos = n.findAllByType(Text).map((t: any) => t.props.children);
-      return textos.includes("Gerar");
+      return textos.includes("Sugerir");
     });
     expect(botoesGerar.length).toBeGreaterThan(0);
     act(() => { botoesGerar[botoesGerar.length - 1].props.onPress(); });
