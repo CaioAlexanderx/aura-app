@@ -237,16 +237,47 @@ describe("Papel — etiqueta e orçamento", () => {
   const ITEM = { name: "Cimento CP II 50 kg", price: 38, barcode: "7891234567895", size: "", color: "", qty: 1 };
   const OPTS = { mode: "barcode" as const, storeName: "Depósito", showStoreName: true };
 
-  test("etiqueta NÃO VAZA: sem cardPrice, HTML sem segunda linha", () => {
+  test("etiqueta NÃO VAZA: sem cardPrice, HTML idêntico ao de sempre (um preço, sem rótulo, sem price-wrap)", () => {
     const html = buildLabelHtml([ITEM], OPTS);
+    expect(html).not.toContain("price-wrap");
     expect(html).not.toContain("price2");
-    expect(html).not.toContain("cartão");
+    expect(html).not.toContain("bc-inner-card");
+    expect(html).not.toContain("Cartão");
+    expect(html).not.toContain("Dinheiro ou PIX");
+    expect(html).toContain('<div class="price">R$ 38,00</div>');
   });
-  test("etiqueta ligada: 'cartão R$ 42,20' embaixo do preço", () => {
+  test("etiqueta ligada: os dois preços com rótulo ('Dinheiro ou PIX' e 'Cartão')", () => {
     const html = buildLabelHtml([{ ...ITEM, cardPrice: 42.2 }], OPTS);
-    expect(html).toContain('<div class="price">R$ 38,00</div><div class="price2">cartão R$ 42,20</div>');
+    expect(html).toContain(
+      '<div class="price-wrap">' +
+      '<div class="price-row"><span class="price-lbl">Dinheiro ou PIX</span><span class="price-val">R$ 38,00</span></div>' +
+      '<div class="price-row price-row-card"><span class="price-lbl">Cartão</span><span class="price-val price-val-card">R$ 42,20</span></div>' +
+      '</div>',
+    );
     // QR também.
-    expect(buildLabelHtml([{ ...ITEM, cardPrice: 42.2 }], { ...OPTS, mode: "qr" })).toContain("cartão R$ 42,20");
+    const htmlQr = buildLabelHtml([{ ...ITEM, cardPrice: 42.2 }], { ...OPTS, mode: "qr" });
+    expect(htmlQr).toContain("Dinheiro ou PIX");
+    expect(htmlQr).toContain("Cartão");
+    expect(htmlQr).toContain("R$ 42,20");
+  });
+  test("etiqueta ligada: o preço no cartão sai em pelo menos 7pt nos dois formatos (33x21 e 30x25) — era 5,5pt sem rótulo, ilegível", () => {
+    (["99x21", "30x25"] as const).forEach((size) => {
+      const html = buildLabelHtml([{ ...ITEM, cardPrice: 42.2 }], { ...OPTS, labelSize: size });
+      const m = html.match(/\.price-row-card \.price-val\{font-size:([\d.]+)pt/);
+      expect(m).not.toBeNull();
+      expect(Number(m![1])).toBeGreaterThanOrEqual(7);
+    });
+  });
+  test("etiqueta ligada: NÃO toca no BARCODE_OPTS nem no .bc-box (código de barras não pode encolher)", () => {
+    const htmlOff = buildLabelHtml([ITEM], OPTS);
+    const htmlOn = buildLabelHtml([{ ...ITEM, cardPrice: 42.2 }], OPTS);
+    // Mesmos parâmetros LOCKED do JsBarcode de sempre.
+    expect(htmlOn).toContain("width:1,height:24,margin:1,displayValue:true,fontSize:7,textMargin:0");
+    // A regra ".bc-inner .bc-box{...}" (LOCKED) sai idêntica ligado/desligado —
+    // só a classe extra .bc-inner-card (fora do .bc-box) aperta o resto.
+    const bcBoxRuleOff = htmlOff.match(/\.bc-inner \.bc-box\{[^}]*\}/)![0];
+    const bcBoxRuleOn = htmlOn.match(/\.bc-inner \.bc-box\{[^}]*\}/)![0];
+    expect(bcBoxRuleOn).toBe(bcBoxRuleOff);
   });
 
   const QUOTE = { items: [{ name: "Cimento", qty: 10, unitPrice: 38, cardUnitPrice: 42.2 }], total: 380, companyName: "Depósito" };

@@ -7,10 +7,12 @@ import { useAuthStore } from "@/stores/auth";
 import { companiesApi, pdvSettingsApi } from "@/services/api";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { lerConfigDoCartao, precoNoCartaoDoItem } from "@/utils/precoNoCartao";
+import { readMatconSettings } from "@/constants/matcon";
 import { ehIphoneInstalado } from "@/services/instalarApp";
 import { avisarImpressaoNoIphone } from "@/components/ImpressaoNoIphone";
 import { hexToName } from "@/utils/colorNames";
 import { buildLabelHtml, buildLabelName, validateLabelItems, isValidEAN13, generateEAN13, LABEL_SIZE_PRESETS, DEFAULT_LABEL_SIZE } from "@/components/screens/estoque/labels/buildLabelHtml";
+import { defaultLabelQty, unitLabelForList } from "@/components/screens/estoque/labels/labelDefaults";
 import type { LabelItem, InvalidCodeItem, LabelSizeKey } from "@/components/screens/estoque/labels/buildLabelHtml";
 import type { Product } from "@/components/screens/estoque/types";
 
@@ -83,6 +85,10 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   // 22/09/2026 (preco no cartao): so a opcao da loja — desligada, nada muda.
   var { settings: pdvSettings } = usePdvSettings();
   var cartaoCfg = lerConfigDoCartao(pdvSettings);
+  // 23/09/2026 (QA etiquetas): quantidade padrao = 1 pra fracionado/milheiro
+  // SO com Matcon ligado — restricao do Caio (loja sem Matcon, incl. kg/L,
+  // mantem o padrao de sempre = estoque).
+  var matconEnabled = readMatconSettings(pdvSettings).matcon_enabled;
   var [mode, setMode] = useState<"barcode" | "qr">("barcode");
   var [labelSize, setLabelSizeState] = useState<LabelSizeKey>(loadStoredLabelSize);
   var labelPreset = LABEL_SIZE_PRESETS[labelSize];
@@ -159,6 +165,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     if (variantCache[productId] || !company?.id) return;
     var p = products.find(function(pr) { return pr.id === productId; });
     if (!p || !p.has_variants) return;
+    var productUnit = p.unit;
     companiesApi.variants(company.id, productId).then(function(res) {
       var active = (res.variants || []).filter(function(v: any) { return v.is_active !== false; });
       setVariantCache(function(prev) { return { ...prev, [productId]: active }; });
@@ -166,7 +173,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
         var varIds = new Set(active.map(function(v: any) { return v.id; }));
         setSelectedVariants(function(prev) { return { ...prev, [productId]: varIds }; });
         var newQtys: Record<string, number> = {};
-        active.forEach(function(v: any) { var stock = parseInt(v.stock_qty) || 1; newQtys[productId + "__" + v.id] = Math.max(1, stock); });
+        active.forEach(function(v: any) { var stock = parseInt(v.stock_qty) || 1; newQtys[productId + "__" + v.id] = defaultLabelQty(productUnit, stock, matconEnabled); });
         setQuantities(function(prev) { return { ...prev, ...newQtys }; });
       }
     }).catch(function() { setVariantCache(function(prev) { return { ...prev, [productId]: [] }; }); });
@@ -180,7 +187,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     } else {
       onSelectionChange([...selectedIds, id]);
       fetchVariantsIfNeeded(id);
-      if (!quantities[id]) { var p = products.find(function(pr) { return pr.id === id; }); if (p && p.stock > 1) setQty(id, p.stock); }
+      if (!quantities[id]) { var p = products.find(function(pr) { return pr.id === id; }); if (p) setQty(id, defaultLabelQty(p.unit, p.stock, matconEnabled)); }
     }
   }
 
@@ -207,7 +214,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   function toggleAll() {
     var ids = filtered.map(function(p) { return p.id; });
     if (ids.every(function(id) { return selectedIds.includes(id); })) { onSelectionChange(selectedIds.filter(function(id) { return !ids.includes(id); })); }
-    else { var newIds = Array.from(new Set([...selectedIds, ...ids])); onSelectionChange(newIds); filtered.forEach(function(p) { fetchVariantsIfNeeded(p.id); if (!quantities[p.id] && p.stock > 1) setQty(p.id, p.stock); }); }
+    else { var newIds = Array.from(new Set([...selectedIds, ...ids])); onSelectionChange(newIds); filtered.forEach(function(p) { fetchVariantsIfNeeded(p.id); if (!quantities[p.id]) setQty(p.id, defaultLabelQty(p.unit, p.stock, matconEnabled)); }); }
   }
 
   var totalLabels = useMemo(function() {
@@ -231,6 +238,13 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   function comCartao(preco: number, p: Product): { cardPrice?: number } {
     var card = precoNoCartaoDoItem(preco, { price: p.price, cardPrice: p.cardPrice }, cartaoCfg);
     return card != null ? { cardPrice: card } : {};
+  }
+
+  // 23/09/2026 (QA etiquetas, item 4): mesmo calculo do comCartao, so pra
+  // exibir na lista (discreto, ao lado do preco em dinheiro) — nao entra na
+  // etiqueta impressa (isso ja e o comCartao acima).
+  function cardPriceFor(preco: number, p: Product): number | null {
+    return precoNoCartaoDoItem(preco, { price: p.price, cardPrice: p.cardPrice }, cartaoCfg);
   }
 
   // Monta a lista de LabelItems a partir da selecao atual
@@ -400,7 +414,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       <View style={s.header}>
         <View style={{ flex: 1, minWidth: 200 }}>
           <Text style={s.title}>Etiquetas {labelPreset.uiLabel} — Padrão EAN-13</Text>
-          <Text style={s.hint}>Selecione os produtos. Produtos sem EAN-13 válido receberão um código interno gerado automaticamente antes da impressão.</Text>
+          <Text style={s.hint}>Selecione os produtos. Produto com código válido mas fora do padrão de código de barras (EAN-13) recebe um código interno automaticamente; sem nenhum código válido cadastrado, corrija no Estoque antes de imprimir.</Text>
         </View>
         <View style={{ gap: 6, alignItems: "flex-end" }}>
           <View style={s.modeToggle}>
@@ -450,6 +464,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
           if (!hasVariants) {
             var qty = getQty(p.id);
             var labelPreview = buildLabelName(p.name, p.size || "", p.color || "");
+            var cardPriceDisplay = cartaoCfg.enabled ? cardPriceFor(p.price, p) : null;
             return (
               <View key={p.id} style={[s.item, sel && s.itemSelected]}>
                 <Pressable onPress={function() { toggleSelect(p.id); }} style={s.itemLeft}>
@@ -460,13 +475,16 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                       {p.has_variants && <Text style={s.varBadge}>V</Text>}
                     </View>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
-                      <Text style={s.itemCode} numberOfLines={1}>{productCode} | {p.stock} un</Text>
+                      <Text style={s.itemCode} numberOfLines={1}>{productCode} | {p.stock} {unitLabelForList(p.unit)}</Text>
                       {renderColorIndicator(p.color)}
                       {p.size ? <Text style={s.sizeBadge}>{p.size}</Text> : null}
                       {renderEan13Badge(productCode)}
                     </View>
                   </View>
-                  <Text style={s.itemPrice}>R$ {p.price.toFixed(2).replace(".", ",")}</Text>
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Text style={s.itemPrice}>R$ {p.price.toFixed(2).replace(".", ",")}</Text>
+                    {cardPriceDisplay != null && <Text style={s.itemCardPriceHint}>cartão R$ {cardPriceDisplay.toFixed(2).replace(".", ",")}</Text>}
+                  </View>
                 </Pressable>
                 {sel && (
                   <View style={s.qtyRow}>
@@ -482,6 +500,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
 
           var parentLabelPreview = buildLabelName(p.name, p.size || "", p.color || "");
           var parentQty = getQty(p.id);
+          var parentCardPriceDisplay = cartaoCfg.enabled ? cardPriceFor(p.price, p) : null;
           return (
             <View key={p.id} style={[s.item, s.itemSelected]}>
               <View style={s.parentRow}>
@@ -513,11 +532,14 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                       {p.size ? <Text style={s.sizeBadge}>{p.size}</Text> : null}
                     </View>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
-                      <Text style={s.variantMeta}>{productCode} | {p.stock} un</Text>
+                      <Text style={s.variantMeta}>{productCode} | {p.stock} {unitLabelForList(p.unit)}</Text>
                       {renderEan13Badge(productCode)}
                     </View>
                   </View>
-                  <Text style={s.variantPrice}>R$ {p.price.toFixed(2).replace(".", ",")}</Text>
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Text style={s.variantPrice}>R$ {p.price.toFixed(2).replace(".", ",")}</Text>
+                    {parentCardPriceDisplay != null && <Text style={s.variantCardPriceHint}>cartão R$ {parentCardPriceDisplay.toFixed(2).replace(".", ",")}</Text>}
+                  </View>
                 </Pressable>
                 {parentChecked && (
                   <View style={s.qtyRowVariant}>
@@ -538,6 +560,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                 var effectivePrice = v.price_override ? parseFloat(v.price_override) : p.price;
                 var vBarcode = v.barcode || p.barcode || p.code;
                 var vStock = parseInt(v.stock_qty) || 0;
+                var vCardPriceDisplay = cartaoCfg.enabled ? cardPriceFor(effectivePrice, p as Product) : null;
 
                 return (
                   <View key={v.id} style={[s.variantRow, vsel && s.variantRowSelected]}>
@@ -550,11 +573,14 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                           {sc.size ? <Text style={s.sizeBadge}>{sc.size}</Text> : null}
                         </View>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
-                          <Text style={s.variantMeta}>{vBarcode} | {vStock} un</Text>
+                          <Text style={s.variantMeta}>{vBarcode} | {vStock} {unitLabelForList(p.unit)}</Text>
                           {renderEan13Badge(vBarcode)}
                         </View>
                       </View>
-                      <Text style={s.variantPrice}>R$ {effectivePrice.toFixed(2).replace(".", ",")}</Text>
+                      <View style={{ alignItems: "flex-end" }}>
+                        <Text style={s.variantPrice}>R$ {effectivePrice.toFixed(2).replace(".", ",")}</Text>
+                        {vCardPriceDisplay != null && <Text style={s.variantCardPriceHint}>cartão R$ {vCardPriceDisplay.toFixed(2).replace(".", ",")}</Text>}
+                      </View>
                     </Pressable>
                     {vsel && (
                       <View style={s.qtyRowVariant}>
@@ -578,14 +604,14 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
           <View style={s.invalidHeader}>
             <Icon name="alert" size={16} color={Colors.red} />
             <Text style={s.invalidTitle}>
-              {invalidCodes.length} produto{invalidCodes.length > 1 ? "s" : ""} sem codigo valido - corrija antes de imprimir
+              {invalidCodes.length} produto{invalidCodes.length > 1 ? "s" : ""} sem código válido — corrija antes de imprimir
             </Text>
             <Pressable onPress={function() { setInvalidCodes([]); }} style={s.invalidClose}>
               <Icon name="x" size={14} color={Colors.ink3} />
             </Pressable>
           </View>
           <Text style={s.invalidHint}>
-            Códigos como "...", "-", "0000" ou muito curtos geram barras ilegiveis no scanner. Edite o produto no Estoque e cadastre um SKU real.
+            Códigos como "...", "-", "0000" ou muito curtos geram barras ilegíveis no scanner. Cadastre o código de barras ou um código interno no produto, no Estoque, antes de imprimir.
           </Text>
           <ScrollView style={s.invalidList} nestedScrollEnabled>
             {invalidCodes.map(function(item, idx) {
@@ -646,7 +672,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       </Pressable>
       <View style={s.setupHint}>
         <Icon name="alert" size={12} color={Colors.amber} />
-        <Text style={s.setupText}>Chrome: Ctrl+P, papel {labelPreset.pageWidthMm}x{labelPreset.pageHeightMm}mm, Margens: Nenhuma, Escala: 100%. A quantidade padrao e baseada no estoque de cada variante.</Text>
+        <Text style={s.setupText}>Chrome: Ctrl+P, papel {labelPreset.pageWidthMm}x{labelPreset.pageHeightMm}mm, Margens: Nenhuma, Escala: 100%. A quantidade padrão é baseada no estoque de cada variante{matconEnabled ? ", exceto em unidades fracionadas (m, m², m³, kg, L, ton) e milheiro, que começam em 1" : ""}.</Text>
       </View>
     </View>
   );
@@ -682,6 +708,9 @@ var s = StyleSheet.create({
   itemName: { fontSize: 13, color: Colors.ink, fontWeight: "500" },
   itemCode: { fontSize: 10, color: Colors.ink3, fontFamily: "monospace" as any },
   itemPrice: { fontSize: 13, color: Colors.green, fontWeight: "700", flexShrink: 0 },
+  // 23/09/2026 (QA etiquetas, item 4): preco no cartao na lista, discreto —
+  // so aparece com a opcao ligada, embaixo do preco em dinheiro.
+  itemCardPriceHint: { fontSize: 10, color: Colors.ink3, fontWeight: "600", marginTop: 1 },
   emptyText: { fontSize: 12, color: Colors.ink3, textAlign: "center", paddingVertical: 16 },
   colorDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1, borderColor: "rgba(0,0,0,0.15)" },
   colorBadge: { fontSize: 9, fontWeight: "600", color: Colors.ink2, backgroundColor: Colors.bg4, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: "hidden" },
@@ -698,6 +727,7 @@ var s = StyleSheet.create({
   variantName: { fontSize: 12, color: Colors.ink, fontWeight: "500" },
   variantMeta: { fontSize: 9, color: Colors.ink3, fontFamily: "monospace" as any, marginTop: 1 },
   variantPrice: { fontSize: 12, color: Colors.green, fontWeight: "700", flexShrink: 0 },
+  variantCardPriceHint: { fontSize: 9, color: Colors.ink3, fontWeight: "600", marginTop: 1 },
   qtyRow: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingBottom: 8, paddingLeft: 40 },
   qtyRowVariant: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 10, paddingBottom: 6, paddingLeft: 34 },
   qtyBtn: { width: 28, height: 28, borderRadius: 7, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border, alignItems: "center", justifyContent: "center" },
