@@ -11,7 +11,7 @@
 // ============================================================
 import { View, Text } from "react-native";
 import { Entrada, Secao, fr, s } from "./ui";
-import { fmtQty, parseQtyInput } from "@/utils/matconUnits";
+import { fmtQty, nomeDaUnidade, parseQtyInput } from "@/utils/matconUnits";
 import { nomeDaEmbalagem } from "./perfis";
 
 type Props = {
@@ -44,7 +44,7 @@ export function SecaoEntrega(p: Props) {
   return (
     <Secao icon="truck" titulo="Entrega" selo={{ tom: "", texto: "opcional" }}>
       <View style={fr.frase}>
-        <Text style={fr.fraseTxt}>{"Cada " + p.unidade + " pesa"}</Text>
+        <Text style={fr.fraseTxt}>{"Cada " + nomeDaUnidade(p.unidade) + " pesa"}</Text>
         <Entrada
           value={p.peso}
           onChangeText={(v: string) => p.onPeso(v.replace(/[^0-9.,]/g, ""))}

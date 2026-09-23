@@ -23,6 +23,7 @@ import {
   ehMilheiro,
   estoqueEmDecimal,
   PECAS_POR_MILHEIRO,
+  nomeDaUnidade,
 } from "@/utils/matconUnits";
 
 describe("isFractionalUnit", () => {
@@ -245,5 +246,33 @@ describe("rotuloEmbalagem — singular/plural sem unidade de compra cadastrada",
   test("com unidade de compra cadastrada, usa o que a loja escreveu (sem inventar plural)", () => {
     expect(rotuloEmbalagem(7, "cx")).toBe("7 cx");
     expect(rotuloEmbalagem(1, "cx")).toBe("1 cx");
+  });
+});
+
+// 23/09/2026 (QA em produção): os chips de unidade e as frases do cadastro
+// ("Cada sc pesa", "por mlh") mostravam a sigla crua. nomeDaUnidade troca
+// pelo nome por extenso só na TELA — o valor gravado continua a sigla.
+describe("nomeDaUnidade — nome por extenso pra tela, sigla continua gravada", () => {
+  test("siglas do Matcon viram nome por extenso", () => {
+    expect(nomeDaUnidade("un")).toBe("unidade");
+    expect(nomeDaUnidade("sc")).toBe("saco");
+    expect(nomeDaUnidade("br")).toBe("barra");
+    expect(nomeDaUnidade("ton")).toBe("tonelada");
+    expect(nomeDaUnidade("mlh")).toBe("milheiro");
+    expect(nomeDaUnidade("pç")).toBe("peça");
+    expect(nomeDaUnidade("m")).toBe("metro");
+    expect(nomeDaUnidade("cx")).toBe("caixa");
+    expect(nomeDaUnidade("pct")).toBe("pacote");
+  });
+
+  test("m², m³ e as unidades já claras (kg, g, ml, L, par, kit, rolo, lata, balde) ficam como estão", () => {
+    ["m²", "m³", "kg", "g", "ml", "L", "par", "kit", "rolo", "lata", "balde"].forEach((u) =>
+      expect(nomeDaUnidade(u)).toBe(u));
+  });
+
+  test("sem unidade conhecida, devolve o que veio (fallback)", () => {
+    expect(nomeDaUnidade("xyz")).toBe("xyz");
+    expect(nomeDaUnidade(null)).toBe("");
+    expect(nomeDaUnidade(undefined)).toBe("");
   });
 });

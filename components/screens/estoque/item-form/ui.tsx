@@ -43,7 +43,7 @@ export function Campo({
 
 // ── chip clicável ───────────────────────────────────────────
 export function Chip({
-  label, active, onPress, dashed, icon, swatch, onRemove, removeLabel,
+  label, active, onPress, dashed, icon, swatch, onRemove, removeLabel, accessibilityLabel,
 }: {
   label: string;
   active?: boolean;
@@ -53,10 +53,14 @@ export function Chip({
   swatch?: string;
   onRemove?: () => void;
   removeLabel?: string;
+  // Rótulo de acessibilidade quando difere do texto visível (ex.: chip de
+  // unidade mostra "saco" mas o valor gravado — e o rótulo pra achar o
+  // botão — continua "sc").
+  accessibilityLabel?: string;
 }) {
   return (
     <View style={[s.chip, active && s.chipAtivo, dashed && s.chipTracejado]}>
-      <Pressable onPress={onPress} style={s.chipMain} accessibilityLabel={label}>
+      <Pressable onPress={onPress} style={s.chipMain} accessibilityLabel={accessibilityLabel || label}>
         {swatch ? <View style={[s.swatch, { backgroundColor: swatch }]} /> : null}
         {icon ? <Icon name={icon as any} size={12} color={active || dashed ? Colors.violet3 : Colors.ink3} /> : null}
         <Text style={[s.chipTxt, active && s.chipTxtAtivo, dashed && s.chipTxtAtivo]}>{label}</Text>

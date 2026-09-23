@@ -125,6 +125,20 @@ describe("SecaoEstoque — perfil Matcon", () => {
     tree.unmount();
   });
 
+  // 23/09/2026 (QA em produção): "Tenho 0 un em estoque , e me avise" tinha
+  // um espaço sobrando antes da vírgula, e "un" ficava sigla crua — as
+  // outras unidades (sc, m²…) continuam do jeito que a loja já lê.
+  it("'un' vira 'unidade' na frase do estoque, sem espaço antes da vírgula", () => {
+    let tree: any;
+    act(() => { tree = renderer.create(<Harness matcon unidade="un" />); });
+    const t = texto(tree);
+    expect(t).toContain("unidade em estoque,");
+    expect(t).not.toContain("un em estoque");
+    expect(t).not.toContain(" , e me avise");
+    expect(t).not.toContain("estoque , ");
+    tree.unmount();
+  });
+
   it("saco é inteiro: o campo não aceita vírgula; m² aceita", () => {
     let tree: any;
     act(() => { tree = renderer.create(<Harness matcon unidade="sc" />); });

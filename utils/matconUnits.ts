@@ -130,6 +130,31 @@ export function toPackages(qty: number, factor: number): { packages: number; cov
 // crescer isto é decisão de PO, não digitação livre.
 export const PURCHASE_UNITS = ["cx", "pct", "sc", "rolo", "lata", "balde", "mlh", "un"] as const;
 
+// 23/09/2026 (QA em produção): os chips de unidade do "Vendo por" e as
+// frases que citam a unidade ("Cada sc pesa", "por mlh") mostravam a
+// sigla crua — legível pra quem já é do ramo, não pra quem está
+// aprendendo o sistema. O valor GRAVADO continua a sigla (matcon_units,
+// products.unit); só o texto na tela vira por extenso. m², m³ e as
+// unidades já claras (kg, g, ml, L, par, kit) ficam como estão.
+const NOMES_POR_EXTENSO: Record<string, string> = {
+  un: "unidade",
+  pct: "pacote",
+  cx: "caixa",
+  m: "metro",
+  sc: "saco",
+  br: "barra",
+  ton: "tonelada",
+  mlh: "milheiro",
+  "pç": "peça",
+};
+
+/** Nome legível da unidade pra frases e chips ("sc" → "saco"). Sem
+ *  tradução conhecida, devolve a própria unidade (kg, g, ml, L, m², m³…). */
+export function nomeDaUnidade(u: string | null | undefined): string {
+  const norm = String(u || "").trim();
+  return NOMES_POR_EXTENSO[norm] || norm;
+}
+
 // QA 22/09/2026: "1 caixas" no hint do carrinho (CartPanel), na calculadora
 // de ambiente e na ficha do produto — as três frases contam embalagem e
 // as três erravam o singular na mesma forma. Fonte única: "7 caixas" / "1
