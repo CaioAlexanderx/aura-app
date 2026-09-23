@@ -231,6 +231,29 @@ describe("Configurações — Cobro mais no cartão", () => {
     expect(t).toContain("18 com preço no cartão ajustado à mão");
     tree.unmount();
   });
+
+  // 23/09/2026 (QA em produção): ligar o toggle não grava card_price_pct —
+  // fica null até o lojista digitar. Antes o campo lia isso como 0 e
+  // mostrava "34 produtos seguem os 0%", que não faz sentido nenhum.
+  test("recém-ligada, sem %: sugestão no placeholder, sem contagem nem exemplo", () => {
+    let tree!: renderer.ReactTestRenderer;
+    act(() => {
+      tree = renderer.create(
+        <CardPriceSection
+          display={{ card_price_enabled: true, card_price_pct: null } as any}
+          saving={false} onToggle={jest.fn()} palette={PALETA}
+          contagem={{ auto: 34, manual: 0 }}
+        />,
+      );
+    });
+    const input = tree.root.findAll((n) => n.props?.testID === "pdv-settings-card-price-pct")[0];
+    expect(input.props.placeholder).toBe("ex.: 10");
+    const t = flattenText(tree.toJSON());
+    expect(t).not.toContain("seguem os 0%");
+    expect(t).not.toContain("produtos seguem");
+    expect(t).toContain("Digite quanto a mais o cliente paga no cartão");
+    tree.unmount();
+  });
 });
 
 describe("Papel — etiqueta e orçamento", () => {

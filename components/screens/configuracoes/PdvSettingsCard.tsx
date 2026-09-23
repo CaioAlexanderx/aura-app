@@ -33,7 +33,12 @@ import { CardPriceSection } from "@/components/screens/configuracoes/CardPriceSe
 const CARD_FEE_PALETTE: CardFeePalette = {
   label:       Colors.ink,
   desc:        Colors.ink3,
-  hint:        Colors.ink4,
+  // 23/09/2026 (QA em produção): Colors.ink4 não existe em constants/
+  // colors.ts (só ink/ink2/ink3) — o hint, o rodapé e o placeholder
+  // caíam pra undefined e renderizavam com a cor padrão do texto,
+  // quase ilegível contra o fundo do card. ink3 é o secundário de
+  // verdade do tema, já legível em claro e escuro.
+  hint:        Colors.ink3,
   trackOff:    Colors.bg4,
   trackOn:     Colors.violet + "66",
   thumbOff:    Colors.ink3,

@@ -47,6 +47,11 @@ export function CardPriceSection({ display, saving, onToggle, palette, contagem 
   }
 
   const exemplo = precoNoCartaoAutomatico(100, pct);
+  // 23/09/2026 (QA em produção): recém-ligado, card_price_pct ainda é null
+  // e `pct` cai pra 0 só pra fazer a conta do exemplo — mas mostrar "34
+  // produtos seguem os 0%" não faz sentido nenhum. A contagem só aparece
+  // com um % de verdade gravado.
+  const temPct = pctSalvo != null && pctSalvo > 0;
 
   return (
     <>
@@ -77,7 +82,7 @@ export function CardPriceSection({ display, saving, onToggle, palette, contagem 
               onBlur={() => { commitPct(pctInput); setPctInput(""); }}
               onSubmitEditing={() => { commitPct(pctInput); setPctInput(""); }}
               keyboardType="decimal-pad"
-              placeholder="0"
+              placeholder="ex.: 10"
               placeholderTextColor={palette.hint}
               style={s.pctInput}
               editable={!saving}
@@ -85,12 +90,12 @@ export function CardPriceSection({ display, saving, onToggle, palette, contagem 
             <Text style={s.fraseTxt}>% a mais</Text>
           </View>
           <Text style={s.hint}>
-            {pctSalvo == null
+            {!temPct
               ? "Digite quanto a mais o cliente paga no cartão. Dá para ajustar produto a produto no cadastro."
               : "Um produto de R$ 100,00 sai a " + fmtReais(exemplo) + " no cartão — no débito e no crédito."}
           </Text>
 
-          {contagem ? (
+          {contagem && temPct ? (
             <View style={s.contagem}>
               <Text style={s.contagemPill}>
                 {contagem.auto + (contagem.auto === 1 ? " produto segue os " : " produtos seguem os ") + fmtPct(pct) + "%"}
