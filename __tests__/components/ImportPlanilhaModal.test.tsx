@@ -27,7 +27,7 @@ jest.mock("@/components/WebPortal", () => ({
 import React from "react";
 import renderer, { act } from "react-test-renderer";
 import { ImportPlanilhaModal } from "@/components/screens/estoque/ImportPlanilhaModal";
-import { ImportarMenu } from "@/components/screens/estoque/ImportarMenu";
+import { ImportarMenu, TRAVA_DO_FUNDO_MS } from "@/components/screens/estoque/ImportarMenu";
 import type { ResumoImport, ResultadoImport, LinhaForaDaImportacao } from "@/utils/importPrevia";
 
 function flattenText(node: any): string {
@@ -243,10 +243,16 @@ describe("barra do Estoque — botão Importar", () => {
     expect(onPlanilha).toHaveBeenCalledTimes(1);
     expect(porTestID(tree, "importar-menu")).toHaveLength(0);
 
-    // Tocar fora fecha sem escolher.
+    // Tocar fora fecha sem escolher — mas só depois da trava contra
+    // clique duplo (o fundo ignora toques nos primeiros TRAVA_DO_FUNDO_MS).
+    jest.useFakeTimers();
     act(() => { porTestID(tree, "importar-botao")[0].props.onPress(); });
     act(() => { porTestID(tree, "importar-menu-fundo")[0].props.onPress(); });
+    expect(porTestID(tree, "importar-menu")).toHaveLength(1);
+    act(() => { jest.advanceTimersByTime(TRAVA_DO_FUNDO_MS); });
+    act(() => { porTestID(tree, "importar-menu-fundo")[0].props.onPress(); });
     expect(porTestID(tree, "importar-menu")).toHaveLength(0);
+    jest.useRealTimers();
 
     act(() => { porTestID(tree, "importar-botao")[0].props.onPress(); });
     act(() => { porTestID(tree, "importar-opcao-nota")[0].props.onPress(); });
