@@ -69,6 +69,17 @@
 //   · O card "Orçamento #N salvo" ganhou "Imprimir" (onGenerateQuote, o
 //     gerador de sempre) ao lado de "Enviar no WhatsApp" e "Ver orçamentos"
 //     (era "Ver na esteira" — texto de tela é língua do lojista).
+//
+// 22/09/2026 (preço no cartão — docs/mockups/preco-no-cartao.html, telas 3
+// e 5). Tudo opcional e só com a opção da loja ligada:
+//   · `pricePair`: o par "dinheiro e PIX · cartão" dentro do bloco violeta,
+//     logo abaixo do total — o vendedor responde "e no cartão?" sem tocar
+//     em nada. O lado do chip escolhido acende. No celular é a única linha
+//     a mais (≈ 36px); o rodapé continua Limpar · Orçamento · Finalizar.
+//   · item com `otherPrice`: o preço do outro método em cinza, ao lado do
+//     unitário ("· cartão R$ 42,20"). Sempre visível, nada de hover.
+//   · card do orçamento salvo com os dois totais.
+// Sem essas props o painel é byte a byte o de antes.
 // ============================================================
 import { Fragment, forwardRef, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator, TextInput } from "react-native";
@@ -101,7 +112,14 @@ export type CartDisplayItem = {
   unit?: string | null;
   purchaseUnit?: string | null;
   purchaseFactor?: number | null;
+  // 22/09/2026 (preço no cartão): preço unitário no OUTRO método e o nome
+  // dele ("cartão" / "dinheiro"). Ausente = linha de sempre.
+  otherPrice?: number | null;
+  otherLabel?: string;
 };
+
+/** Preço no cartão: totais nos dois métodos e qual está valendo. */
+export type PricePair = { cash: number; card: number; active: "cash" | "card" | "split"; split?: number };
 
 export type PayChip = { key: string; label: string; icon: string };
 
@@ -112,6 +130,8 @@ export type SavedQuoteCard = {
   /** "29/09" — já formatado (o CartPanel não sabe de fuso/parse de data). */
   validUntilLabel: string;
   total: number;
+  /** Preço no cartão: total no cartão do orçamento salvo. */
+  cardTotal?: number;
   onSendWhatsApp: () => void;
   onViewEsteira: () => void;
   onDismiss?: () => void;
@@ -165,6 +185,10 @@ type Props = {
   /** Painel com altura limitada (desktop): corpo rola e o checkout ancora no
    *  fundo. No mobile (sem fill) o painel tem altura natural e a página rola. */
   fill?: boolean;
+  /** 22/09/2026 (preço no cartão). null/ausente = topo de sempre. */
+  pricePair?: PricePair | null;
+  /** "Subtotal no cartão" quando o chip é de cartão. */
+  subtotalLabel?: string;
   // CPF na nota (NFC-e). Opcional — se passado, mostra o input.
   cpfNaNota?: string;
   onCpfNaNotaChange?: (v: string) => void;
@@ -195,6 +219,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     discountLabel, isProcessing, finalizeDisabled, requiredHints,
     emptyCta, headerSubtitle, compact, fill,
     cpfNaNota, onCpfNaNotaChange,
+    pricePair, subtotalLabel,
     splitMode, splitPayments, splitRemaining, splitIsBalanced,
     onToggleSplit, onAddSplitPayment, onUpdateSplitPayment, onRemoveSplitPayment,
   } = props;
@@ -297,6 +322,18 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
             ,{String(Math.round((total - Math.floor(total)) * 100)).padStart(2, "0")}
           </Text>
         </View>
+        {pricePair ? (
+          <View style={s.par} testID="carrinho-par-precos">
+            <View style={[s.parItem, pricePair.active === "cash" && s.parItemOn]}>
+              <Text style={s.parK} numberOfLines={1}>dinheiro e PIX</Text>
+              <Text style={s.parV} numberOfLines={1}>{fmtCurrency(pricePair.cash)}</Text>
+            </View>
+            <View style={[s.parItem, pricePair.active === "card" && s.parItemOn]}>
+              <Text style={s.parK} numberOfLines={1}>cartão</Text>
+              <Text style={s.parV} numberOfLines={1}>{fmtCurrency(pricePair.card)}</Text>
+            </View>
+          </View>
+        ) : null}
         <View style={s.meta}>
           <View>
             <Text style={s.metaK}>Itens</Text>
@@ -454,7 +491,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
 
           {/* Summary */}
           <View style={s.sumRow}>
-            <Text style={s.sumK}>Subtotal</Text>
+            <Text style={s.sumK}>{subtotalLabel || "Subtotal"}</Text>
             <Text style={s.sumV}>{fmtCurrency(subtotal)}</Text>
           </View>
           <View style={s.sumRow}>
@@ -542,7 +579,10 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
               )}
             </View>
             <Text style={s.quoteCardSub}>
-              Vale até {savedQuote.validUntilLabel} · {fmtCurrency(savedQuote.total)}
+              {savedQuote.cardTotal != null
+                ? "Vale até " + savedQuote.validUntilLabel + " · " + fmtCurrency(savedQuote.total) +
+                  " no dinheiro ou PIX · " + fmtCurrency(savedQuote.cardTotal) + " no cartão"
+                : <>Vale até {savedQuote.validUntilLabel} · {fmtCurrency(savedQuote.total)}</>}
             </Text>
             <View style={s.quoteCardActs}>
               <Pressable onPress={savedQuote.onSendWhatsApp} style={s.quoteCardWaBtn}>
@@ -1002,6 +1042,11 @@ function CartItem({
             {fmtCurrency(item.price)}
           </Text>
         )}
+        {item.otherPrice != null ? (
+          <Text testID={"carrinho-outro-preco-" + item.productId} style={s.itemOther} numberOfLines={1}>
+            {" · " + (item.otherLabel || "cartão") + " " + fmtCurrency(item.otherPrice)}
+          </Text>
+        ) : null}
         <View style={{ flex: 1 }} />
         {decimalQty ? (
           /* Campo decimal: o número se digita, não se clica. Sem − e +,
@@ -1164,6 +1209,16 @@ const s = StyleSheet.create({
   metaK: { fontSize: 9, fontWeight: "700", color: HEAD_INK_DIMMER, letterSpacing: 1, textTransform: "uppercase" },
   metaV: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 12, color: HEAD_INK, fontWeight: "700", marginTop: 3 },
   subtitle: { fontSize: 10, color: HEAD_INK_DIMMER, marginTop: 10 },
+  // Par "dinheiro e PIX · cartão" (preço no cartão). Cabe no bloco violeta
+  // do celular em ≈ 36px: rótulo 10 + valor 13 + respiro.
+  par: { flexDirection: "row", gap: 6, marginBottom: 8 },
+  parItem: {
+    flex: 1, minWidth: 0, borderRadius: 9, paddingVertical: 4, paddingHorizontal: 8,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.18)",
+  },
+  parItemOn: { backgroundColor: "rgba(255,255,255,0.18)", borderColor: "rgba(255,255,255,0.55)" },
+  parK: { fontSize: 10, color: HEAD_INK_DIM, fontWeight: "600" },
+  parV: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 13, color: HEAD_INK, fontWeight: "700" },
   body: { flex: 1, minHeight: 0 },
   empty: { alignItems: "center", padding: 40, paddingHorizontal: 20, gap: 4 },
   emptyLoja: { color: Colors.ink, fontSize: 14, fontWeight: "700", letterSpacing: 0.2, textAlign: "center", marginTop: 12, marginBottom: 6 },
@@ -1183,6 +1238,9 @@ const s = StyleSheet.create({
   itemLetter: { fontSize: 12, color: "#ffffff", fontWeight: "700", textShadowColor: "rgba(0,0,0,0.25)" as any, textShadowRadius: Platform.OS === "web" ? 4 : 0 as any },
   itemName: { fontSize: 13, color: Colors.ink, fontWeight: "600", flex: 1, minWidth: 0 },
   itemMeta: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 10.5, color: Colors.ink3, letterSpacing: 0.2 },
+  // Preço no cartão: o outro método, em cinza, depois do unitário. Encolhe
+  // antes do controle de quantidade.
+  itemOther: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 10, color: Colors.ink3, opacity: 0.85, flexShrink: 1, minWidth: 0, marginRight: 6 },
   itemMetaStrike: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 10, color: Colors.ink3, letterSpacing: 0.2, textDecorationLine: "line-through", opacity: 0.7 },
   itemMetaDiscounted: { color: Colors.green, fontWeight: "700" },
   itemDiscBadge: { fontSize: 9, fontWeight: "800", color: Colors.green, backgroundColor: Colors.green + "1A", paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, overflow: "hidden" },

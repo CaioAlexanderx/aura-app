@@ -11,6 +11,11 @@
 // disponível (3–6) sem nunca estourar a área do catálogo. `compact`
 // reduz imagem/glyph/paddings em telas menores pra caber mais cards
 // legíveis sem zoom out. `columns` continua como fallback no nativo.
+//
+// 22/09/2026 (preço no cartão, docs/mockups/preco-no-cartao.html telas 3 e
+// 5): com `cardPriceFor` (opção da loja ligada) o card mostra, embaixo do
+// preço de sempre, "cartão R$ 42,20" em 11px — igual à etiqueta. Sem a
+// prop, o card é o de antes.
 // ============================================================
 import { useRef } from "react";
 import { View, Text, Pressable, StyleSheet, Platform, Image } from "react-native";
@@ -48,6 +53,7 @@ export type GridProduct = {
   unit?: string;
   image_url?: string;
   has_variants?: boolean;
+  cardPrice?: number | null;
 };
 
 type Props = {
@@ -66,9 +72,11 @@ type Props = {
   dense?: boolean;
   /** 22/09/2026 (Matcon): milheiro mostra peças no estoque e no selo. */
   matconEnabled?: boolean;
+  /** 22/09/2026 (preço no cartão): preço no cartão do card. Ausente = card de sempre. */
+  cardPriceFor?: (p: GridProduct) => number | null;
 };
 
-export function ProductGrid({ products, qtyById, onAdd, columns = 4, minCard, compact = false, dense = false, matconEnabled = false }: Props) {
+export function ProductGrid({ products, qtyById, onAdd, columns = 4, minCard, compact = false, dense = false, matconEnabled = false, cardPriceFor }: Props) {
   const gap = dense ? 12 : compact ? 10 : 14;
   const webGrid = IS_WEB
     ? (minCard
@@ -91,13 +99,14 @@ export function ProductGrid({ products, qtyById, onAdd, columns = 4, minCard, co
           compact={compact}
           dense={dense}
           matconEnabled={matconEnabled}
+          cardPrice={cardPriceFor ? cardPriceFor(p) : null}
         />
       ))}
     </View>
   );
 }
 
-function ProdCard({ product, qty, index, onAdd, compact = false, dense = false, matconEnabled = false }: { product: GridProduct; qty: number; index: number; onAdd: Props["onAdd"]; compact?: boolean; dense?: boolean; matconEnabled?: boolean }) {
+function ProdCard({ product, qty, index, onAdd, compact = false, dense = false, matconEnabled = false, cardPrice = null }: { product: GridProduct; qty: number; index: number; onAdd: Props["onAdd"]; compact?: boolean; dense?: boolean; matconEnabled?: boolean; cardPrice?: number | null }) {
   const accent = accentForProduct(product.id);
   const letter = productLetter(product.name);
   const inCart = qty > 0;
@@ -216,7 +225,16 @@ function ProdCard({ product, qty, index, onAdd, compact = false, dense = false, 
       )}
 
       <View style={s.foot}>
-        <Text style={s.price} numberOfLines={1}>{fmtCurrency(product.price)}</Text>
+        {cardPrice != null ? (
+          <View style={{ flexShrink: 1, minWidth: 0 }}>
+            <Text style={s.price} numberOfLines={1}>{fmtCurrency(product.price)}</Text>
+            <Text testID={"grid-cartao-" + product.id} style={s.priceCard} numberOfLines={1}>
+              cartão <Text style={s.priceCardV}>{fmtCurrency(cardPrice)}</Text>
+            </Text>
+          </View>
+        ) : (
+          <Text style={s.price} numberOfLines={1}>{fmtCurrency(product.price)}</Text>
+        )}
         <View ref={addRef as any} style={[s.addBtn, { width: addSz, height: addSz }, Platform.OS === "web" ? (addBtnBg as any) : { backgroundColor: inCart ? "#10b981" : Colors.violet }]}>
           <Icon name={inCart ? "check" : "plus"} size={14} color="#fff" />
         </View>
@@ -303,6 +321,9 @@ const s = StyleSheet.create({
     fontWeight: "700",
     color: Colors.violet3,
   },
+  // Preço no cartão: linha de 11px debaixo do preço (mockup .pc2).
+  priceCard: { fontSize: 11, color: Colors.ink3, marginTop: 1 },
+  priceCardV: { color: Colors.ink2, fontWeight: "700" },
   addBtn: {
     width: 30,
     height: 30,

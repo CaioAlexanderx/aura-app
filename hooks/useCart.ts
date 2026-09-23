@@ -5,6 +5,10 @@ import type { PdvSaleResponse } from "@/services/salesApi";
 import type { LotAllocation } from "@/services/matconApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
+import {
+  CARTAO_DESLIGADO, ehCartao, editarPrecoProporcional, linhasNoMetodo, precoNoCartaoDoItem,
+  r2, totalComoNoServidor, type ConfigDoCartao, type DescontosDaVenda, type PrecosDaLinha, type RegraDoCupom,
+} from "@/utils/precoNoCartao";
 
 // 22/09/2026 (Matcon M0): o item carrega a unidade de venda do produto e,
 // quando existe, a unidade de compra + o fator (caixa de 2,32 m²). Tudo
@@ -21,6 +25,16 @@ export type CartItem = {
   unit?: string;
   purchaseUnit?: string | null;
   purchaseFactor?: number | null;
+  // 22/09/2026 (preço no cartão, docs/mockups/preco-no-cartao.html tela 3).
+  // Só existem com a opção da loja ligada. No estado do carrinho `price` e
+  // `listPrice` são SEMPRE os do dinheiro e estes dois, os do cartão —
+  // guardados no momento em que o item entra, como o preço de hoje. O
+  // `cart` que o hook devolve é a VISTA do chip escolhido: `price`/
+  // `listPrice` do método, e os quatro preços em cash*/card*.
+  cardPrice?: number;
+  cardListPrice?: number;
+  cashPrice?: number;
+  cashListPrice?: number;
 };
 
 // Multi-pagamento: cada entrada vira uma `detPag` no SEFAZ NFC-e (tPag = method, vPag = value).
@@ -83,7 +97,12 @@ function round2(n: number): number {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
 
-export function useCart() {
+// 22/09/2026 (preço no cartão): o hook recebe a opção da loja
+// (utils/precoNoCartao.lerConfigDoCartao). Sem ela — ou com ela desligada —
+// todo o caminho é o de antes: nenhum item ganha preço no cartão, a vista é
+// o próprio estado e o payload sai idêntico.
+export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
+  const cartaoOn = cardCfg.enabled === true;
   // 22/09/2026 (Matcon M1): id do orçamento que montou este carrinho
   // (Caixa aberto com ?quote=). Vai como quote_id no POST da venda — o
   // backend grava converted_sale_id e cria a 1ª entrega; sem isso o
@@ -155,6 +174,10 @@ export function useCart() {
 
   const [couponCode, setCouponCode] = useState("");
   const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number } | null>(null);
+  // Preço no cartão: a REGRA do cupom (percent/fixed + valor), vinda do
+  // validate. Com ela o cupom em % vale sobre o preço do método escolhido;
+  // sem ela (ou opção desligada) vale o `discount` de sempre, fixo.
+  const [couponRule, setCouponRule] = useState<(RegraDoCupom & { code: string }) | null>(null);
 
   const [discountType, setDiscountType] = useState<"%" | "R$">("%");
   const [discountValue, setDiscountValue] = useState("");
@@ -188,7 +211,27 @@ export function useCart() {
     },
   });
 
-  const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  // ── Preço no cartão: a vista do chip ─────────────────────────
+  // Crediário, dinheiro e PIX = preço do dinheiro; débito e crédito = preço
+  // no cartão. Trocar de chip NÃO mexe no estado do carrinho (nem no cupom):
+  // só escolhe qual dos dois preços guardados vale.
+  const noCartao = cartaoOn && !splitMode && ehCartao(payment);
+  const cartView: CartItem[] = useMemo(() => {
+    if (!cartaoOn) return cart;
+    return cart.map(function(i) {
+      const card = i.cardPrice ?? i.price;
+      const cardList = i.cardListPrice ?? card;
+      return {
+        ...i,
+        cashPrice: i.price, cashListPrice: i.listPrice,
+        cardPrice: card, cardListPrice: cardList,
+        price: noCartao ? card : i.price,
+        listPrice: noCartao ? cardList : i.listPrice,
+      };
+    });
+  }, [cart, cartaoOn, noCartao]);
+
+  const total = cartView.reduce((s, i) => s + i.price * i.qty, 0);
   const itemCount = cart.reduce((s, i) => s + i.qty, 0);
 
   const parsedDiscount = parseFloat(discountValue.replace(",", ".")) || 0;
@@ -203,8 +246,55 @@ export function useCart() {
     }
   }
 
-  const couponDiscount = couponApplied?.discount || 0;
-  const totalAfterCoupon = Math.max(0, total - manualDiscountAmount - couponDiscount);
+  let couponDiscount = couponApplied?.discount || 0;
+  let totalAfterCoupon = Math.max(0, total - manualDiscountAmount - couponDiscount);
+
+  // Com a opção ligada, os dois totais (dinheiro e cartão) saem do MESMO
+  // cálculo do POST /pdv/sale (totalComoNoServidor): o que a tela mostra é
+  // o que o backend grava. Cupom e desconto em % valem sobre o preço do
+  // método; desconto em R$ tira o mesmo valor dos dois (teto de 50% pelo
+  // subtotal no dinheiro). O mínimo do cupom foi conferido pelo total no
+  // dinheiro (usePdvState.handleValidateCoupon).
+  const precosDasLinhas: PrecosDaLinha[] = cartaoOn
+    ? cart.map(function(i) {
+        const card = i.cardPrice ?? i.price;
+        return { qty: i.qty, cash: i.price, cashList: i.listPrice ?? i.price, card: card, cardList: i.cardListPrice ?? card };
+      })
+    : [];
+  let descontosDaVenda: DescontosDaVenda = {};
+  let precoNoCartao: {
+    totalDinheiro: number; totalCartao: number;
+    subtotalDinheiro: number; subtotalCartao: number;
+    descontoDinheiro: number; descontoCartao: number;
+    noCartao: boolean;
+  } | null = null;
+  if (cartaoOn) {
+    const linhasD = linhasNoMetodo(precosDasLinhas, false);
+    const linhasK = linhasNoMetodo(precosDasLinhas, true);
+    const subtotalD = totalComoNoServidor(linhasD, {}).subtotal;
+    const cupom: RegraDoCupom | null = couponApplied
+      ? (couponRule && couponRule.code === couponApplied.code
+          ? { tipo: couponRule.tipo, valor: couponRule.valor }
+          : { tipo: "fixed", valor: couponApplied.discount || 0 })
+      : null;
+    descontosDaVenda = { cupom: cupom };
+    if (parsedDiscount > 0 && subtotalD > 0) {
+      if (discountType === "%") descontosDaVenda.manualPct = Math.min(parsedDiscount, MAX_DISCOUNT_PCT);
+      else descontosDaVenda.manualValor = r2(Math.min(parsedDiscount, subtotalD * MAX_DISCOUNT_PCT / 100));
+    }
+    const simD = totalComoNoServidor(linhasD, descontosDaVenda);
+    const simK = totalComoNoServidor(linhasK, descontosDaVenda);
+    const sim = noCartao ? simK : simD;
+    manualDiscountAmount = sim.manual;
+    couponDiscount = sim.cupom;
+    totalAfterCoupon = sim.total;
+    precoNoCartao = {
+      totalDinheiro: simD.total, totalCartao: simK.total,
+      subtotalDinheiro: simD.subtotal, subtotalCartao: simK.subtotal,
+      descontoDinheiro: simD.desconto, descontoCartao: simK.desconto,
+      noCartao: noCartao,
+    };
+  }
 
   // Splits — derivados puros
   const splitTotal = useMemo(
@@ -269,14 +359,24 @@ export function useCart() {
   // tipo do parâmetro — quem chama com o objeto de hoje (o scanner monta um
   // `{id,name,price}` na mão) continua compilando e o item nasce sem unidade,
   // ou seja, com o stepper de sempre.
+  // 22/09/2026 (preço no cartão): `cardPrice` é o products.card_price do
+  // catálogo (null = segue o %) e `refPrice` o preço do catálogo ao qual ele
+  // se refere — quando o preço que entra é outro (variante com preço
+  // próprio, linha de orçamento), o do cartão vai na mesma proporção.
   function addToCart(
-    product: { id: string; name: string; price: number; unit?: string; purchaseUnit?: string | null; purchaseFactor?: number | null },
+    product: {
+      id: string; name: string; price: number; unit?: string; purchaseUnit?: string | null; purchaseFactor?: number | null;
+      cardPrice?: number | null; refPrice?: number;
+    },
     variant?: { id: string; label: string; price?: number },
   ) {
     setLastSale(null);
     var cartKey = variant ? product.id + "__" + variant.id : product.id;
     var displayName = variant ? product.name + " (" + variant.label + ")" : product.name;
     var effectivePrice = (variant?.price != null && variant.price > 0) ? variant.price : product.price;
+    var cardPrice = cartaoOn
+      ? precoNoCartaoDoItem(effectivePrice, { price: product.refPrice ?? product.price, cardPrice: product.cardPrice }, cardCfg)
+      : null;
 
     setCart(function(prev) {
       var existing = prev.find(function(i) { return i.productId === cartKey; });
@@ -286,6 +386,7 @@ export function useCart() {
         unit: product.unit || undefined,
         purchaseUnit: product.purchaseUnit ?? undefined,
         purchaseFactor: product.purchaseFactor ?? undefined,
+        ...(cardPrice != null ? { cardPrice: cardPrice, cardListPrice: cardPrice } : {}),
       }];
     });
     if (couponApplied) setCouponApplied(null);
@@ -325,7 +426,12 @@ export function useCart() {
     const rounded = Math.round(price * 100) / 100;
     setCart(function(prev) {
       return prev.map(function(i) {
-        return i.productId === productId ? { ...i, price: rounded } : i;
+        if (i.productId !== productId) return i;
+        if (!cartaoOn) return { ...i, price: rounded };
+        // Preço no cartão (decisão 5 do Caio): o lápis mexe no preço do
+        // método escolhido e o outro vai junto, na mesma proporção.
+        const novo = editarPrecoProporcional({ cash: i.price, card: i.cardPrice ?? i.price }, rounded, noCartao);
+        return { ...i, price: novo.cash, cardPrice: novo.card };
       });
     });
     if (couponApplied) setCouponApplied(null);
@@ -343,7 +449,7 @@ export function useCart() {
     setSelectedCustomerPhone(phone || null);
   }
   function selectEmployee(id: string | null, name: string | null) { setSelectedEmployeeId(id); setSelectedEmployeeName(name); }
-  function clearCoupon() { setCouponCode(""); setCouponApplied(null); }
+  function clearCoupon() { setCouponCode(""); setCouponApplied(null); setCouponRule(null); }
   function clearDiscount() { setDiscountValue(""); }
 
   /**
@@ -368,7 +474,9 @@ export function useCart() {
 
     setIsProcessing(true);
 
-    var cartSnapshot = [...cart];
+    // Vista do chip: com a opção desligada é o próprio `cart` (mesmo payload
+    // de sempre); ligada, `price`/`listPrice` já são os do método escolhido.
+    var cartSnapshot = [...cartView];
     var effectiveSellerName = sellerName.trim() || selectedEmployeeName || null;
     var cleanCpf = cpfNaNota.replace(/\D/g, "");
 
@@ -415,7 +523,11 @@ export function useCart() {
     if (saleDate) saleData.sale_date = saleDate;
     if (couponApplied?.code) saleData.coupon_code = couponApplied.code;
 
-    if (manualDiscountAmount > 0) {
+    if (cartaoOn) {
+      // Mesmos números que o totalComoNoServidor usou na tela.
+      if (descontosDaVenda.manualValor && descontosDaVenda.manualValor > 0) saleData.discount_amount = descontosDaVenda.manualValor;
+      else if (descontosDaVenda.manualPct && descontosDaVenda.manualPct > 0) saleData.discount_pct = descontosDaVenda.manualPct;
+    } else if (manualDiscountAmount > 0) {
       if (discountType === "%") {
         saleData.discount_pct = Math.min(parsedDiscount, MAX_DISCOUNT_PCT);
       } else {
@@ -451,7 +563,7 @@ export function useCart() {
         employeeName: selectedEmployeeName || undefined,
         sellerName: effectiveSellerName || undefined,
         couponCode: couponApplied?.code,
-        couponDiscount: couponApplied?.discount,
+        couponDiscount: cartaoOn ? (couponDiscount || undefined) : couponApplied?.discount,
         manualDiscount: manualDiscountAmount || undefined,
         cpfNaNota: cleanCpf || undefined,
       };
@@ -509,7 +621,11 @@ export function useCart() {
     // `onLotAllocations` do CartPanel; sem isso a linha do lote continua
     // aparecendo e a venda baixa FIFO.
     lotAllocations, setLotAllocations, clearLotAllocations,
-    cart, payment, setPayment, lastSale, total, totalAfterCoupon, itemCount, isProcessing,
+    // `cart` é a VISTA do chip (ver cartView). Sem preço no cartão, é o estado.
+    cart: cartView, payment, setPayment, lastSale, total, totalAfterCoupon, itemCount, isProcessing,
+    // Preço no cartão: os dois totais (null com a opção desligada), o
+    // desconto efetivo do cupom no método e a regra do cupom.
+    precoNoCartao, couponDiscount, setCouponRule,
     addToCart, setQty, updateQty, setUnitPrice, removeItem, finalizeSale, newSale,
     selectedCustomerId, selectedCustomerName, selectedCustomerPhone, selectCustomer,
     selectedEmployeeId, selectedEmployeeName, selectEmployee,

@@ -12,6 +12,11 @@
 //
 // O carrinho NÃO é limpo depois de salvar (o vendedor pode imprimir e
 // finalizar também) — só quem chama `useCart`/`usePdvState` decide isso.
+//
+// 22/09/2026 (preço no cartão, docs/mockups/preco-no-cartao.html tela 6):
+// os itens vão com o preço no DINHEIRO; com `cardTotal` (opção da loja
+// ligada) o card e o WhatsApp falam os dois — "R$ 1.000,00 no dinheiro ou
+// PIX · R$ 1.110,00 no cartão". Sem ele, tudo como antes.
 // ============================================================
 import { useState } from "react";
 import { router } from "expo-router";
@@ -58,12 +63,20 @@ export type UseMatconQuoteParams = {
   customerPhone?: string | null;
   sellerId?: string | null;
   discount?: number;
+  /** Preço no cartão: total da venda no cartão agora. null/ausente = opção desligada. */
+  cardTotal?: number | null;
 };
 
+function fmtValor(n: number): string {
+  return "R$ " + n.toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
 export function useMatconQuote(params: UseMatconQuoteParams) {
-  const { companyId, matconEnabled, cart, customerId, customerName, customerPhone, sellerId, discount } = params;
+  const { companyId, matconEnabled, cart, customerId, customerName, customerPhone, sellerId, discount, cardTotal } = params;
   const [saving, setSaving] = useState(false);
   const [lastQuote, setLastQuote] = useState<Quote | null>(null);
+  // Total no cartão NO MOMENTO de salvar (o orçamento guarda o preço do dia).
+  const [lastCardTotal, setLastCardTotal] = useState<number | null>(null);
 
   async function saveQuote() {
     if (!matconEnabled || !companyId) return;
@@ -91,6 +104,7 @@ export function useMatconQuote(params: UseMatconQuoteParams) {
         items,
       });
       setLastQuote(quote);
+      setLastCardTotal(cardTotal != null && cardTotal > 0 ? cardTotal : null);
       toast.success("Orçamento #" + quote.number + " salvo");
     } catch (e: any) {
       toast.error(e?.message || "Não deu para salvar o orçamento");
@@ -104,7 +118,9 @@ export function useMatconQuote(params: UseMatconQuoteParams) {
     const url = appOrigin() + "/orcamento/" + lastQuote.public_token;
     const primeiro = (lastQuote.customer_name || "").trim().split(" ")[0];
     const saudacao = primeiro ? "Oi, " + primeiro + "! " : "Oi! ";
-    const valor = "R$ " + lastQuote.total.toFixed(2).replace(".", ",");
+    const valor = lastCardTotal != null
+      ? fmtValor(lastQuote.total) + " no dinheiro ou PIX · " + fmtValor(lastCardTotal) + " no cartão"
+      : "R$ " + lastQuote.total.toFixed(2).replace(".", ",");
     const texto = saudacao + "Segue seu orçamento #" + lastQuote.number + " — " + valor + ". " + url;
     const opened = openWhatsApp(lastQuote.customer_phone, texto);
     if (!opened) {
@@ -122,6 +138,7 @@ export function useMatconQuote(params: UseMatconQuoteParams) {
 
   function dismiss() {
     setLastQuote(null);
+    setLastCardTotal(null);
   }
 
   const savedQuote: SavedQuoteCard | null = lastQuote
@@ -129,6 +146,7 @@ export function useMatconQuote(params: UseMatconQuoteParams) {
         number: lastQuote.number,
         validUntilLabel: fmtDiaMes(lastQuote.valid_until),
         total: lastQuote.total,
+        ...(lastCardTotal != null ? { cardTotal: lastCardTotal } : {}),
         onSendWhatsApp: sendWhatsApp,
         onViewEsteira: viewEsteira,
         onDismiss: dismiss,
