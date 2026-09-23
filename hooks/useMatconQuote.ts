@@ -17,6 +17,14 @@
 // os itens vão com o preço no DINHEIRO; com `cardTotal` (opção da loja
 // ligada) o card e o WhatsApp falam os dois — "R$ 1.000,00 no dinheiro ou
 // PIX · R$ 1.110,00 no cartão". Sem ele, tudo como antes.
+//
+// 23/09/2026 (QA em produção): o POST /matcon/quotes ainda não existe no
+// backend — o botão "Orçamento" mostrava "Rota nao encontrada" e nada
+// imprimia. Agora, se salvar falhar (qualquer erro), `onSaveFailed` imprime
+// pelo caminho de sempre (quem chama decide o toast). Se o erro foi 404 (a
+// rota não existe), o hook para de oferecer o salvar nesta sessão: o botão
+// volta a imprimir direto, no próprio clique (sem esperar a API, o que
+// também evita o bloqueio de janela do navegador).
 // ============================================================
 import { useState } from "react";
 import { router } from "expo-router";
@@ -24,6 +32,7 @@ import { toast } from "@/components/Toast";
 import { openWhatsApp } from "@/utils/whatsapp";
 import { matconApi, type Quote, type QuoteItem } from "@/services/matconApi";
 import type { SavedQuoteCard } from "@/components/screens/pdv/CartPanel";
+import { ehRotaAusente, textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
 
 // "YYYY-MM-DD" → "29/09". Sem `new Date()`: data pura viraria UTC e mudaria
 // o dia perto da meia-noite (mesma cautela de dataPorExtenso em acompanhar).
@@ -65,6 +74,8 @@ export type UseMatconQuoteParams = {
   discount?: number;
   /** Preço no cartão: total da venda no cartão agora. null/ausente = opção desligada. */
   cardTotal?: number | null;
+  /** Salvar falhou: imprime pelo caminho de sempre. Sem ele, só o toast. */
+  onSaveFailed?: () => void;
 };
 
 function fmtValor(n: number): string {
@@ -72,8 +83,10 @@ function fmtValor(n: number): string {
 }
 
 export function useMatconQuote(params: UseMatconQuoteParams) {
-  const { companyId, matconEnabled, cart, customerId, customerName, customerPhone, sellerId, discount, cardTotal } = params;
+  const { companyId, matconEnabled, cart, customerId, customerName, customerPhone, sellerId, discount, cardTotal, onSaveFailed } = params;
   const [saving, setSaving] = useState(false);
+  // A rota de salvar respondeu 404: nesta sessão o botão só imprime.
+  const [semRota, setSemRota] = useState(false);
   const [lastQuote, setLastQuote] = useState<Quote | null>(null);
   // Total no cartão NO MOMENTO de salvar (o orçamento guarda o preço do dia).
   const [lastCardTotal, setLastCardTotal] = useState<number | null>(null);
@@ -107,7 +120,9 @@ export function useMatconQuote(params: UseMatconQuoteParams) {
       setLastCardTotal(cardTotal != null && cardTotal > 0 ? cardTotal : null);
       toast.success("Orçamento #" + quote.number + " salvo");
     } catch (e: any) {
-      toast.error(e?.message || "Não deu para salvar o orçamento");
+      if (ehRotaAusente(e)) setSemRota(true);
+      if (onSaveFailed) onSaveFailed();
+      else toast.error(textoDoErro(e, "Não deu para salvar o orçamento"));
     } finally {
       setSaving(false);
     }
@@ -158,6 +173,7 @@ export function useMatconQuote(params: UseMatconQuoteParams) {
     savedQuote,
     // undefined (não uma função no-op) quando o módulo está desligado —
     // é o mesmo sinal que o CartPanel usa pra decidir se renderiza o botão.
-    saveQuote: matconEnabled ? saveQuote : undefined,
+    // Também undefined depois de um 404: o "Orçamento" volta a imprimir.
+    saveQuote: matconEnabled && !semRota ? saveQuote : undefined,
   };
 }

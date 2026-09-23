@@ -81,6 +81,7 @@ import { useMatconReferral } from "@/hooks/useMatconReferral";
 
 import { toast } from "@/components/Toast";
 import { flyToCart } from "@/components/screens/pdv/flyToCart";
+import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
 import { IS_WEB, fmtCurrency } from "@/components/screens/pdv/types";
 import type { CartDisplayItem, PayChip, RequiredHint } from "@/components/screens/pdv/CartPanel";
 import type { PersonPickerHandle } from "@/components/screens/pdv/ActionToolbar";
@@ -264,6 +265,9 @@ export function usePdvState() {
     customerPhone: selectedCustomerPhone,
     sellerId: selectedEmployeeId,
     discount: matconQuoteDiscount,
+    // QA 23/09: salvar falhou (o backend ainda não tem a rota) — imprime
+    // pelo caminho de sempre, com um aviso curto e sem jargão.
+    onSaveFailed: () => handleGenerateQuote("Orçamento aberto para imprimir."),
   });
 
   // ── Matcon M3 — "Indicado por" (chip do Caixa) ───────────────────────────
@@ -683,11 +687,11 @@ export function usePdvState() {
       }
       return { ok: false, error: res.error || "Cupom inválido" };
     } catch (err: any) {
-      return { ok: false, error: err?.message || "Erro ao validar cupom" };
+      return { ok: false, error: textoDoErro(err, "Não deu para conferir o cupom agora") };
     }
   }
 
-  function handleGenerateQuote() {
+  function handleGenerateQuote(avisoAoAbrir: string = "Orçamento gerado") {
     if (cart.length === 0) {
       toast.info("Adicione produtos ao carrinho antes de gerar orçamento");
       return;
@@ -720,7 +724,7 @@ export function usePdvState() {
         companyPhone:       profile.phone || null,
         companyAddress:     profile.address || null,
       });
-      toast.success("Orçamento gerado");
+      toast.success(avisoAoAbrir);
       return;
     }
     const items: QuoteItem[] = cart.map(i => ({ name: i.name, qty: i.qty, unitPrice: i.price, unit: i.unit }));
@@ -738,7 +742,7 @@ export function usePdvState() {
       companyPhone:       profile.phone || null,
       companyAddress:     profile.address || null,
     });
-    toast.success("Orçamento gerado");
+    toast.success(avisoAoAbrir);
   }
 
   // ── Scanner gate ──────────────────────────────────────────────────────────
@@ -884,7 +888,7 @@ export function usePdvState() {
     onRemove:          removeItem,
     onClear:           () => { cart.forEach(i => removeItem(i.productId)); clearCoupon(); },
     onFinalize:        handleFinalize,
-    onGenerateQuote:   handleGenerateQuote,
+    onGenerateQuote:   () => handleGenerateQuote(),
     showOrcamento:     true,
     onSaveQuote:       matconQuote.saveQuote,
     savingQuote:       matconQuote.saving,

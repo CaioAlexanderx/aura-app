@@ -5,6 +5,7 @@ import type { PdvSaleResponse } from "@/services/salesApi";
 import type { LotAllocation } from "@/services/matconApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
+import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
 import {
   CARTAO_DESLIGADO, ehCartao, editarPrecoProporcional, fraseDaConta, linhasNoMetodo, linhasRateadas,
   precoNoCartaoDoItem, r2, resolverDividido, statusDoDividido, totalComoNoServidor,
@@ -678,7 +679,7 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
           if (errCode === "CREDIARIO_REQUIRES_CUSTOMER") {
             toast.error("Selecione um cliente antes de finalizar no crediário.");
           } else {
-            toast.error(err?.data?.error || err?.message || "Erro ao registrar venda");
+            toast.error(textoDoErro(err, "Não deu para registrar a venda. Tente de novo."));
           }
           setIsProcessing(false);
         },
