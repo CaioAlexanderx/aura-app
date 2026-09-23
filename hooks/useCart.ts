@@ -247,16 +247,25 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
   vendaRef.current = vendaAtual;
   const empresaRef = useRef(companyId);
   empresaRef.current = companyId;
+  // O guardião lê pelos refs: registrado uma vez, na montagem, já vale para
+  // o primeiro item que entrar. Devolve true quando guardou (o toggle avisa).
   useEffect(() => aoRecarregar(() => {
-    if (vendaRef.current) guardarVenda(empresaRef.current, vendaRef.current);
+    if (!vendaRef.current) return false;
+    return guardarVenda(empresaRef.current, vendaRef.current);
   }), []);
 
+  // Recuperação: só com a empresa conhecida. Na abertura o /auth/me ainda
+  // não voltou (company null) ou a empresa ativa pode ser outra (multi-CNPJ)
+  // — em vez de desistir, tenta de novo a cada empresa que chegar, até
+  // recuperar uma vez. Venda de outra empresa fica guardada (recuperarVenda
+  // não apaga). Carrinho que já começou nesta página não é sobrescrito.
   const jaRecuperou = useRef(false);
   useEffect(() => {
     if (jaRecuperou.current || !companyId) return;
-    jaRecuperou.current = true;
+    if (vendaRef.current) return;
     const v = recuperarVenda<VendaGuardada>(companyId);
     if (!v || !Array.isArray(v.cart) || v.cart.length === 0) return;
+    jaRecuperou.current = true;
     setCart(v.cart);
     if (v.payment) setPayment(v.payment);
     setSelectedCustomerId(v.selectedCustomerId ?? null);

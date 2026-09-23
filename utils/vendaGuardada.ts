@@ -23,8 +23,18 @@
 const CHAVE = "aura:caixa:venda-em-andamento";
 export const VALIDADE_DA_VENDA_GUARDADA_MS = 10 * 60 * 1000;
 
-type Guardiao = () => void;
+/** Guarda o que precisa sobreviver à recarga. Devolve true se guardou algo
+ *  (o toggle do tema usa isso para avisar e dar tempo de ler o aviso). */
+type Guardiao = () => boolean | void;
 const guardioes = new Set<Guardiao>();
+
+// Correção de 23/09/2026, 16h (produção): a venda era GUARDADA, mas um Caixa
+// remontado nos 200 ms antes da recarga a LIA — e a leitura é única, apaga a
+// chave —, então a página voltava com o sessionStorage vazio. O remonte vinha
+// do set({ isDark }) do toggle: o layout das abas embrulha a página num
+// <div key={themeKey}>. Com uma recarga marcada, esta página não recupera
+// nada: quem recupera é a página que vem DEPOIS (o módulo renasce zerado).
+let recargaMarcada = false;
 
 /** Registra quem precisa guardar algo antes da recarga. Devolve o
  *  cancelamento (use no cleanup do useEffect). */
@@ -33,11 +43,29 @@ export function aoRecarregar(fn: Guardiao): () => void {
   return () => { guardioes.delete(fn); };
 }
 
-/** Chamado logo antes de window.location.reload() (troca de tema). */
-export function guardarAntesDeRecarregar(): void {
+/** Chamado de forma SÍNCRONA antes de window.location.reload() (troca de
+ *  tema) — e de novo imediatamente antes dele, para levar o que mudou no
+ *  meio-tempo. Marca a recarga: daqui em diante esta página não lê (nem
+ *  apaga) a venda guardada. Devolve true se algum guardião guardou algo. */
+export function guardarAntesDeRecarregar(): boolean {
+  recargaMarcada = true;
+  let guardou = false;
   guardioes.forEach((fn) => {
-    try { fn(); } catch {}
+    try { if (fn() === true) guardou = true; } catch {}
   });
+  return guardou;
+}
+
+/** A recarga em si, num ponto só (o jsdom não deixa espionar
+ *  window.location.reload; os testes espionam esta função). */
+export function recarregarPagina(): void {
+  try { window.location.reload(); } catch {}
+}
+
+/** Só para testes: o que uma recarga de verdade zera. */
+export function __zerarParaTestes(): void {
+  recargaMarcada = false;
+  guardioes.clear();
 }
 
 function armazenamento(): Storage | null {
@@ -51,18 +79,24 @@ function armazenamento(): Storage | null {
 
 type Envelope<T> = { v: 1; empresa: string; em: number; dados: T };
 
-export function guardarVenda<T>(empresa: string | null | undefined, dados: T, agora: number = Date.now()): void {
+/** Grava a venda. Devolve true se gravou. */
+export function guardarVenda<T>(empresa: string | null | undefined, dados: T, agora: number = Date.now()): boolean {
   const st = armazenamento();
-  if (!st || !empresa) return;
+  if (!st || !empresa) return false;
   try {
     const env: Envelope<T> = { v: 1, empresa: String(empresa), em: agora, dados };
     st.setItem(CHAVE, JSON.stringify(env));
-  } catch {}
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Lê e APAGA a venda guardada. null se não houver, se for de outra
- *  empresa ou se passou da validade. */
+ *  empresa (fica guardada, esperando a empresa certa), se passou da validade
+ *  ou se esta página já marcou uma recarga (quem recupera é a próxima). */
 export function recuperarVenda<T>(empresa: string | null | undefined, agora: number = Date.now()): T | null {
+  if (recargaMarcada) return null;
   const st = armazenamento();
   if (!st || !empresa) return null;
   let bruto: string | null = null;

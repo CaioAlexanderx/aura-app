@@ -25,6 +25,7 @@ jest.mock("@tanstack/react-query", () => ({
 import { useCart } from "@/hooks/useCart";
 import {
   guardarAntesDeRecarregar, guardarVenda, recuperarVenda, VALIDADE_DA_VENDA_GUARDADA_MS,
+  __zerarParaTestes,
 } from "@/utils/vendaGuardada";
 
 let api: ReturnType<typeof useCart>;
@@ -39,6 +40,7 @@ function montar() {
 }
 
 beforeEach(() => {
+  __zerarParaTestes();
   window.sessionStorage.clear();
   mockEmpresa = "empresa-1";
 });
@@ -55,6 +57,15 @@ describe("utils/vendaGuardada", () => {
   test("passou da validade: não devolve nada", () => {
     guardarVenda("empresa-1", { cart: [1] }, 0);
     expect(recuperarVenda("empresa-1", VALIDADE_DA_VENDA_GUARDADA_MS + 1)).toBeNull();
+  });
+
+  test("com a recarga marcada, esta página não lê nem apaga a venda guardada", () => {
+    guardarVenda("empresa-1", { cart: [1] }, 1000);
+    guardarAntesDeRecarregar();
+    expect(recuperarVenda("empresa-1", 2000)).toBeNull();
+    expect(window.sessionStorage.length).toBe(1);
+    __zerarParaTestes(); // a página nova
+    expect(recuperarVenda("empresa-1", 2000)).toEqual({ cart: [1] });
   });
 
   test("sem empresa não guarda nem recupera", () => {
@@ -77,6 +88,7 @@ describe("Caixa: trocar o tema não perde a venda", () => {
     // O toggle do tema chama isto logo antes de window.location.reload().
     guardarAntesDeRecarregar();
     act(() => { antes.unmount(); });
+    __zerarParaTestes(); // a recarga zera o que vive em memória
 
     // "Recarregou": um Caixa novo, com o estado zerado.
     const depois = montar();
@@ -105,6 +117,7 @@ describe("Caixa: trocar o tema não perde a venda", () => {
     act(() => { api.addToCart({ id: "cim", name: "Cimento", price: 38 }); });
     guardarAntesDeRecarregar();
     act(() => { antes.unmount(); });
+    __zerarParaTestes(); // a recarga zera o que vive em memória
 
     mockEmpresa = "empresa-2";
     const outra = montar();

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { Platform } from "react-native";
-import { guardarAntesDeRecarregar } from "@/utils/vendaGuardada";
+import { guardarAntesDeRecarregar, recarregarPagina } from "@/utils/vendaGuardada";
 
 var THEME_KEY = "aura_theme";
 var COOKIE_NAME = "aura_theme";
@@ -165,25 +165,45 @@ type ThemeState = {
   toggle: () => void;
 };
 
-export var useThemeStore = create<ThemeState>(function(set, get) {
+var trocaDeTemaMarcada = false;
+
+export var useThemeStore = create<ThemeState>(function(_set, get) {
   return {
     isDark: IS_DARK,
     toggle: function() {
       if (Platform.OS !== "web" || typeof window === "undefined") return;
+      // Clique repetido durante o aviso: a recarga já está marcada.
+      if (trocaDeTemaMarcada) return;
+      trocaDeTemaMarcada = true;
       var next = !get().isDark;
-      set({ isDark: next });
-      saveTheme(next);
       // Colors are frozen at import time — full reload required.
+      //
       // QA 23/09/2026: a recarga apagava o carrinho do Caixa sem aviso.
-      // Quem tem venda em andamento guarda agora (utils/vendaGuardada) e
-      // recupera ao voltar.
-      guardarAntesDeRecarregar();
+      // 1) Quem tem venda em andamento guarda AGORA, de forma síncrona, antes
+      //    de qualquer re-render (utils/vendaGuardada).
+      // 2) NÃO fazemos set({ isDark }) na web: o layout das abas embrulha a
+      //    página num <div key={themeKey}>, e a chave nova remontava o Caixa
+      //    antes da recarga — o Caixa novo lia a venda guardada (leitura
+      //    única, apaga) e a página voltava com o sessionStorage vazio
+      //    (produção, 23/09 16h). A página nova já nasce com o tema salvo.
+      // 3) Com venda guardada, avisa e dá tempo de ler o aviso; logo antes do
+      //    reload guarda de novo, para levar o que mudou no meio-tempo.
+      var guardou = guardarAntesDeRecarregar();
+      saveTheme(next);
+      if (guardou) {
+        // require na hora: Toast importa este arquivo (ciclo na importação).
+        try { require("@/components/Toast").toast.info(AVISO_DE_RECARGA_COM_VENDA); } catch {}
+      }
       setTimeout(function() {
-        try { window.location.reload(); } catch {}
-      }, 200);
+        guardarAntesDeRecarregar();
+        recarregarPagina();
+      }, guardou ? ESPERA_DO_AVISO_MS : 200);
     },
   };
 });
+
+export var AVISO_DE_RECARGA_COM_VENDA = "Vou recarregar a tela para trocar o tema. Sua venda continua aqui.";
+var ESPERA_DO_AVISO_MS = 1500;
 
 export function useColors() {
   var isDark = useThemeStore(function(s) { return s.isDark; });
