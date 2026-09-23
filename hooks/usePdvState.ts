@@ -240,6 +240,7 @@ export function usePdvState() {
     splitPayments, addSplitPayment, updateSplitPayment, removeSplitPayment,
     splitRemaining, splitIsBalanced,
     precoNoCartao, couponDiscount: cartCouponDiscount, setCouponRule,
+    splitNote, splitStatus,
   } = useCart(cardCfg);
 
   // ── Matcon M1 — "Salvar orçamento" ──────────────────────────────────────
@@ -911,6 +912,10 @@ export function usePdvState() {
     splitPayments,
     splitRemaining,
     splitIsBalanced,
+    // Preço no cartão: a conta do dividido e o status "faltam R$ X no
+    // dinheiro ou PIX, ou R$ Y no cartão". null = painel de sempre.
+    splitNote,
+    splitStatusText: splitStatus,
     onToggleSplit:        toggleSplitMode,
     onAddSplitPayment:    () => addSplitPayment(),
     onUpdateSplitPayment: updateSplitPayment,

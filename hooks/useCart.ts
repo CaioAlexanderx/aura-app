@@ -6,8 +6,9 @@ import type { LotAllocation } from "@/services/matconApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import {
-  CARTAO_DESLIGADO, ehCartao, editarPrecoProporcional, linhasNoMetodo, precoNoCartaoDoItem,
-  r2, totalComoNoServidor, type ConfigDoCartao, type DescontosDaVenda, type PrecosDaLinha, type RegraDoCupom,
+  CARTAO_DESLIGADO, ehCartao, editarPrecoProporcional, fraseDaConta, linhasNoMetodo, linhasRateadas,
+  precoNoCartaoDoItem, r2, resolverDividido, statusDoDividido, totalComoNoServidor,
+  type ConfigDoCartao, type DescontosDaVenda, type LinhaDoPayload, type PrecosDaLinha, type RegraDoCupom,
 } from "@/utils/precoNoCartao";
 
 // 22/09/2026 (Matcon M0): o item carrega a unidade de venda do produto e,
@@ -44,6 +45,10 @@ export type PaymentEntry = {
   method: string;        // chave do PDV: "dinheiro" | "pix" | "debito" | "cartao" | "crediario"
   value: number;         // valor em R$
   change?: number;       // troco (só faz sentido em dinheiro)
+  // 22/09/2026 (preço no cartão, só com a opção ligada): a linha "o que
+  // falta" — se preenche sozinha pela regra do dividido até alguém digitar
+  // nela. Nunca vai no POST.
+  auto?: boolean;
 };
 
 export type SaleResult = {
@@ -297,19 +302,52 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
   }
 
   // Splits — derivados puros
-  const splitTotal = useMemo(
+  const splitTotalLegado = useMemo(
     () => round2(splitPayments.reduce((s, p) => s + (Number(p.value) || 0), 0)),
     [splitPayments],
   );
   // Restante = totalAfterCoupon − soma dos splits. Pode ser negativo (overpay).
-  const splitRemaining = useMemo(
-    () => round2(totalAfterCoupon - splitTotal),
-    [totalAfterCoupon, splitTotal],
+  const splitRemainingLegado = useMemo(
+    () => round2(totalAfterCoupon - splitTotalLegado),
+    [totalAfterCoupon, splitTotalLegado],
   );
+
+  // ── Preço no cartão: a regra do dividido (tela 4 do mockup) ──────
+  // base = total no dinheiro; fator = total no cartão ÷ total no dinheiro
+  // desta venda. Dinheiro/PIX/crediário abatem da base pelo valor, cartão
+  // abate valor ÷ fator, e a linha "auto" é o que falta. Recalcula sozinho
+  // quando o carrinho muda (as linhas digitadas ficam, a "auto" acompanha).
+  // Desligada: null, e o dividido é o de sempre (valores digitados).
+  const dividido = cartaoOn && precoNoCartao
+    ? resolverDividido(splitPayments, precoNoCartao.totalDinheiro, precoNoCartao.totalCartao)
+    : null;
+  const splitTotal = dividido ? dividido.total : splitTotalLegado;
+  const splitRemaining = dividido ? dividido.falta : splitRemainingLegado;
   // Tolerância: 1 centavo (mesma do backend validatePayments).
-  const splitIsBalanced = Math.abs(splitRemaining) < 0.01;
+  const splitIsBalanced = dividido ? dividido.equilibrado : Math.abs(splitRemaining) < 0.01;
+  const splitPaymentsVista: PaymentEntry[] = dividido ? dividido.entradas : splitPayments;
+  // O que a venda cobra: no dividido com preço no cartão, a soma dos
+  // pagamentos (+ o que falta, no dinheiro, enquanto não fecha).
+  const totalDaVenda = dividido && splitMode ? r2(dividido.total + Math.max(0, dividido.falta)) : totalAfterCoupon;
+  const splitNote = dividido && splitMode && precoNoCartao && splitPayments.length > 0
+    ? fraseDaConta(splitPayments, precoNoCartao.totalDinheiro, dividido)
+    : null;
+  const splitStatus = dividido && splitMode ? statusDoDividido(dividido) : null;
 
   function addSplitPayment(entry?: Partial<PaymentEntry>) {
+    if (cartaoOn && precoNoCartao) {
+      // As linhas que já estão lá viram valor fixo (o que mostravam) e a
+      // nova é "o que falta" — a regra se preenche sozinha.
+      const C = precoNoCartao.totalDinheiro;
+      const K = precoNoCartao.totalCartao;
+      setSplitPayments(prev => {
+        const fixas = resolverDividido(prev, C, K).entradas.map(p => ({ method: p.method, value: round2(p.value), change: p.change }));
+        const method = entry?.method || (prev.length === 0 ? payment : "cartao");
+        if (entry?.value !== undefined) return [...fixas, { method: method, value: round2(entry.value), change: entry.change }];
+        return [...fixas, { method: method, value: 0, auto: true }];
+      });
+      return;
+    }
     setSplitPayments(prev => [
       ...prev,
       {
@@ -326,6 +364,8 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
   function updateSplitPayment(idx: number, patch: Partial<PaymentEntry>) {
     setSplitPayments(prev => prev.map((p, i) => i === idx ? {
       ...p,
+      // Preço no cartão: digitar o valor fixa a linha (deixa de ser "o que falta").
+      ...(cartaoOn && patch.value !== undefined ? { auto: false } : {}),
       ...(patch.method !== undefined ? { method: patch.method } : {}),
       ...(patch.value !== undefined ? { value: round2(patch.value) } : {}),
       ...(patch.change !== undefined ? { change: round2(patch.change) } : {}),
@@ -333,7 +373,14 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
   }
 
   function removeSplitPayment(idx: number) {
-    setSplitPayments(prev => prev.filter((_, i) => i !== idx));
+    setSplitPayments(prev => {
+      const resto = prev.filter((_, i) => i !== idx);
+      // Preço no cartão: saiu a linha "o que falta" — a última assume.
+      if (cartaoOn && prev[idx]?.auto && resto.length > 0 && !resto.some(p => p.auto)) {
+        return resto.map((p, i) => i === resto.length - 1 ? { ...p, auto: true } : p);
+      }
+      return resto;
+    });
   }
 
   function clearSplitPayments() {
@@ -344,8 +391,11 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
     setSplitMode(prev => {
       const next = !prev;
       if (next) {
-        // Inicia com 1 entrada cobrindo total no chip atual
-        setSplitPayments([{ method: payment, value: round2(totalAfterCoupon) }]);
+        // Inicia com 1 entrada cobrindo total no chip atual. Com preço no
+        // cartão ela é "o que falta" (se preenche pelo método escolhido).
+        setSplitPayments(cartaoOn
+          ? [{ method: payment, value: 0, auto: true }]
+          : [{ method: payment, value: round2(totalAfterCoupon) }]);
       } else {
         setSplitPayments([]);
       }
@@ -481,13 +531,36 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
     var cleanCpf = cpfNaNota.replace(/\D/g, "");
 
     // Pagamento "primário" (o que vai no campo singular tanto na sale quanto no resumo)
-    var primaryPayment = splitMode && splitPayments.length > 0 ? splitPayments[0].method : payment;
-    var paymentsSnapshot: PaymentEntry[] | undefined = splitMode && splitPayments.length > 0
-      ? splitPayments.map(p => ({ method: p.method, value: round2(p.value), change: p.change ? round2(p.change) : undefined }))
+    // Preço no cartão: os pagamentos são os RESOLVIDOS (a linha "o que
+    // falta" com o valor calculado); linha zerada não vai no POST.
+    var entradasDaVenda: PaymentEntry[] = splitPaymentsVista;
+    if (dividido) {
+      var comValor = splitPaymentsVista.filter(function(p) { return (Number(p.value) || 0) > 0; });
+      entradasDaVenda = comValor.length > 0 ? comValor : splitPaymentsVista.slice(0, 1);
+    }
+    var primaryPayment = splitMode && entradasDaVenda.length > 0 ? entradasDaVenda[0].method : payment;
+    var paymentsSnapshot: PaymentEntry[] | undefined = splitMode && entradasDaVenda.length > 0
+      ? entradasDaVenda.map(p => ({ method: p.method, value: round2(p.value), change: p.change ? round2(p.change) : undefined }))
       : undefined;
 
+    // Preço no cartão + dividido: o acréscimo da parte no cartão é rateado
+    // no preço de cada item (resíduo de centavos na última linha), e a soma
+    // das linhas fecha com a soma dos pagamentos — é esse preço que vai na
+    // nota (SaleComplete/NfceActions usam items[].price) e que a troca
+    // devolve. Venda toda num método = exatamente o preço daquele método.
+    var linhasDoPayload: LinhaDoPayload[] | null = null;
+    if (dividido && paymentsSnapshot) {
+      var alvo = round2(paymentsSnapshot.reduce(function(s, p) { return s + p.value; }, 0));
+      linhasDoPayload = linhasRateadas(precosDasLinhas, alvo, descontosDaVenda);
+      var rateadas = linhasDoPayload;
+      cartSnapshot = cartSnapshot.map(function(i, idx) {
+        var lp = rateadas[idx];
+        return lp ? { ...i, price: i.qty > 0 ? lp.totalDaLinha / i.qty : i.price, listPrice: lp.unit_price } : i;
+      });
+    }
+
     var saleData: any = {
-      items: cartSnapshot.map(function(i) {
+      items: cartSnapshot.map(function(i, idx) {
         var decomposed = decomposeCartKey(i.productId);
         // Lapis do PDV: mantem o preco de tabela do estoque (listPrice) como
         // unit_price e lanca a diferenca como desconto do item (total da linha).
@@ -499,6 +572,20 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
         // feito em cima da quantidade atual). Sem alocação o campo nem vai
         // no JSON, e o backend baixa FIFO.
         var allocs = lotAllocations[i.productId] || [];
+        if (linhasDoPayload && linhasDoPayload[idx]) {
+          var lp = linhasDoPayload[idx];
+          return {
+            product_id: decomposed.pid,
+            variant_id: decomposed.vid || undefined,
+            quantity: i.qty,
+            unit_price: lp.unit_price,
+            item_discount: lp.item_discount,
+            product_name_snapshot: i.name,
+            lot_allocations: allocs.length > 0
+              ? allocs.map(function(a) { return { lot_id: a.lot_id, quantity: a.quantity }; })
+              : undefined,
+          };
+        }
         return {
           product_id: decomposed.pid,
           variant_id: decomposed.vid || undefined,
@@ -552,7 +639,7 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
       return {
         id: String(saleId),
         saleNumber: saleNumber ?? null,
-        total: totalAfterCoupon,
+        total: totalDaVenda,
         payment: primaryPayment,
         payments: paymentsSnapshot,
         items: cartSnapshot,
@@ -622,7 +709,7 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
     // aparecendo e a venda baixa FIFO.
     lotAllocations, setLotAllocations, clearLotAllocations,
     // `cart` é a VISTA do chip (ver cartView). Sem preço no cartão, é o estado.
-    cart: cartView, payment, setPayment, lastSale, total, totalAfterCoupon, itemCount, isProcessing,
+    cart: cartView, payment, setPayment, lastSale, total, totalAfterCoupon: totalDaVenda, itemCount, isProcessing,
     // Preço no cartão: os dois totais (null com a opção desligada), o
     // desconto efetivo do cupom no método e a regra do cupom.
     precoNoCartao, couponDiscount, setCouponRule,
@@ -635,7 +722,10 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
     cpfNaNota, setCpfNaNota,
     // Multi-pagamento
     splitMode, toggleSplitMode,
-    splitPayments, addSplitPayment, updateSplitPayment, removeSplitPayment, clearSplitPayments,
+    splitPayments: splitPaymentsVista, addSplitPayment, updateSplitPayment, removeSplitPayment, clearSplitPayments,
     splitTotal, splitRemaining, splitIsBalanced,
+    // Preço no cartão: a conta do dividido numa linha e o status nas duas
+    // línguas (null com a opção desligada).
+    splitNote, splitStatus,
   };
 }

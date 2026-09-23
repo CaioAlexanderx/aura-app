@@ -142,7 +142,8 @@ export type SavedQuoteCard = {
 export type RequiredHint = { label: string; onPress?: () => void };
 
 // Mantido isolado de useCart pra evitar dep ciclica e permitir uso standalone.
-export type SplitEntry = { method: string; value: number; change?: number };
+// `auto` (preço no cartão): a linha "o que falta", que se preenche sozinha.
+export type SplitEntry = { method: string; value: number; change?: number; auto?: boolean };
 
 type Props = {
   orderNumber?: string | null;
@@ -202,6 +203,10 @@ type Props = {
   onAddSplitPayment?: () => void;
   onUpdateSplitPayment?: (idx: number, patch: Partial<SplitEntry>) => void;
   onRemoveSplitPayment?: (idx: number) => void;
+  /** Preço no cartão (tela 4 do mockup): a conta do dividido numa linha. */
+  splitNote?: string | null;
+  /** Preço no cartão: status nas duas línguas (substitui o de sempre). */
+  splitStatusText?: string | null;
 };
 
 const HEAD_INK = "#ffffff";
@@ -222,6 +227,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     pricePair, subtotalLabel,
     splitMode, splitPayments, splitRemaining, splitIsBalanced,
     onToggleSplit, onAddSplitPayment, onUpdateSplitPayment, onRemoveSplitPayment,
+    splitNote, splitStatusText,
   } = props;
 
   const marca = useMerchantBrand();
@@ -466,6 +472,10 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
                 <Text style={s.splitAddTxt}>Adicionar pagamento</Text>
               </Pressable>
 
+              {splitNote ? (
+                <Text testID="carrinho-dividido-conta" style={s.splitNote}>{splitNote}</Text>
+              ) : null}
+
               {/* Status balance */}
               <View style={[
                 s.splitStatus,
@@ -479,7 +489,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
                   color={splitIsBalanced ? "#22c55e" : Colors.amber}
                 />
                 <Text style={[s.splitStatusTxt, { color: splitIsBalanced ? "#22c55e" : Colors.amber }]}>
-                  {splitIsBalanced
+                  {splitStatusText ? splitStatusText : splitIsBalanced
                     ? "Pronto · soma fecha com o total"
                     : (splitRemaining || 0) > 0
                       ? `Faltam ${fmtCurrency(splitRemaining || 0)}`
@@ -768,12 +778,15 @@ function SplitRow({
     if (buf !== null) {
       const cleaned = buf.replace(",", ".").replace(/[^\d.]/g, "");
       const n = parseFloat(cleaned);
-      if (!isNaN(n) && n >= 0) onChangeValue(n);
+      // A linha "o que falta" (preço no cartão) só vira valor fixo se o
+      // vendedor DIGITAR outro valor — focar e sair não fixa nada.
+      const mudou = !entry.auto || Math.abs(n - entry.value) > 0.0001;
+      if (!isNaN(n) && n >= 0 && mudou) onChangeValue(n);
     }
     setBuf(null);
   }
 
-  return (
+  const row = (
     <View style={s.splitRow}>
       {/* Mini chips de método */}
       <View style={s.splitChips}>
@@ -793,7 +806,7 @@ function SplitRow({
       </View>
 
       {/* Valor */}
-      <View style={s.splitValBox}>
+      <View style={entry.auto ? [s.splitValBox, s.splitValBoxAuto] : s.splitValBox}>
         <Text style={s.splitValPrefix}>R$</Text>
         <TextInput
           style={s.splitValInput}
@@ -815,6 +828,18 @@ function SplitRow({
       ) : (
         <View style={s.splitRemove} />
       )}
+    </View>
+  );
+
+  if (!entry.auto) return row;
+  // Preço no cartão: a linha "o que falta" ganha o rótulo e a borda
+  // tracejada (tela 4 do mockup). Sempre visível, sem hover.
+  return (
+    <View style={s.splitRowWrap}>
+      <Text testID="carrinho-dividido-falta" style={s.splitAutoTag}>
+        {"o que falta" + (entry.method === "cartao" || entry.method === "debito" ? ", com o acréscimo do cartão" : "")}
+      </Text>
+      {row}
     </View>
   );
 }
@@ -1374,6 +1399,15 @@ const s = StyleSheet.create({
     borderWidth: 1, borderStyle: "dashed", borderColor: "rgba(124,58,237,0.4)",
   },
   splitAddTxt: { fontSize: 11, color: Colors.violet3, fontWeight: "700" },
+  // Preço no cartão: linha "o que falta" (tracejada, violeta) e a conta.
+  splitRowWrap: { gap: 4 },
+  splitAutoTag: { fontSize: 10, color: Colors.violet3, fontWeight: "700" },
+  splitValBoxAuto: { borderStyle: "dashed" as any, borderColor: Colors.violet },
+  splitNote: {
+    fontSize: 11, color: Colors.ink2, lineHeight: 16,
+    backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2,
+    borderRadius: 9, paddingHorizontal: 10, paddingVertical: 7,
+  },
   splitStatus: {
     flexDirection: "row", alignItems: "center", gap: 6,
     paddingVertical: 6, paddingHorizontal: 10,
