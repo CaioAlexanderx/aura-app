@@ -96,6 +96,7 @@ import {
   usaPecasNoMilheiro, unidadesParaMilheiro, milheiroParaUnidades, parseInteiroDigitado,
   fraseDoMilheiro, quantidadeParaContar,
 } from "./matconQty";
+import { rotuloDoPagamento } from "./rotulosDoCaixa";
 import { CalculadoraAmbiente } from "@/components/matcon/CalculadoraAmbiente";
 import { LoteDoItem } from "@/components/matcon/LotePicker";
 import type { LotAllocation } from "@/services/matconApi";
@@ -360,8 +361,11 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           </View>
           <View>
             <Text style={s.metaK}>Pagamento</Text>
-            <Text style={[s.metaV, { color: "#e9d5ff", textTransform: "uppercase" }]}>
-              {splitOn ? `${splitPayments?.length || 0}× SPLIT` : activePay}
+            {/* QA 23/09/2026: era a chave interna em caixa alta ("CARTAO",
+                "1× SPLIT"). Agora o nome do balcão, e o dividido conta só as
+                linhas com valor. */}
+            <Text testID="carrinho-pagamento" style={[s.metaV, { color: "#e9d5ff" }]} numberOfLines={1}>
+              {rotuloDoPagamento(activePay, splitOn, splitPayments)}
             </Text>
           </View>
         </View>
