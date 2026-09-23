@@ -175,23 +175,55 @@ export type DescontosDaVenda = {
   manualValor?: number;
 };
 
+/** Quanto o cupom tira de um subtotal — a mesma conta do POST /pdv/sale
+ *  (% arredondado no centavo; valor fixo com teto no subtotal). */
+export function descontoDoCupom(cupom: RegraDoCupom | null | undefined, subtotal: number): number {
+  if (!cupom) return 0;
+  return cupom.tipo === "percent"
+    ? Math.round(((subtotal * cupom.valor) / 100) * 100) / 100
+    : Math.min(cupom.valor, subtotal);
+}
+
 /** Espelho do cálculo do POST /pdv/sale (aura-backend src/routes/pdv.js):
  *  cupom e desconto manual somam, com teto no subtotal. */
 export function totalComoNoServidor(linhas: { totalDaLinha: number }[], d: DescontosDaVenda) {
   let subtotal = 0;
   for (const l of linhas) subtotal += l.totalDaLinha;
-  let cupom = 0;
-  if (d.cupom) {
-    cupom = d.cupom.tipo === "percent"
-      ? Math.round(((subtotal * d.cupom.valor) / 100) * 100) / 100
-      : Math.min(d.cupom.valor, subtotal);
-  }
+  const cupom = descontoDoCupom(d.cupom, subtotal);
   let manual = 0;
   if (d.manualValor && d.manualValor > 0) manual = d.manualValor;
   else if (d.manualPct && d.manualPct > 0) manual = parseFloat(((subtotal * d.manualPct) / 100).toFixed(2));
   const desconto = Math.min(parseFloat((cupom + manual).toFixed(2)), subtotal);
   const total = parseFloat((subtotal - desconto).toFixed(2));
   return { subtotal: r2(subtotal), cupom, manual, desconto, total: Math.max(0, total) };
+}
+
+/** A conta da venda como a tela final mostra: subtotal − desconto = total. */
+export type ContaDaVenda = { subtotal: number; cupom: number; manual: number; desconto: number; total: number };
+
+/**
+ * Tela final da venda (QA 23/09/2026): o que vale é o que o POST /pdv/sale
+ * gravou — `sale.total_amount` e `sale.discount_amount` (cupom + manual,
+ * recalculados pelo servidor sobre o subtotal das linhas enviadas). Com os
+ * dois, o subtotal é total + desconto e o manual (que o servidor não devolve
+ * separado) sai da conta local; o resto do desconto é o cupom. Sem eles
+ * (venda offline/demo, ambiente antigo), fica a conta local.
+ */
+export function contaComOServidor(
+  local: ContaDaVenda,
+  venda: { total_amount?: unknown; discount_amount?: unknown } | null | undefined,
+): ContaDaVenda {
+  const total = parseFloat(venda?.total_amount as any);
+  const desconto = parseFloat(venda?.discount_amount as any);
+  if (!isFinite(total) || !isFinite(desconto)) return local;
+  const manual = r2(Math.min(Math.max(0, local.manual), desconto));
+  return {
+    subtotal: r2(total + desconto),
+    cupom: r2(desconto - manual),
+    manual,
+    desconto: r2(desconto),
+    total: r2(total),
+  };
 }
 
 export function linhasNoMetodo(linhas: PrecosDaLinha[], noCartao: boolean): LinhaDoPayload[] {
@@ -299,32 +331,24 @@ const NOME_DO_METODO: Record<string, string> = {
   dinheiro: "dinheiro", pix: "PIX", debito: "débito", cartao: "crédito", crediario: "crediário",
 };
 
-/** "R$ 1.000,00 no dinheiro − R$ 400,00 no PIX = faltam R$ 600,00. No
- *  crédito, com o acréscimo desta venda (11%): R$ 600,00 × 1,11 = R$ 666,00." */
-export function fraseDaConta(entradas: EntradaDividida[], base: number, dv: Dividido): string {
-  const fatorTxt = dv.fator.toFixed(2).replace(".", ",");
-  let partes = fmtReais(base) + " no dinheiro";
-  entradas.forEach((e) => {
-    if (e.auto) return;
-    const nome = NOME_DO_METODO[e.method] || e.method;
-    if (ehCartao(e.method)) {
-      partes += " − " + fmtReais(e.value) + " no " + nome + " (÷ " + fatorTxt + " = " + fmtReais(e.value / dv.fator) + ")";
-    } else {
-      partes += " − " + fmtReais(e.value) + " no " + nome;
-    }
-  });
+/**
+ * A conta do dividido numa frase de balcão (QA 23/09/2026 — antes era a
+ * equação "R$ 1.142,40 no dinheiro − R$ 1.268,16 no crédito (÷ 1,11 = …)"):
+ *   · "o que falta" no cartão → "Faltam R$ 742,40. No cartão fica
+ *     R$ 824,13 (11% a mais)."
+ *   · no dinheiro/PIX/crediário → "Faltam R$ 600,00 no PIX."
+ * Nada faltando (ou sem a linha "o que falta") → "" — o status já diz.
+ */
+export function fraseDaConta(dv: Dividido): string {
   const auto = dv.entradas.find((e) => e.auto);
-  const faltaBase = auto
-    ? (ehCartao(auto.method) ? r2(auto.value / dv.fator) : auto.value)
-    : Math.max(0, dv.falta);
-  partes += " = faltam " + fmtReais(faltaBase);
-  if (auto && ehCartao(auto.method)) {
-    return partes + ". No " + (NOME_DO_METODO[auto.method] || auto.method) +
-      ", com o acréscimo desta venda (" + fmtPct((dv.fator - 1) * 100) + "%): " +
-      fmtReais(faltaBase) + " × " + fatorTxt + " = " + fmtReais(auto.value) + ".";
-  }
-  if (auto) return partes + ", pagos no " + (NOME_DO_METODO[auto.method] || auto.method) + " sem acréscimo.";
-  return partes + ".";
+  if (!auto) return "";
+  const noCartao = ehCartao(auto.method);
+  const faltaBase = noCartao ? r2(auto.value / dv.fator) : r2(auto.value);
+  if (!(faltaBase > 0.005)) return "";
+  if (!noCartao) return "Faltam " + fmtReais(faltaBase) + " no " + (NOME_DO_METODO[auto.method] || auto.method) + ".";
+  const pct = Math.round((dv.fator - 1) * 1000) / 10;
+  const diferenca = pct > 0 ? " (" + fmtPct(pct) + "% a mais)" : pct < 0 ? " (" + fmtPct(-pct) + "% a menos)" : "";
+  return "Faltam " + fmtReais(faltaBase) + ". No cartão fica " + fmtReais(auto.value) + diferenca + ".";
 }
 
 /** Status do dividido nas duas línguas (dinheiro e cartão). */
@@ -348,4 +372,20 @@ export function editarPrecoProporcional(
     return { card: n, cash: atual.card > 0 ? r2((n * atual.cash) / atual.card) : n };
   }
   return { cash: n, card: atual.cash > 0 ? r2((n * atual.card) / atual.cash) : n };
+}
+
+/**
+ * Lápis no dividido (QA 23/09/2026): a linha mostra o preço RATEADO desta
+ * venda. O novo valor vale sobre ele — dinheiro e cartão andam na mesma
+ * proporção (novo ÷ mostrado), e o rateio da venda acompanha.
+ */
+export function editarPrecoNoDividido(
+  atual: { cash: number; card: number },
+  mostrado: number,
+  novo: number,
+): { cash: number; card: number } {
+  const n = r2(novo);
+  if (!(mostrado > 0)) return { cash: n, card: n };
+  const k = n / mostrado;
+  return { cash: r2(atual.cash * k), card: r2(atual.card * k) };
 }

@@ -14,6 +14,13 @@
 // "Número da venda"; o UUID encurtado ficou só como fallback pra venda
 // sem número (ambiente não migrado). O toque continua copiando o UUID
 // inteiro — é o que o suporte pede.
+//
+// 23/09/2026 (QA em produção) — a conta fecha na tela: subtotal, desconto e
+// total vêm do que o POST /pdv/sale gravou (useCart → contaComOServidor).
+// Antes, com cupom e preço no cartão/dividido, a tela mostrava o cupom do
+// dinheiro (R$ 201,60) sobre o subtotal rateado e o banco gravava R$ 216,02.
+// O desconto manual ganhou a própria linha — subtotal − cupom − desconto =
+// total, sempre.
 // ============================================================
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -27,7 +34,6 @@ import type { SaleResult } from "@/hooks/useCart";
 import { PAYMENTS } from "@/hooks/useCart";
 import { NfceActions, type NfceActionsItem } from "./NfceActions";
 import { OsActions } from "./OsActions";
-import { quantidadeParaContar } from "./matconQty";
 import { openPrintWindow } from "@/services/printWindow";
 import type { NfcePaymentEntry } from "@/services/nfceApi";
 
@@ -63,15 +69,21 @@ type Props = {
   /** Se true, dispara nfceApi.emit() automaticamente no mount.
       Lido de nfce_config.auto_emit_nfce pela tela do PDV. */
   autoEmit?: boolean;
-  /** 22/09/2026 (QA Matcon): tijolo em milheiro conta em peças no
-   *  "N produtos" — 500 tijolos, não "0.5 produtos". Opcional, default off. */
+  /** 22/09/2026 (QA Matcon). Sem uso desde 23/09/2026 — "N produtos"
+   *  conta linhas, em qualquer loja. Mantido para não mexer em quem chama. */
   matconEnabled?: boolean;
 };
 
-export function SaleComplete({ sale, onNewSale, autoEmit, matconEnabled = false }: Props) {
+export function SaleComplete({ sale, onNewSale, autoEmit }: Props) {
   const { company, token } = useAuthStore();
-  const subtotal = sale.items.reduce((s, i) => s + i.price * i.qty, 0);
-  const hasCoupon = !!(sale.couponCode && sale.couponDiscount && sale.couponDiscount > 0);
+  const cupom = sale.couponDiscount && sale.couponDiscount > 0 ? sale.couponDiscount : 0;
+  const manual = sale.manualDiscount && sale.manualDiscount > 0 ? sale.manualDiscount : 0;
+  const desconto = sale.discount != null ? sale.discount : cupom + manual;
+  const subtotal = sale.subtotal != null
+    ? sale.subtotal
+    : sale.items.reduce((s, i) => s + i.price * i.qty, 0);
+  const hasCoupon = !!(sale.couponCode && cupom > 0);
+  const hasDiscount = desconto > 0.004;
 
   const hasSplit = !!(sale.payments && sale.payments.length > 0);
   const payments: NfcePaymentEntry[] | undefined = hasSplit
@@ -85,7 +97,9 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconEnabled = false 
     unit_price: i.price,
   }));
 
-  const totalItens = sale.items.reduce((acc, i) => acc + quantidadeParaContar(matconEnabled, i.qty, i.unit), 0);
+  // QA 23/09/2026: conta PRODUTOS (linhas) — somar quantidades misturava
+  // unidades (10 m² + 500 tijolos = "510 produtos").
+  const totalProdutos = sale.items.length;
 
   // 01/09/2026 — número de venda de verdade. Vem sequencial POR EMPRESA, então
   // é o que o lojista dita no balcão. Quando vier null (venda de ambiente não
@@ -123,19 +137,25 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconEnabled = false 
             <View style={s.couponBadge}>
               <Text style={s.couponBadgeText}>{sale.couponCode}</Text>
             </View>
-            <Text style={s.couponDiscount}>-{fmt(sale.couponDiscount!)}</Text>
+            <Text testID="venda-cupom" style={s.couponDiscount}>-{fmt(cupom)}</Text>
           </View>
         )}
 
-        {hasCoupon && (
+        {hasDiscount && (
           <View style={s.row}>
             <Text style={s.label}>Subtotal</Text>
-            <Text style={s.metaStrike}>{fmt(subtotal)}</Text>
+            <Text testID="venda-subtotal" style={s.metaStrike}>{fmt(subtotal)}</Text>
+          </View>
+        )}
+        {manual > 0 && (
+          <View style={s.row}>
+            <Text style={s.label}>Desconto</Text>
+            <Text testID="venda-desconto" style={s.meta}>-{fmt(manual)}</Text>
           </View>
         )}
         <View style={s.row}>
           <Text style={s.label}>Total</Text>
-          <Text style={s.value}>{fmt(sale.total)}</Text>
+          <Text testID="venda-total" style={s.value}>{fmt(sale.total)}</Text>
         </View>
         {hasSplit ? (
           <View style={s.splitBox}>
@@ -155,7 +175,7 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconEnabled = false 
         )}
         <View style={s.row}>
           <Text style={s.label}>Itens</Text>
-          <Text style={s.meta}>{pluralize(totalItens, "produto")}</Text>
+          <Text testID="venda-produtos" style={s.meta}>{pluralize(totalProdutos, "produto")}</Text>
         </View>
         {sale.customerName && (
           <View style={s.row}>

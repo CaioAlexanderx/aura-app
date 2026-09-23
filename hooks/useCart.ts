@@ -5,10 +5,11 @@ import type { PdvSaleResponse } from "@/services/salesApi";
 import type { LotAllocation } from "@/services/matconApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
+import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
 import {
-  CARTAO_DESLIGADO, ehCartao, editarPrecoProporcional, fraseDaConta, linhasNoMetodo, linhasRateadas,
+  CARTAO_DESLIGADO, contaComOServidor, ehCartao, editarPrecoNoDividido, editarPrecoProporcional, fraseDaConta, linhasNoMetodo, linhasRateadas,
   precoNoCartaoDoItem, r2, resolverDividido, statusDoDividido, totalComoNoServidor,
-  type ConfigDoCartao, type DescontosDaVenda, type LinhaDoPayload, type PrecosDaLinha, type RegraDoCupom,
+  type ConfigDoCartao, type ContaDaVenda, type DescontosDaVenda, type LinhaDoPayload, type PrecosDaLinha, type RegraDoCupom,
 } from "@/utils/precoNoCartao";
 
 // 22/09/2026 (Matcon M0): o item carrega a unidade de venda do produto e,
@@ -72,6 +73,11 @@ export type SaleResult = {
   couponCode?: string;
   couponDiscount?: number;
   manualDiscount?: number;
+  // QA 23/09/2026: a conta que a tela final mostra, do jeito que o servidor
+  // gravou (subtotal − discount = total). Ausentes em venda antiga: a tela
+  // cai na soma dos itens.
+  subtotal?: number;
+  discount?: number;
   cpfNaNota?: string;       // CPF do consumidor (opcional, pra NFC-e)
 };
 
@@ -267,6 +273,8 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
       })
     : [];
   let descontosDaVenda: DescontosDaVenda = {};
+  // A conta do método escolhido (opção ligada, fora do dividido).
+  let simDoMetodo: ContaDaVenda | null = null;
   let precoNoCartao: {
     totalDinheiro: number; totalCartao: number;
     subtotalDinheiro: number; subtotalCartao: number;
@@ -290,6 +298,7 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
     const simD = totalComoNoServidor(linhasD, descontosDaVenda);
     const simK = totalComoNoServidor(linhasK, descontosDaVenda);
     const sim = noCartao ? simK : simD;
+    simDoMetodo = sim;
     manualDiscountAmount = sim.manual;
     couponDiscount = sim.cupom;
     totalAfterCoupon = sim.total;
@@ -329,10 +338,36 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
   // O que a venda cobra: no dividido com preço no cartão, a soma dos
   // pagamentos (+ o que falta, no dinheiro, enquanto não fecha).
   const totalDaVenda = dividido && splitMode ? r2(dividido.total + Math.max(0, dividido.falta)) : totalAfterCoupon;
-  const splitNote = dividido && splitMode && precoNoCartao && splitPayments.length > 0
-    ? fraseDaConta(splitPayments, precoNoCartao.totalDinheiro, dividido)
+  const splitNote = dividido && splitMode && splitPayments.length > 0
+    ? (fraseDaConta(dividido) || null)
     : null;
   const splitStatus = dividido && splitMode ? statusDoDividido(dividido) : null;
+
+  // ── Preço no cartão: a vista do DIVIDIDO (QA 23/09/2026) ─────────
+  // O topo mostrava o total da venda dividida com o desconto do dinheiro, e
+  // as linhas voltavam ao preço do dinheiro. Agora o carrinho mostra as
+  // linhas como vão no POST (acréscimo da parte no cartão rateado no preço
+  // de cada item) e o desconto/subtotal saem delas — subtotal − desconto =
+  // o total do topo. Sobrando pagamento, a vista para no preço do cartão
+  // (o status já avisa para diminuir). Desligada ou fora do dividido: nada.
+  let linhasDaVista: LinhaDoPayload[] | null = null;
+  let subtotalDaVista: number | null = null;
+  if (dividido && splitMode && precoNoCartao && cart.length > 0) {
+    const C = precoNoCartao.totalDinheiro;
+    const K = precoNoCartao.totalCartao;
+    const alvoVista = Math.min(Math.max(totalDaVenda, Math.min(C, K)), Math.max(C, K));
+    linhasDaVista = linhasRateadas(precosDasLinhas, alvoVista, descontosDaVenda);
+    const simDaVista = totalComoNoServidor(linhasDaVista, descontosDaVenda);
+    couponDiscount = simDaVista.cupom;
+    manualDiscountAmount = simDaVista.manual;
+    subtotalDaVista = simDaVista.subtotal;
+  }
+  const vistaDoCarrinho: CartItem[] = linhasDaVista
+    ? cartView.map(function(i, idx) {
+        const lp = linhasDaVista![idx];
+        return lp && i.qty > 0 ? { ...i, price: lp.totalDaLinha / i.qty, listPrice: lp.unit_price } : i;
+      })
+    : cartView;
 
   function addSplitPayment(entry?: Partial<PaymentEntry>) {
     if (cartaoOn && precoNoCartao) {
@@ -474,6 +509,23 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
   function setUnitPrice(productId: string, price: number) {
     if (!isFinite(price) || price < 0) return;
     const rounded = Math.round(price * 100) / 100;
+    // Dividido com preço no cartão: a linha mostra o preço rateado. Editar
+    // leva dinheiro e cartão na mesma proporção do que foi digitado sobre o
+    // que estava na tela. Sair do campo sem mudar (o rateado tem mais casas
+    // que o campo) não mexe em nada.
+    const mostrado = linhasDaVista ? vistaDoCarrinho.find(function(i) { return i.productId === productId; }) : undefined;
+    if (mostrado) {
+      if (Math.abs(rounded - r2(mostrado.price)) < 0.005) return;
+      setCart(function(prev) {
+        return prev.map(function(i) {
+          if (i.productId !== productId) return i;
+          const novo = editarPrecoNoDividido({ cash: i.price, card: i.cardPrice ?? i.price }, mostrado.price, rounded);
+          return { ...i, price: novo.cash, cardPrice: novo.card };
+        });
+      });
+      if (couponApplied) setCouponApplied(null);
+      return;
+    }
     setCart(function(prev) {
       return prev.map(function(i) {
         if (i.productId !== productId) return i;
@@ -635,11 +687,33 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
       saleData.first_due_date = crediario.first_due_date;
     }
 
-    function buildLastSale(saleId: string, saleNumber?: number | null): SaleResult {
+    // A conta da tela final. Dividido: a das linhas rateadas que vão no
+    // POST (o cupom em % recalculado sobre elas, como o servidor faz);
+    // opção ligada num método só: a do método; desligada: a de sempre.
+    var contaLocal: ContaDaVenda;
+    if (linhasDoPayload) {
+      contaLocal = totalComoNoServidor(linhasDoPayload, descontosDaVenda);
+    } else if (simDoMetodo) {
+      contaLocal = simDoMetodo;
+    } else {
+      var descontoDeSempre = round2(Math.max(0, total - totalAfterCoupon));
+      var manualDeSempre = round2(Math.min(manualDiscountAmount || 0, descontoDeSempre));
+      contaLocal = {
+        subtotal: round2(total),
+        cupom: round2(descontoDeSempre - manualDeSempre),
+        manual: manualDeSempre,
+        desconto: descontoDeSempre,
+        total: totalAfterCoupon,
+      };
+    }
+
+    function buildLastSale(saleId: string, saleNumber?: number | null, venda?: any): SaleResult {
+      // Com a resposta do servidor, vale o que ele gravou.
+      var conta = contaComOServidor(contaLocal, venda);
       return {
         id: String(saleId),
         saleNumber: saleNumber ?? null,
-        total: totalDaVenda,
+        total: conta.total,
         payment: primaryPayment,
         payments: paymentsSnapshot,
         items: cartSnapshot,
@@ -650,8 +724,10 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
         employeeName: selectedEmployeeName || undefined,
         sellerName: effectiveSellerName || undefined,
         couponCode: couponApplied?.code,
-        couponDiscount: cartaoOn ? (couponDiscount || undefined) : couponApplied?.discount,
-        manualDiscount: manualDiscountAmount || undefined,
+        couponDiscount: conta.cupom > 0 ? conta.cupom : undefined,
+        manualDiscount: conta.manual > 0 ? conta.manual : undefined,
+        subtotal: conta.subtotal,
+        discount: conta.desconto,
         cpfNaNota: cleanCpf || undefined,
       };
     }
@@ -664,12 +740,13 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
           // sale_number pode vir null (venda de ambiente nao migrado) — o
           // recibo cai no UUID encurtado nesse caso.
           var saleNumber = typeof res?.sale?.sale_number === "number" ? res.sale.sale_number : null;
-          setLastSale(buildLastSale(String(saleId), saleNumber));
+          setLastSale(buildLastSale(String(saleId), saleNumber, res?.sale));
           setCart([]); setQuoteId(null); setReferredProfessionalId(null); clearLotAllocations(); toast.success("Venda registrada!"); setIsProcessing(false); clearCoupon(); clearDiscount();
           setSellerName("");
           setCpfNaNota("");
-          // Não desativa splitMode automaticamente — usuário decide se mantém
-          if (splitMode) setSplitPayments([]);
+          // QA 23/09/2026 (decisão do Caio): a próxima venda começa limpa —
+          // sem dividido e no PIX (antes herdava "0× SPLIT" e o método).
+          voltarAoPagamentoInicial();
         },
         onError: function(err: any) {
           // F3-3A (29/05/2026): trata 422 CREDIARIO_REQUIRES_CUSTOMER com mensagem acionavel.
@@ -678,7 +755,7 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
           if (errCode === "CREDIARIO_REQUIRES_CUSTOMER") {
             toast.error("Selecione um cliente antes de finalizar no crediário.");
           } else {
-            toast.error(err?.data?.error || err?.message || "Erro ao registrar venda");
+            toast.error(textoDoErro(err, "Não deu para registrar a venda. Tente de novo."));
           }
           setIsProcessing(false);
         },
@@ -686,8 +763,15 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
     } else {
       setLastSale(buildLastSale(Date.now().toString(36).toUpperCase().slice(-6)));
       setCart([]); setQuoteId(null); setReferredProfessionalId(null); clearLotAllocations(); setIsProcessing(false);
-      if (splitMode) setSplitPayments([]);
+      voltarAoPagamentoInicial();
     }
+  }
+
+  // Venda nova: sem dividido e no PIX (QA 23/09/2026, decisão do Caio).
+  function voltarAoPagamentoInicial() {
+    setSplitMode(false);
+    setSplitPayments([]);
+    setPayment("pix");
   }
 
   function newSale() {
@@ -697,8 +781,9 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
     setSellerName("");
     setCpfNaNota("");
     clearCoupon(); clearDiscount();
-    // mantém splitMode entre vendas (workflow de loja)
-    setSplitPayments([]);
+    // QA 23/09/2026: não herda mais o dividido nem o método da venda
+    // anterior ("0× SPLIT" com carrinho vazio, preços no cartão).
+    voltarAoPagamentoInicial();
   }
 
   return {
@@ -708,8 +793,10 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
     // `onLotAllocations` do CartPanel; sem isso a linha do lote continua
     // aparecendo e a venda baixa FIFO.
     lotAllocations, setLotAllocations, clearLotAllocations,
-    // `cart` é a VISTA do chip (ver cartView). Sem preço no cartão, é o estado.
-    cart: cartView, payment, setPayment, lastSale, total, totalAfterCoupon: totalDaVenda, itemCount, isProcessing,
+    // `cart` é a VISTA do chip (ver cartView; no dividido, as linhas
+    // rateadas). Sem preço no cartão, é o estado.
+    cart: vistaDoCarrinho, payment, setPayment, lastSale,
+    total: subtotalDaVista ?? total, totalAfterCoupon: totalDaVenda, itemCount, isProcessing,
     // Preço no cartão: os dois totais (null com a opção desligada), o
     // desconto efetivo do cupom no método e a regra do cupom.
     precoNoCartao, couponDiscount, setCouponRule,

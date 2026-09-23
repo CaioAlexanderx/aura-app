@@ -72,7 +72,7 @@
 //
 // 22/09/2026 (preço no cartão — docs/mockups/preco-no-cartao.html, telas 3
 // e 5). Tudo opcional e só com a opção da loja ligada:
-//   · `pricePair`: o par "dinheiro e PIX · cartão" dentro do bloco violeta,
+//   · `pricePair`: o par "Dinheiro ou PIX · Cartão" dentro do bloco violeta,
 //     logo abaixo do total — o vendedor responde "e no cartão?" sem tocar
 //     em nada. O lado do chip escolhido acende. No celular é a única linha
 //     a mais (≈ 36px); o rodapé continua Limpar · Orçamento · Finalizar.
@@ -81,7 +81,7 @@
 //   · card do orçamento salvo com os dois totais.
 // Sem essas props o painel é byte a byte o de antes.
 // ============================================================
-import { Fragment, forwardRef, useMemo, useRef, useState } from "react";
+import { Fragment, forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator, TextInput } from "react-native";
 import { Colors, Glass, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -94,8 +94,9 @@ import { parseQtyInput, fmtQty } from "@/utils/matconUnits";
 import {
   usaCampoDecimal, qtyMaxLength, fraseDeEmbalagem, usaCalculadoraAmbiente, usaLoteNoItem,
   usaPecasNoMilheiro, unidadesParaMilheiro, milheiroParaUnidades, parseInteiroDigitado,
-  fraseDoMilheiro, quantidadeParaContar,
+  fraseDoMilheiro,
 } from "./matconQty";
+import { rotuloDoLadoDinheiro, rotuloDoPagamento } from "./rotulosDoCaixa";
 import { CalculadoraAmbiente } from "@/components/matcon/CalculadoraAmbiente";
 import { LoteDoItem } from "@/components/matcon/LotePicker";
 import type { LotAllocation } from "@/services/matconApi";
@@ -151,6 +152,8 @@ type Props = {
   subtotal: number;
   discountAmount: number;
   total: number;
+  /** Soma das quantidades. Mantido por compatibilidade; o topo conta
+   *  produtos (linhas) desde o QA de 23/09/2026. */
   itemCount: number;
   payMethods: PayChip[];
   activePay: string;
@@ -216,7 +219,7 @@ const HEAD_INK_DIMMER = "rgba(255,255,255,0.55)";
 
 export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRef) {
   const {
-    orderNumber, items, subtotal, discountAmount, total, itemCount,
+    orderNumber, items, subtotal, discountAmount, total,
     payMethods, activePay, onPay,
     onInc, onDec, onSetQty, onPriceChange, onRemove, onClear, onFinalize, onGenerateQuote,
     onLotAllocations,
@@ -265,6 +268,22 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
   //    propósito: handleFinalize mostra o toast explicando o que falta. Se
   //    desabilitássemos o Pressable, o lojista clicaria e não aconteceria
   //    absolutamente nada — pior do que o bug original.
+  // QA 23/09/2026: no dividido a conta ("Faltam R$ 742,40. No cartão fica
+  // …") e o status ficavam atrás do rodapé fixo até rolar. No painel de
+  // altura limitada (fill/desktop), ligar o dividido ou mudar o número de
+  // pagamentos rola o corpo até o fim — o painel do dividido, a frase e o
+  // resumo ficam logo acima do "Finalizar venda". No celular a página rola
+  // inteira e o rodapé não é fixo: nada muda.
+  const bodyRef = useRef<ScrollView | null>(null);
+  const linhasDoDividido = splitOn ? (splitPayments || []).length : 0;
+  useEffect(() => {
+    if (!fill || !splitOn) return;
+    const t = setTimeout(() => {
+      try { (bodyRef.current as any)?.scrollToEnd?.({ animated: true }); } catch {}
+    }, 0);
+    return () => clearTimeout(t);
+  }, [fill, splitOn, linhasDoDividido]);
+
   const finalizeHardBlocked = !!isProcessing || items.length === 0 || (splitOn && !splitIsBalanced);
   const finalizeInactive = finalizeHardBlocked || !!finalizeDisabled;
 
@@ -330,27 +349,29 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
         </View>
         {pricePair ? (
           <View style={s.par} testID="carrinho-par-precos">
+            {/* QA 23/09/2026: "Dinheiro ou PIX" (o mesmo do papel e da
+                etiqueta). Com Crediário o destaque cai deste lado, então o
+                rótulo cita o crediário — e pode quebrar em 2 linhas no
+                carrinho estreito em vez de cortar. */}
             <View style={[s.parItem, pricePair.active === "cash" && s.parItemOn]}>
-              <Text style={s.parK} numberOfLines={1}>dinheiro e PIX</Text>
+              <Text testID="carrinho-par-dinheiro" style={s.parK} numberOfLines={2}>
+                {rotuloDoLadoDinheiro(activePay, splitOn)}
+              </Text>
               <Text style={s.parV} numberOfLines={1}>{fmtCurrency(pricePair.cash)}</Text>
             </View>
             <View style={[s.parItem, pricePair.active === "card" && s.parItemOn]}>
-              <Text style={s.parK} numberOfLines={1}>cartão</Text>
+              <Text testID="carrinho-par-cartao" style={s.parK} numberOfLines={1}>Cartão</Text>
               <Text style={s.parV} numberOfLines={1}>{fmtCurrency(pricePair.card)}</Text>
             </View>
           </View>
         ) : null}
         <View style={s.meta}>
           <View>
-            <Text style={s.metaK}>Itens</Text>
-            {/* Com unidade fracionada a soma vira 22,5 — fmtQty escreve em
-                pt-BR. Tijolo em milheiro conta em peças (500, não 0,5).
-                Fora do Matcon fica o número cru de sempre. */}
-            <Text style={s.metaV}>
-              {matcon.matcon_enabled
-                ? fmtQty(items.reduce((acc, it) => acc + quantidadeParaContar(true, it.qty, it.unit), 0))
-                : itemCount}
-            </Text>
+            <Text style={s.metaK}>Produtos</Text>
+            {/* QA 23/09/2026: conta as LINHAS do carrinho. Somar
+                quantidades misturava unidades (10 m² de piso + 500 tijolos
+                = "510"). */}
+            <Text testID="carrinho-produtos" style={s.metaV}>{items.length}</Text>
           </View>
           <View>
             <Text style={s.metaK}>Desconto</Text>
@@ -360,8 +381,11 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           </View>
           <View>
             <Text style={s.metaK}>Pagamento</Text>
-            <Text style={[s.metaV, { color: "#e9d5ff", textTransform: "uppercase" }]}>
-              {splitOn ? `${splitPayments?.length || 0}× SPLIT` : activePay}
+            {/* QA 23/09/2026: era a chave interna em caixa alta ("CARTAO",
+                "1× SPLIT"). Agora o nome do balcão, e o dividido conta só as
+                linhas com valor. */}
+            <Text testID="carrinho-pagamento" style={[s.metaV, { color: "#e9d5ff" }]} numberOfLines={1}>
+              {rotuloDoPagamento(activePay, splitOn, splitPayments)}
             </Text>
           </View>
         </View>
@@ -371,7 +395,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
       {/* BODY — rola tudo que pode crescer: itens + pagamento + divisão +
           resumo + CPF. O "Finalizar venda" fica fixo no FOOT, sempre visível.
           Só ancora o checkout no fundo (espaçador) quando fill (desktop). */}
-      <ScrollView style={s.body} contentContainerStyle={fill ? { padding: 14, paddingHorizontal: 16, flexGrow: 1 } : { padding: 14, paddingHorizontal: 16 }}>
+      <ScrollView ref={bodyRef} style={s.body} contentContainerStyle={fill ? { padding: 14, paddingHorizontal: 16, flexGrow: 1 } : { padding: 14, paddingHorizontal: 16 }}>
         {items.length === 0 ? (
           <View style={s.empty}>
             {/* 16/09/2026 (Fase 0 · I0.3): é aqui que a marca da loja fica em
@@ -786,60 +810,63 @@ function SplitRow({
     setBuf(null);
   }
 
-  const row = (
-    <View style={s.splitRow}>
-      {/* Mini chips de método */}
-      <View style={s.splitChips}>
+  // QA 23/09/2026: os cinco métodos e o valor na mesma linha quebravam em
+  // três linhas no painel estreito. Agora cada pagamento tem duas linhas
+  // fixas: os métodos numa faixa só (rótulo curto, sem ícone, dividindo a
+  // largura) e, embaixo, o valor — com "o que falta" à esquerda.
+  const autoTag = entry.auto
+    ? "o que falta" + (entry.method === "cartao" || entry.method === "debito" ? ", com o acréscimo do cartão" : "")
+    : null;
+  return (
+    <View style={s.splitEntry}>
+      <View style={s.splitChips} testID="carrinho-dividido-metodos">
         {methods.map(m => {
           const active = entry.method === m.key;
           return (
             <Pressable
               key={m.key}
               onPress={() => onChangeMethod(m.key)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
               style={[s.splitChip, active && s.splitChipActive]}
             >
-              <Icon name={m.icon as any} size={11} color={active ? Colors.violet : Colors.ink3} />
-              <Text style={[s.splitChipTxt, active && { color: Colors.violet, fontWeight: "700" }]}>{m.label}</Text>
+              <Text style={[s.splitChipTxt, active && { color: Colors.violet, fontWeight: "700" }]} numberOfLines={1}>{m.label}</Text>
             </Pressable>
           );
         })}
       </View>
 
-      {/* Valor */}
-      <View style={entry.auto ? [s.splitValBox, s.splitValBoxAuto] : s.splitValBox}>
-        <Text style={s.splitValPrefix}>R$</Text>
-        <TextInput
-          style={s.splitValInput}
-          value={display}
-          onFocus={() => setBuf(entry.value.toFixed(2).replace(".", ","))}
-          onChangeText={(v) => setBuf(v.replace(/[^\d,.]/g, ""))}
-          onBlur={handleCommit}
-          onSubmitEditing={handleCommit}
-          keyboardType="decimal-pad"
-          selectTextOnFocus
-        />
+      <View style={s.splitRow}>
+        {autoTag ? (
+          <Text testID="carrinho-dividido-falta" style={s.splitAutoTag} numberOfLines={2}>{autoTag}</Text>
+        ) : (
+          <View style={{ flex: 1 }} />
+        )}
+
+        {/* Valor */}
+        <View style={entry.auto ? [s.splitValBox, s.splitValBoxAuto] : s.splitValBox}>
+          <Text style={s.splitValPrefix}>R$</Text>
+          <TextInput
+            style={s.splitValInput}
+            value={display}
+            onFocus={() => setBuf(entry.value.toFixed(2).replace(".", ","))}
+            onChangeText={(v) => setBuf(v.replace(/[^\d,.]/g, ""))}
+            onBlur={handleCommit}
+            onSubmitEditing={handleCommit}
+            keyboardType="decimal-pad"
+            selectTextOnFocus
+          />
+        </View>
+
+        {/* Remover */}
+        {canRemove ? (
+          <Pressable onPress={onRemove} style={s.splitRemove} accessibilityLabel="Tirar este pagamento">
+            <Icon name="x" size={12} color={Colors.ink3} />
+          </Pressable>
+        ) : (
+          <View style={s.splitRemove} />
+        )}
       </View>
-
-      {/* Remover */}
-      {canRemove ? (
-        <Pressable onPress={onRemove} style={s.splitRemove}>
-          <Icon name="x" size={12} color={Colors.ink3} />
-        </Pressable>
-      ) : (
-        <View style={s.splitRemove} />
-      )}
-    </View>
-  );
-
-  if (!entry.auto) return row;
-  // Preço no cartão: a linha "o que falta" ganha o rótulo e a borda
-  // tracejada (tela 4 do mockup). Sempre visível, sem hover.
-  return (
-    <View style={s.splitRowWrap}>
-      <Text testID="carrinho-dividido-falta" style={s.splitAutoTag}>
-        {"o que falta" + (entry.method === "cartao" || entry.method === "debito" ? ", com o acréscimo do cartão" : "")}
-      </Text>
-      {row}
     </View>
   );
 }
@@ -1234,7 +1261,7 @@ const s = StyleSheet.create({
   metaK: { fontSize: 9, fontWeight: "700", color: HEAD_INK_DIMMER, letterSpacing: 1, textTransform: "uppercase" },
   metaV: { fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace", fontSize: 12, color: HEAD_INK, fontWeight: "700", marginTop: 3 },
   subtitle: { fontSize: 10, color: HEAD_INK_DIMMER, marginTop: 10 },
-  // Par "dinheiro e PIX · cartão" (preço no cartão). Cabe no bloco violeta
+  // Par "Dinheiro ou PIX · Cartão" (preço no cartão). Cabe no bloco violeta
   // do celular em ≈ 36px: rótulo 10 + valor 13 + respiro.
   par: { flexDirection: "row", gap: 6, marginBottom: 8 },
   parItem: {
@@ -1357,24 +1384,28 @@ const s = StyleSheet.create({
   // Painel de splits
   splitPanel: {
     marginBottom: 12,
-    padding: 10,
+    padding: 8,
     backgroundColor: Glass.lineFaint,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: Glass.lineBorderCard,
     gap: 8,
   },
+  // Um pagamento do dividido: faixa de métodos + linha do valor.
+  splitEntry: { gap: 5 },
   splitRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  splitChips: { flex: 1, flexDirection: "row", flexWrap: "wrap", gap: 4 },
+  // Os métodos dividem a largura numa linha só (nunca quebram): em 320px de
+  // carrinho cada um tem ≈ 48px, o suficiente para "Crediário" em 10px.
+  splitChips: { flexDirection: "row", flexWrap: "nowrap", gap: 3 },
   splitChip: {
-    flexDirection: "row", alignItems: "center", gap: 3,
-    paddingVertical: 4, paddingHorizontal: 7,
+    flex: 1, minWidth: 0, alignItems: "center", justifyContent: "center",
+    paddingVertical: 6, paddingHorizontal: 2,
     borderRadius: 6,
     backgroundColor: Glass.lineSoft,
     borderWidth: 1, borderColor: "transparent",
   },
   splitChipActive: { backgroundColor: Colors.violetD, borderColor: "rgba(124,58,237,0.4)" },
-  splitChipTxt: { fontSize: 9, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.4 },
+  splitChipTxt: { fontSize: 10, color: Colors.ink3, fontWeight: "600" },
   splitValBox: {
     flexDirection: "row", alignItems: "center", gap: 4,
     backgroundColor: Colors.bg, borderRadius: 6,
@@ -1400,8 +1431,7 @@ const s = StyleSheet.create({
   },
   splitAddTxt: { fontSize: 11, color: Colors.violet3, fontWeight: "700" },
   // Preço no cartão: linha "o que falta" (tracejada, violeta) e a conta.
-  splitRowWrap: { gap: 4 },
-  splitAutoTag: { fontSize: 10, color: Colors.violet3, fontWeight: "700" },
+  splitAutoTag: { flex: 1, minWidth: 0, fontSize: 10, color: Colors.violet3, fontWeight: "700" },
   splitValBoxAuto: { borderStyle: "dashed" as any, borderColor: Colors.violet },
   splitNote: {
     fontSize: 11, color: Colors.ink2, lineHeight: 16,

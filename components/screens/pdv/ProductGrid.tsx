@@ -16,6 +16,12 @@
 // 5): com `cardPriceFor` (opção da loja ligada) o card mostra, embaixo do
 // preço de sempre, "cartão R$ 42,20" em 11px — igual à etiqueta. Sem a
 // prop, o card é o de antes.
+//
+// 23/09/2026 (QA em produção): duas "MANTA ALUMINIZADA 10CM" (Dryko e
+// Denver) apareciam idênticas. Com `brand` o card mostra a marca numa linha
+// pequena logo abaixo do nome. O nome e a marca dividem a mesma altura
+// mínima de antes (2 linhas de nome): sem marca o card fica igual, e nome
+// de uma linha + marca também não cresce.
 // ============================================================
 import { useRef } from "react";
 import { View, Text, Pressable, StyleSheet, Platform, Image } from "react-native";
@@ -54,6 +60,8 @@ export type GridProduct = {
   image_url?: string;
   has_variants?: boolean;
   cardPrice?: number | null;
+  /** Marca (GET /products). Vazia/ausente = card sem a linha. */
+  brand?: string | null;
 };
 
 type Props = {
@@ -111,6 +119,7 @@ function ProdCard({ product, qty, index, onAdd, compact = false, dense = false, 
   const letter = productLetter(product.name);
   const inCart = qty > 0;
   const addRef = useRef<any>(null);
+  const marca = String(product.brand || "").trim();
 
   // ── Métricas responsivas ──────────────────────────
   const pad      = dense ? 10 : compact ? 10 : 14;
@@ -219,7 +228,14 @@ function ProdCard({ product, qty, index, onAdd, compact = false, dense = false, 
         )}
       </View>
 
-      <Text numberOfLines={2} style={[s.name, { fontSize: nameSz, minHeight: nameMinH }]}>{product.name}</Text>
+      {marca ? (
+        <View style={{ minHeight: nameMinH }}>
+          <Text numberOfLines={2} style={[s.name, { fontSize: nameSz, minHeight: 0 }]}>{product.name}</Text>
+          <Text testID={"grid-marca-" + product.id} numberOfLines={1} style={s.brand}>{marca}</Text>
+        </View>
+      ) : (
+        <Text numberOfLines={2} style={[s.name, { fontSize: nameSz, minHeight: nameMinH }]}>{product.name}</Text>
+      )}
       {(product.stock != null || product.unit) && (
         <Text style={s.stock}>{stockLabel(product.stock, product.unit, matconEnabled)}</Text>
       )}
@@ -301,6 +317,13 @@ const s = StyleSheet.create({
     fontWeight: "600",
     lineHeight: 17,
     minHeight: 36,
+  },
+  // Marca: uma linha pequena debaixo do nome (QA 23/09/2026).
+  brand: {
+    fontSize: 11,
+    lineHeight: 14,
+    color: Colors.ink3,
+    fontWeight: "600",
   },
   // Frase, não etiqueta de sistema: sem monoespaçado, sem caixa alta, e no
   // ink2 pra ficar legível (o ink3 em 10px era quase invisível).

@@ -81,14 +81,16 @@ import { useMatconReferral } from "@/hooks/useMatconReferral";
 
 import { toast } from "@/components/Toast";
 import { flyToCart } from "@/components/screens/pdv/flyToCart";
-import { IS_WEB, fmtCurrency } from "@/components/screens/pdv/types";
+import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
+import { fraseDoCupomAplicado } from "@/components/screens/pdv/rotulosDoCaixa";
+import { IS_WEB } from "@/components/screens/pdv/types";
 import type { CartDisplayItem, PayChip, RequiredHint } from "@/components/screens/pdv/CartPanel";
 import type { PersonPickerHandle } from "@/components/screens/pdv/ActionToolbar";
 import type { Product } from "@/components/screens/estoque/types";
 import type { CrediarioConfirmPayload } from "@/components/screens/pdv/PdvModals";
 
 import { openQuotePdf, type QuoteItem } from "@/utils/quotePdf";
-import { lerConfigDoCartao, precoNoCartaoDoProduto } from "@/utils/precoNoCartao";
+import { descontoDoCupom, lerConfigDoCartao, precoNoCartaoDoProduto } from "@/utils/precoNoCartao";
 import { normalizeText, buildProductHaystack, matchesQuery } from "@/utils/productSearch";
 
 const PAGE_SIZE = 12;
@@ -264,6 +266,9 @@ export function usePdvState() {
     customerPhone: selectedCustomerPhone,
     sellerId: selectedEmployeeId,
     discount: matconQuoteDiscount,
+    // QA 23/09: salvar falhou (o backend ainda não tem a rota) — imprime
+    // pelo caminho de sempre, com um aviso curto e sem jargão.
+    onSaveFailed: () => handleGenerateQuote("Orçamento aberto para imprimir."),
   });
 
   // ── Matcon M3 — "Indicado por" (chip do Caixa) ───────────────────────────
@@ -286,9 +291,12 @@ export function usePdvState() {
   // com cliente/vendedora/cupom (setCart/setQuoteId já zeram
   // referredProfessionalId dentro de useCart; aqui só falta esquecer QUEM
   // era o profissional exibido no chip).
+  // QA 23/09/2026: a busca também recomeça vazia (o "Tijolo" da venda
+  // anterior grudava no "Piso" da próxima: "TijoloPiso").
   function newSale() {
     matconReferral.clear();
     rawNewSale();
+    setQuery("");
   }
 
   // ── Matcon M1 — Caixa abre orçamento convertido (`?quote={id}`) ─────────
@@ -670,24 +678,32 @@ export function usePdvState() {
       const baseDoCupom = precoNoCartao ? precoNoCartao.subtotalDinheiro : totalRaw;
       const res = await couponsApi.validate(company.id, code, baseDoCupom, selectedCustomerId);
       if (res.valid && res.code) {
+        // QA 23/09: o toast fala o desconto do MÉTODO escolhido (no cartão o
+        // 15% sai de outro subtotal). No dividido o valor depende de quanto
+        // vai no cartão — aí o toast não fala valor.
+        let valorNoMetodo: number | null = res.discount_amount || 0;
         if (precoNoCartao) {
           const valor = Number(res.discount_value);
-          setCouponRule(res.discount_type === "percent" && isFinite(valor)
-            ? { code: res.code, tipo: "percent", valor: valor }
-            : { code: res.code, tipo: "fixed", valor: isFinite(valor) && valor > 0 ? valor : (res.discount_amount || 0) });
+          const regra = res.discount_type === "percent" && isFinite(valor)
+            ? { tipo: "percent" as const, valor: valor }
+            : { tipo: "fixed" as const, valor: isFinite(valor) && valor > 0 ? valor : (res.discount_amount || 0) };
+          setCouponRule({ code: res.code, ...regra });
+          valorNoMetodo = splitMode
+            ? null
+            : descontoDoCupom(regra, precoNoCartao.noCartao ? precoNoCartao.subtotalCartao : precoNoCartao.subtotalDinheiro);
         }
         setCouponApplied({ code: res.code, discount: res.discount_amount || 0 });
         setCouponCode(res.code);
-        toast.success("Cupom " + res.code + " aplicado! −" + fmtCurrency(res.discount_amount || 0));
+        toast.success(fraseDoCupomAplicado(res.code, valorNoMetodo));
         return { ok: true, code: res.code, discount: res.discount_amount };
       }
       return { ok: false, error: res.error || "Cupom inválido" };
     } catch (err: any) {
-      return { ok: false, error: err?.message || "Erro ao validar cupom" };
+      return { ok: false, error: textoDoErro(err, "Não deu para conferir o cupom agora") };
     }
   }
 
-  function handleGenerateQuote() {
+  function handleGenerateQuote(avisoAoAbrir: string = "Orçamento gerado") {
     if (cart.length === 0) {
       toast.info("Adicione produtos ao carrinho antes de gerar orçamento");
       return;
@@ -720,7 +736,7 @@ export function usePdvState() {
         companyPhone:       profile.phone || null,
         companyAddress:     profile.address || null,
       });
-      toast.success("Orçamento gerado");
+      toast.success(avisoAoAbrir);
       return;
     }
     const items: QuoteItem[] = cart.map(i => ({ name: i.name, qty: i.qty, unitPrice: i.price, unit: i.unit }));
@@ -738,7 +754,7 @@ export function usePdvState() {
       companyPhone:       profile.phone || null,
       companyAddress:     profile.address || null,
     });
-    toast.success("Orçamento gerado");
+    toast.success(avisoAoAbrir);
   }
 
   // ── Scanner gate ──────────────────────────────────────────────────────────
@@ -761,7 +777,9 @@ export function usePdvState() {
     const base = it.productId.split("__")[0];
     // Preço no cartão: a linha mostra, em cinza ao lado, o preço do OUTRO
     // método ("· cartão R$ 42,20"). Desligada, o objeto é o de sempre.
-    if (precoNoCartao) {
+    // No dividido a linha já é o preço rateado desta venda (useCart) — não
+    // há "o outro" preço a mostrar.
+    if (precoNoCartao && !splitMode) {
       const outroNoCartao = !precoNoCartao.noCartao;
       return {
         productId: it.productId, productBaseId: base, name: it.name, price: it.price, qty: it.qty, listPrice: it.listPrice,
@@ -884,7 +902,7 @@ export function usePdvState() {
     onRemove:          removeItem,
     onClear:           () => { cart.forEach(i => removeItem(i.productId)); clearCoupon(); },
     onFinalize:        handleFinalize,
-    onGenerateQuote:   handleGenerateQuote,
+    onGenerateQuote:   () => handleGenerateQuote(),
     showOrcamento:     true,
     onSaveQuote:       matconQuote.saveQuote,
     savingQuote:       matconQuote.saving,

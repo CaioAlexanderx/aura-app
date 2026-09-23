@@ -4,7 +4,7 @@
 // Contrato "NÃO VAZA": com a opção da loja desligada (as props novas
 // ausentes) o Caixa, o cadastro, a etiqueta e o orçamento renderizam como
 // hoje — nenhuma linha, campo, par de preços ou texto novo. Ligada:
-//   · carrinho: par "dinheiro e PIX · cartão" no topo, o outro preço em
+//   · carrinho: par "Dinheiro ou PIX · Cartão" no topo, o outro preço em
 //     cinza na linha, e no dividido a linha "o que falta" com a conta;
 //   · grid: "cartão R$ X" embaixo do preço;
 //   · cadastro: "Preço no dinheiro e PIX" + "Preço no cartão" automático
@@ -75,8 +75,8 @@ describe("Caixa — carrinho", () => {
     const t = flattenText(tree.toJSON());
     expect(porTestID(tree, "carrinho-par-precos")).toHaveLength(0);
     expect(porTestID(tree, "carrinho-outro-preco-cim")).toHaveLength(0);
-    expect(t).not.toContain("dinheiro e PIX");
-    expect(t).not.toMatch(/cartão/);
+    expect(t).not.toMatch(/dinheiro (e|ou) PIX/i);
+    expect(t).not.toMatch(/cartão/i);
     expect(t).toContain("Subtotal");
     tree.unmount();
   });
@@ -91,7 +91,8 @@ describe("Caixa — carrinho", () => {
     });
     expect(porTestID(tree, "carrinho-par-precos")).toHaveLength(1);
     const t = flattenText(tree.toJSON());
-    expect(t).toContain("dinheiro e PIX");
+    expect(t).toContain("Dinheiro ou PIX");
+    expect(t).toContain("Cartão");
     expect(t).toContain("R$ 422,00");
     expect(flattenText(porTestID(tree, "carrinho-outro-preco-cim")[0].children)).toBe(" · cartão R$ 42,20");
     tree.unmount();
@@ -124,7 +125,7 @@ describe("Caixa — grid", () => {
     let tree!: renderer.ReactTestRenderer;
     act(() => { tree = renderer.create(<ProductGrid products={[P]} qtyById={{}} onAdd={jest.fn()} />); });
     expect(porTestID(tree, "grid-cartao-cim")).toHaveLength(0);
-    expect(flattenText(tree.toJSON())).not.toMatch(/cartão/);
+    expect(flattenText(tree.toJSON())).not.toMatch(/cartão/i);
     tree.unmount();
   });
   test("ligada: 'cartão R$ 42,20' embaixo do preço", () => {
