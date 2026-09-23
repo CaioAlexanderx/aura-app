@@ -227,10 +227,20 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
     const code = esc(item.barcode);
     const labelName = esc(buildLabelName(item.name, item.size, item.color));
     const price = "R$ " + item.price.toFixed(2).replace(".", ",");
-    // ZONA LIVRE (texto do preco). So existe com a opcao ligada.
-    const priceCard = item.cardPrice != null && item.cardPrice > 0
-      ? '<div class="price2">cart\u00e3o R$ ' + item.cardPrice.toFixed(2).replace(".", ",") + '</div>'
-      : "";
+    // ZONA LIVRE (texto do preco). So existe com a opcao ligada. QA
+    // 23/09/2026: preco sem rotulo + "cartao R$ X" em 5,5pt era ilegivel na
+    // prateleira. Decisao do Caio: os dois precos com rotulo ("Dinheiro ou
+    // PIX" / "Cartao"), o do cartao em pelo menos 7pt. Sem cardPrice sai o
+    // <div class="price"> de sempre, byte a byte (opcao desligada).
+    const hasCard = item.cardPrice != null && item.cardPrice > 0;
+    const cardPriceTxt = hasCard ? "R$ " + (item.cardPrice as number).toFixed(2).replace(".", ",") : "";
+    const priceBlock = hasCard
+      ? '<div class="price-wrap">' +
+        '<div class="price-row"><span class="price-lbl">Dinheiro ou PIX</span><span class="price-val">' + price + '</span></div>' +
+        '<div class="price-row price-row-card"><span class="price-lbl">Cart\u00e3o</span><span class="price-val price-val-card">' + cardPriceTxt + '</span></div>' +
+        '</div>'
+      : '<div class="price">' + price + '</div>';
+    const bcInnerClass = hasCard ? "bc-inner bc-inner-card" : "bc-inner";
 
     for (let q = 0; q < item.qty; q++) {
       if (isQR) {
@@ -239,18 +249,20 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
         cells.push(
           '<td class="cell"><div class="qr-inner"><img src="' + qrUrl + '" class="qr"><div class="info">' +
           (storeHeader ? '<div class="store">' + storeHeader + '</div>' : '') +
-          '<div class="name">' + labelName + '</div><div class="price">' + price + '</div>' + priceCard + '</div></div></td>'
+          '<div class="name">' + labelName + '</div>' + priceBlock + '</div></div></td>'
         );
       } else {
         // ===== LOCKED STRUCTURE =====
         // Ordem: store -> bc-box -> name -> price
-        // NAO mudar as classes nem os parametros do SVG/JsBarcode.
+        // NAO mudar as classes nem os parametros do SVG/JsBarcode. A classe
+        // extra "bc-inner-card" (so quando ha 2o preco) e ZONA LIVRE \u2014 nao
+        // toca no .bc-box nem no SVG, so aperta padding/gap ao redor.
         cells.push(
-          '<td class="cell"><div class="bc-inner">' +
+          '<td class="cell"><div class="' + bcInnerClass + '">' +
           (storeHeader ? '<div class="store">' + storeHeader + '</div>' : '') +
           '<div class="bc-box"><svg id="bc-' + labelIdx + '" data-code="' + code + '"></svg></div>' +
           '<div class="name">' + labelName + '</div>' +
-          '<div class="price">' + price + '</div>' + priceCard + '</div></td>'
+          priceBlock + '</div></td>'
         );
         // ============================
       }
@@ -299,11 +311,27 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += '.bc-inner .bc-box svg{max-width:100%;max-height:100%;width:auto;height:auto;display:block}';
   html += '.bc-inner .name{font-size:5.5pt;font-weight:500;line-height:1.05;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#000;max-height:4mm}';
   html += '.bc-inner .price{font-size:9pt;font-weight:900;line-height:1;color:#000}';
-  // Preco no cartao (22/09/2026): so e emitido quando alguma etiqueta tem o
-  // segundo preco — sem ele o CSS continua byte-identico. Texto, nao barra.
+  // Preco no cartao (22/09/2026, ajustado no QA 23/09/2026): so e emitido
+  // quando alguma etiqueta tem o segundo preco — sem ele o CSS continua
+  // byte-identico (opcao desligada). Dois precos com rotulo; o do cartao
+  // em pelo menos 7pt (era 5,5pt sem rotulo — ilegivel na prateleira). A
+  // classe .bc-inner-card aperta padding/gap/nome SO nas etiquetas com
+  // cartao, pra abrir espaco sem encolher o .bc-box (LOCKED) nem mexer na
+  // etiqueta sem cartao.
   if (items.some(function (i) { return i.cardPrice != null && i.cardPrice > 0; })) {
-    html += '.bc-inner .price2{font-size:5.5pt;font-weight:800;line-height:1;color:#000;white-space:nowrap}';
-    html += '.qr-inner .price2{font-size:6pt;font-weight:800;white-space:nowrap;color:#000}';
+    html += '.bc-inner.bc-inner-card{padding:0.5mm 1mm;gap:0.15mm}';
+    html += '.bc-inner.bc-inner-card .store{font-size:4.5pt}';
+    html += '.bc-inner.bc-inner-card .name{font-size:5pt;max-height:3mm}';
+    html += '.price-wrap{display:flex;flex-direction:column;align-items:center;width:100%;gap:0.2mm}';
+    html += '.price-row{display:flex;align-items:baseline;gap:0.6mm;white-space:nowrap;line-height:1}';
+    html += '.price-lbl{font-size:4.5pt;font-weight:700;color:#000}';
+    html += '.price-val{font-size:8pt;font-weight:900;color:#000}';
+    html += '.price-row-card .price-val{font-size:7pt}'; // minimo legivel (QA 23/09/2026)
+    html += '.qr-inner .price-wrap{margin-top:0.4mm;gap:0.3mm}';
+    html += '.qr-inner .price-row{gap:0.8mm}';
+    html += '.qr-inner .price-lbl{font-size:5pt}';
+    html += '.qr-inner .price-val{font-size:8pt}';
+    html += '.qr-inner .price-row-card .price-val{font-size:7pt}';
   }
 
   // QR layout
