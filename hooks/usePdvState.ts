@@ -774,7 +774,9 @@ export function usePdvState() {
     const base = it.productId.split("__")[0];
     // Preço no cartão: a linha mostra, em cinza ao lado, o preço do OUTRO
     // método ("· cartão R$ 42,20"). Desligada, o objeto é o de sempre.
-    if (precoNoCartao) {
+    // No dividido a linha já é o preço rateado desta venda (useCart) — não
+    // há "o outro" preço a mostrar.
+    if (precoNoCartao && !splitMode) {
       const outroNoCartao = !precoNoCartao.noCartao;
       return {
         productId: it.productId, productBaseId: base, name: it.name, price: it.price, qty: it.qty, listPrice: it.listPrice,

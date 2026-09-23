@@ -381,3 +381,19 @@ export function editarPrecoProporcional(
   }
   return { cash: n, card: atual.cash > 0 ? r2((n * atual.card) / atual.cash) : n };
 }
+
+/**
+ * Lápis no dividido (QA 23/09/2026): a linha mostra o preço RATEADO desta
+ * venda. O novo valor vale sobre ele — dinheiro e cartão andam na mesma
+ * proporção (novo ÷ mostrado), e o rateio da venda acompanha.
+ */
+export function editarPrecoNoDividido(
+  atual: { cash: number; card: number },
+  mostrado: number,
+  novo: number,
+): { cash: number; card: number } {
+  const n = r2(novo);
+  if (!(mostrado > 0)) return { cash: n, card: n };
+  const k = n / mostrado;
+  return { cash: r2(atual.cash * k), card: r2(atual.card * k) };
+}

@@ -7,7 +7,7 @@ import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
 import {
-  CARTAO_DESLIGADO, contaComOServidor, ehCartao, editarPrecoProporcional, fraseDaConta, linhasNoMetodo, linhasRateadas,
+  CARTAO_DESLIGADO, contaComOServidor, ehCartao, editarPrecoNoDividido, editarPrecoProporcional, fraseDaConta, linhasNoMetodo, linhasRateadas,
   precoNoCartaoDoItem, r2, resolverDividido, statusDoDividido, totalComoNoServidor,
   type ConfigDoCartao, type ContaDaVenda, type DescontosDaVenda, type LinhaDoPayload, type PrecosDaLinha, type RegraDoCupom,
 } from "@/utils/precoNoCartao";
@@ -343,6 +343,32 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
     : null;
   const splitStatus = dividido && splitMode ? statusDoDividido(dividido) : null;
 
+  // ── Preço no cartão: a vista do DIVIDIDO (QA 23/09/2026) ─────────
+  // O topo mostrava o total da venda dividida com o desconto do dinheiro, e
+  // as linhas voltavam ao preço do dinheiro. Agora o carrinho mostra as
+  // linhas como vão no POST (acréscimo da parte no cartão rateado no preço
+  // de cada item) e o desconto/subtotal saem delas — subtotal − desconto =
+  // o total do topo. Sobrando pagamento, a vista para no preço do cartão
+  // (o status já avisa para diminuir). Desligada ou fora do dividido: nada.
+  let linhasDaVista: LinhaDoPayload[] | null = null;
+  let subtotalDaVista: number | null = null;
+  if (dividido && splitMode && precoNoCartao && cart.length > 0) {
+    const C = precoNoCartao.totalDinheiro;
+    const K = precoNoCartao.totalCartao;
+    const alvoVista = Math.min(Math.max(totalDaVenda, Math.min(C, K)), Math.max(C, K));
+    linhasDaVista = linhasRateadas(precosDasLinhas, alvoVista, descontosDaVenda);
+    const simDaVista = totalComoNoServidor(linhasDaVista, descontosDaVenda);
+    couponDiscount = simDaVista.cupom;
+    manualDiscountAmount = simDaVista.manual;
+    subtotalDaVista = simDaVista.subtotal;
+  }
+  const vistaDoCarrinho: CartItem[] = linhasDaVista
+    ? cartView.map(function(i, idx) {
+        const lp = linhasDaVista![idx];
+        return lp && i.qty > 0 ? { ...i, price: lp.totalDaLinha / i.qty, listPrice: lp.unit_price } : i;
+      })
+    : cartView;
+
   function addSplitPayment(entry?: Partial<PaymentEntry>) {
     if (cartaoOn && precoNoCartao) {
       // As linhas que já estão lá viram valor fixo (o que mostravam) e a
@@ -483,6 +509,23 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
   function setUnitPrice(productId: string, price: number) {
     if (!isFinite(price) || price < 0) return;
     const rounded = Math.round(price * 100) / 100;
+    // Dividido com preço no cartão: a linha mostra o preço rateado. Editar
+    // leva dinheiro e cartão na mesma proporção do que foi digitado sobre o
+    // que estava na tela. Sair do campo sem mudar (o rateado tem mais casas
+    // que o campo) não mexe em nada.
+    const mostrado = linhasDaVista ? vistaDoCarrinho.find(function(i) { return i.productId === productId; }) : undefined;
+    if (mostrado) {
+      if (Math.abs(rounded - r2(mostrado.price)) < 0.005) return;
+      setCart(function(prev) {
+        return prev.map(function(i) {
+          if (i.productId !== productId) return i;
+          const novo = editarPrecoNoDividido({ cash: i.price, card: i.cardPrice ?? i.price }, mostrado.price, rounded);
+          return { ...i, price: novo.cash, cardPrice: novo.card };
+        });
+      });
+      if (couponApplied) setCouponApplied(null);
+      return;
+    }
     setCart(function(prev) {
       return prev.map(function(i) {
         if (i.productId !== productId) return i;
@@ -741,8 +784,10 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
     // `onLotAllocations` do CartPanel; sem isso a linha do lote continua
     // aparecendo e a venda baixa FIFO.
     lotAllocations, setLotAllocations, clearLotAllocations,
-    // `cart` é a VISTA do chip (ver cartView). Sem preço no cartão, é o estado.
-    cart: cartView, payment, setPayment, lastSale, total, totalAfterCoupon: totalDaVenda, itemCount, isProcessing,
+    // `cart` é a VISTA do chip (ver cartView; no dividido, as linhas
+    // rateadas). Sem preço no cartão, é o estado.
+    cart: vistaDoCarrinho, payment, setPayment, lastSale,
+    total: subtotalDaVista ?? total, totalAfterCoupon: totalDaVenda, itemCount, isProcessing,
     // Preço no cartão: os dois totais (null com a opção desligada), o
     // desconto efetivo do cupom no método e a regra do cupom.
     precoNoCartao, couponDiscount, setCouponRule,

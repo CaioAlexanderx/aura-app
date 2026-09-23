@@ -12,7 +12,7 @@
 //   · desconto em % sobre o preço do método, em R$ o mesmo nos dois.
 // ============================================================
 import {
-  CARTAO_DESLIGADO, contaComOServidor, descontoDoCupom, ehCartao, editarPrecoProporcional, fraseDaConta, lerConfigDoCartao,
+  CARTAO_DESLIGADO, contaComOServidor, descontoDoCupom, ehCartao, editarPrecoNoDividido, editarPrecoProporcional, fraseDaConta, lerConfigDoCartao,
   linhasNoMetodo, linhasRateadas, paraCimaNos10Centavos, percentualReal, precoNoCartaoAutomatico,
   precoNoCartaoDoItem, precoNoCartaoDoProduto, resolverDividido, statusDoDividido, totalComoNoServidor,
   type DescontosDaVenda, type PrecosDaLinha,
@@ -225,6 +225,11 @@ describe("lápis do carrinho", () => {
   test("editar um preço leva o outro na mesma proporção", () => {
     expect(editarPrecoProporcional({ cash: 38, card: 42.2 }, 34.2, false)).toEqual({ cash: 34.2, card: 37.98 });
     expect(editarPrecoProporcional({ cash: 38, card: 42.2 }, 40, true)).toEqual({ card: 40, cash: 36.02 });
+  });
+  test("no dividido: o novo vale sobre o preço rateado mostrado", () => {
+    // mostrado R$ 40,00 (entre 38 e 42,20); digitou R$ 36,00 → −10% nos dois
+    expect(editarPrecoNoDividido({ cash: 38, card: 42.2 }, 40, 36)).toEqual({ cash: 34.2, card: 37.98 });
+    expect(editarPrecoNoDividido({ cash: 38, card: 42.2 }, 0, 36)).toEqual({ cash: 36, card: 36 });
   });
 });
 

@@ -125,6 +125,59 @@ describe("tela final: a conta fecha com o que o servidor gravou", () => {
   });
 });
 
+describe("dividido: o topo e as linhas fecham com o total mostrado", () => {
+  test("desconto do topo e preços das linhas são os do rateio (não os do dinheiro)", () => {
+    const tree = montar(LIGADO);
+    carrinhoDoQa();
+    divididoDoQa();
+    expect(api.totalAfterCoupon).toBe(1224.13);
+    // subtotal − desconto = total do topo
+    expect(api.total).toBe(1440.15);
+    expect(api.couponDiscount).toBe(216.02);
+    expect(Math.round((api.total - api.couponDiscount - api.manualDiscountAmount) * 100) / 100).toBe(1224.13);
+    // as linhas somam o subtotal e não estão no preço do dinheiro
+    const soma = api.cart.reduce((s, i) => s + i.price * i.qty, 0);
+    expect(Math.round(soma * 100) / 100).toBe(1440.15);
+    expect(api.cart[0].price).toBeGreaterThan(648);
+    expect(api.cart[0].price).toBeLessThan(719.3);
+    tree.unmount();
+  });
+
+  test("fora do dividido, as linhas voltam ao preço do método", () => {
+    const tree = montar(LIGADO);
+    carrinhoDoQa();
+    divididoDoQa();
+    act(() => { api.toggleSplitMode(); });
+    expect(api.cart.map((i) => i.price)).toEqual([648, 696]);
+    expect(api.couponDiscount).toBe(201.6);
+    tree.unmount();
+  });
+
+  test("lápis no dividido: o valor digitado vale sobre o preço rateado, os dois preços na mesma proporção", () => {
+    const tree = montar(LIGADO);
+    carrinhoDoQa();
+    divididoDoQa();
+    const mostrado = api.cart[0].price;
+    // sair do campo sem mudar (2 casas) não mexe em nada
+    act(() => { api.setUnitPrice("piso", Math.round(mostrado * 100) / 100); });
+    expect(api.couponApplied).not.toBeNull();
+    act(() => { api.setUnitPrice("piso", 600); });
+    const k = 600 / mostrado;
+    expect(api.cart[0].cashPrice).toBe(Math.round(648 * k * 100) / 100);
+    expect(api.cart[0].cardPrice).toBe(Math.round(719.3 * k * 100) / 100);
+    tree.unmount();
+  });
+
+  test("opção desligada: dividido de sempre, linhas no preço do cadastro", () => {
+    const tree = montar();
+    act(() => { api.addToCart({ id: "p1", name: "Camiseta", price: 100 }); });
+    act(() => { api.toggleSplitMode(); });
+    expect(api.cart[0].price).toBe(100);
+    expect(api.total).toBe(100);
+    tree.unmount();
+  });
+});
+
 describe("erro da venda nunca mostra texto de sistema", () => {
   test("404 'Rota nao encontrada' vira frase neutra", () => {
     mockFalha = Object.assign(new Error("Rota nao encontrada"), { status: 404, data: { error: "Rota nao encontrada" } });
