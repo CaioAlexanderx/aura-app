@@ -280,6 +280,29 @@ export type PurchaseOrderListResponse = {
   };
 };
 
+// "A nota do fornecedor entrou" (M4 › Compras; Aura-backend#741). A
+// conferencia do XML (DanfeImportModal) chama DEPOIS de somar o estoque.
+// quantity/unit_cost vao COMO ESTAO NA NOTA, na unidade de COMPRA (10 cx a
+// R$ 89,90): quem converte para a unidade de venda e o backend, pelo
+// purchase_factor do produto. A rota NAO mexe em estoque — grava a ultima
+// compra no produto e fecha o pedido `sent` do mesmo CNPJ.
+export type PurchaseReceiptItem = { product_id: string; quantity: number; unit_cost: number };
+
+export type PurchaseReceiptBody = {
+  supplier_name: string | null;
+  supplier_cnpj: string | null;
+  supplier_phone?: string | null;
+  invoice_number: string | null;
+  items: PurchaseReceiptItem[];
+};
+
+export type PurchaseReceiptResponse = {
+  products_updated: number;
+  ignored: number;
+  // So os pedidos que a nota mexeu: `received` = fechou; `sent` = parcial.
+  orders: PurchaseOrder[];
+};
+
 function qs(params: Record<string, string | number | undefined>): string {
   var parts: string[] = [];
   Object.keys(params).forEach(function (k) {
@@ -369,5 +392,8 @@ export var matconApi = {
   },
   updatePurchaseOrder: function (companyId: string, orderId: string, body: Partial<{ status: PurchaseOrderStatus; items: Array<{ product_id: string; quantity: number }> }>) {
     return request<{ order: PurchaseOrder }>("/companies/" + companyId + "/matcon/purchase-orders/" + orderId, { method: "PATCH", body: body, retry: 0 });
+  },
+  registerPurchaseReceipt: function (companyId: string, body: PurchaseReceiptBody) {
+    return request<PurchaseReceiptResponse>("/companies/" + companyId + "/matcon/purchase-receipts", { method: "POST", body: body, retry: 0 });
   },
 };
