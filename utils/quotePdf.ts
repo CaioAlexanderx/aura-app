@@ -27,9 +27,25 @@ import { Platform } from "react-native";
 // totais. Rotulo "Dinheiro ou PIX", nunca "a vista" (decisao do Caio:
 // debito tambem e "a vista" e paga o preco do cartao). Sem `card`, o HTML
 // sai identico ao de antes.
+//
+// 23/09/2026 (QA final Matcon): o orçamento impresso saía sem acento
+// ("ORCAMENTO", "Valido ate", "Unitario", "nao e") e o tijolo vendido por
+// milheiro saía "1 mlh". Agora a quantidade vem por extenso e no plural
+// certo ("2 sacos", "12,5 m²") e o milheiro diz quantas peças são:
+// "1 milheiro (1.000 peças)".
 // ============================================================
 
-import { fmtQty } from "@/utils/matconUnits";
+import { qtdComUnidade, ehMilheiro } from "@/utils/matconUnits";
+import { milheiroParaUnidades } from "@/components/screens/pdv/matconQty";
+
+/** Texto da coluna Quantidade do orçamento: "2 sacos", "12,5 m²",
+ *  "1 milheiro (1.000 peças)". Sem unidade, o número como sempre saiu. */
+export function quantidadeImpressa(qty: number, unit?: string | null): string {
+  if (!unit) return String(qty);
+  var texto = qtdComUnidade(qty, String(unit));
+  if (ehMilheiro(unit)) texto += " (" + qtdComUnidade(milheiroParaUnidades(qty), "pç") + ")";
+  return texto;
+}
 
 export type QuoteItem = {
   name: string;
@@ -80,7 +96,7 @@ export function buildQuoteHtml(data: QuoteData): string {
   var comCartao = !!data.card;
   var itemRows = data.items.map(function(item) {
     var subtotal = item.qty * item.unitPrice;
-    var qtyStr = item.unit ? fmtQty(item.qty, String(item.unit)) : String(item.qty);
+    var qtyStr = quantidadeImpressa(item.qty, item.unit);
     if (comCartao) {
       var cardUnit = item.cardUnitPrice != null ? item.cardUnitPrice : item.unitPrice;
       return '<tr>' +
@@ -176,10 +192,10 @@ export function buildQuoteHtml(data: QuoteData): string {
 '      </div>' +
 '    </div>' +
 '    <div class="quote-info">' +
-'      <div class="badge">ORCAMENTO</div>' +
+'      <div class="badge">ORÇAMENTO</div>' +
 '      <div class="number">' + quoteNumber + '</div>' +
 '      <div class="date">Emitido em ' + dateStr + '</div>' +
-'      <div class="valid">Valido ate ' + validStr + '</div>' +
+'      <div class="valid">Válido até ' + validStr + '</div>' +
 '    </div>' +
 '  </div>' +
 '  <div class="info-row">' +
@@ -193,7 +209,7 @@ export function buildQuoteHtml(data: QuoteData): string {
 '  </div>' +
 '  <table>' +
 '    <thead>' +
-'      <tr><th>Item</th><th>Qtd</th><th>Unitario</th><th>Subtotal</th></tr>' +
+'      <tr><th>Item</th><th>Quantidade</th><th>Preço unitário</th><th>Subtotal</th></tr>' +
 '    </thead>' +
 '    <tbody>' + itemRows + '</tbody>' +
 '  </table>' +
@@ -202,8 +218,8 @@ export function buildQuoteHtml(data: QuoteData): string {
 '  </div>' +
    (data.notes ? '<div class="notes">' + escapeHtml(data.notes) + '</div>' : '') +
 '  <div class="footer">' +
-'    <div>Orcamento gerado por <span class="brand">Aura</span> - getaura.com.br</div>' +
-'    <div style="margin-top: 4px;">Este nao e um documento fiscal.</div>' +
+'    <div>Orçamento gerado por <span class="brand">Aura</span> - getaura.com.br</div>' +
+'    <div style="margin-top: 4px;">Este orçamento não é documento fiscal.</div>' +
 '  </div>' +
 '</body>' +
 '</html>';
@@ -215,7 +231,7 @@ export function openQuotePdf(data: QuoteData) {
   if (Platform.OS === "web" && typeof window !== "undefined") {
     var win = window.open("", "_blank");
     if (!win) {
-      alert("Habilite popups pra gerar o orçamento.");
+      alert("O navegador bloqueou a janela do orçamento. Permita janelas novas para este site e toque de novo em imprimir.");
       return;
     }
     win.document.write(html);

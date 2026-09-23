@@ -24,7 +24,7 @@ import { View, Text, Pressable } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { maskCurrency } from "@/utils/masks";
-import { MATCON_UNITS, PURCHASE_UNITS, ehMilheiro, fmtQty, nomeDaUnidade, parseQtyInput } from "@/utils/matconUnits";
+import { MATCON_UNITS, PURCHASE_UNITS, ehMilheiro, qtdComUnidade, nomeDaUnidade, parseQtyInput } from "@/utils/matconUnits";
 import { UNITS } from "../types";
 import { Campo, Chip, Entrada, Radio, Secao, fr, s } from "./ui";
 import { PERFIL_PADRAO, nomeDaEmbalagem, type PerfilDoCadastro } from "./perfis";
@@ -403,11 +403,14 @@ function ComoVoceVende(p: Props) {
         ) : null}
         {ehMilheiro(unidade) ? (
           <Text style={s.hint} testID="ficha-milheiro-dica">
-            1 milheiro = 1.000 unidades. No Caixa o vendedor digita a quantidade de peças.
+            1 milheiro = 1.000 peças. No Caixa, o vendedor digita quantas peças o cliente leva.
           </Text>
         ) : null}
+        {/* 23/09/2026 (QA final Matcon): apontava para "Matcon › Configurações",
+            que não existe no menu. O caminho real é o link do quadro
+            Políticas do Caixa, em Configurações (PdvSettingsCard). */}
         <Text style={s.hint}>
-          A linha de cima são as unidades que sua loja usa (Matcon › Configurações). m² e m³ vendem com vírgula no Caixa; saco e barra, inteiros.
+          A linha de cima são as unidades que sua loja usa. Para mudar: Configurações › Materiais de construção › Unidades, entrega e parceiros. m² e m³ aceitam quantidade quebrada no Caixa (como 12,5); saco e barra, só inteira.
         </Text>
       </Campo>
 
@@ -490,8 +493,8 @@ function ComoVoceVende(p: Props) {
             <Text style={s.hint}>
               {fator
                 ? (precoDaCaixa ? precoDaCaixa + " " : "") +
-                  "Com essa frase, a nota do fornecedor entra convertida (10 " + unidadeCompra + " → " +
-                  fmtQty(Math.round(10 * fator * 1000) / 1000, unidade) + ")."
+                  "Com essa frase, a nota do fornecedor entra convertida (" + qtdComUnidade(10, unidadeCompra) + " → " +
+                  qtdComUnidade(Math.round(10 * fator * 1000) / 1000, unidade) + ")."
                 : "Quanto vem em cada " + nomeDaEmbalagem(unidadeCompra).nome +
                   "? Com esse número, a nota do fornecedor entra convertida e o estoque mostra as embalagens."}
             </Text>

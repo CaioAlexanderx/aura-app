@@ -155,6 +155,49 @@ export function nomeDaUnidade(u: string | null | undefined): string {
   return NOMES_POR_EXTENSO[norm] || norm;
 }
 
+// 23/09/2026 (QA final Matcon): a lista do Estoque mostrava "16 rolo" e
+// "2 sc". Fonte única do plural da unidade ao lado de uma quantidade: as
+// unidades que são palavra (saco, rolo, peça...) flexionam; as abreviações
+// de medida (m, m², m³, kg, g, ml, L) e o "un" de sempre ficam como estão.
+// Singular de 0 < n < 2 ("1 rolo", "1,5 tonelada", "0,5 milheiro"); zero
+// e o resto no plural ("0 rolos", "16 rolos"). Sem tradução conhecida, a
+// unidade volta como a loja escreveu.
+const PALAVRA_DA_UNIDADE: Record<string, [string, string]> = {
+  pct: ["pacote", "pacotes"],
+  cx: ["caixa", "caixas"],
+  sc: ["saco", "sacos"],
+  br: ["barra", "barras"],
+  ton: ["tonelada", "toneladas"],
+  mlh: ["milheiro", "milheiros"],
+  "pç": ["peça", "peças"],
+  rolo: ["rolo", "rolos"],
+  lata: ["lata", "latas"],
+  balde: ["balde", "baldes"],
+  par: ["par", "pares"],
+  kit: ["kit", "kits"],
+};
+
+function usaSingular(n: number): boolean {
+  var a = Math.abs(Number(n) || 0);
+  return a > 0 && a < 2;
+}
+
+/** A unidade escrita para acompanhar a quantidade `n`: (16, "rolo") →
+ *  "rolos"; (1, "sc") → "saco"; (12,5, "m²") → "m²"; (3, "un") → "un". */
+export function unidadeParaQuantidade(n: number, unit: string | null | undefined): string {
+  var bruta = String(unit || "").trim();
+  var palavras = PALAVRA_DA_UNIDADE[bruta.toLowerCase()];
+  if (!palavras) return bruta;
+  return usaSingular(n) ? palavras[0] : palavras[1];
+}
+
+/** Quantidade + unidade no plural certo: "16 rolos", "1 saco", "12,5 m²".
+ *  Sem unidade, só o número (fmtQty). */
+export function qtdComUnidade(n: number, unit: string | null | undefined): string {
+  var u = unidadeParaQuantidade(n, unit);
+  return u ? fmtQty(n) + " " + u : fmtQty(n);
+}
+
 // QA 22/09/2026: "1 caixas" no hint do carrinho (CartPanel), na calculadora
 // de ambiente e na ficha do produto — as três frases contam embalagem e
 // as três erravam o singular na mesma forma. Fonte única: "7 caixas" / "1

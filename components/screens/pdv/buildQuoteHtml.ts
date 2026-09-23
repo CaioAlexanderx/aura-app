@@ -12,7 +12,7 @@
 // `cardUnitPrice` opcionais; sem eles o HTML e o de sempre.
 // ============================================================
 
-import { fmtQty, ehMilheiro, PECAS_POR_MILHEIRO } from "@/utils/matconUnits";
+import { quantidadeImpressa } from "@/utils/quotePdf";
 
 export type QuoteItem = {
   name: string;
@@ -52,10 +52,10 @@ export function buildQuoteHtml(opts: QuoteOptions): string {
 
   var itemsHtml = opts.items.map(function(item, i) {
     var lineTotal = item.qty * item.unitPrice;
-    var qtyStr = item.unit ? fmtQty(item.qty, String(item.unit)) : String(item.qty);
-    // Milheiro: "0,5 mlh (500 un)" — o preço é por milheiro, a conta fecha
-    // com a coluna ao lado, e o cliente lê quantos tijolos vêm.
-    if (ehMilheiro(item.unit)) qtyStr += " (" + fmtQty(Math.round(item.qty * PECAS_POR_MILHEIRO)) + " un)";
+    // Milheiro: "0,5 milheiro (500 peças)" — o preço é por milheiro, a conta
+    // fecha com a coluna ao lado, e o cliente lê quantos tijolos vêm. Mesma
+    // regra do utils/quotePdf.ts (quantidadeImpressa).
+    var qtyStr = quantidadeImpressa(item.qty, item.unit);
     return '<tr>' +
       '<td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#1f2937">' + (i + 1) + '</td>' +
       '<td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#1f2937;font-weight:500">' + escHtml(item.name) + '</td>' +
@@ -69,7 +69,7 @@ export function buildQuoteHtml(opts: QuoteOptions): string {
     ? '<img src="' + opts.companyLogo + '" style="max-height:60px;max-width:180px;object-fit:contain" />'
     : '<div style="width:60px;height:60px;border-radius:14px;background:#6d28d9;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;font-weight:800">' + (opts.companyName || "A").charAt(0).toUpperCase() + '</div>';
 
-  return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Orcamento ' + quoteNum + '</title>' +
+  return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Orçamento ' + quoteNum + '</title>' +
     '<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#1f2937;background:#fff;padding:40px}' +
     '@media print{body{padding:20px}@page{margin:15mm 10mm;size:A4}}' +
     '.container{max-width:720px;margin:0 auto}' +
@@ -87,10 +87,10 @@ export function buildQuoteHtml(opts: QuoteOptions): string {
         '</div>' +
       '</div>' +
       '<div style="text-align:right">' +
-        '<div style="font-size:20px;font-weight:800;color:#6d28d9">ORCAMENTO</div>' +
+        '<div style="font-size:20px;font-weight:800;color:#6d28d9">ORÇAMENTO</div>' +
         '<div style="font-size:11px;color:#6b7280;margin-top:4px">' + quoteNum + '</div>' +
         '<div style="font-size:11px;color:#6b7280">Data: ' + dateStr + '</div>' +
-        '<div style="font-size:11px;color:#6b7280">Valido ate: ' + validStr + '</div>' +
+        '<div style="font-size:11px;color:#6b7280">Válido até: ' + validStr + '</div>' +
       '</div>' +
     '</div>' +
 
@@ -102,8 +102,8 @@ export function buildQuoteHtml(opts: QuoteOptions): string {
       '<thead><tr style="background:#f3f4f6">' +
         '<th style="padding:10px 12px;text-align:left;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;width:40px">#</th>' +
         '<th style="padding:10px 12px;text-align:left;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Item</th>' +
-        '<th style="padding:10px 12px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;width:60px">Qtd</th>' +
-        '<th style="padding:10px 12px;text-align:right;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;width:100px">Unitario</th>' +
+        '<th style="padding:10px 12px;text-align:center;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;width:120px">Quantidade</th>' +
+        '<th style="padding:10px 12px;text-align:right;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;width:100px">Preço unitário</th>' +
         '<th style="padding:10px 12px;text-align:right;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;width:100px">Total</th>' +
       '</tr></thead>' +
       '<tbody>' + itemsHtml + '</tbody>' +
@@ -112,7 +112,7 @@ export function buildQuoteHtml(opts: QuoteOptions): string {
     // Total
     '<div style="display:flex;justify-content:flex-end;margin-bottom:24px">' +
       '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:16px 24px;min-width:220px;text-align:right">' +
-        '<div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">' + opts.items.length + ' item(ns)</div>' +
+        '<div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">' + (opts.items.length === 1 ? '1 item' : opts.items.length + ' itens') + '</div>' +
         (opts.cardTotal != null
           ? '<div style="font-size:11px;color:#6b7280">Dinheiro ou PIX</div>' +
             '<div style="font-size:24px;font-weight:800;color:#1f2937">' + fmtBrl(opts.total) + '</div>' +
@@ -130,7 +130,7 @@ export function buildQuoteHtml(opts: QuoteOptions): string {
 
     // Conditions
     '<div style="margin-bottom:32px;padding:16px;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb">' +
-      '<div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Condicoes</div>' +
+      '<div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Condições</div>' +
       '<div style="font-size:11px;color:#6b7280;line-height:18px">' +
         'Este orçamento tem validade de ' + validDays + ' dias a partir da data de emissão.<br>' +
         'Valores sujeitos a alteração após o vencimento.<br>' +

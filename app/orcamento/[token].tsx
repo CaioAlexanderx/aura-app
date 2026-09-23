@@ -44,7 +44,7 @@ import {
 import { useLocalSearchParams } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { studioApi, type PublicQuote } from "@/services/studioApi";
-import { fmtQty } from "@/utils/matconUnits";
+import { qtdComUnidade } from "@/utils/matconUnits";
 import { Fonts, GOOGLE_FONTS_CSS } from "@/constants/fonts";
 
 import { tipografiaDaLoja, cssDaVitrine } from "@/constants/fonts";
@@ -330,9 +330,9 @@ export default function OrcamentoPublico() {
                     .filter(([, v]) => v != null && String(v).trim() !== "")
                     .slice(0, 4)
                 : [];
-            // Matcon mostra a unidade ("13,92 m²", "10 sc") em vez do "N×"
+            // Matcon mostra a unidade por extenso ("13,92 m²", "10 sacos") em vez do "N×"
             // de peça avulsa do Studio.
-            const qtyLabel = isMatcon ? fmtQty(it.quantity, it.unit || undefined) : it.quantity + "×";
+            const qtyLabel = isMatcon ? qtdComUnidade(it.quantity, it.unit) : it.quantity + "×";
             return (
               <View key={i} style={[s.itemBlock, i > 0 && s.itemBlockBorder]}>
                 <View style={s.itemRow}>

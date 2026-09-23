@@ -10,7 +10,7 @@ import { useValoresOcultos } from "@/stores/valoresOcultos";
 // decimal se houvesse um (JS não trunca), mas sem separador de milhar
 // pt-BR nem limite de casas. fmtQty é neutro pra estoque inteiro (a
 // imensa maioria hoje) e correto pra fracionado.
-import { fmtQty } from "@/utils/matconUnits";
+import { qtdComUnidade } from "@/utils/matconUnits";
 // 22/09/2026 (Matcon M4): "148,48 m² em 2 lotes" no lugar do número solto,
 // com a lista dos lotes abrindo no TOQUE (regra 7 do CLAUDE.md — nada de
 // hover-reveal). Produto sem lots_summary não muda em nada.
@@ -118,7 +118,7 @@ export function ProductRow({
           ) : (
             <View style={{ alignItems: "flex-end" }}>
               <View style={s.stockRow}>
-                <Text style={[s.stock, isLow && { color: Colors.red }]}>{fmtQty(product.stock)} {product.unit}</Text>
+                <Text style={[s.stock, isLow && { color: Colors.red }]}>{qtdComUnidade(product.stock, product.unit)}</Text>
                 {isLow && <View style={s.alertDot} />}
               </View>
               {lotes ? (
@@ -147,7 +147,7 @@ export function ProductRow({
           {lotes.map(l => (
             <View key={l.id} style={s.loteLinha}>
               <Text style={s.loteCod} numberOfLines={1}>lote {l.lot_code}</Text>
-              <Text style={s.loteQty}>{fmtQty(l.qty, product.unit)}</Text>
+              <Text style={s.loteQty}>{qtdComUnidade(l.qty, product.unit)}</Text>
             </View>
           ))}
         </View>
@@ -159,7 +159,7 @@ export function ProductRow({
             <View style={s.detailPhotoRow}>
               <ProductImageUpload productId={product.id} imageUrl={product.image_url} compact />
               <View style={s.detailGrid}>
-                {[["Custo", m(fmt(product.cost))], ["Margem", margin], ["Valor estoque", m(fmt(product.stock * product.cost))], ["Estoque mínimo", fmtQty(product.minStock) + " " + product.unit]].map(([l, v]) =>
+                {[["Custo", m(fmt(product.cost))], ["Margem", margin], ["Valor estoque", m(fmt(product.stock * product.cost))], ["Estoque mínimo", qtdComUnidade(product.minStock, product.unit)]].map(([l, v]) =>
                   <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text
                     style={[s.detailValue, l === "Margem" && { color: marginValue === null ? Colors.ink3 : Colors.green }]}
                     accessibilityLabel={l === "Margem" && marginValue === null ? DICA_MARGEM_SEM_CUSTO : undefined}

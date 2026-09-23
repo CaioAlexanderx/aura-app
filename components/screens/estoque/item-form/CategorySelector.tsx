@@ -42,14 +42,20 @@ export function CategoriaSeletor({
   return (
     <Pressable onPress={onAbrir} style={cs.linha} accessibilityLabel="Escolher categoria">
       <Icon name="tag" size={14} color={Colors.ink3} />
-      {rotulo ? (
+      {/* 23/09/2026 (QA final Matcon): o selo "última usada" confundia
+          quando a categoria não tinha nada a ver com o produto ("Calçados"
+          num cadastro de cimento). Agora uma linha embaixo explica de onde
+          ela veio e convida a trocar. */}
+      {rotulo && ultimaUsada ? (
+        <View style={cs.valorCaixa}>
+          <Text style={cs.valor} numberOfLines={1}>{rotulo}</Text>
+          <Text style={cs.origem} numberOfLines={2}>A mesma do último cadastro. Se não combina, toque para trocar.</Text>
+        </View>
+      ) : rotulo ? (
         <Text style={cs.valor} numberOfLines={1}>{rotulo}</Text>
       ) : (
         <Text style={cs.placeholder}>Escolher categoria</Text>
       )}
-      {rotulo && ultimaUsada ? (
-        <View style={cs.badge}><Text style={cs.badgeTxt}>última usada</Text></View>
-      ) : null}
       <Text style={cs.trocar}>{rotulo ? "Trocar" : "Escolher"}</Text>
     </Pressable>
   );
@@ -188,11 +194,8 @@ const cs = {
   },
   valor: { fontSize: 13.5, color: Colors.ink, flexShrink: 1 },
   placeholder: { fontSize: 13.5, color: Colors.ink3, flex: 1 },
-  badge: {
-    borderRadius: 5, paddingHorizontal: 6, paddingVertical: 1,
-    backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border,
-  },
-  badgeTxt: { fontSize: 10.5, color: Colors.ink3 },
+  valorCaixa: { flex: 1, minWidth: 0, gap: 2 },
+  origem: { fontSize: 11, color: Colors.ink3, lineHeight: 15 },
   trocar: { marginLeft: "auto" as any, fontSize: 12, color: Colors.violet3, fontWeight: "700" as const },
   sheetOverlay: {
     position: "absolute" as any, top: 0, left: 0, right: 0, bottom: 0,

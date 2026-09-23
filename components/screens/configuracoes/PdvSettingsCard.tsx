@@ -182,8 +182,8 @@ export function PdvSettingsCard() {
       {/* 12/05/2026: Toggle modal de troco em venda dinheiro */}
       <View style={s.row}>
         <View style={{ flex: 1 }}>
-          <Text style={s.rowLabel}>Modal de troco em dinheiro</Text>
-          <Text style={s.rowDesc}>Ao finalizar venda em dinheiro, abre um auxílio para calcular o troco (single ou parcela dinheiro em multi-pagamento)</Text>
+          <Text style={s.rowLabel}>Calculadora de troco</Text>
+          <Text style={s.rowDesc}>Ao finalizar uma venda em dinheiro, abre uma conta do troco, também quando só uma parte da venda é paga em dinheiro</Text>
         </View>
         <Switch
           value={display.cash_tender_modal_enabled !== false}
@@ -302,7 +302,12 @@ export function PdvSettingsCard() {
       <View style={s.row}>
         <View style={{ flex: 1 }}>
           <Text style={s.rowLabel}>Materiais de construção</Text>
-          <Text style={s.rowDesc}>Venda por metro, metro quadrado, saco e milheiro, com estoque fracionado e conversão de caixa para m²</Text>
+          {/* 23/09/2026 (QA final Matcon): "estoque fracionado e conversão
+              de caixa para m²" era jargão. Agora diz, na língua do lojista,
+              o que vale em todos os planos (orçamentos, entregas, compras e
+              parceiros são do Negócio e não entram aqui — premissa do
+              Essencial sem promessa do que o plano não tem). */}
+          <Text style={s.rowDesc}>Venda por metro, m², saco e milheiro, e a conta de quantas caixas de piso o cliente leva</Text>
         </View>
         <Switch
           value={display.matcon_enabled === true}

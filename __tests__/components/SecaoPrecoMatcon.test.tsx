@@ -118,7 +118,7 @@ describe("SecaoPreco — perfil Matcon: 'Como você vende'", () => {
     act(() => { porLabel(tree, "Em caixa, saco ou fardo").props.onPress(); });
     expect(texto(tree)).toContain("Compro por");
     act(() => { porLabel(tree, "Quanto vem em 1 cx, em un").props.onChangeText("100"); });
-    expect(texto(tree)).toContain("10 cx → 1.000 un");
+    expect(texto(tree)).toContain("10 caixas → 1.000 un");
     tree.unmount();
   });
 
@@ -129,7 +129,7 @@ describe("SecaoPreco — perfil Matcon: 'Como você vende'", () => {
     act(() => { porLabel(tree, "Quanto vem em 1 cx, em m²").props.onChangeText("2,32"); });
     const t = texto(tree);
     expect(t).toMatch(/A caixa sai a R\$\s?72,38 de custo e R\$\s?127,37 na venda\./);
-    expect(t).toContain("10 cx → 23,2 m²");
+    expect(t).toContain("10 caixas → 23,2 m²");
 
     act(() => { porLabel(tree, "Do mesmo jeito que vendo").props.onPress(); });
     expect(texto(tree)).not.toContain("Compro por");

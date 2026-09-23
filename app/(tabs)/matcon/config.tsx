@@ -32,7 +32,10 @@ import { useAuthStore } from "@/stores/auth";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { pdvSettingsApi, type PdvSettings } from "@/services/api";
 import { readMatconSettings, type MatconSettings } from "@/constants/matcon";
-import { MATCON_UNITS } from "@/utils/matconUnits";
+// 23/09/2026 (QA final Matcon): os chips mostravam a sigla ("sc", "br",
+// "mlh", "pç", "ton"). Agora o nome por extenso, igual ao cadastro de
+// produto (nomeDaUnidade). O valor gravado continua a sigla.
+import { MATCON_UNITS, nomeDaUnidade } from "@/utils/matconUnits";
 
 // Ordem de exibição: os 8 primeiros de MATCON_UNITS ficam sempre visíveis
 // (batem com o default de constants/matcon.ts); o resto ("+ rolo, lata,
@@ -195,7 +198,7 @@ export default function MatconConfigScreen() {
       {!enabled ? (
         <View style={st.gate}>
           <View style={st.gateIcon}><Icon name="lock" size={20} color={Colors.violet3} /></View>
-          <Text style={st.gateTitle}>Ligue &quot;Materiais de construção&quot; em Configurações › Caixa</Text>
+          <Text style={st.gateTitle}>Ligue &quot;Materiais de construção&quot; em Configurações, no quadro Políticas do Caixa</Text>
           <Text style={st.gateDesc}>Essas configurações só valem depois que o módulo estiver ligado para esta loja.</Text>
           <Pressable onPress={() => router.push("/configuracoes" as any)} style={st.gateBtn} testID="matcon-cfg-ir-config">
             <Text style={st.gateBtnText}>Abrir Configurações</Text>
@@ -209,21 +212,21 @@ export default function MatconConfigScreen() {
           <View style={st.card}>
             {/* ── Unidades ── */}
             <View style={st.frase}>
-              <Text style={st.fraseText}>Minha loja vende em</Text>
+              <Text style={st.fraseText}>Minha loja vende por</Text>
               <View style={st.chipRow}>
                 {UNITS_PRIMARY.map((u) => (
                   <Pressable key={u} onPress={() => toggleUnit(u)} style={[st.chip, draft.units.includes(u) && st.chipOn]} testID={`matcon-cfg-unidade-${u}`}>
-                    <Text style={[st.chipText, draft.units.includes(u) && st.chipTextOn]}>{u}</Text>
+                    <Text style={[st.chipText, draft.units.includes(u) && st.chipTextOn]}>{nomeDaUnidade(u)}</Text>
                   </Pressable>
                 ))}
                 {!showExtraUnits ? (
                   <Pressable onPress={() => setShowExtraUnits(true)} style={st.chipMore} testID="matcon-cfg-unidades-mais">
-                    <Text style={st.chipMoreText}>+ {UNITS_EXTRA.join(", ")}</Text>
+                    <Text style={st.chipMoreText}>+ {UNITS_EXTRA.map(nomeDaUnidade).join(", ")}</Text>
                   </Pressable>
                 ) : (
                   UNITS_EXTRA.map((u) => (
                     <Pressable key={u} onPress={() => toggleUnit(u)} style={[st.chip, draft.units.includes(u) && st.chipOn]} testID={`matcon-cfg-unidade-${u}`}>
-                      <Text style={[st.chipText, draft.units.includes(u) && st.chipTextOn]}>{u}</Text>
+                      <Text style={[st.chipText, draft.units.includes(u) && st.chipTextOn]}>{nomeDaUnidade(u)}</Text>
                     </Pressable>
                   ))
                 )}
@@ -261,7 +264,7 @@ export default function MatconConfigScreen() {
                   thumbColor={draft.roundToPackage ? Colors.violet : Colors.ink3}
                   testID="matcon-cfg-arredondar"
                 />{" "}
-                arredondo para a caixa cheia e mostro a sobra.
+                mostro quantas caixas fechadas ele leva e quanto sobra.
               </Text>
             </View>
 
@@ -331,15 +334,14 @@ export default function MatconConfigScreen() {
             {/* ── Profissionais Parceiros (M3) ── */}
             <View style={st.frase}>
               <Text style={st.fraseText}>
-                Tenho profissionais parceiros{" "}
+                Tenho profissionais parceiros que indicam clientes: pedreiro, pintor, eletricista, arquiteto e quem mais eu cadastrar{" "}
                 <Switch
                   value={draft.clubEnabled}
                   onValueChange={(v) => set({ clubEnabled: v })}
                   trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
                   thumbColor={draft.clubEnabled ? Colors.violet : Colors.ink3}
                   testID="matcon-cfg-clube"
-                />{" "}
-                e ele vale também para pintor, eletricista, arquiteto e quem mais eu colocar nele.
+                />
               </Text>
             </View>
 
