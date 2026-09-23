@@ -89,6 +89,9 @@ function mapApiProduct(p: any): Product {
     has_variants: hasVariants,
     variant_barcodes: Array.isArray(p.variant_barcodes) ? p.variant_barcodes : [],
     ncm: p.ncm || "",
+    // 23/09/2026 (QA producao): faltava mapear created_at — o sort "recent"
+    // do Estoque (estoque.tsx) dependia dele e sempre recebia undefined.
+    created_at: p.created_at || null,
   };
 }
 

@@ -15,6 +15,8 @@ import { fmtQty } from "@/utils/matconUnits";
 // com a lista dos lotes abrindo no TOQUE (regra 7 do CLAUDE.md — nada de
 // hover-reveal). Produto sem lots_summary não muda em nada.
 import { resumoDeLotes } from "@/utils/matconLots";
+// 23/09/2026 (QA producao, item 9): margem 100% em produto sem custo.
+import { computeMargin, DICA_MARGEM_SEM_CUSTO } from "@/utils/productMargin";
 
 var COLOR_NAMES: Record<string, string> = {
   '#000000':'Preto','#ffffff':'Branco','#ff0000':'Vermelho','#c0c0c0':'Prata',
@@ -56,7 +58,10 @@ export function ProductRow({
   const isService = isServiceProduct(product);
   // Servico nao tem estoque, entao nunca esta "baixo"
   const isLow = !isService && product.stock <= product.minStock;
-  const margin = product.price > 0 ? ((product.price - product.cost) / product.price * 100).toFixed(0) : "0";
+  // 23/09/2026 (QA producao, item 9): sem custo cadastrado (null ou 0) a
+  // margem nao existe — "—" em vez do 100% enganoso de antes.
+  const marginValue = computeMargin(product.price, product.cost);
+  const margin = marginValue === null ? "—" : marginValue.toFixed(0) + "%";
   const duracao = isService ? minutosParaRotulo(product.durationMinutes) : "";
   const colorName = product.color ? hexToName(product.color) : "";
   const hasVariant = !!(product.color || product.size);
@@ -154,8 +159,11 @@ export function ProductRow({
             <View style={s.detailPhotoRow}>
               <ProductImageUpload productId={product.id} imageUrl={product.image_url} compact />
               <View style={s.detailGrid}>
-                {[["Custo", m(fmt(product.cost))], ["Margem", margin + "%"], ["Valor estoque", m(fmt(product.stock * product.cost))], ["Estoque mínimo", fmtQty(product.minStock) + " " + product.unit]].map(([l, v]) =>
-                  <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text style={[s.detailValue, l === "Margem" && { color: Colors.green }]}>{v}</Text></View>
+                {[["Custo", m(fmt(product.cost))], ["Margem", margin], ["Valor estoque", m(fmt(product.stock * product.cost))], ["Estoque mínimo", fmtQty(product.minStock) + " " + product.unit]].map(([l, v]) =>
+                  <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text
+                    style={[s.detailValue, l === "Margem" && { color: marginValue === null ? Colors.ink3 : Colors.green }]}
+                    accessibilityLabel={l === "Margem" && marginValue === null ? DICA_MARGEM_SEM_CUSTO : undefined}
+                  >{v}</Text></View>
                 )}
               </View>
             </View>
@@ -165,10 +173,13 @@ export function ProductRow({
                   45 min") e aparecia aqui embaixo, em itálico, junto das
                   observações. Virou coluna na migration 323 — e passa a ter
                   um lugar próprio, ao lado do preço. */}
-              {([["Preço", m(fmt(product.price))], ["Custo", m(fmt(product.cost))], ["Margem", margin + "%"]] as Array<[string, string]>)
+              {([["Preço", m(fmt(product.price))], ["Custo", m(fmt(product.cost))], ["Margem", margin]] as Array<[string, string]>)
                 .concat(duracao ? [["Duração", duracao]] : [])
                 .map(([l, v]) =>
-                  <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text style={[s.detailValue, l === "Margem" && { color: Colors.green }]}>{v}</Text></View>
+                  <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text
+                    style={[s.detailValue, l === "Margem" && { color: marginValue === null ? Colors.ink3 : Colors.green }]}
+                    accessibilityLabel={l === "Margem" && marginValue === null ? DICA_MARGEM_SEM_CUSTO : undefined}
+                  >{v}</Text></View>
                 )}
             </View>
           )}

@@ -20,6 +20,8 @@ import { fmtQty } from "@/utils/matconUnits";
 // 22/09/2026 (Matcon M4): com lots_summary o estoque vira "148,48 m² em 2
 // lotes" e a pilha abre no clique — nunca no hover (regra 7 do CLAUDE.md).
 import { resumoDeLotes } from "@/utils/matconLots";
+// 23/09/2026 (QA producao, item 9): margem 100% em produto sem custo.
+import { computeMargin, DICA_MARGEM_SEM_CUSTO } from "@/utils/productMargin";
 
 const fmtBRL = (n: number) =>
   "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -92,8 +94,7 @@ export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bul
         <tbody>
           {items.map(p => {
             const price = (p as any).price || 0;
-            const cost = p.cost || 0;
-            const margin = price > 0 ? ((price - cost) / price) * 100 : 0;
+            const margin = computeMargin(price, p.cost);
             const low = p.stock <= p.minStock && p.unit !== "srv";
             const sku = (p as any).sku || p.code || (p as any).barcode || "—";
             const variant = [p.color, p.size].filter(Boolean).join(" · ") || p.unit || "—";
@@ -174,7 +175,7 @@ export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bul
                     fontFamily: Fonts.mono, fontSize: 14, fontWeight: 600,
                     color: low ? (isDark ? "#f87171" : "#dc2626") : C.ink,
                     fontVariantNumeric: "tabular-nums",
-                  } as any}>{fmtQty(p.stock)}<span style={{ fontSize: 11, opacity: 0.7, marginLeft: 2 } as any}>{p.unit || "un"}</span></span>
+                  } as any}>{fmtQty(p.stock)}{" "}<span style={{ fontFamily: Fonts.body, fontSize: 11, fontWeight: 400, opacity: 0.7 } as any}>{p.unit || "un"}</span></span>
                   {lotes && (
                     <div>
                       <button
@@ -209,9 +210,22 @@ export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bul
                 <td style={{
                   padding: "14px 14px", textAlign: "right",
                   fontFamily: Fonts.mono, fontSize: 12,
-                  color: margin >= 30 ? (isDark ? "#34d399" : "#059669") : margin >= 10 ? "#fbbf24" : (isDark ? "#f87171" : "#dc2626"),
+                  color: margin === null ? C.ink3 : margin >= 30 ? (isDark ? "#34d399" : "#059669") : margin >= 10 ? "#fbbf24" : (isDark ? "#f87171" : "#dc2626"),
                   fontWeight: 600, fontVariantNumeric: "tabular-nums",
-                } as any}>{margin > 0 ? margin.toFixed(0) + "%" : "—"}</td>
+                } as any}>
+                  {margin === null ? (
+                    // 23/09/2026 (QA producao, item 9): sem custo cadastrado
+                    // a margem nao existe — "—" em vez de 100% enganoso.
+                    // title = tooltip no hover; aria-label cobre leitor de
+                    // tela; sublinhado pontilhado sinaliza pra quem usa
+                    // touch (sem depender só de hover, regra 7 do CLAUDE.md).
+                    <span
+                      title={DICA_MARGEM_SEM_CUSTO}
+                      aria-label={DICA_MARGEM_SEM_CUSTO}
+                      style={{ cursor: "help", textDecoration: "underline", textDecorationStyle: "dotted", textDecorationColor: C.ink3 } as any}
+                    >—</span>
+                  ) : margin.toFixed(0) + "%"}
+                </td>
                 <td style={{ padding: "14px 14px", textAlign: "right" } as any}>
                   <div className="aura-est-row-actions" style={{
                     display: "flex", justifyContent: "flex-end", gap: 4, opacity: 0,
