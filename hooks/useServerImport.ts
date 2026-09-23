@@ -18,13 +18,19 @@
 // planilha" na barra de ações (ao lado de "Importar DANFE"), pedido
 // depois que a cliente com 11 produtos já cadastrados não conseguia
 // achar como importar (o estado vazio só aparece com 0 produtos).
+//
+// 23/09/2026 (QA): PRODUTOS saíram deste hook — agora têm prévia antes de
+// gravar e relatório depois (hooks/useImportProdutos.ts +
+// ImportPlanilhaModal). Aqui ficam clientes e lançamentos, com o mesmo
+// comportamento de antes, e a leitura do arquivo (lerArquivoPlanilha),
+// compartilhada com a importação de produtos.
 // ============================================================
 import { useState } from "react";
 import { Platform } from "react-native";
 import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { BASE_URL } from "@/services/api";
-import { buildImportExtras, csvTextToMatrix, escolherAba, rowsFromMatrix, type AbaPlanilha } from "@/utils/importPlanilha";
+import { buildImportExtras, csvTextToMatrixComLinhas, escolherAba, rowsFromMatrix, type AbaPlanilha } from "@/utils/importPlanilha";
 
 export type ServerImportEntity = "products" | "customers" | "transactions";
 
@@ -36,12 +42,19 @@ const ROUTE_MAP: Record<string, string> = {
   transactions: "transactions/import",
 };
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-const MAX_ROWS = 6000; // mesmo limite do backend
+export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+export const MAX_ROWS = 6000; // mesmo limite do backend
 
-type LeituraPlanilha = { matrix: unknown[][]; nomeAba?: string; primeiraAba?: boolean };
+export type LeituraPlanilha = {
+  matrix: unknown[][];
+  nomeAba?: string;
+  primeiraAba?: boolean;
+  /** Linha do arquivo (1 = primeira) do índice i da matriz — a prévia da
+   *  importação aponta "linha 235" como o lojista vê no Excel. */
+  linhaDoArquivo: (i: number) => number;
+};
 
-async function readFileAsMatrix(file: File): Promise<LeituraPlanilha> {
+export async function lerArquivoPlanilha(file: File): Promise<LeituraPlanilha> {
   const name = file.name.toLowerCase();
   if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
     const buf = await file.arrayBuffer();
@@ -61,15 +74,25 @@ async function readFileAsMatrix(file: File): Promise<LeituraPlanilha> {
       matriz: xlsxLib.utils.sheet_to_json(wb.Sheets[nome], { header: 1, raw: true, defval: "" }) as unknown[][],
     }));
     const escolhida = escolherAba(abas);
-    if (!escolhida) return { matrix: [] };
+    if (!escolhida) return { matrix: [], linhaDoArquivo: i => i + 1 };
+    // sheet_to_json(header:1) mantém as linhas vazias (conferido com a
+    // planilha real da cliente: 2.051 linhas, a 3ª vazia) e começa no
+    // início do intervalo da aba — normalmente A1, mas não sempre.
+    let inicio = 0;
+    try {
+      const ref = wb.Sheets[escolhida.nome]["!ref"];
+      if (ref) inicio = xlsxLib.utils.decode_range(ref).s.r;
+    } catch { inicio = 0; }
     return {
       matrix: escolhida.matriz,
       nomeAba: escolhida.nome,
       primeiraAba: wb.SheetNames[0] === escolhida.nome,
+      linhaDoArquivo: i => inicio + i + 1,
     };
   }
   const text = await file.text();
-  return { matrix: csvTextToMatrix(text) };
+  const { matriz, linhas } = csvTextToMatrixComLinhas(text);
+  return { matrix: matriz, linhaDoArquivo: i => linhas[i] ?? i + 1 };
 }
 
 export function useServerImport(entity: ServerImportEntity, onComplete?: (result: ServerImportResult) => void) {
@@ -99,7 +122,7 @@ export function useServerImport(entity: ServerImportEntity, onComplete?: (result
       try {
         let leitura: LeituraPlanilha;
         try {
-          leitura = await readFileAsMatrix(file);
+          leitura = await lerArquivoPlanilha(file);
         } catch {
           toast.error("Não conseguimos ler essa planilha. Confira se é um arquivo Excel (.xlsx) ou CSV válido.");
           return;

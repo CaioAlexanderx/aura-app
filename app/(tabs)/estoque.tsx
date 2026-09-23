@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useEffect } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions } from "react-native";
 import { Colors, useColors, useThemeStore } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import { useProducts } from "@/hooks/useProducts";
@@ -11,8 +11,10 @@ import { EmptyState } from "@/components/EmptyState";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ImportExportBar } from "@/components/ImportExportBar";
-import { ServerImport } from "@/components/ServerImport";
-import { useServerImport } from "@/hooks/useServerImport";
+import { useImportProdutos } from "@/hooks/useImportProdutos";
+import { ImportPlanilhaModal } from "@/components/screens/estoque/ImportPlanilhaModal";
+import { ImportarMenu, OPCOES_IMPORTAR } from "@/components/screens/estoque/ImportarMenu";
+import { WebPortal } from "@/components/WebPortal";
 import { ItemFormModal } from "@/components/screens/estoque/ItemFormModal";
 import { ProductRow } from "@/components/screens/estoque/ProductRow";
 import { AlertsList } from "@/components/screens/estoque/AlertsList";
@@ -324,7 +326,10 @@ export default function EstoqueScreen() {
   // tinha itens cadastrados não achava como importar mais. Mesmo fluxo do
   // ServerImport (useServerImport), mesmo gate de plano/permissão do
   // "Importar DANFE" (!isDemo).
-  const { loading: xlsxImporting, handleImport: handleXlsxImport } = useServerImport("products", handleImportComplete);
+  // 23/09/2026 (QA): a planilha agora passa por uma conferência antes de
+  // gravar e termina num relatório (ImportPlanilhaModal). Um controlador
+  // só, usado pelo menu "Importar" da barra e pelo estado vazio.
+  const importPlanilha = useImportProdutos(handleImportComplete);
 
   // Scanner popup: TextInput inline simples (sem ScannerInput pra evitar
   // conflitos de auto-focus + overlay). Foco é dado via ref.focus() quando
@@ -521,8 +526,11 @@ export default function EstoqueScreen() {
     );
   }
 
-  // Helper: 5 botões de ação do header (reusados em wide e narrow)
+  // Helper: botões de ação do header (reusados em wide e narrow)
   // 12/05/2026: "Selecionar" volta como toggle do bulkMode (Eryca).
+  // 23/09/2026: chamado como função ({ActionButtons()}), não como
+  // <ActionButtons />: como componente, cada render da tela criava um tipo
+  // novo e remontava os botões — o menu "Importar" fechava sozinho.
   const ActionButtons = () => (
     <>
       <OlhoValores variant="botao" />
@@ -536,17 +544,15 @@ export default function EstoqueScreen() {
           {!isMobileNarrow && <Text style={s.batchBtnText}>+ Em lote</Text>}
         </Pressable>
       )}
+      {/* 23/09/2026 (QA): "Importar DANFE" + "Importar planilha" viraram
+          um botão só, com menu explicando cada origem. Mesmo gate (!isDemo). */}
       {!isDemo && (
-        <Pressable onPress={() => setShowDanfeModal(true)} style={[s.danfeBtn, isMobileNarrow && s.btnIconOnly]}>
-          <Icon name="file_text" size={14} color={Colors.violet3} />
-          {!isMobileNarrow && <Text style={s.danfeBtnText}>Importar DANFE</Text>}
-        </Pressable>
-      )}
-      {!isDemo && (
-        <Pressable onPress={handleXlsxImport} disabled={xlsxImporting} style={[s.danfeBtn, isMobileNarrow && s.btnIconOnly, xlsxImporting && { opacity: 0.6 }]}>
-          {xlsxImporting ? <ActivityIndicator size="small" color={Colors.violet3} /> : <Icon name="upload" size={14} color={Colors.violet3} />}
-          {!isMobileNarrow && <Text style={s.danfeBtnText}>{xlsxImporting ? "Importando..." : "Importar planilha"}</Text>}
-        </Pressable>
+        <ImportarMenu
+          onNota={() => setShowDanfeModal(true)}
+          onPlanilha={importPlanilha.escolherArquivo}
+          ocupado={importPlanilha.ocupado}
+          compacto={isMobileNarrow}
+        />
       )}
       {/* 12/05/2026: botao Selecionar — toggle bulk mode. So aparece se ja tem produto e usuario nao e demo. */}
       {!isDemo && products.length > 0 && (
@@ -624,7 +630,7 @@ export default function EstoqueScreen() {
             />
             <View style={[s.headerRow, { marginBottom: 18, marginTop: 4 }]}>
               <View style={s.headerActions}>
-                <ActionButtons />
+                {ActionButtons()}
               </View>
             </View>
           </>
@@ -634,7 +640,7 @@ export default function EstoqueScreen() {
               <Text style={s.pageTitle}>Estoque</Text>
             </View>
             <View style={s.headerActions}>
-              <ActionButtons />
+              {ActionButtons()}
             </View>
           </View>
         )}
@@ -691,15 +697,17 @@ export default function EstoqueScreen() {
             </View>
             <View style={s.emptyImport}>
               <View style={s.emptyImportIcon}><Icon name="file_text" size={18} color={Colors.violet3} /></View>
-              <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Importar DANFE (XML)</Text><Text style={s.emptyImportDesc}>Cadastre todos os produtos de uma nota fiscal — selecione o arquivo .xml gerado pela SEFAZ</Text></View>
+              <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Importar nota do fornecedor</Text><Text style={s.emptyImportDesc}>{OPCOES_IMPORTAR.nota.texto} (o arquivo XML que o fornecedor manda junto com a nota)</Text></View>
               <Pressable onPress={() => setShowDanfeModal(true)} style={s.batchBtnSmall}>
                 <Text style={s.batchBtnSmallText}>Abrir</Text>
               </Pressable>
             </View>
             <View style={s.emptyImport}>
               <View style={s.emptyImportIcon}><Icon name="upload" size={18} color={Colors.violet3} /></View>
-              <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Importar planilha</Text><Text style={s.emptyImportDesc}>Cadastre centenas de produtos via planilha Excel ou CSV</Text></View>
-              <ServerImport entity="products" onComplete={handleImportComplete} />
+              <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Importar planilha</Text><Text style={s.emptyImportDesc}>{OPCOES_IMPORTAR.planilha.texto}, a partir de uma planilha do Excel ou CSV. Você confere tudo antes de gravar.</Text></View>
+              <Pressable onPress={importPlanilha.escolherArquivo} disabled={importPlanilha.ocupado} style={[s.batchBtnSmall, importPlanilha.ocupado && { opacity: 0.6 }]} testID="estoque-vazio-planilha">
+                <Text style={s.batchBtnSmallText}>Escolher planilha</Text>
+              </Pressable>
             </View>
           </View>
         )}
@@ -869,6 +877,18 @@ export default function EstoqueScreen() {
           onSuccess={() => handleImportComplete()}
         />
       )}
+      <WebPortal active={importPlanilha.aberto}>
+        <ImportPlanilhaModal
+          fase={importPlanilha.fase}
+          resumo={importPlanilha.resumo}
+          resultado={importPlanilha.resultado}
+          erro={importPlanilha.erro}
+          nomeArquivo={importPlanilha.nomeArquivo}
+          onImportar={importPlanilha.importar}
+          onFechar={importPlanilha.fechar}
+          onBaixarProblemas={importPlanilha.baixarProblemas}
+        />
+      </WebPortal>
       <CategoriesModal
         visible={categoriesModal.open}
         initialType={categoriesModal.initialType}

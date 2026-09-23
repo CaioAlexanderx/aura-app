@@ -327,7 +327,7 @@ export function DanfeImportModal({
       {step === "upload" && (
         <View style={[s.panel, s.panelUpload]}>
           <View style={s.panelHeader}>
-            <Text style={s.panelTitle}>Importar DANFE (NF-e)</Text>
+            <Text style={s.panelTitle}>Importar nota do fornecedor</Text>
             <Pressable onPress={handleClose} style={s.closeBtn}>
               <Text style={s.closeBtnTxt}>✕</Text>
             </Pressable>
@@ -337,10 +337,10 @@ export function DanfeImportModal({
             <View style={s.uploadIcon}>
               <Text style={s.uploadIconTxt}>📄</Text>
             </View>
-            <Text style={s.uploadTitle}>Selecione o XML da NF-e</Text>
+            <Text style={s.uploadTitle}>Escolha o arquivo XML da nota</Text>
             <Text style={s.uploadSub}>
-              Selecione o arquivo .xml gerado pela SEFAZ para importar os
-              produtos automaticamente.
+              É o arquivo que o fornecedor manda junto com a nota (termina em
+              .xml). Cadastramos os produtos e damos entrada no estoque.
             </Text>
 
             {error && (
