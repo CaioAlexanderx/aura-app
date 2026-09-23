@@ -41,10 +41,22 @@
 //   · Regra 7: ações sempre visíveis no card, sem hover.
 //   · "Nova entrega" fica de fora de propósito — a entrega nasce da
 //     venda (conversão de orçamento ou finalização no Caixa).
+//
+// QA 23/09/2026 (a rota ainda respondia 404 em produção):
+//   · Sem tentativas por cima do client (RETRY_DA_TELA). "Carregando…" só
+//     enquanto carrega; falhou → <EsteiraErro> com "Tentar de novo" — o
+//     erro nunca vira "Nenhuma entrega hoje".
+//   · O estado vazio explica de onde a entrega nasce: da venda feita a
+//     partir de um orçamento, ou do botão "Criar entrega" no detalhe da
+//     venda (components/screens/vendas/SaleDetailModal.tsx, POST
+//     .../deliveries do contrato).
+//   · `?dia=pending` na URL abre direto em "Com saldo a entregar" — é o
+//     destino do selo "saldo a entregar" do detalhe da venda.
+//   · "NF-e" virou "nota fiscal" no card (texto sem sigla).
 // ============================================================
 import { useMemo, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, TextInput } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
@@ -61,8 +73,9 @@ import {
 import { readMatconSettings, type MatconSettings } from "@/constants/matcon";
 import { parseQtyInput, fmtQty } from "@/utils/matconUnits";
 import {
-  EsteiraMatcon, EsteiraCard, EsteiraVazia, EsteiraVaziaDestaque, type EsteiraEstacao,
+  EsteiraMatcon, EsteiraCard, EsteiraVazia, EsteiraVaziaDestaque, EsteiraErro, type EsteiraEstacao,
 } from "@/components/matcon/EsteiraMatcon";
+import { RETRY_DA_TELA, fraseDoErroDeCarga, textoDoErro } from "@/components/matcon/erroMatcon";
 import {
   agruparPorDia, progressoDoItem, rotuloProgresso, seloSaldo, proximaEtapa, seloEstacao,
 } from "@/components/matcon/deliveriesUtil";
@@ -77,6 +90,11 @@ const fmtMoneyCurto = (n: number | string | null | undefined) =>
   `R$ ${Math.round(Number(n || 0)).toLocaleString("pt-BR")}`;
 
 type DiaFiltro = "today" | "tomorrow" | "pending" | "late";
+
+function diaDaUrl(v: unknown): DiaFiltro {
+  const s = Array.isArray(v) ? v[0] : v;
+  return s === "tomorrow" || s === "pending" || s === "late" ? s : "today";
+}
 
 const CHIPS: { key: DiaFiltro; label: string }[] = [
   { key: "today", label: "Hoje" },
@@ -106,7 +124,8 @@ function MatconEntregasScreen() {
   const matcon = useMemo(() => readMatconSettings(settings as Partial<MatconSettings>), [settings]);
   const enabled = matcon.matcon_enabled;
 
-  const [dia, setDia] = useState<DiaFiltro>("today");
+  const params = useLocalSearchParams<{ dia?: string }>();
+  const [dia, setDia] = useState<DiaFiltro>(() => diaDaUrl(params?.dia));
   const [stage, setStage] = useState<DeliveryStage | "all">("all");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [parcialDe, setParcialDe] = useState<Delivery | null>(null);
@@ -116,7 +135,7 @@ function MatconEntregasScreen() {
   const [emitirDe, setEmitirDe] = useState<Delivery | null>(null);
   const [danfeBusyId, setDanfeBusyId] = useState<string | null>(null);
 
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
     queryKey: ["matcon-deliveries", company?.id, dia, stage],
     queryFn: () =>
       matconApi.listDeliveries(company!.id, {
@@ -126,7 +145,10 @@ function MatconEntregasScreen() {
       } as DeliveryListFilters),
     enabled: !!company?.id && enabled,
     staleTime: 15_000,
+    retry: RETRY_DA_TELA,
   });
+  // Falhou e não há nada guardado para mostrar: bloco de erro, não lista vazia.
+  const falhou = isError && !data;
 
   const resumo = data?.summary;
   const grupos = useMemo(() => agruparPorDia(data?.deliveries || []), [data]);
@@ -134,7 +156,7 @@ function MatconEntregasScreen() {
   const estacoes: EsteiraEstacao[] = [
     { key: "separating", label: "Separando", count: resumo ? resumo.separating.count : null, money: resumo ? fmtMoneyCurto(resumo.separating.total) : null, tone: "violet", active: stage === "separating", onPress: () => alternarEstacao("separating") },
     { key: "ready", label: "Pronto", count: resumo ? resumo.ready.count : null, money: resumo ? fmtMoneyCurto(resumo.ready.total) : null, tone: "violet", active: stage === "ready", onPress: () => alternarEstacao("ready") },
-    { key: "out", label: "Saiu pra entrega", count: resumo ? resumo.out.count : null, money: resumo ? fmtMoneyCurto(resumo.out.total) : null, tone: "amber", active: stage === "out", onPress: () => alternarEstacao("out") },
+    { key: "out", label: "Saiu para entrega", count: resumo ? resumo.out.count : null, money: resumo ? fmtMoneyCurto(resumo.out.total) : null, tone: "amber", active: stage === "out", onPress: () => alternarEstacao("out") },
     { key: "delivered", label: "Entregue hoje", count: resumo ? resumo.delivered_today.count : null, money: resumo ? fmtMoneyCurto(resumo.delivered_today.total) : null, tone: "green", active: stage === "delivered", onPress: () => alternarEstacao("delivered") },
   ];
 
@@ -156,7 +178,7 @@ function MatconEntregasScreen() {
       await matconApi.updateDelivery(company.id, delivery.id, { stage: proxima.stage });
       invalidate();
     } catch (e: any) {
-      toast.error(e?.data?.error || "Não deu para avançar a entrega");
+      toast.error(textoDoErro(e, "Não consegui mudar a etapa da entrega. Tente de novo em instantes."));
     } finally {
       setBusyId(null);
     }
@@ -170,7 +192,7 @@ function MatconEntregasScreen() {
       await matconApi.updateDelivery(company.id, delivery.id, { delivered_by: valor || null });
       invalidate();
     } catch (e: any) {
-      toast.error(e?.data?.error || "Não deu para salvar quem entregou");
+      toast.error(textoDoErro(e, "Não consegui salvar quem entregou. Tente de novo em instantes."));
     }
   }
 
@@ -185,7 +207,7 @@ function MatconEntregasScreen() {
     try {
       await openDanfeTermica(company.id, delivery.nfe_emission_id);
     } catch (e: any) {
-      toast.error(e?.message || "Não foi possível abrir a nota");
+      toast.error(textoDoErro(e, "Não consegui abrir a nota fiscal. Tente de novo em instantes."));
     } finally {
       setDanfeBusyId(null);
     }
@@ -203,7 +225,7 @@ function MatconEntregasScreen() {
       invalidate();
       toast.success("Entrega registrada. A próxima já está criada com o saldo.");
     } catch (e: any) {
-      toast.error(e?.data?.error || "Não deu para registrar a entrega parcial");
+      toast.error(textoDoErro(e, "Não consegui registrar a entrega parcial. Tente de novo em instantes."));
     } finally {
       setBusyId(null);
     }
@@ -235,9 +257,9 @@ function MatconEntregasScreen() {
       <ScreenHero
         eyebrow="Matcon"
         title="Entregas"
-        live
+        live={!!resumo}
         subtitle={
-          !resumo ? "Carregando…" : (
+          !resumo ? (falhou ? "Não consegui carregar as entregas agora." : isLoading ? "Carregando…" : undefined) : (
             <Text>
               {fmtMoneyCurto(materialParado)} em material vendido esperando caminhão ·{" "}
               <Text style={{ color: pedidosComSaldo > 0 ? Colors.amber : Colors.ink3, fontWeight: pedidosComSaldo > 0 ? "700" : "400" }}>
@@ -265,8 +287,16 @@ function MatconEntregasScreen() {
       </View>
 
       {isLoading ? (
-        <View style={st.loadingBox}><ActivityIndicator color={Colors.violet3} /></View>
-      ) : grupos.length === 0 ? (
+        <View style={st.loadingBox} testID="matcon-entregas-carregando"><ActivityIndicator color={Colors.violet3} /></View>
+      ) : falhou ? (
+        <EsteiraErro
+          testID="matcon-entregas-erro"
+          titulo="Não consegui carregar as entregas."
+          frase={fraseDoErroDeCarga(error)}
+          onTentarDeNovo={() => { refetch(); }}
+          tentando={isFetching}
+        />
+      ) : !data ? null : grupos.length === 0 ? (
         <EsteiraVazia
           testID="matcon-entregas-vazio"
           titulo={
@@ -277,10 +307,10 @@ function MatconEntregasScreen() {
           }
           frase={
             dia === "today" ? (
-              <Text>Quando um orçamento virar pedido, a entrega aparece aqui, em <EsteiraVaziaDestaque>Separando</EsteiraVaziaDestaque>.</Text>
-            ) : dia === "tomorrow" ? "Quando uma entrega for agendada para amanhã, ela aparece aqui."
+              <Text>A entrega nasce da venda: quando a venda sai de um orçamento que virou pedido, ou quando você toca em <EsteiraVaziaDestaque>Criar entrega</EsteiraVaziaDestaque> no detalhe da venda, em Vendas. Ela aparece aqui, em <EsteiraVaziaDestaque>Separando</EsteiraVaziaDestaque>.</Text>
+            ) : dia === "tomorrow" ? "Quando uma entrega for marcada para amanhã, ela aparece aqui."
               : dia === "pending" ? "Toda entrega dividida em duas viagens aparece aqui até fechar o saldo."
-                : "Nenhuma entrega atrasada agora — ótimo sinal."
+                : "Tudo o que estava marcado para antes de hoje já saiu."
           }
           acao={
             <Pressable onPress={() => router.push("/matcon/orcamentos" as any)} style={st.newBtn} testID="matcon-vazio-ir-orcamentos">
@@ -363,14 +393,17 @@ function DeliveryCard({ delivery, busy, danfeBusy, onAvancar, onParcial, onSalva
     ? (STATUS_MAP[delivery.nfe_status]?.label || delivery.nfe_status).toUpperCase()
     : "PROCESSANDO";
 
+  // sale_number não está no contrato das entregas (só em matconApi.ts):
+  // sem ele, "Pedido" sozinho em vez de "Pedido #—".
+  const rotuloPedido = delivery.sale_number != null ? `Pedido #${delivery.sale_number}` : "Pedido";
   const meta = [
-    `Pedido #${delivery.sale_number ?? "—"}`,
+    rotuloPedido,
     delivery.address || "",
     delivery.customer_phone || "",
   ].filter(Boolean).join(" · ");
 
   const linhaSequencia = segundaViagem
-    ? [`Pedido #${delivery.sale_number ?? "—"}`, `${delivery.sequence}ª entrega`, "criada sozinha com o que faltou"].join(" · ")
+    ? [rotuloPedido, `${delivery.sequence}ª entrega`, "criada sozinha com o que faltou"].join(" · ")
     : meta;
 
   return (
@@ -405,7 +438,7 @@ function DeliveryCard({ delivery, busy, danfeBusy, onAvancar, onParcial, onSalva
             {podeEmitirNfe && (
               <Pressable onPress={onEmitirNfe} style={[st.miniBtn, st.miniBtnPrimary]} testID={`matcon-emitir-nfe-${delivery.id}`}>
                 <Icon name="file_text" size={13} color="#fff" />
-                <Text style={[st.miniBtnText, { color: "#fff" }]}>{notaFalhou ? "Tentar de novo" : "Emitir NF-e"}</Text>
+                <Text style={[st.miniBtnText, { color: "#fff" }]}>{notaFalhou ? "Tentar de novo" : "Emitir nota fiscal"}</Text>
               </Pressable>
             )}
             {!!proxima && (
@@ -427,7 +460,7 @@ function DeliveryCard({ delivery, busy, danfeBusy, onAvancar, onParcial, onSalva
         {temNota && (
           <View style={[st.badge, { borderColor: corNota }]} testID={`matcon-selo-nfe-${delivery.id}`}>
             <Text style={[st.badgeText, { color: corNota }]}>
-              NF-E #{delivery.nfe_number ?? "—"} · {statusNotaLabel}
+              {delivery.nfe_number != null ? `NOTA FISCAL #${delivery.nfe_number}` : "NOTA FISCAL"} · {statusNotaLabel}
             </Text>
           </View>
         )}

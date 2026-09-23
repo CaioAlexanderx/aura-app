@@ -43,6 +43,17 @@
 //     enviado" com "N de M un" por item — por isso não existe um botão
 //     "marcar como recebido" aqui: a tela só lê o que o backend já casou.
 //   · Regra 7: ações sempre visíveis no card, sem hover.
+//
+// QA 23/09/2026 (a rota ainda respondia 404 em produção e a tela dizia
+// "Nada faltando hoje" com 23 alertas de estoque baixo):
+//   · Sem tentativas por cima do client (RETRY_DA_TELA). Cada query tem o
+//     seu estado: sugestões que falharam → <EsteiraErro> em "Falta
+//     comprar"; pedidos que falharam → <EsteiraErro> em "Pedido enviado" e
+//     "Recebido". "Nada faltando hoje" SÓ quando a API devolveu a lista
+//     vazia, e a frase explica de onde vem a sugestão.
+//   · Pedido montado e não enviado (`draft`, que o contrato já devolve)
+//     aparece no topo de "Falta comprar" com "Continuar pedido" — antes ele
+//     sumia ao fechar a folha e o dono montava outro por cima.
 // ============================================================
 import { useMemo, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, TextInput } from "react-native";
@@ -65,8 +76,9 @@ import { parseQtyInput, fmtQty } from "@/utils/matconUnits";
 import { openWhatsApp } from "@/utils/whatsapp";
 import { fmtDiaMesDeTimestamp } from "@/components/matcon/quotesUtil";
 import {
-  EsteiraMatcon, EsteiraCard, EsteiraVazia, EsteiraVaziaDestaque, type EsteiraEstacao,
+  EsteiraMatcon, EsteiraCard, EsteiraVazia, EsteiraVaziaDestaque, EsteiraErro, type EsteiraEstacao,
 } from "@/components/matcon/EsteiraMatcon";
+import { RETRY_DA_TELA, fraseDoErroDeCarga, textoDoErro } from "@/components/matcon/erroMatcon";
 import {
   agruparPorFornecedor, fraseDaSugestao, textoPedidoWhatsApp, progressoDoPedido,
   fmtMoneyApprox, type FornecedorSugestoes,
@@ -112,6 +124,7 @@ function MatconComprasScreen() {
     queryFn: () => matconApi.purchaseSuggestions(company!.id),
     enabled: !!company?.id && enabled,
     staleTime: 30_000,
+    retry: RETRY_DA_TELA,
   });
 
   const ordersQuery = useQuery({
@@ -119,7 +132,13 @@ function MatconComprasScreen() {
     queryFn: () => matconApi.listPurchaseOrders(company!.id, {}),
     enabled: !!company?.id && enabled,
     staleTime: 15_000,
+    retry: RETRY_DA_TELA,
   });
+
+  // Falhou e não há nada guardado para mostrar: bloco de erro, nunca a
+  // lista vazia (o "Nada faltando hoje" do QA de 23/09 era um 404).
+  const sugestoesFalharam = suggestionsQuery.isError && !suggestionsQuery.data;
+  const pedidosFalharam = ordersQuery.isError && !ordersQuery.data;
 
   function invalidate() {
     qc.invalidateQueries({ queryKey: ["matcon-purchase-suggestions"] });
@@ -137,6 +156,12 @@ function MatconComprasScreen() {
   const fornecedoresFiltrados = useMemo(
     () => (fornecedor ? fornecedores.filter((f) => f.key === fornecedor) : fornecedores),
     [fornecedores, fornecedor],
+  );
+
+  // Montado e ainda não enviado: volta a aparecer em "Falta comprar".
+  const pedidosRascunho = useMemo(
+    () => ((ordersQuery.data?.orders || []) as PurchaseOrder[]).filter((o) => o.status === "draft"),
+    [ordersQuery.data],
   );
 
   const pedidosEnviados = useMemo(
@@ -188,13 +213,15 @@ function MatconComprasScreen() {
       invalidate();
       setPedidoAberto(res.order);
     } catch (e: any) {
-      toast.error(e?.data?.error || "Não deu para montar o pedido");
+      toast.error(textoDoErro(e, "Não consegui montar o pedido. Tente de novo em instantes."));
     } finally {
       setBusyKey(null);
     }
   }
 
-  const isLoading = enabled && (suggestionsQuery.isLoading || ordersQuery.isLoading);
+  // Carregando por estação: "Falta comprar" depende das sugestões (e dos
+  // rascunhos); "Pedido enviado"/"Recebido", só dos pedidos.
+  const carregandoEstacao = enabled && (estacao === "sugestao" ? suggestionsQuery.isLoading : ordersQuery.isLoading);
   const isFetching = suggestionsQuery.isFetching || ordersQuery.isFetching;
 
   // ── Tela ──────────────────────────────────────────────────
@@ -224,9 +251,12 @@ function MatconComprasScreen() {
       <ScreenHero
         eyebrow="Matcon"
         title="Compras"
-        live
+        live={!!resumoSugestao && !!resumoPedidos}
         subtitle={
-          !resumoSugestao || !resumoPedidos ? "Carregando…" : (
+          !resumoSugestao || !resumoPedidos ? (
+            sugestoesFalharam || pedidosFalharam ? "Não consegui carregar tudo agora — veja o aviso abaixo."
+              : suggestionsQuery.isLoading || ordersQuery.isLoading ? "Carregando…" : undefined
+          ) : (
             <Text>
               {fmtMoneyCurto(resumoSugestao.total_est_cost)} de material faltando para a loja voltar ao mínimo ·{" "}
               <Text style={{ color: itensAbaixoDoMinimo > 0 ? Colors.amber : Colors.ink3, fontWeight: itensAbaixoDoMinimo > 0 ? "700" : "400" }}>
@@ -259,16 +289,38 @@ function MatconComprasScreen() {
         </View>
       )}
 
-      {isLoading ? (
-        <View style={st.loadingBox}><ActivityIndicator color={Colors.violet3} /></View>
+      {carregandoEstacao ? (
+        <View style={st.loadingBox} testID="matcon-compras-carregando"><ActivityIndicator color={Colors.violet3} /></View>
       ) : (
         <>
+          {estacao === "sugestao" && pedidosRascunho.length > 0 && (
+            <View style={{ gap: 8, marginBottom: 12 }} testID="matcon-lista-rascunho">
+              {pedidosRascunho.map((order) => (
+                <PedidoRascunhoCard key={order.id} order={order} onAbrir={() => setPedidoAberto(order)} />
+              ))}
+            </View>
+          )}
+
           {estacao === "sugestao" && (
-            fornecedoresFiltrados.length === 0 ? (
+            sugestoesFalharam ? (
+              <EsteiraErro
+                testID="matcon-compras-erro-sugestao"
+                titulo="Não consegui ver o que falta comprar."
+                frase={fraseDoErroDeCarga(suggestionsQuery.error)}
+                onTentarDeNovo={() => { suggestionsQuery.refetch(); }}
+                tentando={suggestionsQuery.isFetching}
+              />
+            ) : !suggestionsQuery.data ? null : fornecedoresFiltrados.length === 0 ? (
               <EsteiraVazia
                 testID="matcon-compras-vazio"
                 titulo="Nada faltando hoje."
-                frase="Quando um produto passar do estoque mínimo, ele aparece aqui com a quantidade sugerida — e você monta o pedido em um toque."
+                frase="Sugerimos compra quando o estoque de um produto fica abaixo do mínimo cadastrado, ou quando as vendas dos últimos 30 dias mostram que ele vai acabar. Hoje nenhum produto está assim."
+                acao={
+                  <Pressable onPress={() => router.push("/estoque" as any)} style={st.ghostBtn} testID="matcon-compras-vazio-ir-estoque">
+                    <Icon name="package" size={14} color={Colors.ink} />
+                    <Text style={st.ghostBtnText}>Conferir o estoque mínimo</Text>
+                  </Pressable>
+                }
               />
             ) : (
               <View style={{ gap: 8 }} testID="matcon-lista-sugestao">
@@ -286,12 +338,22 @@ function MatconComprasScreen() {
             )
           )}
 
-          {estacao === "enviado" && (
+          {estacao !== "sugestao" && pedidosFalharam && (
+            <EsteiraErro
+              testID="matcon-compras-erro-pedidos"
+              titulo="Não consegui carregar os pedidos de compra."
+              frase={fraseDoErroDeCarga(ordersQuery.error)}
+              onTentarDeNovo={() => { ordersQuery.refetch(); }}
+              tentando={ordersQuery.isFetching}
+            />
+          )}
+
+          {estacao === "enviado" && !!ordersQuery.data && (
             pedidosEnviados.length === 0 ? (
               <EsteiraVazia
                 testID="matcon-compras-enviado-vazio"
                 titulo="Nenhum pedido enviado."
-                frase={<Text>Toque em <EsteiraVaziaDestaque>Montar pedido</EsteiraVaziaDestaque> num item que falta comprar para começar um.</Text>}
+                frase={<Text>Em <EsteiraVaziaDestaque>Falta comprar</EsteiraVaziaDestaque>, toque em <EsteiraVaziaDestaque>Montar pedido</EsteiraVaziaDestaque> no fornecedor e depois em <EsteiraVaziaDestaque>Enviar no WhatsApp para o fornecedor</EsteiraVaziaDestaque> ou <EsteiraVaziaDestaque>Marcar como enviado</EsteiraVaziaDestaque>.</Text>}
               />
             ) : (
               <View style={{ gap: 8 }} testID="matcon-lista-enviado">
@@ -302,7 +364,7 @@ function MatconComprasScreen() {
             )
           )}
 
-          {estacao === "recebido" && (
+          {estacao === "recebido" && !!ordersQuery.data && (
             pedidosRecebidos.length === 0 ? (
               <EsteiraVazia
                 testID="matcon-compras-recebido-vazio"
@@ -401,6 +463,33 @@ function FornecedorCard({ grupo, expandido, onVerItens, onMontarPedido, busy }: 
           <Text style={st.avisoTexto}>Acaba em {grupo.min_days_to_stockout} {grupo.min_days_to_stockout === 1 ? "dia" : "dias"} no ritmo de venda de hoje.</Text>
         </View>
       )}
+    </EsteiraCard>
+  );
+}
+
+// ── Card de pedido montado e ainda não enviado (draft) ───────
+function PedidoRascunhoCard({ order, onAbrir }: { order: PurchaseOrder; onAbrir: () => void }) {
+  const n = (order.items || []).length;
+  return (
+    <EsteiraCard
+      testID={`matcon-pedido-rascunho-${order.id}`}
+      tone="violet"
+      right={
+        <>
+          <View style={[st.badge, { borderColor: Colors.violet3 }]}>
+            <Text style={[st.badgeText, { color: Colors.violet3 }]}>Falta enviar</Text>
+          </View>
+          <Text style={st.total}>{fmtMoneyCurto(order.total_est)}</Text>
+        </>
+      }
+      actions={
+        <Pressable onPress={onAbrir} style={[st.miniBtn, st.miniBtnPrimary]} testID={`matcon-continuar-pedido-${order.id}`}>
+          <Text style={[st.miniBtnText, { color: "#fff" }]}>Continuar pedido</Text>
+        </Pressable>
+      }
+    >
+      <Text style={st.cliente}>{order.supplier_name || "Fornecedor não identificado"}</Text>
+      <Text style={st.meta}>Pedido #{order.number} · {n} {n === 1 ? "item" : "itens"} · montado e ainda não enviado</Text>
     </EsteiraCard>
   );
 }
@@ -530,7 +619,7 @@ function PedidoSheet({ order, companyId, nomeDaLoja, onClose, onSalvo }: {
       toast.success(`Pedido #${res.order.number} marcado como enviado`);
       onClose();
     } catch (e: any) {
-      toast.error(e?.data?.error || "Não deu para marcar o pedido como enviado");
+      toast.error(textoDoErro(e, "Não consegui marcar o pedido como enviado. Tente de novo em instantes."));
     } finally {
       setBusy(false);
     }

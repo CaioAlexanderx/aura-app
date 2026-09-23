@@ -21,7 +21,7 @@ import renderer, { act } from "react-test-renderer";
 
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
 jest.mock("@/components/Toast", () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
-jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }));
+jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() }, useLocalSearchParams: () => ({}) }));
 jest.mock("@/services/api", () => ({ request: jest.fn() }));
 
 // pdv_settings controlável por teste — mesmo padrão de CartPanelMatcon.test.tsx.

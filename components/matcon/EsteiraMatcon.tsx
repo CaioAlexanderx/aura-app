@@ -21,7 +21,7 @@
 //      (estação a ~62% da largura, sem as setas "›"); a PÁGINA continua
 //      sem rolar de lado.
 // ============================================================
-import { View, Text, StyleSheet, Pressable, ScrollView, useWindowDimensions } from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 
@@ -36,6 +36,9 @@ export type EsteiraEstacao = {
   label: string;
   /** null enquanto o resumo não chegou — a estação mostra "–" e não zero. */
   count: number | null;
+  /** Número grande já formatado no lugar da contagem (ex.: "R$ 12.480"),
+   *  para a estação cujo número é dinheiro. Ganha de `count`. */
+  valorPrincipal?: string | null;
   /** Dinheiro parado na estação, já formatado ("R$ 18.400"). */
   money?: string | null;
   tone?: EsteiraTom;
@@ -97,7 +100,7 @@ function Estacao({ estacao, ultima, estreito, largura }: {
   const conteudo = (
     <>
       <Text style={[st.estN, tom !== "violet" && { color: cor }]}>
-        {estacao.count === null ? "–" : estacao.count}
+        {estacao.valorPrincipal ? estacao.valorPrincipal : estacao.count === null ? "–" : estacao.count}
       </Text>
       <Text style={st.estL} numberOfLines={2}>{estacao.label}</Text>
       {!!estacao.money && (
@@ -124,7 +127,7 @@ function Estacao({ estacao, ultima, estreito, largura }: {
       onPress={estacao.onPress}
       style={estilo}
       accessibilityRole="button"
-      accessibilityLabel={`${estacao.label}: ${estacao.count === null ? "carregando" : estacao.count}`}
+      accessibilityLabel={`${estacao.label}: ${estacao.valorPrincipal || (estacao.count === null ? "sem número" : estacao.count)}`}
       testID={`matcon-estacao-${estacao.key}`}
     >
       {conteudo}
@@ -200,7 +203,36 @@ export function EsteiraVazia({ titulo, frase, acao, testID }: {
   );
 }
 
-/** Palavra destacada dentro da frase do estado vazio ("Salvar orçamento"). */
+/**
+ * A chamada falhou (QA 23/09/2026): nunca mostrar a lista vazia no lugar
+ * do erro. Título diz O QUE não carregou; a frase diz o que fazer; o botão
+ * "Tentar de novo" fica sempre visível (regra 7, nada de hover).
+ */
+export function EsteiraErro({ titulo, frase, onTentarDeNovo, tentando, testID }: {
+  titulo: string;
+  frase: string;
+  onTentarDeNovo: () => void;
+  tentando?: boolean;
+  testID?: string;
+}) {
+  return (
+    <View style={[st.vazia, st.erro]} testID={testID} accessibilityRole="alert">
+      <Text style={st.erroTitulo}>{titulo}</Text>
+      <Text style={st.vaziaFrase}>{frase}</Text>
+      <Pressable
+        onPress={tentando ? undefined : onTentarDeNovo}
+        disabled={!!tentando}
+        style={[st.erroBtn, tentando && { opacity: 0.6 }]}
+        accessibilityRole="button"
+        testID={testID ? `${testID}-tentar` : undefined}
+      >
+        {tentando ? <ActivityIndicator size="small" color="#fff" /> : <Text style={st.erroBtnTexto}>Tentar de novo</Text>}
+      </Pressable>
+    </View>
+  );
+}
+
+/** Palavra destacada dentro da frase do estado vazio ("Orçamento"). */
 export function EsteiraVaziaDestaque({ children }: { children: React.ReactNode }) {
   return <Text style={st.vaziaDestaque}>{children}</Text>;
 }
@@ -242,4 +274,9 @@ const st = StyleSheet.create({
   vaziaFrase: { fontSize: 13, color: Colors.ink2, textAlign: "center", maxWidth: 420, lineHeight: 19 },
   vaziaDestaque: { color: Colors.violet3, fontWeight: "700" },
   vaziaAcao: { marginTop: 8 },
+
+  erro: { borderStyle: "solid", borderColor: Colors.amber + "73", backgroundColor: Colors.amberD },
+  erroTitulo: { fontSize: 16, fontWeight: "700", color: Colors.ink, textAlign: "center" },
+  erroBtn: { marginTop: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", minWidth: 150, backgroundColor: Colors.violet, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 },
+  erroBtnTexto: { fontSize: 13, color: "#fff", fontWeight: "700" },
 });

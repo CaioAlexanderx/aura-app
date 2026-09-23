@@ -13,7 +13,7 @@ import renderer, { act } from "react-test-renderer";
 
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
 jest.mock("@/components/Toast", () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
-jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }));
+jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() }, useLocalSearchParams: () => ({}) }));
 jest.mock("@/services/api", () => ({ request: jest.fn() }));
 
 let mockPdvSettings: any = { matcon_enabled: true };
@@ -97,7 +97,7 @@ describe("/matcon/entregas — botão Emitir NF-e (Matcon M2)", () => {
     const texto = flatten(tree.toJSON());
 
     expect(tree.root.findAllByProps({ testID: "matcon-emitir-nfe-entrega-1" }).length).toBeGreaterThan(0);
-    expect(texto).toContain("Emitir NF-e");
+    expect(texto).toContain("Emitir nota fiscal");
     expect(tree.root.findAllByProps({ testID: "matcon-selo-nfe-entrega-1" }).length).toBe(0);
     expect(tree.root.findAllByProps({ testID: "matcon-ver-danfe-entrega-1" }).length).toBe(0);
 
@@ -125,7 +125,7 @@ describe("/matcon/entregas — botão Emitir NF-e (Matcon M2)", () => {
     const texto = flatten(tree.toJSON());
 
     expect(tree.root.findAllByProps({ testID: "matcon-selo-nfe-entrega-1" }).length).toBeGreaterThan(0);
-    expect(texto).toContain("NF-E #1204");
+    expect(texto).toContain("NOTA FISCAL #1204");
     expect(texto).toContain("AUTORIZADA");
     expect(tree.root.findAllByProps({ testID: "matcon-ver-danfe-entrega-1" }).length).toBeGreaterThan(0);
     expect(texto).toContain("Ver nota");

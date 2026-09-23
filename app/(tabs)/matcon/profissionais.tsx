@@ -37,6 +37,13 @@
 //     profissional — isso só existe no detalhe (getProfessional), que
 //     custaria uma chamada por card. Por isso o card mostra o resumo do
 //     mês, não a lista de vendas recentes do mockup.
+//
+// QA 23/09/2026 (a rota ainda respondia 404 em produção):
+//   · Sem tentativas por cima do client (RETRY_DA_TELA). "Carregando…" só
+//     enquanto carrega; falhou → <EsteiraErro> com "Tentar de novo" — o
+//     erro nunca vira "Nenhum parceiro ainda".
+//   · O vazio nomeia o botão exato da ficha ("Marcar como parceiro") e
+//     leva até Clientes. "pts" virou "pontos" (texto sem abreviação).
 // ============================================================
 import { useMemo, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, TextInput } from "react-native";
@@ -53,7 +60,8 @@ import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { matconApi, TRADE_LABELS, type Professional } from "@/services/matconApi";
 import { readMatconSettings, type MatconSettings } from "@/constants/matcon";
 import { openWhatsApp } from "@/utils/whatsapp";
-import { EsteiraMatcon, EsteiraCard, EsteiraVazia, EsteiraVaziaDestaque, type EsteiraEstacao } from "@/components/matcon/EsteiraMatcon";
+import { EsteiraMatcon, EsteiraCard, EsteiraVazia, EsteiraVaziaDestaque, EsteiraErro, type EsteiraEstacao } from "@/components/matcon/EsteiraMatcon";
+import { RETRY_DA_TELA, fraseDoErroDeCarga, textoDoErro } from "@/components/matcon/erroMatcon";
 import {
   cupomPossivel, rotuloResumo, textoExtratoWhatsApp, textoChamarDeVolta, textoCupomGerado,
   diasSemCompra, ehNovo, fmtMoneyCurto, fmtPontos,
@@ -90,12 +98,15 @@ function MatconProfissionaisScreen() {
 
   const clubOn = matcon.matcon_enabled && matcon.matcon_club_enabled;
 
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
     queryKey: ["matcon-professionals", company?.id, filtro, q],
     queryFn: () => matconApi.listProfessionals(company!.id, { filter: filtro, q: q || undefined }),
     enabled: !!company?.id && clubOn,
     staleTime: 30_000,
+    retry: RETRY_DA_TELA,
   });
+  // Falhou e não há nada guardado para mostrar: bloco de erro, não lista vazia.
+  const falhou = isError && !data;
 
   const resumo = data?.summary;
   const profissionais = data?.professionals || [];
@@ -105,9 +116,11 @@ function MatconProfissionaisScreen() {
   }
 
   const estacoes: EsteiraEstacao[] = resumo ? [
-    { key: "vendido", label: "Vendido por indicação", count: null, money: fmtMoneyCurto(resumo.referred_total_month), tone: "violet" },
+    // O número desta estação é dinheiro: vai grande, no lugar da contagem
+    // (antes ficava um "–" que parecia carregando para sempre).
+    { key: "vendido", label: "Vendido por indicação este mês", count: null, valorPrincipal: fmtMoneyCurto(resumo.referred_total_month), money: null, tone: "violet" },
     { key: "ativos", label: "Parceiros ativos", count: resumo.active_count, money: null, tone: "violet" },
-    { key: "resgates", label: "Cupons pra gerar", count: resumo.pending_redeems, money: null, tone: resumo.pending_redeems > 0 ? "amber" : "violet" },
+    { key: "resgates", label: "Cupons para gerar", count: resumo.pending_redeems, money: null, tone: resumo.pending_redeems > 0 ? "amber" : "violet" },
   ] : [];
 
   // ── Ações do card ─────────────────────────────────────────
@@ -140,7 +153,7 @@ function MatconProfissionaisScreen() {
         toast.error(`${p.customer_name} não tem telefone cadastrado — avise pelo código ${res.coupon_code}`);
       }
     } catch (e: any) {
-      toast.error(e?.data?.error || "Não deu para gerar o cupom");
+      toast.error(textoDoErro(e, "Não consegui gerar o cupom. Tente de novo em instantes."));
     } finally {
       setBusyId(null);
     }
@@ -186,13 +199,13 @@ function MatconProfissionaisScreen() {
       <ScreenHero
         eyebrow="Matcon"
         title="Profissionais Parceiros"
-        live
+        live={!!resumo}
         subtitle={
-          !resumo ? "Carregando…" : (
+          !resumo ? (falhou ? "Não consegui carregar os profissionais parceiros agora." : isLoading ? "Carregando…" : undefined) : (
             <Text>
               {fmtMoneyCurto(resumo.referred_total_month)} vendidos por indicação este mês · {resumo.active_count} {resumo.active_count === 1 ? "parceiro ativo" : "parceiros ativos"}
               {resumo.pending_redeems > 0 && (
-                <Text style={{ color: Colors.amber, fontWeight: "700" }}> · {resumo.pending_redeems} {resumo.pending_redeems === 1 ? "cupom pra gerar" : "cupons pra gerar"}</Text>
+                <Text style={{ color: Colors.amber, fontWeight: "700" }}> · {resumo.pending_redeems} {resumo.pending_redeems === 1 ? "cupom para gerar" : "cupons para gerar"}</Text>
               )}
             </Text>
           )
@@ -235,16 +248,32 @@ function MatconProfissionaisScreen() {
       </View>
 
       {isLoading ? (
-        <View style={st.loadingBox}><ActivityIndicator color={Colors.violet3} /></View>
-      ) : profissionais.length === 0 ? (
+        <View style={st.loadingBox} testID="matcon-profissionais-carregando"><ActivityIndicator color={Colors.violet3} /></View>
+      ) : falhou ? (
+        <EsteiraErro
+          testID="matcon-profissionais-erro"
+          titulo="Não consegui carregar os profissionais parceiros."
+          frase={fraseDoErroDeCarga(error)}
+          onTentarDeNovo={() => { refetch(); }}
+          tentando={isFetching}
+        />
+      ) : !data ? null : profissionais.length === 0 ? (
         <EsteiraVazia
           testID="matcon-profissionais-vazio"
-          titulo={q ? "Nada encontrado." : "Nenhum parceiro ainda."}
+          titulo={q ? "Nada encontrado." : filtro === "active" ? "Nenhum parceiro ainda." : filtro === "new" ? "Nenhum parceiro novo." : "Ninguém parado."}
           frase={
             q ? "Confira o nome, o telefone ou a profissão, ou tente outra busca."
               : filtro === "inactive_60d" ? "Ninguém parado há 60 dias sem compra — sinal bom."
                 : filtro === "new" ? "Nenhum parceiro novo nos últimos 30 dias."
-                  : <Text>Abra a ficha do profissional em Clientes, toque em <EsteiraVaziaDestaque>Marcar como parceiro</EsteiraVaziaDestaque> e diga que foi ele quem indicou na próxima venda — ele aparece aqui.</Text>
+                  : <Text>Em Clientes, abra a ficha do profissional e toque em <EsteiraVaziaDestaque>Marcar como parceiro</EsteiraVaziaDestaque>. Na próxima venda que ele indicar, toque em <EsteiraVaziaDestaque>+ quem indicou?</EsteiraVaziaDestaque> no Caixa — ele aparece aqui.</Text>
+          }
+          acao={
+            !q && filtro === "active" ? (
+              <Pressable onPress={() => router.push("/clientes" as any)} style={st.ghostBtn} testID="matcon-prof-vazio-ir-clientes">
+                <Icon name="users" size={14} color={Colors.ink} />
+                <Text style={st.ghostBtnText}>Abrir Clientes</Text>
+              </Pressable>
+            ) : undefined
           }
         />
       ) : (
@@ -286,7 +315,7 @@ function ProfessionalCard({ p, matcon, busy, onWhats, onGerarCupom, onChamarDeVo
       tone={!inativo && cupons > 0 ? "amber" : undefined}
       dim={inativo}
       right={
-        <Text style={st.pontos}>{fmtPontos(p.points_balance)} pts</Text>
+        <Text style={st.pontos}>{fmtPontos(p.points_balance)} {p.points_balance === 1 ? "ponto" : "pontos"}</Text>
       }
       actions={
         busy ? <ActivityIndicator size="small" color={Colors.violet3} /> : inativo ? (
