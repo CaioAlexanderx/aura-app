@@ -20,6 +20,13 @@ import { Platform } from "react-native";
 // Este e o caminho que o botao "Imprimir orcamento" do Caixa usa de fato
 // (openQuotePdf) — o components/screens/pdv/buildQuoteHtml.ts recebeu a
 // mesma mudanca pra os dois nao divergirem.
+//
+// 22/09/2026 (preco no cartao, docs/mockups/preco-no-cartao.html tela 6):
+// com `card` (opcao da loja ligada), cada linha imprime os dois precos —
+// o de cima no dinheiro ou PIX, o de baixo no cartao — e o rodape tem dois
+// totais. Rotulo "Dinheiro ou PIX", nunca "a vista" (decisao do Caio:
+// debito tambem e "a vista" e paga o preco do cartao). Sem `card`, o HTML
+// sai identico ao de antes.
 // ============================================================
 
 import { fmtQty } from "@/utils/matconUnits";
@@ -29,6 +36,8 @@ export type QuoteItem = {
   qty: number;
   unitPrice: number;
   unit?: string | null;
+  /** Preco no cartao da linha — so com a opcao ligada. */
+  cardUnitPrice?: number;
 };
 
 export type QuoteData = {
@@ -44,6 +53,8 @@ export type QuoteData = {
   companyPhone?: string | null;
   companyAddress?: string | null;
   validityDays?: number;  // padrao 7 dias
+  /** Preco no cartao: totais no cartao. Ausente = orcamento de um preco so. */
+  card?: { total: number; totalAfterDiscount?: number; discount?: number } | null;
 };
 
 function fmt(n: number) {
@@ -66,9 +77,19 @@ export function buildQuoteHtml(data: QuoteData): string {
   var dateStr = now.toLocaleDateString("pt-BR");
   var validStr = validUntil.toLocaleDateString("pt-BR");
 
+  var comCartao = !!data.card;
   var itemRows = data.items.map(function(item) {
     var subtotal = item.qty * item.unitPrice;
     var qtyStr = item.unit ? fmtQty(item.qty, String(item.unit)) : String(item.qty);
+    if (comCartao) {
+      var cardUnit = item.cardUnitPrice != null ? item.cardUnitPrice : item.unitPrice;
+      return '<tr>' +
+        '<td>' + escapeHtml(item.name) + '</td>' +
+        '<td class="num">' + escapeHtml(qtyStr) + '</td>' +
+        '<td class="num">' + fmt(item.unitPrice) + '<small class="cartao">cart\u00e3o ' + fmt(cardUnit) + '</small></td>' +
+        '<td class="num">' + fmt(subtotal) + '<small class="cartao">cart\u00e3o ' + fmt(item.qty * cardUnit) + '</small></td>' +
+        '</tr>';
+    }
     return '<tr>' +
       '<td>' + escapeHtml(item.name) + '</td>' +
       '<td class="num">' + escapeHtml(qtyStr) + '</td>' +
@@ -79,6 +100,17 @@ export function buildQuoteHtml(data: QuoteData): string {
 
   var displayTotal = data.totalAfterDiscount != null ? data.totalAfterDiscount : data.total;
   var hasDiscount = data.discount && data.discount > 0;
+  // Preco no cartao: dois totais no lugar do "Total" unico.
+  var totalsHtml = comCartao
+    ? '    <div class="totals-row"><span>Subtotal no dinheiro ou PIX</span><span>' + fmt(data.total) + '</span></div>' +
+      (hasDiscount ? '<div class="totals-row discount"><span>Desconto</span><span>-' + fmt(data.discount!) + '</span></div>' : '') +
+      '    <div class="totals-row grand"><span>Dinheiro ou PIX</span><span>' + fmt(displayTotal) + '</span></div>' +
+      '    <div class="totals-row grand cartao"><span>No cart\u00e3o (d\u00e9bito ou cr\u00e9dito)</span><span>' +
+             fmt(data.card!.totalAfterDiscount != null ? data.card!.totalAfterDiscount : data.card!.total) + '</span></div>' +
+      '    <div class="totals-note">Em cada linha, o valor de cima \u00e9 no dinheiro ou PIX; o de baixo, no cart\u00e3o. Pagamento dividido: o valor no cart\u00e3o vale s\u00f3 sobre a parte paga no cart\u00e3o.</div>'
+    : '    <div class="totals-row"><span>Subtotal</span><span>' + fmt(data.total) + '</span></div>' +
+      (hasDiscount ? '<div class="totals-row discount"><span>Desconto</span><span>-' + fmt(data.discount!) + '</span></div>' : '') +
+      '    <div class="totals-row grand"><span>Total</span><span>' + fmt(displayTotal) + '</span></div>';
 
   var logoHtml = data.companyLogoUrl
     ? '<img src="' + escapeHtml(data.companyLogoUrl) + '" alt="logo" class="logo" />'
@@ -116,6 +148,11 @@ export function buildQuoteHtml(data: QuoteData): string {
 '  .totals-row { display: flex; justify-content: space-between; padding: 6px 12px; font-size: 12px; }' +
 '  .totals-row.discount { color: #ef4444; }' +
 '  .totals-row.grand { background: #f3e8ff; padding: 12px; border-radius: 8px; font-size: 16px; font-weight: 800; color: #6d28d9; margin-top: 6px; }' +
+(comCartao
+  ? '  tbody td small.cartao { display: block; font-size: 10px; color: #6d28d9; margin-top: 2px; }' +
+    '  .totals-row.grand.cartao { background: #ede9fe; color: #5b21b6; }' +
+    '  .totals-note { font-size: 10px; color: #666; padding: 6px 12px; }'
+  : '') +
 '  .notes { margin-top: 20px; padding: 12px; background: #fffbeb; border-left: 4px solid #f59e0b; border-radius: 4px; font-size: 11px; color: #78350f; }' +
 '  .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 10px; color: #999; }' +
 '  .footer .brand { color: #6d28d9; font-weight: 700; letter-spacing: 0.5px; }' +
@@ -161,9 +198,7 @@ export function buildQuoteHtml(data: QuoteData): string {
 '    <tbody>' + itemRows + '</tbody>' +
 '  </table>' +
 '  <div class="totals">' +
-'    <div class="totals-row"><span>Subtotal</span><span>' + fmt(data.total) + '</span></div>' +
-     (hasDiscount ? '<div class="totals-row discount"><span>Desconto</span><span>-' + fmt(data.discount!) + '</span></div>' : '') +
-'    <div class="totals-row grand"><span>Total</span><span>' + fmt(displayTotal) + '</span></div>' +
+     totalsHtml +
 '  </div>' +
    (data.notes ? '<div class="notes">' + escapeHtml(data.notes) + '</div>' : '') +
 '  <div class="footer">' +

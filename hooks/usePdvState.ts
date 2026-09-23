@@ -88,6 +88,7 @@ import type { Product } from "@/components/screens/estoque/types";
 import type { CrediarioConfirmPayload } from "@/components/screens/pdv/PdvModals";
 
 import { openQuotePdf, type QuoteItem } from "@/utils/quotePdf";
+import { lerConfigDoCartao, precoNoCartaoDoProduto } from "@/utils/precoNoCartao";
 import { normalizeText, buildProductHaystack, matchesQuery } from "@/utils/productSearch";
 
 const PAGE_SIZE = 12;
@@ -101,6 +102,12 @@ const MAX_RECENT_CUSTOMERS = 8;
 function jaComprou(c: { lastPurchase?: string | null }): boolean {
   const v = (c.lastPurchase || "").trim();
   return v.length > 0 && v !== "---";
+}
+
+/** products.card_price do scan: null/lixo = segue o % da loja. */
+function parseCardPrice(v: any): number | null {
+  const n = parseFloat(v);
+  return isFinite(n) && n > 0 ? n : null;
 }
 
 function getProductStock(p: any): number {
@@ -139,6 +146,11 @@ export function usePdvState() {
   // 22/09/2026 (Matcon M1): única leitura do toggle neste hook — "Salvar
   // orçamento" e o `?quote=` abaixo dependem só de matcon.matcon_enabled.
   const matcon = useMemo(() => readMatconSettings(pdvSettings), [pdvSettings]);
+  // 22/09/2026 (preço no cartão, docs/mockups/preco-no-cartao.html). Única
+  // leitura da opção neste hook; desligada, o useCart segue o caminho de
+  // sempre e nada abaixo mostra preço no cartão.
+  const cardCfg = useMemo(() => lerConfigDoCartao(pdvSettings), [pdvSettings]);
+  const cardPriceOn = cardCfg.enabled;
 
   // ── Plano / módulos ─────────────────────────────────────────────────────────
   const plan = (company?.plan || "essencial").toLowerCase();
@@ -227,18 +239,26 @@ export function usePdvState() {
     splitMode, toggleSplitMode,
     splitPayments, addSplitPayment, updateSplitPayment, removeSplitPayment,
     splitRemaining, splitIsBalanced,
-  } = useCart();
+    precoNoCartao, couponDiscount: cartCouponDiscount, setCouponRule,
+    splitNote, splitStatus,
+  } = useCart(cardCfg);
 
   // ── Matcon M1 — "Salvar orçamento" ──────────────────────────────────────
   // useMatconQuote é quem sabe montar o QuoteCreateBody e falar com
   // matconApi; aqui só passamos o retrato atual do carrinho/cliente/
   // vendedora. `discount` é o desconto EFETIVO da venda (cupom + manual),
   // mesma soma que já alimenta o resumo do carrinho mais abaixo.
-  const matconQuoteDiscount = (couponApplied?.discount || 0) + (manualDiscountAmount || 0);
+  // Preço no cartão: o orçamento salvo guarda o preço do DINHEIRO por item
+  // (é ele que o Caixa trata como base ao reabrir com ?quote=) e o desconto
+  // no dinheiro; o total no cartão viaja só pro card e pro WhatsApp.
+  const matconQuoteDiscount = precoNoCartao
+    ? precoNoCartao.descontoDinheiro
+    : (couponApplied?.discount || 0) + (manualDiscountAmount || 0);
   const matconQuote = useMatconQuote({
     companyId: company?.id,
     matconEnabled: matcon.matcon_enabled,
-    cart: cart.map(i => ({ productId: i.productId, name: i.name, price: i.price, qty: i.qty, unit: i.unit })),
+    cart: cart.map(i => ({ productId: i.productId, name: i.name, price: i.cashPrice ?? i.price, qty: i.qty, unit: i.unit })),
+    cardTotal: precoNoCartao ? precoNoCartao.totalCartao : null,
     customerId: selectedCustomerId,
     customerName: selectedCustomerName,
     customerPhone: selectedCustomerPhone,
@@ -294,7 +314,15 @@ export function usePdvState() {
           // nenhum produto do catálogo, então não soma quantidade com
           // nada que já esteja lá.
           const key = it.product_id || ("orcamento-" + quote.id + "-" + idx);
-          addToCart({ id: key, name: it.name, price: it.unit_price, unit: it.unit || undefined });
+          // Preço no cartão: o unit_price do orçamento é o preço no
+          // dinheiro; o do cartão sai do card_price/% do produto (mesma
+          // proporção quando o preço do orçamento é outro).
+          const doCatalogo = it.product_id ? products.find(p => p.id === it.product_id) : undefined;
+          addToCart({
+            id: key, name: it.name, price: it.unit_price, unit: it.unit || undefined,
+            cardPrice: doCatalogo?.cardPrice ?? null,
+            refPrice: doCatalogo ? doCatalogo.price : undefined,
+          });
           setQty(key, it.quantity);
         });
         if (quote.customer_id) {
@@ -435,7 +463,10 @@ export function usePdvState() {
         const parentName   = parentLocal?.name || (result.product as any).name || "Produto";
         const parentPrice  = parentLocal?.price ?? (result.product as any).price ?? 0;
         const price        = result.effective_price || parentPrice;
-        const parent: any  = parentLocal || { id: result.product.id, name: parentName, price: parentPrice };
+        // Preço no cartão: o scan devolve o card_price do PAI mesmo quando a
+        // variante tem preço próprio — o addToCart leva na proporção.
+        const parentCard   = parentLocal ? parentLocal.cardPrice : parseCardPrice((result.product as any).card_price);
+        const parent: any  = parentLocal || { id: result.product.id, name: parentName, price: parentPrice, cardPrice: parentCard };
         addToCart(parent, { id: result.variant_id, label: suffix, price });
         toast.success(parentName + " · " + suffix);
         return;
@@ -447,6 +478,8 @@ export function usePdvState() {
           id:    result.product.id,
           name:  (result.product as any).name || "Produto",
           price: result.effective_price || (result.product as any).price || 0,
+          cardPrice: parseCardPrice((result.product as any).card_price),
+          refPrice: parseFloat((result.product as any).price) || undefined,
         };
         addToCart(bp);
         toast.success(bp.name);
@@ -631,8 +664,18 @@ export function usePdvState() {
       // livre) só é válido para o próprio cliente. O backend é quem decide —
       // aqui só informamos quem está na venda. Sem cliente selecionado o
       // cupom nominal é recusado com mensagem explicando o que fazer.
-      const res = await couponsApi.validate(company.id, code, totalRaw, selectedCustomerId);
+      // Preço no cartão: o mínimo do cupom confere pelo total no DINHEIRO —
+      // trocar pra cartão nunca derruba o cupom. A regra (percent/fixed)
+      // fica guardada pra o % valer sobre o preço do método escolhido.
+      const baseDoCupom = precoNoCartao ? precoNoCartao.subtotalDinheiro : totalRaw;
+      const res = await couponsApi.validate(company.id, code, baseDoCupom, selectedCustomerId);
       if (res.valid && res.code) {
+        if (precoNoCartao) {
+          const valor = Number(res.discount_value);
+          setCouponRule(res.discount_type === "percent" && isFinite(valor)
+            ? { code: res.code, tipo: "percent", valor: valor }
+            : { code: res.code, tipo: "fixed", valor: isFinite(valor) && valor > 0 ? valor : (res.discount_amount || 0) });
+        }
         setCouponApplied({ code: res.code, discount: res.discount_amount || 0 });
         setCouponCode(res.code);
         toast.success("Cupom " + res.code + " aplicado! −" + fmtCurrency(res.discount_amount || 0));
@@ -651,10 +694,38 @@ export function usePdvState() {
     }
     // 22/09/2026 (Matcon M0): a unidade vai junto pro orçamento impresso —
     // "12,5 m²" em vez de "12.5". Item sem unidade imprime como sempre.
+    const profile       = (company as any)?.profile || {};
+    // Preço no cartão: dois preços por linha e dois totais, "Dinheiro ou
+    // PIX" e "No cartão" (decisão 4 do Caio — nunca "à vista").
+    if (precoNoCartao) {
+      const pc = precoNoCartao;
+      openQuotePdf({
+        items: cart.map(i => ({
+          name: i.name, qty: i.qty, unit: i.unit,
+          unitPrice: i.cashPrice ?? i.price,
+          cardUnitPrice: i.cardPrice ?? i.price,
+        })),
+        customerName:       selectedCustomerName,
+        sellerName:         selectedEmployeeName || sellerName || null,
+        total:              pc.subtotalDinheiro,
+        totalAfterDiscount: pc.descontoDinheiro > 0 ? pc.totalDinheiro : undefined,
+        discount:           pc.descontoDinheiro > 0 ? pc.descontoDinheiro : undefined,
+        card: {
+          total:              pc.subtotalCartao,
+          totalAfterDiscount: pc.totalCartao,
+          discount:           pc.descontoCartao > 0 ? pc.descontoCartao : undefined,
+        },
+        companyName:        company?.name || "Sua empresa",
+        companyLogoUrl:     profile.logo_url || null,
+        companyPhone:       profile.phone || null,
+        companyAddress:     profile.address || null,
+      });
+      toast.success("Orçamento gerado");
+      return;
+    }
     const items: QuoteItem[] = cart.map(i => ({ name: i.name, qty: i.qty, unitPrice: i.price, unit: i.unit }));
     const discount      = couponApplied ? couponApplied.discount : (manualDiscountAmount || 0);
     const afterDiscount = totalRaw - discount;
-    const profile       = (company as any)?.profile || {};
     openQuotePdf({
       items,
       customerName:       selectedCustomerName,
@@ -688,6 +759,17 @@ export function usePdvState() {
   // com undefined e cai no stepper de sempre.
   const displayItems: CartDisplayItem[] = cart.map(it => {
     const base = it.productId.split("__")[0];
+    // Preço no cartão: a linha mostra, em cinza ao lado, o preço do OUTRO
+    // método ("· cartão R$ 42,20"). Desligada, o objeto é o de sempre.
+    if (precoNoCartao) {
+      const outroNoCartao = !precoNoCartao.noCartao;
+      return {
+        productId: it.productId, productBaseId: base, name: it.name, price: it.price, qty: it.qty, listPrice: it.listPrice,
+        unit: it.unit, purchaseUnit: it.purchaseUnit, purchaseFactor: it.purchaseFactor,
+        otherPrice: outroNoCartao ? (it.cardPrice ?? it.price) : (it.cashPrice ?? it.price),
+        otherLabel: outroNoCartao ? "cartão" : "dinheiro",
+      };
+    }
     return {
       productId: it.productId, productBaseId: base, name: it.name, price: it.price, qty: it.qty, listPrice: it.listPrice,
       unit: it.unit, purchaseUnit: it.purchaseUnit, purchaseFactor: it.purchaseFactor,
@@ -695,7 +777,10 @@ export function usePdvState() {
   });
 
   const subtotal       = totalRaw;
-  const couponDiscount = couponApplied?.discount || 0;
+  // cartCouponDiscount = o desconto do cupom NO MÉTODO escolhido (com o
+  // preço no cartão, 5% de R$ 1.110,00 no crédito); desligado, é o
+  // couponApplied.discount de sempre.
+  const couponDiscount = cartCouponDiscount;
   const discountAmount = couponDiscount + (manualDiscountAmount || 0);
   const totalFinal     = totalAfterCoupon;
 
@@ -813,10 +898,24 @@ export function usePdvState() {
     requiredHints,
     cpfNaNota,
     onCpfNaNotaChange: setCpfNaNota,
+    // Preço no cartão (tela 3/5 do mockup): o par "dinheiro e PIX · cartão"
+    // sempre à vista no topo. null com a opção desligada = topo de sempre.
+    pricePair: precoNoCartao
+      ? {
+          cash: precoNoCartao.totalDinheiro,
+          card: precoNoCartao.totalCartao,
+          active: (splitMode ? "split" : precoNoCartao.noCartao ? "card" : "cash") as "split" | "card" | "cash",
+        }
+      : null,
+    subtotalLabel: precoNoCartao && precoNoCartao.noCartao ? "Subtotal no cartão" : undefined,
     splitMode,
     splitPayments,
     splitRemaining,
     splitIsBalanced,
+    // Preço no cartão: a conta do dividido e o status "faltam R$ X no
+    // dinheiro ou PIX, ou R$ Y no cartão". null = painel de sempre.
+    splitNote,
+    splitStatusText: splitStatus,
     onToggleSplit:        toggleSplitMode,
     onAddSplitPayment:    () => addSplitPayment(),
     onUpdateSplitPayment: updateSplitPayment,
@@ -883,5 +982,8 @@ export function usePdvState() {
     // 22/09/2026 (QA Matcon): o grid e o fim da venda mostram o milheiro em
     // peças ("20 mlh em estoque · 20.000 un", "500 produtos").
     matconEnabled: matcon.matcon_enabled,
+    // Preço no cartão: o grid mostra "cartão R$ X" embaixo do preço.
+    cardPriceOn,
+    gridCardPrice: (p: { price: number; cardPrice?: number | null }) => precoNoCartaoDoProduto(p, cardCfg),
   };
 }

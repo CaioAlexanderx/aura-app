@@ -5,6 +5,10 @@ export type Product = {
   barcode: string;
   category: string;
   price: number;
+  // 22/09/2026 (preço no cartão, products.card_price): preço no débito e no
+  // crédito ajustado à mão. null = segue o % da loja (automático). Só o
+  // cadastro com a opção ligada escreve aqui; undefined some do PATCH.
+  cardPrice?: number | null;
   cost: number;
   stock: number;
   minStock: number;

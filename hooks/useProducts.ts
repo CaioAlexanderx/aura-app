@@ -43,6 +43,9 @@ function mapApiProduct(p: any): Product {
     barcode: p.barcode || p.ean || "",
     category: p.category || "Produtos",
     price: parseFloat(p.price || p.sale_price) || 0,
+    // 22/09/2026 (preço no cartão, migration 351): null = segue o % da
+    // loja. Base atrás da migration devolve undefined -> null.
+    cardPrice: p.card_price === null || p.card_price === undefined ? null : (parseFloat(p.card_price) || null),
     cost: parseFloat(p.cost || p.cost_price) || 0,
     stock,
     minStock: parseFloat(p.stock_min ?? p.min_stock ?? p.minStock) || 0,
@@ -123,6 +126,10 @@ export function useProducts() {
       barcode: product.barcode || undefined,
       category: product.category,
       price: product.price,
+      // 22/09/2026 (preço no cartão): undefined some do JSON e a coluna
+      // nem entra no UPDATE (o cadastro com a opção desligada nunca manda);
+      // null volta o produto para o automático (% da loja).
+      card_price: product.cardPrice === undefined ? undefined : product.cardPrice,
       cost_price: product.cost,
       stock_qty: product.stock,
       min_stock: product.minStock,

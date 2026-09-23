@@ -1,0 +1,1021 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aura — Preço no cartão</title>
+<style>
+  /* ============================================================
+     Mockup standalone — "Preço no cartão", 22/09/2026.
+     Regra 4 do CLAUDE.md: mockup antes do código.
+     Origem: primeira cliente Matcon com dados reais (Geovana) cobra mais
+     no cartão. Cada produto tem "valor no dinheiro" e "valor no cartão",
+     em média +11%, de 5% a 25% conforme o produto. Cobrar diferente por
+     forma de pagamento é permitido (Lei 13.455/2017) desde que o cliente
+     veja os dois preços.
+     Base: CardFeeSection.tsx + PdvSettingsCard.tsx (Políticas do Caixa),
+     item-form/SecaoPreco.tsx (perfil padrão e perfil Matcon), useCart.ts
+     + usePdvState.ts + CartPanel.tsx (Caixa), buildQuoteHtml.ts
+     (orçamento), estoque/labels/buildLabelHtml.ts (etiquetas).
+     Molde visual: matcon-cadastro-produto.html e matcon-modulo.html —
+     mesmos tokens, sem paleta própria, sem dependência externa.
+
+     A IDEIA EM UMA LINHA: cada produto passa a ter DOIS preços — o de
+     sempre (dinheiro, PIX e crediário) e o do cartão (débito e crédito).
+     O preço no cartão nasce sozinho do "% a mais" da loja e pode ser
+     ajustado por produto. No Caixa, o chip de pagamento escolhe qual dos
+     dois vale. Opção desligada (padrão) = a Aura de hoje, byte a byte.
+
+     DECISÕES FECHADAS (Caio) que o mockup desenha:
+       1. Opção da loja, todos os planos, em Configurações › Políticas do
+          Caixa, ao lado da "Taxa da maquininha". Desligada = nada aparece.
+       2. Ligada: "No cartão, cobro [11]% a mais". No cadastro, "Preço no
+          cartão" preenchido sozinho, editável; editado deixa de seguir o
+          % (selo "ajustado à mão" + "voltar aos 11%").
+       3. Débito e crédito: mesmo preço. Dinheiro e PIX: preço normal.
+       4. Crediário cobra o preço do dinheiro (já tem juros próprios).
+       5. Pagamento dividido: acréscimo só na parte paga no cartão.
+
+     A REGRA DO DIVIDIDO (decisão 5, validada na tela 4):
+       base   = total da venda no dinheiro (já com cupom/desconto)
+       fator  = total no cartão ÷ total no dinheiro (desta venda — é a
+                média ponderada dos itens, não os 11% da loja: tem produto
+                a 5% e produto a 22,75% no mesmo carrinho)
+       Cada pagamento em dinheiro, PIX ou crediário abate da base pelo
+       valor. Cada pagamento no cartão abate valor ÷ fator. O que falta
+       da base, se for no cartão, vira falta × fator.
+       Ex.: R$ 1.000,00 no dinheiro / R$ 1.110,00 no cartão (fator 1,11).
+       PIX R$ 400,00 → faltam R$ 600,00 da base → no cartão R$ 666,00.
+       Total que o cliente paga: R$ 1.066,00.
+       Por que funciona: (a) tudo num método só dá exatamente o preço
+       daquele método (dois cartões somam R$ 1.110,00; dinheiro + PIX
+       somam R$ 1.000,00); (b) a ordem não importa — cartão primeiro e
+       PIX depois dá o mesmo total que o contrário; (c) é uma linha de
+       conta que o vendedor explica no balcão. Arredonda no centavo, no
+       fim; a soma fecha com 1 centavo de folga (como hoje).
+       Troca com diferença paga no cartão usa a mesma regra: o crédito da
+       devolução abate da base como se fosse dinheiro.
+
+     Sete telas:
+       1. Configurações › Políticas do Caixa — desligada e ligada, e a
+          diferença para a Taxa da maquininha num quadro "Cartão".
+       2. Cadastro do produto (seção Preço) — perfil padrão e Matcon,
+          automático × ajustado à mão, com prévia do card do Caixa.
+       3. Caixa desktop — grid e carrinho com os dois preços; o topo
+          troca com o chip; par "dinheiro e PIX · cartão" sempre à vista;
+          cupom segue valendo ao trocar o chip.
+       4. Caixa, pagamento dividido — a regra acima, com cenários prontos
+          e a conta numa linha.
+       5. Caixa no celular 390px — mesmo carrinho, rodapé de três botões
+          intacto; nada novo no rodapé.
+       6. Orçamento impresso, orçamento salvo (WhatsApp) e etiquetas.
+       7. O que não muda + mapa tela → arquivo.
+
+     NENHUM hover-reveal: tudo que o mockup mostra está sempre visível
+     (regra 7 atendida por construção). Números do exemplo são coerentes
+     entre as telas 3, 4, 5 e 6.
+     ============================================================ */
+  :root {
+    --bg: #060816; --bg2: #090c1a; --bg3: #0e1228; --bg4: #141830;
+    --border: rgba(255,255,255,0.07); --border2: rgba(120,100,240,0.22);
+    --ink: #f0edff; --ink2: rgba(220,215,255,0.75); --ink3: rgba(170,160,235,0.65);
+    --violet: #7c3aed; --violet3: #a78bfa; --violetD: rgba(109,40,217,0.14);
+    --green: #34d399; --greenD: rgba(52,211,153,0.10);
+    --red: #f87171; --redD: rgba(248,113,113,0.10);
+    --amber: #fbbf24; --amberD: rgba(251,191,36,0.10);
+    --serif: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+    --sans: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --mono: 'DM Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  }
+  html[data-tema="claro"] {
+    --bg: #e6e4f0; --bg2: #fafbff; --bg3: #ffffff; --bg4: #e3dff0;
+    --border: rgba(109,40,217,0.22); --border2: rgba(120,100,240,0.30);
+    --ink: #18172b; --ink2: #3b3461; --ink3: #6a608e;
+    --violet: #7c3aed; --violet3: #6d28d9; --violetD: rgba(109,40,217,0.06);
+    --green: #059669; --greenD: rgba(5,150,105,0.08);
+    --red: #dc2626; --redD: rgba(220,38,38,0.06);
+    --amber: #d97706; --amberD: rgba(217,119,6,0.06);
+  }
+  * { box-sizing: border-box; font-variant-numeric: tabular-nums; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  a { color: var(--violet3); text-decoration: none; }
+  button, input, select { font: inherit; }
+  .topbar { position: sticky; top: 0; z-index: 5; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 16px; background: var(--bg2); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--ink3); }
+  .topbar b { color: var(--ink); }
+  .topbar nav { display: flex; gap: 8px; flex-wrap: wrap; }
+  .topbar nav a { font-family: var(--mono); font-size: 11px; padding: 3px 7px; border-radius: 6px; background: var(--bg3); border: 1px solid var(--border); }
+  .topbar .tema { margin-left: auto; color: var(--ink); background: var(--bg3); border: 1px solid var(--border2); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+  .screen { max-width: 1060px; margin: 0 auto; padding: 28px 16px 64px; min-width: 0; }
+  .screen + .screen { border-top: 1px dashed var(--border2); }
+  .mock-label { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--violet3); margin-bottom: 18px; }
+  .eyebrow { display: flex; align-items: center; gap: 10px; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink3); margin-bottom: 12px; flex-wrap: wrap; }
+  .eyebrow .glyph { width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle, var(--violet) 0 25%, rgba(124,58,237,.35) 26% 100%); }
+  .eyebrow .pill { padding: 3px 8px; border-radius: 999px; background: rgba(124,58,237,.08); color: var(--violet); font-size: 10px; letter-spacing: .08em; }
+  .hero h1 { font-family: var(--serif); font-weight: 400; font-size: 52px; line-height: .98; letter-spacing: -.025em; margin: 0; overflow-wrap: anywhere; }
+  .hero h1 i { color: var(--violet); font-style: normal; }
+  h2.tt { font-family: var(--serif); font-weight: 400; font-size: 34px; line-height: 1.05; letter-spacing: -.02em; margin: 0; overflow-wrap: anywhere; }
+  h2.tt i { color: var(--violet); font-style: normal; }
+  .sub { font-size: 14px; color: var(--ink3); margin: 10px 0 0; max-width: 780px; line-height: 21px; }
+  .sub em { font-style: normal; color: var(--amber); }
+  .sub b { color: var(--ink2); }
+  .section { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ink3); margin: 18px 0 8px; }
+  .box { background: var(--bg3); border: 1px solid var(--border); border-radius: 14px; padding: 14px; min-width: 0; }
+  .note { font-size: 11.5px; color: var(--ink3); margin-top: 10px; line-height: 1.55; }
+  .note b { color: var(--ink2); }
+  .cols { display: grid; grid-template-columns: 1.1fr .9fr; gap: 14px; align-items: start; }
+  .cols > * { min-width: 0; }
+  .mono { font-family: var(--mono); }
+  .ico { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; opacity: .8; }
+
+  /* alternadores do mockup (não são UI do app) */
+  .ctrl { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 18px 0 14px; }
+  .seg { display: inline-flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--bg2); border: 1px solid var(--border2); flex-wrap: wrap; max-width: 100%; }
+  .seg button { border: 0; background: transparent; color: var(--ink3); padding: 7px 11px; border-radius: 9px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+  .seg button.on { background: var(--violet); color: #fff; }
+  .ctrl .lbl-ctrl { font-size: 11px; color: var(--ink3); font-family: var(--mono); }
+
+  /* botões e peças comuns */
+  .btn { font-size: 13px; font-weight: 700; border-radius: 10px; padding: 9px 14px; border: 1px solid var(--border2); background: var(--bg3); color: var(--ink); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; justify-content: center; }
+  .btn.pri { background: linear-gradient(135deg, #8b5cf6, #6d28d9); border-color: transparent; color: #fff; box-shadow: 0 8px 20px rgba(124,58,237,.35); }
+  .btn.alt { color: var(--violet3); }
+  .btn.sm { padding: 5px 10px; font-size: 12px; border-radius: 8px; }
+  .chip { padding: 5px 11px; border-radius: 999px; border: 1px solid var(--border2); background: var(--bg2); color: var(--ink3); font-size: 12px; font-weight: 600; cursor: pointer; user-select: none; }
+  .chip.on { background: rgba(124,58,237,.13); border-color: var(--violet); color: var(--violet3); }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .nota { display: flex; gap: 8px; align-items: flex-start; padding: 9px 11px; border-radius: 10px; font-size: 12px; color: var(--ink2); line-height: 1.5; }
+  .nota.amber { background: var(--amberD); border: 1px solid rgba(251,191,36,.35); }
+  .nota.amber .s { color: var(--amber); }
+  .nota.vio { background: var(--violetD); border: 1px solid var(--border2); }
+  .nota.vio .s { color: var(--violet3); }
+  .nota.green { background: var(--greenD); border: 1px solid rgba(52,211,153,.3); }
+  .nota.green .s { color: var(--green); }
+  .nota b { color: var(--ink); }
+  .novo { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #fff; background: var(--violet); border-radius: 999px; padding: 1px 7px; vertical-align: 2px; }
+
+  /* ============ 1. Configurações ============ */
+  .cfg { border: 1px solid var(--border2); border-radius: 16px; background: var(--bg3); padding: 16px 18px; min-width: 0; }
+  .cfg .h1 { font-size: 14px; font-weight: 700; }
+  .cfg .h2 { font-size: 12px; color: var(--ink3); margin-bottom: 6px; }
+  .row { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); }
+  .row .l { flex: 1; min-width: 0; }
+  .row .rl { font-size: 13px; font-weight: 600; }
+  .row .rd { font-size: 11.5px; color: var(--ink3); line-height: 1.45; margin-top: 2px; }
+  .row.fade { opacity: .45; }
+  .sw { width: 38px; height: 22px; border-radius: 999px; background: var(--bg4); border: 1px solid var(--border); position: relative; flex: 0 0 auto; cursor: pointer; }
+  .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--ink3); transition: .15s; }
+  .sw.on { background: rgba(124,58,237,.45); border-color: var(--violet); }
+  .sw.on::after { left: 19px; background: #fff; }
+  .grupo { margin-top: 6px; border: 1px solid var(--border2); border-radius: 12px; padding: 4px 12px 10px; background: var(--bg2); }
+  .grupo .gh { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--violet3); padding: 8px 0 2px; }
+  .grupo .gh + .row { border-top: 0; }
+  .subbox { margin: 0 0 8px; padding-left: 12px; border-left: 2px solid var(--border2); }
+  .subrow { display: flex; gap: 8px; align-items: center; padding: 5px 0; font-size: 12px; }
+  .subrow .k { flex: 1; min-width: 0; font-weight: 600; }
+  .subrow .k small { display: block; font-weight: 400; color: var(--ink3); font-size: 10.5px; }
+  .pctin { width: 64px; text-align: center; font-weight: 700; font-size: 14px; background: var(--bg3); color: var(--ink); border: 1px solid var(--border2); border-bottom: 2px solid var(--violet); border-radius: 8px; padding: 4px 6px; }
+  .pctin.sm { width: 56px; font-size: 13px; border-bottom-width: 1px; border-color: var(--border); }
+  .frase { font-size: 14px; line-height: 2.1; color: var(--ink2); }
+  .quem { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .quem > div { border: 1px dashed var(--border2); border-radius: 10px; padding: 8px 10px; font-size: 11.5px; color: var(--ink3); min-width: 0; }
+  .quem b { display: block; color: var(--ink); font-size: 12px; }
+  .contagem { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .contagem span { font-size: 11.5px; border: 1px solid var(--border); border-radius: 999px; padding: 2px 9px; color: var(--ink2); background: var(--bg3); }
+  .contagem span b { color: var(--ink); }
+  [data-cfg="off"] .so-on { display: none !important; }
+
+  /* ============ 2. Cadastro ============ */
+  .modal { border: 1px solid var(--border2); border-radius: 18px; background: var(--bg3); overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.35); min-width: 0; }
+  .mhead { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .mhead .ic { width: 34px; height: 34px; border-radius: 10px; background: var(--violetD); border: 1px solid var(--border2); display: grid; place-items: center; color: var(--violet3); font-family: var(--mono); font-size: 10px; flex: 0 0 auto; }
+  .mhead .t1 { font-size: 15px; font-weight: 700; }
+  .mhead .t2 { font-size: 12px; color: var(--ink3); }
+  .perfiltag { font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--violet3); border: 1px solid var(--border2); background: var(--violetD); border-radius: 999px; padding: 2px 8px; margin-left: 6px; }
+  .mbody { background: var(--bg2); padding: 14px; display: grid; grid-template-columns: 1.35fr 1fr; gap: 14px; align-items: start; }
+  .mbody > * { min-width: 0; }
+  .sec { background: var(--bg3); border: 1px solid var(--border); border-radius: 14px; padding: 14px; min-width: 0; }
+  .sec.destaque { border-color: var(--violet); box-shadow: 0 0 0 3px rgba(124,58,237,.10); }
+  .sec-h { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .sec-h .g { width: 22px; height: 22px; border-radius: 7px; background: var(--violetD); color: var(--violet3); font-family: var(--mono); font-size: 9px; display: grid; place-items: center; }
+  .sec-h .t { font-size: 13px; font-weight: 700; flex: 1; }
+  .selo { font-size: 10px; font-weight: 800; border-radius: 999px; padding: 2px 8px; border: 1px solid var(--border); color: var(--ink3); white-space: nowrap; }
+  .selo.ok { color: var(--green); border-color: rgba(52,211,153,.35); background: var(--greenD); }
+  .selo.auto { color: var(--violet3); border-color: var(--border2); background: var(--violetD); }
+  .selo.mao { color: var(--amber); border-color: rgba(251,191,36,.4); background: var(--amberD); }
+  .fld { margin-bottom: 12px; min-width: 0; }
+  .lbl { font-size: 11.5px; font-weight: 600; color: var(--ink2); margin-bottom: 5px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; min-height: 20px; }
+  .lbl .req { color: var(--red); }
+  .lbl .opt { font-weight: 400; color: var(--ink3); font-size: 11px; }
+  .money { position: relative; }
+  .money .p { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); font-size: 12px; font-weight: 700; color: var(--ink3); pointer-events: none; }
+  .money .s { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-family: var(--mono); font-size: 11px; color: var(--ink3); pointer-events: none; }
+  .money input { width: 100%; background: var(--bg2); border: 1px solid var(--border); border-radius: 9px; padding: 9px 11px 9px 34px; font-size: 14px; font-weight: 700; color: var(--ink); min-height: 40px; }
+  .money input.auto { color: var(--violet3); border-style: dashed; border-color: var(--border2); }
+  .money input.mao { border-color: rgba(251,191,36,.55); }
+  .money.suf input { padding-right: 62px; }
+  .linha2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .linha2 > * { min-width: 0; }
+  .hint { font-size: 11.5px; color: var(--ink3); margin-top: 5px; line-height: 1.5; }
+  .hint b { color: var(--ink2); }
+  .hint .lk { color: var(--violet3); font-weight: 700; cursor: pointer; background: none; border: 0; padding: 0; font-size: inherit; }
+  .margem { display: block; padding: 8px 11px; line-height: 1.6; border-radius: 9px; background: var(--greenD); border: 1px solid rgba(52,211,153,.3); font-size: 12px; color: var(--ink2); flex-wrap: wrap; }
+  .margem b { color: var(--green); }
+  .vendopor { margin-bottom: 12px; }
+  .frase-c { font-size: 13px; color: var(--ink2); line-height: 2; }
+  .edit { display: inline-block; font-family: var(--mono); font-weight: 500; color: var(--ink); background: var(--bg2); border: 1px solid var(--border2); border-bottom: 2px solid var(--violet); border-radius: 8px; padding: 0 8px; line-height: 1.6; }
+  [data-perfil="padrao"] .so-m, [data-perfil="matcon"] .so-p { display: none !important; }
+  [data-opcao="off"] .so-on, [data-opcao="on"] .so-off { display: none !important; }
+  /* prévia do card do Caixa */
+  .pvcard { border: 1px dashed var(--border2); border-radius: 12px; overflow: hidden; }
+  .pvcard .h { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--amber); font-weight: 700; padding: 4px 10px; background: var(--amberD); }
+  .pvcard .b { padding: 12px; background: var(--bg3); display: flex; gap: 12px; flex-wrap: wrap; }
+
+  /* ============ Caixa: grid de produtos ============ */
+  .caixa { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 14px; border: 1px solid var(--border2); border-radius: 18px; background: var(--bg2); padding: 14px; box-shadow: 0 30px 80px rgba(0,0,0,.35); }
+  .caixa > * { min-width: 0; }
+  .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .act { font-size: 12px; font-weight: 700; border: 1px solid var(--border); background: var(--bg3); color: var(--ink2); border-radius: 10px; padding: 7px 11px; }
+  .act.on { border-color: rgba(52,211,153,.45); color: var(--green); background: var(--greenD); }
+  .busca { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; color: var(--ink3); font-size: 13px; margin-bottom: 10px; }
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .pc { background: var(--bg3); border: 1px solid var(--border); border-radius: 14px; padding: 10px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .pc .ic { width: 30px; height: 30px; border-radius: 9px; background: var(--violetD); color: var(--violet3); display: grid; place-items: center; font-family: var(--mono); font-size: 9px; margin-bottom: 4px; }
+  .pc .nm { font-size: 12.5px; font-weight: 600; line-height: 1.3; min-height: 32px; overflow-wrap: anywhere; }
+  .pc .pr { font-size: 15px; font-weight: 800; color: var(--violet3); }
+  .pc .pr small { font-size: 11px; font-weight: 600; color: var(--ink3); }
+  .pc .pc2 { font-size: 11px; color: var(--ink3); }
+  .pc .pc2 b { color: var(--ink2); font-weight: 700; }
+  .pc .est { font-size: 10.5px; color: var(--ink3); }
+  .pc.in { border-color: var(--border2); }
+
+  /* ============ Caixa: carrinho ============ */
+  .cart { border-radius: 18px; border: 1px solid var(--border2); background: var(--bg3); overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+  .ch { padding: 14px 16px 12px; background: linear-gradient(135deg, rgba(124,58,237,.92), rgba(76,29,149,.92)); color: #fff; }
+  .ch .k { display: flex; justify-content: space-between; font-size: 9.5px; letter-spacing: 1.2px; text-transform: uppercase; color: rgba(255,255,255,.7); font-weight: 700; }
+  .ch .tot { font-size: 34px; font-weight: 800; letter-spacing: -1px; line-height: 1.1; margin-top: 2px; }
+  .ch .tot small { font-size: 16px; font-weight: 700; opacity: .85; }
+  .ch .tot .c { font-size: 18px; }
+  .par { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .par span { flex: 1 1 0; min-width: 0; font-size: 11px; line-height: 1.3; border-radius: 9px; padding: 5px 8px; border: 1px solid rgba(255,255,255,.18); color: rgba(255,255,255,.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .par span b { display: block; font-size: 13px; color: rgba(255,255,255,.9); }
+  .par span.on { background: rgba(255,255,255,.18); border-color: rgba(255,255,255,.55); color: #fff; }
+  .par span.on b { color: #fff; }
+  .meta { display: flex; gap: 18px; margin-top: 10px; flex-wrap: wrap; }
+  .meta div { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,.6); font-weight: 700; }
+  .meta div b { display: block; font-size: 12.5px; letter-spacing: 0; color: #fff; }
+  .meta div b.desc { color: #b9f6ca; }
+  .cb { padding: 8px 16px 12px; }
+  .li { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); align-items: flex-start; }
+  .li .l { flex: 1; min-width: 0; }
+  .li .n { font-size: 12.5px; font-weight: 600; overflow-wrap: anywhere; }
+  .li .q { font-size: 11.5px; color: var(--ink2); margin-top: 1px; }
+  .li .q .o { color: var(--ink3); }
+  .li .v { font-size: 13px; font-weight: 700; white-space: nowrap; }
+  .pay { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-top: 12px; }
+  .pay button { border: 1px solid var(--border); background: var(--bg2); color: var(--ink2); border-radius: 10px; padding: 8px 2px; font-size: 11.5px; font-weight: 700; cursor: pointer; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pay button.on { background: rgba(124,58,237,.22); border-color: rgba(124,58,237,.6); color: var(--ink); box-shadow: 0 4px 12px rgba(124,58,237,.3); }
+  .split-t { display: inline-flex; gap: 5px; align-items: center; margin-top: 8px; font-size: 12px; font-weight: 700; color: var(--violet3); cursor: pointer; background: none; border: 0; padding: 2px 0; }
+  .sum { margin-top: 8px; }
+  .sum div { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--ink2); padding: 3px 0; gap: 8px; }
+  .sum div.d { color: var(--green); }
+  .sum div.t { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 7px; font-weight: 700; color: var(--ink); }
+  .sum div.t span:last-child { color: var(--violet3); font-size: 15px; }
+  .cupnote { font-size: 11px; color: var(--green); margin-top: 4px; }
+  .cf { padding: 12px 16px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; flex-wrap: wrap; }
+  .cf .btn { flex: 1 1 0; min-width: 0; white-space: nowrap; }
+  .cf .btn.pri { flex: 1.6 1 0; }
+  .cf.compact .top { display: flex; gap: 8px; width: 100%; }
+  .cf.compact .top .btn { flex: 1; }
+  .cf.compact .btn.pri { flex: 1 1 100%; }
+
+  /* dividir */
+  .splitp { margin-top: 10px; border: 1px solid var(--border2); border-radius: 12px; padding: 10px; background: var(--bg2); }
+  .sr { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 6px 0; border-top: 1px solid var(--border); }
+  .sr:first-child { border-top: 0; padding-top: 0; }
+  .sr .ms { display: flex; gap: 4px; flex-wrap: wrap; flex: 1 1 100%; min-width: 0; }
+  .sr .ms button { font-size: 11px; font-weight: 600; border: 1px solid var(--border); background: var(--bg3); color: var(--ink3); border-radius: 999px; padding: 3px 8px; cursor: pointer; }
+  .sr .ms button.on { border-color: var(--violet); color: var(--violet3); background: var(--violetD); font-weight: 800; }
+  .sr .val { position: relative; flex: 0 0 130px; margin-left: auto; }
+  .sr .val span { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--ink3); font-weight: 700; }
+  .sr .val input { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px 6px 28px; color: var(--ink); font-weight: 700; font-size: 13px; text-align: right; }
+  .sr .val input.auto { border-style: dashed; border-color: var(--violet); color: var(--violet3); }
+  .sr .tag { font-size: 10.5px; color: var(--violet3); font-weight: 700; flex: 1 1 0; min-width: 0; line-height: 1.3; }
+  .sub + .phones, .sub + .cols { margin-top: 18px; }
+  .conta { margin-top: 8px; font-size: 12px; color: var(--ink2); background: var(--violetD); border: 1px solid var(--border2); border-radius: 9px; padding: 8px 10px; line-height: 1.55; }
+  .conta b { color: var(--ink); }
+  .conta .mono { color: var(--violet3); }
+  .status { margin-top: 8px; font-size: 12px; font-weight: 700; border-radius: 8px; padding: 6px 10px; }
+  .status.ok { color: #22c55e; background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.35); }
+  .status.falta { color: var(--amber); background: var(--amberD); border: 1px solid rgba(251,191,36,.35); }
+
+  /* celular */
+  .phones { display: grid; grid-template-columns: 390px 390px; gap: 24px; justify-content: start; }
+  .phones > * { min-width: 0; }
+  .phone { width: min(390px, 100%); height: 820px; border: 1px solid var(--border2); border-radius: 36px; background: var(--bg2); overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 30px 80px rgba(0,0,0,.35); }
+  .phone .status-b { display: flex; justify-content: space-between; padding: 10px 22px 4px; font-size: 11px; color: var(--ink3); font-family: var(--mono); }
+  .phone .appbar { display: flex; align-items: center; gap: 8px; padding: 6px 14px 8px; border-bottom: 1px solid var(--border); font-weight: 700; font-size: 15px; }
+  .phone .scroll { flex: 1; overflow-y: auto; padding: 10px 12px 16px; }
+  .phone .grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .phone .cart { margin-top: 14px; }
+  .phone .ch .tot { font-size: 30px; }
+  .phone .cb { padding: 6px 12px 10px; }
+  .phone .cf { padding: 10px 12px 14px; }
+  .phone .pay { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .phone-cap { font-size: 11.5px; color: var(--ink3); margin-top: 8px; text-align: center; }
+
+  /* ============ 6. Orçamento e etiqueta ============ */
+  .papel { background: #fff; color: #1f2937; border-radius: 10px; padding: 22px; box-shadow: 0 20px 60px rgba(0,0,0,.35); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; min-width: 0; }
+  .papel .top { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-bottom: 2px solid #6d28d9; padding-bottom: 12px; margin-bottom: 14px; }
+  .papel .loja { display: flex; gap: 10px; align-items: center; }
+  .papel .logo { width: 42px; height: 42px; border-radius: 11px; background: #6d28d9; color: #fff; font-weight: 800; display: grid; place-items: center; font-size: 18px; }
+  .papel .ln { font-weight: 800; font-size: 15px; }
+  .papel .ls { font-size: 11px; color: #6b7280; }
+  .papel .num { text-align: right; font-size: 11px; color: #6b7280; }
+  .papel .num b { display: block; font-size: 15px; color: #1f2937; }
+  .papel .tw { overflow-x: auto; }
+  .papel table { width: 100%; border-collapse: collapse; }
+  .papel th { background: #f3f4f6; font-size: 9.5px; color: #6b7280; text-transform: uppercase; letter-spacing: .5px; font-weight: 600; padding: 8px 10px; text-align: left; }
+  .papel th.r, .papel td.r { text-align: right; }
+  .papel th.c, .papel td.c { text-align: center; }
+  .papel td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; font-size: 12.5px; vertical-align: top; }
+  .papel td small { display: block; font-size: 10.5px; color: #6d28d9; font-weight: 600; }
+  .papel .tots { display: flex; justify-content: flex-end; margin-top: 14px; }
+  .papel .tbox { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 16px; min-width: 250px; }
+  .papel .tl { display: flex; justify-content: space-between; gap: 16px; font-size: 12px; color: #4b5563; padding: 3px 0; }
+  .papel .tl b { color: #1f2937; font-size: 17px; }
+  .papel .tl.c b { color: #6d28d9; font-size: 15px; }
+  .papel .rodape { margin-top: 14px; font-size: 10.5px; color: #6b7280; line-height: 1.5; }
+  .wa { background: #0b141a; border-radius: 14px; padding: 14px; min-width: 0; }
+  .wa .bub { background: #005c4b; color: #e9edef; border-radius: 10px 10px 2px 10px; padding: 9px 11px; font-size: 12.5px; line-height: 1.5; margin-left: auto; max-width: 300px; white-space: pre-line; font-family: system-ui, sans-serif; }
+  .wa .hr { font-size: 10px; text-align: right; color: rgba(233,237,239,.6); margin-top: 3px; }
+  .qcard { border: 1px solid var(--border2); background: var(--bg3); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
+  .qcard .t { font-size: 12.5px; font-weight: 700; }
+  .qcard .d { font-size: 11.5px; color: var(--ink3); margin: 2px 0 8px; }
+  .etqs { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; }
+  .etq { background: #fff; color: #000; border: 1px solid #d1d5db; border-radius: 4px; font-family: Arial, Helvetica, sans-serif; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+  .etq.gon { width: 250px; padding: 10px 12px; }
+  .etq.gon .nm { font-size: 12px; font-weight: 700; line-height: 1.2; }
+  .etq.gon .un { font-size: 10px; color: #444; }
+  .etq.gon .p1 { display: flex; align-items: baseline; gap: 6px; margin-top: 6px; }
+  .etq.gon .p1 b { font-size: 30px; font-weight: 900; letter-spacing: -1px; }
+  .etq.gon .p1 span { font-size: 10px; font-weight: 700; text-transform: uppercase; }
+  .etq.gon .p2 { border-top: 1px solid #000; margin-top: 4px; padding-top: 3px; display: flex; justify-content: space-between; font-size: 13px; font-weight: 800; }
+  .etq.gon .p2 span { font-size: 10px; font-weight: 700; text-transform: uppercase; align-self: center; }
+  .etq.bc { width: 150px; padding: 6px 8px; text-align: center; }
+  .etq.bc .st { font-size: 7.5px; font-weight: 700; text-transform: uppercase; }
+  .etq.bc .bars { height: 26px; margin: 3px 0; background: repeating-linear-gradient(90deg, #000 0 2px, #fff 2px 3px, #000 3px 4px, #fff 4px 6px, #000 6px 9px, #fff 9px 10px); }
+  .etq.bc .nm { font-size: 8px; line-height: 1.15; }
+  .etq.bc .pr { font-size: 12px; font-weight: 900; margin-top: 2px; }
+  .etq.bc .pr2 { font-size: 9px; font-weight: 800; }
+  .etq-cap { font-size: 11px; color: var(--ink3); margin-top: 6px; }
+
+  /* ============ 7. O que não muda ============ */
+  .nm-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .nm-grid .box b.t { display: block; font-size: 13px; margin-bottom: 3px; }
+  .nm-grid .box p { margin: 0; font-size: 12px; color: var(--ink3); line-height: 1.55; }
+  .tbl-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 14px; background: var(--bg3); margin-top: 14px; }
+  .tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 620px; }
+  .tbl th { text-align: left; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); font-weight: 800; padding: 8px 10px; border-bottom: 1px solid var(--border2); }
+  .tbl td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--ink2); }
+  .tbl td:first-child { color: var(--ink); font-weight: 600; }
+  .tbl td.arq { font-family: var(--mono); font-size: 11px; color: var(--violet3); }
+  ol.perg { margin: 8px 0 0; padding-left: 20px; font-size: 12.5px; color: var(--ink2); line-height: 1.6; }
+  ol.perg b { color: var(--ink); }
+
+  @media (max-width: 980px) {
+    .caixa { grid-template-columns: minmax(0, 1fr); }
+    .phones { grid-template-columns: minmax(0, 390px); justify-content: center; }
+  }
+  @media (max-width: 900px) {
+    .cols, .mbody, .nm-grid { grid-template-columns: minmax(0, 1fr); }
+    .hero h1 { font-size: 36px; }
+    h2.tt { font-size: 28px; }
+  }
+  @media (max-width: 480px) {
+    .linha2, .quem { grid-template-columns: 1fr; }
+    .grid { grid-template-columns: 1fr 1fr; }
+    .pay { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .phone { height: 760px; border-radius: 28px; }
+    .caixa { padding: 10px; }
+    .papel { padding: 14px; }
+    .papel th:first-child, .papel td:first-child { display: none; }
+    .papel th, .papel td { padding: 7px 5px; font-size: 11.5px; }
+    .papel .tbox { min-width: 0; width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="topbar">Mockup · <b>Preço no cartão</b> · 7 telas · violeta <span class="ico">#7c3aed</span>
+  <nav><a href="#config">1 config</a><a href="#cadastro">2 cadastro</a><a href="#caixa">3 caixa</a><a href="#dividido">4 dividido</a><a href="#celular">5 celular</a><a href="#orcamento">6 orçamento e etiqueta</a><a href="#naomuda">7 não muda</a></nav>
+  <button class="tema" onclick="document.documentElement.dataset.tema = document.documentElement.dataset.tema === 'claro' ? '' : 'claro'">Tema claro/escuro</button>
+</div>
+
+<!-- ===================== 1. CONFIGURAÇÕES ===================== -->
+<section class="screen" id="config">
+  <div class="mock-label">1 · Configurações › Políticas do Caixa (PdvSettingsCard + CardFeeSection)</div>
+  <div class="eyebrow"><span class="glyph"></span> Aura<span style="color:var(--violet)">.</span> · Preço no cartão <span class="pill">todos os planos</span></div>
+  <div class="hero"><h1>No dinheiro é um preço. No cartão, é outro<i>.</i></h1></div>
+  <p class="sub">Uma opção da loja, ao lado da Taxa da maquininha. <b>Desligada, a Aura é a de hoje</b>: nenhum campo, nenhuma coluna, nenhuma linha a mais em lugar nenhum. Ligada, cada produto ganha um preço no cartão, que <em>nasce sozinho do % da loja</em> e pode ser ajustado produto a produto.</p>
+
+  <div class="ctrl">
+    <div class="seg"><button id="cfg-off" onclick="cfg('off')">Desligada (padrão)</button><button id="cfg-on" class="on" onclick="cfg('on')">Ligada</button></div>
+    <span class="lbl-ctrl">mude o % e veja o aviso de mudança</span>
+  </div>
+
+  <div class="cols">
+    <div class="cfg" id="cfgcard" data-cfg="on">
+      <div class="h1">Políticas do Caixa</div>
+      <div class="h2">Defina o que é obrigatório em cada venda e quais funcionalidades sua loja usa</div>
+      <div class="row fade"><div class="l"><div class="rl">Identificar cliente</div><div class="rd">Bloqueia finalizar venda sem selecionar cliente</div></div><span class="sw"></span></div>
+      <div class="row fade"><div class="l"><div class="rl">Crediário (fiado)</div><div class="rd">Permite vender no fiado e registrar pagamento posterior pelo cadastro do cliente</div></div><span class="sw on"></span></div>
+      <div class="row fade"><div class="l"><div class="rl">Materiais de construção</div><div class="rd">Venda por metro, metro quadrado, saco e milheiro…</div></div><span class="sw on"></span></div>
+
+      <div class="grupo">
+        <div class="gh">Cartão</div>
+        <div class="row">
+          <div class="l"><div class="rl">Taxa da maquininha</div><div class="rd">Lança sozinho a despesa do que a maquininha retém em cada venda no cartão. Sua receita continua cheia — a taxa entra separada, na data da venda.</div></div>
+          <span class="sw on"></span>
+        </div>
+        <div class="subbox">
+          <div class="subrow"><div class="k">Crédito<small>Quanto a adquirente retém no crédito</small></div><input class="pctin sm" value="4,5" readonly /> %</div>
+          <div class="subrow"><div class="k">Débito<small>Quanto a adquirente retém no débito</small></div><input class="pctin sm" value="1,9" readonly /> %</div>
+        </div>
+
+        <div class="row">
+          <div class="l"><div class="rl">Cobro mais no cartão <span class="novo">novo</span></div><div class="rd">Cada produto ganha um preço no cartão, para débito e crédito. Dinheiro, PIX e crediário continuam no preço de sempre.</div></div>
+          <span class="sw on" id="cfg-sw" onclick="cfg(document.getElementById('cfgcard').dataset.cfg === 'on' ? 'off' : 'on')"></span>
+        </div>
+        <div class="subbox so-on">
+          <div class="frase">No cartão, cobro <input class="pctin" id="cfg-pct" value="11" inputmode="decimal" aria-label="Quanto a mais no cartão, em %" /> % a mais</div>
+          <div class="hint" id="cfg-ex">Um produto de <b>R$ 100,00</b> sai a <b>R$ 111,00</b> no cartão — no débito e no crédito.</div>
+          <div class="contagem">
+            <span><b id="cfg-n-auto">342</b> produtos seguem os <b class="cfg-pct-t">11</b>%</span>
+            <span><b>18</b> com preço no cartão ajustado à mão · <a href="#cadastro">ver</a></span>
+          </div>
+          <div class="nota amber" id="cfg-mudou" style="display:none;margin-top:8px"><span class="s">!</span><span>Os <b>342</b> produtos automáticos passam a cobrar <b class="cfg-pct-t">11</b>% a mais no cartão assim que você salvar. Os 18 ajustados à mão não mudam. <b>Reimprima as etiquetas</b> (Estoque › Etiquetas) — as da prateleira mostram o preço antigo.</span></div>
+        </div>
+      </div>
+
+      <div class="hint so-on" style="margin-top:10px">Pode cobrar diferente no cartão (Lei 13.455/2017), desde que o cliente veja os dois preços. A Aura mostra os dois no Caixa e imprime os dois na etiqueta e no orçamento.</div>
+    </div>
+
+    <div>
+      <div class="box">
+        <div class="section" style="margin-top:0">Não confundir as duas</div>
+        <div class="quem" style="margin-top:0">
+          <div><b>Taxa da maquininha</b>é o que a <b style="display:inline">maquininha fica de você</b>. Não muda o preço; vira despesa no Financeiro.</div>
+          <div><b>Cobro mais no cartão</b>é o que o <b style="display:inline">cliente paga a mais</b>. Muda o preço no Caixa, na etiqueta e no orçamento.</div>
+        </div>
+        <p class="note">As duas moram juntas no quadro "Cartão" porque o lojista pensa nelas juntas ("cobro 11% porque a máquina me come 4,5%"). Uma não liga a outra: dá para ter só uma, as duas ou nenhuma. Com as duas ligadas, a venda de R$ 1.110,00 no crédito entra como receita de R$ 1.110,00 e a taxa sai como despesa sobre R$ 1.110,00 — igual a hoje.</p>
+      </div>
+      <div class="box" style="margin-top:12px">
+        <div class="section" style="margin-top:0">O que o % faz — e o que não faz</div>
+        <p class="note" style="margin:0 0 6px"><b>Preenche</b> o preço no cartão dos produtos que você não mexeu. Mudou o %, eles acompanham.</p>
+        <p class="note" style="margin:0 0 6px"><b>Não mexe</b> nos produtos ajustados à mão (a Geovana tem produto a 5% e produto a 25%). Não mexe em vendas já feitas nem em orçamentos já salvos.</p>
+        <p class="note" style="margin:0"><b>Desligar depois</b> esconde tudo de novo e guarda os preços ajustados — religou, eles voltam.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 2. CADASTRO ===================== -->
+<section class="screen" id="cadastro">
+  <div class="mock-label">2 · Estoque › Novo item › seção Preço (item-form/SecaoPreco.tsx) — padrão e Matcon</div>
+  <h2 class="tt">"Preço" vira dois: <i>dinheiro e PIX</i>, e cartão.</h2>
+  <p class="sub">O preço no cartão chega preenchido e em violeta tracejado — é automático. Digitou nele, vira <em>ajustado à mão</em> (âmbar) e para de seguir o %. "Voltar aos 11%" desfaz. Digite no preço do dinheiro para ver o automático acompanhar; digite no do cartão para ajustar.</p>
+
+  <div class="ctrl">
+    <div class="seg"><button id="pf-padrao" class="on" onclick="perfil('padrao')">Perfil padrão</button><button id="pf-matcon" onclick="perfil('matcon')">Perfil Matcon</button></div>
+    <div class="seg"><button id="op-off" onclick="opcao('off')">Opção desligada</button><button id="op-on" class="on" onclick="opcao('on')">Opção ligada</button></div>
+  </div>
+
+  <div class="modal" id="m2" data-perfil="padrao" data-opcao="on">
+    <div class="mhead">
+      <div class="ic">pkg</div>
+      <div style="flex:1;min-width:0">
+        <div class="t1">Novo item <span class="perfiltag so-m">materiais de construção</span></div>
+        <div class="t2"><span class="so-p">Cimento CP II 50 kg</span><span class="so-m">Porcelanato Bianco 60×60</span> · nome e preço bastam</div>
+      </div>
+    </div>
+    <div class="mbody">
+      <div class="sec destaque">
+        <div class="sec-h"><span class="g">R$</span><span class="t"><span class="so-p">Preço</span><span class="so-m">Como você vende</span></span><span class="selo ok">✓</span></div>
+
+        <div class="so-m vendopor">
+          <div class="lbl">Vendo por</div>
+          <div class="chips"><span class="chip">un</span><span class="chip on">m²</span><span class="chip">sc</span><span class="chip">m</span><span class="chip" style="border-style:dashed">+ outras</span></div>
+        </div>
+
+        <div class="linha2">
+          <div class="fld">
+            <div class="lbl"><span class="so-off">Preço de venda</span><span class="so-on">Preço no dinheiro e PIX</span> <span class="req">*</span></div>
+            <div class="money"><span class="p">R$</span><input id="in-din" value="38,00" inputmode="decimal" aria-label="Preço no dinheiro e PIX" /><span class="s so-m">por m²</span></div>
+          </div>
+          <div class="fld so-on">
+            <div class="lbl">Preço no cartão <span class="selo auto" id="selo-cartao">automático · +11%</span></div>
+            <div class="money"><span class="p">R$</span><input id="in-car" class="auto" value="42,18" inputmode="decimal" aria-label="Preço no cartão" /><span class="s so-m">por m²</span></div>
+          </div>
+        </div>
+        <div class="hint so-on" id="hint-cartao" style="margin-top:-6px;margin-bottom:12px">Segue os <b>11%</b> da loja. Este produto é diferente? Digite o valor do cartão aqui.</div>
+        <div class="nota amber so-on" id="aviso-barato" style="display:none;margin:-4px 0 12px"><span class="s">!</span><span>No cartão está <b>mais barato</b> que no dinheiro. É isso mesmo? A Aura salva assim se você quiser.</span></div>
+
+        <div class="linha2">
+          <div class="fld">
+            <div class="lbl">Custo <span class="opt">opcional</span></div>
+            <div class="money"><span class="p">R$</span><input id="in-custo" value="24,00" inputmode="decimal" aria-label="Custo" /><span class="s so-m">por m²</span></div>
+          </div>
+        </div>
+        <div class="margem" id="margem"></div>
+
+        <div class="so-m" style="margin-top:14px">
+          <div class="lbl">Como chega do fornecedor</div>
+          <div class="frase-c">Compro por <span class="edit">cx ▾</span> de <span class="edit">2,32</span> m²</div>
+          <div class="hint" id="caixa-m">A caixa sai a R$ 55,68 de custo e R$ 88,16 na venda <span class="so-on">(R$ 97,86 no cartão)</span>.</div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+        <div class="pvcard">
+          <div class="h">Assim aparece no Caixa</div>
+          <div class="b">
+            <div class="pc" style="width:170px">
+              <div class="ic">pkg</div>
+              <div class="nm"><span class="so-p">Cimento CP II 50 kg</span><span class="so-m">Porcelanato Bianco 60×60</span></div>
+              <div class="pr" id="pv-din">R$ 38,00<small class="so-m"> /m²</small></div>
+              <div class="pc2 so-on">cartão <b id="pv-car">R$ 42,18</b></div>
+              <div class="est">32 em estoque</div>
+            </div>
+          </div>
+        </div>
+        <div class="box">
+          <div class="section" style="margin-top:0">Três estados do "Preço no cartão"</div>
+          <p class="note" style="margin:0 0 6px"><span class="selo auto">automático · +11%</span> nasce do % da loja; muda quando o % muda ou quando o preço do dinheiro muda. Grava <span class="mono">null</span> — o valor é calculado.</p>
+          <p class="note" style="margin:0 0 6px"><span class="selo mao">ajustado à mão · +15%</span> o lojista digitou; o % do selo é só informação. Mudar o preço do dinheiro <b>não</b> mexe nele (e o selo recalcula o %).</p>
+          <p class="note" style="margin:0"><b>Voltar aos 11%</b> — link no hint, sempre visível (sem hover), volta a <span class="mono">null</span>.</p>
+        </div>
+        <div class="box">
+          <div class="section" style="margin-top:0">Margem</div>
+          <p class="note" style="margin:0">A margem mostra as duas, na mesma linha. Com a Taxa da maquininha ligada, a do cartão já sai <b>depois da taxa</b> — é a pergunta que o lojista faz ("vale a pena cobrar só 5% nesse?").</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="note">Estado "Opção desligada": a seção é a de hoje — "Preço de venda" + "Custo" e a margem de uma linha. Serviço (tipo Serviço) segue a mesma regra: ganha preço no cartão se a opção estiver ligada. Importação pela nota do fornecedor (DanfeImportModal) cria o produto no automático.</p>
+</section>
+
+<!-- ===================== 3. CAIXA DESKTOP ===================== -->
+<section class="screen" id="caixa">
+  <div class="mock-label">3 · Caixa desktop (ProductGrid + CartPanel) — o chip escolhe qual preço vale</div>
+  <h2 class="tt">O cliente pergunta "e no cartão?" — <i>a resposta já está na tela.</i></h2>
+  <p class="sub">O topo mostra o total do chip escolhido e, logo abaixo, o par <b>dinheiro e PIX · cartão</b> sempre à vista: o vendedor responde sem tocar em nada. Troque o chip: o total, as linhas e o desconto acompanham, <em>o cupom continua</em>. O grid mostra o preço do dinheiro em destaque e o do cartão embaixo, igual à etiqueta.</p>
+
+  <div class="ctrl">
+    <span class="lbl-ctrl">cupom OBRA5 (5%):</span>
+    <div class="seg"><button id="cup-on" class="on" onclick="cupom(true)">aplicado</button><button id="cup-off" onclick="cupom(false)">sem cupom</button></div>
+  </div>
+
+  <div class="caixa">
+    <div>
+      <div class="acts"><span class="act">Cliente · Construtora Alfa</span><span class="act">Vendedora · Ana</span><span class="act on" id="act-cupom">Cupom · OBRA5</span><span class="act">Troca ou devolução</span></div>
+      <div class="busca">Buscar produto ou bipar código…</div>
+      <div class="grid" id="grid-d"></div>
+    </div>
+    <div class="cart" id="cart-d"></div>
+  </div>
+  <div class="cols" style="margin-top:14px">
+    <div class="box">
+      <div class="section" style="margin-top:0">Decisões desta tela</div>
+      <p class="note" style="margin:0 0 6px"><b>O carrinho guarda os dois preços de cada item</b> no momento em que ele entra (como já faz com o preço de hoje). O chip só escolhe qual somar — trocar de chip não é "mudar o carrinho".</p>
+      <p class="note" style="margin:0 0 6px"><b>Cupom e desconto em %</b> valem sobre o preço do método escolhido (5% de R$ 1.000,00 ou de R$ 1.110,00). <b>Desconto em R$</b> sai o mesmo valor dos dois. Cupom com valor mínimo confere pelo total no dinheiro — trocar para cartão nunca derruba o cupom.</p>
+      <p class="note" style="margin:0"><b>Crediário</b> acende o lado "dinheiro e PIX" do par — cobra o preço do dinheiro.</p>
+    </div>
+    <div class="box">
+      <div class="section" style="margin-top:0">O que não entra</div>
+      <p class="note" style="margin:0 0 6px">Nenhum botão novo, nenhum seletor de "tabela de preço". O vendedor já escolhe o chip hoje; agora o chip também escolhe o preço.</p>
+      <p class="note" style="margin:0">Na linha do carrinho, o preço do outro método aparece em cinza, ao lado — sem selo de "ajustado" (isso é assunto do cadastro, não do balcão). Nada depende de hover.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 4. DIVIDIDO ===================== -->
+<section class="screen" id="dividido">
+  <div class="mock-label">4 · Caixa › Dividir pagamento (CartPanel SplitRow + useCart) — acréscimo só na parte do cartão</div>
+  <h2 class="tt">Pagou parte no PIX? <i>O cartão leva acréscimo só no resto.</i></h2>
+  <p class="sub">A base é o total no dinheiro. Dinheiro, PIX e crediário abatem da base pelo valor; o que falta, se for no cartão, leva o acréscimo desta venda. A última linha é <b>"o que falta"</b> (tracejada) e se preenche sozinha; digitar nela vira valor fixo. Escolha um cenário ou mexa nos valores e métodos.</p>
+
+  <div class="ctrl">
+    <span class="lbl-ctrl">cenários:</span>
+    <div class="seg" id="cenarios">
+      <button class="on" onclick="cenario(0, this)">PIX 400 + cartão</button>
+      <button onclick="cenario(1, this)">Crediário 500 + dinheiro 200 + débito</button>
+      <button onclick="cenario(2, this)">Dois cartões</button>
+      <button onclick="cenario(3, this)">Cartão 300 + PIX</button>
+    </div>
+  </div>
+
+  <div class="cols">
+    <div class="cart" id="cart-s" style="max-width:440px"></div>
+    <div>
+      <div class="box">
+        <div class="section" style="margin-top:0">A regra, em uma linha</div>
+        <p class="note" style="margin:0 0 8px"><span class="mono" style="color:var(--violet3)">falta no cartão = (base − pago em dinheiro/PIX/crediário − pago no cartão ÷ fator) × fator</span>, com <span class="mono">fator = total no cartão ÷ total no dinheiro</span> desta venda.</p>
+        <p class="note" style="margin:0 0 6px"><b>Tudo num método só dá o preço daquele método.</b> Dois cartões somam R$ 1.110,00; dinheiro com PIX, R$ 1.000,00. Nenhuma combinação sai mais cara que tudo no cartão nem mais barata que tudo no dinheiro.</p>
+        <p class="note" style="margin:0 0 6px"><b>A ordem não importa.</b> "Cartão 300 + PIX" e "PIX primeiro + cartão 300" fecham no mesmo total.</p>
+        <p class="note" style="margin:0 0 6px"><b>O fator é da venda, não da loja.</b> Neste carrinho a média deu 11% (tem argamassa a 5% e disjuntor a 22,75%). Num carrinho só de disjuntor, o fator seria 1,2275.</p>
+        <p class="note" style="margin:0"><b>Faltando</b>, o aviso fala as duas línguas: "faltam R$ X no dinheiro ou PIX, ou R$ Y no cartão".</p>
+      </div>
+      <div class="box" style="margin-top:12px">
+        <div class="section" style="margin-top:0">O que a venda grava</div>
+        <p class="note" style="margin:0 0 6px">Total cobrado (R$ 1.066,00 no cenário 1) e cada pagamento com seu valor, como hoje. O acréscimo da parte no cartão (R$ 66,00) é <b>rateado entre os itens</b> pelo valor de cada um — é esse preço por item que vai na nota e que a troca devolve.</p>
+        <p class="note" style="margin:0">A troca com diferença paga no cartão usa a mesma conta: o crédito da devolução abate da base como dinheiro.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 5. CELULAR ===================== -->
+<section class="screen" id="celular">
+  <div class="mock-label">5 · Caixa no celular 390px — mesmo carrinho, rodapé de três botões intacto</div>
+  <h2 class="tt">No celular, <i>uma linha a mais no topo</i> — e só.</h2>
+  <p class="sub">O par "dinheiro e PIX · cartão" cabe dentro do bloco violeta que já existe (≈ 36px). O rodapé continua <b>Limpar · Orçamento</b> em cima e <b>Finalizar venda</b> na largura toda. No grid de 2 colunas, o preço do cartão é uma linha de 11px debaixo do preço. Toque nos chips.</p>
+
+  <div class="phones">
+    <div>
+      <div class="phone">
+        <div class="status-b"><span>9:41</span><span>●●● 4G</span></div>
+        <div class="appbar">Caixa <span style="margin-left:auto;font-size:11px;color:var(--ink3);font-weight:600">Depósito São Jorge</span></div>
+        <div class="scroll">
+          <div class="acts"><span class="act">Cliente</span><span class="act">Vendedora</span><span class="act on">Mais… · OBRA5</span></div>
+          <div class="chips" style="margin-bottom:8px"><span class="chip on">Tudo</span><span class="chip">Cimento</span><span class="chip">Pisos</span><span class="chip">Elétrica</span></div>
+          <div class="grid" id="grid-m"></div>
+          <div class="cart" id="cart-m"></div>
+        </div>
+      </div>
+      <div class="phone-cap">Catálogo e carrinho — role dentro do celular</div>
+    </div>
+    <div>
+      <div class="phone">
+        <div class="status-b"><span>9:42</span><span>●●● 4G</span></div>
+        <div class="appbar">Caixa <span style="margin-left:auto;font-size:11px;color:var(--ink3);font-weight:600">Depósito São Jorge</span></div>
+        <div class="scroll">
+          <div class="cart" id="cart-ms" style="margin-top:0"></div>
+        </div>
+      </div>
+      <div class="phone-cap">Dividido: PIX R$ 400 + cartão (mesma conta da tela 4)</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 6. ORÇAMENTO E ETIQUETA ===================== -->
+<section class="screen" id="orcamento">
+  <div class="mock-label">6 · Orçamento impresso (buildQuoteHtml) · orçamento salvo (Matcon) · etiquetas (labels/buildLabelHtml)</div>
+  <h2 class="tt">O cliente leva os dois preços <i>no papel.</i></h2>
+  <p class="sub">É o que a lei pede e o que evita briga no caixa. Na impressão, o rótulo é <b>"Dinheiro ou PIX"</b>, não "à vista": no balcão, débito também é "à vista" — e débito paga o preço do cartão. (Pergunta aberta para o Caio.)</p>
+
+  <div class="cols">
+    <div class="papel">
+      <div class="top">
+        <div class="loja"><div class="logo">S</div><div><div class="ln">Depósito São Jorge</div><div class="ls">Rua das Obras, 120 · (11) 4002-8922</div></div></div>
+        <div class="num">Orçamento<b>#128</b>22/09/2026 · válido até 29/09</div>
+      </div>
+      <div style="font-size:12px;color:#4b5563;margin-bottom:10px">Cliente: <b style="color:#1f2937">Construtora Alfa</b></div>
+      <div class="tw">
+        <table>
+          <thead><tr><th>#</th><th>Item</th><th class="c">Qtd</th><th class="r">Unitário</th><th class="r">Total</th></tr></thead>
+          <tbody id="q-rows"></tbody>
+        </table>
+      </div>
+      <div class="tots"><div class="tbox">
+        <div class="tl"><span>Dinheiro ou PIX</span><b>R$ 1.000,00</b></div>
+        <div class="tl c"><span>No cartão (débito ou crédito)</span><b>R$ 1.110,00</b></div>
+      </div></div>
+      <div class="rodape">Em cada linha, o valor de cima é no dinheiro ou PIX; o de baixo, <b style="color:#6d28d9">no cartão</b>. Pagamento dividido: o valor no cartão vale só sobre a parte paga no cartão.</div>
+    </div>
+
+    <div>
+      <div class="section" style="margin-top:0">Orçamento salvo (Matcon) — card do carrinho e WhatsApp</div>
+      <div class="qcard">
+        <div class="t">Orçamento #128 salvo</div>
+        <div class="d">R$ 1.000,00 no dinheiro ou PIX · R$ 1.110,00 no cartão</div>
+        <div class="chips"><span class="btn sm" style="background:#25d366;border-color:#25d366;color:#05241a">Enviar no WhatsApp</span><span class="btn sm">Imprimir</span><span class="btn sm">Ver orçamentos</span></div>
+      </div>
+      <div class="wa"><div class="bub">*Orçamento #128 — Depósito São Jorge*
+4 itens · válido até 29/09
+
+Dinheiro ou PIX: *R$ 1.000,00*
+No cartão: *R$ 1.110,00*
+
+Ver o orçamento: aura.app/o/k3f9…</div><div class="hr">10:12 ✓✓</div></div>
+      <p class="note">O orçamento salva os dois preços do dia. Reaberto no Caixa, o carrinho volta com os dois — mesmo que o % da loja tenha mudado depois.</p>
+
+      <div class="section">Etiquetas (Estoque › Etiquetas)</div>
+      <div class="etqs">
+        <div>
+          <div class="etq gon">
+            <div class="nm">Cimento CP II 50 kg</div><div class="un">saco</div>
+            <div class="p1"><b>R$ 38,00</b><span>dinheiro<br>ou PIX</span></div>
+            <div class="p2"><span>no cartão</span>R$ 42,18</div>
+          </div>
+          <div class="etq-cap">Prateleira: o do dinheiro grande, o do cartão numa faixa embaixo.</div>
+        </div>
+        <div>
+          <div class="etq bc">
+            <div class="st">Depósito São Jorge</div>
+            <div class="bars"></div>
+            <div class="nm">Disjuntor bipolar 20 A</div>
+            <div class="pr">R$ 20,00</div>
+            <div class="pr2">cartão R$ 24,55</div>
+          </div>
+          <div class="etq-cap">Código de barras: segunda linha, menor.</div>
+        </div>
+      </div>
+      <p class="note">Com a opção ligada, <b>as etiquetas saem sempre com os dois</b> — sem caixinha para esconder (é o que torna a cobrança diferente legal). Mudou o % em Configurações? O aviso manda reimprimir.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 7. O QUE NÃO MUDA ===================== -->
+<section class="screen" id="naomuda">
+  <div class="mock-label">7 · O que não muda · mapa tela → arquivo · perguntas</div>
+  <h2 class="tt">O que <i>não</i> muda.</h2>
+  <div class="nm-grid" style="margin-top:16px">
+    <div class="box"><b class="t">Opção desligada = Aura de hoje</b><p>Padrão desligado. Nenhum campo no cadastro, nenhuma linha no Caixa, etiqueta e orçamento de um preço só. Mesmos objetos, nenhuma prop obrigatória nova.</p></div>
+    <div class="box"><b class="t">Troca devolve pelo preço pago</b><p>Como hoje: o item volta pelo preço gravado na venda — no cartão, o do cartão; no dividido, o preço rateado. Itens novos da troca seguem o chip da diferença.</p></div>
+    <div class="box"><b class="t">Crediário no preço do dinheiro</b><p>Chip Crediário = preço do dinheiro; os juros do crediário continuam os de hoje (CreditInstallmentModal). No dividido, a parte no crediário abate da base pelo valor.</p></div>
+    <div class="box"><b class="t">Nota fiscal com o preço cobrado</b><p>Venda no cartão: a NFC-e sai com o preço do cartão em cada item. Dividida: com o preço rateado. A nota nunca mostra um preço e cobra outro.</p></div>
+    <div class="box"><b class="t">Taxa da maquininha</b><p>Continua igual: despesa sobre o valor cobrado no cartão. As duas opções são independentes.</p></div>
+    <div class="box"><b class="t">Parcelado no crédito</b><p>Mesmo preço no cartão em 1× ou em 10×. O que já existe de parcelas continua como está.</p></div>
+  </div>
+
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead><tr><th>Tela do mockup</th><th>O que muda</th><th>Arquivo / rota</th></tr></thead>
+      <tbody>
+        <tr><td>1 · Políticas do Caixa</td><td>linha "Cobro mais no cartão" + frase do %, contagem e aviso de mudança; quadro "Cartão"</td><td class="arq">configuracoes/PdvSettingsCard.tsx · nova CardPriceSection.tsx ao lado de CardFeeSection.tsx · services/api PdvSettings (card_price_enabled, card_price_pct)</td></tr>
+        <tr><td>2 · Cadastro</td><td>"Preço no dinheiro e PIX" + "Preço no cartão" (auto/ajustado), margem dupla</td><td class="arq">estoque/item-form/SecaoPreco.tsx (PrecoDeHoje e ComoVoceVende) · ItemFormModal.tsx · item-form/types.ts · products.card_price (null = automático)</td></tr>
+        <tr><td>3 · Caixa desktop</td><td>card do produto com 2 preços; item do carrinho guarda os 2; total/par/desconto pelo chip; cupom não cai ao trocar chip</td><td class="arq">pdv/ProductCard.tsx · hooks/useCart.ts · hooks/usePdvState.ts · pdv/CartPanel.tsx · app/(tabs)/pdv.tsx</td></tr>
+        <tr><td>4 · Dividido</td><td>conta base × fator, linha "o que falta", aviso nas duas línguas, rateio no POST</td><td class="arq">hooks/useCart.ts (split) · pdv/CartPanel.tsx (SplitRow) · backend /pdv/sale</td></tr>
+        <tr><td>5 · Celular</td><td>o mesmo CartPanel em compact; nada no rodapé</td><td class="arq">pdv/CartPanel.tsx (compact) · app/(tabs)/pdv.tsx</td></tr>
+        <tr><td>6 · Orçamento e etiqueta</td><td>colunas com os dois preços, totais duplos, WhatsApp; etiqueta com 2ª linha</td><td class="arq">pdv/buildQuoteHtml.ts · orçamento salvo Matcon (services/matconApi.ts) · estoque/labels/buildLabelHtml.ts</td></tr>
+        <tr><td>Troca</td><td>diferença no cartão pela regra do dividido</td><td class="arq">pdv/TrocaModal.tsx · pdv/troca/</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="box" style="margin-top:14px">
+    <div class="section" style="margin-top:0">Perguntas abertas para o Caio</div>
+    <ol class="perg">
+      <li><b>"À vista" ou "Dinheiro ou PIX"</b> no papel e na etiqueta? O mockup usa "Dinheiro ou PIX" porque débito também é "à vista" e paga o preço do cartão.</li>
+      <li><b>Arredondar o automático?</b> 38,00 × 1,11 = 42,18. Deixar no centavo, ou arredondar para cima (42,20 / 42,90)?</li>
+      <li><b>Preço editado no carrinho</b> (lápis do item): mexe no preço do método escolhido e o outro acompanha na mesma proporção do produto?</li>
+      <li><b>Frete da entrega (Matcon)</b> e taxas avulsas: levam acréscimo no cartão ou ficam iguais?</li>
+      <li><b>Nota do dividido:</b> acréscimo rateado no preço de cada item (proposta) ou em "outras despesas" da NFC-e? Confirmar com o contador.</li>
+      <li><b>Studio, Food, Odonto e loja online:</b> ficam de fora nesta primeira versão (só o Caixa do varejo)?</li>
+    </ol>
+  </div>
+</section>
+
+<script>
+  /* ---------- dados do exemplo (coerentes entre as telas 3–6) ---------- */
+  var ITENS = [
+    { n: 'Cimento CP II 50 kg',       q: 10, u: 'sc', d: 38.00, c: 42.18, est: 'CIM' },
+    { n: 'Porcelanato Bianco 60×60',  q: 5,  u: 'm²', d: 64.80, c: 71.93, est: 'PIS' },
+    { n: 'Argamassa AC-III 20 kg',    q: 4,  u: 'sc', d: 49.00, c: 51.45, est: 'ARG' },
+    { n: 'Disjuntor bipolar 20 A',    q: 5,  u: 'un', d: 20.00, c: 24.55, est: 'ELE' }
+  ];
+  var EXTRA = [
+    { n: 'Areia média lavada', u: 'm³', d: 145.00, c: 160.95, est: 'ARE' },
+    { n: 'Tinta acrílica 18 L branco', u: 'un', d: 289.90, c: 321.79, est: 'TIN' }
+  ];
+  var CARTAO = { debito: 1, cartao: 1 };
+  var METODOS = [ ['dinheiro', 'Dinheiro'], ['pix', 'PIX'], ['debito', 'Débito'], ['cartao', 'Crédito'], ['crediario', 'Crediário'] ];
+  var NOME = { dinheiro: 'dinheiro', pix: 'PIX', debito: 'débito', cartao: 'crédito', crediario: 'crediário' };
+  function r2(x) { return Math.round(x * 100 + 1e-9) / 100; }
+  function brl(x) { return 'R$ ' + r2(x).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+  function num(s) { var v = parseFloat(String(s).replace(/\./g, '').replace(',', '.')); return isNaN(v) ? 0 : v; }
+  function qtd(q, u) { return String(q).replace('.', ',') + ' ' + u; }
+  var SUB_D = ITENS.reduce(function (a, i) { return a + r2(i.q * i.d); }, 0);
+  var SUB_C = ITENS.reduce(function (a, i) { return a + r2(i.q * i.c); }, 0);
+
+  /* ---------- grid de produtos ---------- */
+  function gridHTML(limit) {
+    var lista = ITENS.concat(EXTRA).slice(0, limit);
+    return lista.map(function (p, i) {
+      return '<div class="pc' + (i < ITENS.length ? ' in' : '') + '"><div class="ic">' + p.est + '</div>' +
+        '<div class="nm">' + p.n + '</div>' +
+        '<div class="pr">' + brl(p.d) + (p.u !== 'un' ? '<small> /' + p.u + '</small>' : '') + '</div>' +
+        '<div class="pc2">cartão <b>' + brl(p.c) + '</b></div>' +
+        '<div class="est">' + (i < ITENS.length ? '✓ no carrinho' : '12 em estoque') + '</div></div>';
+    }).join('');
+  }
+
+  /* ---------- carrinho (desktop e celular usam o mesmo) ---------- */
+  var estado = { pay: 'pix', cupom: true };
+  function totais(pay, cupom) {
+    var ehCartao = !!CARTAO[pay];
+    var sub = ehCartao ? SUB_C : SUB_D;
+    var desc = cupom ? r2(sub * 0.05) : 0;
+    return { ehCartao: ehCartao, sub: sub, desc: desc, total: r2(sub - desc),
+      totD: r2(SUB_D - (cupom ? r2(SUB_D * 0.05) : 0)), totC: r2(SUB_C - (cupom ? r2(SUB_C * 0.05) : 0)) };
+  }
+  function totalBig(v) {
+    var s = brl(v).replace('R$ ', ''); var p = s.split(',');
+    return '<small>R$ </small>' + p[0] + '<span class="c">,' + p[1] + '</span>';
+  }
+  function linhasHTML(ehCartao) {
+    return ITENS.map(function (i) {
+      var pr = ehCartao ? i.c : i.d, outro = ehCartao ? i.d : i.c;
+      return '<div class="li"><div class="l"><div class="n">' + i.n + '</div>' +
+        '<div class="q">' + qtd(i.q, i.u) + ' × ' + brl(pr) + ' <span class="o">· ' + (ehCartao ? 'dinheiro ' : 'cartão ') + brl(outro) + '</span></div></div>' +
+        '<div class="v">' + brl(r2(i.q * pr)) + '</div></div>';
+    }).join('');
+  }
+  function rodapeHTML(compact) {
+    if (compact) return '<div class="cf compact"><div class="top"><span class="btn">Limpar</span><span class="btn alt">Orçamento</span></div><span class="btn pri">✓ Finalizar venda</span></div>';
+    return '<div class="cf"><span class="btn">Limpar</span><span class="btn alt">Orçamento</span><span class="btn pri">✓ Finalizar venda</span></div>';
+  }
+  function cartHTML(id, compact) {
+    var t = totais(estado.pay, estado.cupom);
+    var h = '<div class="ch"><div class="k"><span>Total da venda</span><span>#0412</span></div>' +
+      '<div class="tot">' + totalBig(t.total) + '</div>' +
+      '<div class="par"><span class="' + (t.ehCartao ? '' : 'on') + '">dinheiro e PIX<b>' + brl(t.totD) + '</b></span>' +
+      '<span class="' + (t.ehCartao ? 'on' : '') + '">cartão<b>' + brl(t.totC) + '</b></span></div>' +
+      '<div class="meta"><div>Itens<b>24</b></div><div>Desconto<b class="' + (t.desc ? 'desc' : '') + '">' + (t.desc ? '− ' + brl(t.desc) : 'R$ 0,00') + '</b></div><div>Pagamento<b>' + NOME[estado.pay].toUpperCase() + '</b></div></div></div>';
+    h += '<div class="cb">' + linhasHTML(t.ehCartao);
+    h += '<div class="pay">' + METODOS.map(function (m) {
+      return '<button class="' + (estado.pay === m[0] ? 'on' : '') + '" onclick="pagar(\'' + m[0] + '\')">' + m[1] + '</button>';
+    }).join('') + '</div>';
+    h += '<button class="split-t" onclick="location.hash=\'#dividido\'">⇄ Dividir pagamento</button>';
+    h += '<div class="sum"><div><span>Subtotal' + (t.ehCartao ? ' no cartão' : '') + '</span><span>' + brl(t.sub) + '</span></div>' +
+      '<div class="' + (t.desc ? 'd' : '') + '"><span>Desconto' + (estado.cupom ? ' · cupom OBRA5 5%' : '') + '</span><span>' + (t.desc ? '− ' + brl(t.desc) : 'R$ 0,00') + '</span></div>' +
+      '<div class="t"><span>Total</span><span>' + brl(t.total) + '</span></div></div>';
+    if (estado.cupom) h += '<div class="cupnote">✓ Cupom OBRA5 continua valendo no ' + NOME[estado.pay] + '.</div>';
+    h += '</div>' + rodapeHTML(compact);
+    document.getElementById(id).innerHTML = h;
+  }
+  function pagar(m) { estado.pay = m; cartHTML('cart-d', false); cartHTML('cart-m', true); }
+  function cupom(on) {
+    estado.cupom = on;
+    document.getElementById('cup-on').classList.toggle('on', on);
+    document.getElementById('cup-off').classList.toggle('on', !on);
+    document.getElementById('act-cupom').className = on ? 'act on' : 'act';
+    document.getElementById('act-cupom').textContent = on ? 'Cupom · OBRA5' : 'Cupom';
+    pagar(estado.pay);
+  }
+
+  /* ---------- dividido (regra da decisão 5) ---------- */
+  var BASE = SUB_D, FATOR = SUB_C / SUB_D;   // sem cupom nesta tela: 1.000,00 / 1.110,00
+  var CENARIOS = [
+    [ { m: 'pix', v: 400 }, { m: 'cartao', auto: true } ],
+    [ { m: 'crediario', v: 500 }, { m: 'dinheiro', v: 200 }, { m: 'debito', auto: true } ],
+    [ { m: 'cartao', v: 555 }, { m: 'debito', auto: true } ],
+    [ { m: 'cartao', v: 300 }, { m: 'pix', auto: true } ]
+  ];
+  var SPLITS = { 'cart-s': [], 'cart-ms': [] };
+  function clone(a) { return a.map(function (x) { return { m: x.m, v: x.v, auto: !!x.auto }; }); }
+  function calcSplit(ls) {
+    var pagoBase = 0;
+    ls.forEach(function (l) { if (!l.auto) pagoBase += CARTAO[l.m] ? (l.v || 0) / FATOR : (l.v || 0); });
+    var falta = r2(BASE - pagoBase);
+    ls.forEach(function (l) { if (l.auto) { l.v = Math.max(0, CARTAO[l.m] ? r2(falta * FATOR) : falta); } });
+    var auto = ls.filter(function (l) { return l.auto; })[0];
+    var resta = auto ? 0 : falta;
+    var total = ls.reduce(function (a, l) { return a + (l.v || 0); }, 0);
+    return { falta: falta, resta: resta, total: r2(total), auto: auto };
+  }
+  function contaHTML(ls, c) {
+    var naoCartao = ls.filter(function (l) { return !l.auto && !CARTAO[l.m]; });
+    var cartaoFixo = ls.filter(function (l) { return !l.auto && CARTAO[l.m]; });
+    var partes = '<b>' + brl(BASE) + '</b> no dinheiro';
+    naoCartao.forEach(function (l) { partes += ' − ' + brl(l.v) + ' no ' + NOME[l.m]; });
+    cartaoFixo.forEach(function (l) { partes += ' − ' + brl(l.v) + ' no ' + NOME[l.m] + ' <span class="mono">(÷ ' + FATOR.toFixed(2).replace('.', ',') + ' = ' + brl(r2(l.v / FATOR)) + ')</span>'; });
+    partes += ' = faltam <b>' + brl(Math.max(0, c.falta)) + '</b>';
+    if (c.auto && CARTAO[c.auto.m]) {
+      partes += '. No ' + NOME[c.auto.m] + ', com o acréscimo desta venda (' + ((FATOR - 1) * 100).toFixed(0) + '%): <span class="mono">' + brl(Math.max(0, c.falta)) + ' × ' + FATOR.toFixed(2).replace('.', ',') + '</span> = <b>' + brl(c.auto.v) + '</b>.';
+    } else if (c.auto) {
+      partes += ', pagos no ' + NOME[c.auto.m] + ' sem acréscimo.';
+    } else partes += '.';
+    return '<div class="conta">' + partes + '</div>';
+  }
+  function splitCartHTML(id, compact) {
+    var linhas = SPLITS[id];
+    var c = calcSplit(linhas);
+    var h = '<div class="ch"><div class="k"><span>Total da venda · dividido</span><span>#0413</span></div>' +
+      '<div class="tot">' + totalBig(c.total) + '</div>' +
+      '<div class="par"><span>dinheiro e PIX<b>' + brl(SUB_D) + '</b></span><span>cartão<b>' + brl(SUB_C) + '</b></span><span class="on">dividido<b>' + brl(c.total) + '</b></span></div>' +
+      '<div class="meta"><div>Itens<b>24</b></div><div>Desconto<b>R$ 0,00</b></div><div>Pagamento<b>' + linhas.length + '× dividido</b></div></div></div>';
+    h += '<div class="cb">';
+    if (!compact) h += linhasHTML(false);
+    else h += '<div class="li"><div class="l"><div class="n">4 itens · 24 no total</div><div class="q">no dinheiro ' + brl(SUB_D) + ' <span class="o">· cartão ' + brl(SUB_C) + '</span></div></div></div>';
+    h += '<div class="splitp">';
+    linhas.forEach(function (l, idx) {
+      h += '<div class="sr"><div class="ms">' + METODOS.map(function (m) {
+        return '<button class="' + (l.m === m[0] ? 'on' : '') + '" onclick="mudaMetodo(\'' + id + '\',' + idx + ',\'' + m[0] + '\')">' + m[1] + '</button>';
+      }).join('') + '</div>' +
+        (l.auto ? '<div class="tag">o que falta' + (CARTAO[l.m] ? ', com o acréscimo do cartão' : '') + '</div>' : '') +
+        '<div class="val"><span>R$</span><input class="' + (l.auto ? 'auto' : '') + '" value="' + r2(l.v || 0).toFixed(2).replace('.', ',') + '" onchange="mudaValor(\'' + id + '\',' + idx + ', this.value)" aria-label="Valor do pagamento ' + (idx + 1) + '" /></div></div>';
+    });
+    h += '<button class="split-t" onclick="addLinha(\'' + id + '\')">＋ Adicionar pagamento</button>';
+    h += contaHTML(linhas, c);
+    var sobra = c.auto ? c.falta : c.resta;
+    if (sobra < -0.005) h += '<div class="status falta">Sobrando ' + brl(-sobra) + ' (no dinheiro) — diminua um pagamento</div>';
+    else if (c.auto || Math.abs(c.resta) < 0.01) h += '<div class="status ok">✓ Pronto · a conta fecha em ' + brl(c.total) + '</div>';
+    else h += '<div class="status falta">Faltam ' + brl(c.resta) + ' no dinheiro ou PIX, ou ' + brl(r2(c.resta * FATOR)) + ' no cartão</div>';
+    h += '<button class="split-t" style="color:var(--ink3)">✕ Cancelar divisão</button>';
+    h += '</div></div>' + rodapeHTML(compact);
+    document.getElementById(id).innerHTML = h;
+  }
+  function renderSplit(id) { splitCartHTML(id, id === 'cart-ms'); }
+  function cenario(i, bt) {
+    SPLITS['cart-s'] = clone(CENARIOS[i]);
+    if (bt) document.querySelectorAll('#cenarios button').forEach(function (b) { b.classList.toggle('on', b === bt); });
+    renderSplit('cart-s');
+  }
+  function mudaMetodo(id, i, m) { SPLITS[id][i].m = m; renderSplit(id); }
+  function mudaValor(id, i, v) { SPLITS[id][i].v = num(v); SPLITS[id][i].auto = false; renderSplit(id); }
+  function addLinha(id) { SPLITS[id].forEach(function (l) { l.auto = false; }); SPLITS[id].push({ m: 'cartao', auto: true }); renderSplit(id); }
+
+  /* ---------- config ---------- */
+  function cfg(v) {
+    document.getElementById('cfgcard').dataset.cfg = v;
+    document.getElementById('cfg-off').classList.toggle('on', v === 'off');
+    document.getElementById('cfg-on').classList.toggle('on', v === 'on');
+    document.getElementById('cfg-sw').classList.toggle('on', v === 'on');
+  }
+  document.getElementById('cfg-pct').addEventListener('input', function () {
+    var p = num(this.value);
+    document.getElementById('cfg-ex').innerHTML = 'Um produto de <b>R$ 100,00</b> sai a <b>' + brl(100 * (1 + p / 100)) + '</b> no cartão — no débito e no crédito.';
+    document.querySelectorAll('.cfg-pct-t').forEach(function (s) { s.textContent = String(p).replace('.', ','); });
+    document.getElementById('cfg-mudou').style.display = p !== 11 ? 'flex' : 'none';
+  });
+
+  /* ---------- cadastro ---------- */
+  var m2 = document.getElementById('m2');
+  var carAuto = true, PCT = 11;
+  function perfil(p) {
+    m2.dataset.perfil = p;
+    document.getElementById('pf-padrao').classList.toggle('on', p === 'padrao');
+    document.getElementById('pf-matcon').classList.toggle('on', p === 'matcon');
+    var din = document.getElementById('in-din');
+    din.value = p === 'matcon' ? '64,80' : '38,00';
+    document.getElementById('in-custo').value = p === 'matcon' ? '39,20' : '24,00';
+    voltarAuto();
+  }
+  function opcao(o) {
+    m2.dataset.opcao = o;
+    document.getElementById('op-off').classList.toggle('on', o === 'off');
+    document.getElementById('op-on').classList.toggle('on', o === 'on');
+    atualizaCadastro();
+  }
+  function voltarAuto() { carAuto = true; atualizaCadastro(); }
+  function atualizaCadastro() {
+    var din = num(document.getElementById('in-din').value);
+    var inCar = document.getElementById('in-car');
+    if (carAuto) inCar.value = r2(din * (1 + PCT / 100)).toFixed(2).replace('.', ',');
+    var car = num(inCar.value), custo = num(document.getElementById('in-custo').value);
+    var pct = din > 0 ? ((car / din - 1) * 100) : 0;
+    var pctTxt = (Math.round(pct * 10) / 10).toFixed(1).replace('.', ',').replace(',0', '');
+    inCar.className = carAuto ? 'auto' : 'mao';
+    var selo = document.getElementById('selo-cartao');
+    selo.className = 'selo ' + (carAuto ? 'auto' : 'mao');
+    selo.textContent = (carAuto ? 'automático · +' + PCT : 'ajustado à mão · ' + (pct >= 0 ? '+' : '') + pctTxt) + '%';
+    document.getElementById('hint-cartao').innerHTML = carAuto
+      ? 'Segue os <b>11%</b> da loja. Este produto é diferente? Digite o valor do cartão aqui.'
+      : 'Não segue mais os 11% da loja. <button class="lk" onclick="voltarAuto()">↺ Voltar aos 11% (' + brl(din * 1.11) + ')</button>';
+    document.getElementById('aviso-barato').style.display = (!carAuto && car < din) ? 'flex' : 'none';
+    var on = m2.dataset.opcao === 'on', mat = m2.dataset.perfil === 'matcon', u = mat ? 'm²' : 'un.';
+    var mg = document.getElementById('margem');
+    if (custo > 0 && din > 0) {
+      var md = Math.round((din - custo) / din * 100);
+      if (on) {
+        var carLiq = car * (1 - 0.045);
+        var mc = Math.round((carLiq - custo) / car * 100);
+        mg.innerHTML = '✓ Margem <b>' + md + '%</b> no dinheiro · <b>' + mc + '%</b> no cartão, já tirada a taxa da maquininha (4,5%) · lucro <b>' + brl(din - custo) + '</b> / <b>' + brl(carLiq - custo) + '</b> por ' + u;
+      } else {
+        mg.innerHTML = '✓ Margem <b>' + md + '%</b> · lucro <b>' + brl(din - custo) + '</b> por ' + u;
+      }
+    } else mg.innerHTML = 'Com o custo, mostramos a margem.';
+    document.getElementById('pv-din').innerHTML = brl(din) + (mat ? '<small> /m²</small>' : '');
+    document.getElementById('pv-car').textContent = brl(car);
+    document.getElementById('caixa-m').innerHTML = 'A caixa sai a ' + brl(custo * 2.32) + ' de custo e ' + brl(din * 2.32) + ' na venda' + (on ? ' (' + brl(car * 2.32) + ' no cartão)' : '') + '.';
+  }
+  document.getElementById('in-din').addEventListener('input', atualizaCadastro);
+  document.getElementById('in-custo').addEventListener('input', atualizaCadastro);
+  document.getElementById('in-car').addEventListener('input', function () { carAuto = false; atualizaCadastro(); });
+
+  /* ---------- orçamento ---------- */
+  document.getElementById('q-rows').innerHTML = ITENS.map(function (i, k) {
+    return '<tr><td>' + (k + 1) + '</td><td>' + i.n + '</td><td class="c">' + qtd(i.q, i.u) + '</td>' +
+      '<td class="r" style="white-space:nowrap">' + brl(i.d) + '<small>cartão ' + brl(i.c) + '</small></td>' +
+      '<td class="r" style="white-space:nowrap"><b>' + brl(r2(i.q * i.d)) + '</b><small>cartão ' + brl(r2(i.q * i.c)) + '</small></td></tr>';
+  }).join('');
+
+  /* ---------- inicial ---------- */
+  document.getElementById('grid-d').innerHTML = gridHTML(6);
+  document.getElementById('grid-m').innerHTML = gridHTML(4);
+  pagar('pix');
+  cenario(0);
+  SPLITS['cart-ms'] = clone(CENARIOS[0]); renderSplit('cart-ms');
+  atualizaCadastro();
+</script>
+</body>
+</html>

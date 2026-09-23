@@ -217,6 +217,9 @@ function CaixaScreenInner() {
           compact={vp.compact}
           dense={dense}
           matconEnabled={st.matconEnabled}
+          // 22/09/2026 (preço no cartão): "cartão R$ X" embaixo do preço —
+          // só com a opção da loja ligada; desligada o card é o de sempre.
+          cardPriceFor={st.cardPriceOn ? (p => st.gridCardPrice(p as Product)) : undefined}
         />
         <Pagination page={page} totalPages={totalPages} total={filteredTotal}
           pageSize={PAGE_SIZE} onPage={goTo} />

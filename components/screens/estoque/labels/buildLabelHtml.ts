@@ -153,6 +153,12 @@ export type LabelItem = {
   // 08/06/2026: ids para persistir o EAN-13 gerado no cadastro (produto/variante).
   productId?: string;
   variantId?: string;
+  // 22/09/2026 (preco no cartao, docs/mockups/preco-no-cartao.html tela 6):
+  // com a opcao da loja ligada a etiqueta SEMPRE sai com os dois precos
+  // (e o que torna a cobranca diferente legal) — o de sempre grande e
+  // "cartao R$ X" numa linha menor embaixo. Ausente/null = etiqueta de
+  // sempre, byte a byte.
+  cardPrice?: number | null;
 };
 
 // ----- Presets de tamanho de etiqueta -----
@@ -221,6 +227,10 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
     const code = esc(item.barcode);
     const labelName = esc(buildLabelName(item.name, item.size, item.color));
     const price = "R$ " + item.price.toFixed(2).replace(".", ",");
+    // ZONA LIVRE (texto do preco). So existe com a opcao ligada.
+    const priceCard = item.cardPrice != null && item.cardPrice > 0
+      ? '<div class="price2">cart\u00e3o R$ ' + item.cardPrice.toFixed(2).replace(".", ",") + '</div>'
+      : "";
 
     for (let q = 0; q < item.qty; q++) {
       if (isQR) {
@@ -229,7 +239,7 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
         cells.push(
           '<td class="cell"><div class="qr-inner"><img src="' + qrUrl + '" class="qr"><div class="info">' +
           (storeHeader ? '<div class="store">' + storeHeader + '</div>' : '') +
-          '<div class="name">' + labelName + '</div><div class="price">' + price + '</div></div></div></td>'
+          '<div class="name">' + labelName + '</div><div class="price">' + price + '</div>' + priceCard + '</div></div></td>'
         );
       } else {
         // ===== LOCKED STRUCTURE =====
@@ -240,7 +250,7 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
           (storeHeader ? '<div class="store">' + storeHeader + '</div>' : '') +
           '<div class="bc-box"><svg id="bc-' + labelIdx + '" data-code="' + code + '"></svg></div>' +
           '<div class="name">' + labelName + '</div>' +
-          '<div class="price">' + price + '</div></div></td>'
+          '<div class="price">' + price + '</div>' + priceCard + '</div></td>'
         );
         // ============================
       }
@@ -289,6 +299,12 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += '.bc-inner .bc-box svg{max-width:100%;max-height:100%;width:auto;height:auto;display:block}';
   html += '.bc-inner .name{font-size:5.5pt;font-weight:500;line-height:1.05;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#000;max-height:4mm}';
   html += '.bc-inner .price{font-size:9pt;font-weight:900;line-height:1;color:#000}';
+  // Preco no cartao (22/09/2026): so e emitido quando alguma etiqueta tem o
+  // segundo preco — sem ele o CSS continua byte-identico. Texto, nao barra.
+  if (items.some(function (i) { return i.cardPrice != null && i.cardPrice > 0; })) {
+    html += '.bc-inner .price2{font-size:5.5pt;font-weight:800;line-height:1;color:#000;white-space:nowrap}';
+    html += '.qr-inner .price2{font-size:6pt;font-weight:800;white-space:nowrap;color:#000}';
+  }
 
   // QR layout
   html += '.qr-inner{display:flex;flex-direction:row;align-items:center;padding:1mm 1.5mm;gap:1.5mm;height:' + preset.cellHeightMm + 'mm;width:' + preset.cellWidthMm + 'mm}';
