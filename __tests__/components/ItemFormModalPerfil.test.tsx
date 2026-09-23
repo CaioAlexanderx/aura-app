@@ -177,6 +177,9 @@ describe("ItemFormModal — perfil Matcon", () => {
     expect(t.indexOf("Vendo por")).toBeLessThan(t.indexOf("Preço de venda"));
     expect(t).not.toContain("Unidade de venda");
     expect(t).toContain(EX_MATCON);
+    // 23/09/2026 (QA em produção): "un" por extenso na frase da Entrega —
+    // "Cada un pesa" não dizia nada pra quem não é do ramo.
+    expect(t).toContain("Cada unidade pesa");
     tree.unmount();
   });
 
@@ -203,6 +206,26 @@ describe("ItemFormModal — perfil Matcon", () => {
     expect(porLabel(tree, "un")).toBeTruthy();
     act(() => { porLabel(tree, "Em caixa, saco ou fardo").props.onPress(); });
     expect(texto(tree)).toContain("Compro por");
+    tree.unmount();
+  });
+
+  // 23/09/2026 (QA em produção): a dica da ficha citava a frase "Compro
+  // por" mesmo quando ela não estava na tela ("do mesmo jeito que vendo").
+  test("dica da ficha só cita 'Compro por' quando a frase está visível", () => {
+    const tree = montar();
+    // "Do mesmo jeito que vendo" (estado inicial): sem "Compro por" na
+    // tela, a dica não deve falar nele.
+    expect(texto(tree)).not.toContain("Compro por");
+    expect(texto(tree)).toContain("Para tinta e argamassa, escreva o rendimento aqui");
+    expect(texto(tree)).not.toContain("Rendimento de piso não precisa digitar");
+    expect(texto(tree)).not.toContain("Tinta e argamassa escrevem aqui");
+
+    act(() => { porLabel(tree, "Em caixa, saco ou fardo").props.onPress(); });
+    const t = texto(tree);
+    // texto() serializa via JSON.stringify: aspas internas viram \" — o
+    // trecho sem aspas evita depender do escaping.
+    expect(t).toContain("Rendimento de piso não precisa digitar: sai da frase");
+    expect(t).toContain("Para tinta e argamassa, escreva o rendimento aqui");
     tree.unmount();
   });
 

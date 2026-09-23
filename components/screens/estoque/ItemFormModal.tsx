@@ -1218,8 +1218,12 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       {(confirmarSaida || dupPendente) && (
         <View style={s.exitOverlay}>
           <View style={s.exitCard}>
+            {/* 23/09/2026 (QA em produção): título e botão diziam coisas
+                diferentes no cadastro novo ("Descartar...") e na edição
+                ("Sair sem salvar") — padronizado para "Sair sem salvar"
+                nos dois, título e botão coerentes. */}
             <Text style={s.exitTitle}>
-              {dupPendente ? "Abrir o produto que já existe?" : (modoEdicao ? "Sair sem salvar?" : "Descartar este cadastro?")}
+              {dupPendente ? "Abrir o produto que já existe?" : "Sair sem salvar?"}
             </Text>
             <Text style={s.exitMsg}>
               {dupPendente
@@ -1240,7 +1244,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
                   onClose();
                 }}
               >
-                <Text style={s.exitLeaveTxt}>{dupPendente ? "Descartar e abrir" : (modoEdicao ? "Sair sem salvar" : "Descartar e sair")}</Text>
+                <Text style={s.exitLeaveTxt}>{dupPendente ? "Descartar e abrir" : "Sair sem salvar"}</Text>
               </Pressable>
             </View>
           </View>
