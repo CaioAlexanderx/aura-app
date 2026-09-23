@@ -7,9 +7,9 @@ import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
 import {
-  CARTAO_DESLIGADO, ehCartao, editarPrecoProporcional, fraseDaConta, linhasNoMetodo, linhasRateadas,
+  CARTAO_DESLIGADO, contaComOServidor, ehCartao, editarPrecoProporcional, fraseDaConta, linhasNoMetodo, linhasRateadas,
   precoNoCartaoDoItem, r2, resolverDividido, statusDoDividido, totalComoNoServidor,
-  type ConfigDoCartao, type DescontosDaVenda, type LinhaDoPayload, type PrecosDaLinha, type RegraDoCupom,
+  type ConfigDoCartao, type ContaDaVenda, type DescontosDaVenda, type LinhaDoPayload, type PrecosDaLinha, type RegraDoCupom,
 } from "@/utils/precoNoCartao";
 
 // 22/09/2026 (Matcon M0): o item carrega a unidade de venda do produto e,
@@ -73,6 +73,11 @@ export type SaleResult = {
   couponCode?: string;
   couponDiscount?: number;
   manualDiscount?: number;
+  // QA 23/09/2026: a conta que a tela final mostra, do jeito que o servidor
+  // gravou (subtotal − discount = total). Ausentes em venda antiga: a tela
+  // cai na soma dos itens.
+  subtotal?: number;
+  discount?: number;
   cpfNaNota?: string;       // CPF do consumidor (opcional, pra NFC-e)
 };
 
@@ -268,6 +273,8 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
       })
     : [];
   let descontosDaVenda: DescontosDaVenda = {};
+  // A conta do método escolhido (opção ligada, fora do dividido).
+  let simDoMetodo: ContaDaVenda | null = null;
   let precoNoCartao: {
     totalDinheiro: number; totalCartao: number;
     subtotalDinheiro: number; subtotalCartao: number;
@@ -291,6 +298,7 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
     const simD = totalComoNoServidor(linhasD, descontosDaVenda);
     const simK = totalComoNoServidor(linhasK, descontosDaVenda);
     const sim = noCartao ? simK : simD;
+    simDoMetodo = sim;
     manualDiscountAmount = sim.manual;
     couponDiscount = sim.cupom;
     totalAfterCoupon = sim.total;
@@ -636,11 +644,33 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
       saleData.first_due_date = crediario.first_due_date;
     }
 
-    function buildLastSale(saleId: string, saleNumber?: number | null): SaleResult {
+    // A conta da tela final. Dividido: a das linhas rateadas que vão no
+    // POST (o cupom em % recalculado sobre elas, como o servidor faz);
+    // opção ligada num método só: a do método; desligada: a de sempre.
+    var contaLocal: ContaDaVenda;
+    if (linhasDoPayload) {
+      contaLocal = totalComoNoServidor(linhasDoPayload, descontosDaVenda);
+    } else if (simDoMetodo) {
+      contaLocal = simDoMetodo;
+    } else {
+      var descontoDeSempre = round2(Math.max(0, total - totalAfterCoupon));
+      var manualDeSempre = round2(Math.min(manualDiscountAmount || 0, descontoDeSempre));
+      contaLocal = {
+        subtotal: round2(total),
+        cupom: round2(descontoDeSempre - manualDeSempre),
+        manual: manualDeSempre,
+        desconto: descontoDeSempre,
+        total: totalAfterCoupon,
+      };
+    }
+
+    function buildLastSale(saleId: string, saleNumber?: number | null, venda?: any): SaleResult {
+      // Com a resposta do servidor, vale o que ele gravou.
+      var conta = contaComOServidor(contaLocal, venda);
       return {
         id: String(saleId),
         saleNumber: saleNumber ?? null,
-        total: totalDaVenda,
+        total: conta.total,
         payment: primaryPayment,
         payments: paymentsSnapshot,
         items: cartSnapshot,
@@ -651,8 +681,10 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
         employeeName: selectedEmployeeName || undefined,
         sellerName: effectiveSellerName || undefined,
         couponCode: couponApplied?.code,
-        couponDiscount: cartaoOn ? (couponDiscount || undefined) : couponApplied?.discount,
-        manualDiscount: manualDiscountAmount || undefined,
+        couponDiscount: conta.cupom > 0 ? conta.cupom : undefined,
+        manualDiscount: conta.manual > 0 ? conta.manual : undefined,
+        subtotal: conta.subtotal,
+        discount: conta.desconto,
         cpfNaNota: cleanCpf || undefined,
       };
     }
@@ -665,7 +697,7 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
           // sale_number pode vir null (venda de ambiente nao migrado) — o
           // recibo cai no UUID encurtado nesse caso.
           var saleNumber = typeof res?.sale?.sale_number === "number" ? res.sale.sale_number : null;
-          setLastSale(buildLastSale(String(saleId), saleNumber));
+          setLastSale(buildLastSale(String(saleId), saleNumber, res?.sale));
           setCart([]); setQuoteId(null); setReferredProfessionalId(null); clearLotAllocations(); toast.success("Venda registrada!"); setIsProcessing(false); clearCoupon(); clearDiscount();
           setSellerName("");
           setCpfNaNota("");

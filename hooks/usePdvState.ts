@@ -82,14 +82,15 @@ import { useMatconReferral } from "@/hooks/useMatconReferral";
 import { toast } from "@/components/Toast";
 import { flyToCart } from "@/components/screens/pdv/flyToCart";
 import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
-import { IS_WEB, fmtCurrency } from "@/components/screens/pdv/types";
+import { fraseDoCupomAplicado } from "@/components/screens/pdv/rotulosDoCaixa";
+import { IS_WEB } from "@/components/screens/pdv/types";
 import type { CartDisplayItem, PayChip, RequiredHint } from "@/components/screens/pdv/CartPanel";
 import type { PersonPickerHandle } from "@/components/screens/pdv/ActionToolbar";
 import type { Product } from "@/components/screens/estoque/types";
 import type { CrediarioConfirmPayload } from "@/components/screens/pdv/PdvModals";
 
 import { openQuotePdf, type QuoteItem } from "@/utils/quotePdf";
-import { lerConfigDoCartao, precoNoCartaoDoProduto } from "@/utils/precoNoCartao";
+import { descontoDoCupom, lerConfigDoCartao, precoNoCartaoDoProduto } from "@/utils/precoNoCartao";
 import { normalizeText, buildProductHaystack, matchesQuery } from "@/utils/productSearch";
 
 const PAGE_SIZE = 12;
@@ -674,15 +675,23 @@ export function usePdvState() {
       const baseDoCupom = precoNoCartao ? precoNoCartao.subtotalDinheiro : totalRaw;
       const res = await couponsApi.validate(company.id, code, baseDoCupom, selectedCustomerId);
       if (res.valid && res.code) {
+        // QA 23/09: o toast fala o desconto do MÉTODO escolhido (no cartão o
+        // 15% sai de outro subtotal). No dividido o valor depende de quanto
+        // vai no cartão — aí o toast não fala valor.
+        let valorNoMetodo: number | null = res.discount_amount || 0;
         if (precoNoCartao) {
           const valor = Number(res.discount_value);
-          setCouponRule(res.discount_type === "percent" && isFinite(valor)
-            ? { code: res.code, tipo: "percent", valor: valor }
-            : { code: res.code, tipo: "fixed", valor: isFinite(valor) && valor > 0 ? valor : (res.discount_amount || 0) });
+          const regra = res.discount_type === "percent" && isFinite(valor)
+            ? { tipo: "percent" as const, valor: valor }
+            : { tipo: "fixed" as const, valor: isFinite(valor) && valor > 0 ? valor : (res.discount_amount || 0) };
+          setCouponRule({ code: res.code, ...regra });
+          valorNoMetodo = splitMode
+            ? null
+            : descontoDoCupom(regra, precoNoCartao.noCartao ? precoNoCartao.subtotalCartao : precoNoCartao.subtotalDinheiro);
         }
         setCouponApplied({ code: res.code, discount: res.discount_amount || 0 });
         setCouponCode(res.code);
-        toast.success("Cupom " + res.code + " aplicado! −" + fmtCurrency(res.discount_amount || 0));
+        toast.success(fraseDoCupomAplicado(res.code, valorNoMetodo));
         return { ok: true, code: res.code, discount: res.discount_amount };
       }
       return { ok: false, error: res.error || "Cupom inválido" };

@@ -14,6 +14,13 @@
 // "Número da venda"; o UUID encurtado ficou só como fallback pra venda
 // sem número (ambiente não migrado). O toque continua copiando o UUID
 // inteiro — é o que o suporte pede.
+//
+// 23/09/2026 (QA em produção) — a conta fecha na tela: subtotal, desconto e
+// total vêm do que o POST /pdv/sale gravou (useCart → contaComOServidor).
+// Antes, com cupom e preço no cartão/dividido, a tela mostrava o cupom do
+// dinheiro (R$ 201,60) sobre o subtotal rateado e o banco gravava R$ 216,02.
+// O desconto manual ganhou a própria linha — subtotal − cupom − desconto =
+// total, sempre.
 // ============================================================
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -70,8 +77,14 @@ type Props = {
 
 export function SaleComplete({ sale, onNewSale, autoEmit, matconEnabled = false }: Props) {
   const { company, token } = useAuthStore();
-  const subtotal = sale.items.reduce((s, i) => s + i.price * i.qty, 0);
-  const hasCoupon = !!(sale.couponCode && sale.couponDiscount && sale.couponDiscount > 0);
+  const cupom = sale.couponDiscount && sale.couponDiscount > 0 ? sale.couponDiscount : 0;
+  const manual = sale.manualDiscount && sale.manualDiscount > 0 ? sale.manualDiscount : 0;
+  const desconto = sale.discount != null ? sale.discount : cupom + manual;
+  const subtotal = sale.subtotal != null
+    ? sale.subtotal
+    : sale.items.reduce((s, i) => s + i.price * i.qty, 0);
+  const hasCoupon = !!(sale.couponCode && cupom > 0);
+  const hasDiscount = desconto > 0.004;
 
   const hasSplit = !!(sale.payments && sale.payments.length > 0);
   const payments: NfcePaymentEntry[] | undefined = hasSplit
@@ -123,19 +136,25 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconEnabled = false 
             <View style={s.couponBadge}>
               <Text style={s.couponBadgeText}>{sale.couponCode}</Text>
             </View>
-            <Text style={s.couponDiscount}>-{fmt(sale.couponDiscount!)}</Text>
+            <Text testID="venda-cupom" style={s.couponDiscount}>-{fmt(cupom)}</Text>
           </View>
         )}
 
-        {hasCoupon && (
+        {hasDiscount && (
           <View style={s.row}>
             <Text style={s.label}>Subtotal</Text>
-            <Text style={s.metaStrike}>{fmt(subtotal)}</Text>
+            <Text testID="venda-subtotal" style={s.metaStrike}>{fmt(subtotal)}</Text>
+          </View>
+        )}
+        {manual > 0 && (
+          <View style={s.row}>
+            <Text style={s.label}>Desconto</Text>
+            <Text testID="venda-desconto" style={s.meta}>-{fmt(manual)}</Text>
           </View>
         )}
         <View style={s.row}>
           <Text style={s.label}>Total</Text>
-          <Text style={s.value}>{fmt(sale.total)}</Text>
+          <Text testID="venda-total" style={s.value}>{fmt(sale.total)}</Text>
         </View>
         {hasSplit ? (
           <View style={s.splitBox}>

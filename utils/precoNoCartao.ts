@@ -175,23 +175,55 @@ export type DescontosDaVenda = {
   manualValor?: number;
 };
 
+/** Quanto o cupom tira de um subtotal — a mesma conta do POST /pdv/sale
+ *  (% arredondado no centavo; valor fixo com teto no subtotal). */
+export function descontoDoCupom(cupom: RegraDoCupom | null | undefined, subtotal: number): number {
+  if (!cupom) return 0;
+  return cupom.tipo === "percent"
+    ? Math.round(((subtotal * cupom.valor) / 100) * 100) / 100
+    : Math.min(cupom.valor, subtotal);
+}
+
 /** Espelho do cálculo do POST /pdv/sale (aura-backend src/routes/pdv.js):
  *  cupom e desconto manual somam, com teto no subtotal. */
 export function totalComoNoServidor(linhas: { totalDaLinha: number }[], d: DescontosDaVenda) {
   let subtotal = 0;
   for (const l of linhas) subtotal += l.totalDaLinha;
-  let cupom = 0;
-  if (d.cupom) {
-    cupom = d.cupom.tipo === "percent"
-      ? Math.round(((subtotal * d.cupom.valor) / 100) * 100) / 100
-      : Math.min(d.cupom.valor, subtotal);
-  }
+  const cupom = descontoDoCupom(d.cupom, subtotal);
   let manual = 0;
   if (d.manualValor && d.manualValor > 0) manual = d.manualValor;
   else if (d.manualPct && d.manualPct > 0) manual = parseFloat(((subtotal * d.manualPct) / 100).toFixed(2));
   const desconto = Math.min(parseFloat((cupom + manual).toFixed(2)), subtotal);
   const total = parseFloat((subtotal - desconto).toFixed(2));
   return { subtotal: r2(subtotal), cupom, manual, desconto, total: Math.max(0, total) };
+}
+
+/** A conta da venda como a tela final mostra: subtotal − desconto = total. */
+export type ContaDaVenda = { subtotal: number; cupom: number; manual: number; desconto: number; total: number };
+
+/**
+ * Tela final da venda (QA 23/09/2026): o que vale é o que o POST /pdv/sale
+ * gravou — `sale.total_amount` e `sale.discount_amount` (cupom + manual,
+ * recalculados pelo servidor sobre o subtotal das linhas enviadas). Com os
+ * dois, o subtotal é total + desconto e o manual (que o servidor não devolve
+ * separado) sai da conta local; o resto do desconto é o cupom. Sem eles
+ * (venda offline/demo, ambiente antigo), fica a conta local.
+ */
+export function contaComOServidor(
+  local: ContaDaVenda,
+  venda: { total_amount?: unknown; discount_amount?: unknown } | null | undefined,
+): ContaDaVenda {
+  const total = parseFloat(venda?.total_amount as any);
+  const desconto = parseFloat(venda?.discount_amount as any);
+  if (!isFinite(total) || !isFinite(desconto)) return local;
+  const manual = r2(Math.min(Math.max(0, local.manual), desconto));
+  return {
+    subtotal: r2(total + desconto),
+    cupom: r2(desconto - manual),
+    manual,
+    desconto: r2(desconto),
+    total: r2(total),
+  };
 }
 
 export function linhasNoMetodo(linhas: PrecosDaLinha[], noCartao: boolean): LinhaDoPayload[] {

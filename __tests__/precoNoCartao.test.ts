@@ -12,7 +12,7 @@
 //   · desconto em % sobre o preço do método, em R$ o mesmo nos dois.
 // ============================================================
 import {
-  CARTAO_DESLIGADO, ehCartao, editarPrecoProporcional, fraseDaConta, lerConfigDoCartao,
+  CARTAO_DESLIGADO, contaComOServidor, descontoDoCupom, ehCartao, editarPrecoProporcional, fraseDaConta, lerConfigDoCartao,
   linhasNoMetodo, linhasRateadas, paraCimaNos10Centavos, percentualReal, precoNoCartaoAutomatico,
   precoNoCartaoDoItem, precoNoCartaoDoProduto, resolverDividido, statusDoDividido, totalComoNoServidor,
   type DescontosDaVenda, type PrecosDaLinha,
@@ -225,5 +225,28 @@ describe("lápis do carrinho", () => {
   test("editar um preço leva o outro na mesma proporção", () => {
     expect(editarPrecoProporcional({ cash: 38, card: 42.2 }, 34.2, false)).toEqual({ cash: 34.2, card: 37.98 });
     expect(editarPrecoProporcional({ cash: 38, card: 42.2 }, 40, true)).toEqual({ card: 40, cash: 36.02 });
+  });
+});
+
+// QA 23/09/2026 — a tela final mostra a conta que o servidor gravou.
+describe("tela final da venda", () => {
+  test("descontoDoCupom: % no centavo, fixo com teto", () => {
+    expect(descontoDoCupom({ tipo: "percent", valor: 15 }, 1440.15)).toBe(216.02);
+    expect(descontoDoCupom({ tipo: "percent", valor: 15 }, 1344)).toBe(201.6);
+    expect(descontoDoCupom({ tipo: "fixed", valor: 50 }, 30)).toBe(30);
+    expect(descontoDoCupom(null, 100)).toBe(0);
+  });
+  test("contaComOServidor: vale o total e o desconto gravados; o manual sai da conta local", () => {
+    const local = { subtotal: 1440.15, cupom: 201.6, manual: 0, desconto: 201.6, total: 1224.13 };
+    expect(contaComOServidor(local, { total_amount: "1224.13", discount_amount: "216.02" }))
+      .toEqual({ subtotal: 1440.15, cupom: 216.02, manual: 0, desconto: 216.02, total: 1224.13 });
+    const comManual = { subtotal: 200, cupom: 20, manual: 10, desconto: 30, total: 170 };
+    expect(contaComOServidor(comManual, { total_amount: 170, discount_amount: 30 }))
+      .toEqual({ subtotal: 200, cupom: 20, manual: 10, desconto: 30, total: 170 });
+  });
+  test("sem os números do servidor, fica a conta local", () => {
+    const local = { subtotal: 100, cupom: 5, manual: 0, desconto: 5, total: 95 };
+    expect(contaComOServidor(local, { id: "x" } as any)).toBe(local);
+    expect(contaComOServidor(local, null)).toBe(local);
   });
 });
