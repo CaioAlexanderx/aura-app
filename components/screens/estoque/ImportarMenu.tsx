@@ -11,6 +11,19 @@
 // ele ficaria preso no z-index:0 das Views do RNW e a lista de produtos
 // pintaria por cima (memória "overlay fixo dentro de shell"). Fecha ao
 // tocar fora, no Esc e ao escolher uma opção.
+//
+// QA 23/09/2026 (Matcon, computador): "o primeiro clique às vezes não abre".
+// Três caminhos levavam a isso, e os três foram fechados:
+//   1. Texto selecionado durante o clique. O "Importar" era texto
+//      selecionável; um tremor de 1–2px com o botão apertado selecionava
+//      letras, e o react-native-web ENCERRA o toque quando há seleção de
+//      texto durante o gesto (selectionchange) e cancela o onPress — o
+//      clique simplesmente não acontece. O botão agora é userSelect: none.
+//   2. Clique duplo (hábito de quem usa o computador pouco): o 1º clique
+//      abria, o 2º caía no fundo do menu (que cobre a tela) e fechava. O
+//      fundo agora ignora toques nos primeiros instantes depois de abrir.
+//   3. No celular, fechar o teclado (sair da busca) dispara "resize" e o
+//      menu fechava junto. Agora o resize só reposiciona o menu.
 // ============================================================
 import { useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet, Platform, ActivityIndicator } from "react-native";
@@ -54,19 +67,28 @@ function calcularPosicao(el: any): Posicao | null {
   return { top: r.bottom + 6, left, width };
 }
 
+/** Depois de abrir, o fundo ignora toques por este tempo — o 2º clique de
+ *  um clique duplo não fecha o menu que o 1º acabou de abrir. */
+export const TRAVA_DO_FUNDO_MS = 450;
+
+/** Web: o botão não deixa selecionar o próprio texto (ver item 1 acima). */
+const SEM_SELECAO: any = Platform.OS === "web" ? { userSelect: "none", WebkitUserSelect: "none" } : null;
+
 export function ImportarMenu({ onNota, onPlanilha, ocupado, compacto }: Props) {
   const [aberto, setAberto] = useState(false);
   const [pos, setPos] = useState<Posicao | null>(null);
   const botaoRef = useRef<any>(null);
+  const abertoEm = useRef(0);
 
   useEffect(() => {
     if (!aberto || Platform.OS !== "web" || typeof window === "undefined") return;
-    const fechar = () => setAberto(false);
+    // Resize (inclusive o teclado do celular fechando) só reposiciona.
+    const reposicionar = () => setPos(calcularPosicao(botaoRef.current));
     const tecla = (e: KeyboardEvent) => { if (e.key === "Escape") setAberto(false); };
-    window.addEventListener("resize", fechar);
+    window.addEventListener("resize", reposicionar);
     window.addEventListener("keydown", tecla);
     return () => {
-      window.removeEventListener("resize", fechar);
+      window.removeEventListener("resize", reposicionar);
       window.removeEventListener("keydown", tecla);
     };
   }, [aberto]);
@@ -74,7 +96,13 @@ export function ImportarMenu({ onNota, onPlanilha, ocupado, compacto }: Props) {
   function alternar() {
     if (aberto) { setAberto(false); return; }
     setPos(calcularPosicao(botaoRef.current));
+    abertoEm.current = Date.now();
     setAberto(true);
+  }
+
+  function tocarFora() {
+    if (Date.now() - abertoEm.current < TRAVA_DO_FUNDO_MS) return;
+    setAberto(false);
   }
 
   function escolher(acao: () => void) {
@@ -84,7 +112,7 @@ export function ImportarMenu({ onNota, onPlanilha, ocupado, compacto }: Props) {
 
   const menu = (
     <View style={s.camada} testID="importar-menu">
-      <Pressable style={s.fundo} onPress={() => setAberto(false)} testID="importar-menu-fundo" />
+      <Pressable style={s.fundo} onPress={tocarFora} testID="importar-menu-fundo" />
       <View
         style={[
           s.menu,
@@ -118,13 +146,13 @@ export function ImportarMenu({ onNota, onPlanilha, ocupado, compacto }: Props) {
       <Pressable
         ref={botaoRef}
         onPress={alternar}
-        style={[s.botao, aberto && s.botaoAberto, compacto && s.botaoCompacto]}
+        style={[s.botao, aberto && s.botaoAberto, compacto && s.botaoCompacto, SEM_SELECAO]}
         testID="importar-botao"
         accessibilityLabel="Importar"
         accessibilityState={{ expanded: aberto } as any}
       >
         {ocupado ? <ActivityIndicator size="small" color={Colors.violet3} /> : <Icon name="upload" size={14} color={Colors.violet3} />}
-        {!compacto && <Text style={s.botaoTxt}>Importar</Text>}
+        {!compacto && <Text style={[s.botaoTxt, SEM_SELECAO]}>Importar</Text>}
         {!compacto && <Icon name={aberto ? "chevron_up" : "chevron_down"} size={13} color={Colors.violet3} />}
       </Pressable>
       {aberto && (Platform.OS === "web" ? <WebPortal active>{menu}</WebPortal> : menu)}
