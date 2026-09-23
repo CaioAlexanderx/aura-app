@@ -22,6 +22,7 @@
 // ============================================================
 
 import { toPackages, rotuloEmbalagem } from "@/utils/matconUnits";
+import { fmtReais } from "@/utils/precoNoCartao";
 
 // Reexportado por compatibilidade — quem já importava rotuloEmbalagem
 // daqui (CalculadoraAmbiente.tsx, testes) continua funcionando. A fonte
@@ -134,3 +135,35 @@ export function fmtArea(n: number, unit?: string): string {
   return unit ? s + " " + unit : s;
 }
 
+
+/** Quanto sai uma opção da folha: quantidade × preço unitário, no centavo
+ *  (a mesma conta da linha do carrinho). Sem preço (> 0), null. */
+export function valorDaOpcao(qty: number | null | undefined, precoUnitario: number | null | undefined): number | null {
+  var q = Number(qty);
+  var p = Number(precoUnitario);
+  if (!isFinite(q) || q <= 0 || !isFinite(p) || p <= 0) return null;
+  return Math.round(q * p * 100) / 100;
+}
+
+/**
+ * QA 23/09/2026: cada opção da folha diz quanto custa — o cliente pergunta
+ * "e quanto fica?" antes de escolher entre os m² exatos e as caixas
+ * fechadas. "R$ 1.202,69" e, com o preço no cartão ligado, o outro método
+ * do jeito que a linha do carrinho escreve: "R$ 1.202,69 · cartão
+ * R$ 1.335,00". Sem preço, "" (a folha não inventa valor).
+ */
+export function fraseDoValor(args: {
+  qty: number | null | undefined;
+  precoUnitario?: number | null;
+  outroPrecoUnitario?: number | null;
+  outroRotulo?: string | null;
+}): string {
+  var v = valorDaOpcao(args.qty, args.precoUnitario);
+  if (v == null) return "";
+  var frase = fmtReais(v);
+  var outro = valorDaOpcao(args.qty, args.outroPrecoUnitario);
+  if (outro != null && Math.abs(outro - v) >= 0.005) {
+    frase += " · " + ((args.outroRotulo || "").trim() || "cartão") + " " + fmtReais(outro);
+  }
+  return frase;
+}

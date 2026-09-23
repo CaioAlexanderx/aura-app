@@ -10,9 +10,27 @@
 // Modal não passam pelo transformIgnorePatterns do projeto).
 // ============================================================
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
-jest.mock("@/components/ResponsiveSheet", () => ({
-  ResponsiveSheet: ({ visible, children }: any) => (visible ? children : null),
-}));
+// Janela de notebook (o jsdom mede 0×0, que seria "celular").
+let mockJanela = { width: 1366, height: 768 };
+jest.mock("react-native", () => {
+  const rn = jest.requireActual("react-native");
+  return new Proxy(rn, {
+    get(alvo, chave) {
+      if (chave === "useWindowDimensions") return () => ({ ...mockJanela, scale: 1, fontScale: 1 });
+      return alvo[chave as any];
+    },
+  });
+});
+jest.mock("@/components/ResponsiveSheet", () => {
+  const { View } = jest.requireActual("react-native");
+  return {
+    SHEET_NARROW_BP: 500,
+    // Passa-adiante, mas guarda o sheetStyle num View para o teste da
+    // altura fixa (QA 23/09/2026).
+    ResponsiveSheet: ({ visible, children, sheetStyle }: any) =>
+      visible ? <View testID="matcon-calc-folha" style={sheetStyle}>{children}</View> : null,
+  };
+});
 
 import React from "react";
 import renderer, { act } from "react-test-renderer";
@@ -38,7 +56,9 @@ const BASE = {
   defaultWastePct: 8,
 };
 
-function montar(props: Partial<typeof BASE> & { onUse?: any; onClose?: any } = {}) {
+type Extras = { onUse?: any; onClose?: any; unitPrice?: number | null; otherUnitPrice?: number | null; otherLabel?: string };
+
+function montar(props: Partial<typeof BASE> & Extras = {}) {
   const onUse = props.onUse || jest.fn();
   const onClose = props.onClose || jest.fn();
   let tree!: renderer.ReactTestRenderer;
@@ -166,5 +186,80 @@ describe("CalculadoraAmbiente · Matcon M3", () => {
     expect(onUse).not.toHaveBeenCalled();
 
     tree.unmount();
+  });
+
+  // ── QA 23/09/2026 ────────────────────────────────────────────────
+  function estilo(node: any) {
+    const st = node.props.style;
+    return Object.assign({}, ...(Array.isArray(st) ? st.flat(5) : [st]).filter(Boolean));
+  }
+
+  it("no computador o balão tem altura fixa: o que cresce rola por dentro", () => {
+    const { tree } = montar();
+    const folha = () => tree.root.findAllByProps({ testID: "matcon-calc-folha" }, { deep: false } as any)[0];
+    const antes = estilo(folha()).height;
+    expect(typeof antes).toBe("number");
+    expect(antes).toBeGreaterThan(0);
+
+    digitarSala(tree);
+    act(() => { campo(tree, "matcon-calc-add").props.onPress(); });
+    act(() => { campo(tree, "matcon-calc-largura-1").props.onChangeText("2"); });
+    act(() => { campo(tree, "matcon-calc-comprimento-1").props.onChangeText("3"); });
+
+    // Mais linhas e o resultado cheio: a altura do balão não muda.
+    expect(estilo(folha()).height).toBe(antes);
+    tree.unmount();
+  });
+
+  it("'considero [10] % de perda' fica numa linha só, com o campo de largura fixa", () => {
+    const { tree } = montar({ defaultWastePct: 10 });
+    const linha = tree.root.findAllByProps({ testID: "matcon-calc-perda-linha" })[0];
+    expect(estilo(linha).flexWrap).toBe("nowrap");
+    expect(flattenText(linha.props.children)).toContain("% de perda");
+    const perda = campo(tree, "matcon-calc-perda");
+    expect(estilo(perda).width).toBe(52);
+    tree.unmount();
+  });
+
+  it("cada opção mostra quanto custa no preço do carrinho", () => {
+    // 15,88 m² × R$ 64,80 = R$ 1.029,02 · 7 caixas = 16,24 m² × 64,80 = R$ 1.052,35
+    const { tree } = montar({ unitPrice: 64.8 });
+    digitarSala(tree);
+    expect(flattenText(campo(tree, "matcon-calc-valor-area").props.children)).toBe("R$ 1.029,02");
+    expect(flattenText(campo(tree, "matcon-calc-valor-caixas").props.children)).toBe("16,24 m² · R$ 1.052,35");
+    tree.unmount();
+  });
+
+  it("com o preço no cartão, as opções mostram os dois métodos", () => {
+    const { tree } = montar({ unitPrice: 64.8, otherUnitPrice: 72, otherLabel: "cartão" });
+    digitarSala(tree);
+    expect(flattenText(campo(tree, "matcon-calc-valor-area").props.children)).toBe("R$ 1.029,02 · cartão R$ 1.143,36");
+    expect(flattenText(campo(tree, "matcon-calc-valor-caixas").props.children))
+      .toBe("16,24 m² · R$ 1.052,35 · cartão R$ 1.169,28");
+    tree.unmount();
+  });
+
+  it("no celular (folha ancorada embaixo) não trava a altura", () => {
+    mockJanela = { width: 390, height: 844 };
+    try {
+      const { tree } = montar();
+      const folha = tree.root.findAllByProps({ testID: "matcon-calc-folha" }, { deep: false } as any)[0];
+      expect(estilo(folha).height).toBeUndefined();
+      tree.unmount();
+    } finally {
+      mockJanela = { width: 1366, height: 768 };
+    }
+  });
+
+  it("sem preço nem medida, nada de valor inventado", () => {
+    const semPreco = montar();
+    digitarSala(semPreco.tree);
+    expect(semPreco.tree.root.findAllByProps({ testID: "matcon-calc-valor-area" }).length).toBe(0);
+    expect(flattenText(campo(semPreco.tree, "matcon-calc-valor-caixas").props.children)).toBe("16,24 m²");
+    semPreco.tree.unmount();
+
+    const semMedida = montar({ unitPrice: 64.8 });
+    expect(semMedida.tree.root.findAllByProps({ testID: "matcon-calc-valor-area" }).length).toBe(0);
+    semMedida.tree.unmount();
   });
 });

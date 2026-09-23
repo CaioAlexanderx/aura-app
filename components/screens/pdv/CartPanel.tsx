@@ -1235,6 +1235,11 @@ function CartItem({
           purchaseFactor={item.purchaseFactor}
           defaultWastePct={defaultWastePct ?? 0}
           onUse={qty => onQtySet(qty)}
+          // QA 23/09/2026: cada opção mostra quanto custa, no preço da
+          // linha (o do chip escolhido) e, com o preço no cartão, no outro.
+          unitPrice={item.price}
+          otherUnitPrice={item.otherPrice}
+          otherLabel={item.otherLabel}
         />
       ) : null}
     </View>
