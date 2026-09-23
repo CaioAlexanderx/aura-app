@@ -183,7 +183,13 @@ export function ProductGridWeb({ items, onEdit, onDelete, onLink, bulkMode, bulk
                 <span style={{
                   fontSize: 12, fontFamily: Fonts.mono, fontWeight: 600,
                   color: low ? (isDark ? "#f87171" : "#dc2626") : C.ink3,
-                } as any}>{fmtQty(p.stock)}{p.unit || "un"}</span>
+                } as any}>
+                  {fmtQty(p.stock)}
+                  {/* 23/09/2026 (QA producao, item 3): "16rolo", "0m" — sem
+                      espaço e a unidade herdando a fonte mono do número.
+                      Espaço de verdade + fonte normal pra unidade. */}
+                  {" "}<span style={{ fontFamily: Fonts.body, fontWeight: 400 } as any}>{p.unit || "un"}</span>
+                </span>
               </div>
             </div>
           </div>

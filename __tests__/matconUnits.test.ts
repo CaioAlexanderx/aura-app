@@ -109,6 +109,17 @@ describe("fmtQty", () => {
   test("com unidade, sufixa com espaço", () => {
     expect(fmtQty(12.5, "m²")).toBe("12,5 m²");
   });
+
+  // 23/09/2026 (QA producao, item 3): "16rolo", "0m", "120m²" na lista do
+  // Estoque -- ProductTableWeb/ProductGridWeb concatenavam o numero e a
+  // unidade sem espaço (e a unidade herdava a fonte monoespaçada do
+  // número). fmtQty(qty, unit) já produzia o texto certo; os call sites é
+  // que não passavam a unidade. Casos exatos do QA:
+  test("casos do QA: numero e unidade sempre com espaço entre eles", () => {
+    expect(fmtQty(16, "rolo")).toBe("16 rolo");
+    expect(fmtQty(0, "m")).toBe("0 m");
+    expect(fmtQty(120, "m²")).toBe("120 m²");
+  });
 });
 
 describe("toPackages", () => {

@@ -55,6 +55,11 @@ export type Product = {
   // do Estoque pra achar o pai bipando barcode de uma variante.
   variant_barcodes?: string[];
   ncm?: string;
+  // 23/09/2026 (QA producao, item 10 — "Ultimos adicionados" ordenava
+  // alfabetico): GET /products ja devolvia created_at, mas mapApiProduct
+  // nunca mapeava pro Product — o sort "recent" em estoque.tsx sempre via
+  // undefined dos dois lados e caia na ordem do backend (ORDER BY name).
+  created_at?: string | null;
 };
 
 export const UNITS = ["un", "pct", "cx", "kg", "g", "ml", "L", "par", "kit"];

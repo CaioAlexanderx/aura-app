@@ -55,6 +55,11 @@ import { ProductGridWeb } from "@/components/screens/estoque/ProductGridWeb";
 import { readMatconSettings } from "@/constants/matcon";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { nfceApi } from "@/services/nfceApi";
+// 23/09/2026 (QA producao, item 5): estoque consolidado (AggregatedView)
+// usava "un" fixo e Math.round — errado pra produto fracionado (m², kg).
+import { fmtQty } from "@/utils/matconUnits";
+// 23/09/2026 (QA producao, item 10): "Ultimos adicionados" ordenava alfabetico.
+import { compareByRecent } from "@/utils/productSort";
 // import { EstoqueRightRail } from "@/components/screens/estoque/EstoqueRightRail"; // Phase 2 — right rail
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
@@ -205,8 +210,12 @@ function AggregatedView() {
                 <View style={agg.itemsList}>
                   {g.items.map((item) => (
                     <View key={item.product_id} style={agg.itemChip}>
+                      {/* 23/09/2026 (QA producao, item 5 — "un" fixo mesmo
+                          quando o produto e vendido em m²/kg/etc.): usa a
+                          unidade do grupo, com fmtQty pra nao truncar
+                          estoque fracionado ("12,5 m²" em vez de "12"). */}
                       <Text style={agg.itemChipText}>
-                        {item.company_name}: {Math.round(item.stock_qty)} un
+                        {item.company_name}: {fmtQty(item.stock_qty, g.unit || "un")}
                       </Text>
                     </View>
                   ))}
@@ -214,7 +223,10 @@ function AggregatedView() {
               )}
             </View>
             <View style={agg.rightCol}>
-              <Text style={agg.totalStock}>{Math.round(g.total_stock)}</Text>
+              {/* 23/09/2026 (QA producao, item 5): fmtQty em vez de
+                  Math.round — estoque fracionado (m², kg) nao pode virar
+                  inteiro truncado. */}
+              <Text style={agg.totalStock}>{fmtQty(g.total_stock)}</Text>
               <Text style={agg.totalStockLabel}>{g.unit || "un"}</Text>
               <Text style={agg.price}>{m(fmt(g.avg_price))}</Text>
             </View>
@@ -416,7 +428,7 @@ export default function EstoqueScreen() {
   const sorted = useMemo(() => {
     const arr = [...filtered];
     if (sortOrder === "recent") {
-      arr.sort((a, b) => new Date((b as any).created_at || 0).getTime() - new Date((a as any).created_at || 0).getTime());
+      arr.sort(compareByRecent);
     } else if (sortOrder === "price_desc") {
       arr.sort((a, b) => ((b as any).price ?? 0) - ((a as any).price ?? 0));
     } else if (sortOrder === "price_asc") {
@@ -677,7 +689,14 @@ export default function EstoqueScreen() {
             <View style={s.dupBannerIcon}><Text style={s.dupBannerIconText}>!</Text></View>
             <View style={{ flex: 1 }}>
               <Text style={s.dupBannerTitle}>{dupGroupsCount} grupo{dupGroupsCount > 1 ? "s" : ""} de produtos duplicados</Text>
-              <Text style={s.dupBannerDesc}>Produtos com o mesmo nome podem ser unificados em variantes (cor/tamanho).</Text>
+              {/* 23/09/2026 (QA producao, item 11): a deteccao (backend,
+                  GET /duplicate-groups) passou a exigir mesmo nome + mesma
+                  unidade + mesma marca — antes agrupava so por nome e
+                  sugeria unificar "manta em metro" com "manta em rolo", ou
+                  cimento de marcas diferentes. O texto agora explica o
+                  criterio pra ficar claro por que esses produtos entraram
+                  no grupo. */}
+              <Text style={s.dupBannerDesc}>Mesmo nome, mesma unidade e mesma marca — provavelmente é o mesmo produto em cor ou tamanho diferente.</Text>
             </View>
             <View style={s.dupBannerCta}><Text style={s.dupBannerCtaText}>Unificar</Text><Text style={s.dupBannerArrow}>{"›"}</Text></View>
           </Pressable>
