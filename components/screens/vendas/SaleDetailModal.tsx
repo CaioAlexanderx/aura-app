@@ -13,6 +13,8 @@ import { router } from "expo-router";
 import { ROTA_TROCA_PDV, rotuloDevolvido, mensagemCancelamento, avisoRetornosAtivos } from "@/utils/devolucaoOuTroca";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { readMatconSettings } from "@/constants/matcon";
+import { matconApi } from "@/services/matconApi";
+import { textoDoErro } from "@/components/matcon/erroMatcon";
 
 // ============================================================
 // AURA. — Modal de detalhes da venda (Item 3 Eryca)
@@ -117,6 +119,12 @@ export function SaleDetailModal({
   // 22/09/2026 (Matcon M1): selo "saldo a entregar" — só com o toggle ligado.
   const { settings: pdvSettings } = usePdvSettings();
   const matcon = readMatconSettings(pdvSettings);
+  // QA final 23/09/2026 (Matcon M1): "Criar entrega" — a venda feita no
+  // balcão, sem orçamento, ganha a 1ª entrega por aqui (POST
+  // .../matcon/deliveries {sale_id}, docs/CONTRACT_MATCON.md). A venda que
+  // sai de um orçamento já nasce com a entrega (o backend cria).
+  const [criandoEntrega, setCriandoEntrega] = useState(false);
+  const [entregaCriadaDe, setEntregaCriadaDe] = useState<string | null>(null);
 
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
@@ -296,6 +304,22 @@ export function SaleDetailModal({
 
   const sale = detail?.sale;
   const isCancelled = sale?.status === "cancelled";
+
+  async function handleCriarEntrega() {
+    if (!sale || !effectiveCompanyId || criandoEntrega) return;
+    setCriandoEntrega(true);
+    try {
+      await matconApi.createDelivery(effectiveCompanyId, { sale_id: sale.id });
+      setEntregaCriadaDe(sale.id);
+      toast.success("Entrega criada. Ela aparece em Entregas, em Separando.");
+    } catch (e: any) {
+      // A frase do backend ("esta venda já tem entrega") passa como veio;
+      // texto de sistema (rota, rede) vira a frase simples.
+      toast.error(textoDoErro(e, "Não consegui criar a entrega agora. Tente de novo daqui a pouco."));
+    } finally {
+      setCriandoEntrega(false);
+    }
+  }
   const items = detail?.items || [];
   const customer = detail?.customer;
   const seller = detail?.seller;
@@ -360,8 +384,10 @@ export function SaleDetailModal({
                   em SaleDetailFull; ausente = nada aparece). */}
               {matcon.matcon_enabled && sale?.has_pending_delivery === true && (
                 <Pressable
-                  onPress={() => { onClose(); router.push("/matcon/entregas" as any); }}
+                  // Abre Entregas já em "Com saldo a entregar".
+                  onPress={() => { onClose(); router.push("/matcon/entregas?dia=pending" as any); }}
                   style={s.pendingDeliveryBadge}
+                  testID="venda-saldo-a-entregar"
                 >
                   <Icon name="truck" size={10} color={Colors.amber} />
                   <Text style={s.pendingDeliveryText}>saldo a entregar</Text>
@@ -722,6 +748,38 @@ export function SaleDetailModal({
                   <Icon name="repeat" size={13} color={Colors.violet3} />
                   <Text style={s.actionEditText}>Trocar</Text>
                 </Pressable>
+              )}
+              {/* QA final 23/09 (Matcon M1): "Criar entrega" — só com o
+                  módulo ligado, em venda (não troca/devolução) ativa e que
+                  ainda não mostra saldo a entregar. Depois de criar, vira
+                  "Ver entregas". Sempre visível (regra 7). */}
+              {matcon.matcon_enabled && !isCancelled && !isTroca && !isDevolucao && sale.has_pending_delivery !== true && (
+                entregaCriadaDe === sale.id ? (
+                  <Pressable
+                    testID="venda-ver-entregas"
+                    onPress={function() { onClose(); router.push("/matcon/entregas" as any); }}
+                    style={[s.actionBtn, s.actionEdit]}
+                  >
+                    <Icon name="truck" size={13} color={Colors.violet3} />
+                    <Text style={s.actionEditText}>Ver entregas</Text>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    testID="venda-criar-entrega"
+                    onPress={handleCriarEntrega}
+                    disabled={criandoEntrega}
+                    style={[s.actionBtn, s.actionEdit, criandoEntrega && { opacity: 0.6 }]}
+                  >
+                    {criandoEntrega ? (
+                      <ActivityIndicator color={Colors.violet3} size="small" />
+                    ) : (
+                      <>
+                        <Icon name="truck" size={13} color={Colors.violet3} />
+                        <Text style={s.actionEditText}>Criar entrega</Text>
+                      </>
+                    )}
+                  </Pressable>
+                )
               )}
               {!isCancelled && (
                 <Pressable
