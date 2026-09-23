@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { Platform } from "react-native";
+import { guardarAntesDeRecarregar } from "@/utils/vendaGuardada";
 
 var THEME_KEY = "aura_theme";
 var COOKIE_NAME = "aura_theme";
@@ -172,7 +173,11 @@ export var useThemeStore = create<ThemeState>(function(set, get) {
       var next = !get().isDark;
       set({ isDark: next });
       saveTheme(next);
-      // Colors are frozen at import time — full reload required
+      // Colors are frozen at import time — full reload required.
+      // QA 23/09/2026: a recarga apagava o carrinho do Caixa sem aviso.
+      // Quem tem venda em andamento guarda agora (utils/vendaGuardada) e
+      // recupera ao voltar.
+      guardarAntesDeRecarregar();
       setTimeout(function() {
         try { window.location.reload(); } catch {}
       }, 200);
