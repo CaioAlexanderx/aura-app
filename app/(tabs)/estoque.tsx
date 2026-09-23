@@ -60,7 +60,9 @@ import { nfceApi } from "@/services/nfceApi";
 // 23/09/2026 (QA final Matcon): unidade no plural certo ("16 rolos").
 import { fmtQty, qtdComUnidade, unidadeParaQuantidade } from "@/utils/matconUnits";
 // 23/09/2026 (QA producao, item 10): "Ultimos adicionados" ordenava alfabetico.
-import { compareByRecent } from "@/utils/productSort";
+// 23/09/2026: + A–Z / Z–A e a escolha lembrada no navegador (lerOrdemSalva).
+import { ordenarProdutos, lerOrdemSalva, salvarOrdem, type OrdemEstoque } from "@/utils/productSort";
+import { OrdenarBarra } from "@/components/screens/estoque/OrdenarBarra";
 // import { EstoqueRightRail } from "@/components/screens/estoque/EstoqueRightRail"; // Phase 2 — right rail
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
@@ -76,6 +78,13 @@ const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.
 // frase, mesmas cores condicionais do alerta.
 const fmtInt = (n: number) => Math.round(n).toLocaleString("pt-BR");
 const PAGE_SIZE = 20;
+// Consolidado multi-CNPJ: o grupo não tem data de cadastro, então
+// "Últimos adicionados" não se aplica ali — quem tinha essa escolha vê A–Z.
+const ORDENS_CONSOLIDADO: readonly OrdemEstoque[] = ["name_asc", "name_desc", "price_desc", "price_asc", "low_stock"];
+function ordemInicialConsolidado(): OrdemEstoque {
+  const salva = lerOrdemSalva();
+  return ORDENS_CONSOLIDADO.includes(salva) ? salva : "name_asc";
+}
 // Thresholds reativos pro layout split (table+rail). 1100px = mostra
 // rail; 900px = mostra Table/Grid (abaixo cai pra ProductRow).
 const RAIL_BREAKPOINT = 1100;
@@ -115,6 +124,8 @@ function AggregatedView() {
   const [search, setSearch] = useState("");
   const { m } = useValoresOcultos();
   const [refreshKey, setRefreshKey] = useState(0);
+  const [ordem, setOrdem] = useState<OrdemEstoque>(ordemInicialConsolidado);
+  const trocarOrdem = (o: OrdemEstoque) => { setOrdem(o); salvarOrdem(o); };
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["productsAggregated", refreshKey],
@@ -140,6 +151,16 @@ function AggregatedView() {
       )
     );
   }, [groups, search]);
+
+  const ordenados = useMemo(
+    () => ordenarProdutos(filtered, ordem, (g: AggregatedProduct) => ({
+      id: g.group_key,
+      name: g.name,
+      price: g.avg_price,
+      stock: g.total_stock,
+    })),
+    [filtered, ordem],
+  );
 
   const linkedCount = groups.filter((g: AggregatedProduct) => g.is_linked).length;
   const totalUnits = groups.reduce((acc: number, g: AggregatedProduct) => acc + g.total_stock, 0);
@@ -183,6 +204,10 @@ function AggregatedView() {
         onChangeText={setSearch}
       />
 
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 10 }} contentContainerStyle={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
+        <OrdenarBarra value={ordem} onChange={trocarOrdem} opcoes={ORDENS_CONSOLIDADO} />
+      </ScrollView>
+
       {filtered.length === 0 && (
         <View style={{ alignItems: "center", paddingVertical: 40 }}>
           <Text style={{ fontSize: 13, color: Colors.ink3 }}>
@@ -192,7 +217,7 @@ function AggregatedView() {
       )}
 
       <View style={s.listCard}>
-        {filtered.map((g: AggregatedProduct) => (
+        {ordenados.map((g: AggregatedProduct) => (
           <View key={g.group_key} style={agg.row}>
             <View style={{ flex: 1, minWidth: 0 }}>
               <View style={agg.nameLine}>
@@ -379,7 +404,10 @@ export default function EstoqueScreen() {
   }, [mergeSuggestion]);
 
   const [linkTarget, setLinkTarget] = useState<Product | null>(null);
-  const [sortOrder, setSortOrder] = useState<"recent" | "price_desc" | "price_asc" | "low_stock">("recent");
+  // Escolha lembrada no navegador (chave só desta tela); sem nada salvo ou
+  // sem localStorage, "Últimos adicionados".
+  const [sortOrder, setSortOrderState] = useState<OrdemEstoque>(lerOrdemSalva);
+  const setSortOrder = (o: OrdemEstoque) => { setSortOrderState(o); salvarOrdem(o); };
   const hasMultipleCnpjs = (availableCompanies?.length || 0) >= 2;
   const canLinkProducts = hasMultipleCnpjs && !consolidatedView && !!company?.id;
 
@@ -426,19 +454,7 @@ export default function EstoqueScreen() {
     });
   }, [products, search, effectiveCats]);
 
-  const sorted = useMemo(() => {
-    const arr = [...filtered];
-    if (sortOrder === "recent") {
-      arr.sort(compareByRecent);
-    } else if (sortOrder === "price_desc") {
-      arr.sort((a, b) => ((b as any).price ?? 0) - ((a as any).price ?? 0));
-    } else if (sortOrder === "price_asc") {
-      arr.sort((a, b) => ((a as any).price ?? 0) - ((b as any).price ?? 0));
-    } else if (sortOrder === "low_stock") {
-      arr.sort((a, b) => a.stock - b.stock);
-    }
-    return arr;
-  }, [filtered, sortOrder]);
+  const sorted = useMemo(() => ordenarProdutos(filtered, sortOrder), [filtered, sortOrder]);
 
   // Pagination key inclui catsMulti pra resetar página quando user
   // troca categorias no wide layout (multi-select dropdown).
@@ -787,15 +803,7 @@ export default function EstoqueScreen() {
             </View>
             {/* Sort + view toggle */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 10 }} contentContainerStyle={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
-              <Text style={s.sortLabel}>Ordenar:</Text>
-              {(["recent", "price_desc", "price_asc", "low_stock"] as const).map((key) => {
-                const opts: Record<string, string> = { recent: "🕐 Últimos adicionados", price_desc: "↑ Maior preço", price_asc: "↓ Menor preço", low_stock: "⚠ Menor estoque" };
-                return (
-                  <Pressable key={key} onPress={() => setSortOrder(key)} style={[s.sortChip, sortOrder === key && s.sortChipActive]}>
-                    <Text style={[s.sortChipText, sortOrder === key && s.sortChipTextActive]}>{opts[key]}</Text>
-                  </Pressable>
-                );
-              })}
+              <OrdenarBarra value={sortOrder} onChange={setSortOrder} />
               {isWebWide && Platform.OS === "web" ? (
                 <>
                   <View style={{ width: 12 } as any} />
@@ -1023,11 +1031,6 @@ const s = StyleSheet.create({
     fontSize: 10, color: Colors.ink3, marginTop: 8,
     lineHeight: 14,
   },
-  sortLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "600" as const, textTransform: "uppercase" as const, letterSpacing: 0.8, alignSelf: "center" as const, marginRight: 2 },
-  sortChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg3 },
-  sortChipActive: { backgroundColor: Colors.violet, borderColor: Colors.violet },
-  sortChipText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" as const },
-  sortChipTextActive: { color: "#fff", fontWeight: "600" as const },
   listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
   emptyImport: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, marginTop: 12 },
   emptyImportIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
