@@ -106,15 +106,17 @@ describe("Caixa — carrinho", () => {
           splitMode: true,
           splitPayments: [{ method: "pix", value: 400 }, { method: "cartao", value: 666, auto: true }],
           splitIsBalanced: true, splitRemaining: 0,
-          splitNote: "R$ 1.000,00 no dinheiro − R$ 400,00 no PIX = faltam R$ 600,00.",
-          splitStatusText: "Pronto · a conta fecha em R$ 1.066,00",
+          splitStatusText: "Pronto · a conta fecha em R$ 1.066,00. No cartão, os R$ 600,00 que faltavam ficam R$ 666,00 (11% a mais).",
           onAddSplitPayment: jest.fn(), onUpdateSplitPayment: jest.fn(), onRemoveSplitPayment: jest.fn(),
         })} />,
       );
     });
     expect(flattenText(porTestID(tree, "carrinho-dividido-falta")[0].children)).toBe("o que falta, com o acréscimo do cartão");
-    expect(porTestID(tree, "carrinho-dividido-conta")).toHaveLength(1);
-    expect(flattenText(tree.toJSON())).toContain("Pronto · a conta fecha em R$ 1.066,00");
+    // Uma frase só (QA 23/09/2026): o "Pronto" já explica o valor no cartão.
+    expect(porTestID(tree, "carrinho-dividido-conta")).toHaveLength(0);
+    expect(flattenText(tree.toJSON())).toContain(
+      "Pronto · a conta fecha em R$ 1.066,00. No cartão, os R$ 600,00 que faltavam ficam R$ 666,00 (11% a mais).",
+    );
     tree.unmount();
   });
 });

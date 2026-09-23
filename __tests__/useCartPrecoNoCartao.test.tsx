@@ -74,7 +74,7 @@ describe("opção desligada — o carrinho de sempre", () => {
     act(() => { api.updateSplitPayment(0, { value: 40 }); });
     act(() => { api.addSplitPayment(); });
     expect(api.splitPayments[1]).toEqual({ method: "dinheiro", value: 60, change: undefined });
-    expect(api.splitNote).toBeNull();
+    expect(api.splitStatus).toBeNull();
     tree.unmount();
   });
 });
@@ -164,7 +164,10 @@ describe("opção ligada — dividido (tela 4)", () => {
     expect(api.splitTotal).toBe(1066);
     expect(api.splitIsBalanced).toBe(true);
     expect(api.totalAfterCoupon).toBe(1066);
-    expect(api.splitStatus).toBe("Pronto · a conta fecha em R$ 1.066,00");
+    // Uma frase só (QA 23/09/2026): o "Pronto" traz o porquê do cartão.
+    expect(api.splitStatus).toBe(
+      "Pronto · a conta fecha em R$ 1.066,00. No cartão, os R$ 600,00 que faltavam ficam R$ 666,00 (11% a mais).",
+    );
 
     act(() => { api.finalizeSale(); });
     const body = mockBodies[0];

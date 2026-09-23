@@ -7,7 +7,7 @@ import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
 import {
-  CARTAO_DESLIGADO, contaComOServidor, ehCartao, editarPrecoNoDividido, editarPrecoProporcional, fraseDaConta, linhasNoMetodo, linhasRateadas,
+  CARTAO_DESLIGADO, contaComOServidor, ehCartao, editarPrecoNoDividido, editarPrecoProporcional, linhasNoMetodo, linhasRateadas,
   precoNoCartaoDoItem, r2, resolverDividido, statusDoDividido, totalComoNoServidor,
   type ConfigDoCartao, type ContaDaVenda, type DescontosDaVenda, type LinhaDoPayload, type PrecosDaLinha, type RegraDoCupom,
 } from "@/utils/precoNoCartao";
@@ -338,9 +338,10 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
   // O que a venda cobra: no dividido com preço no cartão, a soma dos
   // pagamentos (+ o que falta, no dinheiro, enquanto não fecha).
   const totalDaVenda = dividido && splitMode ? r2(dividido.total + Math.max(0, dividido.falta)) : totalAfterCoupon;
-  const splitNote = dividido && splitMode && splitPayments.length > 0
-    ? (fraseDaConta(dividido) || null)
-    : null;
+  // QA 23/09/2026: uma frase só. A explicação do valor no cartão ("os
+  // R$ 742,40 que faltavam ficam R$ 824,13") vai DENTRO do "Pronto · a
+  // conta fecha" — antes era uma segunda frase começando com "Faltam",
+  // embaixo do "Pronto", e as duas se contradiziam.
   const splitStatus = dividido && splitMode ? statusDoDividido(dividido) : null;
 
   // ── Preço no cartão: a vista do DIVIDIDO (QA 23/09/2026) ─────────
@@ -811,8 +812,8 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
     splitMode, toggleSplitMode,
     splitPayments: splitPaymentsVista, addSplitPayment, updateSplitPayment, removeSplitPayment, clearSplitPayments,
     splitTotal, splitRemaining, splitIsBalanced,
-    // Preço no cartão: a conta do dividido numa linha e o status nas duas
-    // línguas (null com a opção desligada).
-    splitNote, splitStatus,
+    // Preço no cartão: a conta do dividido numa frase só, nas duas línguas
+    // (null com a opção desligada).
+    splitStatus,
   };
 }

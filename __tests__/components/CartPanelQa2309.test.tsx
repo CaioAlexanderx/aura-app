@@ -107,8 +107,7 @@ describe("dividido: métodos numa linha e a conta em frase de balcão", () => {
       fill,
       splitMode: true, splitIsBalanced: true, splitRemaining: 0,
       splitPayments: [{ method: "pix", value: 400 }, { method: "cartao", value: 824.13, auto: true }],
-      splitNote: "Faltam R$ 742,40. No cartão fica R$ 824,13 (11% a mais).",
-      splitStatusText: "Pronto · a conta fecha em R$ 1.224,13",
+      splitStatusText: "Pronto · a conta fecha em R$ 1.224,13. No cartão, os R$ 742,40 que faltavam ficam R$ 824,13 (11% a mais).",
     });
   }
   function estilo(node: any) {
@@ -127,15 +126,42 @@ describe("dividido: métodos numa linha e a conta em frase de balcão", () => {
     tree.unmount();
   });
 
-  test("a conta é uma frase, sem equação", () => {
+  test("a conta é uma frase só, sem equação", () => {
     const tree = montarDividido(false);
-    expect(textoDe(tree, "carrinho-dividido-conta")).toBe("Faltam R$ 742,40. No cartão fica R$ 824,13 (11% a mais).");
+    const t = flattenText(tree.toJSON());
+    expect(t).toContain("Pronto · a conta fecha em R$ 1.224,13. No cartão, os R$ 742,40 que faltavam ficam R$ 824,13 (11% a mais).");
+    expect(t).not.toMatch(/Faltam/);
     expect(textoDe(tree, "carrinho-dividido-falta")).toBe("o que falta, com o acréscimo do cartão");
     expect(textoDe(tree, "carrinho-pagamento")).toBe("Dividido em 2");
     tree.unmount();
   });
 
-  test("painel de altura limitada: ligar o dividido rola o corpo até a conta", () => {
+  test("QA 23/09: 'Faltam…' e 'Pronto' nunca aparecem juntos, mesmo com uma nota avulsa", () => {
+    // Chamador antigo que ainda manda a nota: com a conta fechada, ela some.
+    const fechada = montar({
+      splitMode: true, splitIsBalanced: true, splitRemaining: 0,
+      splitPayments: [{ method: "pix", value: 400 }, { method: "cartao", value: 824.13, auto: true }],
+      splitNote: "Faltam R$ 742,40. No cartão fica R$ 824,13 (11% a mais).",
+      splitStatusText: "Pronto · a conta fecha em R$ 1.224,13",
+    });
+    expect(porTestID(fechada, "carrinho-dividido-conta")).toHaveLength(0);
+    const t = flattenText(fechada.toJSON());
+    expect(t).toContain("Pronto · a conta fecha em R$ 1.224,13");
+    expect(t).not.toMatch(/Faltam/);
+    fechada.unmount();
+
+    // Conta aberta: só o "Faltam", nada de "Pronto".
+    const aberta = montar({
+      splitMode: true, splitIsBalanced: false, splitRemaining: 600,
+      splitPayments: [{ method: "pix", value: 400 }],
+    });
+    const ta = flattenText(aberta.toJSON());
+    expect(ta).toContain("Faltam R$ 600,00");
+    expect(ta).not.toMatch(/Pronto/);
+    aberta.unmount();
+  });
+
+  test("painel de altura limitada: ligar o dividido rola o corpo até a conta (uma vez só)", () => {
     jest.useFakeTimers();
     // Nó "de verdade" para o ScrollView do react-native-web: o scrollToEnd
     // dele termina em node.scroll({ top: scrollHeight }).
@@ -155,6 +181,26 @@ describe("dividido: métodos numa linha e a conta em frase de balcão", () => {
     act(() => { tree = renderer.create(<CartPanel {...props({ ...base, fill: true })} />, opcoes); });
     act(() => { jest.runOnlyPendingTimers(); });
     expect(scroll).toHaveBeenCalledWith(expect.objectContaining({ top: 900 }));
+
+    // QA 23/09/2026: enquanto o lojista digita, a linha "o que falta" entra
+    // e sai e os valores mudam — o painel NÃO rola mais sozinho.
+    scroll.mockClear();
+    const digitando = [
+      [{ method: "pix", value: 1224.13 }],
+      [{ method: "pix", value: 40 }, { method: "cartao", value: 1180, auto: true }],
+      [{ method: "pix", value: 400 }, { method: "dinheiro", value: 100 }, { method: "cartao", value: 700, auto: true }],
+    ];
+    for (const splitPayments of digitando) {
+      act(() => { tree.update(<CartPanel {...props({ ...base, splitPayments, fill: true })} />); });
+      act(() => { jest.runOnlyPendingTimers(); });
+    }
+    expect(scroll).not.toHaveBeenCalled();
+
+    // Desligar e ligar de novo conta como abrir: rola outra vez.
+    act(() => { tree.update(<CartPanel {...props({ ...base, splitMode: false, fill: true })} />); });
+    act(() => { tree.update(<CartPanel {...props({ ...base, fill: true })} />); });
+    act(() => { jest.runOnlyPendingTimers(); });
+    expect(scroll).toHaveBeenCalledTimes(1);
     tree.unmount();
 
     // Sem fill (celular: a página rola inteira), nada de rolar o corpo.
@@ -177,13 +223,22 @@ describe("Pagamento no topo", () => {
     tree.unmount();
   });
 
-  test("dividido: 'Dividido em N' com as linhas que têm valor", () => {
+  test("dividido com um pagamento só: o nome da forma, não 'Dividido em 1' (QA 23/09)", () => {
     const tree = montar({
       splitMode: true, splitIsBalanced: false, splitRemaining: 100,
       splitPayments: [{ method: "pix", value: 400 }, { method: "cartao", value: 0 }],
     });
-    expect(textoDe(tree, "carrinho-pagamento")).toBe("Dividido em 1");
-    expect(flattenText(tree.toJSON())).not.toMatch(/SPLIT/);
+    expect(textoDe(tree, "carrinho-pagamento")).toBe("PIX");
+    expect(flattenText(tree.toJSON())).not.toMatch(/SPLIT|Dividido em 1/);
+    tree.unmount();
+  });
+
+  test("dividido com dois pagamentos com valor: 'Dividido em 2'", () => {
+    const tree = montar({
+      splitMode: true, splitIsBalanced: false, splitRemaining: 100,
+      splitPayments: [{ method: "pix", value: 400 }, { method: "cartao", value: 300 }],
+    });
+    expect(textoDe(tree, "carrinho-pagamento")).toBe("Dividido em 2");
     tree.unmount();
   });
 });

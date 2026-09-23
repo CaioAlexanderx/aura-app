@@ -28,9 +28,24 @@ describe("Pagamento no topo do carrinho", () => {
   });
   test("dividido conta as linhas com valor", () => {
     expect(rotuloDoPagamento("pix", true, [{ value: 400 }, { value: 824.13 }])).toBe("Dividido em 2");
-    expect(rotuloDoPagamento("pix", true, [{ value: 400 }, { value: 0 }])).toBe("Dividido em 1");
+    expect(rotuloDoPagamento("pix", true, [
+      { method: "pix", value: 400 }, { method: "cartao", value: 824.13 }, { method: "dinheiro", value: 50 },
+    ])).toBe("Dividido em 3");
     expect(rotuloDoPagamento("pix", true, [{ value: 0 }])).toBe("Dividido");
     expect(rotuloDoPagamento("pix", true, [])).toBe("Dividido");
+  });
+  test("QA 23/09: com um pagamento só, o nome da forma — nunca 'Dividido em 1'", () => {
+    // Uma linha com valor e outra zerada: é o PIX que está pagando.
+    expect(rotuloDoPagamento("dinheiro", true, [{ method: "pix", value: 400 }, { method: "cartao", value: 0 }])).toBe("PIX");
+    // Acabou de ligar o dividido: uma linha só.
+    expect(rotuloDoPagamento("pix", true, [{ method: "cartao", value: 1066 }])).toBe("Crédito");
+    expect(rotuloDoPagamento("pix", true, [{ method: "debito", value: 0 }])).toBe("Débito");
+    // Sem saber a forma (chamador antigo), não inventa: "Dividido".
+    expect(rotuloDoPagamento("pix", true, [{ value: 400 }, { value: 0 }])).toBe("Dividido");
+    for (const n of [0, 1]) {
+      const linhas = [{ method: "pix", value: 400 }, { method: "cartao", value: n ? 10 : 0 }];
+      expect(rotuloDoPagamento("pix", true, linhas)).not.toBe("Dividido em 1");
+    }
   });
 });
 

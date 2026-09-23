@@ -327,34 +327,41 @@ export function resolverDividido(entradas: EntradaDividida[], base: number, tota
   };
 }
 
-const NOME_DO_METODO: Record<string, string> = {
-  dinheiro: "dinheiro", pix: "PIX", debito: "débito", cartao: "crédito", crediario: "crediário",
-};
-
 /**
- * A conta do dividido numa frase de balcão (QA 23/09/2026 — antes era a
- * equação "R$ 1.142,40 no dinheiro − R$ 1.268,16 no crédito (÷ 1,11 = …)"):
- *   · "o que falta" no cartão → "Faltam R$ 742,40. No cartão fica
- *     R$ 824,13 (11% a mais)."
- *   · no dinheiro/PIX/crediário → "Faltam R$ 600,00 no PIX."
- * Nada faltando (ou sem a linha "o que falta") → "" — o status já diz.
+ * A linha "o que falta" no cartão, em frase de balcão (QA 23/09/2026 —
+ * antes era a equação "R$ 1.142,40 no dinheiro − R$ 1.268,16 no crédito
+ * (÷ 1,11 = …)"): "No cartão, os R$ 742,40 que faltavam ficam R$ 824,13
+ * (11% a mais)."
+ *
+ * QA 23/09/2026 (Matcon): esta frase era "Faltam R$ 742,40. No cartão fica
+ * …" e aparecia EMBAIXO de "Pronto · a conta fecha" — duas frases que se
+ * contradiziam. Com a linha "o que falta" preenchida a conta sempre fecha,
+ * então agora ela é só o complemento do "Pronto" (statusDoDividido), no
+ * passado. No dinheiro/PIX/crediário não há diferença a explicar → "".
  */
 export function fraseDaConta(dv: Dividido): string {
   const auto = dv.entradas.find((e) => e.auto);
-  if (!auto) return "";
-  const noCartao = ehCartao(auto.method);
-  const faltaBase = noCartao ? r2(auto.value / dv.fator) : r2(auto.value);
+  if (!auto || !ehCartao(auto.method)) return "";
+  const faltaBase = r2(auto.value / dv.fator);
   if (!(faltaBase > 0.005)) return "";
-  if (!noCartao) return "Faltam " + fmtReais(faltaBase) + " no " + (NOME_DO_METODO[auto.method] || auto.method) + ".";
   const pct = Math.round((dv.fator - 1) * 1000) / 10;
-  const diferenca = pct > 0 ? " (" + fmtPct(pct) + "% a mais)" : pct < 0 ? " (" + fmtPct(-pct) + "% a menos)" : "";
-  return "Faltam " + fmtReais(faltaBase) + ". No cartão fica " + fmtReais(auto.value) + diferenca + ".";
+  if (pct === 0) return "";
+  const diferenca = pct > 0 ? " (" + fmtPct(pct) + "% a mais)" : " (" + fmtPct(-pct) + "% a menos)";
+  return "No cartão, os " + fmtReais(faltaBase) + " que faltavam ficam " + fmtReais(auto.value) + diferenca + ".";
 }
 
-/** Status do dividido nas duas línguas (dinheiro e cartão). */
+/**
+ * O status do dividido — a ÚNICA frase da conta na tela (QA 23/09/2026):
+ * "Sobrando …", "Faltam …" ou "Pronto · a conta fecha em …", este último
+ * com o porquê do valor no cartão quando a linha "o que falta" é de cartão.
+ * Nunca "Faltam" e "Pronto" ao mesmo tempo.
+ */
 export function statusDoDividido(dv: Dividido): string {
   if (dv.falta < -0.005) return "Sobrando " + fmtReais(-dv.falta) + " (no dinheiro) — diminua um pagamento";
-  if (dv.equilibrado) return "Pronto · a conta fecha em " + fmtReais(dv.total);
+  if (dv.equilibrado) {
+    const porque = fraseDaConta(dv);
+    return "Pronto · a conta fecha em " + fmtReais(dv.total) + (porque ? ". " + porque : "");
+  }
   return "Faltam " + fmtReais(dv.falta) + " no dinheiro ou PIX, ou " + fmtReais(dv.faltaNoCartao) + " no cartão";
 }
 

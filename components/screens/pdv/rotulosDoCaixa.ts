@@ -23,15 +23,24 @@ export function nomeDoPagamento(key: string | null | undefined): string {
 /**
  * O "Pagamento" do topo do carrinho: "Crédito", "PIX"… ou, no dividido,
  * "Dividido em 2" (conta só as linhas com valor).
+ *
+ * QA 23/09/2026 (Matcon): com UM pagamento só, "Dividido em 1" não diz
+ * nada — o topo mostra o nome da forma ("PIX"). "Dividido em N" só a
+ * partir de dois pagamentos com valor.
  */
 export function rotuloDoPagamento(
   activePay: string,
   dividido: boolean,
-  pagamentos?: { value: number }[] | null,
+  pagamentos?: { value: number; method?: string }[] | null,
 ): string {
   if (!dividido) return nomeDoPagamento(activePay);
-  const n = (pagamentos || []).filter((p) => (Number(p.value) || 0) > 0).length;
-  return n > 0 ? "Dividido em " + n : "Dividido";
+  const linhas = pagamentos || [];
+  const comValor = linhas.filter((p) => (Number(p.value) || 0) > 0);
+  if (comValor.length >= 2) return "Dividido em " + comValor.length;
+  // Um pagamento com valor (ou uma linha só, ainda zerada): o nome dele.
+  const unico = comValor.length === 1 ? comValor[0] : linhas.length === 1 ? linhas[0] : null;
+  if (unico && unico.method) return nomeDoPagamento(unico.method);
+  return "Dividido";
 }
 
 /**
