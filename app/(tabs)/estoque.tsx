@@ -12,6 +12,7 @@ import { ListSkeleton } from "@/components/ListSkeleton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ImportExportBar } from "@/components/ImportExportBar";
 import { ServerImport } from "@/components/ServerImport";
+import { useServerImport } from "@/hooks/useServerImport";
 import { ItemFormModal } from "@/components/screens/estoque/ItemFormModal";
 import { ProductRow } from "@/components/screens/estoque/ProductRow";
 import { AlertsList } from "@/components/screens/estoque/AlertsList";
@@ -318,6 +319,12 @@ export default function EstoqueScreen() {
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [showDanfeModal, setShowDanfeModal] = useState(false);
   const [categoriesModal, setCategoriesModal] = useState<CategoriesModalState>({ open: false });
+  // 22/09/2026: botão "Importar planilha" na barra de ações — antes o
+  // ServerImport só aparecia no estado vazio (0 produtos), então quem já
+  // tinha itens cadastrados não achava como importar mais. Mesmo fluxo do
+  // ServerImport (useServerImport), mesmo gate de plano/permissão do
+  // "Importar DANFE" (!isDemo).
+  const { loading: xlsxImporting, handleImport: handleXlsxImport } = useServerImport("products", handleImportComplete);
 
   // Scanner popup: TextInput inline simples (sem ScannerInput pra evitar
   // conflitos de auto-focus + overlay). Foco é dado via ref.focus() quando
@@ -535,6 +542,12 @@ export default function EstoqueScreen() {
           {!isMobileNarrow && <Text style={s.danfeBtnText}>Importar DANFE</Text>}
         </Pressable>
       )}
+      {!isDemo && (
+        <Pressable onPress={handleXlsxImport} disabled={xlsxImporting} style={[s.danfeBtn, isMobileNarrow && s.btnIconOnly, xlsxImporting && { opacity: 0.6 }]}>
+          {xlsxImporting ? <ActivityIndicator size="small" color={Colors.violet3} /> : <Icon name="upload" size={14} color={Colors.violet3} />}
+          {!isMobileNarrow && <Text style={s.danfeBtnText}>{xlsxImporting ? "Importando..." : "Importar planilha"}</Text>}
+        </Pressable>
+      )}
       {/* 12/05/2026: botao Selecionar — toggle bulk mode. So aparece se ja tem produto e usuario nao e demo. */}
       {!isDemo && products.length > 0 && (
         <Pressable
@@ -685,7 +698,7 @@ export default function EstoqueScreen() {
             </View>
             <View style={s.emptyImport}>
               <View style={s.emptyImportIcon}><Icon name="upload" size={18} color={Colors.violet3} /></View>
-              <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Importar planilha CSV</Text><Text style={s.emptyImportDesc}>Cadastre centenas de produtos via arquivo CSV</Text></View>
+              <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Importar planilha</Text><Text style={s.emptyImportDesc}>Cadastre centenas de produtos via planilha Excel ou CSV</Text></View>
               <ServerImport entity="products" onComplete={handleImportComplete} />
             </View>
           </View>
