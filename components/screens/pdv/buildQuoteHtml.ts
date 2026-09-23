@@ -6,6 +6,10 @@
 // 22/09/2026 (Matcon M0): o item pode trazer a unidade de venda. Com ela, a
 // coluna Qtd imprime "12,5 m²" (fmtQty, virgula e sufixo); sem ela, imprime
 // o numero cru como sempre imprimiu.
+//
+// 22/09/2026 (preco no cartao): o botao do Caixa usa utils/quotePdf.ts; este
+// gemeo recebe a mesma mudanca pra os dois nao divergirem — `cardTotal` e
+// `cardUnitPrice` opcionais; sem eles o HTML e o de sempre.
 // ============================================================
 
 import { fmtQty, ehMilheiro, PECAS_POR_MILHEIRO } from "@/utils/matconUnits";
@@ -15,6 +19,7 @@ export type QuoteItem = {
   qty: number;
   unitPrice: number;
   unit?: string | null;
+  cardUnitPrice?: number;
 };
 
 export type QuoteOptions = {
@@ -26,6 +31,8 @@ export type QuoteOptions = {
   customerName?: string;
   items: QuoteItem[];
   total: number;
+  /** Preco no cartao: total no cartao. Ausente = um preco so. */
+  cardTotal?: number;
   sellerName?: string;
   validDays?: number;
   notes?: string;
@@ -53,8 +60,8 @@ export function buildQuoteHtml(opts: QuoteOptions): string {
       '<td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#1f2937">' + (i + 1) + '</td>' +
       '<td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#1f2937;font-weight:500">' + escHtml(item.name) + '</td>' +
       '<td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280;text-align:center">' + escHtml(qtyStr) + '</td>' +
-      '<td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280;text-align:right">' + fmtBrl(item.unitPrice) + '</td>' +
-      '<td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#1f2937;font-weight:600;text-align:right">' + fmtBrl(lineTotal) + '</td>' +
+      '<td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280;text-align:right">' + fmtBrl(item.unitPrice) + cartaoSmall(opts.cardTotal != null ? (item.cardUnitPrice ?? item.unitPrice) : null) + '</td>' +
+      '<td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#1f2937;font-weight:600;text-align:right">' + fmtBrl(lineTotal) + cartaoSmall(opts.cardTotal != null ? item.qty * (item.cardUnitPrice ?? item.unitPrice) : null) + '</td>' +
       '</tr>';
   }).join("\n");
 
@@ -106,7 +113,12 @@ export function buildQuoteHtml(opts: QuoteOptions): string {
     '<div style="display:flex;justify-content:flex-end;margin-bottom:24px">' +
       '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:16px 24px;min-width:220px;text-align:right">' +
         '<div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">' + opts.items.length + ' item(ns)</div>' +
-        '<div style="font-size:28px;font-weight:800;color:#6d28d9">' + fmtBrl(opts.total) + '</div>' +
+        (opts.cardTotal != null
+          ? '<div style="font-size:11px;color:#6b7280">Dinheiro ou PIX</div>' +
+            '<div style="font-size:24px;font-weight:800;color:#1f2937">' + fmtBrl(opts.total) + '</div>' +
+            '<div style="font-size:11px;color:#6b7280;margin-top:6px">No cart\u00e3o (d\u00e9bito ou cr\u00e9dito)</div>' +
+            '<div style="font-size:24px;font-weight:800;color:#6d28d9">' + fmtBrl(opts.cardTotal) + '</div>'
+          : '<div style="font-size:28px;font-weight:800;color:#6d28d9">' + fmtBrl(opts.total) + '</div>') +
       '</div>' +
     '</div>' +
 
@@ -136,6 +148,11 @@ export function buildQuoteHtml(opts: QuoteOptions): string {
     '</div>' +
     '<script>window.onload=function(){window.print()}</script>' +
     '</body></html>';
+}
+
+function cartaoSmall(v: number | null): string {
+  if (v == null) return "";
+  return '<div style="font-size:10px;color:#6d28d9;margin-top:2px">cart\u00e3o ' + fmtBrl(v) + '</div>';
 }
 
 function escHtml(str: string): string {

@@ -5,6 +5,8 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { companiesApi, pdvSettingsApi } from "@/services/api";
+import { usePdvSettings } from "@/hooks/usePdvSettings";
+import { lerConfigDoCartao, precoNoCartaoDoItem } from "@/utils/precoNoCartao";
 import { ehIphoneInstalado } from "@/services/instalarApp";
 import { avisarImpressaoNoIphone } from "@/components/ImpressaoNoIphone";
 import { hexToName } from "@/utils/colorNames";
@@ -78,6 +80,9 @@ function loadStoredLabelSize(): LabelSizeKey {
 
 export function PrintLabels({ products, selectedIds, onSelectionChange }: Props) {
   var { company, token } = useAuthStore();
+  // 22/09/2026 (preco no cartao): so a opcao da loja — desligada, nada muda.
+  var { settings: pdvSettings } = usePdvSettings();
+  var cartaoCfg = lerConfigDoCartao(pdvSettings);
   var [mode, setMode] = useState<"barcode" | "qr">("barcode");
   var [labelSize, setLabelSizeState] = useState<LabelSizeKey>(loadStoredLabelSize);
   var labelPreset = LABEL_SIZE_PRESETS[labelSize];
@@ -220,6 +225,14 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     return total;
   }, [selectedIds, quantities, selectedVariants, variantCache, includeParentInPrint]);
 
+  // 22/09/2026 (preco no cartao): com a opcao da loja ligada, toda etiqueta
+  // sai com os dois precos (sem opcao de esconder). `comCartao` devolve {}
+  // com ela desligada — o LabelItem e o de sempre.
+  function comCartao(preco: number, p: Product): { cardPrice?: number } {
+    var card = precoNoCartaoDoItem(preco, { price: p.price, cardPrice: p.cardPrice }, cartaoCfg);
+    return card != null ? { cardPrice: card } : {};
+  }
+
   // Monta a lista de LabelItems a partir da selecao atual
   function buildItems(): LabelItem[] | null {
     var items: LabelItem[] = [];
@@ -231,7 +244,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
 
       if (hasAnyVariant) {
         if (includeParentInPrint[id]) {
-          items.push({ name: p.name, price: p.price, barcode: p.barcode || p.code, size: p.size || "", color: p.color || "", qty: getQty(id), productId: id });
+          items.push({ name: p.name, price: p.price, barcode: p.barcode || p.code, size: p.size || "", color: p.color || "", qty: getQty(id), productId: id, ...comCartao(p.price, p) });
         }
         if (selVars && selVars.size > 0) {
           variants.forEach(function(v: any) {
@@ -239,11 +252,11 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
             var sc = variantSizeColor(v);
             var effectivePrice = v.price_override ? parseFloat(v.price_override) : p.price;
             var effectiveBarcode = v.barcode || p.barcode || p.code;
-            items.push({ name: p.name, price: effectivePrice, barcode: effectiveBarcode, size: sc.size, color: sc.color, qty: getQty(id + "__" + v.id), productId: id, variantId: v.id });
+            items.push({ name: p.name, price: effectivePrice, barcode: effectiveBarcode, size: sc.size, color: sc.color, qty: getQty(id + "__" + v.id), productId: id, variantId: v.id, ...comCartao(effectivePrice, p as Product) });
           });
         }
       } else {
-        items.push({ name: p.name, price: p.price, barcode: p.barcode || p.code, size: p.size || "", color: p.color || "", qty: getQty(id), productId: id });
+        items.push({ name: p.name, price: p.price, barcode: p.barcode || p.code, size: p.size || "", color: p.color || "", qty: getQty(id), productId: id, ...comCartao(p.price, p) });
       }
     });
     return items;
