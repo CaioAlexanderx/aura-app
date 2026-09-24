@@ -34,7 +34,8 @@ import { Icon } from "@/components/Icon";
 import { hexToName } from "@/utils/colorNames";
 import { matrixKey } from "@/services/productsVariationsApi";
 import { UNITS } from "../types";
-import { Campo, Chip, Entrada, Nota, Radio, Secao, IS_WEB, fr, s } from "./ui";
+import { Campo, Chip, Entrada, MiniBtn, Nota, Radio, Secao, IS_WEB, fr, s } from "./ui";
+import { novoCodigoDeBarras } from "./codigoDeBarras";
 import {
   novaLinhaDeLote, statusEstoque, totalDosLotes, lotesParaGravar,
   type CorDoItem, type LinhaDeLote, type StockMode,
@@ -50,6 +51,7 @@ const PRESET_COLORS = [
 
 // RN Web transforma em data-enter-local="1" (ver cabeçalho).
 const ENTER_LOCAL = { enterLocal: "1" };
+
 
 type Props = {
   narrow: boolean;
@@ -151,6 +153,27 @@ export function SecaoEstoque(p: Props) {
     ? C.flatMap((c) => Z.map((z) => ({ k: matrixKey(c.hex, z), hex: c.hex, nome: (c.name || c.hex) + " · " + z })))
     : [];
   const barrasPreenchidas = combos.filter((r) => (p.barras[r.k] ?? "").trim() !== "").length;
+
+  // Gerar código de barras (um ou todos os que faltam). Os códigos já na
+  // grade entram no "usados" pra nunca sair repetido entre combinações.
+  function codigosEmUso() {
+    const u = new Set<string>();
+    Object.keys(p.barras).forEach((k) => { const v = (p.barras[k] || "").trim(); if (v) u.add(v); });
+    return u;
+  }
+  function gerarBarra(k: string) {
+    p.onBarra(k, novoCodigoDeBarras(k, codigosEmUso()));
+  }
+  function gerarFaltantes(chaves: string[]) {
+    const usados = codigosEmUso();
+    chaves.forEach((k) => { if (!(p.barras[k] ?? "").trim()) p.onBarra(k, novoCodigoDeBarras(k, usados)); });
+  }
+  // Grade de um eixo só (só cores ou só tamanhos).
+  const linhasUmEixo = umEixo
+    ? (C.length ? C.map((c) => ({ k: matrixKey(c.hex, null), nome: c.name || c.hex, hex: c.hex as string | null }))
+                : Z.map((z) => ({ k: matrixKey(null, z), nome: z, hex: null as string | null })))
+    : [];
+  const faltamUmEixo = linhasUmEixo.filter((r) => !(p.barras[r.k] ?? "").trim()).length;
 
   // Bipou, o leitor manda Enter: pula pro próximo código, pra bipar a
   // grade inteira sem tocar na tela. Só web — o Entrada não repassa ref
@@ -545,36 +568,49 @@ export function SecaoEstoque(p: Props) {
               a contagem no cabeçalho pra dizer o que falta sem abrir. */}
           {matriz && (
             <View style={[st.grade, { marginTop: 8 }]}>
-              <Pressable
-                onPress={() => setAbrirBarras(!abrirBarras)}
-                style={[st.linha, st.linhaCab, !abrirBarras && { borderBottomWidth: 0 }]}
-                accessibilityRole="button"
-                accessibilityState={{ expanded: abrirBarras }}
-                accessibilityLabel={"Códigos de barras, " + barrasPreenchidas + " de " + combos.length + " preenchidos"}
-              >
-                <Icon name={abrirBarras ? "chevron_down" : "chevron_right"} size={14} color={Colors.ink3} />
-                <Text style={st.barrasTit} numberOfLines={1}>
-                  Códigos de barras
-                  <Text style={st.barrasConta}>{" · " + barrasPreenchidas + " de " + combos.length + " preenchidos"}</Text>
-                </Text>
-              </Pressable>
+              <View style={[st.linha, st.linhaCab, !abrirBarras && { borderBottomWidth: 0 }]}>
+                <Pressable
+                  onPress={() => setAbrirBarras(!abrirBarras)}
+                  style={st.barrasToggle}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: abrirBarras }}
+                  accessibilityLabel={"Códigos de barras, " + barrasPreenchidas + " de " + combos.length + " preenchidos"}
+                >
+                  <Icon name={abrirBarras ? "chevron_down" : "chevron_right"} size={14} color={Colors.ink3} />
+                  <Text style={st.barrasTit} numberOfLines={1}>
+                    Códigos de barras
+                    <Text style={st.barrasConta}>{" · " + barrasPreenchidas + " de " + combos.length + " preenchidos"}</Text>
+                  </Text>
+                </Pressable>
+                {barrasPreenchidas < combos.length && (
+                  <View style={st.miniCaixa}>
+                    <MiniBtn
+                      label={"Gerar os que faltam (" + (combos.length - barrasPreenchidas) + ")"}
+                      onPress={() => { gerarFaltantes(combos.map((r) => r.k)); setAbrirBarras(true); }}
+                    />
+                  </View>
+                )}
+              </View>
               {abrirBarras && combos.map((r, i) => (
                 <View key={r.k} style={[st.linha, p.narrow && st.linhaEmPe]}>
                   <View style={[p.narrow ? null : st.colBarraNome, { flexDirection: "row", alignItems: "center", gap: 6 }]}>
                     <View style={[st.sw, { backgroundColor: r.hex }]} />
                     <Text style={st.nomeCel} numberOfLines={1}>{r.nome}</Text>
                   </View>
-                  <Entrada
-                    nativeID={"estoque-barra-" + i}
-                    value={p.barras[r.k] ?? ""}
-                    onChangeText={(v: string) => p.onBarra(r.k, v)}
-                    onSubmitEditing={() => focarBarra(i + 1)}
-                    blurOnSubmit={false}
-                    placeholder="Bipe ou digite"
-                    accessibilityLabel={"Código de barras de " + r.nome}
-                    dataSet={ENTER_LOCAL}
-                    style={[p.narrow ? { alignSelf: "stretch" as const } : { flex: 1 }, st.celula]}
-                  />
+                  <View style={[st.barraComGerar, p.narrow ? { alignSelf: "stretch" as const } : { flex: 1 }]}>
+                    <Entrada
+                      nativeID={"estoque-barra-" + i}
+                      value={p.barras[r.k] ?? ""}
+                      onChangeText={(v: string) => p.onBarra(r.k, v)}
+                      onSubmitEditing={() => focarBarra(i + 1)}
+                      blurOnSubmit={false}
+                      placeholder="Bipe, digite ou gere"
+                      accessibilityLabel={"Código de barras de " + r.nome}
+                      dataSet={ENTER_LOCAL}
+                      style={[{ flex: 1 }, st.celula]}
+                    />
+                    {!(p.barras[r.k] ?? "").trim() && <MiniBtn label="Gerar" onPress={() => gerarBarra(r.k)} />}
+                  </View>
                 </View>
               ))}
             </View>
@@ -586,10 +622,16 @@ export function SecaoEstoque(p: Props) {
                 <Text style={[st.cab, { flex: 1 }]}>{C.length ? "Cor" : (matcon ? "Medida" : "Tamanho")}</Text>
                 <Text style={[st.cab, { width: 72 }]}>Estoque</Text>
                 {!p.narrow && <Text style={[st.cab, { flex: 1 }]}>Cód. barras</Text>}
+                {faltamUmEixo > 0 && (
+                  <View style={st.miniCaixa}>
+                    <MiniBtn
+                      label={p.narrow ? "Gerar códigos (" + faltamUmEixo + ")" : "Gerar os que faltam (" + faltamUmEixo + ")"}
+                      onPress={() => gerarFaltantes(linhasUmEixo.map((r) => r.k))}
+                    />
+                  </View>
+                )}
               </View>
-              {(C.length ? C.map((c) => ({ k: matrixKey(c.hex, null), nome: c.name || c.hex, hex: c.hex }))
-                          : Z.map((z) => ({ k: matrixKey(null, z), nome: z, hex: null as string | null }))
-              ).map((r) => (
+              {linhasUmEixo.map((r) => (
                 <View key={r.k} style={[st.linha, p.narrow && { flexWrap: "wrap" as const }]}>
                   <View style={{ flex: 1, minWidth: 90, flexDirection: "row", alignItems: "center", gap: 6 }}>
                     {r.hex ? <View style={[st.sw, { backgroundColor: r.hex }]} /> : null}
@@ -607,14 +649,17 @@ export function SecaoEstoque(p: Props) {
                   />
                   {/* Celular: o código de barras não cabe ao lado — cai para a
                       linha de baixo, inteiro, em vez de sumir. */}
-                  <Entrada
-                    value={p.barras[r.k] ?? ""}
-                    onChangeText={(v: string) => p.onBarra(r.k, v)}
-                    placeholder="Cód. barras: bipe ou digite"
-                    accessibilityLabel={"Código de barras de " + r.nome}
-                    dataSet={ENTER_LOCAL}
-                    style={[p.narrow ? { width: "100%" as any } : { flex: 1 }, st.celula]}
-                  />
+                  <View style={[st.barraComGerar, p.narrow ? { width: "100%" as any } : { flex: 1 }]}>
+                    <Entrada
+                      value={p.barras[r.k] ?? ""}
+                      onChangeText={(v: string) => p.onBarra(r.k, v)}
+                      placeholder="Cód. barras: bipe, digite ou gere"
+                      accessibilityLabel={"Código de barras de " + r.nome}
+                      dataSet={ENTER_LOCAL}
+                      style={[{ flex: 1 }, st.celula]}
+                    />
+                    {!(p.barras[r.k] ?? "").trim() && <MiniBtn label="Gerar" onPress={() => gerarBarra(r.k)} />}
+                  </View>
                 </View>
               ))}
             </View>
@@ -660,6 +705,10 @@ const st = {
   celula: { paddingHorizontal: 8, paddingVertical: 6, fontSize: 12.5 },
   nomeCel: { fontSize: 12.5, color: Colors.ink, flexShrink: 1 },
   sw: { width: 12, height: 12, borderRadius: 4, borderWidth: 1, borderColor: "rgba(0,0,0,0.15)" },
+  barrasToggle: { flex: 1, flexDirection: "row" as const, alignItems: "center" as const, gap: 8 },
+  // MiniBtn não tem padding vertical: esta caixa dá a altura da linha a ele.
+  miniCaixa: { alignSelf: "stretch" as const, flexDirection: "row" as const, minHeight: 30 },
+  barraComGerar: { flexDirection: "row" as const, alignItems: "stretch" as const, gap: 6 },
   barrasTit: { flex: 1, fontSize: 12.5, color: Colors.ink, fontWeight: "700" as const, paddingVertical: 4 },
   barrasConta: { color: Colors.ink3, fontWeight: "500" as const },
   paleta: {
