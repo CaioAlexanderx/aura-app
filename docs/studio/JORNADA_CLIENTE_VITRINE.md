@@ -314,7 +314,7 @@ Cada fase entrega algo que a Sheid consegue ver. Tamanho em camisetas (P/M/G), n
 
 ### F2 — Página do produto (G) · *mockup antes* · **é aqui que o "premium" mora**
 - Layout da tabela em §4.4.
-- Carrossel com galeria de 6 fotos (S9) e mockup como slide (S3); cor da louça no 3D; sombra + ambiente (S10).
+- Mockup como slide do carrossel (S3). A galeria (S9), a cor da louça no 3D e a sombra com ambiente (S10) já estão prontas: ver a errata em `FASEAMENTO_VITRINE_STUDIO.md` §3.1.
 - Quantidade digitável; escada como régua; prazo por faixa.
 - Três caminhos de arte como cartões; aviso de qualidade da imagem.
 - Compartilhar; "Adicionado à sacola" com feedback; relacionados.
@@ -341,7 +341,9 @@ Cada fase entrega algo que a Sheid consegue ver. Tamanho em camisetas (P/M/G), n
 - Colar coluna da planilha, data com seletor, máscara, número do orçamento, texto por categoria.
 - Link público do orçamento para aprovação e sinal.
 
-**Ordem recomendada:** F0 → F2 → F3 → F4 → F1 → F5 → F6. A F1 (home) vem depois do produto e do checkout de propósito: a home de hoje já é razoável, e o dinheiro está no configurador e em fechar o pedido sem perder o cliente no meio.
+> **Revisto em 24/09/2026:** a ordem e as datas finais estão em `FASEAMENTO_VITRINE_STUDIO.md`, que substitui esta seção.
+
+**Ordem recomendada (original):** F0 → F2 → F3 → F4 → F1 → F5 → F6. A F1 (home) vem depois do produto e do checkout de propósito: a home de hoje já é razoável, e o dinheiro está no configurador e em fechar o pedido sem perder o cliente no meio.
 
 ---
 
