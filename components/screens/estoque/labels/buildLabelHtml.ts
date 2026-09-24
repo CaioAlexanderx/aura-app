@@ -214,11 +214,18 @@ export const LABEL_SIZE_PRESETS: Record<LabelSizeKey, {
   // alinhado aos pontos da cabeca termica. Ausente => BARCODE_OPTS (LOCKED).
   bcModuleMm?: number;
   bcBarHeightMm?: number;
+  // Linhas por pagina de impressao. Pagina "deitada" (largura > altura, ex.
+  // 58x28) faz o Chrome/driver imprimir em PAISAGEM e girar tudo 90 graus
+  // na bobina — foi o 2o teste da Essencial (24/09): o scanner leu, mas as
+  // etiquetas sairam lado a lado ao longo do rolo. Com 3 linhas a pagina
+  // vira 58x84mm (em pe) e sai em retrato, uma embaixo da outra.
+  // Ausente => 1 (byte-identico).
+  rowsPerPage?: number;
   uiLabel: string;
 }> = {
   "99x21": { pageWidthMm: 99, pageHeightMm: 21, cols: 3, cellWidthMm: 33, cellHeightMm: 21, uiLabel: "33x21mm (3 colunas)" },
   "30x25": { pageWidthMm: 94, pageHeightMm: 27, cols: 3, cellWidthMm: 30, cellHeightMm: 25, colGapMm: 2, rowGapMm: 2, uiLabel: "30x25mm (3 colunas)" },
-  "58mm":  { pageWidthMm: 58, pageHeightMm: 28, cols: 1, cellWidthMm: 46, cellHeightMm: 25, rowGapMm: 3, padLeftMm: 6, cutMarks: true, bcModuleMm: 0.375, bcBarHeightMm: 9, uiLabel: "Bobina 58mm (1 por linha)" },
+  "58mm":  { pageWidthMm: 58, pageHeightMm: 28, cols: 1, cellWidthMm: 46, cellHeightMm: 25, rowGapMm: 3, padLeftMm: 6, cutMarks: true, bcModuleMm: 0.375, bcBarHeightMm: 9, rowsPerPage: 3, uiLabel: "Bobina 58mm (1 por linha)" },
 };
 export const LABEL_SIZE_KEYS: LabelSizeKey[] = ["99x21", "30x25", "58mm"];
 export const DEFAULT_LABEL_SIZE: LabelSizeKey = "99x21";
@@ -247,6 +254,8 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   // Margens laterais (so presets com padLeftMm). A da direita fecha a largura
   // da pagina pra table-layout:fixed nao esticar a celula. 0 => nada emitido.
   const padLeftMm = preset.padLeftMm || 0;
+  // Altura da PAGINA de impressao = passo da linha x linhas por pagina.
+  const pageSheetHeightMm = preset.pageHeightMm * (preset.rowsPerPage || 1);
   const padRightMm = padLeftMm > 0 ? Math.max(0, preset.pageWidthMm - padLeftMm - preset.cols * preset.cellWidthMm - (preset.cols - 1) * colGapMm) : 0;
   const rawOffset = Number(options.offsetMm);
   const offsetMm = Number.isFinite(rawOffset) ? Math.min(Math.max(rawOffset, -8), 5) : 0;
@@ -326,7 +335,7 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   // ===== LOCKED CSS — dimensoes da etiqueta (nao mudar pro preset 99x21) =====
   // @page e tr usam pageHeightMm = PASSO da linha (label + vao vertical). Pro
   // 99x21 (sem vao) pageHeightMm == cellHeightMm, entao sai identico ao antigo.
-  html += '@page{margin:0;size:' + preset.pageWidthMm + 'mm ' + preset.pageHeightMm + 'mm}*{margin:0;padding:0;box-sizing:border-box}';
+  html += '@page{margin:0;size:' + preset.pageWidthMm + 'mm ' + pageSheetHeightMm + 'mm}*{margin:0;padding:0;box-sizing:border-box}';
   html += 'body{font-family:Arial,Helvetica,sans-serif;background:#f5f5f5;color:#000}';
   // Offset de calibracao: translateX na tabela inteira — nao mexe em barra,
   // fonte nem geometria da celula. Com offsetMm=0 nada e emitido (byte-identico).
@@ -422,7 +431,7 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += '<div class="setup-guide" id="setupGuide">';
   html += '<div class="setup-row">';
   html += '<label class="confirm"><input type="checkbox" id="confirmSetup"> Setup conferido</label>';
-  html += '<span class="specs">Papel <b>' + preset.pageWidthMm + '&times;' + preset.pageHeightMm + 'mm</b> &middot; Margens <b>Nenhuma</b> &middot; Escala <b>100%</b> &middot; Cabe&ccedil;alho/rodap&eacute; <b>desligados</b></span>';
+  html += '<span class="specs">Papel <b>' + preset.pageWidthMm + '&times;' + pageSheetHeightMm + 'mm</b> &middot; Margens <b>Nenhuma</b> &middot; Escala <b>100%</b> &middot; Cabe&ccedil;alho/rodap&eacute; <b>desligados</b></span>';
   html += '</div>';
   html += '<div class="offset-row" id="offsetRow">';
   html += '<label for="offsetRange">Etiqueta saindo cortada? Deslocar:</label>';
