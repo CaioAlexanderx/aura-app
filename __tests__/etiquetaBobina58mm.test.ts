@@ -23,7 +23,9 @@ describe("preset Bobina 58mm", () => {
 
   test("página 58mm, 1 por linha, centralizada e com corte", () => {
     const html = buildLabelHtml([item], { mode: "barcode", storeName: "Essencial", showStoreName: true, labelSize: "58mm" });
-    expect(html).toContain("@page{margin:0;size:58mm 28mm}");
+    // página em pé (58x84 = 3 linhas de 28mm): em pé o driver imprime em
+    // retrato; deitada (58x28) ele girava tudo 90 graus (2o teste, 24/09)
+    expect(html).toContain("@page{margin:0;size:58mm 84mm}");
     expect(html).toContain(".padl{width:6mm;");
     expect(html).toContain(".padr{width:6mm;");
     expect((html.match(/<tr>/g) || []).length).toBe(2);
