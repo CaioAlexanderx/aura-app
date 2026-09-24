@@ -176,8 +176,25 @@ export type LabelItem = {
 //
 // Um preset SEM colGapMm/rowGapMm (como "99x21") se comporta como antes
 // (vao 0), entao presets colados continuam byte-identicos.
+// "58mm" (24/09/2026, loja Essencial / Maria Eduarda): impressora termica
+// GENERICA de bobina 58mm via Bluetooth (papel continuo, sem vao/sensor).
+// Com os presets de 3 colunas (94-99mm de largura) a pagina nao cabia na
+// bobina e o driver girava tudo 90 graus: as etiquetas saiam "deitadas" ao
+// longo do rolo e a 1a coluna cortada. Aqui e UMA etiqueta por linha, com a
+// mesma ordem de layout da Finesse (loja/barras/nome/preco), centralizada
+// na largura de 58mm e impressa em retrato (texto atravessando a bobina):
+//   - padLeftMm 6    -> (58 - 46) / 2, centraliza na bobina
+//   - rowGapMm 3     -> sobra entre etiquetas pra cortar (papel continuo)
+//   - cutMarks       -> linha pontilhada de corte no vao
+// 1o teste na loja: com as barras no tamanho da Finesse (0,265mm por barra)
+// a termica de 203dpi (8 pontos/mm) arredonda cada barra pra 2 ou 3 pontos
+// de forma irregular -> barras "apertadas" e a pistola NAO leu. Por isso este
+// preset tem barcode PROPRIO (bcModuleMm): cada barra fina = 0,375mm = 3
+// pontos exatos da cabeca termica, com zona de silencio de verdade. Celula
+// maior (46x25mm) pra caber o EAN-13 nesse tamanho. Os presets da Finesse/
+// Eryca continuam com BARCODE_OPTS (LOCKED) — nada muda pra eles.
 // NUNCA mudar os numeros do preset "99x21".
-export type LabelSizeKey = "99x21" | "30x25";
+export type LabelSizeKey = "99x21" | "30x25" | "58mm";
 
 export const LABEL_SIZE_PRESETS: Record<LabelSizeKey, {
   pageWidthMm: number;
@@ -187,11 +204,23 @@ export const LABEL_SIZE_PRESETS: Record<LabelSizeKey, {
   cellHeightMm: number;
   colGapMm?: number;
   rowGapMm?: number;
+  // Margem esquerda (mm) antes da 1a coluna — so presets de bobina larga
+  // demais pra etiqueta (ex: 58mm com 1 coluna). Ausente => 0 (byte-identico).
+  padLeftMm?: number;
+  // Linha pontilhada de corte no vao entre linhas (papel continuo).
+  cutMarks?: boolean;
+  // Barcode dimensionado em mm fisicos (impressora termica). Com isso o
+  // preset NAO usa BARCODE_OPTS: cada modulo (barra fina) = bcModuleMm,
+  // alinhado aos pontos da cabeca termica. Ausente => BARCODE_OPTS (LOCKED).
+  bcModuleMm?: number;
+  bcBarHeightMm?: number;
   uiLabel: string;
 }> = {
   "99x21": { pageWidthMm: 99, pageHeightMm: 21, cols: 3, cellWidthMm: 33, cellHeightMm: 21, uiLabel: "33x21mm (3 colunas)" },
   "30x25": { pageWidthMm: 94, pageHeightMm: 27, cols: 3, cellWidthMm: 30, cellHeightMm: 25, colGapMm: 2, rowGapMm: 2, uiLabel: "30x25mm (3 colunas)" },
+  "58mm":  { pageWidthMm: 58, pageHeightMm: 28, cols: 1, cellWidthMm: 46, cellHeightMm: 25, rowGapMm: 3, padLeftMm: 6, cutMarks: true, bcModuleMm: 0.375, bcBarHeightMm: 9, uiLabel: "Bobina 58mm (1 por linha)" },
 };
+export const LABEL_SIZE_KEYS: LabelSizeKey[] = ["99x21", "30x25", "58mm"];
 export const DEFAULT_LABEL_SIZE: LabelSizeKey = "99x21";
 // -------------------------------------------
 
@@ -215,6 +244,10 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   const COLS = preset.cols;
   // Vao horizontal entre colunas (0 = etiquetas coladas, comportamento original).
   const colGapMm = preset.colGapMm || 0;
+  // Margens laterais (so presets com padLeftMm). A da direita fecha a largura
+  // da pagina pra table-layout:fixed nao esticar a celula. 0 => nada emitido.
+  const padLeftMm = preset.padLeftMm || 0;
+  const padRightMm = padLeftMm > 0 ? Math.max(0, preset.pageWidthMm - padLeftMm - preset.cols * preset.cellWidthMm - (preset.cols - 1) * colGapMm) : 0;
   const rawOffset = Number(options.offsetMm);
   const offsetMm = Number.isFinite(rawOffset) ? Math.min(Math.max(rawOffset, -8), 5) : 0;
   const storeHeader = options.showStoreName && options.storeName ? esc(options.storeName.toUpperCase()) : "";
@@ -237,7 +270,7 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
     const priceBlock = hasCard
       ? '<div class="price-wrap">' +
         '<div class="price-row"><span class="price-lbl">Dinheiro ou PIX</span><span class="price-val">' + price + '</span></div>' +
-        '<div class="price-row price-row-card"><span class="price-lbl">Cart\u00e3o</span><span class="price-val price-val-card">' + cardPriceTxt + '</span></div>' +
+        '<div class="price-row price-row-card"><span class="price-lbl">Cartão</span><span class="price-val price-val-card">' + cardPriceTxt + '</span></div>' +
         '</div>'
       : '<div class="price">' + price + '</div>';
     const bcInnerClass = hasCard ? "bc-inner bc-inner-card" : "bc-inner";
@@ -255,7 +288,7 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
         // ===== LOCKED STRUCTURE =====
         // Ordem: store -> bc-box -> name -> price
         // NAO mudar as classes nem os parametros do SVG/JsBarcode. A classe
-        // extra "bc-inner-card" (so quando ha 2o preco) e ZONA LIVRE \u2014 nao
+        // extra "bc-inner-card" (so quando ha 2o preco) e ZONA LIVRE — nao
         // toca no .bc-box nem no SVG, so aperta padding/gap ao redor.
         cells.push(
           '<td class="cell"><div class="' + bcInnerClass + '">' +
@@ -277,7 +310,7 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   const colSep = colGapMm > 0 ? '<td class="colgap"></td>' : "";
   let rowsHtml = "";
   for (let r = 0; r < cells.length; r += COLS) {
-    rowsHtml += "<tr>" + cells.slice(r, r + COLS).join(colSep) + "</tr>\n";
+    rowsHtml += "<tr>" + (padLeftMm > 0 ? '<td class="padl"></td>' : "") + cells.slice(r, r + COLS).join(colSep) + (padLeftMm > 0 ? '<td class="padr"></td>' : "") + "</tr>\n";
   }
   const totalRows = cells.length / COLS;
 
@@ -300,6 +333,10 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += 'table{border-collapse:collapse;width:' + preset.pageWidthMm + 'mm;table-layout:fixed' + (offsetMm !== 0 ? ';transform:translateX(' + offsetMm + 'mm)' : '') + '}tr{height:' + preset.pageHeightMm + 'mm;page-break-inside:avoid}';
   html += '.cell{width:' + preset.cellWidthMm + 'mm;height:' + preset.cellHeightMm + 'mm;overflow:hidden;vertical-align:top;padding:0}';
   // Coluna espacadora = vao horizontal entre etiquetas (so quando colGapMm>0).
+  if (padLeftMm > 0) html += '.padl{width:' + padLeftMm + 'mm;padding:0;border:none}.padr{width:' + padRightMm + 'mm;padding:0;border:none}';
+  // Linha de corte: pontilhado no meio do vao entre linhas (so na impressao
+  // continua, preset com cutMarks). Nao toca na celula nem no barcode.
+  if (preset.cutMarks) html += 'tr{background-image:linear-gradient(to right,#000 50%,transparent 50%);background-size:2mm 0.2mm;background-repeat:repeat-x;background-position:0 ' + (preset.cellHeightMm + (preset.pageHeightMm - preset.cellHeightMm) / 2) + 'mm;-webkit-print-color-adjust:exact;print-color-adjust:exact}';
   if (colGapMm > 0) html += '.colgap{width:' + colGapMm + 'mm;height:' + preset.cellHeightMm + 'mm;padding:0;border:none;background:transparent}';
   // ============================================================
 
@@ -332,6 +369,15 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
     html += '.qr-inner .price-lbl{font-size:5pt}';
     html += '.qr-inner .price-val{font-size:8pt}';
     html += '.qr-inner .price-row-card .price-val{font-size:7pt}';
+  }
+
+  // Preset termico (bcModuleMm): o SVG sai com largura/altura em mm reais
+  // (definidas no script abaixo), entao o .bc-box nao pode encolher o SVG.
+  // Textos um pouco maiores — a celula e maior. So emitido nesse preset.
+  if (preset.bcModuleMm) {
+    html += '.bc-inner .bc-box{flex:0 0 auto;max-width:none;overflow:visible}';
+    html += '.bc-inner .bc-box svg{max-width:none;max-height:none}';
+    html += '.bc-inner .store{font-size:6pt}.bc-inner .name{font-size:7pt;max-height:3.2mm}.bc-inner .price{font-size:12pt}';
   }
 
   // QR layout
@@ -369,6 +415,7 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += '.preview-bar button:disabled{background:#4b5563;color:#9ca3af;cursor:not-allowed;opacity:0.7}';
   html += '.preview-wrap{display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px;padding-top:84px;padding-bottom:80px}';
   html += '.preview-wrap table{border:1px dashed #ccc}.preview-wrap .cell{border:1px dashed #eee}.preview-wrap .colgap{border:none}';
+  if (padLeftMm > 0) html += '.preview-wrap .padl,.preview-wrap .padr{border:none}';
   html += '@media print{.setup-guide{display:none!important}.preview-bar{display:none!important}.preview-wrap{padding:0;gap:0}.preview-wrap table{border:none}.preview-wrap .cell{border:none}body{background:#fff}}';
   html += '</style></head><body>';
 
@@ -425,8 +472,22 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
             ',fontOptions:"' + BARCODE_OPTS.fontOptions + '"' +
             ',background:"' + BARCODE_OPTS.background + '"' +
             ',lineColor:"' + BARCODE_OPTS.lineColor + '"};';
+    if (preset.bcModuleMm) {
+      // Preset termico: 1 unidade do SVG = 1 modulo; depois o SVG ganha
+      // largura/altura em mm -> modulo = bcModuleMm exato. Zona de silencio:
+      // no EAN-13 o digito inicial ja reserva ~12 modulos em branco a esquerda
+      // (+2) e a direita leva 8 (norma pede 7). Se um CODE128 longo nao couber na celula,
+      // cai pra 0,25mm (2 pontos) e, em ultimo caso, encaixa na largura.
+      html += 'opts={width:1,height:' + Math.round((preset.bcBarHeightMm || 10) / preset.bcModuleMm) + ',margin:0,marginLeft:2,marginRight:8,marginTop:1,marginBottom:0,displayValue:true,fontSize:8,textMargin:1,font:"Arial",fontOptions:"bold",background:"#ffffff",lineColor:"#000000"};';
+    }
     html += 'try{JsBarcode(el,code,Object.assign({},opts,{format:"EAN13"}));}';
     html += 'catch(e){try{JsBarcode(el,code,Object.assign({},opts,{format:"CODE128"}));}catch(e2){console.error(e2);}}';
+    if (preset.bcModuleMm) {
+      const maxBcMm = preset.cellWidthMm - 2;
+      html += 'var w=parseFloat(el.getAttribute("width")),h=parseFloat(el.getAttribute("height"));';
+      html += 'if(w>0&&h>0){var m=' + preset.bcModuleMm + ';if(w*m>' + maxBcMm + ')m=0.25;if(w*m>' + maxBcMm + ')m=' + maxBcMm + '/w;';
+      html += 'el.setAttribute("width",(w*m).toFixed(3)+"mm");el.setAttribute("height",(h*m).toFixed(3)+"mm");}';
+    }
     html += '});';
     html += '</scr' + 'ipt>';
     // =============================================
