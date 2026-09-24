@@ -11,7 +11,7 @@ import { readMatconSettings } from "@/constants/matcon";
 import { ehIphoneInstalado } from "@/services/instalarApp";
 import { avisarImpressaoNoIphone } from "@/components/ImpressaoNoIphone";
 import { hexToName } from "@/utils/colorNames";
-import { buildLabelHtml, buildLabelName, validateLabelItems, isValidEAN13, generateEAN13, LABEL_SIZE_PRESETS, DEFAULT_LABEL_SIZE } from "@/components/screens/estoque/labels/buildLabelHtml";
+import { buildLabelHtml, buildLabelName, validateLabelItems, isValidEAN13, generateEAN13, LABEL_SIZE_PRESETS, LABEL_SIZE_KEYS, DEFAULT_LABEL_SIZE } from "@/components/screens/estoque/labels/buildLabelHtml";
 import { defaultLabelQty, unitLabelForList } from "@/components/screens/estoque/labels/labelDefaults";
 import type { LabelItem, InvalidCodeItem, LabelSizeKey } from "@/components/screens/estoque/labels/buildLabelHtml";
 import type { Product } from "@/components/screens/estoque/types";
@@ -67,7 +67,7 @@ function colorNameToHex(name: string): string | null {
 }
 
 var LABEL_SIZE_STORAGE_KEY = "aura_label_print_size";
-var LABEL_SIZE_OPTIONS: LabelSizeKey[] = ["99x21", "30x25"];
+var LABEL_SIZE_OPTIONS: LabelSizeKey[] = LABEL_SIZE_KEYS;
 
 // Toggle manual com memoria: le a ultima escolha do navegador (web only).
 // Sem preferencia salva ainda -> cai no DEFAULT_LABEL_SIZE (99x21, formato
@@ -75,7 +75,7 @@ var LABEL_SIZE_OPTIONS: LabelSizeKey[] = ["99x21", "30x25"];
 function loadStoredLabelSize(): LabelSizeKey {
   if (Platform.OS === "web" && typeof window !== "undefined" && window.localStorage) {
     var stored = window.localStorage.getItem(LABEL_SIZE_STORAGE_KEY);
-    if (stored === "99x21" || stored === "30x25") return stored;
+    if (stored && (LABEL_SIZE_KEYS as string[]).indexOf(stored) >= 0) return stored as LabelSizeKey;
   }
   return DEFAULT_LABEL_SIZE;
 }
@@ -92,12 +92,25 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   var [mode, setMode] = useState<"barcode" | "qr">("barcode");
   var [labelSize, setLabelSizeState] = useState<LabelSizeKey>(loadStoredLabelSize);
   var labelPreset = LABEL_SIZE_PRESETS[labelSize];
+  // 24/09/2026: o modelo escolhido vira PRE-DEFINICAO DA LOJA
+  // (pdv_settings.label_size) — vale em qualquer computador/celular da loja,
+  // nao so no navegador onde foi escolhido. O localStorage continua como
+  // espelho/fallback (loja que nunca salvou, ou sem conexao).
   function setLabelSize(key: LabelSizeKey) {
     setLabelSizeState(key);
+    setSizeMenuOpen(false);
     if (Platform.OS === "web" && typeof window !== "undefined" && window.localStorage) {
-      window.localStorage.setItem(LABEL_SIZE_STORAGE_KEY, key);
+      try { window.localStorage.setItem(LABEL_SIZE_STORAGE_KEY, key); } catch (e) { /* sem storage */ }
+    }
+    if (company?.id) {
+      pdvSettingsApi.save(company.id, { label_size: key } as any).then(function() {
+        toast.success("Modelo " + LABEL_SIZE_PRESETS[key].uiLabel + " salvo como padrão da loja");
+      }).catch(function() {
+        toast.error("Não foi possível salvar o modelo como padrão — vale só neste navegador");
+      });
     }
   }
+  var [sizeMenuOpen, setSizeMenuOpen] = useState(false);
   var [search, setSearch] = useState("");
   var [quantities, setQuantities] = useState<Record<string, number>>({});
   var [showStoreName, setShowStoreName] = useState(true);
@@ -123,6 +136,9 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     pdvSettingsApi.get(company.id).then(function(res) {
       var v = Number(res.settings && res.settings.label_offset_mm);
       if (Number.isFinite(v)) setLabelOffsetMm(v);
+      // Modelo salvo da loja vence a escolha antiga do navegador.
+      var sz = res.settings && (res.settings as any).label_size;
+      if (sz && (LABEL_SIZE_KEYS as string[]).indexOf(sz) >= 0) setLabelSizeState(sz as LabelSizeKey);
     }).catch(function() { /* sem calibracao salva -> neutro */ });
   }, [isWeb, company?.id]);
 
@@ -421,15 +437,34 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
             <Pressable onPress={function() { setMode("barcode"); }} style={[s.modeBtn, mode === "barcode" && s.modeBtnActive]}><Text style={[s.modeText, mode === "barcode" && s.modeTextActive]}>EAN-13</Text></Pressable>
             <Pressable onPress={function() { setMode("qr"); }} style={[s.modeBtn, mode === "qr" && s.modeBtnActive]}><Text style={[s.modeText, mode === "qr" && s.modeTextActive]}>QR Code</Text></Pressable>
           </View>
-          <View style={s.modeToggle}>
-            {LABEL_SIZE_OPTIONS.map(function(key) {
-              var active = labelSize === key;
-              return (
-                <Pressable key={key} onPress={function() { setLabelSize(key); }} style={[s.modeBtn, active && s.modeBtnActive]}>
-                  <Text style={[s.modeText, active && s.modeTextActive]}>{LABEL_SIZE_PRESETS[key].uiLabel}</Text>
-                </Pressable>
-              );
-            })}
+          {/* 24/09/2026: modelo de etiqueta em lista suspensa (com 3+ modelos
+              os botoes lado a lado estouravam a largura). A escolha fica
+              salva como padrao da loja. */}
+          <View style={s.sizeSelect}>
+            <Pressable
+              onPress={function() { setSizeMenuOpen(!sizeMenuOpen); }}
+              style={s.sizeSelectBtn}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: sizeMenuOpen }}
+              accessibilityLabel={"Modelo de etiqueta: " + labelPreset.uiLabel}
+            >
+              <Text style={s.sizeSelectLbl}>Modelo:</Text>
+              <Text style={s.sizeSelectVal} numberOfLines={1}>{labelPreset.uiLabel}</Text>
+              <Icon name={sizeMenuOpen ? "chevron_up" : "chevron_down"} size={12} color={Colors.ink3} />
+            </Pressable>
+            {sizeMenuOpen && (
+              <View style={s.sizeMenu}>
+                {LABEL_SIZE_OPTIONS.map(function(key) {
+                  var active = labelSize === key;
+                  return (
+                    <Pressable key={key} onPress={function() { setLabelSize(key); }} style={[s.sizeMenuItem, active && s.sizeMenuItemActive]} accessibilityRole="menuitem">
+                      <Text style={[s.sizeMenuTxt, active && s.sizeMenuTxtActive]}>{LABEL_SIZE_PRESETS[key].uiLabel}</Text>
+                      {active && <Icon name="check" size={12} color={Colors.violet3} />}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
           </View>
         </View>
       </View>
@@ -688,6 +723,15 @@ var s = StyleSheet.create({
   modeBtnActive: { backgroundColor: Colors.violet },
   modeText: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
   modeTextActive: { color: "#fff", fontWeight: "600" },
+  sizeSelect: { position: "relative", zIndex: 20, minWidth: 220 },
+  sizeSelectBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.bg, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: Colors.border },
+  sizeSelectLbl: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
+  sizeSelectVal: { flex: 1, fontSize: 11.5, color: Colors.ink, fontWeight: "600" },
+  sizeMenu: { position: "absolute", top: "100%", right: 0, left: 0, marginTop: 4, backgroundColor: Colors.bg3, borderRadius: 8, borderWidth: 1, borderColor: Colors.border2, paddingVertical: 4, zIndex: 30 },
+  sizeMenuItem: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 8, paddingHorizontal: 12 },
+  sizeMenuItemActive: { backgroundColor: Colors.violetD },
+  sizeMenuTxt: { fontSize: 12, color: Colors.ink2 },
+  sizeMenuTxtActive: { color: Colors.violet3, fontWeight: "700" },
   storeToggle: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg3, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: Colors.border },
   storeToggleText: { fontSize: 12, color: Colors.ink2, flex: 1 },
   storeTogglePreview: { fontWeight: "700", color: Colors.violet3, letterSpacing: 0.5 },
