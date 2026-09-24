@@ -270,7 +270,7 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
     const priceBlock = hasCard
       ? '<div class="price-wrap">' +
         '<div class="price-row"><span class="price-lbl">Dinheiro ou PIX</span><span class="price-val">' + price + '</span></div>' +
-        '<div class="price-row price-row-card"><span class="price-lbl">Cart\\u00e3o</span><span class="price-val price-val-card">' + cardPriceTxt + '</span></div>' +
+        '<div class="price-row price-row-card"><span class="price-lbl">Cartão</span><span class="price-val price-val-card">' + cardPriceTxt + '</span></div>' +
         '</div>'
       : '<div class="price">' + price + '</div>';
     const bcInnerClass = hasCard ? "bc-inner bc-inner-card" : "bc-inner";
@@ -288,7 +288,7 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
         // ===== LOCKED STRUCTURE =====
         // Ordem: store -> bc-box -> name -> price
         // NAO mudar as classes nem os parametros do SVG/JsBarcode. A classe
-        // extra "bc-inner-card" (so quando ha 2o preco) e ZONA LIVRE \\u2014 nao
+        // extra "bc-inner-card" (so quando ha 2o preco) e ZONA LIVRE — nao
         // toca no .bc-box nem no SVG, so aperta padding/gap ao redor.
         cells.push(
           '<td class="cell"><div class="' + bcInnerClass + '">' +
