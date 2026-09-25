@@ -142,7 +142,7 @@ function PdfNote({ size }: { size: number }) {
 
 export function LivePreview({
   config, values, size, productName, showLabel, slug, productId,
-  allowSideToggle = false, fotoProduto,
+  allowSideToggle = false, fotoProduto, lado,
 }: {
   config: CustomizationConfig | null;
   values: Record<string, any>;
@@ -162,11 +162,20 @@ export function LivePreview({
   /** Foto do produto — vira a base do preview quando nao ha template
    *  visual. Sem ela o cliente ve um quadrado colorido no lugar da peca. */
   fotoProduto?: string | null;
+  /**
+   * Fase 3 (página do produto nova): o lado vindo de FORA. A página nova
+   * desenha as abas Frente · Verso · Meio em cima do mockup e no
+   * formulário, as duas sincronizadas — o lado é dela, e o alternador
+   * interno fica desligado (allowSideToggle). Sem a prop, o lado segue
+   * sendo do próprio preview, como antes.
+   */
+  lado?: "front" | "back" | "middle";
 }) {
   const T = usePaletaDaVitrine();
   const canUseEngine = Platform.OS === "web" && !!slug && !!productId;
   const [tpl, setTpl] = useState<VisualTemplate | null>(null);
-  const [viewId, setViewId] = useState<"front" | "back" | "middle">("front");
+  const [ladoInterno, setViewId] = useState<"front" | "back" | "middle">("front");
+  const viewId = lado ?? ladoInterno;
   const canvasRef = useRef<any>(null);
 
   useEffect(() => {

@@ -282,7 +282,7 @@ export function CascaDaVitrine({
  * rotas: na publica, a rota filha so chama isto depois de o estado
  * alcancar a URL (VitrineNaRota.tsx, telaPronta).
  */
-export function ConteudoDaVitrine() {
+export function ConteudoDaVitrine({ telaNova }: { telaNova?: ReactNode } = {}) {
   const v = useVitrine();
   const sf = v?.sf;
   const slug = v?.slug || "";
@@ -305,9 +305,12 @@ export function ConteudoDaVitrine() {
 
   if (!sf || !sf.store) return null;
 
+  // Fase 3 (chave vitrine_v2): a rota pode trocar a TELA — a página do
+  // produto nova, a grade nova (VitrineNaRota.tsx, ConteudoDaRota) — e o
+  // que mora em volta dela, aqui, continua valendo para as duas.
   return (
     <>
-      {sf.stage === "modelos" && sf.grupoAberto ? (
+      {telaNova ? telaNova : sf.stage === "modelos" && sf.grupoAberto ? (
         <GradeDeModelos
           categoria={sf.grupoAberto.categoria}
           produtos={sf.grupoAberto.produtos}
