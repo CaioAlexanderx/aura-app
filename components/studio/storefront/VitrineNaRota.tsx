@@ -33,7 +33,7 @@ import {
   type MutableRefObject, type ReactNode,
 } from "react";
 import { Platform, Pressable, View } from "react-native";
-import { Slot, router, useLocalSearchParams } from "expo-router";
+import { Slot, router, useLocalSearchParams, useSegments } from "expo-router";
 import { CascaDaVitrine, ConteudoDaVitrine, categoriaAberta } from "./PaginaDaVitrine";
 import { useVitrine } from "./ContextoDaVitrine";
 import { slugDaVitrine } from "./slugDaVitrine";
@@ -54,6 +54,8 @@ import { PaginaDoProduto } from "./produto/PaginaDoProduto";
 import { GradeDeModelosV2 } from "./produto/GradeDeModelosV2";
 
 const API_BASE = enderecoDaApi();
+import { textoDaFaixaDeRepeticao } from "./repeticaoDoPedido";
+import { NOTA } from "./posCompra/posCompra";
 
 // ── O que o layout sabe sobre a navegação ────────────────────
 
@@ -113,6 +115,13 @@ export function LayoutDaVitrine() {
   const params = useLocalSearchParams<{ slug: string }>();
   const slugDoCaminho = String(params.slug || "");
   const slug = slugDaVitrine(params.slug);
+  // Fase 4: aprovação e acompanhamento moram no endereço da loja, mas não
+  // DENTRO da vitrine. Elas têm o próprio payload com a marca (não
+  // precisam do catálogo inteiro que a casca carrega), abrem mesmo com a
+  // loja despublicada — quem já comprou continua vendo o próprio pedido —
+  // e não levam cabeçalho de loja, sacola nem busca (mockup da Fase 4).
+  const segmentos = useSegments() as string[];
+  const posCompra = ehPaginaDoPosCompra(segmentos);
 
   const navegar = useCallback((tela: TelaDaVitrine, modo: ModoDeNavegar) => {
     const href = caminhoDaTela(slugDoCaminho, tela) as any;
@@ -125,12 +134,42 @@ export function LayoutDaVitrine() {
 
   return (
     <ProvedorDaRota navegar={navegar}>
-      <CascaDaVitrine slug={slug} navegar={navegar}>
+      {posCompra ? (
         <Slot />
-        <RetornoDoCartao slugDoCaminho={slugDoCaminho} />
-      </CascaDaVitrine>
+      ) : (
+        <CascaDaVitrine slug={slug} navegar={navegar}>
+          <Slot />
+          <RetornoDoCartao slugDoCaminho={slugDoCaminho} />
+        </CascaDaVitrine>
+      )}
     </ProvedorDaRota>
   );
+}
+
+/**
+ * `/<slug>/aprovacao/<token>` e `/<slug>/acompanhar/<token>`: as páginas
+ * do pós-compra, que o layout desenha sem a casca da loja.
+ */
+export function ehPaginaDoPosCompra(segmentos: readonly string[] | null | undefined): boolean {
+  if (!segmentos || segmentos[0] !== "[slug]") return false;
+  return segmentos[1] === "aprovacao" || segmentos[1] === "acompanhar";
+}
+
+/**
+ * A página do pós-compra avisa a rota que a loja já está nesta aba.
+ *
+ * "Pedir outro igual" empilha a página do produto por cima do
+ * acompanhamento. Sem isto a rota do produto acharia que é a entrada na
+ * loja por um link de fora e trocaria o acompanhamento pela home — o
+ * voltar do navegador não voltaria mais para o pedido.
+ */
+export function useEntradaPeloPosCompra(slug: string) {
+  const rota = useContext(RotaCtx);
+  useEffect(() => {
+    if (rota) rota.primeira.current = false;
+    if (slug) marcarLojaNaAba(slug);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug]);
 }
 
 /** Identidade de uma tela, para os efeitos rodarem quando ela muda. */
@@ -206,6 +245,18 @@ export function TelaNaRota({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── 1b. "Pedir outro igual" (Fase 4) ───────────────────────
+  // `/<slug>/p/<id>?repetir=<token>`: a peça abre com a personalização do
+  // pedido. Pedido aqui, e não no efeito da entrada: o link também chega
+  // de dentro da loja (o acompanhamento empilha a peça). O estado mora no
+  // layout, então sobrevive à troca da entrada pela home.
+  const repetir = tela.tipo === "produto" && typeof consulta?.repetir === "string" ? consulta.repetir : "";
+  useEffect(() => {
+    if (!repetir || tela.tipo !== "produto" || !sf) return;
+    sf.pedirRepeticao(repetir, tela.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repetir, chave]);
+
   // ── 2. O estado alcança a URL ───────────────────────────────
   // Quando a loja chega e sempre que a tela da URL muda. Peça que saiu
   // da loja volta para a home com o aviso discreto; categoria que não
@@ -237,10 +288,24 @@ export function TelaNaRota({
   if (!pronta) return null;
 
   const comFaixa = tela.tipo === "produto" && rota?.faixaDaAurinha === tela.id;
-  if (!comFaixa) return <ConteudoDaRota tela={tela} />;
+  // A faixa do "Pedir outro igual" é da peça do pedido, e some quando a
+  // cliente troca de peça (repeticaoDoPedido.ts). Vale para as duas
+  // páginas do produto (a de hoje e a nova da Fase 3): fica em volta.
+  const textoDaRepeticao =
+    tela.tipo === "produto" && sf.repeticao && sf.repeticao.produtoId === tela.id
+      ? textoDaFaixaDeRepeticao(sf.repeticao)
+      : null;
+  if (!comFaixa && !textoDaRepeticao) return <ConteudoDaRota tela={tela} />;
   return (
     <View style={{ flex: 1 }}>
-      <FaixaDaAurinha onFechar={() => rota?.setFaixaDaAurinha(null)} />
+      {comFaixa ? <FaixaDaAurinha onFechar={() => rota?.setFaixaDaAurinha(null)} /> : null}
+      {textoDaRepeticao ? (
+        <FaixaDaRepeticao
+          texto={textoDaRepeticao}
+          aviso={sf.repeticao?.estado !== "aplicada"}
+          onFechar={sf.dispensarRepeticao}
+        />
+      ) : null}
       <View style={{ flex: 1 }}>
         <ConteudoDaRota tela={tela} />
       </View>
@@ -270,6 +335,49 @@ function ConteudoDaRota({ tela }: { tela: TelaDaVitrine }) {
   // em volta de qualquer tela (o título da aba, a gaveta da sacola da
   // Fase 2) vale também para as telas novas.
   return <ConteudoDaVitrine telaNova={telaNova} />;
+}
+
+/**
+ * "Personalização do pedido #00123 carregada — confira e ajuste."
+ * (mockup da Fase 4, Tela 5). Nota de informação, não alerta: a peça
+ * abriu como a cliente pediu. Quando a personalização não veio (peça
+ * fora da loja, link velho), a mesma faixa em âmbar diz o que fazer.
+ */
+export function FaixaDaRepeticao({
+  texto, aviso = false, onFechar,
+}: {
+  texto: string;
+  aviso?: boolean;
+  onFechar: () => void;
+}) {
+  const T = usePaletaDaVitrine();
+  const cor = aviso ? NOTA.ambar : NOTA.info;
+  return (
+    <View style={{ backgroundColor: T.card, paddingHorizontal: 16, paddingTop: 12 }}>
+      <View
+        testID="faixa-da-repeticao"
+        accessibilityRole="alert"
+        style={{
+          flexDirection: "row", alignItems: "center", gap: 10,
+          backgroundColor: cor.fundo, borderRadius: 12,
+          paddingLeft: 14, paddingRight: 4, paddingVertical: 4, minHeight: 44,
+          maxWidth: 980, width: "100%", alignSelf: "center",
+        }}
+      >
+        <Icon name={aviso ? "alert_circle" : "refresh"} size={16} color={cor.tinta} />
+        <Texto style={{ flex: 1, fontSize: 13.5, lineHeight: 19, color: cor.tinta }}>{texto}</Texto>
+        <Pressable
+          onPress={onFechar}
+          accessibilityRole="button"
+          accessibilityLabel="Fechar aviso"
+          hitSlop={4}
+          style={{ width: 40, height: 40, borderRadius: 8, alignItems: "center", justifyContent: "center" }}
+        >
+          <Icon name="x" size={16} color={cor.tinta} />
+        </Pressable>
+      </View>
+    </View>
+  );
 }
 
 /**

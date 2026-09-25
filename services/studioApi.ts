@@ -171,6 +171,10 @@ export type PublicTrack = {
     entregue?: number | null;
     total?: number | null;
     unidade?: string | null;
+    // Fase 4 (pedido da vitrine): foto do produto e o resumo da
+    // personalização ("Frente e verso", "Nome: Mãe").
+    imagem?: string | null;
+    resumo?: string[];
   }[];
   total?: number;
   etapa_atual?: number;
@@ -181,6 +185,35 @@ export type PublicTrack = {
   proxima_entrega?: string | null;
   // 22/09/2026 (Matcon M2): link do DANFE quando a entrega tem NF-e autorizada.
   danfe_url?: string | null;
+  // Fase 4 da vitrine Studio (25/09/2026) — ausentes no backend de antes e
+  // nos caminhos de OS/Matcon. Ver Aura-backend studioTrackPublic.js.
+  /** A marca da loja (encomenda do Studio: vitrine e balcão). */
+  marca?: MarcaDaLoja | null;
+  /** "vitrine" só no pedido da loja online — o que pode ser repetido. */
+  origem?: "vitrine";
+  /** "Pronto" e "Entregue" são a mesma etapa; isto separa os dois. */
+  entregue?: boolean;
+  /** Aprovação de arte em aberto: o token do link, para o botão "Aprovar a arte". */
+  aprovacao?: { token: string } | null;
+  /** Endereço DA LOJA para retirar (null na entrega em casa). */
+  retirada_endereco?: string | null;
+};
+
+/**
+ * A marca da loja nas páginas públicas do pós-compra (Fase 4). Só dado
+ * da loja — o mesmo que a vitrine já mostra.
+ */
+export type MarcaDaLoja = {
+  slug: string;
+  nome: string | null;
+  logo_url: string | null;
+  primary_color: string | null;
+  font_family: string | null;
+  whatsapp: string | null;
+  /** Endereço público da loja (domínio próprio quando ativo). */
+  url?: string | null;
+  /** A chave da vitrine nova ligada nesta loja. */
+  vitrine_v2?: boolean;
 };
 
 export type StudioOrderItem = {
@@ -237,11 +270,27 @@ export type PublicApproval = {
   shop: { name: string };
   order: {
     id: string;
+    /** Fase 4: o número que a cliente conhece ("#00123"). */
+    numero?: string | null;
     customer_name: string;
     total_amount: number;
-    items: Array<{ product_name: string; quantity: number; unit_price: number; customization: any }>;
+    items: Array<{
+      product_id?: string | null;
+      product_name: string;
+      product_image?: string | null;
+      quantity: number;
+      unit_price: number;
+      customization: any;
+    }>;
   };
   revisions: StudioApprovalRevision[];
+  // Fase 4 da vitrine Studio (25/09/2026) — ausentes no backend de antes.
+  marca?: MarcaDaLoja | null;
+  /** Revisões inclusas na política da loja, já pedidas e o preço da extra. */
+  revisoes?: { inclusas: number | null; usadas: number; valor_extra: number };
+  prazo_dias_uteis?: number | null;
+  /** Token do acompanhamento do pedido (o mesmo da confirmação). */
+  acompanhar_token?: string | null;
 };
 
 // ─── Nivel 1 (25/05) — Settings + Metrics + SLA ──────────────
@@ -820,7 +869,7 @@ export const studioApi = {
     request<PublicTrack>("/acompanhar/" + token, { method: "GET", retry: 1, timeout: 8000, skipAuth: true } as any),
   getPublicApproval: (token: string) =>
     request<PublicApproval>("/aprovacao/" + token, { method: "GET", retry: 1, timeout: 8000, skipAuth: true } as any),
-  respondPublicApproval: (token: string, body: { action: "approve" | "request_changes"; note?: string }) =>
+  respondPublicApproval: (token: string, body: { action: "approve" | "request_changes"; note?: string; referencia_url?: string }) =>
     request<{ ok: true; action: string; new_status: StudioApprovalStatus; message: string }>(
       "/aprovacao/" + token + "/respond",
       { method: "POST", body, retry: 0, timeout: 10000, skipAuth: true } as any
