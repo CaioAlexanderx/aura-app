@@ -10,7 +10,7 @@ import {
   lerLinkDaAurinha, origemValida, ehUuid, veioDaAurinha,
   guardarAtribuicao, atribuicaoGuardada, camposDeAtribuicao, ORIGEM_MAX,
 } from "@/components/studio/storefront/linkDaAurinha";
-import { compartilharOuCopiar } from "@/components/studio/storefront/compartilhar";
+import { compartilharOuCopiar, metodoDoCompartilhar } from "@/components/studio/storefront/compartilhar";
 
 const PRODUTO = "8F21C4A9-1B2C-4D3E-8F90-A1B2C3D4E5F6";
 const CONVERSA = "3f0e7a52-9c1d-4b8e-a6f2-0d5c7e9b1a24";
@@ -175,5 +175,14 @@ describe("compartilharOuCopiar", () => {
     expect(await compartilharOuCopiar(dados, {})).toBe("falhou");
     const copiar = jest.fn().mockRejectedValue(new Error("negado"));
     expect(await compartilharOuCopiar(dados, { copiar })).toBe("falhou");
+  });
+});
+
+describe("metodoDoCompartilhar (evento share da Fase 1C)", () => {
+  test("só conta o que saiu", () => {
+    expect(metodoDoCompartilhar("compartilhado")).toBe("compartilhar");
+    expect(metodoDoCompartilhar("copiado")).toBe("link");
+    expect(metodoDoCompartilhar("cancelado")).toBeNull();
+    expect(metodoDoCompartilhar("falhou")).toBeNull();
   });
 });

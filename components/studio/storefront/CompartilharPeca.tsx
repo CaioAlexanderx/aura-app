@@ -14,7 +14,8 @@ import { Icon } from "@/components/Icon";
 import { usePaletaDaVitrine, useTemaDaVitrine } from "./TemaDaVitrine";
 import { useVitrine } from "./ContextoDaVitrine";
 import { linkDaPeca, tituloDaPagina } from "./rotasDaVitrine";
-import { ambienteDoNavegador, compartilharOuCopiar } from "./compartilhar";
+import { ambienteDoNavegador, compartilharOuCopiar, metodoDoCompartilhar, type ResultadoDoCompartilhar } from "./compartilhar";
+import { medirNaVitrine } from "./eventosDaVitrine";
 
 export function BotaoCompartilhar({ produto }: { produto: { id: string | number; name?: string | null } }) {
   const T = usePaletaDaVitrine();
@@ -38,13 +39,25 @@ export function BotaoCompartilhar({ produto }: { produto: { id: string | number;
     });
     const titulo = tituloDaPagina({ stage: "configure", nomeDaLoja: store?.site?.name, produto: produto.name });
 
+    let r: ResultadoDoCompartilhar;
     if (Platform.OS !== "web") {
-      try { await Share.share({ message: url, url, title: titulo }); } catch { /* fechou a folha */ }
-      return;
+      try {
+        const feito = await Share.share({ message: url, url, title: titulo });
+        r = feito.action === Share.sharedAction ? "compartilhado" : "cancelado";
+      } catch { r = "falhou"; }
+    } else {
+      r = await compartilharOuCopiar({ titulo, url }, ambienteDoNavegador());
+      if (r === "copiado") v.avisar("Link da peça copiado", "check");
+      else if (r === "falhou") v.avisar("Não deu para copiar o link", "info");
     }
-    const r = await compartilharOuCopiar({ titulo, url }, ambienteDoNavegador());
-    if (r === "copiado") v.avisar("Link da peça copiado", "check");
-    else if (r === "falhou") v.avisar("Não deu para copiar o link", "info");
+    // Fase 1C: `share` no GA4 (o Pixel não tem evento padrão para isso),
+    // atrás do consentimento como os outros — ver eventosDaVitrine.ts.
+    const metodo = metodoDoCompartilhar(r);
+    if (metodo) {
+      medirNaVitrine(store?.site?.rastreadores, {
+        nome: "share", metodo, item: { id: String(produto.id), nome: String(produto.name || "") },
+      });
+    }
   }
 
   return (

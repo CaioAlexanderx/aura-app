@@ -37,6 +37,14 @@ jest.mock("@/components/studio/storefront/LivePreview", () => ({
   defaultConfiguratorSize: () => 320,
 }));
 
+// Os eventos de medição (Fase 1C) espiados: o que importa aqui é o
+// Compartilhar chamar o `share`, não o gtag.
+const mockMedir = jest.fn();
+jest.mock("@/components/studio/storefront/eventosDaVitrine", () => ({
+  ...jest.requireActual("@/components/studio/storefront/eventosDaVitrine"),
+  medirNaVitrine: (...a: any[]) => mockMedir(...a),
+}));
+
 import { CascaDaVitrine } from "@/components/studio/storefront/PaginaDaVitrine";
 import { ProvedorDaRota, TelaNaRota } from "@/components/studio/storefront/VitrineNaRota";
 import type { TelaDaVitrine } from "@/components/studio/storefront/rotasDaVitrine";
@@ -220,4 +228,22 @@ test("peça aberta sem vir da Aurinha não tem faixa", async () => {
   montar({ tipo: "produto", id: CANECA });
   expect(await screen.findByLabelText("Compartilhar")).toBeTruthy();
   expect(naTela("Separamos esta peça para você")).toBe(false);
+});
+
+test("Compartilhar no computador copia o link público da peça, avisa e mede o share", async () => {
+  const escrito: string[] = [];
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: (t: string) => { escrito.push(t); return Promise.resolve(); } },
+  });
+  mockMedir.mockClear();
+  montar({ tipo: "produto", id: CANECA });
+  fireEvent.press(await screen.findByLabelText("Compartilhar"));
+  await waitFor(() => expect(naTela("Link da peça copiado")).toBe(true));
+  // jsdom roda em localhost: o link sai com a própria origem (dev). No ar,
+  // loja.getaura.com.br — ver linkDaPeca.
+  expect(escrito).toEqual([`${window.location.origin}/sheid-mania/p/${CANECA}`]);
+  const share = mockMedir.mock.calls.find((c) => c[1]?.nome === "share");
+  expect(share?.[1]).toEqual({ nome: "share", metodo: "link", item: { id: CANECA, nome: "Caneca Alça Coração" } });
+  delete (navigator as any).clipboard;
 });

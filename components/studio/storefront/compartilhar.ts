@@ -52,6 +52,18 @@ export async function compartilharOuCopiar(
   return "falhou";
 }
 
+/**
+ * O `method` do evento `share` (GA4, Fase 1C). Só conta o que saiu: a
+ * folha fechada sem escolher nada e a cópia que falhou não são
+ * compartilhamento. A folha não diz para qual app foi, então é
+ * "compartilhar" e pronto; a cópia é "link".
+ */
+export function metodoDoCompartilhar(r: ResultadoDoCompartilhar): "compartilhar" | "link" | null {
+  if (r === "compartilhado") return "compartilhar";
+  if (r === "copiado") return "link";
+  return null;
+}
+
 /** O ambiente do navegador de verdade. Nada aqui lança. */
 export function ambienteDoNavegador(): AmbienteDeCompartilhar {
   if (typeof window === "undefined" || typeof navigator === "undefined") return {};
