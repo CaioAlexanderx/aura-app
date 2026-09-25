@@ -78,21 +78,32 @@ describe("as duas rotas abrem a mesma tela", () => {
   const path = require("path");
   const RAIZ = path.join(__dirname, "..");
 
-  test("a rota pública e a antiga montam PaginaDaVitrine", () => {
+  test("a rota pública e a antiga montam a mesma vitrine", () => {
     // Duplicar a tela seria a quinta cópia da mesma coisa neste produto.
-    for (const rota of ["app/[slug].tsx", "app/cardapio/studio/[slug].tsx"]) {
-      const fonte = fs.readFileSync(path.join(RAIZ, rota), "utf8");
-      expect(fonte).toContain("<PaginaDaVitrine slug={slugDaVitrine(params.slug)} />");
-    }
+    // Onda 1B: a pública virou layout (app/[slug]/_layout.tsx) que monta a
+    // casca da loja uma vez e deixa as rotas filhas escolherem a tela; a
+    // antiga continua com PaginaDaVitrine, a tela sendo só estado.
+    const antiga = fs.readFileSync(path.join(RAIZ, "app/cardapio/studio/[slug].tsx"), "utf8");
+    expect(antiga).toContain("<PaginaDaVitrine slug={slugDaVitrine(params.slug)} />");
+    const layout = fs.readFileSync(path.join(RAIZ, "app/[slug]/_layout.tsx"), "utf8");
+    expect(layout).toContain("<LayoutDaVitrine />");
+    const naRota = fs.readFileSync(
+      path.join(RAIZ, "components/studio/storefront/VitrineNaRota.tsx"), "utf8");
+    expect(naRota).toContain("const slug = slugDaVitrine(params.slug);");
+    expect(naRota).toContain("<CascaDaVitrine slug={slug} navegar={navegar}>");
+    const pagina = fs.readFileSync(
+      path.join(RAIZ, "components/studio/storefront/PaginaDaVitrine.tsx"), "utf8");
+    expect(pagina).toContain("<CascaDaVitrine slug={slug}>");
   });
 
   test("a vitrine pública passa pelo guarda de autenticação", () => {
     // Verificado no ar em 04/09: sem isto, `app.getaura.com.br/<slug>`
     // caía na tela de login. O guarda libera por PRIMEIRO SEGMENTO, e o
     // segmento dinâmico da raiz chega como o literal "[slug]" — uma
-    // loja aberta por quem não tem conta não pode pedir senha.
+    // loja aberta por quem não tem conta não pode pedir senha. Onda 1B:
+    // todas as telas da loja, não só a home (vitrineStudioGuardaPublica).
     const layout = fs.readFileSync(path.join(RAIZ, "app/_layout.tsx"), "utf8");
-    expect(layout).toContain('segments.length === 1 && segments[0] === "[slug]"');
+    expect(layout).toContain("ehVitrinePublica(segments)");
     expect(layout).toContain("onVitrinePublica ||");
   });
 
