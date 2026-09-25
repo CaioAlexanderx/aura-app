@@ -58,7 +58,7 @@ function normalizaFormato(f: unknown): { mime: string | null; ext: string | null
   return { mime: null, ext: s.replace(/^\./, "") || null };
 }
 
-function buildAccept(formats: string[]): string {
+export function buildAccept(formats: string[]): string {
   // O atributo accept entende MIME ("image/png") e extensao com ponto
   // (".png") — nunca "png" solto, que o navegador descarta.
   const partes = (formats || [])
@@ -78,7 +78,7 @@ function buildAccept(formats: string[]): string {
   return [...new Set(partes)].join(",");
 }
 
-function buildFormatLabel(formats: string[]): string {
+export function buildFormatLabel(formats: string[]): string {
   const labels = (formats || [])
     .map((f) => {
       if (typeof f === "string" && FORMAT_LABELS[f]) return FORMAT_LABELS[f];

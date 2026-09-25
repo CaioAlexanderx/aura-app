@@ -35,6 +35,35 @@ export function cepCompleto(v: string): boolean {
 
 type Resultado = { fee: number; etaText?: string | null } | null;
 
+/**
+ * A cotação pela MESMA rota do checkout, sem estado de tela. Separada do
+ * componente para a página do produto nova (Fase 3) desenhar a entrega
+ * do jeito dela — CEP, "Receber em casa" e "Retire na loja" na mesma
+ * lista — sem uma segunda cópia da chamada.
+ */
+export async function cotarFrete(
+  slug: string,
+  cep: string,
+): Promise<{ ok: true; fee: number; eta: string | null } | { ok: false; erro: string }> {
+  try {
+    const r = await fetch(
+      `${enderecoDaApi()}/storefront/${encodeURIComponent(slug)}/studio/shipping-quote?cep=${cepLimpo(cep)}`,
+    );
+    const j = await r.json();
+    // A rota devolve 200 COM `error` no corpo para CEP inválido e fora
+    // de área — checar só `r.ok` faria a tela anunciar "Entrega grátis"
+    // para um CEP que ela recusou.
+    if (!r.ok || j?.error || j?.fee == null) {
+      // A mensagem da rota é escrita para o cliente ("Loja nao faz
+      // entregas", "CEP invalido"), então vale mais que um genérico.
+      return { ok: false, erro: j?.error || "Não consegui calcular agora." };
+    }
+    return { ok: true, fee: Number(j.fee) || 0, eta: j?.eta || null };
+  } catch {
+    return { ok: false, erro: "Não consegui calcular agora. Tente de novo em instantes." };
+  }
+}
+
 export function FreteNoProduto({
   slug, corDaLoja,
 }: {
@@ -60,26 +89,10 @@ export function FreteNoProduto({
     setCarregando(true);
     setErro(null);
     setResultado(null);
-    try {
-      const r = await fetch(
-        `${enderecoDaApi()}/storefront/${encodeURIComponent(slug)}/studio/shipping-quote?cep=${cepLimpo(cep)}`,
-      );
-      const j = await r.json();
-      // A rota devolve 200 COM `error` no corpo para CEP inválido e fora
-      // de área — checar só `r.ok` faria a tela anunciar "Entrega grátis"
-      // para um CEP que ela recusou.
-      if (!r.ok || j?.error || j?.fee == null) {
-        // A mensagem da rota é escrita para o cliente ("Loja nao faz
-        // entregas", "CEP invalido"), então vale mais que um genérico.
-        setErro(j?.error || "Não consegui calcular agora.");
-        return;
-      }
-      setResultado({ fee: Number(j.fee) || 0, etaText: j?.eta || null });
-    } catch {
-      setErro("Não consegui calcular agora. Tente de novo em instantes.");
-    } finally {
-      setCarregando(false);
-    }
+    const r = await cotarFrete(slug, cep);
+    if (r.ok) setResultado({ fee: r.fee, etaText: r.eta });
+    else setErro(r.erro);
+    setCarregando(false);
   }
 
   return (
