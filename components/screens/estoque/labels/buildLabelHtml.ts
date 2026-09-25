@@ -139,6 +139,19 @@ export function buildLabelName(name: string, size: string, color: string): strin
   return parts.join(" - ");
 }
 
+// Tamanho e cor da etiqueta "editorial" (25/09/2026). Mesma leitura de cor
+// do buildLabelName (hex -> nome PT), sem o nome do produto e sem corte.
+// Vazio quando nao ha nem tamanho nem cor.
+function labelVariantParts(size: string, color: string): string[] {
+  const parts: string[] = [];
+  if (size) parts.push(String(size).trim());
+  if (color) {
+    if (/^#[0-9A-Fa-f]{6}$/.test(color)) parts.push(hexToName(color));
+    else parts.push(String(color).trim());
+  }
+  return parts.filter(Boolean);
+}
+
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -193,8 +206,15 @@ export type LabelItem = {
 // pontos exatos da cabeca termica, com zona de silencio de verdade. Celula
 // maior (46x25mm) pra caber o EAN-13 nesse tamanho. Os presets da Finesse/
 // Eryca continuam com BARCODE_OPTS (LOCKED) — nada muda pra eles.
+// "105x21" (25/09/2026, Divina D'Lux / Fabiany): rolo termico 33x21mm,
+// 3 colunas, COM vao — vao vertical 2,5mm (espec. do fornecedor) e papel de
+// 105mm (105 - 3x33 = 6mm -> 2 vaos de 3mm entre colunas). O "99x21" e
+// colado e saia desalinhado nesse rolo (2a/3a coluna 3 e 6mm fora do lugar).
+// Mesma mecanica de colGapMm/rowGapMm do "30x25"; o barcode e o da Finesse
+// (BARCODE_OPTS, mesma largura de 33mm). O desenho do texto e o "editorial"
+// (ver `design` abaixo).
 // NUNCA mudar os numeros do preset "99x21".
-export type LabelSizeKey = "99x21" | "30x25" | "58mm";
+export type LabelSizeKey = "99x21" | "105x21" | "30x25" | "58mm";
 
 export const LABEL_SIZE_PRESETS: Record<LabelSizeKey, {
   pageWidthMm: number;
@@ -221,13 +241,22 @@ export const LABEL_SIZE_PRESETS: Record<LabelSizeKey, {
   // vira 58x84mm (em pe) e sai em retrato, uma embaixo da outra.
   // Ausente => 1 (byte-identico).
   rowsPerPage?: number;
+  // Desenho do texto da etiqueta (25/09/2026, Divina D'Lux / Fabiany —
+  // mockup docs/mockups/etiqueta-33x21-vao.html, desenho "C · Editorial",
+  // aprovado pelo Caio). Na termica de 203dpi o nome em 5,5pt peso 500 saia
+  // fino e falhado, e cortado em 16 letras. "editorial": alinhada a
+  // esquerda, Montserrat em negrito, nome inteiro em ate 2 linhas, selo de
+  // tamanho/cor ao lado do preco e o codigo de barras no rodape (MESMO
+  // .bc-box/SVG/BARCODE_OPTS). Ausente => layout Finesse (byte-identico).
+  design?: "editorial";
   uiLabel: string;
 }> = {
   "99x21": { pageWidthMm: 99, pageHeightMm: 21, cols: 3, cellWidthMm: 33, cellHeightMm: 21, uiLabel: "33x21mm (3 colunas)" },
+  "105x21": { pageWidthMm: 105, pageHeightMm: 23.5, cols: 3, cellWidthMm: 33, cellHeightMm: 21, colGapMm: 3, rowGapMm: 2.5, design: "editorial", uiLabel: "33x21mm com vão (3 colunas · papel 105mm)" },
   "30x25": { pageWidthMm: 94, pageHeightMm: 27, cols: 3, cellWidthMm: 30, cellHeightMm: 25, colGapMm: 2, rowGapMm: 2, uiLabel: "30x25mm (3 colunas)" },
   "58mm":  { pageWidthMm: 58, pageHeightMm: 28, cols: 1, cellWidthMm: 46, cellHeightMm: 25, rowGapMm: 3, padLeftMm: 6, cutMarks: true, bcModuleMm: 0.375, bcBarHeightMm: 9, rowsPerPage: 3, uiLabel: "Bobina 58mm (1 por linha)" },
 };
-export const LABEL_SIZE_KEYS: LabelSizeKey[] = ["99x21", "30x25", "58mm"];
+export const LABEL_SIZE_KEYS: LabelSizeKey[] = ["99x21", "105x21", "30x25", "58mm"];
 export const DEFAULT_LABEL_SIZE: LabelSizeKey = "99x21";
 // -------------------------------------------
 
@@ -261,13 +290,22 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   const offsetMm = Number.isFinite(rawOffset) ? Math.min(Math.max(rawOffset, -8), 5) : 0;
   const storeHeader = options.showStoreName && options.storeName ? esc(options.storeName.toUpperCase()) : "";
   const totalLabels = items.reduce((s, i) => s + i.qty, 0);
+  // Desenho "editorial" (preset "105x21", 25/09/2026). Tudo que ele emite
+  // (CSS, fonte, script de ajuste, marcacao) fica atras desta flag: os
+  // presets sem `design` saem byte-identicos.
+  const isEditorial = preset.design === "editorial";
 
   const cells: string[] = [];
   let labelIdx = 0;
 
   items.forEach(function (item) {
     const code = esc(item.barcode);
-    const labelName = esc(buildLabelName(item.name, item.size, item.color));
+    // Editorial: nome inteiro (sem o corte em 16 letras do buildLabelName) —
+    // o CSS quebra em ate 2 linhas e o script de ajuste encolhe a fonte.
+    const variantParts = isEditorial ? labelVariantParts(item.size, item.color) : [];
+    const labelName = isEditorial
+      ? esc([item.name].concat(isQR ? variantParts : []).join(" - "))
+      : esc(buildLabelName(item.name, item.size, item.color));
     const price = "R$ " + item.price.toFixed(2).replace(".", ",");
     // ZONA LIVRE (texto do preco). So existe com a opcao ligada. QA
     // 23/09/2026: preco sem rotulo + "cartao R$ X" em 5,5pt era ilegivel na
@@ -293,6 +331,26 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
           (storeHeader ? '<div class="store">' + storeHeader + '</div>' : '') +
           '<div class="name">' + labelName + '</div>' + priceBlock + '</div></div></td>'
         );
+      } else if (isEditorial) {
+        // ===== Desenho "editorial" (25/09/2026, preset "105x21") =====
+        // Ordem: store -> name -> row (selo tamanho/cor + preco) -> bc-box.
+        // O .bc-box e o <svg id="bc-N" data-code="..."> sao a MESMA string
+        // do layout Finesse (LOCKED) — so a posicao na coluna muda.
+        // Preco no cartao (so lojas Matcon): linha "Cartao R$ X" logo abaixo
+        // da .row; nada de .price-wrap neste desenho.
+        cells.push(
+          '<td class="cell"><div class="bc-inner ed' + (hasCard ? ' ed-card' : '') + '">' +
+          (storeHeader ? '<div class="store">' + storeHeader + '</div>' : '') +
+          '<div class="name">' + labelName + '</div>' +
+          '<div class="row">' +
+          (variantParts.length ? '<span class="variant">' + esc(variantParts.join(" · ")) + '</span>' : '') +
+          '<div class="price"><span class="cur">R$</span>' + item.price.toFixed(2).replace(".", ",") + '</div>' +
+          '</div>' +
+          (hasCard ? '<div class="card-line">Cartão <b>' + cardPriceTxt + '</b></div>' : '') +
+          '<div class="bc-box"><svg id="bc-' + labelIdx + '" data-code="' + code + '"></svg></div>' +
+          '</div></td>'
+        );
+        // =============================================================
       } else {
         // ===== LOCKED STRUCTURE =====
         // Ordem: store -> bc-box -> name -> price
@@ -326,6 +384,8 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   let html = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">';
   html += '<title>Etiquetas Aura - ' + totalLabels + ' etiquetas</title>';
   if (!isQR) html += '<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></scr' + 'ipt>';
+  // Editorial: Montserrat (Google Fonts) so nesse desenho; Arial de reserva.
+  if (isEditorial && !isQR) html += '<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&display=swap" rel="stylesheet">';
   // Valores derivados do preset. Pro preset default "99x21" estes calculos
   // reproduzem exatamente os numeros LOCKED originais (33-3=30, min(33,21)-4=17).
   const bcBoxMaxWidthMm = preset.cellWidthMm - 3;
@@ -389,6 +449,35 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
     html += '.bc-inner .store{font-size:6pt}.bc-inner .name{font-size:7pt;max-height:3.2mm}.bc-inner .price{font-size:12pt}';
   }
 
+  // Desenho "editorial" (25/09/2026, preset "105x21"): regras .dC do mockup
+  // docs/mockups/etiqueta-33x21-vao.html com .bc-inner.ed no lugar de
+  // ".dC .bc-inner". Vem DEPOIS do CSS base e ganha por especificidade — as
+  // regras base nao mudam. Sem `order`: a marcacao ja sai na ordem certa.
+  // Tudo em negrito e nada abaixo de 0,25mm (a termica de 203dpi apaga
+  // hastes finas). O .bc-box so ganha alinhamento/padding — flex, max-width
+  // e overflow continuam os da zona LOCKED.
+  if (isEditorial && !isQR) {
+    html += '.bc-inner.ed{justify-content:flex-start;align-items:flex-start;text-align:left;gap:0.25mm;padding:0.7mm 1.2mm 0.4mm;font-family:Montserrat,Arial,Helvetica,sans-serif}';
+    html += '.bc-inner.ed .store{font-size:4.6pt;letter-spacing:1.4pt;text-transform:uppercase}';
+    html += '.bc-inner.ed .name{font-size:6.5pt;font-weight:700;line-height:1.08;width:100%;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word;max-height:none}';
+    html += '.bc-inner.ed .row{display:flex;width:100%;align-items:flex-end;justify-content:space-between;gap:0.8mm;margin-top:0.15mm;flex-wrap:nowrap}';
+    html += '.bc-inner.ed .row .variant{display:inline-block;flex:0 1 auto;min-width:0;font-size:4.4pt;font-weight:700;letter-spacing:0.3pt;text-transform:uppercase;line-height:1;border:0.25mm solid #000;border-radius:0.6mm;padding:0.4mm 0.6mm 0.3mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
+    html += '.bc-inner.ed .row .variant:empty{display:none}';
+    html += '.bc-inner.ed .price{font-size:9.5pt;font-weight:900;line-height:1;margin-left:auto;letter-spacing:-0.3pt;white-space:nowrap;flex-shrink:0}';
+    html += '.bc-inner.ed .price .cur{font-size:5.5pt;font-weight:700;vertical-align:top;margin-right:0.4mm;letter-spacing:0;position:relative;top:0.2mm}';
+    html += '.bc-inner.ed .bc-box{align-self:center;align-items:flex-end;padding:0.25mm 0 0}';
+    // Selo comprido demais pra dividir a linha com o preco (ex.: "UNICO ·
+    // VERDE MILITAR"): o script de ajuste poe .stack — nome em 1 linha, selo
+    // na linha inteira e o preco embaixo, a direita.
+    html += '.bc-inner.ed.stack .name{-webkit-line-clamp:1;font-size:6pt}';
+    html += '.bc-inner.ed.stack .row{flex-wrap:wrap;gap:0.2mm}';
+    html += '.bc-inner.ed.stack .row .variant{max-width:100%}';
+    html += '.bc-inner.ed.stack .price{width:100%;text-align:right;font-size:9pt}'; // 9pt: com 9,5pt a celula empilhada encolhia o barcode 1,6%; com 9pt, 0,2%
+    // Preco no cartao (so lojas Matcon): 1 linha a mais, nome cai pra 1 linha.
+    html += '.bc-inner.ed .card-line{font-size:5pt;font-weight:700;line-height:1;white-space:nowrap;width:100%;text-align:right}';
+    html += '.bc-inner.ed.ed-card .name{-webkit-line-clamp:1}';
+  }
+
   // QR layout
   html += '.qr-inner{display:flex;flex-direction:row;align-items:center;padding:1mm 1.5mm;gap:1.5mm;height:' + preset.cellHeightMm + 'mm;width:' + preset.cellWidthMm + 'mm}';
   html += '.qr-inner .qr{width:' + qrSizeMm + 'mm;height:' + qrSizeMm + 'mm;flex-shrink:0;image-rendering:pixelated}';
@@ -396,6 +485,8 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += '.qr-inner .store{font-size:5pt;font-weight:700;line-height:1;color:#000;letter-spacing:0.2pt;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
   html += '.qr-inner .name{font-size:5.5pt;font-weight:600;line-height:1.15;max-height:9mm;overflow:hidden;word-break:break-word;color:#000}';
   html += '.qr-inner .price{font-size:8pt;font-weight:900;white-space:nowrap;color:#000;margin-top:0.4mm}';
+  // Editorial em QR (25/09/2026): nome inteiro e em negrito (termica 203dpi).
+  if (isEditorial) html += '.qr-inner .name{font-weight:700;font-size:6pt}';
 
   // ===== GUIA VISUAL PRE-IMPRESSAO (livre, so tela) =====
   // 26/08/2026: compactado pra uma faixa de linha unica — a loja imprime
@@ -500,6 +591,36 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
     html += '});';
     html += '</scr' + 'ipt>';
     // =============================================
+  }
+  if (isEditorial && !isQR) {
+    // Ajuste automatico do desenho "editorial" (fitAll do mockup), depois
+    // das fontes: nome em 2 linhas — se a 3a aparecer, desce 0,25pt ate
+    // 5,2pt; selo — se cortar, tira o tracking e desce 0,2pt de 4,4 ate
+    // 4,0; se ainda cortar, empilha (.stack) e desce ate 3,8pt. So encolhe
+    // quando precisa. Nao toca no .bc-box nem no SVG.
+    // "Cortou" e medido pela largura real do texto (Range) contra a caixa de
+    // conteudo do selo: scrollWidth arredonda pra inteiro e deixava passar
+    // um corte de fracao de pixel ("AZUL ESCUR...").
+    html += '<script>(function(){';
+    html += 'function over(el){var r=document.createRange();r.selectNodeContents(el);var w=r.getBoundingClientRect().width;var cs=getComputedStyle(el);return w>el.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight)+0.05;}';
+    html += 'function fit(){document.querySelectorAll(".bc-inner.ed").forEach(function(b){';
+    html += 'b.classList.remove("stack");';
+    html += 'var n=b.querySelector(".name");if(!n)return;';
+    html += 'var pt=6.5;n.style.fontSize=pt+"pt";';
+    html += 'while(n.scrollHeight>n.clientHeight+1&&pt>5.2){pt-=0.25;n.style.fontSize=pt+"pt";}';
+    html += 'var v=b.querySelector(".row .variant");if(!v||!v.textContent)return;';
+    html += 'v.style.letterSpacing="";v.style.fontSize="";';
+    html += 'if(over(v))v.style.letterSpacing="0";';
+    html += 'var vp=4.4;';
+    html += 'while(over(v)&&vp>4.0){vp-=0.2;v.style.fontSize=vp+"pt";}';
+    html += 'if(over(v)){';
+    html += 'b.classList.add("stack");n.style.fontSize="";v.style.letterSpacing="";v.style.fontSize="";vp=4.4;';
+    html += 'while(over(v)&&vp>3.8){vp-=0.2;v.style.fontSize=vp+"pt";}';
+    html += '}';
+    html += '});}';
+    html += 'if(document.fonts&&document.fonts.ready){document.fonts.ready.then(fit);}else{fit();}';
+    html += 'window.addEventListener("load",fit);';
+    html += '})();</scr' + 'ipt>';
   }
   html += '</body></html>';
   return html;

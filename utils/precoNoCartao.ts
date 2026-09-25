@@ -26,6 +26,12 @@
 //     que falta". O acréscimo da parte no cartão é rateado no preço de cada
 //     item, com o resíduo de centavos na última linha, e a soma das linhas
 //     fecha com a soma dos pagamentos.
+//
+// Decisão do Caio (25/09/2026): "Cobro mais no cartão" existe SÓ em lojas
+// com Matcon ligado (pdv_settings.matcon_enabled). Loja sem Matcon não tem
+// a configuração nem o texto na etiqueta — lerConfigDoCartao devolve
+// desligado mesmo com card_price_enabled salvo. (Hoje só a Aura interna e
+// a GF Amorim, ambas Matcon, usam.)
 // ============================================================
 
 /** Chaves do Caixa que pagam o preço no cartão. */
@@ -39,12 +45,13 @@ export type ConfigDoCartao = { enabled: boolean; pct: number };
 
 export const CARTAO_DESLIGADO: ConfigDoCartao = { enabled: false, pct: 0 };
 
-/** Lê as duas chaves do pdv_settings. Qualquer coisa diferente de
- *  `card_price_enabled === true` é desligado. % null/lixo vira 0. */
+/** Lê as chaves do pdv_settings. Ligado só com `card_price_enabled === true`
+ *  E `matcon_enabled === true` (decisão 25/09/2026: o recurso é só de lojas
+ *  Matcon); qualquer outra coisa é desligado. % null/lixo vira 0. */
 export function lerConfigDoCartao(
-  s: { card_price_enabled?: boolean | null; card_price_pct?: number | null } | null | undefined,
+  s: { card_price_enabled?: boolean | null; card_price_pct?: number | null; matcon_enabled?: boolean | null } | null | undefined,
 ): ConfigDoCartao {
-  if (!s || s.card_price_enabled !== true) return CARTAO_DESLIGADO;
+  if (!s || s.card_price_enabled !== true || s.matcon_enabled !== true) return CARTAO_DESLIGADO;
   const bruto = s.card_price_pct;
   const n = Number(bruto);
   const pct = bruto == null || !isFinite(n) ? 0 : Math.min(100, Math.max(0, n));

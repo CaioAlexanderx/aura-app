@@ -17,7 +17,7 @@ const item = { name: "Meia Arrastão", price: 20, barcode: "7891033948208", size
 
 describe("preset Bobina 58mm", () => {
   test("está na lista do seletor", () => {
-    expect(LABEL_SIZE_KEYS).toEqual(["99x21", "30x25", "58mm"]);
+    expect(LABEL_SIZE_KEYS).toEqual(["99x21", "105x21", "30x25", "58mm"]);
     expect(LABEL_SIZE_PRESETS["58mm"].cols).toBe(1);
   });
 

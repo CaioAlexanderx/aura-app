@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Etiqueta 33x21 com vão — mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<style>
+  :root { --violet:#7c3aed; --ink:#111827; --ink2:#475569; --ink3:#94a3b8; --bg:#f8fafc; --card:#fff; --border:#e2e8f0; --liner:#e9e4d8; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--ink); padding:28px 32px 80px; }
+  h1 { font-size:22px; font-weight:800; }
+  h2 { font-size:15px; font-weight:800; margin:34px 0 6px; display:flex; align-items:center; gap:10px; }
+  h2 .tag { font-size:11px; font-weight:700; color:#fff; background:var(--violet); border-radius:999px; padding:2px 9px; }
+  h2 .tag.gray { background:var(--ink3); }
+  p.lead { color:var(--ink2); font-size:13px; margin-top:6px; max-width:860px; line-height:1.5; }
+  .spec { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+  .spec span { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:6px 10px; font-size:12px; color:var(--ink2); }
+  .spec b { color:var(--ink); }
+  .controls { display:flex; flex-wrap:wrap; gap:18px 28px; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px 16px; margin:14px 0 18px; font-size:13px; }
+  .controls label { display:flex; align-items:center; gap:6px; cursor:pointer; }
+  .controls .grp { display:flex; flex-direction:column; gap:6px; }
+  .controls .grp > b { font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--ink3); }
+  .note { font-size:12px; color:var(--ink2); background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:8px 12px; margin-top:10px; max-width:860px; line-height:1.5; }
+  .designs { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:14px 0; }
+  .design { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px 14px; font-size:12px; color:var(--ink2); line-height:1.45; cursor:pointer; }
+  .design.on { border-color:var(--violet); box-shadow:0 0 0 2px rgba(124,58,237,.18); }
+  .design b { display:block; color:var(--ink); font-size:13px; margin-bottom:3px; }
+  @media (max-width:900px) { .designs { grid-template-columns:1fr; } }
+
+  /* ---------- rolo ---------- */
+  .roll-wrap { overflow:auto; padding:8px 0; }
+  .roll { background:var(--liner); display:inline-block; box-shadow:0 2px 10px rgba(0,0,0,.12); }
+  .roll table { border-collapse:collapse; table-layout:fixed; }
+  .roll td { padding:0; vertical-align:top; }
+  .roll .cell { width:33mm; height:21mm; overflow:hidden; background:#fff; border-radius:1mm; }
+  .roll .colgap { width:3mm; }
+  .roll tr { height:23.5mm; }
+  .roll.glued .colgap { width:0; }
+  .roll.glued tr { height:21mm; }
+  .roll.glued .cell { border-radius:0; outline:1px dashed #cbd5e1; outline-offset:-1px; }
+  .zoomL { zoom:1.4; }
+  .zoom1 { zoom:1; }
+
+  /* ---------- base LOCKED (igual ao buildLabelHtml) ---------- */
+  .bc-inner { padding:0.8mm 1mm; display:flex; flex-direction:column; align-items:center; justify-content:space-between; text-align:center; height:21mm; width:33mm; gap:0.3mm; font-family:Arial,Helvetica,sans-serif; color:#000; }
+  .bc-inner .bc-box { flex:1 1 auto; width:100%; max-width:30mm; display:flex; align-items:center; justify-content:center; min-height:0; overflow:hidden; padding:0.2mm 0; }
+  .bc-inner .bc-box svg { max-width:100%; max-height:100%; width:auto; height:auto; display:block; }
+  .bc-inner .store, .bc-inner .rule, .bc-inner .row, .bc-inner .variant { display:none; }
+
+  /* ---------- HOJE (99x21) ---------- */
+  .hoje .bc-inner .store { display:block; font-size:5pt; font-weight:700; line-height:1; letter-spacing:0.2pt; width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hoje .bc-inner .name { font-size:5.5pt; font-weight:500; line-height:1.05; width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-height:4mm; }
+  .hoje .bc-inner .name .var::before { content:" - "; }
+  .hoje .bc-inner .price { font-size:9pt; font-weight:900; line-height:1; }
+  .hoje .bc-inner .price .cur { font-size:inherit; }
+
+  /* ---------- fonte ---------- */
+  .prop.mont .bc-inner { font-family:Montserrat,Arial,sans-serif; }
+
+  /* ---------- A · Clássica reforçada ---------- */
+  .dA .bc-inner .store { display:block; font-size:5pt; font-weight:700; line-height:1; letter-spacing:0.2pt; width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dA .bc-inner .name { font-size:6.5pt; font-weight:700; line-height:1.1; width:100%; white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; word-break:break-word; }
+  .dA .bc-inner .name .var::before { content:" - "; }
+  .dA .bc-inner .price { font-size:10pt; font-weight:900; line-height:1; }
+  .dA .bc-inner .price .cur, .hoje .bc-inner .price .cur { margin-right:0.5mm; }
+
+  /* ---------- B · Boutique (centralizada, marca no topo, código embaixo) ---------- */
+  .dB .bc-inner { justify-content:flex-start; gap:0.25mm; padding:0.7mm 1mm 0.4mm; }
+  .dB .bc-inner .store { display:block; order:1; font-size:4.6pt; font-weight:700; line-height:1; letter-spacing:1.4pt; text-transform:uppercase; width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-left:1.4pt; }
+  .dB .bc-inner .rule { display:block; order:2; width:8mm; border-top:0.25mm solid #000; margin:0.25mm 0 0.15mm; }
+  .dB .bc-inner .name { order:3; font-size:6.5pt; font-weight:700; line-height:1.1; width:100%; white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; word-break:break-word; }
+  .dB .bc-inner .name .var { display:none; }
+  .dB .bc-inner .variant { display:block; order:4; font-size:4.8pt; font-weight:700; letter-spacing:0.9pt; text-transform:uppercase; line-height:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; padding-left:0.9pt; }
+  .dB .bc-inner .variant:empty { display:none; }
+  .dB .bc-inner .price { order:5; font-size:11pt; font-weight:900; line-height:1; margin-top:0.15mm; letter-spacing:-0.2pt; }
+  .dB .bc-inner .price .cur { font-size:6pt; font-weight:700; vertical-align:top; margin-right:0.5mm; letter-spacing:0; position:relative; top:0.2mm; }
+  .dB .bc-inner .bc-box { order:6; align-items:flex-end; padding:0.3mm 0 0; }
+  .dB .has-var .name { -webkit-line-clamp:1; }
+
+  /* ---------- C · Editorial (alinhada à esquerda, selo de tamanho e preço na mesma linha) ---------- */
+  .dC .bc-inner { justify-content:flex-start; align-items:flex-start; text-align:left; gap:0.25mm; padding:0.7mm 1.2mm 0.4mm; }
+  .dC .bc-inner .store { display:block; order:1; font-size:4.6pt; font-weight:700; line-height:1; letter-spacing:1.4pt; text-transform:uppercase; width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dC .bc-inner .name { order:2; font-size:6.5pt; font-weight:700; line-height:1.08; width:100%; white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; word-break:break-word; }
+  .dC .bc-inner .name .var { display:none; }
+  .dC .bc-inner .row { display:flex; order:3; width:100%; align-items:flex-end; justify-content:space-between; gap:0.8mm; margin-top:0.15mm; flex-wrap:nowrap; }
+  .dC .bc-inner .row .variant { display:inline-block; flex:0 1 auto; min-width:0; font-size:4.4pt; font-weight:700; letter-spacing:0.3pt; text-transform:uppercase; line-height:1; border:0.25mm solid #000; border-radius:0.6mm; padding:0.4mm 0.6mm 0.3mm; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dC .bc-inner > .variant, .dC .bc-inner .row .variant:empty { display:none; }
+  /* tag comprida demais pra dividir a linha com o preço (ex.: "ÚNICO · VERDE MILITAR"):
+     nome em 1 linha, tag na linha inteira e preço na linha de baixo, à direita */
+  .dC .stack .name { -webkit-line-clamp:1; font-size:6pt; }
+  .dC .stack .row { flex-wrap:wrap; gap:0.2mm; }
+  .dC .stack .row .variant { max-width:100%; }
+  .dC .stack .price { width:100%; text-align:right; font-size:9pt; }
+  .dC .bc-inner .price { order:4; font-size:9.5pt; font-weight:900; line-height:1; margin-left:auto; letter-spacing:-0.3pt; white-space:nowrap; flex-shrink:0; }
+  .dC .bc-inner .price .cur { font-size:5.5pt; font-weight:700; vertical-align:top; margin-right:0.4mm; letter-spacing:0; position:relative; top:0.2mm; }
+  .dC .bc-inner .bc-box { order:5; align-self:center; align-items:flex-end; padding:0.25mm 0 0; }
+
+  /* nome da loja ligado: nome da peça em 1 linha em todos os desenhos (pra não encolher o código) */
+  .nostore .store, .nostore .rule { display:none !important; }
+  .prop:not(.nostore):not(.dC) .bc-inner .name { -webkit-line-clamp:1; }
+
+  .legend { display:flex; gap:18px; font-size:12px; color:var(--ink2); margin-top:8px; flex-wrap:wrap; }
+  .legend i { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-2px; margin-right:5px; }
+  .col h3 { font-size:13px; font-weight:800; color:var(--ink2); margin:18px 0 6px; }
+  .col h3 small { font-weight:500; color:var(--ink3); }
+  @media print { body { padding:0; background:#fff; } .controls, .note, h2 .tag, .legend, .designs, .hojeblock { display:none; } .zoomL { zoom:1; } }
+</style>
+</head>
+<body>
+
+<h1>Etiqueta 33x21 com vão · papel 105mm — Divina D'Lux</h1>
+<p class="lead">Mockup do modelo novo pra Fabiany. A geometria do código de barras é a mesma da Finesse (zona travada, validada com pistola). O que muda é o <b>desenho do texto</b>: escolha um dos três abaixo e ajuste com os toggles; o rolo redesenha na hora.</p>
+
+<div class="spec">
+  <span>Etiqueta <b>33 × 21 mm</b></span>
+  <span>Colunas <b>3</b></span>
+  <span>Vão vertical <b>2,5 mm</b> (espec. do fornecedor)</span>
+  <span>Papel <b>105 mm</b> → 105 − 3×33 = 6 mm → vão horizontal <b>3 mm</b></span>
+  <span>Página de impressão <b>105 × 23,5 mm</b> (uma linha por página; o sensor de vão alinha cada linha)</span>
+</div>
+
+<div class="designs">
+  <!-- aprovado pelo Caio em 25/09/2026: C · Editorial, Montserrat, nome da loja no topo, preço SEM ponto de milhar -->
+  <div class="design" data-d="dA"><b>A · Clássica reforçada</b>Mesma ordem de hoje (código em cima, nome, preço). Nome em negrito 6,5 pt até 2 linhas, preço 10 pt. Mudança mínima, zero risco.</div>
+  <div class="design" data-d="dB"><b>B · Boutique</b>Centralizada. Marca no topo com tracking e um traço curto, nome da peça, tamanho e cor em versalete espaçado ("G · BRANCO"), preço grande com "R$" pequeno, código de barras embaixo.</div>
+  <div class="design on" data-d="dC"><b>C · Editorial</b>Alinhada à esquerda, como tag de loja de roupa. Nome em 2 linhas, embaixo o selo de tamanho e cor num contorno fino e o preço à direita, código de barras no rodapé.</div>
+</div>
+
+<div class="controls">
+  <div class="grp"><b>Fonte</b>
+    <label><input type="radio" name="font" value="arial"> Arial (já usada, sem dependência)</label>
+    <label><input type="radio" name="font" value="mont" checked> Montserrat (Google Fonts, baixada na hora de imprimir)</label>
+  </div>
+  <div class="grp"><b>Nome da loja no topo</b>
+    <label><input type="checkbox" id="store" checked> mostrar "DIVINA D'LUX"</label>
+  </div>
+  <div class="grp"><b>Preço</b>
+    <label><input type="radio" name="milhar" value="1"> com ponto de milhar (R$ 1.000,00)</label>
+    <label><input type="radio" name="milhar" value="0" checked> como hoje (R$ 1000,00)</label>
+  </div>
+</div>
+
+<div class="note">Na tela a fonte fina (peso 500, 5,5 pt) parece limpa; na térmica de 203 dpi ela vira o texto "falhado" da foto, porque cada haste da letra tem menos de 1 ponto. Tudo aqui é negrito e nada tem menos de 0,25 mm (2 pontos), inclusive o traço e o contorno do selo. As barras continuam idênticas às da Finesse. Com o nome da loja ligado, o nome da peça cai pra 1 linha — é o jeito de não encolher o código. O preço no cartão ("Dinheiro ou PIX" / "Cartão" da foto) não entra: passa a existir só em lojas com Matcon ligado.</div>
+
+<h2>Ampliado 1,4× <span class="tag">proposta</span></h2>
+<div class="col">
+  <h3 id="propTitle">C · Editorial <small>— modelo "33x21mm com vão (3 colunas · papel 105mm)"</small></h3>
+  <div class="roll-wrap"><div class="roll zoomL prop dA nostore" id="rollProp"></div></div>
+  <div class="legend"><span><i style="background:var(--liner)"></i>papel-suporte (vão de 3 mm entre colunas, 2,5 mm entre linhas)</span><span><i style="background:#fff;border:1px solid #ddd"></i>etiqueta 33×21</span></div>
+</div>
+
+<div class="col hojeblock">
+  <h3>Hoje <small>— modelo "33x21mm (3 colunas)" colado, impresso no rolo com vão</small></h3>
+  <div class="roll-wrap"><div class="roll glued zoomL hoje nostore" id="rollHoje"></div></div>
+  <div class="legend"><span><i style="background:#fff;outline:1px dashed #cbd5e1"></i>etiquetas coladas, sem vão: a 2ª e a 3ª coluna caem 3 e 6 mm à esquerda do lugar; nome fino e cortado em 16 letras</span></div>
+</div>
+
+<h2>Tamanho real (1×) <span class="tag">proposta</span></h2>
+<p class="lead">Imprima esta página em 100% e encoste no rolo pra conferir o encaixe. Na tela, a escala depende do monitor.</p>
+<div class="roll-wrap"><div class="roll zoom1 prop dA nostore" id="rollReal"></div></div>
+
+<script>
+  var ITEMS = [
+    { name: "Vestido Midi Tule Bordado Manga Longa Festa", size: "G", color: "Branco", price: 1000, code: "2008238067510" },
+    { name: "Blazer Alfaiataria Oversized Forrado Botão Dourado", size: "42", color: "Azul Marinho", price: 1000, code: "2008238067510" },
+    { name: "Vestido slmsjslisnenozkznsioz", size: "M", color: "Branco", price: 1000, code: "2008238067510" },
+    { name: "Conjunto Cropped e Saia Midi Linho", size: "P", color: "Off White", price: 289.9, code: "7891234567895" },
+    { name: "Blusa Alça", size: "", color: "", price: 79.9, code: "2001234567893" },
+    { name: "Calça Wide Leg Alfaiataria Premium Cintura Alta", size: "Único", color: "Verde Militar", price: 349, code: "2009876543213" },
+  ];
+  var seq = 0;
+  var milhar = false;
+  function fmt(v) {
+    var s = v.toFixed(2).replace(".", ",");
+    if (milhar) s = s.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return s;
+  }
+  function trunc(n, lim) { return n.length > lim ? n.substring(0, lim).trim() + "..." : n; }
+  function cell(it, hoje) {
+    var hasVar = !!(it.size || it.color);
+    var name = hoje && hasVar ? trunc(it.name, 16) : it.name;
+    var varDash = [it.size, it.color].filter(Boolean).join(" - ");
+    var varDot = [it.size, it.color].filter(Boolean).join(" · ");
+    var id = "bc" + (seq++);
+    return '<td class="cell"><div class="bc-inner' + (hasVar ? ' has-var' : '') + '">' +
+      '<div class="store">DIVINA D\'LUX</div><div class="rule"></div>' +
+      '<div class="bc-box"><svg id="' + id + '" data-code="' + it.code + '"></svg></div>' +
+      '<div class="name">' + name + (hasVar ? '<span class="var">' + varDash + '</span>' : '') + '</div>' +
+      '<div class="row"><span class="variant">' + varDot + '</span></div>' +
+      '<div class="variant">' + varDot + '</div>' +
+      '<div class="price"><span class="cur">R$</span>' + fmt(it.price) + '</div></div></td>';
+  }
+  function roll(el, hoje) {
+    var h = "<table>";
+    for (var r = 0; r < ITEMS.length; r += 3) {
+      var cells = [];
+      for (var c = r; c < r + 3; c++) cells.push(cell(ITEMS[c], hoje));
+      h += "<tr>" + cells.join('<td class="colgap"></td>') + "</tr>";
+    }
+    el.innerHTML = h + "</table>";
+  }
+  var opts = { width: 1, height: 24, margin: 1, displayValue: true, fontSize: 7, textMargin: 0, font: "Arial", fontOptions: "bold", background: "#ffffff", lineColor: "#000000", format: "EAN13" };
+  function render() {
+    roll(document.getElementById("rollHoje"), true);
+    roll(document.getElementById("rollProp"), false);
+    roll(document.getElementById("rollReal"), false);
+    document.querySelectorAll("[data-code]").forEach(function (el) { try { JsBarcode(el, el.getAttribute("data-code"), opts); } catch (e) { console.error(e); } });
+    // Desenho C: o selo fica dentro da .row com o preço; nos outros, o selo solto e o preço ficam na coluna.
+    document.querySelectorAll(".dC .bc-inner").forEach(function (b) { b.querySelector(".row").appendChild(b.querySelector(".price")); });
+    fitAll();
+  }
+  // Ajuste automático (vai pro HTML de impressão, roda depois das fontes):
+  // nome em 2 linhas — se a 3a linha aparecer, desce 0,25pt por vez até 5,2pt;
+  // tag — se cortar, tira o tracking e depois desce até 3,8pt. Só encolhe
+  // quando precisa; nome curto fica no tamanho cheio.
+  function fitAll() {
+    document.querySelectorAll(".dC .bc-inner").forEach(function (b) {
+      b.classList.remove("stack");
+      var n = b.querySelector(".name");
+      var pt = 6.5;
+      n.style.fontSize = pt + "pt";
+      while (n.scrollHeight > n.clientHeight + 1 && pt > 5.2) { pt -= 0.25; n.style.fontSize = pt + "pt"; }
+      var v = b.querySelector(".row .variant");
+      if (!v || !v.textContent) return;
+      v.style.letterSpacing = ""; v.style.fontSize = "";
+      if (v.scrollWidth > v.clientWidth + 1) v.style.letterSpacing = "0";
+      var vp = 4.4;
+      while (v.scrollWidth > v.clientWidth + 1 && vp > 4.0) { vp -= 0.2; v.style.fontSize = vp + "pt"; }
+      if (v.scrollWidth > v.clientWidth + 1) {
+        // nao coube ao lado do preco: empilha (nome 1 linha, tag inteira, preco embaixo)
+        b.classList.add("stack");
+        n.style.fontSize = "";
+        v.style.letterSpacing = ""; v.style.fontSize = "";
+        vp = 4.4;
+        while (v.scrollWidth > v.clientWidth + 1 && vp > 3.8) { vp -= 0.2; v.style.fontSize = vp + "pt"; }
+      }
+    });
+  }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitAll);
+  var TITLES = { dA: "A · Clássica reforçada", dB: "B · Boutique", dC: "C · Editorial" };
+  function apply() {
+    var d = document.querySelector(".design.on").getAttribute("data-d");
+    var mont = document.querySelector("input[name=font]:checked").value === "mont";
+    var store = document.getElementById("store").checked;
+    milhar = document.querySelector("input[name=milhar]:checked").value === "1";
+    ["rollProp", "rollReal"].forEach(function (id) {
+      var el = document.getElementById(id);
+      el.className = "roll " + (id === "rollProp" ? "zoomL" : "zoom1") + " prop " + d + (mont ? " mont" : "") + (store ? "" : " nostore");
+    });
+    document.getElementById("rollHoje").classList.toggle("nostore", !store);
+    document.getElementById("propTitle").innerHTML = TITLES[d] + ' <small>— modelo "33x21mm com vão (3 colunas · papel 105mm)"</small>';
+    render();
+  }
+  document.querySelectorAll(".design").forEach(function (el) {
+    el.addEventListener("click", function () { document.querySelectorAll(".design").forEach(function (x) { x.classList.remove("on"); }); el.classList.add("on"); apply(); });
+  });
+  document.querySelectorAll(".controls input").forEach(function (i) { i.addEventListener("change", apply); });
+  apply();
+</script>
+</body>
+</html>
