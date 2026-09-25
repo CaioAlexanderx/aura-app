@@ -118,6 +118,18 @@ export type StorePayload = {
     cnpj_formatado?: string;
     /** Fase 2: a chave por loja da vitrine nova (Aura-backend#747). */
     vitrine_v2?: boolean;
+    /**
+     * Fase 5 (home nova): `banners` é o fallback de capa + tagline da loja
+     * comum quando a lojista não cadastrou banner nenhum. Na home nova
+     * isso conta como "sem banner".
+     */
+    banners_automaticos?: boolean;
+    /** Fase 5: a faixa escrita na aba Design; '' = a automática do Studio. */
+    announcement_bar?: string;
+    /** Fase 5: os selos escritos na aba Design; [] = os automáticos do Studio. */
+    service_cards?: Array<{ icon: string; title: string; body: string; enabled?: boolean }>;
+    /** Fase 5: a peça do destaque sem banner (migration 356); null = automática. */
+    hero_product_id?: string | null;
   };
   products: StudioStoreProduct[];
   sla: { sla_base_days: number; queue_qty: number; total_estimate_days: number };

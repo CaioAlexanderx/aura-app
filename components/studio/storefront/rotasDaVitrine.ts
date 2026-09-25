@@ -21,6 +21,7 @@
 // ============================================================
 import type { Stage, StudioStoreProduct } from "./types";
 import type { StoreCategory, VitrineEntry } from "./categoryGrouping";
+import { alvoDaCategoria } from "./home/regrasDaHome";
 
 export type TelaDaVitrine =
   | { tipo: "home" }
@@ -165,12 +166,15 @@ export function resolverTela(
       if (grupo && grupo.kind === "category") {
         return { acao: "categoria", categoria: grupo.category, produtos: grupo.products };
       }
+      // Fase 5: a categoria com filhas (Canecas > Cerâmica, Metalizadas)
+      // abre com as peças das filhas — a mesma regra da barra, da gaveta e
+      // do rodapé (home/regrasDaHome.ts, alvoDaCategoria). Sem árvore, é
+      // exatamente o que era: as peças da própria categoria.
       const cat = (loja?.categories || []).find((c) => chaveDaCategoria(c) === tela.categoria);
-      const daCategoria = cat
-        ? (loja?.products || []).filter((p) => (p as any).category_id === cat.id)
-        : [];
-      if (daCategoria.length === 1) {
-        return { acao: "redirecionar", para: { tipo: "produto", id: String(daCategoria[0].id) } };
+      const alvo = alvoDaCategoria(cat, loja);
+      if (alvo?.tipo === "grupo") return { acao: "categoria", categoria: alvo.categoria, produtos: alvo.produtos };
+      if (alvo?.tipo === "produto") {
+        return { acao: "redirecionar", para: { tipo: "produto", id: String(alvo.produto.id) } };
       }
       return { acao: "redirecionar", para: { tipo: "home" } };
     }
