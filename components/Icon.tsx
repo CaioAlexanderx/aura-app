@@ -98,6 +98,11 @@ const PATHS: Record<string, string> = {
   // "Ver guia de medidas" e no "Não achamos essa loja" da vitrine.
   ruler:          "M3.5 15.5L15.5 3.5l5 5-12 12z M7.5 11.5l2 2 M10.5 8.5l1.5 1.5 M13.5 5.5l2 2",
   store:          "M4 9.5L5.6 4.5h12.8L20 9.5 M4.5 9.5v10h15v-10 M9.5 19.5v-5h5v5 M4 9.5c0 1.4 1.1 2.3 2.7 2.3S9.3 10.9 9.3 9.5c0 1.4 1.2 2.3 2.7 2.3s2.7-.9 2.7-2.3c0 1.4 1.1 2.3 2.6 2.3S20 10.9 20 9.5",
+  // Vitrine Studio · Fase 2 (checkout): o losango do Pix, a moto da
+  // retirada por app e a cedula do "pagar na retirada" — sprite do kit.
+  pix:            "M12 3.2l3.4 3.4-3.4 3.4-3.4-3.4z M12 14l3.4 3.4-3.4 3.4-3.4-3.4z M3.2 12l3.4-3.4L10 12l-3.4 3.4z M14 12l3.4-3.4 3.4 3.4-3.4 3.4z",
+  moto:           "M2.5 16.5a3 3 0 106 0 3 3 0 00-6 0z M15.5 16.5a3 3 0 106 0 3 3 0 00-6 0z M5.5 16.5L9.5 10h5l4 6.5 M13 10l-1.3-3H9.5",
+  cash:           "M5 6.5h14a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2v-7a2 2 0 012-2z M9.5 12a2.5 2.5 0 105 0 2.5 2.5 0 00-5 0z M6 9.5v5 M18 9.5v5",
   // Pin de localizacao — endereco de retirada no storefront
   location:       "M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z M12 13a3 3 0 100-6 3 3 0 000 6z",
   // ── People ──────────────────────────────────────────────────

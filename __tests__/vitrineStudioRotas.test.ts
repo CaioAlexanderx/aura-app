@@ -260,9 +260,13 @@ describe("as rotas da árvore real de app/", () => {
     expect(rotaDe("/sheid-mania/pedido/tok")).toBe("[slug] > pedido/[token]");
     expect(rotaDe("/sheid-mania/acompanhar/tok")).toBe("[slug] > acompanhar/[token]");
     expect(rotaDe("/sheid-mania/aprovacao/tok")).toBe("[slug] > aprovacao/[token]");
-    for (const f of ["sacola", "pedido/[token]", "acompanhar/[token]", "aprovacao/[token]"]) {
+    // Fase 2: /sacola e /pedido/<token> deixaram de ser reservadas —
+    // viraram a gaveta aberta e a página do pedido. As da Fase 4 seguem.
+    for (const f of ["acompanhar/[token]", "aprovacao/[token]"]) {
       expect(fs.readFileSync(path.join(RAIZ, "app/[slug]", f + ".tsx"), "utf8")).toContain("<RotaReservada />");
     }
+    expect(fs.readFileSync(path.join(RAIZ, "app/[slug]/sacola.tsx"), "utf8")).toContain("<SacolaNaRota />");
+    expect(fs.readFileSync(path.join(RAIZ, "app/[slug]/pedido/[token].tsx"), "utf8")).toContain("<PedidoNaRota");
   });
 });
 

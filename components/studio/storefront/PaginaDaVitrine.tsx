@@ -29,6 +29,9 @@ import { useStorefront, type StorefrontState } from "@/components/studio/storefr
 import { ProductList } from "@/components/studio/storefront/ProductList";
 import { ProductConfigurator } from "@/components/studio/storefront/ProductConfigurator";
 import { Checkout } from "@/components/studio/storefront/Checkout";
+// Fase 2 (chave vitrine_v2): checkout em etapas e sacola em gaveta.
+import { CheckoutEmEtapas } from "@/components/studio/storefront/CheckoutEmEtapas";
+import { SacolaEmGaveta } from "@/components/studio/storefront/SacolaEmGaveta";
 import { SentConfirmation } from "@/components/studio/storefront/SentConfirmation";
 
 import { VitrineSkeleton } from "@/components/studio/storefront/VitrineSkeleton";
@@ -323,10 +326,12 @@ export function ConteudoDaVitrine() {
         // para que o FieldImage monte a URL do endpoint de upload
         <ProductConfigurator sf={sf} slug={slug} />
       ) : sf.stage === "checkout" ? (
-        <Checkout sf={sf} />
+        sf.vitrineV2 ? <CheckoutEmEtapas sf={sf} /> : <Checkout sf={sf} />
       ) : (
         <ProductList sf={sf} />
       )}
+      {/* A gaveta abre por cima de qualquer tela; sem a chave, nao desenha. */}
+      <SacolaEmGaveta sf={sf} />
     </>
   );
 }

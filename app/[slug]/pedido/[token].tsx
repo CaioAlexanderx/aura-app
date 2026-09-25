@@ -1,8 +1,10 @@
-// Rota reservada da vitrine (`/<slug>/pedido/<token>`): o servidor já serve a
-// casca aqui (BE-1), a tela chega numa fase seguinte. Até lá, abre a
-// home da loja em vez de quebrar. Ver RotaReservada em VitrineNaRota.tsx.
-import { RotaReservada } from "@/components/studio/storefront/VitrineNaRota";
+// O pedido: `/<slug>/pedido/<token>` (Fase 2 · Fechar a venda). A tela do
+// Pix, a volta do cartão e a confirmação, lidas do servidor pelo token —
+// um F5 não apaga mais o pedido. Ver PaginaDoPedido.tsx.
+import { useLocalSearchParams } from "expo-router";
+import { PedidoNaRota } from "@/components/studio/storefront/VitrineNaRota";
 
-export default function Reservada() {
-  return <RotaReservada />;
+export default function PedidoDaLoja() {
+  const consulta = useLocalSearchParams<{ token: string }>();
+  return <PedidoNaRota token={String(consulta.token || "")} consulta={consulta} />;
 }

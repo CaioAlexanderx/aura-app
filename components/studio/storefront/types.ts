@@ -116,10 +116,15 @@ export type StorePayload = {
     horario_resumo?: string;
     /** Já com máscara; formatar de novo daria duas máscaras. */
     cnpj_formatado?: string;
+    /** Fase 2: a chave por loja da vitrine nova (Aura-backend#747). */
+    vitrine_v2?: boolean;
   };
   products: StudioStoreProduct[];
   sla: { sla_base_days: number; queue_qty: number; total_estimate_days: number };
-  payment: { has_pix: boolean; has_card: boolean; pay_on_delivery_enabled: boolean };
+  payment: {
+    has_pix: boolean; has_card: boolean; pay_on_delivery_enabled: boolean;
+    pix_discount_pct?: number; card_max_installments?: number | null;
+  };
   revisions: StoreRevisions;
   // S1 — lista FLAT com parent_id; o cliente deriva a hierarquia.
   // Ausente/vazia em base sem as migrations 257/258 da F0.
@@ -133,6 +138,8 @@ export type StorePayload = {
     delivery_fee: number;
     pickup_eta_text: string | null;
     delivery_eta_text: string | null;
+    /** Endereço de retirada, quando o servidor mandar; senão vale `site.endereco`. */
+    pickup_address?: string | null;
   };
   /** S0 — os números da faixa de confiança, do banco. */
   numeros?: { pedidos_entregues: number };
@@ -200,6 +207,9 @@ export type SentOrder = {
   /** 05/09/2026: link publico de acompanhamento (/acompanhar/<token>).
    *  null enquanto o backend nao gera token — a tela nao mostra o bloco. */
   track_url?: string | null;
+  /** Fase 2 (contrato B1): o token da página do pedido e o endereço dela. */
+  pedido_token?: string | null;
+  pedido_url?: string | null;
 };
 
 // A paleta cravada `T` (azul-marinho #1E3A8A, magenta #EC4899) e os

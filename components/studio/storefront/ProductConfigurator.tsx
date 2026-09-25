@@ -43,6 +43,7 @@ import { relacionadosDe } from "./relacionados";
 import { configDisponivel } from "./camposDaVitrine";
 import { dinheiro } from "./moeda";
 import { BotaoCompartilhar } from "./CompartilharPeca";
+import { BotaoDaSacola } from "./SacolaEmGaveta";
 // 30px era menor que a ponta do dedo; 40px + hitSlop chega aos 44 que o
 // toque pede sem o controle ficar grande na tela.
 // O fundo era #f3f4f6 (cinza frio da paleta antiga); agora e o degrau
@@ -84,6 +85,9 @@ export function ProductConfigurator({
     editingAddBack, setEditingAddBack,
     editingAddMiddle, setEditingAddMiddle,
     configuringUnitPrice, commitConfigure,
+    // Fase 2: o total da linha leva o servico de arte UMA vez (nao por
+    // unidade) — precoDaSacola.ts, a mesma conta do servidor.
+    configuringLineTotal, configuringArtDelta,
     // openConfigure entra aqui pra secao de relacionados: tocar num
     // vizinho troca o produto ativo sem sair da tela.
     openConfigure,
@@ -398,7 +402,20 @@ export function ProductConfigurator({
         </View>
         {/* Onda 1B: a peca tem endereco proprio, e a Sheid manda esse
             link no WhatsApp (mockup da Fase 1, Tela 2). */}
-        <BotaoCompartilhar produto={activeProduct} />
+        {/* Fase 2 (chave): a sacola a um toque, com a contagem. No celular
+            ela fica EMBAIXO do compartilhar — lado a lado, os dois ícones
+            espremiam o nome da peça numa coluna de uma palavra por linha. */}
+        {sf.vitrineV2 && !telaLarga ? (
+          <View style={{ alignItems: "center" }}>
+            <BotaoCompartilhar produto={activeProduct} />
+            <BotaoDaSacola sf={sf} />
+          </View>
+        ) : (
+          <>
+            <BotaoCompartilhar produto={activeProduct} />
+            <BotaoDaSacola sf={sf} />
+          </>
+        )}
       </View>
 
       <ScrollView
@@ -878,14 +895,14 @@ export function ProductConfigurator({
           <Pressable
             onPress={() => commitConfigure()}
             accessibilityRole="button"
-            accessibilityLabel={"Atualizar item por " + dinheiro(configuringUnitPrice * editingQty)}
+            accessibilityLabel={"Atualizar item por " + dinheiro(configuringLineTotal)}
             style={{
               backgroundColor: tema.marcaFill, paddingVertical: 14, borderRadius: 10, alignItems: "center",
               width: "100%", maxWidth: telaLarga ? 420 : undefined,
             }}
           >
             <Texto style={{ color: tema.sobreMarca, fontSize: 15, fontWeight: "800" }}>
-              Atualizar • {dinheiro((configuringUnitPrice * editingQty))}
+              Atualizar • {dinheiro(configuringLineTotal)}
             </Texto>
           </Pressable>
         ) : (
@@ -906,6 +923,7 @@ export function ProductConfigurator({
                     valores: editingValues,
                     quantidade: editingQty,
                     precoUnitario: configuringUnitPrice,
+                    arte: configuringArtDelta,
                     nomeDaLoja: sf.store?.site?.name,
                   });
                   if (l) Linking.openURL(l);
@@ -916,7 +934,7 @@ export function ProductConfigurator({
               }}
               accessibilityRole="button"
               accessibilityLabel={modo.aceita
-                ? "Comprar agora por " + dinheiro((configuringUnitPrice * editingQty))
+                ? "Comprar agora por " + dinheiro(configuringLineTotal)
                 : "Pedir orcamento desta peca"}
               style={{
                 flex: 1, backgroundColor: tema.marcaFill, paddingVertical: 14,
@@ -928,7 +946,7 @@ export function ProductConfigurator({
                 {modo.rotuloDoBotao}
               </Texto>
               <Numero style={{ color: tema.sobreMarca, fontSize: 11.5, fontWeight: "600", opacity: 0.85, marginTop: 1 }}>
-                {dinheiro((configuringUnitPrice * editingQty))}
+                {dinheiro(configuringLineTotal)}
               </Numero>
             </Pressable>
 
@@ -936,7 +954,7 @@ export function ProductConfigurator({
             <Pressable
               onPress={() => commitConfigure()}
               accessibilityRole="button"
-              accessibilityLabel="Adicionar ao carrinho e continuar comprando"
+              accessibilityLabel={sf.vitrineV2 ? "Adicionar à sacola e continuar na peça" : "Adicionar ao carrinho e continuar comprando"}
               style={{
                 flex: 1, backgroundColor: "transparent", paddingVertical: 14,
                 borderRadius: 10, alignItems: "center", justifyContent: "center",
@@ -944,7 +962,8 @@ export function ProductConfigurator({
               }}
             >
               <Texto style={{ color: tema.marcaTexto, fontSize: 14.5, fontWeight: "800", textAlign: "center" }}>
-                Adicionar ao carrinho
+                {/* Fase 2 (chave): "sacola", a palavra da loja inteira. */}
+                {sf.vitrineV2 ? "Adicionar à sacola" : "Adicionar ao carrinho"}
               </Texto>
             </Pressable>
             ) : null}
@@ -967,6 +986,7 @@ export function ProductConfigurator({
             valores: editingValues,
             quantidade: editingQty,
             precoUnitario: configuringUnitPrice,
+            arte: configuringArtDelta,
             nomeDaLoja: sf.store?.site?.name,
           });
           if (!link) return null;

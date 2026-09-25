@@ -17,16 +17,23 @@
 // O evento nasce RASCUNHO (decisão 2). A tela diz isso com todas as
 // letras — sem isso a pessoa acha que fechou negócio e fica esperando.
 // ============================================================
-import { useEffect, useMemo, useState } from "react";
-import { View, Pressable, TextInput, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
+import { createElement, useEffect, useMemo, useState } from "react";
+import { View, Pressable, TextInput, ScrollView, ActivityIndicator, Linking, Platform, useWindowDimensions } from "react-native";
 import { Texto, Numero, useTipografia } from "./TipografiaVitrine";
 import { usePaletaDaVitrine, useTemaDaVitrine } from "./TemaDaVitrine";
 import { Etiqueta } from "./HomeDaVitrine";
 import { BarraDeCookies } from "./ConsentimentoDaVitrine";
 import {
   nomesDaLista, nomesIgnorados, proximoDegrau, pendenciaDoLote, dinheiro, fraseDoPrazo,
+  dataMinimaDoLote, dataDoLoteLegivel, codigoDoOrcamento, mensagemDoOrcamento,
   type CotacaoDoLote,
 } from "./loteDaVitrine";
+import { maskPhone, maskDateBr, brDateToIso } from "@/utils/masks";
+import { numeroWhatsApp } from "./AncoraWhatsApp";
+import { Icon } from "@/components/Icon";
+import { VERDE_WHATSAPP, BORDA_DE_CAMPO, FUNDO_APAGADO, Nota } from "./ui/Formulario";
+import { tintaSobre } from "./theme";
+import { useTipografia as useTipo, estiloNumero } from "./TipografiaVitrine";
 import type { StorePayload, StudioStoreProduct } from "./types";
 
 import { enderecoDaApi } from "./enderecoDaApi";
@@ -61,7 +68,10 @@ export function OrcamentoEmLote({
   const [cotando, setCotando] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const [pronto, setPronto] = useState<{ numero: string; total: number } | null>(null);
+  // Fase 2: `codigo` é o número do orçamento que o servidor devolve (B6,
+  // "L-3F9A2C"). Sem ele a tela NÃO inventa número — antes ela mostrava o
+  // nome do evento no lugar.
+  const [pronto, setPronto] = useState<{ codigo: string | null; total: number; unit: number; pct: number; prazo: number | null } | null>(null);
 
   const nomes = useMemo(() => nomesDaLista(lista), [lista]);
   const sobrando = useMemo(() => nomesIgnorados(lista), [lista]);
@@ -123,13 +133,21 @@ export function OrcamentoEmLote({
           customer_name: contato.trim(),
           customer_phone: telefone,
           names: nomes,
-          delivery_deadline: prazo.trim() || null,
+          // "AAAA-MM-DD" do seletor (ou o "DD/MM/AAAA" digitado no nativo,
+          // convertido): o servidor aceita os dois (services/dataDoLote.js).
+          delivery_deadline: (/^\d{4}-\d{2}-\d{2}$/.test(prazo) ? prazo : brDateToIso(prazo)) || null,
           notes: obs.trim() || null,
         }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "Não foi possível registrar agora.");
-      setPronto({ numero: j.event?.event_name || evento, total: j.pricing?.total_amount || 0 });
+      setPronto({
+        codigo: codigoDoOrcamento(j),
+        total: Number(j.pricing?.total_amount) || cotacao?.total_amount || 0,
+        unit: Number(j.pricing?.unit_price) || (cotacao ? cotacao.total_amount / Math.max(1, cotacao.qty) : 0),
+        pct: Number(j.pricing?.discount_pct) || cotacao?.discount_pct || 0,
+        prazo: cotacao?.prazo_dias ?? null,
+      });
     } catch (e: any) {
       setErro(String(e?.message || e));
     } finally {
@@ -143,33 +161,76 @@ export function OrcamentoEmLote({
     fontSize: 14, color: T.ink,
   } as const;
 
-  // ── Pedido registrado ───────────────────────────────────────
+  // ── Orçamento registrado (Fase 2, Tela 9 · "Orçamento enviado") ──
   if (pronto) {
+    const loja = store.site.name;
+    const primeiro = contato.trim().split(/\s+/)[0] || "";
+    const num = numeroWhatsApp((store.site as any)?.whatsapp);
+    const recado = mensagemDoOrcamento({
+      codigo: pronto.codigo, evento, pecas: nomes.length, produto: produto?.name, total: pronto.total, nomeDaLoja: loja,
+    });
+    const passos = [
+      `A ${loja} confere os ${nomes.length} ${nomes.length === 1 ? "nome" : "nomes"} e o prazo.`,
+      pronto.codigo
+        ? `Você recebe no WhatsApp o orçamento #${pronto.codigo} com a prova da arte.`
+        : "Você recebe no WhatsApp o orçamento com a prova da arte.",
+      "Aprova e paga o sinal pelo link. Precisa de nota com CNPJ? É lá que você informa.",
+    ];
     return (
-      <View style={{ flex: 1, backgroundColor: T.bg, padding: 22, justifyContent: "center" }}>
-        <View style={{ width: "100%", maxWidth: 520, alignSelf: "center", gap: 12 }}>
-          <Etiqueta cor={tema.marcaTexto}>Pedido em lote registrado</Etiqueta>
-          <Texto style={{ fontFamily: tipo.display, fontSize: 30, lineHeight: 35, color: T.ink }}>
-            {store.site.name} recebeu sua lista.
-          </Texto>
-          {/* A tela diz o que É: rascunho esperando a lojista. Sem isso a
-              pessoa acha que fechou negócio e fica esperando a peça. */}
-          <Texto style={{ fontSize: 14.5, lineHeight: 21, color: T.ink2 }}>
-            São {nomes.length} {nomes.length === 1 ? "peça" : "peças"} com estimativa de{" "}
-            {dinheiro(pronto.total)}. Isso é um orçamento, ainda não é um pedido fechado:
-            a loja confere a lista, confirma o prazo e responde no seu WhatsApp.
-          </Texto>
-          <Pressable
-            onPress={onVoltar}
-            accessibilityRole="button"
-            style={{ alignSelf: "flex-start", marginTop: 8, backgroundColor: tema.marcaFill,
-                     paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12 }}
-          >
-            <Texto style={{ color: tema.sobreMarca, fontWeight: "700", fontSize: 14 }}>
-              Voltar para a loja
+      <View style={{ flex: 1, backgroundColor: T.bg }}>
+        <ScrollView contentContainerStyle={{ padding: 22, paddingBottom: 48 }}>
+          <View style={{ width: "100%", maxWidth: 560, alignSelf: "center", gap: 16 }} testID="orcamento-enviado">
+            {pronto.codigo ? (
+              <View style={{ alignSelf: "flex-start", backgroundColor: FUNDO_APAGADO, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 }}>
+                <Numero style={{ fontSize: 12.5, letterSpacing: 1, color: T.ink }}>Orçamento #{pronto.codigo}</Numero>
+              </View>
+            ) : (
+              <Etiqueta cor={tema.marcaTexto}>Orçamento em lote registrado</Etiqueta>
+            )}
+            <Texto accessibilityRole="header" style={{ fontFamily: tipo.display, fontSize: 30, lineHeight: 35, color: T.ink }}>
+              {loja} recebeu sua lista{primeiro ? `, ${primeiro}` : ""}.
             </Texto>
-          </Pressable>
-        </View>
+            <Texto style={{ fontSize: 15, lineHeight: 22, color: T.ink2 }}>
+              {nomes.length} {produto?.name || (nomes.length === 1 ? "peça" : "peças")} para "{evento.trim()}", com estimativa de{" "}
+              <Texto style={{ fontWeight: "700", color: T.ink }}>{dinheiro(pronto.total)}</Texto>
+              {pronto.unit > 0 ? ` (${dinheiro(pronto.unit)} cada)` : ""}
+              {pronto.prazo ? ` e pronto em ${pronto.prazo} ${pronto.prazo === 1 ? "dia útil" : "dias úteis"} depois da aprovação` : ""}.
+            </Texto>
+            <Nota tom="info" icone="info">
+              {`Isso é um orçamento, ainda não é um pedido fechado. A ${loja} confere a lista e confirma o preço e o prazo.`}
+            </Nota>
+            <View style={{ backgroundColor: T.card, borderRadius: 18, borderWidth: 1, borderColor: T.border, padding: 18, gap: 12 }}>
+              <Numero style={{ fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase", color: T.ink3 }}>O que acontece agora</Numero>
+              {passos.map((t, i) => (
+                <View key={i} style={{ flexDirection: "row", gap: 12 }}>
+                  <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: FUNDO_APAGADO, alignItems: "center", justifyContent: "center" }}>
+                    <Numero style={{ fontSize: 12.5, fontWeight: "700", color: T.ink }}>{i + 1}</Numero>
+                  </View>
+                  <Texto style={{ flex: 1, fontSize: 14, lineHeight: 20, color: T.ink2 }}>{t}</Texto>
+                </View>
+              ))}
+            </View>
+            {num ? (
+              <Pressable
+                onPress={() => Linking.openURL(`https://wa.me/${num}?text=${encodeURIComponent(recado)}`)}
+                accessibilityRole="link"
+                style={{ minHeight: 48, borderRadius: 12, backgroundColor: VERDE_WHATSAPP, flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 }}
+              >
+                <Icon name="whatsapp" size={17} color={tintaSobre(VERDE_WHATSAPP)} />
+                <Texto style={{ color: tintaSobre(VERDE_WHATSAPP), fontSize: 15, fontWeight: "700", textAlign: "center" }}>
+                  {pronto.codigo ? `Mandar o #${pronto.codigo} no WhatsApp da ${loja}` : `Avisar a ${loja} no WhatsApp`}
+                </Texto>
+              </Pressable>
+            ) : null}
+            <Pressable
+              onPress={onVoltar}
+              accessibilityRole="button"
+              style={{ minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: BORDA_DE_CAMPO, backgroundColor: T.card, alignItems: "center", justifyContent: "center" }}
+            >
+              <Texto style={{ color: T.ink, fontWeight: "700", fontSize: 15 }}>Voltar para a loja</Texto>
+            </Pressable>
+          </View>
+        </ScrollView>
       </View>
     );
   }
@@ -339,18 +400,18 @@ export function OrcamentoEmLote({
                       accessibilityLabel="Seu nome" style={campo}
                     />
                     <TextInput
-                      value={telefone} onChangeText={setTelefone}
-                      placeholder="WhatsApp com DDD" placeholderTextColor={T.ink4}
-                      keyboardType="phone-pad"
+                      value={telefone} onChangeText={(t) => setTelefone(maskPhone(t))}
+                      placeholder="(12) 99999-9999" placeholderTextColor={T.ink4}
+                      keyboardType="phone-pad" inputMode="tel"
                       accessibilityLabel="WhatsApp com DDD" style={campo}
                     />
                   </Bloco>
 
                   <Bloco titulo="Para quando?" T={T} nota="opcional">
-                    <TextInput
-                      value={prazo} onChangeText={setPrazo}
-                      placeholder="Ex: 12/10/2026" placeholderTextColor={T.ink4}
-                      accessibilityLabel="Data de entrega desejada" style={campo}
+                    <SeletorDeData
+                      valor={prazo} onMudar={setPrazo}
+                      minimo={dataMinimaDoLote(cotacao?.prazo_dias ?? null)}
+                      estilo={campo}
                     />
                   </Bloco>
 
@@ -446,5 +507,50 @@ function Linha({ rotulo, valor, T, destaque }: { rotulo: string; valor: string; 
       <Texto style={{ fontSize: 12.5, color: T.ink2 }}>{rotulo}</Texto>
       <Numero style={{ fontSize: 12.5, color: destaque || T.ink }}>{valor}</Numero>
     </View>
+  );
+}
+
+/**
+ * "Para quando?" com o seletor de data do aparelho (Fase 2, Tela 9). Era
+ * texto livre, e "semana que vem" chegava à lojista como data.
+ *
+ * No navegador é o `<input type="date">` nativo — o calendário que o
+ * celular já sabe mostrar —, com a data mínima tirada do prazo da faixa
+ * (dias úteis). Fora do navegador, o campo com máscara DD/MM/AAAA.
+ */
+function SeletorDeData({
+  valor, onMudar, minimo, estilo,
+}: { valor: string; onMudar: (v: string) => void; minimo: string; estilo: any }) {
+  const T = usePaletaDaVitrine();
+  const par = useTipo();
+  if (Platform.OS === "web") {
+    return (
+      <View style={{ gap: 6 }}>
+        {createElement("input", {
+          type: "date",
+          value: valor,
+          min: minimo,
+          "aria-label": "Data de entrega desejada",
+          onChange: (e: any) => onMudar(String(e?.target?.value || "")),
+          style: {
+            ...estilo,
+            fontFamily: estiloNumero(par).fontFamily,
+            minHeight: 46, boxSizing: "border-box", width: "100%",
+            borderStyle: "solid", outline: "none",
+          },
+        })}
+        <Texto style={{ fontSize: 12, color: T.ink3 }}>
+          {valor ? `Entrega até ${dataDoLoteLegivel(valor)}. ` : ""}A partir de {dataDoLoteLegivel(minimo)}, pelo prazo desta quantidade.
+        </Texto>
+      </View>
+    );
+  }
+  return (
+    <TextInput
+      value={valor} onChangeText={(t) => onMudar(maskDateBr(t))}
+      placeholder={dataDoLoteLegivel(minimo)} placeholderTextColor={T.ink4}
+      keyboardType="number-pad"
+      accessibilityLabel="Data de entrega desejada" style={estilo}
+    />
   );
 }
