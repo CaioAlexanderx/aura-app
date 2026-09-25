@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vitrine Studio — Kit visual</title>
+<!--
+  ============================================================
+  Mockup standalone — Kit visual da Vitrine Studio, 25/09/2026.
+  Regra 4 do CLAUDE.md: mockup antes do código.
+
+  O QUE É: o DNA comum dos mockups das Fases 1 a 5 da normalização da
+  vitrine Studio (docs/studio/FASEAMENTO_VITRINE_STUDIO.md). Todo mockup
+  studio-vitrine-0N-*.html copia, sem mudar, os blocos marcados
+  KIT:BEGIN / KIT:END do <style> e do <script> deste arquivo.
+
+  DE ONDE VEM CADA TOKEN (nada inventado):
+    Superfície "papel"   components/studio/storefront/theme.ts (SUPERFICIE.papel)
+    Par de fontes        constants/fonts.ts (TIPOGRAFIAS_STUDIO)
+    Números e rótulos    Bricolage Grotesque, dígitos tabulares (decisão do PO,
+                         25/09). Substitui a DM Mono em tudo: preço, quantidade,
+                         contagem, CEP, rótulos em caixa alta e código Pix.
+    Cor da loja → texto  theme.ts (corLegivelSobre, parLegivel): mesma regra,
+                         reimplementada em JS abaixo (brandPair / brandText)
+    Movimento            theme.ts (AURA.motion): 150/220 ms, ease (.4,0,.2,1)
+    Loja de exemplo      Sheid Mania em produção (25/09): cor #1a1612,
+                         tipografia classic, cartão image-heavy, prazo 3 d.u.,
+                         produtos e preços reais.
+
+  DECISÕES DO PO APLICADAS (25/09):
+    - Só a cor PRINCIPAL da lojista pinta a vitrine. accent_color não é usada.
+    - Sem emoji em lugar nenhum: ícones em SVG (sprite abaixo).
+
+  PROPOSTA DESTE KIT (a validar no QA):
+    - ink3 do papel passa de #837A6E (3,98:1 sobre #FBF8F3, reprova AA)
+      para #756C61 (4,86:1). Vira item da Fase 1A.
+  ============================================================
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Instrument+Serif:ital@0;1&family=Pacifico&display=swap">
+<style>
+/* === KIT:BEGIN ============================================== */
+:root{
+  /* papel (theme.ts) — ink3 ajustado para AA */
+  --bg:#FBF8F3; --bg2:#FFFFFF; --bg3:#F6F1E8; --bg4:#F0E9DC;
+  --ink:#1A1714; --ink2:#4A443C; --ink3:#756C61; --ink4:#B4A99A;
+  --border:#E7DFD3; --border2:#D9CFBF;
+  /* cor da loja: preenchidas pelo JS (applyBrand) */
+  --brand:#1a1612; --brand-text:#1a1612; --brand-fill:#1a1612; --on-brand:#FFFFFF;
+  --brand-wash:rgba(26,22,18,.06); --brand-wash-2:rgba(26,22,18,.12); --brand-ring:rgba(26,22,18,.28);
+  /* semânticas — não mudam com a loja */
+  --pix:#0E7A43; --pix-soft:#E3F4EA;
+  --amber:#8A4B0A; --amber-soft:#FDF0DA;
+  --red:#B42318; --red-soft:#FDE8E6;
+  --info:#1D4E89; --info-soft:#E6EEF8;
+  /* tipografia */
+  --f-display:'Fraunces','Instrument Serif',Georgia,serif;
+  --f-display-w:500;
+  --f-body:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  /* números, rótulos e códigos: Bricolage Grotesque (decisão do PO, 25/09; substitui a DM Mono) */
+  --f-num:'Bricolage Grotesque','DM Sans',-apple-system,sans-serif;
+  /* raio, sombra, movimento */
+  --r-sm:6px; --r-md:10px; --r-lg:14px; --r-xl:20px; --r-pill:999px;
+  --sh-1:0 1px 2px rgba(26,23,20,.06),0 1px 1px rgba(26,23,20,.04);
+  --sh-2:0 8px 24px -10px rgba(26,23,20,.22),0 2px 6px rgba(26,23,20,.06);
+  --sh-3:0 24px 60px -20px rgba(26,23,20,.35),0 4px 12px rgba(26,23,20,.08);
+  --ease:cubic-bezier(.4,0,.2,1); --t-fast:150ms; --t:220ms;
+}
+*{box-sizing:border-box}
+.sv{font-family:var(--f-body);color:var(--ink);background:var(--bg);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.sv h1,.sv h2,.sv h3,.sv .display{font-family:var(--f-display);font-weight:var(--f-display-w);letter-spacing:-.01em;line-height:1.12;margin:0;text-wrap:balance;color:var(--ink)}
+.sv p{margin:0}
+.sv .t-h1{font-size:34px}.sv .t-h2{font-size:26px}.sv .t-h3{font-size:20px}
+.sv .t-body{font-size:15px}.sv .t-small{font-size:13px;color:var(--ink2)}.sv .t-cap{font-size:12.5px;color:var(--ink3)}
+.sv .label{font:500 11px/1.2 var(--f-num);letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
+.sv .mono,.sv .price,.sv .num{font-family:var(--f-num);font-variant-numeric:tabular-nums;font-feature-settings:'tnum' 1}
+.sv .price{font-weight:600;color:var(--ink);letter-spacing:-.01em}
+.sv .price-lg{font:700 28px/1 var(--f-num);letter-spacing:-.025em}
+.sv .pix-line{color:var(--pix);font-size:13px;font-weight:600}
+.sv .brand-text{color:var(--brand-text)}
+
+/* ícones */
+.ic{width:20px;height:20px;flex:none;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+.ic.sm{width:16px;height:16px}.ic.lg{width:24px;height:24px}
+
+/* botões */
+.btn{appearance:none;border:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;height:48px;padding:0 20px;border-radius:12px;font:600 15px/1 var(--f-body);letter-spacing:.005em;transition:transform var(--t-fast) var(--ease),box-shadow var(--t) var(--ease),background var(--t) var(--ease);white-space:nowrap;text-decoration:none}
+.btn:active{transform:scale(.98)}
+.btn:focus-visible{outline:2px solid var(--brand-text);outline-offset:2px}
+.btn-primary{background:var(--brand-fill);color:var(--on-brand);box-shadow:0 6px 18px -8px var(--brand-ring)}
+.btn-primary:hover{box-shadow:0 10px 24px -8px var(--brand-ring);transform:translateY(-1px)}
+.btn-secondary{background:var(--bg2);color:var(--ink);border:1px solid var(--border2)}
+.btn-secondary:hover{border-color:var(--ink3)}
+.btn-ghost{background:transparent;color:var(--brand-text);height:40px;padding:0 10px}
+.btn-pix{background:var(--pix);color:#fff}
+.btn-wa{background:#1F7A4D;color:#fff}
+.btn-block{width:100%}
+.btn-sm{height:36px;padding:0 14px;font-size:13.5px;border-radius:10px}
+.btn[disabled]{background:var(--bg4);color:var(--ink3);box-shadow:none;cursor:not-allowed}
+.icon-btn{appearance:none;border:0;background:transparent;width:44px;height:44px;border-radius:12px;display:inline-grid;place-items:center;color:var(--ink);cursor:pointer;position:relative}
+.icon-btn:hover{background:var(--bg3)}
+.count{position:absolute;top:6px;right:5px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--brand-fill);color:var(--on-brand);font:700 10.5px/18px var(--f-num);text-align:center}
+
+/* chips (opções, entrega, pagamento) */
+.chip{appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:8px 14px;border-radius:12px;border:1px solid var(--border2);background:var(--bg2);color:var(--ink);font:500 14px/1.2 var(--f-body);transition:border-color var(--t) var(--ease),background var(--t) var(--ease)}
+.chip:hover{border-color:var(--ink3)}
+.chip[aria-pressed="true"],.chip.on{border-color:var(--brand-text);background:var(--brand-wash);box-shadow:inset 0 0 0 1px var(--brand-text)}
+.chip .delta{font:600 12px var(--f-num);color:var(--ink3)}
+.swatch{width:36px;height:36px;border-radius:50%;border:1px solid rgba(0,0,0,.12);box-shadow:inset 0 0 0 3px var(--bg2);cursor:pointer}
+.swatch.on{outline:2px solid var(--brand-text);outline-offset:2px}
+
+/* campos */
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:13px;font-weight:600;color:var(--ink2)}
+.field .opt{font-weight:400;color:var(--ink3)}
+.input{height:48px;border-radius:12px;border:1px solid var(--border2);background:var(--bg2);padding:0 14px;font:400 15px var(--f-body);color:var(--ink);width:100%;transition:border-color var(--t),box-shadow var(--t)}
+.input::placeholder{color:var(--ink4)}
+.input:focus{outline:0;border-color:var(--brand-text);box-shadow:0 0 0 3px var(--brand-wash-2)}
+.input.err{border-color:var(--red);box-shadow:0 0 0 3px var(--red-soft)}
+.field .hint{font-size:12.5px;color:var(--ink3)}
+.field .error{font-size:12.5px;color:var(--red);display:flex;gap:6px;align-items:center}
+
+/* superfícies */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg)}
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-xl);box-shadow:var(--sh-1)}
+.divider{height:1px;background:var(--border);border:0;margin:0}
+.badge{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:var(--r-pill);font:500 11px/1 var(--f-num);letter-spacing:.06em;text-transform:uppercase}
+.badge-brand{background:var(--brand-fill);color:var(--on-brand)}
+.badge-soft{background:var(--bg2);color:var(--ink);box-shadow:var(--sh-1)}
+.badge-pix{background:var(--pix-soft);color:var(--pix)}
+.badge-amber{background:var(--amber-soft);color:var(--amber)}
+.note{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:12px;font-size:13.5px}
+.note-amber{background:var(--amber-soft);color:var(--amber)}
+.note-info{background:var(--info-soft);color:var(--info)}
+.note-pix{background:var(--pix-soft);color:var(--pix)}
+.note-red{background:var(--red-soft);color:var(--red)}
+
+/* foto de produto: a caneca ilustrada sobre o papel */
+.shot{position:relative;aspect-ratio:4/5;border-radius:var(--r-lg);overflow:hidden;background:radial-gradient(120% 90% at 50% 30%,#FFFFFF 0%,var(--bg3) 62%,var(--bg4) 100%);display:grid;place-items:center}
+.shot svg.prod{width:78%;height:auto}
+.shot .badge{position:absolute;top:10px;left:10px}
+
+/* ---------- moldura do mockup (não é produto) ---------- */
+.mk-body{margin:0;background:#E9E6E1;color:#1d1d1f;font-family:var(--f-body)}
+.mk-bar{position:sticky;top:0;z-index:50;background:#16181D;color:#E8EAF0;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:10px 20px;font-size:12.5px}
+.mk-bar b{font:600 12px var(--f-num);letter-spacing:.08em;text-transform:uppercase;color:#fff}
+.mk-grp{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.mk-grp span{color:#9BA1AE;margin-right:2px}
+.mk-seg{appearance:none;border:1px solid #333845;background:#1F222A;color:#E8EAF0;border-radius:8px;height:30px;padding:0 10px;font:500 12px var(--f-body);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.mk-seg[aria-pressed="true"]{background:#E8EAF0;color:#16181D;border-color:#E8EAF0}
+.mk-dot{width:12px;height:12px;border-radius:50%;border:1px solid rgba(255,255,255,.35)}
+.mk-wrap{max-width:1480px;margin:0 auto;padding:32px 20px 80px;display:flex;flex-direction:column;gap:56px}
+.mk-intro{max-width:760px;display:flex;flex-direction:column;gap:10px}
+.mk-intro h1{font:600 30px/1.15 var(--f-body);margin:0;letter-spacing:-.01em}
+.mk-intro p{margin:0;color:#4a4a4f;font-size:15px;line-height:1.6}
+.mk-screen{display:grid;grid-template-columns:300px 1fr;gap:28px;align-items:start}
+.mk-screen+.mk-screen{border-top:1px solid #d3cfc8;padding-top:48px}
+.mk-meta{position:sticky;top:70px;display:flex;flex-direction:column;gap:10px}
+.mk-meta .mk-n{font:500 11px var(--f-num);letter-spacing:.14em;text-transform:uppercase;color:#8a5a00}
+.mk-meta h2{font:600 20px/1.25 var(--f-body);margin:0}
+.mk-meta p{margin:0;font-size:14px;line-height:1.55;color:#4a4a4f}
+.mk-meta ul{margin:0;padding-left:18px;font-size:13px;line-height:1.5;color:#4a4a4f;display:flex;flex-direction:column;gap:5px}
+.mk-meta code{font:12px var(--f-num);background:#dcd8d1;padding:1px 5px;border-radius:4px}
+.mk-frames{display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap;min-width:0}
+.phone{width:390px;height:844px;border-radius:48px;background:#0F0F11;padding:11px;box-shadow:0 30px 60px -25px rgba(0,0,0,.45);flex:none;position:relative}
+.phone>.screen{width:100%;height:100%;border-radius:38px;overflow:hidden;position:relative;background:var(--bg)}
+.phone>.screen>.scroll{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none}
+.phone>.screen>.scroll::-webkit-scrollbar{display:none}
+.phone .notch{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:120px;height:30px;background:#0F0F11;border-radius:0 0 18px 18px;z-index:40}
+.statusbar{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px 0 30px;font:600 14px var(--f-body);color:var(--ink)}
+.desk-fit{flex:1 1 640px;min-width:0}
+.desk{width:1280px;border-radius:14px;overflow:hidden;background:var(--bg);box-shadow:0 30px 60px -25px rgba(0,0,0,.4);transform-origin:top left}
+.chrome{height:40px;background:#ECE8E2;display:flex;align-items:center;gap:14px;padding:0 14px;border-bottom:1px solid #DDD7CE}
+.chrome i{width:11px;height:11px;border-radius:50%;background:#D3CCC2;display:inline-block}
+.chrome .url{flex:1;max-width:560px;height:26px;border-radius:8px;background:#fff;font:12px/26px var(--f-num);color:#6b6459;padding:0 12px;display:flex;gap:6px;align-items:center}
+.desk .viewport{height:820px;overflow-y:auto;position:relative}
+.mk-hide-phone .phone,.mk-hide-desk .desk-fit{display:none}
+@media (max-width:1000px){.mk-screen{grid-template-columns:1fr}.mk-meta{position:static}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+/* === KIT:END ================================================ */
+
+/* ---------- só desta página ---------- */
+.kit-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:20px}
+.kit-box{padding:20px;display:flex;flex-direction:column;gap:14px}
+.sw-row{display:flex;flex-wrap:wrap;gap:10px}
+.sw-tok{display:flex;flex-direction:column;gap:4px;font:11px var(--f-num);color:var(--ink3);width:74px}
+.sw-tok i{height:44px;border-radius:10px;border:1px solid var(--border)}
+.icons{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:10px}
+.icons div{display:flex;flex-direction:column;align-items:center;gap:6px;font:10.5px var(--f-num);color:var(--ink3);padding:10px 4px;border-radius:10px;background:var(--bg3)}
+.mugs{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
+.mugs figure{margin:0;display:flex;flex-direction:column;gap:8px}
+.mugs figcaption{font-size:13px;color:var(--ink2)}
+</style>
+</head>
+<body class="mk-body">
+
+<!-- ======== sprite de ícones (KIT) ======== -->
+<!-- === KIT:SPRITE:BEGIN === -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-bag" viewBox="0 0 24 24"><path d="M5.5 8h13l-1.1 12.1a1 1 0 0 1-1 .9H7.6a1 1 0 0 1-1-.9L5.5 8Z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5 8 12l7 7"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15V3.5M8 7.5l4-4 4 4M5 12.5V19a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-6.5"/></symbol>
+  <symbol id="i-wa" viewBox="0 0 24 24"><path d="M20 11.6a8.4 8.4 0 0 1-12.4 7.4L3.5 20.3l1.3-3.9A8.4 8.4 0 1 1 20 11.6Z"/><path d="M9 8.6c0 3.3 2.9 6.2 6.1 6.3l1.1-1.4-1.9-1-1 .8a4.6 4.6 0 0 1-2.4-2.4l.8-1-1-1.9Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></symbol>
+  <symbol id="i-truck" viewBox="0 0 24 24"><path d="M3 6.5h10.5v9.5H3zM13.5 10h4l3 3.2V16h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></symbol>
+  <symbol id="i-store" viewBox="0 0 24 24"><path d="M4 9.5 5.6 4.5h12.8L20 9.5M4.5 9.5v10h15v-10M9.5 19.5v-5h5v5"/><path d="M4 9.5c0 1.4 1.1 2.3 2.7 2.3S9.3 10.9 9.3 9.5c0 1.4 1.2 2.3 2.7 2.3s2.7-.9 2.7-2.3c0 1.4 1.1 2.3 2.6 2.3S20 10.9 20 9.5"/></symbol>
+  <symbol id="i-moto" viewBox="0 0 24 24"><circle cx="5.5" cy="16.5" r="3"/><circle cx="18.5" cy="16.5" r="3"/><path d="M5.5 16.5 9.5 10h5l4 6.5M13 10l-1.3-3H9.5"/></symbol>
+  <symbol id="i-pix" viewBox="0 0 24 24"><path d="m12 3.2 3.4 3.4-3.4 3.4-3.4-3.4zM12 14l3.4 3.4-3.4 3.4-3.4-3.4zM3.2 12l3.4-3.4L10 12l-3.4 3.4zM14 12l3.4-3.4 3.4 3.4-3.4 3.4z"/></symbol>
+  <symbol id="i-card" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3 9.5h18M6.5 15h4"/></symbol>
+  <symbol id="i-cash" viewBox="0 0 24 24"><rect x="3" y="6.5" width="18" height="11" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9.5v5M18 9.5v5"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15.5V4M7.5 8.5 12 4l4.5 4.5M4.5 15v4a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-4"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="m20.5 16-5-5-9 8.5"/></symbol>
+  <symbol id="i-brush" viewBox="0 0 24 24"><path d="M14.5 4.5 19.5 9.5 11 18l-5-5z"/><path d="M6 13c-2 0-3 1.5-3 3.5V20h3.5C8.5 20 10 19 10 17"/></symbol>
+  <symbol id="i-ruler" viewBox="0 0 24 24"><path d="M3.5 15.5 15.5 3.5l5 5-12 12z"/><path d="m7.5 11.5 2 2M10.5 8.5l1.5 1.5M13.5 5.5l2 2"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.8v.1"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4 21 19.5H3z"/><path d="M12 10v4.5M12 17v.1"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4.5L19.5 9 15 4.5 4 15.5z"/><path d="m13 6.5 4.5 4.5"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2"/><path d="M15.5 8.5V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v9.5a1 1 0 0 0 1 1h3.5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="14.5" rx="2"/><path d="M4 10h16M9 3.5v4M15 3.5v4"/></symbol>
+  <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 0 1 13.2-4.9M18 3.5v4h-4M19.5 12a7.5 7.5 0 0 1-13.2 4.9M6 20.5v-4h4"/></symbol>
+  <symbol id="i-zoom" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5M11 8.5v5M8.5 11h5"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5 19 6.5v5.5c0 4.3-2.9 7.3-7 8.5-4.1-1.2-7-4.2-7-8.5V6.5z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M3.5 7.8 12 3.5l8.5 4.3v8.4L12 20.5l-8.5-4.3z"/><path d="M3.5 7.8 12 12l8.5-4.2M12 12v8.5"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.8"/></symbol>
+  <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M6 3.5h12v17l-2.4-1.5-2.4 1.5-1.2-.8-1.2.8-2.4-1.5L6 20.5z"/><path d="M9 8h6M9 11.5h6M9 15h3.5"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c.8-3.6 3.8-5.8 7.5-5.8s6.7 2.2 7.5 5.8"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.4"/></symbol>
+  <symbol id="i-instagram" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><path d="M17.2 6.8v.1"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 19.5s-7.5-4.4-7.5-10A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 7.5 2.5c0 5.6-7.5 10-7.5 10Z"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 4 8.5 4.5L12 13 3.5 8.5z"/><path d="m3.5 12.5 8.5 4.5 8.5-4.5M3.5 16.5 12 21l8.5-4.5"/></symbol>
+  <symbol id="i-text" viewBox="0 0 24 24"><path d="M5 6.5V5h14v1.5M12 5v14M9 19h6"/></symbol>
+  <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1 0 1.6-.8 1.6-1.6 0-1-.8-1.4-.8-2.3 0-.9.7-1.6 1.6-1.6h2.1a4 4 0 0 0 4-4c0-4.2-3.8-7.5-8.5-7.5Z"/><circle cx="7.8" cy="11.5" r="1"/><circle cx="10.5" cy="7.6" r="1"/><circle cx="15" cy="7.8" r="1"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4h-4"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></symbol>
+</svg>
+<!-- === KIT:SPRITE:END === -->
+
+<div class="mk-bar" id="mk-bar">
+  <b>Mockup · Vitrine Studio · Kit visual</b>
+  <div class="mk-grp"><span>Cor da loja</span><div id="mk-brands" class="mk-grp"></div></div>
+  <div class="mk-grp"><span>Tipografia</span><div id="mk-fonts" class="mk-grp"></div></div>
+</div>
+
+<div class="mk-wrap">
+  <header class="mk-intro">
+    <h1>Kit visual da Vitrine Studio</h1>
+    <p>O DNA comum dos mockups das Fases 1 a 5. Troque a cor da loja e a tipografia na barra de cima: tudo abaixo se recalcula com a mesma regra de contraste que a vitrine usa hoje. A loja de exemplo é a Sheid Mania, com a cor, a tipografia, os produtos e os preços que estão em produção.</p>
+  </header>
+
+  <section class="sv panel kit-box" style="padding:28px">
+    <span class="label">Superfície papel e cor da loja</span>
+    <div class="sw-row" id="tokens"></div>
+    <p class="t-small">A cor da loja entra em três papéis. <b>Preenchimento</b> no botão principal, com a tinta de cima escolhida por contraste. <b>Texto</b>, escurecida até passar 4,5:1 sobre o papel. <b>Lavagem</b> a 6% e 12% para estados selecionados. Verde do Pix, âmbar, vermelho e azul de informação nunca mudam com a loja.</p>
+  </section>
+
+  <section class="sv panel kit-box" style="padding:28px">
+    <span class="label">Tipografia</span>
+    <h1 class="t-h1">Presentes que ninguém mais tem.</h1>
+    <h2 class="t-h2">Caneca Alça Coração</h2>
+    <h3 class="t-h3">Como você quer resolver a arte?</h3>
+    <p class="t-body">Texto corrido em DM Sans 15 px. A arte do cliente é a protagonista: a tipografia da loja aparece nos títulos e recua no resto.</p>
+    <p class="t-small">Texto secundário, 13 px, tinta 2.</p>
+    <p class="t-cap">Legenda, 12,5 px, tinta 3 ajustada para AA.</p>
+    <div style="display:flex;gap:18px;align-items:baseline;flex-wrap:wrap">
+      <span class="label">Rótulo em Bricolage Grotesque</span>
+      <span class="price price-lg">R$ 49,90</span>
+      <span class="pix-line">R$ 47,41 no Pix</span>
+    </div>
+  </section>
+
+  <section class="sv kit-grid">
+    <div class="panel kit-box">
+      <span class="label">Botões</span>
+      <button class="btn btn-primary btn-block"><svg class="ic"><use href="#i-bag"/></svg>Adicionar à sacola</button>
+      <button class="btn btn-secondary btn-block">Comprar agora</button>
+      <button class="btn btn-pix btn-block"><svg class="ic"><use href="#i-copy"/></svg>Copiar código Pix</button>
+      <button class="btn btn-wa btn-block"><svg class="ic"><use href="#i-wa"/></svg>Chamar no WhatsApp</button>
+      <button class="btn btn-block" disabled>Envie sua arte para continuar</button>
+      <button class="btn btn-ghost"><svg class="ic sm"><use href="#i-share"/></svg>Compartilhar</button>
+    </div>
+    <div class="panel kit-box">
+      <span class="label">Opções e cores</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="chip" aria-pressed="true">P</button><button class="chip">M</button><button class="chip">G</button><button class="chip">GG <span class="delta">+R$ 5</span></button>
+      </div>
+      <div style="display:flex;gap:10px">
+        <span class="swatch on" style="background:#F7F4EE"></span><span class="swatch" style="background:#1F1B18"></span><span class="swatch" style="background:#D8436F"></span><span class="swatch" style="background:#3E6FB0"></span><span class="swatch" style="background:#E9C46A"></span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="chip on"><svg class="ic sm"><use href="#i-store"/></svg>Retirar na loja</button>
+        <button class="chip"><svg class="ic sm"><use href="#i-truck"/></svg>Receber em casa</button>
+      </div>
+      <span class="badge badge-brand">Mais pedido</span>
+      <span class="badge badge-soft">Novo</span>
+      <span class="badge badge-pix">Pix -5%</span>
+    </div>
+    <div class="panel kit-box">
+      <span class="label">Campos</span>
+      <div class="field"><label for="k1">Nome completo</label><input id="k1" class="input" placeholder="Como no seu documento" value="Helena Martins"></div>
+      <div class="field"><label for="k2">WhatsApp</label><input id="k2" class="input err" value="(12) 9961"><span class="error"><svg class="ic sm"><use href="#i-alert"/></svg>Faltam números no WhatsApp.</span></div>
+      <div class="field"><label for="k3">E-mail <span class="opt">(opcional)</span></label><input id="k3" class="input" placeholder="voce@email.com"><span class="hint">Mandamos o link para acompanhar o pedido.</span></div>
+    </div>
+    <div class="panel kit-box">
+      <span class="label">Avisos</span>
+      <div class="note note-amber"><svg class="ic sm"><use href="#i-calendar"/></svg><span>Pedidos para o Natal até 20/12.</span></div>
+      <div class="note note-info"><svg class="ic sm"><use href="#i-eye"/></svg><span>Você aprova o mockup antes de produzir.</span></div>
+      <div class="note note-pix"><svg class="ic sm"><use href="#i-check"/></svg><span>Pagamento recebido.</span></div>
+      <div class="note note-red"><svg class="ic sm"><use href="#i-alert"/></svg><span>Não conseguimos calcular o frete para esse CEP.</span></div>
+    </div>
+  </section>
+
+  <section class="sv panel kit-box" style="padding:28px">
+    <span class="label">Produtos ilustrados (substituem a foto nos mockups)</span>
+    <div class="mugs" id="mugs"></div>
+  </section>
+
+  <section class="sv panel kit-box" style="padding:28px">
+    <span class="label">Ícones (sprite SVG, sem emoji)</span>
+    <div class="icons" id="icons"></div>
+  </section>
+</div>
+
+<script>
+/* === KIT:BEGIN ============================================== */
+/* Cor da loja → tokens. Mesma regra de theme.ts (parLegivel / corLegivelSobre). */
+const KIT = (() => {
+  const hex2rgb = h => { h = h.replace('#',''); if (h.length===3) h = h.split('').map(c=>c+c).join(''); const n = parseInt(h,16); return [n>>16&255, n>>8&255, n&255]; };
+  const rgb2hex = ([r,g,b]) => '#' + [r,g,b].map(v => Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join('');
+  const lum = h => { const c = hex2rgb(h).map(v => { v/=255; return v<=.03928 ? v/12.92 : Math.pow((v+.055)/1.055,2.4); }); return .2126*c[0]+.7152*c[1]+.0722*c[2]; };
+  const contrast = (a,b) => { const x=lum(a), y=lum(b); return (Math.max(x,y)+.05)/(Math.min(x,y)+.05); };
+  const mix = (h, target, t) => { const a=hex2rgb(h), b=hex2rgb(target); return rgb2hex(a.map((v,i)=>v+(b[i]-v)*t)); };
+  const INK = '#1A1714', PAPER = '#FBF8F3', WHITE = '#FFFFFF';
+  const inkOn = h => contrast(h, WHITE) >= contrast(h, INK) ? WHITE : INK;
+  function brandPair(h){
+    let t = inkOn(h); if (contrast(h,t) >= 4.5) return {fill:h, on:t};
+    for (let i=1;i<=12;i++){ for (const c of [mix(h,'#000000',i*.06), mix(h,'#FFFFFF',i*.06)]) { const k = inkOn(c); if (contrast(c,k) >= 4.5) return {fill:c, on:k}; } }
+    return {fill:INK, on:WHITE};
+  }
+  function brandText(h, bg=PAPER){ let c=h; for (let i=0;i<30 && contrast(c,bg)<4.5;i++) c = mix(c,'#000000',.07); return c; }
+  const rgba = (h,a) => { const [r,g,b]=hex2rgb(h); return `rgba(${r},${g},${b},${a})`; };
+  function applyBrand(h){
+    const s = document.documentElement.style, p = brandPair(h), txt = brandText(h);
+    s.setProperty('--brand', h); s.setProperty('--brand-fill', p.fill); s.setProperty('--on-brand', p.on);
+    s.setProperty('--brand-text', txt); s.setProperty('--brand-wash', rgba(txt,.06)); s.setProperty('--brand-wash-2', rgba(txt,.12)); s.setProperty('--brand-ring', rgba(p.fill,.45));
+  }
+  const FONTS = {
+    classic:  {nome:'Elegante',   display:"'Fraunces','Instrument Serif',Georgia,serif", w:500},
+    modern:   {nome:'Moderna',    display:"'DM Sans',-apple-system,sans-serif", w:700},
+    editorial:{nome:'Marcante',   display:"'Instrument Serif',Georgia,serif", w:400},
+    humanist: {nome:'Acolhedora', display:"'Pacifico',cursive", w:400},
+  };
+  function applyFont(k){ const f = FONTS[k] || FONTS.classic; document.documentElement.style.setProperty('--f-display', f.display); document.documentElement.style.setProperty('--f-display-w', f.w); }
+  const BRANDS = [
+    {nome:'Sheid Mania', hex:'#1a1612'},
+    {nome:'Rosa', hex:'#D6336C'},
+    {nome:'Amarelo', hex:'#F2C94C'},
+    {nome:'Petróleo', hex:'#0F6E7A'},
+  ];
+
+  /* Produto ilustrado. tipo: reta | chopp | coracao | colher | cromada | imperial | camiseta | copo
+     corpo/alca: cor da peça; arte: {texto, cor, fonte, sub, desenho:'coracao'|'folha'|'estrela'|null} */
+  let uid = 0;
+  function produto(o = {}){
+    const id = 'p' + (++uid);
+    const tipo = o.tipo || 'reta', corpo = o.corpo || '#F7F4EE', alca = o.alca || corpo;
+    const arte = o.arte || null;
+    const metal = tipo === 'cromada' || tipo === 'imperial';
+    const shade = `<linearGradient id="${id}s" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity=".22"/><stop offset=".18" stop-color="#000" stop-opacity=".04"/><stop offset=".42" stop-color="#fff" stop-opacity="${metal?'.55':'.28'}"/><stop offset=".6" stop-color="#fff" stop-opacity="0"/><stop offset=".88" stop-color="#000" stop-opacity=".08"/><stop offset="1" stop-color="#000" stop-opacity=".26"/></linearGradient>`;
+    const desenho = d => d==='coracao' ? '<path d="M0 6c-7-5-11-9-11-14a6 6 0 0 1 11-3 6 6 0 0 1 11 3c0 5-4 9-11 14Z"/>'
+      : d==='folha' ? '<path d="M-10 8C-10-6 2-12 12-12 12 0 6 10-10 8Z M-10 8 6-6" />'
+      : d==='estrela' ? '<path d="M0-12 3.5-3.7 12.4-3.7 5.2 1.6 7.9 10.2 0 5 -7.9 10.2 -5.2 1.6 -12.4-3.7 -3.5-3.7Z"/>' : '';
+    const arteSvg = (cx, cy, esc=1) => !arte ? '' : `<g transform="translate(${cx} ${cy}) scale(${esc})" fill="${arte.cor||'#1A1714'}" stroke="none">
+        ${arte.desenho ? `<g transform="translate(0 -26)" ${arte.desenho==='folha'?`fill="none" stroke="${arte.cor}" stroke-width="2.2" stroke-linecap="round"`:''}>${desenho(arte.desenho)}</g>` : ''}
+        <text x="0" y="${arte.desenho?8:4}" text-anchor="middle" font-family="${arte.fonte||"'Pacifico',cursive"}" font-size="${arte.tam||22}">${arte.texto||''}</text>
+        ${arte.sub ? `<text x="0" y="${arte.desenho?24:20}" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="6.4" letter-spacing="1.1">${arte.sub}</text>` : ''}
+      </g>`;
+    const sombra = `<ellipse cx="96" cy="178" rx="62" ry="7" fill="#000" opacity=".13"/>`;
+    if (tipo === 'camiseta') {
+      return `<svg class="prod" viewBox="0 0 200 200" role="img" aria-label="Camiseta"><defs>${shade}</defs>${sombra}
+        <path d="M70 26 52 34 22 52l14 30 18-9v99h92V73l18 9 14-30-30-18-18-8c-4 12-16 18-30 18S74 38 70 26Z" fill="${corpo}" stroke="rgba(0,0,0,.14)" stroke-width="1"/>
+        <path d="M70 26c4 12 16 18 30 18s26-6 30-18" fill="none" stroke="rgba(0,0,0,.18)" stroke-width="2"/>
+        <path d="M54 73v99h92V73" fill="url(#${id}s)" opacity=".7"/>
+        ${arteSvg(100, 100, .95)}</svg>`;
+    }
+    if (tipo === 'copo') {
+      return `<svg class="prod" viewBox="0 0 200 200" role="img" aria-label="Copo térmico"><defs>${shade}</defs>${sombra}
+        <path d="M60 40h72l-7 134a6 6 0 0 1-6 6H73a6 6 0 0 1-6-6Z" fill="${corpo}"/><path d="M60 40h72l-7 134a6 6 0 0 1-6 6H73a6 6 0 0 1-6-6Z" fill="url(#${id}s)"/>
+        <rect x="55" y="26" width="82" height="18" rx="6" fill="${alca}"/><rect x="55" y="26" width="82" height="18" rx="6" fill="url(#${id}s)"/>
+        <path d="M132 58c26 0 26 60 0 60" fill="none" stroke="${alca}" stroke-width="11" stroke-linecap="round"/>
+        <rect x="104" y="6" width="7" height="24" rx="3" fill="${alca}" opacity=".9"/>
+        ${arteSvg(96, 108, .9)}</svg>`;
+    }
+    const chopp = tipo === 'chopp';
+    const x0 = chopp ? 50 : 44, x1 = chopp ? 142 : 146, top = chopp ? 20 : 44, bot = 172;
+    const body = chopp ? `M${x0} ${top}h${x1-x0}l-4 ${bot-top-8}a8 8 0 0 1-8 8H${x0+12}a8 8 0 0 1-8-8Z` : `M${x0} ${top}h${x1-x0}v${bot-top-10}a10 10 0 0 1-10 10H${x0+10}a10 10 0 0 1-10-10Z`;
+    const handle = tipo === 'coracao'
+      ? `<path d="M${x1-2} 78c10-16 34-12 34 8 0 18-18 30-34 44" fill="none" stroke="${alca}" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>`
+      : `<path d="M${x1-2} ${chopp?60:74}c${chopp?38:34} 0 ${chopp?38:34} ${chopp?80:62} 0 ${chopp?80:62}" fill="none" stroke="${alca}" stroke-width="${chopp?15:12}" stroke-linecap="round"/>`;
+    const handleShade = tipo === 'coracao' ? '' : `<path d="M${x1-2} ${chopp?60:74}c${chopp?38:34} 0 ${chopp?38:34} ${chopp?80:62} 0 ${chopp?80:62}" fill="none" stroke="#000" stroke-opacity=".12" stroke-width="3" transform="translate(4 0)"/>`;
+    const rimTop = tipo === 'imperial' ? `<rect x="${x0}" y="${top}" width="${x1-x0}" height="7" fill="#C9A45C"/><rect x="${x0}" y="${top}" width="${x1-x0}" height="7" fill="url(#${id}s)"/>` : '';
+    const colher = tipo === 'colher' ? `<g transform="rotate(14 150 30)"><rect x="140" y="-4" width="7" height="70" rx="3.5" fill="#C8CCD2"/><ellipse cx="143.5" cy="-8" rx="10" ry="13" fill="#D5D9DE"/></g>` : '';
+    const glass = chopp ? `<path d="${body}" fill="#FFFFFF" opacity=".35"/>` : '';
+    return `<svg class="prod" viewBox="0 0 200 200" role="img" aria-label="Caneca"><defs>${shade}<clipPath id="${id}c"><path d="${body}"/></clipPath></defs>${sombra}
+      ${handle}${handleShade}
+      <path d="${body}" fill="${corpo}"/>${glass}
+      <g clip-path="url(#${id}c)">${arteSvg((x0+x1)/2 - 2, chopp ? 100 : 112, chopp ? 1 : 1.05)}</g>
+      <path d="${body}" fill="url(#${id}s)"/>${rimTop}
+      <ellipse cx="${(x0+x1)/2}" cy="${top}" rx="${(x1-x0)/2}" ry="5" fill="${alca}"/><ellipse cx="${(x0+x1)/2}" cy="${top+1}" rx="${(x1-x0)/2-5}" ry="3.4" fill="#000" opacity=".16"/>
+      ${colher}</svg>`;
+  }
+
+  /* Barra do mockup: cor, tipografia e aparelho. Chame KIT.bar({device:true}). */
+  function bar(opts = {}){
+    const bw = document.getElementById('mk-brands'), fw = document.getElementById('mk-fonts'), dw = document.getElementById('mk-devices');
+    const set = (wrap, btn) => { wrap.querySelectorAll('.mk-seg').forEach(b => b.setAttribute('aria-pressed', b===btn ? 'true':'false')); };
+    if (bw) BRANDS.forEach((b,i) => { const el = document.createElement('button'); el.className='mk-seg'; el.innerHTML=`<i class="mk-dot" style="background:${b.hex}"></i>${b.nome}`; el.setAttribute('aria-pressed', i===0?'true':'false'); el.onclick=()=>{applyBrand(b.hex); set(bw,el); document.dispatchEvent(new CustomEvent('kit:brand',{detail:b}));}; bw.appendChild(el); });
+    if (fw) Object.entries(FONTS).forEach(([k,f],i) => { const el = document.createElement('button'); el.className='mk-seg'; el.textContent=f.nome; el.setAttribute('aria-pressed', i===0?'true':'false'); el.onclick=()=>{applyFont(k); set(fw,el);}; fw.appendChild(el); });
+    if (dw) [['ambos','Celular e desktop'],['phone','Só celular'],['desk','Só desktop']].forEach(([k,n],i) => { const el=document.createElement('button'); el.className='mk-seg'; el.textContent=n; el.setAttribute('aria-pressed', i===0?'true':'false'); el.onclick=()=>{ document.body.classList.toggle('mk-hide-desk', k==='phone'); document.body.classList.toggle('mk-hide-phone', k==='desk'); set(dw,el); fitDesk(); }; dw.appendChild(el); });
+    applyBrand(BRANDS[0].hex); applyFont('classic');
+    window.addEventListener('resize', fitDesk); fitDesk();
+  }
+  /* Escala a moldura desktop (1280 px) para caber na coluna. */
+  function fitDesk(){
+    document.querySelectorAll('.desk-fit').forEach(w => { const d = w.querySelector('.desk'); if (!d) return; const s = Math.min(1, w.clientWidth / 1280); d.style.transform = `scale(${s})`; w.style.height = (d.offsetHeight * s) + 'px'; });
+  }
+  const money = v => 'R$ ' + v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const icon = (n, cls='') => `<svg class="ic ${cls}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+  return { applyBrand, applyFont, brandPair, brandText, contrast, produto, bar, fitDesk, money, icon, BRANDS, FONTS };
+})();
+/* === KIT:END ================================================ */
+
+/* ---------- só desta página ---------- */
+KIT.bar();
+function drawTokens(){
+  const cs = getComputedStyle(document.documentElement);
+  const toks = ['--bg','--bg2','--bg3','--bg4','--ink','--ink2','--ink3','--border','--brand','--brand-fill','--on-brand','--brand-text','--brand-wash-2','--pix','--amber','--red'];
+  document.getElementById('tokens').innerHTML = toks.map(t => `<div class="sw-tok"><i style="background:var(${t})"></i>${t.replace('--','')}<br>${cs.getPropertyValue(t).trim().slice(0,22)}</div>`).join('');
+}
+drawTokens(); document.addEventListener('kit:brand', () => setTimeout(drawTokens, 0));
+const M = [
+  ['Caneca Branca · R$ 39,90', {tipo:'reta', corpo:'#F7F4EE', arte:{texto:'Helena', cor:'#C2255C', desenho:'coracao'}}],
+  ['Caneca Alça Coração · R$ 49,90', {tipo:'coracao', corpo:'#F7F4EE', alca:'#D8436F', arte:{texto:'Mãe', cor:'#D8436F', sub:'A MELHOR'}}],
+  ['Caneca Alça Colorida · R$ 49,90', {tipo:'reta', corpo:'#F7F4EE', alca:'#3E6FB0', arte:{texto:'Café & Código', cor:'#3E6FB0', fonte:"'DM Sans',sans-serif", tam:14}}],
+  ['Caneca Chopp · R$ 70,00', {tipo:'chopp', corpo:'#E9D9B8', arte:{texto:'Padrinho', cor:'#6B3E12', fonte:"'Fraunces',serif", tam:20, sub:'BIA & LEO'}}],
+  ['Caneca Cromada Prata · R$ 69,00', {tipo:'cromada', corpo:'#B9BEC5', arte:{texto:'Formatura 2026', cor:'#1A1714', fonte:"'Fraunces',serif", tam:15}}],
+  ['Caneca Imperial Dourada · R$ 65,90', {tipo:'imperial', corpo:'#F7F4EE', alca:'#C9A45C', arte:{texto:'Vovó Lourdes', cor:'#8A6A2A', fonte:"'Fraunces',serif", tam:16, desenho:'folha'}}],
+  ['Caneca com Colher · R$ 49,00', {tipo:'colher', corpo:'#F7F4EE', arte:{texto:'Bom dia', cor:'#2F7D5B', desenho:'folha'}}],
+  ['Camisa Algodão Básico · R$ 59,99', {tipo:'camiseta', corpo:'#F4F1EA', arte:{texto:'Time Sheid', cor:'#1a1612', fonte:"'Fraunces',serif", tam:16, sub:'SÃO JOSÉ DOS CAMPOS'}}],
+  ['Copo Stanley · R$ 49,99', {tipo:'copo', corpo:'#2C4A3E', alca:'#20362D', arte:{texto:'Ana', cor:'#F4E9D0', desenho:'estrela'}}],
+];
+document.getElementById('mugs').innerHTML = M.map(([n,o]) => `<figure><div class="shot">${KIT.produto(o)}</div><figcaption>${n}</figcaption></figure>`).join('');
+const I = ['bag','search','back','next','down','arrow','share','wa','check','lock','truck','store','moto','pix','card','cash','upload','image','brush','ruler','info','alert','close','plus','minus','edit','trash','copy','clock','calendar','rotate','zoom','menu','shield','box','eye','receipt','user','pin','instagram','heart','layers','text','palette','refresh','play'];
+document.getElementById('icons').innerHTML = I.map(n => `<div>${KIT.icon(n,'lg')}${n}</div>`).join('');
+</script>
+</body>
+</html>

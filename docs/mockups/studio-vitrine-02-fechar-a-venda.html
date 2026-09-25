@@ -1,0 +1,1694 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vitrine Studio — Fase 2: Fechar a venda</title>
+<!--
+  ============================================================
+  Mockup standalone — Fase 2 "Fechar a venda" da normalização da Vitrine
+  Studio, 25/09/2026. Regra 4 do CLAUDE.md: mockup antes do código.
+
+  FASE E ESCOPO (FASEAMENTO_VITRINE_STUDIO.md §4 "Fase 2 — Fechar a
+  venda", 19/10–13/11, atrás da chave vitrine_v2): o cliente termina o
+  pedido no celular sem se perder, paga o Pix e vê o status mudar
+  sozinho. Sacola em gaveta, checkout em 3 etapas portado da Negócio,
+  tela do Pix com comprovante e "Já paguei", volta do cartão com status
+  real, confirmação persistente em /<slug>/pedido/<token>, guarda de
+  pedido duplicado e o orçamento em lote rápido.
+  Cobre JORNADA_CLIENTE_VITRINE.md §4.5, §4.6, §4.7, §4.8 e §4.11.
+
+  DE ONDE VEM:
+    Docs   docs/studio/JORNADA_CLIENTE_VITRINE.md §2, §3, §4.5–4.8, §4.11
+           docs/studio/FASEAMENTO_VITRINE_STUDIO.md §3.3, §4 Fase 2
+    Kit    docs/mockups/studio-vitrine-00-kit.html (blocos KIT:BEGIN/END
+           e KIT:SPRITE copiados sem mudar uma vírgula)
+    Negócio (referência validada, textos e fluxo portados)
+           Aura-backend/src/templates/storefront/parts/checkout.js
+             (3 etapas, máscaras, ViaCEP, cotação pelo CEP, "Quero
+             CPF/CNPJ na nota fiscal", aura_customer_{slug} por 90 dias,
+             aura_pending_order_{slug}, "Você paga no Mercado Pago e volta
+             pra cá", "Usamos o WhatsApp só para avisar sobre o pedido")
+           parts/sacola.js (sacola de 7 dias, resumo da direita, "Ver
+             itens", desconto do Pix só sobre o subtotal)
+           parts/pix.js (Copiar código → Copiado, polling de 4 s, "Já
+             paguei", "Anexar comprovante (opcional) · Anexar agiliza a
+             confirmação do lojista", sobreposição "Pagamento recebido")
+           parts/bootstrap.js (volta do cartão: aprovado / em análise /
+             não aprovado)
+           storefrontHtml.js:334-390 (gaveta "Sacola", checkout em página
+             inteira, "Compra segura", "Seus dados são protegidos e
+             usados só para este pedido")
+    Studio (o que existe hoje e é mantido/melhorado)
+           components/studio/storefront/Cart.tsx (CartBar, CartItemList
+             com LivePreview, Editar/Remover, "+ verso", Orçamento)
+           Checkout.tsx (modalidades pickup/delivery/courier do config,
+             nome e placa do entregador, Pix/Cartão/Pagar na retirada,
+             prazo de produção, botão que diz o que falta)
+           SentConfirmation.tsx (Pix, "Próximos passos", política de
+             revisões, track_url, "+ Personalizar outro")
+           OrcamentoEmLote.tsx + loteDaVitrine.ts (bulk-quote, rascunho,
+             proximoDegrau, fraseDoPrazo, telefoneValido, pendenciaDoLote)
+           oQueFaltaNoCheckout.ts, pedidoPeloWhatsApp.ts, courierPlate.ts
+             (maskPlate / normalizePlate), precoNoPix.ts, parcelamento.ts
+
+  DECISÕES DO PO (25/09) APLICADAS:
+    - Só a cor principal da lojista pinta a vitrine (verde do Pix, âmbar,
+      vermelho e azul de estado não mudam com a loja).
+    - Sacola em gaveta: lateral no desktop, folha de baixo no celular.
+    - Quantidade digitável, além do − / +.
+    - CPF/CNPJ opcional no checkout ("Quero CPF/CNPJ na nota").
+    - Pix pendente cancela sozinho em 72 horas.
+    - "Powered by Aura" sai do fixo; a confirmação assina só no rodapé
+      institucional ("Loja desenvolvida com Aura.").
+    - Aviso de cookies não aparece por cima de nenhuma barra de compra.
+  EXEMPLOS (não são configuração real da Sheid):
+    - 5% no Pix (a Sheid hoje não dá desconto; é configurável).
+    - "2 revisões inclusas, revisão extra R$ 10,00".
+    - Verso da Caneca Alça Coração +R$ 8,00; frete para o CEP de exemplo
+      R$ 12,00; até 3x sem juros no cartão.
+    - Escada da caneca: 10 un −5% · 20 un −10% · 50 un −15%; prazo por
+      faixa: até 9 un 3 d.u. · 10–49 un 5 d.u. · 50+ un 8 d.u.
+
+  TELAS:
+    1. Sacola em gaveta (folha no celular, lateral no desktop), com o
+       toast "Adicionado à sacola", sacola vazia e loja fechada
+    2. Checkout · 1 Seus dados (dados lembrados, CPF/CNPJ com validação)
+    3. Checkout · 2 Entrega (CEP primeiro, três modos, fora da área)
+    4. Checkout · 3 Pagamento (Pix, cartão, na retirada; revisões acima
+       do botão; botão diz o total ou o que falta)
+    5. Tela do Pix (copiar, QR, validade de 72 h, comprovante, "Já
+       paguei", aguardando a loja, pagamento recebido)
+    6. Volta do cartão (aprovado, em análise, recusado)
+    7. Confirmação que sobrevive ao F5 (/sheid-mania/pedido/<token>)
+    8. Proteção contra pedido duplicado
+    9. Orçamento em lote rápido (Marcos, 50 canecas)
+
+  PERGUNTAS EM ABERTO PARA O PO:
+    1. Adicional de serviço de arte por UNIDADE ou por LINHA? Hoje
+       lineUnitPrice (useStorefront.ts:130) soma por unidade: 2 canecas
+       com a mesma foto pagam R$ 20,00 de "vocês ajustam". O mockup segue
+       a regra atual; a proposta é cobrar uma vez por linha.
+    2. A escada de desconto conta por linha (hoje) ou soma as canecas da
+       sacola? A Caneca Branca e a Alça Coração não se somam para chegar a 10.
+    3. "Que bom te ver de novo" supõe o gênero. Neutro: "Que bom te ver de
+       novo, Helena". Qual a regra?
+    4. Retirada por app pede nome e placa NO CHECKOUT, mas o cliente só
+       sabe quem vem quando chama o app, dias depois. Aceitar "informo
+       depois" (pelo link de acompanhamento)? Hoje o servidor exige.
+    5. "Fazer um novo" (Tela 8) deixa o #00123 aberto até vencer em 72 h
+       ou cancela na hora?
+    6. "Pagar na retirada" em peça personalizada: a Sheid produz sem
+       sinal? Esconder para personalizados, ou pedir sinal no Pix?
+    7. Pix no celular: "Copiar código" é o botão principal e o QR fica
+       recolhido (ninguém escaneia a própria tela); no desktop o QR é o
+       principal. De acordo?
+    8. Número do orçamento em lote com sequência própria ("L-0042")?
+       Precisa de coluna/sequência no backend (bulk-order).
+    9. Prazo de entrega em casa ("chega 1 dia útil depois de pronto")
+       vem de delivery_eta_text da loja ou da cotação?
+  ============================================================
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Instrument+Serif:ital@0;1&family=Pacifico&display=swap">
+<style>
+/* === KIT:BEGIN ============================================== */
+:root{
+  /* papel (theme.ts) — ink3 ajustado para AA */
+  --bg:#FBF8F3; --bg2:#FFFFFF; --bg3:#F6F1E8; --bg4:#F0E9DC;
+  --ink:#1A1714; --ink2:#4A443C; --ink3:#756C61; --ink4:#B4A99A;
+  --border:#E7DFD3; --border2:#D9CFBF;
+  /* cor da loja: preenchidas pelo JS (applyBrand) */
+  --brand:#1a1612; --brand-text:#1a1612; --brand-fill:#1a1612; --on-brand:#FFFFFF;
+  --brand-wash:rgba(26,22,18,.06); --brand-wash-2:rgba(26,22,18,.12); --brand-ring:rgba(26,22,18,.28);
+  /* semânticas — não mudam com a loja */
+  --pix:#0E7A43; --pix-soft:#E3F4EA;
+  --amber:#8A4B0A; --amber-soft:#FDF0DA;
+  --red:#B42318; --red-soft:#FDE8E6;
+  --info:#1D4E89; --info-soft:#E6EEF8;
+  /* tipografia */
+  --f-display:'Fraunces','Instrument Serif',Georgia,serif;
+  --f-display-w:500;
+  --f-body:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  /* números, rótulos e códigos: Bricolage Grotesque (decisão do PO, 25/09; substitui a DM Mono) */
+  --f-num:'Bricolage Grotesque','DM Sans',-apple-system,sans-serif;
+  /* raio, sombra, movimento */
+  --r-sm:6px; --r-md:10px; --r-lg:14px; --r-xl:20px; --r-pill:999px;
+  --sh-1:0 1px 2px rgba(26,23,20,.06),0 1px 1px rgba(26,23,20,.04);
+  --sh-2:0 8px 24px -10px rgba(26,23,20,.22),0 2px 6px rgba(26,23,20,.06);
+  --sh-3:0 24px 60px -20px rgba(26,23,20,.35),0 4px 12px rgba(26,23,20,.08);
+  --ease:cubic-bezier(.4,0,.2,1); --t-fast:150ms; --t:220ms;
+}
+*{box-sizing:border-box}
+.sv{font-family:var(--f-body);color:var(--ink);background:var(--bg);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.sv h1,.sv h2,.sv h3,.sv .display{font-family:var(--f-display);font-weight:var(--f-display-w);letter-spacing:-.01em;line-height:1.12;margin:0;text-wrap:balance;color:var(--ink)}
+.sv p{margin:0}
+.sv .t-h1{font-size:34px}.sv .t-h2{font-size:26px}.sv .t-h3{font-size:20px}
+.sv .t-body{font-size:15px}.sv .t-small{font-size:13px;color:var(--ink2)}.sv .t-cap{font-size:12.5px;color:var(--ink3)}
+.sv .label{font:500 11px/1.2 var(--f-num);letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
+.sv .mono,.sv .price,.sv .num{font-family:var(--f-num);font-variant-numeric:tabular-nums;font-feature-settings:'tnum' 1}
+.sv .price{font-weight:600;color:var(--ink);letter-spacing:-.01em}
+.sv .price-lg{font:700 28px/1 var(--f-num);letter-spacing:-.025em}
+.sv .pix-line{color:var(--pix);font-size:13px;font-weight:600}
+.sv .brand-text{color:var(--brand-text)}
+
+/* ícones */
+.ic{width:20px;height:20px;flex:none;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+.ic.sm{width:16px;height:16px}.ic.lg{width:24px;height:24px}
+
+/* botões */
+.btn{appearance:none;border:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;height:48px;padding:0 20px;border-radius:12px;font:600 15px/1 var(--f-body);letter-spacing:.005em;transition:transform var(--t-fast) var(--ease),box-shadow var(--t) var(--ease),background var(--t) var(--ease);white-space:nowrap;text-decoration:none}
+.btn:active{transform:scale(.98)}
+.btn:focus-visible{outline:2px solid var(--brand-text);outline-offset:2px}
+.btn-primary{background:var(--brand-fill);color:var(--on-brand);box-shadow:0 6px 18px -8px var(--brand-ring)}
+.btn-primary:hover{box-shadow:0 10px 24px -8px var(--brand-ring);transform:translateY(-1px)}
+.btn-secondary{background:var(--bg2);color:var(--ink);border:1px solid var(--border2)}
+.btn-secondary:hover{border-color:var(--ink3)}
+.btn-ghost{background:transparent;color:var(--brand-text);height:40px;padding:0 10px}
+.btn-pix{background:var(--pix);color:#fff}
+.btn-wa{background:#1F7A4D;color:#fff}
+.btn-block{width:100%}
+.btn-sm{height:36px;padding:0 14px;font-size:13.5px;border-radius:10px}
+.btn[disabled]{background:var(--bg4);color:var(--ink3);box-shadow:none;cursor:not-allowed}
+.icon-btn{appearance:none;border:0;background:transparent;width:44px;height:44px;border-radius:12px;display:inline-grid;place-items:center;color:var(--ink);cursor:pointer;position:relative}
+.icon-btn:hover{background:var(--bg3)}
+.count{position:absolute;top:6px;right:5px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--brand-fill);color:var(--on-brand);font:700 10.5px/18px var(--f-num);text-align:center}
+
+/* chips (opções, entrega, pagamento) */
+.chip{appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:8px 14px;border-radius:12px;border:1px solid var(--border2);background:var(--bg2);color:var(--ink);font:500 14px/1.2 var(--f-body);transition:border-color var(--t) var(--ease),background var(--t) var(--ease)}
+.chip:hover{border-color:var(--ink3)}
+.chip[aria-pressed="true"],.chip.on{border-color:var(--brand-text);background:var(--brand-wash);box-shadow:inset 0 0 0 1px var(--brand-text)}
+.chip .delta{font:600 12px var(--f-num);color:var(--ink3)}
+.swatch{width:36px;height:36px;border-radius:50%;border:1px solid rgba(0,0,0,.12);box-shadow:inset 0 0 0 3px var(--bg2);cursor:pointer}
+.swatch.on{outline:2px solid var(--brand-text);outline-offset:2px}
+
+/* campos */
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:13px;font-weight:600;color:var(--ink2)}
+.field .opt{font-weight:400;color:var(--ink3)}
+.input{height:48px;border-radius:12px;border:1px solid var(--border2);background:var(--bg2);padding:0 14px;font:400 15px var(--f-body);color:var(--ink);width:100%;transition:border-color var(--t),box-shadow var(--t)}
+.input::placeholder{color:var(--ink4)}
+.input:focus{outline:0;border-color:var(--brand-text);box-shadow:0 0 0 3px var(--brand-wash-2)}
+.input.err{border-color:var(--red);box-shadow:0 0 0 3px var(--red-soft)}
+.field .hint{font-size:12.5px;color:var(--ink3)}
+.field .error{font-size:12.5px;color:var(--red);display:flex;gap:6px;align-items:center}
+
+/* superfícies */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg)}
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-xl);box-shadow:var(--sh-1)}
+.divider{height:1px;background:var(--border);border:0;margin:0}
+.badge{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:var(--r-pill);font:500 11px/1 var(--f-num);letter-spacing:.06em;text-transform:uppercase}
+.badge-brand{background:var(--brand-fill);color:var(--on-brand)}
+.badge-soft{background:var(--bg2);color:var(--ink);box-shadow:var(--sh-1)}
+.badge-pix{background:var(--pix-soft);color:var(--pix)}
+.badge-amber{background:var(--amber-soft);color:var(--amber)}
+.note{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:12px;font-size:13.5px}
+.note-amber{background:var(--amber-soft);color:var(--amber)}
+.note-info{background:var(--info-soft);color:var(--info)}
+.note-pix{background:var(--pix-soft);color:var(--pix)}
+.note-red{background:var(--red-soft);color:var(--red)}
+
+/* foto de produto: a caneca ilustrada sobre o papel */
+.shot{position:relative;aspect-ratio:4/5;border-radius:var(--r-lg);overflow:hidden;background:radial-gradient(120% 90% at 50% 30%,#FFFFFF 0%,var(--bg3) 62%,var(--bg4) 100%);display:grid;place-items:center}
+.shot svg.prod{width:78%;height:auto}
+.shot .badge{position:absolute;top:10px;left:10px}
+
+/* ---------- moldura do mockup (não é produto) ---------- */
+.mk-body{margin:0;background:#E9E6E1;color:#1d1d1f;font-family:var(--f-body)}
+.mk-bar{position:sticky;top:0;z-index:50;background:#16181D;color:#E8EAF0;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:10px 20px;font-size:12.5px}
+.mk-bar b{font:600 12px var(--f-num);letter-spacing:.08em;text-transform:uppercase;color:#fff}
+.mk-grp{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.mk-grp span{color:#9BA1AE;margin-right:2px}
+.mk-seg{appearance:none;border:1px solid #333845;background:#1F222A;color:#E8EAF0;border-radius:8px;height:30px;padding:0 10px;font:500 12px var(--f-body);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.mk-seg[aria-pressed="true"]{background:#E8EAF0;color:#16181D;border-color:#E8EAF0}
+.mk-dot{width:12px;height:12px;border-radius:50%;border:1px solid rgba(255,255,255,.35)}
+.mk-wrap{max-width:1480px;margin:0 auto;padding:32px 20px 80px;display:flex;flex-direction:column;gap:56px}
+.mk-intro{max-width:760px;display:flex;flex-direction:column;gap:10px}
+.mk-intro h1{font:600 30px/1.15 var(--f-body);margin:0;letter-spacing:-.01em}
+.mk-intro p{margin:0;color:#4a4a4f;font-size:15px;line-height:1.6}
+.mk-screen{display:grid;grid-template-columns:300px 1fr;gap:28px;align-items:start}
+.mk-screen+.mk-screen{border-top:1px solid #d3cfc8;padding-top:48px}
+.mk-meta{position:sticky;top:70px;display:flex;flex-direction:column;gap:10px}
+.mk-meta .mk-n{font:500 11px var(--f-num);letter-spacing:.14em;text-transform:uppercase;color:#8a5a00}
+.mk-meta h2{font:600 20px/1.25 var(--f-body);margin:0}
+.mk-meta p{margin:0;font-size:14px;line-height:1.55;color:#4a4a4f}
+.mk-meta ul{margin:0;padding-left:18px;font-size:13px;line-height:1.5;color:#4a4a4f;display:flex;flex-direction:column;gap:5px}
+.mk-meta code{font:12px var(--f-num);background:#dcd8d1;padding:1px 5px;border-radius:4px}
+.mk-frames{display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap;min-width:0}
+.phone{width:390px;height:844px;border-radius:48px;background:#0F0F11;padding:11px;box-shadow:0 30px 60px -25px rgba(0,0,0,.45);flex:none;position:relative}
+.phone>.screen{width:100%;height:100%;border-radius:38px;overflow:hidden;position:relative;background:var(--bg)}
+.phone>.screen>.scroll{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none}
+.phone>.screen>.scroll::-webkit-scrollbar{display:none}
+.phone .notch{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:120px;height:30px;background:#0F0F11;border-radius:0 0 18px 18px;z-index:40}
+.statusbar{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px 0 30px;font:600 14px var(--f-body);color:var(--ink)}
+.desk-fit{flex:1 1 640px;min-width:0}
+.desk{width:1280px;border-radius:14px;overflow:hidden;background:var(--bg);box-shadow:0 30px 60px -25px rgba(0,0,0,.4);transform-origin:top left}
+.chrome{height:40px;background:#ECE8E2;display:flex;align-items:center;gap:14px;padding:0 14px;border-bottom:1px solid #DDD7CE}
+.chrome i{width:11px;height:11px;border-radius:50%;background:#D3CCC2;display:inline-block}
+.chrome .url{flex:1;max-width:560px;height:26px;border-radius:8px;background:#fff;font:12px/26px var(--f-num);color:#6b6459;padding:0 12px;display:flex;gap:6px;align-items:center}
+.desk .viewport{height:820px;overflow-y:auto;position:relative}
+.mk-hide-phone .phone,.mk-hide-desk .desk-fit{display:none}
+@media (max-width:1000px){.mk-screen{grid-template-columns:1fr}.mk-meta{position:static}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+/* === KIT:END ================================================ */
+
+/* ---------- só desta página ---------- */
+/* moldura: controles de estado e cronômetro da intro */
+.mk-states{display:flex;flex-wrap:wrap;gap:6px}
+.mk-states button,.mk-act{appearance:none;border:1px solid #c9c3b9;background:#f6f3ee;color:#1d1d1f;border-radius:8px;min-height:34px;padding:0 11px;font:500 12.5px var(--f-body);cursor:pointer}
+.mk-states button[aria-pressed="true"]{background:#16181D;color:#fff;border-color:#16181D}
+.mk-act{background:#16181D;color:#fff;border-color:#16181D;display:inline-flex;align-items:center;gap:6px}
+.mk-act.alt{background:#f6f3ee;color:#1d1d1f;border-color:#c9c3b9}
+.mk-states button:focus-visible,.mk-act:focus-visible{outline:2px solid #8a5a00;outline-offset:2px}
+.mk-meta .mk-dec{font-size:12.5px;color:#8a5a00;line-height:1.5}
+.mk-clock{background:#fff;border:1px solid #dcd6cc;border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:12px;max-width:900px}
+.mk-clock-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px}
+.mk-clock-h b{font:600 17px var(--f-body)}
+.mk-clock-h span{font-size:13px;color:#5a5a60}
+.mk-bars{display:flex;flex-direction:column;gap:8px}
+.mk-barrow{display:grid;grid-template-columns:128px 1fr 64px;gap:10px;align-items:center;font-size:12.5px;color:#4a4a4f}
+.mk-track{display:flex;height:26px;border-radius:7px;overflow:hidden;background:#f1eee8}
+.mk-track span{display:flex;align-items:center;padding:0 7px;font:500 11px var(--f-num);color:#fff;white-space:nowrap;overflow:hidden;border-right:2px solid #fff}
+.mk-track span:nth-child(1){background:#3b3f4a}.mk-track span:nth-child(2){background:#565c6b}.mk-track span:nth-child(3){background:#6f7686}.mk-track span:nth-child(4){background:#8a91a0}.mk-track span:nth-child(5){background:#0E7A43}
+.mk-cartline{display:flex;flex-wrap:wrap;gap:10px}
+.mk-cartline div{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid #dcd6cc;border-radius:12px;padding:8px 12px 8px 8px;font-size:13px;color:#3a3a3f;line-height:1.35}
+.mk-cartline .shot{width:52px;aspect-ratio:1;border-radius:10px}
+.mk-cartline .shot svg.prod{width:96%}
+.home-ind{position:absolute;bottom:17px;left:50%;transform:translateX(-50%);width:128px;height:5px;border-radius:3px;background:rgba(26,23,20,.28);z-index:45;pointer-events:none}
+.phone{position:relative}
+
+/* base das telas dentro das molduras */
+.app{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--bg);overflow:hidden}
+.desk .viewport.app-host{overflow:hidden}
+.app-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;position:relative;overscroll-behavior:contain}
+.phone .app-scroll{scrollbar-width:none}.phone .app-scroll::-webkit-scrollbar{display:none}
+.statusbar{flex:none}
+.statusbar svg{display:block}
+.sv .lnk{appearance:none;border:0;background:none;color:var(--brand-text);font:600 14px var(--f-body);min-height:44px;padding:0 4px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px;border-radius:8px}
+.sv .lnk:focus-visible,.sv .opc:focus-visible,.sv .rs-bar:focus-visible,.sv .proof:focus-visible,.sv .stp:focus-visible,.sv .pc:focus-visible{outline:2px solid var(--brand-text);outline-offset:2px}
+.sv .lnk.mute{color:var(--ink2)}
+.sv .btn[aria-disabled="true"]{background:var(--bg4);color:var(--ink2);box-shadow:none;cursor:pointer}
+.sv .btn[aria-disabled="true"]:hover{transform:none;box-shadow:none}
+.sv .btn-wa:hover,.sv .btn-pix:hover{filter:brightness(1.06)}
+.gratis{color:var(--pix);font-weight:600}
+.spin{width:16px;height:16px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;display:inline-block;animation:spin .8s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.rot{transform:rotate(180deg)}
+.wm{font-family:var(--f-display);font-weight:var(--f-display-w);font-size:21px;line-height:1;color:var(--brand-text);letter-spacing:-.015em;white-space:nowrap}
+
+/* cabeçalho da loja */
+.st-head{flex:none;height:56px;display:flex;align-items:center;gap:2px;padding:0 6px;border-bottom:1px solid var(--border);background:var(--bg)}
+.st-head .wm{flex:1;text-align:center}
+.desk .st-head{height:68px;padding:0 28px;gap:24px}
+.desk .st-head .wm{flex:none;text-align:left;font-size:25px}
+.st-nav{display:flex;gap:26px;flex:1;font-size:14px;color:var(--ink2)}
+.st-nav span:first-child{color:var(--ink);font-weight:600}
+.hsp{width:44px;flex:none}
+
+/* página do produto (fundo da gaveta) */
+.pp-shot{border-radius:0;aspect-ratio:1/1}
+.pp-shot svg.prod{width:70%}
+.pp-info{padding:18px 16px 24px;display:flex;flex-direction:column;gap:10px}
+.pp-price{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.pp-sel{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-radius:14px;background:var(--bg2);border:1px solid var(--border);font-size:14px}
+.pp-bar{flex:none;padding:10px 16px 26px;border-top:1px solid var(--border);background:var(--bg2)}
+.pp-d{display:grid;grid-template-columns:1.05fr 1fr;gap:56px;max-width:1140px;margin:0 auto;padding:32px 40px 60px}
+.pp-d .shot{aspect-ratio:1/1}
+.pp-d .pp-info{padding:8px 0 0;gap:14px}
+.pp-d .btn{align-self:flex-start;min-width:280px}
+.prazo{display:flex;gap:8px;align-items:flex-start;font-size:13.5px;color:var(--ink2)}
+.prazo .ic{color:var(--brand-text);margin-top:1px}
+
+/* gaveta e folha */
+.scrim{position:absolute;inset:0;background:rgba(22,18,14,.44);z-index:20;cursor:pointer}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:21;max-height:91%;display:flex;flex-direction:column;background:var(--bg);border-radius:24px 24px 0 0;box-shadow:var(--sh-3)}
+.sheet .grab{width:40px;height:5px;border-radius:3px;background:var(--border2);margin:8px auto 0;flex:none}
+.drawer{position:absolute;top:0;right:0;bottom:0;width:440px;z-index:21;display:flex;flex-direction:column;background:var(--bg);box-shadow:var(--sh-3)}
+.anim-up{animation:up var(--t) var(--ease)}@keyframes up{from{transform:translateY(60px);opacity:.3}}
+.anim-in{animation:inr var(--t) var(--ease)}@keyframes inr{from{transform:translateX(60px);opacity:.3}}
+.anim-fade{animation:fade var(--t) var(--ease)}@keyframes fade{from{opacity:0}}
+.dr-head{flex:none;display:flex;align-items:center;gap:8px;padding:6px 6px 8px 20px;border-bottom:1px solid var(--border)}
+.dr-head h2{font-size:22px}
+.dr-head .n{flex:1;font:500 12px var(--f-num);color:var(--ink3);letter-spacing:.04em;padding-top:4px;font-variant-numeric:tabular-nums}
+.dr-body{flex:1;min-height:0;overflow-y:auto;padding:0 20px;scrollbar-width:thin}
+.dr-foot{flex:none;padding:14px 20px 26px;border-top:1px solid var(--border);background:var(--bg2);display:flex;flex-direction:column;gap:10px}
+.desk .dr-foot{padding-bottom:20px}
+.dr-foot .wa-link{align-self:center;font-size:13px}
+
+/* miniatura do mockup */
+.th{position:relative;flex:none;width:var(--s,56px);height:var(--s,56px);border-radius:12px;background:radial-gradient(120% 90% at 50% 30%,#FFFFFF 0%,var(--bg3) 62%,var(--bg4) 100%);display:grid;place-items:center;border:1px solid var(--border)}
+.th svg.prod{width:100%;height:auto}
+.th .q{position:absolute;top:-7px;right:-7px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:var(--ink);color:var(--bg2);font:600 11px/20px var(--f-num);text-align:center;font-variant-numeric:tabular-nums}
+
+/* itens da sacola */
+.bag{list-style:none;margin:0;padding:0}
+.bi{display:grid;grid-template-columns:84px 1fr;gap:14px;padding:16px 0;border-bottom:1px solid var(--border)}
+.bi:last-child{border-bottom:0}
+.bi-art{display:flex;flex-direction:column;align-items:center}
+.bi-art .lnk{font-size:13px;min-height:40px}
+.bi-info{display:flex;flex-direction:column;gap:2px;min-width:0}
+.bi-top{display:flex;align-items:flex-start;gap:2px}
+.bi-nome{flex:1;font-weight:600;font-size:15px;line-height:1.3;padding-top:3px}
+.bi-top .icon-btn{margin:-8px -10px -6px 0;color:var(--ink3)}
+.bi-top .icon-btn:hover{color:var(--red)}
+.bi-desc{font-size:13.5px;color:var(--ink2)}
+.bi-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px}
+.bi-row .price{font-size:15px}
+.bi-nudge{display:flex;gap:6px;align-items:center;font-size:12.5px;color:var(--brand-text);font-weight:600;margin-top:4px}
+.bi .badge{align-self:flex-start;margin-top:4px}
+.qty{display:inline-flex;align-items:center;border:1px solid var(--border2);border-radius:12px;background:var(--bg2);height:44px;overflow:hidden;flex:none}
+.qb{appearance:none;border:0;background:transparent;width:44px;height:44px;display:grid;place-items:center;color:var(--ink);cursor:pointer}
+.qb:hover{background:var(--bg3)}
+.qb[aria-disabled="true"]{color:var(--ink4);cursor:default}
+.qb:focus-visible,.qi:focus-visible{outline:2px solid var(--brand-text);outline-offset:-2px}
+.qi{width:46px;height:44px;border:0;border-left:1px solid var(--border);border-right:1px solid var(--border);border-radius:0;text-align:center;font:500 15px var(--f-num);color:var(--ink);background:transparent;padding:0;font-variant-numeric:tabular-nums}
+.qi:focus{outline:0;background:var(--brand-wash)}
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:12px;padding:36px 28px}
+.empty .ring{width:84px;height:84px;border-radius:50%;background:var(--brand-wash);color:var(--brand-text);display:grid;place-items:center;margin-bottom:6px}
+.empty .ring .ic{width:36px;height:36px;stroke-width:1.5}
+.empty p{color:var(--ink2);max-width:300px}
+
+/* resumo e totais */
+.sum{display:flex;flex-direction:column;gap:7px}
+.sr{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:14px;color:var(--ink2)}
+.sr .v{font-family:var(--f-num);font-variant-numeric:tabular-nums;color:var(--ink);white-space:nowrap;text-align:right}
+.sr .v.gratis{color:var(--pix);font-family:var(--f-body)}
+.sr.pix,.sr.pix .v{color:var(--pix)}
+.sr.muted .v{font-family:var(--f-body);color:var(--ink3);font-size:13px}
+.sr.total{padding-top:10px;margin-top:3px;border-top:1px solid var(--border);font-size:16px;color:var(--ink);font-weight:600}
+.sr.total .v{font-size:19px;font-weight:500}
+.ri{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px}
+.ri li{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center}
+.ri b{display:block;font-size:14px;font-weight:600;line-height:1.3}
+.ri li span.d{display:block;font-size:12.5px;color:var(--ink3);line-height:1.35}
+.ri .price{font-size:14px}
+
+/* toasts */
+.toast{position:absolute;z-index:35;left:12px;right:12px;top:108px;display:flex;align-items:center;gap:12px;padding:10px 8px 10px 10px;border-radius:16px;background:var(--ink);color:var(--bg2);box-shadow:var(--sh-3);font-size:13.5px;line-height:1.4}
+.toast .th{--s:48px;border:0}
+.toast b{display:block;font-size:14px}
+.toast span.d{color:rgba(255,255,255,.72);font-size:12.5px}
+.toast .tx{flex:1;min-width:0}
+.toast button{appearance:none;border:0;background:rgba(255,255,255,.12);color:#fff;font:600 13.5px var(--f-body);min-height:44px;padding:0 14px;border-radius:12px;cursor:pointer;white-space:nowrap}
+.toast button:hover{background:rgba(255,255,255,.2)}
+.toast button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.desk .toast{left:auto;right:28px;top:84px;width:400px}
+.toast.anim{animation:tdown var(--t) var(--ease)}@keyframes tdown{from{transform:translateY(-14px);opacity:0}}
+
+/* checkout */
+.co-head{flex:none;height:56px;display:flex;align-items:center;gap:2px;padding:0 12px 0 6px;border-bottom:1px solid var(--border);background:var(--bg)}
+.co-head .wm{flex:1;text-align:center;font-size:19px}
+.seguro{display:inline-flex;align-items:center;gap:5px;font:500 10.5px var(--f-num);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);white-space:nowrap}
+.seguro .ic{color:var(--pix)}
+.desk .co-head{height:64px;padding:0 28px;display:grid;grid-template-columns:1fr auto 1fr}
+.desk .co-head .wm{font-size:23px}
+.desk .co-head .seguro{justify-self:end}
+.desk .co-head .btn-ghost{justify-self:start;height:44px}
+.steps{display:flex;align-items:center;gap:8px;padding:16px 16px 14px}
+.stp{appearance:none;border:0;background:none;padding:0;display:flex;align-items:center;gap:7px;font:500 13px var(--f-body);color:var(--ink3);white-space:nowrap;min-height:44px;border-radius:10px}
+button.stp{cursor:pointer}
+button.stp:hover .sl{text-decoration:underline}
+.stp .dot{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border2);display:grid;place-items:center;font:600 12px var(--f-num);background:var(--bg2);flex:none;font-variant-numeric:tabular-nums}
+.stp.on{color:var(--ink);font-weight:600}
+.stp.on .dot{background:var(--brand-fill);color:var(--on-brand);border-color:var(--brand-fill)}
+.stp.done{color:var(--ink2)}
+.stp.done .dot{background:var(--brand-wash-2);color:var(--brand-text);border-color:transparent}
+.steps .ln{flex:1;height:1.5px;background:var(--border2);min-width:8px}
+.rs-bar{appearance:none;width:100%;border:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:var(--bg3);display:flex;align-items:center;gap:10px;padding:0 16px;height:56px;font:500 14px var(--f-body);color:var(--ink);cursor:pointer;text-align:left}
+.rs-bar .thumbs{display:flex}
+.rs-bar .thumbs .th{--s:34px;border-radius:9px;margin-left:-10px;box-shadow:0 0 0 2px var(--bg3)}
+.rs-bar .thumbs .th:first-child{margin-left:0}
+.rs-bar .tt{margin-left:auto;font:500 15px var(--f-num);font-variant-numeric:tabular-nums}
+.rs-open{padding:16px 16px 18px;background:var(--bg3);border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:14px}
+.co-body{padding:22px 16px 20px;display:flex;flex-direction:column;gap:18px}
+.co-top{display:flex;flex-direction:column;gap:6px}
+.co-top h2{font-size:26px}
+.co-top p{color:var(--ink2);font-size:14px}
+.co-foot{flex:none;padding:10px 16px 28px;border-top:1px solid var(--border);background:var(--bg2);display:flex;flex-direction:column;gap:8px}
+.co-foot .rev{display:flex;gap:7px;align-items:center;justify-content:center;font-size:12.5px;color:var(--ink2);text-align:center;line-height:1.35}
+.co-foot .rev .ic{color:var(--brand-text)}
+.co-foot-row{display:flex;gap:10px}
+.co-foot-row .btn-primary{flex:1}
+.protegido{display:flex;gap:6px;align-items:center;justify-content:center;font-size:12px;color:var(--ink3);text-align:center}
+.co-d{max-width:1120px;margin:0 auto;padding:12px 40px 56px;display:grid;grid-template-columns:1fr 380px;gap:32px;align-items:start}
+.co-d>.steps{grid-column:1/-1;max-width:560px;margin:0 auto;width:100%;padding:8px 0 0}
+.co-main{display:flex;flex-direction:column;gap:14px}
+.co-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-xl);box-shadow:var(--sh-1);overflow:hidden}
+.co-card .co-body{padding:28px 32px 26px}
+.co-card .co-foot{padding:16px 32px 20px;background:var(--bg)}
+.aside{position:sticky;top:20px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-xl);padding:22px;display:flex;flex-direction:column;gap:16px;box-shadow:var(--sh-1)}
+.aside-h{display:flex;justify-content:space-between;align-items:center}
+.field .ok{font-size:12.5px;color:var(--pix);display:flex;gap:6px;align-items:center;font-weight:500}
+.inw{position:relative}
+.inw .st{position:absolute;right:14px;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink3);pointer-events:none}
+.inw .st.ok{color:var(--pix)}
+.f-cep .input{font-family:var(--f-num);letter-spacing:.04em;font-variant-numeric:tabular-nums}
+.wb{display:flex;align-items:center;gap:12px;padding:12px 8px 12px 14px;border-radius:16px;background:var(--brand-wash);border:1px solid var(--brand-wash-2)}
+.av{width:42px;height:42px;border-radius:50%;background:var(--brand-fill);color:var(--on-brand);display:grid;place-items:center;font:600 17px var(--f-display);flex:none}
+.wb-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.wb-t b{font-family:var(--f-display);font-weight:var(--f-display-w);font-size:17px;line-height:1.2}
+.wb-t span{font-size:13px;color:var(--ink2)}
+.wb .lnk{font-size:13.5px;white-space:nowrap}
+.ck{display:flex;align-items:center;gap:12px;min-height:48px;cursor:pointer;font-size:15px;color:var(--ink);padding:2px 0}
+.ck input{appearance:none;-webkit-appearance:none;width:24px;height:24px;border-radius:7px;border:1.5px solid var(--border2);background:var(--bg2);display:grid;place-items:center;margin:0;flex:none;cursor:pointer;transition:background var(--t-fast)}
+.ck input:checked{background:var(--brand-fill);border-color:var(--brand-fill)}
+.ck input:checked::after{content:"";width:11px;height:6px;border-left:2px solid var(--on-brand);border-bottom:2px solid var(--on-brand);transform:rotate(-45deg) translate(1px,-1px)}
+.ck input:focus-visible{outline:2px solid var(--brand-text);outline-offset:2px}
+.row-num{display:grid;grid-template-columns:112px 1fr;gap:10px}
+.opts{display:flex;flex-direction:column;gap:10px}
+.optw{border:1px solid var(--border2);border-radius:16px;background:var(--bg2);transition:border-color var(--t) var(--ease),box-shadow var(--t) var(--ease)}
+.optw:hover{border-color:var(--ink3)}
+.optw.on{border-color:var(--brand-text);box-shadow:inset 0 0 0 1px var(--brand-text)}
+.optw.dis{background:var(--bg3);border-style:dashed}
+.optw.dis:hover{border-color:var(--border2)}
+.optw.dis .ot,.optw.dis .or{opacity:.72}
+.opc{appearance:none;background:transparent;border:0;width:100%;display:grid;grid-template-columns:22px 1fr auto;gap:12px;align-items:start;padding:15px 16px;text-align:left;cursor:pointer;font:inherit;color:var(--ink);border-radius:16px;min-height:60px}
+.optw.dis .opc{cursor:not-allowed}
+.rd{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--border2);background:var(--bg2);margin-top:1px;transition:border var(--t-fast)}
+.optw.on .rd{border:7px solid var(--brand-text)}
+.ot{display:flex;flex-direction:column;gap:3px;min-width:0}
+.oh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.oh b{font-weight:600;font-size:15.5px}
+.oh .ic{color:var(--ink2)}
+.os{font-size:13px;color:var(--ink2);line-height:1.45}
+.or{display:flex;flex-direction:column;align-items:flex-end;gap:2px;font:500 14.5px var(--f-num);white-space:nowrap;padding-top:1px}
+.or s{font-size:12px;color:var(--ink3)}
+.opt-more{padding:0 16px 16px 50px;display:flex;flex-direction:column;gap:12px;animation:fade var(--t) var(--ease)}
+.phone .opt-more{padding-left:16px}
+.addr{display:flex;gap:10px;align-items:flex-start;padding:12px;border-radius:12px;background:var(--bg3);font-size:13.5px;color:var(--ink2);line-height:1.45}
+.addr .ic{color:var(--brand-text);margin-top:1px}
+.addr b{color:var(--ink);font-weight:600}
+.why{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--ink2);line-height:1.45}
+.why .ic{color:var(--brand-text);margin-top:1px}
+.review{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:14px;background:var(--bg2)}
+.rv{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;padding:10px 8px 10px 14px}
+.rv+.rv{border-top:1px solid var(--border)}
+.rv .label{grid-column:1}
+.rv p{grid-column:1;font-size:14px;color:var(--ink)}
+.rv .lnk{grid-column:2;grid-row:1/3;font-size:13.5px}
+.ta{height:auto;min-height:92px;padding:12px 14px;line-height:1.5;resize:vertical}
+
+/* Pix */
+.pix-p{padding:20px 16px 32px;display:flex;flex-direction:column;gap:16px}
+.pix-hero{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px}
+.pix-val{font:500 38px/1.05 var(--f-num);letter-spacing:-.03em;color:var(--ink);font-variant-numeric:tabular-nums}
+.code-box{display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:16px;background:var(--bg2);border:1px solid var(--border)}
+.code{font:12px/1.5 var(--f-num);color:var(--ink2);background:var(--bg3);border-radius:10px;padding:9px 11px;word-break:break-all;max-height:58px;overflow:hidden;position:relative}
+.code::after{content:"";position:absolute;left:0;right:0;bottom:0;height:18px;background:linear-gradient(transparent,var(--bg3))}
+.valid{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--ink2)}
+.valid .ic{color:var(--amber);margin-top:1px}
+.passos{counter-reset:p;list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.passos li{display:grid;grid-template-columns:26px 1fr;gap:10px;font-size:14px;color:var(--ink2);line-height:1.45;align-items:start}
+.passos li::before{counter-increment:p;content:counter(p);width:26px;height:26px;border-radius:50%;background:var(--brand-wash-2);color:var(--brand-text);font:600 12px/26px var(--f-num);text-align:center;font-variant-numeric:tabular-nums}
+.passos b{color:var(--ink);font-weight:600}
+.qr-box{align-self:center;background:#fff;border:1px solid var(--border);border-radius:18px;padding:12px;box-shadow:var(--sh-1)}
+.qr{width:196px;height:196px;display:block}
+.live{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink3);align-self:center}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--pix);animation:pulse 1.6s infinite;flex:none}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(14,122,67,.45)}70%{box-shadow:0 0 0 8px rgba(14,122,67,0)}100%{box-shadow:0 0 0 0 rgba(14,122,67,0)}}
+.proof{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px dashed var(--border2);border-radius:14px;background:var(--bg2);cursor:pointer;width:100%;appearance:none;font:inherit;color:var(--ink);text-align:left;min-height:60px}
+.proof:hover{border-color:var(--ink3)}
+.proof .pi{width:40px;height:40px;border-radius:12px;background:var(--bg3);display:grid;place-items:center;color:var(--ink2);flex:none}
+.proof.done{border-style:solid;border-color:var(--pix);background:var(--pix-soft)}
+.proof.done .pi{background:var(--pix);color:#fff}
+.proof .tx{display:flex;flex-direction:column;gap:1px;font-size:14px}
+.proof .tx span{font-size:12.5px;color:var(--ink3)}
+.circ{width:76px;height:76px;border-radius:50%;display:grid;place-items:center;background:var(--pix-soft);color:var(--pix);flex:none}
+.circ .ic{width:36px;height:36px;stroke-width:2.1}
+.circ.amber{background:var(--amber-soft);color:var(--amber)}
+.circ.red{background:var(--red-soft);color:var(--red)}
+.circ.sm{width:56px;height:56px}.circ.sm .ic{width:26px;height:26px}
+.pop{animation:pop 420ms cubic-bezier(.2,1.4,.4,1)}@keyframes pop{from{transform:scale(.5);opacity:0}}
+.state-card{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:22px 18px;border-radius:18px;background:var(--bg2);border:1px solid var(--border)}
+.state-card p{color:var(--ink2);font-size:14.5px;max-width:420px}
+.pix-d{max-width:1000px;margin:0 auto;padding:36px 40px 56px}
+.pix-panel{display:grid;grid-template-columns:340px 1fr;background:var(--bg2);border:1px solid var(--border);border-radius:24px;box-shadow:var(--sh-2);overflow:hidden}
+.pix-left{background:var(--bg3);padding:32px 28px;display:flex;flex-direction:column;align-items:center;gap:14px;border-right:1px solid var(--border)}
+.pix-left .qr{width:236px;height:236px}
+.pix-right{padding:32px 36px;display:flex;flex-direction:column;gap:18px}
+.pix-right .pix-hero{align-items:flex-start;text-align:left}
+
+/* linha do tempo */
+.tl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.tl li{display:grid;grid-template-columns:30px 1fr;gap:12px;position:relative;padding-bottom:18px}
+.tl li::before{content:"";position:absolute;left:14px;top:30px;bottom:0;width:2px;background:var(--border)}
+.tl li:last-child{padding-bottom:0}.tl li:last-child::before{display:none}
+.tl .nd{width:30px;height:30px;border-radius:50%;border:2px solid var(--border2);background:var(--bg2);display:grid;place-items:center;color:var(--ink3);position:relative;z-index:1}
+.tl .nd .ic{width:15px;height:15px}
+.tl li.on .nd{background:var(--brand-fill);border-color:var(--brand-fill);color:var(--on-brand);box-shadow:0 0 0 5px var(--brand-wash-2)}
+.tl b{font-weight:600;font-size:15px;display:block;line-height:1.3;padding-top:4px}
+.tl li:not(.on) b{color:var(--ink2);font-weight:500}
+.tl span{font-size:13px;color:var(--ink3);line-height:1.4;display:block}
+.tl-h{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,1fr);position:relative}
+.tl-h::before{content:"";position:absolute;left:12.5%;right:12.5%;top:17px;height:2px;background:var(--border)}
+.tl-h li{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;position:relative;padding:0 10px}
+.tl-h .nd{width:36px;height:36px;border-radius:50%;border:2px solid var(--border2);background:var(--bg2);display:grid;place-items:center;color:var(--ink3);position:relative;z-index:1}
+.tl-h li.on .nd{background:var(--brand-fill);border-color:var(--brand-fill);color:var(--on-brand);box-shadow:0 0 0 6px var(--brand-wash-2)}
+.tl-h b{font-weight:600;font-size:15px}
+.tl-h li:not(.on) b{color:var(--ink2);font-weight:500}
+.tl-h span{font-size:13px;color:var(--ink3);line-height:1.4}
+
+/* confirmação */
+.cf{padding:22px 16px 28px;display:flex;flex-direction:column;gap:18px}
+.cf-hero{display:flex;flex-direction:column;gap:8px}
+.cf-hero .badge{align-self:flex-start}
+.cf-box{padding:18px;border-radius:18px;background:var(--bg2);border:1px solid var(--border);display:flex;flex-direction:column;gap:14px}
+.agora{padding:18px;border-radius:18px;background:var(--brand-wash);border:1px solid var(--brand-wash-2);display:flex;flex-direction:column;gap:8px}
+.agora .big{font-family:var(--f-display);font-weight:var(--f-display-w);font-size:20px;line-height:1.25;color:var(--ink)}
+.agora .t-small{display:flex;gap:7px;align-items:flex-start}
+.agora .t-small .ic{color:var(--brand-text);margin-top:2px}
+.btns{display:flex;flex-direction:column;gap:10px}
+.inst{text-align:center;font-size:12.5px;color:var(--ink3);line-height:1.6;padding-top:8px;border-top:1px solid var(--border)}
+.cf-d{max-width:1080px;margin:0 auto;padding:32px 40px 48px;display:flex;flex-direction:column;gap:24px}
+.cf-d .cf-hero{flex-direction:row;align-items:flex-end;justify-content:space-between;gap:20px}
+.cf-cols{display:grid;grid-template-columns:1fr 400px;gap:24px;align-items:start}
+.sk{background:linear-gradient(90deg,var(--bg3) 20%,var(--bg4) 40%,var(--bg3) 60%);background-size:300% 100%;animation:sk 1.1s linear infinite;border-radius:12px}
+@keyframes sk{from{background-position:100% 0}to{background-position:0 0}}
+
+/* diálogo (pedido duplicado) */
+.dialog{position:absolute;z-index:21;left:50%;top:50%;transform:translate(-50%,-50%);width:460px;background:var(--bg);border-radius:24px;box-shadow:var(--sh-3)}
+.dlg-b{padding:18px 20px 30px;display:flex;flex-direction:column;gap:14px}
+.dialog .dlg-b{padding:28px}
+.dup{display:flex;align-items:center;gap:12px;padding:12px;border-radius:14px;background:var(--bg2);border:1px solid var(--border)}
+.dup .thumbs{display:flex}
+.dup .thumbs .th{--s:40px;margin-left:-12px;box-shadow:0 0 0 2px var(--bg2)}
+.dup .thumbs .th:first-child{margin-left:0}
+.dup .tx{display:flex;flex-direction:column;font-size:13px;color:var(--ink2);line-height:1.4}
+.dup .tx b{font-size:14.5px;color:var(--ink);font-weight:600}
+
+/* orçamento em lote */
+.lt{padding:20px 16px 24px;display:flex;flex-direction:column;gap:20px}
+.lt-h{display:flex;flex-direction:column;gap:8px}
+.lt-h p{color:var(--ink2);font-size:14.5px}
+.pcs{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pc{appearance:none;display:flex;align-items:center;gap:10px;padding:8px 10px 8px 8px;border-radius:14px;border:1px solid var(--border2);background:var(--bg2);cursor:pointer;text-align:left;font:inherit;color:var(--ink);min-height:60px}
+.pc .th{--s:44px;border:0}
+.pc b{display:block;font-size:13.5px;font-weight:600;line-height:1.25}
+.pc span.d{font:500 12px var(--f-num);color:var(--ink3);font-variant-numeric:tabular-nums}
+.pc[aria-checked="true"]{border-color:var(--brand-text);box-shadow:inset 0 0 0 1px var(--brand-text);background:var(--brand-wash)}
+.lbl-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.cnt{font:500 12.5px var(--f-num);color:var(--brand-text);background:var(--brand-wash-2);padding:3px 9px;border-radius:999px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.ta-names{min-height:188px;font-size:14.5px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips span{font-size:12.5px;padding:4px 10px;border-radius:999px;background:var(--bg3);color:var(--ink2);border:1px solid var(--border)}
+.chips span.hl{background:var(--brand-wash);border-color:var(--brand-text);color:var(--ink)}
+.prev{display:flex;flex-direction:column;gap:14px;padding:18px;border-radius:18px;background:var(--bg2);border:1px solid var(--border)}
+.esc{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;align-items:end}
+.deg{border-radius:12px;padding:8px 8px 9px;background:var(--bg3);border:1px solid var(--border);display:flex;flex-direction:column;justify-content:flex-end;gap:1px;font-size:11.5px;color:var(--ink2);line-height:1.3}
+.deg b{font:500 14px var(--f-num);color:var(--ink);white-space:nowrap;font-variant-numeric:tabular-nums}
+.desk .deg b{font-size:15px}
+.deg .pct{font:600 11px var(--f-num);color:var(--pix);font-variant-numeric:tabular-nums}
+.deg:nth-child(1){height:78px}.deg:nth-child(2){height:92px}.deg:nth-child(3){height:106px}.deg:nth-child(4){height:120px}
+.deg.on{background:var(--brand-fill);border-color:var(--brand-fill);color:var(--on-brand)}
+.deg.on b,.deg.on .pct{color:var(--on-brand)}
+.nudge{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--brand-text);font-weight:600}
+.lt-foot{flex:none;padding:10px 16px 28px;border-top:1px solid var(--border);background:var(--bg2);display:flex;flex-direction:column;gap:8px}
+.lt-foot .lf{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;color:var(--ink2)}
+.lt-foot .lf b{font:500 18px var(--f-num);color:var(--ink);font-variant-numeric:tabular-nums}
+.lt-d{max-width:1120px;margin:0 auto;padding:32px 40px 56px;display:grid;grid-template-columns:1fr 420px;gap:32px;align-items:start}
+.lt-d .lt{padding:0}
+.lt-d .pcs{grid-template-columns:repeat(4,1fr)}
+.lt-d .pc{flex-direction:column;align-items:flex-start;padding:10px}
+.lt-d .pc .th{--s:64px;align-self:stretch;width:auto;height:88px;border-radius:10px}
+.lt-d .aside .btn{margin-top:4px}
+.lt-done{display:flex;flex-direction:column;gap:14px;padding:28px 18px 32px}
+.lt-done .num{font:500 13px var(--f-num);letter-spacing:.08em;color:var(--brand-text);background:var(--brand-wash-2);padding:6px 12px;border-radius:999px;align-self:flex-start;font-variant-numeric:tabular-nums}
+.lt-done-d{max-width:620px;margin:0 auto;padding:56px 40px}
+
+/* recado curto dentro da tela */
+.flash{position:absolute;z-index:36;left:12px;right:12px;top:108px;display:flex;align-items:center;gap:10px;padding:12px 10px 12px 14px;border-radius:14px;background:var(--ink);color:var(--bg2);box-shadow:var(--sh-3);font-size:13.5px;line-height:1.4;animation:tdown var(--t) var(--ease)}
+.flash .ic{flex:none}
+.flash span{flex:1}
+.flash button{appearance:none;border:0;background:rgba(255,255,255,.12);color:#fff;font:600 13.5px var(--f-body);min-height:40px;padding:0 12px;border-radius:10px;cursor:pointer}
+.flash button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.desk .flash{left:auto;right:28px;top:84px;width:420px}
+@media (prefers-reduced-motion:reduce){.live i{box-shadow:none}}
+</style>
+</head>
+<body class="mk-body">
+
+<!-- ======== sprite de ícones (KIT) ======== -->
+<!-- === KIT:SPRITE:BEGIN === -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-bag" viewBox="0 0 24 24"><path d="M5.5 8h13l-1.1 12.1a1 1 0 0 1-1 .9H7.6a1 1 0 0 1-1-.9L5.5 8Z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5 8 12l7 7"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15V3.5M8 7.5l4-4 4 4M5 12.5V19a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-6.5"/></symbol>
+  <symbol id="i-wa" viewBox="0 0 24 24"><path d="M20 11.6a8.4 8.4 0 0 1-12.4 7.4L3.5 20.3l1.3-3.9A8.4 8.4 0 1 1 20 11.6Z"/><path d="M9 8.6c0 3.3 2.9 6.2 6.1 6.3l1.1-1.4-1.9-1-1 .8a4.6 4.6 0 0 1-2.4-2.4l.8-1-1-1.9Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></symbol>
+  <symbol id="i-truck" viewBox="0 0 24 24"><path d="M3 6.5h10.5v9.5H3zM13.5 10h4l3 3.2V16h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></symbol>
+  <symbol id="i-store" viewBox="0 0 24 24"><path d="M4 9.5 5.6 4.5h12.8L20 9.5M4.5 9.5v10h15v-10M9.5 19.5v-5h5v5"/><path d="M4 9.5c0 1.4 1.1 2.3 2.7 2.3S9.3 10.9 9.3 9.5c0 1.4 1.2 2.3 2.7 2.3s2.7-.9 2.7-2.3c0 1.4 1.1 2.3 2.6 2.3S20 10.9 20 9.5"/></symbol>
+  <symbol id="i-moto" viewBox="0 0 24 24"><circle cx="5.5" cy="16.5" r="3"/><circle cx="18.5" cy="16.5" r="3"/><path d="M5.5 16.5 9.5 10h5l4 6.5M13 10l-1.3-3H9.5"/></symbol>
+  <symbol id="i-pix" viewBox="0 0 24 24"><path d="m12 3.2 3.4 3.4-3.4 3.4-3.4-3.4zM12 14l3.4 3.4-3.4 3.4-3.4-3.4zM3.2 12l3.4-3.4L10 12l-3.4 3.4zM14 12l3.4-3.4 3.4 3.4-3.4 3.4z"/></symbol>
+  <symbol id="i-card" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3 9.5h18M6.5 15h4"/></symbol>
+  <symbol id="i-cash" viewBox="0 0 24 24"><rect x="3" y="6.5" width="18" height="11" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9.5v5M18 9.5v5"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15.5V4M7.5 8.5 12 4l4.5 4.5M4.5 15v4a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-4"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="m20.5 16-5-5-9 8.5"/></symbol>
+  <symbol id="i-brush" viewBox="0 0 24 24"><path d="M14.5 4.5 19.5 9.5 11 18l-5-5z"/><path d="M6 13c-2 0-3 1.5-3 3.5V20h3.5C8.5 20 10 19 10 17"/></symbol>
+  <symbol id="i-ruler" viewBox="0 0 24 24"><path d="M3.5 15.5 15.5 3.5l5 5-12 12z"/><path d="m7.5 11.5 2 2M10.5 8.5l1.5 1.5M13.5 5.5l2 2"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.8v.1"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4 21 19.5H3z"/><path d="M12 10v4.5M12 17v.1"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4.5L19.5 9 15 4.5 4 15.5z"/><path d="m13 6.5 4.5 4.5"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2"/><path d="M15.5 8.5V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v9.5a1 1 0 0 0 1 1h3.5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="14.5" rx="2"/><path d="M4 10h16M9 3.5v4M15 3.5v4"/></symbol>
+  <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 0 1 13.2-4.9M18 3.5v4h-4M19.5 12a7.5 7.5 0 0 1-13.2 4.9M6 20.5v-4h4"/></symbol>
+  <symbol id="i-zoom" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5M11 8.5v5M8.5 11h5"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5 19 6.5v5.5c0 4.3-2.9 7.3-7 8.5-4.1-1.2-7-4.2-7-8.5V6.5z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M3.5 7.8 12 3.5l8.5 4.3v8.4L12 20.5l-8.5-4.3z"/><path d="M3.5 7.8 12 12l8.5-4.2M12 12v8.5"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.8"/></symbol>
+  <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M6 3.5h12v17l-2.4-1.5-2.4 1.5-1.2-.8-1.2.8-2.4-1.5L6 20.5z"/><path d="M9 8h6M9 11.5h6M9 15h3.5"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c.8-3.6 3.8-5.8 7.5-5.8s6.7 2.2 7.5 5.8"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.4"/></symbol>
+  <symbol id="i-instagram" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><path d="M17.2 6.8v.1"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 19.5s-7.5-4.4-7.5-10A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 7.5 2.5c0 5.6-7.5 10-7.5 10Z"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 4 8.5 4.5L12 13 3.5 8.5z"/><path d="m3.5 12.5 8.5 4.5 8.5-4.5M3.5 16.5 12 21l8.5-4.5"/></symbol>
+  <symbol id="i-text" viewBox="0 0 24 24"><path d="M5 6.5V5h14v1.5M12 5v14M9 19h6"/></symbol>
+  <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1 0 1.6-.8 1.6-1.6 0-1-.8-1.4-.8-2.3 0-.9.7-1.6 1.6-1.6h2.1a4 4 0 0 0 4-4c0-4.2-3.8-7.5-8.5-7.5Z"/><circle cx="7.8" cy="11.5" r="1"/><circle cx="10.5" cy="7.6" r="1"/><circle cx="15" cy="7.8" r="1"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4h-4"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></symbol>
+</svg>
+<!-- === KIT:SPRITE:END === -->
+<!-- ícones só desta página -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1.2 1.2"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1.2-1.2"/></symbol>
+  <symbol id="i-qr" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2.5v2.5H14zM17.5 17.5H20V20h-2.5zM14 19.5v.5M20 14v.5"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m4 7 8 6 8-6"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3.5 13.8 10.2 20.5 12l-6.7 1.8L12 20.5l-1.8-6.7L3.5 12l6.7-1.8Z"/></symbol>
+</svg>
+
+<div class="mk-bar" id="mk-bar">
+  <b>Mockup · Vitrine Studio · Fase 2 · Fechar a venda</b>
+  <div class="mk-grp"><span>Cor da loja</span><div id="mk-brands" class="mk-grp"></div></div>
+  <div class="mk-grp"><span>Tipografia</span><div id="mk-fonts" class="mk-grp"></div></div>
+  <div class="mk-grp"><span>Ver</span><div id="mk-devices" class="mk-grp"></div></div>
+</div>
+
+<div class="mk-wrap">
+  <header class="mk-intro" style="max-width:920px">
+    <h1>Fase 2 · Fechar a venda</h1>
+    <p>Da sacola ao "Pagamento recebido", no celular, em menos de dois minutos. É o trecho onde a venda se perde hoje: a lista vive dentro do checkout, os campos não têm rótulo, o CEP vem por último, o status do Pix é fixo e um F5 apaga a confirmação. Aqui o checkout da loja Negócio (validado em set/2026) é portado inteiro para o Studio, com três coisas só dele: a miniatura do mockup com a arte do cliente, o prazo de produção e a política de revisões acima do botão.</p>
+    <p>Um único carrinho atravessa as telas. Tudo que parece botão funciona: quantidade recalcula preço, desconto e prazo; o CEP preenche o endereço; o botão apagado diz o que falta e leva ao campo.</p>
+    <div class="mk-cartline" id="mk-cartline"></div>
+    <div class="mk-clock" aria-label="Tempo estimado do pedido no celular">
+      <div class="mk-clock-h"><b>Do "Finalizar compra" ao Pix pago: cerca de 1 min 46 s</b><span>Estimativa pelo roteiro desta página, no celular. A demo de 06/11 cronometra de verdade.</span></div>
+      <div class="mk-bars">
+        <div class="mk-barrow"><span>Cliente nova</span><div class="mk-track"><span style="flex:8">Sacola 8 s</span><span style="flex:30">Seus dados 30 s</span><span style="flex:15">Entrega 15 s</span><span style="flex:8">Pagar 8 s</span><span style="flex:45">Pix no app do banco 45 s</span></div><span>1 min 46 s</span></div>
+        <div class="mk-barrow"><span>Helena volta</span><div class="mk-track" style="width:76%"><span style="flex:8">8 s</span><span style="flex:5">5 s</span><span style="flex:15">Entrega 15 s</span><span style="flex:8">8 s</span><span style="flex:45">Pix no app do banco 45 s</span></div><span>1 min 21 s</span></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============ TELA 1 ============ -->
+  <section class="mk-screen" id="t1">
+    <div class="mk-meta">
+      <span class="mk-n">Tela 1</span>
+      <h2>Sacola em gaveta</h2>
+      <p>Resolve: hoje não existe sacola; a lista mora dentro do checkout e "Editar" devolve para a home. Agora a gaveta abre por cima do produto, sem tirar o cliente de onde está, e cada item mostra a arte dele, não a foto de catálogo.</p>
+      <div class="mk-states" data-for="t1">
+        <button data-state="aberta" aria-pressed="true">Sacola aberta</button>
+        <button data-state="adicionado" aria-pressed="false">Acabou de adicionar</button>
+        <button data-state="vazia" aria-pressed="false">Vazia</button>
+        <button data-state="fechada" aria-pressed="false">Loja fechada</button>
+      </div>
+      <ul>
+        <li>Digite 10 na Caneca Branca: a escada de exemplo entra (−5%), o preço e o prazo mudam ("Pronto em 5 dias úteis").</li>
+        <li>Miniatura: <code>LivePreview</code> com os <code>values</code> da linha, como <code>CartItemList</code> já faz em <code>Cart.tsx</code>; sobe de 56 para 84 px.</li>
+        <li>"Editar" abre o configurador preenchido e, ao salvar, volta para a gaveta (hoje volta para a home, <code>useStorefront.ts:607</code>).</li>
+        <li>Preço da linha: <code>lineUnitPrice</code> (faixa sobre o preço de tabela + adicionais), mesmo cálculo do servidor depois do BE-5.</li>
+        <li>"Mandar a sacola para a Sheid" usa <code>mensagemDoCarrinho</code> (<code>pedidoPeloWhatsApp.ts</code>) com os nomes e preços desta tela, não "designer" e preço de tabela.</li>
+        <li>Guarda a sacola por 7 dias (<code>sacola.js</code> da Negócio). <code>/sheid-mania/sacola</code> abre a loja com a gaveta aberta (link direto e F5).</li>
+        <li>Loja fechada: <code>modoDaVitrine</code> também aqui (hoje só no produto, <code>Cart.tsx:47</code>); "Finalizar" some e vira orçamento.</li>
+        <li>Evento <code>add_to_cart</code> no toast; <code>begin_checkout</code> no "Finalizar compra".</li>
+      </ul>
+      <p class="mk-dec">Decisão de desenho: "Editar" fica embaixo da miniatura (mexer na arte perto da arte); remover é o ícone da lixeira com rótulo acessível e "Desfazer" por 5 segundos.</p>
+    </div>
+    <div class="mk-frames">
+      <div class="phone"><div class="notch"></div><div class="screen sv" data-host="t1" data-dev="phone"></div><i class="home-ind"></i></div>
+      <div class="desk-fit"><div class="desk"><div class="chrome"><i></i><i></i><i></i><div class="url"><svg class="ic sm"><use href="#i-lock"/></svg>loja.getaura.com.br/sheid-mania/p/3c7a1e52</div></div><div class="viewport sv app-host" data-host="t1" data-dev="desk"></div></div></div>
+    </div>
+  </section>
+
+  <!-- ============ TELA 2 ============ -->
+  <section class="mk-screen" id="t2">
+    <div class="mk-meta">
+      <span class="mk-n">Tela 2</span>
+      <h2>Checkout · 1 Seus dados</h2>
+      <p>Resolve: campos só com placeholder, sem CPF/CNPJ, e a cliente que volta digitando tudo de novo. Rótulo sempre em cima, máscara no WhatsApp e validação de verdade no CPF/CNPJ.</p>
+      <div class="mk-states" data-for="t2">
+        <button data-state="lembrada" aria-pressed="true">Helena volta</button>
+        <button data-state="nova" aria-pressed="false">Cliente nova</button>
+      </div>
+      <ul>
+        <li>Toque em "Não sou eu": os campos esvaziam e o botão passa a dizer o que falta. Toque no botão apagado: ele leva ao campo.</li>
+        <li>Marque "Quero CPF/CNPJ na nota" e digite <code>52998224725</code> (CPF válido de teste) ou um número errado.</li>
+        <li><code>Checkout.tsx</code> vira 3 etapas; <code>ui/FInput.tsx</code> ganha <code>label</code>; <code>oQueFaltaNoCheckout.ts</code> ganha uma frase por etapa.</li>
+        <li>Dados lembrados em <code>aura_customer_sheid-mania</code> por 90 dias, como <code>checkout.js</code> da Negócio. "Não sou eu" apaga a chave.</li>
+        <li>CPF/CNPJ vai em <code>customer_cpf_cnpj</code> (mesmo campo da Negócio).</li>
+        <li>Resumo: recolhido no celular ("Ver itens" com o total sempre à vista), coluna fixa no desktop. Sai o <code>PoweredByAura</code> do rodapé.</li>
+      </ul>
+    </div>
+    <div class="mk-frames">
+      <div class="phone"><div class="notch"></div><div class="screen sv" data-host="t2" data-dev="phone"></div><i class="home-ind"></i></div>
+      <div class="desk-fit"><div class="desk"><div class="chrome"><i></i><i></i><i></i><div class="url"><svg class="ic sm"><use href="#i-lock"/></svg>loja.getaura.com.br/sheid-mania/finalizar</div></div><div class="viewport sv app-host" data-host="t2" data-dev="desk"></div></div></div>
+    </div>
+  </section>
+
+  <!-- ============ TELA 3 ============ -->
+  <section class="mk-screen" id="t3">
+    <div class="mk-meta">
+      <span class="mk-n">Tela 3</span>
+      <h2>Checkout · 2 Entrega</h2>
+      <p>Resolve: CEP por último, endereço digitado à mão, frete só no botão, retirada sem endereço nem prazo. Agora o CEP vem primeiro e faz o resto sozinho.</p>
+      <div class="mk-states" data-for="t3">
+        <button data-state="vazio" aria-pressed="true">CEP em branco</button>
+        <button data-state="casa" aria-pressed="false">CEP 12242-000</button>
+        <button data-state="fora" aria-pressed="false">CEP fora da área</button>
+        <button data-state="app" aria-pressed="false">Retirada por app</button>
+      </div>
+      <ul>
+        <li>Digite um CEP: "Buscando" → bairro e cidade aparecem, "Receber em casa" é escolhido e o cursor vai para o número.</li>
+        <li>ViaCEP + <code>GET /shipping-quote?cep=</code> automáticos no oitavo dígito (hoje é o botão "Calcular frete"). Sem CEP a retirada continua possível.</li>
+        <li>Retirada usa <code>store.delivery.pickup_address</code> e <code>pickup_eta_text</code>, que já chegam no payload e hoje são ignorados.</li>
+        <li>Fora da área: "Receber em casa" fica apagado com o motivo, e os dois outros modos continuam à mão.</li>
+        <li>Retirada por app: <code>courierPlate.ts</code> (<code>maskPlate</code> ao digitar, <code>normalizePlate</code> ao seguir). Aparece só com <code>courier_pickup_enabled</code>.</li>
+      </ul>
+      <p class="mk-dec">Frete de R$ 12,00 e "chega 1 dia útil depois de pronto" são exemplo.</p>
+    </div>
+    <div class="mk-frames">
+      <div class="phone"><div class="notch"></div><div class="screen sv" data-host="t3" data-dev="phone"></div><i class="home-ind"></i></div>
+      <div class="desk-fit"><div class="desk"><div class="chrome"><i></i><i></i><i></i><div class="url"><svg class="ic sm"><use href="#i-lock"/></svg>loja.getaura.com.br/sheid-mania/finalizar</div></div><div class="viewport sv app-host" data-host="t3" data-dev="desk"></div></div></div>
+    </div>
+  </section>
+
+  <!-- ============ TELA 4 ============ -->
+  <section class="mk-screen" id="t4">
+    <div class="mk-meta">
+      <span class="mk-n">Tela 4</span>
+      <h2>Checkout · 3 Pagamento</h2>
+      <p>Resolve: pagamento em chips sem preço, total sem Pix até o fim, política de revisões escondida e cartão que redireciona depois de 800 ms sem aviso. Cada forma de pagar mostra quanto custa; o botão diz o total.</p>
+      <ul>
+        <li>Nada vem escolhido: o botão apagado diz "Escolha como pagar". Com Pix: "Pagar R$ 206,81 no Pix". Toque nele para seguir à Tela 5 (ou 6, no cartão).</li>
+        <li>Desconto do Pix só sobre o subtotal (<code>precoNoPix.ts</code>, igual à Negócio); parcelas de <code>parcelamento.ts</code>.</li>
+        <li>Linha de revisões de <code>store.revisions</code> (<code>max_included</code>). Prazo de <code>store.sla</code> pelo maior prazo das faixas da sacola.</li>
+        <li>"Pagar na retirada" some na retirada por app (quem paga é o entregador?) e vira "Pagar na entrega" em casa.</li>
+        <li>Evento <code>add_payment_info</code> ao escolher; <code>purchase</code> quando o pedido é criado.</li>
+      </ul>
+      <p class="mk-dec">5% no Pix, "até 3x sem juros" e "2 revisões inclusas" são exemplo configurável; a Sheid hoje não dá desconto no Pix.</p>
+    </div>
+    <div class="mk-frames">
+      <div class="phone"><div class="notch"></div><div class="screen sv" data-host="t4" data-dev="phone"></div><i class="home-ind"></i></div>
+      <div class="desk-fit"><div class="desk"><div class="chrome"><i></i><i></i><i></i><div class="url"><svg class="ic sm"><use href="#i-lock"/></svg>loja.getaura.com.br/sheid-mania/finalizar</div></div><div class="viewport sv app-host" data-host="t4" data-dev="desk"></div></div></div>
+    </div>
+  </section>
+
+  <!-- ============ TELA 5 ============ -->
+  <section class="mk-screen" id="t5">
+    <div class="mk-meta">
+      <span class="mk-n">Tela 5</span>
+      <h2>Tela do Pix</h2>
+      <p>Resolve: o status fixo "Aguardando produção da arte" antes de o Pix ser pago (<code>SentConfirmation.tsx:93-95</code>), sem comprovante e sem "Já paguei". É o primeiro estado da página do pedido: quando o pagamento entra, a mesma URL vira a confirmação da Tela 7.</p>
+      <div class="mk-states" data-for="t5">
+        <button data-state="pend" aria-pressed="true">Esperando o Pix</button>
+        <button data-state="wait" aria-pressed="false">Depois do "Já paguei"</button>
+        <button data-state="pago" aria-pressed="false">Pagamento recebido</button>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="mk-act" id="t5-sim"><svg class="ic sm"><use href="#i-play"/></svg>Simular o Pix entrando</button></div>
+      <ul>
+        <li>No celular, "Copiar código Pix" é o botão principal e o QR fica recolhido; no desktop, o QR é o principal.</li>
+        <li>Consulta o pedido a cada 4 s (<code>pix.js</code> da Negócio); a mudança acontece sozinha, sem recarregar.</li>
+        <li>"Já paguei" e "Anexar comprovante" usam as rotas da loja comum, que não filtram por vertical (<code>storefront.js:908</code> e <code>:954</code>).</li>
+        <li>URL <code>/sheid-mania/pedido/&lt;token&gt;</code> lida do servidor (BE-2): o código do Pix volta num F5.</li>
+        <li>Validade: 72 h (decisão Q7); o job de Pix vencido passa a incluir o Studio (BE-4).</li>
+      </ul>
+    </div>
+    <div class="mk-frames">
+      <div class="phone"><div class="notch"></div><div class="screen sv" data-host="t5" data-dev="phone"></div><i class="home-ind"></i></div>
+      <div class="desk-fit"><div class="desk"><div class="chrome"><i></i><i></i><i></i><div class="url"><svg class="ic sm"><use href="#i-lock"/></svg>loja.getaura.com.br/sheid-mania/pedido/k7Qm2x9T</div></div><div class="viewport sv app-host" data-host="t5" data-dev="desk"></div></div></div>
+    </div>
+  </section>
+
+  <!-- ============ TELA 6 ============ -->
+  <section class="mk-screen" id="t6">
+    <div class="mk-meta">
+      <span class="mk-n">Tela 6</span>
+      <h2>Volta do cartão</h2>
+      <p>Resolve: o cliente vai ao Mercado Pago e volta para a home, sem saber se pagou (<code>useStorefront.ts:781</code>). Agora o <code>back_url</code> aponta para a página do pedido, que mostra o status real.</p>
+      <div class="mk-states" data-for="t6">
+        <button data-state="ok" aria-pressed="true">Aprovado</button>
+        <button data-state="analise" aria-pressed="false">Em análise</button>
+        <button data-state="recusado" aria-pressed="false">Recusado</button>
+      </div>
+      <ul>
+        <li>Mesma lógica do <code>bootstrap.js</code> da Negócio: até 15 consultas quando o retorno diz aprovado, porque o webhook pode chegar depois.</li>
+        <li>Em análise: a tela continua consultando e diz que o cliente pode sair; o aviso chega no WhatsApp.</li>
+        <li>Recusado: o pedido continua guardado; "Pagar com Pix" troca a forma de pagamento do mesmo pedido (sem criar outro).</li>
+      </ul>
+    </div>
+    <div class="mk-frames">
+      <div class="phone"><div class="notch"></div><div class="screen sv" data-host="t6" data-dev="phone"></div><i class="home-ind"></i></div>
+      <div class="desk-fit"><div class="desk"><div class="chrome"><i></i><i></i><i></i><div class="url"><svg class="ic sm"><use href="#i-lock"/></svg>loja.getaura.com.br/sheid-mania/pedido/k7Qm2x9T?pagamento=cartao</div></div><div class="viewport sv app-host" data-host="t6" data-dev="desk"></div></div></div>
+    </div>
+  </section>
+
+  <!-- ============ TELA 7 ============ -->
+  <section class="mk-screen" id="t7">
+    <div class="mk-meta">
+      <span class="mk-n">Tela 7</span>
+      <h2>Confirmação que sobrevive ao F5</h2>
+      <p>Resolve: <code>sentOrder</code> só em memória, então um F5 apaga o pedido da tela. Agora a confirmação é uma página do servidor, pelo token: recarregar, fechar e abrir em outro aparelho mostra sempre o mesmo pedido.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="mk-act" id="t7-f5"><svg class="ic sm"><use href="#i-refresh"/></svg>Recarregar a página (F5)</button></div>
+      <ul>
+        <li>BE-2: pedido por <code>public_token</code> (migration 322) com status, itens com miniatura e código do Pix enquanto pendente.</li>
+        <li>Linha do tempo é a mesma de <code>app/acompanhar/[token].tsx</code>: etapas, nunca horário.</li>
+        <li>"Acompanhar pedido" vai para <code>/sheid-mania/acompanhar/&lt;token&gt;</code> (decisão do PO). "Guardar este link" abre o WhatsApp com o link pronto.</li>
+        <li>O conteúdo de "Próximos passos" e da política de revisões de <code>SentConfirmation.tsx</code> continua, mais curto. Sai o emoji e o "Feito no Aura Studio"; a assinatura fica só no rodapé institucional.</li>
+        <li>Verificar se o Studio dispara o e-mail de confirmação do <code>mailer</code>, como a Negócio.</li>
+      </ul>
+      <p class="mk-dec">"2 revisões inclusas, revisão extra R$ 10,00" é exemplo.</p>
+    </div>
+    <div class="mk-frames">
+      <div class="phone"><div class="notch"></div><div class="screen sv" data-host="t7" data-dev="phone"></div><i class="home-ind"></i></div>
+      <div class="desk-fit"><div class="desk"><div class="chrome"><i></i><i></i><i></i><div class="url"><svg class="ic sm"><use href="#i-lock"/></svg>loja.getaura.com.br/sheid-mania/pedido/k7Qm2x9T</div><button class="mk-act alt" data-f5 aria-label="Recarregar a página" style="min-height:26px;height:26px;padding:0 8px"><svg class="ic sm"><use href="#i-refresh"/></svg></button></div><div class="viewport sv app-host" data-host="t7" data-dev="desk"></div></div></div>
+    </div>
+  </section>
+
+  <!-- ============ TELA 8 ============ -->
+  <section class="mk-screen" id="t8">
+    <div class="mk-meta">
+      <span class="mk-n">Tela 8</span>
+      <h2>Proteção contra pedido duplicado</h2>
+      <p>Resolve: quem volta pelo histórico, abre duas abas ou toca duas vezes cria dois pedidos, e a Sheid recebe duas cobranças do mesmo presente.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="mk-act alt" id="t8-reset"><svg class="ic sm"><use href="#i-refresh"/></svg>Mostrar de novo</button></div>
+      <ul>
+        <li>Chave <code>aura_pending_order_sheid-mania</code> gravada ao criar o pedido (migration 121 da Negócio), mais a consulta do status no servidor.</li>
+        <li>Aparece só se o pedido ainda espera pagamento e não venceu; pago ou cancelado, a chave é apagada em silêncio.</li>
+        <li>"Continuar esse pedido" abre a Tela 5 do #00123. "Fazer um novo" segue o checkout e deixa o recado no topo.</li>
+      </ul>
+    </div>
+    <div class="mk-frames">
+      <div class="phone"><div class="notch"></div><div class="screen sv" data-host="t8" data-dev="phone"></div><i class="home-ind"></i></div>
+      <div class="desk-fit"><div class="desk"><div class="chrome"><i></i><i></i><i></i><div class="url"><svg class="ic sm"><use href="#i-lock"/></svg>loja.getaura.com.br/sheid-mania/finalizar</div></div><div class="viewport sv app-host" data-host="t8" data-dev="desk"></div></div></div>
+    </div>
+  </section>
+
+  <!-- ============ TELA 9 ============ -->
+  <section class="mk-screen" id="t9">
+    <div class="mk-meta">
+      <span class="mk-n">Tela 9</span>
+      <h2>Orçamento em lote (rápido)</h2>
+      <p>Resolve: vírgula quebrando "Silva, João" (<code>loteDaVitrine.ts:57</code>), "Para quando?" em texto livre, telefone sem máscara e a tela final mostrando o nome do evento no lugar de um número.</p>
+      <div class="mk-states" data-for="t9">
+        <button data-state="form" aria-pressed="true">Preenchendo</button>
+        <button data-state="done" aria-pressed="false">Orçamento enviado</button>
+      </div>
+      <ul>
+        <li>Marcos cola a coluna da planilha: separa só por linha e por <code>;</code>. Apague ou cole nomes: a contagem, a faixa, o preço e o prazo mudam na hora.</li>
+        <li>O WhatsApp está em branco de propósito: o botão diz "Informe um WhatsApp com DDD" (<code>pendenciaDoLote</code>). Digite para ver a máscara.</li>
+        <li>Prévia com <code>bulk-quote</code> a cada mudança; "Faltam N nomes" é <code>proximoDegrau</code>; prazo de <code>fraseDoPrazo</code> por faixa.</li>
+        <li>Data com seletor nativo; a data mínima sai do prazo da faixa (dias úteis, sem os feriados).</li>
+        <li>O texto segue a categoria da peça ("50 canecas", "50 copos"), não "canecas" fixo.</li>
+        <li>Tela final: número do orçamento (sequência nova no <code>bulk-order</code>) e "Isso é um orçamento, ainda não é um pedido fechado".</li>
+      </ul>
+      <p class="mk-dec">Escada e prazos por faixa são exemplo; valem para as quatro peças só neste mockup.</p>
+    </div>
+    <div class="mk-frames">
+      <div class="phone"><div class="notch"></div><div class="screen sv" data-host="t9" data-dev="phone"></div><i class="home-ind"></i></div>
+      <div class="desk-fit"><div class="desk"><div class="chrome"><i></i><i></i><i></i><div class="url"><svg class="ic sm"><use href="#i-lock"/></svg>loja.getaura.com.br/sheid-mania/orcamento</div></div><div class="viewport sv app-host" data-host="t9" data-dev="desk"></div></div></div>
+    </div>
+  </section>
+</div>
+
+<script>
+/* === KIT:BEGIN ============================================== */
+/* Cor da loja → tokens. Mesma regra de theme.ts (parLegivel / corLegivelSobre). */
+const KIT = (() => {
+  const hex2rgb = h => { h = h.replace('#',''); if (h.length===3) h = h.split('').map(c=>c+c).join(''); const n = parseInt(h,16); return [n>>16&255, n>>8&255, n&255]; };
+  const rgb2hex = ([r,g,b]) => '#' + [r,g,b].map(v => Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join('');
+  const lum = h => { const c = hex2rgb(h).map(v => { v/=255; return v<=.03928 ? v/12.92 : Math.pow((v+.055)/1.055,2.4); }); return .2126*c[0]+.7152*c[1]+.0722*c[2]; };
+  const contrast = (a,b) => { const x=lum(a), y=lum(b); return (Math.max(x,y)+.05)/(Math.min(x,y)+.05); };
+  const mix = (h, target, t) => { const a=hex2rgb(h), b=hex2rgb(target); return rgb2hex(a.map((v,i)=>v+(b[i]-v)*t)); };
+  const INK = '#1A1714', PAPER = '#FBF8F3', WHITE = '#FFFFFF';
+  const inkOn = h => contrast(h, WHITE) >= contrast(h, INK) ? WHITE : INK;
+  function brandPair(h){
+    let t = inkOn(h); if (contrast(h,t) >= 4.5) return {fill:h, on:t};
+    for (let i=1;i<=12;i++){ for (const c of [mix(h,'#000000',i*.06), mix(h,'#FFFFFF',i*.06)]) { const k = inkOn(c); if (contrast(c,k) >= 4.5) return {fill:c, on:k}; } }
+    return {fill:INK, on:WHITE};
+  }
+  function brandText(h, bg=PAPER){ let c=h; for (let i=0;i<30 && contrast(c,bg)<4.5;i++) c = mix(c,'#000000',.07); return c; }
+  const rgba = (h,a) => { const [r,g,b]=hex2rgb(h); return `rgba(${r},${g},${b},${a})`; };
+  function applyBrand(h){
+    const s = document.documentElement.style, p = brandPair(h), txt = brandText(h);
+    s.setProperty('--brand', h); s.setProperty('--brand-fill', p.fill); s.setProperty('--on-brand', p.on);
+    s.setProperty('--brand-text', txt); s.setProperty('--brand-wash', rgba(txt,.06)); s.setProperty('--brand-wash-2', rgba(txt,.12)); s.setProperty('--brand-ring', rgba(p.fill,.45));
+  }
+  const FONTS = {
+    classic:  {nome:'Elegante',   display:"'Fraunces','Instrument Serif',Georgia,serif", w:500},
+    modern:   {nome:'Moderna',    display:"'DM Sans',-apple-system,sans-serif", w:700},
+    editorial:{nome:'Marcante',   display:"'Instrument Serif',Georgia,serif", w:400},
+    humanist: {nome:'Acolhedora', display:"'Pacifico',cursive", w:400},
+  };
+  function applyFont(k){ const f = FONTS[k] || FONTS.classic; document.documentElement.style.setProperty('--f-display', f.display); document.documentElement.style.setProperty('--f-display-w', f.w); }
+  const BRANDS = [
+    {nome:'Sheid Mania', hex:'#1a1612'},
+    {nome:'Rosa', hex:'#D6336C'},
+    {nome:'Amarelo', hex:'#F2C94C'},
+    {nome:'Petróleo', hex:'#0F6E7A'},
+  ];
+
+  /* Produto ilustrado. tipo: reta | chopp | coracao | colher | cromada | imperial | camiseta | copo
+     corpo/alca: cor da peça; arte: {texto, cor, fonte, sub, desenho:'coracao'|'folha'|'estrela'|null} */
+  let uid = 0;
+  function produto(o = {}){
+    const id = 'p' + (++uid);
+    const tipo = o.tipo || 'reta', corpo = o.corpo || '#F7F4EE', alca = o.alca || corpo;
+    const arte = o.arte || null;
+    const metal = tipo === 'cromada' || tipo === 'imperial';
+    const shade = `<linearGradient id="${id}s" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity=".22"/><stop offset=".18" stop-color="#000" stop-opacity=".04"/><stop offset=".42" stop-color="#fff" stop-opacity="${metal?'.55':'.28'}"/><stop offset=".6" stop-color="#fff" stop-opacity="0"/><stop offset=".88" stop-color="#000" stop-opacity=".08"/><stop offset="1" stop-color="#000" stop-opacity=".26"/></linearGradient>`;
+    const desenho = d => d==='coracao' ? '<path d="M0 6c-7-5-11-9-11-14a6 6 0 0 1 11-3 6 6 0 0 1 11 3c0 5-4 9-11 14Z"/>'
+      : d==='folha' ? '<path d="M-10 8C-10-6 2-12 12-12 12 0 6 10-10 8Z M-10 8 6-6" />'
+      : d==='estrela' ? '<path d="M0-12 3.5-3.7 12.4-3.7 5.2 1.6 7.9 10.2 0 5 -7.9 10.2 -5.2 1.6 -12.4-3.7 -3.5-3.7Z"/>' : '';
+    const arteSvg = (cx, cy, esc=1) => !arte ? '' : `<g transform="translate(${cx} ${cy}) scale(${esc})" fill="${arte.cor||'#1A1714'}" stroke="none">
+        ${arte.desenho ? `<g transform="translate(0 -26)" ${arte.desenho==='folha'?`fill="none" stroke="${arte.cor}" stroke-width="2.2" stroke-linecap="round"`:''}>${desenho(arte.desenho)}</g>` : ''}
+        <text x="0" y="${arte.desenho?8:4}" text-anchor="middle" font-family="${arte.fonte||"'Pacifico',cursive"}" font-size="${arte.tam||22}">${arte.texto||''}</text>
+        ${arte.sub ? `<text x="0" y="${arte.desenho?24:20}" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="6.4" letter-spacing="1.1">${arte.sub}</text>` : ''}
+      </g>`;
+    const sombra = `<ellipse cx="96" cy="178" rx="62" ry="7" fill="#000" opacity=".13"/>`;
+    if (tipo === 'camiseta') {
+      return `<svg class="prod" viewBox="0 0 200 200" role="img" aria-label="Camiseta"><defs>${shade}</defs>${sombra}
+        <path d="M70 26 52 34 22 52l14 30 18-9v99h92V73l18 9 14-30-30-18-18-8c-4 12-16 18-30 18S74 38 70 26Z" fill="${corpo}" stroke="rgba(0,0,0,.14)" stroke-width="1"/>
+        <path d="M70 26c4 12 16 18 30 18s26-6 30-18" fill="none" stroke="rgba(0,0,0,.18)" stroke-width="2"/>
+        <path d="M54 73v99h92V73" fill="url(#${id}s)" opacity=".7"/>
+        ${arteSvg(100, 100, .95)}</svg>`;
+    }
+    if (tipo === 'copo') {
+      return `<svg class="prod" viewBox="0 0 200 200" role="img" aria-label="Copo térmico"><defs>${shade}</defs>${sombra}
+        <path d="M60 40h72l-7 134a6 6 0 0 1-6 6H73a6 6 0 0 1-6-6Z" fill="${corpo}"/><path d="M60 40h72l-7 134a6 6 0 0 1-6 6H73a6 6 0 0 1-6-6Z" fill="url(#${id}s)"/>
+        <rect x="55" y="26" width="82" height="18" rx="6" fill="${alca}"/><rect x="55" y="26" width="82" height="18" rx="6" fill="url(#${id}s)"/>
+        <path d="M132 58c26 0 26 60 0 60" fill="none" stroke="${alca}" stroke-width="11" stroke-linecap="round"/>
+        <rect x="104" y="6" width="7" height="24" rx="3" fill="${alca}" opacity=".9"/>
+        ${arteSvg(96, 108, .9)}</svg>`;
+    }
+    const chopp = tipo === 'chopp';
+    const x0 = chopp ? 50 : 44, x1 = chopp ? 142 : 146, top = chopp ? 20 : 44, bot = 172;
+    const body = chopp ? `M${x0} ${top}h${x1-x0}l-4 ${bot-top-8}a8 8 0 0 1-8 8H${x0+12}a8 8 0 0 1-8-8Z` : `M${x0} ${top}h${x1-x0}v${bot-top-10}a10 10 0 0 1-10 10H${x0+10}a10 10 0 0 1-10-10Z`;
+    const handle = tipo === 'coracao'
+      ? `<path d="M${x1-2} 78c10-16 34-12 34 8 0 18-18 30-34 44" fill="none" stroke="${alca}" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>`
+      : `<path d="M${x1-2} ${chopp?60:74}c${chopp?38:34} 0 ${chopp?38:34} ${chopp?80:62} 0 ${chopp?80:62}" fill="none" stroke="${alca}" stroke-width="${chopp?15:12}" stroke-linecap="round"/>`;
+    const handleShade = tipo === 'coracao' ? '' : `<path d="M${x1-2} ${chopp?60:74}c${chopp?38:34} 0 ${chopp?38:34} ${chopp?80:62} 0 ${chopp?80:62}" fill="none" stroke="#000" stroke-opacity=".12" stroke-width="3" transform="translate(4 0)"/>`;
+    const rimTop = tipo === 'imperial' ? `<rect x="${x0}" y="${top}" width="${x1-x0}" height="7" fill="#C9A45C"/><rect x="${x0}" y="${top}" width="${x1-x0}" height="7" fill="url(#${id}s)"/>` : '';
+    const colher = tipo === 'colher' ? `<g transform="rotate(14 150 30)"><rect x="140" y="-4" width="7" height="70" rx="3.5" fill="#C8CCD2"/><ellipse cx="143.5" cy="-8" rx="10" ry="13" fill="#D5D9DE"/></g>` : '';
+    const glass = chopp ? `<path d="${body}" fill="#FFFFFF" opacity=".35"/>` : '';
+    return `<svg class="prod" viewBox="0 0 200 200" role="img" aria-label="Caneca"><defs>${shade}<clipPath id="${id}c"><path d="${body}"/></clipPath></defs>${sombra}
+      ${handle}${handleShade}
+      <path d="${body}" fill="${corpo}"/>${glass}
+      <g clip-path="url(#${id}c)">${arteSvg((x0+x1)/2 - 2, chopp ? 100 : 112, chopp ? 1 : 1.05)}</g>
+      <path d="${body}" fill="url(#${id}s)"/>${rimTop}
+      <ellipse cx="${(x0+x1)/2}" cy="${top}" rx="${(x1-x0)/2}" ry="5" fill="${alca}"/><ellipse cx="${(x0+x1)/2}" cy="${top+1}" rx="${(x1-x0)/2-5}" ry="3.4" fill="#000" opacity=".16"/>
+      ${colher}</svg>`;
+  }
+
+  /* Barra do mockup: cor, tipografia e aparelho. Chame KIT.bar({device:true}). */
+  function bar(opts = {}){
+    const bw = document.getElementById('mk-brands'), fw = document.getElementById('mk-fonts'), dw = document.getElementById('mk-devices');
+    const set = (wrap, btn) => { wrap.querySelectorAll('.mk-seg').forEach(b => b.setAttribute('aria-pressed', b===btn ? 'true':'false')); };
+    if (bw) BRANDS.forEach((b,i) => { const el = document.createElement('button'); el.className='mk-seg'; el.innerHTML=`<i class="mk-dot" style="background:${b.hex}"></i>${b.nome}`; el.setAttribute('aria-pressed', i===0?'true':'false'); el.onclick=()=>{applyBrand(b.hex); set(bw,el); document.dispatchEvent(new CustomEvent('kit:brand',{detail:b}));}; bw.appendChild(el); });
+    if (fw) Object.entries(FONTS).forEach(([k,f],i) => { const el = document.createElement('button'); el.className='mk-seg'; el.textContent=f.nome; el.setAttribute('aria-pressed', i===0?'true':'false'); el.onclick=()=>{applyFont(k); set(fw,el);}; fw.appendChild(el); });
+    if (dw) [['ambos','Celular e desktop'],['phone','Só celular'],['desk','Só desktop']].forEach(([k,n],i) => { const el=document.createElement('button'); el.className='mk-seg'; el.textContent=n; el.setAttribute('aria-pressed', i===0?'true':'false'); el.onclick=()=>{ document.body.classList.toggle('mk-hide-desk', k==='phone'); document.body.classList.toggle('mk-hide-phone', k==='desk'); set(dw,el); fitDesk(); }; dw.appendChild(el); });
+    applyBrand(BRANDS[0].hex); applyFont('classic');
+    window.addEventListener('resize', fitDesk); fitDesk();
+  }
+  /* Escala a moldura desktop (1280 px) para caber na coluna. */
+  function fitDesk(){
+    document.querySelectorAll('.desk-fit').forEach(w => { const d = w.querySelector('.desk'); if (!d) return; const s = Math.min(1, w.clientWidth / 1280); d.style.transform = `scale(${s})`; w.style.height = (d.offsetHeight * s) + 'px'; });
+  }
+  const money = v => 'R$ ' + v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const icon = (n, cls='') => `<svg class="ic ${cls}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+  return { applyBrand, applyFont, brandPair, brandText, contrast, produto, bar, fitDesk, money, icon, BRANDS, FONTS };
+})();
+/* === KIT:END ================================================ */
+
+/* ---------- só desta página ---------- */
+const R = KIT.money, I = KIT.icon;
+const r2 = v => Math.round(v * 100 + 1e-6) / 100;
+const dig = s => String(s == null ? '' : s).replace(/\D/g, '');
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const REDUZ = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const clone = o => JSON.parse(JSON.stringify(o));
+let _id = 0; const uid = () => 'f' + (++_id);
+
+/* ---------- a loja e o carrinho de exemplo ---------- */
+const LOJA = { end:'Av. Dom Pedro I, 553 — Jardim Colonial', cidade:'São José dos Campos/SP', wa:'(12) 99614-5447', pixPct:5, rev:2, revExtra:10, frete:12, pedido:'00123', token:'k7Qm2x9T', vence:'28/09 às 14:32' };
+/* escada de exemplo (caneca) e prazo por faixa */
+const ESCADA = {
+  caneca:[{de:50,pct:15,dias:8},{de:20,pct:10,dias:5},{de:10,pct:5,dias:5},{de:1,pct:0,dias:3}],
+  camisa:[{de:1,pct:0,dias:3}],
+  copo:[{de:50,pct:15,dias:8},{de:20,pct:10,dias:5},{de:10,pct:5,dias:5},{de:1,pct:0,dias:3}],
+};
+const faixa = (cat, q) => ESCADA[cat].find(f => q >= f.de);
+const proxFaixa = (cat, q) => ESCADA[cat].filter(f => f.de > q).sort((a, b) => a.de - b.de)[0];
+const ART = {
+  a:{tipo:'coracao', corpo:'#F7F4EE', alca:'#D8436F', arte:{texto:'Mãe', cor:'#D8436F', sub:'A MELHOR'}},
+  b:{tipo:'reta', corpo:'#F7F4EE', arte:{texto:'Nós três', cor:'#3E6FB0', fonte:"'Fraunces',serif", tam:17, desenho:'estrela'}},
+  c:{tipo:'camiseta', corpo:'#F4F1EA', arte:{texto:'Time Sheid', cor:'#22324A', fonte:"'Fraunces',serif", tam:16, sub:'SÃO JOSÉ DOS CAMPOS'}},
+};
+const CARRINHO = [
+  {id:'a', nome:'Caneca Alça Coração', base:49.90, extra:8, cat:'caneca', qty:1, resumo:'Frente e verso · Arte: Mãe', nota:'inclui R$ 8,00 do verso'},
+  {id:'b', nome:'Caneca Branca', base:39.90, extra:10, cat:'caneca', qty:2, resumo:'Sua foto · A Sheid ajusta a arte', nota:'inclui R$ 10,00 de "Envio minha arte e vocês ajustam"'},
+  {id:'c', nome:'Camisa Algodão Básico', base:59.99, extra:0, cat:'camisa', qty:1, resumo:'Tamanho M · Texto: Time Sheid', nota:''},
+];
+const unitOf = (l, q = l.qty) => r2(r2(l.base * (1 - faixa(l.cat, q).pct / 100)) + l.extra);
+const linha = l => r2(unitOf(l) * l.qty);
+const subtotal = ls => r2(ls.reduce((s, l) => s + linha(l), 0));
+const pixOff = sub => r2(sub * LOJA.pixPct / 100);
+const prazoDe = ls => ls.length ? Math.max(...ls.map(l => faixa(l.cat, l.qty).dias)) : 3;
+const pecas = ls => ls.reduce((s, l) => s + l.qty, 0);
+const nPecas = n => n + (n === 1 ? ' peça' : ' peças');
+const th = (id, s = 56, q) => `<span class="th" style="--s:${s}px">${KIT.produto(ART[id])}${q ? `<span class="q">${q}</span>` : ''}</span>`;
+
+/* ---------- mini motor: um estado por tela, as duas molduras redesenham juntas ---------- */
+const SC = {};
+const hosts = id => [...document.querySelectorAll(`[data-host="${id}"]`)];
+function draw(id, opt = {}){
+  const S = SC[id];
+  hosts(id).forEach(h => {
+    const ae = document.activeElement;
+    const key = h.contains(ae) && ae.dataset ? ae.dataset.k : null;
+    let sel = null; try { if (key && typeof ae.selectionStart === 'number') sel = [ae.selectionStart, ae.selectionEnd, ae.value.length]; } catch (e) {}
+    const scr = [...h.querySelectorAll('[data-scroll]')].map(e => [e.dataset.scroll, e.scrollTop]);
+    h.innerHTML = S.render(S.st, h.dataset.dev);
+    scr.forEach(([k, t]) => { const e = h.querySelector(`[data-scroll="${k}"]`); if (e) e.scrollTop = opt.top ? 0 : t; });
+    if (key){ const n = h.querySelector(`[data-k="${key}"]`); if (n){ n.focus({preventScroll:true}); if (sel && n.setSelectionRange){ const d = n.value.length - sel[2]; try { n.setSelectionRange(Math.max(0, sel[0] + d), Math.max(0, sel[1] + d)); } catch (e) {} } } }
+  });
+  S.st._anim = null;
+}
+function wire(id){
+  hosts(id).forEach(h => {
+    h.addEventListener('click', e => { const a = e.target.closest('[data-act]'); if (!a || !h.contains(a)) return; if (a.tagName !== 'A') e.preventDefault(); SC[id].act(a.dataset.act, a, SC[id].st, h.dataset.dev); });
+    h.addEventListener('input', e => { const t = e.target; if (t.dataset && t.dataset.f && SC[id].input) SC[id].input(t.dataset.f, t, SC[id].st, h.dataset.dev); });
+    h.addEventListener('focusout', e => { const t = e.target; if (t.dataset && t.dataset.f && SC[id].blur) SC[id].blur(t.dataset.f, t, SC[id].st, h.dataset.dev); });
+    h.addEventListener('keydown', e => { if (e.key === 'Escape' && SC[id].act) SC[id].act('esc', null, SC[id].st, h.dataset.dev); });
+  });
+}
+function screen(id, st, render, act, input, blur){ SC[id] = {st, render, act, input, blur}; wire(id); draw(id); }
+function hostOf(id, dev){ return hosts(id).find(h => h.dataset.dev === dev); }
+/* leva o foco a um campo e rola só a tela de dentro (a moldura desktop está em escala) */
+function focusK(id, dev, k){
+  const h = hostOf(id, dev); const n = h && h.querySelector(`[data-k="${k}"]`); if (!n) return;
+  n.focus({preventScroll:true});
+  const sc = n.closest('.app-scroll'); if (!sc) return;
+  const esc2 = sc.getBoundingClientRect().height / sc.offsetHeight || 1;
+  const y = (n.getBoundingClientRect().top - sc.getBoundingClientRect().top) / esc2 + sc.scrollTop - 110;
+  sc.scrollTo({top:Math.max(0, y), behavior: REDUZ ? 'auto' : 'smooth'});
+}
+const timers = {};
+function flash(id, msg, undo){ const st = SC[id].st; st.flash = {msg, undo}; draw(id); clearTimeout(timers[id]); timers[id] = setTimeout(() => { st.flash = null; draw(id); }, undo ? 5000 : 3400); }
+const flashHtml = st => st.flash ? `<div class="flash" role="status">${I(st.flash.undo ? 'trash' : 'info', 'sm')}<span>${st.flash.msg}</span>${st.flash.undo ? `<button data-act="desfazer">Desfazer</button>` : ''}</div>` : '';
+function irPara(sec){ const el = document.getElementById(sec); if (el) el.scrollIntoView({behavior: REDUZ ? 'auto' : 'smooth', block:'start'}); }
+const SB = `<div class="statusbar"><span>9:41</span><svg width="62" height="12" viewBox="0 0 62 12" aria-hidden="true"><g fill="currentColor"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="6" width="3" height="6" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/><path d="M29 3.2a8 8 0 0 1 9.6 0l-1.3 1.5a6 6 0 0 0-7 0zM31.2 6a4.5 4.5 0 0 1 5.2 0L34 9z"/></g><rect x="43.5" y="1" width="16" height="10" rx="3" fill="none" stroke="currentColor" opacity=".5"/><rect x="45.5" y="3" width="11" height="6" rx="1.5" fill="currentColor"/></svg></div>`;
+
+/* ---------- máscaras e validações (as mesmas da Negócio) ---------- */
+function maskTel(v){ const d = dig(v).slice(0, 11); if (!d) return ''; if (d.length <= 2) return '(' + d; if (d.length <= 6) return `(${d.slice(0,2)}) ${d.slice(2)}`; if (d.length <= 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`; return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`; }
+function maskCep(v){ const d = dig(v).slice(0, 8); return d.length > 5 ? d.slice(0,5) + '-' + d.slice(5) : d; }
+function maskDoc(v){ const d = dig(v).slice(0, 14); if (d.length <= 11){ return d.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2'); } return d.replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2'); }
+function maskPlate(raw){ const c = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7); return c.length <= 3 ? c : c.slice(0, 3) + '-' + c.slice(3); }
+const placaOk = v => /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, ''));
+function cpfOk(c){ if (c.length !== 11 || /^(\d)\1+$/.test(c)) return false; for (let t = 9; t < 11; t++){ let s = 0; for (let i = 0; i < t; i++) s += +c[i] * (t + 1 - i); if (((s * 10) % 11) % 10 !== +c[t]) return false; } return true; }
+function cnpjOk(c){ if (c.length !== 14 || /^(\d)\1+$/.test(c)) return false; const calc = n => { let s = 0, p = n - 7; for (let i = 0; i < n; i++){ s += +c[i] * p--; if (p < 2) p = 9; } const r = s % 11; return r < 2 ? 0 : 11 - r; }; return calc(12) === +c[12] && calc(13) === +c[13]; }
+const emailOk = v => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
+
+/* ================= TELA 1 · SACOLA ================= */
+function t1State(v){ return { view:v, open: v !== 'adicionado', itens: v === 'vazia' ? [] : clone(CARRINHO), fechada: v === 'fechada', toast: v === 'adicionado', _anim:null, flash:null, ult:null }; }
+function bagItem(l){
+  const f = faixa(l.cat, l.qty), px = proxFaixa(l.cat, l.qty);
+  const qv = l.qtyTxt != null ? l.qtyTxt : l.qty;
+  return `<li class="bi">
+    <div class="bi-art">${th(l.id, 84)}<button class="lnk" data-act="editar" data-id="${l.id}" aria-label="Editar ${l.nome}">${I('edit','sm')}Editar</button></div>
+    <div class="bi-info">
+      <div class="bi-top"><b class="bi-nome">${l.nome}</b><button class="icon-btn" data-act="remover" data-id="${l.id}" aria-label="Remover ${l.nome} da sacola" title="Remover">${I('trash','sm')}</button></div>
+      <p class="bi-desc">${l.resumo}</p>
+      <p class="t-cap">${R(unitOf(l))} cada${l.nota ? ' · ' + esc(l.nota) : ''}</p>
+      ${f.pct ? `<span class="badge badge-pix">−${f.pct}% pela quantidade</span>` : ''}
+      ${px && l.qty >= 5 ? `<p class="bi-nudge">${I('layers','sm')}Com ${px.de}, cada uma sai ${R(unitOf(l, px.de))}</p>` : ''}
+      <div class="bi-row">
+        <div class="qty" role="group" aria-label="Quantidade de ${l.nome}">
+          <button class="qb" data-act="menos" data-id="${l.id}" data-k="m-${l.id}" aria-label="Tirar uma" ${l.qty <= 1 ? 'aria-disabled="true"' : ''}>${I('minus','sm')}</button>
+          <input class="qi" data-f="qty" data-id="${l.id}" data-k="q-${l.id}" inputmode="numeric" value="${qv}" aria-label="Quantidade de ${l.nome}" maxlength="3">
+          <button class="qb" data-act="mais" data-id="${l.id}" data-k="p-${l.id}" aria-label="Pôr mais uma">${I('plus','sm')}</button>
+        </div>
+        <span class="price">${R(linha(l))}</span>
+      </div>
+    </div></li>`;
+}
+function bagPanel(st, dev){
+  const n = pecas(st.itens), sub = subtotal(st.itens), pz = prazoDe(st.itens);
+  const head = `<div class="dr-head"><h2 id="bag-t-${dev}">Sua sacola</h2><span class="n">${n ? nPecas(n) : ''}</span><button class="icon-btn" data-act="fechar" aria-label="Fechar a sacola">${I('close')}</button></div>`;
+  if (!st.itens.length) return head + `<div class="empty"><span class="ring">${I('bag')}</span><h3 class="t-h3">Sua sacola está vazia</h3><p>Escolha uma peça e deixe com a sua cara. A gente mostra como fica antes de produzir.</p><button class="btn btn-primary" data-act="fechar">Ver as canecas</button><button class="lnk" data-act="fechar">Ver as camisetas</button></div>`;
+  const fechada = st.fechada ? `<div class="note note-amber">${I('calendar','sm')}<span>A Sheid não está recebendo pedidos pela loja até 05/01. Dá para pedir um orçamento e ela responde no WhatsApp.</span></div>` : '';
+  const pz2 = pz > 3 ? `<span class="t-cap" style="display:block">Com essa quantidade, o prazo passa de 3 para ${pz} dias úteis.</span>` : '';
+  return head + `<div class="dr-body" data-scroll="bag"><ul class="bag">${st.itens.map(bagItem).join('')}</ul></div>
+    <div class="dr-foot">${fechada}
+      <div class="sum">
+        <div class="sr"><span>Subtotal</span><span class="v">${R(sub)}</span></div>
+        <div class="sr pix"><span>No Pix (${LOJA.pixPct}% off)</span><span class="v">${R(r2(sub - pixOff(sub)))}</span></div>
+        <div class="sr muted"><span>Frete</span><span class="v">calculado no próximo passo</span></div>
+      </div>
+      <p class="prazo">${I('clock','sm')}<span>Pronto em ${pz} dias úteis após a aprovação da arte.${pz2}</span></p>
+      ${st.fechada ? `<button class="btn btn-wa btn-block" data-act="whats">${I('wa','sm')}Pedir orçamento pelo WhatsApp</button>`
+        : `<button class="btn btn-primary btn-block" data-act="finalizar">Finalizar compra${I('arrow','sm')}</button><button class="lnk mute wa-link" data-act="whats">${I('wa','sm')}Prefiro fechar pelo WhatsApp</button>`}
+    </div>`;
+}
+function t1Render(st, dev){
+  const n = pecas(st.itens);
+  const A = st._anim;
+  const head = dev === 'phone'
+    ? `<header class="st-head"><button class="icon-btn" aria-label="Menu" data-act="nada">${I('menu')}</button><span class="wm">Sheid Mania</span><button class="icon-btn" data-act="abrir" aria-label="Abrir a sacola, ${nPecas(n)}">${I('bag')}${n ? `<span class="count">${n}</span>` : ''}</button></header>`
+    : `<header class="st-head"><span class="wm">Sheid Mania</span><nav class="st-nav"><span>Canecas</span><span>Camisetas</span><span>Copos</span><span>Azulejos</span><span>Orçamento em lote</span></nav><button class="icon-btn" aria-label="Buscar" data-act="nada">${I('search')}</button><button class="icon-btn" data-act="abrir" aria-label="Abrir a sacola, ${nPecas(n)}">${I('bag')}${n ? `<span class="count">${n}</span>` : ''}</button></header>`;
+  const a = CARRINHO[0];
+  const info = `<nav class="t-cap">Canecas · Presentes</nav><h1 class="t-h2">Caneca Alça Coração</h1>
+    <div class="pp-price"><span class="price price-lg">${R(unitOf(a))}</span><span class="pix-line">${R(r2(unitOf(a) - pixOff(unitOf(a))))} no Pix</span></div>
+    <p class="prazo">${I('clock','sm')}<span>Pronto em 3 dias úteis após a aprovação da arte.</span></p>
+    <div class="pp-sel"><span class="label">Sua personalização</span><span>Frente e verso · Arte: Mãe, em rosa</span><span class="t-cap">Preço inclui R$ 8,00 do verso</span></div>`;
+  const page = dev === 'phone'
+    ? `<div class="app-scroll" data-scroll="pp"><div class="shot pp-shot">${KIT.produto(ART.a)}<span class="badge badge-soft">Sua arte</span></div><div class="pp-info">${info}</div></div><div class="pp-bar"><button class="btn btn-primary btn-block" data-act="add">${I('bag','sm')}Adicionar à sacola</button></div>`
+    : `<div class="app-scroll" data-scroll="pp"><div class="pp-d"><div class="shot">${KIT.produto(ART.a)}<span class="badge badge-soft">Sua arte</span></div><div class="pp-info">${info}<button class="btn btn-primary" data-act="add">${I('bag','sm')}Adicionar à sacola</button><button class="btn btn-secondary" data-act="add" style="min-width:280px">Comprar agora</button></div></div></div>`;
+  const toast = st.toast ? `<div class="toast${A === 'toast' ? ' anim' : ''}" role="status">${th('a', 48)}<div class="tx"><b>Adicionado à sacola</b><span class="d">Caneca Alça Coração · Frente e verso</span></div><button data-act="versacola">Ver sacola</button></div>` : '';
+  const ov = st.open ? `<div class="scrim${A === 'open' ? ' anim-fade' : ''}" data-act="fechar" aria-hidden="true"></div>
+    <div class="${dev === 'phone' ? 'sheet' : 'drawer'}${A === 'open' ? (dev === 'phone' ? ' anim-up' : ' anim-in') : ''}" role="dialog" aria-modal="true" aria-labelledby="bag-t-${dev}">${dev === 'phone' ? '<div class="grab" aria-hidden="true"></div>' : ''}${bagPanel(st, dev)}</div>` : '';
+  return `<div class="app">${dev === 'phone' ? SB : ''}${head}${page}${toast}${ov}${flashHtml(st)}</div>`;
+}
+function t1Act(act, el, st, dev){
+  const it = el && el.dataset.id ? st.itens.find(l => l.id === el.dataset.id) : null;
+  switch (act){
+    case 'abrir': case 'versacola': st.open = true; st.toast = false; st._anim = 'open'; draw('t1'); break;
+    case 'fechar': case 'esc': if (!st.open) return; st.open = false; draw('t1'); break;
+    case 'add': { const a = st.itens.find(l => l.id === 'a'); if (a) a.qty++; else st.itens.unshift(clone(CARRINHO[0])); st.toast = true; st.open = false; st._anim = 'toast'; draw('t1'); clearTimeout(timers.t1t); timers.t1t = setTimeout(() => { st.toast = false; draw('t1'); }, 4500); break; }
+    case 'mais': if (it && it.qty < 999){ it.qty++; it.qtyTxt = null; draw('t1'); } break;
+    case 'menos': if (it && it.qty > 1){ it.qty--; it.qtyTxt = null; draw('t1'); } break;
+    case 'remover': if (it){ const i = st.itens.indexOf(it); st.ult = {item:it, i}; st.itens.splice(i, 1); flash('t1', `${it.nome} saiu da sacola.`, true); } break;
+    case 'desfazer': if (st.ult){ st.itens.splice(st.ult.i, 0, st.ult.item); st.ult = null; st.flash = null; draw('t1'); } break;
+    case 'editar': flash('t1', `Abre ${it ? 'a ' + it.nome : 'a peça'} como você deixou. Ao salvar, você volta para a sacola.`); break;
+    case 'finalizar': flash('t1', 'Vai para o checkout (Tela 2). A sacola continua guardada por 7 dias.'); setTimeout(() => irPara('t2'), 700); break;
+    case 'whats': flash('t1', 'Abre o WhatsApp da Sheid com as peças, a arte, as quantidades e os preços desta tela.'); break;
+  }
+}
+function t1Input(f, el, st){
+  if (f !== 'qty') return;
+  const l = st.itens.find(x => x.id === el.dataset.id); if (!l) return;
+  const d = dig(el.value).slice(0, 3);
+  if (!d){ l.qtyTxt = ''; } else { l.qty = Math.max(1, parseInt(d, 10)); l.qtyTxt = null; }
+  draw('t1');
+}
+function t1Blur(f, el, st){ if (f !== 'qty') return; const l = st.itens.find(x => x.id === el.dataset.id); if (l && l.qtyTxt === ''){ l.qtyTxt = null; draw('t1'); } }
+
+/* ================= CHECKOUT (Telas 2, 3, 4 e o fundo da 8) ================= */
+const HINT = {
+  wa:'Usamos o WhatsApp só para avisar sobre o pedido e mandar a arte para você aprovar.',
+  email:'Mandamos o link para acompanhar o pedido.',
+  doc:'A nota sai no seu nome ou no da empresa.',
+  cep:'Vai retirar na loja? Pode pular.',
+  placa:'Carro ou moto. Exemplo: ABC-1234 ou ABC-1D23.',
+};
+const ENDERECOS = { '12242000':{rua:'Av. São João', bairro:'Jardim Esplanada'} };
+function coState(o = {}){
+  return Object.assign({ step:1, lembrado:true, nome:'Helena Martins', wa:'(12) 99183-4410', email:'helena.martins@gmail.com', querDoc:false, doc:'',
+    cep:'', cepState:'idle', end:null, km:0, num:'', compl:'', modo:null, entNome:'', placa:'', pag:null, obs:'', obsOpen:false,
+    rs:false, tent:false, touched:{}, sending:false, note:null, flash:null }, o);
+}
+function coTotals(st){
+  const sub = subtotal(CARRINHO);
+  const frete = st.modo === 'delivery' && st.cepState === 'ok' ? LOJA.frete : 0;
+  const desc = st.pag === 'pix' ? pixOff(sub) : 0;
+  return { sub, frete, desc, total:r2(sub + frete - desc), pix:r2(sub + frete - pixOff(sub)), cheio:r2(sub + frete) };
+}
+function rawErr(st, f){
+  const v = st[f];
+  switch (f){
+    case 'nome': return String(v).trim() ? null : 'Diga seu nome para a Sheid saber de quem é o pedido.';
+    case 'wa': { const d = dig(v); return !d ? 'Falta o WhatsApp.' : d.length < 10 ? 'Faltam números. Use DDD + número, como (12) 99999-9999.' : null; }
+    case 'email': return v && !emailOk(v) ? 'Esse e-mail parece incompleto. Exemplo: nome@email.com' : null;
+    case 'doc': { if (!st.querDoc) return null; const d = dig(v); if (!d) return 'Digite o CPF ou o CNPJ.'; if (d.length !== 11 && d.length !== 14) return 'Digite os 11 números do CPF ou os 14 do CNPJ.'; if (d.length === 11 && !cpfOk(d)) return 'Esse CPF não confere. Confira os números.'; if (d.length === 14 && !cnpjOk(d)) return 'Esse CNPJ não confere. Confira os números.'; return null; }
+    case 'cep': return st.cepState === 'nf' ? 'Não achamos esse CEP. Confira os números.' : (st.modo === 'delivery' && st.cepState === 'idle' ? 'Digite o CEP para calcular o frete.' : null);
+    case 'num': return st.modo === 'delivery' && st.cepState === 'ok' && !String(v).trim() ? 'Falta o número.' : null;
+    case 'entNome': return st.modo === 'courier' && !String(v).trim() ? 'Diga o nome de quem vai buscar.' : null;
+    case 'placa': return st.modo === 'courier' && !placaOk(v) ? (v ? 'Confira a placa. Exemplo: ABC-1234 ou ABC-1D23.' : 'Falta a placa.') : null;
+  }
+  return null;
+}
+function okMsg(st, f){
+  if (f === 'doc' && st.querDoc){ const d = dig(st.doc); if (d.length === 11 && cpfOk(d)) return 'CPF confere'; if (d.length === 14 && cnpjOk(d)) return 'CNPJ confere'; }
+  if (f === 'cep' && st.cepState === 'ok') return `${st.end.bairro} · ${LOJA.cidade}`;
+  return null;
+}
+const showErr = (st, f) => (st.tent || st.touched[f]) ? rawErr(st, f) : null;
+function slotHtml(st, f){ const e = showErr(st, f); if (e) return `<span class="error">${I('alert','sm')}${e}</span>`; const ok = okMsg(st, f); if (ok) return `<span class="ok">${I('check','sm')}${ok}</span>`; return HINT[f] ? `<span class="hint">${HINT[f]}</span>` : ''; }
+function fld(st, o){
+  const id = uid(), f = o.f, e = showErr(st, f);
+  const tag = o.ta ? `<textarea id="${id}" class="input ta" data-f="${f}" data-k="${f}" placeholder="${o.ph || ''}" aria-describedby="${id}-h">${esc(st[f])}</textarea>`
+    : `<input id="${id}" class="input${e ? ' err' : ''}" data-f="${f}" data-k="${f}" type="${o.type || 'text'}" ${o.im ? `inputmode="${o.im}"` : ''} ${o.ac ? `autocomplete="${o.ac}"` : ''} ${o.ph ? `placeholder="${o.ph}"` : ''} value="${esc(st[f])}" ${e ? 'aria-invalid="true"' : ''} aria-describedby="${id}-h">`;
+  return `<div class="field ${o.cls || ''}"><label for="${id}">${o.label}${o.opt ? ' <span class="opt">(opcional)</span>' : ''}</label><div class="inw">${tag}${o.extra || ''}</div><span id="${id}-h" data-slot="${f}" aria-live="polite">${slotHtml(st, f)}</span></div>`;
+}
+/* erro no blur sem redesenhar (redesenhar no blur engoliria o toque no botão) */
+function patchSlot(id, f){
+  const st = SC[id].st.co || SC[id].st;
+  hosts(id).forEach(h => { h.querySelectorAll(`[data-slot="${f}"]`).forEach(s => s.innerHTML = slotHtml(st, f)); h.querySelectorAll(`input[data-f="${f}"]`).forEach(i => { const e = !!showErr(st, f); i.classList.toggle('err', e); if (e) i.setAttribute('aria-invalid', 'true'); else i.removeAttribute('aria-invalid'); }); });
+}
+function cta(st){
+  const t = coTotals(st);
+  if (st.step === 1){
+    for (const [f, m] of [['nome','Falta seu nome'],['wa', dig(st.wa) ? 'Faltam números no WhatsApp' : 'Falta seu WhatsApp'],['email','Confira o e-mail'],['doc','Confira o CPF ou o CNPJ']]) if (rawErr(st, f)) return {ok:false, label:m, f};
+    return {ok:true, label:'Continuar para a entrega'};
+  }
+  if (st.step === 2){
+    if (!st.modo) return {ok:false, label:'Escolha como receber', f:'modo-pickup'};
+    if (st.modo === 'delivery'){
+      if (st.cepState === 'busy') return {ok:false, label:'Buscando o endereço…', f:'cep'};
+      if (st.cepState !== 'ok') return {ok:false, label: st.cepState === 'nf' ? 'Confira o CEP' : 'Digite o CEP para calcular o frete', f:'cep'};
+      if (rawErr(st, 'num')) return {ok:false, label:'Falta o número da casa', f:'num'};
+    }
+    if (st.modo === 'courier'){
+      if (rawErr(st, 'entNome')) return {ok:false, label:'Falta o nome de quem vai buscar', f:'entNome'};
+      if (rawErr(st, 'placa')) return {ok:false, label:'Confira a placa do veículo', f:'placa'};
+    }
+    return {ok:true, label:'Continuar para o pagamento'};
+  }
+  if (!st.pag) return {ok:false, label:'Escolha como pagar', f:'pag-pix'};
+  if (st.pag === 'pix') return {ok:true, label:`Pagar ${R(t.total)} no Pix`};
+  if (st.pag === 'card') return {ok:true, label:`Pagar ${R(t.total)} no cartão`};
+  return {ok:true, label:`Enviar pedido · ${R(t.total)}`};
+}
+function stepsHtml(st){
+  const L = ['Seus dados', 'Entrega', 'Pagamento'];
+  return `<nav class="steps" aria-label="Etapas do checkout">${L.map((l, i) => {
+    const n = i + 1, cls = n === st.step ? 'on' : n < st.step ? 'done' : '';
+    const inner = `<span class="dot">${n < st.step ? I('check','sm') : n}</span><span class="sl">${l}</span>`;
+    return (i ? '<span class="ln" aria-hidden="true"></span>' : '') + (n < st.step ? `<button class="stp ${cls}" data-act="goto" data-step="${n}" aria-label="Voltar para ${l}">${inner}</button>` : `<span class="stp ${cls}" ${n === st.step ? 'aria-current="step"' : ''}>${inner}</span>`);
+  }).join('')}</nav>`;
+}
+const itensHtml = (s = 52) => `<ul class="ri">${CARRINHO.map(l => `<li>${th(l.id, s, l.qty)}<div><b>${l.nome}</b><span class="d">${l.resumo}</span></div><span class="price">${R(linha(l))}</span></li>`).join('')}</ul>`;
+const prazoHtml = () => `<p class="prazo">${I('clock','sm')}<span>Pronto em ${prazoDe(CARRINHO)} dias úteis após a aprovação da arte.</span></p>`;
+function sumHtml(st){
+  const t = coTotals(st);
+  const ent = (st.step < 2 || !st.modo) ? `<div class="sr muted"><span>Entrega</span><span class="v">${st.step < 2 ? 'no próximo passo' : 'escolha como receber'}</span></div>`
+    : st.modo === 'pickup' ? `<div class="sr"><span>Retirada na loja</span><span class="v gratis">Grátis</span></div>`
+    : st.modo === 'courier' ? `<div class="sr"><span>Retirada por app</span><span class="v gratis" style="color:var(--ink2)">pago no app</span></div>`
+    : st.cepState === 'ok' ? `<div class="sr"><span>Entrega</span><span class="v">${R(t.frete)}</span></div>` : `<div class="sr muted"><span>Entrega</span><span class="v">digite o CEP</span></div>`;
+  return `<div class="sum"><div class="sr"><span>Subtotal · ${nPecas(pecas(CARRINHO))}</span><span class="v">${R(t.sub)}</span></div>${ent}
+    ${t.desc ? `<div class="sr pix"><span>Desconto no Pix (${LOJA.pixPct}%)</span><span class="v">− ${R(t.desc)}</span></div>` : ''}
+    <div class="sr total"><span>${t.desc ? 'Total no Pix' : 'Total'}</span><span class="v">${R(t.total)}</span></div>
+    ${!st.pag ? `<span class="pix-line" style="text-align:right">ou ${R(t.pix)} no Pix</span>` : st.pag === 'card' ? `<span class="t-cap" style="text-align:right">até 3x de ${R(r2(t.total / 3))} sem juros</span>` : ''}</div>`;
+}
+function rsBar(st){
+  const t = coTotals(st);
+  return `<button class="rs-bar" data-act="rs" aria-expanded="${!!st.rs}"><span class="thumbs">${CARRINHO.map(l => th(l.id, 34)).join('')}</span><span>${st.rs ? 'Esconder itens' : 'Ver itens'}</span>${I('down', st.rs ? 'sm rot' : 'sm')}<span class="tt">${R(t.total)}</span></button>${st.rs ? `<div class="rs-open anim-fade">${itensHtml(52)}${sumHtml(st)}${prazoHtml()}</div>` : ''}`;
+}
+function optCard(o){
+  return `<div class="optw${o.on ? ' on' : ''}${o.dis ? ' dis' : ''}"><button class="opc" role="radio" aria-checked="${!!o.on}" ${o.dis ? 'aria-disabled="true"' : ''} data-act="${o.grp}" data-v="${o.v}" data-k="${o.grp}-${o.v}">
+    <span class="rd" aria-hidden="true"></span><span class="ot"><span class="oh">${I(o.ic,'sm')}<b>${o.t}</b>${o.badge || ''}</span><span class="os">${o.s}</span></span><span class="or">${o.right}</span></button>${o.on && o.more ? `<div class="opt-more">${o.more}</div>` : ''}</div>`;
+}
+function step1(st){
+  return `<div class="co-top"><span class="label">Etapa 1 de 3</span><h2>Seus dados</h2></div>
+    ${st.lembrado ? `<div class="wb"><span class="av" aria-hidden="true">H</span><div class="wb-t"><b>Que bom te ver de novo, Helena</b><span>Seus dados da última compra já estão aqui.</span></div><button class="lnk" data-act="naosou">Não sou eu</button></div>` : ''}
+    ${fld(st, {f:'nome', label:'Nome completo', ac:'name', ph:'Como está no seu documento'})}
+    ${fld(st, {f:'wa', label:'WhatsApp', type:'tel', im:'numeric', ac:'tel', ph:'(12) 99999-9999'})}
+    ${fld(st, {f:'email', label:'E-mail', opt:1, type:'email', im:'email', ac:'email', ph:'voce@email.com'})}
+    <label class="ck"><input type="checkbox" data-f="querDoc" data-k="querDoc" ${st.querDoc ? 'checked' : ''}><span>Quero CPF/CNPJ na nota</span></label>
+    ${st.querDoc ? fld(st, {f:'doc', label:'CPF ou CNPJ', im:'numeric', ph:'000.000.000-00'}) : ''}`;
+}
+function step2(st){
+  const pz = prazoDe(CARRINHO);
+  const cepSt = st.cepState === 'busy' ? `<span class="st"><span class="spin"></span>Buscando</span>` : st.cepState === 'ok' ? `<span class="st ok">${I('check','sm')}</span>` : '';
+  const fora = st.cepState === 'fora';
+  const casa = st.cepState === 'ok'
+    ? `<div class="addr">${I('pin','sm')}<span><b>${st.end.rua}</b><br>${st.end.bairro} · ${LOJA.cidade}</span></div><div class="row-num">${fld(st, {f:'num', label:'Número', im:'numeric', ph:'123'})}${fld(st, {f:'compl', label:'Complemento', opt:1, ph:'Apto, bloco'})}</div>`
+    : `<p class="t-small">Digite o CEP lá em cima: o endereço e o frete aparecem sozinhos.</p>`;
+  return `<div class="co-top"><span class="label">Etapa 2 de 3</span><h2>Como você quer receber?</h2></div>
+    ${fld(st, {f:'cep', label:'CEP', im:'numeric', ac:'postal-code', ph:'00000-000', cls:'f-cep', extra:cepSt})}
+    ${fora ? `<div class="note note-red">${I('alert','sm')}<span>Fora da área de entrega (${st.km} km da loja). Dá para retirar na loja ou mandar buscar por app.</span></div>` : ''}
+    <div class="opts" role="radiogroup" aria-label="Como receber">
+      ${optCard({grp:'modo', v:'pickup', on:st.modo === 'pickup', ic:'store', t:'Retirar na loja', s:`${LOJA.end}<br>Pronto para retirar em ${pz} dias úteis após a aprovação da arte.`, right:'<span class="gratis">Grátis</span>',
+        more:`<div class="addr">${I('pin','sm')}<span><b>${LOJA.end}</b><br>${LOJA.cidade}</span></div><p class="t-small">Avisamos no WhatsApp quando estiver pronto. É só dizer o número do pedido no balcão.</p>`})}
+      ${optCard({grp:'modo', v:'delivery', on:st.modo === 'delivery', dis:fora, ic:'truck', t:'Receber em casa',
+        s: fora ? 'Não entregamos nesse CEP.' : st.cepState === 'ok' ? 'Chega 1 dia útil depois de pronto.' : 'Digite o CEP para ver o frete e o prazo.',
+        right: st.cepState === 'ok' ? R(LOJA.frete) : fora ? '—' : '<span class="t-cap">pelo CEP</span>', more:casa})}
+      ${optCard({grp:'modo', v:'courier', on:st.modo === 'courier', ic:'moto', t:'Retirada por app', s:'Você chama um Uber Flash ou 99 Entrega até a loja quando estiver pronto.', right:'<span class="t-cap">pago no app</span>',
+        more:`<div class="why">${I('shield','sm')}<span>Por que pedimos: a Sheid só entrega a sua peça para quem você indicar aqui. O frete você paga direto no app.</span></div>${fld(st, {f:'entNome', label:'Nome de quem vai buscar', ph:'Como aparece no app'})}${fld(st, {f:'placa', label:'Placa do veículo', ph:'ABC-1234', cls:'f-cep'})}`})}
+    </div>`;
+}
+function step3(st){
+  const t = coTotals(st);
+  const cheio = r2(t.sub + t.frete), pix = r2(t.sub + t.frete - pixOff(t.sub));
+  const ent = st.modo === 'delivery' ? `Receber em casa · ${st.end ? st.end.rua + ', ' + (st.num || 's/n') : ''}` : st.modo === 'courier' ? `Retirada por app · ${esc(st.entNome)} · ${esc(st.placa)}` : `Retirar na loja · ${LOJA.end}`;
+  const naHora = st.modo === 'delivery' ? 'Pagar na entrega' : 'Pagar na retirada';
+  return `<div class="co-top"><span class="label">Etapa 3 de 3</span><h2>Como você quer pagar?</h2></div>
+    <div class="opts" role="radiogroup" aria-label="Como pagar">
+      ${optCard({grp:'pag', v:'pix', on:st.pag === 'pix', ic:'pix', t:'Pix', badge:`<span class="badge badge-pix">−${LOJA.pixPct}%</span>`, s:`Aprovação na hora. Você economiza ${R(pixOff(t.sub))}. O código vale por 72 horas.`, right:`${R(pix)}<s>${R(cheio)}</s>`})}
+      ${optCard({grp:'pag', v:'card', on:st.pag === 'card', ic:'card', t:'Cartão de crédito', s:`Até 3x de ${R(r2(cheio / 3))} sem juros. Você paga no Mercado Pago e volta pra cá.`, right:R(cheio)})}
+      ${st.modo !== 'courier' ? optCard({grp:'pag', v:'hora', on:st.pag === 'hora', ic:'cash', t:naHora, s:`Dinheiro ou maquininha, na hora de ${st.modo === 'delivery' ? 'receber' : 'retirar'}.`, right:R(cheio)}) : ''}
+    </div>
+    <div class="review">
+      <div class="rv"><span class="label">Seus dados</span><p>${esc(st.nome) || '—'} · ${esc(st.wa) || '—'}</p><button class="lnk" data-act="goto" data-step="1" aria-label="Alterar seus dados">Alterar</button></div>
+      <div class="rv"><span class="label">Entrega</span><p>${ent}</p><button class="lnk" data-act="goto" data-step="2" aria-label="Alterar a entrega">Alterar</button></div>
+    </div>
+    ${st.obsOpen ? fld(st, {f:'obs', label:'Recado para a Sheid', opt:1, ta:1, ph:'Ex.: é presente, pode caprichar no laço.'}) : `<button class="lnk" data-act="obs" style="align-self:flex-start">${I('plus','sm')}Adicionar um recado para a Sheid</button>`}`;
+}
+function footHtml(st, dev){
+  const c = cta(st);
+  const rev = st.step === 3 ? `<p class="rev">${I('eye','sm')}<span>Você aprova o mockup antes de produzir. ${LOJA.rev} revisões inclusas.</span></p>` : '';
+  const btn = `<button class="btn btn-primary btn-block" data-act="${st.step === 3 ? 'final' : 'next'}" data-k="cta" ${c.ok && !st.sending ? '' : 'aria-disabled="true"'}>${st.sending ? '<span class="spin"></span>Criando seu pedido…' : c.label + (c.ok && st.step < 3 ? I('arrow','sm') : '')}</button>`;
+  return dev === 'phone' ? `<div class="co-foot">${rev}${btn}</div>`
+    : `<div class="co-foot">${rev}<div class="co-foot-row">${st.step > 1 ? `<button class="btn btn-secondary" data-act="back">${I('back','sm')}Voltar</button>` : ''}${btn}</div></div>`;
+}
+function coRender(st, dev, extra = ''){
+  const body = st.step === 1 ? step1(st) : st.step === 2 ? step2(st) : step3(st);
+  const note = st.note ? `<div class="note note-info">${I('info','sm')}<span>${st.note}</span></div>` : '';
+  const prot = `<p class="protegido">${I('lock','sm')}Seus dados são protegidos e usados só para este pedido.</p>`;
+  if (dev === 'phone') return `<div class="app">${SB}<header class="co-head"><button class="icon-btn" data-act="back" aria-label="${st.step > 1 ? 'Voltar uma etapa' : 'Voltar para a sacola'}">${I('back')}</button><span class="wm">Sheid Mania</span><span class="seguro">${I('lock','sm')}Compra segura</span></header>
+    <div class="app-scroll" data-scroll="co">${stepsHtml(st)}${rsBar(st)}<div class="co-body">${note}${body}${prot}</div></div>${footHtml(st, dev)}${flashHtml(st)}${extra}</div>`;
+  return `<div class="app"><header class="co-head"><button class="btn btn-ghost" data-act="back">${I('back','sm')}${st.step > 1 ? 'Voltar' : 'Continuar comprando'}</button><span class="wm">Sheid Mania</span><span class="seguro">${I('lock','sm')}Compra segura</span></header>
+    <div class="app-scroll" data-scroll="co"><div class="co-d">${stepsHtml(st)}<div class="co-main"><div class="co-card"><div class="co-body">${note}${body}</div>${footHtml(st, dev)}</div>${prot}</div>
+    <aside class="aside" aria-label="Resumo do pedido"><div class="aside-h"><span class="label">Sua sacola · ${nPecas(pecas(CARRINHO))}</span><button class="lnk" data-act="back" style="font-size:13px">Editar</button></div>${itensHtml(56)}<hr class="divider">${sumHtml(st)}${prazoHtml()}</aside></div></div>${flashHtml(st)}${extra}</div>`;
+}
+function buscaCep(d){
+  if (ENDERECOS[d]) return {state:'ok', end:ENDERECOS[d]};
+  if (/^00/.test(d)) return {state:'nf'};
+  if (/^122/.test(d)) return {state:'ok', end:{rua:'Rua Paraibuna', bairro:'Jardim São Dimas'}};
+  return {state:'fora', km: d[0] === '0' ? 94 : 137};
+}
+function onCep(id, st, dev){
+  const d = dig(st.cep);
+  if (d.length < 8){ if (st.cepState !== 'idle'){ st.cepState = 'idle'; st.end = null; st._cepFor = null; } return; }
+  if (st._cepFor === d) return;
+  st._cepFor = d; st.cepState = 'busy';
+  setTimeout(() => {
+    if (dig(st.cep) !== d) return;
+    const r = buscaCep(d); st.cepState = r.state; st.end = r.end || null; st.km = r.km || 0;
+    if (r.state === 'ok' && (!st.modo || st.modo === 'delivery')) st.modo = 'delivery';
+    if (r.state === 'fora' && st.modo === 'delivery') st.modo = null;
+    draw(id);
+    if (r.state === 'ok' && st.modo === 'delivery' && dev) focusK(id, dev, 'num');
+  }, 650);
+}
+function coAct(id, act, el, st, dev){
+  const c = cta(st);
+  const falta = () => { st.tent = true; draw(id); if (c.f) focusK(id, dev, c.f); };
+  switch (act){
+    case 'next': if (st.sending) return; if (!c.ok) return falta(); st.step++; st.tent = false; draw(id, {top:true}); break;
+    case 'back': if (st.step > 1){ st.step--; draw(id, {top:true}); } else flash(id, 'Volta para a sacola, com tudo como você deixou.'); break;
+    case 'goto': st.step = +el.dataset.step; st.tent = false; draw(id, {top:true}); break;
+    case 'naosou': Object.assign(st, {lembrado:false, nome:'', wa:'', email:'', doc:'', querDoc:false, touched:{}}); draw(id); focusK(id, dev, 'nome'); break;
+    case 'modo': if (el.getAttribute('aria-disabled') === 'true') return; st.modo = el.dataset.v; st.tent = false; if (st.pag === 'hora' && st.modo === 'courier') st.pag = null; draw(id); break;
+    case 'pag': st.pag = el.dataset.v; draw(id); break;
+    case 'rs': st.rs = !st.rs; draw(id); break;
+    case 'obs': st.obsOpen = true; draw(id); focusK(id, dev, 'obs'); break;
+    case 'final':
+      if (st.sending) return; if (!c.ok) return falta();
+      st.sending = true; draw(id);
+      setTimeout(() => { st.sending = false; draw(id); if (st.pag === 'card'){ setState('t6', 'ok'); irPara('t6'); } else if (st.pag === 'pix'){ setState('t5', 'pend'); irPara('t5'); } else irPara('t7'); }, 900);
+      break;
+  }
+}
+function coInput(id, f, el, st, dev){
+  let v = el.type === 'checkbox' ? el.checked : el.value;
+  if (f === 'wa') v = maskTel(v);
+  if (f === 'doc') v = maskDoc(v);
+  if (f === 'cep') v = maskCep(v);
+  if (f === 'placa') v = maskPlate(v);
+  st[f] = v;
+  if (f === 'cep') onCep(id, st, dev);
+  if (f === 'doc' && [11, 14].includes(dig(v).length)) st.touched.doc = true;
+  draw(id);
+  if (f === 'querDoc' && v) focusK(id, dev, 'doc');
+}
+function coBlur(id, f, el, st){ if (f === 'querDoc' || f === 'obs') return; st.touched[f] = true; patchSlot(id, f); }
+function checkoutScreen(id, init){
+  screen(id, coState(init), (st, dev) => coRender(st, dev), (a, el, st, dev) => coAct(id, a, el, st, dev), (f, el, st, dev) => coInput(id, f, el, st, dev), (f, el, st) => coBlur(id, f, el, st));
+}
+
+/* ================= TELA 5 · PIX ================= */
+const PIX_CODE = '00020101021226870014br.gov.bcb.pix2565qrcode.mercadopago.com/pix/v2/cobv/4f9e2c71b0d84e0a9d3a57c1e6b2f8a05204000053039865406206.815802BR5911SHEID MANIA6013SAO JOSE CAMP62070503***6304B7A1';
+function qrSvg(seed = 7, n = 29){
+  let s = seed; const rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  const zona = (x, y) => (x < 8 && y < 8) || (x > n - 9 && y < 8) || (x < 8 && y > n - 9);
+  let p = '';
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (!zona(x, y) && rnd() > .5) p += `M${x} ${y}h1v1h-1z`;
+  const f = (x, y) => `<path d="M${x} ${y}h7v7h-7zM${x + 1} ${y + 1}v5h5v-5z" fill-rule="evenodd"/><rect x="${x + 2}" y="${y + 2}" width="3" height="3"/>`;
+  return `<svg class="qr" viewBox="-2 -2 ${n + 4} ${n + 4}" role="img" aria-label="QR Code do Pix de R$ 206,81" shape-rendering="crispEdges"><rect x="-2" y="-2" width="${n + 4}" height="${n + 4}" fill="#fff"/><g fill="#141414"><path d="${p}"/>${f(0, 0)}${f(n - 7, 0)}${f(0, n - 7)}</g></svg>`;
+}
+const QR = qrSvg();
+const PIX_T = (() => { const s = subtotal(CARRINHO); return {total:r2(s - pixOff(s)), desc:pixOff(s)}; })();
+const tlItens = (sub) => [
+  ['Pedido recebido', sub || 'Hoje, pelo Pix', 'check'],
+  ['Criando a arte', 'A Sheid prepara o mockup e manda para você aprovar', 'brush'],
+  ['Em produção', 'Começa assim que você aprovar', 'layers'],
+  ['Pronto', `Para retirar na loja, ${prazoDe(CARRINHO)} dias úteis após a aprovação`, 'box'],
+];
+const tlV = sub => `<ol class="tl">${tlItens(sub).map(([b, s, ic], i) => `<li class="${i ? '' : 'on'}"><span class="nd">${I(i ? ic : 'check')}</span><div><b>${b}</b><span>${s}</span></div></li>`).join('')}</ol>`;
+const tlH = sub => `<ol class="tl-h">${tlItens(sub).map(([b, s, ic], i) => `<li class="${i ? '' : 'on'}" ${i ? '' : 'aria-current="step"'}><span class="nd">${I(i ? ic : 'check')}</span><b>${b}</b><span>${s}</span></li>`).join('')}</ol>`;
+function pixRender(st, dev){
+  const phone = dev === 'phone';
+  const head = phone ? `<header class="st-head"><span class="hsp"></span><span class="wm">Sheid Mania</span><button class="icon-btn" data-act="wa" aria-label="Falar com a Sheid no WhatsApp">${I('wa')}</button></header>`
+    : `<header class="st-head"><span class="wm">Sheid Mania</span><span style="flex:1"></span><button class="btn btn-ghost" data-act="wa">${I('wa','sm')}Precisa de ajuda? Falar com a Sheid</button></header>`;
+  const copiar = `<button class="btn ${phone ? 'btn-pix' : 'btn-secondary'} btn-block" data-act="copiar" data-k="copiar">${st.copied ? I('check','sm') + 'Copiado' : I('copy','sm') + 'Copiar código Pix'}</button>`;
+  const proof = `<button class="proof${st.proof === 2 ? ' done' : ''}" data-act="proof" ${st.proof === 1 ? 'aria-busy="true"' : ''}><span class="pi">${st.proof === 1 ? '<span class="spin"></span>' : I(st.proof === 2 ? 'check' : 'upload')}</span><span class="tx">${st.proof === 2 ? '<b>Comprovante enviado</b><span>comprovante-pix.jpg · a Sheid já pode conferir</span>' : st.proof === 1 ? '<b>Enviando…</b><span>comprovante-pix.jpg</span>' : '<b>Anexar comprovante <span style="display:inline;color:var(--ink3);font-weight:400">(opcional)</span></b><span>Anexar agiliza a confirmação da loja.</span>'}</span></button>`;
+  const live = `<p class="live" aria-live="polite"><i></i>Esta tela confere o pagamento sozinha</p>`;
+  const validade = `<p class="valid">${I('clock','sm')}<span>O código vale por 72 horas, até ${LOJA.vence}. Depois disso o pedido cancela sozinho.</span></p>`;
+  const passos = `<ol class="passos"><li><span>Toque em <b>Copiar código Pix</b>.</span></li><li><span>No app do banco, escolha <b>Pix Copia e Cola</b> e cole.</span></li><li><span>Volte aqui: esta tela muda sozinha quando o pagamento entrar.</span></li></ol>`;
+  const passosD = `<ol class="passos"><li><span>Abra o app do banco no celular e escolha <b>pagar com QR Code</b>.</span></li><li><span>Aponte a câmera para o código ao lado.</span></li><li><span>Pronto: esta página muda sozinha quando o pagamento entrar.</span></li></ol>`;
+  let body;
+  if (st.fase === 'pago'){
+    const inner = `<span class="circ pop">${I('check')}</span><span class="label">Pedido #${LOJA.pedido}</span><h1 class="t-h2">Pagamento recebido</h1><p>A Sheid já está com o seu pedido. Em até 1 dia útil ela manda o mockup no seu WhatsApp para você aprovar.</p>`;
+    body = phone ? `<div class="pix-p"><div class="state-card" style="border:0;background:none;padding:12px 0 0">${inner}</div><div class="cf-box">${tlV('Hoje, pago no Pix')}</div><button class="btn btn-primary btn-block" data-act="ver">Ver meu pedido${I('arrow','sm')}</button></div>`
+      : `<div class="pix-d"><div class="state-card" style="padding:40px 48px;gap:14px">${inner}<div style="width:100%;margin:14px 0 6px">${tlH('Hoje, pago no Pix')}</div><button class="btn btn-primary" data-act="ver" style="min-width:260px">Ver meu pedido${I('arrow','sm')}</button></div></div>`;
+  } else {
+    const topo = st.fase === 'wait'
+      ? `<div class="state-card"><span class="circ amber sm">${I('clock')}</span><h1 class="t-h3">Aguardando a loja confirmar</h1><p>Avisamos a Sheid que você pagou ${R(PIX_T.total)}. Assim que o Pix aparecer para ela, esta tela muda sozinha e você recebe a confirmação no WhatsApp.</p>${live}</div>`
+      : `<div class="pix-hero"><span class="label">Pedido #${LOJA.pedido}</span><h1 class="t-h2">Falta só o Pix</h1><span class="pix-val">${R(PIX_T.total)}</span><span class="pix-line">Você economiza ${R(PIX_T.desc)} pagando no Pix</span></div>`;
+    const codeBox = `<div class="code-box"><span class="label">Pix Copia e Cola</span><p class="code">${PIX_CODE}</p>${copiar}</div>`;
+    const acoes = st.fase === 'wait' ? `${proof}` : `${proof}<button class="btn btn-secondary btn-block" data-act="japaguei">${I('check','sm')}Já paguei</button>${live}`;
+    if (phone){
+      body = `<div class="pix-p">${topo}${st.fase === 'wait' ? `<button class="lnk" data-act="qrtog" style="align-self:center">${I('copy','sm')}Ainda não pagou? Ver o código de novo</button>${st.qr ? codeBox : ''}` : codeBox + validade + passos +
+        `<button class="lnk mute" data-act="qrtog" aria-expanded="${!!st.qr}" style="align-self:flex-start">${I('qr','sm')}${st.qr ? 'Esconder o QR Code' : 'Mostrar o QR Code (para pagar com outro celular)'}</button>${st.qr ? `<div class="qr-box anim-fade">${QR}</div>` : ''}`}<hr class="divider">${acoes}
+        <p class="t-cap" style="text-align:center">${nPecas(pecas(CARRINHO))} · Retirar na loja · pronto em ${prazoDe(CARRINHO)} dias úteis após a aprovação da arte</p></div>`;
+    } else {
+      body = `<div class="pix-d"><div class="pix-panel"><div class="pix-left">${st.fase === 'wait' ? `<span class="label">Pedido #${LOJA.pedido}</span>` : `<span class="label">Aponte a câmera do banco</span><div class="qr-box">${QR}</div><span class="t-cap">ou</span><p class="code" style="width:100%">${PIX_CODE}</p>${copiar}`}
+        <ul class="ri" style="width:100%;margin-top:6px">${CARRINHO.map(l => `<li>${th(l.id, 44, l.qty)}<div><b style="font-size:13px">${l.nome}</b><span class="d">${l.resumo}</span></div></li>`).join('')}</ul></div>
+        <div class="pix-right">${topo}${st.fase === 'wait' ? '' : validade + passosD}<hr class="divider">${acoes}</div></div></div>`;
+    }
+  }
+  return `<div class="app">${phone ? SB : ''}${head}<div class="app-scroll" data-scroll="pix">${body}</div>${flashHtml(st)}</div>`;
+}
+function pixAct(act, el, st){
+  switch (act){
+    case 'copiar': try { navigator.clipboard && navigator.clipboard.writeText(PIX_CODE).catch(() => {}); } catch (e) {} st.copied = true; draw('t5'); clearTimeout(timers.cp); timers.cp = setTimeout(() => { st.copied = false; draw('t5'); }, 2200); break;
+    case 'qrtog': st.qr = !st.qr; draw('t5'); break;
+    case 'proof': if (st.proof) return; st.proof = 1; draw('t5'); setTimeout(() => { st.proof = 2; draw('t5'); }, 1000); break;
+    case 'japaguei': st.fase = 'wait'; st.qr = false; draw('t5', {top:true}); pressed('t5', 'wait'); break;
+    case 'ver': irPara('t7'); break;
+    case 'wa': flash('t5', 'Abre o WhatsApp da Sheid com "Pedido #00123" já escrito.'); break;
+  }
+}
+
+/* ================= TELA 6 · VOLTA DO CARTÃO ================= */
+function cardRender(st, dev){
+  const phone = dev === 'phone', total = subtotal(CARRINHO);
+  const head = phone ? `<header class="st-head"><span class="hsp"></span><span class="wm">Sheid Mania</span><button class="icon-btn" data-act="wa" aria-label="Falar com a Sheid no WhatsApp">${I('wa')}</button></header>` : `<header class="st-head"><span class="wm">Sheid Mania</span></header>`;
+  let c;
+  if (st.estado === 'ok') c = `<span class="circ pop">${I('check')}</span><span class="label">Pedido #${LOJA.pedido}</span><h1 class="t-h2">Pagamento aprovado</h1><p>${R(total)} em 3x de ${R(r2(total / 3))} sem juros no cartão. A Sheid já está com o seu pedido e em até 1 dia útil manda o mockup no seu WhatsApp.</p>
+      <div style="width:100%;text-align:left;margin:6px 0">${phone ? tlV('Hoje, pago no cartão') : tlH('Hoje, pago no cartão')}</div><button class="btn btn-primary ${phone ? 'btn-block' : ''}" data-act="ver" style="min-width:260px">Ver meu pedido${I('arrow','sm')}</button>`;
+  else if (st.estado === 'analise') c = `<span class="circ amber">${I('clock')}</span><span class="label">Pedido #${LOJA.pedido}</span><h1 class="t-h2">Pagamento em análise</h1><p>O Mercado Pago está conferindo o pagamento de ${R(total)}. Costuma levar poucos minutos. Seu pedido está guardado: você pode fechar esta página e o aviso chega no WhatsApp.</p>
+      <p class="live"><i></i>Conferindo de novo em alguns segundos</p><button class="btn btn-secondary ${phone ? 'btn-block' : ''}" data-act="acomp" style="min-width:260px">${I('eye','sm')}Acompanhar pedido</button>`;
+  else c = `<span class="circ red">${I('alert')}</span><span class="label">Pedido #${LOJA.pedido}</span><h1 class="t-h2">O pagamento não foi aprovado</h1><p>Nada foi cobrado. Costuma ser limite do cartão ou um número digitado diferente. Seu pedido continua guardado por 72 horas.</p>
+      <div class="btns" style="width:100%;max-width:380px"><button class="btn btn-primary btn-block" data-act="outro">${I('card','sm')}Tentar outro cartão</button><button class="btn btn-pix btn-block" data-act="pix">${I('pix','sm')}Pagar com Pix · ${R(PIX_T.total)}</button><span class="pix-line" style="text-align:center">No Pix você ainda economiza ${R(PIX_T.desc)}</span></div>`;
+  const body = phone ? `<div class="pix-p"><div class="state-card" style="border:0;background:none;padding:18px 4px 0" role="status">${c}</div></div>`
+    : `<div class="pix-d" style="max-width:760px;padding-top:48px"><div class="state-card" style="padding:40px 48px;gap:14px;box-shadow:var(--sh-2)" role="status">${c}</div></div>`;
+  return `<div class="app">${phone ? SB : ''}${head}<div class="app-scroll" data-scroll="card">${body}</div>${flashHtml(st)}</div>`;
+}
+function cardAct(act){
+  if (act === 'ver') irPara('t7');
+  else if (act === 'pix'){ setState('t5', 'pend'); irPara('t5'); }
+  else if (act === 'outro') flash('t6', 'Abre o Mercado Pago de novo, com o mesmo pedido #00123.');
+  else if (act === 'acomp') flash('t6', 'Abre /sheid-mania/acompanhar/k7Qm2x9T.');
+  else if (act === 'wa') flash('t6', 'Abre o WhatsApp da Sheid com "Pedido #00123" já escrito.');
+}
+
+/* ================= TELA 7 · CONFIRMAÇÃO ================= */
+function confRender(st, dev){
+  const phone = dev === 'phone', s = subtotal(CARRINHO), desc = pixOff(s);
+  const head = phone ? `<header class="st-head"><button class="icon-btn" aria-label="Menu" data-act="nada">${I('menu')}</button><span class="wm">Sheid Mania</span><button class="icon-btn" data-act="wa" aria-label="Falar com a Sheid no WhatsApp">${I('wa')}</button></header>`
+    : `<header class="st-head"><span class="wm">Sheid Mania</span><nav class="st-nav"><span>Canecas</span><span>Camisetas</span><span>Copos</span><span>Azulejos</span></nav><button class="btn btn-ghost" data-act="wa">${I('wa','sm')}Falar com a Sheid</button></header>`;
+  if (st.loading){
+    const sk = (h, w = '100%') => `<div class="sk" style="height:${h}px;width:${w}"></div>`;
+    return `<div class="app">${phone ? SB : ''}${head}<div class="app-scroll"><div class="${phone ? 'cf' : 'cf-d'}" aria-busy="true">${sk(24, '40%')}${sk(34, '80%')}${sk(phone ? 250 : 120)}${sk(110)}${sk(48)}</div></div></div>`;
+  }
+  const hero = `<div class="cf-hero"><div style="display:flex;flex-direction:column;gap:8px"><span class="badge badge-pix">${I('check','sm')}Pago no Pix</span><h1 class="${phone ? 't-h2' : 't-h1'}">Pedido recebido, Helena.</h1><p class="t-small">Pedido #${LOJA.pedido} · feito em 25/09/2026</p></div></div>`;
+  const agora = `<div class="agora"><span class="label">O que acontece agora</span><p class="big">Em até 1 dia útil a Sheid manda o mockup no seu WhatsApp para você aprovar.</p><p class="t-small">${I('eye','sm')}<span>Nada vai para a produção sem o seu ok. ${LOJA.rev} revisões inclusas; a partir da terceira, ${R(LOJA.revExtra)} cada.</span></p></div>`;
+  const btns = `<div class="btns"><button class="btn btn-primary btn-block" data-act="acomp">${I('eye','sm')}Acompanhar pedido</button><button class="btn btn-wa btn-block" data-act="guardar">${I('wa','sm')}Guardar este link no WhatsApp</button></div>`;
+  const itens = `<div class="cf-box"><span class="label">Seus itens</span>${itensHtml(56)}<hr class="divider"><div class="sum"><div class="sr"><span>Subtotal</span><span class="v">${R(s)}</span></div><div class="sr"><span>Retirada na loja</span><span class="v gratis">Grátis</span></div><div class="sr pix"><span>Desconto no Pix</span><span class="v">− ${R(desc)}</span></div><div class="sr total"><span>Pago no Pix</span><span class="v">${R(r2(s - desc))}</span></div></div>
+    <div class="addr">${I('store','sm')}<span><b>Retirar na loja</b><br>${LOJA.end} · ${LOJA.cidade}</span></div></div>`;
+  const outra = `<button class="btn btn-ghost" data-act="outra" style="align-self:center">${I('brush','sm')}Personalizar outra peça</button>`;
+  const inst = `<footer class="inst">Sheid Mania · @sheidmania_ · ${LOJA.wa}<br>Loja desenvolvida com Aura.</footer>`;
+  const body = phone ? `<div class="cf">${hero}<div class="cf-box"><span class="label">Onde está o seu pedido</span>${tlV()}</div>${agora}${btns}${itens}${outra}${inst}</div>`
+    : `<div class="cf-d">${hero}<div class="cf-box" style="padding:26px 20px">${tlH()}</div><div class="cf-cols"><div style="display:flex;flex-direction:column;gap:16px">${agora}${btns}${outra}</div>${itens}</div>${inst}</div>`;
+  return `<div class="app">${phone ? SB : ''}${head}<div class="app-scroll" data-scroll="cf">${body}</div>${flashHtml(st)}</div>`;
+}
+function confAct(act, el, st){
+  const m = { acomp:'Abre loja.getaura.com.br/sheid-mania/acompanhar/k7Qm2x9T, com a marca da Sheid.', guardar:'Abre o WhatsApp com o link deste pedido pronto para você mandar para si mesma.', outra:'Volta para a loja. A sacola começa vazia; este pedido continua neste link.', wa:'Abre o WhatsApp da Sheid com "Pedido #00123" já escrito.' }[act];
+  if (m) flash('t7', m);
+}
+function f5(){ const st = SC.t7.st; st.loading = true; st.flash = null; draw('t7', {top:true}); setTimeout(() => { st.loading = false; draw('t7'); flash('t7', 'Recarregou. O pedido veio do servidor pelo link: nada se perdeu.'); }, 800); }
+
+/* ================= TELA 8 · PEDIDO DUPLICADO ================= */
+function dupRender(st, dev){
+  const phone = dev === 'phone';
+  const ov = st.fase === 'ask' ? `<div class="scrim anim-fade" aria-hidden="true"></div><div class="${phone ? 'sheet anim-up' : 'dialog anim-fade'}" role="alertdialog" aria-modal="true" aria-labelledby="dup-${dev}">${phone ? '<div class="grab" aria-hidden="true"></div>' : ''}<div class="dlg-b">
+      <span class="circ amber sm">${I('clock')}</span>
+      <h2 class="t-h3" id="dup-${dev}">Você tem um pedido esperando pagamento (#${LOJA.pedido})</h2>
+      <p class="t-small">Você começou esse pedido há 2 horas e o Pix ainda não entrou. Quer continuar de onde parou?</p>
+      <div class="dup"><span class="thumbs">${CARRINHO.map(l => th(l.id, 40)).join('')}</span><div class="tx"><b>${nPecas(pecas(CARRINHO))} · ${R(PIX_T.total)} no Pix</b><span>O código vale até ${LOJA.vence}</span></div></div>
+      <button class="btn btn-primary btn-block" data-act="continuar" data-k="continuar">Continuar esse pedido</button>
+      <button class="btn btn-secondary btn-block" data-act="novo">Fazer um novo</button>
+      <p class="t-cap" style="text-align:center">Se não for pago, o #${LOJA.pedido} cancela sozinho em 72 horas.</p></div></div>` : '';
+  st.co.flash = st.flash;
+  return coRender(st.co, dev, ov);
+}
+function dupAct(act, el, st, dev){
+  if (act === 'continuar'){ setState('t5', 'pend'); irPara('t5'); return; }
+  if (act === 'novo' || (act === 'esc' && st.fase === 'ask')){ st.fase = 'novo'; st.co.note = `Tudo bem, vamos fazer um novo. O #${LOJA.pedido} continua esperando o Pix até ${LOJA.vence} e depois cancela sozinho.`; draw('t8'); return; }
+  if (st.fase === 'ask') return;
+  coAct('t8', act, el, st.co, dev);
+}
+
+/* ================= TELA 9 · ORÇAMENTO EM LOTE ================= */
+const PECAS_LOTE = [
+  {id:'branca', nome:'Caneca Branca', plural:'Canecas Brancas', un:'canecas', preco:39.90, cat:'caneca', art:{tipo:'reta', corpo:'#F7F4EE', arte:{texto:'Formatura', cor:'#1D4E89', fonte:"'Fraunces',serif", tam:15, sub:'ENFERMAGEM 2026'}}},
+  {id:'colorida', nome:'Caneca Alça Colorida', plural:'Canecas Alça Colorida', un:'canecas', preco:49.90, cat:'caneca', art:{tipo:'reta', corpo:'#F7F4EE', alca:'#3E6FB0', arte:{texto:'Formatura', cor:'#3E6FB0', fonte:"'Fraunces',serif", tam:15}}},
+  {id:'chopp', nome:'Caneca Chopp', plural:'Canecas Chopp', un:'canecas', preco:70.00, cat:'caneca', art:{tipo:'chopp', corpo:'#E9D9B8', arte:{texto:'Turma 26', cor:'#6B3E12', fonte:"'Fraunces',serif", tam:16}}},
+  {id:'stanley', nome:'Copo Stanley', plural:'Copos Stanley', un:'copos', preco:49.99, cat:'copo', art:{tipo:'copo', corpo:'#2C4A3E', alca:'#20362D', arte:{texto:'Turma', cor:'#F4E9D0', fonte:"'Fraunces',serif", tam:15}}},
+];
+const NOMES = ['Ana Clara Ribeiro','Beatriz Nogueira','Bruno Carvalho','Camila Duarte','Carlos Eduardo Lima','Silva, João','Daniela Prado','Eduarda Fontes','Felipe Moraes','Gabriela Antunes','Gustavo Henrique Reis','Helena Cardoso','Isabela Rocha','Júlia Martins','Kauã Oliveira','Larissa Monteiro','Leonardo Batista','Letícia Farias','Lucas Gabriel Souza','Luana Teixeira','Marcela Pires','Maria Eduarda Castro','Mariana Lopes','Matheus Almeida','Mirela Campos','Natália Barros','Nicolas Freitas','Paula Vasconcelos','Pedro Henrique Dias','Rafaela Mendes','Renan Figueiredo','Sabrina Correia','Santos, Maria Luísa','Sophia Azevedo','Thaís Guimarães','Thiago Pereira','Valentina Costa','Vinícius Rezende','Vitória Ramos','Yasmin Tavares','Alice Fernandes','Arthur Nascimento','Bianca Queiroz','Caio Brandão','Débora Sampaio','Enzo Macedo','Fernanda Siqueira','Giovanna Lacerda','Igor Pacheco','Joana Bittencourt'];
+const nomesDaLista = raw => String(raw || '').split(/[\n;]+/).map(n => n.trim()).filter(Boolean).slice(0, 200);
+const FERIADOS = ['2026-10-12', '2026-11-02', '2026-11-20', '2026-12-25'];
+function maisDiasUteis(ini, n){ const d = new Date(ini + 'T12:00:00'); let k = 0; while (k < n){ d.setDate(d.getDate() + 1); const w = d.getDay(), iso = d.toISOString().slice(0, 10); if (w && w !== 6 && !FERIADOS.includes(iso)) k++; } return d.toISOString().slice(0, 10); }
+const ddmm = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '';
+function loteCot(st){
+  const p = PECAS_LOTE.find(x => x.id === st.prod), nomes = nomesDaLista(st.raw), n = nomes.length;
+  const f = faixa(p.cat, Math.max(1, n)), px = proxFaixa(p.cat, Math.max(1, n));
+  const unit = r2(p.preco * (1 - f.pct / 100)), total = r2(unit * n), cheio = r2(p.preco * n);
+  const minimo = maisDiasUteis('2026-09-25', f.dias + 1);
+  return {p, nomes, n, f, px, unit, total, economia:r2(cheio - total), minimo};
+}
+function pendLote(st, c){
+  if (!st.evento || st.evento.trim().length < 2) return ['Diga de qual evento se trata', 'evento'];
+  if (!c.n) return ['Cole a lista de nomes', 'raw'];
+  if (!st.contato || st.contato.trim().length < 2) return ['Diga seu nome', 'contato'];
+  if (dig(st.tel).length < 10) return ['Informe um WhatsApp com DDD', 'tel'];
+  return null;
+}
+function prevHtml(c){
+  const faixas = ESCADA[c.p.cat].slice().sort((a, b) => a.de - b.de);
+  const rot = (f, i) => { const prox = faixas[i + 1]; return prox ? `${f.de}–${prox.de - 1}` : `${f.de}+`; };
+  return `<div class="prev" aria-live="polite"><div class="lbl-row"><span class="label">Prévia do lote</span><span class="t-cap">${c.p.nome}</span></div><span class="t-cap" style="margin-bottom:-6px">Preço por unidade (R$) e prazo em dias úteis, por faixa</span>
+    <div class="esc">${faixas.map((f, i) => `<div class="deg${f === c.f ? ' on' : ''}"><span>${rot(f, i)} un</span><b>${R(r2(c.p.preco * (1 - f.pct / 100))).replace('R$ ', '')}</b><span class="pct">${f.pct ? '−' + f.pct + '%' : 'tabela'}</span><span>${f.dias} d.u.</span></div>`).join('')}</div>
+    ${c.px ? `<p class="nudge">${I('layers','sm')}Faltam ${c.px.de - c.n} ${c.px.de - c.n === 1 ? 'nome' : 'nomes'} para ${R(r2(c.p.preco * (1 - c.px.pct / 100)))} cada</p>` : ''}
+    <div class="sum"><div class="sr"><span>${c.n} × ${R(c.unit)}</span><span class="v">${R(c.total)}</span></div>
+    ${c.economia > 0 ? `<div class="sr pix"><span>Desconto por volume (${c.f.pct}%)</span><span class="v">− ${R(c.economia)}</span></div>` : ''}
+    <div class="sr total"><span>Total do lote</span><span class="v">${R(c.total)}</span></div></div>
+    <p class="prazo">${I('clock','sm')}<span>Pronto em ${c.f.dias} dias úteis depois que você aprova a prova da arte.</span></p></div>`;
+}
+function loteForm(st, dev, c){
+  const e = f => st.tent && pendLote(st, c) && pendLote(st, c)[1] === f;
+  const ids = {ev:uid(), nm:uid(), ct:uid(), tl:uid(), dt:uid()};
+  const hl = c.nomes.filter(n => n.includes(','));
+  const late = st.data && st.data < c.minimo;
+  return `<div class="lt">
+    <div class="lt-h"><span class="label">Pedido em lote · preço na hora</span><h1 class="${dev === 'phone' ? 't-h2' : 't-h1'}">Muitas peças, um orçamento só</h1><p>Cole a lista de nomes e veja o preço por unidade na hora. A Sheid confere e responde no seu WhatsApp.</p></div>
+    <div class="field"><label for="${ids.ev}">De qual evento estamos falando?</label><input id="${ids.ev}" class="input${e('evento') ? ' err' : ''}" data-f="evento" data-k="evento" value="${esc(st.evento)}" placeholder="Ex.: Casamento Marília e João"></div>
+    <div class="field"><span style="font-size:13px;font-weight:600;color:var(--ink2)" id="pc-l-${dev}">Qual peça?</span><div class="pcs" role="radiogroup" aria-labelledby="pc-l-${dev}">${PECAS_LOTE.map(p => `<button class="pc" role="radio" aria-checked="${st.prod === p.id}" data-act="prod" data-v="${p.id}"><span class="th">${KIT.produto(p.art)}</span><span><b>${p.nome}</b><span class="d">${R(p.preco)}</span></span></button>`).join('')}</div></div>
+    <div class="field"><div class="lbl-row"><label for="${ids.nm}">Quem vai receber? Um nome por linha.</label><span class="cnt" aria-live="polite">${c.n} ${c.n === 1 ? 'nome' : 'nomes'}</span></div>
+      <textarea id="${ids.nm}" class="input ta ta-names${e('raw') ? ' err' : ''}" data-f="raw" data-k="raw" placeholder="Cole aqui a coluna da planilha">${esc(st.raw)}</textarea>
+      <span class="hint">Pode colar a coluna inteira da planilha. Vírgula não separa nomes: "Silva, João" é uma pessoa só.</span>
+      ${c.n ? `<div class="chips" aria-label="Como a Sheid vai ler">${c.nomes.slice(0, 4).map(n => `<span>${esc(n)}</span>`).join('')}${hl.slice(0, 1).map(n => `<span class="hl">${esc(n)}</span>`).join('')}${c.n > 5 ? `<span>e mais ${c.n - 4 - Math.min(1, hl.length)}</span>` : ''}</div>` : ''}</div>
+    ${dev === 'phone' ? prevHtml(c) : ''}
+    <div class="field"><label for="${ids.ct}">Seu nome</label><input id="${ids.ct}" class="input${e('contato') ? ' err' : ''}" data-f="contato" data-k="contato" autocomplete="name" value="${esc(st.contato)}"></div>
+    <div class="field"><label for="${ids.tl}">WhatsApp com DDD</label><input id="${ids.tl}" class="input${e('tel') ? ' err' : ''}" data-f="tel" data-k="tel" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(12) 99999-9999" value="${esc(st.tel)}">${e('tel') ? `<span class="error">${I('alert','sm')}Informe o WhatsApp com DDD para a Sheid responder.</span>` : `<span class="hint">É por ele que chega o orçamento e a prova da arte.</span>`}</div>
+    <div class="field"><label for="${ids.dt}">Para quando você precisa? <span class="opt">(opcional)</span></label><input id="${ids.dt}" class="input" type="date" data-f="data" data-k="data" min="2026-09-26" value="${st.data}">
+      ${late ? `<div class="note note-amber">${I('calendar','sm')}<span>Essa data fica apertada para ${c.n} ${c.p.un}. A Sheid diz na resposta se consegue.</span></div>` : `<span class="hint">Com ${c.n} ${c.p.un}, dá tempo para receber a partir de ${ddmm(c.minimo)}, se a prova for aprovada até segunda.</span>`}</div>
+  </div>`;
+}
+function loteRender(st, dev){
+  const phone = dev === 'phone', c = loteCot(st), pend = pendLote(st, c);
+  const head = phone ? `<header class="st-head"><button class="icon-btn" data-act="voltar" aria-label="Voltar para a loja">${I('back')}</button><span class="wm">Sheid Mania</span><span class="hsp"></span></header>`
+    : `<header class="st-head"><span class="wm">Sheid Mania</span><nav class="st-nav"><span>Canecas</span><span>Camisetas</span><span>Copos</span><span>Azulejos</span><span style="color:var(--brand-text);font-weight:600">Orçamento em lote</span></nav></header>`;
+  const btn = `<button class="btn btn-primary btn-block" data-act="enviar" data-k="enviar" ${pend || st.sending ? 'aria-disabled="true"' : ''}>${st.sending ? '<span class="spin"></span>Enviando…' : pend ? pend[0] : `Pedir orçamento · ${c.n} ${c.p.un}`}</button>`;
+  if (st.enviado){
+    const d = `<div class="${phone ? 'lt-done' : 'lt-done lt-done-d'}" role="status"><span class="num">Orçamento #L-0042</span><h1 class="${phone ? 't-h2' : 't-h1'}">A Sheid recebeu sua lista, ${esc(st.contato.split(' ')[0] || '')}.</h1>
+      <p class="t-body" style="color:var(--ink2)">${c.n} ${c.p.plural} para "${esc(st.evento)}", com estimativa de <b style="color:var(--ink)">${R(c.total)}</b> (${R(c.unit)} cada) e pronto em ${c.f.dias} dias úteis depois da aprovação.</p>
+      <div class="note note-info">${I('info','sm')}<span>Isso é um orçamento, ainda não é um pedido fechado. A Sheid confere a lista e confirma o preço e o prazo.</span></div>
+      <div class="cf-box"><span class="label">O que acontece agora</span><ol class="passos"><li><span>A Sheid confere os ${c.n} nomes e o prazo, <b>em até 1 dia útil</b>.</span></li><li><span>Você recebe no WhatsApp o link do orçamento #L-0042 com a prova da arte.</span></li><li><span>Aprova e paga o sinal pelo link. Precisa de nota com CNPJ? É lá que você informa.</span></li></ol></div>
+      <div class="btns"><button class="btn btn-wa btn-block" data-act="wa">${I('wa','sm')}Mandar o #L-0042 no WhatsApp da Sheid</button><button class="btn btn-secondary btn-block" data-act="voltar">Voltar para a loja</button></div></div>`;
+    return `<div class="app">${phone ? SB : ''}${head}<div class="app-scroll" data-scroll="lt">${d}</div>${flashHtml(st)}</div>`;
+  }
+  if (phone) return `<div class="app">${SB}${head}<div class="app-scroll" data-scroll="lt">${loteForm(st, dev, c)}</div><div class="lt-foot"><div class="lf"><span>${c.n} × ${R(c.unit)}${c.f.pct ? ` · −${c.f.pct}%` : ''}</span><b>${R(c.total)}</b></div>${btn}</div>${flashHtml(st)}</div>`;
+  return `<div class="app">${head}<div class="app-scroll" data-scroll="lt"><div class="lt-d"><div class="co-card" style="padding:32px">${loteForm(st, dev, c)}</div><aside class="aside" aria-label="Prévia do lote">${prevHtml(c)}${btn}<p class="t-cap" style="text-align:center">Sem compromisso: a Sheid responde no WhatsApp.</p></aside></div></div>${flashHtml(st)}</div>`;
+}
+function loteAct(act, el, st, dev){
+  const c = loteCot(st);
+  switch (act){
+    case 'prod': st.prod = el.dataset.v; draw('t9'); break;
+    case 'enviar': { if (st.sending) return; const p = pendLote(st, c); if (p){ st.tent = true; draw('t9'); focusK('t9', dev, p[1]); return; } st.sending = true; draw('t9'); setTimeout(() => { st.sending = false; st.enviado = true; draw('t9', {top:true}); pressed('t9', 'done'); }, 900); break; }
+    case 'voltar': flash('t9', 'Volta para a loja.'); break;
+    case 'wa': flash('t9', 'Abre o WhatsApp da Sheid: "Oi! Mandei o orçamento #L-0042, 50 Canecas Brancas para a formatura."'); break;
+  }
+}
+function loteInput(f, el, st){ let v = el.value; if (f === 'tel') v = maskTel(v); st[f] = v; draw('t9'); }
+
+/* ---------- estados da moldura (botões da meta) ---------- */
+function pressed(id, v){ document.querySelectorAll(`.mk-states[data-for="${id}"] button`).forEach(b => b.setAttribute('aria-pressed', b.dataset.state === v ? 'true' : 'false')); }
+const T9 = () => ({evento:'Formatura Enfermagem 2026', prod:'branca', raw:NOMES.join('\n'), contato:'Marcos Tavares', tel:'', data:'2026-12-04', tent:false, sending:false, enviado:false, flash:null});
+function setState(id, v){
+  pressed(id, v);
+  const S = SC[id];
+  if (id === 't1'){ S.st = t1State(v); }
+  if (id === 't2'){ S.st = coState(v === 'nova' ? {lembrado:false, nome:'', wa:'', email:''} : {}); }
+  if (id === 't3'){ S.st = coState({step:2}); if (v === 'casa'){ Object.assign(S.st, {cep:'12242-000', cepState:'ok', _cepFor:'12242000', end:ENDERECOS['12242000'], modo:'delivery'}); } if (v === 'fora'){ Object.assign(S.st, {cep:'01310-100', cepState:'fora', _cepFor:'01310100', km:94}); } if (v === 'app'){ Object.assign(S.st, {modo:'courier', entNome:'Rogério', placa:'FXT-4'}); } }
+  if (id === 't5'){ Object.assign(S.st, {fase:v, copied:false, qr:false, proof: v === 'pend' ? 0 : 2}); }
+  if (id === 't6'){ S.st.estado = v; }
+  if (id === 't9'){ S.st = T9(); if (v === 'done'){ S.st.tel = '(12) 98124-7730'; S.st.enviado = true; } }
+  draw(id, {top:true});
+}
+
+/* ---------- monta tudo ---------- */
+KIT.bar();
+document.getElementById('mk-cartline').innerHTML = CARRINHO.map(l => `<div><span class="shot">${KIT.produto(ART[l.id])}</span><span><b>${l.nome}</b> · ${l.qty} un<br>${l.resumo} · ${R(unitOf(l))} cada</span></div>`).join('')
+  + `<div style="padding-left:14px"><span>Subtotal <b>${R(subtotal(CARRINHO))}</b><br>no Pix (5%, exemplo) <b>${R(PIX_T.total)}</b></span></div>`;
+
+screen('t1', t1State('aberta'), t1Render, t1Act, t1Input, t1Blur);
+checkoutScreen('t2', {});
+checkoutScreen('t3', {step:2});
+checkoutScreen('t4', {step:3, modo:'pickup'});
+screen('t5', {fase:'pend', copied:false, qr:false, proof:0, flash:null}, pixRender, pixAct);
+screen('t6', {estado:'ok', flash:null}, cardRender, cardAct);
+screen('t7', {loading:false, flash:null}, confRender, confAct);
+screen('t8', {fase:'ask', co:coState({}), flash:null}, dupRender, dupAct, (f, el, st, dev) => coInput('t8', f, el, st.co, dev), (f, el, st) => coBlur('t8', f, el, st.co));
+screen('t9', T9(), loteRender, loteAct, loteInput);
+
+document.querySelectorAll('.mk-states').forEach(g => g.addEventListener('click', e => { const b = e.target.closest('button'); if (b) setState(g.dataset.for, b.dataset.state); }));
+document.getElementById('t5-sim').onclick = () => setState('t5', 'pago');
+document.getElementById('t7-f5').onclick = f5;
+document.querySelector('[data-f5]').onclick = f5;
+document.getElementById('t8-reset').onclick = () => { SC.t8.st = {fase:'ask', co:coState({}), flash:null}; draw('t8', {top:true}); };
+KIT.fitDesk();
+</script>
+</body>
+</html>

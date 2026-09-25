@@ -1,0 +1,1324 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vitrine Studio — Fase 4: pós-compra com a marca da loja</title>
+<!--
+  ============================================================
+  Mockup standalone — Fase 4 "Pós-compra com a marca", 25/09/2026.
+  Regra 4 do CLAUDE.md: mockup antes do código.
+
+  FASE E ESCOPO (docs/studio/FASEAMENTO_VITRINE_STUDIO.md §4, Fase 4):
+  "do link no WhatsApp ao 'Pronto', o cliente continua na mesma loja".
+    - BE-6: logo, cor e fonte da loja nos dados públicos de aprovação e
+      de acompanhamento (backend, fora deste mockup).
+    - APP: /aprovacao e /acompanhar com o tema da loja; "Pedir outro
+      igual" abre o configurador preenchido.
+    - Decisão Q9 (JORNADA §8 e FASEAMENTO §7): mover as duas páginas pro
+      endereço da loja — loja.getaura.com.br/sheid-mania/aprovacao/<token>
+      e .../acompanhar/<token>.
+
+  DE ONDE VEM (JORNADA_CLIENTE_VITRINE.md):
+    §2.3 "Quem volta" — não tem conta, chega pelo link no WhatsApp, no
+      celular. Pergunta: "Em que pé está? Precisa de mim?"
+    §4.8 Confirmação e "e agora?" — e-mail de confirmação ao cliente com
+      o link de acompanhar.
+    §4.9 Aprovar a arte — hoje `app/aprovacao/[token].tsx` funciona bem
+      (turntable, aprovar/pedir ajuste, histórico) mas está "fora da
+      marca da loja: azul-marinho fixo #1E3A8A (:79,216,311,372), sem
+      logo nem cor da lojista. O cliente sai de uma loja rosa e cai numa
+      página azul de outra empresa." Alvo: mesmo tema da vitrine
+      (`montarTema` com a cor da loja, logo no topo, tipografia da loja).
+    §4.10 Acompanhar, receber, voltar — hoje `app/acompanhar/[token].tsx`
+      "é bom (etapas, sem horário, Pix do saldo a um toque). Sem marca da
+      loja. Sem caminho para 'pedir de novo'." Alvo: marca da loja +
+      "Pedir outro igual" que abre o configurador com a personalização
+      anterior.
+
+  COMPONENTES REAIS LIDOS (mantidos, não reinventados):
+    app/aprovacao/[token].tsx — turntable de vídeo do mockup 3D
+      (isVideoUrl, :22-26), "Aprovar produção"/"Pedir ajuste" (:190-207),
+      modal de ajuste com TextInput multiline (:237-271), histórico de
+      revisões (:210-229).
+    app/acompanhar/[token].tsx — cabeçalho "cliente, sem conta" (:82-96),
+      timeline por etapas sem horário (:176-211), bloco de saldo com Pix
+      copiável e fallback de seleção manual quando o clipboard falha
+      (:100-105, :241-279), DANFE condicional (Matcon M2, :222-239).
+    utils/acompanharTextos.ts — títulos e rótulos por `tipo` (oculos/
+      entrega/encomenda); este mockup usa o `tipo` padrão (encomenda),
+      então os textos batem com `tituloAcompanhamento`/`rotuloSaldo` de
+      lá sem herdar o vocabulário de "entrega"/"óculos" do Matcon.
+    services/studioApi.ts — `PublicApproval` (shop.name, order.items,
+      revisions) e `PublicTrack` (etapas, saldo, itens) são os contratos
+      que este mockup respeita nos dados de exemplo.
+
+  DECISÕES DO PO APLICADAS (25/09):
+    - Só a cor PRINCIPAL da lojista pinta a vitrine; accent_color não é
+      usada (Q6 da jornada).
+    - "Powered by Aura" sai do rodapé fixo; fica só na assinatura
+      institucional discreta ("Loja desenvolvida com Aura.") no rodapé
+      de cada tela, sem sobrepor nada (Q5).
+    - Prazo de produção padrão da Sheid: 3 dias úteis. Revisões: "2
+      inclusas, revisão extra R$ 10,00" é o EXEMPLO usado neste mockup —
+      o valor real vem de `max_revisions_included`/`extra_revision_price`
+      (StudioSettings), configurável por loja.
+    - O bloco de "saldo a pagar" com Pix a um toque é recurso genérico
+      da própria tela de acompanhamento (`saldo` em PublicTrack), não um
+      hábito real da Sheid hoje (ela cobra 100% no fechamento). Este
+      mockup mostra um estado hipotético de saldo pra documentar o
+      componente — ver nota na Tela 4.
+
+  LOJA DE EXEMPLO: Sheid Mania · slug sheid-mania · cor #1a1612 ·
+    tipografia "Elegante" (Fraunces + DM Sans) · Av. Dom Pedro I, 553 —
+    Jardim Colonial, São José dos Campos/SP · Instagram @sheidmania_ ·
+    WhatsApp (12) 99614-5447.
+  PEDIDO DE EXEMPLO: #00123, Helena Martins, pago no Pix.
+    1× Caneca Alça Coração — "Mãe" na frente e no verso — R$ 49,90
+    2× Caneca Branca — com a foto que ela enviou — R$ 39,90 cada
+    Total R$ 129,70.
+
+  TELAS (celular primeiro; desktop é a segunda leitura, coluna central —
+  como a própria página de acompanhar de hoje já faz em produção):
+    1. Aprovar a arte — mockup grande com frente/verso, "item 1 de 2",
+       "Aprovar e produzir" / "Pedir ajuste", revisões inclusas restantes.
+    2. Pedir ajuste — folha (celular) / modal (desktop) com o que mudar,
+       anexo opcional, aviso de cobrança e a confirmação de recebido.
+    3. Arte aprovada — confirmação calma, o que acontece agora.
+    4. Acompanhar o pedido — linha do tempo por etapas com 4 estados
+       demonstrados (o enunciado pede dois; os outros dois cobrem as
+       demais "próximas ações" da jornada §4.10 no mesmo componente):
+       A) Criando a arte · aguardando você aprovar
+       B) Em produção · falta pagar o saldo (Pix a um toque)
+       C) Pronto para retirar
+       D) Entregue (com o bloco "peça outra igual" embutido)
+    5. Pedir outro igual — o destino: página do produto com a faixa
+       "Personalização do pedido #00123 carregada".
+    6. E-mail de confirmação do pedido, com a marca da loja.
+    7. Link inválido ou expirado.
+
+  PERGUNTAS EM ABERTO PARA O PO (o desenho levantou):
+    1. O Studio já dispara e-mail de confirmação hoje (o `mailer` da
+       Negócio manda Confirmado/Em preparo/Pronto/Entregue — FASEAMENTO
+       §3.3 menciona "verificar se o Studio dispara o mesmo mailer")? A
+       Tela 6 assume que sim; se não, ela vira parte do backlog do BE-2.
+    2. "Saldo do pedido" com Pix a um toque (Tela 4-B) é um recurso que a
+       Sheid vai usar (ex.: sinal + saldo), ou fica só disponível pra
+       quem cobrar assim? Afeta se ele entra na demo de aceite da Fase 4.
+    3. O link de aprovação expira (`expires_at` já existe em
+       PublicApproval); o de acompanhar parece não expirar hoje. A Tela 7
+       assume os dois podem "não encontrar o pedido" — confirmar se o
+       texto de erro deveria diferenciar "expirado" de "nunca existiu".
+    4. "Pedir outro igual" (Tela 5): confirmar o mecanismo de deep link
+       pro configurador pré-preenchido (`?repetir=00123` na URL do
+       produto, ou rota própria) — este mockup só mostra o destino, não
+       o contrato.
+    5. Confirma-se que a marca some quando o slug não resolve (loja não
+       encontrada) mas continua quando só o token falha (link errado)?
+       A Tela 7 aqui assume a segunda hipótese — o slug é válido, só o
+       pedido não foi encontrado — porque é o caso mais comum (link
+       velho, copiado errado).
+  ============================================================
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Instrument+Serif:ital@0;1&family=Pacifico&display=swap">
+<style>
+/* === KIT:BEGIN ============================================== */
+:root{
+  /* papel (theme.ts) — ink3 ajustado para AA */
+  --bg:#FBF8F3; --bg2:#FFFFFF; --bg3:#F6F1E8; --bg4:#F0E9DC;
+  --ink:#1A1714; --ink2:#4A443C; --ink3:#756C61; --ink4:#B4A99A;
+  --border:#E7DFD3; --border2:#D9CFBF;
+  /* cor da loja: preenchidas pelo JS (applyBrand) */
+  --brand:#1a1612; --brand-text:#1a1612; --brand-fill:#1a1612; --on-brand:#FFFFFF;
+  --brand-wash:rgba(26,22,18,.06); --brand-wash-2:rgba(26,22,18,.12); --brand-ring:rgba(26,22,18,.28);
+  /* semânticas — não mudam com a loja */
+  --pix:#0E7A43; --pix-soft:#E3F4EA;
+  --amber:#8A4B0A; --amber-soft:#FDF0DA;
+  --red:#B42318; --red-soft:#FDE8E6;
+  --info:#1D4E89; --info-soft:#E6EEF8;
+  /* tipografia */
+  --f-display:'Fraunces','Instrument Serif',Georgia,serif;
+  --f-display-w:500;
+  --f-body:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  /* números, rótulos e códigos: Bricolage Grotesque (decisão do PO, 25/09; substitui a DM Mono) */
+  --f-num:'Bricolage Grotesque','DM Sans',-apple-system,sans-serif;
+  /* raio, sombra, movimento */
+  --r-sm:6px; --r-md:10px; --r-lg:14px; --r-xl:20px; --r-pill:999px;
+  --sh-1:0 1px 2px rgba(26,23,20,.06),0 1px 1px rgba(26,23,20,.04);
+  --sh-2:0 8px 24px -10px rgba(26,23,20,.22),0 2px 6px rgba(26,23,20,.06);
+  --sh-3:0 24px 60px -20px rgba(26,23,20,.35),0 4px 12px rgba(26,23,20,.08);
+  --ease:cubic-bezier(.4,0,.2,1); --t-fast:150ms; --t:220ms;
+}
+*{box-sizing:border-box}
+.sv{font-family:var(--f-body);color:var(--ink);background:var(--bg);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.sv h1,.sv h2,.sv h3,.sv .display{font-family:var(--f-display);font-weight:var(--f-display-w);letter-spacing:-.01em;line-height:1.12;margin:0;text-wrap:balance;color:var(--ink)}
+.sv p{margin:0}
+.sv .t-h1{font-size:34px}.sv .t-h2{font-size:26px}.sv .t-h3{font-size:20px}
+.sv .t-body{font-size:15px}.sv .t-small{font-size:13px;color:var(--ink2)}.sv .t-cap{font-size:12.5px;color:var(--ink3)}
+.sv .label{font:500 11px/1.2 var(--f-num);letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
+.sv .mono,.sv .price,.sv .num{font-family:var(--f-num);font-variant-numeric:tabular-nums;font-feature-settings:'tnum' 1}
+.sv .price{font-weight:600;color:var(--ink);letter-spacing:-.01em}
+.sv .price-lg{font:700 28px/1 var(--f-num);letter-spacing:-.025em}
+.sv .pix-line{color:var(--pix);font-size:13px;font-weight:600}
+.sv .brand-text{color:var(--brand-text)}
+
+/* ícones */
+.ic{width:20px;height:20px;flex:none;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+.ic.sm{width:16px;height:16px}.ic.lg{width:24px;height:24px}
+
+/* botões */
+.btn{appearance:none;border:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;height:48px;padding:0 20px;border-radius:12px;font:600 15px/1 var(--f-body);letter-spacing:.005em;transition:transform var(--t-fast) var(--ease),box-shadow var(--t) var(--ease),background var(--t) var(--ease);white-space:nowrap;text-decoration:none}
+.btn:active{transform:scale(.98)}
+.btn:focus-visible{outline:2px solid var(--brand-text);outline-offset:2px}
+.btn-primary{background:var(--brand-fill);color:var(--on-brand);box-shadow:0 6px 18px -8px var(--brand-ring)}
+.btn-primary:hover{box-shadow:0 10px 24px -8px var(--brand-ring);transform:translateY(-1px)}
+.btn-secondary{background:var(--bg2);color:var(--ink);border:1px solid var(--border2)}
+.btn-secondary:hover{border-color:var(--ink3)}
+.btn-ghost{background:transparent;color:var(--brand-text);height:40px;padding:0 10px}
+.btn-pix{background:var(--pix);color:#fff}
+.btn-wa{background:#1F7A4D;color:#fff}
+.btn-block{width:100%}
+.btn-sm{height:36px;padding:0 14px;font-size:13.5px;border-radius:10px}
+.btn[disabled]{background:var(--bg4);color:var(--ink3);box-shadow:none;cursor:not-allowed}
+.icon-btn{appearance:none;border:0;background:transparent;width:44px;height:44px;border-radius:12px;display:inline-grid;place-items:center;color:var(--ink);cursor:pointer;position:relative}
+.icon-btn:hover{background:var(--bg3)}
+.count{position:absolute;top:6px;right:5px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--brand-fill);color:var(--on-brand);font:700 10.5px/18px var(--f-num);text-align:center}
+
+/* chips (opções, entrega, pagamento) */
+.chip{appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:8px 14px;border-radius:12px;border:1px solid var(--border2);background:var(--bg2);color:var(--ink);font:500 14px/1.2 var(--f-body);transition:border-color var(--t) var(--ease),background var(--t) var(--ease)}
+.chip:hover{border-color:var(--ink3)}
+.chip[aria-pressed="true"],.chip.on{border-color:var(--brand-text);background:var(--brand-wash);box-shadow:inset 0 0 0 1px var(--brand-text)}
+.chip .delta{font:600 12px var(--f-num);color:var(--ink3)}
+.swatch{width:36px;height:36px;border-radius:50%;border:1px solid rgba(0,0,0,.12);box-shadow:inset 0 0 0 3px var(--bg2);cursor:pointer}
+.swatch.on{outline:2px solid var(--brand-text);outline-offset:2px}
+
+/* campos */
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:13px;font-weight:600;color:var(--ink2)}
+.field .opt{font-weight:400;color:var(--ink3)}
+.input{height:48px;border-radius:12px;border:1px solid var(--border2);background:var(--bg2);padding:0 14px;font:400 15px var(--f-body);color:var(--ink);width:100%;transition:border-color var(--t),box-shadow var(--t)}
+.input::placeholder{color:var(--ink4)}
+.input:focus{outline:0;border-color:var(--brand-text);box-shadow:0 0 0 3px var(--brand-wash-2)}
+.input.err{border-color:var(--red);box-shadow:0 0 0 3px var(--red-soft)}
+.field .hint{font-size:12.5px;color:var(--ink3)}
+.field .error{font-size:12.5px;color:var(--red);display:flex;gap:6px;align-items:center}
+
+/* superfícies */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg)}
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-xl);box-shadow:var(--sh-1)}
+.divider{height:1px;background:var(--border);border:0;margin:0}
+.badge{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:var(--r-pill);font:500 11px/1 var(--f-num);letter-spacing:.06em;text-transform:uppercase}
+.badge-brand{background:var(--brand-fill);color:var(--on-brand)}
+.badge-soft{background:var(--bg2);color:var(--ink);box-shadow:var(--sh-1)}
+.badge-pix{background:var(--pix-soft);color:var(--pix)}
+.badge-amber{background:var(--amber-soft);color:var(--amber)}
+.note{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:12px;font-size:13.5px}
+.note-amber{background:var(--amber-soft);color:var(--amber)}
+.note-info{background:var(--info-soft);color:var(--info)}
+.note-pix{background:var(--pix-soft);color:var(--pix)}
+.note-red{background:var(--red-soft);color:var(--red)}
+
+/* foto de produto: a caneca ilustrada sobre o papel */
+.shot{position:relative;aspect-ratio:4/5;border-radius:var(--r-lg);overflow:hidden;background:radial-gradient(120% 90% at 50% 30%,#FFFFFF 0%,var(--bg3) 62%,var(--bg4) 100%);display:grid;place-items:center}
+.shot svg.prod{width:78%;height:auto}
+.shot .badge{position:absolute;top:10px;left:10px}
+
+/* ---------- moldura do mockup (não é produto) ---------- */
+.mk-body{margin:0;background:#E9E6E1;color:#1d1d1f;font-family:var(--f-body)}
+.mk-bar{position:sticky;top:0;z-index:50;background:#16181D;color:#E8EAF0;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:10px 20px;font-size:12.5px}
+.mk-bar b{font:600 12px var(--f-num);letter-spacing:.08em;text-transform:uppercase;color:#fff}
+.mk-grp{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.mk-grp span{color:#9BA1AE;margin-right:2px}
+.mk-seg{appearance:none;border:1px solid #333845;background:#1F222A;color:#E8EAF0;border-radius:8px;height:30px;padding:0 10px;font:500 12px var(--f-body);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.mk-seg[aria-pressed="true"]{background:#E8EAF0;color:#16181D;border-color:#E8EAF0}
+.mk-dot{width:12px;height:12px;border-radius:50%;border:1px solid rgba(255,255,255,.35)}
+.mk-wrap{max-width:1480px;margin:0 auto;padding:32px 20px 80px;display:flex;flex-direction:column;gap:56px}
+.mk-intro{max-width:760px;display:flex;flex-direction:column;gap:10px}
+.mk-intro h1{font:600 30px/1.15 var(--f-body);margin:0;letter-spacing:-.01em}
+.mk-intro p{margin:0;color:#4a4a4f;font-size:15px;line-height:1.6}
+.mk-screen{display:grid;grid-template-columns:300px 1fr;gap:28px;align-items:start}
+.mk-screen+.mk-screen{border-top:1px solid #d3cfc8;padding-top:48px}
+.mk-meta{position:sticky;top:70px;display:flex;flex-direction:column;gap:10px}
+.mk-meta .mk-n{font:500 11px var(--f-num);letter-spacing:.14em;text-transform:uppercase;color:#8a5a00}
+.mk-meta h2{font:600 20px/1.25 var(--f-body);margin:0}
+.mk-meta p{margin:0;font-size:14px;line-height:1.55;color:#4a4a4f}
+.mk-meta ul{margin:0;padding-left:18px;font-size:13px;line-height:1.5;color:#4a4a4f;display:flex;flex-direction:column;gap:5px}
+.mk-meta code{font:12px var(--f-num);background:#dcd8d1;padding:1px 5px;border-radius:4px}
+.mk-frames{display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap;min-width:0}
+.phone{width:390px;height:844px;border-radius:48px;background:#0F0F11;padding:11px;box-shadow:0 30px 60px -25px rgba(0,0,0,.45);flex:none;position:relative}
+.phone>.screen{width:100%;height:100%;border-radius:38px;overflow:hidden;position:relative;background:var(--bg)}
+.phone>.screen>.scroll{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none}
+.phone>.screen>.scroll::-webkit-scrollbar{display:none}
+.phone .notch{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:120px;height:30px;background:#0F0F11;border-radius:0 0 18px 18px;z-index:40}
+.statusbar{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px 0 30px;font:600 14px var(--f-body);color:var(--ink)}
+.desk-fit{flex:1 1 640px;min-width:0}
+.desk{width:1280px;border-radius:14px;overflow:hidden;background:var(--bg);box-shadow:0 30px 60px -25px rgba(0,0,0,.4);transform-origin:top left}
+.chrome{height:40px;background:#ECE8E2;display:flex;align-items:center;gap:14px;padding:0 14px;border-bottom:1px solid #DDD7CE}
+.chrome i{width:11px;height:11px;border-radius:50%;background:#D3CCC2;display:inline-block}
+.chrome .url{flex:1;max-width:560px;height:26px;border-radius:8px;background:#fff;font:12px/26px var(--f-num);color:#6b6459;padding:0 12px;display:flex;gap:6px;align-items:center}
+.desk .viewport{height:820px;overflow-y:auto;position:relative}
+.mk-hide-phone .phone,.mk-hide-desk .desk-fit{display:none}
+@media (max-width:1000px){.mk-screen{grid-template-columns:1fr}.mk-meta{position:static}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+/* === KIT:END ================================================ */
+
+/* ---------- só desta página ---------- */
+.mk-devgrp{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+
+/* moldura interna comum às telas de token (aprovação / acompanhar / erro) */
+.pc-head{display:flex;align-items:center;justify-content:center;padding:20px 20px 16px;border-bottom:1px solid var(--border)}
+.sv-wordmark{font-family:var(--f-display);font-weight:var(--f-display-w);font-size:19px;color:var(--brand-text);letter-spacing:-.01em}
+.pc-eyebrow{text-align:center;margin-top:16px}
+.pc-hgroup{padding:2px 22px 4px;text-align:center;display:flex;flex-direction:column;gap:6px}
+.pc-desktop-wrap{max-width:640px;margin:0 auto;min-height:100%}
+.pc-desktop-wrap .pc-head{border-radius:0}
+
+/* tela 1 — visor do mockup e paginação entre itens */
+.pc-viewer{margin:16px 20px 0;position:relative}
+.pc-viewer .shot{aspect-ratio:1/1;transition:opacity var(--t) var(--ease)}
+.pc-viewer-controls{display:flex;justify-content:center;gap:8px;margin-top:12px;min-height:44px}
+.pc-photocap{text-align:center;margin-top:10px;color:var(--ink3);font-size:12.5px}
+.pc-pager{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:14px}
+.pc-dots{display:flex;gap:6px;align-items:center}
+.pc-dot{width:7px;height:7px;border-radius:50%;background:var(--border2);transition:width var(--t) var(--ease),background var(--t) var(--ease)}
+.pc-dot.on{background:var(--brand-text);width:18px;border-radius:4px}
+.pc-dot.done{background:var(--pix)}
+.pc-itemname{text-align:center;margin-top:10px;padding:0 26px;color:var(--ink2)}
+.pc-actionbar{padding:16px 20px 20px;display:flex;flex-direction:column;gap:10px}
+.pc-footer{text-align:center;padding:10px 20px 30px;color:var(--ink3);font-size:12px}
+
+/* pedir ajuste — inline (tela 1) e sheet/modal completos (tela 2) */
+.adj-inline{margin:14px 20px 0;padding:18px;display:flex;flex-direction:column;gap:12px}
+.adj-panel{display:flex;flex-direction:column;gap:12px}
+.adj-panel textarea{min-height:104px;border-radius:12px;border:1px solid var(--border2);background:var(--bg2);padding:12px 14px;font:400 14.5px/1.5 var(--f-body);color:var(--ink);resize:vertical;width:100%}
+.adj-panel textarea::placeholder{color:var(--ink4)}
+.adj-panel textarea:focus{outline:0;border-color:var(--brand-text);box-shadow:0 0 0 3px var(--brand-wash-2)}
+.adj-attach{display:inline-flex;align-items:center;gap:8px;align-self:flex-start;height:40px;padding:0 14px;border-radius:10px;border:1px dashed var(--border2);color:var(--ink2);font:500 13.5px var(--f-body);background:transparent;cursor:pointer}
+.adj-attach:hover{border-color:var(--ink3)}
+.adj-file{display:inline-flex;align-items:center;gap:8px;align-self:flex-start;height:36px;padding:0 6px 0 12px;border-radius:10px;background:var(--bg3);color:var(--ink2);font:500 13px var(--f-body)}
+.adj-file button{appearance:none;border:0;background:transparent;color:var(--ink3);cursor:pointer;width:30px;height:30px;border-radius:8px;display:inline-grid;place-items:center}
+.adj-file button:hover{background:var(--bg4);color:var(--ink)}
+.adj-actions{display:flex;gap:10px;justify-content:flex-end}
+.adj-confirm{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:20px 6px 6px}
+.adj-confirm .ico{width:52px;height:52px;border-radius:50%;background:var(--pix-soft);display:grid;place-items:center;color:var(--pix)}
+.adj-scene{position:relative;min-height:100%}
+.adj-scene .scene-behind{filter:saturate(.5);opacity:.55;pointer-events:none;user-select:none}
+.adj-scene .scene-dim{position:absolute;inset:0;background:rgba(20,16,12,.42)}
+.adj-sheet{position:absolute;left:0;right:0;bottom:0;background:var(--bg2);border-radius:20px 20px 0 0;box-shadow:var(--sh-3);max-height:82%;overflow-y:auto;padding-bottom:22px}
+.adj-sheet .grabber{width:36px;height:4px;border-radius:2px;background:var(--border2);margin:10px auto 6px}
+.adj-modal-wrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:40px}
+.adj-modal{width:100%;max-width:460px;background:var(--bg2);border-radius:var(--r-xl);box-shadow:var(--sh-3);padding:26px}
+.adj-sheet-head,.adj-modal-head{padding:4px 22px 2px}
+.adj-sheet .adj-panel,.adj-modal .adj-panel{padding:14px 22px 4px}
+.adj-modal .adj-panel{padding:0}
+
+/* acompanhar — linha do tempo, ação, itens */
+.ac-state-row{display:flex;gap:8px;flex-wrap:wrap}
+.tl{display:flex;flex-direction:column}
+.tl-row{display:flex;gap:14px}
+.tl-dotcol{display:flex;flex-direction:column;align-items:center}
+.tl-dot{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--bg3);border:2px solid var(--border2);flex:none;color:var(--ink3);transition:background var(--t) var(--ease),border-color var(--t) var(--ease)}
+.tl-dot.done{background:var(--brand-fill);border-color:var(--brand-fill);color:var(--on-brand)}
+.tl-dot.now{background:var(--bg2);border-color:var(--brand-text);color:var(--brand-text)}
+.tl-line{width:2px;flex:1;min-height:24px;background:var(--border2)}
+.tl-line.done{background:var(--brand-fill)}
+.tl-label{font:600 15.5px var(--f-body);color:var(--ink3);padding-top:2px}
+.tl-label.done{color:var(--ink)}
+.tl-label.now{color:var(--ink);font-weight:700}
+.tl-sub{font-size:12.5px;color:var(--brand-text);font-weight:700;margin-top:2px}
+.ac-card{margin:16px 20px 0;padding:20px}
+.ac-action{display:flex;flex-direction:column;gap:10px}
+.ac-action .row{display:flex;gap:12px;align-items:flex-start}
+.ac-action .row svg{margin-top:2px}
+.ac-item{display:flex;gap:12px;align-items:center;padding:11px 0}
+.ac-item .shot{width:52px;height:52px;flex:none;border-radius:10px;border:1px solid var(--border)}
+.ac-item+.ac-item{border-top:1px solid var(--border)}
+.ac-total{display:flex;justify-content:space-between;padding-top:12px;margin-top:6px;border-top:1px solid var(--border)}
+.ac-addr{display:flex;gap:10px;align-items:flex-start}
+.ac-again{display:flex;gap:14px;align-items:center}
+.ac-again .shot{width:68px;height:68px;flex:none;border-radius:12px;border:1px solid var(--border)}
+
+/* destino do produto (tela 5) */
+.dp-crumb{padding:16px 22px 0;color:var(--ink3);font-size:12.5px}
+.dp-banner{margin:12px 20px 0}
+.dp-wrap{padding:0 20px 26px}
+.dp-price{display:flex;align-items:baseline;gap:10px;margin-top:6px}
+.dp-tabs{display:flex;gap:8px;margin-top:14px}
+.dp-qty{display:flex;align-items:center;gap:10px;margin-top:14px}
+.dp-qty .qbtn{width:40px;height:40px;border-radius:10px;border:1px solid var(--border2);background:var(--bg2);display:grid;place-items:center;cursor:pointer;color:var(--ink)}
+.dp-qty .qbtn:hover{border-color:var(--ink3)}
+.dp-qty input{width:52px;height:40px;text-align:center;border-radius:10px;border:1px solid var(--border2);font:600 15px var(--f-num);font-variant-numeric:tabular-nums}
+
+/* e-mail (tela 6) — moldura de cliente de e-mail, não de navegador */
+.mail-toolbar{background:#ECE8E2;border-bottom:1px solid #DDD7CE;padding:12px 22px;display:flex;flex-direction:column;gap:3px}
+.mail-toolbar .subj{font:600 14px var(--f-body);color:#2c2822}
+.mail-toolbar .meta{font:12px var(--f-num);color:#8a8377}
+.mail-rail{width:64px;flex:none;background:#F2EFE8;border-right:1px solid #DDD7CE;display:flex;flex-direction:column;align-items:center;gap:16px;padding:18px 0}
+.mail-rail .r-dot{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;color:#6b6459}
+.mail-rail .r-dot.on{background:var(--brand-fill);color:var(--on-brand)}
+.mail-desk-body{display:flex;height:100%}
+.mail-mobile-bar{height:52px;display:flex;align-items:center;gap:16px;padding:0 16px;border-bottom:1px solid var(--border);color:var(--ink2)}
+.mail-mobile-subject{padding:14px 20px 2px}
+.mail-content{padding:30px 26px 40px;max-width:560px;margin:0 auto;flex:1}
+.mail-mobile .mail-content{padding:18px 18px 34px;max-width:none}
+.mail-brandhead{text-align:center;padding:4px 0 20px;border-bottom:3px solid var(--brand-fill);margin-bottom:22px}
+.mail-btn{display:inline-flex;align-items:center;justify-content:center;height:48px;padding:0 26px;border-radius:10px;background:var(--brand-fill);color:var(--on-brand);font:700 15px var(--f-body);text-decoration:none;margin:18px 0}
+.mail-steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:13.5px;color:var(--ink2)}
+.mail-item{display:flex;gap:12px;align-items:center;padding:10px 0}
+.mail-item .shot{width:46px;height:46px;flex:none;border-radius:9px;border:1px solid var(--border)}
+.mail-item+.mail-item{border-top:1px solid var(--border)}
+.mail-total{display:flex;justify-content:space-between;padding-top:12px;margin-top:4px;border-top:1px solid var(--border)}
+.mail-footer{border-top:1px solid var(--border);margin-top:24px;padding-top:16px;color:var(--ink3);font-size:12px;text-align:center;line-height:1.75}
+
+/* tela 7 — link inválido */
+.err-wrap{min-height:70%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px 30px;gap:14px}
+.err-ico{width:60px;height:60px;border-radius:50%;background:var(--red-soft);color:var(--red);display:grid;place-items:center}
+.err-actions{display:flex;flex-direction:column;gap:10px;width:100%;max-width:280px;margin-top:6px}
+</style>
+</head>
+<body class="mk-body">
+
+<!-- ======== sprite de ícones (KIT) ======== -->
+<!-- === KIT:SPRITE:BEGIN === -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-bag" viewBox="0 0 24 24"><path d="M5.5 8h13l-1.1 12.1a1 1 0 0 1-1 .9H7.6a1 1 0 0 1-1-.9L5.5 8Z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5 8 12l7 7"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15V3.5M8 7.5l4-4 4 4M5 12.5V19a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-6.5"/></symbol>
+  <symbol id="i-wa" viewBox="0 0 24 24"><path d="M20 11.6a8.4 8.4 0 0 1-12.4 7.4L3.5 20.3l1.3-3.9A8.4 8.4 0 1 1 20 11.6Z"/><path d="M9 8.6c0 3.3 2.9 6.2 6.1 6.3l1.1-1.4-1.9-1-1 .8a4.6 4.6 0 0 1-2.4-2.4l.8-1-1-1.9Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></symbol>
+  <symbol id="i-truck" viewBox="0 0 24 24"><path d="M3 6.5h10.5v9.5H3zM13.5 10h4l3 3.2V16h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></symbol>
+  <symbol id="i-store" viewBox="0 0 24 24"><path d="M4 9.5 5.6 4.5h12.8L20 9.5M4.5 9.5v10h15v-10M9.5 19.5v-5h5v5"/><path d="M4 9.5c0 1.4 1.1 2.3 2.7 2.3S9.3 10.9 9.3 9.5c0 1.4 1.2 2.3 2.7 2.3s2.7-.9 2.7-2.3c0 1.4 1.1 2.3 2.6 2.3S20 10.9 20 9.5"/></symbol>
+  <symbol id="i-moto" viewBox="0 0 24 24"><circle cx="5.5" cy="16.5" r="3"/><circle cx="18.5" cy="16.5" r="3"/><path d="M5.5 16.5 9.5 10h5l4 6.5M13 10l-1.3-3H9.5"/></symbol>
+  <symbol id="i-pix" viewBox="0 0 24 24"><path d="m12 3.2 3.4 3.4-3.4 3.4-3.4-3.4zM12 14l3.4 3.4-3.4 3.4-3.4-3.4zM3.2 12l3.4-3.4L10 12l-3.4 3.4zM14 12l3.4-3.4 3.4 3.4-3.4 3.4z"/></symbol>
+  <symbol id="i-card" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3 9.5h18M6.5 15h4"/></symbol>
+  <symbol id="i-cash" viewBox="0 0 24 24"><rect x="3" y="6.5" width="18" height="11" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9.5v5M18 9.5v5"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15.5V4M7.5 8.5 12 4l4.5 4.5M4.5 15v4a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-4"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="m20.5 16-5-5-9 8.5"/></symbol>
+  <symbol id="i-brush" viewBox="0 0 24 24"><path d="M14.5 4.5 19.5 9.5 11 18l-5-5z"/><path d="M6 13c-2 0-3 1.5-3 3.5V20h3.5C8.5 20 10 19 10 17"/></symbol>
+  <symbol id="i-ruler" viewBox="0 0 24 24"><path d="M3.5 15.5 15.5 3.5l5 5-12 12z"/><path d="m7.5 11.5 2 2M10.5 8.5l1.5 1.5M13.5 5.5l2 2"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.8v.1"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4 21 19.5H3z"/><path d="M12 10v4.5M12 17v.1"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4.5L19.5 9 15 4.5 4 15.5z"/><path d="m13 6.5 4.5 4.5"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2"/><path d="M15.5 8.5V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v9.5a1 1 0 0 0 1 1h3.5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="14.5" rx="2"/><path d="M4 10h16M9 3.5v4M15 3.5v4"/></symbol>
+  <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 0 1 13.2-4.9M18 3.5v4h-4M19.5 12a7.5 7.5 0 0 1-13.2 4.9M6 20.5v-4h4"/></symbol>
+  <symbol id="i-zoom" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5M11 8.5v5M8.5 11h5"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5 19 6.5v5.5c0 4.3-2.9 7.3-7 8.5-4.1-1.2-7-4.2-7-8.5V6.5z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M3.5 7.8 12 3.5l8.5 4.3v8.4L12 20.5l-8.5-4.3z"/><path d="M3.5 7.8 12 12l8.5-4.2M12 12v8.5"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.8"/></symbol>
+  <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M6 3.5h12v17l-2.4-1.5-2.4 1.5-1.2-.8-1.2.8-2.4-1.5L6 20.5z"/><path d="M9 8h6M9 11.5h6M9 15h3.5"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c.8-3.6 3.8-5.8 7.5-5.8s6.7 2.2 7.5 5.8"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.4"/></symbol>
+  <symbol id="i-instagram" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><path d="M17.2 6.8v.1"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 19.5s-7.5-4.4-7.5-10A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 7.5 2.5c0 5.6-7.5 10-7.5 10Z"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 4 8.5 4.5L12 13 3.5 8.5z"/><path d="m3.5 12.5 8.5 4.5 8.5-4.5M3.5 16.5 12 21l8.5-4.5"/></symbol>
+  <symbol id="i-text" viewBox="0 0 24 24"><path d="M5 6.5V5h14v1.5M12 5v14M9 19h6"/></symbol>
+  <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1 0 1.6-.8 1.6-1.6 0-1-.8-1.4-.8-2.3 0-.9.7-1.6 1.6-1.6h2.1a4 4 0 0 0 4-4c0-4.2-3.8-7.5-8.5-7.5Z"/><circle cx="7.8" cy="11.5" r="1"/><circle cx="10.5" cy="7.6" r="1"/><circle cx="15" cy="7.8" r="1"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4h-4"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></symbol>
+</svg>
+<!-- === KIT:SPRITE:END === -->
+<!-- ---------- sprite só desta página ---------- -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M4 12.5h4.3l1.4 3h4.6l1.4-3H20"/><path d="M4 12.5 5.6 5a1 1 0 0 1 1-.8h10.8a1 1 0 0 1 1 .8L20 12.5v5.3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m4.5 7 7.5 6 7.5-6"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M20 4 3.5 10.8 11 13l2.2 7.5z"/><path d="M20 4 11 13"/></symbol>
+</svg>
+
+<div class="mk-bar" id="mk-bar">
+  <b>Mockup · Fase 4 · Pós-compra com a marca da loja</b>
+  <div class="mk-grp"><span>Cor da loja</span><div id="mk-brands" class="mk-grp"></div></div>
+  <div class="mk-grp"><span>Tipografia</span><div id="mk-fonts" class="mk-grp"></div></div>
+  <div class="mk-grp"><span>Aparelho</span><div id="mk-devices" class="mk-grp"></div></div>
+</div>
+
+<div class="mk-wrap">
+  <header class="mk-intro">
+    <h1>Fase 4 — Pós-compra com a marca da loja</h1>
+    <p>Do link no WhatsApp ao "Pronto", o cliente continua na mesma loja. Estas telas trocam o azul-marinho fixo de <code>app/aprovacao/[token].tsx</code> e a paleta neutra de <code>app/acompanhar/[token].tsx</code> pela cor, a fonte e o wordmark da lojista — sem mudar o que já funciona nelas (etapas em vez de horário, Pix do saldo a um toque). Pedido de exemplo: <b>Helena Martins, #00123</b>, Caneca Alça Coração com "Mãe" (frente e verso) e 2 Canecas Brancas com foto, pago no Pix. Troque a cor da loja acima — a amarela é o teste de fogo de contraste.</p>
+  </header>
+
+  <!-- ======================= TELA 1 — APROVAR A ARTE ======================= -->
+  <section class="mk-screen" id="tela1">
+    <div class="mk-meta">
+      <span class="mk-n">Tela 1</span>
+      <h2>Aprovar a arte</h2>
+      <p>Chegada pelo link do WhatsApp: marca da loja no topo, mockup grande com frente/verso, qual item é (1 de 2) e as duas ações — aprovar ou pedir ajuste.</p>
+      <ul>
+        <li>Substitui o topo sem marca de <code>app/aprovacao/[token].tsx</code> (hoje <code>#1E3A8A</code> cravado, :79/216/311/372).</li>
+        <li>O turntable de vídeo (<code>isVideoUrl</code>, :22-26) vira aqui a troca Frente/Verso — mesmo princípio, ilustrado sem depender do motor 3D.</li>
+        <li>"Aprovar produção" / "Pedir ajuste" (:190-207) mantidos; ganham a cor da loja.</li>
+        <li>Revisões inclusas: exemplo "2 inclusas" — vem de <code>StudioSettings.max_revisions_included</code>.</li>
+      </ul>
+    </div>
+    <div class="mk-frames">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen"><div class="scroll">
+          <div class="statusbar"><span>9:41</span><span>100%</span></div>
+          <div class="sv" id="t1-phone"></div>
+        </div></div>
+      </div>
+      <div class="desk-fit"><div class="desk">
+        <div class="chrome"><i></i><i></i><i></i><div class="url"><svg class="ic sm"><use href="#i-lock"/></svg>loja.getaura.com.br/sheid-mania/aprovacao/hx7k2mq1</div></div>
+        <div class="viewport"><div class="sv pc-desktop-wrap" id="t1-desk"></div></div>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- ======================= TELA 2 — PEDIR AJUSTE ======================= -->
+  <section class="mk-screen" id="tela2">
+    <div class="mk-meta">
+      <span class="mk-n">Tela 2</span>
+      <h2>Pedir ajuste</h2>
+      <p>Folha (celular) / modal centrado (desktop) com o que mudar, anexo opcional de referência, o aviso de cobrança quando a revisão passa a ser paga, e a confirmação de recebido.</p>
+      <ul>
+        <li>Porta o <code>TextInput</code> multiline do modal atual (:237-271) para o campo de texto com placeholder de exemplos.</li>
+        <li>Aviso de cobrança é novo: hoje o modal não distingue revisão inclusa de paga. Exemplo: 2 incluídas já usadas, esta é a 3ª — R$ 10,00, a loja confirma antes.</li>
+        <li>Use o controle abaixo para ver os dois estados do aviso.</li>
+        <li>Anexo usa <code>&lt;input type="file" accept="image/*"&gt;</code> real — escolha uma imagem e o nome aparece no chip.</li>
+      </ul>
+      <div class="ac-state-row" id="t2-toggle"></div>
+    </div>
+    <div class="mk-frames">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen"><div class="scroll">
+          <div class="statusbar"><span>9:41</span><span>100%</span></div>
+          <div class="sv" id="t2-phone"></div>
+        </div></div>
+      </div>
+      <div class="desk-fit"><div class="desk">
+        <div class="chrome"><i></i><i></i><i></i><div class="url"><svg class="ic sm"><use href="#i-lock"/></svg>loja.getaura.com.br/sheid-mania/aprovacao/hx7k2mq1</div></div>
+        <div class="viewport"><div class="sv" id="t2-desk"></div></div>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- ======================= TELA 3 — ARTE APROVADA ======================= -->
+  <section class="mk-screen" id="tela3">
+    <div class="mk-meta">
+      <span class="mk-n">Tela 3</span>
+      <h2>Arte aprovada</h2>
+      <p>Confirmação calma: o que acontece agora, prazo em dias úteis, sem hora marcada — mesma regra da Tela 4 ("prazo em etapas, nunca em horas", JORNADA §3.4).</p>
+      <ul>
+        <li>Troca o "Aprovado! 🎉" de hoje (:112-113, com emoji) por um título sem emoji e o passo a passo do que vem a seguir.</li>
+        <li>CTA leva direto para o acompanhamento (Tela 4) — hoje a tela de sucesso não linka para lá.</li>
+      </ul>
+    </div>
+    <div class="mk-frames">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen"><div class="scroll">
+          <div class="statusbar"><span>9:41</span><span>100%</span></div>
+          <div class="sv" id="t3-phone"></div>
+        </div></div>
+      </div>
+      <div class="desk-fit"><div class="desk">
+        <div class="chrome"><i></i><i></i><i></i><div class="url"><svg class="ic sm"><use href="#i-lock"/></svg>loja.getaura.com.br/sheid-mania/aprovacao/hx7k2mq1</div></div>
+        <div class="viewport"><div class="sv pc-desktop-wrap" id="t3-desk"></div></div>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- ======================= TELA 4 — ACOMPANHAR ======================= -->
+  <section class="mk-screen" id="tela4">
+    <div class="mk-meta">
+      <span class="mk-n">Tela 4</span>
+      <h2>Acompanhar o pedido</h2>
+      <p>Linha do tempo por etapas, a etapa atual em destaque, a próxima ação quando existe, itens com miniatura, endereço de retirada, WhatsApp da loja. Mesmo princípio de <code>app/acompanhar/[token].tsx</code> — etapas, nunca horário — com a marca da loja.</p>
+      <ul>
+        <li>Quatro estados no seletor abaixo: os dois pedidos no briefing ("Criando a arte · aguardando aprovação" e "Pronto para retirar") mais dois que também são "próxima ação" da jornada §4.10: saldo com Pix a um toque, e entregue com "peça outra igual" (Tela 5).</li>
+        <li>O bloco de saldo porta <code>copiarPix</code> (:100-105): tenta a área de transferência e cai para seleção manual se falhar — clique em "Copiar código Pix".</li>
+        <li>DANFE (Matcon M2, :222-239) e "entrega parcial" (Matcon M1) não se aplicam ao Studio — omitidos aqui de propósito.</li>
+      </ul>
+      <div class="ac-state-row" id="t4-toggle"></div>
+    </div>
+    <div class="mk-frames">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen"><div class="scroll">
+          <div class="statusbar"><span>9:41</span><span>100%</span></div>
+          <div class="sv" id="t4-phone"></div>
+        </div></div>
+      </div>
+      <div class="desk-fit"><div class="desk">
+        <div class="chrome"><i></i><i></i><i></i><div class="url"><svg class="ic sm"><use href="#i-lock"/></svg>loja.getaura.com.br/sheid-mania/acompanhar/hx7k2mq1</div></div>
+        <div class="viewport"><div class="sv pc-desktop-wrap" id="t4-desk"></div></div>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- ======================= TELA 5 — PEDIR OUTRO IGUAL ======================= -->
+  <section class="mk-screen" id="tela5">
+    <div class="mk-meta">
+      <span class="mk-n">Tela 5</span>
+      <h2>Pedir outro igual</h2>
+      <p>Destino do botão "Peça outra igual" (visto no estado "Entregue" da Tela 4): a página do produto, com a personalização do pedido já carregada e uma faixa avisando disso.</p>
+      <ul>
+        <li>Novo — não existe hoje (JORNADA §4.10: "Sem caminho para 'pedir de novo'").</li>
+        <li>Layout completo da página do produto é escopo da Fase 3B (<code>docs/mockups/studio-vitrine-0N-produto.html</code>); aqui só o topo, o suficiente para mostrar o estado de chegada.</li>
+        <li>Mecanismo do deep link (querystring vs. rota) é a pergunta em aberto 4 no cabeçalho do arquivo.</li>
+      </ul>
+    </div>
+    <div class="mk-frames">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen"><div class="scroll">
+          <div class="statusbar"><span>9:41</span><span>100%</span></div>
+          <div class="sv" id="t5-phone"></div>
+        </div></div>
+      </div>
+      <div class="desk-fit"><div class="desk">
+        <div class="chrome"><i></i><i></i><i></i><div class="url"><svg class="ic sm"><use href="#i-lock"/></svg>loja.getaura.com.br/sheid-mania/p/caneca-alca-coracao?repetir=00123</div></div>
+        <div class="viewport"><div class="sv pc-desktop-wrap" id="t5-desk"></div></div>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- ======================= TELA 6 — E-MAIL ======================= -->
+  <section class="mk-screen" id="tela6">
+    <div class="mk-meta">
+      <span class="mk-n">Tela 6</span>
+      <h2>E-mail de confirmação</h2>
+      <p>Assunto "Recebemos seu pedido #00123 · Sheid Mania": número do pedido, itens com miniatura, total, "Acompanhar pedido", o que acontece agora, e os dados da loja. Moldura de cliente de e-mail, não de navegador — sem chrome de URL.</p>
+      <ul>
+        <li>Verificar se o Studio já dispara este e-mail hoje (pergunta em aberto 1) — a Negócio manda Confirmado/Em preparo/Pronto/Entregue (FASEAMENTO §3.3).</li>
+        <li>O botão "Acompanhar pedido" leva para a Tela 4 desta mesma fase.</li>
+        <li>Assinatura institucional "Loja desenvolvida com Aura." no rodapé do e-mail, nunca no corpo principal.</li>
+      </ul>
+    </div>
+    <div class="mk-frames">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen"><div class="scroll">
+          <div class="statusbar"><span>9:41</span><span>100%</span></div>
+          <div class="sv" id="t6-phone"></div>
+        </div></div>
+      </div>
+      <div class="desk-fit"><div class="desk">
+        <div class="viewport" style="height:860px"><div class="sv" id="t6-desk"></div></div>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- ======================= TELA 7 — LINK INVÁLIDO ======================= -->
+  <section class="mk-screen" id="tela7">
+    <div class="mk-meta">
+      <span class="mk-n">Tela 7</span>
+      <h2>Link inválido ou expirado</h2>
+      <p>Estado de erro com a voz da loja e um caminho: falar com a Sheid no WhatsApp. O slug <code>sheid-mania</code> resolveu (a marca aparece); só o pedido não foi encontrado.</p>
+      <ul>
+        <li>Troca o "🔍 Não encontramos esta encomenda" cru de hoje (<code>app/acompanhar/[token].tsx:117-128</code>) e o card genérico de <code>app/aprovacao/[token].tsx:85-97</code> por um texto com a voz da loja e sem emoji.</li>
+        <li>Sempre tem um caminho — nunca é um beco sem saída.</li>
+      </ul>
+    </div>
+    <div class="mk-frames">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen"><div class="scroll">
+          <div class="statusbar"><span>9:41</span><span>100%</span></div>
+          <div class="sv" id="t7-phone" style="min-height:100%;display:flex;flex-direction:column"></div>
+        </div></div>
+      </div>
+      <div class="desk-fit"><div class="desk">
+        <div class="chrome"><i></i><i></i><i></i><div class="url"><svg class="ic sm"><use href="#i-lock"/></svg>loja.getaura.com.br/sheid-mania/acompanhar/a1c9-expirado</div></div>
+        <div class="viewport"><div class="sv pc-desktop-wrap" id="t7-desk" style="min-height:100%;display:flex;flex-direction:column"></div></div>
+      </div></div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+/* === KIT:BEGIN ============================================== */
+/* Cor da loja → tokens. Mesma regra de theme.ts (parLegivel / corLegivelSobre). */
+const KIT = (() => {
+  const hex2rgb = h => { h = h.replace('#',''); if (h.length===3) h = h.split('').map(c=>c+c).join(''); const n = parseInt(h,16); return [n>>16&255, n>>8&255, n&255]; };
+  const rgb2hex = ([r,g,b]) => '#' + [r,g,b].map(v => Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join('');
+  const lum = h => { const c = hex2rgb(h).map(v => { v/=255; return v<=.03928 ? v/12.92 : Math.pow((v+.055)/1.055,2.4); }); return .2126*c[0]+.7152*c[1]+.0722*c[2]; };
+  const contrast = (a,b) => { const x=lum(a), y=lum(b); return (Math.max(x,y)+.05)/(Math.min(x,y)+.05); };
+  const mix = (h, target, t) => { const a=hex2rgb(h), b=hex2rgb(target); return rgb2hex(a.map((v,i)=>v+(b[i]-v)*t)); };
+  const INK = '#1A1714', PAPER = '#FBF8F3', WHITE = '#FFFFFF';
+  const inkOn = h => contrast(h, WHITE) >= contrast(h, INK) ? WHITE : INK;
+  function brandPair(h){
+    let t = inkOn(h); if (contrast(h,t) >= 4.5) return {fill:h, on:t};
+    for (let i=1;i<=12;i++){ for (const c of [mix(h,'#000000',i*.06), mix(h,'#FFFFFF',i*.06)]) { const k = inkOn(c); if (contrast(c,k) >= 4.5) return {fill:c, on:k}; } }
+    return {fill:INK, on:WHITE};
+  }
+  function brandText(h, bg=PAPER){ let c=h; for (let i=0;i<30 && contrast(c,bg)<4.5;i++) c = mix(c,'#000000',.07); return c; }
+  const rgba = (h,a) => { const [r,g,b]=hex2rgb(h); return `rgba(${r},${g},${b},${a})`; };
+  function applyBrand(h){
+    const s = document.documentElement.style, p = brandPair(h), txt = brandText(h);
+    s.setProperty('--brand', h); s.setProperty('--brand-fill', p.fill); s.setProperty('--on-brand', p.on);
+    s.setProperty('--brand-text', txt); s.setProperty('--brand-wash', rgba(txt,.06)); s.setProperty('--brand-wash-2', rgba(txt,.12)); s.setProperty('--brand-ring', rgba(p.fill,.45));
+  }
+  const FONTS = {
+    classic:  {nome:'Elegante',   display:"'Fraunces','Instrument Serif',Georgia,serif", w:500},
+    modern:   {nome:'Moderna',    display:"'DM Sans',-apple-system,sans-serif", w:700},
+    editorial:{nome:'Marcante',   display:"'Instrument Serif',Georgia,serif", w:400},
+    humanist: {nome:'Acolhedora', display:"'Pacifico',cursive", w:400},
+  };
+  function applyFont(k){ const f = FONTS[k] || FONTS.classic; document.documentElement.style.setProperty('--f-display', f.display); document.documentElement.style.setProperty('--f-display-w', f.w); }
+  const BRANDS = [
+    {nome:'Sheid Mania', hex:'#1a1612'},
+    {nome:'Rosa', hex:'#D6336C'},
+    {nome:'Amarelo', hex:'#F2C94C'},
+    {nome:'Petróleo', hex:'#0F6E7A'},
+  ];
+
+  /* Produto ilustrado. tipo: reta | chopp | coracao | colher | cromada | imperial | camiseta | copo
+     corpo/alca: cor da peça; arte: {texto, cor, fonte, sub, desenho:'coracao'|'folha'|'estrela'|null} */
+  let uid = 0;
+  function produto(o = {}){
+    const id = 'p' + (++uid);
+    const tipo = o.tipo || 'reta', corpo = o.corpo || '#F7F4EE', alca = o.alca || corpo;
+    const arte = o.arte || null;
+    const metal = tipo === 'cromada' || tipo === 'imperial';
+    const shade = `<linearGradient id="${id}s" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity=".22"/><stop offset=".18" stop-color="#000" stop-opacity=".04"/><stop offset=".42" stop-color="#fff" stop-opacity="${metal?'.55':'.28'}"/><stop offset=".6" stop-color="#fff" stop-opacity="0"/><stop offset=".88" stop-color="#000" stop-opacity=".08"/><stop offset="1" stop-color="#000" stop-opacity=".26"/></linearGradient>`;
+    const desenho = d => d==='coracao' ? '<path d="M0 6c-7-5-11-9-11-14a6 6 0 0 1 11-3 6 6 0 0 1 11 3c0 5-4 9-11 14Z"/>'
+      : d==='folha' ? '<path d="M-10 8C-10-6 2-12 12-12 12 0 6 10-10 8Z M-10 8 6-6" />'
+      : d==='estrela' ? '<path d="M0-12 3.5-3.7 12.4-3.7 5.2 1.6 7.9 10.2 0 5 -7.9 10.2 -5.2 1.6 -12.4-3.7 -3.5-3.7Z"/>' : '';
+    const arteSvg = (cx, cy, esc=1) => !arte ? '' : `<g transform="translate(${cx} ${cy}) scale(${esc})" fill="${arte.cor||'#1A1714'}" stroke="none">
+        ${arte.desenho ? `<g transform="translate(0 -26)" ${arte.desenho==='folha'?`fill="none" stroke="${arte.cor}" stroke-width="2.2" stroke-linecap="round"`:''}>${desenho(arte.desenho)}</g>` : ''}
+        <text x="0" y="${arte.desenho?8:4}" text-anchor="middle" font-family="${arte.fonte||"'Pacifico',cursive"}" font-size="${arte.tam||22}">${arte.texto||''}</text>
+        ${arte.sub ? `<text x="0" y="${arte.desenho?24:20}" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="6.4" letter-spacing="1.1">${arte.sub}</text>` : ''}
+      </g>`;
+    const sombra = `<ellipse cx="96" cy="178" rx="62" ry="7" fill="#000" opacity=".13"/>`;
+    if (tipo === 'camiseta') {
+      return `<svg class="prod" viewBox="0 0 200 200" role="img" aria-label="Camiseta"><defs>${shade}</defs>${sombra}
+        <path d="M70 26 52 34 22 52l14 30 18-9v99h92V73l18 9 14-30-30-18-18-8c-4 12-16 18-30 18S74 38 70 26Z" fill="${corpo}" stroke="rgba(0,0,0,.14)" stroke-width="1"/>
+        <path d="M70 26c4 12 16 18 30 18s26-6 30-18" fill="none" stroke="rgba(0,0,0,.18)" stroke-width="2"/>
+        <path d="M54 73v99h92V73" fill="url(#${id}s)" opacity=".7"/>
+        ${arteSvg(100, 100, .95)}</svg>`;
+    }
+    if (tipo === 'copo') {
+      return `<svg class="prod" viewBox="0 0 200 200" role="img" aria-label="Copo térmico"><defs>${shade}</defs>${sombra}
+        <path d="M60 40h72l-7 134a6 6 0 0 1-6 6H73a6 6 0 0 1-6-6Z" fill="${corpo}"/><path d="M60 40h72l-7 134a6 6 0 0 1-6 6H73a6 6 0 0 1-6-6Z" fill="url(#${id}s)"/>
+        <rect x="55" y="26" width="82" height="18" rx="6" fill="${alca}"/><rect x="55" y="26" width="82" height="18" rx="6" fill="url(#${id}s)"/>
+        <path d="M132 58c26 0 26 60 0 60" fill="none" stroke="${alca}" stroke-width="11" stroke-linecap="round"/>
+        <rect x="104" y="6" width="7" height="24" rx="3" fill="${alca}" opacity=".9"/>
+        ${arteSvg(96, 108, .9)}</svg>`;
+    }
+    const chopp = tipo === 'chopp';
+    const x0 = chopp ? 50 : 44, x1 = chopp ? 142 : 146, top = chopp ? 20 : 44, bot = 172;
+    const body = chopp ? `M${x0} ${top}h${x1-x0}l-4 ${bot-top-8}a8 8 0 0 1-8 8H${x0+12}a8 8 0 0 1-8-8Z` : `M${x0} ${top}h${x1-x0}v${bot-top-10}a10 10 0 0 1-10 10H${x0+10}a10 10 0 0 1-10-10Z`;
+    const handle = tipo === 'coracao'
+      ? `<path d="M${x1-2} 78c10-16 34-12 34 8 0 18-18 30-34 44" fill="none" stroke="${alca}" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>`
+      : `<path d="M${x1-2} ${chopp?60:74}c${chopp?38:34} 0 ${chopp?38:34} ${chopp?80:62} 0 ${chopp?80:62}" fill="none" stroke="${alca}" stroke-width="${chopp?15:12}" stroke-linecap="round"/>`;
+    const handleShade = tipo === 'coracao' ? '' : `<path d="M${x1-2} ${chopp?60:74}c${chopp?38:34} 0 ${chopp?38:34} ${chopp?80:62} 0 ${chopp?80:62}" fill="none" stroke="#000" stroke-opacity=".12" stroke-width="3" transform="translate(4 0)"/>`;
+    const rimTop = tipo === 'imperial' ? `<rect x="${x0}" y="${top}" width="${x1-x0}" height="7" fill="#C9A45C"/><rect x="${x0}" y="${top}" width="${x1-x0}" height="7" fill="url(#${id}s)"/>` : '';
+    const colher = tipo === 'colher' ? `<g transform="rotate(14 150 30)"><rect x="140" y="-4" width="7" height="70" rx="3.5" fill="#C8CCD2"/><ellipse cx="143.5" cy="-8" rx="10" ry="13" fill="#D5D9DE"/></g>` : '';
+    const glass = chopp ? `<path d="${body}" fill="#FFFFFF" opacity=".35"/>` : '';
+    return `<svg class="prod" viewBox="0 0 200 200" role="img" aria-label="Caneca"><defs>${shade}<clipPath id="${id}c"><path d="${body}"/></clipPath></defs>${sombra}
+      ${handle}${handleShade}
+      <path d="${body}" fill="${corpo}"/>${glass}
+      <g clip-path="url(#${id}c)">${arteSvg((x0+x1)/2 - 2, chopp ? 100 : 112, chopp ? 1 : 1.05)}</g>
+      <path d="${body}" fill="url(#${id}s)"/>${rimTop}
+      <ellipse cx="${(x0+x1)/2}" cy="${top}" rx="${(x1-x0)/2}" ry="5" fill="${alca}"/><ellipse cx="${(x0+x1)/2}" cy="${top+1}" rx="${(x1-x0)/2-5}" ry="3.4" fill="#000" opacity=".16"/>
+      ${colher}</svg>`;
+  }
+
+  /* Barra do mockup: cor, tipografia e aparelho. Chame KIT.bar({device:true}). */
+  function bar(opts = {}){
+    const bw = document.getElementById('mk-brands'), fw = document.getElementById('mk-fonts'), dw = document.getElementById('mk-devices');
+    const set = (wrap, btn) => { wrap.querySelectorAll('.mk-seg').forEach(b => b.setAttribute('aria-pressed', b===btn ? 'true':'false')); };
+    if (bw) BRANDS.forEach((b,i) => { const el = document.createElement('button'); el.className='mk-seg'; el.innerHTML=`<i class="mk-dot" style="background:${b.hex}"></i>${b.nome}`; el.setAttribute('aria-pressed', i===0?'true':'false'); el.onclick=()=>{applyBrand(b.hex); set(bw,el); document.dispatchEvent(new CustomEvent('kit:brand',{detail:b}));}; bw.appendChild(el); });
+    if (fw) Object.entries(FONTS).forEach(([k,f],i) => { const el = document.createElement('button'); el.className='mk-seg'; el.textContent=f.nome; el.setAttribute('aria-pressed', i===0?'true':'false'); el.onclick=()=>{applyFont(k); set(fw,el);}; fw.appendChild(el); });
+    if (dw) [['ambos','Celular e desktop'],['phone','Só celular'],['desk','Só desktop']].forEach(([k,n],i) => { const el=document.createElement('button'); el.className='mk-seg'; el.textContent=n; el.setAttribute('aria-pressed', i===0?'true':'false'); el.onclick=()=>{ document.body.classList.toggle('mk-hide-desk', k==='phone'); document.body.classList.toggle('mk-hide-phone', k==='desk'); set(dw,el); fitDesk(); }; dw.appendChild(el); });
+    applyBrand(BRANDS[0].hex); applyFont('classic');
+    window.addEventListener('resize', fitDesk); fitDesk();
+  }
+  /* Escala a moldura desktop (1280 px) para caber na coluna. */
+  function fitDesk(){
+    document.querySelectorAll('.desk-fit').forEach(w => { const d = w.querySelector('.desk'); if (!d) return; const s = Math.min(1, w.clientWidth / 1280); d.style.transform = `scale(${s})`; w.style.height = (d.offsetHeight * s) + 'px'; });
+  }
+  const money = v => 'R$ ' + v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const icon = (n, cls='') => `<svg class="ic ${cls}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+  return { applyBrand, applyFont, brandPair, brandText, contrast, produto, bar, fitDesk, money, icon, BRANDS, FONTS };
+})();
+/* === KIT:END ================================================ */
+
+/* ---------- só desta página ---------- */
+
+// ---- dados do pedido de exemplo (PublicApproval / PublicTrack) ----
+const LOJA = {
+  nome: 'Sheid Mania',
+  endereco: 'Av. Dom Pedro I, 553 — Jardim Colonial, São José dos Campos/SP',
+  instagram: '@sheidmania_',
+  whatsDisplay: '(12) 99614-5447',
+  whatsHref: 'https://wa.me/5512996145447',
+};
+
+const ORDER = {
+  id: '00123',
+  cliente: 'Helena Martins',
+  primeiroNome: 'Helena',
+  prazoDias: 3,
+  revisoesInclusas: 2,
+  valorRevisaoExtra: 10,
+  itens: [
+    {
+      nome: 'Caneca Alça Coração',
+      detalhe: 'Personalizada com "Mãe" na frente e no verso',
+      qtd: 1, preco: 49.90,
+      produto: { tipo: 'coracao', corpo: '#F7F4EE', alca: '#D8436F' },
+      frente: { texto: 'Mãe', cor: '#D8436F', desenho: 'coracao' },
+      verso: { texto: 'Com carinho', cor: '#D8436F', fonte: "'DM Sans',sans-serif", tam: 13 },
+    },
+    {
+      nome: 'Caneca Branca',
+      detalhe: '2 unidades, com a foto que você enviou',
+      qtd: 2, preco: 39.90,
+      produto: { tipo: 'reta', corpo: '#F7F4EE' },
+      foto: true,
+    },
+  ],
+  get total(){ return this.itens.reduce((s,it) => s + it.preco * it.qtd, 0); },
+};
+
+function shotSvg(item, side){
+  if (item.foto) return KIT.produto(item.produto);
+  const arte = (side === 'verso' && item.verso) ? item.verso : item.frente;
+  return KIT.produto(Object.assign({}, item.produto, { arte }));
+}
+
+function moneyStr(v){ return KIT.money(v); }
+
+// ===================================================================
+// TELA 1 — aprovar a arte
+// ===================================================================
+function mountAprovar(el, opts){
+  opts = opts || {};
+  const st = { idx: 0, side: 'frente', aprovados: new Set(), ajusteAberto: false, ajusteEnviado: false };
+
+  el.innerHTML = `
+    <div class="pc-head"><span class="sv-wordmark">Sheid Mania</span></div>
+    <p class="t-cap pc-eyebrow" style="text-align:center">APROVAÇÃO DE ARTE</p>
+    <div class="pc-hgroup">
+      <h1 class="t-h2">A arte da sua caneca está pronta</h1>
+      <p class="t-small">Oi, Helena! Dá uma olhada e nos diz se pode ir pra produção.</p>
+    </div>
+    <div class="pc-viewer">
+      <div class="shot" data-shot></div>
+      <div class="pc-viewer-controls" data-controls></div>
+      <p class="pc-photocap" data-photocap hidden>Sua foto aplicada na caneca.</p>
+    </div>
+    <div class="pc-pager">
+      <button class="icon-btn" data-prev aria-label="Ver item anterior"><svg class="ic"><use href="#i-back"/></svg></button>
+      <div class="pc-dots" data-dots></div>
+      <button class="icon-btn" data-next aria-label="Ver próximo item"><svg class="ic"><use href="#i-next"/></svg></button>
+    </div>
+    <p class="t-small pc-itemname" data-itemname></p>
+    <div class="note note-info" style="margin:16px 20px" data-revnote></div>
+    <div data-donenote></div>
+    <div data-ajusteinline></div>
+    <div class="pc-actionbar">
+      <button class="btn btn-primary btn-block" data-approve><svg class="ic"><use href="#i-check"/></svg>Aprovar e produzir</button>
+      <button class="btn btn-secondary btn-block" data-adjust>Pedir ajuste</button>
+    </div>
+    <p class="pc-footer">Loja desenvolvida com Aura.</p>
+  `;
+
+  const $ = sel => el.querySelector(sel);
+  $('[data-prev]').onclick = () => { st.idx = (st.idx + ORDER.itens.length - 1) % ORDER.itens.length; st.side = 'frente'; render(); };
+  $('[data-next]').onclick = () => { st.idx = (st.idx + 1) % ORDER.itens.length; st.side = 'frente'; render(); };
+  $('[data-approve]').onclick = () => {
+    st.aprovados.add(st.idx);
+    if (st.aprovados.size < ORDER.itens.length) {
+      const next = [...ORDER.itens.keys()].find(i => !st.aprovados.has(i));
+      if (next != null) { st.idx = next; st.side = 'frente'; }
+    }
+    render();
+  };
+  $('[data-adjust]').onclick = () => { st.ajusteAberto = !st.ajusteAberto; st.ajusteEnviado = false; render(); };
+
+  function render(){
+    const item = ORDER.itens[st.idx];
+    $('[data-shot]').innerHTML = shotSvg(item, st.side);
+    const controls = $('[data-controls]'), photocap = $('[data-photocap]');
+    if (item.foto) { controls.innerHTML = ''; photocap.hidden = false; }
+    else {
+      photocap.hidden = true;
+      controls.innerHTML = `
+        <button class="chip ${st.side === 'frente' ? 'on' : ''}" aria-pressed="${st.side === 'frente'}" data-side="frente">Frente</button>
+        <button class="chip ${st.side === 'verso' ? 'on' : ''}" aria-pressed="${st.side === 'verso'}" data-side="verso"><svg class="ic sm"><use href="#i-rotate"/></svg>Verso</button>`;
+      controls.querySelectorAll('[data-side]').forEach(b => b.onclick = () => { st.side = b.dataset.side; render(); });
+    }
+    $('[data-dots]').innerHTML = ORDER.itens.map((_, i) =>
+      `<span class="pc-dot ${i === st.idx ? 'on' : ''} ${st.aprovados.has(i) ? 'done' : ''}"></span>`).join('');
+    $('[data-itemname]').innerHTML = `Item ${st.idx + 1} de ${ORDER.itens.length} · <b>${item.nome}</b> — ${item.detalhe}`;
+    $('[data-revnote]').innerHTML = `<svg class="ic sm"><use href="#i-info"/></svg><span>Você ainda tem <b>${ORDER.revisoesInclusas} revisões</b> inclusas neste pedido.</span>`;
+
+    const done = $('[data-donenote]');
+    done.innerHTML = st.aprovados.size === ORDER.itens.length
+      ? `<div class="note note-pix" style="margin:12px 20px 0"><svg class="ic sm"><use href="#i-check"/></svg><span>Prontinho — você aprovou os ${ORDER.itens.length} itens. A Sheid já foi avisada e entra em produção.</span></div>`
+      : '';
+
+    const wrap = $('[data-ajusteinline]');
+    if (!st.ajusteAberto) { wrap.innerHTML = ''; }
+    else if (st.ajusteEnviado) {
+      wrap.innerHTML = `<div class="panel adj-inline"><div class="adj-confirm">
+        <div class="ico"><svg class="ic lg"><use href="#i-check"/></svg></div>
+        <h3 class="t-h3">A Sheid recebeu seu pedido de ajuste</h3>
+        <p class="t-small">Assim que a nova versão ficar pronta, mandamos este link de novo pra você aprovar.</p>
+      </div></div>`;
+    } else {
+      wrap.innerHTML = `<div class="panel adj-inline">
+        <p class="t-h3" style="font-size:16px">O que a gente ajusta em ${item.nome}?</p>
+        <textarea placeholder="Ex.: deixar o nome maior · trocar a cor da letra pra dourado · usar uma fonte mais simples"></textarea>
+        <div class="note note-amber"><svg class="ic sm"><use href="#i-alert"/></svg><span>Esta seria a 3ª revisão: R$ ${ORDER.valorRevisaoExtra.toFixed(2).replace('.', ',')}. A loja confirma com você antes de cobrar.</span></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button class="btn btn-secondary btn-sm" data-cancel-inline>Cancelar</button>
+          <button class="btn btn-primary btn-sm" data-send-inline>Enviar pra loja</button>
+        </div>
+      </div>`;
+      wrap.querySelector('[data-cancel-inline]').onclick = () => { st.ajusteAberto = false; render(); };
+      wrap.querySelector('[data-send-inline]').onclick = () => { st.ajusteEnviado = true; render(); };
+    }
+  }
+  render();
+}
+
+// ===================================================================
+// TELA 2 — pedir ajuste (sheet / modal completos)
+// ===================================================================
+let T2_COBRADA = true;
+
+function ajusteBodyHTML(cobrada){
+  const notaHTML = cobrada
+    ? `<div class="note note-amber"><svg class="ic sm"><use href="#i-alert"/></svg><span>Esta seria a <b>3ª revisão</b>: R$ ${ORDER.valorRevisaoExtra.toFixed(2).replace('.', ',')}. A loja confirma com você antes de cobrar.</span></div>`
+    : `<div class="note note-pix"><svg class="ic sm"><use href="#i-check"/></svg><span>Ajuste incluso — você ainda vai ter <b>1 revisão grátis</b> depois deste.</span></div>`;
+  return `
+    <div class="adj-panel" data-adjpanel>
+      <textarea placeholder="Ex.: deixar o nome maior · trocar a cor da letra pra dourado · usar uma fonte mais simples" data-adjtext></textarea>
+      <div data-attachzone>
+        <button type="button" class="adj-attach" data-attachbtn><svg class="ic sm"><use href="#i-upload"/></svg>Anexar uma referência (opcional)</button>
+        <input type="file" accept="image/*" data-attachinput style="display:none">
+      </div>
+      ${notaHTML}
+      <div class="adj-actions">
+        <button class="btn btn-secondary btn-sm" data-adjcancel>Cancelar</button>
+        <button class="btn btn-primary btn-sm" data-adjsend>Enviar pra loja</button>
+      </div>
+    </div>`;
+}
+
+function ajusteConfirmHTML(){
+  return `<div class="adj-confirm">
+      <div class="ico"><svg class="ic lg"><use href="#i-check"/></svg></div>
+      <h3 class="t-h3">A Sheid recebeu seu pedido de ajuste</h3>
+      <p class="t-small">Assim que a nova versão ficar pronta, mandamos este link de novo pra você aprovar.</p>
+      <button class="btn btn-secondary btn-sm" data-adjagain style="margin-top:6px">Ver o formulário de novo</button>
+    </div>`;
+}
+
+function wireAjuste(scope){
+  const zone = scope.querySelector('[data-attachzone]');
+  const btn = scope.querySelector('[data-attachbtn]');
+  const input = scope.querySelector('[data-attachinput]');
+  if (btn && input) {
+    btn.onclick = () => input.click();
+    input.onchange = () => {
+      const f = input.files && input.files[0];
+      if (!f) return;
+      zone.innerHTML = `<span class="adj-file"><svg class="ic sm"><use href="#i-image"/></svg>${f.name}<button type="button" aria-label="Remover anexo" data-removefile><svg class="ic sm"><use href="#i-close"/></svg></button></span>`;
+      zone.querySelector('[data-removefile]').onclick = () => { zone.innerHTML = ''; zone.appendChild(btn); zone.appendChild(input); input.value = ''; };
+    };
+  }
+  const cancel = scope.querySelector('[data-adjcancel]');
+  if (cancel) cancel.onclick = () => { const ta = scope.querySelector('[data-adjtext]'); if (ta) ta.value = ''; };
+  const send = scope.querySelector('[data-adjsend]');
+  if (send) send.onclick = () => { const host = scope.closest('[data-adjhost]'); if (host) host.innerHTML = ajusteConfirmHTML(); wireConfirm(host); };
+}
+function wireConfirm(host){
+  const again = host.querySelector('[data-adjagain]');
+  if (again) again.onclick = () => { host.innerHTML = ajusteBodyHTML(T2_COBRADA); wireAjuste(host); };
+}
+
+function mountAjusteScreen(el, opts){
+  opts = opts || {};
+  const item = ORDER.itens[0];
+  if (opts.desktop) {
+    el.className = 'sv adj-scene';
+    el.innerHTML = `
+      <div class="scene-behind">
+        <div class="pc-head"><span class="sv-wordmark">Sheid Mania</span></div>
+        <div class="pc-hgroup"><h1 class="t-h2">A arte da sua caneca está pronta</h1></div>
+        <div class="pc-viewer"><div class="shot">${shotSvg(item, 'frente')}</div></div>
+      </div>
+      <div class="scene-dim"></div>
+      <div class="adj-modal-wrap">
+        <div class="adj-modal" data-adjhost>
+          <div class="adj-modal-head">
+            <h3 class="t-h3">O que a gente ajusta em ${item.nome}?</h3>
+            <p class="t-small" style="margin-top:4px">Quanto mais detalhe, mais rápido voltamos com a versão certa.</p>
+          </div>
+          ${ajusteBodyHTML(T2_COBRADA)}
+        </div>
+      </div>`;
+  } else {
+    el.className = 'sv adj-scene';
+    el.style.minHeight = '100%';
+    el.innerHTML = `
+      <div class="scene-behind">
+        <div class="pc-head"><span class="sv-wordmark">Sheid Mania</span></div>
+        <div class="pc-hgroup"><h1 class="t-h2">A arte da sua caneca está pronta</h1></div>
+        <div class="pc-viewer"><div class="shot">${shotSvg(item, 'frente')}</div></div>
+      </div>
+      <div class="scene-dim"></div>
+      <div class="adj-sheet" data-adjhost>
+        <div class="grabber"></div>
+        <div class="adj-sheet-head">
+          <h3 class="t-h3">O que a gente ajusta em ${item.nome}?</h3>
+          <p class="t-small" style="margin-top:4px">Quanto mais detalhe, mais rápido voltamos com a versão certa.</p>
+        </div>
+        ${ajusteBodyHTML(T2_COBRADA)}
+      </div>`;
+  }
+  wireAjuste(el.querySelector('[data-adjhost]'));
+}
+
+const T2_MOUNTS = [];
+function refreshTela2(){ T2_MOUNTS.forEach(fn => fn()); }
+
+// ===================================================================
+// TELA 3 — arte aprovada
+// ===================================================================
+function mountAprovada(el, opts){
+  const item = ORDER.itens[0];
+  el.innerHTML = `
+    <div class="pc-head"><span class="sv-wordmark">Sheid Mania</span></div>
+    <div style="padding:34px 26px 8px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:12px">
+      <div style="width:56px;height:56px;border-radius:50%;background:var(--pix-soft);display:grid;place-items:center;color:var(--pix)"><svg class="ic lg"><use href="#i-check"/></svg></div>
+      <h1 class="t-h2">Arte aprovada</h1>
+      <p class="t-body" style="color:var(--ink2);max-width:360px">Sua Caneca Alça Coração já pode ir pra produção. Avisamos a Sheid.</p>
+    </div>
+    <div class="panel" style="margin:18px 20px;padding:20px;display:flex;gap:14px;align-items:center">
+      <div class="shot" style="width:66px;height:66px;flex:none;border-radius:12px">${shotSvg(item,'frente')}</div>
+      <div>
+        <p class="t-small" style="color:var(--ink)"><b>${item.nome}</b></p>
+        <p class="t-small">Pedido #${ORDER.id} · ${moneyStr(ORDER.total)} · pago no Pix</p>
+      </div>
+    </div>
+    <div class="panel" style="margin:0 20px 18px;padding:20px;display:flex;flex-direction:column;gap:14px">
+      <span class="label">O que acontece agora</span>
+      <div style="display:flex;gap:12px"><svg class="ic sm" style="margin-top:2px;color:var(--brand-text)"><use href="#i-box"/></svg><p class="t-small" style="color:var(--ink)">Começamos a produzir hoje.</p></div>
+      <div style="display:flex;gap:12px"><svg class="ic sm" style="margin-top:2px;color:var(--brand-text)"><use href="#i-calendar"/></svg><p class="t-small" style="color:var(--ink)">Prazo de ${ORDER.prazoDias} dias úteis — sem hora marcada, por etapas.</p></div>
+      <div style="display:flex;gap:12px"><svg class="ic sm" style="margin-top:2px;color:var(--brand-text)"><use href="#i-wa"/></svg><p class="t-small" style="color:var(--ink)">Te avisamos por aqui quando estiver pronta pra retirar.</p></div>
+    </div>
+    <div style="padding:0 20px 14px"><button class="btn btn-primary btn-block"><svg class="ic"><use href="#i-truck"/></svg>Acompanhar o pedido</button></div>
+    <p class="pc-footer">Loja desenvolvida com Aura.</p>
+  `;
+}
+
+// ===================================================================
+// TELA 4 — acompanhar (4 estados)
+// ===================================================================
+const AC_ETAPAS = ['Pedido recebido', 'Criando a arte', 'Em produção', 'Pronto para retirar'];
+const AC_ESTADOS = {
+  arte:     { label: 'Criando a arte · aguardando aprovação', etapaAtual: 1, entregue: false },
+  saldo:    { label: 'Em produção · falta pagar o saldo',     etapaAtual: 2, entregue: false },
+  pronto:   { label: 'Pronto para retirar',                    etapaAtual: 3, entregue: false },
+  entregue: { label: 'Entregue',                                etapaAtual: 3, entregue: true  },
+};
+let AC_STATE = 'arte';
+const AC_MOUNTS = [];
+
+function timelineHTML(etapaAtual, entregue){
+  return AC_ETAPAS.map((label, i) => {
+    const done = entregue ? true : i < etapaAtual;
+    const now = !entregue && i === etapaAtual;
+    const isLast = i === AC_ETAPAS.length - 1;
+    return `<div class="tl-row">
+      <div class="tl-dotcol">
+        <div class="tl-dot ${done ? 'done' : (now ? 'now' : '')}">${done ? '<svg class="ic sm"><use href="#i-check"/></svg>' : ''}</div>
+        ${!isLast ? `<div class="tl-line ${(done || (entregue)) ? 'done' : ''}"></div>` : ''}
+      </div>
+      <div style="flex:1;padding-bottom:${isLast ? 0 : 14}px">
+        <p class="tl-label ${done ? 'done' : ''} ${now ? 'now' : ''}">${entregue && isLast ? 'Retirado' : label}</p>
+        ${now ? `<p class="tl-sub">é onde estamos agora</p>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function actionCardHTML(key){
+  if (key === 'arte') {
+    return `<div class="panel ac-card ac-action">
+      <div class="row"><svg class="ic" style="color:var(--brand-text)"><use href="#i-eye"/></svg>
+        <div><p class="t-body" style="color:var(--ink);font-weight:600">A arte da sua Caneca Alça Coração está pronta.</p>
+        <p class="t-small">Dá uma olhada e diz se pode seguir pra produção.</p></div>
+      </div>
+      <button class="btn btn-primary btn-block" data-goapprove><svg class="ic"><use href="#i-check"/></svg>Aprovar a arte</button>
+    </div>`;
+  }
+  if (key === 'saldo') {
+    return `<div class="panel ac-card ac-action">
+      <span class="label">SALDO DO PEDIDO</span>
+      <p class="price-lg">${moneyStr(64.85)}</p>
+      <p class="t-small">para 22 de outubro</p>
+      <button class="btn btn-pix btn-block" data-copiapix><svg class="ic"><use href="#i-copy"/></svg>Copiar código Pix</button>
+      <p class="t-small" data-pixhint>Cole no app do seu banco, na opção Pix copia e cola.</p>
+      <div data-pixmanual></div>
+    </div>`;
+  }
+  if (key === 'pronto') {
+    return `<div class="panel ac-card ac-action">
+      <div class="row"><svg class="ic" style="color:var(--brand-text)"><use href="#i-store"/></svg>
+        <div><p class="t-body" style="color:var(--ink);font-weight:600">Pronto para retirar.</p>
+        <p class="t-small">Qualquer pessoa pode buscar mostrando o número do pedido #${ORDER.id}.</p></div>
+      </div>
+    </div>`;
+  }
+  return `<div class="panel ac-card ac-action">
+      <div class="row"><svg class="ic" style="color:var(--pix)"><use href="#i-check"/></svg>
+        <div><p class="t-body" style="color:var(--ink);font-weight:600">Entregue com carinho.</p>
+        <p class="t-small">Esperamos que a Helena ame a caneca.</p></div>
+      </div>
+    </div>
+    <div class="panel ac-card ac-again">
+      <div class="shot">${shotSvg(ORDER.itens[0], 'frente')}</div>
+      <div style="flex:1">
+        <p class="t-body" style="color:var(--ink);font-weight:700">Gostou? Peça outra igual</p>
+        <p class="t-small" style="margin-top:2px">Abrimos a Caneca Alça Coração com a mesma arte pronta pra você ajustar.</p>
+      </div>
+    </div>
+    <div style="padding:2px 20px 0"><button class="btn btn-primary btn-block" data-again><svg class="ic"><use href="#i-refresh"/></svg>Pedir outro igual</button></div>`;
+}
+
+function mountAcompanhar(el, opts){
+  opts = opts || {};
+  el.innerHTML = `
+    <div class="pc-head"><span class="sv-wordmark">Sheid Mania</span></div>
+    <div style="padding:18px 22px 0">
+      <p class="t-cap">SHEID MANIA</p>
+      <h1 class="t-h2" style="margin-top:2px">Oi, Helena!</h1>
+      <p class="t-body" style="color:var(--ink2);margin-top:4px" data-titulo></p>
+    </div>
+    <div class="panel ac-card" style="padding:20px" data-timeline></div>
+    <div data-action></div>
+    <div class="panel ac-card" style="padding:20px">
+      <span class="label">SEU PEDIDO</span>
+      <div data-items></div>
+      <div class="ac-total"><span class="t-small">Total</span><span class="t-small" style="color:var(--ink);font-weight:700">${moneyStr(ORDER.total)}</span></div>
+    </div>
+    <div class="panel ac-card" style="padding:20px" data-addr></div>
+    <div style="padding:16px 20px 0"><a class="btn btn-wa btn-block" href="${LOJA.whatsHref}" target="_blank" rel="noopener"><svg class="ic"><use href="#i-wa"/></svg>Falar com a Sheid no WhatsApp</a></div>
+    <p class="pc-footer">Pedido #${ORDER.id} · feito com Aura Studio</p>
+  `;
+
+  const $ = sel => el.querySelector(sel);
+  $('[data-items]').innerHTML = ORDER.itens.map(it => `
+    <div class="ac-item"><div class="shot">${shotSvg(it,'frente')}</div>
+      <div style="flex:1"><p class="t-small" style="color:var(--ink)">${it.nome}</p><p class="t-small">${it.detalhe}</p></div>
+      <p class="t-small" style="color:var(--ink);font-weight:700">${it.qtd}×</p>
+    </div>`).join('');
+  $('[data-addr]').innerHTML = `
+    <span class="label">RETIRADA</span>
+    <div class="ac-addr" style="margin-top:8px"><svg class="ic sm" style="margin-top:2px;color:var(--brand-text)"><use href="#i-pin"/></svg>
+      <p class="t-small" style="color:var(--ink)">${LOJA.endereco}</p></div>`;
+
+  function render(){
+    const st = AC_ESTADOS[AC_STATE];
+    $('[data-titulo]').textContent = st.entregue ? 'Seu pedido foi entregue.' : 'Acompanhe sua encomenda por aqui.';
+    $('[data-timeline]').innerHTML = timelineHTML(st.etapaAtual, st.entregue);
+    const action = $('[data-action]');
+    action.innerHTML = actionCardHTML(AC_STATE);
+
+    const goApprove = action.querySelector('[data-goapprove]');
+    if (goApprove) goApprove.onclick = () => document.getElementById('tela1').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const again = action.querySelector('[data-again]');
+    if (again) again.onclick = () => document.getElementById('tela5').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const copia = action.querySelector('[data-copiapix]');
+    if (copia) copia.onclick = async () => {
+      const codigo = '00020126580014BR.GOV.BCB.PIX0136sheidmania-pix-exemplo-04102026520400005303986540564.855802BR5913SHEID MANIA6009SAO JOSE62070503***6304ABCD';
+      let ok = false;
+      try { await navigator.clipboard.writeText(codigo); ok = true; } catch (e) { ok = false; }
+      const hint = action.querySelector('[data-pixhint]');
+      const manual = action.querySelector('[data-pixmanual]');
+      if (ok) {
+        hint.textContent = 'Copiado! Cole no app do seu banco, na opção Pix copia e cola.';
+      } else {
+        manual.innerHTML = `<div style="margin-top:10px;padding:12px;background:var(--bg3);border-radius:10px;border:1px solid var(--border)">
+          <p class="t-cap">Selecione e copie o código:</p>
+          <p class="mono" style="font-size:11px;line-height:1.5;word-break:break-all;color:var(--ink)" tabindex="0">${codigo}</p>
+        </div>`;
+      }
+    };
+  }
+  render();
+  AC_MOUNTS.push(render);
+}
+function refreshTela4(){ AC_MOUNTS.forEach(fn => fn()); }
+
+// ===================================================================
+// TELA 5 — pedir outro igual (destino: produto pré-preenchido)
+// ===================================================================
+function mountRepetir(el, opts){
+  const item = ORDER.itens[0];
+  el.innerHTML = `
+    <div class="pc-head"><span class="sv-wordmark">Sheid Mania</span></div>
+    <p class="dp-crumb">Início / Canecas / Alça Coração</p>
+    <div class="dp-banner"><div class="note note-info"><svg class="ic sm"><use href="#i-refresh"/></svg><span>Personalização do pedido #${ORDER.id} carregada — confira e ajuste.</span></div></div>
+    <div class="dp-wrap">
+      <div class="pc-viewer" style="margin-left:0;margin-right:0"><div class="shot">${shotSvg(item, 'frente')}</div></div>
+      <h1 class="t-h2" style="margin-top:16px">${item.nome}</h1>
+      <div class="dp-price"><span class="price-lg">${moneyStr(item.preco)}</span><span class="t-small">cada</span></div>
+      <span class="pix-line" style="display:block;margin-top:4px">${moneyStr(item.preco * 0.95)} no Pix</span>
+
+      <div style="margin-top:18px" class="field">
+        <label for="dp-frente">Texto na frente</label>
+        <input id="dp-frente" class="input" value="Mãe">
+      </div>
+      <div class="dp-tabs">
+        <button class="chip on" aria-pressed="true">Frente</button>
+        <button class="chip" aria-pressed="false">Verso</button>
+      </div>
+      <div class="dp-qty">
+        <span class="t-small" style="color:var(--ink)">Quantidade</span>
+        <button class="qbtn" aria-label="Diminuir quantidade"><svg class="ic sm"><use href="#i-minus"/></svg></button>
+        <input value="1" inputmode="numeric" aria-label="Quantidade">
+        <button class="qbtn" aria-label="Aumentar quantidade"><svg class="ic sm"><use href="#i-plus"/></svg></button>
+      </div>
+    </div>
+    <div style="padding:0 20px 20px"><button class="btn btn-primary btn-block"><svg class="ic"><use href="#i-bag"/></svg>Adicionar à sacola</button></div>
+    <p class="pc-footer">Loja desenvolvida com Aura.</p>
+  `;
+}
+
+// ===================================================================
+// TELA 6 — e-mail de confirmação
+// ===================================================================
+function mailBodyHTML(){
+  return `
+    <div class="mail-brandhead"><span class="sv-wordmark" style="font-size:24px">Sheid Mania</span></div>
+    <h1 class="t-h2">Recebemos seu pedido, Helena!</h1>
+    <p class="t-body" style="margin-top:10px;color:var(--ink2)">Pedido <b>#${ORDER.id}</b> · pago no Pix. Assim que a arte ficar pronta, mandamos outro e-mail pra você aprovar.</p>
+    <div style="margin-top:22px">
+      ${ORDER.itens.map(it => `<div class="mail-item"><div class="shot">${shotSvg(it,'frente')}</div>
+        <div style="flex:1"><p class="t-small" style="color:var(--ink)">${it.nome}</p><p class="t-small">${it.detalhe}</p></div>
+        <p class="t-small" style="color:var(--ink);font-weight:700">${moneyStr(it.preco * it.qtd)}</p></div>`).join('')}
+      <div class="mail-total"><span class="t-small">Total</span><span class="t-small" style="color:var(--ink);font-weight:800">${moneyStr(ORDER.total)}</span></div>
+    </div>
+    <div style="text-align:center"><a class="mail-btn" href="#tela4">Acompanhar pedido</a></div>
+    <span class="label">O QUE ACONTECE AGORA</span>
+    <ol class="mail-steps" style="margin-top:8px">
+      <li>Vamos criar a arte da sua caneca.</li>
+      <li>Você aprova antes de irmos pra produção.</li>
+      <li>Produção em até ${ORDER.prazoDias} dias úteis.</li>
+      <li>Te avisamos por aqui quando estiver pronta.</li>
+    </ol>
+    <div class="mail-footer">
+      <b style="color:var(--ink2)">Sheid Mania</b><br>
+      ${LOJA.endereco}<br>
+      Instagram ${LOJA.instagram} · WhatsApp ${LOJA.whatsDisplay}<br><br>
+      E-mail enviado automaticamente. Loja desenvolvida com Aura.
+    </div>`;
+}
+
+function mountEmailDesktop(el){
+  el.className = 'sv';
+  el.style.height = '100%';
+  el.innerHTML = `<div class="mail-desk-body">
+    <div class="mail-rail"><div class="r-dot on"><svg class="ic"><use href="#i-inbox"/></svg></div><div class="r-dot"><svg class="ic"><use href="#i-send"/></svg></div></div>
+    <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+      <div class="mail-toolbar">
+        <span class="subj">Recebemos seu pedido #${ORDER.id} · Sheid Mania</span>
+        <span class="meta">De: Sheid Mania &lt;pedidos@sheidmania.getaura.com.br&gt; · Para: helena.martins@email.com · hoje, 14:32</span>
+      </div>
+      <div style="flex:1;overflow-y:auto"><div class="mail-content">${mailBodyHTML()}</div></div>
+    </div>
+  </div>`;
+}
+function mountEmailMobile(el){
+  el.className = 'sv mail-mobile';
+  el.innerHTML = `
+    <div class="mail-mobile-bar"><svg class="ic"><use href="#i-back"/></svg><span style="flex:1"></span><svg class="ic"><use href="#i-box"/></svg><svg class="ic"><use href="#i-trash"/></svg></div>
+    <div class="mail-mobile-subject">
+      <p class="t-small">De: Sheid Mania · hoje, 14:32</p>
+      <h2 class="t-h3" style="margin-top:4px">Recebemos seu pedido #${ORDER.id} · Sheid Mania</h2>
+    </div>
+    <div class="mail-content">${mailBodyHTML()}</div>`;
+}
+
+// ===================================================================
+// TELA 7 — link inválido / expirado
+// ===================================================================
+function mountErro(el){
+  el.innerHTML = `
+    <div class="pc-head"><span class="sv-wordmark">Sheid Mania</span></div>
+    <div class="err-wrap">
+      <div class="err-ico"><svg class="ic lg"><use href="#i-alert"/></svg></div>
+      <h1 class="t-h3">Não encontramos esse pedido</h1>
+      <p class="t-body" style="color:var(--ink2)">Esse link pode ter expirado ou faltar algum caractere. A Sheid resolve rapidinho pelo WhatsApp.</p>
+      <div class="err-actions">
+        <a class="btn btn-wa btn-block" href="${LOJA.whatsHref}" target="_blank" rel="noopener"><svg class="ic"><use href="#i-wa"/></svg>Falar com a Sheid no WhatsApp</a>
+        <a class="btn btn-secondary btn-block" href="#">Ir para a loja</a>
+      </div>
+    </div>
+  `;
+}
+
+// ===================================================================
+// montagem + controles de estado (mk-meta)
+// ===================================================================
+mountAprovar(document.getElementById('t1-phone'), { desktop: false });
+mountAprovar(document.getElementById('t1-desk'), { desktop: true });
+
+T2_MOUNTS.push(() => mountAjusteScreen(document.getElementById('t2-phone'), { desktop: false }));
+T2_MOUNTS.push(() => mountAjusteScreen(document.getElementById('t2-desk'), { desktop: true }));
+refreshTela2();
+(function wireT2Toggle(){
+  const wrap = document.getElementById('t2-toggle');
+  const opts = [['cobrada', 'Aviso: revisão paga (exemplo do briefing)'], ['gratis', 'Aviso: revisão ainda inclusa']];
+  opts.forEach(([key, label], i) => {
+    const b = document.createElement('button');
+    b.className = 'mk-seg'; b.textContent = label; b.setAttribute('aria-pressed', i === 0 ? 'true' : 'false');
+    b.onclick = () => { T2_COBRADA = key === 'cobrada'; wrap.querySelectorAll('.mk-seg').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false')); refreshTela2(); };
+    wrap.appendChild(b);
+  });
+})();
+
+mountAprovada(document.getElementById('t3-phone'), { desktop: false });
+mountAprovada(document.getElementById('t3-desk'), { desktop: true });
+
+mountAcompanhar(document.getElementById('t4-phone'), { desktop: false });
+mountAcompanhar(document.getElementById('t4-desk'), { desktop: true });
+(function wireT4Toggle(){
+  const wrap = document.getElementById('t4-toggle');
+  const opts = [['arte', 'Criando a arte · aguardando aprovação'], ['saldo', 'Falta pagar o saldo'], ['pronto', 'Pronto para retirar'], ['entregue', 'Entregue']];
+  opts.forEach(([key, label], i) => {
+    const b = document.createElement('button');
+    b.className = 'mk-seg'; b.textContent = label; b.setAttribute('aria-pressed', i === 0 ? 'true' : 'false');
+    b.onclick = () => { AC_STATE = key; wrap.querySelectorAll('.mk-seg').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false')); refreshTela4(); };
+    wrap.appendChild(b);
+  });
+})();
+
+mountRepetir(document.getElementById('t5-phone'), { desktop: false });
+mountRepetir(document.getElementById('t5-desk'), { desktop: true });
+
+mountEmailMobile(document.getElementById('t6-phone'));
+mountEmailDesktop(document.getElementById('t6-desk'));
+
+mountErro(document.getElementById('t7-phone'));
+mountErro(document.getElementById('t7-desk'));
+
+KIT.bar();
+</script>
+</body>
+</html>
