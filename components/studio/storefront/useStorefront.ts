@@ -12,6 +12,8 @@
 //   sf.loading         -- boolean
 //   sf.error           -- string | null
 //   sf.setError        -- (msg: string | null) => void
+//   sf.erroDeCarga     -- { status, mensagem } | null  (falha ao CARREGAR a loja)
+//   sf.recarregar()    -- refaz a carga (o "Tentar de novo" da tela de erro)
 //
 //   // Navegacao
 //   sf.stage           -- Stage
@@ -89,6 +91,7 @@ import type {
   DeliveryType, ShippingQuote,
 } from "./types";
 import { normalizePlate, maskPlate } from "./courierPlate";
+import type { ErroDeCarga } from "./erroDaVitrine";
 import { isArtSourceType, sideOf } from "@/components/studio/customizationConfig";
 import { versoAtivo } from "./versoDoPedido";
 import {
@@ -268,6 +271,12 @@ export function useStorefront(slug: string) {
   const [store, setStore] = useState<StorePayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Fase 1A (25/09/2026): a falha de CARREGAR a loja guarda o status HTTP
+  // (null = sem resposta) para a tela distinguir "nao achamos essa loja"
+  // de "a loja nao carregou" — ver erroDaVitrine.ts. `tentativa` e o que
+  // o "Tentar de novo" incrementa para refazer a carga.
+  const [erroDeCarga, setErroDeCarga] = useState<ErroDeCarga | null>(null);
+  const [tentativa, setTentativa] = useState(0);
 
   const [stage, setStage] = useState<Stage>("list");
   const [grupoAberto, setGrupoAberto] = useState<{ categoria: any; produtos: StudioStoreProduct[] } | null>(null);
@@ -318,11 +327,23 @@ export function useStorefront(slug: string) {
   // Carrega a loja
   useEffect(() => {
     if (!slug) return;
+    // Resposta de uma tentativa antiga nao pode sobrescrever a nova.
+    let vivo = true;
     setLoading(true);
     fetch(API_BASE + "/storefront/" + slug + "/studio/products")
-      .then((r) => r.json())
+      .then(async (r) => {
+        let data: any = null;
+        try { data = await r.json(); } catch { data = null; }
+        if (!r.ok || !data || data.error) {
+          const falha: any = new Error(data?.error || "Erro ao carregar loja");
+          falha.status = r.status;
+          throw falha;
+        }
+        return data;
+      })
       .then((data) => {
-        if (data.error) throw new Error(data.error);
+        if (!vivo) return;
+        setErroDeCarga(null);
         setStore(data as StorePayload);
         const pm = data.payment?.has_pix
           ? "pix"
@@ -333,9 +354,22 @@ export function useStorefront(slug: string) {
           : null;
         setPaymentMethod(pm);
       })
-      .catch((e) => setError(e?.message || "Erro ao carregar loja"))
-      .finally(() => setLoading(false));
-  }, [slug]);
+      .catch((e) => {
+        if (!vivo) return;
+        // Sem `status` e falha de rede (fetch rejeitou): nem houve resposta.
+        setErroDeCarga({ status: typeof e?.status === "number" ? e.status : null, mensagem: e?.message || null });
+        setError(e?.message || "Erro ao carregar loja");
+      })
+      .finally(() => { if (vivo) setLoading(false); });
+    return () => { vivo = false; };
+  }, [slug, tentativa]);
+
+  /** "Tentar de novo" da tela de erro: refaz a carga da loja. */
+  function recarregar() {
+    setErroDeCarga(null);
+    setError(null);
+    setTentativa((t) => t + 1);
+  }
 
   // Hidrata o carrinho do localStorage (web) por slug -- refresh nao perde nada.
   // Segue o padrao aura-food-storefront-<slug> do Food.
@@ -796,6 +830,7 @@ export function useStorefront(slug: string) {
   return {
     // Loja
     store, loading, error, setError,
+    erroDeCarga, recarregar,
     // Navegacao
     stage, goTo,
     abrirGrupo, grupoAberto,
