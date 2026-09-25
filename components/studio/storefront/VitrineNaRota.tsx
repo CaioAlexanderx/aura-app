@@ -9,6 +9,9 @@
 //   app/[slug]/p/[id]           → produto
 //   app/[slug]/finalizar        → checkout (e a confirmação, nesta fase)
 //   app/[slug]/orcamento        → orçamento em lote
+//   app/[slug]/pedido/[token]   → Fase 2: o pedido (Pix, cartão, confirmação),
+//                                 lido do servidor pelo token (PaginaDoPedido)
+//   app/[slug]/sacola           → Fase 2: a home com a gaveta da sacola aberta
 //
 // POR QUE O LAYOUT GUARDA O ESTADO: o layout de uma rota do Expo Router
 // fica montado enquanto a navegação acontece dentro dele. A loja
@@ -42,6 +45,12 @@ import { guardarAtribuicao, lerLinkDaAurinha, veioDaAurinha } from "./linkDaAuri
 import { usePaletaDaVitrine, useTemaDaVitrine } from "./TemaDaVitrine";
 import { Texto } from "./TipografiaVitrine";
 import { Icon } from "@/components/Icon";
+import { PaginaDoPedido } from "./PaginaDoPedido";
+import { lerRetornoDoCartao, lerPedidoPendente } from "./pedidoGuardado";
+import { storageLocal } from "./dadosLembrados";
+import { enderecoDaApi } from "./enderecoDaApi";
+
+const API_BASE = enderecoDaApi();
 
 // ── O que o layout sabe sobre a navegação ────────────────────
 
@@ -115,6 +124,7 @@ export function LayoutDaVitrine() {
     <ProvedorDaRota navegar={navegar}>
       <CascaDaVitrine slug={slug} navegar={navegar}>
         <Slot />
+        <RetornoDoCartao slugDoCaminho={slugDoCaminho} />
       </CascaDaVitrine>
     </ProvedorDaRota>
   );
@@ -285,5 +295,114 @@ export function RotaReservada() {
     setTimeout(() => rota?.navegar({ tipo: "home" }, "trocar"), 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  return null;
+}
+
+// ── Fase 2 · Fechar a venda ──────────────────────────────────
+
+/**
+ * `/<slug>/pedido/<token>`: a página do pedido, lida do servidor. Não é
+ * estado do hook (F5 e outro aparelho mostram o mesmo pedido); só espera
+ * a loja carregar, para ter a cor, a fonte e o nome dela.
+ */
+export function PedidoNaRota({ token, consulta }: { token: string; consulta?: Record<string, unknown> }) {
+  const v = useVitrine();
+  if (!v?.sf?.store || !token) return null;
+  return <PaginaDoPedido token={token} consulta={consulta} />;
+}
+
+/**
+ * `/<slug>/sacola`: com a chave `vitrine_v2`, a loja abre com a gaveta da
+ * sacola aberta (link direto e F5, mockup da Fase 2, Tela 1). Sem a
+ * chave, continua como a rota reservada de antes: a home.
+ *
+ * Troca, não empilha: o voltar do navegador não cai de novo em /sacola.
+ */
+export function SacolaNaRota() {
+  const v = useVitrine();
+  const rota = useContext(RotaCtx);
+  const sf = v?.sf;
+  const temLoja = !!sf?.store;
+  const feito = useRef(false);
+  useEffect(() => {
+    if (!sf || !temLoja || feito.current) return;
+    feito.current = true;
+    const abrir = sf.vitrineV2;
+    setTimeout(() => {
+      rota?.navegar({ tipo: "home" }, "trocar");
+      if (abrir) sf.abrirSacola();
+    }, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [temLoja]);
+  return null;
+}
+
+/** Os recados da volta do cartão sem a página do pedido (sem token). */
+const RECADO_DO_CARTAO = {
+  approved: "Pagamento confirmado. Seu pedido foi recebido.",
+  analise: "Estamos confirmando seu pagamento. O aviso chega no seu WhatsApp em alguns minutos.",
+  pending: "Pagamento em análise. Em breve você recebe a confirmação.",
+  failed: "O pagamento não foi aprovado. Tente de novo.",
+  cancelled: "Pedido cancelado.",
+} as const;
+
+/**
+ * A volta do Mercado Pago: `?order_id=&payment=` (o back_url do pedido
+ * no cartão, o mesmo contrato do bootstrap.js da loja Negócio). Antes a
+ * cliente voltava para a home sem saber se tinha pago (JORNADA §4.7).
+ *
+ * Com a chave: o pedido em andamento guardado no navegador tem o token,
+ * e a vitrine abre a página do pedido com o resultado — ela mostra
+ * aprovado, em análise ou recusado, consultando o servidor. Sem token
+ * (backend antes do B1, outro aparelho), o recado de sempre da Negócio,
+ * com até 15 consultas quando o retorno diz aprovado (o webhook pode
+ * chegar depois do back_url). Sem a chave, nada muda.
+ */
+export function RetornoDoCartao({ slugDoCaminho }: { slugDoCaminho: string }) {
+  const v = useVitrine();
+  const sf = v?.sf;
+  const temLoja = !!sf?.store;
+  const feito = useRef(false);
+  useEffect(() => {
+    if (!sf || !temLoja || feito.current || Platform.OS !== "web" || typeof window === "undefined") return;
+    feito.current = true;
+    if (!sf.vitrineV2) return;
+    const r = lerRetornoDoCartao(window.location.search);
+    if (!r) return;
+    // A URL sai limpa: um F5 não repete o recado.
+    try { window.history.replaceState(window.history.state, document.title, window.location.pathname); } catch { /* ok */ }
+    const pend = lerPedidoPendente(v!.slug, storageLocal());
+    if (pend && pend.id === r.orderId && pend.token) {
+      const q = new URLSearchParams({ pagamento: "cartao", retorno: r.resultado }).toString();
+      setTimeout(() => router.replace(`/${encodeURIComponent(slugDoCaminho)}/pedido/${encodeURIComponent(pend.token!)}?${q}` as any), 0);
+      return;
+    }
+    if (r.resultado !== "approved") {
+      v!.avisar(r.resultado === "failed" ? RECADO_DO_CARTAO.failed : RECADO_DO_CARTAO.pending, "info");
+      return;
+    }
+    let tentativas = 0;
+    let vivo = true;
+    const consultar = () => {
+      tentativas++;
+      fetch(`${API_BASE}/storefront/${v!.slug}/studio/order/${encodeURIComponent(r.orderId)}`)
+        .then((x) => x.json())
+        .then((o) => {
+          if (!vivo) return;
+          if (o?.status === "confirmed" || o?.payment_status === "paid") return v!.avisar(RECADO_DO_CARTAO.approved);
+          if (o?.status === "cancelled") return v!.avisar(RECADO_DO_CARTAO.cancelled, "info");
+          if (tentativas >= 15) return v!.avisar(RECADO_DO_CARTAO.analise, "info");
+          setTimeout(consultar, 2000);
+        })
+        .catch(() => {
+          if (!vivo) return;
+          if (tentativas >= 15) return v!.avisar(RECADO_DO_CARTAO.analise, "info");
+          setTimeout(consultar, 2000);
+        });
+    };
+    setTimeout(consultar, 800);
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [temLoja]);
   return null;
 }
