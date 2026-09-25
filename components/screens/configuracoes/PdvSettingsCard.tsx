@@ -64,7 +64,9 @@ export function PdvSettingsCard() {
   // no cartão ajustado à mão". Mesma chave do useProducts (cache
   // compartilhado com o Estoque) e só busca com a opção ligada — desligada,
   // esta tela não faz requisição nenhuma a mais.
-  const cartaoLigado = display.card_price_enabled === true;
+  // 25/09/2026 (decisão do Caio): o recurso é só de lojas Matcon — sem
+  // matcon_enabled a opção não existe, mesmo com card_price_enabled salvo.
+  const cartaoLigado = display.card_price_enabled === true && display.matcon_enabled === true;
   const { data: produtosData } = useQuery({
     queryKey: ["products", company?.id],
     queryFn: () => companiesApi.products(company!.id),
@@ -345,14 +347,18 @@ export function PdvSettingsCard() {
 
       {/* 22/09/2026: preço no cartão (docs/mockups/preco-no-cartao.html,
           tela 1). Mora junto da taxa da maquininha, no quadro "Cartão" —
-          uma não liga a outra. Todos os planos; desligada = só esta linha. */}
-      <CardPriceSection
-        display={display}
-        saving={saving}
-        onToggle={toggle}
-        palette={CARD_FEE_PALETTE}
-        contagem={cartaoLigado ? contagemDoCartao : null}
-      />
+          uma não liga a outra. Desligada = só esta linha.
+          25/09/2026 (decisão do Caio): "Cobro mais no cartão" é só de lojas
+          com Matcon ligado — sem Matcon a seção não aparece. */}
+      {display.matcon_enabled === true && (
+        <CardPriceSection
+          display={display}
+          saving={saving}
+          onToggle={toggle}
+          palette={CARD_FEE_PALETTE}
+          contagem={cartaoLigado ? contagemDoCartao : null}
+        />
+      )}
 
       {/* Fase 7 (Restaurante): so aparece se vertical_active === "food" */}
       {isFoodVertical && (

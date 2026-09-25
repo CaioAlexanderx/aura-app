@@ -204,6 +204,8 @@ describe("Cadastro — seção Preço", () => {
   });
 });
 
+// 25/09/2026: o PdvSettingsCard só renderiza esta seção em loja com Matcon
+// ligado (decisão do Caio) — por isso os displays "ligada" trazem matcon_enabled.
 describe("Configurações — Cobro mais no cartão", () => {
   const PALETA = {
     label: "#000", desc: "#333", hint: "#666", trackOff: "#ccc", trackOn: "#a78bfa",
@@ -221,7 +223,7 @@ describe("Configurações — Cobro mais no cartão", () => {
     act(() => {
       tree = renderer.create(
         <CardPriceSection
-          display={{ card_price_enabled: true, card_price_pct: 11 } as any}
+          display={{ matcon_enabled: true, card_price_enabled: true, card_price_pct: 11 } as any}
           saving={false} onToggle={jest.fn()} palette={PALETA}
           contagem={{ auto: 342, manual: 18 }}
         />,
@@ -243,7 +245,7 @@ describe("Configurações — Cobro mais no cartão", () => {
     act(() => {
       tree = renderer.create(
         <CardPriceSection
-          display={{ card_price_enabled: true, card_price_pct: null } as any}
+          display={{ matcon_enabled: true, card_price_enabled: true, card_price_pct: null } as any}
           saving={false} onToggle={jest.fn()} palette={PALETA}
           contagem={{ auto: 34, manual: 0 }}
         />,

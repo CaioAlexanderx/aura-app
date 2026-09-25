@@ -39,10 +39,15 @@ describe("opção da loja", () => {
     expect(lerConfigDoCartao({})).toEqual(CARTAO_DESLIGADO);
     expect(lerConfigDoCartao({ card_price_enabled: false, card_price_pct: 11 })).toEqual(CARTAO_DESLIGADO);
   });
-  test("ligada lê o %; null vira 0 e o teto é 100", () => {
-    expect(lerConfigDoCartao({ card_price_enabled: true, card_price_pct: 11 })).toEqual({ enabled: true, pct: 11 });
-    expect(lerConfigDoCartao({ card_price_enabled: true, card_price_pct: null })).toEqual({ enabled: true, pct: 0 });
-    expect(lerConfigDoCartao({ card_price_enabled: true, card_price_pct: 500 })).toEqual({ enabled: true, pct: 100 });
+  test("ligada (loja Matcon) lê o %; null vira 0 e o teto é 100", () => {
+    expect(lerConfigDoCartao({ matcon_enabled: true, card_price_enabled: true, card_price_pct: 11 })).toEqual({ enabled: true, pct: 11 });
+    expect(lerConfigDoCartao({ matcon_enabled: true, card_price_enabled: true, card_price_pct: null })).toEqual({ enabled: true, pct: 0 });
+    expect(lerConfigDoCartao({ matcon_enabled: true, card_price_enabled: true, card_price_pct: 500 })).toEqual({ enabled: true, pct: 100 });
+  });
+  test("ligada sem Matcon = desligada (decisão 25/09/2026: só lojas Matcon)", () => {
+    expect(lerConfigDoCartao({ card_price_enabled: true, card_price_pct: 11 })).toEqual(CARTAO_DESLIGADO);
+    expect(lerConfigDoCartao({ matcon_enabled: false, card_price_enabled: true, card_price_pct: 11 })).toEqual(CARTAO_DESLIGADO);
+    expect(lerConfigDoCartao({ matcon_enabled: null, card_price_enabled: true, card_price_pct: 11 })).toEqual(CARTAO_DESLIGADO);
   });
   test("débito e crédito são cartão; dinheiro, PIX e crediário não", () => {
     expect(ehCartao("cartao")).toBe(true);
