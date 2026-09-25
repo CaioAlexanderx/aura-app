@@ -13,6 +13,11 @@ import { avisarImpressaoNoIphone } from "@/components/ImpressaoNoIphone";
 import { hexToName } from "@/utils/colorNames";
 import { buildLabelHtml, buildLabelName, validateLabelItems, isValidEAN13, generateEAN13, LABEL_SIZE_PRESETS, LABEL_SIZE_KEYS, DEFAULT_LABEL_SIZE } from "@/components/screens/estoque/labels/buildLabelHtml";
 import { defaultLabelQty, unitLabelForList } from "@/components/screens/estoque/labels/labelDefaults";
+import {
+  filtrarEtiquetas, categoriasDe, filtrosAtivos, lerOrdemEtiquetas, salvarOrdemEtiquetas,
+  ORDENS_ETIQUETAS, PERIODOS, type PeriodoCadastro,
+} from "@/utils/etiquetasFiltro";
+import type { OrdemEstoque } from "@/utils/productSort";
 import type { LabelItem, InvalidCodeItem, LabelSizeKey } from "@/components/screens/estoque/labels/buildLabelHtml";
 import type { Product } from "@/components/screens/estoque/types";
 
@@ -112,6 +117,14 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   }
   var [sizeMenuOpen, setSizeMenuOpen] = useState(false);
   var [search, setSearch] = useState("");
+  // 25/09/2026: filtros das etiquetas (utils/etiquetasFiltro). A ordem fica
+  // lembrada no navegador; periodo/categoria/estoque recomecam a cada visita.
+  var [ordem, setOrdemState] = useState<OrdemEstoque>(lerOrdemEtiquetas);
+  var [periodo, setPeriodo] = useState<PeriodoCadastro>("todos");
+  var [categoria, setCategoria] = useState<string | null>(null);
+  var [soComEstoque, setSoComEstoque] = useState(false);
+  var [menuFiltro, setMenuFiltro] = useState<"ordem" | "categoria" | null>(null);
+  function setOrdem(o: OrdemEstoque) { setOrdemState(o); salvarOrdemEtiquetas(o); setMenuFiltro(null); }
   var [quantities, setQuantities] = useState<Record<string, number>>({});
   var [showStoreName, setShowStoreName] = useState(true);
   var [variantCache, setVariantCache] = useState<Record<string, any[]>>({});
@@ -166,13 +179,13 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   var productsWithCode = useMemo(
     function() { return products.filter(function(p) { return p.barcode || p.code; }); }, [products]);
 
+  var filtroAtual = { busca: search, ordem: ordem, periodo: periodo, categoria: categoria, soComEstoque: soComEstoque };
   var filtered = useMemo(function() {
-    var q = search.toLowerCase().trim();
-    if (!q) return productsWithCode;
-    return productsWithCode.filter(function(p) {
-      return p.name.toLowerCase().includes(q) || (p.barcode || p.code || "").toLowerCase().includes(q);
-    });
-  }, [productsWithCode, search]);
+    return filtrarEtiquetas(productsWithCode, filtroAtual);
+  }, [productsWithCode, search, ordem, periodo, categoria, soComEstoque]);
+  var categorias = useMemo(function() { return categoriasDe(productsWithCode); }, [productsWithCode]);
+  var nFiltros = filtrosAtivos(filtroAtual);
+  function limparFiltros() { setPeriodo("todos"); setCategoria(null); setSoComEstoque(false); setMenuFiltro(null); }
 
   function getQty(key: string) { return quantities[key] || 1; }
   function setQty(key: string, n: number) { setQuantities(function(prev) { return { ...prev, [key]: Math.max(1, Math.min(999, n)) }; }); }
@@ -485,6 +498,80 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
         <Pressable onPress={toggleAll} style={s.selectAllBtn}><Text style={s.selectAllText}>{allSelected ? "Desmarcar" : "Selecionar"} todos ({filtered.length})</Text></Pressable>
       </View>
 
+      {/* 25/09/2026: filtros. "Selecionar todos" vale para o que esta filtrado. */}
+      <View style={s.filtros} testID="etiquetas-filtros">
+        <View style={s.filtroGrupo}>
+          <Text style={s.filtroRotulo}>Cadastrados:</Text>
+          {PERIODOS.map(function(pp) {
+            var on = periodo === pp.key;
+            return (
+              <Pressable key={pp.key} onPress={function() { setPeriodo(pp.key); }} style={[s.chip, on && s.chipOn]} testID={"etiquetas-periodo-" + pp.key} accessibilityState={{ selected: on }}>
+                <Text style={[s.chipTxt, on && s.chipTxtOn]}>{pp.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <View style={s.filtroGrupo}>
+          <View style={s.filtroMenuWrap}>
+            <Pressable onPress={function() { setMenuFiltro(menuFiltro === "ordem" ? null : "ordem"); }} style={s.filtroBtn} testID="etiquetas-ordem" accessibilityLabel="Ordenar etiquetas">
+              <Text style={s.filtroRotulo}>Ordenar:</Text>
+              <Text style={s.filtroValor}>{(ORDENS_ETIQUETAS.find(function(o) { return o.key === ordem; }) || ORDENS_ETIQUETAS[0]).label}</Text>
+              <Icon name={menuFiltro === "ordem" ? "chevron_up" : "chevron_down"} size={11} color={Colors.ink3} />
+            </Pressable>
+            {menuFiltro === "ordem" && (
+              <View style={s.filtroMenu}>
+                {ORDENS_ETIQUETAS.map(function(o) {
+                  var on = ordem === o.key;
+                  return (
+                    <Pressable key={o.key} onPress={function() { setOrdem(o.key); }} style={[s.sizeMenuItem, on && s.sizeMenuItemActive]} testID={"etiquetas-ordem-" + o.key}>
+                      <Text style={[s.sizeMenuTxt, on && s.sizeMenuTxtActive]}>{o.label}</Text>
+                      {on && <Icon name="check" size={12} color={Colors.violet3} />}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+
+          {categorias.length > 0 && (
+            <View style={s.filtroMenuWrap}>
+              <Pressable onPress={function() { setMenuFiltro(menuFiltro === "categoria" ? null : "categoria"); }} style={[s.filtroBtn, !!categoria && s.filtroBtnOn]} testID="etiquetas-categoria" accessibilityLabel="Filtrar por categoria">
+                <Text style={s.filtroRotulo}>Categoria:</Text>
+                <Text style={s.filtroValor} numberOfLines={1}>{categoria || "Todas"}</Text>
+                <Icon name={menuFiltro === "categoria" ? "chevron_up" : "chevron_down"} size={11} color={Colors.ink3} />
+              </Pressable>
+              {menuFiltro === "categoria" && (
+                <ScrollView style={[s.filtroMenu, { maxHeight: 280 }]} nestedScrollEnabled>
+                  {([null] as (string | null)[]).concat(categorias).map(function(c) {
+                    var on = categoria === c;
+                    return (
+                      <Pressable key={c || "__todas"} onPress={function() { setCategoria(c); setMenuFiltro(null); }} style={[s.sizeMenuItem, on && s.sizeMenuItemActive]} testID={"etiquetas-categoria-" + (c || "todas")}>
+                        <Text style={[s.sizeMenuTxt, on && s.sizeMenuTxtActive]} numberOfLines={1}>{c || "Todas"}</Text>
+                        {on && <Icon name="check" size={12} color={Colors.violet3} />}
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              )}
+            </View>
+          )}
+
+          <Pressable onPress={function() { setSoComEstoque(!soComEstoque); }} style={[s.chip, soComEstoque && s.chipOn]} testID="etiquetas-com-estoque" accessibilityState={{ selected: soComEstoque }}>
+            <Text style={[s.chipTxt, soComEstoque && s.chipTxtOn]}>Só com estoque</Text>
+          </Pressable>
+
+          {nFiltros > 0 && (
+            <Pressable onPress={limparFiltros} style={s.limpar} testID="etiquetas-limpar-filtros">
+              <Text style={s.limparTxt}>Limpar filtros</Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+      {nFiltros > 0 && (
+        <Text style={s.filtroResumo} testID="etiquetas-resumo-filtro">{filtered.length} de {productsWithCode.length} produtos</Text>
+      )}
+
       <ScrollView style={s.list} nestedScrollEnabled>
         {filtered.length === 0 && (<Text style={s.emptyText}>{productsWithCode.length === 0 ? "Nenhum produto com código cadastrado" : "Nenhum produto encontrado"}</Text>)}
         {filtered.map(function(p) {
@@ -740,6 +827,24 @@ var s = StyleSheet.create({
   storeToggleText: { fontSize: 12, color: Colors.ink2, flex: 1 },
   storeTogglePreview: { fontWeight: "700", color: Colors.violet3, letterSpacing: 0.5 },
   toolbar: { flexDirection: "row", gap: 8, alignItems: "center" },
+  // Filtros (25/09/2026). zIndex abaixo do cabecalho (10) e acima da lista:
+  // os menus de Ordenar/Categoria abrem por cima dos produtos (mesma
+  // armadilha do menu de modelo: o RNW da z-index 0 a cada View).
+  filtros: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8, position: "relative", zIndex: 5 },
+  filtroGrupo: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 },
+  filtroRotulo: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
+  filtroValor: { fontSize: 11.5, color: Colors.ink, fontWeight: "600", maxWidth: 160 },
+  filtroMenuWrap: { position: "relative", zIndex: 6 },
+  filtroBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.bg3, borderRadius: 8, paddingVertical: 7, paddingHorizontal: 10, borderWidth: 1, borderColor: Colors.border },
+  filtroBtnOn: { borderColor: Colors.violet },
+  filtroMenu: { position: "absolute", top: "100%", left: 0, minWidth: 190, marginTop: 4, backgroundColor: Colors.bg3, borderRadius: 8, borderWidth: 1, borderColor: Colors.border2, paddingVertical: 4, zIndex: 30 },
+  chip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg3 },
+  chipOn: { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  chipTxt: { fontSize: 11.5, color: Colors.ink2, fontWeight: "600" },
+  chipTxtOn: { color: "#fff" },
+  limpar: { paddingHorizontal: 8, paddingVertical: 6 },
+  limparTxt: { fontSize: 11.5, color: Colors.violet3, fontWeight: "700" },
+  filtroResumo: { fontSize: 11, color: Colors.ink3, marginTop: -4 },
   searchBox: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.bg3, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border },
   searchInput: { flex: 1, fontSize: 13, color: Colors.ink } as any,
   selectAllBtn: { backgroundColor: Colors.violetD, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: Colors.border2 },

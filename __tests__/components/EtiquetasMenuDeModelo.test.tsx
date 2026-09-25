@@ -56,3 +56,58 @@ test("menu de modelo aberto fica acima da busca e do 'Selecionar todos'", () => 
 
   t.unmount();
 });
+
+// ── Filtros (25/09/2026) ─────────────────────────────────────
+const hoje = new Date().toISOString();
+const PRODUTOS: any[] = [
+  { id: "p1", name: "Blusa nova", code: "001", barcode: "", category: "Blusas", price: 50, stock: 2, unit: "un", created_at: hoje },
+  { id: "p2", name: "Calça antiga", code: "002", barcode: "", category: "Calças", price: 90, stock: 0, unit: "un", created_at: "2025-01-10T12:00:00Z" },
+  { id: "p3", name: "Blusa antiga", code: "003", barcode: "", category: "Blusas", price: 40, stock: 5, unit: "un", created_at: "2025-02-10T12:00:00Z" },
+];
+
+function nomesNaLista(t: renderer.ReactTestRenderer): string[] {
+  const texto = flatten(t.toJSON());
+  return PRODUTOS.map((p) => p.name).filter((n) => texto.includes(n));
+}
+const aperta = (t: renderer.ReactTestRenderer, id: string) =>
+  act(() => { t.root.findAll((n) => n.props && n.props.testID === id, { deep: false })[0].props.onPress(); });
+
+test("'Cadastrados: Hoje' deixa só o que entrou hoje e 'Selecionar todos' marca só esses", () => {
+  const onSel = jest.fn();
+  let t!: renderer.ReactTestRenderer;
+  act(() => { t = renderer.create(<PrintLabels products={PRODUTOS} selectedIds={[]} onSelectionChange={onSel} />); });
+  expect(nomesNaLista(t)).toEqual(["Blusa nova", "Calça antiga", "Blusa antiga"]);
+
+  aperta(t, "etiquetas-periodo-hoje");
+  expect(nomesNaLista(t)).toEqual(["Blusa nova"]);
+  expect(flatten(t.toJSON())).toContain("1 de 3 produtos");
+  expect(flatten(t.toJSON())).toContain("Selecionar todos (1)");
+
+  const selTodos = t.root.findAll((n) => n.props && n.props.onPress && flatten(n.children).startsWith("Selecionar todos"), { deep: false })[0];
+  act(() => { selTodos.props.onPress(); });
+  expect(onSel).toHaveBeenLastCalledWith(["p1"]);
+
+  aperta(t, "etiquetas-limpar-filtros");
+  expect(nomesNaLista(t)).toHaveLength(3);
+  t.unmount();
+});
+
+test("categoria e 'Só com estoque' filtram; o menu de categoria fica acima da lista", () => {
+  let t!: renderer.ReactTestRenderer;
+  act(() => { t = renderer.create(<PrintLabels products={PRODUTOS} selectedIds={[]} onSelectionChange={() => {}} />); });
+
+  aperta(t, "etiquetas-com-estoque");
+  expect(nomesNaLista(t)).toEqual(["Blusa nova", "Blusa antiga"]);
+
+  aperta(t, "etiquetas-categoria");
+  const filtros = t.root.findAll((n) => n.props && n.props.testID === "etiquetas-filtros", { deep: false })[0];
+  const zFiltros = Number(StyleSheet.flatten(filtros.props.style).zIndex) || 0;
+  const cabecalho = t.root.findAll((n) => n.props && n.props.testID === "etiquetas-cabecalho", { deep: false })[0];
+  const zCab = Number(StyleSheet.flatten(cabecalho.props.style).zIndex) || 0;
+  expect(zFiltros).toBeGreaterThan(0);
+  expect(zCab).toBeGreaterThan(zFiltros);
+
+  aperta(t, "etiquetas-categoria-Calças");
+  expect(nomesNaLista(t)).toEqual([]);
+  t.unmount();
+});
