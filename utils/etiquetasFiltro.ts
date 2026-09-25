@@ -8,25 +8,29 @@
 //
 //   · ordem: a mesma do Estoque (utils/productSort), padrão "mais recentes";
 //   · cadastrados: hoje / 7 dias / 30 dias / todos (dia civil de São Paulo
-//     para "hoje", não 24 horas corridas);
+//     para "hoje", não 24 horas corridas) ou UM DIA escolhido no calendário
+//     (periodo "dia" + dia AAAA-MM-DD, também no dia civil de SP);
 //   · categoria;
 //   · só com estoque.
 // Função pura: o Icon quebra o Jest, e a regra fica testável aqui.
 // ============================================================
 import { ordenarProdutos, type OrdemEstoque } from "@/utils/productSort";
 
-export type PeriodoCadastro = "todos" | "hoje" | "7d" | "30d";
+/** "dia" = um dia escolhido no calendário (campo `dia`). */
+export type PeriodoCadastro = "todos" | "hoje" | "7d" | "30d" | "dia";
 
 export type FiltroEtiquetas = {
   busca: string;
   ordem: OrdemEstoque;
   periodo: PeriodoCadastro;
+  /** AAAA-MM-DD; só vale com periodo "dia". */
+  dia?: string | null;
   categoria: string | null;
   soComEstoque: boolean;
 };
 
 export const FILTRO_PADRAO: FiltroEtiquetas = {
-  busca: "", ordem: "recent", periodo: "todos", categoria: null, soComEstoque: false,
+  busca: "", ordem: "recent", periodo: "todos", dia: null, categoria: null, soComEstoque: false,
 };
 
 export const ORDENS_ETIQUETAS: { key: OrdemEstoque; label: string }[] = [
@@ -64,12 +68,15 @@ function diaEmSaoPaulo(ms: number): string {
   return new Date(ms - 3 * 3600000).toISOString().slice(0, 10);
 }
 
-export function dentroDoPeriodo(createdAt: string | null | undefined, periodo: PeriodoCadastro, agora: number): boolean {
+export function dentroDoPeriodo(createdAt: string | null | undefined, periodo: PeriodoCadastro, agora: number, dia?: string | null): boolean {
   if (periodo === "todos") return true;
+  // Dia escolhido sem data válida: não filtra (melhor mostrar tudo que nada).
+  if (periodo === "dia" && !/^\d{4}-\d{2}-\d{2}$/.test(dia || "")) return true;
   if (!createdAt) return false;
   const t = new Date(createdAt).getTime();
   if (!Number.isFinite(t)) return false;
   if (periodo === "hoje") return diaEmSaoPaulo(t) === diaEmSaoPaulo(agora);
+  if (periodo === "dia") return diaEmSaoPaulo(t) === dia;
   const dias = periodo === "7d" ? 7 : 30;
   return agora - t <= dias * DIA;
 }
@@ -80,8 +87,19 @@ export function filtrarEtiquetas<T extends ProdutoEtiqueta>(produtos: readonly T
     (!q || p.name.toLowerCase().includes(q) || (p.barcode || p.code || "").toLowerCase().includes(q))
     && (!f.categoria || (p.category || "") === f.categoria)
     && (!f.soComEstoque || (Number(p.stock) || 0) > 0)
-    && dentroDoPeriodo(p.created_at, f.periodo, agora));
+    && dentroDoPeriodo(p.created_at, f.periodo, agora, f.dia));
   return ordenarProdutos(lista, f.ordem);
+}
+
+/** "2026-09-24" → "24/09/2026". Sem new Date(): data pura viraria UTC. */
+export function diaParaBr(iso: string | null | undefined): string {
+  const [y, m, d] = String(iso || "").slice(0, 10).split("-");
+  return y && m && d ? `${d}/${m}/${y}` : "";
+}
+
+/** Hoje em São Paulo, AAAA-MM-DD — teto do calendário (não há cadastro no futuro). */
+export function hojeEmSaoPaulo(agora: number = Date.now()): string {
+  return diaEmSaoPaulo(agora);
 }
 
 export function categoriasDe(produtos: readonly ProdutoEtiqueta[]): string[] {

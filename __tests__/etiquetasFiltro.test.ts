@@ -73,3 +73,34 @@ test("filtrosAtivos não conta busca nem ordem", () => {
   expect(filtrosAtivos({ ...FILTRO_PADRAO, busca: "x", ordem: "name_asc" })).toBe(0);
   expect(filtrosAtivos({ ...FILTRO_PADRAO, periodo: "hoje", categoria: "Blusas", soComEstoque: true })).toBe(3);
 });
+
+describe("um dia escolhido no calendário (periodo 'dia')", () => {
+  test("pega só o que foi cadastrado naquele dia civil de São Paulo", () => {
+    expect(f({ periodo: "dia", dia: "2026-09-21" })).toEqual(["b"]);
+    expect(f({ periodo: "dia", dia: "2026-09-25" })).toEqual(["a"]);
+    expect(f({ periodo: "dia", dia: "2026-09-24" })).toEqual([]);
+  });
+
+  test("a virada do dia é a de São Paulo", () => {
+    // 24/09 23:30 em SP = 25/09 02:30 UTC: conta no dia 24.
+    expect(dentroDoPeriodo("2026-09-25T02:30:00Z", "dia", AGORA, "2026-09-24")).toBe(true);
+    expect(dentroDoPeriodo("2026-09-25T02:30:00Z", "dia", AGORA, "2026-09-25")).toBe(false);
+  });
+
+  test("sem data válida não filtra nada (melhor mostrar tudo que esconder tudo)", () => {
+    expect(f({ periodo: "dia", dia: null })).toEqual(["a", "b", "c", "d"]);
+    expect(f({ periodo: "dia", dia: "24/09/2026" })).toEqual(["a", "b", "c", "d"]);
+  });
+
+  test("conta como filtro ativo", () => {
+    expect(filtrosAtivos({ ...FILTRO_PADRAO, periodo: "dia", dia: "2026-09-24" })).toBe(1);
+  });
+});
+
+test("diaParaBr e hojeEmSaoPaulo", () => {
+  const { diaParaBr, hojeEmSaoPaulo } = require("@/utils/etiquetasFiltro");
+  expect(diaParaBr("2026-09-24")).toBe("24/09/2026");
+  expect(diaParaBr(null)).toBe("");
+  // 25/09 01:00 UTC ainda é 24/09 em SP.
+  expect(hojeEmSaoPaulo(Date.parse("2026-09-25T01:00:00Z"))).toBe("2026-09-24");
+});

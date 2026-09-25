@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Pressable, Platform, ScrollView, TextInput } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -15,8 +15,9 @@ import { buildLabelHtml, buildLabelName, validateLabelItems, isValidEAN13, gener
 import { defaultLabelQty, unitLabelForList } from "@/components/screens/estoque/labels/labelDefaults";
 import {
   filtrarEtiquetas, categoriasDe, filtrosAtivos, lerOrdemEtiquetas, salvarOrdemEtiquetas,
-  ORDENS_ETIQUETAS, PERIODOS, type PeriodoCadastro,
+  ORDENS_ETIQUETAS, PERIODOS, diaParaBr, hojeEmSaoPaulo, type PeriodoCadastro,
 } from "@/utils/etiquetasFiltro";
+import { maskDateBr, brDateToIso } from "@/utils/masks";
 import type { OrdemEstoque } from "@/utils/productSort";
 import type { LabelItem, InvalidCodeItem, LabelSizeKey } from "@/components/screens/estoque/labels/buildLabelHtml";
 import type { Product } from "@/components/screens/estoque/types";
@@ -120,7 +121,28 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   // 25/09/2026: filtros das etiquetas (utils/etiquetasFiltro). A ordem fica
   // lembrada no navegador; periodo/categoria/estoque recomecam a cada visita.
   var [ordem, setOrdemState] = useState<OrdemEstoque>(lerOrdemEtiquetas);
-  var [periodo, setPeriodo] = useState<PeriodoCadastro>("todos");
+  var [periodo, setPeriodoState] = useState<PeriodoCadastro>("todos");
+  // 25/09/2026: um dia escolhido no calendario (periodo "dia"). No web abre o
+  // calendario do navegador (input type=date invisivel, mesmo truque de
+  // components/studio/pdv/DataBR); no app nativo, um campo DD/MM/AAAA.
+  var [dia, setDia] = useState<string | null>(null);
+  var [digitandoDia, setDigitandoDia] = useState(false);
+  var [diaTexto, setDiaTexto] = useState("");
+  var inputDia = useRef<any>(null);
+  function setPeriodo(pp: PeriodoCadastro) { setPeriodoState(pp); if (pp !== "dia") { setDia(null); setDigitandoDia(false); setDiaTexto(""); } }
+  function escolherDia(iso: string) {
+    if (iso) { setDia(iso); setPeriodoState("dia"); setDigitandoDia(false); }
+    else setPeriodo("todos");
+  }
+  function abrirCalendario() {
+    setMenuFiltro(null);
+    if (Platform.OS !== "web") { setDiaTexto(dia ? diaParaBr(dia) : ""); setDigitandoDia(!digitandoDia); return; }
+    var el = inputDia.current;
+    if (!el) return;
+    // showPicker e o caminho moderno; o clique cobre navegadores antigos.
+    if (typeof el.showPicker === "function") { try { el.showPicker(); return; } catch (e) { /* cai no clique */ } }
+    el.click();
+  }
   var [categoria, setCategoria] = useState<string | null>(null);
   var [soComEstoque, setSoComEstoque] = useState(false);
   var [menuFiltro, setMenuFiltro] = useState<"ordem" | "categoria" | null>(null);
@@ -179,10 +201,10 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   var productsWithCode = useMemo(
     function() { return products.filter(function(p) { return p.barcode || p.code; }); }, [products]);
 
-  var filtroAtual = { busca: search, ordem: ordem, periodo: periodo, categoria: categoria, soComEstoque: soComEstoque };
+  var filtroAtual = { busca: search, ordem: ordem, periodo: periodo, dia: dia, categoria: categoria, soComEstoque: soComEstoque };
   var filtered = useMemo(function() {
     return filtrarEtiquetas(productsWithCode, filtroAtual);
-  }, [productsWithCode, search, ordem, periodo, categoria, soComEstoque]);
+  }, [productsWithCode, search, ordem, periodo, dia, categoria, soComEstoque]);
   var categorias = useMemo(function() { return categoriasDe(productsWithCode); }, [productsWithCode]);
   var nFiltros = filtrosAtivos(filtroAtual);
   function limparFiltros() { setPeriodo("todos"); setCategoria(null); setSoComEstoque(false); setMenuFiltro(null); }
@@ -502,6 +524,45 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       <View style={s.filtros} testID="etiquetas-filtros">
         <View style={s.filtroGrupo}>
           <Text style={s.filtroRotulo}>Cadastrados:</Text>
+          <View style={s.calWrap}>
+            <Pressable
+              onPress={abrirCalendario}
+              style={[s.chip, s.calBtn, periodo === "dia" && s.chipOn]}
+              testID="etiquetas-calendario"
+              accessibilityRole="button"
+              accessibilityLabel={periodo === "dia" && dia ? "Cadastrados em " + diaParaBr(dia) + ". Trocar o dia" : "Escolher um dia de cadastro"}
+              accessibilityState={{ selected: periodo === "dia" }}
+            >
+              <Icon name="calendar" size={13} color={periodo === "dia" ? "#fff" : Colors.ink2} />
+              {periodo === "dia" && dia ? <Text style={[s.chipTxt, s.chipTxtOn]}>{diaParaBr(dia)}</Text> : null}
+            </Pressable>
+            {Platform.OS === "web" ? (
+              <input
+                ref={inputDia}
+                type="date"
+                value={dia || ""}
+                max={hojeEmSaoPaulo()}
+                onChange={function(e: any) { escolherDia(e.target.value || ""); }}
+                tabIndex={-1}
+                aria-hidden="true"
+                data-testid="etiquetas-calendario-input"
+                style={{ position: "absolute", left: 0, bottom: 0, width: 1, height: 1, opacity: 0, border: 0, padding: 0, pointerEvents: "none" }}
+              />
+            ) : null}
+          </View>
+          {digitandoDia && Platform.OS !== "web" ? (
+            <TextInput
+              style={s.diaInput}
+              value={diaTexto}
+              autoFocus
+              placeholder="DD/MM/AAAA"
+              placeholderTextColor={Colors.ink3}
+              keyboardType="number-pad"
+              maxLength={10}
+              testID="etiquetas-dia-texto"
+              onChangeText={function(v) { var m = maskDateBr(v); setDiaTexto(m); var iso = brDateToIso(m); if (iso) escolherDia(iso); }}
+            />
+          ) : null}
           {PERIODOS.map(function(pp) {
             var on = periodo === pp.key;
             return (
@@ -842,6 +903,9 @@ var s = StyleSheet.create({
   chipOn: { backgroundColor: Colors.violet, borderColor: Colors.violet },
   chipTxt: { fontSize: 11.5, color: Colors.ink2, fontWeight: "600" },
   chipTxtOn: { color: "#fff" },
+  calWrap: { position: "relative" },
+  calBtn: { flexDirection: "row", alignItems: "center", gap: 6 },
+  diaInput: { width: 110, fontSize: 12, color: Colors.ink, backgroundColor: Colors.bg3, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 10, paddingVertical: 6 },
   limpar: { paddingHorizontal: 8, paddingVertical: 6 },
   limparTxt: { fontSize: 11.5, color: Colors.violet3, fontWeight: "700" },
   filtroResumo: { fontSize: 11, color: Colors.ink3, marginTop: -4 },
