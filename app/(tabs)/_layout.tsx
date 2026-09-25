@@ -84,7 +84,7 @@ const NAV: NavSection[] = [
   // 29/08/2026: o campo estatico `plan` saiu dos itens. Ele duplicava (e
   // contradizia) MODULE_PLAN_MAP e era o que fazia o selo aparecer pra quem
   // ja tinha o modulo liberado. O plano exigido agora vem de `mod`.
-  { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },{ r: "/vendas", l: "Vendas", ic: "receipt", mod: "vendas" },{ r: "/cupons", l: "Cupons", ic: "tag", mod: "cupons" },{ r: "/crediario", l: "Crediário", ic: "percent", mod: "crediario" },{ r: "/os", l: "Ordem de Serviço", ic: "tool", mod: "os", osToggle: true },{ r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" }]},
+  { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },{ r: "/vendas", l: "Vendas", ic: "receipt", mod: "vendas" },{ r: "/cupons", l: "Cupons", ic: "tag", mod: "cupons" },{ r: "/crediario", l: "Crediário", ic: "percent", mod: "crediario" },{ r: "/os", l: "Ordem de Serviço", ic: "tool", mod: "os", osToggle: true },{ r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" },{ r: "/fornecedores", l: "Fornecedores", ic: "truck", mod: "estoque" }]},
   // ============================================================
   // 16/09/2026 — "Clientes e WhatsApp" sobe para a quarta posição.
   //
@@ -120,11 +120,14 @@ const NAV: NavSection[] = [
   // o item so some com matconToggle (Matcon desligado), nunca so porque o
   // matcon_club_enabled esta desligado. No celular estes itens caem no menu "Mais", como
   // a Otica: MORE_PRIORIDADE nao muda (§4 do faseamento).
-  // 22/09/2026 (M4) — "Compras" entra depois de Profissionais Parceiros: e a unica
+  // 25/09/2026 — "Compras" saiu daqui: virou parte de /fornecedores (secao
+  // Vendas, depois do Estoque, para todo varejo; com o Matcon ligado a tela
+  // mostra a reposicao e os pedidos de compra de cada fornecedor).
+  // Historico — 22/09/2026 (M4): "Compras" entrava depois de Profissionais Parceiros: e a unica
   // tela nova de M4 (lote e devolucao de sobra entram em telas que ja
   // existem, docs/CONTRACT_MATCON.md §M4). Mesmo desenho: mod PROPRIO
   // (matcon.compras, ja em MODULE_PLAN_MAP/PERM_TO_MODULES) e matconToggle.
-  { s: "Matcon", i: [{ r: "/matcon/orcamentos", l: "Orçamentos", ic: "clipboard", mod: "matcon.orcamentos", matconToggle: true },{ r: "/matcon/entregas", l: "Entregas", ic: "truck", mod: "matcon.entregas", matconToggle: true },{ r: "/matcon/profissionais", l: "Profissionais Parceiros", ic: "building", mod: "matcon.profissionais", matconToggle: true },{ r: "/matcon/compras", l: "Compras", ic: "package", mod: "matcon.compras", matconToggle: true }]},
+  { s: "Matcon", i: [{ r: "/matcon/orcamentos", l: "Orçamentos", ic: "clipboard", mod: "matcon.orcamentos", matconToggle: true },{ r: "/matcon/entregas", l: "Entregas", ic: "truck", mod: "matcon.entregas", matconToggle: true },{ r: "/matcon/profissionais", l: "Profissionais Parceiros", ic: "building", mod: "matcon.profissionais", matconToggle: true }]},
   { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", mod: "folha" },{ r: "/agendamento", l: "Agenda", ic: "calendar", mod: "agendamento" }]},
   { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", mod: "agentes" }]},
   { s: "Admin", i: [{ r: "/gestao-aura", l: "Gestão Aura", ic: "shield", staff: true }]},
