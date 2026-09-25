@@ -14,6 +14,12 @@
 //   7. Entrega      — reuso TabEntrega (canal varejo, tematizado)
 //   8. Pedidos      — NOVO Studio (unifica digital + pdv + marketplace)
 //
+// 25/09/2026 (Fase 1C da vitrine, Tela 7 do mockup studio-vitrine-01):
+//   · "Pedidos pela loja" — aba própria (decisão do PO) entre Entrega e
+//     Pedidos: fechar/abrir a loja para pedidos com recado e data limite,
+//     retirada por app e os IDs de GA4/Pixel. É ABA, não tela: como as
+//     outras abas, não tem `mod` próprio — o módulo é o da Loja Digital.
+//
 // Envelopa em <AccentTheme tokens={studioAccent}> — tematização navy+magenta
 // completa nas 3 tabs reaproveitadas + tabs novas usam StudioColors direto.
 //
@@ -50,6 +56,7 @@ import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { StudioScreen } from "@/components/studio/StudioScreen";
 import { AccentTheme, studioAccent } from "@/contexts/AccentTheme";
 import { useDigitalChannel } from "@/hooks/useDigitalChannel";
+import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { IS_WIDE } from "@/components/screens/canal/shared";
@@ -65,10 +72,11 @@ import { TabStudioGaleria }      from "@/components/screens/studio-loja-digital/
 import { TabStudioRevisoes }     from "@/components/screens/studio-loja-digital/TabStudioRevisoes";
 import { TabStudioMarketplaces } from "@/components/screens/studio-loja-digital/TabStudioMarketplaces";
 import { TabStudioPedidos }      from "@/components/screens/studio-loja-digital/TabStudioPedidos";
+import { TabStudioPedidosPelaLoja } from "@/components/screens/studio-loja-digital/TabStudioPedidosPelaLoja";
 
 const STOREFRONT_BASE = "https://loja.getaura.com.br";
 
-type TabKey = "site" | "design" | "aparencia" | "configurator" | "gallery" | "revisions" | "marketplaces" | "delivery" | "orders";
+type TabKey = "site" | "design" | "aparencia" | "configurator" | "gallery" | "revisions" | "marketplaces" | "delivery" | "pedidos_loja" | "orders";
 
 const TABS: Array<{ key: TabKey; label: string; icon: string }> = [
   { key: "site",          label: "Meu Site",     icon: "globe" },
@@ -81,12 +89,16 @@ const TABS: Array<{ key: TabKey; label: string; icon: string }> = [
   { key: "revisions",     label: "Revisões",     icon: "refresh" },
   { key: "marketplaces",  label: "Marketplaces", icon: "external-link" },
   { key: "delivery",      label: "Entrega",      icon: "truck" },
+  // Fase 1C — temporada (fechar para pedidos, data limite), retirada por
+  // app e medição. Ao lado de Entrega: as duas mudam o que o checkout da
+  // vitrine oferece.
+  { key: "pedidos_loja",  label: "Pedidos pela loja", icon: "calendar" },
   { key: "orders",        label: "Pedidos",      icon: "shopping-bag" },
 ];
 
 // Índices APÓS os quais inserimos um separador vertical sutil entre grupos.
-// Grupos: [0,1]=Site/Design · [2,3,4,5]=Configurador/Galeria/Revisões/Marketplaces
-//         · [6,7]=Entrega/Pedidos
+// Grupos: [0,1,2]=Site/Design/Aparência · [3,4,5,6]=Configurador/Galeria/Revisões/Marketplaces
+//         · [7,8,9]=Entrega/Pedidos pela loja/Pedidos
 const TAB_GROUP_DIVIDERS = new Set<number>([2, 6]);
 
 const TAB_KEYS = new Set<string>(TABS.map((tDef) => tDef.key));
@@ -137,6 +149,8 @@ export default function StudioVendasLojaDigital() {
     deleteImage,
     setupPix, isSettingUpPix,
   } = useDigitalChannel();
+  // A empresa ativa (multi-CNPJ): a config da loja é dela.
+  const company = useAuthStore((st) => st.company);
 
   const storefrontUrl = config.storefront_url
     || (config.slug ? `${STOREFRONT_BASE}/${config.slug}` : null);
@@ -281,6 +295,19 @@ export default function StudioVendasLojaDigital() {
         {tab === "delivery" && (
           isLoading ? <ListSkeleton rows={4} /> : (
             <TabEntrega
+              config={config}
+              saveConfig={saveConfig}
+              isSaving={isSaving}
+            />
+          )
+        )}
+
+        {tab === "pedidos_loja" && (
+          isLoading ? <ListSkeleton rows={4} /> : (
+            // key = empresa ativa: trocar de CNPJ recomeça o formulário do
+            // zero, em vez de carregar a edição de uma loja para a outra.
+            <TabStudioPedidosPelaLoja
+              key={company?.id || "sem-empresa"}
               config={config}
               saveConfig={saveConfig}
               isSaving={isSaving}

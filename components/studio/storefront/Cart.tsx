@@ -2,6 +2,7 @@
 // components/studio/storefront/Cart.tsx
 // Barra flutuante do carrinho (stage="list") + lista no checkout.
 // ============================================================
+import { useState } from "react";
 import { View, Pressable, Linking } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { linkDoOrcamentoDoCarrinho } from "./pedidoPeloWhatsApp";
@@ -13,6 +14,9 @@ import { CapaProduto } from "./CapaProduto";
 import { temPersonalizacaoVisivel } from "@/components/studio/customizationConfig";
 import { Texto, Numero, useTipografia } from "./TipografiaVitrine";
 import { dinheiro } from "./moeda";
+import { Icon } from "@/components/Icon";
+import { modoDaVitrine } from "./modoDaVitrine";
+import { FolhaDaSacolaFechada } from "./SacolaFechada";
 // Helpers expostos pelo hook
 function effectiveBackSelected(
   cfg: any, explicit: boolean | undefined
@@ -37,6 +41,12 @@ function effectiveMiddleSelected(
 export function CartBar({ sf }: { sf: StorefrontState }) {
   const T = usePaletaDaVitrine();
   const tema = useTemaDaVitrine();
+  // Fase 1C (D8): com a loja fechada, a barra nao leva ao checkout — abre
+  // a folha que explica com o recado da loja e oferece o orcamento. Antes
+  // a sacola guardada no navegador furava o fechamento e a cliente so
+  // descobria no 409 do "Enviar pedido".
+  const modo = modoDaVitrine(sf.store);
+  const [folha, setFolha] = useState(false);
   if (sf.cart.length === 0) return null;
   // A barra e escura (a tinta do papel). Nada de branco cravado: a tinta
   // de cima sai da conta de contraste, e o selo da contagem usa a cor da
@@ -45,6 +55,37 @@ export function CartBar({ sf }: { sf: StorefrontState }) {
   // accent_color, que o PO tirou da vitrine (so a cor principal pinta).
   const tinta = tintaSobre(T.ink);
   const selo = corLegivelSobre(tema.marca, T.ink);
+  const pecas = sf.cart.reduce((s, l) => s + l.qty, 0);
+
+  if (!modo.aceita) {
+    return (
+      <>
+        <Pressable
+          onPress={() => setFolha(true)}
+          accessibilityRole="button"
+          accessibilityLabel={"Ver sacola, " + pecas + (pecas === 1 ? " item" : " itens")}
+          style={{
+            position: "absolute", left: 12, right: 12, bottom: 40,
+            maxWidth: 980, marginHorizontal: "auto",
+            backgroundColor: T.ink, borderRadius: 12, minHeight: 48,
+            paddingVertical: 13, paddingHorizontal: 16,
+            flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Icon name="shopping_bag" size={18} color={tinta} />
+            <Texto style={{ color: tinta, fontSize: 14, fontWeight: "600" }}>
+              <Numero style={{ color: tinta, fontSize: 14, fontWeight: "700" }}>{pecas}</Numero>
+              {pecas === 1 ? " item na sacola" : " itens na sacola"}
+            </Texto>
+          </View>
+          <Icon name="chevron_right" size={18} color={tinta} />
+        </Pressable>
+        <FolhaDaSacolaFechada sf={sf} visivel={folha} onFechar={() => setFolha(false)} />
+      </>
+    );
+  }
+
   return (
     <Pressable
       onPress={() => sf.goTo("checkout")}

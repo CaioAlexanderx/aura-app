@@ -138,6 +138,12 @@ describe("o configurador respeita o modo", () => {
   });
 
   test("e a cliente lê por que o botão mudou", () => {
-    expect(conf).toContain("{modo.recado}");
+    // Fase 1C: o recado vem pela faixa da temporada, perto do botão — a
+    // mesma que a home e a sacola usam (FaixaDaTemporada, tom "fechada").
+    expect(conf).toContain('<FaixaDaTemporada store={sf.store} lugar="junto" />');
+  });
+
+  test("com a loja fechada, o link do WhatsApp não duplica o botão (Tela 6)", () => {
+    expect(conf).toContain("{modo.aceita ? (() => {");
   });
 });
