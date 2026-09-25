@@ -7,6 +7,7 @@ import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { maskPhone } from "@/utils/masks";
+import { validarCadastroRapido, nomeValido } from "@/utils/cadastroRapidoCliente";
 
 type Props = {
   visible: boolean;
@@ -16,7 +17,8 @@ type Props = {
 
 /**
  * P0 #7: Quick customer registration modal for PDV
- * Fields: Nome*, Data nascimento*, Telefone*, Instagram (Nos segue? Sim/Nao)
+ * Fields: Nome*, Data nascimento, Telefone, Instagram (Nos segue? Sim/Nao)
+ * 25/09/2026: só o nome é obrigatório (regra em utils/cadastroRapidoCliente).
  * Renders as a modal overlay that blurs the background
  *
  * feat(dup-prevention, 19/06/2026):
@@ -47,10 +49,10 @@ export function QuickCustomerModal({ visible, onClose, onCustomerCreated }: Prop
     return nums.slice(0, 2) + '/' + nums.slice(2, 4) + '/' + nums.slice(4);
   }
 
-  const nameValid = name.trim().length >= 2;
+  const nameValid = nomeValido(name);
   const phoneValid = phone.replace(/\D/g, '').length >= 10;
   const dateValid = birthDate.replace(/\D/g, '').length === 8;
-  const canSave = nameValid && phoneValid && dateValid;
+  const canSave = nameValid;
 
   /** Detecta duplicata no cache local. Retorna o cliente se encontrado. */
   function findDuplicate(): { id: string; name: string; phone: string } | null {
@@ -80,21 +82,19 @@ export function QuickCustomerModal({ visible, onClose, onCustomerCreated }: Prop
   /** Executa o POST para criar o cliente (sem checagem de duplicata). */
   async function performSave() {
     if (!company?.id) return;
+    const v = validarCadastroRapido({ name, birthDate, phone });
+    if (!v.ok) { toast.error(v.erro); return; }
     setSaving(true);
     try {
-      const nums = birthDate.replace(/\D/g, '');
-      const isoDate = `${nums.slice(4, 8)}-${nums.slice(2, 4)}-${nums.slice(0, 2)}`;
       const res = await companiesApi.createCustomer(company.id, {
-        name: name.trim(),
-        phone: phone.replace(/\D/g, ''),
-        birth_date: isoDate,
+        ...v.body,
         instagram: instagram.trim() ? instagram.trim().replace('@', '') : null,
         follows_instagram: followsUs,
         source: 'pdv',
       });
       toast.success(`${name.trim()} cadastrado!`);
       qc.invalidateQueries({ queryKey: ['customers', company.id] });
-      onCustomerCreated({ id: res.id, name: res.name || name.trim(), phone: res.phone || phone });
+      onCustomerCreated({ id: res.id, name: res.name || v.body.name, phone: res.phone || phone });
       // Reset form
       setName(''); setBirthDate(''); setPhone(''); setInstagram(''); setFollowsUs(false);
       setDupWarning(null);
@@ -105,7 +105,9 @@ export function QuickCustomerModal({ visible, onClose, onCustomerCreated }: Prop
   }
 
   async function handleSave() {
-    if (!canSave || !company?.id) { toast.error('Preencha os campos obrigatórios'); return; }
+    if (!company?.id) return;
+    const v = validarCadastroRapido({ name, birthDate, phone });
+    if (!v.ok) { toast.error(v.erro); return; }
 
     // Limpa aviso anterior antes de nova checagem
     setDupWarning(null);
@@ -136,13 +138,13 @@ export function QuickCustomerModal({ visible, onClose, onCustomerCreated }: Prop
 
         <View style={s.row2}>
           <View style={{ flex: 1 }}>
-            <Text style={s.label}>Data de nascimento *</Text>
+            <Text style={s.label}>Data de nascimento</Text>
             <TextInput style={[s.input, dateValid && s.inputValid]} value={birthDate}
               onChangeText={(v) => setBirthDate(maskDate(v))}
               placeholder="DD/MM/AAAA" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={s.label}>Telefone *</Text>
+            <Text style={s.label}>Telefone</Text>
             <TextInput style={[s.input, phoneValid && s.inputValid]} value={phone}
               onChangeText={(v) => { setPhone(maskPhone(v)); setDupWarning(null); }}
               placeholder="(12) 99999-0000" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} />
