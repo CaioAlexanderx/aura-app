@@ -427,7 +427,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
 
   return (
     <View style={s.container}>
-      <View style={s.header}>
+      <View style={s.header} testID="etiquetas-cabecalho">
         <View style={{ flex: 1, minWidth: 200 }}>
           <Text style={s.title}>Etiquetas {labelPreset.uiLabel} — Padrão EAN-13</Text>
           <Text style={s.hint}>Selecione os produtos. Produto com código válido mas fora do padrão de código de barras (EAN-13) recebe um código interno automaticamente; sem nenhum código válido cadastrado, corrija no Estoque antes de imprimir.</Text>
@@ -715,7 +715,11 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
 
 var s = StyleSheet.create({
   container: { gap: 12 },
-  header: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 },
+  // 25/09/2026: zIndex no CABECALHO, nao so no menu. No web o RNW da a cada
+  // View o seu proprio z-index: 0, entao o zIndex 30 do menu de modelo so
+  // valia dentro do cabecalho — a busca e o "Selecionar todos" (translucido),
+  // que vem depois, eram pintados por cima da lista de modelos aberta.
+  header: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10, position: "relative", zIndex: 10 },
   title: { fontSize: 16, fontWeight: "700", color: Colors.ink },
   hint: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
   modeToggle: { flexDirection: "row", gap: 4, backgroundColor: Colors.bg, borderRadius: 8, padding: 3 },
