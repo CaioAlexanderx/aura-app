@@ -32,8 +32,21 @@ describe("a lista colada", () => {
     expect(nomesDaLista("Marília\nJoão\nAna Paula")).toEqual(["Marília", "João", "Ana Paula"]);
   });
 
-  test("aceita vírgula e ponto-e-vírgula — quem cola de planilha traz os três", () => {
-    expect(nomesDaLista("Ana, Bruno; Carla")).toEqual(["Ana", "Bruno", "Carla"]);
+  test("separa por linha e por ponto-e-vírgula", () => {
+    expect(nomesDaLista("Ana\nBruno; Carla")).toEqual(["Ana", "Bruno", "Carla"]);
+  });
+
+  test("vírgula NÃO separa: \"Silva, João\" é um nome (Fase 2)", () => {
+    expect(nomesDaLista("Silva, João\nSouza, Maria")).toEqual(["Silva, João", "Souza, Maria"]);
+    expect(nomesIgnorados("Silva, João")).toBe(0);
+  });
+
+  test("coluna colada do Excel com duas colunas: fica a primeira", () => {
+    expect(nomesDaLista("Ana Clara\tRH\nBruno\tTI")).toEqual(["Ana Clara", "Bruno"]);
+  });
+
+  test("quebra de linha do Windows também separa", () => {
+    expect(nomesDaLista("Ana\r\nBruno\r\n")).toEqual(["Ana", "Bruno"]);
   });
 
   test("linha vazia e espaço solto não viram peça", () => {

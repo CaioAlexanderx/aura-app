@@ -22,60 +22,41 @@
 // Foto enviada vira o endereço do arquivo: é assim que a lojista abre a
 // arte sem pedir para reenviar.
 // ============================================================
-import type { StudioStoreProduct, CustomizationField, CartLine } from "./types";
+import type { StudioStoreProduct, CartLine } from "./types";
 import { numeroWhatsApp } from "./AncoraWhatsApp";
 import { dinheiro } from "./moeda";
+import { linhasDaPeca } from "./resumoDaPeca";
+import { precoDaLinha } from "./precoDaSacola";
 
 /** Quantos caracteres cabem sem o WhatsApp truncar o link. */
 const TETO = 1200;
 
-function ehVazio(v: any): boolean {
-  if (v == null) return true;
-  if (typeof v === "string") return v.trim() === "";
-  if (Array.isArray(v)) return v.length === 0;
-  return false;
-}
-
-function rotuloDoCampo(f: CustomizationField): string {
-  const l = (f as any)?.label;
-  return typeof l === "string" && l.trim() ? l.trim() : "Personalização";
-}
-
-/**
- * O valor como a LOJISTA precisa ler.
- *
- * Uma cor é `#D62828` no dado e "cor #D62828" na mensagem: ela abre o
- * pedido e vê o hex, que é o que ela usa na prensa. Um arquivo é o
- * endereço, que ela abre. Um texto é o texto.
- */
-function valorLegivel(f: CustomizationField, valor: any): string | null {
-  if (ehVazio(valor)) return null;
-  const tipo = (f as any)?.type;
-  if (tipo === "image" || tipo === "template") {
-    return typeof valor === "string" ? valor : null;
-  }
-  if (tipo === "color") return String(valor);
-  return String(valor);
-}
-
 export type LinhaDoPedido = { rotulo: string; valor: string };
 
-/** As linhas da personalização, na ordem em que a cliente preencheu. */
+/**
+ * As linhas da personalização, na ordem em que a cliente preencheu, com
+ * o NOME que ela viu (Fase 2 · 25/09/2026).
+ *
+ * Até aqui a linha levava o valor cru da escolha: a lojista recebia
+ * "Serviço de arte: designer" e "Tamanho: m", o briefing da arte ficava
+ * de fora quando o config não tinha o campo, e a cor da arte (chave
+ * lateral `<campo>_cor`) nunca chegava. Os nomes vêm de resumoDaPeca.ts,
+ * a mesma leitura que a sacola usa — a mensagem diz o que a tela disse.
+ */
 export function linhasDaPersonalizacao(
   produto: StudioStoreProduct,
   valores: Record<string, any> | null | undefined
 ): LinhaDoPedido[] {
-  const campos = produto?.customization_config?.fields || [];
-  const v = valores || {};
-  const linhas: LinhaDoPedido[] = [];
-  for (const f of campos) {
-    const legivel = valorLegivel(f, v[(f as any).id]);
-    if (legivel == null) continue;
-    linhas.push({ rotulo: rotuloDoCampo(f), valor: legivel });
-  }
-  return linhas;
+  return linhasDaPeca(produto, valores).map((l) => ({ rotulo: l.rotulo, valor: l.valor }));
 }
 
+/** "2 × R$ 39,90 = R$ 79,80", com a arte (uma vez) quando houver. */
+function contaDaLinha(qtd: number, unit: number, arte: number): string {
+  const arteTxt = arte > 0 ? ` + ${dinheiro(arte)} do serviço de arte` : "";
+  const total = unit * qtd + (arte > 0 ? arte : 0);
+  if (qtd > 1) return `${qtd} × ${dinheiro(unit)}${arteTxt} = ${dinheiro(total)}`;
+  return arte > 0 ? `${dinheiro(unit)}${arteTxt} = ${dinheiro(total)}` : dinheiro(unit);
+}
 
 /**
  * A mensagem inteira.
@@ -88,12 +69,16 @@ export function mensagemDoPedido({
   valores,
   quantidade = 1,
   precoUnitario,
+  arte = 0,
   nomeDaLoja,
 }: {
   produto: StudioStoreProduct;
   valores?: Record<string, any> | null;
   quantidade?: number;
+  /** Por unidade, SEM o serviço de arte (ver precoDaSacola.ts). */
   precoUnitario?: number;
+  /** O serviço de arte pago, uma vez por linha. */
+  arte?: number;
   nomeDaLoja?: string | null;
 }): string {
   const loja = String(nomeDaLoja || "").trim();
@@ -106,7 +91,7 @@ export function mensagemDoPedido({
   const qtd = Math.max(1, Math.floor(Number(quantidade) || 1));
   const unit = Number(precoUnitario);
   if (Number.isFinite(unit) && unit > 0) {
-    partes.push(qtd > 1 ? `${qtd} × ${dinheiro(unit)} = ${dinheiro(unit * qtd)}` : dinheiro(unit));
+    partes.push(contaDaLinha(qtd, unit, Number(arte) || 0));
   } else if (qtd > 1) {
     partes.push(`Quantidade: ${qtd}`);
   }
@@ -135,6 +120,7 @@ export function linkDoPedido(args: {
   valores?: Record<string, any> | null;
   quantidade?: number;
   precoUnitario?: number;
+  arte?: number;
   nomeDaLoja?: string | null;
 }): string | null {
   const num = numeroWhatsApp(args.numero);
@@ -163,20 +149,29 @@ export function mensagemDoCarrinho({
     ? `Olá! Vim pela loja ${loja} e quero um orçamento destas peças:`
     : "Olá! Vim pela loja e quero um orçamento destas peças:");
 
+  // Fase 2 (25/09/2026): o preço de cada linha é o que a SACOLA mostra —
+  // faixa de quantidade, adicionais (verso, meio, opções) e o serviço de
+  // arte uma vez por linha (precoDaSacola.ts). Antes ia o preço de tabela
+  // vezes a quantidade, e a lojista respondia um valor que a cliente não
+  // tinha visto.
   let total = 0;
   for (const l of linhas || []) {
     const qtd = Math.max(1, Math.floor(Number(l.qty) || 1));
-    const unit = Number(l.product?.price) || 0;
-    total += unit * qtd;
+    const p = precoDaLinha({ ...l, qty: qtd });
+    total += p.total;
     partes.push("");
     partes.push(`*${l.product?.name || "Peça personalizada"}* × ${qtd}`);
+    if (p.unitario > 0) {
+      const faixa = p.faixa ? ` (faixa de ${p.faixa.min_qty} un: -${p.faixa.pct}%)` : "";
+      partes.push(contaDaLinha(qtd, p.unitario, p.arte) + faixa);
+    }
     for (const c of linhasDaPersonalizacao(l.product, l.values)) {
       partes.push(`${c.rotulo}: ${c.valor}`);
     }
   }
   if (total > 0) {
     partes.push("");
-    partes.push(`Estimativa pelo preço de tabela: ${dinheiro(total)}`);
+    partes.push(`Total estimado: ${dinheiro(total)} (sem frete)`);
   }
 
   const texto = partes.join("\n");
