@@ -11,13 +11,12 @@
 // há modelos para escolher.
 // ============================================================
 import { View, Pressable, Platform } from "react-native";
-import { Fonts } from "@/constants/fonts";
 import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import { wash, AURA } from "./theme";
 import { CarrosselFoto } from "./CarrosselFoto";
 import { resumo } from "./capaModel";
 
-import { Texto } from "./TipografiaVitrine";
+import { Texto, Numero, useTipografia } from "./TipografiaVitrine";
 import { dinheiro } from "./moeda";
 type Props = {
   nome: string;
@@ -63,6 +62,7 @@ export function ProductCard({
   estilo = "editorial", destaque, chips, escada, precoPix, onPress,
 }: Props) {
   const T = usePaletaDaVitrine();
+  const tipo = useTipografia();
   const cor = corDaLoja || AURA.violet;
   // No minimal a descricao nao entra: o estilo existe pra caber mais
   // produto na tela, e uma linha extra por cartao briga com isso.
@@ -172,7 +172,7 @@ export function ProductCard({
         <Texto
           numberOfLines={2}
           style={{
-            fontFamily: compacto ? undefined : (fonteDisplay || Fonts.heading),
+            fontFamily: compacto ? undefined : (fonteDisplay || tipo.display),
             fontSize: compacto ? 13 : 16,
             lineHeight: compacto ? 16 : 20,
             fontWeight: compacto ? "500" : "400",
@@ -188,38 +188,36 @@ export function ProductCard({
           </Texto>
         ) : null}
 
-        <Texto
+        <Numero
           style={{
-            fontSize: compacto ? 13 : 15, fontWeight: "800",
+            fontSize: compacto ? 13 : 15, fontWeight: "700",
             color: sobreposto ? "#fff" : cor, marginTop: 2,
-            fontVariant: ["tabular-nums"],
           }}
         >
           {dinheiro(preco)}
-        </Texto>
+        </Numero>
 
         {/* "ou R$ 35,91 no Pix": a mesma conta do checkout, numa unidade.
             So aparece com desconto configurado — "0%" seria ruido. */}
         {precoPix != null && precoPix < preco ? (
-          <Texto style={{
+          <Numero style={{
             fontSize: compacto ? 10.5 : 11.5, marginTop: 1,
             color: sobreposto ? "rgba(255,255,255,0.9)" : T.green,
-            fontVariant: ["tabular-nums"],
           }}>
             ou {dinheiro(precoPix)} no Pix
-          </Texto>
+          </Numero>
         ) : null}
 
         {/* A escada so existe quando a lojista configurou faixa. Nenhuma
             das lojas Studio tem hoje — inventar uma seria anunciar
             desconto que o checkout nao daria. */}
         {escada && !compacto ? (
-          <Texto style={{
-            fontFamily: Fonts.mono, fontSize: 10.5,
+          <Numero style={{
+            fontSize: 10.5,
             color: sobreposto ? "rgba(255,255,255,0.9)" : T.green,
           }}>
             {escada}
-          </Texto>
+          </Numero>
         ) : null}
 
         {/* O que da para personalizar, lido do customization_config. No

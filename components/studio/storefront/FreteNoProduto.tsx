@@ -16,7 +16,7 @@ import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import { wash, AURA } from "./theme";
 import { enderecoDaApi } from "./enderecoDaApi";
 
-import { Texto } from "./TipografiaVitrine";
+import { Texto, Numero, useTipografia, estiloNumero } from "./TipografiaVitrine";
 import { dinheiro } from "./moeda";
 /** Só os dígitos, no formato que a rota espera. */
 export function cepLimpo(v: string): string {
@@ -42,6 +42,7 @@ export function FreteNoProduto({
   corDaLoja?: string | null;
 }) {
   const T = usePaletaDaVitrine();
+  const tipo = useTipografia();
   const cor = corDaLoja || AURA.violet;
   const [cep, setCep] = useState("");
   const [carregando, setCarregando] = useState(false);
@@ -103,6 +104,7 @@ export function FreteNoProduto({
             flex: 1, borderWidth: 1, borderColor: T.border, borderRadius: 9,
             paddingHorizontal: 11, paddingVertical: 9, fontSize: 14, color: T.ink,
             backgroundColor: T.card,
+            ...estiloNumero(tipo),
             ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
           }}
         />
@@ -125,9 +127,9 @@ export function FreteNoProduto({
 
       {resultado ? (
         <Texto style={{ fontSize: 13.5, color: T.ink }}>
-          <Texto style={{ fontWeight: "800", color: cor }}>
+          <Numero style={{ fontWeight: "700", color: cor }}>
             {resultado.fee > 0 ? `${dinheiro(resultado.fee)}` : "Entrega grátis"}
-          </Texto>
+          </Numero>
           {resultado.etaText ? <Texto style={{ color: T.ink3 }}>{` · ${resultado.etaText}`}</Texto> : null}
         </Texto>
       ) : null}

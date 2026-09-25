@@ -6,7 +6,8 @@
 //
 //   Aura entrega a ESTRUTURA — fundo, superfícies, bordas, raios,
 //   tipografia, movimento. Tudo vem do Aura Design System (dark-first,
-//   #060816, bordas violeta-tingidas, Instrument Serif + DM Sans + DM Mono,
+//   #060816, bordas violeta-tingidas, Instrument Serif + DM Sans +
+//   Bricolage Grotesque nos numeros (era DM Mono ate 25/09/2026),
 //   200–250ms numa curva só).
 //
 //   O lojista entra com a COR. Ela ocupa exatamente o lugar que o violeta
@@ -64,12 +65,16 @@ export const AURA = {
 
   radius: { sm: 6, md: 8, lg: 10, xl: 12, card: 16, editorial: 24, pill: 999 },
   space: [4, 6, 8, 10, 12, 16, 20, 24, 32, 48],
+  // `num` era `mono` (DM Mono). Decisao do PO de 25/09/2026: a vitrine
+  // Studio nao usa mais fonte monoespacada — numero, rotulo e codigo saem
+  // na Bricolage Grotesque com digitos tabulares (ver NUMEROS_STUDIO em
+  // constants/fonts.ts, que e a pilha completa com fallback).
   font: {
     display: "Instrument Serif",
     body: "DM Sans",
-    mono: "DM Mono",
+    num: "Bricolage Grotesque",
   },
-  type: { h1: 28, h2: 22, h3: 18, body: 14, caption: 12, label: 11, mono: 13 },
+  type: { h1: 28, h2: 22, h3: 18, body: 14, caption: 12, label: 11, num: 13 },
   motion: {
     ease: "cubic-bezier(0.4, 0, 0.2, 1)",
     fast: 150,

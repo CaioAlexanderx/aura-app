@@ -19,9 +19,8 @@
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
 import { View, Pressable, TextInput, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
-import { Texto, useTipografia } from "./TipografiaVitrine";
+import { Texto, Numero, useTipografia } from "./TipografiaVitrine";
 import { usePaletaDaVitrine, useTemaDaVitrine } from "./TemaDaVitrine";
-import { Fonts } from "@/constants/fonts";
 import { Etiqueta } from "./HomeDaVitrine";
 import {
   nomesDaLista, nomesIgnorados, proximoDegrau, pendenciaDoLote, dinheiro, fraseDoPrazo,
@@ -195,9 +194,9 @@ export function OrcamentoEmLote({
           <View style={{ height: 1, backgroundColor: T.border, marginVertical: 4 }} />
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" }}>
             <Texto style={{ fontSize: 13, fontWeight: "700", color: T.ink }}>Total do lote</Texto>
-            <Texto style={{ fontFamily: Fonts.mono, fontSize: 18, color: T.ink }}>
+            <Numero style={{ fontSize: 18, color: T.ink }}>
               {dinheiro(cotacao.total_amount)}
-            </Texto>
+            </Numero>
           </View>
           {degrau ? (
             <Texto style={{ fontSize: 11.5, color: tema.marcaTexto, lineHeight: 16 }}>
@@ -234,10 +233,10 @@ export function OrcamentoEmLote({
         <Pressable onPress={onVoltar} accessibilityRole="button" accessibilityLabel="Voltar para a loja">
           <Texto style={{ fontSize: 13, color: T.ink2 }}>‹ Voltar para a loja</Texto>
         </Pressable>
-        <Texto style={{ fontFamily: Fonts.mono, fontSize: 10.5, letterSpacing: 1.4,
+        <Numero style={{ fontSize: 10.5, letterSpacing: 1.4,
                         textTransform: "uppercase", color: T.ink3, marginLeft: "auto" }}>
           Empresas e eventos
-        </Texto>
+        </Numero>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 60 }}>
@@ -300,9 +299,9 @@ export function OrcamentoEmLote({
                             <Texto numberOfLines={2} style={{ fontSize: 13, fontWeight: "600", color: T.ink }}>
                               {p.name}
                             </Texto>
-                            <Texto style={{ fontFamily: Fonts.mono, fontSize: 11, color: T.ink3 }}>
+                            <Numero style={{ fontSize: 11, color: T.ink3 }}>
                               {dinheiro(Number(p.price))}
-                            </Texto>
+                            </Numero>
                           </Pressable>
                         );
                       })}
@@ -427,7 +426,7 @@ function Bloco({
       <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
         <Texto style={{ fontSize: 13.5, fontWeight: "700", color: T.ink }}>{titulo}</Texto>
         {nota ? (
-          <Texto style={{ fontFamily: Fonts.mono, fontSize: 10.5, color: T.ink3 }}>{nota}</Texto>
+          <Numero style={{ fontSize: 10.5, color: T.ink3 }}>{nota}</Numero>
         ) : null}
       </View>
       {children}
@@ -439,7 +438,7 @@ function Linha({ rotulo, valor, T, destaque }: { rotulo: string; valor: string; 
   return (
     <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 10 }}>
       <Texto style={{ fontSize: 12.5, color: T.ink2 }}>{rotulo}</Texto>
-      <Texto style={{ fontFamily: Fonts.mono, fontSize: 12.5, color: destaque || T.ink }}>{valor}</Texto>
+      <Numero style={{ fontSize: 12.5, color: destaque || T.ink }}>{valor}</Numero>
     </View>
   );
 }

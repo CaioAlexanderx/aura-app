@@ -11,14 +11,14 @@ import { montarTema } from "./theme";
 import { NextStep } from "./ui/NextStep";
 import { QrCode } from "@/components/QrCode";
 
-import { tipografiaDaLoja } from "@/constants/fonts";
-import { Texto } from "./TipografiaVitrine";
+import { Texto, Numero, useTipografia } from "./TipografiaVitrine";
 import { dinheiro } from "./moeda";
 export function SentConfirmation({ sf }: { sf: StorefrontState }) {
   const T = usePaletaDaVitrine();
   // Confirmacao tambem na cor da loja: e a ultima tela que o cliente ve.
   const tema = montarTema((sf.store as any)?.site?.primary_color);
-  const tipo = tipografiaDaLoja((sf.store as any)?.site?.font_family);
+  // A fonte do Studio, a mesma da home (ver Checkout).
+  const tipo = useTipografia();
 
   const [copied, setCopied] = useState(false);
   if (!sf.sentOrder || !sf.store) return null;
@@ -84,12 +84,12 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
           alignItems: "center", gap: 6, minWidth: 260, marginTop: 16,
         }}
       >
-        <Texto style={{ fontSize: 11, color: T.ink3, textTransform: "uppercase" }}>Pedido</Texto>
-        <Texto style={{ fontSize: 18, color: T.ink, fontWeight: "800" }}>#{sentOrder.order_number}</Texto>
-        <Texto style={{ fontSize: 11, color: T.ink3, textTransform: "uppercase", marginTop: 8 }}>Total</Texto>
-        <Texto style={{ fontSize: 26, color: tema.marcaTexto, fontWeight: "800" }}>
+        <Numero style={{ fontSize: 10.5, color: T.ink3, textTransform: "uppercase", letterSpacing: 1.2 }}>Pedido</Numero>
+        <Numero style={{ fontSize: 18, color: T.ink, fontWeight: "700" }}>#{sentOrder.order_number}</Numero>
+        <Numero style={{ fontSize: 10.5, color: T.ink3, textTransform: "uppercase", letterSpacing: 1.2, marginTop: 8 }}>Total</Numero>
+        <Numero style={{ fontSize: 26, color: tema.marcaTexto, fontWeight: "700" }}>
           {dinheiro(Number(sentOrder.total))}
-        </Texto>
+        </Numero>
         <Texto style={{ fontSize: 11, color: T.accent, fontWeight: "700", marginTop: 8 }}>
           Aguardando produção da arte
         </Texto>
@@ -97,9 +97,9 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
 
       {sentOrder.pix && (
         <View style={{ marginTop: 16, maxWidth: 320, width: "100%", gap: 10, alignItems: "center" }}>
-          <Texto style={{ fontSize: 11, color: T.ink3, textAlign: "center", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: "700" }}>
+          <Numero style={{ fontSize: 10.5, color: T.ink3, textAlign: "center", textTransform: "uppercase", letterSpacing: 1.2, fontWeight: "600" }}>
             Pague com Pix
-          </Texto>
+          </Numero>
 
           {/* QR: usa a imagem do gateway (base64) quando vier; senao gera do payload */}
           <View style={{ padding: 12, backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: T.border }}>
@@ -120,17 +120,18 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
           </View>
 
           <Texto style={{ fontSize: 11, color: T.ink3, textAlign: "center" }}>ou copie o código Pix</Texto>
-          <Texto
+          {/* O codigo sai na voz dos numeros (Bricolage, digitos tabulares):
+              a mono de sistema era a unica fonte fora da loja nesta tela. */}
+          <Numero
             style={{
               fontSize: 11, color: T.ink,
-              fontFamily: Platform.OS === "web" ? "monospace" : undefined,
               padding: 10, backgroundColor: T.bg, borderRadius: 8,
               borderWidth: 1, borderColor: T.border,
             }}
             numberOfLines={4}
           >
             {sentOrder.pix.payload}
-          </Texto>
+          </Numero>
 
           <Pressable
             onPress={copyPix}

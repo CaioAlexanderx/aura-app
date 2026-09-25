@@ -14,8 +14,7 @@ import { TotalRow } from "./ui/TotalRow";
 import { PoweredByAura } from "./ui/PoweredByAura";
 import { oQueFaltaNoCheckout } from "./oQueFaltaNoCheckout";
 
-import { tipografiaDaLoja } from "@/constants/fonts";
-import { Texto } from "./TipografiaVitrine";
+import { Texto, Numero, useTipografia } from "./TipografiaVitrine";
 import { dinheiro } from "./moeda";
 export function Checkout({ sf }: { sf: StorefrontState }) {
   const T = usePaletaDaVitrine();
@@ -23,7 +22,9 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
   // fixo. Fill e tinta saem de montarTema porque o hex do lojista e
   // arbitrario (ver fase 01).
   const tema = montarTema((sf.store as any)?.site?.primary_color);
-  const tipo = tipografiaDaLoja((sf.store as any)?.site?.font_family);
+  // A fonte do Studio, a mesma da home — o resolvedor da loja comum
+  // carregava um par que a pagina nunca baixa, e o titulo caia em Georgia.
+  const tipo = useTipografia();
 
   if (!sf.store) return null;
   const sendDisabled =

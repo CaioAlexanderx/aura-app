@@ -10,8 +10,7 @@ import { LivePreview } from "./LivePreview";
 
 import { CapaProduto } from "./CapaProduto";
 import { temPersonalizacaoVisivel } from "@/components/studio/customizationConfig";
-import { tipografiaDaLoja } from "@/constants/fonts";
-import { Texto } from "./TipografiaVitrine";
+import { Texto, Numero, useTipografia } from "./TipografiaVitrine";
 import { dinheiro } from "./moeda";
 // Helpers expostos pelo hook
 function effectiveBackSelected(
@@ -67,15 +66,15 @@ export function CartBar({
             borderRadius: 13, alignItems: "center", justifyContent: "center",
           }}
         >
-          <Texto style={{ color: "#fff", fontSize: 12, fontWeight: "800" }}>
+          <Numero style={{ color: "#fff", fontSize: 12, fontWeight: "700" }}>
             {sf.cart.reduce((s, l) => s + l.qty, 0)}
-          </Texto>
+          </Numero>
         </View>
         <View>
           <Texto style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}>
             {sf.cart.reduce((s, l) => s + l.qty, 0) === 1 ? "item personalizado" : "itens personalizados"}
           </Texto>
-          <Texto style={{ color: "#fff", fontSize: 16, fontWeight: "800" }}>{dinheiro(sf.cartSubtotal)}</Texto>
+          <Numero style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>{dinheiro(sf.cartSubtotal)}</Numero>
         </View>
       </View>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
@@ -113,7 +112,8 @@ export function CartBar({
 /** Lista de itens no checkout */
 export function CartItemList({ sf }: { sf: StorefrontState }) {
   const T = usePaletaDaVitrine();
-  const tipo = tipografiaDaLoja((sf.store as any)?.site?.font_family);
+  // A fonte do Studio, a mesma da home (ver Checkout).
+  const tipo = useTipografia();
   // Os dois chips tinham 22px de altura: no celular o dedo errava e
   // "Remover" ficava a 6px de "Editar". Altura mínima e área de toque
   // ampliada (hitSlop) — o desenho continua discreto.
@@ -179,9 +179,9 @@ export function CartItemList({ sf }: { sf: StorefrontState }) {
             )}
             <View style={{ flex: 1 }}>
               <Texto style={{ fontSize: 13, color: T.ink, fontWeight: "700" }}>{l.product.name}</Texto>
-              <Texto style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
+              <Numero style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
                 Qtd {l.qty} · {dinheiro(sf._lineTotal(l))}
-              </Texto>
+              </Numero>
               {hasDelta && (
                 <Texto style={{ fontSize: 10, color: T.accent, marginTop: 1 }}>
                   inclui {dinheiro((unit - Number(l.product.price)))} por opções

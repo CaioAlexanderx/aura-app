@@ -10,9 +10,8 @@
 // não tem, ela pula — e a home encurta em vez de mostrar caixa vazia.
 // ============================================================
 import { View, Image, Pressable, Platform, useWindowDimensions } from "react-native";
-import { Texto, useTipografia } from "./TipografiaVitrine";
+import { Texto, Numero, useTipografia } from "./TipografiaVitrine";
 import { usePaletaDaVitrine, useTemaDaVitrine } from "./TemaDaVitrine";
-import { Fonts } from "@/constants/fonts";
 import type { BlocosDaHome, PassoDaLoja } from "./blocosDaHome";
 import type { StudioStoreProduct } from "./types";
 import { CapaProduto } from "./CapaProduto";
@@ -20,16 +19,16 @@ import { dinheiro } from "./moeda";
 
 const LARGURA_MAX = 980;
 
-/** Rótulo monoespaçado em caixa alta — a voz de etiqueta do sistema. */
+/** Rótulo em caixa alta, na voz dos números (Bricolage) — a etiqueta do sistema. */
 export function Etiqueta({ children, cor }: { children: React.ReactNode; cor?: string }) {
   const T = usePaletaDaVitrine();
   return (
-    <Texto style={{
-      fontFamily: Fonts.mono, fontSize: 10.5, letterSpacing: 1.6,
+    <Numero style={{
+      fontSize: 10.5, letterSpacing: 1.6,
       textTransform: "uppercase", color: cor || T.ink3,
     }}>
       {children}
-    </Texto>
+    </Numero>
   );
 }
 
@@ -69,12 +68,12 @@ export function FaixaDeAvisos({ avisos }: { avisos: string[] }) {
       <View style={{ width: "100%", maxWidth: LARGURA_MAX, alignSelf: "center",
                      flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 6 }}>
         {avisos.map((a, i) => (
-          <Texto key={i} style={{
-            fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1.1,
+          <Numero key={i} style={{
+            fontSize: 10, letterSpacing: 1.1,
             textTransform: "uppercase", color: tema.sobreMarca,
           }}>
             {i > 0 ? "· " : ""}{a}
-          </Texto>
+          </Numero>
         ))}
       </View>
     </View>
@@ -164,13 +163,13 @@ export function Hero({
           ) : null}
 
           <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 10, marginTop: 18 }}>
-            <Texto style={{
-              fontFamily: Fonts.mono, fontSize: 11, letterSpacing: 0.8,
+            <Numero style={{
+              fontSize: 11, letterSpacing: 0.8,
               color: comBanner ? "rgba(255,255,255,0.8)" : T.ink3,
             }}>
               {sla > 0 ? `Pronto em ${sla} ${sla === 1 ? "dia útil" : "dias úteis"}` : "Feito sob encomenda"}
               {totalProdutos > 0 ? `  ·  ${totalProdutos} ${totalProdutos === 1 ? "modelo" : "modelos"}` : ""}
-            </Texto>
+            </Numero>
           </View>
         </View>
 
@@ -198,9 +197,9 @@ export function ComoFunciona({ passos }: { passos: PassoDaLoja[] }) {
             backgroundColor: T.card, borderRadius: 16, padding: 16,
             borderWidth: 1, borderColor: T.border, gap: 6,
           }}>
-            <Texto style={{ fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1.4, color: tema.marcaTexto }}>
+            <Numero style={{ fontSize: 10, letterSpacing: 1.4, color: tema.marcaTexto }}>
               {"0" + p.n}
-            </Texto>
+            </Numero>
             <Texto style={{ fontSize: 14.5, fontWeight: "700", color: T.ink }}>{p.titulo}</Texto>
             <Texto style={{ fontSize: 12.5, lineHeight: 18, color: T.ink2 }}>{p.texto}</Texto>
           </View>
@@ -236,9 +235,9 @@ export function TiraDeCategorias({
             }}
           >
             <Texto style={{ fontSize: 14.5, fontWeight: "700", color: T.ink }}>{c.nome}</Texto>
-            <Texto style={{ fontFamily: Fonts.mono, fontSize: 10.5, color: tema.marcaTexto }}>
+            <Numero style={{ fontSize: 10.5, color: tema.marcaTexto }}>
               {c.total} {c.total === 1 ? "modelo" : "modelos"}
-            </Texto>
+            </Numero>
           </Pressable>
         ))}
       </View>
@@ -281,9 +280,9 @@ export function MaisPedidos({
             <Texto numberOfLines={2} style={{ fontSize: 12.5, color: T.ink, lineHeight: 17 }}>
               {p.name}
             </Texto>
-            <Texto style={{ fontFamily: Fonts.mono, fontSize: 12, color: T.ink }}>
+            <Numero style={{ fontSize: 12, color: T.ink }}>
               {dinheiro(Number(p.price))}
-            </Texto>
+            </Numero>
           </Pressable>
         ))}
       </View>
@@ -369,10 +368,10 @@ export function FaixaDeConfianca({ numeros }: { numeros: BlocosDaHome["confianca
             <Texto style={{ fontFamily: tipo.display, fontSize: 30, lineHeight: 34, color: T.ink }}>
               {n.valor}
             </Texto>
-            <Texto style={{ fontFamily: Fonts.mono, fontSize: 10.5, letterSpacing: 0.8,
+            <Numero style={{ fontSize: 10.5, letterSpacing: 0.8,
                             textTransform: "uppercase", color: T.ink3 }}>
               {n.rotulo}
-            </Texto>
+            </Numero>
           </View>
         ))}
       </View>

@@ -19,8 +19,9 @@ import { createContext, useContext, type ReactNode } from "react";
 import { Text, type TextProps } from "react-native";
 // A chave e a MESMA que a lojista escolheu (contrato de banco), mas a
 // vitrine Studio resolve ela no trio Studio Premium — Fraunces, DM Sans
-// e DM Mono. A loja comum resolve na curadoria dela. Ver constants/fonts.ts.
-import { tipografiaDoStudio, type ParTipografico } from "@/constants/fonts";
+// e Bricolage Grotesque nos numeros. A loja comum resolve na curadoria
+// dela. Ver constants/fonts.ts.
+import { tipografiaDoStudio, NUMEROS_STUDIO, type ParTipografico } from "@/constants/fonts";
 
 const Contexto = createContext<ParTipografico>(tipografiaDoStudio(null));
 
@@ -48,4 +49,26 @@ export function useTipografia(): ParTipografico {
 export function Texto({ style, ...resto }: TextProps) {
   const par = useTipografia();
   return <Text {...resto} style={[{ fontFamily: par.body }, style]} />;
+}
+
+/**
+ * A voz dos numeros: preco, quantidade, contagem, CEP, codigo Pix e
+ * rotulo em caixa alta. Bricolage Grotesque com digitos tabulares — um
+ * total que muda de R$ 49,90 para R$ 99,80 nao pode mudar de largura e
+ * empurrar o botao ao lado.
+ *
+ * Funcao, e nao so componente, porque TextInput e folhas de estilo
+ * tambem precisam dela.
+ */
+export function estiloNumero(par: ParTipografico) {
+  return {
+    fontFamily: par.numeros || NUMEROS_STUDIO,
+    fontVariant: ["tabular-nums" as const],
+  };
+}
+
+/** `Texto` na voz dos numeros. O style do chamador continua vencendo. */
+export function Numero({ style, ...resto }: TextProps) {
+  const par = useTipografia();
+  return <Text {...resto} style={[estiloNumero(par), style]} />;
 }
