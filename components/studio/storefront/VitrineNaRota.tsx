@@ -49,6 +49,9 @@ import { PaginaDoPedido } from "./PaginaDoPedido";
 import { lerRetornoDoCartao, lerPedidoPendente } from "./pedidoGuardado";
 import { storageLocal } from "./dadosLembrados";
 import { enderecoDaApi } from "./enderecoDaApi";
+import { vitrineV2NoNavegador } from "./chaveVitrineV2";
+import { PaginaDoProduto } from "./produto/PaginaDoProduto";
+import { GradeDeModelosV2 } from "./produto/GradeDeModelosV2";
 
 const API_BASE = enderecoDaApi();
 
@@ -175,6 +178,9 @@ export function TelaNaRota({
   // na desmontagem de propósito: a primeira tela É desmontada pela
   // própria troca, e o empilhar tem que acontecer mesmo assim.
   useEffect(() => {
+    // Fase 3: o `?v2=1` da URL fica guardado na aba ANTES de a entrada
+    // arrumar o histórico (a troca pela home leva a consulta embora).
+    vitrineV2NoNavegador(null, slug);
     if (!rota || !rota.primeira.current) return;
     rota.primeira.current = false;
     const link = lerLinkDaAurinha(consulta);
@@ -231,15 +237,39 @@ export function TelaNaRota({
   if (!pronta) return null;
 
   const comFaixa = tela.tipo === "produto" && rota?.faixaDaAurinha === tela.id;
-  if (!comFaixa) return <ConteudoDaVitrine />;
+  if (!comFaixa) return <ConteudoDaRota tela={tela} />;
   return (
     <View style={{ flex: 1 }}>
       <FaixaDaAurinha onFechar={() => rota?.setFaixaDaAurinha(null)} />
       <View style={{ flex: 1 }}>
-        <ConteudoDaVitrine />
+        <ConteudoDaRota tela={tela} />
       </View>
     </View>
   );
+}
+
+/**
+ * Fase 3 (página do produto nova): com a chave `vitrine_v2` ligada
+ * (chaveV2.ts — a loja ou o `?v2=1` guardado na aba), o produto e a
+ * grade de modelos da categoria são os novos; o resto da loja, e tudo
+ * com a chave desligada, segue o ConteudoDaVitrine de hoje.
+ */
+function ConteudoDaRota({ tela }: { tela: TelaDaVitrine }) {
+  const v = useVitrine();
+  const sf = v?.sf;
+  const slug = v?.slug || "";
+  // A chave é a do hook (sf.vitrineV2, chaveVitrineV2.ts): uma decisão só
+  // para a sacola, o checkout e a página do produto.
+  const v2 = !!sf?.vitrineV2;
+  let telaNova: ReactNode = null;
+  if (sf && v2) {
+    if (tela.tipo === "produto" && sf.stage === "configure" && sf.activeProduct) telaNova = <PaginaDoProduto sf={sf} slug={slug} />;
+    else if (tela.tipo === "categoria" && sf.stage === "modelos" && sf.grupoAberto) telaNova = <GradeDeModelosV2 sf={sf} />;
+  }
+  // Por dentro do ConteudoDaVitrine, e não no lugar dele: o que ele põe
+  // em volta de qualquer tela (o título da aba, a gaveta da sacola da
+  // Fase 2) vale também para as telas novas.
+  return <ConteudoDaVitrine telaNova={telaNova} />;
 }
 
 /**
