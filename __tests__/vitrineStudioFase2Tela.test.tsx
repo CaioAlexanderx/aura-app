@@ -266,7 +266,9 @@ describe("a sacola em gaveta (Tela 1)", () => {
     ]));
     servidor({ store: loja({ pedidos: { aceita: false, motivo: "pausado", recado: "Voltamos em 6 de janeiro.", pedidos_ate: null } }) });
     render(<PaginaDaVitrine slug={SLUG} />);
-    fireEvent.press(await acharId("barra-da-sacola"));
+    // Fase 5: na home nova a sacola mora no cabeçalho (mockup 05, tela 1);
+    // a barra escura do pé saiu. O toque abre a mesma gaveta.
+    fireEvent.press(await acharId("botao-da-sacola"));
     expect(await acharId("sacola-em-gaveta")).toBeTruthy();
     expect(naTela("Pedir orçamento desta sacola")).toBe(true);
     expect(nenhumId("finalizar-compra")).toBe(true);

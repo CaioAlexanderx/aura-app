@@ -48,9 +48,18 @@ type Props = {
   corDaLoja?: string | null;
   /** Sobe o botão quando a barra do carrinho está na tela. */
   acimaDaBarra?: boolean;
+  /**
+   * Fase 5 (home nova): só o balão, num círculo de 56 px. Onde não há
+   * margem livre ao lado do conteúdo (celular, desktop estreito), a
+   * pílula com o texto cobriria o que está embaixo; o círculo ocupa o
+   * mínimo. O nome continua para o leitor de tela.
+   */
+  compacto?: boolean;
+  /** Distância da borda direita (a home nova põe o botão na margem). */
+  direita?: number;
 };
 
-export function AncoraWhatsApp({ numero, nomeDaLoja, corDaLoja, acimaDaBarra }: Props) {
+export function AncoraWhatsApp({ numero, nomeDaLoja, corDaLoja, acimaDaBarra, compacto, direita = 16 }: Props) {
   const href = linkWhatsApp(numero, nomeDaLoja);
   // Sem número configurado não há botão. Um botão que não leva a lugar
   // nenhum é pior que ausência.
@@ -73,7 +82,7 @@ export function AncoraWhatsApp({ numero, nomeDaLoja, corDaLoja, acimaDaBarra }: 
       pointerEvents="box-none"
       style={{
         position: "absolute",
-        right: 16,
+        right: direita,
         bottom: acimaDaBarra ? 92 : 20,
         zIndex: 40,
       }}
@@ -87,8 +96,11 @@ export function AncoraWhatsApp({ numero, nomeDaLoja, corDaLoja, acimaDaBarra }: 
             flexDirection: "row",
             alignItems: "center",
             gap: 8,
-            paddingHorizontal: 16,
-            paddingVertical: 12,
+            paddingHorizontal: compacto ? 0 : 16,
+            paddingVertical: compacto ? 0 : 12,
+            width: compacto ? 56 : undefined,
+            height: compacto ? 56 : undefined,
+            justifyContent: "center",
             borderRadius: 999,
             backgroundColor: cor,
             borderWidth: 1,
@@ -106,8 +118,8 @@ export function AncoraWhatsApp({ numero, nomeDaLoja, corDaLoja, acimaDaBarra }: 
             : ({ elevation: 5 } as any),
         ]}
       >
-        <Icone cor={tinta} />
-        <Texto style={{ color: tinta, fontSize: 13.5, fontWeight: "700" }}>Tirar dúvida</Texto>
+        <Icone cor={tinta} tamanho={compacto ? 24 : 18} />
+        {compacto ? null : <Texto style={{ color: tinta, fontSize: 13.5, fontWeight: "700" }}>Tirar dúvida</Texto>}
       </Pressable>
     </View>
   );
@@ -126,12 +138,12 @@ const BALAO_DO_WHATSAPP = "M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.
  * testes. O glifo feito de View que existia antes virava uma seta num
  * círculo e não lia como WhatsApp (QA 25/09); fica só no app nativo.
  */
-function Icone({ cor }: { cor: string }) {
+function Icone({ cor, tamanho = 18 }: { cor: string; tamanho?: number }) {
   if (Platform.OS === "web") {
-    const svg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="${cor}" aria-hidden="true"><path d="${BALAO_DO_WHATSAPP}"/></svg>`;
+    const svg = `<svg width="${tamanho}" height="${tamanho}" viewBox="0 0 24 24" fill="${cor}" aria-hidden="true"><path d="${BALAO_DO_WHATSAPP}"/></svg>`;
     return (
       <span
-        style={{ width: 18, height: 18, display: "inline-flex", flexShrink: 0 } as any}
+        style={{ width: tamanho, height: tamanho, display: "inline-flex", flexShrink: 0 } as any}
         aria-hidden="true"
         dangerouslySetInnerHTML={{ __html: svg }}
       />

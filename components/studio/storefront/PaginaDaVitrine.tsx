@@ -27,6 +27,8 @@ import { Platform, View, Pressable, Linking } from "react-native";
 import { cssDaVitrineStudio } from "@/constants/fonts";
 import { useStorefront, type StorefrontState } from "@/components/studio/storefront/useStorefront";
 import { ProductList } from "@/components/studio/storefront/ProductList";
+import { HomeDaVitrineNova } from "@/components/studio/storefront/home/HomeDaVitrineNova";
+import { vitrineV2NoNavegador } from "@/components/studio/storefront/chaveVitrineV2";
 import { ProductConfigurator } from "@/components/studio/storefront/ProductConfigurator";
 import { Checkout } from "@/components/studio/storefront/Checkout";
 // Fase 2 (chave vitrine_v2): checkout em etapas e sacola em gaveta.
@@ -186,6 +188,8 @@ export function CascaDaVitrine({
   children?: ReactNode;
 }) {
   const sf = useStorefront(slug, { navegar });
+  // Lido uma vez: so escolhe o desenho do esqueleto (ver abaixo).
+  const [esqueletoNovo] = useState(() => Platform.OS === "web" && !!slug && vitrineV2NoNavegador(null, slug));
 
   // A vitrine nunca carregou fonte nenhuma: o painel e a pagina de
   // orcamento injetavam as fontes da marca, e justamente a superficie que
@@ -261,7 +265,10 @@ export function CascaDaVitrine({
         {sf.loading ? (
           // Esqueleto no lugar do spinner: a tela vazia era indistinguivel de
           // loja quebrada pra quem clicou no link do WhatsApp da lojista.
-          <VitrineSkeleton />
+          // Fase 5: com a vitrine nova ja escolhida nesta aba (?v2=1), o
+          // esqueleto desenha a home nova. A chave da loja so chega com o
+          // payload; ate la, o de sempre.
+          <VitrineSkeleton variante={esqueletoNovo ? "home" : "grade"} />
         ) : !sf.store ? (
           // Sem loja e sem carregamento em curso e falha — mesmo que o status
           // nao tenha chegado. Nunca uma tela em branco.
@@ -330,6 +337,10 @@ export function ConteudoDaVitrine({ telaNova }: { telaNova?: ReactNode } = {}) {
         <ProductConfigurator sf={sf} slug={slug} />
       ) : sf.stage === "checkout" ? (
         sf.vitrineV2 ? <CheckoutEmEtapas sf={sf} /> : <Checkout sf={sf} />
+      ) : sf.vitrineV2 ? (
+        // Fase 5 (chave vitrine_v2): a home nova. Aqui, e nao na rota, para
+        // o endereco de dentro de casa (/cardapio/studio/<slug>) tambem.
+        <HomeDaVitrineNova sf={sf} slug={slug} />
       ) : (
         <ProductList sf={sf} />
       )}

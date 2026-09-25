@@ -21,7 +21,7 @@
 // ============================================================
 import { useEffect, useRef } from "react";
 import { View, Animated, Easing, Platform, useWindowDimensions } from "react-native";
-import { usePaletaDaVitrine } from "./TemaDaVitrine";
+import { usePaletaDaVitrine, useTemaDaVitrine } from "./TemaDaVitrine";
 import { useReduzirMovimento } from "./movimento";
 
 /** Opacidade fixa dos blocos quando o movimento está reduzido. */
@@ -73,10 +73,84 @@ type PropsSkeleton = {
    * a grade la faria a tela reorganizar quando o conteudo chegasse, que e
    * exatamente o que o esqueleto existe pra evitar.
    */
-  variante?: "grade" | "lista";
+  variante?: "grade" | "lista" | "home";
 };
 
 export function VitrineSkeleton({ variante = "grade" }: PropsSkeleton = {}) {
+  if (variante === "home") return <EsqueletoDaHome />;
+  return <EsqueletoAtual variante={variante} />;
+}
+
+/**
+ * Fase 5 (home nova, mockup 05 tela 7): a MESMA composição que vai
+ * chegar — faixa, cabeçalho, barra de categorias, destaque, passos e
+ * grade — no tom do papel (bg3/bg4), sem a cor da loja: o payload ainda
+ * não chegou. Um pulso lento só, para a tela toda; com "reduzir
+ * movimento", parado. O leitor de tela ouve "Carregando a loja" uma vez.
+ */
+function EsqueletoDaHome() {
+  const tema = useTemaDaVitrine();
+  const reduzir = useReduzirMovimento();
+  const o = usePulso(reduzir);
+  const { width } = useWindowDimensions();
+  const desktop = width >= 900;
+  const B = ({ w, h, r = 8, forte, style }: { w: number | string; h: number; r?: number; forte?: boolean; style?: any }) => (
+    <Animated.View style={[{ width: w as any, height: h, borderRadius: r, backgroundColor: forte ? tema.border : tema.bg4, opacity: o }, style]} />
+  );
+  const colunas = desktop ? 3 : 2;
+  const util = Math.min(width, 1120) - (desktop ? 0 : 32);
+  const larg = Math.floor((util - (desktop ? 22 : 12) * (colunas - 1)) / colunas);
+  return (
+    <View
+      testID="vitrine-esqueleto"
+      style={{ flex: 1, backgroundColor: tema.bg, overflow: "hidden" }}
+      accessibilityRole="progressbar"
+      accessibilityLabel="Carregando a loja"
+      accessibilityState={{ busy: true }}
+      aria-busy
+    >
+      <View style={{ height: desktop ? 38 : 34, backgroundColor: tema.bg3, alignItems: "center", justifyContent: "center" }}>
+        <B w={desktop ? 420 : "70%"} h={9} r={5} />
+      </View>
+      <View style={{ borderBottomWidth: 1, borderBottomColor: tema.border }}>
+        <View style={{ width: "100%", maxWidth: 1180, alignSelf: "center", height: desktop ? 76 : 58, flexDirection: "row", alignItems: "center", gap: desktop ? 24 : 12, paddingHorizontal: desktop ? 20 : 16 }}>
+          {desktop ? null : <B w={28} h={28} r={8} />}
+          <B w={desktop ? 150 : 130} h={20} r={6} />
+          <View style={{ flex: 1, alignItems: "center" }}>{desktop ? <B w={"100%"} h={46} r={999} style={{ maxWidth: 520 }} /> : null}</View>
+          {desktop ? <B w={130} h={14} r={6} /> : <B w={28} h={28} r={8} />}
+          <B w={28} h={28} r={8} />
+        </View>
+        <View style={{ borderTopWidth: 1, borderTopColor: tema.border, height: 44, flexDirection: "row", alignItems: "center", justifyContent: desktop ? "center" : "flex-start", gap: desktop ? 34 : 22, paddingHorizontal: 16 }}>
+          {[58, 72, 44, 60, 56].map((w, i) => <B key={i} w={w} h={10} r={5} />)}
+        </View>
+      </View>
+      <View style={{ width: "100%", maxWidth: 1280, alignSelf: "center", flexDirection: desktop ? "row" : "column", gap: desktop ? 64 : 16, paddingHorizontal: desktop ? 80 : 16, paddingTop: desktop ? 56 : 26, paddingBottom: desktop ? 64 : 30 }}>
+        <View style={{ flex: desktop ? 1 : undefined, gap: 14, justifyContent: "center" }}>
+          <B w={150} h={10} r={5} />
+          <B w={desktop ? "80%" : "86%"} h={desktop ? 54 : 32} />
+          <B w={desktop ? "60%" : "62%"} h={desktop ? 54 : 32} />
+          <B w={desktop ? "72%" : "90%"} h={12} r={6} />
+          <B w={desktop ? "54%" : "70%"} h={12} r={6} />
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 6 }}>
+            <B w={desktop ? 200 : "48%"} h={48} r={12} />
+            <B w={desktop ? 140 : "48%"} h={48} r={12} />
+          </View>
+        </View>
+        <View style={{ flex: desktop ? 1 : undefined }}>
+          <B w={"100%"} h={desktop ? 440 : 300} r={desktop ? 28 : 22} style={{ backgroundColor: tema.bg3 }} />
+        </View>
+      </View>
+      <View style={{ width: "100%", maxWidth: 1120, alignSelf: "center", paddingHorizontal: desktop ? 0 : 16, flexDirection: desktop ? "row" : "column", gap: desktop ? 20 : 10 }}>
+        {[0, 1, 2].map((i) => <B key={i} w={desktop ? undefined as any : "100%"} h={desktop ? 150 : 88} r={14} style={[{ backgroundColor: tema.bg3 }, desktop ? { flex: 1 } : null]} />)}
+      </View>
+      <View style={{ width: "100%", maxWidth: 1120, alignSelf: "center", paddingHorizontal: desktop ? 0 : 16, paddingTop: 40, flexDirection: "row", flexWrap: "wrap", gap: desktop ? 22 : 12 }}>
+        {Array.from({ length: colunas * 2 }).map((_, i) => <B key={i} w={larg} h={Math.round(larg * 1.2)} r={14} style={{ backgroundColor: tema.bg3 }} />)}
+      </View>
+    </View>
+  );
+}
+
+function EsqueletoAtual({ variante }: { variante: "grade" | "lista" }) {
   const T = usePaletaDaVitrine();
   const reduzir = useReduzirMovimento();
   const o = usePulso(reduzir);
