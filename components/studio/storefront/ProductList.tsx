@@ -28,6 +28,7 @@ import {
 } from "./HomeDaVitrine";
 import { ORDENS, ordenarEntradas, mostrarControles, colunasComDensidade, type OrdemVitrine } from "./ordenacaoVitrine";
 import { Texto, useTipografia } from "./TipografiaVitrine";
+import { FaixaDaTemporada } from "./FaixaDaTemporada";
 export function ProductList({ sf }: { sf: StorefrontState }) {
   const T = usePaletaDaVitrine();
   const tema = useTemaDaVitrine();
@@ -132,6 +133,12 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
+      {/* Fase 1C (Tela 5): "Pedidos até 20/12" no alto da home, fora do
+          scroll — e a informacao que faz a cliente decidir hoje, entao nao
+          rola para longe. Com a loja fechada, o recado da lojista, antes de
+          ela montar uma sacola que nao vai poder fechar. Fora do ScrollView
+          tambem para nao deslocar o stickyHeaderIndices da busca. */}
+      <FaixaDaTemporada store={store} lugar="topo" />
       {/* Area da loja: o scroll e os flutuantes (WhatsApp, carrinho) vivem
           aqui dentro, ancorados no pe DESTA caixa. A barra de cookies vem
           depois, no fluxo — entao os flutuantes ficam acima dela em vez de

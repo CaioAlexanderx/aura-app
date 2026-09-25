@@ -90,3 +90,46 @@ export function avisoDePrazo(store: any, hoje: Date = new Date()): string | null
   if (dias === 1) return "Amanhã é o último dia para pedir nesta temporada.";
   return `Pedidos até ${dataCurta(ate, hoje)} — depois disso, só orçamento.`;
 }
+
+// ── A faixa da temporada (Fase 1C, Tela 5 e 6 do mockup 01) ────────────
+//
+// `avisoDePrazo` diz O QUE escrever; a tela precisa saber também COM QUE
+// VOZ. Perto do fim ("último dia", "amanhã") a faixa passa do âmbar para
+// o vermelho: é a única hora em que a urgência é verdade, e a cliente que
+// deixa para amanhã perde a data. E com a loja fechada a mesma faixa leva
+// o recado da lojista — a home explica, antes de a cliente montar uma
+// sacola que não vai poder fechar.
+
+export type TomDaFaixa = "prazo" | "ultimo_dia" | "fechada";
+
+export type FaixaDaTemporada = {
+  texto: string;
+  tom: TomDaFaixa;
+};
+
+/** Dias de hoje até a data limite (0 = hoje). `null` sem data válida. */
+export function diasAtePrazo(ate: string | null | undefined, hoje: Date = new Date()): number | null {
+  const m = typeof ate === "string" ? /^(\d{4})-(\d{2})-(\d{2})/.exec(ate) : null;
+  if (!m) return null;
+  const alvo = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const agora = Date.UTC(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+  return Math.round((alvo - agora) / 86400000);
+}
+
+/**
+ * A faixa que a vitrine mostra no topo da home e perto do botão de
+ * compra, ou `null` quando não há o que dizer.
+ *
+ * O texto é sempre o de `avisoDePrazo` (aberta) ou o recado de
+ * `modoDaVitrine` (fechada) — esta função só escolhe o tom, para a faixa
+ * nunca dizer uma coisa e a regra outra.
+ */
+export function faixaDaTemporada(store: any, hoje: Date = new Date()): FaixaDaTemporada | null {
+  const modo = modoDaVitrine(store, hoje);
+  if (!modo.aceita) return { texto: modo.recado, tom: "fechada" };
+
+  const texto = avisoDePrazo(store, hoje);
+  if (!texto) return null;
+  const dias = diasAtePrazo(store?.pedidos?.pedidos_ate, hoje);
+  return { texto, tom: dias != null && dias <= 1 ? "ultimo_dia" : "prazo" };
+}

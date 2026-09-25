@@ -20,6 +20,8 @@ import { validateRequiredFields } from "./useStorefront";
 import { BarraDeCookies } from "./ConsentimentoDaVitrine";
 import { linkDoPedido } from "./pedidoPeloWhatsApp";
 import { modoDaVitrine } from "./modoDaVitrine";
+import { FaixaDaTemporada } from "./FaixaDaTemporada";
+import { medirNaVitrine, itemDoProduto } from "./eventosDaVitrine";
 import { SizeGuideModal } from "./SizeGuideModal";
 // sideOf: fonte unica pra decidir o lado de um campo (front/back/middle).
 // Usar aqui em vez de reimplementar o ternario evita a mesma divergencia
@@ -137,6 +139,19 @@ export function ProductConfigurator({
     // apenas a mudancas no valor do art_service, nao a cada keystroke geral.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [artServiceValue]);
+
+  // Fase 1C — view_item: uma vez por peça aberta. Editar uma linha da
+  // sacola não é "ver o produto": a cliente já o escolheu. Trocar de
+  // modelo dentro da categoria é, e conta de novo (id muda).
+  const editandoLinha = !!(sf as any)._editingLineId;
+  useEffect(() => {
+    if (!activeProduct || editandoLinha) return;
+    medirNaVitrine((sf.store as any)?.site?.rastreadores, {
+      nome: "view_item",
+      itens: [itemDoProduto(activeProduct)],
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProduct?.id]);
 
   if (!activeProduct) return null;
 
@@ -817,6 +832,16 @@ export function ProductConfigurator({
           alignItems: telaLarga ? "center" : "stretch",
         }}
       >
+        {/* Fase 1C (Telas 5 e 6): "Pedidos até 20/12" e, com a loja
+            fechada, o recado da lojista — perto do botao, porque e ali que
+            a decisao acontece. Com a loja fechada, sem esta frase uma loja
+            sem "comprar" parece quebrada. */}
+        {!(sf as any)._editingLineId ? (
+          <View style={{ width: "100%", maxWidth: telaLarga ? 420 : undefined, marginBottom: 10 }}>
+            <FaixaDaTemporada store={sf.store} lugar="junto" />
+          </View>
+        ) : null}
+
         {/* O que falta, em ambar, antes do botao — nao depois do toque. */}
         {pendencia ? (
           <View style={{
@@ -922,24 +947,16 @@ export function ProductConfigurator({
           </View>
         )}
 
-        {/* Loja fechada para pedidos: a vitrine continua inteira e a
-            cliente entende por que o botao mudou. Sem esta frase, uma
-            loja sem "comprar" parece quebrada. */}
-        {!modo.aceita ? (
-          <View style={{ marginTop: 12, padding: 14, borderRadius: 10, backgroundColor: wash(tema.marcaFill, 0.06) }}>
-            <Texto style={{ color: tema.ink2, fontSize: 13.5, lineHeight: 20 }}>
-              {modo.recado}
-            </Texto>
-          </View>
-        ) : null}
-
         {/* O terceiro caminho: metade das clientes de personalizado so
             fecha falando com gente. O que muda a conversa nao e o botao,
             e a mensagem chegar pronta — a lojista le a peca, a
             personalizacao e o valor sem perguntar "de qual peca voce
             fala?". Sem numero cadastrado o botao nao existe: abrir o
-            WhatsApp em branco seria pior. */}
-        {(() => {
+            WhatsApp em branco seria pior.
+            Fase 1C: com a loja fechada o botao principal JA leva ao
+            WhatsApp com o mesmo pedido — dois caminhos fazendo a mesma
+            coisa e ruido, entao o link sai (Tela 6). */}
+        {modo.aceita ? (() => {
           const link = linkDoPedido({
             numero: (sf.store?.site as any)?.whatsapp,
             produto: activeProduct,
@@ -964,7 +981,7 @@ export function ProductConfigurator({
               </Texto>
             </Pressable>
           );
-        })()}
+        })() : null}
       </View>
       {/* Sem o "Powered by Aura" fixo: ele tampava o pe da barra de
           compra. A assinatura fica so no rodape institucional. */}

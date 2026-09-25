@@ -3,6 +3,7 @@
 // Stage="checkout": dados do cliente, endereço, pagamento,
 // resumo do carrinho e botão "Enviar pedido".
 // ============================================================
+import { useEffect, useRef } from "react";
 import { View, Pressable, ScrollView } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { usePaletaDaVitrine, useTemaDaVitrine } from "./TemaDaVitrine";
@@ -16,6 +17,74 @@ import { oQueFaltaNoCheckout } from "./oQueFaltaNoCheckout";
 import { Texto, Numero, useTipografia } from "./TipografiaVitrine";
 import { Icon } from "@/components/Icon";
 import { dinheiro } from "./moeda";
+import { modoDaVitrine } from "./modoDaVitrine";
+import { OrcamentoNoLugarDoPedido } from "./SacolaFechada";
+import { medirNaVitrine, itensDaSacola } from "./eventosDaVitrine";
+
+/** O topo da tela: voltar para a loja + "Finalizar / Seu pedido". */
+function CabecalhoDoCheckout({ sf, rotulo }: { sf: StorefrontState; rotulo: string }) {
+  const T = usePaletaDaVitrine();
+  const tipo = useTipografia();
+  return (
+    <View
+      style={{
+        backgroundColor: T.card,
+        paddingHorizontal: 16, paddingTop: 20, paddingBottom: 14,
+        borderBottomWidth: 1, borderBottomColor: T.border,
+        flexDirection: "row", alignItems: "center", gap: 10,
+      }}
+    >
+      <Pressable
+        onPress={() => sf.goTo("list")}
+        accessibilityRole="button"
+        accessibilityLabel="Voltar para a loja"
+        hitSlop={8}
+        style={{ width: 44, height: 44, marginLeft: -12, alignItems: "center", justifyContent: "center" }}
+      >
+        <Icon name="chevron_left" size={22} color={T.ink2} />
+      </Pressable>
+      <View style={{ flex: 1 }}>
+        <Numero style={{ fontSize: 10.5, color: T.ink3, textTransform: "uppercase", letterSpacing: 1.2 }}>{rotulo}</Numero>
+        <Texto style={{ fontFamily: tipo.display, fontSize: 19, lineHeight: 23, color: T.ink }}>Seu pedido</Texto>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Fase 1C (D8): a loja fechou para pedidos — antes de a cliente chegar
+ * aqui, ou enquanto ela preenchia (o 409 do envio fecha a vitrine, ver
+ * lojaFechouNoEnvio). O formulário some: não há pedido para enviar. Fica
+ * a sacola, o recado da lojista e o orçamento das mesmas peças.
+ */
+function CheckoutComLojaFechada({ sf }: { sf: StorefrontState }) {
+  const T = usePaletaDaVitrine();
+  const { rotulo: sectionLabel } = useEstilosDaVitrine();
+  return (
+    <View style={{ flex: 1, backgroundColor: T.bg }}>
+      <CabecalhoDoCheckout sf={sf} rotulo="Sacola" />
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          padding: 16, gap: 10, paddingBottom: 60,
+          width: "100%", maxWidth: 720, alignSelf: "center",
+        }}
+      >
+        <Texto style={sectionLabel}>Itens personalizados</Texto>
+        <CartItemList sf={sf} />
+        <Texto
+          accessibilityRole="header"
+          style={{ fontSize: 15, fontWeight: "700", color: T.ink, marginTop: 10 }}
+        >
+          A loja não está recebendo pedidos agora
+        </Texto>
+        <OrcamentoNoLugarDoPedido sf={sf} />
+      </ScrollView>
+      <BarraDeCookies />
+    </View>
+  );
+}
+
 export function Checkout({ sf }: { sf: StorefrontState }) {
   const T = usePaletaDaVitrine();
   // O tema do CONTEXTO, montado no papel. Antes era montarTema(cor) sem
@@ -24,11 +93,25 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
   const tema = useTemaDaVitrine();
   const { rotulo: sectionLabel, chip, chipAtivo: chipActive, chipTexto: chipTxt, chipTextoAtivo: chipTxtActive } =
     useEstilosDaVitrine();
-  // A fonte do Studio, a mesma da home — o resolvedor da loja comum
-  // carregava um par que a pagina nunca baixa, e o titulo caia em Georgia.
-  const tipo = useTipografia();
+  // A fonte do Studio (useTipografia) vive no CabecalhoDoCheckout, o
+  // unico texto em display desta tela.
+  const modo = modoDaVitrine(sf.store);
+
+  // begin_checkout uma vez por visita à tela, e só com pedido possível:
+  // loja fechada ou sacola vazia não é checkout começado.
+  const medido = useRef(false);
+  useEffect(() => {
+    if (medido.current || !sf.store || !modo.aceita || sf.cart.length === 0) return;
+    medido.current = true;
+    medirNaVitrine((sf.store as any)?.site?.rastreadores, {
+      nome: "begin_checkout",
+      itens: itensDaSacola(sf.cart, sf._lineUnitPrice),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sf.store, modo.aceita, sf.cart.length]);
 
   if (!sf.store) return null;
+  if (!modo.aceita) return <CheckoutComLojaFechada sf={sf} />;
   const sendDisabled =
     sf.sending || sf.cart.length === 0 || !sf.customerName.trim() || !sf.customerPhone.trim();
   // O botão apagado diz o que falta — antes ficava cinza e mudo, com o
@@ -48,28 +131,7 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
-      <View
-        style={{
-          backgroundColor: T.card,
-          paddingHorizontal: 16, paddingTop: 20, paddingBottom: 14,
-          borderBottomWidth: 1, borderBottomColor: T.border,
-          flexDirection: "row", alignItems: "center", gap: 10,
-        }}
-      >
-        <Pressable
-          onPress={() => sf.goTo("list")}
-          accessibilityRole="button"
-          accessibilityLabel="Voltar para a loja"
-          hitSlop={8}
-          style={{ width: 44, height: 44, marginLeft: -12, alignItems: "center", justifyContent: "center" }}
-        >
-          <Icon name="chevron_left" size={22} color={T.ink2} />
-        </Pressable>
-        <View style={{ flex: 1 }}>
-          <Numero style={{ fontSize: 10.5, color: T.ink3, textTransform: "uppercase", letterSpacing: 1.2 }}>Finalizar</Numero>
-          <Texto style={{ fontFamily: tipo.display, fontSize: 19, lineHeight: 23, color: T.ink }}>Seu pedido</Texto>
-        </View>
-      </View>
+      <CabecalhoDoCheckout sf={sf} rotulo="Finalizar" />
 
       <ScrollView
         style={{ flex: 1 }}

@@ -100,6 +100,10 @@ import {
 import { basePriceForQty } from "./qtyTiers";
 
 import { enderecoDaApi } from "./enderecoDaApi";
+// Fase 1C: medicao (GA4/Pixel, atras do consentimento) e loja que fecha
+// no meio da compra. As regras moram nos modulos; aqui so as chamadas.
+import { medirNaVitrine, itemDoProduto, itensDaSacola } from "./eventosDaVitrine";
+import { lojaFechouNoEnvio } from "./lojaFechada";
 
 const API_BASE = enderecoDaApi();
 
@@ -622,6 +626,10 @@ export function useStorefront(slug: string) {
         )
       );
     } else {
+      medirNaVitrine((store as any)?.site?.rastreadores, {
+        nome: "add_to_cart",
+        itens: [itemDoProduto(activeProduct, configuringUnitPrice, editingQty)],
+      });
       const lineId = String(Date.now()) + "-" + Math.random().toString(36).slice(2, 7);
       setCart((prev) => [
         ...prev,
@@ -808,7 +816,22 @@ export function useStorefront(slug: string) {
         body: JSON.stringify(body),
       });
       const data = await res.json();
+      // A loja fechou enquanto a cliente comprava (409 com `motivo`): a
+      // vitrine inteira passa a se comportar como fechada e o checkout
+      // mostra o recado com o orcamento, em vez do recado como erro cru.
+      const fechou = lojaFechouNoEnvio(res.status, data);
+      if (fechou) {
+        setStore((s) => (s ? ({ ...s, pedidos: fechou } as StorePayload) : s));
+        return;
+      }
       if (data.error) throw new Error(data.error);
+      medirNaVitrine((store as any)?.site?.rastreadores, {
+        nome: "purchase",
+        pedido: String(data.order_number || data.order_id || ""),
+        valor: Number(data.total) || cartTotal,
+        frete: shippingFee || undefined,
+        itens: itensDaSacola(cart, lineUnitPrice),
+      });
       setSentOrder(data);
       setStage("sent");
       setCart([]);
