@@ -21,10 +21,12 @@ import { useState, useRef, useCallback } from "react";
 import { formatoAceito } from "../formatoDeArquivo";
 import { View, Pressable, Platform, ActivityIndicator } from "react-native";
 import type { CustomizationField } from "../types";
-import { sectionLabel } from "../types";
+import { useEstilosDaVitrine } from "../estilosDaVitrine";
 import { usePaletaDaVitrine } from "../TemaDaVitrine";
+import { wash, tintaSobre } from "../theme";
 
 import { Texto } from "../TipografiaVitrine";
+import { Icon } from "@/components/Icon";
 import { enderecoDaApi } from "../enderecoDaApi";
 
 const API_BASE = enderecoDaApi();
@@ -108,6 +110,7 @@ export function FieldImage({
   onChange: (url: string) => void;
 }) {
   const T = usePaletaDaVitrine();
+  const E = useEstilosDaVitrine();
   // --- estado local ---
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -221,7 +224,7 @@ export function FieldImage({
   return (
     <View>
       {/* Label */}
-      <Texto style={sectionLabel}>
+      <Texto style={E.rotulo}>
         {field.label}{" "}
         {field.required && <Texto style={{ color: T.red }}>*</Texto>}
       </Texto>
@@ -258,7 +261,7 @@ export function FieldImage({
                 gap: 6,
               }}
             >
-              <Texto style={{ fontSize: 16 }}>🖼️</Texto>
+              <Icon name="image" size={16} color={T.green} />
               <Texto style={{ fontSize: 12, color: T.green, fontWeight: "700", flex: 1 }}>
                 Imagem enviada com sucesso
               </Texto>
@@ -273,13 +276,13 @@ export function FieldImage({
                 alignItems: "center",
                 gap: 8,
                 padding: 10,
-                backgroundColor: "#f0fdf4",
+                backgroundColor: wash(T.green, 0.08),
                 borderRadius: 8,
                 borderWidth: 1,
                 borderColor: T.green,
               }}
             >
-              <Texto style={{ fontSize: 18 }}>📄</Texto>
+              <Icon name="file_text" size={18} color={T.green} />
               <View style={{ flex: 1 }}>
                 <Texto style={{ fontSize: 12, color: T.green, fontWeight: "700" }}>
                   Arquivo enviado
@@ -357,7 +360,7 @@ export function FieldImage({
                 paddingHorizontal: 12,
                 paddingVertical: 6,
                 borderRadius: 6,
-                backgroundColor: "#fee2e2",
+                backgroundColor: wash(T.red, 0.1),
                 opacity: uploading ? 0.5 : 1,
               }}
             >
@@ -368,7 +371,7 @@ export function FieldImage({
           {/* Spinner de troca */}
           {uploading && (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <ActivityIndicator size="small" color={T.primary} />
+              <ActivityIndicator size="small" color={T.primaryTexto} />
               <Texto style={{ fontSize: 11, color: T.ink3 }}>Enviando novo arquivo…</Texto>
             </View>
           )}
@@ -399,9 +402,9 @@ export function FieldImage({
               } as any}
             >
               {uploading ? (
-                <ActivityIndicator size="large" color={T.primary} />
+                <ActivityIndicator size="large" color={T.primaryTexto} />
               ) : (
-                <Texto style={{ fontSize: 28 }}>📁</Texto>
+                <Icon name="upload" size={26} color={T.primaryTexto} />
               )}
               <Texto
                 style={{
@@ -459,13 +462,13 @@ export function FieldImage({
                 alignItems: "center",
                 gap: 8,
                 padding: 10,
-                backgroundColor: "#fff1f2",
+                backgroundColor: wash(T.red, 0.06),
                 borderRadius: 8,
                 borderWidth: 1,
-                borderColor: "#fecdd3",
+                borderColor: wash(T.red, 0.25),
               }}
             >
-              <Texto style={{ fontSize: 15 }}>⚠️</Texto>
+              <Icon name="alert" size={16} color={T.red} />
               <Texto style={{ fontSize: 12, color: T.red, flex: 1 }}>{uploadError}</Texto>
               {/* Retry: reabre o picker */}
               {Platform.OS === "web" && (
@@ -479,7 +482,7 @@ export function FieldImage({
                     cursor: "pointer",
                     fontSize: 11,
                     fontWeight: "700",
-                    color: "#fff",
+                    color: tintaSobre(T.red),
                     whiteSpace: "nowrap",
                   } as any}
                 >

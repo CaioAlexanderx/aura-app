@@ -12,6 +12,7 @@
 import { useEffect, useState } from "react";
 import { View, Image, Pressable, Modal, Platform, useWindowDimensions } from "react-native";
 import { usePaletaDaVitrine } from "./TemaDaVitrine";
+import { SOBRE_FOTO } from "./theme";
 import { proximoIndice } from "./CarrosselFoto";
 
 import { Texto } from "./TipografiaVitrine";
@@ -95,7 +96,7 @@ function Seta({ glifo, rotulo, onPress }: { glifo: string; rotulo: string; onPre
         alignItems: "center", justifyContent: "center",
       }}
     >
-      <Texto style={{ color: "#fff", fontSize: 20, lineHeight: 24 }}>{glifo}</Texto>
+      <Texto style={{ color: SOBRE_FOTO, fontSize: 20, lineHeight: 24 }}>{glifo}</Texto>
     </Pressable>
   );
 }

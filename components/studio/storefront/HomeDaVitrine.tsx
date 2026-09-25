@@ -15,6 +15,7 @@ import { usePaletaDaVitrine, useTemaDaVitrine } from "./TemaDaVitrine";
 import type { BlocosDaHome, PassoDaLoja } from "./blocosDaHome";
 import type { StudioStoreProduct } from "./types";
 import { CapaProduto } from "./CapaProduto";
+import { SOBRE_FOTO } from "./theme";
 import { dinheiro } from "./moeda";
 
 const LARGURA_MAX = 980;
@@ -104,7 +105,7 @@ export function Hero({
 
   return (
     <View style={{
-      backgroundColor: comBanner ? "#1A1714" : T.bg,
+      backgroundColor: comBanner ? T.ink : T.bg,
       paddingHorizontal: larga ? 20 : 14,
       paddingTop: comBanner ? 0 : 26,
       paddingBottom: comBanner ? 0 : 30,
@@ -144,7 +145,7 @@ export function Hero({
 
           <Texto style={{
             fontFamily: tipo.display,
-            color: comBanner ? "#fff" : T.ink,
+            color: comBanner ? SOBRE_FOTO : T.ink,
             fontSize: larga ? 46 : 34,
             lineHeight: larga ? 50 : 38,
             marginTop: 8,

@@ -16,11 +16,12 @@
 // ============================================================
 import { useEffect, useRef, useState } from "react";
 import { View, Pressable, ScrollView, useWindowDimensions, Platform, Animated, Easing } from "react-native";
-import { AURA } from "./theme";
+import { AURA, wash } from "./theme";
 import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import type { ItemMenu, Menu } from "./storeNavModel";
 
-import { Texto } from "./TipografiaVitrine";
+import { Texto, Numero } from "./TipografiaVitrine";
+import { Icon } from "@/components/Icon";
 type Props = {
   menu: Menu;
   /** Categoria ativa, ou null para "Tudo". */
@@ -34,7 +35,11 @@ export function StoreNav({ menu, ativa, onSelect, primary }: Props) {
   const T = usePaletaDaVitrine();
   const { width } = useWindowDimensions();
   const telaLarga = width >= 720;
-  const cor = primary || T.primary;
+  // A marca como TEXTO/linha legivel no papel. Usar o hex cru deixava o
+  // sublinhado da categoria ativa invisivel numa loja amarela; `primary`
+  // fica no tipo so por compatibilidade e nao pinta mais nada.
+  void primary;
+  const cor = T.primaryTexto;
   const [aberto, setAberto] = useState<string | null>(null);
 
   if (menu.vazio) return null;
@@ -99,18 +104,17 @@ export function StoreNav({ menu, ativa, onSelect, primary }: Props) {
           {rotulo}
         </Texto>
         {item !== null && (
-          <Texto
+          <Numero
             style={{
               fontSize: 11,
-              fontVariant: ["tabular-nums"],
-              color: T.ink4,
+              color: T.ink3,
             }}
           >
             {item.total}
-          </Texto>
+          </Numero>
         )}
         {temFilhas && telaLarga && (
-          <Texto style={{ fontSize: 9, color: T.ink4 }}>▾</Texto>
+          <Icon name="chevron_down" size={12} color={T.ink3} />
         )}
       </Pressable>
     );
@@ -140,8 +144,8 @@ export function StoreNav({ menu, ativa, onSelect, primary }: Props) {
           paddingHorizontal: 20,
           zIndex: 50,
           ...(Platform.OS === "web"
-            ? ({ boxShadow: "0 12px 24px -12px rgba(15,23,42,0.18)" } as any)
-            : { shadowColor: "#0F172A", shadowOpacity: 0.12, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 }),
+            ? ({ boxShadow: `0 12px 24px -12px ${wash(T.ink, 0.18)}` } as any)
+            : { shadowColor: T.ink, shadowOpacity: 0.12, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 }),
         }}
       >
         <View style={{ width: "100%", maxWidth: 980, alignSelf: "center", gap: 12 }}>
@@ -266,7 +270,7 @@ export function StoreNav({ menu, ativa, onSelect, primary }: Props) {
               <Texto style={{ fontSize: 13, fontWeight: "700", color: T.ink2 }}>
                 Mais {menu.extras.length}
               </Texto>
-              <Texto style={{ fontSize: 9, color: T.ink4 }}>▾</Texto>
+              <Icon name="chevron_down" size={12} color={T.ink3} />
             </Pressable>
           )}
         </ScrollView>

@@ -5,7 +5,8 @@
 import { useMemo, useState } from "react";
 import { View, Pressable, ScrollView, Platform, Image, TextInput, useWindowDimensions , Linking } from "react-native";
 import type { StorefrontState } from "./useStorefront";
-import { usePaletaDaVitrine } from "./TemaDaVitrine";
+import { usePaletaDaVitrine, useTemaDaVitrine } from "./TemaDaVitrine";
+import { Icon } from "@/components/Icon";
 import { Fonts } from "@/constants/fonts";
 import { ProductCard } from "./ProductCard";
 import { fotosDoProduto, fotosDoGrupo } from "./CarrosselFoto";
@@ -14,7 +15,6 @@ import { CartBar } from "./Cart";
 import { precoMinimo } from "./categoryGrouping";
 import { StoreNav } from "./StoreNav";
 import { montarMenu, cabemNaBarra, type ItemMenu } from "./storeNavModel";
-import { wash } from "./theme";
 
 import { AncoraWhatsApp } from "./AncoraWhatsApp";
 import { RodapeDaVitrine } from "./RodapeDaVitrine";
@@ -29,9 +29,13 @@ import { ORDENS, ordenarEntradas, mostrarControles, colunasComDensidade, type Or
 import { Texto, useTipografia } from "./TipografiaVitrine";
 export function ProductList({ sf }: { sf: StorefrontState }) {
   const T = usePaletaDaVitrine();
+  const tema = useTemaDaVitrine();
   if (!sf.store) return null;
   const { store } = sf;
-  const accent = store.site.accent_color || T.accent;
+  // A cor CRUA da loja so vai para quem faz a propria conta de contraste
+  // (cartao, ancora do WhatsApp). Texto e preenchimento desta tela saem do
+  // tema: o hex cru como texto sumia numa loja amarela. E so a cor
+  // principal pinta a vitrine — accent_color nao e mais lida (PO, 25/09).
   const primary = store.site.primary_color || T.primary;
 
   // ── Navegação por categoria ───────────────────────────────
@@ -177,7 +181,7 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
         </View>
       </View>
 
-      <StoreNav menu={menu} ativa={ativa} onSelect={setAtiva} primary={primary} />
+      <StoreNav menu={menu} ativa={ativa} onSelect={setAtiva} />
 
       {/* Grade de produtos */}
       <View
@@ -210,11 +214,12 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
                   style={{
                     paddingHorizontal: 11, paddingVertical: 6, borderRadius: 999,
                     borderWidth: 1,
-                    borderColor: sel ? primary : T.border,
-                    backgroundColor: sel ? wash(primary, 0.12) : "transparent",
+                    borderColor: sel ? tema.marcaTexto : T.border,
+                    backgroundColor: sel ? tema.marcaWash : "transparent",
                   }}
+                  hitSlop={6}
                 >
-                  <Texto style={{ fontSize: 12, fontWeight: sel ? "800" : "600", color: sel ? primary : T.ink2 }}>
+                  <Texto style={{ fontSize: 12, fontWeight: sel ? "800" : "600", color: sel ? tema.marcaTexto : T.ink2 }}>
                     {o.rotulo}
                   </Texto>
                 </Pressable>
@@ -229,11 +234,12 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
                 accessibilityLabel={denso ? "Ver cartões maiores" : "Ver mais produtos por linha"}
                 style={{
                   paddingHorizontal: 11, paddingVertical: 6, borderRadius: 999,
-                  borderWidth: 1, borderColor: denso ? primary : T.border,
-                  backgroundColor: denso ? wash(primary, 0.12) : "transparent",
+                  borderWidth: 1, borderColor: denso ? tema.marcaTexto : T.border,
+                  backgroundColor: denso ? tema.marcaWash : "transparent",
                 }}
+                hitSlop={6}
               >
-                <Texto style={{ fontSize: 12, fontWeight: "700", color: denso ? primary : T.ink2 }}>
+                <Texto style={{ fontSize: 12, fontWeight: "700", color: denso ? tema.marcaTexto : T.ink2 }}>
                   {denso ? "Cartões maiores" : "Mais por linha"}
                 </Texto>
               </Pressable>
@@ -243,7 +249,9 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
 
         {store.products.length === 0 ? (
           <View style={{ padding: 32, alignItems: "center" }}>
-            <Texto style={{ fontSize: 36 }}>🎨</Texto>
+            <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: tema.bg3, alignItems: "center", justifyContent: "center" }}>
+              <Icon name="package" size={26} color={T.ink3} />
+            </View>
             <Texto style={{ color: T.ink, fontWeight: "700", marginTop: 12, textAlign: "center" }}>
               Esta loja ainda não tem produtos personalizáveis publicados.
             </Texto>
@@ -272,10 +280,11 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
                 accessibilityRole="button"
                 style={{
                   marginTop: 4, paddingHorizontal: 16, paddingVertical: 9,
-                  borderRadius: 999, backgroundColor: primary,
+                  borderRadius: 999, backgroundColor: tema.marcaFill,
+                  minHeight: 44, justifyContent: "center",
                 }}
               >
-                <Texto style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>Ver a loja toda</Texto>
+                <Texto style={{ color: tema.sobreMarca, fontWeight: "800", fontSize: 13 }}>Ver a loja toda</Texto>
               </Pressable>
             </View>
           ) : (
@@ -379,7 +388,7 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
         corDaLoja={primary}
         acimaDaBarra={sf.cart.length > 0}
       />
-      <CartBar sf={sf} accent={accent} />
+      <CartBar sf={sf} />
       {/* Sem a barra flutuante "Powered by Aura" nesta tela: o rodape
           assina a loja com a mesma frase, uma vez so, e no lugar onde
           se procura por isso. A barra tampava o fim da pagina. */}

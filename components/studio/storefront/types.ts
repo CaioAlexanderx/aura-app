@@ -202,31 +202,8 @@ export type SentOrder = {
   track_url?: string | null;
 };
 
-// Paleta Studio — exportada para sub-componentes não precisarem redefinir
-export const T = {
-  bg: "#FAFAFC",
-  card: "#FFFFFF",
-  border: "#E5E7EB",
-  ink: "#0F172A",
-  ink2: "#334155",
-  ink3: "#64748B",
-  ink4: "#94A3B8",
-  primary: "#1E3A8A",
-  accent: "#EC4899",
-  green: "#10B981",
-  amber: "#F59E0B",
-  red: "#EF4444",
-} as const;
-
-// Estilos compartilhados
-export const sectionLabel: any = {
-  fontSize: 11, color: T.ink3, fontWeight: "700",
-  textTransform: "uppercase", letterSpacing: 0.5, marginTop: 6,
-};
-export const chip: any = {
-  paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999,
-  backgroundColor: "#f3f4f6", borderWidth: 1, borderColor: T.border,
-};
-export const chipActive: any = { backgroundColor: T.primary, borderColor: T.primary };
-export const chipTxt: any = { color: T.ink2, fontSize: 12, fontWeight: "700" };
-export const chipTxtActive: any = { color: "#fff" };
+// A paleta cravada `T` (azul-marinho #1E3A8A, magenta #EC4899) e os
+// estilos soltos `chip`/`chipActive`/`sectionLabel` que dependiam dela
+// sairam em 25/09/2026 (Fase 1A). Cor vem do tema da loja
+// (usePaletaDaVitrine / useTemaDaVitrine) e os estilos de opcao e rotulo
+// de estilosDaVitrine.ts, que sabem a cor da loja.

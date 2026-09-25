@@ -4,10 +4,10 @@
 // ============================================================
 import { View, Pressable } from "react-native";
 import type { CustomizationField } from "../types";
-import { sectionLabel } from "../types";
+import { useEstilosDaVitrine } from "../estilosDaVitrine";
 import { usePaletaDaVitrine } from "../TemaDaVitrine";
 
-import { Texto } from "../TipografiaVitrine";
+import { Texto, Numero } from "../TipografiaVitrine";
 import { dinheiro } from "../moeda";
 export function FieldColor({
   field, value, onChange,
@@ -17,11 +17,12 @@ export function FieldColor({
   onChange: (v: any) => void;
 }) {
   const T = usePaletaDaVitrine();
+  const E = useEstilosDaVitrine();
   const colors = field.config.colors || ["#FFFFFF", "#000000"];
   const choices = field.config.choices || [];
   return (
     <View>
-      <Texto style={sectionLabel}>
+      <Texto style={E.rotulo}>
         {field.label} {field.required && <Texto style={{ color: T.red }}>*</Texto>}
       </Texto>
       <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
@@ -35,20 +36,23 @@ export function FieldColor({
                 onPress={() => onChange(c)}
                 // Sem nome, o leitor de tela anunciava oito "botão" iguais e
                 // ninguém sabia qual estava marcado.
-                accessibilityRole="button"
+                accessibilityRole="radio"
                 accessibilityLabel={`${field.label} ${c}`}
-                accessibilityState={{ selected }}
+                accessibilityState={{ checked: selected, selected }}
+                hitSlop={4}
                 style={{
                   width: 36, height: 36, borderRadius: 18,
                   backgroundColor: c,
                   borderWidth: selected ? 3 : 1,
-                  borderColor: selected ? T.primary : T.border,
+                  // O anel do escolhido e a marca como TEXTO (legivel no
+                  // papel): o preenchimento cru some numa loja clara.
+                  borderColor: selected ? T.primaryTexto : T.border,
                 }}
               />
               {typeof delta === "number" && delta !== 0 && (
-                <Texto style={{ fontSize: 9, fontWeight: "700", color: selected ? T.accent : T.ink3 }}>
+                <Numero style={{ fontSize: 10, fontWeight: "600", color: selected ? T.primaryTexto : T.ink3 }}>
                   {delta > 0 ? "+" : ""}{dinheiro(delta)}
-                </Texto>
+                </Numero>
               )}
             </View>
           );

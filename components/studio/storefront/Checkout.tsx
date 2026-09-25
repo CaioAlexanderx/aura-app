@@ -5,23 +5,25 @@
 // ============================================================
 import { View, Pressable, ScrollView } from "react-native";
 import type { StorefrontState } from "./useStorefront";
-import { sectionLabel, chip, chipActive, chipTxt, chipTxtActive } from "./types";
-import { usePaletaDaVitrine } from "./TemaDaVitrine";
+import { usePaletaDaVitrine, useTemaDaVitrine } from "./TemaDaVitrine";
+import { useEstilosDaVitrine } from "./estilosDaVitrine";
 import { CartItemList } from "./Cart";
-import { montarTema } from "./theme";
 import { FInput } from "./ui/FInput";
 import { TotalRow } from "./ui/TotalRow";
 import { PoweredByAura } from "./ui/PoweredByAura";
 import { oQueFaltaNoCheckout } from "./oQueFaltaNoCheckout";
 
 import { Texto, Numero, useTipografia } from "./TipografiaVitrine";
+import { Icon } from "@/components/Icon";
 import { dinheiro } from "./moeda";
 export function Checkout({ sf }: { sf: StorefrontState }) {
   const T = usePaletaDaVitrine();
-  // A cor da loja tambem no botao que fecha a venda — era azul-marinho
-  // fixo. Fill e tinta saem de montarTema porque o hex do lojista e
-  // arbitrario (ver fase 01).
-  const tema = montarTema((sf.store as any)?.site?.primary_color);
+  // O tema do CONTEXTO, montado no papel. Antes era montarTema(cor) sem
+  // modo, que cai no "claro": o contraste da marca era calculado contra
+  // um fundo que esta tela nao tem (D4).
+  const tema = useTemaDaVitrine();
+  const { rotulo: sectionLabel, chip, chipAtivo: chipActive, chipTexto: chipTxt, chipTextoAtivo: chipTxtActive } =
+    useEstilosDaVitrine();
   // A fonte do Studio, a mesma da home — o resolvedor da loja comum
   // carregava um par que a pagina nunca baixa, e o titulo caia em Georgia.
   const tipo = useTipografia();
@@ -54,11 +56,17 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
           flexDirection: "row", alignItems: "center", gap: 10,
         }}
       >
-        <Pressable onPress={() => sf.goTo("list")}>
-          <Texto style={{ fontSize: 22, color: T.ink2 }}>←</Texto>
+        <Pressable
+          onPress={() => sf.goTo("list")}
+          accessibilityRole="button"
+          accessibilityLabel="Voltar para a loja"
+          hitSlop={8}
+          style={{ width: 44, height: 44, marginLeft: -12, alignItems: "center", justifyContent: "center" }}
+        >
+          <Icon name="chevron_left" size={22} color={T.ink2} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Texto style={{ fontSize: 11, color: T.ink3, textTransform: "uppercase" }}>Finalizar</Texto>
+          <Numero style={{ fontSize: 10.5, color: T.ink3, textTransform: "uppercase", letterSpacing: 1.2 }}>Finalizar</Numero>
           <Texto style={{ fontFamily: tipo.display, fontSize: 19, lineHeight: 23, color: T.ink }}>Seu pedido</Texto>
         </View>
       </View>

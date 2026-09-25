@@ -6,8 +6,9 @@
 import { useState } from "react";
 import { View, Pressable, ScrollView, Platform, Image, Linking } from "react-native";
 import type { StorefrontState } from "./useStorefront";
-import { usePaletaDaVitrine } from "./TemaDaVitrine";
-import { montarTema } from "./theme";
+import { usePaletaDaVitrine, useTemaDaVitrine } from "./TemaDaVitrine";
+import { tintaSobre, FUNDO_DO_QR } from "./theme";
+import { Icon } from "@/components/Icon";
 import { NextStep } from "./ui/NextStep";
 import { QrCode } from "@/components/QrCode";
 
@@ -16,7 +17,9 @@ import { dinheiro } from "./moeda";
 export function SentConfirmation({ sf }: { sf: StorefrontState }) {
   const T = usePaletaDaVitrine();
   // Confirmacao tambem na cor da loja: e a ultima tela que o cliente ve.
-  const tema = montarTema((sf.store as any)?.site?.primary_color);
+  // Tema do contexto (papel), nao montarTema(cor) sem modo — que caia no
+  // "claro" e calculava o contraste contra o fundo errado (D4).
+  const tema = useTemaDaVitrine();
   // A fonte do Studio, a mesma da home (ver Checkout).
   const tipo = useTipografia();
 
@@ -56,15 +59,12 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
           alignItems: "center", justifyContent: "center",
         }}
       >
-        <Texto style={{ fontSize: 40, color: "#fff" }}>✓</Texto>
+        <Icon name="check" size={40} color={tintaSobre(T.green)} />
       </View>
 
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 }}>
-        <Texto style={{ fontSize: 12, color: T.accent }}>✨</Texto>
-        <Texto style={{ fontSize: 10.5, color: T.ink3, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase" }}>
-          Feito no Aura Studio
-        </Texto>
-      </View>
+      {/* O "Feito no Aura Studio" com emoji saiu daqui (mockup da Fase 2,
+          tela de confirmacao): a loja e da lojista, e a assinatura da Aura
+          fica so no rodape institucional. */}
 
       <Texto style={{ fontFamily: tipo.display, fontSize: 24, lineHeight: 29, color: T.ink, marginTop: 10 }}>
         Pedido enviado!
@@ -90,7 +90,7 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
         <Numero style={{ fontSize: 26, color: tema.marcaTexto, fontWeight: "700" }}>
           {dinheiro(Number(sentOrder.total))}
         </Numero>
-        <Texto style={{ fontSize: 11, color: T.accent, fontWeight: "700", marginTop: 8 }}>
+        <Texto style={{ fontSize: 11.5, color: tema.marcaTexto, fontWeight: "700", marginTop: 8 }}>
           Aguardando produção da arte
         </Texto>
       </View>
@@ -102,7 +102,7 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
           </Numero>
 
           {/* QR: usa a imagem do gateway (base64) quando vier; senao gera do payload */}
-          <View style={{ padding: 12, backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: T.border }}>
+          <View style={{ padding: 12, backgroundColor: FUNDO_DO_QR, borderRadius: 12, borderWidth: 1, borderColor: T.border }}>
             {sentOrder.pix.qrcode ? (
               <Image
                 source={{
@@ -142,8 +142,9 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
               paddingHorizontal: 18, paddingVertical: 11, borderRadius: 10,
             }}
           >
-            <Texto style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>
-              {copied ? "✓ Código copiado" : "Copiar código Pix"}
+            {copied ? <Icon name="check" size={16} color={tintaSobre(T.green)} /> : null}
+            <Texto style={{ color: copied ? tintaSobre(T.green) : tema.sobreMarca, fontSize: 13, fontWeight: "800" }}>
+              {copied ? "Código copiado" : "Copiar código Pix"}
             </Texto>
           </Pressable>
         </View>
@@ -162,9 +163,9 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
             marginTop: 16, maxWidth: 380, width: "100%", gap: 8,
           }}
         >
-          <Texto style={{ fontSize: 11, color: T.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" }}>
+          <Numero style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "700", letterSpacing: 1.2, textTransform: "uppercase" }}>
             Acompanhe seu pedido
-          </Texto>
+          </Numero>
           <Texto style={{ fontSize: 12.5, color: T.ink2, lineHeight: 18 }}>
             Guarde este link: ele mostra em que etapa o pedido está, sem precisar perguntar.
           </Texto>
@@ -191,14 +192,14 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
           marginTop: 20, maxWidth: 380, width: "100%",
         }}
       >
-        <Texto
+        <Numero
           style={{
-            fontSize: 11, color: T.accent, fontWeight: "800",
-            letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 8,
+            fontSize: 10.5, color: tema.marcaTexto, fontWeight: "700",
+            letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8,
           }}
         >
           Próximos passos
-        </Texto>
+        </Numero>
         <NextStep n={1} title="A loja recebe seu pedido" desc="Tudo que você personalizou já chegou. A produção entra na fila." />
         <NextStep
           n={2}
@@ -218,17 +219,17 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
             gap: 6,
           }}
         >
-          <Texto style={{ fontSize: 11, color: T.ink3, fontWeight: "800", letterSpacing: 0.6, textTransform: "uppercase" }}>
+          <Numero style={{ fontSize: 10.5, color: T.ink3, fontWeight: "700", letterSpacing: 1.2, textTransform: "uppercase" }}>
             Política de revisões
-          </Texto>
+          </Numero>
           {rev.max_included > 0 && (
             <Texto style={{ fontSize: 12, color: T.ink2, lineHeight: 17 }}>
-              <Texto style={{ fontWeight: "800", color: tema.marcaTexto }}>{rev.max_included}</Texto>
+              <Numero style={{ fontWeight: "700", color: tema.marcaTexto }}>{rev.max_included}</Numero>
               {" "}revis{rev.max_included === 1 ? "ão" : "ões"} grát{rev.max_included === 1 ? "is" : "is"} no mockup.
               {rev.extra_price > 0 && (
                 <>
                   {" "}Revisão extra:{" "}
-                  <Texto style={{ fontWeight: "800", color: T.accent }}>{dinheiro(rev.extra_price)}</Texto>.
+                  <Numero style={{ fontWeight: "700", color: tema.marcaTexto }}>{dinheiro(rev.extra_price)}</Numero>.
                 </>
               )}
             </Texto>
@@ -249,7 +250,7 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
           borderRadius: 10, marginTop: 20,
         }}
       >
-        <Texto style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>+ Personalizar outro</Texto>
+        <Texto style={{ color: tema.sobreMarca, fontSize: 14, fontWeight: "700" }}>+ Personalizar outro</Texto>
       </Pressable>
     </ScrollView>
   );
