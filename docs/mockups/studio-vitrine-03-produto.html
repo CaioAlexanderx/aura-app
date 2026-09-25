@@ -1,0 +1,1885 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vitrine Studio — Página do produto</title>
+<!--
+  ============================================================
+  Mockup standalone — Vitrine Studio, Fase 3: página do produto, 25/09/2026.
+  Regra 4 do CLAUDE.md: mockup antes do código.
+
+  FASE E ESCOPO: Fase 3A (ganhos rápidos, 16/11 a 19/11, sem mudar o
+  layout) e Fase 3B (página nova, constrói 23/11 a 18/12, liga 05/01 a
+  15/01) desenhadas juntas, como a página final. Os itens da 3A estão
+  marcados [3A] na meta de cada tela: quantidade digitável, escada como
+  régua com prazo por faixa, "Adicionado à sacola" com retorno visual e
+  área de impressão com uma fonte só. O resto é 3B. Gate: mockup aprovado
+  até 13/11 (FASEAMENTO §4).
+
+  DE ONDE VEM:
+    docs/studio/JORNADA_CLIENTE_VITRINE.md   §3 princípios, §4.3, §4.4 (tabela de layout alvo)
+    docs/studio/FASEAMENTO_VITRINE_STUDIO.md §3.1 (galeria, cor da louça no 3D e sombra já prontas), §4 Fases 3A e 3B
+    Aura-backend/docs/F1_CONTEUDO_STUDIO.md  §1 o alvo, S3 mockup no carrossel, S4 três caminhos, S6 escada, §3.3 área de impressão
+    Componentes: ProductConfigurator.tsx, LivePreview.tsx, CarrosselFoto.tsx,
+    ZoomFoto.tsx, GradeDeModelos.tsx, FreteNoProduto.tsx, SizeGuideModal.tsx,
+    fields/FieldText, FieldColor, FieldOption, FieldArtService, FieldImage,
+    FieldTemplate, components/studio/artService.ts, selosDoProduto.ts,
+    qtyTiers.ts, parcelamento.ts, precoNoPix.ts, modelosDoGrupo.ts.
+    Kit visual: docs/mockups/studio-vitrine-00-kit.html (blocos KIT copiados sem mudança).
+
+  REGRAS QUE O DESENHO MANTÉM (não é regra nova):
+    - Grupo de origem da arte (S0): arquivo OU arte pronta do mesmo lado; um basta.
+      "Criem a arte pra mim" satisfaz o grupo e esconde o envio (artService.ts, dispensaEnvioDeArte).
+    - Três caminhos com os textos de artService.ts (buildArtServiceChoices, choiceHint, briefingFor);
+      briefing de 600 caracteres só nos dois pagos.
+    - Verso e meio com opt-in cobrado quando back_charge_enabled / middle_charge_enabled.
+    - Escada incide sobre o preço de tabela; adicionais somam depois (basePriceForQty).
+      Faixa mal cadastrada nunca encarece.
+    - Prazo em dias úteis, nunca em horas. Revisões lidas de pdv_settings.
+    - Aviso de baixa resolução não bloqueia (DEC-11: triagem é parte do processo).
+
+  DECISÕES DO PO (25/09) APLICADAS:
+    - Só a cor principal da lojista pinta a página (tokens do kit). Sem cor de destaque.
+    - Quantidade digitável, além do − e +.
+    - Sacola em gaveta: "Ver sacola" e o contador levam à gaveta da Fase 2.
+    - "Powered by Aura" fora da barra fixa; só na assinatura do rodapé ("Loja desenvolvida com Aura.").
+    - Aviso de cookies nunca cobre a barra de compra.
+    - Sem emoji; ícones do sprite do kit.
+
+  EXEMPLOS (não são dado da Sheid): Pix 5% configurável (a Sheid hoje não
+  dá desconto no Pix); parcelamento em até 3x; ajuste da arte +R$ 10,00;
+  criação +R$ 25,00; verso +R$ 8,00; escada 10/20/50 un com −5/−10/−15%;
+  prazo por faixa 3/5/8 dias úteis; "2 revisões inclusas, revisão extra
+  R$ 10,00"; valores de frete; medidas do guia; texto da descrição.
+
+  TELAS:
+    1. Chegada no produto (carrossel, preço ao vivo, parcelas, Pix, prazo, compartilhar)
+    2. Escolher modelo e cor (troca suave, cor pinta a louça, prévia compacta no celular)
+    3. A arte: três caminhos (cartões com preço, envio, briefing, arte pronta, baixa resolução)
+    4. O mockup vira slide (etiqueta "Sua caneca", girar, abas Frente · Verso · Meio)
+    5. Quantidade e desconto (campo digitável, régua da escada, prazo por faixa, lote)
+    6. Frete e retirada (CEP, resultado, retirada grátis)
+    7. Barra de ação fixa (o que falta, total, sacola; bloco preso no desktop)
+    8. Detalhes abaixo da dobra (descrição, área de impressão, guia, revisões, mesma categoria)
+    9. Grade de modelos da categoria ("Canecas · 9 modelos")
+
+  PERGUNTAS EM ABERTO QUE O DESENHO LEVANTA:
+    P1. Área de impressão (F1 §3.3): o texto "20 × 9 cm, dá a volta na caneca"
+        mistura spec.width_cm (20) com a altura de print_area (9). Qual fonte vale?
+        O número muda o texto da Tela 8 e o limite do aviso de baixa resolução.
+    P2. Escolher a cor da caneca conta como "personalizou"? O desenho diz que sim:
+        foto real não muda de cor, então o mockup assume a frente.
+    P3. Limite do aviso de baixa resolução: proposta de 1200 px no lado maior
+        (metade dos 2400 px que 20 cm pedem a 300 dpi). PDF não é medido.
+    P4. Briefing obrigatório em "Criem a arte pra mim"? Hoje é opcional.
+    P5. Criar a arte do zero soma dias ao prazo? Hoje o prazo só depende da faixa.
+    P6. Hierarquia: hoje "Comprar agora" é o preenchido; a Jornada §4.4 pede
+        "Adicionar à sacola" como primário. O mockup segue a Jornada.
+    P7. Botão nunca desabilitado: com pendência, tocar leva ao que falta. Ok?
+    P8. "Da mesma categoria" repete o seletor de modelo. Trocar por "Para
+        completar o presente" (outras categorias) quando a loja tiver?
+    P9. Retirada por app (S8) entra como terceira linha em "Entrega ou retirada"
+        quando courier_pickup_enabled?
+    P10. "a partir de" no cartão da grade: sempre, ou só quando há adicional pago?
+    P11. Na página do produto o botão flutuante do WhatsApp dá lugar a um link
+         no fluxo e no bloco de compra. Vale para a loja toda?
+  ============================================================
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=DM+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Pacifico&display=swap">
+<style>
+/* === KIT:BEGIN ============================================== */
+:root{
+  /* papel (theme.ts) — ink3 ajustado para AA */
+  --bg:#FBF8F3; --bg2:#FFFFFF; --bg3:#F6F1E8; --bg4:#F0E9DC;
+  --ink:#1A1714; --ink2:#4A443C; --ink3:#756C61; --ink4:#B4A99A;
+  --border:#E7DFD3; --border2:#D9CFBF;
+  /* cor da loja: preenchidas pelo JS (applyBrand) */
+  --brand:#1a1612; --brand-text:#1a1612; --brand-fill:#1a1612; --on-brand:#FFFFFF;
+  --brand-wash:rgba(26,22,18,.06); --brand-wash-2:rgba(26,22,18,.12); --brand-ring:rgba(26,22,18,.28);
+  /* semânticas — não mudam com a loja */
+  --pix:#0E7A43; --pix-soft:#E3F4EA;
+  --amber:#8A4B0A; --amber-soft:#FDF0DA;
+  --red:#B42318; --red-soft:#FDE8E6;
+  --info:#1D4E89; --info-soft:#E6EEF8;
+  /* tipografia */
+  --f-display:'Fraunces','Instrument Serif',Georgia,serif;
+  --f-display-w:500;
+  --f-body:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --f-mono:'DM Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
+  /* raio, sombra, movimento */
+  --r-sm:6px; --r-md:10px; --r-lg:14px; --r-xl:20px; --r-pill:999px;
+  --sh-1:0 1px 2px rgba(26,23,20,.06),0 1px 1px rgba(26,23,20,.04);
+  --sh-2:0 8px 24px -10px rgba(26,23,20,.22),0 2px 6px rgba(26,23,20,.06);
+  --sh-3:0 24px 60px -20px rgba(26,23,20,.35),0 4px 12px rgba(26,23,20,.08);
+  --ease:cubic-bezier(.4,0,.2,1); --t-fast:150ms; --t:220ms;
+}
+*{box-sizing:border-box}
+.sv{font-family:var(--f-body);color:var(--ink);background:var(--bg);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.sv h1,.sv h2,.sv h3,.sv .display{font-family:var(--f-display);font-weight:var(--f-display-w);letter-spacing:-.01em;line-height:1.12;margin:0;text-wrap:balance;color:var(--ink)}
+.sv p{margin:0}
+.sv .t-h1{font-size:34px}.sv .t-h2{font-size:26px}.sv .t-h3{font-size:20px}
+.sv .t-body{font-size:15px}.sv .t-small{font-size:13px;color:var(--ink2)}.sv .t-cap{font-size:12.5px;color:var(--ink3)}
+.sv .label{font:500 11px/1.2 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
+.sv .mono,.sv .price{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.sv .price{font-weight:500;color:var(--ink)}
+.sv .price-lg{font:500 26px/1 var(--f-mono);letter-spacing:-.02em}
+.sv .pix-line{color:var(--pix);font-size:13px;font-weight:600}
+.sv .brand-text{color:var(--brand-text)}
+
+/* ícones */
+.ic{width:20px;height:20px;flex:none;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+.ic.sm{width:16px;height:16px}.ic.lg{width:24px;height:24px}
+
+/* botões */
+.btn{appearance:none;border:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;height:48px;padding:0 20px;border-radius:12px;font:600 15px/1 var(--f-body);letter-spacing:.005em;transition:transform var(--t-fast) var(--ease),box-shadow var(--t) var(--ease),background var(--t) var(--ease);white-space:nowrap;text-decoration:none}
+.btn:active{transform:scale(.98)}
+.btn:focus-visible{outline:2px solid var(--brand-text);outline-offset:2px}
+.btn-primary{background:var(--brand-fill);color:var(--on-brand);box-shadow:0 6px 18px -8px var(--brand-ring)}
+.btn-primary:hover{box-shadow:0 10px 24px -8px var(--brand-ring);transform:translateY(-1px)}
+.btn-secondary{background:var(--bg2);color:var(--ink);border:1px solid var(--border2)}
+.btn-secondary:hover{border-color:var(--ink3)}
+.btn-ghost{background:transparent;color:var(--brand-text);height:40px;padding:0 10px}
+.btn-pix{background:var(--pix);color:#fff}
+.btn-wa{background:#1F7A4D;color:#fff}
+.btn-block{width:100%}
+.btn-sm{height:36px;padding:0 14px;font-size:13.5px;border-radius:10px}
+.btn[disabled]{background:var(--bg4);color:var(--ink3);box-shadow:none;cursor:not-allowed}
+.icon-btn{appearance:none;border:0;background:transparent;width:44px;height:44px;border-radius:12px;display:inline-grid;place-items:center;color:var(--ink);cursor:pointer;position:relative}
+.icon-btn:hover{background:var(--bg3)}
+.count{position:absolute;top:6px;right:5px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--brand-fill);color:var(--on-brand);font:600 10.5px/18px var(--f-mono);text-align:center}
+
+/* chips (opções, entrega, pagamento) */
+.chip{appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:8px 14px;border-radius:12px;border:1px solid var(--border2);background:var(--bg2);color:var(--ink);font:500 14px/1.2 var(--f-body);transition:border-color var(--t) var(--ease),background var(--t) var(--ease)}
+.chip:hover{border-color:var(--ink3)}
+.chip[aria-pressed="true"],.chip.on{border-color:var(--brand-text);background:var(--brand-wash);box-shadow:inset 0 0 0 1px var(--brand-text)}
+.chip .delta{font:500 12px var(--f-mono);color:var(--ink3)}
+.swatch{width:36px;height:36px;border-radius:50%;border:1px solid rgba(0,0,0,.12);box-shadow:inset 0 0 0 3px var(--bg2);cursor:pointer}
+.swatch.on{outline:2px solid var(--brand-text);outline-offset:2px}
+
+/* campos */
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:13px;font-weight:600;color:var(--ink2)}
+.field .opt{font-weight:400;color:var(--ink3)}
+.input{height:48px;border-radius:12px;border:1px solid var(--border2);background:var(--bg2);padding:0 14px;font:400 15px var(--f-body);color:var(--ink);width:100%;transition:border-color var(--t),box-shadow var(--t)}
+.input::placeholder{color:var(--ink4)}
+.input:focus{outline:0;border-color:var(--brand-text);box-shadow:0 0 0 3px var(--brand-wash-2)}
+.input.err{border-color:var(--red);box-shadow:0 0 0 3px var(--red-soft)}
+.field .hint{font-size:12.5px;color:var(--ink3)}
+.field .error{font-size:12.5px;color:var(--red);display:flex;gap:6px;align-items:center}
+
+/* superfícies */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg)}
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-xl);box-shadow:var(--sh-1)}
+.divider{height:1px;background:var(--border);border:0;margin:0}
+.badge{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:var(--r-pill);font:500 11px/1 var(--f-mono);letter-spacing:.06em;text-transform:uppercase}
+.badge-brand{background:var(--brand-fill);color:var(--on-brand)}
+.badge-soft{background:var(--bg2);color:var(--ink);box-shadow:var(--sh-1)}
+.badge-pix{background:var(--pix-soft);color:var(--pix)}
+.badge-amber{background:var(--amber-soft);color:var(--amber)}
+.note{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:12px;font-size:13.5px}
+.note-amber{background:var(--amber-soft);color:var(--amber)}
+.note-info{background:var(--info-soft);color:var(--info)}
+.note-pix{background:var(--pix-soft);color:var(--pix)}
+.note-red{background:var(--red-soft);color:var(--red)}
+
+/* foto de produto: a caneca ilustrada sobre o papel */
+.shot{position:relative;aspect-ratio:4/5;border-radius:var(--r-lg);overflow:hidden;background:radial-gradient(120% 90% at 50% 30%,#FFFFFF 0%,var(--bg3) 62%,var(--bg4) 100%);display:grid;place-items:center}
+.shot svg.prod{width:78%;height:auto}
+.shot .badge{position:absolute;top:10px;left:10px}
+
+/* ---------- moldura do mockup (não é produto) ---------- */
+.mk-body{margin:0;background:#E9E6E1;color:#1d1d1f;font-family:var(--f-body)}
+.mk-bar{position:sticky;top:0;z-index:50;background:#16181D;color:#E8EAF0;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:10px 20px;font-size:12.5px}
+.mk-bar b{font:600 12px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:#fff}
+.mk-grp{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.mk-grp span{color:#9BA1AE;margin-right:2px}
+.mk-seg{appearance:none;border:1px solid #333845;background:#1F222A;color:#E8EAF0;border-radius:8px;height:30px;padding:0 10px;font:500 12px var(--f-body);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.mk-seg[aria-pressed="true"]{background:#E8EAF0;color:#16181D;border-color:#E8EAF0}
+.mk-dot{width:12px;height:12px;border-radius:50%;border:1px solid rgba(255,255,255,.35)}
+.mk-wrap{max-width:1480px;margin:0 auto;padding:32px 20px 80px;display:flex;flex-direction:column;gap:56px}
+.mk-intro{max-width:760px;display:flex;flex-direction:column;gap:10px}
+.mk-intro h1{font:600 30px/1.15 var(--f-body);margin:0;letter-spacing:-.01em}
+.mk-intro p{margin:0;color:#4a4a4f;font-size:15px;line-height:1.6}
+.mk-screen{display:grid;grid-template-columns:300px 1fr;gap:28px;align-items:start}
+.mk-screen+.mk-screen{border-top:1px solid #d3cfc8;padding-top:48px}
+.mk-meta{position:sticky;top:70px;display:flex;flex-direction:column;gap:10px}
+.mk-meta .mk-n{font:500 11px var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:#8a5a00}
+.mk-meta h2{font:600 20px/1.25 var(--f-body);margin:0}
+.mk-meta p{margin:0;font-size:14px;line-height:1.55;color:#4a4a4f}
+.mk-meta ul{margin:0;padding-left:18px;font-size:13px;line-height:1.5;color:#4a4a4f;display:flex;flex-direction:column;gap:5px}
+.mk-meta code{font:12px var(--f-mono);background:#dcd8d1;padding:1px 5px;border-radius:4px}
+.mk-frames{display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap;min-width:0}
+.phone{width:390px;height:844px;border-radius:48px;background:#0F0F11;padding:11px;box-shadow:0 30px 60px -25px rgba(0,0,0,.45);flex:none;position:relative}
+.phone>.screen{width:100%;height:100%;border-radius:38px;overflow:hidden;position:relative;background:var(--bg)}
+.phone>.screen>.scroll{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none}
+.phone>.screen>.scroll::-webkit-scrollbar{display:none}
+.phone .notch{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:120px;height:30px;background:#0F0F11;border-radius:0 0 18px 18px;z-index:40}
+.statusbar{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px 0 30px;font:600 14px var(--f-body);color:var(--ink)}
+.desk-fit{flex:1 1 640px;min-width:0}
+.desk{width:1280px;border-radius:14px;overflow:hidden;background:var(--bg);box-shadow:0 30px 60px -25px rgba(0,0,0,.4);transform-origin:top left}
+.chrome{height:40px;background:#ECE8E2;display:flex;align-items:center;gap:14px;padding:0 14px;border-bottom:1px solid #DDD7CE}
+.chrome i{width:11px;height:11px;border-radius:50%;background:#D3CCC2;display:inline-block}
+.chrome .url{flex:1;max-width:560px;height:26px;border-radius:8px;background:#fff;font:12px/26px var(--f-mono);color:#6b6459;padding:0 12px;display:flex;gap:6px;align-items:center}
+.desk .viewport{height:820px;overflow-y:auto;position:relative}
+.mk-hide-phone .phone,.mk-hide-desk .desk-fit{display:none}
+@media (max-width:1000px){.mk-screen{grid-template-columns:1fr}.mk-meta{position:static}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+/* === KIT:END ================================================ */
+
+/* ---------- só desta página ---------- */
+/* meta do mockup (não é produto) */
+.mk-meta .mk-sub{font:600 10.5px var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:#6b6459;margin-top:8px}
+.mk-meta .tg{display:inline-block;font:600 9.5px/1.5 var(--f-mono);letter-spacing:.06em;padding:0 5px;border-radius:4px;background:#2b2f3a;color:#fff;margin-right:5px;vertical-align:1px}
+.mk-meta .tg.a{background:#8a5a00}
+.mk-intro .legend{display:flex;gap:10px;flex-wrap:wrap;font-size:13px;color:#4a4a4f}
+.mk-intro .legend .tg{display:inline-block;font:600 10px/1.6 var(--f-mono);padding:0 6px;border-radius:4px;background:#2b2f3a;color:#fff;margin-right:6px}
+.mk-intro .legend .tg.a{background:#8a5a00}
+.mk-try{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.mk-try button{appearance:none;border:1px solid #c9c3b9;background:#fff;border-radius:8px;min-height:32px;padding:0 10px;font:500 12px var(--f-body);cursor:pointer;color:#1d1d1f}
+.mk-try button:hover{border-color:#8a8378}
+.mk-try button:focus-visible{outline:2px solid #1d1d1f;outline-offset:2px}
+
+/* base da página do produto */
+.pdp button{font-family:var(--f-body)}
+.pdp :is(button,a,input,textarea,[tabindex]):focus-visible{outline:2px solid var(--brand-text);outline-offset:2px}
+.pdp .btn-md{height:44px;padding:0 14px;font-size:14px;border-radius:11px}
+.pdp .ic.xs{width:14px;height:14px}
+.vh{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* celular: casca */
+.screen.is-phone{font-family:var(--f-body)}
+.screen.is-phone>.scroll{padding-top:96px}
+.p-top{position:absolute;top:0;left:0;right:0;z-index:30;background:var(--bg);border-bottom:1px solid transparent;transition:border-color var(--t) var(--ease)}
+.p-top.lined{border-bottom-color:var(--border)}
+.statusbar .sb-r{display:flex;align-items:center;gap:6px}
+.sb-sig{display:flex;align-items:flex-end;gap:2px;height:11px}
+.sb-sig i{width:3px;border-radius:1px;background:currentColor}
+.sb-bat{width:24px;height:12px;border-radius:3px;border:1.5px solid currentColor;position:relative;opacity:.9}
+.sb-bat::after{content:"";position:absolute;inset:1.5px;right:5px;border-radius:1px;background:currentColor}
+.p-head{height:52px;display:flex;align-items:center;padding:0 4px}
+.wm{font-family:var(--f-display);font-weight:var(--f-display-w);color:var(--brand-text);font-size:20px;letter-spacing:-.01em;white-space:nowrap;line-height:1}
+.p-head .wm{flex:1;text-align:center}
+.count.pulse{animation:pulse .6s var(--ease) 2}
+@keyframes pulse{0%,100%{transform:scale(1)}40%{transform:scale(1.35)}}
+
+/* prévia compacta (celular) */
+.p-dock{position:absolute;left:0;right:0;top:96px;z-index:25;background:var(--bg);border-bottom:1px solid var(--border);padding:6px 12px;transform:translateY(-100%);opacity:0;pointer-events:none;transition:transform var(--t) var(--ease),opacity var(--t) var(--ease)}
+.p-dock.on{transform:none;opacity:1;pointer-events:auto}
+.dock-btn{appearance:none;border:0;background:transparent;width:100%;display:flex;align-items:center;gap:12px;padding:0;cursor:pointer;color:var(--ink);text-align:left;min-height:60px;border-radius:12px}
+.dock-img{width:60px;height:60px;flex:none;border-radius:12px;display:grid;place-items:center;overflow:hidden}
+.dock-img svg{width:54px;height:auto}
+.dock-tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.dock-tx b{font-size:14px;font-weight:600}
+.dock-tx .t-cap{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dock-p{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.dock-p .price{font-size:15px}
+.dock-go{font:600 12px var(--f-body);color:var(--brand-text);display:flex;align-items:center;gap:2px}
+
+/* barra fixa (celular) */
+.p-bar{position:absolute;left:0;right:0;bottom:0;z-index:28;background:var(--bg2);border-top:1px solid var(--border);box-shadow:0 -12px 30px -20px rgba(26,23,20,.4);padding:4px 16px 26px;display:flex;flex-direction:column;gap:4px}
+.p-bar::after{content:"";position:absolute;left:50%;bottom:8px;width:128px;height:5px;border-radius:3px;background:var(--ink);opacity:.8;transform:translateX(-50%)}
+.bar-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.falta{appearance:none;border:0;background:transparent;padding:0;min-height:44px;display:flex;align-items:center;gap:8px;font:600 13.5px var(--f-body);color:var(--amber);cursor:pointer;text-align:left}
+.falta::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;flex:none}
+.falta.ok{color:var(--pix);cursor:default}
+.falta.ok::before{display:none}
+.falta .ic{width:16px;height:16px;stroke-width:2.2}
+.falta.hi{animation:hi 1.1s var(--ease)}
+@keyframes hi{0%,100%{transform:none}30%{transform:translateX(3px)}60%{transform:translateX(-2px)}}
+.tot{display:flex;flex-direction:column;align-items:flex-end;line-height:1.1}
+.tot .price{font-size:19px;letter-spacing:-.01em}
+.tot .t-cap{font-size:11.5px}
+.acts{display:grid;grid-template-columns:1fr 1.5fr;gap:10px}
+.acts .btn{padding:0 12px;min-width:0}
+.btn.done-add{background:var(--pix);color:#fff;box-shadow:none}
+
+/* aviso curto */
+.p-toast{position:absolute;left:50%;top:106px;z-index:45;transform:translate(-50%,-6px);opacity:0;pointer-events:none;transition:opacity var(--t) var(--ease),transform var(--t) var(--ease);background:var(--ink);color:#FFFFFF;border-radius:14px;padding:6px 8px 6px 14px;font:500 13.5px/1.35 var(--f-body);display:flex;gap:6px;align-items:center;box-shadow:var(--sh-3);width:max-content;max-width:calc(100% - 32px);min-height:44px}
+.p-toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.p-toast .ic{color:#9BE0B7;flex:none}
+.p-toast button{appearance:none;border:0;background:transparent;color:#FFFFFF;font:600 13.5px var(--f-body);text-decoration:underline;text-underline-offset:3px;cursor:pointer;min-height:36px;padding:0 8px;white-space:nowrap;border-radius:8px}
+.p-toast button:focus-visible{outline:2px solid #fff}
+.desk>.p-toast{top:122px}
+
+/* sobreposições: lupa e guia */
+.p-ovl{position:absolute;inset:0;z-index:60;display:none;background:transparent}
+.desk>.p-ovl{top:40px}
+.p-ovl.on{display:block}
+.screen>.p-ovl{border-radius:38px;overflow:hidden}
+.ovl-bg{position:absolute;inset:0;background:rgba(20,18,16,.52);animation:fade var(--t) var(--ease)}
+@keyframes fade{from{opacity:0}}
+@keyframes rise{from{transform:translateY(40px);opacity:0}}
+@keyframes pop{from{transform:translate(-50%,-46%);opacity:0}}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--bg2);border-radius:24px 24px 0 0;padding:8px 20px 30px;max-height:88%;overflow:auto;animation:rise .28s var(--ease);box-shadow:var(--sh-3)}
+.desk .sheet{left:50%;right:auto;top:50%;bottom:auto;width:600px;transform:translate(-50%,-50%);border-radius:var(--r-xl);padding:22px 28px 28px;animation:pop .24s var(--ease)}
+.grab{width:40px;height:5px;border-radius:3px;background:var(--border2);margin:0 auto 10px}
+.desk .grab{display:none}
+.sh-h{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.guide{display:grid;grid-template-columns:150px 1fr;gap:18px;align-items:center;margin:14px 0 10px}
+.guide svg{width:100%;height:auto;color:var(--ink3)}
+.gt{width:100%;border-collapse:collapse;font-size:14px}
+.gt th{text-align:left;font-weight:500;color:var(--ink2);padding:10px 0;border-bottom:1px solid var(--border)}
+.gt td{text-align:right;font-family:var(--f-mono);padding:10px 0;border-bottom:1px solid var(--border)}
+.lb{position:absolute;inset:0;background:#141210;color:#fff;display:flex;flex-direction:column;animation:fade var(--t) var(--ease)}
+.lb-top{display:flex;align-items:center;justify-content:space-between;padding:52px 12px 6px 20px;font:500 13px var(--f-mono);color:#D8D2C8}
+.desk .lb-top{padding:14px 16px 8px 24px}
+.lb .icon-btn{color:#fff}
+.lb .icon-btn:hover{background:rgba(255,255,255,.1)}
+.lb-img{flex:1;margin:4px 12px 12px;border-radius:18px;overflow:hidden;position:relative}
+.desk .lb-img{margin:4px 80px 24px}
+.lb-img .st-layer{position:absolute;inset:0}
+.lb-nav{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.9);color:var(--ink);border:0;display:grid;place-items:center;cursor:pointer;z-index:2}
+.lb-nav.l{left:10px}.lb-nav.r{right:10px}
+
+/* trilha */
+.trail{display:flex;flex-wrap:wrap;align-items:center;gap:0 6px;font-size:12.5px;color:var(--ink3);padding:0 16px 4px}
+.trail a{color:var(--ink3);text-decoration:none;min-height:40px;display:inline-flex;align-items:center}
+.trail a:hover{color:var(--ink);text-decoration:underline;text-underline-offset:3px}
+.trail .sep{color:var(--ink4)}
+.trail [aria-current]{color:var(--ink2);font-weight:500}
+
+/* carrossel */
+.stage-wrap{padding:0 16px;position:relative}
+.stage{position:relative;aspect-ratio:1/1;border-radius:var(--r-xl);overflow:hidden;background:var(--bg3);touch-action:pan-y;user-select:none;-webkit-user-select:none;outline-offset:3px}
+.st-layers{position:absolute;inset:0}
+.st-layer{position:absolute;inset:0;display:grid;place-items:center;transition:opacity 240ms var(--ease)}
+.st-art{width:74%;display:grid;place-items:center;transition:transform 240ms var(--ease);transform-origin:var(--zx,50%) var(--zy,50%)}
+.st-art svg.prod{width:100%;height:auto;display:block}
+.st-pair{display:flex;align-items:flex-end;width:92%}
+.st-pair svg.prod{width:50%;height:auto}
+.st-pair svg.prod+svg.prod{margin-left:-6%}
+.flipx{transform:scaleX(-1)}
+.turn-in .st-art{animation:turn .44s var(--ease)}
+@keyframes turn{0%{transform:scaleX(.06);opacity:.2}100%{transform:none;opacity:1}}
+.mock-in .st-art{animation:mockin .5s var(--ease)}
+@keyframes mockin{0%{transform:translateY(10px) scale(.96);opacity:0}100%{transform:none;opacity:1}}
+/* fundos das "fotos": substituem as fotos reais da galeria (S9) */
+.ph-linen{background:linear-gradient(180deg,#F5EFE6 0%,#EFE6D8 71%,#E1D2BC 71.3%,#E9DDCA 100%)}
+.ph-rose{background:linear-gradient(180deg,#F7ECE8 0%,#F1DFDA 71%,#E2CBC4 71.3%,#EBD7D1 100%)}
+.ph-stone{background:linear-gradient(180deg,#F0F1F1 0%,#E6E8E9 71%,#D2D6D8 71.3%,#DEE1E2 100%)}
+.ph-sage{background:linear-gradient(180deg,#EFF1EA 0%,#E4E8DD 71%,#CFD6C6 71.3%,#DCE1D4 100%)}
+.mockbg{background:radial-gradient(120% 90% at 50% 30%,#FFFFFF 0%,var(--bg3) 62%,var(--bg4) 100%)}
+.st-over{position:absolute;inset:0;pointer-events:none;z-index:3}
+.st-over>*{pointer-events:auto;position:absolute}
+.st-tl{top:12px;left:12px}
+.st-tr{top:8px;right:8px;display:flex;gap:6px}
+.st-bl{bottom:12px;left:12px}
+.st-bc{bottom:10px;left:50%;transform:translateX(-50%)}
+.glass{background:rgba(255,255,255,.88);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:var(--sh-1)}
+.icon-btn.glass:hover{background:#fff}
+.side-seg{display:flex;padding:2px;border-radius:999px;gap:2px}
+.side-seg button{appearance:none;border:0;background:transparent;height:40px;padding:0 14px;border-radius:999px;font:600 13px var(--f-body);color:var(--ink2);cursor:pointer;transition:background var(--t) var(--ease),color var(--t) var(--ease)}
+.side-seg button[aria-pressed="true"]{background:var(--brand-fill);color:var(--on-brand)}
+.st-arrow{top:50%;transform:translateY(-50%)}
+.st-arrow.l{left:12px}.st-arrow.r{right:12px}
+.is-phone .st-arrow{display:none}
+.dots{display:flex;justify-content:center;align-items:center;min-height:36px}
+.dots button{appearance:none;border:0;background:transparent;width:24px;height:36px;display:grid;place-items:center;cursor:pointer;padding:0}
+.dots i{width:7px;height:7px;border-radius:4px;background:var(--ink4);transition:width var(--t) var(--ease),background var(--t) var(--ease)}
+.dots button[aria-current="true"] i{width:20px;background:var(--ink)}
+.dots .dm i{background:transparent;box-shadow:inset 0 0 0 1.5px var(--brand-text);width:9px;height:9px;border-radius:50%}
+.dots .dm[aria-current="true"] i{background:var(--brand-fill);box-shadow:none;width:20px;border-radius:5px}
+.st-cap{font-size:12.5px;color:var(--ink3);text-align:center;padding:0 24px;min-height:18px;margin-top:-2px}
+.stage.glow{animation:glow 1.2s var(--ease)}
+@keyframes glow{0%{box-shadow:0 0 0 0 var(--brand-ring)}40%{box-shadow:0 0 0 6px var(--brand-wash-2)}100%{box-shadow:0 0 0 0 transparent}}
+
+/* informações do topo */
+.p-info{padding:10px 16px 20px;display:flex;flex-direction:column}
+.i-kick{display:flex;gap:8px;align-items:center;min-height:0;margin-bottom:8px}
+.i-kick:empty{display:none}
+.i-top{display:flex;gap:6px;align-items:flex-start;justify-content:space-between}
+.i-top h1{font-size:27px;padding-top:4px}
+.i-top .icon-btn{margin:-2px -8px 0 0;color:var(--ink2)}
+.i-price{display:flex;align-items:baseline;gap:8px;margin-top:10px}
+.i-price .price-lg{font-size:28px}
+.i-price .t-cap{font-size:13px}
+.i-parc{font-size:13.5px;color:var(--ink2);margin-top:6px}
+.i-pix{margin-top:2px}
+.i-inc{font-size:12.5px;color:var(--ink3);margin-top:6px}
+.i-inc:empty{display:none}
+.i-ass{list-style:none;margin:16px 0 0;padding:4px 14px;border-radius:14px;background:var(--bg3)}
+.i-ass li{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--ink2);min-height:40px}
+.i-ass li+li{border-top:1px solid var(--border)}
+.i-ass b{color:var(--ink);font-weight:600}
+.i-ass .ic{color:var(--brand-text)}
+.flash{animation:flash 1.3s var(--ease)}
+@keyframes flash{0%,100%{background:transparent}30%{background:var(--brand-wash-2)}}
+
+/* seções do configurador */
+.sec{padding:22px 16px;border-top:1px solid var(--border)}
+.sec-h{display:flex;align-items:center;gap:10px;margin-bottom:14px;min-height:28px}
+.step{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font:500 12px var(--f-mono);color:var(--ink2);box-shadow:inset 0 0 0 1px var(--border2);flex:none;background:var(--bg2)}
+.sec-h h3{font-size:19px;flex:1;min-width:0}
+.sec-v{font-size:13px;color:var(--ink2);white-space:nowrap}
+.sec-h .icon-btn{width:40px;height:40px}
+.tag-falta{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:999px;background:var(--amber-soft);color:var(--amber);font:600 12px var(--f-body);white-space:nowrap}
+.tag-ok{display:inline-flex;align-items:center;gap:4px;font:600 12px var(--f-body);color:var(--pix);white-space:nowrap}
+.tag-ok .ic{width:15px;height:15px;stroke-width:2.2}
+
+/* modelos */
+.mdl-wrap{position:relative;margin:0 -16px}
+.mdl-wrap::after{content:"";position:absolute;top:0;right:0;bottom:8px;width:28px;background:linear-gradient(90deg,transparent,var(--bg));pointer-events:none}
+.mdl-row{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;padding:3px 16px 8px;scrollbar-width:none;scroll-padding:0 16px}
+.mdl-row::-webkit-scrollbar{display:none}
+.mdl{appearance:none;border:0;background:transparent;padding:0;width:98px;flex:none;scroll-snap-align:start;display:flex;flex-direction:column;gap:6px;text-align:left;cursor:pointer;color:var(--ink)}
+.mdl-img{width:98px;height:98px;border-radius:14px;display:grid;place-items:center;box-shadow:inset 0 0 0 1px var(--border);transition:box-shadow var(--t) var(--ease);overflow:hidden}
+.mdl-img svg{width:84px;height:auto}
+.mdl:hover .mdl-img{box-shadow:inset 0 0 0 1px var(--ink3)}
+.mdl[aria-checked="true"] .mdl-img{box-shadow:inset 0 0 0 2px var(--brand-text)}
+.mdl-n{font-size:12.5px;line-height:1.25;color:var(--ink2)}
+.mdl[aria-checked="true"] .mdl-n{color:var(--ink);font-weight:600}
+.mdl-p{font:500 12px var(--f-mono);color:var(--ink3)}
+.mdl[aria-checked="true"] .mdl-p{color:var(--ink)}
+.mdl-arrows{display:none;gap:4px}
+
+/* cores */
+.sw-row{display:flex;flex-wrap:wrap;gap:2px;margin:0 -4px}
+.sw-btn{appearance:none;border:0;background:transparent;width:50px;height:50px;display:grid;place-items:center;padding:0;cursor:pointer;border-radius:50%}
+.sw-btn .swatch{width:36px;height:36px;transition:transform var(--t-fast) var(--ease)}
+.sw-btn:hover .swatch{transform:scale(1.06)}
+.sw-row.sm .sw-btn{width:44px;height:44px}
+.sw-row.sm .swatch{width:30px;height:30px}
+.one-color{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--ink2)}
+.one-color .swatch{width:28px;height:28px;cursor:default}
+
+/* arte: três caminhos */
+.paths{display:flex;flex-direction:column;gap:10px}
+.path{appearance:none;display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;text-align:left;padding:13px 14px;border-radius:var(--r-lg);border:1px solid var(--border2);background:var(--bg2);cursor:pointer;color:var(--ink);transition:border-color var(--t) var(--ease),background var(--t) var(--ease),box-shadow var(--t) var(--ease);width:100%}
+.path:hover{border-color:var(--ink3)}
+.path[aria-checked="true"]{border-color:var(--brand-text);box-shadow:inset 0 0 0 1px var(--brand-text);background:var(--brand-wash)}
+.path-ic{width:44px;height:44px;border-radius:12px;background:var(--bg3);display:grid;place-items:center;color:var(--ink2);transition:background var(--t) var(--ease),color var(--t) var(--ease)}
+.path[aria-checked="true"] .path-ic{background:var(--brand-fill);color:var(--on-brand)}
+.path-tx{display:flex;flex-direction:column;gap:2px;min-width:0}
+.path-tx b{font-size:14.5px;font-weight:600;line-height:1.3}
+.path-tx span{font-size:12.5px;color:var(--ink3);line-height:1.4}
+.pill{font:500 12.5px var(--f-mono);padding:5px 9px;border-radius:999px;background:var(--bg3);color:var(--ink);white-space:nowrap;align-self:start;margin-top:2px}
+.pill.free{font-family:var(--f-body);font-weight:500;color:var(--ink2)}
+.brief{margin-top:14px}
+.brief .input.ta{height:auto;min-height:108px;padding:12px 14px;line-height:1.5;resize:vertical;font-family:var(--f-body)}
+.brief .row{display:flex;justify-content:space-between;gap:10px}
+.cnt{font:500 11.5px var(--f-mono);color:var(--ink3);white-space:nowrap}
+
+/* arte: lados */
+.sides{margin-top:22px;display:flex;flex-direction:column;gap:14px}
+.sides>.label{margin-bottom:-4px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);padding:4px;border-radius:14px;background:var(--bg3);gap:4px}
+.seg button{appearance:none;border:0;background:transparent;min-height:44px;border-radius:10px;font:600 14px var(--f-body);color:var(--ink2);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:background var(--t) var(--ease),box-shadow var(--t) var(--ease)}
+.seg button[aria-selected="true"]{background:var(--bg2);color:var(--ink);box-shadow:var(--sh-1)}
+.seg .d{width:6px;height:6px;border-radius:50%;background:var(--brand-text)}
+.seg small{font:500 11px var(--f-mono);color:var(--ink3)}
+.panel-side{display:flex;flex-direction:column;gap:16px}
+.drop{appearance:none;width:100%;border:1.5px dashed var(--border2);background:var(--bg2);border-radius:var(--r-lg);padding:20px 16px 18px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;color:var(--ink);text-align:center;transition:border-color var(--t) var(--ease),background var(--t) var(--ease)}
+.drop:hover{border-color:var(--brand-text);background:var(--brand-wash)}
+.drop .ci{width:48px;height:48px;border-radius:50%;background:var(--brand-wash-2);color:var(--brand-text);display:grid;place-items:center;margin-bottom:6px}
+.drop b{font-size:15px;font-weight:600}
+.drop .t-cap{max-width:260px}
+.attn{animation:attn 1.1s var(--ease) 2}
+@keyframes attn{0%,100%{box-shadow:0 0 0 0 transparent}45%{box-shadow:0 0 0 5px var(--amber-soft),0 0 0 6px var(--amber)}}
+.file{display:grid;grid-template-columns:60px 1fr auto;gap:12px;align-items:center;padding:12px;border-radius:var(--r-lg);border:1px solid var(--border);background:var(--bg2)}
+.file-th{width:60px;height:60px;border-radius:10px;background:#FFFFFF;display:grid;place-items:center;overflow:hidden;box-shadow:inset 0 0 0 1px var(--border);color:var(--ink3)}
+.file-th svg{width:86%;height:auto}
+.file-th svg.ic{width:24px;height:24px}
+.file-tx{min-width:0;display:flex;flex-direction:column;gap:4px}
+.file-tx b{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prog{height:6px;border-radius:3px;background:var(--bg4);overflow:hidden}
+.prog i{display:block;height:100%;background:var(--brand-fill);border-radius:3px;transition:width .12s linear}
+.file-act{display:flex;gap:8px;grid-column:1/-1}
+.file .note{grid-column:1/-1;margin-top:2px}
+.note-act{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.note-act .btn{background:var(--bg2);color:var(--ink);border:1px solid rgba(138,75,10,.35)}
+.note p+p{margin-top:4px}
+.or{display:flex;align-items:center;gap:10px;color:var(--ink3);font-size:13px}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--border)}
+.tpl-row{display:flex;gap:10px;overflow-x:auto;margin:0 -16px;padding:2px 16px 4px;scrollbar-width:none}
+.tpl-row::-webkit-scrollbar{display:none}
+.tpl{appearance:none;border:0;background:transparent;padding:0;display:flex;flex-direction:column;gap:6px;align-items:center;cursor:pointer;flex:none;width:78px;font-size:12px;color:var(--ink2)}
+.tpl-img{width:78px;height:78px;border-radius:12px;background:#FFFFFF;box-shadow:inset 0 0 0 1px var(--border);display:grid;place-items:center;transition:box-shadow var(--t) var(--ease)}
+.tpl-img svg{width:80%;height:auto}
+.tpl:hover .tpl-img{box-shadow:inset 0 0 0 1px var(--ink3)}
+.tpl[aria-checked="true"] .tpl-img{box-shadow:inset 0 0 0 2px var(--brand-text)}
+.tpl[aria-checked="true"]{color:var(--ink);font-weight:600}
+.inp-wrap{position:relative}
+.inp-wrap .input{padding-right:62px}
+.inp-wrap .cnt{position:absolute;right:14px;top:50%;transform:translateY(-50%);pointer-events:none}
+.field .hint.warn{color:var(--amber)}
+.optin{appearance:none;display:grid;grid-template-columns:24px 1fr auto;gap:12px;align-items:center;width:100%;text-align:left;padding:14px;border-radius:var(--r-lg);border:1px solid var(--border2);background:var(--bg2);cursor:pointer;color:var(--ink);transition:border-color var(--t) var(--ease),background var(--t) var(--ease)}
+.optin:hover{border-color:var(--ink3)}
+.optin[aria-checked="true"]{border-color:var(--brand-text);box-shadow:inset 0 0 0 1px var(--brand-text);background:var(--brand-wash)}
+.optin b{font-size:14.5px;font-weight:600;display:block}
+.optin .t-cap{display:block;margin-top:2px}
+.box{width:24px;height:24px;border-radius:7px;box-shadow:inset 0 0 0 1.5px var(--ink4);display:grid;place-items:center;color:var(--on-brand);background:var(--bg2)}
+.optin[aria-checked="true"] .box{background:var(--brand-fill);box-shadow:none}
+.box .ic{width:16px;height:16px;stroke-width:2.4;opacity:0}
+.optin[aria-checked="true"] .box .ic{opacity:1}
+.side-note{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;color:var(--ink2);padding:12px 14px;border-radius:12px;background:var(--bg3)}
+.side-note .ic{color:var(--brand-text);margin-top:1px}
+
+/* quantidade */
+.q-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.stepper{display:flex;align-items:center;border:1px solid var(--border2);border-radius:14px;background:var(--bg2);height:52px;padding:3px}
+.stepper button{appearance:none;border:0;background:transparent;width:44px;height:44px;border-radius:10px;display:grid;place-items:center;cursor:pointer;color:var(--ink)}
+.stepper button:hover{background:var(--bg3)}
+.stepper input{width:64px;height:44px;border:0;background:transparent;text-align:center;font:500 19px var(--f-mono);color:var(--ink);border-radius:8px}
+.stepper input:focus{outline:0;box-shadow:0 0 0 2px var(--brand-text)}
+.q-unit{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.q-unit .price{font-size:18px}
+.rl{position:relative;height:78px;margin:20px 6px 4px;--p:0}
+.rl-track{position:absolute;left:0;right:0;top:30px;height:6px;border-radius:3px;background:var(--bg4)}
+.rl-fill{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:var(--brand-fill);width:calc(var(--p) * 100%);transition:width 320ms var(--ease)}
+.rl-knob{position:absolute;top:33px;left:calc(var(--p) * 100%);width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:var(--bg2);box-shadow:0 0 0 3px var(--brand-fill),var(--sh-2);transition:left 320ms var(--ease);z-index:2;pointer-events:none}
+.rl-stop{appearance:none;border:0;background:transparent;position:absolute;top:0;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;cursor:pointer;padding:0;min-width:64px;height:78px;color:var(--ink2);border-radius:10px}
+.rl-stop.first{transform:none;align-items:flex-start;cursor:default}
+.rl-stop.last{transform:translateX(-100%);align-items:flex-end}
+.rl-stop .q{font:600 12px/18px var(--f-body);white-space:nowrap}
+.rl-stop .q small{font:500 11px var(--f-mono);color:var(--ink3);margin-left:4px}
+.rl-stop .dot{width:14px;height:14px;border-radius:50%;background:var(--bg2);box-shadow:inset 0 0 0 2px var(--border2);margin-top:8px}
+.rl-stop.first .dot{margin-left:-4px}.rl-stop.last .dot{margin-right:-4px}
+.rl-stop .pp{font:500 12px var(--f-mono);color:var(--ink3);margin-top:8px;white-space:nowrap}
+.rl-stop.on .dot{background:var(--brand-fill);box-shadow:none}
+.rl-stop.on .pp{color:var(--ink)}
+.rl-stop.on .q small{color:var(--ink2)}
+.q-msg{font-size:15px;font-weight:600;margin-top:8px}
+.q-msg em{font-style:normal;font-family:var(--f-mono);font-weight:500}
+.q-sub{font-size:12.5px;color:var(--pix);font-weight:600;margin-top:2px}
+.q-sub:empty{display:none}
+.q-prazo{display:flex;gap:8px;align-items:center;margin-top:12px;font-size:13.5px;color:var(--ink2)}
+.q-prazo .ic{color:var(--brand-text)}
+.q-prazo b{color:var(--ink);font-weight:600}
+.lote{display:grid;grid-template-columns:40px 1fr 20px;gap:12px;align-items:center;margin-top:18px;padding:14px;border-radius:var(--r-lg);background:var(--bg3);text-decoration:none;color:var(--ink);transition:background var(--t) var(--ease)}
+.lote:hover{background:var(--bg4)}
+.lote .ci{width:40px;height:40px;border-radius:12px;background:var(--bg2);display:grid;place-items:center;color:var(--brand-text)}
+.lote b{font-size:14.5px;font-weight:600;display:block}
+.lote .t-cap{display:block;margin-top:2px}
+.lote>.ic{color:var(--ink3)}
+
+/* frete */
+.cep-row{display:grid;grid-template-columns:1fr auto;gap:8px}
+.cep-row .btn{height:48px}
+.cep-help{font-size:12.5px;color:var(--ink3);text-decoration:underline;text-underline-offset:3px;min-height:36px;display:inline-flex;align-items:center}
+.ship{list-style:none;margin:12px 0 0;padding:0;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--bg2);overflow:hidden}
+.ship li{display:grid;grid-template-columns:36px 1fr auto;gap:12px;align-items:center;padding:12px 14px}
+.ship li+li{border-top:1px solid var(--border)}
+.ship li.new{animation:rise .3s var(--ease)}
+.ship-ic{width:36px;height:36px;border-radius:10px;background:var(--bg3);display:grid;place-items:center;color:var(--ink2)}
+.ship b{font-size:14px;font-weight:600;display:block}
+.ship .t-cap{display:block;margin-top:1px}
+.ship .free{font:600 13.5px var(--f-body);color:var(--pix)}
+.ship .price{font-size:14px}
+.p-wa{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;margin-top:14px;font-size:13.5px;font-weight:500;color:var(--ink2);text-decoration:none;border-radius:10px}
+.p-wa:hover{color:var(--ink);text-decoration:underline;text-underline-offset:3px}
+
+/* bloco de compra (desktop) */
+.buybox{display:none}
+.bb-top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
+.bb-top .label{display:block;margin-bottom:4px}
+.bb-top .price-lg{font-size:26px}
+.bb-meta{text-align:right;font-size:12.5px;color:var(--ink3);line-height:1.45}
+.bb-meta .pix-line{font-size:12.5px}
+
+/* detalhes */
+.p-det{padding:30px 16px 6px;border-top:1px solid var(--border)}
+.det-desc{color:var(--ink2);margin-top:10px;max-width:560px}
+.area{margin-top:18px;padding:16px;display:grid;grid-template-columns:118px 1fr;gap:16px;align-items:center}
+.area svg{width:100%;height:auto;color:var(--ink3)}
+.area b{font-size:14.5px;font-weight:600;display:block;line-height:1.35}
+.area .t-cap{display:block;margin-top:6px}
+.det-list{display:flex;flex-direction:column;margin-top:18px;border-top:1px solid var(--border)}
+.det-row{appearance:none;border:0;border-bottom:1px solid var(--border);background:transparent;width:100%;display:grid;grid-template-columns:40px 1fr 20px;gap:12px;align-items:center;padding:14px 0;text-align:left;color:var(--ink);text-decoration:none;font:inherit;min-height:64px}
+button.det-row,a.det-row{cursor:pointer}
+button.det-row:hover b,a.det-row:hover b{text-decoration:underline;text-underline-offset:3px}
+.det-row .ci{width:40px;height:40px;border-radius:12px;background:var(--bg3);display:grid;place-items:center;color:var(--ink2)}
+.det-row b{font-size:14.5px;font-weight:600;display:block}
+.det-row .t-cap{display:block;margin-top:2px;line-height:1.45}
+.det-row>.ic{color:var(--ink3)}
+
+/* da mesma categoria */
+.p-rel{padding:30px 0 6px}
+.p-rel h2{padding:0 16px;font-size:22px}
+.rel-row{display:flex;gap:12px;overflow-x:auto;padding:14px 16px 4px;scrollbar-width:none;scroll-snap-type:x mandatory}
+.rel-row::-webkit-scrollbar{display:none}
+.rel{appearance:none;border:0;background:transparent;padding:0;text-align:left;flex:none;width:152px;cursor:pointer;color:var(--ink);display:flex;flex-direction:column;gap:3px;scroll-snap-align:start}
+.rel .shot{margin-bottom:6px;transition:transform var(--t) var(--ease),box-shadow var(--t) var(--ease)}
+.rel .display{font-size:15px;line-height:1.25}
+.rel .price{font-size:13px}
+.p-foot{margin-top:30px;padding:26px 16px 160px;border-top:1px solid var(--border);color:var(--ink3);font-size:12.5px;display:flex;flex-direction:column;gap:6px}
+.p-foot .wm{font-size:18px;text-align:left}
+
+/* grade da categoria */
+.g-head{padding:2px 16px 22px;display:flex;flex-direction:column;gap:6px}
+.g-title{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.g-head .t-h1{font-size:32px}
+.g-faixa{font-size:15px;font-weight:600;color:var(--ink2);margin-top:4px}
+.g-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 12px;padding:0 16px 40px}
+.g-card{appearance:none;border:0;background:transparent;padding:0;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:3px;color:var(--ink);min-width:0}
+.g-shot{position:relative;aspect-ratio:4/5;border-radius:var(--r-lg);overflow:hidden;display:grid;place-items:center;margin-bottom:8px;transition:transform var(--t) var(--ease),box-shadow var(--t) var(--ease)}
+.g-shot svg.prod{width:86%;height:auto}
+.g-shot .badge{position:absolute;top:10px;left:10px}
+.g-name{font-size:16.5px;line-height:1.22}
+.g-tags{font-size:12px;color:var(--ink3);line-height:1.4}
+.g-price{display:flex;align-items:baseline;gap:5px;flex-wrap:wrap;margin-top:4px}
+.g-price .t-cap{font-size:12px}
+.g-card .pix-line{font-size:12.5px}
+@media (hover:hover){
+  .g-card:hover .g-shot,.rel:hover .shot{transform:translateY(-3px);box-shadow:var(--sh-2)}
+}
+
+/* ---------- desktop ---------- */
+.is-desk{min-height:100%}
+.d-head{position:sticky;top:0;z-index:20;background:var(--bg);border-bottom:1px solid var(--border)}
+.d-head-in{max-width:1200px;margin:0 auto;height:64px;padding:0 40px;display:flex;align-items:center;gap:36px}
+.d-head .wm{font-size:24px}
+.d-nav{display:flex;gap:4px;font-size:14px}
+.d-nav a{color:var(--ink2);text-decoration:none;padding:0 10px;min-height:44px;display:inline-flex;align-items:center;border-radius:10px}
+.d-nav a:hover{color:var(--ink);background:var(--bg3)}
+.d-nav a[aria-current]{color:var(--ink);font-weight:600}
+.d-search{margin-left:auto;display:flex;align-items:center;gap:8px;height:42px;border-radius:999px;background:var(--bg3);padding:0 16px;color:var(--ink3);font-size:13.5px;width:260px;border:0;cursor:text}
+.is-desk .trail{max-width:1200px;margin:0 auto;padding:8px 40px 8px}
+.is-desk .p-cols{display:grid;grid-template-columns:600px minmax(0,1fr);gap:56px;align-items:start;padding:0 40px;max-width:1200px;margin:0 auto}
+.is-desk .p-gal{position:sticky;top:80px;display:grid;grid-template-columns:72px 1fr;gap:14px}
+.is-desk .stage-wrap{padding:0}
+.is-desk .stage{cursor:grab}
+.thumbs{display:flex;flex-direction:column;gap:10px}
+.is-phone .thumbs{display:none}
+.thumb{appearance:none;border:0;padding:0;width:72px;height:72px;border-radius:12px;overflow:hidden;cursor:pointer;position:relative;display:grid;place-items:center;box-shadow:inset 0 0 0 1px var(--border);outline:2px solid transparent;outline-offset:2px;transition:outline-color var(--t) var(--ease)}
+.thumb[aria-current="true"]{outline-color:var(--brand-text)}
+.thumb .st-art{width:78%}
+.thumb .st-pair{width:94%}
+.thumb .tl{position:absolute;left:0;right:0;bottom:0;font:600 9.5px/16px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;background:var(--brand-fill);color:var(--on-brand);text-align:center}
+.is-desk .dots{display:none}
+.is-desk .st-cap{text-align:left;padding:10px 0 0}
+.zoom-hint{display:none}
+.is-desk .zoom-hint{display:inline}
+@media (hover:none){.is-desk .zoom-hint{display:none}}
+@media (hover:hover){
+  .is-desk .stage.zoomable{cursor:zoom-in}
+  .is-desk .stage.zoomable:hover .st-layer:last-child .st-art{transform:scale(1.9)}
+}
+.is-desk .p-info{padding:6px 0 22px}
+.is-desk .i-top h1{font-size:32px}
+.is-desk .i-price .price-lg{font-size:30px}
+.is-desk .sec{padding:24px 0}
+.is-desk .mdl-wrap{margin:0}
+.is-desk .mdl-wrap::after{bottom:8px}
+.is-desk .mdl-row{padding:3px 2px 8px;scroll-padding:0}
+.is-desk .mdl-arrows{display:flex}
+.is-desk .tpl-row{margin:0;padding:2px 2px 4px}
+.is-desk .buybox{display:flex;flex-direction:column;gap:12px;position:sticky;bottom:16px;margin-top:4px;padding:16px 18px;border-radius:var(--r-xl);background:var(--bg2);border:1px solid var(--border);box-shadow:var(--sh-3);z-index:6}
+.is-desk .buybox .falta{min-height:24px}
+.is-desk .buybox .acts{grid-template-columns:1fr 1.35fr}
+.is-desk .p-wa{margin-top:0;min-height:36px}
+.is-desk .p-det{max-width:1200px;margin:56px auto 0;padding:44px 40px 0;display:grid;grid-template-columns:1.05fr 1fr;gap:64px}
+.is-desk .det-list{margin-top:0}
+.is-desk .p-rel{max-width:1200px;margin:0 auto;padding:56px 40px 0}
+.is-desk .p-rel h2{padding:0}
+.is-desk .rel-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:22px;padding:18px 0 0;overflow:visible}
+.is-desk .rel{width:auto}
+.is-desk .p-foot{max-width:1200px;margin:56px auto 0;padding:28px 40px 40px;flex-direction:row;justify-content:space-between;align-items:baseline}
+.is-desk .g-head{max-width:1200px;margin:0 auto;padding:8px 40px 30px;flex-direction:row;align-items:flex-end;justify-content:space-between;gap:40px}
+.is-desk .g-head .t-h1{font-size:40px}
+.is-desk .g-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:40px 24px;padding:0 40px 56px;max-width:1200px;margin:0 auto}
+.is-desk .g-name{font-size:18px}
+.field .lbl{font-size:13px;font-weight:600;color:var(--ink2)}
+.hint.warn:empty{display:none}
+.badge.foto-n{text-transform:none;letter-spacing:0;font:500 12px/1 var(--f-body)}
+.lb .st-layer{display:grid;place-items:center}
+.lb .st-art{width:86%}
+.lb .st-pair{width:96%}
+.desk .lb .st-art{width:44%}
+.desk .lb .st-pair{width:60%}
+/* ajustes: primeira dobra do celular */
+.is-phone .stage{aspect-ratio:6/5}
+.is-phone .st-art{width:62%}
+.is-phone .st-pair{width:82%}
+.is-phone .st-cap:empty{display:none}
+.is-phone .dots{min-height:32px}
+.is-phone .p-info{padding-top:4px}
+.is-phone .i-price{margin-top:6px}
+.is-phone .i-ass{margin-top:12px}
+.st-tl.badge-brand+.st-tr{}
+.is-phone .path:not([aria-checked="true"]) .path-tx span{display:none}
+.is-phone .path{min-height:68px}
+</style>
+</head>
+<body class="mk-body">
+
+<!-- === KIT:SPRITE:BEGIN === -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-bag" viewBox="0 0 24 24"><path d="M5.5 8h13l-1.1 12.1a1 1 0 0 1-1 .9H7.6a1 1 0 0 1-1-.9L5.5 8Z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5 8 12l7 7"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15V3.5M8 7.5l4-4 4 4M5 12.5V19a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-6.5"/></symbol>
+  <symbol id="i-wa" viewBox="0 0 24 24"><path d="M20 11.6a8.4 8.4 0 0 1-12.4 7.4L3.5 20.3l1.3-3.9A8.4 8.4 0 1 1 20 11.6Z"/><path d="M9 8.6c0 3.3 2.9 6.2 6.1 6.3l1.1-1.4-1.9-1-1 .8a4.6 4.6 0 0 1-2.4-2.4l.8-1-1-1.9Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></symbol>
+  <symbol id="i-truck" viewBox="0 0 24 24"><path d="M3 6.5h10.5v9.5H3zM13.5 10h4l3 3.2V16h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></symbol>
+  <symbol id="i-store" viewBox="0 0 24 24"><path d="M4 9.5 5.6 4.5h12.8L20 9.5M4.5 9.5v10h15v-10M9.5 19.5v-5h5v5"/><path d="M4 9.5c0 1.4 1.1 2.3 2.7 2.3S9.3 10.9 9.3 9.5c0 1.4 1.2 2.3 2.7 2.3s2.7-.9 2.7-2.3c0 1.4 1.1 2.3 2.6 2.3S20 10.9 20 9.5"/></symbol>
+  <symbol id="i-moto" viewBox="0 0 24 24"><circle cx="5.5" cy="16.5" r="3"/><circle cx="18.5" cy="16.5" r="3"/><path d="M5.5 16.5 9.5 10h5l4 6.5M13 10l-1.3-3H9.5"/></symbol>
+  <symbol id="i-pix" viewBox="0 0 24 24"><path d="m12 3.2 3.4 3.4-3.4 3.4-3.4-3.4zM12 14l3.4 3.4-3.4 3.4-3.4-3.4zM3.2 12l3.4-3.4L10 12l-3.4 3.4zM14 12l3.4-3.4 3.4 3.4-3.4 3.4z"/></symbol>
+  <symbol id="i-card" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3 9.5h18M6.5 15h4"/></symbol>
+  <symbol id="i-cash" viewBox="0 0 24 24"><rect x="3" y="6.5" width="18" height="11" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9.5v5M18 9.5v5"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15.5V4M7.5 8.5 12 4l4.5 4.5M4.5 15v4a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-4"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="m20.5 16-5-5-9 8.5"/></symbol>
+  <symbol id="i-brush" viewBox="0 0 24 24"><path d="M14.5 4.5 19.5 9.5 11 18l-5-5z"/><path d="M6 13c-2 0-3 1.5-3 3.5V20h3.5C8.5 20 10 19 10 17"/></symbol>
+  <symbol id="i-ruler" viewBox="0 0 24 24"><path d="M3.5 15.5 15.5 3.5l5 5-12 12z"/><path d="m7.5 11.5 2 2M10.5 8.5l1.5 1.5M13.5 5.5l2 2"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.8v.1"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4 21 19.5H3z"/><path d="M12 10v4.5M12 17v.1"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4.5L19.5 9 15 4.5 4 15.5z"/><path d="m13 6.5 4.5 4.5"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2"/><path d="M15.5 8.5V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v9.5a1 1 0 0 0 1 1h3.5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="14.5" rx="2"/><path d="M4 10h16M9 3.5v4M15 3.5v4"/></symbol>
+  <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 0 1 13.2-4.9M18 3.5v4h-4M19.5 12a7.5 7.5 0 0 1-13.2 4.9M6 20.5v-4h4"/></symbol>
+  <symbol id="i-zoom" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5M11 8.5v5M8.5 11h5"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5 19 6.5v5.5c0 4.3-2.9 7.3-7 8.5-4.1-1.2-7-4.2-7-8.5V6.5z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M3.5 7.8 12 3.5l8.5 4.3v8.4L12 20.5l-8.5-4.3z"/><path d="M3.5 7.8 12 12l8.5-4.2M12 12v8.5"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.8"/></symbol>
+  <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M6 3.5h12v17l-2.4-1.5-2.4 1.5-1.2-.8-1.2.8-2.4-1.5L6 20.5z"/><path d="M9 8h6M9 11.5h6M9 15h3.5"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c.8-3.6 3.8-5.8 7.5-5.8s6.7 2.2 7.5 5.8"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.4"/></symbol>
+  <symbol id="i-instagram" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><path d="M17.2 6.8v.1"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 19.5s-7.5-4.4-7.5-10A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 7.5 2.5c0 5.6-7.5 10-7.5 10Z"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 4 8.5 4.5L12 13 3.5 8.5z"/><path d="m3.5 12.5 8.5 4.5 8.5-4.5M3.5 16.5 12 21l8.5-4.5"/></symbol>
+  <symbol id="i-text" viewBox="0 0 24 24"><path d="M5 6.5V5h14v1.5M12 5v14M9 19h6"/></symbol>
+  <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1 0 1.6-.8 1.6-1.6 0-1-.8-1.4-.8-2.3 0-.9.7-1.6 1.6-1.6h2.1a4 4 0 0 0 4-4c0-4.2-3.8-7.5-8.5-7.5Z"/><circle cx="7.8" cy="11.5" r="1"/><circle cx="10.5" cy="7.6" r="1"/><circle cx="15" cy="7.8" r="1"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4h-4"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></symbol>
+</svg>
+<!-- === KIT:SPRITE:END === -->
+
+<div class="mk-bar" id="mk-bar">
+  <b>Mockup · Vitrine Studio · Fase 3 · Página do produto</b>
+  <div class="mk-grp"><span>Cor da loja</span><div id="mk-brands" class="mk-grp"></div></div>
+  <div class="mk-grp"><span>Tipografia</span><div id="mk-fonts" class="mk-grp"></div></div>
+  <div class="mk-grp"><span>Aparelho</span><div id="mk-devices" class="mk-grp"></div></div>
+</div>
+
+<div class="mk-wrap">
+  <header class="mk-intro">
+    <h1>Fase 3 — A página do produto</h1>
+    <p>A página onde a Helena vê a caneca da mãe com a arte dela, sabe quanto custa e quando fica pronta, e onde o Marcos digita 50 e entende o preço por unidade. As Fases 3A e 3B estão desenhadas juntas, como a página final: a 3A entra antes (16/11) no layout atual, a 3B liga em janeiro. Tudo responde: troque o modelo, a cor, o caminho da arte, digite um texto, mude a quantidade, calcule o frete, adicione à sacola.</p>
+    <p>Produto: Caneca Alça Coração, R$ 49,90, categoria Canecas, com os nove modelos da Sheid no seletor. As fotos são as ilustrações do kit no lugar das fotos reais da galeria. Troque a cor da loja na barra de cima: a amarela é o teste de fogo.</p>
+    <div class="legend"><span><span class="tg a">3A</span>ganhos rápidos, sem mudar o layout</span><span><span class="tg">3B</span>página nova, atrás da chave <code>vitrine_v2</code></span></div>
+  </header>
+
+  <!-- ============ TELA 1 ============ -->
+  <section class="mk-screen" id="tela-1">
+    <aside class="mk-meta">
+      <span class="mk-n">Tela 1</span>
+      <h2>Chegada no produto</h2>
+      <p>A Helena abre o link no celular e, sem rolar, responde as três perguntas da Jornada §2.1: como é, quanto é, quando fica pronto.</p>
+      <p class="mk-sub">Decisões de desenho</p>
+      <ul>
+        <li><span class="tg">3B</span>Carrossel na largura toda no celular (1:1). Bolinhas embaixo, "Foto 1 de 4" dentro da foto, lupa no canto. No desktop: miniaturas em coluna, setas, teclado e zoom que segue o mouse; em <code>hover: none</code> o zoom some e fica a lupa.</li>
+        <li><span class="tg">3B</span>Preço unitário em mono, parcelamento e Pix logo embaixo. Prazo e "Você aprova o mockup" num bloco calmo, ainda na primeira dobra.</li>
+        <li><span class="tg">3B</span>Selo "Mais pedido" no canto da foto, como no cartão da grade. No slide do mockup o canto é da etiqueta "Sua caneca" e o selo sai.</li>
+        <li>No celular a foto é 6:5, não quadrada: é o que deixa o prazo acima da barra fixa na primeira dobra.</li>
+        <li>Compartilhar é um ícone ao lado do nome; o toque copia o link (ou abre o compartilhar do aparelho).</li>
+        <li>A trilha "Início / Canecas / Alça Coração" troca o último nível junto com o modelo. "Canecas" leva à grade (Tela 9).</li>
+        <li>Sai o cabeçalho de hoje ("Personalize", selo azul "Estúdio · Arte personalizada", seta sem rótulo).</li>
+      </ul>
+      <p class="mk-sub">Perguntas em aberto</p>
+      <ul>
+        <li>Parcelamento em até 3x é exemplo (<code>card_max_installments</code>). Pix 5% é exemplo configurável: a Sheid hoje não dá desconto.</li>
+      </ul>
+      <p class="mk-sub">Implementação</p>
+      <ul>
+        <li><code>CarrosselFoto.tsx</code> (<code>fotosDoProduto</code>, <code>proximoIndice</code>) vira a galeria da página; <code>ZoomFoto.tsx</code> vira a lupa.</li>
+        <li><code>parcelamento.ts</code>, <code>precoNoPix.ts</code>; cabeçalho de <code>ProductConfigurator.tsx:302-377</code> sai.</li>
+      </ul>
+      <div class="mk-try"><button data-try="t1" data-do="reset">Recomeçar</button></div>
+    </aside>
+    <div class="mk-frames"><div class="phone" id="t1p"></div><div class="desk-fit" id="t1d"></div></div>
+  </section>
+
+  <!-- ============ TELA 2 ============ -->
+  <section class="mk-screen" id="tela-2">
+    <aside class="mk-meta">
+      <span class="mk-n">Tela 2</span>
+      <h2>Escolher modelo e cor</h2>
+      <p>Trocar de modelo sem perder o que já foi preenchido e ver a cor escolhida na louça, sem a prévia piscar.</p>
+      <p class="mk-sub">Decisões de desenho</p>
+      <ul>
+        <li><span class="tg">3B</span>Mini-carrossel com a capa de cada modelo, nome curto e preço, na ordem da grade (preço, depois nome).</li>
+        <li><span class="tg">3B</span>Trocar modelo: a caneca nova entra por cima da antiga em 240 ms, o preço conta até o novo valor, a URL e a trilha mudam. Texto, arte e cor da arte ficam; a cor da caneca fica se o modelo novo tiver a mesma, senão vai para a primeira.</li>
+        <li><span class="tg">3B</span>Escolher a cor conta como personalizar: o mockup vira o slide ativo, porque foto real não muda de cor.</li>
+        <li><span class="tg">3B</span>No celular a prévia não gruda inteira no topo: ao rolar, vira uma faixa de 72 px com a caneca ao vivo, nome e preço. Tocar volta para a foto grande. Hoje a prévia grudada (445 px) escondia o campo de texto.</li>
+        <li>Modelo com uma cor só mostra uma frase, sem bolinha solitária.</li>
+      </ul>
+      <p class="mk-sub">Perguntas em aberto</p>
+      <ul>
+        <li>Na Alça Coração e na Alça Colorida a cor pinta a alça (a parte colorida da peça). As cores reais vêm da Sheid (S7).</li>
+      </ul>
+      <p class="mk-sub">Implementação</p>
+      <ul>
+        <li><code>sf.switchModel</code> e <code>transportarValores</code> (<code>categoryGrouping.ts</code>).</li>
+        <li><code>FieldColor.tsx</code> já leva a cor ao 3D (<code>LivePreview.tsx:290</code>, <code>garmentColor</code>); "+R$" da cor sai de <code>price_delta</code>.</li>
+      </ul>
+      <div class="mk-try"><button data-try="t2" data-do="modelo:vintage">Trocar para Vintage Fosca</button><button data-try="t2" data-do="modelo:chopp">Trocar para Chopp</button><button data-try="t2" data-do="reset">Recomeçar</button></div>
+    </aside>
+    <div class="mk-frames"><div class="phone" id="t2p"></div><div class="desk-fit" id="t2d"></div></div>
+  </section>
+
+  <!-- ============ TELA 3 ============ -->
+  <section class="mk-screen" id="tela-3">
+    <aside class="mk-meta">
+      <span class="mk-n">Tela 3</span>
+      <h2>A arte: três caminhos</h2>
+      <p>Escolher como resolver a arte já sabendo o preço de cada caminho, e enviar o arquivo sem medo de sair borrado.</p>
+      <p class="mk-sub">Decisões de desenho</p>
+      <ul>
+        <li><span class="tg">3B</span>Três cartões com ícone, título e preço à direita. "Vou enviar minha arte pronta" vem marcado: é incluso e já mostra o envio. No celular só o cartão marcado abre a frase de <code>choiceHint</code>; no desktop as três aparecem.</li>
+        <li><span class="tg">3B</span>Envio só nos dois primeiros; briefing de 600 caracteres só nos pagos, com os textos de <code>briefingFor</code>. "Criem a arte pra mim" esconde o envio e limpa o arquivo.</li>
+        <li><span class="tg">3B</span>"Ou escolha uma arte pronta" só no caminho "pronta" e só sem arquivo: arquivo e arte pronta são o grupo de origem da arte (S0), um basta.</li>
+        <li><span class="tg">3B</span>Estados: enviando (barra e cancelar), enviado (miniatura, medidas, Trocar e Remover) e baixa resolução, com duas saídas: mandar outra ou pedir o ajuste, que troca o caminho e soma R$ 10,00. O mockup mostra a arte borrada, para o aviso não ficar abstrato.</li>
+        <li>O aviso não bloqueia a compra (DEC-11).</li>
+      </ul>
+      <p class="mk-sub">Perguntas em aberto</p>
+      <ul>
+        <li>Limite do aviso: proposta de 1200 px no lado maior (metade dos 2400 px que 20 cm pedem a 300 dpi). PDF não é medido.</li>
+        <li>Briefing obrigatório em "Criem a arte pra mim"? Hoje é opcional.</li>
+        <li>+R$ 10,00 e +R$ 25,00 são exemplo; o preço é por produto (DEC-09).</li>
+      </ul>
+      <p class="mk-sub">Implementação</p>
+      <ul>
+        <li><code>FieldArtService.tsx</code> perde o magenta e o tracejado; <code>artService.ts</code> fica como está.</li>
+        <li><code>FieldImage.tsx</code>: os emojis viram ícones, e o navegador lê largura e altura antes de subir. <code>FieldTemplate.tsx</code> ganha o nome da arte.</li>
+      </ul>
+      <div class="mk-try"><button data-try="t3" data-do="up:ok">Enviar arte</button><button data-try="t3" data-do="up:low">Enviar foto pequena (640 px)</button><button data-try="t3" data-do="caminho:designer">Criem a arte pra mim</button><button data-try="t3" data-do="reset">Recomeçar</button></div>
+    </aside>
+    <div class="mk-frames"><div class="phone" id="t3p"></div><div class="desk-fit" id="t3d"></div></div>
+  </section>
+
+  <!-- ============ TELA 4 ============ -->
+  <section class="mk-screen" id="tela-4">
+    <aside class="mk-meta">
+      <span class="mk-n">Tela 4</span>
+      <h2>O mockup vira slide</h2>
+      <p>Ver a própria arte na caneca, dos três lados, sem sair do lugar e sem procurar onde ficou a prévia.</p>
+      <p class="mk-sub">Decisões de desenho</p>
+      <ul>
+        <li><span class="tg">3B</span>Com arte ou texto, o mockup entra como primeiro slide, vira o ativo e ganha a etiqueta "Sua caneca". As fotos continuam a um toque. Cada nova personalização traz o mockup de volta.</li>
+        <li><span class="tg">3B</span>No mockup: Frente · Verso · Meio sobre a peça e o botão girar. As abas do formulário e as do mockup são a mesma escolha.</li>
+        <li><span class="tg">3B</span>Verso é opt-in com o preço no cartão (+R$ 8,00) e o preço do topo diz o que soma. Meio incluso neste exemplo.</li>
+        <li>Texto com contador e cor da arte; quando a cor some na louça (menos de 1,8:1), uma frase sugere outra.</li>
+        <li>A legenda "Prévia. A loja manda o mockup final para você aprovar." tira o medo de sair diferente.</li>
+      </ul>
+      <p class="mk-sub">Perguntas em aberto</p>
+      <ul>
+        <li>No 3D o cliente também arrasta a peça; o botão girar é o atalho. "Tempo até o primeiro mockup" vira a métrica da 3B.</li>
+        <li>Limite de 20 caracteres é exemplo de <code>max_chars</code>.</li>
+      </ul>
+      <p class="mk-sub">Implementação</p>
+      <ul>
+        <li><code>LivePreview.tsx</code> (<code>allowSideToggle</code>) vira slide do carrossel; o bloco separado de <code>ProductConfigurator.tsx:390</code> sai.</li>
+        <li><code>FieldText.tsx</code>, <code>sideOf</code>, <code>back_charge_enabled</code>, <code>middle_charge_enabled</code>; o <code>console.log</code> das linhas 505 e 587 sai.</li>
+      </ul>
+      <div class="mk-try"><button data-try="t4" data-do="lado:back">Ver o verso</button><button data-try="t4" data-do="lado:middle">Ver o meio</button><button data-try="t4" data-do="lado:front">Ver a frente</button><button data-try="t4" data-do="reset">Recomeçar</button></div>
+    </aside>
+    <div class="mk-frames"><div class="phone" id="t4p"></div><div class="desk-fit" id="t4d"></div></div>
+  </section>
+
+  <!-- ============ TELA 5 ============ -->
+  <section class="mk-screen" id="tela-5">
+    <aside class="mk-meta">
+      <span class="mk-n">Tela 5</span>
+      <h2>Quantidade e desconto</h2>
+      <p>O Marcos digita 50 sem 49 toques e vê o preço por unidade e o prazo. A Helena vê que 10 saem mais baratas, sem que isso grite.</p>
+      <p class="mk-sub">Decisões de desenho</p>
+      <ul>
+        <li><span class="tg a">3A</span>Campo digitável entre − e +: só números, de 1 a 999; vazio volta a 1 ao sair do campo.</li>
+        <li><span class="tg a">3A</span>A escada vira régua de quatro paradas (1 · 10 · 20 · 50) com o preço de cada uma. Tocar numa parada sobe a quantidade até ela, nunca desce (regra atual).</li>
+        <li><span class="tg a">3A</span>Uma frase só: longe da faixa, "Leve 10 e pague R$ 47,41 cada"; da metade do caminho em diante, "Faltam 3 para pagar R$ 44,91 cada"; na última, "Você chegou ao menor preço".</li>
+        <li><span class="tg a">3A</span>Prazo por faixa embaixo da régua e no topo da página, que acende de leve quando muda.</li>
+        <li>Faixa sobre o preço de tabela; arte e verso somam depois.</li>
+        <li>"Comprando para evento ou empresa?" leva ao orçamento em lote com a caneca preenchida.</li>
+      </ul>
+      <p class="mk-sub">Perguntas em aberto</p>
+      <ul>
+        <li>Sem <code>qty_tiers</code> a régua some (a Sheid hoje não tem escada). Faixas e prazos são o exemplo do briefing.</li>
+      </ul>
+      <p class="mk-sub">Implementação</p>
+      <ul>
+        <li><code>qtyTiers.ts</code> (<code>matchTier</code>, <code>proximaFaixa</code>, <code>basePriceForQty</code>); <code>ProductConfigurator.tsx:645-719</code>; <code>T.accent</code> sai do selo de desconto.</li>
+      </ul>
+      <div class="mk-try"><button data-try="t5" data-do="qtd:1">1 un</button><button data-try="t5" data-do="qtd:17">17 un</button><button data-try="t5" data-do="qtd:50">50 un</button></div>
+    </aside>
+    <div class="mk-frames"><div class="phone" id="t5p"></div><div class="desk-fit" id="t5d"></div></div>
+  </section>
+
+  <!-- ============ TELA 6 ============ -->
+  <section class="mk-screen" id="tela-6">
+    <aside class="mk-meta">
+      <span class="mk-n">Tela 6</span>
+      <h2>Frete e retirada</h2>
+      <p>Saber quanto custa receber, ou que dá para buscar de graça, antes de chegar no checkout.</p>
+      <p class="mk-sub">Decisões de desenho</p>
+      <ul>
+        <li><span class="tg">3B</span>"Retire na loja · Jardim Colonial · Grátis" sempre visível, com o endereço. A entrega aparece depois do CEP.</li>
+        <li>CEP com máscara; Enter calcula; o erro diz o que fazer. O CEP calculado segue para o checkout.</li>
+        <li>O prazo da entrega vem do servidor (<code>eta</code>) e é contado depois de a caneca ficar pronta.</li>
+      </ul>
+      <p class="mk-sub">Perguntas em aberto</p>
+      <ul>
+        <li>Valores (R$ 12,00 em São José, R$ 24,90 fora) são exemplo.</li>
+        <li>Retirada por app (S8) entra aqui como terceira linha quando <code>courier_pickup_enabled</code>?</li>
+      </ul>
+      <p class="mk-sub">Implementação</p>
+      <ul>
+        <li><code>FreteNoProduto.tsx</code> (mesma rota do checkout); o <code>#fff</code> fixo do botão sai.</li>
+      </ul>
+      <div class="mk-try"><button data-try="t6" data-do="cep:12230-000">CEP de São José</button><button data-try="t6" data-do="cep:01310-100">CEP de São Paulo</button><button data-try="t6" data-do="cep:1223">CEP incompleto</button></div>
+    </aside>
+    <div class="mk-frames"><div class="phone" id="t6p"></div><div class="desk-fit" id="t6d"></div></div>
+  </section>
+
+  <!-- ============ TELA 7 ============ -->
+  <section class="mk-screen" id="tela-7">
+    <aside class="mk-meta">
+      <span class="mk-n">Tela 7</span>
+      <h2>Barra de ação fixa</h2>
+      <p>O total e o que falta sempre à vista, e as duas ações ao alcance do polegar, sem nada por cima.</p>
+      <p class="mk-sub">Decisões de desenho</p>
+      <ul>
+        <li><span class="tg">3B</span>Celular: barra fixa com a frase do que falta, o total ao vivo e os dois botões. "Adicionar à sacola" é o primário e fica à direita, onde o polegar alcança.</li>
+        <li><span class="tg">3B</span>Nada por cima da barra: "Powered by" vai para o rodapé, cookies nunca a cobrem, e o WhatsApp flutuante dá lugar a um link no fluxo.</li>
+        <li><span class="tg">3B</span>O botão nunca fica desabilitado: com pendência, o toque rola até o que falta e acende o campo. A frase também é um botão.</li>
+        <li><span class="tg a">3A</span>Ao adicionar: o botão vira "Adicionado" por 1,4 s, o contador da sacola pulsa e um aviso curto oferece "Ver sacola" (gaveta da Fase 2).</li>
+        <li><span class="tg">3B</span>Desktop: bloco de compra no pé da coluna direita, preso ao rolar, com total, unidades × preço, Pix do total, a frase do que falta e os dois botões. O WhatsApp fica no fluxo, logo abaixo do frete.</li>
+        <li>Regras mantidas: editando um item da sacola, um botão só ("Atualizar item"); loja fechada, o primário vira "Pedir orçamento" com o recado (<code>modoDaVitrine</code>).</li>
+      </ul>
+      <p class="mk-sub">Perguntas em aberto</p>
+      <ul>
+        <li>Hoje "Comprar agora" é o preenchido. A Jornada §4.4 pede "Adicionar à sacola" como primário; o mockup segue a Jornada.</li>
+      </ul>
+      <p class="mk-sub">Implementação</p>
+      <ul>
+        <li><code>validateRequiredFields</code> dá a frase; <code>modoDaVitrine.ts</code>; <code>PoweredByAura</code> sai do fixo; <code>ConsentimentoDaVitrine.tsx</code> respeita a barra.</li>
+      </ul>
+      <div class="mk-try"><button data-try="t7" data-do="falta">Faltando a arte</button><button data-try="t7" data-do="pronto">Tudo pronto</button><button data-try="t7" data-do="add">Adicionar à sacola</button></div>
+    </aside>
+    <div class="mk-frames"><div class="phone" id="t7p"></div><div class="desk-fit" id="t7d"></div></div>
+  </section>
+
+  <!-- ============ TELA 8 ============ -->
+  <section class="mk-screen" id="tela-8">
+    <aside class="mk-meta">
+      <span class="mk-n">Tela 8</span>
+      <h2>Detalhes abaixo da dobra</h2>
+      <p>Para quem desceu procurando mais: o que é a peça, onde a arte cabe, as medidas, as revisões e os outros modelos.</p>
+      <p class="mk-sub">Decisões de desenho</p>
+      <ul>
+        <li><span class="tg a">3A</span>Área de impressão com uma fonte só: "Área de impressão: 20 × 9 cm, dá a volta na caneca", com o desenho da faixa e a resolução que isso pede (2400 × 1080 px). É a mesma régua do aviso de baixa resolução.</li>
+        <li><span class="tg">3B</span>Guia de medidas abre um modal (folha de baixo no celular). Revisões e prazo por faixa em linhas curtas.</li>
+        <li><span class="tg">3B</span>WhatsApp como linha discreta, com a mensagem pronta (<code>pedidoPeloWhatsApp.ts</code>).</li>
+        <li><span class="tg">3B</span>"Da mesma categoria": quatro modelos com foto grande; o toque troca o modelo e volta ao topo.</li>
+      </ul>
+      <p class="mk-sub">Perguntas em aberto</p>
+      <ul>
+        <li><b>O número depende da decisão da §3.3 do F1</b> (spec 20 cm, UV ≈ 5,9 cm, <code>print_area</code> 9 × 9 cm). Mudou o número, muda o texto e o limite do aviso.</li>
+        <li>"Da mesma categoria" repete o seletor de modelo. Trocar por "Para completar o presente" (outras categorias)?</li>
+        <li>Descrição e medidas do guia são exemplo.</li>
+      </ul>
+      <p class="mk-sub">Implementação</p>
+      <ul>
+        <li><code>SizeGuideModal.tsx</code> (o emoji vira ícone), <code>FichaTecnica.tsx</code>, <code>relacionados.ts</code>; o <code>&lt;img&gt;</code> sem guarda da linha 774 sai.</li>
+      </ul>
+      <div class="mk-try"><button data-try="t8" data-do="guia">Abrir guia de medidas</button></div>
+    </aside>
+    <div class="mk-frames"><div class="phone" id="t8p"></div><div class="desk-fit" id="t8d"></div></div>
+  </section>
+
+  <!-- ============ TELA 9 ============ -->
+  <section class="mk-screen" id="tela-9">
+    <aside class="mk-meta">
+      <span class="mk-n">Tela 9</span>
+      <h2>Grade de modelos da categoria</h2>
+      <p>A tela antes do produto: comparar os nove modelos por foto e preço sem abrir um por um (Jornada §4.3).</p>
+      <p class="mk-sub">Decisões de desenho</p>
+      <ul>
+        <li><span class="tg">3B</span>Cartão de foto grande (estilo "foto grande" da Sheid): um selo de canto no máximo ("Mais pedido" ou "Novo"), até três etiquetas em texto, "a partir de" e o Pix.</li>
+        <li>Cabeçalho com "Canecas · 9 modelos", a prévia em 3D, a faixa de preço e a frase do que varia (<code>eixoQueVaria</code>).</li>
+        <li>Trilha no lugar de "← Voltar para a loja". O toque abre a Tela 1 com o modelo escolhido.</li>
+      </ul>
+      <p class="mk-sub">Perguntas em aberto</p>
+      <ul>
+        <li>"a partir de" em todo cartão, ou só quando há adicional pago?</li>
+        <li>"Todos com prévia em 3D" só vale depois do DEC-10 (um template por modelo).</li>
+      </ul>
+      <p class="mk-sub">Implementação</p>
+      <ul>
+        <li><code>GradeDeModelos.tsx</code> (<code>Text</code> vira <code>Texto</code>, D6), <code>ProductCard.tsx</code>, <code>selosDoProduto.ts</code>, <code>modelosDoGrupo.ts</code>.</li>
+      </ul>
+    </aside>
+    <div class="mk-frames"><div class="phone" id="t9p"></div><div class="desk-fit" id="t9d"></div></div>
+  </section>
+</div>
+
+<script>
+/* === KIT:BEGIN ============================================== */
+/* Cor da loja → tokens. Mesma regra de theme.ts (parLegivel / corLegivelSobre). */
+const KIT = (() => {
+  const hex2rgb = h => { h = h.replace('#',''); if (h.length===3) h = h.split('').map(c=>c+c).join(''); const n = parseInt(h,16); return [n>>16&255, n>>8&255, n&255]; };
+  const rgb2hex = ([r,g,b]) => '#' + [r,g,b].map(v => Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join('');
+  const lum = h => { const c = hex2rgb(h).map(v => { v/=255; return v<=.03928 ? v/12.92 : Math.pow((v+.055)/1.055,2.4); }); return .2126*c[0]+.7152*c[1]+.0722*c[2]; };
+  const contrast = (a,b) => { const x=lum(a), y=lum(b); return (Math.max(x,y)+.05)/(Math.min(x,y)+.05); };
+  const mix = (h, target, t) => { const a=hex2rgb(h), b=hex2rgb(target); return rgb2hex(a.map((v,i)=>v+(b[i]-v)*t)); };
+  const INK = '#1A1714', PAPER = '#FBF8F3', WHITE = '#FFFFFF';
+  const inkOn = h => contrast(h, WHITE) >= contrast(h, INK) ? WHITE : INK;
+  function brandPair(h){
+    let t = inkOn(h); if (contrast(h,t) >= 4.5) return {fill:h, on:t};
+    for (let i=1;i<=12;i++){ for (const c of [mix(h,'#000000',i*.06), mix(h,'#FFFFFF',i*.06)]) { const k = inkOn(c); if (contrast(c,k) >= 4.5) return {fill:c, on:k}; } }
+    return {fill:INK, on:WHITE};
+  }
+  function brandText(h, bg=PAPER){ let c=h; for (let i=0;i<30 && contrast(c,bg)<4.5;i++) c = mix(c,'#000000',.07); return c; }
+  const rgba = (h,a) => { const [r,g,b]=hex2rgb(h); return `rgba(${r},${g},${b},${a})`; };
+  function applyBrand(h){
+    const s = document.documentElement.style, p = brandPair(h), txt = brandText(h);
+    s.setProperty('--brand', h); s.setProperty('--brand-fill', p.fill); s.setProperty('--on-brand', p.on);
+    s.setProperty('--brand-text', txt); s.setProperty('--brand-wash', rgba(txt,.06)); s.setProperty('--brand-wash-2', rgba(txt,.12)); s.setProperty('--brand-ring', rgba(p.fill,.45));
+  }
+  const FONTS = {
+    classic:  {nome:'Elegante',   display:"'Fraunces','Instrument Serif',Georgia,serif", w:500},
+    modern:   {nome:'Moderna',    display:"'DM Sans',-apple-system,sans-serif", w:700},
+    editorial:{nome:'Marcante',   display:"'Instrument Serif',Georgia,serif", w:400},
+    humanist: {nome:'Acolhedora', display:"'Pacifico',cursive", w:400},
+  };
+  function applyFont(k){ const f = FONTS[k] || FONTS.classic; document.documentElement.style.setProperty('--f-display', f.display); document.documentElement.style.setProperty('--f-display-w', f.w); }
+  const BRANDS = [
+    {nome:'Sheid Mania', hex:'#1a1612'},
+    {nome:'Rosa', hex:'#D6336C'},
+    {nome:'Amarelo', hex:'#F2C94C'},
+    {nome:'Petróleo', hex:'#0F6E7A'},
+  ];
+
+  /* Produto ilustrado. tipo: reta | chopp | coracao | colher | cromada | imperial | camiseta | copo
+     corpo/alca: cor da peça; arte: {texto, cor, fonte, sub, desenho:'coracao'|'folha'|'estrela'|null} */
+  let uid = 0;
+  function produto(o = {}){
+    const id = 'p' + (++uid);
+    const tipo = o.tipo || 'reta', corpo = o.corpo || '#F7F4EE', alca = o.alca || corpo;
+    const arte = o.arte || null;
+    const metal = tipo === 'cromada' || tipo === 'imperial';
+    const shade = `<linearGradient id="${id}s" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity=".22"/><stop offset=".18" stop-color="#000" stop-opacity=".04"/><stop offset=".42" stop-color="#fff" stop-opacity="${metal?'.55':'.28'}"/><stop offset=".6" stop-color="#fff" stop-opacity="0"/><stop offset=".88" stop-color="#000" stop-opacity=".08"/><stop offset="1" stop-color="#000" stop-opacity=".26"/></linearGradient>`;
+    const desenho = d => d==='coracao' ? '<path d="M0 6c-7-5-11-9-11-14a6 6 0 0 1 11-3 6 6 0 0 1 11 3c0 5-4 9-11 14Z"/>'
+      : d==='folha' ? '<path d="M-10 8C-10-6 2-12 12-12 12 0 6 10-10 8Z M-10 8 6-6" />'
+      : d==='estrela' ? '<path d="M0-12 3.5-3.7 12.4-3.7 5.2 1.6 7.9 10.2 0 5 -7.9 10.2 -5.2 1.6 -12.4-3.7 -3.5-3.7Z"/>' : '';
+    const arteSvg = (cx, cy, esc=1) => !arte ? '' : `<g transform="translate(${cx} ${cy}) scale(${esc})" fill="${arte.cor||'#1A1714'}" stroke="none">
+        ${arte.desenho ? `<g transform="translate(0 -26)" ${arte.desenho==='folha'?`fill="none" stroke="${arte.cor}" stroke-width="2.2" stroke-linecap="round"`:''}>${desenho(arte.desenho)}</g>` : ''}
+        <text x="0" y="${arte.desenho?8:4}" text-anchor="middle" font-family="${arte.fonte||"'Pacifico',cursive"}" font-size="${arte.tam||22}">${arte.texto||''}</text>
+        ${arte.sub ? `<text x="0" y="${arte.desenho?24:20}" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="6.4" letter-spacing="1.1">${arte.sub}</text>` : ''}
+      </g>`;
+    const sombra = `<ellipse cx="96" cy="178" rx="62" ry="7" fill="#000" opacity=".13"/>`;
+    if (tipo === 'camiseta') {
+      return `<svg class="prod" viewBox="0 0 200 200" role="img" aria-label="Camiseta"><defs>${shade}</defs>${sombra}
+        <path d="M70 26 52 34 22 52l14 30 18-9v99h92V73l18 9 14-30-30-18-18-8c-4 12-16 18-30 18S74 38 70 26Z" fill="${corpo}" stroke="rgba(0,0,0,.14)" stroke-width="1"/>
+        <path d="M70 26c4 12 16 18 30 18s26-6 30-18" fill="none" stroke="rgba(0,0,0,.18)" stroke-width="2"/>
+        <path d="M54 73v99h92V73" fill="url(#${id}s)" opacity=".7"/>
+        ${arteSvg(100, 100, .95)}</svg>`;
+    }
+    if (tipo === 'copo') {
+      return `<svg class="prod" viewBox="0 0 200 200" role="img" aria-label="Copo térmico"><defs>${shade}</defs>${sombra}
+        <path d="M60 40h72l-7 134a6 6 0 0 1-6 6H73a6 6 0 0 1-6-6Z" fill="${corpo}"/><path d="M60 40h72l-7 134a6 6 0 0 1-6 6H73a6 6 0 0 1-6-6Z" fill="url(#${id}s)"/>
+        <rect x="55" y="26" width="82" height="18" rx="6" fill="${alca}"/><rect x="55" y="26" width="82" height="18" rx="6" fill="url(#${id}s)"/>
+        <path d="M132 58c26 0 26 60 0 60" fill="none" stroke="${alca}" stroke-width="11" stroke-linecap="round"/>
+        <rect x="104" y="6" width="7" height="24" rx="3" fill="${alca}" opacity=".9"/>
+        ${arteSvg(96, 108, .9)}</svg>`;
+    }
+    const chopp = tipo === 'chopp';
+    const x0 = chopp ? 50 : 44, x1 = chopp ? 142 : 146, top = chopp ? 20 : 44, bot = 172;
+    const body = chopp ? `M${x0} ${top}h${x1-x0}l-4 ${bot-top-8}a8 8 0 0 1-8 8H${x0+12}a8 8 0 0 1-8-8Z` : `M${x0} ${top}h${x1-x0}v${bot-top-10}a10 10 0 0 1-10 10H${x0+10}a10 10 0 0 1-10-10Z`;
+    const handle = tipo === 'coracao'
+      ? `<path d="M${x1-2} 78c10-16 34-12 34 8 0 18-18 30-34 44" fill="none" stroke="${alca}" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>`
+      : `<path d="M${x1-2} ${chopp?60:74}c${chopp?38:34} 0 ${chopp?38:34} ${chopp?80:62} 0 ${chopp?80:62}" fill="none" stroke="${alca}" stroke-width="${chopp?15:12}" stroke-linecap="round"/>`;
+    const handleShade = tipo === 'coracao' ? '' : `<path d="M${x1-2} ${chopp?60:74}c${chopp?38:34} 0 ${chopp?38:34} ${chopp?80:62} 0 ${chopp?80:62}" fill="none" stroke="#000" stroke-opacity=".12" stroke-width="3" transform="translate(4 0)"/>`;
+    const rimTop = tipo === 'imperial' ? `<rect x="${x0}" y="${top}" width="${x1-x0}" height="7" fill="#C9A45C"/><rect x="${x0}" y="${top}" width="${x1-x0}" height="7" fill="url(#${id}s)"/>` : '';
+    const colher = tipo === 'colher' ? `<g transform="rotate(14 150 30)"><rect x="140" y="-4" width="7" height="70" rx="3.5" fill="#C8CCD2"/><ellipse cx="143.5" cy="-8" rx="10" ry="13" fill="#D5D9DE"/></g>` : '';
+    const glass = chopp ? `<path d="${body}" fill="#FFFFFF" opacity=".35"/>` : '';
+    return `<svg class="prod" viewBox="0 0 200 200" role="img" aria-label="Caneca"><defs>${shade}<clipPath id="${id}c"><path d="${body}"/></clipPath></defs>${sombra}
+      ${handle}${handleShade}
+      <path d="${body}" fill="${corpo}"/>${glass}
+      <g clip-path="url(#${id}c)">${arteSvg((x0+x1)/2 - 2, chopp ? 100 : 112, chopp ? 1 : 1.05)}</g>
+      <path d="${body}" fill="url(#${id}s)"/>${rimTop}
+      <ellipse cx="${(x0+x1)/2}" cy="${top}" rx="${(x1-x0)/2}" ry="5" fill="${alca}"/><ellipse cx="${(x0+x1)/2}" cy="${top+1}" rx="${(x1-x0)/2-5}" ry="3.4" fill="#000" opacity=".16"/>
+      ${colher}</svg>`;
+  }
+
+  /* Barra do mockup: cor, tipografia e aparelho. Chame KIT.bar({device:true}). */
+  function bar(opts = {}){
+    const bw = document.getElementById('mk-brands'), fw = document.getElementById('mk-fonts'), dw = document.getElementById('mk-devices');
+    const set = (wrap, btn) => { wrap.querySelectorAll('.mk-seg').forEach(b => b.setAttribute('aria-pressed', b===btn ? 'true':'false')); };
+    if (bw) BRANDS.forEach((b,i) => { const el = document.createElement('button'); el.className='mk-seg'; el.innerHTML=`<i class="mk-dot" style="background:${b.hex}"></i>${b.nome}`; el.setAttribute('aria-pressed', i===0?'true':'false'); el.onclick=()=>{applyBrand(b.hex); set(bw,el); document.dispatchEvent(new CustomEvent('kit:brand',{detail:b}));}; bw.appendChild(el); });
+    if (fw) Object.entries(FONTS).forEach(([k,f],i) => { const el = document.createElement('button'); el.className='mk-seg'; el.textContent=f.nome; el.setAttribute('aria-pressed', i===0?'true':'false'); el.onclick=()=>{applyFont(k); set(fw,el);}; fw.appendChild(el); });
+    if (dw) [['ambos','Celular e desktop'],['phone','Só celular'],['desk','Só desktop']].forEach(([k,n],i) => { const el=document.createElement('button'); el.className='mk-seg'; el.textContent=n; el.setAttribute('aria-pressed', i===0?'true':'false'); el.onclick=()=>{ document.body.classList.toggle('mk-hide-desk', k==='phone'); document.body.classList.toggle('mk-hide-phone', k==='desk'); set(dw,el); fitDesk(); }; dw.appendChild(el); });
+    applyBrand(BRANDS[0].hex); applyFont('classic');
+    window.addEventListener('resize', fitDesk); fitDesk();
+  }
+  /* Escala a moldura desktop (1280 px) para caber na coluna. */
+  function fitDesk(){
+    document.querySelectorAll('.desk-fit').forEach(w => { const d = w.querySelector('.desk'); if (!d) return; const s = Math.min(1, w.clientWidth / 1280); d.style.transform = `scale(${s})`; w.style.height = (d.offsetHeight * s) + 'px'; });
+  }
+  const money = v => 'R$ ' + v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const icon = (n, cls='') => `<svg class="ic ${cls}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+  return { applyBrand, applyFont, brandPair, brandText, contrast, produto, bar, fitDesk, money, icon, BRANDS, FONTS };
+})();
+/* === KIT:END ================================================ */
+
+/* ---------- só desta página ---------- */
+(() => {
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const din = KIT.money, ic = KIT.icon;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const slug = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+/* Loja de exemplo (Sheid Mania, produção 25/09). Pix, parcelas, escada,
+   prazos por faixa e preços de arte/verso são EXEMPLO (ver meta). */
+const LOJA = { pixPct: 5, parcelasMax: 3, rua: 'Av. Dom Pedro I, 553', bairro: 'Jardim Colonial', cidade: 'São José dos Campos/SP', wa: '(12) 99614-5447' };
+const ESCADA = [{min:10, pct:5}, {min:20, pct:10}, {min:50, pct:15}];
+const PARADAS = [{min:1, pct:0}, ...ESCADA];
+const prazoDe = q => q >= 50 ? 8 : q >= 10 ? 5 : 3;
+const faixaDe = q => ESCADA.filter(t => q >= t.min).pop() || null;
+const proximaDe = q => ESCADA.find(t => t.min > q) || null;
+/* desconto em centavos, como o servidor: 49,90 × 0,90 = 44,91 */
+const menos = (v, pct) => { const c = Math.round(v * 100); return Math.round(c * (100 - pct) / 100) / 100; };
+/* parcelamento.ts: teto da loja, parcela mínima R$ 5, 1x não é parcela */
+function parcelas(p){ const n = Math.min(LOJA.parcelasMax, Math.floor(p / 5), 12); return n >= 2 ? `ou ${n}x de ${din(p / n)} sem juros` : ''; }
+
+/* artService.ts: os três caminhos, com os textos de hoje */
+const CAMINHOS = [
+  {v:'none', label:'Vou enviar minha arte pronta', hint:'Seu arquivo já está pronto para impressão (PNG, JPG ou PDF)', delta:0, icon:'upload'},
+  {v:'adjust', label:'Envio minha arte e vocês ajustam', hint:'A gente ajusta o tamanho e as cores para ficar perfeito no produto', delta:10, icon:'edit'},
+  {v:'designer', label:'Criem a arte pra mim', hint:'Nossa equipe cria a arte do zero, a partir da sua ideia', delta:25, icon:'brush'},
+];
+const BRIEF = {
+  designer:{title:'Descreva sua ideia', hint:'Quanto mais detalhes, melhor o resultado. Ex: cores, estilo, texto, referências.', ph:'Ex: quero uma arte minimalista com meu nome em dourado, fundo preto, estilo moderno...'},
+  adjust:{title:'O que você quer que a gente ajuste?', hint:'Opcional. Se não disser nada, ajustamos o tamanho e as cores para o produto.', ph:'Ex: deixar o fundo transparente, aumentar o logo, tirar a borda branca...'},
+};
+const VERSO = 8, MAXTXT = 20;
+const LADOS = [{v:'front', n:'Frente'}, {v:'back', n:'Verso'}, {v:'middle', n:'Meio'}];
+
+const C = {
+  branca:{n:'Branca', c:'#F7F4EE'}, rosa:{n:'Rosa', c:'#D8436F'}, vermelha:{n:'Vermelha', c:'#C8322F'},
+  lilas:{n:'Lilás', c:'#A58BC9'}, azulbebe:{n:'Azul-bebê', c:'#8FB5DE'}, preta:{n:'Preta', c:'#1F1B18'},
+  azul:{n:'Azul', c:'#3E6FB0'}, verde:{n:'Verde', c:'#2F7D5B'}, amarela:{n:'Amarela', c:'#E9B949'},
+  areia:{n:'Areia', c:'#D9CBB5'}, salvia:{n:'Sálvia', c:'#A9B8A0'}, terracota:{n:'Terracota', c:'#C07A5A'}, grafite:{n:'Grafite', c:'#4A4A48'},
+  prata:{n:'Prata', c:'#B9BEC5'}, ambar:{n:'Âmbar', c:'#E9D9B8'}, dourada:{n:'Branca com dourado', c:'#F7F4EE'},
+};
+/* Os nove modelos da categoria, na ordem de modelosOrdenados (preço, depois nome). */
+const MODELOS = [
+  {id:'branca', nome:'Caneca Branca', curto:'Branca', preco:39.90, tipo:'reta', modo:'corpo', cores:[C.branca], so:'Vem só em branco.', desc:'A caneca clássica de cerâmica branca, a tela mais limpa para a sua arte.', amostra:{texto:'Helena', cor:'#C2255C', desenho:'coracao'}},
+  {id:'colher', nome:'Caneca com Colher', curto:'Com Colher', preco:49.00, tipo:'colher', modo:'corpo', cores:[C.branca], so:'Vem só em branco, com a colher.', desc:'Caneca de cerâmica branca que acompanha uma colher encaixada na alça.', amostra:{texto:'Bom dia', cor:'#2F7D5B', desenho:'folha'}},
+  {id:'colorida', nome:'Caneca Alça Colorida', curto:'Alça Colorida', preco:49.90, tipo:'reta', modo:'alca', cores:[C.azul, C.rosa, C.verde, C.amarela, C.preta], desc:'Caneca de cerâmica branca com a alça e o interior na cor que você escolher.', amostra:{texto:'Café & Código', cor:'#3E6FB0', fonte:"'DM Sans',sans-serif", tam:14}},
+  {id:'coracao', nome:'Caneca Alça Coração', curto:'Alça Coração', preco:49.90, tipo:'coracao', modo:'alca', cores:[C.rosa, C.vermelha, C.lilas, C.azulbebe, C.preta], selo:'Mais pedido', desc:'Caneca de cerâmica com a alça em forma de coração, na cor que você escolher.', amostra:{texto:'Mãe', cor:'#D8436F', sub:'A MELHOR'}},
+  {id:'coracao-preta', nome:'Caneca Alça de Coração Preta', curto:'Coração Preta', preco:59.90, tipo:'coracao', modo:'corpo', cores:[C.preta], so:'Vem só em preto; a arte sai em cores claras.', desc:'A caneca de alça de coração inteira em preto, para artes em cores claras.', amostra:{texto:'Amor', cor:'#F4E9D0', desenho:'coracao'}},
+  {id:'vintage', nome:'Caneca Cerâmica Vintage Fosca', curto:'Vintage Fosca', preco:65.90, tipo:'reta', modo:'corpo', cores:[C.areia, C.salvia, C.terracota, C.grafite], selo:'Novo', desc:'Cerâmica de acabamento fosco, em tons terrosos, com toque aveludado.', amostra:{texto:'Domingo', cor:'#4A3B2A', fonte:"'Fraunces',serif", tam:17, sub:'CAFÉ DEVAGAR'}},
+  {id:'imperial', nome:'Caneca Imperial Dourada 400 ml', curto:'Imperial Dourada', preco:65.90, tipo:'imperial', modo:'imperial', cores:[C.dourada], so:'Vem em branco, com a borda e a alça douradas.', ml:400, desc:'Caneca de 400 ml com a borda e a alça douradas.', amostra:{texto:'Vovó Lourdes', cor:'#8A6A2A', fonte:"'Fraunces',serif", tam:16, desenho:'folha'}},
+  {id:'cromada', nome:'Caneca Cromada Prata', curto:'Cromada Prata', preco:69.00, tipo:'cromada', modo:'corpo', cores:[C.prata], so:'Vem em prata espelhada.', desc:'Caneca de acabamento cromado, espelhada como metal.', amostra:{texto:'Formatura 2026', cor:'#1A1714', fonte:"'Fraunces',serif", tam:15}},
+  {id:'chopp', nome:'Caneca Chopp', curto:'Chopp', preco:70.00, tipo:'chopp', modo:'corpo', cores:[C.ambar], so:'Vem numa cor só.', desc:'Caneca de chopp de boca larga, alta e com a alça robusta.', amostra:{texto:'Padrinho', cor:'#6B3E12', fonte:"'Fraunces',serif", tam:20, sub:'BIA & LEO'}},
+];
+const MOD = Object.fromEntries(MODELOS.map(m => [m.id, m]));
+const ARTE_CORES = [{n:'Rosa', c:'#C2255C'}, {n:'Preto', c:'#1A1714'}, {n:'Vinho', c:'#7A1F3D'}, {n:'Dourado', c:'#8A6A2A'}, {n:'Verde', c:'#2F7D5B'}, {n:'Azul', c:'#1D4E89'}, {n:'Creme', c:'#F4E9D0'}];
+/* A arte que a Helena envia (arquivo com cores próprias). */
+const ARTE_ENVIADA = {desenho:'coracao', texto:'Mãe', cor:'#C2255C', tam:24};
+const TEMPLATES = [
+  {id:'coracao', nome:'Coração', arte:{desenho:'coracao', texto:'Amor', cor:'#C2255C', tam:22}},
+  {id:'mae', nome:'Mãe', arte:{texto:'Mãe', sub:'A MELHOR', cor:'#C2255C', tam:26}},
+  {id:'folhas', nome:'Folhas', arte:{desenho:'folha', texto:'Bom dia', cor:'#2F7D5B', tam:18}},
+  {id:'estrela', nome:'Estrela', arte:{desenho:'estrela', texto:'Brilha', cor:'#8A6A2A', tam:18}},
+  {id:'cafe', nome:'Café', arte:{texto:'Café', sub:'PRIMEIRO', cor:'#1A1714', fonte:"'Fraunces',serif", tam:24}},
+];
+
+/* ---------- desenho da peça ---------- */
+function peca(m, i){
+  const c = (m.cores[i] || m.cores[0]).c;
+  if (m.modo === 'alca') return {tipo:m.tipo, corpo:'#F7F4EE', alca:c};
+  if (m.modo === 'imperial') return {tipo:'imperial', corpo:c, alca:'#C9A45C'};
+  return {tipo:m.tipo, corpo:c, alca:c};
+}
+let nid = 0;
+const RX_ARTE = /<g transform="translate\(([^)]*)\) scale\(([\d.]+)\)"/;
+/* verso: espelha a peça e desespelha a arte */
+function flip(s){ return s.replace('<svg class="prod"', '<svg class="prod flipx"').replace(RX_ARTE, (m0, t, k) => `<g transform="translate(${t}) scale(-${k} ${k})"`); }
+/* meio: a alça fica atrás */
+function semAlca(s){ return s.replace(/<path d="M1\d\d [^"]*" fill="none"[^>]*\/>/g, ''); }
+/* arte pequena demais: o mockup mostra borrado */
+function borrar(s){ const id = 'bl' + (++nid); return s.replace('<defs>', `<defs><filter id="${id}" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.3"/></filter>`).replace(RX_ARTE, m0 => m0 + ` filter="url(#${id})"`); }
+const DES = {
+  coracao:'<path d="M0 6c-7-5-11-9-11-14a6 6 0 0 1 11-3 6 6 0 0 1 11 3c0 5-4 9-11 14Z"/>',
+  folha:'<path d="M-10 8C-10-6 2-12 12-12 12 0 6 10-10 8Z M-10 8 6-6" />',
+  estrela:'<path d="M0-12 3.5-3.7 12.4-3.7 5.2 1.6 7.9 10.2 0 5 -7.9 10.2 -5.2 1.6 -12.4-3.7 -3.5-3.7Z"/>',
+};
+/* miniatura de uma arte (arquivo enviado ou arte pronta), sem a caneca */
+function arteMini(a, blur){
+  const id = 'am' + (++nid), cor = a.cor || '#1A1714';
+  return `<svg viewBox="-46 -44 92 78" aria-hidden="true">${blur ? `<defs><filter id="${id}"><feGaussianBlur stdDeviation="1.4"/></filter></defs>` : ''}<g fill="${cor}" ${blur ? `filter="url(#${id})"` : ''}>${a.desenho ? `<g transform="translate(0 -26)" ${a.desenho === 'folha' ? `fill="none" stroke="${cor}" stroke-width="2.2" stroke-linecap="round"` : ''}>${DES[a.desenho]}</g>` : ''}<text x="0" y="${a.desenho ? 8 : 4}" text-anchor="middle" font-family="${a.fonte || "'Pacifico',cursive"}" font-size="${Math.min(a.tam || 22, 22)}">${a.texto || ''}</text>${a.sub ? `<text x="0" y="${a.desenho ? 24 : 20}" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="6.4" letter-spacing="1.1">${a.sub}</text>` : ''}</g></svg>`;
+}
+function fotosDe(m){
+  const n = m.cores.length, a = peca(m, 0), b = peca(m, 1 % n), c = peca(m, 2 % n), d = peca(m, 3 % n);
+  const clara = KIT.contrast(b.corpo, '#1A1714') > 4.5;
+  const arte2 = {texto:'Amor', cor: clara ? '#C2255C' : '#F4E9D0', desenho:'coracao'};
+  return [
+    {bg:'ph-linen', svg:KIT.produto({...a, arte:m.amostra}), alt:`${m.nome} com arte de exemplo`},
+    {bg:'ph-rose', svg:KIT.produto({...b, arte:arte2}), alt:`${m.nome}, ${m.cores[1 % n].n.toLowerCase()}`},
+    {bg:'ph-stone', svg:flip(KIT.produto({...a})), alt:'O outro lado, com a alça'},
+    {bg:'ph-sage', pair:[KIT.produto({...c}), KIT.produto({...d, arte:m.amostra})], alt:'Duas peças lado a lado'},
+  ];
+}
+const topIn = (el, cont) => { let y = 0, e = el; while (e && e !== cont){ y += e.offsetTop; e = e.offsetParent; } return y; };
+function numero(el, to, anim){
+  if (!el) return;
+  const from = parseFloat(el.dataset.v); el.dataset.v = to;
+  cancelAnimationFrame(el._raf);
+  if (!anim || RM || isNaN(from) || Math.abs(from - to) < .005){ el.textContent = din(to); return; }
+  const t0 = performance.now(), D = 340;
+  const step = t => { const k = Math.min(1, (t - t0) / D), e = 1 - Math.pow(1 - k, 3); el.textContent = din(from + (to - from) * e); if (k < 1) el._raf = requestAnimationFrame(step); };
+  el._raf = requestAnimationFrame(step);
+}
+const reflow = (el, cls) => { if (!el) return; el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); };
+const statusbar = () => `<div class="statusbar"><span>9:41</span><span class="sb-r"><span class="sb-sig"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:11px"></i></span><span class="sb-bat"></span></span></div>`;
+const cabDesk = (url) => `<header class="d-head"><div class="d-head-in"><span class="wm">Sheid Mania</span>
+  <nav class="d-nav" aria-label="Categorias"><a href="#" data-act="grade" aria-current="page">Canecas</a><a href="#" data-act="cat">Camisetas</a><a href="#" data-act="cat">Outros</a></nav>
+  <button class="d-search" data-act="busca">${ic('search', 'sm')}Buscar na loja</button>
+  <button class="icon-btn" data-act="sacola" aria-label="Abrir a sacola">${ic('bag')}<span class="count" data-f="count" hidden>0</span></button></div></header>`;
+const rodape = `<footer class="p-foot"><span class="wm">Sheid Mania</span><span>${LOJA.rua} — ${LOJA.bairro}, ${LOJA.cidade} · @sheidmania_</span><span>Loja desenvolvida com Aura.</span></footer>`;
+function irPara(id){ const el = document.getElementById(id); if (el) el.scrollIntoView({behavior: RM ? 'auto' : 'smooth', block:'start'}); }
+
+/* ============================================================
+   Página do produto — uma instância por moldura
+   ============================================================ */
+function PDP(host, device, init = {}){
+  const P = device === 'phone', U = host.id;
+  let st, upTimer = null, addTimer = null, toastTimer = null, lb = null, rolouInicio = 0;
+  const q = f => host.querySelector(`[data-f="${f}"]`);
+  const qa = f => [...host.querySelectorAll(`[data-f="${f}"]`)];
+  const sec = n => host.querySelector(`[data-sec="${n}"]`);
+  const M = () => MOD[st.modelo];
+  const scroller = () => host.querySelector(P ? '.scroll' : '.viewport');
+
+  function novoEstado(){
+    const s = {
+      modelo:'coracao', cor:0, caminho:'none', brief:'',
+      up:{estado:'idle', pct:0, lowres:false, nome:''}, tpl:null,
+      lado:'front', texto:{front:'', back:'', middle:''},
+      corArte:{front:'#C2255C', back:'#C2255C', middle:'#C2255C'},
+      verso:false, qtd:1, cep:'', frete:null, cepErro:'', freteNovo:false,
+      slide:0, mock:false, sacola:0,
+    };
+    const o = init.st || {};
+    for (const k in o){ const v = o[k]; if (v && typeof v === 'object' && s[k] && typeof s[k] === 'object') Object.assign(s[k], v); else s[k] = v; }
+    return s;
+  }
+
+  /* ---------- preço ---------- */
+  const deltas = () => { const d = [], cam = CAMINHOS.find(c => c.v === st.caminho); if (cam.delta) d.push([cam.v === 'adjust' ? 'ajuste da arte' : 'criação da arte', cam.delta]); if (st.verso) d.push(['verso', VERSO]); return d; };
+  const unitAt = qn => { const t = faixaDe(qn), b = t ? menos(M().preco, t.pct) : M().preco; return Math.round((b + deltas().reduce((a, x) => a + x[1], 0)) * 100) / 100; };
+  const unit = () => unitAt(st.qtd);
+  const total = () => Math.round(unit() * st.qtd * 100) / 100;
+  function falta(){
+    if (st.caminho !== 'designer' && st.up.estado !== 'done' && !st.tpl) return st.up.estado === 'uploading' ? 'Enviando a arte da frente' : 'Falta a arte da frente';
+    if (st.verso && !st.texto.back.trim()) return 'Falta o texto do verso';
+    return null;
+  }
+
+  /* ---------- a arte na caneca ---------- */
+  function arteDe(lado){
+    const t = (st.texto[lado] || '').trim(), cor = st.corArte[lado];
+    if (lado === 'back' && !st.verso) return null;
+    if (lado === 'front' && st.caminho !== 'designer'){
+      let base = null, bor = false;
+      if (st.up.estado === 'done'){ base = ARTE_ENVIADA; bor = st.up.lowres; }
+      else if (st.tpl) base = TEMPLATES.find(x => x.id === st.tpl).arte;
+      if (base) return {...base, sub: t ? esc(t.toUpperCase()) : (base.sub || ''), subCor: t ? cor : null, borrada: bor};
+    }
+    if (!t) return null;
+    const n = t.length;
+    return {texto: esc(t), cor, tam: n <= 5 ? 24 : n <= 8 ? 19 : n <= 12 ? 15 : n <= 16 ? 12 : 9.5};
+  }
+  function caneca(lado){
+    const a = arteDe(lado);
+    let s = KIT.produto({...peca(M(), st.cor), arte:a});
+    if (a && a.subCor) s = s.replace('font-size="6.4"', `font-size="6.4" fill="${a.subCor}"`);
+    if (a && a.borrada) s = borrar(s);
+    if (lado === 'back') s = flip(s);
+    if (lado === 'middle') s = semAlca(s);
+    return s;
+  }
+
+  /* ---------- carrossel ---------- */
+  const slides = () => st.mock ? [{mock:true}, ...fotosDe(M())] : fotosDe(M());
+  function visual(s){
+    if (s.mock) return {bg:'mockbg', html:`<div class="st-art">${caneca(st.lado)}</div>`};
+    if (s.pair) return {bg:s.bg, html:`<div class="st-pair">${s.pair.join('')}</div>`};
+    return {bg:s.bg, html:`<div class="st-art">${s.svg}</div>`};
+  }
+  function pintarPalco(modo = 'fade'){
+    const lista = slides(); if (st.slide >= lista.length || st.slide < 0) st.slide = 0;
+    const s = lista[st.slide], v = visual(s), layers = q('layers'), velhas = [...layers.children];
+    const el = document.createElement('div'); el.className = 'st-layer ' + v.bg; el.innerHTML = v.html;
+    el.setAttribute('role', 'img'); el.setAttribute('aria-label', s.mock ? `Sua caneca, ${LADOS.find(l => l.v === st.lado).n.toLowerCase()}` : s.alt);
+    if (!velhas.length || modo === 'none' || RM){ layers.replaceChildren(el); }
+    else {
+      if (modo === 'turn') el.classList.add('turn-in');
+      if (modo === 'mock') el.classList.add('mock-in');
+      el.style.opacity = '0'; layers.appendChild(el);
+      requestAnimationFrame(() => requestAnimationFrame(() => { el.style.opacity = '1'; }));
+      setTimeout(() => velhas.forEach(x => x.remove()), 300);
+    }
+    q('stage').classList.toggle('zoomable', !s.mock && !P);
+    pintarSobre(lista); pintarNav();
+  }
+  function pintarSobre(lista){
+    const s = lista[st.slide], nF = lista.filter(x => !x.mock).length;
+    let h = '';
+    if (s.mock){
+      h += `<span class="st-tl badge badge-brand">Sua caneca</span>`;
+      h += `<span class="st-tr"><button class="icon-btn glass" data-act="girar" aria-label="Girar a caneca">${ic('rotate')}</button><button class="icon-btn glass" data-act="zoom" aria-label="Ver a prévia em tela cheia">${ic('zoom')}</button></span>`;
+      h += `<div class="st-bc side-seg glass" role="group" aria-label="Lado da caneca">${LADOS.map(l => `<button data-act="lado" data-v="${l.v}" aria-pressed="${st.lado === l.v}">${l.n}</button>`).join('')}</div>`;
+    } else {
+      if (M().selo) h += `<span class="st-tl badge ${M().selo === 'Novo' ? 'badge-soft' : 'badge-brand'}">${M().selo}</span>`;
+      h += `<span class="st-bl badge badge-soft foto-n">Foto ${st.mock ? st.slide : st.slide + 1} de ${nF}</span>`;
+      h += `<span class="st-tr"><button class="icon-btn glass" data-act="zoom" aria-label="Ampliar a foto">${ic('zoom')}</button></span>`;
+    }
+    if (!P && lista.length > 1) h += `<button class="icon-btn glass st-arrow l" data-act="prev" aria-label="Foto anterior">${ic('back')}</button><button class="icon-btn glass st-arrow r" data-act="next" aria-label="Próxima foto">${ic('next')}</button>`;
+    q('over').innerHTML = h;
+  }
+  function pintarNav(){
+    const lista = slides(), s = lista[st.slide];
+    q('dots').innerHTML = lista.length > 1 ? lista.map((x, i) => `<button class="${x.mock ? 'dm' : ''}" data-act="slide" data-v="${i}" aria-label="${x.mock ? 'Sua caneca' : 'Foto ' + (st.mock ? i : i + 1)}" aria-current="${i === st.slide}"><i></i></button>`).join('') : '';
+    if (!P) q('thumbs').innerHTML = lista.map((x, i) => { const v = visual(x); return `<button class="thumb ${v.bg}" data-act="slide" data-v="${i}" aria-label="${x.mock ? 'Sua caneca' : 'Foto ' + (st.mock ? i : i + 1)}" aria-current="${i === st.slide}">${v.html}${x.mock ? '<span class="tl">Sua</span>' : ''}</button>`; }).join('');
+    q('cap').innerHTML = s.mock ? 'Prévia. A loja manda o mockup final para você aprovar.' : (P ? '' : '<span class="zoom-hint">Passe o mouse sobre a foto para ver de perto.</span>');
+  }
+  function mover(d){ const n = slides().length; st.slide = (st.slide + d + n) % n; pintarPalco('fade'); }
+  function mostrarMock(modo){
+    const primeira = !st.mock, longe = st.slide !== 0;
+    st.mock = true; st.slide = 0;
+    pintarPalco(primeira ? 'mock' : longe ? 'fade' : modo);
+    if (primeira) reflow(q('stage'), 'glow');
+  }
+
+  /* ---------- topo: nome, preço, prazo ---------- */
+  function pintarInfo(anim){
+    const m = M(), u = unit(), el = q('info');
+    if (!el.dataset.ok){
+      el.dataset.ok = 1;
+      el.innerHTML = `<div class="i-top"><h1 data-f="nome"></h1><button class="icon-btn" data-act="share" aria-label="Compartilhar esta caneca">${ic('share')}</button></div>
+        <div class="i-price"><span class="price price-lg" data-f="unit" aria-live="polite"></span><span class="t-cap" data-f="cada"></span></div>
+        <p class="i-parc" data-f="parc"></p><p class="pix-line i-pix" data-f="pix"></p><p class="i-inc" data-f="inc"></p>
+        <ul class="i-ass"><li>${ic('clock')}<span data-f="prazo"></span></li><li>${ic('eye')}<span>Você aprova o mockup antes de produzir</span></li></ul>`;
+    }
+    q('nome').textContent = m.nome;
+    numero(q('unit'), u, anim);
+    q('cada').textContent = st.qtd > 1 ? 'cada' : '';
+    q('parc').textContent = parcelas(u);
+    q('pix').textContent = `${din(menos(u, LOJA.pixPct))} no Pix`;
+    const inc = deltas();
+    q('inc').textContent = inc.length ? 'Inclui ' + inc.map(([n, v]) => `${n} (+${din(v)})`).join(' e ') : '';
+    const pe = q('prazo'), pz = prazoDe(st.qtd);
+    if (pe.dataset.v && pe.dataset.v !== String(pz)) reflow(pe.closest('li'), 'flash');
+    pe.dataset.v = pz;
+    pe.innerHTML = `<b>Pronto em ${pz} dias úteis</b>${st.qtd >= 10 ? ` <span class="t-cap">para ${st.qtd} unidades</span>` : ''}`;
+    q('trail').textContent = m.curto;
+    const url = q('url'); if (url) url.textContent = `loja.getaura.com.br/sheid-mania/p/${slug(m.nome)}`;
+  }
+
+  const cab = (n, titulo, extra = '') => `<div class="sec-h"><span class="step" aria-hidden="true">${n}</span><h3>${titulo}</h3>${extra}</div>`;
+
+  /* ---------- 1 · modelo ---------- */
+  function pintarModelo(){
+    const el = sec('modelo'), velha = el.querySelector('.mdl-row'), sl = velha ? velha.scrollLeft : 0;
+    el.innerHTML = cab(1, 'Modelo', `<span class="sec-v">${MODELOS.length} modelos</span>${P ? '' : `<span class="mdl-arrows"><button class="icon-btn" data-act="mdl" data-v="-1" aria-label="Ver modelos anteriores">${ic('back')}</button><button class="icon-btn" data-act="mdl" data-v="1" aria-label="Ver mais modelos">${ic('next')}</button></span>`}`) +
+      `<div class="mdl-wrap"><div class="mdl-row" role="radiogroup" aria-label="Modelo">${MODELOS.map(m => `<button class="mdl" role="radio" aria-checked="${m.id === st.modelo}" data-act="modelo" data-v="${m.id}"><span class="mdl-img mockbg">${KIT.produto(peca(m, 0))}</span><span class="mdl-n">${m.curto}</span><span class="mdl-p">${din(m.preco)}</span></button>`).join('')}</div></div>`;
+    el.querySelector('.mdl-row').scrollLeft = sl;
+  }
+  function mostrarModeloEscolhido(){
+    const row = sec('modelo').querySelector('.mdl-row'), b = row.querySelector('[aria-checked="true"]');
+    if (!b) return;
+    const esq = b.offsetLeft - 16, dir = b.offsetLeft + b.offsetWidth - row.clientWidth + 16;
+    if (row.scrollLeft > esq) row.scrollTo({left:esq, behavior: RM ? 'auto' : 'smooth'});
+    else if (row.scrollLeft < dir) row.scrollTo({left:dir, behavior: RM ? 'auto' : 'smooth'});
+  }
+  function trocarModelo(id){
+    if (!MOD[id] || id === st.modelo) return;
+    const nomeCor = M().cores[st.cor].n; st.modelo = id;
+    const i = M().cores.findIndex(c => c.n === nomeCor); st.cor = i >= 0 ? i : 0; st.slide = 0;
+    preservando(() => { pintarModelo(); pintarCor(); pintarRel(); pintarDet(); pintarPainel(); });
+    mostrarModeloEscolhido(); pintarPalco('fade'); atualizar(true);
+  }
+
+  /* ---------- 2 · cor ---------- */
+  function pintarCor(){
+    const m = M(), c = m.cores[st.cor];
+    sec('cor').innerHTML = cab(2, 'Cor da caneca', `<span class="sec-v">${c.n}</span>`) + (m.cores.length > 1
+      ? `<div class="sw-row" role="radiogroup" aria-label="Cor da caneca">${m.cores.map((k, i) => `<button class="sw-btn" role="radio" aria-checked="${i === st.cor}" aria-label="${k.n}" data-act="cor" data-v="${i}"><span class="swatch ${i === st.cor ? 'on' : ''}" style="background:${k.c}"></span></button>`).join('')}</div>`
+      : `<p class="one-color"><span class="swatch" style="background:${c.c}"></span>${m.so}</p>`);
+  }
+
+  /* ---------- 3 · arte ---------- */
+  function pintarArte(){
+    const b = BRIEF[st.caminho];
+    sec('arte').innerHTML = cab(3, 'Como você quer resolver a arte?', `<span data-f="arte-tag"></span>`) +
+      `<div class="paths" role="radiogroup" aria-label="Como resolver a arte">${CAMINHOS.map(c => `<button class="path" role="radio" aria-checked="${c.v === st.caminho}" data-act="caminho" data-v="${c.v}"><span class="path-ic">${ic(c.icon)}</span><span class="path-tx"><b>${c.label}</b><span>${c.hint}</span></span><span class="pill ${c.delta ? '' : 'free'}">${c.delta ? '+' + din(c.delta) : 'Incluso'}</span></button>`).join('')}</div>` +
+      (b ? `<div class="field brief"><label for="${U}-brief">${b.title}</label><span class="hint">${b.hint}</span><textarea class="input ta" id="${U}-brief" data-k="brief" maxlength="600" placeholder="${b.ph}">${esc(st.brief)}</textarea><div class="row"><span></span><span class="cnt" data-f="brief-cnt">${st.brief.length}/600</span></div></div>` : '') +
+      `<div class="sides"><span class="label">A arte em cada lado</span><div class="seg" role="tablist" aria-label="Lado da caneca" data-f="seg"></div><div class="panel-side" role="tabpanel" data-f="panel"></div></div>`;
+    pintarSeg(); pintarPainel(); pintarTag();
+  }
+  function pintarTag(){
+    const el = q('arte-tag'); if (!el) return;
+    const f = falta();
+    el.innerHTML = f ? `<span class="tag-falta">${f.includes('verso') ? 'Falta o verso' : st.up.estado === 'uploading' ? 'Enviando' : 'Falta a arte'}</span>`
+      : `<span class="tag-ok">${ic('check')}${st.caminho === 'designer' ? 'A loja cria' : 'Pronta'}</span>`;
+  }
+  function pintarSeg(){
+    const el = q('seg'); if (!el) return;
+    el.innerHTML = LADOS.map(l => `<button role="tab" aria-selected="${st.lado === l.v}" data-act="lado" data-v="${l.v}">${l.n}${l.v === 'back' && !st.verso ? ` <small>+R$ ${VERSO}</small>` : ''}${arteDe(l.v) ? '<i class="d" aria-hidden="true"></i>' : ''}</button>`).join('');
+  }
+  function pintarPainel(){
+    const p = q('panel'); if (!p) return;
+    let h = '';
+    if (st.lado === 'front'){
+      if (st.caminho === 'designer') h += `<div class="side-note">${ic('brush')}<span>A loja cria a arte a partir da sua ideia e manda o mockup para você aprovar antes de produzir.</span></div>`;
+      else {
+        h += envio();
+        if (st.caminho === 'none' && st.up.estado === 'idle') h += `<div class="or">ou escolha uma arte pronta</div><div class="tpl-row" role="radiogroup" aria-label="Artes prontas">${TEMPLATES.map(t => `<button class="tpl" role="radio" aria-checked="${st.tpl === t.id}" data-act="tpl" data-v="${t.id}"><span class="tpl-img">${arteMini(t.arte)}</span><span>${t.nome}</span></button>`).join('')}</div>`;
+      }
+      h += campoTexto('front', (st.up.estado === 'done' || st.tpl) && st.caminho !== 'designer' ? 'Frase embaixo da arte' : 'Nome ou frase');
+    } else if (st.lado === 'back'){
+      h += `<button class="optin" role="switch" aria-checked="${st.verso}" data-act="verso"><span class="box">${ic('check')}</span><span><b>Personalizar também o verso</b><span class="t-cap">${st.verso ? `+${din(VERSO)} no total` : 'Opcional · adiciona arte no lado de trás da peça'}</span></span><span class="pill">+${din(VERSO)}</span></button>`;
+      if (st.verso) h += campoTexto('back', 'Nome ou frase do verso', true);
+    } else {
+      h += `<div class="side-note">${ic('check')}<span>Meio incluso, sem custo adicional. A frase fica na faixa do meio, do lado oposto à alça.</span></div>` + campoTexto('middle', 'Frase do meio');
+    }
+    p.innerHTML = h;
+  }
+  function avisoCor(l){ return KIT.contrast(peca(M(), st.cor).corpo, st.corArte[l]) < 1.8 ? 'Essa cor quase some nesta caneca. Experimente outra.' : ''; }
+  function campoTexto(l, label, obrig){
+    const v = st.texto[l], id = `${U}-tx-${l}`, cf = st.corArte[l];
+    return `<div class="field"><label for="${id}">${label}${obrig ? '' : ' <span class="opt">(opcional)</span>'}</label>
+      <div class="inp-wrap"><input class="input" id="${id}" data-k="tx-${l}" maxlength="${MAXTXT}" autocomplete="off" placeholder="${l === 'front' ? 'Ex.: Te amo, mãe' : 'Ex.: Com amor, Helena'}" value="${esc(v)}"><span class="cnt" data-f="cnt-${l}">${v.length}/${MAXTXT}</span></div></div>
+      <div class="field"><span class="lbl" id="${id}-c">Cor da arte</span><div class="sw-row sm" role="radiogroup" aria-labelledby="${id}-c">${ARTE_CORES.map(k => `<button class="sw-btn" role="radio" aria-checked="${k.c === cf}" aria-label="${k.n}" data-act="corarte" data-v="${k.c}"><span class="swatch ${k.c === cf ? 'on' : ''}" style="background:${k.c}"></span></button>`).join('')}</div>
+      <span class="hint warn" data-f="warn-${l}">${avisoCor(l)}</span></div>`;
+  }
+  function envio(){
+    const u = st.up;
+    if (u.estado === 'idle') return `<button class="drop" data-act="upload" data-f="drop"><span class="ci">${ic('upload', 'lg')}</span><b>Enviar a arte da frente</b><span class="t-cap">PNG, JPG ou PDF · até 15 MB</span><span class="t-cap">Ela aparece na caneca ${P ? 'lá em cima' : 'ao lado'} assim que chegar.</span></button>`;
+    if (u.estado === 'uploading') return `<div class="file" data-f="drop"><span class="file-th">${ic('image')}</span><div class="file-tx"><b>${u.nome}</b><div class="prog" role="progressbar" aria-label="Enviando a arte" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${u.pct}"><i data-f="prog" style="width:${u.pct}%"></i></div><span class="t-cap" data-f="prog-t">Enviando… ${u.pct}%</span></div><button class="icon-btn" data-act="cancelar" aria-label="Cancelar o envio">${ic('close')}</button></div>`;
+    const low = u.lowres;
+    return `<div class="file" data-f="drop"><span class="file-th">${arteMini(ARTE_ENVIADA, low)}</span><div class="file-tx"><b>${u.nome}</b><span class="t-cap">${low ? '640 × 640 px · 96 KB' : '2400 × 2400 px · 1,8 MB'}</span></div><span class="tag-ok">${ic('check')}Enviada</span>
+      <div class="file-act">${low ? '' : `<button class="btn btn-secondary btn-md" data-act="upload">${ic('refresh', 'sm')}Trocar</button>`}<button class="btn btn-ghost btn-md" data-act="remover">${ic('trash', 'sm')}Remover</button></div>
+      ${low ? `<div class="note note-amber" role="alert">${ic('alert', 'sm')}<div><p>Essa foto tem 640 px. Na caneca ela pode sair borrada. Mande uma maior ou peça para a loja ajustar.</p>${st.caminho === 'adjust' ? '<p>Você já pediu o ajuste: a loja melhora o que der e mostra no mockup antes de produzir.</p>' : ''}<div class="note-act"><button class="btn btn-md" data-act="upload">Mandar outra</button>${st.caminho === 'none' ? `<button class="btn btn-md" data-act="caminho" data-v="adjust">Pedir ajuste · +${din(10)}</button>` : ''}</div></div></div>` : ''}</div>`;
+  }
+  function enviar(low, desde = 4, lento = false){
+    clearInterval(upTimer);
+    if (st.caminho === 'designer') st.caminho = 'none';
+    st.tpl = null; st.lado = 'front';
+    st.up = {estado:'uploading', pct:desde, lowres:low, nome: low ? 'foto-mae.jpg' : 'arte-dia-das-maes.png'};
+    preservando(pintarArte); atualizar(false);
+    const passo = lento ? 1 : 4;
+    upTimer = setInterval(() => {
+      st.up.pct = Math.min(100, st.up.pct + passo);
+      const bar = q('prog');
+      if (bar){ bar.style.width = st.up.pct + '%'; q('prog-t').textContent = `Enviando… ${st.up.pct}%`; bar.parentElement.setAttribute('aria-valuenow', st.up.pct); }
+      if (st.up.pct >= 100){ clearInterval(upTimer); st.up.estado = 'done'; preservando(pintarArte); mostrarMock('fade'); atualizar(false); }
+    }, 90);
+  }
+  function mudarCaminho(v){
+    st.caminho = v;
+    if (v === 'designer'){ clearInterval(upTimer); st.up = {estado:'idle', pct:0, lowres:false, nome:''}; st.tpl = null; }
+    if (v === 'adjust') st.tpl = null;
+    preservando(pintarArte); pintarPalco('none'); atualizar(true);
+  }
+  function mudarLado(v, gira = true){
+    st.lado = v;
+    preservando(() => { pintarSeg(); pintarPainel(); });
+    if (st.mock){ st.slide = 0; pintarPalco(gira ? 'turn' : 'none'); }
+    pintarDock();
+  }
+
+  /* ---------- 4 · quantidade ---------- */
+  function pintarQtd(){
+    sec('qtd').innerHTML = cab(4, 'Quantidade') + `
+      <div class="q-row"><div class="stepper"><button data-act="menos" aria-label="Diminuir quantidade">${ic('minus')}</button><input data-k="qtd" id="${U}-qtd" inputmode="numeric" autocomplete="off" aria-label="Quantidade" value="${st.qtd}"><button data-act="mais" aria-label="Aumentar quantidade">${ic('plus')}</button></div>
+      <div class="q-unit"><span class="price" data-f="q-unit"></span><span class="t-cap">por unidade</span></div></div>
+      <div class="rl" data-f="rl"><div class="rl-track"><i class="rl-fill"></i></div><span class="rl-knob"></span><div data-f="rl-stops"></div></div>
+      <p class="q-msg" data-f="q-msg" aria-live="polite"></p><p class="q-sub" data-f="q-sub"></p>
+      <p class="q-prazo" data-f="q-prazo"></p>
+      <a class="lote" href="#" data-act="lote"><span class="ci">${ic('box')}</span><span><b>Comprando para evento ou empresa?</b><span class="t-cap">Peça um orçamento em lote: mande a lista de nomes e a loja responde com o preço.</span></span>${ic('next')}</a>`;
+  }
+  function posRegua(n){
+    const s = PARADAS.map(p => p.min), k = s.length - 1;
+    if (n <= s[0]) return 0; if (n >= s[k]) return 1;
+    for (let i = 0; i < k; i++) if (n < s[i + 1]) return (i + (n - s[i]) / (s[i + 1] - s[i])) / k;
+    return 1;
+  }
+  function pintarQtdDin(){
+    if (!q('rl')) return;
+    const n = st.qtd, t = faixaDe(n), prox = proximaDe(n);
+    numero(q('q-unit'), unit(), true);
+    q('rl').style.setProperty('--p', posRegua(n));
+    q('rl-stops').innerHTML = PARADAS.map((p, i) => {
+      const first = i === 0, last = i === PARADAS.length - 1, on = n >= p.min, u = unitAt(p.min), tag = first ? 'span' : 'button';
+      return `<${tag} class="rl-stop${first ? ' first' : ''}${last ? ' last' : ''}${on ? ' on' : ''}" style="left:${i / (PARADAS.length - 1) * 100}%" ${first ? '' : `data-act="faixa" data-v="${p.min}" aria-label="Levar ${p.min} unidades: ${din(u)} cada"`}><span class="q">${p.min} un${p.pct ? `<small>−${p.pct}%</small>` : ''}</span><span class="dot"></span><span class="pp">${din(u)}</span></${tag}>`;
+    }).join('');
+    let msg;
+    if (!prox) msg = `Você chegou ao menor preço: <em>${din(unit())}</em> cada`;
+    else msg = (n > 1 && n >= prox.min / 2 ? `Faltam ${prox.min - n} para pagar` : `Leve ${prox.min} e pague`) + ` <em>${din(unitAt(prox.min))}</em> cada`;
+    q('q-msg').innerHTML = msg;
+    q('q-sub').textContent = t ? `Você economiza ${din(Math.round((unitAt(1) - unit()) * n * 100) / 100)} com o desconto de ${t.pct}%.` : '';
+    q('q-prazo').innerHTML = `${ic('clock')}<span>${n} ${n === 1 ? 'unidade' : 'unidades'}: <b>pronto em ${prazoDe(n)} dias úteis</b></span>`;
+  }
+  function setQtd(v){
+    st.qtd = Math.max(1, Math.min(999, Math.round(v) || 1));
+    const inp = host.querySelector('[data-k="qtd"]');
+    if (inp && document.activeElement !== inp) inp.value = st.qtd;
+    atualizar(true);
+  }
+
+  /* ---------- 5 · frete ---------- */
+  function pintarFrete(){
+    const id = `${U}-cep`;
+    sec('frete').innerHTML = cab(5, 'Entrega ou retirada') + `
+      <form class="field" data-f="cep-form" novalidate><label for="${id}">Calcular frete</label>
+        <div class="cep-row"><input class="input${st.cepErro ? ' err' : ''}" id="${id}" data-k="cep" inputmode="numeric" autocomplete="postal-code" placeholder="Seu CEP" maxlength="9" value="${st.cep}"${st.cepErro ? ` aria-invalid="true" aria-describedby="${id}-e"` : ''}><button class="btn btn-secondary" type="submit">Calcular</button></div>
+        ${st.cepErro ? `<span class="error" id="${id}-e">${ic('alert', 'sm')}${st.cepErro}</span>` : `<a class="cep-help" href="#" data-act="naosei">Não sei meu CEP</a>`}
+      </form>
+      <ul class="ship">${st.frete ? `<li class="${st.freteNovo ? 'new' : ''}"><span class="ship-ic">${ic('truck')}</span><span><b>Receber em casa</b><span class="t-cap">${st.frete.onde} · ${st.frete.eta}</span></span><span class="price">${din(st.frete.fee)}</span></li>` : ''}
+        <li><span class="ship-ic">${ic('store')}</span><span><b>Retire na loja · ${LOJA.bairro}</b><span class="t-cap">${LOJA.rua} · quando ficar pronta</span></span><span class="free">Grátis</span></li></ul>`;
+  }
+  function calcularFrete(){
+    const d = st.cep.replace(/\D/g, '');
+    if (d.length < 8){ st.frete = null; st.cepErro = d.length ? 'Faltam números no CEP. Confira os 8 dígitos.' : 'Digite o seu CEP para calcular.'; }
+    else {
+      st.cepErro = ''; st.freteNovo = true;
+      st.frete = d.startsWith('122') ? {fee:12, onde:'São José dos Campos', eta:'chega 1 dia útil depois de pronta'}
+        : {fee:24.9, onde: d.startsWith('0') ? 'São Paulo/SP, pelos Correios' : 'Pelos Correios', eta:'5 a 7 dias úteis depois de pronta'};
+    }
+    preservando(pintarFrete); st.freteNovo = false;
+  }
+
+  /* ---------- abaixo da dobra ---------- */
+  const areaSvg = `<svg viewBox="0 0 130 84" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="4" y="6" width="104" height="46" rx="3" stroke-dasharray="3 2.5" style="fill:var(--brand-wash-2)"/><path d="M4 62h104M4 58.5v7M108 58.5v7M118 6v46M114.5 6h7M114.5 52h7"/><text x="56" y="78" text-anchor="middle" fill="currentColor" stroke="none" font-size="10" font-family="'DM Mono',monospace">20 cm</text><text x="126" y="33" text-anchor="middle" fill="currentColor" stroke="none" font-size="10" font-family="'DM Mono',monospace" transform="rotate(90 126 33)">9 cm</text><text x="56" y="33" text-anchor="middle" fill="currentColor" stroke="none" font-size="8.5" font-family="'DM Sans',sans-serif">sua arte</text></svg>`;
+  function pintarDet(){
+    const m = M();
+    sec('det').innerHTML = `<div><h2 class="t-h3">Sobre esta caneca</h2>
+      <p class="t-body det-desc">${m.desc} Sua arte é impressa em volta do corpo da caneca, com as cores vivas da sublimação.</p>
+      <div class="area card">${areaSvg}<div><b>Área de impressão: 20 × 9 cm, dá a volta na caneca</b><span class="t-cap">Para sair nítida, mande a arte com pelo menos 2400 × 1080 px.</span></div></div></div>
+      <div class="det-list">
+        <button class="det-row" data-act="guia"><span class="ci">${ic('ruler')}</span><span><b>Guia de medidas</b><span class="t-cap">Altura, diâmetro e capacidade</span></span>${ic('next')}</button>
+        <div class="det-row"><span class="ci">${ic('shield')}</span><span><b>Revisões da arte</b><span class="t-cap">Você aprova o mockup antes de produzir. 2 revisões inclusas; revisão extra R$ 10,00.</span></span><span></span></div>
+        <div class="det-row"><span class="ci">${ic('clock')}</span><span><b>Prazo por quantidade</b><span class="t-cap">Até 9 un: 3 dias úteis · 10 a 49 un: 5 dias úteis · 50 un ou mais: 8 dias úteis</span></span><span></span></div>
+        <a class="det-row" href="#" data-act="wa"><span class="ci">${ic('wa')}</span><span><b>Tirar dúvida no WhatsApp</b><span class="t-cap">${LOJA.wa} · a mensagem já vai com esta caneca</span></span>${ic('next')}</a>
+      </div>`;
+  }
+  function pintarRel(){
+    const atual = M().preco;
+    const outros = MODELOS.filter(m => m.id !== st.modelo).sort((a, b) => Math.abs(a.preco - atual) - Math.abs(b.preco - atual)).slice(0, 4).sort((a, b) => a.preco - b.preco);
+    sec('rel').innerHTML = `<h2>Da mesma categoria</h2><div class="rel-row">${outros.map(m => `<button class="rel" data-act="rel" data-v="${m.id}"><span class="shot ph-linen">${KIT.produto({...peca(m, 0), arte:m.amostra})}</span><span class="display">${m.nome}</span><span class="price">${din(m.preco)}</span></button>`).join('')}</div>`;
+  }
+
+  /* ---------- barra / bloco de compra ---------- */
+  function pintarAcao(){
+    const f = falta(), tot = total(), u = unit();
+    qa('acao').forEach(el => {
+      const desk = el.classList.contains('buybox');
+      if (!el.dataset.ok){
+        el.dataset.ok = 1;
+        el.innerHTML = desk
+          ? `<div class="bb-top"><div><span class="label">Total</span><span class="price price-lg" data-g="tot" aria-live="polite"></span></div><div class="bb-meta" data-g="meta"></div></div>
+             <div data-g="falta"></div>
+             <div class="acts"><button class="btn btn-secondary" data-act="comprar">Comprar agora</button><button class="btn btn-primary js-add" data-act="add">${ic('bag')}<span>Adicionar à sacola</span></button></div>`
+          : `<div class="bar-top"><div data-g="falta"></div><div class="tot"><span class="price" data-g="tot" aria-live="polite"></span><span class="t-cap" data-g="meta"></span></div></div>
+             <div class="acts"><button class="btn btn-secondary" data-act="comprar">Comprar agora</button><button class="btn btn-primary js-add" data-act="add">Adicionar à sacola</button></div>`;
+      }
+      numero(el.querySelector('[data-g="tot"]'), tot, true);
+      el.querySelector('[data-g="meta"]').innerHTML = desk
+        ? `${st.qtd} un × ${din(u)}<br><span class="pix-line">${din(menos(tot, LOJA.pixPct))} no Pix</span>`
+        : (st.qtd > 1 ? `${st.qtd} un × ${din(u)}` : `${din(menos(tot, LOJA.pixPct))} no Pix`);
+      el.querySelector('[data-g="falta"]').innerHTML = f
+        ? `<button class="falta" data-act="irfalta">${f}</button>`
+        : `<span class="falta ok">${ic('check')}Tudo pronto para a sacola</span>`;
+    });
+  }
+  function pintarSacola(pulsa){
+    qa('count').forEach(c => { c.hidden = !st.sacola; c.textContent = st.sacola; if (pulsa) reflow(c, 'pulse'); });
+  }
+  function pintarDock(){
+    if (!P) return;
+    const m = M();
+    q('dock-img').innerHTML = st.mock ? caneca(st.lado) : KIT.produto(peca(m, st.cor));
+    q('dock-n').textContent = st.mock ? 'Sua caneca' : m.nome;
+    q('dock-s').textContent = st.mock ? `${m.curto} · ${m.cores[st.cor].n}` : m.cores[st.cor].n;
+    numero(q('dock-p'), unit(), false);
+  }
+  function adicionar(direto){
+    if (falta()){ irParaFalta(); return; }
+    if (direto){ toast('Segue direto para o checkout com esta caneca (Fase 2).'); return; }
+    st.sacola++; pintarSacola(true);
+    qa('acao').forEach(el => { const b = el.querySelector('.js-add'); b.classList.add('done-add'); b.innerHTML = `${ic('check')}<span>Adicionado</span>`; });
+    clearTimeout(addTimer);
+    addTimer = setTimeout(() => qa('acao').forEach(el => { const b = el.querySelector('.js-add'); b.classList.remove('done-add'); b.innerHTML = el.classList.contains('buybox') ? `${ic('bag')}<span>Adicionar à sacola</span>` : 'Adicionar à sacola'; }), 1400);
+    toast(`${M().nome} na sacola.`, 'check', 'Ver sacola');
+  }
+  function irParaFalta(){
+    const f = falta(); if (!f) return;
+    const verso = f.includes('verso'), lado = verso ? 'back' : 'front';
+    if (st.lado !== lado) mudarLado(lado);
+    const alvo = verso ? host.querySelector('[data-k="tx-back"]') : (q('drop') || sec('arte').querySelector('.paths'));
+    rolarAte(alvo, () => { reflow(alvo, 'attn'); if (verso) alvo.focus({preventScroll:true}); });
+    qa('acao').forEach(el => reflow(el.querySelector('.falta'), 'hi'));
+  }
+  function rolarAte(el, depois){
+    const sc = scroller(); if (!el || !sc) return;
+    sc.scrollTo({top: topIn(el, sc) - (P ? 96 + 72 + 12 : 64 + 20), behavior: RM ? 'auto' : 'smooth'});
+    if (depois) setTimeout(depois, RM ? 0 : 450);
+  }
+  function toast(msg, icone, acao){
+    const t = host.querySelector('.p-toast');
+    t.innerHTML = `${icone ? ic(icone, 'sm') : ''}<span>${msg}</span>${acao ? `<button data-act="versacola">${acao}</button>` : ''}`;
+    t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 2800);
+  }
+
+  /* ---------- lupa e guia ---------- */
+  function abrirLupa(){
+    const lista = slides(); lb = {i:st.slide, lista, volta:document.activeElement};
+    pintarLupa(); host.querySelector('.p-ovl').classList.add('on');
+    host.querySelector('.p-ovl [data-act="fechar"]').focus({preventScroll:true});
+  }
+  function pintarLupa(){
+    const s = lb.lista[lb.i], v = visual(s), nF = lb.lista.filter(x => !x.mock).length;
+    host.querySelector('.p-ovl').innerHTML = `<div class="lb" role="dialog" aria-modal="true" aria-label="${s.mock ? 'Prévia da sua caneca' : 'Foto ampliada'}"><div class="lb-top"><span>${s.mock ? 'Sua caneca' : `Foto ${st.mock ? lb.i : lb.i + 1} de ${nF}`}</span><button class="icon-btn" data-act="fechar" aria-label="Fechar">${ic('close')}</button></div><div class="lb-img"><div class="st-layer ${v.bg}">${v.html}</div>${lb.lista.length > 1 ? `<button class="lb-nav l" data-act="lb" data-v="-1" aria-label="Anterior">${ic('back')}</button><button class="lb-nav r" data-act="lb" data-v="1" aria-label="Próxima">${ic('next')}</button>` : ''}</div></div>`;
+  }
+  const guiaSvg = `<svg viewBox="0 0 150 150" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M36 34h66v84a8 8 0 0 1-8 8H44a8 8 0 0 1-8-8Z"/><path d="M102 56c24 0 24 44 0 44"/><ellipse cx="69" cy="34" rx="33" ry="4"/><path d="M20 34v92M16 34h8M16 126h8M36 140h66M36 136v8M102 136v8" stroke-width="1"/><text x="12" y="84" fill="currentColor" stroke="none" font-size="10" font-family="'DM Mono',monospace" text-anchor="middle" transform="rotate(-90 12 84)">9,5 cm</text><text x="69" y="150" fill="currentColor" stroke="none" font-size="10" font-family="'DM Mono',monospace" text-anchor="middle">8,2 cm</text></svg>`;
+  function abrirGuia(){
+    const o = host.querySelector('.p-ovl'), m = M();
+    lb = null;
+    o.innerHTML = `<div class="ovl-bg" data-act="fechar"></div><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="${U}-gt"><div class="grab"></div><div class="sh-h"><h2 class="t-h3" id="${U}-gt">Guia de medidas</h2><button class="icon-btn" data-act="fechar" aria-label="Fechar o guia">${ic('close')}</button></div><p class="t-small">${m.nome}</p>
+      <div class="guide">${guiaSvg}<table class="gt"><tbody><tr><th>Altura</th><td>9,5 cm</td></tr><tr><th>Diâmetro da boca</th><td>8,2 cm</td></tr><tr><th>Capacidade</th><td>${m.ml || 325} ml</td></tr><tr><th>Área de impressão</th><td>20 × 9 cm</td></tr></tbody></table></div>
+      <p class="t-cap">Medidas de referência do modelo. A área de impressão dá a volta na caneca e para antes da alça.</p>
+      <button class="btn btn-secondary btn-block" data-act="fechar" style="margin-top:16px">Entendi</button></div>`;
+    o.classList.add('on'); o.querySelector('.sh-h .icon-btn').focus({preventScroll:true});
+  }
+  function fechar(){ const o = host.querySelector('.p-ovl'); o.classList.remove('on'); o.innerHTML = ''; if (lb && lb.volta && host.contains(lb.volta)) lb.volta.focus({preventScroll:true}); lb = null; }
+
+  /* ---------- ciclo ---------- */
+  function preservando(fn){
+    const a = document.activeElement, dentro = a && host.contains(a);
+    const k = dentro && a.dataset.k, act = dentro && a.dataset.act, v = dentro ? a.dataset.v : undefined;
+    const sel = k && a.selectionStart;
+    fn();
+    if (!dentro || document.activeElement === a && host.contains(a)) return;
+    const n = k ? host.querySelector(`[data-k="${k}"]`) : act ? host.querySelector(`[data-act="${act}"]${v != null ? `[data-v="${v}"]` : ''}`) : null;
+    if (n){ n.focus({preventScroll:true}); if (k && n.setSelectionRange) try { n.setSelectionRange(sel, sel); } catch (e) {} }
+  }
+  function atualizar(anim){ pintarInfo(anim); pintarAcao(); pintarDock(); pintarTag(); pintarSeg(); pintarQtdDin(); }
+  function renderTudo(){
+    pintarModelo(); pintarCor(); pintarArte(); pintarQtd(); pintarFrete(); pintarDet(); pintarRel();
+    pintarPalco('none'); pintarSacola(false); atualizar(false);
+  }
+  function agir(act, v){
+    switch (act){
+      case 'modelo': trocarModelo(v); break;
+      case 'rel': trocarModelo(v); scroller().scrollTo({top:0, behavior: RM ? 'auto' : 'smooth'}); break;
+      case 'cor': st.cor = +v; preservando(() => { pintarCor(); pintarPainel(); }); mostrarMock('fade'); atualizar(true); break;
+      case 'caminho': mudarCaminho(v); break;
+      case 'upload': enviar(false); break;
+      case 'cancelar': case 'remover': clearInterval(upTimer); st.up = {estado:'idle', pct:0, lowres:false, nome:''}; preservando(pintarArte); pintarPalco('none'); atualizar(false); break;
+      case 'tpl': st.tpl = st.tpl === v ? null : v; preservando(pintarArte); if (st.tpl) mostrarMock('fade'); else pintarPalco('none'); atualizar(false); break;
+      case 'lado': mudarLado(v); break;
+      case 'girar': { const i = LADOS.findIndex(l => l.v === st.lado); mudarLado(LADOS[(i + 1) % 3].v); break; }
+      case 'verso': st.verso = !st.verso; preservando(pintarPainel); if (st.verso) mostrarMock('turn'); else pintarPalco('none'); atualizar(true); break;
+      case 'corarte': st.corArte[st.lado] = v; preservando(pintarPainel); if (arteDe(st.lado)) mostrarMock('none'); atualizar(false); break;
+      case 'menos': setQtd(st.qtd - 1); break;
+      case 'mais': setQtd(st.qtd + 1); break;
+      case 'faixa': setQtd(Math.max(st.qtd, +v)); break;
+      case 'slide': st.slide = +v; pintarPalco('fade'); break;
+      case 'prev': mover(-1); break;
+      case 'next': mover(1); break;
+      case 'mdl': { const r = sec('modelo').querySelector('.mdl-row'); r.scrollBy({left: +v * 324, behavior: RM ? 'auto' : 'smooth'}); break; }
+      case 'zoom': abrirLupa(); break;
+      case 'lb': lb.i = (lb.i + +v + lb.lista.length) % lb.lista.length; pintarLupa(); break;
+      case 'fechar': fechar(); break;
+      case 'guia': abrirGuia(); break;
+      case 'share': toast('Link copiado. Cole no WhatsApp para mostrar.', 'check'); break;
+      case 'add': adicionar(false); break;
+      case 'comprar': adicionar(true); break;
+      case 'irfalta': irParaFalta(); break;
+      case 'topo': scroller().scrollTo({top:0, behavior: RM ? 'auto' : 'smooth'}); break;
+      case 'grade': case 'voltar': irPara('tela-9'); break;
+      case 'inicio': toast('Volta para a página inicial da loja.'); break;
+      case 'sacola': case 'versacola': toast('A sacola abre em gaveta: é o mockup da Fase 2.'); break;
+      case 'busca': toast('A busca mora no cabeçalho da loja (Fase 5).'); break;
+      case 'cat': toast('Abre a categoria.'); break;
+      case 'lote': toast('Abre o orçamento em lote já com esta caneca.'); break;
+      case 'wa': toast('Abre o WhatsApp da loja com a caneca, a arte e o valor.'); break;
+      case 'naosei': toast('Abre a busca de CEP dos Correios.'); break;
+    }
+  }
+
+  /* ---------- eventos (uma vez por moldura) ---------- */
+  host.addEventListener('click', e => {
+    const b = e.target.closest('[data-act]'); if (!b || !host.contains(b)) return;
+    e.preventDefault(); agir(b.dataset.act, b.dataset.v);
+  });
+  host.addEventListener('submit', e => { e.preventDefault(); calcularFrete(); });
+  host.addEventListener('input', e => {
+    const k = e.target.dataset.k; if (!k) return;
+    if (k === 'qtd'){ const d = e.target.value.replace(/\D/g, '').slice(0, 3); if (d !== e.target.value) e.target.value = d; if (d) setQtd(+d); return; }
+    if (k === 'cep'){ const d = e.target.value.replace(/\D/g, '').slice(0, 8); e.target.value = st.cep = d.length > 5 ? d.slice(0, 5) + '-' + d.slice(5) : d; return; }
+    if (k === 'brief'){ st.brief = e.target.value; q('brief-cnt').textContent = `${st.brief.length}/600`; return; }
+    if (k.startsWith('tx-')){
+      const l = k.slice(3); st.texto[l] = e.target.value.slice(0, MAXTXT);
+      q('cnt-' + l).textContent = `${st.texto[l].length}/${MAXTXT}`;
+      if (st.texto[l].trim()) mostrarMock('none'); else pintarPalco('none');
+      atualizar(false);
+    }
+  });
+  host.addEventListener('focusout', e => { if (e.target.dataset && e.target.dataset.k === 'qtd') e.target.value = st.qtd; });
+  host.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && host.querySelector('.p-ovl.on')) fechar();
+    if (e.key === 'Enter' && e.target.dataset && e.target.dataset.k === 'qtd') e.target.blur();
+    if (e.target.dataset && e.target.dataset.f === 'stage'){ if (e.key === 'ArrowRight') mover(1); if (e.key === 'ArrowLeft') mover(-1); }
+  });
+
+  /* ---------- montagem ---------- */
+  function montar(){
+    clearInterval(upTimer); st = novoEstado();
+    const pagina = `<div class="p-page">
+      <nav class="trail" aria-label="Você está em"><a href="#" data-act="inicio">Início</a><span class="sep" aria-hidden="true">/</span><a href="#" data-act="grade">Canecas</a><span class="sep" aria-hidden="true">/</span><span aria-current="page" data-f="trail"></span></nav>
+      <div class="p-cols">
+        <div class="p-gal"><div class="thumbs" data-f="thumbs"></div>
+          <div class="stage-wrap"><div class="stage" data-f="stage" tabindex="0" role="region" aria-roledescription="carrossel" aria-label="Fotos e prévia da caneca"><div class="st-layers" data-f="layers"></div><div class="st-over" data-f="over"></div></div>
+          <div class="dots" data-f="dots"></div><p class="st-cap" data-f="cap"></p></div></div>
+        <div class="p-cfg"><div class="p-info" data-f="info"></div>
+          <section class="sec" data-sec="modelo"></section><section class="sec" data-sec="cor"></section><section class="sec" data-sec="arte"></section><section class="sec" data-sec="qtd"></section><section class="sec" data-sec="frete"></section>
+          <a class="p-wa" href="#" data-act="wa">${ic('wa', 'sm')}Prefere pedir pelo WhatsApp?</a>
+          <div class="buybox" data-f="acao"></div></div>
+      </div>
+      <section class="p-det" data-sec="det"></section><section class="p-rel" data-sec="rel"></section>${rodape}</div>`;
+    if (P){
+      host.innerHTML = `<div class="notch"></div><div class="screen sv pdp is-phone">
+        <div class="p-top">${statusbar()}<div class="p-head"><button class="icon-btn" data-act="voltar" aria-label="Voltar para Canecas">${ic('back')}</button><span class="wm">Sheid Mania</span><button class="icon-btn" data-act="busca" aria-label="Buscar na loja">${ic('search')}</button><button class="icon-btn" data-act="sacola" aria-label="Abrir a sacola">${ic('bag')}<span class="count" data-f="count" hidden>0</span></button></div></div>
+        <div class="scroll">${pagina}</div>
+        <div class="p-dock"><button class="dock-btn" data-act="topo" aria-label="Voltar para a foto grande"><span class="dock-img mockbg" data-f="dock-img"></span><span class="dock-tx"><b data-f="dock-n"></b><span class="t-cap" data-f="dock-s"></span></span><span class="dock-p"><span class="price" data-f="dock-p"></span><span class="dock-go">Ver maior</span></span></button></div>
+        <div class="p-bar" data-f="acao"></div>
+        <div class="p-toast" role="status" aria-live="polite"></div><div class="p-ovl"></div></div>`;
+      const sc = host.querySelector('.scroll'), top = host.querySelector('.p-top'), dk = host.querySelector('.p-dock'), sw = host.querySelector('.stage-wrap');
+      sc.addEventListener('scroll', () => { const y = sc.scrollTop; top.classList.toggle('lined', y > 2); dk.classList.toggle('on', y > sw.offsetTop + sw.offsetHeight - 96 - 70); }, {passive:true});
+    } else {
+      host.innerHTML = `<div class="desk" style="position:relative"><div class="chrome"><i></i><i></i><i></i><div class="url">${ic('lock', 'sm')}<span data-f="url"></span></div></div>
+        <div class="viewport"><div class="sv pdp is-desk">${cabDesk()}${pagina}</div></div>
+        <div class="p-toast" role="status" aria-live="polite"></div><div class="p-ovl sv pdp"></div></div>`;
+    }
+    const stg = q('stage'); let x0 = null;
+    stg.addEventListener('pointerdown', e => { if (e.target.closest('button')) return; x0 = e.clientX; });
+    stg.addEventListener('pointerup', e => { if (x0 == null) return; const dx = e.clientX - x0; x0 = null; if (Math.abs(dx) > 40) mover(dx < 0 ? 1 : -1); });
+    stg.addEventListener('pointerleave', () => { x0 = null; });
+    if (!P) stg.addEventListener('mousemove', e => { const r = stg.getBoundingClientRect(); stg.style.setProperty('--zx', ((e.clientX - r.left) / r.width * 100).toFixed(1) + '%'); stg.style.setProperty('--zy', ((e.clientY - r.top) / r.height * 100).toFixed(1) + '%'); });
+    renderTudo();
+    if (init.upload) enviar(init.upload.low, init.upload.desde, init.upload.lento);
+    if (init.calc) calcularFrete();
+    rolarInicial();
+  }
+  function rolarInicial(){
+    if (!init.rolar) return;
+    const aplica = () => {
+      const sc = scroller(), alvo = init.rolar === 'sides' ? host.querySelector('.sides') : sec(init.rolar);
+      if (!sc || !alvo) return;
+      sc.scrollTop = Math.max(0, topIn(alvo, sc) - (P ? 96 + 72 + 8 : 64 + 16) + (init.ajuste || 0));
+      rolouInicio = sc.scrollTop; sc.dispatchEvent(new Event('scroll'));
+    };
+    aplica();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { const sc = scroller(); if (sc && sc.scrollTop === rolouInicio) aplica(); });
+  }
+  montar();
+
+  /* controles da meta (fora do produto) */
+  const api = {
+    reset: () => montar(),
+    modelo: v => { trocarModelo(v); rolarAte(sec('modelo')); },
+    up: v => { if (st.caminho === 'designer') st.caminho = 'none'; rolarAte(host.querySelector('.sides')); enviar(v === 'low'); },
+    caminho: v => { mudarCaminho(v); rolarAte(sec('arte')); },
+    lado: v => { if (v === 'back' && !st.verso){ st.verso = true; if (!st.texto.back) st.texto.back = 'Com amor, Helena'; } st.mock = true; mudarLado(v); atualizar(true); },
+    qtd: v => { setQtd(+v); const i = host.querySelector('[data-k="qtd"]'); if (i) i.value = st.qtd; rolarAte(sec('qtd')); },
+    cep: v => { st.cep = v; calcularFrete(); rolarAte(sec('frete')); },
+    falta: () => { clearInterval(upTimer); Object.assign(st, {up:{estado:'idle', pct:0, lowres:false, nome:''}, tpl:null, caminho:'none', verso:false, lado:'front'}); renderTudo(); },
+    pronto: () => { clearInterval(upTimer); Object.assign(st, {up:{estado:'done', pct:100, lowres:false, nome:'arte-dia-das-maes.png'}, mock:true, slide:0, caminho: st.caminho === 'designer' ? 'none' : st.caminho}); renderTudo(); },
+    add: () => adicionar(false),
+    guia: () => abrirGuia(),
+  };
+  return {api};
+}
+
+/* ============================================================
+   Grade de modelos da categoria (Tela 9)
+   ============================================================ */
+function Grade(host, device){
+  const P = device === 'phone';
+  const cartoes = MODELOS.map(m => {
+    const chips = ['Mockup 3D', 'Frente e verso', m.cores.length > 1 ? 'Escolha a cor' : 'Nome ou frase'];
+    return `<button class="g-card" data-act="abrir" data-v="${m.id}"><span class="g-shot ph-linen">${KIT.produto({...peca(m, 0), arte:m.amostra})}${m.selo ? `<span class="badge ${m.selo === 'Novo' ? 'badge-soft' : 'badge-brand'}">${m.selo}</span>` : ''}</span><span class="g-name display">${m.nome}</span><span class="g-tags">${chips.join(' · ')}</span><span class="g-price"><span class="t-cap">a partir de</span><span class="price">${din(m.preco)}</span></span><span class="pix-line">${din(menos(m.preco, LOJA.pixPct))} no Pix</span></button>`;
+  }).join('');
+  const min = Math.min(...MODELOS.map(m => m.preco)), max = Math.max(...MODELOS.map(m => m.preco));
+  const pagina = `<nav class="trail" aria-label="Você está em"><a href="#" data-act="inicio">Início</a><span class="sep" aria-hidden="true">/</span><span aria-current="page">Canecas</span></nav>
+    <header class="g-head"><div><div class="g-title"><h1 class="t-h1">Canecas</h1><span class="badge badge-soft">${MODELOS.length} modelos</span></div><p class="t-small" style="margin-top:6px">Todos com prévia em 3D da sua arte.</p></div>
+    <div><p class="g-faixa">De ${din(min)} a ${din(max)}</p><p class="t-cap" style="margin-top:4px">Cada modelo tem um preço. Toque para ver a peça de perto.</p></div></header>
+    <div class="g-grid">${cartoes}</div>${rodape}`;
+  if (P){
+    host.innerHTML = `<div class="notch"></div><div class="screen sv pdp is-phone"><div class="p-top">${statusbar()}<div class="p-head"><button class="icon-btn" data-act="inicio" aria-label="Voltar para a loja">${ic('back')}</button><span class="wm">Sheid Mania</span><button class="icon-btn" data-act="busca" aria-label="Buscar na loja">${ic('search')}</button><button class="icon-btn" data-act="sacola" aria-label="Abrir a sacola">${ic('bag')}</button></div></div><div class="scroll">${pagina}</div><div class="p-toast" role="status" aria-live="polite"></div></div>`;
+    const sc = host.querySelector('.scroll'), top = host.querySelector('.p-top');
+    sc.addEventListener('scroll', () => top.classList.toggle('lined', sc.scrollTop > 2), {passive:true});
+    host.querySelector('.p-foot').style.paddingBottom = '40px';
+  } else {
+    host.innerHTML = `<div class="desk" style="position:relative"><div class="chrome"><i></i><i></i><i></i><div class="url">${ic('lock', 'sm')}<span>loja.getaura.com.br/sheid-mania/c/canecas</span></div></div><div class="viewport"><div class="sv pdp is-desk">${cabDesk()}${pagina}</div></div><div class="p-toast" role="status" aria-live="polite"></div></div>`;
+  }
+  let tt;
+  host.addEventListener('click', e => {
+    const b = e.target.closest('[data-act]'); if (!b) return; e.preventDefault();
+    if (b.dataset.act === 'abrir'){ ['t1p', 't1d'].forEach(k => INST[k] && INST[k].api.modelo(b.dataset.v)); irPara('tela-1'); return; }
+    const t = host.querySelector('.p-toast'); t.innerHTML = `<span>${b.dataset.act === 'inicio' ? 'Volta para a página inicial da loja.' : b.dataset.act === 'sacola' ? 'A sacola abre em gaveta: é o mockup da Fase 2.' : 'Navegação da loja (Fase 5).'}</span>`;
+    t.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('on'), 2400);
+  });
+}
+
+/* ============================================================
+   As nove telas
+   ============================================================ */
+const INST = {};
+const $ = id => document.getElementById(id);
+const PRONTA = {up:{estado:'done', pct:100, lowres:false, nome:'arte-dia-das-maes.png'}, mock:true};
+const cfg = {
+  t1p:['phone', {}], t1d:['desk', {}],
+  t2p:['phone', {st:{cor:2, mock:true}, rolar:'modelo'}], t2d:['desk', {st:{cor:1, mock:true}}],
+  t3p:['phone', {rolar:'arte', ajuste:48, upload:{low:false, desde:30, lento:true}}],
+  t3d:['desk', {st:{up:{estado:'done', pct:100, lowres:true, nome:'foto-mae.jpg'}, mock:true}, rolar:'sides', ajuste:-60}],
+  t4p:['phone', {st:{...PRONTA, texto:{front:'Te amo, mãe'}}}],
+  t4d:['desk', {st:{...PRONTA, texto:{front:'Te amo, mãe', back:'Com amor, Helena'}, verso:true, lado:'back'}, rolar:'sides'}],
+  t5p:['phone', {st:{...PRONTA, texto:{front:'Te amo, mãe'}, qtd:17}, rolar:'qtd'}],
+  t5d:['desk', {st:{...PRONTA, qtd:50}, rolar:'qtd'}],
+  t6p:['phone', {st:{...PRONTA, cep:'12230-000'}, rolar:'frete', calc:true}],
+  t6d:['desk', {st:{...PRONTA, cep:'01310-100'}, rolar:'frete', calc:true}],
+  t7p:['phone', {rolar:'modelo'}],
+  t7d:['desk', {st:{...PRONTA, texto:{front:'Te amo, mãe'}, sacola:1}, rolar:'arte'}],
+  t8p:['phone', {st:{...PRONTA}, rolar:'det'}], t8d:['desk', {st:{...PRONTA}, rolar:'det'}],
+};
+for (const k in cfg){ const el = $(k); if (el) INST[k] = PDP(el, cfg[k][0], cfg[k][1]); }
+Grade($('t9p'), 'phone'); Grade($('t9d'), 'desk');
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-try]'); if (!b) return;
+  const [acao, ...resto] = b.dataset.do.split(':'), arg = resto.join(':');
+  ['p', 'd'].forEach(s => { const i = INST[b.dataset.try + s]; if (i && i.api[acao]) i.api[acao](arg); });
+});
+})();
+
+KIT.bar();
+</script>
+</body>
+</html>
