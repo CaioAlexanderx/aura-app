@@ -8,6 +8,10 @@
 //
 // Identidade visual mais sóbria que o app interno — é o cliente final
 // que vê. Light theme + accent navy/magenta, sem bolinhas orgânicas.
+//
+// Fase 4 da vitrine Studio: com a chave `vitrine_v2` da loja ligada, a
+// página é a nova, com a marca da loja (components/studio/storefront/
+// posCompra/AprovacaoComMarca.tsx) — a mesma de /<slug>/aprovacao/<token>.
 // ============================================================
 import { useEffect, useState } from "react";
 import {
@@ -17,13 +21,10 @@ import {
 import { useLocalSearchParams } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { studioApi, type PublicApproval } from "@/services/studioApi";
-
-// F5: mockup pode ser um vídeo turntable (.webm/.mp4) gerado pelo motor 3D
-function isVideoUrl(v?: string | null): boolean {
-  if (!v) return false;
-  const p = String(v).split("?")[0].toLowerCase();
-  return p.endsWith(".webm") || p.endsWith(".mp4");
-}
+// F5: mockup pode ser um vídeo turntable (.webm/.mp4) gerado pelo motor 3D.
+// A regra mora com as páginas da Fase 4, que a usam também.
+import { isVideoUrl, usaVisualDaLoja } from "@/components/studio/storefront/posCompra/posCompra";
+import { AprovacaoComMarca } from "@/components/studio/storefront/posCompra/AprovacaoComMarca";
 
 export default function AprovacaoPublica() {
   const { token } = useLocalSearchParams<{ token: string }>();
@@ -94,6 +95,16 @@ export default function AprovacaoPublica() {
         </View>
       </View>
     );
+  }
+
+  // Fase 4 (25/09/2026): loja com a chave `vitrine_v2` ligada — este
+  // endereço antigo (links já enviados, e o domínio próprio da lojista,
+  // onde o caminho não tem slug) abre a MESMA página do endereço da loja,
+  // com a marca dela. Renderiza aqui em vez de redirecionar: não troca
+  // de domínio nem depende da casca, e o link nunca quebra. Sem a chave,
+  // a página de sempre, abaixo.
+  if (usaVisualDaLoja(data.marca, { noEnderecoDaLoja: false })) {
+    return <AprovacaoComMarca token={String(token)} dados={data} responder={studioApi.respondPublicApproval} />;
   }
 
   // Status final (já respondido)

@@ -39,7 +39,16 @@
 //                           central/wrap 360 de caneca e copo)
 //   sf.setEditingAddMiddle -- (b: boolean) => void
 //   sf.configuringUnitPrice -- numero calculado (base + choices + verso + meio)
-//   sf.openConfigure(product) -- abre o configurador pra um produto
+//   sf.openConfigure(product, siblings?, inicial?) -- abre o configurador pra
+//     um produto; `inicial` (ValoresIniciais) abre ja preenchido
+//
+//   // Pedir outro igual (Fase 4, 25/09/2026) -- repeticaoDoPedido.ts
+//   sf.repeticao       -- RepeticaoNoEstado | null (pedido, estado, numero)
+//   sf.pedirRepeticao(token, produtoId) -- busca a personalizacao do pedido
+//     e, quando a peca estiver aberta no configurador, carrega os valores
+//     nele (editingValues/Qty/AddBack/AddMiddle). A pagina do produto so
+//     LE o estado: nada muda nela alem da faixa (VitrineNaRota.tsx).
+//   sf.dispensarRepeticao() -- fecha a faixa
 //   sf.editCartLine(line)     -- reabre o configurador pra editar linha
 //   sf.commitConfigure()      -- valida + commita no carrinho + volta pra "list"
 //
@@ -109,6 +118,10 @@ import {
   type NavegarNaVitrine, type ModoDeNavegar, type TelaDaVitrine, type Resolucao,
 } from "./rotasDaVitrine";
 import { atribuicaoGuardada, camposDeAtribuicao } from "./linkDaAurinha";
+import {
+  itemParaOProduto, valoresIniciaisDaRepeticao,
+  type RepeticaoNoEstado, type RespostaDaRepeticao, type ValoresIniciais,
+} from "./repeticaoDoPedido";
 
 import { enderecoDaApi } from "./enderecoDaApi";
 // Fase 1C: medicao (GA4/Pixel, atras do consentimento) e loja que fecha
@@ -290,6 +303,8 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
 
   const [sending, setSending] = useState(false);
   const [sentOrder, setSentOrder] = useState<SentOrder | null>(null);
+  // Fase 4 — "Pedir outro igual". Ver repeticaoDoPedido.ts.
+  const [repeticao, setRepeticao] = useState<RepeticaoNoEstado | null>(null);
 
   // ── Fase 2: a sacola em gaveta ──────────────────────────────
   // A gaveta e estado da vitrine, nao uma tela: abre por cima de onde a
@@ -577,29 +592,36 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
     setEditingValues((prev) => ({ ...prev, [fieldId]: value }));
   }
 
-  function openConfigure(product: StudioStoreProduct, siblings: StudioStoreProduct[] = []) {
-    abrirProduto(product, siblings);
+  function openConfigure(
+    product: StudioStoreProduct,
+    siblings: StudioStoreProduct[] = [],
+    inicial?: ValoresIniciais,
+  ) {
+    abrirProduto(product, siblings, inicial);
     irPara("configure", { tipo: "produto", id: String(product.id) }, "empilhar");
   }
 
-  /** Abre a peca no configurador, sem mexer na URL. */
-  function abrirProduto(product: StudioStoreProduct, siblings: StudioStoreProduct[] = []) {
+  /**
+   * Abre a peca no configurador, sem mexer na URL.
+   *
+   * `inicial` (Fase 4): os valores com que o configurador abre — o
+   * "Pedir outro igual". Sem ele, o configurador em branco de sempre.
+   */
+  function abrirProduto(
+    product: StudioStoreProduct,
+    siblings: StudioStoreProduct[] = [],
+    inicial?: ValoresIniciais,
+  ) {
     setActiveProduct(product);
     setActiveSiblings(siblings.length > 1 ? siblings : []);
     setEditingLineId(null);
-    const initial: Record<string, any> = {};
-    const cfg = product.customization_config;
-    if (cfg?.fields) {
-      for (const f of cfg.fields) {
-        if (f.type === "color" && f.config.colors?.length) {
-          initial[f.id] = f.config.colors[0];
-        }
-      }
-    }
-    setEditingValues(initial);
-    setEditingQty(1);
-    setEditingAddBack(false);
-    setEditingAddMiddle(false);
+    // Sem item, valoresIniciaisDaRepeticao devolve exatamente o de
+    // sempre: a primeira cor de cada campo de cor, quantidade 1.
+    const ini = inicial || valoresIniciaisDaRepeticao(null, product);
+    setEditingValues(ini.valores);
+    setEditingQty(ini.quantidade);
+    setEditingAddBack(ini.verso);
+    setEditingAddMiddle(ini.meio);
     setStage("configure");
   }
 
@@ -612,6 +634,59 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
     if (stage === "modelos" && grupoAberto) return { tipo: "categoria", categoria: chaveDaCategoria(grupoAberto.categoria) };
     return null;
   }
+
+  /**
+   * "Pedir outro igual" (Fase 4): busca a personalizacao do pedido para
+   * a peca `produtoId`. A carga no configurador acontece no efeito
+   * abaixo, quando a peca estiver aberta — a ordem entre a resposta do
+   * pedido e a carga da loja nao importa.
+   *
+   * Chamado pela rota do produto quando a URL traz `?repetir=<token>`.
+   * O mesmo pedido para a mesma peca nao e buscado de novo (voltar e
+   * avancar do navegador).
+   */
+  function pedirRepeticao(token: string, produtoId: string) {
+    const t = String(token || "").trim();
+    const id = String(produtoId || "").trim();
+    if (!t || !id || !slug) return;
+    if (repeticao && repeticao.token === t && repeticao.produtoId === id && repeticao.estado !== "erro") return;
+    setRepeticao({ token: t, produtoId: id, estado: "carregando", numero: null, item: null });
+    fetch(API_BASE + "/storefront/" + slug + "/studio/pedido/" + encodeURIComponent(t) + "/repetir")
+      .then(async (r) => {
+        const data = (await r.json().catch(() => null)) as RespostaDaRepeticao | null;
+        if (!r.ok || !data || !Array.isArray(data.itens)) throw new Error("repetir " + r.status);
+        return data;
+      })
+      .then((data) => {
+        const item = itemParaOProduto(data, id);
+        setRepeticao((atual) => {
+          // A cliente ja saiu para outro pedido/peca: resposta velha.
+          if (!atual || atual.token !== t || atual.produtoId !== id) return atual;
+          return { ...atual, numero: data.numero, item, estado: item ? "pronta" : "indisponivel" };
+        });
+      })
+      .catch(() => {
+        setRepeticao((atual) =>
+          atual && atual.token === t && atual.produtoId === id ? { ...atual, estado: "erro" } : atual
+        );
+      });
+  }
+
+  // Carrega a personalizacao do pedido quando a peca dele esta aberta.
+  // Uma vez so: depois de "aplicada", o que a cliente mexer e dela.
+  useEffect(() => {
+    if (!repeticao || repeticao.estado !== "pronta" || !repeticao.item) return;
+    if (!activeProduct || String(activeProduct.id) !== repeticao.produtoId) return;
+    // Editando uma linha da sacola a peca e a da linha, nao a do pedido.
+    if (editingLineId) return;
+    const ini = valoresIniciaisDaRepeticao(repeticao.item, activeProduct);
+    setEditingValues(ini.valores);
+    setEditingQty(ini.quantidade);
+    setEditingAddBack(ini.verso);
+    setEditingAddMiddle(ini.meio);
+    setRepeticao({ ...repeticao, estado: "aplicada" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repeticao, activeProduct?.id, editingLineId]);
 
   function editCartLine(line: CartLine) {
     // Fase 2: editar pela gaveta lembra de onde a cliente veio — ao salvar,
@@ -1110,6 +1185,9 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
     openConfigure, editCartLine, commitConfigure,
     activeSiblings, switchModel,
     vitrine,
+    // Pedir outro igual (Fase 4)
+    repeticao, pedirRepeticao,
+    dispensarRepeticao: () => setRepeticao(null),
     // Upload
     uploadImage, uploadingFieldId, uploadError,
     clearUploadError: () => setUploadError(null),

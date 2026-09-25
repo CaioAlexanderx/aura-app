@@ -261,12 +261,18 @@ describe("as rotas da árvore real de app/", () => {
     expect(rotaDe("/sheid-mania/acompanhar/tok")).toBe("[slug] > acompanhar/[token]");
     expect(rotaDe("/sheid-mania/aprovacao/tok")).toBe("[slug] > aprovacao/[token]");
     // Fase 2: /sacola e /pedido/<token> deixaram de ser reservadas —
-    // viraram a gaveta aberta e a página do pedido. As da Fase 4 seguem.
-    for (const f of ["acompanhar/[token]", "aprovacao/[token]"]) {
-      expect(fs.readFileSync(path.join(RAIZ, "app/[slug]", f + ".tsx"), "utf8")).toContain("<RotaReservada />");
-    }
+    // viraram a gaveta aberta e a página do pedido.
     expect(fs.readFileSync(path.join(RAIZ, "app/[slug]/sacola.tsx"), "utf8")).toContain("<SacolaNaRota />");
     expect(fs.readFileSync(path.join(RAIZ, "app/[slug]/pedido/[token].tsx"), "utf8")).toContain("<PedidoNaRota");
+    // Fase 4: aprovação e acompanhamento viraram páginas no endereço da loja.
+    const ler = (f: string) => fs.readFileSync(path.join(RAIZ, "app/[slug]", f + ".tsx"), "utf8");
+    expect(ler("aprovacao/[token]")).toContain("<PaginaDaAprovacao");
+    expect(ler("acompanhar/[token]")).toContain("<PaginaDoAcompanhamento");
+  });
+
+  test("Fase 4: os endereços antigos do pós-compra continuam de pé (links já enviados)", () => {
+    expect(rotaDe("/aprovacao/tok")).toBe("aprovacao/[token]");
+    expect(rotaDe("/acompanhar/tok")).toBe("acompanhar/[token]");
   });
 });
 

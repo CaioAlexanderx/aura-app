@@ -27,6 +27,10 @@
 //   - `itens[].entregue`, `itens[].total`, `itens[].unidade` (entrega parcial)
 //   - `proxima_entrega` (data 'YYYY-MM-DD', nullable)
 // Sem esses campos a tela é exatamente a de hoje ("oculos"/encomenda).
+//
+// Fase 4 da vitrine Studio (25/09/2026): com a chave `vitrine_v2` da loja
+// ligada, a encomenda do Studio abre a página nova com a marca da loja
+// (components/studio/storefront/posCompra/AcompanhamentoComMarca.tsx).
 // ============================================================
 import { useEffect, useState } from "react";
 import { View, Text, Image, ScrollView, Pressable, ActivityIndicator, Platform, Linking } from "react-native";
@@ -39,6 +43,8 @@ import {
   tituloAcompanhamento, rotuloSaldo, rotuloItens, rodapePedido, textoItemEntrega, qtdDoItemPublico,
   LABEL_NOTA_FISCAL, LABEL_VER_DANFE,
 } from "@/utils/acompanharTextos";
+import { acompanhamentoComMarca } from "@/components/studio/storefront/posCompra/posCompra";
+import { AcompanhamentoComMarca } from "@/components/studio/storefront/posCompra/AcompanhamentoComMarca";
 
 // 22/09/2026 (Matcon M2 — fiscal do Simples, docs/CONTRACT_MATCON.md §M2):
 // linha "Nota fiscal · ver DANFE", mockup
@@ -126,6 +132,15 @@ export default function AcompanharEncomenda() {
         </Text>
       </View>
     );
+  }
+
+  // Fase 4 (25/09/2026): encomenda do Studio numa loja com a chave
+  // `vitrine_v2` ligada — este endereço antigo (links já enviados, e o
+  // domínio próprio, onde o caminho não tem slug) abre a MESMA página do
+  // endereço da loja, com a marca dela. OS da ótica e entrega do Matcon
+  // (`tipo`) seguem nesta página.
+  if (acompanhamentoComMarca(dados, { noEnderecoDaLoja: false })) {
+    return <AcompanhamentoComMarca token={String(token)} dados={dados} />;
   }
 
   if (dados.cancelado) {
