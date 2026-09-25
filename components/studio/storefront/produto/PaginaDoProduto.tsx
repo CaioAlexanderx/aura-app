@@ -148,6 +148,17 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [produto?.id]);
 
+  // Fase 4 — "Pedir outro igual": a personalização do pedido chega ao
+  // estado DEPOIS de a página montar (o pedido é buscado junto com a
+  // loja). Quando ela entra, o palco mostra o mockup dela, como se a
+  // cliente tivesse acabado de personalizar.
+  const repeticaoAplicada = sf.repeticao?.estado === "aplicada" && sf.repeticao.produtoId === String(produto?.id);
+  useEffect(() => {
+    if (!repeticaoAplicada) return;
+    if (temPersonalizacaoVisivel(cfg, sf.editingValues)) { setPersonalizou(true); setSlide(0); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repeticaoAplicada]);
+
   // Fase 1C — view_item: uma vez por peça aberta (igual ao configurador).
   useEffect(() => {
     if (!produto || editando) return;

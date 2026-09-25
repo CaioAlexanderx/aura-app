@@ -350,8 +350,8 @@ describe("Pedir outro igual — a página do produto carrega a personalização"
     total_products: 1,
   };
 
-  function montar(repetir: any) {
-    rotas.push(quando(/\/studio\/products$/, LOJA));
+  function montar(repetir: any, loja: any = LOJA) {
+    rotas.push(quando(/\/studio\/products$/, loja));
     rotas.push(quando(/\/repetir$/, repetir));
     try { window.sessionStorage.setItem("aura-vitrine-na-aba-sheid-mania", "1"); } catch {}
     const navegar = jest.fn();
@@ -378,6 +378,19 @@ describe("Pedir outro igual — a página do produto carrega a personalização"
     await waitFor(() => expect(temId("faixa-da-repeticao")).toBe(false));
     // O que foi carregado continua no campo.
     expect(screen.getByDisplayValue("Mãe")).toBeTruthy();
+  });
+
+  test("chave vitrine_v2 ligada: a PÁGINA NOVA do produto (Fase 3) abre com a personalização e a faixa", async () => {
+    montar({
+      numero: "00123",
+      itens: [{ product_id: CANECA, nome: "Caneca Alça Coração", quantidade: 3, indisponivel: false, personalizacao: { valores: { nome: "Mãe" }, verso: false, meio: false } }],
+    }, { ...LOJA, site: { ...LOJA.site, vitrine_v2: true } });
+    expect(await acharId("faixa-da-repeticao")).toBeTruthy();
+    expect(naTela("Personalização do pedido #00123 carregada — confira e ajuste.")).toBe(true);
+    await waitFor(() => expect(screen.getByDisplayValue("Mãe")).toBeTruthy());
+    // É a página nova, não o ProductConfigurator.
+    expect(temId("pagina-do-produto")).toBe(true);
+    expect(screen.getByDisplayValue("3")).toBeTruthy();
   });
 
   test("o pedido não tem mais esta peça disponível: faixa de aviso, configurador em branco", async () => {
