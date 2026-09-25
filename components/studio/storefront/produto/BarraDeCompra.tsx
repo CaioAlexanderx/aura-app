@@ -30,6 +30,8 @@ export type AcaoDaBarra = {
   total: number;
   unitario: number;
   qtd: number;
+  /** Serviço de arte cobrado uma vez na linha (Fase 2); 0 sem ele. */
+  arte: number;
   /** "R$ X no Pix" do total; null sem desconto no Pix. */
   totalNoPix: number | null;
   /** A frase do que falta; null = tudo pronto. */
@@ -118,7 +120,7 @@ export function BarraDeCompraCelular({ a }: { a: AcaoDaBarra }) {
           <View style={{ alignItems: "flex-end" }}>
             <Numero accessibilityLiveRegion="polite" style={{ fontSize: 19, fontWeight: "600", color: t.ink, lineHeight: 22 }}>{dinheiro(total)}</Numero>
             <Texto style={{ fontSize: 11.5, color: t.ink3 }}>
-              {a.qtd > 1 ? <Numero style={{ fontSize: 11.5 }}>{`${a.qtd} un × ${dinheiro(a.unitario)}`}</Numero>
+              {a.qtd > 1 ? <Numero style={{ fontSize: 11.5 }}>{`${a.qtd} un × ${dinheiro(a.unitario)}${a.arte > 0 ? ` + arte ${dinheiro(a.arte)}` : ""}`}</Numero>
                 : a.totalNoPix != null ? <><Numero style={{ fontSize: 11.5 }}>{dinheiro(a.totalNoPix)}</Numero> no Pix</> : null}
             </Texto>
           </View>
@@ -141,7 +143,7 @@ export function BlocoDeCompraDesktop({ a, compacto }: { a: AcaoDaBarra; compacto
   const total = useNumeroAnimado(a.total);
   const meta = (
     <View style={{ alignItems: compacto ? "flex-start" : "flex-end" }}>
-      <Numero style={{ fontSize: 12.5, color: t.ink3, lineHeight: 18 }}>{`${a.qtd} un × ${dinheiro(a.unitario)}`}</Numero>
+      <Numero style={{ fontSize: 12.5, color: t.ink3, lineHeight: 18 }}>{`${a.qtd} un × ${dinheiro(a.unitario)}${a.arte > 0 ? ` + arte ${dinheiro(a.arte)}` : ""}`}</Numero>
       {a.totalNoPix != null ? (
         <Texto style={{ fontSize: 12.5, fontWeight: "600", color: t.green }}><Numero style={{ fontSize: 12.5, fontWeight: "600", color: t.green }}>{dinheiro(a.totalNoPix)}</Numero> no Pix</Texto>
       ) : null}

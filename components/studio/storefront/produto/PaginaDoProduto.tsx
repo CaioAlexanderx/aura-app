@@ -551,7 +551,7 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
   );
 
   const acao: AcaoDaBarra = {
-    total: totalDaLinha, unitario, qtd,
+    total: totalDaLinha, unitario, qtd, arte: arteDaLinha,
     totalNoPix: temPix ? noPix(totalDaLinha) : null,
     falta: fraseDaFalta, cutucada, adicionado, editando, aceita: modo.aceita, store,
     onFalta: irParaFalta, onAdicionar: adicionar, onComprar: comprarAgora, onAtualizar: atualizar, onOrcamento: pedirOrcamento,
