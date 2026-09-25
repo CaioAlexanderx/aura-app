@@ -247,6 +247,10 @@ export function LivePreview({
           <Pressable
             key={id}
             onPress={() => setViewId(id)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: sel }}
+            accessibilityLabel={"Ver " + label}
+            hitSlop={8}
             style={{
               paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999,
               backgroundColor: sel ? T.primary : "transparent",

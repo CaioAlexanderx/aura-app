@@ -12,18 +12,27 @@
 //
 // Sem cor da loja de propósito: neste momento o payload ainda não
 // chegou, então a cor dela é desconhecida. Inventar uma e trocar depois
-// seria pior que começar neutro.
+// seria pior que começar neutro. (Por isso a assinatura fantasma do pé
+// também deixou de ser violeta — era a cor da Aura, não neutra.)
+//
+// 25/09/2026 (Fase 1A, D10): com "reduzir movimento" ligado o pulso não
+// roda — os blocos ficam parados num cinza médio. Quem pediu menos
+// movimento continua vendo que a página está chegando.
 // ============================================================
 import { useEffect, useRef } from "react";
 import { View, Animated, Easing, Platform, useWindowDimensions } from "react-native";
 import { usePaletaDaVitrine } from "./TemaDaVitrine";
-import { AURA } from "./theme";
+import { useReduzirMovimento } from "./movimento";
+
+/** Opacidade fixa dos blocos quando o movimento está reduzido. */
+const OPACIDADE_PARADA = 0.8;
 
 /** Pulso lento e único para a tela toda — vários timers desencontrados viram ruído. */
-function usePulso() {
+function usePulso(parado: boolean) {
   const v = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (parado) return;
     const ciclo = Animated.loop(
       Animated.sequence([
         Animated.timing(v, { toValue: 1, duration: 720, easing: Easing.inOut(Easing.quad), useNativeDriver: Platform.OS !== "web" }),
@@ -32,9 +41,9 @@ function usePulso() {
     );
     ciclo.start();
     return () => ciclo.stop();
-  }, [v]);
+  }, [v, parado]);
 
-  return v.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] });
+  return parado ? OPACIDADE_PARADA : v.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] });
 }
 
 function Bloco({
@@ -69,7 +78,8 @@ type PropsSkeleton = {
 
 export function VitrineSkeleton({ variante = "grade" }: PropsSkeleton = {}) {
   const T = usePaletaDaVitrine();
-  const o = usePulso();
+  const reduzir = useReduzirMovimento();
+  const o = usePulso(reduzir);
   const { width } = useWindowDimensions();
 
   const telaLarga = width >= 720;
@@ -83,7 +93,13 @@ export function VitrineSkeleton({ variante = "grade" }: PropsSkeleton = {}) {
   const cartoes = colunas * 2;
 
   return (
-    <View style={{ flex: 1, backgroundColor: T.bg }} accessibilityLabel="Carregando a loja">
+    <View
+      testID="vitrine-esqueleto"
+      style={{ flex: 1, backgroundColor: T.bg }}
+      accessibilityRole="progressbar"
+      accessibilityLabel="Carregando a loja"
+      accessibilityState={{ busy: true }}
+    >
       {/* Hero */}
       <View style={{ backgroundColor: T.card, paddingHorizontal: telaLarga ? 20 : 14, paddingTop: 28, paddingBottom: 32 }}>
         <View style={{ width: "100%", maxWidth: LARGURA_MAX, alignSelf: "center", paddingHorizontal: telaLarga ? 20 : 0, gap: 12 }}>
@@ -159,7 +175,7 @@ export function VitrineSkeleton({ variante = "grade" }: PropsSkeleton = {}) {
       {/* Assinatura fantasma: o rodapé existe desde o primeiro frame, então
           a página não cresce por baixo do dedo de quem já começou a rolar. */}
       <View style={{ alignItems: "center", paddingVertical: 22 }}>
-        <Bloco largura={160} altura={10} raio={5} opacidade={o} style={{ backgroundColor: AURA.violet, opacity: 0.12 }} />
+        <Bloco largura={160} altura={10} raio={5} opacidade={o} style={{ opacity: 0.5 }} />
       </View>
     </View>
   );

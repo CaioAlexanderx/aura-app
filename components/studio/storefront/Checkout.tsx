@@ -92,13 +92,13 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
         {modalidades.length > 0 ? (
           <>
             <Texto style={sectionLabel}>Como você quer receber?</Texto>
-            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+            <View accessibilityRole="radiogroup" accessibilityLabel="Como você quer receber?" style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
               {modalidades.map((m) => (
                 <Pressable
                   key={m.value}
                   onPress={() => sf.setDeliveryType(m.value)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: sf.deliveryType === m.value }}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: sf.deliveryType === m.value, selected: sf.deliveryType === m.value }}
                   style={[chip, sf.deliveryType === m.value && chipActive]}
                 >
                   <Texto style={[chipTxt, sf.deliveryType === m.value && chipTxtActive]}>{m.label}</Texto>
@@ -165,10 +165,15 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
         )}
 
         <Texto style={sectionLabel}>Pagamento</Texto>
-        <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+        {/* Os botoes de pagamento nao tinham papel nem estado: o leitor de
+            tela anunciava tres textos soltos e ninguem sabia qual estava
+            escolhido. */}
+        <View accessibilityRole="radiogroup" accessibilityLabel="Forma de pagamento" style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
           {sf.store.payment.has_pix && (
             <Pressable
               onPress={() => sf.setPaymentMethod("pix")}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: sf.paymentMethod === "pix", selected: sf.paymentMethod === "pix" }}
               style={[chip, sf.paymentMethod === "pix" && chipActive]}
             >
               <Texto style={[chipTxt, sf.paymentMethod === "pix" && chipTxtActive]}>Pix</Texto>
@@ -177,6 +182,8 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
           {sf.store.payment.has_card && (
             <Pressable
               onPress={() => sf.setPaymentMethod("card")}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: sf.paymentMethod === "card", selected: sf.paymentMethod === "card" }}
               style={[chip, sf.paymentMethod === "card" && chipActive]}
             >
               <Texto style={[chipTxt, sf.paymentMethod === "card" && chipTxtActive]}>Cartão</Texto>
@@ -185,6 +192,8 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
           {sf.store.payment.pay_on_delivery_enabled && (
             <Pressable
               onPress={() => sf.setPaymentMethod("on_delivery")}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: sf.paymentMethod === "on_delivery", selected: sf.paymentMethod === "on_delivery" }}
               style={[chip, sf.paymentMethod === "on_delivery" && chipActive]}
             >
               <Texto style={[chipTxt, sf.paymentMethod === "on_delivery" && chipTxtActive]}>

@@ -138,10 +138,12 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
           <Pressable
             onPress={copyPix}
             accessibilityRole="button"
+            accessibilityLabel={copied ? "Código Pix copiado" : "Copiar código Pix"}
             style={{
               flexDirection: "row", alignItems: "center", gap: 6,
               backgroundColor: copied ? T.green : tema.marcaFill,
               paddingHorizontal: 18, paddingVertical: 11, borderRadius: 10,
+              minHeight: 44,
             }}
           >
             {copied ? <Icon name="check" size={16} color={tintaSobre(T.green)} /> : null}
@@ -249,7 +251,7 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
         accessibilityRole="button"
         style={{
           backgroundColor: tema.marcaFill, paddingHorizontal: 24, paddingVertical: 12,
-          borderRadius: 10, marginTop: 20,
+          borderRadius: 10, marginTop: 20, minHeight: 44, justifyContent: "center",
         }}
       >
         <Texto style={{ color: tema.sobreMarca, fontSize: 14, fontWeight: "700" }}>+ Personalizar outro</Texto>

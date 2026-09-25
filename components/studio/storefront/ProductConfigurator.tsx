@@ -8,7 +8,7 @@
 //   com template visual vinculado, o preview vira canvas 2D/viewer 3D.
 // ============================================================
 import { useState, useEffect, useMemo } from "react";
-import { View, Pressable, ScrollView, useWindowDimensions, Platform, Linking } from "react-native";
+import { View, Pressable, ScrollView, useWindowDimensions, Platform, Linking, Image } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { usePaletaDaVitrine, useTemaDaVitrine } from "./TemaDaVitrine";
 import type { PaletaDaVitrine, VitrineTema } from "./theme";
@@ -504,13 +504,10 @@ export function ProductConfigurator({
                 {/* Opt-in verso cobrado */}
                 {backCharge ? (
                   <Pressable
-                    onPress={() => {
-                      const next = !editingAddBack;
-                      setEditingAddBack(next);
-                      if (next && backPrice > 0) {
-                        console.log("[storefront] verso adicionado: +" + dinheiro(backPrice));
-                      }
-                    }}
+                    onPress={() => setEditingAddBack(!editingAddBack)}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: editingAddBack }}
+                    accessibilityLabel={"Personalizar também o verso" + (backPrice > 0 ? ", mais " + dinheiro(backPrice) : "")}
                     style={{
                       flexDirection: "row", alignItems: "center", gap: 10,
                       backgroundColor: T.card, borderRadius: 10, padding: 12,
@@ -586,13 +583,10 @@ export function ProductConfigurator({
                     fechamento. */}
                 {middleCharge ? (
                   <Pressable
-                    onPress={() => {
-                      const next = !editingAddMiddle;
-                      setEditingAddMiddle(next);
-                      if (next && middlePrice > 0) {
-                        console.log("[storefront] meio adicionado: +" + dinheiro(middlePrice));
-                      }
-                    }}
+                    onPress={() => setEditingAddMiddle(!editingAddMiddle)}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: editingAddMiddle }}
+                    accessibilityLabel={"Personalizar também o meio" + (middlePrice > 0 ? ", mais " + dinheiro(middlePrice) : "")}
                     style={{
                       flexDirection: "row", alignItems: "center", gap: 10,
                       backgroundColor: T.card, borderRadius: 10, padding: 12,
@@ -779,11 +773,15 @@ export function ProductConfigurator({
                         alignItems: "center", justifyContent: "center",
                       }}
                     >
+                      {/* Image do RN, e nao <img>: a tag HTML crua quebrava
+                          fora do navegador. 88% = o respiro de 6% de cada lado
+                          que o padding dava. */}
                       {foto ? (
-                        <img
-                          src={foto}
-                          alt=""
-                          style={{ width: "100%", height: "100%", objectFit: "contain", padding: "6%" }}
+                        <Image
+                          source={{ uri: foto }}
+                          style={{ width: "88%", height: "88%" }}
+                          resizeMode="contain"
+                          accessibilityIgnoresInvertColors
                         />
                       ) : (
                         <Texto style={{ fontSize: 22, color: T.ink3 }}>
@@ -850,6 +848,8 @@ export function ProductConfigurator({
         {(sf as any)._editingLineId ? (
           <Pressable
             onPress={() => commitConfigure()}
+            accessibilityRole="button"
+            accessibilityLabel={"Atualizar item por " + dinheiro(configuringUnitPrice * editingQty)}
             style={{
               backgroundColor: tema.marcaFill, paddingVertical: 14, borderRadius: 10, alignItems: "center",
               width: "100%", maxWidth: telaLarga ? 420 : undefined,

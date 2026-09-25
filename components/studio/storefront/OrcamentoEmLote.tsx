@@ -105,6 +105,9 @@ export function OrcamentoEmLote({
   const degrau = proximoDegrau(cotacao);
   const pendencia = pendenciaDoLote({ evento, produtoId, nomes, contato, telefone });
   const podeAvancar = !!(evento.trim().length >= 2 && produtoId && nomes.length > 0);
+  // O botao principal trava por uma regra so: o `disabled` e o estado que
+  // o leitor de tela anuncia saem daqui.
+  const botaoTravado = passo === 1 ? !podeAvancar : !!pendencia || enviando;
 
   async function enviar() {
     if (pendencia) return;
@@ -382,21 +385,22 @@ export function OrcamentoEmLote({
                   </Pressable>
                 ) : null}
 
+                {/* O estado acessivel repetia a regra do `disabled` sem o
+                    `enviando`: durante o envio o botao estava travado e o
+                    leitor de tela o anunciava como ativo. Uma conta so. */}
                 <Pressable
                   onPress={() => (passo === 1 ? setPasso(2) : enviar())}
-                  disabled={passo === 1 ? !podeAvancar : !!pendencia || enviando}
+                  disabled={botaoTravado}
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: passo === 1 ? !podeAvancar : !!pendencia }}
+                  accessibilityState={{ disabled: botaoTravado, busy: enviando }}
                   style={{
                     flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center",
-                    backgroundColor: (passo === 1 ? podeAvancar : !pendencia && !enviando)
-                      ? tema.marcaFill : T.border,
+                    backgroundColor: !botaoTravado ? tema.marcaFill : T.border,
                   }}
                 >
                   <Texto style={{
                     fontSize: 14.5, fontWeight: "800",
-                    color: (passo === 1 ? podeAvancar : !pendencia && !enviando)
-                      ? tema.sobreMarca : T.ink4,
+                    color: !botaoTravado ? tema.sobreMarca : T.ink3,
                   }}>
                     {passo === 1 ? "Continuar" : enviando ? "Enviando..." : "Pedir orçamento"}
                   </Texto>

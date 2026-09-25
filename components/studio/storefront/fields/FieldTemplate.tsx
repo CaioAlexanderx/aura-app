@@ -37,6 +37,9 @@ export function FieldTemplate({
             <Pressable
               key={t.id}
               onPress={() => onChange(t.image_url)}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: value === t.image_url }}
+              accessibilityLabel={t.name}
               style={{
                 width: 80, height: 80, borderRadius: 8,
                 borderWidth: value === t.image_url ? 3 : 1,
