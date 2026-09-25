@@ -29,7 +29,6 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Image, Linking, Modal, Platform, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import type { StorefrontState } from "../useStorefront";
 import type { StudioStoreProduct } from "../types";
-import { useVitrine } from "../ContextoDaVitrine";
 import { useTemaDaVitrine } from "../TemaDaVitrine";
 import { Texto, Numero, useTipografia } from "../TipografiaVitrine";
 import { Icon } from "@/components/Icon";
@@ -48,7 +47,7 @@ import { linkDoPedido } from "../pedidoPeloWhatsApp";
 import { numeroWhatsApp } from "../AncoraWhatsApp";
 import { medirNaVitrine, itemDoProduto } from "../eventosDaVitrine";
 import { textoDeParcelamento } from "../parcelamento";
-import { precoNoPix } from "../precoNoPix";
+import { descontoDoPix } from "../precoDaSacola";
 import { basePriceForQty } from "../qtyTiers";
 import { relacionadosDe } from "../relacionados";
 import { seloDoProduto, pecaMaisPedida } from "../selosDoProduto";
@@ -98,7 +97,6 @@ function noDom(r: any): any {
 }
 
 export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: string }) {
-  const v = useVitrine();
   const t = useTemaDaVitrine();
   const reduzir = useReduzirMovimento();
   const { width, height } = useWindowDimensions();
@@ -110,7 +108,7 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
   const values = sf.editingValues;
   const store: any = sf.store;
   const modo = modoDaVitrine(store);
-  const editando = !!(sf as any)._editingLineId;
+  const editando = !!sf._editingLineId;
   const grupo = produto ? categoriaDaPeca(sf, produto) : null;
   const peca = nomeDaPeca(grupo?.categoria?.name || produto?.category);
 
@@ -182,11 +180,13 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
   // ── Números (todos do hook) ──────────────────────────────
   const qtd = sf.editingQty;
   const unitario = sf.configuringUnitPrice;
-  const totalDaLinha = typeof (sf as any).configuringLineTotal === "number" ? (sf as any).configuringLineTotal : unitario * qtd;
-  // Com a Fase 2 o serviço de arte é cobrado uma vez por linha: ele sai
-  // do unitário e aparece à parte.
-  const artePorLinha = typeof (sf as any).configuringArtDelta === "number";
+  // O total da linha é o da Fase 2 (precoDaSacola.ts, a conta do
+  // servidor): o serviço de arte entra UMA vez por linha, fora do unitário.
+  const totalDaLinha = sf.configuringLineTotal;
+  const arteDaLinha = sf.configuringArtDelta;
   const pixPct = Number(store?.payment?.pix_discount_pct) || 0;
+  // O Pix com a MESMA conta do servidor (descontoDoPix, Fase 2).
+  const noPix = (v: number) => Math.round((v - descontoDoPix(v, pixPct)) * 100) / 100;
   const temPix = !!store?.payment?.has_pix && pixPct > 0;
   const tiers = produto.qty_tiers || [];
   const precoDeTabela = Number(produto.price) || 0;
@@ -194,8 +194,8 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
   const prazoDaLoja = Number(store?.sla?.total_estimate_days) || null;
   const prazo = prazoDaQuantidade(tiers as any, qtd, prazoDaLoja);
 
-  const versoAtivo = (sf as any)._effectiveBackSelected ? (sf as any)._effectiveBackSelected(cfg, sf.editingAddBack) : sf.editingAddBack;
-  const meioAtivo = (sf as any)._effectiveMiddleSelected ? (sf as any)._effectiveMiddleSelected(cfg, sf.editingAddMiddle) : sf.editingAddMiddle;
+  const versoAtivo = sf._effectiveBackSelected(cfg, sf.editingAddBack);
+  const meioAtivo = sf._effectiveMiddleSelected(cfg, sf.editingAddMiddle);
   const falta = faltaNaPeca(cfg, values, versoAtivo, meioAtivo);
   const ladoEnviando = (Object.keys(envios) as Lado[]).find((l) => envios[l] === "enviando") || null;
   const fraseDaFalta = ladoEnviando
@@ -261,22 +261,21 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
     const l = linkDoPedido({
       numero: store?.site?.whatsapp, produto, valores: values, quantidade: qtd,
       precoUnitario: unitario, nomeDaLoja: store?.site?.name,
-      ...(artePorLinha ? ({ arte: (sf as any).configuringArtDelta } as any) : null),
+      arte: arteDaLinha,
     });
     if (l) Linking.openURL(l);
     else sf.goTo("lote");
   }
   function adicionar() {
     if (falta || ladoEnviando) { irParaFalta(); return; }
-    const faseDois = "adicionado" in (sf as any);
-    const nome = produto.name;
+    // Fase 2: a peça fica na tela com o que foi preenchido, o hook marca
+    // `adicionado` e a gaveta mostra "Adicionado à sacola · Ver sacola"
+    // (SacolaEmGaveta, montada pelo ConteudoDaVitrine em volta desta
+    // tela). Aqui: o botão vira "Adicionado" por 1,4 s e o contador do
+    // cabeçalho pulsa.
     sf.commitConfigure();
     setAdicionado(true);
     depois(1400, () => setAdicionado(false));
-    // Sem a gaveta da Fase 2 a vitrine volta para a loja ao adicionar;
-    // o aviso da casca diz o que aconteceu. Com ela, a própria Fase 2
-    // mostra "Adicionado à sacola" com o "Ver sacola".
-    if (!faseDois) v?.avisar(`${nome} na sacola`, "check");
   }
   function comprarAgora() {
     if (falta || ladoEnviando) { irParaFalta(); return; }
@@ -294,8 +293,8 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
 
   // ── Textos do topo ───────────────────────────────────────
   const adicionais = adicionaisDaPeca(cfg, values, versoAtivo, meioAtivo);
-  const noUnitario = adicionais.filter((a) => !(artePorLinha && a.servicoDeArte));
-  const daLinha = adicionais.filter((a) => artePorLinha && a.servicoDeArte);
+  const noUnitario = adicionais.filter((a) => !(a.servicoDeArte));
+  const daLinha = adicionais.filter((a) => a.servicoDeArte);
   const inclui = [
     noUnitario.length ? "Inclui " + noUnitario.map((a) => `${a.nome} (+${dinheiro(a.valor)})`).join(" e ") : "",
     daLinha.length ? daLinha.map((a) => `${a.nome.charAt(0).toUpperCase() + a.nome.slice(1)}: +${dinheiro(a.valor)}, uma vez no item`).join(" · ") : "",
@@ -309,7 +308,7 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
   const numeroWa = numeroWhatsApp(store?.site?.whatsapp);
   const linkWa = linkDoPedido({
     numero: store?.site?.whatsapp, produto, valores: values, quantidade: qtd, precoUnitario: unitario, nomeDaLoja: store?.site?.name,
-    ...(artePorLinha ? ({ arte: (sf as any).configuringArtDelta } as any) : null),
+    arte: arteDaLinha,
   });
 
   // ── Medidas ──────────────────────────────────────────────
@@ -543,7 +542,7 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
       unitario={unitario}
       qtd={qtd}
       parcelas={textoDeParcelamento(unitario, store?.payment?.card_max_installments)}
-      pix={temPix ? precoNoPix(unitario, pixPct) : null}
+      pix={temPix ? noPix(unitario) : null}
       inclui={inclui}
       prazo={prazo}
       store={store}
@@ -553,7 +552,7 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
 
   const acao: AcaoDaBarra = {
     total: totalDaLinha, unitario, qtd,
-    totalNoPix: temPix ? precoNoPix(totalDaLinha, pixPct) : null,
+    totalNoPix: temPix ? noPix(totalDaLinha) : null,
     falta: fraseDaFalta, cutucada, adicionado, editando, aceita: modo.aceita, store,
     onFalta: irParaFalta, onAdicionar: adicionar, onComprar: comprarAgora, onAtualizar: atualizar, onOrcamento: pedirOrcamento,
   };

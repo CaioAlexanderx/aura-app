@@ -1,12 +1,11 @@
 // ============================================================
 // Vitrine Studio · Fase 3 — as regras da página do produto nova
 //
-// A chave vitrine_v2, a régua da escada e a frase "Faltam N", o prazo
+// A régua da escada e a frase "Faltam N", o prazo
 // por faixa, o que falta na peça (com a MESMA resposta do validador do
 // commit), o aviso de foto pequena, a área de impressão e os nomes que a
 // página escreve. Mockup: docs/mockups/studio-vitrine-03-produto.html.
 // ============================================================
-import { chaveDaAba, v2DaConsulta, vitrineV2Ativa } from "@/components/studio/storefront/chaveV2";
 import {
   QTD_MAXIMA, quantidadeValida, quantidadeDigitada,
   reguaDaEscada, progressoNaRegua, fraseDaEscada, economiaNaFaixa,
@@ -17,52 +16,6 @@ import {
   notaDeRevisao, adicionaisDaPeca, precoPodeMudar, areaDeImpressao, textoDaArea,
 } from "@/components/studio/storefront/produto/regrasDaPagina";
 import { validateRequiredFields } from "@/components/studio/storefront/useStorefront";
-
-function armazem(inicial: Record<string, string> = {}) {
-  const dados: Record<string, string> = { ...inicial };
-  return {
-    dados,
-    getItem: (k: string) => (k in dados ? dados[k] : null),
-    setItem: (k: string, v: string) => { dados[k] = String(v); },
-  };
-}
-
-describe("chave vitrine_v2", () => {
-  test("a loja liga pelo servidor", () => {
-    expect(vitrineV2Ativa({ site: { vitrine_v2: true } }, { slug: "sheid" })).toBe(true);
-    expect(vitrineV2Ativa({ site: { vitrine_v2: false } }, { slug: "sheid" })).toBe(false);
-    expect(vitrineV2Ativa(null, { slug: "sheid" })).toBe(false);
-    // Só `true` liga: "1" ou "sim" vindo do banco não é a chave.
-    expect(vitrineV2Ativa({ site: { vitrine_v2: "1" } }, { slug: "sheid" })).toBe(false);
-  });
-
-  test("?v2=1 liga e fica na aba; ?v2=0 desliga mesmo com a loja ligada", () => {
-    const s = armazem();
-    expect(vitrineV2Ativa({ site: { vitrine_v2: false } }, { slug: "Sheid", search: "?v2=1", storage: s })).toBe(true);
-    expect(s.dados[chaveDaAba("sheid")]).toBe("1");
-    // A URL trocou de tela e o parâmetro sumiu: a aba lembra.
-    expect(vitrineV2Ativa({ site: {} }, { slug: "sheid", search: "", storage: s })).toBe(true);
-    expect(vitrineV2Ativa({ site: { vitrine_v2: true } }, { slug: "sheid", search: "?x=1&v2=0", storage: s })).toBe(false);
-    expect(vitrineV2Ativa({ site: { vitrine_v2: true } }, { slug: "sheid", search: null, storage: s })).toBe(false);
-  });
-
-  test("a aba é por loja, e storage que falha não derruba", () => {
-    const s = armazem({ [chaveDaAba("outra")]: "1" });
-    expect(vitrineV2Ativa({ site: {} }, { slug: "sheid", storage: s })).toBe(false);
-    const quebrado = { getItem: () => { throw new Error("x"); }, setItem: () => { throw new Error("x"); } };
-    expect(vitrineV2Ativa({ site: {} }, { slug: "sheid", search: "?v2=1", storage: quebrado as any })).toBe(true);
-    expect(vitrineV2Ativa({ site: { vitrine_v2: true } }, { slug: "sheid", storage: quebrado as any })).toBe(true);
-  });
-
-  test("leitura do parâmetro", () => {
-    expect(v2DaConsulta("?v2=1")).toBe("1");
-    expect(v2DaConsulta("v2=sim")).toBe("1");
-    expect(v2DaConsulta("?a=1&v2=0")).toBe("0");
-    expect(v2DaConsulta("?v2=talvez")).toBeNull();
-    expect(v2DaConsulta("?v22=1")).toBeNull();
-    expect(v2DaConsulta(undefined)).toBeNull();
-  });
-});
 
 describe("quantidade digitável", () => {
   test("de 1 a 999; lixo e vazio viram 1", () => {

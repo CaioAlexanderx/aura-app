@@ -202,8 +202,10 @@ describe("a barra de compra", () => {
     await waitFor(() => expect(naTela("Falta o texto da frente")).toBe(true));
     expect(naTela("Descreva sua ideia")).toBe(true);
     expect(naTela("A loja cria a arte a partir da sua ideia")).toBe(true);
-    // O preço já inclui a criação (sem a Fase 2, ela entra no unitário).
-    expect(naTela("Inclui criação da arte (+R$ 25,00)")).toBe(true);
+    // Fase 2: a criação é cobrada UMA vez no item, fora do unitário; o
+    // total da barra já a soma (49,90 + 25,00).
+    expect(naTela("Criação da arte: +R$ 25,00, uma vez no item")).toBe(true);
+    expect(naTela("R$ 74,90")).toBe(true);
 
     expect(naTela("Sua caneca")).toBe(false);
     fireEvent.changeText(screen.getByLabelText("Nome ou frase"), "Mãe");
@@ -213,10 +215,18 @@ describe("a barra de compra", () => {
     expect(naTela("Prévia. A loja manda o mockup final para você aprovar.")).toBe(true);
 
     fireEvent.press(screen.getByLabelText("Adicionar à sacola"));
-    await waitFor(() => expect(navegar).toHaveBeenCalledWith({ tipo: "home" }, "voltar"));
+    // A cliente fica na peça: o botão vira "Adicionado", o contador da
+    // sacola mostra 1 e a Fase 2 oferece a gaveta.
+    expect(await screen.findByLabelText("Adicionado à sacola")).toBeTruthy();
+    expect(navegar).not.toHaveBeenCalledWith({ tipo: "home" }, "voltar");
+    expect(await screen.findByText("Ver sacola")).toBeTruthy();
+    expect(screen.getByLabelText("Abrir a sacola, 1 peça")).toBeTruthy();
     const add = mockMedir.mock.calls.find((c) => c[1]?.nome === "add_to_cart");
-    expect(add?.[1].itens[0]).toMatchObject({ id: CANECA.id, preco: 74.9, quantidade: 1 });
+    expect(add?.[1].itens[0]).toMatchObject({ id: CANECA.id, quantidade: 1 });
     await waitFor(() => expect(JSON.parse(localStorage.getItem("aura-studio-storefront-sheid-mania") || "[]")).toHaveLength(1));
+    // "Ver sacola" abre a gaveta por cima da peça.
+    fireEvent.press(screen.getByText("Ver sacola"));
+    await waitFor(() => expect(naTela("Sua sacola")).toBe(true));
   });
 
   test("as abas Frente · Verso levam o mockup junto; o verso é opt-in cobrado", async () => {

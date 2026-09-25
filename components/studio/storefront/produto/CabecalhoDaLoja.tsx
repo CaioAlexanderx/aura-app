@@ -17,16 +17,14 @@ import { useTemaDaVitrine } from "../TemaDaVitrine";
 import { Texto, Numero, useTipografia } from "../TipografiaVitrine";
 import { Icon } from "@/components/Icon";
 import { BotaoIcone, transicao, usePulso } from "./kitDaPagina";
+import { pecasNaSacola } from "../precoDaSacola";
 
-/** Peças na sacola (soma das quantidades). */
-export function pecasNaSacola(sf: StorefrontState): number {
-  return (sf.cart || []).reduce((s, l) => s + (Number(l.qty) || 0), 0);
-}
-
-/** Abre a sacola: a gaveta da Fase 2 quando existe; senão, o checkout. */
+/**
+ * Abre a sacola: a gaveta da Fase 2. Fora da vitrine nova (sem a chave)
+ * a gaveta não desenha, e a sacola de hoje mora no checkout.
+ */
 export function abrirASacola(sf: StorefrontState) {
-  const gaveta = (sf as any).abrirSacola;
-  if (typeof gaveta === "function") { gaveta(); return; }
+  if (sf.vitrineV2) { sf.abrirSacola(); return; }
   if (sf.cart.length) sf.goTo("checkout");
 }
 
@@ -43,7 +41,7 @@ export function CabecalhoDaLoja({
   const t = useTemaDaVitrine();
   const tipo = useTipografia();
   const nome = String((sf.store as any)?.site?.name || "");
-  const n = pecasNaSacola(sf);
+  const n = pecasNaSacola(sf.cart);
   const antes = useRef(n);
   const [gatilho, setGatilho] = useState(0);
   useEffect(() => {
