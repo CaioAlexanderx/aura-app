@@ -12,6 +12,8 @@
 //   /<slug>/p/<id>          produto      (stage "configure")
 //   /<slug>/finalizar       checkout     (stage "checkout"; "sent" também)
 //   /<slug>/orcamento       lote         (stage "lote")
+//   /<slug>/pedido/<token>  o pedido     (Fase 2: página própria, lida do
+//                                         servidor pelo token — não é stage)
 //
 // Este módulo é a tradução entre as duas línguas — tela da URL e estado
 // do hook — e nada mais. Puro de propósito: é regra, tem teste, e tela
@@ -25,7 +27,11 @@ export type TelaDaVitrine =
   | { tipo: "categoria"; categoria: string }
   | { tipo: "produto"; id: string }
   | { tipo: "finalizar" }
-  | { tipo: "orcamento" };
+  | { tipo: "orcamento" }
+  // Fase 2: a confirmação e o Pix em /<slug>/pedido/<token>. A página lê o
+  // pedido do servidor (PaginaDoPedido.tsx), então não há estado a alcançar:
+  // o hook só NAVEGA para ela, depois do pedido criado.
+  | { tipo: "pedido"; token: string };
 
 /**
  * Como chegar numa tela a partir de uma ação da cliente.
@@ -59,6 +65,7 @@ export function caminhoDaTela(slug: string, tela: TelaDaVitrine): string {
     case "produto": return `${base}/p/${encodeURIComponent(tela.id)}`;
     case "finalizar": return `${base}/finalizar`;
     case "orcamento": return `${base}/orcamento`;
+    case "pedido": return `${base}/pedido/${encodeURIComponent(tela.token)}`;
     default: return base;
   }
 }
@@ -68,6 +75,7 @@ export function mesmaTela(a: TelaDaVitrine | null | undefined, b: TelaDaVitrine 
   if (!a || !b || a.tipo !== b.tipo) return false;
   if (a.tipo === "produto") return a.id === (b as any).id;
   if (a.tipo === "categoria") return a.categoria === (b as any).categoria;
+  if (a.tipo === "pedido") return a.token === (b as any).token;
   return true;
 }
 
@@ -104,6 +112,8 @@ export function telaPronta(tela: TelaDaVitrine, e: EstadoDaTela): boolean {
     // da Fase 2): o pedido enviado fica na URL do checkout.
     case "finalizar": return e.stage === "checkout" || e.stage === "sent";
     case "orcamento": return e.stage === "lote";
+    // A página do pedido não depende do estado do hook.
+    case "pedido": return true;
   }
 }
 
@@ -114,6 +124,7 @@ export type Resolucao =
   | { acao: "produto"; produto: StudioStoreProduct; irmaos: StudioStoreProduct[] }
   | { acao: "finalizar" }
   | { acao: "orcamento" }
+  | { acao: "pedido"; token: string }
   | { acao: "redirecionar"; para: TelaDaVitrine; aviso?: string };
 
 export const AVISO_PECA_FORA = "Essa peça não está mais na loja";
@@ -135,6 +146,7 @@ export function resolverTela(
     case "home": return { acao: "home" };
     case "finalizar": return { acao: "finalizar" };
     case "orcamento": return { acao: "orcamento" };
+    case "pedido": return { acao: "pedido", token: tela.token };
     case "produto": {
       const produto = (loja?.products || []).find((p) => String(p.id) === tela.id);
       if (!produto) return { acao: "redirecionar", para: { tipo: "home" }, aviso: AVISO_PECA_FORA };
