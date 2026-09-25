@@ -31,6 +31,10 @@ import { PreviewCartao } from "./PreviewCartao";
 import { BASE_URL } from "@/services/api";
 import { ChecklistDaLoja } from "./ChecklistDaLoja";
 import { SPECS } from "./specsDeImagem";
+import {
+  enderecoDaPrevia, pecaAutomatica, pecasParaODestaque, selosDeFabrica,
+  type PecaDoPainel, type VitrineDoPainel,
+} from "./designDaVitrineStudio";
 type BannerTone = "split" | "editorial" | "centered" | "image-clean";
 
 type Banner = {
@@ -62,17 +66,13 @@ type Cfg = {
   banner_rotation_seconds?: number;
   service_cards?: ServiceCard[];
   is_published?: boolean; slug?: string; storefront_url?: string;
+  /** Fase 5 (Studio): a peça do destaque sem banner; null = automática. */
+  hero_product_id?: string | null;
 };
 
-const BACKEND_BASE = (
-  (typeof process !== "undefined" && process.env?.EXPO_PUBLIC_API_URL) ||
-  "https://aura-backend-production-f805.up.railway.app/api/v1"
-).replace(/\/api\/v1\/?$/, "");
-
-function previewUrlFor(slug?: string | null) {
-  if (!slug) return null;
-  return `${BACKEND_BASE}/api/v1/storefront/${encodeURIComponent(slug)}/page`;
-}
+// A prévia: vitrine Studio no endereço da loja, ou a loja comum pelo
+// endereço da API. Antes as duas abriam a loja comum num endereço antigo
+// do Railway. Ver designDaVitrineStudio.ts.
 
 const DEFAULT_BANNERS: Banner[] = [
   { kicker: "", headline: "Bem-vindo à nossa loja", body: "", cta: "Ver produtos", tone: "split",     tint: "brand",  image_url: null, enabled: true },
@@ -278,7 +278,14 @@ export function TabDesign({
   config, saveConfig, isSaving,
   uploadImage, isUploadingImage,
   deleteImage,
+  vitrine = "comum",
 }: {
+  /**
+   * Fase 5: qual vitrine esta aba configura. "studio" (Loja Digital do
+   * Studio) mostra a prévia da vitrine Studio, os textos dela e o seletor
+   * da peça do destaque.
+   */
+  vitrine?: VitrineDoPainel;
   config: Cfg;
   saveConfig: (body: any) => Promise<any>;
   isSaving: boolean;
@@ -300,7 +307,13 @@ export function TabDesign({
   const [banners, setBanners]   = useState<Banner[]>(normalizeBanners(config.banners));
   const [rotateSeconds, setRotateSeconds] = useState<number>(clampRotation(config.banner_rotation_seconds ?? ROTATION_DEFAULT));
   const [rotateText, setRotateText] = useState<string>(String(clampRotation(config.banner_rotation_seconds ?? ROTATION_DEFAULT)));
-  const [serviceCards, setServiceCards] = useState<ServiceCard[]>(normalizeServiceCards(config.service_cards));
+  const ehStudio = vitrine === "studio";
+  // Na vitrine Studio, o conjunto de fábrica do painel não aparece na loja
+  // (ela mostra os selos automáticos dela): aqui também não.
+  const selosIniciais = (cards: any) => (ehStudio && selosDeFabrica(cards) ? [] : normalizeServiceCards(cards));
+  const [serviceCards, setServiceCards] = useState<ServiceCard[]>(selosIniciais(config.service_cards));
+  const [pecas, setPecas] = useState<PecaDoPainel[]>([]);
+  const [heroId, setHeroId] = useState<string | null>(config.hero_product_id || null);
   const [device, setDevice]     = useState<"desktop" | "mobile">(IS_WIDE ? "desktop" : "mobile");
   const [previewKey, setPreviewKey] = useState(0);
   // Produtos reais pro preview. A diferenca entre "Editorial" e "Imagem"
@@ -321,6 +334,7 @@ export function TabDesign({
         if (!vivo || !Array.isArray(j?.products)) return;
         const comFoto = j.products.filter((p: any) => p?.image_url);
         setContagem({ total: j.products.length, comFoto: comFoto.length });
+        setPecas(pecasParaODestaque(j.products));
         const escolhidos = (comFoto.length ? comFoto : j.products).slice(0, 3);
         setProdutosDemo(
           escolhidos.map((p: any) => ({
@@ -346,10 +360,11 @@ export function TabDesign({
     setRotateSeconds(next);
     setRotateText(String(next));
   }, [config.banner_rotation_seconds]);
-  useEffect(() => { setServiceCards(normalizeServiceCards(config.service_cards)); }, [JSON.stringify(config.service_cards)]);
+  useEffect(() => { setServiceCards(selosIniciais(config.service_cards)); }, [JSON.stringify(config.service_cards)]);
+  useEffect(() => { setHeroId(config.hero_product_id || null); }, [config.hero_product_id]);
 
   const saveTimer = useRef<any>(null);
-  function scheduleSave(patch: Partial<Cfg> & { banners?: Banner[]; service_cards?: ServiceCard[]; banner_rotation_seconds?: number }) {
+  function scheduleSave(patch: Partial<Cfg> & { banners?: Banner[]; service_cards?: ServiceCard[]; banner_rotation_seconds?: number; hero_product_id?: string | null }) {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       try {
@@ -459,7 +474,11 @@ export function TabDesign({
     input.click();
   }
 
-  const previewUrl = useMemo(() => previewUrlFor(config.slug), [config.slug]);
+  const previewUrl = useMemo(
+    () => enderecoDaPrevia({ slug: config.slug, storefrontUrl: config.storefront_url, vitrine }),
+    [config.slug, config.storefront_url, vitrine],
+  );
+  const automatica = pecaAutomatica(pecas);
   const wide = IS_WIDE;
 
   const editor = (
@@ -575,14 +594,18 @@ export function TabDesign({
           onChange={(v) => { setAnnBar(v); scheduleSave({ announcement_bar: v }); }}
           placeholder="Ex: Frete grátis acima de R$ 250" />
         <Text style={cs.hint}>
-          Deixe vazio e a loja monta a faixa com o que você ligou: frete grátis acima de um valor, troca em 7 dias e o desconto no Pix.
+          {ehStudio
+            ? "Deixe vazio e a loja monta a faixa com os dados dela: “Você aprova o mockup antes de produzir · Pronto em N dias úteis · X% no Pix”. Separe os avisos com “·”."
+            : "Deixe vazio e a loja monta a faixa com o que você ligou: frete grátis acima de um valor, troca em 7 dias e o desconto no Pix."}
         </Text>
       </View>
 
       <SectionTitle title="Banners do topo" />
       <View style={cs.card}>
         <Text style={cs.hint}>
-          Até 3 banners se alternam no topo da loja, cobrindo toda a largura. Sem nenhum ativo, a loja mostra o seu título sobre um fundo com a sua cor — nada fica quebrado.
+          {ehStudio
+            ? "Até 3 banners se alternam no topo da loja a cada 6 segundos, cobrindo toda a largura. Sem nenhum ativo, a loja mostra o título dela e a peça do destaque com o mockup girando (escolha a peça logo abaixo dos banners)."
+            : "Até 3 banners se alternam no topo da loja, cobrindo toda a largura. Sem nenhum ativo, a loja mostra o seu título sobre um fundo com a sua cor — nada fica quebrado."}
         </Text>
         <View style={s.toneHelper}>
           <Text style={s.toneHelperText}>
@@ -591,7 +614,10 @@ export function TabDesign({
           </Text>
         </View>
 
-        {/* Fase 3 — Rec #6: tempo entre slides do carrossel */}
+        {/* Fase 3 — Rec #6: tempo entre slides do carrossel. A vitrine
+            Studio gira a cada 6 s (mockup 05) e não lê este campo: não
+            mostrar um controle que não muda a loja dela. */}
+        {ehStudio ? null : (<>
         <View style={s.rotateRow}>
           <View style={{ flex: 1 }}>
             <Text style={cs.fieldLabel}>Tempo entre slides</Text>
@@ -613,6 +639,7 @@ export function TabDesign({
         <Text style={cs.hint}>
           Quanto tempo cada banner fica visível antes de trocar pro próximo (entre {ROTATION_MIN} e {ROTATION_MAX}).
         </Text>
+        </>)}
       </View>
       {banners.map((b, idx) => {
         const toneKey = (b.tone || "split") as BannerTone;
@@ -644,10 +671,12 @@ export function TabDesign({
           <Field label="Link do botão" value={b.cta_url || ""}
             onChange={(v) => updateBanner(idx, { cta_url: v })}
             onBlur={() => updateBanner(idx, { cta_url: normalizarDestino(b.cta_url || "") })}
-            placeholder="https://… ou uma categoria: #cat=/vestidos"
+            placeholder={ehStudio ? "https://… ou #cat=/canecas, #vista=lote" : "https://… ou uma categoria: #cat=/vestidos"}
             testID={`cta-url-${idx}`} />
           <Text style={cs.hint}>
-            Um link (https://…) abre em nova aba. Uma categoria da sua loja (#cat=/vestidos, o caminho da categoria) abre aqui mesmo.
+            {ehStudio
+              ? "Um link (https://…) abre em nova aba. Na própria loja: uma categoria (#cat=/canecas), a loja toda (#vista=todos), os mais pedidos (#vista=mais_vendidos) ou o orçamento em lote (#vista=lote). Com imagem e sem texto, o banner inteiro vira o link."
+              : "Um link (https://…) abre em nova aba. Uma categoria da sua loja (#cat=/vestidos, o caminho da categoria) abre aqui mesmo."}
           </Text>
           {avisoDoCta(estadoDoCta(b.cta, b.cta_url)) ? (
             <Text style={s.avisoCta} testID={`cta-aviso-${idx}`}>
@@ -736,9 +765,44 @@ export function TabDesign({
         );
       })}
 
+      {ehStudio ? (
+        <>
+          <SectionTitle title="Peça do destaque (quando não há banner)" />
+          <View style={cs.card} testID="peca-do-destaque">
+            <Text style={cs.hint}>
+              Sem banner ativo, o topo da loja mostra esta peça com o mockup girando e as artes trocando sozinhas. No automático, é a primeira com prévia 3D{automatica ? ` (hoje: ${automatica.nome})` : ""}.
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 8 }}>
+              {[{ id: "", nome: "Automático", foto: null, tresD: false } as PecaDoPainel, ...pecas].map((p) => {
+                const sel = (heroId || "") === p.id;
+                return (
+                  <Pressable
+                    key={p.id || "auto"}
+                    testID={`destaque-${p.id || "auto"}`}
+                    onPress={() => { const v = p.id || null; setHeroId(v); scheduleSave({ hero_product_id: v }); }}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: sel }}
+                    accessibilityLabel={p.id ? p.nome : "Automático: a primeira com prévia 3D"}
+                    style={{ width: 104, padding: 6, gap: 6, borderRadius: 12, borderWidth: sel ? 2 : 1, borderColor: sel ? accent.primaryStrong : accent.border, backgroundColor: sel ? accent.primarySoft : Colors.bg2 }}
+                  >
+                    <View style={{ width: "100%", aspectRatio: 1, borderRadius: 8, overflow: "hidden", backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center" }}>
+                      {p.foto ? <Image source={{ uri: p.foto }} style={{ width: "100%", height: "100%" }} resizeMode="cover" /> : <Icon name={p.id ? "image" : "refresh"} size={18} color={Colors.ink3} />}
+                    </View>
+                    <Text numberOfLines={2} style={{ fontSize: 11.5, fontWeight: sel ? "700" : "500", color: Colors.ink }}>{p.nome}</Text>
+                    {p.tresD ? <Text style={{ fontSize: 10, color: Colors.ink3 }}>Prévia 3D</Text> : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </>
+      ) : null}
+
       <SectionTitle title="Selos de confiança" />
       <Text style={cs.hint}>
-        Quatro selos curtos entre a grade e o rodapé. Sem nenhum escrito, a loja mostra os padrões com o que você ligou (Pix ou cartão, troca em 7 dias, entrega ou retirada, WhatsApp) — nunca um selo do que a loja não faz.
+        {ehStudio
+          ? "Quatro selos curtos antes do rodapé. Sem nenhum escrito, a loja mostra os automáticos do Studio com os números dela: você aprova antes (com as revisões inclusas), pedidos entregues, compra segura, retirada ou entrega e o WhatsApp."
+          : "Quatro selos curtos entre a grade e o rodapé. Sem nenhum escrito, a loja mostra os padrões com o que você ligou (Pix ou cartão, troca em 7 dias, entrega ou retirada, WhatsApp) — nunca um selo do que a loja não faz."}
       </Text>
 
       {/* Rec #5 — empty state com biblioteca de templates */}

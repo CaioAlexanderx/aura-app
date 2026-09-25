@@ -21,6 +21,9 @@ export function destinoValido(url: string | null | undefined): boolean {
   const u = String(url || "").trim();
   if (!u) return false;
   if (/^#cat=\/[a-z0-9][a-z0-9\-/]*$/i.test(u)) return true;
+  // As vistas da loja (10/09/2026) e o orçamento em lote da vitrine
+  // Studio (Fase 5): o mesmo contrato do backend (destinoDoCta).
+  if (/^#vista=(todos|novidades|mais_vendidos|lote)$/.test(u)) return true;
   return /^https?:\/\/\S+$/i.test(u);
 }
 
@@ -54,7 +57,7 @@ export function avisoDoCta(estado: EstadoDoCta): string | null {
     case "so_destino":
       return "Falta o texto do botão — sem ele não há o que clicar.";
     case "destino_invalido":
-      return "O link precisa começar com https:// — ou ser uma categoria da loja, como #cat=/vestidos";
+      return "O link precisa começar com https:// — ou ser um destino da loja, como #cat=/vestidos ou #vista=todos";
     default:
       return null;
   }

@@ -26,7 +26,16 @@ export const MAXIMO_MAIS_PEDIDOS = 4;
 /** Categorias de primeiro nível na tira. */
 export const MAXIMO_CATEGORIAS = 6;
 
-export type PassoDaLoja = { n: number; titulo: string; texto: string };
+export type PassoDaLoja = {
+  n: number; titulo: string; texto: string;
+  /**
+   * Fase 5 (home nova): o texto sem o prazo, e o prazo à parte — a home
+   * nova desenha o prazo como etiqueta no terceiro passo (mockup 05,
+   * tela 3). A home de hoje continua lendo `texto`.
+   */
+  curto?: string;
+  prazo?: string;
+};
 
 export type BlocosDaHome = {
   hero: {
@@ -114,7 +123,9 @@ export function passosDaLoja(store: StorePayload): PassoDaLoja[] {
     { n: 3, titulo: "Produção e entrega",
       texto: dias > 0
         ? `Pronto em até ${dias} ${plural(dias, "dia útil", "dias úteis")}. ${comoRecebe}`
-        : comoRecebe },
+        : comoRecebe,
+      curto: comoRecebe,
+      ...(dias > 0 ? { prazo: `Pronto em até ${dias} ${plural(dias, "dia útil", "dias úteis")}` } : {}) },
   ];
 }
 
