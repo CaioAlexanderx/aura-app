@@ -10,6 +10,7 @@
 //   - Tornar principal (M2-03 transfer-primary, recarrega após)
 //   - Remover empresa secundária (não a primary)
 //   - Adicionar nova empresa (abre AddCompanyModal)
+//   - Estoque compartilhado entre as empresas (StockSharingCard, 25/09/2026)
 // ============================================================
 import { useState, useEffect, useCallback } from "react";
 import {
@@ -37,6 +38,7 @@ import {
   type BillingPreviewResponse,
 } from "@/services/multicnpj";
 import { AddCompanyModal } from "@/components/AddCompanyModal";
+import { StockSharingCard } from "@/components/StockSharingCard";
 
 function planBadgeColor(plan: string) {
   switch ((plan || "").toLowerCase()) {
@@ -514,6 +516,9 @@ export default function MinhasEmpresasScreen() {
           </View>
         );
       })}
+
+      {/* Estoque compartilhado — só aparece com 2+ empresas (backend decide) */}
+      <StockSharingCard />
 
       {/* CTA adicionar */}
       <Pressable

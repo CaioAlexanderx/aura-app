@@ -175,6 +175,16 @@ export type TransferPrimaryResponse = {
   next_step: string;
 };
 
+// Estoque compartilhado no grupo (backend migration 355).
+// available=false (empresa única, não é o dono ou backend antigo)
+// esconde a opção.
+export type StockSharingResponse = {
+  available: boolean;
+  shared: boolean;
+  companies: { id: string; name: string }[];
+  products_changed?: number;
+};
+
 // ── APIs ───────────────────────────────────────────────────
 
 // Endpoints user-level (lista detalhada + criação + remoção + transfer)
@@ -208,6 +218,17 @@ export var userCompaniesApi = {
       "/me/companies/" + companyId + "/transfer-primary",
       { method: "POST", retry: 0, timeout: 15000 }
     );
+  },
+  stockSharing: function () {
+    return request<StockSharingResponse>("/me/companies/stock-sharing", { retry: 1 });
+  },
+  setStockSharing: function (shared: boolean) {
+    return request<StockSharingResponse>("/me/companies/stock-sharing", {
+      method: "PATCH",
+      body: { shared: shared },
+      retry: 0,
+      timeout: 15000,
+    });
   },
 };
 
