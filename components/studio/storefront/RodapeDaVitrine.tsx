@@ -13,7 +13,9 @@
 // No celular as colunas viram uma pilha: três colunas de 33% num
 // telefone dariam três textos espremidos e ilegíveis.
 // ============================================================
-import { View, Text, Image, Pressable, Linking, StyleSheet, useWindowDimensions } from "react-native";
+import { View, Image, Pressable, Linking, StyleSheet, useWindowDimensions } from "react-native";
+import { Texto, Numero } from "./TipografiaVitrine";
+import { Icon } from "@/components/Icon";
 import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import { montarConteudoDoRodape } from "./conteudoDoRodape";
 import { RodapeInstitucional } from "./RodapeInstitucional";
@@ -22,8 +24,9 @@ import type { PortaDoRodape } from "./conteudoDoRodape";
 /** A partir daqui cabem as três colunas lado a lado. */
 const LARGURA_DE_TRES_COLUNAS = 760;
 
+// Rótulo em caixa alta: voz dos números (Bricolage), como no kit.
 function Etiqueta({ texto, cor }: { texto: string; cor: string }) {
-  return <Text style={[s.etiqueta, { color: cor }]}>{texto}</Text>;
+  return <Numero style={[s.etiqueta, { color: cor }]}>{texto}</Numero>;
 }
 
 export function RodapeDaVitrine({
@@ -58,15 +61,15 @@ export function RodapeDaVitrine({
               accessibilityLabel={identidade.nome}
             />
           ) : (
-            <Text testID="rodape-nome" style={[s.nome, { color: T.ink }]}>
+            <Texto testID="rodape-nome" style={[s.nome, { color: T.ink }]}>
               {identidade.nome}
-            </Text>
+            </Texto>
           )}
 
           {enderecoEHorario ? (
-            <Text testID="rodape-endereco" style={[s.corpo, { color: T.ink3 }]}>
+            <Texto testID="rodape-endereco" style={[s.corpo, { color: T.ink3 }]}>
               {enderecoEHorario}
-            </Text>
+            </Texto>
           ) : null}
 
           {identidade.redes.length > 0 ? (
@@ -80,10 +83,10 @@ export function RodapeDaVitrine({
                   style={({ hovered }: any) => [
                     s.rede,
                     { borderColor: T.border, backgroundColor: T.card },
-                    hovered && { borderColor: T.primary },
+                    hovered && { borderColor: T.primaryTexto },
                   ]}
                 >
-                  <Text style={[s.redeTexto, { color: T.ink2 }]}>{rede.nome}</Text>
+                  <Texto style={[s.redeTexto, { color: T.ink2 }]}>{rede.nome}</Texto>
                 </Pressable>
               ))}
             </View>
@@ -113,7 +116,7 @@ export function RodapeDaVitrine({
                 accessibilityLabel={porta.nome}
                 style={({ hovered }: any) => [s.porta, hovered && { opacity: 0.6 }]}
               >
-                <Text style={[s.portaTexto, { color: T.ink2 }]}>{porta.nome}</Text>
+                <Texto style={[s.portaTexto, { color: T.ink2 }]}>{porta.nome}</Texto>
               </Pressable>
             ))}
           </View>
@@ -123,23 +126,24 @@ export function RodapeDaVitrine({
       {/* Jurídico e assinatura. A Aura aparece UMA vez, na mesma
           frase-link, com o selo ao lado — igual à loja comum. */}
       <View style={[s.baixo, { borderTopColor: T.border }, emColunas ? s.baixoLado : s.baixoPilha]}>
-        <Text testID="rodape-legal" style={[s.legal, { color: T.ink4 }]}>
+        <Texto testID="rodape-legal" style={[s.legal, { color: T.ink3 }]}>
           {r.linhaLegal}
-        </Text>
+        </Texto>
         <View style={s.assinatura}>
           <Pressable
             onPress={() => Linking.openURL("https://getaura.com.br")}
             accessibilityRole="link"
             accessibilityLabel="Loja desenvolvida com Aura — quero a minha"
           >
-            <Text style={[s.legal, { color: T.ink4 }]}>
+            <Texto style={[s.legal, { color: T.ink3 }]}>
               Loja desenvolvida com{" "}
-              <Text style={{ fontWeight: "700", color: T.ink3 }}>Aura.</Text>
-              <Text style={{ color: T.ink4 }}> — quero a minha</Text>
-            </Text>
+              <Texto style={{ fontWeight: "700", color: T.ink2 }}>Aura.</Texto>
+              <Texto style={{ color: T.ink3 }}> — quero a minha</Texto>
+            </Texto>
           </Pressable>
           <View style={[s.selo, { borderColor: T.border }]}>
-            <Text style={[s.seloTexto, { color: T.ink4 }]}>✓ Loja verificada Aura</Text>
+            <Icon name="check" size={11} color={T.ink3} />
+            <Texto style={[s.seloTexto, { color: T.ink3 }]}>Loja verificada Aura</Texto>
           </View>
         </View>
       </View>
@@ -178,6 +182,6 @@ const s = StyleSheet.create({
   baixoPilha: { flexDirection: "column", alignItems: "flex-start" },
   legal: { fontSize: 12 },
   assinatura: { flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" },
-  selo: { borderWidth: 1, borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 },
+  selo: { borderWidth: 1, borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 4 },
   seloTexto: { fontSize: 10.5, letterSpacing: 0.2 },
 });
