@@ -76,8 +76,8 @@ Os números abaixo são os de referência das histórias. Se a loja de teste tiv
 
 | Dado | Valor |
 |---|---|
-| Regra da arte | Serviço de arte pago ("vocês ajustam" ou "criem a arte") entra **uma vez por item da sacola**, não por unidade. Caneca de R$ 39,90 × 2 com arte de R$ 10,00 = **R$ 89,80** (e não R$ 99,80). |
-| Pix | Desconto do Pix conforme o cadastro da loja; o Pix pendente vence e o pedido cancela sozinho em **72 horas**. |
+| Regra da arte | Serviço de arte pago ("vocês ajustam" ou "criem a arte") entra **uma vez por item da sacola**, não por unidade. CANECA BRANCA R$ 39,90 × 2 com ajuste de R$ 10,00 = **R$ 89,80** (e não R$ 99,80); no Pix de 10% da aura-qa, **R$ 80,82**. |
+| Pix | aura-qa: **10%** de desconto; sheid-mania: sem desconto; o Pix pendente vence e o pedido cancela sozinho em **72 horas**. |
 | CPF válido para teste | `529.982.247-25` |
 | CNPJ válido para teste | `11.222.333/0001-81` |
 | CPF inválido | `123.456.789-00` |
@@ -95,9 +95,9 @@ Cores de loja para os testes de contraste (Design → cor dos botões, **só na 
 | Nome | Cor | Por quê |
 |---|---|---|
 | Sheid | `#1a1612` | quase preta, é a real da piloto |
-| Rosa | `#EC4899` | média, texto branco no limite |
-| Amarela | `#FACC15` | clara, texto branco some: a vitrine tem que trocar para texto escuro |
-| Petróleo | `#0F766E` | escura fria |
+| Rosa | `#D6336C` | média, texto branco no limite |
+| Amarela | `#F2C94C` | clara, texto branco some: a vitrine tem que trocar para texto escuro |
+| Petróleo | `#0F6E7A` | escura fria |
 
 Depois dos testes, volte a aura-qa para a cor original.
 
@@ -140,7 +140,7 @@ As histórias trazem critérios premium específicos. Estes aqui valem em **toda
 
 ### Cor e contraste
 - [ ] Só a cor principal da loja pinta a vitrine. Uma segunda cor da loja (`accent_color`) nunca aparece.
-- [ ] Texto sobre a cor da loja com contraste AA (4,5:1 para texto normal, 3:1 para texto grande). Com a amarela `#FACC15`, o texto do botão fica escuro sozinho.
+- [ ] Texto sobre a cor da loja com contraste AA (4,5:1 para texto normal, 3:1 para texto grande). Com a amarela `#F2C94C`, o texto do botão fica escuro sozinho.
 - [ ] Superfície papel quente em todas as telas da vitrine; texto secundário em `#756C61` ou mais escuro.
 - [ ] Estados de erro em vermelho com ícone e texto, nunca só a cor.
 
@@ -199,3 +199,19 @@ Não são achados novos; confira se continuam valendo e registre se piorarem.
 - O e-mail de confirmação ao cliente ainda não traz a marca da loja.
 - A página de aprovação mostra um mockup por link (sem "item 1 de 2").
 - A lista completa de pendências conhecidas por fase está nos "Pontos de atenção" de cada história.
+
+---
+
+## 9. Achados antecipados (antes da primeira rodada)
+
+Ao escrever as histórias, os agentes cruzaram código, mockup e dados reais e já acharam problemas. A lista completa está no fim de cada frente. Estes pedem decisão do PO **antes** de ligar a chave na sheid-mania:
+
+| # | Achado | Frente | Peso |
+|---|---|---|---|
+| 1 | O painel Studio não tem como confirmar o Pix de um pedido da vitrine nem ver o comprovante. O botão "Confirmar pagamento" só existe no Canal Digital, e a conta Studio não abre essa tela; o registro de pagamento do Studio só marca o sinal. Somado ao cancelamento automático em 72 h, um pedido pago por chave Pix, com comprovante mandado pelo WhatsApp e produção ainda parada, pode ser cancelado sozinho. Volume hoje: 1 pedido da vitrine Studio em 60 dias. | Lojista (LJ, achado A1) | P0 |
+| 2 | Revisões inclusas = 0 significam "ilimitadas" no painel, mas a página de aprovação avisa "Esta seria a 1ª revisão" (paga). aura-qa e sheid-mania estão com 0. | Lojista A3 · Cliente | P0 |
+| 3 | A lojista não recebe aviso quando a cliente aprova ou pede ajuste, embora a página diga que a loja foi notificada. | Lojista A4 | P0 |
+| 4 | O detalhe do pedido Studio não mostra forma e situação do pagamento, modo de entrega, quem busca, CPF/CNPJ, a linha da arte, e mostra valores com ponto ("R$ 49.90"). | Lojista A2 | P0 |
+| 5 | O voltar do navegador nas etapas 2 e 3 do checkout sai do checkout (as etapas não entram no histórico). | Cliente | P1 |
+| 6 | Prévia de tipografia do painel mostra as fontes da loja comum, não as do Studio; o estilo "Marcante" é recusado pelo servidor. | Lojista A5, A6 | P1 |
+| 7 | Emoji e prazo em horas em mensagens e avisos (aprovação, push, aba Entrega), contra as decisões do PO. | Lojista A16 | P1 |
