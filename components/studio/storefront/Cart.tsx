@@ -17,25 +17,9 @@ import { dinheiro } from "./moeda";
 import { Icon } from "@/components/Icon";
 import { modoDaVitrine } from "./modoDaVitrine";
 import { FolhaDaSacolaFechada } from "./SacolaFechada";
-// Helpers expostos pelo hook
-function effectiveBackSelected(
-  cfg: any, explicit: boolean | undefined
-): boolean {
-  if (!cfg || cfg.has_back !== true) return false;
-  if (cfg.back_charge_enabled !== true) return true;
-  return explicit === true;
-}
-
-// Mesma regra para a faixa central / wrap 360 (caneca, copo). A escolha
-// explicita mora em values.has_middle_selected — a CartLine nao tem campo
-// proprio, ao contrario do verso.
-function effectiveMiddleSelected(
-  cfg: any, explicit: boolean | undefined
-): boolean {
-  if (!cfg || cfg.has_middle !== true) return false;
-  if (cfg.middle_charge_enabled !== true) return true;
-  return explicit === true;
-}
+// O verso e o meio estao na peca? Era uma COPIA da regra do hook, aqui;
+// desde a Fase 2 (25/09/2026) as duas telas leem o mesmo modulo puro.
+import { versoEfetivo as effectiveBackSelected, meioEfetivo as effectiveMiddleSelected, precoDaLinha } from "./precoDaSacola";
 
 /** Barra flutuante no stage="list" quando há itens no carrinho */
 export function CartBar({ sf }: { sf: StorefrontState }) {
@@ -56,6 +40,42 @@ export function CartBar({ sf }: { sf: StorefrontState }) {
   const tinta = tintaSobre(T.ink);
   const selo = corLegivelSobre(tema.marca, T.ink);
   const pecas = sf.cart.reduce((s, l) => s + l.qty, 0);
+
+  // Fase 2 (chave vitrine_v2): a barra abre a GAVETA da sacola, aberta ou
+  // fechada a loja — a gaveta sabe mostrar as duas (SacolaEmGaveta.tsx).
+  if (sf.vitrineV2) {
+    return (
+      <Pressable
+        testID="barra-da-sacola"
+        onPress={sf.abrirSacola}
+        accessibilityRole="button"
+        accessibilityLabel={"Ver sacola, " + pecas + (pecas === 1 ? " peça" : " peças") + ", " + dinheiro(sf.cartSubtotal)}
+        style={{
+          position: "absolute", left: 12, right: 12, bottom: 40,
+          maxWidth: 980, marginHorizontal: "auto",
+          backgroundColor: T.ink, borderRadius: 12, minHeight: 52,
+          paddingVertical: 12, paddingHorizontal: 16,
+          flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <View style={{ backgroundColor: selo, minWidth: 26, height: 26, paddingHorizontal: 6, borderRadius: 13, alignItems: "center", justifyContent: "center" }}>
+            <Numero style={{ color: tintaSobre(selo), fontSize: 12, fontWeight: "700" }}>{pecas}</Numero>
+          </View>
+          <View>
+            <Texto style={{ fontSize: 10.5, color: tinta, opacity: 0.72 }}>
+              {pecas === 1 ? "peça na sacola" : "peças na sacola"}
+            </Texto>
+            <Numero style={{ color: tinta, fontSize: 16, fontWeight: "700" }}>{dinheiro(sf.cartSubtotal)}</Numero>
+          </View>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Texto style={{ color: tinta, fontSize: 13.5, fontWeight: "800" }}>Ver sacola</Texto>
+          <Icon name="chevron_right" size={16} color={tinta} />
+        </View>
+      </Pressable>
+    );
+  }
 
   if (!modo.aceita) {
     return (
@@ -179,6 +199,8 @@ export function CartItemList({ sf }: { sf: StorefrontState }) {
       {sf.cart.map((l) => {
         const unit = sf._lineUnitPrice(l);
         const hasDelta = unit !== Number(l.product.price);
+        // Servico de arte: uma vez por linha (decisao do PO, 25/09/2026).
+        const arte = precoDaLinha(l).arte;
         const backActive = effectiveBackSelected(
           l.product.customization_config,
           l.hasBackSelected
@@ -231,6 +253,11 @@ export function CartItemList({ sf }: { sf: StorefrontState }) {
               {hasDelta && (
                 <Texto style={{ fontSize: 10.5, color: T.primaryTexto, marginTop: 1 }}>
                   inclui {dinheiro((unit - Number(l.product.price)))} por opções
+                </Texto>
+              )}
+              {arte > 0 && (
+                <Texto style={{ fontSize: 10.5, color: T.primaryTexto, marginTop: 1 }}>
+                  + {dinheiro(arte)} do serviço de arte, uma vez
                 </Texto>
               )}
               {backActive &&

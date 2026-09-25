@@ -169,7 +169,10 @@ describe("as telas", () => {
   });
 
   test("o pedido manda o verso pela regra nova", () => {
-    expect(le("components/studio/storefront/useStorefront.ts")).toContain("const backActive = versoAtivo(");
+    // Fase 2: a montagem dos itens saiu do hook para um lugar só, usado
+    // pelo pedido e pela cotação (cotacaoDaSacola.ts).
+    expect(le("components/studio/storefront/cotacaoDaSacola.ts")).toContain("const backActive = versoAtivo(");
+    expect(le("components/studio/storefront/useStorefront.ts")).toContain("items: itensDoPedido(cart),");
   });
 
   test("min_dpi saiu do padrão do campo de imagem (decisão 4)", () => {

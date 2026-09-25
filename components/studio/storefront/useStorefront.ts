@@ -101,11 +101,9 @@ import type {
 import { normalizePlate, maskPlate } from "./courierPlate";
 import type { ErroDeCarga } from "./erroDaVitrine";
 import { isArtSourceType, sideOf } from "@/components/studio/customizationConfig";
-import { versoAtivo } from "./versoDoPedido";
 import {
   agruparVitrine, transportarValores, type VitrineEntry,
 } from "./categoryGrouping";
-import { basePriceForQty } from "./qtyTiers";
 import {
   resolverTela, chaveDaCategoria,
   type NavegarNaVitrine, type ModoDeNavegar, type TelaDaVitrine, type Resolucao,
@@ -117,54 +115,28 @@ import { enderecoDaApi } from "./enderecoDaApi";
 // no meio da compra. As regras moram nos modulos; aqui so as chamadas.
 import { medirNaVitrine, itemDoProduto, itensDaSacola } from "./eventosDaVitrine";
 import { lojaFechouNoEnvio } from "./lojaFechada";
+// Fase 2 (Fechar a venda): preco numa conta so, a chave vitrine_v2, a
+// cotacao no servidor e o pedido guardado para a pagina /pedido/<token>.
+import {
+  precoDaPeca, precoUnitarioDaLinha, totalDaLinha, versoEfetivo, meioEfetivo,
+} from "./precoDaSacola";
+import { vitrineV2NoNavegador } from "./chaveVitrineV2";
+import {
+  itensDoPedido, lerCotacao, assinaturaDaCotacao, RESPIRO_DA_COTACAO_MS,
+  type CotacaoDaSacola,
+} from "./cotacaoDaSacola";
+import { situacaoDoDocumento, digitos } from "./formularioDoCheckout";
+import { guardarDadosLembrados, storageLocal, storageDaAba } from "./dadosLembrados";
+import { guardarPedidoPendente, guardarIdDoPedido } from "./pedidoGuardado";
 
 const API_BASE = enderecoDaApi();
 
-// --- Helpers de preco (identicos ao monolito) ---
-function choicesDelta(
-  cfg: StudioStoreProduct["customization_config"] | null | undefined,
-  values: Record<string, any>
-): number {
-  if (!cfg?.fields) return 0;
-  let delta = 0;
-  for (const f of cfg.fields) {
-    if (f.type !== "option" && f.type !== "color") continue;
-    const choices = f.config?.choices;
-    if (!Array.isArray(choices) || choices.length === 0) continue;
-    const selected = values[f.id];
-    if (selected == null) continue;
-    const sels = Array.isArray(selected) ? selected : [selected];
-    for (const s of sels) {
-      const c = choices.find((ch: any) => ch.value === s || ch.label === s);
-      if (c && typeof c.price_delta === "number" && !isNaN(c.price_delta)) {
-        delta += c.price_delta;
-      }
-    }
-  }
-  return delta;
-}
-
-function effectiveBackSelected(
-  cfg: StudioStoreProduct["customization_config"] | null | undefined,
-  explicit: boolean | undefined
-): boolean {
-  if (!cfg || cfg.has_back !== true) return false;
-  if (cfg.back_charge_enabled !== true) return true;
-  return explicit === true;
-}
-
-// Mesma regra do verso, para o meio (faixa central / wrap 360 de caneca
-// e copo). ESPELHO OBRIGATORIO de middleIsActive em src/routes/
-// studioStorefront.js (aura-backend) -- se um lado mudar sem o outro, o
-// item entra no carrinho e o pedido leva 400 no fechamento.
-function effectiveMiddleSelected(
-  cfg: StudioStoreProduct["customization_config"] | null | undefined,
-  explicit: boolean | undefined
-): boolean {
-  if (!cfg || cfg.has_middle !== true) return false;
-  if (cfg.middle_charge_enabled !== true) return true;
-  return explicit === true;
-}
+// --- Helpers de preco ---
+// Fase 2 (25/09/2026): a conta de preco saiu daqui para precoDaSacola.ts
+// (pura, com teste, e a mesma que o Cart.tsx le). O servico de arte pago
+// passou a entrar UMA VEZ por linha, como o servidor cobra.
+const effectiveBackSelected = versoEfetivo;
+const effectiveMiddleSelected = meioEfetivo;
 
 // ── S0 (18/08/2026) — grupo de origem da arte ────────────────
 // `image` e `template` preenchem o MESMO slot de arte: compose3dMug e
@@ -239,48 +211,16 @@ export function validateRequiredFields(
   return null;
 }
 
-function backDelta(
-  cfg: StudioStoreProduct["customization_config"] | null | undefined,
-  explicit: boolean | undefined
-): number {
-  if (!cfg || cfg.has_back !== true) return 0;
-  if (cfg.back_charge_enabled !== true) return 0;
-  if (explicit !== true) return 0;
-  const d = Number(cfg.back_price_delta);
-  return isFinite(d) ? d : 0;
-}
-
-// Mesmo contrato de backDelta, para o meio. ESPELHO de computeMiddleDelta
-// em src/routes/studioStorefront.js (aura-backend).
-function middleDelta(
-  cfg: StudioStoreProduct["customization_config"] | null | undefined,
-  explicit: boolean | undefined
-): number {
-  if (!cfg || cfg.has_middle !== true) return 0;
-  if (cfg.middle_charge_enabled !== true) return 0;
-  if (explicit !== true) return 0;
-  const d = Number(cfg.middle_price_delta);
-  return isFinite(d) ? d : 0;
-}
-
 // S6 — a faixa de quantidade incide sobre o preco de tabela; os deltas de
-// personalizacao somam DEPOIS. E a mesma ordem do backend: se os dois
+// personalizacao somam DEPOIS; o servico de arte entra uma vez por linha.
+// E a mesma ordem do backend (services/precoDoStudio.js): se os dois
 // lados discordassem, o cliente veria um total e pagaria outro.
 function lineUnitPrice(line: CartLine): number {
-  return (
-    basePriceForQty(Number(line.product.price), line.product.qty_tiers, line.qty) +
-    choicesDelta(line.product.customization_config, line.values) +
-    backDelta(line.product.customization_config, line.hasBackSelected) +
-    // CartLine nao tem um campo dedicado tipo hasBackSelected pro meio
-    // (contrato congelado em ./types) — a bandeira explicita viaja dentro
-    // de `values.has_middle_selected`, escrita em commitConfigure. Mesmo
-    // padrao que categoryGrouping.ts ja usa pra has_back_selected.
-    middleDelta(line.product.customization_config, line.values?.has_middle_selected)
-  );
+  return precoUnitarioDaLinha(line);
 }
 
 function lineTotal(line: CartLine): number {
-  return lineUnitPrice(line) * line.qty;
+  return totalDaLinha(line);
 }
 
 // --- Hook ---
@@ -341,9 +281,27 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
   const [addressState, setAddressState] = useState("");
   const [addressZip, setAddressZip] = useState("");
   const [notes, setNotes] = useState("");
+  // Fase 2 (checkout em etapas, com a chave vitrine_v2): CPF/CNPJ na nota,
+  // complemento do endereco e o "informo depois" da retirada por app.
+  const [querDocumento, setQuerDocumento] = useState(false);
+  const [customerDocument, setCustomerDocument] = useState("");
+  const [addressComplement, setAddressComplement] = useState("");
+  const [courierInformarDepois, setCourierInformarDepois] = useState(false);
 
   const [sending, setSending] = useState(false);
   const [sentOrder, setSentOrder] = useState<SentOrder | null>(null);
+
+  // ── Fase 2: a sacola em gaveta ──────────────────────────────
+  // A gaveta e estado da vitrine, nao uma tela: abre por cima de onde a
+  // cliente esta (produto, home, checkout) sem tirar ela dali.
+  const [sacolaAberta, setSacolaAberta] = useState(false);
+  // "Adicionado a sacola": o toast com a miniatura e o "Ver sacola".
+  const [adicionado, setAdicionado] = useState<{ lineId: string; n: number } | null>(null);
+  // "Remover" com "Desfazer" por 5 s: a linha e onde ela estava.
+  const [removida, setRemovida] = useState<{ line: CartLine; indice: number; n: number } | null>(null);
+  // Editar uma linha a partir da gaveta volta para ela, na tela de onde a
+  // cliente saiu (antes voltava para a home — useStorefront.ts:607).
+  const voltaDaEdicao = useRef<{ stage: Stage; tela: TelaDaVitrine | null } | null>(null);
 
   // Carrega a loja
   useEffect(() => {
@@ -384,6 +342,17 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
       .finally(() => { if (vivo) setLoading(false); });
     return () => { vivo = false; };
   }, [slug, tentativa]);
+
+  // Fase 2: a chave `vitrine_v2` (chaveVitrineV2.ts). O `?v2=` da URL e
+  // guardado na aba JA no primeiro render: o link de peca aberto de fora
+  // troca a URL pela home antes de a loja chegar (VitrineNaRota, entrada
+  // na loja), e o parametro sumiria antes de ser lido.
+  useState(() => (Platform.OS === "web" && slug ? vitrineV2NoNavegador(null, slug) : false));
+  // Lida uma vez por loja carregada.
+  const vitrineV2 = useMemo(
+    () => (store && Platform.OS === "web" ? vitrineV2NoNavegador(store, slug) : store?.site && (store.site as any).vitrine_v2 === true),
+    [store, slug],
+  ) === true;
 
   /** "Tentar de novo" da tela de erro: refaz a carga da loja. */
   function recarregar() {
@@ -434,8 +403,10 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
   //
   // A cotacao e disparada por acao explicita (botao/blur), nao a cada
   // tecla: sao 8 digitos e o servidor geocodifica o CEP.
-  async function quoteShipping() {
-    const cep = addressZip.replace(/\D/g, "");
+  async function quoteShipping(cepInformado?: string) {
+    // Fase 2: o checkout em etapas cota no oitavo digito do CEP, antes de
+    // o estado do campo chegar aqui — por isso o CEP pode vir por parametro.
+    const cep = (cepInformado ?? addressZip).replace(/\D/g, "");
     if (cep.length !== 8) {
       setShippingQuote(null);
       setShippingError(cep.length === 0 ? null : "CEP incompleto");
@@ -493,24 +464,76 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
     [cartSubtotal, pixDiscount, shippingFee],
   );
 
+  // ── Fase 2: a sacola cotada no servidor (contrato B3) ──────
+  // Com a chave, sacola e checkout mostram o que o servidor responde, com
+  // as MESMAS funcoes que ele usa para cobrar. A conta local e so a
+  // estimativa do primeiro instante. A resposta vale para a sacola que a
+  // pediu (assinatura): mexeu na sacola, volta a estimativa ate a nova.
+  const [cotacaoNoServidor, setCotacaoNoServidor] = useState<{ assinatura: string; dados: CotacaoDaSacola } | null>(null);
+  const [cotando, setCotando] = useState(false);
+  const assinaturaAtual = useMemo(
+    () => (vitrineV2 && cart.length ? assinaturaDaCotacao(cart) : ""),
+    [vitrineV2, cart],
+  );
+  useEffect(() => {
+    if (!vitrineV2 || !slug || cart.length === 0 || !assinaturaAtual) return;
+    if (cotacaoNoServidor?.assinatura === assinaturaAtual) return;
+    let vivo = true;
+    setCotando(true);
+    const t = setTimeout(async () => {
+      try {
+        const r = await fetch(API_BASE + "/storefront/" + slug + "/studio/cotacao", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: itensDoPedido(cart) }),
+        });
+        const j = await r.json().catch(() => null);
+        const dados = r.ok ? lerCotacao(j, cart.length) : null;
+        if (vivo && dados) setCotacaoNoServidor({ assinatura: assinaturaAtual, dados });
+      } catch {
+        // Cotacao e conforto: sem ela fica a estimativa, e o servidor
+        // continua sendo quem cobra no pedido.
+      } finally {
+        if (vivo) setCotando(false);
+      }
+    }, RESPIRO_DA_COTACAO_MS);
+    return () => { vivo = false; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vitrineV2, slug, assinaturaAtual]);
+  const cotacao = cotacaoNoServidor && cotacaoNoServidor.assinatura === assinaturaAtual
+    ? cotacaoNoServidor.dados : null;
+
   // Trocar de modalidade ou mexer no carrinho invalida a cotacao: o valor
   // depende do subtotal (frete gratis acima de X).
-  useEffect(() => { setShippingQuote(null); setShippingError(null); }, [deliveryType]);
+  // Fase 2 (chave): no checkout em etapas a cotacao depende so do CEP — a
+  // cliente que olha "Retirar na loja" e volta para "Receber em casa" nao
+  // pode perder o frete (nem o "fora da area") que ja estava na tela.
+  useEffect(() => {
+    if (vitrineV2) return;
+    setShippingQuote(null); setShippingError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deliveryType]);
 
   const vitrine: VitrineEntry[] = useMemo(
     () => (store ? agruparVitrine(store.products, store.categories || []) : []),
     [store]
   );
 
-  const configuringUnitPrice = useMemo(() => {
-    if (!activeProduct) return 0;
-    return (
-      basePriceForQty(Number(activeProduct.price), activeProduct.qty_tiers, editingQty) +
-      choicesDelta(activeProduct.customization_config, editingValues) +
-      backDelta(activeProduct.customization_config, editingAddBack) +
-      middleDelta(activeProduct.customization_config, editingAddMiddle)
-    );
+  // O preco da peca aberta no configurador. `unitario` nao inclui o
+  // servico de arte (e por linha); `total` e o que a linha vai custar.
+  const configuringPreco = useMemo(() => {
+    if (!activeProduct) return null;
+    return precoDaPeca({
+      produto: activeProduct,
+      quantidade: editingQty,
+      values: editingValues,
+      verso: editingAddBack,
+      meio: editingAddMiddle,
+    });
   }, [activeProduct, editingValues, editingAddBack, editingAddMiddle, editingQty]);
+  const configuringUnitPrice = configuringPreco?.unitario ?? 0;
+  const configuringLineTotal = configuringPreco?.total ?? 0;
+  const configuringArtDelta = configuringPreco?.arte ?? 0;
 
   /**
    * Troca de tela: o estado muda aqui e, na vitrine com rotas, a URL
@@ -580,7 +603,21 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
     setStage("configure");
   }
 
+  /** A tela em que a cliente esta agora, pelo estado (para voltar a ela). */
+  function telaAtual(): TelaDaVitrine | null {
+    if (stage === "list") return { tipo: "home" };
+    if (stage === "checkout") return { tipo: "finalizar" };
+    if (stage === "lote") return { tipo: "orcamento" };
+    if (stage === "configure" && activeProduct) return { tipo: "produto", id: String(activeProduct.id) };
+    if (stage === "modelos" && grupoAberto) return { tipo: "categoria", categoria: chaveDaCategoria(grupoAberto.categoria) };
+    return null;
+  }
+
   function editCartLine(line: CartLine) {
+    // Fase 2: editar pela gaveta lembra de onde a cliente veio — ao salvar,
+    // ela volta para la com a gaveta aberta.
+    voltaDaEdicao.current = vitrineV2 ? { stage, tela: telaAtual() } : null;
+    setSacolaAberta(false);
     setActiveProduct(line.product);
     // Editando uma linha do carrinho, o seletor de modelo some: trocar o
     // modelo aqui viraria outro produto na mesma linha, e o cliente
@@ -673,6 +710,32 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
             : l
         )
       );
+      // Fase 2: salvar a edicao volta para a gaveta, na tela de onde a
+      // cliente saiu. O voltar do navegador tira o configurador de cima.
+      if (vitrineV2) {
+        const volta = voltaDaEdicao.current;
+        voltaDaEdicao.current = null;
+        setEditingLineId(null);
+        setSacolaAberta(true);
+        // Voltando para uma peca (a gaveta foi aberta na pagina dela): a
+        // peca abre de novo, limpa — e o estado ja esta la quando a rota
+        // desenha, mesmo que seja a mesma peca que acabou de ser editada.
+        const tela = volta?.tela || null;
+        if (tela?.tipo === "produto") {
+          const p = (store?.products || []).find((x) => String(x.id) === tela.id);
+          if (p) {
+            abrirProduto(p, []);
+            navegarRef.current?.(tela, "voltar");
+            return;
+          }
+        }
+        setActiveProduct(null);
+        setEditingAddBack(false);
+        setEditingAddMiddle(false);
+        if (tela && volta) irPara(volta.stage, tela, "voltar");
+        else irPara("list", { tipo: "home" }, "voltar");
+        return;
+      }
     } else {
       medirNaVitrine((store as any)?.site?.rastreadores, {
         nome: "add_to_cart",
@@ -686,6 +749,14 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
           values: valuesToCommit, hasBackSelected: editingAddBack,
         },
       ]);
+      // Fase 2 (Tela 1, "Acabou de adicionar"): a cliente fica na peca, com
+      // a personalizacao na tela, e o toast "Adicionado a sacola" oferece a
+      // gaveta. Antes a peca sumia e a vitrine voltava para a home — quem
+      // queria a mesma caneca para a irma tinha de montar tudo de novo.
+      if (vitrineV2 && !opcoes?.direto) {
+        setAdicionado((a) => ({ lineId, n: (a?.n || 0) + 1 }));
+        return;
+      }
     }
     setActiveProduct(null);
     setEditingLineId(null);
@@ -701,7 +772,39 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
   }
 
   function removeCartLine(lineId: string) {
+    const indice = cart.findIndex((l) => l.lineId === lineId);
+    if (indice >= 0) {
+      const line = cart[indice];
+      setRemovida((r) => ({ line, indice, n: (r?.n || 0) + 1 }));
+    }
     setCart((prev) => prev.filter((l) => l.lineId !== lineId));
+  }
+
+  /** "Desfazer": a linha volta para o mesmo lugar da sacola. */
+  function desfazerRemocao() {
+    const r = removida;
+    if (!r) return;
+    setRemovida(null);
+    setCart((prev) => {
+      if (prev.some((l) => l.lineId === r.line.lineId)) return prev;
+      const novo = prev.slice();
+      novo.splice(Math.min(r.indice, novo.length), 0, r.line);
+      return novo;
+    });
+  }
+
+  /**
+   * Quantidade digitada na gaveta (decisao do PO: quantidade digitavel,
+   * alem do - / +). Minimo 1 — zerar e "Remover", que tem o "Desfazer".
+   */
+  function setCartLineQty(lineId: string, qty: number) {
+    const q = Math.max(1, Math.min(9999, Math.floor(Number(qty) || 1)));
+    setCart((prev) => prev.map((l) => (l.lineId === lineId ? { ...l, qty: q } : l)));
+  }
+
+  function abrirSacola() {
+    setAdicionado(null);
+    setSacolaAberta(true);
   }
 
   /**
@@ -752,7 +855,12 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
     }
   }
 
+  // Guarda de toque duplo: o `sending` do estado so chega no proximo
+  // render, e dois toques no mesmo quadro criariam dois pedidos.
+  const enviandoAgora = useRef(false);
+
   async function submitOrder() {
+    if (enviandoAgora.current) return;
     if (!customerName.trim() || !customerPhone.trim()) {
       setError("Nome e telefone obrigatórios");
       return;
@@ -777,7 +885,10 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
       setError(shippingQuote.error);
       return;
     }
-    if (deliveryType === "courier") {
+    // Fase 2: retirada por app aceita "informo depois" (decisao do PO) —
+    // a cliente so sabe quem vem quando chama o app, dias depois.
+    const courierDepois = vitrineV2 && deliveryType === "courier" && courierInformarDepois;
+    if (deliveryType === "courier" && !courierDepois) {
       if (!courierName.trim()) {
         setError("Informe o nome de quem vai retirar o pedido");
         return;
@@ -787,64 +898,30 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
         return;
       }
     }
+    // CPF/CNPJ na nota: so com a chave (o checkout de hoje nao pergunta).
+    const documento = vitrineV2 && querDocumento ? digitos(customerDocument) : "";
+    if (documento) {
+      const sit = situacaoDoDocumento(documento);
+      if (sit !== "cpf" && sit !== "cnpj") {
+        setError("CPF/CNPJ inválido. Confira os dígitos.");
+        return;
+      }
+    }
+    enviandoAgora.current = true;
     setSending(true);
     setError(null);
     try {
-      const body = {
+      const body: Record<string, any> = {
         customer_name: customerName.trim(),
         customer_phone: customerPhone.trim(),
         customer_email: customerEmail.trim() || null,
         delivery_type: deliveryType,
         payment_method: paymentMethod || undefined,
         notes: notes.trim() || null,
-        items: cart.map((l) => {
-          // Decisao do Caio (04/09/2026): o verso so vai para a producao
-          // quando a cliente o escolheu E preencheu. Antes, verso incluso
-          // no preco saia como "Sim" em todo pedido, e a ficha mandava
-          // prensar um verso que ninguem tocou. Ver versoDoPedido.ts.
-          const backActive = versoAtivo(
-            l.product.customization_config,
-            l.hasBackSelected,
-            l.values
-          );
-          // Bandeira do meio guardada em values (ver commitConfigure) —
-          // recalculamos a atividade efetiva aqui pelo mesmo motivo do
-          // verso: o que importa e o contrato atual do produto, nao so a
-          // escolha bruta do cliente.
-          const middleActive = effectiveMiddleSelected(
-            l.product.customization_config,
-            l.values?.has_middle_selected
-          );
-          let valuesOut: Record<string, any> = l.values;
-          const cfg = l.product.customization_config;
-          if (cfg?.has_back === true && !backActive && cfg.fields) {
-            const cleaned: Record<string, any> = { ...l.values };
-            for (const f of cfg.fields) {
-              if (sideOf(f) === "back") delete cleaned[f.id];
-            }
-            valuesOut = cleaned;
-          }
-          if (cfg?.has_middle === true && !middleActive && cfg.fields) {
-            const cleaned: Record<string, any> = { ...valuesOut };
-            for (const f of cfg.fields) {
-              if (sideOf(f) === "middle") delete cleaned[f.id];
-            }
-            valuesOut = cleaned;
-          }
-          return {
-            product_id: l.product.id,
-            quantity: l.qty,
-            customization: {
-              ...valuesOut,
-              has_back_selected: backActive,
-              // ESPELHO OBRIGATORIO do has_back_selected acima: o backend
-              // (middleIsActive em studioStorefront.js) confia neste
-              // valor pra cobrar middle_price_delta. Divergir aqui e o
-              // pedido levar 400 no fechamento (mesmo risco do verso).
-              has_middle_selected: middleActive,
-            },
-          };
-        }),
+        // Os itens como o servidor espera — a MESMA montagem da cotacao
+        // (cotacaoDaSacola.ts): verso so escolhido E preenchido (decisao
+        // do Caio, 04/09/2026), e has_middle_selected espelho do verso.
+        items: itensDoPedido(cart),
         address_zip: addressZip.replace(/\D/g, "") || null,
         address_street: addressStreet.trim() || null,
         address_number: addressNumber.trim() || null,
@@ -852,8 +929,8 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
         address_city: addressCity.trim() || null,
         address_state: addressState.trim().toUpperCase() || null,
         // S8 — normalizado aqui tambem, mas o servidor revalida.
-        courier_name: deliveryType === "courier" ? courierName.trim() : null,
-        courier_plate: deliveryType === "courier" ? normalizePlate(courierPlate) : null,
+        courier_name: deliveryType === "courier" && !courierDepois ? courierName.trim() : null,
+        courier_plate: deliveryType === "courier" && !courierDepois ? normalizePlate(courierPlate) : null,
         // S2 — o servidor recalcula o frete pelo CEP; isto e so a cotacao
         // que o cliente VIU. Diferenca vira 409 em vez de cobranca errada.
         expected_delivery_fee:
@@ -865,6 +942,18 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
         // invalido nao manda nada — atribuicao nunca bloqueia o pedido.
         ...camposDeAtribuicao(atribuicaoGuardada(slug)),
       };
+      if (vitrineV2) {
+        // Fase 2 (contrato B1). `customer_document` e o campo novo; o
+        // `customer_cpf_cnpj` + `request_nfce` e o que o servidor de hoje
+        // (e a loja comum) ja le — os dois caem na mesma validacao.
+        if (documento) {
+          body.customer_document = documento;
+          body.customer_cpf_cnpj = documento;
+          body.request_nfce = true;
+        }
+        if (deliveryType === "delivery") body.address_complement = addressComplement.trim() || null;
+        if (courierDepois) body.courier_informar_depois = true;
+      }
       const res = await fetch(API_BASE + "/storefront/" + slug + "/studio/order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -887,16 +976,81 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
         frete: shippingFee || undefined,
         itens: itensDaSacola(cart, lineUnitPrice),
       });
+
+      // Fase 2: com a chave, o pedido ganha endereco proprio. O id fica na
+      // aba (para "Ja paguei" e o comprovante), o pedido em andamento fica
+      // na loja (Tela 8 e volta do cartao), e os dados da cliente ficam
+      // lembrados por 90 dias. Sem token (backend antes do B1 ou coluna
+      // da migration 322 ausente), cai na confirmacao antiga.
+      const token = typeof data.pedido_token === "string" && data.pedido_token.trim() ? data.pedido_token.trim() : null;
+      if (vitrineV2) {
+        guardarDadosLembrados(slug, {
+          name: customerName.trim(),
+          phone: customerPhone.trim(),
+          email: customerEmail.trim(),
+          customer_cpf_cnpj: documento,
+          request_nfce: !!documento,
+          address_zip: addressZip,
+          address_street: addressStreet.trim(),
+          address_number: addressNumber.trim(),
+          address_complement: addressComplement.trim(),
+          address_neighborhood: addressNeigh.trim(),
+          address_city: addressCity.trim(),
+          address_state: addressState.trim().toUpperCase(),
+        }, storageLocal());
+        if (data.order_id) {
+          guardarPedidoPendente(slug, {
+            id: String(data.order_id),
+            token,
+            order_number: data.order_number != null ? String(data.order_number) : null,
+            payment_method: data.payment_method || paymentMethod || null,
+            total: Number(data.total) || cartTotal,
+            pecas: cart.reduce((n, l) => n + l.qty, 0),
+            imagens: cart.map((l) => l.product.image_url).filter((u): u is string => !!u).slice(0, 4),
+            card_init_point: data.card?.init_point || null,
+          }, storageLocal());
+        }
+        if (token && data.order_id) guardarIdDoPedido(token, String(data.order_id), storageDaAba());
+      }
+
+      setCart([]);
+      if (vitrineV2 && token && navegarRef.current) {
+        setSentOrder(data);
+        irPara("list", { tipo: "pedido", token }, "trocar");
+        // Cartao: a pagina do pedido diz "voce paga no Mercado Pago e
+        // volta pra ca" e o navegador segue. A volta cai na mesma pagina
+        // com o status real (Tela 6).
+        if (data.card?.init_point && Platform.OS === "web" && typeof window !== "undefined") {
+          setTimeout(() => { window.location.href = data.card.init_point; }, 1200);
+        }
+        return;
+      }
       setSentOrder(data);
       setStage("sent");
-      setCart([]);
       if (data.card?.init_point && Platform.OS === "web" && typeof window !== "undefined") {
         setTimeout(() => { window.location.href = data.card.init_point; }, 800);
       }
     } catch (e: any) {
       setError(e?.message || "Erro ao enviar pedido");
     } finally {
+      enviandoAgora.current = false;
       setSending(false);
+    }
+  }
+
+  /**
+   * Fase 2: abre a pagina de um pedido (a Tela 8 — "Continuar esse
+   * pedido"). Na vitrine com rotas e navegacao; no endereco de dentro de
+   * casa (sem roteador), o navegador vai direto ao endereco da loja.
+   */
+  function irParaPedido(token: string) {
+    if (!token) return;
+    if (navegarRef.current) {
+      navegarRef.current({ tipo: "pedido", token }, "empilhar");
+      return;
+    }
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      window.location.assign("/" + encodeURIComponent(slug) + "/pedido/" + encodeURIComponent(token));
     }
   }
 
@@ -951,6 +1105,8 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
     editingAddBack, setEditingAddBack,
     editingAddMiddle, setEditingAddMiddle,
     configuringUnitPrice,
+    // Fase 2: o total da linha (servico de arte uma vez por linha).
+    configuringLineTotal, configuringArtDelta,
     openConfigure, editCartLine, commitConfigure,
     activeSiblings, switchModel,
     vitrine,
@@ -959,6 +1115,14 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
     clearUploadError: () => setUploadError(null),
     // Carrinho
     cart, cartSubtotal, removeCartLine,
+    // Fase 2 — a chave, a gaveta, a quantidade digitavel, o "Desfazer" e
+    // a cotacao no servidor.
+    vitrineV2,
+    sacolaAberta, abrirSacola, fecharSacola: () => setSacolaAberta(false),
+    adicionado, limparAdicionado: () => setAdicionado(null),
+    removida, desfazerRemocao, esquecerRemocao: () => setRemovida(null),
+    setCartLineQty,
+    cotacao, cotando,
     // Checkout
     customerName, setCustomerName,
     customerPhone, setCustomerPhone: (v: string) => setCustomerPhone(maskPhone(v)),
@@ -978,9 +1142,13 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
     addressState, setAddressState: (v: string) => setAddressState(v.toUpperCase().slice(0, 2)),
     addressZip, setAddressZip,
     notes, setNotes,
+    querDocumento, setQuerDocumento,
+    customerDocument, setCustomerDocument,
+    addressComplement, setAddressComplement,
+    courierInformarDepois, setCourierInformarDepois,
     sending, submitOrder,
     // Confirmacao
-    sentOrder, resetToList,
+    sentOrder, resetToList, irParaPedido,
     // Internos (prefixo _ -- sub-componentes de display apenas)
     _editingLineId: editingLineId,
     _effectiveBackSelected: effectiveBackSelected,
