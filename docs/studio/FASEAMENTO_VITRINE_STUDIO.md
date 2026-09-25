@@ -6,27 +6,38 @@
 
 ---
 
+## 0. Decisões do PO (25/09/2026)
+
+| # | Decisão | Efeito neste plano |
+|---|---|---|
+| 1 | Capacidade frente ao Matcon: indiferente | Sem reserva de dias; as fases correm em sequência |
+| 2 | Chave por loja: indiferente | O TL mantém a chave `vitrine_v2` para testar na loja de teste antes de ligar na Sheid |
+| 3 | Black Friday | Fica para outra fase. Sem congelamento nem go/no-go de temporada neste projeto |
+| 4 | Ordem e cronograma | Fases 0 a 5 em sequência. **O cronograma com datas foi removido** |
+| 5 | Pix pendente no Studio | Cancela sozinho em **72 horas** |
+| 6 | Sacola em gaveta, quantidade digitável, CPF/CNPJ | Sim para os três |
+| 7 | Cor de destaque da lojista | Não usar. Só a cor principal |
+| 8 | Aprovação e acompanhamento no endereço da loja | Sim, na Fase 4 |
+
+Execução: o TL orquestra agentes (Sonnet e Opus), revisa, abre os PRs e faz o merge com CI verde. O QA extenso acontece depois da Fase 5. **Primeiro passo: todos os mockups** (`docs/mockups/studio-vitrine-0N-*.html`, kit comum em `studio-vitrine-00-kit.html`).
+
 ## 1. Em uma página
 
-| Fase | Nome | Janela | Dias úteis | Vai ao ar |
-|---|---|---|---|---|
-| 0 | Preparação | 25/09 – 30/09 | 4 | — |
-| 1 | Alicerce | 01/10 – 16/10 | 11 | Em 3 ondas, direto |
-| 2 | Fechar a venda | 19/10 – 13/11 | 19 | Atrás de flag; liga na Sheid em 09/11 se passar no go/no-go |
-| 3A | Produto: ganhos rápidos | 16/11 – 19/11 | 4 | Direto |
-| ❄ | **Congelamento de temporada** | 23/11 – 31/12 | — | Só correção no caminho da compra |
-| 3B | Página do produto nova | constrói 23/11 – 18/12 | 15 | Liga 05/01 – 15/01 |
-| 4 | Pós-compra com a marca | constrói 07/12 – 18/12 | 8 | Liga junto com a 3B |
-| 5 | Home e navegação | 18/01 – 05/02/2027 | 15 | Direto; flag removida no fim |
+| Fase | Nome | Vai ao ar |
+|---|---|---|
+| 0 | Preparação e mockups | — |
+| 1 | Alicerce | Direto, em três ondas |
+| 2 | Fechar a venda | Atrás da chave; loja de teste, depois Sheid |
+| 3 | Página do produto (ganhos rápidos + página nova) | Atrás da chave |
+| 4 | Pós-compra com a marca | Atrás da chave |
+| 5 | Home e navegação | Direto; chave removida no fim |
+| QA | QA extenso de ponta a ponta | Depois da Fase 5 |
 
-**Fim do projeto:** 05/02/2027, antes do Carnaval (08 e 09/02).
+**As duas coisas que continuam valendo:**
+1. **O dinheiro vem antes da vitrine.** Checkout, Pix e confirmação (Fase 2) entram antes da página do produto nova. Hoje um F5 apaga a confirmação e o status do Pix é fixo.
+2. **O gargalo não é código, é QA e decisão.** O redesign da loja Negócio saiu em seis PRs num dia (02/09) e precisou de mais treze de correção vindas do QA (#651–#661, #678–#683).
 
-**As três coisas que o PM precisa guardar:**
-1. **O dinheiro vem antes da vitrine.** Checkout, Pix e confirmação (Fase 2) entram antes da página do produto nova. Hoje um F5 apaga a confirmação e o status do Pix é fixo. Isso custa venda todo dia; o layout do configurador, não.
-2. **Novembro e dezembro são da Sheid, não nossos.** Black Friday em 27/11 e Natal são o pico de quem vende caneca personalizada. O caminho da compra congela de 23/11 a 31/12. O trabalho grande de produto é construído nesse período atrás de uma chave por loja e liga em janeiro.
-3. **O gargalo não é código, é QA e decisão.** O redesign da loja Negócio saiu em seis PRs num dia (02/09) e precisou de mais treze de correção vindas do QA (#651–#661, #678–#683). Este plano orça QA do mesmo tamanho que desenvolvimento.
-
----
+> As seções abaixo foram escritas antes das decisões de 25/09. Onde citam datas, janelas, congelamento de temporada ou go/no-go de Black Friday, valem só o escopo e as dependências; as datas estão revogadas pela decisão 4.
 
 ## 2. Premissas de capacidade
 
