@@ -17,6 +17,7 @@ import { StoreNav } from "./StoreNav";
 import { montarMenu, cabemNaBarra, type ItemMenu } from "./storeNavModel";
 
 import { AncoraWhatsApp } from "./AncoraWhatsApp";
+import { BarraDeCookies } from "./ConsentimentoDaVitrine";
 import { RodapeDaVitrine } from "./RodapeDaVitrine";
 import { montarBlocosDaHome } from "./blocosDaHome";
 import { seloDoProduto, chipsDoProduto, linhaDeEscada, pecaMaisPedida } from "./selosDoProduto";
@@ -131,6 +132,11 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
+      {/* Area da loja: o scroll e os flutuantes (WhatsApp, carrinho) vivem
+          aqui dentro, ancorados no pe DESTA caixa. A barra de cookies vem
+          depois, no fluxo — entao os flutuantes ficam acima dela em vez de
+          ela cobri-los (Tela 8 do mockup). */}
+      <View style={{ flex: 1 }}>
       {/* A home inteira rola. Antes so a grade rolava e o hero ficava
           preso no topo — com um hero editorial e sete blocos abaixo, isso
           deixaria metade da pagina inalcancavel no celular.
@@ -392,6 +398,8 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
       {/* Sem a barra flutuante "Powered by Aura" nesta tela: o rodape
           assina a loja com a mesma frase, uma vez so, e no lugar onde
           se procura por isso. A barra tampava o fim da pagina. */}
+      </View>
+      <BarraDeCookies />
     </View>
   );
 }

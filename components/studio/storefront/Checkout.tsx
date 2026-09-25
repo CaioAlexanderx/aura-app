@@ -10,7 +10,7 @@ import { useEstilosDaVitrine } from "./estilosDaVitrine";
 import { CartItemList } from "./Cart";
 import { FInput } from "./ui/FInput";
 import { TotalRow } from "./ui/TotalRow";
-import { PoweredByAura } from "./ui/PoweredByAura";
+import { BarraDeCookies } from "./ConsentimentoDaVitrine";
 import { oQueFaltaNoCheckout } from "./oQueFaltaNoCheckout";
 
 import { Texto, Numero, useTipografia } from "./TipografiaVitrine";
@@ -233,6 +233,9 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
         )}
       </ScrollView>
 
+      {/* Cookies acima da barra do "Enviar pedido", nunca por cima. */}
+      <BarraDeCookies />
+
       <View style={{ backgroundColor: T.card, padding: 14, borderTopWidth: 1, borderTopColor: T.border }}>
         {/* O botão acompanha a coluna do formulário (720px). Antes ia de
             ponta a ponta num monitor de 1366px — a tela esticada que a
@@ -262,8 +265,8 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
           </Texto>
         ) : null}
       </View>
-
-      <PoweredByAura />
+      {/* Sem o "Powered by Aura" fixo por cima do botao: a assinatura fica
+          so no rodape institucional. */}
     </View>
   );
 }

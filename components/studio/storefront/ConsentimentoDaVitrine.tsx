@@ -10,23 +10,44 @@
 // painel. A decisao fica no mesmo lugar que o banner do painel usa
 // (localStorage, chave unica), entao quem ja respondeu la nao responde
 // de novo aqui.
+//
+// 25/09/2026 (Fase 1A, Tela 8 do mockup studio-vitrine-01-alicerce):
+// o aviso era um cartao ABSOLUTO no pe da tela, por cima da barra de
+// compra, da barra do carrinho e do botao do WhatsApp. Agora ele se
+// divide em dois:
+//   - `ConsentimentoDaVitrine` e o PROVIDER: decide se ha o que
+//     perguntar e injeta os rastreadores (fica em PaginaDaVitrine, uma
+//     vez so, qualquer que seja a tela);
+//   - `BarraDeCookies` e a barra compacta, que cada tela poe NO FLUXO,
+//     logo acima da propria barra de acao. Empilhada, nunca por cima:
+//     o botao de comprar e o WhatsApp continuam visiveis e tocaveis.
 // ============================================================
-import { useEffect, useState } from "react";
-import { View, Pressable, Platform } from "react-native";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { View, Pressable, Platform, useWindowDimensions } from "react-native";
 import { getLgpdConsent, saveConsent, hasAnalyticsConsent } from "@/components/LGPDConsent";
-import { usePaletaDaVitrine } from "./TemaDaVitrine";
-import { montarTema } from "./theme";
+import { usePaletaDaVitrine, useTemaDaVitrine } from "./TemaDaVitrine";
+import { wash } from "./theme";
 import { Texto } from "./TipografiaVitrine";
 import { lojaRastreia, injetarRastreadores, type Rastreadores } from "./rastreadoresDaVitrine";
 
+type EstadoDoConsentimento = {
+  rastreia: boolean;
+  pendente: boolean;
+  decidir: (aceita: boolean) => void;
+};
+
+const Contexto = createContext<EstadoDoConsentimento>({
+  rastreia: false,
+  pendente: false,
+  decidir: () => {},
+});
+
 export function ConsentimentoDaVitrine({
-  rastreadores, corDaLoja,
+  rastreadores, children,
 }: {
   rastreadores: Partial<Rastreadores> | null | undefined;
-  corDaLoja?: string | null;
+  children?: ReactNode;
 }) {
-  const T = usePaletaDaVitrine();
-  const tema = montarTema(corDaLoja || undefined);
   const rastreia = lojaRastreia(rastreadores);
   const [pendente, setPendente] = useState(false);
 
@@ -49,46 +70,81 @@ export function ConsentimentoDaVitrine({
     setPendente(false);
   }
 
+  const valor = useMemo(
+    () => ({ rastreia, pendente, decidir }),
+    // decidir fecha sobre `rastreadores`; a identidade dele muda junto.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rastreia, pendente, rastreadores?.ga4, rastreadores?.pixel],
+  );
+
+  return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;
+}
+
+/**
+ * A barra compacta. Cada tela a coloca no FLUXO, imediatamente acima da
+ * sua barra de acao (ou no pe, se nao tiver barra) — assim ela empurra o
+ * conteudo em vez de cobrir o botao de comprar ou o WhatsApp.
+ */
+export function BarraDeCookies() {
+  const { rastreia, pendente, decidir } = useContext(Contexto);
+  const T = usePaletaDaVitrine();
+  const tema = useTemaDaVitrine();
+  const { width } = useWindowDimensions();
+  const larga = width >= 720;
+
   if (!rastreia || !pendente) return null;
 
   return (
     <View
       testID="consentimento-da-vitrine"
-      style={{
-        position: "absolute", left: 0, right: 0, bottom: 0, padding: 12,
-        alignItems: "center", zIndex: 50,
-      }}
-      pointerEvents="box-none"
+      style={{ paddingHorizontal: larga ? 24 : 10, paddingVertical: 8, alignItems: "center" }}
     >
-      <View
-        style={{
-          width: "100%", maxWidth: 560,
-          backgroundColor: T.card, borderColor: T.border, borderWidth: 1, borderRadius: 14,
-          padding: 14, gap: 10,
-          ...(Platform.OS === "web" ? ({ boxShadow: "0 8px 30px rgba(0,0,0,0.12)" } as any) : {}),
-        }}
-      >
-        <Texto style={{ fontSize: 12.5, lineHeight: 18, color: T.ink2 }}>
-          Esta loja usa cookies de medição de audiência para saber quantas pessoas visitam e o que mais interessa.
-          Nada é vendido a terceiros. Você pode ficar só com os essenciais.
-        </Texto>
-        <View style={{ flexDirection: "row", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
-          <Pressable
-            onPress={() => decidir(false)}
-            accessibilityRole="button"
-            style={{ paddingVertical: 9, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: T.border }}
-          >
-            <Texto style={{ fontSize: 12, fontWeight: "700", color: T.ink3 }}>Só os essenciais</Texto>
-          </Pressable>
-          <Pressable
-            onPress={() => decidir(true)}
-            accessibilityRole="button"
-            style={{ paddingVertical: 9, paddingHorizontal: 16, borderRadius: 10, backgroundColor: tema.marcaFill }}
-          >
-            <Texto style={{ fontSize: 12, fontWeight: "800", color: "#fff" }}>Aceitar</Texto>
-          </Pressable>
-        </View>
+    <View
+      accessibilityRole="alert"
+      style={{
+        flexDirection: "row", alignItems: "center", gap: 10,
+        width: "100%", maxWidth: 720,
+        backgroundColor: T.card, borderColor: T.border, borderWidth: 1, borderRadius: 12,
+        paddingVertical: 9, paddingLeft: 13, paddingRight: 10,
+        ...(Platform.OS === "web"
+          ? ({ boxShadow: `0 8px 24px -10px ${wash(T.ink, 0.22)}, 0 2px 6px ${wash(T.ink, 0.06)}` } as any)
+          : { elevation: 3 }),
+      }}
+    >
+      <Texto style={{ flex: 1, fontSize: 12, lineHeight: 17, color: T.ink2 }}>
+        {larga
+          ? "Usamos cookies para medir visitas e entender o que mais interessa. Nada é vendido a terceiros."
+          : "Usamos cookies para medir visitas. Nada é vendido a terceiros."}
+      </Texto>
+      <View style={{ flexDirection: "row", gap: 6, flexShrink: 0 }}>
+        <Pressable
+          onPress={() => decidir(false)}
+          accessibilityRole="button"
+          accessibilityLabel="Aceitar só os cookies essenciais"
+          hitSlop={4}
+          style={{
+            minHeight: 36, justifyContent: "center",
+            paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, backgroundColor: tema.bg3,
+          }}
+        >
+          <Texto style={{ fontSize: 12, fontWeight: "700", color: T.ink2 }}>
+            {larga ? "Só os essenciais" : "Essenciais"}
+          </Texto>
+        </Pressable>
+        <Pressable
+          onPress={() => decidir(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Aceitar cookies de medição"
+          hitSlop={4}
+          style={{
+            minHeight: 36, justifyContent: "center",
+            paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: tema.marcaFill,
+          }}
+        >
+          <Texto style={{ fontSize: 12, fontWeight: "800", color: tema.sobreMarca }}>Aceitar</Texto>
+        </Pressable>
       </View>
+    </View>
     </View>
   );
 }

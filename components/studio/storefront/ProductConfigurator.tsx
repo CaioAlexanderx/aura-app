@@ -17,7 +17,7 @@ import { LivePreview, defaultConfiguratorSize } from "./LivePreview";
 import { wash } from "./theme";
 import { matchTier, proximaFaixa, faixaLabel } from "./qtyTiers";
 import { validateRequiredFields } from "./useStorefront";
-import { PoweredByAura } from "./ui/PoweredByAura";
+import { BarraDeCookies } from "./ConsentimentoDaVitrine";
 import { linkDoPedido } from "./pedidoPeloWhatsApp";
 import { modoDaVitrine } from "./modoDaVitrine";
 import { SizeGuideModal } from "./SizeGuideModal";
@@ -807,6 +807,10 @@ export function ProductConfigurator({
 
       <ZoomFoto fotos={fotosDaPeca} nome={activeProduct.name} indice={zoom} onFechar={() => setZoom(null)} />
 
+      {/* Cookies no FLUXO, acima da barra de compra — nunca por cima dela
+          nem do "Prefere pedir pelo WhatsApp?" (Tela 8 do mockup). */}
+      <BarraDeCookies />
+
       {/* Botao CTA */}
       <View
         style={{
@@ -962,8 +966,8 @@ export function ProductConfigurator({
           );
         })()}
       </View>
-
-      <PoweredByAura />
+      {/* Sem o "Powered by Aura" fixo: ele tampava o pe da barra de
+          compra. A assinatura fica so no rodape institucional. */}
     </View>
   );
 }

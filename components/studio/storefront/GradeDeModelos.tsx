@@ -12,6 +12,7 @@ import { View, Pressable, ScrollView, StyleSheet, useWindowDimensions } from "re
 import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import { useTipografia, Texto, Numero } from "./TipografiaVitrine";
 import { Icon } from "@/components/Icon";
+import { BarraDeCookies } from "./ConsentimentoDaVitrine";
 import { ProductCard } from "./ProductCard";
 import { fotosDoProduto } from "./CarrosselFoto";
 import { chipsDoProduto } from "./selosDoProduto";
@@ -113,6 +114,7 @@ export function GradeDeModelos({
           </View>
         </View>
       </ScrollView>
+      <BarraDeCookies />
     </View>
   );
 }

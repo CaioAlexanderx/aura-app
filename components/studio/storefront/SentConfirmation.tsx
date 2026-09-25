@@ -11,6 +11,7 @@ import { tintaSobre, FUNDO_DO_QR } from "./theme";
 import { Icon } from "@/components/Icon";
 import { NextStep } from "./ui/NextStep";
 import { QrCode } from "@/components/QrCode";
+import { BarraDeCookies } from "./ConsentimentoDaVitrine";
 
 import { Texto, Numero, useTipografia } from "./TipografiaVitrine";
 import { dinheiro } from "./moeda";
@@ -45,6 +46,7 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
   }
 
   return (
+    <View style={{ flex: 1, backgroundColor: T.bg }}>
     <ScrollView
       style={{ flex: 1, backgroundColor: T.bg }}
       contentContainerStyle={{
@@ -253,5 +255,7 @@ export function SentConfirmation({ sf }: { sf: StorefrontState }) {
         <Texto style={{ color: tema.sobreMarca, fontSize: 14, fontWeight: "700" }}>+ Personalizar outro</Texto>
       </Pressable>
     </ScrollView>
+    <BarraDeCookies />
+    </View>
   );
 }

@@ -111,6 +111,11 @@ export function PaginaDaVitrine({ slug }: { slug: string }) {
   return (
     <TemaDaVitrine cor={(sf.store as any)?.site?.primary_color}>
     <TipografiaDaVitrine chave={parEscolhido}>
+    {/* 05/09/2026: GA4/Pixel so entram depois do "Aceitar". Loja sem
+        rastreador configurado nao renderiza aviso nenhum. 25/09: o
+        provider decide aqui, uma vez; a barra (BarraDeCookies) cada tela
+        poe no fluxo, acima da propria barra de acao. */}
+    <ConsentimentoDaVitrine rastreadores={(sf.store as any)?.site?.rastreadores}>
       {sf.stage === "modelos" && sf.grupoAberto ? (
         <GradeDeModelos
           categoria={sf.grupoAberto.categoria}
@@ -134,12 +139,7 @@ export function PaginaDaVitrine({ slug }: { slug: string }) {
       ) : (
         <ProductList sf={sf} />
       )}
-      {/* 05/09/2026: GA4/Pixel so entram depois do "Aceitar". Loja sem
-          rastreador configurado nao renderiza aviso nenhum. */}
-      <ConsentimentoDaVitrine
-        rastreadores={(sf.store as any)?.site?.rastreadores}
-        corDaLoja={(sf.store as any)?.site?.primary_color}
-      />
+    </ConsentimentoDaVitrine>
     </TipografiaDaVitrine>
     </TemaDaVitrine>
   );

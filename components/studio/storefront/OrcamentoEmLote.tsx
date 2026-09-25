@@ -22,6 +22,7 @@ import { View, Pressable, TextInput, ScrollView, ActivityIndicator, useWindowDim
 import { Texto, Numero, useTipografia } from "./TipografiaVitrine";
 import { usePaletaDaVitrine, useTemaDaVitrine } from "./TemaDaVitrine";
 import { Etiqueta } from "./HomeDaVitrine";
+import { BarraDeCookies } from "./ConsentimentoDaVitrine";
 import {
   nomesDaLista, nomesIgnorados, proximoDegrau, pendenciaDoLote, dinheiro, fraseDoPrazo,
   type CotacaoDoLote,
@@ -414,6 +415,7 @@ export function OrcamentoEmLote({
           </View>
         </View>
       </ScrollView>
+      <BarraDeCookies />
     </View>
   );
 }
