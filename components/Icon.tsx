@@ -167,6 +167,11 @@ const PATHS: Record<string, string> = {
   list:           "M8 6h13 M8 12h13 M8 18h13 M3 6h.01 M3 12h.01 M3 18h.01",
   // Ferramenta (Feather \"tool\") — usado em praticante (config/manutencao)
   tool:           "M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z",
+  // Vitrine Studio, Onda 1B (mockup da Fase 1): compartilhar no desenho
+  // da folha do sistema (seta saindo da caixa) e o coracao da faixa
+  // "Separamos esta peca para voce".
+  share:          "M12 15V3.5 M8 7.5l4-4 4 4 M5 12.5V19a1 1 0 001 1h12a1 1 0 001-1v-6.5",
+  heart:          "M12 19.5s-7.5-4.4-7.5-10A4.3 4.3 0 0112 7a4.3 4.3 0 017.5 2.5c0 5.6-7.5 10-7.5 10z",
 };
 
 // ── Aliases kebab-case → snake_case ────────────────────────────

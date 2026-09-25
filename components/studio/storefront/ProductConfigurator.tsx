@@ -42,6 +42,7 @@ import { FichaTecnica } from "./FichaTecnica";
 import { relacionadosDe } from "./relacionados";
 import { configDisponivel } from "./camposDaVitrine";
 import { dinheiro } from "./moeda";
+import { BotaoCompartilhar } from "./CompartilharPeca";
 // 30px era menor que a ponta do dedo; 40px + hitSlop chega aos 44 que o
 // toque pede sem o controle ficar grande na tela.
 // O fundo era #f3f4f6 (cinza frio da paleta antiga); agora e o degrau
@@ -395,6 +396,9 @@ export function ProductConfigurator({
             </Numero>
           )}
         </View>
+        {/* Onda 1B: a peca tem endereco proprio, e a Sheid manda esse
+            link no WhatsApp (mockup da Fase 1, Tela 2). */}
+        <BotaoCompartilhar produto={activeProduct} />
       </View>
 
       <ScrollView
