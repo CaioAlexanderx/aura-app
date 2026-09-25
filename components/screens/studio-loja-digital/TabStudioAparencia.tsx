@@ -28,6 +28,7 @@ import { studioVisualApi, type VisualTemplate } from "@/services/studioVisualApi
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { useAuthStore } from "@/stores/auth";
 import { request } from "@/services/api";
+import { router } from "expo-router";
 
 type Produto = { id: string; name: string; visual_template_key?: string | null };
 
@@ -108,8 +109,8 @@ export function TabStudioAparencia({
     leitura.tom === "ok" ? "#34D399" : leitura.tom === "ajustada" ? "#FBBF24" : "#F87171";
 
   const cartao = {
-    backgroundColor: (T as any)?.card,
-    borderRadius: 16, borderWidth: 1, borderColor: (T as any)?.border,
+    backgroundColor: T.paperCard,
+    borderRadius: 16, borderWidth: 1, borderColor: T.ink5,
     padding: 18, gap: 12,
   } as const;
 
@@ -186,7 +187,7 @@ export function TabStudioAparencia({
             {produtos.map((p) => (
               <View key={p.id} style={{
                 gap: 7, paddingVertical: 10,
-                borderTopWidth: 1, borderTopColor: (T as any)?.border,
+                borderTopWidth: 1, borderTopColor: T.ink5,
               }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                   <Texto style={{ flex: 1, fontSize: 13, color: (T as any)?.ink }} numberOfLines={1}>
@@ -219,14 +220,23 @@ export function TabStudioAparencia({
       </View>
 
       {/* ── Onde mora o resto ─────────────────────────────── */}
-      {onIrPara ? (
-        <Pressable onPress={() => onIrPara("revisions")} accessibilityRole="button" style={cartao}>
-          <Texto style={{ fontSize: 13, color: (T as any)?.ink2, lineHeight: 19 }}>
-            A política de revisão e o prazo de produção aparecem na vitrine, mas são
-            configurados na aba Revisões. →
-          </Texto>
+      {/* Os dois moram em lugares diferentes: a política de revisão na
+          aba Revisões, o prazo de produção nas Configurações do Studio
+          (studio_settings.default_sla_days). O texto antigo mandava a
+          lojista procurar o prazo na aba Revisões, onde ele não está. */}
+      <View style={[cartao, { gap: 4 }]}>
+        <Texto style={{ fontSize: 13, color: T.ink2, lineHeight: 19 }}>
+          A política de revisão e o prazo de produção aparecem na vitrine, mas são configurados em outro lugar:
+        </Texto>
+        {onIrPara ? (
+          <Pressable onPress={() => onIrPara("revisions")} accessibilityRole="button" style={{ minHeight: 40, justifyContent: "center" }}>
+            <Texto style={{ fontSize: 13, fontWeight: "600", color: T.primary }}>Revisões inclusas e preço da revisão extra: aba Revisões →</Texto>
+          </Pressable>
+        ) : null}
+        <Pressable onPress={() => router.push("/studio/configuracoes" as any)} accessibilityRole="link" style={{ minHeight: 40, justifyContent: "center" }}>
+          <Texto style={{ fontSize: 13, fontWeight: "600", color: T.primary }}>Prazo de produção: Configurações do Studio →</Texto>
         </Pressable>
-      ) : null}
+      </View>
     </ScrollView>
   );
 }
@@ -239,7 +249,7 @@ function Amostra({
       <View style={{
         width: 92, height: 52, borderRadius: 10, backgroundColor: sobre || cor,
         alignItems: "center", justifyContent: "center",
-        borderWidth: 1, borderColor: (T as any)?.border,
+        borderWidth: 1, borderColor: T.ink5,
       }}>
         <Texto style={{ fontSize: 13, fontWeight: "700", color: sobre ? cor : (tinta || "#fff") }}>
           Aa
@@ -263,7 +273,7 @@ function Chip({
       style={{
         paddingVertical: 7, paddingHorizontal: 11, borderRadius: 999,
         borderWidth: 1,
-        borderColor: ativo ? ((T as any)?.primary || "#7C3AED") : (T as any)?.border,
+        borderColor: ativo ? ((T as any)?.primary || "#7C3AED") : T.ink5,
         backgroundColor: ativo ? "rgba(124,58,237,0.14)" : "transparent",
         flexDirection: "row", alignItems: "center", gap: 5,
       }}

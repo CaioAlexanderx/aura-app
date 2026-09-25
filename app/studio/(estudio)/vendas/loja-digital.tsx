@@ -271,6 +271,7 @@ export default function StudioVendasLojaDigital() {
         {tab === "design" && (
           isLoading ? <ListSkeleton rows={4} /> : (
             <TabDesign
+              vitrine="studio"
               config={config}
               saveConfig={saveConfig}
               isSaving={isSaving}
