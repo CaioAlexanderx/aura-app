@@ -164,3 +164,59 @@ describe("a migração não deixou ninguém para trás", () => {
     expect(shell.indexOf("<TemaDaVitrine")).toBeLessThan(shell.indexOf("<ProductList"));
   });
 });
+
+// ── Fase 1A (25/09/2026) ─────────────────────────────────────
+describe("papel com contraste AA (Fase 1A)", () => {
+  test("ink3 do papel é #756C61: passa em 4.5:1 no fundo e no cartão", () => {
+    // Era #837A6E, 3,99:1 no #FBF8F3 — reprovava justo no texto de apoio.
+    expect(SUPERFICIE.papel.ink3).toBe("#756C61");
+    expect(contraste(SUPERFICIE.papel.ink3, SUPERFICIE.papel.bg)).toBeGreaterThanOrEqual(AA);
+    expect(contraste(SUPERFICIE.papel.ink3, SUPERFICIE.papel.bg2)).toBeGreaterThanOrEqual(AA);
+  });
+
+  test("as semânticas do papel são legíveis como texto (o verde do escuro dava 1,9:1)", () => {
+    const t = montarTema("#1a1612", "papel");
+    [t.green, t.red, t.amber].forEach((c) => {
+      expect(contraste(c, t.bg)).toBeGreaterThanOrEqual(AA);
+      expect(contraste(c, t.bg2)).toBeGreaterThanOrEqual(AA);
+    });
+  });
+
+  test("o escuro e o claro continuam com as semânticas de antes", () => {
+    expect(montarTema("#1a1612", "escuro").green).toBe(AURA.green);
+    expect(montarTema("#1a1612", "claro").red).toBe(AURA.red);
+  });
+});
+
+describe("estilosDaVitrine — opção escolhida na cor da loja", () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { estilosDaVitrine } = require("@/components/studio/storefront/estilosDaVitrine");
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { tipografiaDoStudio } = require("@/constants/fonts");
+
+  test.each(CORES)("%s: o chip escolhido usa a marca legível, nunca o azul-marinho", (cor) => {
+    const tema = montarTema(cor, "papel");
+    const e = estilosDaVitrine(tema, tipografiaDoStudio("classic"));
+    expect(e.chipAtivo.borderColor).toBe(tema.marcaTexto);
+    expect(e.chipAtivo.backgroundColor).toBe(tema.marcaWash);
+    expect(e.chipTextoAtivo.color).toBe(tema.marcaTexto);
+    expect(contraste(e.chipTextoAtivo.color, tema.bg2)).toBeGreaterThanOrEqual(AA);
+  });
+
+  test("numa loja amarela não sobra azul-marinho, magenta nem branco cravado", () => {
+    const e = estilosDaVitrine(montarTema("#EAFF00", "papel"), tipografiaDoStudio("classic"));
+    expect(JSON.stringify(e)).not.toMatch(/1E3A8A|EC4899|"#fff"/i);
+  });
+
+  test("o chip tem alvo de toque de 44 px", () => {
+    const e = estilosDaVitrine(montarTema("#EAFF00", "papel"), tipografiaDoStudio("classic"));
+    expect(e.chip.minHeight).toBeGreaterThanOrEqual(44);
+  });
+
+  test("o rótulo de seção fala na voz dos números (Bricolage, dígitos tabulares)", () => {
+    const e = estilosDaVitrine(montarTema(null, "papel"), tipografiaDoStudio("modern"));
+    expect(e.rotulo.fontFamily).toContain("Bricolage Grotesque");
+    expect(e.rotulo.fontVariant).toEqual(["tabular-nums"]);
+    expect(e.rotulo.textTransform).toBe("uppercase");
+  });
+});
