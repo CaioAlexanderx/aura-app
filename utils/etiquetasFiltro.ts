@@ -102,6 +102,34 @@ export function hojeEmSaoPaulo(agora: number = Date.now()): string {
   return diaEmSaoPaulo(agora);
 }
 
+/**
+ * Dia (AAAA-MM-DD, São Paulo) → quantos produtos foram cadastrados nele.
+ * O calendário marca esses dias com um ponto: a lojista acha o dia da
+ * mercadoria sem adivinhar.
+ */
+export function diasComCadastro(produtos: readonly ProdutoEtiqueta[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  produtos.forEach((p) => {
+    const t = p.created_at ? new Date(p.created_at).getTime() : NaN;
+    if (!Number.isFinite(t)) return;
+    const d = diaEmSaoPaulo(t);
+    out[d] = (out[d] || 0) + 1;
+  });
+  return out;
+}
+
+export type MarcaDoDia = { marked?: boolean; dotColor?: string; selected?: boolean; selectedColor?: string };
+
+/** `markedDates` do react-native-calendars: ponto nos dias com cadastro, destaque no escolhido. */
+export function marcasDoCalendario(
+  dias: Record<string, number>, escolhido: string | null | undefined, cores: { ponto: string; selecionado: string },
+): Record<string, MarcaDoDia> {
+  const out: Record<string, MarcaDoDia> = {};
+  Object.keys(dias).forEach((d) => { out[d] = { marked: true, dotColor: cores.ponto }; });
+  if (escolhido) out[escolhido] = { ...(out[escolhido] || {}), selected: true, selectedColor: cores.selecionado };
+  return out;
+}
+
 export function categoriasDe(produtos: readonly ProdutoEtiqueta[]): string[] {
   const set = new Set<string>();
   produtos.forEach((p) => { if (p.category) set.add(p.category); });
