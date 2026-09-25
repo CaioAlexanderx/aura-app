@@ -33,7 +33,7 @@ import {
   StoreEvent,
 } from '@/services/notificationsApi';
 import {
-  ordersToEvents, buildFeed, mergePrefs, defaultPrefs, allMuted,
+  ordersToEvents, buildFeed, mergePrefs, defaultPrefs, allMuted, idsQueSomemAoVer,
 } from '@/components/notificationEventModel';
 // 10/09/2026 — som de pedido e aviso no computador (Web Push).
 import { avisosNovos, eventosDaResposta, chaveDoAviso, tocaParaPush } from '@/utils/avisosDePedido';
@@ -73,6 +73,10 @@ export function useNotifications() {
   const [seen, setSeen] = useState<Set<string>>(() => loadSeen());
   // Marcados como lidos localmente (otimista) enquanto o POST não volta.
   const [readLocal, setReadLocal] = useState<Set<string>>(() => new Set());
+  // 25/09/2026 — "visualizou, sumiu" (SOME_AO_VER): o que estava na tela
+  // quando o sino abriu, e o que já foi dispensado nesta sessão.
+  const vistosNaAberturaRef = useRef<string[]>([]);
+  const [dispensados, setDispensados] = useState<Set<string>>(() => new Set());
 
   const [prefs, setPrefs]             = useState<Record<string, boolean>>(() => defaultPrefs());
   const [prefsLoaded, setPrefsLoaded] = useState(false);
@@ -166,12 +170,12 @@ export function useNotifications() {
     const doServidor = data.events || [];
     const jaNoFeed = new Set(doServidor.map(e => e.entity_id).filter(Boolean) as string[]);
     const dePedidos = ordersToEvents(data.orders).filter(e => !jaNoFeed.has(e.entity_id!));
-    const todos = [...doServidor, ...dePedidos];
+    const todos = [...doServidor, ...dePedidos].filter(e => !dispensados.has(e.id));
     // Aplica o "lido" otimista por cima do que o servidor devolveu.
     return readLocal.size === 0
       ? todos
       : todos.map(e => (readLocal.has(e.id) && !e.read_at ? { ...e, read_at: 'local' } : e));
-  }, [data.events, data.orders, readLocal]);
+  }, [data.events, data.orders, readLocal, dispensados]);
 
   const feed = useMemo(() => buildFeed(events), [events]);
 
@@ -196,6 +200,7 @@ export function useNotifications() {
   // volta em refresh/nova sessão. NÃO marca como lido — a fila de pendências
   // continua de pé até alguém resolver.
   const markSeen = useCallback(() => {
+    vistosNaAberturaRef.current = idsQueSomemAoVer(events);
     setSeen(prev => {
       let next = new Set(prev);
       data.banners.forEach(b => next.add(b.id));
@@ -223,6 +228,20 @@ export function useNotifications() {
       return next;
     });
     try { await notificationsApi.markEventRead(companyId, eventId); } catch (_) {}
+  }, [companyId]);
+
+  // Ao FECHAR o sino: o lembrete que foi visto some (lido no servidor e fora
+  // da lista já, sem esperar o poll). Ver SOME_AO_VER.
+  const dispensarVistos = useCallback(() => {
+    const ids = vistosNaAberturaRef.current;
+    vistosNaAberturaRef.current = [];
+    if (!companyId || ids.length === 0) return;
+    setDispensados(prev => {
+      const next = new Set(prev);
+      ids.forEach(id => next.add(id));
+      return next;
+    });
+    ids.forEach(id => { notificationsApi.markEventRead(companyId, id).catch(() => {}); });
   }, [companyId]);
 
   const markAllRead = useCallback(async () => {
@@ -273,6 +292,7 @@ export function useNotifications() {
     markBannerRead,
     markEventRead,
     markAllRead,
+    dispensarVistos,
     prefs,
     prefsLoaded,
     prefsAllMuted: allMuted(prefs),

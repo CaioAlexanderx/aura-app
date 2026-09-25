@@ -87,7 +87,11 @@ export function NotificationBell({ tone = 'default' }: { tone?: BellTone } = {})
     notifs.ensurePrefs();
     setOpen(true);
   }, [notifs]);
-  const handleClose = useCallback(() => setOpen(false), []);
+  // Fechar = o lembrete visto some ("visualizou, sumiu", 25/09/2026).
+  const handleClose = useCallback(() => {
+    notifs.dispensarVistos();
+    setOpen(false);
+  }, [notifs]);
 
   if (Platform.OS !== 'web') {
     return (
