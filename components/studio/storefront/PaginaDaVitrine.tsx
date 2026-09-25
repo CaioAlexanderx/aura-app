@@ -6,6 +6,14 @@
 // Este arquivo so monta o hook de estado + roteia entre stages.
 // Toda a UI esta em components/studio/storefront/.
 //
+// Onda 1B (25/09/2026): a casca (loja carregada, fonte, tema, cookies,
+// avisos) e o conteudo (qual tela desenhar) viraram pecas separadas. A
+// vitrine publica (`app/[slug]/_layout.tsx`) monta a CASCA uma vez no
+// layout e cada rota filha desenha o conteudo da sua tela — trocar de
+// tela nao recarrega a loja nem perde a sacola. O endereco de dentro de
+// casa (`app/cardapio/studio/[slug]`) continua com PaginaDaVitrine, a
+// tela sendo so estado, como antes. Ver VitrineNaRota.tsx.
+//
 // Sub-componentes:
 //   useStorefront         -- estado + API calls
 //   ProductList           -- stage="list" (hero + grade de produtos)
@@ -13,10 +21,11 @@
 //   Checkout              -- stage="checkout" (dados + pagamento)
 //   SentConfirmation      -- stage="sent" (confirmacao + pix + revisoes)
 // ============================================================
-import { useEffect } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Contexto, useVitrine, type ContextoDaVitrine } from "@/components/studio/storefront/ContextoDaVitrine";
 import { Platform, View, Pressable, Linking } from "react-native";
 import { cssDaVitrineStudio } from "@/constants/fonts";
-import { useStorefront } from "@/components/studio/storefront/useStorefront";
+import { useStorefront, type StorefrontState } from "@/components/studio/storefront/useStorefront";
 import { ProductList } from "@/components/studio/storefront/ProductList";
 import { ProductConfigurator } from "@/components/studio/storefront/ProductConfigurator";
 import { Checkout } from "@/components/studio/storefront/Checkout";
@@ -31,6 +40,7 @@ import { ConsentimentoDaVitrine } from "@/components/studio/storefront/Consentim
 import { erroDaLoja, LINK_DA_AURA, type ErroDeCarga } from "@/components/studio/storefront/erroDaVitrine";
 import { wash } from "@/components/studio/storefront/theme";
 import { Icon } from "@/components/Icon";
+import { tituloDaPagina, chaveDaCategoria, type NavegarNaVitrine } from "@/components/studio/storefront/rotasDaVitrine";
 
 /**
  * A tela de erro com a voz da loja (Tela 4 do mockup da Fase 1).
@@ -112,8 +122,67 @@ export function TelaDeErroDaVitrine({
   );
 }
 
-export function PaginaDaVitrine({ slug }: { slug: string }) {
-  const sf = useStorefront(slug);
+// ── O contexto da vitrine ────────────────────────────────────
+// A casca guarda o estado da loja (useStorefront) e o aviso passageiro;
+// quem esta dentro dela le daqui em vez de receber por prop. E o que
+// deixa o layout da rota montar a loja uma vez e as telas filhas so
+// escolherem o que desenhar.
+
+type AvisoNaTela = { texto: string; icone: "check" | "info"; n: number };
+
+export { useVitrine };
+
+/** Tempo do aviso na tela: da para ler uma frase curta sem pressa. */
+const DURACAO_DO_AVISO = 2600;
+
+/**
+ * O aviso passageiro: uma pilula escura no pe da tela, acima da barra de
+ * acao (mockup da Fase 1, Tela 2 — "Copiado"). Sem animacao de entrada:
+ * aparece e some, o que ja respeita "reduzir movimento". Anunciado ao
+ * leitor de tela pela regiao viva.
+ */
+function AvisoDaVitrine({ aviso }: { aviso: AvisoNaTela | null }) {
+  const T = usePaletaDaVitrine();
+  if (!aviso) return null;
+  return (
+    <View
+      pointerEvents="none"
+      style={{ position: "absolute", left: 16, right: 16, bottom: 128, alignItems: "center", zIndex: 70 }}
+    >
+      <View
+        testID="aviso-da-vitrine"
+        accessibilityLiveRegion="polite"
+        accessibilityRole={"status" as any}
+        style={{
+          flexDirection: "row", alignItems: "center", gap: 6,
+          backgroundColor: T.ink, borderRadius: 999,
+          paddingHorizontal: 16, paddingVertical: 9, maxWidth: 420,
+        }}
+      >
+        <Icon name={aviso.icone} size={15} color={T.bg} />
+        <Texto style={{ color: T.bg, fontSize: 12.5, fontWeight: "600" }}>{aviso.texto}</Texto>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * A casca da vitrine: carrega a loja, poe fonte, tema e consentimento em
+ * volta de tudo e desenha o esqueleto ou o erro enquanto nao ha loja.
+ *
+ * `children` fica montado o tempo todo, inclusive carregando: no layout
+ * da rota ele e o <Slot/>, e o navegador das telas filhas tem que existir
+ * desde o primeiro quadro para a vitrine poder arrumar o historico (ver
+ * VitrineNaRota.tsx). Quem esta dentro nao desenha nada ate a loja chegar.
+ */
+export function CascaDaVitrine({
+  slug, navegar, children,
+}: {
+  slug: string;
+  navegar?: NavegarNaVitrine;
+  children?: ReactNode;
+}) {
+  const sf = useStorefront(slug, { navegar });
 
   // A vitrine nunca carregou fonte nenhuma: o painel e a pagina de
   // orcamento injetavam as fontes da marca, e justamente a superficie que
@@ -153,16 +222,16 @@ export function PaginaDaVitrine({ slug }: { slug: string }) {
     document.head.appendChild(link);
   }, [sf.store, falhou, parEscolhido]);
 
-  if (sf.loading) {
-    // Esqueleto no lugar do spinner: a tela vazia era indistinguivel de
-    // loja quebrada pra quem clicou no link do WhatsApp da lojista.
-    return <VitrineSkeleton />;
-  }
-  if (!sf.store) {
-    // Sem loja e sem carregamento em curso e falha — mesmo que o status
-    // nao tenha chegado. Nunca uma tela em branco.
-    return <TelaDeErroDaVitrine erro={sf.erroDeCarga} onTentarDeNovo={sf.recarregar} />;
-  }
+  const [aviso, setAviso] = useState<AvisoNaTela | null>(null);
+  const relogio = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const avisar = useCallback((texto: string, icone: "check" | "info" = "check") => {
+    if (relogio.current) clearTimeout(relogio.current);
+    setAviso((a) => ({ texto, icone, n: (a?.n || 0) + 1 }));
+    relogio.current = setTimeout(() => setAviso(null), DURACAO_DO_AVISO);
+  }, []);
+  useEffect(() => () => { if (relogio.current) clearTimeout(relogio.current); }, []);
+
+  const contexto = useMemo<ContextoDaVitrine>(() => ({ sf, slug, avisar }), [sf, slug, avisar]);
 
   // A fonte da loja vale pra PAGINA TODA, nao so pros titulos. Medido na
   // loja de teste antes disto: de 20 textos da tela de produto, 19 saiam
@@ -171,7 +240,13 @@ export function PaginaDaVitrine({ slug }: { slug: string }) {
   // que ja montavam o tema. Ver TemaDaVitrine.tsx: ate aqui os outros 27
   // liam uma paleta cravada, e a cliente entrava na loja da lojista e
   // comprava numa loja da Aura.
+  // Enquanto a loja nao chega, os tres providers recebem "nada" e caem
+  // no padrao — papel quente com o violeta da Aura, par do Studio, sem
+  // rastreador —, que e o que o esqueleto e a tela de erro usavam fora
+  // deles. A arvore fica a mesma antes e depois da carga: trocar o pai do
+  // <Slot/> no meio remontaria as telas.
   return (
+    <Contexto.Provider value={contexto}>
     <TemaDaVitrine cor={(sf.store as any)?.site?.primary_color}>
     <TipografiaDaVitrine chave={parEscolhido}>
     {/* 05/09/2026: GA4/Pixel so entram depois do "Aceitar". Loja sem
@@ -179,6 +254,56 @@ export function PaginaDaVitrine({ slug }: { slug: string }) {
         provider decide aqui, uma vez; a barra (BarraDeCookies) cada tela
         poe no fluxo, acima da propria barra de acao. */}
     <ConsentimentoDaVitrine rastreadores={(sf.store as any)?.site?.rastreadores}>
+      <View style={{ flex: 1 }}>
+        {sf.loading ? (
+          // Esqueleto no lugar do spinner: a tela vazia era indistinguivel de
+          // loja quebrada pra quem clicou no link do WhatsApp da lojista.
+          <VitrineSkeleton />
+        ) : !sf.store ? (
+          // Sem loja e sem carregamento em curso e falha — mesmo que o status
+          // nao tenha chegado. Nunca uma tela em branco.
+          <TelaDeErroDaVitrine erro={sf.erroDeCarga} onTentarDeNovo={sf.recarregar} />
+        ) : null}
+        {children}
+        <AvisoDaVitrine aviso={aviso} />
+      </View>
+    </ConsentimentoDaVitrine>
+    </TipografiaDaVitrine>
+    </TemaDaVitrine>
+    </Contexto.Provider>
+  );
+}
+
+/**
+ * Qual tela desenhar, pelo estado (`sf.stage`). O mesmo para as duas
+ * rotas: na publica, a rota filha so chama isto depois de o estado
+ * alcancar a URL (VitrineNaRota.tsx, telaPronta).
+ */
+export function ConteudoDaVitrine() {
+  const v = useVitrine();
+  const sf = v?.sf;
+  const slug = v?.slug || "";
+
+  // O titulo da aba acompanha a tela: "Caneca Alca Coracao · Sheid
+  // Mania". O servidor escreve o mesmo na casca de /p/<id> (BE-1) para a
+  // previa do link; este e o do navegador depois que a cliente anda.
+  const titulo = sf?.store
+    ? tituloDaPagina({
+        stage: sf.stage,
+        nomeDaLoja: (sf.store as any)?.site?.name,
+        produto: sf.activeProduct?.name,
+        categoria: sf.grupoAberto?.categoria?.name,
+      })
+    : null;
+  useEffect(() => {
+    if (!titulo || Platform.OS !== "web" || typeof document === "undefined") return;
+    document.title = titulo;
+  }, [titulo]);
+
+  if (!sf || !sf.store) return null;
+
+  return (
+    <>
       {sf.stage === "modelos" && sf.grupoAberto ? (
         <GradeDeModelos
           categoria={sf.grupoAberto.categoria}
@@ -202,8 +327,23 @@ export function PaginaDaVitrine({ slug }: { slug: string }) {
       ) : (
         <ProductList sf={sf} />
       )}
-    </ConsentimentoDaVitrine>
-    </TipografiaDaVitrine>
-    </TemaDaVitrine>
+    </>
+  );
+}
+
+/** A chave da categoria aberta, para a rota conferir se ja e a da URL. */
+export function categoriaAberta(sf: StorefrontState | null | undefined): string | null {
+  return sf?.grupoAberto ? chaveDaCategoria(sf.grupoAberto.categoria) : null;
+}
+
+/**
+ * A vitrine inteira num componente so, com a tela sendo so estado — o
+ * endereco de dentro de casa (`/cardapio/studio/<slug>`) e os testes.
+ */
+export function PaginaDaVitrine({ slug }: { slug: string }) {
+  return (
+    <CascaDaVitrine slug={slug}>
+      <ConteudoDaVitrine />
+    </CascaDaVitrine>
   );
 }

@@ -18,6 +18,14 @@
 //   // Navegacao
 //   sf.stage           -- Stage
 //   sf.goTo(stage)     -- navega entre stages
+//   sf.sincronizarComTela(tela) -- Onda 1B: poe o estado na tela da URL
+//     (quem chama e a rota; devolve a Resolucao, com redirecionamento
+//     quando a peca/categoria da URL nao existe mais)
+//
+//   Onda 1B (25/09/2026): `useStorefront(slug, { navegar })`. Com
+//   `navegar`, cada troca de tela vira tambem uma troca de URL (ver
+//   rotasDaVitrine.ts); sem ele (app/cardapio/studio/[slug], testes) a
+//   tela continua sendo so estado, como antes.
 //
 //   // Produto sendo configurado
 //   sf.activeProduct   -- StudioStoreProduct | null
@@ -83,7 +91,7 @@
 //   sf._lineUnitPrice(line) -- number
 //   sf._lineTotal(line)     -- number
 // ============================================================
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Platform } from "react-native";
 import { maskPhone } from "@/utils/masks";
 import type {
@@ -98,6 +106,11 @@ import {
   agruparVitrine, transportarValores, type VitrineEntry,
 } from "./categoryGrouping";
 import { basePriceForQty } from "./qtyTiers";
+import {
+  resolverTela, chaveDaCategoria,
+  type NavegarNaVitrine, type ModoDeNavegar, type TelaDaVitrine, type Resolucao,
+} from "./rotasDaVitrine";
+import { atribuicaoGuardada, camposDeAtribuicao } from "./linkDaAurinha";
 
 import { enderecoDaApi } from "./enderecoDaApi";
 // Fase 1C: medicao (GA4/Pixel, atras do consentimento) e loja que fecha
@@ -271,7 +284,11 @@ function lineTotal(line: CartLine): number {
 }
 
 // --- Hook ---
-export function useStorefront(slug: string) {
+export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrine }) {
+  // Lido na hora de navegar, nao na montagem: quem passa o navegador e o
+  // layout da rota, que pode recriar a funcao a cada render.
+  const navegarRef = useRef<NavegarNaVitrine | undefined>(opcoes?.navegar);
+  navegarRef.current = opcoes?.navegar;
   const [store, setStore] = useState<StorePayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -495,8 +512,29 @@ export function useStorefront(slug: string) {
     );
   }, [activeProduct, editingValues, editingAddBack, editingAddMiddle, editingQty]);
 
-  function goTo(s: Stage) {
+  /**
+   * Troca de tela: o estado muda aqui e, na vitrine com rotas, a URL
+   * acompanha. `tela` null = sem URL propria (a confirmacao, nesta fase).
+   */
+  function irPara(s: Stage, tela: TelaDaVitrine | null, modo: ModoDeNavegar) {
     setStage(s);
+    if (tela && navegarRef.current) navegarRef.current(tela, modo);
+  }
+
+  function goTo(s: Stage) {
+    // A tela de cada stage. "configure" e "modelos" precisam do alvo, que
+    // ja esta no estado; quem abre produto e grupo usa openConfigure e
+    // abrirGrupo, que sabem qual e.
+    const tela: TelaDaVitrine | null =
+      s === "list" ? { tipo: "home" }
+      : s === "checkout" ? { tipo: "finalizar" }
+      : s === "lote" ? { tipo: "orcamento" }
+      : s === "configure" && activeProduct ? { tipo: "produto", id: String(activeProduct.id) }
+      : s === "modelos" && grupoAberto ? { tipo: "categoria", categoria: chaveDaCategoria(grupoAberto.categoria) }
+      : null;
+    // Voltar para a loja VOLTA no historico quando a home esta nele: o
+    // voltar do navegador, depois, nao reabre a peca que a cliente fechou.
+    irPara(s, tela, s === "list" ? "voltar" : "empilhar");
   }
 
   /**
@@ -508,7 +546,8 @@ export function useStorefront(slug: string) {
    */
   function abrirGrupo(categoria: any, produtos: StudioStoreProduct[]) {
     setGrupoAberto({ categoria: categoria || null, produtos: produtos || [] });
-    setStage("modelos");
+    const chave = chaveDaCategoria(categoria);
+    irPara("modelos", chave ? { tipo: "categoria", categoria: chave } : null, "empilhar");
   }
 
   function setFieldValue(fieldId: string, value: any) {
@@ -516,6 +555,12 @@ export function useStorefront(slug: string) {
   }
 
   function openConfigure(product: StudioStoreProduct, siblings: StudioStoreProduct[] = []) {
+    abrirProduto(product, siblings);
+    irPara("configure", { tipo: "produto", id: String(product.id) }, "empilhar");
+  }
+
+  /** Abre a peca no configurador, sem mexer na URL. */
+  function abrirProduto(product: StudioStoreProduct, siblings: StudioStoreProduct[] = []) {
     setActiveProduct(product);
     setActiveSiblings(siblings.length > 1 ? siblings : []);
     setEditingLineId(null);
@@ -548,7 +593,7 @@ export function useStorefront(slug: string) {
     // Ver nota em lineUnitPrice: a bandeira do meio vive dentro de
     // `values`, nao num campo dedicado da CartLine.
     setEditingAddMiddle(line.values?.has_middle_selected === true);
-    setStage("configure");
+    irPara("configure", { tipo: "produto", id: String(line.product.id) }, "empilhar");
   }
 
   // S1 — troca de modelo dentro da categoria, sem sair do configurador.
@@ -579,6 +624,9 @@ export function useStorefront(slug: string) {
     // la, este lado ja esta pronto pra receber).
     setEditingAddMiddle(levados.has_middle_selected === true);
     setError(null);
+    // Trocar de modelo troca a URL sem empilhar: o voltar do navegador
+    // sai do produto, nao desfila pelos modelos que a cliente olhou.
+    navegarRef.current?.({ tipo: "produto", id: String(product.id) }, "trocar");
   }
 
   /**
@@ -646,7 +694,10 @@ export function useStorefront(slug: string) {
     // Editar uma linha do carrinho NUNCA vai direto pro checkout, mesmo
     // que o botao direto seja clicado: quem esta editando veio de la e
     // volta pra lista, que e de onde ela decide.
-    setStage(opcoes?.direto && !editingLineId ? "checkout" : "list");
+    // "Comprar agora" TROCA o produto pelo checkout: a peca virou item da
+    // sacola, e o voltar do navegador levaria a um configurador em branco.
+    if (opcoes?.direto && !editingLineId) irPara("checkout", { tipo: "finalizar" }, "trocar");
+    else irPara("list", { tipo: "home" }, "voltar");
   }
 
   function removeCartLine(lineId: string) {
@@ -809,6 +860,10 @@ export function useStorefront(slug: string) {
           deliveryType === "delivery" && typeof shippingQuote?.fee === "number"
             ? shippingQuote.fee
             : undefined,
+        // Onda 1B: de onde a cliente veio (link da Aurinha, contrato da
+        // migration 313). Guardado na aba ao abrir o link; ausente ou
+        // invalido nao manda nada — atribuicao nunca bloqueia o pedido.
+        ...camposDeAtribuicao(atribuicaoGuardada(slug)),
       };
       const res = await fetch(API_BASE + "/storefront/" + slug + "/studio/order", {
         method: "POST",
@@ -846,8 +901,40 @@ export function useStorefront(slug: string) {
   }
 
   function resetToList() {
-    setStage("list");
+    irPara("list", { tipo: "home" }, "voltar");
     setSentOrder(null);
+  }
+
+  /**
+   * Onda 1B: poe o estado na tela que a URL pede. Quem chama e a rota
+   * (VitrineNaRota.tsx), ao montar e quando o endereco muda — e NUNCA
+   * navega: a URL ja e a verdade. Devolve a resolucao para a rota tratar
+   * o redirecionamento (peca que saiu da loja, categoria sem grupo), ou
+   * null enquanto a loja nao carregou.
+   */
+  function sincronizarComTela(tela: TelaDaVitrine): Resolucao | null {
+    if (!store) return null;
+    const r = resolverTela(tela, store, vitrine);
+    switch (r.acao) {
+      case "home": setStage("list"); break;
+      case "orcamento": setStage("lote"); break;
+      // O pedido enviado fica na URL do checkout ate a Fase 2 (confirmacao
+      // em /pedido/<token>): voltar a /finalizar nao o apaga.
+      case "finalizar": setStage((s) => (s === "sent" ? "sent" : "checkout")); break;
+      case "categoria":
+        if (chaveDaCategoria(grupoAberto?.categoria) !== chaveDaCategoria(r.categoria)) {
+          setGrupoAberto({ categoria: r.categoria, produtos: r.produtos });
+        }
+        setStage("modelos");
+        break;
+      case "produto":
+        // A mesma peca ja aberta (editando uma linha da sacola, ou o
+        // avancar do navegador): o que a cliente preencheu fica.
+        if (activeProduct && String(activeProduct.id) === String(r.produto.id)) setStage("configure");
+        else abrirProduto(r.produto, r.irmaos);
+        break;
+    }
+    return r;
   }
 
   return {
@@ -855,7 +942,7 @@ export function useStorefront(slug: string) {
     store, loading, error, setError,
     erroDeCarga, recarregar,
     // Navegacao
-    stage, goTo,
+    stage, goTo, sincronizarComTela,
     abrirGrupo, grupoAberto,
     // Configurador
     activeProduct,

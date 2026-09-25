@@ -18,6 +18,7 @@ import { UpdateBanner } from "@/components/UpdateBanner";
 import { GlobalOverlays } from "@/components/GlobalOverlays";
 import { KarateLoginTransition } from "@/components/karate/KarateLoginTransition";
 import { useKarateIntro } from "@/stores/karateIntro";
+import { ehVitrinePublica } from "@/components/studio/storefront/rotasDaVitrine";
 
 const queryClient = new QueryClient();
 
@@ -137,7 +138,11 @@ function AuthGuard() {
     // comparação é exata e não pega nenhuma rota declarada do painel —
     // "/studio", "/empresas", "/cardapio" e as outras são estáticas e
     // aparecem com o próprio nome.
-    const onVitrinePublica = segments.length === 1 && segments[0] === "[slug]";
+    // Onda 1B (25/09/2026): a vitrine ganhou telas aninhadas
+    // (`[slug]/p/[id]`, `[slug]/finalizar`...). TODAS são públicas — a
+    // comparação por `segments.length === 1` mandaria a cliente para o
+    // login ao abrir um produto. Ver ehVitrinePublica.
+    const onVitrinePublica = ehVitrinePublica(segments);
     // Fase 5 Studio: aprovação de arte pública em /aprovacao/[token]
     // (link enviado via wa.me pro cliente — não exige login).
     const onPublicApproval = segments[0] === "aprovacao";
