@@ -16,6 +16,8 @@ module.exports = {
     '^@/(.*)$': '<rootDir>/$1',
     '^react-native$': 'react-native-web',
     '^react-native/(.*)$': 'react-native-web',
+    // 25/09/2026: react-native-calendars importa as setas em PNG.
+    '\\.(png|jpe?g|gif|webp|ttf|otf)$': '<rootDir>/__mocks__/arquivoEstatico.js',
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
   collectCoverageFrom: [

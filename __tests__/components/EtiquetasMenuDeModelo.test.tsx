@@ -120,19 +120,41 @@ test("calendário: escolher um dia mostra só o que foi cadastrado nele; 'Todos'
   const texto0 = flatten(t.toJSON());
   expect(texto0.indexOf("Cadastrados:")).toBeLessThan(texto0.indexOf("Todos"));
   expect(t.root.findAll((n) => n.props && n.props.testID === "etiquetas-calendario", { deep: false })).toHaveLength(1);
+  // Nada de <input type="date"> escondido: o calendário é o nosso.
+  expect(t.root.findAll((n) => n.type === "input" && n.props.type === "date")).toHaveLength(0);
 
-  const input = t.root.findAll((n) => n.type === "input" && n.props["data-testid"] === "etiquetas-calendario-input")[0];
-  expect(input).toBeTruthy();
-  expect(input.props.type).toBe("date");
-  expect(input.props.max).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  // Fechado até tocar no ícone.
+  expect(t.root.findAll((n) => n.props && n.props.testID === "etiquetas-calendario-painel", { deep: false })).toHaveLength(0);
+  aperta(t, "etiquetas-calendario");
 
-  act(() => { input.props.onChange({ target: { value: "2025-01-10" } }); });
+  // O react-native-calendars de verdade renderiza (JS puro, no react-native-web).
+  const cal = t.root.findAll((n) => n.props && n.props.markedDates && typeof n.props.onDayPress === "function")[0];
+  expect(cal).toBeTruthy();
+  expect(cal.props.maxDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  // Os dias com produto cadastrado vêm marcados com ponto.
+  expect(cal.props.markedDates["2025-01-10"]).toMatchObject({ marked: true });
+  expect(cal.props.markedDates["2025-02-10"]).toMatchObject({ marked: true });
+
+  act(() => { cal.props.onDayPress({ dateString: "2025-01-10" }); });
   expect(nomesNaLista(t)).toEqual(["Calça antiga"]);
   expect(flatten(t.toJSON())).toContain("10/01/2025");
   expect(flatten(t.toJSON())).toContain("1 de 3 produtos");
+  // Escolher fecha o calendário.
+  expect(t.root.findAll((n) => n.props && n.props.testID === "etiquetas-calendario-painel", { deep: false })).toHaveLength(0);
 
-  aperta(t, "etiquetas-periodo-todos");
+  // Reabrindo, o dia escolhido vem selecionado.
+  aperta(t, "etiquetas-calendario");
+  const cal2 = t.root.findAll((n) => n.props && n.props.markedDates && typeof n.props.onDayPress === "function")[0];
+  expect(cal2.props.markedDates["2025-01-10"]).toMatchObject({ selected: true, marked: true });
+
+  aperta(t, "etiquetas-calendario-painel-limpar");
   expect(nomesNaLista(t)).toHaveLength(3);
   expect(flatten(t.toJSON())).not.toContain("10/01/2025");
+
+  act(() => { t.root.findAll((n) => n.props && n.props.testID === "etiquetas-calendario", { deep: false })[0].props.onPress(); });
+  act(() => { t.root.findAll((n) => n.props && n.props.markedDates && typeof n.props.onDayPress === "function")[0].props.onDayPress({ dateString: "2025-02-10" }); });
+  expect(nomesNaLista(t)).toEqual(["Blusa antiga"]);
+  aperta(t, "etiquetas-periodo-todos");
+  expect(nomesNaLista(t)).toHaveLength(3);
   t.unmount();
 });
