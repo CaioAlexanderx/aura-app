@@ -119,7 +119,7 @@ function Corpo({
       <Selo icone="alert_circle" tipo="erro" />
       <Titulo tamanho={20} centro>{titulo}</Titulo>
       <Texto style={{ textAlign: "center", color: tema.ink2, fontSize: 15, lineHeight: 23, maxWidth: 380 }}>{texto}</Texto>
-      <View style={{ width: "100%", maxWidth: 320, gap: 10, marginTop: 6 }}>
+      <View style={{ width: "100%", maxWidth: 360, gap: 10, marginTop: 6 }}>
         {onTentarDeNovo ? <Botao icone="refresh" rotulo="Tentar de novo" onPress={onTentarDeNovo} /> : null}
         {whats ? (
           <Botao

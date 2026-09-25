@@ -352,7 +352,7 @@ function Cancelado({ dados, loja, whats, slug }: { dados: PublicTrack; loja: str
       <Texto style={{ textAlign: "center", color: tema.ink2, fontSize: 15, lineHeight: 23, maxWidth: 380 }}>
         {`Esta encomenda em ${loja} foi cancelada. Fale com a loja se tiver dúvida.`}
       </Texto>
-      <View style={{ width: "100%", maxWidth: 320, gap: 10, marginTop: 6 }}>
+      <View style={{ width: "100%", maxWidth: 360, gap: 10, marginTop: 6 }}>
         {whats ? <Botao tipo="whatsapp" icone="whatsapp" rotulo={`Falar com ${loja} no WhatsApp`} onPress={() => abrirFora(whats)} /> : null}
         {slug ? <Botao tipo="secundario" rotulo="Ir para a loja" onPress={() => router.replace(("/" + slug) as any)} /> : null}
       </View>
