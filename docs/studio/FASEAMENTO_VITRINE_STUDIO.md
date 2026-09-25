@@ -18,6 +18,8 @@
 | 6 | Sacola em gaveta, quantidade digitável, CPF/CNPJ | Sim para os três |
 | 7 | Cor de destaque da lojista | Não usar. Só a cor principal |
 | 8 | Aprovação e acompanhamento no endereço da loja | Sim, na Fase 4 |
+| 9 | Mockups das Fases 1 a 5 | **Aprovados** (25/09), com uma mudança: a DM Mono sai por completo e **Bricolage Grotesque** entra em números, rótulos e códigos |
+| 10 | Perguntas abertas dos mockups | Aprovadas as recomendações do TL: "Adicionar à sacola" como botão principal; ajuste de arte cobrado uma vez por item; desconto por quantidade na regra atual do servidor; retirada por app aceita "informo depois"; pagar na retirada segue a escolha da lojista; área de impressão vem do cadastro do produto; home sem "O que a gente personaliza" e com os números dentro dos selos; "Pedidos pela loja" como aba própria; hero sem banner gira a primeira peça com prévia 3D, trocável na aba Design |
 
 Execução: o TL orquestra agentes (Sonnet e Opus), revisa, abre os PRs e faz o merge com CI verde. O QA extenso acontece depois da Fase 5. **Primeiro passo: todos os mockups** (`docs/mockups/studio-vitrine-0N-*.html`, kit comum em `studio-vitrine-00-kit.html`).
 

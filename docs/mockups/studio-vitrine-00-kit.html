@@ -17,6 +17,9 @@
   DE ONDE VEM CADA TOKEN (nada inventado):
     Superfície "papel"   components/studio/storefront/theme.ts (SUPERFICIE.papel)
     Par de fontes        constants/fonts.ts (TIPOGRAFIAS_STUDIO)
+    Números e rótulos    Bricolage Grotesque, dígitos tabulares (decisão do PO,
+                         25/09). Substitui a DM Mono em tudo: preço, quantidade,
+                         contagem, CEP, rótulos em caixa alta e código Pix.
     Cor da loja → texto  theme.ts (corLegivelSobre, parLegivel): mesma regra,
                          reimplementada em JS abaixo (brandPair / brandText)
     Movimento            theme.ts (AURA.motion): 150/220 ms, ease (.4,0,.2,1)
@@ -35,7 +38,7 @@
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=DM+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Pacifico&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Instrument+Serif:ital@0;1&family=Pacifico&display=swap">
 <style>
 /* === KIT:BEGIN ============================================== */
 :root{
@@ -55,7 +58,8 @@
   --f-display:'Fraunces','Instrument Serif',Georgia,serif;
   --f-display-w:500;
   --f-body:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-  --f-mono:'DM Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
+  /* números, rótulos e códigos: Bricolage Grotesque (decisão do PO, 25/09; substitui a DM Mono) */
+  --f-num:'Bricolage Grotesque','DM Sans',-apple-system,sans-serif;
   /* raio, sombra, movimento */
   --r-sm:6px; --r-md:10px; --r-lg:14px; --r-xl:20px; --r-pill:999px;
   --sh-1:0 1px 2px rgba(26,23,20,.06),0 1px 1px rgba(26,23,20,.04);
@@ -69,10 +73,10 @@
 .sv p{margin:0}
 .sv .t-h1{font-size:34px}.sv .t-h2{font-size:26px}.sv .t-h3{font-size:20px}
 .sv .t-body{font-size:15px}.sv .t-small{font-size:13px;color:var(--ink2)}.sv .t-cap{font-size:12.5px;color:var(--ink3)}
-.sv .label{font:500 11px/1.2 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
-.sv .mono,.sv .price{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
-.sv .price{font-weight:500;color:var(--ink)}
-.sv .price-lg{font:500 26px/1 var(--f-mono);letter-spacing:-.02em}
+.sv .label{font:500 11px/1.2 var(--f-num);letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
+.sv .mono,.sv .price,.sv .num{font-family:var(--f-num);font-variant-numeric:tabular-nums;font-feature-settings:'tnum' 1}
+.sv .price{font-weight:600;color:var(--ink);letter-spacing:-.01em}
+.sv .price-lg{font:700 28px/1 var(--f-num);letter-spacing:-.025em}
 .sv .pix-line{color:var(--pix);font-size:13px;font-weight:600}
 .sv .brand-text{color:var(--brand-text)}
 
@@ -96,13 +100,13 @@
 .btn[disabled]{background:var(--bg4);color:var(--ink3);box-shadow:none;cursor:not-allowed}
 .icon-btn{appearance:none;border:0;background:transparent;width:44px;height:44px;border-radius:12px;display:inline-grid;place-items:center;color:var(--ink);cursor:pointer;position:relative}
 .icon-btn:hover{background:var(--bg3)}
-.count{position:absolute;top:6px;right:5px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--brand-fill);color:var(--on-brand);font:600 10.5px/18px var(--f-mono);text-align:center}
+.count{position:absolute;top:6px;right:5px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--brand-fill);color:var(--on-brand);font:700 10.5px/18px var(--f-num);text-align:center}
 
 /* chips (opções, entrega, pagamento) */
 .chip{appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:8px 14px;border-radius:12px;border:1px solid var(--border2);background:var(--bg2);color:var(--ink);font:500 14px/1.2 var(--f-body);transition:border-color var(--t) var(--ease),background var(--t) var(--ease)}
 .chip:hover{border-color:var(--ink3)}
 .chip[aria-pressed="true"],.chip.on{border-color:var(--brand-text);background:var(--brand-wash);box-shadow:inset 0 0 0 1px var(--brand-text)}
-.chip .delta{font:500 12px var(--f-mono);color:var(--ink3)}
+.chip .delta{font:600 12px var(--f-num);color:var(--ink3)}
 .swatch{width:36px;height:36px;border-radius:50%;border:1px solid rgba(0,0,0,.12);box-shadow:inset 0 0 0 3px var(--bg2);cursor:pointer}
 .swatch.on{outline:2px solid var(--brand-text);outline-offset:2px}
 
@@ -121,7 +125,7 @@
 .card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg)}
 .panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-xl);box-shadow:var(--sh-1)}
 .divider{height:1px;background:var(--border);border:0;margin:0}
-.badge{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:var(--r-pill);font:500 11px/1 var(--f-mono);letter-spacing:.06em;text-transform:uppercase}
+.badge{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:var(--r-pill);font:500 11px/1 var(--f-num);letter-spacing:.06em;text-transform:uppercase}
 .badge-brand{background:var(--brand-fill);color:var(--on-brand)}
 .badge-soft{background:var(--bg2);color:var(--ink);box-shadow:var(--sh-1)}
 .badge-pix{background:var(--pix-soft);color:var(--pix)}
@@ -140,7 +144,7 @@
 /* ---------- moldura do mockup (não é produto) ---------- */
 .mk-body{margin:0;background:#E9E6E1;color:#1d1d1f;font-family:var(--f-body)}
 .mk-bar{position:sticky;top:0;z-index:50;background:#16181D;color:#E8EAF0;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:10px 20px;font-size:12.5px}
-.mk-bar b{font:600 12px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:#fff}
+.mk-bar b{font:600 12px var(--f-num);letter-spacing:.08em;text-transform:uppercase;color:#fff}
 .mk-grp{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .mk-grp span{color:#9BA1AE;margin-right:2px}
 .mk-seg{appearance:none;border:1px solid #333845;background:#1F222A;color:#E8EAF0;border-radius:8px;height:30px;padding:0 10px;font:500 12px var(--f-body);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
@@ -153,11 +157,11 @@
 .mk-screen{display:grid;grid-template-columns:300px 1fr;gap:28px;align-items:start}
 .mk-screen+.mk-screen{border-top:1px solid #d3cfc8;padding-top:48px}
 .mk-meta{position:sticky;top:70px;display:flex;flex-direction:column;gap:10px}
-.mk-meta .mk-n{font:500 11px var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:#8a5a00}
+.mk-meta .mk-n{font:500 11px var(--f-num);letter-spacing:.14em;text-transform:uppercase;color:#8a5a00}
 .mk-meta h2{font:600 20px/1.25 var(--f-body);margin:0}
 .mk-meta p{margin:0;font-size:14px;line-height:1.55;color:#4a4a4f}
 .mk-meta ul{margin:0;padding-left:18px;font-size:13px;line-height:1.5;color:#4a4a4f;display:flex;flex-direction:column;gap:5px}
-.mk-meta code{font:12px var(--f-mono);background:#dcd8d1;padding:1px 5px;border-radius:4px}
+.mk-meta code{font:12px var(--f-num);background:#dcd8d1;padding:1px 5px;border-radius:4px}
 .mk-frames{display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap;min-width:0}
 .phone{width:390px;height:844px;border-radius:48px;background:#0F0F11;padding:11px;box-shadow:0 30px 60px -25px rgba(0,0,0,.45);flex:none;position:relative}
 .phone>.screen{width:100%;height:100%;border-radius:38px;overflow:hidden;position:relative;background:var(--bg)}
@@ -169,7 +173,7 @@
 .desk{width:1280px;border-radius:14px;overflow:hidden;background:var(--bg);box-shadow:0 30px 60px -25px rgba(0,0,0,.4);transform-origin:top left}
 .chrome{height:40px;background:#ECE8E2;display:flex;align-items:center;gap:14px;padding:0 14px;border-bottom:1px solid #DDD7CE}
 .chrome i{width:11px;height:11px;border-radius:50%;background:#D3CCC2;display:inline-block}
-.chrome .url{flex:1;max-width:560px;height:26px;border-radius:8px;background:#fff;font:12px/26px var(--f-mono);color:#6b6459;padding:0 12px;display:flex;gap:6px;align-items:center}
+.chrome .url{flex:1;max-width:560px;height:26px;border-radius:8px;background:#fff;font:12px/26px var(--f-num);color:#6b6459;padding:0 12px;display:flex;gap:6px;align-items:center}
 .desk .viewport{height:820px;overflow-y:auto;position:relative}
 .mk-hide-phone .phone,.mk-hide-desk .desk-fit{display:none}
 @media (max-width:1000px){.mk-screen{grid-template-columns:1fr}.mk-meta{position:static}}
@@ -180,10 +184,10 @@
 .kit-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:20px}
 .kit-box{padding:20px;display:flex;flex-direction:column;gap:14px}
 .sw-row{display:flex;flex-wrap:wrap;gap:10px}
-.sw-tok{display:flex;flex-direction:column;gap:4px;font:11px var(--f-mono);color:var(--ink3);width:74px}
+.sw-tok{display:flex;flex-direction:column;gap:4px;font:11px var(--f-num);color:var(--ink3);width:74px}
 .sw-tok i{height:44px;border-radius:10px;border:1px solid var(--border)}
 .icons{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:10px}
-.icons div{display:flex;flex-direction:column;align-items:center;gap:6px;font:10.5px var(--f-mono);color:var(--ink3);padding:10px 4px;border-radius:10px;background:var(--bg3)}
+.icons div{display:flex;flex-direction:column;align-items:center;gap:6px;font:10.5px var(--f-num);color:var(--ink3);padding:10px 4px;border-radius:10px;background:var(--bg3)}
 .mugs{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
 .mugs figure{margin:0;display:flex;flex-direction:column;gap:8px}
 .mugs figcaption{font-size:13px;color:var(--ink2)}
@@ -270,7 +274,7 @@
     <p class="t-small">Texto secundário, 13 px, tinta 2.</p>
     <p class="t-cap">Legenda, 12,5 px, tinta 3 ajustada para AA.</p>
     <div style="display:flex;gap:18px;align-items:baseline;flex-wrap:wrap">
-      <span class="label">Rótulo em DM Mono</span>
+      <span class="label">Rótulo em Bricolage Grotesque</span>
       <span class="price price-lg">R$ 49,90</span>
       <span class="pix-line">R$ 47,41 no Pix</span>
     </div>
