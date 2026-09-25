@@ -5,13 +5,13 @@
 import { View, Pressable, Linking } from "react-native";
 import type { StorefrontState } from "./useStorefront";
 import { linkDoOrcamentoDoCarrinho } from "./pedidoPeloWhatsApp";
-import { usePaletaDaVitrine } from "./TemaDaVitrine";
+import { usePaletaDaVitrine, useTemaDaVitrine } from "./TemaDaVitrine";
+import { wash, tintaSobre, corLegivelSobre } from "./theme";
 import { LivePreview } from "./LivePreview";
 
 import { CapaProduto } from "./CapaProduto";
 import { temPersonalizacaoVisivel } from "@/components/studio/customizationConfig";
-import { tipografiaDaLoja } from "@/constants/fonts";
-import { Texto } from "./TipografiaVitrine";
+import { Texto, Numero, useTipografia } from "./TipografiaVitrine";
 import { dinheiro } from "./moeda";
 // Helpers expostos pelo hook
 function effectiveBackSelected(
@@ -34,14 +34,17 @@ function effectiveMiddleSelected(
 }
 
 /** Barra flutuante no stage="list" quando há itens no carrinho */
-export function CartBar({
-  sf, accent,
-}: {
-  sf: StorefrontState;
-  accent: string;
-}) {
+export function CartBar({ sf }: { sf: StorefrontState }) {
   const T = usePaletaDaVitrine();
+  const tema = useTemaDaVitrine();
   if (sf.cart.length === 0) return null;
+  // A barra e escura (a tinta do papel). Nada de branco cravado: a tinta
+  // de cima sai da conta de contraste, e o selo da contagem usa a cor da
+  // loja AJUSTADA para aparecer sobre a barra — a Sheid (#1a1612) sumiria
+  // num selo quase preto em cima de barra quase preta. Antes o selo usava
+  // accent_color, que o PO tirou da vitrine (so a cor principal pinta).
+  const tinta = tintaSobre(T.ink);
+  const selo = corLegivelSobre(tema.marca, T.ink);
   return (
     <Pressable
       onPress={() => sf.goTo("checkout")}
@@ -63,19 +66,19 @@ export function CartBar({
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
         <View
           style={{
-            backgroundColor: accent, width: 26, height: 26,
+            backgroundColor: selo, width: 26, height: 26,
             borderRadius: 13, alignItems: "center", justifyContent: "center",
           }}
         >
-          <Texto style={{ color: "#fff", fontSize: 12, fontWeight: "800" }}>
+          <Numero style={{ color: tintaSobre(selo), fontSize: 12, fontWeight: "700" }}>
             {sf.cart.reduce((s, l) => s + l.qty, 0)}
-          </Texto>
+          </Numero>
         </View>
         <View>
-          <Texto style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}>
+          <Texto style={{ fontSize: 10.5, color: tinta, opacity: 0.72 }}>
             {sf.cart.reduce((s, l) => s + l.qty, 0) === 1 ? "item personalizado" : "itens personalizados"}
           </Texto>
-          <Texto style={{ color: "#fff", fontSize: 16, fontWeight: "800" }}>{dinheiro(sf.cartSubtotal)}</Texto>
+          <Numero style={{ color: tinta, fontSize: 16, fontWeight: "700" }}>{dinheiro(sf.cartSubtotal)}</Numero>
         </View>
       </View>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
@@ -98,13 +101,13 @@ export function CartBar({
               hitSlop={8}
               style={{ paddingVertical: 6, paddingHorizontal: 4 }}
             >
-              <Texto style={{ color: "rgba(255,255,255,0.75)", fontSize: 11.5, fontWeight: "600" }}>
+              <Texto style={{ color: tinta, opacity: 0.8, fontSize: 11.5, fontWeight: "600" }}>
                 Orçamento
               </Texto>
             </Pressable>
           );
         })()}
-        <Texto style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>Finalizar →</Texto>
+        <Texto style={{ color: tinta, fontSize: 13, fontWeight: "800" }}>Finalizar →</Texto>
       </View>
     </Pressable>
   );
@@ -113,7 +116,8 @@ export function CartBar({
 /** Lista de itens no checkout */
 export function CartItemList({ sf }: { sf: StorefrontState }) {
   const T = usePaletaDaVitrine();
-  const tipo = tipografiaDaLoja((sf.store as any)?.site?.font_family);
+  // A fonte do Studio, a mesma da home (ver Checkout).
+  const tipo = useTipografia();
   // Os dois chips tinham 22px de altura: no celular o dedo errava e
   // "Remover" ficava a 6px de "Editar". Altura mínima e área de toque
   // ampliada (hitSlop) — o desenho continua discreto.
@@ -121,10 +125,11 @@ export function CartItemList({ sf }: { sf: StorefrontState }) {
     paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, minHeight: 36,
     backgroundColor: T.primary, alignItems: "center", justifyContent: "center",
   };
-  const editChipTxt: any = { color: "#fff", fontSize: 11.5, fontWeight: "800" };
+  // Texto do par legivel da loja — era branco cravado sobre a cor dela.
+  const editChipTxt: any = { color: T.sobrePrimary, fontSize: 11.5, fontWeight: "800" };
   const removeChip: any = {
     paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, minHeight: 36,
-    backgroundColor: "#fee2e2", alignItems: "center", justifyContent: "center",
+    backgroundColor: wash(T.red, 0.1), alignItems: "center", justifyContent: "center",
   };
   const removeChipTxt: any = { color: T.red, fontSize: 11.5, fontWeight: "800" };
 
@@ -179,11 +184,11 @@ export function CartItemList({ sf }: { sf: StorefrontState }) {
             )}
             <View style={{ flex: 1 }}>
               <Texto style={{ fontSize: 13, color: T.ink, fontWeight: "700" }}>{l.product.name}</Texto>
-              <Texto style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
+              <Numero style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
                 Qtd {l.qty} · {dinheiro(sf._lineTotal(l))}
-              </Texto>
+              </Numero>
               {hasDelta && (
-                <Texto style={{ fontSize: 10, color: T.accent, marginTop: 1 }}>
+                <Texto style={{ fontSize: 10.5, color: T.primaryTexto, marginTop: 1 }}>
                   inclui {dinheiro((unit - Number(l.product.price)))} por opções
                 </Texto>
               )}

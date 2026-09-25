@@ -7,7 +7,8 @@
 // ============================================================
 import { useEffect } from "react";
 import { View, Pressable, Modal, ScrollView, Platform } from "react-native";
-import { usePaletaDaVitrine } from "./TemaDaVitrine";
+import { usePaletaDaVitrine, useTemaDaVitrine } from "./TemaDaVitrine";
+import { Icon } from "@/components/Icon";
 
 import { Texto } from "./TipografiaVitrine";
 export type SizeGuide = {
@@ -23,6 +24,7 @@ export function SizeGuideModal({
   onClose: () => void;
 }) {
   const T = usePaletaDaVitrine();
+  const tema = useTemaDaVitrine();
   const isImage =
     sizeGuide.content_type === "image/png" ||
     sizeGuide.content_type === "image/jpeg" ||
@@ -84,7 +86,7 @@ export function SizeGuideModal({
             }}
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Texto style={{ fontSize: 18 }}>📐</Texto>
+              <Icon name="ruler" size={20} color={tema.marcaTexto} />
               <Texto
                 style={{
                   fontSize: 16,
@@ -99,6 +101,8 @@ export function SizeGuideModal({
             <Pressable
               onPress={onClose}
               hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Fechar guia de medidas"
               style={{
                 width: 32,
                 height: 32,
@@ -108,7 +112,7 @@ export function SizeGuideModal({
                 justifyContent: "center",
               }}
             >
-              <Texto style={{ fontSize: 16, color: T.ink3, fontWeight: "700" }}>✕</Texto>
+              <Icon name="x" size={16} color={T.ink2} />
             </Pressable>
           </View>
 
@@ -162,7 +166,7 @@ export function SizeGuideModal({
                         borderRadius: 8,
                       }}
                     >
-                      <Texto style={{ color: "#fff", fontSize: 13, fontWeight: "700" }}>
+                      <Texto style={{ color: T.sobrePrimary, fontSize: 13, fontWeight: "700" }}>
                         Abrir imagem
                       </Texto>
                     </Pressable>
@@ -198,7 +202,7 @@ export function SizeGuideModal({
                       gap: 8,
                     }}
                   >
-                    <Texto style={{ fontSize: 28 }}>📄</Texto>
+                    <Icon name="file_text" size={28} color={T.ink3} />
                     <Texto
                       style={{
                         fontSize: 13,
@@ -237,12 +241,12 @@ export function SizeGuideModal({
                     paddingHorizontal: 16,
                     borderRadius: 9,
                     borderWidth: 1.5,
-                    borderColor: T.primary,
-                    backgroundColor: "rgba(30,58,138,0.06)",
+                    borderColor: tema.borderAccent,
+                    backgroundColor: tema.marcaWash,
                     alignSelf: "center",
                   }}
                 >
-                  <Texto style={{ fontSize: 14 }}>📥</Texto>
+                  <Icon name="download" size={16} color={T.primaryTexto} />
                   <Texto
                     style={{
                       fontSize: 13,
@@ -269,7 +273,7 @@ export function SizeGuideModal({
                   gap: 8,
                 }}
               >
-                <Texto style={{ fontSize: 28 }}>📎</Texto>
+                <Icon name="file_text" size={28} color={T.ink3} />
                 <Texto
                   style={{
                     fontSize: 13,
@@ -294,7 +298,7 @@ export function SizeGuideModal({
                     borderRadius: 8,
                   }}
                 >
-                  <Texto style={{ color: "#fff", fontSize: 13, fontWeight: "700" }}>
+                  <Texto style={{ color: T.sobrePrimary, fontSize: 13, fontWeight: "700" }}>
                     Abrir arquivo
                   </Texto>
                 </Pressable>

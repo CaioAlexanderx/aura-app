@@ -93,6 +93,11 @@ const PATHS: Record<string, string> = {
   truck:          "M1 3h15v13H1z M16 8h4l3 3v5h-7V8z M5.5 18.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z M18.5 18.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z",
   // Redimensionar / expand — usado em previews e modais de galeria
   resize:         "M15 3h6v6 M9 21H3v-6 M21 3l-7 7 M3 21l7-7",
+  // Regua e fachada de loja — sprite do kit da vitrine Studio
+  // (docs/mockups/studio-vitrine-00-kit.html, i-ruler e i-store). Usados no
+  // "Ver guia de medidas" e no "Não achamos essa loja" da vitrine.
+  ruler:          "M3.5 15.5L15.5 3.5l5 5-12 12z M7.5 11.5l2 2 M10.5 8.5l1.5 1.5 M13.5 5.5l2 2",
+  store:          "M4 9.5L5.6 4.5h12.8L20 9.5 M4.5 9.5v10h15v-10 M9.5 19.5v-5h5v5 M4 9.5c0 1.4 1.1 2.3 2.7 2.3S9.3 10.9 9.3 9.5c0 1.4 1.2 2.3 2.7 2.3s2.7-.9 2.7-2.3c0 1.4 1.1 2.3 2.6 2.3S20 10.9 20 9.5",
   // Pin de localizacao — endereco de retirada no storefront
   location:       "M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z M12 13a3 3 0 100-6 3 3 0 000 6z",
   // ── People ──────────────────────────────────────────────────

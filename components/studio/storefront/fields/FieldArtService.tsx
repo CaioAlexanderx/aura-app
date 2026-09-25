@@ -25,16 +25,24 @@
 //
 // RESTRIÇÕES (Onda 0):
 //   - NÃO toca em FieldImage.tsx, LivePreview.tsx, ProductConfigurator.tsx
-//   - dark tokens via T (paleta Studio), reduceMotion respeitado
+//
+// 25/09/2026 (Fase 1A): os cartões seguem o "Depois" da Tela 1 do mockup
+// studio-vitrine-01-alicerce.html. O cartão do designer era SEMPRE
+// magenta (#EC4899 cravado, a cor do Aura Studio) e o escolhido
+// azul-marinho — numa loja amarela, os dois brigavam com a marca. Agora
+// escolhido = borda e texto na marca legível sobre o wash dela, e o
+// preço escolhido vira o par cheio (marcaFill + sobreMarca). Sem
+// destaque especial para o designer: quem destaca é a escolha.
 // ============================================================
-import { View, Pressable, TextInput, StyleSheet, Platform } from "react-native";
+import { View, Pressable, TextInput, StyleSheet } from "react-native";
 import type { CustomizationField } from "../types";
 import { useMemo } from "react";
-import { usePaletaDaVitrine } from "../TemaDaVitrine";
-import type { PaletaDaVitrine } from "../theme";
-import { Texto } from "../TipografiaVitrine";
+import { useTemaDaVitrine } from "../TemaDaVitrine";
+import { wash, type VitrineTema } from "../theme";
+import { Texto, Numero } from "../TipografiaVitrine";
+import { Icon } from "@/components/Icon";
 import {
-  ART_DESIGNER, priceLabel, choiceHint, briefingFor,
+  priceLabel, choiceHint, briefingFor,
 } from "@/components/studio/artService";
 
 const ART_FIELD_ID     = "art_service";
@@ -57,9 +65,8 @@ export function FieldArtService({
   onChange,
   onBriefChange,
 }: Props) {
-  const T = usePaletaDaVitrine();
-  const styles = useMemo(() => folha(T), [T]);
-  const shouldReduceMotion = Platform.OS === "web" ? false : false; // fallback seguro
+  const tema = useTemaDaVitrine();
+  const styles = useMemo(() => folha(tema), [tema]);
 
   const choices: Array<{ value: string; label: string; price_delta?: number }> =
     field.config?.choices || [];
@@ -71,7 +78,7 @@ export function FieldArtService({
       {/* Header do bloco */}
       <View style={styles.header}>
         <View style={styles.sparkIco}>
-          <Texto style={styles.sparkEmoji}>✦</Texto>
+          <Icon name="sparkles" size={16} color={tema.marcaTexto} />
         </View>
         <View style={{ flex: 1 }}>
           <Texto style={styles.fieldLabel}>{field.label}</Texto>
@@ -79,41 +86,32 @@ export function FieldArtService({
         </View>
       </View>
 
+      <View accessibilityRole="radiogroup" accessibilityLabel={field.label} style={{ gap: 10 }}>
       {choices.map((c) => {
         const sel = value === c.value;
         const pago = typeof c.price_delta === "number" && c.price_delta > 0;
         const etiqueta = priceLabel(c.price_delta);
-        const destaque = c.value === ART_DESIGNER;
         return (
           <Pressable
             key={c.value}
             onPress={() => onChange(c.value)}
-            style={[
-              styles.optionCard,
-              destaque && styles.designerCard,
-              sel && (destaque ? styles.designerCardActive : styles.optionCardActive),
-            ]}
+            style={[styles.optionCard, sel && styles.optionCardActive]}
             accessibilityRole="radio"
             accessibilityState={{ checked: sel }}
             accessibilityLabel={c.label + (etiqueta ? ", " + etiqueta : ", incluso")}
           >
-            <View style={[styles.radio, sel && (destaque ? styles.radioDesignerActive : styles.radioActive)]}>
-              {sel && <View style={[styles.radioDot, destaque && { backgroundColor: T.accent }]} />}
+            <View style={[styles.radio, sel && styles.radioActive]}>
+              {sel && <View style={styles.radioDot} />}
             </View>
             <View style={{ flex: 1 }}>
-              <Texto
-                style={[
-                  styles.optionTitle,
-                  sel && (destaque ? styles.designerTitleActive : styles.optionTitleActive),
-                ]}
-              >
+              <Texto style={[styles.optionTitle, sel && styles.optionTitleActive]}>
                 {c.label}
               </Texto>
               <Texto style={styles.optionSub}>{choiceHint(c.value)}</Texto>
             </View>
             {pago && etiqueta ? (
               <View style={[styles.priceBadge, sel && styles.priceBadgeActive]}>
-                <Texto style={[styles.priceBadgeTxt, sel && styles.priceBadgeTxtActive]}>{etiqueta}</Texto>
+                <Numero style={[styles.priceBadgeTxt, sel && styles.priceBadgeTxtActive]}>{etiqueta}</Numero>
               </View>
             ) : (
               <View style={styles.freeBadge}>
@@ -123,26 +121,27 @@ export function FieldArtService({
           </Pressable>
         );
       })}
+      </View>
 
       {/* Briefing — nos dois caminhos pagos, com pedidos diferentes.
           No ajuste ele é OPCIONAL: sem texto, a lojista ajusta tamanho e
           cores, que é o padrão do serviço. */}
       {brief && (
         <View style={styles.briefBlock}>
-          <Texto style={styles.briefTitle}>{brief.title}</Texto>
+          <Numero style={styles.briefTitle}>{brief.title}</Numero>
           <Texto style={styles.briefHint}>{brief.hint}</Texto>
           <TextInput
             style={styles.briefInput}
             multiline
             numberOfLines={4}
             placeholder={brief.placeholder}
-            placeholderTextColor={T.ink4}
+            placeholderTextColor={tema.ink4}
             value={briefValue}
             onChangeText={onBriefChange}
             maxLength={600}
             accessibilityLabel={brief.title}
           />
-          <Texto style={styles.charCount}>{briefValue.length}/600</Texto>
+          <Numero style={styles.charCount}>{briefValue.length}/600</Numero>
         </View>
       )}
     </View>
@@ -152,7 +151,7 @@ export function FieldArtService({
 // A folha inteira depende da cor da loja, entao ela vira funcao do tema.
 // Memoizada dentro do componente: StyleSheet.create a cada render
 // descartaria o cache de estilo do react-native-web.
-const folha = (T: PaletaDaVitrine) => StyleSheet.create({
+const folha = (tema: VitrineTema) => StyleSheet.create({
   root: {
     gap: 8,
     marginTop: 4,
@@ -167,64 +166,49 @@ const folha = (T: PaletaDaVitrine) => StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 10,
-    backgroundColor: "rgba(236,72,153,0.12)",
+    backgroundColor: tema.marcaWash,
     alignItems: "center",
     justifyContent: "center",
-  },
-  sparkEmoji: {
-    fontSize: 16,
-    color: T.accent,
   },
   fieldLabel: {
     fontSize: 13,
     fontWeight: "700",
-    color: T.ink,
+    color: tema.ink,
     letterSpacing: -0.1,
   },
   fieldSub: {
-    fontSize: 11,
-    color: T.ink3,
+    fontSize: 11.5,
+    color: tema.ink3,
     marginTop: 1,
   },
 
-  // Cards de opção
+  // Cartões de opção — .new-art-card do mockup
   optionCard: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     borderWidth: 1.5,
-    borderColor: "#E5E7EB",
+    borderColor: tema.border,
     borderRadius: 14,
-    padding: 14,
-    backgroundColor: "#fff",
+    padding: 13,
+    minHeight: 44,
+    backgroundColor: tema.bg2,
   },
   optionCardActive: {
-    borderColor: T.primary,
-    backgroundColor: "rgba(30,58,138,0.04)",
-  },
-  designerCard: {
-    // leve destaque visual pra estimular a escolha premium
-    borderStyle: "dashed",
-  },
-  designerCardActive: {
-    borderColor: T.accent,
-    borderStyle: "solid",
-    backgroundColor: "rgba(236,72,153,0.04)",
+    borderColor: tema.marcaTexto,
+    backgroundColor: tema.marcaWash,
   },
   optionTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: T.ink2,
+    color: tema.ink,
   },
   optionTitleActive: {
-    color: T.primaryTexto,
-  },
-  designerTitleActive: {
-    color: T.accent,
+    color: tema.marcaTexto,
   },
   optionSub: {
-    fontSize: 11.5,
-    color: T.ink3,
+    fontSize: 12,
+    color: tema.ink3,
     marginTop: 2,
   },
 
@@ -234,22 +218,19 @@ const folha = (T: PaletaDaVitrine) => StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: "#D1D5DB",
+    borderColor: tema.ink4,
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
   },
   radioActive: {
-    borderColor: T.primary,
-  },
-  radioDesignerActive: {
-    borderColor: T.accent,
+    borderColor: tema.marcaTexto,
   },
   radioDot: {
     width: 9,
     height: 9,
     borderRadius: 5,
-    backgroundColor: T.primary,
+    backgroundColor: tema.marcaTexto,
   },
 
   // Badges
@@ -257,33 +238,32 @@ const folha = (T: PaletaDaVitrine) => StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: "rgba(16,185,129,0.12)",
+    backgroundColor: wash(tema.green, 0.12),
   },
   freeBadgeTxt: {
-    fontSize: 10.5,
+    fontSize: 11,
     fontWeight: "700",
-    color: T.green,
+    color: tema.green,
   },
   priceBadge: {
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 999,
-    backgroundColor: "rgba(236,72,153,0.10)",
+    backgroundColor: tema.marcaWash,
     borderWidth: 1,
-    borderColor: "rgba(236,72,153,0.25)",
+    borderColor: tema.borderAccent,
   },
   priceBadgeActive: {
-    backgroundColor: T.accent,
-    borderColor: T.accent,
+    backgroundColor: tema.marcaFill,
+    borderColor: tema.marcaFill,
   },
   priceBadgeTxt: {
     fontSize: 11,
-    fontWeight: "800",
-    color: T.accent,
-    letterSpacing: 0.2,
+    fontWeight: "700",
+    color: tema.marcaTexto,
   },
   priceBadgeTxtActive: {
-    color: "#fff",
+    color: tema.sobreMarca,
   },
 
   // Briefing
@@ -291,41 +271,41 @@ const folha = (T: PaletaDaVitrine) => StyleSheet.create({
     marginTop: 4,
     padding: 14,
     borderRadius: 12,
-    backgroundColor: "rgba(236,72,153,0.04)",
+    backgroundColor: tema.bg3,
     borderWidth: 1,
-    borderColor: "rgba(236,72,153,0.15)",
+    borderColor: tema.border,
     gap: 4,
   },
   briefTitle: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: T.ink,
+    fontSize: 10.5,
+    fontWeight: "600",
+    color: tema.ink2,
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 1.2,
   },
   briefHint: {
-    fontSize: 11.5,
-    color: T.ink3,
+    fontSize: 12,
+    color: tema.ink3,
     marginBottom: 6,
     lineHeight: 17,
   },
   briefInput: {
-    backgroundColor: "#fff",
+    backgroundColor: tema.bg2,
     borderWidth: 1.5,
-    borderColor: "rgba(236,72,153,0.25)",
+    borderColor: tema.border,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 13.5,
-    color: T.ink,
+    color: tema.ink,
     minHeight: 88,
     textAlignVertical: "top",
     lineHeight: 20,
   },
   charCount: {
     fontSize: 10.5,
-    color: T.ink4,
+    color: tema.ink3,
     textAlign: "right",
     marginTop: 3,
   },
-})
+});

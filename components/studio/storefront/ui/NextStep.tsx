@@ -1,9 +1,14 @@
 // ============================================================
 // components/studio/storefront/ui/NextStep.tsx
 // Item numerado da lista de "Próximos passos" no stage sent.
+//
+// 25/09/2026: `Texto` no lugar de `Text` (o `Text` puro saía na fonte do
+// sistema no meio da loja) e o número na tinta do par legível da loja —
+// era branco cravado sobre a cor dela.
 // ============================================================
-import { View, Text } from "react-native";
+import { View } from "react-native";
 import { usePaletaDaVitrine } from "../TemaDaVitrine";
+import { Texto, Numero } from "../TipografiaVitrine";
 
 export function NextStep({
   n, title, desc, last,
@@ -24,11 +29,11 @@ export function NextStep({
           flexShrink: 0,
         }}
       >
-        <Text style={{ color: "#fff", fontSize: 11, fontWeight: "800" }}>{n}</Text>
+        <Numero style={{ color: T.sobrePrimary, fontSize: 11, fontWeight: "700" }}>{n}</Numero>
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 12.5, color: T.ink, fontWeight: "800" }}>{title}</Text>
-        <Text style={{ fontSize: 11.5, color: T.ink3, marginTop: 2, lineHeight: 16 }}>{desc}</Text>
+        <Texto style={{ fontSize: 13, color: T.ink, fontWeight: "800" }}>{title}</Texto>
+        <Texto style={{ fontSize: 12, color: T.ink3, marginTop: 2, lineHeight: 17 }}>{desc}</Texto>
       </View>
     </View>
   );

@@ -4,7 +4,7 @@
 // ============================================================
 import { View, Pressable, ScrollView, Platform } from "react-native";
 import type { CustomizationField, StudioStoreProduct } from "../types";
-import { sectionLabel } from "../types";
+import { useEstilosDaVitrine } from "../estilosDaVitrine";
 import { usePaletaDaVitrine } from "../TemaDaVitrine";
 
 import { Texto } from "../TipografiaVitrine";
@@ -17,9 +17,10 @@ export function FieldTemplate({
   onChange: (v: any) => void;
 }) {
   const T = usePaletaDaVitrine();
+  const E = useEstilosDaVitrine();
   return (
     <View>
-      <Texto style={sectionLabel}>
+      <Texto style={E.rotulo}>
         {field.label} {field.required && <Texto style={{ color: T.red }}>*</Texto>}
       </Texto>
       {templates.length === 0 ? (
@@ -36,10 +37,13 @@ export function FieldTemplate({
             <Pressable
               key={t.id}
               onPress={() => onChange(t.image_url)}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: value === t.image_url }}
+              accessibilityLabel={t.name}
               style={{
                 width: 80, height: 80, borderRadius: 8,
                 borderWidth: value === t.image_url ? 3 : 1,
-                borderColor: value === t.image_url ? T.primary : T.border,
+                borderColor: value === t.image_url ? T.primaryTexto : T.border,
                 overflow: "hidden",
                 backgroundColor: T.bg,
               }}

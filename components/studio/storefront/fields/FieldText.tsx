@@ -4,7 +4,7 @@
 // ============================================================
 import { View, TextInput, Pressable } from "react-native";
 import type { CustomizationField } from "../types";
-import { sectionLabel } from "../types";
+import { useEstilosDaVitrine } from "../estilosDaVitrine";
 import { usePaletaDaVitrine } from "../TemaDaVitrine";
 
 import { Texto } from "../TipografiaVitrine";
@@ -26,6 +26,7 @@ export function FieldText({
   onCorChange?: (v: string) => void;
 }) {
   const T = usePaletaDaVitrine();
+  const E = useEstilosDaVitrine();
   const maxChars = field.config.max_chars || 30;
   const paleta = (field.config.colors || []).filter(
     (c: any) => typeof c === "string" && /^#[0-9A-Fa-f]{3,8}$/.test(c.trim()),
@@ -35,7 +36,7 @@ export function FieldText({
   const corAtual = corValue || paleta[0];
   return (
     <View>
-      <Texto style={sectionLabel}>
+      <Texto style={E.rotulo}>
         {field.label} {field.required && <Texto style={{ color: T.red }}>*</Texto>}
       </Texto>
       <TextInput

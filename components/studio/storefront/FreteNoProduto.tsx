@@ -12,11 +12,11 @@
 // ============================================================
 import { useState } from "react";
 import { View, TextInput, Pressable, ActivityIndicator, Platform } from "react-native";
-import { usePaletaDaVitrine } from "./TemaDaVitrine";
+import { usePaletaDaVitrine, useTemaDaVitrine } from "./TemaDaVitrine";
 import { wash, AURA } from "./theme";
 import { enderecoDaApi } from "./enderecoDaApi";
 
-import { Texto } from "./TipografiaVitrine";
+import { Texto, Numero, useTipografia, estiloNumero } from "./TipografiaVitrine";
 import { dinheiro } from "./moeda";
 /** Só os dígitos, no formato que a rota espera. */
 export function cepLimpo(v: string): string {
@@ -42,6 +42,11 @@ export function FreteNoProduto({
   corDaLoja?: string | null;
 }) {
   const T = usePaletaDaVitrine();
+  const tipo = useTipografia();
+  const tema = useTemaDaVitrine();
+  // A cor crua so tinge o fundo e a borda do bloco (wash). O botao e o
+  // valor usam o par legivel do tema: branco cravado sobre a cor da loja
+  // sumia no "Calcular" de uma loja amarela.
   const cor = corDaLoja || AURA.violet;
   const [cep, setCep] = useState("");
   const [carregando, setCarregando] = useState(false);
@@ -84,9 +89,9 @@ export function FreteNoProduto({
         padding: 12, gap: 9, backgroundColor: wash(cor, 0.04),
       }}
     >
-      <Texto style={{ fontSize: 11, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase", color: T.ink3 }}>
+      <Numero style={{ fontSize: 10.5, fontWeight: "700", letterSpacing: 1.2, textTransform: "uppercase", color: T.ink3 }}>
         Quanto custa a entrega
-      </Texto>
+      </Numero>
 
       <View style={{ flexDirection: "row", gap: 8 }}>
         <TextInput
@@ -103,6 +108,7 @@ export function FreteNoProduto({
             flex: 1, borderWidth: 1, borderColor: T.border, borderRadius: 9,
             paddingHorizontal: 11, paddingVertical: 9, fontSize: 14, color: T.ink,
             backgroundColor: T.card,
+            ...estiloNumero(tipo),
             ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
           }}
         />
@@ -113,21 +119,22 @@ export function FreteNoProduto({
           accessibilityLabel="Calcular a entrega"
           style={{
             paddingHorizontal: 16, justifyContent: "center", borderRadius: 9,
-            backgroundColor: pronto ? cor : T.border,
+            backgroundColor: pronto ? tema.marcaFill : T.border,
+            minHeight: 44,
             opacity: carregando ? 0.7 : 1,
           }}
         >
           {carregando
-            ? <ActivityIndicator size="small" color="#fff" />
-            : <Texto style={{ color: pronto ? "#fff" : T.ink3, fontWeight: "800", fontSize: 13 }}>Calcular</Texto>}
+            ? <ActivityIndicator size="small" color={tema.sobreMarca} />
+            : <Texto style={{ color: pronto ? tema.sobreMarca : T.ink3, fontWeight: "800", fontSize: 13 }}>Calcular</Texto>}
         </Pressable>
       </View>
 
       {resultado ? (
         <Texto style={{ fontSize: 13.5, color: T.ink }}>
-          <Texto style={{ fontWeight: "800", color: cor }}>
+          <Numero style={{ fontWeight: "700", color: tema.marcaTexto }}>
             {resultado.fee > 0 ? `${dinheiro(resultado.fee)}` : "Entrega grátis"}
-          </Texto>
+          </Numero>
           {resultado.etaText ? <Texto style={{ color: T.ink3 }}>{` · ${resultado.etaText}`}</Texto> : null}
         </Texto>
       ) : null}

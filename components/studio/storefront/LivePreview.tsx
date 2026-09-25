@@ -32,7 +32,8 @@ import { PersonalizationPreviewBase, type PreviewPalette } from "@/components/st
 import { valoresDoMotor } from "./valoresDoMotor";
 import type { CustomizationConfig } from "./types";
 import { usePaletaDaVitrine } from "./TemaDaVitrine";
-import type { PaletaDaVitrine } from "./theme";
+import { wash, type PaletaDaVitrine } from "./theme";
+import { Icon } from "@/components/Icon";
 import type { VisualTemplate, VisualView } from "@/services/studioVisualApi";
 import { fetchStorefrontVisualTemplate } from "./visualTemplatePublic";
 
@@ -116,15 +117,15 @@ function PdfNote({ size }: { size: number }) {
         paddingHorizontal: 10,
         paddingVertical: 5,
         borderRadius: 999,
-        backgroundColor: "rgba(100,116,139,0.10)",
+        backgroundColor: wash(T.ink3, 0.1),
         borderWidth: 1,
-        borderColor: "rgba(100,116,139,0.20)",
+        borderColor: wash(T.ink3, 0.2),
         maxWidth: size,
       }}
       accessibilityRole="text"
       accessibilityLabel="PDF enviado. Pré-visualização indisponível."
     >
-      <Texto style={{ fontSize: 12, color: T.ink3 }}>📄</Texto>
+      <Icon name="file_text" size={13} color={T.ink3} />
       <Texto
         style={{ fontSize: 11, color: T.ink3, fontWeight: "600", flexShrink: 1 }}
         numberOfLines={1}
@@ -246,13 +247,17 @@ export function LivePreview({
           <Pressable
             key={id}
             onPress={() => setViewId(id)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: sel }}
+            accessibilityLabel={"Ver " + label}
+            hitSlop={8}
             style={{
               paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999,
               backgroundColor: sel ? T.primary : "transparent",
               borderWidth: 1.5, borderColor: sel ? T.primary : T.border,
             }}
           >
-            <Texto style={{ fontSize: 11.5, fontWeight: "700", color: sel ? "#fff" : T.ink3 }}>
+            <Texto style={{ fontSize: 11.5, fontWeight: "700", color: sel ? T.sobrePrimary : T.ink3 }}>
               {label}
             </Texto>
           </Pressable>

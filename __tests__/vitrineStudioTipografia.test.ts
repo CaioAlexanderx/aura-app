@@ -5,7 +5,8 @@
 // banco, congelado por CHECK na migration 299, e a lojista escolhe UMA
 // vez para as duas lojas dela. O que muda é o que cada chave resolve: a
 // loja comum tem a curadoria de varejo de moda; a vitrine Studio tem o
-// trio Studio Premium — Fraunces, DM Sans, DM Mono.
+// trio Studio Premium — Fraunces, DM Sans e, nos números, Bricolage
+// Grotesque (a DM Mono saiu por decisão do PO em 25/09/2026).
 //
 // Decisão 1 do redesign. O que este teste guarda é justamente que são as
 // MESMAS quatro chaves: uma quinta chave aqui viraria valor que o banco
@@ -15,7 +16,7 @@ import fs from "fs";
 import path from "path";
 import {
   TIPOGRAFIAS, TIPOGRAFIAS_STUDIO, tipografiaDaLoja, tipografiaDoStudio,
-  cssDaVitrine, cssDaVitrineStudio, ART_FONTS,
+  cssDaVitrine, cssDaVitrineStudio, ART_FONTS, NUMEROS_STUDIO, Fonts,
 } from "@/constants/fonts";
 
 describe("as chaves são as mesmas nos dois lados", () => {
@@ -70,10 +71,13 @@ describe("os pares do Studio Premium", () => {
 });
 
 describe("o link do Google Fonts", () => {
-  test("carrega o par escolhido, a mono dos preços e as fontes de arte", () => {
+  // 25/09/2026: a mono dos preços virou Bricolage Grotesque (decisão 9
+  // do PO). Mudança intencional deste teste: antes ele exigia DM+Mono.
+  test("carrega o par escolhido, a Bricolage dos números e as fontes de arte", () => {
     const url = cssDaVitrineStudio("classic");
     expect(url).toContain("family=Fraunces");
-    expect(url).toContain("family=DM+Mono");
+    expect(url).toContain("family=Bricolage+Grotesque");
+    expect(url).not.toContain("DM+Mono");
     ART_FONTS.forEach((f) => expect(url).toContain("family=" + f.replace(/ /g, "+")));
     expect(url).toContain("display=swap");
   });
@@ -91,14 +95,58 @@ describe("o link do Google Fonts", () => {
     expect(url).not.toContain("Instrument+Serif");
   });
 
+  test("nenhuma das quatro chaves carrega a DM Mono", () => {
+    (["classic", "modern", "editorial", "humanist"] as const).forEach((k) => {
+      expect(cssDaVitrineStudio(k)).not.toContain("Mono");
+      expect(cssDaVitrineStudio(k)).toContain("Bricolage+Grotesque");
+    });
+  });
+
   test("a loja comum segue com a curadoria dela, intocada", () => {
     expect(cssDaVitrine("classic")).toContain("Cormorant+Garamond");
     expect(cssDaVitrine("classic")).not.toContain("Fraunces");
   });
 });
 
+describe("os números do Studio", () => {
+  test("todo par do Studio declara a Bricolage nos números, com fallback", () => {
+    Object.values(TIPOGRAFIAS_STUDIO).forEach((p) => {
+      expect(p.numeros).toBe(NUMEROS_STUDIO);
+    });
+    expect(NUMEROS_STUDIO).toContain("Bricolage Grotesque");
+    expect(NUMEROS_STUDIO.split(",").length).toBeGreaterThan(1);
+  });
+
+  test("o painel e a loja comum não foram arrastados: Fonts.mono segue a mesma", () => {
+    expect(Fonts.mono).not.toContain("Bricolage");
+    Object.values(TIPOGRAFIAS).forEach((p) => expect(p.numeros).toBeUndefined());
+  });
+});
+
 describe("a vitrine usa o resolvedor do Studio", () => {
   const RAIZ = path.join(__dirname, "..");
+
+  test("produto, checkout, confirmação e carrinho usam a fonte da home", () => {
+    // Antes chamavam tipografiaDaLoja — pares da loja comum que a página
+    // nunca carrega — e o título do produto caía em Georgia.
+    ["ProductConfigurator.tsx", "Checkout.tsx", "SentConfirmation.tsx", "Cart.tsx"].forEach((f) => {
+      const s = fs.readFileSync(path.join(RAIZ, "components/studio/storefront", f), "utf8");
+      expect(s).not.toContain("tipografiaDaLoja(");
+      expect(s).toContain("useTipografia()");
+    });
+  });
+
+  test("nenhum componente da vitrine usa fonte mono", () => {
+    const dir = path.join(RAIZ, "components/studio/storefront");
+    const todos = [
+      ...fs.readdirSync(dir).map((f) => path.join(dir, f)),
+      ...fs.readdirSync(path.join(dir, "fields")).map((f) => path.join(dir, "fields", f)),
+      ...fs.readdirSync(path.join(dir, "ui")).map((f) => path.join(dir, "ui", f)),
+    ].filter((f) => f.endsWith(".tsx"));
+    const culpados = todos.filter((f) =>
+      /Fonts\.mono|"monospace"|DM Mono/.test(fs.readFileSync(f, "utf8")));
+    expect(culpados.map((f) => path.basename(f))).toEqual([]);
+  });
 
   test("o provider de tipografia resolve pelo Studio", () => {
     const s = fs.readFileSync(

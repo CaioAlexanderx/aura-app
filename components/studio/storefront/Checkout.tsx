@@ -5,25 +5,28 @@
 // ============================================================
 import { View, Pressable, ScrollView } from "react-native";
 import type { StorefrontState } from "./useStorefront";
-import { sectionLabel, chip, chipActive, chipTxt, chipTxtActive } from "./types";
-import { usePaletaDaVitrine } from "./TemaDaVitrine";
+import { usePaletaDaVitrine, useTemaDaVitrine } from "./TemaDaVitrine";
+import { useEstilosDaVitrine } from "./estilosDaVitrine";
 import { CartItemList } from "./Cart";
-import { montarTema } from "./theme";
 import { FInput } from "./ui/FInput";
 import { TotalRow } from "./ui/TotalRow";
-import { PoweredByAura } from "./ui/PoweredByAura";
+import { BarraDeCookies } from "./ConsentimentoDaVitrine";
 import { oQueFaltaNoCheckout } from "./oQueFaltaNoCheckout";
 
-import { tipografiaDaLoja } from "@/constants/fonts";
-import { Texto } from "./TipografiaVitrine";
+import { Texto, Numero, useTipografia } from "./TipografiaVitrine";
+import { Icon } from "@/components/Icon";
 import { dinheiro } from "./moeda";
 export function Checkout({ sf }: { sf: StorefrontState }) {
   const T = usePaletaDaVitrine();
-  // A cor da loja tambem no botao que fecha a venda — era azul-marinho
-  // fixo. Fill e tinta saem de montarTema porque o hex do lojista e
-  // arbitrario (ver fase 01).
-  const tema = montarTema((sf.store as any)?.site?.primary_color);
-  const tipo = tipografiaDaLoja((sf.store as any)?.site?.font_family);
+  // O tema do CONTEXTO, montado no papel. Antes era montarTema(cor) sem
+  // modo, que cai no "claro": o contraste da marca era calculado contra
+  // um fundo que esta tela nao tem (D4).
+  const tema = useTemaDaVitrine();
+  const { rotulo: sectionLabel, chip, chipAtivo: chipActive, chipTexto: chipTxt, chipTextoAtivo: chipTxtActive } =
+    useEstilosDaVitrine();
+  // A fonte do Studio, a mesma da home — o resolvedor da loja comum
+  // carregava um par que a pagina nunca baixa, e o titulo caia em Georgia.
+  const tipo = useTipografia();
 
   if (!sf.store) return null;
   const sendDisabled =
@@ -53,11 +56,17 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
           flexDirection: "row", alignItems: "center", gap: 10,
         }}
       >
-        <Pressable onPress={() => sf.goTo("list")}>
-          <Texto style={{ fontSize: 22, color: T.ink2 }}>←</Texto>
+        <Pressable
+          onPress={() => sf.goTo("list")}
+          accessibilityRole="button"
+          accessibilityLabel="Voltar para a loja"
+          hitSlop={8}
+          style={{ width: 44, height: 44, marginLeft: -12, alignItems: "center", justifyContent: "center" }}
+        >
+          <Icon name="chevron_left" size={22} color={T.ink2} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Texto style={{ fontSize: 11, color: T.ink3, textTransform: "uppercase" }}>Finalizar</Texto>
+          <Numero style={{ fontSize: 10.5, color: T.ink3, textTransform: "uppercase", letterSpacing: 1.2 }}>Finalizar</Numero>
           <Texto style={{ fontFamily: tipo.display, fontSize: 19, lineHeight: 23, color: T.ink }}>Seu pedido</Texto>
         </View>
       </View>
@@ -83,13 +92,13 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
         {modalidades.length > 0 ? (
           <>
             <Texto style={sectionLabel}>Como você quer receber?</Texto>
-            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+            <View accessibilityRole="radiogroup" accessibilityLabel="Como você quer receber?" style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
               {modalidades.map((m) => (
                 <Pressable
                   key={m.value}
                   onPress={() => sf.setDeliveryType(m.value)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: sf.deliveryType === m.value }}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: sf.deliveryType === m.value, selected: sf.deliveryType === m.value }}
                   style={[chip, sf.deliveryType === m.value && chipActive]}
                 >
                   <Texto style={[chipTxt, sf.deliveryType === m.value && chipTxtActive]}>{m.label}</Texto>
@@ -156,10 +165,15 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
         )}
 
         <Texto style={sectionLabel}>Pagamento</Texto>
-        <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+        {/* Os botoes de pagamento nao tinham papel nem estado: o leitor de
+            tela anunciava tres textos soltos e ninguem sabia qual estava
+            escolhido. */}
+        <View accessibilityRole="radiogroup" accessibilityLabel="Forma de pagamento" style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
           {sf.store.payment.has_pix && (
             <Pressable
               onPress={() => sf.setPaymentMethod("pix")}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: sf.paymentMethod === "pix", selected: sf.paymentMethod === "pix" }}
               style={[chip, sf.paymentMethod === "pix" && chipActive]}
             >
               <Texto style={[chipTxt, sf.paymentMethod === "pix" && chipTxtActive]}>Pix</Texto>
@@ -168,6 +182,8 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
           {sf.store.payment.has_card && (
             <Pressable
               onPress={() => sf.setPaymentMethod("card")}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: sf.paymentMethod === "card", selected: sf.paymentMethod === "card" }}
               style={[chip, sf.paymentMethod === "card" && chipActive]}
             >
               <Texto style={[chipTxt, sf.paymentMethod === "card" && chipTxtActive]}>Cartão</Texto>
@@ -176,6 +192,8 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
           {sf.store.payment.pay_on_delivery_enabled && (
             <Pressable
               onPress={() => sf.setPaymentMethod("on_delivery")}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: sf.paymentMethod === "on_delivery", selected: sf.paymentMethod === "on_delivery" }}
               style={[chip, sf.paymentMethod === "on_delivery" && chipActive]}
             >
               <Texto style={[chipTxt, sf.paymentMethod === "on_delivery" && chipTxtActive]}>
@@ -224,6 +242,9 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
         )}
       </ScrollView>
 
+      {/* Cookies acima da barra do "Enviar pedido", nunca por cima. */}
+      <BarraDeCookies />
+
       <View style={{ backgroundColor: T.card, padding: 14, borderTopWidth: 1, borderTopColor: T.border }}>
         {/* O botão acompanha a coluna do formulário (720px). Antes ia de
             ponta a ponta num monitor de 1366px — a tela esticada que a
@@ -253,8 +274,8 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
           </Texto>
         ) : null}
       </View>
-
-      <PoweredByAura />
+      {/* Sem o "Powered by Aura" fixo por cima do botao: a assinatura fica
+          so no rodape institucional. */}
     </View>
   );
 }

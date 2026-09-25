@@ -48,6 +48,12 @@ export type ParTipografico = {
   body: string;
   /** Familias pro Google Fonts — so estas sao carregadas na vitrine. */
   familias: string[];
+  /**
+   * Numeros, rotulos em caixa alta e codigos (preco, quantidade, CEP,
+   * Pix). So a vitrine Studio declara: a loja comum e o painel seguem na
+   * pilha deles, e quem le cai no corpo quando o campo nao existe.
+   */
+  numeros?: string;
 };
 
 /**
@@ -140,14 +146,26 @@ export function cssDaVitrine(chave?: string | null): string {
 // vez para as duas lojas dela. O que muda e o que cada chave RESOLVE:
 //
 //   loja comum  — a curadoria de 02/09, virada para varejo de moda
-//   vitrine Studio — o trio Studio Premium (Fraunces · DM Sans · DM Mono)
+//   vitrine Studio — o trio Studio Premium (Fraunces · DM Sans · Bricolage
+//                    Grotesque nos numeros)
 //
 // Nao sao dois seletores nem duas colunas: e a mesma escolha, lida com o
 // vocabulario de cada vitrine. O rotulo que a lojista ve ("Elegante",
 // "Moderna") vem de TIPOGRAFIAS e continua valendo nos dois lugares.
 //
 // Decisao 1 do redesign da vitrine Studio, 03/09/2026.
+//
+// 25/09/2026 (decisao 9 do PO): a DM Mono sai da vitrine Studio por
+// completo. Numero, rotulo em caixa alta e codigo Pix passam para a
+// Bricolage Grotesque com digitos tabulares — a mono dava cara de
+// terminal a uma loja de presente. O painel e a loja comum continuam com
+// `Fonts.mono`: a troca e so daqui, por isso a pilha tem nome proprio.
 // ═══════════════════════════════════════════════════════════════
+/** Pilha dos numeros e rotulos da vitrine Studio. */
+export const NUMEROS_STUDIO = "'Bricolage Grotesque', 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif";
+/** A familia no formato do Google Fonts (eixo optico + pesos usados). */
+export const FAMILIA_NUMEROS_STUDIO = "Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800";
+
 export const TIPOGRAFIAS_STUDIO: Record<ChaveTipografia, ParTipografico> = {
   classic: {
     chave: "classic",
@@ -159,6 +177,7 @@ export const TIPOGRAFIAS_STUDIO: Record<ChaveTipografia, ParTipografico> = {
     body: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif",
     familias: ["Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400",
                "DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700"],
+    numeros: NUMEROS_STUDIO,
   },
   modern: {
     chave: "modern",
@@ -168,6 +187,7 @@ export const TIPOGRAFIAS_STUDIO: Record<ChaveTipografia, ParTipografico> = {
     display: "'DM Sans', -apple-system, sans-serif",
     body: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif",
     familias: ["DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800"],
+    numeros: NUMEROS_STUDIO,
   },
   editorial: {
     chave: "editorial",
@@ -179,6 +199,7 @@ export const TIPOGRAFIAS_STUDIO: Record<ChaveTipografia, ParTipografico> = {
     body: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif",
     familias: ["Instrument+Serif:ital@0;1",
                "DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700"],
+    numeros: NUMEROS_STUDIO,
   },
   humanist: {
     chave: "humanist",
@@ -190,6 +211,7 @@ export const TIPOGRAFIAS_STUDIO: Record<ChaveTipografia, ParTipografico> = {
     body: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif",
     familias: ["Pacifico",
                "DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700"],
+    numeros: NUMEROS_STUDIO,
   },
 };
 
@@ -201,13 +223,13 @@ export function tipografiaDoStudio(chave?: string | null): ParTipografico {
 
 /**
  * O link do Google Fonts da vitrine Studio: so o par escolhido, mais a
- * mono dos precos e as fontes de arte que vao impressas no produto.
+ * Bricolage dos numeros e as fontes de arte que vao impressas no produto.
  */
 export function cssDaVitrineStudio(chave?: string | null): string {
   const par = tipografiaDoStudio(chave);
   const familias = [
     ...par.familias,
-    "DM+Mono:wght@400;500",
+    FAMILIA_NUMEROS_STUDIO,
     ...ART_FONTS.map((f) => f.replace(/ /g, "+")),
   ];
   // Set: `modern` repete DM Sans, e familia duplicada na URL e 404 no CSS.

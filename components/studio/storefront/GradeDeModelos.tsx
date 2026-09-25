@@ -8,9 +8,11 @@
 // A tela não decide nada — a ordem, o eixo que varia e o resumo saem de
 // modelosDoGrupo.ts, que tem teste.
 // ============================================================
-import { View, Text, Pressable, ScrollView, StyleSheet, useWindowDimensions } from "react-native";
+import { View, Pressable, ScrollView, StyleSheet, useWindowDimensions } from "react-native";
 import { usePaletaDaVitrine } from "./TemaDaVitrine";
-import { useTipografia, Texto } from "./TipografiaVitrine";
+import { useTipografia, Texto, Numero } from "./TipografiaVitrine";
+import { Icon } from "@/components/Icon";
+import { BarraDeCookies } from "./ConsentimentoDaVitrine";
 import { ProductCard } from "./ProductCard";
 import { fotosDoProduto } from "./CarrosselFoto";
 import { chipsDoProduto } from "./selosDoProduto";
@@ -66,30 +68,31 @@ export function GradeDeModelos({
             accessibilityLabel="Voltar para a loja"
             style={s.voltar}
           >
-            <Text style={[s.voltarTxt, { color: T.ink3 }]}>← Voltar para a loja</Text>
+            <Icon name="chevron_left" size={18} color={T.ink2} />
+            <Texto style={[s.voltarTxt, { color: T.ink2 }]}>Voltar para a loja</Texto>
           </Pressable>
 
           <Texto style={[s.titulo, { color: T.ink, fontFamily: tipo.display }]}>
             {categoria?.name || "Modelos"}
           </Texto>
 
-          <Text style={[s.resumo, { color: T.ink3 }]}>{resumoDoGrupo(modelos)}</Text>
+          <Texto style={[s.resumo, { color: T.ink3 }]}>{resumoDoGrupo(modelos)}</Texto>
 
           {faixa ? (
-            <Text style={[s.faixa, { color: T.ink2 }]}>
+            <Numero style={[s.faixa, { color: T.ink2 }]}>
               De {dinheiro(faixa.min)} a {dinheiro(faixa.max)}
-            </Text>
+            </Numero>
           ) : null}
 
           {/* A frase muda com o que de fato varia entre estes modelos —
               gritar preço quando todos custam igual seria ruído. */}
-          <Text style={[s.dica, { color: T.ink3 }]}>
+          <Texto style={[s.dica, { color: T.ink3 }]}>
             {eixo === "preco"
               ? "Cada modelo tem um preço. Toque para ver a peça de perto."
               : eixo === "cor"
               ? "Mesmo preço; o que muda é a cor disponível em cada um."
               : "Mesmo preço; o que muda é o acabamento da peça."}
-          </Text>
+          </Texto>
 
           <View style={s.grade}>
             {modelos.map((m) => (
@@ -111,6 +114,7 @@ export function GradeDeModelos({
           </View>
         </View>
       </ScrollView>
+      <BarraDeCookies />
     </View>
   );
 }
@@ -119,7 +123,7 @@ const s = StyleSheet.create({
   rolo: { paddingBottom: 60 },
   coluna: { width: "100%", maxWidth: COLUNA_MAX, alignSelf: "center", paddingHorizontal: 16, paddingTop: 12 },
   // 44px de alvo: no celular é a única saída desta tela.
-  voltar: { paddingVertical: 12, alignSelf: "flex-start" },
+  voltar: { paddingVertical: 12, minHeight: 44, alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 4 },
   voltarTxt: { fontSize: 14 },
   titulo: { fontSize: 30, fontWeight: "600", marginTop: 4, letterSpacing: -0.4 },
   resumo: { fontSize: 13.5, marginTop: 6 },

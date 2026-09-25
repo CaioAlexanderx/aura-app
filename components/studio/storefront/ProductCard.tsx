@@ -11,13 +11,12 @@
 // há modelos para escolher.
 // ============================================================
 import { View, Pressable, Platform } from "react-native";
-import { Fonts } from "@/constants/fonts";
-import { usePaletaDaVitrine } from "./TemaDaVitrine";
-import { wash, AURA } from "./theme";
+import { usePaletaDaVitrine, useTemaDaVitrine } from "./TemaDaVitrine";
+import { wash, AURA, SOBRE_FOTO } from "./theme";
 import { CarrosselFoto } from "./CarrosselFoto";
 import { resumo } from "./capaModel";
 
-import { Texto } from "./TipografiaVitrine";
+import { Texto, Numero, useTipografia } from "./TipografiaVitrine";
 import { dinheiro } from "./moeda";
 type Props = {
   nome: string;
@@ -63,6 +62,11 @@ export function ProductCard({
   estilo = "editorial", destaque, chips, escada, precoPix, onPress,
 }: Props) {
   const T = usePaletaDaVitrine();
+  const tipo = useTipografia();
+  const tema = useTemaDaVitrine();
+  // `cor` crua so tinge sombra e borda de hover (wash). Texto e
+  // preenchimento saem do tema, que garante contraste: o preco no hex cru
+  // sumia no cartao de uma loja amarela.
   const cor = corDaLoja || AURA.violet;
   // No minimal a descricao nao entra: o estilo existe pra caber mais
   // produto na tela, e uma linha extra por cartao briga com isso.
@@ -117,7 +121,7 @@ export function ProductCard({
           style={{
             position: "absolute", top: sobreposto ? 10 : 18, left: sobreposto ? 10 : 18,
             zIndex: 2, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5,
-            backgroundColor: destaque.tom === "marca" ? cor : T.card,
+            backgroundColor: destaque.tom === "marca" ? tema.marcaFill : T.card,
             borderWidth: destaque.tom === "marca" ? 0 : 1, borderColor: T.border,
           }}
         >
@@ -162,7 +166,7 @@ export function ProductCard({
           <Texto
             style={{
               fontSize: 10, fontWeight: "800", letterSpacing: 0.8,
-              textTransform: "uppercase", color: sobreposto ? "rgba(255,255,255,0.85)" : cor,
+              textTransform: "uppercase", color: sobreposto ? "rgba(255,255,255,0.85)" : tema.marcaTexto,
             }}
           >
             {selo}
@@ -172,11 +176,11 @@ export function ProductCard({
         <Texto
           numberOfLines={2}
           style={{
-            fontFamily: compacto ? undefined : (fonteDisplay || Fonts.heading),
+            fontFamily: compacto ? undefined : (fonteDisplay || tipo.display),
             fontSize: compacto ? 13 : 16,
             lineHeight: compacto ? 16 : 20,
             fontWeight: compacto ? "500" : "400",
-            color: sobreposto ? "#fff" : T.ink,
+            color: sobreposto ? SOBRE_FOTO : T.ink,
           }}
         >
           {nome}
@@ -188,38 +192,36 @@ export function ProductCard({
           </Texto>
         ) : null}
 
-        <Texto
+        <Numero
           style={{
-            fontSize: compacto ? 13 : 15, fontWeight: "800",
-            color: sobreposto ? "#fff" : cor, marginTop: 2,
-            fontVariant: ["tabular-nums"],
+            fontSize: compacto ? 13 : 15, fontWeight: "700",
+            color: sobreposto ? SOBRE_FOTO : tema.marcaTexto, marginTop: 2,
           }}
         >
           {dinheiro(preco)}
-        </Texto>
+        </Numero>
 
         {/* "ou R$ 35,91 no Pix": a mesma conta do checkout, numa unidade.
             So aparece com desconto configurado — "0%" seria ruido. */}
         {precoPix != null && precoPix < preco ? (
-          <Texto style={{
+          <Numero style={{
             fontSize: compacto ? 10.5 : 11.5, marginTop: 1,
             color: sobreposto ? "rgba(255,255,255,0.9)" : T.green,
-            fontVariant: ["tabular-nums"],
           }}>
             ou {dinheiro(precoPix)} no Pix
-          </Texto>
+          </Numero>
         ) : null}
 
         {/* A escada so existe quando a lojista configurou faixa. Nenhuma
             das lojas Studio tem hoje — inventar uma seria anunciar
             desconto que o checkout nao daria. */}
         {escada && !compacto ? (
-          <Texto style={{
-            fontFamily: Fonts.mono, fontSize: 10.5,
+          <Numero style={{
+            fontSize: 10.5,
             color: sobreposto ? "rgba(255,255,255,0.9)" : T.green,
           }}>
             {escada}
-          </Texto>
+          </Numero>
         ) : null}
 
         {/* O que da para personalizar, lido do customization_config. No
@@ -235,7 +237,7 @@ export function ProductCard({
             paddingHorizontal: 7, paddingVertical: 3,
             backgroundColor: "rgba(255,255,255,0.22)",
           }}>
-            <Texto style={{ fontSize: 9.5, color: "#fff", letterSpacing: 0.2 }}>
+            <Texto style={{ fontSize: 9.5, color: SOBRE_FOTO, letterSpacing: 0.2 }}>
               {chips[0].texto}
             </Texto>
           </View>

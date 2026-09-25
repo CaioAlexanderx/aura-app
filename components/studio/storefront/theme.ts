@@ -6,7 +6,8 @@
 //
 //   Aura entrega a ESTRUTURA — fundo, superfícies, bordas, raios,
 //   tipografia, movimento. Tudo vem do Aura Design System (dark-first,
-//   #060816, bordas violeta-tingidas, Instrument Serif + DM Sans + DM Mono,
+//   #060816, bordas violeta-tingidas, Instrument Serif + DM Sans +
+//   Bricolage Grotesque nos numeros (era DM Mono ate 25/09/2026),
 //   200–250ms numa curva só).
 //
 //   O lojista entra com a COR. Ela ocupa exatamente o lugar que o violeta
@@ -64,12 +65,16 @@ export const AURA = {
 
   radius: { sm: 6, md: 8, lg: 10, xl: 12, card: 16, editorial: 24, pill: 999 },
   space: [4, 6, 8, 10, 12, 16, 20, 24, 32, 48],
+  // `num` era `mono` (DM Mono). Decisao do PO de 25/09/2026: a vitrine
+  // Studio nao usa mais fonte monoespacada — numero, rotulo e codigo saem
+  // na Bricolage Grotesque com digitos tabulares (ver NUMEROS_STUDIO em
+  // constants/fonts.ts, que e a pilha completa com fallback).
   font: {
     display: "Instrument Serif",
     body: "DM Sans",
-    mono: "DM Mono",
+    num: "Bricolage Grotesque",
   },
-  type: { h1: 28, h2: 22, h3: 18, body: 14, caption: 12, label: 11, mono: 13 },
+  type: { h1: 28, h2: 22, h3: 18, body: 14, caption: 12, label: 11, num: 13 },
   motion: {
     ease: "cubic-bezier(0.4, 0, 0.2, 1)",
     fast: 150,
@@ -240,11 +245,41 @@ export const SUPERFICIE = {
    * mudaria a cara dela sem ninguem ter pedido.
    */
   papel: {
+    // ink3 era #837A6E: 3,98:1 sobre o #FBF8F3, reprova AA justamente no
+    // texto de apoio (legenda, prazo, "base R$"). #756C61 da 4,86:1 sem
+    // sair da familia quente. Kit da Fase 1 (studio-vitrine-00-kit.html).
     bg: "#FBF8F3", bg2: "#FFFFFF", bg3: "#F6F1E8", bg4: "#F0E9DC",
-    ink: "#1A1714", ink2: "#4A443C", ink3: "#837A6E", ink4: "#B4A99A",
+    ink: "#1A1714", ink2: "#4A443C", ink3: "#756C61", ink4: "#B4A99A",
     border: "#E7DFD3",
   },
 } as const;
+
+/**
+ * Semanticas por modo: dinheiro, erro e atencao.
+ *
+ * Nao mudam com a LOJA, mas mudam com o FUNDO. O verde #34D399 nasceu
+ * para o escuro; como texto no papel ele da 1,9:1 — o "+R$ 8 no total" e
+ * o "no Pix" sumiam. No papel valem os tons do kit, todos AA sobre o
+ * branco e o papel.
+ */
+export const SEMANTICAS = {
+  escuro: { green: AURA.green, red: AURA.red, amber: AURA.amber },
+  claro: { green: AURA.green, red: AURA.red, amber: AURA.amber },
+  papel: { green: "#0E7A43", red: "#B42318", amber: "#8A4B0A" },
+} as const;
+
+/**
+ * Tinta sobre FOTO escurecida por veu (cartao "Imagem", hero com banner,
+ * zoom). O veu e fixo e escuro, entao a tinta tambem e fixa — e o unico
+ * branco cravado que a vitrine aceita, e por isso tem nome.
+ */
+export const SOBRE_FOTO = "#FFFFFF";
+
+/**
+ * Fundo do QR do Pix. Leitor de QR precisa de quiet zone clara, qualquer
+ * que seja a cor da loja ou o modo.
+ */
+export const FUNDO_DO_QR = "#FFFFFF";
 
 export type ModoVitrine = keyof typeof SUPERFICIE;
 
@@ -308,9 +343,9 @@ export function montarTema(corDaLoja?: string | null, modo: ModoVitrine = "claro
     sobreMarca: par.tinta,
     marcaWash: wash(marca, 0.08),
     marcaWashForte: wash(marca, 0.16),
-    green: AURA.green,
-    red: AURA.red,
-    amber: AURA.amber,
+    green: SEMANTICAS[modo].green,
+    red: SEMANTICAS[modo].red,
+    amber: SEMANTICAS[modo].amber,
     radius: AURA.radius,
     font: AURA.font,
     type: AURA.type,

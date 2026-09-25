@@ -13,7 +13,8 @@
 //
 // A vitrine decide COMO desenhar; o backend decide O QUE dizer.
 // ============================================================
-import { View, Text, StyleSheet } from "react-native";
+import { View, StyleSheet } from "react-native";
+import { Texto, Numero } from "./TipografiaVitrine";
 
 export type RodapeDaLoja = {
   formas?: string[];
@@ -49,24 +50,24 @@ export function RodapeInstitucional({
     >
       {formas.length > 0 && (
         <View style={s.bloco}>
-          <Text style={[s.titulo, { color: corDoTexto }]}>Formas de pagamento</Text>
+          <Numero style={[s.titulo, { color: corDoTexto }]}>Formas de pagamento</Numero>
           {/* Junta com ' · ', igual à loja comum. Sem selo de bandeira:
               não temos as marcas, e desenhar um retângulo escrito "VISA"
               seria falsificar. */}
-          <Text testID="rodape-formas" style={[s.texto, { color: corFraca }]}>
+          <Texto testID="rodape-formas" style={[s.texto, { color: corFraca }]}>
             {formas.join(" · ")}
-          </Text>
+          </Texto>
         </View>
       )}
 
       {politica.length > 0 && (
         <View style={s.bloco}>
-          <Text style={[s.titulo, { color: corDoTexto }]}>
+          <Numero style={[s.titulo, { color: corDoTexto }]}>
             {rodape?.politica_titulo || "Trocas e devoluções"}
-          </Text>
-          <Text testID="rodape-politica" style={[s.texto, { color: corFraca }]}>
+          </Numero>
+          <Texto testID="rodape-politica" style={[s.texto, { color: corFraca }]}>
             {politica}
-          </Text>
+          </Texto>
         </View>
       )}
     </View>

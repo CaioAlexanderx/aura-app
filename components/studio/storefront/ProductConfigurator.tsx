@@ -8,16 +8,16 @@
 //   com template visual vinculado, o preview vira canvas 2D/viewer 3D.
 // ============================================================
 import { useState, useEffect, useMemo } from "react";
-import { View, Pressable, ScrollView, useWindowDimensions, Platform, Linking } from "react-native";
+import { View, Pressable, ScrollView, useWindowDimensions, Platform, Linking, Image } from "react-native";
 import type { StorefrontState } from "./useStorefront";
-import { usePaletaDaVitrine } from "./TemaDaVitrine";
-import type { PaletaDaVitrine } from "./theme";
+import { usePaletaDaVitrine, useTemaDaVitrine } from "./TemaDaVitrine";
+import type { PaletaDaVitrine, VitrineTema } from "./theme";
 import { FieldRenderer } from "./FieldRenderer";
 import { LivePreview, defaultConfiguratorSize } from "./LivePreview";
-import { montarTema, wash } from "./theme";
+import { wash } from "./theme";
 import { matchTier, proximaFaixa, faixaLabel } from "./qtyTiers";
 import { validateRequiredFields } from "./useStorefront";
-import { PoweredByAura } from "./ui/PoweredByAura";
+import { BarraDeCookies } from "./ConsentimentoDaVitrine";
 import { linkDoPedido } from "./pedidoPeloWhatsApp";
 import { modoDaVitrine } from "./modoDaVitrine";
 import { SizeGuideModal } from "./SizeGuideModal";
@@ -26,12 +26,12 @@ import { SizeGuideModal } from "./SizeGuideModal";
 // que ja aconteceu entre painel/backend/storefront (ver customizationConfig.ts).
 import { sideOf } from "@/components/studio/customizationConfig";
 
-import { tipografiaDaLoja } from "@/constants/fonts";
 import { textoDeParcelamento } from "./parcelamento";
 import { FreteNoProduto } from "./FreteNoProduto";
 import { ZoomFoto, DicaDeZoom } from "./ZoomFoto";
 import { fotosDoProduto } from "./CarrosselFoto";
-import { Texto } from "./TipografiaVitrine";
+import { Texto, Numero, useTipografia } from "./TipografiaVitrine";
+import { Icon } from "@/components/Icon";
 // Porte da loja comum (24/08/2026): descricao, ficha tecnica, "Comprar
 // agora" e relacionados. Nenhuma linha de UI e compartilhada entre as
 // duas lojas — o que e compartilhado e o payload, e ha teste no backend
@@ -42,11 +42,13 @@ import { configDisponivel } from "./camposDaVitrine";
 import { dinheiro } from "./moeda";
 // 30px era menor que a ponta do dedo; 40px + hitSlop chega aos 44 que o
 // toque pede sem o controle ficar grande na tela.
-const qtyBtn: any = {
+// O fundo era #f3f4f6 (cinza frio da paleta antiga); agora e o degrau
+// de superficie do papel.
+const qtyBtnCom = (tema: VitrineTema): any => ({
   width: 40, height: 40, borderRadius: 10,
-  backgroundColor: "#f3f4f6",
+  backgroundColor: tema.bg3,
   alignItems: "center", justifyContent: "center",
-};
+});
 // Estilo solto no módulo lia a paleta cravada; com o tema vivo ele
 // depende da loja, então vira função chamada dentro do componente.
 const qtyTxtCom = (T: PaletaDaVitrine): any => ({ color: T.ink, fontSize: 16, fontWeight: "800" });
@@ -63,8 +65,17 @@ export function ProductConfigurator({
   // decide e o servidor — a mesma decisao vale no POST do pedido.
 
   const T = usePaletaDaVitrine();
+  // A mesma fonte da home. Esta tela chamava o resolvedor da LOJA COMUM
+  // (tipografiaDaLoja), cujos pares a pagina nunca carrega: o titulo do
+  // produto caia em Georgia e a loja "mudava de cara" ao abrir a peca.
+  const tipo = useTipografia();
+  // O tema do CONTEXTO (papel), montado uma vez em PaginaDaVitrine. Antes
+  // esta tela montava o proprio com montarTema(cor) sem modo — que cai no
+  // "claro" — e, pior, depois de um return antecipado (hook condicional).
+  const tema = useTemaDaVitrine();
   const modo = modoDaVitrine(sf.store);
   const qtyTxt = qtyTxtCom(T);
+  const qtyBtn = qtyBtnCom(tema);
   const {
     activeProduct, editingValues, setFieldValue, editingQty, setEditingQty,
     editingAddBack, setEditingAddBack,
@@ -221,21 +232,7 @@ export function ProductConfigurator({
   // pixels do proprio contador. No desktop o conteudo passa a viver numa
   // coluna centrada, com o preview FIXO ao lado dos campos — o cliente ve
   // a peca mudando enquanto digita, que e o ponto da tela.
-  // A cor da loja finalmente chega ao caminho de compra. Ate aqui o botao
-  // "Adicionar" saia azul-marinho (`tema.marcaTexto`) numa loja violeta — a
-  // marca quebrava exatamente onde o cliente decide pagar.
-  //
-  // Preenchimento e tinta saem de `montarTema`, nao da cor crua: o hex do
-  // lojista e arbitrario e um botao amarelo-limao com texto branco nao se
-  // le. Ver fase 01.
-  const tema = useMemo(
-    () => montarTema((sf.store as any)?.site?.primary_color),
-    [(sf.store as any)?.site?.primary_color],
-  );
 
-  // A tipografia escolhida pela lojista parava na prateleira: o titulo do
-  // produto saia na fonte do sistema. Mesma fonte de verdade do ProductList.
-  const tipo = tipografiaDaLoja((sf.store as any)?.site?.font_family);
   const [zoom, setZoom] = useState<number | null>(null);
   const fotosDaPeca = fotosDoProduto((activeProduct as any)?.gallery_urls, (activeProduct as any)?.image_url);
   const textoParcelas = textoDeParcelamento(
@@ -307,50 +304,59 @@ export function ProductConfigurator({
           flexDirection: "row", alignItems: "center", gap: 10,
         }}
       >
-        <Pressable onPress={() => { goTo("list"); sf.setError(null); }}>
-          <Texto style={{ fontSize: 22, color: T.ink2 }}>←</Texto>
+        <Pressable
+          onPress={() => { goTo("list"); sf.setError(null); }}
+          accessibilityRole="button"
+          accessibilityLabel="Voltar para a loja"
+          hitSlop={8}
+          style={{ width: 44, height: 44, marginLeft: -12, alignItems: "center", justifyContent: "center" }}
+        >
+          <Icon name="chevron_left" size={22} color={T.ink2} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Texto style={{ fontSize: 11, color: T.ink3, textTransform: "uppercase" }}>Personalize</Texto>
+          <Numero style={{ fontSize: 10.5, color: T.ink3, textTransform: "uppercase", letterSpacing: 1.2 }}>Personalize</Numero>
           <Texto style={{ fontFamily: tipo.display, fontSize: 19, lineHeight: 23, color: T.ink }}>{activeProduct.name}</Texto>
           <View
             style={{
               alignSelf: "flex-start",
-              backgroundColor: "rgba(30,58,138,0.08)",
+              backgroundColor: tema.marcaWash,
               paddingHorizontal: 8, paddingVertical: 3,
               borderRadius: 999, marginTop: 4,
             }}
           >
-            <Texto style={{ fontSize: 9, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" }}>
+            <Numero style={{ fontSize: 9.5, color: tema.marcaTexto, fontWeight: "700", letterSpacing: 0.8, textTransform: "uppercase" }}>
               Estúdio · Arte personalizada
-            </Texto>
+            </Numero>
           </View>
 
           {/* Agente I: link 'Ver guia de medidas' — só quando size_guide existe */}
           {hasSizeGuide && (
             <Pressable
               onPress={() => setShowSizeGuide(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Ver guia de medidas"
+              hitSlop={4}
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                gap: 4,
-                marginTop: 6,
+                gap: 6,
+                marginTop: 8,
                 alignSelf: "flex-start",
-                paddingHorizontal: 8,
-                paddingVertical: 4,
-                borderRadius: 6,
+                minHeight: 36,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 10,
                 borderWidth: 1,
-                borderColor: "rgba(30,58,138,0.25)",
-                backgroundColor: "rgba(30,58,138,0.05)",
+                borderColor: tema.borderAccent,
+                backgroundColor: tema.marcaWash,
               }}
             >
-              <Texto style={{ fontSize: 11 }}>📐</Texto>
+              <Icon name="ruler" size={16} color={tema.marcaTexto} />
               <Texto
                 style={{
-                  fontSize: 11,
+                  fontSize: 12.5,
                   color: tema.marcaTexto,
-                  fontWeight: "700",
-                  textDecorationLine: "underline",
+                  fontWeight: "600",
                 }}
               >
                 Ver guia de medidas
@@ -359,19 +365,19 @@ export function ProductConfigurator({
           )}
         </View>
         <View style={{ alignItems: "flex-end" }}>
-          <Texto style={{ fontSize: 15, fontWeight: "800", color: tema.marcaTexto }}>
+          <Numero style={{ fontSize: 16, fontWeight: "700", color: tema.marcaTexto }}>
             {dinheiro(configuringUnitPrice)}
-          </Texto>
+          </Numero>
           {/* "3x de R$ 53,30" e uma frase diferente de "R$ 159,90" pra
               quem esta decidindo. So aparece quando a lojista declarou o
               teto — a loja nao inventa numero de parcela. */}
           {textoParcelas ? (
-            <Texto style={{ fontSize: 10.5, color: T.ink3, marginTop: 1 }}>{textoParcelas}</Texto>
+            <Numero style={{ fontSize: 10.5, color: T.ink3, marginTop: 1 }}>{textoParcelas}</Numero>
           ) : null}
           {hasDelta && (
-            <Texto style={{ fontSize: 9.5, color: T.ink3, marginTop: 1 }}>
+            <Numero style={{ fontSize: 9.5, color: T.ink3, marginTop: 1 }}>
               base {dinheiro(Number(activeProduct.price))}
-            </Texto>
+            </Numero>
           )}
         </View>
       </View>
@@ -429,9 +435,9 @@ export function ProductConfigurator({
             preenchido (ver transportarValores em categoryGrouping.ts). */}
         {sf.activeSiblings.length > 1 ? (
           <View style={{ gap: 8 }}>
-            <Texto style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
+            <Numero style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase" }}>
               Modelo
-            </Texto>
+            </Numero>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 4 }}>
               {sf.activeSiblings.map((m) => {
                 const sel = m.id === activeProduct.id;
@@ -455,9 +461,9 @@ export function ProductConfigurator({
                     >
                       {m.name}
                     </Texto>
-                    <Texto style={{ fontSize: 11, color: sel ? tema.marcaTexto : T.ink3, fontWeight: "700", marginTop: 4 }}>
+                    <Numero style={{ fontSize: 11, color: sel ? tema.marcaTexto : T.ink3, fontWeight: "700", marginTop: 4 }}>
                       {dinheiro(Number(m.price))}
-                    </Texto>
+                    </Numero>
                   </Pressable>
                 );
               })}
@@ -476,9 +482,9 @@ export function ProductConfigurator({
                 mais, parecendo secao quebrada. */}
             {frontFields.length > 0 && (
               <View style={{ gap: 4, marginTop: 4 }}>
-                <Texto style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
+                <Numero style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase" }}>
                   Frente
-                </Texto>
+                </Numero>
               </View>
             )}
             {frontFields.map(renderField)}
@@ -488,9 +494,9 @@ export function ProductConfigurator({
                 {/* Divisor VERSO */}
                 <View style={{ marginTop: 18, marginBottom: 4, flexDirection: "row", alignItems: "center", gap: 10 }}>
                   <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: "rgba(30,58,138,0.08)" }}>
-                    <Texto style={{ fontSize: 12, color: tema.marcaTexto }}>↻</Texto>
-                    <Texto style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 1.2, textTransform: "uppercase" }}>Verso</Texto>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: tema.marcaWash }}>
+                    <Icon name="rotate_ccw" size={12} color={tema.marcaTexto} />
+                    <Numero style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "700", letterSpacing: 1.2, textTransform: "uppercase" }}>Verso</Numero>
                   </View>
                   <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
                 </View>
@@ -498,13 +504,10 @@ export function ProductConfigurator({
                 {/* Opt-in verso cobrado */}
                 {backCharge ? (
                   <Pressable
-                    onPress={() => {
-                      const next = !editingAddBack;
-                      setEditingAddBack(next);
-                      if (next && backPrice > 0) {
-                        console.log("[storefront] verso adicionado: +" + dinheiro(backPrice));
-                      }
-                    }}
+                    onPress={() => setEditingAddBack(!editingAddBack)}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: editingAddBack }}
+                    accessibilityLabel={"Personalizar também o verso" + (backPrice > 0 ? ", mais " + dinheiro(backPrice) : "")}
                     style={{
                       flexDirection: "row", alignItems: "center", gap: 10,
                       backgroundColor: T.card, borderRadius: 10, padding: 12,
@@ -522,7 +525,7 @@ export function ProductConfigurator({
                       }}
                     >
                       {editingAddBack && (
-                        <Texto style={{ color: tema.sobreMarca, fontSize: 13, fontWeight: "900" }}>✓</Texto>
+                        <Icon name="check" size={14} color={tema.sobreMarca} />
                       )}
                     </View>
                     <View style={{ flex: 1 }}>
@@ -535,14 +538,14 @@ export function ProductConfigurator({
                         </Texto>
                       )}
                       {editingAddBack && backPrice > 0 && (
-                        <Texto style={{ fontSize: 11.5, color: T.green, fontWeight: "700", marginTop: 2 }}>
+                        <Numero style={{ fontSize: 11.5, color: T.green, fontWeight: "700", marginTop: 2 }}>
                           +{dinheiro(backPrice)} no total
-                        </Texto>
+                        </Numero>
                       )}
                     </View>
                     {!editingAddBack && backPrice > 0 && (
-                      <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: "rgba(236,72,153,0.12)" }}>
-                        <Texto style={{ fontSize: 11, color: T.accent, fontWeight: "800" }}>+{dinheiro(backPrice)}</Texto>
+                      <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: tema.marcaWash, borderWidth: 1, borderColor: tema.borderAccent }}>
+                        <Numero style={{ fontSize: 11, color: tema.marcaTexto, fontWeight: "700" }}>+{dinheiro(backPrice)}</Numero>
                       </View>
                     )}
                   </Pressable>
@@ -565,9 +568,9 @@ export function ProductConfigurator({
                     verso, e um terceiro lado com a mesma regra de opt-in. */}
                 <View style={{ marginTop: 18, marginBottom: 4, flexDirection: "row", alignItems: "center", gap: 10 }}>
                   <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: "rgba(30,58,138,0.08)" }}>
-                    <Texto style={{ fontSize: 12, color: tema.marcaTexto }}>▭</Texto>
-                    <Texto style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 1.2, textTransform: "uppercase" }}>Meio</Texto>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: tema.marcaWash }}>
+                    <Icon name="layers" size={12} color={tema.marcaTexto} />
+                    <Numero style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "700", letterSpacing: 1.2, textTransform: "uppercase" }}>Meio</Numero>
                   </View>
                   <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
                 </View>
@@ -580,13 +583,10 @@ export function ProductConfigurator({
                     fechamento. */}
                 {middleCharge ? (
                   <Pressable
-                    onPress={() => {
-                      const next = !editingAddMiddle;
-                      setEditingAddMiddle(next);
-                      if (next && middlePrice > 0) {
-                        console.log("[storefront] meio adicionado: +" + dinheiro(middlePrice));
-                      }
-                    }}
+                    onPress={() => setEditingAddMiddle(!editingAddMiddle)}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: editingAddMiddle }}
+                    accessibilityLabel={"Personalizar também o meio" + (middlePrice > 0 ? ", mais " + dinheiro(middlePrice) : "")}
                     style={{
                       flexDirection: "row", alignItems: "center", gap: 10,
                       backgroundColor: T.card, borderRadius: 10, padding: 12,
@@ -604,7 +604,7 @@ export function ProductConfigurator({
                       }}
                     >
                       {editingAddMiddle && (
-                        <Texto style={{ color: tema.sobreMarca, fontSize: 13, fontWeight: "900" }}>✓</Texto>
+                        <Icon name="check" size={14} color={tema.sobreMarca} />
                       )}
                     </View>
                     <View style={{ flex: 1 }}>
@@ -617,14 +617,14 @@ export function ProductConfigurator({
                         </Texto>
                       )}
                       {editingAddMiddle && middlePrice > 0 && (
-                        <Texto style={{ fontSize: 11.5, color: T.green, fontWeight: "700", marginTop: 2 }}>
+                        <Numero style={{ fontSize: 11.5, color: T.green, fontWeight: "700", marginTop: 2 }}>
                           +{dinheiro(middlePrice)} no total
-                        </Texto>
+                        </Numero>
                       )}
                     </View>
                     {!editingAddMiddle && middlePrice > 0 && (
-                      <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: "rgba(236,72,153,0.12)" }}>
-                        <Texto style={{ fontSize: 11, color: T.accent, fontWeight: "800" }}>+{dinheiro(middlePrice)}</Texto>
+                      <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: tema.marcaWash, borderWidth: 1, borderColor: tema.borderAccent }}>
+                        <Numero style={{ fontSize: 11, color: tema.marcaTexto, fontWeight: "700" }}>+{dinheiro(middlePrice)}</Numero>
                       </View>
                     )}
                   </Pressable>
@@ -654,9 +654,9 @@ export function ProductConfigurator({
             >
               <Texto style={qtyTxt}>−</Texto>
             </Pressable>
-            <Texto style={{ minWidth: 30, textAlign: "center", color: T.ink, fontWeight: "800", fontSize: 16 }}>
+            <Numero style={{ minWidth: 30, textAlign: "center", color: T.ink, fontWeight: "700", fontSize: 16 }}>
               {editingQty}
-            </Texto>
+            </Numero>
             <Pressable
               onPress={() => setEditingQty(editingQty + 1)}
               style={qtyBtn}
@@ -675,9 +675,9 @@ export function ProductConfigurator({
             para a quantidade que ativa o desconto é o gesto todo. */}
         {escada.length > 0 ? (
           <View style={{ gap: 6 }}>
-            <Texto style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
+            <Numero style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase" }}>
               Quanto mais, mais barato
-            </Texto>
+            </Numero>
             {escada.map((t) => {
               const ativa = faixaAtual && faixaAtual.min_qty === t.min_qty;
               return (
@@ -698,13 +698,16 @@ export function ProductConfigurator({
                     {faixaLabel(t)}
                   </Texto>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <Texto style={{ fontSize: 12, color: ativa ? tema.marcaTexto : T.ink, fontWeight: "800" }}>
+                    <Numero style={{ fontSize: 12, color: ativa ? tema.marcaTexto : T.ink, fontWeight: "700" }}>
                       {dinheiro(Number(t.unit_price))}
-                    </Texto>
-                    <View style={{ backgroundColor: T.accent, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                      <Texto style={{ color: "#fff", fontSize: 9, fontWeight: "800" }}>
+                    </Numero>
+                    {/* Selo de desconto: preenchimento e tinta do PAR legivel
+                        da loja. Era T.accent com branco cravado — numa loja
+                        amarela o "-10%" sumia. */}
+                    <View style={{ backgroundColor: tema.marcaFill, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                      <Numero style={{ color: tema.sobreMarca, fontSize: 9.5, fontWeight: "700" }}>
                         -{Number(t.discount_pct).toFixed(0)}%
-                      </Texto>
+                      </Numero>
                     </View>
                   </View>
                 </Pressable>
@@ -725,9 +728,9 @@ export function ProductConfigurator({
             desceu procurando mais. */}
         {activeProduct.description && String(activeProduct.description).trim() ? (
           <View style={{ gap: 7 }}>
-            <Texto style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
+            <Numero style={{ fontSize: 10.5, color: tema.marcaTexto, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase" }}>
               Sobre este produto
-            </Texto>
+            </Numero>
             <Texto style={{ fontSize: 13, lineHeight: 20, color: T.ink2 }}>
               {String(activeProduct.description).trim()}
             </Texto>
@@ -770,11 +773,15 @@ export function ProductConfigurator({
                         alignItems: "center", justifyContent: "center",
                       }}
                     >
+                      {/* Image do RN, e nao <img>: a tag HTML crua quebrava
+                          fora do navegador. 88% = o respiro de 6% de cada lado
+                          que o padding dava. */}
                       {foto ? (
-                        <img
-                          src={foto}
-                          alt=""
-                          style={{ width: "100%", height: "100%", objectFit: "contain", padding: "6%" }}
+                        <Image
+                          source={{ uri: foto }}
+                          style={{ width: "88%", height: "88%" }}
+                          resizeMode="contain"
+                          accessibilityIgnoresInvertColors
                         />
                       ) : (
                         <Texto style={{ fontSize: 22, color: T.ink3 }}>
@@ -785,9 +792,9 @@ export function ProductConfigurator({
                     <Texto numberOfLines={2} style={{ fontFamily: tipo.display, fontSize: 13.5, lineHeight: 17, color: T.ink, marginTop: 8 }}>
                       {r.name}
                     </Texto>
-                    <Texto style={{ fontSize: 12.5, fontWeight: "800", color: tema.marcaTexto, marginTop: 2 }}>
+                    <Numero style={{ fontSize: 12.5, fontWeight: "700", color: tema.marcaTexto, marginTop: 2 }}>
                       {dinheiro(Number(r.price))}
-                    </Texto>
+                    </Numero>
                   </Pressable>
                 );
               })}
@@ -797,6 +804,10 @@ export function ProductConfigurator({
       </ScrollView>
 
       <ZoomFoto fotos={fotosDaPeca} nome={activeProduct.name} indice={zoom} onFechar={() => setZoom(null)} />
+
+      {/* Cookies no FLUXO, acima da barra de compra — nunca por cima dela
+          nem do "Prefere pedir pelo WhatsApp?" (Tela 8 do mockup). */}
+      <BarraDeCookies />
 
       {/* Botao CTA */}
       <View
@@ -837,6 +848,8 @@ export function ProductConfigurator({
         {(sf as any)._editingLineId ? (
           <Pressable
             onPress={() => commitConfigure()}
+            accessibilityRole="button"
+            accessibilityLabel={"Atualizar item por " + dinheiro(configuringUnitPrice * editingQty)}
             style={{
               backgroundColor: tema.marcaFill, paddingVertical: 14, borderRadius: 10, alignItems: "center",
               width: "100%", maxWidth: telaLarga ? 420 : undefined,
@@ -885,9 +898,9 @@ export function ProductConfigurator({
               <Texto style={{ color: tema.sobreMarca, fontSize: 14.5, fontWeight: "800" }}>
                 {modo.rotuloDoBotao}
               </Texto>
-              <Texto style={{ color: tema.sobreMarca, fontSize: 11.5, fontWeight: "700", opacity: 0.85, marginTop: 1 }}>
+              <Numero style={{ color: tema.sobreMarca, fontSize: 11.5, fontWeight: "600", opacity: 0.85, marginTop: 1 }}>
                 {dinheiro((configuringUnitPrice * editingQty))}
-              </Texto>
+              </Numero>
             </Pressable>
 
             {modo.aceita ? (
@@ -953,8 +966,8 @@ export function ProductConfigurator({
           );
         })()}
       </View>
-
-      <PoweredByAura />
+      {/* Sem o "Powered by Aura" fixo: ele tampava o pe da barra de
+          compra. A assinatura fica so no rodape institucional. */}
     </View>
   );
 }

@@ -6,9 +6,16 @@
 // 04/09/2026: o endereco aqui apontava para a loja da PROPRIA Aura.
 // Quem lesse a assinatura na loja da Sheid ia parar na vitrine de outra
 // empresa. Agora leva ao site do produto, que e o que ela quer dizer.
+//
+// 25/09/2026 (Fase 1A): saiu da vitrine Studio. Era uma barra FIXA por
+// cima do rodape do configurador e do checkout, cobrindo o botao de
+// comprar; a assinatura da Aura fica so no rodape institucional ("Loja
+// desenvolvida com Aura."). Continua aqui porque o cardapio e o
+// orcamento publico ainda a usam.
 // ============================================================
-import { View, Text } from "react-native";
+import { View } from "react-native";
 import { usePaletaDaVitrine } from "../TemaDaVitrine";
+import { Texto } from "../TipografiaVitrine";
 
 export function PoweredByAura() {
   const T = usePaletaDaVitrine();
@@ -23,9 +30,9 @@ export function PoweredByAura() {
       }}
       pointerEvents="none"
     >
-      <Text style={{ fontSize: 9.5, color: T.ink4, letterSpacing: 0.4 }}>
-        Powered by <Text style={{ fontWeight: "800", color: T.ink3 }}>Aura</Text> · getaura.com.br
-      </Text>
+      <Texto style={{ fontSize: 9.5, color: T.ink4, letterSpacing: 0.4 }}>
+        Powered by <Texto style={{ fontWeight: "800", color: T.ink3 }}>Aura</Texto> · getaura.com.br
+      </Texto>
     </View>
   );
 }
