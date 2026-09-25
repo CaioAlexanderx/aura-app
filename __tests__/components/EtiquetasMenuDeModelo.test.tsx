@@ -111,3 +111,28 @@ test("categoria e 'Só com estoque' filtram; o menu de categoria fica acima da l
   expect(nomesNaLista(t)).toEqual([]);
   t.unmount();
 });
+
+test("calendário: escolher um dia mostra só o que foi cadastrado nele; 'Todos' desfaz", () => {
+  let t!: renderer.ReactTestRenderer;
+  act(() => { t = renderer.create(<PrintLabels products={PRODUTOS} selectedIds={[]} onSelectionChange={() => {}} />); });
+
+  // O botão de calendário fica entre "Cadastrados:" e "Todos".
+  const texto0 = flatten(t.toJSON());
+  expect(texto0.indexOf("Cadastrados:")).toBeLessThan(texto0.indexOf("Todos"));
+  expect(t.root.findAll((n) => n.props && n.props.testID === "etiquetas-calendario", { deep: false })).toHaveLength(1);
+
+  const input = t.root.findAll((n) => n.type === "input" && n.props["data-testid"] === "etiquetas-calendario-input")[0];
+  expect(input).toBeTruthy();
+  expect(input.props.type).toBe("date");
+  expect(input.props.max).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+  act(() => { input.props.onChange({ target: { value: "2025-01-10" } }); });
+  expect(nomesNaLista(t)).toEqual(["Calça antiga"]);
+  expect(flatten(t.toJSON())).toContain("10/01/2025");
+  expect(flatten(t.toJSON())).toContain("1 de 3 produtos");
+
+  aperta(t, "etiquetas-periodo-todos");
+  expect(nomesNaLista(t)).toHaveLength(3);
+  expect(flatten(t.toJSON())).not.toContain("10/01/2025");
+  t.unmount();
+});
