@@ -1,0 +1,1530 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vitrine Studio — Fase 5 · Home e navegação</title>
+<!--
+  ============================================================
+  Mockup standalone — Vitrine Studio, Fase 5: Home e navegação. 25/09/2026.
+  Regra 4 do CLAUDE.md: mockup antes do código.
+
+  FASE E ESCOPO (docs/studio/FASEAMENTO_VITRINE_STUDIO.md §4, Fase 5,
+  18/01 a 05/02/2027; gate de design até 11/12):
+    - Cabeçalho preso com logo, busca e sacola, junto com a barra de categorias.
+    - Hero com os três banners, botão e destino interno; sem banner, o mockup
+      do produto mais pedido girando.
+    - Faixa de anúncio e selos da aba Design (automáticos do Studio quando vazios).
+    - Âncoras de categoria que levam até a grade; trilha "Início / Canecas".
+  Fora deste desenho: prévia da aba Design e aba Aparência (painel da lojista).
+
+  DE ONDE VEM:
+    docs/studio/JORNADA_CLIENTE_VITRINE.md §4.2 (home: manter, defeitos, alvo),
+      §4.3 (explorar), §5 (o que trazer da Negócio e o que não trazer).
+    components/studio/storefront/HomeDaVitrine.tsx, blocosDaHome.ts,
+      ProductList.tsx, ProductCard.tsx, StoreNav.tsx, RodapeDaVitrine.tsx,
+      conteudoDoRodape.ts, AncoraWhatsApp.tsx, VitrineSkeleton.tsx,
+      buscaVitrine.ts (casa), modelosDoGrupo.ts (resumoDoGrupo),
+      ordenacaoVitrine.ts (LIMIAR_CONTROLES = 20), selosDoProduto.ts.
+    Referência de padrão: a home da loja Negócio pós-upgrade
+      (Aura-backend/src/templates/storefrontHtml.js, storefront/parts/home.js,
+      services/storefrontBuilder.js selosPadrao, services/rodapeInstitucional.js).
+    Kit visual: docs/mockups/studio-vitrine-00-kit.html (blocos copiados sem mudança).
+
+  DECISÕES DO PO APLICADAS (25/09/2026):
+    - Só a cor PRINCIPAL da lojista pinta a vitrine (faixa, sacola, botão do
+      WhatsApp, selos, régua da categoria). A cor de destaque não aparece.
+    - "Powered by Aura" sai da tela; fica só "Loja desenvolvida com Aura." na
+      última linha do rodapé.
+    - O botão do WhatsApp nunca fica coberto (nem por cookies).
+    - Pix: 5% é EXEMPLO configurável (a Sheid hoje não dá desconto).
+    - Sem emoji. Ícones do sprite.
+    - Nada de "últimas unidades", filtros laterais de tamanho/cor/preço nem
+      paginação de 24 (JORNADA §5).
+
+  TELAS:
+    1. Home com banners — faixa de anúncio, cabeçalho preso com busca e sacola,
+       barra de categorias presa junto, 3 banners girando (setas, bolinhas,
+       pausa), CTA com destino interno, banner de arte pronta = link inteiro.
+    2. Home sem banner (a Sheid hoje) — título + mockup da caneca girando com a
+       arte trocando sozinha ("Helena", "Vovó Lourdes", "Time Sheid").
+    3. Corpo da home — como funciona, grade agrupada, queridinhos, artes
+       prontas, bloco para empresas que se adapta, selos, WhatsApp flutuante.
+    4. Navegação no celular — gaveta com subcategorias, busca ao digitar,
+       "Nada encontrado".
+    5. Página de categoria — trilha, título, contagem, subcategorias, grade.
+    6. Rodapé — três colunas no desktop, uma no celular; categorias levam à grade.
+    7. Carregando — esqueleto no tom do papel, respeitando reduzir movimento.
+
+  PERGUNTAS EM ABERTO (o desenho levanta):
+    a. A tira "O que a gente personaliza" sai? Com a barra presa e a grade
+       agrupada por categoria, ela virou a terceira porta para o mesmo lugar.
+    b. A faixa de números (FaixaDeConfianca) se funde aos selos? Aqui fundiu.
+    c. "Os queridinhos" some com menos de 2 peças pedidas (regra atual). A Sheid
+       hoje não teria o bloco; a tela 3 mostra como fica quando tiver.
+    d. Sem banner e sem pedido, qual peça gira no hero? Proposta: a primeira
+       com mockup 3D na ordem de destaque; a lojista escolhe na aba Design.
+    e. Arte pronta vira porta: tocar abre a peça mais pedida que aceita a arte,
+       já aplicada? Hoje o bloco é só vitrine, sem toque.
+    f. Subcategorias (Cerâmica, Metalizadas, Vidro e chopp; Adulto, Feminina,
+       Infantil) são EXEMPLO: a Sheid não tem árvore hoje.
+    g. A política de troca padrão fala de "tamanho ou cor". Peça personalizada
+       precisa de um texto padrão do Studio? (CDC art. 49 x encomenda.)
+    h. O selo "Loja verificada Aura" sai do rodapé junto com o "Powered by"?
+    i. Deixar a cliente digitar um nome no mockup do hero, ao vivo?
+    j. Busca: a regra atual (todos os termos em nome + descrição) acha 6 peças
+       para "caneca co", uma delas só pela descrição. Ordenar nome antes de
+       descrição é mudança pequena em buscaVitrine.ts. Aprovar?
+    k. Horário e CNPJ do rodapé são ilustrativos; o endereço é o real.
+  ============================================================
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=DM+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Pacifico&display=swap">
+<style>
+/* === KIT:BEGIN ============================================== */
+:root{
+  /* papel (theme.ts) — ink3 ajustado para AA */
+  --bg:#FBF8F3; --bg2:#FFFFFF; --bg3:#F6F1E8; --bg4:#F0E9DC;
+  --ink:#1A1714; --ink2:#4A443C; --ink3:#756C61; --ink4:#B4A99A;
+  --border:#E7DFD3; --border2:#D9CFBF;
+  /* cor da loja: preenchidas pelo JS (applyBrand) */
+  --brand:#1a1612; --brand-text:#1a1612; --brand-fill:#1a1612; --on-brand:#FFFFFF;
+  --brand-wash:rgba(26,22,18,.06); --brand-wash-2:rgba(26,22,18,.12); --brand-ring:rgba(26,22,18,.28);
+  /* semânticas — não mudam com a loja */
+  --pix:#0E7A43; --pix-soft:#E3F4EA;
+  --amber:#8A4B0A; --amber-soft:#FDF0DA;
+  --red:#B42318; --red-soft:#FDE8E6;
+  --info:#1D4E89; --info-soft:#E6EEF8;
+  /* tipografia */
+  --f-display:'Fraunces','Instrument Serif',Georgia,serif;
+  --f-display-w:500;
+  --f-body:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --f-mono:'DM Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
+  /* raio, sombra, movimento */
+  --r-sm:6px; --r-md:10px; --r-lg:14px; --r-xl:20px; --r-pill:999px;
+  --sh-1:0 1px 2px rgba(26,23,20,.06),0 1px 1px rgba(26,23,20,.04);
+  --sh-2:0 8px 24px -10px rgba(26,23,20,.22),0 2px 6px rgba(26,23,20,.06);
+  --sh-3:0 24px 60px -20px rgba(26,23,20,.35),0 4px 12px rgba(26,23,20,.08);
+  --ease:cubic-bezier(.4,0,.2,1); --t-fast:150ms; --t:220ms;
+}
+*{box-sizing:border-box}
+.sv{font-family:var(--f-body);color:var(--ink);background:var(--bg);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.sv h1,.sv h2,.sv h3,.sv .display{font-family:var(--f-display);font-weight:var(--f-display-w);letter-spacing:-.01em;line-height:1.12;margin:0;text-wrap:balance;color:var(--ink)}
+.sv p{margin:0}
+.sv .t-h1{font-size:34px}.sv .t-h2{font-size:26px}.sv .t-h3{font-size:20px}
+.sv .t-body{font-size:15px}.sv .t-small{font-size:13px;color:var(--ink2)}.sv .t-cap{font-size:12.5px;color:var(--ink3)}
+.sv .label{font:500 11px/1.2 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
+.sv .mono,.sv .price{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.sv .price{font-weight:500;color:var(--ink)}
+.sv .price-lg{font:500 26px/1 var(--f-mono);letter-spacing:-.02em}
+.sv .pix-line{color:var(--pix);font-size:13px;font-weight:600}
+.sv .brand-text{color:var(--brand-text)}
+
+/* ícones */
+.ic{width:20px;height:20px;flex:none;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+.ic.sm{width:16px;height:16px}.ic.lg{width:24px;height:24px}
+
+/* botões */
+.btn{appearance:none;border:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;height:48px;padding:0 20px;border-radius:12px;font:600 15px/1 var(--f-body);letter-spacing:.005em;transition:transform var(--t-fast) var(--ease),box-shadow var(--t) var(--ease),background var(--t) var(--ease);white-space:nowrap;text-decoration:none}
+.btn:active{transform:scale(.98)}
+.btn:focus-visible{outline:2px solid var(--brand-text);outline-offset:2px}
+.btn-primary{background:var(--brand-fill);color:var(--on-brand);box-shadow:0 6px 18px -8px var(--brand-ring)}
+.btn-primary:hover{box-shadow:0 10px 24px -8px var(--brand-ring);transform:translateY(-1px)}
+.btn-secondary{background:var(--bg2);color:var(--ink);border:1px solid var(--border2)}
+.btn-secondary:hover{border-color:var(--ink3)}
+.btn-ghost{background:transparent;color:var(--brand-text);height:40px;padding:0 10px}
+.btn-pix{background:var(--pix);color:#fff}
+.btn-wa{background:#1F7A4D;color:#fff}
+.btn-block{width:100%}
+.btn-sm{height:36px;padding:0 14px;font-size:13.5px;border-radius:10px}
+.btn[disabled]{background:var(--bg4);color:var(--ink3);box-shadow:none;cursor:not-allowed}
+.icon-btn{appearance:none;border:0;background:transparent;width:44px;height:44px;border-radius:12px;display:inline-grid;place-items:center;color:var(--ink);cursor:pointer;position:relative}
+.icon-btn:hover{background:var(--bg3)}
+.count{position:absolute;top:6px;right:5px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--brand-fill);color:var(--on-brand);font:600 10.5px/18px var(--f-mono);text-align:center}
+
+/* chips (opções, entrega, pagamento) */
+.chip{appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:8px 14px;border-radius:12px;border:1px solid var(--border2);background:var(--bg2);color:var(--ink);font:500 14px/1.2 var(--f-body);transition:border-color var(--t) var(--ease),background var(--t) var(--ease)}
+.chip:hover{border-color:var(--ink3)}
+.chip[aria-pressed="true"],.chip.on{border-color:var(--brand-text);background:var(--brand-wash);box-shadow:inset 0 0 0 1px var(--brand-text)}
+.chip .delta{font:500 12px var(--f-mono);color:var(--ink3)}
+.swatch{width:36px;height:36px;border-radius:50%;border:1px solid rgba(0,0,0,.12);box-shadow:inset 0 0 0 3px var(--bg2);cursor:pointer}
+.swatch.on{outline:2px solid var(--brand-text);outline-offset:2px}
+
+/* campos */
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:13px;font-weight:600;color:var(--ink2)}
+.field .opt{font-weight:400;color:var(--ink3)}
+.input{height:48px;border-radius:12px;border:1px solid var(--border2);background:var(--bg2);padding:0 14px;font:400 15px var(--f-body);color:var(--ink);width:100%;transition:border-color var(--t),box-shadow var(--t)}
+.input::placeholder{color:var(--ink4)}
+.input:focus{outline:0;border-color:var(--brand-text);box-shadow:0 0 0 3px var(--brand-wash-2)}
+.input.err{border-color:var(--red);box-shadow:0 0 0 3px var(--red-soft)}
+.field .hint{font-size:12.5px;color:var(--ink3)}
+.field .error{font-size:12.5px;color:var(--red);display:flex;gap:6px;align-items:center}
+
+/* superfícies */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg)}
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-xl);box-shadow:var(--sh-1)}
+.divider{height:1px;background:var(--border);border:0;margin:0}
+.badge{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:var(--r-pill);font:500 11px/1 var(--f-mono);letter-spacing:.06em;text-transform:uppercase}
+.badge-brand{background:var(--brand-fill);color:var(--on-brand)}
+.badge-soft{background:var(--bg2);color:var(--ink);box-shadow:var(--sh-1)}
+.badge-pix{background:var(--pix-soft);color:var(--pix)}
+.badge-amber{background:var(--amber-soft);color:var(--amber)}
+.note{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:12px;font-size:13.5px}
+.note-amber{background:var(--amber-soft);color:var(--amber)}
+.note-info{background:var(--info-soft);color:var(--info)}
+.note-pix{background:var(--pix-soft);color:var(--pix)}
+.note-red{background:var(--red-soft);color:var(--red)}
+
+/* foto de produto: a caneca ilustrada sobre o papel */
+.shot{position:relative;aspect-ratio:4/5;border-radius:var(--r-lg);overflow:hidden;background:radial-gradient(120% 90% at 50% 30%,#FFFFFF 0%,var(--bg3) 62%,var(--bg4) 100%);display:grid;place-items:center}
+.shot svg.prod{width:78%;height:auto}
+.shot .badge{position:absolute;top:10px;left:10px}
+
+/* ---------- moldura do mockup (não é produto) ---------- */
+.mk-body{margin:0;background:#E9E6E1;color:#1d1d1f;font-family:var(--f-body)}
+.mk-bar{position:sticky;top:0;z-index:50;background:#16181D;color:#E8EAF0;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:10px 20px;font-size:12.5px}
+.mk-bar b{font:600 12px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:#fff}
+.mk-grp{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.mk-grp span{color:#9BA1AE;margin-right:2px}
+.mk-seg{appearance:none;border:1px solid #333845;background:#1F222A;color:#E8EAF0;border-radius:8px;height:30px;padding:0 10px;font:500 12px var(--f-body);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.mk-seg[aria-pressed="true"]{background:#E8EAF0;color:#16181D;border-color:#E8EAF0}
+.mk-dot{width:12px;height:12px;border-radius:50%;border:1px solid rgba(255,255,255,.35)}
+.mk-wrap{max-width:1480px;margin:0 auto;padding:32px 20px 80px;display:flex;flex-direction:column;gap:56px}
+.mk-intro{max-width:760px;display:flex;flex-direction:column;gap:10px}
+.mk-intro h1{font:600 30px/1.15 var(--f-body);margin:0;letter-spacing:-.01em}
+.mk-intro p{margin:0;color:#4a4a4f;font-size:15px;line-height:1.6}
+.mk-screen{display:grid;grid-template-columns:300px 1fr;gap:28px;align-items:start}
+.mk-screen+.mk-screen{border-top:1px solid #d3cfc8;padding-top:48px}
+.mk-meta{position:sticky;top:70px;display:flex;flex-direction:column;gap:10px}
+.mk-meta .mk-n{font:500 11px var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:#8a5a00}
+.mk-meta h2{font:600 20px/1.25 var(--f-body);margin:0}
+.mk-meta p{margin:0;font-size:14px;line-height:1.55;color:#4a4a4f}
+.mk-meta ul{margin:0;padding-left:18px;font-size:13px;line-height:1.5;color:#4a4a4f;display:flex;flex-direction:column;gap:5px}
+.mk-meta code{font:12px var(--f-mono);background:#dcd8d1;padding:1px 5px;border-radius:4px}
+.mk-frames{display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap;min-width:0}
+.phone{width:390px;height:844px;border-radius:48px;background:#0F0F11;padding:11px;box-shadow:0 30px 60px -25px rgba(0,0,0,.45);flex:none;position:relative}
+.phone>.screen{width:100%;height:100%;border-radius:38px;overflow:hidden;position:relative;background:var(--bg)}
+.phone>.screen>.scroll{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none}
+.phone>.screen>.scroll::-webkit-scrollbar{display:none}
+.phone .notch{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:120px;height:30px;background:#0F0F11;border-radius:0 0 18px 18px;z-index:40}
+.statusbar{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px 0 30px;font:600 14px var(--f-body);color:var(--ink)}
+.desk-fit{flex:1 1 640px;min-width:0}
+.desk{width:1280px;border-radius:14px;overflow:hidden;background:var(--bg);box-shadow:0 30px 60px -25px rgba(0,0,0,.4);transform-origin:top left}
+.chrome{height:40px;background:#ECE8E2;display:flex;align-items:center;gap:14px;padding:0 14px;border-bottom:1px solid #DDD7CE}
+.chrome i{width:11px;height:11px;border-radius:50%;background:#D3CCC2;display:inline-block}
+.chrome .url{flex:1;max-width:560px;height:26px;border-radius:8px;background:#fff;font:12px/26px var(--f-mono);color:#6b6459;padding:0 12px;display:flex;gap:6px;align-items:center}
+.desk .viewport{height:820px;overflow-y:auto;position:relative}
+.mk-hide-phone .phone,.mk-hide-desk .desk-fit{display:none}
+@media (max-width:1000px){.mk-screen{grid-template-columns:1fr}.mk-meta{position:static}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+/* === KIT:END ================================================ */
+
+/* ---------- só desta página ---------- */
+/* moldura: status bar fixa, rolagem abaixo dela, camada para sobreposições */
+.phone>.screen>.scroll.h-below{top:44px}
+.h-sb{position:absolute;top:0;left:0;right:0;z-index:45;background:var(--bg)}
+.h-bat{display:inline-flex;gap:6px;align-items:center;font:600 12px var(--f-body)}
+.h-bat i{width:24px;height:11px;border:1.5px solid currentColor;border-radius:3px;position:relative}
+.h-bat i::after{content:"";position:absolute;top:1.5px;bottom:1.5px;left:1.5px;right:6px;background:currentColor;border-radius:1px}
+.h-vp{position:relative}
+.sv a{color:inherit;text-decoration:none}
+.sv button,.sv a{-webkit-tap-highlight-color:transparent}
+.sv :is(button,a,input):focus-visible{outline:2px solid var(--brand-text);outline-offset:2px}
+.h-view{animation:h-in 280ms var(--ease)}
+@keyframes h-in{from{opacity:0;transform:translateY(6px)}}
+.vh{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* faixa de anúncio */
+.h-ann{background:var(--brand-fill);color:var(--on-brand);padding:8px 16px;display:flex;flex-wrap:wrap;justify-content:center;gap:2px 16px;font:500 10.5px/1.6 var(--f-mono);letter-spacing:.08em;text-transform:uppercase}
+.h-ann span{white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.h-ann .ic{width:12px;height:12px;stroke-width:2.2;opacity:.85}
+.desk .h-ann{font-size:11px;padding:10px 24px;gap:4px 28px}
+
+/* cabeçalho preso + barra de categorias presa junto */
+.h-head{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 94%,transparent);-webkit-backdrop-filter:saturate(1.3) blur(10px);backdrop-filter:saturate(1.3) blur(10px);border-bottom:1px solid var(--border);transition:box-shadow var(--t) var(--ease)}
+.h-head.stuck{box-shadow:0 10px 24px -18px rgba(26,23,20,.45)}
+.h-bar{display:flex;align-items:center;gap:2px;height:58px;padding:0 6px}
+.h-word{font-family:var(--f-display);font-weight:var(--f-display-w);color:var(--brand-text);font-size:22px;letter-spacing:-.01em;line-height:1;white-space:nowrap;cursor:pointer}
+.h-bar .h-word{flex:1;padding-left:2px;min-height:44px;display:flex;align-items:center}
+.desk .h-bar{height:76px;max-width:1180px;margin:0 auto;padding:0 20px;gap:24px}
+.desk .h-bar .h-word{flex:none;font-size:28px}
+.h-dsearch-wrap{flex:1;max-width:520px;margin:0 auto;position:relative}
+.h-sfield{display:flex;align-items:center;gap:10px;height:46px;border-radius:999px;border:1px solid var(--border2);background:var(--bg2);padding:0 8px 0 16px;color:var(--ink3);transition:border-color var(--t),box-shadow var(--t)}
+.h-sfield:focus-within{border-color:var(--brand-text);box-shadow:0 0 0 3px var(--brand-wash-2)}
+.h-sfield input{flex:1;min-width:0;border:0;background:transparent;font:400 15px var(--f-body);color:var(--ink);height:100%;outline:0}
+.h-sfield input::placeholder{color:var(--ink3)}
+.h-sfield input::-webkit-search-cancel-button{display:none}
+.h-sfield .icon-btn{width:36px;height:36px;color:var(--ink3)}
+.h-right{display:flex;align-items:center;gap:4px}
+.h-link{appearance:none;border:0;background:none;cursor:pointer;font:500 14px var(--f-body);color:var(--ink2);height:44px;padding:0 12px;border-radius:10px;display:inline-flex;align-items:center;gap:8px}
+.h-link:hover{background:var(--bg3);color:var(--ink)}
+.h-cats{display:flex;gap:22px;overflow-x:auto;scrollbar-width:none;padding:0 16px;border-top:1px solid var(--border);-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent);mask-image:linear-gradient(90deg,#000 88%,transparent)}
+.h-cats::-webkit-scrollbar{display:none}
+.desk .h-cats{justify-content:center;gap:34px;-webkit-mask-image:none;mask-image:none}
+.h-cat{appearance:none;background:none;border:0;cursor:pointer;height:44px;padding:0 2px;font:500 14px var(--f-body);color:var(--ink2);white-space:nowrap;position:relative;flex:none}
+.h-cat:hover{color:var(--ink)}
+.h-cat[aria-current="page"]{color:var(--ink);font-weight:600}
+.h-cat[aria-current="page"]::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--brand-text);border-radius:2px}
+.sv .h-cat:focus-visible{outline-offset:-3px;border-radius:6px}
+
+/* hero com banners */
+.h-hero{position:relative;overflow:hidden;background:#1A1714;touch-action:pan-y;user-select:none}
+.desk .h-hero{height:427px}
+.phone .h-hero{height:476px}
+.h-slide{position:absolute;inset:0;opacity:0;visibility:hidden;transition:opacity 600ms var(--ease),visibility 0s linear 600ms}
+.h-slide.on{opacity:1;visibility:visible;transition:opacity 600ms var(--ease)}
+.h-art{position:absolute;inset:0;overflow:hidden}
+.h-slide.on .h-art{animation:h-drift 9s var(--ease) both}
+@keyframes h-drift{from{transform:scale(1.035)}to{transform:scale(1)}}
+.h-pos{position:absolute}
+.h-pos svg.prod{width:100%;height:auto;display:block}
+.h-deco{position:absolute;border-radius:50%;pointer-events:none}
+.h-scrim{position:absolute;inset:0;pointer-events:none}
+.desk .h-scrim{background:linear-gradient(90deg,rgba(20,17,14,.74) 0%,rgba(20,17,14,.44) 36%,rgba(20,17,14,0) 60%)}
+.phone .h-scrim{background:linear-gradient(0deg,rgba(20,17,14,.86) 0%,rgba(20,17,14,.55) 34%,rgba(20,17,14,0) 58%)}
+.h-htxt{position:absolute;display:flex;flex-direction:column;gap:10px;align-items:flex-start;z-index:2}
+.desk .h-htxt{left:96px;top:50%;transform:translateY(-54%);max-width:460px}
+.phone .h-htxt{left:20px;right:20px;bottom:76px;gap:8px}
+.h-kick{font:500 11px/1.2 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.84)}
+.sv .h-htxt h2{font-family:var(--f-display);font-weight:var(--f-display-w);color:#fff;font-size:48px;line-height:1.03;letter-spacing:-.015em}
+.sv .phone .h-htxt h2,.phone .sv .h-htxt h2{font-size:32px}
+.h-htxt p{color:rgba(255,255,255,.9);font-size:16px;line-height:1.5;max-width:420px}
+.phone .h-htxt p{font-size:14.5px}
+.h-cta{background:var(--bg2);color:var(--ink);margin-top:10px;box-shadow:0 10px 24px -12px rgba(0,0,0,.6)}
+.h-cta:hover{transform:translateY(-1px)}
+.h-cta .ic{transition:transform var(--t) var(--ease)}
+.h-cta:hover .ic{transform:translateX(3px)}
+.h-slide-link{position:absolute;inset:0;z-index:2;cursor:pointer}
+.h-slide-link:hover~.h-art,.h-slide-link:hover+.h-art{filter:brightness(1.03)}
+.sv .h-slide-link:focus-visible{outline:3px solid #fff;outline-offset:-6px;box-shadow:inset 0 0 0 7px rgba(20,17,14,.55)}
+.h-ctl{position:absolute;z-index:4;display:flex;align-items:center;padding:0 2px;border-radius:999px;background:rgba(20,17,14,.42);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.desk .h-ctl{left:96px;bottom:26px}
+.phone .h-ctl{left:14px;bottom:14px}
+.h-dot{appearance:none;border:0;background:none;width:40px;height:44px;display:grid;place-items:center;cursor:pointer;padding:0}
+.h-dot i{display:block;width:8px;height:8px;border-radius:4px;background:rgba(255,255,255,.55);position:relative;overflow:hidden;transition:width var(--t) var(--ease),background var(--t)}
+.h-dot:hover i{background:rgba(255,255,255,.85)}
+.h-dot[aria-current="true"] i{width:30px;background:rgba(255,255,255,.34)}
+.h-dot[aria-current="true"] i::after{content:"";position:absolute;inset:0;background:#fff;transform-origin:left center;animation:h-prog 6s linear forwards}
+.h-hero.paused .h-dot i::after{animation-play-state:paused}
+.h-hero.static .h-dot[aria-current="true"] i::after{animation:none;transform:none}
+@keyframes h-prog{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.h-ctl .icon-btn{color:#fff;width:44px;height:44px}
+.h-ctl .icon-btn:hover{background:rgba(255,255,255,.12)}
+.h-arrow{position:absolute;top:50%;z-index:4;transform:translateY(-50%);width:48px;height:48px;border-radius:50%;border:0;background:rgba(251,248,243,.9);color:var(--ink);display:grid;place-items:center;cursor:pointer;box-shadow:var(--sh-2);transition:background var(--t),transform var(--t-fast) var(--ease)}
+.h-arrow:hover{background:#fff}
+.h-arrow:active{transform:translateY(-50%) scale(.96)}
+.h-arrow.prev{left:24px}.h-arrow.next{right:24px}
+.sv .h-hero :focus-visible{outline-color:#fff}
+.h-count{position:absolute;right:24px;bottom:34px;z-index:4;font:500 11px var(--f-mono);letter-spacing:.14em;color:rgba(255,255,255,.8)}
+.phone .h-count{right:18px;bottom:28px}
+.h-baked{position:absolute;color:#23305E}
+
+/* hero sem banner: título + mockup girando */
+.h-h0{position:relative;padding:26px 16px 30px;display:flex;flex-direction:column;gap:16px;background:radial-gradient(110% 60% at 85% 0%,var(--brand-wash-2) 0%,transparent 55%),var(--bg);overflow:hidden}
+.desk .h-h0{display:grid;grid-template-columns:1.02fr 1fr;align-items:center;gap:64px;padding:56px 80px 64px}
+.h-h0-t{display:flex;flex-direction:column;gap:16px;align-items:flex-start}
+.h-h0-k{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.h-h0-k .h-word{font-size:19px}
+.sv .h-h0 h1{font-size:36px;line-height:1.04;letter-spacing:-.02em}
+.sv .desk .h-h0 h1,.desk .sv .h-h0 h1{font-size:64px;line-height:.98}
+.h-h0 .lead{font-size:15.5px;color:var(--ink2);max-width:470px}
+.desk .h-h0 .lead{font-size:18px;line-height:1.55}
+.h-h0-cta{display:flex;gap:10px;flex-wrap:wrap}
+.phone .h-h0-cta .btn{flex:1 1 150px}
+.h-h0-facts{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:13px;color:var(--ink2)}
+.h-h0-facts span{display:inline-flex;align-items:center;gap:6px}
+.h-h0-facts .ic{color:var(--brand-text)}
+.h-h0-facts .pixf .ic{color:var(--pix)}
+.h-stage-col{display:flex;flex-direction:column;gap:12px;min-width:0}
+.h-stage{position:relative;border-radius:28px;overflow:hidden;border:1px solid var(--border);background:radial-gradient(80% 70% at 50% 36%,#FFFFFF 0%,var(--bg3) 58%,var(--bg4) 100%);aspect-ratio:1/1}
+.phone .h-stage{aspect-ratio:auto;height:318px;border-radius:22px}
+.h-disc{position:absolute;left:12%;right:12%;bottom:15%;height:12%;border-radius:50%;background:radial-gradient(50% 50% at 50% 50%,rgba(26,23,20,.10),rgba(26,23,20,0) 70%)}
+.h-mug{position:absolute;inset:6% 12% 17% 10%;display:grid;place-items:center;opacity:0;transition:opacity 700ms var(--ease)}
+.phone .h-mug{inset:4% 16% 22% 14%}
+.h-mug.on{opacity:1}
+.h-mug svg.prod{width:100%;height:100%;animation:h-sway 7s ease-in-out infinite alternate;transform-origin:50% 85%}
+.h-spin{transform-box:fill-box;transform-origin:center;animation:h-spin 7s ease-in-out infinite alternate}
+@keyframes h-spin{0%{transform:translateX(-17px) scaleX(.84);opacity:.88}50%{transform:translateX(0) scaleX(1);opacity:1}100%{transform:translateX(15px) scaleX(.86);opacity:.9}}
+@keyframes h-sway{0%{transform:rotate(-1.4deg) translateY(0)}100%{transform:rotate(1.4deg) translateY(-3px)}}
+.h-stage.paused svg.prod,.h-stage.paused .h-spin{animation-play-state:paused}
+.h-stage-tag{position:absolute;top:14px;left:14px;z-index:2}
+.h-stage-pause{position:absolute;top:6px;right:6px;z-index:2;color:var(--ink2)}
+.h-stage-bar{position:absolute;left:12px;right:12px;bottom:12px;z-index:2;display:flex;align-items:center;gap:4px;padding:4px;border-radius:16px;background:color-mix(in srgb,var(--bg2) 86%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:var(--sh-1);border:1px solid var(--border)}
+.h-pills{display:flex;gap:4px;flex:1;min-width:0}
+.h-pill{appearance:none;border:0;background:transparent;cursor:pointer;flex:1 1 auto;min-width:0;height:44px;border-radius:12px;font:500 13.5px var(--f-body);color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 8px;position:relative;transition:background var(--t),color var(--t)}
+.h-pill:hover{color:var(--ink)}
+.h-pill[aria-checked="true"]{background:var(--brand-fill);color:var(--on-brand);font-weight:600}
+.h-stage-bar .icon-btn{flex:none;color:var(--ink2)}
+.h-stage-cap{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 4px;flex-wrap:wrap}
+.h-stage-cap .t-small b{color:var(--ink);font-weight:600}
+
+/* seções */
+.h-sec{padding:40px 16px;display:flex;flex-direction:column;gap:20px}
+.desk .h-sec{padding:72px 0;max-width:1120px;margin:0 auto}
+.h-sec+.h-sec{border-top:1px solid var(--border)}
+.h-sec-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px}
+.h-sec-head>div{display:flex;flex-direction:column;gap:8px}
+.sv .h-sec-head h2{font-size:26px}
+.sv .desk .h-sec-head h2,.desk .sv .h-sec-head h2{font-size:36px}
+.h-more{font-size:13.5px;font-weight:600;color:var(--brand-text);display:inline-flex;align-items:center;gap:4px;min-height:44px;cursor:pointer;white-space:nowrap}
+
+/* como funciona */
+.h-steps{display:grid;gap:10px;counter-reset:s}
+.desk .h-steps{grid-template-columns:repeat(3,1fr);gap:20px}
+.h-step{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;display:flex;gap:14px;align-items:flex-start}
+.desk .h-step{flex-direction:column;padding:26px;gap:16px}
+.h-step-ic{width:44px;height:44px;border-radius:12px;background:var(--brand-wash-2);color:var(--brand-text);display:grid;place-items:center;flex:none}
+.h-step-n{font:500 11px var(--f-mono);letter-spacing:.12em;color:var(--brand-text)}
+.h-step b{display:block;font-size:15.5px;font-weight:600;margin:2px 0 4px;color:var(--ink)}
+.desk .h-step b{font-size:17px}
+.h-step p{font-size:13.5px;color:var(--ink2)}
+.h-step .badge{margin-top:10px;background:var(--bg3);color:var(--ink)}
+
+/* grade (cartão "foto grande": nome e preço sobre a foto, véu por baixo) */
+.h-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.desk .h-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:22px}
+.desk .h-grid.h-grid-cat{grid-template-columns:repeat(4,minmax(0,1fr));gap:20px}
+.h-card{appearance:none;border:0;padding:0;margin:0;background:var(--bg2);border-radius:var(--r-lg);overflow:hidden;position:relative;cursor:pointer;text-align:left;display:block;width:100%;font:inherit;color:inherit;box-shadow:var(--sh-1);transition:transform var(--t) var(--ease),box-shadow var(--t) var(--ease)}
+.h-card:hover{transform:translateY(-2px);box-shadow:var(--sh-2)}
+.h-card:active{transform:scale(.985)}
+.h-card .shot{border-radius:0;place-items:start center;padding-top:5%}
+.h-card .shot svg.prod{width:84%}
+.desk .h-grid:not(.h-grid-cat) .h-card .shot{aspect-ratio:1/1.08}
+.desk .h-grid:not(.h-grid-cat) .h-card .shot svg.prod{width:74%}
+.h-trio{position:absolute;inset:0}
+.h-trio>div{position:absolute}
+.h-trio svg.prod{width:100%!important;height:auto}
+.h-trio .a{left:-2%;top:16%;width:54%;filter:brightness(.97)}
+.h-trio .c{right:-4%;top:14%;width:54%;filter:brightness(.97)}
+.h-trio .b{left:18%;top:3%;width:66%;z-index:1}
+.h-veil{position:absolute;left:0;right:0;bottom:0;padding:44px 12px 12px;background:linear-gradient(180deg,rgba(20,17,14,0) 0%,rgba(20,17,14,.6) 42%,rgba(20,17,14,.86) 100%);color:#fff;display:flex;flex-direction:column;gap:3px}
+.desk .h-veil{padding:56px 18px 18px;gap:4px}
+.h-veil .ch{font:500 9.5px/1.3 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.78);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.h-veil .kind{font:500 10px/1.3 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:#fff;opacity:.9}
+.h-veil .nm{font-family:var(--f-display);font-weight:var(--f-display-w);font-size:17px;line-height:1.15;letter-spacing:-.005em}
+.desk .h-veil .nm{font-size:21px}
+.desk .h-grid-cat .h-veil .nm{font-size:18px}
+.h-veil .pr{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline;margin-top:2px}
+.h-veil .pr b{font:500 13.5px var(--f-mono);font-variant-numeric:tabular-nums}
+.h-veil .pr small{font-size:11px;opacity:.8}
+.h-veil .px{font-size:11.5px;color:#A6E6C1;font-weight:600}
+.h-veil .es{font-size:11px;color:rgba(255,255,255,.82)}
+.phone .h-veil{padding:36px 10px 10px;gap:2px}
+.phone .h-veil .ch{display:none}
+.phone .h-veil .nm{font-size:15.5px}
+.phone .h-veil .pr b{font-size:12.5px}
+.phone .h-veil .px{font-size:11px}
+.phone .h-card .shot{aspect-ratio:3/4;padding-top:3%}
+.phone .h-card .shot svg.prod{width:78%}
+.phone .h-grid:not(.h-grid-cat) .h-card .shot{aspect-ratio:4/5}
+
+/* queridinhos */
+.h-rail{display:grid;grid-auto-flow:column;grid-auto-columns:58%;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;margin:0 -16px;padding:0 16px 6px;scrollbar-width:none}
+.h-rail::-webkit-scrollbar{display:none}
+.desk .h-rail{grid-auto-flow:row;grid-template-columns:repeat(4,1fr);grid-auto-columns:auto;margin:0;padding:0;gap:22px;overflow:visible}
+.h-mini{appearance:none;border:0;background:none;padding:0;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:8px;scroll-snap-align:start;font:inherit;color:inherit;border-radius:var(--r-lg)}
+.h-mini .shot{aspect-ratio:1/1;transition:transform var(--t) var(--ease)}
+.h-mini:hover .shot{transform:translateY(-2px)}
+.h-mini .nm{font-size:14px;font-weight:500;color:var(--ink);line-height:1.3}
+.h-mini .row{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.h-mini .ord{font:500 11px var(--f-mono);color:var(--ink3)}
+
+/* artes prontas */
+.h-artes{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.desk .h-artes{grid-template-columns:repeat(6,1fr);gap:16px}
+.h-arte{appearance:none;border:0;background:none;padding:0;cursor:pointer;display:flex;flex-direction:column;gap:6px;text-align:left;font:inherit;color:inherit}
+.h-arte-img{aspect-ratio:1/1;border-radius:var(--r-md);background:var(--bg2);border:1px solid var(--border);display:grid;place-items:center;transition:border-color var(--t),transform var(--t) var(--ease),box-shadow var(--t)}
+.h-arte:hover .h-arte-img{border-color:var(--brand-text);transform:translateY(-2px);box-shadow:var(--sh-2)}
+.h-arte-img svg{width:82%;height:82%}
+.h-arte span{font-size:12.5px;color:var(--ink2)}
+
+/* para empresas */
+.h-b2b{border-radius:var(--r-xl);background:var(--brand-wash);border:1px solid var(--brand-wash-2);padding:22px 20px;display:grid;gap:18px;overflow:hidden;position:relative}
+.desk .h-b2b{grid-template-columns:1.08fr 1fr;padding:48px 52px;gap:40px;align-items:center}
+.h-b2b-t{display:flex;flex-direction:column;gap:12px;align-items:flex-start}
+.sv .h-b2b h2{font-size:25px}
+.sv .desk .h-b2b h2,.desk .sv .h-b2b h2{font-size:34px}
+.h-b2b .lbl{color:var(--brand-text)}
+.h-ladder{display:flex;gap:8px;flex-wrap:wrap}
+.h-ladder{flex-wrap:nowrap;width:100%}
+.desk .h-ladder{width:auto}
+.h-rung{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;gap:1px;flex:1 1 0;min-width:0}
+.desk .h-rung{flex:none;min-width:120px;padding:10px 14px}
+.h-rung small{font:500 10.5px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+.h-rung b{font:500 14px var(--f-mono);color:var(--ink)}
+.h-rung em{font-style:normal;font-size:12px;font-weight:600;color:var(--brand-text)}
+.h-b2b-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.phone .h-b2b-acts .btn{width:100%}
+.h-fan{position:relative;height:150px}
+.desk .h-fan{height:300px}
+.h-fan>div{position:absolute;bottom:0;width:30%}
+.desk .h-fan>div{width:32%}
+.h-fan svg.prod{width:100%;height:auto;display:block}
+
+/* selos */
+.h-selos{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.desk .h-selos{grid-template-columns:repeat(4,1fr);gap:16px}
+.h-selo{display:flex;flex-direction:column;gap:10px;padding:16px;border-radius:var(--r-lg);background:var(--bg2);border:1px solid var(--border)}
+.desk .h-selo{flex-direction:row;padding:20px;gap:14px}
+.h-selo .h-step-ic{width:40px;height:40px;border-radius:50%}
+.h-selo b{display:block;font-size:14px;font-weight:600;color:var(--ink)}
+.h-selo p{font-size:12.5px;color:var(--ink2);margin-top:2px}
+
+/* WhatsApp flutuante (cor da loja, par legível) */
+.h-wa{position:absolute;right:16px;bottom:22px;z-index:30;display:inline-flex;align-items:center;gap:8px;height:50px;padding:0 20px 0 16px;border-radius:999px;border:1px solid var(--brand-wash-2);background:var(--brand-fill);color:var(--on-brand);box-shadow:0 12px 26px -12px var(--brand-ring),var(--sh-2);font:600 14px var(--f-body);cursor:pointer;transition:transform var(--t) var(--ease),box-shadow var(--t)}
+.h-wa:hover{transform:translateY(-2px)}
+.desk .h-wa{right:28px;bottom:28px}
+
+/* rodapé */
+.h-foot{background:var(--bg3);border-top:1px solid var(--border);padding:36px 16px 104px}
+.desk .h-foot{padding:64px 0 36px}
+.h-foot-in{max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+.h-fcols{display:grid;gap:30px}
+.desk .h-fcols{grid-template-columns:1.35fr 1.35fr 1fr;gap:64px}
+.h-fc{display:flex;flex-direction:column;gap:12px;align-items:flex-start}
+.h-fc .h-word{font-size:26px}
+.h-finfo{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;font-size:13.5px;color:var(--ink2)}
+.h-finfo li{display:flex;gap:10px;align-items:flex-start}
+.h-finfo .ic{margin-top:2px;color:var(--ink3)}
+.h-fsoc{display:flex;gap:8px;flex-wrap:wrap}
+.h-fsoc .chip{font-size:13px;background:var(--bg2)}
+.h-fpay{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-direction:column;gap:8px;font-size:13.5px;color:var(--ink)}
+.h-fpay li{display:flex;gap:10px;align-items:center}
+.h-fpay em{font-style:normal;font-size:12px;color:var(--pix);font-weight:600}
+.h-fnav{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;width:100%}
+.phone .h-fnav{display:grid;grid-template-columns:1fr 1fr;column-gap:12px}
+.h-fnav a{display:flex;align-items:center;min-height:44px;font-size:14.5px;color:var(--ink2);cursor:pointer}
+.h-fnav a:hover{color:var(--ink);text-decoration:underline;text-underline-offset:3px}
+.h-legal{border-top:1px solid var(--border2);padding-top:18px;display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--ink3)}
+.desk .h-legal{flex-direction:row;justify-content:space-between;align-items:center}
+.h-legal a{display:inline-flex;align-items:center;min-height:44px;cursor:pointer}
+.h-legal a b{color:var(--ink2);font-weight:600;margin-left:4px}
+.h-legal a:hover{color:var(--ink2)}
+
+/* página de categoria */
+.h-catpage{padding:14px 16px 40px;display:flex;flex-direction:column;gap:14px}
+.desk .h-catpage{max-width:1120px;margin:0 auto;padding:28px 0 72px;gap:18px}
+.h-crumbs{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink3);flex-wrap:wrap}
+.h-crumbs a{min-height:44px;display:inline-flex;align-items:center;color:var(--ink2);text-decoration:underline;text-decoration-color:var(--border2);text-underline-offset:3px;cursor:pointer}
+.h-crumbs a:hover{color:var(--ink)}
+.h-crumbs [aria-current]{color:var(--ink);font-weight:500}
+.h-cathead{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.sv .h-cathead h1{font-size:34px;outline:0}
+.sv .desk .h-cathead h1,.desk .sv .h-cathead h1{font-size:46px}
+.h-catcount{font:500 13px var(--f-mono);color:var(--ink3)}
+.h-subs{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px 4px}
+.desk .h-subs{margin:0;padding:2px 0 4px;flex-wrap:wrap}
+.h-subs::-webkit-scrollbar{display:none}
+.h-subs .chip{flex:none;font-size:13.5px}
+.h-subs .chip .n{font:500 11.5px var(--f-mono);color:var(--ink3)}
+.h-catend{margin-top:10px;padding:18px;border-radius:var(--r-lg);border:1px dashed var(--border2);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:14px;color:var(--ink2)}
+
+/* gaveta (celular) */
+.h-drawer{position:absolute;inset:44px 0 0;z-index:50}
+.h-drawer[hidden]{display:none}
+.h-dscrim{position:absolute;inset:0;background:rgba(20,17,14,.42);opacity:0;transition:opacity var(--t) var(--ease)}
+.h-dpanel{position:absolute;top:0;bottom:0;left:0;width:88%;background:var(--bg);box-shadow:var(--sh-3);display:flex;flex-direction:column;transform:translateX(-102%);transition:transform 260ms var(--ease);overflow-y:auto}
+.h-dpanel>*{flex-shrink:0}
+.h-drawer.open .h-dscrim{opacity:1}
+.h-drawer.open .h-dpanel{transform:none}
+.h-dtop{display:flex;align-items:center;justify-content:space-between;padding:8px 8px 8px 20px;border-bottom:1px solid var(--border);min-height:60px}
+.h-dsearch{margin:14px 16px 6px;appearance:none;display:flex;align-items:center;gap:10px;height:46px;border-radius:999px;border:1px solid var(--border2);background:var(--bg2);padding:0 16px;font:400 15px var(--f-body);color:var(--ink3);cursor:pointer;text-align:left}
+.h-dlist{list-style:none;margin:0;padding:6px 8px;display:flex;flex-direction:column}
+.h-dlist ul{list-style:none;margin:0 0 6px;padding:0 0 0 12px}
+.h-drow{appearance:none;border:0;background:none;width:100%;min-height:50px;display:flex;align-items:center;gap:12px;padding:0 12px;border-radius:12px;font:500 16px var(--f-body);color:var(--ink);cursor:pointer;text-align:left}
+.h-drow:hover{background:var(--bg3)}
+.h-drow .n{margin-left:auto;font:500 12px var(--f-mono);color:var(--ink3)}
+.h-drow .ic.chev{color:var(--ink3);transition:transform var(--t) var(--ease)}
+.h-drow[aria-expanded="true"] .ic.chev{transform:rotate(180deg)}
+.h-drow[aria-expanded="true"]{font-weight:600}
+.h-drow.sub{min-height:46px;font-size:15px;font-weight:400;color:var(--ink2);border-left:1px solid var(--border);border-radius:0 12px 12px 0}
+.h-drow.sub.all{color:var(--brand-text);font-weight:600}
+.h-drow .ic:not(.chev){color:var(--ink3)}
+.h-dsep{height:1px;background:var(--border);margin:8px 20px}
+.h-dfoot{margin-top:auto;padding:18px 20px 26px;display:flex;flex-direction:column;gap:8px;font-size:12.5px;color:var(--ink3);border-top:1px solid var(--border);background:var(--bg3)}
+.h-dfoot span{display:flex;gap:8px;align-items:flex-start}
+
+/* busca (celular: camada cheia; desktop: lista suspensa) */
+.h-search{position:absolute;inset:44px 0 0;z-index:50;background:var(--bg);display:flex;flex-direction:column}
+.h-search[hidden]{display:none}
+.h-search-top{display:flex;align-items:center;gap:4px;padding:8px 12px 10px 4px;border-bottom:1px solid var(--border)}
+.h-search-top .h-sfield{flex:1}
+.h-sres{overflow-y:auto;flex:1;padding:6px 0 30px}
+.h-dd{position:absolute;left:0;right:0;top:calc(100% + 8px);z-index:40;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--sh-3);max-height:520px;overflow-y:auto;padding:8px 0}
+.h-dd[hidden]{display:none}
+.h-rlabel{padding:14px 16px 6px;display:flex;justify-content:space-between;align-items:baseline}
+.h-rrow{appearance:none;border:0;background:none;width:100%;display:flex;align-items:center;gap:12px;padding:8px 16px;min-height:56px;text-align:left;cursor:pointer;font:inherit;color:inherit}
+.h-rrow:hover,.h-rrow:focus-visible{background:var(--bg3)}
+.h-rthumb{width:52px;height:52px;border-radius:10px;flex:none;background:radial-gradient(120% 90% at 50% 30%,#fff 0%,var(--bg3) 62%,var(--bg4) 100%);display:grid;place-items:center;overflow:hidden;border:1px solid var(--border)}
+.h-rthumb svg.prod{width:86%;height:auto}
+.h-rtxt{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.h-rtxt .nm{font-size:14.5px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.h-rtxt .nm mark{background:transparent;color:var(--ink);font-weight:700;text-decoration:underline;text-decoration-color:var(--brand-ring);text-decoration-thickness:2px;text-underline-offset:3px}
+.h-rtxt .sub{font-size:12.5px;color:var(--ink3)}
+.h-rrow .price{font-size:13.5px}
+.h-rcat .h-rthumb{background:var(--brand-wash-2);color:var(--brand-text);border-color:transparent}
+.h-sugs{display:flex;flex-wrap:wrap;gap:8px;padding:4px 16px 8px}
+.h-sugs .chip{min-height:40px;font-size:13.5px}
+.h-empty{padding:40px 24px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px}
+.h-empty-ic{width:56px;height:56px;border-radius:50%;background:var(--bg3);display:grid;place-items:center;color:var(--ink3);margin-bottom:4px}
+.sv .h-empty h3{font-size:21px}
+.h-empty p{font-size:14px;color:var(--ink2);max-width:300px}
+.h-empty .acts{display:flex;flex-direction:column;gap:8px;width:100%;max-width:300px;margin-top:10px}
+
+/* aviso do mockup (não é produto) */
+.mk-toast{position:absolute;left:50%;bottom:92px;z-index:70;transform:translate(-50%,8px);background:#16181D;color:#E8EAF0;font:500 12.5px/1.45 var(--f-body);padding:10px 14px;border-radius:10px;width:max-content;max-width:84%;opacity:0;pointer-events:none;transition:opacity 200ms,transform 200ms;box-shadow:0 12px 30px -12px rgba(0,0,0,.5)}
+.mk-toast.on{opacity:1;transform:translate(-50%,0)}
+.mk-toast b{font:600 10px var(--f-mono);letter-spacing:.12em;color:#F2C94C;margin-right:8px}
+.mk-ctl{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:12px;background:#f3f0ea;border:1px solid #dcd6cc;border-radius:12px}
+.mk-ctl>span{font:500 10.5px var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:#6b665f;width:100%}
+.mk-pill{appearance:none;border:1px solid #cfc9bf;background:#fff;border-radius:8px;min-height:32px;padding:0 10px;font:500 12.5px var(--f-body);cursor:pointer;color:#1d1d1f}
+.mk-pill[aria-pressed="true"]{background:#16181D;color:#fff;border-color:#16181D}
+.mk-frames.mk-trio{gap:24px}
+
+/* esqueleto */
+.h-sk{background:var(--bg4);border-radius:8px;animation:h-pulse 1.44s ease-in-out infinite}
+.h-sk.d{background:var(--border2)}
+@keyframes h-pulse{0%,100%{opacity:.55}50%{opacity:1}}
+.h-reduce .h-sk{animation:none;opacity:.85}
+.h-skw{display:flex;flex-direction:column}
+.h-skrow{display:flex;align-items:center;gap:12px}
+
+@media (hover:none){.h-card:hover,.h-mini:hover .shot,.h-arte:hover .h-arte-img{transform:none}}
+@media (prefers-reduced-motion:reduce){.h-dot i::after{animation:none!important}.h-slide,.h-dpanel,.h-dscrim,.h-mug{transition:none!important}}
+</style>
+</head>
+<body class="mk-body">
+
+<!-- ======== sprite de ícones (KIT) ======== -->
+<!-- === KIT:SPRITE:BEGIN === -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-bag" viewBox="0 0 24 24"><path d="M5.5 8h13l-1.1 12.1a1 1 0 0 1-1 .9H7.6a1 1 0 0 1-1-.9L5.5 8Z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5 8 12l7 7"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15V3.5M8 7.5l4-4 4 4M5 12.5V19a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-6.5"/></symbol>
+  <symbol id="i-wa" viewBox="0 0 24 24"><path d="M20 11.6a8.4 8.4 0 0 1-12.4 7.4L3.5 20.3l1.3-3.9A8.4 8.4 0 1 1 20 11.6Z"/><path d="M9 8.6c0 3.3 2.9 6.2 6.1 6.3l1.1-1.4-1.9-1-1 .8a4.6 4.6 0 0 1-2.4-2.4l.8-1-1-1.9Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></symbol>
+  <symbol id="i-truck" viewBox="0 0 24 24"><path d="M3 6.5h10.5v9.5H3zM13.5 10h4l3 3.2V16h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></symbol>
+  <symbol id="i-store" viewBox="0 0 24 24"><path d="M4 9.5 5.6 4.5h12.8L20 9.5M4.5 9.5v10h15v-10M9.5 19.5v-5h5v5"/><path d="M4 9.5c0 1.4 1.1 2.3 2.7 2.3S9.3 10.9 9.3 9.5c0 1.4 1.2 2.3 2.7 2.3s2.7-.9 2.7-2.3c0 1.4 1.1 2.3 2.6 2.3S20 10.9 20 9.5"/></symbol>
+  <symbol id="i-moto" viewBox="0 0 24 24"><circle cx="5.5" cy="16.5" r="3"/><circle cx="18.5" cy="16.5" r="3"/><path d="M5.5 16.5 9.5 10h5l4 6.5M13 10l-1.3-3H9.5"/></symbol>
+  <symbol id="i-pix" viewBox="0 0 24 24"><path d="m12 3.2 3.4 3.4-3.4 3.4-3.4-3.4zM12 14l3.4 3.4-3.4 3.4-3.4-3.4zM3.2 12l3.4-3.4L10 12l-3.4 3.4zM14 12l3.4-3.4 3.4 3.4-3.4 3.4z"/></symbol>
+  <symbol id="i-card" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3 9.5h18M6.5 15h4"/></symbol>
+  <symbol id="i-cash" viewBox="0 0 24 24"><rect x="3" y="6.5" width="18" height="11" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9.5v5M18 9.5v5"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15.5V4M7.5 8.5 12 4l4.5 4.5M4.5 15v4a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-4"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="m20.5 16-5-5-9 8.5"/></symbol>
+  <symbol id="i-brush" viewBox="0 0 24 24"><path d="M14.5 4.5 19.5 9.5 11 18l-5-5z"/><path d="M6 13c-2 0-3 1.5-3 3.5V20h3.5C8.5 20 10 19 10 17"/></symbol>
+  <symbol id="i-ruler" viewBox="0 0 24 24"><path d="M3.5 15.5 15.5 3.5l5 5-12 12z"/><path d="m7.5 11.5 2 2M10.5 8.5l1.5 1.5M13.5 5.5l2 2"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.8v.1"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4 21 19.5H3z"/><path d="M12 10v4.5M12 17v.1"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4.5L19.5 9 15 4.5 4 15.5z"/><path d="m13 6.5 4.5 4.5"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2"/><path d="M15.5 8.5V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v9.5a1 1 0 0 0 1 1h3.5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="14.5" rx="2"/><path d="M4 10h16M9 3.5v4M15 3.5v4"/></symbol>
+  <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 0 1 13.2-4.9M18 3.5v4h-4M19.5 12a7.5 7.5 0 0 1-13.2 4.9M6 20.5v-4h4"/></symbol>
+  <symbol id="i-zoom" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5M11 8.5v5M8.5 11h5"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5 19 6.5v5.5c0 4.3-2.9 7.3-7 8.5-4.1-1.2-7-4.2-7-8.5V6.5z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M3.5 7.8 12 3.5l8.5 4.3v8.4L12 20.5l-8.5-4.3z"/><path d="M3.5 7.8 12 12l8.5-4.2M12 12v8.5"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.8"/></symbol>
+  <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M6 3.5h12v17l-2.4-1.5-2.4 1.5-1.2-.8-1.2.8-2.4-1.5L6 20.5z"/><path d="M9 8h6M9 11.5h6M9 15h3.5"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c.8-3.6 3.8-5.8 7.5-5.8s6.7 2.2 7.5 5.8"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.4"/></symbol>
+  <symbol id="i-instagram" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><path d="M17.2 6.8v.1"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 19.5s-7.5-4.4-7.5-10A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 7.5 2.5c0 5.6-7.5 10-7.5 10Z"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 4 8.5 4.5L12 13 3.5 8.5z"/><path d="m3.5 12.5 8.5 4.5 8.5-4.5M3.5 16.5 12 21l8.5-4.5"/></symbol>
+  <symbol id="i-text" viewBox="0 0 24 24"><path d="M5 6.5V5h14v1.5M12 5v14M9 19h6"/></symbol>
+  <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1 0 1.6-.8 1.6-1.6 0-1-.8-1.4-.8-2.3 0-.9.7-1.6 1.6-1.6h2.1a4 4 0 0 0 4-4c0-4.2-3.8-7.5-8.5-7.5Z"/><circle cx="7.8" cy="11.5" r="1"/><circle cx="10.5" cy="7.6" r="1"/><circle cx="15" cy="7.8" r="1"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4h-4"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></symbol>
+</svg>
+<!-- === KIT:SPRITE:END === -->
+<!-- sprite só desta página -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5.5v13M15 5.5v13"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.3"/><path d="M3 19.5c.6-3.2 3-5 6-5s5.4 1.8 6 5"/><path d="M15.5 5.4a3.2 3.2 0 0 1 0 6.2M17.6 14.8c1.9.6 3.1 2.2 3.4 4.7"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></symbol>
+</svg>
+
+<div class="mk-bar" id="mk-bar">
+  <b>Mockup · Vitrine Studio · Fase 5 · Home e navegação</b>
+  <div class="mk-grp"><span>Cor da loja</span><div id="mk-brands" class="mk-grp"></div></div>
+  <div class="mk-grp"><span>Tipografia</span><div id="mk-fonts" class="mk-grp"></div></div>
+  <div class="mk-grp"><span>Ver</span><div id="mk-devices" class="mk-grp"></div></div>
+</div>
+
+<div class="mk-wrap">
+  <header class="mk-intro">
+    <h1>Fase 5 — Home e navegação</h1>
+    <p>A porta de entrada da loja, no nível do resto da vitrine. O que a home tem de bom fica (faixa de avisos, como funciona, grade agrupada, queridinhos, bloco para empresas, rodapé de três colunas). O que a Negócio já resolveu entra: cabeçalho preso com busca e sacola, três banners com botão e destino, selos, trilha de categorias. O que não serve a uma loja de encomenda fica de fora: nada de "últimas unidades", filtros laterais ou paginação.</p>
+    <p>Tudo dentro das molduras funciona: os banners giram e param no toque, as categorias abrem a página da categoria, a busca filtra enquanto você digita, o menu abre a gaveta. Troque a cor da loja na barra de cima; a amarela é o teste de fogo.</p>
+  </header>
+
+  <!-- ============ TELA 1 ============ -->
+  <section class="mk-screen">
+    <div class="mk-meta">
+      <span class="mk-n">Tela 1</span>
+      <h2>Home com banners</h2>
+      <p>Hoje só o primeiro banner aparece, sem botão, sem link e sem kicker (<code>HomeDaVitrine.tsx:85-183</code>). A lojista configura tudo isso na aba Design e a vitrine joga fora.</p>
+      <ul>
+        <li><b>Faixa de anúncio</b> da aba Design; vazia, a automática do Studio: <code>avisosDaLoja()</code> com "Você aprova o mockup antes de produzir · Pronto em N dias úteis · X% no Pix". Parada, sem letreiro (decisão já registrada no componente). No celular quebra em duas linhas.</li>
+        <li><b>Cabeçalho preso</b> com wordmark, busca e sacola com contador. A barra de categorias fica presa <b>junto</b> (hoje só a busca prende: <code>ProductList.tsx:133-137</code>). Sombra só depois de rolar.</li>
+        <li><b>Até 3 banners</b>, 6 s cada. A bolinha ativa enche como barra de progresso. Para no toque, no mouse por cima e no foco do teclado; o botão de pausa segura de vez. Com reduzir movimento, não gira sozinho. Setas só no desktop; no celular, arrastar.</li>
+        <li><b>Destino interno</b> igual à Negócio (<code>irPeloCta</code>): <code>#cat=/canecas</code> abre a categoria, <code>#vista=lote</code> abre o orçamento. Teste "Ver canecas".</li>
+        <li><b>Banner 3 é arte pronta</b>: a lojista escreveu o texto dentro da imagem e só preencheu o destino. Sem texto nosso por cima, o banner inteiro vira o link (sem véu escuro).</li>
+        <li><b>Arte do celular</b> própria (<code>image_url_mobile</code>): outra composição, texto embaixo. Sem ela, vale a regra da Negócio: hero na proporção 3:1, arte inteira.</li>
+        <li>Pix 5% é exemplo configurável; a Sheid hoje não dá desconto e a faixa não anunciaria.</li>
+      </ul>
+      <div class="mk-ctl" id="ctl-banner"><span>Ir para o banner</span>
+        <button class="mk-pill" data-n="0" aria-pressed="true">1 · Dia das Mães</button>
+        <button class="mk-pill" data-n="1" aria-pressed="false">2 · Lote</button>
+        <button class="mk-pill" data-n="2" aria-pressed="false">3 · Arte pronta</button>
+      </div>
+    </div>
+    <div class="mk-frames">
+      <div class="phone"><div class="notch"></div><div class="screen sv"><div class="statusbar h-sb"><span>9:41</span><span class="h-bat">5G<i></i></span></div><div class="scroll h-below" id="s1p"></div></div></div>
+      <div class="desk-fit"><div class="desk"><div class="chrome"><i></i><i></i><i></i><div class="url"><svg class="ic sm"><use href="#i-lock"/></svg><span class="u">loja.getaura.com.br/sheid-mania</span></div></div><div class="h-vp sv"><div class="viewport" id="s1d"></div></div></div></div>
+    </div>
+  </section>
+
+  <!-- ============ TELA 2 ============ -->
+  <section class="mk-screen">
+    <div class="mk-meta">
+      <span class="mk-n">Tela 2</span>
+      <h2>Home sem banner: o caso real da Sheid</h2>
+      <p>A Sheid não tem banner cadastrado. Hoje o desktop fica com metade do hero vazia (<code>ProductList.tsx:142-146</code>), e a prop <code>mockup</code> do <code>Hero</code> existe mas ninguém passa.</p>
+      <ul>
+        <li>Do lado do título, <b>a caneca gira</b> e a arte troca sozinha: "Helena", "Vovó Lourdes", "Time Sheid". É a demonstração do que a loja faz, e a vitrine que vende a Aura para a próxima lojista.</li>
+        <li>No celular o mockup vem <b>abaixo do título</b>, menor, e ainda cabe na primeira tela.</li>
+        <li>As artes são um grupo de opção: tocar escolhe e para a troca automática. Pausa explícita ao lado. Com reduzir movimento, nada gira e nada troca sozinho.</li>
+        <li>No produto real é o motor 3D (<code>MockupScene</code>) com as artes de <code>artesProntas()</code>. Aqui o giro é simulado.</li>
+        <li>Qual peça gira: a mais pedida. <b>A Sheid ainda não tem pedido</b>, então o rótulo não diz "a mais pedida": vale a primeira com mockup 3D na ordem de destaque (pergunta d).</li>
+        <li>"Personalizar esta caneca" abre <code>/sheid-mania/p/caneca-branca</code>. "Ver a loja toda" desce até a grade.</li>
+      </ul>
+    </div>
+    <div class="mk-frames">
+      <div class="phone"><div class="notch"></div><div class="screen sv"><div class="statusbar h-sb"><span>9:41</span><span class="h-bat">5G<i></i></span></div><div class="scroll h-below" id="s2p"></div></div></div>
+      <div class="desk-fit"><div class="desk"><div class="chrome"><i></i><i></i><i></i><div class="url"><svg class="ic sm"><use href="#i-lock"/></svg><span class="u">loja.getaura.com.br/sheid-mania</span></div></div><div class="h-vp sv"><div class="viewport" id="s2d"></div></div></div></div>
+    </div>
+  </section>
+
+  <!-- ============ TELA 3 ============ -->
+  <section class="mk-screen">
+    <div class="mk-meta">
+      <span class="mk-n">Tela 3</span>
+      <h2>Corpo da home</h2>
+      <p>Os blocos que já existem, na ordem de <code>HomeDaVitrine.tsx</code>, com a mesma regra de <code>blocosDaHome.ts</code>: bloco nasce da configuração ou não existe. Role dentro das molduras.</p>
+      <ul>
+        <li><b>Como funciona</b>: os textos de <code>passosDaLoja()</code>, com o prazo real da loja no terceiro passo.</li>
+        <li><b>Grade agrupada</b>: categoria com 2+ modelos vira um cartão ("10 modelos para escolher") e abre a página da categoria. A lista de produção de 25/09 tem 10 canecas; o código ainda comenta "9".</li>
+        <li><b>Cartão "foto grande"</b> (o estilo da Sheid, <code>image-heavy</code>): nome e preço sobre a foto, com véu. Preço no Pix no cartão (<code>precoNoPix</code>).</li>
+        <li><b>Os queridinhos</b> só aparecem com 2+ peças pedidas (<code>maisPedidos()</code>). A Sheid hoje não teria o bloco; aqui é como fica quando tiver. No celular, fileira que desliza com a próxima peça aparecendo.</li>
+        <li><b>Artes da loja</b>: proposta de tocar e abrir a peça com a arte já aplicada (pergunta e).</li>
+        <li><b>Para empresas</b>: a frase acompanha a categoria mais forte da loja (mais pedidos; sem pedido, mais modelos). Escada e prazos por faixa são exemplo.</li>
+        <li><b>Selos</b>: os da aba Design (<code>service_cards</code>) ou, vazios, os automáticos do Studio, que nascem do que a loja ligou (como <code>selosPadrao</code>, com "Você aprova antes" no lugar de "Troca em 7 dias"). A faixa de números entra aqui (pergunta b).</li>
+        <li><b>WhatsApp flutuante</b> "Tirar dúvida" na cor da loja (<code>AncoraWhatsApp</code>, <code>parLegivel</code>). Nenhum aviso de cookies cobre esse botão.</li>
+        <li>Sai: a tira "O que a gente personaliza" (pergunta a). Não entram: "últimas unidades", "mais vendidos em 90 dias", filtros laterais, paginação.</li>
+      </ul>
+      <div class="mk-ctl" id="ctl-forte"><span>Categoria mais forte da loja</span>
+        <button class="mk-pill" data-v="canecas" aria-pressed="true">Canecas</button>
+        <button class="mk-pill" data-v="camisetas" aria-pressed="false">Camisetas</button>
+        <button class="mk-pill" data-v="copos" aria-pressed="false">Copos</button>
+      </div>
+      <div class="mk-ctl" id="ctl-selos"><span>Selos</span>
+        <button class="mk-pill" data-v="auto" aria-pressed="true">Automáticos do Studio</button>
+        <button class="mk-pill" data-v="design" aria-pressed="false">Escritos na aba Design (exemplo)</button>
+      </div>
+    </div>
+    <div class="mk-frames">
+      <div class="phone"><div class="notch"></div><div class="screen sv"><div class="statusbar h-sb"><span>9:41</span><span class="h-bat">5G<i></i></span></div><div class="scroll h-below" id="s3p"></div></div></div>
+      <div class="desk-fit"><div class="desk"><div class="chrome"><i></i><i></i><i></i><div class="url"><svg class="ic sm"><use href="#i-lock"/></svg><span class="u">loja.getaura.com.br/sheid-mania</span></div></div><div class="h-vp sv"><div class="viewport" id="s3d"></div></div></div></div>
+    </div>
+  </section>
+
+  <!-- ============ TELA 4 ============ -->
+  <section class="mk-screen">
+    <div class="mk-meta">
+      <span class="mk-n">Tela 4</span>
+      <h2>Navegação no celular</h2>
+      <p>Só no celular. No desktop a busca é o campo do cabeçalho, com a mesma lista caindo embaixo dele (digite em qualquer moldura de desktop), e as categorias ficam na barra.</p>
+      <ul>
+        <li><b>Gaveta</b> pelo menu: categorias com contagem, subcategorias em sanfona, "Ver todas as canecas", orçamento em lote, WhatsApp, e o endereço embaixo. Subcategorias são exemplo (pergunta f).</li>
+        <li><b>Busca</b> em camada cheia, resultado a cada letra, termo destacado no nome. A regra é a de hoje, <code>casa()</code> em <code>buscaVitrine.ts</code>: todos os termos, sem acento, em nome e descrição. "caneca co" traz 6 peças, a Cromada só pela descrição ("Cor prata"), por isso ela vem por último (pergunta j).</li>
+        <li>Acima das peças, <b>a categoria que casa</b> ("Canecas · 6 de 10 modelos"), que abre a página da categoria.</li>
+        <li><b>Nada encontrado</b> diz o que fazer: "Ver a loja toda" ou "Pedir pelo WhatsApp", com a busca já escrita na mensagem. Loja de encomenda: o que não está na vitrine muitas vezes dá para fazer.</li>
+        <li>Campo vazio: sugestões com as palavras dos produtos da loja, não uma lista inventada.</li>
+      </ul>
+    </div>
+    <div class="mk-frames mk-trio">
+      <div class="phone"><div class="notch"></div><div class="screen sv"><div class="statusbar h-sb"><span>9:41</span><span class="h-bat">5G<i></i></span></div><div class="scroll h-below" id="s4a"></div></div></div>
+      <div class="phone"><div class="notch"></div><div class="screen sv"><div class="statusbar h-sb"><span>9:41</span><span class="h-bat">5G<i></i></span></div><div class="scroll h-below" id="s4b"></div></div></div>
+      <div class="phone"><div class="notch"></div><div class="screen sv"><div class="statusbar h-sb"><span>9:41</span><span class="h-bat">5G<i></i></span></div><div class="scroll h-below" id="s4c"></div></div></div>
+    </div>
+  </section>
+
+  <!-- ============ TELA 5 ============ -->
+  <section class="mk-screen">
+    <div class="mk-meta">
+      <span class="mk-n">Tela 5</span>
+      <h2>Página de categoria</h2>
+      <p>Com a rota <code>/sheid-mania/c/canecas</code> (Fase 1), a categoria vira uma página com endereço, e o voltar do navegador volta para a home.</p>
+      <ul>
+        <li><b>Trilha</b> "Início / Canecas", como a Negócio (<code>renderCabecalhoDaGrade</code>), com níveis redundantes omitidos. Com subcategoria: "Início / Canecas / Metalizadas".</li>
+        <li>Título, contagem e o resumo de <code>resumoDoGrupo()</code> + <code>faixaDePrecos()</code>: "todos com prévia em 3D · de R$ 39,90 a R$ 70,00".</li>
+        <li><b>Ordenar não aparece</b>: são 10 modelos, e os controles só entram com 20 ou mais (<code>LIMIAR_CONTROLES</code> em <code>ordenacaoVitrine.ts</code>).</li>
+        <li>Subcategorias como opções, só quando a loja tem árvore. Sem filtro lateral de tamanho, cor ou preço.</li>
+        <li>Selo de canto: no máximo um por cartão, "Mais pedido" só na campeã da loja, "Novo" nas recentes (<code>selosDoProduto.ts</code>). Escada "R$ 33,92 cada · 50 un ou mais" só onde há faixa.</li>
+        <li><b>Tocar numa categoria</b> (barra, rodapé, banner, gaveta, resultado da busca) abre esta página já no topo: a grade é a primeira coisa abaixo do cabeçalho. Acaba o filtro que mudava fora da vista (<code>ProductList.tsx:340-373</code>). O foco vai para o título.</li>
+      </ul>
+    </div>
+    <div class="mk-frames">
+      <div class="phone"><div class="notch"></div><div class="screen sv"><div class="statusbar h-sb"><span>9:41</span><span class="h-bat">5G<i></i></span></div><div class="scroll h-below" id="s5p"></div></div></div>
+      <div class="desk-fit"><div class="desk"><div class="chrome"><i></i><i></i><i></i><div class="url"><svg class="ic sm"><use href="#i-lock"/></svg><span class="u">loja.getaura.com.br/sheid-mania/c/canecas</span></div></div><div class="h-vp sv"><div class="viewport" id="s5d"></div></div></div></div>
+    </div>
+  </section>
+
+  <!-- ============ TELA 6 ============ -->
+  <section class="mk-screen">
+    <div class="mk-meta">
+      <span class="mk-n">Tela 6</span>
+      <h2>Rodapé</h2>
+      <p>O rodapé de três colunas que a loja comum ganhou em 09/2026 (<code>RodapeDaVitrine.tsx</code>, <code>conteudoDoRodape.ts</code>), agora com <code>Texto</code> em tudo: hoje ele usa <code>Text</code> puro e cai na fonte do sistema.</p>
+      <ul>
+        <li><b>Quem é a loja</b>: wordmark, endereço real, horário (ilustrativo), Instagram e WhatsApp.</li>
+        <li><b>Como atende</b>: formas de pagamento e a política de troca, texto pronto do backend (<code>rodapeInstitucional.js</code>). O padrão fala de "tamanho ou cor" (pergunta g).</li>
+        <li><b>Navegue</b>: só categorias com peça à venda, no máximo 6. No celular, duas colunas de alvos de 44 px. Tocar leva à página da categoria, no topo.</li>
+        <li>Última linha: "© 2026 Sheid Mania · CNPJ" (ilustrativo) e "Loja desenvolvida com Aura.", uma vez só. Nada de "Powered by" fixo na tela.</li>
+        <li>Três colunas a partir de 760 px; abaixo, uma.</li>
+      </ul>
+    </div>
+    <div class="mk-frames">
+      <div class="phone"><div class="notch"></div><div class="screen sv"><div class="statusbar h-sb"><span>9:41</span><span class="h-bat">5G<i></i></span></div><div class="scroll h-below" id="s6p"></div></div></div>
+      <div class="desk-fit"><div class="desk"><div class="chrome"><i></i><i></i><i></i><div class="url"><svg class="ic sm"><use href="#i-lock"/></svg><span class="u">loja.getaura.com.br/sheid-mania</span></div></div><div class="h-vp sv"><div class="viewport" id="s6d"></div></div></div></div>
+    </div>
+  </section>
+
+  <!-- ============ TELA 7 ============ -->
+  <section class="mk-screen">
+    <div class="mk-meta">
+      <span class="mk-n">Tela 7</span>
+      <h2>Carregando</h2>
+      <p>O esqueleto desenha a mesma composição que vai chegar: faixa, cabeçalho, barra de categorias, hero, passos e grade. Quando o conteúdo entra, a página não pula.</p>
+      <ul>
+        <li>No tom do papel (<code>--bg3</code>/<code>--bg4</code>), <b>sem a cor da loja</b>: o payload ainda não chegou (regra de <code>VitrineSkeleton.tsx</code>). Troque a cor lá em cima: o esqueleto não muda.</li>
+        <li>Um pulso lento só, para a tela toda. Com reduzir movimento, fica parado (hoje o esqueleto ignora a preferência, dívida D10).</li>
+        <li>Leitor de tela ouve "Carregando a loja" uma vez (<code>aria-busy</code>).</li>
+      </ul>
+      <div class="mk-ctl" id="ctl-rm"><span>Simular preferência</span>
+        <button class="mk-pill" data-v="0" aria-pressed="true">Movimento normal</button>
+        <button class="mk-pill" data-v="1" aria-pressed="false">Reduzir movimento</button>
+      </div>
+    </div>
+    <div class="mk-frames" id="sk-frames">
+      <div class="phone"><div class="notch"></div><div class="screen sv"><div class="statusbar h-sb"><span>9:41</span><span class="h-bat">5G<i></i></span></div><div class="scroll h-below" id="s7p"></div></div></div>
+      <div class="desk-fit"><div class="desk"><div class="chrome"><i></i><i></i><i></i><div class="url"><svg class="ic sm"><use href="#i-lock"/></svg><span class="u">loja.getaura.com.br/sheid-mania</span></div></div><div class="h-vp sv"><div class="viewport" id="s7d"></div></div></div></div>
+    </div>
+  </section>
+</div>
+
+<script>
+/* === KIT:BEGIN ============================================== */
+/* Cor da loja → tokens. Mesma regra de theme.ts (parLegivel / corLegivelSobre). */
+const KIT = (() => {
+  const hex2rgb = h => { h = h.replace('#',''); if (h.length===3) h = h.split('').map(c=>c+c).join(''); const n = parseInt(h,16); return [n>>16&255, n>>8&255, n&255]; };
+  const rgb2hex = ([r,g,b]) => '#' + [r,g,b].map(v => Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join('');
+  const lum = h => { const c = hex2rgb(h).map(v => { v/=255; return v<=.03928 ? v/12.92 : Math.pow((v+.055)/1.055,2.4); }); return .2126*c[0]+.7152*c[1]+.0722*c[2]; };
+  const contrast = (a,b) => { const x=lum(a), y=lum(b); return (Math.max(x,y)+.05)/(Math.min(x,y)+.05); };
+  const mix = (h, target, t) => { const a=hex2rgb(h), b=hex2rgb(target); return rgb2hex(a.map((v,i)=>v+(b[i]-v)*t)); };
+  const INK = '#1A1714', PAPER = '#FBF8F3', WHITE = '#FFFFFF';
+  const inkOn = h => contrast(h, WHITE) >= contrast(h, INK) ? WHITE : INK;
+  function brandPair(h){
+    let t = inkOn(h); if (contrast(h,t) >= 4.5) return {fill:h, on:t};
+    for (let i=1;i<=12;i++){ for (const c of [mix(h,'#000000',i*.06), mix(h,'#FFFFFF',i*.06)]) { const k = inkOn(c); if (contrast(c,k) >= 4.5) return {fill:c, on:k}; } }
+    return {fill:INK, on:WHITE};
+  }
+  function brandText(h, bg=PAPER){ let c=h; for (let i=0;i<30 && contrast(c,bg)<4.5;i++) c = mix(c,'#000000',.07); return c; }
+  const rgba = (h,a) => { const [r,g,b]=hex2rgb(h); return `rgba(${r},${g},${b},${a})`; };
+  function applyBrand(h){
+    const s = document.documentElement.style, p = brandPair(h), txt = brandText(h);
+    s.setProperty('--brand', h); s.setProperty('--brand-fill', p.fill); s.setProperty('--on-brand', p.on);
+    s.setProperty('--brand-text', txt); s.setProperty('--brand-wash', rgba(txt,.06)); s.setProperty('--brand-wash-2', rgba(txt,.12)); s.setProperty('--brand-ring', rgba(p.fill,.45));
+  }
+  const FONTS = {
+    classic:  {nome:'Elegante',   display:"'Fraunces','Instrument Serif',Georgia,serif", w:500},
+    modern:   {nome:'Moderna',    display:"'DM Sans',-apple-system,sans-serif", w:700},
+    editorial:{nome:'Marcante',   display:"'Instrument Serif',Georgia,serif", w:400},
+    humanist: {nome:'Acolhedora', display:"'Pacifico',cursive", w:400},
+  };
+  function applyFont(k){ const f = FONTS[k] || FONTS.classic; document.documentElement.style.setProperty('--f-display', f.display); document.documentElement.style.setProperty('--f-display-w', f.w); }
+  const BRANDS = [
+    {nome:'Sheid Mania', hex:'#1a1612'},
+    {nome:'Rosa', hex:'#D6336C'},
+    {nome:'Amarelo', hex:'#F2C94C'},
+    {nome:'Petróleo', hex:'#0F6E7A'},
+  ];
+
+  /* Produto ilustrado. tipo: reta | chopp | coracao | colher | cromada | imperial | camiseta | copo
+     corpo/alca: cor da peça; arte: {texto, cor, fonte, sub, desenho:'coracao'|'folha'|'estrela'|null} */
+  let uid = 0;
+  function produto(o = {}){
+    const id = 'p' + (++uid);
+    const tipo = o.tipo || 'reta', corpo = o.corpo || '#F7F4EE', alca = o.alca || corpo;
+    const arte = o.arte || null;
+    const metal = tipo === 'cromada' || tipo === 'imperial';
+    const shade = `<linearGradient id="${id}s" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity=".22"/><stop offset=".18" stop-color="#000" stop-opacity=".04"/><stop offset=".42" stop-color="#fff" stop-opacity="${metal?'.55':'.28'}"/><stop offset=".6" stop-color="#fff" stop-opacity="0"/><stop offset=".88" stop-color="#000" stop-opacity=".08"/><stop offset="1" stop-color="#000" stop-opacity=".26"/></linearGradient>`;
+    const desenho = d => d==='coracao' ? '<path d="M0 6c-7-5-11-9-11-14a6 6 0 0 1 11-3 6 6 0 0 1 11 3c0 5-4 9-11 14Z"/>'
+      : d==='folha' ? '<path d="M-10 8C-10-6 2-12 12-12 12 0 6 10-10 8Z M-10 8 6-6" />'
+      : d==='estrela' ? '<path d="M0-12 3.5-3.7 12.4-3.7 5.2 1.6 7.9 10.2 0 5 -7.9 10.2 -5.2 1.6 -12.4-3.7 -3.5-3.7Z"/>' : '';
+    const arteSvg = (cx, cy, esc=1) => !arte ? '' : `<g transform="translate(${cx} ${cy}) scale(${esc})" fill="${arte.cor||'#1A1714'}" stroke="none">
+        ${arte.desenho ? `<g transform="translate(0 -26)" ${arte.desenho==='folha'?`fill="none" stroke="${arte.cor}" stroke-width="2.2" stroke-linecap="round"`:''}>${desenho(arte.desenho)}</g>` : ''}
+        <text x="0" y="${arte.desenho?8:4}" text-anchor="middle" font-family="${arte.fonte||"'Pacifico',cursive"}" font-size="${arte.tam||22}">${arte.texto||''}</text>
+        ${arte.sub ? `<text x="0" y="${arte.desenho?24:20}" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="6.4" letter-spacing="1.1">${arte.sub}</text>` : ''}
+      </g>`;
+    const sombra = `<ellipse cx="96" cy="178" rx="62" ry="7" fill="#000" opacity=".13"/>`;
+    if (tipo === 'camiseta') {
+      return `<svg class="prod" viewBox="0 0 200 200" role="img" aria-label="Camiseta"><defs>${shade}</defs>${sombra}
+        <path d="M70 26 52 34 22 52l14 30 18-9v99h92V73l18 9 14-30-30-18-18-8c-4 12-16 18-30 18S74 38 70 26Z" fill="${corpo}" stroke="rgba(0,0,0,.14)" stroke-width="1"/>
+        <path d="M70 26c4 12 16 18 30 18s26-6 30-18" fill="none" stroke="rgba(0,0,0,.18)" stroke-width="2"/>
+        <path d="M54 73v99h92V73" fill="url(#${id}s)" opacity=".7"/>
+        ${arteSvg(100, 100, .95)}</svg>`;
+    }
+    if (tipo === 'copo') {
+      return `<svg class="prod" viewBox="0 0 200 200" role="img" aria-label="Copo térmico"><defs>${shade}</defs>${sombra}
+        <path d="M60 40h72l-7 134a6 6 0 0 1-6 6H73a6 6 0 0 1-6-6Z" fill="${corpo}"/><path d="M60 40h72l-7 134a6 6 0 0 1-6 6H73a6 6 0 0 1-6-6Z" fill="url(#${id}s)"/>
+        <rect x="55" y="26" width="82" height="18" rx="6" fill="${alca}"/><rect x="55" y="26" width="82" height="18" rx="6" fill="url(#${id}s)"/>
+        <path d="M132 58c26 0 26 60 0 60" fill="none" stroke="${alca}" stroke-width="11" stroke-linecap="round"/>
+        <rect x="104" y="6" width="7" height="24" rx="3" fill="${alca}" opacity=".9"/>
+        ${arteSvg(96, 108, .9)}</svg>`;
+    }
+    const chopp = tipo === 'chopp';
+    const x0 = chopp ? 50 : 44, x1 = chopp ? 142 : 146, top = chopp ? 20 : 44, bot = 172;
+    const body = chopp ? `M${x0} ${top}h${x1-x0}l-4 ${bot-top-8}a8 8 0 0 1-8 8H${x0+12}a8 8 0 0 1-8-8Z` : `M${x0} ${top}h${x1-x0}v${bot-top-10}a10 10 0 0 1-10 10H${x0+10}a10 10 0 0 1-10-10Z`;
+    const handle = tipo === 'coracao'
+      ? `<path d="M${x1-2} 78c10-16 34-12 34 8 0 18-18 30-34 44" fill="none" stroke="${alca}" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>`
+      : `<path d="M${x1-2} ${chopp?60:74}c${chopp?38:34} 0 ${chopp?38:34} ${chopp?80:62} 0 ${chopp?80:62}" fill="none" stroke="${alca}" stroke-width="${chopp?15:12}" stroke-linecap="round"/>`;
+    const handleShade = tipo === 'coracao' ? '' : `<path d="M${x1-2} ${chopp?60:74}c${chopp?38:34} 0 ${chopp?38:34} ${chopp?80:62} 0 ${chopp?80:62}" fill="none" stroke="#000" stroke-opacity=".12" stroke-width="3" transform="translate(4 0)"/>`;
+    const rimTop = tipo === 'imperial' ? `<rect x="${x0}" y="${top}" width="${x1-x0}" height="7" fill="#C9A45C"/><rect x="${x0}" y="${top}" width="${x1-x0}" height="7" fill="url(#${id}s)"/>` : '';
+    const colher = tipo === 'colher' ? `<g transform="rotate(14 150 30)"><rect x="140" y="-4" width="7" height="70" rx="3.5" fill="#C8CCD2"/><ellipse cx="143.5" cy="-8" rx="10" ry="13" fill="#D5D9DE"/></g>` : '';
+    const glass = chopp ? `<path d="${body}" fill="#FFFFFF" opacity=".35"/>` : '';
+    return `<svg class="prod" viewBox="0 0 200 200" role="img" aria-label="Caneca"><defs>${shade}<clipPath id="${id}c"><path d="${body}"/></clipPath></defs>${sombra}
+      ${handle}${handleShade}
+      <path d="${body}" fill="${corpo}"/>${glass}
+      <g clip-path="url(#${id}c)">${arteSvg((x0+x1)/2 - 2, chopp ? 100 : 112, chopp ? 1 : 1.05)}</g>
+      <path d="${body}" fill="url(#${id}s)"/>${rimTop}
+      <ellipse cx="${(x0+x1)/2}" cy="${top}" rx="${(x1-x0)/2}" ry="5" fill="${alca}"/><ellipse cx="${(x0+x1)/2}" cy="${top+1}" rx="${(x1-x0)/2-5}" ry="3.4" fill="#000" opacity=".16"/>
+      ${colher}</svg>`;
+  }
+
+  /* Barra do mockup: cor, tipografia e aparelho. Chame KIT.bar({device:true}). */
+  function bar(opts = {}){
+    const bw = document.getElementById('mk-brands'), fw = document.getElementById('mk-fonts'), dw = document.getElementById('mk-devices');
+    const set = (wrap, btn) => { wrap.querySelectorAll('.mk-seg').forEach(b => b.setAttribute('aria-pressed', b===btn ? 'true':'false')); };
+    if (bw) BRANDS.forEach((b,i) => { const el = document.createElement('button'); el.className='mk-seg'; el.innerHTML=`<i class="mk-dot" style="background:${b.hex}"></i>${b.nome}`; el.setAttribute('aria-pressed', i===0?'true':'false'); el.onclick=()=>{applyBrand(b.hex); set(bw,el); document.dispatchEvent(new CustomEvent('kit:brand',{detail:b}));}; bw.appendChild(el); });
+    if (fw) Object.entries(FONTS).forEach(([k,f],i) => { const el = document.createElement('button'); el.className='mk-seg'; el.textContent=f.nome; el.setAttribute('aria-pressed', i===0?'true':'false'); el.onclick=()=>{applyFont(k); set(fw,el);}; fw.appendChild(el); });
+    if (dw) [['ambos','Celular e desktop'],['phone','Só celular'],['desk','Só desktop']].forEach(([k,n],i) => { const el=document.createElement('button'); el.className='mk-seg'; el.textContent=n; el.setAttribute('aria-pressed', i===0?'true':'false'); el.onclick=()=>{ document.body.classList.toggle('mk-hide-desk', k==='phone'); document.body.classList.toggle('mk-hide-phone', k==='desk'); set(dw,el); fitDesk(); }; dw.appendChild(el); });
+    applyBrand(BRANDS[0].hex); applyFont('classic');
+    window.addEventListener('resize', fitDesk); fitDesk();
+  }
+  /* Escala a moldura desktop (1280 px) para caber na coluna. */
+  function fitDesk(){
+    document.querySelectorAll('.desk-fit').forEach(w => { const d = w.querySelector('.desk'); if (!d) return; const s = Math.min(1, w.clientWidth / 1280); d.style.transform = `scale(${s})`; w.style.height = (d.offsetHeight * s) + 'px'; });
+  }
+  const money = v => 'R$ ' + v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const icon = (n, cls='') => `<svg class="ic ${cls}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+  return { applyBrand, applyFont, brandPair, brandText, contrast, produto, bar, fitDesk, money, icon, BRANDS, FONTS };
+})();
+/* === KIT:END ================================================ */
+
+/* ---------- só desta página ---------- */
+const RM = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const ic = KIT.icon, R$ = KIT.money;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ── A loja (Sheid Mania, dados de produção 25/09; Pix, revisões, horário e CNPJ são exemplo) ── */
+const LOJA = {
+  nome:'Sheid Mania', slug:'sheid-mania', prazo:3, pix:5, rev:2,
+  wa:'(12) 99614-5447', ig:'@sheidmania_',
+  end1:'Av. Dom Pedro I, 553 — Jardim Colonial', end2:'São José dos Campos/SP',
+  horario:'Seg a sex, 9h às 18h · Sáb, 9h às 13h', cnpj:'00.000.000/0001-00',
+  politica:'Você tem até 7 dias corridos após receber o pedido para desistir da compra, conforme o Código de Defesa do Consumidor. Para trocar por outro tamanho ou cor, fale com a loja pelo WhatsApp.',
+};
+const CATS = [
+  {slug:'canecas', nome:'Canecas', subs:[['ceramica','Cerâmica'],['metalizadas','Metalizadas'],['vidro','Vidro e chopp']]},
+  {slug:'camisetas', nome:'Camisetas', subs:[['adulto','Adulto'],['feminina','Feminina'],['infantil','Infantil']]},
+  {slug:'copos', nome:'Copos'}, {slug:'azulejos', nome:'Azulejos'}, {slug:'adesivos', nome:'Adesivos'}, {slug:'cartoes', nome:'Cartões'},
+];
+const C3D = ['Mockup 3D','Nome ou frase'], CFOTO = ['Prévia da arte','Frente e verso'];
+const P = [
+  {id:'caneca-branca', nome:'Caneca Branca', preco:39.90, cat:'canecas', sub:'ceramica', desc:'A clássica de 325 ml, pronta para a sua foto.', chips:['Mockup 3D','Sua arte'], pedidos:48, escada:true,
+   v:{tipo:'reta', corpo:'#F7F4EE', arte:{texto:'Helena', cor:'#C2255C', desenho:'coracao'}}},
+  {id:'caneca-alca-colorida', nome:'Caneca Alça Colorida', preco:49.90, cat:'canecas', sub:'ceramica', desc:'Alça e interior na cor que você escolher.', chips:['Mockup 3D','Escolha a cor'],
+   v:{tipo:'reta', corpo:'#F7F4EE', alca:'#3E6FB0', arte:{texto:'Café & Código', cor:'#3E6FB0', fonte:"'DM Sans',sans-serif", tam:14}}},
+  {id:'caneca-alca-coracao', nome:'Caneca Alça Coração', preco:49.90, cat:'canecas', sub:'ceramica', desc:'A alça em forma de coração.', chips:C3D, pedidos:31,
+   v:{tipo:'coracao', corpo:'#F7F4EE', alca:'#D8436F', arte:{texto:'Mãe', cor:'#D8436F', sub:'A MELHOR'}}},
+  {id:'caneca-coracao-preta', nome:'Caneca Alça de Coração Preta', preco:59.90, cat:'canecas', sub:'ceramica', desc:'Toda preta, arte em tom claro.', chips:C3D,
+   v:{tipo:'coracao', corpo:'#1F1B18', alca:'#1F1B18', arte:{texto:'Amor', cor:'#F4E9D0'}}},
+  {id:'caneca-colher', nome:'Caneca com Colher', preco:49.00, cat:'canecas', sub:'ceramica', desc:'Vem com a colher de metal na alça.', chips:C3D,
+   v:{tipo:'colher', corpo:'#F7F4EE', arte:{texto:'Bom dia', cor:'#2F7D5B', desenho:'folha'}}},
+  {id:'caneca-vintage', nome:'Caneca Cerâmica Vintage Fosca', preco:65.90, cat:'canecas', sub:'ceramica', desc:'Toque aveludado em tom areia.', chips:C3D,
+   v:{tipo:'reta', corpo:'#D9CBB5', arte:{texto:'Café', cor:'#5A4632', fonte:"'Fraunces',serif", tam:22, sub:'DESDE 1998'}}},
+  {id:'caneca-chopp', nome:'Caneca Chopp', preco:70.00, cat:'canecas', sub:'vidro', desc:'Vidro jateado de 475 ml.', chips:C3D,
+   v:{tipo:'chopp', corpo:'#E9D9B8', arte:{texto:'Padrinho', cor:'#6B3E12', fonte:"'Fraunces',serif", tam:20, sub:'BIA & LEO'}}},
+  {id:'caneca-cromada', nome:'Caneca Cromada Prata', preco:69.00, cat:'canecas', sub:'metalizadas', desc:'Cor prata espelhada.', chips:C3D,
+   v:{tipo:'cromada', corpo:'#B9BEC5', arte:{texto:'Formatura 2026', cor:'#1A1714', fonte:"'Fraunces',serif", tam:15}}},
+  {id:'caneca-imperial', nome:'Caneca Imperial Dourada 400 ml', preco:65.90, cat:'canecas', sub:'metalizadas', desc:'Borda dourada, 400 ml.', chips:C3D,
+   v:{tipo:'imperial', corpo:'#F7F4EE', alca:'#C9A45C', arte:{texto:'Vovó Lourdes', cor:'#8A6A2A', fonte:"'Fraunces',serif", tam:16, desenho:'folha'}}},
+  {id:'caneca-vidro', nome:'Caneca de Vidro com Adesivo Premium', preco:49.90, cat:'canecas', sub:'vidro', desc:'Vidro transparente, adesivo resistente.', chips:C3D, novo:true,
+   v:{tipo:'reta', corpo:'#DCE6E8', alca:'#CFDCDF', arte:{texto:'Lua', cor:'#23305E', desenho:'estrela'}}},
+  {id:'camisa-basico', nome:'Camisa Algodão Básico', preco:59.99, cat:'camisetas', sub:'adulto', desc:'Malha 100% algodão.', chips:CFOTO, pedidos:17,
+   v:{tipo:'camiseta', corpo:'#F4F1EA', arte:{texto:'Time Sheid', cor:'#23305E', fonte:"'Fraunces',serif", tam:16, sub:'SÃO JOSÉ DOS CAMPOS'}}},
+  {id:'camisa-penteado', nome:'Camisa Algodão Penteado', preco:70.00, cat:'camisetas', sub:'adulto', desc:'Fio penteado, toque macio.', chips:CFOTO,
+   v:{tipo:'camiseta', corpo:'#2B2F36', arte:{texto:'Ana', cor:'#F4E9D0', desenho:'estrela'}}},
+  {id:'baby-look', nome:'Baby Look Feminina', preco:60.00, cat:'camisetas', sub:'feminina', desc:'Modelagem acinturada.', chips:CFOTO,
+   v:{tipo:'camiseta', corpo:'#E9B8C4', arte:{texto:'Mãe de pet', cor:'#7A2842', tam:17}}},
+  {id:'camisa-infantil', nome:'Camisa Infantil', preco:48.00, cat:'camisetas', sub:'infantil', desc:'Do 2 ao 14 anos.', chips:CFOTO,
+   v:{tipo:'camiseta', corpo:'#F2D16B', arte:{texto:'Pedro', cor:'#23305E', sub:'5 ANOS', desenho:'estrela'}}},
+  {id:'camisa-polo', nome:'Camisa Polo', preco:98.00, cat:'camisetas', sub:'adulto', desc:'Piquet com bordado no peito.', chips:['Prévia da arte','Escolha a cor'],
+   v:{tipo:'camiseta', corpo:'#1F3A5F', arte:{texto:'Sheid', cor:'#F4E9D0', fonte:"'Fraunces',serif", tam:14}}},
+  {id:'camisa-premium', nome:'Camisa Algodão Premium', preco:150.00, cat:'camisetas', sub:'adulto', desc:'Fio 30.1, acabamento superior.', chips:CFOTO,
+   v:{tipo:'camiseta', corpo:'#EDE6D8', arte:{texto:'Formatura', cor:'#5A4632', fonte:"'Fraunces',serif", tam:17, sub:'TURMA 2026'}}},
+  {id:'copo-stanley', nome:'Copo Stanley', preco:49.99, cat:'copos', desc:'Térmico, com alça e tampa.', chips:C3D, pedidos:22,
+   v:{tipo:'copo', corpo:'#2C4A3E', alca:'#20362D', arte:{texto:'Ana', cor:'#F4E9D0', desenho:'estrela'}}},
+  {id:'azulejo', nome:'Azulejo Decorativo', preco:49.99, cat:'azulejos', desc:'15 x 15 cm, com suporte.', chips:['Prévia da arte','Sua arte'], extra:'azulejo'},
+  {id:'adesivo', nome:'Adesivo Premium Pequeno', preco:8.00, cat:'adesivos', desc:'Vinil com recorte no formato.', chips:['Prévia da arte','Sua arte'], extra:'adesivo'},
+  {id:'cartao-visita', nome:'Cartão de Visita Couché 300 g', preco:120.00, aPartir:true, cat:'cartoes', desc:'Pacote com 500 unidades.', chips:['Prévia da arte','Frente e verso'], extra:'cartao'},
+];
+const CAMPEA = 'caneca-branca';
+const QUERIDINHOS = ['caneca-branca','caneca-alca-coracao','copo-stanley','camisa-basico'];
+const byId = id => P.find(p => p.id === id);
+const doCat = slug => P.filter(p => p.cat === slug);
+const catDe = slug => CATS.find(c => c.slug === slug);
+const pix = v => Math.round(v * (100 - LOJA.pix)) / 100;
+const plural = (n, um, muitos) => n === 1 ? um : muitos;
+
+/* ── Ilustrações de produto que o kit ainda não tem (proposta de tipos novos para o kit) ── */
+const sombra = '<ellipse cx="100" cy="178" rx="62" ry="7" fill="#000" opacity=".13"/>';
+function svgAzulejo(){
+  return `<svg class="prod" viewBox="0 0 200 200" role="img" aria-label="Azulejo">${sombra}
+    <g transform="rotate(-5 100 100)"><rect x="38" y="36" width="124" height="124" rx="5" fill="#FBFAF7" stroke="rgba(0,0,0,.14)"/>
+    <rect x="47" y="45" width="106" height="106" rx="2" fill="none" stroke="#3E6FB0" stroke-width="2.4"/>
+    <g fill="#3E6FB0"><circle cx="47" cy="45" r="5"/><circle cx="153" cy="45" r="5"/><circle cx="47" cy="151" r="5"/><circle cx="153" cy="151" r="5"/></g>
+    <text x="100" y="98" text-anchor="middle" font-family="'Pacifico',cursive" font-size="17" fill="#3E6FB0">Lar doce</text>
+    <text x="100" y="122" text-anchor="middle" font-family="'Pacifico',cursive" font-size="17" fill="#3E6FB0">lar</text>
+    <path d="M100 64c-4-4-10-3-10 2 0 4 6 7 10 10 4-3 10-6 10-10 0-5-6-6-10-2Z" fill="#D8436F"/>
+    <rect x="38" y="36" width="124" height="124" rx="5" fill="url(#azg)"/></g>
+    <defs><linearGradient id="azg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".5"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/></linearGradient></defs></svg>`;
+}
+function svgAdesivo(){
+  return `<svg class="prod" viewBox="0 0 200 200" role="img" aria-label="Adesivo">${sombra}
+    <g transform="rotate(-8 100 96)"><circle cx="100" cy="96" r="66" fill="#fff" stroke="rgba(0,0,0,.08)"/>
+    <circle cx="100" cy="96" r="58" fill="#F2C94C"/>
+    <text x="100" y="100" text-anchor="middle" font-family="'Pacifico',cursive" font-size="26" fill="#23305E">Sheid</text>
+    <text x="100" y="121" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="8" letter-spacing="2" fill="#23305E">FEITO COM AMOR</text>
+    <path d="M150 58a66 66 0 0 1 8 16l-16-4Z" fill="#EDE6D8"/></g></svg>`;
+}
+function svgCartao(){
+  return `<svg class="prod" viewBox="0 0 200 200" role="img" aria-label="Cartão de visita">${sombra}
+    <g transform="rotate(-10 100 100)"><rect x="34" y="70" width="136" height="80" rx="4" fill="#1F1B18"/>
+    <text x="102" y="118" text-anchor="middle" font-family="'Fraunces',serif" font-size="26" fill="#C9A45C">HM</text></g>
+    <g transform="rotate(6 100 100)"><rect x="30" y="58" width="136" height="80" rx="4" fill="#FBF8F3" stroke="rgba(0,0,0,.12)"/>
+    <text x="44" y="92" font-family="'Fraunces',serif" font-size="14" fill="#1A1714">Helena Martins</text>
+    <text x="44" y="106" font-family="'DM Sans',sans-serif" font-size="7" letter-spacing="1.4" fill="#756C61">CONFEITARIA ARTESANAL</text>
+    <rect x="44" y="118" width="46" height="2" fill="#C9A45C"/><text x="44" y="130" font-family="'DM Sans',sans-serif" font-size="6.5" fill="#4A443C">(12) 90000-0000</text></g></svg>`;
+}
+function foto(p){
+  if (p.extra === 'azulejo') return svgAzulejo();
+  if (p.extra === 'adesivo') return svgAdesivo();
+  if (p.extra === 'cartao') return svgCartao();
+  return KIT.produto(p.v);
+}
+
+/* ── Banners (a "foto" que a lojista subiu é desenhada aqui) ── */
+const BANNERS = [
+  {id:'maes', kicker:'Dia das Mães', titulo:'Canecas com a foto dela', texto:'Mande a foto pelo celular. Você aprova o mockup antes de a gente produzir.', cta:'Ver canecas', dest:'cat:canecas'},
+  {id:'lote', kicker:'Formaturas, casamentos e empresas', titulo:'Um nome diferente em cada caneca', texto:'Cole a lista de convidados. O desconto por quantidade entra sozinho.', cta:'Pedir orçamento em lote', dest:'lote'},
+  {id:'time', arte:true, rotulo:'Camisetas do time inteiro, um nome em cada. Ver camisetas', dest:'cat:camisetas'},
+];
+const pos = (st, svg) => `<div class="h-pos" style="${st}">${svg}</div>`;
+const deco = (st) => `<i class="h-deco" style="${st}"></i>`;
+function arteBanner(id, desk){
+  if (id === 'maes') {
+    const cor = KIT.produto({tipo:'coracao', corpo:'#F7F4EE', alca:'#D8436F', arte:{texto:'Mãe', cor:'#C2255C', sub:'A MELHOR', desenho:'coracao'}});
+    const br = KIT.produto({tipo:'reta', corpo:'#F7F4EE', arte:{texto:'Lourdes', cor:'#8A6A2A', fonte:"'Fraunces',serif", tam:17, desenho:'folha'}});
+    return desk
+      ? `<div class="h-art" style="background:radial-gradient(52% 100% at 72% 46%,#E2AD98 0%,#B56B5D 34%,#6E3630 70%,#3D1D1B 100%)">
+          ${deco('left:560px;top:250px;width:560px;height:130px;background:radial-gradient(50% 50% at 50% 50%,rgba(255,226,210,.32),transparent 70%)')}
+          ${deco('left:1150px;top:60px;width:14px;height:14px;background:rgba(255,214,200,.55)')}${deco('left:600px;top:84px;width:9px;height:9px;background:rgba(255,214,200,.5)')}${deco('left:1190px;top:300px;width:22px;height:22px;background:rgba(255,214,200,.28)')}
+          ${pos('left:905px;top:112px;width:220px;filter:brightness(.9) saturate(.95)', br)}${pos('left:640px;top:28px;width:340px', cor)}</div>`
+      : `<div class="h-art" style="background:radial-gradient(95% 62% at 52% 30%,#E2AD98 0%,#B56B5D 38%,#6E3630 74%,#3D1D1B 100%)">
+          ${deco('left:10px;top:210px;width:340px;height:90px;background:radial-gradient(50% 50% at 50% 50%,rgba(255,226,210,.3),transparent 70%)')}
+          ${deco('left:318px;top:40px;width:10px;height:10px;background:rgba(255,214,200,.55)')}${deco('left:40px;top:60px;width:7px;height:7px;background:rgba(255,214,200,.5)')}
+          ${pos('left:196px;top:78px;width:170px;filter:brightness(.9)', br)}${pos('left:20px;top:10px;width:250px', cor)}</div>`;
+  }
+  if (id === 'lote') {
+    const nomes = ['Ana','Bruno','Carla','Diego','Elisa'];
+    const mug = n => KIT.produto({tipo:'reta', corpo:'#F7F4EE', arte:{texto:n, cor:'#23305E', fonte:"'Fraunces',serif", tam:21, sub:'FORMATURA 2026'}});
+    const bg = 'linear-gradient(120deg,#132B2A 0%,#21423F 45%,#3B625D 100%)';
+    if (desk) {
+      const L = [['left:560px;top:150px;width:150px;filter:brightness(.82)',0],['left:670px;top:118px;width:175px;filter:brightness(.9)',1],['left:790px;top:78px;width:210px;z-index:2',2],['left:950px;top:118px;width:175px;filter:brightness(.9)',3],['left:1080px;top:150px;width:150px;filter:brightness(.82)',4]];
+      return `<div class="h-art" style="background:${bg}">${deco('left:620px;top:-120px;width:620px;height:520px;background:radial-gradient(50% 50% at 50% 50%,rgba(255,255,255,.16),transparent 70%)')}${L.map(([s,i]) => pos(s, mug(nomes[i]))).join('')}</div>`;
+    }
+    const L = [['left:0px;top:92px;width:140px;filter:brightness(.88)',1],['left:228px;top:92px;width:140px;filter:brightness(.88)',3],['left:84px;top:26px;width:200px;z-index:2',2]];
+    return `<div class="h-art" style="background:${bg}">${deco('left:-60px;top:-80px;width:480px;height:420px;background:radial-gradient(50% 50% at 50% 50%,rgba(255,255,255,.15),transparent 70%)')}${L.map(([s,i]) => pos(s, mug(nomes[i]))).join('')}</div>`;
+  }
+  /* arte pronta: o texto está DENTRO da imagem da lojista */
+  const tee = (c, t, sub) => KIT.produto({tipo:'camiseta', corpo:c, arte:{texto:t, cor: c === '#F4F1EA' ? '#23305E' : '#F4E9D0', fonte: t.length > 5 ? "'Fraunces',serif" : "'Pacifico',cursive", tam: t.length > 5 ? 16 : 24, sub}});
+  const baked = (big) => `<div style="font:400 ${big}px/1.05 'Pacifico',cursive">Camisetas</div>
+      <div style="font:700 ${big > 50 ? 15 : 12.5}px/1.45 'DM Sans',sans-serif;letter-spacing:.16em;text-transform:uppercase;margin-top:${big > 50 ? 18 : 12}px">do time inteiro,<br>um nome em cada</div>
+      <div style="margin-top:${big > 50 ? 26 : 16}px;display:inline-flex;align-items:center;gap:8px;height:${big > 50 ? 46 : 40}px;padding:0 20px;border:2px solid #23305E;border-radius:999px;font:700 12.5px 'DM Sans',sans-serif;letter-spacing:.16em">VER CAMISETAS<svg class="ic sm" aria-hidden="true" style="stroke:#23305E"><use href="#i-arrow"/></svg></div>`;
+  if (desk) {
+    return `<div class="h-art" style="background:linear-gradient(160deg,#F1E5CB 0%,#E4D0A8 100%)">
+      ${deco('left:700px;top:-90px;width:600px;height:600px;background:#EBDDBF')}${deco('left:120px;top:330px;width:60px;height:60px;background:#D9A93B;opacity:.35')}
+      <div class="h-baked" style="left:96px;top:92px">${baked(66)}</div>
+      ${pos('left:640px;top:70px;width:250px', tee('#23305E','Ana','Nº 7'))}${pos('left:1000px;top:78px;width:240px', tee('#D9A93B','Léo','Nº 10'))}${pos('left:800px;top:28px;width:290px;z-index:2', tee('#F4F1EA','Time Sheid','SÃO JOSÉ DOS CAMPOS'))}</div>`;
+  }
+  return `<div class="h-art" style="background:linear-gradient(170deg,#F1E5CB 0%,#E4D0A8 100%)">
+    ${deco('left:120px;top:190px;width:420px;height:420px;background:#EBDDBF')}
+    <div class="h-baked" style="left:24px;top:28px">${baked(44)}</div>
+    ${pos('left:0px;top:262px;width:150px', tee('#23305E','Ana','Nº 7'))}${pos('left:220px;top:266px;width:150px', tee('#D9A93B','Léo','Nº 10'))}${pos('left:92px;top:222px;width:190px;z-index:2', tee('#F4F1EA','Time Sheid','SÃO JOSÉ DOS CAMPOS'))}</div>`;
+}
+
+/* ── Artes prontas da loja ── */
+const ARTES = [
+  {n:'Mãe coração', t:'Mãe', f:"'Pacifico',cursive", s:30, c:'#C2255C', sub:'A MELHOR DO MUNDO', d:'coracao'},
+  {n:'Aniversário', t:'Feliz aniversário', f:"'Pacifico',cursive", s:14, c:'#3E6FB0', d:'estrela'},
+  {n:'Formatura', t:'Formatura', f:"'Fraunces',serif", s:18, c:'#8A6A2A', sub:'TURMA 2026', d:'folha'},
+  {n:'Bom dia', t:'Bom dia', f:"'Pacifico',cursive", s:22, c:'#2F7D5B', d:'folha'},
+  {n:'Padrinho', t:'Padrinho', f:"'Fraunces',serif", s:19, c:'#6B3E12', sub:'BIA & LEO'},
+  {n:'Café & Código', t:'Café & Código', f:"'DM Sans',sans-serif", s:13, c:'#1A1714', sub:'DEV MODE ON'},
+];
+function svgArte(a){
+  const des = a.d === 'coracao' ? `<path d="M60 40c-6-5-15-4-15 3 0 5 8 10 15 14 7-4 15-9 15-14 0-7-9-8-15-3Z" fill="${a.c}"/>`
+    : a.d === 'estrela' ? `<path d="M60 26l3.5 8.3 8.9.1-7.2 5.3 2.7 8.6-7.9-5.2-7.9 5.2 2.7-8.6-7.2-5.3 8.9-.1Z" fill="${a.c}"/>`
+    : a.d === 'folha' ? `<path d="M48 48C48 34 60 28 72 28 72 40 66 50 48 48ZM48 48 64 34" fill="none" stroke="${a.c}" stroke-width="2.2" stroke-linecap="round"/>` : '';
+  const y = a.d ? 76 : 66;
+  return `<svg viewBox="0 0 120 120" aria-hidden="true">${des}<text x="60" y="${y}" text-anchor="middle" font-family="${a.f}" font-size="${a.s}" fill="${a.c}">${esc(a.t)}</text>${a.sub ? `<text x="60" y="${y + 15}" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="6.5" letter-spacing="1.6" fill="${a.c}">${a.sub}</text>` : ''}</svg>`;
+}
+
+/* ── Para empresas: a frase segue a categoria mais forte ── */
+const B2B = {
+  canecas:{titulo:'50 canecas com o nome de cada convidado? Preço na hora.', base:39.90, prod:'Caneca Branca', item:n => KIT.produto({tipo:'reta', corpo:'#F7F4EE', arte:{texto:n, cor:'#23305E', fonte:"'Fraunces',serif", tam:21, sub:'FORMATURA 2026'}})},
+  camisetas:{titulo:'30 camisetas com o nome de cada pessoa do time? Preço na hora.', base:59.99, prod:'Camisa Algodão Básico', item:n => KIT.produto({tipo:'camiseta', corpo:'#F4F1EA', arte:{texto:n, cor:'#23305E', fonte:"'Pacifico',cursive", tam:24, sub:'TIME SHEID'}})},
+  copos:{titulo:'40 copos com o nome de cada convidado? Preço na hora.', base:49.99, prod:'Copo Stanley', item:n => KIT.produto({tipo:'copo', corpo:'#2C4A3E', alca:'#20362D', arte:{texto:n, cor:'#F4E9D0', fonte:"'Pacifico',cursive", tam:22}})},
+};
+const SELOS = {
+  auto:[['eye','Você aprova antes',`Mockup antes de produzir, ${LOJA.rev} revisões inclusas`],['shield','Compra segura','Pix ou cartão, pagamento protegido'],['store','Retire na loja','Jardim Colonial, São José dos Campos'],['wa','Atendimento humano','WhatsApp direto com a loja']],
+  design:[['box','Embalagem para presente','Toda peça vai embalada, sem custo'],['brush','A gente cria a arte','Mande a ideia, a Sheid desenha'],['shield','Compra segura','Pix ou cartão'],['heart','Produção própria','Feito aqui em São José dos Campos']],
+};
+const ESTADO = {forte:'canecas', selos:'auto'};
+
+/* ── Busca: a mesma regra de buscaVitrine.ts (casa) ── */
+const DIAC = /[̀-ͯ]/g;
+const norm = s => String(s ?? '').normalize('NFD').replace(DIAC, '').toLowerCase().replace(/\s+/g, ' ').trim();
+function casa(q, ...campos){ const t = norm(q).split(' ').filter(Boolean); if (!t.length) return true; const alvo = campos.map(norm).filter(Boolean).join(' '); return t.every(x => alvo.includes(x)); }
+function destacar(nome, q){
+  const termos = norm(q).split(' ').filter(Boolean); if (!termos.length) return esc(nome);
+  let n = '', map = [];
+  [...nome].forEach((ch, i) => { const k = ch.normalize('NFD').replace(DIAC, '').toLowerCase(); for (const c of k) { n += c; map.push(i); } });
+  const marca = new Array(nome.length).fill(false);
+  termos.forEach(t => { let at = n.indexOf(t); while (at >= 0) { for (let j = at; j < at + t.length; j++) marca[map[j]] = true; at = n.indexOf(t, at + t.length); } });
+  let out = '', on = false;
+  [...nome].forEach((ch, i) => { if (marca[i] && !on) { out += '<mark>'; on = true; } if (!marca[i] && on) { out += '</mark>'; on = false; } out += esc(ch); });
+  return out + (on ? '</mark>' : '');
+}
+function buscar(q){
+  const ps = P.filter(p => casa(q, p.nome, p.desc));
+  ps.sort((a, b) => (casa(q, b.nome) ? 1 : 0) - (casa(q, a.nome) ? 1 : 0));
+  const cats = CATS.map(c => ({c, n: ps.filter(p => p.cat === c.slug).length, total: doCat(c.slug).length})).filter(x => x.n > 0 && x.total > 1);
+  return {ps, cats};
+}
+
+/* ── Peças da página ── */
+function cartao(p){
+  const selo = p.id === CAMPEA ? '<span class="badge badge-brand">Mais pedido</span>' : p.novo ? '<span class="badge badge-soft">Novo</span>' : '';
+  const escada = p.escada ? `<span class="es">${R$(p.preco * .85)} cada · 50 un ou mais</span>` : '';
+  return `<button class="h-card" data-act="prod" data-id="${p.id}" aria-label="${esc(p.nome)}, ${p.aPartir ? 'a partir de ' : ''}${R$(p.preco)}">
+    <div class="shot">${foto(p)}${selo}</div>
+    <div class="h-veil"><span class="ch">${p.chips.join(' · ')}</span><span class="nm">${esc(p.nome)}</span>
+      <span class="pr">${p.aPartir ? '<small>a partir de</small>' : ''}<b>${R$(p.preco)}</b><span class="px">${R$(pix(p.preco))} no Pix</span></span>${escada}</div></button>`;
+}
+function cartaoGrupo(c){
+  const ps = doCat(c.slug), min = Math.min(...ps.map(p => p.preco));
+  const trio = c.slug === 'canecas' ? ['caneca-imperial','caneca-branca','caneca-alca-coracao'] : ['camisa-penteado','camisa-basico','camisa-infantil'];
+  const [a, b, d] = trio.map(byId);
+  return `<button class="h-card" data-act="cat" data-cat="${c.slug}" aria-label="${c.nome}, ${ps.length} modelos, a partir de ${R$(min)}">
+    <div class="shot"><div class="h-trio"><div class="a">${foto(a)}</div><div class="c">${foto(d)}</div><div class="b">${foto(b)}</div></div></div>
+    <div class="h-veil"><span class="kind">${ps.length} modelos para escolher</span><span class="nm">${c.nome}</span>
+      <span class="pr"><small>a partir de</small><b>${R$(min)}</b><span class="px">${R$(pix(min))} no Pix</span></span></div></button>`;
+}
+function b2bHTML(){
+  const b = B2B[ESTADO.forte], nomes = ['Ana','Bruno','Carla','Diego','Elisa'];
+  const L = ['left:0;z-index:1;transform:scale(.86);transform-origin:bottom','left:17%;z-index:2;transform:scale(.93);transform-origin:bottom','left:35%;z-index:3','left:53%;z-index:2;transform:scale(.93);transform-origin:bottom','left:70%;z-index:1;transform:scale(.86);transform-origin:bottom'];
+  const rung = (q, pct) => `<div class="h-rung"><small>${q}+ un</small><b>${R$(b.base * (1 - pct / 100))}</b><em>−${pct}% cada</em></div>`;
+  return `<div class="h-b2b"><div class="h-b2b-t">
+      <span class="label lbl">Para empresas e eventos</span>
+      <h2>${b.titulo}</h2>
+      <p class="t-small" style="font-size:14px;max-width:480px">Cole a lista de nomes. Cada linha vira uma peça personalizada, o desconto por quantidade cai sozinho e você recebe um mockup por pessoa para aprovar.</p>
+      <div class="h-ladder">${rung(10, 5)}${rung(20, 10)}${rung(50, 15)}</div>
+      <p class="t-cap">${b.prod}, preço por unidade. Prazo: até 9 un, 3 dias úteis · 10 a 49, 5 · 50 ou mais, 8.</p>
+      <div class="h-b2b-acts"><button class="btn btn-primary" data-act="lote">${ic('users')}Pedir orçamento em lote</button><button class="btn btn-ghost" data-act="wa">Prefiro falar no WhatsApp</button></div>
+    </div>
+    <div class="h-fan" aria-hidden="true">${nomes.map((n, i) => `<div style="${L[i]}">${b.item(n)}</div>`).join('')}</div></div>`;
+}
+function selosHTML(){
+  return `<div class="h-selos">${SELOS[ESTADO.selos].map(([i, t, d]) => `<div class="h-selo"><span class="h-step-ic">${ic(i)}</span><div><b>${t}</b><p>${d}</p></div></div>`).join('')}</div>`;
+}
+
+/* ── A loja dentro de uma moldura ── */
+class Loja {
+  constructor(id, o = {}){
+    this.root = document.getElementById(id); this.wrap = this.root.parentElement;
+    this.desk = !!this.root.closest('.desk'); this.id = id;
+    this.hero = o.hero || 'banners'; this.view = o.view || 'home'; this.cat = o.cat || null; this.sub = null;
+    this.timers = []; this.aberta = o.aberta || 'canecas';
+    this.url = this.root.closest('.desk')?.querySelector('.url .u');
+    this.wrap.insertAdjacentHTML('beforeend', `${this.desk ? '' : this.gavetaHTML() + this.buscaHTML()}
+      <button class="h-wa" data-act="wa" aria-label="Tirar dúvida com a ${LOJA.nome} no WhatsApp">${ic('wa')}Tirar dúvida</button>
+      <div class="mk-toast" role="status" aria-live="polite"></div>`);
+    this.wrap.addEventListener('click', e => this.clique(e));
+    this.wrap.addEventListener('input', e => { if (e.target.matches('[data-role=q]')) this.digitou(e.target); });
+    this.wrap.addEventListener('focusin', e => { if (this.desk && e.target.matches('[data-role=q]')) this.digitou(e.target); });
+    this.wrap.addEventListener('keydown', e => { if (e.key === 'Escape') { this.fecharCamadas(); } });
+    this.root.addEventListener('scroll', () => this.rolou(), {passive:true});
+    this.render();
+    if (o.gaveta) this.abrirGaveta(true);
+    if (o.busca != null) this.abrirBusca(o.busca, true);
+  }
+  /* ── html ── */
+  anuncio(){ return `<div class="h-ann" role="note">${['Você aprova o mockup antes de produzir', `Pronto em ${LOJA.prazo} dias úteis`, `${LOJA.pix}% no Pix`].map(t => `<span>${ic('check')}${t}</span>`).join('')}</div>`; }
+  cabecalho(){
+    const cats = `<nav class="h-cats" aria-label="Categorias">${CATS.map(c => `<button class="h-cat" data-act="cat" data-cat="${c.slug}" ${this.view === 'cat' && this.cat === c.slug ? 'aria-current="page"' : ''}>${c.nome}</button>`).join('')}</nav>`;
+    const bag = `<button class="icon-btn" data-act="bag" aria-label="Abrir sacola, 2 itens">${ic('bag')}<span class="count">2</span></button>`;
+    if (this.desk) return `<header class="h-head"><div class="h-bar">
+        <a class="h-word" href="#" data-act="home" aria-label="${LOJA.nome}, início">${LOJA.nome}</a>
+        <div class="h-dsearch-wrap"><label class="h-sfield">${ic('search','sm')}<input type="search" data-role="q" placeholder="Buscar na ${LOJA.nome}" aria-label="Buscar produtos" autocomplete="off"></label><div class="h-dd" hidden></div></div>
+        <div class="h-right"><button class="h-link" data-act="lote">${ic('users','sm')}Orçamento em lote</button>${bag}</div>
+      </div>${cats}</header>`;
+    return `<header class="h-head"><div class="h-bar">
+        <button class="icon-btn" data-act="menu" aria-label="Abrir menu">${ic('menu')}</button>
+        <a class="h-word" href="#" data-act="home" aria-label="${LOJA.nome}, início">${LOJA.nome}</a>
+        <button class="icon-btn" data-act="search" aria-label="Buscar na loja">${ic('search')}</button>${bag}
+      </div>${cats}</header>`;
+  }
+  heroBanners(){
+    const d = this.desk, n = BANNERS.length;
+    const slides = BANNERS.map((b, i) => `<div class="h-slide${i === 0 ? ' on' : ''}" role="group" aria-roledescription="banner" aria-label="${i + 1} de ${n}" ${i ? 'aria-hidden="true" inert' : ''}>
+      ${b.arte ? `<a class="h-slide-link" href="#" data-act="dest" data-dest="${b.dest}" aria-label="${b.rotulo}"></a>${arteBanner(b.id, d)}`
+               : `${arteBanner(b.id, d)}<div class="h-scrim"></div><div class="h-htxt"><span class="h-kick">${b.kicker}</span><h2>${b.titulo}</h2><p>${b.texto}</p>
+                  <button class="btn h-cta" data-act="dest" data-dest="${b.dest}">${b.cta}${ic('arrow','sm')}</button></div>`}</div>`).join('');
+    const setas = d ? `<button class="h-arrow prev" data-act="hprev" aria-label="Banner anterior">${ic('back')}</button><button class="h-arrow next" data-act="hnext" aria-label="Próximo banner">${ic('next')}</button>` : '';
+    return `<section class="h-hero" aria-roledescription="carrossel" aria-label="Destaques da loja">${slides}${setas}
+      <div class="h-ctl">${BANNERS.map((_, i) => `<button class="h-dot" data-act="hgo" data-n="${i}" aria-label="Ir para o banner ${i + 1}" aria-current="${i === 0}"><i></i></button>`).join('')}
+        ${RM ? '' : `<button class="icon-btn" data-act="hpause" aria-label="Pausar banners">${ic('pause','sm')}</button>`}</div>
+      <span class="h-count mono" aria-hidden="true">01 / 0${n}</span></section>`;
+  }
+  heroMockup(){
+    const artes = [
+      {t:'Helena', v:{tipo:'reta', corpo:'#F7F4EE', arte:{texto:'Helena', cor:'#C2255C', desenho:'coracao'}}},
+      {t:'Vovó Lourdes', v:{tipo:'reta', corpo:'#F7F4EE', arte:{texto:'Vovó Lourdes', cor:'#8A6A2A', fonte:"'Fraunces',serif", tam:16, desenho:'folha'}}},
+      {t:'Time Sheid', v:{tipo:'reta', corpo:'#F7F4EE', arte:{texto:'Time Sheid', cor:'#23305E', fonte:"'Fraunces',serif", tam:17, sub:'SÃO JOSÉ DOS CAMPOS'}}},
+    ];
+    const p = byId(CAMPEA);
+    return `<section class="h-h0">
+      <div class="h-h0-t">
+        <div class="h-h0-k"><span class="h-word">${LOJA.nome}</span><span class="label">Personalizados · São José dos Campos</span></div>
+        <h1>Presentes que ninguém mais tem.</h1>
+        <p class="lead">Canecas, camisetas e copos com a sua foto, o seu nome ou a sua frase. Você vê como fica antes de pagar.</p>
+        ${this.desk ? this.h0cta() + this.h0facts() : ''}
+      </div>
+      <div class="h-stage-col">
+        <div class="h-stage" aria-label="Prévia da Caneca Branca com três artes de exemplo">
+          <span class="badge badge-soft h-stage-tag">${ic('rotate','sm')}Prévia 3D</span>
+          <div class="h-disc"></div>
+          ${artes.map((a, i) => `<div class="h-mug${i === 0 ? ' on' : ''}" aria-hidden="${i !== 0}">${KIT.produto(a.v)}</div>`).join('')}
+          ${RM ? '' : `<button class="icon-btn h-stage-pause" data-act="spause" aria-label="Pausar a troca de artes">${ic('pause','sm')}</button>`}
+          <div class="h-stage-bar"><div class="h-pills" role="radiogroup" aria-label="Arte de exemplo">${artes.map((a, i) => `<button class="h-pill" role="radio" aria-checked="${i === 0}" data-act="arte0" data-n="${i}">${a.t}</button>`).join('')}</div></div>
+        </div>
+        <div class="h-stage-cap"><span class="t-small"><b>${p.nome}</b> · ${R$(p.preco)} · <span class="pix-line">${R$(pix(p.preco))} no Pix</span></span>
+          <a class="h-more" href="#" data-act="prod" data-id="${p.id}">Personalizar esta ${ic('arrow','sm')}</a></div>
+      </div>
+      ${this.desk ? '' : this.h0cta() + this.h0facts()}
+    </section>`;
+  }
+  h0cta(){ return `<div class="h-h0-cta"><button class="btn btn-primary" data-act="prod" data-id="${CAMPEA}">${ic('brush')}Personalizar uma caneca</button><button class="btn btn-secondary" data-act="grade">Ver a loja toda</button></div>`; }
+  h0facts(){ return `<div class="h-h0-facts"><span>${ic('clock','sm')}Pronto em ${LOJA.prazo} dias úteis</span><span>${ic('eye','sm')}Você aprova antes</span><span class="pixf">${ic('pix','sm')}${LOJA.pix}% no Pix</span></div>`; }
+  home(){
+    const passos = [
+      ['brush','Personalize na tela','Escolha a cor, envie sua arte ou seu texto e veja como fica antes de pagar.',''],
+      ['wa','Aprove pelo WhatsApp',`Nada vai para produção sem o seu ok. ${LOJA.rev} revisões inclusas.`,''],
+      ['box','Produção e entrega','Retire na loja ou receba em casa.',`Pronto em até ${LOJA.prazo} dias úteis`],
+    ];
+    const grade = [cartaoGrupo(catDe('canecas')), cartaoGrupo(catDe('camisetas')), ...['copo-stanley','azulejo','adesivo','cartao-visita'].map(id => cartao(byId(id)))].join('');
+    const mini = p => `<button class="h-mini" data-act="prod" data-id="${p.id}"><div class="shot">${foto(p)}${p.id === CAMPEA ? '<span class="badge badge-brand">Mais pedido</span>' : ''}</div>
+      <span class="nm">${esc(p.nome)}</span><span class="row"><span class="price">${R$(p.preco)}</span><span class="pix-line">${R$(pix(p.preco))} no Pix</span></span></button>`;
+    return `${this.hero === 'banners' ? this.heroBanners() : this.heroMockup()}
+      <section class="h-sec" data-sec="como"><div class="h-sec-head"><div><span class="label">Como funciona</span><h2>Três passos até o presente pronto</h2></div></div>
+        <div class="h-steps">${passos.map(([i, t, x, b], k) => `<div class="h-step"><span class="h-step-ic">${ic(i)}</span><div><span class="h-step-n">0${k + 1}</span><b>${t}</b><p>${x}</p>${b ? `<span class="badge">${ic('clock','sm')}${b}</span>` : ''}</div></div>`).join('')}</div></section>
+      <section class="h-sec" data-sec="grade"><div class="h-sec-head"><div><span class="label">A loja</span><h2>Escolha a peça. A arte é sua.</h2></div>${this.desk ? `<span class="t-cap mono">${P.length} peças</span>` : ''}</div>
+        <div class="h-grid">${grade}</div></section>
+      <section class="h-sec"><div class="h-sec-head"><div><span class="label">Mais pedidos</span><h2>Os queridinhos da ${LOJA.nome}</h2></div></div>
+        <div class="h-rail">${QUERIDINHOS.map(id => mini(byId(id))).join('')}</div></section>
+      <section class="h-sec"><div class="h-sec-head"><div><span class="label">Artes da loja</span><h2>Não tem arte pronta? Escolha uma das nossas</h2></div></div>
+        <div class="h-artes">${ARTES.map(a => `<button class="h-arte" data-act="arte" data-n="${esc(a.n)}"><div class="h-arte-img">${svgArte(a)}</div><span>${a.n}</span></button>`).join('')}</div></section>
+      <section class="h-sec" data-sec="b2b">${b2bHTML()}</section>
+      <section class="h-sec" data-sec="selos"><span class="vh">Por que comprar aqui</span>${selosHTML()}</section>`;
+  }
+  pagCategoria(){
+    const c = catDe(this.cat), todos = doCat(c.slug), lista = this.sub ? todos.filter(p => p.sub === this.sub) : todos;
+    const precos = todos.map(p => p.preco), min = Math.min(...precos), max = Math.max(...precos);
+    const com3D = todos.filter(p => p.chips.includes('Mockup 3D')).length;
+    const resumo = [com3D === todos.length ? 'todos com prévia em 3D' : com3D ? `${com3D} com prévia em 3D` : 'prévia da arte antes de pagar', min !== max ? `de ${R$(min)} a ${R$(max)}` : ''].filter(Boolean).join(' · ');
+    const subNome = this.sub && c.subs.find(s => s[0] === this.sub)[1];
+    const trilha = `<nav class="h-crumbs" aria-label="Você está em"><a href="#" data-act="home">Início</a><span aria-hidden="true">/</span>${subNome ? `<a href="#" data-act="cat" data-cat="${c.slug}">${c.nome}</a><span aria-hidden="true">/</span><span aria-current="page">${subNome}</span>` : `<span aria-current="page">${c.nome}</span>`}</nav>`;
+    const subs = c.subs ? `<div class="h-subs" role="group" aria-label="Tipos de ${c.nome.toLowerCase()}"><button class="chip" data-act="cat" data-cat="${c.slug}" aria-pressed="${!this.sub}">Todas <span class="n">${todos.length}</span></button>${c.subs.map(([s, n]) => `<button class="chip" data-act="sub" data-sub="${s}" aria-pressed="${this.sub === s}">${n} <span class="n">${todos.filter(p => p.sub === s).length}</span></button>`).join('')}</div>` : '';
+    return `<section class="h-catpage">${trilha}
+      <div class="h-cathead"><h1 tabindex="-1">${subNome || c.nome}</h1><span class="h-catcount">${lista.length} ${plural(lista.length, 'modelo', 'modelos')}</span></div>
+      <p class="t-small">${resumo.charAt(0).toUpperCase() + resumo.slice(1)}</p>
+      ${subs}
+      <div class="h-grid h-grid-cat">${lista.map(cartao).join('')}</div>
+      <div class="h-catend"><span>Não achou o modelo que queria? A ${LOJA.nome} faz sob encomenda.</span><button class="btn btn-secondary btn-sm" data-act="wa">${ic('wa','sm')}Perguntar no WhatsApp</button></div>
+    </section>`;
+  }
+  rodape(){
+    return `<footer class="h-foot"><div class="h-foot-in"><div class="h-fcols">
+      <div class="h-fc"><a class="h-word" href="#" data-act="home">${LOJA.nome}</a><p class="t-small">Presentes personalizados feitos em São José dos Campos.</p>
+        <ul class="h-finfo"><li>${ic('pin','sm')}<span>${LOJA.end1}<br>${LOJA.end2}</span></li><li>${ic('clock','sm')}<span>${LOJA.horario}</span></li></ul>
+        <div class="h-fsoc"><a class="chip" href="#" data-act="ig" aria-label="Instagram ${LOJA.ig}">${ic('instagram','sm')}${LOJA.ig}</a><a class="chip" href="#" data-act="wa" aria-label="WhatsApp ${LOJA.wa}">${ic('wa','sm')}${LOJA.wa}</a></div></div>
+      <div class="h-fc"><span class="label">Formas de pagamento</span>
+        <ul class="h-fpay"><li>${ic('pix','sm')}Pix <em>${LOJA.pix}% de desconto</em></li><li>${ic('card','sm')}Cartão de crédito e débito</li></ul>
+        <span class="label">Trocas e devoluções</span><p class="t-small">${LOJA.politica}</p></div>
+      <div class="h-fc"><span class="label">Navegue</span><ul class="h-fnav">${CATS.map(c => `<li><a href="#" data-act="cat" data-cat="${c.slug}">${c.nome}</a></li>`).join('')}</ul></div>
+    </div><div class="h-legal"><span>© 2026 ${LOJA.nome} · CNPJ ${LOJA.cnpj}</span><a href="#" data-act="aura">Loja desenvolvida com<b>Aura.</b></a></div></div></footer>`;
+  }
+  gavetaHTML(){
+    const linha = c => { const n = doCat(c.slug).length;
+      if (!c.subs) return `<li><button class="h-drow" data-act="cat" data-cat="${c.slug}">${c.nome}<span class="n">${n}</span></button></li>`;
+      return `<li><button class="h-drow" data-act="acc" data-cat="${c.slug}" aria-expanded="false">${c.nome}<span class="n">${n}</span>${ic('down','sm chev')}</button>
+        <ul data-sub-of="${c.slug}" hidden>${c.subs.map(([s, nm]) => `<li><button class="h-drow sub" data-act="cat" data-cat="${c.slug}" data-sub="${s}">${nm}<span class="n">${doCat(c.slug).filter(p => p.sub === s).length}</span></button></li>`).join('')}
+        <li><button class="h-drow sub all" data-act="cat" data-cat="${c.slug}">Ver todas as ${c.nome.toLowerCase()}</button></li></ul></li>`; };
+    return `<div class="h-drawer" hidden><div class="h-dscrim" data-act="fechar"></div>
+      <nav class="h-dpanel" aria-label="Menu da loja" role="dialog" aria-modal="true">
+        <div class="h-dtop"><span class="h-word">${LOJA.nome}</span><button class="icon-btn" data-act="fechar" aria-label="Fechar menu">${ic('close')}</button></div>
+        <button class="h-dsearch" data-act="search">${ic('search','sm')}Buscar na loja</button>
+        <ul class="h-dlist"><li><button class="h-drow" data-act="home">Início</button></li>${CATS.map(linha).join('')}</ul>
+        <div class="h-dsep"></div>
+        <ul class="h-dlist"><li><button class="h-drow" data-act="lote">${ic('users','sm')}Orçamento em lote</button></li><li><button class="h-drow" data-act="wa">${ic('wa','sm')}Falar no WhatsApp</button></li></ul>
+        <div class="h-dfoot"><span>${ic('pin','sm')}${LOJA.end1}, ${LOJA.end2}</span><span>${ic('clock','sm')}${LOJA.horario}</span><span>${ic('instagram','sm')}${LOJA.ig}</span></div>
+      </nav></div>`;
+  }
+  buscaHTML(){
+    return `<div class="h-search" role="dialog" aria-label="Buscar na loja" hidden>
+      <div class="h-search-top"><button class="icon-btn" data-act="fechar" aria-label="Fechar busca">${ic('back')}</button>
+        <label class="h-sfield">${ic('search','sm')}<input type="search" data-role="q" placeholder="Buscar na ${LOJA.nome}" aria-label="Buscar produtos" autocomplete="off" enterkeyhint="search">
+        <button class="icon-btn" data-act="limpar" aria-label="Limpar busca" hidden>${ic('close','sm')}</button></label></div>
+      <div class="h-sres" aria-live="polite"></div></div>`;
+  }
+  resultados(q){
+    q = q.trim();
+    if (!q) return `<div class="h-rlabel"><span class="label">Mais procurados</span></div><div class="h-sugs">${['Caneca','Camisa','Stanley','Azulejo','Adesivo','Cartão'].map(s => `<button class="chip" data-act="sug" data-q="${s}">${s}</button>`).join('')}</div>
+      <div class="h-rlabel"><span class="label">Categorias</span></div>${CATS.map(c => this.linhaCat(c, doCat(c.slug).length, doCat(c.slug).length)).join('')}`;
+    const {ps, cats} = buscar(q);
+    if (!ps.length) return `<div class="h-empty"><div class="h-empty-ic">${ic('search','lg')}</div><h3>Nada encontrado para “${esc(q)}”</h3>
+      <p>A ${LOJA.nome} faz sob encomenda. Se não está na loja, pergunte: muitas vezes dá para fazer.</p>
+      <div class="acts"><button class="btn btn-secondary" data-act="grade">${ic('grid','sm')}Ver a loja toda</button><button class="btn btn-wa" data-act="wabusca" data-q="${esc(q)}">${ic('wa','sm')}Pedir pelo WhatsApp</button></div></div>`;
+    return `${cats.length ? `<div class="h-rlabel"><span class="label">Categoria</span></div>${cats.map(x => this.linhaCat(x.c, x.n, x.total)).join('')}` : ''}
+      <div class="h-rlabel"><span class="label">Peças</span><span class="t-cap mono">${ps.length} ${plural(ps.length, 'peça', 'peças')}</span></div>
+      ${ps.map(p => `<button class="h-rrow" data-act="prod" data-id="${p.id}"><span class="h-rthumb">${foto(p)}</span><span class="h-rtxt"><span class="nm">${destacar(p.nome, q)}</span><span class="sub">${casa(q, p.nome) ? catDe(p.cat).nome : 'Na descrição: ' + esc(p.desc)}</span></span><span class="price">${R$(p.preco)}</span></button>`).join('')}`;
+  }
+  linhaCat(c, n, total){ return `<button class="h-rrow h-rcat" data-act="cat" data-cat="${c.slug}"><span class="h-rthumb">${ic('grid')}</span><span class="h-rtxt"><span class="nm">${c.nome}</span><span class="sub">${n === total ? `${total} ${plural(total, 'modelo', 'modelos')}` : `${n} de ${total} modelos`}</span></span>${ic('next','sm')}</button>`; }
+
+  /* ── ciclo ── */
+  render(){
+    this.timers.forEach(t => clearInterval(t)); this.timers = [];
+    this.root.innerHTML = `<div class="h-view">${this.anuncio()}${this.cabecalho()}${this.view === 'home' ? this.home() : this.pagCategoria()}${this.rodape()}</div>`;
+    if (this.url) this.url.textContent = `loja.getaura.com.br/${LOJA.slug}${this.view === 'cat' ? '/c/' + this.cat : ''}`;
+    this.carrossel(); this.palco(); this.rolou();
+  }
+  rolou(){ const h = this.root.querySelector('.h-head'), a = this.root.querySelector('.h-ann'); if (h && a) h.classList.toggle('stuck', this.root.scrollTop > a.offsetHeight + 2); }
+  ir(view, cat, sub = null){
+    this.view = view; this.cat = cat; this.sub = sub; this.fecharCamadas(true); this.render();
+    this.root.scrollTop = 0;
+    if (view === 'cat') this.root.querySelector('.h-cathead h1')?.focus({preventScroll:true});
+  }
+  rolarPara(sel){
+    const el = this.root.querySelector(sel); if (!el) return;
+    const head = this.root.querySelector('.h-head').offsetHeight;
+    const top = el.getBoundingClientRect().top - this.root.getBoundingClientRect().top + this.root.scrollTop - head + 1;
+    this.root.scrollTo({top, behavior: RM ? 'auto' : 'smooth'});
+  }
+  aviso(msg){
+    const t = this.wrap.querySelector('.mk-toast'); t.innerHTML = `<b>MOCKUP</b>${msg}`; t.classList.add('on');
+    clearTimeout(this._t); this._t = setTimeout(() => t.classList.remove('on'), 2800);
+  }
+  /* ── carrossel de banners ── */
+  carrossel(){
+    const h = this.root.querySelector('.h-hero'); if (!h) return;
+    const slides = [...h.querySelectorAll('.h-slide')], dots = [...h.querySelectorAll('.h-dot')], cnt = h.querySelector('.h-count');
+    const pb = h.querySelector('[data-act=hpause]');
+    const st = {i:0, user:RM, hover:false};
+    if (RM) h.classList.add('static');
+    const aplicar = () => { const p = st.user || st.hover; h.classList.toggle('paused', p);
+      if (pb) { pb.innerHTML = ic(st.user ? 'play' : 'pause', 'sm'); pb.setAttribute('aria-label', st.user ? 'Continuar banners' : 'Pausar banners'); } };
+    const go = n => {
+      st.i = (n + slides.length) % slides.length;
+      slides.forEach((s, k) => { const on = k === st.i; s.classList.toggle('on', on); s.toggleAttribute('inert', !on); s.setAttribute('aria-hidden', String(!on)); });
+      dots.forEach((d, k) => d.setAttribute('aria-current', String(k === st.i)));
+      const cur = dots[st.i].querySelector('i'); cur.style.display = 'none'; void cur.offsetWidth; cur.style.display = '';
+      if (cnt) cnt.textContent = `0${st.i + 1} / 0${slides.length}`;
+    };
+    h.addEventListener('animationend', e => { if (e.animationName === 'h-prog') go(st.i + 1); });
+    h.addEventListener('mouseenter', () => { st.hover = true; aplicar(); });
+    h.addEventListener('mouseleave', () => { st.hover = false; aplicar(); });
+    h.addEventListener('focusin', () => { st.hover = true; aplicar(); });
+    h.addEventListener('focusout', () => { st.hover = false; aplicar(); });
+    let x0 = null;
+    h.addEventListener('pointerdown', e => { x0 = e.clientX; if (e.pointerType === 'touch') { st.user = true; aplicar(); } });
+    h.addEventListener('pointerup', e => { if (x0 == null) return; const dx = e.clientX - x0; x0 = null; if (Math.abs(dx) > 40) { this._arrastou = true; go(st.i + (dx < 0 ? 1 : -1)); setTimeout(() => this._arrastou = false, 0); } });
+    this.hero$ = {go, pausar: v => { st.user = v ?? !st.user; aplicar(); }, st};
+    aplicar();
+  }
+  /* ── palco do hero sem banner ── */
+  palco(){
+    const s = this.root.querySelector('.h-stage'); if (!s) return;
+    const ns = 'http://www.w3.org/2000/svg';
+    s.querySelectorAll('svg.prod g[clip-path]').forEach(g => { const w = document.createElementNS(ns, 'g'); w.setAttribute('class', 'h-spin'); while (g.firstChild) w.appendChild(g.firstChild); g.appendChild(w); });
+    const mugs = [...s.querySelectorAll('.h-mug')], pills = [...s.querySelectorAll('.h-pill')], pb = s.querySelector('[data-act=spause]');
+    const st = {i:0, user:RM, hover:false};
+    const aplicar = () => { s.classList.toggle('paused', st.user || st.hover); if (pb) { pb.innerHTML = ic(st.user ? 'play' : 'pause', 'sm'); pb.setAttribute('aria-label', st.user ? 'Continuar a troca de artes' : 'Pausar a troca de artes'); } };
+    const go = n => { st.i = n % mugs.length; mugs.forEach((m, k) => { m.classList.toggle('on', k === st.i); m.setAttribute('aria-hidden', String(k !== st.i)); }); pills.forEach((p, k) => p.setAttribute('aria-checked', String(k === st.i))); };
+    s.addEventListener('mouseenter', () => { st.hover = true; aplicar(); });
+    s.addEventListener('mouseleave', () => { st.hover = false; aplicar(); });
+    this.timers.push(setInterval(() => { if (!st.user && !st.hover) go(st.i + 1); }, 3400));
+    this.palco$ = {go, pausar: v => { st.user = v ?? !st.user; aplicar(); }};
+    aplicar();
+  }
+  /* ── camadas do celular ── */
+  abrirGaveta(inicial){
+    const d = this.wrap.querySelector('.h-drawer'); if (!d) return;
+    d.hidden = false; requestAnimationFrame(() => d.classList.add('open'));
+    if (inicial) this.sanfona(this.aberta, true);
+    else d.querySelector('[data-act=fechar]').focus({preventScroll:true});
+  }
+  sanfona(slug, abrir){
+    const b = this.wrap.querySelector(`.h-drawer [data-act=acc][data-cat="${slug}"]`), ul = this.wrap.querySelector(`[data-sub-of="${slug}"]`); if (!b) return;
+    const on = abrir ?? b.getAttribute('aria-expanded') !== 'true'; b.setAttribute('aria-expanded', String(on)); ul.hidden = !on;
+  }
+  abrirBusca(q = '', inicial){
+    const s = this.wrap.querySelector('.h-search'); if (!s) return;
+    this.fecharCamadas(true); s.hidden = false;
+    const inp = s.querySelector('input'); inp.value = q; this.digitou(inp);
+    if (!inicial) inp.focus({preventScroll:true});
+  }
+  fecharCamadas(rapido){
+    const d = this.wrap.querySelector('.h-drawer');
+    if (d && !d.hidden) { d.classList.remove('open'); if (rapido || RM) d.hidden = true; else setTimeout(() => d.hidden = true, 260); }
+    const s = this.wrap.querySelector('.h-search'); if (s) s.hidden = true;
+    const dd = this.root.querySelector('.h-dd'); if (dd) dd.hidden = true;
+  }
+  digitou(inp){
+    const q = inp.value;
+    if (this.desk) { const dd = inp.closest('.h-dsearch-wrap').querySelector('.h-dd'); dd.innerHTML = this.resultados(q); dd.hidden = false; return; }
+    this.wrap.querySelector('.h-sres').innerHTML = this.resultados(q);
+    this.wrap.querySelector('[data-act=limpar]').hidden = !q;
+  }
+  /* ── cliques ── */
+  clique(e){
+    const t = e.target.closest('[data-act]');
+    if (this.desk && !e.target.closest('.h-dsearch-wrap')) { const dd = this.root.querySelector('.h-dd'); if (dd) dd.hidden = true; }
+    if (!t || this._arrastou) return;
+    e.preventDefault();
+    const a = t.dataset.act;
+    const destino = d => { if (d.startsWith('cat:')) this.ir('cat', d.slice(4)); else this.aviso(`Abre o orçamento em lote: /${LOJA.slug}/orcamento`); };
+    switch (a) {
+      case 'home': this.ir('home'); break;
+      case 'cat': this.ir('cat', t.dataset.cat, t.dataset.sub || null); break;
+      case 'sub': this.sub = this.sub === t.dataset.sub ? null : t.dataset.sub; this.render(); this.root.querySelector('.h-subs [aria-pressed=true]')?.focus({preventScroll:true}); break;
+      case 'dest': destino(t.dataset.dest); break;
+      case 'grade': if (this.view !== 'home') this.ir('home'); this.fecharCamadas(true); this.rolarPara('[data-sec=grade]'); break;
+      case 'prod': this.aviso(`Abre a página do produto: /${LOJA.slug}/p/${t.dataset.id}`); break;
+      case 'bag': this.aviso('Abre a sacola em gaveta (Fase 2): folha de baixo no celular, lateral no desktop.'); break;
+      case 'lote': this.aviso(`Abre o assistente de orçamento em lote: /${LOJA.slug}/orcamento`); break;
+      case 'wa': this.aviso(`Abre o WhatsApp ${LOJA.wa}: "Olá! Vim pela loja ${LOJA.nome} e queria tirar uma dúvida."`); break;
+      case 'wabusca': this.aviso(`WhatsApp com a mensagem: "Olá! Procurei por “${t.dataset.q}” na loja ${LOJA.nome}. Vocês fazem?"`); break;
+      case 'ig': this.aviso(`Abre instagram.com/${LOJA.ig.slice(1)} em outra aba.`); break;
+      case 'aura': this.aviso('Abre getaura.com.br em outra aba.'); break;
+      case 'arte': this.aviso(`Proposta: abre a Caneca Branca com a arte "${t.dataset.n}" já aplicada.`); break;
+      case 'menu': this.abrirGaveta(); break;
+      case 'search': this.abrirBusca(''); break;
+      case 'fechar': this.fecharCamadas(); break;
+      case 'acc': this.sanfona(t.dataset.cat); break;
+      case 'sug': { const i = this.wrap.querySelector('.h-search input'); i.value = t.dataset.q; this.digitou(i); i.focus({preventScroll:true}); break; }
+      case 'limpar': { const i = this.wrap.querySelector('.h-search input'); i.value = ''; this.digitou(i); i.focus({preventScroll:true}); break; }
+      case 'hgo': this.hero$.go(+t.dataset.n); break;
+      case 'hprev': this.hero$.go(this.hero$.st.i - 1); break;
+      case 'hnext': this.hero$.go(this.hero$.st.i + 1); break;
+      case 'hpause': this.hero$.pausar(); break;
+      case 'arte0': this.palco$.go(+t.dataset.n); this.palco$.pausar(true); break;
+      case 'spause': this.palco$.pausar(); break;
+    }
+  }
+}
+
+/* ── Esqueleto (sem cor da loja: o payload ainda não chegou) ── */
+function esqueleto(desk){
+  const b = (w, h, r = 8, x = '') => `<div class="h-sk${x}" style="width:${w};height:${h}px;border-radius:${r}px;flex:none"></div>`;
+  if (!desk) return `<div class="h-skw" aria-busy="true"><span class="vh">Carregando a loja</span>
+    <div style="height:52px;display:grid;place-items:center;background:var(--bg3)">${b('72%', 10, 5, ' d')}</div>
+    <div class="h-skrow" style="height:58px;padding:0 14px">${b('28px', 28, 8)}${b('130px', 20, 6)}<span style="flex:1"></span>${b('28px', 28, 8)}${b('28px', 28, 8)}</div>
+    <div class="h-skrow" style="height:44px;padding:0 16px;gap:22px;border-top:1px solid var(--border);border-bottom:1px solid var(--border)">${['58px','72px','46px','64px','60px'].map(w => b(w, 10, 5)).join('')}</div>
+    <div style="padding:26px 16px;display:flex;flex-direction:column;gap:12px">${b('150px', 10, 5)}${b('92%', 30, 8)}${b('70%', 30, 8)}${b('84%', 12, 6)}${b('100%', 300, 22)}</div>
+    <div style="padding:8px 16px;display:grid;grid-template-columns:1fr 1fr;gap:12px">${[0,1,2,3].map(() => `<div style="display:flex;flex-direction:column;gap:8px">${b('100%', 210, 14)}</div>`).join('')}</div></div>`;
+  return `<div class="h-skw" aria-busy="true"><span class="vh">Carregando a loja</span>
+    <div style="height:38px;display:grid;place-items:center;background:var(--bg3)">${b('420px', 10, 5, ' d')}</div>
+    <div class="h-skrow" style="height:76px;max-width:1180px;margin:0 auto;width:100%;padding:0 20px;gap:24px">${b('170px', 26, 8)}<span style="flex:1;display:flex;justify-content:center">${b('520px', 46, 23)}</span>${b('150px', 20, 6)}${b('32px', 32, 10)}</div>
+    <div class="h-skrow" style="height:44px;justify-content:center;gap:34px;border-top:1px solid var(--border);border-bottom:1px solid var(--border)">${['64px','82px','50px','70px','66px','60px'].map(w => b(w, 10, 5)).join('')}</div>
+    <div style="display:grid;grid-template-columns:1.02fr 1fr;gap:64px;padding:56px 80px;align-items:center">
+      <div style="display:flex;flex-direction:column;gap:16px">${b('220px', 12, 6)}${b('96%', 58, 10)}${b('80%', 58, 10)}${b('88%', 16, 6)}${b('70%', 16, 6)}<div class="h-skrow" style="margin-top:8px">${b('220px', 48, 12)}${b('160px', 48, 12)}</div></div>
+      ${b('100%', 480, 28)}</div>
+    <div style="max-width:1120px;margin:0 auto;width:100%;display:grid;grid-template-columns:repeat(3,1fr);gap:20px;padding-bottom:40px">${[0,1,2].map(() => b('100%', 150, 14)).join('')}</div></div>`;
+}
+
+/* ── Montagem ── */
+KIT.bar();
+const LOJAS = {
+  s1p: new Loja('s1p', {hero:'banners'}), s1d: new Loja('s1d', {hero:'banners'}),
+  s2p: new Loja('s2p', {hero:'mockup'}),  s2d: new Loja('s2d', {hero:'mockup'}),
+  s3p: new Loja('s3p', {hero:'mockup'}),  s3d: new Loja('s3d', {hero:'banners'}),
+  s4a: new Loja('s4a', {hero:'mockup', gaveta:true}),
+  s4b: new Loja('s4b', {hero:'mockup', busca:'caneca co'}),
+  s4c: new Loja('s4c', {hero:'mockup', busca:'garrafa'}),
+  s5p: new Loja('s5p', {view:'cat', cat:'canecas'}), s5d: new Loja('s5d', {view:'cat', cat:'canecas'}),
+  s6p: new Loja('s6p', {hero:'mockup'}), s6d: new Loja('s6d', {hero:'mockup'}),
+};
+document.getElementById('s7p').innerHTML = esqueleto(false);
+document.getElementById('s7d').innerHTML = esqueleto(true);
+KIT.fitDesk();
+requestAnimationFrame(() => {
+  LOJAS.s3p.rolarPara('[data-sec=como]'); LOJAS.s3d.rolarPara('[data-sec=como]');
+  ['s3p','s3d'].forEach(k => { LOJAS[k].root.style.scrollBehavior = 'auto'; });
+  ['s6p','s6d'].forEach(k => { const r = LOJAS[k].root; r.scrollTop = r.scrollHeight; });
+  setTimeout(() => { ['s3p','s3d'].forEach(k => { const L = LOJAS[k], el = L.root.querySelector('[data-sec=como]'); L.root.scrollTop = el.getBoundingClientRect().top - L.root.getBoundingClientRect().top + L.root.scrollTop - L.root.querySelector('.h-head').offsetHeight + 1; L.rolou(); }); ['s6p','s6d'].forEach(k => LOJAS[k].rolou()); }, 60);
+});
+
+/* controles do mockup */
+function grupo(id, fn){ const g = document.getElementById(id); g.addEventListener('click', e => { const b = e.target.closest('.mk-pill'); if (!b) return; g.querySelectorAll('.mk-pill').forEach(x => x.setAttribute('aria-pressed', String(x === b))); fn(b); }); }
+grupo('ctl-banner', b => ['s1p','s1d'].forEach(k => { LOJAS[k].hero$.go(+b.dataset.n); LOJAS[k].hero$.pausar(true); }));
+grupo('ctl-forte', b => { ESTADO.forte = b.dataset.v; document.querySelectorAll('.h-b2b').forEach(el => el.outerHTML = b2bHTML()); });
+grupo('ctl-selos', b => { ESTADO.selos = b.dataset.v; document.querySelectorAll('.h-selos').forEach(el => el.outerHTML = selosHTML()); });
+grupo('ctl-rm', b => document.getElementById('sk-frames').classList.toggle('h-reduce', b.dataset.v === '1'));
+</script>
+</body>
+</html>
