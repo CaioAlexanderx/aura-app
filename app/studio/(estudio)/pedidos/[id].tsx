@@ -28,6 +28,8 @@ import { labelStudioStatus, colorStudioStatus } from "@/constants/studio-status"
 import { StudioBreadcrumb } from "@/components/studio/StudioBreadcrumb";
 import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
 import { rotuloDaChave, valorDaChave } from "@/components/studio/customizationConfig";
+import { BlocoPagamentoDoPedido } from "@/components/studio/BlocoPagamentoDoPedido";
+import { temBlocoDePagamento, situacaoDoPagamento, reais } from "@/components/studio/pagamentoDoPedido";
 
 const NEXT: Record<StudioProductionStatus, StudioProductionStatus | null> = {
   pending_art: "approved",
@@ -211,7 +213,10 @@ function PaymentCard({ orderId, companyId, depositRequired, depositPaid, onDepos
   return (
     <View style={[ps.section]}>
       <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 10, gap: 8 }}>
-        <Text style={ps.eyebrow}>PAGAMENTOS</Text>
+        {/* 26/09/2026: era "PAGAMENTOS". O Pix da vitrine ganhou o bloco
+            "Pagamento" próprio; este card é o dos marcos (sinal e saldo) da
+            encomenda, e o nome igual confundia os dois (LJ-33). */}
+        <Text style={ps.eyebrow}>SINAL E SALDO</Text>
         {hasDeposit && (
           <View style={[ps.pill, depositPaid ? { backgroundColor: sem.approved.soft } : { backgroundColor: sem.waiting.soft }]}>
             <Text style={[ps.pillTxt, depositPaid ? { color: sem.approved.ink } : { color: sem.waiting.ink }]}>
@@ -482,6 +487,15 @@ export default function StudioOrderDetail() {
   const next = status ? NEXT[status] : null;
   const lastApproval = approvals?.[0] || null;
 
+  // 26/09/2026 (A1 do QA da lojista, P0): pagamento do pedido da vitrine.
+  // Enquanto pede ação (Pix a confirmar, comprovante a conferir), o bloco
+  // sobe para o topo em âmbar; depois de pago, desce para depois do cliente.
+  const mostraPagamento = temBlocoDePagamento(order);
+  const pagamentoNoTopo = mostraPagamento && situacaoDoPagamento(order).precisaAgir;
+  const blocoPagamento = mostraPagamento ? (
+    <BlocoPagamentoDoPedido pedido={order} companyIdDaSessao={company?.id} onAtualizado={load} />
+  ) : null;
+
   return (
     <StudioScreen variant="reading">
       <StudioBreadcrumb
@@ -497,7 +511,7 @@ export default function StudioOrderDetail() {
         <StudioPageHeader
           eyebrow="PEDIDOS"
           title={order.display_name || order.customer_name || "Pedido"}
-          subtitle={`Criado em ${new Date(order.created_at).toLocaleString("pt-BR")} · ${order.item_count} item(ns) · R$ ${Number(order.total_amount || 0).toFixed(2)}`}
+          subtitle={`Criado em ${new Date(order.created_at).toLocaleString("pt-BR")} · ${order.item_count} item(ns) · ${reais(order.total_amount || 0)}`}
           rightSlot={
             <View style={[s.statusPill, { backgroundColor: statusCol.bg }]}>
               <Text style={[s.statusTxt, { color: statusCol.fg }]}>{labelStudioStatus(status)}</Text>
@@ -536,6 +550,8 @@ export default function StudioOrderDetail() {
           </Pressable>
         </View>
 
+        {pagamentoNoTopo ? blocoPagamento : null}
+
         <View style={s.section}>
           <Text style={s.sectionEyebrow}>CLIENTE</Text>
           <Text style={s.sectionTitle}>{order.customer_name || "—"}</Text>
@@ -546,6 +562,8 @@ export default function StudioOrderDetail() {
             </Pressable>
           ) : null}
         </View>
+
+        {!pagamentoNoTopo ? blocoPagamento : null}
 
         <View style={s.section}>
           <Text style={s.sectionEyebrow}>ITENS DO PEDIDO</Text>
