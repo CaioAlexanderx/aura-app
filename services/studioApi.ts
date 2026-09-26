@@ -304,8 +304,12 @@ export type PublicApproval = {
   revisions: StudioApprovalRevision[];
   // Fase 4 da vitrine Studio (25/09/2026) — ausentes no backend de antes.
   marca?: MarcaDaLoja | null;
-  /** Revisões inclusas na política da loja, já pedidas e o preço da extra. */
-  revisoes?: { inclusas: number | null; usadas: number; valor_extra: number };
+  /**
+   * Revisões inclusas na política da loja, já pedidas e o preço da extra.
+   * `ilimitadas` (26/09/2026, achado A3): a loja em 0 ou sem limite — aí
+   * `inclusas` vem null e `valor_extra` 0. Ausente no backend de antes.
+   */
+  revisoes?: { inclusas: number | null; usadas: number; valor_extra: number; ilimitadas?: boolean };
   prazo_dias_uteis?: number | null;
   /** Token do acompanhamento do pedido (o mesmo da confirmação). */
   acompanhar_token?: string | null;

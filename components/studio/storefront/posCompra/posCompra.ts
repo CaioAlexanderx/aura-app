@@ -93,15 +93,33 @@ const ordinal = (n: number) => `${n}ª`;
 
 
 /**
+ * A loja não limita as revisões? (Achado A3 do QA, decisão do Tech Lead:
+ * vale o que o painel diz — "0 = revisões ilimitadas, sem cobrança".)
+ *
+ * O backend novo manda `ilimitadas: true` com `inclusas: null`; o de antes
+ * mandava `inclusas: 0` (loja em 0) ou `null` (nada configurado). Os três
+ * são ilimitadas. Sem o placar (backend de antes da Fase 4) não há o que
+ * dizer: `false`, e as funções abaixo devolvem null.
+ */
+export function revisoesIlimitadas(revisoes: PublicApproval["revisoes"] | null | undefined): boolean {
+  if (!revisoes) return false;
+  if (revisoes.ilimitadas === true) return true;
+  return !(Number(revisoes.inclusas) > 0);
+}
+
+/**
  * Quantas revisões inclusas ainda restam, para a nota da tela de aprovar.
- * `null` quando a loja não tem política (nada a dizer).
+ * `null` quando não há limite (ilimitadas) ou não há placar: nada a contar.
  */
 export function revisoesRestantes(revisoes: PublicApproval["revisoes"] | null | undefined): number | null {
-  if (!revisoes || revisoes.inclusas == null) return null;
-  return Math.max(0, revisoes.inclusas - (revisoes.usadas || 0));
+  if (!revisoes || revisoesIlimitadas(revisoes)) return null;
+  return Math.max(0, Number(revisoes.inclusas) - (revisoes.usadas || 0));
 }
 
 export type AvisoDeAjuste = { tipo: "inclusa" | "paga"; texto: string };
+
+/** O aviso da folha de ajuste quando a loja não limita as revisões. */
+export const AJUSTE_ILIMITADO = "Ajuste incluso. Pode pedir quantos precisar.";
 
 /**
  * O aviso da folha de "Pedir ajuste" (mockup, Tela 2): se ESTE ajuste é
@@ -110,10 +128,13 @@ export type AvisoDeAjuste = { tipo: "inclusa" | "paga"; texto: string };
  * a tela só avisa.
  */
 export function avisoDoAjuste(revisoes: PublicApproval["revisoes"] | null | undefined): AvisoDeAjuste | null {
-  if (!revisoes || revisoes.inclusas == null) return null;
+  if (!revisoes) return null;
+  // Ilimitadas: nunca fala em cobrança. Frase curta, na voz da loja.
+  if (revisoesIlimitadas(revisoes)) return { tipo: "inclusa", texto: AJUSTE_ILIMITADO };
+  const inclusas = Number(revisoes.inclusas);
   const esta = (revisoes.usadas || 0) + 1;
-  if (esta <= revisoes.inclusas) {
-    const depois = revisoes.inclusas - esta;
+  if (esta <= inclusas) {
+    const depois = inclusas - esta;
     return {
       tipo: "inclusa",
       texto: depois > 0
@@ -130,7 +151,11 @@ export function avisoDoAjuste(revisoes: PublicApproval["revisoes"] | null | unde
   };
 }
 
-/** O texto da nota de revisões da tela de aprovar ("Você ainda tem 2 revisões..."). */
+/**
+ * O texto da nota de revisões da tela de aprovar ("Você ainda tem 2
+ * revisões..."). Ilimitadas: sem nota — não há o que contar, e a folha de
+ * ajuste já diz que o ajuste é incluso.
+ */
 export function textoDasRevisoes(revisoes: PublicApproval["revisoes"] | null | undefined): string | null {
   const r = revisoesRestantes(revisoes);
   if (r == null) return null;

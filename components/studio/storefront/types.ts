@@ -69,6 +69,8 @@ export type StoreRevisions = {
   max_included: number;   // 0 = ilimitado
   extra_price: number;    // R$ cobrado por revisão extra
   policy_text: string | null;
+  /** true com 0 ou sem limite (backend de 26/09/2026); aí extra_price é 0. */
+  ilimitadas?: boolean;
 };
 
 /** Um banner da home. Mesmo formato que a loja comum recebe. */

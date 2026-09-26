@@ -187,6 +187,22 @@ describe("aprovar a arte no endereço da loja", () => {
     expect(JSON.parse(post.init.body)).toEqual({ action: "request_changes", note: "Deixar o nome maior" });
   });
 
+  // Achado A3: a loja em 0 (Sheid, aura-qa) é ilimitada — a cliente nunca
+  // lê cobrança nem "revisões já usadas".
+  test("revisões ilimitadas: sem placar na tela e ajuste incluso na folha", async () => {
+    rotas.push(quando(/\/aprovacao\/hx7k[^/]*$/, aprovacao({
+      revisoes: { inclusas: null, usadas: 3, valor_extra: 0, ilimitadas: true },
+    })));
+    render(<PaginaDaAprovacao slug="sheid-mania" token={APROV} />);
+    expect(await acharId("aprovacao-aprovar")).toBeTruthy();
+    expect(temId("aprovacao-revisoes")).toBe(false);
+    fireEvent.press(porId("aprovacao-ajuste-botao"));
+    expect(await acharId("folha-de-ajuste")).toBeTruthy();
+    expect(naTela("Ajuste incluso. Pode pedir quantos precisar.")).toBe(true);
+    expect(naTela("cobrar")).toBe(false);
+    expect(naTela("revisão:")).toBe(false);
+  });
+
   test("aprovar: 'Arte aprovada', o que acontece agora e o caminho para acompanhar", async () => {
     rotas.push(quando(/\/aprovacao\/hx7k[^/]*$/, aprovacao()));
     rotas.push(quando(/\/respond$/, { ok: true, action: "approve" }, 200, "POST"));
