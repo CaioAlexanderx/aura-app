@@ -147,6 +147,12 @@ export type StudioOrder = {
   // Data prometida de entrega. Opcional: sem ela o card usa a idade do
   // pedido, como sempre fez.
   promised_date?: string | null;
+  // 26/09/2026 (A1 do QA da lojista): situação do pagamento do pedido da
+  // vitrine (source='digital'), para o selo "Pagamento a conferir". Ausentes
+  // no backend de antes e nos outros canais.
+  payment_method?: "pix" | "card" | "on_delivery" | string | null;
+  payment_status?: string | null;
+  has_payment_proof?: boolean;
 };
 
 // K3 — o que a página pública recebe. Espelha exatamente o que a rota
@@ -226,7 +232,19 @@ export type StudioOrderItem = {
 };
 
 export type StudioOrderDetail = {
-  order: StudioOrder & { vertical?: string; updated_at: string };
+  order: StudioOrder & {
+    vertical?: string;
+    updated_at: string;
+    company_id?: string;
+    // 26/09/2026 (A1): pagamento do pedido da vitrine, vindo fresco de
+    // digital_orders (bloco "Pagamento" do detalhe). Só em source='digital'.
+    payment_proof_url?: string | null;
+    payment_proof_uploaded_at?: string | null;
+    total?: number | null;
+    order_number?: string | number | null;
+    confirmed_at?: string | null;
+    cancelled_at?: string | null;
+  };
   items: StudioOrderItem[];
   approvals: StudioApproval[];
 };

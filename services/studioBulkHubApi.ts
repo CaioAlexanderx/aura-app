@@ -72,6 +72,12 @@ export type HubFeedItem = {
   status: string;
   name: string | null;
   qty: number;
+  // 26/09/2026 (A1): `status` acima é a etapa de PRODUÇÃO. A situação do
+  // pedido e do pagamento vem aqui, para o selo "Pagamento a conferir".
+  order_status?: string | null;
+  payment_method?: string | null;
+  payment_status?: string | null;
+  has_payment_proof?: boolean;
 };
 
 export type HubAlert = {
