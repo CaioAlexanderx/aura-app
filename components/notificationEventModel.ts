@@ -67,6 +67,13 @@ const CATALOG: Record<string, CatalogEntry> = {
     accent: 'amber', icon: 'caixa', glyph: '📦',
     ctaLabel: 'Ver produto', fallbackRoute: '/estoque',
   },
+  // 25/09/2026: lembrete do Financeiro, 2 dias antes do vencimento (backend
+  // jobs/expenseDueReminderJob). Some depois de visto — ver SOME_AO_VER.
+  loja_conta_vencendo: {
+    label: 'Conta a pagar vencendo', severity: 'atencao', requiresAction: true,
+    accent: 'amber', icon: 'dinheiro', glyph: '💸',
+    ctaLabel: 'Ver contas a pagar', fallbackRoute: '/financeiro',
+  },
   loja_pedido_novo: {
     label: 'Pedido novo', severity: 'info', requiresAction: false,
     accent: 'violet', icon: 'sacola', glyph: '🛍️',
@@ -349,6 +356,12 @@ export const PREF_SECTIONS: PrefSection[] = [
     ],
   },
   {
+    titulo: 'Financeiro',
+    linhas: [
+      { type: 'loja_conta_vencendo', nome: 'Conta a pagar vencendo', desc: 'Lembrete 2 dias antes do vencimento. Some depois que você vê.', padrao: true },
+    ],
+  },
+  {
     titulo: 'Estoque e loja',
     linhas: [
       { type: 'loja_estoque_baixo', nome: 'Estoque abaixo do mínimo', desc: 'Venda online derrubou o saldo do produto.', padrao: true },
@@ -356,6 +369,19 @@ export const PREF_SECTIONS: PrefSection[] = [
     ],
   },
 ];
+
+// ── "Visualizou, sumiu" (25/09/2026) ──────────────────────────────────────
+// Lembrete não é trabalho parado: depois que a lojista viu, ele não tem por
+// que continuar no sino. Os tipos abaixo viram LIDOS quando a gaveta que os
+// mostrou FECHA (e não ao abrir: o poll de 30s tiraria o card da frente dela
+// no meio da leitura). O que chegou com a gaveta aberta não foi visto e fica
+// para a próxima abertura.
+export const SOME_AO_VER: ReadonlySet<string> = new Set(['loja_conta_vencendo']);
+
+/** Ids dos eventos que somem depois de vistos, entre os que estão na tela agora. */
+export function idsQueSomemAoVer(events: StoreEvent[]): string[] {
+  return (events || []).filter((e) => SOME_AO_VER.has(e.type) && !e.read_at).map((e) => e.id);
+}
 
 export const PREF_ROWS: PrefRow[] = PREF_SECTIONS.reduce<PrefRow[]>(
   (acc, s) => acc.concat(s.linhas), []
