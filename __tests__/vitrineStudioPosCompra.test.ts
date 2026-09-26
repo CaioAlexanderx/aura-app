@@ -8,7 +8,7 @@
 // ============================================================
 import {
   acaoDoAcompanhamento, acompanhamentoComMarca, avisoDoAjuste, isVideoUrl, linkDoWhatsAppDoPedido,
-  nomeDaLoja, revisoesRestantes, rotuloDaEtapa, subtituloDoAcompanhamento, telaDaAprovacao,
+  nomeDaLoja, revisoesIlimitadas, revisoesRestantes, rotuloDaEtapa, subtituloDoAcompanhamento, telaDaAprovacao,
   textoDasRevisoes, tituloDaAprovacao, usaVisualDaLoja,
 } from "@/components/studio/storefront/posCompra/posCompra";
 import {
@@ -89,10 +89,32 @@ describe("aprovar a arte", () => {
     expect(avisoDoAjuste({ inclusas: 2, usadas: 2, valor_extra: 10 })).toEqual({
       tipo: "paga", texto: "Esta seria a 3ª revisão: R$ 10,00. A loja confirma com você antes de cobrar.",
     });
-    expect(avisoDoAjuste({ inclusas: 0, usadas: 0, valor_extra: 0 })).toEqual({
-      tipo: "paga", texto: "Esta seria a 1ª revisão. A loja confirma com você antes de cobrar.",
+    expect(avisoDoAjuste({ inclusas: 2, usadas: 2, valor_extra: 0 })).toEqual({
+      tipo: "paga", texto: "Esta seria a 3ª revisão. A loja confirma com você antes de cobrar.",
     });
-    expect(avisoDoAjuste({ inclusas: null, usadas: 0, valor_extra: 0 })).toBeNull();
+    expect(avisoDoAjuste(undefined)).toBeNull();
+  });
+
+  // Achado A3 (26/09/2026): 0 = ilimitadas, como o painel diz. A Sheid e a
+  // aura-qa estão em 0 e a cliente lia "Esta seria a 1ª revisão...".
+  test("revisões ilimitadas: ajuste incluso, nunca fala em cobrança", () => {
+    const ILIMITADO = { tipo: "inclusa", texto: "Ajuste incluso. Pode pedir quantos precisar." };
+    // Backend novo: ilimitadas true, inclusas null, sem preço.
+    const novo = { inclusas: null, usadas: 4, valor_extra: 0, ilimitadas: true };
+    expect(revisoesIlimitadas(novo)).toBe(true);
+    expect(avisoDoAjuste(novo)).toEqual(ILIMITADO);
+    // Backend de antes: loja em 0 (com preço de extra salvo) ou nada configurado.
+    expect(avisoDoAjuste({ inclusas: 0, usadas: 0, valor_extra: 10 })).toEqual(ILIMITADO);
+    expect(avisoDoAjuste({ inclusas: null, usadas: 2, valor_extra: 0 })).toEqual(ILIMITADO);
+    // Nada a contar na tela de aprovar.
+    expect(revisoesRestantes(novo)).toBeNull();
+    expect(textoDasRevisoes(novo)).toBeNull();
+    expect(textoDasRevisoes({ inclusas: 0, usadas: 3, valor_extra: 10 })).toBeNull();
+    // Sem travessão decorativo e sem "cobrar".
+    expect(ILIMITADO.texto).not.toMatch(/—|cobr/);
+    // Limite positivo continua limitado, mesmo se ilimitadas vier false.
+    expect(revisoesIlimitadas({ inclusas: 2, usadas: 0, valor_extra: 10, ilimitadas: false })).toBe(false);
+    expect(revisoesIlimitadas(undefined)).toBe(false);
   });
 
   test("mockup em vídeo (turntable do motor 3D)", () => {

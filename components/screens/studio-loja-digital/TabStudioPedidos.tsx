@@ -7,6 +7,7 @@ import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { studioApi, StudioOrder, StudioProductionStatus } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
+import { SeloDoPagamento } from "@/components/studio/SeloDoPagamento";
 
 // QA fix (achado #11): esta tab usava uma janela própria (30d/limit 100,
 // sem paginação) como fonte de dados, diferente do feed do hub
@@ -216,6 +217,8 @@ export function TabStudioPedidos() {
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
                     <Text style={styles.totalValue}>{formatBRL(o.total_amount)}</Text>
+                    {/* 26/09/2026 (A1): Pix da vitrine esperando a lojista. */}
+                    {(o.source || "digital") === "digital" ? <SeloDoPagamento item={o} /> : null}
                   </View>
                 </View>
 

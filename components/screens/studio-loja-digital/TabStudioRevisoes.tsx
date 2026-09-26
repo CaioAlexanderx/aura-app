@@ -106,7 +106,7 @@ export function TabStudioRevisoes() {
         extra_revision_price: parsedPrice,
         revision_policy_text: policyText.trim(),
       });
-      toast.success("✓ Política de revisões salva");
+      toast.success("Política de revisões salva");
     } catch (e: any) {
       toast.error(e?.message || "Erro ao salvar política");
     } finally {

@@ -27,7 +27,7 @@ export type { StoreEvent, NotificationSeverity };
 export type AccentToken = 'red' | 'amber' | 'green' | 'violet' | 'ink3';
 export type EventIcon =
   | 'alerta' | 'comprovante' | 'dinheiro' | 'check' | 'sacola'
-  | 'caminhao' | 'relogio' | 'caixa' | 'x' | 'sino';
+  | 'caminhao' | 'relogio' | 'caixa' | 'x' | 'sino' | 'pincel';
 
 export interface EventVisual {
   label:          string;             // rótulo canônico do tipo
@@ -73,6 +73,21 @@ const CATALOG: Record<string, CatalogEntry> = {
     label: 'Conta a pagar vencendo', severity: 'atencao', requiresAction: true,
     accent: 'amber', icon: 'dinheiro', glyph: '💸',
     ctaLabel: 'Ver contas a pagar', fallbackRoute: '/financeiro',
+  },
+  // 26/09/2026 (achado A4 do QA da vitrine): a cliente respondeu a arte
+  // pelo link de aprovação. O ajuste é trabalho parado — ela espera a arte
+  // nova; a aprovação é informativa (o pedido já foi para "Aprovado"). O
+  // backend manda cta_route /studio/pedidos/<id>, que abre o pedido com o
+  // histórico de aprovação; a produção é só a queda se ele faltar.
+  loja_ajuste_pedido: {
+    label: 'Ajuste pedido na arte', severity: 'atencao', requiresAction: true,
+    accent: 'amber', icon: 'pincel', glyph: '✎',
+    ctaLabel: 'Ver ajuste', fallbackRoute: '/studio/producao',
+  },
+  loja_arte_aprovada: {
+    label: 'Arte aprovada', severity: 'info', requiresAction: false,
+    accent: 'green', icon: 'check', glyph: '✓',
+    ctaLabel: 'Ver pedido', fallbackRoute: '/studio/producao',
   },
   loja_pedido_novo: {
     label: 'Pedido novo', severity: 'info', requiresAction: false,
@@ -353,6 +368,13 @@ export const PREF_SECTIONS: PrefSection[] = [
       { type: 'loja_pedido_saiu_entrega', nome: 'Saiu para entrega', desc: 'Em geral quem marca é você — vem desligado.', padrao: false },
       { type: 'loja_pedido_entregue',   nome: 'Pedido entregue',   desc: 'Fecha o ciclo do pedido.', padrao: false },
       { type: 'loja_pedido_cancelado',  nome: 'Pedido cancelado',  desc: 'Cliente ou você desfez a venda.', padrao: true },
+    ],
+  },
+  {
+    titulo: 'Aprovação de arte (Studio)',
+    linhas: [
+      { type: 'loja_ajuste_pedido', nome: 'Ajuste pedido', desc: 'A cliente pediu ajuste na arte e espera a versão nova.', padrao: true },
+      { type: 'loja_arte_aprovada', nome: 'Arte aprovada', desc: 'A cliente aprovou a arte pelo link. O pedido segue para a produção.', padrao: true },
     ],
   },
   {

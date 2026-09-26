@@ -42,6 +42,15 @@ const ordersApi = {
     ),
 };
 
+// 26/09/2026 (A1 do QA da lojista): o detalhe do pedido Studio confirma e
+// recusa o Pix da vitrine pela MESMA rota do Canal. Exportado para ele não
+// duplicar a chamada nem montar a fila inteira (useDigitalOrders consulta a
+// lista a cada 30 s) só para ter as duas funções.
+export const pagamentoDoPedidoDigitalApi = {
+  aprovar: ordersApi.approvePayment,
+  recusar: ordersApi.rejectPayment,
+};
+
 // `companyIdOverride` permite que uma tela force a empresa (multi-CNPJ);
 // sem ele, cai na empresa autenticada do store. Nunca mais no company_id
 // do primeiro pedido da lista.

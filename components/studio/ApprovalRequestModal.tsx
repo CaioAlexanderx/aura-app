@@ -172,7 +172,7 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
   // Confirmação explícita de que a lojista realmente apertou enviar no
   // WhatsApp — só aqui declaramos "aprovação solicitada" de fato.
   function confirmSent() {
-    toast.success("✨ Aprovação solicitada! Aguarde resposta do cliente.");
+    toast.success("Aprovação solicitada. Agora é aguardar a resposta do cliente.");
     onSent();
   }
 
@@ -312,7 +312,7 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
               multiline
             />
             <Text style={s.subHelp}>
-              Padrão: "Oi [nome]! Sua arte do pedido ficou pronta 🎨 Dá uma olhada e me confirma se posso imprimir: [link]"
+              Padrão: "Oi [nome]! A arte do seu pedido ficou pronta. Dá uma olhada e me confirma se posso produzir: [link]"
             </Text>
 
             {/* FIX (bug #12 QA): sem passo 3 interstitial — o link já sai
