@@ -30,6 +30,7 @@ import { PersonalizationPreview } from "@/components/studio/PersonalizationPrevi
 import { rotuloDaChave, valorDaChave } from "@/components/studio/customizationConfig";
 import { BlocoPagamentoDoPedido } from "@/components/studio/BlocoPagamentoDoPedido";
 import { temBlocoDePagamento, situacaoDoPagamento, reais } from "@/components/studio/pagamentoDoPedido";
+import { separarReferencia } from "@/components/studio/referenciaDoAjuste";
 
 const NEXT: Record<StudioProductionStatus, StudioProductionStatus | null> = {
   pending_art: "approved",
@@ -590,6 +591,9 @@ export default function StudioOrderDetail() {
             <Text style={s.sectionEyebrow}>HISTÓRICO DE APROVAÇÃO</Text>
             {approvals.map((a) => {
               const col = colorStudioStatus(a.status, isDark);
+              // A referência que a cliente anexou ao pedir ajuste vem na
+              // última linha da nota; aqui ela vira link (achado A4 do QA).
+              const nota = separarReferencia(a.response_note);
               return (
                 <View key={a.id} style={s.approvalRow}>
                   <View style={[s.approvalDot, { backgroundColor: col.fg }]} />
@@ -597,8 +601,20 @@ export default function StudioOrderDetail() {
                     <Text style={s.approvalTitle}>{labelStudioStatus(a.status)}</Text>
                     <Text style={s.approvalSub}>
                       {new Date(a.created_at).toLocaleString("pt-BR")}
-                      {a.response_note ? ` · "${a.response_note}"` : ""}
+                      {nota.texto ? ` · "${nota.texto}"` : ""}
                     </Text>
+                    {nota.referencia ? (
+                      <Pressable
+                        onPress={() => Linking.openURL(nota.referencia!)}
+                        accessibilityRole="link"
+                        accessibilityLabel="Abrir a referência que a cliente enviou"
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                        style={s.referenciaRow}
+                      >
+                        <Icon name="external_link" size={13} color={tk.primary} />
+                        <Text style={s.referenciaTxt}>Abrir referência da cliente</Text>
+                      </Pressable>
+                    ) : null}
                   </View>
                 </View>
               );
@@ -651,6 +667,8 @@ function buildStyles(t: StudioPalette) {
   approvalDot: { width: 8, height: 8, borderRadius: 4 },
   approvalTitle: { fontWeight: "700", color: t.ink, fontSize: 13 },
   approvalSub: { color: t.ink3, fontSize: 11, marginTop: 2 },
+  referenciaRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 6, alignSelf: "flex-start", minHeight: 24 },
+  referenciaTxt: { color: t.primary, fontSize: 12, fontWeight: "700", textDecorationLine: "underline" },
   linkRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 },
   link: { color: t.primary, fontWeight: "600", fontSize: 12 },
   });
