@@ -121,13 +121,13 @@ export default function AprovacaoPublica() {
               <Icon name={isApproved ? "check" : "edit"} size={36} color="#fff" />
             </View>
             <Text style={s.successTitle}>
-              {isApproved ? "Aprovado! 🎉" : "Ajuste solicitado"}
+              {isApproved ? "Arte aprovada" : "Ajuste solicitado"}
             </Text>
             <Text style={s.successMsg}>
               {result?.message ||
                 (isApproved
-                  ? "A loja já foi notificada e vai começar a produzir."
-                  : "A loja recebeu seu pedido de ajuste e vai te chamar.")}
+                  ? "A loja já foi avisada e segue para a produção."
+                  : "Pedido de ajuste enviado. A loja já foi avisada.")}
             </Text>
             {data.mockup_url && (
               isVideoUrl(data.mockup_url) && Platform.OS === "web" ? (
@@ -253,7 +253,7 @@ export default function AprovacaoPublica() {
       >
         <View style={s.modalBg}>
           <View style={s.modalCard}>
-            <Text style={s.modalTitle}>Conta pra loja o que ajustar 🎨</Text>
+            <Text style={s.modalTitle}>Conta pra loja o que ajustar</Text>
             <Text style={s.modalSub}>Quanto mais detalhe, mais rápido eles voltam com a versão certa.</Text>
             <TextInput
               style={s.modalInput}
