@@ -102,6 +102,8 @@ const ICON_PATHS: Record<EventIcon, string[]> = {
   caixa:       ['M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z', 'M3.27 6.96 12 12l8.73-5.04', 'M12 22.08V12'],
   x:           ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M15 9l-6 6', 'M9 9l6 6'],
   sino:        ['M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9', 'M13.73 21a2 2 0 0 1-3.46 0'],
+  // Ajuste na arte (Studio): o traço de uma caneta de desenho.
+  pincel:      ['M12 19l7-7 3 3-7 7-3-3z', 'M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z', 'M2 2l7.586 7.586', 'M11 13a2 2 0 1 0 0-4 2 2 0 0 0 0 4z'],
 };
 
 function EventIconSVG({ icon, color, size = 15 }: { icon: EventIcon; color: string; size?: number }) {

@@ -201,6 +201,46 @@ describe("preferências", () => {
   });
 });
 
+// Achado A4 do QA da vitrine (26/09/2026): a resposta da cliente à arte
+// do Studio chega no sino. O backend (services/lojaEvents.js) manda estes
+// dois tipos com cta_route /studio/pedidos/<id>.
+describe("aprovação de arte do Studio", () => {
+  test("ajuste pedido é trabalho parado: sobe para 'Precisa de você'", () => {
+    const v = visualForEvent({ type: "loja_ajuste_pedido" });
+    expect(v.label).toBe("Ajuste pedido na arte");
+    expect(v.severity).toBe("atencao");
+    expect(v.requiresAction).toBe(true);
+    expect(v.icon).toBe("pincel");
+    const feed = buildFeed([
+      ev({ id: "aj", type: "loja_ajuste_pedido", entity_id: "pedido:9", cta_route: "/studio/pedidos/9" }),
+    ], AGORA);
+    expect(feed.acoes.map(i => i.event.id)).toEqual(["aj"]);
+  });
+
+  test("arte aprovada é informativa e não entra na fila", () => {
+    const v = visualForEvent({ type: "loja_arte_aprovada" });
+    expect(v.label).toBe("Arte aprovada");
+    expect(v.severity).toBe("info");
+    expect(v.requiresAction).toBe(false);
+    expect(v.accent).toBe("green");
+    expect(buildFeed([ev({ id: "ok", type: "loja_arte_aprovada" })], AGORA).actionCount).toBe(0);
+  });
+
+  test("sem cta_route do servidor, o clique cai na produção do Studio", () => {
+    expect(visualForEvent({ type: "loja_ajuste_pedido" }).fallbackRoute).toBe("/studio/producao");
+    expect(visualForEvent({ type: "loja_arte_aprovada" }).fallbackRoute).toBe("/studio/producao");
+  });
+
+  test("os dois têm preferência, ligada por padrão e desligável", () => {
+    const p = defaultPrefs();
+    expect(p.loja_ajuste_pedido).toBe(true);
+    expect(p.loja_arte_aprovada).toBe(true);
+    const m = mergePrefs({ loja_arte_aprovada: false, loja_ajuste_pedido: false });
+    expect(m.loja_arte_aprovada).toBe(false);
+    expect(m.loja_ajuste_pedido).toBe(false);
+  });
+});
+
 describe("dayLabel", () => {
   test("hoje, ontem e o resto em dd/mm", () => {
     expect(dayLabel(h(1), AGORA)).toBe("Hoje");
