@@ -51,6 +51,7 @@ import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
 import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import { AnimatedKpiCounter } from "@/components/studio/AnimatedKpiCounter";
+import { SeloDoPagamento } from "@/components/studio/SeloDoPagamento";
 
 function fmtBRL(v: number) {
   return "R$ " + (Number(v) || 0).toFixed(2).replace(".", ",");
@@ -387,6 +388,9 @@ export default function StudioPedidosHub() {
                     <View style={s.feedStatus}>
                       <Text style={s.feedStatusTxt}>{item.status || "—"}</Text>
                     </View>
+                    {/* 26/09/2026 (A1): Pix com comprovante ou "já paguei"
+                        esperando a lojista conferir no detalhe do pedido. */}
+                    {item.kind === "order" ? <SeloDoPagamento item={item} /> : null}
                   </>
                 )}
               </View>
