@@ -37,7 +37,7 @@ import { SacolaEmGaveta } from "@/components/studio/storefront/SacolaEmGaveta";
 import { SentConfirmation } from "@/components/studio/storefront/SentConfirmation";
 
 import { VitrineSkeleton } from "@/components/studio/storefront/VitrineSkeleton";
-import { TipografiaDaVitrine, Texto, useTipografia } from "@/components/studio/storefront/TipografiaVitrine";
+import { TipografiaDaVitrine, Texto, useTipografia, chaveDaTipografia } from "@/components/studio/storefront/TipografiaVitrine";
 import { TemaDaVitrine, usePaletaDaVitrine, useTemaDaVitrine } from "@/components/studio/storefront/TemaDaVitrine";
 import { OrcamentoEmLote } from "@/components/studio/storefront/OrcamentoEmLote";
 import { GradeDeModelos } from "@/components/studio/storefront/GradeDeModelos";
@@ -201,7 +201,9 @@ export function CascaDaVitrine({
   // link so pode ser montado depois de saber qual e. Carregamos apenas o
   // par escolhido — as quatro opcoes somam oito familias, e pagar banda
   // por escolha que a lojista nao fez seria desperdicio.
-  const parEscolhido = (sf.store as any)?.site?.font_family;
+  // QA 27/09: a chave normalizada (" Editorial " vira "editorial"): o
+  // link das fontes e o par da tela têm de ser o mesmo.
+  const parEscolhido = chaveDaTipografia((sf.store as any)?.site?.font_family) || null;
   const falhou = !!sf.erroDeCarga && !sf.store;
 
   useEffect(() => {

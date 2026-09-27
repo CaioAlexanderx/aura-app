@@ -242,6 +242,17 @@ describe("a página Outras peças", () => {
   });
 });
 
+describe("a tipografia Marcante (font_family: editorial)", () => {
+  test("a vitrine carrega o link com Instrument Serif e DM Sans", async () => {
+    montar({ tipo: "home" }, loja({ site: { font_family: "editorial" } }));
+    await home();
+    const link = document.getElementById("aura-storefront-fonts") as HTMLLinkElement | null;
+    expect(link?.getAttribute("href")).toContain("family=Instrument+Serif");
+    expect(link?.getAttribute("href")).toContain("family=DM+Sans");
+    expect(link?.getAttribute("href")).not.toContain("Fraunces");
+  });
+});
+
 describe("peça fora da loja por link direto", () => {
   test("a home abre com o recado no topo, e ele fecha", async () => {
     const { navegar, irPara } = montarComRota({ tipo: "produto", id: "11111111-2222-4333-8444-555555555555" });

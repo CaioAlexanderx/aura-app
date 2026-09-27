@@ -25,6 +25,17 @@ import { tipografiaDoStudio, NUMEROS_STUDIO, type ParTipografico } from "@/const
 
 const Contexto = createContext<ParTipografico>(tipografiaDoStudio(null));
 
+/**
+ * A chave como o banco grava (`classic`, `modern`, `editorial`,
+ * `humanist`). QA 27/09: o painel manda `editorial` para "Marcante"; uma
+ * grafia diferente ("Editorial", com espaço) caía calada no `classic`
+ * (Fraunces). Normalizada aqui, vale para o par da tela e para o link das
+ * fontes, que precisam ser o MESMO par.
+ */
+export function chaveDaTipografia(chave?: string | null): string {
+  return String(chave || "").trim().toLowerCase();
+}
+
 export function TipografiaDaVitrine({
   chave, children,
 }: {
@@ -32,7 +43,7 @@ export function TipografiaDaVitrine({
   chave?: string | null;
   children: ReactNode;
 }) {
-  return <Contexto.Provider value={tipografiaDoStudio(chave)}>{children}</Contexto.Provider>;
+  return <Contexto.Provider value={tipografiaDoStudio(chaveDaTipografia(chave))}>{children}</Contexto.Provider>;
 }
 
 /** O par escolhido, para quem precisa da serifada de título. */
