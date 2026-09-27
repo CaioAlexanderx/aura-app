@@ -54,6 +54,7 @@ import { AnimatedKpiCounter } from "@/components/studio/AnimatedKpiCounter";
 import { SeloDoPagamento } from "@/components/studio/SeloDoPagamento";
 import { labelStudioStatus } from "@/constants/studio-status";
 import { filtrarPedidosDoHub } from "@/components/studio/filtroDoHub";
+import { numeroDoPedido } from "@/components/studio/pagamentoDoPedido";
 
 function fmtBRL(v: number) {
   return "R$ " + (Number(v) || 0).toFixed(2).replace(".", ",");
@@ -347,8 +348,11 @@ export default function StudioPedidosHub() {
                 <Text style={s.feedName} numberOfLines={1}>
                   {item.name || (item.kind === "bulk" ? "Evento" : "Pedido")}
                 </Text>
+                {/* 27/09/2026: o mesmo "Pedido 00001" do detalhe e da fila
+                    (numeroDoPedido), pra quem procura pelo número achar a
+                    linha. Evento não tem número. */}
                 <Text style={s.feedMeta}>
-                  {item.kind === "bulk" ? "Evento" : "Pedido"} · {item.qty} {item.qty === 1 ? "item" : "itens"} · {fmtDate(item.created_at)}
+                  {item.kind === "bulk" ? "Evento" : numeroDoPedido(item)} · {item.qty} {item.qty === 1 ? "item" : "itens"} · {fmtDate(item.created_at)}
                 </Text>
               </View>
               <View style={{ alignItems: "flex-end" }}>
