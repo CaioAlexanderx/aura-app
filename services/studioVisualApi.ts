@@ -16,11 +16,21 @@ import { request } from "./api";
 // Coordenadas em px no espaço base da vista (view.base). Quando
 // photo_url é null, o motor desenha o garment vetorial provisório
 // (assets provisórios até as fotos HD definitivas — decisão F1).
+export type VisualPoint = { x: number; y: number };
+/**
+ * Quadrilátero da área na foto, em coordenadas da base da vista, no
+ * sentido horário a partir do canto superior esquerdo: sup. esq., sup.
+ * dir., inf. dir., inf. esq. (27/09/2026 — mockup na foto real da peça).
+ */
+export type VisualQuad = [VisualPoint, VisualPoint, VisualPoint, VisualPoint];
+
 export type VisualArea = {
   id: string;                 // 'front' | 'back' | 'panel' | 'wrap' | custom
   width_cm: number;
   height_cm: number;
   rect?: { x: number; y: number; w: number; h: number }; // photo2d
+  /** photo2d: quando presente e válido, vale no lugar do `rect` (arte deformada por homografia). */
+  quad?: VisualQuad;
   uv?: { u0: number; v0: number; u1: number; v1: number }; // model3d
 };
 
@@ -30,8 +40,31 @@ export type VisualView = {
   base: { w: number; h: number };
   photo_url?: string | null;  // foto HD (R2); null = fallback vetorial
   shading_url?: string | null;// mapa de sombras (multiply) — fase fotos reais
+  /** Sombreado tirado da própria foto (luz e dobras da região do quad), sem `shading_url`. */
+  shading_from_photo?: { strength: number } | null;
+  /** Mistura da arte com a foto. Ausente: multiply em peça clara, normal levemente translúcido em peça escura. */
+  art_blend?: "multiply" | "normal" | null;
   garment?: { shape: "tshirt"; back?: boolean } | null;
   areas: VisualArea[];
+};
+
+// ── Mockup na foto do produto (customization_config.mockup_foto) ──
+// O que a lojista marca na foto da própria peça, por lado. O quad é
+// guardado NORMALIZADO (0..1 da largura e da altura da foto), não em px:
+// a foto do R2 pode ser trocada por outra resolução da mesma imagem e a
+// marcação continua valendo. `w`/`h` são o tamanho natural da foto no
+// momento da marcação (opcionais: sem eles o app mede ao carregar).
+export type MockupFotoLado = {
+  photo_url: string;
+  quad: VisualQuad;           // normalizado 0..1
+  shading?: number;           // força do "Assentar na foto", 0..1
+  w?: number;
+  h?: number;
+};
+export type MockupFoto = {
+  front?: MockupFotoLado | null;
+  back?: MockupFotoLado | null;
+  middle?: MockupFotoLado | null;
 };
 
 // model3d (F4): modelo procedural de caneca (`procedural-mug`, forma e
