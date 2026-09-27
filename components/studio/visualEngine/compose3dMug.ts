@@ -36,6 +36,17 @@
 // alta), e o mesh de impressão recebe a mesma CanvasTexture — com a cor
 // do tecido e uma trama fina gerada em canvas por baixo da arte.
 //
+// 27/09/2026 (realismo) — a camiseta deixou de parecer plástico low-poly.
+// A malha vem refinada do arquivo (scripts/studio/refinar-camiseta-glb.mjs:
+// subdivisão, dobras e oclusão por vértice em COLOR_0). Aqui: a trama em
+// escala real (fios por cm medidos pela área da spec, não "8 por
+// ladrilho"), um relevo de dobras finas assado no mapa de normais junto
+// com a trama, material físico de algodão (aspereza alta, sheen de veludo
+// do r128 para o preto ter leitura), a arte assentada só onde há tinta
+// (sem o retângulo escurecido da área) e o estúdio ajustado para peça
+// vertical: luz principal mais alta e mancha de contato em elipse sob a
+// barra.
+//
 // 03/07/2026 — F4/F5 do escopo Visualização 2D/3D (contrato no chat)
 // ============================================================
 import type { VisualArea, VisualTemplateSpec } from "@/services/studioVisualApi";
@@ -50,8 +61,9 @@ import {
 } from "./mugScene";
 import {
   readGlbModel, escalaDoModelo, cameraDistanceParaCaixa, floorLevelParaCaixa,
-  contactShadowRadiusParaCaixa, uvParaRetangulo, escolherMeshDeImpressao,
-  recebeCorDoCliente, type GlbModel, type Caixa,
+  sombraDeContatoParaCaixa, uvParaRetangulo, escolherMeshDeImpressao,
+  recebeCorDoCliente, pixelsPorCm, fiosDoLadrilho,
+  type GlbModel, type Caixa, type SombraDeContato,
 } from "./glbModel";
 
 export type Mug3DOptions = {
@@ -198,84 +210,156 @@ async function paintTexture(
 
 // ── Tecido (GLB) ─────────────────────────────────────────────
 
+/** O que a peça de tecido gera uma vez e reusa a cada pintura. */
+type Tecido = {
+  /** Ladrilho da trama (64 px, `fios` fios por lado, repete sem emenda). */
+  trama: HTMLCanvasElement;
+  /** Relevo das dobras finas no tamanho da textura, em cinza (128 = plano). */
+  dobras: HTMLCanvasElement;
+};
+
+/** Gerador determinístico: o mesmo pedido rende sempre o mesmo pixel (o hash da aprovação depende disso). */
+function criarRnd(semente: number) {
+  let s = semente;
+  return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+}
+
 /**
  * Um ladrilho de trama: fios de urdidura e de trama alternando por cima
  * e por baixo, em cinza médio com variação pequena. Gerado em canvas —
- * nada é baixado — e com semente fixa, para o mesmo pedido render sempre
- * o mesmo pixel (o hash da aprovação depende disso).
+ * nada é baixado — e com semente fixa. `fios` por lado vem da escala da
+ * peça (fiosDoLadrilho): num algodão são ~8 por cm, e o ladrilho de 64 px
+ * cobre ~3,5 cm de tecido — cada fio tem 2 px e a trama vira um grão
+ * fino, como numa foto de produto, em vez de um xadrez.
  */
-function tramaDoTecido(): HTMLCanvasElement {
+function tramaDoTecido(fios = 8): HTMLCanvasElement {
+  const N = 64;
   const cv = document.createElement("canvas");
-  cv.width = 64; cv.height = 64;
+  cv.width = N; cv.height = N;
   const ctx = cv.getContext("2d")!;
-  ctx.fillStyle = "#707070"; // o vão entre os fios
-  ctx.fillRect(0, 0, 64, 64);
-  const fio = 8;
-  let semente = 7;
-  const rnd = () => { semente = (semente * 9301 + 49297) % 233280; return semente / 233280; };
-  for (let y = 0; y < 8; y++) {
-    for (let x = 0; x < 8; x++) {
+  ctx.fillStyle = "#6e6e6e"; // o vão entre os fios
+  ctx.fillRect(0, 0, N, N);
+  const passo = N / fios;
+  const rnd = criarRnd(7);
+  for (let y = 0; y < fios; y++) {
+    for (let x = 0; x < fios; x++) {
       const porCima = (x + y) % 2 === 0;
-      const b = 128 + (porCima ? 10 : -6) + Math.round((rnd() - 0.5) * 12);
+      const b = 128 + (porCima ? 12 : -6) + Math.round((rnd() - 0.5) * 14);
       ctx.fillStyle = "rgb(" + b + "," + b + "," + b + ")";
-      if (porCima) ctx.fillRect(x * fio + 1, y * fio, fio - 2, fio);
-      else ctx.fillRect(x * fio, y * fio + 1, fio, fio - 2);
+      // Fios com 3/4 do passo: o quarto que sobra é o vão, e o canvas
+      // interpola as frações de pixel.
+      if (porCima) ctx.fillRect(x * passo + passo * 0.12, y * passo, passo * 0.76, passo);
+      else ctx.fillRect(x * passo, y * passo + passo * 0.12, passo, passo * 0.76);
     }
   }
   return cv;
 }
 
 /**
- * Mapa de normais da trama (altura = brilho do ladrilho), no tamanho da
- * textura da arte. É assado no tamanho cheio, e não como ladrilho com
- * `repeat`, porque no r128 o material só tem UMA transformação de UV — a
- * do `map` — e o repeat do normalMap é ignorado: o ladrilho de 64px
- * viraria oito quadrados gigantes sobre a camiseta inteira.
+ * Relevo das dobras finas do tecido: ruído de valor em duas oitavas, em
+ * baixa resolução (1/8) e ampliado com interpolação — sai liso por
+ * construção, nunca "amassado". O comprimento de onda é em centímetros
+ * de tecido (pela escala da spec), para a dobra ter o tamanho de uma
+ * dobra e não de um pixel. Cinza 128 é plano.
  */
-function normalMapDaTrama(THREE: any, trama: HTMLCanvasElement, W: number, H: number, forca = 2) {
-  const N = trama.width;
-  const src = trama.getContext("2d")!.getImageData(0, 0, N, N).data;
-  const altura = (x: number, y: number) => src[(((y + N) % N) * N + ((x + N) % N)) * 4] / 255;
-  const ladrilho = document.createElement("canvas");
-  ladrilho.width = N; ladrilho.height = N;
-  const lctx = ladrilho.getContext("2d")!;
-  const out = lctx.createImageData(N, N);
-  for (let y = 0; y < N; y++) {
-    for (let x = 0; x < N; x++) {
-      const dx = (altura(x + 1, y) - altura(x - 1, y)) * forca;
-      const dy = (altura(x, y + 1) - altura(x, y - 1)) * forca;
+function relevoDasDobras(W: number, H: number, pxPorCm: number | null, semente = 11): HTMLCanvasElement {
+  const REDUCAO = 8;
+  const w = Math.max(8, Math.round(W / REDUCAO)), h = Math.max(8, Math.round(H / REDUCAO));
+  // ~4,5 cm por onda; sem escala conhecida, 1/24 da largura da textura.
+  const onda = (pxPorCm ? pxPorCm * 4.5 : W / 24) / REDUCAO;
+  const rnd = criarRnd(semente);
+  const grade = 64;
+  const valores = new Float32Array(grade * grade);
+  for (let i = 0; i < valores.length; i++) valores[i] = rnd() * 2 - 1;
+  const suave = (t: number) => t * t * (3 - 2 * t);
+  const ruido = (x: number, y: number) => {
+    const xi = Math.floor(x), yi = Math.floor(y), tx = suave(x - xi), ty = suave(y - yi);
+    const v = (a: number, b: number) => valores[((b % grade) + grade) % grade * grade + ((a % grade) + grade) % grade];
+    const cima = v(xi, yi) + (v(xi + 1, yi) - v(xi, yi)) * tx;
+    const baixo = v(xi, yi + 1) + (v(xi + 1, yi + 1) - v(xi, yi + 1)) * tx;
+    return cima + (baixo - cima) * ty;
+  };
+  const pequeno = document.createElement("canvas");
+  pequeno.width = w; pequeno.height = h;
+  const pctx = pequeno.getContext("2d")!;
+  const img = pctx.createImageData(w, h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      // Dobras de roupa pendurada correm na vertical: a onda é 2× mais longa em y.
+      const n = ruido(x / onda, y / (onda * 2)) + 0.5 * ruido(x / (onda * 0.45) + 37, y / (onda * 0.9) + 11);
+      const g = Math.max(0, Math.min(255, Math.round(128 + n * 45)));
+      const i = (y * w + x) * 4;
+      img.data[i] = g; img.data[i + 1] = g; img.data[i + 2] = g; img.data[i + 3] = 255;
+    }
+  }
+  pctx.putImageData(img, 0, 0);
+  const cv = document.createElement("canvas");
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext("2d")!;
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(pequeno, 0, 0, W, H);
+  return cv;
+}
+
+/**
+ * Mapa de normais do tecido no tamanho da textura: a trama (altura =
+ * brilho do ladrilho, repetido pelo módulo) somada ao relevo das dobras.
+ * É assado no tamanho cheio, e não como ladrilho com `repeat`, porque no
+ * r128 o material só tem UMA transformação de UV — a do `map` — e o
+ * repeat do normalMap é ignorado: o ladrilho de 64px viraria oito
+ * quadrados gigantes sobre a camiseta inteira. As dobras são lidas com
+ * passo largo (±4 px) porque a onda tem dezenas de pixels e a diferença
+ * entre vizinhos seria ruído de arredondamento.
+ */
+function normalMapDoTecido(THREE: any, tecido: Tecido, W: number, H: number, forcaTrama = 3, forcaDobras = 16) {
+  const N = tecido.trama.width;
+  const trama = tecido.trama.getContext("2d")!.getImageData(0, 0, N, N).data;
+  const dobras = tecido.dobras.getContext("2d")!.getImageData(0, 0, W, H).data;
+  const alturaTrama = (x: number, y: number) => trama[(((y % N) + N) % N * N + ((x % N) + N) % N) * 4] / 255;
+  const alturaDobra = (x: number, y: number) => dobras[(Math.min(H - 1, Math.max(0, y)) * W + Math.min(W - 1, Math.max(0, x))) * 4] / 255;
+  const cv = document.createElement("canvas");
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext("2d")!;
+  const out = ctx.createImageData(W, H);
+  const P = 4;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const dx = (alturaTrama(x + 1, y) - alturaTrama(x - 1, y)) * forcaTrama
+        + (alturaDobra(x + P, y) - alturaDobra(x - P, y)) / (2 * P) * forcaDobras;
+      const dy = (alturaTrama(x, y + 1) - alturaTrama(x, y - 1)) * forcaTrama
+        + (alturaDobra(x, y + P) - alturaDobra(x, y - P)) / (2 * P) * forcaDobras;
       const len = Math.sqrt(dx * dx + dy * dy + 1);
-      const i = (y * N + x) * 4;
+      const i = (y * W + x) * 4;
       out.data[i] = Math.round((-dx / len * 0.5 + 0.5) * 255);
       out.data[i + 1] = Math.round((-dy / len * 0.5 + 0.5) * 255);
       out.data[i + 2] = Math.round((1 / len * 0.5 + 0.5) * 255);
       out.data[i + 3] = 255;
     }
   }
-  lctx.putImageData(out, 0, 0);
-  const cv = document.createElement("canvas");
-  cv.width = W; cv.height = H;
-  const ctx = cv.getContext("2d")!;
-  const padrao = ctx.createPattern(ladrilho, "repeat");
-  // Sem padrão (canvas sem suporte) o mapa fica "plano": normal (0,0,1).
-  ctx.fillStyle = padrao || "#8080ff";
-  ctx.fillRect(0, 0, W, H);
+  ctx.putImageData(out, 0, 0);
   return new THREE.CanvasTexture(cv);
 }
 
 /**
- * A textura da peça de tecido: cor do tecido, a trama por cima (overlay,
- * para respeitar o tom escolhido), a arte, e a trama de novo só na área
- * da arte, multiplicada — é o que faz a tinta "assentar" no tecido em vez
- * de parecer um adesivo. Em tecido preto o overlay não muda nada; a trama
- * ainda aparece pelo mapa de normais.
+ * A textura da peça de tecido, em camadas:
+ *   1. a cor do tecido;
+ *   2. a trama por cima (overlay, para respeitar o tom escolhido);
+ *   3. a arte, pintada num rascunho transparente e "assentada": a trama
+ *      é multiplicada SÓ onde há tinta (destination-in pelo alfa da arte)
+ *      e a borda ganha meio pixel de desfoque — tinta que penetra no fio,
+ *      não adesivo. Antes a trama era multiplicada no retângulo inteiro da
+ *      área, e o retângulo aparecia como uma mancha mais escura no tecido;
+ *   4. o relevo das dobras em soft-light sobre tudo, arte incluída, para a
+ *      dobra ter leitura mesmo onde a luz bate de frente.
+ * Em tecido preto o overlay e o soft-light quase não mudam nada; a trama
+ * e as dobras aparecem pelo mapa de normais e pelo sheen do material.
  */
 async function paintFabricTexture(
   texCv: HTMLCanvasElement,
   spec: VisualTemplateSpec,
   values: Record<string, any>,
   o: Opcoes,
-  trama: HTMLCanvasElement
+  tecido: Tecido
 ) {
   const ctx = texCv.getContext("2d");
   if (!ctx) return;
@@ -283,28 +367,48 @@ async function paintFabricTexture(
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = o.bodyColor || o.garmentColor;
   ctx.fillRect(0, 0, W, H);
-  const padrao = ctx.createPattern(trama, "repeat");
+  const padrao = ctx.createPattern(tecido.trama, "repeat");
   if (padrao) {
     ctx.save();
     ctx.globalCompositeOperation = "overlay";
-    ctx.globalAlpha = 0.55;
+    ctx.globalAlpha = 0.5;
     ctx.fillStyle = padrao;
     ctx.fillRect(0, 0, W, H);
     ctx.restore();
   }
 
-  await paintArt(ctx, W, H, spec, values, o);
-
-  const area = pickArea(spec, o.areaId);
-  if (padrao && area && area.uv) {
-    const r = uvParaRetangulo(area.uv, W, H);
-    ctx.save();
-    ctx.globalCompositeOperation = "multiply";
-    ctx.globalAlpha = 0.22;
-    ctx.fillStyle = padrao;
-    ctx.fillRect(r.x, r.y, r.w, r.h);
-    ctx.restore();
+  const arte = document.createElement("canvas");
+  arte.width = W; arte.height = H;
+  const actx = arte.getContext("2d");
+  if (actx) {
+    await paintArt(actx, W, H, spec, values, o);
+    if (padrao) {
+      const assentada = document.createElement("canvas");
+      assentada.width = W; assentada.height = H;
+      const sctx = assentada.getContext("2d")!;
+      sctx.drawImage(arte, 0, 0);
+      sctx.globalCompositeOperation = "multiply";
+      sctx.globalAlpha = 0.35;
+      sctx.fillStyle = padrao;
+      sctx.fillRect(0, 0, W, H);
+      sctx.globalAlpha = 1;
+      sctx.globalCompositeOperation = "destination-in";
+      sctx.drawImage(arte, 0, 0);
+      ctx.save();
+      // Canvas sem `filter` (jsdom, navegador antigo) pinta a borda dura — ainda é a arte.
+      if ("filter" in ctx) ctx.filter = "blur(0.6px)";
+      ctx.drawImage(assentada, 0, 0);
+      ctx.restore();
+    } else {
+      ctx.drawImage(arte, 0, 0);
+    }
   }
+
+  ctx.save();
+  ctx.globalCompositeOperation = "soft-light";
+  ctx.globalAlpha = 0.22;
+  ctx.drawImage(tecido.dobras, 0, 0);
+  ctx.restore();
 }
 
 // ── Cena de estúdio ──────────────────────────────────────────
@@ -399,7 +503,8 @@ type Peca = {
   group: any;
   texture: any;
   chaoY: number;
-  raioSombra: number;
+  /** Meios-eixos da mancha de contato (a caneca é um disco; a camiseta, uma elipse sob a barra). */
+  sombra: SombraDeContato;
   /** Caixa da peça já escalada (só o GLB precisa: a câmera se ajusta a ela). */
   caixa: Caixa | null;
   /** Atualiza os materiais com a cor escolhida e devolve as opções de pintura. */
@@ -575,7 +680,7 @@ function montarCaneca(THREE: any, spec: VisualTemplateSpec, renderer: any, texCv
     group,
     texture,
     chaoY: floorLevel(G, acess),
-    raioSombra: contactShadowRadius(G, acess),
+    sombra: { rx: contactShadowRadius(G, acess), rz: contactShadowRadius(G, acess) },
     caixa: null,
     aplicarOpcoes(opcoes) {
       M = applyCustomerColor(readMugMaterials(spec), opcoes.garmentColor);
@@ -665,19 +770,35 @@ async function montarGlb(
   // cai exatamente onde o mesh o lê.
   texture.flipY = false;
   texture.anisotropy = renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1;
-  const trama = tramaDoTecido();
-  const normalMap = glb.fabric.normalScale > 0 ? normalMapDaTrama(THREE, trama, texCv.width, texCv.height) : null;
+  // A trama e as dobras em escala real: a spec diz quantos cm tem a área
+  // e quantos pixels ela ocupa, e disso sai o passo dos fios.
+  const pxPorCm = pixelsPorCm(spec, texCv.width);
+  const tecido: Tecido = {
+    trama: tramaDoTecido(fiosDoLadrilho(pxPorCm)),
+    dobras: relevoDasDobras(texCv.width, texCv.height, pxPorCm),
+  };
+  const normalMap = glb.fabric.normalScale > 0 ? normalMapDoTecido(THREE, tecido, texCv.width, texCv.height) : null;
   if (normalMap) normalMap.flipY = false;
-  print.material = new THREE.MeshStandardMaterial({
+  // Algodão: material físico do r128 quando existe (o sheen — BRDF de
+  // veludo — é o que dá ao preto a leitura de tecido: a luz raspa nos
+  // fios da borda da silhueta). Sem sheen, um MeshStandardMaterial áspero.
+  const Material = THREE.MeshPhysicalMaterial || THREE.MeshStandardMaterial;
+  const fabricMat = new Material({
     map: texture,
     roughness: glb.fabric.roughness,
     metalness: 0,
     normalMap,
     normalScale: new THREE.Vector2(glb.fabric.normalScale, glb.fabric.normalScale),
-    envMapIntensity: 0.5,
+    envMapIntensity: 0.45,
     // Roupa é uma casca: pela gola e pelas mangas se vê o lado de dentro.
     side: THREE.DoubleSide,
+    // Oclusão assada por vértice (COLOR_0: axilas, sob a gola) multiplica a textura.
+    vertexColors: !!(print.geometry && print.geometry.attributes && print.geometry.attributes.color),
   });
+  // No r128 `sheen` é uma Color (null = desligado); em versões novas virou
+  // número — só liga quando o material tem o formato que este código conhece.
+  if (fabricMat.sheen === null) fabricMat.sheen = new THREE.Color(0.25, 0.25, 0.25);
+  print.material = fabricMat;
   meshes.forEach((m, i) => {
     m.castShadow = true;
     if (i !== iPrint && m.material) {
@@ -696,7 +817,7 @@ async function montarGlb(
     group,
     texture,
     chaoY: floorLevelParaCaixa(caixa),
-    raioSombra: contactShadowRadiusParaCaixa(caixa),
+    sombra: sombraDeContatoParaCaixa(caixa),
     caixa,
     aplicarOpcoes(opcoes) {
       meshes.forEach((m, i) => {
@@ -711,7 +832,7 @@ async function montarGlb(
         bodyOpacity: 1,
       };
     },
-    pintar: (cv, values, opcoes) => paintFabricTexture(cv, spec, values, opcoes, trama),
+    pintar: (cv, values, opcoes) => paintFabricTexture(cv, spec, values, opcoes, tecido),
   };
 }
 
@@ -755,7 +876,11 @@ export async function createModelViewer(
   // e contraluz para descolar a peca do fundo. O ambiente vem do env map.
   scene.add(new THREE.HemisphereLight(0xfff6e8, 0xb9ae9e, 0.25));
   const key = new THREE.DirectionalLight(0xfff3e4, 1.0);
-  key.position.set(3.2, 6, 4.5);
+  // Peça vertical (camiseta) pede a principal um pouco mais alta: a luz
+  // desce pelas dobras e a sombra cai sob a barra, como na foto de um
+  // manequim fantasma. A caneca fica com a luz de sempre.
+  if (glb) key.position.set(2.6, 7.6, 4.2);
+  else key.position.set(3.2, 6, 4.5);
   key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024);
   key.shadow.camera.near = 0.5;
@@ -804,9 +929,9 @@ export async function createModelViewer(
   chao.position.y = chaoY - 0.001;
   chao.receiveShadow = true;
   scene.add(chao);
-  const raioSombra = peca.raioSombra;
+  // O plano deitado (rotação em x) tem a altura no eixo z do mundo: rz é a profundidade da mancha.
   const contato = new THREE.Mesh(
-    new THREE.PlaneGeometry(raioSombra * 2, raioSombra * 2),
+    new THREE.PlaneGeometry(peca.sombra.rx * 2, peca.sombra.rz * 2),
     new THREE.MeshBasicMaterial({ map: paintContactShadow(THREE), transparent: true, depthWrite: false }),
   );
   contato.rotation.x = -Math.PI / 2;

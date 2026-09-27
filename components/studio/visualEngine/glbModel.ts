@@ -168,9 +168,51 @@ export function floorLevelParaCaixa(caixa: Pick<Caixa, "height">): number {
   return -caixa.height / 2;
 }
 
-/** A mancha de contato cobre a base da peça com folga — mas não as mangas abertas inteiras. */
-export function contactShadowRadiusParaCaixa(caixa: Caixa): number {
-  return Math.max(caixa.width, caixa.depth) * 0.42;
+export type SombraDeContato = { rx: number; rz: number };
+
+/**
+ * A mancha de contato de uma peça vertical: uma elipse sob a barra, não
+ * um disco do tamanho da peça. Numa camiseta a caixa é larga por causa
+ * das mangas abertas, mas o que "toca o chão" é a barra — mais estreita
+ * que a caixa e quase tão funda quanto ela. A elipse fica um pouco maior
+ * que a barra porque a luz vem de cima e de lado.
+ */
+export function sombraDeContatoParaCaixa(caixa: Caixa): SombraDeContato {
+  return {
+    rx: caixa.width * 0.3,
+    rz: Math.max(caixa.depth * 0.8, caixa.width * 0.12),
+  };
+}
+
+/**
+ * Quantos pixels da textura cabem num centímetro do tecido, medido pela
+ * primeira área que declara UV e largura: é o que deixa a trama em escala
+ * real (fios de ~1,2 mm) em vez de "8 fios por ladrilho" sem relação com
+ * o tamanho da peça. null quando a spec não dá como medir.
+ */
+export function pixelsPorCm(spec: any, W: number): number | null {
+  const areas: any[] = Array.isArray(spec?.areas) ? spec.areas : [];
+  for (const a of areas) {
+    const uv = a?.uv;
+    const larguraCm = Number(a?.width_cm);
+    if (!uv || !(larguraCm > 0)) continue;
+    const larguraPx = (Number(uv.u1) - Number(uv.u0)) * W;
+    if (Number.isFinite(larguraPx) && larguraPx > 0) return larguraPx / larguraCm;
+  }
+  return null;
+}
+
+/**
+ * Fios por lado do ladrilho da trama (64 px) para a trama ter o passo de
+ * uma malha de algodão: ~8 fios por cm — numa área de 28 cm cabem mais
+ * de 200, não dezenas. O ladrilho só repete sem emenda com um número
+ * inteiro de fios, daí o arredondamento; sem escala conhecida fica o
+ * ladrilho de 8 fios de antes.
+ */
+export function fiosDoLadrilho(pxPorCm: number | null, ladrilhoPx = 64, fiosPorCm = 8): number {
+  if (pxPorCm === null || !(pxPorCm > 0)) return 8;
+  const passoPx = pxPorCm / fiosPorCm;
+  return Math.max(4, Math.min(32, Math.round(ladrilhoPx / passoPx)));
 }
 
 export type RetanguloDaTextura = { x: number; y: number; w: number; h: number };

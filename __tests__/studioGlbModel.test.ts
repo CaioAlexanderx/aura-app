@@ -10,8 +10,8 @@
 // ============================================================
 import {
   readGlbModel, isGlbSpec, escalaDoModelo, cameraDistanceParaCaixa, floorLevelParaCaixa,
-  contactShadowRadiusParaCaixa, uvParaRetangulo, escolherMeshDeImpressao, recebeCorDoCliente,
-  ALTURA_ALVO_DO_MODELO,
+  sombraDeContatoParaCaixa, uvParaRetangulo, escolherMeshDeImpressao, recebeCorDoCliente,
+  pixelsPorCm, fiosDoLadrilho, ALTURA_ALVO_DO_MODELO,
 } from "@/components/studio/visualEngine/glbModel";
 import { MUG_GEOMETRY_PADRAO } from "@/components/studio/visualEngine/mugGeometry";
 import { CAMERA_DISTANCIA_PADRAO, CAMERA_FOV_GRAUS, cameraDistance } from "@/components/studio/visualEngine/mugScene";
@@ -144,10 +144,47 @@ describe("chão e mancha", () => {
     expect(floorLevelParaCaixa({ height: 2.3 })).toBeCloseTo(-1.15, 6);
   });
 
-  it("a mancha segue a maior dimensão horizontal, com desconto", () => {
-    const r = contactShadowRadiusParaCaixa({ width: 5, height: 2.3, depth: 1 });
-    expect(r).toBeGreaterThan(1);
-    expect(r).toBeLessThan(2.5);
+  // 27/09/2026 — a mancha é uma elipse sob a barra: a caixa da camiseta
+  // é larga por causa das mangas abertas, mas o que toca o chão é a barra.
+  it("a mancha de contato é uma elipse: mais estreita que a caixa, quase tão funda quanto ela", () => {
+    const s = sombraDeContatoParaCaixa({ width: 3.26, height: 2.3, depth: 1.12 });
+    expect(s.rx).toBeCloseTo(3.26 * 0.3, 6);
+    expect(s.rx).toBeLessThan(3.26 / 2);
+    expect(s.rz).toBeCloseTo(1.12 * 0.8, 6);
+    // peça chapada (profundidade ~0): a mancha ainda tem alguma profundidade
+    expect(sombraDeContatoParaCaixa({ width: 3, height: 2, depth: 0.01 }).rz).toBeCloseTo(0.36, 6);
+  });
+});
+
+describe("trama em escala real — fios por cm medidos pela área da spec", () => {
+  const spec = {
+    areas: [{ id: "front", width_cm: 21, height_cm: 28, uv: { u0: 0.16, v0: 0.12, u1: 0.35, v1: 0.37 } }],
+  };
+
+  it("pixels por cm vêm da largura da área em UV vezes a textura", () => {
+    // 0,19 × 2048 = 389 px para 21 cm
+    expect(pixelsPorCm(spec, 2048)).toBeCloseTo((0.19 * 2048) / 21, 6);
+    expect(pixelsPorCm({ areas: [{ id: "x", uv: { u0: 0, u1: 0.5 } }] }, 2048)).toBeNull(); // sem width_cm
+    expect(pixelsPorCm({ areas: [{ id: "x", width_cm: 21 }] }, 2048)).toBeNull();          // sem uv
+    expect(pixelsPorCm({}, 2048)).toBeNull();
+    expect(pixelsPorCm(null, 2048)).toBeNull();
+  });
+
+  it("numa área de 28 cm cabem centenas de fios, não dezenas", () => {
+    const px = pixelsPorCm(spec, 2048)!;
+    const fios = fiosDoLadrilho(px);
+    // 8 fios/cm → passo de ~2,3 px → 64 px / 2,3 ≈ 28 fios por ladrilho
+    expect(fios).toBe(28);
+    const fiosEm28cm = (28 * px) / (64 / fios);
+    expect(fiosEm28cm).toBeGreaterThan(200);
+    expect(fiosEm28cm).toBeLessThan(260);
+  });
+
+  it("sem escala conhecida fica o ladrilho de 8 fios; extremos ficam entre 4 e 32", () => {
+    expect(fiosDoLadrilho(null)).toBe(8);
+    expect(fiosDoLadrilho(0)).toBe(8);
+    expect(fiosDoLadrilho(1000)).toBe(4);   // textura minúscula por cm: fio gigante
+    expect(fiosDoLadrilho(0.5)).toBe(32);   // textura enorme por cm: fio de subpixel, teto
   });
 });
 
