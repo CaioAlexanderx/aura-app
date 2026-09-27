@@ -22,6 +22,7 @@ import { valuesForSide } from "@/components/studio/customizationConfig";
 import { Platform, View } from "react-native";
 import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
 import { composeView } from "@/components/studio/visualEngine/compose2d";
+import { corDaPeca } from "@/components/studio/visualEngine/corDaPeca";
 import { Mug3DPreview } from "@/components/studio/visualEngine/Mug3DPreview";
 import {
   studioVisualApi,
@@ -70,16 +71,18 @@ function fetchProductTemplate(cid: string, pid: string): Promise<TemplateResp> {
 
 // ── Canvas 2D (photo2d) — redesenha via composeView ──────────
 function Engine2DCanvas({
-  view, values, size,
-}: { view: VisualView; values: Record<string, any>; size: number }) {
+  view, values, size, garmentColor,
+}: { view: VisualView; values: Record<string, any>; size: number; garmentColor?: string }) {
   const canvasRef = useRef<any>(null);
   const height = Math.round(size * (view.base.h / view.base.w));
 
   useEffect(() => {
     if (!canvasRef.current) return;
-    composeView(canvasRef.current, view, values, { showAreas: false, pixelWidth: 800 })
+    // 27/09/2026: a cor escolhida pelo cliente não chegava ao 2D — a
+    // camiseta vetorial ficava bege com "preto" escolhido.
+    composeView(canvasRef.current, view, values, { showAreas: false, pixelWidth: 800, garmentColor })
       .catch((e) => console.error("[EnginePreview] composeView error", e?.message || e));
-  }, [view, values, size]);
+  }, [view, values, size, garmentColor]);
 
   return (
     <View style={{ width: size, borderRadius: 12, overflow: "hidden" }}>
@@ -122,6 +125,8 @@ export function EnginePreview(props: Props) {
   }, [engineEnabled, companyId, productId]);
 
   if (engineEnabled && template) {
+    // A cor da peça vem do campo `color` do produto, como na vitrine.
+    const garmentColor = corDaPeca(props.config, props.values);
     if (template.kind === "photo2d" && template.spec?.views?.length) {
       // A view do lado pedido: os templates de vestuário trazem
       // views[0]=frente e views[1]=verso. Sem view correspondente, cai na
@@ -134,11 +139,17 @@ export function EnginePreview(props: Props) {
           view={porId || porOrdem || views[0]}
           values={engineValues}
           size={size ?? 280}
+          garmentColor={garmentColor}
         />
       );
     }
     if (template.kind === "model3d" && template.spec) {
-      return <Mug3DPreview spec={template.spec} values={engineValues} size={size ?? 280} side={props.side} />;
+      return (
+        <Mug3DPreview
+          spec={template.spec} values={engineValues} size={size ?? 280} side={props.side}
+          garmentColor={garmentColor}
+        />
+      );
     }
   }
 
