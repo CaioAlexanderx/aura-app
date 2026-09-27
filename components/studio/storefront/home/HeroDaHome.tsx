@@ -35,7 +35,7 @@ import { loadThree } from "@/components/studio/visualEngine/threeLoader";
 import { Botao, Rotulo, Selo, sombraWeb, transicao } from "../produto/kitDaPagina";
 import { MarcaDaLoja, irParaDestino } from "./NavegacaoDaVitrine";
 import {
-  SEGUNDOS_POR_BANNER, TROCA_DA_ARTE_MS, alturaDoHero, arteGira, artesDoDestaque, bannerGira,
+  SEGUNDOS_POR_BANNER, TITULO_FIXO_DO_HERO, TROCA_DA_ARTE_MS, alturaDoHero, arteGira, artesDoDestaque, bannerGira,
   conviteDaPeca, descontoDoPix, fraseDoDestaque, lugarDaLoja, pecaDoDestaque, proximoBanner,
   type BannerDaHome,
 } from "./regrasDaHome";
@@ -508,7 +508,11 @@ export function HeroDaPeca({
           </View>
         )}
         {usaMotor ? (
-          <View style={{ position: "absolute", top: 14, left: 14 }}>
+          // O motor 3D desenha a própria faixa no topo do palco (a medida
+          // da peça e "Volta inteira"): com o selo também em cima, os dois
+          // brigavam pelo mesmo canto em 360 px (QA 27/09/2026). Abaixo da
+          // faixa do motor, o selo tem o palco só para ele.
+          <View style={{ position: "absolute", top: 46, left: 14 }}>
             <Selo texto={eh3D ? "Prévia 3D" : "Prévia da arte"} tom="suave" />
           </View>
         ) : null}
@@ -542,7 +546,11 @@ export function HeroDaPeca({
                   accessibilityLabel={a.rotulo}
                   style={[{ flex: 1, minWidth: 0, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingHorizontal: 8, backgroundColor: sel ? t.marcaFill : "transparent" }, transicao("background-color")]}
                 >
-                  <Texto numberOfLines={1} style={{ fontSize: 13.5, fontWeight: sel ? "600" : "500", color: sel ? t.sobreMarca : t.ink2 }}>{a.rotulo}</Texto>
+                  {/* A cor do texto tinha de trocar NA HORA enquanto o fundo
+                      ainda ia escurecendo aos poucos — um instante de texto
+                      escuro sobre fundo ainda escuro (QA 27/09/2026). Mesma
+                      transição nos dois: trocam juntos. */}
+                  <Texto numberOfLines={1} style={[{ fontSize: 13.5, fontWeight: sel ? "600" : "500", color: sel ? t.sobreMarca : t.ink2 }, transicao("color")]}>{a.rotulo}</Texto>
                 </Pressable>
               );
             })}
@@ -596,7 +604,7 @@ export function HeroDaPeca({
             <Rotulo>{lugar ? `Personalizados · ${lugar}` : "Personalizados"}</Rotulo>
           </View>
           <Texto accessibilityRole="header" style={{ fontFamily: tipo.display, fontSize: desktop ? 64 : 36, lineHeight: desktop ? 63 : 38, letterSpacing: desktop ? -1.3 : -0.7, color: t.ink }}>
-            Presentes que ninguém mais tem.
+            {TITULO_FIXO_DO_HERO}
           </Texto>
           <Texto style={{ fontSize: desktop ? 18 : 15.5, lineHeight: desktop ? 28 : 24, color: t.ink2, maxWidth: 470 }}>
             {fraseDoDestaque(store)}

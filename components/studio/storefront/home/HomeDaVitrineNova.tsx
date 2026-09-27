@@ -36,7 +36,7 @@ import { Botao, Rotulo, Selo, sombraWeb, transicao } from "../produto/kitDaPagin
 import { abrirCategoria, linkDoWhatsApp, useCamadas, CabecalhoDaVitrine, CamadasDaNavegacao } from "./NavegacaoDaVitrine";
 import { HeroDaPeca, HeroDeBanners } from "./HeroDaHome";
 import {
-  artesDaHome, bannersDaHome, blocoParaEmpresas, descontoDoPix, gradeDaHome, itensDaFaixa, mostrarTirarDuvida,
+  artesDaHome, bannerAutomaticoDaHome, bannersDaHome, blocoParaEmpresas, descontoDoPix, gradeDaHome, itensDaFaixa, mostrarTirarDuvida,
   selosDaHome, type ArteDaHome,
 } from "./regrasDaHome";
 
@@ -427,6 +427,10 @@ export function HomeDaVitrineNova({ sf, slug }: { sf: StorefrontState; slug: str
   const [y, setY] = useState(0);
 
   const banners = useMemo(() => bannersDaHome(store), [store]);
+  // Sem banner da lojista, a home nova ficava sem nada no topo além da
+  // peça do destaque; o automático (capa + slogan, cor da loja) entra
+  // ANTES dela, como no fallback da loja Negócio (P1, 27/09/2026).
+  const bannerAutomatico = useMemo(() => (banners.length ? null : bannerAutomaticoDaHome(store)), [banners, store]);
   const itens = useMemo(() => itensDaFaixa(store), [store]);
 
   const rolarPara = useCallback((onde: "grade" | "queridinhos") => {
@@ -468,7 +472,12 @@ export function HomeDaVitrineNova({ sf, slug }: { sf: StorefrontState; slug: str
             {banners.length ? (
               <HeroDeBanners sf={sf} banners={banners} largura={width} desktop={desktop} rolarPara={rolarPara} />
             ) : (
-              <HeroDaPeca sf={sf} slug={slug} desktop={desktop} onVerLoja={verLoja} />
+              <>
+                {bannerAutomatico ? (
+                  <HeroDeBanners sf={sf} banners={[bannerAutomatico]} largura={width} desktop={desktop} rolarPara={rolarPara} />
+                ) : null}
+                <HeroDaPeca sf={sf} slug={slug} desktop={desktop} onVerLoja={verLoja} />
+              </>
             )}
           </View>
           <ComoFunciona sf={sf} desktop={desktop} />

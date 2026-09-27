@@ -11,7 +11,7 @@
 // ============================================================
 import {
   nomesDaLista, nomesIgnorados, proximoDegrau, telefoneValido,
-  pendenciaDoLote, dinheiro, MAXIMO_NOMES,
+  pendenciaDoLote, dinheiro, MAXIMO_NOMES, fraseDeFaltamNomes,
 } from "@/components/studio/storefront/loteDaVitrine";
 import type { CotacaoDoLote } from "@/components/studio/storefront/loteDaVitrine";
 
@@ -91,6 +91,14 @@ describe("o empurrão para a próxima faixa", () => {
   test("sem cotação ou sem faixas, não inventa empurrão", () => {
     expect(proximoDegrau(null)).toBeNull();
     expect(proximoDegrau({ ...cotacao(5), tiers: [] })).toBeNull();
+  });
+
+  // QA 27/09/2026: a tela sempre dizia "Faltam 1 nome" — o verbo não
+  // concordava com o número quando faltava só um.
+  test("o verbo concorda com o número: falta 1, faltam 2+", () => {
+    expect(fraseDeFaltamNomes(1)).toBe("Falta 1 nome");
+    expect(fraseDeFaltamNomes(2)).toBe("Faltam 2 nomes");
+    expect(fraseDeFaltamNomes(38)).toBe("Faltam 38 nomes");
   });
 });
 

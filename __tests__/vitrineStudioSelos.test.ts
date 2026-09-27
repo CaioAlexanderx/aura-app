@@ -76,7 +76,7 @@ describe('"Restam N" não existe na vitrine Studio', () => {
 describe("os chips do que dá para personalizar", () => {
   const cfg = (fields: any[], extra: any = {}) => ({ fields, ...extra });
 
-  test("a Caneca Branca da Sheid, com a config real dela", () => {
+  test("a Caneca Branca da Sheid, com a config real dela (o verso com o próprio texto)", () => {
     const p = produto({
       visual_kind: "model3d",
       customization_config: cfg(
@@ -84,6 +84,7 @@ describe("os chips do que dá para personalizar", () => {
          { id: "image", type: "image", config: {} },
          { id: "template", type: "template", config: {} },
          { id: "color", type: "color", config: {} },
+         { id: "text_back", type: "text", side: "back", config: {} },
          { id: "art_service", type: "option", config: { is_art_service: true } }],
         { has_back: true },
       ) as any,
@@ -92,11 +93,26 @@ describe("os chips do que dá para personalizar", () => {
       ["Mockup 3D", "Frente e verso", "Escolha a cor"]);
   });
 
+  test("QA 27/09/2026: has_back sozinho não basta — só com campo ou origem de arte no verso", () => {
+    // A mesma peça acima, mas sem NENHUM campo no verso: `has_back` ficou
+    // ligado no cadastro, a página não oferece o verso (ladosComConteudo),
+    // e a grade não pode anunciar "Frente e verso" para uma peça de um
+    // lado só.
+    const semVerso = produto({
+      visual_kind: "model3d",
+      customization_config: cfg(
+        [{ id: "text", type: "text", config: {} }, { id: "color", type: "color", config: {} }],
+        { has_back: true },
+      ) as any,
+    });
+    expect(chipsDoProduto(semVerso).map((c) => c.texto)).toEqual(["Mockup 3D", "Escolha a cor", "Nome ou frase"]);
+  });
+
   test("no máximo três — do quarto em diante o cartão vira formulário", () => {
     const p = produto({
       visual_kind: "model3d",
       customization_config: cfg(
-        [{ id: "c", type: "color" }, { id: "t", type: "text" }, { id: "i", type: "image" }],
+        [{ id: "c", type: "color" }, { id: "t", type: "text" }, { id: "i", type: "image" }, { id: "tb", type: "text", side: "back" }],
         { has_back: true },
       ) as any,
     });

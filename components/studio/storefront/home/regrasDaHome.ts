@@ -151,6 +151,30 @@ export function bannersDaHome(store: StorePayload | null | undefined): BannerDaH
     });
 }
 
+/**
+ * O banner automático (P1, 27/09/2026): sem banner da lojista
+ * (`banners_automaticos` true, ou nenhum cadastrado), a home nova ficava
+ * sem NADA no topo além da peça do destaque — a loja Negócio sempre
+ * mostra algo (o fallback do `storefrontBuilder.parseBanners`: a capa e o
+ * slogan). Aqui é o mesmo, um slide só: a cor da loja (`tint: "brand"`,
+ * que o Slide já resolve com `t.sobreMarca` — legível AA por construção
+ * do motor de tema), a capa quando houver, o slogan (ou o convite
+ * genérico) e a descrição. Sem kicker e sem botão: não há destino para
+ * um "saiba mais" — é identidade, não campanha. Entra ANTES da peça do
+ * destaque (o mockup girando continua vindo logo abaixo, como sempre).
+ */
+export function bannerAutomaticoDaHome(store: StorePayload | null | undefined): BannerDaHome | null {
+  if (!store?.site) return null;
+  const site: any = store.site;
+  const headline = String(site.tagline || "").trim() || "Bem-vindo à nossa loja";
+  const body = String(site.description || "").trim();
+  return {
+    kicker: "", headline, body, cta: "", cta_url: null, tone: "", tint: "brand",
+    image_url: site.cover_url || null, image_url_mobile: null, enabled: true,
+    comTexto: true, soLink: false, destino: null, rotulo: headline,
+  };
+}
+
 /** O próximo banner (ou o anterior), dando a volta. */
 export function proximoBanner(atual: number, total: number, passo: 1 | -1 = 1): number {
   if (total <= 0) return 0;
@@ -260,10 +284,23 @@ export function listaDeCategorias(nomes: string[]): string {
   return frase.charAt(0).toUpperCase() + frase.slice(1);
 }
 
-/** O parágrafo do destaque: a tagline da lojista, ou a frase do Studio. */
+/** O título fixo do destaque sem banner (mockup 05, tela 2). */
+export const TITULO_FIXO_DO_HERO = "Presentes que ninguém mais tem.";
+
+function mesmoTexto(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/**
+ * O parágrafo do destaque: a tagline da lojista, ou a frase do Studio.
+ *
+ * Quando a lojista escreveu o MESMO texto do título fixo como slogan, a
+ * home repetia a frase duas vezes seguidas (QA 27/09/2026) — o slogan só
+ * vale como subtítulo quando diz algo além do título.
+ */
 export function fraseDoDestaque(store: StorePayload | null | undefined): string {
   const tag = String(store?.site?.tagline || "").trim();
-  if (tag) return tag;
+  if (tag && !mesmoTexto(tag, TITULO_FIXO_DO_HERO)) return tag;
   const cats = menuDaLoja(store).map((i) => i.categoria.name);
   const quem = listaDeCategorias(cats) || "Peças";
   return `${quem} com a sua foto, o seu nome ou a sua frase. Você vê como fica antes de pagar.`;

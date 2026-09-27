@@ -22,9 +22,9 @@
 import { View } from "react-native";
 import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import { wash } from "./theme";
-import { Texto } from "./TipografiaVitrine";
+import { Texto, Numero } from "./TipografiaVitrine";
 import { Icon } from "@/components/Icon";
-import { faixaDaTemporada, type FaixaDaTemporada as Faixa } from "./modoDaVitrine";
+import { faixaDaTemporada, trechosDaFaixa, type FaixaDaTemporada as Faixa } from "./modoDaVitrine";
 
 export function FaixaDaTemporada({
   store,
@@ -72,7 +72,9 @@ export function FaixaDaTemporada({
           flexShrink: 1,
         }}
       >
-        {faixa.texto}
+        {trechosDaFaixa(faixa.texto).map((t, i) => t.data ? (
+          <Numero key={i} style={{ fontSize: 12.5, fontWeight: "600", color: cor }}>{t.texto}</Numero>
+        ) : t.texto)}
       </Texto>
     </View>
   );

@@ -9,6 +9,7 @@ import { usePaletaDaVitrine } from "../TemaDaVitrine";
 
 import { Texto, Numero } from "../TipografiaVitrine";
 import { dinheiro } from "../moeda";
+import { nomeDaCor } from "../leituraDaCor";
 export function FieldColor({
   field, value, onChange,
 }: {
@@ -35,9 +36,11 @@ export function FieldColor({
               <Pressable
                 onPress={() => onChange(c)}
                 // Sem nome, o leitor de tela anunciava oito "botão" iguais e
-                // ninguém sabia qual estava marcado.
+                // ninguém sabia qual estava marcado; e a cor era lida como
+                // hex ("#FFFFFF") — agora o rótulo cadastrado, ou o nome
+                // mais próximo em português (nomeDaCor).
                 accessibilityRole="radio"
-                accessibilityLabel={`${field.label} ${c}`}
+                accessibilityLabel={`${field.label}: ${choice?.label && choice.label !== c ? choice.label : nomeDaCor(c)}`}
                 accessibilityState={{ checked: selected, selected }}
                 hitSlop={4}
                 style={{

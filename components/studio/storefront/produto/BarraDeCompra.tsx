@@ -18,7 +18,7 @@
 // conteúdo (o mockup cobria a seção da arte numa tela de 820 px): a
 // página o põe numa faixa própria, fora da rolagem — ver PaginaDoProduto.
 // ============================================================
-import { Platform, Pressable, View } from "react-native";
+import { Platform, Pressable, View, useWindowDimensions } from "react-native";
 import { useTemaDaVitrine } from "../TemaDaVitrine";
 import { Texto, Numero } from "../TipografiaVitrine";
 import { Icon } from "@/components/Icon";
@@ -75,12 +75,44 @@ function Falta({ a, pequena }: { a: AcaoDaBarra; pequena?: boolean }) {
   );
 }
 
-function Acoes({ a, desktop }: { a: AcaoDaBarra; desktop: boolean }) {
+/**
+ * 360 px (a largura mais comum de Android): "Comprar agora" ao lado de
+ * "Adicionar à sacola", os dois com fonte 15, cortava em "Comprar
+ * ago…" (QA 27/09/2026). Abaixo de 375 px os dois EMPILHAM — em vez de
+ * apertar a fonte e arriscar cortar nome de novo, cada botão ganha a
+ * largura inteira, sem sobrepor o outro.
+ */
+const LARGURA_EMPILHA = 375;
+
+function Acoes({ a, desktop, estreita }: { a: AcaoDaBarra; desktop: boolean; estreita?: boolean }) {
   if (a.editando) {
     return <Botao rotulo={`Atualizar item · ${dinheiro(a.total)}`} rotuloAcessivel={`Atualizar item por ${dinheiro(a.total)}`} onPress={a.onAtualizar} />;
   }
   if (!a.aceita) {
-    return <Botao rotulo="Pedir orçamento" rotuloAcessivel="Pedir orçamento desta peça" onPress={a.onOrcamento} />;
+    // O mesmo ícone da prévia do painel (QA 27/09/2026): o botão abre o
+    // WhatsApp da loja (pedirOrcamento, PaginaDoProduto.tsx) — sem o
+    // ícone, parecia um botão de compra comum.
+    return <Botao rotulo="Pedir orçamento" rotuloAcessivel="Pedir orçamento desta peça" icone="whatsapp" onPress={a.onOrcamento} />;
+  }
+  if (estreita) {
+    return (
+      <View style={{ gap: 8 }}>
+        <Botao
+          tipo="secundario" rotulo="Comprar agora" rotuloAcessivel={`Comprar agora por ${dinheiro(a.total)}`}
+          onPress={a.onComprar} estilo={{ width: "100%" }} testID="botao-comprar-agora" pequeno
+        />
+        <Botao
+          tipo={a.adicionado ? "feito" : "primario"}
+          rotulo={a.adicionado ? "Adicionado" : "Adicionar à sacola"}
+          rotuloAcessivel={a.adicionado ? "Adicionado à sacola" : "Adicionar à sacola"}
+          icone={a.adicionado ? "check" : undefined}
+          onPress={a.onAdicionar}
+          estilo={{ width: "100%" }}
+          testID="botao-adicionar"
+          pequeno
+        />
+      </View>
+    );
   }
   return (
     <View style={{ flexDirection: "row", gap: 10 }}>
@@ -105,6 +137,8 @@ function Acoes({ a, desktop }: { a: AcaoDaBarra; desktop: boolean }) {
 export function BarraDeCompraCelular({ a }: { a: AcaoDaBarra }) {
   const t = useTemaDaVitrine();
   const total = useNumeroAnimado(a.total);
+  const { width } = useWindowDimensions();
+  const estreita = width < LARGURA_EMPILHA;
   return (
     <View
       testID="barra-de-compra"
@@ -127,7 +161,7 @@ export function BarraDeCompraCelular({ a }: { a: AcaoDaBarra }) {
         </View>
       ) : null}
       <View style={{ paddingTop: a.aceita ? 0 : 4 }}>
-        <Acoes a={a} desktop={false} />
+        <Acoes a={a} desktop={false} estreita={estreita} />
       </View>
     </View>
   );

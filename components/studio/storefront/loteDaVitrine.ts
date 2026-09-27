@@ -100,6 +100,15 @@ export function proximoDegrau(
   };
 }
 
+/**
+ * "Falta 1 nome" / "Faltam 3 nomes" — o verbo concorda com o número, não
+ * só o substantivo (QA 27/09/2026: a tela sempre dizia "Faltam 1 nome").
+ */
+export function fraseDeFaltamNomes(faltam: number): string {
+  const um = faltam === 1;
+  return `${um ? "Falta" : "Faltam"} ${faltam} ${um ? "nome" : "nomes"}`;
+}
+
 /** O WhatsApp digitado só serve se der para responder nele. */
 export function telefoneValido(bruto: string): boolean {
   return String(bruto || "").replace(/\D/g, "").length >= 10;

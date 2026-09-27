@@ -96,3 +96,71 @@ export function lerCorDaLoja(hex: string, modo: ModoVitrine = "papel"): LeituraD
 export function corNosDoisModos(hex: string): { papel: LeituraDaCor; escuro: LeituraDaCor } {
   return { papel: lerCorDaLoja(hex, "papel"), escuro: lerCorDaLoja(hex, "escuro") };
 }
+
+// ============================================================
+// nomeDaCor — o hex, em português (QA da vitrine, 27/09/2026)
+//
+// O leitor de tela anunciava "Cor da arte, #0F172A" e a mensagem do
+// WhatsApp chegava com "Cor: #FFFFFF" — a lojista e a cliente liam um
+// código, não uma cor. Sem paleta cadastrada (rótulo por campo), o hex
+// vira o nome mais próximo de uma paleta comum em português. Não é
+// ciência da cor: é o suficiente para não ler um código onde deveria
+// haver uma palavra.
+// ============================================================
+
+type Rgb = { r: number; g: number; b: number };
+
+function hexParaRgb(hex: string): Rgb | null {
+  const h = String(hex || "").trim().replace(/^#/, "");
+  if (/^[0-9a-fA-F]{3}$/.test(h)) {
+    const r = parseInt(h[0] + h[0], 16);
+    const g = parseInt(h[1] + h[1], 16);
+    const b = parseInt(h[2] + h[2], 16);
+    return { r, g, b };
+  }
+  if (/^[0-9a-fA-F]{6}$/.test(h)) {
+    return {
+      r: parseInt(h.slice(0, 2), 16),
+      g: parseInt(h.slice(2, 4), 16),
+      b: parseInt(h.slice(4, 6), 16),
+    };
+  }
+  return null;
+}
+
+function rgbParaHsl({ r, g, b }: Rgb): { h: number; s: number; l: number } {
+  const rn = r / 255, gn = g / 255, bn = b / 255;
+  const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  const diff = max - min;
+  if (diff === 0) return { h: 0, s: 0, l };
+  const s = l > 0.5 ? diff / (2 - max - min) : diff / (max + min);
+  let h: number;
+  if (max === rn) h = 60 * (((gn - bn) / diff) % 6);
+  else if (max === gn) h = 60 * ((bn - rn) / diff + 2);
+  else h = 60 * ((rn - gn) / diff + 4);
+  if (h < 0) h += 360;
+  return { h, s, l };
+}
+
+/**
+ * O nome em português mais próximo do hex — branco, preto, vermelho,
+ * rosa, roxo, azul, laranja, verde, amarelo, marrom, cinza, dourado ou
+ * prata. Hex inválido devolve o próprio texto (não inventa cor do nada).
+ */
+export function nomeDaCor(hex: string | null | undefined): string {
+  const rgb = hexParaRgb(String(hex || ""));
+  if (!rgb) return String(hex || "").trim() || "cor personalizada";
+  const { h, s, l } = rgbParaHsl(rgb);
+  if (l <= 0.12) return "preto";
+  if (l >= 0.94) return "branco";
+  if (s <= 0.12) return l >= 0.62 ? "prata" : "cinza";
+  if (h >= 40 && h < 58 && s >= 0.35 && s <= 0.85 && l >= 0.35 && l <= 0.68) return "dourado";
+  if (h < 20 || h >= 345) return l >= 0.62 ? "rosa" : "vermelho";
+  if (h < 45) return l < 0.38 ? "marrom" : "laranja";
+  if (h < 65) return "amarelo";
+  if (h < 170) return "verde";
+  if (h < 255) return "azul";
+  if (h < 300) return "roxo";
+  return "rosa";
+}

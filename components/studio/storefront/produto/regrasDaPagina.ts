@@ -331,6 +331,16 @@ export function origensDoLado(cfg: CustomizationConfig | null | undefined, lado:
   };
 }
 
+/**
+ * O lado tem campo próprio (texto, opção, cor…) ou uma origem de arte
+ * (envio ou arte pronta)? A mesma pergunta de `ladosComConteudo`
+ * (ArteDaPeca.tsx) — aqui, pura, para quem precisa dela sem montar tela
+ * (o selo "Frente e verso" da grade, selosDoProduto.ts).
+ */
+export function ladoTemConteudo(cfg: CustomizationConfig | null | undefined, lado: Lado): boolean {
+  return camposDoLado(cfg, lado).length > 0 || !!origensDoLado(cfg, lado).envio || !!origensDoLado(cfg, lado).pronta;
+}
+
 /** O lado tem alguma coisa que a cliente preencheu? (o pontinho da aba) */
 export function ladoPreenchido(cfg: CustomizationConfig | null | undefined, lado: Lado, values: Record<string, any>): boolean {
   return (cfg?.fields || []).some((f) =>

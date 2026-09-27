@@ -236,7 +236,10 @@ describe("a mensagem do WhatsApp diz o que a tela disse", () => {
     const m = mensagemDoCarrinho({ linhas: [l2], nomeDaLoja: "Sheid Mania" });
     expect(m).toContain("Quem cria a arte: Envio minha arte e vocês ajustam");
     expect(m).toContain("Briefing da arte: tirar o fundo");
-    expect(m).toContain("Cor da arte: #D62828");
+    // QA 27/09/2026: cor sem rótulo cadastrado virava hex cru na mensagem
+    // ("Cor da arte: #0F172A") — agora o nome em português (nomeDaCor).
+    expect(m).toContain("Cor da arte: Vermelho");
+    expect(m).not.toMatch(/#D62828/i);
     expect(m).toContain("Tamanho: M");
     expect(m).not.toMatch(/: adjust\b/);
     expect(m).not.toMatch(/Tamanho: m\b/);

@@ -8,12 +8,12 @@
 // busca com o nome antes da descrição; categoria com filhas.
 // ============================================================
 import {
-  itensDaFaixa, destinoDoBanner, bannersDaHome, proximoBanner, bannerGira, alturaDoHero,
+  itensDaFaixa, destinoDoBanner, bannersDaHome, bannerAutomaticoDaHome, proximoBanner, bannerGira, alturaDoHero,
   pecaDoDestaque, artesDoDestaque, nomesDeExemplo, listaDeCategorias, fraseDoDestaque, conviteDaPeca,
   lugarDaLoja, produtosDaArvore, alvoDaCategoria, menuDaLoja, trilhaDaCategoria, subcategorias,
   buscarNaVitrine, trechosDestacados, sugestoesDeBusca, mensagemDaBuscaVazia, selosDaHome,
   categoriaMaisForte, tituloParaEmpresas, blocoParaEmpresas, artesDaHome, mostrarTirarDuvida,
-  descontoDoPix, gradeDaHome,
+  descontoDoPix, gradeDaHome, TITULO_FIXO_DO_HERO,
 } from "@/components/studio/storefront/home/regrasDaHome";
 import { resolverTela } from "@/components/studio/storefront/rotasDaVitrine";
 import { agruparVitrine } from "@/components/studio/storefront/categoryGrouping";
@@ -117,6 +117,20 @@ describe("os banners", () => {
     expect(bannerGira({ total: 3, pausado: true, reduzirMovimento: false })).toBe(false);
     expect(bannerGira({ total: 3, pausado: false, reduzirMovimento: true })).toBe(false);
   });
+  test("o item novo do PO: sem banner da lojista, entra o automático — cor da loja, capa quando houver, slogan e descrição", () => {
+    const semNada = loja({ site: { banners_automaticos: true } });
+    expect(bannerAutomaticoDaHome(semNada)).toMatchObject({
+      tint: "brand", headline: "Bem-vindo à nossa loja", body: "", cta: "", cta_url: null,
+      kicker: "", image_url: null, comTexto: true, soLink: false, destino: null,
+    });
+    const comSlogan: any = loja({ site: { tagline: "Feito à mão em SJC", cover_url: "https://x/capa.jpg", description: "Canecas e copos desde 2018", banners_automaticos: true } });
+    expect(bannerAutomaticoDaHome(comSlogan)).toMatchObject({
+      headline: "Feito à mão em SJC", body: "Canecas e copos desde 2018", image_url: "https://x/capa.jpg",
+    });
+    // Sem `site`, não há como montar o banner (loja não carregou ainda).
+    expect(bannerAutomaticoDaHome(null)).toBeNull();
+    expect(bannerAutomaticoDaHome({} as any)).toBeNull();
+  });
   test("altura: 3:1 no desktop; no celular alta com texto ou arte de celular, 3:1 só com arte pronta larga", () => {
     const comTexto = bannersDaHome(loja({ site: { banners: [b({ headline: "x", image_url: "https://x/1.jpg" })] } }));
     const soArte = bannersDaHome(loja({ site: { banners: [b({ image_url: "https://x/1.jpg" })] } }));
@@ -166,6 +180,10 @@ describe("a peça do destaque sem banner", () => {
     expect(fraseDoDestaque(loja({ site: { tagline: "Feito à mão em SJC" } }))).toBe("Feito à mão em SJC");
     const l = loja({ categories: [cat("canecas", "Canecas")], products: [peca("a", { category_id: "canecas" })] });
     expect(fraseDoDestaque(l)).toBe("Canecas com a sua foto, o seu nome ou a sua frase. Você vê como fica antes de pagar.");
+    // QA 27/09/2026: slogan igual ao título fixo do hero não repete a
+    // mesma frase duas vezes — cai na frase do Studio, como sem slogan.
+    expect(fraseDoDestaque(loja({ site: { tagline: TITULO_FIXO_DO_HERO } }))).not.toBe(TITULO_FIXO_DO_HERO);
+    expect(fraseDoDestaque(loja({ site: { tagline: "  presentes que ninguém mais tem.  " } }))).not.toMatch(/^presentes que ninguém mais tem\.?$/i);
     expect(conviteDaPeca("Canecas")).toBe("Personalizar uma caneca");
     expect(conviteDaPeca("Copos")).toBe("Personalizar um copo");
     expect(conviteDaPeca("Cartões")).toBe("Personalizar um cartão");

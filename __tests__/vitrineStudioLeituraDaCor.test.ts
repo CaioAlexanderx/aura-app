@@ -10,7 +10,7 @@
 // mude quando a sorte da cor muda.
 // ============================================================
 import {
-  lerCorDaLoja, corNosDoisModos, MINIMO_AA,
+  lerCorDaLoja, corNosDoisModos, MINIMO_AA, nomeDaCor,
 } from "@/components/studio/storefront/leituraDaCor";
 import { contraste } from "@/components/studio/storefront/theme";
 
@@ -137,5 +137,52 @@ describe("a aba de Aparência mostra o que faltava", () => {
     expect(painel).toContain('{ key: "aparencia"');
     expect(painel).toContain("<TabStudioAparencia");
     expect(painel.indexOf('key: "design"')).toBeLessThan(painel.indexOf('key: "aparencia"'));
+  });
+});
+
+describe("nomeDaCor — o hex em português (QA da vitrine, 27/09/2026)", () => {
+  // O leitor de tela e a mensagem do WhatsApp liam "#0F172A" — código, não
+  // cor. Sem rótulo cadastrado, o hex vira o nome mais próximo.
+  test("preto e branco pelos extremos de luz, não pelo matiz", () => {
+    expect(nomeDaCor("#000000")).toBe("preto");
+    expect(nomeDaCor("#FFFFFF")).toBe("branco");
+    // Um azul-marinho quase preto (a tinta escura de um layout real) lê
+    // como preto — é assim que a cliente enxerga, não como "azul".
+    expect(nomeDaCor("#0F172A")).toBe("preto");
+  });
+
+  test("as cores do próprio kit da vitrine", () => {
+    expect(nomeDaCor("#EF4444")).toBe("vermelho"); // primary do Food
+    expect(nomeDaCor("#7c3aed")).toBe("roxo"); // accent da marca
+    expect(nomeDaCor("#2563EB")).toBe("azul");
+    expect(nomeDaCor("#22C55E")).toBe("verde");
+    expect(nomeDaCor("#FACC15")).toBe("amarelo");
+    expect(nomeDaCor("#F97316")).toBe("laranja");
+  });
+
+  test("marrom e dourado — hue perto de laranja, separados pela luz e saturação", () => {
+    expect(nomeDaCor("#92400E")).toBe("marrom");
+    expect(nomeDaCor("#D4AF37")).toBe("dourado");
+  });
+
+  test("cinza e prata — sem matiz, separados pela luz", () => {
+    expect(nomeDaCor("#808080")).toBe("cinza");
+    expect(nomeDaCor("#C0C0C0")).toBe("prata");
+  });
+
+  test("rosa: hue de vermelho ou magenta, mas claro", () => {
+    expect(nomeDaCor("#F472B6")).toBe("rosa");
+  });
+
+  test("maiúscula, minúscula e hex curto dão o mesmo nome", () => {
+    expect(nomeDaCor("#fff")).toBe("branco");
+    expect(nomeDaCor("#FFF")).toBe("branco");
+    expect(nomeDaCor("#EF4444")).toBe(nomeDaCor("#ef4444"));
+  });
+
+  test("hex inválido ou vazio não inventa cor: devolve o texto original", () => {
+    expect(nomeDaCor("")).toBe("cor personalizada");
+    expect(nomeDaCor(null)).toBe("cor personalizada");
+    expect(nomeDaCor("não é hex")).toBe("não é hex");
   });
 });

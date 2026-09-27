@@ -175,6 +175,15 @@ describe("as telas", () => {
     expect(le("components/studio/storefront/useStorefront.ts")).toContain("items: itensDoPedido(cart),");
   });
 
+  test("QA 27/09/2026: \"com verso personalizado\" só com o verso escolhido E preenchido", () => {
+    // Verso INCLUSO (sem cobrança) é sempre "ativo" pela conta do preço
+    // (versoEfetivo) mesmo sem a cliente ter tocado nele — a etiqueta da
+    // sacola usava essa mesma conta e chamava de "personalizado" um verso
+    // em branco. versoAtivo (escolhido E preenchido) é a régua certa.
+    const cart = le("components/studio/storefront/Cart.tsx");
+    expect(cart).toMatch(/versoAtivo\(l\.product\.customization_config,\s*l\.hasBackSelected,\s*l\.values\)[\s\S]{0,40}<Texto[^>]*>com verso personalizado/);
+  });
+
   test("min_dpi saiu do padrão do campo de imagem (decisão 4)", () => {
     expect(le("components/studio/customizationConfig.ts")).not.toMatch(/min_dpi:\s*IMAGE_MIN_DPI_PADRAO/);
   });

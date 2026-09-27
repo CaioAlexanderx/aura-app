@@ -133,3 +133,27 @@ export function faixaDaTemporada(store: any, hoje: Date = new Date()): FaixaDaTe
   const dias = diasAtePrazo(store?.pedidos?.pedidos_ate, hoje);
   return { texto, tom: dias != null && dias <= 1 ? "ultimo_dia" : "prazo" };
 }
+
+// ── Números da faixa, para o componente (QA 27/09/2026) ────────────────
+//
+// "Pedidos até 05/10 — depois disso, só orçamento." saía inteiro no corpo
+// da fonte: a data devia sair com `Numero` (Bricolage Grotesque, dígitos
+// tabulares), como todo número da vitrine. O texto já nasce pronto (esta
+// função só separa a data do resto); a tela decide a fonte de cada trecho.
+
+export type TrechoDaFaixa = { texto: string; data: boolean };
+
+/** Quebra o texto em trechos, marcando as datas ("05/10", "05/10/2026"). */
+export function trechosDaFaixa(texto: string): TrechoDaFaixa[] {
+  const re = /\d{1,2}\/\d{1,2}(?:\/\d{2,4})?/g;
+  const out: TrechoDaFaixa[] = [];
+  let ultimo = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(texto))) {
+    if (m.index > ultimo) out.push({ texto: texto.slice(ultimo, m.index), data: false });
+    out.push({ texto: m[0], data: true });
+    ultimo = m.index + m[0].length;
+  }
+  if (ultimo < texto.length) out.push({ texto: texto.slice(ultimo), data: false });
+  return out;
+}

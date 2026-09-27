@@ -27,6 +27,11 @@ import { numeroWhatsApp } from "./AncoraWhatsApp";
 import { dinheiro } from "./moeda";
 import { linhasDaPeca } from "./resumoDaPeca";
 import { precoDaLinha } from "./precoDaSacola";
+import { nomeDaCor } from "./leituraDaCor";
+
+function capitalizada(s: string): string {
+  return s.length ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
 
 /** Quantos caracteres cabem sem o WhatsApp truncar o link. */
 const TETO = 1200;
@@ -47,7 +52,10 @@ export function linhasDaPersonalizacao(
   produto: StudioStoreProduct,
   valores: Record<string, any> | null | undefined
 ): LinhaDoPedido[] {
-  return linhasDaPeca(produto, valores).map((l) => ({ rotulo: l.rotulo, valor: l.valor }));
+  return linhasDaPeca(produto, valores).map((l) => ({
+    rotulo: l.rotulo,
+    valor: l.tipo === "cor" && /^#[0-9A-Fa-f]{3,8}$/.test(l.valor) ? capitalizada(nomeDaCor(l.valor)) : l.valor,
+  }));
 }
 
 /** "2 × R$ 39,90 = R$ 79,80", com a arte (uma vez) quando houver. */
