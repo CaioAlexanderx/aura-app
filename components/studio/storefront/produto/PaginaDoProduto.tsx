@@ -72,6 +72,7 @@ import { BarraDeCompraCelular, BlocoDeCompraDesktop, type AcaoDaBarra } from "./
 import { DetalhesDaPeca, DaMesmaCategoria } from "./DetalhesDaPeca";
 import { CabecalhoDaLoja, Trilha } from "./CabecalhoDaLoja";
 import { BotaoIcone, CabecalhoDaSecao, EtiquetaFalta, EtiquetaPronta, transicao, useNumeroAnimado, usePulso } from "./kitDaPagina";
+import { useCamadaNoHistorico } from "../historicoDaVitrine";
 
 /** A partir daqui, duas colunas (a mesma régua do ProductConfigurator). */
 export const LARGURA_DESKTOP = 900;
@@ -126,6 +127,11 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
   const [zoomFoto, setZoomFoto] = useState<number | null>(null);
   const [zoomMock, setZoomMock] = useState(false);
   const [guia, setGuia] = useState(false);
+  // QA 27/09: o zoom da foto, o da prévia e o guia de medidas entram no
+  // histórico — o voltar do navegador fecha a camada, sem sair da peça.
+  useCamadaNoHistorico("zoom-da-foto", zoomFoto != null, () => setZoomFoto(null));
+  useCamadaNoHistorico("zoom-da-previa", zoomMock, () => setZoomMock(false));
+  useCamadaNoHistorico("guia-de-medidas", guia, () => setGuia(false));
   const [dock, setDock] = useState(false);
   const [areasDoModelo, setAreasDoModelo] = useState<any[] | null>(null);
   const [faixaMedida, setFaixaMedida] = useState(0);

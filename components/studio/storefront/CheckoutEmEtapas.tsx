@@ -45,8 +45,13 @@ import {
   type Etapa, type FormaDePagamento, type Falta,
 } from "./formularioDoCheckout";
 import {
-  lerDadosLembrados, esquecerDadosLembrados, saudacao, storageLocal, primeiroNome,
+  lerDadosLembrados, esquecerDadosLembrados, saudacao, storageLocal, primeiroNome, storageDaAba,
+  lerRascunhoDoCheckout, guardarRascunhoDoCheckout, type RascunhoDoCheckout,
 } from "./dadosLembrados";
+import {
+  etapaAoAbrir, etapaDoEstado, etapaPossivel, estadoComEtapa, checkoutRecarregado, lerEstadoDoHistorico,
+  empilharNoHistorico, regravarNoHistorico, andarNoHistorico, ouvirOHistorico,
+} from "./historicoDaVitrine";
 import { buscarEnderecoPorCep, linhaDoBairro, type EnderecoDoCep } from "./enderecoPorCep";
 import { lerPedidoPendente, esquecerPedidoPendente, aindaEsperaPagamento, type PedidoPendente } from "./pedidoGuardado";
 import { diaEHora, numeroDoPedido } from "./pedidoPorToken";
@@ -448,7 +453,50 @@ function CheckoutAberto({ sf }: { sf: StorefrontState }) {
   const slug = useVitrine()?.slug || "";
   const nomeDaLoja = store?.site?.name || "loja";
 
-  const [etapa, setEtapa] = useState<Etapa>(1);
+  // ── O rascunho da aba e a etapa do histórico (QA 27/09) ────
+  // Cada etapa entra no histórico (historicoDaVitrine.ts): o voltar do
+  // navegador volta uma etapa, o avançar avança. F5 e o avançar depois de
+  // sair preservam a etapa e o que a cliente digitou (o rascunho da aba,
+  // dadosLembrados.ts), até o pedido ser enviado.
+  const [rascunho] = useState<RascunhoDoCheckout | null>(() => lerRascunhoDoCheckout(slug, storageDaAba()));
+  const modosIniciais = modosDeEntrega(store?.delivery);
+  const [entregaInicial] = useState<DeliveryType | null>(() => {
+    const doRascunho = rascunho?.dados.entrega || null;
+    if (doRascunho && modosIniciais.some((m) => m.tipo === doRascunho)) return doRascunho;
+    return modosIniciais.length === 1 ? modosIniciais[0].tipo : null;
+  });
+  const [etapa, setEtapa] = useState<Etapa>(() => {
+    // Com a cliente já digitando nesta visita, valem os dados da tela;
+    // senão, os do rascunho (que o efeito abaixo põe na tela).
+    const daTela = !!sf.customerName.trim();
+    const r = rascunho?.dados;
+    const d = {
+      nome: daTela ? sf.customerName : r?.name || "", whatsapp: daTela ? sf.customerPhone : r?.phone || "",
+      email: daTela ? sf.customerEmail : r?.email || "",
+      querDocumento: daTela ? sf.querDocumento : !!r?.quer_documento,
+      documento: daTela ? sf.customerDocument : r?.customer_cpf_cnpj || "",
+    };
+    const e = {
+      tipo: entregaInicial, cep: daTela ? sf.addressZip : r?.address_zip || "", rua: daTela ? sf.addressStreet : r?.address_street || "",
+      numero: daTela ? sf.addressNumber : r?.address_number || "", bairro: daTela ? sf.addressNeigh : r?.address_neighborhood || "",
+      cidade: daTela ? sf.addressCity : r?.address_city || "", uf: daTela ? sf.addressState : r?.address_state || "",
+      foraDaArea: false, cotando: false, buscandoCep: false,
+      courierNome: daTela ? sf.courierName : r?.courier_name || "", courierPlaca: daTela ? sf.courierPlate : r?.courier_plate || "",
+      informarDepois: daTela ? sf.courierInformarDepois : !!r?.courier_depois,
+    };
+    return etapaAoAbrir({
+      doHistorico: etapaDoEstado(lerEstadoDoHistorico()),
+      doRascunho: rascunho?.etapa ?? null,
+      recarregou: checkoutRecarregado(),
+      faltaNosDados: !!faltaNosDados(d),
+      faltaNaEntrega: !!faltaNaEntrega(e),
+    });
+  });
+  // A entrada atual leva a etapa (o F5 apaga a marca: ela é regravada).
+  useEffect(() => {
+    if (etapa > 1 && etapaDoEstado(lerEstadoDoHistorico()) !== etapa) regravarNoHistorico(estadoComEtapa(lerEstadoDoHistorico(), etapa));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const scroll = useRef<ScrollView>(null);
   const campos = useRef<Record<string, TextInput | null>>({});
   const ref = (nome: string) => (el: TextInput | null) => { campos.current[nome] = el; };
@@ -456,8 +504,27 @@ function CheckoutAberto({ sf }: { sf: StorefrontState }) {
   // ── Dados lembrados (Tela 2) ────────────────────────────────
   const [lembrada, setLembrada] = useState<string | null>(null);
   useEffect(() => {
+    // O que a cliente já digitou nesta visita fica como está.
+    if (sf.customerName.trim()) return;
     const d = lerDadosLembrados(slug, storageLocal());
-    if (!d || sf.customerName.trim()) return;
+    // O rascunho da aba (F5, avançar do navegador) vem antes dos dados da
+    // última compra: é o que ela digitou agora.
+    const r = rascunho?.dados;
+    if (r && (r.name.trim() || r.phone.trim())) {
+      sf.setCustomerName(r.name); sf.setCustomerPhone(r.phone); sf.setCustomerEmail(r.email);
+      sf.setQuerDocumento(r.quer_documento); sf.setCustomerDocument(r.customer_cpf_cnpj ? maskDocumento(r.customer_cpf_cnpj) : "");
+      sf.setAddressZip(r.address_zip ? maskCep(r.address_zip) : ""); sf.setAddressStreet(r.address_street);
+      sf.setAddressNumber(r.address_number); sf.setAddressComplement(r.address_complement);
+      sf.setAddressNeigh(r.address_neighborhood); sf.setAddressCity(r.address_city); sf.setAddressState(r.address_state);
+      sf.setCourierName(r.courier_name); sf.setCourierPlate(r.courier_plate); sf.setCourierInformarDepois(r.courier_depois);
+      if (r.notes) sf.setNotes(r.notes);
+      if (entregaInicial) sf.setDeliveryType(entregaInicial);
+      // Receber em casa depois do F5: o frete é cotado de novo.
+      if (entregaInicial === "delivery" && digitos(r.address_zip).length === 8) sf.quoteShipping(digitos(r.address_zip));
+      if (d && d.name.trim() === r.name.trim()) setLembrada(d.name);
+      return;
+    }
+    if (!d) return;
     sf.setCustomerName(d.name);
     sf.setCustomerPhone(d.phone);
     sf.setCustomerEmail(d.email);
@@ -516,7 +583,7 @@ function CheckoutAberto({ sf }: { sf: StorefrontState }) {
   const modos = modosDeEntrega(store?.delivery);
   // Nada vem escolhido (o botão diz "Escolha como receber"), a não ser que
   // a loja só tenha um modo.
-  const [entrega, setEntrega] = useState<DeliveryType | null>(modos.length === 1 ? modos[0].tipo : null);
+  const [entrega, setEntrega] = useState<DeliveryType | null>(entregaInicial);
   const [cep, setCep] = useState<{ estado: "vazio" | "buscando" | "ok" | "nao_achado" | "erro"; endereco: EnderecoDoCep | null }>({ estado: "vazio", endereco: null });
   const [editarEndereco, setEditarEndereco] = useState(false);
   const foraDaArea = !!(sf.shippingQuote && sf.shippingQuote.fee == null && sf.shippingQuote.error);
@@ -604,12 +671,56 @@ function CheckoutAberto({ sf }: { sf: StorefrontState }) {
   });
   const falta3: Falta | null = forma ? null : { texto: "Escolha como pagar", campo: "pagamento" };
   const falta = etapa === 1 ? falta1 : etapa === 2 ? falta2 : falta3;
+  const faltas = useRef({ dados: false, entrega: false });
+  faltas.current = { dados: !!falta1, entrega: !!falta2 };
 
-  function irPara(e: Etapa) {
+  // O rascunho da aba acompanha o que a cliente digita e a etapa.
+  useEffect(() => {
+    guardarRascunhoDoCheckout(slug, {
+      etapa,
+      dados: {
+        name: sf.customerName, phone: sf.customerPhone, email: sf.customerEmail,
+        customer_cpf_cnpj: sf.querDocumento ? sf.customerDocument : "", quer_documento: sf.querDocumento,
+        address_zip: sf.addressZip, address_street: sf.addressStreet, address_number: sf.addressNumber,
+        address_complement: sf.addressComplement, address_neighborhood: sf.addressNeigh,
+        address_city: sf.addressCity, address_state: sf.addressState,
+        entrega, courier_name: sf.courierName, courier_plate: sf.courierPlate,
+        courier_depois: sf.courierInformarDepois, notes: sf.notes,
+      },
+    }, storageDaAba());
+  }, [
+    slug, etapa, entrega, sf.customerName, sf.customerPhone, sf.customerEmail, sf.querDocumento, sf.customerDocument,
+    sf.addressZip, sf.addressStreet, sf.addressNumber, sf.addressComplement, sf.addressNeigh, sf.addressCity,
+    sf.addressState, sf.courierName, sf.courierPlate, sf.courierInformarDepois, sf.notes,
+  ]);
+
+  function mostrarEtapa(e: Etapa) {
     setEtapa(e);
     sf.setError(null);
     setTimeout(() => scroll.current?.scrollTo?.({ y: 0, animated: false }), 0);
   }
+  /**
+   * Ir a uma etapa. Para a frente, a etapa nova entra no histórico. Para
+   * trás, o histórico ANDA até a entrada dela (o voltar do navegador
+   * depois disso sai do checkout, e não repassa pelas etapas); sem
+   * histórico (nativo, entrada perdida), só troca a tela.
+   */
+  function irPara(e: Etapa) {
+    if (e === etapa) return;
+    if (e > etapa) {
+      empilharNoHistorico(estadoComEtapa(lerEstadoDoHistorico(), e));
+      mostrarEtapa(e);
+      return;
+    }
+    if ((etapaDoEstado(lerEstadoDoHistorico()) ?? 1) === etapa && andarNoHistorico(e - etapa)) return;
+    mostrarEtapa(e);
+  }
+  // O voltar e o avançar do navegador trocam a etapa (sem pular dado que falta).
+  useEffect(() => ouvirOHistorico((estado) => {
+    const e = etapaPossivel(etapaDoEstado(estado) ?? 1, faltas.current.dados, faltas.current.entrega);
+    mostrarEtapa(e);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), []);
   function levarAoCampo(f: Falta) {
     const el = campos.current[f.campo];
     if (el && typeof el.focus === "function") { el.focus(); return; }

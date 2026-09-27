@@ -139,7 +139,7 @@ import {
   type CotacaoDaSacola,
 } from "./cotacaoDaSacola";
 import { situacaoDoDocumento, digitos } from "./formularioDoCheckout";
-import { guardarDadosLembrados, storageLocal, storageDaAba } from "./dadosLembrados";
+import { guardarDadosLembrados, esquecerRascunhoDoCheckout, storageLocal, storageDaAba } from "./dadosLembrados";
 import { guardarPedidoPendente, guardarIdDoPedido } from "./pedidoGuardado";
 
 const API_BASE = enderecoDaApi();
@@ -1086,6 +1086,8 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
           }, storageLocal());
         }
         if (token && data.order_id) guardarIdDoPedido(token, String(data.order_id), storageDaAba());
+        // O pedido foi criado: o rascunho do checkout (F5 e voltar) sai da aba.
+        esquecerRascunhoDoCheckout(slug, storageDaAba());
       }
 
       setCart([]);
