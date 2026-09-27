@@ -144,6 +144,16 @@ export type StudioOrder = {
   // render do Visual Engine → foto do produto). Vem null quando nada foi
   // encontrado, e aí o card mostra o monograma. Sem configuração nenhuma.
   card_image_url?: string | null;
+  // 27/09/2026 (achado 4c do QA): de qual degrau da cascata saiu
+  // card_image_url. "product" é a foto do catálogo, que traz a arte de
+  // EXEMPLO do produto (ex.: "CACHORRO"), não o que a cliente digitou.
+  // Ausente em backend antigo — aí o cartão se comporta como antes.
+  card_image_source?: "mockup" | "render" | "product" | null;
+  // Personalização (valores digitados) e customization_config do produto
+  // do primeiro item personalizado do pedido. Com ela o cartão desenha a
+  // arte real quando a capa seria só a foto do catálogo. `values` pode
+  // vir `{}` (venda de PDV sem nada preenchido).
+  card_customization?: { values: Record<string, any>; config: CustomizationConfig | null } | null;
   // Data prometida de entrega. Opcional: sem ela o card usa a idade do
   // pedido, como sempre fez.
   promised_date?: string | null;
