@@ -192,13 +192,34 @@ export function subtotalDaSacola(cart: CartLine[] | null | undefined): number {
 }
 
 /**
- * O desconto do Pix, com a MESMA conta do servidor: sobre o subtotal,
- * arredondado em centavos, frete fora.
+ * O preço no Pix — a regra canônica, combinada com o backend (QA 27/09).
+ *
+ *   precoCentavos    = Math.round(preco × 100)
+ *   precoPixCentavos = Math.round(precoCentavos × (100 − pct) / 100)
+ *
+ * A peça mostrava R$ 47,40 para R$ 49,90 a 5% e a sacola calculava o
+ * desconto por outra conta: dois números para o mesmo Pix. Esta é a
+ * ÚNICA conta da vitrine — cartão da grade, destaque da home, peça,
+ * sacola e checkout —, sempre em centavos inteiros. `null` quando não há
+ * Pix a mostrar (preço ou desconto zero, nulo ou inválido).
+ */
+export function precoNoPix(preco: number, pct: number | null | undefined): number | null {
+  const p = Number(preco);
+  const d = Number(pct);
+  if (!Number.isFinite(p) || p <= 0) return null;
+  if (!Number.isFinite(d) || d <= 0) return null;
+  const centavos = Math.round(p * 100);
+  return Math.round(centavos * (100 - d) / 100) / 100;
+}
+
+/**
+ * O desconto do Pix: o preço menos o preço no Pix (precoNoPix), em
+ * centavos. Sobre o subtotal, frete fora — como o servidor cobra.
  */
 export function descontoDoPix(subtotal: number, pct: number | null | undefined): number {
-  const p = Number(pct) || 0;
-  if (p <= 0) return 0;
-  return Math.round((Number(subtotal) || 0) * p) / 100;
+  const pix = precoNoPix(subtotal, pct);
+  if (pix == null) return 0;
+  return (Math.round(Number(subtotal) * 100) - Math.round(pix * 100)) / 100;
 }
 
 /** Quantas peças há na sacola (soma das quantidades). */

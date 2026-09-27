@@ -62,13 +62,12 @@ import { valoresDaSacola } from "./SacolaEmGaveta";
 import { precoDaLinha, descontoDoPix, pecasNaSacola } from "./precoDaSacola";
 import { medirNaVitrine, itensDaSacola } from "./eventosDaVitrine";
 import { enderecoDaApi } from "./enderecoDaApi";
+import { enderecoDeRetiradaDaLoja } from "./home/regrasDaHome";
 
 const API_BASE = enderecoDaApi();
 
-/** O endereço de retirada: o do servidor, senão o da loja no rodapé. */
-function enderecoDeRetirada(store: any): string {
-  return String(store?.delivery?.pickup_address || store?.site?.endereco || "").trim();
-}
+/** O endereço de retirada: o do servidor, senão o da loja (regrasDaHome). */
+const enderecoDeRetirada = enderecoDeRetiradaDaLoja;
 
 // ── Os números do checkout ───────────────────────────────────
 

@@ -28,7 +28,10 @@ export function EntregaNoProduto({
     pickup_enabled?: boolean; delivery_enabled?: boolean; courier_pickup_enabled?: boolean;
     pickup_eta_text?: string | null;
   } | null | undefined;
-  /** `site.endereco` da loja ("Av Dom Pedro I, 553 - Jardim Colonial"). */
+  /**
+   * Onde retirar: `delivery.pickup_address`, senão `site.endereco`
+   * ("Av Dom Pedro I, 553 - Jardim Colonial"). Ver enderecoDeRetiradaDaLoja.
+   */
   endereco: string | null | undefined;
   cepInicial?: string;
   /** O CEP que deu certo vai para o checkout (sf.setAddressZip). */

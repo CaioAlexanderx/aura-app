@@ -47,7 +47,7 @@ import { linkDoPedido } from "../pedidoPeloWhatsApp";
 import { numeroWhatsApp } from "../AncoraWhatsApp";
 import { medirNaVitrine, itemDoProduto } from "../eventosDaVitrine";
 import { textoDeParcelamento } from "../parcelamento";
-import { descontoDoPix } from "../precoDaSacola";
+import { precoNoPix } from "../precoDaSacola";
 import { basePriceForQty } from "../qtyTiers";
 import { relacionadosDe } from "../relacionados";
 import { seloDoProduto, pecaMaisPedida } from "../selosDoProduto";
@@ -73,6 +73,7 @@ import { DetalhesDaPeca, DaMesmaCategoria } from "./DetalhesDaPeca";
 import { CabecalhoDaLoja, Trilha } from "./CabecalhoDaLoja";
 import { BotaoIcone, CabecalhoDaSecao, EtiquetaFalta, EtiquetaPronta, transicao, useNumeroAnimado, usePulso } from "./kitDaPagina";
 import { useCamadaNoHistorico } from "../historicoDaVitrine";
+import { enderecoDeRetiradaDaLoja } from "../home/regrasDaHome";
 
 /** A partir daqui, duas colunas (a mesma régua do ProductConfigurator). */
 export const LARGURA_DESKTOP = 900;
@@ -202,8 +203,9 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
   const totalDaLinha = sf.configuringLineTotal;
   const arteDaLinha = sf.configuringArtDelta;
   const pixPct = Number(store?.payment?.pix_discount_pct) || 0;
-  // O Pix com a MESMA conta do servidor (descontoDoPix, Fase 2).
-  const noPix = (v: number) => Math.round((v - descontoDoPix(v, pixPct)) * 100) / 100;
+  // O Pix com a regra canônica (precoDaSacola.precoNoPix): a mesma da
+  // grade, da sacola e do checkout.
+  const noPix = (v: number) => precoNoPix(v, pixPct) ?? v;
   const temPix = !!store?.payment?.has_pix && pixPct > 0;
   const tiers = produto.qty_tiers || [];
   const precoDeTabela = Number(produto.price) || 0;
@@ -506,7 +508,7 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
     secoes.push(secao("entrega", (
       <>
         <CabecalhoDaSecao numero={passo} titulo="Entrega ou retirada" />
-        <EntregaNoProduto slug={slug} entrega={entrega} endereco={store?.site?.endereco} cepInicial={sf.addressZip} onCep={(c) => sf.setAddressZip(c)} />
+        <EntregaNoProduto slug={slug} entrega={entrega} endereco={enderecoDeRetiradaDaLoja(store)} cepInicial={sf.addressZip} onCep={(c) => sf.setAddressZip(c)} />
         {modo.aceita && linkWa ? (
           <Pressable onPress={() => Linking.openURL(linkWa)} accessibilityRole="link" accessibilityLabel="Fazer este pedido pelo WhatsApp da loja"
             style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 44, marginTop: 14 }}>

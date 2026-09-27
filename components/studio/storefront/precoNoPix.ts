@@ -8,16 +8,8 @@
 // checkout: a cliente descobria o desconto depois de decidir, quando ele
 // já não decidia nada.
 //
-// A conta é a MESMA do checkout (useStorefront: `Math.round(subtotal *
-// pct) / 100`), aplicada a uma unidade. Duas contas diferentes para o
-// mesmo desconto é a divergência que este produto já pagou caro.
+// QA 27/09: a conta mora em precoDaSacola.ts (a regra canônica, em
+// centavos, combinada com o backend) e é a MESMA da peça, da sacola e do
+// checkout. Este módulo só a reexporta para quem já importava daqui.
 // ============================================================
-
-/** O preço de uma unidade no Pix, ou `null` quando não há desconto. */
-export function precoNoPix(preco: number, pct: number | null | undefined): number | null {
-  const p = Number(preco);
-  const d = Number(pct);
-  if (!Number.isFinite(p) || p <= 0) return null;
-  if (!Number.isFinite(d) || d <= 0) return null;
-  return Math.round(p * (100 - d)) / 100;
-}
+export { precoNoPix } from "./precoDaSacola";

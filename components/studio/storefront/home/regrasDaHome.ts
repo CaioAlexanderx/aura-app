@@ -288,6 +288,20 @@ export function conviteDaPeca(nomeDaCategoria: string | null | undefined): strin
   return "Personalizar esta peça";
 }
 
+/**
+ * Onde a cliente retira (QA 27/09, P0): `delivery.pickup_address` quando
+ * o servidor manda — a lojista pode retirar num lugar diferente do
+ * endereço do negócio —; sem ele, o endereço do negócio (`site.endereco`),
+ * como era. É a regra da peça, dos selos da home e do checkout.
+ */
+export function enderecoDeRetiradaDaLoja(
+  store: { delivery?: { pickup_address?: string | null } | null; site?: { endereco?: string | null } | null } | null | undefined,
+): string {
+  const daRetirada = typeof store?.delivery?.pickup_address === "string" ? store.delivery.pickup_address.trim() : "";
+  if (daRetirada) return daRetirada;
+  return typeof store?.site?.endereco === "string" ? store.site.endereco.trim() : "";
+}
+
 /** O bairro (ou o trecho final) do endereço: "Jardim Colonial". */
 export function lugarDaLoja(endereco: string | null | undefined): string {
   const e = String(endereco || "").trim();
@@ -658,7 +672,7 @@ export function selosDaHome(store: StorePayload | null | undefined): SeloDaHome[
   if (dv?.delivery_enabled) {
     selos.push({ icone: "truck", titulo: "Entrega", texto: String(dv.delivery_eta_text || "").trim() || "Combinada com a loja" });
   } else if (dv?.pickup_enabled !== false) {
-    selos.push({ icone: "store", titulo: "Retire na loja", texto: lugarDaLoja(store?.site?.endereco) || "Sem custo de envio" });
+    selos.push({ icone: "store", titulo: "Retire na loja", texto: lugarDaLoja(enderecoDeRetiradaDaLoja(store)) || "Sem custo de envio" });
   }
   if (String(store?.site?.whatsapp || "").replace(/\D/g, "").length >= 10) {
     selos.push({ icone: "whatsapp", titulo: "Atendimento humano", texto: "WhatsApp direto com a loja" });
