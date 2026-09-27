@@ -10,18 +10,40 @@
 // Token-free (cores neutras fixas) — funciona em painel e listas.
 // Web-only; nativo devolve null (a lista mostra o placeholder atual).
 //
+// 27/09/2026 — todo `model3d` era desenhado como caneca, e a camiseta em
+// GLB (model.kind = "glb") aparecia como caneca na lista de mockups. Com
+// a `spec` em mãos, a peça em GLB ganha a camiseta neutra 2D — a mesma
+// silhueta vetorial do compose2d — e a caneca procedural continua caneca.
+//
 // 03/07/2026 — F6 do escopo Visualização 2D/3D (contrato no chat)
 // ============================================================
 import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
+import type { VisualTemplateSpec } from "@/services/studioVisualApi";
 import { composeView } from "./compose2d";
 import { defaultTshirtSpec } from "./defaultTemplates";
 
 type Props = {
   kind: "photo2d" | "model3d" | null | undefined;
+  /** A spec do template, quando quem chama a tem: decide caneca × camiseta no 3D. */
+  spec?: VisualTemplateSpec | null;
   size?: number;          // px (quadrado-ish; altura 0.76x)
   garmentColor?: string;
 };
+
+export type FormaDaMiniatura = "caneca" | "camiseta" | null;
+
+/**
+ * O que a miniatura desenha: sem kind, nada; photo2d, a camiseta; model3d,
+ * a caneca — salvo quando a spec diz que a peça é um GLB (a camiseta 3D
+ * é o primeiro caso), aí a camiseta neutra. Regra pura, testada em
+ * __tests__/studioVisualTemplateThumb.
+ */
+export function formaDaMiniatura(kind: Props["kind"], spec?: VisualTemplateSpec | null): FormaDaMiniatura {
+  if (!kind) return null;
+  if (kind === "photo2d") return "camiseta";
+  return spec?.model?.kind === "glb" ? "camiseta" : "caneca";
+}
 
 function drawMugThumb(canvas: HTMLCanvasElement, px: number, garmentColor: string) {
   canvas.width = px;
@@ -73,22 +95,23 @@ function drawMugThumb(canvas: HTMLCanvasElement, px: number, garmentColor: strin
   ctx.setLineDash([]);
 }
 
-export function VisualTemplateThumb({ kind, size = 96, garmentColor = "#F5F2EA" }: Props) {
+export function VisualTemplateThumb({ kind, spec, size = 96, garmentColor = "#F5F2EA" }: Props) {
   const canvasRef = useRef<any>(null);
+  const forma = formaDaMiniatura(kind, spec);
 
   useEffect(() => {
-    if (Platform.OS !== "web" || !canvasRef.current || !kind) return;
-    if (kind === "model3d") {
+    if (Platform.OS !== "web" || !canvasRef.current || !forma) return;
+    if (forma === "caneca") {
       drawMugThumb(canvasRef.current, size * 2, garmentColor); // 2x pra nitidez
     } else {
-      const spec = defaultTshirtSpec(21, 28, "center");
-      composeView(canvasRef.current, spec.views[0], {}, {
+      const camiseta = defaultTshirtSpec(21, 28, "center");
+      composeView(canvasRef.current, camiseta.views![0], {}, {
         garmentColor,
         showAreas: true,
         pixelWidth: size * 2,
       });
     }
-  }, [kind, size, garmentColor]);
+  }, [forma, size, garmentColor]);
 
   if (Platform.OS !== "web" || !kind) return null;
 
