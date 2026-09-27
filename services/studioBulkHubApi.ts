@@ -72,6 +72,11 @@ export type HubFeedItem = {
   status: string;
   name: string | null;
   qty: number;
+  // 27/09/2026 (backend#760): o numero que a cliente ve ("Pedido 00001") e o
+  // telefone. `order_number` e nulo nos eventos (nao tem numero de pedido);
+  // os dois ficam opcionais porque o backend pode ainda estar sem eles.
+  order_number?: string | number | null;
+  customer_phone?: string | null;
   // 26/09/2026 (A1): `status` acima é a etapa de PRODUÇÃO. A situação do
   // pedido e do pagamento vem aqui, para o selo "Pagamento a conferir".
   order_status?: string | null;

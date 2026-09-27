@@ -25,22 +25,32 @@ export type ItemBuscavelDoHub = {
   id: string;
   name?: string | null;
   customer_phone?: string | null;
+  order_number?: string | number | null;
 };
 
 /**
  * Filtra o feed do Hub por nome, telefone (só dígitos) ou número do
- * pedido. Sem `order_number` no feed (a API não devolve — ver relatório
- * do PR), o "número" possível hoje é o id interno; funciona como atalho
- * pra quem colou o identificador de "Ver dados brutos" ou de outra tela.
+ * pedido. O número é o `order_number` que a cliente vê ("Pedido 00001",
+ * backend#760); aceita "42", "00042" e "pedido 42". Telefone e id interno
+ * só entram com 4+ caracteres: com menos, "7" bateria em todo telefone com
+ * um 7 e "42" em todo uuid com "42", e a busca pelo número viraria ruído.
+ * O id continua valendo como atalho pra quem colou o identificador de
+ * "Ver dados brutos" ou de outra tela (e cobre o feed enquanto o backend
+ * não manda o número).
  */
+const MIN_CHARS_TELEFONE_OU_ID = 4;
+
 export function filtrarPedidosDoHub<T extends ItemBuscavelDoHub>(itens: T[], busca: string): T[] {
   const q = normalizar(busca);
   if (!q) return itens;
   const qDigitos = apenasDigitos(busca);
+  // "pedido 42" / "#42" / "nº 42" → "42", pra bater sem exigir o prefixo.
+  const qNumero = q.replace(/^(pedido|n[º°o]?\.?|#)\s*/, "").trim();
   return itens.filter((it) => {
     if (normalizar(it.name).includes(q)) return true;
-    if (qDigitos && apenasDigitos(it.customer_phone).includes(qDigitos)) return true;
-    if (normalizar(it.id).includes(q)) return true;
+    if (qNumero && normalizar(it.order_number == null ? "" : String(it.order_number)).includes(qNumero)) return true;
+    if (qDigitos.length >= MIN_CHARS_TELEFONE_OU_ID && apenasDigitos(it.customer_phone).includes(qDigitos)) return true;
+    if (q.length >= MIN_CHARS_TELEFONE_OU_ID && normalizar(it.id).includes(q)) return true;
     return false;
   });
 }
