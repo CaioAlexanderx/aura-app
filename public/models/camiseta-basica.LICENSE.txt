@@ -16,9 +16,19 @@ malha, UV e material fora do corte estão como no original. Para
 reproduzir: baixe o arquivo acima e rode
   node scripts/studio/encurtar-mangas-glb.mjs original.glb public/models/camiseta-basica.glb --corte=0.245
 
+MODIFICAÇÃO 2 (27/09/2026): a malha low-poly foi refinada com
+scripts/studio/refinar-camiseta-glb.mjs — duas passadas de subdivisão de
+Loop (4.352 → 69.632 triângulos, UVs interpoladas, ilhas preservadas),
+normais suaves, dobras discretas por ruído de baixa frequência com
+semente fixa (mais no abdômen e nas mangas, quase nada no peito) e
+oclusão por vértice (COLOR_0) nas axilas e sob a gola. Nome do mesh,
+origem, escala e material como no original. Para reproduzir, depois do
+passo acima:
+  node scripts/studio/refinar-camiseta-glb.mjs mangas-curtas.glb public/models/camiseta-basica.glb
+
 A atribuição exigida pela licença é esta nota; se o modelo for exibido
 com créditos em algum lugar público, citar "T Shirt por Nour (Poly
-Pizza), CC BY 3.0, mangas encurtadas pela Aura".
+Pizza), CC BY 3.0, mangas encurtadas e malha refinada pela Aura".
 
 Como a Aura usa: template visual `camiseta-basica-3d`
 (docs/studio/visual-templates/camiseta-basica-3d.json), servido em
