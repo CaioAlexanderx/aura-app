@@ -23,6 +23,7 @@ import {
   economiaNaFaixa, prazoDaQuantidade, textoDeDias,
 } from "./regrasDaPagina";
 import { borda2, transicao, useNumeroAnimado } from "./kitDaPagina";
+import { useSelecionarAoFocar } from "../ui/selecaoAoFocar";
 
 export function QuantidadeEDesconto({
   qtd, onQtd, unitario, tiers, precoDeTabela, adicionalPorUnidade, prazoDaLoja, onLote, destacarPrazo,
@@ -43,6 +44,9 @@ export function QuantidadeEDesconto({
   const reduzir = useReduzirMovimento();
   const [campo, setCampo] = useState(String(qtd));
   const [focado, setFocado] = useState(false);
+  // O clique simples seleciona o número inteiro (no Chrome, o mouseup
+  // desfazia a seleção e "50" virava "501"). Ver ui/selecaoAoFocar.ts.
+  const selecionarAoFocar = useSelecionarAoFocar();
   // O campo segue a quantidade quando ela muda por fora (−, +, parada da
   // régua), mas não enquanto a cliente digita.
   useEffect(() => { if (!focado) setCampo(String(qtd)); }, [qtd, focado]);
@@ -64,6 +68,7 @@ export function QuantidadeEDesconto({
             <Icon name="minus" size={20} color={t.ink} />
           </Pressable>
           <TextInput
+            ref={selecionarAoFocar as any}
             value={campo}
             onChangeText={(v) => {
               const d = quantidadeDigitada(v);

@@ -38,6 +38,7 @@ import { resumoDaLinha } from "./resumoDaPeca";
 import { linkDoOrcamentoDoCarrinho } from "./pedidoPeloWhatsApp";
 import { BotaoOrcamentoDaSacola } from "./SacolaFechada";
 import { MiniaturaDaLinha } from "./ui/MiniaturaDaLinha";
+import { useSelecionarAoFocar } from "./ui/selecaoAoFocar";
 import { Botao, Nota, BORDA_DE_CAMPO, FUNDO_APAGADO } from "./ui/Formulario";
 import { diasUteis } from "./formularioDoCheckout";
 
@@ -116,6 +117,8 @@ function Quantidade({ valor, onMudar, nome }: { valor: number; onMudar: (n: numb
   const T = usePaletaDaVitrine();
   const tipo = useTipografia();
   const [rascunho, setRascunho] = useState(String(valor));
+  // O clique simples seleciona o número inteiro (ver ui/selecaoAoFocar.ts).
+  const selecionarAoFocar = useSelecionarAoFocar();
   useEffect(() => { setRascunho(String(valor)); }, [valor]);
   const confirmar = () => {
     const n = Math.floor(Number(rascunho.replace(/\D/g, "")));
@@ -143,6 +146,7 @@ function Quantidade({ valor, onMudar, nome }: { valor: number; onMudar: (n: numb
       {botao("minus", "Menos uma de " + nome, () => onMudar(Math.max(1, valor - 1)), valor <= 1)}
       <View style={{ width: 1, alignSelf: "stretch", backgroundColor: T.border }} />
       <TextInput
+        ref={selecionarAoFocar as any}
         value={rascunho}
         onChangeText={(t) => setRascunho(t.replace(/\D/g, "").slice(0, 4))}
         onBlur={confirmar}
