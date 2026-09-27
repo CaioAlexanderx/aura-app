@@ -18,9 +18,10 @@ import { Texto, Numero, useTipografia } from "./TipografiaVitrine";
 import { numeroWhatsApp } from "./AncoraWhatsApp";
 import { Icon } from "@/components/Icon";
 import { usePaletaDaVitrine, useTemaDaVitrine } from "./TemaDaVitrine";
-import { montarConteudoDoRodape } from "./conteudoDoRodape";
+import { montarConteudoDoRodape, navegacaoDoRodapeNovo } from "./conteudoDoRodape";
 import { RodapeInstitucional } from "./RodapeInstitucional";
 import type { PortaDoRodape } from "./conteudoDoRodape";
+import type { EntradaDaNavegacao } from "./home/regrasDaHome";
 
 /** A assinatura leva ao site do produto — um endereço só, nas duas variantes. */
 const SITE_DA_AURA = "https://getaura.com.br";
@@ -36,10 +37,16 @@ function Etiqueta({ texto, cor }: { texto: string; cor: string }) {
 export function RodapeDaVitrine({
   store,
   onAbrirCategoria,
+  onNavegar,
   variante = "atual",
 }: {
   store: any;
   onAbrirCategoria?: (porta: PortaDoRodape) => void;
+  /**
+   * Vitrine nova: o "Navegue" é a lista da barra ("Todas as peças",
+   * categorias, "Outras peças"), e quem abre cada uma é a página.
+   */
+  onNavegar?: (entrada: EntradaDaNavegacao) => void;
   /**
    * Fase 5 (chave vitrine_v2): o rodapé da home nova, desenhado como o
    * mockup 05 (tela 6) — ícones no endereço e no horário, Instagram e
@@ -49,7 +56,7 @@ export function RodapeDaVitrine({
    */
   variante?: "atual" | "nova";
 }) {
-  if (variante === "nova") return <RodapeNovo store={store} onAbrirCategoria={onAbrirCategoria} />;
+  if (variante === "nova") return <RodapeNovo store={store} onAbrirCategoria={onAbrirCategoria} onNavegar={onNavegar} />;
   return <RodapeAtual store={store} onAbrirCategoria={onAbrirCategoria} />;
 }
 
@@ -195,9 +202,11 @@ function iconeDaForma(forma: string): string {
 function RodapeNovo({
   store,
   onAbrirCategoria,
+  onNavegar,
 }: {
   store: any;
   onAbrirCategoria?: (porta: PortaDoRodape) => void;
+  onNavegar?: (entrada: EntradaDaNavegacao) => void;
 }) {
   const t = useTemaDaVitrine();
   const tipo = useTipografia();
@@ -206,6 +215,10 @@ function RodapeNovo({
   const r = montarConteudoDoRodape(store);
   if (!r.temAlgo) return null;
   const { identidade } = r;
+  // Com quem abra as entradas, a lista da barra; sem, as portas de sempre.
+  const portas: Array<{ chave: string; nome: string; abrir: () => void }> = onNavegar
+    ? navegacaoDoRodapeNovo(store).map((e) => ({ chave: e.tipo + ":" + e.chave, nome: e.rotulo, abrir: () => onNavegar(e) }))
+    : r.navegacao.map((porta) => ({ chave: porta.id, nome: porta.nome, abrir: () => onAbrirCategoria?.(porta) }));
   const site = store?.site || {};
   const inst = store?.rodape_institucional || {};
   const formas: string[] = Array.isArray(inst.formas) ? inst.formas : [];
@@ -284,14 +297,14 @@ function RodapeNovo({
           </View>
         ) : null}
 
-        {r.navegacao.length ? (
+        {portas.length ? (
           <View testID="rodape-navegacao" style={{ flex: emColunas ? 0.8 : undefined }}>
             {etiqueta("Navegue")}
             <View style={{ flexDirection: emColunas ? "column" : "row", flexWrap: "wrap", columnGap: 12 }}>
-              {r.navegacao.map((porta) => (
+              {portas.map((porta) => (
                 <Pressable
-                  key={porta.id}
-                  onPress={() => onAbrirCategoria?.(porta)}
+                  key={porta.chave}
+                  onPress={porta.abrir}
                   accessibilityRole="link"
                   accessibilityLabel={porta.nome}
                   style={({ hovered }: any) => ({ minHeight: 44, justifyContent: "center", width: emColunas ? undefined : "47%", opacity: hovered ? 0.7 : 1 })}

@@ -238,7 +238,13 @@ export function CascaDaVitrine({
   }, []);
   useEffect(() => () => { if (relogio.current) clearTimeout(relogio.current); }, []);
 
-  const contexto = useMemo<ContextoDaVitrine>(() => ({ sf, slug, avisar }), [sf, slug, avisar]);
+  // QA 27/09: o recado da home (peça fora da loja), lido pela home nova.
+  const [recadoDaHome, deixarRecadoNaHome] = useState<string | null>(null);
+
+  const contexto = useMemo<ContextoDaVitrine>(
+    () => ({ sf, slug, avisar, recadoDaHome, deixarRecadoNaHome }),
+    [sf, slug, avisar, recadoDaHome],
+  );
 
   // A fonte da loja vale pra PAGINA TODA, nao so pros titulos. Medido na
   // loja de teste antes disto: de 20 textos da tela de produto, 19 saiam

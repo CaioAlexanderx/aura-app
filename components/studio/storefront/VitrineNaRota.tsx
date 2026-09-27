@@ -269,7 +269,13 @@ export function TelaNaRota({
     if (tela.tipo === "home" && rota?.pendente.current) return; // a peça vem já
     const r = sf.sincronizarComTela(tela);
     if (r?.acao === "redirecionar" && !mesmaTela(r.para, tela)) {
-      if (r.aviso) v?.avisar(r.aviso, "info");
+      // Na vitrine nova, o aviso fica no topo da home até a cliente fechar
+      // (QA 27/09: o aviso passageiro sumia antes de ser lido); sem a
+      // chave, o de sempre.
+      if (r.aviso) {
+        if (sf.vitrineV2 && v?.deixarRecadoNaHome) v.deixarRecadoNaHome(r.aviso);
+        else v?.avisar(r.aviso, "info");
+      }
       if (rota) rota.navegar(r.para, r.para.tipo === "home" ? "voltar" : "trocar");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

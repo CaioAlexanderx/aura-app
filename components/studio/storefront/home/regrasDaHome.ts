@@ -342,7 +342,8 @@ export function alvoDaCategoria(
   store: { products?: StudioStoreProduct[] | null; categories?: StoreCategory[] | null } | null | undefined,
 ): AlvoDaCategoria | null {
   if (!categoria) return null;
-  const produtos = produtosDaArvore(categoria.id, store);
+  // O grupo virtual "Outras peças" não tem árvore: as peças são as soltas.
+  const produtos = ehOutrasPecas(categoria) ? pecasSemCategoria(store) : produtosDaArvore(categoria.id, store);
   if (produtos.length >= 2) return { tipo: "grupo", categoria, produtos };
   if (produtos.length === 1) return { tipo: "produto", produto: produtos[0] };
   return null;
@@ -375,6 +376,97 @@ export function menuDaLoja(store: StorePayload | null | undefined): ItemDoMenu[]
     .map(montar)
     .filter((i) => i.total > 0)
     .sort((a, b) => b.total - a.total || a.categoria.name.localeCompare(b.categoria.name, "pt-BR"));
+}
+
+// ── A navegação: todas, categorias e "Outras peças" ──────────
+//
+// QA 27/09: com UMA categoria com peça, a barra sumia (`itens.length <
+// 2`). As lojas reais são assim: aura-qa tem 10 peças em Canecas e 21 sem
+// categoria; a Sheid, 9 e 1. A cliente não tinha como ver a loja inteira
+// nem as peças soltas pela navegação. A regra nova vale para a barra, a
+// gaveta do celular e o rodapé ("Navegue"), na mesma ordem:
+//   1. "Todas as peças" — a grade completa da home (#vista=todos);
+//   2. as categorias com peça (menuDaLoja);
+//   3. "Outras peças" — as sem categoria (ou com categoria que a loja não
+//      tem mais), só quando existe pelo menos uma categoria com peça.
+// Loja com menos de 2 peças não tem o que navegar: lista vazia.
+
+export const NOME_DE_TODAS_AS_PECAS = "Todas as peças";
+export const NOME_DAS_OUTRAS_PECAS = "Outras peças";
+/** O id do grupo virtual: não vem do banco, então não colide com uuid. */
+export const ID_DAS_OUTRAS_PECAS = "__outras_pecas__";
+const CHAVES_DAS_OUTRAS = ["outras", "outras-pecas", "mais-pecas", "pecas-avulsas"];
+
+/** As peças sem categoria, ou com uma categoria que a loja não tem mais. */
+export function pecasSemCategoria(
+  store: { products?: StudioStoreProduct[] | null; categories?: StoreCategory[] | null } | null | undefined,
+): StudioStoreProduct[] {
+  const conhecidas = new Set((store?.categories || []).map((c) => String(c.id)));
+  return (store?.products || []).filter((p) => !p.category_id || !conhecidas.has(String(p.category_id)));
+}
+
+/**
+ * A chave do grupo na URL (`/<slug>/c/outras`). Uma categoria de verdade
+ * com o mesmo slug vence — ela é da lojista —, e o grupo pega a próxima.
+ */
+export function chaveDasOutrasPecas(categorias: StoreCategory[] | null | undefined): string {
+  const usadas = new Set((categorias || []).map((c) => String((c.slug || "").trim() || c.id)));
+  return CHAVES_DAS_OUTRAS.find((k) => !usadas.has(k)) || "outras-" + (categorias || []).length;
+}
+
+/** A categoria é o grupo virtual "Outras peças"? */
+export function ehOutrasPecas(categoria: { id?: unknown } | null | undefined): boolean {
+  return !!categoria && String(categoria.id) === ID_DAS_OUTRAS_PECAS;
+}
+
+/**
+ * O grupo "Outras peças", com cara de categoria de primeiro nível (a
+ * página da categoria, a trilha e a rota leem igual), ou null quando não
+ * cabe: sem peça solta, ou loja sem nenhuma categoria com peça — aí a
+ * barra fica só com "Todas as peças", que já mostra tudo.
+ */
+export function grupoDasOutrasPecas(
+  store: { products?: StudioStoreProduct[] | null; categories?: StoreCategory[] | null } | null | undefined,
+): { categoria: StoreCategory; produtos: StudioStoreProduct[] } | null {
+  const soltas = pecasSemCategoria(store);
+  if (!soltas.length) return null;
+  if (!menuDaLoja(store as StorePayload).length) return null;
+  const chave = chaveDasOutrasPecas(store?.categories);
+  return {
+    categoria: { id: ID_DAS_OUTRAS_PECAS, name: NOME_DAS_OUTRAS_PECAS, slug: chave, path: "/" + chave, depth: 0, parent_id: null },
+    produtos: soltas,
+  };
+}
+
+export type EntradaDaNavegacao =
+  | { tipo: "todas"; chave: string; rotulo: string; total: number }
+  | { tipo: "categoria"; chave: string; rotulo: string; total: number; item: ItemDoMenu }
+  | { tipo: "outras"; chave: string; rotulo: string; total: number; categoria: StoreCategory; produtos: StudioStoreProduct[] };
+
+/** A barra, a gaveta e o rodapé: a mesma lista, na mesma ordem. */
+export function navegacaoDaLoja(store: StorePayload | null | undefined): EntradaDaNavegacao[] {
+  const total = (store?.products || []).length;
+  if (total < 2) return [];
+  const saida: EntradaDaNavegacao[] = [{ tipo: "todas", chave: "todas", rotulo: NOME_DE_TODAS_AS_PECAS, total }];
+  for (const item of menuDaLoja(store)) {
+    const c = item.categoria;
+    saida.push({ tipo: "categoria", chave: String((c.slug || "").trim() || c.id), rotulo: c.name, total: item.total, item });
+  }
+  const outras = grupoDasOutrasPecas(store);
+  if (outras) {
+    saida.push({
+      tipo: "outras", chave: outras.categoria.slug, rotulo: NOME_DAS_OUTRAS_PECAS,
+      total: outras.produtos.length, categoria: outras.categoria, produtos: outras.produtos,
+    });
+  }
+  return saida;
+}
+
+/** A entrada está ativa na página aberta? (`ativa` é a chave da categoria da página.) */
+export function entradaAtiva(e: EntradaDaNavegacao, ativa: string | null | undefined): boolean {
+  if (!ativa || e.tipo === "todas") return false;
+  if (e.chave === ativa) return true;
+  return e.tipo === "categoria" && String(e.item.categoria.id) === ativa;
 }
 
 /** "Início / Canecas / Metalizadas": os ancestrais da categoria, do topo para ela. */

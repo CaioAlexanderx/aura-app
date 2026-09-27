@@ -21,7 +21,7 @@
 // ============================================================
 import type { Stage, StudioStoreProduct } from "./types";
 import type { StoreCategory, VitrineEntry } from "./categoryGrouping";
-import { alvoDaCategoria } from "./home/regrasDaHome";
+import { alvoDaCategoria, grupoDasOutrasPecas } from "./home/regrasDaHome";
 
 export type TelaDaVitrine =
   | { tipo: "home" }
@@ -128,7 +128,11 @@ export type Resolucao =
   | { acao: "pedido"; token: string }
   | { acao: "redirecionar"; para: TelaDaVitrine; aviso?: string };
 
-export const AVISO_PECA_FORA = "Essa peça não está mais na loja";
+/**
+ * QA 27/09: na voz da loja, com o que fazer — e a garantia de que o que
+ * a cliente já montou não se perdeu (as artes enviadas continuam dela).
+ */
+export const AVISO_PECA_FORA = "Essa peça não está mais na loja. Escolha outra: as artes continuam suas.";
 
 /**
  * Resolve a tela da URL contra a loja carregada.
@@ -170,7 +174,12 @@ export function resolverTela(
       // abre com as peças das filhas — a mesma regra da barra, da gaveta e
       // do rodapé (home/regrasDaHome.ts, alvoDaCategoria). Sem árvore, é
       // exatamente o que era: as peças da própria categoria.
-      const cat = (loja?.categories || []).find((c) => chaveDaCategoria(c) === tela.categoria);
+      // QA 27/09: o grupo virtual "Outras peças" (as peças sem categoria)
+      // tem página própria, `/<slug>/c/outras`. Uma categoria de verdade
+      // com a mesma chave vence (chaveDasOutrasPecas pula a chave dela).
+      const outras = grupoDasOutrasPecas(loja);
+      const cat = (loja?.categories || []).find((c) => chaveDaCategoria(c) === tela.categoria)
+        || (outras && chaveDaCategoria(outras.categoria) === tela.categoria ? outras.categoria : undefined);
       const alvo = alvoDaCategoria(cat, loja);
       if (alvo?.tipo === "grupo") return { acao: "categoria", categoria: alvo.categoria, produtos: alvo.produtos };
       if (alvo?.tipo === "produto") {

@@ -15,6 +15,13 @@ export type ContextoDaVitrine = {
   slug: string;
   /** Um aviso curto no pé da tela ("Link da peça copiado"). */
   avisar: (texto: string, icone?: "check" | "info") => void;
+  /**
+   * QA 27/09: o recado que a home nova mostra no topo do conteúdo, uma
+   * vez — hoje, o da peça que saiu da loja (link direto de peça oculta ou
+   * apagada). Some no "Fechar aviso" ou quando a cliente sai da home.
+   */
+  recadoDaHome?: string | null;
+  deixarRecadoNaHome?: (texto: string | null) => void;
 };
 
 export const Contexto = createContext<ContextoDaVitrine | null>(null);
