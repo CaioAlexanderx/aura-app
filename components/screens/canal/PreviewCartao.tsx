@@ -13,7 +13,7 @@
 import { View, Text, Pressable } from "react-native";
 import { Icon } from "@/components/Icon";
 import { useAccent } from "@/contexts/AccentTheme";
-import { Colors } from "@/constants/colors";
+import { usePaletaDoCanal } from "./paletaDoCanal";
 import { MiniLoja, type EstiloCartao, type ProdutoDemo } from "./MiniLoja";
 
 const OPCOES: Array<{ chave: EstiloCartao; nome: string; hint: string }> = [
@@ -32,6 +32,7 @@ type Props = {
 
 export function PreviewCartao({ valor, onChange, cor, fonte, produtos }: Props) {
   const t = useAccent();
+  const pal = usePaletaDoCanal();
   const escolhido = (OPCOES.some((o) => o.chave === valor) ? valor : "editorial") as EstiloCartao;
 
   return (
@@ -49,8 +50,8 @@ export function PreviewCartao({ valor, onChange, cor, fonte, produtos }: Props) 
               flexGrow: 1, flexBasis: 190, minWidth: 170,
               borderRadius: 12, overflow: "hidden",
               borderWidth: sel ? 2 : 1,
-              borderColor: sel ? t.primary : Colors.border,
-              backgroundColor: Colors.bg3,
+              borderColor: sel ? t.primary : pal.border,
+              backgroundColor: pal.bg3,
             }}
           >
             <View style={{ padding: 8 }}>
@@ -71,15 +72,15 @@ export function PreviewCartao({ valor, onChange, cor, fonte, produtos }: Props) 
               style={{
                 flexDirection: "row", alignItems: "center", gap: 8,
                 paddingHorizontal: 11, paddingVertical: 9,
-                borderTopWidth: 1, borderTopColor: Colors.border,
+                borderTopWidth: 1, borderTopColor: pal.border,
                 backgroundColor: sel ? t.primarySoft : "transparent",
               }}
             >
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 12.5, fontWeight: "800", color: sel ? t.primary : Colors.ink }}>
+                <Text style={{ fontSize: 12.5, fontWeight: "800", color: sel ? t.primary : pal.ink }}>
                   {o.nome}
                 </Text>
-                <Text numberOfLines={2} style={{ fontSize: 10.5, color: Colors.ink3, marginTop: 1 }}>
+                <Text numberOfLines={2} style={{ fontSize: 10.5, color: pal.ink3, marginTop: 1 }}>
                   {o.hint}
                 </Text>
               </View>

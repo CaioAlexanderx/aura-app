@@ -14,11 +14,12 @@ import { useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import { Icon } from "@/components/Icon";
 import { useAccent } from "@/contexts/AccentTheme";
-import { Colors } from "@/constants/colors";
+import { usePaletaDoCanal } from "./paletaDoCanal";
 import { montarChecklist, progresso, type EstadoDaLoja } from "./specsDeImagem";
 
 export function ChecklistDaLoja({ estado }: { estado: EstadoDaLoja }) {
   const t = useAccent();
+  const pal = usePaletaDoCanal();
   const itens = montarChecklist(estado);
   const p = progresso(itens);
   const [aberto, setAberto] = useState<string | null>(
@@ -31,14 +32,14 @@ export function ChecklistDaLoja({ estado }: { estado: EstadoDaLoja }) {
       style={{
         borderRadius: 14,
         borderWidth: 1,
-        borderColor: p.pct === 100 ? Colors.border : Colors.border2,
-        backgroundColor: Colors.bg3,
+        borderColor: p.pct === 100 ? pal.border : pal.border2,
+        backgroundColor: pal.bg3,
         overflow: "hidden",
       }}
     >
       <View style={{ padding: 16, gap: 10 }}>
         <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
-          <Text style={{ fontSize: 14.5, fontWeight: "800", color: Colors.ink, flex: 1 }}>
+          <Text style={{ fontSize: 14.5, fontWeight: "800", color: pal.ink, flex: 1 }}>
             {p.pct === 100 ? "Sua loja está completa" : "Deixe sua loja pronta"}
           </Text>
           <Text
@@ -52,18 +53,18 @@ export function ChecklistDaLoja({ estado }: { estado: EstadoDaLoja }) {
         </View>
 
         {/* Barra de progresso: uma linha, sem número redundante. */}
-        <View style={{ height: 5, borderRadius: 3, backgroundColor: Colors.bg4, overflow: "hidden" }}>
+        <View style={{ height: 5, borderRadius: 3, backgroundColor: pal.bg4, overflow: "hidden" }}>
           <View style={{ width: `${p.pct}%`, height: "100%", backgroundColor: t.primary, borderRadius: 3 }} />
         </View>
       </View>
 
-      <View style={{ borderTopWidth: 1, borderTopColor: Colors.border }}>
+      <View style={{ borderTopWidth: 1, borderTopColor: pal.border }}>
         {itens.map((item, i) => {
           const expandido = aberto === item.chave;
           return (
             <View
               key={item.chave}
-              style={{ borderTopWidth: i === 0 ? 0 : 1, borderTopColor: Colors.border }}
+              style={{ borderTopWidth: i === 0 ? 0 : 1, borderTopColor: pal.border }}
             >
               <Pressable
                 onPress={() => setAberto(expandido ? null : item.chave)}
@@ -79,8 +80,8 @@ export function ChecklistDaLoja({ estado }: { estado: EstadoDaLoja }) {
                   style={{
                     width: 18, height: 18, borderRadius: 9, marginTop: 1,
                     borderWidth: item.feito ? 0 : 1.5,
-                    borderColor: Colors.ink3,
-                    backgroundColor: item.feito ? Colors.green : "transparent",
+                    borderColor: pal.ink3,
+                    backgroundColor: item.feito ? pal.green : "transparent",
                     alignItems: "center", justifyContent: "center",
                   }}
                 >
@@ -89,13 +90,13 @@ export function ChecklistDaLoja({ estado }: { estado: EstadoDaLoja }) {
 
                 <View style={{ flex: 1, gap: 2 }}>
                   <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-                    <Text style={{ fontSize: 13.5, fontWeight: "700", color: Colors.ink }}>
+                    <Text style={{ fontSize: 13.5, fontWeight: "700", color: pal.ink }}>
                       {item.titulo}
                     </Text>
                     {item.medida ? (
                       <Text
                         style={{
-                          fontSize: 11, color: item.feito ? Colors.ink3 : t.primary,
+                          fontSize: 11, color: item.feito ? pal.ink3 : t.primary,
                           fontWeight: "700", fontVariant: ["tabular-nums"],
                         }}
                       >
@@ -103,13 +104,13 @@ export function ChecklistDaLoja({ estado }: { estado: EstadoDaLoja }) {
                       </Text>
                     ) : null}
                   </View>
-                  <Text style={{ fontSize: 12, color: Colors.ink3, lineHeight: 17 }}>
+                  <Text style={{ fontSize: 12, color: pal.ink3, lineHeight: 17 }}>
                     {item.acao}
                   </Text>
                 </View>
 
                 {item.spec ? (
-                  <Icon name={expandido ? "chevron-up" : "chevron-down"} size={14} color={Colors.ink3} />
+                  <Icon name={expandido ? "chevron-up" : "chevron-down"} size={14} color={pal.ink3} />
                 ) : null}
               </Pressable>
 
@@ -118,7 +119,7 @@ export function ChecklistDaLoja({ estado }: { estado: EstadoDaLoja }) {
                   {item.spec.detalhes.map((linha, n) => (
                     <View key={n} style={{ flexDirection: "row", gap: 7 }}>
                       <Text style={{ color: t.primary, fontSize: 12, lineHeight: 17 }}>·</Text>
-                      <Text style={{ flex: 1, fontSize: 12, color: Colors.ink2, lineHeight: 17 }}>
+                      <Text style={{ flex: 1, fontSize: 12, color: pal.ink2, lineHeight: 17 }}>
                         {linha}
                       </Text>
                     </View>

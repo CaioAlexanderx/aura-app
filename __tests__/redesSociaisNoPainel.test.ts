@@ -9,6 +9,10 @@
 // ============================================================
 import fs from "fs";
 import path from "path";
+// 27/09/2026: o corpo do salvar e a leitura da config saíram da tela para
+// canal/meuSite.ts (QA da Loja Digital). O teste passou a exercitar as
+// funções em vez de procurar a linha no fonte.
+import { corpoDoMeuSite, formDoMeuSite } from "@/components/screens/canal/meuSite";
 
 const tab = fs.readFileSync(
   path.join(__dirname, "../components/screens/canal/TabMeuSite.tsx"),
@@ -22,17 +26,24 @@ describe("os três campos existem e chegam ao backend", () => {
   });
 
   test("os três vão no corpo do salvar", () => {
-    expect(tab).toContain("instagram: instagram.trim() || null,");
-    expect(tab).toContain("tiktok: tiktok.trim() || null,");
-    expect(tab).toContain("facebook: facebook.trim() || null,");
+    const corpo = corpoDoMeuSite({ ...formDoMeuSite({}), instagram: " @a ", tiktok: "@b", facebook: "" });
+    expect(corpo.instagram).toBe("@a");
+    expect(corpo.tiktok).toBe("@b");
+    // Vazio vai como null — e vai: chave presente é o que apaga no servidor.
+    expect(Object.prototype.hasOwnProperty.call(corpo, "facebook")).toBe(true);
+    expect(corpo.facebook).toBeNull();
+    expect(tab).toContain("corpoDoMeuSite(formAtual, politicaPadrao)");
   });
 
   test("recarregar a config repõe os três", () => {
     // Sem isto, abrir a aba de novo mostrava campo vazio e o salvar
     // seguinte apagava o que a lojista tinha cadastrado.
-    expect(tab).toContain('setInstagram(config.instagram || "");');
-    expect(tab).toContain('setTiktok(config.tiktok || "");');
-    expect(tab).toContain('setFacebook(config.facebook || "");');
+    const f = formDoMeuSite({ instagram: "@a", tiktok: "@b", facebook: "@c" });
+    expect([f.instagram, f.tiktok, f.facebook]).toEqual(["@a", "@b", "@c"]);
+    expect(tab).toContain("setInstagram(f.instagram);");
+    expect(tab).toContain("setTiktok(f.tiktok);");
+    expect(tab).toContain("setFacebook(f.facebook);");
+    expect(tab).toContain("const f = formDoMeuSite(config, company?.name);");
   });
 
   test("os campos ficam juntos, e a dica diz o que acontece", () => {

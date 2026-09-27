@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { View, Text, StyleSheet, Pressable, TextInput, Platform, Switch, Linking, Image } from "react-native";
-import { Colors } from "@/constants/colors";
+import { usePaletaDoCanal, type PaletaDoCanalTokens } from "./paletaDoCanal";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
@@ -13,9 +13,21 @@ import type { AccentTokens } from "@/contexts/AccentTheme";
 
 import { SPECS } from "./specsDeImagem";
 import { usePaymentGateways } from "@/hooks/usePaymentGateways";
+import {
+  corpoDoMeuSite, formDoMeuSite, formatarPct, meuSiteAlterado, tecladoDaChavePix, dicaDoPublicado,
+  type FormDoMeuSite,
+} from "./meuSite";
+
+/**
+ * A tinta do nome da loja na prévia. O cartão da prévia é SEMPRE branco
+ * (é a loja, não o painel): com a tinta do tema, o nome saía em
+ * rgb(240,237,255) sobre branco no tema escuro — ilegível.
+ */
+const TINTA_DO_CARTAO = "#0F172A";
+
 type Props = {
   config: any;
-  saveConfig: (data: any) => Promise<void>;
+  saveConfig: (data: any) => Promise<any>;
   isSaving: boolean;
   requestDomain: (data: any) => Promise<void>;
   isRequestingDomain: boolean;
@@ -23,12 +35,18 @@ type Props = {
   isUploadingImage: boolean;
   setupPix: (data: any) => Promise<any>;
   isSettingUpPix: boolean;
+  /**
+   * Contrato da Loja Digital (QA 26/09): a aba avisa quando tem alteração
+   * não salva, e a tela pergunta antes de trocar de aba.
+   */
+  onAlteracoes?: (alterada: boolean) => void;
 };
 
-export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequestingDomain, uploadImage, isUploadingImage, setupPix, isSettingUpPix }: Props) {
+export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequestingDomain, uploadImage, isUploadingImage, setupPix, isSettingUpPix, onAlteracoes }: Props) {
   const cs = useChannelStyles();
   const accent = useAccent();
-  const s = useMemo(() => buildStyles(accent), [accent]);
+  const p = usePaletaDoCanal();
+  const s = useMemo(() => buildStyles(accent, p), [accent, p]);
   const { company } = useAuthStore();
   const [siteName, setSiteName] = useState(config.site_name || company?.name || "");
   const [tagline, setTagline] = useState(config.tagline || "");
@@ -82,23 +100,33 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   const { mpGateway } = usePaymentGateways();
   const mpConfigurado = !!mpGateway;
 
+  // O que está salvo no servidor — a régua de "tem alteração?".
+  const [salvo, setSalvo] = useState<FormDoMeuSite>(() => formDoMeuSite(config, company?.name));
+
+  function aplicar(f: FormDoMeuSite) {
+    setSiteName(f.siteName); setTagline(f.tagline);
+    setDescription(f.description); setPhone(f.phone);
+    setWhatsapp(f.whatsapp); setInstagram(f.instagram);
+    setTiktok(f.tiktok); setFacebook(f.facebook);
+    setAddress(f.address); setColor(f.color);
+    setPublished(f.published);
+    setPixKey(f.pixKey);
+    setPixKeyType(f.pixKeyType);
+    setPixHolderName(f.pixHolderName);
+    setPixHolderCity(f.pixHolderCity);
+    setPayOnDelivery(f.payOnDelivery);
+    setCardEnabled(f.cardEnabled);
+    setParcelas(f.parcelas);
+    setPolitica(f.politica);
+    setPixPct(f.pixPct);
+  }
+
   useEffect(() => {
     if (!config.exists) return;
-    setSiteName(config.site_name || ""); setTagline(config.tagline || "");
-    setDescription(config.description || ""); setPhone(maskPhone(config.phone || ""));
-    setWhatsapp(maskPhone(config.whatsapp || "")); setInstagram(config.instagram || "");
-    setTiktok(config.tiktok || ""); setFacebook(config.facebook || "");
-    setAddress(config.address || ""); setColor(config.primary_color || "#7c3aed");
-    setPublished(config.is_published ?? false);
-    setPixKey(config.pix_key || "");
-    setPixKeyType((config.pix_key_type as any) || "CPF");
-    setPixHolderName(config.pix_holder_name || "");
-    setPixHolderCity(config.pix_holder_city || "");
-    setPayOnDelivery(config.pay_on_delivery_enabled === true);
-    setCardEnabled(config.card_enabled !== false);
-    setParcelas(config.card_max_installments ?? null);
-    setPolitica(config.politica_troca || "");
-    setPixPct(String(config.pix_discount_pct ?? 0));
+    const f = formDoMeuSite(config, company?.name);
+    aplicar(f);
+    setSalvo(f);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.exists]);
 
   function pickImage(type: "logo" | "banner") {
@@ -113,7 +141,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
         const file = input.files?.[0];
         if (!file) return;
         try { document.body.removeChild(input); } catch {}
-        if (file.size > 5 * 1024 * 1024) { toast.error("Imagem muito grande (max 5MB)"); return; }
+        if (file.size > 5 * 1024 * 1024) { toast.error("Imagem muito grande (máx. 5 MB)"); return; }
         const reader = new FileReader();
         reader.onload = async (e) => {
           const dataUrl = e.target?.result as string;
@@ -132,36 +160,35 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
     } catch {}
   }
 
+  const formAtual: FormDoMeuSite = {
+    siteName, tagline, description, phone, whatsapp, instagram, tiktok, facebook, address,
+    color, published, pixKey, pixKeyType, pixHolderName, pixHolderCity,
+    payOnDelivery, cardEnabled, parcelas, politica, pixPct,
+  };
+  const alterado = meuSiteAlterado(formAtual, salvo, politicaPadrao);
+  useEffect(() => { onAlteracoes?.(alterado); }, [alterado, onAlteracoes]);
+  // Saiu da aba: nada pendente por aqui.
+  useEffect(() => () => onAlteracoes?.(false), [onAlteracoes]);
+
   async function handleSave() {
-    await saveConfig({
-      site_name: siteName.trim() || null,
-      tagline: tagline.trim() || null,
-      description: description.trim() || null,
-      phone: phone.trim() || null,
-      whatsapp: whatsapp.trim() || null,
-      instagram: instagram.trim() || null,
-      tiktok: tiktok.trim() || null,
-      facebook: facebook.trim() || null,
-      address: address.trim() || null,
-      primary_color: color,
-      is_published: published,
-      pix_key: pixKey.trim() || null,
-      pix_key_type: pixKey.trim() ? pixKeyType : null,
-      pix_holder_name: pixHolderName.trim() || null,
-      pix_holder_city: pixHolderCity.trim() || null,
-      pay_on_delivery_enabled: payOnDelivery,
-      card_enabled: cardEnabled,
-      card_max_installments: parcelas,
-      // Campo em branco volta ao padrao — e assim que ela desfaz uma
-      // edicao sem ter que recopiar o texto de lugar nenhum. Texto igual
-      // ao padrao tambem salva vazio: melhora do padrao continua chegando
-      // em quem nunca escreveu nada proprio.
-      politica_troca:
-        politica.trim() && politica.trim() !== politicaPadrao.trim() ? politica.trim() : null,
-      // O backend apara também; aparar aqui é para ela ver o valor
-      // corrigido na hora, em vez de descobrir depois que salvou 30.
-      pix_discount_pct: Math.min(30, Math.max(0, Number(pixPct.replace(",", ".")) || 0)),
-    });
+    // Corpo com TODAS as chaves de texto, campo vazio = null (apagar).
+    // Ver CHAVES_DE_TEXTO em meuSite.ts.
+    const corpo = corpoDoMeuSite(formAtual, politicaPadrao);
+    let resposta: any;
+    try {
+      resposta = await saveConfig(corpo);
+    } catch {
+      // O hook já mostrou o erro; a edição continua na tela.
+      return;
+    }
+    // A tela passa a mostrar o que o servidor GRAVOU: ele apara o desconto
+    // (35 vira 30) e normaliza as redes. Sem isto ela via 35 depois de
+    // salvar e só descobria o 30 na loja.
+    const gravado = resposta?.config
+      ? formDoMeuSite({ ...config, ...resposta.config }, company?.name)
+      : { ...formAtual, pixPct: formatarPct(corpo.pix_discount_pct) };
+    aplicar(gravado);
+    setSalvo(gravado);
   }
 
   async function handleRequestDomain() {
@@ -261,10 +288,10 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
                 </View>
               )}
             </View>
-            <Text style={s.mockupBrand} numberOfLines={1}>{siteName || "Meu Negócio"}</Text>
-            <View style={[s.mockupStatus, { backgroundColor: published ? Colors.greenD : Colors.bg4 }]}>
-              <View style={[s.mockupStatusDot, { backgroundColor: published ? Colors.green : Colors.ink3 }]} />
-              <Text style={[s.mockupStatusText, { color: published ? Colors.green : Colors.ink3 }]}>
+            <Text style={[s.mockupBrand, { color: TINTA_DO_CARTAO }]} numberOfLines={1}>{siteName || "Meu Negócio"}</Text>
+            <View style={[s.mockupStatus, { backgroundColor: published ? p.greenD : p.bg4 }]}>
+              <View style={[s.mockupStatusDot, { backgroundColor: published ? p.green : p.ink3 }]} />
+              <Text style={[s.mockupStatusText, { color: published ? p.green : p.ink3 }]}>
                 {published ? "Publicada" : "Rascunho"}
               </Text>
             </View>
@@ -288,19 +315,19 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
 
         {/* Acoes abaixo do mockup */}
         <View style={s.mockupActions}>
-          <Pressable onPress={copyStorefrontUrl} style={s.mockupBtnGhost}>
+          <Pressable onPress={copyStorefrontUrl} style={s.mockupBtnGhost} accessibilityRole="button">
             <Icon name="copy" size={13} color={accent.primaryStrong} />
             <Text style={s.mockupBtnGhostText}>Copiar link</Text>
           </Pressable>
           {Platform.OS === "web" && (
-            <Pressable onPress={() => Linking.openURL(storefrontUrl)} style={s.mockupBtnPrimary}>
+            <Pressable onPress={() => Linking.openURL(storefrontUrl)} style={s.mockupBtnPrimary} accessibilityRole="link">
               <Icon name="globe" size={13} color="#fff" />
               <Text style={s.mockupBtnPrimaryText}>Ver loja</Text>
             </Pressable>
           )}
         </View>
         <View style={s.mockupUrlRow}>
-          <Icon name="globe" size={11} color={Colors.ink3} />
+          <Icon name="globe" size={11} color={p.ink3} />
           <Text style={s.mockupUrlText} numberOfLines={1}>{storefrontUrl}</Text>
         </View>
       </View>
@@ -308,11 +335,11 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
       <SectionTitle title="Informações do negócio" />
       <View style={cs.card}>
         <View style={cs.switchRow}>
-          <View style={{ flex: 1 }}><Text style={cs.switchLabel}>Site publicado</Text><Text style={cs.switchHint}>{published ? "Visível para clientes" : "Site oculto"}</Text></View>
-          <Switch value={published} onValueChange={setPublished} trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor="#fff" />
+          <View style={{ flex: 1 }}><Text style={cs.switchLabel}>Site publicado</Text><Text style={cs.switchHint}>{dicaDoPublicado(published, salvo.published)}</Text></View>
+          <Switch value={published} onValueChange={setPublished} trackColor={{ true: p.green, false: p.bg4 }} thumbColor="#fff" />
         </View>
         <View style={cs.divider} />
-        <Field label="Nome do negócio" value={siteName} onChange={setSiteName} placeholder="Ex: Barbearia do Caio" />
+        <Field label="Nome do negócio" value={siteName} onChange={setSiteName} placeholder="Ex: Ateliê da Helena · Personalizados" />
         <Field label="Slogan (opcional)" value={tagline} onChange={setTagline} placeholder="Qualidade que fala por si" />
         <Field label="Descrição" value={description} onChange={setDescription} placeholder="Conte sobre seu negócio..." multiline />
         <Field label="WhatsApp" value={whatsapp} onChange={(v) => setWhatsapp(maskPhone(v))} placeholder="(12) 99999-0000" />
@@ -330,7 +357,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
       {/* Logo (cor principal e capa/banner foram movidas pra Tab Design — Rec #1) */}
       <SectionTitle title="Logo" />
       <View style={cs.card}>
-        <Text style={cs.hint}>Imagem que aparece no cabecalho da loja. Cor principal e banners ficam em Design.</Text>
+        <Text style={cs.hint}>Imagem que aparece no cabeçalho da loja. Cor principal e banners ficam em Design.</Text>
 
         <Text style={cs.fieldLabel}>Logo</Text>
         <View style={s.imgRow}>
@@ -373,7 +400,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
             <Text style={cs.switchLabel}>Aceitar cartão de crédito</Text>
             <Text style={cs.switchHint}>{cardEnabled ? "Cliente vê opção de cartão no checkout (requer Mercado Pago configurado abaixo)" : "Cartão desativado — cliente só vê Pix e/ou pagamento na entrega"}</Text>
           </View>
-          <Switch value={cardEnabled} onValueChange={setCardEnabled} trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor="#fff" />
+          <Switch value={cardEnabled} onValueChange={setCardEnabled} trackColor={{ true: p.green, false: p.bg4 }} thumbColor="#fff" />
         </View>
 
         {/* Migration 301 — parcelamento MOSTRADO na pagina do produto.
@@ -396,11 +423,11 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
                     style={{
                       paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
                       borderWidth: 1,
-                      borderColor: sel ? accent.primary : Colors.border,
+                      borderColor: sel ? accent.primary : p.border,
                       backgroundColor: sel ? accent.primarySoft : "transparent",
                     }}
                   >
-                    <Text style={{ fontSize: 12.5, fontWeight: sel ? "800" : "600", color: sel ? accent.primary : Colors.ink2 }}>
+                    <Text style={{ fontSize: 12.5, fontWeight: sel ? "800" : "600", color: sel ? accent.primary : p.ink2 }}>
                       {n === null ? "Não mostrar" : `até ${n}x`}
                     </Text>
                   </Pressable>
@@ -411,8 +438,8 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
               {!mpConfigurado
                 ? "Conecte o Mercado Pago abaixo para o parcelamento aparecer na loja. Sem cartão funcionando, anunciar parcela seria promessa que a loja não cumpre."
                 : parcelas
-                  ? `A pagina do produto passa a mostrar "ou ${parcelas}x de ...". Parcela minima de R$ 5 — produto barato mostra menos vezes.`
-                  : "A loja mostra so o preço a vista."}
+                  ? `A página do produto passa a mostrar "ou ${parcelas}x de ...". Parcela mínima de R$ 5: produto barato mostra menos vezes.`
+                  : "A loja mostra só o preço à vista."}
             </Text>
           </View>
         ) : null}
@@ -425,7 +452,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
             <Text style={cs.switchLabel}>Aceitar pagamento na entrega</Text>
             <Text style={cs.switchHint}>Cliente paga em dinheiro/cartão no momento da entrega ou retirada</Text>
           </View>
-          <Switch value={payOnDelivery} onValueChange={setPayOnDelivery} trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor="#fff" />
+          <Switch value={payOnDelivery} onValueChange={setPayOnDelivery} trackColor={{ true: p.green, false: p.bg4 }} thumbColor="#fff" />
         </View>
         <View style={cs.divider} />
 
@@ -464,12 +491,14 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
             pixKeyType === "PHONE" ? "(11) 99999-0000" :
             "00000000-0000-0000-0000-000000000000"
           }
-          placeholderTextColor={Colors.ink3}
-          keyboardType={pixKeyType === "EMAIL" ? "email-address" : pixKeyType === "RANDOM" ? "default" : "numeric"}
-          autoCapitalize={pixKeyType === "EMAIL" ? "none" : "sentences"}
+          placeholderTextColor={p.ink3}
+          // Numérico só para CPF, CNPJ e celular; e-mail abre o teclado
+          // com @ e a aleatória, o de texto.
+          {...tecladoDaChavePix(pixKeyType)}
+          autoCorrect={false}
         />
 
-        <Field label="Nome do recebedor" value={pixHolderName} onChange={setPixHolderName} placeholder="Nome que aparece pro cliente no app do banco" />
+        <Field label="Nome do recebedor" value={pixHolderName} onChange={setPixHolderName} placeholder="Nome que aparece para o cliente no app do banco" />
         <Field label="Cidade do recebedor" value={pixHolderCity} onChange={setPixHolderCity} placeholder="São Paulo" />
 
         {/* Migration 309 — desconto no Pix.
@@ -481,10 +510,13 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
           value={pixPct}
           onChange={(v) => setPixPct(v.replace(/[^0-9.,]/g, "").slice(0, 5))}
           placeholder="0"
+          inputMode="decimal"
+          keyboardType="decimal-pad"
+          testID="pix-pct"
         />
         <Text style={cs.hint}>
           {Number(pixPct.replace(",", ".")) > 0
-            ? `Cada produto vai mostrar "ou R$ X no Pix" com ${Math.min(30, Number(pixPct.replace(",", ".")) || 0)}% a menos. Deixe 0 para não mostrar nada.`
+            ? `Cada produto vai mostrar "ou R$ X no Pix" com ${formatarPct(pixPct)}% a menos. Deixe 0 para não mostrar nada.`
             : "Com 0, o preço no Pix não aparece. Preencha para mostrar o desconto em cada produto da loja."}
         </Text>
         {Number(pixPct.replace(",", ".")) > 30 ? (
@@ -524,7 +556,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
       <SectionTitle title="Trocas e devoluções" />
       <View style={cs.card}>
         <Text style={cs.hint}>
-          Esse texto aparece no rodape da sua loja. Ja deixamos preenchido com o prazo
+          Esse texto aparece no rodapé da sua loja. Já deixamos preenchido com o prazo
           que a lei garante ao cliente. Se você troca em mais dias ou tem alguma regra
           própria, reescreva do seu jeito.
         </Text>
@@ -550,7 +582,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
         <View style={cs.infoCard}>
           <Icon name="alert" size={13} color={accent.primaryStrong} />
           <Text style={cs.infoText}>
-            Prometa so o que você consegue cumprir: o que estiver escrito aqui vale
+            Prometa só o que você consegue cumprir: o que estiver escrito aqui vale
             para o cliente.
           </Text>
         </View>
@@ -565,7 +597,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
         {hasDomain ? (
           <View>
             <View style={s.domainRow}><Icon name="globe" size={16} color={accent.primaryStrong} /><Text style={s.domainName}>{config.custom_domain}</Text><StatusBadge status={config.custom_domain_status} /></View>
-            {config.custom_domain_status === "pending_dns" && <View style={cs.infoCard}><Icon name="alert" size={13} color={Colors.amber} /><Text style={cs.infoText}>A equipe Aura vai configurar seu domínio em até 48h úteis.</Text></View>}
+            {config.custom_domain_status === "pending_dns" && <View style={cs.infoCard}><Icon name="alert" size={13} color={p.amber} /><Text style={cs.infoText}>A equipe Aura vai configurar seu domínio em até 48h úteis.</Text></View>}
           </View>
         ) : (
           <View>
@@ -578,12 +610,12 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
               </Pressable>
               <Pressable onPress={() => setDomainPlan("2years")} style={[s.planBtn, domainPlan === "2years" && s.planBtnActive]}>
                 <Text style={[s.planBtnLabel, domainPlan === "2years" && s.planBtnLabelActive]}>2 anos</Text>
-                <Text style={[s.planBtnPrice, domainPlan === "2years" && s.planBtnLabelActive]}>R$ 152 <Text style={{ fontSize: 10, color: Colors.green }}>(-5%)</Text></Text>
+                <Text style={[s.planBtnPrice, domainPlan === "2years" && s.planBtnLabelActive]}>R$ 152 <Text style={{ fontSize: 10, color: p.green }}>(-5%)</Text></Text>
               </Pressable>
             </View>
             <Text style={[cs.fieldLabel, { marginTop: 12 }]}>Domínio desejado</Text>
             <View style={{ flexDirection: "row", gap: 8 }}>
-              <TextInput style={[cs.input, { flex: 1 }]} value={domainInput} onChangeText={setDomainInput} placeholder="meunegocio.com.br" placeholderTextColor={Colors.ink3} autoCapitalize="none" autoCorrect={false} />
+              <TextInput style={[cs.input, { flex: 1 }]} value={domainInput} onChangeText={setDomainInput} placeholder="meunegocio.com.br" placeholderTextColor={p.ink3} autoCapitalize="none" autoCorrect={false} />
               <Pressable onPress={handleRequestDomain} disabled={isRequestingDomain} style={[s.domainBtn, isRequestingDomain && { opacity: 0.6 }]}><Text style={s.domainBtnText}>{isRequestingDomain ? "..." : "Solicitar"}</Text></Pressable>
             </View>
             <View style={cs.infoCard}><Icon name="alert" size={13} color={accent.primaryStrong} /><Text style={cs.infoText}>Após solicitar, a equipe Aura confirma e configura em até 48h úteis.</Text></View>
@@ -594,14 +626,14 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   );
 }
 
-function buildStyles(accent: AccentTokens) {
+function buildStyles(accent: AccentTokens, p: PaletaDoCanalTokens) {
   return StyleSheet.create({
   // Fase 3 — Rec #9: mini-mockup (substitui o preview plano)
   mockupWrap: {
-    backgroundColor: Colors.bg3,
+    backgroundColor: p.bg3,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.border2,
+    borderColor: p.border2,
     padding: 10,
     marginBottom: 16,
     gap: 8,
@@ -610,7 +642,7 @@ function buildStyles(accent: AccentTokens) {
     borderRadius: 10,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: p.border,
     backgroundColor: "#fff",
   },
   mockupTopbar: {
@@ -621,14 +653,14 @@ function buildStyles(accent: AccentTokens) {
     paddingVertical: 8,
     backgroundColor: "#fff",
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: p.border,
   },
   mockupLogoSlot: {
     width: 26,
     height: 26,
     borderRadius: 6,
     overflow: "hidden",
-    backgroundColor: Colors.bg4,
+    backgroundColor: p.bg4,
     flexShrink: 0,
   },
   mockupLogoImg: { width: "100%", height: "100%" },
@@ -638,7 +670,7 @@ function buildStyles(accent: AccentTokens) {
     flex: 1,
     fontSize: 13,
     fontWeight: "700",
-    color: Colors.ink,
+    color: p.ink,
   },
   mockupStatus: {
     flexDirection: "row",
@@ -695,7 +727,7 @@ function buildStyles(accent: AccentTokens) {
     width: 44,
     height: 4,
     borderRadius: 2,
-    backgroundColor: Colors.ink,
+    backgroundColor: p.ink,
     opacity: 0.5,
   },
   mockupActions: {
@@ -709,12 +741,14 @@ function buildStyles(accent: AccentTokens) {
     gap: 5,
     paddingHorizontal: 12,
     paddingVertical: 7,
+    // Alvo de toque de 44 px no celular (QA 26/09).
+    minHeight: IS_WIDE ? undefined : 44,
     borderRadius: 8,
-    backgroundColor: Colors.bg4,
+    backgroundColor: p.bg4,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: p.border,
   },
-  // WCAG AA: 11px magenta sobre Colors.bg4 cinza claro ~3.4:1 — peso 700 puxa pro critério "bold ≥14px" (3:1).
+  // WCAG AA: 11px magenta sobre p.bg4 cinza claro ~3.4:1 — peso 700 puxa pro critério "bold ≥14px" (3:1).
   mockupBtnGhostText: { fontSize: 11, color: accent.primaryStrong, fontWeight: "700" },
   mockupBtnPrimary: {
     flexDirection: "row",
@@ -722,6 +756,7 @@ function buildStyles(accent: AccentTokens) {
     gap: 5,
     paddingHorizontal: 12,
     paddingVertical: 7,
+    minHeight: IS_WIDE ? undefined : 44,
     borderRadius: 8,
     backgroundColor: accent.primary,
   },
@@ -732,53 +767,53 @@ function buildStyles(accent: AccentTokens) {
     gap: 5,
     paddingHorizontal: 2,
   },
-  mockupUrlText: { flex: 1, fontSize: 10, color: Colors.ink3, fontWeight: "500" },
+  mockupUrlText: { flex: 1, fontSize: 10, color: p.ink3, fontWeight: "500" },
 
   // Identidade visual
   imgRow: { flexDirection: "row", alignItems: "flex-start", gap: 16, marginBottom: 4 },
-  logoPreview: { width: 80, height: 80, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, overflow: "hidden", flexShrink: 0 },
+  logoPreview: { width: 80, height: 80, borderRadius: 14, borderWidth: 1, borderColor: p.border, overflow: "hidden", flexShrink: 0 },
   logoPlaceholder: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
   logoInitial: { fontSize: 28, fontWeight: "800", color: "#fff" },
-  imgHint: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
-  imgBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.bg4, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: Colors.border, alignSelf: "flex-start" },
-  // WCAG AA: 12px magenta sobre Colors.bg4 — peso 700 garante leitura sob Studio.
+  imgHint: { fontSize: 11, color: p.ink3, lineHeight: 16 },
+  imgBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: p.bg4, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: p.border, alignSelf: "flex-start" },
+  // WCAG AA: 12px magenta sobre p.bg4 — peso 700 garante leitura sob Studio.
   imgBtnText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "700" },
-  bannerPreview: { width: "100%", height: 100, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, overflow: "hidden" },
+  bannerPreview: { width: "100%", height: 100, borderRadius: 10, borderWidth: 1, borderColor: p.border, overflow: "hidden" },
   bannerPlaceholder: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center", gap: 6 },
   bannerPlaceholderText: { fontSize: 12, fontWeight: "600" },
   // Pagamentos
   pixRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   pixIcon: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  pixTitle: { fontSize: 13, fontWeight: "700", color: Colors.ink, marginBottom: 3 },
-  pixDesc: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
+  pixTitle: { fontSize: 13, fontWeight: "700", color: p.ink, marginBottom: 3 },
+  pixDesc: { fontSize: 11, color: p.ink3, lineHeight: 16 },
   pixBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, flexShrink: 0 },
   pixBadgeText: { fontSize: 10, fontWeight: "700" },
   activatePixBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: accent.primary, borderRadius: 12, paddingVertical: 14, marginTop: 4 },
   activatePixBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
-  pixForm: { backgroundColor: Colors.bg4, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: Colors.border2 },
-  pixFormTitle: { fontSize: 13, fontWeight: "700", color: Colors.ink, marginBottom: 4 },
-  pixFormHint: { fontSize: 11, color: Colors.ink3, lineHeight: 16, marginBottom: 12 },
+  pixForm: { backgroundColor: p.bg4, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: p.border2 },
+  pixFormTitle: { fontSize: 13, fontWeight: "700", color: p.ink, marginBottom: 4 },
+  pixFormHint: { fontSize: 11, color: p.ink3, lineHeight: 16, marginBottom: 12 },
   typeRow: { flexDirection: "row", gap: 8, marginBottom: 12, flexWrap: "wrap" },
-  typeBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, borderWidth: 1.5, borderColor: Colors.border, backgroundColor: Colors.bg3 },
+  typeBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, borderWidth: 1.5, borderColor: p.border, backgroundColor: p.bg3 },
   typeBtnActive: { borderColor: accent.border, backgroundColor: accent.primarySoft },
-  typeBtnText: { fontSize: 12, color: Colors.ink3, fontWeight: "600" },
+  typeBtnText: { fontSize: 12, color: p.ink3, fontWeight: "600" },
   // WCAG AA: 12px magenta sobre primarySoft (#EFF6FF) — peso 700 obrigatório no estado ativo.
   typeBtnTextActive: { color: accent.primaryStrong, fontWeight: "700" },
-  pixCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, alignItems: "center" },
-  pixCancelBtnText: { fontSize: 13, color: Colors.ink3, fontWeight: "600" },
+  pixCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: p.border, alignItems: "center" },
+  pixCancelBtnText: { fontSize: 13, color: p.ink3, fontWeight: "600" },
   pixConfirmBtn: { flex: 2, paddingVertical: 12, borderRadius: 10, backgroundColor: accent.primary, alignItems: "center" },
   pixConfirmBtnText: { fontSize: 13, color: "#fff", fontWeight: "700" },
   // Dominio
-  domainDesc: { fontSize: 12, color: Colors.ink3, lineHeight: 18, marginBottom: 16 },
+  domainDesc: { fontSize: 12, color: p.ink3, lineHeight: 18, marginBottom: 16 },
   domainRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
-  domainName: { flex: 1, fontSize: 14, color: Colors.ink, fontWeight: "600" },
+  domainName: { flex: 1, fontSize: 14, color: p.ink, fontWeight: "600" },
   domainBtn: { backgroundColor: accent.primary, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 11, flexShrink: 0 },
   domainBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   planRow: { flexDirection: "row", gap: 10, marginTop: 6 },
-  planBtn: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 12, padding: 14, borderWidth: 2, borderColor: Colors.border, alignItems: "center", gap: 4 },
+  planBtn: { flex: 1, backgroundColor: p.bg4, borderRadius: 12, padding: 14, borderWidth: 2, borderColor: p.border, alignItems: "center", gap: 4 },
   planBtnActive: { borderColor: accent.border, backgroundColor: accent.primarySoft },
-  planBtnLabel: { fontSize: 13, color: Colors.ink3, fontWeight: "600" },
-  planBtnPrice: { fontSize: 18, color: Colors.ink3, fontWeight: "800" },
+  planBtnLabel: { fontSize: 13, color: p.ink3, fontWeight: "600" },
+  planBtnPrice: { fontSize: 18, color: p.ink3, fontWeight: "800" },
   // WCAG AA: 13px magenta sobre primarySoft — peso 700 no ativo.
   planBtnLabelActive: { color: accent.primaryStrong, fontWeight: "700" },
   });

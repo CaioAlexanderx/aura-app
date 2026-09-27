@@ -144,6 +144,59 @@ export function pedidosDoForm(f: FormPedidosPelaLoja, hoje: Date = new Date()) {
   return { aceita: true, motivo: null, recado: null, pedidos_ate: ate };
 }
 
+/**
+ * O topo do cartão "Temporada": título, frase e o interruptor.
+ *
+ * QA 26/09: com a data limite passada, o selo dizia "FECHADA" e o título
+ * seguia "Aceitando pedidos pela loja" com o interruptor verde. Fechada
+ * pela data, o interruptor fica desligado e travado — quem reabre é a
+ * data, e a frase diz isso.
+ */
+export type TopoDaTemporada = {
+  titulo: string;
+  sub: string;
+  /** O que o interruptor mostra. */
+  ligado: boolean;
+  /** Travado: a loja está fechada pela data, não pelo interruptor. */
+  travado: boolean;
+};
+
+export function topoDaTemporada(f: FormPedidosPelaLoja, hoje: Date = new Date()): TopoDaTemporada {
+  const pedidos = pedidosDoForm(f, hoje);
+  if (f.aceitando && pedidos.motivo === "prazo") {
+    return {
+      titulo: "Loja fechada pela data limite",
+      sub: "A data limite já passou: a vitrine troca o botão de comprar por \"Pedir orçamento\". Para reabrir, tire a data ou escolha outra.",
+      ligado: false,
+      travado: true,
+    };
+  }
+  if (!f.aceitando) {
+    return {
+      titulo: "Loja fechada para pedidos",
+      sub: "A vitrine troca o botão de comprar por \"Pedir orçamento\" e mostra o recado abaixo.",
+      ligado: false,
+      travado: false,
+    };
+  }
+  return {
+    titulo: "Aceitando pedidos pela loja",
+    sub: "A vitrine mostra o botão de comprar normalmente.",
+    ligado: true,
+    travado: false,
+  };
+}
+
+/**
+ * O campo do recado aparece quando a loja está fechada, quando há data
+ * limite ou quando já existe um recado gravado. Esse último é o caso da
+ * loja que reabriu: o recado continua guardado para a próxima vez, e
+ * escondê-lo fazia a lojista achar que tinha perdido o texto.
+ */
+export function mostrarCampoDoRecado(f: FormPedidosPelaLoja): boolean {
+  return !f.aceitando || !!f.ate.trim() || !!f.recado.trim();
+}
+
 export type PreviaNaVitrine = {
   /** A loja aceita pedido agora, com o que está no formulário? */
   aberta: boolean;

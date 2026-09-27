@@ -64,6 +64,47 @@ export function selosDeFabrica(cards: Array<{ title?: string; body?: string; ena
   return ligados.length > 0 && ligados.every((c) => DE_FABRICA.has(`${c.title || ""}|${c.body || ""}`));
 }
 
+/**
+ * A cor que o campo da cor mostra ao abrir a aba.
+ *
+ * QA 26/09: o campo mostrava #7c3aed por um segundo e trocava pela cor
+ * da loja — antes da configuração chegar, `primary_color` ainda não
+ * existe e o padrão entrava no lugar. Agora: sem configuração, vazio (a
+ * tela mostra um esqueleto); com ela, a cor salva ou o padrão do banco.
+ */
+export function corInicialDaLoja(config: { primary_color?: string | null; exists?: boolean } | null | undefined): string {
+  if (config?.primary_color) return config.primary_color;
+  return configChegou(config) ? "#7c3aed" : "";
+}
+
+/** O GET da Loja Digital já respondeu? Ele sempre traz `exists`. */
+export function configChegou(config: { primary_color?: string | null; exists?: boolean } | null | undefined): boolean {
+  return !!config && (typeof config.exists === "boolean" || !!config.primary_color);
+}
+
+/**
+ * Troca uma escolha na tela e salva; se o servidor recusar, a tela volta
+ * ao que era e o erro sobe.
+ *
+ * QA 26/09: clicar em "Marcante" recebia 400 e a tela ficava marcada como
+ * se tivesse salvo — a lojista saía achando que a loja tinha mudado.
+ */
+export async function trocarESalvar<T>(p: {
+  antes: T;
+  depois: T;
+  mostrar: (v: T) => void;
+  salvar: (v: T) => Promise<unknown>;
+}): Promise<boolean> {
+  p.mostrar(p.depois);
+  try {
+    await p.salvar(p.depois);
+    return true;
+  } catch {
+    p.mostrar(p.antes);
+    return false;
+  }
+}
+
 export type PecaDoPainel = { id: string; nome: string; foto: string | null; tresD: boolean };
 
 /**

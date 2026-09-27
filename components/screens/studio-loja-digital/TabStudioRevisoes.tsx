@@ -28,6 +28,7 @@ import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { studioApi } from "@/services/studioApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
+import { textoPadraoDaPolitica } from "./textoDaPolitica";
 
 export function TabStudioRevisoes() {
   const t = useStudioTokens();
@@ -83,7 +84,7 @@ export function TabStudioRevisoes() {
   async function save() {
     if (!company?.id) return;
     if (loadError) {
-      toast.error("Não dá pra salvar sem antes recarregar a política atual — clique em \"Tentar de novo\".");
+      toast.error("Não dá para salvar sem antes recarregar a política atual. Clique em \"Tentar de novo\".");
       return;
     }
 
@@ -127,7 +128,7 @@ export function TabStudioRevisoes() {
   // ── Preview text ────────────────────────────────────────────
   const parsedMaxPreview = parseInt(maxRevisions, 10) || 0;
   const parsedPricePreview = parseFloat(extraPrice.replace(",", ".")) || 0;
-  const previewFallback = buildDefaultPolicyText(
+  const previewFallback = textoPadraoDaPolitica(
     parsedMaxPreview,
     parsedPricePreview,
   );
@@ -145,7 +146,7 @@ export function TabStudioRevisoes() {
         <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle}>Política de revisões</Text>
           <Text style={styles.headerSub}>
-            Defina quantas revisões da arte estão inclusas no preço e quanto cobrar por revisões adicionais. Este texto aparece pro cliente no checkout do Canal Digital.
+            Defina quantas revisões da arte estão inclusas no preço e quanto cobrar por revisões adicionais. Este texto aparece para o cliente no checkout da Loja Digital.
           </Text>
         </View>
       </View>
@@ -202,7 +203,7 @@ export function TabStudioRevisoes() {
         <View style={styles.hintRow}>
           <Icon name="info" size={12} color={t.ink3} />
           <Text style={styles.hintText}>
-            Digite <Text style={styles.hintBold}>0</Text> pra liberar revisões ilimitadas (sem cobrança extra).
+            Digite <Text style={styles.hintBold}>0</Text> para liberar revisões ilimitadas (sem cobrança extra).
           </Text>
         </View>
       </View>
@@ -216,7 +217,7 @@ export function TabStudioRevisoes() {
           <Text style={styles.cardTitle}>Preço por revisão extra</Text>
         </View>
         <Text style={styles.cardSub}>
-          Valor cobrado a partir da revisão {parsedMaxPreview + 1}ª (após estourar o limite incluso).
+          Valor cobrado a partir da 1ª revisão além das inclusas.
         </Text>
 
         <View
@@ -258,7 +259,7 @@ export function TabStudioRevisoes() {
           <Text style={styles.cardTitle}>Texto da política exibido ao cliente</Text>
         </View>
         <Text style={styles.cardSub}>
-          Escreva o texto que aparecerá no checkout. Deixe em branco pra usar um texto automático baseado nos valores acima.
+          Escreva o texto que aparecerá no checkout. Deixe em branco para usar um texto automático baseado nos valores acima.
         </Text>
 
         <View
@@ -272,7 +273,7 @@ export function TabStudioRevisoes() {
             onChangeText={setPolicyText}
             placeholder={`Ex: Você tem direito a ${parsedMaxPreview || 3} revisões grátis da arte. Cada revisão adicional custa R$ ${
               parsedPricePreview ? parsedPricePreview.toFixed(2).replace(".", ",") : "15,00"
-            }. Use as revisões com calma — peça todas as alterações de uma vez :)`}
+            }. Use as revisões com calma: peça todas as alterações de uma vez.`}
             placeholderTextColor={t.ink4}
             style={styles.textarea}
             multiline
@@ -323,7 +324,7 @@ export function TabStudioRevisoes() {
         ) : (
           <>
             <Icon name="save" size={16} color="#fff" />
-            <Text style={styles.saveBtnText}>{loadError ? "Recarregue pra salvar" : "Salvar política"}</Text>
+            <Text style={styles.saveBtnText}>{loadError ? "Recarregue para salvar" : "Salvar política"}</Text>
           </>
         )}
       </Pressable>
@@ -333,18 +334,7 @@ export function TabStudioRevisoes() {
   );
 }
 
-// ── Helper: texto padrao quando o lojista nao escreve nada ──
-function buildDefaultPolicyText(maxRevisions: number, extraPrice: number): string {
-  if (maxRevisions === 0) {
-    return "Você tem direito a revisões ilimitadas da arte. Pode pedir quantas alterações precisar — sem custo extra :)";
-  }
-  const priceFmt = extraPrice
-    ? `R$ ${extraPrice.toFixed(2).replace(".", ",")}`
-    : "valor a combinar";
-  return `Você tem direito a ${maxRevisions} ${
-    maxRevisions === 1 ? "revisão grátis" : "revisões grátis"
-  } da arte. A partir da ${maxRevisions + 1}ª revisão, cobramos ${priceFmt} por alteração. Dica: peça todas as mudanças de uma vez pra economizar!`;
-}
+// O texto automático da política mora em textoDaPolitica.ts (com teste).
 
 // ────────────────────────────────────────────────────────────
 // Styles

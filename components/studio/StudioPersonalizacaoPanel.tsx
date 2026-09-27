@@ -63,6 +63,7 @@ import { studioVisualApi, type VisualTemplate } from "@/services/studioVisualApi
 import { PreviewWhatsAppModal } from "@/components/studio/PreviewWhatsAppModal";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import { request } from "@/services/api";
+import { ladoSemCampo, AVISO_LADO_SEM_CAMPO } from "@/components/studio/ladoSemCampo";
 import {
   normalizeCustomizationConfig, canonicalizeIds, makeField, makeArtServiceFields,
   artSourceRequired, isArtSourceType, isArtServiceField, isArtBriefField, sideOf,
@@ -959,6 +960,14 @@ export function StudioPersonalizacaoPanel({
           />
         </View>
 
+        {/* QA 26/09: verso ligado sem campo no verso não aparece na loja. */}
+        {ladoSemCampo(config as any, "back") ? (
+          <View style={s.ladoSemCampo} accessibilityRole="alert" testID="verso-sem-campo">
+            <Icon name="alert" size={14} color={t.warningInk} />
+            <Text style={s.ladoSemCampoTxt}>{AVISO_LADO_SEM_CAMPO.back}</Text>
+          </View>
+        ) : null}
+
         {hasBack && backPrintArea ? (
           <View style={{ gap: 10 }}>
             <PrintAreaRow
@@ -1016,6 +1025,13 @@ export function StudioPersonalizacaoPanel({
             thumbColor="#fff"
           />
         </View>
+
+        {ladoSemCampo(config as any, "middle") ? (
+          <View style={s.ladoSemCampo} accessibilityRole="alert" testID="meio-sem-campo">
+            <Icon name="alert" size={14} color={t.warningInk} />
+            <Text style={s.ladoSemCampoTxt}>{AVISO_LADO_SEM_CAMPO.middle}</Text>
+          </View>
+        ) : null}
 
         {hasMiddle && middlePrintArea ? (
           <View style={{ gap: 10 }}>
@@ -2099,6 +2115,24 @@ function buildStyles(t: StudioPalette) {
     },
     sideChipDisabled: {
       opacity: 0.45,
+    },
+    // Lado ligado sem campo (QA 26/09): atenção, não erro.
+    ladoSemCampo: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 8,
+      padding: 10,
+      borderRadius: 10,
+      backgroundColor: t.warningSoft,
+      borderWidth: 1,
+      borderColor: t.warning,
+    },
+    ladoSemCampoTxt: {
+      flex: 1,
+      fontSize: 12,
+      lineHeight: 17,
+      fontWeight: "600",
+      color: t.warningInk,
     },
     sideChipTxt: {
       fontSize: 11,

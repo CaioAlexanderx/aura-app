@@ -1,10 +1,10 @@
 import { View, Text, StyleSheet, TextInput, Pressable, Dimensions, Platform, Switch } from "react-native";
 import Svg, { Path, Circle, Rect, Ellipse } from "react-native-svg";
 import { useMemo } from "react";
-import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAccent, varejoAccent, AccentTokens } from "@/contexts/AccentTheme";
 import { TIPOGRAFIAS } from "@/constants/fonts";
+import { usePaletaDoCanal, PALETA_DO_NEGOCIO, type PaletaDoCanalTokens } from "./paletaDoCanal";
 
 export const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
@@ -12,6 +12,18 @@ export const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dime
 export const TABS = ["Meu Site", "Design", "Vitrine", "Entrega", "Pedidos"];
 
 export const COLOR_PRESETS = ["#7c3aed", "#059669", "#dc2626", "#d97706", "#2563eb", "#db2777", "#0891b2", "#374151"];
+
+/** O nome de cada bolinha, para o leitor de tela (QA 26/09: eram mudas). */
+export const NOMES_DAS_CORES: Record<string, string> = {
+  "#7c3aed": "Violeta",
+  "#059669": "Verde",
+  "#dc2626": "Vermelho",
+  "#d97706": "Laranja",
+  "#2563eb": "Azul",
+  "#db2777": "Rosa",
+  "#0891b2": "Azul-piscina",
+  "#374151": "Grafite",
+};
 
 export const PALETTE_PRESETS: Array<[string, string, string]> = [
   ["#3a5a47", "#c47a51", "Botânica"],
@@ -126,20 +138,26 @@ export function ServiceIconPreview({ icon, size = 18, color }: { icon: string; s
   }
 }
 
-export function Field({ label, value, onChange, placeholder, multiline, onBlur, testID }: {
+export function Field({ label, value, onChange, placeholder, multiline, onBlur, testID, inputMode, keyboardType, autoCapitalize }: {
   label: string; value: string; onChange: (v: string) => void; placeholder?: string; multiline?: boolean;
   // onBlur: pra normalizar o que a pessoa colou SEM corrigir a cada tecla
   // (completar "loja.com" pra "https://loja.com" no meio da digitacao
   // faria o cursor pular). testID: pro teste alcancar o campo.
   onBlur?: () => void; testID?: string;
+  /** Teclado do celular (ex.: "decimal" no desconto do Pix). */
+  inputMode?: "text" | "decimal" | "numeric" | "email" | "tel" | "url" | "search" | "none";
+  keyboardType?: any;
+  autoCapitalize?: "none" | "sentences" | "words" | "characters";
 }) {
   const cs = useChannelStyles();
+  const p = usePaletaDoCanal();
   return (
     <View style={cs.field}>
       <Text style={cs.fieldLabel}>{label}</Text>
       <TextInput style={[cs.input, multiline && cs.textarea]} value={value} onChangeText={onChange}
         onBlur={onBlur} testID={testID}
-        placeholder={placeholder} placeholderTextColor={Colors.ink3} multiline={multiline} numberOfLines={multiline ? 3 : 1} />
+        inputMode={inputMode} keyboardType={keyboardType} autoCapitalize={autoCapitalize}
+        placeholder={placeholder} placeholderTextColor={p.ink3} multiline={multiline} numberOfLines={multiline ? 3 : 1} />
     </View>
   );
 }
@@ -176,6 +194,7 @@ export function ToggleRow({ label, value, onChange, hint }: {
 }) {
   const cs = useChannelStyles();
   const accent = useAccent();
+  const p = usePaletaDoCanal();
   return (
     <View style={cs.toggleRow}>
       <View style={{ flex: 1 }}>
@@ -184,7 +203,7 @@ export function ToggleRow({ label, value, onChange, hint }: {
       </View>
       <Switch
         value={value} onValueChange={onChange}
-        trackColor={{ false: Colors.border, true: accent.primary }}
+        trackColor={{ false: p.border, true: accent.primary }}
         thumbColor="#fff"
       />
     </View>
@@ -193,10 +212,11 @@ export function ToggleRow({ label, value, onChange, hint }: {
 
 export function StatusBadge({ status }: { status: string }) {
   const cs = useChannelStyles();
+  const p = usePaletaDoCanal();
   const map: Record<string, { label: string; bg: string; color: string }> = {
-    active: { label: "Ativo", bg: Colors.greenD, color: Colors.green },
-    pending_dns: { label: "Aguardando DNS", bg: Colors.amberD, color: Colors.amber },
-    none: { label: "Sem domínio", bg: Colors.bg4, color: Colors.ink3 },
+    active: { label: "Ativo", bg: p.greenD, color: p.green },
+    pending_dns: { label: "Aguardando DNS", bg: p.amberD, color: p.amber },
+    none: { label: "Sem domínio", bg: p.bg4, color: p.ink3 },
   };
   const st = map[status] || map.none;
   return <View style={[cs.badge, { backgroundColor: st.bg }]}><Text style={[cs.badgeText, { color: st.color }]}>{st.label}</Text></View>;
@@ -212,46 +232,47 @@ export function StatusBadge({ status }: { status: string }) {
 // 5 tabs (TabMeuSite/Design/Vitrine/Entrega/Pedidos) precisam migrar
 // `import { cs }` → `const cs = useChannelStyles()` no topo da função.
 // ============================================================
-function buildChannelStyles(accent: AccentTokens) {
+function buildChannelStyles(accent: AccentTokens, p: PaletaDoCanalTokens) {
   return StyleSheet.create({
-    card: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: Colors.border, marginBottom: 12 },
-    divider: { height: 1, backgroundColor: Colors.border, marginVertical: 12 },
+    card: { backgroundColor: p.bg3, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: p.border, marginBottom: 12 },
+    divider: { height: 1, backgroundColor: p.border, marginVertical: 12 },
     field: { marginBottom: 14 },
-    fieldLabel: { fontSize: 11, color: Colors.ink3, fontWeight: "600", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.3 },
-    input: { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: Colors.ink },
+    fieldLabel: { fontSize: 11, color: p.ink3, fontWeight: "600", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.3 },
+    input: { backgroundColor: p.bg4, borderRadius: 10, borderWidth: 1, borderColor: p.border, paddingHorizontal: 14, paddingVertical: 11, fontSize: 13, color: p.ink },
     textarea: { minHeight: 80, textAlignVertical: "top" },
-    sectionTitle: { fontSize: 13, color: Colors.ink, fontWeight: "700", marginTop: 20, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 },
+    sectionTitle: { fontSize: 13, color: p.ink, fontWeight: "700", marginTop: 20, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 },
     badge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
     badgeText: { fontSize: 10, fontWeight: "700" },
-    switchRow: { flexDirection: "row", alignItems: "center", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border },
+    switchRow: { flexDirection: "row", alignItems: "center", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: p.border },
     toggleRow: { flexDirection: "row", alignItems: "center", paddingVertical: 12, gap: 12 },
-    switchLabel: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
-    switchHint: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
+    switchLabel: { fontSize: 13, color: p.ink, fontWeight: "600" },
+    switchHint: { fontSize: 11, color: p.ink3, marginTop: 2 },
     saveBtn: { backgroundColor: accent.primary, borderRadius: 12, paddingVertical: 14, alignItems: "center", marginTop: 8 },
     saveBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
-    infoCard: { flexDirection: "row", gap: 8, backgroundColor: Colors.bg4, borderRadius: 12, padding: 14, marginTop: 12, borderWidth: 1, borderColor: Colors.border },
-    infoText: { fontSize: 11, color: Colors.ink3, flex: 1, lineHeight: 16 },
-    hint: { fontSize: 12, color: Colors.ink3, lineHeight: 18, marginBottom: 12 },
+    infoCard: { flexDirection: "row", gap: 8, backgroundColor: p.bg4, borderRadius: 12, padding: 14, marginTop: 12, borderWidth: 1, borderColor: p.border },
+    infoText: { fontSize: 11, color: p.ink3, flex: 1, lineHeight: 16 },
+    hint: { fontSize: 12, color: p.ink3, lineHeight: 18, marginBottom: 12 },
     colorRow: { flexDirection: "row", gap: 10, marginTop: 6, marginBottom: 16, flexWrap: "wrap" },
     colorDot: { width: 30, height: 30, borderRadius: 15 },
     colorDotActive: { borderWidth: 3, borderColor: "#fff", transform: [{ scale: 1.15 }] },
-    filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
+    filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, backgroundColor: p.bg3, borderWidth: 1, borderColor: p.border },
     filterChipActive: { backgroundColor: accent.primarySoft, borderColor: accent.primary },
-    filterText: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
+    filterText: { fontSize: 12, color: p.ink3, fontWeight: "500" },
     filterTextActive: { color: accent.primaryStrong, fontWeight: "600" },
     chipRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
-    chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg4, minWidth: 80 },
+    chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: p.border, backgroundColor: p.bg4, minWidth: 80 },
     chipActive: { borderColor: accent.primary, backgroundColor: accent.primarySoft },
-    chipText: { fontSize: 12, color: Colors.ink, fontWeight: "600" },
+    chipText: { fontSize: 12, color: p.ink, fontWeight: "600" },
     chipTextActive: { color: accent.primaryStrong },
-    chipHint: { fontSize: 10, color: Colors.ink3, marginTop: 2 },
+    chipHint: { fontSize: 10, color: p.ink3, marginTop: 2 },
     chipHintActive: { color: accent.primaryStrong },
   });
 }
 
 export function useChannelStyles() {
   const accent = useAccent();
-  return useMemo(() => buildChannelStyles(accent), [accent]);
+  const p = usePaletaDoCanal();
+  return useMemo(() => buildChannelStyles(accent, p), [accent, p]);
 }
 
 // ============================================================
@@ -259,4 +280,4 @@ export function useChannelStyles() {
 // importam diretamente. NÃO é tematizado (sempre violeta varejo).
 // Novo código: use `useChannelStyles()` hook em vez de `cs` direto.
 // ============================================================
-export const cs = buildChannelStyles(varejoAccent);
+export const cs = buildChannelStyles(varejoAccent, PALETA_DO_NEGOCIO);

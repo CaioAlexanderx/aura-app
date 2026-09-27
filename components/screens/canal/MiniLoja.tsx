@@ -16,8 +16,8 @@
 // queixa.
 // ============================================================
 import { View, Text, Image, Platform } from "react-native";
-import { tipografiaDaLoja } from "@/constants/fonts";
-import { Colors } from "@/constants/colors";
+import { tipografiaDaLoja, tipografiaDoStudio } from "@/constants/fonts";
+import { usePaletaDoCanal } from "./paletaDoCanal";
 import { iniciais, degrauDaCapa } from "@/components/studio/storefront/capaModel";
 import { wash, corLegivelSobre } from "@/components/studio/storefront/theme";
 
@@ -47,13 +47,18 @@ type Props = {
   semHero?: boolean;
   /** Escala geral; 1 = tamanho de leitura confortável no painel. */
   escala?: number;
+  /** Qual vitrine a mini loja imita: a tipografia resolve diferente em cada uma. */
+  vitrine?: "comum" | "studio";
 };
 
 export function MiniLoja({
   cor, corDestaque, fonte, estiloCartao = "editorial",
   nomeDaLoja, tagline, logoUrl, produtos, colunas = 3, semHero, escala = 1,
+  vitrine,
 }: Props) {
-  const tipo = tipografiaDaLoja(fonte);
+  const pal = usePaletaDoCanal();
+  // A mesma chave resolve em pares diferentes em cada vitrine.
+  const tipo = vitrine === "studio" ? tipografiaDoStudio(fonte) : tipografiaDaLoja(fonte);
   const nome = (nomeDaLoja || "").trim() || "Sua loja";
   const lista = (produtos && produtos.length ? produtos : [PRODUTO_EXEMPLO]).slice(0, colunas);
   // Repete o catálogo curto para a prateleira não ficar meio vazia — uma
@@ -69,7 +74,7 @@ export function MiniLoja({
         borderRadius: px(10),
         overflow: "hidden",
         borderWidth: 1,
-        borderColor: Colors.border,
+        borderColor: pal.border,
         backgroundColor: "#FFFFFF",
       }}
     >
@@ -142,6 +147,7 @@ function CartaoMini({
   fonteCorpo: string;
   escala: number;
 }) {
+  const pal = usePaletaDoCanal();
   const px = (n: number) => Math.round(n * escala);
   const sobreposto = estilo === "image-heavy";
   const compacto = estilo === "minimal";
@@ -158,7 +164,7 @@ function CartaoMini({
         borderRadius: px(compacto ? 4 : 8),
         overflow: sobreposto ? "hidden" : "visible",
         borderWidth: sobreposto ? 0 : 1,
-        borderColor: Colors.border,
+        borderColor: pal.border,
         backgroundColor: "#FFFFFF",
         padding: sobreposto ? 0 : px(5),
         gap: sobreposto ? 0 : px(4),

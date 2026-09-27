@@ -17,7 +17,9 @@ describe("checklist — ordem e estado", () => {
     const p = progresso(montarChecklist({
       logoUrl: "https://x/logo.png",
       corPrimaria: "#1a1612",
-      banners: [{}],
+      // Banner DA LOJISTA, com imagem. Um objeto vazio contava como banner
+      // no ar — foi o bug do banner de fábrica (QA 26/09).
+      banners: [{ headline: "Coleção de verão", image_url: "https://x/banner.jpg", enabled: true }],
       anuncio: "Frete grátis acima de R$ 250",
       produtosTotal: 12,
       produtosComFoto: 12,

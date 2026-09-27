@@ -39,7 +39,7 @@ import { Texto } from "@/components/studio/storefront/TipografiaVitrine";
 import {
   RECADO_MAX, RECADO_PADRAO,
   formDaConfig, corpoDoSalvar, mesmoForm, validarGa4, validarPixel,
-  problemaDoForm, previaNaVitrine,
+  problemaDoForm, previaNaVitrine, topoDaTemporada, mostrarCampoDoRecado,
   type FormPedidosPelaLoja, type PreviaNaVitrine, type Validacao,
 } from "./pedidosPelaLoja";
 
@@ -47,9 +47,11 @@ type Props = {
   config: any;
   saveConfig: (body: any) => Promise<any>;
   isSaving: boolean;
+  /** Contrato da Loja Digital: avisa quando há alteração não salva. */
+  onAlteracoes?: (alterada: boolean) => void;
 };
 
-export function TabStudioPedidosPelaLoja({ config, saveConfig, isSaving }: Props) {
+export function TabStudioPedidosPelaLoja({ config, saveConfig, isSaving, onAlteracoes }: Props) {
   const t = useStudioTokens();
   const s = useMemo(() => buildStyles(t), [t]);
   const { width } = useWindowDimensions();
@@ -76,8 +78,11 @@ export function TabStudioPedidosPelaLoja({ config, saveConfig, isSaving }: Props
   const [salvouAgora, setSalvouAgora] = useState(false);
 
   const alterado = !mesmoForm(form, salvo.current);
+  useEffect(() => { onAlteracoes?.(alterado); }, [alterado, onAlteracoes]);
+  useEffect(() => () => onAlteracoes?.(false), [onAlteracoes]);
   const problema = problemaDoForm(form);
   const previa = previaNaVitrine(form);
+  const topo = topoDaTemporada(form);
   const ga4 = validarGa4(form.ga4);
   const pixel = validarPixel(form.pixel);
 
@@ -122,21 +127,18 @@ export function TabStudioPedidosPelaLoja({ config, saveConfig, isSaving }: Props
       <Text style={s.eyebrow}>Temporada</Text>
       <View style={[s.linha, { marginTop: 8 }]}>
         <View style={{ flex: 1 }}>
-          <Text style={s.rotulo}>{form.aceitando ? "Aceitando pedidos pela loja" : "Loja fechada para pedidos"}</Text>
-          <Text style={s.sub}>
-            {form.aceitando
-              ? "A vitrine mostra o botão de comprar normalmente."
-              : "A vitrine troca o botão de comprar por \"Pedir orçamento\" e mostra o recado abaixo."}
-          </Text>
+          <Text style={s.rotulo}>{topo.titulo}</Text>
+          <Text style={s.sub}>{topo.sub}</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <Selo aberta={previa.aberta} t={t} />
           <Interruptor
-            ligado={form.aceitando}
+            ligado={topo.ligado}
             onMudar={(v) => muda({ aceitando: v })}
-            rotulo="Aceitando pedidos pela loja"
+            rotulo={topo.travado ? "Aceitando pedidos pela loja (fechada pela data limite)" : "Aceitando pedidos pela loja"}
             corLigado={t.success}
             corDesligado={t.danger}
+            travado={topo.travado}
             t={t}
           />
         </View>
@@ -167,7 +169,7 @@ export function TabStudioPedidosPelaLoja({ config, saveConfig, isSaving }: Props
 
       {/* O recado vale para os dois jeitos de fechar: na mão (interruptor)
           e pela data. Aparece quando um deles está em jogo. */}
-      {!form.aceitando || form.ate ? (
+      {mostrarCampoDoRecado(form) ? (
         <View style={[s.campo, { marginTop: 14 }]}>
           <Text style={s.label}>Recado para o cliente</Text>
           <TextInput
@@ -183,7 +185,9 @@ export function TabStudioPedidosPelaLoja({ config, saveConfig, isSaving }: Props
           />
           <View style={[s.linha, { alignItems: "flex-start" }]}>
             <Text style={[s.dica, { flex: 1 }]}>
-              Aparece no lugar do botão de comprar, em todas as telas, quando a loja estiver fechada. Em branco, vale o texto de exemplo.
+              {previa.aberta
+                ? "Aparece quando a loja fechar, no lugar do botão de comprar, em todas as telas. Em branco, vale o texto de exemplo."
+                : "Aparece no lugar do botão de comprar, em todas as telas, quando a loja estiver fechada. Em branco, vale o texto de exemplo."}
             </Text>
             <Text style={[s.dica, form.recado.trim().length > RECADO_MAX && s.dicaErro]}>
               {`${form.recado.trim().length}/${RECADO_MAX}`}
@@ -327,25 +331,32 @@ function Selo({ aberta, t }: { aberta: boolean; t: StudioPalette }) {
 
 /** Interruptor do mockup (46×27), com papel de switch e alvo de 44 px. */
 function Interruptor({
-  ligado, onMudar, rotulo, corLigado, corDesligado, t,
+  ligado, onMudar, rotulo, corLigado, corDesligado, travado, t,
 }: {
   ligado: boolean;
   onMudar: (v: boolean) => void;
   rotulo: string;
   corLigado: string;
   corDesligado: string;
+  /** Desligado e sem ação: quem manda é a data limite. */
+  travado?: boolean;
   t: StudioPalette;
 }) {
   return (
     <Pressable
-      onPress={() => onMudar(!ligado)}
+      onPress={() => { if (!travado) onMudar(!ligado); }}
+      disabled={travado}
       accessibilityRole="switch"
       accessibilityLabel={rotulo}
-      accessibilityState={{ checked: ligado }}
+      accessibilityState={{ checked: ligado, disabled: !!travado }}
+      // No web o react-native-web não leva o `checked` do accessibilityState
+      // para o DOM: sem isto o leitor de tela não sabia se estava ligado.
+      aria-checked={ligado}
       hitSlop={9}
       style={{
         width: 46, height: 27, borderRadius: 999, padding: 2.5,
-        backgroundColor: ligado ? corLigado : corDesligado,
+        backgroundColor: travado ? t.ink4 : ligado ? corLigado : corDesligado,
+        opacity: travado ? 0.6 : 1,
         justifyContent: "center",
       }}
     >

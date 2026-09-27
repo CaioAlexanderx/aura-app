@@ -11,11 +11,11 @@ import {
   View, Text, ScrollView, StyleSheet, Pressable, Image, ActivityIndicator,
   TextInput, Platform,
 } from "react-native";
-import { Colors } from "@/constants/colors";
+import { usePaletaDoCanal, type PaletaDoCanalTokens } from "./paletaDoCanal";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import {
-  IS_WIDE, COLOR_PRESETS, PALETTE_PRESETS, ACCENT_PRESETS,
+  IS_WIDE, COLOR_PRESETS, NOMES_DAS_CORES, PALETTE_PRESETS, ACCENT_PRESETS,
   CARD_STYLES, BANNER_TONES, BANNER_TINTS,
   SERVICE_ICONS, ServiceIconPreview,
   Field, ChipToggle, ToggleRow, SectionTitle, useChannelStyles,
@@ -30,9 +30,10 @@ import { MiniLoja, type ProdutoDemo } from "./MiniLoja";
 import { PreviewCartao } from "./PreviewCartao";
 import { BASE_URL } from "@/services/api";
 import { ChecklistDaLoja } from "./ChecklistDaLoja";
-import { SPECS } from "./specsDeImagem";
+import { SPECS, bannersDeFabrica } from "./specsDeImagem";
 import {
   enderecoDaPrevia, pecaAutomatica, pecasParaODestaque, selosDeFabrica,
+  corInicialDaLoja, configChegou, trocarESalvar,
   type PecaDoPainel, type VitrineDoPainel,
 } from "./designDaVitrineStudio";
 type BannerTone = "split" | "editorial" | "centered" | "image-clean";
@@ -68,6 +69,10 @@ type Cfg = {
   is_published?: boolean; slug?: string; storefront_url?: string;
   /** Fase 5 (Studio): a peça do destaque sem banner; null = automática. */
   hero_product_id?: string | null;
+  /** O GET sempre traz; ausente = a configuração ainda não chegou. */
+  exists?: boolean;
+  /** Backend (PR paralelo): os banners gravados são o de fábrica. */
+  banners_automaticos?: boolean;
 };
 
 // A prévia: vitrine Studio no endereço da loja, ou a loja comum pelo
@@ -103,7 +108,7 @@ const BANNER_TONE_HELPERS: Record<BannerTone, { title: string; body: string }> =
   },
   centered: {
     title: "Centralizado:",
-    body: "todo o texto centralizado no banner. Bom pra anúncios curtos com CTA.",
+    body: "todo o texto centralizado no banner. Bom para anúncios curtos com botão.",
   },
   "image-clean": {
     title: "Imagem + legenda:",
@@ -166,12 +171,13 @@ function normalizeServiceCards(input: any): ServiceCard[] {
 // existe; os 3 originais ficam disabled nesse caso.
 // ============================================================
 function BannerLayoutThumb({ tone, thumb }: { tone: BannerTone; thumb: any }) {
+  const p = usePaletaDoCanal();
   // Container interno do thumb — 70x40 aproximado
   if (tone === "image-clean") {
     return (
       <View style={thumb.frame}>
         {/* Top 70% — simula imagem */}
-        <View style={[thumb.imageBlock, { backgroundColor: Colors.bg4 }]}>
+        <View style={[thumb.imageBlock, { backgroundColor: p.bg4 }]}>
           <View style={thumb.imageInner} />
         </View>
         {/* Bottom 30% — faixa branca com headline + cta */}
@@ -295,10 +301,11 @@ export function TabDesign({
 }) {
   const cs = useChannelStyles();
   const accent = useAccent();
-  const s = useMemo(() => buildStyles(accent), [accent]);
-  const pickerStyles = useMemo(() => buildPickerStyles(accent), [accent]);
-  const thumb = useMemo(() => buildThumbStyles(accent), [accent]);
-  const [primary, setPrimary]   = useState(config.primary_color || "#7c3aed");
+  const p = usePaletaDoCanal();
+  const s = useMemo(() => buildStyles(accent, p), [accent, p]);
+  const pickerStyles = useMemo(() => buildPickerStyles(accent, p), [accent, p]);
+  const thumb = useMemo(() => buildThumbStyles(accent, p), [accent, p]);
+  const [primary, setPrimary]   = useState(corInicialDaLoja(config));
   const [accentColor, setAccentColor]     = useState(config.accent_color  || "#a78bfa");
   const [dark, setDark]         = useState(!!config.dark_mode);
   const [font, setFont]         = useState(config.font_family   || "classic");
@@ -314,6 +321,8 @@ export function TabDesign({
   const [serviceCards, setServiceCards] = useState<ServiceCard[]>(selosIniciais(config.service_cards));
   const [pecas, setPecas] = useState<PecaDoPainel[]>([]);
   const [heroId, setHeroId] = useState<string | null>(config.hero_product_id || null);
+  // Erro da tipografia: aparece no próprio cartão, junto da escolha que voltou.
+  const [erroDaFonte, setErroDaFonte] = useState<string | null>(null);
   const [device, setDevice]     = useState<"desktop" | "mobile">(IS_WIDE ? "desktop" : "mobile");
   const [previewKey, setPreviewKey] = useState(0);
   // Produtos reais pro preview. A diferenca entre "Editorial" e "Imagem"
@@ -348,7 +357,7 @@ export function TabDesign({
     return () => { vivo = false; };
   }, [slugDaLoja]);
 
-  useEffect(() => { setPrimary(config.primary_color || "#7c3aed"); }, [config.primary_color]);
+  useEffect(() => { setPrimary(corInicialDaLoja(config)); }, [config.primary_color, config.exists]);
   useEffect(() => { setAccentColor(config.accent_color   || "#a78bfa"); }, [config.accent_color]);
   useEffect(() => { setDark(!!config.dark_mode); }, [config.dark_mode]);
   useEffect(() => { setFont(config.font_family   || "classic"); }, [config.font_family]);
@@ -364,16 +373,48 @@ export function TabDesign({
   useEffect(() => { setHeroId(config.hero_product_id || null); }, [config.hero_product_id]);
 
   const saveTimer = useRef<any>(null);
+  // O patch ACUMULA até o timer disparar: antes cada chamada trocava o
+  // patch inteiro, e a cor trocada logo antes de mexer num banner se perdia.
+  const patchPendente = useRef<Record<string, any>>({});
   function scheduleSave(patch: Partial<Cfg> & { banners?: Banner[]; service_cards?: ServiceCard[]; banner_rotation_seconds?: number; hero_product_id?: string | null }) {
     if (saveTimer.current) clearTimeout(saveTimer.current);
+    patchPendente.current = { ...patchPendente.current, ...patch };
     saveTimer.current = setTimeout(async () => {
+      const corpo = patchPendente.current;
+      patchPendente.current = {};
       try {
-        await saveConfig(patch);
+        await saveConfig(corpo);
         setPreviewKey((k) => k + 1);
       } catch (err: any) {
         toast.error(err?.message || "Erro ao salvar");
       }
     }, 800);
+  }
+
+  // Saiu da aba com um salvamento na fila (trocar de aba monta a tela de
+  // novo): salva AGORA em vez de esperar o timer de uma tela que acabou.
+  useEffect(() => () => {
+    if (!saveTimer.current) return;
+    clearTimeout(saveTimer.current);
+    const corpo = patchPendente.current;
+    patchPendente.current = {};
+    if (Object.keys(corpo).length) saveConfig(corpo).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // A tipografia salva na hora, fora da fila do scheduleSave: se o
+  // servidor recusar, a tela precisa saber QUAL escolha voltar.
+  async function escolherFonte(v: string) {
+    if (v === font) return;
+    setErroDaFonte(null);
+    const salvou = await trocarESalvar({
+      antes: font,
+      depois: v,
+      mostrar: setFont,
+      salvar: (valor) => saveConfig({ font_family: valor }),
+    });
+    if (salvou) setPreviewKey((k) => k + 1);
+    else setErroDaFonte("Não deu para salvar a tipografia. Tente de novo.");
   }
 
   function updateBanner(idx: number, patch: Partial<Banner>) {
@@ -480,6 +521,12 @@ export function TabDesign({
   );
   const automatica = pecaAutomatica(pecas);
   const wide = IS_WIDE;
+  const carregouConfig = configChegou(config);
+  // O campo do backend descreve os banners SALVOS. Enquanto ela edita (a
+  // tela na frente do servidor), vale a leitura dos banners da tela.
+  const bannersComoNoServidor = JSON.stringify(banners) === JSON.stringify(normalizeBanners(config.banners));
+  const bannersAutomaticos = bannersComoNoServidor ? config.banners_automaticos : undefined;
+  const bannerDeFabrica = bannersDeFabrica(banners, bannersAutomaticos);
 
   const editor = (
     <ScrollView style={s.editorScroll} contentContainerStyle={{ paddingBottom: 80 }}>
@@ -500,6 +547,7 @@ export function TabDesign({
             logoUrl: config.logo_url,
             corPrimaria: primary,
             banners,
+            bannersAutomaticos,
             anuncio: annBar,
             tagline: config.tagline,
             produtosTotal: contagem.total,
@@ -515,9 +563,12 @@ export function TabDesign({
             que "a troca de cores não faz muito". */}
         <View style={{ marginBottom: 16, gap: 7 }}>
           <MiniLoja
-            cor={primary}
-            corDestaque={accentColor}
+            cor={primary || "#7c3aed"}
+            // Na vitrine Studio a cor de destaque saiu (decisão do PO): a
+            // mini loja pinta só com a cor principal, como a loja dela.
+            corDestaque={ehStudio ? (primary || "#7c3aed") : accentColor}
             fonte={font}
+            vitrine={vitrine}
             estiloCartao={cardStyle as any}
             nomeDaLoja={config.site_name}
             tagline={config.tagline}
@@ -526,7 +577,7 @@ export function TabDesign({
             colunas={3}
           />
           <Text style={cs.hint}>
-            É assim que sua loja aparece pro cliente. Mexa nas opções abaixo e veja mudar aqui.
+            É assim que sua loja aparece para o cliente. Mexa nas opções abaixo e veja mudar aqui.
           </Text>
         </View>
 
@@ -541,6 +592,11 @@ export function TabDesign({
         <View style={cs.colorRow}>
           {COLOR_PRESETS.map((c) => (
             <Pressable key={c} onPress={() => { setPrimary(c); scheduleSave({ primary_color: c }); }}
+              accessibilityRole="button"
+              accessibilityLabel={`Cor ${NOMES_DAS_CORES[c] || c}`}
+              accessibilityState={{ selected: primary === c }}
+              // No web o accessibilityState não chega ao DOM (RNW 0.19).
+              aria-pressed={primary === c}
               style={[cs.colorDot, { backgroundColor: c }, primary === c && cs.colorDotActive]} />
           ))}
         </View>
@@ -549,8 +605,9 @@ export function TabDesign({
         <SeletorDeCor
           valor={primary}
           onMudar={(v) => { setPrimary(v); scheduleSave({ primary_color: v }); }}
-          placeholder="#7c3aed"
+          placeholder="#1e3a8a"
           estiloInput={cs.input}
+          carregando={!carregouConfig}
         />
         {/* Redesign 09/2026 (decisao 4): a loja tem UMA cor. Cor de
             destaque, paletas e tema escuro sairam do painel; as colunas
@@ -571,10 +628,17 @@ export function TabDesign({
             ainda: a lojista escolhia no escuro. */}
         <PreviewTipografia
           valor={font}
-          onChange={(v) => { setFont(v); scheduleSave({ font_family: v }); }}
-          cor={primary}
+          onChange={escolherFonte}
+          cor={primary || "#7c3aed"}
           nomeDaLoja={config.site_name}
+          vitrine={vitrine}
         />
+        {erroDaFonte ? (
+          <View style={[cs.infoCard, { borderColor: p.red }]} accessibilityRole="alert" testID="erro-da-fonte">
+            <Icon name="alert" size={13} color={p.red} />
+            <Text style={[cs.infoText, { color: p.red }]}>{erroDaFonte}</Text>
+          </View>
+        ) : null}
 
         <Text style={[cs.fieldLabel, { marginTop: 18 }]}>Estilo dos cards de produto</Text>
         {/* Era ChipToggle de texto puro ("Compacto, sem destaque").
@@ -590,7 +654,9 @@ export function TabDesign({
 
       <SectionTitle title="Anúncio (faixa superior)" />
       <View style={cs.card}>
-        <Field label="Texto exibido no topo (desktop)" value={annBar}
+        {/* A vitrine Studio mostra a faixa no celular também: "(desktop)"
+            mandava a lojista achar que o celular não via o aviso. */}
+        <Field label={ehStudio ? "Texto da faixa do topo" : "Texto exibido no topo (desktop)"} value={annBar}
           onChange={(v) => { setAnnBar(v); scheduleSave({ announcement_bar: v }); }}
           placeholder="Ex: Frete grátis acima de R$ 250" />
         <Text style={cs.hint}>
@@ -631,13 +697,13 @@ export function TabDesign({
               keyboardType="numeric"
               maxLength={2}
               placeholder="7"
-              placeholderTextColor={Colors.ink3}
+              placeholderTextColor={p.ink3}
             />
             <Text style={s.rotateSuffix}>segundos</Text>
           </View>
         </View>
         <Text style={cs.hint}>
-          Quanto tempo cada banner fica visível antes de trocar pro próximo (entre {ROTATION_MIN} e {ROTATION_MAX}).
+          Quanto tempo cada banner fica visível antes de trocar para o próximo (entre {ROTATION_MIN} e {ROTATION_MAX}).
         </Text>
         </>)}
       </View>
@@ -652,6 +718,14 @@ export function TabDesign({
             <ToggleRow label="Ativo" value={!!b.enabled}
               onChange={(v) => updateBanner(idx, { enabled: v })} />
           </View>
+          {idx === 0 && bannerDeFabrica ? (
+            <View style={[cs.infoCard, { marginTop: 0, marginBottom: 12 }]} testID="banner-de-fabrica">
+              <Icon name="info" size={13} color={p.amber} />
+              <Text style={cs.infoText}>
+                Este é o texto de exemplo. Edite ou envie uma imagem para ele aparecer na loja.
+              </Text>
+            </View>
+          ) : null}
 
           <Field label="Kicker (linha curta acima do título)" value={b.kicker || ""}
             onChange={(v) => updateBanner(idx, { kicker: v })}
@@ -701,8 +775,8 @@ export function TabDesign({
                       updateBanner(idx, { image_url: null });
                     } catch (err: any) { toast.error(err?.message); }
                   }}>
-                  <Icon name="trash" size={14} color="#dc2626" />
-                  <Text style={[s.smallBtnText, { color: "#dc2626" }]}>Remover</Text>
+                  <Icon name="trash" size={14} color={p.red} />
+                  <Text style={[s.smallBtnText, { color: p.red }]}>Remover</Text>
                 </Pressable>
               </View>
             </View>
@@ -711,7 +785,7 @@ export function TabDesign({
               disabled={isUploadingImage}>
               {isUploadingImage ? <ActivityIndicator color={accent.primary} /> : (
                 <>
-                  <Icon name="image" size={20} color={Colors.ink3} />
+                  <Icon name="image" size={20} color={p.ink3} />
                   <Text style={s.uploadText}>Adicionar imagem</Text>
                   {/* A spec exata, nao "JPG ou PNG": a lojista subia o
                       que tinha e descobria o texto cortado no celular. */}
@@ -746,15 +820,15 @@ export function TabDesign({
                           updateBanner(idx, { image_url_mobile: null });
                         } catch (err: any) { toast.error(err?.message); }
                       }}>
-                      <Icon name="trash" size={14} color="#dc2626" />
-                      <Text style={[s.smallBtnText, { color: "#dc2626" }]}>Remover</Text>
+                      <Icon name="trash" size={14} color={p.red} />
+                      <Text style={[s.smallBtnText, { color: p.red }]}>Remover</Text>
                     </Pressable>
                   </View>
                 </View>
               ) : (
                 <Pressable style={s.uploadDrop} onPress={() => pickAndUploadImage(`banner_${idx}_mobile` as any)}
                   disabled={isUploadingImage} testID={`banner-mobile-${idx}`}>
-                  <Icon name="image" size={20} color={Colors.ink3} />
+                  <Icon name="image" size={20} color={p.ink3} />
                   <Text style={s.uploadText}>Adicionar imagem para celular</Text>
                   <Text style={s.uploadHint}>{SPECS.banner_mobile.resumo}</Text>
                 </Pressable>
@@ -773,23 +847,23 @@ export function TabDesign({
               Sem banner ativo, o topo da loja mostra esta peça com o mockup girando e as artes trocando sozinhas. No automático, é a primeira com prévia 3D{automatica ? ` (hoje: ${automatica.nome})` : ""}.
             </Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 8 }}>
-              {[{ id: "", nome: "Automático", foto: null, tresD: false } as PecaDoPainel, ...pecas].map((p) => {
-                const sel = (heroId || "") === p.id;
+              {[{ id: "", nome: "Automático", foto: null, tresD: false } as PecaDoPainel, ...pecas].map((peca) => {
+                const sel = (heroId || "") === peca.id;
                 return (
                   <Pressable
-                    key={p.id || "auto"}
-                    testID={`destaque-${p.id || "auto"}`}
-                    onPress={() => { const v = p.id || null; setHeroId(v); scheduleSave({ hero_product_id: v }); }}
+                    key={peca.id || "auto"}
+                    testID={`destaque-${peca.id || "auto"}`}
+                    onPress={() => { const v = peca.id || null; setHeroId(v); scheduleSave({ hero_product_id: v }); }}
                     accessibilityRole="radio"
                     accessibilityState={{ checked: sel }}
-                    accessibilityLabel={p.id ? p.nome : "Automático: a primeira com prévia 3D"}
-                    style={{ width: 104, padding: 6, gap: 6, borderRadius: 12, borderWidth: sel ? 2 : 1, borderColor: sel ? accent.primaryStrong : accent.border, backgroundColor: sel ? accent.primarySoft : Colors.bg2 }}
+                    accessibilityLabel={peca.id ? peca.nome : "Automático: a primeira com prévia 3D"}
+                    style={{ width: 104, padding: 6, gap: 6, borderRadius: 12, borderWidth: sel ? 2 : 1, borderColor: sel ? accent.primaryStrong : accent.border, backgroundColor: sel ? accent.primarySoft : p.bg2 }}
                   >
-                    <View style={{ width: "100%", aspectRatio: 1, borderRadius: 8, overflow: "hidden", backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center" }}>
-                      {p.foto ? <Image source={{ uri: p.foto }} style={{ width: "100%", height: "100%" }} resizeMode="cover" /> : <Icon name={p.id ? "image" : "refresh"} size={18} color={Colors.ink3} />}
+                    <View style={{ width: "100%", aspectRatio: 1, borderRadius: 8, overflow: "hidden", backgroundColor: p.bg3, alignItems: "center", justifyContent: "center" }}>
+                      {peca.foto ? <Image source={{ uri: peca.foto }} style={{ width: "100%", height: "100%" }} resizeMode="cover" /> : <Icon name={peca.id ? "image" : "refresh"} size={18} color={p.ink3} />}
                     </View>
-                    <Text numberOfLines={2} style={{ fontSize: 11.5, fontWeight: sel ? "700" : "500", color: Colors.ink }}>{p.nome}</Text>
-                    {p.tresD ? <Text style={{ fontSize: 10, color: Colors.ink3 }}>Prévia 3D</Text> : null}
+                    <Text numberOfLines={2} style={{ fontSize: 11.5, fontWeight: sel ? "700" : "500", color: p.ink }}>{peca.nome}</Text>
+                    {peca.tresD ? <Text style={{ fontSize: 10, color: p.ink3 }}>Prévia 3D</Text> : null}
                   </Pressable>
                 );
               })}
@@ -865,7 +939,7 @@ export function TabDesign({
                       onPress={() => updateServiceCard(idx, { icon: opt.value })}
                       style={[s.iconChip, active && s.iconChipActive]}>
                       <ServiceIconPreview icon={opt.value} size={20}
-                        color={active ? accent.primaryStrong : Colors.ink} />
+                        color={active ? accent.primaryStrong : p.ink} />
                       <Text style={[s.iconChipLabel, active && { color: accent.primaryStrong, fontWeight: "700" }]}>{opt.label}</Text>
                     </Pressable>
                   );
@@ -885,7 +959,7 @@ export function TabDesign({
 
       {!config.is_published && (
         <View style={[cs.infoCard, { marginTop: 16 }]}>
-          <Icon name="info" size={16} color={Colors.amber} />
+          <Icon name="info" size={16} color={p.amber} />
           <Text style={cs.infoText}>
             Sua loja ainda não está publicada. Vá em <Text style={{ fontWeight: "700" }}>Meu Site</Text> e
             ative a publicação para que clientes possam acessar.
@@ -908,17 +982,17 @@ export function TabDesign({
         <View style={s.deviceToggle}>
           <Pressable onPress={() => setDevice("desktop")}
             style={[s.deviceBtn, device === "desktop" && s.deviceBtnActive]}>
-            <Icon name="monitor" size={14} color={device === "desktop" ? accent.primaryStrong : Colors.ink3} />
-            <Text style={[s.deviceText, device === "desktop" && { color: accent.primaryStrong, fontWeight: "700" }]}>Desktop</Text>
+            <Icon name="monitor" size={14} color={device === "desktop" ? accent.primaryStrong : p.ink3} />
+            <Text style={[s.deviceText, device === "desktop" && { color: accent.primaryStrong, fontWeight: "700" }]}>Computador</Text>
           </Pressable>
           <Pressable onPress={() => setDevice("mobile")}
             style={[s.deviceBtn, device === "mobile" && s.deviceBtnActive]}>
-            <Icon name="smartphone" size={14} color={device === "mobile" ? accent.primaryStrong : Colors.ink3} />
-            <Text style={[s.deviceText, device === "mobile" && { color: accent.primaryStrong, fontWeight: "700" }]}>Mobile</Text>
+            <Icon name="smartphone" size={14} color={device === "mobile" ? accent.primaryStrong : p.ink3} />
+            <Text style={[s.deviceText, device === "mobile" && { color: accent.primaryStrong, fontWeight: "700" }]}>Celular</Text>
           </Pressable>
         </View>
         <Pressable onPress={() => setPreviewKey((k) => k + 1)} style={s.refreshBtn}>
-          <Icon name="refresh" size={14} color={Colors.ink3} />
+          <Icon name="refresh" size={14} color={p.ink3} />
           <Text style={s.refreshText}>Atualizar</Text>
         </Pressable>
       </View>
@@ -934,15 +1008,15 @@ export function TabDesign({
               borderRadius: device === "mobile" ? 28 : 8,
               background: "#fff",
             }}
-            title="Preview da loja"
+            title="Prévia da loja"
           />
         ) : (
           <View style={s.previewEmpty}>
-            <Icon name="globe" size={28} color={Colors.ink3} />
+            <Icon name="globe" size={28} color={p.ink3} />
             <Text style={s.previewEmptyText}>
               {previewUrl
-                ? "Preview disponível na versão web"
-                : "Publique sua loja na aba Meu Site para ver o preview aqui"}
+                ? "Prévia disponível na versão web"
+                : "Publique sua loja na aba Meu Site para ver a prévia aqui"}
             </Text>
           </View>
         )}
@@ -972,7 +1046,7 @@ export function TabDesign({
 // ============================================================
 // Estilos do BannerLayoutPicker (Fase 2) — accent-aware
 // ============================================================
-function buildPickerStyles(accent: AccentTokens) {
+function buildPickerStyles(accent: AccentTokens, p: PaletaDoCanalTokens) {
   return StyleSheet.create({
     grid: {
       flexDirection: "row",
@@ -987,8 +1061,8 @@ function buildPickerStyles(accent: AccentTokens) {
       minWidth: 110,
       borderRadius: 10,
       borderWidth: 1,
-      borderColor: Colors.border,
-      backgroundColor: Colors.bg4,
+      borderColor: p.border,
+      backgroundColor: p.bg4,
       padding: 8,
       alignItems: "center",
       gap: 6,
@@ -1004,7 +1078,7 @@ function buildPickerStyles(accent: AccentTokens) {
     },
     label: {
       fontSize: 11,
-      color: Colors.ink,
+      color: p.ink,
       fontWeight: "600",
       textAlign: "center",
     },
@@ -1012,7 +1086,7 @@ function buildPickerStyles(accent: AccentTokens) {
     labelActive: { color: accent.primaryStrong, fontWeight: "700" },
     disabledHint: {
       fontSize: 9,
-      color: Colors.ink3,
+      color: p.ink3,
       textAlign: "center",
       lineHeight: 12,
     },
@@ -1020,7 +1094,7 @@ function buildPickerStyles(accent: AccentTokens) {
 }
 
 // Schematics CSS-puros pros 4 layouts. Cada thumb fica num frame ~70x40px.
-function buildThumbStyles(accent: AccentTokens) {
+function buildThumbStyles(accent: AccentTokens, p: PaletaDoCanalTokens) {
   return StyleSheet.create({
     frame: {
       width: 72,
@@ -1028,7 +1102,7 @@ function buildThumbStyles(accent: AccentTokens) {
       borderRadius: 6,
       backgroundColor: "#fff",
       borderWidth: 1,
-      borderColor: Colors.border,
+      borderColor: p.border,
       overflow: "hidden",
       position: "relative",
     },
@@ -1054,12 +1128,12 @@ function buildThumbStyles(accent: AccentTokens) {
       justifyContent: "space-between",
       paddingHorizontal: 4,
       borderTopWidth: 1,
-      borderTopColor: Colors.border,
+      borderTopColor: p.border,
     },
     captionLine: {
       height: 2,
       width: 26,
-      backgroundColor: Colors.ink3,
+      backgroundColor: p.ink3,
       borderRadius: 1,
     },
     captionDot: {
@@ -1092,7 +1166,7 @@ function buildThumbStyles(accent: AccentTokens) {
     },
     textLine: {
       height: 2.5,
-      backgroundColor: Colors.ink3,
+      backgroundColor: p.ink3,
       borderRadius: 1,
     },
     // editorial: letra A gigante + retangulo pequeno no canto
@@ -1115,7 +1189,7 @@ function buildThumbStyles(accent: AccentTokens) {
       width: 22,
       height: 4,
       borderRadius: 1,
-      backgroundColor: Colors.ink3,
+      backgroundColor: p.ink3,
     },
     // centered: 2 linhas centralizadas + cta
     centeredInner: {
@@ -1133,11 +1207,11 @@ function buildThumbStyles(accent: AccentTokens) {
   });
 }
 
-function buildStyles(accent: AccentTokens) {
+function buildStyles(accent: AccentTokens, p: PaletaDoCanalTokens) {
   return StyleSheet.create({
     // Aviso do CTA sem link: cor de atenção, não de erro — nada está
     // quebrado, só há um botão que ainda não aparece na loja.
-    avisoCta: { fontSize: 11, color: Colors.amber, lineHeight: 15, marginTop: -6, marginBottom: 10 },
+    avisoCta: { fontSize: 11, color: p.amber, lineHeight: 15, marginTop: -6, marginBottom: 10 },
     sideBySide: { flexDirection: "row", gap: 16, alignItems: "stretch", minHeight: 720 },
     editorSide: { width: 380, flexShrink: 0 },
     previewSide: { flex: 1 },
@@ -1154,27 +1228,27 @@ function buildStyles(accent: AccentTokens) {
     // WCAG AA: 12px magenta sobre primarySoft — fontWeight 700 sobe ratio pra ≥3:1.
     tabIntroText: { flex: 1, fontSize: 12, color: accent.primaryStrong, lineHeight: 17, fontWeight: "700" },
 
-    previewWrap: { flex: 1, backgroundColor: Colors.bg3, borderRadius: 16, borderWidth: 1, borderColor: Colors.border, overflow: "hidden", padding: 12 },
+    previewWrap: { flex: 1, backgroundColor: p.bg3, borderRadius: 16, borderWidth: 1, borderColor: p.border, overflow: "hidden", padding: 12 },
     previewBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4, paddingBottom: 10, gap: 8 },
-    deviceToggle: { flexDirection: "row", backgroundColor: Colors.bg4, borderRadius: 10, padding: 3, gap: 2 },
+    deviceToggle: { flexDirection: "row", backgroundColor: p.bg4, borderRadius: 10, padding: 3, gap: 2 },
     deviceBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
     deviceBtnActive: { backgroundColor: accent.primarySoft },
-    deviceText: { fontSize: 12, color: Colors.ink3, fontWeight: "600" },
-    refreshBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border },
-    refreshText: { fontSize: 12, color: Colors.ink3, fontWeight: "600" },
+    deviceText: { fontSize: 12, color: p.ink3, fontWeight: "600" },
+    refreshBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: p.bg4, borderWidth: 1, borderColor: p.border },
+    refreshText: { fontSize: 12, color: p.ink3, fontWeight: "600" },
     previewFrame: { flex: 1, backgroundColor: "#fff", borderRadius: 10, overflow: "hidden" },
     previewFrameMobile: { alignSelf: "center", width: 390, maxWidth: "100%", borderRadius: 28, borderWidth: 8, borderColor: "#1a1a2e" },
     previewEmpty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, padding: 24 },
-    previewEmptyText: { fontSize: 12, color: Colors.ink3, textAlign: "center", lineHeight: 18, maxWidth: 280 },
+    previewEmptyText: { fontSize: 12, color: p.ink3, textAlign: "center", lineHeight: 18, maxWidth: 280 },
 
-    paletteChip: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg4 },
+    paletteChip: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: p.border, backgroundColor: p.bg4 },
     paletteChipActive: { borderColor: accent.primary, backgroundColor: accent.primarySoft },
     paletteSplit: { flexDirection: "row", width: 28, height: 16, borderRadius: 8, overflow: "hidden" },
     paletteHalf: { flex: 1, height: "100%" },
-    paletteLabel: { fontSize: 11, color: Colors.ink, fontWeight: "600" },
+    paletteLabel: { fontSize: 11, color: p.ink, fontWeight: "600" },
 
     bannerHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
-    bannerTitle: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
+    bannerTitle: { fontSize: 14, color: p.ink, fontWeight: "700" },
 
     // Fase 3 — Rec #6: input compacto pra tempo entre slides
     rotateRow: {
@@ -1197,16 +1271,16 @@ function buildStyles(accent: AccentTokens) {
       paddingVertical: 8,
       borderRadius: 8,
       borderWidth: 1,
-      borderColor: Colors.border,
-      backgroundColor: Colors.bg4,
+      borderColor: p.border,
+      backgroundColor: p.bg4,
       fontSize: 14,
-      color: Colors.ink,
+      color: p.ink,
       fontWeight: "600",
       textAlign: "center",
     },
     rotateSuffix: {
       fontSize: 12,
-      color: Colors.ink3,
+      color: p.ink3,
       fontWeight: "500",
     },
 
@@ -1217,31 +1291,31 @@ function buildStyles(accent: AccentTokens) {
       paddingHorizontal: 12, paddingVertical: 10,
       borderRadius: 6, marginTop: 8,
     },
-    toneHelperText: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
+    toneHelperText: { fontSize: 11, color: p.ink3, lineHeight: 16 },
     toneHelperTitle: { fontWeight: "700", color: accent.primaryStrong },
 
     imagePreview: { flexDirection: "row", gap: 12, alignItems: "stretch" },
-    imageThumb: { width: 88, height: 88, borderRadius: 10, backgroundColor: Colors.bg4 },
-    smallBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, backgroundColor: accent.primarySoft, borderWidth: 1, borderColor: Colors.border },
-    smallBtnDanger: { backgroundColor: "rgba(220,38,38,0.06)" },
+    imageThumb: { width: 88, height: 88, borderRadius: 10, backgroundColor: p.bg4 },
+    smallBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, backgroundColor: accent.primarySoft, borderWidth: 1, borderColor: p.border },
+    smallBtnDanger: { backgroundColor: p.redD },
     // WCAG AA: 12px magenta sobre primarySoft — peso 700.
     smallBtnText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "700" },
 
-    uploadDrop: { borderRadius: 10, borderWidth: 1.5, borderColor: Colors.border, borderStyle: "dashed", padding: 20, alignItems: "center", gap: 6, backgroundColor: Colors.bg4 },
-    uploadText: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
-    uploadHint: { fontSize: 11, color: Colors.ink3 },
+    uploadDrop: { borderRadius: 10, borderWidth: 1.5, borderColor: p.border, borderStyle: "dashed", padding: 20, alignItems: "center", gap: 6, backgroundColor: p.bg4 },
+    uploadText: { fontSize: 13, color: p.ink, fontWeight: "600" },
+    uploadHint: { fontSize: 11, color: p.ink3 },
 
-    svcIconChip: { width: 32, height: 32, borderRadius: 8, backgroundColor: accent.primarySoft, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border },
+    svcIconChip: { width: 32, height: 32, borderRadius: 8, backgroundColor: accent.primarySoft, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: p.border },
     iconGrid: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 },
-    iconChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg4 },
+    iconChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: p.border, backgroundColor: p.bg4 },
     iconChipActive: { borderColor: accent.primary, backgroundColor: accent.primarySoft },
-    iconChipLabel: { fontSize: 11, color: Colors.ink, fontWeight: "500" },
+    iconChipLabel: { fontSize: 11, color: p.ink, fontWeight: "500" },
 
     // Rec #5 — empty state de service cards
     svcEmpty: {
       borderRadius: 14,
-      borderWidth: 1.5, borderColor: Colors.border, borderStyle: "dashed",
-      backgroundColor: Colors.bg4,
+      borderWidth: 1.5, borderColor: p.border, borderStyle: "dashed",
+      backgroundColor: p.bg4,
       padding: 20, alignItems: "center",
     },
     svcEmptyIcon: {
@@ -1249,17 +1323,17 @@ function buildStyles(accent: AccentTokens) {
       flexDirection: "row", flexWrap: "wrap",
       gap: 3, marginBottom: 12, alignItems: "center", justifyContent: "center",
     },
-    svcEmptySquare: { width: 18, height: 18, borderRadius: 4, backgroundColor: accent.primarySoft, borderWidth: 1, borderColor: Colors.border },
-    svcEmptyTitle: { fontSize: 14, fontWeight: "700", color: Colors.ink, marginBottom: 4 },
-    svcEmptyHint: { fontSize: 12, color: Colors.ink3, marginBottom: 16, textAlign: "center" },
+    svcEmptySquare: { width: 18, height: 18, borderRadius: 4, backgroundColor: accent.primarySoft, borderWidth: 1, borderColor: p.border },
+    svcEmptyTitle: { fontSize: 14, fontWeight: "700", color: p.ink, marginBottom: 4 },
+    svcEmptyHint: { fontSize: 12, color: p.ink3, marginBottom: 16, textAlign: "center" },
     svcTemplateGrid: {
       flexDirection: "row", flexWrap: "wrap",
       gap: 8, marginBottom: 14, width: "100%",
     },
     svcTemplateCard: {
       width: "48%", minWidth: 140,
-      borderRadius: 10, borderWidth: 1, borderColor: Colors.border,
-      backgroundColor: Colors.bg3,
+      borderRadius: 10, borderWidth: 1, borderColor: p.border,
+      backgroundColor: p.bg3,
       padding: 12, gap: 6,
     },
     svcTemplateIcon: {
@@ -1268,27 +1342,27 @@ function buildStyles(accent: AccentTokens) {
       alignItems: "center", justifyContent: "center",
       marginBottom: 4,
     },
-    svcTemplateTitle: { fontSize: 12, fontWeight: "700", color: Colors.ink },
-    svcTemplateBody: { fontSize: 10, color: Colors.ink3, lineHeight: 14 },
+    svcTemplateTitle: { fontSize: 12, fontWeight: "700", color: p.ink },
+    svcTemplateBody: { fontSize: 10, color: p.ink3, lineHeight: 14 },
     svcEmptyBtn: {
       flexDirection: "row", alignItems: "center", gap: 6,
       paddingHorizontal: 14, paddingVertical: 9,
-      borderRadius: 8, backgroundColor: Colors.bg3,
-      borderWidth: 1, borderColor: Colors.border,
+      borderRadius: 8, backgroundColor: p.bg3,
+      borderWidth: 1, borderColor: p.border,
     },
-    // WCAG AA: 12px magenta sobre Colors.bg3 — peso 700.
+    // WCAG AA: 12px magenta sobre p.bg3 — peso 700.
     svcEmptyBtnText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "700" },
     svcAddBtn: {
       flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
       paddingVertical: 10, borderRadius: 10,
-      backgroundColor: Colors.bg4,
-      borderWidth: 1, borderColor: Colors.border, borderStyle: "dashed",
+      backgroundColor: p.bg4,
+      borderWidth: 1, borderColor: p.border, borderStyle: "dashed",
       marginTop: 4,
     },
-    // WCAG AA: 12px magenta sobre Colors.bg4 — peso 700.
+    // WCAG AA: 12px magenta sobre p.bg4 — peso 700.
     svcAddBtnText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "700" },
 
-    savingPill: { position: "absolute", bottom: 16, left: 16, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: accent.primarySoft, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: Colors.border },
+    savingPill: { position: "absolute", bottom: 16, left: 16, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: accent.primarySoft, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: p.border },
     // WCAG AA: 12px magenta sobre primarySoft — peso 700.
     savingText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "700" },
   });

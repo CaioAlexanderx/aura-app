@@ -46,15 +46,29 @@
 //   · Substituído por <StudioGradient> (zero-deps): CSS linear-gradient no web,
 //     cor sólida central no native. Props start/end removidas (usa "direction"
 //     CSS-style: "to bottom right", "to right", "135deg", etc).
+//
+// 27/09/2026 — QA do painel (Loja Digital):
+//   · Troca de aba com PUSH: o voltar do navegador volta para a aba
+//     anterior. Com replace, ele saía da Loja Digital.
+//   · Aba com formulário avisa `onAlteracoes`; com alteração não salva, a
+//     tela pergunta antes de trocar ("Ficar" / "Sair sem salvar").
+//   · As abas do canal (Meu Site, Design, Entrega) seguem o tema do Studio
+//     pela PaletaDoCanal — antes vinham com o tema do painel Negócio.
+//   · Aba ativa em navy com texto branco nos dois temas; alvos de 44 px
+//     no celular.
 // ============================================================
-import { useState, useMemo, useEffect } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, Linking, Platform } from "react-native";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { View, Text, ScrollView, StyleSheet, Pressable, Linking, Platform, useWindowDimensions } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StudioGradient } from "@/components/studio/StudioGradient";
 import { StudioColors, StudioGradients, type StudioPalette } from "@/constants/studio-tokens";
-import { useStudioTokens } from "@/contexts/StudioThemeMode";
+import { useStudioTokens, useStudioTheme } from "@/contexts/StudioThemeMode";
 import { StudioScreen } from "@/components/studio/StudioScreen";
-import { AccentTheme, studioAccent } from "@/contexts/AccentTheme";
+import { AccentTheme, studioAccent, type AccentTokens } from "@/contexts/AccentTheme";
+import { PaletaDoCanal, paletaDoStudio } from "@/components/screens/canal/paletaDoCanal";
+import {
+  abaDaUrl, trocaDeAba, PERGUNTA_ALTERACOES, type AbaDaLojaDigital,
+} from "@/components/screens/studio-loja-digital/abasDaLojaDigital";
 import { useDigitalChannel } from "@/hooks/useDigitalChannel";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
@@ -76,7 +90,7 @@ import { TabStudioPedidosPelaLoja } from "@/components/screens/studio-loja-digit
 
 const STOREFRONT_BASE = "https://loja.getaura.com.br";
 
-type TabKey = "site" | "design" | "aparencia" | "configurator" | "gallery" | "revisions" | "marketplaces" | "delivery" | "pedidos_loja" | "orders";
+type TabKey = AbaDaLojaDigital;
 
 const TABS: Array<{ key: TabKey; label: string; icon: string }> = [
   { key: "site",          label: "Meu Site",     icon: "globe" },
@@ -101,7 +115,9 @@ const TABS: Array<{ key: TabKey; label: string; icon: string }> = [
 //         · [7,8,9]=Entrega/Pedidos pela loja/Pedidos
 const TAB_GROUP_DIVIDERS = new Set<number>([2, 6]);
 
-const TAB_KEYS = new Set<string>(TABS.map((tDef) => tDef.key));
+// A aba ativa é navy nos DOIS temas (identidade do painel). No escuro o
+// token `primary` vira #3B82F6 — o azul claro não é a cor do Studio.
+const NAVY = StudioColors.primary;
 
 // Converte hex (#RRGGBB) do StudioPalette pra rgba com alpha — usado só pro
 // fade-edge das tabs, que precisa acompanhar o bg do tema (achado #20:
@@ -117,30 +133,72 @@ function hexToRgba(hex: string, alpha: number): string {
 
 export default function StudioVendasLojaDigital() {
   const t = useStudioTokens();
-  const s = useMemo(() => buildStyles(t), [t]);
+  const { isDark } = useStudioTheme();
+  const { width } = useWindowDimensions();
+  const celular = width < 768;
+  const s = useMemo(() => buildStyles(t, isDark, celular), [t, isDark, celular]);
+  // As abas do canal seguem o tema do Studio: cores neutras pela paleta,
+  // e no escuro o accent também vem do tema (o #EFF6FF claro do accent
+  // fixo virava uma faixa branca no meio da tela escura).
+  const paleta = useMemo(() => paletaDoStudio(t), [t]);
+  const accent: AccentTokens = useMemo(() => (isDark
+    ? { primary: t.primary, primaryStrong: t.accent, primarySoft: t.primarySoft, border: t.ink5 }
+    : studioAccent), [isDark, t]);
   const router = useRouter();
   // QA fix (achado #12): as 8 tabs só existiam em estado local — F5 sempre
   // voltava pra "Meu Site" e não dava pra favoritar/compartilhar link
   // direto pra uma tab específica. Sincroniza com ?tab= na URL.
   const params = useLocalSearchParams<{ tab?: string }>();
-  const initialTab: TabKey = (typeof params.tab === "string" && TAB_KEYS.has(params.tab))
-    ? (params.tab as TabKey)
-    : "site";
-  const [tab, setTabState] = useState<TabKey>(initialTab);
+  const [tab, setTabState] = useState<TabKey>(abaDaUrl(params.tab));
+
+  // Abas com alteração não salva (contrato `onAlteracoes`) e a troca que
+  // espera a resposta da lojista.
+  const [alteradas, setAlteradas] = useState<Partial<Record<TabKey, boolean>>>({});
+  const [pendente, setPendente] = useState<TabKey | null>(null);
+  const avisos = useMemo(() => {
+    const marcar = (aba: TabKey) => (v: boolean) =>
+      setAlteradas((antes) => (!!antes[aba] === v ? antes : { ...antes, [aba]: v }));
+    return { site: marcar("site"), delivery: marcar("delivery"), pedidos_loja: marcar("pedidos_loja") };
+  }, []);
+
+  // PUSH, não replace: cada aba vira uma entrada no histórico e o voltar
+  // do navegador volta para a aba anterior (QA 26/09). O expo-router monta
+  // a tela de novo com o ?tab= novo; a config vem do cache do react-query.
+  const irPara = useCallback((next: TabKey) => {
+    setPendente(null);
+    setAlteradas({});
+    setTabState(next);
+    router.push({ pathname: "/studio/vendas/loja-digital", params: { tab: next } } as any);
+  }, [router]);
 
   function setTab(next: TabKey) {
-    setTabState(next);
-    router.setParams({ tab: next } as any);
+    const acao = trocaDeAba({ atual: tab, proxima: next, alteradas });
+    if (acao === "perguntar") setPendente(next);
+    else if (acao === "ir") irPara(next);
   }
 
-  // Se o usuário navegar via link externo trocando só o ?tab= (voltar/avançar
-  // do navegador, link de suporte), mantém o estado local em sincronia.
+  // Se o ?tab= mudar nesta mesma tela (link de suporte), acompanha — sem
+  // passar por cima de uma edição pela metade.
   useEffect(() => {
-    if (typeof params.tab === "string" && TAB_KEYS.has(params.tab) && params.tab !== tab) {
-      setTabState(params.tab as TabKey);
-    }
+    const daUrl = abaDaUrl(params.tab);
+    if (typeof params.tab !== "string" || daUrl === tab) return;
+    if (alteradas[tab]) setPendente(daUrl);
+    else setTabState(daUrl);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.tab]);
+
+  // Recarregar ou fechar a página com alteração não salva: o navegador
+  // pergunta (web).
+  const temAlteracao = Object.values(alteradas).some(Boolean);
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined" || !temAlteracao) return;
+    const segurar = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", segurar);
+    return () => window.removeEventListener("beforeunload", segurar);
+  }, [temAlteracao]);
+
+  // No celular as abas rolam de lado: a ativa entra na tela ao abrir.
+  const abasRef = useRef<ScrollView | null>(null);
   const {
     config, isLoading,
     saveConfig, isSaving,
@@ -156,15 +214,16 @@ export default function StudioVendasLojaDigital() {
     || (config.slug ? `${STOREFRONT_BASE}/${config.slug}` : null);
 
   return (
-    <AccentTheme tokens={studioAccent}>
+    <AccentTheme tokens={accent}>
+      <PaletaDoCanal paleta={paleta}>
       <StudioScreen variant="grid">
         {/* Header canônico Studio (Fase 3) */}
         <StudioPageHeader
           eyebrow="VENDAS · LOJA DIGITAL"
           title="Sua loja Studio na internet"
-          subtitle="Configure tudo do storefront: produtos personalizáveis, galeria de templates, política de revisões, marketplaces e pedidos unificados."
+          subtitle="Configure tudo da sua loja: peças personalizáveis, artes prontas, política de revisões, marketplaces e pedidos num só lugar."
           rightSlot={config.is_published && storefrontUrl ? (
-            <Pressable onPress={() => Linking.openURL(storefrontUrl)} style={s.viewSiteBtn}>
+            <Pressable onPress={() => Linking.openURL(storefrontUrl)} style={s.viewSiteBtn} accessibilityRole="link">
               <Icon name="globe" size={13} color={t.primary} />
               <Text style={s.viewSiteBtnTxt}>Ver site</Text>
             </Pressable>
@@ -182,7 +241,7 @@ export default function StudioVendasLojaDigital() {
             <Icon name="globe" size={22} color={t.primary} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={s.heroTitle}>Loja Digital pronta pra personalizados</Text>
+            <Text style={s.heroTitle}>Loja Digital pronta para personalizados</Text>
             <Text style={s.heroDesc}>
               Tudo que o cliente precisa: ver produtos, configurar arte com texto/foto/cores, escolher template e fechar pelo Pix ou cartão.
             </Text>
@@ -208,6 +267,7 @@ export default function StudioVendasLojaDigital() {
         {/* Tabs Studio (8) — scroll horizontal em mobile, com fade-edges (Fase 2) */}
         <View style={s.tabsWrap}>
           <ScrollView
+            ref={abasRef}
             horizontal
             showsHorizontalScrollIndicator={false}
             style={{ flexGrow: 0 }}
@@ -216,9 +276,19 @@ export default function StudioVendasLojaDigital() {
             {TABS.map((tDef, idx) => {
               const active = tDef.key === tab;
               return (
-                <View key={tDef.key} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <View
+                  key={tDef.key}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+                  onLayout={active ? (e) => {
+                    const x = e.nativeEvent.layout.x;
+                    abasRef.current?.scrollTo({ x: Math.max(0, x - 24), animated: false });
+                  } : undefined}
+                >
                   <Pressable
                     onPress={() => setTab(tDef.key)}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: active }}
+                    aria-selected={active}
                     style={[s.tabBtn, active && s.tabBtnActive]}
                   >
                     <Icon name={tDef.icon as any} size={13} color={active ? "#fff" : t.ink3} />
@@ -251,6 +321,25 @@ export default function StudioVendasLojaDigital() {
           )}
         </View>
 
+        {/* Troca de aba com alteração não salva: pergunta na tela, logo
+            abaixo das abas, onde ela acabou de clicar. */}
+        {pendente ? (
+          <View style={s.confirma} accessibilityRole="alert" testID="confirmar-troca-de-aba">
+            <View style={{ flexDirection: "row", gap: 8, alignItems: "flex-start", flex: 1, minWidth: 220 }}>
+              <Icon name="alert" size={16} color={t.warningInk} />
+              <Text style={s.confirmaTxt}>{PERGUNTA_ALTERACOES}</Text>
+            </View>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <Pressable onPress={() => setPendente(null)} accessibilityRole="button" style={s.confirmaFicar}>
+                <Text style={s.confirmaFicarTxt}>Ficar</Text>
+              </Pressable>
+              <Pressable onPress={() => irPara(pendente)} accessibilityRole="button" style={s.confirmaSair}>
+                <Text style={s.confirmaSairTxt}>Sair sem salvar</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
         {/* Conteúdo da tab ativa */}
         {tab === "site" && (
           isLoading ? <ListSkeleton rows={4} /> : (
@@ -264,6 +353,7 @@ export default function StudioVendasLojaDigital() {
               isUploadingImage={isUploadingImage}
               setupPix={setupPix}
               isSettingUpPix={isSettingUpPix}
+              onAlteracoes={avisos.site}
             />
           )
         )}
@@ -296,9 +386,11 @@ export default function StudioVendasLojaDigital() {
         {tab === "delivery" && (
           isLoading ? <ListSkeleton rows={4} /> : (
             <TabEntrega
+              vitrine="studio"
               config={config}
               saveConfig={saveConfig}
               isSaving={isSaving}
+              onAlteracoes={avisos.delivery}
             />
           )
         )}
@@ -312,17 +404,19 @@ export default function StudioVendasLojaDigital() {
               config={config}
               saveConfig={saveConfig}
               isSaving={isSaving}
+              onAlteracoes={avisos.pedidos_loja}
             />
           )
         )}
 
         {tab === "orders" && <TabStudioPedidos />}
       </StudioScreen>
+      </PaletaDoCanal>
     </AccentTheme>
   );
 }
 
-const buildStyles = (t: StudioPalette) => StyleSheet.create({
+const buildStyles = (t: StudioPalette, isDark: boolean, celular: boolean) => StyleSheet.create({
   scroll: { flex: 1, backgroundColor: t.bg },
   container: {
     padding: IS_WIDE ? 32 : 20,
@@ -343,6 +437,8 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
     paddingVertical: 8,
     borderWidth: 1,
     borderColor: t.primaryBorder,
+    // Alvo de toque de 44 px no celular.
+    minHeight: celular ? 44 : undefined,
   },
   viewSiteBtnTxt: {
     fontSize: 12,
@@ -435,10 +531,13 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
     backgroundColor: t.paperCard,
     borderWidth: 1,
     borderColor: t.ink5,
+    minHeight: celular ? 44 : undefined,
   },
   tabBtnActive: {
-    backgroundColor: t.primary,
-    borderColor: t.primary,
+    // Navy nos dois temas, texto branco (12:1). No escuro o navy encosta
+    // no fundo #0F172A: a borda no azul do tema desenha o contorno.
+    backgroundColor: NAVY,
+    borderColor: isDark ? t.primary : NAVY,
     // Sombra navy sutil pra dar presença ao estado ativo
     ...(Platform.OS === "web"
       ? { boxShadow: t.shadowNavy as any }
@@ -452,6 +551,32 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
   tabBtnTxtActive: {
     color: "#fff",
   },
+
+  // Confirmação de troca de aba com alteração não salva.
+  confirma: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: t.warningSoft,
+    borderWidth: 1,
+    borderColor: t.warning,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  confirmaTxt: { flex: 1, fontSize: 13, fontWeight: "700", color: t.warningInk, lineHeight: 18 },
+  confirmaFicar: {
+    minHeight: 44, paddingHorizontal: 16, borderRadius: 10,
+    backgroundColor: NAVY, alignItems: "center", justifyContent: "center",
+  },
+  confirmaFicarTxt: { fontSize: 13, fontWeight: "700", color: "#fff" },
+  confirmaSair: {
+    minHeight: 44, paddingHorizontal: 16, borderRadius: 10,
+    borderWidth: 1, borderColor: t.ink4, backgroundColor: t.paperCard,
+    alignItems: "center", justifyContent: "center",
+  },
+  confirmaSairTxt: { fontSize: 13, fontWeight: "700", color: t.ink },
 
   // Divisor vertical sutil entre grupos de tabs (Site/Design | Studio core | Entrega/Pedidos)
   tabGroupDivider: {

@@ -23,12 +23,16 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import {
   View, Text, StyleSheet, Pressable, TextInput, Switch, ActivityIndicator, Dimensions,
 } from "react-native";
-import { Colors } from "@/constants/colors";
+import { usePaletaDoCanal, type PaletaDoCanalTokens } from "./paletaDoCanal";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { IS_WIDE, Field, useChannelStyles } from "./shared";
 import { useAccent } from "@/contexts/AccentTheme";
 import type { AccentTokens } from "@/contexts/AccentTheme";
+import {
+  AVISO_SEM_RECEBIMENTO, desligarPedeConfirmacao, semComoReceber, textosDoPrazo,
+  type CampoDeRecebimento,
+} from "./entrega";
 
 // Narrow mode: phones estreitas (<480px) precisam stack do mode-grid
 const NARROW = Dimensions.get("window").width < 480;
@@ -150,12 +154,17 @@ type Props = {
   config: any;
   saveConfig: (data: any) => Promise<any>;
   isSaving: boolean;
+  /** Qual vitrine: o Studio vende sob encomenda e o prazo é em dias úteis. */
+  vitrine?: "comum" | "studio";
+  /** Contrato da Loja Digital: a aba avisa quando tem escolha pendente. */
+  onAlteracoes?: (alterada: boolean) => void;
 };
 
-export function TabEntrega({ config, saveConfig, isSaving }: Props) {
+export function TabEntrega({ config, saveConfig, isSaving, vitrine = "comum", onAlteracoes }: Props) {
   const cs = useChannelStyles();
   const accent = useAccent();
-  const s = useMemo(() => buildStyles(accent), [accent]);
+  const p = usePaletaDoCanal();
+  const s = useMemo(() => buildStyles(accent, p), [accent, p]);
 
   // --- State ----------------------------------------------------
   const [pickupEnabled, setPickupEnabled] = useState(config.pickup_enabled !== false);
@@ -213,26 +222,65 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
   useEffect(() => { setAlwaysOpen(config.always_open === true); }, [config.always_open]);
 
   // --- Save debounce 800ms -------------------------------------
+  // O patch ACUMULA até o timer disparar: antes cada chamada trocava o
+  // patch inteiro, e ligar a retirada e mexer no prazo em menos de 800 ms
+  // salvava só o prazo.
   const saveTimer = useRef<any>(null);
+  const patchPendente = useRef<Record<string, any>>({});
   function scheduleSave(patch: Record<string, any>) {
     if (saveTimer.current) clearTimeout(saveTimer.current);
+    patchPendente.current = { ...patchPendente.current, ...patch };
     saveTimer.current = setTimeout(async () => {
+      const corpo = patchPendente.current;
+      patchPendente.current = {};
       try {
-        await saveConfig(patch);
+        await saveConfig(corpo);
       } catch (err: any) {
         toast.error(err?.message || "Erro ao salvar entrega");
       }
     }, 800);
   }
 
+  // Saiu da aba com um salvamento na fila (trocar de aba monta a tela de
+  // novo): salva AGORA em vez de esperar o timer de uma tela que acabou.
+  useEffect(() => () => {
+    if (!saveTimer.current) return;
+    clearTimeout(saveTimer.current);
+    const corpo = patchPendente.current;
+    patchPendente.current = {};
+    if (Object.keys(corpo).length) saveConfig(corpo).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // --- Sem retirada nem entrega: pergunta antes -------------------
+  // QA 26/09: desligar as duas salvava calado, e a loja passava a aceitar
+  // pedido que o cliente não tinha como receber.
+  const [confirmarDesligar, setConfirmarDesligar] = useState<CampoDeRecebimento | null>(null);
+  useEffect(() => { onAlteracoes?.(!!confirmarDesligar); }, [confirmarDesligar, onAlteracoes]);
+  useEffect(() => () => onAlteracoes?.(false), [onAlteracoes]);
+
+  function aplicarRecebimento(campo: CampoDeRecebimento, v: boolean) {
+    if (campo === "pickup_enabled") setPickupEnabled(v);
+    else setDeliveryEnabled(v);
+    scheduleSave({ [campo]: v });
+  }
+
   // --- Handlers de toggles -------------------------------------
   function handlePickupToggle(v: boolean) {
-    setPickupEnabled(v);
-    scheduleSave({ pickup_enabled: v });
+    if (desligarPedeConfirmacao("pickup_enabled", v, { pickup: pickupEnabled, delivery: deliveryEnabled })) {
+      setConfirmarDesligar("pickup_enabled");
+      return;
+    }
+    setConfirmarDesligar(null);
+    aplicarRecebimento("pickup_enabled", v);
   }
   function handleDeliveryToggle(v: boolean) {
-    setDeliveryEnabled(v);
-    scheduleSave({ delivery_enabled: v });
+    if (desligarPedeConfirmacao("delivery_enabled", v, { pickup: pickupEnabled, delivery: deliveryEnabled })) {
+      setConfirmarDesligar("delivery_enabled");
+      return;
+    }
+    setConfirmarDesligar(null);
+    aplicarRecebimento("delivery_enabled", v);
   }
   // Nao apaga business_hours ao ligar: se a lojista desligar depois, a
   // grade que ela preencheu continua la. O backend ignora enquanto
@@ -367,6 +415,13 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
     pricingMode === "distance" && tiers.length > 0
       ? `Até ${tiers[0].max_km} km`
       : "";
+  const prazo = textosDoPrazo(vitrine);
+  const titulo = (icone: string, texto: string) => (
+    <View style={s.cardTitleRow}>
+      <Icon name={icone as any} size={16} color={accent.primaryStrong} />
+      <Text style={s.cardTitle}>{texto}</Text>
+    </View>
+  );
 
   // ============================================================
   // Render
@@ -380,15 +435,47 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
         </Text>
       </View>
 
+      {confirmarDesligar ? (
+        <View style={[s.warnBox, { marginTop: 0, marginBottom: 12 }]} accessibilityRole="alert" testID="confirmar-sem-recebimento">
+          <Icon name="alert" size={14} color={p.amber} />
+          <View style={{ flex: 1, gap: 10 }}>
+            <Text style={s.warnText}>
+              {AVISO_SEM_RECEBIMENTO} Desligar {confirmarDesligar === "pickup_enabled" ? "a retirada" : "a entrega"} mesmo assim?
+            </Text>
+            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+              <Pressable
+                onPress={() => setConfirmarDesligar(null)}
+                accessibilityRole="button"
+                style={s.confirmBtnGhost}
+              >
+                <Text style={s.confirmBtnGhostText}>Manter ligada</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => { const campo = confirmarDesligar; setConfirmarDesligar(null); aplicarRecebimento(campo, false); }}
+                accessibilityRole="button"
+                style={s.confirmBtn}
+              >
+                <Text style={s.confirmBtnText}>Desligar mesmo assim</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      ) : semComoReceber(pickupEnabled, deliveryEnabled) ? (
+        <View style={[s.warnBox, { marginTop: 0, marginBottom: 12 }]} accessibilityRole="alert" testID="aviso-sem-recebimento">
+          <Icon name="alert" size={14} color={p.amber} />
+          <Text style={s.warnText}>{AVISO_SEM_RECEBIMENTO} Ligue a retirada ou a entrega.</Text>
+        </View>
+      ) : null}
+
       {/* Cards grid */}
       <View style={IS_WIDE ? s.gridWide : s.gridStack}>
         {/* ---------------- Card 1: Retirada ---------------- */}
         <View style={[cs.card, IS_WIDE && s.gridCell]}>
           <View style={s.cardHead}>
-            <Text style={s.cardTitle}>
-              <Text style={s.emoji}>🏬</Text> Retirada no local
-            </Text>
+            {titulo("store", "Retirada no local")}
             <Switch
+              testID="toggle-retirada"
+              accessibilityLabel="Retirada no local"
               value={pickupEnabled}
               onValueChange={handlePickupToggle}
               trackColor={{ false: accent.border, true: accent.primary }}
@@ -406,7 +493,7 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
                 multiline
               />
               <Text style={s.helper}>
-                Aparece pro cliente no checkout depois que ele escolhe "Retirar". Pode ser diferente do endereço do negócio.
+                Aparece para o cliente no checkout depois que ele escolhe "Retirar". Pode ser diferente do endereço do negócio.
               </Text>
 
               <View style={s.sectionSep} />
@@ -415,10 +502,10 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
                 label="Tempo para ficar pronto"
                 value={pickupEtaText}
                 onChange={handlePickupEta}
-                placeholder="Ex: Em até 1 hora após confirmação"
+                placeholder={prazo.retiradaPlaceholder}
               />
               <Text style={s.helper}>
-                Texto livre. Ex: "Em 30 min", "No mesmo dia", "Em 1 dia útil".
+                {prazo.retiradaAjuda}
               </Text>
             </View>
           ) : (
@@ -431,10 +518,10 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
         {/* ---------------- Card 2: Entrega ---------------- */}
         <View style={[cs.card, IS_WIDE && s.gridCell]}>
           <View style={s.cardHead}>
-            <Text style={s.cardTitle}>
-              <Text style={s.emoji}>🛵</Text> Entrega a domicílio
-            </Text>
+            {titulo("truck", "Entrega a domicílio")}
             <Switch
+              testID="toggle-entrega"
+              accessibilityLabel="Entrega a domicílio"
               value={deliveryEnabled}
               onValueChange={handleDeliveryToggle}
               trackColor={{ false: accent.border, true: accent.primary }}
@@ -455,7 +542,7 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
                     Taxa única
                   </Text>
                   <Text style={s.modeCardDesc}>
-                    Mesmo valor pra qualquer endereço
+                    Mesmo valor para qualquer endereço
                   </Text>
                 </Pressable>
                 <Pressable
@@ -485,12 +572,12 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
                       value={deliveryFeeText}
                       onChangeText={handleDeliveryFee}
                       placeholder="0,00"
-                      placeholderTextColor={Colors.ink3}
+                      placeholderTextColor={p.ink3}
                       keyboardType="decimal-pad"
                     />
                   </View>
                   <Text style={s.helper}>
-                    Mesmo valor pra qualquer endereço dentro da área que você atende.
+                    Mesmo valor para qualquer endereço dentro da área que você atende.
                   </Text>
                 </>
               )}
@@ -506,7 +593,7 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
                       value={originZipMasked}
                       onChangeText={handleOriginZip}
                       placeholder="00000-000"
-                      placeholderTextColor={Colors.ink3}
+                      placeholderTextColor={p.ink3}
                       keyboardType="numeric"
                       maxLength={9}
                     />
@@ -517,16 +604,16 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
 
                   {hasGeocode && (
                     <View style={s.geoOkBadge}>
-                      <Icon name="check" size={12} color={Colors.green} />
+                      <Icon name="check" size={12} color={p.green} />
                       <Text style={s.geoOkText}>CEP geolocalizado</Text>
                     </View>
                   )}
 
                   {geocodeFailed && (
                     <View style={s.warnBox}>
-                      <Icon name="alert" size={14} color={Colors.amber} />
+                      <Icon name="alert" size={14} color={p.amber} />
                       <Text style={s.warnText}>
-                        Esse CEP não foi geolocalizado. A cobrança vai cair em taxa única pra todos os pedidos. Tente outro CEP próximo.
+                        Esse CEP não foi geolocalizado. A cobrança vai cair em taxa única para todos os pedidos. Tente outro CEP próximo.
                       </Text>
                     </View>
                   )}
@@ -539,7 +626,9 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
 
                   {tiers.length === 0 ? (
                     <View style={s.tierEmpty}>
-                      <Text style={s.tierEmptyEmoji}>📏</Text>
+                      <View style={s.tierEmptyIcon}>
+                        <Icon name="ruler" size={22} color={accent.primaryStrong} />
+                      </View>
                       <Text style={s.tierEmptyTitle}>Nenhuma faixa configurada</Text>
                       <Text style={s.tierEmptyHint}>
                         Defina até 3 faixas por distância. Ex: "Até 5 km = R$ 10 · Até 10 km = R$ 18 · Até 20 km = R$ 28".
@@ -562,7 +651,7 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
                                 updateTier(idx, { max_km: Number.isFinite(num) ? num : 0 });
                               }}
                               placeholder="0"
-                              placeholderTextColor={Colors.ink3}
+                              placeholderTextColor={p.ink3}
                               keyboardType="decimal-pad"
                             />
                             <Text style={s.tierUnit}>km</Text>
@@ -578,7 +667,7 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
                                 updateTier(idx, { fee: parseMoney(v) });
                               }}
                               placeholder="0,00"
-                              placeholderTextColor={Colors.ink3}
+                              placeholderTextColor={p.ink3}
                               keyboardType="decimal-pad"
                             />
                           </View>
@@ -587,7 +676,7 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
                             style={s.tierRemove}
                             accessibilityLabel="Remover faixa"
                           >
-                            <Icon name="x" size={14} color={Colors.ink3} />
+                            <Icon name="x" size={14} color={p.ink3} />
                           </Pressable>
                         </View>
                       ))}
@@ -614,7 +703,7 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
               {/* --- Frete grátis (sub-card destacado) --- */}
               <View style={s.freteBlock}>
                 <View style={s.freteBlockHead}>
-                  <Text style={s.freteBlockEmoji}>💸</Text>
+                  <Icon name="tag" size={16} color={accent.primaryStrong} />
                   <Text style={s.freteBlockTitle}>Frete grátis acima de</Text>
                 </View>
                 <View style={s.inlineInput}>
@@ -626,7 +715,7 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
                     value={freeAboveText}
                     onChangeText={handleFreeAbove}
                     placeholder="0,00"
-                    placeholderTextColor={Colors.ink3}
+                    placeholderTextColor={p.ink3}
                     keyboardType="decimal-pad"
                   />
                 </View>
@@ -642,10 +731,10 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
                 label="Tempo estimado de entrega"
                 value={deliveryEtaText}
                 onChange={handleDeliveryEta}
-                placeholder="Ex: Em até 2h corridas"
+                placeholder={prazo.entregaPlaceholder}
               />
               <Text style={s.helper}>
-                Texto livre. Ex: "Em 2-4 horas", "No mesmo dia", "1-3 dias úteis".
+                {prazo.entregaAjuda}
               </Text>
             </View>
           ) : (
@@ -659,9 +748,7 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
       {/* ---------------- Card 3: Horário (full width) ---------------- */}
       <View style={[cs.card, { marginTop: 4 }]}>
         <View style={s.cardHead}>
-          <Text style={s.cardTitle}>
-            <Text style={s.emoji}>🕒</Text> Horário de funcionamento
-          </Text>
+          {titulo("clock", "Horário de funcionamento")}
           <Text style={s.cardHeadHint}>
             {alwaysOpen
               ? 'Cliente vê "Aberta" no topo da loja, sempre'
@@ -687,7 +774,7 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
         {alwaysOpen ? null : (
         <>
         <Text style={s.helper}>
-          Use o mesmo horário pra retirada e entrega — ou deixe um dia em branco pra marcar como fechado.
+          Use o mesmo horário para retirada e entrega, ou deixe um dia em branco para marcar como fechado.
         </Text>
 
         <View testID="grade-de-horarios" style={{ marginTop: 10 }}>
@@ -707,7 +794,7 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
                     value={day.open}
                     onChangeText={(v) => updateHourDay(key, { open: maskTime(v) })}
                     placeholder="—"
-                    placeholderTextColor={Colors.ink3}
+                    placeholderTextColor={p.ink3}
                     keyboardType="numeric"
                     maxLength={5}
                   />
@@ -722,7 +809,7 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
                     value={day.close}
                     onChangeText={(v) => updateHourDay(key, { close: maskTime(v) })}
                     placeholder="—"
-                    placeholderTextColor={Colors.ink3}
+                    placeholderTextColor={p.ink3}
                     keyboardType="numeric"
                     maxLength={5}
                   />
@@ -731,13 +818,13 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
                   <View
                     style={[
                       s.hourDot,
-                      { backgroundColor: isClosed ? Colors.red : Colors.green },
+                      { backgroundColor: isClosed ? p.red : p.green },
                     ]}
                   />
                   <Text
                     style={[
                       s.hourStatusText,
-                      { color: isClosed ? Colors.red : Colors.green },
+                      { color: isClosed ? p.red : p.green },
                     ]}
                   >
                     {isClosed ? "Fechada" : "Aberta"}
@@ -759,7 +846,7 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
           {pickupEnabled && (
             <View style={s.previewRow}>
               <View style={s.previewIcon}>
-                <Text style={{ fontSize: 18 }}>🏬</Text>
+                <Icon name="store" size={18} color={accent.primaryStrong} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.previewTitle}>Retirar na loja</Text>
@@ -777,7 +864,7 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
           {deliveryEnabled && (
             <View style={[s.previewRow, pickupEnabled && { marginTop: 8 }]}>
               <View style={s.previewIcon}>
-                <Text style={{ fontSize: 18 }}>🛵</Text>
+                <Icon name="truck" size={18} color={accent.primaryStrong} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.previewTitle}>Entrega a domicílio</Text>
@@ -807,7 +894,7 @@ export function TabEntrega({ config, saveConfig, isSaving }: Props) {
 // ============================================================
 // Estilos
 // ============================================================
-function buildStyles(accent: AccentTokens) {
+function buildStyles(accent: AccentTokens, p: PaletaDoCanalTokens) {
   return StyleSheet.create({
   tabIntro: {
     flexDirection: "row", alignItems: "flex-start", gap: 8,
@@ -830,21 +917,22 @@ function buildStyles(accent: AccentTokens) {
     marginBottom: 12,
     gap: 8,
   },
-  cardTitle: { fontSize: 14, fontWeight: "700", color: Colors.ink, flex: 1 },
-  cardHeadHint: { fontSize: 10, color: Colors.ink3, fontWeight: "500", textAlign: "right", flex: 1 },
+  cardTitleRow: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1 },
+  cardTitle: { fontSize: 14, fontWeight: "700", color: p.ink, flexShrink: 1 },
+  cardHeadHint: { fontSize: 10, color: p.ink3, fontWeight: "500", textAlign: "right", flex: 1 },
   emoji: { fontSize: 16 },
 
   // Helper text — espaçamento natural abaixo do input (era marginTop:-8, colava)
-  helper: { fontSize: 11, color: Colors.ink3, lineHeight: 15, marginTop: 4, marginBottom: 0 },
+  helper: { fontSize: 11, color: p.ink3, lineHeight: 15, marginTop: 4, marginBottom: 0 },
   disabledHint: {
-    fontSize: 12, color: Colors.ink3, fontStyle: "italic",
+    fontSize: 12, color: p.ink3, fontStyle: "italic",
     paddingVertical: 6,
   },
 
   // Separadores entre sub-seções dentro do mesmo card
   sectionSep: {
     height: 1,
-    backgroundColor: Colors.border,
+    backgroundColor: p.border,
     marginVertical: 16,
   },
 
@@ -852,10 +940,10 @@ function buildStyles(accent: AccentTokens) {
   inlineInput: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.bg4,
+    backgroundColor: p.bg4,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: p.border,
     paddingHorizontal: 14,
     height: 44,
     maxWidth: 220,
@@ -864,16 +952,16 @@ function buildStyles(accent: AccentTokens) {
     paddingRight: 10,
     marginRight: 10,
     borderRightWidth: 1,
-    borderRightColor: Colors.border,
+    borderRightColor: p.border,
     height: 22,
     justifyContent: "center",
   },
   inlinePrefix: {
-    fontSize: 13, color: Colors.ink3, fontWeight: "700",
+    fontSize: 13, color: p.ink3, fontWeight: "700",
   },
   inlineField: {
     flex: 1,
-    fontSize: 14, color: Colors.ink,
+    fontSize: 14, color: p.ink,
     paddingVertical: 0,
     height: "100%",
     fontWeight: "500",
@@ -892,10 +980,10 @@ function buildStyles(accent: AccentTokens) {
   },
   modeCard: {
     flex: 1,
-    backgroundColor: Colors.bg4,
+    backgroundColor: p.bg4,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: p.border,
     padding: 12,
   },
   modeCardActive: {
@@ -905,13 +993,13 @@ function buildStyles(accent: AccentTokens) {
   modeCardName: {
     fontSize: 13,
     fontWeight: "700",
-    color: Colors.ink,
+    color: p.ink,
     marginBottom: 3,
   },
   modeCardNameActive: { color: accent.primaryStrong },
   modeCardDesc: {
     fontSize: 11,
-    color: Colors.ink3,
+    color: p.ink3,
     lineHeight: 15,
   },
 
@@ -921,7 +1009,7 @@ function buildStyles(accent: AccentTokens) {
     alignItems: "center",
     gap: 5,
     alignSelf: "flex-start",
-    backgroundColor: Colors.greenD,
+    backgroundColor: p.greenD,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
@@ -929,7 +1017,7 @@ function buildStyles(accent: AccentTokens) {
   },
   geoOkText: {
     fontSize: 10,
-    color: Colors.green,
+    color: p.green,
     fontWeight: "700",
     letterSpacing: 0.2,
   },
@@ -937,35 +1025,40 @@ function buildStyles(accent: AccentTokens) {
   // Warning âmbar (CEP não geolocalizado)
   warnBox: {
     flexDirection: "row", alignItems: "flex-start", gap: 8,
-    backgroundColor: Colors.amberD,
-    borderLeftWidth: 3, borderLeftColor: Colors.amber,
+    backgroundColor: p.amberD,
+    borderLeftWidth: 3, borderLeftColor: p.amber,
     paddingHorizontal: 12, paddingVertical: 10,
     borderRadius: 8, marginTop: 10,
   },
-  warnText: { flex: 1, fontSize: 11, color: Colors.amber, lineHeight: 15 },
+  warnText: { flex: 1, fontSize: 11, color: p.amber, lineHeight: 15 },
 
   // Empty state das faixas
   tierEmpty: {
-    backgroundColor: Colors.bg4,
+    backgroundColor: p.bg4,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: p.border,
     borderStyle: "dashed",
     paddingVertical: 18,
     paddingHorizontal: 16,
     alignItems: "center",
     marginTop: 6,
   },
-  tierEmptyEmoji: { fontSize: 24, marginBottom: 6 },
+  tierEmptyIcon: { marginBottom: 6 },
+  // Confirmação de "sem retirada nem entrega": 44 px de alvo no celular.
+  confirmBtn: { minHeight: 44, paddingHorizontal: 14, borderRadius: 10, backgroundColor: accent.primary, alignItems: "center", justifyContent: "center" },
+  confirmBtnText: { fontSize: 13, color: "#fff", fontWeight: "700" },
+  confirmBtnGhost: { minHeight: 44, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: p.border, backgroundColor: p.bg4, alignItems: "center", justifyContent: "center" },
+  confirmBtnGhostText: { fontSize: 13, color: p.ink, fontWeight: "700" },
   tierEmptyTitle: {
     fontSize: 12,
     fontWeight: "700",
-    color: Colors.ink,
+    color: p.ink,
     marginBottom: 4,
   },
   tierEmptyHint: {
     fontSize: 11,
-    color: Colors.ink3,
+    color: p.ink3,
     lineHeight: 15,
     textAlign: "center",
     maxWidth: 360,
@@ -980,7 +1073,7 @@ function buildStyles(accent: AccentTokens) {
     borderRadius: 8,
     backgroundColor: accent.primarySoft,
     borderWidth: 1,
-    borderColor: Colors.border2,
+    borderColor: p.border2,
   },
   tierEmptyCtaText: {
     fontSize: 12,
@@ -999,10 +1092,10 @@ function buildStyles(accent: AccentTokens) {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.bg4,
+    backgroundColor: p.bg4,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: p.border,
     paddingHorizontal: 10,
     height: 40,
   },
@@ -1010,25 +1103,25 @@ function buildStyles(accent: AccentTokens) {
     paddingRight: 8,
     marginRight: 8,
     borderRightWidth: 1,
-    borderRightColor: Colors.border,
+    borderRightColor: p.border,
     height: 18,
     justifyContent: "center",
   },
   tierInput: {
     flex: 1,
     fontSize: 13,
-    color: Colors.ink,
+    color: p.ink,
     paddingVertical: 0,
     height: "100%",
     fontWeight: "500",
   },
-  tierUnit: { fontSize: 11, color: Colors.ink3, fontWeight: "600", marginLeft: 6 },
-  tierPrefix: { fontSize: 13, color: Colors.ink3, fontWeight: "700" },
+  tierUnit: { fontSize: 11, color: p.ink3, fontWeight: "600", marginLeft: 6 },
+  tierPrefix: { fontSize: 13, color: p.ink3, fontWeight: "700" },
   tierRemove: {
     width: 32, height: 32, borderRadius: 8,
     alignItems: "center", justifyContent: "center",
-    backgroundColor: Colors.bg4,
-    borderWidth: 1, borderColor: Colors.border,
+    backgroundColor: p.bg4,
+    borderWidth: 1, borderColor: p.border,
   },
   addTierBtn: {
     flexDirection: "row",
@@ -1037,22 +1130,22 @@ function buildStyles(accent: AccentTokens) {
     gap: 6,
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: Colors.bg4,
+    backgroundColor: p.bg4,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: p.border,
     borderStyle: "dashed",
     marginTop: 10,
     marginBottom: 6,
   },
-  // WCAG AA: 12px magenta sobre Colors.bg4 — peso 700.
+  // WCAG AA: 12px magenta sobre p.bg4 — peso 700.
   addTierText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "700" },
 
   // Frete grátis em sub-card destacado
   freteBlock: {
-    backgroundColor: Colors.bg4,
+    backgroundColor: p.bg4,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: p.border,
     padding: 14,
   },
   freteBlockHead: {
@@ -1065,7 +1158,7 @@ function buildStyles(accent: AccentTokens) {
   freteBlockTitle: {
     fontSize: 11,
     fontWeight: "700",
-    color: Colors.ink2,
+    color: p.ink2,
     letterSpacing: 0.4,
     textTransform: "uppercase",
   },
@@ -1081,8 +1174,8 @@ function buildStyles(accent: AccentTokens) {
     paddingVertical: 10,
     marginTop: 2,
   },
-  always24Title: { fontSize: 13, fontWeight: "700", color: Colors.ink },
-  always24Hint: { fontSize: 11, color: Colors.ink3, lineHeight: 15, marginTop: 2 },
+  always24Title: { fontSize: 13, fontWeight: "700", color: p.ink },
+  always24Hint: { fontSize: 11, color: p.ink3, lineHeight: 15, marginTop: 2 },
 
   hourRow: {
     flexDirection: "row",
@@ -1090,13 +1183,13 @@ function buildStyles(accent: AccentTokens) {
     gap: 10,
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: p.border,
   },
   hourLabel: {
     width: 40,
     fontSize: 13,
     fontWeight: "700",
-    color: Colors.ink,
+    color: p.ink,
   },
   hourFieldGroup: {
     flexDirection: "row",
@@ -1106,7 +1199,7 @@ function buildStyles(accent: AccentTokens) {
   },
   hourSmall: {
     fontSize: 10,
-    color: Colors.ink3,
+    color: p.ink3,
     fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: 0.3,
@@ -1115,17 +1208,17 @@ function buildStyles(accent: AccentTokens) {
     flex: 1,
     minWidth: 60,
     maxWidth: 80,
-    backgroundColor: Colors.bg4,
+    backgroundColor: p.bg4,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: p.border,
     paddingHorizontal: 10,
     paddingVertical: 8,
     fontSize: 13,
-    color: Colors.ink,
+    color: p.ink,
     textAlign: "center",
   },
-  hourInputError: { borderColor: Colors.red },
+  hourInputError: { borderColor: p.red },
   hourStatus: {
     flexDirection: "row",
     alignItems: "center",
@@ -1138,16 +1231,16 @@ function buildStyles(accent: AccentTokens) {
 
   // Preview
   previewCard: {
-    backgroundColor: Colors.bg4,
+    backgroundColor: p.bg4,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: p.border,
     padding: 16,
     marginTop: 12,
   },
   previewLabel: {
     fontSize: 11,
-    color: Colors.ink3,
+    color: p.ink3,
     fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: 0.5,
@@ -1157,10 +1250,10 @@ function buildStyles(accent: AccentTokens) {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    backgroundColor: Colors.bg3,
+    backgroundColor: p.bg3,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: p.border,
     padding: 12,
   },
   previewIcon: {
@@ -1168,8 +1261,8 @@ function buildStyles(accent: AccentTokens) {
     backgroundColor: accent.primarySoft,
     alignItems: "center", justifyContent: "center",
   },
-  previewTitle: { fontSize: 13, fontWeight: "700", color: Colors.ink },
-  previewSub: { fontSize: 11, color: Colors.ink3, marginTop: 2, lineHeight: 15 },
+  previewTitle: { fontSize: 13, fontWeight: "700", color: p.ink },
+  previewSub: { fontSize: 11, color: p.ink3, marginTop: 2, lineHeight: 15 },
   previewPrice: { fontSize: 13, fontWeight: "700", color: accent.primaryStrong },
 
   savingPill: {
@@ -1179,7 +1272,7 @@ function buildStyles(accent: AccentTokens) {
     backgroundColor: accent.primarySoft,
     paddingHorizontal: 14, paddingVertical: 8,
     borderRadius: 999,
-    borderWidth: 1, borderColor: Colors.border,
+    borderWidth: 1, borderColor: p.border,
   },
   // WCAG AA: 12px magenta sobre primarySoft — peso 700.
   savingText: { fontSize: 12, color: accent.primaryStrong, fontWeight: "700" },
