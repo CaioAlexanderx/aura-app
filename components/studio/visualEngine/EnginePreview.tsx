@@ -14,6 +14,10 @@
 //       · photo2d com spec.views → canvas 2D via composeView
 //       · model3d com spec       → Mug3DPreview (viewer 3D)
 //       · template null / carregando / erro → fallback SVG atual
+//   - Mockup na foto (27/09/2026): sem template do banco (resposta null,
+//     ou sem companyId/productId), a marcação `config.mockup_foto` vira
+//     spec photo2d e vai para o mesmo canvas. Precedência: banco > foto
+//     > SVG — a mesma do LivePreview da vitrine (fonteDoMockup).
 //
 // Web-only no caminho do motor (canvas DOM) — nativo cai no fallback.
 // ============================================================
@@ -24,6 +28,7 @@ import { PersonalizationPreview } from "@/components/studio/PersonalizationPrevi
 import { composeView } from "@/components/studio/visualEngine/compose2d";
 import { corDaPeca } from "@/components/studio/visualEngine/corDaPeca";
 import { Mug3DPreview } from "@/components/studio/visualEngine/Mug3DPreview";
+import { fonteDoMockup, useSpecDaFotoDoProduto, vistaDoLado } from "@/components/studio/visualEngine/specDaFotoDoProduto";
 import {
   studioVisualApi,
   type VisualTemplate,
@@ -109,6 +114,7 @@ export function EnginePreview(props: Props) {
 
   // undefined = carregando; null = sem template (fallback SVG)
   const [template, setTemplate] = useState<VisualTemplate | null | undefined>(undefined);
+  const specDaFoto = useSpecDaFotoDoProduto(props.config);
 
   useEffect(() => {
     if (!engineEnabled) return;
@@ -151,6 +157,17 @@ export function EnginePreview(props: Props) {
         />
       );
     }
+  }
+
+  // Mockup na foto: só depois de o banco responder "sem template" (ou
+  // quando não há como perguntar) — nunca por cima de um template.
+  const bancoRespondeu = !engineEnabled || template !== undefined;
+  if (
+    Platform.OS === "web" && bancoRespondeu &&
+    fonteDoMockup(engineEnabled ? template : null, specDaFoto) === "foto"
+  ) {
+    const vista = vistaDoLado(specDaFoto, props.side ?? "front");
+    if (vista) return <Engine2DCanvas view={vista} values={engineValues} size={size ?? 280} />;
   }
 
   // Fallback: motor desabilitado, carregando, sem template ou kind desconhecido

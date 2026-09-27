@@ -20,6 +20,13 @@
 //   slug?        — slug da loja (habilita o motor)
 //   productId?   — id do produto (habilita o motor)
 //
+// MOCKUP NA FOTO (27/09/2026): sem template do banco, a marcação que a
+//   lojista fez na foto da peça (`config.mockup_foto`) vira uma spec
+//   photo2d e passa pelo MESMO canvas do motor. Precedência: template do
+//   banco > mockup na foto > SVG. Nas miniaturas da sacola e do checkout
+//   (sem slug/productId) não há consulta ao banco: a foto marcada vale
+//   direto, porque a config já veio junto com a linha.
+//
 // TRATAMENTO PDF (D1): mantido — valor PDF é stripado antes de
 // qualquer renderer (SVG ou canvas) e a nota discreta aparece abaixo.
 //
@@ -36,6 +43,7 @@ import { wash, type PaletaDaVitrine } from "./theme";
 import { Icon } from "@/components/Icon";
 import type { VisualTemplate, VisualView } from "@/services/studioVisualApi";
 import { fetchStorefrontVisualTemplate } from "./visualTemplatePublic";
+import { fonteDoMockup, useSpecDaFotoDoProduto } from "@/components/studio/visualEngine/specDaFotoDoProduto";
 
 // S3 — a cor escolhida no campo `color` e a cor da PECA no mockup (3D e,
 // desde 27/09/2026, tambem no 2D). Sem isto o motor caia no default bege
@@ -165,6 +173,10 @@ export function LivePreview({
   const T = usePaletaDaVitrine();
   const canUseEngine = Platform.OS === "web" && !!slug && !!productId;
   const [tpl, setTpl] = useState<VisualTemplate | null>(null);
+  // Se a consulta ao template do banco já respondeu. Enquanto não
+  // responde, o mockup na foto espera: mostrar a foto e trocar pelo
+  // template do banco um instante depois seria um pulo na tela.
+  const [tplRespondeu, setTplRespondeu] = useState(!canUseEngine);
   const [ladoInterno, setViewId] = useState<"front" | "back" | "middle">("front");
   const viewId = lado ?? ladoInterno;
   const canvasRef = useRef<any>(null);
@@ -172,11 +184,13 @@ export function LivePreview({
   useEffect(() => {
     let alive = true;
     if (canUseEngine) {
+      setTplRespondeu(false);
       fetchStorefrontVisualTemplate(slug as string, productId as string).then((t) => {
-        if (alive) setTpl(t);
+        if (alive) { setTpl(t); setTplRespondeu(true); }
       });
     } else {
       setTpl(null);
+      setTplRespondeu(true);
     }
     return () => { alive = false; };
   }, [slug, productId, canUseEngine]);
@@ -187,9 +201,14 @@ export function LivePreview({
     ? { ...values, [pdfField.fieldId]: undefined }
     : values;
 
+  const specDaFoto = useSpecDaFotoDoProduto(config);
+  // O canvas do motor só existe no web; no nativo segue o SVG.
+  const fonte = fonteDoMockup(tpl, tplRespondeu && Platform.OS === "web" ? specDaFoto : null);
   const photoViews: VisualView[] =
     tpl?.kind === "photo2d" && Array.isArray(tpl.spec?.views) && tpl.spec!.views!.length
       ? (tpl.spec!.views as VisualView[])
+      : fonte === "foto" && specDaFoto?.views
+      ? specDaFoto.views
       : [];
   // O verso sempre foi photoViews[1] — vista fixa, template com 2 fotos.
   // O meio (wrap 360 / faixa central de caneca e copo) não tem posição
@@ -197,7 +216,11 @@ export function LivePreview({
   // id='middle'. Sem ela NÃO inventamos asset — o preview degrada pro
   // mesmo caminho que já existe quando falta a view do verso (front, ou
   // o SVG genérico mais abaixo quando nem front tem template).
-  const backView = photoViews[1] || null;
+  // Por id primeiro: a spec da foto pode ter frente e meio sem verso, e
+  // aí photoViews[1] é o meio.
+  const backView =
+    photoViews.find((v) => v.id === "back") ||
+    (photoViews[1] && photoViews[1].id !== "middle" ? photoViews[1] : null);
   const middleView = photoViews.find((v) => v.id === "middle") || null;
   const engineView = !photoViews.length
     ? null
