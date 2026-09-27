@@ -189,7 +189,7 @@ export default function StudioPainel() {
       const msg = err?.response?.data?.error || err?.message || "Erro desconhecido";
       console.error("[StudioPainel] getPainel:", status, msg);
       const friendly = `[${status || "rede"}] ${msg}`;
-      toast.error("Painel indisponivel. " + friendly);
+      toast.error("Painel indisponível. " + friendly);
       setPainelError(friendly);
       // UI degradada: KPIs ficam em zero, mas o banner de erro acima deixa
       // claro que não é "dia sem vendas" — é falha de carregamento.
@@ -211,7 +211,7 @@ export default function StudioPainel() {
   // (formatado pt-BR, sem decimais pra ficar compacto).
   const lucroSubLabel =
     "Receita " + formatBRL(kpiLucro.receita_mes, 0) +
-    " . Despesa " + formatBRL(kpiLucro.despesa_mes, 0);
+    " · Despesa " + formatBRL(kpiLucro.despesa_mes, 0);
 
   // Prejuizo no mes: faixa danger + valor em vermelho
   const isLoss = kpiLucro.value < 0;
@@ -223,7 +223,7 @@ export default function StudioPainel() {
         {/* ═══════ HEADER + Toggle periodo ═══════ */}
         <View style={s.pageHeader}>
           <View style={{ flexShrink: 1, minWidth: 0 }}>
-            <Text style={s.eyebrow}>ESTUDIO . PAINEL</Text>
+            <Text style={s.eyebrow}>ESTÚDIO · PAINEL</Text>
             <Text style={s.pageTitle}>Indicadores do dia</Text>
             <Text style={s.pageSub}>Acompanhe vendas, pedidos e margem em tempo real.</Text>
           </View>
@@ -323,7 +323,7 @@ export default function StudioPainel() {
               <KpiCard
                 t={t}
                 variant={isLoss ? "danger" : "success"}
-                label="Lucro Líquido . mes"
+                label="Lucro Líquido · mês"
                 value={kpiLucro.value}
                 format="currency"
                 deltaPct={kpiLucro.delta_pct}
@@ -340,7 +340,7 @@ export default function StudioPainel() {
                   <View style={{ flex: 1 }}>
                     <Text style={s.chartEyebrow}>RECEITA</Text>
                     <Text style={s.chartTitle}>
-                      Faturamento {period === "hoje" ? "de hoje" : "ultimos " + (period === "30d" ? "30 dias" : "7 dias")}
+                      Faturamento {period === "hoje" ? "de hoje" : "dos últimos " + (period === "30d" ? "30 dias" : "7 dias")}
                     </Text>
                   </View>
                   <Text style={s.chartMeta}>
@@ -356,7 +356,7 @@ export default function StudioPainel() {
                   <View style={{ flex: 1 }}>
                     <Text style={s.chartEyebrow}>TOP VENDAS</Text>
                     <Text style={s.chartTitle}>
-                      Top 5 produtos . {periodLabel(period).toLowerCase()}
+                      Top 5 produtos · {periodLabel(period).toLowerCase()}
                     </Text>
                   </View>
                 </View>
@@ -370,7 +370,7 @@ export default function StudioPainel() {
                 <View style={{ flex: 1 }}>
                   <Text style={s.chartEyebrow}>APROVAÇÃO DE ARTE (wa.me)</Text>
                   <Text style={s.chartTitle}>
-                    Funil de aprovacao . {periodLabel(period).toLowerCase()}
+                    Funil de aprovação · {periodLabel(period).toLowerCase()}
                   </Text>
                 </View>
                 <Text style={s.chartMeta}>
@@ -936,7 +936,7 @@ function FunilAprovacao({
         gap: 8,
       }}>
         <Text style={{ fontSize: 11, color: t.ink3, fontWeight: "600" }}>
-          Taxa de aprovacao na 1a:{" "}
+          Taxa de aprovação na 1ª:{" "}
           <Text style={{ color: t.success, fontSize: 16, fontWeight: "800" }}>
             {data.aprovacao_primeira_pct !== null && data.aprovacao_primeira_pct !== undefined
               ? Math.round(data.aprovacao_primeira_pct) + "%"
@@ -944,7 +944,7 @@ function FunilAprovacao({
           </Text>
         </Text>
         <Text style={{ fontSize: 11, color: t.ink4, fontWeight: "600" }}>
-          Tempo medio de resposta: {tempoTxt}
+          Tempo médio de resposta: {tempoTxt}
         </Text>
       </View>
     </View>

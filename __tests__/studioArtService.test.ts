@@ -18,7 +18,7 @@
 // ============================================================
 import {
   buildArtServiceChoices, parseArtPrice, priceLabel, choiceHint,
-  dispensaEnvioDeArte, briefingFor,
+  dispensaEnvioDeArte, briefingFor, labelForArtServiceValue,
   ART_NONE, ART_ADJUST, ART_DESIGNER,
 } from "@/components/studio/artService";
 import { validateRequiredFields } from "@/components/studio/storefront/useStorefront";
@@ -43,6 +43,23 @@ describe("buildArtServiceChoices", () => {
     const c = buildArtServiceChoices("", "abc");
     expect(c.every((x) => Number.isFinite(x.price_delta))).toBe(true);
     expect(c.map((x) => x.price_delta)).toEqual([0, 0, 0]);
+  });
+});
+
+// QA do detalhe do pedido (26/09/2026, achado 2e): a tela mostrava o
+// código gravado (`designer`, `adjust`) em vez do caminho que a cliente
+// escolheu na vitrine.
+describe("labelForArtServiceValue", () => {
+  it("traduz o valor gravado pro rótulo que a cliente viu", () => {
+    expect(labelForArtServiceValue(ART_DESIGNER)).toBe("Criem a arte pra mim");
+    expect(labelForArtServiceValue(ART_ADJUST)).toBe("Envio minha arte e vocês ajustam");
+    expect(labelForArtServiceValue(ART_NONE)).toBe("Vou enviar minha arte pronta");
+  });
+
+  it("valor desconhecido ou ausente não quebra — devolve o próprio valor", () => {
+    expect(labelForArtServiceValue("outro-valor")).toBe("outro-valor");
+    expect(labelForArtServiceValue(null)).toBe("—");
+    expect(labelForArtServiceValue(undefined)).toBe("—");
   });
 });
 

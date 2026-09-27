@@ -167,6 +167,7 @@ export function rotuloDaChave(
   if (campo?.label) return campo.label;
 
   if (chave === "art_service_brief") return "Briefing da arte";
+  if (chave === "art_service") return "Quem cria a arte";
   if (chave === "has_back_selected") return "Personalizar o verso";
   if (chave === "has_middle_selected") return "Personalizar o meio";
 
@@ -216,6 +217,50 @@ export function temPersonalizacaoVisivel(
 export function sideOf(f: { side?: string } | null | undefined): CustomizationFieldSide {
   const s = (f as any)?.side;
   return s === "back" || s === "middle" ? s : "front";
+}
+
+// ── Detalhe do pedido (QA 26/09/2026) ───────────────────────
+/**
+ * "Personalizar o verso: Sim" só faz sentido quando o verso é COBRADO à
+ * parte e a cliente de fato escolheu — achado 2f. Quando o verso é
+ * incluso no produto (sem cobrança), a chave lateral existe mas não diz
+ * nada de novo pra produção; a linha só confundia.
+ */
+export function chaveLateralVisivel(
+  chave: string,
+  valor: unknown,
+  config: CustomizationConfig | null | undefined,
+): boolean {
+  if (chave === "has_back_selected") return valor === true && config?.back_charge_enabled === true;
+  if (chave === "has_middle_selected") return valor === true && config?.middle_charge_enabled === true;
+  return true;
+}
+
+/**
+ * Qual lado (frente/verso) tem a personalização de verdade da cliente —
+ * achado 2g/4c. A prévia sempre desenhava "front"; quando a cliente
+ * personalizou só o verso (a frente é o design de exemplo do catálogo,
+ * sem texto/imagem preenchidos), a miniatura mostrava o modelo, não o
+ * que ela escreveu.
+ */
+export function ladoComConteudo(
+  config: CustomizationConfig | null | undefined,
+  values: Record<string, any> | null | undefined,
+): CustomizationFieldSide {
+  if (!config?.has_back) return "front";
+  const fields = config.fields || [];
+  const v = values || {};
+  const temConteudo = (side: CustomizationFieldSide) =>
+    fields.some((f) => {
+      if (sideOf(f) !== side) return false;
+      const val = v[f.id];
+      if (f.type === "text") return String(val || "").trim().length > 0;
+      if (f.type === "image" || f.type === "template") return !!val;
+      return false;
+    });
+  if (temConteudo("front")) return "front";
+  if (temConteudo("back")) return "back";
+  return "front";
 }
 
 /**

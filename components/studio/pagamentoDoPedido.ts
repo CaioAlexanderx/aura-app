@@ -134,8 +134,13 @@ export function situacaoDoPagamento(p: PagamentoDoPedido): SituacaoDoPagamento {
 
   return {
     chave: "aguardando", rotulo: "Aguardando pagamento", tom: "atencao", precisaAgir: true,
+    // Coordenação (27/09/2026): o texto dizia o cancelamento automático sem
+    // dizer as exceções que o job (lojaPixExpiradoJob) já respeita — a
+    // lojista lia "72h e cancela" e achava que precisava correr mesmo
+    // quando um dos quatro escapes já valia.
     detalhe: "A cliente ainda não avisou que pagou. Se o Pix já caiu na sua conta, confirme abaixo. "
-      + "Sem pagamento, o pedido é cancelado sozinho 72 h depois de feito.",
+      + "Sem pagamento, o pedido é cancelado sozinho 72 h depois de feito. Não cancela se a cliente "
+      + "mandou comprovante ou tocou em \"Já paguei\", se você registrou o sinal ou se a produção já começou.",
   };
 }
 
@@ -157,6 +162,53 @@ export function acoesDoPagamento(p: PagamentoDoPedido): { podeAgir: boolean; rot
 /** Comprovante em PDF abre fora; imagem vira miniatura. A URL do R2 traz "?v=". */
 export function comprovanteEhPdf(url?: string | null): boolean {
   return !!url && /\.pdf(\?|#|$)/i.test(url);
+}
+
+/**
+ * O número que a cliente vê ("Pedido 00001"), nunca o id interno (uuid).
+ *
+ * QA do detalhe do pedido (26/09/2026, achado 2h): a mesma encomenda
+ * aparecia com TRÊS identificadores diferentes — "00001" cru no título
+ * (é `display_name`: a view `studio_orders` já devolve o `order_number`
+ * puro pra pedidos digitais, ou o prefixo `PDV-`/`ML-`/`SHOP-`/`MKT-`
+ * pros outros canais), e o uuid fatiado (`#baa22b9d`) na trilha e nos
+ * cartões. Uma função só, usada em todo canto que hoje monta esse texto
+ * na unha.
+ */
+export function numeroDoPedido(
+  order: { display_name?: string | null; order_number?: string | number | null; id?: string | null } | null | undefined,
+): string {
+  const numero = order?.order_number ?? order?.display_name;
+  if (numero != null && String(numero).trim() !== "") return "Pedido " + String(numero).trim();
+  if (order?.id) return "Pedido " + String(order.id).slice(0, 8).toUpperCase();
+  return "Pedido";
+}
+
+/**
+ * A situação do Pix pro CARTÃO da fila de Produção (achado 4b do QA,
+ * 26/09/2026) — mesma fonte de dados que `seloDoPagamentoNaFila` (Hub),
+ * com dois acréscimos que o Hub não precisa: o caso "pago" (o Hub some o
+ * selo quando não há mais o que agir; o cartão da fila quer confirmar
+ * que o Pix já caiu) e a cor âmbar fixa pro pendente.
+ */
+export function situacaoDoPixNoCartao(item: {
+  status?: string | null;
+  payment_method?: string | null;
+  payment_status?: string | null;
+  has_payment_proof?: boolean | null;
+}): { rotulo: string; tom: TomDoPagamento } | null {
+  if (item.payment_method === "card" || item.payment_method === "on_delivery") return null;
+  const status = item.status ?? "";
+  if (PAGO.includes(item.payment_status || "") || ANDOU.includes(status)) {
+    return { rotulo: "Pix recebido", tom: "sucesso" };
+  }
+  if (status === "awaiting_approval") {
+    return { rotulo: "Pagamento a conferir", tom: "atencao" };
+  }
+  if (status === "pending_payment") {
+    return { rotulo: item.has_payment_proof ? "Pagamento a conferir" : "Aguardando Pix", tom: "atencao" };
+  }
+  return null;
 }
 
 /**
