@@ -356,6 +356,8 @@ describe("o checkout em três etapas (Telas 2 a 4)", () => {
     // Etapa 3: nada vem escolhido; cada forma diz quanto custa.
     await ver("Como você quer pagar?");
     expect(naTela("Escolha como pagar")).toBe(true);
+    // O resumo "Seus dados" mostra o CPF que vai na nota (QA 27/09).
+    expect(naTela("Helena Martins · (12) 99183-4410 · 529.982.247-25")).toBe(true);
     expect(naTela("Você aprova o mockup antes de produzir. 2 revisões inclusas.")).toBe(true);
     await waitFor(() => expect(naTela("R$ 47,40")).toBe(true)); // 49,90 − 5% no Pix
     fireEvent.press(screen.getAllByText("Pix")[0]);

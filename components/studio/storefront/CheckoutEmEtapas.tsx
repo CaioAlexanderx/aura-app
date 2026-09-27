@@ -941,7 +941,9 @@ function CheckoutAberto({ sf }: { sf: StorefrontState }) {
 
       <View style={{ borderWidth: 1, borderColor: T.border, borderRadius: 16, backgroundColor: T.card, marginTop: 6 }}>
         {[
-          { rotulo: "Seus dados", texto: [sf.customerName.trim(), sf.customerPhone].filter(Boolean).join(" · "), ir: 1 as Etapa },
+          // QA 27/09: o CPF/CNPJ que vai na nota entra no resumo, para a
+          // cliente conferir antes de pagar (mascarado, como ela digitou).
+          { rotulo: "Seus dados", texto: [sf.customerName.trim(), sf.customerPhone, sf.querDocumento ? sf.customerDocument.trim() : ""].filter(Boolean).join(" · "), ir: 1 as Etapa },
           { rotulo: "Entrega", texto: entregaResumo, ir: 2 as Etapa },
         ].map((b, i) => (
           <View key={b.rotulo} style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 14, borderTopWidth: i ? 1 : 0, borderTopColor: T.border }}>
