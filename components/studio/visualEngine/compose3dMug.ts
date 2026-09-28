@@ -136,6 +136,13 @@ export type Mug3DHandle = {
   resize: () => void;
   snapshot: (pixelWidth?: number) => string | null;
   recordTurntable: (durationMs?: number) => Promise<Blob | null>;
+  /**
+   * Gira a peça para `rotacaoY` radianos a partir da vista de repouso (a
+   * frente) e renderiza na hora, no mesmo tick (28/09/2026, orçamento em
+   * vídeo 3D). Para o giro automático; quem grava quadro a quadro (WebCodecs)
+   * controla o ângulo exato de cada quadro e lê o canvas logo depois.
+   */
+  renderizarQuadro: (rotacaoY: number) => void;
   dispose: () => void;
 };
 
@@ -1256,6 +1263,14 @@ export async function createModelViewer(
     }
   }
 
+  function renderizarQuadro(rotacaoY: number) {
+    if (disposed) return;
+    userTouched = true;
+    giroAlvo = null;
+    group.rotation.y = giroDeRepouso + rotacaoY;
+    render();
+  }
+
   // F5: grava uma volta completa (ease in-out) e devolve Blob webm.
   // null = navegador sem captureStream/MediaRecorder (caller mostra erro).
   function recordTurntable(durationMs = 3600): Promise<Blob | null> {
@@ -1317,7 +1332,7 @@ export async function createModelViewer(
   await update(values);
   loop();
 
-  return { update, trocarPeca, resize, snapshot, recordTurntable, dispose };
+  return { update, trocarPeca, resize, snapshot, recordTurntable, renderizarQuadro, dispose };
 }
 
 /** O nome de antes da generalização: quem chama não precisa mudar. */
