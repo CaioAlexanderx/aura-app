@@ -82,6 +82,15 @@ export type Mug3DOptions = {
 
 export type Mug3DHandle = {
   update: (values: Record<string, any>, opts?: Mug3DOptions) => Promise<void>;
+  /**
+   * Troca a peça na MESMA cena e no mesmo WebGLRenderer (28/09/2026). A
+   * vitrine continua criando um viewer por spec (Mug3DPreview); a prévia
+   * da aba Aparência, que passa por vários modelos seguidos, reaproveita
+   * um só — navegador tem teto de contextos WebGL por página.
+   */
+  trocarPeca: (spec: VisualTemplateSpec, values: Record<string, any>, opts?: Mug3DOptions) => Promise<void>;
+  /** Remede o canvas (quem mudou o tamanho dele por fora chama). */
+  resize: () => void;
   snapshot: (pixelWidth?: number) => string | null;
   recordTurntable: (durationMs?: number) => Promise<Blob | null>;
   dispose: () => void;
@@ -837,32 +846,50 @@ async function montarGlb(
   };
 }
 
+/** Libera geometria, materiais e texturas de uma peça que saiu de cena. */
+function descartarPeca(peca: Peca) {
+  try {
+    peca.group.traverse((obj: any) => {
+      if (obj.geometry && obj.geometry.dispose) obj.geometry.dispose();
+      const mats = Array.isArray(obj.material) ? obj.material : obj.material ? [obj.material] : [];
+      mats.forEach((m: any) => {
+        ["map", "normalMap", "roughnessMap", "alphaMap"].forEach((k) => {
+          if (m[k] && m[k].dispose) m[k].dispose();
+        });
+        if (m.dispose) m.dispose();
+      });
+    });
+  } catch (_e) {}
+  try { if (peca.texture && peca.texture.dispose) peca.texture.dispose(); } catch (_e) {}
+}
+
+function canvasDaTextura(spec: VisualTemplateSpec, glb: GlbModel | null): HTMLCanvasElement {
+  const cv = document.createElement("canvas");
+  cv.width = glb ? glb.texture.w : (spec.model?.texture?.w || 2048);
+  cv.height = glb ? glb.texture.h : (spec.model?.texture?.h || 1024);
+  return cv;
+}
+
 export async function createModelViewer(
   canvas: HTMLCanvasElement,
-  spec: VisualTemplateSpec,
+  specInicial: VisualTemplateSpec,
   values: Record<string, any>,
   opts: Mug3DOptions = {}
 ): Promise<Mug3DHandle> {
   const THREE = await loadThree();
   let o: Opcoes = { ...DEFAULTS, ...opts };
-  const glb = readGlbModel(spec);
 
-  const texW = glb ? glb.texture.w : (spec.model?.texture?.w || 2048);
-  const texH = glb ? glb.texture.h : (spec.model?.texture?.h || 1024);
-  const texCv = document.createElement("canvas");
-  texCv.width = texW;
-  texCv.height = texH;
+  // O que depende da peça é `let`: `trocarPeca` troca a peça dentro da
+  // mesma cena e do mesmo WebGLRenderer (28/09/2026 — a prévia da aba
+  // Aparência passa por vários modelos seguidos e não pode abrir um
+  // contexto WebGL por modelo).
+  let spec = specInicial;
+  let glb = readGlbModel(spec);
+  let texCv = canvasDaTextura(spec, glb);
 
   const scene = new THREE.Scene();
   scene.background = paintBackdrop(THREE, o.backdrop);
   const camera = new THREE.PerspectiveCamera(glb ? glb.camera.fov : CAMERA_FOV_GRAUS, 1, 0.1, 100);
-  if (!glb) {
-    const dist = cameraDistance(readMugGeometry(spec), readMugAccessories(spec));
-    // Um pouco acima e olhando um pouco para baixo: e o enquadramento de
-    // foto de produto, e e o que deixa o chao e a sombra aparecerem.
-    camera.position.set(0, dist * 0.2, dist);
-    camera.lookAt(0, -0.05, 0);
-  }
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
   renderer.outputEncoding = THREE.sRGBEncoding;
   // Curva de filme: sem ela o branco da louca estourava e o corpo virava
@@ -877,11 +904,6 @@ export async function createModelViewer(
   // e contraluz para descolar a peca do fundo. O ambiente vem do env map.
   scene.add(new THREE.HemisphereLight(0xfff6e8, 0xb9ae9e, 0.25));
   const key = new THREE.DirectionalLight(0xfff3e4, 1.0);
-  // Peça vertical (camiseta) pede a principal um pouco mais alta: a luz
-  // desce pelas dobras e a sombra cai sob a barra, como na foto de um
-  // manequim fantasma. A caneca fica com a luz de sempre.
-  if (glb) key.position.set(2.6, 7.6, 4.2);
-  else key.position.set(3.2, 6, 4.5);
   key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024);
   key.shadow.camera.near = 0.5;
@@ -894,12 +916,47 @@ export async function createModelViewer(
   const fill = new THREE.DirectionalLight(0xe8f0ff, 0.22); fill.position.set(-5, 2.5, 3); scene.add(fill);
   const rimLight = new THREE.DirectionalLight(0xffffff, 0.5); rimLight.position.set(-2, 4, -5); scene.add(rimLight);
 
-  const peca: Peca = glb
+  let peca: Peca = glb
     ? await montarGlb(THREE, spec, glb, renderer, texCv, o)
     : montarCaneca(THREE, spec, renderer, texCv, o);
-  const group = peca.group;
-  const texture = peca.texture;
+  let group = peca.group;
+  let texture = peca.texture;
   scene.add(group);
+
+  // Chao: invisivel, so recebe a sombra projetada; e a mancha de contato
+  // por cima, que segura a peca no chao mesmo onde a luz nao alcanca.
+  const chao = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ opacity: 0.2 }));
+  chao.rotation.x = -Math.PI / 2;
+  chao.receiveShadow = true;
+  scene.add(chao);
+  // O plano deitado (rotação em x) tem a altura no eixo z do mundo: rz é a profundidade da mancha.
+  // Geometria unitária escalada pela mancha: trocar de peça não refaz a malha.
+  const contato = new THREE.Mesh(
+    new THREE.PlaneGeometry(2, 2),
+    new THREE.MeshBasicMaterial({ map: paintContactShadow(THREE), transparent: true, depthWrite: false }),
+  );
+  contato.rotation.x = -Math.PI / 2;
+  scene.add(contato);
+
+  /** Luz, chão e câmera da caneca: o que muda quando a peça muda. */
+  function ajustarCenaAPeca() {
+    // Peça vertical (camiseta) pede a principal um pouco mais alta: a luz
+    // desce pelas dobras e a sombra cai sob a barra, como na foto de um
+    // manequim fantasma. A caneca fica com a luz de sempre.
+    if (glb) key.position.set(2.6, 7.6, 4.2);
+    else key.position.set(3.2, 6, 4.5);
+    camera.fov = glb ? glb.camera.fov : CAMERA_FOV_GRAUS;
+    if (!glb) {
+      const dist = cameraDistance(readMugGeometry(spec), readMugAccessories(spec));
+      // Um pouco acima e olhando um pouco para baixo: e o enquadramento de
+      // foto de produto, e e o que deixa o chao e a sombra aparecerem.
+      camera.position.set(0, dist * 0.2, dist);
+      camera.lookAt(0, -0.05, 0);
+    }
+    chao.position.y = peca.chaoY - 0.001;
+    contato.scale.set(peca.sombra.rx, peca.sombra.rz, 1);
+    contato.position.y = peca.chaoY + 0.002;
+  }
 
   // A câmera do GLB depende da proporção do canvas (a largura da peça é
   // que manda numa camiseta), então é posicionada a cada resize.
@@ -921,23 +978,6 @@ export async function createModelViewer(
     camera.updateProjectionMatrix();
     posicionarCameraDoGlb(w / h);
   }
-
-  // Chao: invisivel, so recebe a sombra projetada; e a mancha de contato
-  // por cima, que segura a peca no chao mesmo onde a luz nao alcanca.
-  const chaoY = peca.chaoY;
-  const chao = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ opacity: 0.2 }));
-  chao.rotation.x = -Math.PI / 2;
-  chao.position.y = chaoY - 0.001;
-  chao.receiveShadow = true;
-  scene.add(chao);
-  // O plano deitado (rotação em x) tem a altura no eixo z do mundo: rz é a profundidade da mancha.
-  const contato = new THREE.Mesh(
-    new THREE.PlaneGeometry(peca.sombra.rx * 2, peca.sombra.rz * 2),
-    new THREE.MeshBasicMaterial({ map: paintContactShadow(THREE), transparent: true, depthWrite: false }),
-  );
-  contato.rotation.x = -Math.PI / 2;
-  contato.position.y = chaoY + 0.002;
-  scene.add(contato);
 
   let disposed = false;
   let dragging = false;
@@ -974,22 +1014,51 @@ export async function createModelViewer(
   // primeiro tinha acabado de escrever, e a caneca ficava lisa até a
   // próxima mudança. Visto na loja da Sheid em 04/09/2026 ao trocar
   // "Painel" por "Volta inteira". Pintura mais velha que terminar depois
-  // de uma mais nova é descartada.
+  // de uma mais nova é descartada — e a pintura que começou numa peça
+  // que já saiu de cena também.
   let pinturaAtual = 0;
   async function update(newValues: Record<string, any>, newOpts?: Mug3DOptions) {
-    o = peca.aplicarOpcoes({ ...o, ...(newOpts || {}) });
+    const pecaDaPintura = peca;
+    const tela = texCv;
+    const tex = texture;
+    o = pecaDaPintura.aplicarOpcoes({ ...o, ...(newOpts || {}) });
     const minha = ++pinturaAtual;
     const rascunho = document.createElement("canvas");
-    rascunho.width = texCv.width;
-    rascunho.height = texCv.height;
-    await peca.pintar(rascunho, newValues, o);
-    if (minha !== pinturaAtual || disposed) return;
-    const ctx = texCv.getContext("2d");
+    rascunho.width = tela.width;
+    rascunho.height = tela.height;
+    await pecaDaPintura.pintar(rascunho, newValues, o);
+    if (minha !== pinturaAtual || disposed || pecaDaPintura !== peca) return;
+    const ctx = tela.getContext("2d");
     if (!ctx) return;
-    ctx.clearRect(0, 0, texCv.width, texCv.height);
+    ctx.clearRect(0, 0, tela.width, tela.height);
     ctx.drawImage(rascunho, 0, 0);
-    texture.needsUpdate = true;
+    tex.needsUpdate = true;
     render();
+  }
+
+  // Troca de peça na mesma cena. Troca pedida depois vence a anterior:
+  // quem passa o mouse por cinco modelos vê o último, não o mais lento.
+  let trocaAtual = 0;
+  async function trocarPeca(novaSpec: VisualTemplateSpec, newValues: Record<string, any>, newOpts?: Mug3DOptions) {
+    if (disposed) return;
+    const minha = ++trocaAtual;
+    const novoGlb = readGlbModel(novaSpec);
+    const novaTela = canvasDaTextura(novaSpec, novoGlb);
+    const oNova: Opcoes = { ...o, ...(newOpts || {}) };
+    const nova: Peca = novoGlb
+      ? await montarGlb(THREE, novaSpec, novoGlb, renderer, novaTela, oNova)
+      : montarCaneca(THREE, novaSpec, renderer, novaTela, oNova);
+    if (minha !== trocaAtual || disposed) { descartarPeca(nova); return; }
+    scene.remove(group);
+    descartarPeca(peca);
+    spec = novaSpec; glb = novoGlb; texCv = novaTela; peca = nova;
+    group = nova.group; texture = nova.texture;
+    scene.add(group);
+    ajustarCenaAPeca();
+    resize();
+    // Peça nova gira sozinha de novo até o primeiro toque.
+    userTouched = false;
+    await update(newValues, newOpts);
   }
 
   function snapshot(pixelWidth = 1600): string | null {
@@ -1059,11 +1128,12 @@ export async function createModelViewer(
     try { renderer.dispose(); } catch (_e) {}
   }
 
+  ajustarCenaAPeca();
   resize();
   await update(values);
   loop();
 
-  return { update, snapshot, recordTurntable, dispose };
+  return { update, trocarPeca, resize, snapshot, recordTurntable, dispose };
 }
 
 /** O nome de antes da generalização: quem chama não precisa mudar. */

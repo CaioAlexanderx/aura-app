@@ -118,10 +118,15 @@ describe("a aba de Aparência mostra o que faltava", () => {
   });
 
   test("dá tela ao vínculo 3D, que tinha endpoint e nenhuma", () => {
-    expect(aba).toContain("setProductVisualTemplate");
-    // Falha ao salvar volta o chip: mostrar vinculado o que não salvou
+    // 28/09/2026: o vínculo mora na seção "Mockup por produto" (seletor
+    // único + prévia), que a aba monta.
+    expect(aba).toContain("<SecaoMockupPorProduto");
+    const secao = fs.readFileSync(
+      path.join(RAIZ, "components/studio/mockupPorProduto/SecaoMockupPorProduto.tsx"), "utf8");
+    expect(secao).toContain("setProductVisualTemplate");
+    // Falha ao salvar volta a escolha: mostrar vinculado o que não salvou
     // faria a lojista contar com uma prévia que a vitrine não tem.
-    expect(aba).toContain("setVinculos((v) => ({ ...v, [pid]: antes }))");
+    expect(secao).toContain("setVinculos((v) => ({ ...v, [pid]: antes }))");
   });
 
   test("revisões e SLA continuam nas abas próprias (decisão 5)", () => {
