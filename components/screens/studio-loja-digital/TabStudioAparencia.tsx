@@ -15,22 +15,24 @@
 //     03/07/2026 e NUNCA teve tela: `setProductVisualTemplate` era
 //     chamável e ninguém tinha por onde chamar
 //
+// 28/09/2026 — o mockup por produto deixou de ser uma fileira de ~13
+// chips por linha e virou um seletor único com pré-visualizador
+// (components/studio/mockupPorProduto; mockup aprovado em
+// docs/mockups/studio-aparencia-seletor-de-mockup.html).
+//
 // Revisões e SLA continuam nas abas próprias (decisão 5) — aqui só um
 // atalho, para a lojista não procurar duas vezes.
 // ============================================================
-import { useEffect, useMemo, useState } from "react";
-import { View, Pressable, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
+import { useMemo } from "react";
+import { View, Pressable, ScrollView } from "react-native";
 import { Texto } from "@/components/studio/storefront/TipografiaVitrine";
 import { Fonts, TIPOGRAFIAS, tipografiaDoStudio } from "@/constants/fonts";
 import { lerCorDaLoja } from "@/components/studio/storefront/leituraDaCor";
 import { montarTema } from "@/components/studio/storefront/theme";
-import { studioVisualApi, type VisualTemplate } from "@/services/studioVisualApi";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { useAuthStore } from "@/stores/auth";
-import { request } from "@/services/api";
 import { router } from "expo-router";
-
-type Produto = { id: string; name: string; visual_template_key?: string | null };
+import { SecaoMockupPorProduto } from "@/components/studio/mockupPorProduto/SecaoMockupPorProduto";
 
 export function TabStudioAparencia({
   config, onIrPara,
@@ -44,74 +46,11 @@ export function TabStudioAparencia({
   const corDaLoja = config?.primary_color;
   const chaveTipografia = config?.font_family;
 
-  const [produtos, setProdutos] = useState<Produto[]>([]);
-  useEffect(() => {
-    if (!companyId) return;
-    let vivo = true;
-    // A MESMA rota que o Configurador usa: a genérica filtra por
-    // vertical=varejo e devolve vazio em conta Studio.
-    request<{ products: any[] }>(
-      "/companies/" + companyId + "/studio/products?limit=200",
-      { method: "GET", retry: 1, timeout: 8000 },
-    )
-      .then((r) => {
-        if (!vivo) return;
-        setProdutos((r.products || [])
-          .filter((p: any) => p.is_personalizable)
-          .map((p: any) => ({ id: p.id, name: p.name, visual_template_key: p.visual_template_key })));
-      })
-      .catch(() => { if (vivo) setProdutos([]); });
-    return () => { vivo = false; };
-  }, [companyId]);
-
   const leitura = useMemo(() => lerCorDaLoja(String(corDaLoja || ""), "papel"), [corDaLoja]);
   const tema = useMemo(() => montarTema(corDaLoja, "papel"), [corDaLoja]);
   const par = tipografiaDoStudio(chaveTipografia);
   const rotulo = (TIPOGRAFIAS as any)[String(chaveTipografia || "classic")]?.nome
     || TIPOGRAFIAS.classic.nome;
-
-  const [templates, setTemplates] = useState<VisualTemplate[] | null>(null);
-  const [vinculos, setVinculos] = useState<Record<string, string | null>>({});
-  const [salvando, setSalvando] = useState<string | null>(null);
-  // O produto cujo vínculo não salvou: a mensagem fica junto dele.
-  const [falhou, setFalhou] = useState<string | null>(null);
-  // Chips com 44 px de altura no celular (alvo de toque).
-  const { width } = useWindowDimensions();
-  const celular = width < 768;
-
-  useEffect(() => {
-    if (!companyId) return;
-    let vivo = true;
-    studioVisualApi.listVisualTemplates(companyId)
-      .then((r) => { if (vivo) setTemplates(r.templates || []); })
-      .catch(() => { if (vivo) setTemplates([]); });
-    return () => { vivo = false; };
-  }, [companyId]);
-
-  useEffect(() => {
-    const inicial: Record<string, string | null> = {};
-    produtos.forEach((p) => { inicial[p.id] = p.visual_template_key || null; });
-    setVinculos(inicial);
-  }, [produtos]);
-
-
-  async function vincular(pid: string, key: string | null) {
-    const antes = vinculos[pid] ?? null;
-    setVinculos((v) => ({ ...v, [pid]: key }));
-    setSalvando(pid);
-    setFalhou((f) => (f === pid ? null : f));
-    try {
-      await studioVisualApi.setProductVisualTemplate(companyId, pid, key);
-    } catch {
-      // Volta ao que era: mostrar vinculado o que não salvou faria a
-      // lojista contar com uma prévia 3D que a vitrine não tem. E AVISA:
-      // antes a escolha voltava calada e parecia clique perdido.
-      setVinculos((v) => ({ ...v, [pid]: antes }));
-      setFalhou(pid);
-    } finally {
-      setSalvando(null);
-    }
-  }
 
   const corDoTom =
     leitura.tom === "ok" ? "#34D399" : leitura.tom === "ajustada" ? "#FBBF24" : "#F87171";
@@ -176,63 +115,8 @@ export function TabStudioAparencia({
         </View>
       </View>
 
-      {/* ── Mockup 3D por produto ─────────────────────────── */}
-      <View style={cartao}>
-        <Texto style={{ fontSize: 14, fontWeight: "700", color: (T as any)?.ink }}>Mockup 3D por produto</Texto>
-        <Texto style={{ fontSize: 12, color: (T as any)?.ink3, lineHeight: 17 }}>
-          Produto com mockup deixa o cliente girar a peça e ver a arte dele antes de
-          pagar. Sem vínculo, a prévia cai na foto do produto.
-        </Texto>
-
-        {templates === null ? (
-          <ActivityIndicator color={(T as any)?.primary} />
-        ) : templates.length === 0 ? (
-          <Texto style={{ fontSize: 12, color: (T as any)?.ink3 }}>
-            Nenhum modelo publicado ainda. A Aura mantém esta lista.
-          </Texto>
-        ) : (
-          <View style={{ gap: 10 }}>
-            {produtos.map((p) => (
-              <View key={p.id} style={{
-                gap: 7, paddingVertical: 10,
-                borderTopWidth: 1, borderTopColor: T.ink5,
-              }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <Texto style={{ flex: 1, fontSize: 13, color: (T as any)?.ink }} numberOfLines={1}>
-                    {p.name}
-                  </Texto>
-                  {salvando === p.id ? <ActivityIndicator size="small" color={(T as any)?.primary} /> : null}
-                </View>
-                {falhou === p.id ? (
-                  <Texto accessibilityRole="alert" style={{ fontSize: 12, fontWeight: "700", color: T.dangerInk }}>
-                    Não salvou, tente de novo
-                  </Texto>
-                ) : null}
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                  <Chip
-                    rotulo="Sem mockup"
-                    ativo={!vinculos[p.id]}
-                    onPress={() => vincular(p.id, null)}
-                    celular={celular}
-                    T={T}
-                  />
-                  {templates.map((t) => (
-                    <Chip
-                      key={t.key}
-                      rotulo={t.name}
-                      nota={t.kind === "model3d" ? "3D" : "2D"}
-                      ativo={vinculos[p.id] === t.key}
-                      onPress={() => vincular(p.id, t.key)}
-                      celular={celular}
-                      T={T}
-                    />
-                  ))}
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-      </View>
+      {/* ── Mockup por produto: seletor único e prévia ────── */}
+      <SecaoMockupPorProduto companyId={companyId} />
 
       {/* ── Onde mora o resto ─────────────────────────────── */}
       {/* Os dois moram em lugares diferentes: a política de revisão na
@@ -274,34 +158,5 @@ function Amostra({
         {rotulo.toUpperCase()}
       </Texto>
     </View>
-  );
-}
-
-function Chip({
-  rotulo, nota, ativo, onPress, celular, T,
-}: { rotulo: string; nota?: string; ativo: boolean; onPress: () => void; celular?: boolean; T: any }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={nota ? `${rotulo} (${nota})` : rotulo}
-      accessibilityState={{ selected: ativo }}
-      // No web o accessibilityState não chega ao DOM (RNW 0.19).
-      aria-pressed={ativo}
-      style={{
-        paddingVertical: 7, paddingHorizontal: 11, borderRadius: 999,
-        minHeight: celular ? 44 : undefined,
-        borderWidth: ativo ? 1.5 : 1,
-        // O ativo no navy do PAINEL (era o violeta da Aura, cor do Negócio).
-        borderColor: ativo ? T.primary : T.ink5,
-        backgroundColor: ativo ? T.primarySoft : "transparent",
-        flexDirection: "row", alignItems: "center", gap: 5,
-      }}
-    >
-      <Texto style={{ fontSize: 11.5, color: ativo ? (T as any)?.ink : (T as any)?.ink2 }}>{rotulo}</Texto>
-      {nota ? (
-        <Texto style={{ fontFamily: Fonts.mono, fontSize: 9, color: (T as any)?.ink3 }}>{nota}</Texto>
-      ) : null}
-    </Pressable>
   );
 }
