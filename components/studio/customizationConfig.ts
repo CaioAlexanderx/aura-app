@@ -133,6 +133,9 @@ export function canonicalFieldId(
  * Aqui o lado pedido vira o "front" do motor. So o que esta naquele lado
  * entra: o verso nao mostra a arte da frente, que e o certo.
  */
+/** Chaves laterais de um campo: `<campo>_<sufixo>`. */
+export const SUFIXOS_LATERAIS = ["cor", "ajuste", "fonte", "tam", "contorno"] as const;
+
 export function valuesForSide(
   values: Record<string, any> | null | undefined,
   side: CustomizationFieldSide
@@ -140,10 +143,15 @@ export function valuesForSide(
   const v = values || {};
   if (side === "front") return v;
   const out: Record<string, any> = {};
-  const re = new RegExp("^(.+?)_" + side + "(_\d+)?$");
+  // Barra dupla: dentro de string, uma barra só antes do `d` some e a
+  // regex deixava de reconhecer `text_back_2` — o segundo campo do verso
+  // sumia da previa do painel (achado de 28/09/2026). As chaves laterais
+  // do campo (`_cor`, `_ajuste`, `_fonte`, `_tam`, `_contorno`) acompanham
+  // o campo.
+  const re = new RegExp("^(.+?)_" + side + "(_\\d+)?(_(?:" + SUFIXOS_LATERAIS.join("|") + "))?$");
   for (const k of Object.keys(v)) {
     const m = k.match(re);
-    if (m) out[m[1] + (m[2] || "")] = v[k];
+    if (m) out[m[1] + (m[2] || "") + (m[3] || "")] = v[k];
   }
   return out;
 }
