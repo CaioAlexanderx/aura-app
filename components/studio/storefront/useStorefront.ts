@@ -131,7 +131,7 @@ import { lojaFechouNoEnvio } from "./lojaFechada";
 // Fase 2 (Fechar a venda): preco numa conta so, a chave vitrine_v2, a
 // cotacao no servidor e o pedido guardado para a pagina /pedido/<token>.
 import {
-  precoDaPeca, precoUnitarioDaLinha, totalDaLinha, versoEfetivo, meioEfetivo,
+  precoDaPeca, precoUnitarioDaLinha, totalDaLinha, versoEfetivo, meioEfetivo, descontoDoPix,
 } from "./precoDaSacola";
 import { vitrineV2NoNavegador } from "./chaveVitrineV2";
 import {
@@ -139,7 +139,7 @@ import {
   type CotacaoDaSacola,
 } from "./cotacaoDaSacola";
 import { situacaoDoDocumento, digitos } from "./formularioDoCheckout";
-import { guardarDadosLembrados, storageLocal, storageDaAba } from "./dadosLembrados";
+import { guardarDadosLembrados, esquecerRascunhoDoCheckout, storageLocal, storageDaAba } from "./dadosLembrados";
 import { guardarPedidoPendente, guardarIdDoPedido } from "./pedidoGuardado";
 
 const API_BASE = enderecoDaApi();
@@ -463,15 +463,16 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
    * e pronto: a partir do dia em que uma lojista ligasse o desconto, a
    * tela mostraria um total e a cobranca seria outra.
    *
-   * A formula e copiada de la de proposito — `Math.round(subtotal * pct)
-   * / 100`, arredondando em centavos — e o frete fica FORA, tambem como
-   * la. Conta de dinheiro em dois lugares e conta que diverge; o jeito de
+   * QA 27/09: a formula e a regra canonica combinada com o backend
+   * (precoDaSacola.precoNoPix/descontoDoPix, em centavos) — a mesma da
+   * peca, da sacola e do checkout — e o frete fica FORA, tambem como la.
+   * Conta de dinheiro em dois lugares e conta que diverge; o jeito de
    * conviver com isso e ela ser identica e ter teste dos dois lados.
    */
   const pixDiscountPct = Number((store as any)?.payment?.pix_discount_pct) || 0;
   const pixDiscount = useMemo(() => {
     if (paymentMethod !== "pix" || pixDiscountPct <= 0) return 0;
-    return Math.round(cartSubtotal * pixDiscountPct) / 100;
+    return descontoDoPix(cartSubtotal, pixDiscountPct);
   }, [paymentMethod, pixDiscountPct, cartSubtotal]);
 
   const cartTotal = useMemo(
@@ -1086,6 +1087,8 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
           }, storageLocal());
         }
         if (token && data.order_id) guardarIdDoPedido(token, String(data.order_id), storageDaAba());
+        // O pedido foi criado: o rascunho do checkout (F5 e voltar) sai da aba.
+        esquecerRascunhoDoCheckout(slug, storageDaAba());
       }
 
       setCart([]);

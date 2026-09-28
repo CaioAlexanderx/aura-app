@@ -83,7 +83,10 @@ describe("os dois lados continuam ligados", () => {
   test("o app calcula o desconto e o desconta do total", () => {
     const s = fs.readFileSync(
       path.join(RAIZ, "components/studio/storefront/useStorefront.ts"), "utf8");
-    expect(s).toContain("Math.round(cartSubtotal * pixDiscountPct) / 100");
+    // QA 27/09 (mudança intencional): a conta é a regra canônica em
+    // centavos, combinada com o backend, e mora em precoDaSacola.ts
+    // (testada em vitrineQaPixERetirada.test.ts).
+    expect(s).toContain("descontoDoPix(cartSubtotal, pixDiscountPct)");
     expect(s).toContain("cartSubtotal - pixDiscount + shippingFee");
     // O percentual vem do payload, nunca cravado na tela.
     expect(s).toContain("payment?.pix_discount_pct");

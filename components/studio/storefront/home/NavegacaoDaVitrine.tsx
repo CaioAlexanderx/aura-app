@@ -32,9 +32,10 @@ import { useReduzirMovimento } from "../movimento";
 import { abrirASacola } from "../produto/CabecalhoDaLoja";
 import { BotaoIcone, Rotulo, borda2, sombraWeb, transicao, usePulso } from "../produto/kitDaPagina";
 import {
-  alvoDaCategoria, buscarNaVitrine, menuDaLoja, mensagemDaBuscaVazia, sugestoesDeBusca,
-  trechosDestacados, type DestinoDaVitrine, type ItemDoMenu,
+  alvoDaCategoria, buscarNaVitrine, entradaAtiva, mensagemDaBuscaVazia, navegacaoDaLoja, sugestoesDeBusca,
+  trechosDestacados, type DestinoDaVitrine, type EntradaDaNavegacao,
 } from "./regrasDaHome";
+import { pedirAGradeNaHome } from "./rolagemDaVitrine";
 
 // ── Ações de navegação ───────────────────────────────────────
 
@@ -48,6 +49,23 @@ export function abrirCategoria(sf: StorefrontState, categoria: StoreCategory | n
   if (alvo.tipo === "grupo") sf.abrirGrupo(alvo.categoria, alvo.produtos);
   else sf.openConfigure(alvo.produto);
   return true;
+}
+
+/**
+ * "Todas as peças": a grade completa da loja, o mesmo alvo do "Ver a loja
+ * toda" e do `#vista=todos`. Na home, `onVerLoja` rola até ela; fora da
+ * home, a home abre e rola sozinha (rolagemDaVitrine.ts).
+ */
+export function irParaTodasAsPecas(sf: StorefrontState, onVerLoja?: () => void) {
+  if (onVerLoja) { onVerLoja(); return; }
+  pedirAGradeNaHome();
+  sf.goTo("list");
+}
+
+/** Abre uma entrada da navegação (barra, gaveta, rodapé). */
+export function abrirEntrada(sf: StorefrontState, e: EntradaDaNavegacao, onVerLoja?: () => void) {
+  if (e.tipo === "todas") irParaTodasAsPecas(sf, onVerLoja);
+  else abrirCategoria(sf, e.tipo === "categoria" ? e.item.categoria : e.categoria);
 }
 
 /** O link do WhatsApp da loja com uma mensagem pronta. */
@@ -70,6 +88,7 @@ export function irParaDestino(
   else if (destino.tipo === "lote") sf.goTo("lote");
   else if (destino.tipo === "externo") Linking.openURL(destino.url);
   else if (rolarPara) rolarPara(destino.tipo);
+  else if (destino.tipo === "grade") irParaTodasAsPecas(sf);
   else sf.goTo("list");
 }
 
@@ -155,29 +174,36 @@ function Sacola({ sf }: { sf: StorefrontState }) {
 
 // ── A barra de categorias ────────────────────────────────────
 
+/**
+ * A barra de categorias: "Todas as peças", as categorias com peça e
+ * "Outras peças" (regrasDaHome.navegacaoDaLoja). Existe sempre que a loja
+ * tem 2 ou mais peças — com uma categoria só, antes, ela sumia.
+ */
 function BarraDeCategorias({
-  sf, itens, desktop, ativa,
+  sf, entradas, desktop, ativa, onVerLoja,
 }: {
   sf: StorefrontState;
-  itens: ItemDoMenu[];
+  entradas: EntradaDaNavegacao[];
   desktop: boolean;
   ativa?: string | null;
+  onVerLoja?: () => void;
 }) {
   const t = useTemaDaVitrine();
-  if (itens.length < 2) return null;
-  const botoes = itens.map((i) => {
-    const eAtiva = !!ativa && (ativa === String(i.categoria.slug || "") || ativa === String(i.categoria.id));
+  if (!entradas.length) return null;
+  const botoes = entradas.map((e) => {
+    const eAtiva = entradaAtiva(e, ativa);
     return (
       <Pressable
-        key={i.categoria.id}
-        onPress={() => abrirCategoria(sf, i.categoria)}
+        key={e.tipo + ":" + e.chave}
+        testID={"barra-" + e.tipo}
+        onPress={() => abrirEntrada(sf, e, onVerLoja)}
         accessibilityRole="link"
         accessibilityState={{ selected: eAtiva }}
-        accessibilityLabel={i.categoria.name}
+        accessibilityLabel={e.rotulo}
         style={({ hovered }: any) => ({ height: 44, paddingHorizontal: 2, justifyContent: "center", opacity: hovered && !eAtiva ? 0.8 : 1 })}
       >
         <Texto numberOfLines={1} style={{ fontSize: 14, fontWeight: eAtiva ? "600" : "500", color: eAtiva ? t.ink : t.ink2 }}>
-          {i.categoria.name}
+          {e.rotulo}
         </Texto>
         {eAtiva ? <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 2, borderRadius: 2, backgroundColor: t.marcaTexto }} /> : null}
       </Pressable>
@@ -219,7 +245,7 @@ export function CabecalhoDaVitrine({
 }) {
   const t = useTemaDaVitrine();
   const store: any = sf.store;
-  const itens = useMemo(() => menuDaLoja(store), [store]);
+  const entradas = useMemo(() => navegacaoDaLoja(store), [store]);
   const [focado, setFocado] = useState(false);
   const nome = String(store?.site?.name || "");
   const listaAberta = desktop && (focado || camadas.aberta === "busca") && !!camadas.termo.trim();
@@ -295,7 +321,7 @@ export function CabecalhoDaVitrine({
           <Sacola sf={sf} />
         </View>
       )}
-      <BarraDeCategorias sf={sf} itens={itens} desktop={desktop} ativa={categoriaAtiva} />
+      <BarraDeCategorias sf={sf} entradas={entradas} desktop={desktop} ativa={categoriaAtiva} onVerLoja={onVerLoja} />
     </View>
   );
 }
@@ -400,7 +426,7 @@ export function ResultadosDaBusca({
         </Texto>
         <View style={{ width: "100%", maxWidth: 300, gap: 8, marginTop: 10 }}>
           <Pressable
-            onPress={() => { onFechar(); if (onVerLoja) onVerLoja(); else sf.goTo("list"); }}
+            onPress={() => { onFechar(); irParaTodasAsPecas(sf, onVerLoja); }}
             accessibilityRole="button"
             style={{ minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: borda2(t), backgroundColor: t.bg2, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}
           >
@@ -519,11 +545,12 @@ function LinhaDaGaveta({
   );
 }
 
-function Gaveta({ sf, camadas }: { sf: StorefrontState; camadas: CamadasDaVitrine }) {
+function Gaveta({ sf, camadas, onVerLoja }: { sf: StorefrontState; camadas: CamadasDaVitrine; onVerLoja?: () => void }) {
   const t = useTemaDaVitrine();
   const reduzir = useReduzirMovimento();
   const store: any = sf.store;
-  const itens = useMemo(() => menuDaLoja(store), [store]);
+  // A mesma lista da barra: "Todas as peças", categorias, "Outras peças".
+  const entradas = useMemo(() => navegacaoDaLoja(store), [store]);
   const [aberta, setAberta] = useState<string | null>(null);
   const [entrou, setEntrou] = useState(false);
   useEffect(() => {
@@ -568,10 +595,11 @@ function Gaveta({ sf, camadas }: { sf: StorefrontState; camadas: CamadasDaVitrin
           </Pressable>
           <View style={{ paddingHorizontal: 8, paddingVertical: 6 }}>
             <LinhaDaGaveta rotulo="Início" onPress={ir(() => sf.goTo("list"))} />
-            {itens.map((i) => {
-              if (!i.filhas.length) {
-                return <LinhaDaGaveta key={i.categoria.id} rotulo={i.categoria.name} total={i.total} onPress={ir(() => abrirCategoria(sf, i.categoria))} />;
+            {entradas.map((e) => {
+              if (e.tipo !== "categoria" || !e.item.filhas.length) {
+                return <LinhaDaGaveta key={e.tipo + ":" + e.chave} testID={"gaveta-" + e.tipo} rotulo={e.rotulo} total={e.total} onPress={ir(() => abrirEntrada(sf, e, onVerLoja))} />;
               }
+              const i = e.item;
               const exp = aberta === i.categoria.id;
               return (
                 <View key={i.categoria.id}>
@@ -659,5 +687,5 @@ export function CamadasDaNavegacao({
   onVerLoja?: () => void;
 }) {
   if (desktop || !camadas.aberta) return null;
-  return camadas.aberta === "gaveta" ? <Gaveta sf={sf} camadas={camadas} /> : <BuscaCheia sf={sf} camadas={camadas} onVerLoja={onVerLoja} />;
+  return camadas.aberta === "gaveta" ? <Gaveta sf={sf} camadas={camadas} onVerLoja={onVerLoja} /> : <BuscaCheia sf={sf} camadas={camadas} onVerLoja={onVerLoja} />;
 }

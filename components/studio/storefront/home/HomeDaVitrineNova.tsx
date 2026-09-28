@@ -15,7 +15,7 @@
 // Não entram (JORNADA §4.2 e §5): "últimas unidades", "mais vendidos em
 // 90 dias", filtros laterais de tamanho/cor/preço e paginação de 24.
 // ============================================================
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Image, Linking, Platform, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import type { StorefrontState } from "../useStorefront";
 import { useTemaDaVitrine } from "../TemaDaVitrine";
@@ -32,9 +32,13 @@ import { AncoraWhatsApp } from "../AncoraWhatsApp";
 import { BarraDeCookies } from "../ConsentimentoDaVitrine";
 import { RodapeDaVitrine } from "../RodapeDaVitrine";
 import { FaixaDaTemporada } from "../FaixaDaTemporada";
-import { Botao, Rotulo, Selo, sombraWeb, transicao } from "../produto/kitDaPagina";
-import { abrirCategoria, linkDoWhatsApp, useCamadas, CabecalhoDaVitrine, CamadasDaNavegacao } from "./NavegacaoDaVitrine";
+import { Botao, BotaoIcone, Rotulo, Selo, sombraWeb, transicao } from "../produto/kitDaPagina";
+import { abrirCategoria, abrirEntrada, linkDoWhatsApp, useCamadas, CabecalhoDaVitrine, CamadasDaNavegacao } from "./NavegacaoDaVitrine";
 import { HeroDaPeca, HeroDeBanners } from "./HeroDaHome";
+import { useVitrine } from "../ContextoDaVitrine";
+import {
+  chaveDaRolagem, consumirPedidoDaGrade, entradaDoHistorico, guardarRolagem, rolagemParaRestaurar,
+} from "./rolagemDaVitrine";
 import {
   artesDaHome, bannersDaHome, blocoParaEmpresas, descontoDoPix, gradeDaHome, itensDaFaixa, mostrarTirarDuvida,
   selosDaHome, type ArteDaHome,
@@ -413,6 +417,34 @@ function Selos({ sf, desktop }: { sf: StorefrontState; desktop: boolean }) {
   );
 }
 
+// ── O recado no topo ─────────────────────────────────────────
+
+/**
+ * QA 27/09: link direto de peça que saiu da loja abre a home com este
+ * recado no topo do conteúdo, na voz da loja, até a cliente fechar. Uma
+ * vez: some no "Fechar aviso" ou quando ela sai da home.
+ */
+export function RecadoDaHome({ texto, onFechar, desktop }: { texto: string; onFechar: () => void; desktop: boolean }) {
+  const t = useTemaDaVitrine();
+  return (
+    <View style={{ paddingHorizontal: 16, paddingTop: desktop ? 16 : 12 }}>
+      <View
+        testID="recado-da-home"
+        accessibilityRole="alert"
+        style={{
+          flexDirection: "row", alignItems: "center", gap: 10, width: "100%", maxWidth: LARGURA_MAX, alignSelf: "center",
+          backgroundColor: t.marcaWash, borderWidth: 1, borderColor: t.borderAccent, borderRadius: 12,
+          paddingLeft: 14, paddingRight: 4, minHeight: 48,
+        }}
+      >
+        <Icon name="info" size={16} color={t.marcaTexto} />
+        <Texto style={{ flex: 1, fontSize: 13.5, lineHeight: 19, paddingVertical: 8, color: t.ink }}>{texto}</Texto>
+        <BotaoIcone icone="x" rotulo="Fechar aviso" tamanho={40} cor={t.marcaTexto} onPress={onFechar} testID="fechar-recado-da-home" />
+      </View>
+    </View>
+  );
+}
+
 // ── A página ─────────────────────────────────────────────────
 
 export function HomeDaVitrineNova({ sf, slug }: { sf: StorefrontState; slug: string }) {
@@ -425,6 +457,37 @@ export function HomeDaVitrineNova({ sf, slug }: { sf: StorefrontState; slug: str
   const posicoes = useRef<{ grade: number; queridinhos: number; cabecalho: number }>({ grade: 0, queridinhos: 0, cabecalho: 0 });
   const [fimDoTopo, setFimDoTopo] = useState(0);
   const [y, setY] = useState(0);
+  const v = useVitrine();
+  const recado = v?.recadoDaHome || null;
+  // O recado vale para esta visita à home: saiu dela, ele some.
+  useEffect(() => () => { v?.deixarRecadoNaHome?.(null); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Onde a página estava (QA 27/09) ─────────────────────────
+  // A home rola no próprio ScrollView e o navegador não devolve a
+  // posição. Ela é guardada ao sair e restaurada no voltar do navegador
+  // (a mesma entrada do histórico: rolagemDaVitrine.ts). "Todas as
+  // peças" vindo de outra tela abre a home já na grade.
+  const chaveDaHome = chaveDaRolagem(slug, "home");
+  const yReal = useRef(0);
+  const entrada = useRef("");
+  const pendente = useRef<{ y: number | null; grade: boolean }>({ y: null, grade: false });
+  useLayoutEffect(() => {
+    const grade = consumirPedidoDaGrade();
+    pendente.current = { grade, y: grade ? null : rolagemParaRestaurar(chaveDaHome, entradaDoHistorico()) };
+    // O que ficar pendente sem conteúdo para rolar, desiste em 1,5 s.
+    const desiste = setTimeout(() => { pendente.current = { y: null, grade: false }; }, 1500);
+    return () => {
+      clearTimeout(desiste);
+      guardarRolagem(chaveDaHome, yReal.current, entrada.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const restaurarSePreciso = (alturaDoConteudo: number) => {
+    const alvo = pendente.current.y;
+    if (alvo == null || alturaDoConteudo < alvo) return;
+    pendente.current.y = null;
+    rolagem.current?.scrollTo({ y: alvo, animated: false });
+  };
 
   const banners = useMemo(() => bannersDaHome(store), [store]);
   const itens = useMemo(() => itensDaFaixa(store), [store]);
@@ -444,6 +507,8 @@ export function HomeDaVitrineNova({ sf, slug }: { sf: StorefrontState; slug: str
   // Só os limiares importam para a tela: evita um render por quadro.
   const aoRolar = (e: any) => {
     const novo = e?.nativeEvent?.contentOffset?.y || 0;
+    yReal.current = novo;
+    entrada.current = entradaDoHistorico();
     const antes = y;
     if ((novo > 4) !== (antes > 4) || mostrarTirarDuvida({ rolagem: novo, fimDoTopo, alturaDaTela: height }) !== zapVisivel) setY(novo);
   };
@@ -458,12 +523,13 @@ export function HomeDaVitrineNova({ sf, slug }: { sf: StorefrontState; slug: str
           stickyHeaderIndices={[1]}
           scrollEventThrottle={32}
           onScroll={aoRolar}
-          
+          onContentSizeChange={(_w: number, h: number) => restaurarSePreciso(h)}
         >
           <FaixaDeAnuncio itens={itens} desktop={desktop} />
           <View onLayout={(e) => { posicoes.current.cabecalho = e.nativeEvent.layout.height; }} style={{ zIndex: 20 }}>
             <CabecalhoDaVitrine sf={sf} desktop={desktop} camadas={camadas} rolou={y > 4} onVerLoja={verLoja} />
           </View>
+          {recado ? <RecadoDaHome texto={recado} desktop={desktop} onFechar={() => v?.deixarRecadoNaHome?.(null)} /> : null}
           <View onLayout={(e) => setFimDoTopo(e.nativeEvent.layout.y + e.nativeEvent.layout.height)}>
             {banners.length ? (
               <HeroDeBanners sf={sf} banners={banners} largura={width} desktop={desktop} rolarPara={rolarPara} />
@@ -472,15 +538,19 @@ export function HomeDaVitrineNova({ sf, slug }: { sf: StorefrontState; slug: str
             )}
           </View>
           <ComoFunciona sf={sf} desktop={desktop} />
-          <GradeDaHome sf={sf} desktop={desktop} largura={width} onLayout={(e) => { posicoes.current.grade = e.nativeEvent.layout.y; }} />
+          <GradeDaHome sf={sf} desktop={desktop} largura={width} onLayout={(e) => {
+            posicoes.current.grade = e.nativeEvent.layout.y;
+            if (pendente.current.grade) {
+              pendente.current.grade = false;
+              // Depois do layout do cabeçalho (a conta desconta a altura dele).
+              setTimeout(() => rolarPara("grade"), 60);
+            }
+          }} />
           <Queridinhos sf={sf} desktop={desktop} largura={width} onLayout={(e) => { posicoes.current.queridinhos = e.nativeEvent.layout.y; }} />
           <ArtesDaLoja sf={sf} desktop={desktop} />
           <ParaEmpresas sf={sf} desktop={desktop} />
           <Selos sf={sf} desktop={desktop} />
-          <RodapeDaVitrine store={store} variante="nova" onAbrirCategoria={(porta) => {
-            const c = (store?.categories || []).find((x: any) => String(x.id) === porta.id);
-            abrirCategoria(sf, c);
-          }} />
+          <RodapeDaVitrine store={store} variante="nova" onNavegar={(e) => abrirEntrada(sf, e, verLoja)} />
           {/* A folga do fim (o "Tirar dúvida" não cobre a assinatura) no tom do rodapé. */}
           <View style={{ height: 96, backgroundColor: t.bg3 }} />
         </ScrollView>

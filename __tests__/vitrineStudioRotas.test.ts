@@ -118,7 +118,8 @@ describe("resolverTela: a URL contra a loja carregada", () => {
     expect(resolverTela({ tipo: "produto", id: "nao-existe" }, LOJA, VITRINE)).toEqual({
       acao: "redirecionar", para: { tipo: "home" }, aviso: AVISO_PECA_FORA,
     });
-    expect(AVISO_PECA_FORA).toBe("Essa peça não está mais na loja");
+    // QA 27/09: o recado ganhou o que fazer (mudança intencional).
+    expect(AVISO_PECA_FORA).toBe("Essa peça não está mais na loja. Escolha outra: as artes continuam suas.");
   });
 
   test("categoria com grupo abre a grade", () => {

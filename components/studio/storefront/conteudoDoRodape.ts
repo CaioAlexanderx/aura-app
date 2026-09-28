@@ -18,6 +18,7 @@
 // duas lojas.
 // ============================================================
 import type { RedeSocial, StoreCategory, StudioStoreProduct } from "./types";
+import { navegacaoDaLoja, type EntradaDaNavegacao } from "./home/regrasDaHome";
 
 /** Quantas portas de navegação cabem no rodapé sem virar índice. */
 export const MAXIMO_NA_NAVEGACAO = 6;
@@ -89,6 +90,18 @@ export function navegacaoDoRodape(
     .filter((c) => !c.parent_id && comPeca.has(String(c.id)))
     .slice(0, MAXIMO_NA_NAVEGACAO)
     .map((c) => ({ id: String(c.id), slug: String(c.slug || ""), nome: c.name }));
+}
+
+/**
+ * O "Navegue" do rodapé da vitrine nova (QA 27/09): a MESMA lista da
+ * barra e da gaveta — "Todas as peças", as categorias com peça e "Outras
+ * peças" (regrasDaHome.navegacaoDaLoja). As categorias continuam no teto
+ * de MAXIMO_NA_NAVEGACAO: rodapé não é índice; quem quer tudo tem
+ * "Todas as peças" logo acima.
+ */
+export function navegacaoDoRodapeNovo(store: any): EntradaDaNavegacao[] {
+  let categorias = 0;
+  return navegacaoDaLoja(store).filter((e) => e.tipo !== "categoria" || ++categorias <= MAXIMO_NA_NAVEGACAO);
 }
 
 /**

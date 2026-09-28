@@ -22,7 +22,7 @@ import { Icon } from "@/components/Icon";
 import { cssDaVitrineStudio } from "@/constants/fonts";
 import type { MarcaDaLoja } from "@/services/studioApi";
 import { TemaDaVitrine, useTemaDaVitrine } from "../TemaDaVitrine";
-import { TipografiaDaVitrine, Texto, estiloNumero, useTipografia } from "../TipografiaVitrine";
+import { TipografiaDaVitrine, Texto, estiloNumero, useTipografia, chaveDaTipografia } from "../TipografiaVitrine";
 import { NOTA, TINTA_SOBRE_VERDE, VERDE_WHATSAPP } from "./posCompra";
 
 export const LARGURA_DA_COLUNA = 640;
@@ -31,7 +31,7 @@ export const LARGURA_DA_COLUNA = 640;
 function useFontesDaLoja(chave: string | null | undefined) {
   useEffect(() => {
     if (Platform.OS !== "web" || typeof document === "undefined") return;
-    const href = cssDaVitrineStudio(chave);
+    const href = cssDaVitrineStudio(chaveDaTipografia(chave));
     const existente = document.getElementById("aura-storefront-fonts") as HTMLLinkElement | null;
     if (existente) {
       if (existente.getAttribute("href") !== href) existente.setAttribute("href", href);

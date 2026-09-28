@@ -13,12 +13,12 @@
 // preço pode mudar na página, e o Pix. A trilha substitui o "← Voltar
 // para a loja".
 // ============================================================
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Image, Linking, Platform, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import { Icon } from "@/components/Icon";
 import { wash } from "../theme";
-import { CabecalhoDaVitrine, CamadasDaNavegacao, abrirCategoria, linkDoWhatsApp, useCamadas } from "../home/NavegacaoDaVitrine";
-import { itensDaFaixa, produtosDaArvore, subcategorias, trilhaDaCategoria } from "../home/regrasDaHome";
+import { CabecalhoDaVitrine, CamadasDaNavegacao, abrirCategoria, abrirEntrada, linkDoWhatsApp, useCamadas } from "../home/NavegacaoDaVitrine";
+import { ehOutrasPecas, itensDaFaixa, produtosDaArvore, subcategorias, trilhaDaCategoria } from "../home/regrasDaHome";
 import { FaixaDeAnuncio } from "../home/HomeDaVitrineNova";
 import type { StorefrontState } from "../useStorefront";
 import type { StudioStoreProduct } from "../types";
@@ -31,7 +31,9 @@ import { fotosDoProduto } from "../CarrosselFoto";
 import { chipsDoProduto, seloDoProduto, pecaMaisPedida } from "../selosDoProduto";
 import { precoNoPix } from "../precoNoPix";
 import { modelosOrdenados, eixoQueVaria, faixaDePrecos, resumoDoGrupo } from "../modelosDoGrupo";
-import { tituloDaPagina } from "../rotasDaVitrine";
+import { chaveDaCategoria, tituloDaPagina } from "../rotasDaVitrine";
+import { useVitrine } from "../ContextoDaVitrine";
+import { chaveDaRolagem, entradaDoHistorico, guardarRolagem, rolagemParaRestaurar } from "../home/rolagemDaVitrine";
 import { dinheiro } from "../moeda";
 import { precoPodeMudar } from "./regrasDaPagina";
 import { Trilha } from "./CabecalhoDaLoja";
@@ -106,6 +108,10 @@ export function GradeDeModelosV2({ sf }: { sf: StorefrontState }) {
   const store: any = sf.store;
   const categoria = grupo?.categoria || null;
   const produtosDoGrupo = grupo?.produtos || [];
+  // QA 27/09: "Outras peças" é o grupo virtual das peças sem categoria.
+  // São peças diferentes, não modelos da mesma: a contagem diz "peças" e
+  // a peça abre sem o seletor de modelo.
+  const soltas = ehOutrasPecas(categoria);
   // Fase 5: a página da categoria ganha o cabeçalho da home nova (busca,
   // gaveta, barra de categorias presa), a trilha com os ancestrais, as
   // filhas como opções e o "não achou?" com o WhatsApp (mockup 05, tela 5).
@@ -117,6 +123,23 @@ export function GradeDeModelosV2({ sf }: { sf: StorefrontState }) {
   const produtos = filhaAtiva ? produtosDaArvore(filhaAtiva.id, store) : produtosDoGrupo;
   const ancestrais = useMemo(() => trilhaDaCategoria(categoria, store?.categories), [categoria, store]);
   const raiz = ancestrais[0] || categoria;
+
+  // QA 27/09: voltar da peça devolve a grade onde a cliente estava (a
+  // página rola no próprio ScrollView; ver home/rolagemDaVitrine.ts).
+  const slug = useVitrine()?.slug || "";
+  const rolagem = useRef<ScrollView | null>(null);
+  const chaveDaPagina = chaveDaRolagem(slug, "c:" + chaveDaCategoria(categoria));
+  const yReal = useRef(0);
+  const entrada = useRef("");
+  const pendente = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    pendente.current = rolagemParaRestaurar(chaveDaPagina, entradaDoHistorico());
+    const desiste = setTimeout(() => { pendente.current = null; }, 1500);
+    return () => {
+      clearTimeout(desiste);
+      guardarRolagem(chaveDaPagina, yReal.current, entrada.current);
+    };
+  }, [chaveDaPagina]);
 
   const titulo = tituloDaPagina({ stage: "modelos", nomeDaLoja: store?.site?.name, categoria: categoria?.name });
   useEffect(() => {
@@ -142,7 +165,9 @@ export function GradeDeModelosV2({ sf }: { sf: StorefrontState }) {
   const gap = desktop ? 24 : 12;
   const larguraCartao = Math.floor((util - gap * (colunas - 1)) / colunas);
   const n = modelos.length;
-  const dica = eixo === "preco"
+  const dica = soltas
+    ? "Toque na peça para ver de perto e personalizar."
+    : eixo === "preco"
     ? "Cada modelo tem um preço. Toque para ver a peça de perto."
     : eixo === "cor"
     ? "Mesmo preço; o que muda é a cor disponível em cada um."
@@ -161,7 +186,7 @@ export function GradeDeModelosV2({ sf }: { sf: StorefrontState }) {
           <Texto nativeID="titulo-da-categoria" accessibilityRole="header" style={[{ fontFamily: tipo.display, fontSize: desktop ? 40 : 32, lineHeight: desktop ? 44 : 36, color: t.ink, letterSpacing: -0.4 }, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : null]}>
             {nomeDaVez}
           </Texto>
-          <Selo texto={`${n} ${n === 1 ? "modelo" : "modelos"}`} tom="suave" />
+          <Selo texto={soltas ? `${n} ${n === 1 ? "peça" : "peças"}` : `${n} ${n === 1 ? "modelo" : "modelos"}`} tom="suave" />
         </View>
         {frase3D ? <Texto style={{ fontSize: 13.5, color: t.ink2 }}>{frase3D}</Texto> : null}
       </View>
@@ -186,7 +211,20 @@ export function GradeDeModelosV2({ sf }: { sf: StorefrontState }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }} testID="grade-de-modelos-v2">
-      <ScrollView style={{ flex: 1 }} stickyHeaderIndices={[1]} contentContainerStyle={{ paddingBottom: 24 }}>
+      <ScrollView
+        ref={rolagem}
+        style={{ flex: 1 }}
+        stickyHeaderIndices={[1]}
+        contentContainerStyle={{ paddingBottom: 24 }}
+        scrollEventThrottle={32}
+        onScroll={(e: any) => { yReal.current = e?.nativeEvent?.contentOffset?.y || 0; entrada.current = entradaDoHistorico(); }}
+        onContentSizeChange={(_w: number, h: number) => {
+          const alvo = pendente.current;
+          if (alvo == null || h < alvo) return;
+          pendente.current = null;
+          rolagem.current?.scrollTo({ y: alvo, animated: false });
+        }}
+      >
         <FaixaDeAnuncio itens={itensDaFaixa(store)} desktop={desktop} />
         <View style={{ zIndex: 20 }}>
           <CabecalhoDaVitrine sf={sf} desktop={desktop} camadas={camadas} categoriaAtiva={raiz ? String(raiz.slug || raiz.id || "") : null} rolou />
@@ -223,7 +261,7 @@ export function GradeDeModelosV2({ sf }: { sf: StorefrontState }) {
                 largura={larguraCartao}
                 selo={seloDoProduto(m.produto, campeao)}
                 pixPct={pixPct}
-                onPress={() => sf.openConfigure(m.produto, produtosDoGrupo)}
+                onPress={() => sf.openConfigure(m.produto, soltas ? [] : produtosDoGrupo)}
               />
             ))}
           </View>
@@ -239,7 +277,7 @@ export function GradeDeModelosV2({ sf }: { sf: StorefrontState }) {
             </View>
           ) : <View style={{ height: desktop ? 56 : 40 }} />}
         </View>
-        <RodapeDaVitrine store={store} variante="nova" onAbrirCategoria={(porta) => abrirCategoria(sf, (store?.categories || []).find((c: any) => String(c.id) === porta.id))} />
+        <RodapeDaVitrine store={store} variante="nova" onNavegar={(e) => abrirEntrada(sf, e)} />
       </ScrollView>
       <CamadasDaNavegacao sf={sf} camadas={camadas} desktop={desktop} />
       <BarraDeCookies />
