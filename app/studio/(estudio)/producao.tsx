@@ -55,6 +55,8 @@ import { useRegistrarPagamento } from "@/components/studio/useRegistrarPagamento
 import { RegistrarPagamentoSheet } from "@/components/studio/RegistrarPagamentoSheet";
 import { resumoDaSemana, colunaGargalo, riscoDoCard } from "@/components/studio/fluxoDoQuadro";
 import { numeroDoPedido, situacaoDoPixNoCartao, reais } from "@/components/studio/pagamentoDoPedido";
+import { capaDoCartao } from "@/components/studio/capaDoCartao";
+import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
 import {
   useStudioKanbanDnD,
   useDraggableCardRef,
@@ -184,7 +186,17 @@ function DraggableCard({
   // A imagem pode faltar (54% de cobertura hoje) e pode falhar ao carregar.
   // Os dois casos caem no mesmo lugar: o monograma, que sempre existe.
   const [imgFalhou, setImgFalhou] = useState(false);
-  const capa = !imgFalhou ? (o.card_image_url || null) : null;
+  // Achado 4c do QA (27/09/2026): quando a capa seria só a foto do
+  // catálogo (arte de EXEMPLO do produto), o cartão desenha a
+  // personalização da cliente — ver capaDoCartao.
+  const capaBase = capaDoCartao(o);
+  const capa = imgFalhou && (capaBase.tipo === "arte" || capaBase.tipo === "foto")
+    ? ({ tipo: "monograma" } as const)
+    : capaBase;
+  // O SVG da prévia é quadrado: escalar pela ALTURA da capa (16/10) deixa
+  // a arte inteira visível, com faixas laterais, sem cortar texto.
+  const [alturaPrevia, setAlturaPrevia] = useState(0);
+  const nomeCapa = o.customer_name || o.display_name || "encomenda";
   const inicial = (o.customer_name || o.display_name || "?").trim().charAt(0).toUpperCase();
   const next = NEXT[col.key];
   const platformMeta = o.marketplace_platform ? PLATFORM_LABELS[o.marketplace_platform] : null;
@@ -208,15 +220,35 @@ function DraggableCard({
       )}
       {/* K1: o produto é a imagem. Personalizado se vende pelo olho — um card
           só de texto é uma planilha em pé. Sem foto, o monograma segura a
-          composição em vez de deixar um vão. */}
-      {capa ? (
+          composição em vez de deixar um vão. Quando a capa seria só a foto
+          do catálogo, desenha a personalização da cliente (achado 4c). */}
+      {capa.tipo === "arte" || capa.tipo === "foto" ? (
         <Image
-          source={{ uri: capa }}
+          source={{ uri: capa.url }}
           style={s.capa}
           resizeMode="cover"
           onError={() => setImgFalhou(true)}
-          accessibilityLabel={`Arte de ${o.customer_name || o.display_name || "encomenda"}`}
+          accessibilityLabel={`Arte de ${nomeCapa}`}
         />
+      ) : capa.tipo === "previa" ? (
+        <View
+          style={[s.capa, s.capaPrevia]}
+          onLayout={(e) => {
+            const h = Math.round(e.nativeEvent.layout.height);
+            if (h > 0 && h !== alturaPrevia) setAlturaPrevia(h);
+          }}
+          accessibilityLabel={`Prévia da personalização de ${nomeCapa}`}
+        >
+          {alturaPrevia > 0 ? (
+            <PersonalizationPreview
+              config={capa.config}
+              values={capa.values}
+              side={capa.side}
+              size={alturaPrevia}
+              showLabel={false}
+            />
+          ) : null}
+        </View>
       ) : (
         <View style={[s.capa, s.capaVazia]}>
           <Text style={s.capaInicial}>{inicial}</Text>
@@ -872,6 +904,11 @@ function buildStyles(t: StudioPalette) {
       borderWidth: 1, borderColor: t.ink5,
     },
     capaInicial: { fontSize: 26, fontWeight: "800", color: t.ink4 },
+    // Achado 4c: prévia da personalização no lugar da foto do catálogo.
+    capaPrevia: {
+      overflow: "hidden", alignItems: "center", justifyContent: "center",
+      backgroundColor: t.bgSoft,
+    },
     cardHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
     cardId: { fontSize: 10.5, color: t.ink4, fontWeight: "700", letterSpacing: 0.5 },
     slaChip: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, backgroundColor: t.bgSoft },
