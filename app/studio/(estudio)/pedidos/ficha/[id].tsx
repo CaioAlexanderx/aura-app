@@ -16,6 +16,9 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { studioApi, type StudioOrderDetail, type CustomizationConfig, type CustomizationField } from "@/services/studioApi";
 import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
+// Mesmo layout da vitrine: a oficina vê o que a cliente aprovou (28/09/2026).
+import { arteDoLado } from "@/components/studio/storefront/valoresDoMotor";
+import { ProvaDaArte } from "@/components/studio/ProvaDaArte";
 import { rotuloDaChave, valorDaChave } from "@/components/studio/customizationConfig";
 import { versoAtivo } from "@/components/studio/storefront/versoDoPedido";
 import { labelStudioStatus } from "@/constants/studio-status";
@@ -163,17 +166,26 @@ export default function FichaDeProducao() {
             {cfg ? (
               <View style={s.previews}>
                 <View style={s.previewBloco}>
-                  <PersonalizationPreview config={cfg} values={valores} size={220} showLabel={false} side="front" />
+                  <PersonalizationPreview config={cfg} values={valores} size={220} showLabel={false} side="front" arte={arteDoLado(cfg, valores, "front")} />
                   <Text style={s.legenda}>Frente</Text>
                 </View>
                 {temVerso ? (
                   <View style={s.previewBloco}>
-                    <PersonalizationPreview config={cfg} values={valores} size={220} showLabel={false} side="back" />
+                    <PersonalizationPreview config={cfg} values={valores} size={220} showLabel={false} side="back" arte={arteDoLado(cfg, valores, "back")} />
                     <Text style={s.legenda}>Verso</Text>
                   </View>
                 ) : null}
               </View>
             ) : null}
+
+            {/* Formatação da arte (28/09/2026): medidas em cm e o PNG de impressão. */}
+            <ProvaDaArte
+              config={cfg}
+              valores={valores}
+              lados={temVerso ? ["front", "back"] : ["front"]}
+              numero={numero}
+              rotulos={Object.fromEntries((cfg?.fields || []).map((f) => [f.id, f.label]))}
+            />
 
             {entradas.length ? (
               <View style={s.tabela}>

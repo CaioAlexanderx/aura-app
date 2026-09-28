@@ -35,6 +35,11 @@ import {
 } from "./regrasDaPagina";
 import { EnvioDaArte, type EstadoDoEnvio } from "./EnvioDaArte";
 import { PilulaDePreco, Rotulo, borda2, transicao } from "./kitDaPagina";
+import { artFontStack } from "@/constants/fonts";
+import { nomeDaFonteDoCampo } from "../valoresDoMotor";
+import { textoDasMedidas, tamanhoValido, type Tamanho } from "@/components/studio/visualEngine/layoutDaArte";
+import type { EditorDaArte } from "./EditorDaArte";
+import { nitidezDoItem } from "./nitidezDaArte";
 
 const NOME_DO_LADO: Record<Lado, string> = { front: "Frente", back: "Verso", middle: "Meio" };
 const ICONE_DO_CAMINHO: Record<string, string> = { [ART_NONE]: "upload", [ART_ADJUST]: "edit", [ART_DESIGNER]: "sparkles" };
@@ -166,6 +171,7 @@ export function ArtesProntas({
  */
 export function CampoDeTexto({
   field, value, cor, corDaPeca, fotoNaCorFotografada, lado, onChange, onCor, destacar,
+  fonte, onFonte, tam, onTam, contorno, onContorno,
 }: {
   field: CustomizationField;
   value: any;
@@ -177,6 +183,17 @@ export function CampoDeTexto({
   onChange: (v: string) => void;
   onCor: (c: string) => void;
   destacar?: boolean;
+  /**
+   * 28/09/2026 — formatação da arte: a fonte entre as que a lojista
+   * liberou (até 4), o tamanho P/M/G e o contorno fino, que só aparece
+   * quando a cor escolhida some na peça (ou já está ligado).
+   */
+  fonte?: string | null;
+  onFonte?: (f: string) => void;
+  tam?: Tamanho | null;
+  onTam?: (t: Tamanho) => void;
+  contorno?: boolean;
+  onContorno?: (v: boolean) => void;
 }) {
   const t = useTemaDaVitrine();
   const maxChars = field.config?.max_chars || 30;
@@ -185,6 +202,8 @@ export function CampoDeTexto({
   const texto = String(value || "");
   const quaseSome = !!(corDaPeca && corAtual && /^#/.test(corDaPeca) && contraste(corDaPeca, corAtual) < 1.8);
   const aviso = avisoDeContraste({ quaseSome, fotoNaCorFotografada, nomeDaCorDaPeca: corDaPeca ? nomeDaCor(corDaPeca) : null });
+  const fontes: string[] = ((field.config as any)?.fonts || []).filter((f: any) => typeof f === "string" && f.trim()).slice(0, 4);
+  const temTexto = texto.trim().length > 0;
   return (
     <View style={{ gap: 14 }}>
       <View style={{ gap: 6 }}>
@@ -228,7 +247,82 @@ export function CampoDeTexto({
               );
             })}
           </View>
-          {aviso ? <Texto testID="aviso-de-contraste" style={{ fontSize: 12.5, color: t.amber }}>{aviso}</Texto> : null}
+          {aviso && !contorno ? (
+            <Texto testID="aviso-de-contraste" style={{ fontSize: 12.5, color: t.amber }}>
+              {aviso}{quaseSome && onContorno ? " Ou ligue o contorno fino." : ""}
+            </Texto>
+          ) : null}
+        </View>
+      ) : null}
+      {temTexto && onFonte && fontes.length > 1 ? (
+        <View style={{ gap: 6 }}>
+          <Texto style={{ fontSize: 13, fontWeight: "600", color: t.ink2 }}>Fonte</Texto>
+          <View accessibilityRole="radiogroup" accessibilityLabel={`Fonte — ${field.label}`} style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {fontes.map((f) => {
+              const sel = f === (fonte || fontes[0]);
+              return (
+                <Pressable
+                  key={f}
+                  testID={"fonte-" + f}
+                  onPress={() => onFonte(f)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: sel }} aria-checked={sel}
+                  accessibilityLabel={"Fonte " + f}
+                  style={({ hovered }: any) => [{
+                    minWidth: 72, minHeight: 60, paddingHorizontal: 10, borderRadius: 12, alignItems: "center", justifyContent: "center", gap: 2,
+                    borderWidth: sel ? 2 : 1, margin: sel ? 0 : 1,
+                    borderColor: sel ? t.marcaTexto : hovered ? t.ink3 : borda2(t),
+                    backgroundColor: sel ? t.marcaWash : t.bg2,
+                  }, transicao("border-color, background-color")]}
+                >
+                  <Texto style={{ fontFamily: artFontStack(f), fontSize: 22, lineHeight: 26, color: t.ink }}>Aa</Texto>
+                  <Texto numberOfLines={1} style={{ fontSize: 11, color: t.ink3 }}>{f}</Texto>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
+      {temTexto && (onTam || onContorno) ? (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "flex-end", gap: 16 }}>
+          {onTam ? (
+            <View style={{ gap: 6 }}>
+              <Texto style={{ fontSize: 13, fontWeight: "600", color: t.ink2 }}>Tamanho</Texto>
+              <View accessibilityRole="radiogroup" accessibilityLabel={`Tamanho — ${field.label}`} style={{ flexDirection: "row", padding: 3, gap: 3, borderRadius: 12, backgroundColor: t.bg3 }}>
+                {(["P", "M", "G"] as Tamanho[]).map((x) => {
+                  const sel = x === tam;
+                  return (
+                    <Pressable
+                      key={x}
+                      testID={"tamanho-" + x}
+                      onPress={() => onTam(x)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: sel }} aria-checked={sel}
+                      accessibilityLabel={x === "P" ? "Pequeno" : x === "M" ? "Médio" : "Grande"}
+                      style={[{ width: 44, height: 40, borderRadius: 9, alignItems: "center", justifyContent: "center", backgroundColor: sel ? t.bg2 : "transparent" }, transicao("background-color")]}
+                    >
+                      <Texto style={{ fontSize: 14, fontWeight: "600", color: sel ? t.ink : t.ink2 }}>{x}</Texto>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+          {onContorno && (quaseSome || contorno) ? (
+            <Pressable
+              testID="contorno-fino"
+              onPress={() => onContorno(!contorno)}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: !!contorno }} aria-checked={!!contorno}
+              accessibilityLabel="Contorno fino"
+              style={{ flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44, paddingHorizontal: 12, borderRadius: 999, backgroundColor: t.bg3 }}
+            >
+              <View style={{ width: 30, height: 18, borderRadius: 9, backgroundColor: contorno ? t.marcaFill : t.ink4, justifyContent: "center" }}>
+                <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: contorno ? t.sobreMarca : t.bg2, marginLeft: contorno ? 14 : 2 }} />
+              </View>
+              <Texto style={{ fontSize: 13, color: t.ink2 }}>Contorno fino</Texto>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
     </View>
@@ -290,7 +384,11 @@ export function ladosComConteudo(cfg: CustomizationConfig | null | undefined): L
 export function LadosDaArte({
   cfg, values, lados, lado, onLado, setValor, caminho, templates, slug, peca, limiar, desktop,
   versoLigado, meioLigado, onVerso, onMeio, corDaPeca, fotoNaCorFotografada, onEnvio, pedirAjuste, destaque,
+  editor, onAjustar,
 }: {
+  /** Formatação da arte (28/09/2026): medidas e nitidez na peça, e o atalho "Ajustar a arte". */
+  editor?: EditorDaArte | null;
+  onAjustar?: () => void;
   cfg: CustomizationConfig;
   values: Record<string, any>;
   lados: Lado[];
@@ -325,6 +423,14 @@ export function LadosDaArte({
   const designer = caminho === ART_DESIGNER;
   const { envio, pronta } = origensDoLado(cfg, ladoAtual);
   const temArquivo = !!(envio && values[envio.id]);
+  // O tamanho que a imagem tem NA PEÇA e a nitidez nesse tamanho (DPI
+  // efetivo), do mesmo layout que a prévia desenha.
+  const naPecaDe = (campo: string) => {
+    if (!editor) return null;
+    const it = editor.itens.find((i) => i.campo === campo);
+    if (!it) return null;
+    return { medidas: editor.emCm ? textoDasMedidas(it.bw, it.bh) : null, nitidez: nitidezDoItem(it, editor.emCm) };
+  };
 
   const campo = (f: CustomizationField) => {
     const dest = destaque === f.id;
@@ -334,6 +440,12 @@ export function LadosDaArte({
           key={f.id} field={f} value={values[f.id]} cor={values[f.id + "_cor"]} corDaPeca={corDaPeca} fotoNaCorFotografada={fotoNaCorFotografada}
           lado={ladoAtual} destacar={dest}
           onChange={(v) => setValor(f.id, v)} onCor={(c) => setValor(f.id + "_cor", c)}
+          fonte={nomeDaFonteDoCampo(f, values)}
+          onFonte={(x) => setValor(f.id + "_fonte", x)}
+          tam={tamanhoValido(values[f.id + "_tam"])}
+          onTam={(x) => (editor ? editor.tamanho(x, f.id) : setValor(f.id + "_tam", x))}
+          contorno={values[f.id + "_contorno"] === true}
+          onContorno={(v) => setValor(f.id + "_contorno", v)}
         />
       );
     }
@@ -412,6 +524,8 @@ export function LadosDaArte({
                     onEstado={(e) => onEnvio(ladoAtual, e)}
                     pedirAjuste={pedirAjuste}
                     jaPediuAjuste={caminho === ART_ADJUST}
+                    naPeca={naPecaDe(envio.id)}
+                    onAjustar={onAjustar}
                   />
                 ) : null}
                 {pronta && caminho !== ART_ADJUST && !temArquivo && templates?.length ? (

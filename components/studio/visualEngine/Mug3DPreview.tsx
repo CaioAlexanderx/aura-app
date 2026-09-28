@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, Platform } from "react-native";
 import type { VisualTemplateSpec } from "@/services/studioVisualApi";
-import { createModelViewer, type Cenario, type Mug3DHandle } from "./compose3dMug";
+import { createModelViewer, type ArrasteDaPeca, type Cenario, type Mug3DHandle } from "./compose3dMug";
 import { areaParaLado, rotuloDaArea } from "./areasDaPeca";
 
 // 27/09/2026: o rótulo mudou de arquivo (areasDaPeca.ts) para ganhar
@@ -51,6 +51,16 @@ type Props = {
    * numa peça cadastrada com 7×7) e ficavam sob o selo "Sua peça".
    */
   semSeletorDeArea?: boolean;
+  /**
+   * 28/09/2026 — formatação da arte. `giroAutomatico` desliga o giro
+   * sozinho (a vitrine lembra a escolha na aba); `arraste` liga o arraste
+   * da arte na própria peça (fora da área, a peça gira); `editando` vira
+   * a área para a câmera e só então prende o toque no canvas — fora da
+   * edição, o dedo na peça ainda rola a página.
+   */
+  giroAutomatico?: boolean;
+  arraste?: ArrasteDaPeca | null;
+  editando?: boolean;
 };
 
 // A legenda "caneca provisória (GLB real entra sem mudar o viewer)" era
@@ -60,6 +70,7 @@ export function Mug3DPreview({
   garmentColor = "#F5F2EA", artColor = "#D85A30", font, accentColor = "#1E3A8A", side,
   backdrop, cenario,
   semSeletorDeArea = false,
+  giroAutomatico, arraste, editando,
 }: Props) {
   const canvasRef = useRef<any>(null);
   const handleRef = useRef<Mug3DHandle | null>(null);
@@ -109,6 +120,9 @@ export function Mug3DPreview({
         if (u.values !== inicial.values || u.garmentColor !== inicial.garmentColor || u.artColor !== inicial.artColor || u.font !== inicial.font || u.areaId !== inicial.areaId) {
           h.update(u.values, { garmentColor: u.garmentColor, artColor: u.artColor, font: u.font, areaId: u.areaId });
         }
+        h.giroAutomatico(giroRef.current !== false);
+        h.definirArraste(arrasteRef.current || null);
+        if (editandoRef.current) h.mostrarArea(areaRef.current);
       })
       .catch((e) => setErr(e?.message || "Erro ao iniciar o 3D"));
     return () => {
@@ -123,6 +137,19 @@ export function Mug3DPreview({
   useEffect(() => {
     handleRef.current?.update(values, { garmentColor, artColor, font, areaId });
   }, [values, garmentColor, artColor, font, areaId]);
+
+  // Edição da arte: o que o viewer já criado precisa saber.
+  const giroRef = useRef(giroAutomatico);
+  giroRef.current = giroAutomatico;
+  const arrasteRef = useRef(arraste);
+  arrasteRef.current = arraste;
+  const editandoRef = useRef(editando);
+  editandoRef.current = editando;
+  const areaRef = useRef(areaId);
+  areaRef.current = areaId;
+  useEffect(() => { handleRef.current?.giroAutomatico(giroAutomatico !== false); }, [giroAutomatico]);
+  useEffect(() => { handleRef.current?.definirArraste(arraste || null); }, [arraste]);
+  useEffect(() => { if (editando) handleRef.current?.mostrarArea(areaId); }, [editando, areaId]);
 
   if (Platform.OS !== "web") {
     return (
@@ -164,14 +191,14 @@ export function Mug3DPreview({
         <canvas
           key={geracao.current}
           ref={canvasRef}
-          style={{ width: "100%", height: Math.round(size * 0.78), display: "block", cursor: "grab", touchAction: "none" } as any}
+          style={{ width: "100%", height: Math.round(size * 0.78), display: "block", cursor: "grab", touchAction: editando ? "none" : "pan-y" } as any}
         />
       </View>
 
       {err ? (
         <Text style={{ fontSize: 11, color: "#B91C1C" }}>{err}</Text>
       ) : (
-        <Text style={{ fontSize: 10.5, color: "#94A3B8" }}>Arraste para girar a peça</Text>
+        <Text style={{ fontSize: 10.5, color: "#94A3B8" }}>{editando ? "Arraste a arte para mover; fora dela, a peça gira" : "Arraste para girar a peça"}</Text>
       )}
     </View>
   );

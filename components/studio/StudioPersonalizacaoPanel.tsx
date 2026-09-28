@@ -62,6 +62,7 @@ import VisualTemplateThumb from "@/components/studio/visualEngine/VisualTemplate
 import { studioVisualApi, type VisualTemplate } from "@/services/studioVisualApi";
 import { PreviewWhatsAppModal } from "@/components/studio/PreviewWhatsAppModal";
 import { MockupNaFotoSecao } from "@/components/studio/MockupNaFotoSecao";
+import { SecaoTecnicaDeImpressao, SecaoTestarComUmaArte } from "@/components/studio/TecnicaETesteDaArte";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import { request } from "@/services/api";
 import { ladoSemCampo, AVISO_LADO_SEM_CAMPO } from "@/components/studio/ladoSemCampo";
@@ -1176,6 +1177,20 @@ export function StudioPersonalizacaoPanel({
           </View>
         )}
       </View>
+
+      {/* Formatação da arte (28/09/2026): a técnica muda a mistura da
+          arte na prévia; o teste usa o mesmo editor da vitrine, sem salvar. */}
+      <SecaoTecnicaDeImpressao
+        config={config}
+        onMudar={(tec) => setConfig((prev) => ({ ...prev, tecnica: tec }))}
+      />
+      <SecaoTestarComUmaArte
+        config={config}
+        productId={productId}
+        productName={productName}
+        slug={slug}
+        fotoProduto={(fotos || [])[0] || null}
+      />
 
       {/* Mockup na foto (28/09/2026) — a lojista marca na foto da peça
           onde a arte cai; grava mockup_foto pelo save() desta aba. */}

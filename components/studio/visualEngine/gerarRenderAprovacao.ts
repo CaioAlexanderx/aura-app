@@ -26,7 +26,9 @@ import { studioApi, type StudioOrderItem } from "@/services/studioApi";
 import { studioVisualApi, type VisualView } from "@/services/studioVisualApi";
 import { uploadStudioMockup } from "@/services/studioUploadApi";
 import { exportPng } from "./compose2d";
-import { valoresDoMotor } from "@/components/studio/storefront/valoresDoMotor";
+import { valoresDoMotor, valoresComArte, type ValoresDoMotor } from "@/components/studio/storefront/valoresDoMotor";
+import { areaParaLado } from "./areasDaPeca";
+import type { CustomizationConfig } from "@/services/studioApi";
 import {
   chaveDoMockupFoto,
   specDaFotoDoProdutoMedida,
@@ -52,6 +54,61 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
+// ── Formatação da arte (28/09/2026) ─────────────────────────
+// A render de aprovação passa pela MESMA tradução da vitrine
+// (valoresDoMotor): cor, fonte, tamanho e posição que a cliente viu, e
+// todos os textos e imagens do lado. Antes, com template do banco, o
+// customization ia cru e a cliente aprovava um texto grafite em Georgia
+// no lugar do rosa em Pacifico que tinha escolhido. E quando o verso tem
+// arte, a prova mostra frente e verso.
+
+/** O verso tem arte da cliente? */
+function temVerso(cfg: CustomizationConfig | null, customizacao: Record<string, any>): ValoresDoMotor | null {
+  if (!cfg || (cfg as any).has_back !== true) return null;
+  const m = valoresDoMotor(cfg, customizacao, "back");
+  return m.arte.imagens.length || m.arte.textos.length ? m : null;
+}
+
+/** Duas imagens (data URL) lado a lado, na mesma altura, num PNG só. */
+async function ladoALado(urls: string[]): Promise<string | null> {
+  if (urls.length < 2 || typeof document === "undefined") return urls[0] || null;
+  const imgs = await Promise.all(urls.map((u) => new Promise<HTMLImageElement | null>((res) => {
+    const im = new Image();
+    im.onload = () => res(im);
+    im.onerror = () => res(null);
+    im.src = u;
+  })));
+  if (imgs.some((i) => !i)) return urls[0];
+  const h = Math.max(...imgs.map((i) => i!.height));
+  const larguras = imgs.map((i) => Math.round((i!.width * h) / i!.height));
+  const cv = document.createElement("canvas");
+  cv.width = larguras.reduce((a, b) => a + b, 0);
+  cv.height = h;
+  const ctx = cv.getContext("2d");
+  if (!ctx) return urls[0];
+  let x = 0;
+  imgs.forEach((im, i) => { ctx.drawImage(im!, x, 0, larguras[i], h); x += larguras[i]; });
+  try { return cv.toDataURL("image/png"); } catch { return urls[0]; }
+}
+
+/** Frente (e verso, se tiver arte) de uma lista de vistas 2D, num PNG só. */
+async function pngDasVistas(
+  vistas: VisualView[],
+  cfg: CustomizationConfig | null,
+  customizacao: Record<string, any>,
+  peca: string | null,
+): Promise<{ png: string | null; vista: VisualView }> {
+  const frente = valoresDoMotor(cfg, customizacao, "front", { peca });
+  const vista = vistas[0];
+  const pngFrente = await exportPng(vista, valoresComArte(frente), { artColor: frente.artColor, font: frente.font }, 2048);
+  const verso = temVerso(cfg, customizacao);
+  const vistaDoVerso = vistas.find((v) => v.id === "back") || (vistas[1] && vistas[1].id !== "middle" ? vistas[1] : null);
+  if (!pngFrente || !verso || !vistaDoVerso) return { png: pngFrente, vista };
+  const versoCfg = valoresDoMotor(cfg, customizacao, "back", { peca });
+  const pngVerso = await exportPng(vistaDoVerso, valoresComArte(versoCfg), { artColor: versoCfg.artColor, font: versoCfg.font }, 2048);
+  return { png: pngVerso ? await ladoALado([pngFrente, pngVerso]) : pngFrente, vista };
+}
+
 export async function gerarRenderDoPedido(
   companyId: string,
   orderId: string
@@ -74,9 +131,7 @@ export async function gerarRenderDoPedido(
     const spec = cfg ? await specDaFotoDoProdutoMedida(cfg) : null;
     if (spec && spec.views && spec.views.length) {
       const customizacao: Record<string, any> = item.customization || {};
-      const motor = valoresDoMotor(cfg, customizacao, "front");
-      const vista = spec.views[0];
-      const png = await exportPng(vista, motor.values, { artColor: motor.artColor, font: motor.font }, 2048);
+      const { png, vista } = await pngDasVistas(spec.views, cfg, customizacao, null);
       if (!png) {
         throw new Error("Não foi possível gerar o render (foto ou arte sem CORS?). Envie o mockup manualmente.");
       }
@@ -113,13 +168,27 @@ export async function gerarRenderDoPedido(
   }
 
   const customization: Record<string, any> = item.customization || {};
+  // A config do produto: é ela que diz os campos, a paleta, as fontes e a
+  // área — sem ela, cai no customization cru de antes.
+  const doProdutoT = await studioApi.getCustomizationConfig(companyId, item.product_id).catch(() => null);
+  const cfgT: CustomizationConfig | null = doProdutoT?.config || null;
+  const pecaT = template.kind === "model3d" ? ((template.spec as any)?.model?.kind === "glb" ? "camiseta" : "caneca") : null;
 
   // ── F5: template 3D → vídeo turntable ──────────────────────
   if (template.kind === "model3d") {
     const cv = document.createElement("canvas");
     cv.width = 1280;
     cv.height = 1000;
-    const viewer = await createMugViewer(cv, template.spec, customization, {});
+    // Frente e verso na mesma textura: o vídeo dá a volta e mostra os dois.
+    const frente3d = valoresDoMotor(cfgT, customization, "front", { peca: pecaT });
+    const verso3d = temVerso(cfgT, customization);
+    const areaFrente = areaParaLado(template.spec.areas, "front");
+    const areaVerso = verso3d ? areaParaLado(template.spec.areas, "back") : null;
+    const porArea: Record<string, any> = {};
+    if (areaFrente) porArea[areaFrente] = frente3d.arte;
+    if (areaVerso && areaVerso !== areaFrente) porArea[areaVerso] = valoresDoMotor(cfgT, customization, "back", { peca: pecaT }).arte;
+    const valores3d = cfgT ? { ...frente3d.values, __artePorArea: porArea } : customization;
+    const viewer = await createMugViewer(cv, template.spec, valores3d, cfgT ? { artColor: frente3d.artColor, font: frente3d.font } : {});
     let blob: Blob | null = null;
     try {
       blob = await viewer.recordTurntable(3600);
@@ -163,12 +232,11 @@ export async function gerarRenderDoPedido(
     throw new Error("Template do produto sem vistas 2D — envie o mockup manualmente.");
   }
 
-  // Verso: quando o cliente personalizou o verso e o template tem a vista,
-  // o render da frente segue como principal (v1). O verso sai como revisão
-  // manual — evolução prevista: composição lado a lado.
-  const view: VisualView = template.spec.views[0];
-
-  const dataUrl = await exportPng(view, customization, {}, 2048);
+  // Verso: quando a cliente personalizou o verso e o template tem a vista,
+  // frente e verso saem lado a lado num PNG só (28/09/2026).
+  const { png: dataUrl, vista: view } = cfgT
+    ? await pngDasVistas(template.spec.views as VisualView[], cfgT, customization, pecaT)
+    : { png: await exportPng(template.spec.views[0], customization, {}, 2048), vista: template.spec.views[0] as VisualView };
   if (!dataUrl) {
     throw new Error("Não foi possível gerar o render (imagem da arte sem CORS?). Envie o mockup manualmente.");
   }

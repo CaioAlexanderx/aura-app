@@ -14,7 +14,7 @@
 // transformação (centro → escala da área → rotação).
 // ============================================================
 import {
-  resolverArte, unidadeDaArea, margemDaArea, caixaDoItem, PESO_DO_TEXTO,
+  resolverArte, unidadeDaArea, margemDaArea, caixaDoItem, subAreaNoRetangulo, comAreaDoMotor, PESO_DO_TEXTO,
   type ArteDoLado, type ItemDaArte, type Medidor,
 } from "./layoutDaArte";
 
@@ -119,16 +119,16 @@ function pintarItens(
 export type OpcoesDoPintor = {
   /** Modo de mistura da arte sobre o que já está no canvas (sublimação = multiply). */
   mistura?: "multiply" | "normal" | null;
-  /** Espessura base das guias, em px do destino (padrão: 0,35% do lado maior da área). */
+  /** Espessura base das guias, em px do destino (padrão: 0,8% do lado maior da área). */
   linha?: number;
   /** A medida da área que o MOTOR conhece (spec da vista), quando o produto não tem a sua. */
   areaCmDoMotor?: { w: number; h: number } | null;
+  /** A área do produto pode passar do retângulo do motor (3D: a textura continua em volta). */
+  transbordar?: boolean;
+  /** Pixel não quadrado na peça (caneca): ver subAreaNoRetangulo. */
+  pixel?: number | null;
 };
 
-function comAreaDoMotor(arte: ArteDoLado, a: { w: number; h: number } | null | undefined): ArteDoLado {
-  if (arte.areaCm || !a || !(a.w > 0) || !(a.h > 0)) return arte;
-  return { ...arte, areaCm: { w: a.w, h: a.h } };
-}
 
 /**
  * Desenha a arte do lado no retângulo da área e devolve os itens já
@@ -141,7 +141,10 @@ export function pintarArteNaArea(
   imgs: ImagensDaArte,
   opts: OpcoesDoPintor = {},
 ): ItemDaArte[] {
+  // A área do produto dentro da do motor (escala física); sem medida no
+  // produto, vale a do motor no retângulo inteiro.
   arte = comAreaDoMotor(arte, opts.areaCmDoMotor);
+  if (arte.areaCm) rect = subAreaNoRetangulo(rect, arte.areaCm, opts.areaCmDoMotor || null, !opts.transbordar, opts.pixel);
   const { W, H, emCm } = unidadeDaArea(arte, rect);
   const sx = rect.w / W, sy = rect.h / H;
   const itens = resolverArte(arte, W, H, medidorDoCanvas(ctx, imgs));
@@ -166,7 +169,7 @@ export function pintarArteNaArea(
   ctx.restore();
 
   if (arte.guias || arte.editando) {
-    const lw = opts.linha || Math.max(1.5, Math.max(rect.w, rect.h) * 0.0035);
+    const lw = opts.linha || Math.max(1.5, Math.max(rect.w, rect.h) * 0.008);
     ctx.save();
     ctx.strokeStyle = COR_DA_GUIA;
     ctx.lineWidth = lw;
@@ -233,8 +236,20 @@ export function svgDaArte(arte: ArteDoLado, rect: Retangulo, medir: Medidor, idD
       );
     }
   }
+  let guias = "";
+  if (arte.editando) {
+    const lw = Math.max(rect.w, rect.h) * 0.006;
+    const m = margemDaArea(W, H, unidadeDaArea(arte, rect).emCm);
+    guias += `<rect x="${rect.x + m * sx}" y="${rect.y + m * sy}" width="${rect.w - 2 * m * sx}" height="${rect.h - 2 * m * sy}" fill="none" stroke="${COR_DA_GUIA}" stroke-opacity="0.55" stroke-width="${lw * 0.7}" stroke-dasharray="${lw * 2} ${lw * 2}"/>`;
+    const sel = arte.selecionado ? itens.find((i) => i.campo === arte.selecionado) : null;
+    if (sel) {
+      const c = caixaDoItem(sel);
+      guias += `<rect x="${rect.x + c.x * sx}" y="${rect.y + c.y * sy}" width="${c.w * sx}" height="${c.h * sy}" fill="none" stroke="${COR_DA_GUIA}" stroke-width="${lw}"/>`;
+    }
+  }
   return (
     `<clipPath id="${esc(idDoClip)}"><rect x="${rect.x}" y="${rect.y}" width="${rect.w}" height="${rect.h}"/></clipPath>` +
-    `<g clip-path="url(#${esc(idDoClip)})">${partes.join("")}</g>`
+    (arte.editando ? `<g opacity="0.3">${partes.join("")}</g>` : "") +
+    `<g clip-path="url(#${esc(idDoClip)})">${partes.join("")}</g>` + guias
   );
 }

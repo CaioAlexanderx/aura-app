@@ -30,6 +30,7 @@ import {
   nomeDoLado, type Lado, type NomeDaPeca,
 } from "./regrasDaPagina";
 import { Botao, borda2, transicao } from "./kitDaPagina";
+import { SeloDeNitidez } from "./nitidezDaArte";
 
 const FORMATOS_PADRAO = ["image/png", "image/jpeg", "image/jpg", "image/webp", "application/pdf"];
 
@@ -43,6 +44,15 @@ type Meta = { nome: string; tipo: string; bytes: number; largura: number | null;
  * (transportarValores) — as medidas vão junto com ela.
  */
 const metaPorUrl = new Map<string, Meta>();
+
+/**
+ * Pixels do arquivo enviado nesta sessão (medidos antes de subir). É o
+ * que o editor da arte usa para o DPI efetivo pelo tamanho na peça.
+ */
+export function medidaDoArquivo(url: string): { w: number; h: number } | null {
+  const m = url ? metaPorUrl.get(url) : null;
+  return m && m.largura && m.altura ? { w: m.largura, h: m.altura } : null;
+}
 
 /** Mede a imagem no navegador. PDF e o que não abrir: sem medida. */
 function medir(file: File): Promise<{ largura: number; altura: number } | null> {
@@ -97,8 +107,15 @@ function subir(url: string, corpo: string, onProgresso: (pct: number) => void): 
 
 export function EnvioDaArte({
   field, value, slug, lado, peca, limiar, desktop, onChange, onEstado,
-  pedirAjuste, jaPediuAjuste, destacar,
+  pedirAjuste, jaPediuAjuste, destacar, naPeca, onAjustar,
 }: {
+  /**
+   * 28/09/2026 — o tamanho que a imagem tem NA PEÇA e a nitidez nesse
+   * tamanho (DPI efetivo). Com ele, o aviso de foto pequena passa a ser
+   * pelo tamanho impresso, não pelos 1200 px fixos.
+   */
+  naPeca?: { medidas: string | null; nitidez: { dpi: number; faixa: "boa" | "aceitavel" | "ruim" } | null } | null;
+  onAjustar?: () => void;
   field: CustomizationField;
   value: any;
   slug: string;
@@ -126,7 +143,12 @@ export function EnvioDaArte({
   const rotuloFormatos = buildFormatLabel(formatos).replace(/, ([^,]*)$/, " ou $1");
   const url = typeof value === "string" ? value : "";
   const meta = url ? metaPorUrl.get(url) || null : null;
-  const aviso = meta ? avisoDeResolucao({ tipo: meta.tipo, largura: meta.largura, altura: meta.altura }, limiar) : null;
+  const nitidez = naPeca?.nitidez || null;
+  // Com a nitidez na peça, o aviso é dela (DPI pelo tamanho impresso);
+  // sem ela (PDF, área sem medida), o limiar fixo de sempre.
+  const aviso = nitidez
+    ? (nitidez.faixa === "ruim" ? { ladoMaior: meta?.largura || 0, limiar } : null)
+    : meta ? avisoDeResolucao({ tipo: meta.tipo, largura: meta.largura, altura: meta.altura }, limiar) : null;
 
   const estado: EstadoDoEnvio = enviando ? "enviando" : url ? "pronto" : "vazio";
   useEffect(() => { onEstado?.(estado); }, [estado]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -262,7 +284,18 @@ export function EnvioDaArte({
           <Texto style={{ fontSize: 12, fontWeight: "600", color: t.green }}>Enviada</Texto>
         </View>
       </View>
-      <View style={{ flexDirection: "row", gap: 8 }}>
+      {naPeca && (naPeca.medidas || nitidez) ? (
+        <View testID="arte-na-peca" style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, padding: 10, borderRadius: 12, backgroundColor: t.bg3 }}>
+          {naPeca.medidas ? (
+            <Texto style={{ fontSize: 13, color: t.ink2 }}>
+              Na peça: <Numero style={{ fontSize: 13, fontWeight: "600", color: t.ink }}>{naPeca.medidas}</Numero>
+            </Texto>
+          ) : null}
+          {nitidez ? <SeloDeNitidez dpi={nitidez.dpi} faixa={nitidez.faixa} /> : null}
+        </View>
+      ) : null}
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {onAjustar && Platform.OS === "web" ? <Botao pequeno tipo="primario" icone="resize" rotulo="Ajustar a arte" onPress={onAjustar} testID="ajustar-no-cartao" /> : null}
         {!aviso && Platform.OS === "web" ? <Botao pequeno tipo="secundario" icone="refresh" rotulo="Trocar" rotuloAcessivel="Trocar a arte" onPress={abrir} /> : null}
         <Botao pequeno tipo="fantasma" icone="trash" rotulo="Remover" rotuloAcessivel="Remover a arte" onPress={() => { setErro(null); onChange(""); }} />
       </View>
@@ -271,7 +304,9 @@ export function EnvioDaArte({
           <View style={{ marginTop: 2 }}><Icon name="alert" size={16} color={t.amber} /></View>
           <View style={{ flex: 1, gap: 4 }}>
             <Texto style={{ fontSize: 13.5, lineHeight: 19, color: t.amber }}>
-              {textoDoAvisoDeResolucao(aviso.ladoMaior, peca)} Mande uma maior ou peça para a loja ajustar.
+              {nitidez
+                ? `Nesse tamanho a foto fica com ${nitidez.dpi} dpi e pode sair borrada. Diminua na peça, mande uma maior ou peça para a loja ajustar.`
+                : `${textoDoAvisoDeResolucao(aviso.ladoMaior, peca)} Mande uma maior ou peça para a loja ajustar.`}
             </Texto>
             {jaPediuAjuste ? (
               <Texto style={{ fontSize: 13.5, lineHeight: 19, color: t.amber }}>

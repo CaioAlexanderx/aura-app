@@ -385,7 +385,9 @@ export function itemNoPonto(itens: ItemDaArte[], x: number, y: number, folga = 0
 export type AvisoDaArte =
   | { tipo: "cortada"; campo: string }
   | { tipo: "margem"; campo: string }
-  | { tipo: "nitidez"; campo: string; dpi: number; faixa: Nitidez; nitidaAteCm: number };
+  | { tipo: "nitidez"; campo: string; dpi: number; faixa: Nitidez; nitidaAteCm: number }
+  /** DTF com arte de fundo branco chapado (medido no navegador, fora deste módulo). */
+  | { tipo: "fundo"; campo: string };
 
 /**
  * O que a cliente precisa saber antes de comprar:
@@ -420,4 +422,92 @@ export function avisosDaArte(itens: ItemDaArte[], W: number, H: number, emCm: bo
 export function textoDasMedidas(w: number, h: number): string {
   const f = (n: number) => (Math.round(n * 10) / 10).toFixed(1).replace(".", ",");
   return `${f(w)} × ${f(h)} cm`;
+}
+
+// ── A área do produto dentro da área do motor ────────────────
+
+export type Ret = { x: number; y: number; w: number; h: number };
+
+/**
+ * Onde a área do PRODUTO (cm do cadastro) cai dentro do retângulo da área
+ * do MOTOR (painel da caneca, frente da camiseta, quad da foto). Com as
+ * duas em cm, em escala física, centralizada (um cadastro de 8 × 8 cm no
+ * painel de 20 × 9 cm da caneca ocupa 8/20 da largura); sem cm no motor,
+ * a proporção do produto encaixada no retângulo. Sem isso a arte seria
+ * esticada até o retângulo do motor.
+ */
+export function subAreaNoRetangulo(
+  rect: Ret,
+  areaCm: { w: number; h: number } | null,
+  areaCmDoMotor: { w: number; h: number } | null,
+  /**
+   * false = a área do produto pode passar do retângulo do motor. É o caso
+   * do 3D: a textura continua em volta (uma área de 20 cm na caneca cujo
+   * painel do modelo tem 9 cm dá a volta, como na peça de verdade). No 2D
+   * o retângulo é o que a foto mostra, então a área encolhe para caber.
+   */
+  encolher = true,
+  /**
+   * Quanto um pixel da textura vale na horizontal em relação à vertical,
+   * na peça de verdade (caneca: a textura dá a volta no cilindro e sobe a
+   * altura dele, então o pixel não é quadrado). Com ele, a escala vem da
+   * ALTURA do motor e a largura segue a peça — a arte redonda sai redonda
+   * mesmo quando o cm do modelo não bate com a geometria.
+   */
+  pixel?: number | null,
+): Ret {
+  if (!areaCm || !(areaCm.w > 0) || !(areaCm.h > 0) || !(rect.w > 0) || !(rect.h > 0)) return rect;
+  let sw: number, sh: number;
+  if (pixel && pixel > 0 && areaCmDoMotor && areaCmDoMotor.h > 0) {
+    const porCmY = rect.h / areaCmDoMotor.h;
+    sw = areaCm.w * porCmY * pixel;
+    sh = areaCm.h * porCmY;
+    if (encolher) {
+      const k = Math.min(1, rect.w / sw, rect.h / sh);
+      sw *= k; sh *= k;
+    }
+  } else if (areaCmDoMotor && areaCmDoMotor.w > 0 && areaCmDoMotor.h > 0) {
+    // Escala UNIFORME (px por cm igual nos dois eixos): quando o retângulo
+    // da vista não tem a proporção dos cm do modelo (a camiseta vetorial
+    // de 28 × 35 cm desenhada em 290 × 330 px), a escala por eixo
+    // esticava a arte — a foto redonda saía oval.
+    const porCm = Math.min(rect.w / areaCmDoMotor.w, rect.h / areaCmDoMotor.h);
+    sw = areaCm.w * porCm;
+    sh = areaCm.h * porCm;
+    const k = encolher ? Math.min(1, rect.w / sw, rect.h / sh) : 1;
+    sw *= k; sh *= k;
+  } else {
+    const k = Math.min(rect.w / areaCm.w, rect.h / areaCm.h);
+    sw = areaCm.w * k; sh = areaCm.h * k;
+  }
+  return { x: rect.x + (rect.w - sw) / 2, y: rect.y + (rect.h - sh) / 2, w: sw, h: sh };
+}
+
+/** A arte com a medida do motor quando o produto não tem a sua. */
+export function comAreaDoMotor(arte: ArteDoLado, a: { w: number; h: number } | null | undefined): ArteDoLado {
+  if (arte.areaCm || !a || !(a.w > 0) || !(a.h > 0)) return arte;
+  return { ...arte, areaCm: { w: a.w, h: a.h } };
+}
+
+/**
+ * O ponteiro (fração da área do motor: u na largura, v na altura) na
+ * unidade da área da arte — o mesmo caminho que o pintor faz, ao contrário.
+ * `aspecto` = altura ÷ largura do retângulo do motor (em px).
+ */
+export function pontoNaAreaDaArte(
+  u: number,
+  v: number,
+  arte: Pick<ArteDoLado, "areaCm">,
+  areaCmDoMotor: { w: number; h: number } | null,
+  aspecto: number,
+  encolher = true,
+  pixel?: number | null,
+): { x: number; y: number; W: number; H: number; emCm: boolean; porU: number } {
+  const rect = { x: 0, y: 0, w: 1, h: aspecto > 0 ? aspecto : 1 };
+  const base = arte.areaCm ? arte.areaCm : areaCmDoMotor && areaCmDoMotor.w > 0 && areaCmDoMotor.h > 0 ? areaCmDoMotor : null;
+  const sub = base ? subAreaNoRetangulo(rect, base, areaCmDoMotor, encolher, pixel) : rect;
+  const { W, H, emCm } = base ? { W: base.w, H: base.h, emCm: true } : { W: rect.w, H: rect.h, emCm: false };
+  // porU: quanto a unidade da área anda para 1,0 de u (para medir a folga
+  // do toque em pixels de tela).
+  return { x: ((u * rect.w - sub.x) / sub.w) * W, y: ((v * rect.h - sub.y) / sub.h) * H, W, H, emCm, porU: W / sub.w };
 }

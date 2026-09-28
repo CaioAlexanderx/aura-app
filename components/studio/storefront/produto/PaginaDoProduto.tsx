@@ -65,6 +65,7 @@ import {
   areaDeImpressao, areaDoLado, textoDaArea, limiarDaPeca, quantidadeValida, legendaDoMockup, type Lado,
 } from "./regrasDaPagina";
 import { PalcoDoProduto } from "./PalcoDoProduto";
+import { ControlesDaArte, FaixaDaPrevia, useEditorDaArte, useGiroAutomatico } from "./EditorDaArte";
 import { CaminhosDaArte, LadosDaArte, ladosComConteudo, etiquetaDaArte } from "./ArteDaPeca";
 import type { EstadoDoEnvio } from "./EnvioDaArte";
 import { QuantidadeEDesconto } from "./QuantidadeEDesconto";
@@ -133,6 +134,14 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
   // De onde vem o desenho do mockup (o LivePreview decide e avisa): na
   // foto marcada pela lojista, a legenda explica que a cor não pinta a foto.
   const [fonteDoMock, setFonteDoMock] = useState<"banco" | "foto" | "nenhuma" | null>(null);
+  // Formatação da arte (28/09/2026): "Área de impressão" sobre a peça,
+  // "Girar sozinha" (lembrado na aba) e o editor "Ajustar a arte".
+  const [mostrarArea, setMostrarArea] = useState(false);
+  const [motorDoMock, setMotorDoMock] = useState<"3d" | "2d" | "svg" | null>(null);
+  const [giro, setGiro] = useGiroAutomatico();
+  const editor = useEditorDaArte({
+    cfg, values, lado: ladoAtual, setValor: (id, v) => sf.setFieldValue(id, v), peca: peca.nome, mostrarArea,
+  });
   // QA 27/09: o zoom da foto, o da prévia e o guia de medidas entram no
   // histórico — o voltar do navegador fecha a camada, sem sair da peça.
   useCamadaNoHistorico("zoom-da-foto", zoomFoto != null, () => setZoomFoto(null));
@@ -367,8 +376,29 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
       onFonte={setFonteDoMock}
       // O slide do mockup é bg3 (PalcoDoProduto): o estúdio casa com ele.
       fundo={t.bg3}
+      peca={peca.nome}
+      onMotor={setMotorDoMock}
+      giroAutomatico={giro}
+      edicao={{ extras: editor.extras, arraste: editor.arraste, editando: editor.editando, informarMotor: editor.informarMotor }}
     />
   );
+  // Os nomes dos campos, para os botões e os avisos do editor.
+  const rotulosDaArte: Record<string, string> = {};
+  for (const f of cfg?.fields || []) rotulosDaArte[f.id] = f.type === "image" || f.type === "template" ? "Imagem" : f.label || f.id;
+  const noSlideDoMock = comMockup && slide === 0;
+  const rodapeDoPalco = noSlideDoMock ? (
+    <View style={{ gap: 10, width: desktop ? larguraDoPalco : "100%", paddingHorizontal: desktop ? 0 : 16, marginTop: 10 }}>
+      <FaixaDaPrevia
+        editor={editor}
+        mostrarArea={mostrarArea}
+        onMostrarArea={setMostrarArea}
+        giro={giro}
+        onGiro={setGiro}
+        tem3D={motorDoMock === "3d"}
+      />
+      <ControlesDaArte editor={editor} rotulos={rotulosDaArte} />
+    </View>
+  ) : null;
 
   // ── Seções numeradas ─────────────────────────────────────
   let passo = 0;
@@ -497,6 +527,8 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
               onEnvio={(l, e) => setEnvios((s) => (s[l] === e ? s : { ...s, [l]: e }))}
               pedirAjuste={escolhaDoAjuste && Number(escolhaDoAjuste.price_delta) >= 0 ? { preco: Number(escolhaDoAjuste.price_delta) || 0, onPress: () => escolherCaminho(ART_ADJUST) } : null}
               destaque={destaque}
+              editor={editor}
+              onAjustar={() => { personalizar(); setSlide(0); editor.abrir(); if (!desktop) rolagem.current?.scrollTo?.({ y: 0, animated: !reduzir }); }}
             />
           ) : null}
         </View>
@@ -577,6 +609,7 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
       onAmpliar={(i) => (i == null ? setZoomMock(true) : setZoomFoto(i))}
       brilho={primeiraVez}
       legendaDoMock={legendaDoMockup({ fonte: fonteDoMock, temCampoDeCor: !!campoCor })}
+      rodape={rodapeDoPalco}
     />
   );
 

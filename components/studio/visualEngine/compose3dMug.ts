@@ -85,6 +85,11 @@ import {
   recebeCorDoCliente, pixelsPorCm, fiosDoLadrilho,
   type GlbModel, type Caixa, type SombraDeContato,
 } from "./glbModel";
+// 28/09/2026 — formatação da arte: com `values.__arte` (vitrine) ou
+// `values.__artePorArea` (render de aprovação com frente e verso) quem
+// pinta a área é o pintor único; sem elas, o desenho de sempre.
+import { arteDosValores, precarregarArte, pintarArteNaArea } from "./pintarArte";
+import { misturaDaTecnica, type ArteDoLado } from "./layoutDaArte";
 
 export type Mug3DOptions = {
   garmentColor?: string;  // cor ESCOLHIDA pelo cliente (incide onde o modelo mandar)
@@ -123,8 +128,43 @@ export type Cenario = "estudio" | "gradiente" | "nenhum";
  */
 export const MIME_DO_VIDEO = "video/webm";
 
+/** Ponto do ponteiro na área de impressão, em fração da área (0..1; fora disso, fora da área). */
+export type PontoNaArea = {
+  u: number; v: number;
+  /** Altura ÷ largura do retângulo da área na textura. */
+  aspecto: number;
+  /** A medida da área no modelo (spec), quando há. */
+  areaCm: { w: number; h: number } | null;
+  /** A área do produto pode passar do retângulo do modelo (a textura continua em volta). */
+  transborda: boolean;
+  /** Pixel não quadrado na peça (caneca); null no GLB. */
+  pixel: number | null;
+  /** Pixels de tela para 1,0 de u no ponto (derivada por um segundo raio). */
+  pxPorU: number | null;
+};
+
+/**
+ * Arraste da arte na peça (edição da vitrine). `tocar` decide se o
+ * toque é da arte (true) ou do giro (false); enquanto for da arte, todo
+ * ponteiro vai para `tocar`/`mover`/`soltar` — inclusive o segundo dedo
+ * da pinça. `soltar` devolve true enquanto ainda houver dedo na arte.
+ */
+export type ArrasteDaPeca = {
+  tocar: (p: PontoNaArea | null, e: PointerEvent) => boolean;
+  mover: (p: PontoNaArea | null, e: PointerEvent) => void;
+  soltar: (e: PointerEvent) => boolean;
+};
+
 export type Mug3DHandle = {
   update: (values: Record<string, any>, opts?: Mug3DOptions) => Promise<void>;
+  /** Giro automático ligado/desligado (liga de novo mesmo depois de um toque). */
+  giroAutomatico: (ligado: boolean) => void;
+  /** Onde o ponteiro cai na área de impressão (raycast → UV → área); null fora da peça. */
+  pontoNaArea: (clientX: number, clientY: number, areaId?: string) => PontoNaArea | null;
+  /** Liga/desliga o arraste da arte (null = arrastar só gira a peça). */
+  definirArraste: (a: ArrasteDaPeca | null) => void;
+  /** Vira a peça para a área ficar de frente para a câmera. */
+  mostrarArea: (areaId?: string) => void;
   /**
    * Troca a peça na MESMA cena e no mesmo WebGLRenderer (28/09/2026). A
    * vitrine continua criando um viewer por spec (Mug3DPreview); a prévia
@@ -191,6 +231,10 @@ async function paintArt(
   values: Record<string, any>,
   o: Opcoes
 ) {
+  if (arteDosValores(values) || (values && values.__artePorArea)) {
+    await pintarArteDaVitrine(ctx, W, H, spec, values, o);
+    return;
+  }
   const area = pickArea(spec, o.areaId);
   if (!area || !area.uv) return;
   const r = uvParaRetangulo(area.uv, W, H);
@@ -228,6 +272,50 @@ async function paintArt(
       : ay + ah / 2 + fontPx * 0.35;
     ctx.fillText(text, cx, ty);
   }
+}
+
+/** A arte da vitrine, pelo pintor único — uma área, ou várias (frente e verso). */
+async function pintarArteDaVitrine(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  H: number,
+  spec: VisualTemplateSpec,
+  values: Record<string, any>,
+  o: Opcoes
+) {
+  const porArea = values && values.__artePorArea && typeof values.__artePorArea === "object"
+    ? (values.__artePorArea as Record<string, ArteDoLado>)
+    : null;
+  const lista: Array<[VisualArea | null, ArteDoLado | null]> = porArea
+    ? Object.keys(porArea).map((id) => [(spec.areas || []).find((a) => a.id === id) || null, arteDosValores({ __arte: porArea[id] })])
+    : [[pickArea(spec, o.areaId), arteDosValores(values)]];
+  const pixel = pixelDaTextura(spec, W, H);
+  for (const [area, arte] of lista) {
+    if (!area || !area.uv || !arte) continue;
+    const r = uvParaRetangulo(area.uv, W, H);
+    const imgs = await precarregarArte(arte, (u) => loadImg(u));
+    pintarArteNaArea(ctx, r, arte, imgs, {
+      mistura: misturaDaTecnica(arte.tecnica) === "multiply" ? "multiply" : null,
+      areaCmDoMotor: area.width_cm > 0 && area.height_cm > 0 ? { w: area.width_cm, h: area.height_cm } : null,
+      transbordar: true,
+      pixel,
+      // A textura inteira aparece pequena na tela: a guia acompanha ela.
+      linha: Math.max(W, H) * 0.004,
+    });
+  }
+}
+
+/**
+ * Caneca: quanto um pixel da textura vale na horizontal em relação à
+ * vertical, na louça (a textura dá a volta no corpo e sobe a altura
+ * dele). O GLB vem com a UV já em proporção (null = pixel quadrado).
+ */
+export function pixelDaTextura(spec: VisualTemplateSpec, W: number, H: number): number | null {
+  if (readGlbModel(spec)) return null;
+  const G = readMugGeometry(spec);
+  const raio = (G.body.topRadius + G.body.bottomRadius) / 2;
+  if (!(raio > 0) || !(G.body.height > 0) || !(W > 0) || !(H > 0)) return null;
+  return (W / (2 * Math.PI * raio)) / (H / G.body.height);
 }
 
 async function paintTexture(
@@ -626,6 +714,8 @@ type Peca = {
   /** Atualiza os materiais com a cor escolhida e devolve as opções de pintura. */
   aplicarOpcoes: (o: Opcoes) => Opcoes;
   pintar: (cv: HTMLCanvasElement, values: Record<string, any>, o: Opcoes) => Promise<void>;
+  /** A malha que recebe a textura da arte (raycast do arraste). */
+  malhaDaArte?: any;
 };
 
 function montarCaneca(THREE: any, spec: VisualTemplateSpec, renderer: any, texCv: HTMLCanvasElement, o: Opcoes): Peca {
@@ -842,6 +932,7 @@ function montarCaneca(THREE: any, spec: VisualTemplateSpec, renderer: any, texCv
       return { ...opcoes, bodyColor: M.body.color, bodyTopBand: M.body.topBand ?? null, bodyOpacity: M.body.opacity };
     },
     pintar: (cv, values, opcoes) => paintTexture(cv, spec, values, opcoes),
+    malhaDaArte: corpo,
   };
 }
 
@@ -980,6 +1071,7 @@ async function montarGlb(
       };
     },
     pintar: (cv, values, opcoes) => paintFabricTexture(cv, spec, values, opcoes, tecido),
+    malhaDaArte: print,
   };
 }
 
@@ -1143,21 +1235,99 @@ export async function createModelViewer(
 
   function render() { if (!disposed) renderer.render(scene, camera); }
 
+  // Edição da arte (28/09/2026): giro automático controlável e arraste
+  // da arte na própria peça. Sem `arraste`, tudo segue como antes.
+  let giroAuto = true;
+  let arraste: ArrasteDaPeca | null = null;
+  let arrastandoArte = false;
+  const raycaster = new THREE.Raycaster();
+  const ndc = new THREE.Vector2();
+
+  function pontoNaArea(clientX: number, clientY: number, areaId?: string): PontoNaArea | null {
+    const malha = peca.malhaDaArte;
+    if (!malha || typeof canvas.getBoundingClientRect !== "function") return null;
+    const r = canvas.getBoundingClientRect();
+    if (!(r.width > 0) || !(r.height > 0)) return null;
+    ndc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+    group.updateMatrixWorld(true);
+    raycaster.setFromCamera(ndc, camera);
+    const hit = raycaster.intersectObject(malha, false)[0];
+    if (!hit || !hit.uv) return null;
+    // Um segundo raio 6 px ao lado dá quantos pixels de tela vale 1 de u.
+    ndc.set(((clientX + 6 - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+    raycaster.setFromCamera(ndc, camera);
+    const vizinho = raycaster.intersectObject(malha, false)[0];
+    const area = pickArea(spec, areaId || o.areaId);
+    if (!area || !area.uv) return null;
+    const W = texCv.width, H = texCv.height;
+    const ret = uvParaRetangulo(area.uv, W, H);
+    // GLB: o v do glTF cresce para baixo e a textura vai com flipY
+    // desligado (glbModel.ts) — a linha do canvas é o próprio v.
+    const x = hit.uv.x * W, y = (texture && texture.flipY === false ? hit.uv.y : 1 - hit.uv.y) * H;
+    return {
+      u: (x - ret.x) / ret.w, v: (y - ret.y) / ret.h, aspecto: ret.h / ret.w,
+      areaCm: area.width_cm > 0 && area.height_cm > 0 ? { w: area.width_cm, h: area.height_cm } : null,
+      transborda: true,
+      pixel: pixelDaTextura(spec, W, H),
+      pxPorU: vizinho && vizinho.uv && Math.abs(vizinho.uv.x - hit.uv.x) > 1e-6
+        ? 6 / (Math.abs(vizinho.uv.x - hit.uv.x) * W / ret.w)
+        : null,
+    };
+  }
+
   const onDown = (e: PointerEvent) => {
+    if (arraste && (arrastandoArte || arraste.tocar(pontoNaArea(e.clientX, e.clientY), e))) {
+      if (arrastandoArte) arraste.tocar(pontoNaArea(e.clientX, e.clientY), e);
+      arrastandoArte = true; userTouched = true; giroAlvo = null;
+      try { canvas.setPointerCapture(e.pointerId); } catch (_e) {}
+      return;
+    }
     dragging = true; userTouched = true; lastX = e.clientX;
     giroAlvo = null; // a mão manda: a animação para onde estiver
     try { canvas.setPointerCapture(e.pointerId); } catch (_e) {}
   };
   const onMove = (e: PointerEvent) => {
+    if (arrastandoArte && arraste) { arraste.mover(pontoNaArea(e.clientX, e.clientY), e); return; }
     if (!dragging) return;
     group.rotation.y += (e.clientX - lastX) * 0.011;
     lastX = e.clientX;
     render();
   };
-  const onUp = () => { dragging = false; };
+  const onUp = (e: PointerEvent) => {
+    if (arrastandoArte) {
+      // Pinça: só o último dedo que sai encerra o arraste da arte.
+      arrastandoArte = arraste ? arraste.soltar(e) : false;
+      return;
+    }
+    dragging = false;
+  };
   canvas.addEventListener("pointerdown", onDown);
   canvas.addEventListener("pointermove", onMove);
   canvas.addEventListener("pointerup", onUp);
+  canvas.addEventListener("pointercancel", onUp);
+
+  function giroAutomatico(ligado: boolean) {
+    giroAuto = !!ligado;
+    if (giroAuto) { userTouched = false; giroAlvo = null; }
+  }
+  function definirArraste(a: ArrasteDaPeca | null) {
+    arraste = a;
+    if (!a) arrastandoArte = false;
+  }
+  /** Vira a área para a câmera: costas a meia-volta; painel da caneca pelo centro da UV. */
+  function mostrarArea(areaId?: string) {
+    const area = pickArea(spec, areaId || o.areaId);
+    userTouched = true;
+    if (!glb && area && area.uv) {
+      // Torno do three: o ponto de u está no ângulo φ = 2πu (x = sen φ,
+      // z = cos φ) e encara a câmera (+z) com o giro do grupo = −φ. O corpo
+      // não gira dentro do grupo, então o alvo é absoluto.
+      const uc = (area.uv.u0 + area.uv.u1) / 2;
+      giroAlvo = giroMaisCurto(group.rotation.y, -uc * Math.PI * 2);
+    } else {
+      giroAlvo = giroMaisCurto(group.rotation.y, giroDeRepouso + (area && area.id === "back" ? Math.PI : 0));
+    }
+  }
 
   // 28/09/2026 — os chips Frente/Costas levam a um ângulo ABSOLUTO. Antes
   // só trocavam a área pintada: depois de a cliente girar a peça à mão,
@@ -1177,7 +1347,7 @@ export async function createModelViewer(
 
   function loop() {
     if (disposed) return;
-    if (!userTouched) { group.rotation.y += 0.004; render(); }
+    if (giroAuto && !userTouched) { group.rotation.y += 0.004; render(); }
     else if (giroAlvo !== null && !dragging) {
       const resto = giroAlvo - group.rotation.y;
       if (Math.abs(resto) < 0.002) { group.rotation.y = giroAlvo; giroAlvo = null; }
@@ -1323,6 +1493,7 @@ export async function createModelViewer(
     canvas.removeEventListener("pointerdown", onDown);
     canvas.removeEventListener("pointermove", onMove);
     canvas.removeEventListener("pointerup", onUp);
+    canvas.removeEventListener("pointercancel", onUp);
     try { if (scene.environment) scene.environment.dispose(); } catch (_e) {}
     try { renderer.dispose(); } catch (_e) {}
   }
@@ -1332,7 +1503,7 @@ export async function createModelViewer(
   await update(values);
   loop();
 
-  return { update, trocarPeca, resize, snapshot, recordTurntable, renderizarQuadro, dispose };
+  return { update, giroAutomatico, pontoNaArea, definirArraste, mostrarArea, trocarPeca, resize, snapshot, recordTurntable, renderizarQuadro, dispose };
 }
 
 /** O nome de antes da generalização: quem chama não precisa mudar. */
