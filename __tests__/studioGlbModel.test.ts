@@ -90,9 +90,10 @@ describe("escala — toda peça ganha a altura da caneca", () => {
     expect(ALTURA_ALVO_DO_MODELO).toBe(MUG_GEOMETRY_PADRAO.body.height);
   });
 
-  // A camiseta do Poly Pizza mede 0,35 de altura; em metros seria 0,7.
+  // A camiseta gerada pela Aura mede 0,72 m de altura (70 cm de corpo mais
+  // a ribana); um modelo em centímetros viria com 72.
   it("um GLB pequeno cresce e um grande encolhe até a altura alvo", () => {
-    expect(escalaDoModelo({ width: 0.76, height: 0.3456, depth: 0.17 }) * 0.3456).toBeCloseTo(ALTURA_ALVO_DO_MODELO, 6);
+    expect(escalaDoModelo({ width: 0.836, height: 0.719, depth: 0.179 }) * 0.719).toBeCloseTo(ALTURA_ALVO_DO_MODELO, 6);
     expect(escalaDoModelo({ width: 40, height: 70, depth: 20 }) * 70).toBeCloseTo(ALTURA_ALVO_DO_MODELO, 6);
   });
 
@@ -120,7 +121,8 @@ describe("câmera pela caixa — a distância de sempre, e mais longe só quando
     expect(cameraDistanceParaCaixa({ width: 1, height: 3.3 }, ASPECTO)).toBeCloseTo(daCaneca, 2);
   });
 
-  // A camiseta de mangas abertas é mais larga que alta: 5.07 × 2.3.
+  // A camiseta de mangas abertas é mais larga que alta (0,836 × 0,719 no
+  // arquivo → 2,67 × 2,3 na cena); 5,07 é o caso extremo de uma peça bem larga.
   it("uma peça larga afasta a câmera pela largura", () => {
     const d = cameraDistanceParaCaixa({ width: 5.07, height: ALTURA_ALVO_DO_MODELO }, ASPECTO);
     expect(d).toBeGreaterThan(CAMERA_DISTANCIA_PADRAO);
