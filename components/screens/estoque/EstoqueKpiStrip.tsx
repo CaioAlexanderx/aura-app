@@ -39,14 +39,19 @@ function Sparkline({ accent, isDark }: { accent: string; isDark: boolean }) {
 }
 
 type Props = {
+  /** Σ estoque × custo. */
   totalValue: number;
+  /** Σ estoque × preço de venda. */
+  saleValue?: number;
+  /** Produtos com peças e custo zerado — ficam fora do valor a custo. */
+  withoutCost?: number;
   totalProducts: number;
   totalUnits: number;
   lowCount: number;
   onLowClick?: () => void;
 };
 
-export function EstoqueKpiStrip({ totalValue, totalProducts, totalUnits, lowCount, onLowClick }: Props) {
+export function EstoqueKpiStrip({ totalValue, saleValue, withoutCost = 0, totalProducts, totalUnits, lowCount, onLowClick }: Props) {
   const C = useColors();
   const { isDark } = useThemeStore();
   const { ocultos } = useValoresOcultos();
@@ -122,7 +127,17 @@ export function EstoqueKpiStrip({ totalValue, totalProducts, totalUnits, lowCoun
             <span style={{ fontFamily: Fonts.heading, fontSize: 22, color: C.ink2, alignSelf: "flex-start", marginTop: 6, fontVariantNumeric: "tabular-nums" } as any}>,{cents || "00"}</span>
           </span>
         )}
-        sub={<span>Soma de stock × custo · atualizado em tempo real</span>}
+        sub={
+          <span>
+            A preço de custo
+            {saleValue !== undefined && <> · {ocultos ? MASCARA_MOEDA : fmtBRL(saleValue)} a preço de venda</>}
+            {withoutCost > 0 && (
+              <span style={{ display: "block", marginTop: 4, color: isDark ? "#fbbf24" : "#b45309" } as any}>
+                {withoutCost === 1 ? "1 produto sem custo não entra" : withoutCost + " produtos sem custo não entram"} na soma a custo — preencha o custo no cadastro
+              </span>
+            )}
+          </span>
+        }
       />
       <Card
         label="Produtos"

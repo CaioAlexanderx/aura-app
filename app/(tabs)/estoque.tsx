@@ -32,6 +32,7 @@ import type { Product } from "@/components/screens/estoque/types";
 import type { CategoryType } from "@/services/api";
 import { arrayToCSV, downloadCSV, PRODUCT_COLUMNS } from "@/utils/csv";
 import { productMatchesSearch } from "@/utils/productSearch";
+import { resumoValorEstoque, legendaValorEstoque } from "@/utils/valorEstoque";
 import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { companiesApi } from "@/services/api";
@@ -460,7 +461,7 @@ export default function EstoqueScreen() {
   // troca categorias no wide layout (multi-select dropdown).
   const { paginated, page, totalPages, total: filteredTotal, goTo } = usePagination(sorted, PAGE_SIZE, search + catFilter + catsMulti.join(",") + sortOrder);
   const lowStock = products.filter(p => p.stock <= p.minStock && p.unit !== "srv");
-  const totalValue = products.reduce((acc, p) => acc + p.stock * p.cost, 0);
+  const valorEstoque = resumoValorEstoque(products);
   const totalItems = products.reduce((acc, p) => acc + p.stock, 0);
   const serviceCount = products.filter(p => p.category === "Servicos" || p.unit === "srv").length;
 
@@ -686,7 +687,9 @@ export default function EstoqueScreen() {
         {products.length > 0 && (
           isWebWide ? (
             <EstoqueKpiStrip
-              totalValue={totalValue}
+              totalValue={valorEstoque.custo}
+              saleValue={valorEstoque.venda}
+              withoutCost={valorEstoque.semCusto}
               totalProducts={products.length}
               totalUnits={totalItems}
               lowCount={lowStock.length}
@@ -695,7 +698,7 @@ export default function EstoqueScreen() {
           ) : (
             <View style={s.summaryRow}>
               <SummaryCard label="TOTAL PRODUTOS" value={String(products.length)} sub={`${totalItems} unidades` + (serviceCount > 0 ? ` + ${serviceCount} servico${serviceCount > 1 ? "s" : ""}` : "")} />
-              <SummaryCard label="VALOR EM ESTOQUE" value={m(fmt(totalValue))} />
+              <SummaryCard label="VALOR EM ESTOQUE" value={m(fmt(valorEstoque.custo))} sub={legendaValorEstoque(valorEstoque, n => m(fmt(n)))} />
               <SummaryCard label="ESTOQUE BAIXO" value={String(lowStock.length)} color={lowStock.length > 0 ? Colors.red : Colors.green} sub={lowStock.length > 0 ? "Ver alertas" : "Tudo OK"} onPress={lowStock.length > 0 ? () => setActiveTab(1) : undefined} />
             </View>
           )
