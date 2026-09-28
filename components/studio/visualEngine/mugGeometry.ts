@@ -402,3 +402,160 @@ export function readMugAccessories(spec: any): MugAccessories {
     saucer: a?.saucer === true,
   };
 }
+
+// ============================================================
+// 28/09/2026 — realismo da caneca: lábio, interior e junções da alça
+//
+// A caneca era um cilindro com um toro fino no topo e uma parede interna
+// solta: sem espessura, sem lábio, sem fundo. Aqui fica a aritmética dos
+// perfis novos (testável sem three.js); o compose3dMug.ts só transforma
+// os pontos em LatheGeometry.
+// ============================================================
+
+/**
+ * Largura do lábio (a espessura da louça vista de cima): a parede
+ * declarada pelo template, ou o dobro do tubo da borda antiga, ou o
+ * mínimo de uma louça crível — o que for maior. Sem o mínimo a caneca
+ * padrão (parede 0.04) teria um fio de borda, como antes.
+ */
+export function larguraDoLabio(g: MugGeometry): number {
+  return Math.max(g.body.topRadius - g.inner.topRadius, g.rim.tube * 2, 0.06);
+}
+
+/**
+ * Perfil do lábio para o LatheGeometry: meio círculo da face externa
+ * (x = raio do topo) por cima até a face interna, no topo do corpo. Os
+ * pontos vão de fora para dentro; com essa ordem as normais saem para
+ * fora, para cima e para dentro em sequência, contínuas com o corpo e
+ * com o interior.
+ */
+export function perfilDoLabio(g: MugGeometry, passos = 10): Array<{ x: number; y: number }> {
+  const lab = larguraDoLabio(g);
+  const cx = g.body.topRadius - lab / 2;
+  const r = lab / 2;
+  const topo = g.body.height / 2;
+  const pontos: Array<{ x: number; y: number }> = [];
+  for (let i = 0; i <= passos; i++) {
+    const a = (Math.PI * i) / passos; // 0 = fora, π = dentro
+    pontos.push({ x: cx + r * Math.cos(a), y: topo + r * Math.sin(a) });
+  }
+  return pontos;
+}
+
+export type PontoDoInterior = {
+  x: number;
+  y: number;
+  /** 0 no topo, 1 no fundo — alimenta a oclusão por vértice. */
+  profundidade: number;
+};
+
+/**
+ * Perfil do interior, do lábio ao centro do fundo: parede interna
+ * (paralela à externa), filete arredondado no encontro com o fundo e o
+ * fundo até o eixo. Ordenado de cima para baixo, de propósito: é a ordem
+ * que deixa as normais do LatheGeometry apontando para DENTRO da caneca,
+ * que é de onde se vê o interior.
+ *
+ * A parede interna começa onde o lábio termina — não onde o template
+ * declarou `inner.topRadius`, que pode ser mais fino que o lábio mínimo.
+ */
+export function perfilDoInterior(g: MugGeometry, passosParede = 24, passosFilete = 8): PontoDoInterior[] {
+  const lab = larguraDoLabio(g);
+  const topo = g.body.height / 2;
+  const raioTopo = Math.min(g.inner.topRadius, g.body.topRadius - lab);
+  const conic = g.body.topRadius - g.body.bottomRadius;
+  const raioFundo = Math.max(0.1, Math.min(g.inner.bottomRadius, raioTopo - conic));
+  const fundoY = topo - g.inner.height;
+  const filete = Math.min(0.14, raioFundo * 0.45, g.inner.height * 0.3);
+  const pontos: PontoDoInterior[] = [];
+  const alturaParede = g.inner.height - filete;
+  for (let i = 0; i <= passosParede; i++) {
+    const t = i / passosParede;
+    const y = topo - alturaParede * t;
+    const x = raioTopo + (raioFundo - raioTopo) * ((alturaParede * t) / g.inner.height);
+    pontos.push({ x, y, profundidade: (topo - y) / g.inner.height });
+  }
+  const cx = raioFundo - filete;
+  const cy = fundoY + filete;
+  for (let i = 1; i <= passosFilete; i++) {
+    const a = (Math.PI / 2) * (i / passosFilete); // 0 = parede, π/2 = fundo
+    const x = cx + filete * Math.cos(a);
+    const y = cy - filete * Math.sin(a);
+    pontos.push({ x, y, profundidade: Math.min(1, (topo - y) / g.inner.height) });
+  }
+  pontos.push({ x: 0, y: fundoY, profundidade: 1 });
+  return pontos;
+}
+
+/**
+ * Onde a alça encontra o corpo: os cruzamentos da curva da alça (já no
+ * plano XY, com a inclinação aplicada e deslocada para a posição dela)
+ * com a parede externa. É onde a louça ganha um filete de junção, em vez
+ * de um tubo atravessando um cilindro. `paredeEm(y)` é o raio da parede
+ * naquela altura. Devolve os pontos interpolados no cruzamento com a
+ * tangente da curva ali, orientada para FORA do corpo (x crescente);
+ * sem cruzamento (alça solta), lista vazia.
+ */
+export type JuncaoDaAlca = { x: number; y: number; tx: number; ty: number };
+
+export function juncoesDaAlca(
+  curva: Array<{ x: number; y: number }>,
+  paredeEm: (y: number) => number,
+): JuncaoDaAlca[] {
+  const fora: JuncaoDaAlca[] = [];
+  if (curva.length < 2) return fora;
+  const n = curva.length;
+  const sinal = (p: { x: number; y: number }) => p.x - paredeEm(p.y);
+  for (let i = 0; i < n; i++) {
+    const a = curva[i], b = curva[(i + 1) % n];
+    const sa = sinal(a), sb = sinal(b);
+    if ((sa <= 0 && sb > 0) || (sa > 0 && sb <= 0)) {
+      const t = sa / (sa - sb);
+      let tx = b.x - a.x, ty = b.y - a.y;
+      const len = Math.hypot(tx, ty) || 1;
+      tx /= len; ty /= len;
+      // a tangente aponta para o lado da curva que está fora da parede
+      if (sb <= 0) { tx = -tx; ty = -ty; }
+      fora.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, tx, ty });
+    }
+  }
+  return fora;
+}
+
+/**
+ * A curva do centro da alça em coordenadas do corpo (deslocada para
+ * `offsetX/offsetY` e girada por `tilt`), amostrada: é o que alimenta
+ * `juncoesDaAlca`. Anel = círculo; coração = bézier do `heartPath`;
+ * "D" = `squarePath`. Sem alça, vazia.
+ */
+export function curvaDaAlca(g: MugGeometry, amostras = 64): Array<{ x: number; y: number }> {
+  const h = g.handle;
+  if (h.shape === "none") return [];
+  let local: Array<{ x: number; y: number }> = [];
+  if (h.shape === "ring") {
+    for (let i = 0; i < amostras; i++) {
+      const a = (Math.PI * 2 * i) / amostras;
+      local.push({ x: Math.cos(a) * h.radius, y: Math.sin(a) * h.radius });
+    }
+  } else if (h.shape === "heart") {
+    let atual = { x: 0, y: 0 };
+    for (const c of heartPath(h.radius)) {
+      if (c.op === "moveTo") { atual = { x: c.x, y: c.y }; continue; }
+      const p0 = atual;
+      const passos = Math.max(4, Math.floor(amostras / 2));
+      for (let i = 1; i <= passos; i++) {
+        const t = i / passos, u = 1 - t;
+        local.push({
+          x: u * u * u * p0.x + 3 * u * u * t * c.c1x + 3 * u * t * t * c.c2x + t * t * t * c.x,
+          y: u * u * u * p0.y + 3 * u * u * t * c.c1y + 3 * u * t * t * c.c2y + t * t * t * c.y,
+        });
+      }
+      atual = { x: c.x, y: c.y };
+    }
+  } else {
+    local = squarePath(h.radius).slice(0, -1);
+  }
+  const rad = (h.tilt * Math.PI) / 180;
+  const c = Math.cos(rad), s = Math.sin(rad);
+  return local.map((p) => ({ x: h.offsetX + p.x * c - p.y * s, y: h.offsetY + p.x * s + p.y * c }));
+}

@@ -76,22 +76,26 @@ const PARAMETROS = {
   bainhaDaManga: 2,
   espessuraDaBainha: 0.3,
   // Meia profundidade (z) do tronco por altura (y), frente e costas em
-  // separado: 18 cm no peito, afinando pouco até a barra e recuando no
+  // separado: ~20 cm no peito (28/09/2026: eram 18, e de lado o corpo
+  // virava um tubo achatado), afinando pouco até a barra e recuando no
   // peito alto até o pescoço. Interpolado por spline (Catmull-Rom).
-  profundidadeFrente: [[0, 7.5], [20, 8], [44, 9], [55, 8.7], [63, 7.2], [72, 6]],
-  profundidadeCostas: [[0, 7.5], [20, 8], [44, 8.8], [55, 8.3], [66, 6.5], [72, 5.5]],
+  profundidadeFrente: [[0, 8.2], [20, 8.8], [44, 10.2], [55, 9.7], [63, 8], [72, 6.4]],
+  profundidadeCostas: [[0, 8], [20, 8.6], [44, 9.8], [55, 9.2], [66, 7], [72, 5.8]],
   // Expoente da superelipse de cada seção transversal: 2 é uma elipse,
   // maior é mais "retangular arredondado" (o tecido pendurado num
   // manequim fantasma fica mais achatado que uma elipse).
   expoenteDaSecao: 2.4,
   // Manga curta: 20 cm medidos da ponta do ombro pela borda de cima, eixo
-  // caído 20° abaixo da horizontal, boca aberta com 20 cm de largura plana
-  // e 7 cm de profundidade — achatada, como uma manga pendurada, e não um
-  // tubo redondo (afina de leve da cava até a boca).
+  // caído 30° abaixo da horizontal (28/09/2026: eram 20°, e a manga ficava
+  // dura e horizontal) e ainda vergando mais `quedaDaManga` cm até a boca,
+  // como tecido que pende. Boca aberta com 20 cm de largura plana e ~9 cm
+  // de profundidade — achatada, como uma manga pendurada, e não um tubo
+  // redondo (afina de leve da cava até a boca).
   comprimentoDaManga: 20,
-  inclinacaoDaManga: 20,
+  inclinacaoDaManga: 30,
+  quedaDaManga: 2.2,
   meiaAlturaDaBocaDaManga: 10,
-  meiaProfundidadeDaManga: [4.6, 3.6],
+  meiaProfundidadeDaManga: [5.4, 4.5],
   // Até que fração do comprimento a manga ainda "lembra" o contorno da
   // cava antes de virar o tubo achatado da boca.
   transicaoDaManga: 0.55,
@@ -115,11 +119,25 @@ const PARAMETROS = {
   alturaImprimivel: 35,
   folgaDaGola: 8,
   // Dobras e oclusão (em cm, convertidos para metros na hora): dobras de
-  // ~4 mm com onda de ~10 cm, sumindo a 4 cm das bordas escondidas e a
-  // 7 cm da barra e das bocas (a barra continua reta); axilas com sombra
-  // de 10 cm de alcance e a gola com 6 cm.
-  dobras: { amplitude: 0.42, comprimento: 10, semente: 7, margemDaBorda: 4, faixaLisaDaBarra: 7 },
+  // ~6 mm com onda de ~12 cm, sumindo a 4 cm das bordas escondidas e a
+  // 3 cm da barra e das bocas (28/09/2026: eram 4 mm e 7 cm, e não se
+  // viam); axilas com sombra de 10 cm de alcance e a gola com 6 cm.
+  dobras: { amplitude: 0.55, comprimento: 12, semente: 7, margemDaBorda: 4, faixaLisaDaBarra: 3 },
   oclusao: { raioAxila: 10, forcaAxila: 0.4, raioGola: 6, forcaGola: 0.2 },
+  // Caimento (28/09/2026) — o que uma camiseta pendurada num manequim
+  // fantasma tem e o ruído não dá:
+  //   - pregas verticais no terço de baixo do tronco (o tecido relaxa da
+  //     cintura à barra em ondas compridas, e a barra ondula com elas);
+  //   - dobras diagonais que saem das axilas rumo ao centro (a manga puxa
+  //     o tecido do lado);
+  //   - relaxamento na cintura, nas laterais (o tecido junta onde não há
+  //     corpo segurando).
+  // Amplitudes em cm; `ondas` é o número de pregas na largura da frente.
+  caimento: {
+    pregas: { amplitude: 0.55, ondas: 3.2, inicio: 34, semente: 23 },
+    axilas: { amplitude: 0.45, alcance: 17, passo: 6.5 },
+    cintura: { amplitude: 0.35, altura: 27, largura: 7 },
+  },
 };
 
 // ── Álgebra pequena ──────────────────────────────────────────
@@ -339,7 +357,9 @@ function construirCamiseta(P = PARAMETROS) {
     const L = (lo + hi) / 2;
 
     const anel = (s) => {
-      const centro = soma(centro0, escala(eixo, L * s));
+      // o eixo verga para baixo com o quadrado do comprimento: a manga
+      // pende, em vez de sair rígida do ombro
+      const centro = sub(soma(centro0, escala(eixo, L * s)), escala(cima, (P.quedaDaManga || 0) * s * s));
       const h = lerp(meiaAltura0, P.meiaAlturaDaBocaDaManga, s);
       const e = lerp(P.meiaProfundidadeDaManga[0], P.meiaProfundidadeDaManga[1], s);
       const beta = suave(s / P.transicaoDaManga);
@@ -589,6 +609,10 @@ function refinarCamiseta(base, P = PARAMETROS, opcoes = {}) {
     });
     nrm = normaisSuaves(malha.pos, malha.tris, malha.ids);
   }
+  if (!opcoes.semDobras && P.caimento) {
+    malha = aplicarCaimento(malha, nrm, P, centro, base.medidas.axilas);
+    nrm = normaisSuaves(malha.pos, malha.tris, malha.ids);
+  }
   const O = P.oclusao;
   const cor = opcoes.semOclusao ? null : oclusaoPorVertice(malha, {
     axilas: base.medidas.axilas.map((a) => escala(sub(a, centro), CM_PARA_METRO)),
@@ -596,6 +620,95 @@ function refinarCamiseta(base, P = PARAMETROS, opcoes = {}) {
     raioGola: O.raioGola * CM_PARA_METRO, forcaGola: O.forcaGola,
   });
   return { ...malha, nrm, cor };
+}
+
+/**
+ * O caimento: deslocamentos ao longo da normal, por vértice soldado,
+ * com forma — o ruído de aplicarDobras dá o "amassado" fino; isto dá o
+ * que se vê numa foto de manequim fantasma.
+ *
+ *   pregas   ondas verticais compridas da cintura à barra (a barra ondula
+ *            junto), só no tronco, sumindo antes das costuras laterais;
+ *   axilas   dobras diagonais que saem de cada axila para baixo e para o
+ *            centro, em anel de alcance limitado;
+ *   cintura  relaxamento nas laterais da cintura.
+ *
+ * Tudo em metros aqui (a malha já foi convertida); os parâmetros vêm em
+ * centímetros. A fase das pregas leva um ruído com semente para não
+ * saírem como um seno de régua.
+ */
+function aplicarCaimento(malha, nrm, P, centroCm, axilasCm) {
+  const { pos, ids } = malha;
+  const C = P.caimento;
+  const cm = CM_PARA_METRO;
+  const meiaLargura = P.meiaLarguraDoPeito * cm;
+  const yBarra = (0 - centroCm[1]) * cm;
+  const axilas = axilasCm.map((a) => escala(sub(a, centroCm), cm));
+  const rnd = criarRndLocal(C.pregas.semente);
+  const fases = Array.from({ length: 8 }, () => rnd() * Math.PI * 2);
+  const nIds = ids.reduce((m, i) => Math.max(m, i), -1) + 1;
+  const normalPorId = new Array(nIds).fill(null).map(() => [0, 0, 0]);
+  pos.forEach((_, i) => { normalPorId[ids[i]] = soma(normalPorId[ids[i]], nrm[i]); });
+  const desloc = new Array(nIds);
+  return {
+    ...malha,
+    pos: pos.map((p, i) => {
+      const w = ids[i];
+      if (desloc[w] === undefined) {
+        const x = p[0], y = p[1] - yBarra, z = p[2]; // y = altura acima da barra
+        const dentroDoTronco = Math.abs(x) < meiaLargura * 0.97;
+        let d = 0;
+        if (dentroDoTronco) {
+          const frente = z > 0 ? 1 : -1;
+          // pregas verticais: sumindo rumo às costuras e crescendo da cintura à barra
+          const Pr = C.pregas;
+          const lateral = suave((meiaLargura * 0.92 - Math.abs(x)) / (meiaLargura * 0.25));
+          const vertical = suave((Pr.inicio * cm - y) / (Pr.inicio * cm * 0.55));
+          const lambda = (2 * meiaLargura) / Pr.ondas;
+          const fase = fases[frente > 0 ? 0 : 1] + 0.35 * Math.sin(y / (0.12) + fases[2]);
+          const onda = Math.sin((2 * Math.PI * x) / lambda + fase) + 0.22 * Math.sin((2 * Math.PI * x) / (lambda * 0.55) + fases[3] + y / 0.11);
+          d += Pr.amplitude * cm * lateral * vertical * onda * (frente > 0 ? 1 : 0.85);
+          // cintura: relaxamento nas laterais
+          const Ci = C.cintura;
+          const gauss = Math.exp(-Math.pow((y - Ci.altura * cm) / (Ci.largura * cm), 2));
+          const naLateral = Math.pow(Math.abs(x) / meiaLargura, 3);
+          d -= Ci.amplitude * cm * gauss * naLateral;
+        }
+        // dobras diagonais das axilas (no tronco e no começo da manga)
+        const Ax = C.axilas;
+        for (const a of axilas) {
+          const sx = Math.sign(a[0]) || 1;
+          const dx = p[0] - a[0], dy = p[1] - a[1];
+          const dist = Math.hypot(dx, dy, (p[2] - a[2]) * 0.5);
+          if (dist > Ax.alcance * cm) continue;
+          // eixo da dobra: da axila para baixo e para dentro (45°); a onda é
+          // medida na perpendicular
+          const ax = -sx * Math.SQRT1_2, ay = -Math.SQRT1_2;
+          const ao = dx * ax + dy * ay;           // ao longo da dobra
+          const perp = -dx * ay + dy * ax;        // perpendicular
+          if (ao < 0) continue;                    // só para baixo/dentro da axila
+          const janela = Math.exp(-Math.pow(dist / (Ax.alcance * cm * 0.55), 2)) * suave(ao / (0.03));
+          d += Ax.amplitude * cm * janela * Math.sin((2 * Math.PI * perp) / (Ax.passo * cm));
+        }
+        // Só na horizontal: prega e relaxamento movem o tecido para dentro
+        // e para fora, nunca para cima ou para baixo — a barra continua na
+        // mesma altura (só ondula em z) e a caixa não sai do centro.
+        const n = normalPorId[w];
+        desloc[w] = escala(normalizarLocal([n[0], 0, n[2]]), d);
+      }
+      return soma(p, desloc[w]);
+    }),
+  };
+}
+
+function criarRndLocal(semente) {
+  let s = semente >>> 0;
+  return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+}
+
+function normalizarLocal(n) {
+  const l = norma(n);
+  return l > 0 ? escala(n, 1 / l) : [0, 0, 0];
 }
 
 /** O JSON do glTF que embrulha a malha: uma cena, um nó, um material de algodão. */

@@ -3,50 +3,55 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Teste 3D · camiseta em GLB</title>
+<title>Teste 3D · caneca e camiseta no viewer real</title>
 <!--
-  Página de teste manual do viewer GLB do Aura Studio, sem subir o app.
-  Espelha compose3dMug.ts (three r128 + GLTFLoader do CDN, estúdio com
-  fundo em gradiente, mapa de ambiente, três luzes, chão com sombra e
-  mancha de contato; peça centrada e escalada; CanvasTexture com
-  flipY=false; trama em escala real, relevo de dobras no mapa de normais,
-  material físico com sheen, oclusão por vértice e arte assentada) para
-  conferir o modelo, o material e as áreas no navegador. Quando mudar o
-  viewer, mude aqui também — cada função diz qual do viewer ela espelha.
+  Página de teste manual do viewer 3D do Aura Studio, sem subir o app.
 
-  Como abrir (o GLB e o JSON precisam vir por http, não por file://):
+  28/09/2026 — deixou de ser um espelho copiado à mão do compose3dMug.ts:
+  agora importa o viewer REAL, transpilado por
+      node scripts/studio/transpilar-viewer-de-teste.mjs
+  para ./viewer/ (pasta no .gitignore). Rode o script depois de qualquer
+  mudança no visualEngine e recarregue a página.
+
+  Como abrir (o GLB, a spec e os módulos precisam vir por http, não por file://):
     na raiz do repositório:  npx serve .      (ou: python -m http.server 8000)
     depois:  http://localhost:3000/docs/studio/visual-templates/teste-3d.html
   Parâmetros opcionais:
-    ?spec=./camiseta-basica-3d.json      (padrão)
-    ?glb=../../../public/models/camiseta-basica.glb   (padrão local; sem ele
-         usa a url da spec, que só existe depois do deploy)
+    ?spec=./camiseta-basica-3d.json   spec (arquivo com `spec` ou a spec direta);
+                                      sem ela, a caneca procedural padrão
+    ?glb=../../../public/models/camiseta-basica.glb   (padrão local para a
+         camiseta; sem ele usa a url da spec, que só existe depois do deploy)
     ?cor=%23111111   cor da peça      ?corArte=%23D85A30   cor da arte
-    ?texto=Aura      texto de prova   ?area=front|back
+    ?texto=Aura      texto de prova   ?area=front|back|panel|wrap
     ?giro=45         giro fixo em graus (desliga a rotação automática)
-    ?prova=1         círculo e retângulo de cantos redondos em TODAS as áreas
-                     (se aparecerem como elipse ou esticados, a textura ou o
-                     UV não têm a proporção certa)
-    ?retangulo=0     esconde o retângulo tracejado da área (foto de produto)
+    ?cenario=estudio|gradiente|nenhum   o que há em volta da peça
+    ?fundo=%23060816 fundo da página (o cenário deriva a paleta dele)
+    ?imagem=url      foto no lugar do emblema (precisa de CORS)
+  O que a página antiga tinha e esta não tem: o círculo de prova pintado na
+  textura (?prova) e o retângulo tracejado da área (?retangulo) — eram do
+  espelho, que desenhava a textura por conta própria. Para conferir UV,
+  use a textura pintada no painel à direita (um clone do canvas do viewer
+  não é acessível; o painel mostra a arte que o viewer recebe).
 -->
 <style>
-  :root { --papel: #FBF8F3; --tinta: #1F1B16; --borda: #E2DCD2; }
+  :root { --papel: #FBF8F3; --tinta: #1F1B16; --borda: #E7DFD3; }
   body { margin: 0; font: 14px/1.4 system-ui, sans-serif; background: var(--papel); color: var(--tinta); }
   main { max-width: 1100px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; grid-template-columns: 1fr 300px; }
   @media (max-width: 760px) { main { grid-template-columns: 1fr; } }
   canvas#cena { width: 100%; aspect-ratio: 1 / 0.78; display: block; border: 1px solid var(--borda); border-radius: 12px; cursor: grab; touch-action: none; }
   aside { display: grid; gap: 10px; align-content: start; }
   label { display: grid; gap: 4px; font-weight: 600; font-size: 12px; }
-  input, select { font: inherit; padding: 6px 8px; border: 1px solid var(--borda); border-radius: 8px; background: #fff; }
-  #textura { width: 100%; border: 1px solid var(--borda); border-radius: 8px; background: #fff; }
-  #status { font-size: 12px; color: #6B6257; min-height: 1.4em; }
+  input, select, button { font: inherit; padding: 6px 8px; border: 1px solid var(--borda); border-radius: 8px; background: #fff; }
+  #status { font-size: 12px; color: #756C61; min-height: 1.4em; }
   h1 { font-size: 16px; margin: 0 0 4px; grid-column: 1 / -1; }
-  small { color: #6B6257; }
+  small { color: #756C61; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chips button[aria-pressed="true"] { background: #7C3AED; color: #fff; border-color: #7C3AED; }
 </style>
 </head>
 <body>
 <main>
-  <h1>Camiseta em GLB · viewer de teste <small>(arraste para girar)</small></h1>
+  <h1>Viewer 3D · página de teste <small>(arraste para girar; o código é o do app)</small></h1>
   <div>
     <canvas id="cena"></canvas>
     <div id="status">carregando…</div>
@@ -54,311 +59,114 @@
   <aside>
     <label>Texto <input id="texto" value="Aura"></label>
     <label>Cor da peça <input id="cor" type="color" value="#F5F2EA"></label>
-    <label>Cor da arte <input id="corArte" type="color" value="#D85A30"></label>
-    <label>Área <select id="area"></select></label>
-    <label><input id="mostrarArea" type="checkbox" checked> mostrar o retângulo da área</label>
-    <label><input id="prova" type="checkbox"> círculo e retângulo de prova em todas as áreas</label>
-    <label>Textura pintada <canvas id="textura"></canvas></label>
+    <label>Cor da arte <input id="corArte" type="color" value="#1C1C1C"></label>
+    <label>Área <div class="chips" id="areas"></div></label>
+    <label>Fundo da página <input id="fundo" type="color" value="#FBF8F3"></label>
+    <label>Cenário
+      <select id="cenario">
+        <option value="estudio">estúdio (ciclorama)</option>
+        <option value="gradiente">gradiente 2D (antigo)</option>
+        <option value="nenhum">nenhum (transparente)</option>
+      </select>
+    </label>
+    <button id="recriar" type="button">Recriar o viewer (fundo e cenário só valem na criação)</button>
     <div id="info"></div>
   </aside>
 </main>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-<script>
-(async function () {
+<script type="module">
   const q = new URLSearchParams(location.search);
   const status = (m) => { document.getElementById("status").textContent = m; };
-  const specUrl = q.get("spec") || "./camiseta-basica-3d.json";
-  let template;
+  let createModelViewer;
   try {
-    template = await (await fetch(specUrl)).json();
+    ({ createModelViewer } = await import("./viewer/compose3dMug.js"));
   } catch (e) {
-    status("Não consegui ler a spec em " + specUrl + " — abra por http (npx serve .), não por file://");
-    return;
+    status("Não achei ./viewer/compose3dMug.js — rode: node scripts/studio/transpilar-viewer-de-teste.mjs (e abra por http, não file://)");
+    throw e;
   }
-  const spec = template.spec || template;
-  const model = spec.model || {};
-  const glbUrl = q.get("glb") || (location.protocol === "file:" ? null : "../../../public/models/camiseta-basica.glb");
-  const url = glbUrl || model.url;
-  const ALTURA_ALVO = 2.3, FOV = model.camera && model.camera.fov || 32, DIST_PADRAO = 6.6;
-  const OCUP_V = ALTURA_ALVO / (2 * DIST_PADRAO * Math.tan((FOV / 2) * Math.PI / 180)), OCUP_H = 0.82;
-  const BACKDROP = "#FBF8F3";
 
-  const canvas = document.getElementById("cena");
-  const texCv = document.getElementById("textura");
-  texCv.width = model.texture && model.texture.w || 2048;
-  texCv.height = model.texture && model.texture.h || 1024;
-  const W = texCv.width, H = texCv.height;
-
-  const areaSel = document.getElementById("area");
-  for (const a of spec.areas || []) {
-    const op = document.createElement("option");
-    op.value = a.id; op.textContent = a.id + " · " + a.width_cm + "×" + a.height_cm + " cm";
-    areaSel.appendChild(op);
+  // A spec: arquivo pedido, ou a caneca procedural padrão (a mesma leitura
+  // que a vitrine faz de um template sem geometria declarada).
+  const CANECA_PADRAO = {
+    schema: 1,
+    model: { kind: "procedural-mug", texture: { w: 2048, h: 1024 } },
+    areas: [
+      { id: "panel", width_cm: 9, height_cm: 9.7, uv: { u0: 0.285, v0: 0.18, u1: 0.715, v1: 0.82 } },
+      { id: "wrap", width_cm: 21, height_cm: 9.7, uv: { u0: 0.02, v0: 0.18, u1: 0.98, v1: 0.82 } },
+    ],
+  };
+  let spec = CANECA_PADRAO;
+  if (q.get("spec")) {
+    try {
+      const template = await (await fetch(q.get("spec"))).json();
+      spec = template.spec || template;
+    } catch (e) {
+      status("Não consegui ler a spec em " + q.get("spec") + " — abra por http (npx serve .), não por file://");
+      throw e;
+    }
   }
-  // Parâmetros da URL nos controles (para screenshots reproduzíveis).
-  if (q.get("cor")) document.getElementById("cor").value = q.get("cor");
-  if (q.get("corArte")) document.getElementById("corArte").value = q.get("corArte");
-  if (q.get("texto") !== null) document.getElementById("texto").value = q.get("texto");
-  if (q.get("area")) areaSel.value = q.get("area");
-  if (q.get("prova")) document.getElementById("prova").checked = q.get("prova") === "1";
-  if (q.get("retangulo")) document.getElementById("mostrarArea").checked = q.get("retangulo") === "1";
+  if (spec.model && spec.model.kind === "glb") {
+    const glb = q.get("glb") || (location.protocol === "file:" ? null : new URL("../../../public/models/camiseta-basica.glb", location.href).href);
+    if (glb) spec.model.url = glb;
+  }
+
+  const $ = (id) => document.getElementById(id);
+  if (q.get("cor")) $("cor").value = q.get("cor");
+  if (q.get("corArte")) $("corArte").value = q.get("corArte");
+  if (q.get("texto") !== null) $("texto").value = q.get("texto");
+  if (q.get("fundo")) $("fundo").value = q.get("fundo");
+  if (q.get("cenario")) $("cenario").value = q.get("cenario");
   const giroFixo = q.get("giro") !== null ? parseFloat(q.get("giro")) : null;
+  const imagem = q.get("imagem");
 
-  // ── Estúdio (espelha compose3dMug.ts: paintBackdrop, buildEnvironment, luzes) ──
-  const hexToRgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return "rgba(" + (n >> 16) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")"; };
-  const mix = (a, b, t) => { const A = parseInt(a.slice(1), 16), B = parseInt(b.slice(1), 16); const c = (s) => Math.round(((A >> s) & 255) + (((B >> s) & 255) - ((A >> s) & 255)) * t); return "#" + [16, 8, 0].map((s) => c(s).toString(16).padStart(2, "0")).join(""); };
-  function paintBackdrop() {
-    const cv = document.createElement("canvas"); cv.width = 64; cv.height = 256;
-    const c = cv.getContext("2d");
-    const g = c.createLinearGradient(0, 0, 0, 256);
-    g.addColorStop(0, mix(BACKDROP, "#FFFFFF", 0.4)); g.addColorStop(0.55, BACKDROP); g.addColorStop(1, mix(BACKDROP, "#B7AC9C", 0.24));
-    c.fillStyle = g; c.fillRect(0, 0, 64, 256);
-    const halo = c.createRadialGradient(32, 256 * 0.42, 0, 32, 256 * 0.42, 128);
-    halo.addColorStop(0, "rgba(255,255,255,0.55)"); halo.addColorStop(1, "rgba(255,255,255,0)");
-    c.fillStyle = halo; c.fillRect(0, 0, 64, 256);
-    const t = new THREE.CanvasTexture(cv); t.encoding = THREE.sRGBEncoding; return t;
-  }
-  function paintContactShadow() {
-    const cv = document.createElement("canvas"); cv.width = 256; cv.height = 256;
-    const c = cv.getContext("2d");
-    const g = c.createRadialGradient(128, 128, 0, 128, 128, 128);
-    g.addColorStop(0, "rgba(40,30,20,0.42)"); g.addColorStop(0.45, "rgba(40,30,20,0.18)"); g.addColorStop(1, "rgba(40,30,20,0)");
-    c.fillStyle = g; c.fillRect(0, 0, 256, 256);
-    return new THREE.CanvasTexture(cv);
-  }
-  function buildEnvironment(renderer) {
-    const sala = new THREE.Scene();
-    sala.add(new THREE.Mesh(new THREE.BoxGeometry(12, 12, 12), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.32, 0.30, 0.28), side: THREE.BackSide })));
-    const painel = (w, h, cor, pos, rot) => {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(cor[0], cor[1], cor[2]), side: THREE.DoubleSide }));
-      m.position.set(pos[0], pos[1], pos[2]); m.rotation.set(rot[0], rot[1], rot[2]); sala.add(m);
-    };
-    painel(7, 4, [2.2, 2.1, 1.9], [0, 5.9, 0], [Math.PI / 2, 0, 0]);
-    painel(3, 6, [1.6, 1.5, 1.35], [-5.9, 1.5, 2], [0, Math.PI / 2, 0]);
-    painel(3, 6, [0.8, 0.85, 1.0], [5.9, 1, 1], [0, -Math.PI / 2, 0]);
-    painel(5, 2, [1.1, 1.1, 1.1], [0, 3.5, -5.9], [0, 0, 0]);
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    const env = pmrem.fromScene(sala, 0.04); pmrem.dispose();
-    return env.texture;
-  }
-
-  const scene = new THREE.Scene();
-  scene.background = paintBackdrop();
-  const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 100);
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
-  renderer.outputEncoding = THREE.sRGBEncoding;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.2;
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  scene.environment = buildEnvironment(renderer);
-  scene.add(new THREE.HemisphereLight(0xfff6e8, 0xb9ae9e, 0.25));
-  const key = new THREE.DirectionalLight(0xfff3e4, 1.0);
-  key.position.set(2.6, 7.6, 4.2); // peça vertical: principal mais alta (viewer: `if (glb)`)
-  key.castShadow = true; key.shadow.mapSize.set(1024, 1024);
-  key.shadow.camera.near = 0.5; key.shadow.camera.far = 30;
-  key.shadow.camera.left = -4.5; key.shadow.camera.right = 4.5; key.shadow.camera.top = 4.5; key.shadow.camera.bottom = -4.5;
-  key.shadow.bias = -0.0006; key.shadow.normalBias = 0.02;
-  scene.add(key);
-  const fill = new THREE.DirectionalLight(0xe8f0ff, 0.22); fill.position.set(-5, 2.5, 3); scene.add(fill);
-  const rim = new THREE.DirectionalLight(0xffffff, 0.5); rim.position.set(-2, 4, -5); scene.add(rim);
-  const chao = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ opacity: 0.2 }));
-  chao.rotation.x = -Math.PI / 2; chao.receiveShadow = true; scene.add(chao);
-
-  status("baixando " + url);
-  const gltf = await new Promise((res, rej) => new THREE.GLTFLoader().load(url, res, undefined, rej)).catch((e) => {
-    status("Falha ao carregar o GLB: " + (e && e.message || e)); return null;
-  });
-  if (!gltf) return;
-  const modelo = gltf.scene;
-  const meshes = []; modelo.traverse((o) => { if (o.isMesh) meshes.push(o); });
-  const nome = model.print_mesh;
-  let print = meshes.find((m) => m.name === nome || (m.material && m.material.name === nome));
-  if (!print) print = meshes.reduce((a, b) => (b.geometry.attributes.position.count > a.geometry.attributes.position.count ? b : a));
-  modelo.updateMatrixWorld(true);
-  const caixa0 = new THREE.Box3().setFromObject(modelo);
-  const tam0 = caixa0.getSize(new THREE.Vector3()), centro = caixa0.getCenter(new THREE.Vector3());
-  const k = (ALTURA_ALVO / tam0.y) * (model.scale || 1);
-  const pivo = new THREE.Group(); modelo.position.set(-centro.x, -centro.y, -centro.z); pivo.add(modelo); pivo.scale.setScalar(k);
-  const caixa = { width: tam0.x * k, height: tam0.y * k, depth: tam0.z * k };
-  const chaoY = -caixa.height / 2;
-  chao.position.y = chaoY - 0.001;
-  // mancha de contato em elipse sob a barra (glbModel.ts: sombraDeContatoParaCaixa)
-  const sombra = { rx: caixa.width * 0.3, rz: Math.max(caixa.depth * 0.8, caixa.width * 0.12) };
-  const contato = new THREE.Mesh(new THREE.PlaneGeometry(sombra.rx * 2, sombra.rz * 2), new THREE.MeshBasicMaterial({ map: paintContactShadow(), transparent: true, depthWrite: false }));
-  contato.rotation.x = -Math.PI / 2; contato.position.y = chaoY + 0.002; scene.add(contato);
-  const group = new THREE.Group(); group.add(pivo); group.rotation.y = ((model.rotation_y || 0) * Math.PI) / 180; scene.add(group);
-
-  // ── Tecido (espelha compose3dMug.ts: pixelsPorCm, fiosDoLadrilho, tramaDoTecido, relevoDasDobras, normalMapDoTecido) ──
-  const areaComMedida = (spec.areas || []).find((a) => a.uv && a.width_cm > 0);
-  const pxPorCm = areaComMedida ? ((areaComMedida.uv.u1 - areaComMedida.uv.u0) * W) / areaComMedida.width_cm : null;
-  const fios = pxPorCm ? Math.max(4, Math.min(32, Math.round(64 / (pxPorCm / 8)))) : 8;
-  const criarRnd = (semente) => { let s = semente; return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; }; };
-  const trama = document.createElement("canvas"); trama.width = 64; trama.height = 64;
-  (function () {
-    const c = trama.getContext("2d"); c.fillStyle = "#6e6e6e"; c.fillRect(0, 0, 64, 64);
-    const passo = 64 / fios, rnd = criarRnd(7);
-    for (let y = 0; y < fios; y++) for (let x = 0; x < fios; x++) {
-      const cima = (x + y) % 2 === 0, b = 128 + (cima ? 12 : -6) + Math.round((rnd() - 0.5) * 14);
-      c.fillStyle = "rgb(" + b + "," + b + "," + b + ")";
-      if (cima) c.fillRect(x * passo + passo * 0.12, y * passo, passo * 0.76, passo); else c.fillRect(x * passo, y * passo + passo * 0.12, passo, passo * 0.76);
+  const areas = (spec.areas || []).map((a) => a.id);
+  let areaId = q.get("area") && areas.includes(q.get("area")) ? q.get("area") : areas[0] || "panel";
+  const chips = $("areas");
+  const desenharChips = () => {
+    chips.innerHTML = "";
+    for (const id of areas) {
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = id; b.setAttribute("aria-pressed", String(id === areaId));
+      b.addEventListener("click", () => { areaId = id; desenharChips(); atualizar(); });
+      chips.appendChild(b);
     }
-  })();
-  const dobras = (function () {
-    const R = 8, w = Math.max(8, Math.round(W / R)), h = Math.max(8, Math.round(H / R));
-    const onda = (pxPorCm ? pxPorCm * 4.5 : W / 24) / R;
-    const rnd = criarRnd(11), grade = 64, valores = new Float32Array(grade * grade);
-    for (let i = 0; i < valores.length; i++) valores[i] = rnd() * 2 - 1;
-    const suave = (t) => t * t * (3 - 2 * t);
-    const ruido = (x, y) => {
-      const xi = Math.floor(x), yi = Math.floor(y), tx = suave(x - xi), ty = suave(y - yi);
-      const v = (a, b) => valores[((b % grade) + grade) % grade * grade + ((a % grade) + grade) % grade];
-      const cima = v(xi, yi) + (v(xi + 1, yi) - v(xi, yi)) * tx, baixo = v(xi, yi + 1) + (v(xi + 1, yi + 1) - v(xi, yi + 1)) * tx;
-      return cima + (baixo - cima) * ty;
-    };
-    const pequeno = document.createElement("canvas"); pequeno.width = w; pequeno.height = h;
-    const pc = pequeno.getContext("2d"), img = pc.createImageData(w, h);
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      const n = ruido(x / onda, y / (onda * 2)) + 0.5 * ruido(x / (onda * 0.45) + 37, y / (onda * 0.9) + 11);
-      const g = Math.max(0, Math.min(255, Math.round(128 + n * 45))), i = (y * w + x) * 4;
-      img.data[i] = g; img.data[i + 1] = g; img.data[i + 2] = g; img.data[i + 3] = 255;
+  };
+  desenharChips();
+
+  const canvas = $("cena");
+  let handle = null;
+  const values = () => ({ text: $("texto").value, ...(imagem ? { image: imagem } : {}) });
+  const opcoes = () => ({ garmentColor: $("cor").value, artColor: $("corArte").value, areaId });
+
+  async function criar() {
+    if (handle) { handle.dispose(); handle = null; }
+    document.body.style.background = $("fundo").value;
+    status("montando…");
+    try {
+      handle = await createModelViewer(canvas, spec, values(), { ...opcoes(), backdrop: $("fundo").value, cenario: $("cenario").value });
+    } catch (e) {
+      status("Erro ao montar o viewer: " + (e && e.message || e));
+      throw e;
     }
-    pc.putImageData(img, 0, 0);
-    const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
-    const c = cv.getContext("2d"); c.imageSmoothingEnabled = true; c.drawImage(pequeno, 0, 0, W, H);
-    return cv;
-  })();
-  const normalMap = (function (forcaTrama, forcaDobras) {
-    const N = 64, src = trama.getContext("2d").getImageData(0, 0, N, N).data, dob = dobras.getContext("2d").getImageData(0, 0, W, H).data;
-    const ht = (x, y) => src[(((y % N) + N) % N * N + ((x % N) + N) % N) * 4] / 255;
-    const hd = (x, y) => dob[(Math.min(H - 1, Math.max(0, y)) * W + Math.min(W - 1, Math.max(0, x))) * 4] / 255;
-    const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
-    const c = cv.getContext("2d"), out = c.createImageData(W, H), P = 4;
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      const dx = (ht(x + 1, y) - ht(x - 1, y)) * forcaTrama + (hd(x + P, y) - hd(x - P, y)) / (2 * P) * forcaDobras;
-      const dy = (ht(x, y + 1) - ht(x, y - 1)) * forcaTrama + (hd(x, y + P) - hd(x, y - P)) / (2 * P) * forcaDobras;
-      const len = Math.sqrt(dx * dx + dy * dy + 1), i = (y * W + x) * 4;
-      out.data[i] = Math.round((-dx / len * 0.5 + 0.5) * 255); out.data[i + 1] = Math.round((-dy / len * 0.5 + 0.5) * 255);
-      out.data[i + 2] = Math.round((1 / len * 0.5 + 0.5) * 255); out.data[i + 3] = 255;
+    if (giroFixo !== null) {
+      // giro determinístico por arraste sintético (0.011 rad por px), como o harness de capturas
+      const px = ((giroFixo * Math.PI) / 180) / 0.011;
+      const r = canvas.getBoundingClientRect();
+      const ev = (t, x) => canvas.dispatchEvent(new PointerEvent(t, { clientX: r.left + 10 + x, clientY: r.top + 10, pointerId: 1, bubbles: true }));
+      ev("pointerdown", 0); ev("pointermove", px); ev("pointerup", px);
     }
-    c.putImageData(out, 0, 0);
-    const t = new THREE.CanvasTexture(cv); t.flipY = false; return t;
-  })(3, 16);
-
-  // ── Material (espelha montarGlb) ──
-  const fab = model.materials && model.materials.fabric || {};
-  const ns = fab.normal_scale != null ? fab.normal_scale : 0.35;
-  const texture = new THREE.CanvasTexture(texCv);
-  texture.encoding = THREE.sRGBEncoding;
-  texture.flipY = false;
-  texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-  const Material = THREE.MeshPhysicalMaterial || THREE.MeshStandardMaterial;
-  const fabricMat = new Material({
-    map: texture, roughness: fab.roughness != null ? fab.roughness : 0.85, metalness: 0,
-    normalMap, normalScale: new THREE.Vector2(ns, ns), envMapIntensity: 0.45, side: THREE.DoubleSide,
-    vertexColors: !!print.geometry.attributes.color,
-  });
-  if (fabricMat.sheen === null) fabricMat.sheen = new THREE.Color(0.25, 0.25, 0.25);
-  print.material = fabricMat;
-  meshes.forEach((m) => { m.castShadow = true; });
-
-  document.getElementById("info").innerHTML =
-    "<small>meshes: " + meshes.map((m) => m.name + " (" + (m.material && m.material.name) + ", " + m.geometry.attributes.position.count + " v, " + (m.geometry.index ? m.geometry.index.count / 3 : "?") + " tri" + (m.geometry.attributes.color ? ", COLOR_0" : "") + ")").join("; ") +
-    "<br>impressão: <b>" + print.name + "</b> · sheen: " + (fabricMat.sheen ? "sim" : "não") +
-    "<br>caixa original: " + tam0.x.toFixed(3) + " × " + tam0.y.toFixed(3) + " × " + tam0.z.toFixed(3) +
-    "<br>escala: " + k.toFixed(3) + " · textura " + W + "×" + H + " · " + (pxPorCm ? pxPorCm.toFixed(1) + " px/cm, " + fios + " fios por ladrilho" : "sem escala") + "</small>";
-
-  // ── Pintura (espelha paintArt + paintFabricTexture) ──
-  const retangulo = (a) => ({ x: a.uv.u0 * W, y: (1 - a.uv.v1) * H, w: (a.uv.u1 - a.uv.u0) * W, h: (a.uv.v1 - a.uv.v0) * H });
-  function pintarProva(ctx, r, cor) {
-    // círculo e retângulo de cantos redondos: se saírem como elipse ou
-    // esticados na peça, a textura ou o UV não têm a proporção certa
-    ctx.save();
-    ctx.strokeStyle = cor; ctx.lineWidth = Math.max(r.h * 0.02, 4); ctx.lineJoin = "round";
-    const raio = Math.min(r.w, r.h) * 0.16;
-    ctx.beginPath(); ctx.arc(r.x + r.w * 0.32, r.y + r.h * 0.2, raio, 0, Math.PI * 2); ctx.stroke();
-    const bx = r.x + r.w * 0.55, by = r.y + r.h * 0.08, bw = r.w * 0.36, bh = r.h * 0.24, br = raio * 0.5;
-    ctx.beginPath();
-    ctx.moveTo(bx + br, by); ctx.lineTo(bx + bw - br, by); ctx.quadraticCurveTo(bx + bw, by, bx + bw, by + br);
-    ctx.lineTo(bx + bw, by + bh - br); ctx.quadraticCurveTo(bx + bw, by + bh, bx + bw - br, by + bh);
-    ctx.lineTo(bx + br, by + bh); ctx.quadraticCurveTo(bx, by + bh, bx, by + bh - br);
-    ctx.lineTo(bx, by + br); ctx.quadraticCurveTo(bx, by, bx + br, by); ctx.closePath(); ctx.stroke();
-    ctx.restore();
+    $("info").innerHTML = "<small>modelo: " + (spec.model && spec.model.kind || "procedural-mug") +
+      " · áreas: " + areas.join(", ") + " · cenário: " + $("cenario").value + "</small>";
+    status("ok");
+    window.__pronto = true;
+    window.__handle = handle;
   }
-  function pintarArte(ctx) {
-    const area = (spec.areas || []).find((a) => a.id === areaSel.value) || (spec.areas || [])[0];
-    const corArte = document.getElementById("corArte").value;
-    const texto = document.getElementById("texto").value;
-    if (document.getElementById("prova").checked) for (const a of spec.areas || []) if (a.uv) pintarProva(ctx, retangulo(a), corArte);
-    if (!area || !area.uv) return;
-    const r = retangulo(area);
-    const imgBoxH = r.h * (texto ? 0.55 : 0.85), cx = r.x + r.w / 2;
-    if (texto && !document.getElementById("prova").checked) {
-      // emblema simples acima do texto (mesma identidade do viewer); com a
-      // prova ligada, o círculo e o retângulo ocupam o lugar dele
-      ctx.strokeStyle = corArte; ctx.lineWidth = Math.max(r.h * 0.02, 4); ctx.lineCap = "round"; ctx.lineJoin = "round";
-      const ey = r.y + imgBoxH * 0.45, es = Math.min(r.w, r.h) * 0.16;
-      ctx.beginPath(); ctx.arc(cx, ey + es * 0.35, es, 3.5, 5.9); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(cx - es * 0.7, ey + es * 0.55); ctx.lineTo(cx - es * 0.15, ey - es * 0.2); ctx.lineTo(cx + es * 0.12, ey + es * 0.25); ctx.lineTo(cx + es * 0.45, ey - es * 0.3); ctx.lineTo(cx + es * 0.85, ey + es * 0.45); ctx.stroke();
-    }
-    if (texto) {
-      ctx.fillStyle = corArte; ctx.textAlign = "center";
-      let px = r.h * 0.28; ctx.font = "600 " + Math.round(px) + "px Georgia, serif";
-      while (px > 12 && ctx.measureText(texto).width > r.w * 0.92) { px -= 4; ctx.font = "600 " + Math.round(px) + "px Georgia, serif"; }
-      ctx.fillText(texto, cx, r.y + imgBoxH + (r.h - imgBoxH) * 0.6 + px * 0.3);
-    }
-  }
-  function pintar() {
-    const ctx = texCv.getContext("2d");
-    ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = document.getElementById("cor").value;
-    ctx.fillRect(0, 0, W, H);
-    const padrao = ctx.createPattern(trama, "repeat");
-    ctx.save(); ctx.globalCompositeOperation = "overlay"; ctx.globalAlpha = 0.5; ctx.fillStyle = padrao; ctx.fillRect(0, 0, W, H); ctx.restore();
-    // a arte num rascunho transparente, assentada só onde há tinta
-    const arte = document.createElement("canvas"); arte.width = W; arte.height = H;
-    pintarArte(arte.getContext("2d"));
-    const assentada = document.createElement("canvas"); assentada.width = W; assentada.height = H;
-    const s = assentada.getContext("2d");
-    s.drawImage(arte, 0, 0);
-    s.globalCompositeOperation = "multiply"; s.globalAlpha = 0.35; s.fillStyle = padrao; s.fillRect(0, 0, W, H);
-    s.globalAlpha = 1; s.globalCompositeOperation = "destination-in"; s.drawImage(arte, 0, 0);
-    ctx.save(); ctx.filter = "blur(0.6px)"; ctx.drawImage(assentada, 0, 0); ctx.restore();
-    ctx.save(); ctx.globalCompositeOperation = "soft-light"; ctx.globalAlpha = 0.22; ctx.drawImage(dobras, 0, 0); ctx.restore();
-    if (document.getElementById("mostrarArea").checked) {
-      const area = (spec.areas || []).find((a) => a.id === areaSel.value) || (spec.areas || [])[0];
-      if (area && area.uv) { const r = retangulo(area); ctx.save(); ctx.strokeStyle = "#7C3AED"; ctx.setLineDash([12, 8]); ctx.lineWidth = 4; ctx.strokeRect(r.x, r.y, r.w, r.h); ctx.restore(); }
-    }
-    texture.needsUpdate = true;
-  }
+  function atualizar() { if (handle) handle.update(values(), opcoes()); }
 
-  function resize() {
-    const w = canvas.clientWidth || 640, h = Math.round(w * 0.78);
-    renderer.setSize(w, h, false);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    camera.aspect = w / h; camera.updateProjectionMatrix();
-    const vis = 2 * Math.tan((FOV / 2) * Math.PI / 180);
-    const ideal = Math.max(caixa.height / (vis * OCUP_V), caixa.width / (vis * camera.aspect * OCUP_H));
-    const dist = model.camera && model.camera.distance || Math.max(DIST_PADRAO, Math.round(ideal * 100) / 100);
-    const alt = model.camera && model.camera.height != null ? model.camera.height : 0.2;
-    camera.position.set(0, dist * alt, dist); camera.lookAt(0, -0.05, 0);
-  }
-
-  let dragging = false, lastX = 0, tocado = giroFixo !== null;
-  if (giroFixo !== null) group.rotation.y += (giroFixo * Math.PI) / 180;
-  canvas.addEventListener("pointerdown", (e) => { dragging = true; tocado = true; lastX = e.clientX; canvas.setPointerCapture(e.pointerId); });
-  canvas.addEventListener("pointermove", (e) => { if (!dragging) return; group.rotation.y += (e.clientX - lastX) * 0.011; lastX = e.clientX; });
-  canvas.addEventListener("pointerup", () => { dragging = false; });
-  for (const id of ["texto", "cor", "corArte", "area", "mostrarArea", "prova"]) document.getElementById(id).addEventListener("input", pintar);
-  window.addEventListener("resize", resize);
-
-  resize(); pintar();
-  status("ok · " + url);
-  window.__pronto = true;
-  (function loop() { if (!tocado) group.rotation.y += 0.004; renderer.render(scene, camera); requestAnimationFrame(loop); })();
-})();
+  for (const id of ["texto", "cor", "corArte"]) $(id).addEventListener("input", atualizar);
+  $("recriar").addEventListener("click", criar);
+  window.addEventListener("resize", () => handle && handle.resize && handle.resize());
+  await criar();
 </script>
 </body>
 </html>

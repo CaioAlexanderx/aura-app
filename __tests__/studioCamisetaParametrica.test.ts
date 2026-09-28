@@ -70,8 +70,8 @@ describe("construirCamiseta — a malha-base é fechada, manifold e do tamanho c
     expect(Math.max(...y)).toBeCloseTo(PARAMETROS.alturaDoCorpo + PARAMETROS.ribana, 0); // ribana acima do ponto do ombro
     const peito = base.pos.filter((p: V3, i: number) => base.grupos[i] === "frente" && Math.abs(p[1] - PARAMETROS.alturaDaCava) < 0.8);
     expect(Math.max(...peito.map((p: V3) => p[0])) - Math.min(...peito.map((p: V3) => p[0]))).toBeCloseTo(2 * PARAMETROS.meiaLarguraDoPeito, 0);
-    expect(Math.max(...z) - Math.min(...z)).toBeGreaterThan(17);                // volume de torso ≈ 18 cm
-    expect(Math.max(...z) - Math.min(...z)).toBeLessThan(19);
+    expect(Math.max(...z) - Math.min(...z)).toBeGreaterThan(19);                // volume de torso ≈ 20 cm (28/09: eram 18, e de lado virava tubo achatado)
+    expect(Math.max(...z) - Math.min(...z)).toBeLessThan(21.5);
     // a manga cai abaixo da axila e termina fora do corpo
     const manga = base.pos.filter((_: V3, i: number) => base.grupos[i] === "mangaDireita");
     expect(Math.max(...manga.map((p: V3) => p[0]))).toBeGreaterThan(PARAMETROS.meiaLarguraDoPeito + 12);
