@@ -29,7 +29,7 @@ import type { StudioPalette } from "@/constants/studio-tokens";
 import type { CustomizationConfig } from "@/services/studioApi";
 import type { VisualQuad } from "@/services/studioVisualApi";
 import { studioStorefrontUrl } from "@/utils/storefrontUrl";
-import { blendDaVista, composeView, type BlendDaArte } from "@/components/studio/visualEngine/compose2d";
+import { blendDaVista, composeView, notaDaComposicao, type BlendDaArte } from "@/components/studio/visualEngine/compose2d";
 import {
   areaImpressaDoLado, ladosDaPeca, vistaDaMarcacao, type LadoDaPeca,
 } from "@/components/studio/visualEngine/specDaFotoDoProduto";
@@ -364,16 +364,21 @@ export function MockupNaFotoSecao({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [r.photo_url, JSON.stringify(r.quad), r.forca, r.w, r.h, valido, ladoAtivo, cm.width_cm, cm.height_cm]);
 
+  // A foto que entrou sem a luz (sem CORS) ou não entrou: a prévia diz,
+  // em vez de mostrar a arte num quadro cinza (QA 28/09/2026).
+  const [notaDaPrevia, setNotaDaPrevia] = useState<string | null>(null);
   useEffect(() => {
     if (Platform.OS !== "web" || !vista || !canvasRef.current) return;
+    let vivo = true;
     // Um quadro por vez: o arraste gera dezenas de quads por segundo e o
     // motor descarta composições velhas, mas não precisa recebê-las.
     const id = requestAnimationFrame(() => {
       composeView(canvasRef.current, vista as any, valido ? valoresDaArte(arte) : {}, {
         pixelWidth: 720, artColor: "#BE185D", font: "Georgia, serif",
-      }).catch((e) => console.error("[MockupNaFoto] composeView error", e?.message || e));
+      }).then((r) => { if (vivo && r) setNotaDaPrevia(notaDaComposicao(r)); })
+        .catch((e) => console.error("[MockupNaFoto] composeView error", e?.message || e));
     });
-    return () => cancelAnimationFrame(id);
+    return () => { vivo = false; cancelAnimationFrame(id); };
   }, [vista, arte, valido]);
 
   useEffect(() => {
@@ -534,7 +539,10 @@ export function MockupNaFotoSecao({
               <View style={s.previa}>
                 {Platform.OS === "web" && vista ? (
                   // @ts-ignore — canvas DOM no web (motor compose2d)
-                  <canvas ref={canvasRef} style={{ width: "100%", display: "block", borderRadius: 10 } as any} />
+                  <>
+                    <canvas ref={canvasRef} style={{ width: "100%", display: "block", borderRadius: 10 } as any} />
+                    {notaDaPrevia ? <Text style={[s.quadroSub, { marginTop: 6, textAlign: "center" }]}>{notaDaPrevia}</Text> : null}
+                  </>
                 ) : (
                   <View style={s.previaVazia}>
                     <Text style={s.previaVaziaTxt}>
