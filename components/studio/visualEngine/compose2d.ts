@@ -26,6 +26,12 @@
 // ============================================================
 import type { VisualArea, VisualView, VisualPoint, VisualQuad } from "@/services/studioVisualApi";
 import { hexToRgb } from "./mugScene";
+// 28/09/2026 — formatação da arte: com `values.__arte` (a vitrine, via
+// valoresDoMotor) quem desenha é o pintor único, que respeita o ajuste
+// da cliente e mostra todos os textos e imagens do lado. Sem ela, o
+// desenho de sempre, intocado.
+import { arteDosValores, arteTemConteudo, precarregarArte, pintarArteNaArea, type ImagensDaArte } from "./pintarArte";
+import { misturaDaTecnica } from "./layoutDaArte";
 
 export type ComposeValues = Record<string, any>; // fieldId → valor (contrato do PersonalizationPreview)
 
@@ -655,6 +661,8 @@ export async function composeView(
   const shading = view.shading_url ? await loadImage(view.shading_url) : null;
   const imageUrl: string | null = values.image || values.template || null;
   const arte = imageUrl ? await loadImage(imageUrl) : null;
+  const arteDoLado = arteDosValores(values);
+  const imgsDaArte = arteDoLado ? await precarregarArte(arteDoLado, loadImage) : null;
   // Null = esta composição foi passada para trás por outra mais nova.
   if (geracaoDoCanvas.get(canvas) !== geracao) return null;
 
@@ -708,9 +716,9 @@ export async function composeView(
   // de sempre.
   for (const area of view.areas) {
     if (quadValido(area.quad)) {
-      drawAreaNoQuad(ctx, view, area, area.quad, values, o, arte, photo, scale, isVector);
+      drawAreaNoQuad(ctx, view, area, area.quad, values, o, arte, photo, scale, isVector, imgsDaArte);
     } else if (area.rect) {
-      drawAreaContent(ctx, view, area.rect, values, o, isVector, arte);
+      drawAreaContent(ctx, view, area.rect, values, o, isVector, arte, imgsDaArte, area);
     }
   }
 
@@ -778,8 +786,20 @@ function desenharArteNoRetangulo(
   rect: { x: number; y: number; w: number; h: number },
   values: ComposeValues,
   o: OpcoesDaArte,
-  img: HTMLImageElement | null
+  img: HTMLImageElement | null,
+  imgsDaArte?: ImagensDaArte | null,
+  area?: VisualArea | null,
+  mistura?: "multiply" | "normal" | null
 ): boolean {
+  const arteDoLado = arteDosValores(values);
+  if (arteDoLado) {
+    if (!arteTemConteudo(arteDoLado)) return false;
+    pintarArteNaArea(ctx, rect, arteDoLado, imgsDaArte || new Map(), {
+      mistura: mistura ?? null,
+      areaCmDoMotor: area && area.width_cm > 0 && area.height_cm > 0 ? { w: area.width_cm, h: area.height_cm } : null,
+    });
+    return true;
+  }
   const imageUrl: string | null = values.image || values.template || null;
   const text: string = values.text != null ? String(values.text) : "";
   if (!imageUrl && !text) return false;
@@ -822,15 +842,18 @@ function drawAreaContent(
   values: ComposeValues,
   o: OpcoesDaArte,
   clipVector: boolean,
-  img: HTMLImageElement | null
+  img: HTMLImageElement | null,
+  imgsDaArte?: ImagensDaArte | null,
+  area?: VisualArea | null
 ) {
   const imageUrl: string | null = values.image || values.template || null;
   const text: string = values.text != null ? String(values.text) : "";
-  if (!imageUrl && !text) return;
+  const arteDoLado = arteDosValores(values);
+  if (!imageUrl && !text && !arteTemConteudo(arteDoLado)) return;
 
   ctx.save();
   if (clipVector) clipToGarment(ctx, view);
-  desenharArteNoRetangulo(ctx, rect, values, o, img);
+  desenharArteNoRetangulo(ctx, rect, values, o, img, imgsDaArte, area, misturaDaTecnica(arteDoLado?.tecnica));
   ctx.restore();
 }
 
@@ -847,11 +870,13 @@ function drawAreaNoQuad(
   img: HTMLImageElement | null,
   photo: HTMLImageElement | null,
   scale: number,
-  clipVector: boolean
+  clipVector: boolean,
+  imgsDaArte?: ImagensDaArte | null
 ) {
   const imageUrl: string | null = values.image || values.template || null;
   const text: string = values.text != null ? String(values.text) : "";
-  if (!imageUrl && !text) return;
+  const arteDoLado = arteDosValores(values);
+  if (!imageUrl && !text && !arteTemConteudo(arteDoLado)) return;
 
   // 1. A arte montada de frente, num canvas intermediário com a
   //    resolução que ela terá no destino (texto nítido no HD).
@@ -862,7 +887,7 @@ function drawAreaNoQuad(
   const actx = arteCv && arteCv.getContext("2d");
   if (!arteCv || !actx) return;
   actx.setTransform(arteCv.width / qw, 0, 0, arteCv.height / qh, 0, 0);
-  if (!desenharArteNoRetangulo(actx, { x: 0, y: 0, w: qw, h: qh }, values, o, img)) return;
+  if (!desenharArteNoRetangulo(actx, { x: 0, y: 0, w: qw, h: qh }, values, o, img, imgsDaArte, area)) return;
 
   // 2. A arte deformada até o quad, numa camada do tamanho da caixa dele
   //    (em px de saída). Cada triângulo da malha: recorte + afim + drawImage.
@@ -918,9 +943,12 @@ function drawAreaNoQuad(
 
   // 4. A camada na foto, com o modo de mistura da peça. Área só com
   //    vetor (sem foto) mantém o normal opaco de sempre.
+  // A técnica do produto (sublimação/DTF) decide antes da vista; "outra"
+  // (ou sem arte da vitrine) segue a regra de sempre.
+  const daTecnica = misturaDaTecnica(arteDoLado?.tecnica);
   const blend = photo
-    ? blendDaArte(analise ? analise.luminancia : null, view.art_blend ?? null)
-    : blendDaArte(null, view.art_blend ?? "normal");
+    ? blendDaArte(analise ? analise.luminancia : null, daTecnica ?? view.art_blend ?? null)
+    : blendDaArte(null, daTecnica ?? view.art_blend ?? "normal");
   ctx.save();
   if (clipVector) clipToGarment(ctx, view);
   ctx.globalCompositeOperation = blend.modo === "multiply" ? "multiply" : "source-over";

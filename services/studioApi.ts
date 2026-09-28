@@ -52,6 +52,10 @@ export type CustomizationConfig = {
   // Mockup na foto real da peça (27/09/2026): onde a arte cai na foto
   // do produto, por lado. O backend grava o objeto inteiro (studio.js).
   mockup_foto?: MockupFoto | null;
+  // Técnica de impressão (28/09/2026): muda como a arte se mistura à
+  // peça na prévia (sublimação = a arte pega a cor da peça; DTF = opaca,
+  // o branco é impresso). Sem valor: o padrão da peça (layoutDaArte).
+  tecnica?: "sublimacao" | "dtf" | "outra" | null;
 };
 export type CustomizationConfigResponse = {
   product_id: string; name: string; is_personalizable: boolean; config: CustomizationConfig | null;

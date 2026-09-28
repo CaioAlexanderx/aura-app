@@ -1,6 +1,6 @@
 // O que a cliente preencheu, traduzido para as chaves que os motores
 // 2D/3D leem. Sem esta tradução o mockup 3D girava uma caneca vazia.
-import { valoresDoMotor } from "@/components/studio/storefront/valoresDoMotor";
+import { valoresDoMotor, arteDoLado, valoresComArte } from "@/components/studio/storefront/valoresDoMotor";
 
 const cfg: any = {
   fields: [
@@ -56,5 +56,68 @@ describe("valoresDoMotor", () => {
   it("config nula ou sem campos devolve vazio sem estourar", () => {
     expect(valoresDoMotor(null, { f_txt: "x" }).values).toEqual({});
     expect(valoresDoMotor({ fields: [] } as any, null).values).toEqual({});
+  });
+});
+
+// 28/09/2026 — formatação da arte: a arte INTEIRA do lado para o pintor único.
+describe("arteDoLado", () => {
+  const cfg2: any = {
+    print_area: { width_cm: 20, height_cm: 9 },
+    back_print_area: { width_cm: 28, height_cm: 35 },
+    has_back: true,
+    fields: [
+      { id: "text", type: "text", label: "Nome", config: { colors: ["#111111"], fonts: ["Pacifico", "Bebas Neue"] } },
+      { id: "text_2", type: "text", label: "Data", config: {} },
+      { id: "image", type: "image", label: "Foto", config: {} },
+      { id: "template", type: "template", label: "Arte pronta", config: {} },
+      { id: "art_service_brief", type: "text", label: "Briefing", config: {} },
+      { id: "text_back", type: "text", label: "Verso", side: "back", config: {} },
+    ],
+  };
+
+  it("todos os textos do lado entram (o segundo sumia da prévia), sem o briefing", () => {
+    const a = arteDoLado(cfg2, { text: "Helena", text_2: "12/10", art_service_brief: "praia", text_back: "x" });
+    expect(a.textos.map((t) => t.campo)).toEqual(["text", "text_2"]);
+    expect(a.areaCm).toEqual({ w: 20, h: 9 });
+  });
+
+  it("fonte da cliente só se a lojista liberou; tamanho e contorno pelas chaves laterais", () => {
+    const a = arteDoLado(cfg2, { text: "Oi", text_fonte: "Bebas Neue", text_tam: "G", text_contorno: true });
+    expect(a.textos[0]).toMatchObject({ nomeDaFonte: "Bebas Neue", tam: "G", contorno: true, cor: "#111111" });
+    expect(arteDoLado(cfg2, { text: "Oi", text_fonte: "Comic Sans" }).textos[0].nomeDaFonte).toBe("Pacifico");
+    // sem paleta, a cor padrão do motor
+    expect(arteDoLado(cfg2, { text_2: "Oi" }).textos[0].cor).toBe("#2C2C2A");
+  });
+
+  it("arquivo e arte pronta são o mesmo lugar: a pronta só entra sem arquivo", () => {
+    expect(arteDoLado(cfg2, { image: "https://r2/a.jpg", template: "https://r2/t.png" }).imagens.map((i) => i.campo)).toEqual(["image"]);
+    expect(arteDoLado(cfg2, { template: "https://r2/t.png" }).imagens.map((i) => i.campo)).toEqual(["template"]);
+  });
+
+  it("ajuste do pedido e pixels medidos chegam ao item; ajuste inválido vale o padrão", () => {
+    const a = arteDoLado(cfg2, { image: "https://r2/a.jpg", image_ajuste: { v: 1, cx: 0.3, cy: 0.5, larg: 0.4 } }, "front", {
+      arquivo: () => ({ w: 2400, h: 1800 }),
+    });
+    expect(a.imagens[0]).toMatchObject({ ajuste: { v: 1, cx: 0.3, cy: 0.5, larg: 0.4, rot: 0 }, arquivo: { w: 2400, h: 1800 } });
+    expect(arteDoLado(cfg2, { image: "u", image_ajuste: "lixo" }).imagens[0].ajuste).toBeNull();
+  });
+
+  it("verso usa a área do verso e só os campos dele", () => {
+    const a = arteDoLado(cfg2, { text: "frente", text_back: "costas" }, "back");
+    expect(a.areaCm).toEqual({ w: 28, h: 35 });
+    expect(a.textos.map((t) => t.texto)).toEqual(["costas"]);
+  });
+
+  it("técnica: a do produto, senão o padrão da peça", () => {
+    expect(arteDoLado({ ...cfg2, tecnica: "dtf" }, {}, "front", { peca: "caneca" }).tecnica).toBe("dtf");
+    expect(arteDoLado(cfg2, {}, "front", { peca: "caneca" }).tecnica).toBe("sublimacao");
+    expect(arteDoLado(cfg2, {}).tecnica).toBe("outra");
+  });
+
+  it("valoresComArte junta as chaves de sempre e a arte para o motor", () => {
+    const m = valoresDoMotor(cfg2, { text: "Oi" });
+    const v = valoresComArte(m);
+    expect(v.text).toBe("Oi");
+    expect(v.__arte.textos[0].texto).toBe("Oi");
   });
 });
