@@ -35,9 +35,14 @@
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Platform, Pressable } from "react-native";
-import { PersonalizationPreviewBase, type PreviewPalette } from "@/components/studio/PersonalizationPreview";
-import { valoresDoMotor } from "./valoresDoMotor";
+import { PersonalizationPreviewBase, areaNoSvg, type PreviewPalette } from "@/components/studio/PersonalizationPreview";
+import { valoresDoMotor, valoresComArte } from "./valoresDoMotor";
 import { esperarFonteDaArte } from "./fonteDaArte";
+import { pontoNaAreaDaVista } from "@/components/studio/visualEngine/pontoNaVista";
+import { medidaDoArquivo } from "./produto/EnvioDaArte";
+import { pixelsConhecidos } from "./produto/medidasDaArte";
+import type { ArrasteDaSuperficie, PontoDaSuperficie } from "./produto/EditorDaArte";
+import type { ExtrasDaArte } from "./valoresDoMotor";
 import type { CustomizationConfig } from "./types";
 import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import { wash, type PaletaDaVitrine } from "./theme";
@@ -143,8 +148,24 @@ function PdfNote({ size }: { size: number }) {
 
 export function LivePreview({
   config, values, size, productName, showLabel, slug, productId,
-  allowSideToggle = false, fotoProduto, lado, onFonte, fundo, cenario,
+  allowSideToggle = false, fotoProduto, lado, onFonte, fundo, cenario, peca, edicao, giroAutomatico, onMotor,
 }: {
+  /** Qual desenho está na tela: 3D, 2D (foto/template) ou o SVG de sempre. */
+  onMotor?: (m: "3d" | "2d" | "svg") => void;
+  /**
+   * 28/09/2026 — formatação da arte. A peça ("caneca", "camiseta") dá a
+   * técnica padrão quando a lojista não escolheu; `edicao` liga as guias
+   * e o arraste da arte na própria peça (3D e 2D); `giroAutomatico`
+   * desliga o giro sozinho do 3D.
+   */
+  peca?: string | null;
+  edicao?: {
+    extras: ExtrasDaArte;
+    arraste: ArrasteDaSuperficie | null;
+    editando: boolean;
+    informarMotor?: (areaCm: { w: number; h: number } | null, aspecto: number) => void;
+  } | null;
+  giroAutomatico?: boolean;
   config: CustomizationConfig | null;
   values: Record<string, any>;
   size: number;
@@ -269,28 +290,82 @@ export function LivePreview({
   // girava VAZIA com o nome digitado e a foto enviada (visto na loja da
   // Sheid em 04/09/2026). A cor e a fonte da arte seguem a mesma regra
   // do preview SVG: escolha do cliente, depois paleta da lojista.
-  const motor = valoresDoMotor(config, safeValues, viewId);
+  // A peça pela spec do 3D (a caneca é torneada; o GLB, por ora, é a
+  // camiseta); sem 3D, a que a página disse.
+  const pecaDoMotor = tpl?.kind === "model3d" && tpl.spec
+    ? ((tpl.spec as any).model?.kind === "glb" ? "camiseta" : "caneca")
+    : peca || null;
+  const motor = valoresDoMotor(config, safeValues, viewId, {
+    peca: pecaDoMotor,
+    arquivo: (u) => medidaDoArquivo(u) || pixelsConhecidos(u),
+    ...(edicao?.extras || {}),
+  });
   // QA 28/09 (CL-26): o canvas desenha com a fonte que houver. Enquanto a
   // fonte da arte não chega, o 3D recebe a peça sem o texto (e não o texto
   // numa serifada que depois "vira" cursiva sozinha); o 2D espera dentro
-  // da composição (fonteDaArte.ts).
-  const [fontePronta, setFontePronta] = useState(() => esperarFonteDaArte(motor.font) === null);
+  // da composição (fonteDaArte.ts). Com a formatação da arte cada texto
+  // pode ter a sua fonte: espera todas.
+  const fontesDaArte = Array.from(new Set([motor.font, ...motor.arte.textos.map((x) => x.fonte)])).join("\n");
+  const [fontePronta, setFontePronta] = useState(() => fontesDaArte.split("\n").every((f) => esperarFonteDaArte(f) === null));
   useEffect(() => {
-    const espera = esperarFonteDaArte(motor.font);
-    if (!espera) { setFontePronta(true); return; }
+    const esperas = fontesDaArte.split("\n").map((f) => esperarFonteDaArte(f)).filter(Boolean) as Promise<unknown>[];
+    if (!esperas.length) { setFontePronta(true); return; }
     let vivo = true;
     setFontePronta(false);
-    espera.then(() => { if (vivo) setFontePronta(true); });
+    Promise.all(esperas).then(() => { if (vivo) setFontePronta(true); });
     return () => { vivo = false; };
-  }, [motor.font]);
-  const safeValuesKey = JSON.stringify([motor.values, motor.artColor, motor.font, fontePronta]);
+  }, [fontesDaArte]);
+  const safeValuesKey = JSON.stringify([motor.values, motor.artColor, motor.font, motor.arte, fontePronta]);
   // Identidade estável: o viewer 3D repinta a textura a cada objeto novo
   // que recebe, e um objeto novo por render era uma repintura por render.
+  // A arte inteira do lado vai junto (`__arte`): é o que o pintor único
+  // desenha, com todos os textos e imagens e o ajuste da cliente.
   const engineValues = useMemo(
-    () => (fontePronta || !motor.values.text ? motor.values : { ...motor.values, text: undefined }),
+    () => (fontePronta
+      ? valoresComArte(motor)
+      : valoresComArte({ values: { ...motor.values, text: undefined }, arte: { ...motor.arte, textos: [] } })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [safeValuesKey],
   );
+  const tipoDoMotor: "3d" | "2d" | "svg" = tpl?.kind === "model3d" && tpl.spec ? "3d" : engineView ? "2d" : "svg";
+  const onMotorRef = useRef(onMotor);
+  onMotorRef.current = onMotor;
+  useEffect(() => { onMotorRef.current?.(tipoDoMotor); }, [tipoDoMotor]);
+  const arraste = edicao?.arraste || null;
+  const editando = !!edicao?.editando;
+
+  // 2D: o ponteiro no canvas vira fração da área da vista (retângulo ou
+  // quad da foto) e vai para o editor; fora da área, nada acontece.
+  const areaDaVista = engineView?.areas?.[0] || null;
+  useEffect(() => {
+    if (!areaDaVista || !edicao?.informarMotor) return;
+    const areaCm = areaDaVista.width_cm > 0 && areaDaVista.height_cm > 0 ? { w: areaDaVista.width_cm, h: areaDaVista.height_cm } : null;
+    const r = areaDaVista.rect;
+    edicao.informarMotor(areaCm, r && r.w > 0 ? r.h / r.w : 1);
+  });
+  function pontoDoCanvas(e: any): PontoDaSuperficie | null {
+    const cv = canvasRef.current;
+    if (!cv || !engineView || !areaDaVista || typeof cv.getBoundingClientRect !== "function") return null;
+    const r = cv.getBoundingClientRect();
+    if (!(r.width > 0)) return null;
+    const x = ((e.clientX - r.left) / r.width) * engineView.base.w;
+    const y = ((e.clientY - r.top) / r.height) * engineView.base.h;
+    const p = pontoNaAreaDaVista(areaDaVista, x, y);
+    return p ? { ...p, pxPorU: p.larguraNaVista * (r.width / engineView.base.w) } : null;
+  }
+  const arrastandoNo2D = useRef(false);
+  const eventosDo2D: any = arraste && Platform.OS === "web" ? {
+    onPointerDown: (e: any) => {
+      if (arrastandoNo2D.current || arraste.tocar(pontoDoCanvas(e), e)) {
+        arrastandoNo2D.current = true;
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* sem captura */ }
+        e.preventDefault?.();
+      }
+    },
+    onPointerMove: (e: any) => { if (arrastandoNo2D.current) arraste.mover(pontoDoCanvas(e), e); },
+    onPointerUp: (e: any) => { if (arrastandoNo2D.current) arrastandoNo2D.current = arraste.soltar(e); },
+    onPointerCancel: (e: any) => { if (arrastandoNo2D.current) arrastandoNo2D.current = arraste.soltar(e); },
+  } : {};
 
   // O lado escolhido pode sumir se a lojista desligar verso/meio com a
   // tela aberta — sem isso o cliente ficaria preso numa vista morta.
@@ -331,7 +406,9 @@ export function LivePreview({
     let vivo = true;
     const compor = () => {
       if (!vivo || !canvasRef.current) return;
-      composeView(canvasRef.current, engineView, motor.values, {
+      // A arte inteira do lado (`__arte`) — o 2D espera as fontes aqui, então
+      // recebe os textos já com elas carregadas.
+      composeView(canvasRef.current, engineView, valoresComArte(motor), {
         showAreas: false,
         pixelWidth: 800,
         // A camiseta vetorial ficava bege com "preto" escolhido: a cor só
@@ -347,8 +424,10 @@ export function LivePreview({
     };
     // A fonte da arte primeiro (CL-26): desenhar antes dela é desenhar
     // numa serifada que troca na próxima composição.
-    const espera = motor.values.text ? esperarFonteDaArte(motor.font) : null;
-    if (espera) espera.then(compor);
+    const esperas = motor.arte.textos.length || motor.values.text
+      ? (fontesDaArte.split("\n").map((f) => esperarFonteDaArte(f)).filter(Boolean) as Promise<unknown>[])
+      : [];
+    if (esperas.length) Promise.all(esperas).then(compor);
     else compor();
     return () => { vivo = false; };
     // safeValuesKey representa safeValues de forma estável
@@ -377,6 +456,9 @@ export function LivePreview({
           garmentColor={corDaPeca(config, safeValues)}
           artColor={motor.artColor}
           font={motor.font}
+          giroAutomatico={giroAutomatico}
+          arraste={arraste}
+          editando={editando}
         />
         {pdfField && <PdfNote size={size} />}
       </View>
@@ -391,7 +473,11 @@ export function LivePreview({
         {viewToggle}
         <View style={{ width: size, height: h, borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: T.border }}>
           {/* @ts-ignore — canvas DOM no web (motor compose2d) */}
-          <canvas ref={canvasRef} style={{ width: "100%", height: "100%", display: "block" } as any} />
+          <canvas
+            ref={canvasRef}
+            {...eventosDo2D}
+            style={{ width: "100%", height: "100%", display: "block", touchAction: editando ? "none" : "auto", cursor: editando ? "move" : "default" } as any}
+          />
         </View>
         {notaDoMotor ? (
           <Texto testID="nota-do-motor" style={{ fontSize: 11.5, color: T.ink3, textAlign: "center", maxWidth: size }}>
@@ -407,9 +493,11 @@ export function LivePreview({
   return (
     <View style={{ alignItems: "center", gap: 6 }}>
       {viewToggle}
+      <SvgEditavel config={config} lado={viewId} size={size} arraste={arraste} editando={editando} informarMotor={edicao?.informarMotor}>
       <PersonalizationPreviewBase
         config={config}
         values={safeValues}
+        arte={motor.arte}
         side={viewId}
         fotoProduto={fotoProduto}
         size={size}
@@ -417,7 +505,55 @@ export function LivePreview({
         showLabel={showLabel}
         t={paletaDoPreview(T)}
       />
+      </SvgEditavel>
       {pdfField && <PdfNote size={size} />}
+    </View>
+  );
+}
+
+/**
+ * A prévia sem motor (SVG) também aceita o arraste: a área desenhada é a
+ * do próprio produto, em proporção, então o ponteiro vira fração dela.
+ */
+function SvgEditavel({
+  config, lado, size, arraste, editando, informarMotor, children,
+}: {
+  config: CustomizationConfig | null;
+  lado: "front" | "back" | "middle";
+  size: number;
+  arraste: ArrasteDaSuperficie | null;
+  editando: boolean;
+  informarMotor?: (areaCm: { w: number; h: number } | null, aspecto: number) => void;
+  children: any;
+}) {
+  const area = config ? areaNoSvg(config, lado) : null;
+  useEffect(() => {
+    if (area && informarMotor) informarMotor(area.cm, area.h / area.w);
+  });
+  const ativo = useRef(false);
+  if (!arraste || !area || Platform.OS !== "web") return children;
+  const ponto = (e: any): PontoDaSuperficie | null => {
+    const r = e.currentTarget?.getBoundingClientRect?.();
+    if (!r || !(r.width > 0)) return null;
+    const x = ((e.clientX - r.left) / r.width) * 100;
+    const y = ((e.clientY - r.top) / r.height) * 100;
+    return { u: (x - area.x) / area.w, v: (y - area.y) / area.h, aspecto: area.h / area.w, areaCm: area.cm, pxPorU: (area.w / 100) * r.width };
+  };
+  const ev: any = {
+    onPointerDown: (e: any) => {
+      if (ativo.current || arraste.tocar(ponto(e), e)) {
+        ativo.current = true;
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* sem captura */ }
+        e.preventDefault?.();
+      }
+    },
+    onPointerMove: (e: any) => { if (ativo.current) arraste.mover(ponto(e), e); },
+    onPointerUp: (e: any) => { if (ativo.current) ativo.current = arraste.soltar(e); },
+    onPointerCancel: (e: any) => { if (ativo.current) ativo.current = arraste.soltar(e); },
+  };
+  return (
+    <View style={{ width: size, height: size, touchAction: editando ? "none" : "auto", cursor: editando ? "move" : "default" } as any} {...ev}>
+      {children}
     </View>
   );
 }

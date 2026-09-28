@@ -35,6 +35,12 @@ import type { CustomizationConfig, CustomizationField, CustomizationFieldSide } 
 // renderiza este componente sem o StudioThemeProvider.
 import { sideOf } from "@/components/studio/customizationConfig";
 import { artFontStack, ART_FONTS } from "@/constants/fonts";
+// 28/09/2026 — formatação da arte: com a arte do lado (valoresDoMotor),
+// o SVG desenha pelo mesmo layout do motor — todos os textos e imagens,
+// no lugar e no tamanho que a cliente ajustou. Sem ela, o de sempre.
+import { svgDaArte } from "@/components/studio/visualEngine/pintarArte";
+import type { ArteDoLado } from "@/components/studio/visualEngine/layoutDaArte";
+import { medidorDaVitrine } from "@/components/studio/storefront/produto/medidasDaArte";
 
 /**
  * Subconjunto de tokens que o preview realmente consome. Tipos `string`
@@ -69,7 +75,34 @@ type Props = {
    * produto, que e o que a pessoa precisa julgar antes de pagar.
    */
   fotoProduto?: string | null;
+  /** A arte do lado (valoresDoMotor.arteDoLado). Com ela, o layout é o do motor. */
+  arte?: ArteDoLado | null;
 };
+
+/**
+ * A área de impressão do lado no viewBox 0–100 do SVG (e a medida em cm).
+ * É a conta de sempre do preview; exportada para o arraste da vitrine
+ * saber onde a área está.
+ */
+export function areaNoSvg(
+  config: CustomizationConfig,
+  side: CustomizationFieldSide = "front",
+): { x: number; y: number; w: number; h: number; cm: { w: number; h: number } } {
+  const cfgAny: any = config;
+  const areaDoLado =
+    side === "back" ? cfgAny.back_print_area :
+    side === "middle" ? cfgAny.middle_print_area :
+    config.print_area;
+  const printArea = areaDoLado || config.print_area || { width_cm: 10, height_cm: 10, position: "center" as const };
+  const maxDim = Math.max(printArea.width_cm, printArea.height_cm, 1);
+  const w = (printArea.width_cm / maxDim) * 55;
+  const h = (printArea.height_cm / maxDim) * 55;
+  let x = 50 - w / 2;
+  const y = 50 - h / 2;
+  if (printArea.position === "left") x = 18;
+  if (printArea.position === "right") x = 82 - w;
+  return { x, y, w, h, cm: { w: printArea.width_cm, h: printArea.height_cm } };
+}
 
 /** Tinta legivel sobre uma cor — inline pra nao inverter a dependencia
  *  entre este componente compartilhado e o tema da vitrine. */
@@ -173,6 +206,7 @@ export function PersonalizationPreviewBase({
   showLabel = true,
   side = "front",
   fotoProduto,
+  arte,
   t,
 }: Props & { t: PreviewPalette }) {
   // Estado vazio: sem config, mostra placeholder neutro
@@ -272,6 +306,13 @@ export function PersonalizationPreviewBase({
   // pequena, os tracos se encontram e a palavra vira uma mancha.
   const haloLargura = 0.1;
 
+  const temArte = !!arte && (arte.imagens.length > 0 || arte.textos.length > 0);
+  const arteNoSvg: string | null = temArte && arte
+    ? svgDaArte({ ...arte, areaCm: { w: printArea.width_cm, h: printArea.height_cm } }, { x: areaX, y: areaY, w: areaW, h: areaH }, medidorDaVitrine(),
+        // Mesmo id = mesmo retângulo: vários SVGs na página não se atrapalham.
+        ["arte", side, areaX, areaY, areaW, areaH].map((n) => (typeof n === "number" ? n.toFixed(2) : n)).join("-").replace(/\./g, "_"))
+    : null;
+
   const svg = `<svg width="${size}" height="${size}" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
   <!-- Produto base: a foto quando existe, o quadrado colorido como
        ultimo recurso. A cor fica ATRAS da foto, entao PNG recortado
@@ -290,11 +331,11 @@ export function PersonalizationPreviewBase({
         stroke="${t.primary}" stroke-width="${fotoProduto ? "0.25" : "0.4"}"
         stroke-opacity="${fotoProduto ? "0.35" : "1"}"
         stroke-dasharray="1.5,0.8"/>
-  ${overlayUrl && layout.imagem ? `<image href="${escapeXml(overlayUrl)}" x="${layout.imagem.x}" y="${layout.imagem.y}" width="${layout.imagem.w}" height="${layout.imagem.h}" preserveAspectRatio="xMidYMid meet"/>` : ""}
+  ${arteNoSvg !== null ? arteNoSvg : `  ${overlayUrl && layout.imagem ? `<image href="${escapeXml(overlayUrl)}" x="${layout.imagem.x}" y="${layout.imagem.y}" width="${layout.imagem.w}" height="${layout.imagem.h}" preserveAspectRatio="xMidYMid meet"/>` : ""}
   ${layout.texto ? `<text x="${layout.texto.x}" y="${layout.texto.y.toFixed(2)}" text-anchor="middle" font-family="${escapeXml(fonteArte)}" font-weight="600" font-size="${fontSize.toFixed(2)}" fill="none" stroke="${haloArte}" stroke-width="${(fontSize * haloLargura).toFixed(2)}" stroke-linejoin="round">${escapeXml(textValue)}</text>
-  <text x="${layout.texto.x}" y="${layout.texto.y.toFixed(2)}" text-anchor="middle" font-family="${escapeXml(fonteArte)}" font-weight="600" font-size="${fontSize.toFixed(2)}" fill="${corArte}">${escapeXml(textValue)}</text>` : ""}
+  <text x="${layout.texto.x}" y="${layout.texto.y.toFixed(2)}" text-anchor="middle" font-family="${escapeXml(fonteArte)}" font-weight="600" font-size="${fontSize.toFixed(2)}" fill="${corArte}">${escapeXml(textValue)}</text>` : ""}`}
   ${showLabel && productName ? `<text x="50" y="96" text-anchor="middle" font-family="-apple-system, system-ui, sans-serif" font-size="3.2" font-weight="600" fill="${t.ink3}">${escapeXml(productName)}</text>` : ""}
-  ${!overlayUrl && !textValue && !fotoProduto ? `<text x="${areaX + areaW / 2}" y="${areaY + areaH / 2}" text-anchor="middle" font-family="-apple-system, system-ui, sans-serif" font-size="3" fill="${t.ink4}" font-style="italic">${escapeXml(`${printArea.width_cm}×${printArea.height_cm}cm`)}</text>` : ""}
+  ${!overlayUrl && !textValue && !fotoProduto && !temArte ? `<text x="${areaX + areaW / 2}" y="${areaY + areaH / 2}" text-anchor="middle" font-family="-apple-system, system-ui, sans-serif" font-size="3" fill="${t.ink4}" font-style="italic">${escapeXml(`${printArea.width_cm}×${printArea.height_cm}cm`)}</text>` : ""}
 </svg>`.trim();
 
   if (Platform.OS === "web") {

@@ -50,8 +50,10 @@ export function PalcoDoProduto({
   fotos, nome, selo, largura, altura, desktop,
   comMockup, mockupPersonalizado, mockup, rotuloDoMock,
   lados, lado, onLado, medidas,
-  slide, onSlide, onAmpliar, brilho, legendaDoMock,
+  slide, onSlide, onAmpliar, brilho, legendaDoMock, rodape,
 }: {
+  /** Debaixo do palco, no slide do mockup: área, giro e "Ajustar a arte" (28/09/2026). */
+  rodape?: ReactNode;
   fotos: string[];
   nome: string;
   selo: { texto: string; tom: "marca" | "novo" } | null;
@@ -368,6 +370,7 @@ export function PalcoDoProduto({
         {legenda ? (
           <Texto style={{ fontSize: 12.5, color: t.ink3, textAlign: "center", paddingHorizontal: 24, marginTop: total > 1 ? -2 : 8 }}>{legenda}</Texto>
         ) : null}
+        {rodape}
       </View>
     );
   }
@@ -413,6 +416,7 @@ export function PalcoDoProduto({
       <View>
         {palco}
         {legenda ? <Texto style={{ fontSize: 12.5, color: t.ink3, paddingTop: 10 }}>{legenda}</Texto> : null}
+        {rodape}
       </View>
     </View>
   );

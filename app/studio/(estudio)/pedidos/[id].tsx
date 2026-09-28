@@ -27,6 +27,8 @@ import { studioApi, type StudioOrderDetail, type StudioProductionStatus, type St
 import { labelStudioStatus, colorStudioStatus } from "@/constants/studio-status";
 import { StudioBreadcrumb } from "@/components/studio/StudioBreadcrumb";
 import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
+// A prévia do pedido desenha a arte pelo mesmo layout da vitrine (28/09/2026).
+import { arteDoLado } from "@/components/studio/storefront/valoresDoMotor";
 import { rotuloDaChave, valorDaChave, chaveLateralVisivel, ladoComConteudo } from "@/components/studio/customizationConfig";
 import { BlocoPagamentoDoPedido } from "@/components/studio/BlocoPagamentoDoPedido";
 import { ApprovalRequestModal } from "@/components/studio/ApprovalRequestModal";
@@ -101,7 +103,7 @@ function ItemCustomization({
       <Text style={s.custTitle}>Personalização</Text>
       {config ? (
         <View style={{ alignItems: "center", marginVertical: 8 }}>
-          <PersonalizationPreview config={config} values={customization} size={160} showLabel={false} side={ladoPreview} />
+          <PersonalizationPreview config={config} values={customization} size={160} showLabel={false} side={ladoPreview} arte={arteDoLado(config, customization, ladoPreview)} />
         </View>
       ) : null}
       <View style={{ gap: 6, marginTop: 4 }}>

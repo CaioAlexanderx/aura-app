@@ -202,6 +202,14 @@ export function rotuloDaChave(
     return dono ? `Cor da arte — ${dono}` : "Cor da arte";
   }
 
+  // Formatação da arte (28/09/2026): o que a cliente ajustou na peça.
+  const mLat = chave.match(/^(.+)_(ajuste|fonte|tam|contorno)$/);
+  if (mLat) {
+    const dono = camposPorId[mLat[1]]?.label;
+    const nome = { ajuste: "Posição na peça", fonte: "Fonte", tam: "Tamanho do texto", contorno: "Contorno fino" }[mLat[2] as "ajuste"];
+    return dono ? `${nome} — ${dono}` : nome;
+  }
+
   return chave;
 }
 
@@ -210,7 +218,29 @@ export function valorDaChave(valor: unknown): string {
   if (valor === true) return "Sim";
   if (valor === false) return "Não";
   if (valor == null) return "—";
+  if (typeof valor === "object") return textoDoAjuste(valor as any);
   return String(valor);
+}
+
+/**
+ * O ajuste da arte (`<campo>_ajuste`) em uma linha para a oficina:
+ * "8,4 × 6,3 cm · a 4,0 cm da esquerda e 1,3 cm do topo · girada 90° · 726 dpi".
+ * Sem o retrato em cm (área sem medida), diz só que foi posicionada.
+ */
+export function textoDoAjuste(a: { v?: unknown; cm?: any; rot?: unknown; dpi?: unknown } | null | undefined): string {
+  if (!a || a.v !== 1) return "—";
+  const f = (n: number) => (Math.round(n * 10) / 10).toFixed(1).replace(".", ",");
+  const partes: string[] = [];
+  const c = a.cm;
+  if (c && [c.x, c.y, c.w, c.h].every((n: unknown) => typeof n === "number" && Number.isFinite(n))) {
+    partes.push(`${f(c.w)} × ${f(c.h)} cm`);
+    partes.push(`a ${f(c.x)} cm da esquerda e ${f(c.y)} cm do topo da área`);
+  } else {
+    partes.push("posicionada pela cliente");
+  }
+  if (a.rot === 90 || a.rot === 180 || a.rot === 270) partes.push(`girada ${a.rot}°`);
+  if (typeof a.dpi === "number" && a.dpi > 0) partes.push(`${Math.round(a.dpi)} dpi`);
+  return partes.join(" · ");
 }
 
 /**
