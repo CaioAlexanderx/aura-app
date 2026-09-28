@@ -10,3 +10,6 @@ web-build/
 
 expo-env.d.ts
 # @end expo-cli
+
+# viewer 3D transpilado para a página de teste (scripts/studio/transpilar-viewer-de-teste.mjs)
+docs/studio/visual-templates/viewer/
