@@ -34,6 +34,7 @@ import { artFontStack } from "@/constants/fonts";
 import { loadThree } from "@/components/studio/visualEngine/threeLoader";
 import { Botao, Rotulo, Selo, sombraWeb, transicao } from "../produto/kitDaPagina";
 import { MarcaDaLoja, irParaDestino } from "./NavegacaoDaVitrine";
+import { temMockupNaFoto } from "@/components/studio/visualEngine/specDaFotoDoProduto";
 import {
   SEGUNDOS_POR_BANNER, TITULO_FIXO_DO_HERO, TROCA_DA_ARTE_MS, alturaDoHero, arteGira, artesDoDestaque, bannerGira,
   conviteDaPeca, descontoDoPix, fraseDoDestaque, lugarDaLoja, pecaDoDestaque, proximoBanner,
@@ -413,7 +414,9 @@ export function HeroDaPeca({
   }, [gira, k, artes.length]);
   const eh3D = produto?.visual_kind === "model3d";
   const motor = useMotor3D(!!produto && eh3D);
-  const usaMotor = !!produto && ((eh3D && motor) || produto.visual_kind === "photo2d");
+  // Mockup na foto (27/09/2026): a peça com a arte marcada na foto da
+  // lojista também passa pelo motor, que desenha a arte sobre a foto.
+  const usaMotor = !!produto && ((eh3D && motor) || produto.visual_kind === "photo2d" || temMockupNaFoto(produto.customization_config));
 
   const dias = Number(store?.sla?.total_estimate_days) || 0;
   const pix = descontoDoPix(store);

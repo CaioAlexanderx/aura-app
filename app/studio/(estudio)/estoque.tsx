@@ -52,6 +52,7 @@ import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioScreen } from "@/components/studio/StudioScreen";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import StudioPersonalizacaoPanel from "@/components/studio/StudioPersonalizacaoPanel";
+import { fotosDoProduto } from "@/components/studio/visualEngine/marcacaoDaFoto";
 import { isCanonicalConfig } from "@/components/studio/customizationConfig";
 import type { CustomizationConfig } from "@/services/studioApi";
 import StudioFichaTecnicaPanel from "@/components/studio/StudioFichaTecnicaPanel";
@@ -778,6 +779,7 @@ function ProductExpanded({
             productPrice={product.price}
             slug={slug}
             onSaved={() => onSubpanelChanged()}
+            fotos={fotosDoProduto(product.image_url, product.gallery_urls)}
           />
         )}
 

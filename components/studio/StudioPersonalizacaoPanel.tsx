@@ -61,6 +61,7 @@ import { studioStorefrontUrl } from "@/utils/storefrontUrl";
 import VisualTemplateThumb from "@/components/studio/visualEngine/VisualTemplateThumb";
 import { studioVisualApi, type VisualTemplate } from "@/services/studioVisualApi";
 import { PreviewWhatsAppModal } from "@/components/studio/PreviewWhatsAppModal";
+import { MockupNaFotoSecao } from "@/components/studio/MockupNaFotoSecao";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import { request } from "@/services/api";
 import { ladoSemCampo, AVISO_LADO_SEM_CAMPO } from "@/components/studio/ladoSemCampo";
@@ -83,6 +84,8 @@ type Props = {
   productPrice: number;
   slug?: string | null;
   onSaved?: (cfg: CustomizationConfig) => void;
+  /** Capa + galeria do produto (fotosDoProduto) — a seção "Mockup na foto" marca numa delas. */
+  fotos?: string[];
 };
 
 // Field side helper — backend espera "front" | "back" | "middle"
@@ -191,7 +194,7 @@ async function uploadSizeGuide(
 // Component
 // ────────────────────────────────────────────────────────────
 export function StudioPersonalizacaoPanel({
-  productId, companyId, productName, productPrice, slug, onSaved,
+  productId, companyId, productName, productPrice, slug, onSaved, fotos,
 }: Props) {
   const t = useStudioTokens();
   const s = useMemo(() => buildStyles(t), [t]);
@@ -655,8 +658,12 @@ export function StudioPersonalizacaoPanel({
   }
 
   // ── Save ───────────────────────────────────────────────
-  async function save() {
-    const cfgAnyLocal: any = config;
+  // `base` e `mensagem`: o "Salvar posição" do Mockup na foto passa a
+  // config com o lado novo e grava por AQUI — mesma normalização, mesmas
+  // validações, um caminho só de escrita da coluna.
+  async function save(base?: CustomizationConfig, mensagem?: string): Promise<boolean> {
+    const alvo: CustomizationConfig = base ?? config;
+    const cfgAnyLocal: any = alvo;
 
     // As dimensões do verso são a única validação que sobrou aqui: a
     // normalização preencheria 10×10 em silêncio, e para uma medida de
@@ -665,7 +672,7 @@ export function StudioPersonalizacaoPanel({
       const bp = cfgAnyLocal.back_print_area;
       if (!bp || !(bp.width_cm > 0) || !(bp.height_cm > 0)) {
         toast.error("Configure as dimensões do verso");
-        return;
+        return false;
       }
       if (cfgAnyLocal.back_charge_enabled) {
         const bpd = Number(cfgAnyLocal.back_price_delta);
@@ -673,7 +680,7 @@ export function StudioPersonalizacaoPanel({
         // Aceitar aqui só adiava o erro pra um 400 depois do Salvar.
         if (!Number.isFinite(bpd) || bpd <= 0) {
           toast.error("Informe quanto cobrar pelo verso (maior que zero)");
-          return;
+          return false;
         }
       }
     }
@@ -683,13 +690,13 @@ export function StudioPersonalizacaoPanel({
       const mp = cfgAnyLocal.middle_print_area;
       if (!mp || !(mp.width_cm > 0) || !(mp.height_cm > 0)) {
         toast.error("Configure as dimensões do meio");
-        return;
+        return false;
       }
       if (cfgAnyLocal.middle_charge_enabled) {
         const mpd = Number(cfgAnyLocal.middle_price_delta);
         if (!Number.isFinite(mpd) || mpd <= 0) {
           toast.error("Informe quanto cobrar pelo meio (maior que zero)");
-          return;
+          return false;
         }
       }
     }
@@ -697,8 +704,8 @@ export function StudioPersonalizacaoPanel({
     // Tudo o que se grava passa por aqui: ids canônicos, config
     // completo por tipo, obrigatoriedade coerente. É este ponto que
     // impede o painel de reintroduzir uma config como a da Sheid.
-    const cfg = normalizeCustomizationConfig(config);
-    if (!cfg.fields.length) { toast.error("Adicione 1 campo"); return; }
+    const cfg = normalizeCustomizationConfig(alvo);
+    if (!cfg.fields.length) { toast.error("Adicione 1 campo"); return false; }
     setSaving(true);
     console.log("[StudioPersonalizacao] save start", {
       productId,
@@ -715,14 +722,16 @@ export function StudioPersonalizacaoPanel({
       // digitado: a normalização pode ter renomeado ids e preenchido
       // config, e esconder isso faria o painel divergir do banco.
       setConfig(cfg);
-      toast.success("Configuração salva!");
+      toast.success(mensagem || "Configuração salva!");
       onSaved?.(cfg);
+      return true;
     } catch (e: any) {
       console.error("[StudioPersonalizacao] save error", {
         status: e?.status, code: e?.code, message: e?.message, data: e?.data,
       });
       const status = e?.status ? `[${e.status}] ` : "";
       toast.error(`${status}${e?.data?.error || e?.message || "Erro"}`);
+      return false;
     } finally {
       setSaving(false);
     }
@@ -1168,6 +1177,18 @@ export function StudioPersonalizacaoPanel({
         )}
       </View>
 
+      {/* Mockup na foto (28/09/2026) — a lojista marca na foto da peça
+          onde a arte cai; grava mockup_foto pelo save() desta aba. */}
+      <MockupNaFotoSecao
+        config={config}
+        fotos={fotos || []}
+        temModeloVinculado={!!visualKey}
+        slug={slug}
+        productId={productId}
+        salvando={saving}
+        onSalvar={(cfg) => save(cfg, "Posição salva")}
+      />
+
       {/* Serviço de arte */}
       <View style={s.card}>
         <View style={s.toggleRow}>
@@ -1328,7 +1349,7 @@ export function StudioPersonalizacaoPanel({
           </Text>
         </View>
         <Pressable
-          onPress={save}
+          onPress={() => { save(); }}
           disabled={saveDisabled}
           style={[s.saveBtn, saveDisabled && { opacity: 0.5 }]}
         >

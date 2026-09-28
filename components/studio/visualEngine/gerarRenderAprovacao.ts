@@ -15,11 +15,23 @@
 // modal mostra o toast e o lojista segue no fluxo manual (upload/URL).
 //
 // 03/07/2026 — F2/F5 do escopo Visualização 2D/3D (contrato no chat)
+//
+// 27/09/2026 — Mockup na foto: sem template do banco, o render HD sai
+// da marcação que a lojista fez na foto da peça (`mockup_foto`), pela
+// mesma spec e pelo mesmo exportPng que a vitrine usa no preview. Os
+// valores passam por valoresDoMotor, como na vitrine, para a cor e a
+// fonte da arte aprovada serem as que o cliente viu.
 // ============================================================
 import { studioApi, type StudioOrderItem } from "@/services/studioApi";
 import { studioVisualApi, type VisualView } from "@/services/studioVisualApi";
 import { uploadStudioMockup } from "@/services/studioUploadApi";
 import { exportPng } from "./compose2d";
+import { valoresDoMotor } from "@/components/studio/storefront/valoresDoMotor";
+import {
+  chaveDoMockupFoto,
+  specDaFotoDoProdutoMedida,
+  versaoDoMockupFoto,
+} from "./specDaFotoDoProduto";
 import { createMugViewer } from "./compose3dMug";
 
 export type RenderGerado = {
@@ -55,6 +67,43 @@ export async function gerarRenderDoPedido(
   const tpl = await studioVisualApi.getProductVisualTemplate(companyId, item.product_id);
   const template = tpl?.template;
   if (!template || !template.spec) {
+    // Precedência: template do banco > mockup na foto. Só chega aqui sem
+    // template; a config do produto diz se há foto marcada.
+    const doProduto = await studioApi.getCustomizationConfig(companyId, item.product_id).catch(() => null);
+    const cfg = doProduto?.config || null;
+    const spec = cfg ? await specDaFotoDoProdutoMedida(cfg) : null;
+    if (spec && spec.views && spec.views.length) {
+      const customizacao: Record<string, any> = item.customization || {};
+      const motor = valoresDoMotor(cfg, customizacao, "front");
+      const vista = spec.views[0];
+      const png = await exportPng(vista, motor.values, { artColor: motor.artColor, font: motor.font }, 2048);
+      if (!png) {
+        throw new Error("Não foi possível gerar o render (foto ou arte sem CORS?). Envie o mockup manualmente.");
+      }
+      const enviado = await uploadStudioMockup(companyId, {
+        content_base64: png.split(",")[1],
+        content_type: "image/png",
+        kind: "approval",
+      });
+      if (!enviado?.url) throw new Error("Falha no upload do render");
+      const registro = await studioVisualApi.createVisualRender(companyId, {
+        template_key: chaveDoMockupFoto(item.product_id),
+        template_version: versaoDoMockupFoto((cfg as any).mockup_foto),
+        kind: "hd_2d",
+        customization: customizacao,
+        file_url: enviado.url,
+        content_type: "image/png",
+        digital_order_item_id: item.id || null,
+      });
+      return {
+        url: enviado.url,
+        renderId: registro.render.id,
+        contentHash: registro.render.content_hash,
+        itemName: item.product_name || "item",
+        view: vista.id,
+        isVideo: false,
+      };
+    }
     throw new Error(
       // O vínculo mora na aba Aparência da Loja Digital desde o S7 — a
       // mensagem mandava a lojista procurar em "Estúdio › Produtos", onde

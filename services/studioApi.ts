@@ -7,6 +7,7 @@
 // 05/06/2026 (#4): product category CRUD (listProductCategories, createProductCategory, updateProductCategory, deleteProductCategory)
 // ============================================================
 import { request } from "./api";
+import type { MockupFoto } from "./studioVisualApi";
 
 // ─── F0 Health ────────────────────────────────────────────────────────
 export type StudioHealth = {
@@ -48,6 +49,9 @@ export type CustomizationConfig = {
   back_price_delta?: number;
   middle_charge_enabled?: boolean;
   middle_price_delta?: number;
+  // Mockup na foto real da peça (27/09/2026): onde a arte cai na foto
+  // do produto, por lado. O backend grava o objeto inteiro (studio.js).
+  mockup_foto?: MockupFoto | null;
 };
 export type CustomizationConfigResponse = {
   product_id: string; name: string; is_personalizable: boolean; config: CustomizationConfig | null;
