@@ -85,6 +85,8 @@ export var companiesApi = {
   updateProfile: function(companyId: string, body: any) { return request<any>("/companies/" + companyId + "/profile", { method: "PUT", body: body }); },
   transactions: function(companyId: string, params?: string) { return request<any>("/companies/" + companyId + "/transactions" + (params ? "?" + params : "")); },
   createTransaction: function(companyId: string, body: any) { return request<any>("/companies/" + companyId + "/transactions", { method: "POST", body: body }); },
+  // Quadro do Financeiro (28/09/2026): Atrasado / A receber / Recebido do mês.
+  transactionsBoard: function(companyId: string, type: "income" | "expense", month: string) { return request<any>("/companies/" + companyId + "/transactions/board?type=" + type + "&month=" + encodeURIComponent(month)); },
   updateTransaction: function(companyId: string, txId: string, body: any) { return request<any>("/companies/" + companyId + "/transactions/" + txId, { method: "PATCH", body: body }); },
   deleteTransaction: function(companyId: string, txId: string) { return request<any>("/companies/" + companyId + "/transactions/" + txId, { method: "DELETE" }); },
   categorize: function(companyId: string, descriptions: string[]) { return request<any>("/companies/" + companyId + "/transactions/categorize", { method: "POST", body: { descriptions: descriptions }, timeout: 15000 }); },
