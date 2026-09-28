@@ -530,3 +530,105 @@ describe("raízes da alça — onde a curva cruza a parede", () => {
     expect(juncoesDaAlca(curvaDaAlca(solta), parede(solta))).toEqual([]);
   });
 });
+
+// ── 28/09/2026 (2ª rodada) — a alça como um tubo só, do corpo ao corpo ──
+import {
+  arcoExternoDaAlca, malhaDaAlca, raioExternoEm, raioInternoEm,
+} from "@/components/studio/visualEngine/mugGeometry";
+
+const ESPECS_COM_ALCA: Array<[string, any]> = [
+  ["anel padrão", {}],
+  ["alça colorida", { model: { geometry: { body: { height: 2.3, topRadius: 1, bottomRound: 0.07, bottomRadius: 0.95 }, handle: { tube: 0.135, shape: "ring", radius: 0.5 } } } }],
+  ["coração inclinado", { model: { geometry: { body: { height: 2.3, topRadius: 1, bottomRound: 0.07, bottomRadius: 0.95 }, handle: { tilt: -50, tube: 0.1, shape: "heart", radius: 0.68, offsetX: 1.22 } } } }],
+  ["Chopp (D)", { model: { geometry: { rim: { tube: 0.06 }, body: { height: 3.3, topRadius: 1.02, bottomRound: 0.08, bottomRadius: 1.02 }, handle: { tube: 0.16, shape: "square", radius: 0.95, offsetX: 1.35, offsetY: -0.22 } } } }],
+  ["Imperial", { model: { geometry: { rim: { tube: 0.05 }, body: { height: 2.42, topRadius: 1.06, bottomRound: 0.22, bottomRadius: 1 }, handle: { tube: 0.11, shape: "ring", radius: 0.54 } } } }],
+  ["xícara cônica", { model: { geometry: { body: { height: 1.6, topRadius: 1, bottomRadius: 0.7 }, handle: { tube: 0.085, shape: "ring", radius: 0.42 } } } }],
+];
+
+describe("arcoExternoDaAlca — o trecho da curva fora da parede", () => {
+  it("começa e termina na parede, e todos os pontos do meio ficam fora", () => {
+    for (const [, spec] of ESPECS_COM_ALCA) {
+      const g = readMugGeometry(spec);
+      const parede = (y: number) => raioExternoEm(g, y);
+      const arco = arcoExternoDaAlca(curvaDaAlca(g, 256), parede)!;
+      expect(arco).not.toBeNull();
+      const p = arco.pontos;
+      expect(p.length).toBeGreaterThan(10);
+      expect(p[0].x).toBeCloseTo(parede(p[0].y), 6);
+      expect(p[p.length - 1].x).toBeCloseTo(parede(p[p.length - 1].y), 6);
+      for (const q of p.slice(1, -1)) expect(q.x).toBeGreaterThan(parede(q.y));
+    }
+  });
+
+  it("alça solta ou toda dentro: null", () => {
+    const solta = readMugGeometry({ model: { geometry: { handle: { offsetX: 3 } } } });
+    expect(arcoExternoDaAlca(curvaDaAlca(solta), (y) => raioExternoEm(solta, y))).toBeNull();
+    expect(arcoExternoDaAlca(curvaDaAlca(solta), () => 10)).toBeNull();
+  });
+});
+
+describe("malhaDaAlca — raiz alargada, sem costura e sem atravessar a louça", () => {
+  const raioCilindrico = (x: number, z: number) => Math.hypot(x, z);
+
+  it.each(ESPECS_COM_ALCA)("%s: nenhum vértice entra na cavidade; as pontas ficam dentro da louça", (_nome, spec) => {
+    const g = readMugGeometry(spec);
+    const m = malhaDaAlca(g)!;
+    expect(m).not.toBeNull();
+    expect(m.indices.length % 3).toBe(0);
+    const n = m.positions.length / 3;
+    for (const i of m.indices) { expect(i).toBeLessThan(n); }
+    // 1. nunca para dentro da cavidade
+    for (let i = 0; i < n; i++) {
+      const x = m.positions[i * 3], y = m.positions[i * 3 + 1], z = m.positions[i * 3 + 2];
+      expect(raioCilindrico(x, z)).toBeGreaterThanOrEqual(raioInternoEm(g, y) - 1e-6);
+    }
+    // 2. as estações enterradas (e < 0) ficam entre a parede interna e a externa
+    m.estacoes.forEach((est, s) => {
+      if (est.e >= 0) return;
+      for (let k = 0; k < m.segmentos; k++) {
+        const i = s * m.segmentos + k;
+        const x = m.positions[i * 3], y = m.positions[i * 3 + 1], z = m.positions[i * 3 + 2];
+        const r = raioCilindrico(x, z);
+        expect(r).toBeLessThanOrEqual(raioExternoEm(g, y) + 1e-6);
+        expect(r).toBeGreaterThanOrEqual(raioInternoEm(g, y) - 1e-6);
+      }
+    });
+    // 3. há duas pontas enterradas e o meio está fora do corpo
+    const enterradas = m.estacoes.filter((e) => e.e < 0).length;
+    expect(enterradas).toBe(4);
+    const meio = m.estacoes[Math.floor(m.estacoes.length / 2)];
+    expect(meio.e).toBeGreaterThan(0);
+  });
+
+  it("a raiz é mais grossa que o tubo e afina até ele com continuidade", () => {
+    const g = readMugGeometry({});
+    const m = malhaDaAlca(g)!;
+    const raios = m.estacoes.map((e) => e.raio);
+    const naParede = m.estacoes.find((e) => e.e === 0)!;
+    expect(naParede.raio).toBeCloseTo(g.handle.tube * 1.55, 6);
+    const meio = m.estacoes[Math.floor(m.estacoes.length / 2)];
+    expect(meio.raio).toBeCloseTo(g.handle.tube, 6);
+    // do primeiro ponto fora até o meio, o raio nunca cresce
+    const i0 = m.estacoes.findIndex((e) => e.e === 0);
+    for (let i = i0 + 1; i <= Math.floor(m.estacoes.length / 2); i++) expect(raios[i]).toBeLessThanOrEqual(raios[i - 1] + 1e-9);
+  });
+
+  it("a seção na parede cai sobre a parede redonda (elipse para alça inclinada), uns milímetros para dentro", () => {
+    const g = readMugGeometry(ESPECS_COM_ALCA[2][1]); // coração a −50°
+    const m = malhaDaAlca(g)!;
+    const s = m.estacoes.findIndex((e) => e.e === 0);
+    for (let k = 0; k < m.segmentos; k++) {
+      const i = s * m.segmentos + k;
+      const x = m.positions[i * 3], y = m.positions[i * 3 + 1], z = m.positions[i * 3 + 2];
+      const folga = raioExternoEm(g, y) - raioCilindrico(x, z);
+      expect(folga).toBeGreaterThan(0);      // nunca fora da parede
+      expect(folga).toBeLessThan(0.012);     // e nunca mais fundo que a borda afundada
+    }
+  });
+
+  it("alça preenchida, sem alça ou solta: null (o viewer usa a geometria de antes)", () => {
+    expect(malhaDaAlca(readMugGeometry({ model: { geometry: { handle: { filled: true } } } }))).toBeNull();
+    expect(malhaDaAlca(readMugGeometry({ model: { geometry: { handle: { shape: "none" } } } }))).toBeNull();
+    expect(malhaDaAlca(readMugGeometry({ model: { geometry: { handle: { offsetX: 3 } } } }))).toBeNull();
+  });
+});

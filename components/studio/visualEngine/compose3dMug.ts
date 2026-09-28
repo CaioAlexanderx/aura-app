@@ -72,7 +72,7 @@ import { loadThree, loadGLTFLoader, loadDRACOLoader, DRACO_DECODER_PATH } from "
 import {
   readMugGeometry, heartPath, readMugMaterials, applyCustomerColor,
   readMugAccessories, latheProfile, squarePath, type MugMaterial,
-  perfilDoLabio, perfilDoInterior, curvaDaAlca, juncoesDaAlca,
+  perfilDoLabio, perfilDoInterior, malhaDaAlca,
 } from "./mugGeometry";
 import {
   backdropPalette, cameraDistance, contactShadowRadius, floorLevel,
@@ -571,40 +571,6 @@ function makeMaterial(THREE: any, m: MugMaterial, extra: Record<string, any> = {
 }
 
 /**
- * Raiz da alça: onde o tubo entra no corpo, a louça alarga — uma
- * revolução ao longo da tangente da alça, larga na base (enterrada na
- * parede) e afinando com derivada zero até o diâmetro do tubo, para
- * encontrar o tubo sem degrau. De frente e de três quartos lê como a
- * alça que nasce do corpo, em vez de um tubo atravessando um cilindro.
- * (Uma esfera achatada ali parecia um rebite; um cone reto, um soquete.)
- */
-function raizesDaAlca(THREE: any, G: ReturnType<typeof readMugGeometry>, material: any): any[] {
-  const meia = G.body.height / 2;
-  const paredeEm = (y: number) => {
-    const t = Math.max(0, Math.min(1, (y + meia) / G.body.height));
-    return G.body.bottomRadius + (G.body.topRadius - G.body.bottomRadius) * t;
-  };
-  const juncoes = juncoesDaAlca(curvaDaAlca(G), paredeEm);
-  const tubo = G.handle.tube;
-  const altura = tubo * 2.6;
-  const perfil: any[] = [];
-  const passos = 12;
-  for (let i = 0; i <= passos; i++) {
-    const s = i / passos;
-    perfil.push(new THREE.Vector2(tubo * (1.0 + 0.65 * Math.pow(1 - s, 2.2)) + 0.001, altura * s));
-  }
-  return juncoes.map((j) => {
-    const geo = new THREE.LatheGeometry(perfil, 32);
-    const m = new THREE.Mesh(geo, material);
-    // a base fica um pouco dentro da parede; a raiz sobe pela tangente
-    m.position.set(j.x - j.tx * altura * 0.3, j.y - j.ty * altura * 0.3, 0);
-    m.rotation.z = Math.atan2(j.ty, j.tx) - Math.PI / 2;
-    m.castShadow = false;
-    return m;
-  });
-}
-
-/**
  * O ciclorama do estúdio: um plano dobrado pelo perfil de mugScene.ts
  * (chão → curva → parede), com a vinheta e o halo assados em cor por
  * vértice. Sem luz e sem tone mapping: a cor é a da paleta, exata — o
@@ -757,7 +723,18 @@ function montarCaneca(THREE: any, spec: VisualTemplateSpec, renderer: any, texCv
       curveSegments: 32,
     };
     let handleGeo: any;
-    if (G.handle.shape === "heart" && G.handle.filled) {
+    // 28/09/2026 (2ª rodada) — alça vazada como um tubo só, varrido do
+    // corpo ao corpo (mugGeometry.malhaDaAlca): raiz alargada na própria
+    // malha, seção cortada no plano da parede e ponta enterrada na louça.
+    // Já vem em coordenadas do corpo (deslocada e inclinada). Alça que
+    // não cruza a parede cai nas geometrias fechadas de antes.
+    const varrida = malhaDaAlca(G);
+    if (varrida) {
+      handleGeo = new THREE.BufferGeometry();
+      handleGeo.setAttribute("position", new THREE.Float32BufferAttribute(varrida.positions, 3));
+      handleGeo.setIndex(varrida.indices);
+      handleGeo.computeVertexNormals();
+    } else if (G.handle.shape === "heart" && G.handle.filled) {
       const shape = new THREE.Shape();
       for (const cmd of heartPath(G.handle.radius + G.handle.tube)) {
         if (cmd.op === "moveTo") shape.moveTo(cmd.x, cmd.y);
@@ -799,20 +776,16 @@ function montarCaneca(THREE: any, spec: VisualTemplateSpec, renderer: any, texCv
       handleGeo = new THREE.TorusGeometry(G.handle.radius, G.handle.tube, 20, 64);
     }
     const handle = new THREE.Mesh(handleGeo, handleMat);
-    handle.position.set(G.handle.offsetX, G.handle.offsetY, 0);
-    // SEM rotacao em Y. O coracao vem de uma curva no plano XY — a MESMA
-    // orientacao do TorusGeometry, que tambem e XY. Girar 90 graus em Y
-    // deixava o coracao de PERFIL para a camera, um risco vertical em vez
-    // de uma alca. So a inclinacao no proprio plano (tilt, em Z) e aceita.
-    handle.rotation.z = (G.handle.tilt * Math.PI) / 180;
+    if (!varrida) {
+      handle.position.set(G.handle.offsetX, G.handle.offsetY, 0);
+      // SEM rotacao em Y. O coracao vem de uma curva no plano XY — a MESMA
+      // orientacao do TorusGeometry, que tambem e XY. Girar 90 graus em Y
+      // deixava o coracao de PERFIL para a camera, um risco vertical em vez
+      // de uma alca. So a inclinacao no proprio plano (tilt, em Z) e aceita.
+      handle.rotation.z = (G.handle.tilt * Math.PI) / 180;
+    }
     handle.castShadow = opaco(M.handle);
     group.add(handle);
-    // Onde a alça entra no corpo, a louça alarga: as raízes da alça. A
-    // alça preenchida (orelha maciça) já encosta em bloco e não precisa;
-    // no vidro, a raiz translúcida sobre o tubo translúcido só suja.
-    if (!G.handle.filled && opaco(M.handle)) {
-      for (const raiz of raizesDaAlca(THREE, G, handleMat)) group.add(raiz);
-    }
   }
   // S11 — acessorios do modelo. A colher da CANECA COM COLHER e o pires
   // da xicara sao parte do que se compra: sem eles o mockup mostra outro
