@@ -160,7 +160,7 @@ function TelaAprovar({
       <View style={{ paddingHorizontal: 22, paddingTop: 6, gap: 6, alignItems: "center" }}>
         <Titulo centro>{tituloDaAprovacao(itens)}</Titulo>
         <Texto style={{ fontSize: 13.5, lineHeight: 20, color: tema.ink2, textAlign: "center" }}>
-          {nome ? `Oi, ${nome}! ` : ""}Dá uma olhada e nos diz se pode ir pra produção.
+          {nome ? `Oi, ${nome}! ` : ""}Dá uma olhada e nos diz se pode ir para produção.
         </Texto>
       </View>
 
@@ -256,7 +256,7 @@ function TelaAprovada({
         <Selo icone="check" tipo="pix" />
         <Titulo centro>Arte aprovada</Titulo>
         <Texto style={{ fontSize: 15, lineHeight: 23, color: tema.ink2, textAlign: "center", maxWidth: 360 }}>
-          {`${nomeDoItem ? `${nomeDoItem} já pode ir pra produção.` : "Seu pedido já pode ir pra produção."} Avisamos ${loja}.`}
+          {`${nomeDoItem ? `${nomeDoItem} já pode ir para produção.` : "Seu pedido já pode ir para produção."} Avisamos ${loja}.`}
         </Texto>
       </View>
 

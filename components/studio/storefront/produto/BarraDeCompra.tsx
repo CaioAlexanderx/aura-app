@@ -137,6 +137,9 @@ function Acoes({ a, desktop, estreita }: { a: AcaoDaBarra; desktop: boolean; est
 export function BarraDeCompraCelular({ a }: { a: AcaoDaBarra }) {
   const t = useTemaDaVitrine();
   const total = useNumeroAnimado(a.total);
+  // O Pix anda junto com o total (QA 28/09: o total contava e o Pix
+  // trocava na hora — por 1 s o Pix aparecia maior que o total).
+  const pix = useNumeroAnimado(a.totalNoPix ?? 0);
   const { width } = useWindowDimensions();
   const estreita = width < LARGURA_EMPILHA;
   return (
@@ -155,7 +158,7 @@ export function BarraDeCompraCelular({ a }: { a: AcaoDaBarra }) {
             <Numero accessibilityLiveRegion="polite" style={{ fontSize: 19, fontWeight: "600", color: t.ink, lineHeight: 22 }}>{dinheiro(total)}</Numero>
             <Texto style={{ fontSize: 11.5, color: t.ink3 }}>
               {a.qtd > 1 ? <Numero style={{ fontSize: 11.5 }}>{`${a.qtd} un × ${dinheiro(a.unitario)}${a.arte > 0 ? ` + arte ${dinheiro(a.arte)}` : ""}`}</Numero>
-                : a.totalNoPix != null ? <><Numero style={{ fontSize: 11.5 }}>{dinheiro(a.totalNoPix)}</Numero> no Pix</> : null}
+                : a.totalNoPix != null ? <><Numero style={{ fontSize: 11.5 }}>{dinheiro(pix)}</Numero> no Pix</> : null}
             </Texto>
           </View>
         </View>
@@ -175,11 +178,13 @@ export function BarraDeCompraCelular({ a }: { a: AcaoDaBarra }) {
 export function BlocoDeCompraDesktop({ a, compacto }: { a: AcaoDaBarra; compacto: boolean }) {
   const t = useTemaDaVitrine();
   const total = useNumeroAnimado(a.total);
+  // O Pix anda junto com o total (ver a barra do celular).
+  const pix = useNumeroAnimado(a.totalNoPix ?? 0);
   const meta = (
     <View style={{ alignItems: compacto ? "flex-start" : "flex-end" }}>
       <Numero style={{ fontSize: 12.5, color: t.ink3, lineHeight: 18 }}>{`${a.qtd} un × ${dinheiro(a.unitario)}${a.arte > 0 ? ` + arte ${dinheiro(a.arte)}` : ""}`}</Numero>
       {a.totalNoPix != null ? (
-        <Texto style={{ fontSize: 12.5, fontWeight: "600", color: t.green }}><Numero style={{ fontSize: 12.5, fontWeight: "600", color: t.green }}>{dinheiro(a.totalNoPix)}</Numero> no Pix</Texto>
+        <Texto style={{ fontSize: 12.5, fontWeight: "600", color: t.green }}><Numero style={{ fontSize: 12.5, fontWeight: "600", color: t.green }}>{dinheiro(pix)}</Numero> no Pix</Texto>
       ) : null}
     </View>
   );

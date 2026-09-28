@@ -50,7 +50,7 @@ export function PalcoDoProduto({
   fotos, nome, selo, largura, altura, desktop,
   comMockup, mockupPersonalizado, mockup, rotuloDoMock,
   lados, lado, onLado,
-  slide, onSlide, onAmpliar, brilho,
+  slide, onSlide, onAmpliar, brilho, legendaDoMock,
 }: {
   fotos: string[];
   nome: string;
@@ -74,6 +74,8 @@ export function PalcoDoProduto({
   onAmpliar: (fotoIndice: number | null) => void;
   /** Muda quando o mockup entra pela primeira vez: o palco acende. */
   brilho: unknown;
+  /** Troca a legenda do slide do mockup (a foto marcada com cor: regrasDaPagina.legendaDoMockup). */
+  legendaDoMock?: string | null;
 }) {
   const t = useTemaDaVitrine();
   const reduzir = useReduzirMovimento();
@@ -311,7 +313,7 @@ export function PalcoDoProduto({
   );
 
   const legenda = s?.tipo === "mock"
-    ? "Prévia. A loja manda o mockup final para você aprovar."
+    ? legendaDoMock || "Prévia. A loja manda o mockup final para você aprovar."
     : podeZoom ? "Passe o mouse sobre a foto para ver de perto." : "";
 
   if (!desktop) {

@@ -177,55 +177,14 @@ export function SizeGuideModal({
 
             {isPdf && (
               <View style={{ gap: 12 }}>
-                {Platform.OS === "web" ? (
-                  // @ts-ignore — iframe nativo no web
-                  <iframe
-                    src={sizeGuide.file_url}
-                    title="Guia de medidas (PDF)"
-                    style={{
-                      width: "100%",
-                      height: 480,
-                      border: "1px solid " + T.border,
-                      borderRadius: 8,
-                      display: "block",
-                    } as any}
-                  />
-                ) : (
-                  <View
-                    style={{
-                      backgroundColor: T.bg,
-                      borderRadius: 8,
-                      borderWidth: 1,
-                      borderColor: T.border,
-                      padding: 20,
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <Icon name="file_text" size={28} color={T.ink3} />
-                    <Texto
-                      style={{
-                        fontSize: 13,
-                        color: T.ink2,
-                        fontWeight: "700",
-                        textAlign: "center",
-                      }}
-                    >
-                      Guia de medidas em PDF
-                    </Texto>
-                    <Texto
-                      style={{
-                        fontSize: 12,
-                        color: T.ink3,
-                        textAlign: "center",
-                      }}
-                    >
-                      Clique para abrir o PDF no seu navegador.
-                    </Texto>
-                  </View>
-                )}
-
-                {/* Botão de link — sempre visível como fallback */}
+                {/* QA 28/09: o PDF embutido (iframe) aparecia como um quadro
+                    cinza com ícone de imagem quebrada antes do link: o
+                    navegador não mostrava o PDF embutido. Fica só o link,
+                    que abre o PDF numa aba. */}
+                <Texto style={{ fontSize: 13, color: T.ink2, textAlign: "center" }}>
+                  O guia de medidas desta peça está em PDF.
+                </Texto>
+                {/* O link para o PDF */}
                 <Pressable
                   onPress={() => {
                     if (typeof window !== "undefined") {

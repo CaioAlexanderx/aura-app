@@ -321,7 +321,14 @@ export function montarTema(corDaLoja?: string | null, modo: ModoVitrine = "claro
   const valida = typeof corDaLoja === "string" && hexToRgb(corDaLoja) !== null;
   const marca = valida ? corDaLoja!.trim() : AURA.violet;
   const s = SUPERFICIE[modo];
-  const par = parLegivel(marca);
+  const parBruto = parLegivel(marca);
+  // No papel, a tinta clara sobre a cor da loja é o próprio papel quente,
+  // não o lavanda do painel Aura (#F0EDFF): o banner automático, na cor
+  // da loja, saía com texto rgb(240,237,255) (QA 28/09). O papel é mais
+  // claro que o lavanda, então o contraste só sobe.
+  const par = modo === "papel" && parBruto.tinta === AURA.ink && contraste(parBruto.fundo, s.bg) >= 4.5
+    ? { ...parBruto, tinta: s.bg }
+    : parBruto;
 
   return {
     padrao: !valida,

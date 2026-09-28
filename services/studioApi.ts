@@ -217,6 +217,13 @@ export type PublicTrack = {
   aprovacao?: { token: string } | null;
   /** Endereço DA LOJA para retirar (null na entrega em casa). */
   retirada_endereco?: string | null;
+  /**
+   * QA 28/09: "courier" é a retirada por app (Uber, 99) — o texto do
+   * "Pronto" diz "Quem for buscar leva o número do pedido". O backend
+   * (studioTrackPublic.js) ainda não publica o campo: sem ele, vale o
+   * texto da retirada comum.
+   */
+  tipo_de_entrega?: "pickup" | "courier" | "delivery" | string | null;
 };
 
 /**
