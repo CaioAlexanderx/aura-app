@@ -1,0 +1,1329 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Orçamento em vídeo 3D — Studio</title>
+<!--
+  ============================================================
+  Mockup standalone — Orçamento em vídeo 3D pelo WhatsApp (Aura Studio)
+  28/09/2026 · atualizado com as decisões do PO (sem página pública,
+  desconto só da lojista, vídeo guardado 30 dias prorrogáveis, Aprovar e
+  Fechar no painel). Regra 4 do CLAUDE.md: mudança visual forte nasce em
+  mockup. Desenho técnico: docs/studio/orcamento-video-3d.md
+
+  O QUE MOSTRA
+    A. Onde a lojista começa (editor do orçamento; lista; proposta pelo produto)
+    B. O modal no DNA do TrocaModal: Peça → Valores → Prévia → Enviar → Enviado
+    C. A mensagem como o cliente vê no WhatsApp: o vídeo EMBUTIDO, com os
+       valores por extenso (sem link); e a Cloud API futura
+    D. O orçamento no painel depois do envio: em aberto até Aprovar (vira
+       pedido) ou Fechar; vídeo guardado 30 dias, "Manter por mais 30 dias"
+
+  SEM REDE: o "3D" é uma caneca desenhada em canvas 2D (cilindro com a
+  textura da arte mapeada por coluna, sombreado e asa com profundidade).
+  No app é o createModelViewer do visualEngine (three r128).
+
+  FAIXA ESCURA NO TOPO: só do mockup, para o PO ver todos os estados.
+  Os mesmos estados vão pela URL, para mandar um caso específico:
+    ?passo=4&envio=computador&tema=escuro   (qualquer chave da faixa)
+    &parado=1        pausa as animações (bom para print)
+    &so=sec-modal    mostra só uma seção (sec-entrada, sec-modal, sec-whats, sec-depois)
+  Valores de exemplo: 12 canecas × R$ 39,90 + 12 embalagens × R$ 4,50 =
+  R$ 532,80; Pix 5 % pela regra canônica em centavos
+  Math.round(53280 × 95 / 100) = 50616 → R$ 506,16; cartão 6× de R$ 88,80;
+  sinal 50 % = R$ 266,40. Pix, parcelas e prazo são o que a LOJISTA
+  preencheu no orçamento (nada vem da configuração da loja). Cliente e
+  loja são fictícios.
+  ============================================================
+-->
+<style>
+  :root {
+    --primary: #1E3A8A; --primary2: #3B82F6; --primary-soft: #DBEAFE; --primary-ghost: #EFF6FF;
+    --accent: #EC4899; --accent-soft: #FCE7F3; --accent-ink: #BE185D;
+    --bg: #E8E9F0; --bg-soft: #EEF0F5; --card: #F5F6FA; --card-elev: #FFFFFF;
+    --ink: #0F172A; --ink2: #334155; --ink3: #5E6A7A; --ink4: #94A3B8; --ink5: #CBD5E1;
+    --success: #10B981; --success-soft: #D1FAE5; --success-ink: #065F46;
+    --warning-soft: #FEF3C7; --warning-ink: #92400E; --warning: #F59E0B;
+    --danger: #DC2626; --danger-soft: #FEE2E2; --danger-ink: #991B1B;
+    --info-soft: #DBEAFE; --info-ink: #1E3A8A;
+    --shadow: 0 8px 24px -6px rgba(30,58,138,0.25);
+    --overlay: rgba(2,6,23,0.55);
+    --wa: #25D366; --wa-ink: #0B7A3B;
+    /* WhatsApp (claro) */
+    --wa-fundo: #EFEAE2; --wa-topo: #F0F2F5; --wa-topo-ink: #111B21; --wa-balao-in: #FFFFFF; --wa-balao-out: #D9FDD3;
+    --wa-texto: #111B21; --wa-hora: #667781; --wa-link: #027EB5; --wa-pill: #FFFFFF;
+    /* Loja fictícia (marca da lojista na página pública) */
+    --loja: #0F766E; --loja-soft: #CCFBF1; --loja-ink: #115E59;
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    --primary: #3B82F6; --primary2: #60A5FA; --primary-soft: rgba(59,130,246,0.18); --primary-ghost: rgba(59,130,246,0.08);
+    --accent: #F472B6; --accent-soft: rgba(244,114,182,0.18); --accent-ink: #F9A8D4;
+    --bg: #0F172A; --bg-soft: #1E293B; --card: #1E293B; --card-elev: #273449;
+    --ink: #F8FAFC; --ink2: #CBD5E1; --ink3: #94A3B8; --ink4: #64748B; --ink5: #334155;
+    --success: #34D399; --success-soft: rgba(52,211,153,0.16); --success-ink: #6EE7B7;
+    --warning-soft: rgba(251,191,36,0.16); --warning-ink: #FCD34D;
+    --danger: #F87171; --danger-soft: rgba(248,113,113,0.16); --danger-ink: #FCA5A5;
+    --info-soft: rgba(96,165,250,0.16); --info-ink: #93C5FD;
+    --shadow: 0 8px 24px -6px rgba(0,0,0,0.6);
+    --overlay: rgba(0,0,0,0.62);
+    --wa-ink: #4ADE80;
+    --wa-fundo: #0B141A; --wa-topo: #202C33; --wa-topo-ink: #E9EDEF; --wa-balao-in: #202C33; --wa-balao-out: #005C4B;
+    --wa-texto: #E9EDEF; --wa-hora: #8696A0; --wa-link: #53BDEB; --wa-pill: #182229;
+    --loja: #2DD4BF; --loja-soft: rgba(45,212,191,0.14); --loja-ink: #5EEAD4;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+    overflow-x: hidden;
+  }
+  button { font: inherit; color: inherit; }
+  [hidden] { display: none !important; }
+
+  /* ── Faixa de estados (só do mockup) ───────────────────── */
+  .estados {
+    background: #0B1224; color: #CBD5E1; padding: 10px 16px; position: sticky; top: 0; z-index: 50;
+    display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; font-size: 12.5px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.35);
+  }
+  .estados b { color: #F8FAFC; font-weight: 700; margin-right: 2px; }
+  .estados .grupo { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+  .estados button {
+    background: transparent; border: 1px solid #334155; color: #CBD5E1;
+    padding: 3px 9px; border-radius: 999px; cursor: pointer; font-size: 12px;
+  }
+  .estados button[aria-pressed="true"] { background: #F472B6; border-color: #F472B6; color: #0F172A; font-weight: 700; }
+  @media (max-width: 640px) { .estados { position: static; gap: 6px 12px; padding: 10px 12px; } }
+
+  .pagina { max-width: 1320px; margin: 0 auto; padding: 22px 16px 80px; }
+  .intro h1 { font-size: 24px; margin: 0 0 6px; letter-spacing: -.01em; }
+  .intro p { margin: 0; color: var(--ink2); max-width: 820px; }
+  .intro .tag { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--accent-ink); background: var(--accent-soft); padding: 2px 9px; border-radius: 999px; margin-bottom: 8px; }
+
+  .secao-mock { margin-top: 34px; scroll-margin-top: 130px; }
+  .cel-col { scroll-margin-top: 130px; }
+  .secao-mock > h2 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); margin: 0 0 4px; }
+  .secao-mock > .sub { color: var(--ink2); margin: 0 0 14px; max-width: 860px; }
+  .nota { font-size: 12.5px; color: var(--ink3); margin-top: 10px; max-width: 860px; }
+  .nota b { color: var(--ink2); }
+  .q { display: inline-block; font-size: 10.5px; font-weight: 800; color: var(--warning-ink); background: var(--warning-soft); padding: 1px 7px; border-radius: 999px; vertical-align: 1px; }
+
+  /* ── Painel: editor do orçamento (réplica) ─────────────── */
+  .editor { background: var(--card-elev); border-radius: 18px; box-shadow: var(--shadow); padding: 18px 20px 20px; }
+  .crumb { font-size: 12.5px; color: var(--ink3); }
+  .crumb b { color: var(--ink2); font-weight: 600; }
+  .ed-head { display: flex; align-items: center; gap: 10px; margin: 8px 0 14px; flex-wrap: wrap; }
+  .ed-head h3 { margin: 0; font-size: 21px; }
+  .pill { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+  .pill-draft { background: #F1F5F9; color: #64748B; }
+  .pill-sent { background: #DBEAFE; color: #1D4ED8; }
+  .pill-acc { background: #D1FAE5; color: #065F46; }
+  .chip-cnpj { font-size: 11.5px; font-weight: 600; color: var(--ink2); background: var(--bg-soft); border: 1px solid var(--ink5); padding: 3px 9px; border-radius: 999px; }
+  .ed-grid { display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px; }
+  @media (max-width: 760px) { .ed-grid { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--ink5); border-radius: 14px; padding: 14px; }
+  .card .rot { font-size: 11px; font-weight: 800; color: var(--ink3); letter-spacing: .05em; text-transform: uppercase; margin-bottom: 8px; }
+  .campo { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px dashed var(--ink5); font-size: 13px; }
+  .campo:last-child { border-bottom: 0; }
+  .campo span:first-child { color: var(--ink3); }
+  .item { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--ink5); }
+  .item:last-of-type { border-bottom: 0; }
+  .thumb { width: 44px; height: 44px; border-radius: 10px; background: var(--bg-soft); flex: none; overflow: hidden; display: grid; place-items: center; color: var(--ink4); }
+  .thumb canvas { width: 100%; height: 100%; display: block; }
+  .item .nome { font-weight: 650; font-size: 13.5px; }
+  .item .det { font-size: 12px; color: var(--ink3); }
+  .item .val { margin-left: auto; text-align: right; font-weight: 700; white-space: nowrap; font-size: 13px; }
+  .item .val small { display: block; font-weight: 500; color: var(--ink3); font-size: 11.5px; }
+  .tot { display: flex; justify-content: space-between; margin-top: 10px; font-weight: 800; font-size: 16px; }
+  .tot span:last-child { color: var(--primary); }
+  .ed-acoes { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; justify-content: flex-end; }
+  .btn { border: 0; border-radius: 11px; padding: 11px 16px; font-weight: 750; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 13.5px; }
+  .btn-sec { background: var(--card); border: 1.5px solid var(--ink5); color: var(--ink); }
+  .btn-pri { background: var(--primary); color: #fff; }
+  .btn-acc { background: var(--accent); color: #fff; }
+  .btn-wa { background: var(--wa); color: #fff; }
+  .btn .novo { font-size: 9.5px; font-weight: 900; letter-spacing: .05em; background: rgba(255,255,255,.25); padding: 1px 6px; border-radius: 999px; }
+  .destaque { position: relative; }
+  .destaque::after { content: ""; position: absolute; inset: -5px; border-radius: 15px; border: 2px dashed var(--accent); pointer-events: none; }
+  @media (max-width: 520px) { .ed-acoes .btn { flex: 1 1 100%; justify-content: center; } }
+
+  .entrada-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 980px) { .entrada-grid { grid-template-columns: minmax(0, 1fr); } }
+  .lista { background: var(--card-elev); border-radius: 18px; box-shadow: var(--shadow); padding: 14px; }
+  .lista h4 { margin: 2px 4px 10px; font-size: 14px; }
+  .linha { display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-radius: 12px; }
+  .linha + .linha { border-top: 1px solid var(--ink5); }
+  .linha .quem { font-weight: 650; }
+  .linha .quando { font-size: 12px; color: var(--ink3); }
+  .linha .dir { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .selo-video { font-size: 10.5px; font-weight: 800; color: var(--accent-ink); background: var(--accent-soft); padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+  .acao-rapida { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--ink5); background: var(--card); display: grid; place-items: center; cursor: pointer; color: var(--ink3); flex: none; }
+  /* Regra 7: a ação rápida é sempre visível (toque). No mouse ela só ganha destaque. */
+  @media (hover: hover) { .linha:hover { background: var(--primary-ghost); } .linha:hover .acao-rapida { border-color: var(--accent); color: var(--accent-ink); } }
+
+  .produto-drawer { background: var(--card-elev); border-radius: 18px; box-shadow: var(--shadow); padding: 16px; position: relative; }
+  .pd-topo { display: flex; gap: 12px; align-items: center; }
+  .pd-topo h4 { margin: 0; font-size: 16px; }
+  .pd-topo p { margin: 2px 0 0; font-size: 12.5px; color: var(--ink3); }
+  .menu { position: absolute; right: 16px; top: 62px; width: 230px; background: var(--card-elev); border: 1px solid var(--ink5); border-radius: 12px; box-shadow: var(--shadow); padding: 6px; z-index: 2; }
+  .menu div { padding: 10px 10px; border-radius: 8px; font-size: 13px; display: flex; gap: 8px; align-items: center; }
+  .menu div.alvo { background: var(--accent-soft); color: var(--accent-ink); font-weight: 750; }
+  .pd-abas { display: flex; gap: 4px; margin-top: 12px; border-bottom: 1px solid var(--ink5); overflow-x: auto; }
+  .pd-abas span { padding: 9px 12px; color: var(--ink3); font-weight: 600; font-size: 13px; white-space: nowrap; }
+  .pd-abas span.ativa { color: var(--primary); border-bottom: 2.5px solid var(--accent); }
+  .pd-corpo { height: 170px; }
+
+  /* ── Palco do modal ────────────────────────────────────── */
+  .palco { position: relative; border-radius: 20px; overflow: hidden; background: var(--bg); padding: 40px 16px; }
+  .palco .fundo { position: absolute; left: 28px; right: 28px; top: 28px; pointer-events: none; }
+  .palco .veu { position: absolute; inset: 0; background: var(--overlay); }
+  .palco .centro { position: relative; z-index: 1; display: flex; justify-content: center; }
+  @media (max-width: 640px) {
+    .palco { padding: 0; background: transparent; border-radius: 0; margin: 0 -16px; }
+    .palco .fundo, .palco .veu { display: none; }
+  }
+
+  .modal { width: 100%; max-width: 940px; background: var(--card-elev); border-radius: 18px; border: 1px solid var(--ink5); box-shadow: 0 24px 60px -18px rgba(2,6,23,0.7); display: flex; flex-direction: column; overflow: hidden; position: relative; }
+  @media (max-width: 640px) { .modal { border-radius: 0; border-left: 0; border-right: 0; box-shadow: none; } }
+  .m-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--ink5); }
+  .m-head .esq { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .m-ico { width: 36px; height: 36px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-ink); display: grid; place-items: center; flex: none; }
+  .m-tit { font-weight: 800; font-size: 16px; }
+  .m-sub { font-size: 12.5px; color: var(--ink3); }
+  .m-fechar { width: 36px; height: 36px; border-radius: 10px; border: 0; background: transparent; cursor: pointer; color: var(--ink3); display: grid; place-items: center; flex: none; }
+  .m-emissor { padding: 8px 18px; font-size: 12px; color: var(--ink2); background: var(--primary-ghost); border-bottom: 1px solid var(--ink5); }
+  .passos { display: flex; align-items: center; gap: 6px; padding: 10px 18px; border-bottom: 1px solid var(--ink5); background: var(--card); overflow-x: auto; }
+  .passo { display: flex; align-items: center; gap: 7px; flex: none; }
+  .passo .bola { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 800; background: var(--bg-soft); color: var(--ink3); border: 1px solid var(--ink5); }
+  .passo.feito .bola { background: var(--success); color: #fff; border-color: var(--success); }
+  .passo.ativo .bola { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .passo .lbl { font-size: 12.5px; color: var(--ink3); }
+  .passo.ativo .lbl { color: var(--accent-ink); font-weight: 750; }
+  .passo.feito .lbl { color: var(--ink2); }
+  .passo .sep { width: 28px; height: 2px; background: var(--ink5); border-radius: 2px; }
+  .passo.feito .sep { background: var(--success); }
+  @media (max-width: 640px) { .passo:not(.ativo) .lbl { display: none; } .passo .sep { width: 16px; } }
+  .m-corpo { padding: 18px; }
+  .m-pe { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--ink5); background: var(--card); }
+  .m-pe .info { flex: 1; font-size: 12.5px; color: var(--ink2); font-weight: 550; min-width: 0; }
+  .m-pe .acoes { display: flex; gap: 8px; flex: none; }
+  @media (max-width: 640px) {
+    .m-pe { flex-wrap: wrap; position: sticky; bottom: 0; }
+    .m-pe .info { flex-basis: 100%; }
+    .m-pe .acoes { flex: 1; }
+    .m-pe .acoes .btn { flex: 1; justify-content: center; }
+  }
+
+  .duas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+  @media (max-width: 760px) { .duas { grid-template-columns: minmax(0, 1fr); } }
+  .rotulo { font-size: 11.5px; font-weight: 800; color: var(--ink3); text-transform: uppercase; letter-spacing: .05em; margin: 0 0 8px; }
+  .rotulo + .rotulo, * + .rotulo { margin-top: 16px; }
+
+  .viewer { position: relative; border-radius: 16px; overflow: hidden; background: #EDE8E1; aspect-ratio: 4 / 5; margin: 0 auto; width: min(100%, 380px); touch-action: none; cursor: grab; }
+  .viewer canvas { width: 100%; height: 100%; display: block; }
+  .legenda-viewer { text-align: center; font-size: 12px; color: var(--ink3); margin: 8px 0 0; }
+  .viewer .vistas { position: absolute; top: 10px; left: 10px; display: flex; gap: 4px; background: rgba(255,255,255,.85); padding: 3px; border-radius: 999px; }
+  .viewer .vistas button { border: 0; background: transparent; padding: 5px 11px; border-radius: 999px; font-size: 12px; font-weight: 700; color: #334155; cursor: pointer; min-height: 30px; }
+  .viewer .vistas button[aria-pressed="true"] { background: #1E3A8A; color: #fff; }
+
+  .opcao { display: flex; gap: 10px; align-items: center; padding: 11px 12px; border: 1.5px solid var(--ink5); border-radius: 12px; background: var(--card); cursor: pointer; }
+  .opcao + .opcao { margin-top: 8px; }
+  .opcao[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); }
+  .opcao .radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--ink4); flex: none; display: grid; place-items: center; }
+  .opcao[aria-checked="true"] .radio { border-color: var(--accent); }
+  .opcao[aria-checked="true"] .radio::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .opcao .txt { min-width: 0; }
+  .opcao .t1 { font-weight: 700; font-size: 13.5px; }
+  .opcao .t2 { font-size: 12px; color: var(--ink3); }
+  .opcao.off { opacity: .6; cursor: default; }
+  .badge3d { margin-left: auto; font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .badge3d.sim { background: var(--success-soft); color: var(--success-ink); }
+  .badge3d.nao { background: var(--bg-soft); color: var(--ink3); border: 1px solid var(--ink5); }
+
+  .cores { display: flex; gap: 10px; flex-wrap: wrap; }
+  .cor { display: flex; flex-direction: column; align-items: center; gap: 4px; border: 0; background: transparent; cursor: pointer; font-size: 11.5px; color: var(--ink3); padding: 0; min-width: 56px; }
+  .cor i { width: 38px; height: 38px; border-radius: 50%; border: 2px solid var(--ink5); display: block; }
+  .cor[aria-pressed="true"] i { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .cor[aria-pressed="true"] { color: var(--ink); font-weight: 700; }
+  .arte { display: flex; gap: 10px; align-items: center; background: var(--card); border: 1px solid var(--ink5); border-radius: 12px; padding: 10px; }
+  .arte .mini { width: 52px; height: 52px; border-radius: 8px; overflow: hidden; flex: none; }
+  .arte .mini canvas { width: 100%; height: 100%; display: block; }
+  .arte .t1 { font-weight: 650; font-size: 13px; }
+  .arte .t2 { font-size: 12px; color: var(--ink3); }
+  .chave { display: flex; align-items: center; gap: 10px; padding: 10px 0; }
+  .chave .sw { width: 40px; height: 24px; border-radius: 999px; background: var(--ink5); position: relative; flex: none; border: 0; cursor: pointer; }
+  .chave .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .15s; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+  .chave .sw[aria-checked="true"] { background: var(--success); }
+  .chave .sw[aria-checked="true"]::after { left: 19px; }
+  .chave .sw:disabled { opacity: .55; cursor: default; }
+  .chave input.num { width: 64px; min-height: 40px; border-radius: 10px; border: 1.5px solid var(--ink5); background: var(--bg-soft); color: var(--ink); font: inherit; font-weight: 700; text-align: center; flex: none; }
+  .chave input.num:focus { outline: 2px solid var(--primary2); outline-offset: 1px; }
+  .chave .t1 { font-weight: 650; font-size: 13.5px; }
+  .chave .t2 { font-size: 12px; color: var(--ink3); }
+  .chave .val { margin-left: auto; text-align: right; font-weight: 800; white-space: nowrap; font-size: 14px; }
+  .chave .val small { display: block; font-size: 11px; font-weight: 500; color: var(--ink3); }
+  .chave + .chave { border-top: 1px solid var(--ink5); }
+
+  .vazio3d { aspect-ratio: 4/5; width: min(100%, 380px); margin: 0 auto; border-radius: 16px; border: 2px dashed var(--ink5); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; gap: 8px; background: var(--card); }
+  .vazio3d .ic { width: 52px; height: 52px; border-radius: 14px; background: var(--bg-soft); display: grid; place-items: center; color: var(--ink3); }
+  .vazio3d b { font-size: 15px; }
+  .vazio3d p { margin: 0; color: var(--ink3); font-size: 12.5px; max-width: 300px; }
+  .link { color: var(--primary); font-weight: 700; text-decoration: none; cursor: pointer; }
+
+  .aviso { border-radius: 12px; padding: 11px 12px; font-size: 12.5px; display: flex; gap: 10px; align-items: flex-start; }
+  .aviso b { display: block; font-size: 13px; margin-bottom: 2px; }
+  .aviso.info { background: var(--info-soft); color: var(--info-ink); }
+  .aviso.ok { background: var(--success-soft); color: var(--success-ink); }
+  .aviso.alerta { background: var(--warning-soft); color: var(--warning-ink); }
+  .aviso.erro { background: var(--danger-soft); color: var(--danger-ink); }
+  .aviso .acoes-aviso { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .aviso .btn { min-height: 36px; padding: 7px 12px; font-size: 12.5px; }
+
+  /* Prévia do vídeo (passo 3) */
+  .video-box { position: relative; border-radius: 16px; overflow: hidden; background: #EDE8E1; aspect-ratio: 4/5; width: min(100%, 380px); margin: 0 auto; }
+  .video-box canvas { width: 100%; height: 100%; display: block; }
+  .rec { position: absolute; top: 10px; left: 10px; background: rgba(220,38,38,.92); color: #fff; font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px; display: flex; gap: 6px; align-items: center; }
+  .rec::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #fff; animation: pisca 1s infinite; }
+  @keyframes pisca { 50% { opacity: .2; } }
+  .progresso-grav { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px; background: linear-gradient(transparent, rgba(15,23,42,.8)); color: #fff; font-size: 12.5px; font-weight: 650; }
+  .barra { height: 6px; border-radius: 999px; background: rgba(255,255,255,.3); margin-top: 6px; overflow: hidden; }
+  .barra i { display: block; height: 100%; background: #F472B6; width: 0; }
+  .tocar { position: absolute; left: 12px; bottom: 12px; background: rgba(15,23,42,.72); color: #fff; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; }
+  .foto-selo { position: absolute; top: 10px; left: 10px; background: rgba(15,23,42,.75); color: #fff; font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px; }
+  .meta-video { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--ink3); margin-top: 10px; align-items: center; }
+  .meta-video .ok { color: var(--success-ink); font-weight: 700; }
+  .meta-video .btn { margin-left: auto; min-height: 36px; padding: 7px 12px; font-size: 12.5px; }
+  textarea.msg { width: 100%; min-height: 250px; border-radius: 12px; border: 1.5px solid var(--ink5); background: var(--card); color: var(--ink); padding: 12px; font: 13px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace; resize: vertical; }
+  textarea.msg:focus { outline: 2px solid var(--primary2); outline-offset: 1px; }
+  .msg-rodape { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink3); margin-top: 6px; gap: 10px; flex-wrap: wrap; }
+
+  /* Passo 4 */
+  .para { display: flex; gap: 12px; align-items: center; background: var(--card); border: 1px solid var(--ink5); border-radius: 14px; padding: 12px 14px; }
+  .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--primary-soft); color: var(--primary); display: grid; place-items: center; font-weight: 800; flex: none; }
+  .para .t1 { font-weight: 750; }
+  .para .t2 { font-size: 12.5px; color: var(--ink3); }
+  .para .btn { margin-left: auto; min-height: 36px; padding: 7px 12px; font-size: 12.5px; }
+  .canal { display: flex; gap: 12px; align-items: flex-start; padding: 13px 14px; border: 1.5px solid var(--ink5); border-radius: 14px; background: var(--card); cursor: pointer; }
+  .canal + .canal { margin-top: 8px; }
+  .canal[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); }
+  .canal .ic { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; flex: none; background: var(--bg-soft); color: var(--ink2); }
+  .canal .ic.wa { background: var(--wa); color: #fff; }
+  .canal .t1 { font-weight: 750; font-size: 14px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .canal .t2 { font-size: 12.5px; color: var(--ink3); margin-top: 2px; }
+  .canal .tag { font-size: 10px; font-weight: 900; letter-spacing: .04em; padding: 1px 7px; border-radius: 999px; background: var(--success-soft); color: var(--success-ink); }
+  .canal .tag.fut { background: var(--warning-soft); color: var(--warning-ink); }
+  .link-orc { display: flex; align-items: center; gap: 10px; background: var(--bg-soft); border-radius: 10px; padding: 9px 12px; font-size: 12.5px; margin-top: 14px; }
+  .link-orc code { font: 12.5px ui-monospace, Consolas, monospace; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+  .link-orc button { border: 0; background: transparent; color: var(--primary); font-weight: 750; cursor: pointer; }
+
+  /* Sucesso */
+  .sucesso { text-align: center; padding: 18px 8px 6px; }
+  .sucesso .ok-ic { width: 60px; height: 60px; border-radius: 50%; background: var(--success-soft); color: var(--success); display: grid; place-items: center; margin: 0 auto 10px; }
+  .sucesso h3 { margin: 0; font-size: 19px; }
+  .sucesso p { margin: 6px auto 0; color: var(--ink3); max-width: 460px; }
+  .timeline { max-width: 460px; margin: 18px auto 0; text-align: left; background: var(--card); border: 1px solid var(--ink5); border-radius: 14px; padding: 6px 14px; }
+  .tl { display: flex; gap: 10px; align-items: center; padding: 9px 0; font-size: 13px; }
+  .tl + .tl { border-top: 1px solid var(--ink5); }
+  .tl i { width: 10px; height: 10px; border-radius: 50%; background: var(--ink5); flex: none; }
+  .tl i.on { background: var(--success); }
+  .tl span:last-child { margin-left: auto; color: var(--ink3); font-size: 12.5px; text-align: right; }
+
+  .confirmar-saida { position: absolute; inset: 0; background: var(--overlay); display: grid; place-items: center; padding: 16px; z-index: 5; }
+  .confirmar-saida .caixa { background: var(--card-elev); border-radius: 16px; padding: 18px; max-width: 360px; box-shadow: var(--shadow); }
+  .confirmar-saida h4 { margin: 0 0 6px; font-size: 16px; }
+  .confirmar-saida p { margin: 0 0 14px; font-size: 13px; color: var(--ink2); }
+  .confirmar-saida .acoes { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+
+  /* ── Celulares (WhatsApp e página pública) ─────────────── */
+  .celulares { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; align-items: start; }
+  @media (max-width: 900px) { .celulares { grid-template-columns: minmax(0, 1fr); } }
+  .cel-col h2 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); margin: 0 0 4px; }
+  .cel-col .sub { color: var(--ink2); margin: 0 0 14px; }
+  .celular { width: 100%; max-width: 380px; margin: 0 auto; border-radius: 34px; background: #0B0F19; padding: 10px; box-shadow: 0 20px 50px -20px rgba(2,6,23,.6); }
+  .tela { border-radius: 26px; overflow: hidden; position: relative; }
+  .status-bar { height: 26px; display: flex; justify-content: space-between; align-items: center; padding: 0 18px; font-size: 11.5px; font-weight: 700; }
+  @media (max-width: 420px) { .celular { border-radius: 0; padding: 0; background: transparent; box-shadow: none; margin: 0 -16px; width: calc(100% + 32px); max-width: none; } .tela { border-radius: 0; } }
+
+  /* WhatsApp */
+  .tela-wa { background: var(--wa-fundo); color: var(--wa-texto); min-height: 700px; display: flex; flex-direction: column; }
+  .tela-wa .status-bar { background: var(--wa-topo); color: var(--wa-topo-ink); }
+  .wa-topo { background: var(--wa-topo); color: var(--wa-topo-ink); display: flex; align-items: center; gap: 10px; padding: 8px 12px 10px; }
+  .wa-topo .av { width: 36px; height: 36px; border-radius: 50%; background: var(--loja); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 13px; flex: none; }
+  .wa-topo .n { font-weight: 650; font-size: 15px; }
+  .wa-topo .s { font-size: 12px; color: var(--wa-hora); }
+  .wa-conversa { flex: 1; padding: 12px 10px 16px; display: flex; flex-direction: column; gap: 6px;
+    background-image: radial-gradient(rgba(0,0,0,.035) 1px, transparent 1px); background-size: 16px 16px; }
+  :root[data-theme="dark"] .wa-conversa { background-image: radial-gradient(rgba(255,255,255,.03) 1px, transparent 1px); }
+  .wa-dia { align-self: center; background: var(--wa-pill); color: var(--wa-hora); font-size: 11.5px; padding: 4px 10px; border-radius: 8px; box-shadow: 0 1px .5px rgba(0,0,0,.13); margin: 4px 0 6px; }
+  .wa-cripto { align-self: center; background: #FFEECD; color: #54656F; font-size: 11px; padding: 6px 10px; border-radius: 8px; text-align: center; max-width: 290px; margin-bottom: 4px; }
+  :root[data-theme="dark"] .wa-cripto { background: #182229; color: #FFD279; }
+  .balao { max-width: 88%; background: var(--wa-balao-in); border-radius: 0 8px 8px 8px; padding: 4px; box-shadow: 0 1px .5px rgba(0,0,0,.13); position: relative; align-self: flex-start; }
+  .balao.midia { width: 278px; max-width: 88%; }
+  .balao.midia .wa-video, .balao.midia .wa-previa { width: 100%; }
+  .balao.out { align-self: flex-end; background: var(--wa-balao-out); border-radius: 8px 0 8px 8px; }
+  .balao .txt { padding: 3px 6px 2px; font-size: 14px; line-height: 1.38; white-space: pre-wrap; word-wrap: break-word; }
+  .balao .txt a { color: var(--wa-link); text-decoration: none; word-break: break-all; }
+  .balao .hora { font-size: 11px; color: var(--wa-hora); text-align: right; padding: 0 6px 2px; }
+  .wa-video { position: relative; border-radius: 6px; overflow: hidden; aspect-ratio: 4/5; width: 250px; max-width: 100%; background: #EDE8E1; cursor: pointer; }
+  .wa-video canvas { width: 100%; height: 100%; display: block; }
+  .wa-video .play { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 54px; height: 54px; border-radius: 50%; background: rgba(0,0,0,.5); display: grid; place-items: center; color: #fff; }
+  .wa-video .dur { position: absolute; left: 8px; bottom: 6px; color: #fff; font-size: 11.5px; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,.6); display: flex; gap: 5px; align-items: center; }
+  .wa-video.tocando .play { display: none; }
+  .wa-previa { border-radius: 6px; overflow: hidden; background: rgba(0,0,0,.05); margin-bottom: 2px; width: 270px; max-width: 100%; }
+  :root[data-theme="dark"] .wa-previa { background: rgba(255,255,255,.06); }
+  .wa-previa .img { aspect-ratio: 1.91/1; background: #EDE8E1; }
+  .wa-previa .img canvas { width: 100%; height: 100%; display: block; }
+  .wa-previa .tx { padding: 7px 9px; }
+  .wa-previa .t1 { font-size: 13.5px; font-weight: 650; }
+  .wa-previa .t2 { font-size: 12.5px; color: var(--wa-hora); }
+  .wa-previa .t3 { font-size: 11.5px; color: var(--wa-hora); margin-top: 2px; }
+  .wa-botao-tpl { background: var(--wa-balao-in); border-radius: 8px; box-shadow: 0 1px .5px rgba(0,0,0,.13); color: var(--wa-link); font-weight: 600; font-size: 14px; text-align: center; padding: 9px; align-self: flex-start; width: 262px; max-width: 88%; margin-top: -3px; display: flex; gap: 6px; justify-content: center; align-items: center; }
+  .wa-rodape-tpl { font-size: 12px; color: var(--wa-hora); padding: 0 6px 2px; }
+  .wa-digitar { background: var(--wa-topo); display: flex; gap: 8px; align-items: center; padding: 8px 10px; }
+  .wa-digitar div { flex: 1; background: var(--wa-balao-in); border-radius: 20px; padding: 9px 14px; color: var(--wa-hora); font-size: 14px; }
+  .wa-digitar span { width: 40px; height: 40px; border-radius: 50%; background: #00A884; display: grid; place-items: center; color: #fff; }
+
+  svg.i { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  svg.i.p { width: 15px; height: 15px; }
+  svg.i.g { width: 26px; height: 26px; }
+</style>
+</head>
+<body>
+
+<!-- Ícones (sprite local, sem rede) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-video" viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10l6-3v10l-6-3z"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></symbol>
+  <symbol id="i-wa" viewBox="0 0 24 24"><path d="M3 21l1.6-4.7A8.5 8.5 0 1 1 7.8 19.6z"/><path d="M9 9.5c.3 1.6 1.9 3.6 4.5 4.6l1.3-1.3 2 1-.3 1.4c-3.9.5-8.4-3.7-8.2-7.4L9.7 7.5l1 2z" stroke-width="1.4"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-cube" viewBox="0 0 24 24"><path d="M21 16V8l-9-5-9 5v8l9 5z"/><path d="M3.3 7L12 12l8.7-5M12 22V12"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></symbol>
+  <symbol id="i-img" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></symbol>
+  <symbol id="i-pix" viewBox="0 0 24 24"><path d="M12 2l4 4-4 4-4-4z"/><path d="M12 14l4 4-4 4-4-4z"/><path d="M2 12l4-4 4 4-4 4z"/><path d="M14 12l4-4 4 4-4 4z"/></symbol>
+  <symbol id="i-card" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M14.5 9.5c-.5-1-1.5-1.5-2.5-1.5-1.5 0-2.5.8-2.5 2s1 1.7 2.5 2 2.5.8 2.5 2-1 2-2.5 2c-1 0-2-.5-2.5-1.5M12 6.5V8M12 16v1.5"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-mute" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4z"/><path d="M23 9l-6 6M17 9l6 6"/></symbol>
+  <symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14L21 3"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M23 4v6h-6"/><path d="M20.5 15a9 9 0 1 1-2.1-9.4L23 10"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4"/></symbol>
+</svg>
+
+<!-- ═══════════ Faixa de estados (só do mockup) ═══════════ -->
+<div class="estados" role="toolbar" aria-label="Estados do mockup">
+  <div class="grupo"><b>Tema</b>
+    <button data-set="tema=claro">Claro</button><button data-set="tema=escuro">Escuro</button></div>
+  <div class="grupo"><b>Começa</b>
+    <button data-set="entrada=orcamento">No orçamento</button><button data-set="entrada=produto">No produto (Q1)</button></div>
+  <div class="grupo"><b>Passo</b>
+    <button data-set="passo=1">1 Peça</button><button data-set="passo=2">2 Valores</button><button data-set="passo=3">3 Prévia</button><button data-set="passo=4">4 Enviar</button><button data-set="passo=5">Enviado</button><button data-set="saida=sim">Sair?</button></div>
+  <div class="grupo"><b>Peça</b>
+    <button data-set="peca=com3d">Com 3D</button><button data-set="peca=sem3d">Sem 3D</button></div>
+  <div class="grupo"><b>Gravação</b>
+    <button data-set="grav=pronto">Pronto</button><button data-set="grav=gravando">Gravando</button><button data-set="grav=falhou">Falhou</button><button data-set="grav=semsuporte">Sem suporte</button></div>
+  <div class="grupo"><b>Navegador da lojista</b>
+    <button data-set="envio=celular">Compartilha arquivo</button><button data-set="envio=computador">Não compartilha</button><button data-set="envio=cloud">Futuro · Cloud API</button></div>
+  <div class="grupo"><b>Depois do envio</b>
+    <button data-set="pos=aberto">Em aberto</button><button data-set="pos=aprovado">Aprovado</button><button data-set="pos=fechado">Fechado</button><button data-set="pos=semvideo">Vídeo expirou</button></div>
+  <div class="grupo"><b>Animação</b>
+    <button data-set="anim=on">Ligada</button><button data-set="anim=off">Pausada</button></div>
+  <div class="grupo"><b>Multi-CNPJ</b>
+    <button data-set="consol=nao">Uma loja</button><button data-set="consol=sim">Consolidado</button></div>
+</div>
+
+<main class="pagina">
+  <header class="intro">
+    <span class="tag">Aura Studio · proposta · 28/09/2026</span>
+    <h1>Orçamento em vídeo 3D pelo WhatsApp</h1>
+    <p>A lojista grava, dentro do orçamento, um vídeo de 7 segundos da peça girando com a arte e a cor do cliente e manda o vídeo embutido na mensagem do WhatsApp dele, com os valores e as condições de pagamento por extenso. Sem link e sem página pública: a conversa segue no WhatsApp, e no painel o orçamento fica em aberto até a lojista Aprovar (vira pedido na Produção) ou Fechar.</p>
+  </header>
+
+  <!-- ═══════════ A · Onde começa ═══════════ -->
+  <section class="secao-mock" id="sec-entrada">
+    <h2>A · Onde a lojista começa</h2>
+    <p class="sub" data-quando="entrada=orcamento">No editor do orçamento (rascunho ou já enviado), ao lado de "Enviar ao cliente". Reenviar grava de novo e manda o vídeo novo.</p>
+    <p class="sub" data-quando="entrada=produto"><span class="q">Q1</span> Proposta: no menu da peça, em Catálogo. Cria um rascunho de orçamento com a peça e abre o mesmo modal. O cliente é escolhido no passo 4.</p>
+
+    <div class="entrada-grid" data-quando="entrada=orcamento">
+      <div class="editor">
+        <div class="crumb">Vendas › Orçamentos › <b>Mariana Costa</b></div>
+        <div class="ed-head">
+          <h3>Mariana Costa</h3><span class="pill pill-draft">Rascunho</span>
+          <span class="chip-cnpj" data-quando="consol=sim">Ateliê Lume · Centro</span>
+        </div>
+        <div class="ed-grid">
+          <div class="card">
+            <div class="rot">Cliente e condições</div>
+            <div class="campo"><span>Cliente</span><span>Mariana Costa</span></div>
+            <div class="campo"><span>WhatsApp</span><span>(11) 98765-4321</span></div>
+            <div class="campo"><span>Validade</span><span>7 dias</span></div>
+            <div class="campo"><span>Sinal</span><span>50 %</span></div>
+          </div>
+          <div class="card">
+            <div class="rot">Itens</div>
+            <div class="item"><div class="thumb"><canvas data-caneca="thumb" width="88" height="88"></canvas></div>
+              <div><div class="nome">Caneca de porcelana 325 ml</div><div class="det">Foto + texto "Mari &amp; Léo · 12.10"</div></div>
+              <div class="val">R$ 478,80<small>12 × R$ 39,90</small></div></div>
+            <div class="item"><div class="thumb"><svg class="i"><use href="#i-cube"/></svg></div>
+              <div><div class="nome">Embalagem presente kraft</div><div class="det">Com laço</div></div>
+              <div class="val">R$ 54,00<small>12 × R$ 4,50</small></div></div>
+            <div class="tot"><span>Total</span><span>R$ 532,80</span></div>
+          </div>
+        </div>
+        <div class="ed-acoes">
+          <button class="btn btn-sec">Salvar rascunho</button>
+          <button class="btn btn-pri"><svg class="i p"><use href="#i-send"/></svg>Enviar ao cliente</button>
+          <button class="btn btn-acc destaque" data-ir="passo=1"><svg class="i p"><use href="#i-video"/></svg>Enviar em vídeo 3D <span class="novo">NOVO</span></button>
+        </div>
+      </div>
+
+      <div class="lista">
+        <h4>Orçamentos · lista</h4>
+        <div class="linha">
+          <div><div class="quem">Mariana Costa</div><div class="quando">Enviado hoje, 14:32 · R$ 532,80</div></div>
+          <div class="dir"><span class="selo-video">▶ vídeo</span><span class="pill pill-sent">Enviado</span>
+            <button class="acao-rapida" title="Enviar em vídeo 3D" aria-label="Enviar em vídeo 3D"><svg class="i p"><use href="#i-video"/></svg></button></div>
+        </div>
+        <div class="linha">
+          <div><div class="quem">Buffet Girassol</div><div class="quando">Rascunho · R$ 1.290,00</div></div>
+          <div class="dir"><span class="pill pill-draft">Rascunho</span>
+            <button class="acao-rapida" title="Enviar em vídeo 3D" aria-label="Enviar em vídeo 3D"><svg class="i p"><use href="#i-video"/></svg></button></div>
+        </div>
+        <div class="linha">
+          <div><div class="quem">Carla Mendes</div><div class="quando">Aceito 26/09 · R$ 189,90</div></div>
+          <div class="dir"><span class="selo-video">▶ vídeo</span><span class="pill pill-acc">Aceito</span></div>
+        </div>
+        <p class="nota" style="margin:10px 6px 2px">A ação rápida fica <b>sempre visível</b>, porque no toque não existe hover (regra 7). No mouse ela só ganha destaque. Orçamento aceito ou convertido não tem a ação.</p>
+      </div>
+    </div>
+
+    <div class="entrada-grid" data-quando="entrada=produto">
+      <div class="produto-drawer">
+        <div class="pd-topo">
+          <div class="thumb"><canvas data-caneca="thumb" width="88" height="88"></canvas></div>
+          <div><h4>Caneca de porcelana 325 ml</h4><p>Catálogo · R$ 39,90 · mockup 3D vinculado</p></div>
+          <button class="acao-rapida" style="margin-left:auto" aria-label="Mais ações"><svg class="i p"><use href="#i-dots"/></svg></button>
+        </div>
+        <div class="menu">
+          <div><svg class="i p"><use href="#i-edit"/></svg>Editar</div>
+          <div><svg class="i p"><use href="#i-copy"/></svg>Duplicar</div>
+          <div class="alvo" data-ir="passo=1"><svg class="i p"><use href="#i-video"/></svg>Orçar em vídeo 3D</div>
+          <div><svg class="i p"><use href="#i-x"/></svg>Arquivar</div>
+        </div>
+        <div class="pd-abas"><span class="ativa">Dados</span><span>Personalização</span><span>Fotos</span><span>Preço</span></div>
+        <div class="pd-corpo"></div>
+      </div>
+      <div class="lista">
+        <h4>Por que só depois</h4>
+        <p class="nota" style="margin:0 4px 6px">Pelo produto, a lojista ainda não tem o cliente nem a arte dele. O vídeo sairia com a arte de exemplo, o que serve para vitrine e menos para orçamento. Recomendação: fase 1 só pelo orçamento.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ B · O modal ═══════════ -->
+  <section class="secao-mock" id="sec-modal">
+    <h2>B · O passo a passo (DNA TrocaModal)</h2>
+    <p class="sub">Cabeçalho com subtítulo por passo, barra numerada, rodapé com o resumo à esquerda e "Voltar" / "Continuar" à direita. No celular vira tela cheia com o rodapé fixo.</p>
+
+    <div class="palco">
+      <div class="fundo" aria-hidden="true">
+        <div class="editor">
+          <div class="crumb">Vendas › Orçamentos › <b>Mariana Costa</b></div>
+          <div class="ed-head"><h3>Mariana Costa</h3><span class="pill pill-draft">Rascunho</span></div>
+          <div class="ed-grid"><div class="card" style="height:220px"></div><div class="card" style="height:220px"></div></div>
+          <div class="ed-acoes"><button class="btn btn-sec">Salvar rascunho</button><button class="btn btn-pri">Enviar ao cliente</button><button class="btn btn-acc">Enviar em vídeo 3D</button></div>
+        </div>
+        <div style="height:240px"></div>
+      </div>
+      <div class="veu"></div>
+      <div class="centro">
+        <div class="modal" role="dialog" aria-label="Orçamento em vídeo 3D">
+          <div class="m-head">
+            <div class="esq">
+              <div class="m-ico"><svg class="i"><use href="#i-video"/></svg></div>
+              <div style="min-width:0">
+                <div class="m-tit" id="m-tit">Orçamento em vídeo 3D</div>
+                <div class="m-sub" id="m-sub"></div>
+              </div>
+            </div>
+            <button class="m-fechar" aria-label="Fechar" data-set="saida=sim"><svg class="i"><use href="#i-x"/></svg></button>
+          </div>
+          <div class="m-emissor" data-quando="consol=sim">Emitido por <b>Ateliê Lume · Centro</b> · 12.345.678/0001-90. Pix, parcelas, marca e link saem deste CNPJ.</div>
+
+          <div class="passos" data-quando="passo=1|2|3|4">
+            <div class="passo" data-n="1"><span class="bola">1</span><span class="lbl">Peça</span><span class="sep"></span></div>
+            <div class="passo" data-n="2"><span class="bola">2</span><span class="lbl">Valores</span><span class="sep"></span></div>
+            <div class="passo" data-n="3"><span class="bola">3</span><span class="lbl">Prévia</span><span class="sep"></span></div>
+            <div class="passo" data-n="4"><span class="bola">4</span><span class="lbl">Enviar</span></div>
+          </div>
+
+          <div class="m-corpo">
+            <!-- ── Passo 1 · Peça ── -->
+            <div data-quando="passo=1">
+              <div class="duas">
+                <div>
+                  <div data-quando="peca=com3d">
+                    <div class="viewer" id="viewer">
+                      <canvas data-caneca="viewer" width="480" height="600"></canvas>
+                      <div class="vistas"><button data-set="vista=frente">Frente</button><button data-set="vista=costas">Costas</button></div>
+                    </div>
+                    <p class="legenda-viewer">Arraste para girar. O vídeo começa na vista escolhida.</p>
+                  </div>
+                  <div class="vazio3d" data-quando="peca=sem3d">
+                    <div class="ic"><svg class="i g"><use href="#i-cube"/></svg></div>
+                    <b>Esta peça ainda não tem mockup 3D</b>
+                    <p>O vídeo precisa do modelo 3D da peça. Vincule em <a class="link">Loja digital › Aparência</a>. Enquanto isso, dá para mandar a foto da peça com a arte e o link.</p>
+                    <button class="btn btn-sec" style="margin-top:6px"><svg class="i p"><use href="#i-img"/></svg>Seguir com foto <span class="q">Q9</span></button>
+                  </div>
+                </div>
+                <div>
+                  <p class="rotulo">Qual item vai no vídeo</p>
+                  <div class="opcao" role="radio" aria-checked="true">
+                    <span class="radio"></span>
+                    <div class="txt"><div class="t1">Caneca de porcelana 325 ml</div><div class="t2">12 un · foto + texto do cliente</div></div>
+                    <span class="badge3d sim" data-quando="peca=com3d">3D</span><span class="badge3d nao" data-quando="peca=sem3d">sem 3D</span>
+                  </div>
+                  <div class="opcao off" role="radio" aria-checked="false" aria-disabled="true">
+                    <span class="radio"></span>
+                    <div class="txt"><div class="t1">Embalagem presente kraft</div><div class="t2">Sem mockup 3D · entra só nos valores</div></div>
+                    <span class="badge3d nao">sem 3D</span>
+                  </div>
+
+                  <p class="rotulo">Cor da peça</p>
+                  <div class="cores">
+                    <button class="cor" data-set="cor=#F7F5F0"><i style="background:#F7F5F0"></i>Branca</button>
+                    <button class="cor" data-set="cor=#1F2937"><i style="background:#1F2937"></i>Preta</button>
+                    <button class="cor" data-set="cor=#F9D5DC"><i style="background:#F9D5DC"></i>Rosa-bebê</button>
+                  </div>
+
+                  <p class="rotulo">Arte do cliente</p>
+                  <div class="arte">
+                    <div class="mini"><canvas data-arte="mini" width="104" height="104"></canvas></div>
+                    <div><div class="t1">foto-mariana-leo.jpg + "Mari &amp; Léo · 12.10"</div><div class="t2">Vem da personalização do item. Para trocar, edite o item no orçamento.</div></div>
+                  </div>
+
+                  <div class="chave" style="margin-top:6px">
+                    <button class="sw" role="switch" data-toggle="logo" aria-label="Logo da loja no vídeo"></button>
+                    <div><div class="t1">Logo da loja no canto do vídeo <span class="q">Q4</span></div><div class="t2">O vídeo circula encaminhado. A marca vai junto.</div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── Passo 2 · Valores ── -->
+            <div data-quando="passo=2">
+              <div class="duas">
+                <div>
+                  <p class="rotulo">Do orçamento</p>
+                  <div class="card">
+                    <div class="item"><div class="thumb"><canvas data-caneca="thumb" width="88" height="88"></canvas></div>
+                      <div><div class="nome">Caneca de porcelana 325 ml</div><div class="det">12 × R$ 39,90</div></div><div class="val">R$ 478,80</div></div>
+                    <div class="item"><div class="thumb"><svg class="i"><use href="#i-cube"/></svg></div>
+                      <div><div class="nome">Embalagem presente kraft</div><div class="det">12 × R$ 4,50</div></div><div class="val">R$ 54,00</div></div>
+                    <div class="campo" style="margin-top:6px"><span>Desconto do orçamento</span><span>—</span></div>
+                    <div class="tot"><span>Total</span><span>R$ 532,80</span></div>
+                  </div>
+                  <p class="nota">Preço e quantidade são do orçamento. Para mudar, <a class="link">edite o orçamento</a>. Este modal não recalcula nada.</p>
+                </div>
+                <div>
+                  <p class="rotulo">Condições que vão na mensagem</p>
+                  <p class="nota" style="margin:0 0 8px">Só vai o que você preencher. Nada vem da configuração da loja, e vazio quer dizer sem desconto.</p>
+                  <div class="card" style="padding:4px 14px">
+                    <div class="chave"><input class="num" data-cond-input="pix" value="5" inputmode="decimal" aria-label="Desconto no Pix (%)">
+                      <div><div class="t1">Desconto no Pix (%)</div><div class="t2">vazio = sem desconto</div></div>
+                      <div class="val" data-cond-val="pix">R$ 506,16<small>no Pix</small></div></div>
+                    <div class="chave"><input class="num" data-cond-input="cartao" value="6" inputmode="numeric" aria-label="Parcelas sem juros">
+                      <div><div class="t1">Parcelas sem juros no cartão</div><div class="t2">vazio = não menciona cartão</div></div>
+                      <div class="val" data-cond-val="cartao">6× R$ 88,80<small>no cartão</small></div></div>
+                    <div class="chave"><input class="num" data-cond-input="sinal" value="50" inputmode="decimal" aria-label="Sinal (%)">
+                      <div><div class="t1">Sinal para começar (%)</div><div class="t2">vem do orçamento</div></div>
+                      <div class="val" data-cond-val="sinal">R$ 266,40<small>de sinal</small></div></div>
+                    <div class="chave"><input class="num" data-cond-input="prazo" value="5" inputmode="numeric" aria-label="Prazo em dias úteis">
+                      <div><div class="t1">Prazo de produção (dias úteis)</div><div class="t2">vazio = não menciona prazo</div></div>
+                      <div class="val" data-cond-val="prazo">5 dias úteis<small>após aprovar a arte</small></div></div>
+                    <div class="chave"><input class="num" value="7" inputmode="numeric" aria-label="Validade em dias">
+                      <div><div class="t1">Validade (dias)</div><div class="t2">sempre vai</div></div>
+                      <div class="val">até 05/10<small>7 dias</small></div></div>
+                  </div>
+                  <div class="aviso info" style="margin-top:10px"><svg class="i p"><use href="#i-lock"/></svg>
+                    <div>Fica gravado no orçamento e vai para as notas do pedido quando você <b style="display:inline">Aprovar</b>. O Pix vale sobre o total do orçamento.</div></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── Passo 3 · Prévia ── -->
+            <div data-quando="passo=3">
+              <div class="duas">
+                <div>
+                  <p class="rotulo">Vídeo · 7 s · 720 × 900</p>
+                  <div class="video-box" data-quando="grav=pronto|gravando|falhou">
+                    <canvas data-caneca="gravacao" width="480" height="600"></canvas>
+                    <div class="rec" data-quando="grav=gravando">GRAVANDO</div>
+                    <div class="progresso-grav" data-quando="grav=gravando"><span id="grav-txt">Gravando o giro… 0,0 s de 7 s</span><div class="barra"><i id="grav-barra"></i></div></div>
+                    <div class="tocar" data-quando="grav=pronto">▶ 0:07 · repetindo</div>
+                  </div>
+                  <div class="video-box" data-quando="grav=semsuporte">
+                    <canvas data-caneca="foto" width="480" height="600"></canvas>
+                    <div class="foto-selo">FOTO</div>
+                  </div>
+
+                  <div class="meta-video" data-quando="grav=pronto">
+                    <span>MP4 · H.264 · 1,1 MB</span><span class="ok" id="upload-txt">✓ Guardado por 30 dias</span>
+                    <button class="btn btn-sec"><svg class="i p"><use href="#i-refresh"/></svg>Gravar de novo</button>
+                  </div>
+                  <div class="meta-video" data-quando="grav=gravando"><span>Não feche esta janela. Leva uns 8 segundos.</span></div>
+                  <div class="aviso erro" style="margin-top:10px" data-quando="grav=falhou"><svg class="i"><use href="#i-alert"/></svg>
+                    <div><b>Não deu para gravar o vídeo</b>O navegador parou a gravação no meio. Tente de novo. Se repetir, siga com a foto da peça.
+                      <div class="acoes-aviso"><button class="btn btn-sec" data-set="grav=gravando"><svg class="i p"><use href="#i-refresh"/></svg>Tentar de novo</button><button class="btn btn-sec" data-set="grav=semsuporte"><svg class="i p"><use href="#i-img"/></svg>Seguir com foto</button></div></div></div>
+                  <div class="aviso alerta" style="margin-top:10px" data-quando="grav=semsuporte"><svg class="i"><use href="#i-alert"/></svg>
+                    <div><b>Este navegador não grava vídeo</b>Vai a foto da peça com a mensagem. Chrome, Edge ou Safari atualizados gravam o vídeo.</div></div>
+                </div>
+                <div>
+                  <p class="rotulo">Mensagem</p>
+                  <textarea class="msg" id="msg" spellcheck="false" aria-label="Mensagem para o cliente"></textarea>
+                  <div class="msg-rodape"><span id="msg-conta"></span><a class="link" id="msg-restaurar">Restaurar texto original</a></div>
+                  <p class="nota">*asteriscos* viram negrito no WhatsApp. Sem link: valores e condições vão por extenso.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── Passo 4 · Enviar ── -->
+            <div data-quando="passo=4">
+              <div class="para">
+                <div class="avatar">MC</div>
+                <div><div class="t1">Mariana Costa</div><div class="t2">WhatsApp (11) 98765-4321 · do orçamento</div></div>
+                <button class="btn btn-sec"><svg class="i p"><use href="#i-edit"/></svg>Trocar</button>
+              </div>
+
+              <p class="rotulo">Como mandar</p>
+              <div id="canais"></div>
+
+              <div class="aviso info" style="margin-top:12px" data-quando="envio=celular">
+                <svg class="i p"><use href="#i-msg"/></svg>
+                <div>Vale no celular e no computador (Chrome ou Edge no Windows, Safari ou Chrome no Mac, onde o WhatsApp Desktop aparece na lista). Escolha a conversa da <b style="display:inline">Mariana Costa · (11) 98765-4321</b>. A mensagem também fica copiada: se ela não aparecer junto do vídeo (acontece em alguns iPhones), é só colar.</div>
+              </div>
+              <div class="aviso info" style="margin-top:12px" data-quando="envio=computador">
+                <svg class="i p"><use href="#i-msg"/></svg>
+                <div>Este navegador não compartilha arquivo. 1) Baixe o vídeo (a mensagem fica copiada). 2) Abra a conversa: o texto já vai escrito. 3) Arraste o vídeo para a conversa e envie. Depois toque em <b style="display:inline">Já mandei</b>.</div>
+              </div>
+            </div>
+
+            <!-- ── Enviado ── -->
+            <div data-quando="passo=5">
+              <div class="sucesso">
+                <div class="ok-ic"><svg class="i g"><use href="#i-check"/></svg></div>
+                <h3>Orçamento enviado para a Mariana</h3>
+                <p id="suc-como"></p>
+                <div class="timeline">
+                  <div class="tl"><i class="on"></i><span>Enviado</span><span id="suc-hora">hoje, 14:32</span></div>
+                  <div class="tl" data-quando="envio=cloud"><i></i><span>Entregue · lido</span><span>aguardando</span></div>
+                  <div class="tl"><i></i><span>Vídeo guardado</span><span>até 28/10 (30 dias)</span></div>
+                  <div class="tl"><i></i><span>Próximo passo</span><span>Aprovar ou Fechar no orçamento</span></div>
+                </div>
+                <p class="nota" style="margin:12px auto 0">A conversa segue no WhatsApp. Quando a Mariana topar, toque em Aprovar: o orçamento vira pedido na Produção.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="m-pe" data-quando="passo=1|2|3|4">
+            <div class="info" id="pe-info">Total R$ 532,80 · R$ 506,16 no Pix</div>
+            <div class="acoes">
+              <button class="btn btn-sec" id="btn-voltar">← Voltar</button>
+              <button class="btn btn-pri" id="btn-seguir">Continuar →</button>
+            </div>
+          </div>
+          <div class="m-pe" data-quando="passo=5">
+            <div class="info"></div>
+            <div class="acoes">
+              <button class="btn btn-pri" data-set="passo=1">Voltar ao orçamento</button>
+            </div>
+          </div>
+
+          <div class="confirmar-saida" data-quando="saida=sim">
+            <div class="caixa">
+              <h4>Sair sem enviar?</h4>
+              <p>O vídeo ainda não foi mandado para a Mariana. O orçamento continua como está, e o vídeo fica guardado para quando você voltar.</p>
+              <div class="acoes"><button class="btn btn-sec" data-set="saida=nao">Continuar aqui</button><button class="btn btn-pri" data-set="saida=nao">Sair</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="nota"><b>Quando conta como enviado:</b> no compartilhamento, quando o sistema confirma (se a lojista fechar a folha, volta ao passo 4 sem marcar nada). Sem compartilhamento, quando ela toca em "Já mandei".</p>
+  </section>
+
+  <!-- ═══════════ C e D · celulares ═══════════ -->
+  <div class="celulares secao-mock">
+    <section class="cel-col" id="sec-whats">
+      <h2>C · O que chega no WhatsApp do cliente</h2>
+      <p class="sub" id="wa-sub"></p>
+      <div class="celular"><div class="tela tela-wa">
+        <div class="status-bar"><span>14:33</span><span>●●● 5G</span></div>
+        <div class="wa-topo">
+          <svg class="i"><use href="#i-back"/></svg>
+          <div class="av">AL</div>
+          <div><div class="n">Ateliê Lume</div><div class="s">online</div></div>
+        </div>
+        <div class="wa-conversa">
+          <div class="wa-dia">HOJE</div>
+          <div class="wa-cripto">🔒 As mensagens são protegidas com a criptografia de ponta a ponta.</div>
+
+          <!-- vídeo embutido com a mensagem como legenda (compartilhado ou arrastado) -->
+          <div class="balao midia" data-quando="envio=celular|computador">
+            <div class="wa-video" data-quando="grav=pronto|gravando|falhou" id="wa-video"><canvas data-caneca="wa" width="400" height="500"></canvas>
+              <div class="play"><svg class="i g"><use href="#i-play"/></svg></div>
+              <div class="dur"><svg class="i p"><use href="#i-video"/></svg>0:07</div></div>
+            <div class="wa-video" data-quando="grav=semsuporte" style="cursor:default"><canvas data-caneca="wa-foto" width="400" height="500"></canvas></div>
+            <div class="txt" id="wa-txt-celular"></div>
+            <div class="hora">14:32</div>
+          </div>
+
+          <!-- futuro: template da Cloud API -->
+          <div class="balao midia" data-quando="envio=cloud">
+            <div class="wa-video" id="wa-video2"><canvas data-caneca="wa" width="400" height="500"></canvas>
+              <div class="play"><svg class="i g"><use href="#i-play"/></svg></div>
+              <div class="dur"><svg class="i p"><use href="#i-video"/></svg>0:07</div></div>
+            <div class="txt" id="wa-txt-cloud"></div>
+            <div class="wa-rodape-tpl">Ateliê Lume · orçamento pela Aura</div>
+            <div class="hora">14:32</div>
+          </div>
+        </div>
+        <div class="wa-digitar"><div>Mensagem</div><span><svg class="i"><use href="#i-mic"/></svg></span></div>
+      </div></div>
+      <p class="nota" data-quando="envio=computador">Sem compartilhamento, a lojista arrasta o vídeo baixado para a conversa aberta pelo wa.me: o cliente recebe igual.</p>
+      <p class="nota" data-quando="envio=cloud"><b>Futuro:</b> template aprovado pela Meta com cabeçalho de vídeo e corpo com parâmetros, sem botão de link (não há página pública). Sai do número da loja conectado no Aura Atende, e dá entregue e lido.</p>
+      <p class="nota" data-quando="envio=celular">Tocar no vídeo alterna a reprodução (simulada).</p>
+    </section>
+
+    <section class="cel-col" id="sec-depois">
+      <h2>D · O orçamento no painel depois do envio</h2>
+      <p class="sub">Não há página do orçamento para o cliente. O orçamento fica em aberto, e a lojista decide aqui.</p>
+      <div class="editor">
+        <div class="crumb">Vendas › Orçamentos › <b>Mariana Costa</b></div>
+        <div class="ed-head">
+          <h3>Mariana Costa</h3>
+          <span class="pill pill-sent" data-quando="pos=aberto|semvideo">Enviado</span>
+          <span class="pill" style="background:#EDE9FE;color:#5B21B6" data-quando="pos=aprovado">Convertido</span>
+          <span class="pill" style="background:#E2E8F0;color:#475569" data-quando="pos=fechado">Encerrado</span>
+        </div>
+
+        <div class="aviso ok" data-quando="pos=aprovado" style="margin-bottom:12px"><svg class="i"><use href="#i-check"/></svg>
+          <div><b>Este orçamento virou pedido</b>Pedido na Produção (arte pendente) com os itens, a arte, o total de R$ 532,80, o marco de sinal de R$ 266,40 e as condições nas notas.
+            <div class="acoes-aviso"><button class="btn btn-sec">Ver pedido</button></div></div></div>
+        <div class="aviso" data-quando="pos=fechado" style="margin-bottom:12px;background:var(--bg-soft);color:var(--ink2)"><svg class="i"><use href="#i-x"/></svg>
+          <div><b>Orçamento fechado sem venda</b>Sai dos orçamentos em aberto. O vídeo segue até expirar.</div></div>
+
+        <div class="card" data-quando="pos=aberto|semvideo|fechado">
+          <div class="rot">Orçamento em vídeo</div>
+          <div class="campo"><span>Enviado</span><span>hoje, 14:32 · compartilhamento do WhatsApp</span></div>
+          <div data-quando="pos=aberto|fechado">
+            <div class="campo"><span>Vídeo guardado até</span><span>28/10</span></div>
+            <div class="ed-acoes" style="justify-content:flex-start;margin-top:10px">
+              <button class="btn btn-sec"><svg class="i p"><use href="#i-down"/></svg>Baixar vídeo</button>
+              <button class="btn btn-sec"><svg class="i p"><use href="#i-clock"/></svg>Manter por mais 30 dias</button>
+            </div>
+          </div>
+          <p class="nota" data-quando="pos=semvideo" style="margin-top:8px">O vídeo não está mais guardado (passou dos 30 dias). Para mandar de novo, grave outro.</p>
+        </div>
+
+        <div class="card" data-quando="pos=aprovado" style="margin-top:0">
+          <div class="rot">Notas do pedido</div>
+          <p class="nota" style="margin:0;white-space:pre-line">Condições combinadas no orçamento:
+• Pix: R$ 506,16 (5% de desconto)
+• Cartão: até 6x de R$ 88,80 sem juros
+• Sinal: R$ 266,40 (50%)
+• Prazo: 5 dias úteis depois da aprovação da arte</p>
+        </div>
+
+        <div class="ed-acoes" data-quando="pos=aberto|semvideo">
+          <button class="btn btn-acc"><svg class="i p"><use href="#i-video"/></svg>Reenviar em vídeo 3D</button>
+        </div>
+        <div class="ed-acoes" data-quando="pos=aberto|semvideo" style="margin-top:8px">
+          <button class="btn" style="background:var(--success);color:#fff;flex:1;justify-content:center" data-set="pos=aprovado"><svg class="i p"><use href="#i-check"/></svg>Aprovar</button>
+          <button class="btn btn-sec" style="flex:1;justify-content:center" data-set="pos=fechado"><svg class="i p"><use href="#i-x"/></svg>Fechar</button>
+        </div>
+        <p class="nota" data-quando="pos=aberto|semvideo">Em aberto: quando a cliente topar pelo WhatsApp, Aprovar. Se não seguir, Fechar. As duas pedem confirmação.</p>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  // ── Estado do mockup ──────────────────────────────────────
+  const S = {
+    tema: "claro", entrada: "orcamento", passo: "1", peca: "com3d", grav: "pronto",
+    envio: "celular", pos: "aberto", consol: "nao", saida: "nao", vista: "frente", anim: "on",
+    cor: "#F7F5F0", canal: "compartilhar",
+    tog: { logo: true, pix: true, cartao: true, sinal: true, prazo: true },
+    msgEditada: null,
+  };
+  const NOMES_COR = { "#F7F5F0": "Branca", "#1F2937": "Preta", "#F9D5DC": "Rosa-bebê" };
+  const CANAIS = {
+    celular: [
+      { id: "compartilhar", ic: "i-share", wa: true, t1: "Compartilhar no WhatsApp", tag: "RECOMENDADO", t2: "O vídeo e a mensagem vão juntos, embutidos na conversa. Você escolhe a conversa da Mariana na lista.", botao: "Compartilhar no WhatsApp" },
+    ],
+    computador: [
+      { id: "baixar", ic: "i-down", wa: true, t1: "Baixar, copiar e abrir a conversa", t2: "Baixa o vídeo, copia a mensagem e abre a conversa da Mariana no wa.me com o texto pronto. Você arrasta o vídeo para a conversa.", botao: "Já mandei" },
+    ],
+    cloud: [
+      { id: "cloud", ic: "i-send", wa: true, t1: "Enviar pela Aura", tag: "FUTURO", fut: true, t2: "Sai do WhatsApp da loja, (11) 4002-8922, direto para a Mariana: vídeo e mensagem. Mostra entregue e lido.", botao: "Enviar pela Aura" },
+      { id: "compartilhar", ic: "i-share", t1: "Compartilhar no WhatsApp", t2: "Como hoje.", botao: "Compartilhar no WhatsApp" },
+    ],
+  };
+  const SUBS = {
+    "1": "Escolha a peça e a cor, e confira a arte do cliente",
+    "2": "Valores do orçamento e condições de pagamento",
+    "3": "Gravamos o giro de 7 s e montamos a mensagem",
+    "4": "Mande para o WhatsApp da Mariana",
+    "5": "Pronto",
+  };
+
+  // ── Dinheiro: regra canônica em centavos ──────────────────
+  const TOTAL = 47880 + 5400; // 53280
+  const PIX_PCT = 5;
+  const noPix = Math.round(TOTAL * (100 - PIX_PCT) / 100); // 50616
+  const parc = Math.min(6, Math.floor(TOTAL / 100 / 5), 12);
+  const valorParc = Math.round(TOTAL / parc);
+  const sinal = Math.round(TOTAL * 50 / 100);
+  const brl = (c) => "R$ " + (c / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  function mensagem() {
+    const fotoOnly = S.grav === "semsuporte" || S.peca === "sem3d";
+    const L = [];
+    L.push("Oi, Mariana! Aqui é da Ateliê Lume.");
+    L.push(fotoOnly ? "Segue uma imagem da peça, do jeito que vai ficar." : "Fiz um vídeo da peça para você ver como ela fica de todos os lados.");
+    L.push("");
+    L.push("*Caneca de porcelana 325 ml* · 12 unidades · R$ 478,80");
+    L.push("*Embalagem presente kraft* · 12 unidades · R$ 54,00");
+    L.push("*Total: " + brl(TOTAL) + "*");
+    if (S.tog.pix) L.push("• No Pix: *" + brl(noPix) + "* (" + PIX_PCT + "% de desconto)");
+    if (S.tog.cartao) L.push("• No cartão: até " + parc + "x de " + brl(valorParc) + " sem juros");
+    if (S.tog.sinal) L.push("• Sinal de 50% (" + brl(sinal) + ") para começar a produção");
+    if (S.tog.prazo) L.push("• Prazo: 5 dias úteis depois que você aprovar a arte");
+    L.push("Vale até 05/10.");
+    L.push("");
+    L.push("Posso seguir com o pedido?");
+    return L.join("\n");
+  }
+  function textoAtual() {
+    return S.msgEditada != null ? S.msgEditada : mensagem();
+  }
+  function formatarWa(txt) {
+    const esc = txt.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return esc
+      .replace(/\*([^*\n]+)\*/g, "<b>$1</b>")
+      .replace(/(loja\.getaura\.com\.br\/[^\s]+)/g, '<a href="#" onclick="return false">$1</a>');
+  }
+
+  // ── Mostrar/esconder por data-quando ──────────────────────
+  function casa(expr) {
+    return expr.trim().split(/\s+/).every((cl) => {
+      const [k, v] = cl.split("=");
+      return v.split("|").includes(String(S[k]));
+    });
+  }
+
+  function montarCanais() {
+    const lista = CANAIS[S.envio];
+    // Trocou o aparelho: volta para o caminho recomendado daquele aparelho.
+    if (montarCanais.ultimo !== S.envio || !lista.some((c) => c.id === S.canal)) S.canal = lista[0].id;
+    montarCanais.ultimo = S.envio;
+    const box = document.getElementById("canais");
+    box.innerHTML = lista.map((c) =>
+      '<div class="canal" role="radio" tabindex="0" data-canal="' + c.id + '" aria-checked="' + (c.id === S.canal) + '">' +
+        '<div class="ic' + (c.wa ? " wa" : "") + '"><svg class="i"><use href="#' + c.ic + '"/></svg></div>' +
+        '<div><div class="t1">' + c.t1 + (c.tag ? ' <span class="tag' + (c.fut ? " fut" : "") + '">' + c.tag + "</span>" : "") + "</div>" +
+        '<div class="t2">' + c.t2 + "</div></div></div>"
+    ).join("");
+    box.querySelectorAll(".canal").forEach((el) => el.addEventListener("click", () => { S.canal = el.dataset.canal; render(); }));
+  }
+
+  function render() {
+    document.documentElement.setAttribute("data-theme", S.tema === "escuro" ? "dark" : "light");
+    document.querySelectorAll("[data-set]").forEach((b) => {
+      const [k, v] = b.dataset.set.split("=");
+      if (b.closest(".estados") || b.classList.contains("cor") || b.closest(".vistas")) b.setAttribute("aria-pressed", String(S[k] === v));
+    });
+    document.querySelectorAll("[data-toggle]").forEach((b) => b.setAttribute("aria-checked", String(!!S.tog[b.dataset.toggle])));
+    montarCanais();
+    document.querySelectorAll("[data-quando]").forEach((el) => { el.hidden = !casa(el.dataset.quando); });
+
+    // Barra de passos
+    const n = Number(S.passo);
+    document.querySelectorAll(".passo").forEach((p) => {
+      const k = Number(p.dataset.n);
+      p.classList.toggle("ativo", k === n);
+      p.classList.toggle("feito", k < n);
+      p.querySelector(".bola").innerHTML = k < n ? '<svg class="i p" style="width:12px;height:12px"><use href="#i-check"/></svg>' : String(k);
+    });
+    document.getElementById("m-sub").textContent = SUBS[S.passo];
+
+    // Rodapé do modal
+    const voltar = document.getElementById("btn-voltar");
+    const seguir = document.getElementById("btn-seguir");
+    voltar.hidden = n === 1;
+    const info = document.getElementById("pe-info");
+    let pode = true, rot = "Continuar →", cls = "btn btn-pri";
+    let infoTxt = "Total " + brl(TOTAL) + (S.tog.pix ? " · " + brl(noPix) + " no Pix" : "");
+    if (n === 1 && S.peca === "sem3d") { pode = false; infoTxt = "Escolha \"Seguir com foto\" ou vincule o 3D"; }
+    if (n === 3) {
+      if (S.grav === "gravando") { pode = false; infoTxt = "Gravando…"; }
+      else if (S.grav === "falhou") { pode = false; infoTxt = "Tente de novo ou siga com a foto"; }
+      else if (S.grav === "semsuporte") infoTxt = "Vai a foto da peça";
+      else infoTxt = "Vídeo pronto · 7 s · guardado por 30 dias";
+    }
+    if (n === 4) {
+      const c = CANAIS[S.envio].find((x) => x.id === S.canal);
+      rot = c.botao; cls = "btn btn-wa";
+      infoTxt = "Para Mariana · (11) 98765-4321";
+      if (S.grav === "semsuporte" && S.canal === "compartilhar") infoTxt = "Compartilha a foto e o texto";
+    }
+    seguir.className = cls;
+    seguir.textContent = rot;
+    seguir.disabled = !pode;
+    seguir.style.opacity = pode ? "1" : ".45";
+    info.textContent = infoTxt;
+
+    // Sucesso
+    const como = { compartilhar: "pelo compartilhamento do WhatsApp, com o vídeo", baixar: "com o vídeo arrastado para a conversa", cloud: "pela Aura, do WhatsApp da loja" }[S.canal] || "";
+    document.getElementById("suc-como").textContent = "Hoje às 14:32, " + como + ". O orçamento fica em aberto.";
+
+    // Mensagem
+    const ta = document.getElementById("msg");
+    if (document.activeElement !== ta) ta.value = textoAtual();
+    document.getElementById("msg-conta").textContent = ta.value.length + " caracteres";
+    document.getElementById("msg-restaurar").hidden = S.msgEditada == null;
+    document.getElementById("wa-txt-celular").innerHTML = formatarWa(textoAtual());
+    document.getElementById("wa-txt-cloud").innerHTML = formatarWa(
+      "Oi, Mariana! Aqui é da Ateliê Lume.\nSegue o vídeo da sua caneca.\n\n*Total: " + brl(TOTAL) + "*" +
+      (S.tog.pix ? "\nNo Pix: *" + brl(noPix) + "*" : "") +
+      (S.tog.cartao ? "\nOu até " + parc + "x de " + brl(valorParc) + " sem juros" : "") +
+      "\nVale até 05/10.");
+    document.getElementById("wa-sub").textContent = {
+      celular: "O vídeo chega embutido na conversa, com os valores e as condições como legenda. Sem link.",
+      computador: "Igual: o vídeo arrastado para a conversa chega embutido, com a mensagem.",
+      cloud: "Futuro, pela Cloud API: template com vídeo e texto, sem a lojista escolher a conversa.",
+    }[S.envio];
+
+    document.querySelectorAll("[data-cond-val]").forEach((el) => { el.style.visibility = S.tog[el.dataset.condVal] ? "visible" : "hidden"; });
+    marcarTexturaSuja();
+    if (typeof animar === "function" && pronto) animar();
+  }
+
+  document.addEventListener("click", (e) => {
+    const alvo = e.target.closest("[data-set],[data-ir],[data-toggle]");
+    if (!alvo) return;
+    if (alvo.dataset.toggle) { S.tog[alvo.dataset.toggle] = !S.tog[alvo.dataset.toggle]; if (alvo.dataset.toggle !== "logo") S.msgEditada = null; render(); return; }
+    const par = (alvo.dataset.set || alvo.dataset.ir);
+    const i = par.indexOf("=");
+    const k = par.slice(0, i), v = par.slice(i + 1);
+    S[k] = v;
+    if (k === "vista") { rotAlvo = v === "frente" ? 0 : Math.PI; vistaEm = performance.now(); }
+    if (k === "grav") { autoConcluir = false; if (v === "gravando") inicioGrav = performance.now(); }
+    if (alvo.dataset.ir) document.getElementById("sec-modal").scrollIntoView({ behavior: "smooth", block: "start" });
+    render();
+  });
+  document.getElementById("btn-voltar").addEventListener("click", () => { S.passo = String(Math.max(1, Number(S.passo) - 1)); render(); });
+  document.getElementById("btn-seguir").addEventListener("click", () => {
+    const n = Number(S.passo);
+    if (n === 1 && S.peca === "sem3d") return;
+    if (n === 2 && S.grav === "pronto") { S.grav = "gravando"; inicioGrav = performance.now(); autoConcluir = true; }
+    S.passo = String(Math.min(5, n + 1));
+    render();
+  });
+  // Condições: campo vazio = condição fora da mensagem.
+  document.querySelectorAll("[data-cond-input]").forEach((inp) => inp.addEventListener("input", () => {
+    S.tog[inp.dataset.condInput] = inp.value.trim() !== "";
+    S.msgEditada = null;
+    render();
+  }));
+  document.getElementById("msg").addEventListener("input", (e) => { S.msgEditada = e.target.value; render(); });
+  document.getElementById("msg-restaurar").addEventListener("click", () => { S.msgEditada = null; render(); });
+  ["wa-video", "wa-video2"].forEach((id) => document.getElementById(id).addEventListener("click", (e) => e.currentTarget.classList.toggle("tocando")));
+
+  // ── A caneca "3D" em canvas 2D ────────────────────────────
+  // Cilindro com a textura da arte mapeada por coluna (u = ângulo),
+  // sombreado cilíndrico, boca em elipse e asa com profundidade.
+  let pronto = false;
+  let texturaSuja = true;
+  let textura = null;
+  function marcarTexturaSuja() { texturaSuja = true; }
+
+  function lum(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+  }
+  function desenharArte(ctx, x, y, w, h, escura) {
+    // "foto" do casal: gradiente de céu + duas silhuetas
+    ctx.save();
+    const r = Math.min(w, h) * 0.08;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+    ctx.clip();
+    const g = ctx.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, "#F6C9A8"); g.addColorStop(0.55, "#E98E7B"); g.addColorStop(1, "#7A4E6E");
+    ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = "rgba(255,240,210,.9)";
+    ctx.beginPath(); ctx.arc(x + w * 0.72, y + h * 0.3, h * 0.11, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#3B2A3A";
+    [[0.4, 0.55], [0.6, 0.52]].forEach(([px, py]) => {
+      ctx.beginPath(); ctx.arc(x + w * px, y + h * py, h * 0.1, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(x + w * px, y + h * (py + 0.32), h * 0.17, h * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.restore();
+    ctx.fillStyle = escura ? "#F8E7D6" : "#7A2E4A";
+    ctx.textAlign = "center";
+    ctx.font = "italic 700 " + Math.round(h * 0.2) + "px Georgia, serif";
+    ctx.fillText("Mari & Léo", x + w / 2, y + h + h * 0.26);
+    ctx.font = "600 " + Math.round(h * 0.11) + "px Georgia, serif";
+    ctx.fillText("12 · 10 · 2026", x + w / 2, y + h + h * 0.42);
+  }
+  function montarTextura() {
+    const TW = 1200, TH = 460;
+    const c = textura || document.createElement("canvas");
+    c.width = TW; c.height = TH;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = S.cor; ctx.fillRect(0, 0, TW, TH);
+    const escura = lum(S.cor) < 0.45;
+    // Frente (u = 0.5): a foto e o texto
+    desenharArte(ctx, TW * 0.5 - 150, 60, 300, 250, escura);
+    // Costas (u = 0.0/1.0): um coração e as iniciais
+    ctx.fillStyle = escura ? "#F8B4C8" : "#D6336C";
+    [0, TW].forEach((cx) => {
+      ctx.save(); ctx.translate(cx, 170); ctx.scale(2.4, 2.4);
+      ctx.beginPath(); ctx.moveTo(0, 18); ctx.bezierCurveTo(-30, -2, -14, -24, 0, -8); ctx.bezierCurveTo(14, -24, 30, -2, 0, 18); ctx.fill();
+      ctx.restore();
+      ctx.font = "italic 700 46px Georgia, serif"; ctx.textAlign = "center";
+      ctx.fillText("M ♥ L", cx, 300);
+    });
+    textura = c;
+    texturaSuja = false;
+  }
+
+  function desenharCaneca(cv, rot, opcoes) {
+    const o = opcoes || {};
+    const ctx = cv.getContext("2d");
+    const W = cv.width, H = cv.height;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    // Cenário de estúdio (fixo: é o fundo do vídeo, não do tema)
+    const bg = ctx.createRadialGradient(W * 0.5, H * 0.35, H * 0.05, W * 0.5, H * 0.5, H * 0.85);
+    bg.addColorStop(0, "#FBF8F3"); bg.addColorStop(1, "#DCD4C8");
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+    const escala = Math.min(W / 480, H / 600);
+    const R = 118 * escala * (o.zoom || 1);
+    const altura = 250 * escala * (o.zoom || 1);
+    const cx = W * 0.47;
+    const y0 = H * 0.5 - altura * 0.55 + (o.dy || 0) * escala;
+    const y1 = y0 + altura;
+    const ry = R * 0.24;
+
+    // sombra no chão
+    const sg = ctx.createRadialGradient(cx, y1 + ry * 0.6, 4, cx, y1 + ry * 0.6, R * 1.5);
+    sg.addColorStop(0, "rgba(40,30,20,.35)"); sg.addColorStop(1, "rgba(40,30,20,0)");
+    ctx.fillStyle = sg;
+    ctx.beginPath(); ctx.ellipse(cx, y1 + ry * 0.6, R * 1.5, ry * 1.4, 0, 0, Math.PI * 2); ctx.fill();
+
+    // asa: ponto da textura em u = 0.75 aparece em θ = π/2 − rot
+    let a = Math.PI / 2 - rot;
+    a = Math.atan2(Math.sin(a), Math.cos(a));
+    const frenteAsa = Math.cos(a) > 0;
+    function asa() {
+      const s = Math.sin(a);
+      const hx = cx + (R + R * 0.3 * Math.abs(s)) * s;
+      const hy = (y0 + y1) / 2 + ry * 0.3 * Math.cos(a);
+      const rx = Math.max(R * 0.07, R * 0.34 * Math.abs(s));
+      const rh = altura * 0.3;
+      ctx.lineWidth = R * 0.17;
+      ctx.strokeStyle = S.cor;
+      ctx.beginPath(); ctx.ellipse(hx, hy, rx, rh, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = R * 0.17;
+      ctx.strokeStyle = "rgba(0,0,0," + (0.12 + 0.18 * (1 - Math.abs(s))) + ")";
+      ctx.beginPath(); ctx.ellipse(hx, hy, rx, rh, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = R * 0.05;
+      ctx.strokeStyle = "rgba(255,255,255,.35)";
+      ctx.beginPath(); ctx.ellipse(hx - R * 0.02, hy, rx, rh, 0, Math.PI * 0.9, Math.PI * 1.45); ctx.stroke();
+    }
+    if (!frenteAsa) asa();
+
+    // corpo: colunas da textura
+    if (texturaSuja || !textura) montarTextura();
+    const TW = textura.width, TH = textura.height;
+    const passo = Math.max(1, Math.round(escala));
+    for (let x = -R; x < R; x += passo) {
+      const s = Math.max(-1, Math.min(1, (x + passo / 2) / R));
+      const th = Math.asin(s);
+      let u = 0.5 + (th + rot) / (Math.PI * 2);
+      u = u - Math.floor(u);
+      const dy = ry * Math.sqrt(1 - s * s);
+      ctx.drawImage(textura, Math.floor(u * (TW - 1)), 0, 1, TH, cx + x, y0 + dy, passo + 0.6, altura);
+    }
+    // sombreado cilíndrico
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(cx - R, y0); ctx.lineTo(cx - R, y1);
+    ctx.ellipse(cx, y1, R, ry, 0, Math.PI, 0, true);
+    ctx.lineTo(cx + R, y0);
+    ctx.ellipse(cx, y0, R, ry, 0, 0, Math.PI, false);
+    ctx.closePath();
+    ctx.clip();
+    const sh = ctx.createLinearGradient(cx - R, 0, cx + R, 0);
+    sh.addColorStop(0, "rgba(20,15,10,.42)"); sh.addColorStop(0.22, "rgba(20,15,10,.06)");
+    sh.addColorStop(0.3, "rgba(255,255,255,.34)"); sh.addColorStop(0.37, "rgba(255,255,255,0)");
+    sh.addColorStop(0.72, "rgba(20,15,10,.04)"); sh.addColorStop(1, "rgba(20,15,10,.48)");
+    ctx.fillStyle = sh; ctx.fillRect(cx - R, y0 - ry, R * 2, altura + ry * 3);
+    const base = ctx.createLinearGradient(0, y1 - altura * 0.12, 0, y1 + ry);
+    base.addColorStop(0, "rgba(0,0,0,0)"); base.addColorStop(1, "rgba(0,0,0,.18)");
+    ctx.fillStyle = base; ctx.fillRect(cx - R, y1 - altura * 0.12, R * 2, altura * 0.12 + ry * 2);
+    ctx.restore();
+
+    // boca
+    ctx.fillStyle = S.cor;
+    ctx.beginPath(); ctx.ellipse(cx, y0, R, ry, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,.12)"; ctx.lineWidth = 1.2 * escala; ctx.stroke();
+    const dentro = ctx.createLinearGradient(0, y0 - ry, 0, y0 + ry);
+    dentro.addColorStop(0, "rgba(0,0,0,.42)"); dentro.addColorStop(1, "rgba(0,0,0,.08)");
+    ctx.fillStyle = S.cor;
+    ctx.beginPath(); ctx.ellipse(cx, y0 + ry * 0.06, R * 0.92, ry * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = dentro;
+    ctx.beginPath(); ctx.ellipse(cx, y0 + ry * 0.06, R * 0.92, ry * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+
+    if (frenteAsa) asa();
+
+    // logo da loja no canto (Q4)
+    if (o.logo && S.tog.logo) {
+      const lr = 17 * escala;
+      const lx = W - lr - 16 * escala, ly = H - lr - 16 * escala;
+      ctx.fillStyle = "rgba(15,118,110,.92)";
+      ctx.beginPath(); ctx.arc(lx, ly, lr, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.font = "700 " + Math.round(13 * escala) + "px Georgia, serif";
+      ctx.fillText("AL", lx, ly + 1);
+      ctx.textBaseline = "alphabetic";
+      ctx.fillStyle = "rgba(60,50,40,.7)"; ctx.textAlign = "right";
+      ctx.font = "600 " + Math.round(11 * escala) + "px system-ui, sans-serif";
+      ctx.fillText("Ateliê Lume", lx - lr - 6 * escala, ly + 4 * escala);
+    }
+  }
+
+  function desenharArteMini(cv) {
+    const ctx = cv.getContext("2d");
+    ctx.fillStyle = "#F7F5F0"; ctx.fillRect(0, 0, cv.width, cv.height);
+    desenharArte(ctx, 14, 8, cv.width - 28, cv.height * 0.58, false);
+  }
+
+  // ── Animação (um laço só; só desenha o que está visível) ──
+  let rotViewer = 0.35, rotAlvo = 0, arrastando = false, ultimoX = 0, soltouEm = 0, vistaEm = -1e9, autoConcluir = false;
+  let inicioGrav = performance.now();
+  const viewer = document.getElementById("viewer");
+  viewer.addEventListener("pointerdown", (e) => { arrastando = true; ultimoX = e.clientX; viewer.setPointerCapture(e.pointerId); viewer.style.cursor = "grabbing"; });
+  viewer.addEventListener("pointermove", (e) => { if (!arrastando) return; rotViewer -= (e.clientX - ultimoX) * 0.012; ultimoX = e.clientX; });
+  const soltar = () => { arrastando = false; soltouEm = performance.now(); viewer.style.cursor = "grab"; };
+  viewer.addEventListener("pointerup", soltar);
+  viewer.addEventListener("pointercancel", soltar);
+
+  function visivel(el) {
+    if (!el.offsetParent) return false;
+    const r = el.getBoundingClientRect();
+    return r.bottom > 0 && r.top < innerHeight && r.width > 0;
+  }
+  function ajustarResolucao(cv) {
+    const r = cv.getBoundingClientRect();
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = Math.max(40, Math.round(r.width * dpr)), h = Math.max(40, Math.round(r.height * dpr));
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  }
+
+  const PERIODO = 7000;
+  function giro(t) {
+    const p = (t % PERIODO) / PERIODO;
+    const ease = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+    return ease * Math.PI * 2;
+  }
+
+  let laco = false;
+  function quadro(t) {
+    desenharTudo(t);
+    if (S.anim === "on") requestAnimationFrame(quadro); else laco = false;
+  }
+  function animar() {
+    if (S.anim === "on" && !laco) { laco = true; requestAnimationFrame(quadro); }
+    if (S.anim === "off") setTimeout(() => desenharTudo(1500), 0);
+  }
+  function desenharTudo(t) {
+    document.querySelectorAll("canvas[data-caneca]").forEach((cv) => {
+      // Pausado, desenha tudo uma vez (inclusive o que está fora da tela).
+      if (S.anim === "off" ? !cv.offsetParent : !visivel(cv)) return;
+      ajustarResolucao(cv);
+      const tipo = cv.dataset.caneca;
+      if (tipo === "thumb") return desenharCaneca(cv, 0.35, { zoom: 1.35, dy: 20 });
+      if (tipo === "viewer") {
+        if (!arrastando) {
+          if (t - vistaEm < 2500) {
+            const d = Math.atan2(Math.sin(rotAlvo - rotViewer), Math.cos(rotAlvo - rotViewer));
+            rotViewer += d * 0.08;
+          } else if (t - soltouEm > 2500) rotViewer += 0.006;
+        }
+        return desenharCaneca(cv, rotViewer, { logo: true });
+      }
+      if (tipo === "gravacao") {
+        if (S.grav === "gravando") {
+          if (autoConcluir && t - inicioGrav > PERIODO + 1200) { S.grav = "pronto"; autoConcluir = false; render(); }
+          const el = (t - inicioGrav) % (PERIODO + 1200);
+          const seg = Math.min(7, el / 1000);
+          document.getElementById("grav-txt").textContent = "Gravando o giro… " + seg.toFixed(1).replace(".", ",") + " s de 7 s";
+          document.getElementById("grav-barra").style.width = (seg / 7 * 100) + "%";
+          return desenharCaneca(cv, (rotAlvo + giro(Math.min(el, PERIODO))), { logo: true });
+        }
+        if (S.grav === "falhou") return desenharCaneca(cv, rotAlvo + 2.1, { logo: true });
+        return desenharCaneca(cv, rotAlvo + giro(t), { logo: true });
+      }
+      if (tipo === "foto" || tipo === "wa-foto") return desenharCaneca(cv, 0, { logo: true });
+      if (tipo === "wa") {
+        const tocando = cv.parentElement.classList.contains("tocando");
+        return desenharCaneca(cv, tocando ? rotAlvo + giro(t) : rotAlvo, { logo: true });
+      }
+    });
+  }
+
+  document.querySelectorAll("canvas[data-arte]").forEach(desenharArteMini);
+  // Estado pela URL (?passo=4&envio=computador&tema=escuro&alvo=sec-modal):
+  // cada combinação vira um link que dá para mandar ao PO.
+  const q = new URLSearchParams(location.search);
+  if (q.get("parado") === "1") S.anim = "off";
+  Object.keys(S).forEach((k) => { if (typeof S[k] === "string" && q.has(k)) S[k] = q.get(k); });
+  render();
+  // ?so=sec-modal mostra só uma seção (útil para print e para revisar um trecho).
+  if (q.get("so")) {
+    const so = q.get("so");
+    document.querySelectorAll(".estados, .intro, #sec-entrada, #sec-modal, #sec-whats, #sec-depois").forEach((el) => { if (el.id !== so) el.style.display = "none"; });
+    document.querySelector(".celulares").style.marginTop = "0";
+    document.getElementById(so).style.marginTop = "0";
+  }
+  if (q.get("alvo")) { const alvo = document.querySelector(q.get("alvo").startsWith(".") ? q.get("alvo") : "#" + q.get("alvo")); if (alvo) alvo.scrollIntoView(); }
+  pronto = true;
+  animar();
+})();
+</script>
+</body>
+</html>
