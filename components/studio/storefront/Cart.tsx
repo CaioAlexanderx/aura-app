@@ -20,6 +20,13 @@ import { FolhaDaSacolaFechada } from "./SacolaFechada";
 // O verso e o meio estao na peca? Era uma COPIA da regra do hook, aqui;
 // desde a Fase 2 (25/09/2026) as duas telas leem o mesmo modulo puro.
 import { versoEfetivo as effectiveBackSelected, meioEfetivo as effectiveMiddleSelected, precoDaLinha } from "./precoDaSacola";
+// "com verso personalizado" é outra pergunta que "o verso conta no
+// preço?" (versoEfetivo, acima): um verso INCLUSO sem cobrança está
+// sempre "ativo" pela conta do preço, mesmo que a cliente nunca tenha
+// preenchido nada nele — versoAtivo já resolve isso (escolhido E
+// preenchido, decisão do Caio de 04/09/2026, hoje usada no resumo da
+// sacola); reaproveitada aqui para o mesmo texto (QA 27/09/2026).
+import { versoAtivo } from "./versoDoPedido";
 
 /** Barra flutuante no stage="list" quando há itens no carrinho */
 export function CartBar({ sf }: { sf: StorefrontState }) {
@@ -266,9 +273,9 @@ export function CartItemList({ sf }: { sf: StorefrontState }) {
                     + verso ({dinheiro(Number(l.product.customization_config?.back_price_delta || 0))})
                   </Texto>
                 )}
-              {backActive &&
-                (Number(l.product.customization_config?.back_price_delta) || 0) === 0 &&
-                l.product.customization_config?.has_back === true && (
+              {(Number(l.product.customization_config?.back_price_delta) || 0) === 0 &&
+                l.product.customization_config?.has_back === true &&
+                versoAtivo(l.product.customization_config, l.hasBackSelected, l.values) && (
                   <Texto style={{ fontSize: 10, color: T.ink3, marginTop: 1 }}>com verso personalizado</Texto>
                 )}
               {middleActive &&

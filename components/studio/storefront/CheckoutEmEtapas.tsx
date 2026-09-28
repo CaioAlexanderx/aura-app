@@ -35,7 +35,6 @@ import { Icon } from "@/components/Icon";
 import { dinheiro } from "./moeda";
 import { wash } from "./theme";
 import { modoDaVitrine } from "./modoDaVitrine";
-import { Checkout } from "./Checkout";
 import { BarraDeCookies } from "./ConsentimentoDaVitrine";
 import { MiniaturaDaLinha } from "./ui/MiniaturaDaLinha";
 import { Campo, Botao, Caixinha, Nota, LinhaDeProtecao, BORDA_DE_CAMPO, FUNDO_APAGADO, FUNDO_SUAVE } from "./ui/Formulario";
@@ -59,6 +58,7 @@ import { parcelasDoPreco } from "./parcelamento";
 import { maskPlate } from "./courierPlate";
 import { resumoDaLinha } from "./resumoDaPeca";
 import { valoresDaSacola } from "./SacolaEmGaveta";
+import { BotaoOrcamentoDaSacola } from "./SacolaFechada";
 import { precoDaLinha, descontoDoPix, pecasNaSacola } from "./precoDaSacola";
 import { medirNaVitrine, itensDaSacola } from "./eventosDaVitrine";
 import { enderecoDaApi } from "./enderecoDaApi";
@@ -436,11 +436,59 @@ function AvisoDePedidoPendente({
 
 export function CheckoutEmEtapas({ sf }: { sf: StorefrontState }) {
   const modo = modoDaVitrine(sf.store);
-  // Loja fechada: o checkout de hoje já sabe mostrar o recado e o
-  // orçamento (Fase 1C). Não há pedido para montar em etapas.
   if (!sf.store) return null;
-  if (!modo.aceita) return <Checkout sf={sf} />;
+  // Loja fechada: não há pedido para montar em etapas — mas a cliente
+  // continua dentro da vitrine nova. Caindo no Checkout de hoje (QA
+  // 27/09/2026), a tela perdia a casca inteira: cabeçalho com o nome da
+  // loja, tipografia dela, o papel quente — e mostrava um layout antigo
+  // ("SACOLA / Seu pedido") que não existe mais em nenhum outro lugar da
+  // vitrine nova.
+  if (!modo.aceita) return <CheckoutFechado sf={sf} />;
   return <CheckoutAberto sf={sf} />;
+}
+
+/**
+ * A etapa 3 com a loja fechada: a mesma casca do checkout novo, o recado
+ * da loja e "Pedir orçamento desta sacola" (BotaoOrcamentoDaSacola, o
+ * mesmo da gaveta) — sem etapas, porque não há pedido para fechar.
+ */
+function CheckoutFechado({ sf }: { sf: StorefrontState }) {
+  const T = usePaletaDaVitrine();
+  const tipo = useTipografia();
+  const modo = modoDaVitrine(sf.store);
+  const v = valoresDaSacola(sf);
+  function voltar() { sf.goTo("list"); }
+  return (
+    <View style={{ flex: 1, backgroundColor: T.bg }} testID="checkout-fechado">
+      <Cabecalho sf={sf} etapa={1} onVoltar={voltar} larga={false} />
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 36, gap: 16 }}>
+        <Texto accessibilityRole="header" style={{ fontFamily: tipo.display, fontSize: 27, lineHeight: 33, color: T.ink }}>
+          A loja não está aceitando pedidos agora
+        </Texto>
+        <Nota tom="ambar" icone="calendar" testID="checkout-fechado-recado">{modo.recado}</Nota>
+        {sf.cart.length ? (
+          <View style={{ gap: 12, borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 14, backgroundColor: T.card }}>
+            {sf.cart.map((l) => (
+              <View key={l.lineId} style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+                <MiniaturaDaLinha line={l} tamanho={52} quantidade={l.qty} corDaLoja={(sf.store as any)?.site?.primary_color} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Texto numberOfLines={1} style={{ fontSize: 14, fontWeight: "700", color: T.ink }}>{l.product.name}</Texto>
+                  {resumoDaLinha(l).length ? (
+                    <Texto numberOfLines={1} style={{ fontSize: 12.5, color: T.ink3 }}>{resumoDaLinha(l).join(" · ")}</Texto>
+                  ) : null}
+                </View>
+              </View>
+            ))}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", borderTopWidth: 1, borderTopColor: T.border, paddingTop: 10 }}>
+              <Texto style={{ fontSize: 13.5, fontWeight: "700", color: T.ink }}>Estimativa</Texto>
+              <Numero style={{ fontSize: 15, fontWeight: "700", color: T.ink }}>{dinheiro(v.subtotal)}</Numero>
+            </View>
+          </View>
+        ) : null}
+        <BotaoOrcamentoDaSacola sf={sf} />
+      </ScrollView>
+    </View>
+  );
 }
 
 function CheckoutAberto({ sf }: { sf: StorefrontState }) {
@@ -1003,7 +1051,9 @@ function CheckoutAberto({ sf }: { sf: StorefrontState }) {
 
       <View style={{ borderWidth: 1, borderColor: T.border, borderRadius: 16, backgroundColor: T.card, marginTop: 6 }}>
         {[
-          { rotulo: "Seus dados", texto: [sf.customerName.trim(), sf.customerPhone].filter(Boolean).join(" · "), ir: 1 as Etapa },
+          // QA 27/09: o CPF/CNPJ que vai na nota entra no resumo, para a
+          // cliente conferir antes de pagar (mascarado, como ela digitou).
+          { rotulo: "Seus dados", texto: [sf.customerName.trim(), sf.customerPhone, sf.querDocumento ? sf.customerDocument.trim() : ""].filter(Boolean).join(" · "), ir: 1 as Etapa },
           { rotulo: "Entrega", texto: entregaResumo, ir: 2 as Etapa },
         ].map((b, i) => (
           <View key={b.rotulo} style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 14, borderTopWidth: i ? 1 : 0, borderTopColor: T.border }}>

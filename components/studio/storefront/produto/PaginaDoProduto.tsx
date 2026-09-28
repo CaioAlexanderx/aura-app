@@ -53,7 +53,8 @@ import { relacionadosDe } from "../relacionados";
 import { seloDoProduto, pecaMaisPedida } from "../selosDoProduto";
 import { tituloDaPagina } from "../rotasDaVitrine";
 import { dinheiro } from "../moeda";
-import { SOBRE_FOTO } from "../theme";
+import { SOBRE_FOTO, tintaSobre } from "../theme";
+import { nomeDaCor } from "../leituraDaCor";
 import { useReduzirMovimento } from "../movimento";
 import { temPersonalizacaoVisivel } from "@/components/studio/customizationConfig";
 import { ART_ADJUST, ART_DESIGNER, ART_NONE, ART_SERVICE_BRIEF_ID } from "@/components/studio/artService";
@@ -411,11 +412,16 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
                   onPress={() => setValor(campoCor.id, c)}
                   accessibilityRole="radio"
                   accessibilityState={{ checked: sel }}
-                  accessibilityLabel={`${escolha?.label || c}${delta ? ", mais " + dinheiro(delta) : ""}`}
+                  accessibilityLabel={`${escolha?.label || nomeDaCor(c)}${delta ? ", mais " + dinheiro(delta) : ""}`}
                   style={{ width: 50, minHeight: 50, alignItems: "center", justifyContent: "center" }}
                 >
-                  <View style={[{ width: 36, height: 36, borderRadius: 18, backgroundColor: c, borderWidth: 1, borderColor: "rgba(0,0,0,.12)" },
-                    Platform.OS === "web" ? ({ boxShadow: `inset 0 0 0 3px ${t.bg2}`, ...(sel ? { outline: `2px solid ${t.marcaTexto}`, outlineOffset: 2 } : null) } as any) : sel ? { borderWidth: 2, borderColor: t.marcaTexto } : null]} />
+                  {/* O anel na cor da loja e o visto só aparecem na SELECIONADA
+                      (QA 27/09/2026): antes todo swatch levava um anel interno
+                      fixo e a bolinha preta parecia marcada sem estar. */}
+                  <View style={[{ width: 36, height: 36, borderRadius: 18, backgroundColor: c, borderWidth: 1, borderColor: "rgba(0,0,0,.12)", alignItems: "center", justifyContent: "center" },
+                    sel ? (Platform.OS === "web" ? ({ outline: `2px solid ${t.marcaTexto}`, outlineOffset: 2 } as any) : { borderWidth: 2, borderColor: t.marcaTexto }) : null]}>
+                    {sel ? <Icon name="check" size={16} color={tintaSobre(c)} /> : null}
+                  </View>
                   {delta ? <Numero style={{ fontSize: 10, color: sel ? t.ink : t.ink3, marginTop: 2 }}>+{dinheiro(delta)}</Numero> : null}
                 </Pressable>
               );

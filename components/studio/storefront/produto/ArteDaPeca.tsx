@@ -23,13 +23,14 @@ import { Texto, Numero } from "../TipografiaVitrine";
 import { contraste, wash } from "../theme";
 import { Icon } from "@/components/Icon";
 import { dinheiro } from "../moeda";
+import { nomeDaCor } from "../leituraDaCor";
 import { FieldOption } from "../fields/FieldOption";
 import { FieldColor } from "../fields/FieldColor";
 import {
   ART_ADJUST, ART_DESIGNER, ART_NONE, ART_SERVICE_BRIEF_ID, briefingFor, choiceHint, priceLabel,
 } from "@/components/studio/artService";
 import {
-  camposDoLado, origensDoLado, ladoPreenchido, nomeDoLado,
+  camposDoLado, origensDoLado, ladoPreenchido, ladoTemConteudo, nomeDoLado,
   type Lado, type NomeDaPeca,
 } from "./regrasDaPagina";
 import { EnvioDaArte, type EstadoDoEnvio } from "./EnvioDaArte";
@@ -216,7 +217,7 @@ export function CampoDeTexto({
             {paleta.map((c) => {
               const sel = c.toLowerCase() === String(corAtual || "").toLowerCase();
               return (
-                <Pressable key={c} onPress={() => onCor(c)} accessibilityRole="radio" accessibilityState={{ checked: sel }} accessibilityLabel={`Cor da arte ${c}`}
+                <Pressable key={c} onPress={() => onCor(c)} accessibilityRole="radio" accessibilityState={{ checked: sel }} accessibilityLabel={`Cor da arte: ${nomeDaCor(c)}`}
                   style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
                   <View style={[{ width: 30, height: 30, borderRadius: 15, backgroundColor: c, borderWidth: 1, borderColor: wash(t.ink, 0.12) },
                     sel && Platform.OS === "web" ? ({ outline: `2px solid ${t.marcaTexto}`, outlineOffset: 2 } as any) : sel ? { borderWidth: 2, borderColor: t.marcaTexto } : null]} />
@@ -274,10 +275,9 @@ function NotaDoLado({ icone, texto }: { icone: string; texto: string }) {
 
 /** Os lados que têm o que preencher — as abas do formulário e do mockup. */
 export function ladosComConteudo(cfg: CustomizationConfig | null | undefined): Lado[] {
-  const tem = (l: Lado) => camposDoLado(cfg, l).length > 0 || !!origensDoLado(cfg, l).envio || !!origensDoLado(cfg, l).pronta;
   const out: Lado[] = ["front"];
-  if (cfg?.has_back === true && tem("back")) out.push("back");
-  if (cfg?.has_middle === true && tem("middle")) out.push("middle");
+  if (cfg?.has_back === true && ladoTemConteudo(cfg, "back")) out.push("back");
+  if (cfg?.has_middle === true && ladoTemConteudo(cfg, "middle")) out.push("middle");
   return out;
 }
 

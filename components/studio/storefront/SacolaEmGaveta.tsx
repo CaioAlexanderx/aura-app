@@ -358,6 +358,12 @@ function Desfazer({ sf }: { sf: StorefrontState }) {
  */
 export function AvisoDeAdicionado({ sf }: { sf: StorefrontState }) {
   const T = usePaletaDaVitrine();
+  const { width } = useWindowDimensions();
+  // No desktop o aviso cobria a busca e a sacola do cabeçalho preso (QA
+  // 27/09/2026): `top: 8` media a partir do topo da página, não do fim do
+  // cabeçalho. 146 px passa da barra + a linha de categorias da home
+  // (76 + 58), o cabeçalho mais alto que este aviso pode encontrar.
+  const abaixoDoCabecalho = width >= 900 ? 146 : 8;
   const a = sf.adicionado;
   useEffect(() => {
     if (!a) return;
@@ -371,7 +377,7 @@ export function AvisoDeAdicionado({ sf }: { sf: StorefrontState }) {
   const resumo = resumoDaLinha(l).slice(0, 2).join(" · ");
   const tinta = tintaSobre(T.ink);
   return (
-    <View pointerEvents="box-none" style={{ position: "absolute", top: 8, left: 12, right: 12, zIndex: 80, alignItems: "center" }}>
+    <View pointerEvents="box-none" style={{ position: "absolute", top: abaixoDoCabecalho, left: 12, right: 12, zIndex: 80, alignItems: "center" }}>
       <View
         testID="aviso-adicionado"
         accessibilityLiveRegion="polite"

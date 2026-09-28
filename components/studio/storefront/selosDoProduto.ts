@@ -21,6 +21,7 @@
 // ============================================================
 import type { StudioStoreProduct } from "./types";
 import { faixaLabel } from "./qtyTiers";
+import { ladoTemConteudo } from "./produto/regrasDaPagina";
 
 /** Peça com menos dias que isto é "Novo". Mesma régua da loja comum. */
 export const DIAS_PARA_NOVO = 14;
@@ -70,7 +71,11 @@ export function chipsDoProduto(p: StudioStoreProduct): ChipDoProduto[] {
   if (p.visual_kind === "model3d") chips.push({ texto: "Mockup 3D" });
   else if (p.visual_kind === "photo2d") chips.push({ texto: "Prévia da arte" });
 
-  if (cfg.has_back === true) chips.push({ texto: "Frente e verso" });
+  // QA 27/09/2026: `has_back` sozinho marcava TODA peça com o selo, mesmo
+  // quando o verso não tem campo nem origem de arte (a página nem chega a
+  // oferecer o verso) — a mesma pergunta de `ladosComConteudo`
+  // (ArteDaPeca.tsx): só conta quando o verso realmente aparece na peça.
+  if (cfg.has_back === true && ladoTemConteudo(p.customization_config, "back")) chips.push({ texto: "Frente e verso" });
 
   const temCor = campos.some((f) => f && f.type === "color");
   if (temCor) chips.push({ texto: "Escolha a cor" });

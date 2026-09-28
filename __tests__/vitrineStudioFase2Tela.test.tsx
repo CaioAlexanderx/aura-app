@@ -50,7 +50,7 @@ jest.mock("expo-router", () => ({
 
 import { PaginaDaVitrine, CascaDaVitrine, ConteudoDaVitrine } from "@/components/studio/storefront/PaginaDaVitrine";
 import {
-  ProvedorDaRota, PedidoNaRota, SacolaNaRota, RetornoDoCartao,
+  ProvedorDaRota, PedidoNaRota, SacolaNaRota, RetornoDoCartao, TelaNaRota,
 } from "@/components/studio/storefront/VitrineNaRota";
 
 const SLUG = "aura-qa";
@@ -273,6 +273,33 @@ describe("a sacola em gaveta (Tela 1)", () => {
     expect(naTela("Pedir orçamento desta sacola")).toBe(true);
     expect(nenhumId("finalizar-compra")).toBe(true);
   });
+
+  test("QA 27/09/2026: /finalizar com a loja fechada usa a casca do checkout novo, não o layout antigo", async () => {
+    // Antes, `/<slug>/finalizar` com a loja fechada caía no Checkout de
+    // ANTES da Fase 2 (Checkout.tsx): cabeçalho "Seu pedido" próprio, sem
+    // o nome da loja nem a tipografia dela. Um link salvo de antes da loja
+    // fechar (ou um F5 na etapa 3) perdia a casca nova inteira.
+    localStorage.setItem("aura-studio-storefront-" + SLUG, JSON.stringify([
+      { lineId: "l1", product: CANECA, qty: 2, values: {}, hasBackSelected: false },
+    ]));
+    servidor({ store: loja({ pedidos: { aceita: false, motivo: "pausado", recado: "Voltamos em 6 de janeiro.", pedidos_ate: null } }) });
+    const navegar = jest.fn();
+    render(
+      <ProvedorDaRota navegar={navegar}>
+        <CascaDaVitrine slug={SLUG} navegar={navegar}>
+          <TelaNaRota tela={{ tipo: "finalizar" }} />
+        </CascaDaVitrine>
+      </ProvedorDaRota>,
+    );
+    expect(await acharId("checkout-fechado")).toBeTruthy();
+    // A casca nova: cabeçalho com o nome da loja.
+    expect(naTela("Sheid Mania")).toBe(true);
+    expect(naTela("Voltamos em 6 de janeiro.")).toBe(true);
+    expect(naTela("Pedir orçamento desta sacola")).toBe(true);
+    // O layout antigo não aparece mais.
+    expect(naTela("Seu pedido")).toBe(false);
+    expect(nenhumId("checkout-em-etapas")).toBe(true);
+  });
 });
 
 // ── O checkout em etapas ─────────────────────────────────────
@@ -329,6 +356,8 @@ describe("o checkout em três etapas (Telas 2 a 4)", () => {
     // Etapa 3: nada vem escolhido; cada forma diz quanto custa.
     await ver("Como você quer pagar?");
     expect(naTela("Escolha como pagar")).toBe(true);
+    // O resumo "Seus dados" mostra o CPF que vai na nota (QA 27/09).
+    expect(naTela("Helena Martins · (12) 99183-4410 · 529.982.247-25")).toBe(true);
     expect(naTela("Você aprova o mockup antes de produzir. 2 revisões inclusas.")).toBe(true);
     await waitFor(() => expect(naTela("R$ 47,40")).toBe(true)); // 49,90 − 5% no Pix
     fireEvent.press(screen.getAllByText("Pix")[0]);
@@ -502,7 +531,12 @@ describe("a página do pedido (Telas 5, 6 e 7)", () => {
 });
 
 describe("os endereços novos", () => {
-  test("/sacola abre a loja com a gaveta aberta", async () => {
+  test("/sacola abre a loja com a gaveta aberta, SEM trocar a URL enquanto ela está aberta", async () => {
+    // QA 27/09/2026: antes a URL virava /<slug> no mount, antes mesmo de a
+    // gaveta abrir — um F5 ou um link de /sacola compartilhado perdiam a
+    // URL certa no primeiro quadro. Agora SacolaNaRota desenha a home ela
+    // mesma (mesmo estado, mesma gaveta): a URL só troca quando a gaveta
+    // fecha.
     localStorage.setItem("aura-studio-storefront-" + SLUG, JSON.stringify([
       { lineId: "l1", product: CANECA, qty: 1, values: {}, hasBackSelected: false },
     ]));
@@ -512,12 +546,15 @@ describe("os endereços novos", () => {
       <ProvedorDaRota navegar={navegar}>
         <CascaDaVitrine slug={SLUG} navegar={navegar}>
           <SacolaNaRota />
-          <ConteudoDaVitrine />
         </CascaDaVitrine>
       </ProvedorDaRota>,
     );
     expect(await acharId("sacola-em-gaveta")).toBeTruthy();
-    expect(navegar).toHaveBeenCalledWith({ tipo: "home" }, "trocar");
+    expect(navegar).not.toHaveBeenCalled();
+
+    // Fecha a gaveta: agora sim troca /sacola pelo caminho de sempre.
+    fireEvent.press(screen.getAllByLabelText("Fechar sacola")[0]);
+    await waitFor(() => expect(navegar).toHaveBeenCalledWith({ tipo: "home" }, "trocar"));
   });
 
   test("a volta do Mercado Pago (?order_id=&payment=) abre a página do pedido", async () => {

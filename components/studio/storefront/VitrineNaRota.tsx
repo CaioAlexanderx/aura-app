@@ -460,25 +460,47 @@ export function PedidoNaRota({ token, consulta }: { token: string; consulta?: Re
  * sacola aberta (link direto e F5, mockup da Fase 2, Tela 1). Sem a
  * chave, continua como a rota reservada de antes: a home.
  *
- * Troca, não empilha: o voltar do navegador não cai de novo em /sacola.
+ * QA 27/09/2026: a URL virava `/<slug>` na hora do mount, antes mesmo de
+ * a gaveta abrir — um F5 com a sacola aberta, ou um link de `/sacola`
+ * compartilhado, perdiam a URL certa no primeiro quadro. Agora a home
+ * desenha AQUI (mesmo estado, mesma gaveta) sem trocar a URL; só quando a
+ * gaveta fecha (X, Esc, foi para o checkout) é que a rota troca para o
+ * caminho de sempre — voltar do navegador não cai de novo em /sacola nos
+ * dois casos.
  */
 export function SacolaNaRota() {
   const v = useVitrine();
   const rota = useContext(RotaCtx);
   const sf = v?.sf;
   const temLoja = !!sf?.store;
-  const feito = useRef(false);
+  const iniciou = useRef(false);
+  const abriuAlgumaVez = useRef(false);
+
   useEffect(() => {
-    if (!sf || !temLoja || feito.current) return;
-    feito.current = true;
-    const abrir = sf.vitrineV2;
-    setTimeout(() => {
-      rota?.navegar({ tipo: "home" }, "trocar");
-      if (abrir) sf.abrirSacola();
-    }, 0);
+    if (!sf || !temLoja || iniciou.current) return;
+    iniciou.current = true;
+    if (sf.vitrineV2) {
+      sf.sincronizarComTela({ tipo: "home" });
+      setTimeout(() => sf.abrirSacola(), 0);
+    } else {
+      // Sem a chave não existe gaveta: a rota reservada de sempre, a home.
+      setTimeout(() => rota?.navegar({ tipo: "home" }, "trocar"), 0);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [temLoja]);
-  return null;
+
+  useEffect(() => {
+    if (sf?.sacolaAberta) abriuAlgumaVez.current = true;
+  }, [sf?.sacolaAberta]);
+
+  useEffect(() => {
+    if (!abriuAlgumaVez.current || sf?.sacolaAberta) return;
+    rota?.navegar({ tipo: "home" }, "trocar");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sf?.sacolaAberta]);
+
+  if (!sf?.store || !sf.vitrineV2) return null;
+  return <ConteudoDaRota tela={{ tipo: "home" }} />;
 }
 
 /** Os recados da volta do cartão sem a página do pedido (sem token). */

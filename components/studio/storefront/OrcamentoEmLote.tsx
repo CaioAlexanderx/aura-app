@@ -25,7 +25,7 @@ import { Etiqueta } from "./HomeDaVitrine";
 import { BarraDeCookies } from "./ConsentimentoDaVitrine";
 import {
   nomesDaLista, nomesIgnorados, proximoDegrau, pendenciaDoLote, dinheiro, fraseDoPrazo,
-  dataMinimaDoLote, dataDoLoteLegivel, codigoDoOrcamento, mensagemDoOrcamento,
+  dataMinimaDoLote, dataDoLoteLegivel, codigoDoOrcamento, mensagemDoOrcamento, fraseDeFaltamNomes,
   type CotacaoDoLote,
 } from "./loteDaVitrine";
 import { maskPhone, maskDateBr, brDateToIso } from "@/utils/masks";
@@ -113,6 +113,10 @@ export function OrcamentoEmLote({
   }, [produtoId, nomes.length, slug]);
 
   const degrau = proximoDegrau(cotacao);
+  // A cotação chega 1 a 3 s depois de mudar a lista (o debounce de 350 ms
+  // e a ida ao servidor). Nesse intervalo o preço na tela era o da lista
+  // ANTERIOR — a contagem já tinha mudado, o preço não (QA 27/09/2026).
+  const cotacaoDesatualizada = !!produtoId && nomes.length > 0 && (!cotacao || cotacao.qty !== nomes.length);
   const pendencia = pendenciaDoLote({ evento, produtoId, nomes, contato, telefone });
   const podeAvancar = !!(evento.trim().length >= 2 && produtoId && nomes.length > 0);
   // O botao principal trava por uma regra so: o `disabled` e o estado que
@@ -248,7 +252,9 @@ export function OrcamentoEmLote({
         <Texto style={{ fontSize: 13, color: T.ink3 }}>Escolha a peça para ver o preço.</Texto>
       )}
 
-      {cotacao && cotacao.qty > 0 ? (
+      {cotacaoDesatualizada ? (
+        <BlocoCalculando T={T} />
+      ) : cotacao && cotacao.qty > 0 ? (
         <View style={{ gap: 6 }}>
           <Linha rotulo={`${cotacao.qty} × ${dinheiro(cotacao.unit_price)}`}
                  valor={dinheiro(cotacao.qty * cotacao.unit_price)} T={T} />
@@ -265,7 +271,7 @@ export function OrcamentoEmLote({
           </View>
           {degrau ? (
             <Texto style={{ fontSize: 11.5, color: tema.marcaTexto, lineHeight: 16 }}>
-              Faltam {degrau.faltam} {degrau.faltam === 1 ? "nome" : "nomes"} para{" "}
+              {fraseDeFaltamNomes(degrau.faltam)} para{" "}
               {dinheiro(degrau.precoUn)} cada ({degrau.pct}% off).
             </Texto>
           ) : null}
@@ -497,6 +503,21 @@ function Bloco({
         ) : null}
       </View>
       {children}
+    </View>
+  );
+}
+
+/**
+ * "Calculando…" — o esqueleto do bloco de preço enquanto a cotação nova
+ * não volta (QA 27/09/2026: sem isto, a tela mostrava a contagem nova
+ * com o preço da lista anterior por 1 a 3 s).
+ */
+function BlocoCalculando({ T }: { T: any }) {
+  return (
+    <View testID="lote-calculando" style={{ gap: 8 }} accessibilityLabel="Calculando o preço do lote">
+      <View style={{ height: 14, borderRadius: 7, backgroundColor: T.border, width: "70%" }} />
+      <View style={{ height: 22, borderRadius: 7, backgroundColor: T.border, width: "45%", marginTop: 4 }} />
+      <Texto style={{ fontSize: 11.5, color: T.ink3, marginTop: 2 }}>Calculando…</Texto>
     </View>
   );
 }

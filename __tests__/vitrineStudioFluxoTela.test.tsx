@@ -118,15 +118,22 @@ describe("temporada: pedidos até uma data", () => {
   test("a faixa aparece na home e perto do botão do produto", async () => {
     const ate = daquiA(5);
     const [, m, d] = ate.split("-");
-    const texto = `Pedidos até ${d}/${m}`;
+    // QA 27/09/2026: a data saiu com Numero (Bricolage Grotesque, dígitos
+    // tabulares — trechosDaFaixa, modoDaVitrine.ts), então "Pedidos até" e
+    // "05/10" viram nós de texto SEPARADOS na árvore; o teste confere os
+    // dois pedaços, não mais a frase inteira contígua.
+    const prefixo = "Pedidos até";
+    const dataDaFaixa = `${d}/${m}`;
     servidor(loja({ pedidos: { aceita: true, motivo: null, recado: null, pedidos_ate: ate } }));
     render(<PaginaDaVitrine slug="aura-qa" />);
 
     await screen.findAllByText(CANECA.name);
-    expect(naTela(texto)).toBe(true);
+    expect(naTela(prefixo)).toBe(true);
+    expect(naTela(dataDaFaixa)).toBe(true);
 
     await abrirProduto();
-    expect(naTela(texto)).toBe(true);
+    expect(naTela(prefixo)).toBe(true);
+    expect(naTela(dataDaFaixa)).toBe(true);
     expect(naTela("Comprar agora")).toBe(true);
   });
 

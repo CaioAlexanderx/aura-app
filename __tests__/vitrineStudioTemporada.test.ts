@@ -9,7 +9,7 @@
 //     prévia, que roda a MESMA regra da vitrine.
 // ============================================================
 import {
-  faixaDaTemporada, diasAtePrazo, DIAS_PARA_AVISAR,
+  faixaDaTemporada, diasAtePrazo, DIAS_PARA_AVISAR, trechosDaFaixa,
 } from "@/components/studio/storefront/modoDaVitrine";
 import { destinoDoOrcamento, lojaFechouNoEnvio } from "@/components/studio/storefront/lojaFechada";
 import {
@@ -55,6 +55,28 @@ describe("a faixa da temporada", () => {
     expect(diasAtePrazo("2026-12-20", EM("2026-12-20"))).toBe(0);
     expect(diasAtePrazo("2026-12-20", EM("2026-11-29"))).toBe(DIAS_PARA_AVISAR);
     expect(diasAtePrazo("dezembro", EM("2026-11-29"))).toBeNull();
+  });
+
+  // QA 27/09/2026: a data da faixa saía no corpo da fonte, junto do resto
+  // da frase; a tela usa isto para vestir só a data com Numero (Bricolage
+  // Grotesque, dígitos tabulares) — o resto continua no corpo.
+  test("trechosDaFaixa separa a data do resto da frase", () => {
+    expect(trechosDaFaixa("Pedidos até 05/10 — depois disso, só orçamento.")).toEqual([
+      { texto: "Pedidos até ", data: false },
+      { texto: "05/10", data: true },
+      { texto: " — depois disso, só orçamento.", data: false },
+    ]);
+  });
+
+  test("data com ano, e frase sem nenhuma data", () => {
+    expect(trechosDaFaixa("Pedidos até 05/10/2026.")).toEqual([
+      { texto: "Pedidos até ", data: false },
+      { texto: "05/10/2026", data: true },
+      { texto: ".", data: false },
+    ]);
+    expect(trechosDaFaixa("Amanhã é o último dia para pedir nesta temporada.")).toEqual([
+      { texto: "Amanhã é o último dia para pedir nesta temporada.", data: false },
+    ]);
   });
 });
 

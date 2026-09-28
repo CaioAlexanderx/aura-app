@@ -8,6 +8,7 @@ import { useEstilosDaVitrine } from "../estilosDaVitrine";
 import { usePaletaDaVitrine } from "../TemaDaVitrine";
 
 import { Texto } from "../TipografiaVitrine";
+import { nomeDaCor } from "../leituraDaCor";
 export function FieldText({
   field, value, onChange, corValue, onCorChange,
 }: {
@@ -60,16 +61,16 @@ export function FieldText({
           <Texto style={{ fontSize: 10.5, color: T.ink3, fontWeight: "700", letterSpacing: 0.4, textTransform: "uppercase" }}>
             Cor da arte
           </Texto>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <View accessibilityRole="radiogroup" accessibilityLabel="Cor da arte" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {paleta.map((c: string) => {
               const sel = c.toLowerCase() === String(corAtual || "").toLowerCase();
               return (
                 <Pressable
                   key={c}
                   onPress={() => onCorChange!(c)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: sel }}
-                  accessibilityLabel={`Cor da arte ${c}`}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: sel, selected: sel }}
+                  accessibilityLabel={`Cor da arte: ${nomeDaCor(c)}`}
                   style={{
                     width: 30, height: 30, borderRadius: 15,
                     backgroundColor: c,
