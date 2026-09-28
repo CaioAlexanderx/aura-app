@@ -388,12 +388,14 @@ function CartaoDaArte({ values, produto }: { values: Record<string, any>; produt
 }
 
 export function HeroDaPeca({
-  sf, slug, desktop, onVerLoja,
+  sf, slug, desktop, onVerLoja, sloganNoBanner = false,
 }: {
   sf: StorefrontState;
   slug: string;
   desktop: boolean;
   onVerLoja: () => void;
+  /** O banner automático acima já mostra o slogan (fraseDoDestaque). */
+  sloganNoBanner?: boolean;
 }) {
   const t = useTemaDaVitrine();
   const tipo = useTipografia();
@@ -610,7 +612,7 @@ export function HeroDaPeca({
             {TITULO_FIXO_DO_HERO}
           </Texto>
           <Texto style={{ fontSize: desktop ? 18 : 15.5, lineHeight: desktop ? 28 : 24, color: t.ink2, maxWidth: 470 }}>
-            {fraseDoDestaque(store)}
+            {fraseDoDestaque(store, { sloganNoBanner })}
           </Texto>
           {desktop ? ctas : null}
           {desktop ? fatos : null}

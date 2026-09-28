@@ -115,7 +115,7 @@ describe("resolverTela: a URL contra a loja carregada", () => {
   });
 
   test("peça que saiu da loja volta para a home com o aviso discreto", () => {
-    expect(resolverTela({ tipo: "produto", id: "nao-existe" }, LOJA, VITRINE)).toEqual({
+    expect(resolverTela({ tipo: "produto", id: "nao-existe" }, LOJA, VITRINE, { temSacolaOuArte: true })).toEqual({
       acao: "redirecionar", para: { tipo: "home" }, aviso: AVISO_PECA_FORA,
     });
     // QA 27/09: o recado ganhou o que fazer (mudança intencional).

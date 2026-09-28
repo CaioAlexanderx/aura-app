@@ -41,6 +41,7 @@ import { MiniaturaDaLinha } from "./ui/MiniaturaDaLinha";
 import { useSelecionarAoFocar } from "./ui/selecaoAoFocar";
 import { Botao, Nota, BORDA_DE_CAMPO, FUNDO_APAGADO } from "./ui/Formulario";
 import { diasUteis } from "./formularioDoCheckout";
+import { DIGITOS_DO_CAMPO, QTD_MAXIMA, notaDoTeto, quantidadeNoCampo } from "./produto/regrasDaPagina";
 
 /** O "Desfazer" fica na tela por 5 segundos (decisão de desenho do mockup). */
 const TEMPO_DO_DESFAZER = 5000;
@@ -120,10 +121,23 @@ function Quantidade({ valor, onMudar, nome }: { valor: number; onMudar: (n: numb
   // O clique simples seleciona o número inteiro (ver ui/selecaoAoFocar.ts).
   const selecionarAoFocar = useSelecionarAoFocar();
   useEffect(() => { setRascunho(String(valor)); }, [valor]);
+  // O mesmo teto da página da peça (QA 28/09: 10 + clique + "2" gravou
+  // 120 peças, e nada impedia 4 dígitos). Passou: apara e avisa por 2 s.
+  const [teto, setTeto] = useState(false);
+  const relogioDoTeto = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (relogioDoTeto.current) clearTimeout(relogioDoTeto.current); }, []);
   const confirmar = () => {
-    const n = Math.floor(Number(rascunho.replace(/\D/g, "")));
+    const n = Math.min(QTD_MAXIMA, Math.floor(Number(rascunho.replace(/\D/g, ""))));
     if (!Number.isFinite(n) || n < 1) { setRascunho(String(valor)); return; }
     if (n !== valor) onMudar(n);
+  };
+  const digitar = (t: string) => {
+    const r = quantidadeNoCampo(t);
+    setRascunho(r.texto);
+    if (!r.aparou) return;
+    setTeto(true);
+    if (relogioDoTeto.current) clearTimeout(relogioDoTeto.current);
+    relogioDoTeto.current = setTimeout(() => setTeto(false), 2000);
   };
   const botao = (icone: string, rotulo: string, fazer: () => void, desligado?: boolean) => (
     <Pressable
@@ -137,6 +151,7 @@ function Quantidade({ valor, onMudar, nome }: { valor: number; onMudar: (n: numb
     </Pressable>
   );
   return (
+    <View style={{ alignItems: "flex-start", gap: 4 }}>
     <View
       style={{
         flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: BORDA_DE_CAMPO,
@@ -148,7 +163,8 @@ function Quantidade({ valor, onMudar, nome }: { valor: number; onMudar: (n: numb
       <TextInput
         ref={selecionarAoFocar as any}
         value={rascunho}
-        onChangeText={(t) => setRascunho(t.replace(/\D/g, "").slice(0, 4))}
+        onChangeText={digitar}
+        maxLength={DIGITOS_DO_CAMPO}
         onBlur={confirmar}
         onSubmitEditing={confirmar}
         keyboardType="number-pad"
@@ -158,7 +174,13 @@ function Quantidade({ valor, onMudar, nome }: { valor: number; onMudar: (n: numb
         style={[estiloNumero(tipo), { width: 44, textAlign: "center", fontSize: 16, color: T.ink, height: 44 }]}
       />
       <View style={{ width: 1, alignSelf: "stretch", backgroundColor: T.border }} />
-      {botao("plus", "Mais uma de " + nome, () => onMudar(valor + 1))}
+      {botao("plus", "Mais uma de " + nome, () => onMudar(Math.min(QTD_MAXIMA, valor + 1)), valor >= QTD_MAXIMA)}
+    </View>
+    {teto ? (
+      <Texto testID="nota-do-teto" accessibilityRole={"alert" as any} style={{ fontSize: 12, fontWeight: "600", color: T.ink2 }}>
+        {notaDoTeto()}
+      </Texto>
+    ) : null}
     </View>
   );
 }

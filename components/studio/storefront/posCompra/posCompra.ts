@@ -250,6 +250,33 @@ export function rotuloDaEtapa(
   return rotulo;
 }
 
+/**
+ * Como a etapa aparece na linha do tempo. QA 28/09: a etapa ATUAL era
+ * desenhada como círculo vazio com borda — no "Pronto para retirar", a
+ * última, parecia não alcançada. A atual agora é preenchida na cor da
+ * loja, com um anel em volta; só as futuras ficam vazias.
+ */
+export type EstadoDaEtapa = "feita" | "atual" | "futura";
+
+export function estadoDaEtapa(i: number, atual: number, entregue: boolean): EstadoDaEtapa {
+  if (entregue || i < atual) return "feita";
+  if (i === atual) return "atual";
+  return "futura";
+}
+
+/**
+ * O texto do "Pronto". QA 28/09: "Qualquer pessoa pode buscar mostrando o
+ * número do pedido" soava como "qualquer um leva a sua encomenda". O que
+ * importa é levar o número; na retirada por app (Uber, 99), quem leva é
+ * o motorista.
+ */
+export function textoDoPronto(p: { pedido?: string | null; retirada: boolean; porApp?: boolean }): string {
+  if (!p.retirada) return "A loja fala com você para combinar a entrega.";
+  const numero = String(p.pedido || "").replace(/^#/, "").trim();
+  if (p.porApp) return numero ? `Quem for buscar leva o número do pedido (${numero}).` : "Quem for buscar leva o número do pedido.";
+  return numero ? `Leve o número do pedido (${numero}) na retirada.` : "Leve o número do pedido na retirada.";
+}
+
 /** O subtítulo do topo do acompanhamento. */
 export function subtituloDoAcompanhamento(acao: AcaoDoAcompanhamento): string {
   if (acao === "entregue") return "Seu pedido foi entregue.";

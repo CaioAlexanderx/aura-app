@@ -27,8 +27,8 @@ import { caminhoDeRepetir, primeiroDisponivel, type ItemDaRepeticao } from "../r
 import { apiDoPosCompra } from "./apiDoPosCompra";
 import { Botao, MolduraDaLoja, Nota, Painel, Rotulo, Selo, Titulo, abrirFora } from "./MolduraDaLoja";
 import {
-  acaoDoAcompanhamento, dataPorExtenso, linkDoWhatsAppDoPedido, nomeDaLoja, rotuloDaEtapa,
-  rotuloDoPedido, subtituloDoAcompanhamento, type AcaoDoAcompanhamento,
+  acaoDoAcompanhamento, dataPorExtenso, estadoDaEtapa, linkDoWhatsAppDoPedido, nomeDaLoja, rotuloDaEtapa,
+  rotuloDoPedido, subtituloDoAcompanhamento, textoDoPronto, type AcaoDoAcompanhamento,
 } from "./posCompra";
 
 export function AcompanhamentoComMarca({ token, dados }: { token: string; dados: PublicTrack }) {
@@ -84,22 +84,37 @@ function LinhaDoTempo({ dados }: { dados: PublicTrack }) {
   return (
     <Painel testID="acompanhar-etapas">
       {etapas.map((e, i) => {
-        const feito = entregue || i < atual;
-        const agora = !entregue && i === atual;
+        const estado = estadoDaEtapa(i, atual, entregue);
+        const feito = estado === "feita";
+        const agora = estado === "atual";
         const ultima = i === etapas.length - 1;
         return (
           <View key={e.key} style={{ flexDirection: "row", gap: 14 }}>
             <View style={{ alignItems: "center" }}>
-              <View
-                style={{
-                  width: 26, height: 26, borderRadius: 13, borderWidth: 2,
-                  alignItems: "center", justifyContent: "center",
-                  backgroundColor: feito ? tema.marcaFill : agora ? tema.bg2 : tema.bg3,
-                  borderColor: feito ? tema.marcaFill : agora ? tema.marcaTexto : tema.border,
-                }}
-              >
-                {feito ? <Icon name="check" size={14} color={tema.sobreMarca} /> : null}
-              </View>
+              {agora ? (
+                // A etapa atual: preenchida na cor da loja, com um anel
+                // (QA 28/09 — vazia, parecia não alcançada).
+                <View
+                  testID="etapa-atual"
+                  style={{
+                    width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: tema.marcaFill,
+                    alignItems: "center", justifyContent: "center", backgroundColor: tema.bg2,
+                  }}
+                >
+                  <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: tema.marcaFill }} />
+                </View>
+              ) : (
+                <View
+                  style={{
+                    width: 26, height: 26, borderRadius: 13, borderWidth: 2,
+                    alignItems: "center", justifyContent: "center",
+                    backgroundColor: feito ? tema.marcaFill : tema.bg3,
+                    borderColor: feito ? tema.marcaFill : tema.border,
+                  }}
+                >
+                  {feito ? <Icon name="check" size={14} color={tema.sobreMarca} /> : null}
+                </View>
+              )}
               {!ultima ? (
                 <View style={{ width: 2, flex: 1, minHeight: 24, backgroundColor: feito ? tema.marcaFill : tema.border }} />
               ) : null}
@@ -151,7 +166,7 @@ function ProximaAcao({ dados, acao, token }: { dados: PublicTrack; acao: AcaoDoA
     };
     return (
       <Painel style={{ gap: 12 }} testID="acompanhar-acao-aprovar">
-        <Linha icone="eye" titulo={`A arte ${nomeDoItem ? "de " + nomeDoItem : "do seu pedido"} está pronta.`} texto="Dá uma olhada e diz se pode seguir pra produção." />
+        <Linha icone="eye" titulo={`A arte ${nomeDoItem ? "de " + nomeDoItem : "do seu pedido"} está pronta.`} texto="Dá uma olhada e diz se pode seguir para produção." />
         <Botao icone="check" rotulo="Aprovar a arte" onPress={aprovar} />
       </Painel>
     );
@@ -166,9 +181,7 @@ function ProximaAcao({ dados, acao, token }: { dados: PublicTrack; acao: AcaoDoA
         <Linha
           icone="store"
           titulo={retirada ? "Pronto para retirar." : "Sua encomenda está pronta."}
-          texto={retirada
-            ? `Qualquer pessoa pode buscar mostrando o número do pedido #${dados.pedido}.`
-            : "A loja fala com você para combinar a entrega."}
+          texto={textoDoPronto({ pedido: dados.pedido, retirada, porApp: dados.tipo_de_entrega === "courier" })}
         />
       </Painel>
     );
@@ -274,7 +287,7 @@ function PedirOutroIgual({ slug, token, dados }: { slug: string; token: string; 
         <View style={{ flex: 1 }}>
           <Texto style={{ fontSize: 15, fontWeight: "700", color: tema.ink }}>Gostou? Peça outra igual</Texto>
           <Texto style={{ fontSize: 13, lineHeight: 19, color: tema.ink2, marginTop: 2 }}>
-            Abrimos {nome} com a mesma arte, pronta pra você conferir e ajustar.
+            Abrimos {nome} com a mesma arte, pronta para você conferir e ajustar.
           </Texto>
         </View>
       </Painel>

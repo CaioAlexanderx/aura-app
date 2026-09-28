@@ -50,7 +50,7 @@ import { fonteDoMockup, useSpecDaFotoDoProduto } from "@/components/studio/visua
 // e a escolha do cliente nao aparecia no preview — o oposto do que o
 // mockup existe para mostrar. A regra mora em visualEngine/corDaPeca.ts.
 import { corDaPeca } from "@/components/studio/visualEngine/corDaPeca";
-import { composeView } from "@/components/studio/visualEngine/compose2d";
+import { composeView, notaDaComposicao } from "@/components/studio/visualEngine/compose2d";
 import { Mug3DPreview } from "@/components/studio/visualEngine/Mug3DPreview";
 
 import { Texto } from "./TipografiaVitrine";
@@ -141,7 +141,7 @@ function PdfNote({ size }: { size: number }) {
 
 export function LivePreview({
   config, values, size, productName, showLabel, slug, productId,
-  allowSideToggle = false, fotoProduto, lado,
+  allowSideToggle = false, fotoProduto, lado, onFonte,
 }: {
   config: CustomizationConfig | null;
   values: Record<string, any>;
@@ -169,6 +169,12 @@ export function LivePreview({
    * sendo do próprio preview, como antes.
    */
   lado?: "front" | "back" | "middle";
+  /**
+   * De onde vem o desenho da prévia (template do banco, foto marcada pela
+   * lojista ou o SVG de sempre). A página do produto usa para a legenda:
+   * na foto marcada, a cor da peça não pinta a foto (28/09/2026).
+   */
+  onFonte?: (fonte: "banco" | "foto" | "nenhuma") => void;
 }) {
   const T = usePaletaDaVitrine();
   const canUseEngine = Platform.OS === "web" && !!slug && !!productId;
@@ -204,6 +210,12 @@ export function LivePreview({
   const specDaFoto = useSpecDaFotoDoProduto(config);
   // O canvas do motor só existe no web; no nativo segue o SVG.
   const fonte = fonteDoMockup(tpl, tplRespondeu && Platform.OS === "web" ? specDaFoto : null);
+  const onFonteRef = useRef(onFonte);
+  onFonteRef.current = onFonte;
+  useEffect(() => { onFonteRef.current?.(fonte); }, [fonte]);
+  // A nota debaixo do quadro quando a foto entrou sem a luz (ou nem
+  // entrou): ver carregarImagemDoMotor em compose2d.ts.
+  const [notaDoMotor, setNotaDoMotor] = useState<string | null>(null);
   const photoViews: VisualView[] =
     tpl?.kind === "photo2d" && Array.isArray(tpl.spec?.views) && tpl.spec!.views!.length
       ? (tpl.spec!.views as VisualView[])
@@ -291,6 +303,7 @@ export function LivePreview({
 
   useEffect(() => {
     if (!engineView || !canvasRef.current) return;
+    let vivo = true;
     composeView(canvasRef.current, engineView, engineValues, {
       showAreas: false,
       pixelWidth: 800,
@@ -300,7 +313,11 @@ export function LivePreview({
       garmentColor: corDaPeca(config, safeValues),
       artColor: motor.artColor,
       font: motor.font,
-    });
+    }).then((r) => {
+      // null = passada para trás por uma composição mais nova.
+      if (vivo && r) setNotaDoMotor(notaDaComposicao(r));
+    }).catch(() => undefined);
+    return () => { vivo = false; };
     // safeValuesKey representa safeValues de forma estável
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engineView, safeValuesKey]);
@@ -338,6 +355,11 @@ export function LivePreview({
           {/* @ts-ignore — canvas DOM no web (motor compose2d) */}
           <canvas ref={canvasRef} style={{ width: "100%", height: "100%", display: "block" } as any} />
         </View>
+        {notaDoMotor ? (
+          <Texto testID="nota-do-motor" style={{ fontSize: 11.5, color: T.ink3, textAlign: "center", maxWidth: size }}>
+            {notaDoMotor}
+          </Texto>
+        ) : null}
         {pdfField && <PdfNote size={size} />}
       </View>
     );

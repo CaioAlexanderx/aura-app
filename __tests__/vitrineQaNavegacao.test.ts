@@ -6,8 +6,8 @@
 // Sheid: 9 e 1). Regra nova para barra, gaveta e rodapé: "Todas as
 // peças", as categorias com peça e "Outras peças" (as sem categoria).
 //
-// P1: voltar da peça caía no topo da home/categoria. A posição é guardada
-// com a entrada do histórico e só volta no voltar do navegador.
+// P1: voltar da peça caía no topo da home/categoria. As regras da
+// rolagem (revistas no QA de 28/09) estão em vitrineQaRolagemDaVitrine.
 //
 // P1: link direto de peça que saiu da loja abre a home com o recado.
 // ============================================================
@@ -15,13 +15,9 @@ import {
   navegacaoDaLoja, grupoDasOutrasPecas, chaveDasOutrasPecas, pecasSemCategoria, ehOutrasPecas,
   entradaAtiva, alvoDaCategoria, menuDaLoja, NOME_DAS_OUTRAS_PECAS, NOME_DE_TODAS_AS_PECAS, ID_DAS_OUTRAS_PECAS,
 } from "@/components/studio/storefront/home/regrasDaHome";
-import { resolverTela, AVISO_PECA_FORA } from "@/components/studio/storefront/rotasDaVitrine";
+import { resolverTela, AVISO_PECA_FORA, AVISO_PECA_FORA_SEM_ARTE } from "@/components/studio/storefront/rotasDaVitrine";
 import { agruparVitrine } from "@/components/studio/storefront/categoryGrouping";
 import { navegacaoDoRodapeNovo, MAXIMO_NA_NAVEGACAO } from "@/components/studio/storefront/conteudoDoRodape";
-import {
-  chaveDaRolagem, deveRestaurar, guardarRolagem, rolagemParaRestaurar, VALIDADE_DA_ROLAGEM_MS,
-  pedirAGradeNaHome, consumirPedidoDaGrade,
-} from "@/components/studio/storefront/home/rolagemDaVitrine";
 
 const cat = (id: string, name: string, parent: string | null = null) => ({
   id, name, slug: id, path: "/" + id, depth: parent ? 1 : 0, parent_id: parent,
@@ -142,52 +138,16 @@ describe("o grupo Outras peças", () => {
   });
 });
 
-describe("voltar da peça devolve a rolagem", () => {
-  const agora = 1_000_000;
-  test("a chave é da loja e da tela", () => {
-    expect(chaveDaRolagem(" Aura-QA ", "home")).toBe("aura-qa|home");
-    expect(chaveDaRolagem("aura-qa", "c:canecas")).toBe("aura-qa|c:canecas");
-  });
-
-  test("só restaura na mesma entrada do histórico (o voltar), dentro da validade", () => {
-    const salva = { y: 1200, entrada: "abc", ts: agora };
-    expect(deveRestaurar(salva, "abc", agora + 1000)).toBe(true);
-    // Tela aberta de novo por um toque: entrada nova, começa no topo.
-    expect(deveRestaurar(salva, "xyz", agora + 1000)).toBe(false);
-    expect(deveRestaurar(salva, "", agora)).toBe(false);
-    expect(deveRestaurar(salva, "abc", agora + VALIDADE_DA_ROLAGEM_MS + 1)).toBe(false);
-    expect(deveRestaurar({ ...salva, y: 0 }, "abc", agora)).toBe(false);
-    expect(deveRestaurar(null, "abc", agora)).toBe(false);
-  });
-
-  test("guardar e ler: lida uma vez, depois some", () => {
-    const k = chaveDaRolagem("loja", "home");
-    guardarRolagem(k, 850.4, "e1", agora);
-    expect(rolagemParaRestaurar(k, "e1", agora + 10)).toBe(850);
-    expect(rolagemParaRestaurar(k, "e1", agora + 20)).toBeNull();
-  });
-
-  test("sem entrada conhecida não guarda; no topo apaga o que havia", () => {
-    const k = chaveDaRolagem("loja", "c:x");
-    guardarRolagem(k, 500, "", agora);
-    expect(rolagemParaRestaurar(k, "", agora)).toBeNull();
-    guardarRolagem(k, 500, "e2", agora);
-    guardarRolagem(k, 0, "e2", agora);
-    expect(rolagemParaRestaurar(k, "e2", agora)).toBeNull();
-  });
-
-  test("Todas as peças de fora da home: o pedido vale para a próxima home, uma vez", () => {
-    expect(consumirPedidoDaGrade()).toBe(false);
-    pedirAGradeNaHome();
-    expect(consumirPedidoDaGrade()).toBe(true);
-    expect(consumirPedidoDaGrade()).toBe(false);
-  });
-});
-
 describe("peça fora da loja por link direto", () => {
   test("volta para a home com o recado na voz da loja", () => {
-    const r = resolverTela({ tipo: "produto", id: "oculta" }, QA, agruparVitrine(QA.products, QA.categories));
+    const r = resolverTela({ tipo: "produto", id: "oculta" }, QA, agruparVitrine(QA.products, QA.categories), { temSacolaOuArte: true });
     expect(r).toEqual({ acao: "redirecionar", para: { tipo: "home" }, aviso: AVISO_PECA_FORA });
     expect(AVISO_PECA_FORA).toBe("Essa peça não está mais na loja. Escolha outra: as artes continuam suas.");
+  });
+
+  test("QA 28/09: sem sacola nem arte, o recado não fala das artes", () => {
+    const r = resolverTela({ tipo: "produto", id: "oculta" }, QA, agruparVitrine(QA.products, QA.categories));
+    expect(r).toEqual({ acao: "redirecionar", para: { tipo: "home" }, aviso: AVISO_PECA_FORA_SEM_ARTE });
+    expect(AVISO_PECA_FORA_SEM_ARTE).toBe("Essa peça não está mais na loja. Escolha outra.");
   });
 });

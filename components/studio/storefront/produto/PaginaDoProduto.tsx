@@ -62,7 +62,7 @@ import { fetchStorefrontVisualTemplate } from "../visualTemplatePublic";
 import {
   faltaNaPeca, campoDaCorDaPeca, campoDoServicoDeArte, origensDoLado, prazoDaQuantidade, linhasDePrazo,
   textoDeDias, nomeDaPeca, suaPeca, sobreEstaPeca, nomeCurto, notaDeRevisao, adicionaisDaPeca,
-  areaDeImpressao, limiarDaPeca, quantidadeValida, type Lado,
+  areaDeImpressao, limiarDaPeca, quantidadeValida, legendaDoMockup, type Lado,
 } from "./regrasDaPagina";
 import { PalcoDoProduto } from "./PalcoDoProduto";
 import { CaminhosDaArte, LadosDaArte, ladosComConteudo, etiquetaDaArte } from "./ArteDaPeca";
@@ -75,6 +75,7 @@ import { CabecalhoDaLoja, Trilha } from "./CabecalhoDaLoja";
 import { BotaoIcone, CabecalhoDaSecao, EtiquetaFalta, EtiquetaPronta, transicao, useNumeroAnimado, usePulso } from "./kitDaPagina";
 import { useCamadaNoHistorico } from "../historicoDaVitrine";
 import { enderecoDeRetiradaDaLoja } from "../home/regrasDaHome";
+import { abrirEntrada } from "../home/NavegacaoDaVitrine";
 
 /** A partir daqui, duas colunas (a mesma régua do ProductConfigurator). */
 export const LARGURA_DESKTOP = 900;
@@ -129,6 +130,9 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
   const [zoomFoto, setZoomFoto] = useState<number | null>(null);
   const [zoomMock, setZoomMock] = useState(false);
   const [guia, setGuia] = useState(false);
+  // De onde vem o desenho do mockup (o LivePreview decide e avisa): na
+  // foto marcada pela lojista, a legenda explica que a cor não pinta a foto.
+  const [fonteDoMock, setFonteDoMock] = useState<"banco" | "foto" | "nenhuma" | null>(null);
   // QA 27/09: o zoom da foto, o da prévia e o guia de medidas entram no
   // histórico — o voltar do navegador fecha a camada, sem sair da peça.
   useCamadaNoHistorico("zoom-da-foto", zoomFoto != null, () => setZoomFoto(null));
@@ -355,6 +359,7 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
       productId={produto.id}
       fotoProduto={produto.image_url}
       lado={ladoAtual}
+      onFonte={setFonteDoMock}
     />
   );
 
@@ -533,7 +538,9 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
       niveis={[
         { rotulo: "Início", onPress: () => sf.goTo("list") },
         ...(grupo ? [{ rotulo: grupo.categoria.name, onPress: () => sf.abrirGrupo(grupo.categoria, grupo.produtos) }] : []),
-        { rotulo: grupo ? nomeCurto(produto.name, grupo.categoria.name) : produto.name },
+        // O nome inteiro da peça (QA 28/09: "Início / Canecas / BRANCA"
+        // cortava "CANECA"). O nome curto fica para o seletor de modelos.
+        { rotulo: produto.name },
       ]}
     />
   );
@@ -557,6 +564,7 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
       onSlide={setSlide}
       onAmpliar={(i) => (i == null ? setZoomMock(true) : setZoomFoto(i))}
       brilho={primeiraVez}
+      legendaDoMock={legendaDoMockup({ fonte: fonteDoMock, temCampoDeCor: !!campoCor })}
     />
   );
 
@@ -625,9 +633,12 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
     </>
   );
 
+  // O "Navegue" do rodapé é a mesma lista da barra (Todas as peças, as
+  // categorias, Outras peças), como na home e na categoria. QA 28/09: a
+  // página da peça usava o rodapé antigo, só com "Canecas".
   const rodape = (
     <View style={{ marginTop: desktop ? 56 : 30 }}>
-      <RodapeDaVitrine store={store} />
+      <RodapeDaVitrine store={store} variante="nova" onNavegar={(e) => abrirEntrada(sf, e)} />
     </View>
   );
 

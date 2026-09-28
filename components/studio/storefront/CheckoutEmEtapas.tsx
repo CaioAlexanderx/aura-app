@@ -50,6 +50,7 @@ import {
 import {
   etapaAoAbrir, etapaDoEstado, etapaPossivel, estadoComEtapa, checkoutRecarregado, lerEstadoDoHistorico,
   empilharNoHistorico, regravarNoHistorico, andarNoHistorico, ouvirOHistorico,
+  etapaDaEntrada, chaveDaEntrada, mapaDasEtapas, lembrarEtapaDaEntrada, novaNavegacao, remarcarEtapaDepoisDoRoteador,
 } from "./historicoDaVitrine";
 import { buscarEnderecoPorCep, linhaDoBairro, type EnderecoDoCep } from "./enderecoPorCep";
 import { lerPedidoPendente, esquecerPedidoPendente, aindaEsperaPagamento, type PedidoPendente } from "./pedidoGuardado";
@@ -532,7 +533,7 @@ function CheckoutAberto({ sf }: { sf: StorefrontState }) {
       informarDepois: daTela ? sf.courierInformarDepois : !!r?.courier_depois,
     };
     return etapaAoAbrir({
-      doHistorico: etapaDoEstado(lerEstadoDoHistorico()),
+      doHistorico: etapaDaEntrada({ estado: lerEstadoDoHistorico(), chave: chaveDaEntrada(), mapa: mapaDasEtapas() }),
       doRascunho: rascunho?.etapa ?? null,
       recarregou: checkoutRecarregado(),
       faltaNosDados: !!faltaNosDados(d),
@@ -542,6 +543,7 @@ function CheckoutAberto({ sf }: { sf: StorefrontState }) {
   // A entrada atual leva a etapa (o F5 apaga a marca: ela é regravada).
   useEffect(() => {
     if (etapa > 1 && etapaDoEstado(lerEstadoDoHistorico()) !== etapa) regravarNoHistorico(estadoComEtapa(lerEstadoDoHistorico(), etapa));
+    if (etapa > 1) lembrarEtapaDaEntrada(etapa);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const scroll = useRef<ScrollView>(null);
@@ -755,19 +757,33 @@ function CheckoutAberto({ sf }: { sf: StorefrontState }) {
   function irPara(e: Etapa) {
     if (e === etapa) return;
     if (e > etapa) {
-      empilharNoHistorico(estadoComEtapa(lerEstadoDoHistorico(), e));
+      novaNavegacao();
+      if (empilharNoHistorico(estadoComEtapa(lerEstadoDoHistorico(), e))) lembrarEtapaDaEntrada(e);
       mostrarEtapa(e);
       return;
     }
-    if ((etapaDoEstado(lerEstadoDoHistorico()) ?? 1) === etapa && andarNoHistorico(e - etapa)) return;
+    const daEntrada = etapaDaEntrada({ estado: lerEstadoDoHistorico(), chave: chaveDaEntrada(), mapa: mapaDasEtapas() }) ?? 1;
+    if (daEntrada === etapa && andarNoHistorico(e - etapa)) return;
     mostrarEtapa(e);
   }
-  // O voltar e o avançar do navegador trocam a etapa (sem pular dado que falta).
-  useEffect(() => ouvirOHistorico((estado) => {
-    const e = etapaPossivel(etapaDoEstado(estado) ?? 1, faltas.current.dados, faltas.current.entrega);
-    mostrarEtapa(e);
+  // O voltar e o avançar do navegador trocam a etapa (sem pular dado que
+  // falta). QA 28/09: a marca da entrada é regravada depois do roteador,
+  // que a apaga a cada popstate — senão a segunda passada caía na etapa 1.
+  useEffect(() => {
+    let cancelar = () => {};
+    const parar = ouvirOHistorico((estado) => {
+      cancelar();
+      novaNavegacao();
+      const daEntrada = etapaDaEntrada({ estado, chave: chaveDaEntrada(), mapa: mapaDasEtapas() }) ?? 1;
+      mostrarEtapa(etapaPossivel(daEntrada, faltas.current.dados, faltas.current.entrega));
+      if (daEntrada > 1) {
+        lembrarEtapaDaEntrada(daEntrada);
+        cancelar = remarcarEtapaDepoisDoRoteador(daEntrada);
+      }
+    });
+    return () => { parar(); cancelar(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), []);
+  }, []);
   function levarAoCampo(f: Falta) {
     const el = campos.current[f.campo];
     if (el && typeof el.focus === "function") { el.focus(); return; }

@@ -10,35 +10,56 @@
 // e o maxLength jogava o resto fora; com 50, "25" virava "250". Dois
 // cliques e Tab funcionavam.
 //
-// A correção é a de sempre na web: selecionar no foco e, SÓ no mouseup do
-// clique que deu o foco, impedir o padrão (e selecionar de novo). O
-// segundo clique, com o campo já focado, posiciona o cursor normalmente.
-// No celular nativo, `selectTextOnFocus` continua valendo sozinho.
+// 27/09 a correção segurava só o mouseup do clique que DAVA o foco. QA de
+// 28/09: com o campo JÁ focado, a pessoa digita, olha o preço e clica de
+// novo para corrigir — o clique punha o cursor no meio e "25" depois de
+// 50 virava 520 (na sacola, 10 + "2" virou 120 peças gravadas).
+//
+// Regra de agora: TODO clique sem arraste (mousedown e mouseup a menos de
+// 4 px um do outro) seleciona o número inteiro, com o campo focado ou
+// não. Arrastar continua selecionando só o trecho, como em qualquer
+// campo. No celular nativo, `selectTextOnFocus` continua valendo sozinho.
 // ============================================================
 import { useCallback, useRef } from "react";
 import { Platform } from "react-native";
 
-type CampoDaWeb = Pick<HTMLInputElement, "select" | "addEventListener" | "removeEventListener"> & {
-  ownerDocument?: Document | null;
+type CampoDaWeb = Pick<HTMLInputElement, "select" | "addEventListener" | "removeEventListener">;
+
+/** Até aqui (px, em cada eixo somado) o gesto é clique; além, é arraste. */
+export const LIMITE_DO_ARRASTE_PX = 4;
+
+export type PontoDoMouse = { x: number; y: number };
+
+/** O mouseup caiu perto do mousedown (clique, não arraste)? */
+export function cliqueSemArraste(apertou: PontoDoMouse | null | undefined, soltou: PontoDoMouse | null | undefined): boolean {
+  if (!apertou || !soltou) return false;
+  const dx = Number(soltou.x) - Number(apertou.x);
+  const dy = Number(soltou.y) - Number(apertou.y);
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return false;
+  return Math.hypot(dx, dy) < LIMITE_DO_ARRASTE_PX;
+}
+
+const pontoDe = (e: Event): PontoDoMouse | null => {
+  const m = e as MouseEvent;
+  return typeof m.clientX === "number" && typeof m.clientY === "number" ? { x: m.clientX, y: m.clientY } : null;
 };
 
 /**
- * Liga a seleção no foco num `<input>` da web. Devolve quem desliga.
- *
- * Regra: o mouseup só é segurado quando o mousedown aconteceu com o campo
- * AINDA SEM foco — é o clique que está dando o foco.
+ * Liga a seleção no foco e no clique num `<input>` da web. Devolve quem
+ * desliga.
  */
 export function ligarSelecaoAoFocar(el: CampoDaWeb): () => void {
-  let segurarOSoltar = false;
+  let apertou: PontoDoMouse | null = null;
   const selecionar = () => { try { el.select(); } catch { /* campo saiu da tela */ } };
-  const aoApertar = () => { segurarOSoltar = el.ownerDocument?.activeElement !== (el as any); };
+  const aoApertar = (e: Event) => { apertou = pontoDe(e); };
   const aoSoltar = (e: Event) => {
-    if (!segurarOSoltar) return;
-    segurarOSoltar = false;
+    const clique = cliqueSemArraste(apertou, pontoDe(e));
+    apertou = null;
+    if (!clique) return; // arraste: a seleção parcial é da pessoa
     e.preventDefault();
     selecionar();
   };
-  const aoSair = () => { segurarOSoltar = false; };
+  const aoSair = () => { apertou = null; };
   el.addEventListener("mousedown", aoApertar);
   el.addEventListener("focus", selecionar);
   el.addEventListener("mouseup", aoSoltar);

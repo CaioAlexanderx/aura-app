@@ -24,7 +24,7 @@ import type {
   VisualTemplateSpec,
   VisualView,
 } from "@/services/studioVisualApi";
-import { caixaDoQuad, quadValido } from "./compose2d";
+import { caixaDoQuad, carregarImagemDoMotor, quadValido } from "./compose2d";
 
 export type LadoDaPeca = "front" | "back" | "middle";
 export type MedidasDaFoto = { w: number; h: number };
@@ -215,14 +215,13 @@ const cacheDeMedidas = new Map<string, Promise<MedidasDaFoto | null>>();
 export function medirFoto(url: string): Promise<MedidasDaFoto | null> {
   const emCache = cacheDeMedidas.get(url);
   if (emCache) return emCache;
-  const p = new Promise<MedidasDaFoto | null>((resolve) => {
-    if (typeof Image === "undefined") return resolve(null);
-    const img = new Image();
-    img.crossOrigin = "anonymous"; // mesma requisição que o motor faz depois
-    img.onload = () => resolve(medidaValida(img.naturalWidth || img.width, img.naturalHeight || img.height));
-    img.onerror = () => resolve(null);
-    img.src = url;
-  });
+  // O mesmo carregador do motor (28/09/2026): a URL própria dele contorna
+  // a entrada de cache sem CORS que a galeria deixa, e sem CORS a medida
+  // sai do <img> comum — medir não precisa ler pixel. Antes, com o pedido
+  // CORS falhando, a foto sem `w`/`h` nunca era medida e a vista sumia.
+  const p = carregarImagemDoMotor(url).then((r) =>
+    r ? medidaValida(r.img.naturalWidth || r.img.width, r.img.naturalHeight || r.img.height) : null
+  );
   cacheDeMedidas.set(url, p);
   p.then((m) => { if (!m) cacheDeMedidas.delete(url); });
   return p;

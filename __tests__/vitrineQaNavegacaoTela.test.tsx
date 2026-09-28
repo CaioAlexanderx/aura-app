@@ -259,7 +259,9 @@ describe("peça fora da loja por link direto", () => {
     await waitFor(() => expect(navegar).toHaveBeenCalledWith({ tipo: "home" }, "voltar"));
     irPara({ tipo: "home" });
     expect(await acharId("recado-da-home")).toBeTruthy();
-    expect(naTela("Essa peça não está mais na loja. Escolha outra: as artes continuam suas.")).toBe(true);
+    // QA 28/09: sem sacola nem arte montada, o recado não fala das artes.
+    expect(naTela("Essa peça não está mais na loja. Escolha outra.")).toBe(true);
+    expect(naTela("as artes continuam suas")).toBe(false);
     fireEvent.press(screen.getByLabelText("Fechar aviso"));
     await waitFor(() => expect(temId("recado-da-home")).toBe(false));
   });

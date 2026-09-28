@@ -351,27 +351,104 @@ export function mapaDeSombreado(
   return out;
 }
 
-// ── Canvas ───────────────────────────────────────────────────
+// ── Carregar as imagens do motor ─────────────────────────────
+// 28/09/2026 (QA pós-deploy): o "Mockup na foto" mostrava só a arte num
+// quadro cinza. A foto da peça já estava no cache do navegador SEM
+// cabeçalho CORS — a galeria da página a carrega como <img> comum, e o R2
+// só responde `Access-Control-Allow-Origin` quando o pedido traz Origin.
+// O pedido CORS do motor para a MESMA URL reaproveitava essa entrada e
+// falhava; a foto não era desenhada e ninguém avisava.
+//
+// A saída tem dois degraus:
+//   1. o motor pede a foto numa URL só dele (`?mockup=1`): outra chave de
+//      cache, então o pedido CORS vai de verdade ao R2 e volta com o
+//      cabeçalho. Com ele dá para ler os pixels (a luz da foto) e
+//      exportar o PNG da aprovação.
+//   2. se ainda assim falhar (navegador ou proxy que tira o cabeçalho),
+//      a foto entra como <img> comum: aparece, mas o canvas não pode ler
+//      os pixels. A arte vai por cima sem o sombreado, e a prévia diz
+//      isso numa nota curta — melhor do que o quadro cinza calado.
+
+/** O parâmetro que separa o pedido do motor do <img> da galeria. */
+export const PARAMETRO_DO_MOTOR = "mockup";
+
+/**
+ * A URL que o motor pede com CORS. Acrescenta `mockup=1` (antes do `#`,
+ * respeitando a query que já existir). `data:` e `blob:` não passam pela
+ * rede nem pelo cache HTTP e ficam como estão; URL que já tem o
+ * parâmetro também (chamar duas vezes dá o mesmo resultado).
+ */
+export function urlDoMotor(url: string): string {
+  const u = String(url || "");
+  if (!u || /^(data|blob):/i.test(u)) return u;
+  const [semHash, ...hash] = u.split("#");
+  const [, query = ""] = semHash.split("?");
+  if (query.split("&").some((par) => par.split("=")[0] === PARAMETRO_DO_MOTOR)) return u;
+  const sep = semHash.includes("?") ? (semHash.endsWith("?") || semHash.endsWith("&") ? "" : "&") : "?";
+  return semHash + sep + PARAMETRO_DO_MOTOR + "=1" + (hash.length ? "#" + hash.join("#") : "");
+}
+
+export type ImagemDoMotor = {
+  img: HTMLImageElement;
+  /** Veio com CORS: dá para ler os pixels e exportar. */
+  comCors: boolean;
+};
+
+function carregarTag(src: string, cors: boolean): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    if (typeof Image === "undefined") return resolve(null);
+    const img = new Image();
+    if (cors) img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
 
 // Cache das imagens por URL: o preview recompõe a cada tecla, e a foto
 // HD e a arte são as mesmas. Falha sai do cache para permitir retry.
-const cacheDeImagens = new Map<string, Promise<HTMLImageElement | null>>();
+const cacheDeImagens = new Map<string, Promise<ImagemDoMotor | null>>();
 
-function loadImage(url: string): Promise<HTMLImageElement | null> {
+/** A imagem para o canvas: com CORS na URL do motor; sem, como <img> comum. */
+export function carregarImagemDoMotor(url: string): Promise<ImagemDoMotor | null> {
   const emCache = cacheDeImagens.get(url);
   if (emCache) return emCache;
-  const p = new Promise<HTMLImageElement | null>((resolve) => {
-    if (typeof Image === "undefined") return resolve(null);
-    const img = new Image();
-    img.crossOrigin = "anonymous"; // R2 público — evita taint no toDataURL
-    img.onload = () => resolve(img);
-    img.onerror = () => resolve(null);
-    img.src = url;
-  });
+  const p = (async (): Promise<ImagemDoMotor | null> => {
+    const comCors = await carregarTag(urlDoMotor(url), true);
+    if (comCors) return { img: comCors, comCors: true };
+    const semCors = await carregarTag(url, false);
+    return semCors ? { img: semCors, comCors: false } : null;
+  })();
   cacheDeImagens.set(url, p);
-  p.then((img) => { if (!img) cacheDeImagens.delete(url); });
+  p.then((r) => { if (!r) cacheDeImagens.delete(url); });
   return p;
 }
+
+async function loadImage(url: string): Promise<HTMLImageElement | null> {
+  const r = await carregarImagemDoMotor(url);
+  return r ? r.img : null;
+}
+
+// ── O que a prévia precisa saber da composição ───────────────
+
+/**
+ * - "com-luz": a foto entrou e o motor leu a luz dela (ou nem precisava).
+ * - "sem-luz": a foto entrou sem CORS; a arte foi sem o sombreado.
+ * - "sem-foto": a foto da vista não carregou.
+ */
+export type LuzDaFoto = "com-luz" | "sem-luz" | "sem-foto";
+
+export type ResultadoDaComposicao = { luzDaFoto: LuzDaFoto | null };
+
+/** A nota curta que a prévia mostra debaixo do quadro, ou null. */
+export function notaDaComposicao(r: ResultadoDaComposicao | null | undefined): string | null {
+  if (!r) return null;
+  if (r.luzDaFoto === "sem-luz") return "Sem a luz da foto neste navegador";
+  if (r.luzDaFoto === "sem-foto") return "A foto da peça não carregou agora";
+  return null;
+}
+
+// ── Canvas ───────────────────────────────────────────────────
 
 function criarCanvas(w: number, h: number): HTMLCanvasElement | null {
   if (typeof document === "undefined") return null;
@@ -490,7 +567,9 @@ const MAXIMO_DE_ANALISES = 24;
 function analisarFoto(
   photo: HTMLImageElement, view: VisualView, quad: VisualQuad, forca: number | null
 ): AnaliseDaFoto {
-  const chave = JSON.stringify([view.photo_url, view.base, quad, forca]);
+  // A foto sem CORS não se deixa ler: a análise dela é outra (vazia), e
+  // não pode ocupar a vaga da foto com CORS se ela chegar depois.
+  const chave = JSON.stringify([view.photo_url, view.base, quad, forca, photo.crossOrigin || ""]);
   const emCache = cacheDeAnalises.get(chave);
   if (emCache) return emCache;
   const vazio: AnaliseDaFoto = { sombra: null, caixa: null, luminancia: null };
@@ -564,24 +643,26 @@ export async function composeView(
   view: VisualView,
   values: ComposeValues,
   opts: ComposeOptions = {}
-): Promise<void> {
+): Promise<ResultadoDaComposicao | null> {
   const o = { ...DEFAULTS, ...opts };
   const geracao = (geracaoDoCanvas.get(canvas) || 0) + 1;
   geracaoDoCanvas.set(canvas, geracao);
 
   // Tudo o que é assíncrono vem antes do primeiro traço: o desenho em si
   // é síncrono e, portanto, igual para o mesmo payload.
-  const photo = view.photo_url ? await loadImage(view.photo_url) : null;
+  const fotoDoMotor = view.photo_url ? await carregarImagemDoMotor(view.photo_url) : null;
+  const photo = fotoDoMotor ? fotoDoMotor.img : null;
   const shading = view.shading_url ? await loadImage(view.shading_url) : null;
   const imageUrl: string | null = values.image || values.template || null;
   const arte = imageUrl ? await loadImage(imageUrl) : null;
-  if (geracaoDoCanvas.get(canvas) !== geracao) return;
+  // Null = esta composição foi passada para trás por outra mais nova.
+  if (geracaoDoCanvas.get(canvas) !== geracao) return null;
 
   const scale = o.pixelWidth / view.base.w;
   canvas.width = Math.round(view.base.w * scale);
   canvas.height = Math.round(view.base.h * scale);
   const ctx = canvas.getContext("2d");
-  if (!ctx) return;
+  if (!ctx) return null;
   ctx.setTransform(scale, 0, 0, scale, 0, 0);
   ctx.clearRect(0, 0, view.base.w, view.base.h);
 
@@ -673,6 +754,18 @@ export async function composeView(
       ctx.restore();
     }
   }
+
+  // A luz da foto só pesa onde há área marcada na foto (quad): é ali que
+  // entram o sombreado e a mistura pela luminância.
+  const usaLuz = view.areas.some((a) => quadValido(a.quad));
+  const luzDaFoto: LuzDaFoto | null = !view.photo_url
+    ? null
+    : !fotoDoMotor
+    ? "sem-foto"
+    : !fotoDoMotor.comCors && usaLuz
+    ? "sem-luz"
+    : "com-luz";
+  return { luzDaFoto };
 }
 
 type OpcoesDaArte = Required<Pick<ComposeOptions, "garmentColor" | "artColor" | "font">> & ComposeOptions;

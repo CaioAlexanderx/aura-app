@@ -302,7 +302,8 @@ describe("composeView com quad", () => {
 
   it("sem arte nem texto, só a foto", async () => {
     const { registro: r } = await compor({});
-    expect(r.filter((op) => op[0] === "alvo.drawImage")).toEqual([["alvo.drawImage", "<img " + FOTO + ">", 0, 0, 1000, 1200]]);
+    // A foto vem pela URL do motor (?mockup=1): ver urlDoMotor.
+    expect(r.filter((op) => op[0] === "alvo.drawImage")).toEqual([["alvo.drawImage", "<img " + FOTO + "?mockup=1>", 0, 0, 1000, 1200]]);
   });
 
   it("quad inválido cai no rect de sempre", async () => {

@@ -18,6 +18,20 @@
 // carga), então a etapa do F5 vem do rascunho guardado na aba
 // (dadosLembrados.ts) — e a marca é regravada.
 //
+// QA 28/09: voltar e avançar só funcionavam na primeira passada. A cada
+// `popstate` o roteador regrava a entrada com `replaceState({ id })` e a
+// marca da etapa some; na segunda passada pela mesma entrada não havia
+// mais etapa para ler (caía na 1). Duas defesas:
+//   - depois do `popstate`, a tela REGRAVA a marca na entrada (em mais de
+//     um momento: o roteador regrava logo depois, às vezes só no quadro
+//     seguinte) — remarcarEtapaDepoisDoRoteador;
+//   - a etapa de cada entrada também fica num mapa do módulo, pela chave
+//     da entrada. O `id` do roteador não serve de chave: as três etapas
+//     são a MESMA entrada para ele (o mesmo `id` copiado a cada
+//     pushState). A chave é a do Navigation API (`navigation.currentEntry
+//     .key`, que sobrevive ao replaceState); onde ele não existe, vale a
+//     marca regravada.
+//
 // Puro no que decide (estado entra e sai por parâmetro); os ganchos de
 // tela ficam no fim.
 // ============================================================
@@ -39,6 +53,21 @@ function objeto(estado: unknown): Record<string, unknown> {
 export function etapaDoEstado(estado: unknown): EtapaNoHistorico | null {
   const v = Number((objeto(estado) as any)[MARCA_DA_ETAPA]);
   return v === 2 || v === 3 ? v : v === 1 ? 1 : null;
+}
+
+/**
+ * A etapa desta entrada: a marca do state; sem ela (o roteador apagou), a
+ * que o mapa lembra pela chave da entrada; senão null (etapa 1).
+ */
+export function etapaDaEntrada(p: {
+  estado: unknown;
+  chave: string | null | undefined;
+  mapa: ReadonlyMap<string, EtapaNoHistorico>;
+}): EtapaNoHistorico | null {
+  const marcada = etapaDoEstado(p.estado);
+  if (marcada) return marcada;
+  if (p.chave && p.mapa.has(p.chave)) return p.mapa.get(p.chave) as EtapaNoHistorico;
+  return null;
 }
 
 /** O state da entrada nova: o que o roteador pôs lá (o `id`) mais a etapa. */
@@ -128,6 +157,67 @@ export function regravarNoHistorico(estado: Record<string, unknown>): void {
 export function andarNoHistorico(n: number): boolean {
   if (!naWeb() || !n) return false;
   try { window.history.go(n); return true; } catch { return false; }
+}
+
+// ── A etapa por entrada (QA 28/09) ───────────────────────────
+
+const etapasDasEntradas = new Map<string, EtapaNoHistorico>();
+
+/** O mapa da etapa por entrada (leitura, para etapaDaEntrada). */
+export function mapaDasEtapas(): ReadonlyMap<string, EtapaNoHistorico> {
+  return etapasDasEntradas;
+}
+
+/**
+ * A chave da entrada atual no Navigation API (Chrome, Edge; o Safari e o
+ * Firefox antigos não têm): única por entrada e mantida no replaceState.
+ */
+export function chaveDaEntrada(): string | null {
+  try {
+    if (!naWeb()) return null;
+    const k = (window as any).navigation?.currentEntry?.key;
+    return typeof k === "string" && k ? k : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Lembra a etapa da entrada atual (depois de empilhar ou regravar). */
+export function lembrarEtapaDaEntrada(etapa: EtapaNoHistorico): void {
+  const k = chaveDaEntrada();
+  if (k) etapasDasEntradas.set(k, etapa);
+}
+
+// Cada navegação (popstate ou empilhar) passa as regravações antigas para
+// trás: uma regravação atrasada nunca marca a entrada errada.
+let geracaoDaNavegacao = 0;
+
+/** A cliente navegou (popstate ou etapa empilhada): regravações pendentes caducam. */
+export function novaNavegacao(): number {
+  geracaoDaNavegacao += 1;
+  return geracaoDaNavegacao;
+}
+
+/**
+ * Depois de um `popstate`, regrava a marca da etapa na entrada atual se
+ * o roteador a tiver apagado. Roda num microtask e de novo em 0, 50 e
+ * 250 ms: o roteador regrava o state no mesmo evento ou só depois do
+ * render. Só age enquanto nenhuma navegação nova aconteceu. Devolve quem
+ * cancela (a tela desmontou).
+ */
+export function remarcarEtapaDepoisDoRoteador(etapa: EtapaNoHistorico): () => void {
+  if (!naWeb() || etapa < 2) return () => {};
+  const minha = geracaoDaNavegacao;
+  let vivo = true;
+  const remarcar = () => {
+    if (!vivo || minha !== geracaoDaNavegacao) return;
+    const atual = lerEstadoDoHistorico();
+    if (etapaDoEstado(atual) === etapa) return;
+    regravarNoHistorico(estadoComEtapa(atual, etapa));
+  };
+  const relogios = [0, 50, 250].map((ms) => setTimeout(remarcar, ms));
+  try { Promise.resolve().then(remarcar); } catch { /* sem microtask: os relógios bastam */ }
+  return () => { vivo = false; relogios.forEach(clearTimeout); };
 }
 
 /** Ouve o voltar/avançar do navegador. */

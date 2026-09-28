@@ -110,6 +110,7 @@ import type {
 import { normalizePlate, maskPlate } from "./courierPlate";
 import type { ErroDeCarga } from "./erroDaVitrine";
 import { isArtSourceType, sideOf } from "@/components/studio/customizationConfig";
+import { configDisponivel } from "./camposDaVitrine";
 import {
   agruparVitrine, transportarValores, type VitrineEntry,
 } from "./categoryGrouping";
@@ -750,7 +751,10 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
    */
   function commitConfigure(opcoes?: { direto?: boolean }) {
     if (!activeProduct) return;
-    const cfg = activeProduct.customization_config;
+    // A MESMA config que a página mostra (camposDaVitrine): a galeria
+    // vazia vira envio de arquivo, e validar a config crua barrava a
+    // peça pedindo arte num campo que a cliente nem vê (QA 28/09).
+    const cfg = configDisponivel(activeProduct.customization_config, activeProduct.templates);
     const backActive = effectiveBackSelected(cfg, editingAddBack);
     const middleActive = effectiveMiddleSelected(cfg, editingAddMiddle);
     const faltou = validateRequiredFields(cfg, editingValues, backActive, middleActive);
@@ -1146,7 +1150,14 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
    */
   function sincronizarComTela(tela: TelaDaVitrine): Resolucao | null {
     if (!store) return null;
-    const r = resolverTela(tela, store, vitrine);
+    // A sacola ou a peça já montada (texto, arte) mudam o recado da peça
+    // que saiu da loja (rotasDaVitrine.avisoDePecaFora).
+    // Só texto e arte contam: a cor que a peça já abre escolhida, não.
+    const temSacolaOuArte = cart.length > 0 ||
+      (activeProduct?.customization_config?.fields || []).some(
+        (f) => (f.type === "text" || f.type === "image" || f.type === "template") && isFilled(editingValues?.[f.id]),
+      );
+    const r = resolverTela(tela, store, vitrine, { temSacolaOuArte });
     switch (r.acao) {
       case "home": setStage("list"); break;
       case "orcamento": setStage("lote"); break;

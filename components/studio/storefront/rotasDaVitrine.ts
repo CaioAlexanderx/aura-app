@@ -135,6 +135,16 @@ export type Resolucao =
 export const AVISO_PECA_FORA = "Essa peça não está mais na loja. Escolha outra: as artes continuam suas.";
 
 /**
+ * QA 28/09: "as artes continuam suas" não faz sentido para quem abriu o
+ * link sem nada montado. Sem sacola nem arte, o recado é só o que fazer.
+ */
+export const AVISO_PECA_FORA_SEM_ARTE = "Essa peça não está mais na loja. Escolha outra.";
+
+export function avisoDePecaFora(temSacolaOuArte: boolean): string {
+  return temSacolaOuArte ? AVISO_PECA_FORA : AVISO_PECA_FORA_SEM_ARTE;
+}
+
+/**
  * Resolve a tela da URL contra a loja carregada.
  *
  * Link velho não é erro: peça que saiu da loja volta para a home com um
@@ -146,6 +156,7 @@ export function resolverTela(
   tela: TelaDaVitrine,
   loja: { products?: StudioStoreProduct[] | null; categories?: StoreCategory[] | null } | null | undefined,
   vitrine: VitrineEntry[],
+  opcoes?: { temSacolaOuArte?: boolean },
 ): Resolucao {
   switch (tela.tipo) {
     case "home": return { acao: "home" };
@@ -154,7 +165,7 @@ export function resolverTela(
     case "pedido": return { acao: "pedido", token: tela.token };
     case "produto": {
       const produto = (loja?.products || []).find((p) => String(p.id) === tela.id);
-      if (!produto) return { acao: "redirecionar", para: { tipo: "home" }, aviso: AVISO_PECA_FORA };
+      if (!produto) return { acao: "redirecionar", para: { tipo: "home" }, aviso: avisoDePecaFora(!!opcoes?.temSacolaOuArte) };
       // Os outros modelos da mesma categoria vêm junto, como quando a
       // peça é aberta pela grade: recarregar não pode sumir com o
       // seletor de modelo.
