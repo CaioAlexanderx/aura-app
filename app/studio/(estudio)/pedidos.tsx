@@ -55,6 +55,8 @@ import { SeloDoPagamento } from "@/components/studio/SeloDoPagamento";
 import { labelStudioStatus } from "@/constants/studio-status";
 import { filtrarPedidosDoHub } from "@/components/studio/filtroDoHub";
 import { numeroDoPedido } from "@/components/studio/pagamentoDoPedido";
+import { etapaDoPedido } from "@/components/studio/etapaDoPedido";
+import { rotuloDeItens } from "@/components/studio/rotuloDeItens";
 
 function fmtBRL(v: number) {
   return "R$ " + (Number(v) || 0).toFixed(2).replace(".", ",");
@@ -135,7 +137,7 @@ export default function StudioPedidosHub() {
                 kind: "order" as const,
                 created_at: o.created_at,
                 amount: Number(o.total_amount) || 0,
-                status: o.studio_production_status || "",
+                status: etapaDoPedido(o) || "",
                 name: o.customer_name || o.display_name || null,
                 qty: o.item_count || 0,
                 balance_amount: o.balance_amount != null ? Number(o.balance_amount) : null,
@@ -152,7 +154,14 @@ export default function StudioPedidosHub() {
         feedPromise,
         studioBulkHubApi.hubAlerts(company.id),
       ]);
-      setStats(st); setFeed(f.items || []); setAlerts(a.alerts || []);
+      // LJ-33 (QA final 28/09/2026): pedido cancelado aparece "Cancelado",
+      // não na etapa em que parou (backend antigo mandava a etapa crua).
+      const itens = (f.items || []).map((it: FeedRow) => (
+        it.kind === "order"
+          ? { ...it, status: etapaDoPedido({ studio_production_status: it.status, order_status: (it as any).order_status }) || it.status }
+          : it
+      ));
+      setStats(st); setFeed(itens); setAlerts(a.alerts || []);
       setLoadError(null);
     } catch (e: any) {
       const msg = e?.message || "Erro ao carregar Hub";
@@ -365,7 +374,7 @@ export default function StudioPedidosHub() {
                     (numeroDoPedido), pra quem procura pelo número achar a
                     linha. Evento não tem número. */}
                 <Text style={s.feedMeta}>
-                  {item.kind === "bulk" ? "Evento" : numeroDoPedido(item)} · {item.qty} {item.qty === 1 ? "item" : "itens"} · {fmtDate(item.created_at)}
+                  {item.kind === "bulk" ? "Evento" : numeroDoPedido(item)} · {rotuloDeItens(item.qty)} · {fmtDate(item.created_at)}
                 </Text>
               </View>
               <View style={{ alignItems: "flex-end" }}>

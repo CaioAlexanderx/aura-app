@@ -41,6 +41,7 @@ import { storageDaAba, storageLocal } from "./dadosLembrados";
 import { diasUteis } from "./formularioDoCheckout";
 import { descontoDoPix } from "./precoDaSacola";
 import { enderecoDaApi } from "./enderecoDaApi";
+import { textoDoCancelamento } from "./textoDoCancelamento";
 
 const API_BASE = enderecoDaApi();
 
@@ -189,7 +190,7 @@ function ItensDoPedido({ p }: { p: PedidoPublico }) {
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Texto style={{ fontSize: 14.5, fontWeight: "700", color: T.ink }} numberOfLines={2}>{i.nome}</Texto>
-            {i.resumo.length ? <Texto style={{ fontSize: 12.5, color: T.ink3 }} numberOfLines={2}>{i.resumo.join(" · ")}</Texto> : null}
+            {i.resumo.length ? <Texto style={{ fontSize: 12.5, lineHeight: 18, color: T.ink3 }}>{i.resumo.join(" · ")}</Texto> : null}
           </View>
           <Numero style={{ fontSize: 14, fontWeight: "700", color: T.ink }}>{dinheiro(i.total)}</Numero>
         </View>
@@ -485,16 +486,34 @@ export function PaginaDoPedido({ token, consulta }: { token: string; consulta?: 
 
   // ── Cancelado ───────────────────────────────────────────────
   if (situacao === "cancelado") {
+    // LJ-33/CL-46 (QA final 28/09/2026): o texto das 72 h saía para TODO
+    // Pix cancelado, até o que a loja recusou. Agora o motivo vem do
+    // servidor (`cancelamento`), com o recado da loja e os caminhos.
+    const c = textoDoCancelamento(p.cancelamento, { loja: nomeDaLoja, paymentStatus: p.payment_status });
+    const msgLoja = whatsDaLoja
+      ? `https://wa.me/${whatsDaLoja}?text=${encodeURIComponent(
+          c.tipo === "pagamento_recusado"
+            ? `Olá! Meu pedido ${numero} foi cancelado porque o Pix não foi confirmado. Eu paguei, posso mandar o comprovante?`
+            : `Olá! Quero falar sobre o pedido ${numero}, que foi cancelado.`,
+        )}`
+      : null;
     return casca(centro(
       <>
         <Circulo icone="x_circle" cor={T.ink3} fundo={FUNDO_APAGADO} />
         {rotuloDoNumero}
-        {titulo("Este pedido foi cancelado")}
-        {texto(p.payment_method === "pix"
-          ? "O Pix não foi pago em 72 horas e o pedido cancelou sozinho. Se ainda quiser a peça, é só montar de novo."
-          : `O pedido foi cancelado. Qualquer dúvida, fale com a ${nomeDaLoja} pelo WhatsApp.`)}
-        <View style={{ minWidth: 220, marginTop: 8 }}>
-          <Botao titulo="Voltar para a loja" onPress={() => sf?.goTo("list")} />
+        {titulo(c.titulo)}
+        {texto(c.texto)}
+        {c.motivo ? (
+          <View testID="motivo-do-cancelamento" style={{ maxWidth: 420, width: "100%", borderRadius: 12, padding: 14, backgroundColor: FUNDO_SUAVE }}>
+            <Texto style={{ fontSize: 12, fontWeight: "700", color: T.ink3, marginBottom: 4 }}>{`Recado da ${nomeDaLoja}`}</Texto>
+            <Texto style={{ fontSize: 15, lineHeight: 22, color: T.ink }}>{c.motivo}</Texto>
+          </View>
+        ) : null}
+        <View style={{ width: "100%", maxWidth: 360, gap: 10, marginTop: 8 }}>
+          {msgLoja ? (
+            <Botao testID="cancelado-whatsapp" titulo="Falar com a loja no WhatsApp" icone="whatsapp" variante="escuro" onPress={() => Linking.openURL(msgLoja)} />
+          ) : null}
+          <Botao testID="cancelado-montar-de-novo" titulo="Montar de novo" onPress={() => sf?.goTo("list")} />
         </View>
       </>,
     ), "pedido-cancelado");

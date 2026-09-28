@@ -53,7 +53,10 @@ import {
   etapaDaEntrada, chaveDaEntrada, mapaDasEtapas, lembrarEtapaDaEntrada, novaNavegacao, remarcarEtapaDepoisDoRoteador,
 } from "./historicoDaVitrine";
 import { buscarEnderecoPorCep, linhaDoBairro, type EnderecoDoCep } from "./enderecoPorCep";
-import { lerPedidoPendente, esquecerPedidoPendente, aindaEsperaPagamento, type PedidoPendente } from "./pedidoGuardado";
+import {
+  lerPedidoPendente, esquecerPedidoPendente, aindaEsperaPagamento, dispensarPedidoPendente, jaAvisouQuePagou,
+  type PedidoPendente,
+} from "./pedidoGuardado";
 import { diaEHora, numeroDoPedido } from "./pedidoPorToken";
 import { parcelasDoPreco } from "./parcelamento";
 import { maskPlate } from "./courierPlate";
@@ -388,6 +391,10 @@ function AvisoDePedidoPendente({
     : `há ${Math.round(minutos / 60)} ${Math.round(minutos / 60) === 1 ? "hora" : "horas"}`;
   const vence = diaEHora(new Date(pendente.ts + 72 * 3600 * 1000).toISOString());
   const pix = pendente.payment_method === "pix";
+  // CL-44 (QA final 28/09/2026): ela já tocou em "Já paguei" (ou mandou o
+  // comprovante) — o aviso não pode dizer que o Pix "ainda não entrou", e
+  // o pedido não cancela sozinho enquanto a loja confere.
+  const avisou = pendente.avisou_que_pagou === true;
   return (
     <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 95 }} testID="pedido-pendente">
       <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: wash(T.ink, 0.42) }} />
@@ -404,10 +411,14 @@ function AvisoDePedidoPendente({
           <Icon name="clock" size={24} color={T.amber} />
         </View>
         <Texto accessibilityRole="header" style={{ fontFamily: tipo.display, fontSize: 22, lineHeight: 27, color: T.ink }}>
-          {`Você tem um pedido esperando pagamento${numero ? ` (${numero})` : ""}`}
+          {avisou
+            ? `A loja está conferindo o seu pagamento${numero ? ` (${numero})` : ""}`
+            : `Você tem um pedido esperando pagamento${numero ? ` (${numero})` : ""}`}
         </Texto>
         <Texto style={{ fontSize: 14, lineHeight: 21, color: T.ink2 }}>
-          {`Você começou esse pedido ${ha} e o ${pix ? "Pix" : "pagamento"} ainda não entrou. Quer continuar de onde parou?`}
+          {avisou
+            ? `Você fez esse pedido ${ha} e avisou que pagou. Assim que a loja confirmar, ele segue para a arte. Quer ver o pedido?`
+            : `Você começou esse pedido ${ha} e o ${pix ? "Pix" : "pagamento"} ainda não entrou. Quer continuar de onde parou?`}
         </Texto>
         <View style={{ flexDirection: "row", gap: 12, alignItems: "center", borderWidth: 1, borderColor: T.border, borderRadius: 14, padding: 12, backgroundColor: T.card }}>
           <View style={{ flexDirection: "row" }}>
@@ -421,12 +432,12 @@ function AvisoDePedidoPendente({
             <Texto style={{ fontSize: 14, fontWeight: "700", color: T.ink }}>
               {`${pendente.pecas} ${pendente.pecas === 1 ? "peça" : "peças"}${pendente.total ? ` · ${dinheiro(pendente.total)}${pix ? " no Pix" : ""}` : ""}`}
             </Texto>
-            {pix && vence ? <Texto style={{ fontSize: 13, color: T.ink2 }}>{`O código vale até ${vence}`}</Texto> : null}
+            {pix && vence && !avisou ? <Texto style={{ fontSize: 13, color: T.ink2 }}>{`O código vale até ${vence}`}</Texto> : null}
           </View>
         </View>
-        <Botao titulo="Continuar esse pedido" onPress={onContinuar} testID="continuar-pedido" />
+        <Botao titulo={avisou ? "Ver esse pedido" : "Continuar esse pedido"} onPress={onContinuar} testID="continuar-pedido" />
         <Botao titulo="Fazer um novo" variante="secundario" onPress={onNovo} />
-        {pix ? (
+        {pix && !avisou ? (
           <Texto style={{ fontSize: 12.5, color: T.ink3, textAlign: "center" }}>
             {`Se não for pago, o ${numero || "pedido"} cancela sozinho em 72 horas.`}
           </Texto>
@@ -624,8 +635,12 @@ function CheckoutAberto({ sf }: { sf: StorefrontState }) {
       .then((j) => {
         if (!vivo) return;
         // Pago, cancelado ou sumido: a chave é apagada em silêncio.
-        if (j && aindaEsperaPagamento(j)) setPendente(p);
-        else esquecerPedidoPendente(slug, storageLocal());
+        if (!j || !aindaEsperaPagamento(j)) { esquecerPedidoPendente(slug, storageLocal()); return; }
+        const lido = { ...p, avisou_que_pagou: jaAvisouQuePagou(j) };
+        // CL-44: já dispensado com "Fazer um novo" — o F5 não reabre a
+        // pergunta; fica só a nota discreta no formulário.
+        if (p.dispensado) setRecadoDoPendente(lido);
+        else setPendente(lido);
       })
       .catch(() => { /* sem rede: não pergunta nada */ });
     return () => { vivo = false; };
@@ -1131,7 +1146,9 @@ function CheckoutAberto({ sf }: { sf: StorefrontState }) {
     >
       {recadoDoPendente ? (
         <Nota tom="ambar" icone="clock">
-          {`O pedido ${numeroDoPedido(recadoDoPendente.order_number)} continua esperando o pagamento. Se não for pago, cancela sozinho em 72 horas.`}
+          {recadoDoPendente.avisou_que_pagou
+            ? `O pedido ${numeroDoPedido(recadoDoPendente.order_number)} continua com a loja, que está conferindo o seu pagamento.`
+            : `O pedido ${numeroDoPedido(recadoDoPendente.order_number)} continua esperando o pagamento. Se não for pago, cancela sozinho em 72 horas.`}
         </Nota>
       ) : null}
       <View style={{ gap: 4 }}>
@@ -1176,7 +1193,7 @@ function CheckoutAberto({ sf }: { sf: StorefrontState }) {
           pendente={pendente}
           larga={larga}
           onContinuar={() => { const t = pendente.token; setPendente(null); if (t) sf.irParaPedido(t); }}
-          onNovo={() => { setRecadoDoPendente(pendente); setPendente(null); }}
+          onNovo={() => { dispensarPedidoPendente(slug, storageLocal()); setRecadoDoPendente(pendente); setPendente(null); }}
         />
       ) : null}
     </View>

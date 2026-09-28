@@ -49,6 +49,15 @@ const ordersApi = {
 export const pagamentoDoPedidoDigitalApi = {
   aprovar: ordersApi.approvePayment,
   recusar: ordersApi.rejectPayment,
+  // QA final 28/09/2026 (LJ-33): "Cancelar pedido" do detalhe Studio — a
+  // rota do Canal (PATCH /status 'cancelled'), com o motivo que a cliente
+  // vê na vitrine (aura-backend grava em cancel_reason; backend antigo
+  // ignora o campo e cancela igual).
+  cancelar: (cid: string, oid: string, reason?: string) =>
+    request<any>(`/companies/${cid}/digital-channel/orders/${oid}/status`, {
+      method: "PATCH",
+      body: { status: "cancelled", reason: reason || undefined },
+    }),
 };
 
 // `companyIdOverride` permite que uma tela force a empresa (multi-CNPJ);

@@ -28,6 +28,7 @@ import { FolhaDeAjuste } from "./FolhaDeAjuste";
 import { MockupDaArte } from "./MockupDaArte";
 import { Botao, MolduraDaLoja, Nota, Painel, Rotulo, Selo, Titulo, abrirFora } from "./MolduraDaLoja";
 import { PedidoNaoEncontrado } from "./PedidoNaoEncontrado";
+import { separarReferencia } from "../../referenciaDoAjuste";
 import {
   avisoDoAjuste, linkDoWhatsAppDoPedido, nomeDaLoja, primeiroNome, telaDaAprovacao,
   textoDasRevisoes, tituloDaAprovacao,
@@ -318,6 +319,10 @@ function TelaAjustePedido({
   whats: string | null;
 }) {
   const tema = useTemaDaVitrine();
+  // CL-51 (QA final 28/09/2026): o link já respondido mostrava a nota do
+  // servidor com a última linha "Referência: https://pub-…r2.dev/…png"
+  // crua. A referência vira imagem com "Ver referência".
+  const { texto, referencia } = separarReferencia(nota);
   return (
     <View testID="aprovacao-ajuste">
       <View style={{ paddingTop: 34, paddingHorizontal: 26, paddingBottom: 8, alignItems: "center", gap: 12 }}>
@@ -327,10 +332,23 @@ function TelaAjustePedido({
           Assim que a nova versão ficar pronta, mandamos um link novo pra você aprovar.
         </Texto>
       </View>
-      {nota ? (
+      {texto || referencia ? (
         <Painel>
           <Rotulo>O que você pediu</Rotulo>
-          <Texto style={{ fontSize: 14, lineHeight: 21, color: tema.ink, marginTop: 8 }}>{nota}</Texto>
+          {texto ? <Texto style={{ fontSize: 14, lineHeight: 21, color: tema.ink, marginTop: 8 }}>{texto}</Texto> : null}
+          {referencia ? (
+            <View style={{ marginTop: 10, gap: 8 }} testID="aprovacao-referencia">
+              {/\.(png|jpe?g|webp|gif)(\?|#|$)/i.test(referencia) ? (
+                <Image
+                  source={{ uri: referencia }}
+                  style={{ width: 120, height: 120, borderRadius: 10, backgroundColor: tema.border }}
+                  resizeMode="cover"
+                  accessibilityLabel="A referência que você enviou"
+                />
+              ) : null}
+              <Botao tipo="secundario" icone="image" rotulo="Ver referência" onPress={() => abrirFora(referencia)} />
+            </View>
+          ) : null}
         </Painel>
       ) : null}
       <View style={{ paddingHorizontal: 20, paddingTop: 18, gap: 10 }}>

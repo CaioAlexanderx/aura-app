@@ -153,6 +153,9 @@ export type StudioOrder = {
   // EXEMPLO do produto (ex.: "CACHORRO"), não o que a cliente digitou.
   // Ausente em backend antigo — aí o cartão se comporta como antes.
   card_image_source?: "mockup" | "render" | "product" | null;
+  // QA final 28/09/2026 (LJ-34): por que um Pix vencido não cancelou
+  // sozinho — a mesma leitura do job (aura-backend, situacaoDoPixVencido).
+  pix_cancelamento?: { vencido: boolean; motivo: string | null } | null;
   // Personalização (valores digitados) e customization_config do produto
   // do primeiro item personalizado do pedido. Com ela o cartão desenha a
   // arte real quando a capa seria só a foto do catálogo. `values` pode
@@ -173,6 +176,9 @@ export type StudioOrder = {
 // devolve: nada de CPF, telefone, endereço, sobrenome ou dado comercial.
 export type PublicTrack = {
   cancelado: boolean;
+  // QA final 28/09/2026 (LJ-33/CL-46): tipo e motivo do cancelamento do
+  // pedido da vitrine (aura-backend, studioTrackPublic). Ausente antes.
+  cancelamento?: { tipo: string; motivo: string | null } | null;
   loja: string | null;
   cliente: string;
   pedido: string;
@@ -252,6 +258,12 @@ export type StudioOrderItem = {
   customization: any | null;
 };
 
+/** Tipo e motivo do cancelamento (aura-backend, services/cancelamentoDoPedido). */
+export type CancelamentoDoPedido = {
+  tipo: "pix_expirado" | "pagamento_recusado" | "cancelado_pela_loja" | string;
+  motivo: string | null;
+};
+
 export type StudioOrderDetail = {
   order: StudioOrder & {
     vertical?: string;
@@ -282,6 +294,10 @@ export type StudioOrderDetail = {
     shipping_fee?: number | null;
     pix_discount?: number | null;
     pix_cancelamento?: { vencido: boolean; motivo: string | null } | null;
+    // QA final 28/09/2026 (LJ-33): quem cancelou e o motivo que a lojista
+    // escreveu (aura-backend, services/cancelamentoDoPedido). null quando
+    // não cancelado; ausente em backend antigo.
+    cancelamento?: CancelamentoDoPedido | null;
   };
   items: StudioOrderItem[];
   approvals: StudioApproval[];

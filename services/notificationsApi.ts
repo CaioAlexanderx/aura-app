@@ -54,6 +54,10 @@ export interface StoreEvent {
   cta_route?:    string;
   created_at:    string;
   read_at?:      string | null;
+  // QA final 28/09/2026 (LJ-29): o backend marca o aviso que o pedido já
+  // resolveu (pagou, a própria lojista recusou/cancelou) — sai de "Precisa
+  // de você" e perde o selo. aura-backend, services/eventoResolvido.
+  resolved?:     boolean;
 }
 
 export interface NotificationsResponse {

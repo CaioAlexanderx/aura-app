@@ -178,7 +178,7 @@ export default function FichaDeProducao() {
             {entradas.length ? (
               <View style={s.tabela}>
                 {entradas.map(([k, v]) => {
-                  const rotulo = rotuloDaChave(k, porId);
+                  const rotulo = rotuloDaChave(k, porId, v);
                   const arquivo = ehUrlDeArquivo(v);
                   return (
                     <View key={k} style={s.linha}>

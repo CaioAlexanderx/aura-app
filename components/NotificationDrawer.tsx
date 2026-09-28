@@ -47,7 +47,7 @@ import { useColors } from '@/constants/colors';
 import { AppBanner } from '@/services/notificationsApi';
 import {
   Feed, FeedItem, StoreEvent, EventIcon, AccentToken,
-  visualForEvent, severityLabel, relTime,
+  visualForEvent, seloDoCard, relTime,
 } from '@/components/notificationEventModel';
 import { NotificationPrefs } from '@/components/NotificationPrefs';
 import { WebPortal } from '@/components/WebPortal';
@@ -168,7 +168,7 @@ function EventCard({
   const ev   = item.event;
   const v    = visualForEvent(ev);
   const cor  = accentColor(v.accent, C);
-  const selo = severityLabel(v.severity);
+  const selo = seloDoCard(item);
   const soft = v.severity === 'info' ? undefined : accentSoft(v.accent, C);
   const naoLido = item.unread > 0;
 

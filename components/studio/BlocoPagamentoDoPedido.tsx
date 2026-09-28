@@ -31,6 +31,7 @@ import { pagamentoDoPedidoDigitalApi } from "@/hooks/useDigitalOrders";
 import {
   situacaoDoPagamento, acoesDoPagamento, formaDoPagamento, reais, totalDoPedido,
   comprovanteEhPdf, linhasDePagamentoEEntrega, motivoDoPixVencido,
+  podeCancelarOPedido, avisoDoCancelamento,
   type PagamentoDoPedido, type TomDoPagamento,
 } from "./pagamentoDoPedido";
 
@@ -42,7 +43,9 @@ type Props = {
   onAtualizado: () => void | Promise<void>;
 };
 
-type Confirmacao = "aprovar" | "recusar" | null;
+// "cancelar" (QA final 28/09/2026, LJ-33): o 409 da recusa manda usar
+// "Cancelar pedido" quando o Pix já entrou, e o detalhe não tinha o botão.
+type Confirmacao = "aprovar" | "recusar" | "cancelar" | null;
 
 export function BlocoPagamentoDoPedido({ pedido, companyIdDaSessao, onAtualizado }: Props) {
   const t = useStudioTokens();
@@ -65,6 +68,11 @@ export function BlocoPagamentoDoPedido({ pedido, companyIdDaSessao, onAtualizado
   // padrão, a folha continua aberta e o que a lojista digitou (motivo)
   // continua lá.
   const [erroAcao, setErroAcao] = useState<string | null>(null);
+  // O pedido mudou no servidor (409: outra aba aprovou, o Pix entrou). A
+  // folha mostra o porquê, o bloco por trás é recarregado, e o botão de
+  // confirmar some — repetir a mesma ação sobre o pedido velho não serve.
+  const [desatualizado, setDesatualizado] = useState(false);
+  const podeCancelar = podeCancelarOPedido(pedido);
 
   const cor = corDoTom(t, situacao.tom);
   const comprovante = pedido.payment_proof_url || null;
@@ -77,10 +85,12 @@ export function BlocoPagamentoDoPedido({ pedido, companyIdDaSessao, onAtualizado
     setConfirmacao(null);
     setMotivo("");
     setErroAcao(null);
+    setDesatualizado(false);
   }
 
   function abrirConfirmacao(acao: Exclude<Confirmacao, null>) {
     setErroAcao(null);
+    setDesatualizado(false);
     setConfirmacao(acao);
   }
 
@@ -97,6 +107,9 @@ export function BlocoPagamentoDoPedido({ pedido, companyIdDaSessao, onAtualizado
       if (acao === "aprovar") {
         await pagamentoDoPedidoDigitalApi.aprovar(cid, pedido.id);
         toast.success(`Pagamento confirmado${numero ? ` · pedido ${numero}` : ""}`);
+      } else if (acao === "cancelar") {
+        await pagamentoDoPedidoDigitalApi.cancelar(cid, pedido.id, motivo.trim() || undefined);
+        toast.success(`Pedido${numero ? ` ${numero}` : ""} cancelado`);
       } else {
         await pagamentoDoPedidoDigitalApi.recusar(cid, pedido.id, motivo.trim() || undefined);
         toast.success(`Pagamento recusado${numero ? ` · pedido ${numero} cancelado` : ""}`);
@@ -108,12 +121,23 @@ export function BlocoPagamentoDoPedido({ pedido, companyIdDaSessao, onAtualizado
       // Nunca fecha calada: mensagem do servidor (ou o texto padrão) fica
       // NA FOLHA (não só no toast, que pode ficar atrás do overlay do
       // modal), e o motivo que a lojista já tinha digitado não some.
-      const padrao = acao === "aprovar" ? "Não foi possível confirmar o pagamento" : "Não foi possível recusar o pagamento";
+      const padrao = acao === "aprovar" ? "Não foi possível confirmar o pagamento"
+        : acao === "cancelar" ? "Não foi possível cancelar o pedido"
+        : "Não foi possível recusar o pagamento";
       const fallbackDaFolha = acao === "aprovar"
         ? "Não deu para confirmar o pagamento. Tente de novo."
-        : "Não deu para recusar o pagamento. Tente de novo.";
+        : acao === "cancelar"
+          ? "Não deu para cancelar o pedido. Tente de novo."
+          : "Não deu para recusar o pagamento. Tente de novo.";
       setErroAcao(e?.message || fallbackDaFolha);
       toast.error(e?.message ? `${padrao}: ${e.message}` : padrao);
+      // 409 = o pedido já não é o que a tela mostra (QA final, LJ-33 P2:
+      // a folha ficava sobre "Cliente disse que pagou" até recarregar a
+      // página). Recarrega o bloco por trás; a mensagem fica na folha.
+      if (e?.status === 409) {
+        setDesatualizado(true);
+        try { await onAtualizado(); } catch { /* o erro já está na folha */ }
+      }
     } finally {
       setAgindo(null);
     }
@@ -225,6 +249,24 @@ export function BlocoPagamentoDoPedido({ pedido, companyIdDaSessao, onAtualizado
         </View>
       ) : null}
 
+      {podeCancelar ? (
+        <View style={s.acoes}>
+          <Pressable
+            testID="btn-cancelar-pedido"
+            onPress={() => abrirConfirmacao("cancelar")}
+            disabled={!!agindo}
+            style={[s.botao, s.botaoSecundario, agindo && s.desligado]}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !!agindo, busy: agindo === "cancelar" }}
+          >
+            {agindo === "cancelar"
+              ? <ActivityIndicator size="small" color={t.dangerInk} />
+              : <Icon name="x-circle" size={16} color={t.dangerInk} />}
+            <Text style={[s.botaoTxt, { color: t.dangerInk }]}>Cancelar pedido</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       {/* Confirmação antes de gravar — as duas ações mexem no pedido da cliente. */}
       <Modal visible={confirmacao !== null} transparent animationType="fade" onRequestClose={fechar}>
         <View style={s.fundoModal}>
@@ -241,6 +283,25 @@ export function BlocoPagamentoDoPedido({ pedido, companyIdDaSessao, onAtualizado
                   "Pagamento recebido" e ele sai do cancelamento automático.
                 </Text>
               </>
+            ) : confirmacao === "cancelar" ? (
+              <>
+                <Text style={s.tituloModal}>Cancelar o pedido?</Text>
+                <Text style={s.textoModal}>
+                  {[numero && `Pedido ${numero}`, pedido.customer_name].filter(Boolean).join(" · ")}
+                  {numero || pedido.customer_name ? "\n\n" : ""}
+                  {avisoDoCancelamento(pedido)}
+                </Text>
+                <Text style={[s.rotulo, { marginTop: 12 }]}>Motivo (a cliente vê este texto)</Text>
+                <TextInput
+                  value={motivo}
+                  onChangeText={setMotivo}
+                  placeholder="Ex.: não temos a peça na cor escolhida"
+                  placeholderTextColor={t.ink4}
+                  style={s.entrada}
+                  maxLength={200}
+                  accessibilityLabel="Motivo do cancelamento"
+                />
+              </>
             ) : (
               <>
                 <Text style={s.tituloModal}>Recusar o pagamento?</Text>
@@ -248,7 +309,7 @@ export function BlocoPagamentoDoPedido({ pedido, companyIdDaSessao, onAtualizado
                   {numero ? `O pedido ${numero} será cancelado.` : "O pedido será cancelado."} Use quando o Pix
                   não caiu ou o comprovante não confere.
                 </Text>
-                <Text style={[s.rotulo, { marginTop: 12 }]}>Motivo (opcional)</Text>
+                <Text style={[s.rotulo, { marginTop: 12 }]}>Motivo (opcional — a cliente vê este texto)</Text>
                 <TextInput
                   value={motivo}
                   onChangeText={setMotivo}
@@ -273,23 +334,25 @@ export function BlocoPagamentoDoPedido({ pedido, companyIdDaSessao, onAtualizado
                 style={[s.botao, s.botaoSecundario]}
                 accessibilityRole="button"
               >
-                <Text style={[s.botaoTxt, { color: t.ink2 }]}>Voltar</Text>
+                <Text style={[s.botaoTxt, { color: t.ink2 }]}>{desatualizado ? "Fechar" : "Voltar"}</Text>
               </Pressable>
+              {desatualizado ? null : (
               <Pressable
                 testID="btn-confirmar-acao"
                 onPress={executar}
                 disabled={!!agindo}
-                style={[s.botao, { backgroundColor: confirmacao === "recusar" ? t.danger : t.primary }, agindo && s.desligado]}
+                style={[s.botao, { backgroundColor: confirmacao === "aprovar" ? t.primary : t.danger }, agindo && s.desligado]}
                 accessibilityRole="button"
                 accessibilityState={{ disabled: !!agindo, busy: !!agindo }}
               >
                 {agindo ? <ActivityIndicator size="small" color="#fff" /> : null}
                 <Text style={s.botaoTxt}>
                   {agindo
-                    ? (confirmacao === "recusar" ? "Recusando..." : "Confirmando...")
-                    : (confirmacao === "recusar" ? "Recusar e cancelar" : "Sim, confirmar")}
+                    ? (confirmacao === "recusar" ? "Recusando..." : confirmacao === "cancelar" ? "Cancelando..." : "Confirmando...")
+                    : (confirmacao === "recusar" ? "Recusar e cancelar" : confirmacao === "cancelar" ? "Cancelar o pedido" : "Sim, confirmar")}
                 </Text>
               </Pressable>
+              )}
             </View>
           </View>
         </View>

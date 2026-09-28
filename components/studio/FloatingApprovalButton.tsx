@@ -36,9 +36,14 @@ const ALLOWED_PATHS = [
   '/studio/pedidos',
 ];
 
-function shouldShow(pathname: string | null): boolean {
+// Só a rota EXATA do hub (QA final 28/09/2026, LJ-31): o `startsWith`
+// levava o atalho para /studio/pedidos/<id>, onde ele aparecia até em
+// pedido Entregue e Cancelado. O detalhe já tem "Solicitar aprovação"
+// quando a arte está pendente — o atalho genérico ali só confundia.
+export function shouldShow(pathname: string | null): boolean {
   if (!pathname) return false;
-  return ALLOWED_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'));
+  const rota = pathname.replace(/\/+$/, '');
+  return ALLOWED_PATHS.includes(rota);
 }
 
 export function FloatingApprovalButton() {

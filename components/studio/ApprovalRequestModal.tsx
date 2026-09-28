@@ -89,6 +89,13 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
     }
     setGenerating(true);
     try {
+      // LJ-36 (QA final 28/09/2026): a montagem do mockup roda na thread
+      // da página. Sem ceder a vez, o "Gerando..." nem chegava a aparecer e
+      // a aba parecia travada. Um quadro para o spinner pintar antes.
+      await new Promise<void>((r) => {
+        if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => setTimeout(r, 0));
+        else setTimeout(r, 0);
+      });
       const r = await gerarRenderDoPedido(company.id, order.id);
       setMockupUrl(r.url);
       setRenderId(r.renderId);
@@ -102,7 +109,11 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
     } catch (e: any) {
       // Nunca volta calado: mensagem do servidor, ou o texto padrão que
       // já diz o próximo passo (colar a URL na mão).
-      const msg = e?.message || "Não deu para gerar o mockup. Cole a URL de uma imagem.";
+      // Timeout do envio: diz o que houve e o próximo passo, em vez do
+      // genérico "Não recebemos resposta a tempo" (LJ-36).
+      const msg = e?.code === "timeout"
+        ? "O envio do mockup gerado demorou demais (arquivo grande ou conexão lenta). Tente de novo ou cole a URL de uma imagem."
+        : e?.message || "Não deu para gerar o mockup. Cole a URL de uma imagem.";
       setErroGerar(msg);
       toast.error(msg);
     } finally {

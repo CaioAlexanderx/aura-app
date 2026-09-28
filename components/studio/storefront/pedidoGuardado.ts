@@ -47,6 +47,14 @@ export type PedidoPendente = {
   imagens: string[];
   /** O init_point do Mercado Pago: "Tentar outro cartão" volta para ele. */
   card_init_point: string | null;
+  /**
+   * A cliente já tocou em "Fazer um novo" (QA final 28/09/2026, CL-44): o
+   * F5 no checkout reabria a Tela 8. O registro fica (protege contra
+   * pedido duplicado e guarda a volta do cartão); só a pergunta não volta.
+   */
+  dispensado?: boolean;
+  /** Lido do servidor na hora: ela já avisou que pagou ("Já paguei" ou comprovante). */
+  avisou_que_pagou?: boolean;
 };
 
 const s = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
@@ -79,10 +87,34 @@ export function lerPedidoPendente(slug: string, storage: Armazem, agora = Date.n
       pecas: Math.max(0, Math.floor(Number(d.pecas) || 0)),
       imagens: Array.isArray(d.imagens) ? d.imagens.filter((x: unknown) => typeof x === "string").slice(0, 4) : [],
       card_init_point: s(d.card_init_point),
+      dispensado: d.dispensado === true,
     };
   } catch {
     return null;
   }
+}
+
+/** "Fazer um novo": a Tela 8 não volta para este pedido (CL-44). */
+export function dispensarPedidoPendente(slug: string, storage: Armazem): void {
+  try {
+    const raw = storage?.getItem(chaveDoPedidoPendente(slug));
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    if (!d || typeof d !== "object") return;
+    storage?.setItem(chaveDoPedidoPendente(slug), JSON.stringify({ ...d, dispensado: true }));
+  } catch { /* sem storage */ }
+}
+
+/**
+ * A cliente já avisou que pagou? "Já paguei" põe o pedido em
+ * awaiting_approval; o comprovante pode vir sem o toque. Nos dois casos o
+ * aviso não pode dizer "o Pix ainda não entrou" (CL-44).
+ */
+export function jaAvisouQuePagou(
+  pedido: { status?: string | null; comprovante_enviado?: boolean | null } | null | undefined,
+): boolean {
+  if (!pedido) return false;
+  return pedido.status === "awaiting_approval" || pedido.comprovante_enviado === true;
 }
 
 export function esquecerPedidoPendente(slug: string, storage: Armazem): void {
