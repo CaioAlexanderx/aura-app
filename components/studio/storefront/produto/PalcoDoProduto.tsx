@@ -49,7 +49,7 @@ export function slidesDoPalco(fotos: string[], comMockup: boolean): SlideDoPalco
 export function PalcoDoProduto({
   fotos, nome, selo, largura, altura, desktop,
   comMockup, mockupPersonalizado, mockup, rotuloDoMock,
-  lados, lado, onLado,
+  lados, lado, onLado, medidas,
   slide, onSlide, onAmpliar, brilho, legendaDoMock,
 }: {
   fotos: string[];
@@ -68,6 +68,12 @@ export function PalcoDoProduto({
   lados: Lado[];
   lado: Lado;
   onLado: (l: Lado) => void;
+  /**
+   * A área de impressão de cada lado, do CADASTRO da peça ("7 × 7 cm";
+   * regrasDaPagina.areaDoLado). Vai no seletor Frente · Verso do palco
+   * (QA 28/09: o 3D mostrava a medida do modelo, não a da peça).
+   */
+  medidas?: Partial<Record<Lado, string | null>>;
   slide: number;
   onSlide: (i: number) => void;
   /** Lupa: `null` = o mockup; número = a foto (índice na galeria). */
@@ -266,14 +272,26 @@ export function PalcoDoProduto({
                         key={l}
                         onPress={() => onLado(l)}
                         accessibilityRole="radio"
-                        accessibilityState={{ checked: sel }}
-                        accessibilityLabel={"Ver " + NOME_DO_LADO[l].toLowerCase()}
-                        style={[{ height: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center", backgroundColor: sel ? t.marcaFill : "transparent" }, transicao("background-color")]}
+                        accessibilityState={{ checked: sel }} aria-checked={sel}
+                        accessibilityLabel={"Ver " + NOME_DO_LADO[l].toLowerCase() + (medidas?.[l] ? ", área de " + medidas[l] : "")}
+                        style={[{ height: 40, paddingHorizontal: 14, borderRadius: 999, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: sel ? t.marcaFill : "transparent" }, transicao("background-color")]}
                       >
                         <Texto style={{ fontSize: 13, fontWeight: "600", color: sel ? t.sobreMarca : t.ink2 }}>{NOME_DO_LADO[l]}</Texto>
+                        {medidas?.[l] ? (
+                          <Numero style={{ fontSize: 11.5, color: sel ? t.sobreMarca : t.ink3, opacity: sel ? 0.85 : 1 }}>{medidas[l]}</Numero>
+                        ) : null}
                       </Pressable>
                     );
                   })}
+                </View>
+              </View>
+            ) : medidas?.[lado] ? (
+              // Um lado só: a medida dele, sem seletor (o 3D mostrava a
+              // área do modelo, "Frente 28×35 cm", numa peça de 7 × 7).
+              <View style={{ position: "absolute", bottom: 10, left: 0, right: 0, alignItems: "center" }} pointerEvents="none">
+                <View testID="medida-do-lado" style={[{ flexDirection: "row", alignItems: "center", gap: 6, height: 32, paddingHorizontal: 12, borderRadius: 999, backgroundColor: wash(t.bg2, 0.9) }, sombraWeb(1)]}>
+                  <Texto style={{ fontSize: 12.5, fontWeight: "600", color: t.ink2 }}>{NOME_DO_LADO[lado]}</Texto>
+                  <Numero style={{ fontSize: 11.5, color: t.ink3 }}>{medidas[lado]}</Numero>
                 </View>
               </View>
             ) : null}
@@ -330,7 +348,7 @@ export function PalcoDoProduto({
                   key={i}
                   onPress={() => onSlide(i)}
                   accessibilityRole="tab"
-                  accessibilityState={{ selected: sel }}
+                  accessibilityState={{ selected: sel }} aria-selected={sel}
                   accessibilityLabel={mock ? rotuloDoMock : `Foto ${comMockup ? i : i + 1}`}
                   style={{ width: 24, height: 36, alignItems: "center", justifyContent: "center" }}
                 >
@@ -364,7 +382,7 @@ export function PalcoDoProduto({
               key={i}
               onPress={() => onSlide(i)}
               accessibilityRole="button"
-              accessibilityState={{ selected: sel }}
+              accessibilityState={{ selected: sel }} aria-selected={sel}
               accessibilityLabel={sl.tipo === "mock" ? rotuloDoMock : `Foto ${comMockup ? i : i + 1}`}
               style={[
                 {

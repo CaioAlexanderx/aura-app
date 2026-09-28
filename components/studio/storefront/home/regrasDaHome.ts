@@ -287,8 +287,32 @@ export function listaDeCategorias(nomes: string[]): string {
 /** O título fixo do destaque sem banner (mockup 05, tela 2). */
 export const TITULO_FIXO_DO_HERO = "Presentes que ninguém mais tem.";
 
-function mesmoTexto(a: string, b: string): boolean {
-  return a.trim().toLowerCase() === b.trim().toLowerCase();
+/**
+ * O título do destaque quando o banner logo acima já diz a frase fixa
+ * (QA 28/09, CL-11). Não repete o slogan nem o título da grade ("Escolha
+ * a peça. A arte é sua.").
+ */
+export const TITULO_DO_HERO_SEM_REPETIR = "Feito do seu jeito, peça por peça.";
+
+/** Mesma frase, sem contar caixa, espaços e o ponto do fim. */
+export function mesmoTexto(a: string, b: string): boolean {
+  const n = (s: string) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ").replace(/[.!…\s]+$/u, "");
+  return n(a) === n(b);
+}
+
+/**
+ * O título do destaque sem banner da lojista.
+ *
+ * QA 28/09 (CL-11): o slogan da loja era a própria frase do título fixo
+ * ("Presentes que ninguém mais tem"). O banner automático mostrava o
+ * slogan e, logo abaixo, o destaque repetia a frase como título: a
+ * primeira dobra dizia a mesma coisa duas vezes. Com o banner já dizendo
+ * a frase, o destaque usa outra.
+ */
+export function tituloDoDestaque(opcoes?: { textoDoBanner?: string | null }): string {
+  const banner = String(opcoes?.textoDoBanner || "").trim();
+  if (banner && mesmoTexto(banner, TITULO_FIXO_DO_HERO)) return TITULO_DO_HERO_SEM_REPETIR;
+  return TITULO_FIXO_DO_HERO;
 }
 
 /**
@@ -866,4 +890,15 @@ export function gradeDaHome(store: StorePayload | null | undefined): VitrineEntr
     e.kind === "category"
       ? { ...e, products: e.products.map((p) => original.get(String(p.id)) || p) }
       : { kind: "product" as const, product: original.get(String(e.product.id)) || e.product });
+}
+
+/**
+ * A largura de cada cartão para `colunas` caberem em `util` px com `gap`
+ * entre eles, arredondada para BAIXO (um pixel a mais e o último cartão
+ * desce de linha). `util` é a largura do conteúdo, não a da janela.
+ */
+export function larguraDoCartao(util: number, colunas: number, gap: number): number {
+  const c = Math.max(1, Math.floor(Number(colunas) || 1));
+  const u = Math.max(0, Number(util) || 0);
+  return Math.max(0, Math.floor((u - (Number(gap) || 0) * (c - 1)) / c));
 }

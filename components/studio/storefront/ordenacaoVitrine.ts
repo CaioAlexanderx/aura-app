@@ -73,3 +73,22 @@ export function ordenarEntradas<T extends EntradaOrdenavel>(lista: T[], ordem: O
 export function colunasComDensidade(base: number, denso: boolean): number {
   return denso ? Math.min(base + 1, 6) : Math.max(base, 2);
 }
+
+/**
+ * Quantos MODELOS há nas entradas da grade (o cartão de uma categoria
+ * conta os modelos dele).
+ *
+ * QA 28/09 (CL-15): a vitrine antiga dizia "31 modelos" no topo e "22
+ * itens" na grade — a grade contava cartões, e o topo, peças. As duas
+ * contam modelos agora.
+ */
+export function modelosNasEntradas(
+  entradas: ReadonlyArray<{ kind: string; products?: ReadonlyArray<unknown> }>,
+): number {
+  return entradas.reduce((n, e) => n + (e.kind === "category" ? (e.products?.length || 0) : 1), 0);
+}
+
+/** "1 modelo" · "31 modelos". */
+export function rotuloDeModelos(n: number): string {
+  return `${n} ${n === 1 ? "modelo" : "modelos"}`;
+}

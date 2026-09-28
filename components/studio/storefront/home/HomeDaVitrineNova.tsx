@@ -15,7 +15,7 @@
 // Não entram (JORNADA §4.2 e §5): "últimas unidades", "mais vendidos em
 // 90 dias", filtros laterais de tamanho/cor/preço e paginação de 24.
 // ============================================================
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Image, Linking, Platform, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import type { StorefrontState } from "../useStorefront";
 import { useTemaDaVitrine } from "../TemaDaVitrine";
@@ -32,14 +32,17 @@ import { AncoraWhatsApp } from "../AncoraWhatsApp";
 import { BarraDeCookies } from "../ConsentimentoDaVitrine";
 import { RodapeDaVitrine } from "../RodapeDaVitrine";
 import { FaixaDaTemporada } from "../FaixaDaTemporada";
-import { Botao, BotaoIcone, Rotulo, Selo, sombraWeb, transicao } from "../produto/kitDaPagina";
+import { Botao, BotaoIcone, ROLAGEM_ESTAVEL, Rotulo, Selo, TITULO_EQUILIBRADO, sombraWeb, transicao } from "../produto/kitDaPagina";
 import { abrirCategoria, abrirEntrada, linkDoWhatsApp, useCamadas, CabecalhoDaVitrine, CamadasDaNavegacao } from "./NavegacaoDaVitrine";
 import { HeroDaPeca, HeroDeBanners } from "./HeroDaHome";
 import { useVitrine } from "../ContextoDaVitrine";
-import { alvoDaRolagem, chaveDaRolagem, concluirPedidoDaGrade, haPedidoDaGrade } from "./rolagemDaVitrine";
+import {
+  CONFERENCIA_DA_ROLAGEM_MS, ESPERA_PELA_GRADE_MS, alvoDaRolagem, chaveDaRolagem, concluirPedidoDaGrade, haPedidoDaGrade, rolagemEmpacou,
+} from "./rolagemDaVitrine";
+import { useReduzirMovimento } from "../movimento";
 import { noDeRolagem, noDom, useRolagemGuardada } from "./useRolagemGuardada";
 import {
-  artesDaHome, bannerAutomaticoDaHome, bannersDaHome, blocoParaEmpresas, descontoDoPix, gradeDaHome, itensDaFaixa, mostrarTirarDuvida,
+  artesDaHome, bannerAutomaticoDaHome, bannersDaHome, blocoParaEmpresas, descontoDoPix, gradeDaHome, itensDaFaixa, larguraDoCartao, mostrarTirarDuvida,
   selosDaHome, type ArteDaHome,
 } from "./regrasDaHome";
 
@@ -103,7 +106,7 @@ function Secao({
             <View style={{ gap: 8, flexShrink: 1 }}>
               {etiqueta ? <Rotulo>{etiqueta}</Rotulo> : null}
               {titulo ? (
-                <Texto accessibilityRole="header" style={{ fontFamily: tipo.display, fontSize: desktop ? 36 : 26, lineHeight: desktop ? 40 : 30, letterSpacing: -0.3, color: t.ink }}>
+                <Texto accessibilityRole="header" style={[{ fontFamily: tipo.display, fontSize: desktop ? 36 : 26, lineHeight: desktop ? 40 : 30, letterSpacing: -0.3, color: t.ink }, TITULO_EQUILIBRADO]}>
                   {titulo}
                 </Texto>
               ) : null}
@@ -172,8 +175,14 @@ function GradeDaHome({ sf, desktop, largura, onLayout, noRef }: { sf: Storefront
   const estilo = ((store?.site?.card_style || "editorial") as "editorial" | "minimal" | "image-heavy");
   const colunas = desktop ? 3 : largura >= 640 ? 3 : 2;
   const gap = desktop ? 22 : 12;
-  const util = Math.min(largura, LARGURA_MAX) - (desktop ? 0 : 32);
-  const larguraCartao = Math.floor((util - gap * (colunas - 1)) / colunas);
+  // QA 28/09 (CL-15): a conta usava a largura da JANELA. Com barra de
+  // rolagem de desktop numa janela de 390 px, o conteúdo tem ~15 px a
+  // menos, os dois cartões não cabiam lado a lado e a grade virava uma
+  // coluna com a metade vazia. A largura de verdade é a da própria grade
+  // (medida no layout); a da janela fica só até a primeira medida.
+  const [medida, setMedida] = useState(0);
+  const util = medida > 0 ? medida : Math.min(largura, LARGURA_MAX) - (desktop ? 0 : 32);
+  const larguraCartao = larguraDoCartao(util, colunas, gap);
   const campea = pecaMaisPedida(store?.products || []);
   const pix = descontoDoPix(store);
   const total = (store?.products || []).length;
@@ -202,7 +211,10 @@ function GradeDaHome({ sf, desktop, largura, onLayout, noRef }: { sf: Storefront
       desktop={desktop}
       direita={desktop ? <Numero style={{ fontSize: 12.5, color: t.ink3 }}>{total} {total === 1 ? "peça" : "peças"}</Numero> : null}
     >
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap }}>
+      <View
+        onLayout={(e) => { const w = Math.floor(e?.nativeEvent?.layout?.width || 0); if (w > 0 && Math.abs(w - medida) > 1) setMedida(w); }}
+        style={{ flexDirection: "row", flexWrap: "wrap", gap }}
+      >
         {gradeDaHome(store).map((e) => {
           if (e.kind === "category") {
             const min = precoMinimo(e.products);
@@ -346,7 +358,7 @@ function ParaEmpresas({ sf, desktop }: { sf: StorefrontState; desktop: boolean }
       <View style={{ borderRadius: 20, backgroundColor: t.marcaWash, borderWidth: 1, borderColor: t.marcaWashForte, padding: desktop ? 48 : 20, paddingHorizontal: desktop ? 52 : 20, flexDirection: desktop ? "row" : "column", alignItems: desktop ? "center" : "stretch", gap: desktop ? 40 : 18, overflow: "hidden" }}>
         <View style={{ flex: desktop ? 1.08 : undefined, gap: 12, alignItems: "flex-start" }}>
           <Rotulo cor={t.marcaTexto}>Para empresas e eventos</Rotulo>
-          <Texto accessibilityRole="header" style={{ fontFamily: tipo.display, fontSize: desktop ? 34 : 25, lineHeight: desktop ? 38 : 29, color: t.ink, letterSpacing: -0.3 }}>{b.titulo}</Texto>
+          <Texto accessibilityRole="header" style={[{ fontFamily: tipo.display, fontSize: desktop ? 34 : 25, lineHeight: desktop ? 38 : 29, color: t.ink, letterSpacing: -0.3 }, TITULO_EQUILIBRADO]}>{b.titulo}</Texto>
           <Texto style={{ fontSize: 14, lineHeight: 21, color: t.ink2, maxWidth: 480 }}>
             Cole a lista de nomes. Cada linha vira uma peça personalizada, o desconto por quantidade cai sozinho e você recebe um mockup por pessoa para aprovar.
           </Texto>
@@ -502,51 +514,96 @@ export function HomeDaVitrineNova({ sf, slug }: { sf: StorefrontState; slug: str
     const no = noDom(nos.current.cabecalho);
     return no ? no.getBoundingClientRect().height : posicoes.current.cabecalho;
   }, []);
+  // QA 28/09 (rodada 3): "Todas as peças" na barra do desktop ficava em
+  // scrollTop 0 e só rolava quando a roda do mouse mexia na página; na
+  // gaveta do celular levava ~5 s. A rolagem esperava um
+  // requestAnimationFrame e depois era SUAVE — as duas coisas só andam
+  // quando o navegador pinta um quadro. Com a janela do Chrome coberta
+  // por outra (ou a aba sem pintar), a página continua "visível" e nenhum
+  // quadro sai: o pedido ficava pendurado até a próxima pintura. Agora a
+  // medida e a rolagem acontecem no próprio clique (medir força o layout
+  // na hora) e uma conferência por setTimeout — que não depende de
+  // pintura — pula direto para a grade se a rolagem suave não andou.
+  const reduzir = useReduzirMovimento();
+  const reduzirRef = useRef(reduzir);
+  reduzirRef.current = reduzir;
   const rolarPara = useCallback((onde: "grade" | "queridinhos", animado: boolean = true) => {
-    // Um quadro depois: da gaveta do celular, a camada fecha no mesmo
-    // toque, e a medida sai com ela já fora da tela.
-    const rolar = () => {
-      if (!montada.current) return;
+    if (!montada.current) return;
+    const medir = (): number | null => {
       const topo = topoNoConteudo(onde) ?? topoNoConteudo("grade");
-      if (topo == null) return;
-      rolagem.current?.scrollTo({ y: alvoDaRolagem(topo, alturaDoCabecalho()), animated: animado });
+      return topo == null ? null : alvoDaRolagem(topo, alturaDoCabecalho());
     };
-    if (typeof requestAnimationFrame === "function") requestAnimationFrame(rolar);
-    else rolar();
+    const y = medir();
+    if (y == null) return;
+    const no = noDeRolagem(rolagem.current);
+    const antes = no ? no.scrollTop : yReal.current;
+    const suave = animado && !reduzirRef.current;
+    rolagem.current?.scrollTo({ y, animated: suave });
+    if (!suave) yReal.current = y;
+    setTimeout(() => {
+      if (!montada.current || !no) return;
+      if (suave && rolagemEmpacou(antes, no.scrollTop, y)) {
+        rolagem.current?.scrollTo({ y, animated: false });
+        yReal.current = y;
+      }
+    }, CONFERENCIA_DA_ROLAGEM_MS);
+    // O cabeçalho encolhe depois de rolar, e foto do banner que chega
+    // tarde empurra a grade: chegando, confere a medida uma vez.
+    setTimeout(() => {
+      if (!montada.current || !no || Math.abs(no.scrollTop - y) > 2) return;
+      const y2 = medir();
+      if (y2 != null && Math.abs(y2 - y) > 4) rolagem.current?.scrollTo({ y: y2, animated: false });
+    }, CONFERENCIA_DA_ROLAGEM_MS * 2 + 100);
   }, [topoNoConteudo, alturaDoCabecalho]);
   const verLoja = useCallback(() => rolarPara("grade"), [rolarPara]);
 
-  // "Todas as peças" vindo de outra página: sem prazo curto — resolve no
-  // primeiro layout da grade desta montagem (a loja já está carregada
-  // quando a cliente clica). Rola sem animação (a home abre na grade) e
-  // confere de novo depois: foto do banner que chega depois empurra a
-  // grade, e a conferência acompanha enquanto a cliente não mexe.
+  // "Todas as peças" vindo de outra página: a home abre já na grade. A
+  // primeira tentativa é na montagem (antes da pintura); enquanto a grade
+  // não tem altura, confere de novo por setTimeout — nem o
+  // requestAnimationFrame nem o onLayout (ResizeObserver) andam sem
+  // pintura. Rola sem animação e confere depois: foto do banner que
+  // chega tarde empurra a grade, e a conferência acompanha enquanto a
+  // cliente não mexe.
   const gradeResolvida = useRef(false);
-  const aoLayoutDaGrade = useCallback(() => {
-    if (gradeResolvida.current || !haPedidoDaGrade()) return;
+  const inicioDaHome = useRef(Date.now());
+  const resolverPedidoDaGrade = useCallback((): boolean => {
+    if (gradeResolvida.current || !montada.current || !haPedidoDaGrade()) return true;
+    const topo = topoNoConteudo("grade");
+    const no = noDeRolagem(rolagem.current);
+    if (topo == null || !no) return false;
+    const y = alvoDaRolagem(topo, alturaDoCabecalho());
+    const maximo = no.scrollHeight - no.clientHeight;
+    const esgotou = Date.now() - inicioDaHome.current > ESPERA_PELA_GRADE_MS;
+    if (maximo < y && !esgotou) return false; // o conteúdo ainda não chegou lá
     gradeResolvida.current = true;
-    const ir = () => {
-      // Montagem que saiu antes do quadro não gasta o pedido: a próxima usa.
-      if (!montada.current) { gradeResolvida.current = false; return; }
-      const topo = topoNoConteudo("grade");
-      if (topo == null) { gradeResolvida.current = false; return; }
-      const y = alvoDaRolagem(topo, alturaDoCabecalho());
-      rolagem.current?.scrollTo({ y, animated: false });
-      yReal.current = y;
-      concluirPedidoDaGrade();
-      for (const ms of [300, 900]) {
-        setTimeout(() => {
-          if (!montada.current || Math.abs(yReal.current - y) > 2) return;
-          const t2 = topoNoConteudo("grade");
-          if (t2 == null) return;
-          const y2 = alvoDaRolagem(t2, alturaDoCabecalho());
-          if (Math.abs(y2 - y) > 4) { rolagem.current?.scrollTo({ y: y2, animated: false }); }
-        }, ms);
-      }
-    };
-    if (typeof requestAnimationFrame === "function") requestAnimationFrame(ir);
-    else ir();
+    rolagem.current?.scrollTo({ y, animated: false });
+    yReal.current = y;
+    concluirPedidoDaGrade();
+    for (const ms of [300, 900]) {
+      setTimeout(() => {
+        if (!montada.current || Math.abs(yReal.current - y) > 2) return;
+        const t2 = topoNoConteudo("grade");
+        if (t2 == null) return;
+        const y2 = alvoDaRolagem(t2, alturaDoCabecalho());
+        if (Math.abs(y2 - y) > 4) { rolagem.current?.scrollTo({ y: y2, animated: false }); }
+      }, ms);
+    }
+    return true;
   }, [topoNoConteudo, alturaDoCabecalho]);
+  useLayoutEffect(() => {
+    inicioDaHome.current = Date.now();
+    let id: any = null;
+    const passo = () => {
+      id = null;
+      if (resolverPedidoDaGrade()) return;
+      if (Date.now() - inicioDaHome.current > ESPERA_PELA_GRADE_MS + 1000) return;
+      id = setTimeout(passo, 32);
+    };
+    passo();
+    return () => { if (id != null) clearTimeout(id); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const aoLayoutDaGrade = useCallback(() => { resolverPedidoDaGrade(); }, [resolverPedidoDaGrade]);
 
   const zapVisivel = mostrarTirarDuvida({ rolagem: y, fimDoTopo, alturaDaTela: height });
   // A margem livre à direita do conteúdo (1120 px no centro). A pílula
@@ -569,7 +626,7 @@ export function HomeDaVitrineNova({ sf, slug }: { sf: StorefrontState; slug: str
       <View style={{ flex: 1 }}>
         <ScrollView
           ref={rolagem}
-          style={{ flex: 1 }}
+          style={[{ flex: 1 }, ROLAGEM_ESTAVEL]}
           stickyHeaderIndices={[1]}
           scrollEventThrottle={32}
           onScroll={aoRolar}
@@ -587,7 +644,7 @@ export function HomeDaVitrineNova({ sf, slug }: { sf: StorefrontState; slug: str
                 {bannerAutomatico ? (
                   <HeroDeBanners sf={sf} banners={[bannerAutomatico]} largura={width} desktop={desktop} rolarPara={rolarPara} />
                 ) : null}
-                <HeroDaPeca sf={sf} slug={slug} desktop={desktop} onVerLoja={verLoja} sloganNoBanner={!!bannerAutomatico && !!String(bannerAutomatico.headline || "").trim()} />
+                <HeroDaPeca sf={sf} slug={slug} desktop={desktop} onVerLoja={verLoja} sloganNoBanner={!!bannerAutomatico && !!String(bannerAutomatico.headline || "").trim()} textoDoBanner={bannerAutomatico?.headline || null} />
               </>
             )}
           </View>

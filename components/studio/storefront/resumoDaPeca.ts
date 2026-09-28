@@ -22,6 +22,7 @@ import type { CartLine, StudioStoreProduct } from "./types";
 import { ehCampoDeArte, meioEfetivo } from "./precoDaSacola";
 import { versoAtivo } from "./versoDoPedido";
 import { ART_NONE } from "@/components/studio/artService";
+import { nomeDaCor as nomeDaCorPorHex } from "./leituraDaCor";
 
 function vazio(v: any): boolean {
   if (v == null) return true;
@@ -124,14 +125,62 @@ export function linhasDaPeca(
   return out;
 }
 
+/** O hex válido (#RGB ou #RRGGBB), em caixa alta, ou null. */
+function hexValido(v: any): string | null {
+  const s = typeof v === "string" ? v.trim() : "";
+  return /^#([0-9A-F]{3}|[0-9A-F]{6})$/i.test(s) ? s.toUpperCase() : null;
+}
+
+export type CorDaPecaNaLinha = {
+  /** O rótulo do campo ("Cor", "Cor da peça"). */
+  rotulo: string;
+  /** O nome que a cliente lê: o cadastrado, ou o mais próximo ("preto"). */
+  nome: string;
+  /** O hex para a bolinha; null quando o valor não é uma cor desenhável. */
+  hex: string | null;
+};
+
+/**
+ * A cor da PEÇA que a cliente escolheu (o primeiro campo de cor — o mesmo
+ * que pinta a peça, regrasDaPagina.campoDaCorDaPeca).
+ *
+ * QA 28/09 (CL-34/CL-33): a polo comprada em preto aparecia no aviso
+ * "Adicionado à sacola", na sacola e no checkout só como "Sua foto ·
+ * Texto: HELENA" — a cor sem nome cadastrado era um hex e ficava de
+ * fora do resumo. Somado à foto branca do mockup, a cliente não tinha
+ * onde conferir a cor. Agora ela vem com nome ("preto") e a bolinha.
+ */
+export function corDaPecaDaLinha(
+  line: Pick<CartLine, "product" | "values"> | null | undefined,
+): CorDaPecaNaLinha | null {
+  const campos: any[] = (line?.product?.customization_config?.fields as any[]) || [];
+  const f = campos.find((c) => c && c.type === "color");
+  if (!f) return null;
+  const valor = line?.values?.[f.id];
+  if (vazio(valor)) return null;
+  const bruto = String(Array.isArray(valor) ? valor[0] : valor).trim();
+  const hex = hexValido(bruto);
+  const choices: any[] = Array.isArray(f?.config?.choices) ? f.config.choices : [];
+  const c = choices.find((ch) => ch?.value === bruto || ch?.label === bruto);
+  const cadastrado = c && typeof c.label === "string" && c.label.trim() && c.label.trim().toUpperCase() !== (hex || "") ? c.label.trim() : null;
+  const nome = cadastrado || (hex ? nomeDaCorPorHex(hex) : bruto);
+  return { rotulo: rotulo(f), nome, hex };
+}
+
 /**
  * O resumo curto de uma linha, para a sacola e o checkout:
  * "Frente e verso · Arte: Mãe · Envio minha arte e vocês ajustam".
  *
  * Sem endereço de arquivo, sem briefing (é longo, é para a lojista), no
  * máximo quatro pedaços — é um resumo, não a ficha de produção.
+ *
+ * A cor da peça entra com nome ("Cor: preto"). Quem desenha a cor à
+ * parte, com a bolinha (CorDaLinha), pede `semCorDaPeca` para não repetir.
  */
-export function resumoDaLinha(line: Pick<CartLine, "product" | "values" | "hasBackSelected">): string[] {
+export function resumoDaLinha(
+  line: Pick<CartLine, "product" | "values" | "hasBackSelected">,
+  opcoes?: { semCorDaPeca?: boolean },
+): string[] {
   const cfg = line.product?.customization_config;
   const pedacos: string[] = [];
   // "Frente e verso" só quando o verso vai para a produção: escolhido E
@@ -139,16 +188,25 @@ export function resumoDaLinha(line: Pick<CartLine, "product" | "values" | "hasBa
   // incluso no preço e deixado em branco não é verso.
   if (cfg?.has_back === true && versoAtivo(cfg, line.hasBackSelected, line.values)) pedacos.push("Frente e verso");
   if (cfg?.has_middle === true && meioEfetivo(cfg, line.values?.has_middle_selected)) pedacos.push("Com faixa central");
+  const campoDaCor = ((cfg?.fields as any[]) || []).find((c) => c && c.type === "color") || null;
+  const corDaPeca = corDaPecaDaLinha(line);
   let arteEnviada = false;
+  let corVista = false;
   for (const l of linhasDaPeca(line.product, line.values)) {
     if (l.tipo === "arquivo") { arteEnviada = true; continue; }
     if (l.tipo === "briefing") continue;
     if (l.tipo === "arte") { pedacos.push(l.valor); continue; }
     if (l.tipo === "cor" && l.rotulo === "Cor da arte") continue;
-    // Cor sem nome cadastrado é um hex: serve à lojista (mensagem), não ao
-    // resumo da cliente — o mesmo corte do resumo do servidor.
+    // A primeira cor é a da peça: com o nome em português, não o hex.
+    if (l.tipo === "cor" && campoDaCor && !corVista && corDaPeca) {
+      corVista = true;
+      if (!opcoes?.semCorDaPeca) pedacos.push(`${corDaPeca.rotulo}: ${corDaPeca.nome}`);
+      continue;
+    }
+    // Outra cor sem nome cadastrado é um hex: serve à lojista (mensagem),
+    // não ao resumo da cliente — o mesmo corte do resumo do servidor.
     if (l.tipo === "cor" && /^#[0-9A-F]{3,8}$/i.test(l.valor)) continue;
-    pedacos.push(l.tipo === "texto" ? `${l.rotulo}: ${l.valor}` : `${l.rotulo}: ${l.valor}`);
+    pedacos.push(`${l.rotulo}: ${l.valor}`);
   }
   if (arteEnviada) pedacos.unshift("Sua foto");
   return pedacos.slice(0, 4);

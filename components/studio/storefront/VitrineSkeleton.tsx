@@ -172,7 +172,7 @@ function EsqueletoAtual({ variante }: { variante: "grade" | "lista" }) {
       style={{ flex: 1, backgroundColor: T.bg }}
       accessibilityRole="progressbar"
       accessibilityLabel="Carregando a loja"
-      accessibilityState={{ busy: true }}
+      accessibilityState={{ busy: true }} aria-busy={true}
     >
       {/* Hero */}
       <View style={{ backgroundColor: T.card, paddingHorizontal: telaLarga ? 20 : 14, paddingTop: 28, paddingBottom: 32 }}>

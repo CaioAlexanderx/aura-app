@@ -31,6 +31,21 @@ export function sombraWeb(nivel: 1 | 2 | 3): any {
   return { boxShadow: s };
 }
 
+/**
+ * Título com as linhas equilibradas (web). QA 28/09 (CL-11): com a
+ * tipografia Marcante, o título grande quebrava deixando uma palavra
+ * sozinha na última linha.
+ */
+export const TITULO_EQUILIBRADO: any = Platform.OS === "web" ? { textWrap: "balance" } : null;
+
+/**
+ * A rolagem principal de uma tela da vitrine reserva o lugar da barra de
+ * rolagem (web). QA 28/09 (CL-38): marcar "Quero CPF/CNPJ na nota" abria
+ * um campo, a página passava a ter barra e o conteúdo pulava ~6 px para
+ * o lado. Com o lugar reservado, a barra aparece sem empurrar nada.
+ */
+export const ROLAGEM_ESTAVEL: any = Platform.OS === "web" ? { scrollbarGutter: "stable" } : null;
+
 /** Transição suave no web; respeita "reduzir movimento" por quem chama. */
 export function transicao(props: string, ms = 220): any {
   return Platform.OS === "web" ? { transitionProperty: props, transitionDuration: ms + "ms", transitionTimingFunction: "cubic-bezier(.4,0,.2,1)" } : null;
@@ -242,7 +257,12 @@ export function useNumeroAnimado(alvo: number): number {
       else { atual.current = alvo; setValor(alvo); }
     };
     raf = requestAnimationFrame(passo);
-    return () => cancelAnimationFrame(raf);
+    // QA 28/09 (CL-26): a contagem anda por quadro de pintura. Sem quadro
+    // (janela coberta, aba sem pintar) ela parava no meio, num valor que
+    // não existe. O relógio garante o valor final no tempo da animação —
+    // e o total e o Pix, que contam juntos, terminam juntos.
+    const fim = setTimeout(() => { cancelAnimationFrame(raf); atual.current = alvo; setValor(alvo); }, 400);
+    return () => { cancelAnimationFrame(raf); clearTimeout(fim); };
   }, [alvo, reduzir]);
   return valor;
 }

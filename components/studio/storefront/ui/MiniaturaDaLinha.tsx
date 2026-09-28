@@ -37,6 +37,7 @@ export function MiniaturaDaLinha({
       productName={p.name}
       showLabel={false}
       fotoProduto={p.image_url}
+      cenario="nenhum"
     />
   ) : (
     <CapaProduto nome={p.name} tamanho={tamanho} corDaLoja={corDaLoja} fonteDisplay={tipo.display} />

@@ -69,7 +69,7 @@ export function FieldText({
                   key={c}
                   onPress={() => onCorChange!(c)}
                   accessibilityRole="radio"
-                  accessibilityState={{ checked: sel, selected: sel }}
+                  accessibilityState={{ checked: sel, selected: sel }} aria-checked={sel}
                   accessibilityLabel={`Cor da arte: ${nomeDaCor(c)}`}
                   style={{
                     width: 30, height: 30, borderRadius: 15,

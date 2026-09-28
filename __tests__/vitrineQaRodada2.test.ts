@@ -60,7 +60,11 @@ describe("acompanhamento", () => {
 describe("o slogan na primeira dobra", () => {
   const loja: any = { site: { tagline: "Presentes que ninguém mais tem", name: "Aura QA" }, products: [], categories: [] };
   test("sem banner automático, o subtítulo é o slogan", () => {
-    expect(fraseDoDestaque(loja)).toBe("Presentes que ninguém mais tem");
+    const outra: any = { ...loja, site: { ...loja.site, tagline: "Canecas que contam história" } };
+    expect(fraseDoDestaque(outra)).toBe("Canecas que contam história");
+  });
+  test("rodada 3: o slogan igual ao título fixo (sem o ponto) também não vira subtítulo", () => {
+    expect(fraseDoDestaque(loja)).not.toBe("Presentes que ninguém mais tem");
   });
   test("o banner automático já mostra o slogan: o subtítulo usa a frase do Studio", () => {
     const f = fraseDoDestaque(loja, { sloganNoBanner: true });

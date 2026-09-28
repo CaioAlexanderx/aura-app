@@ -4,19 +4,23 @@
 // A home e a página da categoria guardam a rolagem ao sair e a devolvem
 // quando a cliente volta pelo histórico (regras em rolagemDaVitrine.ts).
 //
-// Por que um laço de quadros (requestAnimationFrame) e não o
-// `onContentSizeChange` com desistência em 1,5 s (27/09): a grade chega
-// em pedaços (fotos, cartões medidos), e rolar para 2.000 px num
-// conteúdo de 900 px não rola nada. A cada quadro a tela confere se o
-// conteúdo já tem altura para a posição; quando tem, rola uma vez. Se a
-// cliente rolar antes, a restauração desiste — a mão dela manda.
+// A restauração confere se o conteúdo já tem altura para a posição;
+// quando tem, rola uma vez. A grade chega em pedaços (fotos, cartões
+// medidos), e rolar para 2.000 px num conteúdo de 900 px não rola nada.
+// Se a cliente rolar antes, a restauração desiste — a mão dela manda.
 //
-// A decisão ("veio do histórico?") é tomada no primeiro quadro, não na
-// montagem: o ouvinte do `popstate` já rodou até lá.
+// QA 28/09 (rodada 3): SEM requestAnimationFrame. O laço de quadros de
+// antes só andava quando o navegador pintava; com a janela do Chrome
+// coberta por outra (ou a aba sem pintar), o `requestAnimationFrame` fica
+// parado com a página "visível", a restauração passava da janela de 3 s
+// da volta e a categoria abria no topo. A primeira tentativa é na própria
+// montagem (useLayoutEffect, antes da pintura: o `popstate` que trouxe a
+// cliente já rodou), e as seguintes vão por setTimeout, que não depende
+// de pintura. Medir (scrollHeight) força o layout na hora.
 // ============================================================
 import { useCallback, useLayoutEffect, useRef, type RefObject } from "react";
 import {
-  caminhoAtual, esquecerRolagem, esquecerVolta, guardarRolagem, ouvirAsVoltas, rolagemParaRestaurar,
+  caminhoAtual, esquecerRolagem, esquecerVolta, guardarRolagem, ouvirAsVoltas, rolagemGuardada, rolagemParaRestaurar,
 } from "./rolagemDaVitrine";
 
 /** Quanto a restauração espera o conteúdo crescer antes de rolar o que der. */
@@ -38,18 +42,16 @@ export function noDom(r: any): HTMLElement | null {
   return null;
 }
 
-const quadro = (fn: () => void): any =>
-  typeof requestAnimationFrame === "function" ? requestAnimationFrame(fn) : setTimeout(fn, 16);
-const cancelarQuadro = (id: any) => {
-  if (id == null) return;
-  if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(id);
-  else clearTimeout(id);
-};
+/** Quanto a montagem espera a marca do `popstate` (que chega depois dela). */
+export const ESPERA_PELA_MARCA_DA_VOLTA_MS = 300;
+
+/** Entre uma conferência e outra, enquanto o conteúdo cresce. */
+export const PASSO_DA_ESPERA_MS = 32;
 
 /**
  * Liga a rolagem guardada numa tela. Devolve o `aoRolar(y)` que a tela
- * chama no onScroll. `pular()` (opcional) diz, no primeiro quadro, que
- * esta montagem tem outro destino (o "Todas as peças" da home).
+ * chama no onScroll. `pular()` (opcional) diz, na montagem, que esta
+ * montagem tem outro destino (o "Todas as peças" da home).
  */
 export function useRolagemGuardada(
   chave: string,
@@ -74,8 +76,26 @@ export function useRolagemGuardada(
       id = null;
       if (!vivo) return;
       if (alvo === undefined) {
-        alvo = pularRef.current?.() ? null : rolagemParaRestaurar(chave, caminhoAtual());
-        if (alvo == null) return;
+        if (pularRef.current?.()) { alvo = null; return; }
+        const y = rolagemParaRestaurar(chave, caminhoAtual());
+        if (y == null) {
+          // QA 28/09 (rodada 3, CL-13): a tela MONTA antes de o nosso
+          // ouvinte do `popstate` rodar — o roteador ouve o mesmo evento,
+          // e o React aplica a troca de tela no microtask logo depois do
+          // ouvinte dele (medido: montagem ~20 ms antes da marca). Havendo
+          // posição guardada, a decisão espera a marca por uma janela
+          // curta; toque em link não tem `popstate` e fica no topo.
+          const guardada = rolagemGuardada(chave) != null;
+          if (guardada && Date.now() - inicio < ESPERA_PELA_MARCA_DA_VOLTA_MS && yReal.current <= 0) {
+            pendente = true;
+            id = setTimeout(passo, PASSO_DA_ESPERA_MS);
+            return;
+          }
+          pendente = false;
+          alvo = null;
+          return;
+        }
+        alvo = y;
         pendente = true;
       }
       if (alvo == null) return;
@@ -89,16 +109,19 @@ export function useRolagemGuardada(
         rolagem.current?.scrollTo?.({ y, animated: false });
         yReal.current = y;
         pendente = false;
+        // A marca da volta NÃO é gasta aqui: se a tela montar de novo
+        // logo em seguida (segunda montagem da rota), a nova também
+        // restaura — a saída desta grava a posição de novo. A marca vence
+        // sozinha (JANELA_DA_VOLTA_MS).
         esquecerRolagem(chave);
-        esquecerVolta();
         return;
       }
-      id = quadro(passo);
+      id = setTimeout(passo, PASSO_DA_ESPERA_MS);
     };
-    id = quadro(passo);
+    passo();
     return () => {
       vivo = false;
-      cancelarQuadro(id);
+      if (id != null) clearTimeout(id);
       if (pendente) return;
       // O DOM ainda está no lugar aqui (a limpeza do layout roda antes de
       // o nó sair): a posição de verdade vence a do último onScroll.

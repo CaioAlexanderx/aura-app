@@ -115,25 +115,20 @@ describe("Todas as peças de fora da home", () => {
 });
 
 // ── O gancho: restaura quando o conteúdo tem altura ─────────────
+// Rodada 3 (QA 28/09): sem requestAnimationFrame. A primeira tentativa é
+// na montagem e as seguintes por setTimeout — o quadro de pintura não
+// chega com a janela coberta. Aqui o rAF nunca dispara, de propósito.
 describe("useRolagemGuardada", () => {
-  let quadros: Array<() => void> = [];
   const rafOriginal = (global as any).requestAnimationFrame;
-  const cafOriginal = (global as any).cancelAnimationFrame;
   beforeEach(() => {
-    quadros = [];
-    (global as any).requestAnimationFrame = (fn: () => void) => { quadros.push(fn); return quadros.length; };
-    (global as any).cancelAnimationFrame = () => undefined;
+    jest.useFakeTimers();
+    (global as any).requestAnimationFrame = () => 0; // nunca pinta
   });
   afterEach(() => {
+    jest.useRealTimers();
     (global as any).requestAnimationFrame = rafOriginal;
-    (global as any).cancelAnimationFrame = cafOriginal;
   });
-  const rodarQuadros = (n = 1) => {
-    for (let i = 0; i < n; i++) {
-      const fila = quadros; quadros = [];
-      act(() => { fila.forEach((f) => f()); });
-    }
-  };
+  const passarTempo = (ms: number) => { act(() => { jest.advanceTimersByTime(ms); }); };
 
   function caixaFalsa(alturaDoConteudo: number) {
     const no: any = { scrollHeight: alturaDoConteudo, clientHeight: 700, scrollTop: 0 };
@@ -147,17 +142,28 @@ describe("useRolagemGuardada", () => {
     return null;
   }
 
-  test("volta pelo histórico: espera o conteúdo crescer e rola uma vez", () => {
+  test("volta pelo histórico com o conteúdo pronto: rola na montagem, sem esperar quadro", () => {
+    const chave = chaveDaRolagem("aura-qa", "c:outras");
+    guardarRolagem(chave, 800);
+    window.history.replaceState(null, "", "/aura-qa/c/outras");
+    marcarVolta("/aura-qa/c/outras");
+    const { scroll } = caixaFalsa(3000);
+    render(<Tela chave={chave} scroll={scroll} />);
+    expect(scroll.scrollTo).toHaveBeenCalledWith({ y: 800, animated: false });
+  });
+
+  test("volta pelo histórico: espera o conteúdo crescer (por relógio) e rola uma vez", () => {
     const chave = chaveDaRolagem("aura-qa", "home");
     guardarRolagem(chave, 2000);
     window.history.replaceState(null, "", "/aura-qa");
     marcarVolta("/aura-qa");
     const { no, scroll } = caixaFalsa(900);
     render(<Tela chave={chave} scroll={scroll} />);
-    rodarQuadros(3);
+    passarTempo(100);
     expect(scroll.scrollTo).not.toHaveBeenCalled();
     no.scrollHeight = 3200; // a grade chegou
-    rodarQuadros(1);
+    passarTempo(40);
+    expect(scroll.scrollTo).toHaveBeenCalledTimes(1);
     expect(scroll.scrollTo).toHaveBeenCalledWith({ y: 2000, animated: false });
     expect(rolagemGuardada(chave)).toBeNull();
   });
@@ -167,7 +173,7 @@ describe("useRolagemGuardada", () => {
     window.history.replaceState(null, "", "/aura-qa/c/canecas");
     const { no, scroll } = caixaFalsa(3000);
     const r = render(<Tela chave={chave} scroll={scroll} />);
-    rodarQuadros(2);
+    passarTempo(100);
     expect(scroll.scrollTo).not.toHaveBeenCalled();
     no.scrollTop = 500;
     r.unmount();
@@ -181,12 +187,48 @@ describe("useRolagemGuardada", () => {
     marcarVolta("/aura-qa/c/outras");
     const primeira = caixaFalsa(100);
     const r = render(<Tela chave={chave} scroll={primeira.scroll} />);
-    rodarQuadros(1);
+    passarTempo(32);
     r.unmount();
     expect(rolagemGuardada(chave)).toBe(800);
     const segunda = caixaFalsa(2500);
     render(<Tela chave={chave} scroll={segunda.scroll} />);
-    rodarQuadros(1);
     expect(segunda.scroll.scrollTo).toHaveBeenCalledWith({ y: 800, animated: false });
+  });
+
+  test("a tela que restaurou e monta de novo logo em seguida restaura de novo (a marca da volta não é gasta)", () => {
+    const chave = chaveDaRolagem("aura-qa", "c:canecas");
+    guardarRolagem(chave, 500);
+    window.history.replaceState(null, "", "/aura-qa/c/canecas");
+    marcarVolta("/aura-qa/c/canecas");
+    const primeira = caixaFalsa(2000);
+    const r = render(<Tela chave={chave} scroll={primeira.scroll} />);
+    expect(primeira.scroll.scrollTo).toHaveBeenCalledWith({ y: 500, animated: false });
+    r.unmount(); // a saída grava a posição de verdade (500)
+    const segunda = caixaFalsa(2000);
+    render(<Tela chave={chave} scroll={segunda.scroll} />);
+    expect(segunda.scroll.scrollTo).toHaveBeenCalledWith({ y: 500, animated: false });
+  });
+
+  test("a tela monta ANTES da marca do popstate (o roteador ouve primeiro): espera a marca e restaura", () => {
+    const chave = chaveDaRolagem("aura-qa", "c:outras");
+    guardarRolagem(chave, 800);
+    window.history.replaceState(null, "", "/aura-qa/c/outras");
+    const { scroll } = caixaFalsa(3000);
+    render(<Tela chave={chave} scroll={scroll} />);
+    expect(scroll.scrollTo).not.toHaveBeenCalled();
+    marcarVolta("/aura-qa/c/outras"); // ~20 ms depois, no navegador
+    passarTempo(40);
+    expect(scroll.scrollTo).toHaveBeenCalledWith({ y: 800, animated: false });
+  });
+
+  test("com posição guardada mas sem popstate (toque em link): desiste da espera e fica no topo", () => {
+    const chave = chaveDaRolagem("aura-qa", "c:canecas");
+    guardarRolagem(chave, 500);
+    window.history.replaceState(null, "", "/aura-qa/c/canecas");
+    const { scroll } = caixaFalsa(3000);
+    render(<Tela chave={chave} scroll={scroll} />);
+    passarTempo(1000);
+    expect(scroll.scrollTo).not.toHaveBeenCalled();
+    esquecerRolagem(chave);
   });
 });

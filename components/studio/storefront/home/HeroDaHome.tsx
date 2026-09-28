@@ -32,11 +32,11 @@ import { useReduzirMovimento } from "../movimento";
 import { LivePreview } from "../LivePreview";
 import { artFontStack } from "@/constants/fonts";
 import { loadThree } from "@/components/studio/visualEngine/threeLoader";
-import { Botao, Rotulo, Selo, sombraWeb, transicao } from "../produto/kitDaPagina";
+import { Botao, Rotulo, Selo, TITULO_EQUILIBRADO, sombraWeb, transicao } from "../produto/kitDaPagina";
 import { MarcaDaLoja, irParaDestino } from "./NavegacaoDaVitrine";
 import { temMockupNaFoto } from "@/components/studio/visualEngine/specDaFotoDoProduto";
 import {
-  SEGUNDOS_POR_BANNER, TITULO_FIXO_DO_HERO, TROCA_DA_ARTE_MS, alturaDoHero, arteGira, artesDoDestaque, bannerGira,
+  SEGUNDOS_POR_BANNER, TROCA_DA_ARTE_MS, tituloDoDestaque, alturaDoHero, arteGira, artesDoDestaque, bannerGira,
   conviteDaPeca, descontoDoPix, fraseDoDestaque, lugarDaLoja, pecaDoDestaque, proximoBanner,
   type BannerDaHome,
 } from "./regrasDaHome";
@@ -155,7 +155,7 @@ export function HeroDeBanners({
                 onPress={() => setAtual(k)}
                 accessibilityRole="button"
                 accessibilityLabel={`Ir para o banner ${k + 1}`}
-                accessibilityState={{ selected: ativo }}
+                accessibilityState={{ selected: ativo }} aria-selected={ativo}
                 style={{ width: 40, height: 44, alignItems: "center", justifyContent: "center" }}
               >
                 <View style={[{ width: ativo ? 30 : 8, height: 8, borderRadius: 4, overflow: "hidden", backgroundColor: ativo ? "rgba(255,255,255,.34)" : "rgba(255,255,255,.55)" }, transicao("width")]}>
@@ -313,7 +313,7 @@ function Slide({
               </Numero>
             ) : null}
             {String(b.headline || "").trim() ? (
-              <Texto accessibilityRole="header" style={{ fontFamily: fonte, color: tinta, fontSize: desktop ? 48 : 32, lineHeight: desktop ? 50 : 34, letterSpacing: -0.6 }}>
+              <Texto accessibilityRole="header" style={[{ fontFamily: fonte, color: tinta, fontSize: desktop ? 48 : 32, lineHeight: desktop ? 50 : 34, letterSpacing: -0.6 }, TITULO_EQUILIBRADO]}>
                 {b.headline}
               </Texto>
             ) : null}
@@ -388,7 +388,7 @@ function CartaoDaArte({ values, produto }: { values: Record<string, any>; produt
 }
 
 export function HeroDaPeca({
-  sf, slug, desktop, onVerLoja, sloganNoBanner = false,
+  sf, slug, desktop, onVerLoja, sloganNoBanner = false, textoDoBanner = null,
 }: {
   sf: StorefrontState;
   slug: string;
@@ -396,6 +396,8 @@ export function HeroDaPeca({
   onVerLoja: () => void;
   /** O banner automático acima já mostra o slogan (fraseDoDestaque). */
   sloganNoBanner?: boolean;
+  /** O texto do banner automático logo acima: o título não repete (tituloDoDestaque). */
+  textoDoBanner?: string | null;
 }) {
   const t = useTemaDaVitrine();
   const tipo = useTipografia();
@@ -484,6 +486,7 @@ export function HeroDaPeca({
               slug={slug}
               productId={String(produto.id)}
               fotoProduto={produto.image_url}
+              fundo={t.bg3}
             />
           </View>
         ) : (
@@ -547,7 +550,7 @@ export function HeroDaPeca({
                   key={a.rotulo + j}
                   onPress={() => { setK(j); setEscolheu(true); }}
                   accessibilityRole={"radio" as any}
-                  accessibilityState={{ checked: sel }}
+                  accessibilityState={{ checked: sel }} aria-checked={sel}
                   accessibilityLabel={a.rotulo}
                   style={[{ flex: 1, minWidth: 0, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingHorizontal: 8, backgroundColor: sel ? t.marcaFill : "transparent" }, transicao("background-color")]}
                 >
@@ -608,8 +611,8 @@ export function HeroDaPeca({
             <MarcaDaLoja sf={sf} tamanho={19} />
             <Rotulo>{lugar ? `Personalizados · ${lugar}` : "Personalizados"}</Rotulo>
           </View>
-          <Texto accessibilityRole="header" style={{ fontFamily: tipo.display, fontSize: desktop ? 64 : 36, lineHeight: desktop ? 63 : 38, letterSpacing: desktop ? -1.3 : -0.7, color: t.ink }}>
-            {TITULO_FIXO_DO_HERO}
+          <Texto accessibilityRole="header" style={[{ fontFamily: tipo.display, fontSize: desktop ? 64 : 36, lineHeight: desktop ? 63 : 38, letterSpacing: desktop ? -1.3 : -0.7, color: t.ink }, TITULO_EQUILIBRADO]}>
+            {tituloDoDestaque({ textoDoBanner })}
           </Texto>
           <Texto style={{ fontSize: desktop ? 18 : 15.5, lineHeight: desktop ? 28 : 24, color: t.ink2, maxWidth: 470 }}>
             {fraseDoDestaque(store, { sloganNoBanner })}

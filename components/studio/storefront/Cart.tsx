@@ -243,6 +243,7 @@ export function CartItemList({ sf }: { sf: StorefrontState }) {
                 productName={l.product.name}
                 showLabel={false}
                 fotoProduto={(l.product as any).image_url}
+                cenario="nenhum"
               />
             ) : (
               <CapaProduto

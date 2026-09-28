@@ -18,7 +18,7 @@ import { Image, Linking, Platform, Pressable, ScrollView, View, useWindowDimensi
 import { Icon } from "@/components/Icon";
 import { wash } from "../theme";
 import { CabecalhoDaVitrine, CamadasDaNavegacao, abrirCategoria, abrirEntrada, linkDoWhatsApp, useCamadas } from "../home/NavegacaoDaVitrine";
-import { ehOutrasPecas, itensDaFaixa, produtosDaArvore, subcategorias, trilhaDaCategoria } from "../home/regrasDaHome";
+import { ehOutrasPecas, itensDaFaixa, larguraDoCartao, produtosDaArvore, subcategorias, trilhaDaCategoria } from "../home/regrasDaHome";
 import { FaixaDeAnuncio } from "../home/HomeDaVitrineNova";
 import type { StorefrontState } from "../useStorefront";
 import type { StudioStoreProduct } from "../types";
@@ -38,7 +38,7 @@ import { useRolagemGuardada } from "../home/useRolagemGuardada";
 import { dinheiro } from "../moeda";
 import { precoPodeMudar } from "./regrasDaPagina";
 import { Trilha } from "./CabecalhoDaLoja";
-import { Selo, transicao } from "./kitDaPagina";
+import { ROLAGEM_ESTAVEL, Selo, TITULO_EQUILIBRADO, transicao } from "./kitDaPagina";
 
 const LARGURA_MAX = 1200;
 
@@ -153,10 +153,13 @@ export function GradeDeModelosV2({ sf }: { sf: StorefrontState }) {
   const campeao = pecaMaisPedida(store?.products || []);
   const pixPct = store?.payment?.has_pix ? Number(store?.payment?.pix_discount_pct) || 0 : 0;
 
-  const util = Math.min(width, LARGURA_MAX) - (desktop ? 80 : 32);
+  // A largura do conteúdo, medida na grade (QA 28/09, CL-15: a da janela
+  // conta a barra de rolagem do desktop e a grade quebrava em uma coluna).
+  const [medida, setMedida] = useState(0);
+  const util = medida > 0 ? medida : Math.min(width, LARGURA_MAX) - (desktop ? 80 : 32);
   const colunas = desktop ? 4 : width >= 700 ? 3 : 2;
   const gap = desktop ? 24 : 12;
-  const larguraCartao = Math.floor((util - gap * (colunas - 1)) / colunas);
+  const larguraCartao = larguraDoCartao(util, colunas, gap);
   const n = modelos.length;
   const dica = soltas
     ? "Toque na peça para ver de perto e personalizar."
@@ -176,7 +179,7 @@ export function GradeDeModelosV2({ sf }: { sf: StorefrontState }) {
     <View style={[{ gap: 6 }, desktop ? { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 40, paddingTop: 8, paddingBottom: 30 } : { paddingTop: 2, paddingBottom: 22 }]}>
       <View style={{ gap: 6, flexShrink: 1 }}>
         <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
-          <Texto nativeID="titulo-da-categoria" accessibilityRole="header" style={[{ fontFamily: tipo.display, fontSize: desktop ? 40 : 32, lineHeight: desktop ? 44 : 36, color: t.ink, letterSpacing: -0.4 }, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : null]}>
+          <Texto nativeID="titulo-da-categoria" accessibilityRole="header" style={[{ fontFamily: tipo.display, fontSize: desktop ? 40 : 32, lineHeight: desktop ? 44 : 36, color: t.ink, letterSpacing: -0.4 }, TITULO_EQUILIBRADO, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : null]}>
             {nomeDaVez}
           </Texto>
           <Selo texto={soltas ? `${n} ${n === 1 ? "peça" : "peças"}` : `${n} ${n === 1 ? "modelo" : "modelos"}`} tom="suave" />
@@ -206,7 +209,7 @@ export function GradeDeModelosV2({ sf }: { sf: StorefrontState }) {
     <View style={{ flex: 1, backgroundColor: t.bg }} testID="grade-de-modelos-v2">
       <ScrollView
         ref={rolagem}
-        style={{ flex: 1 }}
+        style={[{ flex: 1 }, ROLAGEM_ESTAVEL]}
         stickyHeaderIndices={[1]}
         contentContainerStyle={{ paddingBottom: 24 }}
         scrollEventThrottle={32}
@@ -230,7 +233,7 @@ export function GradeDeModelosV2({ sf }: { sf: StorefrontState }) {
                     key={o.id || "todas"}
                     onPress={() => setSub(o.id)}
                     accessibilityRole={"radio" as any}
-                    accessibilityState={{ checked: sel }}
+                    accessibilityState={{ checked: sel }} aria-checked={sel}
                     style={{ minHeight: 44, paddingHorizontal: 14, borderRadius: 12, flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderColor: sel ? t.marcaTexto : wash(t.ink, 0.16), backgroundColor: sel ? t.marcaWash : t.bg2 }}
                   >
                     <Texto style={{ fontSize: 13.5, color: t.ink, fontWeight: sel ? "600" : "500" }}>{o.nome}</Texto>
@@ -240,7 +243,10 @@ export function GradeDeModelosV2({ sf }: { sf: StorefrontState }) {
               })}
             </ScrollView>
           ) : null}
-          <View style={{ flexDirection: "row", flexWrap: "wrap", columnGap: gap, rowGap: desktop ? 40 : 24 }}>
+          <View
+            onLayout={(e) => { const w = Math.floor(e?.nativeEvent?.layout?.width || 0); if (w > 0 && Math.abs(w - medida) > 1) setMedida(w); }}
+            style={{ flexDirection: "row", flexWrap: "wrap", columnGap: gap, rowGap: desktop ? 40 : 24 }}
+          >
             {modelos.map((m) => (
               <Cartao
                 key={m.produto.id}

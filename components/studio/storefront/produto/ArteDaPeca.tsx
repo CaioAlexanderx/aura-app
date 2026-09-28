@@ -30,7 +30,7 @@ import {
   ART_ADJUST, ART_DESIGNER, ART_NONE, ART_SERVICE_BRIEF_ID, briefingFor, choiceHint, priceLabel,
 } from "@/components/studio/artService";
 import {
-  camposDoLado, origensDoLado, ladoPreenchido, ladoTemConteudo, nomeDoLado,
+  avisoDeContraste, camposDoLado, origensDoLado, ladoPreenchido, ladoTemConteudo, nomeDoLado,
   type Lado, type NomeDaPeca,
 } from "./regrasDaPagina";
 import { EnvioDaArte, type EstadoDoEnvio } from "./EnvioDaArte";
@@ -66,7 +66,7 @@ export function CaminhosDaArte({
               key={c.value}
               onPress={() => onEscolher(c.value)}
               accessibilityRole="radio"
-              accessibilityState={{ checked: sel }}
+              accessibilityState={{ checked: sel }} aria-checked={sel}
               accessibilityLabel={c.label + (etiqueta ? ", " + etiqueta : ", incluso")}
               style={({ hovered }: any) => [
                 {
@@ -136,7 +136,7 @@ export function ArtesProntas({
             key={tp.id}
             onPress={() => onEscolher(sel ? "" : tp.image_url)}
             accessibilityRole="radio"
-            accessibilityState={{ checked: sel }}
+            accessibilityState={{ checked: sel }} aria-checked={sel}
             accessibilityLabel={tp.name}
             style={{ width: 78, alignItems: "center", gap: 6 }}
           >
@@ -165,12 +165,14 @@ export function ArtesProntas({
  * abaixo de 1,8:1 com a cor escolhida da peça).
  */
 export function CampoDeTexto({
-  field, value, cor, corDaPeca, lado, onChange, onCor, destacar,
+  field, value, cor, corDaPeca, fotoNaCorFotografada, lado, onChange, onCor, destacar,
 }: {
   field: CustomizationField;
   value: any;
   cor?: string;
   corDaPeca?: string | null;
+  /** A prévia é a foto marcada (a peça fica na cor fotografada): o aviso de contraste diz isso. */
+  fotoNaCorFotografada?: boolean;
   lado: Lado;
   onChange: (v: string) => void;
   onCor: (c: string) => void;
@@ -182,6 +184,7 @@ export function CampoDeTexto({
   const corAtual = cor || paleta[0];
   const texto = String(value || "");
   const quaseSome = !!(corDaPeca && corAtual && /^#/.test(corDaPeca) && contraste(corDaPeca, corAtual) < 1.8);
+  const aviso = avisoDeContraste({ quaseSome, fotoNaCorFotografada, nomeDaCorDaPeca: corDaPeca ? nomeDaCor(corDaPeca) : null });
   return (
     <View style={{ gap: 14 }}>
       <View style={{ gap: 6 }}>
@@ -217,7 +220,7 @@ export function CampoDeTexto({
             {paleta.map((c) => {
               const sel = c.toLowerCase() === String(corAtual || "").toLowerCase();
               return (
-                <Pressable key={c} onPress={() => onCor(c)} accessibilityRole="radio" accessibilityState={{ checked: sel }} accessibilityLabel={`Cor da arte: ${nomeDaCor(c)}`}
+                <Pressable key={c} onPress={() => onCor(c)} accessibilityRole="radio" accessibilityState={{ checked: sel }} aria-checked={sel} accessibilityLabel={`Cor da arte: ${nomeDaCor(c)}`}
                   style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
                   <View style={[{ width: 30, height: 30, borderRadius: 15, backgroundColor: c, borderWidth: 1, borderColor: wash(t.ink, 0.12) },
                     sel && Platform.OS === "web" ? ({ outline: `2px solid ${t.marcaTexto}`, outlineOffset: 2 } as any) : sel ? { borderWidth: 2, borderColor: t.marcaTexto } : null]} />
@@ -225,7 +228,7 @@ export function CampoDeTexto({
               );
             })}
           </View>
-          {quaseSome ? <Texto style={{ fontSize: 12.5, color: t.amber }}>Essa cor quase some nesta peça. Experimente outra.</Texto> : null}
+          {aviso ? <Texto testID="aviso-de-contraste" style={{ fontSize: 12.5, color: t.amber }}>{aviso}</Texto> : null}
         </View>
       ) : null}
     </View>
@@ -240,7 +243,7 @@ export function OptInDoLado({ lado, ligado, preco, onTrocar }: { lado: Lado; lig
     <Pressable
       onPress={onTrocar}
       accessibilityRole="switch"
-      accessibilityState={{ checked: ligado }}
+      accessibilityState={{ checked: ligado }} aria-checked={ligado}
       accessibilityLabel={`Personalizar também ${nome}` + (preco > 0 ? `, mais ${dinheiro(preco)}` : "")}
       style={({ hovered }: any) => [{
         flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14,
@@ -286,7 +289,7 @@ export function ladosComConteudo(cfg: CustomizationConfig | null | undefined): L
  */
 export function LadosDaArte({
   cfg, values, lados, lado, onLado, setValor, caminho, templates, slug, peca, limiar, desktop,
-  versoLigado, meioLigado, onVerso, onMeio, corDaPeca, onEnvio, pedirAjuste, destaque,
+  versoLigado, meioLigado, onVerso, onMeio, corDaPeca, fotoNaCorFotografada, onEnvio, pedirAjuste, destaque,
 }: {
   cfg: CustomizationConfig;
   values: Record<string, any>;
@@ -305,6 +308,8 @@ export function LadosDaArte({
   onVerso: () => void;
   onMeio: () => void;
   corDaPeca: string | null;
+  /** A prévia é a foto marcada, na cor fotografada (aviso de contraste). */
+  fotoNaCorFotografada?: boolean;
   onEnvio: (lado: Lado, e: EstadoDoEnvio) => void;
   pedirAjuste: { preco: number; onPress: () => void } | null;
   /** O campo que a barra mandou acender. */
@@ -326,7 +331,7 @@ export function LadosDaArte({
     if (f.type === "text") {
       return (
         <CampoDeTexto
-          key={f.id} field={f} value={values[f.id]} cor={values[f.id + "_cor"]} corDaPeca={corDaPeca}
+          key={f.id} field={f} value={values[f.id]} cor={values[f.id + "_cor"]} corDaPeca={corDaPeca} fotoNaCorFotografada={fotoNaCorFotografada}
           lado={ladoAtual} destacar={dest}
           onChange={(v) => setValor(f.id, v)} onCor={(c) => setValor(f.id + "_cor", c)}
         />
@@ -353,7 +358,7 @@ export function LadosDaArte({
                   key={l}
                   onPress={() => onLado(l)}
                   accessibilityRole="tab"
-                  accessibilityState={{ selected: sel }}
+                  accessibilityState={{ selected: sel }} aria-selected={sel}
                   accessibilityLabel={NOME_DO_LADO[l]}
                   style={[{
                     flex: 1, minHeight: 44, borderRadius: 10, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,

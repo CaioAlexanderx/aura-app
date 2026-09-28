@@ -133,7 +133,7 @@ export function Botao({
       accessibilityLabel={acessivel || titulo}
       // Apagado continua ativo para o leitor de tela: o toque leva ao campo
       // que falta, e o rótulo já diz o que é ("Falta seu nome").
-      accessibilityState={{ disabled: !!desativado, busy: !!desativado }}
+      accessibilityState={{ disabled: !!desativado, busy: !!desativado }} aria-busy={!!desativado}
       style={({ pressed }) => ({
         minHeight: compacto ? 44 : 48, borderRadius: 12, paddingHorizontal: 18,
         flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
@@ -170,7 +170,7 @@ export function Caixinha({
       testID={testID}
       onPress={() => onTrocar(!marcada)}
       accessibilityRole="checkbox"
-      accessibilityState={{ checked: marcada }}
+      accessibilityState={{ checked: marcada }} aria-checked={marcada}
       accessibilityLabel={texto}
       style={{ flexDirection: "row", alignItems: "center", gap: 12, minHeight: 44 }}
     >

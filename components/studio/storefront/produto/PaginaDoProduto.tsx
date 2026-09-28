@@ -62,7 +62,7 @@ import { fetchStorefrontVisualTemplate } from "../visualTemplatePublic";
 import {
   faltaNaPeca, campoDaCorDaPeca, campoDoServicoDeArte, origensDoLado, prazoDaQuantidade, linhasDePrazo,
   textoDeDias, nomeDaPeca, suaPeca, sobreEstaPeca, nomeCurto, notaDeRevisao, adicionaisDaPeca,
-  areaDeImpressao, limiarDaPeca, quantidadeValida, legendaDoMockup, type Lado,
+  areaDeImpressao, areaDoLado, textoDaArea, limiarDaPeca, quantidadeValida, legendaDoMockup, type Lado,
 } from "./regrasDaPagina";
 import { PalcoDoProduto } from "./PalcoDoProduto";
 import { CaminhosDaArte, LadosDaArte, ladosComConteudo, etiquetaDaArte } from "./ArteDaPeca";
@@ -72,7 +72,7 @@ import { EntregaNoProduto } from "./EntregaNoProduto";
 import { BarraDeCompraCelular, BlocoDeCompraDesktop, type AcaoDaBarra } from "./BarraDeCompra";
 import { DetalhesDaPeca, DaMesmaCategoria } from "./DetalhesDaPeca";
 import { CabecalhoDaLoja, Trilha } from "./CabecalhoDaLoja";
-import { BotaoIcone, CabecalhoDaSecao, EtiquetaFalta, EtiquetaPronta, transicao, useNumeroAnimado, usePulso } from "./kitDaPagina";
+import { BotaoIcone, CabecalhoDaSecao, EtiquetaFalta, EtiquetaPronta, ROLAGEM_ESTAVEL, TITULO_EQUILIBRADO, transicao, useNumeroAnimado, usePulso } from "./kitDaPagina";
 import { useCamadaNoHistorico } from "../historicoDaVitrine";
 import { enderecoDeRetiradaDaLoja } from "../home/regrasDaHome";
 import { abrirEntrada } from "../home/NavegacaoDaVitrine";
@@ -344,9 +344,14 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
   const alturaUtil = height - ALTURA_DO_CABECALHO.desktop - alturaDaFaixa;
   const ladoDoPalcoDesk = Math.round(Math.max(320, Math.min(528, alturaUtil - 40 - 16 - 36, larguraConteudo - 86 - 56 - 400)));
   const larguraDoPalco = desktop ? ladoDoPalcoDesk : width - 32;
-  const alturaDoPalco = desktop ? ladoDoPalcoDesk : Math.round((width - 32) * 5 / 6);
+  // QA 28/09 (item 10): em 390 px o 3D ficava num quadro de ~175 × 140
+  // (a camiseta com ~100 px) num palco de 5:6. O palco do celular agora é
+  // quadrado (sem passar de meia tela de altura) e o mockup ocupa mais
+  // dele — os chips de área do 3D saíram (o lado é o Frente · Verso do
+  // palco), então o quadro não divide espaço com eles.
+  const alturaDoPalco = desktop ? ladoDoPalcoDesk : Math.round(Math.min(width - 32, Math.max(280, height * 0.5)));
   const larguraDaGaleria = desktop ? 72 + 14 + ladoDoPalcoDesk : width;
-  const tamanhoDoMock = Math.round(Math.min(larguraDoPalco, alturaDoPalco) * (desktop ? 0.78 : 0.72));
+  const tamanhoDoMock = Math.round(Math.min(larguraDoPalco, alturaDoPalco) * (desktop ? 0.78 : 0.8));
 
   const mockup = (
     <LivePreview
@@ -360,6 +365,8 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
       fotoProduto={produto.image_url}
       lado={ladoAtual}
       onFonte={setFonteDoMock}
+      // O slide do mockup é bg3 (PalcoDoProduto): o estúdio casa com ele.
+      fundo={t.bg3}
     />
   );
 
@@ -416,7 +423,7 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
                   key={c}
                   onPress={() => setValor(campoCor.id, c)}
                   accessibilityRole="radio"
-                  accessibilityState={{ checked: sel }}
+                  accessibilityState={{ checked: sel }} aria-checked={sel}
                   accessibilityLabel={`${escolha?.label || nomeDaCor(c)}${delta ? ", mais " + dinheiro(delta) : ""}`}
                   style={{ width: 50, minHeight: 50, alignItems: "center", justifyContent: "center" }}
                 >
@@ -486,6 +493,7 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
               onVerso={() => { const novo = !sf.editingAddBack; sf.setEditingAddBack(novo); if (novo) personalizar(); }}
               onMeio={() => { const novo = !sf.editingAddMiddle; sf.setEditingAddMiddle(novo); if (novo) personalizar(); }}
               corDaPeca={corDaPeca}
+              fotoNaCorFotografada={fonteDoMock === "foto"}
               onEnvio={(l, e) => setEnvios((s) => (s[l] === e ? s : { ...s, [l]: e }))}
               pedirAjuste={escolhaDoAjuste && Number(escolhaDoAjuste.price_delta) >= 0 ? { preco: Number(escolhaDoAjuste.price_delta) || 0, onPress: () => escolherCaminho(ART_ADJUST) } : null}
               destaque={destaque}
@@ -558,6 +566,10 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
       mockup={mockup}
       rotuloDoMock={suaPeca(peca)}
       lados={lados}
+      medidas={Object.fromEntries(lados.map((l) => {
+        const a = areaDoLado(cfg, l, areasDoModelo);
+        return [l, a ? textoDaArea(a) : null];
+      }))}
       lado={ladoAtual}
       onLado={setLado}
       slide={slide}
@@ -624,7 +636,7 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
               <BotaoIcone icone="x" rotulo="Fechar" cor={SOBRE_FOTO} onPress={() => setZoomMock(false)} />
             </View>
             <View style={{ borderRadius: 18, overflow: "hidden", backgroundColor: t.bg3, padding: 16 }}>
-              <LivePreview config={cfg} values={values} size={Math.round(Math.min(width, height) * 0.72)} productName={produto.name} showLabel={false} slug={slug} productId={produto.id} fotoProduto={produto.image_url} lado={ladoAtual} />
+              <LivePreview config={cfg} values={values} size={Math.round(Math.min(width, height) * 0.72)} productName={produto.name} showLabel={false} slug={slug} productId={produto.id} fotoProduto={produto.image_url} lado={ladoAtual} fundo={t.bg3} />
             </View>
           </View>
         </Modal>
@@ -650,7 +662,7 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
         <View style={{ flex: 1, position: "relative" }}>
           <ScrollView
             ref={rolagem}
-            style={{ flex: 1 }}
+            style={[{ flex: 1 }, ROLAGEM_ESTAVEL]}
             scrollEventThrottle={32}
             onScroll={(e) => { const y = e.nativeEvent.contentOffset.y; const d = y > fimDoPalco; if (d !== dock) setDock(d); }}
             contentContainerStyle={{ paddingBottom: 24 }}
@@ -682,7 +694,7 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }} testID="pagina-do-produto">
       <CabecalhoDaLoja sf={sf} desktop onVoltar={() => sf.goTo("list")} categoriaAtiva={grupo ? String(grupo.categoria?.slug || grupo.categoria?.id || "") : null} />
-      <ScrollView ref={rolagem} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
+      <ScrollView ref={rolagem} style={[{ flex: 1 }, ROLAGEM_ESTAVEL]} contentContainerStyle={{ paddingBottom: 24 }}>
         <View style={{ width: "100%", maxWidth: LARGURA_MAX, alignSelf: "center", paddingHorizontal: 40 }}>
           <View style={{ paddingVertical: 8 }}>{trilha}</View>
           <View style={{ flexDirection: "row", gap: 56, alignItems: "flex-start" }}>
@@ -739,7 +751,7 @@ function InfoDoTopo({
   return (
     <View style={{ paddingTop: desktop ? 6 : 6, paddingBottom: desktop ? 22 : 20, paddingHorizontal: desktop ? 0 : 16 }}>
       <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 6 }}>
-        <Texto accessibilityRole="header" style={{ flex: 1, fontFamily: tipo.display, fontSize: desktop ? 32 : 27, lineHeight: desktop ? 36 : 31, color: t.ink, paddingTop: 4, letterSpacing: -0.3 }}>
+        <Texto accessibilityRole="header" style={[{ flex: 1, fontFamily: tipo.display, fontSize: desktop ? 32 : 27, lineHeight: desktop ? 36 : 31, color: t.ink, paddingTop: 4, letterSpacing: -0.3 }, TITULO_EQUILIBRADO]}>
           {nome}
         </Texto>
         <BotaoCompartilhar produto={produto} />
@@ -816,7 +828,7 @@ function SeletorDeModelo({
               key={m.id}
               onPress={() => onEscolher(m)}
               accessibilityRole="radio"
-              accessibilityState={{ checked: sel }}
+              accessibilityState={{ checked: sel }} aria-checked={sel}
               accessibilityLabel={`${m.name}, ${dinheiro(Number(m.price))}`}
               style={{ width: 98, gap: 6 }}
             >
