@@ -456,10 +456,14 @@ function pesoDasDobras(p, caixa, larguraDoCorpo) {
  *   amplitude       em unidades do modelo (a camiseta tem 0,35 de altura ≈ 70 cm)
  *   comprimento     comprimento de onda em unidades do modelo
  *   margemDaBorda   distância em que o deslocamento cai a zero perto de uma borda
+ *   peso            opcional, (ponto, caixa) → 0..1 no lugar de pesoDasDobras
  */
 function aplicarDobras(malha, nrm, opcoes) {
   const { pos, tris, ids } = malha;
-  const { amplitude, comprimento, semente = 7, margemDaBorda = 0.02, larguraDoCorpo } = opcoes;
+  const { amplitude, comprimento, semente = 7, margemDaBorda = 0.02, larguraDoCorpo, peso } = opcoes;
+  // `peso` (ponto, caixa) → 0..1 deixa quem chama somar as próprias regiões
+  // (a camiseta gerada zera a barra e as bocas); sem ele vale pesoDasDobras.
+  const pesoEm = typeof peso === "function" ? peso : (p, cx) => pesoDasDobras(p, cx, larguraDoCorpo);
   const caixa = minmax(pos);
   const ruido = criarRuido(semente);
   const ruido2 = criarRuido(semente + 101);
@@ -485,7 +489,7 @@ function aplicarDobras(malha, nrm, opcoes) {
     const w = ids[i];
     if (deslocamentoPorId[w] === undefined) {
       const n = normalizar(normalPorId[w]);
-      const peso = pesoDasDobras(p, caixa, larguraDoCorpo) * Math.min(1, distBorda(p) / margemDaBorda);
+      const peso = pesoEm(p, caixa) * Math.min(1, distBorda(p) / margemDaBorda);
       const r = ruido(p[0] / comprimento, p[1] / (comprimento * 2.2), p[2] / comprimento)
         + 0.45 * ruido2(p[0] / (comprimento * 0.5), p[1] / (comprimento * 1.1), p[2] / (comprimento * 0.5));
       deslocamentoPorId[w] = escala(n, amplitude * peso * r);
