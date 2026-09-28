@@ -914,7 +914,7 @@ export function StudioPersonalizacaoPanel({
                   style={[s.mockupItem, active && s.mockupItemActive]}
                 >
                   <View style={s.mockupThumbWrap}>
-                    <VisualTemplateThumb kind={vt.kind} size={88} />
+                    <VisualTemplateThumb kind={vt.kind} spec={vt.spec} size={88} />
                     <View style={[s.mockupKindBadge, { backgroundColor: vt.kind === "model3d" ? t.accent : t.primary }]}>
                       <Text style={s.mockupKindBadgeTxt}>{vt.kind === "model3d" ? "3D" : "2D"}</Text>
                     </View>

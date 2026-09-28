@@ -15,7 +15,7 @@
       "texture": { "w": 2048, "h": 2048 },
       "materials": {
         "customer_color_targets": ["T-Shirt"],
-        "fabric": { "roughness": 0.88, "normal_scale": 0.35 }
+        "fabric": { "roughness": 0.88, "normal_scale": 0.6 }
       }
     },
     "areas": [
