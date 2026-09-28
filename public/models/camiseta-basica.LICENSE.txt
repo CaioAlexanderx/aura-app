@@ -1,34 +1,20 @@
 camiseta-basica.glb
 ====================
 
-Modelo: "T Shirt" — uma camiseta básica low-poly (gola careca, manga curta,
-um mesh só, UV com frente, costas e mangas separadas).
-Autor:   Nour
-Fonte:   https://poly.pizza/m/oZOt671DyI
-Arquivo: https://static.poly.pizza/466a6b4a-0689-4ec1-9df6-bd8859e37e85.glb
-Licença: Creative Commons Attribution 3.0 (CC BY 3.0)
-         https://creativecommons.org/licenses/by/3.0/
+Modelo original da Aura, gerado por scripts/studio/gerar-camiseta-glb.mjs;
+nenhum asset de terceiros.
 
-MODIFICAÇÃO (27/09/2026): o original tem manga longa com punho. As mangas
-foram cortadas em x = ±0,245 (logo depois da costura que o modelo já
-tinha, que vira a bainha) com scripts/studio/encurtar-mangas-glb.mjs —
-malha, UV e material fora do corte estão como no original. Para
-reproduzir: baixe o arquivo acima e rode
-  node scripts/studio/encurtar-mangas-glb.mjs original.glb public/models/camiseta-basica.glb --corte=0.245
+A malha é construída do zero pela aritmética de
+scripts/studio/camisetaParametrica.js (camiseta básica adulta, tamanho M,
+em "manequim fantasma": corpo por seções transversais suavizadas, mangas
+curtas soldadas na cava, ribana de 2 cm na gola careca, bainhas de 2,5 cm
+na barra e 2 cm nas mangas) e acabada por scripts/studio/refinarMalha.js
+(uma passada de subdivisão de Loop, normais suaves, dobras por ruído com
+semente fixa e oclusão por vértice em COLOR_0). Os parâmetros de molde
+ficam no topo de camisetaParametrica.js.
 
-MODIFICAÇÃO 2 (27/09/2026): a malha low-poly foi refinada com
-scripts/studio/refinar-camiseta-glb.mjs — duas passadas de subdivisão de
-Loop (4.352 → 69.632 triângulos, UVs interpoladas, ilhas preservadas),
-normais suaves, dobras discretas por ruído de baixa frequência com
-semente fixa (mais no abdômen e nas mangas, quase nada no peito) e
-oclusão por vértice (COLOR_0) nas axilas e sob a gola. Nome do mesh,
-origem, escala e material como no original. Para reproduzir, depois do
-passo acima:
-  node scripts/studio/refinar-camiseta-glb.mjs mangas-curtas.glb public/models/camiseta-basica.glb
-
-A atribuição exigida pela licença é esta nota; se o modelo for exibido
-com créditos em algum lugar público, citar "T Shirt por Nour (Poly
-Pizza), CC BY 3.0, mangas encurtadas e malha refinada pela Aura".
+Para reproduzir o arquivo publicado:
+  node scripts/studio/gerar-camiseta-glb.mjs public/models/camiseta-basica.glb
 
 Como a Aura usa: template visual `camiseta-basica-3d`
 (docs/studio/visual-templates/camiseta-basica-3d.json), servido em

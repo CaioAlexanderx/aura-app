@@ -37,8 +37,9 @@
 // do tecido e uma trama fina gerada em canvas por baixo da arte.
 //
 // 27/09/2026 (realismo) — a camiseta deixou de parecer plástico low-poly.
-// A malha vem refinada do arquivo (scripts/studio/refinar-camiseta-glb.mjs:
-// subdivisão, dobras e oclusão por vértice em COLOR_0). Aqui: a trama em
+// A malha vem refinada do arquivo (scripts/studio/gerar-camiseta-glb.mjs:
+// modelo original da Aura, com subdivisão, dobras e oclusão por vértice em
+// COLOR_0). Aqui: a trama em
 // escala real (fios por cm medidos pela área da spec, não "8 por
 // ladrilho"), um relevo de dobras finas assado no mapa de normais junto
 // com a trama, material físico de algodão (aspereza alta, sheen de veludo
