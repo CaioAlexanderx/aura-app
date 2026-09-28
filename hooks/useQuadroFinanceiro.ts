@@ -1,0 +1,60 @@
+// ============================================================
+// useQuadroFinanceiro — dados e movimentos do Quadro do Financeiro
+// (28/09/2026). Um GET por tipo+mês; cada movimento é um PATCH no
+// lançamento com atualização otimista e rollback se o servidor recusar.
+// ============================================================
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { companiesApi } from "@/services/api";
+import { toast } from "@/components/Toast";
+import { invalidateFinanceiroQueries } from "@/hooks/useTransactions";
+import { aplicarMovimento, corpoDoMovimento, ddmm, rotulos, type PedidoDeMovimento, type Quadro, type TipoQuadro } from "@/utils/quadroFinanceiro";
+
+export { corpoDoMovimento, type PedidoDeMovimento };
+
+export function chaveDoQuadro(companyId: string | null | undefined, tipo: TipoQuadro, mes: string) {
+  return ["transactions-board", companyId, tipo, mes] as const;
+}
+
+export function useQuadroFinanceiro(companyId: string | null | undefined, tipo: TipoQuadro, mes: string) {
+  const qc = useQueryClient();
+  const chave = chaveDoQuadro(companyId, tipo, mes);
+
+  const consulta = useQuery<Quadro>({
+    queryKey: chave,
+    queryFn: () => companiesApi.transactionsBoard(companyId as string, tipo, mes),
+    enabled: !!companyId,
+    staleTime: 30_000,
+  });
+
+  const mover = useMutation({
+    mutationFn: (p: PedidoDeMovimento) => companiesApi.updateTransaction(companyId as string, p.id, corpoDoMovimento(p)),
+    onMutate: async (p) => {
+      await qc.cancelQueries({ queryKey: chave });
+      const antes = qc.getQueryData<Quadro>(chave);
+      if (antes) qc.setQueryData<Quadro>(chave, aplicarMovimento(antes, p.id, p.mov, { data: p.data, forma: p.forma }));
+      return { antes };
+    },
+    onError: (err: any, _p, ctx) => {
+      if (ctx?.antes) qc.setQueryData(chave, ctx.antes);
+      toast.error(err?.message || "Não deu para salvar. Confira a conexão e tente de novo.");
+    },
+    onSuccess: (_r, p) => {
+      const r = rotulos(tipo);
+      if (p.mov === "baixa") toast.success("Marcado como " + r.verbo + ".");
+      else if (p.mov === "nova_data") toast.success("Vencimento mudou para " + ddmm(p.data) + ".");
+      else toast.success("Baixa desfeita.");
+    },
+    onSettled: () => {
+      invalidateFinanceiroQueries(qc, companyId);
+    },
+  });
+
+  return {
+    quadro: consulta.data,
+    carregando: consulta.isLoading,
+    erro: consulta.isError,
+    recarregar: consulta.refetch,
+    mover: mover.mutate,
+    salvando: mover.isPending,
+  };
+}

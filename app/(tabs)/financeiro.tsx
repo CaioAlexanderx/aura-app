@@ -10,6 +10,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { TransactionModal } from "@/components/screens/financeiro/TransactionModal";
 import { TabVisaoGeral } from "@/components/screens/financeiro/TabVisaoGeral";
 import { TabLancamentos } from "@/components/screens/financeiro/TabLancamentos";
+import { ListaOuQuadro } from "@/components/screens/financeiro/quadro/ListaOuQuadro";
 import { MonthExpensesBanner } from "@/components/screens/financeiro/MonthExpensesBanner";
 import { ExportDreModal } from "@/components/screens/financeiro/ExportDreModal";
 import { TABS, TAB_INDEX, fmt as fmtBRL } from "@/components/screens/financeiro/types";
@@ -600,7 +601,9 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
           />
         )}
 
+        {/* 28/09/2026: Quadro (Atrasado / A receber / Recebido) ao lado da lista. */}
         {activeTab === TAB_INDEX.lancamentos && !isLoading && !isError && (
+          <ListaOuQuadro podeQuadro={!consolidatedView && !isDemo} companyId={company?.id}>
           <TabLancamentos
             transactions={transactions}
             isLoading={isLoading}
@@ -611,6 +614,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
             onDelete={!isDemo && !consolidatedView ? function(id) { setDeleteTarget(id); } : undefined}
             onEdit={!isDemo && !consolidatedView ? handleEdit : undefined}
           />
+          </ListaOuQuadro>
         )}
 
         <ConfirmDialog visible={!!deleteTarget} title="Excluir lançamento?" message="Esta ação não pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={function() { if (deleteTarget) { deleteTransaction(deleteTarget); setDeleteTarget(null); } }} onCancel={function() { setDeleteTarget(null); }} />

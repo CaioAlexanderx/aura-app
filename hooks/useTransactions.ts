@@ -56,6 +56,7 @@ export function invalidateFinanceiroQueries(qc: ReturnType<typeof useQueryClient
   qc.invalidateQueries({ queryKey: ["dashboard", companyId] });
   qc.invalidateQueries({ queryKey: ["dre", companyId] });
   qc.invalidateQueries({ queryKey: ["financeiro-insights", companyId] });
+  qc.invalidateQueries({ queryKey: ["transactions-board", companyId] });
   // Consolidado nao leva companyId na key — invalida o prefixo inteiro.
   qc.invalidateQueries({ queryKey: ["me-transactions"] });
   qc.invalidateQueries({ queryKey: ["me-transactions-prev"] });
