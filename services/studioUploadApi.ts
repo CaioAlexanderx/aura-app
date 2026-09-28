@@ -37,12 +37,51 @@ export async function uploadStudioMockup(
     kind?: StudioUploadKind;
   }
 ): Promise<StudioUploadResult> {
+  const preparado = prepararUpload(params);
   return request<StudioUploadResult>(`/companies/${cid}/studio/upload-mockup`, {
     method: 'POST',
-    body: params,
+    body: preparado.body,
     retry: 0,
-    timeout: 30000,
+    timeout: preparado.timeout,
   } as any);
+}
+
+/** O que a rota aceita (aura-backend, studioUpload.js MAX_SIZE_MB). */
+export const LIMITE_DO_UPLOAD_MB = 15;
+
+/**
+ * Confere e ajusta o envio ANTES de subir (QA final 28/09/2026, LJ-36).
+ *
+ * "Gerar do pedido (motor visual)" terminava, depois de ~40 s, em "Não
+ * recebemos resposta a tempo": o PNG de 2048 px do motor passava dos 5 MB
+ * do parser JSON do servidor, o servidor lia o corpo inteiro para então
+ * recusar, e o painel desistia antes, aos 30 s fixos. O backend passou a
+ * aceitar os 15 MB que a rota promete (parser próprio); aqui:
+ *
+ * - arquivo acima do limite falha NA HORA, com o tamanho e o que fazer;
+ * - o tempo de espera cresce com o arquivo (30 s + 1 s a cada 200 KB,
+ *   até 3 min), em vez de 30 s para qualquer tamanho;
+ * - "vídeo/webm" (acento que a acentuação em massa de 22/09 pôs no tipo do
+ *   vídeo do motor) vira "video/webm" — a rota recusava com 400.
+ */
+export function prepararUpload(params: { content_base64: string; content_type: string; kind?: StudioUploadKind }): {
+  body: { content_base64: string; content_type: string; kind?: StudioUploadKind };
+  timeout: number;
+  tamanhoMb: number;
+} {
+  const b64 = String(params.content_base64 || '').replace(/^data:[^;]+;base64,/, '');
+  const tamanhoMb = (b64.length * 0.75) / (1024 * 1024);
+  if (tamanhoMb > LIMITE_DO_UPLOAD_MB) {
+    throw new Error(
+      `O arquivo tem ${tamanhoMb.toFixed(1).replace('.', ',')} MB e o limite é ${LIMITE_DO_UPLOAD_MB} MB. ` +
+      'Envie uma imagem menor ou cole a URL do mockup.'
+    );
+  }
+  const content_type = String(params.content_type || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase();
+  const timeout = Math.min(180000, 30000 + Math.ceil(b64.length / (200 * 1024)) * 1000);
+  return { body: { ...params, content_base64: b64, content_type }, timeout, tamanhoMb };
 }
 
 /**

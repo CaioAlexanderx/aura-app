@@ -54,8 +54,10 @@ import { useCobrarSaldo } from "@/components/studio/useCobrarSaldo";
 import { useRegistrarPagamento } from "@/components/studio/useRegistrarPagamento";
 import { RegistrarPagamentoSheet } from "@/components/studio/RegistrarPagamentoSheet";
 import { resumoDaSemana, colunaGargalo, riscoDoCard } from "@/components/studio/fluxoDoQuadro";
-import { numeroDoPedido, situacaoDoPixNoCartao, reais } from "@/components/studio/pagamentoDoPedido";
+import { numeroDoPedido, situacaoDoPixNoCartao, reais, motivoCurtoDoPixVencido } from "@/components/studio/pagamentoDoPedido";
+import { rotuloDeItens } from "@/components/studio/rotuloDeItens";
 import { capaDoCartao } from "@/components/studio/capaDoCartao";
+import { comEtapaDoPedido } from "@/components/studio/etapaDoPedido";
 import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
 import {
   useStudioKanbanDnD,
@@ -205,6 +207,9 @@ function DraggableCard({
   // selo "Aguardando Pix", com o caso "pago" a mais (o cartão da fila
   // quer confirmar que o Pix já caiu, o Hub não precisa mais dizer isso).
   const pix = situacaoDoPixNoCartao(o);
+  // LJ-34 (QA final 28/09/2026): "Aguardando Pix · 24d (urgente)" sem dizer
+  // por que o cancelamento automático não pegou o pedido.
+  const porQueNaoCancelou = pix && pix.tom !== "sucesso" ? motivoCurtoDoPixVencido(o) : null;
 
   return (
     <Pressable
@@ -278,7 +283,7 @@ function DraggableCard({
         {/* FIX (bug #18 QA): "1 items" — item_count às vezes chega como string
             do backend (COUNT() do Postgres), então "=== 1" (comparação
             estrita) nunca batia e sempre caía no plural. Number() normaliza. */}
-        {o.item_count} {Number(o.item_count) === 1 ? "item" : "itens"} · {reais(o.total_amount)}
+        {rotuloDeItens(o.item_count)} · {reais(o.total_amount)}
       </Text>
       {pix ? (
         <View style={[s.pixBadge, { backgroundColor: pix.tom === "sucesso" ? t.successSoft : t.warningSoft }]}>
@@ -291,6 +296,9 @@ function DraggableCard({
             {pix.rotulo}
           </Text>
         </View>
+      ) : null}
+      {porQueNaoCancelou ? (
+        <Text style={[s.cardMeta, { color: t.warningInk }]} numberOfLines={2}>{porQueNaoCancelou}</Text>
       ) : null}
       {platformMeta && (
         <View style={[s.platformBadge, { backgroundColor: platformMeta.bg }]}>
@@ -508,7 +516,9 @@ export default function StudioProducao() {
     setLoading(true);
     try {
       const r = await studioApi.listOrders(company.id, { days: 60, limit: 300 });
-      setOrders(r.orders || []);
+      // LJ-33 (QA final 28/09/2026): cancelado vai para "Cancelados" mesmo
+      // com backend antigo, que mandava a etapa onde ela parou.
+      setOrders((r.orders || []).map(comEtapaDoPedido));
       setLoadError(null);
     } catch (e: any) {
       const msg = e?.message || "Erro ao carregar pedidos";
@@ -593,6 +603,16 @@ export default function StudioProducao() {
   ) => {
     if (!company?.id) return;
     const cur = (order.studio_production_status || "pending_art") as StudioProductionStatus;
+    // LJ-33: pedido da loja online não entra nem sai de "Cancelados" pelo
+    // quadro — cancelar é pelo pedido ("Cancelar pedido"), que avisa a
+    // cliente; cancelado não volta para a produção. O backend também recusa.
+    if (order.source === "digital" && (cur === "cancelled" || targetStatus === "cancelled")) {
+      if (cur === targetStatus) return;
+      toast.error(cur === "cancelled"
+        ? "Este pedido foi cancelado e não volta para a produção."
+        : "Para cancelar, abra o pedido e use \"Cancelar pedido\". Assim a cliente é avisada.");
+      return;
+    }
     // Optimistic update
     setOrders((prev) => prev.map((o) =>
       o.id === order.id ? { ...o, studio_production_status: targetStatus } : o

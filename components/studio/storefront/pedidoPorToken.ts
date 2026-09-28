@@ -42,6 +42,12 @@ export type PedidoPublico = {
   pix: { qrcode: string | null; copia_e_cola: string; expira_em: string | null; modo: string | null } | null;
   cartao: { init_point: string } | null;
   comprovante_enviado: boolean;
+  /**
+   * Por que cancelou (QA final 28/09/2026, LJ-33/CL-46): Pix vencido,
+   * pagamento recusado pela loja ou cancelado pela loja, e o motivo que a
+   * loja escreveu. null enquanto não cancelou ou em backend antigo.
+   */
+  cancelamento: { tipo: string; motivo: string | null } | null;
   etapas: EtapaDoPedido[];
   prazo_dias_uteis: number | null;
   revisoes: { max_included: number; extra_price: number; policy_text: string | null } | null;
@@ -110,6 +116,9 @@ export function lerPedidoPublico(j: any): PedidoPublico | null {
     pix,
     cartao: j.cartao && str(j.cartao.init_point) ? { init_point: String(j.cartao.init_point) } : null,
     comprovante_enviado: j.comprovante_enviado === true,
+    cancelamento: j.cancelamento && typeof j.cancelamento === "object" && str(j.cancelamento.tipo)
+      ? { tipo: String(j.cancelamento.tipo), motivo: str(j.cancelamento.motivo) }
+      : null,
     etapas,
     prazo_dias_uteis: Number.isFinite(Number(j.prazo_dias_uteis)) && Number(j.prazo_dias_uteis) > 0
       ? Math.round(Number(j.prazo_dias_uteis)) : null,

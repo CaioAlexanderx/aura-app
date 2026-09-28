@@ -167,6 +167,23 @@ export function severityLabel(s: NotificationSeverity): string | null {
   return null;   // info não ganha selo — senão todo card vira etiqueta
 }
 
+/**
+ * Selo do card. Grupo do pedido (QA final 28/09/2026, LJ-29): o card do
+ * grupo usava a severidade do evento mais recente e ficava com "AÇÃO"
+ * mesmo quando nada ali pedia mais nada (o pagamento a conferir de um
+ * pedido que a própria lojista já recusou). Agora o grupo só tem selo se
+ * algum evento dele ainda pede ação; evento resolvido não ganha selo.
+ */
+export function seloDoCard(item: Pick<FeedItem, 'event' | 'events' | 'grouped'>): string | null {
+  const lista = item.grouped ? item.events : [item.event];
+  const abertos = lista.filter((e) => !e.resolved);
+  if (!abertos.length) return null;
+  const pior = abertos
+    .map((e) => visualForEvent(e).severity)
+    .sort((a, b) => SEVERITY_RANK[a] - SEVERITY_RANK[b])[0];
+  return severityLabel(pior);
+}
+
 // ── Adaptação do feed antigo ───────────────────────────────────────────────
 const SOURCE_LABEL: Record<string, string> = {
   canal_digital: 'Canal Digital',
@@ -289,13 +306,32 @@ function mkItem(events: StoreEvent[]): FeedItem {
  *  3. Dentro do dia, 2+ eventos do MESMO `entity_id` colapsam num card só.
  *     É isso que faz uma loja de 200 pedidos/dia caber na tela.
  */
-// Um evento deste tipo RESOLVE qualquer pendência do tipo indicado, do
-// MESMO `entity_id` — achado do QA (28/09/2026): "Ajuste pedido #N"
-// continuava em "Precisa de você" mesmo depois de a arte já ter sido
-// aprovada (loja_arte_aprovada chega DEPOIS do ajuste, no mesmo pedido).
-const RESOLVE: Partial<Record<string, string>> = {
-  loja_ajuste_pedido: "loja_arte_aprovada",
+// Um evento destes tipos RESOLVE a pendência do tipo indicado, do MESMO
+// `entity_id` — achado do QA (28/09/2026): "Ajuste pedido #N" continuava
+// em "Precisa de você" mesmo depois de a arte já ter sido aprovada
+// (loja_arte_aprovada chega DEPOIS do ajuste, no mesmo pedido).
+//
+// QA final (28/09/2026, LJ-29): depois de "Recusar pagamento", o
+// "Pagamento a conferir" do pedido seguia pedindo ação. Pagou ou cancelou,
+// não há mais o que conferir. O Pix expirado só sai quando o pedido é pago
+// — o cancelamento automático é justamente o que o aviso conta. O backend
+// novo também manda `resolved` (aura-backend, services/eventoResolvido),
+// lendo o estado atual do pedido; esta regra cobre o backend antigo.
+const RESOLVE: Partial<Record<string, string[]>> = {
+  loja_ajuste_pedido:        ["loja_arte_aprovada"],
+  loja_pagamento_a_conferir: ["loja_pedido_pago", "loja_pedido_cancelado"],
+  loja_comprovante_enviado:  ["loja_pedido_pago", "loja_pedido_cancelado"],
+  loja_pix_expirado:         ["loja_pedido_pago"],
 };
+
+/** O aviso já foi resolvido pelo que aconteceu depois no mesmo pedido? */
+function foiResolvido(ev: StoreEvent, resolvidoEm: Map<string, number>): boolean {
+  if (ev.resolved) return true;
+  const tipos = RESOLVE[ev.type];
+  if (!tipos || !ev.entity_id) return false;
+  const quando = ts(ev.created_at);
+  return tipos.some((tipo) => (resolvidoEm.get(`${ev.entity_id}:${tipo}`) ?? -Infinity) >= quando);
+}
 
 export function buildFeed(events: StoreEvent[], now: number = Date.now()): Feed {
   const lista = [...(events || [])].sort((a, b) => ts(b.created_at) - ts(a.created_at));
@@ -313,11 +349,14 @@ export function buildFeed(events: StoreEvent[], now: number = Date.now()): Feed 
 
   const pendentes: StoreEvent[] = [];
   const resto:     StoreEvent[] = [];
-  for (const ev of lista) {
+  for (const original of lista) {
+    const resolvido = foiResolvido(original, resolvidoEm);
+    // Resolvido vira informativo: sem selo "Ação" nem fundo âmbar, também
+    // dentro do grupo do pedido (seloDoCard).
+    const ev = resolvido && !original.resolved
+      ? { ...original, resolved: true, severity: 'info' as NotificationSeverity }
+      : original;
     const v = visualForEvent(ev);
-    const tipoQueResolve = RESOLVE[ev.type];
-    const resolvido = !!tipoQueResolve && !!ev.entity_id
-      && (resolvidoEm.get(`${ev.entity_id}:${tipoQueResolve}`) ?? -Infinity) >= ts(ev.created_at);
     if (v.requiresAction && !ev.read_at && !resolvido) pendentes.push(ev);
     else resto.push(ev);
   }

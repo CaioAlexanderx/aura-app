@@ -51,6 +51,9 @@ export interface PagamentoDoPedido {
   shipping_fee?: number | null;
   pix_discount?: number | null;
   pix_cancelamento?: { vencido: boolean; motivo: string | null } | null;
+  // QA final 28/09/2026 (LJ-33, P2): quem cancelou e o motivo escrito
+  // pela lojista. Ausente em backend antigo — o texto cai no genérico.
+  cancelamento?: { tipo: string; motivo: string | null } | null;
 }
 
 export type ChaveDaSituacao =
@@ -100,10 +103,26 @@ export function situacaoDoPagamento(p: PagamentoDoPedido): SituacaoDoPagamento {
   const metodo = p.payment_method || "pix";
 
   if (status === "cancelled") {
-    if (p.payment_status === "expired") {
+    const tipo = p.cancelamento?.tipo;
+    if (tipo === "pix_expirado" || (!tipo && p.payment_status === "expired")) {
       return {
         chave: "vencido", rotulo: "Vencido", tom: "neutro", precisaAgir: false,
         detalhe: "O Pix não foi pago no prazo e o pedido foi cancelado automaticamente.",
+      };
+    }
+    // LJ-33 (P2): o bloco dizia só "Pedido cancelado." — sem quem nem por quê.
+    const motivo = (p.cancelamento?.motivo || "").trim();
+    const comMotivo = (base: string) => (motivo ? `${base} Motivo: "${motivo}".` : base);
+    if (tipo === "pagamento_recusado") {
+      return {
+        chave: "cancelado", rotulo: "Cancelado", tom: "neutro", precisaAgir: false,
+        detalhe: comMotivo("Você recusou o pagamento e o pedido foi cancelado."),
+      };
+    }
+    if (tipo === "cancelado_pela_loja") {
+      return {
+        chave: "cancelado", rotulo: "Cancelado", tom: "neutro", precisaAgir: false,
+        detalhe: comMotivo("Você cancelou este pedido."),
       };
     }
     return { chave: "cancelado", rotulo: "Cancelado", tom: "neutro", precisaAgir: false, detalhe: "Pedido cancelado." };
@@ -341,6 +360,43 @@ export function motivoDoPixVencido(p: Pick<PagamentoDoPedido, "pix_cancelamento"
     case "comprovante": return "Este pedido não cancela sozinho porque a cliente mandou comprovante.";
     case "ja_paguei":   return "Este pedido não cancela sozinho porque a cliente disse que pagou.";
     case "sinal":       return "Este pedido não cancela sozinho porque você registrou o sinal.";
+    default:            return null;
+  }
+}
+
+/**
+ * "Cancelar pedido" no detalhe do pedido da vitrine (QA final 28/09/2026,
+ * LJ-33 P2). A recusa do pagamento responde 409 com "use 'Cancelar
+ * pedido'" quando o Pix já entrou — e o detalhe não tinha esse botão.
+ *
+ * Aparece quando o pedido é da vitrine, não foi entregue nem cancelado e
+ * o pagamento NÃO está esperando conferência: nesse caso o caminho é
+ * "Recusar pagamento", no bloco do pagamento (um botão de cancelar a mais
+ * ao lado dele só confundiria).
+ */
+export function podeCancelarOPedido(p: PagamentoDoPedido | null | undefined): boolean {
+  if (!p || !temBlocoDePagamento(p)) return false;
+  const status = p.status || "";
+  if (!status || status === "cancelled" || status === "delivered") return false;
+  return !acoesDoPagamento(p).podeAgir;
+}
+
+/** O que o cancelamento faz, dito antes de confirmar. */
+export function avisoDoCancelamento(p: PagamentoDoPedido): string {
+  const pago = PAGO.includes(p.payment_status || "") || ANDOU.includes(p.status || "");
+  return pago
+    ? "O pedido sai da produção e a cliente vê que a loja cancelou, com o motivo abaixo. O valor que já entrou não volta sozinho: combine a devolução com ela."
+    : "O pedido sai da produção e a cliente vê que a loja cancelou, com o motivo abaixo.";
+}
+
+/** Linha curta para o cartão da Produção: por que o Pix vencido não cancelou. */
+export function motivoCurtoDoPixVencido(p: Pick<PagamentoDoPedido, "pix_cancelamento"> | null | undefined): string | null {
+  if (!p?.pix_cancelamento?.vencido) return null;
+  switch (p.pix_cancelamento.motivo) {
+    case "producao":    return "Não cancela sozinho: a produção já andou";
+    case "comprovante": return "Não cancela sozinho: há comprovante";
+    case "ja_paguei":   return "Não cancela sozinho: a cliente disse que pagou";
+    case "sinal":       return "Não cancela sozinho: sinal registrado";
     default:            return null;
   }
 }

@@ -34,6 +34,7 @@ import { temBlocoDePagamento, situacaoDoPagamento, reais, numeroDoPedido, compro
 import { separarReferencia } from "@/components/studio/referenciaDoAjuste";
 import { ART_SERVICE_FIELD_ID, labelForArtServiceValue } from "@/components/studio/artService";
 import { nomeDaCor } from "@/components/studio/nomeDaCor";
+import { etapaDoPedido } from "@/components/studio/etapaDoPedido";
 
 const fmtMoeda = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -107,7 +108,7 @@ function ItemCustomization({
         {entries.length === 0 ? (
           <Text style={s.custRowValue}>—</Text>
         ) : entries.map(([key, value]) => {
-          const label = rotuloDaChave(key, fieldsById);
+          const label = rotuloDaChave(key, fieldsById, value);
           const campo = fieldsById[key];
 
           // FIX (achado 2e do QA): o serviço de arte gravava o valor cru
@@ -520,7 +521,7 @@ export default function StudioOrderDetail() {
 
   const advance = () => {
     if (!data || !company?.id) return;
-    const cur = data.order.studio_production_status as StudioProductionStatus | null;
+    const cur = etapaDoPedido(data.order) as StudioProductionStatus | null;
     if (!cur) return;
     const next = NEXT[cur];
     if (!next) return;
@@ -556,7 +557,10 @@ export default function StudioOrderDetail() {
   }
 
   const { order, items, approvals } = data;
-  const status = order.studio_production_status as StudioProductionStatus | null;
+  // LJ-33 (QA final 28/09/2026): pedido cancelado é "Cancelado" no selo e
+  // perde avançar/solicitar aprovação, mesmo com backend antigo (que
+  // mandava a etapa em que o pedido parou).
+  const status = etapaDoPedido(order) as StudioProductionStatus | null;
   const statusCol = status ? colorStudioStatus(status, isDark) : { bg: tk.bgSoft, fg: tk.ink3 };
   const next = status ? NEXT[status] : null;
   const lastApproval = approvals?.[0] || null;

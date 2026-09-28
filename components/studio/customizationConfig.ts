@@ -149,6 +149,15 @@ export function valuesForSide(
 }
 
 /**
+ * Arquivo que a CLIENTE enviou pela vitrine: o upload público grava em
+ * `studio/storefront/<empresa>/...` (aura-backend, studioStorefront.js).
+ * As artes da galeria da lojista moram em `studio/<empresa>/template/...`.
+ */
+export function ehEnvioDaCliente(valor: unknown): boolean {
+  return typeof valor === "string" && /\/studio\/storefront\//.test(valor);
+}
+
+/**
  * Rotulo legivel de uma chave da personalizacao.
  *
  * O `customization` do pedido nao guarda so os campos: guarda tambem
@@ -158,12 +167,20 @@ export function valuesForSide(
  * que precisa saber em que cor estampar e se tem verso.
  *
  * Campo normal continua usando o label que a lojista escreveu.
+ *
+ * Exceção (QA final 28/09/2026, LJ-31): loja sem arte pronta cadastrada
+ * troca, na vitrine, o campo de galeria por um envio de arquivo com o
+ * MESMO id (camposDaVitrine.configDisponivel). O painel lê a config crua,
+ * e o arquivo da cliente aparecia como "Escolher template da galeria".
+ * Com o `valor`, o envio da cliente vira "Arte enviada pela cliente".
  */
 export function rotuloDaChave(
   chave: string,
-  camposPorId: Record<string, { label?: string } | undefined>,
+  camposPorId: Record<string, { label?: string; type?: string } | undefined>,
+  valor?: unknown,
 ): string {
   const campo = camposPorId[chave];
+  if (campo?.type === "template" && ehEnvioDaCliente(valor)) return "Arte enviada pela cliente";
   if (campo?.label) return campo.label;
 
   if (chave === "art_service_brief") return "Briefing da arte";

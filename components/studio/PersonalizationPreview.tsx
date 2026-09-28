@@ -9,8 +9,8 @@
 // com layers:
 //   1. Produto base (rect com cor de fundo)
 //   2. Area de impressao (rect dashed navy semi-transparente)
-//   3. Image/template (se houver)
-//   4. Texto centralizado (se houver)
+//   3. Image/template (se houver) — nos 62% de cima quando há texto
+//   4. Texto (se houver) — na faixa de baixo, como o motor visual (layoutDaArte)
 //   5. Label opcional do produto
 //
 // Padrao seguindo Icon.tsx / AuraStudioMark.tsx — span + innerHTML
@@ -34,7 +34,7 @@ import type { CustomizationConfig, CustomizationField, CustomizationFieldSide } 
 // sideOf é função pura (sem hook/context) — seguro no storefront, que
 // renderiza este componente sem o StudioThemeProvider.
 import { sideOf } from "@/components/studio/customizationConfig";
-import { artFontStack } from "@/constants/fonts";
+import { artFontStack, ART_FONTS } from "@/constants/fonts";
 
 /**
  * Subconjunto de tokens que o preview realmente consome. Tipos `string`
@@ -91,9 +91,62 @@ function escapeXml(s: string): string {
     if (c === "<") return "&lt;";
     if (c === ">") return "&gt;";
     if (c === "&") return "&amp;";
-    if (c === "'") return "&após;";
+    // "&apos;" — a acentuação em massa de 22/09 (#822) trocou por "&após;",
+    // entidade que não existe: o font-family da arte ('Pacifico', ...)
+    // virava lixo e o texto caía na fonte da página (QA final, LJ-31).
+    if (c === "'") return "&apos;";
     return "&quot;";
   });
+}
+
+// Fontes de ARTE (Pacifico, Caveat...) no documento. A vitrine já carrega
+// (STOREFRONT_FONTS_CSS); o painel só carregava as da UI, então a prévia
+// do pedido desenhava "HELENA" na fonte da página enquanto a cliente viu
+// a cursiva (QA final 28/09/2026, LJ-31). Um <link> só, por id.
+const ART_FONTS_CSS =
+  "https://fonts.googleapis.com/css2?" +
+  ART_FONTS.map((f) => "family=" + f.replace(/ /g, "+")).join("&") +
+  "&display=swap";
+
+function garantirFontesDeArte() {
+  if (Platform.OS !== "web" || typeof document === "undefined") return;
+  if (document.getElementById("aura-art-fonts")) return;
+  const lk = document.createElement("link");
+  lk.id = "aura-art-fonts";
+  lk.rel = "stylesheet";
+  lk.href = ART_FONTS_CSS;
+  document.head.appendChild(lk);
+}
+
+const HEX = /^#[0-9A-Fa-f]{3}([0-9A-Fa-f]{3})?$/;
+
+/**
+ * Onde a arte e o texto ficam dentro da área de impressão — a MESMA regra
+ * do motor visual que a cliente vê na vitrine (compose2d,
+ * desenharArteNoRetangulo): com imagem e texto, a imagem nos 62% de cima e
+ * o texto centrado na faixa de baixo; só texto, no meio; só imagem, 90% da
+ * altura. Antes a prévia do painel empilhava os dois no centro e a lojista
+ * produzia de uma composição diferente da aprovada (LJ-31).
+ *
+ * O motor mede o texto no canvas; aqui a largura é estimada (0,56 da
+ * altura por letra), com o mesmo teto de 94% da largura da área.
+ */
+export function layoutDaArte(
+  area: { x: number; y: number; w: number; h: number },
+  temImagem: boolean,
+  texto: string,
+): { imagem: { x: number; y: number; w: number; h: number } | null; texto: { x: number; y: number; fontSize: number } | null } {
+  const temTexto = texto.length > 0;
+  const imgH = area.h * (temTexto ? 0.62 : 0.9);
+  const imagem = temImagem ? { x: area.x, y: area.y, w: area.w, h: imgH } : null;
+  if (!temTexto) return { imagem, texto: null };
+  let fontSize = Math.min(area.h * (temImagem ? 0.22 : 0.3), area.w * 0.6);
+  const largura = (fs: number) => texto.length * fs * 0.56;
+  if (largura(fontSize) > area.w * 0.94) fontSize = (area.w * 0.94) / (texto.length * 0.56);
+  const y = temImagem
+    ? area.y + imgH + (area.h - imgH) / 2 + fontSize * 0.35
+    : area.y + area.h / 2 + fontSize * 0.35;
+  return { imagem, texto: { x: area.x + area.w / 2, y, fontSize } };
 }
 
 function findField(
@@ -169,17 +222,21 @@ export function PersonalizationPreviewBase({
   const imageField    = findField(fields, "image", side);
   const templateField = findField(fields, "template", side);
 
-  const bgColor    = (colorField && values[colorField.id]) || "#FFFFFF";
+  // Só hex: cor inválida num stop-color vira PRETO (QA final, capa da
+  // caneca branca na Produção).
+  const corDaPeca  = colorField ? String(values[colorField.id] || "").trim() : "";
+  const bgColor    = HEX.test(corDaPeca) ? corDaPeca : "#FFFFFF";
   const textValue  = (textField  && String(values[textField.id]  || "")) || "";
   const imageUrl   = (imageField && values[imageField.id]) || null;
   const templateUrl= (templateField && values[templateField.id]) || null;
 
-  // Texto: font-size proporcional ao comprimento (cap em 7)
-  const textLen = Math.max(textValue.length, 4);
-  const fontSize = Math.min((areaW / textLen) * 1.6, 7);
-
   // Layer image preferida sobre template (ambos podem coexistir mas image vence)
   const overlayUrl = imageUrl || templateUrl;
+
+  // Arte em cima, texto embaixo — a composição que a cliente aprovou.
+  const layout = layoutDaArte({ x: areaX, y: areaY, w: areaW, h: areaH }, !!overlayUrl, textValue);
+  const fontSize = layout.texto ? layout.texto.fontSize : 0;
+  garantirFontesDeArte();
 
   // A fonte que o lojista configurou no campo — ate agora ela so servia
   // de placeholder no input e a arte saia sempre no sans do sistema.
@@ -216,17 +273,11 @@ export function PersonalizationPreviewBase({
   const haloLargura = 0.1;
 
   const svg = `<svg width="${size}" height="${size}" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bg-shade" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="${bgColor}" stop-opacity="1"/>
-      <stop offset="100%" stop-color="${bgColor}" stop-opacity="0.85"/>
-    </linearGradient>
-  </defs>
   <!-- Produto base: a foto quando existe, o quadrado colorido como
        ultimo recurso. A cor fica ATRAS da foto, entao PNG recortado
        continua mostrando a cor escolhida pelo cliente. -->
   <rect x="12" y="12" width="76" height="76" rx="10"
-        fill="url(#bg-shade)"
+        fill="${bgColor}"
         stroke="${t.ink5}" stroke-width="0.6"/>
   ${fotoProduto ? `<image href="${escapeXml(fotoProduto)}" x="13" y="13" width="74" height="74" preserveAspectRatio="xMidYMid meet" clip-path="inset(0 round 9)"/>` : ""}
   <!-- Sombra interna sutil pra dar volume -->
@@ -239,9 +290,9 @@ export function PersonalizationPreviewBase({
         stroke="${t.primary}" stroke-width="${fotoProduto ? "0.25" : "0.4"}"
         stroke-opacity="${fotoProduto ? "0.35" : "1"}"
         stroke-dasharray="1.5,0.8"/>
-  ${overlayUrl ? `<image href="${escapeXml(overlayUrl)}" x="${areaX}" y="${areaY}" width="${areaW}" height="${areaH}" preserveAspectRatio="xMidYMid meet"/>` : ""}
-  ${textValue ? `<text x="${areaX + areaW / 2}" y="${areaY + areaH / 2 + fontSize * 0.35}" text-anchor="middle" font-family="${escapeXml(fonteArte)}" font-size="${fontSize.toFixed(2)}" fill="none" stroke="${haloArte}" stroke-width="${(fontSize * haloLargura).toFixed(2)}" stroke-linejoin="round">${escapeXml(textValue)}</text>
-  <text x="${areaX + areaW / 2}" y="${areaY + areaH / 2 + fontSize * 0.35}" text-anchor="middle" font-family="${escapeXml(fonteArte)}" font-size="${fontSize.toFixed(2)}" fill="${corArte}">${escapeXml(textValue)}</text>` : ""}
+  ${overlayUrl && layout.imagem ? `<image href="${escapeXml(overlayUrl)}" x="${layout.imagem.x}" y="${layout.imagem.y}" width="${layout.imagem.w}" height="${layout.imagem.h}" preserveAspectRatio="xMidYMid meet"/>` : ""}
+  ${layout.texto ? `<text x="${layout.texto.x}" y="${layout.texto.y.toFixed(2)}" text-anchor="middle" font-family="${escapeXml(fonteArte)}" font-weight="600" font-size="${fontSize.toFixed(2)}" fill="none" stroke="${haloArte}" stroke-width="${(fontSize * haloLargura).toFixed(2)}" stroke-linejoin="round">${escapeXml(textValue)}</text>
+  <text x="${layout.texto.x}" y="${layout.texto.y.toFixed(2)}" text-anchor="middle" font-family="${escapeXml(fonteArte)}" font-weight="600" font-size="${fontSize.toFixed(2)}" fill="${corArte}">${escapeXml(textValue)}</text>` : ""}
   ${showLabel && productName ? `<text x="50" y="96" text-anchor="middle" font-family="-apple-system, system-ui, sans-serif" font-size="3.2" font-weight="600" fill="${t.ink3}">${escapeXml(productName)}</text>` : ""}
   ${!overlayUrl && !textValue && !fotoProduto ? `<text x="${areaX + areaW / 2}" y="${areaY + areaH / 2}" text-anchor="middle" font-family="-apple-system, system-ui, sans-serif" font-size="3" fill="${t.ink4}" font-style="italic">${escapeXml(`${printArea.width_cm}×${printArea.height_cm}cm`)}</text>` : ""}
 </svg>`.trim();

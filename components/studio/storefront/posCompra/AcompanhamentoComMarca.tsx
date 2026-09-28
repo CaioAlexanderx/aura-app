@@ -25,6 +25,7 @@ import { Numero, Texto, estiloNumero, useTipografia } from "../TipografiaVitrine
 import { dinheiro } from "../moeda";
 import { caminhoDeRepetir, primeiroDisponivel, type ItemDaRepeticao } from "../repeticaoDoPedido";
 import { apiDoPosCompra } from "./apiDoPosCompra";
+import { textoDoCancelamento } from "../textoDoCancelamento";
 import { Botao, MolduraDaLoja, Nota, Painel, Rotulo, Selo, Titulo, abrirFora } from "./MolduraDaLoja";
 import {
   acaoDoAcompanhamento, dataPorExtenso, estadoDaEtapa, linkDoWhatsAppDoPedido, nomeDaLoja, rotuloDaEtapa,
@@ -358,13 +359,20 @@ function Retirada({ endereco }: { endereco: string }) {
 
 function Cancelado({ dados, loja, whats, slug }: { dados: PublicTrack; loja: string; whats: string | null; slug: string | null }) {
   const tema = useTemaDaVitrine();
+  // LJ-33/CL-46 (QA final 28/09/2026): por que cancelou e o recado da loja.
+  const c = dados.cancelamento ? textoDoCancelamento(dados.cancelamento, { loja }) : null;
   return (
     <View testID="acompanhar-cancelado" style={{ flexGrow: 1, minHeight: 420, alignItems: "center", justifyContent: "center", paddingVertical: 40, paddingHorizontal: 30, gap: 14 }}>
       <Selo icone="alert_circle" tipo="erro" />
-      <Titulo tamanho={20} centro>{`Pedido #${dados.pedido} cancelado`}</Titulo>
+      <Titulo tamanho={20} centro>{c && c.tipo !== "desconhecido" ? c.titulo : `Pedido #${dados.pedido} cancelado`}</Titulo>
       <Texto style={{ textAlign: "center", color: tema.ink2, fontSize: 15, lineHeight: 23, maxWidth: 380 }}>
-        {`Esta encomenda em ${loja} foi cancelada. Fale com a loja se tiver dúvida.`}
+        {c && c.tipo !== "desconhecido" ? c.texto : `Esta encomenda em ${loja} foi cancelada. Fale com a loja se tiver dúvida.`}
       </Texto>
+      {c?.motivo ? (
+        <Texto testID="acompanhar-motivo" style={{ textAlign: "center", color: tema.ink, fontSize: 15, lineHeight: 22, maxWidth: 380 }}>
+          {`Recado da loja: "${c.motivo}"`}
+        </Texto>
+      ) : null}
       <View style={{ width: "100%", maxWidth: 360, gap: 10, marginTop: 6 }}>
         {whats ? <Botao tipo="whatsapp" icone="whatsapp" rotulo={`Falar com ${loja} no WhatsApp`} onPress={() => abrirFora(whats)} /> : null}
         {slug ? <Botao tipo="secundario" rotulo="Ir para a loja" onPress={() => router.replace(("/" + slug) as any)} /> : null}
