@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, Platform } from "react-native";
 import type { VisualTemplateSpec } from "@/services/studioVisualApi";
-import { createModelViewer, type Mug3DHandle } from "./compose3dMug";
+import { createModelViewer, type Cenario, type Mug3DHandle } from "./compose3dMug";
 import { areaParaLado, rotuloDaArea } from "./areasDaPeca";
 
 // 27/09/2026: o rótulo mudou de arquivo (areasDaPeca.ts) para ganhar
@@ -36,6 +36,14 @@ type Props = {
    * dois seletores dessincronizados na mesma tela.
    */
   side?: "front" | "back" | "middle";
+  /**
+   * 28/09/2026 — o fundo da página onde o viewer está (hex). O estúdio
+   * deriva a paleta do ciclorama dele: papel quente ou tema escuro. Sem
+   * a prop, o papel da vitrine.
+   */
+  backdrop?: string;
+  /** O cenário em volta da peça: estúdio (padrão), gradiente 2D antigo ou nenhum (transparente). */
+  cenario?: Cenario;
 };
 
 // A legenda "caneca provisória (GLB real entra sem mudar o viewer)" era
@@ -43,6 +51,7 @@ type Props = {
 export function Mug3DPreview({
   spec, values, size = 320,
   garmentColor = "#F5F2EA", artColor = "#D85A30", font, accentColor = "#1E3A8A", side,
+  backdrop, cenario,
 }: Props) {
   const canvasRef = useRef<any>(null);
   const handleRef = useRef<Mug3DHandle | null>(null);
@@ -74,7 +83,9 @@ export function Mug3DPreview({
   useEffect(() => {
     if (Platform.OS !== "web" || !canvasRef.current) return;
     let cancelled = false;
-    createModelViewer(canvasRef.current, spec, values, { garmentColor, artColor, font, areaId })
+    // Fundo e cenário só valem na criação (o viewer monta a cena uma vez);
+    // trocar de tema com o viewer aberto não acontece na vitrine.
+    createModelViewer(canvasRef.current, spec, values, { garmentColor, artColor, font, areaId, backdrop, cenario })
       .then((h) => {
         if (cancelled) { h.dispose(); return; }
         handleRef.current = h;

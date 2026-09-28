@@ -48,6 +48,23 @@
 // vertical: luz principal mais alta e mancha de contato em elipse sob a
 // barra.
 //
+// 28/09/2026 (realismo da caneca + cenário) — a caneca deixou de ser um
+// cilindro fosco com um fio de borda: louça com lábio de espessura real
+// (lathe de meio círculo), interior contínuo com filete no fundo e
+// oclusão por vértice (mais escuro no fundo), filete arredondado na base,
+// raízes onde a alça encontra o corpo, e material físico de esmalte
+// (MeshPhysicalMaterial com clearcoat: a arte fica DEBAIXO do brilho,
+// como sublimação, e o fresnel do verniz dá o reflexo suave nas bordas).
+// O material do corpo não multiplica mais a textura pela cor do corpo —
+// a textura já nasce com essa cor, e a arte clara numa caneca preta saía
+// cinza. O ambiente virou um estúdio com strip vertical (o reflexo alto e
+// fino da louça) e chão escuro. E o fundo 2D em gradiente deu lugar a um
+// CICLORAMA 3D (chão que sobe em curva e vira parede), comum à caneca e
+// à camiseta, que recebe a sombra projetada; `cenario: "nenhum"` desliga
+// tudo isso e deixa o canvas transparente (miniaturas). A aritmética do
+// cenário mora em mugScene.ts. Os chips Frente/Costas passaram a levar a
+// um ângulo absoluto (antes só trocavam a área pintada).
+//
 // 03/07/2026 — F4/F5 do escopo Visualização 2D/3D (contrato no chat)
 // ============================================================
 import type { VisualArea, VisualTemplateSpec } from "@/services/studioVisualApi";
@@ -55,10 +72,12 @@ import { loadThree, loadGLTFLoader, loadDRACOLoader, DRACO_DECODER_PATH } from "
 import {
   readMugGeometry, heartPath, readMugMaterials, applyCustomerColor,
   readMugAccessories, latheProfile, squarePath, type MugMaterial,
+  perfilDoLabio, perfilDoInterior, curvaDaAlca, juncoesDaAlca,
 } from "./mugGeometry";
 import {
   backdropPalette, cameraDistance, contactShadowRadius, floorLevel,
   hexToRgba, CAMERA_FOV_GRAUS,
+  cenarioPalette, perfilDoCiclorama, brilhoDoCiclorama, CICLORAMA, giroMaisCurto,
 } from "./mugScene";
 import {
   readGlbModel, escalaDoModelo, cameraDistanceParaCaixa, floorLevelParaCaixa,
@@ -76,9 +95,33 @@ export type Mug3DOptions = {
   artColor?: string;      // cor do texto/emblema
   font?: string;
   areaId?: string;        // 'panel' | 'wrap' | 'front' | 'back'
-  /** Cor base do fundo (vira gradiente de estúdio). */
+  /**
+   * Cor base do fundo: o fundo da página onde o mockup está (o papel
+   * quente da vitrine, ou o escuro). O cenário deriva a paleta dela.
+   */
   backdrop?: string;
+  /**
+   * O que há em volta da peça (28/09/2026):
+   *   "estudio"   — ciclorama 3D com chão, curva e parede, que recebe a
+   *                 sombra da peça (padrão);
+   *   "gradiente" — o fundo 2D de antes (gradiente de papel + halo);
+   *   "nenhum"    — canvas transparente, só a peça e a sombra de contato
+   *                 (miniaturas, lugares onde o cenário não cabe).
+   * Só vale na criação do viewer; `update` e `trocarPeca` ignoram.
+   */
+  cenario?: Cenario;
 };
+
+export type Cenario = "estudio" | "gradiente" | "nenhum";
+
+/**
+ * O MIME do vídeo da aprovação. É um identificador de protocolo, não
+ * texto para gente: o PR de acentuação (#822) pôs acento no "video" do
+ * MIME, `MediaRecorder.isTypeSupported` passou a recusar e o vídeo saía
+ * sem o bitrate configurado — e um blob sem tipo levava 400 no upload.
+ * Guardado por __tests__/studioMimeDoVideo.
+ */
+export const MIME_DO_VIDEO = "video/webm";
 
 export type Mug3DHandle = {
   update: (values: Record<string, any>, opts?: Mug3DOptions) => Promise<void>;
@@ -96,13 +139,14 @@ export type Mug3DHandle = {
   dispose: () => void;
 };
 
-const DEFAULTS: Required<Pick<Mug3DOptions, "garmentColor" | "artColor" | "font" | "areaId" | "backdrop">> = {
+const DEFAULTS: Required<Pick<Mug3DOptions, "garmentColor" | "artColor" | "font" | "areaId" | "backdrop" | "cenario">> = {
   garmentColor: "#F5F2EA",
   artColor: "#D85A30",
   font: "Georgia, serif",
   areaId: "panel",
   // O papel da vitrine: o mockup senta na página em vez de parecer colado.
   backdrop: "#FBF8F3",
+  cenario: "estudio",
 };
 
 type Opcoes = typeof DEFAULTS & Mug3DOptions;
@@ -468,7 +512,9 @@ function paintContactShadow(THREE: any) {
  */
 function buildEnvironment(THREE: any, renderer: any) {
   const sala = new THREE.Scene();
-  const parede = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.32, 0.30, 0.28), side: THREE.BackSide });
+  // Paredes cinza quente; o chão mais escuro que o teto, para a metade de
+  // baixo da louça refletir algo mais fundo (é o que "assenta" a peça).
+  const parede = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.30, 0.285, 0.27), side: THREE.BackSide });
   sala.add(new THREE.Mesh(new THREE.BoxGeometry(12, 12, 12), parede));
   const painel = (w: number, h: number, cor: [number, number, number], pos: [number, number, number], rot: [number, number, number]) => {
     const m = new THREE.Mesh(
@@ -479,18 +525,33 @@ function buildEnvironment(THREE: any, renderer: any) {
     m.rotation.set(rot[0], rot[1], rot[2]);
     sala.add(m);
   };
-  painel(7, 4, [2.2, 2.1, 1.9], [0, 5.9, 0], [Math.PI / 2, 0, 0]);          // softbox no teto
-  painel(3, 6, [1.6, 1.5, 1.35], [-5.9, 1.5, 2], [0, Math.PI / 2, 0]);      // painel principal (esquerda)
-  painel(3, 6, [0.8, 0.85, 1.0], [5.9, 1, 1], [0, -Math.PI / 2, 0]);        // preenchimento frio (direita)
-  painel(5, 2, [1.1, 1.1, 1.1], [0, 3.5, -5.9], [0, 0, 0]);                  // contraluz
+  painel(12, 12, [0.12, 0.115, 0.11], [0, -5.95, 0], [-Math.PI / 2, 0, 0]);  // chão escuro
+  painel(7, 4, [2.0, 1.92, 1.75], [0, 5.9, 0], [Math.PI / 2, 0, 0]);         // softbox no teto
+  // Strip vertical alto e estreito, à esquerda e um pouco à frente: é o
+  // reflexo alto e fino que se vê em toda foto de caneca esmaltada.
+  painel(1.2, 7, [3.2, 3.05, 2.8], [-5.9, 1.2, 2.6], [0, Math.PI / 2, 0]);
+  painel(3, 6, [1.3, 1.25, 1.15], [-5.9, 1.5, -0.5], [0, Math.PI / 2, 0]);  // painel principal (esquerda)
+  painel(2.4, 6, [0.75, 0.8, 0.95], [5.9, 1, 1.5], [0, -Math.PI / 2, 0]);   // preenchimento frio (direita)
+  painel(5, 2, [1.2, 1.2, 1.2], [0, 3.5, -5.9], [0, 0, 0]);                  // contraluz
   const pmrem = new THREE.PMREMGenerator(renderer);
   const env = pmrem.fromScene(sala, 0.04);
   pmrem.dispose();
   return env.texture;
 }
 
+/**
+ * Material de uma peça da caneca. Louça esmaltada é um material físico
+ * com verniz (clearcoat): o esmalte brilha por cima da arte e do
+ * pigmento, com fresnel nas bordas. O verniz é proporcional ao brilho
+ * declarado no template — a Vintage fosca (roughness 0.95) não ganha
+ * verniz nenhum; a louça de sempre (0.28) ganha o esmalte inteiro.
+ * Metal (a Imperial) não leva verniz: dourado cromado já é o reflexo.
+ */
 function makeMaterial(THREE: any, m: MugMaterial, extra: Record<string, any> = {}) {
-  return new THREE.MeshStandardMaterial({
+  const Material = THREE.MeshPhysicalMaterial || THREE.MeshStandardMaterial;
+  const metal = m.metalness > 0.5;
+  const verniz = metal ? 0 : Math.max(0, Math.min(1, (0.85 - m.roughness) / 0.35));
+  const mat = new Material({
     color: new THREE.Color(m.color).convertSRGBToLinear(),
     roughness: m.roughness,
     metalness: m.metalness,
@@ -499,9 +560,89 @@ function makeMaterial(THREE: any, m: MugMaterial, extra: Record<string, any> = {
     // Sem escrever profundidade nas transparentes: parede interna e
     // externa do vidro ficam no mesmo lugar e uma apagava a outra.
     depthWrite: m.opacity >= 1,
-    envMapIntensity: m.metalness > 0.5 ? 1.1 : 0.7,
+    envMapIntensity: metal ? 1.1 : 0.85,
     ...extra,
   });
+  if ("clearcoat" in mat) {
+    mat.clearcoat = verniz;
+    mat.clearcoatRoughness = 0.06 + m.roughness * 0.4;
+  }
+  return mat;
+}
+
+/**
+ * Raiz da alça: onde o tubo entra no corpo, a louça alarga — uma
+ * revolução ao longo da tangente da alça, larga na base (enterrada na
+ * parede) e afinando com derivada zero até o diâmetro do tubo, para
+ * encontrar o tubo sem degrau. De frente e de três quartos lê como a
+ * alça que nasce do corpo, em vez de um tubo atravessando um cilindro.
+ * (Uma esfera achatada ali parecia um rebite; um cone reto, um soquete.)
+ */
+function raizesDaAlca(THREE: any, G: ReturnType<typeof readMugGeometry>, material: any): any[] {
+  const meia = G.body.height / 2;
+  const paredeEm = (y: number) => {
+    const t = Math.max(0, Math.min(1, (y + meia) / G.body.height));
+    return G.body.bottomRadius + (G.body.topRadius - G.body.bottomRadius) * t;
+  };
+  const juncoes = juncoesDaAlca(curvaDaAlca(G), paredeEm);
+  const tubo = G.handle.tube;
+  const altura = tubo * 2.6;
+  const perfil: any[] = [];
+  const passos = 12;
+  for (let i = 0; i <= passos; i++) {
+    const s = i / passos;
+    perfil.push(new THREE.Vector2(tubo * (1.0 + 0.65 * Math.pow(1 - s, 2.2)) + 0.001, altura * s));
+  }
+  return juncoes.map((j) => {
+    const geo = new THREE.LatheGeometry(perfil, 32);
+    const m = new THREE.Mesh(geo, material);
+    // a base fica um pouco dentro da parede; a raiz sobe pela tangente
+    m.position.set(j.x - j.tx * altura * 0.3, j.y - j.ty * altura * 0.3, 0);
+    m.rotation.z = Math.atan2(j.ty, j.tx) - Math.PI / 2;
+    m.castShadow = false;
+    return m;
+  });
+}
+
+/**
+ * O ciclorama do estúdio: um plano dobrado pelo perfil de mugScene.ts
+ * (chão → curva → parede), com a vinheta e o halo assados em cor por
+ * vértice. Sem luz e sem tone mapping: a cor é a da paleta, exata — o
+ * chão junto da peça é o papel da página. A sombra cai num receptor à
+ * parte, com a mesma forma, um fio acima. É o mesmo para a caneca e a
+ * camiseta — só o `chaoY` da peça o posiciona (ajustarCenaAPeca).
+ */
+function montarCiclorama(THREE: any, backdrop: string) {
+  const p = cenarioPalette(backdrop);
+  const C = CICLORAMA;
+  const colunas = 24, linhas = 96;
+  const geo = new THREE.PlaneGeometry(C.meiaLargura * 2, 1, colunas, linhas);
+  const pos = geo.attributes.position;
+  const cores = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    // v do plano vai de +0.5 (topo) a -0.5: t = 0 na frente do chão, 1 no topo da parede
+    const t = 0.5 - pos.getY(i);
+    const { y, z } = perfilDoCiclorama(t);
+    pos.setXYZ(i, x, y, z);
+    const b = brilhoDoCiclorama(x, y, z, p);
+    cores[i * 3] = b; cores[i * 3 + 1] = b; cores[i * 3 + 2] = b;
+  }
+  geo.setAttribute("color", new THREE.BufferAttribute(cores, 3));
+  geo.computeVertexNormals();
+  // DoubleSide: o plano dobrado pelo perfil fica com a face original
+  // virada para baixo/para trás — sem isto o ciclorama inteiro era
+  // descartado e só o `background` aparecia.
+  const mat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(p.base).convertSRGBToLinear(),
+    vertexColors: true,
+    toneMapped: false,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  const sombra = new THREE.Mesh(geo, new THREE.ShadowMaterial({ opacity: p.sombra, side: THREE.DoubleSide }));
+  sombra.receiveShadow = true;
+  return { mesh, sombra, fundo: new THREE.Color(p.fundo).convertSRGBToLinear(), escuro: p.escuro };
 }
 
 // ── A peça em cena ───────────────────────────────────────────
@@ -526,7 +667,10 @@ function montarCaneca(THREE: any, spec: VisualTemplateSpec, renderer: any, texCv
   // S3 — a forma vem do `spec`, com os numeros de antes como default.
   // Template sem bloco de geometria renderiza exatamente como renderizava
   // (ver mugGeometry.ts).
-  const G = readMugGeometry(spec);
+  const Gspec = readMugGeometry(spec);
+  // A base ganha um filete mínimo: uma quina viva no apoio não existe em
+  // louça nenhuma. Template que declara um arredondamento maior manda.
+  const G = { ...Gspec, body: { ...Gspec.body, bottomRound: Math.max(Gspec.body.bottomRound, 0.04) } };
   const acess = readMugAccessories(spec);
   const meiaAltura = G.body.height / 2;
 
@@ -537,13 +681,19 @@ function montarCaneca(THREE: any, spec: VisualTemplateSpec, renderer: any, texCv
   const texture = new THREE.CanvasTexture(texCv);
   texture.encoding = THREE.sRGBEncoding;
   texture.anisotropy = renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1;
-  // A opacidade do corpo mora no alfa da textura (ver paintTexture).
-  const bodyMat = makeMaterial(THREE, M.body, { map: texture, opacity: 1 });
+  // A opacidade do corpo mora no alfa da textura (ver paintTexture). A
+  // COR também: a textura nasce pintada com a cor do corpo, então o
+  // material fica branco — com a cor do corpo aqui, o three multiplicava
+  // as duas e a arte clara de uma caneca preta saía cinza-escuro (e o
+  // dourado da Imperial, mais escuro que o hex do template).
+  const bodyMat = makeMaterial(THREE, { ...M.body, color: "#FFFFFF" }, { map: texture, opacity: 1 });
   const handleMat = makeMaterial(THREE, M.handle);
   const rimMat = makeMaterial(THREE, M.rim);
   const bottomMat = makeMaterial(THREE, M.bottom);
-  const innerMat = makeMaterial(THREE, M.interior, { side: THREE.BackSide });
-  const innerBottomMat = makeMaterial(THREE, M.interior);
+  // Interior com oclusão por vértice: mais escuro quanto mais fundo. Sem
+  // isso o mapa de ambiente ilumina o fundo da caneca como se fosse a
+  // borda, e o interior fica chapado.
+  const innerMat = makeMaterial(THREE, M.interior, { vertexColors: true });
   // Vidro nao projeta sombra cheia; a mancha de contato segura a peca.
   const opaco = (m: MugMaterial) => m.opacity >= 0.5;
 
@@ -553,33 +703,43 @@ function montarCaneca(THREE: any, spec: VisualTemplateSpec, renderer: any, texCv
     bodyMat
   );
   corpo.castShadow = opaco(M.body);
+  corpo.receiveShadow = true;
   group.add(corpo);
   const raioBase = G.body.bottomRadius - G.body.bottomRound;
   const bottom = new THREE.Mesh(new THREE.CircleGeometry(raioBase, 64), bottomMat);
   bottom.rotation.x = Math.PI / 2; bottom.position.y = -meiaAltura; group.add(bottom);
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(G.rim.radius, G.rim.tube, 12, 96), rimMat);
-  rim.rotation.x = Math.PI / 2; rim.position.y = meiaAltura; rim.castShadow = opaco(M.rim); group.add(rim);
-  // A parede interna segue o mesmo perfil do corpo, um pouco para dentro,
-  // senao a base arredondada deixaria o interior atravessar o exterior.
-  const innerProfile = latheProfile({
-    topRadius: G.inner.topRadius, bottomRadius: G.inner.bottomRadius,
-    height: G.inner.height, bottomRound: Math.max(0, G.body.bottomRound - 0.04),
-  });
-  const inner = new THREE.Mesh(
-    new THREE.LatheGeometry(innerProfile.map((p) => new THREE.Vector2(p.x, p.y)), 96),
-    innerMat
+  // Lábio: meio círculo de fora para dentro, com a espessura da louça
+  // (mugGeometry.perfilDoLabio). Substitui o toro fino de antes.
+  const rim = new THREE.Mesh(
+    new THREE.LatheGeometry(perfilDoLabio(G).map((p) => new THREE.Vector2(p.x, p.y)), 96),
+    rimMat
   );
-  inner.position.y = meiaAltura - 0.03 - G.inner.height / 2;
+  rim.castShadow = opaco(M.rim);
+  group.add(rim);
+  // Interior: parede, filete e fundo num perfil só, do lábio ao eixo,
+  // ordenado de cima para baixo (normais para dentro).
+  const perfilInterior = perfilDoInterior(G);
+  const innerGeo = new THREE.LatheGeometry(perfilInterior.map((p) => new THREE.Vector2(p.x, p.y)), 96);
+  {
+    // O LatheGeometry gera (segments + 1) cópias do perfil, ponto a ponto.
+    const n = innerGeo.attributes.position.count;
+    const cores = new Float32Array(n * 3);
+    const porPonto = perfilInterior.length;
+    for (let i = 0; i < n; i++) {
+      const prof = perfilInterior[i % porPonto].profundidade;
+      const b = 1 - 0.62 * Math.pow(prof, 0.85);
+      cores[i * 3] = b; cores[i * 3 + 1] = b; cores[i * 3 + 2] = b;
+    }
+    innerGeo.setAttribute("color", new THREE.BufferAttribute(cores, 3));
+  }
+  const inner = new THREE.Mesh(innerGeo, innerMat);
+  inner.receiveShadow = true;
   group.add(inner);
-  const innerBottom = new THREE.Mesh(new THREE.CircleGeometry(G.inner.bottomRadius, 64), innerBottomMat);
-  innerBottom.rotation.x = -Math.PI / 2;
-  innerBottom.position.y = -meiaAltura + (G.body.height - G.inner.height) + 0.09;
-  group.add(innerBottom);
   // Vidro: parede interna e externa tem o mesmo centro, e o three ordena
   // as transparentes por distancia do centro — a interna podia ser
   // desenhada POR CIMA da externa e apagar a arte. A externa vai por
   // ultimo; e a mais perto da camera de qualquer angulo.
-  inner.renderOrder = 1; innerBottom.renderOrder = 1;
+  inner.renderOrder = 1;
   corpo.renderOrder = 2; rim.renderOrder = 3;
 
   // Alca: anel (padrao), coracao ou nenhuma. A forma e o que se vende na
@@ -647,6 +807,12 @@ function montarCaneca(THREE: any, spec: VisualTemplateSpec, renderer: any, texCv
     handle.rotation.z = (G.handle.tilt * Math.PI) / 180;
     handle.castShadow = opaco(M.handle);
     group.add(handle);
+    // Onde a alça entra no corpo, a louça alarga: as raízes da alça. A
+    // alça preenchida (orelha maciça) já encosta em bloco e não precisa;
+    // no vidro, a raiz translúcida sobre o tubo translúcido só suja.
+    if (!G.handle.filled && opaco(M.handle)) {
+      for (const raiz of raizesDaAlca(THREE, G, handleMat)) group.add(raiz);
+    }
   }
   // S11 — acessorios do modelo. A colher da CANECA COM COLHER e o pires
   // da xicara sao parte do que se compra: sem eles o mockup mostra outro
@@ -698,7 +864,6 @@ function montarCaneca(THREE: any, spec: VisualTemplateSpec, renderer: any, texCv
       rimMat.color.set(M.rim.color).convertSRGBToLinear();
       bottomMat.color.set(M.bottom.color).convertSRGBToLinear();
       innerMat.color.set(M.interior.color).convertSRGBToLinear();
-      innerBottomMat.color.set(M.interior.color).convertSRGBToLinear();
       // A PRIMEIRA pintura tambem precisa do fundo e da faixa certos: sem isto
       // o mockup nascia com a cor escolhida no corpo e so acertava no primeiro
       // update.
@@ -888,9 +1053,14 @@ export async function createModelViewer(
   let texCv = canvasDaTextura(spec, glb);
 
   const scene = new THREE.Scene();
-  scene.background = paintBackdrop(THREE, o.backdrop);
+  // O cenário é da CENA, não da peça: fica fixo, e `trocarPeca` só o
+  // reposiciona pelo chão da peça nova (ajustarCenaAPeca).
+  const cenario: Cenario = o.cenario === "gradiente" || o.cenario === "nenhum" ? o.cenario : "estudio";
+  if (cenario === "gradiente") scene.background = paintBackdrop(THREE, o.backdrop);
   const camera = new THREE.PerspectiveCamera(glb ? glb.camera.fov : CAMERA_FOV_GRAUS, 1, 0.1, 100);
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+  // alpha: sem cenário o canvas é transparente e a peça senta no fundo da
+  // página — é o que as miniaturas pedem.
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true, alpha: true });
   renderer.outputEncoding = THREE.sRGBEncoding;
   // Curva de filme: sem ela o branco da louca estourava e o corpo virava
   // uma mancha chapada, sem o degrade de luz que da volume na foto.
@@ -898,6 +1068,7 @@ export async function createModelViewer(
   renderer.toneMappingExposure = 1.2;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  if (cenario === "nenhum") renderer.setClearColor(0x000000, 0);
   scene.environment = buildEnvironment(THREE, renderer);
 
   // Tres pontos: principal quente (projeta a sombra), preenchimento frio
@@ -923,12 +1094,24 @@ export async function createModelViewer(
   let texture = peca.texture;
   scene.add(group);
 
-  // Chao: invisivel, so recebe a sombra projetada; e a mancha de contato
-  // por cima, que segura a peca no chao mesmo onde a luz nao alcanca.
-  const chao = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ opacity: 0.2 }));
-  chao.rotation.x = -Math.PI / 2;
-  chao.receiveShadow = true;
-  scene.add(chao);
+  // Chao. No estúdio é o ciclorama (chão + curva + parede) com o receptor
+  // da sombra projetada; nos outros cenários, um plano invisível que só
+  // recebe a sombra. Por cima, a mancha de contato, que segura a peca no
+  // chao mesmo onde a luz nao alcanca.
+  const chao: any[] = [];
+  if (cenario === "estudio") {
+    const ciclo = montarCiclorama(THREE, o.backdrop);
+    scene.add(ciclo.mesh);
+    scene.add(ciclo.sombra);
+    scene.background = ciclo.fundo;
+    chao.push(ciclo.mesh, ciclo.sombra);
+  } else {
+    const plano = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ opacity: 0.2 }));
+    plano.rotation.x = -Math.PI / 2;
+    plano.receiveShadow = true;
+    scene.add(plano);
+    chao.push(plano);
+  }
   // O plano deitado (rotação em x) tem a altura no eixo z do mundo: rz é a profundidade da mancha.
   // Geometria unitária escalada pela mancha: trocar de peça não refaz a malha.
   const contato = new THREE.Mesh(
@@ -953,7 +1136,9 @@ export async function createModelViewer(
       camera.position.set(0, dist * 0.2, dist);
       camera.lookAt(0, -0.05, 0);
     }
-    chao.position.y = peca.chaoY - 0.001;
+    // O ciclorama (ou o plano) desce até o chão da peça; o receptor da
+    // sombra um fio acima do papel, a mancha de contato acima dos dois.
+    chao.forEach((m, i) => { m.position.y = peca.chaoY - 0.003 + i * 0.002; });
     contato.scale.set(peca.sombra.rx, peca.sombra.rz, 1);
     contato.position.y = peca.chaoY + 0.002;
   }
@@ -988,6 +1173,7 @@ export async function createModelViewer(
 
   const onDown = (e: PointerEvent) => {
     dragging = true; userTouched = true; lastX = e.clientX;
+    giroAlvo = null; // a mão manda: a animação para onde estiver
     try { canvas.setPointerCapture(e.pointerId); } catch (_e) {}
   };
   const onMove = (e: PointerEvent) => {
@@ -1001,9 +1187,31 @@ export async function createModelViewer(
   canvas.addEventListener("pointermove", onMove);
   canvas.addEventListener("pointerup", onUp);
 
+  // 28/09/2026 — os chips Frente/Costas levam a um ângulo ABSOLUTO. Antes
+  // só trocavam a área pintada: depois de a cliente girar a peça à mão,
+  // "Costas" pintava as costas mas a câmera continuava olhando a frente
+  // (QA de 28/09). O giro de repouso da peça é o de sempre (`group.rotation.y`
+  // na montagem; `trocarPeca` o lê de novo da peça nova); as costas ficam
+  // a meia-volta dele. A troca é animada e desliga o giro automático,
+  // como um toque.
+  let giroDeRepouso = group.rotation.y;
+  let giroAlvo: number | null = null;
+  let areaAtual = o.areaId;
+  function irParaArea(areaId: string) {
+    userTouched = true;
+    // pelo caminho mais curto a partir de onde a peça está
+    giroAlvo = giroMaisCurto(group.rotation.y, giroDeRepouso + (areaId === "back" ? Math.PI : 0));
+  }
+
   function loop() {
     if (disposed) return;
     if (!userTouched) { group.rotation.y += 0.004; render(); }
+    else if (giroAlvo !== null && !dragging) {
+      const resto = giroAlvo - group.rotation.y;
+      if (Math.abs(resto) < 0.002) { group.rotation.y = giroAlvo; giroAlvo = null; }
+      else group.rotation.y += resto * 0.16;
+      render();
+    }
     requestAnimationFrame(loop);
   }
 
@@ -1022,6 +1230,12 @@ export async function createModelViewer(
     const tela = texCv;
     const tex = texture;
     o = pecaDaPintura.aplicarOpcoes({ ...o, ...(newOpts || {}) });
+    // Só a MUDANÇA de área gira a peça; a primeira pintura não mexe no
+    // giro nem desliga a rotação automática.
+    if (o.areaId !== areaAtual) {
+      areaAtual = o.areaId;
+      irParaArea(areaAtual);
+    }
     const minha = ++pinturaAtual;
     const rascunho = document.createElement("canvas");
     rascunho.width = tela.width;
@@ -1056,8 +1270,13 @@ export async function createModelViewer(
     scene.add(group);
     ajustarCenaAPeca();
     resize();
-    // Peça nova gira sozinha de novo até o primeiro toque.
+    // Peça nova gira sozinha de novo até o primeiro toque; o giro de
+    // repouso e a área atual são os dela (a caneca nasce a meia-volta, a
+    // camiseta com o rotation_y da spec).
     userTouched = false;
+    giroAlvo = null;
+    giroDeRepouso = group.rotation.y;
+    areaAtual = { ...o, ...(newOpts || {}) }.areaId;
     await update(newValues, newOpts);
   }
 
@@ -1085,8 +1304,8 @@ export async function createModelViewer(
       try {
         const stream = anyCanvas.captureStream(30);
         const MR = (window as any).MediaRecorder;
-        let mime = "video/webm;codecs=vp9";
-        if (MR.isTypeSupported && !MR.isTypeSupported(mime)) mime = "vídeo/webm";
+        let mime = MIME_DO_VIDEO + ";codecs=vp9";
+        if (MR.isTypeSupported && !MR.isTypeSupported(mime)) mime = MIME_DO_VIDEO;
         try {
           rec = new MR(stream, { mimeType: mime, videoBitsPerSecond: 6000000 });
         } catch (_e) {
@@ -1097,7 +1316,7 @@ export async function createModelViewer(
       }
       const chunks: BlobPart[] = [];
       rec.ondataavailable = (e: any) => { if (e.data && e.data.size) chunks.push(e.data); };
-      rec.onstop = () => resolve(new Blob(chunks, { type: rec.mimeType || "vídeo/webm" }));
+      rec.onstop = () => resolve(new Blob(chunks, { type: rec.mimeType || MIME_DO_VIDEO }));
       rec.onerror = () => resolve(null);
       rec.start();
 

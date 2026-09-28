@@ -431,3 +431,102 @@ describe("acessórios", () => {
     expect(readMugAccessories({})).toEqual({ spoon: false, saucer: false });
   });
 });
+
+// ── 28/09/2026 — realismo: lábio, interior e raízes da alça ─────────
+import {
+  larguraDoLabio, perfilDoLabio, perfilDoInterior, curvaDaAlca, juncoesDaAlca,
+} from "@/components/studio/visualEngine/mugGeometry";
+
+describe("lábio — a espessura da louça vista de cima", () => {
+  it("a caneca padrão (parede de 0.04) ganha o lábio mínimo crível", () => {
+    expect(larguraDoLabio(MUG_GEOMETRY_PADRAO)).toBeCloseTo(0.06, 6);
+  });
+
+  it("parede declarada mais grossa, ou borda de tubo maior, mandam", () => {
+    const grossa = readMugGeometry({ model: { geometry: { inner: { topRadius: 0.85 } } } });
+    expect(larguraDoLabio(grossa)).toBeCloseTo(0.15, 6);
+    const chopp = readMugGeometry({ model: { geometry: { rim: { tube: 0.06 } } } });
+    expect(larguraDoLabio(chopp)).toBeCloseTo(0.12, 6);
+  });
+
+  it("o perfil vai da face externa, por cima, até a face interna, no topo do corpo", () => {
+    const g = MUG_GEOMETRY_PADRAO;
+    const p = perfilDoLabio(g);
+    const topo = g.body.height / 2;
+    expect(p[0]).toEqual({ x: g.body.topRadius, y: topo });
+    expect(p[p.length - 1].x).toBeCloseTo(g.body.topRadius - larguraDoLabio(g), 6);
+    expect(p[p.length - 1].y).toBeCloseTo(topo, 6);
+    const maisAlto = Math.max(...p.map((q) => q.y));
+    expect(maisAlto).toBeCloseTo(topo + larguraDoLabio(g) / 2, 6);
+    for (const q of p) expect(q.y).toBeGreaterThanOrEqual(topo - 1e-9);
+  });
+});
+
+describe("interior — do lábio ao centro do fundo, de cima para baixo", () => {
+  it("começa onde o lábio termina, desce sem subir de volta e termina no eixo", () => {
+    const g = MUG_GEOMETRY_PADRAO;
+    const p = perfilDoInterior(g);
+    expect(p[0].x).toBeCloseTo(g.body.topRadius - larguraDoLabio(g), 6);
+    expect(p[0].y).toBeCloseTo(g.body.height / 2, 6);
+    expect(p[0].profundidade).toBe(0);
+    for (let i = 1; i < p.length; i++) {
+      expect(p[i].y).toBeLessThanOrEqual(p[i - 1].y + 1e-9);
+      expect(p[i].profundidade).toBeGreaterThanOrEqual(p[i - 1].profundidade - 1e-9);
+    }
+    const fim = p[p.length - 1];
+    expect(fim.x).toBe(0);
+    expect(fim.y).toBeCloseTo(g.body.height / 2 - g.inner.height, 6);
+    expect(fim.profundidade).toBe(1);
+  });
+
+  it("o interior nunca atravessa a parede externa", () => {
+    for (const spec of [
+      {},
+      { model: { geometry: { body: { topRadius: 1.06, bottomRadius: 1, bottomRound: 0.22 } } } },
+      { model: { geometry: { body: { height: 1.6, topRadius: 1, bottomRadius: 0.7 } } } },
+    ]) {
+      const g = readMugGeometry(spec);
+      for (const q of perfilDoInterior(g)) {
+        const t = (q.y + g.body.height / 2) / g.body.height;
+        const externo = g.body.bottomRadius + (g.body.topRadius - g.body.bottomRadius) * Math.max(0, Math.min(1, t));
+        expect(q.x).toBeLessThan(externo);
+      }
+    }
+  });
+});
+
+describe("raízes da alça — onde a curva cruza a parede", () => {
+  const parede = (g: ReturnType<typeof readMugGeometry>) => (y: number) => {
+    const t = Math.max(0, Math.min(1, (y + g.body.height / 2) / g.body.height));
+    return g.body.bottomRadius + (g.body.topRadius - g.body.bottomRadius) * t;
+  };
+
+  it("o anel padrão cruza a parede duas vezes, uma acima e uma abaixo do centro, com a tangente para fora", () => {
+    const g = MUG_GEOMETRY_PADRAO;
+    const j = juncoesDaAlca(curvaDaAlca(g), parede(g));
+    expect(j.length).toBe(2);
+    const ys = j.map((p) => p.y).sort((a, b) => a - b);
+    expect(ys[0]).toBeLessThan(0);
+    expect(ys[1]).toBeGreaterThan(0);
+    for (const p of j) {
+      expect(p.x).toBeCloseTo(parede(g)(p.y), 6);
+      expect(p.tx).toBeGreaterThan(0);
+      expect(Math.hypot(p.tx, p.ty)).toBeCloseTo(1, 6);
+    }
+  });
+
+  it("coração inclinado e alça em D também cruzam duas vezes; sem alça, nada", () => {
+    const coracao = readMugGeometry({ model: { geometry: { handle: { shape: "heart", radius: 0.68, tube: 0.1, offsetX: 1.22, tilt: -50 } } } });
+    expect(juncoesDaAlca(curvaDaAlca(coracao), parede(coracao)).length).toBe(2);
+    const chopp = readMugGeometry({ model: { geometry: { body: { height: 3.3, topRadius: 1.02, bottomRadius: 1.02 }, handle: { shape: "square", radius: 0.95, tube: 0.16, offsetX: 1.35, offsetY: -0.22 } } } });
+    expect(juncoesDaAlca(curvaDaAlca(chopp), parede(chopp)).length).toBe(2);
+    const sem = readMugGeometry({ model: { geometry: { handle: { shape: "none" } } } });
+    expect(curvaDaAlca(sem)).toEqual([]);
+    expect(juncoesDaAlca([], parede(sem))).toEqual([]);
+  });
+
+  it("alça solta (longe da parede) não tem raiz", () => {
+    const solta = readMugGeometry({ model: { geometry: { handle: { offsetX: 3 } } } });
+    expect(juncoesDaAlca(curvaDaAlca(solta), parede(solta))).toEqual([]);
+  });
+});
