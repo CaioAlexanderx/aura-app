@@ -142,7 +142,10 @@ export default function StudioVendasLojaDigital() {
   // fixo virava uma faixa branca no meio da tela escura).
   const paleta = useMemo(() => paletaDoStudio(t), [t]);
   const accent: AccentTokens = useMemo(() => (isDark
-    ? { primary: t.primary, primaryStrong: t.accent, primarySoft: t.primarySoft, border: t.ink5 }
+    // AA fix (QA rodada 2, 28/09/2026): t.accent puro em texto pequeno
+    // não tem contraste garantido sobre paperCard escuro — t.accentInk é
+    // a mesma família já escolhida pra isso (6,1:1).
+    ? { primary: t.primary, primaryStrong: t.accentInk, primarySoft: t.primarySoft, border: t.ink5 }
     : studioAccent), [isDark, t]);
   const router = useRouter();
   // QA fix (achado #12): as 8 tabs só existiam em estado local — F5 sempre
@@ -531,7 +534,9 @@ const buildStyles = (t: StudioPalette, isDark: boolean, celular: boolean) => Sty
     backgroundColor: t.paperCard,
     borderWidth: 1,
     borderColor: t.ink5,
-    minHeight: celular ? 44 : undefined,
+    // Alvo de 44 px sempre (achado do QA, 28/09/2026: 36 px no Chrome
+    // desktop) — não só no celular, que é quando `celular` fica true.
+    minHeight: 44,
   },
   tabBtnActive: {
     // Navy nos dois temas, texto branco (12:1). No escuro o navy encosta

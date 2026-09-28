@@ -32,6 +32,25 @@ export interface PagamentoDoPedido {
   total_amount?: number | string | null;
   order_number?: string | number | null;
   customer_name?: string | null;
+  // 28/09/2026 (LJ-32/LJ-34 do QA pós-deploy): CPF/CNPJ da nota, entrega/
+  // retirada, frete, desconto do Pix e o motivo do Pix vencido não
+  // cancelado — services/pagamentoDoPedidoStudio.js (aura-backend),
+  // camposDeEntregaENota. Tudo opcional: backend antigo, ou a consulta da
+  // loja falhando no servidor, não derruba o detalhe — a linha só some.
+  customer_cpf_cnpj?: string | null;
+  request_nfce?: boolean;
+  delivery_type?: "pickup" | "delivery" | "courier" | null;
+  delivery_address?: string | null;
+  address_neighborhood?: string | null;
+  address_city?: string | null;
+  /** Endereço da LOJA (retirada), não da cliente. */
+  retirada_endereco?: string | null;
+  courier_name?: string | null;
+  courier_plate?: string | null;
+  courier_a_informar?: boolean;
+  shipping_fee?: number | null;
+  pix_discount?: number | null;
+  pix_cancelamento?: { vencido: boolean; motivo: string | null } | null;
 }
 
 export type ChaveDaSituacao =
@@ -231,4 +250,97 @@ export function seloDoPagamentoNaFila(item: {
       : { rotulo: item.payment_method === "pix" ? "Aguardando Pix" : "Aguardando pagamento", tom: "neutro" };
   }
   return null;
+}
+
+// ── Pagamento e entrega (LJ-32, 28/09/2026) ──────────────────────────────
+// O bloco novo do detalhe: CPF/CNPJ da nota, entrega/retirada, frete e o
+// desconto do Pix. Tudo opcional — sem o campo (backend antigo, ou a
+// consulta da loja tendo falhado no servidor), a linha correspondente
+// simplesmente não entra.
+
+/** "529.982.247-25" (CPF, 11 dígitos) ou "12.345.678/0001-90" (CNPJ, 14). Sem máscara reconhecível, devolve como veio. */
+export function cpfCnpjFormatado(v?: string | null): string | null {
+  const s = (v || "").replace(/\D/g, "");
+  if (s.length === 11) return s.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+  if (s.length === 14) return s.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+  return texto(v);
+}
+
+function texto(v?: string | null): string | null {
+  const s = v == null ? "" : String(v).trim();
+  return s || null;
+}
+
+/**
+ * "Retirada na loja · <endereço>" / "Receber em casa · <endereço>" /
+ * "Retirada por app · <nome> · <placa>" / "Retirada por app · a cliente
+ * informa quem busca". `null` quando o pedido não tem `delivery_type`
+ * (backend antigo, ou pedido de outro canal).
+ */
+export function linhaDeEntrega(p: PagamentoDoPedido): string | null {
+  const tipo = p.delivery_type;
+  if (!tipo) return null;
+
+  if (tipo === "courier") {
+    if (p.courier_a_informar || !texto(p.courier_name)) {
+      return "Retirada por app · a cliente informa quem busca";
+    }
+    const nome = texto(p.courier_name);
+    const placa = texto(p.courier_plate);
+    return placa ? `Retirada por app · ${nome} · ${placa}` : `Retirada por app · ${nome}`;
+  }
+
+  if (tipo === "delivery") {
+    const endereco = texto(p.delivery_address)
+      || [texto(p.address_neighborhood), texto(p.address_city)].filter(Boolean).join(", ")
+      || null;
+    return endereco ? `Receber em casa · ${endereco}` : "Receber em casa";
+  }
+
+  // pickup
+  const endereco = texto(p.retirada_endereco);
+  return endereco ? `Retirada na loja · ${endereco}` : "Retirada na loja";
+}
+
+export interface LinhaPagamentoEEntrega { rotulo: string; valor: string }
+
+/**
+ * As linhas do bloco "Pagamento e entrega": CPF/CNPJ (só quando a cliente
+ * pediu a nota), entrega, frete (só > 0) e desconto do Pix (só > 0). Vazio
+ * quando não há nada a mostrar — a tela então não desenha o bloco.
+ */
+export function linhasDePagamentoEEntrega(p: PagamentoDoPedido): LinhaPagamentoEEntrega[] {
+  const linhas: LinhaPagamentoEEntrega[] = [];
+
+  if (p.request_nfce) {
+    const cpf = cpfCnpjFormatado(p.customer_cpf_cnpj);
+    if (cpf) linhas.push({ rotulo: "CPF/CNPJ na nota", valor: cpf });
+  }
+
+  const entrega = linhaDeEntrega(p);
+  if (entrega) linhas.push({ rotulo: "Entrega", valor: entrega });
+
+  const frete = Number(p.shipping_fee);
+  if (Number.isFinite(frete) && frete > 0) linhas.push({ rotulo: "Frete", valor: reais(frete) });
+
+  const desconto = Number(p.pix_discount);
+  if (Number.isFinite(desconto) && desconto > 0) linhas.push({ rotulo: "Desconto do Pix", valor: "− " + reais(desconto) });
+
+  return linhas;
+}
+
+/**
+ * Por que um Pix vencido não cancelou sozinho (achado LJ-34). `null`
+ * quando não está vencido, ou vencido sem motivo reconhecido — nesses
+ * casos o texto de hoje (situacaoDoPagamento) não muda.
+ */
+export function motivoDoPixVencido(p: Pick<PagamentoDoPedido, "pix_cancelamento"> | null | undefined): string | null {
+  if (!p?.pix_cancelamento?.vencido) return null;
+  switch (p.pix_cancelamento.motivo) {
+    case "producao":    return "Este pedido não cancela sozinho porque a produção já começou.";
+    case "comprovante": return "Este pedido não cancela sozinho porque a cliente mandou comprovante.";
+    case "ja_paguei":   return "Este pedido não cancela sozinho porque a cliente disse que pagou.";
+    case "sinal":       return "Este pedido não cancela sozinho porque você registrou o sinal.";
+    default:            return null;
+  }
 }

@@ -323,7 +323,7 @@ export default function StudioEstoque() {
           retry: 0,
           timeout: 10000,
         });
-        toast.success(next ? "Item visível na Loja Virtual" : "Item oculto da Loja Virtual");
+        toast.success(next ? "Item visível na Loja Digital" : "Item oculto da Loja Digital");
       } catch (e: any) {
         setProducts((prev) =>
           prev.map((p) => (p.id === productId ? { ...p, studio_storefront_visible: !next } : p)),
@@ -366,7 +366,7 @@ export default function StudioEstoque() {
             <StudioPageHeader
               eyebrow="ESTÚDIO · PRODUTOS & ESTOQUE"
               title="Catálogo Studio"
-              subtitle="Click num produto pra abrir tudo: dados básicos, personalização, ficha técnica e templates — na mesma tela."
+              subtitle="Clique num produto para abrir tudo: dados básicos, personalização, ficha técnica e templates — na mesma tela."
               rightSlot={headerRight}
             />
 
@@ -943,14 +943,14 @@ function BasicoForm({
         />
       </View>
 
-      {/* Visibilidade na Loja Virtual — toggle independente do Salvar */}
+      {/* Visibilidade na Loja Digital — toggle independente do Salvar */}
       <View style={s.visRow}>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={s.fieldLabel}>Mostrar na Loja Virtual</Text>
+          <Text style={s.fieldLabel}>Mostrar na Loja Digital</Text>
           <Text style={s.visHint}>
             {product.studio_storefront_visible === false
               ? "Oculto: não aparece na vitrine pública."
-              : "Visível: aparece na vitrine pública pros clientes."}
+              : "Visível: aparece na vitrine pública para os clientes."}
           </Text>
         </View>
         <Switch

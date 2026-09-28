@@ -32,6 +32,7 @@ import { gerarRenderDoPedido } from "@/components/studio/visualEngine/gerarRende
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { pickImageBase64, uploadStudioMockup } from "@/services/studioUploadApi";
+import { numeroDoPedido } from "@/components/studio/pagamentoDoPedido";
 
 type Props = {
   order: StudioOrder;
@@ -57,6 +58,11 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
   const [renderHashShort, setRenderHashShort] = useState<string | null>(null);
   const [renderIsVideo, setRenderIsVideo] = useState(false);
   const [generating, setGenerating] = useState(false);
+  // FIX (achado do QA, LJ-36, 28/09/2026): quando o servidor falhava
+  // (POST /studio/visual-renders 500), o botão girava e voltava ao
+  // normal SEM mensagem nenhuma. Erro inline, sempre visível — não só o
+  // toast, que pode ficar atrás de outro overlay.
+  const [erroGerar, setErroGerar] = useState<string | null>(null);
   const [customerPhone, setCustomerPhone] = useState(order.customer_phone || "");
   const [customMessage, setCustomMessage] = useState("");
   const [created, setCreated] = useState<StudioApprovalCreated | null>(null);
@@ -71,10 +77,12 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
   function setMockupUrlManual(v: string) {
     setMockupUrl(v);
     if (renderId) { setRenderId(null); setRenderHashShort(null); setRenderIsVideo(false); }
+    if (erroGerar) setErroGerar(null);
   }
 
   async function handleGerarDoPedido() {
     if (!company?.id || generating) return;
+    setErroGerar(null);
     if (Platform.OS !== "web") {
       toast.error("Geração de render disponível na versão web do Studio.");
       return;
@@ -92,7 +100,11 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
           : "Render gerado de \"" + r.itemName + "\" e vinculado ao pedido!"
       );
     } catch (e: any) {
-      toast.error(e?.message || "Não foi possível gerar o render");
+      // Nunca volta calado: mensagem do servidor, ou o texto padrão que
+      // já diz o próximo passo (colar a URL na mão).
+      const msg = e?.message || "Não deu para gerar o mockup. Cole a URL de uma imagem.";
+      setErroGerar(msg);
+      toast.error(msg);
     } finally {
       setGenerating(false);
     }
@@ -189,7 +201,10 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
       </View>
 
       <StudioWorkflow
-        title={`Solicitar aprovação — pedido #${order.id.slice(0, 8).toUpperCase()}`}
+        // FIX (achado do QA, 28/09/2026): identificador interno (uuid em
+        // caixa alta) no título — numeroDoPedido() usa order_number quando
+        // o backend manda; senão cai no mesmo fallback de sempre.
+        title={`Solicitar aprovação — ${numeroDoPedido(order)}`}
         steps={["Mockup", "Confirmar e enviar"]}
         current={step}
         onBack={step > 1 ? () => setStep((x) => x - 1) : undefined}
@@ -231,6 +246,13 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
                 </>
               )}
             </Pressable>
+
+            {erroGerar ? (
+              <View style={s.erroGerarBox} testID="erro-gerar-mockup">
+                <Icon name="alert-circle" size={14} color={t.dangerInk} />
+                <Text style={s.erroGerarTxt}>{erroGerar}</Text>
+              </View>
+            ) : null}
 
             {renderId && (
               <View style={s.renderChip}>
@@ -387,6 +409,11 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
     backgroundColor: t.mintSoft, borderRadius: 10, padding: 10, marginBottom: 10,
   },
   renderChipTxt: { flex: 1, fontSize: 11.5, color: t.ink2, lineHeight: 16 },
+  erroGerarBox: {
+    flexDirection: "row", alignItems: "flex-start", gap: 8,
+    backgroundColor: t.dangerSoft, borderRadius: 10, padding: 10, marginBottom: 10,
+  },
+  erroGerarTxt: { flex: 1, fontSize: 12, color: t.dangerInk, lineHeight: 17, fontWeight: "600" },
   videoChip: {
     flexDirection: "row", alignItems: "center", gap: 8,
     backgroundColor: t.primaryGhost, borderRadius: 10, padding: 12, marginTop: 12,

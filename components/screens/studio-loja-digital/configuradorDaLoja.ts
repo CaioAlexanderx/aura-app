@@ -36,6 +36,31 @@ export function textoDoTotal(n: number): string {
     : `${n} produtos disponíveis para o configurador`;
 }
 
+// ── Motivo oculto na loja (LJ-17, QA rodada 2, 28/09/2026) ───────────────
+// O Configurador marcava tudo como "Visível: aparece na vitrine pública",
+// mas a vitrine tem regras próprias (estoque, categoria inativa, etc.) que
+// escondem a peça mesmo com o interruptor ligado. `motivo_oculto_na_loja`
+// é o motivo que a VITRINE calculou — quando vier, ele conta mais que o
+// texto genérico de "visível".
+
+/** O motivo (recortado), ou null quando o campo não veio ou é vazio. */
+export function motivoOcultoNaLoja(p: { motivo_oculto_na_loja?: string | null }): string | null {
+  const m = (p.motivo_oculto_na_loja || "").trim();
+  return m || null;
+}
+
+/** O backend novo manda o campo (mesmo que vazio) em pelo menos uma peça? Sem isso, nada muda. */
+export function temMotivoDeOcultacao(products: Array<{ motivo_oculto_na_loja?: string | null }>): boolean {
+  return products.some((p) => p.motivo_oculto_na_loja !== undefined);
+}
+
+/** "N peças visíveis na loja" (+ "· M ocultas" quando M > 0). */
+export function textoDeVisibilidade(visiveis: number, ocultas: number): string {
+  const base = visiveis === 1 ? "1 peça visível na loja" : `${visiveis} peças visíveis na loja`;
+  if (ocultas <= 0) return base;
+  return `${base} · ${ocultas} ${ocultas === 1 ? "oculta" : "ocultas"}`;
+}
+
 /** "1 peça sem categoria" / "3 peças sem categoria" */
 export function textoSemCategoria(n: number): string {
   return n === 1 ? "1 peça sem categoria" : `${n} peças sem categoria`;

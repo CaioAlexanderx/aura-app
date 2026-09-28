@@ -11,6 +11,7 @@ import {
   PASSO_GRANDE_DO_TECLADO,
   cantoEm,
   configComLado,
+  configSemLado,
   fotosDoProduto,
   ladoParaGravar,
   mesmaMarcacao,
@@ -19,6 +20,7 @@ import {
   quadDaFotoValido,
   quadInicial,
   rascunhoDoGravado,
+  temCampoDeCor,
 } from "@/components/studio/visualEngine/marcacaoDaFoto";
 import { specDaFotoDoProduto, vistaDaMarcacao } from "@/components/studio/visualEngine/specDaFotoDoProduto";
 import { normalizeCustomizationConfig } from "@/components/studio/customizationConfig";
@@ -131,5 +133,23 @@ describe("o que se grava", () => {
     expect(v.id).toBe("back");
     expect(v.shading_from_photo).toEqual({ strength: 0.2 });
     expect(v.areas[0].quad![1].x).toBeCloseTo(630, 9);
+  });
+
+  // ── "Remover marcação" (QA rodada 2, 28/09/2026) ────────────────────
+  it("configSemLado apaga só o lado pedido, preservando os outros", () => {
+    const frente = ladoParaGravar({ photo_url: "f", quad: Q, forca: 0.6, w: 900, h: 1100 })!;
+    const verso = ladoParaGravar({ photo_url: "v", quad: Q, forca: 0.2, w: 900, h: 1100 })!;
+    const base: any = { fields: [], mockup_foto: { front: frente, back: verso } };
+    expect((configSemLado(base, "back") as any).mockup_foto).toEqual({ front: frente });
+    expect((configSemLado(base, "front") as any).mockup_foto).toEqual({ back: verso });
+  });
+  it("configSemLado sem nada marcado não quebra", () => {
+    expect((configSemLado({ fields: [] } as any, "front") as any).mockup_foto).toEqual({});
+  });
+  it("temCampoDeCor: só quando há um campo type=color", () => {
+    expect(temCampoDeCor({ fields: [{ id: "color", type: "color" }] } as any)).toBe(true);
+    expect(temCampoDeCor({ fields: [{ id: "text", type: "text" }] } as any)).toBe(false);
+    expect(temCampoDeCor({ fields: [] } as any)).toBe(false);
+    expect(temCampoDeCor(null)).toBe(false);
   });
 });

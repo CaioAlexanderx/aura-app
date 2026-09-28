@@ -91,6 +91,15 @@ export type HubAlert = {
   title: string;
   sub: string;
   href: string;
+  // 28/09/2026 (QA rodada 2, aura-backend #762): o alerta de "Pedido
+  // atrasado" e o de "Aprovação pendente" já vêm com o texto pronto do
+  // servidor (order_number com fallback pro uuid), mas mandam os dois
+  // campos crus também — a tela usa numeroDoPedido() como fonte única de
+  // formatação, a mesma do resto do painel, e order_id para linkar direto
+  // no pedido. Ausentes em backend antigo ou em alertas que não são de um
+  // pedido (estoque, evento).
+  order_id?: string | null;
+  order_number?: string | number | null;
 };
 
 // ═══════════════════════════════════════════════════════════

@@ -42,8 +42,23 @@ function injectStudioFonts() {
   if (!document.getElementById("studio-typography")) {
     const st = document.createElement("style");
     st.id = "studio-typography";
+    // FIX (achado do QA, 28/09/2026): o sino de notificações usa
+    // WebPortal — o React Native Web monta a gaveta num <div> anexado
+    // direto em `document.body`, IRMÃO de `#root`, não descendente dele.
+    // A regra só valia dentro de `#root`, então o portal caía no
+    // fallback de sistema do navegador (Times New Roman).
+    //
+    // `.aura-web-portal ...` cobre o portal (WebPortal.tsx marca o
+    // container com essa classe). Precisa da classe, e não só de `body
+    // ...`: um seletor de elemento puro (`body input`) tem especificidade
+    // (0,0,2), que PERDE para a classe atômica do react-native-web
+    // (0,1,0) — foi medido aqui (studioTypographyRule.test.ts). A classe
+    // devolve a especificidade (0,1,1)+, no mesmo patamar do `#root ...`
+    // (que vence pela ID, não por sorte de seletor).
     st.textContent =
-      `#root div[dir="auto"], #root input, #root textarea, #root button { font-family: ${Fonts.body}; }`;
+      `#root div[dir="auto"], #root input, #root textarea, #root button, `
+      + `.aura-web-portal div[dir="auto"], .aura-web-portal input, .aura-web-portal textarea, .aura-web-portal button `
+      + `{ font-family: ${Fonts.body}; }`;
     document.head.appendChild(st);
   }
 }

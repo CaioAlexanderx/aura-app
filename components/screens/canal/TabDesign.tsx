@@ -30,7 +30,7 @@ import { MiniLoja, type ProdutoDemo } from "./MiniLoja";
 import { PreviewCartao } from "./PreviewCartao";
 import { BASE_URL } from "@/services/api";
 import { ChecklistDaLoja } from "./ChecklistDaLoja";
-import { SPECS, bannersDeFabrica } from "./specsDeImagem";
+import { SPECS, bannersDeFabrica, temConteudo } from "./specsDeImagem";
 import {
   enderecoDaPrevia, pecaAutomatica, pecasParaODestaque, selosDeFabrica,
   corInicialDaLoja, configChegou, trocarESalvar,
@@ -669,9 +669,12 @@ export function TabDesign({
       <SectionTitle title="Banners do topo" />
       <View style={cs.card}>
         <Text style={cs.hint}>
-          {ehStudio
-            ? "Até 3 banners se alternam no topo da loja a cada 6 segundos, cobrindo toda a largura. Sem nenhum ativo, a loja mostra o título dela e a peça do destaque com o mockup girando (escolha a peça logo abaixo dos banners)."
-            : "Até 3 banners se alternam no topo da loja, cobrindo toda a largura. Sem nenhum ativo, a loja mostra o seu título sobre um fundo com a sua cor — nada fica quebrado."}
+          {/* FIX (achado do QA, 28/09/2026): a ajuda dizia "nada fica
+              quebrado"/"mockup girando", mas quem ficava sem banner via
+              hoje o banner AUTOMÁTICO na cor da loja — texto único, certo
+              pros dois modos. */}
+          Até 3 banners se alternam no topo da loja, cobrindo toda a largura.
+          Sem nenhum banner seu, a loja mostra um banner automático na sua cor e a peça do destaque.
         </Text>
         <View style={s.toneHelper}>
           <Text style={s.toneHelperText}>
@@ -711,6 +714,13 @@ export function TabDesign({
         const toneKey = (b.tone || "split") as BannerTone;
         const toneHelper = BANNER_TONE_HELPERS[toneKey] || BANNER_TONE_HELPERS.split;
         const hasImage = !!b.image_url;
+        // FIX (achado do QA, 28/09/2026): Banner 2/3 vazios (sem imagem
+        // nem texto) apareciam com o selo "Ativo" — dando a entender que
+        // o banner está no ar, quando um banner sem conteúdo não aparece
+        // na loja de jeito nenhum (ligado ou não). O interruptor continua
+        // funcional (é ele que liga o banner quando ela adicionar
+        // conteúdo); o aviso abaixo é que deixa de mentir.
+        const bannerVazio = !temConteudo(b as any);
         return (
         <View key={idx} style={cs.card}>
           <View style={s.bannerHead}>
@@ -718,6 +728,14 @@ export function TabDesign({
             <ToggleRow label="Ativo" value={!!b.enabled}
               onChange={(v) => updateBanner(idx, { enabled: v })} />
           </View>
+          {b.enabled && bannerVazio ? (
+            <View style={[cs.infoCard, { marginTop: 0, marginBottom: 12 }]} testID={`banner-vazio-${idx}`}>
+              <Icon name="info" size={13} color={p.amber} />
+              <Text style={cs.infoText}>
+                Vazio: mesmo ativo, não aparece na loja até você enviar uma imagem ou escrever um texto.
+              </Text>
+            </View>
+          ) : null}
           {idx === 0 && bannerDeFabrica ? (
             <View style={[cs.infoCard, { marginTop: 0, marginBottom: 12 }]} testID="banner-de-fabrica">
               <Icon name="info" size={13} color={p.amber} />

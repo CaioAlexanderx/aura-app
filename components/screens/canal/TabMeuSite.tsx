@@ -494,7 +494,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
           placeholderTextColor={p.ink3}
           // Numérico só para CPF, CNPJ e celular; e-mail abre o teclado
           // com @ e a aleatória, o de texto.
-          {...tecladoDaChavePix(pixKeyType)}
+          {...tecladoDaChavePix(pixKeyType, pixKey)}
           autoCorrect={false}
         />
 
