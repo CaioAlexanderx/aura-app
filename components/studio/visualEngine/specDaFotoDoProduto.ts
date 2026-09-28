@@ -83,7 +83,7 @@ export function temMockupNaFoto(cfg: CustomizationConfig | null | undefined): bo
   return !!ladoDoMockupFoto(cfg, "front");
 }
 
-function areaImpressaDoLado(cfg: CustomizationConfig | null | undefined, lado: LadoDaPeca) {
+export function areaImpressaDoLado(cfg: CustomizationConfig | null | undefined, lado: LadoDaPeca) {
   const pa: any =
     lado === "back" ? (cfg as any)?.back_print_area :
     lado === "middle" ? (cfg as any)?.middle_print_area :
@@ -100,6 +100,34 @@ function forcaDoSombreado(v: unknown): number {
   const n = Number(v);
   if (!Number.isFinite(n)) return FORCA_PADRAO_DO_SOMBREADO;
   return Math.min(1, Math.max(0, n));
+}
+
+/**
+ * Uma vista a partir da marcação de um lado. É a peça que a spec monta
+ * e que a prévia do painel reaproveita (lá o lado ainda não foi salvo,
+ * então não dá para passar pela config). Null com quad inválido na base.
+ */
+export function vistaDaMarcacao(
+  lado: LadoDaPeca,
+  e: Pick<MockupFotoLado, "photo_url" | "quad" | "shading">,
+  natural: MedidasDaFoto,
+  cm: { width_cm: number; height_cm: number }
+): VisualView | null {
+  const base = baseDaFoto(natural);
+  const quad = e.quad.map((p) => ({ x: p.x * base.w, y: p.y * base.h })) as VisualQuad;
+  if (!quadValido(quad)) return null;
+  const forca = forcaDoSombreado(e.shading);
+  return {
+    id: lado,
+    label: ROTULO[lado],
+    base,
+    photo_url: e.photo_url,
+    shading_url: null,
+    // Força zero é a lojista dizendo "não assente": sem sombreado.
+    shading_from_photo: forca > 0 ? { strength: forca } : null,
+    garment: null,
+    areas: [{ id: lado, width_cm: cm.width_cm, height_cm: cm.height_cm, quad, rect: caixaDoQuad(quad) }],
+  };
 }
 
 /**
@@ -124,22 +152,8 @@ export function specDaFotoDoProduto(
     if (!e) continue;
     const natural = medidaValida(e.w, e.h) || (medidas && medidas[lado]) || null;
     if (!natural) continue;
-    const base = baseDaFoto(natural);
-    const quad = e.quad.map((p) => ({ x: p.x * base.w, y: p.y * base.h })) as VisualQuad;
-    if (!quadValido(quad)) continue;
-    const forca = forcaDoSombreado(e.shading);
-    const cm = areaImpressaDoLado(cfg, lado);
-    views.push({
-      id: lado,
-      label: ROTULO[lado],
-      base,
-      photo_url: e.photo_url,
-      shading_url: null,
-      // Força zero é a lojista dizendo "não assente": sem sombreado.
-      shading_from_photo: forca > 0 ? { strength: forca } : null,
-      garment: null,
-      areas: [{ id: lado, ...cm, quad, rect: caixaDoQuad(quad) }],
-    });
+    const v = vistaDaMarcacao(lado, e, natural, areaImpressaDoLado(cfg, lado));
+    if (v) views.push(v);
   }
   if (!views.length || views[0].id !== "front") return null;
   return { schema: 1, views };

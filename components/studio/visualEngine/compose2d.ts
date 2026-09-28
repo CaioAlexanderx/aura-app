@@ -485,6 +485,7 @@ type AnaliseDaFoto = {
 // pixelWidth. Por isso o preview e o render HD recebem exatamente o
 // mesmo mapa (só escalado), e ela é feita uma vez por sessão.
 const cacheDeAnalises = new Map<string, AnaliseDaFoto>();
+const MAXIMO_DE_ANALISES = 24;
 
 function analisarFoto(
   photo: HTMLImageElement, view: VisualView, quad: VisualQuad, forca: number | null
@@ -527,8 +528,29 @@ function analisarFoto(
     sombra = cv;
   }
   const out: AnaliseDaFoto = { sombra, caixa: { x: x0, y: y0, w, h }, luminancia };
+  // Teto do cache: no painel, cada passo do arraste de uma alça é um quad
+  // novo, e cada entrada guarda um canvas. Sai a mais antiga.
+  if (cacheDeAnalises.size >= MAXIMO_DE_ANALISES) {
+    const primeira = cacheDeAnalises.keys().next().value;
+    if (primeira !== undefined) cacheDeAnalises.delete(primeira);
+  }
   cacheDeAnalises.set(chave, out);
   return out;
+}
+
+/**
+ * A mistura que a arte terá na primeira área com quad da vista — o
+ * mesmo cálculo da composição, para a tela do painel dizer à lojista
+ * "peça clara" ou "peça escura" sem adivinhar. Null sem foto ou sem quad.
+ */
+export async function blendDaVista(view: VisualView): Promise<BlendDaArte | null> {
+  const area = view.areas.find((a) => quadValido(a.quad));
+  if (!view.photo_url || !area || !quadValido(area.quad)) return null;
+  const photo = await loadImage(view.photo_url);
+  if (!photo) return null;
+  const forca = view.shading_from_photo ? Number(view.shading_from_photo.strength) : null;
+  const analise = analisarFoto(photo, view, area.quad, forca);
+  return blendDaArte(analise.luminancia, view.art_blend ?? null);
 }
 
 // ── Composição principal ─────────────────────────────────
