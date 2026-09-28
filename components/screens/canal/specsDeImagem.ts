@@ -37,7 +37,7 @@ export const SPECS: Record<"logo" | "banner" | "banner_mobile" | "produto" | "ca
       "Use 1920×640px — o banner cobre toda a largura da loja",
       "Deixe o lado esquerdo mais vazio: é onde entram o título e o botão",
       "No celular a arte é cortada no centro, então não coloque nada importante nas pontas",
-      "Até 500 KB — imagem pesada deixa sua loja lenta pra abrir",
+      "Até 500 KB — imagem pesada deixa sua loja lenta para abrir",
     ],
   },
   banner_mobile: {
@@ -96,12 +96,70 @@ export type EstadoDaLoja = {
   logoUrl?: string | null;
   corPrimaria?: string | null;
   banners?: unknown[];
+  /**
+   * `banners_automaticos` do GET da Loja Digital: os banners gravados são
+   * o de fábrica ("Bem-vindo à nossa loja", sem imagem). Ausente enquanto
+   * o backend não manda o campo — aí vale a leitura de `bannersDeFabrica`.
+   */
+  bannersAutomaticos?: boolean;
   anuncio?: string | null;
   tagline?: string | null;
   whatsapp?: string | null;
   produtosTotal?: number;
   produtosComFoto?: number;
 };
+
+// ── Banner de fábrica ────────────────────────────────────
+
+/**
+ * O banner que a loja ganha ao nascer. ESPELHO de DEFAULT_BANNERS em
+ * src/routes/digitalChannel.js (Aura-backend) e do DEFAULT_BANNERS da aba
+ * Design, que nasce sem o corpo.
+ */
+export const BANNER_DE_FABRICA = {
+  titulo: "Bem-vindo à nossa loja",
+  corpos: ["", "Peças escolhidas a dedo pra você."],
+} as const;
+
+type BannerLido = {
+  kicker?: string | null; headline?: string | null; body?: string | null;
+  image_url?: string | null; image_url_mobile?: string | null; enabled?: boolean;
+};
+
+function temConteudo(b: BannerLido): boolean {
+  return !!(b.image_url || b.image_url_mobile || String(b.headline || "").trim()
+    || String(b.body || "").trim() || String(b.kicker || "").trim());
+}
+
+function ehBannerDeFabrica(b: BannerLido): boolean {
+  return !b.image_url && !b.image_url_mobile
+    && !String(b.kicker || "").trim()
+    && String(b.headline || "").trim() === BANNER_DE_FABRICA.titulo
+    && (BANNER_DE_FABRICA.corpos as readonly string[]).includes(String(b.body || "").trim());
+}
+
+/**
+ * Os banners da loja são só o de fábrica?
+ *
+ * QA 26/09: o checklist contava `banners.length > 0` e o cartão dizia
+ * "Banner 1 · Ativo" com o banner de fábrica — a lojista lia "seu banner
+ * está no ar", e a vitrine Studio não mostra esse banner. Com o campo do
+ * backend (`banners_automaticos`), vale ele; sem ele, a mesma leitura:
+ * nenhum banner com imagem e todo banner com conteúdo é o texto de fábrica.
+ */
+export function bannersDeFabrica(banners: unknown[] | null | undefined, doServidor?: boolean): boolean {
+  if (typeof doServidor === "boolean") return doServidor;
+  const lista = (Array.isArray(banners) ? banners : []).filter(Boolean) as BannerLido[];
+  const comConteudo = lista.filter(temConteudo);
+  return comConteudo.length > 0 && comConteudo.every(ehBannerDeFabrica);
+}
+
+/** Há um banner DA LOJISTA ligado e com conteúdo? */
+export function temBannerDaLojista(banners: unknown[] | null | undefined, doServidor?: boolean): boolean {
+  if (bannersDeFabrica(banners, doServidor)) return false;
+  const lista = (Array.isArray(banners) ? banners : []).filter(Boolean) as BannerLido[];
+  return lista.some((b) => b.enabled !== false && temConteudo(b));
+}
 
 /** A cor que vem por padrão — se não mudou, a lojista ainda não escolheu. */
 export const COR_PADRAO = "#7c3aed";
@@ -154,10 +212,10 @@ export function montarChecklist(e: EstadoDaLoja): ItemChecklist[] {
     {
       chave: "banner",
       titulo: "Banner do topo",
-      acao: (e.banners || []).length > 0
+      acao: temBannerDaLojista(e.banners, e.bannersAutomaticos)
         ? "Seu banner está no ar."
         : "Envie um banner com sua campanha ou sua melhor peça. Até lá, usamos um na sua cor.",
-      feito: (e.banners || []).length > 0,
+      feito: temBannerDaLojista(e.banners, e.bannersAutomaticos),
       spec: SPECS.banner,
     },
     {

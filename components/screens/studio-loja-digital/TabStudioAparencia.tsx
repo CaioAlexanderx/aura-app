@@ -19,7 +19,7 @@
 // atalho, para a lojista não procurar duas vezes.
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
-import { View, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { View, Pressable, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
 import { Texto } from "@/components/studio/storefront/TipografiaVitrine";
 import { Fonts, TIPOGRAFIAS, tipografiaDoStudio } from "@/constants/fonts";
 import { lerCorDaLoja } from "@/components/studio/storefront/leituraDaCor";
@@ -73,6 +73,11 @@ export function TabStudioAparencia({
   const [templates, setTemplates] = useState<VisualTemplate[] | null>(null);
   const [vinculos, setVinculos] = useState<Record<string, string | null>>({});
   const [salvando, setSalvando] = useState<string | null>(null);
+  // O produto cujo vínculo não salvou: a mensagem fica junto dele.
+  const [falhou, setFalhou] = useState<string | null>(null);
+  // Chips com 44 px de altura no celular (alvo de toque).
+  const { width } = useWindowDimensions();
+  const celular = width < 768;
 
   useEffect(() => {
     if (!companyId) return;
@@ -94,12 +99,15 @@ export function TabStudioAparencia({
     const antes = vinculos[pid] ?? null;
     setVinculos((v) => ({ ...v, [pid]: key }));
     setSalvando(pid);
+    setFalhou((f) => (f === pid ? null : f));
     try {
       await studioVisualApi.setProductVisualTemplate(companyId, pid, key);
     } catch {
       // Volta ao que era: mostrar vinculado o que não salvou faria a
-      // lojista contar com uma prévia 3D que a vitrine não tem.
+      // lojista contar com uma prévia 3D que a vitrine não tem. E AVISA:
+      // antes a escolha voltava calada e parecia clique perdido.
       setVinculos((v) => ({ ...v, [pid]: antes }));
+      setFalhou(pid);
     } finally {
       setSalvando(null);
     }
@@ -195,11 +203,17 @@ export function TabStudioAparencia({
                   </Texto>
                   {salvando === p.id ? <ActivityIndicator size="small" color={(T as any)?.primary} /> : null}
                 </View>
+                {falhou === p.id ? (
+                  <Texto accessibilityRole="alert" style={{ fontSize: 12, fontWeight: "700", color: T.dangerInk }}>
+                    Não salvou, tente de novo
+                  </Texto>
+                ) : null}
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
                   <Chip
                     rotulo="Sem mockup"
                     ativo={!vinculos[p.id]}
                     onPress={() => vincular(p.id, null)}
+                    celular={celular}
                     T={T}
                   />
                   {templates.map((t) => (
@@ -209,6 +223,7 @@ export function TabStudioAparencia({
                       nota={t.kind === "model3d" ? "3D" : "2D"}
                       ativo={vinculos[p.id] === t.key}
                       onPress={() => vincular(p.id, t.key)}
+                      celular={celular}
                       T={T}
                     />
                   ))}
@@ -263,18 +278,23 @@ function Amostra({
 }
 
 function Chip({
-  rotulo, nota, ativo, onPress, T,
-}: { rotulo: string; nota?: string; ativo: boolean; onPress: () => void; T: any }) {
+  rotulo, nota, ativo, onPress, celular, T,
+}: { rotulo: string; nota?: string; ativo: boolean; onPress: () => void; celular?: boolean; T: any }) {
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
+      accessibilityLabel={nota ? `${rotulo} (${nota})` : rotulo}
       accessibilityState={{ selected: ativo }}
+      // No web o accessibilityState não chega ao DOM (RNW 0.19).
+      aria-pressed={ativo}
       style={{
         paddingVertical: 7, paddingHorizontal: 11, borderRadius: 999,
-        borderWidth: 1,
-        borderColor: ativo ? ((T as any)?.primary || "#7C3AED") : T.ink5,
-        backgroundColor: ativo ? "rgba(124,58,237,0.14)" : "transparent",
+        minHeight: celular ? 44 : undefined,
+        borderWidth: ativo ? 1.5 : 1,
+        // O ativo no navy do PAINEL (era o violeta da Aura, cor do Negócio).
+        borderColor: ativo ? T.primary : T.ink5,
+        backgroundColor: ativo ? T.primarySoft : "transparent",
         flexDirection: "row", alignItems: "center", gap: 5,
       }}
     >

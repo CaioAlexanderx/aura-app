@@ -1,5 +1,5 @@
 import { useMemo, useEffect, useState, useCallback } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Switch, Image } from "react-native";
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Image, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import type { StudioPalette } from "@/constants/studio-tokens";
@@ -7,6 +7,9 @@ import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { request } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
+import {
+  AVISO_SEM_CATEGORIA, pecaSemCategoria, rotuloDaPosicao, textoDoTotal, textoSemCategoria,
+} from "./configuradorDaLoja";
 
 type FieldType = "text" | "image" | "template" | "color" | "option" | string;
 
@@ -35,8 +38,32 @@ type ProductRow = {
   customization_config?: CustomizationConfig;
   image_url?: string | null;
   category_name?: string | null;
+  /** Quando a rota trouxer (null = sem categoria). Hoje ela não traz. */
+  category_id?: string | null;
   studio_storefront_visible?: boolean;
 };
+
+/**
+ * Os ids dos produtos SEM categoria primária — a mesma leitura que decide
+ * "Outras peças" na vitrine. A rota pagina em 200; a loja com catálogo
+ * maior precisa de mais de uma volta.
+ */
+async function carregarSemCategoria(cid: string): Promise<Set<string>> {
+  const ids = new Set<string>();
+  let offset = 0;
+  for (let volta = 0; volta < 10; volta++) {
+    const r: any = await request(`/companies/${cid}/products/unclassified?limit=200&offset=${offset}`, {
+      method: "GET",
+      retry: 1,
+      timeout: 15000,
+    });
+    const lista: any[] = Array.isArray(r?.products) ? r.products : [];
+    lista.forEach((p) => { if (p?.id) ids.add(String(p.id)); });
+    offset += lista.length;
+    if (!lista.length || offset >= (Number(r?.total) || 0)) break;
+  }
+  return ids;
+}
 
 function formatBRL(value: number) {
   try {
@@ -53,10 +80,15 @@ export function TabStudioConfigurador() {
   const { company } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<ProductRow[]>([]);
+  // null = não deu para saber (a rota falhou): nenhum aviso, em vez de um falso.
+  const [semCategoria, setSemCategoria] = useState<Set<string> | null>(null);
 
   const load = useCallback(async () => {
     if (!company?.id) return;
     setLoading(true);
+    // Em paralelo e à parte: se a lista de "sem categoria" falhar, os
+    // produtos aparecem do mesmo jeito, só sem o aviso.
+    carregarSemCategoria(company.id).then(setSemCategoria).catch(() => setSemCategoria(null));
     try {
       // Use the Studio-specific endpoint — the generic /products endpoint filters
       // by vertical=varejo internally and returns an empty list for Studio accounts.
@@ -82,7 +114,7 @@ export function TabStudioConfigurador() {
     load();
   }, [load]);
 
-  // ── Visibilidade na Loja Virtual (toggle por item) ────
+  // ── Visibilidade na Loja Digital (toggle por item) ────
   // Espelha o Estoque Studio: otimista + rollback, persiste via PATCH /products.
   const toggleStorefrontVisible = useCallback(
     async (productId: string, next: boolean) => {
@@ -97,7 +129,7 @@ export function TabStudioConfigurador() {
           retry: 0,
           timeout: 10000,
         });
-        toast.success(next ? "Item visível na Loja Virtual" : "Item oculto da Loja Virtual");
+        toast.success(next ? "Item visível na Loja Digital" : "Item oculto da Loja Digital");
       } catch (e: any) {
         setProducts((prev) =>
           prev.map((p) => (p.id === productId ? { ...p, studio_storefront_visible: !next } : p)),
@@ -145,14 +177,20 @@ export function TabStudioConfigurador() {
     );
   }
 
+  const qtdSemCategoria = products.filter((p) => pecaSemCategoria(p, { semCategoria })).length;
+
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle}>Produtos personalizáveis na sua Loja Digital</Text>
-          <Text style={styles.headerSubtitle}>
-            {products.length} {products.length === 1 ? "produto" : "produtos"} disponível{products.length === 1 ? "" : "is"} para o configurador
-          </Text>
+          <Text style={styles.headerSubtitle}>{textoDoTotal(products.length)}</Text>
+          {qtdSemCategoria > 0 ? (
+            <View style={styles.semCatResumo} testID="resumo-sem-categoria">
+              <Icon name="alert" size={12} color={t.warningInk} />
+              <Text style={styles.semCatResumoTxt}>{textoSemCategoria(qtdSemCategoria)}</Text>
+            </View>
+          ) : null}
         </View>
         <Pressable onPress={goEdit} style={({ pressed }) => [styles.secondaryBtn, pressed && styles.secondaryBtnPressed]}>
           <Icon name="settings" size={16} color={t.primary} />
@@ -167,8 +205,9 @@ export function TabStudioConfigurador() {
           const fields = Array.isArray(cfg.fields) ? cfg.fields : [];
           const w = typeof print.width_cm === "number" ? print.width_cm : null;
           const h = typeof print.height_cm === "number" ? print.height_cm : null;
-          const pos = print.position || null;
+          const pos = rotuloDaPosicao(print.position);
           const hidden = p.studio_storefront_visible === false;
+          const orfa = pecaSemCategoria(p, { semCategoria });
 
           // Meta compacta: campos + área numa linha só (era 2 seções de chips)
           const metaParts: string[] = [];
@@ -199,21 +238,37 @@ export function TabStudioConfigurador() {
                 </View>
               </View>
 
+              {orfa ? (
+                <View style={styles.semCat} testID={`sem-categoria-${p.id}`}>
+                  <Icon name="alert" size={13} color={t.warningInk} />
+                  <Text style={styles.semCatTxt}>{AVISO_SEM_CATEGORIA}</Text>
+                </View>
+              ) : null}
+
               <View style={styles.visRow}>
                 <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={styles.visLabel}>Mostrar na Loja Virtual</Text>
+                  <Text style={styles.visLabel}>Mostrar na Loja Digital</Text>
                   <Text style={styles.visHint}>
                     {hidden
                       ? "Oculto: não aparece na vitrine pública."
-                      : "Visível: aparece na vitrine pública pros clientes."}
+                      : "Visível: aparece na vitrine pública para os clientes."}
                   </Text>
                 </View>
-                <Switch
-                  value={!hidden}
-                  onValueChange={(v) => toggleStorefrontVisible(p.id, v)}
-                  trackColor={{ true: t.primary, false: t.ink5 }}
-                  thumbColor="#fff"
-                />
+                {/* Interruptor com alvo de 44 px (o Switch nativo do web
+                    tinha 20 px de altura). */}
+                <Pressable
+                  onPress={() => toggleStorefrontVisible(p.id, hidden)}
+                  accessibilityRole="switch"
+                  accessibilityLabel={`Mostrar ${p.name} na Loja Digital`}
+                  accessibilityState={{ checked: !hidden }}
+                  aria-checked={!hidden}
+                  testID={`visivel-${p.id}`}
+                  style={styles.switchAlvo}
+                >
+                  <View style={[styles.switchTrilho, { backgroundColor: hidden ? t.ink5 : t.primary }]}>
+                    <View style={[styles.switchBola, { transform: [{ translateX: hidden ? 0 : 19 }] }]} />
+                  </View>
+                </Pressable>
               </View>
 
               <Pressable
@@ -513,5 +568,60 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
     fontSize: 11,
     color: t.ink3,
     lineHeight: 15,
+  },
+  switchAlvo: {
+    minWidth: 52,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  switchTrilho: {
+    width: 46,
+    height: 27,
+    borderRadius: 999,
+    padding: 2.5,
+    justifyContent: "center",
+  },
+  switchBola: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#fff",
+    ...(Platform.OS === "web" ? ({ boxShadow: "0 1px 3px rgba(0,0,0,.3)" } as any) : { elevation: 2 }),
+  },
+  // Peça sem categoria: aviso de atenção, não de erro — a peça vende,
+  // só aparece no lugar errado da loja.
+  semCat: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: t.warningSoft,
+    borderWidth: 1,
+    borderColor: t.warning,
+  },
+  semCatTxt: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    color: t.warningInk,
+    fontWeight: "600",
+  },
+  semCatResumo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    alignSelf: "flex-start",
+    marginTop: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: t.warningSoft,
+  },
+  semCatResumoTxt: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: t.warningInk,
   },
 });
