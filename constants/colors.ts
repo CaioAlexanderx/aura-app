@@ -212,3 +212,14 @@ export function useColors() {
 
 export var DarkPalette = Dark;
 export var LightPalette = Light;
+
+// Shape comum de Light/Dark — usado por componentes compartilhados entre
+// shells (ex.: NotificationBell/NotificationDrawer) que aceitam uma paleta
+// por fora em vez de sempre puxar o tema GLOBAL via useColors() (ver
+// constants/studio-tokens.ts, studioNotificationColors).
+//
+// `{ [K in ...]: string }` (não `typeof Light` puro): Light/Dark são
+// `as const`, então cada campo tem tipo do PRÓPRIO hex literal (ex.:
+// `bg: "#e6e4f0"`). Uma paleta por fora (Studio, também `as const`, com
+// hex DIFERENTES) não bateria nesses literais — só no formato.
+export type AuraColors = { [K in keyof typeof Light]: string };

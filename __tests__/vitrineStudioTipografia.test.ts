@@ -24,12 +24,33 @@ describe("as chaves são as mesmas nos dois lados", () => {
     expect(Object.keys(TIPOGRAFIAS_STUDIO).sort()).toEqual(Object.keys(TIPOGRAFIAS).sort());
   });
 
-  test("o rótulo que a lojista lê é o mesmo — ela escolhe uma vez só", () => {
+  test("o rótulo (nome) que a lojista lê é o mesmo — ela escolhe uma vez só", () => {
+    // QA fix (LJ-10, 28/09/2026): o HINT não pode ser sempre igual — as
+    // duas vitrines usam FAMÍLIAS diferentes pro mesmo par (loja comum:
+    // curadoria de varejo de moda; Studio: trio Premium), então a
+    // descrição de "como a fonte parece" precisa bater com a fonte de
+    // CADA lado. Reusar o hint da loja comum era o bug: Acolhedora saía
+    // cursiva (Pacifico) no Studio com a descrição "Serifada macia" da
+    // loja comum (Lora), e Marcante saía fina (Instrument Serif) com a
+    // descrição "Peso alto" do Anton da loja comum. O NOME continua
+    // igual — é o mesmo rótulo, a mesma escolha no banco.
     (Object.keys(TIPOGRAFIAS) as Array<keyof typeof TIPOGRAFIAS>).forEach((k) => {
       expect(TIPOGRAFIAS_STUDIO[k].nome).toBe(TIPOGRAFIAS[k].nome);
-      expect(TIPOGRAFIAS_STUDIO[k].hint).toBe(TIPOGRAFIAS[k].hint);
+      expect(TIPOGRAFIAS_STUDIO[k].hint.trim().length).toBeGreaterThan(0);
       expect(TIPOGRAFIAS_STUDIO[k].chave).toBe(k);
     });
+  });
+
+  test("o hint do Studio descreve a fonte REAL do Studio, não a da loja comum (LJ-10)", () => {
+    // Acolhedora no Studio é Pacifico — cursiva/manuscrita, não serifada.
+    expect(TIPOGRAFIAS_STUDIO.humanist.display).toContain("Pacifico");
+    expect(TIPOGRAFIAS_STUDIO.humanist.hint.toLowerCase()).toMatch(/manuscrita|cursiv/);
+    expect(TIPOGRAFIAS_STUDIO.humanist.hint).not.toBe(TIPOGRAFIAS.humanist.hint);
+
+    // Marcante no Studio é Instrument Serif — fina, não "peso alto".
+    expect(TIPOGRAFIAS_STUDIO.editorial.display).toContain("Instrument Serif");
+    expect(TIPOGRAFIAS_STUDIO.editorial.hint.toLowerCase()).toMatch(/fina/);
+    expect(TIPOGRAFIAS_STUDIO.editorial.hint).not.toBe(TIPOGRAFIAS.editorial.hint);
   });
 
   test("chave desconhecida ou vazia cai em classic, nos dois", () => {

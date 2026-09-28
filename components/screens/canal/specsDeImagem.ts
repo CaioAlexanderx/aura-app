@@ -161,6 +161,29 @@ export function temBannerDaLojista(banners: unknown[] | null | undefined, doServ
   return lista.some((b) => b.enabled !== false && temConteudo(b));
 }
 
+/**
+ * O banner que a PRÉVIA (mini-mockup do Meu Site) deve mostrar — o
+ * primeiro ligado com imagem, senão o primeiro ligado com QUALQUER
+ * conteúdo (headline/body/kicker). `null` se só sobrar o banner de
+ * fábrica ou nenhum banner ligado: aí a prévia cai no banner AUTOMÁTICO
+ * (slogan da loja), igual à vitrine de verdade.
+ *
+ * QA fix (LJ-01, 28/09/2026): antes pegava o primeiro banner LIGADO sem
+ * checar conteúdo — numa loja nova isso é o banner de fábrica ("Bem-vindo
+ * à nossa loja"), e a prévia mostrava esse texto fixo enquanto a vitrine
+ * (que já aplica esta mesma regra) mostrava o slogan.
+ */
+export function bannerParaPreview<T extends BannerLido>(banners: T[] | null | undefined): T | null {
+  const lista = (Array.isArray(banners) ? banners : []).filter(Boolean) as T[];
+  // O banner de fábrica TEM headline ("Bem-vindo à nossa loja") — bate em
+  // temConteudo() —, mas não é conteúdo da lojista. Some ele antes de
+  // procurar, senão a prévia mostra o texto de fábrica igual ao bug do QA.
+  const semFabrica = lista.filter((b) => !ehBannerDeFabrica(b));
+  return semFabrica.find((b) => b.enabled !== false && b.image_url)
+    || semFabrica.find((b) => b.enabled !== false && temConteudo(b))
+    || null;
+}
+
 /** A cor que vem por padrão — se não mudou, a lojista ainda não escolheu. */
 export const COR_PADRAO = "#7c3aed";
 

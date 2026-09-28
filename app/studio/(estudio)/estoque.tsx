@@ -17,7 +17,7 @@
 //   abre expandido inline pra continuar a configuração nas tabs.
 //
 // Lista master continua igual no topo (quando nenhum produto está
-// expandido). Botão "Voltar pra lista" no topo da expansão retorna
+// expandido). Botão "Voltar para a lista" no topo da expansão retorna
 // pro grid.
 //
 // Deep-links:
@@ -444,7 +444,7 @@ export default function StudioEstoque() {
               <StudioEmpty
                 icon="package"
                 title="Catálogo vazio"
-                desc="Cadastre seu primeiro produto pra comecar a vender."
+                desc="Cadastre seu primeiro produto para começar a vender."
                 primaryCta={{
                   label: "Cadastrar produto",
                   onPress: () => setWizardOpen(true),
@@ -454,7 +454,7 @@ export default function StudioEstoque() {
               <StudioEmpty
                 icon="search"
                 title="Nada encontrado"
-                desc="Ajuste o filtro ou a busca pra ver mais produtos."
+                desc="Ajuste o filtro ou a busca para ver mais produtos."
                 primaryCta={{
                   label: "Limpar filtros",
                   onPress: () => { setFilter("all"); setSearch(""); setCategoryFilter(null); },
@@ -675,7 +675,7 @@ function ProductExpanded({
       <View style={s.expandedToolbar}>
         <Pressable onPress={onBack} style={s.backBtn}>
           <Icon name="arrow-left" size={14} color={t.ink2} />
-          <Text style={s.backBtnTxt}>Voltar pra lista</Text>
+          <Text style={s.backBtnTxt}>Voltar para a lista</Text>
         </Pressable>
       </View>
 

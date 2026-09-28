@@ -14,7 +14,7 @@
 // ============================================================
 import { View, Text, Pressable, Platform, StyleSheet, Switch } from 'react-native';
 import { useEffect, useState } from 'react';
-import { useColors } from '@/constants/colors';
+import { useColors, AuraColors } from '@/constants/colors';
 import { somLigado, definirSom, tocarAvisoDePedido } from '@/utils/somDePedido';
 import {
   EstadoDoAviso, estadoDoAviso, ativarAviso, desativarAviso, enviarAvisoDeTeste,
@@ -25,6 +25,9 @@ interface Props {
   companyId?: string;
   prefs:    Record<string, boolean>;
   onChange: (next: Record<string, boolean>) => void;
+  // Paleta por fora (NotificationDrawer repassa a `colors` recebida do
+  // shell hospedeiro) — ver NotificationDrawer.tsx e constants/studio-tokens.ts.
+  colors?:  AuraColors;
 }
 
 const INTRO =
@@ -211,8 +214,9 @@ function AvisosDoNavegadorWeb({ C, companyId }: { C: any; companyId?: string }) 
   );
 }
 
-export function NotificationPrefs({ prefs, onChange, companyId }: Props) {
-  const C = useColors();
+export function NotificationPrefs({ prefs, onChange, companyId, colors }: Props) {
+  const CGlobal = useColors();
+  const C = colors ?? CGlobal;
 
   const toggle = (type: string) => {
     onChange({ ...prefs, [type]: !prefs[type] });

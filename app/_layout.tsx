@@ -3,7 +3,7 @@ if (typeof document !== "undefined" && !document.getElementById("aura-splash")) 
 
 import "@/utils/micrositeBootstrap"; // {slug}.getaura.com.br → /karate/{slug} (web, antes do router ler a URL)
 import { useEffect } from "react";
-import { Platform } from "react-native";
+import { Platform, View, ActivityIndicator } from "react-native";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { authApi } from "@/services/api";
@@ -19,6 +19,7 @@ import { GlobalOverlays } from "@/components/GlobalOverlays";
 import { KarateLoginTransition } from "@/components/karate/KarateLoginTransition";
 import { useKarateIntro } from "@/stores/karateIntro";
 import { ehVitrinePublica } from "@/components/studio/storefront/rotasDaVitrine";
+import { mostrarCarregandoSessao } from "@/utils/carregandoSessao";
 
 const queryClient = new QueryClient();
 
@@ -295,9 +296,19 @@ function AuthGuard() {
 
   return (
     <>
-      <Slot />
+      {mostrarCarregandoSessao(segments, isHydrated) ? <CarregandoSessao /> : <Slot />}
       {karateIntroPending && <KarateLoginTransition onDone={consumeKarateIntro} />}
     </>
+  );
+}
+
+// Carregamento neutro enquanto a sessão é restaurada — sem formulário,
+// sem "Bem-vindo de volta". Mesmo padrão de components/DashboardGuard.tsx.
+function CarregandoSessao() {
+  return (
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 20, backgroundColor: "#060816" }}>
+      <ActivityIndicator size="large" color="#8b5cf6" />
+    </View>
   );
 }
 

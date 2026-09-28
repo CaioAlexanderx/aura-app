@@ -824,7 +824,10 @@ export function TabEntrega({ config, saveConfig, isSaving, vitrine = "comum", on
                   <Text
                     style={[
                       s.hourStatusText,
-                      { color: isClosed ? p.red : p.green },
+                      // AA fix (QA LJ-48): p.red/p.green são a cor viva
+                      // (usada no ponto ao lado); texto pequeno precisa da
+                      // variante Ink pra bater 4,5:1.
+                      { color: isClosed ? p.redInk : p.greenInk },
                     ]}
                   >
                     {isClosed ? "Fechada" : "Aberta"}
@@ -1017,7 +1020,8 @@ function buildStyles(accent: AccentTokens, p: PaletaDoCanalTokens) {
   },
   geoOkText: {
     fontSize: 10,
-    color: p.green,
+    // AA fix (QA LJ-48, mesmo padrão de hourStatusText acima).
+    color: p.greenInk,
     fontWeight: "700",
     letterSpacing: 0.2,
   },

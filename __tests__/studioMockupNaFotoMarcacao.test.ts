@@ -144,7 +144,19 @@ describe("o que se grava", () => {
     expect((configSemLado(base, "front") as any).mockup_foto).toEqual({ back: verso });
   });
   it("configSemLado sem nada marcado não quebra", () => {
-    expect((configSemLado({ fields: [] } as any, "front") as any).mockup_foto).toEqual({});
+    expect((configSemLado({ fields: [] } as any, "front") as any).mockup_foto).toBeNull();
+  });
+  // QA fix (rodada 3, 28/09/2026): a primeira versão deixava `{}` — um
+  // objeto vazio é VERDADEIRO em JS, então `if (config.mockup_foto)`
+  // continuava lendo "tem mockup" mesmo sem nenhum lado marcado. Remover
+  // o ÚNICO lado marcado precisa zerar o campo de vez (`null`), não só
+  // esvaziar o objeto.
+  it("configSemLado: remover o único lado marcado limpa o campo (null, não {})", () => {
+    const frente = ladoParaGravar({ photo_url: "f", quad: Q, forca: 0.6, w: 900, h: 1100 })!;
+    const base: any = { fields: [], mockup_foto: { front: frente } };
+    const depois = configSemLado(base, "front") as any;
+    expect(depois.mockup_foto).toBeNull();
+    expect(!!depois.mockup_foto).toBe(false);
   });
   it("temCampoDeCor: só quando há um campo type=color", () => {
     expect(temCampoDeCor({ fields: [{ id: "color", type: "color" }] } as any)).toBe(true);

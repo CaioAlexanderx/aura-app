@@ -17,13 +17,14 @@ import { lerCorDigitada, hexValido, ERRO_DA_COR } from "@/components/screens/can
 import { corInicialDaLoja, configChegou, trocarESalvar } from "@/components/screens/canal/designDaVitrineStudio";
 import {
   bannersDeFabrica, temBannerDaLojista, montarChecklist, BANNER_DE_FABRICA, temConteudo,
+  bannerParaPreview,
 } from "@/components/screens/canal/specsDeImagem";
 import {
   semComoReceber, desligarPedeConfirmacao, textosDoPrazo, AVISO_SEM_RECEBIMENTO,
 } from "@/components/screens/canal/entrega";
 import {
   pecaSemCategoria, textoDoTotal, textoSemCategoria, rotuloDaPosicao, AVISO_SEM_CATEGORIA,
-  motivoOcultoNaLoja, temMotivoDeOcultacao, textoDeVisibilidade,
+  motivoOcultoNaLoja, temMotivoDeOcultacao, textoDeVisibilidade, deveAvisarSemCategoria,
 } from "@/components/screens/studio-loja-digital/configuradorDaLoja";
 import {
   topoDaTemporada, mostrarCampoDoRecado, formDaConfig,
@@ -256,6 +257,66 @@ describe("banner de fábrica não conta como banner no ar", () => {
     expect(temConteudo({ enabled: true, headline: "Coleção" })).toBe(true);
     expect(temConteudo({ enabled: true, body: "Peças novas" })).toBe(true);
   });
+
+  // LJ-01 (QA rodada 3, 28/09/2026): a prévia do Meu Site mostrava
+  // "Bem-vindo à nossa loja" (texto de fábrica) enquanto a vitrine de
+  // verdade já mostrava o slogan da loja.
+  test("bannerParaPreview: ignora o banner de fábrica, prévia cai no automático", () => {
+    expect(bannerParaPreview(fabricaPainel)).toBeNull();
+    expect(bannerParaPreview([])).toBeNull();
+    expect(bannerParaPreview(null)).toBeNull();
+  });
+
+  test("bannerParaPreview: prioriza banner ligado com imagem", () => {
+    const semImagem = { headline: "Promoção", enabled: true, image_url: null };
+    const comImagem = { headline: "Coleção", enabled: true, image_url: "https://x/b.jpg" };
+    expect(bannerParaPreview([semImagem, comImagem])).toBe(comImagem);
+  });
+
+  test("bannerParaPreview: sem imagem em nenhum, usa o primeiro ligado com QUALQUER conteúdo", () => {
+    const soTexto = { headline: "Dia das Mães", enabled: true, image_url: null };
+    expect(bannerParaPreview([soTexto])).toBe(soTexto);
+  });
+
+  test("bannerParaPreview: ignora banner desligado", () => {
+    const desligado = { headline: "Coleção", enabled: false, image_url: "https://x/b.jpg" };
+    expect(bannerParaPreview([desligado])).toBeNull();
+  });
+});
+
+// ── 7 · contraste dos tokens verde/vermelho do canal (LJ-48) ──
+describe("greenInk/redInk: texto pequeno bate 4,5:1 (LJ-48, 28/09/2026)", () => {
+  // Cálculo de contraste WCAG (mesmo método usado nos outros testes de
+  // AA do repo — luminância relativa + razão de contraste).
+  function luminancia(hex: string): number {
+    const m = /^#([0-9a-f]{6})$/i.exec(hex);
+    if (!m) return 0;
+    const n = parseInt(m[1], 16);
+    const canal = (c: number) => {
+      const s = c / 255;
+      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    };
+    const r = canal((n >> 16) & 255), g = canal((n >> 8) & 255), b = canal(n & 255);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+  function contraste(a: string, bColor: string): number {
+    const la = luminancia(a), lb = luminancia(bColor);
+    const [clara, escura] = la > lb ? [la, lb] : [lb, la];
+    return (clara + 0.05) / (escura + 0.05);
+  }
+
+  test("Studio claro: successInk/dangerInk sobre paperCard e sobre os *Soft batem 4,5:1", () => {
+    const p = paletaDoStudio(StudioColors);
+    expect(contraste(p.greenInk, StudioColors.paperCard)).toBeGreaterThanOrEqual(4.5);
+    expect(contraste(p.greenInk, p.greenD)).toBeGreaterThanOrEqual(4.5);
+    expect(contraste(p.redInk, StudioColors.paperCard)).toBeGreaterThanOrEqual(4.5);
+    expect(contraste(p.redInk, p.redD)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  test("Negócio: greenInk/redInk existem e não regridem (mesma cor de antes)", () => {
+    expect(PALETA_DO_NEGOCIO.greenInk).toBe(PALETA_DO_NEGOCIO.green);
+    expect(PALETA_DO_NEGOCIO.redInk).toBe(PALETA_DO_NEGOCIO.red);
+  });
 });
 
 // ── 5 · Entrega ───────────────────────────────────────────
@@ -336,6 +397,18 @@ describe("Configurador", () => {
     expect(textoDeVisibilidade(1, 0)).toBe("1 peça visível na loja");
     expect(textoDeVisibilidade(30, 5)).toBe("30 peças visíveis na loja · 5 ocultas");
     expect(textoDeVisibilidade(34, 1)).toBe("34 peças visíveis na loja · 1 oculta");
+  });
+
+  // LJ-17 (QA rodada 3, 28/09/2026): uma peça sem campo de personalização
+  // mostrava DOIS avisos — "Não aparece na loja: Sem campos de
+  // personalização" E "Sem categoria: na loja ela aparece só em 'Outras
+  // peças'" — que se contradizem (a categoria não importa pra peça que já
+  // não aparece por outro motivo).
+  test("aviso de categoria some quando já há um motivo mais específico de ocultação", () => {
+    expect(deveAvisarSemCategoria(true, "Sem campos de personalização")).toBe(false);
+    expect(deveAvisarSemCategoria(true, null)).toBe(true);
+    expect(deveAvisarSemCategoria(false, null)).toBe(false);
+    expect(deveAvisarSemCategoria(false, "Sem campos de personalização")).toBe(false);
   });
 });
 

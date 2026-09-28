@@ -163,14 +163,30 @@ it("cantos cruzados não deixam salvar", async () => {
 });
 
 // ── QA rodada 2 (28/09/2026): "Remover marcação" e nota de cor ──────────
-it("'Remover marcação' só aparece com algo salvo, e grava mockup_foto sem o lado", async () => {
+it("'Remover marcação' só aparece com algo salvo, pede confirmação e grava mockup_foto null", async () => {
   await montar(configBase({ mockup_foto: { front: { photo_url: FOTO1, quad: QUAD_GRAVADO, shading: 0.6, w: 900, h: 1100 } } }));
   expect(screen.getByLabelText("Remover marcação")).toBeTruthy();
   await act(async () => { fireEvent.press(screen.getByLabelText("Remover marcação")); });
+  // QA fix (rodada 3, 28/09/2026): agora pede confirmação (ConfirmModal,
+  // padrão do app) antes de remover — não some na hora.
+  expect(screen.getByText("Remover marcação?")).toBeTruthy();
+  expect(mockSave).not.toHaveBeenCalled();
+  await act(async () => { fireEvent.press(screen.getByLabelText("Remover")); });
   await waitFor(() => expect(mockSave).toHaveBeenCalledTimes(1));
-  expect(mockSave.mock.calls[0][2].mockup_foto).toEqual({});
+  // QA fix: {} era verdadeiro em JS (any leitor que checasse só a
+  // presença do campo continuava lendo "tem mockup"); null limpa de vez.
+  expect(mockSave.mock.calls[0][2].mockup_foto).toBeNull();
   // Depois de remover, volta ao estado vazio (sem foto marcada pro lado).
   await waitFor(() => expect(screen.getByText("Escolha uma foto da peça para começar")).toBeTruthy());
+});
+
+it("'Remover marcação': Cancelar fecha sem remover", async () => {
+  await montar(configBase({ mockup_foto: { front: { photo_url: FOTO1, quad: QUAD_GRAVADO, shading: 0.6, w: 900, h: 1100 } } }));
+  await act(async () => { fireEvent.press(screen.getByLabelText("Remover marcação")); });
+  expect(screen.getByText("Remover marcação?")).toBeTruthy();
+  await act(async () => { fireEvent.press(screen.getByLabelText("Cancelar")); });
+  expect(mockSave).not.toHaveBeenCalled();
+  expect(screen.queryByText("Remover marcação?")).toBeNull();
 });
 
 it("sem nada salvo, não tem 'Remover marcação'", async () => {

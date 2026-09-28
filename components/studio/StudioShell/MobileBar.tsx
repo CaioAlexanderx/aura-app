@@ -13,6 +13,7 @@ import { useMemo } from "react";
 import { View, Pressable, Text, ScrollView } from "react-native";
 import { Icon } from "@/components/Icon";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
+import { studioNotificationColors } from "@/constants/studio-tokens";
 import { AuraStudioLockup } from "@/components/studio/AuraStudioMark";
 import { StudioThemeToggle } from "@/components/studio/StudioThemeToggle";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -35,6 +36,8 @@ export function MobileBar({
 }) {
   const tk = useStudioTokens();
   const s = useMemo(() => makeStyles(tk), [tk]);
+  // QA LJ-29 (28/09/2026): mesmo motivo do Topbar — sino seguindo o tema do Studio.
+  const notifColors = useMemo(() => studioNotificationColors(tk), [tk]);
 
   const chips = (
     <ScrollView
@@ -91,7 +94,7 @@ export function MobileBar({
           <AuraStudioLockup size={26} variant="dark" />
         </Pressable>
         <View style={{ flex: 1 }} />
-        <NotificationBell />
+        <NotificationBell colors={notifColors} />
       </View>
       {variant === "mobile" ? (
         <View style={s.mobileBarRow}>
