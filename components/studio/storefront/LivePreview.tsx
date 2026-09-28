@@ -35,7 +35,8 @@
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Platform, Pressable } from "react-native";
-import { PersonalizationPreviewBase, areaNoSvg, type PreviewPalette } from "@/components/studio/PersonalizationPreview";
+import { PersonalizationPreviewBase, type PreviewPalette } from "@/components/studio/PersonalizationPreview";
+import { areaNoSvg } from "@/components/studio/areaNoSvg";
 import { valoresDoMotor, valoresComArte } from "./valoresDoMotor";
 import { esperarFonteDaArte } from "./fonteDaArte";
 import { pontoNaAreaDaVista } from "@/components/studio/visualEngine/pontoNaVista";
