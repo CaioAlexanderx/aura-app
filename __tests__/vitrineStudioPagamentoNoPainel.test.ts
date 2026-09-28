@@ -8,6 +8,7 @@
 import {
   situacaoDoPagamento, acoesDoPagamento, formaDoPagamento, reais, temBlocoDePagamento,
   comprovanteEhPdf, seloDoPagamentoNaFila, totalDoPedido,
+  cpfCnpjFormatado, linhaDeEntrega, linhasDePagamentoEEntrega, motivoDoPixVencido,
 } from "@/components/studio/pagamentoDoPedido";
 
 const pix = (extra: Record<string, any> = {}) => ({
@@ -35,6 +36,91 @@ describe("formaDoPagamento", () => {
     expect(formaDoPagamento("pix")).toBe("Pix");
     expect(formaDoPagamento("card")).toBe("Cartão");
     expect(formaDoPagamento("on_delivery")).toBe("Na retirada/entrega");
+  });
+});
+
+// ── Pagamento e entrega (LJ-32, QA rodada 2, 28/09/2026) ─────────────────
+describe("cpfCnpjFormatado", () => {
+  test("CPF (11 dígitos) e CNPJ (14) mascarados; o resto passa como veio", () => {
+    expect(cpfCnpjFormatado("52998224725")).toBe("529.982.247-25");
+    expect(cpfCnpjFormatado("12345678000190")).toBe("12.345.678/0001-90");
+    expect(cpfCnpjFormatado("  529.982.247-25  ")).toBe("529.982.247-25");
+    expect(cpfCnpjFormatado(null)).toBeNull();
+    expect(cpfCnpjFormatado("")).toBeNull();
+  });
+});
+
+describe("linhaDeEntrega", () => {
+  test("sem delivery_type (backend antigo): null", () => {
+    expect(linhaDeEntrega({})).toBeNull();
+  });
+  test("pickup com e sem endereço da loja", () => {
+    expect(linhaDeEntrega({ delivery_type: "pickup", retirada_endereco: "Av Napoleão, 123" }))
+      .toBe("Retirada na loja · Av Napoleão, 123");
+    expect(linhaDeEntrega({ delivery_type: "pickup" })).toBe("Retirada na loja");
+  });
+  test("delivery com endereço completo, ou composto de bairro/cidade", () => {
+    expect(linhaDeEntrega({ delivery_type: "delivery", delivery_address: "Rua X, 1 - Centro" }))
+      .toBe("Receber em casa · Rua X, 1 - Centro");
+    expect(linhaDeEntrega({ delivery_type: "delivery", address_neighborhood: "Centro", address_city: "SJC" }))
+      .toBe("Receber em casa · Centro, SJC");
+    expect(linhaDeEntrega({ delivery_type: "delivery" })).toBe("Receber em casa");
+  });
+  test("courier: nome e placa, só nome, ou 'a cliente informa'", () => {
+    expect(linhaDeEntrega({ delivery_type: "courier", courier_name: "João", courier_plate: "ABC1D23" }))
+      .toBe("Retirada por app · João · ABC1D23");
+    expect(linhaDeEntrega({ delivery_type: "courier", courier_name: "João" }))
+      .toBe("Retirada por app · João");
+    expect(linhaDeEntrega({ delivery_type: "courier", courier_a_informar: true }))
+      .toBe("Retirada por app · a cliente informa quem busca");
+    expect(linhaDeEntrega({ delivery_type: "courier" }))
+      .toBe("Retirada por app · a cliente informa quem busca");
+  });
+});
+
+describe("linhasDePagamentoEEntrega", () => {
+  test("CPF só quando request_nfce E o CPF vieram", () => {
+    expect(linhasDePagamentoEEntrega({ customer_cpf_cnpj: "52998224725" })).toEqual([]);
+    expect(linhasDePagamentoEEntrega({ request_nfce: true })).toEqual([]);
+    expect(linhasDePagamentoEEntrega({ request_nfce: true, customer_cpf_cnpj: "52998224725" }))
+      .toEqual([{ rotulo: "CPF/CNPJ na nota", valor: "529.982.247-25" }]);
+  });
+  test("frete e desconto do Pix só quando > 0", () => {
+    expect(linhasDePagamentoEEntrega({ shipping_fee: 0, pix_discount: 0 })).toEqual([]);
+    expect(linhasDePagamentoEEntrega({ shipping_fee: 12.5 }))
+      .toEqual([{ rotulo: "Frete", valor: "R$ 12,50" }]);
+    expect(linhasDePagamentoEEntrega({ pix_discount: 4.48 }))
+      .toEqual([{ rotulo: "Desconto do Pix", valor: "− R$ 4,48" }]);
+  });
+  test("tudo junto, na ordem CPF → Entrega → Frete → Desconto", () => {
+    const linhas = linhasDePagamentoEEntrega({
+      request_nfce: true, customer_cpf_cnpj: "52998224725",
+      delivery_type: "delivery", delivery_address: "Rua X, 1",
+      shipping_fee: 10, pix_discount: 5,
+    });
+    expect(linhas.map((l) => l.rotulo)).toEqual(["CPF/CNPJ na nota", "Entrega", "Frete", "Desconto do Pix"]);
+  });
+  test("sem nenhum campo novo: lista vazia (a tela não desenha o bloco)", () => {
+    expect(linhasDePagamentoEEntrega({ id: "o1", status: "pending_payment" })).toEqual([]);
+  });
+});
+
+describe("motivoDoPixVencido", () => {
+  test("os quatro motivos reconhecidos", () => {
+    expect(motivoDoPixVencido({ pix_cancelamento: { vencido: true, motivo: "producao" } }))
+      .toBe("Este pedido não cancela sozinho porque a produção já começou.");
+    expect(motivoDoPixVencido({ pix_cancelamento: { vencido: true, motivo: "comprovante" } }))
+      .toBe("Este pedido não cancela sozinho porque a cliente mandou comprovante.");
+    expect(motivoDoPixVencido({ pix_cancelamento: { vencido: true, motivo: "ja_paguei" } }))
+      .toBe("Este pedido não cancela sozinho porque a cliente disse que pagou.");
+    expect(motivoDoPixVencido({ pix_cancelamento: { vencido: true, motivo: "sinal" } }))
+      .toBe("Este pedido não cancela sozinho porque você registrou o sinal.");
+  });
+  test("sem o campo, não vencido, ou motivo desconhecido: null (nada muda)", () => {
+    expect(motivoDoPixVencido({})).toBeNull();
+    expect(motivoDoPixVencido({ pix_cancelamento: { vencido: false, motivo: "producao" } })).toBeNull();
+    expect(motivoDoPixVencido({ pix_cancelamento: { vencido: true, motivo: null } })).toBeNull();
+    expect(motivoDoPixVencido(null)).toBeNull();
   });
 });
 

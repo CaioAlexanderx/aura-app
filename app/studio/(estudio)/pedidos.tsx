@@ -232,15 +232,28 @@ export default function StudioPedidosHub() {
           </Text>
           {alerts.slice(0, 8).map((a, i) => {
             const tone = sev[a.severity] || sev.info;
+            // FIX (identificador interno, QA 28/09/2026): o alerta de
+            // pedido atrasado usava o uuid em caixa alta. numeroDoPedido()
+            // é a fonte única — usa order_number quando o backend manda,
+            // senão cai no `title` de sempre (backend antigo, ou alerta
+            // que não é de um pedido, como estoque baixo).
+            const titulo = a.kind === "overdue" && (a.order_number != null || a.order_id)
+              ? `${numeroDoPedido({ order_number: a.order_number, id: a.order_id })} atrasado`
+              : a.title;
+            // "Aprovação pendente" agora pode linkar direto no pedido
+            // (order_id do aura-backend #762) em vez do quadro genérico.
+            const href = a.kind === "pending_approval" && a.order_id
+              ? `/studio/pedidos/${a.order_id}`
+              : a.href;
             return (
               <Pressable
                 key={i}
                 style={[s.alertRow, { backgroundColor: tone.bg }]}
-                onPress={() => router.push(a.href as any)}
+                onPress={() => router.push(href as any)}
               >
                 <Icon name={tone.icon as any} size={16} color={tone.color} />
                 <View style={{ flex: 1 }}>
-                  <Text style={[s.alertTitle, { color: tone.color }]}>{a.title}</Text>
+                  <Text style={[s.alertTitle, { color: tone.color }]}>{titulo}</Text>
                   <Text style={[s.alertSub, { color: tone.color, opacity: 0.85 }]}>{a.sub}</Text>
                 </View>
                 <Icon name="chevron-right" size={14} color={tone.color} />

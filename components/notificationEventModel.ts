@@ -57,6 +57,16 @@ const CATALOG: Record<string, CatalogEntry> = {
     accent: 'amber', icon: 'comprovante', glyph: '🧾',
     ctaLabel: 'Conferir comprovante', fallbackRoute: '/canal',
   },
+  // 28/09/2026 (QA rodada 2, achado LJ-29/LJ-33: "Já paguei" sem
+  // comprovante não avisava a lojista — nada entrava em "Precisa de
+  // você", só "Pedido novo"). Backend novo (aura-backend #762) emite
+  // este evento quando a cliente diz que pagou (com ou sem anexar
+  // comprovante), pra ela sempre ter onde conferir.
+  loja_pagamento_a_conferir: {
+    label: 'Pagamento a conferir', severity: 'atencao', requiresAction: true,
+    accent: 'amber', icon: 'dinheiro', glyph: '💰',
+    ctaLabel: 'Conferir pagamento', fallbackRoute: '/canal',
+  },
   loja_pix_expirado: {
     label: 'PIX expirou sem pagamento', severity: 'atencao', requiresAction: true,
     accent: 'amber', icon: 'relogio', glyph: '⏰',
@@ -279,14 +289,36 @@ function mkItem(events: StoreEvent[]): FeedItem {
  *  3. Dentro do dia, 2+ eventos do MESMO `entity_id` colapsam num card só.
  *     É isso que faz uma loja de 200 pedidos/dia caber na tela.
  */
+// Um evento deste tipo RESOLVE qualquer pendência do tipo indicado, do
+// MESMO `entity_id` — achado do QA (28/09/2026): "Ajuste pedido #N"
+// continuava em "Precisa de você" mesmo depois de a arte já ter sido
+// aprovada (loja_arte_aprovada chega DEPOIS do ajuste, no mesmo pedido).
+const RESOLVE: Partial<Record<string, string>> = {
+  loja_ajuste_pedido: "loja_arte_aprovada",
+};
+
 export function buildFeed(events: StoreEvent[], now: number = Date.now()): Feed {
   const lista = [...(events || [])].sort((a, b) => ts(b.created_at) - ts(a.created_at));
+
+  // O timestamp mais recente de cada tipo "resolvedor", por entidade —
+  // para saber se ele aconteceu DEPOIS da pendência que resolve.
+  const resolvidoEm = new Map<string, number>(); // `${entity_id}:${tipo}` -> ts
+  for (const ev of lista) {
+    if (!ev.entity_id) continue;
+    const chave = `${ev.entity_id}:${ev.type}`;
+    const t = ts(ev.created_at);
+    const atual = resolvidoEm.get(chave);
+    if (atual == null || t > atual) resolvidoEm.set(chave, t);
+  }
 
   const pendentes: StoreEvent[] = [];
   const resto:     StoreEvent[] = [];
   for (const ev of lista) {
     const v = visualForEvent(ev);
-    if (v.requiresAction && !ev.read_at) pendentes.push(ev);
+    const tipoQueResolve = RESOLVE[ev.type];
+    const resolvido = !!tipoQueResolve && !!ev.entity_id
+      && (resolvidoEm.get(`${ev.entity_id}:${tipoQueResolve}`) ?? -Infinity) >= ts(ev.created_at);
+    if (v.requiresAction && !ev.read_at && !resolvido) pendentes.push(ev);
     else resto.push(ev);
   }
 
@@ -359,6 +391,7 @@ export const PREF_SECTIONS: PrefSection[] = [
       { type: 'loja_pedido_pago',  nome: 'Pagamento confirmado', desc: 'PIX, cartão ou boleto que caiu.', padrao: true },
       { type: 'loja_sinal_pago',   nome: 'Sinal pago',           desc: 'Entrada de encomenda do Studio.', padrao: true },
       { type: 'loja_pix_expirado', nome: 'PIX expirou',          desc: 'A cobrança venceu antes de o cliente pagar.', padrao: true },
+      { type: 'loja_pagamento_a_conferir', nome: 'Pagamento a conferir', desc: 'A cliente disse que pagou — confira antes de aprovar.', fixo: true, padrao: true },
     ],
   },
   {

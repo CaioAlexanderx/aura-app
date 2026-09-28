@@ -38,7 +38,12 @@ export const varejoAccent: AccentTokens = {
 // Studio = navy + magenta
 export const studioAccent: AccentTokens = {
   primary:       StudioColors.primary,        // navy #1E3A8A
-  primaryStrong: StudioColors.accent,         // magenta #EC4899
+  // AA fix (QA da rodada 2, 28/09/2026): primaryStrong pinta texto pequeno
+  // e selo ("Copiar link", "Trocar logo", "Grátis", "1 ano") — o magenta
+  // puro (#EC4899) sobre branco dá só 3,2–3,5:1. accentInk é o mesmo
+  // magenta escurecido pra 4,5:1+ (AA), sem mudar a cor dos botões, que
+  // continuam com `primary`/`primarySoft`.
+  primaryStrong: StudioColors.accentInk,      // magenta escuro #BE185D
   primarySoft:   StudioColors.primaryGhost,   // #EFF6FF
   border:        StudioColors.ink5,           // #CBD5E1
 };

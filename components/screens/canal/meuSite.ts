@@ -135,14 +135,24 @@ export function meuSiteAlterado(atual: FormDoMeuSite, salvo: FormDoMeuSite, poli
 /**
  * O teclado do campo "Chave". Antes era numérico para todo tipo: quem
  * tinha chave de e-mail não achava o @ no celular.
+ *
+ * QA da rodada 2 (28/09/2026): o #981 (só o `tipo` decidia o teclado)
+ * continuava abrindo numérico para uma chave de e-mail já salva. A causa
+ * mais provável é o `pix_key_type` gravado não bater com o enum do
+ * seletor (maiúsculo/minúsculo, ou chave criada por outro caminho que
+ * não este formulário) — o valor do CAMPO em si, quando parece um
+ * e-mail, é mais confiável que o tipo guardado. `chave` é opcional só
+ * para não quebrar quem já chamava sem o segundo argumento.
  */
-export function tecladoDaChavePix(tipo: TipoDaChavePix): {
+export function tecladoDaChavePix(tipo: TipoDaChavePix, chave?: string): {
   inputMode: "numeric" | "email" | "text";
   keyboardType: "number-pad" | "email-address" | "default";
   autoCapitalize: "none";
 } {
-  if (tipo === "EMAIL") return { inputMode: "email", keyboardType: "email-address", autoCapitalize: "none" };
-  if (tipo === "RANDOM") return { inputMode: "text", keyboardType: "default", autoCapitalize: "none" };
+  const pareceEmail = !!chave && chave.includes("@");
+  const tipoEfetivo = pareceEmail ? "EMAIL" : tipo;
+  if (tipoEfetivo === "EMAIL") return { inputMode: "email", keyboardType: "email-address", autoCapitalize: "none" };
+  if (tipoEfetivo === "RANDOM") return { inputMode: "text", keyboardType: "default", autoCapitalize: "none" };
   return { inputMode: "numeric", keyboardType: "number-pad", autoCapitalize: "none" };
 }
 

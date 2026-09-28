@@ -50,10 +50,57 @@ describe("visualForEvent — catálogo e desconhecidos", () => {
     expect(visualForEvent({ type: "loja_novidade_do_backend", severity: "critico" }).requiresAction).toBe(true);
   });
 
+  // 28/09/2026 (QA rodada 2, achado LJ-29/LJ-33, aura-backend #762): "Já
+  // paguei" sem comprovante não avisava a lojista.
+  test("pagamento a conferir: 'Precisa de você', com rótulo e ícone próprios", () => {
+    const v = visualForEvent({ type: "loja_pagamento_a_conferir" });
+    expect(v.label).toBe("Pagamento a conferir");
+    expect(v.severity).toBe("atencao");
+    expect(v.requiresAction).toBe(true);
+    expect(v.icon).toBe("dinheiro");
+  });
+
   test("selo textual existe pra crítico e atenção, não pra info", () => {
     expect(severityLabel("critico")).toBe("Crítico");
     expect(severityLabel("atencao")).toBe("Ação");
     expect(severityLabel("info")).toBeNull();
+  });
+});
+
+describe("buildFeed — arte aprovada resolve o ajuste do mesmo pedido (QA 28/09/2026)", () => {
+  test("ajuste pendente some de 'Precisa de você' quando a arte já foi aprovada depois", () => {
+    const feed = buildFeed([
+      ev({ id: "aprovado", type: "loja_arte_aprovada", entity_id: "pedido:1", created_at: h(1) }),
+      ev({ id: "ajuste", type: "loja_ajuste_pedido", entity_id: "pedido:1", created_at: h(2) }),
+    ], AGORA);
+    expect(feed.acoes.map(i => i.event.id)).toEqual([]);
+    expect(feed.actionCount).toBe(0);
+    // Não some do feed inteiro — desce pro dia, como qualquer evento lido.
+    const idsDoDia = feed.dias.flatMap(d => d.items.flatMap(i => i.events.map(e => e.id)));
+    expect(idsDoDia).toContain("ajuste");
+  });
+
+  test("sem uma aprovação depois, o ajuste continua em 'Precisa de você'", () => {
+    const feed = buildFeed([
+      ev({ id: "ajuste", type: "loja_ajuste_pedido", entity_id: "pedido:2", created_at: h(1) }),
+    ], AGORA);
+    expect(feed.acoes.map(i => i.event.id)).toEqual(["ajuste"]);
+  });
+
+  test("aprovação de OUTRO pedido não resolve o ajuste deste", () => {
+    const feed = buildFeed([
+      ev({ id: "aprovado-outro", type: "loja_arte_aprovada", entity_id: "pedido:99", created_at: h(1) }),
+      ev({ id: "ajuste", type: "loja_ajuste_pedido", entity_id: "pedido:2", created_at: h(2) }),
+    ], AGORA);
+    expect(feed.acoes.map(i => i.event.id)).toEqual(["ajuste"]);
+  });
+
+  test("aprovação ANTES do ajuste não resolve (o ajuste é o mais novo, ainda em aberto)", () => {
+    const feed = buildFeed([
+      ev({ id: "ajuste", type: "loja_ajuste_pedido", entity_id: "pedido:3", created_at: h(1) }),
+      ev({ id: "aprovado-antigo", type: "loja_arte_aprovada", entity_id: "pedido:3", created_at: h(5) }),
+    ], AGORA);
+    expect(feed.acoes.map(i => i.event.id)).toEqual(["ajuste"]);
   });
 });
 

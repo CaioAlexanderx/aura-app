@@ -126,7 +126,7 @@ type BannerLido = {
   image_url?: string | null; image_url_mobile?: string | null; enabled?: boolean;
 };
 
-function temConteudo(b: BannerLido): boolean {
+export function temConteudo(b: BannerLido): boolean {
   return !!(b.image_url || b.image_url_mobile || String(b.headline || "").trim()
     || String(b.body || "").trim() || String(b.kicker || "").trim());
 }

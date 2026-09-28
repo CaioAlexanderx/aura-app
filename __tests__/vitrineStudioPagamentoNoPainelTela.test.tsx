@@ -166,6 +166,76 @@ test("pago e cartão: sem botão de baixa", () => {
   expect(screen.queryByText("Recusar pagamento")).toBeNull();
 });
 
+// ── QA rodada 2 (28/09/2026): "Pagamento e entrega" (LJ-32) ──────────────
+test("CPF/CNPJ na nota, entrega e frete aparecem quando o backend manda", () => {
+  montar({
+    ...PEDIDO,
+    request_nfce: true,
+    customer_cpf_cnpj: "52998224725",
+    delivery_type: "delivery",
+    delivery_address: "Rua das Flores, 123 - Centro, São José dos Campos/SP",
+    shipping_fee: 12.5,
+    pix_discount: 4.48,
+  });
+  expect(naTela("PAGAMENTO E ENTREGA")).toBe(true);
+  expect(naTela("CPF/CNPJ na nota")).toBe(true);
+  expect(naTela("529.982.247-25")).toBe(true);
+  expect(naTela("Receber em casa · Rua das Flores, 123 - Centro, São José dos Campos/SP")).toBe(true);
+  expect(naTela("Frete")).toBe(true);
+  expect(naTela("R$ 12,50")).toBe(true);
+  expect(naTela("Desconto do Pix")).toBe(true);
+  expect(naTela("R$ 4,48")).toBe(true);
+});
+
+test("retirada na loja e retirada por app, com fallback de quem busca", () => {
+  montar({ ...PEDIDO, delivery_type: "pickup", retirada_endereco: "Av Napoleão Bonaparte, 123" });
+  expect(naTela("Retirada na loja · Av Napoleão Bonaparte, 123")).toBe(true);
+  screen.unmount();
+
+  montar({ ...PEDIDO, delivery_type: "courier", courier_name: "João Motoboy", courier_plate: "ABC1D23" });
+  expect(naTela("Retirada por app · João Motoboy · ABC1D23")).toBe(true);
+  screen.unmount();
+
+  montar({ ...PEDIDO, delivery_type: "courier", courier_a_informar: true });
+  expect(naTela("Retirada por app · a cliente informa quem busca")).toBe(true);
+});
+
+test("sem os campos novos (backend antigo), o bloco não aparece", () => {
+  montar(PEDIDO);
+  expect(naTela("PAGAMENTO E ENTREGA")).toBe(false);
+});
+
+test("Pix vencido conta por que não cancelou sozinho (LJ-34)", () => {
+  montar({ ...PEDIDO, pix_cancelamento: { vencido: true, motivo: "producao" } });
+  expect(naTela("Este pedido não cancela sozinho porque a produção já começou.")).toBe(true);
+});
+
+test("Pix vencido sem o campo: nada muda", () => {
+  montar(PEDIDO);
+  expect(naTela("não cancela sozinho")).toBe(false);
+});
+
+// ── QA rodada 2: "Recusar pagamento" nunca falha calado ──────────────────
+test("recusar com erro do servidor: mensagem na folha, folha aberta, motivo mantido", async () => {
+  mockRecusar.mockRejectedValueOnce(new Error("Erro ao rejeitar pagamento"));
+  const onAtualizado = montar({ ...PEDIDO, status: "awaiting_approval" });
+  fireEvent.press(screen.getByText("Recusar pagamento"));
+  fireEvent.changeText(screen.getByLabelText("Motivo da recusa"), "não confere");
+  fireEvent.press(screen.getByText("Recusar e cancelar"));
+  await waitFor(() => expect(naTela("Erro ao rejeitar pagamento")).toBe(true));
+  // a folha continua aberta com o motivo digitado
+  expect(screen.getByLabelText("Motivo da recusa").props.value).toBe("não confere");
+  expect(onAtualizado).not.toHaveBeenCalled();
+});
+
+test("recusar com erro sem mensagem do servidor: texto padrão", async () => {
+  mockRecusar.mockRejectedValueOnce({});
+  montar({ ...PEDIDO, status: "awaiting_approval" });
+  fireEvent.press(screen.getByText("Recusar pagamento"));
+  fireEvent.press(screen.getByText("Recusar e cancelar"));
+  await waitFor(() => expect(naTela("Não deu para recusar o pagamento. Tente de novo.")).toBe(true));
+});
+
 test("selo da fila: Pagamento a conferir só quando há o que conferir", () => {
   render(<SeloDoPagamento item={{ status: "pending_art", order_status: "awaiting_approval", payment_method: "pix" }} />);
   expect(naTela("Pagamento a conferir")).toBe(true);

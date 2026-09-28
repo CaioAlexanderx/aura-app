@@ -34,8 +34,8 @@ import {
   areaImpressaDoLado, ladosDaPeca, vistaDaMarcacao, type LadoDaPeca,
 } from "@/components/studio/visualEngine/specDaFotoDoProduto";
 import {
-  cantoEm, configComLado, ladoParaGravar, mesmaMarcacao, moverCanto, passoDaTecla,
-  quadDaFotoValido, quadInicial, rascunhoDoGravado, type RascunhoDoLado,
+  cantoEm, configComLado, configSemLado, ladoParaGravar, mesmaMarcacao, moverCanto, passoDaTecla,
+  quadDaFotoValido, quadInicial, rascunhoDoGravado, temCampoDeCor, type RascunhoDoLado,
 } from "@/components/studio/visualEngine/marcacaoDaFoto";
 
 type Props = {
@@ -252,6 +252,9 @@ export function MockupNaFotoSecao({
   const [arte, setArte] = useState<ArteDeExemplo>("selo");
   const [blend, setBlend] = useState<BlendDaArte | null>(null);
   const [falhaDaFoto, setFalhaDaFoto] = useState(false);
+  // "Remover marcação" (achado do QA, 28/09/2026): não existia como
+  // desfazer o mockup salvo — a única saída era marcar em cima de novo.
+  const [removendo, setRemovendo] = useState(false);
   const [larguraDoPalco, refDoPalco, onLayoutDoPalco] = useLargura();
   const [larguraDoEditor, refDoEditor, onLayoutDoEditor] = useLargura();
 
@@ -336,6 +339,23 @@ export function MockupNaFotoSecao({
   async function salvar() {
     if (!paraGravar) return;
     await onSalvar(configComLado(config, ladoAtivo, paraGravar));
+  }
+
+  const temMarcacaoGravada = !!gravado[ladoAtivo];
+
+  async function remover() {
+    if (!temMarcacaoGravada || salvando || removendo) return;
+    setRemovendo(true);
+    try {
+      const ok = await onSalvar(configSemLado(config, ladoAtivo));
+      // Volta o rascunho local ao vazio: sem isto, a marcação recém-
+      // removida reaparecia como "há o que salvar" (o rascunho local ainda
+      // tinha a foto e o quad de antes, comparando contra um `gravado`
+      // agora vazio).
+      if (ok) patch(ladoAtivo, rascunhoDoGravado(undefined));
+    } finally {
+      setRemovendo(false);
+    }
   }
 
   function verComoCliente() {
@@ -631,6 +651,20 @@ export function MockupNaFotoSecao({
               >
                 <Text style={[s.botaoTxt, { color: t.ink2 }]}>Refazer marcação</Text>
               </Pressable>
+              {temMarcacaoGravada ? (
+                <Pressable
+                  testID="remover-marcacao"
+                  onPress={remover}
+                  disabled={salvando || removendo}
+                  accessibilityLabel="Remover marcação"
+                  style={[s.botao, s.botaoSecundario, (salvando || removendo) && { opacity: 0.5 }]}
+                  accessibilityRole="button"
+                >
+                  <Text style={[s.botaoTxt, { color: t.dangerInk }]}>
+                    {removendo ? "Removendo..." : "Remover marcação"}
+                  </Text>
+                </Pressable>
+              ) : null}
               <Pressable
                 testID="salvar-posicao"
                 onPress={salvar}
@@ -662,6 +696,18 @@ export function MockupNaFotoSecao({
             </View>
           ) : null}
 
+          {/* Achado do QA (28/09/2026): a foto marcada mostra a peça na cor
+              em que foi fotografada, mas a produção segue a cor que a
+              cliente escolher na compra — sem isto a lojista podia achar
+              que a prévia já reflete a cor escolhida. */}
+          {!vazio && temCampoDeCor(config) ? (
+            <View style={[s.aviso, { backgroundColor: t.infoSoft }]} testID="aviso-cor">
+              <Icon name="info" size={15} color={t.infoInk} />
+              <Text style={[s.avisoTxt, { color: t.infoInk }]}>
+                A foto mostra a peça na cor fotografada; a cor escolhida pela cliente vai na produção.
+              </Text>
+            </View>
+          ) : null}
           {falhaDaFoto ? (
             <View style={[s.aviso, { backgroundColor: t.warningSoft }]}>
               <Icon name="alert_circle" size={15} color={t.warningInk} />

@@ -162,6 +162,35 @@ it("cantos cruzados não deixam salvar", async () => {
   expect(mockSave).not.toHaveBeenCalled();
 });
 
+// ── QA rodada 2 (28/09/2026): "Remover marcação" e nota de cor ──────────
+it("'Remover marcação' só aparece com algo salvo, e grava mockup_foto sem o lado", async () => {
+  await montar(configBase({ mockup_foto: { front: { photo_url: FOTO1, quad: QUAD_GRAVADO, shading: 0.6, w: 900, h: 1100 } } }));
+  expect(screen.getByLabelText("Remover marcação")).toBeTruthy();
+  await act(async () => { fireEvent.press(screen.getByLabelText("Remover marcação")); });
+  await waitFor(() => expect(mockSave).toHaveBeenCalledTimes(1));
+  expect(mockSave.mock.calls[0][2].mockup_foto).toEqual({});
+  // Depois de remover, volta ao estado vazio (sem foto marcada pro lado).
+  await waitFor(() => expect(screen.getByText("Escolha uma foto da peça para começar")).toBeTruthy());
+});
+
+it("sem nada salvo, não tem 'Remover marcação'", async () => {
+  await montar(configBase());
+  expect(screen.queryByLabelText("Remover marcação")).toBeNull();
+});
+
+it("produto com campo de cor: nota de que a foto está na cor fotografada", async () => {
+  await montar(configBase({
+    fields: [{ id: "color", type: "color", label: "Cor", required: false, side: "front", config: { colors: ["#000", "#FFF"] } }],
+    mockup_foto: { front: { photo_url: FOTO1, quad: QUAD_GRAVADO, shading: 0.6, w: 900, h: 1100 } },
+  }));
+  expect(screen.getByText("A foto mostra a peça na cor fotografada; a cor escolhida pela cliente vai na produção.")).toBeTruthy();
+});
+
+it("produto sem campo de cor: sem a nota", async () => {
+  await montar(configBase({ mockup_foto: { front: { photo_url: FOTO1, quad: QUAD_GRAVADO, shading: 0.6, w: 900, h: 1100 } } }));
+  expect(screen.queryByText(/cor fotografada/)).toBeNull();
+});
+
 it("abas só para os lados ligados", async () => {
   await montar(configBase({ has_back: true, back_print_area: { width_cm: 30, height_cm: 40, position: "center" } }));
   expect(screen.getByLabelText("Frente")).toBeTruthy();

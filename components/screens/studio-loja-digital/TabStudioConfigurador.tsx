@@ -9,6 +9,7 @@ import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import {
   AVISO_SEM_CATEGORIA, pecaSemCategoria, rotuloDaPosicao, textoDoTotal, textoSemCategoria,
+  motivoOcultoNaLoja, temMotivoDeOcultacao, textoDeVisibilidade,
 } from "./configuradorDaLoja";
 
 type FieldType = "text" | "image" | "template" | "color" | "option" | string;
@@ -41,6 +42,8 @@ type ProductRow = {
   /** Quando a rota trouxer (null = sem categoria). Hoje ela não traz. */
   category_id?: string | null;
   studio_storefront_visible?: boolean;
+  /** LJ-17 (QA rodada 2): por que a vitrine não mostra a peça, mesmo com o interruptor ligado. */
+  motivo_oculto_na_loja?: string | null;
 };
 
 /**
@@ -178,13 +181,20 @@ export function TabStudioConfigurador() {
   }
 
   const qtdSemCategoria = products.filter((p) => pecaSemCategoria(p, { semCategoria })).length;
+  // LJ-17: quando a vitrine manda o motivo de ocultação, o cabeçalho conta
+  // visíveis × ocultas de verdade, em vez do total genérico de sempre.
+  const backendComMotivo = temMotivoDeOcultacao(products);
+  const qtdOcultas = products.filter((p) => !!motivoOcultoNaLoja(p)).length;
+  const qtdVisiveis = products.length - qtdOcultas;
 
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle}>Produtos personalizáveis na sua Loja Digital</Text>
-          <Text style={styles.headerSubtitle}>{textoDoTotal(products.length)}</Text>
+          <Text style={styles.headerSubtitle}>
+            {backendComMotivo ? textoDeVisibilidade(qtdVisiveis, qtdOcultas) : textoDoTotal(products.length)}
+          </Text>
           {qtdSemCategoria > 0 ? (
             <View style={styles.semCatResumo} testID="resumo-sem-categoria">
               <Icon name="alert" size={12} color={t.warningInk} />
@@ -208,6 +218,7 @@ export function TabStudioConfigurador() {
           const pos = rotuloDaPosicao(print.position);
           const hidden = p.studio_storefront_visible === false;
           const orfa = pecaSemCategoria(p, { semCategoria });
+          const motivoOculto = motivoOcultoNaLoja(p);
 
           // Meta compacta: campos + área numa linha só (era 2 seções de chips)
           const metaParts: string[] = [];
@@ -249,9 +260,11 @@ export function TabStudioConfigurador() {
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={styles.visLabel}>Mostrar na Loja Digital</Text>
                   <Text style={styles.visHint}>
-                    {hidden
-                      ? "Oculto: não aparece na vitrine pública."
-                      : "Visível: aparece na vitrine pública para os clientes."}
+                    {motivoOculto
+                      ? `Não aparece na loja: ${motivoOculto}`
+                      : hidden
+                        ? "Oculto: não aparece na vitrine pública."
+                        : "Visível: aparece na vitrine pública para os clientes."}
                   </Text>
                 </View>
                 {/* Interruptor com alvo de 44 px (o Switch nativo do web

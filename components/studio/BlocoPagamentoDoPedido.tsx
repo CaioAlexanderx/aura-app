@@ -30,7 +30,8 @@ import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { pagamentoDoPedidoDigitalApi } from "@/hooks/useDigitalOrders";
 import {
   situacaoDoPagamento, acoesDoPagamento, formaDoPagamento, reais, totalDoPedido,
-  comprovanteEhPdf, type PagamentoDoPedido, type TomDoPagamento,
+  comprovanteEhPdf, linhasDePagamentoEEntrega, motivoDoPixVencido,
+  type PagamentoDoPedido, type TomDoPagamento,
 } from "./pagamentoDoPedido";
 
 type Props = {
@@ -57,25 +58,41 @@ export function BlocoPagamentoDoPedido({ pedido, companyIdDaSessao, onAtualizado
   const [agindo, setAgindo] = useState<Confirmacao>(null);
   const [ampliado, setAmpliado] = useState(false);
   const [miniaturaFalhou, setMiniaturaFalhou] = useState(false);
+  // FIX (achado novo do QA, 28/09/2026): "Recusar pagamento" (e "Aprovar")
+  // falhando no servidor fechava a folha em silêncio — nada mudava, nenhum
+  // erro aparecia. Erro inline na PRÓPRIA folha (não só toast, que pode
+  // ficar atrás do overlay do modal): mensagem do servidor ou o texto
+  // padrão, a folha continua aberta e o que a lojista digitou (motivo)
+  // continua lá.
+  const [erroAcao, setErroAcao] = useState<string | null>(null);
 
   const cor = corDoTom(t, situacao.tom);
   const comprovante = pedido.payment_proof_url || null;
   const pdf = comprovanteEhPdf(comprovante);
+  const linhasEntrega = linhasDePagamentoEEntrega(pedido);
+  const motivoVencido = motivoDoPixVencido(pedido);
 
   function fechar() {
     if (agindo) return;
     setConfirmacao(null);
     setMotivo("");
+    setErroAcao(null);
+  }
+
+  function abrirConfirmacao(acao: Exclude<Confirmacao, null>) {
+    setErroAcao(null);
+    setConfirmacao(acao);
   }
 
   async function executar() {
     const acao = confirmacao;
     if (!acao || !pedido.id) return;
     if (!cid) {
-      toast.error("Empresa não identificada — recarregue a página e tente de novo.");
+      setErroAcao("Empresa não identificada — recarregue a página e tente de novo.");
       return;
     }
     setAgindo(acao);
+    setErroAcao(null);
     try {
       if (acao === "aprovar") {
         await pagamentoDoPedidoDigitalApi.aprovar(cid, pedido.id);
@@ -88,7 +105,14 @@ export function BlocoPagamentoDoPedido({ pedido, companyIdDaSessao, onAtualizado
       setMotivo("");
       await onAtualizado();
     } catch (e: any) {
+      // Nunca fecha calada: mensagem do servidor (ou o texto padrão) fica
+      // NA FOLHA (não só no toast, que pode ficar atrás do overlay do
+      // modal), e o motivo que a lojista já tinha digitado não some.
       const padrao = acao === "aprovar" ? "Não foi possível confirmar o pagamento" : "Não foi possível recusar o pagamento";
+      const fallbackDaFolha = acao === "aprovar"
+        ? "Não deu para confirmar o pagamento. Tente de novo."
+        : "Não deu para recusar o pagamento. Tente de novo.";
+      setErroAcao(e?.message || fallbackDaFolha);
       toast.error(e?.message ? `${padrao}: ${e.message}` : padrao);
     } finally {
       setAgindo(null);
@@ -118,6 +142,25 @@ export function BlocoPagamentoDoPedido({ pedido, companyIdDaSessao, onAtualizado
         <Text style={[s.pilulaTxt, { color: cor.texto }]}>{situacao.rotulo}</Text>
       </View>
       <Text style={s.detalhe}>{situacao.detalhe}</Text>
+      {/* LJ-34: Pix vencido sem dizer por que não cancelou sozinho. */}
+      {motivoVencido ? <Text style={[s.detalhe, { marginTop: 4 }]}>{motivoVencido}</Text> : null}
+
+      {/* LJ-32: CPF/CNPJ da nota, entrega/retirada, frete e desconto do
+          Pix — logo abaixo do PAGAMENTO, cada linha só quando há o quê
+          mostrar. */}
+      {linhasEntrega.length > 0 ? (
+        <View style={s.entregaBox} testID="pagamento-e-entrega">
+          <Text style={s.eyebrowEntrega}>PAGAMENTO E ENTREGA</Text>
+          <View style={s.linha}>
+            {linhasEntrega.map((l) => (
+              <View key={l.rotulo} style={s.campo}>
+                <Text style={s.rotulo}>{l.rotulo}</Text>
+                <Text style={s.valor}>{l.valor}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : null}
 
       {comprovante ? (
         <View style={s.comprovante}>
@@ -155,7 +198,7 @@ export function BlocoPagamentoDoPedido({ pedido, companyIdDaSessao, onAtualizado
         <View style={s.acoes}>
           <Pressable
             testID="btn-confirmar-pagamento"
-            onPress={() => setConfirmacao("aprovar")}
+            onPress={() => abrirConfirmacao("aprovar")}
             disabled={!!agindo}
             style={[s.botao, { backgroundColor: t.primary }, agindo && s.desligado]}
             accessibilityRole="button"
@@ -168,7 +211,7 @@ export function BlocoPagamentoDoPedido({ pedido, companyIdDaSessao, onAtualizado
           </Pressable>
           <Pressable
             testID="btn-recusar-pagamento"
-            onPress={() => setConfirmacao("recusar")}
+            onPress={() => abrirConfirmacao("recusar")}
             disabled={!!agindo}
             style={[s.botao, s.botaoSecundario, agindo && s.desligado]}
             accessibilityRole="button"
@@ -217,6 +260,12 @@ export function BlocoPagamentoDoPedido({ pedido, companyIdDaSessao, onAtualizado
                 />
               </>
             )}
+            {erroAcao ? (
+              <View style={s.erroBox} testID="erro-acao-pagamento" accessibilityRole="alert">
+                <Icon name="alert-circle" size={14} color={t.dangerInk} />
+                <Text style={s.erroTxt}>{erroAcao}</Text>
+              </View>
+            ) : null}
             <View style={s.botoesModal}>
               <Pressable
                 onPress={fechar}
@@ -298,6 +347,10 @@ function buildStyles(t: StudioPalette) {
     pilula: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
     pilulaTxt: { fontSize: 12, fontWeight: "800" },
     detalhe: { fontSize: 12.5, color: t.ink2, lineHeight: 18, marginTop: 8 },
+    entregaBox: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: t.ink5 },
+    eyebrowEntrega: { fontSize: 10, fontWeight: "800", color: t.ink3, letterSpacing: 0.8, marginBottom: 10 },
+    erroBox: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginTop: 14, padding: 10, borderRadius: 10, backgroundColor: t.dangerSoft },
+    erroTxt: { flex: 1, fontSize: 12.5, color: t.dangerInk, lineHeight: 17, fontWeight: "600" },
     comprovante: { marginTop: 14 },
     miniaturaAlvo: { alignSelf: "flex-start", gap: 4, minHeight: 44 },
     miniatura: { width: 96, height: 120, borderRadius: 10, backgroundColor: t.bgSoft, borderWidth: 1, borderColor: t.ink5 },

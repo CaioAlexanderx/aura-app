@@ -16,13 +16,14 @@ import {
 import { lerCorDigitada, hexValido, ERRO_DA_COR } from "@/components/screens/canal/SeletorDeCor";
 import { corInicialDaLoja, configChegou, trocarESalvar } from "@/components/screens/canal/designDaVitrineStudio";
 import {
-  bannersDeFabrica, temBannerDaLojista, montarChecklist, BANNER_DE_FABRICA,
+  bannersDeFabrica, temBannerDaLojista, montarChecklist, BANNER_DE_FABRICA, temConteudo,
 } from "@/components/screens/canal/specsDeImagem";
 import {
   semComoReceber, desligarPedeConfirmacao, textosDoPrazo, AVISO_SEM_RECEBIMENTO,
 } from "@/components/screens/canal/entrega";
 import {
   pecaSemCategoria, textoDoTotal, textoSemCategoria, rotuloDaPosicao, AVISO_SEM_CATEGORIA,
+  motivoOcultoNaLoja, temMotivoDeOcultacao, textoDeVisibilidade,
 } from "@/components/screens/studio-loja-digital/configuradorDaLoja";
 import {
   topoDaTemporada, mostrarCampoDoRecado, formDaConfig,
@@ -130,6 +131,17 @@ describe("Meu Site: teclado da chave Pix e dica do publicado", () => {
     expect(tecladoDaChavePix("RANDOM")).toMatchObject({ inputMode: "text", keyboardType: "default" });
   });
 
+  // QA rodada 2 (28/09/2026): o tipo salvo (CPF/CNPJ/EMAIL/...) pode não
+  // bater com o enum do seletor — a chave em si, quando parece e-mail,
+  // vale mais que o tipo guardado.
+  test("chave com @ abre teclado de e-mail mesmo com tipo salvo errado", () => {
+    expect(tecladoDaChavePix("CPF", "qa+studio@getaura.com.br")).toMatchObject({
+      inputMode: "email", keyboardType: "email-address",
+    });
+    expect(tecladoDaChavePix("CPF", "12345678900").inputMode).toBe("numeric");
+    expect(tecladoDaChavePix("EMAIL", undefined).inputMode).toBe("email");
+  });
+
   test("interruptor diferente do salvo avisa", () => {
     expect(dicaDoPublicado(true, true)).toBe("Visível para clientes");
     expect(dicaDoPublicado(false, false)).toBe("Site oculto");
@@ -234,6 +246,16 @@ describe("banner de fábrica não conta como banner no ar", () => {
     const item = montarChecklist({ banners: [{ image_url: "https://x/b.jpg", enabled: true }] }).find((i) => i.chave === "banner")!;
     expect(item.feito).toBe(true);
   });
+
+  // LJ-12 (QA rodada 2, 28/09/2026): Banner 2/3 vazios apareciam com o
+  // selo "Ativo" — sem imagem nem texto, "ativo" não significa nada.
+  test("temConteudo: só com imagem ou algum texto", () => {
+    expect(temConteudo({ enabled: true })).toBe(false);
+    expect(temConteudo({ enabled: true, image_url: "https://x/b.jpg" })).toBe(true);
+    expect(temConteudo({ enabled: true, headline: "  " })).toBe(false);
+    expect(temConteudo({ enabled: true, headline: "Coleção" })).toBe(true);
+    expect(temConteudo({ enabled: true, body: "Peças novas" })).toBe(true);
+  });
 });
 
 // ── 5 · Entrega ───────────────────────────────────────────
@@ -293,6 +315,27 @@ describe("Configurador", () => {
     expect(rotuloDaPosicao("right")).toBe("Direita");
     expect(rotuloDaPosicao(null)).toBeNull();
     expect(AVISO_SEM_CATEGORIA).toContain("Outras peças");
+  });
+
+  // LJ-17 (QA rodada 2, 28/09/2026): o Configurador prometia "Visível" pra
+  // peça que a vitrine na verdade escondia (estoque, categoria inativa…).
+  test("motivo oculto: só quando o campo vem preenchido", () => {
+    expect(motivoOcultoNaLoja({ motivo_oculto_na_loja: "Sem estoque" })).toBe("Sem estoque");
+    expect(motivoOcultoNaLoja({ motivo_oculto_na_loja: "  " })).toBeNull();
+    expect(motivoOcultoNaLoja({ motivo_oculto_na_loja: null })).toBeNull();
+    expect(motivoOcultoNaLoja({})).toBeNull();
+  });
+
+  test("backend novo: ao menos uma peça traz o campo (mesmo vazio)", () => {
+    expect(temMotivoDeOcultacao([{ motivo_oculto_na_loja: null }, {}])).toBe(true);
+    expect(temMotivoDeOcultacao([{}, {}])).toBe(false);
+  });
+
+  test("cabeçalho: visíveis · ocultas, no singular e no plural", () => {
+    expect(textoDeVisibilidade(35, 0)).toBe("35 peças visíveis na loja");
+    expect(textoDeVisibilidade(1, 0)).toBe("1 peça visível na loja");
+    expect(textoDeVisibilidade(30, 5)).toBe("30 peças visíveis na loja · 5 ocultas");
+    expect(textoDeVisibilidade(34, 1)).toBe("34 peças visíveis na loja · 1 oculta");
   });
 });
 

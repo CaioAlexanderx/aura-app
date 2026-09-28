@@ -981,15 +981,18 @@ function buildStyles(t: StudioPalette) {
     btnRecebiTxt: { fontSize: 11.5, color: t.successInk, fontWeight: "700" },
 
     cardActions: { gap: 6, marginTop: 8 },
+    // Alvo de toque de 44 px (achado do QA, 28/09/2026): "Solicitar
+    // aprovação", "Marcar como aprovado" e "Iniciar produção" tinham
+    // 32-33 px de altura no celular.
     btnApproval: {
       flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
       backgroundColor: t.success,
-      paddingVertical: 8, borderRadius: 8,
+      paddingVertical: 8, borderRadius: 8, minHeight: 44,
     },
     btnApprovalTxt: { color: "#fff", fontWeight: "700", fontSize: 12 },
     btnAdvance: {
-      paddingVertical: 8, borderRadius: 8,
-      alignItems: "center",
+      paddingVertical: 8, borderRadius: 8, minHeight: 44,
+      alignItems: "center", justifyContent: "center",
     },
     btnAdvanceTxt: { color: "#fff", fontWeight: "700", fontSize: 12 },
   });

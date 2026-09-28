@@ -29,6 +29,7 @@ import { StudioBreadcrumb } from "@/components/studio/StudioBreadcrumb";
 import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
 import { rotuloDaChave, valorDaChave, chaveLateralVisivel, ladoComConteudo } from "@/components/studio/customizationConfig";
 import { BlocoPagamentoDoPedido } from "@/components/studio/BlocoPagamentoDoPedido";
+import { ApprovalRequestModal } from "@/components/studio/ApprovalRequestModal";
 import { temBlocoDePagamento, situacaoDoPagamento, reais, numeroDoPedido, comprovanteEhPdf } from "@/components/studio/pagamentoDoPedido";
 import { separarReferencia } from "@/components/studio/referenciaDoAjuste";
 import { ART_SERVICE_FIELD_ID, labelForArtServiceValue } from "@/components/studio/artService";
@@ -418,6 +419,11 @@ export default function StudioOrderDetail() {
   // genérico e sem toast nenhum.
   const [loadError, setLoadError] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
+  // FIX (achado do QA, 28/09/2026): "Solicitar aprovação" no detalhe só
+  // levava pra Produção (deep-link ?intent=approval); a lojista tinha
+  // que achar o cartão do MESMO pedido lá pra abrir o modal de verdade.
+  // Mesmo padrão de app/studio/(estudio)/producao.tsx: Modal + estado local.
+  const [aprovacaoAberta, setAprovacaoAberta] = useState(false);
   // FIX (bug #6 QA): customization_config por product_id, pra renderizar
   // PersonalizationPreview + rótulos legíveis em vez de JSON cru.
   const [configByProduct, setConfigByProduct] = useState<Record<string, CustomizationConfig | null>>({});
@@ -601,7 +607,7 @@ export default function StudioOrderDetail() {
           )}
           {status === "pending_art" && (
             <Pressable
-              onPress={() => router.push("/studio/producao?intent=approval" as any)}
+              onPress={() => setAprovacaoAberta(true)}
               style={[s.actionBtn, { backgroundColor: tk.accent }]}
               accessibilityLabel="Solicitar aprovação de arte pelo WhatsApp"
             >
@@ -725,6 +731,20 @@ export default function StudioOrderDetail() {
           />
         ) : null}
       </View>
+
+      <Modal
+        visible={aprovacaoAberta}
+        animationType="slide"
+        onRequestClose={() => setAprovacaoAberta(false)}
+      >
+        {aprovacaoAberta && (
+          <ApprovalRequestModal
+            order={order as any}
+            onClose={() => setAprovacaoAberta(false)}
+            onSent={() => { setAprovacaoAberta(false); load(); }}
+          />
+        )}
+      </Modal>
     </StudioScreen>
   );
 }

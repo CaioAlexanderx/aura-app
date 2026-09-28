@@ -168,6 +168,26 @@ export function configComLado(
   return { ...cfg, mockup_foto: { ...atual, [lado]: gravado } } as CustomizationConfig;
 }
 
+/**
+ * A config SEM a marcação de um lado (achado do QA, 28/09/2026: não
+ * existia como desfazer o "Mockup na foto" depois de salvo). Os outros
+ * lados continuam como estavam; se o lado apagado era o único marcado,
+ * `mockup_foto` fica `{}` — a vitrine volta a mostrar só a foto do
+ * catálogo, sem a marcação.
+ */
+export function configSemLado(cfg: CustomizationConfig, lado: LadoDaPeca): CustomizationConfig {
+  const atual: MockupFoto = ((cfg as any).mockup_foto && typeof (cfg as any).mockup_foto === "object")
+    ? { ...(cfg as any).mockup_foto }
+    : {};
+  delete (atual as any)[lado];
+  return { ...cfg, mockup_foto: atual } as CustomizationConfig;
+}
+
+/** O produto tem um campo de cor (a cor que a cliente escolhe na compra)? */
+export function temCampoDeCor(cfg: CustomizationConfig | null | undefined): boolean {
+  return !!(cfg?.fields || []).some((f) => f.type === "color");
+}
+
 /** Os dois lados são a mesma marcação (para saber se há o que salvar)? */
 export function mesmaMarcacao(a: MockupFotoLado | null | undefined, b: MockupFotoLado | null | undefined): boolean {
   if (!a || !b) return !a && !b;

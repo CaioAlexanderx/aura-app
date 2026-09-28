@@ -17,6 +17,11 @@ function PortalImpl({ children }: { children: React.ReactNode }) {
 
   useEffect(function() {
     var el = document.createElement("div");
+    // Classe estável (não id — mais de um portal pode estar ativo ao
+    // mesmo tempo): permite que CSS global alcance o que está DENTRO do
+    // portal mesmo ele sendo irmão de #root, não descendente. Ver
+    // app/studio/(estudio)/_layout.tsx, regra de tipografia.
+    el.className = "aura-web-portal";
     el.style.position = "fixed";
     el.style.top = "0";
     el.style.left = "0";

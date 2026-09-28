@@ -265,6 +265,23 @@ export type StudioOrderDetail = {
     order_number?: string | number | null;
     confirmed_at?: string | null;
     cancelled_at?: string | null;
+    // 28/09/2026 (LJ-32/LJ-34 do QA pós-deploy): CPF/CNPJ da nota,
+    // entrega/retirada, frete, desconto do Pix e o motivo do Pix vencido
+    // não cancelado — aura-backend, services/pagamentoDoPedidoStudio.js
+    // (camposDeEntregaENota). Ausentes em backend antigo.
+    customer_cpf_cnpj?: string | null;
+    request_nfce?: boolean;
+    delivery_type?: "pickup" | "delivery" | "courier" | null;
+    delivery_address?: string | null;
+    address_neighborhood?: string | null;
+    address_city?: string | null;
+    retirada_endereco?: string | null;
+    courier_name?: string | null;
+    courier_plate?: string | null;
+    courier_a_informar?: boolean;
+    shipping_fee?: number | null;
+    pix_discount?: number | null;
+    pix_cancelamento?: { vencido: boolean; motivo: string | null } | null;
   };
   items: StudioOrderItem[];
   approvals: StudioApproval[];
