@@ -15,9 +15,14 @@ type Props = {
    *  deixava espaço pro chip de estado do leitor ao lado — agora ela ocupa a
    *  linha e o pai decide o limite. */
   maxWidth?: number;
+  /** 28/09/2026: Enter na busca. O leitor global ignora teclas quando o foco
+   *  está num campo — então quem bipa com o cursor na busca (o placeholder diz
+   *  "ou código") via o código parado aqui e tinha de apagar antes do próximo
+   *  bipe. Com isso o Enter do leitor lança o item e o pai limpa o campo. */
+  onSubmit?: (v: string) => void;
 };
 
-export function SearchBox({ value, onChange, placeholder, maxWidth }: Props) {
+export function SearchBox({ value, onChange, placeholder, maxWidth, onSubmit }: Props) {
   const ref = useRef<TextInput | null>(null);
 
   // Web keyboard shortcut: ⌘K / Ctrl+K focuses the input.
@@ -51,6 +56,9 @@ export function SearchBox({ value, onChange, placeholder, maxWidth }: Props) {
         style={s.input as any}
         value={value}
         onChangeText={onChange}
+        onSubmitEditing={onSubmit ? (e: any) => onSubmit(e?.nativeEvent?.text ?? value) : undefined}
+        blurOnSubmit={false}
+        returnKeyType="search"
         placeholder={placeholder || "Buscar produto ou código…"}
         placeholderTextColor={Colors.ink3}
       />

@@ -105,7 +105,7 @@ function CaixaScreenInner() {
   const { couponApplied, setCouponApplied, clearCoupon } = st;
   const { activeSellerValue, activeCustomerValue, customerOptions, customerRecentCount, pickCustomerWithPhone } = st;
   const { sellerPickerRef, customerPickerRef } = st;
-  const { handleScan, handleAddProduct, handleVariantSelected, handleValidateCoupon } = st;
+  const { handleScan, handleSearchSubmit, handleAddProduct, handleVariantSelected, handleValidateCoupon } = st;
   const { selectEmployee, setSellerName } = st;
   const { cartProps, cartHeadRef, orderLabel } = st;
   // 22/09/2026 (Matcon M3): chip "Indicado por" — st.referral vem de
@@ -284,7 +284,7 @@ function CaixaScreenInner() {
               {/* Busca + estado do leitor: o lojista já está olhando pra cá
                   quando vai bipar, então o status mora aqui. */}
               <View style={s.searchRow}>
-                <SearchBox value={query} onChange={setQuery} maxWidth={560} />
+                <SearchBox value={query} onChange={setQuery} onSubmit={handleSearchSubmit} maxWidth={560} />
                 <ScannerStatusChip listening={scannerListening} lastCode={lastScannedCode} />
               </View>
 
@@ -396,7 +396,7 @@ function CaixaScreenInner() {
         )}
 
         <View style={s.searchRow}>
-          <SearchBox value={query} onChange={setQuery} />
+          <SearchBox value={query} onChange={setQuery} onSubmit={handleSearchSubmit} />
           <ScannerStatusChip listening={scannerListening} lastCode={lastScannedCode} compact />
         </View>
 

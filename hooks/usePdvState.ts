@@ -462,14 +462,16 @@ export function usePdvState() {
     [],
   );
 
-  async function handleScan(code: string) {
+  // Devolve true quando o código lançou algo (item no carrinho ou seletor de
+  // variante aberto); false quando virou busca.
+  async function handleScan(code: string, origem: "leitor" | "busca" = "leitor"): Promise<boolean> {
     const cleaned = (code || "").trim();
-    if (!cleaned) return;
-    flashScanFeedback(cleaned);
+    if (!cleaned) return false;
+    if (origem === "leitor") flashScanFeedback(cleaned);
 
     const localProduct = products.find(p => p.barcode === cleaned);
-    if (localProduct) { handleAddProduct(localProduct); return; }
-    if (!company?.id || isDemo) { setQuery(cleaned); return; }
+    if (localProduct) { handleAddProduct(localProduct); return true; }
+    if (!company?.id || isDemo) { setQuery(cleaned); return false; }
 
     try {
       const result = await pdvApi.scan(company.id, cleaned);
@@ -485,11 +487,11 @@ export function usePdvState() {
         const parent: any  = parentLocal || { id: result.product.id, name: parentName, price: parentPrice, cardPrice: parentCard };
         addToCart(parent, { id: result.variant_id, label: suffix, price });
         toast.success(parentName + " · " + suffix);
-        return;
+        return true;
       }
       if (result.match === "exact" && result.product) {
         const full = products.find(p => p.id === result.product.id);
-        if (full) { handleAddProduct(full); return; }
+        if (full) { handleAddProduct(full); return true; }
         const bp: any = {
           id:    result.product.id,
           name:  (result.product as any).name || "Produto",
@@ -499,12 +501,28 @@ export function usePdvState() {
         };
         addToCart(bp);
         toast.success(bp.name);
-        return;
+        return true;
       }
       setQuery(cleaned);
+      return false;
     } catch {
       setQuery(cleaned);
+      return false;
     }
+  }
+
+  // 28/09/2026: Enter na busca do Caixa. O leitor global não lê quando o foco
+  // está num campo, então quem bipa com o cursor na busca mandava o código
+  // para o texto da busca — e o próximo bipe grudava no anterior até o
+  // lojista apagar. Agora o Enter trata o texto como código: limpa o campo na
+  // hora (o bipe seguinte já cai limpo) e, se não era código, handleScan
+  // devolve o texto para a busca.
+  async function handleSearchSubmit(text: string) {
+    const cleaned = (text || "").trim();
+    if (!cleaned) return;
+    setQuery("");
+    const lancou = await handleScan(cleaned, "busca");
+    if (lancou) flashScanFeedback(cleaned);
   }
 
   function handleAddProduct(
@@ -999,7 +1017,7 @@ export function usePdvState() {
     openTroca:  () => setShowTroca(true),
     closeTroca: () => setShowTroca(false),
     // Handlers
-    handleScan, handleAddProduct, handleVariantSelected, handleFinalize,
+    handleScan, handleSearchSubmit, handleAddProduct, handleVariantSelected, handleFinalize,
     handleValidateCoupon, handleGenerateQuote,
     pickCustomerWithPhone,
     // Dados derivados
