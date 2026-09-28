@@ -15,7 +15,7 @@
 // Não entram (JORNADA §4.2 e §5): "últimas unidades", "mais vendidos em
 // 90 dias", filtros laterais de tamanho/cor/preço e paginação de 24.
 // ============================================================
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Image, Linking, Platform, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import type { StorefrontState } from "../useStorefront";
 import { useTemaDaVitrine } from "../TemaDaVitrine";
@@ -36,9 +36,8 @@ import { Botao, BotaoIcone, Rotulo, Selo, sombraWeb, transicao } from "../produt
 import { abrirCategoria, abrirEntrada, linkDoWhatsApp, useCamadas, CabecalhoDaVitrine, CamadasDaNavegacao } from "./NavegacaoDaVitrine";
 import { HeroDaPeca, HeroDeBanners } from "./HeroDaHome";
 import { useVitrine } from "../ContextoDaVitrine";
-import {
-  chaveDaRolagem, consumirPedidoDaGrade, entradaDoHistorico, guardarRolagem, rolagemParaRestaurar,
-} from "./rolagemDaVitrine";
+import { alvoDaRolagem, chaveDaRolagem, concluirPedidoDaGrade, haPedidoDaGrade } from "./rolagemDaVitrine";
+import { noDeRolagem, noDom, useRolagemGuardada } from "./useRolagemGuardada";
 import {
   artesDaHome, bannerAutomaticoDaHome, bannersDaHome, blocoParaEmpresas, descontoDoPix, gradeDaHome, itensDaFaixa, mostrarTirarDuvida,
   selosDaHome, type ArteDaHome,
@@ -81,7 +80,7 @@ export function FaixaDeAnuncio({ itens, desktop }: { itens: string[]; desktop: b
 // ── Seção ────────────────────────────────────────────────────
 
 function Secao({
-  etiqueta, titulo, direita, desktop, linha = true, children, testID, onLayout,
+  etiqueta, titulo, direita, desktop, linha = true, children, testID, onLayout, noRef,
 }: {
   etiqueta?: string;
   titulo?: string;
@@ -91,11 +90,13 @@ function Secao({
   children: React.ReactNode;
   testID?: string;
   onLayout?: (e: any) => void;
+  /** O nó da seção, para medir no clique (ver rolarPara na página). */
+  noRef?: (no: any) => void;
 }) {
   const t = useTemaDaVitrine();
   const tipo = useTipografia();
   return (
-    <View testID={testID} onLayout={onLayout} style={{ borderTopWidth: linha ? 1 : 0, borderTopColor: t.border }}>
+    <View ref={noRef} testID={testID} onLayout={onLayout} style={{ borderTopWidth: linha ? 1 : 0, borderTopColor: t.border }}>
       <View style={{ width: "100%", maxWidth: LARGURA_MAX, alignSelf: "center", paddingHorizontal: desktop ? 0 : 16, paddingVertical: desktop ? 72 : 40, gap: 20 }}>
         {etiqueta || titulo ? (
           <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 16 }}>
@@ -164,7 +165,7 @@ function ComoFunciona({ sf, desktop }: { sf: StorefrontState; desktop: boolean }
 
 // ── A grade agrupada ─────────────────────────────────────────
 
-function GradeDaHome({ sf, desktop, largura, onLayout }: { sf: StorefrontState; desktop: boolean; largura: number; onLayout?: (e: any) => void }) {
+function GradeDaHome({ sf, desktop, largura, onLayout, noRef }: { sf: StorefrontState; desktop: boolean; largura: number; onLayout?: (e: any) => void; noRef?: (no: any) => void }) {
   const t = useTemaDaVitrine();
   const tipo = useTipografia();
   const store: any = sf.store;
@@ -179,7 +180,7 @@ function GradeDaHome({ sf, desktop, largura, onLayout }: { sf: StorefrontState; 
 
   if (!total) {
     return (
-      <Secao desktop={desktop} onLayout={onLayout}>
+      <Secao desktop={desktop} onLayout={onLayout} noRef={noRef}>
         <View style={{ paddingVertical: 24, alignItems: "center", gap: 10 }}>
           <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: t.bg3, alignItems: "center", justifyContent: "center" }}>
             <Icon name="package" size={26} color={t.ink3} />
@@ -195,6 +196,7 @@ function GradeDaHome({ sf, desktop, largura, onLayout }: { sf: StorefrontState; 
     <Secao
       testID="grade-da-home"
       onLayout={onLayout}
+      noRef={noRef}
       etiqueta="A loja"
       titulo="Escolha a peça. A arte é sua."
       desktop={desktop}
@@ -247,7 +249,7 @@ function GradeDaHome({ sf, desktop, largura, onLayout }: { sf: StorefrontState; 
 
 // ── Os queridinhos ───────────────────────────────────────────
 
-function Queridinhos({ sf, desktop, largura, onLayout }: { sf: StorefrontState; desktop: boolean; largura: number; onLayout?: (e: any) => void }) {
+function Queridinhos({ sf, desktop, largura, onLayout, noRef }: { sf: StorefrontState; desktop: boolean; largura: number; onLayout?: (e: any) => void; noRef?: (no: any) => void }) {
   const t = useTemaDaVitrine();
   const store: any = sf.store;
   const lista = maisPedidos(store?.products || []);
@@ -277,7 +279,7 @@ function Queridinhos({ sf, desktop, largura, onLayout }: { sf: StorefrontState; 
     );
   });
   return (
-    <Secao testID="queridinhos" onLayout={onLayout} etiqueta="Mais pedidos" titulo={`Os queridinhos da ${store?.site?.name || "loja"}`} desktop={desktop}>
+    <Secao testID="queridinhos" onLayout={onLayout} noRef={noRef} etiqueta="Mais pedidos" titulo={`Os queridinhos da ${store?.site?.name || "loja"}`} desktop={desktop}>
       {desktop ? (
         <View style={{ flexDirection: "row", gap: 22 }}>{itens}</View>
       ) : (
@@ -462,32 +464,17 @@ export function HomeDaVitrineNova({ sf, slug }: { sf: StorefrontState; slug: str
   // O recado vale para esta visita à home: saiu dela, ele some.
   useEffect(() => () => { v?.deixarRecadoNaHome?.(null); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Onde a página estava (QA 27/09) ─────────────────────────
+  // ── Onde a página estava (QA 27/09 e 28/09) ─────────────────
   // A home rola no próprio ScrollView e o navegador não devolve a
-  // posição. Ela é guardada ao sair e restaurada no voltar do navegador
-  // (a mesma entrada do histórico: rolagemDaVitrine.ts). "Todas as
+  // posição. Ela é guardada ao sair e restaurada quando a cliente volta
+  // pelo histórico (useRolagemGuardada / rolagemDaVitrine.ts). "Todas as
   // peças" vindo de outra tela abre a home já na grade.
   const chaveDaHome = chaveDaRolagem(slug, "home");
+  const aoRolarGuardado = useRolagemGuardada(chaveDaHome, rolagem, () => haPedidoDaGrade());
   const yReal = useRef(0);
-  const entrada = useRef("");
-  const pendente = useRef<{ y: number | null; grade: boolean }>({ y: null, grade: false });
-  useLayoutEffect(() => {
-    const grade = consumirPedidoDaGrade();
-    pendente.current = { grade, y: grade ? null : rolagemParaRestaurar(chaveDaHome, entradaDoHistorico()) };
-    // O que ficar pendente sem conteúdo para rolar, desiste em 1,5 s.
-    const desiste = setTimeout(() => { pendente.current = { y: null, grade: false }; }, 1500);
-    return () => {
-      clearTimeout(desiste);
-      guardarRolagem(chaveDaHome, yReal.current, entrada.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const restaurarSePreciso = (alturaDoConteudo: number) => {
-    const alvo = pendente.current.y;
-    if (alvo == null || alturaDoConteudo < alvo) return;
-    pendente.current.y = null;
-    rolagem.current?.scrollTo({ y: alvo, animated: false });
-  };
+  const nos = useRef<{ grade: any; queridinhos: any; cabecalho: any }>({ grade: null, queridinhos: null, cabecalho: null });
+  const montada = useRef(true);
+  useEffect(() => { montada.current = true; return () => { montada.current = false; }; }, []);
 
   const banners = useMemo(() => bannersDaHome(store), [store]);
   // Sem banner da lojista, a home nova ficava sem nada no topo além da
@@ -496,11 +483,70 @@ export function HomeDaVitrineNova({ sf, slug }: { sf: StorefrontState; slug: str
   const bannerAutomatico = useMemo(() => (banners.length ? null : bannerAutomaticoDaHome(store)), [banners, store]);
   const itens = useMemo(() => itensDaFaixa(store), [store]);
 
-  const rolarPara = useCallback((onde: "grade" | "queridinhos") => {
-    const alvo = posicoes.current[onde] || posicoes.current.grade;
-    rolagem.current?.scrollTo({ y: Math.max(0, alvo - posicoes.current.cabecalho + 1), animated: true });
+  // QA 28/09: "Todas as peças" rolava em 2 de 9 cliques. A conta usava
+  // `posicoes.grade` do onLayout, e o onLayout do react-native-web só
+  // dispara quando a seção muda de TAMANHO — quando o banner ou a peça do
+  // destaque crescem acima dela, a grade desce e a posição guardada fica
+  // velha (rolava para 0, ou para o meio do banner). Agora a posição é
+  // medida no clique, no nó da grade (getBoundingClientRect contra a
+  // caixa rolável); o onLayout fica como reserva fora da web.
+  const topoNoConteudo = useCallback((onde: "grade" | "queridinhos"): number | null => {
+    const no = noDom(nos.current[onde]);
+    const caixa = noDeRolagem(rolagem.current);
+    if (no && caixa && (no as any).isConnected !== false) {
+      return no.getBoundingClientRect().top - caixa.getBoundingClientRect().top + caixa.scrollTop;
+    }
+    return posicoes.current[onde] || null;
   }, []);
+  const alturaDoCabecalho = useCallback((): number => {
+    const no = noDom(nos.current.cabecalho);
+    return no ? no.getBoundingClientRect().height : posicoes.current.cabecalho;
+  }, []);
+  const rolarPara = useCallback((onde: "grade" | "queridinhos", animado: boolean = true) => {
+    // Um quadro depois: da gaveta do celular, a camada fecha no mesmo
+    // toque, e a medida sai com ela já fora da tela.
+    const rolar = () => {
+      if (!montada.current) return;
+      const topo = topoNoConteudo(onde) ?? topoNoConteudo("grade");
+      if (topo == null) return;
+      rolagem.current?.scrollTo({ y: alvoDaRolagem(topo, alturaDoCabecalho()), animated: animado });
+    };
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(rolar);
+    else rolar();
+  }, [topoNoConteudo, alturaDoCabecalho]);
   const verLoja = useCallback(() => rolarPara("grade"), [rolarPara]);
+
+  // "Todas as peças" vindo de outra página: sem prazo curto — resolve no
+  // primeiro layout da grade desta montagem (a loja já está carregada
+  // quando a cliente clica). Rola sem animação (a home abre na grade) e
+  // confere de novo depois: foto do banner que chega depois empurra a
+  // grade, e a conferência acompanha enquanto a cliente não mexe.
+  const gradeResolvida = useRef(false);
+  const aoLayoutDaGrade = useCallback(() => {
+    if (gradeResolvida.current || !haPedidoDaGrade()) return;
+    gradeResolvida.current = true;
+    const ir = () => {
+      // Montagem que saiu antes do quadro não gasta o pedido: a próxima usa.
+      if (!montada.current) { gradeResolvida.current = false; return; }
+      const topo = topoNoConteudo("grade");
+      if (topo == null) { gradeResolvida.current = false; return; }
+      const y = alvoDaRolagem(topo, alturaDoCabecalho());
+      rolagem.current?.scrollTo({ y, animated: false });
+      yReal.current = y;
+      concluirPedidoDaGrade();
+      for (const ms of [300, 900]) {
+        setTimeout(() => {
+          if (!montada.current || Math.abs(yReal.current - y) > 2) return;
+          const t2 = topoNoConteudo("grade");
+          if (t2 == null) return;
+          const y2 = alvoDaRolagem(t2, alturaDoCabecalho());
+          if (Math.abs(y2 - y) > 4) { rolagem.current?.scrollTo({ y: y2, animated: false }); }
+        }, ms);
+      }
+    };
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(ir);
+    else ir();
+  }, [topoNoConteudo, alturaDoCabecalho]);
 
   const zapVisivel = mostrarTirarDuvida({ rolagem: y, fimDoTopo, alturaDaTela: height });
   // A margem livre à direita do conteúdo (1120 px no centro). A pílula
@@ -512,7 +558,7 @@ export function HomeDaVitrineNova({ sf, slug }: { sf: StorefrontState; slug: str
   const aoRolar = (e: any) => {
     const novo = e?.nativeEvent?.contentOffset?.y || 0;
     yReal.current = novo;
-    entrada.current = entradaDoHistorico();
+    aoRolarGuardado(novo);
     const antes = y;
     if ((novo > 4) !== (antes > 4) || mostrarTirarDuvida({ rolagem: novo, fimDoTopo, alturaDaTela: height }) !== zapVisivel) setY(novo);
   };
@@ -527,10 +573,9 @@ export function HomeDaVitrineNova({ sf, slug }: { sf: StorefrontState; slug: str
           stickyHeaderIndices={[1]}
           scrollEventThrottle={32}
           onScroll={aoRolar}
-          onContentSizeChange={(_w: number, h: number) => restaurarSePreciso(h)}
         >
           <FaixaDeAnuncio itens={itens} desktop={desktop} />
-          <View onLayout={(e) => { posicoes.current.cabecalho = e.nativeEvent.layout.height; }} style={{ zIndex: 20 }}>
+          <View ref={(no) => { nos.current.cabecalho = no; }} onLayout={(e) => { posicoes.current.cabecalho = e.nativeEvent.layout.height; }} style={{ zIndex: 20 }}>
             <CabecalhoDaVitrine sf={sf} desktop={desktop} camadas={camadas} rolou={y > 4} onVerLoja={verLoja} />
           </View>
           {recado ? <RecadoDaHome texto={recado} desktop={desktop} onFechar={() => v?.deixarRecadoNaHome?.(null)} /> : null}
@@ -542,20 +587,21 @@ export function HomeDaVitrineNova({ sf, slug }: { sf: StorefrontState; slug: str
                 {bannerAutomatico ? (
                   <HeroDeBanners sf={sf} banners={[bannerAutomatico]} largura={width} desktop={desktop} rolarPara={rolarPara} />
                 ) : null}
-                <HeroDaPeca sf={sf} slug={slug} desktop={desktop} onVerLoja={verLoja} />
+                <HeroDaPeca sf={sf} slug={slug} desktop={desktop} onVerLoja={verLoja} sloganNoBanner={!!bannerAutomatico && !!String(bannerAutomatico.headline || "").trim()} />
               </>
             )}
           </View>
           <ComoFunciona sf={sf} desktop={desktop} />
-          <GradeDaHome sf={sf} desktop={desktop} largura={width} onLayout={(e) => {
-            posicoes.current.grade = e.nativeEvent.layout.y;
-            if (pendente.current.grade) {
-              pendente.current.grade = false;
-              // Depois do layout do cabeçalho (a conta desconta a altura dele).
-              setTimeout(() => rolarPara("grade"), 60);
-            }
-          }} />
-          <Queridinhos sf={sf} desktop={desktop} largura={width} onLayout={(e) => { posicoes.current.queridinhos = e.nativeEvent.layout.y; }} />
+          <GradeDaHome
+            sf={sf} desktop={desktop} largura={width}
+            noRef={(no) => { nos.current.grade = no; }}
+            onLayout={(e) => { posicoes.current.grade = e.nativeEvent.layout.y; aoLayoutDaGrade(); }}
+          />
+          <Queridinhos
+            sf={sf} desktop={desktop} largura={width}
+            noRef={(no) => { nos.current.queridinhos = no; }}
+            onLayout={(e) => { posicoes.current.queridinhos = e.nativeEvent.layout.y; }}
+          />
           <ArtesDaLoja sf={sf} desktop={desktop} />
           <ParaEmpresas sf={sf} desktop={desktop} />
           <Selos sf={sf} desktop={desktop} />

@@ -240,6 +240,41 @@ describe("cada etapa entra no histórico", () => {
     await etapaNaTela(2);
   });
 
+  test("QA 28/09: o roteador apaga a marca a cada popstate, e voltar e avançar funcionam quantas vezes for", async () => {
+    // O expo-router regrava a entrada com `{ id }` a cada popstate (é o
+    // que apagava `auraEtapaDoCheckout` depois da primeira passada).
+    const roteador = () => {
+      const id = (window.history.state || {}).id;
+      window.history.replaceState({ id }, "");
+    };
+    window.addEventListener("popstate", roteador);
+    try {
+      montarComRota(jest.fn());
+      await irAoCheckout();
+      await preencherDados();
+      fireEvent.press(botao());
+      await etapaNaTela(2);
+      fireEvent.press(botao());
+      await etapaNaTela(3);
+      for (let passada = 0; passada < 2; passada++) {
+        window.history.back();
+        await etapaNaTela(2);
+        window.history.back();
+        await etapaNaTela(1);
+        window.history.forward();
+        await etapaNaTela(2);
+        window.history.forward();
+        await etapaNaTela(3);
+      }
+      window.history.back();
+      await etapaNaTela(2);
+      // A marca voltou para a entrada depois que o roteador a apagou.
+      await waitFor(() => expect(marcaAtual()).toBe(2));
+    } finally {
+      window.removeEventListener("popstate", roteador);
+    }
+  });
+
   test("o Voltar da tela anda no histórico (o voltar seguinte sai do checkout, não repassa as etapas)", async () => {
     montarComRota(jest.fn());
     await irAoCheckout();

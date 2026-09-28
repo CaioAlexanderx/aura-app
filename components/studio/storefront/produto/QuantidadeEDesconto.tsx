@@ -10,7 +10,7 @@
 // hoje, ProductConfigurator). As contas são de regrasDaPagina.ts; o
 // preço unitário vem do hook.
 // ============================================================
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Platform, Pressable, TextInput, View } from "react-native";
 import type { QtyTier } from "../types";
 import { useTemaDaVitrine } from "../TemaDaVitrine";
@@ -19,7 +19,7 @@ import { Icon } from "@/components/Icon";
 import { dinheiro } from "../moeda";
 import { useReduzirMovimento } from "../movimento";
 import {
-  QTD_MAXIMA, quantidadeValida, quantidadeDigitada, reguaDaEscada, fraseDaEscada,
+  DIGITOS_DO_CAMPO, quantidadeValida, quantidadeNoCampo, notaDoTeto, reguaDaEscada, fraseDaEscada,
   economiaNaFaixa, prazoDaQuantidade, textoDeDias,
 } from "./regrasDaPagina";
 import { borda2, transicao, useNumeroAnimado } from "./kitDaPagina";
@@ -47,6 +47,16 @@ export function QuantidadeEDesconto({
   // O clique simples seleciona o número inteiro (no Chrome, o mouseup
   // desfazia a seleção e "50" virava "501"). Ver ui/selecaoAoFocar.ts.
   const selecionarAoFocar = useSelecionarAoFocar();
+  // Passou do teto: apara e diz, por 2 s (QA 28/09 — antes o dígito a
+  // mais sumia calado).
+  const [teto, setTeto] = useState(false);
+  const relogioDoTeto = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (relogioDoTeto.current) clearTimeout(relogioDoTeto.current); }, []);
+  const avisarTeto = () => {
+    setTeto(true);
+    if (relogioDoTeto.current) clearTimeout(relogioDoTeto.current);
+    relogioDoTeto.current = setTimeout(() => setTeto(false), 2000);
+  };
   // O campo segue a quantidade quando ela muda por fora (−, +, parada da
   // régua), mas não enquanto a cliente digita.
   useEffect(() => { if (!focado) setCampo(String(qtd)); }, [qtd, focado]);
@@ -71,15 +81,16 @@ export function QuantidadeEDesconto({
             ref={selecionarAoFocar as any}
             value={campo}
             onChangeText={(v) => {
-              const d = quantidadeDigitada(v);
+              const { texto: d, aparou } = quantidadeNoCampo(v);
               setCampo(d);
+              if (aparou) avisarTeto();
               if (d) onQtd(quantidadeValida(d));
             }}
             onFocus={() => setFocado(true)}
             onBlur={() => { setFocado(false); const n = quantidadeValida(campo); setCampo(String(n)); onQtd(n); }}
             keyboardType="number-pad"
             inputMode="numeric"
-            maxLength={String(QTD_MAXIMA).length}
+            maxLength={DIGITOS_DO_CAMPO}
             accessibilityLabel="Quantidade"
             selectTextOnFocus
             style={[{
@@ -97,6 +108,11 @@ export function QuantidadeEDesconto({
           <Texto style={{ fontSize: 12.5, color: t.ink3 }}>por unidade</Texto>
         </View>
       </View>
+      {teto ? (
+        <Texto testID="nota-do-teto" accessibilityRole={"alert" as any} style={{ fontSize: 12.5, fontWeight: "600", color: t.ink2, marginTop: 6 }}>
+          {notaDoTeto()}
+        </Texto>
+      ) : null}
 
       {regua ? (
         <View style={{ height: 78, marginTop: 20, marginHorizontal: 6, marginBottom: 4, position: "relative" }}>

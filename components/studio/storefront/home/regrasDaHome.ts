@@ -298,9 +298,15 @@ function mesmoTexto(a: string, b: string): boolean {
  * home repetia a frase duas vezes seguidas (QA 27/09/2026) — o slogan só
  * vale como subtítulo quando diz algo além do título.
  */
-export function fraseDoDestaque(store: StorePayload | null | undefined): string {
+export function fraseDoDestaque(
+  store: StorePayload | null | undefined,
+  opcoes?: { sloganNoBanner?: boolean },
+): string {
   const tag = String(store?.site?.tagline || "").trim();
-  if (tag && !mesmoTexto(tag, TITULO_FIXO_DO_HERO)) return tag;
+  // QA 28/09: o banner automático (na cor da loja) já mostra o slogan
+  // logo acima; repetido no subtítulo do destaque, a primeira dobra dizia
+  // a mesma frase duas vezes. Aí o subtítulo usa a frase do Studio.
+  if (tag && !opcoes?.sloganNoBanner && !mesmoTexto(tag, TITULO_FIXO_DO_HERO)) return tag;
   const cats = menuDaLoja(store).map((i) => i.categoria.name);
   const quem = listaDeCategorias(cats) || "Peças";
   return `${quem} com a sua foto, o seu nome ou a sua frase. Você vê como fica antes de pagar.`;

@@ -44,6 +44,26 @@ export function quantidadeDigitada(texto: string): string {
   return String(texto || "").replace(/\D/g, "").replace(/^0+/, "").slice(0, String(QTD_MAXIMA).length);
 }
 
+/**
+ * O campo de quantidade com o teto À VISTA (QA 28/09). Antes o maxLength
+ * de 3 jogava fora o quarto dígito calado ("520" + "1" continuava 520).
+ * Agora o campo aceita um dígito a mais para PERCEBER o excesso: acima de
+ * QTD_MAXIMA ele apara no teto e avisa (`aparou`), e a tela mostra
+ * `notaDoTeto()` por 2 s.
+ */
+export function quantidadeNoCampo(texto: string): { texto: string; aparou: boolean } {
+  const d = String(texto || "").replace(/\D/g, "").replace(/^0+/, "");
+  if (d && Number(d) > QTD_MAXIMA) return { texto: String(QTD_MAXIMA), aparou: true };
+  return { texto: d, aparou: false };
+}
+
+/** Quantos dígitos o campo aceita: os do teto e mais um, para o aviso. */
+export const DIGITOS_DO_CAMPO = String(QTD_MAXIMA).length + 1;
+
+export function notaDoTeto(maximo: number = QTD_MAXIMA): string {
+  return `Máximo de ${maximo} por pedido`;
+}
+
 // ── Escada de desconto ───────────────────────────────────────
 
 export type ParadaDaRegua = {
@@ -297,6 +317,24 @@ export function ladosDaPeca(cfg: CustomizationConfig | null | undefined): Lado[]
 /** O campo de cor que pinta a peça (o mesmo que o LivePreview leva ao 3D). */
 export function campoDaCorDaPeca(cfg: CustomizationConfig | null | undefined): CustomizationField | null {
   return cfg?.fields?.find((f) => f.type === "color") || null;
+}
+
+/**
+ * A legenda do slide do mockup quando ele é a FOTO da peça marcada pela
+ * lojista (mockup_foto) e a peça tem cor para escolher.
+ *
+ * QA 28/09/2026: com "Cor da peça" preta, a prévia mostrava a polo branca
+ * da foto. Decisão: a foto não muda de cor — tingir uma foto real fica
+ * falso nas sombras e no tecido, e a cliente aprovaria uma cor que não
+ * existe. A legenda diz isso; a cor escolhida segue no pedido.
+ */
+export const LEGENDA_DA_COR_NA_FOTO = "A foto mostra a peça na cor fotografada; a sua cor vai na produção.";
+
+export function legendaDoMockup(p: {
+  fonte: "banco" | "foto" | "nenhuma" | null | undefined;
+  temCampoDeCor: boolean;
+}): string | null {
+  return p.fonte === "foto" && p.temCampoDeCor ? LEGENDA_DA_COR_NA_FOTO : null;
 }
 
 /** O campo "Como você quer resolver a arte?", quando a peça tem. */

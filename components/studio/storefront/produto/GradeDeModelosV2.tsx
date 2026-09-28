@@ -13,7 +13,7 @@
 // preço pode mudar na página, e o Pix. A trilha substitui o "← Voltar
 // para a loja".
 // ============================================================
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Image, Linking, Platform, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import { Icon } from "@/components/Icon";
 import { wash } from "../theme";
@@ -33,7 +33,8 @@ import { precoNoPix } from "../precoNoPix";
 import { modelosOrdenados, eixoQueVaria, faixaDePrecos, resumoDoGrupo } from "../modelosDoGrupo";
 import { chaveDaCategoria, tituloDaPagina } from "../rotasDaVitrine";
 import { useVitrine } from "../ContextoDaVitrine";
-import { chaveDaRolagem, entradaDoHistorico, guardarRolagem, rolagemParaRestaurar } from "../home/rolagemDaVitrine";
+import { chaveDaRolagem } from "../home/rolagemDaVitrine";
+import { useRolagemGuardada } from "../home/useRolagemGuardada";
 import { dinheiro } from "../moeda";
 import { precoPodeMudar } from "./regrasDaPagina";
 import { Trilha } from "./CabecalhoDaLoja";
@@ -129,17 +130,9 @@ export function GradeDeModelosV2({ sf }: { sf: StorefrontState }) {
   const slug = useVitrine()?.slug || "";
   const rolagem = useRef<ScrollView | null>(null);
   const chaveDaPagina = chaveDaRolagem(slug, "c:" + chaveDaCategoria(categoria));
-  const yReal = useRef(0);
-  const entrada = useRef("");
-  const pendente = useRef<number | null>(null);
-  useLayoutEffect(() => {
-    pendente.current = rolagemParaRestaurar(chaveDaPagina, entradaDoHistorico());
-    const desiste = setTimeout(() => { pendente.current = null; }, 1500);
-    return () => {
-      clearTimeout(desiste);
-      guardarRolagem(chaveDaPagina, yReal.current, entrada.current);
-    };
-  }, [chaveDaPagina]);
+  // QA 28/09: guardada por caminho e restaurada na volta pelo histórico
+  // (home/useRolagemGuardada.ts).
+  const aoRolar = useRolagemGuardada(chaveDaPagina, rolagem);
 
   const titulo = tituloDaPagina({ stage: "modelos", nomeDaLoja: store?.site?.name, categoria: categoria?.name });
   useEffect(() => {
@@ -217,13 +210,7 @@ export function GradeDeModelosV2({ sf }: { sf: StorefrontState }) {
         stickyHeaderIndices={[1]}
         contentContainerStyle={{ paddingBottom: 24 }}
         scrollEventThrottle={32}
-        onScroll={(e: any) => { yReal.current = e?.nativeEvent?.contentOffset?.y || 0; entrada.current = entradaDoHistorico(); }}
-        onContentSizeChange={(_w: number, h: number) => {
-          const alvo = pendente.current;
-          if (alvo == null || h < alvo) return;
-          pendente.current = null;
-          rolagem.current?.scrollTo({ y: alvo, animated: false });
-        }}
+        onScroll={(e: any) => aoRolar(e?.nativeEvent?.contentOffset?.y || 0)}
       >
         <FaixaDeAnuncio itens={itensDaFaixa(store)} desktop={desktop} />
         <View style={{ zIndex: 20 }}>

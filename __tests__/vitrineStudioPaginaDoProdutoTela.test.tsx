@@ -267,9 +267,12 @@ describe("quantidade e desconto", () => {
     expect(naTela("pronto em 8 dias úteis")).toBe(true);
     const campo = screen.getByLabelText("Quantidade");
     fireEvent(campo, "focus", { nativeEvent: {}, target: {} });
+    // QA 28/09: acima do teto o campo apara em 999 e avisa (antes cortava
+    // os dígitos calado: "12345" virava 123).
     fireEvent.changeText(campo, "12345");
+    expect(naTela("Máximo de 999 por pedido")).toBe(true);
     fireEvent(campo, "blur", { nativeEvent: {}, target: {} });
-    await waitFor(() => expect(naTela("123 un × ")).toBe(true));
+    await waitFor(() => expect(naTela("999 un × ")).toBe(true));
   });
 });
 
