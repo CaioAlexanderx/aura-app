@@ -1,0 +1,1471 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Formatação da arte — Aura Studio</title>
+<!--
+  ============================================================
+  Mockup standalone — Formatação da arte na Aura Studio (28/09/2026)
+  Regra 4 do CLAUDE.md: mudança visual forte nasce em mockup.
+  Diagnóstico e prioridades: docs/studio/formatacao-da-arte-diagnostico.md
+
+  TRÊS TELAS (faixa escura no topo, só do mockup):
+    1. Cliente · página da peça (vitrine v2): a arte na peça, o botão
+       "Ajustar a arte" e o editor da área planificada — régua em cm,
+       área tracejada, margem de segurança de 3 mm, a peça ao vivo no
+       canto, nitidez pelo tamanho impresso e avisos de corte e margem.
+       Desktop: o palco vira o editor. Celular (390): folha em tela
+       cheia com "Pronto", para o arraste não brigar com o carrossel.
+    2. Lojista · prova do pedido: a arte do pedido planificada e na
+       peça, medidas em cm, DPI efetivo, e o PNG de impressão (300 dpi,
+       fundo transparente) gerado do mesmo desenho.
+    3. Lojista · testar no produto: técnica de impressão, fontes que a
+       cliente pode escolher e "Testar com uma arte" (arquivo local, não
+       salvo), com o mesmo editor da cliente.
+
+  GESTOS: arrastar move; a alça do canto e a pinça (dois dedos) mudam o
+  tamanho; dois toques centralizam; perto do centro a arte "gruda" na
+  guia. Sem gesto: botões de 44 px (setas, −/+, girar 90°) e teclado
+  (Tab até a arte; setas movem, Shift acelera, + e − mudam o tamanho,
+  R gira). Na peça da caneca, arrastar gira a caneca.
+
+  REALISMO MÍNIMO: a caneca é um cilindro de verdade (a arte de 20 cm dá
+  a volta e some na junta da alça); a luz e o brilho passam por cima da
+  arte. Na camiseta, as dobras e a trama também. A técnica decide a
+  mistura: sublimação = multiply (o branco vira a cor da peça), DTF =
+  opaca (o fundo branco de um JPG é impresso — daí o aviso).
+
+  SEM REDE: as fontes de arte são substitutas do sistema (Pacifico →
+  Segoe Script/Brush Script, Bebas Neue → Impact, Playfair → Georgia,
+  Caveat → Segoe Print). A arte de exemplo e as peças são desenhadas
+  aqui mesmo, em canvas. No app são os arquivos reais (R2) e o motor
+  (visualEngine/compose2d.ts, compose3dMug.ts).
+
+  "Marcar prioridades" mostra as etiquetas P0/P1/P2 da proposta sobre
+  cada peça da interface.
+  ============================================================
+-->
+<style>
+  /* ── Tokens: vitrine (papel quente) ─────────────────────── */
+  :root {
+    --bg:#FBF8F3; --bg2:#FFFFFF; --bg3:#F6F1E8; --bg4:#F0E9DC;
+    --ink:#1A1714; --ink2:#4A443C; --ink3:#756C61; --ink4:#B4A99A;
+    --border:#E7DFD3; --border2:#D9CFBF;
+    --marca:#1A1612; --sobre-marca:#FFFFFF; --marca-wash:rgba(26,22,18,.06);
+    --green:#0E7A43; --green-soft:#E3F4EA; --amber:#8A4B0A; --amber-soft:#FDF0DA;
+    --red:#B42318; --red-soft:#FDE8E6; --info:#1D4E89; --info-soft:#E6EEF8;
+    --mesa:#EDE7DC; --mesa-ponto:rgba(26,23,20,.07); --guia:#7C3AED; --guia-soft:rgba(124,58,237,.14);
+    --palco:#F1ECE3;
+    --sh-1:0 1px 2px rgba(26,23,20,.06),0 1px 1px rgba(26,23,20,.04);
+    --sh-2:0 8px 24px -10px rgba(26,23,20,.22),0 2px 6px rgba(26,23,20,.06);
+    --f-display: Georgia, "Times New Roman", serif;
+    --f-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+    /* painel (Studio) */
+    --p-primary:#1E3A8A; --p-primary2:#3B82F6; --p-primary-soft:#DBEAFE; --p-primary-ghost:#EFF6FF;
+    --p-accent:#EC4899; --p-accent-soft:#FCE7F3; --p-accent-ink:#BE185D;
+    --p-bg:#E8E9F0; --p-bg-soft:#EEF0F5; --p-card:#F5F6FA; --p-card-elev:#FFFFFF;
+    --p-ink:#0F172A; --p-ink2:#334155; --p-ink3:#5E6A7A; --p-ink4:#94A3B8; --p-ink5:#CBD5E1;
+    --p-ok:#065F46; --p-ok-soft:#D1FAE5; --p-warn:#92400E; --p-warn-soft:#FEF3C7;
+    --p-shadow:0 8px 24px -6px rgba(30,58,138,.25);
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    --bg:#141210; --bg2:#1D1A17; --bg3:#26221E; --bg4:#302B26;
+    --ink:#F4EFE8; --ink2:#D2C9BD; --ink3:#A89D90; --ink4:#6E655B;
+    --border:#35302A; --border2:#453E36;
+    --marca:#F4EFE8; --sobre-marca:#141210; --marca-wash:rgba(244,239,232,.08);
+    --green:#5CC98C; --green-soft:rgba(92,201,140,.14); --amber:#F2B45A; --amber-soft:rgba(242,180,90,.14);
+    --red:#F28B7F; --red-soft:rgba(242,139,127,.14); --info:#8DB4E8; --info-soft:rgba(141,180,232,.14);
+    --mesa:#1F1C19; --mesa-ponto:rgba(244,239,232,.06); --guia:#A78BFA; --guia-soft:rgba(167,139,250,.18);
+    --palco:#221F1B;
+    --sh-1:0 1px 2px rgba(0,0,0,.4); --sh-2:0 8px 24px -10px rgba(0,0,0,.6);
+    --p-primary:#3B82F6; --p-primary2:#60A5FA; --p-primary-soft:rgba(59,130,246,.18); --p-primary-ghost:rgba(59,130,246,.08);
+    --p-accent:#F472B6; --p-accent-soft:rgba(244,114,182,.18); --p-accent-ink:#F9A8D4;
+    --p-bg:#0F172A; --p-bg-soft:#1E293B; --p-card:#1E293B; --p-card-elev:#334155;
+    --p-ink:#F8FAFC; --p-ink2:#CBD5E1; --p-ink3:#94A3B8; --p-ink4:#64748B; --p-ink5:#334155;
+    --p-ok:#6EE7B7; --p-ok-soft:rgba(52,211,153,.18); --p-warn:#FCD34D; --p-warn-soft:rgba(251,191,36,.18);
+    --p-shadow:0 8px 24px -6px rgba(0,0,0,.6);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: #2B2724; font: 15px/1.5 var(--f-body); color: var(--ink); -webkit-font-smoothing: antialiased; }
+  button, input, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  [hidden] { display: none !important; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  /* ── Faixa de estados (só do mockup) ───────────────────── */
+  .estados {
+    background: #0B1224; color: #CBD5E1; padding: 10px 16px; position: relative; z-index: 100;
+    display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; font-size: 12.5px;
+  }
+  @media (min-width: 1000px) { .estados { position: sticky; top: 0; } }
+  .estados b { color: #F8FAFC; font-weight: 700; margin-right: 2px; }
+  .estados .grupo { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .estados button {
+    background: transparent; border: 1px solid #334155; color: #CBD5E1; padding: 4px 10px; border-radius: 999px; min-height: 30px;
+  }
+  .estados button[aria-pressed="true"] { background: #F472B6; border-color: #F472B6; color: #0F172A; font-weight: 700; }
+  .estados .so-cliente[aria-disabled="true"] { opacity: .35; }
+
+  /* ── Moldura (celular 390) ─────────────────────────────── */
+  .moldura { position: relative; }
+  .rolagem { container-type: inline-size; container-name: tela; min-height: 100vh; }
+  .rolagem > section { min-height: 100vh; }
+  .moldura.celular .rolagem > section { min-height: 100%; }
+  .moldura.celular { width: min(390px, 100%); margin: 16px auto; height: 844px; transform: translateZ(0); overflow: hidden; border-radius: 34px; }
+  @media (min-width: 520px) { .moldura.celular { outline: 10px solid #0d0d0d; } }
+  .moldura.celular .rolagem { height: 100%; overflow-y: auto; min-height: 0; }
+
+  /* ── Etiquetas de prioridade ────────────────────────────── */
+  .tp { display: none; font: 800 10px/1 var(--f-body); letter-spacing: .04em; padding: 3px 6px; border-radius: 6px; vertical-align: 2px; margin-left: 6px; white-space: nowrap; }
+  body.prioridades .tp { display: inline-block; }
+  .tp.p0 { background: #DC2626; color: #fff; } .tp.p1 { background: #7C3AED; color: #fff; } .tp.p2 { background: #64748B; color: #fff; }
+
+  /* ============================================================
+     VITRINE (cliente)
+     ============================================================ */
+  .sv { background: var(--bg); color: var(--ink); min-height: 100%; }
+  .sv h1, .sv h2 { font-family: var(--f-display); font-weight: 500; letter-spacing: -.01em; margin: 0; }
+  .sv-topo { display: flex; align-items: center; gap: 20px; padding: 14px 32px; border-bottom: 1px solid var(--border); background: var(--bg); }
+  .sv-topo .loja { font-family: var(--f-display); font-size: 22px; }
+  .sv-topo nav { display: flex; gap: 18px; color: var(--ink2); font-size: 14px; }
+  .sv-topo .sacola { margin-left: auto; border: 1px solid var(--border2); background: var(--bg2); border-radius: 999px; min-height: 40px; padding: 0 16px; }
+  .sv-migalha { padding: 12px 32px 0; font-size: 12.5px; color: var(--ink3); }
+  .sv-migalha b { color: var(--ink2); font-weight: 500; }
+  .sv-grade { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr); gap: 40px; padding: 16px 32px 48px; max-width: 1280px; margin: 0 auto; align-items: start; }
+  .sv-palco-col { position: sticky; top: 64px; min-width: 0; }
+
+  .palco { background: var(--palco); border-radius: 20px; position: relative; overflow: hidden; }
+  .palco-topo { position: absolute; left: 14px; right: 14px; top: 14px; display: flex; justify-content: space-between; align-items: center; gap: 8px; z-index: 2; pointer-events: none; }
+  .palco-topo > * { pointer-events: auto; }
+  .selo { background: var(--bg2); color: var(--ink); border-radius: 999px; padding: 5px 12px; font-size: 12.5px; font-weight: 600; box-shadow: var(--sh-1); }
+  .abas-lado { display: inline-flex; padding: 3px; gap: 3px; border-radius: 12px; background: var(--bg3); box-shadow: var(--sh-1); }
+  .abas-lado button { border: 0; background: transparent; min-height: 38px; padding: 0 14px; border-radius: 9px; font-weight: 600; font-size: 13.5px; color: var(--ink2); }
+  .abas-lado button[aria-selected="true"] { background: var(--bg2); color: var(--ink); box-shadow: var(--sh-1); }
+  .palco canvas.peca { display: block; width: 100%; aspect-ratio: 1; touch-action: pan-y; cursor: grab; }
+  .palco-dica { position: absolute; left: 50%; bottom: 76px; transform: translateX(-50%); font-size: 12px; color: var(--ink3); background: color-mix(in srgb, var(--bg2) 80%, transparent); padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+  .palco-rodape { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 0 14px 14px; margin-top: -58px; position: relative; z-index: 2; }
+  .interruptor { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border-radius: 999px; background: var(--bg2); box-shadow: var(--sh-1); border: 0; font-size: 13px; color: var(--ink2); }
+  .interruptor .bola { width: 30px; height: 18px; border-radius: 999px; background: var(--ink4); position: relative; transition: background .2s; flex: none; }
+  .interruptor .bola::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: left .2s; }
+  .interruptor[aria-checked="true"] .bola { background: var(--guia); }
+  .interruptor[aria-checked="true"] .bola::after { left: 14px; }
+
+  .bt { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 12px; border: 1px solid var(--border2); background: var(--bg2); color: var(--ink); font-weight: 600; font-size: 14px; }
+  .bt.marca { background: var(--marca); color: var(--sobre-marca); border-color: var(--marca); }
+  .bt.peq { min-height: 40px; padding: 0 12px; font-size: 13px; border-radius: 10px; }
+  .bt.fantasma { background: transparent; border-color: transparent; color: var(--ink2); }
+  .bt:focus-visible, .ic:focus-visible, .seg button:focus-visible { outline: 2px solid var(--guia); outline-offset: 2px; }
+  .bt svg, .ic svg { width: 18px; height: 18px; flex: none; }
+
+  .sv-coluna { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+  .col-cabeca h1 { font-size: 32px; line-height: 1.1; }
+  .preco { margin-top: 8px; font-size: 26px; font-weight: 700; letter-spacing: -.02em; }
+  .preco small { display: block; font-size: 13px; font-weight: 600; color: var(--green); letter-spacing: 0; }
+  .bloco { display: flex; flex-direction: column; gap: 10px; }
+  .rotulo { font-size: 11.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--ink3); display: flex; align-items: center; gap: 8px; }
+  .etq { font-size: 11.5px; letter-spacing: 0; text-transform: none; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+  .etq.ok { background: var(--green-soft); color: var(--green); } .etq.falta { background: var(--amber-soft); color: var(--amber); }
+  .cores-peca { display: flex; gap: 4px; flex-wrap: wrap; }
+  .cores-peca button { width: 44px; height: 44px; border: 0; background: transparent; display: grid; place-items: center; border-radius: 50%; }
+  .cores-peca span { width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(0,0,0,.15); }
+  .cores-peca button[aria-checked="true"] span { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  .caminhos { display: flex; flex-direction: column; gap: 8px; }
+  .caminho { display: flex; align-items: center; gap: 12px; min-height: 62px; padding: 10px 14px; border-radius: 14px; border: 1px solid var(--border2); background: var(--bg2); text-align: left; }
+  .caminho[aria-checked="true"] { border: 2px solid var(--marca); padding: 9px 13px; background: var(--marca-wash); }
+  .caminho .ic-c { width: 34px; height: 34px; border-radius: 10px; background: var(--bg3); display: grid; place-items: center; flex: none; }
+  .caminho .ic-c svg { width: 18px; height: 18px; }
+  .caminho b { display: block; font-size: 14.5px; font-weight: 600; }
+  .caminho small { display: block; font-size: 12.5px; color: var(--ink3); line-height: 1.35; }
+  .pilula { margin-left: auto; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--bg3); color: var(--ink2); white-space: nowrap; }
+  textarea.brief { width: 100%; min-height: 96px; border-radius: 12px; border: 1px solid var(--border2); background: var(--bg2); padding: 12px 14px; resize: vertical; }
+
+  .envio { width: 100%; border: 1.5px dashed var(--border2); border-radius: 14px; background: var(--bg2); padding: 20px 16px; display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
+  .envio b { font-size: 15px; } .envio small { color: var(--ink3); font-size: 12.5px; }
+  .envio .barra { width: 100%; height: 6px; border-radius: 999px; background: var(--bg3); overflow: hidden; margin-top: 8px; }
+  .envio .barra i { display: block; height: 100%; background: var(--marca); width: 0; transition: width .15s linear; }
+  .cartao { border: 1px solid var(--border); background: var(--bg2); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .arquivo { display: flex; gap: 12px; align-items: center; }
+  .mini { width: 60px; height: 60px; border-radius: 10px; border: 1px solid var(--border); background: repeating-conic-gradient(var(--bg3) 0 25%, var(--bg2) 0 50%) 0 0/12px 12px; display: grid; place-items: center; overflow: hidden; flex: none; }
+  .mini img { max-width: 86%; max-height: 86%; }
+  .mini img.pix { image-rendering: pixelated; }
+  .arquivo .nome { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .arquivo .med { font-size: 12.5px; color: var(--ink3); font-variant-numeric: tabular-nums; }
+  .acoes { display: flex; flex-wrap: wrap; gap: 8px; }
+  .na-peca { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 12px; border-radius: 12px; background: var(--bg3); font-size: 13px; color: var(--ink2); }
+  .na-peca b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .nitidez { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 12.5px; padding: 3px 9px; border-radius: 999px; }
+  .nitidez i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .nitidez.boa { background: var(--green-soft); color: var(--green); }
+  .nitidez.ok { background: var(--info-soft); color: var(--info); }
+  .nitidez.ruim { background: var(--amber-soft); color: var(--amber); }
+  .aviso { display: flex; gap: 10px; padding: 12px; border-radius: 12px; font-size: 13.5px; line-height: 1.4; }
+  .aviso svg { width: 18px; height: 18px; flex: none; margin-top: 1px; }
+  .aviso.amber { background: var(--amber-soft); color: var(--amber); }
+  .aviso.red { background: var(--red-soft); color: var(--red); }
+  .aviso.info { background: var(--info-soft); color: var(--info); }
+  .aviso .acoes { margin-top: 8px; }
+  .aviso .bt { color: var(--ink); }
+
+  .campo-texto { position: relative; }
+  .campo-texto input { width: 100%; height: 48px; border-radius: 12px; border: 1px solid var(--border2); background: var(--bg2); padding: 0 62px 0 14px; font-size: 15px; }
+  .campo-texto span { position: absolute; right: 14px; top: 14px; font-size: 11.5px; color: var(--ink3); font-variant-numeric: tabular-nums; }
+  .sub { font-size: 13px; font-weight: 600; color: var(--ink2); }
+  .fontes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .fontes button { min-height: 64px; border-radius: 12px; border: 1px solid var(--border2); background: var(--bg2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 6px 4px; }
+  .fontes button[aria-checked="true"] { border: 2px solid var(--marca); background: var(--marca-wash); }
+  .fontes .aa { font-size: 24px; line-height: 1.1; color: var(--ink); }
+  .fontes small { font-size: 11px; color: var(--ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .cores-texto { display: flex; flex-wrap: wrap; margin: 0 -4px; }
+  .cores-texto button { width: 44px; height: 44px; border: 0; background: transparent; display: grid; place-items: center; }
+  .cores-texto span { width: 28px; height: 28px; border-radius: 50%; border: 1px solid rgba(0,0,0,.18); }
+  .cores-texto button[aria-checked="true"] span { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .seg { display: inline-flex; padding: 3px; gap: 3px; border-radius: 12px; background: var(--bg3); max-width: 100%; }
+  .seg button { border: 0; background: transparent; min-height: 40px; min-width: 44px; padding: 0 12px; border-radius: 9px; font-weight: 600; font-size: 13.5px; color: var(--ink2); white-space: nowrap; }
+  .seg button[aria-pressed="true"], .seg button[aria-checked="true"] { background: var(--bg2); color: var(--ink); box-shadow: var(--sh-1); }
+  .nota-area { font-size: 13px; color: var(--ink3); border-top: 1px solid var(--border); padding-top: 14px; }
+  .nota-area b { color: var(--ink2); font-weight: 600; }
+
+  .compra { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 16px; background: var(--bg2); border: 1px solid var(--border); }
+  .compra .total { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .compra .total small { display: block; font-size: 12px; color: var(--ink3); font-weight: 500; }
+  .compra .bt { margin-left: auto; }
+
+  /* ── Editor da área planificada ────────────────────────── */
+  .ed { display: flex; flex-direction: column; gap: 12px; padding: 14px; }
+  .ed-cabeca { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .ed-cabeca h2 { font-size: 20px; }
+  .ed-cabeca .dica { font-size: 12.5px; color: var(--ink3); flex: 1 1 200px; }
+  .ed-mesa { position: relative; background-color: var(--mesa); background-image: radial-gradient(var(--mesa-ponto) 1px, transparent 1.2px); background-size: 12px 12px; border-radius: 14px; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; margin: 0 auto; }
+  .ed-mesa:focus-visible { outline: 2px solid var(--guia); outline-offset: 2px; }
+  .ed-camada { position: absolute; inset: 0; pointer-events: none; }
+  .ed-fora { opacity: .3; }
+  .ed-area { position: absolute; overflow: hidden; box-shadow: 0 0 0 1.5px var(--guia); }
+  .ed-area::after { content: ""; position: absolute; inset: 0; border: 1.5px dashed rgba(255,255,255,.0); }
+  .ed-margem { position: absolute; border: 1px dashed var(--guia); opacity: .55; pointer-events: none; }
+  .ed-el { position: absolute; transform-origin: 50% 50%; pointer-events: none; }
+  img.ed-el { display: block; }
+  img.ed-el.pix { image-rendering: pixelated; }
+  .ed-txt { white-space: pre; line-height: 1; transform: translate(-50%, -50%); }
+  .mult .ed-el { mix-blend-mode: multiply; }
+  .ed-sel { position: absolute; border: 1.5px solid var(--guia); border-radius: 2px; pointer-events: none; box-shadow: 0 0 0 9999px transparent; }
+  .ed-sel:focus-visible { outline: 3px solid var(--guia); outline-offset: 3px; }
+  .alca { position: absolute; width: 44px; height: 44px; transform: translate(-50%, -50%); pointer-events: auto; cursor: nwse-resize; border: 0; background: transparent; padding: 0; touch-action: none; }
+  .alca[data-c="1"], .alca[data-c="3"] { cursor: nesw-resize; }
+  .alca::before { content: ""; position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; transform: translate(-50%, -50%); background: #fff; border: 2px solid var(--guia); border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+  body.toque .alca::before { width: 20px; height: 20px; border-radius: 50%; }
+  @media (hover: none) { .alca::before { width: 20px; height: 20px; border-radius: 50%; } }
+  .ed-rotulo-sel { position: absolute; transform: translate(-50%, 8px); background: var(--guia); color: #fff; font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; pointer-events: none; font-variant-numeric: tabular-nums; }
+  .guia-v, .guia-h { position: absolute; background: var(--guia); pointer-events: none; }
+  .guia-v { width: 1px; } .guia-h { height: 1px; }
+  .regua { position: absolute; pointer-events: none; font-size: 10px; color: var(--ink3); font-variant-numeric: tabular-nums; }
+  .regua i { position: absolute; background: var(--ink4); }
+  .regua b { position: absolute; font-weight: 500; transform: translateX(-50%); }
+  .regua.y b { transform: translate(-100%, -50%); }
+  .junta { position: absolute; font-size: 10.5px; color: var(--ink3); writing-mode: vertical-rl; transform: rotate(180deg); pointer-events: none; letter-spacing: .06em; }
+  .medida { position: absolute; pointer-events: none; }
+  .medida.h { height: 0; border-top: 1.5px solid var(--p-accent); }
+  .medida.v { width: 0; border-left: 1.5px solid var(--p-accent); }
+  .medida span { position: absolute; background: var(--p-accent); color: #fff; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 999px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .medida.h span { left: 50%; top: -9px; transform: translate(-50%, -100%); }
+  .medida.v span { top: 50%; left: 6px; transform: translateY(-50%); }
+  .sem-conteudo { position: absolute; inset: 0; display: grid; place-items: center; color: var(--ink3); font-size: 13px; text-align: center; pointer-events: none; }
+
+  .ed-status { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 12px; align-items: start; }
+  .ed-status .peca-viva { position: relative; }
+  .ed-status canvas { width: 112px; height: 112px; border-radius: 12px; background: var(--palco); display: block; }
+  .ed-status .peca-viva small { position: absolute; left: 6px; bottom: 6px; font-size: 10.5px; font-weight: 700; background: var(--bg2); color: var(--ink2); padding: 1px 6px; border-radius: 999px; }
+  .ed-linhas { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--ink2); min-width: 0; }
+  .ed-linhas .l1 { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+  .ed-linhas b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .ed-aviso { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 8px 10px; border-radius: 10px; font-size: 12.5px; }
+  .ed-aviso.amber { background: var(--amber-soft); color: var(--amber); }
+  .ed-aviso.red { background: var(--red-soft); color: var(--red); }
+  .ed-aviso .bt { color: var(--ink); min-height: 36px; }
+
+  .ed-ctl { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--border); padding-top: 12px; }
+  .ed-ctl .linha { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+  .ed-ctl .linha > .sub { min-width: 64px; }
+  .ic { width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--border2); background: var(--bg2); display: inline-grid; place-items: center; color: var(--ink); padding: 0; }
+  .ic:disabled { opacity: .4; cursor: default; }
+  .tamanho { display: flex; align-items: center; gap: 8px; flex: 1 1 240px; min-width: 0; }
+  .tamanho input[type=range] { flex: 1; min-width: 60px; accent-color: var(--guia); height: 44px; }
+  .tamanho output { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; min-width: 92px; text-align: right; }
+  .dpad { display: grid; grid-template-columns: repeat(4, 44px); gap: 6px; }
+  .ed-rodape { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+
+  /* celular: folha em tela cheia */
+  .folha { position: fixed; inset: 0; z-index: 150; background: var(--bg); display: flex; flex-direction: column; }
+  .folha .ed { padding: 12px 16px 16px; }
+  .folha .ed-cabeca h2 { font-size: 18px; }
+
+  @container tela (max-width: 760px) {
+    .sv-topo { padding: 12px 16px; gap: 12px; }
+    .sv-topo nav { display: none; }
+    .sv-migalha { padding: 10px 16px 0; }
+    .sv-grade { grid-template-columns: minmax(0, 1fr); gap: 20px; padding: 12px 0 0; }
+    .sv-palco-col { position: static; }
+    .palco { border-radius: 0; }
+    .sv-coluna { padding: 0 16px 16px; }
+    .col-cabeca h1 { font-size: 26px; }
+    .compra { position: sticky; bottom: 0; border-radius: 0; margin: 8px -16px -16px; border-width: 1px 0 0; }
+    .fontes .aa { font-size: 21px; }
+    .palco-dica { bottom: 70px; }
+  }
+
+  /* ============================================================
+     PAINEL (lojista)
+     ============================================================ */
+  .pn { background: var(--p-bg); color: var(--p-ink); min-height: 100%; padding: 20px 24px 48px; }
+  .pn h1, .pn h2 { margin: 0; }
+  .pn-casca { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+  .pn-migalha { font-size: 12.5px; color: var(--p-ink3); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .pn-migalha b { color: var(--p-ink); }
+  .pn-chip { font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: var(--p-accent-soft); color: var(--p-accent-ink); }
+  .pn-titulo h1 { font-size: 22px; }
+  .pn-titulo p { margin: 4px 0 0; color: var(--p-ink3); font-size: 13.5px; }
+  .pn-grade { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
+  .pn-card { background: var(--p-card-elev); border-radius: 18px; box-shadow: var(--p-shadow); padding: 16px; min-width: 0; }
+  .pn-barra { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .pn .seg { background: var(--p-bg-soft); }
+  .pn .seg button { color: var(--p-ink3); }
+  .pn .seg button[aria-pressed="true"], .pn .seg button[aria-selected="true"], .pn .seg button[aria-checked="true"] { background: var(--p-primary); color: #fff; box-shadow: none; }
+  .pn .interruptor { background: var(--p-bg-soft); color: var(--p-ink2); box-shadow: none; }
+  .pn .interruptor[aria-checked="true"] .bola { background: var(--p-accent); }
+  .pn-vistas { display: grid; gap: 12px; }
+  .pn-vistas.lado { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: center; }
+  .pn-vistas canvas { width: 100%; aspect-ratio: 1; border-radius: 14px; display: block; background: var(--palco); }
+  .pn .ed { padding: 0; }
+  .pn .ed-mesa { --mesa: var(--p-bg-soft); background-color: var(--p-bg-soft); }
+  .pn-ficha h2 { font-size: 16px; display: flex; align-items: center; gap: 8px; }
+  .pn-ficha dl { margin: 12px 0 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 14px; font-size: 13.5px; }
+  .pn-ficha dt { color: var(--p-ink3); }
+  .pn-ficha dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .pn-ficha dd small { display: block; font-weight: 400; color: var(--p-ink3); }
+  .pn-sep { height: 1px; background: var(--p-ink5); margin: 16px 0; }
+  .pn-arquivo { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; align-items: center; }
+  .pn-arquivo canvas { width: 120px; border-radius: 10px; display: block; border: 1px solid var(--p-ink5); }
+  .pn-arquivo b { display: block; font-size: 14px; }
+  .pn-arquivo small { display: block; color: var(--p-ink3); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .pbt { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 44px; border-radius: 12px; font-weight: 700; border: 1.5px solid transparent; margin-top: 8px; font-size: 14px; }
+  .pbt.pri { background: var(--p-primary); color: #fff; }
+  .pbt.sec { background: transparent; border-color: var(--p-ink4); color: var(--p-ink2); }
+  .pbt svg { width: 18px; height: 18px; }
+  .pn-nota { font-size: 12.5px; color: var(--p-ink3); margin: 10px 0 0; }
+  .pn-ok { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .pn-ok.boa { background: var(--p-ok-soft); color: var(--p-ok); }
+  .pn-ok.ruim { background: var(--p-warn-soft); color: var(--p-warn); }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #0F172A; color: #F8FAFC; padding: 10px 16px; border-radius: 12px; font-size: 13.5px; z-index: 200; box-shadow: 0 8px 24px rgba(0,0,0,.35); max-width: calc(100% - 32px); }
+
+  /* drawer do produto (testar) */
+  .drawer { background: var(--p-card-elev); border-radius: 20px; box-shadow: var(--p-shadow); overflow: hidden; }
+  .drawer-topo { padding: 16px 20px 0; border-bottom: 1px solid var(--p-ink5); }
+  .drawer-produto { display: flex; gap: 12px; align-items: center; }
+  .drawer-produto canvas { width: 44px; height: 44px; border-radius: 12px; background: var(--p-bg-soft); }
+  .drawer-produto h1 { font-size: 17px; }
+  .drawer-produto p { margin: 2px 0 0; color: var(--p-ink3); font-size: 12.5px; }
+  .drawer-abas { display: flex; gap: 4px; margin-top: 14px; overflow-x: auto; }
+  .drawer-abas span { padding: 10px 14px; font-weight: 600; color: var(--p-ink3); border-bottom: 2.5px solid transparent; white-space: nowrap; font-size: 14px; }
+  .drawer-abas span.ativa { color: var(--p-primary); border-color: var(--p-accent); }
+  .drawer-corpo { padding: 18px 20px 24px; display: grid; gap: 14px; }
+  .secao-f { background: var(--p-card); border: 1px solid var(--p-ink5); border-radius: 14px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 14px; }
+  .secao-f b { display: block; } .secao-f span { color: var(--p-ink3); font-size: 12.5px; }
+  .secao-p { background: var(--p-card); border: 1.5px solid var(--p-primary-soft); border-radius: 16px; padding: 18px; }
+  .secao-p h2 { font-size: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .secao-p .ajuda { margin: 6px 0 12px; color: var(--p-ink2); font-size: 13.5px; max-width: 680px; }
+  .novo { font-size: 10.5px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--p-accent-ink); background: var(--p-accent-soft); padding: 2px 8px; border-radius: 999px; }
+  .chips-f { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chips-f button { min-height: 44px; padding: 0 14px; border-radius: 12px; border: 1.5px solid var(--p-ink5); background: var(--p-card-elev); color: var(--p-ink2); font-size: 16px; }
+  .chips-f button[aria-pressed="true"] { border-color: var(--p-primary); color: var(--p-primary); background: var(--p-primary-ghost); }
+  .chips-f button:disabled { opacity: .45; cursor: default; }
+  .teste-grade { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .teste-grade canvas.grande { width: 100%; aspect-ratio: 1; border-radius: 14px; background: var(--palco); display: block; }
+  .arq-teste { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--p-ink3); margin-bottom: 12px; }
+  .arq-teste b { color: var(--p-ink); }
+  .pn .ed-ctl { border-color: var(--p-ink5); }
+  .pn .ic, .pn .bt { background: var(--p-card-elev); border-color: var(--p-ink5); color: var(--p-ink); }
+  .pn .bt.marca { background: var(--p-primary); border-color: var(--p-primary); color: #fff; }
+  .pn .sub { color: var(--p-ink2); }
+  .pn .ed-linhas { color: var(--p-ink2); } .pn .ed-linhas b { color: var(--p-ink); }
+  .pn .ed-status canvas { background: var(--p-bg-soft); }
+
+  @container tela (max-width: 760px) {
+    .pn { padding: 12px 16px 32px; }
+    .pn-grade, .teste-grade, .pn-vistas.lado { grid-template-columns: minmax(0, 1fr); }
+    .pn-card { padding: 12px; }
+    .drawer-topo, .drawer-corpo { padding-left: 12px; padding-right: 12px; }
+    .secao-p { padding: 14px; }
+    .dpad { grid-template-columns: repeat(4, 44px); }
+  }
+</style>
+</head>
+<body class="prioridades">
+
+<div class="estados" role="toolbar" aria-label="Estados do mockup">
+  <span class="grupo"><b>Tela</b>
+    <button data-g="tela" data-v="cliente" aria-pressed="true">Cliente · página da peça</button>
+    <button data-g="tela" data-v="prova" aria-pressed="false">Lojista · prova do pedido</button>
+    <button data-g="tela" data-v="teste" aria-pressed="false">Lojista · testar no produto</button>
+  </span>
+  <span class="grupo"><b>Estado</b>
+    <button class="so-cliente" data-g="estado" data-v="sem" aria-pressed="false">Sem arte</button>
+    <button class="so-cliente" data-g="estado" data-v="ok" aria-pressed="true">Arte ok</button>
+    <button class="so-cliente" data-g="estado" data-v="baixa" aria-pressed="false">Baixa resolução</button>
+    <button class="so-cliente" data-g="estado" data-v="cortada" aria-pressed="false">Arte cortada</button>
+    <button class="so-cliente" data-g="estado" data-v="texto" aria-pressed="false">Só texto</button>
+    <button class="so-cliente" data-g="estado" data-v="fundo" aria-pressed="false">Fundo branco (DTF)</button>
+    <button class="so-cliente" data-g="estado" data-v="criem" aria-pressed="false">Criem pra mim</button>
+  </span>
+  <span class="grupo"><b>Peça</b>
+    <button data-g="peca" data-v="caneca" aria-pressed="true">Caneca</button>
+    <button data-g="peca" data-v="camiseta" aria-pressed="false">Camiseta</button>
+  </span>
+  <span class="grupo"><b>Técnica</b>
+    <button data-g="tecnica" data-v="sub" aria-pressed="true">Sublimação</button>
+    <button data-g="tecnica" data-v="dtf" aria-pressed="false">DTF</button>
+  </span>
+  <span class="grupo"><b>Tema</b>
+    <button data-g="tema" data-v="light" aria-pressed="true">Claro</button>
+    <button data-g="tema" data-v="dark" aria-pressed="false">Escuro</button>
+  </span>
+  <span class="grupo"><b>Largura</b>
+    <button data-g="largura" data-v="auto" aria-pressed="true">Automática</button>
+    <button data-g="largura" data-v="celular" aria-pressed="false">Celular 390</button>
+  </span>
+  <span class="grupo"><b>Entrada</b>
+    <button data-g="entrada" data-v="mouse" aria-pressed="true">Mouse</button>
+    <button data-g="entrada" data-v="toque" aria-pressed="false">Toque</button>
+  </span>
+  <span class="grupo"><b>Prioridades</b>
+    <button data-g="prio" data-v="1" aria-pressed="true">Marcar P0/P1/P2</button>
+  </span>
+</div>
+
+<div id="moldura" class="moldura">
+<div id="rolagem" class="rolagem">
+
+  <!-- ========================= CLIENTE ========================= -->
+  <section id="telaCliente" class="sv" aria-label="Página da peça na vitrine">
+    <header class="sv-topo">
+      <div class="loja">Ateliê Helena</div>
+      <nav aria-label="Categorias"><span>Canecas</span><span>Camisetas</span><span>Presentes</span></nav>
+      <button class="sacola" aria-label="Sacola, vazia">Sacola</button>
+    </header>
+    <div class="sv-migalha">Início / <span id="migCat">Canecas</span> / <b id="migNome">Caneca Clássica 325 ml</b></div>
+    <div class="sv-grade">
+      <div class="sv-palco-col">
+        <div id="palco" class="palco"></div>
+      </div>
+      <div class="sv-coluna" id="coluna">
+        <div class="col-cabeca">
+          <h1 id="nomePeca">Caneca Clássica 325 ml</h1>
+          <div class="preco" id="preco">R$ 49,90 <small>R$ 47,40 no Pix</small></div>
+        </div>
+        <div class="bloco" id="blocoCor"></div>
+        <div class="bloco">
+          <div class="rotulo">Como você quer resolver a arte?</div>
+          <div class="caminhos" id="caminhos" role="radiogroup" aria-label="Como resolver a arte"></div>
+          <div id="briefing"></div>
+        </div>
+        <div class="bloco" id="blocoArte">
+          <div class="rotulo">Sua arte <span id="etqArte"></span></div>
+          <div id="ladosCol"></div>
+          <div id="cartaoArte"></div>
+          <div id="avisosArte" style="display:flex;flex-direction:column;gap:8px"></div>
+        </div>
+        <div class="bloco" id="blocoTexto">
+          <div class="rotulo">Nome na peça <span style="text-transform:none;letter-spacing:0;font-weight:400">(opcional)</span></div>
+          <div class="campo-texto">
+            <input id="inTexto" type="text" maxlength="24" placeholder="Ex.: Helena" aria-label="Nome na peça" autocomplete="off" />
+            <span id="contTexto">0/24</span>
+          </div>
+          <div id="opcoesTexto" style="display:flex;flex-direction:column;gap:12px"></div>
+        </div>
+        <div class="nota-area" id="notaArea"></div>
+        <div class="compra">
+          <div class="total" id="total">R$ 49,90<small>1 un · entrega em 5 dias úteis</small></div>
+          <button class="bt marca">Adicionar à sacola</button>
+        </div>
+      </div>
+    </div>
+    <div id="folha" class="folha" role="dialog" aria-modal="true" aria-label="Ajustar a arte" hidden></div>
+  </section>
+
+  <!-- ========================= PROVA (lojista) ========================= -->
+  <section id="telaProva" class="pn" aria-label="Prova do pedido" hidden>
+    <div class="pn-casca">
+      <div class="pn-migalha"><span>Estúdio</span>›<span>Pedidos</span>›<b>SM-0042</b><span class="pn-chip">Arte recebida</span></div>
+      <div class="pn-titulo">
+        <h1>Prova da arte <span class="tp p1">P1</span></h1>
+        <p id="provaSub">Helena Castro · Caneca Clássica 325 ml × 2 · pedido de 28/09</p>
+      </div>
+      <div class="pn-grade">
+        <div class="pn-card">
+          <div class="pn-barra">
+            <div class="seg" role="tablist" id="provaLados"></div>
+            <div class="seg" id="provaVista">
+              <button data-v="plan" aria-pressed="false">Planificada</button>
+              <button data-v="peca" aria-pressed="false">Na peça</button>
+              <button data-v="lado" aria-pressed="true">Lado a lado</button>
+            </div>
+            <button class="interruptor" id="provaMedir" role="switch" aria-checked="true"><span class="bola"></span>Medir</button>
+          </div>
+          <div id="provaVistas" class="pn-vistas lado"></div>
+        </div>
+        <aside class="pn-card pn-ficha" aria-label="Ficha da arte">
+          <h2 id="fichaTitulo">Ficha da arte · Frente</h2>
+          <dl id="fichaDl"></dl>
+          <div class="pn-sep"></div>
+          <div class="pn-arquivo">
+            <canvas id="cvPng" width="240" height="240" aria-label="Prévia do PNG de impressão, fundo transparente"></canvas>
+            <div><b>Arquivo de impressão <span class="tp p1">P1</span></b><small id="pngSpec"></small><small id="pngNome"></small></div>
+          </div>
+          <button class="pbt pri" id="btPng"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>Baixar PNG de impressão</button>
+          <button class="pbt sec" id="btOriginal">Baixar arte original</button>
+          <button class="pbt sec" id="btAprov">Gerar mockup para aprovação</button>
+          <button class="pbt sec" id="btFicha">Abrir ficha A5</button>
+          <p class="pn-nota">O PNG sai do mesmo desenho que a cliente viu: só a área, em escala real, sem a peça. É ele que vai para o Corel, o Photoshop ou a impressora.</p>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================= TESTAR NO PRODUTO (lojista) ========================= -->
+  <section id="telaTeste" class="pn" aria-label="Testar no produto" hidden>
+    <div class="pn-casca">
+      <div class="drawer">
+        <div class="drawer-topo">
+          <div class="drawer-produto">
+            <canvas id="cvThumbDrawer" width="88" height="88"></canvas>
+            <div><h1 id="drawerNome">Caneca Clássica 325 ml</h1><p>Estoque › produto · personalizável</p></div>
+          </div>
+          <div class="drawer-abas"><span>Dados</span><span>Fotos</span><span class="ativa">Personalização</span><span>Ficha técnica</span></div>
+        </div>
+        <div class="drawer-corpo">
+          <div class="secao-f"><div><b>Campos da personalização</b><span>Arte da frente · Nome na peça · Cor da arte</span></div><span>›</span></div>
+          <div class="secao-f"><div><b>Área de impressão</b><span id="drawerArea">Frente 20 × 9 cm</span></div><span>›</span></div>
+          <div class="secao-p">
+            <h2>Técnica de impressão <span class="novo">novo</span><span class="tp p1">P1</span></h2>
+            <p class="ajuda">Muda como a arte aparece na prévia da vitrine. Não muda preço nem prazo.</p>
+            <div class="seg" id="tecSeg" role="radiogroup" aria-label="Técnica de impressão">
+              <button data-v="sub" role="radio" aria-checked="true">Sublimação</button>
+              <button data-v="dtf" role="radio" aria-checked="false">DTF / transfer</button>
+              <button data-v="outra" role="radio" aria-checked="false">Outra</button>
+            </div>
+            <p class="ajuda" id="tecExplica" style="margin-top:10px"></p>
+          </div>
+          <div class="secao-p">
+            <h2>Fontes que a cliente pode escolher <span class="tp p1">P1</span></h2>
+            <p class="ajuda">Até 4. A primeira é a que aparece marcada. Hoje só a primeira chega à vitrine.</p>
+            <div class="chips-f" id="chipsFontes"></div>
+          </div>
+          <div class="secao-p">
+            <h2>Testar com uma arte <span class="novo">novo</span><span class="tp p1">P1</span></h2>
+            <p class="ajuda">Veja uma arte de verdade na peça, do jeito que a cliente vai ver. O arquivo fica só nesta tela: não é salvo no produto.</p>
+            <div class="arq-teste"><button class="bt peq" id="btArqTeste">Escolher arquivo</button><span><b>arte-teste.png</b> · 2400 × 1800 px · não é salva</span></div>
+            <div class="teste-grade">
+              <div id="testeHost"></div>
+              <div><canvas class="grande" id="cvTestePeca" width="900" height="900" aria-label="A arte de teste na peça"></canvas></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+</div>
+<div id="vivo" class="sr" aria-live="polite"></div>
+
+<script>
+"use strict";
+/* ============================================================
+   Dados
+   ============================================================ */
+const AREAS = {
+  caneca:   { w: 20, h: 9,  lados: ["front"], nome: "Caneca Clássica 325 ml", cat: "Canecas", preco: 49.9, margemMesa: 1.4, passo: 2 },
+  camiseta: { w: 28, h: 35, lados: ["front", "back"], nome: "Camiseta Algodão Penteado", cat: "Camisetas", preco: 69.9, margemMesa: 2.6, passo: 5 },
+};
+const CORES_PECA = {
+  caneca: [{ n: "Branca", c: "#F7F6F2" }],
+  camiseta: [{ n: "Branca", c: "#F4F2EE" }, { n: "Areia", c: "#D8C8AC" }, { n: "Preta", c: "#232326" }, { n: "Marinho", c: "#1F2B45" }],
+};
+const FONTES = {
+  "Pacifico": { css: "'Pacifico','Segoe Script','Brush Script MT','Lucida Handwriting',cursive", peso: "400" },
+  "Bebas Neue": { css: "'Bebas Neue',Impact,'Arial Narrow Bold','Arial Black',sans-serif", peso: "400" },
+  "Playfair Display": { css: "'Playfair Display',Georgia,'Times New Roman',serif", peso: "700" },
+  "Caveat": { css: "'Caveat','Segoe Print','Comic Sans MS','Bradley Hand',cursive", peso: "700" },
+  "Inter": { css: "Inter,'Segoe UI',Roboto,Arial,sans-serif", peso: "700" },
+};
+const PALETA = ["#1A1714", "#BE185D", "#7C3AED", "#1D4ED8", "#D97706", "#059669", "#FFFFFF"];
+const NOME_COR = { "#1A1714": "grafite", "#BE185D": "rosa", "#7C3AED": "violeta", "#1D4ED8": "azul", "#D97706": "âmbar", "#059669": "verde", "#FFFFFF": "branco" };
+const MARGEM = 0.3;          // margem de segurança (cm)
+const TAM = { P: 0.9, M: 1.4, G: 2.0 }; // altura da letra (cm) na caneca
+const TAM_TEE = { P: 2.2, M: 3.2, G: 4.4 };
+const ART = { boa: { pxW: 2400, pxH: 1800, nome: "arte-helena.jpg", mb: "1,8 MB" }, baixa: { pxW: 400, pxH: 300, nome: "foto-whats.jpg", mb: "38 KB" } };
+
+const G = {
+  tela: "cliente", estado: "ok", peca: "caneca", tecnica: { caneca: "sub", camiseta: "dtf" }, tema: "light",
+  largura: "auto", entrada: "mouse",
+  fontesLiberadas: ["Pacifico", "Bebas Neue", "Playfair Display", "Caveat"],
+};
+try { if (matchMedia("(prefers-color-scheme: dark)").matches) G.tema = "dark"; } catch (e) {}
+
+/* ── util ───────────────────────────────────────────────── */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const fmt = (n, d = 1) => (Math.round(n * Math.pow(10, d)) / Math.pow(10, d)).toFixed(d).replace(".", ",");
+const brl = (n) => "R$ " + n.toFixed(2).replace(".", ",");
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function hexRgb(h) { h = h.replace("#", ""); if (h.length === 3) h = h.split("").map((c) => c + c).join(""); const n = parseInt(h, 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function lum(h) { const [r, g, b] = hexRgb(h).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; }
+function contraste(a, b) { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+const ICON = {
+  up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
+  down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>',
+  left: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>',
+  right: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>',
+  rot: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>',
+  menos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14"/></svg>',
+  mais: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  alerta: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>',
+  info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>',
+  upload: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>',
+  edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+  spark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg>',
+  ajustar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg>',
+};
+
+/* ============================================================
+   Arte de exemplo (desenhada aqui, sem rede)
+   ============================================================ */
+function ilustracao(w, h, comFundo) {
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const x = c.getContext("2d"); const s = w / 480;
+  if (comFundo) { x.fillStyle = "#FFFFFF"; x.fillRect(0, 0, w, h); }
+  x.save(); x.scale(s, s);
+  const cx = 240, cy = 180, r = 150;
+  x.save(); x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.clip();
+  const g = x.createLinearGradient(0, 30, 0, 330); g.addColorStop(0, "#FF9F43"); g.addColorStop(.45, "#F2545B"); g.addColorStop(.62, "#A23B72"); g.addColorStop(.63, "#118AB2"); g.addColorStop(1, "#073B4C");
+  x.fillStyle = g; x.fillRect(80, 20, 320, 320);
+  x.fillStyle = "#FFD166"; x.beginPath(); x.arc(cx, 205, 62, Math.PI, 0); x.fill();
+  x.fillStyle = "rgba(255,209,102,.55)";
+  for (let i = 0; i < 5; i++) { x.fillRect(cx - 60 + i * 6, 216 + i * 14, 120 - i * 12, 5); }
+  x.strokeStyle = "rgba(255,255,255,.45)"; x.lineWidth = 3;
+  for (let i = 0; i < 6; i++) { x.beginPath(); const y = 240 + i * 16; x.moveTo(80, y); for (let k = 0; k <= 16; k++) x.lineTo(80 + k * 20, y + Math.sin(k * 1.3 + i) * 3); x.stroke(); }
+  x.fillStyle = "#1B1B3A";
+  x.beginPath(); x.moveTo(150, 330); x.quadraticCurveTo(160, 230, 196, 150); x.lineTo(203, 153); x.quadraticCurveTo(170, 240, 166, 330); x.fill();
+  const folha = (a, l) => { x.save(); x.translate(199, 150); x.rotate(a); x.beginPath(); x.moveTo(0, 0); x.quadraticCurveTo(l * .5, -26, l, 8); x.quadraticCurveTo(l * .5, -8, 0, 0); x.fill(); x.restore(); };
+  [-2.6, -2.0, -1.2, -0.4, 0.3, 0.9].forEach((a, i) => folha(a, 70 + (i % 2) * 14));
+  x.strokeStyle = "#1B1B3A"; x.lineWidth = 3; x.lineCap = "round";
+  [[300, 95], [330, 115], [276, 120]].forEach(([bx, by]) => { x.beginPath(); x.moveTo(bx - 10, by - 4); x.quadraticCurveTo(bx - 4, by - 8, bx, by); x.quadraticCurveTo(bx + 4, by - 8, bx + 10, by - 4); x.stroke(); });
+  x.restore();
+  x.lineWidth = 8; x.strokeStyle = "#FFFFFF"; x.beginPath(); x.arc(cx, cy, r - 4, 0, Math.PI * 2); x.stroke();
+  x.lineWidth = 4; x.strokeStyle = "#1B1B3A"; x.beginPath(); x.arc(cx, cy, r + 2, 0, Math.PI * 2); x.stroke();
+  x.fillStyle = "#1B1B3A"; x.font = "900 26px Impact, 'Arial Black', sans-serif"; x.textAlign = "center";
+  x.fillStyle = "#FFFFFF"; x.fillText("VERÃO 26", cx, 312);
+  x.restore();
+  return c;
+}
+function reduzir(src, w, h) { const c = document.createElement("canvas"); c.width = w; c.height = h; const x = c.getContext("2d"); x.imageSmoothingEnabled = true; x.drawImage(src, 0, 0, w, h); return c; }
+const FONTE_ARTE = {};
+(function () {
+  const boaF = ilustracao(480, 360, true), boaS = ilustracao(480, 360, false);
+  FONTE_ARTE.boa = { f: boaF, s: boaS };
+  FONTE_ARTE.baixa = { f: reduzir(boaF, 72, 54), s: reduzir(boaS, 72, 54) };
+  for (const k in FONTE_ARTE) { FONTE_ARTE[k].fu = FONTE_ARTE[k].f.toDataURL(); FONTE_ARTE[k].su = FONTE_ARTE[k].s.toDataURL(); }
+})();
+function fonteDaArte(img) { const a = FONTE_ARTE[img.arte]; const semFundo = !img.fundo || img.semFundo; return { cv: semFundo ? a.s : a.f, url: semFundo ? a.su : a.fu, pix: img.arte === "baixa" }; }
+
+/* ============================================================
+   Geometria da arte (cm) — a "layoutDaArte" proposta, pura
+   ============================================================ */
+function dimsImg(img, A) {
+  const w = img.larg * A.w, h = w * (ART[img.arte].pxH / ART[img.arte].pxW);
+  const rot = ((img.rot % 360) + 360) % 360;
+  const bw = rot % 180 ? h : w, bh = rot % 180 ? w : h;
+  return { w, h, bw, bh, x: img.cx * A.w - bw / 2, y: img.cy * A.h - bh / 2, rot };
+}
+const _medidor = document.createElement("canvas").getContext("2d");
+function fonteCss(txt, px) { const f = FONTES[txt.fonte] || FONTES.Pacifico; return f.peso + " " + px + "px " + f.css; }
+function dimsTxt(txt, A) {
+  _medidor.font = fonteCss(txt, 100);
+  const larg = Math.max(0.5, _medidor.measureText(txt.valor || " ").width / 100 * txt.tamCm);
+  const alt = txt.tamCm * 1.25;
+  const rot = ((txt.rot % 360) + 360) % 360;
+  const bw = rot % 180 ? alt : larg, bh = rot % 180 ? larg : alt;
+  return { w: larg, h: alt, bw, bh, x: txt.cx * A.w - bw / 2, y: txt.cy * A.h - bh / 2, rot };
+}
+function dpiDe(img, A) { const d = dimsImg(img, A); return ART[img.arte].pxW / (d.w / 2.54); }
+function faixaDpi(dpi) { return dpi >= 150 ? "boa" : dpi >= 100 ? "ok" : "ruim"; }
+function larguraEncaixe(img, A, modo) {
+  const ar = ART[img.arte].pxH / ART[img.arte].pxW; const rot = img.rot % 180 !== 0;
+  const W = modo === "preencher" ? A.w : A.w - 2 * MARGEM, H = modo === "preencher" ? A.h : A.h - 2 * MARGEM;
+  const porW = rot ? W / ar : W, porH = rot ? H : H / ar;
+  return (modo === "preencher" ? Math.max(porW, porH) : Math.min(porW, porH)) / A.w;
+}
+function avisosDe(el, A, ctx) {
+  const out = [];
+  const checa = (d, tipo, livre) => {
+    const fora = d.x < -0.02 || d.y < -0.02 || d.x + d.bw > A.w + 0.02 || d.y + d.bh > A.h + 0.02;
+    if (fora && livre) out.push({ tipo: "cortada", de: tipo });
+    else if (!fora && livre && (d.x < MARGEM - 0.02 || d.y < MARGEM - 0.02 || A.w - d.x - d.bw < MARGEM - 0.02 || A.h - d.y - d.bh < MARGEM - 0.02)) out.push({ tipo: "margem", de: tipo });
+  };
+  if (el.img) {
+    checa(dimsImg(el.img, A), "img", el.img.encaixe !== "preencher");
+    if (faixaDpi(dpiDe(el.img, A)) === "ruim") out.push({ tipo: "dpi", de: "img" });
+    if (el.img.fundo && !el.img.semFundo && ctx.tecnica === "dtf" && lum(ctx.cor) < 0.8) out.push({ tipo: "fundo", de: "img" });
+  }
+  if (el.txt && el.txt.valor) {
+    checa(dimsTxt(el.txt, A), "txt", true);
+    if (!el.txt.contorno && contraste(el.txt.cor, ctx.cor) < 1.8) out.push({ tipo: "contraste", de: "txt" });
+  }
+  return out;
+}
+
+/* ============================================================
+   Desenho da área (textura) e das peças — canvas
+   ============================================================ */
+function pintarArea(ctx, el, A, k, opts) {
+  opts = opts || {};
+  if (el.img) {
+    const d = dimsImg(el.img, A); const f = fonteDaArte(el.img);
+    ctx.save(); ctx.imageSmoothingEnabled = !f.pix;
+    ctx.translate(el.img.cx * A.w * k, el.img.cy * A.h * k); ctx.rotate(d.rot * Math.PI / 180);
+    ctx.drawImage(f.cv, -d.w * k / 2, -d.h * k / 2, d.w * k, d.h * k); ctx.restore();
+  }
+  if (el.txt && el.txt.valor) {
+    const px = el.txt.tamCm * k;
+    ctx.save(); ctx.translate(el.txt.cx * A.w * k, el.txt.cy * A.h * k); ctx.rotate(((el.txt.rot || 0) % 360) * Math.PI / 180);
+    ctx.font = fonteCss(el.txt, px); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    if (el.txt.contorno) { ctx.lineJoin = "round"; ctx.lineWidth = Math.max(1, px * 0.1); ctx.strokeStyle = lum(el.txt.cor) > 0.5 ? "#1A1714" : "#FFFFFF"; ctx.strokeText(el.txt.valor, 0, 0); }
+    ctx.fillStyle = el.txt.cor; ctx.fillText(el.txt.valor, 0, 0); ctx.restore();
+  }
+}
+function texturaDaArea(el, A, k) {
+  const c = document.createElement("canvas"); c.width = Math.round(A.w * k); c.height = Math.round(A.h * k);
+  pintarArea(c.getContext("2d"), el, A, k); return c;
+}
+let _ruido = null;
+function ruido() {
+  if (_ruido) return _ruido; const c = document.createElement("canvas"); c.width = c.height = 96; const x = c.getContext("2d"); const im = x.createImageData(96, 96);
+  for (let i = 0; i < im.data.length; i += 4) { const v = 228 + Math.random() * 27; im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255; }
+  x.putImageData(im, 0, 0); return (_ruido = c);
+}
+function fundoPalco(ctx, S, escuro, piso) {
+  const g = ctx.createRadialGradient(S * .5, S * .38, S * .1, S * .5, S * .5, S * .75);
+  if (escuro) { g.addColorStop(0, "#2E2A25"); g.addColorStop(1, "#191613"); } else { g.addColorStop(0, "#F7F3EC"); g.addColorStop(1, "#E3DCD0"); }
+  ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
+  const sg = ctx.createRadialGradient(S * .5, piso, 2, S * .5, piso, S * .3);
+  sg.addColorStop(0, escuro ? "rgba(0,0,0,.55)" : "rgba(60,45,30,.28)"); sg.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.save(); ctx.translate(0, piso); ctx.scale(1, .16); ctx.translate(0, -piso); ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(S * .5, piso, S * .3, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+}
+function desenharPeca(canvas, cena) {
+  const ctx = canvas.getContext("2d"); const S = canvas.width; ctx.clearRect(0, 0, S, S);
+  if (cena.peca === "caneca") desenharCaneca(ctx, S, cena); else desenharCamiseta(ctx, S, cena);
+}
+function desenharCaneca(ctx, S, cena) {
+  const u = S / 1000, escuro = G.tema === "dark";
+  const cx = 480 * u, top = 250 * u, bot = 785 * u, R = 235 * u, ry = 42 * u;
+  const rCm = 4.1, pxCm = R / rCm, A = AREAS.caneca;
+  const areaH = A.h * pxCm, printTop = top + (bot - top - areaH) / 2 + 4 * u;
+  const giro = cena.giro;
+  fundoPalco(ctx, S, escuro, bot + 8 * u);
+  const hAng = Math.PI / 2 + giro, hz = Math.cos(hAng), hx = Math.sin(hAng);
+  const alca = () => {
+    const ax = cx + R * hx * 0.93, ox = cx + (R + 130 * u) * hx;
+    ctx.save(); ctx.lineCap = "round";
+    ctx.strokeStyle = shade(cena.cor, -0.1); ctx.lineWidth = 52 * u;
+    ctx.beginPath(); ctx.moveTo(ax, top + 100 * u); ctx.bezierCurveTo(ox, top + 70 * u, ox, bot - 140 * u, ax, bot - 120 * u); ctx.stroke();
+    ctx.strokeStyle = shade(cena.cor, 0.04); ctx.lineWidth = 30 * u; ctx.stroke();
+    ctx.strokeStyle = "rgba(255,255,255,.55)"; ctx.lineWidth = 6 * u; ctx.stroke();
+    ctx.restore();
+  };
+  if (hz < 0) alca();
+  const corpo = () => { ctx.beginPath(); ctx.moveTo(cx - R, top); ctx.lineTo(cx - R, bot); ctx.ellipse(cx, bot, R, ry, 0, Math.PI, 0, true); ctx.lineTo(cx + R, top); ctx.ellipse(cx, top, R, ry, 0, 0, Math.PI, true); ctx.closePath(); };
+  ctx.save(); corpo(); ctx.fillStyle = cena.cor; ctx.fill(); ctx.clip();
+  const tex = texturaDaArea(cena.el, A, 60);
+  ctx.globalCompositeOperation = cena.tecnica === "sub" ? "multiply" : "source-over";
+  for (let x = Math.floor(cx - R); x < cx + R; x++) {
+    const dx = (x + 0.5 - cx) / R; if (Math.abs(dx) >= 0.999) continue;
+    const th = Math.asin(dx);
+    let a = th - giro + Math.PI / 2; a = ((a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+    const s = rCm * a, uu = (s + A.w / 2) / A.w; if (uu < 0 || uu > 1) continue;
+    const sw = Math.max(1, 60 / (pxCm * Math.cos(th)));
+    const curva = 10 * u * Math.sqrt(1 - dx * dx);
+    ctx.drawImage(tex, uu * tex.width, 0, sw, tex.height, x, printTop + curva, 1.4, areaH);
+  }
+  ctx.globalCompositeOperation = "multiply";
+  const g = ctx.createLinearGradient(cx - R, 0, cx + R, 0);
+  g.addColorStop(0, "#8d8a86"); g.addColorStop(.1, "#c9c6c1"); g.addColorStop(.3, "#f4f2ee"); g.addColorStop(.5, "#ffffff"); g.addColorStop(.75, "#e4e1dc"); g.addColorStop(.92, "#b7b3ad"); g.addColorStop(1, "#86827c");
+  ctx.fillStyle = g; ctx.fillRect(cx - R, top - ry, 2 * R, bot - top + 2 * ry);
+  ctx.globalCompositeOperation = "screen";
+  const h = ctx.createLinearGradient(cx - R, 0, cx + R, 0);
+  h.addColorStop(.17, "rgba(255,255,255,0)"); h.addColorStop(.24, "rgba(255,255,255,.55)"); h.addColorStop(.29, "rgba(255,255,255,0)");
+  h.addColorStop(.8, "rgba(255,255,255,0)"); h.addColorStop(.84, "rgba(255,255,255,.18)"); h.addColorStop(.88, "rgba(255,255,255,0)");
+  ctx.fillStyle = h; ctx.fillRect(cx - R, top - ry, 2 * R, bot - top + 2 * ry);
+  ctx.restore();
+  ctx.save(); ctx.beginPath(); ctx.ellipse(cx, top, R, ry, 0, 0, Math.PI * 2);
+  const gi = ctx.createLinearGradient(0, top - ry, 0, top + ry); gi.addColorStop(0, shade(cena.cor, -0.22)); gi.addColorStop(1, shade(cena.cor, -0.05));
+  ctx.fillStyle = gi; ctx.fill(); ctx.lineWidth = 7 * u; ctx.strokeStyle = shade(cena.cor, 0.03); ctx.stroke(); ctx.restore();
+  if (hz >= 0) alca();
+  if (cena.verArea) {
+    ctx.save(); ctx.strokeStyle = G.tema === "dark" ? "#A78BFA" : "#7C3AED"; ctx.lineWidth = 2.5 * u; ctx.setLineDash([9 * u, 7 * u]);
+    const bordas = [];
+    for (const yy of [0, 1]) {
+      ctx.beginPath(); let aberto = false, ultimoU = null;
+      for (let x = Math.floor(cx - R) + 1; x < cx + R; x += 2) {
+        const dx = (x - cx) / R, th = Math.asin(clamp(dx, -0.999, 0.999));
+        let a = th - giro + Math.PI / 2; a = ((a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+        const uu = (rCm * a + A.w / 2) / A.w; const dentro = uu >= 0 && uu <= 1;
+        const y = printTop + 10 * u * Math.sqrt(1 - dx * dx) + yy * areaH;
+        if (dentro) { if (!aberto) { ctx.moveTo(x, y); aberto = true; } else ctx.lineTo(x, y); }
+        else aberto = false;
+        if (yy === 0 && ultimoU !== null && (ultimoU >= 0 && ultimoU <= 1) !== dentro) bordas.push({ x, y });
+        ultimoU = uu;
+      }
+      ctx.stroke();
+    }
+    bordas.forEach((b) => { ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x, b.y + areaH); ctx.stroke(); });
+    ctx.restore();
+  }
+  if (cena.vazio) textoCentral(ctx, cx, printTop + areaH / 2, u, cena);
+}
+function textoCentral(ctx, x, y, u, cena) {
+  ctx.save(); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillStyle = lum(cena.cor) > 0.4 ? "rgba(26,23,20,.55)" : "rgba(255,255,255,.7)";
+  ctx.font = "600 " + Math.round(30 * u) + "px -apple-system, 'Segoe UI', sans-serif"; ctx.fillText("Sua arte aqui", x, y - 16 * u);
+  ctx.font = "500 " + Math.round(22 * u) + "px -apple-system, 'Segoe UI', sans-serif";
+  const A = AREAS[cena.peca]; ctx.fillText(fmt(A.w, 0) + " × " + fmt(A.h, 0) + " cm", x, y + 20 * u); ctx.restore();
+}
+function shade(hex, f) { const [r, g, b] = hexRgb(hex); const m = (v) => Math.round(clamp(f < 0 ? v * (1 + f) : v + (255 - v) * f, 0, 255)); return "rgb(" + m(r) + "," + m(g) + "," + m(b) + ")"; }
+function caminhoCamiseta(ctx, u, costas) {
+  ctx.beginPath(); ctx.moveTo(395 * u, 140 * u);
+  ctx.quadraticCurveTo(500 * u, (costas ? 168 : 212) * u, 605 * u, 140 * u);
+  ctx.lineTo(765 * u, 190 * u); ctx.lineTo(888 * u, 338 * u); ctx.lineTo(792 * u, 398 * u); ctx.lineTo(766 * u, 350 * u);
+  ctx.lineTo(772 * u, 888 * u); ctx.quadraticCurveTo(500 * u, 908 * u, 228 * u, 888 * u);
+  ctx.lineTo(234 * u, 350 * u); ctx.lineTo(208 * u, 398 * u); ctx.lineTo(112 * u, 338 * u); ctx.lineTo(235 * u, 190 * u); ctx.closePath();
+}
+function desenharCamiseta(ctx, S, cena) {
+  const u = S / 1000, escuro = G.tema === "dark", costas = cena.lado === "back";
+  const A = AREAS.camiseta, pxCm = 10.4 * u;
+  fundoPalco(ctx, S, escuro, 905 * u);
+  const aw = A.w * pxCm, ah = A.h * pxCm, ax = 500 * u - aw / 2, ay = (costas ? 222 : 252) * u;
+  ctx.save(); caminhoCamiseta(ctx, u, costas); ctx.fillStyle = cena.cor; ctx.fill(); ctx.clip();
+  const tex = texturaDaArea(cena.el, A, 30);
+  ctx.globalCompositeOperation = cena.tecnica === "sub" ? "multiply" : "source-over";
+  ctx.globalAlpha = cena.tecnica === "sub" ? 1 : 0.97;
+  const tiras = 40;
+  for (let i = 0; i < tiras; i++) {
+    const sy = i * tex.height / tiras, dy = ay + i * ah / tiras, onda = Math.sin(i / tiras * Math.PI * 2.2) * 2.2 * u;
+    ctx.drawImage(tex, 0, sy, tex.width, tex.height / tiras + 1, ax + onda, dy, aw, ah / tiras + 1);
+  }
+  ctx.globalAlpha = 1;
+  const dobra = (x, y, rx, ryy, rot, a) => { ctx.save(); ctx.translate(x * u, y * u); ctx.rotate(rot); const g = ctx.createRadialGradient(0, 0, 1, 0, 0, rx * u); g.addColorStop(0, "rgba(0,0,0," + a + ")"); g.addColorStop(1, "rgba(0,0,0,0)"); ctx.scale(1, ryy / rx); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, rx * u, 0, Math.PI * 2); ctx.fill(); ctx.restore(); };
+  ctx.globalCompositeOperation = "source-over";
+  dobra(300, 420, 120, 26, 1.1, .16); dobra(700, 430, 120, 24, -1.1, .16); dobra(360, 700, 160, 18, .5, .12); dobra(640, 720, 150, 16, -.45, .12);
+  dobra(500, 860, 260, 20, 0, .12); dobra(250, 600, 90, 260, 0, .14); dobra(750, 600, 90, 260, 0, .14);
+  ctx.globalCompositeOperation = "screen";
+  const brilho = (x, y, rx, ryy, rot, a) => { ctx.save(); ctx.translate(x * u, y * u); ctx.rotate(rot); const g = ctx.createRadialGradient(0, 0, 1, 0, 0, rx * u); g.addColorStop(0, "rgba(255,255,255," + a + ")"); g.addColorStop(1, "rgba(255,255,255,0)"); ctx.scale(1, ryy / rx); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, rx * u, 0, Math.PI * 2); ctx.fill(); ctx.restore(); };
+  brilho(430, 380, 180, 60, .3, .14); brilho(560, 640, 170, 30, -.5, .1); brilho(330, 560, 120, 20, .9, .08);
+  ctx.globalCompositeOperation = "multiply"; ctx.globalAlpha = .55; ctx.fillStyle = ctx.createPattern(ruido(), "repeat"); ctx.fillRect(0, 0, S, S); ctx.globalAlpha = 1;
+  ctx.restore();
+  ctx.save(); ctx.lineWidth = 16 * u; ctx.strokeStyle = shade(cena.cor, lum(cena.cor) > .4 ? -0.12 : 0.1);
+  ctx.beginPath(); ctx.moveTo(398 * u, 144 * u); ctx.quadraticCurveTo(500 * u, (costas ? 170 : 214) * u, 602 * u, 144 * u); ctx.stroke(); ctx.restore();
+  ctx.save(); caminhoCamiseta(ctx, u, costas); ctx.lineWidth = 2 * u; ctx.strokeStyle = "rgba(0,0,0,.18)"; ctx.stroke(); ctx.restore();
+  if (cena.verArea) { ctx.save(); ctx.strokeStyle = escuro || lum(cena.cor) < .3 ? "#C4B5FD" : "#7C3AED"; ctx.lineWidth = 2.5 * u; ctx.setLineDash([9 * u, 7 * u]); ctx.strokeRect(ax, ay, aw, ah); ctx.restore(); }
+  if (cena.vazio) textoCentral(ctx, 500 * u, ay + ah / 2, u, cena);
+}
+
+/* ============================================================
+   Estado da cliente
+   ============================================================ */
+function tamPadrao(peca, t) { return (peca === "caneca" ? TAM : TAM_TEE)[t]; }
+function novoTxt(peca, valor, extra) { return Object.assign({ valor: valor || "", fonte: G.fontesLiberadas[0], cor: "#BE185D", tam: "M", tamCm: tamPadrao(peca, "M"), cx: .5, cy: .5, rot: 0, contorno: false }, extra || {}); }
+function novaImg(peca, arte, extra) {
+  const img = Object.assign({ arte, fundo: true, semFundo: false, cx: .5, cy: .5, larg: .5, rot: 0, encaixe: "ajustar" }, extra || {});
+  if (!extra || extra.larg == null) img.larg = larguraEncaixe(img, AREAS[peca], "ajustar");
+  return img;
+}
+const C = { lado: "front", caminho: "tenho", modo: "peca", sel: "img", giro: Math.PI / 2 - 0.27, verArea: true, cor: { caneca: "#F7F6F2", camiseta: "#232326" }, lados: {} };
+function aplicarEstado() {
+  const p = G.peca, e = G.estado, can = p === "caneca";
+  C.caminho = e === "criem" ? "criem" : "tenho"; C.lado = "front"; C.sel = "img"; C.modo = "peca"; C.giro = Math.PI / 2 - 0.27;
+  let img = null, txt = novoTxt(p, "");
+  if (e === "ok") {
+    img = can ? novaImg(p, "boa", { cx: .45, cy: .5, larg: .32, encaixe: "livre" }) : novaImg(p, "boa", { cx: .5, cy: .4, larg: .72, encaixe: "livre", fundo: false });
+    txt = can ? novoTxt(p, "Helena", { cx: .72, cy: .5, tamCm: 1.5 }) : novoTxt(p, "Helena", { cx: .5, cy: .86, tamCm: 3.8 });
+  } else if (e === "baixa") {
+    img = novaImg(p, "baixa", can ? {} : { fundo: false });
+  } else if (e === "cortada") {
+    img = can ? novaImg(p, "boa", { cx: .9, cy: .5, larg: .5, encaixe: "livre" }) : novaImg(p, "boa", { cx: .5, cy: .2, larg: .95, encaixe: "livre", fundo: false });
+    txt = can ? novoTxt(p, "Helena", { cx: .3, cy: .5, tamCm: 1.7 }) : novoTxt(p, "Helena", { cx: .5, cy: .9, tamCm: 3.8 });
+  } else if (e === "texto") {
+    txt = novoTxt(p, "Helena", { tamCm: can ? 2.6 : 5 }); C.sel = "txt";
+  } else if (e === "fundo") {
+    if (can) { G.peca = "camiseta"; return aplicarEstado(); }
+    G.tecnica.camiseta = "dtf"; C.cor.camiseta = "#232326";
+    img = novaImg(p, "boa", { cx: .5, cy: .42, larg: .72, encaixe: "livre", fundo: true });
+    txt = novoTxt(p, "Helena", { cx: .5, cy: .86, tamCm: 3.8, cor: "#FFFFFF" });
+  }
+  C.lados = { front: { img, txt }, back: { img: null, txt: novoTxt(p, p === "camiseta" && e === "ok" ? "CASTRO 10" : "", { fonte: "Bebas Neue", cor: "#FFFFFF", tamCm: 5, cy: .3 }) } };
+  if (!img) C.sel = "txt";
+}
+function elAtual() { return C.lados[C.lado]; }
+function cenaCliente(extra) {
+  const el = elAtual(); const temAlgo = !!(el.img || (el.txt && el.txt.valor));
+  return Object.assign({ peca: G.peca, cor: C.cor[G.peca], tecnica: G.tecnica[G.peca], lado: C.lado, el, giro: C.giro, verArea: C.verArea || !temAlgo, vazio: !temAlgo && C.caminho !== "criem" }, extra || {});
+}
+function ehCelular() { return $("#rolagem").clientWidth < 760; }
+
+/* ============================================================
+   Editor da área planificada
+   ============================================================ */
+class Editor {
+  constructor(o) { this.o = o; this.host = null; this.ponteiros = new Map(); this.guias = { v: false, h: false }; }
+  // o: { cena(): cena, editavel, medir(): bool, titulo(): string, aoMudar(), aoPronto?, sel(): 'img'|'txt', setSel(s), compacto }
+  montar(host) {
+    this.host = host;
+    const ed = this.o.editavel;
+    host.innerHTML =
+      '<div class="ed">' +
+      (this.o.cabeca !== false ? '<div class="ed-cabeca"><h2 class="ed-titulo"></h2><span class="dica"></span>' + (this.o.aoPronto ? '<button class="bt marca ed-pronto">Pronto</button>' : '') + '</div>' : '') +
+      '<div class="ed-mesa" ' + (ed ? 'tabindex="0" role="application" aria-roledescription="área de impressão" ' : '') + '>' +
+      '<div class="ed-camada ed-fora"></div><div class="ed-area"><div class="ed-camada ed-dentro"></div><div class="ed-margem"></div></div>' +
+      '<div class="ed-camada ed-sobre"></div></div>' +
+      (this.o.status !== false ? '<div class="ed-status"><div class="peca-viva"><canvas width="360" height="360" aria-label="A arte na peça, ao vivo"></canvas><small>Na peça</small></div><div class="ed-linhas" aria-live="polite"></div></div>' : '') +
+      (ed ? '<div class="ed-ctl"></div>' : '') +
+      '</div>';
+    this.mesa = $(".ed-mesa", host); this.area = $(".ed-area", host); this.dentro = $(".ed-dentro", host); this.fora = $(".ed-fora", host); this.sobre = $(".ed-sobre", host);
+    this.margem = $(".ed-margem", host); this.linhas = $(".ed-linhas", host); this.mini = $(".peca-viva canvas", host); this.ctl = $(".ed-ctl", host);
+    const pr = $(".ed-pronto", host); if (pr) pr.onclick = () => this.o.aoPronto();
+    if (ed) this.ligarGestos();
+    this.layout();
+  }
+  layout() {
+    if (!this.host) return;
+    const c = this.o.cena(), A = AREAS[c.peca], M = A.margemMesa;
+    const larg = Math.max(200, this.host.clientWidth - (this.o.pad != null ? this.o.pad : 28));
+    const maxH = this.o.maxH ? this.o.maxH() : 460;
+    this.k = Math.min(larg / (A.w + 2 * M), maxH / (A.h + 2 * M));
+    this.ox = M * this.k; this.oy = M * this.k;
+    const W = (A.w + 2 * M) * this.k, H = (A.h + 2 * M) * this.k;
+    Object.assign(this.mesa.style, { width: W + "px", height: H + "px" });
+    Object.assign(this.area.style, { left: this.ox + "px", top: this.oy + "px", width: A.w * this.k + "px", height: A.h * this.k + "px", background: c.cor });
+    Object.assign(this.margem.style, { left: MARGEM * this.k + "px", top: MARGEM * this.k + "px", right: MARGEM * this.k + "px", bottom: MARGEM * this.k + "px" });
+    this.mesa.classList.toggle("mult", c.tecnica === "sub");
+    this.fora.style.left = "0"; this.fora.style.top = "0";
+    // réguas
+    const ry = this.sobre; ry.innerHTML = "";
+    const rx = document.createElement("div"); rx.className = "regua x"; Object.assign(rx.style, { left: this.ox + "px", top: (this.oy - 22) + "px", width: A.w * this.k + "px", height: "20px" });
+    for (let cm = 0; cm <= A.w; cm++) { const t = document.createElement("i"); const longo = cm % A.passo === 0; Object.assign(t.style, { left: cm * this.k + "px", bottom: "0", width: "1px", height: longo ? "8px" : "4px" }); rx.appendChild(t); if (longo) { const b = document.createElement("b"); b.textContent = cm; Object.assign(b.style, { left: cm * this.k + "px", top: "0" }); rx.appendChild(b); } }
+    ry.appendChild(rx);
+    const rv = document.createElement("div"); rv.className = "regua y"; Object.assign(rv.style, { left: (this.ox - 22) + "px", top: this.oy + "px", width: "20px", height: A.h * this.k + "px" });
+    for (let cm = 0; cm <= A.h; cm++) { const t = document.createElement("i"); const longo = cm % A.passo === 0; Object.assign(t.style, { top: cm * this.k + "px", right: "0", height: "1px", width: longo ? "8px" : "4px" }); rv.appendChild(t); if (longo && cm) { const b = document.createElement("b"); b.textContent = cm; Object.assign(b.style, { top: cm * this.k + "px", left: "10px" }); rv.appendChild(b); } }
+    ry.appendChild(rv);
+    if (c.peca === "caneca") {
+      [["esq", this.ox - 36], ["dir", this.ox + A.w * this.k + 20]].forEach(([n, x]) => { const j = document.createElement("span"); j.className = "junta"; j.textContent = "junta · alça"; Object.assign(j.style, { left: x + "px", top: (this.oy + 4) + "px", height: A.h * this.k - 8 + "px", textAlign: "center" }); ry.appendChild(j); });
+    }
+    this.camadaSel = document.createElement("div"); ry.appendChild(this.camadaSel);
+    this.construirElementos();
+    if (this.ctl) this.construirControles();
+    this.pos();
+  }
+  construirElementos() {
+    const c = this.o.cena(), el = c.el;
+    for (const camada of [this.dentro, this.fora]) {
+      camada.innerHTML = "";
+      if (el.img) { const f = fonteDaArte(el.img); const im = document.createElement("img"); im.className = "ed-el ed-img" + (f.pix ? " pix" : ""); im.src = f.url; im.alt = ""; im.draggable = false; camada.appendChild(im); }
+      if (el.txt && el.txt.valor) { const t = document.createElement("div"); t.className = "ed-el ed-txt"; camada.appendChild(t); }
+    }
+    this.assinatura = this.assinar(c);
+  }
+  assinar(c) { const el = c.el; return [c.peca, c.lado, el.img ? el.img.arte + (el.img.semFundo ? "s" : "") + el.img.fundo : "-", el.txt && el.txt.valor ? "t" : "-"].join("|"); }
+  pos() {
+    if (!this.host) return;
+    const c = this.o.cena(), A = AREAS[c.peca], el = c.el, k = this.k;
+    if (this.assinar(c) !== this.assinatura) this.construirElementos();
+    this.area.style.background = c.cor; this.mesa.classList.toggle("mult", c.tecnica === "sub");
+    const pinta = (camada, dx, dy) => {
+      const im = $(".ed-img", camada), tx = $(".ed-txt", camada);
+      if (im && el.img) { const d = dimsImg(el.img, A); Object.assign(im.style, { left: dx + (el.img.cx * A.w - d.w / 2) * k + "px", top: dy + (el.img.cy * A.h - d.h / 2) * k + "px", width: d.w * k + "px", height: d.h * k + "px", transform: "rotate(" + d.rot + "deg)" }); }
+      if (tx && el.txt) {
+        tx.textContent = el.txt.valor; const f = FONTES[el.txt.fonte] || FONTES.Pacifico;
+        Object.assign(tx.style, { left: dx + el.txt.cx * A.w * k + "px", top: dy + el.txt.cy * A.h * k + "px", fontFamily: f.css, fontWeight: f.peso, fontSize: el.txt.tamCm * k + "px", color: el.txt.cor, transform: "translate(-50%,-50%) rotate(" + (el.txt.rot || 0) + "deg)", webkitTextStroke: el.txt.contorno ? Math.max(1, el.txt.tamCm * k * .08) + "px " + (lum(el.txt.cor) > .5 ? "#1A1714" : "#FFFFFF") : "0", paintOrder: "stroke fill" });
+      }
+    };
+    pinta(this.dentro, 0, 0); pinta(this.fora, this.ox, this.oy);
+    // seleção, guias, medidas
+    const s = this.camadaSel; s.innerHTML = "";
+    const alvo = this.alvo(c);
+    if (alvo && this.o.editavel) {
+      const d = alvo.d; const x = this.ox + d.x * k, y = this.oy + d.y * k, w = d.bw * k, h = d.bh * k;
+      const box = document.createElement("div"); box.className = "ed-sel"; Object.assign(box.style, { left: x + "px", top: y + "px", width: w + "px", height: h + "px" }); s.appendChild(box);
+      [[x, y], [x + w, y], [x + w, y + h], [x, y + h]].forEach(([hx, hy], i) => { const b = document.createElement("button"); b.className = "alca"; b.dataset.c = i; b.tabIndex = -1; b.setAttribute("aria-hidden", "true"); Object.assign(b.style, { left: hx + "px", top: hy + "px" }); s.appendChild(b); });
+      const r = document.createElement("div"); r.className = "ed-rotulo-sel"; r.textContent = fmt(d.bw) + " × " + fmt(d.bh) + " cm"; Object.assign(r.style, { left: x + w / 2 + "px", top: y + h + "px" }); s.appendChild(r);
+    }
+    if (this.guias.v) { const g = document.createElement("div"); g.className = "guia-v"; Object.assign(g.style, { left: this.ox + A.w * k / 2 + "px", top: this.oy + "px", height: A.h * k + "px" }); s.appendChild(g); }
+    if (this.guias.h) { const g = document.createElement("div"); g.className = "guia-h"; Object.assign(g.style, { top: this.oy + A.h * k / 2 + "px", left: this.ox + "px", width: A.w * k + "px" }); s.appendChild(g); }
+    if (this.o.medir && this.o.medir()) {
+      const itens = []; if (el.img) itens.push(dimsImg(el.img, A)); if (el.txt && el.txt.valor) itens.push(dimsTxt(el.txt, A));
+      itens.forEach((d, i) => {
+        const cy = this.oy + (d.y + d.bh / 2) * k, cxp = this.ox + (d.x + d.bw / 2) * k;
+        const lh = document.createElement("div"); lh.className = "medida h"; Object.assign(lh.style, { left: this.ox + "px", top: cy + "px", width: Math.max(0, d.x * k) + "px" }); lh.innerHTML = "<span>" + fmt(d.x) + " cm</span>"; if (d.x > 0.2) s.appendChild(lh);
+        const lv = document.createElement("div"); lv.className = "medida v"; Object.assign(lv.style, { left: cxp + (i ? 18 : 0) + "px", top: this.oy + "px", height: Math.max(0, d.y * k) + "px" }); lv.innerHTML = "<span>" + fmt(d.y) + " cm</span>"; if (d.y > 0.2) s.appendChild(lv);
+        const box = document.createElement("div"); box.className = "ed-sel"; Object.assign(box.style, { left: this.ox + d.x * k + "px", top: this.oy + d.y * k + "px", width: d.bw * k + "px", height: d.bh * k + "px", borderStyle: "dashed", borderColor: "var(--p-accent)" }); s.appendChild(box);
+        const r = document.createElement("div"); r.className = "ed-rotulo-sel"; r.style.background = "var(--p-accent)"; r.textContent = fmt(d.bw) + " × " + fmt(d.bh) + " cm"; Object.assign(r.style, { left: this.ox + (d.x + d.bw / 2) * k + "px", top: this.oy + (d.y + d.bh) * k + "px" }); s.appendChild(r);
+      });
+    }
+    if (!el.img && !(el.txt && el.txt.valor)) { const v = document.createElement("div"); v.className = "sem-conteudo"; v.textContent = "Envie uma arte ou escreva um nome para ajustar aqui."; s.appendChild(v); }
+    if (this.mini) desenharPeca(this.mini, Object.assign({}, c, { verArea: true }));
+    if (this.linhas) this.pintarStatus(c, A);
+    if (this.ctl) this.sincronizarControles(c, A);
+    const t = $(".ed-titulo", this.host); if (t) t.textContent = this.o.titulo();
+    const dica = $(".ed-cabeca .dica", this.host);
+    if (dica) dica.textContent = G.entrada === "toque" ? "Arraste com um dedo para mover · pinça com dois para o tamanho · dois toques centralizam" : "Arraste para mover · puxe o canto para o tamanho · setas do teclado também movem";
+  }
+  alvo(c) {
+    const el = c.el, A = AREAS[c.peca]; const s = this.o.sel();
+    if (s === "img" && el.img) return { tipo: "img", d: dimsImg(el.img, A), obj: el.img };
+    if (s === "txt" && el.txt && el.txt.valor) return { tipo: "txt", d: dimsTxt(el.txt, A), obj: el.txt };
+    if (el.img) return { tipo: "img", d: dimsImg(el.img, A), obj: el.img };
+    if (el.txt && el.txt.valor) return { tipo: "txt", d: dimsTxt(el.txt, A), obj: el.txt };
+    return null;
+  }
+  pintarStatus(c, A) {
+    const el = c.el; const partes = [];
+    const a = this.alvo(c);
+    if (a) {
+      const nome = a.tipo === "img" ? "Imagem" : "Nome";
+      let l1 = '<div class="l1"><span>' + nome + ': <b>' + fmt(a.d.bw) + ' × ' + fmt(a.d.bh) + ' cm</b></span>';
+      if (a.tipo === "img") { const dpi = dpiDe(a.obj, A), f = faixaDpi(dpi); l1 += '<span class="nitidez ' + f + '"><i></i>' + { boa: "Nítida", ok: "Aceitável", ruim: "Pode borrar" }[f] + ' · ' + Math.round(dpi) + ' dpi</span>'; }
+      if (a.d.rot) l1 += '<span>girada ' + a.d.rot + '°</span>';
+      partes.push(l1 + '</div>');
+    }
+    const av = avisosDe(el, A, c).filter((x) => x.tipo !== "contraste" || this.o.editavel);
+    av.forEach((x) => { partes.push(this.avisoCompacto(x, c, A)); });
+    if (!av.length && a) partes.push('<div style="color:var(--ink3)">Dentro da área e longe da borda. É assim que vai ser impresso.</div>');
+    this.linhas.innerHTML = partes.join("");
+    $$("[data-acao]", this.linhas).forEach((b) => b.onclick = () => { acao(b.dataset.acao, c, this.o.aoMudar); });
+  }
+  avisoCompacto(x, c, A) {
+    const ed = this.o.editavel;
+    if (x.tipo === "cortada") return '<div class="ed-aviso red">Parte ' + (x.de === "img" ? "da imagem" : "do nome") + ' fica fora da área e não será impressa.' + (ed ? '<button class="bt peq" data-acao="encaixar-' + x.de + '">Encaixar na área</button>' : '') + '</div>';
+    if (x.tipo === "margem") return '<div class="ed-aviso amber">Perto da borda (menos de 3 mm): pode ser cortado na produção.' + (ed ? '<button class="bt peq" data-acao="afastar-' + x.de + '">Afastar da borda</button>' : '') + '</div>';
+    if (x.tipo === "dpi") { const w = ART[c.el.img.arte].pxW / 150 * 2.54; return '<div class="ed-aviso amber">Nesse tamanho a foto pode sair borrada. Nítida até ' + fmt(w) + ' cm de largura.' + (ed ? '<button class="bt peq" data-acao="reduzir">Reduzir até ficar nítida</button>' : '') + '</div>'; }
+    if (x.tipo === "fundo") return '<div class="ed-aviso amber">O fundo branco da arte vai ser impresso nesta peça.' + (ed ? '<button class="bt peq" data-acao="semfundo">Remover fundo branco <span class="tp p2">P2</span></button>' : '') + '</div>';
+    if (x.tipo === "contraste") return '<div class="ed-aviso amber">Essa cor quase some na peça.' + (ed ? '<button class="bt peq" data-acao="contorno">Pôr contorno fino</button>' : '') + '</div>';
+    return "";
+  }
+  construirControles() {
+    const ctl = this.ctl;
+    ctl.innerHTML =
+      '<div class="linha ctl-sel"><span class="sub">Ajustar</span><div class="seg" role="radiogroup" aria-label="O que ajustar"><button data-sel="img" role="radio">Imagem</button><button data-sel="txt" role="radio">Nome</button></div></div>' +
+      '<div class="linha ctl-enc"><span class="sub">Encaixe <span class="tp p1">P1</span></span><div class="seg" aria-label="Encaixe"><button data-enc="ajustar" aria-pressed="false" title="A arte inteira, sem cortar">Ajustar</button><button data-enc="preencher" aria-pressed="false" title="Cobre a área e corta o excesso">Preencher</button><button data-enc="centro" aria-pressed="false">Centralizar</button></div></div>' +
+      '<div class="linha ctl-tamtxt"><span class="sub">Tamanho</span><div class="seg" role="radiogroup" aria-label="Tamanho do nome"><button data-tam="P" role="radio">P</button><button data-tam="M" role="radio">M</button><button data-tam="G" role="radio">G</button></div></div>' +
+      '<div class="linha"><div class="tamanho"><button class="ic" data-passo="-" aria-label="Diminuir">' + ICON.menos + '</button><input type="range" min="4" max="160" step="1" aria-label="Tamanho"><button class="ic" data-passo="+" aria-label="Aumentar">' + ICON.mais + '</button><output></output></div></div>' +
+      '<div class="linha"><div class="dpad" role="group" aria-label="Mover"><button class="ic" data-mv="l" aria-label="Mover para a esquerda">' + ICON.left + '</button><button class="ic" data-mv="u" aria-label="Mover para cima">' + ICON.up + '</button><button class="ic" data-mv="d" aria-label="Mover para baixo">' + ICON.down + '</button><button class="ic" data-mv="r" aria-label="Mover para a direita">' + ICON.right + '</button></div>' +
+      '<button class="bt peq" data-giro="1">' + ICON.rot + 'Girar 90°</button><button class="bt peq fantasma" data-reset="1">Recomeçar</button></div>';
+    $$("[data-sel]", ctl).forEach((b) => b.onclick = () => { this.o.setSel(b.dataset.sel); this.o.aoMudar(); });
+    $$("[data-enc]", ctl).forEach((b) => b.onclick = () => { const c = this.o.cena(); const a = this.alvo(c); if (!a) return; encaixar(a, c, b.dataset.enc); this.o.aoMudar(); anunciar(a); });
+    $$("[data-tam]", ctl).forEach((b) => b.onclick = () => { const c = this.o.cena(); if (!c.el.txt) return; c.el.txt.tam = b.dataset.tam; c.el.txt.tamCm = tamPadrao(c.peca, b.dataset.tam); this.o.aoMudar(); });
+    const rg = $("input[type=range]", ctl);
+    rg.oninput = () => { const c = this.o.cena(), a = this.alvo(c); if (!a) return; if (a.tipo === "img") { a.obj.larg = rg.value / 100; a.obj.encaixe = "livre"; } else { a.obj.tamCm = rg.value / 20; a.obj.tam = null; } this.o.aoMudar(); };
+    $$("[data-passo]", ctl).forEach((b) => b.onclick = () => { this.escalar(b.dataset.passo === "+" ? 1.08 : 1 / 1.08); });
+    $$("[data-mv]", ctl).forEach((b) => b.onclick = () => { this.mover(b.dataset.mv, 0.5); });
+    $(".bt[data-giro]", ctl).onclick = () => this.girar();
+    $(".bt[data-reset]", ctl).onclick = () => { const c = this.o.cena(); const a = this.alvo(c); if (!a) return; if (a.tipo === "img") { a.obj.rot = 0; encaixar(a, c, "ajustar"); } else { a.obj.rot = 0; a.obj.cx = .5; a.obj.cy = .5; a.obj.tam = "M"; a.obj.tamCm = tamPadrao(c.peca, "M"); } this.o.aoMudar(); };
+  }
+  sincronizarControles(c, A) {
+    const a = this.alvo(c), ctl = this.ctl, el = c.el;
+    const ambos = !!(el.img && el.txt && el.txt.valor);
+    $(".ctl-sel", ctl).hidden = !ambos;
+    $$("[data-sel]", ctl).forEach((b) => b.setAttribute("aria-checked", String(a && a.tipo === b.dataset.sel)));
+    $(".ctl-enc", ctl).hidden = !(a && a.tipo === "img");
+    $(".ctl-tamtxt", ctl).hidden = !(a && a.tipo === "txt");
+    if (a && a.tipo === "img") $$("[data-enc]", ctl).forEach((b) => b.setAttribute("aria-pressed", String(a.obj.encaixe === b.dataset.enc)));
+    if (a && a.tipo === "txt") $$("[data-tam]", ctl).forEach((b) => b.setAttribute("aria-checked", String(a.obj.tam === b.dataset.tam)));
+    const rg = $("input[type=range]", ctl), out = $("output", ctl);
+    $$("button, input", ctl).forEach((x) => { if (!x.closest(".ctl-sel")) x.disabled = !a; });
+    if (a) {
+      if (a.tipo === "img") { rg.min = 5; rg.max = 150; rg.value = Math.round(a.obj.larg * 100); rg.setAttribute("aria-valuetext", fmt(a.d.bw) + " por " + fmt(a.d.bh) + " centímetros"); }
+      else { rg.min = 8; rg.max = c.peca === "caneca" ? 80 : 180; rg.value = Math.round(a.obj.tamCm * 20); rg.setAttribute("aria-valuetext", "letra de " + fmt(a.obj.tamCm) + " centímetros"); }
+      out.textContent = fmt(a.d.bw) + " × " + fmt(a.d.bh) + " cm";
+    } else out.textContent = "";
+  }
+  escalar(f) { const c = this.o.cena(), a = this.alvo(c); if (!a) return; if (a.tipo === "img") { a.obj.larg = clamp(a.obj.larg * f, 0.05, 1.6); a.obj.encaixe = "livre"; } else { a.obj.tamCm = clamp(a.obj.tamCm * f, 0.4, 9); a.obj.tam = null; } this.o.aoMudar(); anunciar(this.alvo(this.o.cena())); }
+  mover(dir, cm) { const c = this.o.cena(), A = AREAS[c.peca], a = this.alvo(c); if (!a) return; const dx = dir === "l" ? -cm : dir === "r" ? cm : 0, dy = dir === "u" ? -cm : dir === "d" ? cm : 0; a.obj.cx += dx / A.w; a.obj.cy += dy / A.h; if (a.tipo === "img") a.obj.encaixe = "livre"; this.o.aoMudar(); anunciar(this.alvo(c)); }
+  girar() { const c = this.o.cena(), a = this.alvo(c); if (!a) return; a.obj.rot = ((a.obj.rot || 0) + 90) % 360; if (a.tipo === "img" && a.obj.encaixe !== "livre") encaixar(a, c, a.obj.encaixe === "preencher" ? "preencher" : "ajustar"); this.o.aoMudar(); }
+  pontoCm(e) { const r = this.mesa.getBoundingClientRect(); return { x: (e.clientX - r.left - this.ox) / this.k, y: (e.clientY - r.top - this.oy) / this.k }; }
+  acertar(p, c) {
+    const el = c.el, A = AREAS[c.peca], tol = 0.3;
+    const dentro = (d) => p.x >= d.x - tol && p.x <= d.x + d.bw + tol && p.y >= d.y - tol && p.y <= d.y + d.bh + tol;
+    if (el.txt && el.txt.valor && dentro(dimsTxt(el.txt, A))) return "txt";
+    if (el.img && dentro(dimsImg(el.img, A))) return "img";
+    return null;
+  }
+  ligarGestos() {
+    const m = this.mesa; let arr = null, ultimoToque = 0;
+    m.addEventListener("pointerdown", (e) => {
+      const c = this.o.cena(), A = AREAS[c.peca];
+      this.ponteiros.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      try { m.setPointerCapture(e.pointerId); } catch (_) {}
+      if (this.ponteiros.size === 2) { const a = this.alvo(c); if (a) { const [p1, p2] = [...this.ponteiros.values()]; arr = { tipo: "pinca", d0: Math.hypot(p1.x - p2.x, p1.y - p2.y), v0: a.tipo === "img" ? a.obj.larg : a.obj.tamCm, a }; } return; }
+      const alca = e.target.closest && e.target.closest(".alca");
+      const p = this.pontoCm(e);
+      if (alca) { const a = this.alvo(c); const cxm = a.obj.cx * A.w, cym = a.obj.cy * A.h; arr = { tipo: "alca", a, dist0: Math.hypot(p.x - cxm, p.y - cym), v0: a.tipo === "img" ? a.obj.larg : a.obj.tamCm, cxm, cym }; e.preventDefault(); return; }
+      const hit = this.acertar(p, c);
+      if (hit) {
+        if (hit !== this.o.sel()) this.o.setSel(hit);
+        const a = this.alvo(this.o.cena());
+        const agora = Date.now();
+        if (agora - ultimoToque < 320) { a.obj.cx = .5; a.obj.cy = .5; this.o.aoMudar(); ultimoToque = 0; arr = null; return; }
+        ultimoToque = agora;
+        arr = { tipo: "mover", a, p0: p, cx0: a.obj.cx, cy0: a.obj.cy };
+        this.o.aoMudar(); e.preventDefault();
+      } else arr = null;
+    });
+    m.addEventListener("pointermove", (e) => {
+      if (!this.ponteiros.has(e.pointerId)) return;
+      this.ponteiros.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (!arr) return;
+      const c = this.o.cena(), A = AREAS[c.peca];
+      if (arr.tipo === "pinca" && this.ponteiros.size >= 2) { const [p1, p2] = [...this.ponteiros.values()]; const f = Math.hypot(p1.x - p2.x, p1.y - p2.y) / (arr.d0 || 1); if (arr.a.tipo === "img") { arr.a.obj.larg = clamp(arr.v0 * f, 0.05, 1.6); arr.a.obj.encaixe = "livre"; } else { arr.a.obj.tamCm = clamp(arr.v0 * f, 0.4, 9); arr.a.obj.tam = null; } this.o.aoMudar(); return; }
+      const p = this.pontoCm(e);
+      if (arr.tipo === "alca") { const f = Math.hypot(p.x - arr.cxm, p.y - arr.cym) / (arr.dist0 || 1); if (arr.a.tipo === "img") { arr.a.obj.larg = clamp(arr.v0 * f, 0.05, 1.6); arr.a.obj.encaixe = "livre"; } else { arr.a.obj.tamCm = clamp(arr.v0 * f, 0.4, 9); arr.a.obj.tam = null; } this.o.aoMudar(); return; }
+      if (arr.tipo === "mover") {
+        let cx = arr.cx0 + (p.x - arr.p0.x) / A.w, cy = arr.cy0 + (p.y - arr.p0.y) / A.h;
+        this.guias.v = Math.abs(cx - .5) * A.w < 0.35; this.guias.h = Math.abs(cy - .5) * A.h < 0.35;
+        if (this.guias.v) cx = .5; if (this.guias.h) cy = .5;
+        arr.a.obj.cx = cx; arr.a.obj.cy = cy; if (arr.a.tipo === "img") arr.a.obj.encaixe = "livre";
+        this.o.aoMudar();
+      }
+    });
+    const fim = (e) => { this.ponteiros.delete(e.pointerId); if (this.ponteiros.size < 2 && arr && arr.tipo === "pinca") arr = null; if (!this.ponteiros.size) { if (arr) anunciar(this.alvo(this.o.cena())); arr = null; this.guias = { v: false, h: false }; this.o.aoMudar(); } };
+    m.addEventListener("pointerup", fim); m.addEventListener("pointercancel", fim);
+    m.addEventListener("keydown", (e) => {
+      const passo = e.shiftKey ? 2 : 0.2;
+      const mapa = { ArrowLeft: "l", ArrowRight: "r", ArrowUp: "u", ArrowDown: "d" };
+      if (mapa[e.key]) { e.preventDefault(); this.mover(mapa[e.key], passo); }
+      else if (e.key === "+" || e.key === "=") { e.preventDefault(); this.escalar(1.05); }
+      else if (e.key === "-") { e.preventDefault(); this.escalar(1 / 1.05); }
+      else if (e.key === "r" || e.key === "R") { e.preventDefault(); this.girar(); }
+      else if (e.key === "Tab" && !e.shiftKey && this.o.cena().el.img && this.o.cena().el.txt && this.o.cena().el.txt.valor && this.o.sel() === "img") { e.preventDefault(); this.o.setSel("txt"); this.o.aoMudar(); }
+    });
+  }
+}
+function encaixar(a, c, modo) {
+  const A = AREAS[c.peca];
+  if (modo === "centro") { a.obj.cx = .5; a.obj.cy = .5; return; }
+  if (a.tipo !== "img") return;
+  a.obj.larg = larguraEncaixe(a.obj, A, modo); a.obj.cx = .5; a.obj.cy = .5; a.obj.encaixe = modo;
+}
+function acao(nome, c, aoMudar) {
+  const A = AREAS[c.peca], el = c.el;
+  const alvoDe = (t) => t === "img" ? { tipo: "img", obj: el.img, d: dimsImg(el.img, A) } : { tipo: "txt", obj: el.txt, d: dimsTxt(el.txt, A) };
+  if (nome.startsWith("encaixar-")) {
+    const a = alvoDe(nome.slice(9));
+    if (a.tipo === "img" && (a.d.bw > A.w - 2 * MARGEM || a.d.bh > A.h - 2 * MARGEM)) encaixar(a, c, "ajustar");
+    else afastar(a, A);
+  } else if (nome.startsWith("afastar-")) afastar(alvoDe(nome.slice(8)), A);
+  else if (nome === "reduzir") { const img = el.img; const wcm = ART[img.arte].pxW / 150 * 2.54; img.larg = Math.min(img.larg, wcm / A.w); img.encaixe = "livre"; afastar({ tipo: "img", obj: img, d: dimsImg(img, A) }, A); }
+  else if (nome === "semfundo") el.img.semFundo = true;
+  else if (nome === "contorno") el.txt.contorno = true;
+  aoMudar();
+}
+function afastar(a, A) {
+  const d = a.tipo === "img" ? dimsImg(a.obj, A) : dimsTxt(a.obj, A);
+  const minX = MARGEM + d.bw / 2, maxX = A.w - MARGEM - d.bw / 2, minY = MARGEM + d.bh / 2, maxY = A.h - MARGEM - d.bh / 2;
+  const cx = a.obj.cx * A.w, cy = a.obj.cy * A.h;
+  a.obj.cx = (minX > maxX ? A.w / 2 : clamp(cx, minX, maxX)) / A.w; a.obj.cy = (minY > maxY ? A.h / 2 : clamp(cy, minY, maxY)) / A.h;
+}
+function anunciar(a) { if (!a) return; $("#vivo").textContent = (a.tipo === "img" ? "Imagem" : "Nome") + ": " + fmt(a.d.bw) + " por " + fmt(a.d.bh) + " centímetros."; }
+
+/* ============================================================
+   Tela da cliente
+   ============================================================ */
+let edCliente = null, cvPalco = null, arrastoGiro = null;
+function montarPalco() {
+  const p = $("#palco"), A = AREAS[G.peca];
+  const desktopAjustando = C.modo === "ajustar" && !ehCelular() && C.caminho !== "criem";
+  if (desktopAjustando) {
+    p.innerHTML = '<div id="hostEd"></div>';
+    edCliente.o.maxH = () => Math.min(440, window.innerHeight - 330); edCliente.montar($("#hostEd"));
+    cvPalco = null; return;
+  }
+  const lados = A.lados.length > 1 && C.caminho !== "criem";
+  p.innerHTML =
+    '<div class="palco-topo">' + (lados ? '<div class="abas-lado" role="tablist">' + A.lados.map((l) => '<button role="tab" data-lado="' + l + '" aria-selected="' + (l === C.lado) + '">' + (l === "front" ? "Frente" : "Verso") + '</button>').join("") + '</div>' : '<span></span>') +
+    '<span class="selo">' + (G.peca === "caneca" ? "Sua caneca" : "Sua camiseta") + '</span></div>' +
+    '<canvas class="peca" width="1000" height="1000" aria-label="Prévia da peça com a sua arte"></canvas>' +
+    (G.peca === "caneca" ? '<div class="palco-dica">Arraste para girar a caneca</div>' : '') +
+    '<div class="palco-rodape"><button class="interruptor" role="switch" id="swArea" aria-checked="' + C.verArea + '"><span class="bola"></span>Área de impressão<span class="tp p0">P0</span></button>' +
+    (C.caminho !== "criem" ? '<button class="bt marca" id="btAjustar">' + ICON.ajustar + 'Ajustar a arte<span class="tp p1">P1</span></button>' : '') + '</div>';
+  cvPalco = $("canvas.peca", p);
+  $$("[data-lado]", p).forEach((b) => b.onclick = () => { C.lado = b.dataset.lado; C.sel = elAtual().img ? "img" : "txt"; tudo(true); });
+  $("#swArea").onclick = () => { C.verArea = !C.verArea; tudo(true); };
+  const ba = $("#btAjustar"); if (ba) ba.onclick = () => abrirEditor();
+  cvPalco.addEventListener("pointerdown", (e) => { if (G.peca !== "caneca") return; arrastoGiro = { x: e.clientX, g: C.giro }; try { cvPalco.setPointerCapture(e.pointerId); } catch (_) {} });
+  cvPalco.addEventListener("pointermove", (e) => { if (!arrastoGiro) return; C.giro = arrastoGiro.g + (e.clientX - arrastoGiro.x) / 140; agendar(); });
+  const solta = () => { arrastoGiro = null; }; cvPalco.addEventListener("pointerup", solta); cvPalco.addEventListener("pointercancel", solta);
+}
+function abrirEditor() {
+  C.modo = "ajustar";
+  const el = elAtual(); if (!el.img && !(el.txt && el.txt.valor)) { $("#inTexto").focus(); C.modo = "peca"; return; }
+  if (ehCelular()) {
+    const f = $("#folha"); f.hidden = false; f.innerHTML = '<div id="hostEdF" style="flex:1;min-height:0;overflow-y:auto"></div>';
+    edCliente.o.maxH = () => Math.min(360, window.innerHeight * .42); edCliente.o.pad = 32;
+    edCliente.montar($("#hostEdF"));
+    setTimeout(() => { const m = $(".ed-mesa", f); if (m) m.focus(); }, 30);
+  } else { edCliente.o.pad = 28; montarPalco(); setTimeout(() => { const m = $("#palco .ed-mesa"); if (m) m.focus(); }, 30); }
+  tudo();
+}
+function fecharEditor() { C.modo = "peca"; const f = $("#folha"); f.hidden = true; f.innerHTML = ""; montarPalco(); tudo(); const b = $("#btAjustar"); if (b) b.focus(); }
+
+function renderColuna() {
+  const A = AREAS[G.peca], el = elAtual(), cena = cenaCliente();
+  $("#nomePeca").textContent = A.nome; $("#migNome").textContent = A.nome; $("#migCat").textContent = A.cat;
+  const precoCaminho = C.caminho === "ajuste" ? 10 : C.caminho === "criem" ? 25 : 0;
+  $("#preco").innerHTML = brl(A.preco) + "<small>" + brl(A.preco * .95) + " no Pix</small>";
+  $("#total").innerHTML = brl(A.preco + precoCaminho) + "<small>1 un" + (precoCaminho ? " + arte " + brl(precoCaminho) : "") + " · entrega em 5 dias úteis</small>";
+  // cor da peça
+  const cores = CORES_PECA[G.peca];
+  $("#blocoCor").innerHTML = cores.length > 1 ? '<div class="rotulo">Cor da peça · ' + cores.find((c) => c.c === C.cor[G.peca]).n + '</div><div class="cores-peca" role="radiogroup" aria-label="Cor da peça">' + cores.map((c) => '<button role="radio" aria-checked="' + (c.c === C.cor[G.peca]) + '" aria-label="' + c.n + '" data-cor="' + c.c + '"><span style="background:' + c.c + '"></span></button>').join("") + '</div>' : "";
+  $$("[data-cor]", $("#blocoCor")).forEach((b) => b.onclick = () => { C.cor[G.peca] = b.dataset.cor; tudo(); });
+  // caminhos
+  const cam = [["tenho", "upload", "Tenho a arte", "Você envia e ajusta na peça.", "incluso"], ["ajuste", "edit", "Pedir ajuste", "A loja melhora a sua arte (nitidez, fundo, encaixe).", "+R$ 10"], ["criem", "spark", "Criem a arte pra mim", "A loja cria a partir da sua ideia.", "+R$ 25"]];
+  $("#caminhos").innerHTML = cam.map(([v, ic, t, d, p]) => '<button class="caminho" role="radio" aria-checked="' + (C.caminho === v) + '" data-cam="' + v + '"><span class="ic-c">' + ICON[ic] + '</span><span><b>' + t + '</b><small>' + d + '</small></span><span class="pilula">' + p + '</span></button>').join("");
+  $$("[data-cam]").forEach((b) => b.onclick = () => { C.caminho = b.dataset.cam; if (C.caminho === "criem" && C.modo === "ajustar") fecharEditor(); montarPalco(); tudo(); });
+  $("#briefing").innerHTML = C.caminho === "criem" ? '<div class="aviso info">' + ICON.info + '<div>A loja cria a arte a partir da sua ideia e manda o mockup para você aprovar antes de produzir.</div></div><label class="sub" for="brief" style="margin-top:6px;display:block">Conte a sua ideia</label><textarea class="brief" id="brief" maxlength="600" placeholder="Ex.: caneca de aniversário da minha mãe, com uma praia ao pôr do sol e o nome dela."></textarea>' : "";
+  $("#blocoArte").hidden = C.caminho === "criem"; $("#blocoTexto").hidden = C.caminho === "criem";
+  // lados na coluna (só camiseta)
+  $("#ladosCol").innerHTML = A.lados.length > 1 ? '<div class="seg" role="tablist" aria-label="Lado da peça">' + A.lados.map((l) => '<button role="tab" aria-selected="' + (l === C.lado) + '" aria-pressed="' + (l === C.lado) + '" data-lado2="' + l + '">' + (l === "front" ? "Frente" : "Verso") + '</button>').join("") + '</div>' : "";
+  $$("[data-lado2]").forEach((b) => b.onclick = () => { C.lado = b.dataset.lado2; C.sel = elAtual().img ? "img" : "txt"; montarPalco(); if (edCliente.host && C.modo === "ajustar") edCliente.layout(); tudo(); });
+  // cartão da arte
+  const ca = $("#cartaoArte");
+  if (!el.img) {
+    ca.innerHTML = '<button class="envio" id="btEnviar">' + ICON.upload + '<b>Enviar a arte ' + (C.lado === "front" ? "da frente" : "do verso") + '</b><small>PNG, JPG ou PDF · até 25 MB <span class="tp p0">P0</span></small><small>Área de ' + fmt(A.w, 0) + ' × ' + fmt(A.h, 0) + ' cm · para sair nítida, ' + Math.round(A.w / 2.54 * 150) + ' px de largura ou mais</small><span class="barra" hidden><i></i></span></button>';
+    $("#btEnviar").onclick = () => enviarFalso();
+  } else {
+    const a = ART[el.img.arte], d = dimsImg(el.img, A), dpi = dpiDe(el.img, A), f = faixaDpi(dpi), fa = fonteDaArte(el.img);
+    ca.innerHTML = '<div class="cartao"><div class="arquivo"><span class="mini"><img alt="A arte enviada" src="' + fa.url + '" class="' + (fa.pix ? "pix" : "") + '"></span><div style="min-width:0;flex:1"><div class="nome">' + a.nome + '</div><div class="med">' + a.pxW + ' × ' + a.pxH + ' px · ' + a.mb + '</div></div></div>' +
+      '<div class="na-peca"><span>Na peça: <b>' + fmt(d.bw) + ' × ' + fmt(d.bh) + ' cm</b></span><span class="nitidez ' + f + '"><i></i>' + { boa: "Nítida", ok: "Aceitável", ruim: "Pode sair borrada" }[f] + ' · ' + Math.round(dpi) + ' dpi<span class="tp p1">P1</span></span></div>' +
+      '<div class="acoes"><button class="bt peq marca" id="btAjustar2">' + ICON.ajustar + 'Ajustar a arte</button><button class="bt peq" id="btTrocar">Trocar</button><button class="bt peq fantasma" id="btRemover">Remover</button></div></div>';
+    $("#btAjustar2").onclick = () => abrirEditor();
+    $("#btTrocar").onclick = () => enviarFalso();
+    $("#btRemover").onclick = () => { el.img = null; C.sel = "txt"; if (C.modo === "ajustar" && !(el.txt && el.txt.valor)) fecharEditor(); tudo(true); };
+  }
+  // avisos completos
+  const av = C.caminho === "criem" ? [] : avisosDe(el, A, cena);
+  const box = $("#avisosArte");
+  box.innerHTML = av.filter((x) => x.tipo !== "contraste").map((x) => avisoCompleto(x, el, A)).join("");
+  $$("[data-acao]", box).forEach((b) => b.onclick = () => acao(b.dataset.acao, cena, () => tudo()));
+  $$("[data-acao2]", box).forEach((b) => b.onclick = () => { if (b.dataset.acao2 === "outra") enviarFalso(); if (b.dataset.acao2 === "ajuste") { C.caminho = "ajuste"; tudo(); } });
+  const etq = $("#etqArte");
+  etq.className = ""; etq.textContent = "";
+  if (C.caminho !== "criem") { if (!el.img && !(el.txt && el.txt.valor)) { etq.className = "etq falta"; etq.textContent = "Falta a arte"; } else if (av.some((x) => x.tipo === "cortada" || x.tipo === "dpi")) { etq.className = "etq falta"; etq.textContent = "Revise"; } else { etq.className = "etq ok"; etq.textContent = "Pronta"; } }
+  // texto
+  const inp = $("#inTexto"); const txt = el.txt;
+  if (document.activeElement !== inp) inp.value = txt ? txt.valor : "";
+  $("#contTexto").textContent = (inp.value.length) + "/24";
+  const op = $("#opcoesTexto");
+  if (txt && txt.valor) {
+    const fontes = G.fontesLiberadas.slice(0, 4);
+    op.innerHTML =
+      '<div><div class="sub" style="margin-bottom:6px">Fonte <span class="tp p1">P1</span></div><div class="fontes" role="radiogroup" aria-label="Fonte do nome">' + fontes.map((f) => '<button role="radio" aria-checked="' + (txt.fonte === f) + '" data-fonte="' + f + '"><span class="aa" style="font-family:' + FONTES[f].css.replace(/"/g, "'") + ';font-weight:' + FONTES[f].peso + '">Aa</span><small>' + f + '</small></button>').join("") + '</div></div>' +
+      '<div><div class="sub">Cor do nome</div><div class="cores-texto" role="radiogroup" aria-label="Cor do nome">' + PALETA.map((c) => '<button role="radio" aria-checked="' + (txt.cor === c) + '" aria-label="' + NOME_COR[c] + '" data-cort="' + c + '"><span style="background:' + c + '"></span></button>').join("") + '</div></div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center"><div><div class="sub" style="margin-bottom:6px">Tamanho</div><div class="seg" role="radiogroup" aria-label="Tamanho do nome">' + ["P", "M", "G"].map((t) => '<button role="radio" aria-checked="' + (txt.tam === t) + '" data-tamc="' + t + '">' + t + '</button>').join("") + '</div></div>' +
+      (contraste(txt.cor, C.cor[G.peca]) < 1.8 || txt.contorno ? '<div><div class="sub" style="margin-bottom:6px">Contorno fino <span class="tp p1">P1</span></div><button class="interruptor" role="switch" id="swContorno" aria-checked="' + txt.contorno + '" style="box-shadow:none;background:var(--bg3)"><span class="bola"></span>' + (txt.contorno ? "Ligado" : "Desligado") + '</button></div>' : '') + '</div>' +
+      (contraste(txt.cor, C.cor[G.peca]) < 1.8 && !txt.contorno ? '<div class="aviso amber">' + ICON.alerta + '<div>Essa cor quase some nesta peça. Troque a cor ou ligue o contorno fino.</div></div>' : '');
+    $$("[data-fonte]", op).forEach((b) => b.onclick = () => { txt.fonte = b.dataset.fonte; tudo(); });
+    $$("[data-cort]", op).forEach((b) => b.onclick = () => { txt.cor = b.dataset.cort; tudo(); });
+    $$("[data-tamc]", op).forEach((b) => b.onclick = () => { txt.tam = b.dataset.tamc; txt.tamCm = tamPadrao(G.peca, txt.tam); tudo(); });
+    const sw = $("#swContorno", op); if (sw) sw.onclick = () => { txt.contorno = !txt.contorno; tudo(); };
+  } else op.innerHTML = "";
+  const tec = G.tecnica[G.peca];
+  $("#notaArea").innerHTML = "<b>Área de impressão:</b> " + fmt(A.w, 0) + " × " + fmt(A.h, 0) + " cm" + (G.peca === "caneca" ? " (dá a volta, menos a junta da alça)" : " por lado") + ". <b>Técnica:</b> " + (tec === "sub" ? "sublimação — a arte pega a cor da peça e o branco não é impresso." : "DTF — a arte é impressa como está, inclusive o fundo branco.") + ' <span class="tp p1">P1</span>';
+}
+function avisoCompleto(x, el, A) {
+  if (x.tipo === "dpi") { const a = ART[el.img.arte], d = dimsImg(el.img, A), w = a.pxW / 150 * 2.54; return '<div class="aviso amber" role="alert">' + ICON.alerta + '<div>Nesse tamanho a foto pode sair borrada. Ela tem <b>' + a.pxW + ' × ' + a.pxH + ' px</b> e vai ocupar <b>' + fmt(d.w) + ' cm</b> de largura, cerca de ' + Math.round(dpiDe(el.img, A)) + ' dpi. Nítida até ' + fmt(w) + ' cm.<div class="acoes"><button class="bt peq" data-acao="reduzir">Reduzir até ficar nítida</button><button class="bt peq" data-acao2="outra">Mandar outra</button><button class="bt peq" data-acao2="ajuste">Pedir ajuste · +R$ 10</button></div></div></div>'; }
+  if (x.tipo === "cortada") return '<div class="aviso red" role="alert">' + ICON.alerta + '<div>Parte ' + (x.de === "img" ? "da imagem" : "do nome") + ' fica fora da área de impressão e <b>não será impressa</b>. Na prévia, o que sai da área aparece apagado.<div class="acoes"><button class="bt peq" data-acao="encaixar-' + x.de + '">Encaixar na área</button></div></div></div>';
+  if (x.tipo === "margem") return '<div class="aviso amber">' + ICON.alerta + '<div>' + (x.de === "img" ? "A imagem" : "O nome") + ' está a menos de 3 mm da borda. Na produção, essa faixa pode ser cortada.<div class="acoes"><button class="bt peq" data-acao="afastar-' + x.de + '">Afastar da borda</button></div></div></div>';
+  if (x.tipo === "fundo") return '<div class="aviso amber">' + ICON.alerta + '<div>A sua arte tem fundo branco. Nesta peça ele <b>vai ser impresso</b> como um retângulo branco em volta do desenho.<div class="acoes"><button class="bt peq" data-acao="semfundo">Remover fundo branco <span class="tp p2">P2</span></button><button class="bt peq" data-acao2="ajuste">Pedir ajuste · +R$ 10</button></div></div></div>';
+  return "";
+}
+function enviarFalso() {
+  const el = elAtual(), b = $("#btEnviar");
+  const conclui = () => { el.img = novaImg(G.peca, "boa", G.peca === "camiseta" ? { fundo: true } : {}); C.sel = "img"; if (C.modo === "ajustar" && edCliente.host) edCliente.layout(); tudo(true); };
+  if (!b) return conclui();
+  const barra = $(".barra", b), i = $(".barra i", b); barra.hidden = false; let p = 4;
+  const t = setInterval(() => { p += 16; i.style.width = Math.min(100, p) + "%"; if (p >= 100) { clearInterval(t); conclui(); } }, 70);
+}
+$("#inTexto").addEventListener("input", (e) => {
+  const el = elAtual(); if (!el.txt) el.txt = novoTxt(G.peca, "");
+  const antes = el.txt.valor; el.txt.valor = e.target.value;
+  if (!antes && el.txt.valor && !el.img) C.sel = "txt";
+  if (!antes && el.txt.valor && el.img) { el.txt.cx = .5; el.txt.cy = G.peca === "caneca" ? .5 : .88; if (G.peca === "caneca") { el.txt.cx = .74; } }
+  if (edCliente.host && C.modo === "ajustar") edCliente.pos();
+  tudo();
+});
+
+/* ============================================================
+   Lojista · prova do pedido
+   ============================================================ */
+const P = { lado: "front", vista: "lado", medir: true };
+const PEDIDO = {};
+function montarPedido() {
+  const p = G.peca;
+  PEDIDO.caneca = { front: { img: novaImg("caneca", "boa", { cx: .45, cy: .5, larg: .32, encaixe: "livre" }), txt: novoTxt("caneca", "Helena", { cx: .72, cy: .5, tamCm: 1.5, fonte: "Pacifico" }) } };
+  PEDIDO.camiseta = {
+    front: { img: novaImg("camiseta", "boa", { cx: .5, cy: .4, larg: .72, encaixe: "livre", fundo: false }), txt: novoTxt("camiseta", "Helena", { cx: .5, cy: .86, tamCm: 3.8, fonte: "Pacifico" }) },
+    back: { img: null, txt: novoTxt("camiseta", "CASTRO 10", { fonte: "Bebas Neue", cor: "#FFFFFF", tamCm: 5, cy: .3 }) },
+  };
+}
+function cenaProva(extra) {
+  const lados = PEDIDO[G.peca]; const lado = lados[P.lado] ? P.lado : "front";
+  return Object.assign({ peca: G.peca, cor: G.peca === "caneca" ? "#F7F6F2" : "#232326", tecnica: G.tecnica[G.peca], lado, el: lados[lado], giro: Math.PI / 2 - 0.27, verArea: false }, extra || {});
+}
+let edProva = null;
+function renderProva() {
+  const A = AREAS[G.peca], c = cenaProva();
+  $("#provaSub").textContent = "Helena Castro · " + A.nome + (G.peca === "caneca" ? " × 2" : " · Preta · M") + " · pedido de 28/09";
+  $("#provaLados").innerHTML = A.lados.map((l) => '<button role="tab" aria-selected="' + (l === c.lado) + '" data-pl="' + l + '">' + (l === "front" ? "Frente" : "Verso") + '</button>').join("");
+  $$("[data-pl]").forEach((b) => b.onclick = () => { P.lado = b.dataset.pl; renderProva(); });
+  $$("#provaVista button").forEach((b) => { b.setAttribute("aria-pressed", String(b.dataset.v === P.vista)); b.onclick = () => { P.vista = b.dataset.v; renderProva(); }; });
+  const sw = $("#provaMedir"); sw.setAttribute("aria-checked", String(P.medir)); sw.onclick = () => { P.medir = !P.medir; renderProva(); };
+  const vs = $("#provaVistas"); vs.className = "pn-vistas" + (P.vista === "lado" ? " lado" : "");
+  vs.innerHTML = (P.vista !== "peca" ? '<div id="provaEd"></div>' : "") + (P.vista !== "plan" ? '<canvas id="cvProva" width="900" height="900" aria-label="A arte do pedido na peça"></canvas>' : "");
+  if (P.vista !== "peca") {
+    edProva = new Editor({ cena: () => cenaProva(), editavel: false, medir: () => P.medir, titulo: () => "", sel: () => "img", setSel() {}, aoMudar() {}, cabeca: false, status: false, pad: 8, maxH: () => 420 });
+    edProva.montar($("#provaEd"));
+  }
+  if (P.vista !== "plan") desenharPeca($("#cvProva"), cenaProva());
+  // ficha
+  const el = c.el, tec = c.tecnica;
+  $("#fichaTitulo").innerHTML = "Ficha da arte · " + (c.lado === "front" ? "Frente" : "Verso");
+  const linhas = [["Área", fmt(A.w, 0) + " × " + fmt(A.h, 0) + " cm<small>" + (G.peca === "caneca" ? "caneca, volta toda" : "camiseta, " + (c.lado === "front" ? "frente" : "verso")) + "</small>"], ["Técnica", tec === "sub" ? "Sublimação" : "DTF / transfer"]];
+  if (el.img) {
+    const d = dimsImg(el.img, A), dpi = dpiDe(el.img, A), a = ART[el.img.arte];
+    linhas.push(["Imagem", fmt(d.bw) + " × " + fmt(d.bh) + " cm<small>a " + fmt(d.x) + " cm da esquerda e " + fmt(d.y) + " cm do topo · " + (d.rot ? "girada " + d.rot + "°" : "sem rotação") + "</small>"]);
+    linhas.push(["Arquivo", a.pxW + " × " + a.pxH + " px<small>" + a.nome + " · " + a.mb + "</small>"]);
+    linhas.push(["Nitidez", '<span class="pn-ok ' + (dpi >= 150 ? "boa" : "ruim") + '">' + Math.round(dpi) + " dpi efetivo</span>"]);
+  }
+  if (el.txt && el.txt.valor) {
+    const d = dimsTxt(el.txt, A);
+    linhas.push(["Nome", "“" + el.txt.valor + "”<small>" + el.txt.fonte + " · letra de " + fmt(el.txt.tamCm) + " cm · " + (NOME_COR[el.txt.cor] || el.txt.cor) + " " + el.txt.cor + "</small>"]);
+    linhas.push(["Posição do nome", fmt(d.bw) + " × " + fmt(d.bh) + " cm<small>a " + fmt(d.x) + " cm da esquerda e " + fmt(d.y) + " cm do topo</small>"]);
+  }
+  $("#fichaDl").innerHTML = linhas.map(([t, v]) => "<dt>" + t + "</dt><dd>" + v + "</dd>").join("");
+  // PNG de impressão
+  const cv = $("#cvPng"), x = cv.getContext("2d"); const W = cv.width; const H = Math.round(W * A.h / A.w);
+  cv.height = H; x.clearRect(0, 0, W, H);
+  for (let yy = 0; yy < H; yy += 10) for (let xx = 0; xx < W; xx += 10) { x.fillStyle = ((xx + yy) / 10) % 2 ? "#E5E7EB" : "#FFFFFF"; x.fillRect(xx, yy, 10, 10); }
+  pintarArea(x, el, A, W / A.w);
+  $("#pngSpec").textContent = Math.round(A.w / 2.54 * 300) + " × " + Math.round(A.h / 2.54 * 300) + " px · 300 dpi · fundo transparente";
+  $("#pngNome").textContent = "SM-0042 - " + (c.lado === "front" ? "Frente" : "Verso") + ".png";
+  $("#btPng").onclick = () => toast("No app, baixa “SM-0042 - " + (c.lado === "front" ? "Frente" : "Verso") + ".png” gerado no navegador (o R2 já responde CORS).");
+  $("#btOriginal").onclick = () => toast("Baixa o arquivo que a cliente enviou, com o nome do pedido (baixarArquivo.ts).");
+  $("#btAprov").onclick = () => toast("Abre o modal de aprovação com o mockup já gerado, na cor e na fonte que a cliente viu (P0).");
+  $("#btFicha").onclick = () => toast("A ficha A5 passa a mostrar as medidas em cm e o mesmo desenho desta prova.");
+}
+
+/* ============================================================
+   Lojista · testar no produto
+   ============================================================ */
+const T = { sel: "img", tecnicaOutra: false, lados: {} };
+function montarTeste() {
+  T.lados.caneca = { img: novaImg("caneca", "boa", {}), txt: novoTxt("caneca", "Helena", { cx: .76, cy: .5 }) };
+  T.lados.caneca.img = novaImg("caneca", "boa", { cx: .45, larg: .32, encaixe: "livre" }); T.lados.caneca.txt.cx = .72; T.lados.caneca.txt.tamCm = 1.5;
+  T.lados.camiseta = { img: novaImg("camiseta", "boa", { cx: .5, cy: .4, larg: .7, encaixe: "livre" }), txt: novoTxt("camiseta", "Helena", { cx: .5, cy: .86, tamCm: 3.8 }) };
+}
+function cenaTeste() { return { peca: G.peca, cor: G.peca === "caneca" ? "#F7F6F2" : C.cor.camiseta, tecnica: G.tecnica[G.peca], lado: "front", el: T.lados[G.peca], giro: Math.PI / 2 - 0.27, verArea: true }; }
+let edTeste = null;
+function renderTeste(recriar) {
+  const A = AREAS[G.peca];
+  $("#drawerNome").textContent = A.nome; $("#drawerArea").textContent = "Frente " + fmt(A.w, 0) + " × " + fmt(A.h, 0) + " cm" + (A.lados.length > 1 ? " · Verso " + fmt(A.w, 0) + " × " + fmt(A.h, 0) + " cm" : "");
+  const tec = T.tecnicaOutra ? "outra" : G.tecnica[G.peca];
+  $$("#tecSeg button").forEach((b) => { b.setAttribute("aria-checked", String(b.dataset.v === tec)); b.onclick = () => { if (b.dataset.v === "outra") { T.tecnicaOutra = true; G.tecnica[G.peca] = "dtf"; } else { T.tecnicaOutra = false; G.tecnica[G.peca] = b.dataset.v; } sincronizarFaixa(); tudo(); }; });
+  $("#tecExplica").textContent = tec === "sub" ? "Sublimação: a arte entra misturada à peça (o branco da arte vira a cor da peça). Só funciona bem em peça clara." : tec === "dtf" ? "DTF / transfer: a arte é impressa opaca, como está. Se o arquivo tiver fundo branco, a cliente é avisada de que ele vai aparecer." : "Outra: a prévia usa a regra de hoje (mistura pela luz da peça). Sem avisos de fundo.";
+  $("#chipsFontes").innerHTML = Object.keys(FONTES).map((f) => { const on = G.fontesLiberadas.includes(f); return '<button aria-pressed="' + on + '" data-fl="' + f + '" ' + (!on && G.fontesLiberadas.length >= 4 ? "disabled" : "") + ' style="font-family:' + FONTES[f].css.replace(/"/g, "'") + ';font-weight:' + FONTES[f].peso + '">' + f + '</button>'; }).join("");
+  $$("[data-fl]").forEach((b) => b.onclick = () => { const f = b.dataset.fl, i = G.fontesLiberadas.indexOf(f); if (i >= 0) { if (G.fontesLiberadas.length > 1) G.fontesLiberadas.splice(i, 1); } else if (G.fontesLiberadas.length < 4) G.fontesLiberadas.push(f); tudo(); });
+  if (recriar || !edTeste || !edTeste.host || !document.body.contains(edTeste.host)) {
+    edTeste = new Editor({ cena: cenaTeste, editavel: true, titulo: () => "Arte de teste · Frente", sel: () => T.sel, setSel: (s) => { T.sel = s; }, aoMudar: () => agendar(), cabeca: false, pad: 4, maxH: () => 380 });
+    edTeste.montar($("#testeHost"));
+  } else edTeste.pos();
+  desenharPeca($("#cvTestePeca"), cenaTeste());
+  const th = $("#cvThumbDrawer"); desenharPeca(th, Object.assign(cenaTeste(), { verArea: false }));
+  $("#btArqTeste").onclick = () => toast("Abre o seletor de arquivo. A arte fica só nesta tela, sem upload.");
+}
+
+/* ============================================================
+   Orquestração
+   ============================================================ */
+let pendente = false;
+function agendar() { if (pendente) return; pendente = true; requestAnimationFrame(() => { pendente = false; tudo(); }); }
+function tudo(remontarPalco) {
+  document.documentElement.dataset.theme = G.tema;
+  document.body.classList.toggle("toque", G.entrada === "toque");
+  $("#telaCliente").hidden = G.tela !== "cliente"; $("#telaProva").hidden = G.tela !== "prova"; $("#telaTeste").hidden = G.tela !== "teste";
+  $$(".so-cliente").forEach((b) => b.setAttribute("aria-disabled", String(G.tela !== "cliente")));
+  if (G.tela === "cliente") {
+    if (remontarPalco) montarPalco();
+    renderColuna();
+    if (cvPalco) desenharPeca(cvPalco, cenaCliente());
+    if (C.modo === "ajustar" && edCliente.host && document.body.contains(edCliente.host)) edCliente.pos();
+  } else if (G.tela === "prova") renderProva();
+  else renderTeste(false);
+}
+edCliente = new Editor({
+  cena: () => cenaCliente(), editavel: true, medir: () => false,
+  titulo: () => "Ajustar a arte · " + (C.lado === "front" ? "Frente" : "Verso"),
+  sel: () => C.sel, setSel: (s) => { C.sel = s; }, aoMudar: () => agendar(), aoPronto: () => fecharEditor(),
+});
+function toast(msg) { const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 3200); }
+function sincronizarFaixa() {
+  $$(".estados button[data-g]").forEach((b) => {
+    const g = b.dataset.g, v = b.dataset.v;
+    const atual = g === "tecnica" ? G.tecnica[G.peca] : g === "prio" ? (document.body.classList.contains("prioridades") ? "1" : "0") : G[g];
+    b.setAttribute("aria-pressed", String(atual === v));
+  });
+}
+$$(".estados button[data-g]").forEach((b) => b.addEventListener("click", () => {
+  const g = b.dataset.g, v = b.dataset.v;
+  if (g === "prio") { document.body.classList.toggle("prioridades"); sincronizarFaixa(); return; }
+  if (g === "estado" && G.tela !== "cliente") G.tela = "cliente";
+  if (g === "tecnica") { G.tecnica[G.peca] = v; T.tecnicaOutra = false; }
+  else G[g] = v;
+  if (g === "largura") { $("#moldura").classList.toggle("celular", v === "celular"); }
+  if (g === "estado" || g === "peca") { if (C.modo === "ajustar") { $("#folha").hidden = true; C.modo = "peca"; } aplicarEstado(); if (g === "peca") P.lado = "front"; }
+  if (g === "estado" && v === "fundo") { /* aplicarEstado já trocou a peça e a técnica */ }
+  sincronizarFaixa();
+  if (g === "largura" || g === "peca" || g === "tela") { if (C.modo === "ajustar") { $("#folha").hidden = true; C.modo = "peca"; } }
+  tudo(true);
+  if (G.tela === "teste") renderTeste(true);
+}));
+let larguraAntes = 0;
+window.addEventListener("resize", () => {
+  const w = $("#rolagem").clientWidth; if (Math.abs(w - larguraAntes) < 4) return; larguraAntes = w;
+  if (C.modo === "ajustar") { const cel = ehCelular(), naFolha = !$("#folha").hidden; if (cel !== naFolha) { $("#folha").hidden = true; C.modo = "peca"; } }
+  tudo(true); if (G.tela === "teste") renderTeste(true); else if (C.modo === "ajustar" && edCliente.host) edCliente.layout();
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && C.modo === "ajustar") fecharEditor(); });
+
+// Link direto para um estado: #tela=prova&estado=baixa&peca=camiseta&tecnica=dtf&tema=light&largura=celular&entrada=toque&ajustar=1
+const H = new URLSearchParams(location.hash.slice(1));
+["tela", "estado", "peca", "tema", "largura", "entrada"].forEach((k) => { if (H.get(k)) G[k] = H.get(k); });
+aplicarEstado(); montarPedido(); montarTeste();
+if (H.get("tecnica")) G.tecnica[G.peca] = H.get("tecnica");
+if (G.largura === "celular") $("#moldura").classList.add("celular");
+if (H.get("prio") === "0") document.body.classList.remove("prioridades");
+sincronizarFaixa();
+larguraAntes = $("#rolagem").clientWidth;
+tudo(true);
+if (G.tela === "teste") renderTeste(true);
+if (H.get("ajustar") === "1" && G.tela === "cliente") abrirEditor();
+</script>
+</body>
+</html>
