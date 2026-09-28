@@ -467,8 +467,13 @@ export function subAreaNoRetangulo(
       sw *= k; sh *= k;
     }
   } else if (areaCmDoMotor && areaCmDoMotor.w > 0 && areaCmDoMotor.h > 0) {
-    sw = (areaCm.w * rect.w) / areaCmDoMotor.w;
-    sh = (areaCm.h * rect.h) / areaCmDoMotor.h;
+    // Escala UNIFORME (px por cm igual nos dois eixos): quando o retângulo
+    // da vista não tem a proporção dos cm do modelo (a camiseta vetorial
+    // de 28 × 35 cm desenhada em 290 × 330 px), a escala por eixo
+    // esticava a arte — a foto redonda saía oval.
+    const porCm = Math.min(rect.w / areaCmDoMotor.w, rect.h / areaCmDoMotor.h);
+    sw = areaCm.w * porCm;
+    sh = areaCm.h * porCm;
     const k = encolher ? Math.min(1, rect.w / sw, rect.h / sh) : 1;
     sw *= k; sh *= k;
   } else {
@@ -499,8 +504,8 @@ export function pontoNaAreaDaArte(
   pixel?: number | null,
 ): { x: number; y: number; W: number; H: number; emCm: boolean; porU: number } {
   const rect = { x: 0, y: 0, w: 1, h: aspecto > 0 ? aspecto : 1 };
-  const sub = arte.areaCm ? subAreaNoRetangulo(rect, arte.areaCm, areaCmDoMotor, encolher, pixel) : rect;
   const base = arte.areaCm ? arte.areaCm : areaCmDoMotor && areaCmDoMotor.w > 0 && areaCmDoMotor.h > 0 ? areaCmDoMotor : null;
+  const sub = base ? subAreaNoRetangulo(rect, base, areaCmDoMotor, encolher, pixel) : rect;
   const { W, H, emCm } = base ? { W: base.w, H: base.h, emCm: true } : { W: rect.w, H: rect.h, emCm: false };
   // porU: quanto a unidade da área anda para 1,0 de u (para medir a folga
   // do toque em pixels de tela).

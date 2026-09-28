@@ -143,8 +143,8 @@ export function pintarArteNaArea(
 ): ItemDaArte[] {
   // A área do produto dentro da do motor (escala física); sem medida no
   // produto, vale a do motor no retângulo inteiro.
+  arte = comAreaDoMotor(arte, opts.areaCmDoMotor);
   if (arte.areaCm) rect = subAreaNoRetangulo(rect, arte.areaCm, opts.areaCmDoMotor || null, !opts.transbordar, opts.pixel);
-  else arte = comAreaDoMotor(arte, opts.areaCmDoMotor);
   const { W, H, emCm } = unidadeDaArea(arte, rect);
   const sx = rect.w / W, sy = rect.h / H;
   const itens = resolverArte(arte, W, H, medidorDoCanvas(ctx, imgs));
