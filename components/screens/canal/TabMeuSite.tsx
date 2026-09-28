@@ -11,7 +11,7 @@ import { MpGatewayCard } from "./MpGatewayCard";
 import { useAccent } from "@/contexts/AccentTheme";
 import type { AccentTokens } from "@/contexts/AccentTheme";
 
-import { SPECS } from "./specsDeImagem";
+import { SPECS, bannerParaPreview } from "./specsDeImagem";
 import { usePaymentGateways } from "@/hooks/usePaymentGateways";
 import {
   corpoDoMeuSite, formDoMeuSite, formatarPct, meuSiteAlterado, tecladoDaChavePix, dicaDoPublicado,
@@ -189,6 +189,10 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
       : { ...formAtual, pixPct: formatarPct(corpo.pix_discount_pct) };
     aplicar(gravado);
     setSalvo(gravado);
+    // QA fix (LJ-05, 28/09/2026): "Salvando..." voltava pro rótulo normal
+    // sem nenhuma confirmação — a lojista não sabia se salvou de verdade.
+    // O erro já era avisado (toast do hook); faltava o sucesso.
+    toast.success("Configurações salvas.");
   }
 
   async function handleRequestDomain() {
@@ -236,8 +240,10 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   const dobRequired = pixCompanyType === "INDIVIDUAL" || pixCompanyType === "MEI";
 
   // Fase 3 — Rec #9: mini-mockup le banner[0] enabled+image se houver.
+  // QA fix (LJ-01, 28/09/2026): bannerParaPreview ignora banner sem
+  // conteúdo (banner de fábrica) — ver o comentário em specsDeImagem.ts.
   const banners: any[] = Array.isArray(config.banners) ? config.banners : [];
-  const heroBanner = banners.find((b) => b && b.enabled !== false && b.image_url) || banners.find((b) => b && b.enabled !== false) || null;
+  const heroBanner = bannerParaPreview(banners);
   const heroImage: string | null = heroBanner?.image_url || null;
   const heroHeadline: string = (heroBanner?.headline || tagline || description || "Bem-vindo ao nosso site").toString();
   const mockHeight = IS_WIDE ? 180 : 140;
@@ -291,7 +297,9 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
             <Text style={[s.mockupBrand, { color: TINTA_DO_CARTAO }]} numberOfLines={1}>{siteName || "Meu Negócio"}</Text>
             <View style={[s.mockupStatus, { backgroundColor: published ? p.greenD : p.bg4 }]}>
               <View style={[s.mockupStatusDot, { backgroundColor: published ? p.green : p.ink3 }]} />
-              <Text style={[s.mockupStatusText, { color: published ? p.green : p.ink3 }]}>
+              {/* AA fix (QA LJ-48): "Publicada" em p.green sobre p.greenD
+                  dava 2,24:1 — p.greenInk é a variante escura, só pro texto. */}
+              <Text style={[s.mockupStatusText, { color: published ? p.greenInk : p.ink3 }]}>
                 {published ? "Publicada" : "Rascunho"}
               </Text>
             </View>
@@ -610,7 +618,8 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
               </Pressable>
               <Pressable onPress={() => setDomainPlan("2years")} style={[s.planBtn, domainPlan === "2years" && s.planBtnActive]}>
                 <Text style={[s.planBtnLabel, domainPlan === "2years" && s.planBtnLabelActive]}>2 anos</Text>
-                <Text style={[s.planBtnPrice, domainPlan === "2years" && s.planBtnLabelActive]}>R$ 152 <Text style={{ fontSize: 10, color: p.green }}>(-5%)</Text></Text>
+                {/* AA fix (QA LJ-48): p.green em 10px sobre branco dava 2,54:1. */}
+                <Text style={[s.planBtnPrice, domainPlan === "2years" && s.planBtnLabelActive]}>R$ 152 <Text style={{ fontSize: 10, color: p.greenInk }}>(-5%)</Text></Text>
               </Pressable>
             </View>
             <Text style={[cs.fieldLabel, { marginTop: 12 }]}>Domínio desejado</Text>

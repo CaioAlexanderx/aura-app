@@ -25,6 +25,14 @@ export type PaletaDoCanalTokens = {
   green: string; greenD: string;
   red: string; redD: string;
   amber: string; amberD: string;
+  // AA fix (QA LJ-48, 28/09/2026): `green`/`red` são a cor VIVA — boa pra
+  // ícone, ponto de status, trilho de switch, mas TEXTO pequeno nessas
+  // cores (ou sobre o próprio `greenD`/`redD`) não bate 4,5:1 no Studio
+  // ("Aberta"/"Fechada" na Entrega, "Publicada" e "(-5%)" no Meu Site).
+  // `greenInk`/`redInk` são a variante escura, só para TEXTO — mesmo
+  // padrão que `amber` já seguia (aponta pra `warningInk`).
+  greenInk: string;
+  redInk: string;
 };
 
 /** A paleta do painel Negócio — o que as abas sempre usaram. */
@@ -35,6 +43,10 @@ export const PALETA_DO_NEGOCIO: PaletaDoCanalTokens = {
   green: Colors.green, greenD: Colors.greenD,
   red: Colors.red, redD: Colors.redD,
   amber: Colors.amber, amberD: Colors.amberD,
+  // Negócio não foi flagrado no QA — mesma cor de `green`/`red` (já mais
+  // escura que a do Studio), sem mudança visual.
+  greenInk: Colors.green,
+  redInk: Colors.red,
 };
 
 /**
@@ -54,6 +66,8 @@ export function paletaDoStudio(t: StudioPalette): PaletaDoCanalTokens {
     green: t.success, greenD: t.successSoft,
     red: t.danger, redD: t.dangerSoft,
     amber: t.warningInk, amberD: t.warningSoft,
+    greenInk: t.successInk,
+    redInk: t.dangerInk,
   };
 }
 

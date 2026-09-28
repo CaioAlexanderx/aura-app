@@ -725,7 +725,13 @@ export function TabDesign({
         <View key={idx} style={cs.card}>
           <View style={s.bannerHead}>
             <Text style={s.bannerTitle}>Banner {idx + 1}</Text>
+            {/* QA fix (LJ-12, 28/09/2026 — completa o fix anterior): o selo
+                "Ativo" sozinho dava a entender que o banner está no ar. O
+                card de aviso abaixo (bannerVazio) já dizia isso, mas só
+                aparecia DEPOIS de rolar — o hint aqui fica junto do próprio
+                controle que a lojista está olhando. */}
             <ToggleRow label="Ativo" value={!!b.enabled}
+              hint={b.enabled && bannerVazio ? "Vazio — não aparece na loja" : undefined}
               onChange={(v) => updateBanner(idx, { enabled: v })} />
           </View>
           {b.enabled && bannerVazio ? (

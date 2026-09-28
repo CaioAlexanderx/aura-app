@@ -43,7 +43,7 @@ import {
   View, Text, Pressable, ScrollView, Animated, Modal,
   Platform, StyleSheet, Linking,
 } from 'react-native';
-import { useColors } from '@/constants/colors';
+import { useColors, AuraColors } from '@/constants/colors';
 import { AppBanner } from '@/services/notificationsApi';
 import {
   Feed, FeedItem, StoreEvent, EventIcon, AccentToken,
@@ -67,6 +67,10 @@ interface Props {
   savePrefs:      (next: Record<string, boolean>) => void;
   // 10/09/2026: som e aviso no computador (Neste navegador) precisam da empresa.
   companyId?:     string;
+  // Paleta por fora (StudioShell passa studioNotificationColors): sem isso
+  // a gaveta cai no tema GLOBAL do app (useColors()), que é independente do
+  // tema do shell hospedeiro — achado do QA LJ-29 (28/09/2026).
+  colors?:        AuraColors;
 }
 
 interface InnerProps extends Props {
@@ -622,7 +626,8 @@ function useFeedBody(props: InnerProps) {
 }
 
 function FeedBody(props: InnerProps) {
-  const C = useColors();
+  const CGlobal = useColors();
+  const C = props.colors ?? CGlobal;
   const { router, expandidos, diasAbertos, abrirEvento, irPara, alternarGrupo, alternarDia } = useFeedBody(props);
   const { feed, banners } = props;
 
@@ -710,7 +715,8 @@ function FeedBody(props: InnerProps) {
 
 // ---------- Conteúdo do drawer (web) ----------
 function DrawerContent(props: InnerProps) {
-  const C = useColors();
+  const CGlobal = useColors();
+  const C = props.colors ?? CGlobal;
   const emPrefs = props.view === 'prefs';
   const temAlgoParaLer = useMemo(
     () => props.banners.length > 0 || props.feed.unreadCount > 0,
@@ -790,7 +796,7 @@ function DrawerContent(props: InnerProps) {
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px 24px' } as any}>
         {emPrefs
-          ? <NotificationPrefs prefs={props.prefs} onChange={props.savePrefs} companyId={props.companyId} />
+          ? <NotificationPrefs prefs={props.prefs} onChange={props.savePrefs} companyId={props.companyId} colors={props.colors} />
           : <FeedBody {...props} />}
       </div>
     </>
@@ -802,7 +808,8 @@ const DRAWER_W = 380;       // nativo (phone) — largura segura
 const DRAWER_W_WEB = 440;   // web — mais largo pra o banner respirar (cap 95vw)
 
 function DrawerWeb(props: InnerProps) {
-  const C = useColors();
+  const CGlobal = useColors();
+  const C = props.colors ?? CGlobal;
   const [visible, setVisible] = useState(false);
   const semAnimacao = useRef(prefersReducedMotion()).current;
 
@@ -858,7 +865,8 @@ function DrawerWeb(props: InnerProps) {
 
 // ---------- Native ----------
 function DrawerNative(props: InnerProps) {
-  const C       = useColors();
+  const CGlobal = useColors();
+  const C       = props.colors ?? CGlobal;
   const slideX  = useRef(new Animated.Value(DRAWER_W)).current;
   const emPrefs = props.view === 'prefs';
 
@@ -906,7 +914,7 @@ function DrawerNative(props: InnerProps) {
         </View>
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
           {emPrefs
-            ? <NotificationPrefs prefs={props.prefs} onChange={props.savePrefs} companyId={props.companyId} />
+            ? <NotificationPrefs prefs={props.prefs} onChange={props.savePrefs} companyId={props.companyId} colors={props.colors} />
             : <FeedBody {...props} onClose={handleClose} />}
         </ScrollView>
       </Animated.View>

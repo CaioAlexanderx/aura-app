@@ -57,6 +57,27 @@ export function parseCSV(text: string): Record<string, string>[] {
   });
 }
 
+// QA fix (item 13, Studio rodada 3, 28/09/2026): forçar UTF-8 na leitura
+// corrompe CSV que não é UTF-8 — Excel no Windows salva "CSV (separado
+// por vírgulas)" em Windows-1252 (ANSI) por padrão, não UTF-8. Ler isso
+// como UTF-8 transforma toda letra acentuada em "�" (caractere de
+// substituição): foi exatamente o que aconteceu com um produto real
+// ("Folha de sublimação" virou "Folha de sublima��o" no banco —
+// achado do QA, ver studioNomesDosModelos.test.ts / achados-qa-final.md).
+//
+// Decodifica em UTF-8 ESTRITO (fatal: true) primeiro; TextDecoder lança
+// se achar uma sequência de bytes que não é UTF-8 válido — sinal de que o
+// arquivo é outra coisa. Cai para Windows-1252, que cobre a esmagadora
+// maioria das planilhas brasileiras fora de UTF-8 (é superset de
+// ISO-8859-1 pros caracteres que aparecem em português).
+export function decodeTextoDoArquivo(buf: ArrayBuffer): string {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(buf);
+  } catch {
+    return new TextDecoder("windows-1252").decode(buf);
+  }
+}
+
 export function pickFileAndParse(): Promise<Record<string, string>[]> {
   return new Promise((resolve, reject) => {
     if (Platform.OS !== "web") { toast.info("Import disponivel apenas na versao web"); reject(new Error("web only")); return; }
@@ -67,9 +88,12 @@ export function pickFileAndParse(): Promise<Record<string, string>[]> {
       if (!file) { reject(new Error("no file")); return; }
       if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (max 10MB)"); reject(new Error("too large")); return; }
       const reader = new FileReader();
-      reader.onload = () => { try { resolve(parseCSV(reader.result as string)); } catch (err) { toast.error("Erro ao ler CSV"); reject(err); } };
+      reader.onload = () => {
+        try { resolve(parseCSV(decodeTextoDoArquivo(reader.result as ArrayBuffer))); }
+        catch (err) { toast.error("Erro ao ler CSV"); reject(err); }
+      };
       reader.onerror = () => reject(new Error("read error"));
-      reader.readAsText(file, "UTF-8");
+      reader.readAsArrayBuffer(file);
     };
     input.click();
   });

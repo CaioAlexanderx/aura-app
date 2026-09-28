@@ -79,7 +79,11 @@ function buildStyles(t: StudioPalette) {
   },
   eyebrow: {
     fontSize: 11,
-    color: t.accent,
+    // AA fix (QA LJ-48, 28/09/2026): t.accent puro (#EC4899) em texto de
+    // 11px dava 2,91:1 sobre o bg do Studio. t.accentInk é a MESMA família
+    // de magenta, só mais escura (#BE185D light) — já usada como texto em
+    // outras telas (loja-digital.tsx) por causa do mesmo AA fix.
+    color: t.accentInk,
     fontWeight: "800",
     letterSpacing: 0.8,
     textTransform: "uppercase",

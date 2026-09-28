@@ -9,7 +9,7 @@ import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import {
   AVISO_SEM_CATEGORIA, pecaSemCategoria, rotuloDaPosicao, textoDoTotal, textoSemCategoria,
-  motivoOcultoNaLoja, temMotivoDeOcultacao, textoDeVisibilidade,
+  motivoOcultoNaLoja, temMotivoDeOcultacao, textoDeVisibilidade, deveAvisarSemCategoria,
 } from "./configuradorDaLoja";
 
 type FieldType = "text" | "image" | "template" | "color" | "option" | string;
@@ -249,7 +249,7 @@ export function TabStudioConfigurador() {
                 </View>
               </View>
 
-              {orfa ? (
+              {deveAvisarSemCategoria(orfa, motivoOculto) ? (
                 <View style={styles.semCat} testID={`sem-categoria-${p.id}`}>
                   <Icon name="alert" size={13} color={t.warningInk} />
                   <Text style={styles.semCatTxt}>{AVISO_SEM_CATEGORIA}</Text>

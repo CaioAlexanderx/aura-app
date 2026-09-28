@@ -24,7 +24,7 @@
 // ============================================================
 import { useState, useCallback, useEffect } from 'react';
 import { Pressable, View, Text, Platform, StyleSheet } from 'react-native';
-import { useColors } from '@/constants/colors';
+import { useColors, AuraColors } from '@/constants/colors';
 import { useNotifications } from '@/hooks/useNotifications';
 import { NotificationDrawer } from '@/components/NotificationDrawer';
 
@@ -70,8 +70,12 @@ function BellSVG({ color, size = 18 }: { color: string; size?: number }) {
   ) as any;
 }
 
-export function NotificationBell({ tone = 'default' }: { tone?: BellTone } = {}) {
-  const C      = useColors();
+export function NotificationBell({ tone = 'default', colors }: { tone?: BellTone; colors?: AuraColors } = {}) {
+  // `colors`: paleta por fora (ex.: StudioShell passa studioNotificationColors)
+  // pra seguir o tema do shell hospedeiro em vez do tema GLOBAL do app
+  // (achado do QA LJ-29, 28/09/2026 — ver constants/studio-tokens.ts).
+  const CGlobal = useColors();
+  const C      = colors ?? CGlobal;
   const onDark = tone === 'onDark';
   const [open, setOpen] = useState(false);
   const notifs = useNotifications();
@@ -116,6 +120,7 @@ export function NotificationBell({ tone = 'default' }: { tone?: BellTone } = {})
             prefsAllMuted={notifs.prefsAllMuted}
             savePrefs={notifs.savePrefs}
             companyId={notifs.companyId}
+            colors={colors}
           />
         )}
       </>
@@ -183,6 +188,7 @@ export function NotificationBell({ tone = 'default' }: { tone?: BellTone } = {})
           prefsAllMuted={notifs.prefsAllMuted}
           savePrefs={notifs.savePrefs}
           companyId={notifs.companyId}
+          colors={colors}
         />
       )}
     </>

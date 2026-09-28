@@ -250,13 +250,18 @@ export default function StudioVendasLojaDigital() {
             </Text>
           </View>
           {/* Pill semântico: success quando publicada (ativo positivo), branco
-              translúcido quando rascunho (neutro, sobre gradient escuro). */}
+              translúcido quando rascunho (neutro, sobre gradient escuro).
+              AA fix (QA LJ-48): texto branco sobre t.success (#10B981, light)
+              dava 2,54:1. `t.successInk` viraria um verde CLARO no dark
+              theme do Studio (#6EE7B7 — pior ainda pra texto branco), então
+              usa um verde escuro FIXO (mesma família, ~7,7:1 com branco) —
+              o hero é o gradient navy→magenta, que não muda com o tema. */}
           <View
             style={[
               s.heroPill,
               {
                 backgroundColor: config.is_published
-                  ? t.success
+                  ? "#065F46"
                   : "rgba(255,255,255,0.22)",
               },
             ]}

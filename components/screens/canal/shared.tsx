@@ -214,7 +214,10 @@ export function StatusBadge({ status }: { status: string }) {
   const cs = useChannelStyles();
   const p = usePaletaDoCanal();
   const map: Record<string, { label: string; bg: string; color: string }> = {
-    active: { label: "Ativo", bg: p.greenD, color: p.green },
+    // AA fix (QA LJ-48, mesmo padrão de paletaDoCanal.tsx): texto pequeno
+    // em p.green sobre p.greenD não bate 4,5:1 no Studio — greenInk é a
+    // variante escura, só pro texto.
+    active: { label: "Ativo", bg: p.greenD, color: p.greenInk },
     pending_dns: { label: "Aguardando DNS", bg: p.amberD, color: p.amber },
     none: { label: "Sem domínio", bg: p.bg4, color: p.ink3 },
   };

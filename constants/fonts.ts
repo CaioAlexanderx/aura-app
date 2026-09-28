@@ -192,7 +192,13 @@ export const TIPOGRAFIAS_STUDIO: Record<ChaveTipografia, ParTipografico> = {
   editorial: {
     chave: "editorial",
     nome: TIPOGRAFIAS.editorial.nome,
-    hint: TIPOGRAFIAS.editorial.hint,
+    // QA fix (LJ-10, 28/09/2026): reusar TIPOGRAFIAS.editorial.hint
+    // descrevia o Anton da loja comum ("Peso alto e largura estreita") —
+    // mas a display do STUDIO pro mesmo par e Instrument Serif, uma
+    // serifada FINA e leve, o oposto do que o texto dizia. NAO troca a
+    // fonte (Instrument Serif continua sendo a display abaixo) — só a
+    // descrição passa a bater com o que a lojista vê no preview.
+    hint: "Serifada fina e elegante, com itálico expressivo. Presente especial, boutique, edição limitada.",
     // Instrument Serif e a display alternativa do sistema: mesma familia
     // de voz, traco mais leve.
     display: "'Instrument Serif', Georgia, serif",
@@ -204,7 +210,12 @@ export const TIPOGRAFIAS_STUDIO: Record<ChaveTipografia, ParTipografico> = {
   humanist: {
     chave: "humanist",
     nome: TIPOGRAFIAS.humanist.nome,
-    hint: TIPOGRAFIAS.humanist.hint,
+    // QA fix (LJ-10, 28/09/2026): reusar TIPOGRAFIAS.humanist.hint
+    // descrevia o Lora da loja comum ("Serifada macia, de curvas
+    // abertas") — mas a display do STUDIO pro mesmo par é Pacifico, uma
+    // CURSIVA manuscrita, nada serifada. NAO troca a fonte (Pacifico
+    // continua sendo a display abaixo) — só a descrição passa a bater.
+    hint: "Manuscrita, letra corrida e afetuosa. Artesanal, convite, presente feito à mão.",
     // Manuscrita — a loja de lembrancinha e convite pede isso, e Pacifico
     // ja e carregada como fonte de ARTE, entao nao custa banda nova.
     display: "'Pacifico', cursive",

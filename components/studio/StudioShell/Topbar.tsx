@@ -25,6 +25,7 @@ import { useMemo } from "react";
 import { View, Text, TextInput } from "react-native";
 import { Icon } from "@/components/Icon";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
+import { studioNotificationColors } from "@/constants/studio-tokens";
 import { StudioThemeToggle } from "@/components/studio/StudioThemeToggle";
 import { NotificationBell } from "@/components/NotificationBell";
 import { GROUPS } from "./types";
@@ -85,6 +86,9 @@ function buildBreadcrumb(pathname: string): string[] {
 export function Topbar({ pathname }: { pathname: string }) {
   const t = useStudioTokens();
   const crumbs = useMemo(() => buildBreadcrumb(pathname), [pathname]);
+  // QA LJ-29 (28/09/2026): sino sem isso ficava preso no tema GLOBAL do
+  // app, ignorando o toggle claro/escuro do Studio.
+  const notifColors = useMemo(() => studioNotificationColors(t), [t]);
 
   return (
     <View
@@ -168,7 +172,7 @@ export function Topbar({ pathname }: { pathname: string }) {
       </View>
 
       {/* Sino de notificações */}
-      <NotificationBell />
+      <NotificationBell colors={notifColors} />
 
       {/* Theme toggle */}
       <StudioThemeToggle />

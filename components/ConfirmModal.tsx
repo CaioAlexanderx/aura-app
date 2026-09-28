@@ -43,10 +43,10 @@ export function ConfirmModal({
           <Text style={s.title}>{title}</Text>
           <Text style={s.message}>{message}</Text>
           <View style={s.actions}>
-            <Pressable onPress={onCancel} style={s.cancelBtn}>
+            <Pressable onPress={onCancel} accessibilityRole="button" accessibilityLabel={cancelLabel} style={s.cancelBtn}>
               <Text style={s.cancelText}>{cancelLabel}</Text>
             </Pressable>
-            <Pressable onPress={onConfirm} style={[s.confirmBtn, { backgroundColor: btnColor }]}>
+            <Pressable onPress={onConfirm} accessibilityRole="button" accessibilityLabel={confirmLabel} style={[s.confirmBtn, { backgroundColor: btnColor }]}>
               <Text style={s.confirmText}>{confirmLabel}</Text>
             </Pressable>
           </View>
@@ -68,10 +68,10 @@ export function ConfirmModal({
           <Text style={s.title}>{title}</Text>
           <Text style={s.message}>{message}</Text>
           <View style={s.actions}>
-            <Pressable onPress={onCancel} style={s.cancelBtn}>
+            <Pressable onPress={onCancel} accessibilityRole="button" accessibilityLabel={cancelLabel} style={s.cancelBtn}>
               <Text style={s.cancelText}>{cancelLabel}</Text>
             </Pressable>
-            <Pressable onPress={onConfirm} style={[s.confirmBtn, { backgroundColor: btnColor }]}>
+            <Pressable onPress={onConfirm} accessibilityRole="button" accessibilityLabel={confirmLabel} style={[s.confirmBtn, { backgroundColor: btnColor }]}>
               <Text style={s.confirmText}>{confirmLabel}</Text>
             </Pressable>
           </View>

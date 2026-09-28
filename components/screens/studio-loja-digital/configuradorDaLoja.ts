@@ -66,6 +66,18 @@ export function textoSemCategoria(n: number): string {
   return n === 1 ? "1 peça sem categoria" : `${n} peças sem categoria`;
 }
 
+/**
+ * Mostra o aviso de "sem categoria" no cartão da peça?
+ *
+ * QA fix (LJ-17, 28/09/2026): quando a peça já tem um `motivoOculto` mais
+ * específico ("Não aparece na loja: Sem campos de personalização"), o
+ * aviso de categoria fica redundante — a categoria não importa pra uma
+ * peça que já não aparece por outro motivo, e mostrar os dois confunde.
+ */
+export function deveAvisarSemCategoria(orfa: boolean, motivoOculto: string | null): boolean {
+  return orfa && !motivoOculto;
+}
+
 const POSICOES: Record<string, string> = {
   center: "Centro",
   left: "Esquerda",

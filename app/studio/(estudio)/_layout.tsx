@@ -42,22 +42,39 @@ function injectStudioFonts() {
   if (!document.getElementById("studio-typography")) {
     const st = document.createElement("style");
     st.id = "studio-typography";
-    // FIX (achado do QA, 28/09/2026): o sino de notificações usa
-    // WebPortal — o React Native Web monta a gaveta num <div> anexado
-    // direto em `document.body`, IRMÃO de `#root`, não descendente dele.
-    // A regra só valia dentro de `#root`, então o portal caía no
-    // fallback de sistema do navegador (Times New Roman).
+    // FIX (achado do QA, 28/09/2026 — rodada 2): a tentativa anterior
+    // (PR #992) listava só `div[dir="auto"], input, textarea, button`
+    // dentro de `.aura-web-portal`. Não bastou: o CORPO da gaveta do sino
+    // (NotificationDrawer.tsx) é escrito com HTML puro no branch web —
+    // `<span>` pro título "Notificações", textos de evento etc., não
+    // `View`/`Text` do React Native Web. `<span>` nunca bateu no seletor
+    // `div[dir="auto"]`, então caía no fallback de sistema do navegador
+    // (Times New Roman) — inclusive o próprio `document.body`, que também
+    // não tinha `font-family` nenhum declarado (ver public/index.html).
+    // Só "Marcar tudo lido" (dentro de um <button>, coberto pela regra
+    // velha) saía em DM Sans — bate com o achado.
     //
-    // `.aura-web-portal ...` cobre o portal (WebPortal.tsx marca o
-    // container com essa classe). Precisa da classe, e não só de `body
-    // ...`: um seletor de elemento puro (`body input`) tem especificidade
-    // (0,0,2), que PERDE para a classe atômica do react-native-web
-    // (0,1,0) — foi medido aqui (studioTypographyRule.test.ts). A classe
-    // devolve a especificidade (0,1,1)+, no mesmo patamar do `#root ...`
-    // (que vence pela ID, não por sorte de seletor).
+    // Correção na causa: define a fonte na RAIZ (herda pra baixo em vez de
+    // listar tag por tag) em dois lugares — `body` (documento inteiro,
+    // cobre qualquer coisa fora de `#root`/`.aura-web-portal`, como texto
+    // solto direto no `document.body`) e `.aura-web-portal` (mantido por
+    // especificidade, caso algo redefina a fonte do body no meio do
+    // caminho). `input`/`textarea`/`button`/`select` continuam explícitos
+    // porque esses elementos NÃO herdam font-family do ancestral por
+    // padrão no navegador (UA stylesheet força a fonte de sistema/form).
     st.textContent =
-      `#root div[dir="auto"], #root input, #root textarea, #root button, `
-      + `.aura-web-portal div[dir="auto"], .aura-web-portal input, .aura-web-portal textarea, .aura-web-portal button `
+      // Bloco 1 — BASE herdada: cobre span/div/p/texto solto que não tem
+      // atomic class do RNW (ex.: os <span> do sino em
+      // NotificationDrawer.tsx, dentro do portal) via herança normal de
+      // CSS, sem listar tag por tag. Cobre também `body` em si (não tinha
+      // font-family nenhuma antes — o QA mediu Times New Roman ali).
+      `body, #root, .aura-web-portal { font-family: ${Fonts.body}; } `
+      // Bloco 2 — OVERRIDE pontual: só estes elementos ganham atomic
+      // class do react-native-web com a PRÓPRIA font-family, então
+      // precisam de seletor com especificidade maior que essa classe
+      // (0,1,0) pra vencer a cascata (a base do bloco 1 sozinha perde).
+      + `#root div[dir="auto"], #root input, #root textarea, #root button, #root select, `
+      + `.aura-web-portal div[dir="auto"], .aura-web-portal input, .aura-web-portal textarea, .aura-web-portal button, .aura-web-portal select `
       + `{ font-family: ${Fonts.body}; }`;
     document.head.appendChild(st);
   }

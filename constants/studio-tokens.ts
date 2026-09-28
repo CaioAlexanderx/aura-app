@@ -18,6 +18,7 @@
 // (danger/warning/info/success + soft/ink variants) pra padronizar
 // estados pelo app e parar de hardcodar #F59E0B, #FEE2E2, etc.
 // ============================================================
+import type { AuraColors } from "@/constants/colors";
 
 export const StudioColors = {
   // ── Primary navy ─────────────────────────────────────────
@@ -198,6 +199,43 @@ export const _STUDIO_COLOR_PARITY: _StudioColorParity = true;
 
 // Type pra ambos os modos
 export type StudioPalette = typeof StudioColors;
+
+// ── Ponte com o sino de notificações (QA LJ-29, 28/09/2026) ──────
+//
+// NotificationBell/NotificationDrawer são compartilhados entre shells
+// (Negócio, Food, Dojô, Karatê, Studio) e por padrão leem useColors() —
+// o tema GLOBAL do app (toggle com reload, cookie `aura_theme`), que é
+// INDEPENDENTE do tema próprio do Studio (`aura_studio_theme_mode`,
+// StudioThemeMode.tsx). Resultado: trocar o Studio para claro não mudava
+// a gaveta do sino, que seguia o tema global (dark por padrão).
+//
+// Mapeia os tokens do Studio pro formato AuraColors (Light/Dark de
+// constants/colors.ts) pra StudioShell passar como prop `colors` e o
+// sino seguir o tema do Studio quando aberto lá dentro.
+export function studioNotificationColors(tokens: StudioPalette): AuraColors {
+  return {
+    bg:      tokens.bg,
+    bg2:     tokens.bgSoft,
+    bg3:     tokens.paperCard,
+    bg4:     tokens.paperCardElev,
+    ink:     tokens.ink,
+    ink2:    tokens.ink2,
+    ink3:    tokens.ink3,
+    border:  tokens.ink5,
+    border2: tokens.ink4,
+    violet:  tokens.primary,
+    violet2: tokens.primary2,
+    violet3: tokens.primary2,
+    violet4: tokens.primary,
+    violetD: tokens.primaryGhost,
+    green:   tokens.success,
+    greenD:  tokens.successSoft,
+    red:     tokens.danger,
+    redD:    tokens.dangerSoft,
+    amber:   tokens.warning,
+    amberD:  tokens.warningSoft,
+  };
+}
 
 export type StudioColorKey = keyof typeof StudioColors;
 export type StudioGradientKey = keyof typeof StudioGradients;

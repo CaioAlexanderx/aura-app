@@ -24,6 +24,7 @@ import {
 } from "react-native";
 import Svg, { Polygon } from "react-native-svg";
 import { Icon } from "@/components/Icon";
+import { ConfirmModal } from "@/components/ConfirmModal";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import type { CustomizationConfig } from "@/services/studioApi";
@@ -255,6 +256,11 @@ export function MockupNaFotoSecao({
   // "Remover marcação" (achado do QA, 28/09/2026): não existia como
   // desfazer o mockup salvo — a única saída era marcar em cima de novo.
   const [removendo, setRemovendo] = useState(false);
+  // QA fix (rodada 3, 28/09/2026): removia na hora, sem confirmar nem
+  // avisar que a vitrine volta pra prévia antiga (a foto pequena e
+  // chapada, sem a marcação). Confirmação curta, padrão do app
+  // (ConfirmModal) — a própria mensagem já é o aviso.
+  const [confirmandoRemocao, setConfirmandoRemocao] = useState(false);
   const [larguraDoPalco, refDoPalco, onLayoutDoPalco] = useLargura();
   const [larguraDoEditor, refDoEditor, onLayoutDoEditor] = useLargura();
 
@@ -413,6 +419,7 @@ export function MockupNaFotoSecao({
 
   // ── Render ──────────────────────────────────────────────
   return (
+    <>
     <View style={s.secao} testID="mockup-na-foto">
       <View style={s.cabeca}>
         <View style={{ flex: 1, minWidth: 220 }}>
@@ -654,7 +661,7 @@ export function MockupNaFotoSecao({
               {temMarcacaoGravada ? (
                 <Pressable
                   testID="remover-marcacao"
-                  onPress={remover}
+                  onPress={() => setConfirmandoRemocao(true)}
                   disabled={salvando || removendo}
                   accessibilityLabel="Remover marcação"
                   style={[s.botao, s.botaoSecundario, (salvando || removendo) && { opacity: 0.5 }]}
@@ -735,6 +742,17 @@ export function MockupNaFotoSecao({
         </>
       )}
     </View>
+    <ConfirmModal
+      visible={confirmandoRemocao}
+      title="Remover marcação?"
+      message="A vitrine volta a mostrar a prévia antiga (a foto pequena, sem a marcação) até você marcar de novo."
+      confirmLabel="Remover"
+      cancelLabel="Cancelar"
+      destructive
+      onConfirm={() => { setConfirmandoRemocao(false); remover(); }}
+      onCancel={() => setConfirmandoRemocao(false)}
+    />
+    </>
   );
 }
 
