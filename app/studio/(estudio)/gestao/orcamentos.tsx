@@ -36,6 +36,8 @@ const STATUS_LABEL: Record<StudioQuoteStatus, string> = {
   rejected:  "Recusado",
   expired:   "Expirado",
   converted: "Convertido",
+  // 28/09/2026 (migration 360): a loja fechou sem venda.
+  closed:    "Encerrado",
 };
 
 // Cores estáticas dos pills de status nas linhas (não dependem do theme —
@@ -47,6 +49,7 @@ const STATUS_COLORS: Record<StudioQuoteStatus, { bg: string; text: string }> = {
   rejected:  { bg: "#FEE2E2", text: "#991B1B" },
   expired:   { bg: "#FEF3C7", text: "#92400E" },
   converted: { bg: "#EDE9FE", text: "#5B21B6" },
+  closed:    { bg: "#E2E8F0", text: "#475569" },
 };
 
 function StatusPill({ status }: { status: StudioQuoteStatus }) {
@@ -112,6 +115,7 @@ export default function StudioOrcamentosScreen() {
     { value: "rejected" as const,    label: "Recusado"  },
     { value: "expired" as const,     label: "Expirado"  },
     { value: "converted" as const,   label: "Convertido"},
+    { value: "closed" as const,      label: "Encerrado" },
   ];
 
   return (
@@ -189,6 +193,14 @@ export default function StudioOrcamentosScreen() {
                     <Text style={s.cardPhone}>{q.customer_phone}</Text>
                   ) : null}
                 </View>
+                {/* Orçamento em vídeo 3D (28/09/2026): o selo diz que há
+                    vídeo guardado para baixar ou mandar de novo. */}
+                {q.tem_video ? (
+                  <View style={s.seloVideo}>
+                    <Icon name="camera" size={11} color={t.accentInk} />
+                    <Text style={s.seloVideoTxt}>vídeo</Text>
+                  </View>
+                ) : null}
                 <StatusPill status={q.status} />
               </View>
 
@@ -267,6 +279,11 @@ function makeStyles(t: StudioPalette) {
       borderColor: t.ink5,
       position: "relative",
     },
+    seloVideo: {
+      flexDirection: "row", alignItems: "center", gap: 4, marginRight: 6,
+      backgroundColor: t.accentSoft, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20,
+    },
+    seloVideoTxt: { fontSize: 11, fontWeight: "800", color: t.accentInk },
     cardTop:    { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 10 },
     cardName:   { fontSize: 15, fontWeight: "700", color: t.ink, flex: 1 },
     cardPhone:  { fontSize: 12, color: t.ink3, marginTop: 2 },

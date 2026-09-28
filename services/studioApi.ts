@@ -578,7 +578,9 @@ export type CollectMarketplaceCustomizationResponse = {
 
 // ─── Camada 1 (30/05/2026) — Orçamento, Precificação, Pagamentos ──────────────
 export type StudioQuoteStatus =
-  | "draft" | "sent" | "accepted" | "rejected" | "expired" | "converted";
+  | "draft" | "sent" | "accepted" | "rejected" | "expired" | "converted"
+  // 28/09/2026 (migration 360): a loja encerrou sem venda ("Fechar").
+  | "closed";
 
 export type StudioQuoteItem = {
   id?: string;
@@ -618,6 +620,32 @@ export type StudioQuote = {
   created_by?: string | null;
   created_at: string;
   updated_at?: string;
+  // ── Orçamento em vídeo 3D (28/09/2026, migration 360). Ausentes no
+  // backend de antes. `tem_video` vem na lista; o detalhe traz as colunas.
+  condicoes?: CondicoesDoOrcamentoApi | null;
+  tem_video?: boolean;
+  video_key?: string | null;
+  video_content_type?: string | null;
+  video_bytes?: number | null;
+  video_expira_em?: string | null;
+  canal_envio?: CanalDeEnvioDoOrcamento | null;
+};
+
+export type CondicoesDoOrcamentoApi = {
+  pix_desconto_pct: number | null;
+  parcelas: number | null;
+  prazo_dias_uteis: number | null;
+  observacao: string | null;
+};
+
+export type CanalDeEnvioDoOrcamento = "compartilhar" | "whatsapp" | "baixar" | "copiar";
+
+export type VideoDoOrcamento = {
+  content_type: string;
+  bytes: number | null;
+  formato: string | null;
+  gerado_em: string | null;
+  expira_em: string | null;
 };
 
 export type StudioQuoteDetail = {
@@ -972,6 +1000,19 @@ export const studioApi = {
     request<StudioQuoteCreated>(base(cid) + "/quotes/" + qid + "/send", { method: "POST", retry: 0, timeout: 10000 }),
   convertQuote: (cid: string, qid: string) =>
     request<{ order_id: string; quote: StudioQuote }>(base(cid) + "/quotes/" + qid + "/convert", { method: "POST", retry: 0, timeout: 10000 }),
+
+  // ── Orçamento em vídeo 3D pelo WhatsApp (28/09/2026, migration 360) ───────
+  // Sem página pública e sem token: o envio é no WhatsApp da lojista.
+  salvarCondicoesDoOrcamento: (cid: string, qid: string, body: CondicoesDoOrcamentoApi & { deposit_pct?: number | null; validity_days?: number | null }) =>
+    request<{ quote: StudioQuote; valores: any }>(base(cid) + "/quotes/" + qid + "/condicoes", { method: "PUT", body, retry: 0, timeout: 10000 }),
+  manterVideoDoOrcamento: (cid: string, qid: string) =>
+    request<{ video: VideoDoOrcamento }>(base(cid) + "/quotes/" + qid + "/video/manter", { method: "POST", retry: 0, timeout: 10000 }),
+  marcarOrcamentoEnviado: (cid: string, qid: string, canal: CanalDeEnvioDoOrcamento) =>
+    request<{ quote: StudioQuote }>(base(cid) + "/quotes/" + qid + "/marcar-enviado", { method: "POST", body: { canal }, retry: 0, timeout: 10000 }),
+  fecharOrcamento: (cid: string, qid: string, motivo?: string) =>
+    request<{ quote: StudioQuote }>(base(cid) + "/quotes/" + qid + "/fechar", { method: "POST", body: motivo ? { motivo } : {}, retry: 0, timeout: 10000 }),
+  aprovarOrcamento: (cid: string, qid: string) =>
+    request<{ order_id: string; quote: StudioQuote }>(base(cid) + "/quotes/" + qid + "/aprovar", { method: "POST", retry: 0, timeout: 15000 }),
 
   // ── Camada 1 — Aceite público do orçamento (Fase A, sem auth) ────────────────
   getPublicQuote: (token: string) =>

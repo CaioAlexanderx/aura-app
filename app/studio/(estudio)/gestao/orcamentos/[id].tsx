@@ -35,7 +35,7 @@
 import { useEffect, useState, useMemo } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
-  TextInput, ActivityIndicator, Modal, Linking, Image,
+  TextInput, ActivityIndicator, Modal, Linking, Image, Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -44,7 +44,11 @@ import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { request } from "@/services/api";
 import { toast } from "@/components/Toast";
-import { notify } from "@/utils/webAlert";
+import { notify, confirmAlert } from "@/utils/webAlert";
+import { useAuthStore } from "@/stores/auth";
+import { OrcamentoVideoModal } from "@/components/studio/orcamentoVideo/OrcamentoVideoModal";
+import { baixarVideoDoOrcamento } from "@/components/studio/orcamentoVideo/videoDoOrcamentoApi";
+import { baixarArquivo, nomeDoArquivo } from "@/components/studio/orcamentoVideo/envioNoWhatsApp";
 import { copyText } from "@/utils/clipboard";
 import { StudioScreen } from "@/components/studio/StudioScreen";
 import { StudioBreadcrumb } from "@/components/studio/StudioBreadcrumb";
@@ -78,6 +82,7 @@ type ProductSearchResult = {
 const STATUS_LABEL: Record<StudioQuoteStatus, string> = {
   draft: "Rascunho", sent: "Enviado", accepted: "Aceito",
   rejected: "Recusado", expired: "Expirado", converted: "Convertido",
+  closed: "Encerrado",
 };
 const STATUS_COLORS: Record<StudioQuoteStatus, { bg: string; text: string }> = {
   draft:     { bg: "#F1F5F9", text: "#64748B" },
@@ -86,6 +91,7 @@ const STATUS_COLORS: Record<StudioQuoteStatus, { bg: string; text: string }> = {
   rejected:  { bg: "#FEE2E2", text: "#991B1B" },
   expired:   { bg: "#FEF3C7", text: "#92400E" },
   converted: { bg: "#EDE9FE", text: "#5B21B6" },
+  closed:    { bg: "#E2E8F0", text: "#475569" },
 };
 // ─── Acompanhamento do orçamento ────────────────────────────
 // O link público, o "enviado em" e o "cliente abriu" sempre existiram no
@@ -424,6 +430,13 @@ export default function OrcamentoEditorScreen() {
   const [addModal, setAddModal] = useState(false);
   const [sentData, setSentData] = useState<StudioQuoteCreated | null>(null);
 
+  // Orçamento em vídeo 3D pelo WhatsApp (28/09/2026). Marca da loja do
+  // orçamento: o editor sempre roda com UMA empresa escolhida (no
+  // consolidado não há companyId e a tela nem carrega).
+  const [videoModal, setVideoModal] = useState(false);
+  const nomeDaLoja = useAuthStore((st) => st.company?.name) || "";
+  const logoDaLoja = useAuthStore((st) => st.companyLogo);
+
   // Carrega orçamento existente
   useEffect(() => {
     if (isNew) { setLoading(false); return; }
@@ -562,6 +575,96 @@ export default function OrcamentoEditorScreen() {
       setSaving(false);
     }
   }
+
+  // ─── Orçamento em vídeo 3D ──────────────────────────────────
+  // Sem página pública: o orçamento fica em aberto depois do envio, e a
+  // lojista decide aqui: Aprovar (vira pedido na Produção) ou Fechar.
+  const temPecaComProduto = items.some((it) => !!it.product_id);
+  const podeVideo = Platform.OS === "web" && !!quote && canSend && temPecaComProduto;
+
+  async function handleAbrirVideo() {
+    if (!quote) return;
+    if (isDraft) {
+      const saved = await persist();
+      if (!saved) return;
+    }
+    setVideoModal(true);
+  }
+
+  function handleAprovar() {
+    if (!companyId || !quote) return;
+    confirmAlert(
+      "Aprovar orçamento?",
+      "Ele vira pedido e entra na Produção com os itens, a arte, os valores e as condições combinadas.",
+      "Aprovar",
+      async () => {
+        setSaving(true);
+        try {
+          const data = await studioApi.aprovarOrcamento(companyId, quote.id);
+          setQuote(data.quote);
+          toast.success("Orçamento aprovado. O pedido está na Produção.");
+        } catch (e: any) {
+          toast.error(`[${e?.status ?? "?"}] ${e?.data?.error || e?.message || "Erro ao aprovar"}`);
+        } finally {
+          setSaving(false);
+        }
+      },
+    );
+  }
+
+  function handleFechar() {
+    if (!companyId || !quote) return;
+    confirmAlert(
+      "Fechar orçamento?",
+      "Ele sai dos orçamentos em aberto, sem virar venda.",
+      "Fechar",
+      async () => {
+        setSaving(true);
+        try {
+          const data = await studioApi.fecharOrcamento(companyId, quote.id);
+          setQuote(data.quote);
+          toast.success("Orçamento fechado");
+        } catch (e: any) {
+          toast.error(`[${e?.status ?? "?"}] ${e?.data?.error || e?.message || "Erro ao fechar"}`);
+        } finally {
+          setSaving(false);
+        }
+      },
+      { destructive: true },
+    );
+  }
+
+  async function handleManterVideo() {
+    if (!companyId || !quote) return;
+    try {
+      const r = await studioApi.manterVideoDoOrcamento(companyId, quote.id);
+      setQuote({ ...quote, video_expira_em: r.video.expira_em });
+      toast.success("O vídeo fica guardado por mais 30 dias");
+    } catch (e: any) {
+      toast.error(e?.data?.error || e?.message || "Não deu para manter o vídeo");
+    }
+  }
+
+  async function handleBaixarVideo() {
+    if (!companyId || !quote) return;
+    try {
+      const blob = await baixarVideoDoOrcamento(companyId, quote.id);
+      if (!blob) { toast.info("O vídeo deste orçamento não está mais guardado"); return; }
+      const ext = (blob.type || "").includes("webm") ? "webm" : "mp4";
+      baixarArquivo(blob, nomeDoArquivo(nomeDaLoja, quote.customer_name, ext));
+    } catch (e: any) {
+      toast.error(e?.message || "Não deu para baixar o vídeo");
+    }
+  }
+
+  const videoGuardado = !!(quote?.video_key || quote?.tem_video)
+    && !!quote?.video_expira_em && new Date(quote.video_expira_em) > new Date();
+  const CANAL_LEGIVEL: Record<string, string> = {
+    compartilhar: "pelo compartilhamento do WhatsApp",
+    whatsapp: "pela conversa do WhatsApp",
+    baixar: "com o vídeo baixado e a conversa aberta",
+    copiar: "com a mensagem copiada",
+  };
 
   // ─── Render ──────────────────────────────────────────────────
   if (loading) {
@@ -744,6 +847,48 @@ export default function OrcamentoEditorScreen() {
           </View>
         ) : null}
 
+        {/* Orçamento em vídeo 3D: envio pelo WhatsApp, vídeo guardado e as
+            decisões da lojista (não há página pública neste fluxo). */}
+        {quote && (quote.canal_envio || videoGuardado) ? (
+          <View style={s.section}>
+            <Text style={s.sectionLabel}>Orçamento em vídeo</Text>
+            {quote.canal_envio && quote.sent_at ? (
+              <Text style={s.tlValue}>Enviado {dataHora(quote.sent_at)} {CANAL_LEGIVEL[quote.canal_envio] || ""}.</Text>
+            ) : null}
+            {videoGuardado ? (
+              <>
+                <Text style={s.trackLabel}>
+                  Vídeo guardado até {new Date(quote.video_expira_em!).toLocaleDateString("pt-BR")}
+                </Text>
+                <View style={s.trackActions}>
+                  <Pressable style={s.trackBtn} onPress={handleBaixarVideo}>
+                    <Icon name="download" size={15} color={t.ink} />
+                    <Text style={s.trackBtnTxt}>Baixar vídeo</Text>
+                  </Pressable>
+                  <Pressable style={s.trackBtn} onPress={handleManterVideo}>
+                    <Icon name="clock" size={15} color={t.ink} />
+                    <Text style={s.trackBtnTxt}>Manter por mais 30 dias</Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : quote.canal_envio ? (
+              <Text style={[s.tlValue, s.tlValueMuted]}>O vídeo não está mais guardado.</Text>
+            ) : null}
+            {quote.status === "sent" && !quote.token ? (
+              <Text style={s.trackValidade}>
+                Em aberto: quando o cliente topar pelo WhatsApp, toque em Aprovar. Se não seguir, Fechar.
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+
+        {quote?.status === "closed" ? (
+          <View style={[s.convertedBanner, { backgroundColor: t.bgSoft }]}>
+            <Icon name="x-circle" size={18} color={t.ink3} />
+            <Text style={[s.convertedTxt, { color: t.ink2 }]}>Orçamento fechado sem venda.</Text>
+          </View>
+        ) : null}
+
         {/* Dados do cliente */}
         <View style={s.section}>
           <Text style={s.sectionLabel}>CLIENTE</Text>
@@ -911,6 +1056,31 @@ export default function OrcamentoEditorScreen() {
             </Pressable>
           )}
 
+          {podeVideo && (
+            <Pressable
+              style={[s.btnVideo, saving && s.btnDisabled]}
+              onPress={handleAbrirVideo}
+              disabled={saving}
+              accessibilityLabel="Enviar em vídeo 3D pelo WhatsApp"
+            >
+              <Icon name="camera" size={16} color="#fff" />
+              <Text style={s.btnPrimaryTxt}>{quote?.canal_envio ? "Reenviar em vídeo 3D" : "Enviar em vídeo 3D"}</Text>
+            </Pressable>
+          )}
+
+          {quote?.status === "sent" && (
+            <View style={s.decisaoRow}>
+              <Pressable style={[s.btnAprovar, saving && s.btnDisabled]} onPress={handleAprovar} disabled={saving}>
+                <Icon name="check" size={16} color="#fff" />
+                <Text style={s.btnPrimaryTxt}>Aprovar</Text>
+              </Pressable>
+              <Pressable style={[s.btnFechar, saving && s.btnDisabled]} onPress={handleFechar} disabled={saving}>
+                <Icon name="x" size={16} color={t.ink2} />
+                <Text style={[s.btnPrimaryTxt, { color: t.ink2 }]}>Fechar</Text>
+              </Pressable>
+            </View>
+          )}
+
           {quote?.status === "accepted" && (
             <Pressable
               style={[s.btnConvert, saving && s.btnDisabled]}
@@ -924,6 +1094,24 @@ export default function OrcamentoEditorScreen() {
           )}
         </View>
       </View>
+
+      {quote && companyId && videoModal ? (
+        <OrcamentoVideoModal
+          visible={videoModal}
+          companyId={companyId}
+          quote={quote}
+          items={items.map((it, i) => ({ ...it, sort_order: i }))}
+          nomeDaLoja={nomeDaLoja}
+          logoUrl={logoDaLoja}
+          onClose={() => setVideoModal(false)}
+          onAtualizou={(q, novos) => {
+            setQuote((antes) => ({ ...(antes || {}), ...q } as StudioQuote));
+            if (q.deposit_pct !== undefined) setDepositPct(q.deposit_pct != null ? String(q.deposit_pct) : "");
+            if (q.validity_days) setValidityDays(String(q.validity_days));
+            if (novos) setItems((antes) => antes.map((it, i) => ({ ...it, customization: novos[i]?.customization ?? it.customization })));
+          }}
+        />
+      ) : null}
 
       <AddItemModal
         visible={addModal}
@@ -1048,6 +1236,19 @@ function buildStyles(t: StudioPalette) {
     btnSend: {
       flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
       backgroundColor: t.info, paddingVertical: 16, borderRadius: 14,
+    },
+    btnVideo: {
+      flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+      backgroundColor: t.accent, paddingVertical: 14, borderRadius: 12,
+    },
+    decisaoRow: { flexDirection: "row", gap: 10 },
+    btnAprovar: {
+      flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+      backgroundColor: t.success, paddingVertical: 14, borderRadius: 12,
+    },
+    btnFechar: {
+      flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+      backgroundColor: t.bgSoft, borderWidth: 1.5, borderColor: t.ink5, paddingVertical: 13, borderRadius: 12,
     },
     btnConvert: {
       flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
