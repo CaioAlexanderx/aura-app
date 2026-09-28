@@ -18,7 +18,7 @@ import { todayLocalString } from "@/utils/dateOnly";
 import { fmt } from "@/components/screens/financeiro/types";
 import { useQuadroFinanceiro } from "@/hooks/useQuadroFinanceiro";
 import {
-  ORDEM_DAS_COLUNAS, ddmm, motivoDoBloqueio, movimento, nomeDoMes, rotulos, somarMes,
+  ORDEM_DAS_COLUNAS, cartaoParaLancamento, ddmm, motivoDoBloqueio, movimento, nomeDoMes, rotulos, somarMes,
   type CartaoQuadro, type ColunaDados, type ColunaQuadro, type Movimento, type Quadro, type TipoQuadro,
 } from "@/utils/quadroFinanceiro";
 import { QuadroCartao } from "./QuadroCartao";
@@ -35,7 +35,7 @@ function acharColuna(q: Quadro | undefined, id: string | null): { coluna: Coluna
   return null;
 }
 
-export function QuadroFinanceiro({ companyId }: { companyId: string }) {
+export function QuadroFinanceiro({ companyId, onEditar }: { companyId: string; onEditar?: (lancamento: ReturnType<typeof cartaoParaLancamento>) => void }) {
   const [tipo, setTipo] = useState<TipoQuadro>("income");
   const [mes, setMes] = useState(() => todayLocalString().slice(0, 7));
   const [alvo, setAlvo] = useState<AlvoDoMovimento>(null);
@@ -98,7 +98,7 @@ export function QuadroFinanceiro({ companyId }: { companyId: string }) {
             ))}
           </View>
           <Text style={s.dica}>
-            {dnd.isWeb ? "Arraste o cartão quando o dinheiro " + (tipo === "income" ? "entrar" : "sair") + ". " : ""}
+            {dnd.isWeb && largo ? "Arraste o cartão quando o dinheiro " + (tipo === "income" ? "entrar" : "sair") + ". " : ""}
             O que vence e não é {r.verbo} passa sozinho para Atrasado. Crediário fica na tela do Crediário.
           </Text>
         </View>
@@ -134,6 +134,7 @@ export function QuadroFinanceiro({ companyId }: { companyId: string }) {
               onInicio={dnd.onCardDragStart}
               onFim={dnd.onCardDragEnd}
               onAcao={abrirMovimento}
+              onEditar={onEditar ? (c) => onEditar(cartaoParaLancamento(c, tipo)) : undefined}
             />
           ))}
         </View>
@@ -159,6 +160,7 @@ function QuadroColuna(p: {
   onDrop: (id: string, para: ColunaQuadro) => void; onHover: (k: ColunaQuadro | null) => void;
   onInicio: (id: string) => void; onFim: () => void;
   onAcao: (c: CartaoQuadro, de: ColunaQuadro, mov: Movimento) => void;
+  onEditar?: (c: CartaoQuadro) => void;
 }) {
   const ref = useDropZoneRef<ColunaQuadro>(p.chave, p.onDrop, p.onHover);
   const { m } = useValoresOcultos();
@@ -193,6 +195,7 @@ function QuadroColuna(p: {
           onInicio={p.onInicio}
           onFim={p.onFim}
           onAcao={p.onAcao}
+          onEditar={p.onEditar}
         />
       ))}
       {(p.dados.grupos || []).map((g) => (

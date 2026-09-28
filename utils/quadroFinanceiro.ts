@@ -26,6 +26,7 @@ export type CartaoQuadro = {
   paid_at: string | null;
   payment_method: string | null;
   notes: string | null;
+  employee_id?: string | null;
   employee_name: string | null;
   recurrence_type: string | null;
   recurrence_index: number | null;
@@ -190,6 +191,30 @@ export function corpoDoMovimento(p: PedidoDeMovimento): Record<string, any> {
   }
   if (p.mov === "nova_data") return { due_date: p.data };
   return { status: "pending" };
+}
+
+/**
+ * Cartão → formato do modal "Editar lançamento" (o mesmo que a lista usa).
+ * employee_id vai sempre (null quando não há): o modal compara com o de
+ * antes e, se faltasse, mandaria employee_id: null e apagaria o vínculo.
+ */
+export function cartaoParaLancamento(c: CartaoQuadro, tipo: TipoQuadro) {
+  return {
+    id: c.id,
+    date: c.date || "",
+    desc: c.description,
+    type: tipo,
+    category: c.category,
+    amount: c.amount,
+    status: c.status,
+    source: "manual",
+    due_date: c.due_date || c.date || undefined,
+    paid_at: c.paid_at || undefined,
+    payment_method: c.payment_method,
+    employee_id: c.employee_id ?? null,
+    employee_name: c.employee_name,
+    idempotency_key: null,
+  };
 }
 
 function arred(n: number) { return Math.round(n * 100) / 100; }
