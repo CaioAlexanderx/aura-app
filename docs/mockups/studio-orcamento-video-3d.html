@@ -7,14 +7,18 @@
 <!--
   ============================================================
   Mockup standalone — Orçamento em vídeo 3D pelo WhatsApp (Aura Studio)
-  28/09/2026 · fase 1 (desenho). Regra 4 do CLAUDE.md: mudança visual
-  forte nasce em mockup. Desenho técnico: docs/studio/orcamento-video-3d.md
+  28/09/2026 · atualizado com as decisões do PO (sem página pública,
+  desconto só da lojista, vídeo guardado 30 dias prorrogáveis, Aprovar e
+  Fechar no painel). Regra 4 do CLAUDE.md: mudança visual forte nasce em
+  mockup. Desenho técnico: docs/studio/orcamento-video-3d.md
 
   O QUE MOSTRA
     A. Onde a lojista começa (editor do orçamento; lista; proposta pelo produto)
     B. O modal no DNA do TrocaModal: Peça → Valores → Prévia → Enviar → Enviado
-    C. A mensagem como o cliente vê no WhatsApp (celular, computador, Cloud API futura)
-    D. A página pública do orçamento no celular, com a marca da loja
+    C. A mensagem como o cliente vê no WhatsApp: o vídeo EMBUTIDO, com os
+       valores por extenso (sem link); e a Cloud API futura
+    D. O orçamento no painel depois do envio: em aberto até Aprovar (vira
+       pedido) ou Fechar; vídeo guardado 30 dias, "Manter por mais 30 dias"
 
   SEM REDE: o "3D" é uma caneca desenhada em canvas 2D (cilindro com a
   textura da arte mapeada por coluna, sombreado e asa com profundidade).
@@ -24,11 +28,13 @@
   Os mesmos estados vão pela URL, para mandar um caso específico:
     ?passo=4&envio=computador&tema=escuro   (qualquer chave da faixa)
     &parado=1        pausa as animações (bom para print)
-    &so=sec-modal    mostra só uma seção (sec-entrada, sec-modal, sec-whats, sec-pagina)
+    &so=sec-modal    mostra só uma seção (sec-entrada, sec-modal, sec-whats, sec-depois)
   Valores de exemplo: 12 canecas × R$ 39,90 + 12 embalagens × R$ 4,50 =
   R$ 532,80; Pix 5 % pela regra canônica em centavos
   Math.round(53280 × 95 / 100) = 50616 → R$ 506,16; cartão 6× de R$ 88,80;
-  sinal 50 % = R$ 266,40. Cliente e loja são fictícios.
+  sinal 50 % = R$ 266,40. Pix, parcelas e prazo são o que a LOJISTA
+  preencheu no orçamento (nada vem da configuração da loja). Cliente e
+  loja são fictícios.
   ============================================================
 -->
 <style>
@@ -49,7 +55,6 @@
     --wa-texto: #111B21; --wa-hora: #667781; --wa-link: #027EB5; --wa-pill: #FFFFFF;
     /* Loja fictícia (marca da lojista na página pública) */
     --loja: #0F766E; --loja-soft: #CCFBF1; --loja-ink: #115E59;
-    --pub-bg: #FAF8F5; --pub-card: #FFFFFF; --pub-ink: #1C1917; --pub-ink2: #57534E; --pub-linha: #E7E5E4;
     color-scheme: light;
   }
   :root[data-theme="dark"] {
@@ -67,7 +72,6 @@
     --wa-fundo: #0B141A; --wa-topo: #202C33; --wa-topo-ink: #E9EDEF; --wa-balao-in: #202C33; --wa-balao-out: #005C4B;
     --wa-texto: #E9EDEF; --wa-hora: #8696A0; --wa-link: #53BDEB; --wa-pill: #182229;
     --loja: #2DD4BF; --loja-soft: rgba(45,212,191,0.14); --loja-ink: #5EEAD4;
-    --pub-bg: #1C1917; --pub-card: #292524; --pub-ink: #FAFAF9; --pub-ink2: #D6D3D1; --pub-linha: #44403C;
     color-scheme: dark;
   }
   * { box-sizing: border-box; }
@@ -256,6 +260,8 @@
   .chave .sw[aria-checked="true"] { background: var(--success); }
   .chave .sw[aria-checked="true"]::after { left: 19px; }
   .chave .sw:disabled { opacity: .55; cursor: default; }
+  .chave input.num { width: 64px; min-height: 40px; border-radius: 10px; border: 1.5px solid var(--ink5); background: var(--bg-soft); color: var(--ink); font: inherit; font-weight: 700; text-align: center; flex: none; }
+  .chave input.num:focus { outline: 2px solid var(--primary2); outline-offset: 1px; }
   .chave .t1 { font-weight: 650; font-size: 13.5px; }
   .chave .t2 { font-size: 12px; color: var(--ink3); }
   .chave .val { margin-left: auto; text-align: right; font-weight: 800; white-space: nowrap; font-size: 14px; }
@@ -381,53 +387,6 @@
   .wa-digitar div { flex: 1; background: var(--wa-balao-in); border-radius: 20px; padding: 9px 14px; color: var(--wa-hora); font-size: 14px; }
   .wa-digitar span { width: 40px; height: 40px; border-radius: 50%; background: #00A884; display: grid; place-items: center; color: #fff; }
 
-  /* Página pública */
-  .pub { background: var(--pub-bg); color: var(--pub-ink); min-height: 700px; }
-  .pub .status-bar { background: var(--pub-bg); color: var(--pub-ink); }
-  .pub-url { margin: 0 10px 6px; background: var(--pub-card); border: 1px solid var(--pub-linha); border-radius: 12px; padding: 7px 12px; font-size: 12px; color: var(--pub-ink2); display: flex; gap: 6px; align-items: center; overflow: hidden; white-space: nowrap; }
-  .pub-url span { overflow: hidden; text-overflow: ellipsis; }
-  .pub-marca { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 16px 6px; }
-  .pub-marca .logo { width: 52px; height: 52px; border-radius: 50%; background: var(--loja); color: #fff; display: grid; place-items: center; font: 700 18px Georgia, "Times New Roman", serif; }
-  .pub-marca .nome { font: 400 22px/1.1 Georgia, "Times New Roman", serif; letter-spacing: .01em; }
-  .pub-corpo { padding: 10px 16px 24px; }
-  .pub h3 { font: 400 24px/1.15 Georgia, "Times New Roman", serif; margin: 6px 0 2px; text-align: center; }
-  .pub .validade { text-align: center; color: var(--pub-ink2); font-size: 13px; }
-  .pub-video { position: relative; margin: 14px 0 6px; border-radius: 18px; overflow: hidden; aspect-ratio: 4/5; background: #EDE8E1; }
-  .pub-video canvas { width: 100%; height: 100%; display: block; }
-  .pub-video .mudo { position: absolute; right: 10px; top: 10px; width: 32px; height: 32px; border-radius: 50%; background: rgba(0,0,0,.45); color: #fff; display: grid; place-items: center; }
-  .pub-video .expirou { position: absolute; inset: auto 10px 10px 10px; background: rgba(28,25,23,.8); color: #fff; font-size: 12.5px; padding: 8px 10px; border-radius: 10px; }
-  .pub .legenda { text-align: center; font-size: 12.5px; color: var(--pub-ink2); margin-bottom: 14px; }
-  .pub-card { background: var(--pub-card); border: 1px solid var(--pub-linha); border-radius: 16px; padding: 14px; }
-  .pub-card + .pub-card { margin-top: 10px; }
-  .pub-item { display: flex; gap: 10px; padding: 8px 0; }
-  .pub-item + .pub-item { border-top: 1px solid var(--pub-linha); }
-  .pub-item .n { font-weight: 650; font-size: 14px; }
-  .pub-item .d { font-size: 12.5px; color: var(--pub-ink2); }
-  .pub-item .v { margin-left: auto; font-weight: 700; white-space: nowrap; font-size: 14px; }
-  .pub-total { display: flex; justify-content: space-between; font-weight: 800; font-size: 17px; padding-top: 10px; border-top: 1px solid var(--pub-linha); margin-top: 4px; }
-  .pix { background: var(--loja-soft); color: var(--loja-ink); border-radius: 12px; padding: 12px; }
-  .pix .grande { font-size: 22px; font-weight: 800; }
-  .pix .peq { font-size: 12.5px; font-weight: 600; }
-  .cond { display: flex; gap: 10px; font-size: 13.5px; padding: 9px 0; align-items: flex-start; }
-  .cond + .cond { border-top: 1px solid var(--pub-linha); }
-  .cond .ic { color: var(--loja); flex: none; margin-top: 1px; }
-  .cond b { font-weight: 700; }
-  .pub-acoes { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
-  .pbtn { border-radius: 14px; padding: 14px; font-weight: 750; font-size: 15px; text-align: center; border: 1.5px solid transparent; cursor: pointer; min-height: 50px; display: flex; gap: 8px; align-items: center; justify-content: center; background: transparent; color: var(--pub-ink); }
-  .pbtn.pri { background: var(--loja); color: #fff; }
-  :root[data-theme="dark"] .pbtn.pri { color: #042F2E; }
-  .pbtn.sec { border-color: var(--pub-linha); background: var(--pub-card); }
-  .pbtn.wa { border-color: #25D366; color: #128C4B; background: var(--pub-card); }
-  :root[data-theme="dark"] .pbtn.wa { color: #4ADE80; }
-  .pub .recusar { text-align: center; font-size: 13px; color: var(--pub-ink2); text-decoration: underline; margin-top: 4px; }
-  .pub-estado { border-radius: 14px; padding: 14px; font-size: 13.5px; margin-top: 16px; }
-  .pub-estado b { display: block; font-size: 15px; margin-bottom: 3px; }
-  .pub-estado.ok { background: var(--success-soft); color: var(--success-ink); }
-  .pub-estado.alerta { background: var(--warning-soft); color: var(--warning-ink); }
-  .pub-estado.info { background: var(--loja-soft); color: var(--loja-ink); }
-  .pub textarea { width: 100%; min-height: 96px; border-radius: 12px; border: 1.5px solid var(--pub-linha); background: var(--pub-card); color: var(--pub-ink); padding: 10px; font: inherit; font-size: 14px; margin-top: 8px; }
-  .pub-rodape { text-align: center; font-size: 11.5px; color: var(--pub-ink2); padding: 10px 0 18px; opacity: .8; }
-
   svg.i { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
   svg.i.p { width: 15px; height: 15px; }
   svg.i.g { width: 26px; height: 26px; }
@@ -477,10 +436,10 @@
     <button data-set="peca=com3d">Com 3D</button><button data-set="peca=sem3d">Sem 3D</button></div>
   <div class="grupo"><b>Gravação</b>
     <button data-set="grav=pronto">Pronto</button><button data-set="grav=gravando">Gravando</button><button data-set="grav=falhou">Falhou</button><button data-set="grav=semsuporte">Sem suporte</button></div>
-  <div class="grupo"><b>Aparelho da lojista</b>
-    <button data-set="envio=celular">Celular</button><button data-set="envio=computador">Computador</button><button data-set="envio=cloud">Futuro · Cloud API</button></div>
-  <div class="grupo"><b>Página</b>
-    <button data-set="pagina=aberta">Aberta</button><button data-set="pagina=aprovada">Aprovada</button><button data-set="pagina=ajuste">Pedir ajuste</button><button data-set="pagina=expirada">Expirada</button><button data-set="pagina=semvideo">Vídeo expirou</button></div>
+  <div class="grupo"><b>Navegador da lojista</b>
+    <button data-set="envio=celular">Compartilha arquivo</button><button data-set="envio=computador">Não compartilha</button><button data-set="envio=cloud">Futuro · Cloud API</button></div>
+  <div class="grupo"><b>Depois do envio</b>
+    <button data-set="pos=aberto">Em aberto</button><button data-set="pos=aprovado">Aprovado</button><button data-set="pos=fechado">Fechado</button><button data-set="pos=semvideo">Vídeo expirou</button></div>
   <div class="grupo"><b>Animação</b>
     <button data-set="anim=on">Ligada</button><button data-set="anim=off">Pausada</button></div>
   <div class="grupo"><b>Multi-CNPJ</b>
@@ -491,13 +450,13 @@
   <header class="intro">
     <span class="tag">Aura Studio · proposta · 28/09/2026</span>
     <h1>Orçamento em vídeo 3D pelo WhatsApp</h1>
-    <p>A lojista grava, dentro do orçamento, um vídeo de 7 segundos da peça girando com a arte e a cor do cliente e manda para o WhatsApp dele com os valores e as condições de pagamento. O cliente assiste, aprova ou pede ajuste numa página com a marca da loja.</p>
+    <p>A lojista grava, dentro do orçamento, um vídeo de 7 segundos da peça girando com a arte e a cor do cliente e manda o vídeo embutido na mensagem do WhatsApp dele, com os valores e as condições de pagamento por extenso. Sem link e sem página pública: a conversa segue no WhatsApp, e no painel o orçamento fica em aberto até a lojista Aprovar (vira pedido na Produção) ou Fechar.</p>
   </header>
 
   <!-- ═══════════ A · Onde começa ═══════════ -->
   <section class="secao-mock" id="sec-entrada">
     <h2>A · Onde a lojista começa</h2>
-    <p class="sub" data-quando="entrada=orcamento">No editor do orçamento (rascunho ou já enviado), ao lado de "Enviar ao cliente". Reenviar com vídeo mantém o mesmo link que o cliente já tem.</p>
+    <p class="sub" data-quando="entrada=orcamento">No editor do orçamento (rascunho ou já enviado), ao lado de "Enviar ao cliente". Reenviar grava de novo e manda o vídeo novo.</p>
     <p class="sub" data-quando="entrada=produto"><span class="q">Q1</span> Proposta: no menu da peça, em Catálogo. Cria um rascunho de orçamento com a peça e abre o mesmo modal. O cliente é escolhido no passo 4.</p>
 
     <div class="entrada-grid" data-quando="entrada=orcamento">
@@ -682,36 +641,27 @@
                   <p class="nota">Preço e quantidade são do orçamento. Para mudar, <a class="link">edite o orçamento</a>. Este modal não recalcula nada.</p>
                 </div>
                 <div>
-                  <p class="rotulo">Condições que vão na mensagem e na página</p>
+                  <p class="rotulo">Condições que vão na mensagem</p>
+                  <p class="nota" style="margin:0 0 8px">Só vai o que você preencher. Nada vem da configuração da loja, e vazio quer dizer sem desconto.</p>
                   <div class="card" style="padding:4px 14px">
-                    <div class="chave">
-                      <button class="sw" role="switch" data-toggle="pix" aria-label="Mostrar Pix"></button>
-                      <div><div class="t1">Pix com 5 % de desconto</div><div class="t2">Da Loja digital › Pagamento</div></div>
-                      <div class="val">R$ 506,16<small>no Pix</small></div>
-                    </div>
-                    <div class="chave">
-                      <button class="sw" role="switch" data-toggle="cartao" aria-label="Mostrar cartão"></button>
-                      <div><div class="t1">Cartão em até 6× sem juros</div><div class="t2">Teto que a loja declarou</div></div>
-                      <div class="val">6× R$ 88,80<small>no cartão</small></div>
-                    </div>
-                    <div class="chave">
-                      <button class="sw" role="switch" data-toggle="sinal" aria-label="Mostrar sinal"></button>
-                      <div><div class="t1">Sinal de 50 % para começar</div><div class="t2">Do orçamento</div></div>
-                      <div class="val">R$ 266,40<small>de sinal</small></div>
-                    </div>
-                    <div class="chave">
-                      <button class="sw" role="switch" data-toggle="prazo" aria-label="Mostrar prazo"></button>
-                      <div><div class="t1">Prazo de produção</div><div class="t2">Faixa de 10 a 49 un</div></div>
-                      <div class="val">5 dias úteis<small>após aprovar a arte</small></div>
-                    </div>
-                    <div class="chave">
-                      <button class="sw" role="switch" aria-checked="true" disabled aria-label="Validade sempre vai"></button>
-                      <div><div class="t1">Validade</div><div class="t2">Sempre vai</div></div>
-                      <div class="val">até 05/10<small>7 dias</small></div>
-                    </div>
+                    <div class="chave"><input class="num" data-cond-input="pix" value="5" inputmode="decimal" aria-label="Desconto no Pix (%)">
+                      <div><div class="t1">Desconto no Pix (%)</div><div class="t2">vazio = sem desconto</div></div>
+                      <div class="val" data-cond-val="pix">R$ 506,16<small>no Pix</small></div></div>
+                    <div class="chave"><input class="num" data-cond-input="cartao" value="6" inputmode="numeric" aria-label="Parcelas sem juros">
+                      <div><div class="t1">Parcelas sem juros no cartão</div><div class="t2">vazio = não menciona cartão</div></div>
+                      <div class="val" data-cond-val="cartao">6× R$ 88,80<small>no cartão</small></div></div>
+                    <div class="chave"><input class="num" data-cond-input="sinal" value="50" inputmode="decimal" aria-label="Sinal (%)">
+                      <div><div class="t1">Sinal para começar (%)</div><div class="t2">vem do orçamento</div></div>
+                      <div class="val" data-cond-val="sinal">R$ 266,40<small>de sinal</small></div></div>
+                    <div class="chave"><input class="num" data-cond-input="prazo" value="5" inputmode="numeric" aria-label="Prazo em dias úteis">
+                      <div><div class="t1">Prazo de produção (dias úteis)</div><div class="t2">vazio = não menciona prazo</div></div>
+                      <div class="val" data-cond-val="prazo">5 dias úteis<small>após aprovar a arte</small></div></div>
+                    <div class="chave"><input class="num" value="7" inputmode="numeric" aria-label="Validade em dias">
+                      <div><div class="t1">Validade (dias)</div><div class="t2">sempre vai</div></div>
+                      <div class="val">até 05/10<small>7 dias</small></div></div>
                   </div>
                   <div class="aviso info" style="margin-top:10px"><svg class="i p"><use href="#i-lock"/></svg>
-                    <div>Os valores são calculados pelo servidor, com as mesmas regras da vitrine, e ficam <b style="display:inline">congelados no envio</b>. Se a loja mudar o desconto do Pix depois, este orçamento continua valendo o que foi prometido.</div></div>
+                    <div>Fica gravado no orçamento e vai para as notas do pedido quando você <b style="display:inline">Aprovar</b>. O Pix vale sobre o total do orçamento.</div></div>
                 </div>
               </div>
             </div>
@@ -733,21 +683,21 @@
                   </div>
 
                   <div class="meta-video" data-quando="grav=pronto">
-                    <span>MP4 · H.264 · 2,4 MB</span><span class="ok" id="upload-txt">✓ Salvo na nuvem</span>
+                    <span>MP4 · H.264 · 1,1 MB</span><span class="ok" id="upload-txt">✓ Guardado por 30 dias</span>
                     <button class="btn btn-sec"><svg class="i p"><use href="#i-refresh"/></svg>Gravar de novo</button>
                   </div>
                   <div class="meta-video" data-quando="grav=gravando"><span>Não feche esta janela. Leva uns 8 segundos.</span></div>
                   <div class="aviso erro" style="margin-top:10px" data-quando="grav=falhou"><svg class="i"><use href="#i-alert"/></svg>
-                    <div><b>Não deu para gravar o vídeo</b>O navegador parou a gravação no meio. Tente de novo. Se repetir, siga com a foto, que o cliente vê a peça na página do orçamento.
+                    <div><b>Não deu para gravar o vídeo</b>O navegador parou a gravação no meio. Tente de novo. Se repetir, siga com a foto da peça.
                       <div class="acoes-aviso"><button class="btn btn-sec" data-set="grav=gravando"><svg class="i p"><use href="#i-refresh"/></svg>Tentar de novo</button><button class="btn btn-sec" data-set="grav=semsuporte"><svg class="i p"><use href="#i-img"/></svg>Seguir com foto</button></div></div></div>
                   <div class="aviso alerta" style="margin-top:10px" data-quando="grav=semsuporte"><svg class="i"><use href="#i-alert"/></svg>
-                    <div><b>Este navegador não grava vídeo</b>Vamos mandar a foto da peça e o link. O cliente vê tudo na página do orçamento. No celular, o Chrome ou o Safari atualizados gravam o vídeo.</div></div>
+                    <div><b>Este navegador não grava vídeo</b>Vai a foto da peça com a mensagem. Chrome, Edge ou Safari atualizados gravam o vídeo.</div></div>
                 </div>
                 <div>
                   <p class="rotulo">Mensagem</p>
                   <textarea class="msg" id="msg" spellcheck="false" aria-label="Mensagem para o cliente"></textarea>
                   <div class="msg-rodape"><span id="msg-conta"></span><a class="link" id="msg-restaurar">Restaurar texto original</a></div>
-                  <p class="nota">*asteriscos* viram negrito no WhatsApp. O link é sempre incluído, porque é por ele que o cliente aprova.</p>
+                  <p class="nota">*asteriscos* viram negrito no WhatsApp. Sem link: valores e condições vão por extenso.</p>
                 </div>
               </div>
             </div>
@@ -763,16 +713,14 @@
               <p class="rotulo">Como mandar</p>
               <div id="canais"></div>
 
-              <div class="aviso info" style="margin-top:12px" data-quando="envio=celular canal=compartilhar">
+              <div class="aviso info" style="margin-top:12px" data-quando="envio=celular">
                 <svg class="i p"><use href="#i-msg"/></svg>
-                <div>No WhatsApp, escolha a conversa da <b style="display:inline">Mariana Costa · (11) 98765-4321</b>. A mensagem já vai copiada: se ela não aparecer junto do vídeo (acontece em alguns iPhones), é só colar.</div>
+                <div>Vale no celular e no computador (Chrome ou Edge no Windows, Safari ou Chrome no Mac, onde o WhatsApp Desktop aparece na lista). Escolha a conversa da <b style="display:inline">Mariana Costa · (11) 98765-4321</b>. A mensagem também fica copiada: se ela não aparecer junto do vídeo (acontece em alguns iPhones), é só colar.</div>
               </div>
-              <div class="aviso info" style="margin-top:12px" data-quando="canal=baixar|copiar">
+              <div class="aviso info" style="margin-top:12px" data-quando="envio=computador">
                 <svg class="i p"><use href="#i-msg"/></svg>
-                <div>Depois de mandar, toque em <b style="display:inline">Já mandei</b> para o orçamento ficar como enviado.</div>
+                <div>Este navegador não compartilha arquivo. 1) Baixe o vídeo (a mensagem fica copiada). 2) Abra a conversa: o texto já vai escrito. 3) Arraste o vídeo para a conversa e envie. Depois toque em <b style="display:inline">Já mandei</b>.</div>
               </div>
-
-              <div class="link-orc"><svg class="i p"><use href="#i-ext"/></svg><code>loja.getaura.com.br/atelie-lume/orcamento/k7Qm2xP9aR</code><button>Copiar</button></div>
             </div>
 
             <!-- ── Enviado ── -->
@@ -784,10 +732,10 @@
                 <div class="timeline">
                   <div class="tl"><i class="on"></i><span>Enviado</span><span id="suc-hora">hoje, 14:32</span></div>
                   <div class="tl" data-quando="envio=cloud"><i></i><span>Entregue · lido</span><span>aguardando</span></div>
-                  <div class="tl"><i></i><span>Cliente abriu</span><span>ainda não abriu</span></div>
-                  <div class="tl"><i></i><span>Resposta</span><span>aprovar ou pedir ajuste</span></div>
+                  <div class="tl"><i></i><span>Vídeo guardado</span><span>até 28/10 (30 dias)</span></div>
+                  <div class="tl"><i></i><span>Próximo passo</span><span>Aprovar ou Fechar no orçamento</span></div>
                 </div>
-                <p class="nota" style="margin:12px auto 0">O sino avisa quando a Mariana aprovar ou pedir ajuste.</p>
+                <p class="nota" style="margin:12px auto 0">A conversa segue no WhatsApp. Quando a Mariana topar, toque em Aprovar: o orçamento vira pedido na Produção.</p>
               </div>
             </div>
           </div>
@@ -802,7 +750,6 @@
           <div class="m-pe" data-quando="passo=5">
             <div class="info"></div>
             <div class="acoes">
-              <button class="btn btn-sec">Ver página do orçamento</button>
               <button class="btn btn-pri" data-set="passo=1">Voltar ao orçamento</button>
             </div>
           </div>
@@ -817,7 +764,7 @@
         </div>
       </div>
     </div>
-    <p class="nota"><b>Quando conta como enviado:</b> no compartilhamento, quando o sistema confirma (se a lojista cancelar, volta ao passo 4 sem marcar nada). No "abrir conversa", no clique. Em "baixar" e "copiar", quando ela toca em "Já mandei".</p>
+    <p class="nota"><b>Quando conta como enviado:</b> no compartilhamento, quando o sistema confirma (se a lojista fechar a folha, volta ao passo 4 sem marcar nada). Sem compartilhamento, quando ela toca em "Já mandei".</p>
   </section>
 
   <!-- ═══════════ C e D · celulares ═══════════ -->
@@ -836,21 +783,13 @@
           <div class="wa-dia">HOJE</div>
           <div class="wa-cripto">🔒 As mensagens são protegidas com a criptografia de ponta a ponta.</div>
 
-          <!-- celular: vídeo compartilhado com legenda -->
-          <div class="balao midia" data-quando="envio=celular">
+          <!-- vídeo embutido com a mensagem como legenda (compartilhado ou arrastado) -->
+          <div class="balao midia" data-quando="envio=celular|computador">
             <div class="wa-video" data-quando="grav=pronto|gravando|falhou" id="wa-video"><canvas data-caneca="wa" width="400" height="500"></canvas>
               <div class="play"><svg class="i g"><use href="#i-play"/></svg></div>
               <div class="dur"><svg class="i p"><use href="#i-video"/></svg>0:07</div></div>
             <div class="wa-video" data-quando="grav=semsuporte" style="cursor:default"><canvas data-caneca="wa-foto" width="400" height="500"></canvas></div>
             <div class="txt" id="wa-txt-celular"></div>
-            <div class="hora">14:32</div>
-          </div>
-
-          <!-- computador: texto com link e prévia -->
-          <div class="balao midia" data-quando="envio=computador">
-            <div class="wa-previa"><div class="img"><canvas data-caneca="og" width="540" height="283"></canvas></div>
-              <div class="tx"><div class="t1">Orçamento · Ateliê Lume</div><div class="t2">Toque para ver a peça em vídeo</div><div class="t3">loja.getaura.com.br</div></div></div>
-            <div class="txt" id="wa-txt-computador"></div>
             <div class="hora">14:32</div>
           </div>
 
@@ -863,73 +802,63 @@
             <div class="wa-rodape-tpl">Ateliê Lume · orçamento pela Aura</div>
             <div class="hora">14:32</div>
           </div>
-          <div class="wa-botao-tpl" data-quando="envio=cloud"><svg class="i p"><use href="#i-ext"/></svg>Ver e aprovar</div>
         </div>
         <div class="wa-digitar"><div>Mensagem</div><span><svg class="i"><use href="#i-mic"/></svg></span></div>
       </div></div>
-      <p class="nota" data-quando="envio=computador">A prévia do link (imagem, título e domínio) vem das metatags que a casca da loja serve para <code>/&lt;slug&gt;/orcamento/&lt;código&gt;</code>. Nelas não vai nome, telefone nem valor.</p>
-      <p class="nota" data-quando="envio=cloud"><b>Futuro:</b> template aprovado pela Meta com cabeçalho de vídeo (o MP4 do R2), corpo com parâmetros e botão de URL dinâmica. Sai do número da loja conectado no Aura Atende, e dá entregue e lido na linha do tempo.</p>
+      <p class="nota" data-quando="envio=computador">Sem compartilhamento, a lojista arrasta o vídeo baixado para a conversa aberta pelo wa.me: o cliente recebe igual.</p>
+      <p class="nota" data-quando="envio=cloud"><b>Futuro:</b> template aprovado pela Meta com cabeçalho de vídeo e corpo com parâmetros, sem botão de link (não há página pública). Sai do número da loja conectado no Aura Atende, e dá entregue e lido.</p>
       <p class="nota" data-quando="envio=celular">Tocar no vídeo alterna a reprodução (simulada).</p>
     </section>
 
-    <section class="cel-col" id="sec-pagina">
-      <h2>D · A página do orçamento (celular)</h2>
-      <p class="sub">Com a marca da loja, no endereço dela. Mostra só o primeiro nome do cliente, sem telefone, com <code>noindex</code>.</p>
-      <div class="celular"><div class="tela pub">
-        <div class="status-bar"><span>14:34</span><span>●●● 5G</span></div>
-        <div class="pub-url"><svg class="i p"><use href="#i-lock"/></svg><span>loja.getaura.com.br/atelie-lume/orcamento/k7Qm2xP9aR</span></div>
-        <div class="pub-marca"><div class="logo">AL</div><div class="nome">Ateliê Lume</div></div>
-        <div class="pub-corpo">
-          <h3>Orçamento para Mariana</h3>
-          <div class="validade" data-quando="pagina=aberta|aprovada|ajuste|semvideo">Vale até 05/10</div>
-          <div class="validade" data-quando="pagina=expirada">Venceu em 05/10</div>
+    <section class="cel-col" id="sec-depois">
+      <h2>D · O orçamento no painel depois do envio</h2>
+      <p class="sub">Não há página do orçamento para o cliente. O orçamento fica em aberto, e a lojista decide aqui.</p>
+      <div class="editor">
+        <div class="crumb">Vendas › Orçamentos › <b>Mariana Costa</b></div>
+        <div class="ed-head">
+          <h3>Mariana Costa</h3>
+          <span class="pill pill-sent" data-quando="pos=aberto|semvideo">Enviado</span>
+          <span class="pill" style="background:#EDE9FE;color:#5B21B6" data-quando="pos=aprovado">Convertido</span>
+          <span class="pill" style="background:#E2E8F0;color:#475569" data-quando="pos=fechado">Encerrado</span>
+        </div>
 
-          <div class="pub-video">
-            <canvas data-caneca="pub" width="480" height="600"></canvas>
-            <div class="mudo" data-quando="pagina=aberta|aprovada|ajuste|expirada"><svg class="i p"><use href="#i-mute"/></svg></div>
-            <div class="expirou" data-quando="pagina=semvideo">O vídeo deste orçamento não está mais disponível. A imagem é o primeiro quadro dele.</div>
-          </div>
-          <div class="legenda">Sua caneca, do jeito que vai ficar</div>
+        <div class="aviso ok" data-quando="pos=aprovado" style="margin-bottom:12px"><svg class="i"><use href="#i-check"/></svg>
+          <div><b>Este orçamento virou pedido</b>Pedido na Produção (arte pendente) com os itens, a arte, o total de R$ 532,80, o marco de sinal de R$ 266,40 e as condições nas notas.
+            <div class="acoes-aviso"><button class="btn btn-sec">Ver pedido</button></div></div></div>
+        <div class="aviso" data-quando="pos=fechado" style="margin-bottom:12px;background:var(--bg-soft);color:var(--ink2)"><svg class="i"><use href="#i-x"/></svg>
+          <div><b>Orçamento fechado sem venda</b>Sai dos orçamentos em aberto. O vídeo segue até expirar.</div></div>
 
-          <div class="pub-card">
-            <div class="pub-item"><div><div class="n">12× Caneca de porcelana 325 ml</div><div class="d">Foto enviada · "Mari &amp; Léo · 12.10" · <span id="pub-cor">Branca</span></div></div><div class="v">R$ 478,80</div></div>
-            <div class="pub-item"><div><div class="n">12× Embalagem presente kraft</div><div class="d">Com laço</div></div><div class="v">R$ 54,00</div></div>
-            <div class="pub-total"><span>Total</span><span>R$ 532,80</span></div>
-          </div>
-
-          <div class="pub-card" id="pub-condicoes">
-            <div class="pix" data-cond="pix"><div class="peq">No Pix, com 5 % de desconto</div><div class="grande">R$ 506,16</div></div>
-            <div class="cond" data-cond="cartao"><svg class="i ic"><use href="#i-card"/></svg><div>ou em até <b>6× de R$ 88,80</b> sem juros no cartão</div></div>
-            <div class="cond" data-cond="sinal"><svg class="i ic"><use href="#i-coin"/></svg><div>Sinal de <b>50 % (R$ 266,40)</b> para começar a produção</div></div>
-            <div class="cond" data-cond="prazo"><svg class="i ic"><use href="#i-clock"/></svg><div>Fica pronto em <b>5 dias úteis</b> depois que você aprovar a arte</div></div>
-            <div class="cond"><svg class="i ic"><use href="#i-cal"/></svg><div>Valores válidos até <b>05/10</b></div></div>
-          </div>
-
-          <div class="pub-acoes" data-quando="pagina=aberta|semvideo">
-            <button class="pbtn pri" data-set="pagina=aprovada"><svg class="i"><use href="#i-check"/></svg>Aprovar orçamento</button>
-            <button class="pbtn sec" data-set="pagina=ajuste"><svg class="i"><use href="#i-edit"/></svg>Pedir ajuste <span class="q">Q7</span></button>
-            <button class="pbtn wa"><svg class="i"><use href="#i-wa"/></svg>Falar com a loja</button>
-            <div class="recusar">Não quero seguir</div>
-          </div>
-
-          <div data-quando="pagina=ajuste">
-            <div class="pub-estado info"><b>O que você quer mudar?</b>A loja recebe seu pedido e te manda um orçamento novo.
-              <textarea aria-label="O que você quer mudar">Dá para trocar o texto para "Mari &amp; Léo · 12.10.2026" e a letra ficar um pouco maior?</textarea></div>
-            <div class="pub-acoes" style="margin-top:10px">
-              <button class="pbtn pri"><svg class="i"><use href="#i-send"/></svg>Enviar pedido de ajuste</button>
-              <button class="pbtn sec" data-set="pagina=aberta">Voltar</button>
+        <div class="card" data-quando="pos=aberto|semvideo|fechado">
+          <div class="rot">Orçamento em vídeo</div>
+          <div class="campo"><span>Enviado</span><span>hoje, 14:32 · compartilhamento do WhatsApp</span></div>
+          <div data-quando="pos=aberto|fechado">
+            <div class="campo"><span>Vídeo guardado até</span><span>28/10</span></div>
+            <div class="ed-acoes" style="justify-content:flex-start;margin-top:10px">
+              <button class="btn btn-sec"><svg class="i p"><use href="#i-down"/></svg>Baixar vídeo</button>
+              <button class="btn btn-sec"><svg class="i p"><use href="#i-clock"/></svg>Manter por mais 30 dias</button>
             </div>
           </div>
-
-          <div class="pub-estado ok" data-quando="pagina=aprovada"><b>Orçamento aprovado!</b>A Ateliê Lume já foi avisada e vai te chamar para combinar o sinal e a arte final.</div>
-          <div class="pub-acoes" data-quando="pagina=aprovada"><button class="pbtn wa"><svg class="i"><use href="#i-wa"/></svg>Falar com a loja</button></div>
-
-          <div class="pub-estado alerta" data-quando="pagina=expirada"><b>Este orçamento venceu</b>Os valores valiam até 05/10. Fale com a loja para receber um novo.</div>
-          <div class="pub-acoes" data-quando="pagina=expirada"><button class="pbtn wa"><svg class="i"><use href="#i-wa"/></svg>Falar com a loja</button></div>
-
-          <div class="pub-rodape">feito com Aura Studio</div>
+          <p class="nota" data-quando="pos=semvideo" style="margin-top:8px">O vídeo não está mais guardado (passou dos 30 dias). Para mandar de novo, grave outro.</p>
         </div>
-      </div></div>
+
+        <div class="card" data-quando="pos=aprovado" style="margin-top:0">
+          <div class="rot">Notas do pedido</div>
+          <p class="nota" style="margin:0;white-space:pre-line">Condições combinadas no orçamento:
+• Pix: R$ 506,16 (5% de desconto)
+• Cartão: até 6x de R$ 88,80 sem juros
+• Sinal: R$ 266,40 (50%)
+• Prazo: 5 dias úteis depois da aprovação da arte</p>
+        </div>
+
+        <div class="ed-acoes" data-quando="pos=aberto|semvideo">
+          <button class="btn btn-acc"><svg class="i p"><use href="#i-video"/></svg>Reenviar em vídeo 3D</button>
+        </div>
+        <div class="ed-acoes" data-quando="pos=aberto|semvideo" style="margin-top:8px">
+          <button class="btn" style="background:var(--success);color:#fff;flex:1;justify-content:center" data-set="pos=aprovado"><svg class="i p"><use href="#i-check"/></svg>Aprovar</button>
+          <button class="btn btn-sec" style="flex:1;justify-content:center" data-set="pos=fechado"><svg class="i p"><use href="#i-x"/></svg>Fechar</button>
+        </div>
+        <p class="nota" data-quando="pos=aberto|semvideo">Em aberto: quando a cliente topar pelo WhatsApp, Aprovar. Se não seguir, Fechar. As duas pedem confirmação.</p>
+      </div>
     </section>
   </div>
 </main>
@@ -941,7 +870,7 @@
   // ── Estado do mockup ──────────────────────────────────────
   const S = {
     tema: "claro", entrada: "orcamento", passo: "1", peca: "com3d", grav: "pronto",
-    envio: "celular", pagina: "aberta", consol: "nao", saida: "nao", vista: "frente", anim: "on",
+    envio: "celular", pos: "aberto", consol: "nao", saida: "nao", vista: "frente", anim: "on",
     cor: "#F7F5F0", canal: "compartilhar",
     tog: { logo: true, pix: true, cartao: true, sinal: true, prazo: true },
     msgEditada: null,
@@ -949,21 +878,14 @@
   const NOMES_COR = { "#F7F5F0": "Branca", "#1F2937": "Preta", "#F9D5DC": "Rosa-bebê" };
   const CANAIS = {
     celular: [
-      { id: "compartilhar", ic: "i-share", wa: true, t1: "Compartilhar no WhatsApp", tag: "RECOMENDADO", t2: "Vídeo e mensagem juntos. Você escolhe a conversa da Mariana.", botao: "Compartilhar no WhatsApp" },
-      { id: "wame", ic: "i-wa", t1: "Só o texto e o link, direto na conversa da Mariana", t2: "Abre a conversa certa. O vídeo toca na página do orçamento.", botao: "Abrir conversa" },
-      { id: "baixar", ic: "i-down", t1: "Baixar o vídeo", t2: "Para mandar por outro app. A mensagem fica copiada.", botao: "Baixar vídeo" },
-      { id: "copiar", ic: "i-copy", t1: "Copiar a mensagem", t2: "Texto com o link, para colar onde quiser.", botao: "Copiar mensagem" },
+      { id: "compartilhar", ic: "i-share", wa: true, t1: "Compartilhar no WhatsApp", tag: "RECOMENDADO", t2: "O vídeo e a mensagem vão juntos, embutidos na conversa. Você escolhe a conversa da Mariana na lista.", botao: "Compartilhar no WhatsApp" },
     ],
     computador: [
-      { id: "wame", ic: "i-wa", wa: true, t1: "Abrir conversa com a Mariana", tag: "RECOMENDADO", t2: "WhatsApp Web ou app, com a mensagem e o link. O vídeo toca na página do orçamento, e a prévia do link já mostra a peça.", botao: "Abrir conversa" },
-      { id: "baixar", ic: "i-down", t1: "Baixar o vídeo", t2: "Para arrastar na conversa do WhatsApp Web, se quiser o vídeo dentro do chat.", botao: "Baixar vídeo" },
-      { id: "copiar", ic: "i-copy", t1: "Copiar a mensagem", t2: "Texto com o link.", botao: "Copiar mensagem" },
-      { id: "compartilhar", ic: "i-share", t1: "Compartilhar…", t2: "Só aparece quando o computador oferece compartilhar arquivo (Windows com Chrome ou Edge).", botao: "Compartilhar" },
+      { id: "baixar", ic: "i-down", wa: true, t1: "Baixar, copiar e abrir a conversa", t2: "Baixa o vídeo, copia a mensagem e abre a conversa da Mariana no wa.me com o texto pronto. Você arrasta o vídeo para a conversa.", botao: "Já mandei" },
     ],
     cloud: [
-      { id: "cloud", ic: "i-send", wa: true, t1: "Enviar pela Aura", tag: "FUTURO", fut: true, t2: "Sai do WhatsApp da loja, (11) 4002-8922, direto para a Mariana: vídeo, mensagem e botão \"Ver e aprovar\". Mostra entregue e lido.", botao: "Enviar pela Aura" },
-      { id: "compartilhar", ic: "i-share", t1: "Compartilhar no WhatsApp", t2: "Pelo celular, como na fase 1.", botao: "Compartilhar no WhatsApp" },
-      { id: "wame", ic: "i-wa", t1: "Só o texto e o link", t2: "Abre a conversa da Mariana.", botao: "Abrir conversa" },
+      { id: "cloud", ic: "i-send", wa: true, t1: "Enviar pela Aura", tag: "FUTURO", fut: true, t2: "Sai do WhatsApp da loja, (11) 4002-8922, direto para a Mariana: vídeo e mensagem. Mostra entregue e lido.", botao: "Enviar pela Aura" },
+      { id: "compartilhar", ic: "i-share", t1: "Compartilhar no WhatsApp", t2: "Como hoje.", botao: "Compartilhar no WhatsApp" },
     ],
   };
   const SUBS = {
@@ -973,7 +895,6 @@
     "4": "Mande para o WhatsApp da Mariana",
     "5": "Pronto",
   };
-  const LINK = "loja.getaura.com.br/atelie-lume/orcamento/k7Qm2xP9aR";
 
   // ── Dinheiro: regra canônica em centavos ──────────────────
   const TOTAL = 47880 + 5400; // 53280
@@ -984,17 +905,14 @@
   const sinal = Math.round(TOTAL * 50 / 100);
   const brl = (c) => "R$ " + (c / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  function mensagem(modo) {
+  function mensagem() {
     const fotoOnly = S.grav === "semsuporte" || S.peca === "sem3d";
-    let intro;
-    if (modo === "computador") intro = fotoOnly ? "Separei uma imagem da sua caneca. No link ela aparece junto com os valores." : "Fiz um vídeo da sua caneca girando, para você ver como ela fica de todos os lados. Ele está no link, junto com os valores.";
-    else intro = fotoOnly ? "Segue uma imagem da sua caneca, do jeito que vai ficar." : "Fiz um vídeo da sua caneca para você ver como ela fica de todos os lados.";
     const L = [];
     L.push("Oi, Mariana! Aqui é da Ateliê Lume.");
-    L.push(intro);
+    L.push(fotoOnly ? "Segue uma imagem da peça, do jeito que vai ficar." : "Fiz um vídeo da peça para você ver como ela fica de todos os lados.");
     L.push("");
-    L.push("*Caneca de porcelana 325 ml* · 12 unidades");
-    L.push("Embalagem presente kraft · 12 unidades");
+    L.push("*Caneca de porcelana 325 ml* · 12 unidades · R$ 478,80");
+    L.push("*Embalagem presente kraft* · 12 unidades · R$ 54,00");
     L.push("*Total: " + brl(TOTAL) + "*");
     if (S.tog.pix) L.push("• No Pix: *" + brl(noPix) + "* (" + PIX_PCT + "% de desconto)");
     if (S.tog.cartao) L.push("• No cartão: até " + parc + "x de " + brl(valorParc) + " sem juros");
@@ -1002,12 +920,11 @@
     if (S.tog.prazo) L.push("• Prazo: 5 dias úteis depois que você aprovar a arte");
     L.push("Vale até 05/10.");
     L.push("");
-    L.push("Para aprovar ou pedir ajuste:");
-    L.push(LINK);
+    L.push("Posso seguir com o pedido?");
     return L.join("\n");
   }
-  function textoAtual(modo) {
-    return S.msgEditada != null ? S.msgEditada : mensagem(modo);
+  function textoAtual() {
+    return S.msgEditada != null ? S.msgEditada : mensagem();
   }
   function formatarWa(txt) {
     const esc = txt.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -1070,12 +987,12 @@
     if (n === 3) {
       if (S.grav === "gravando") { pode = false; infoTxt = "Gravando…"; }
       else if (S.grav === "falhou") { pode = false; infoTxt = "Tente de novo ou siga com a foto"; }
-      else if (S.grav === "semsuporte") infoTxt = "Vai com foto e link";
-      else infoTxt = "Vídeo pronto · 7 s · salvo na nuvem";
+      else if (S.grav === "semsuporte") infoTxt = "Vai a foto da peça";
+      else infoTxt = "Vídeo pronto · 7 s · guardado por 30 dias";
     }
     if (n === 4) {
       const c = CANAIS[S.envio].find((x) => x.id === S.canal);
-      rot = c.botao; cls = "btn " + (c.wa || c.id === "compartilhar" || c.id === "wame" ? "btn-wa" : "btn-pri");
+      rot = c.botao; cls = "btn btn-wa";
       infoTxt = "Para Mariana · (11) 98765-4321";
       if (S.grav === "semsuporte" && S.canal === "compartilhar") infoTxt = "Compartilha a foto e o texto";
     }
@@ -1086,31 +1003,27 @@
     info.textContent = infoTxt;
 
     // Sucesso
-    const como = { compartilhar: "por compartilhamento no WhatsApp, com o vídeo", wame: "pela conversa do WhatsApp, com o link", baixar: "com o vídeo baixado", copiar: "com a mensagem copiada", cloud: "pela Aura, do WhatsApp da loja" }[S.canal] || "";
-    document.getElementById("suc-como").textContent = "Hoje às 14:32, " + como + ". O link é o mesmo se você reenviar.";
+    const como = { compartilhar: "pelo compartilhamento do WhatsApp, com o vídeo", baixar: "com o vídeo arrastado para a conversa", cloud: "pela Aura, do WhatsApp da loja" }[S.canal] || "";
+    document.getElementById("suc-como").textContent = "Hoje às 14:32, " + como + ". O orçamento fica em aberto.";
 
     // Mensagem
     const ta = document.getElementById("msg");
-    const modoMsg = S.envio === "computador" ? "computador" : "celular";
-    if (document.activeElement !== ta) ta.value = textoAtual(modoMsg);
+    if (document.activeElement !== ta) ta.value = textoAtual();
     document.getElementById("msg-conta").textContent = ta.value.length + " caracteres";
     document.getElementById("msg-restaurar").hidden = S.msgEditada == null;
-    document.getElementById("wa-txt-celular").innerHTML = formatarWa(textoAtual("celular"));
-    document.getElementById("wa-txt-computador").innerHTML = formatarWa(textoAtual("computador"));
+    document.getElementById("wa-txt-celular").innerHTML = formatarWa(textoAtual());
     document.getElementById("wa-txt-cloud").innerHTML = formatarWa(
       "Oi, Mariana! Aqui é da Ateliê Lume.\nSegue o vídeo da sua caneca.\n\n*Total: " + brl(TOTAL) + "*" +
       (S.tog.pix ? "\nNo Pix: *" + brl(noPix) + "*" : "") +
       (S.tog.cartao ? "\nOu até " + parc + "x de " + brl(valorParc) + " sem juros" : "") +
       "\nVale até 05/10.");
     document.getElementById("wa-sub").textContent = {
-      celular: "Enviado do celular da lojista: o vídeo chega como vídeo, com a mensagem como legenda.",
-      computador: "Enviado do computador: mensagem com o link. A prévia mostra a peça, e o vídeo toca na página.",
-      cloud: "Futuro, pela Cloud API: template com vídeo, texto e botão, sem a lojista escolher a conversa.",
+      celular: "O vídeo chega embutido na conversa, com os valores e as condições como legenda. Sem link.",
+      computador: "Igual: o vídeo arrastado para a conversa chega embutido, com a mensagem.",
+      cloud: "Futuro, pela Cloud API: template com vídeo e texto, sem a lojista escolher a conversa.",
     }[S.envio];
 
-    // Página pública: condições conforme as chaves
-    document.querySelectorAll("#pub-condicoes [data-cond]").forEach((el) => { el.hidden = !S.tog[el.dataset.cond]; });
-    document.getElementById("pub-cor").textContent = NOMES_COR[S.cor] || "";
+    document.querySelectorAll("[data-cond-val]").forEach((el) => { el.style.visibility = S.tog[el.dataset.condVal] ? "visible" : "hidden"; });
     marcarTexturaSuja();
     if (typeof animar === "function" && pronto) animar();
   }
@@ -1136,6 +1049,12 @@
     S.passo = String(Math.min(5, n + 1));
     render();
   });
+  // Condições: campo vazio = condição fora da mensagem.
+  document.querySelectorAll("[data-cond-input]").forEach((inp) => inp.addEventListener("input", () => {
+    S.tog[inp.dataset.condInput] = inp.value.trim() !== "";
+    S.msgEditada = null;
+    render();
+  }));
   document.getElementById("msg").addEventListener("input", (e) => { S.msgEditada = e.target.value; render(); });
   document.getElementById("msg-restaurar").addEventListener("click", () => { S.msgEditada = null; render(); });
   ["wa-video", "wa-video2"].forEach((id) => document.getElementById(id).addEventListener("click", (e) => e.currentTarget.classList.toggle("tocando")));
@@ -1384,11 +1303,6 @@
         const tocando = cv.parentElement.classList.contains("tocando");
         return desenharCaneca(cv, tocando ? rotAlvo + giro(t) : rotAlvo, { logo: true });
       }
-      if (tipo === "og") return desenharCaneca(cv, 0, { zoom: 0.95, dy: 30 });
-      if (tipo === "pub") {
-        if (S.pagina === "semvideo") return desenharCaneca(cv, 0, { logo: true });
-        return desenharCaneca(cv, giro(t), { logo: true });
-      }
     });
   }
 
@@ -1402,7 +1316,7 @@
   // ?so=sec-modal mostra só uma seção (útil para print e para revisar um trecho).
   if (q.get("so")) {
     const so = q.get("so");
-    document.querySelectorAll(".estados, .intro, #sec-entrada, #sec-modal, #sec-whats, #sec-pagina").forEach((el) => { if (el.id !== so) el.style.display = "none"; });
+    document.querySelectorAll(".estados, .intro, #sec-entrada, #sec-modal, #sec-whats, #sec-depois").forEach((el) => { if (el.id !== so) el.style.display = "none"; });
     document.querySelector(".celulares").style.marginTop = "0";
     document.getElementById(so).style.marginTop = "0";
   }
