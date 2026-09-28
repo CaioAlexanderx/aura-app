@@ -172,7 +172,7 @@ function pickArea(spec: VisualTemplateSpec, areaId: string): VisualArea | null {
 }
 
 /**
- * A arte (foto ou emblema + texto) na área escolhida. É o mesmo desenho
+ * A arte (foto + texto, ou só o texto) na área escolhida. É o mesmo desenho
  * para a caneca e para o GLB: o que muda entre eles é o fundo, pintado
  * antes por quem chama.
  */
@@ -201,22 +201,11 @@ async function paintArt(
       const dw = img.width * r, dh = img.height * r;
       ctx.drawImage(img, cx - dw / 2, ay + (imgBoxH - dh) / 2, dw, dh);
     }
-  } else if (text) {
-    // Emblema simples acima do texto (mesma identidade do 2D)
-    ctx.strokeStyle = o.artColor;
-    ctx.lineWidth = Math.max(ah * 0.02, 4);
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    const ey = ay + imgBoxH * 0.45, es = Math.min(aw, ah) * 0.16;
-    ctx.beginPath(); ctx.arc(cx, ey + es * 0.35, es, 3.5, 5.9); ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx - es * 0.7, ey + es * 0.55);
-    ctx.lineTo(cx - es * 0.15, ey - es * 0.2);
-    ctx.lineTo(cx + es * 0.12, ey + es * 0.25);
-    ctx.lineTo(cx + es * 0.45, ey - es * 0.3);
-    ctx.lineTo(cx + es * 0.85, ey + es * 0.45);
-    ctx.stroke();
   }
+  // QA 28/09 (item 10/CL-32): sem imagem da cliente, o motor desenhava um
+  // "emblema" (sol e montanha, na cor da arte) acima do texto. Na peça ele
+  // parecia parte da arte que seria impressa — e não é. Sem imagem, só o
+  // texto, no meio da área (o mesmo que o 2D faz).
 
   if (text) {
     ctx.fillStyle = o.artColor;
@@ -227,7 +216,10 @@ async function paintArt(
       fontPx -= 4;
       ctx.font = "600 " + Math.round(fontPx) + "px " + o.font;
     }
-    ctx.fillText(text, cx, ay + imgBoxH + (ah - imgBoxH) * 0.6 + fontPx * 0.3);
+    const ty = imageUrl
+      ? ay + imgBoxH + (ah - imgBoxH) * 0.6 + fontPx * 0.3
+      : ay + ah / 2 + fontPx * 0.35;
+    ctx.fillText(text, cx, ty);
   }
 }
 

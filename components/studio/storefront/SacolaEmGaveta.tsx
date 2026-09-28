@@ -38,6 +38,7 @@ import { resumoDaLinha } from "./resumoDaPeca";
 import { linkDoOrcamentoDoCarrinho } from "./pedidoPeloWhatsApp";
 import { BotaoOrcamentoDaSacola } from "./SacolaFechada";
 import { MiniaturaDaLinha } from "./ui/MiniaturaDaLinha";
+import { CorDaLinha } from "./ui/CorDaLinha";
 import { useSelecionarAoFocar } from "./ui/selecaoAoFocar";
 import { Botao, Nota, BORDA_DE_CAMPO, FUNDO_APAGADO } from "./ui/Formulario";
 import { diasUteis } from "./formularioDoCheckout";
@@ -187,7 +188,7 @@ function Quantidade({ valor, onMudar, nome }: { valor: number; onMudar: (n: numb
 
 function ItemDaSacola({ sf, l, indice, total }: { sf: StorefrontState; l: CartLine; indice: number; total: number }) {
   const T = usePaletaDaVitrine();
-  const resumo = resumoDaLinha(l).join(" · ");
+  const resumo = resumoDaLinha(l, { semCorDaPeca: true }).join(" · ");
   return (
     <View
       testID="item-da-sacola"
@@ -219,6 +220,7 @@ function ItemDaSacola({ sf, l, indice, total }: { sf: StorefrontState; l: CartLi
           </Pressable>
         </View>
         {resumo ? <Texto style={{ fontSize: 13, color: T.ink2, lineHeight: 18 }}>{resumo}</Texto> : null}
+        <CorDaLinha line={l} cor={T.ink2} tamanho={13} borda={wash(T.ink, 0.25)} />
         <Numero style={{ fontSize: 12, color: T.ink3, lineHeight: 17 }}>{linhaDePreco(l, sf, indice)}</Numero>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4, gap: 8 }}>
           <Quantidade valor={l.qty} nome={l.product.name} onMudar={(n) => sf.setCartLineQty(l.lineId, n)} />
@@ -396,7 +398,7 @@ export function AvisoDeAdicionado({ sf }: { sf: StorefrontState }) {
   if (!a || sf.sacolaAberta) return null;
   const l = sf.cart.find((x) => x.lineId === a.lineId);
   if (!l) return null;
-  const resumo = resumoDaLinha(l).slice(0, 2).join(" · ");
+  const resumo = resumoDaLinha(l, { semCorDaPeca: true }).slice(0, 2).join(" · ");
   const tinta = tintaSobre(T.ink);
   return (
     <View pointerEvents="box-none" style={{ position: "absolute", top: abaixoDoCabecalho, left: 12, right: 12, zIndex: 80, alignItems: "center" }}>
@@ -416,6 +418,7 @@ export function AvisoDeAdicionado({ sf }: { sf: StorefrontState }) {
           <Texto style={{ color: tinta, opacity: 0.78, fontSize: 12.5 }} numberOfLines={2}>
             {l.product.name}{resumo ? " · " + resumo : ""}
           </Texto>
+          <CorDaLinha line={l} cor={tinta} tamanho={12.5} borda={wash(tinta, 0.45)} testID="cor-do-aviso-adicionado" />
         </View>
         <Pressable
           onPress={sf.abrirSacola}

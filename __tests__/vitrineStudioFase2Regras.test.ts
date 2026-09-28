@@ -209,7 +209,7 @@ describe("a personalização com os nomes que a cliente viu", () => {
     ]);
   });
 
-  test("o resumo curto: verso só quando escolhido E preenchido; sem hex nem endereço", () => {
+  test("o resumo curto: verso só quando escolhido E preenchido; a cor da peça pelo nome, sem hex nem endereço", () => {
     const cfg = {
       fields: [
         { id: "text", type: "text", label: "Arte", config: {} },
@@ -221,7 +221,11 @@ describe("a personalização com os nomes que a cliente viu", () => {
     };
     const produto = { name: "Caneca", customization_config: cfg } as any;
     const semVerso = resumoDaLinha({ product: produto, values: { text: "Mãe", cor: "#000000", art_service: "adjust" } } as any);
-    expect(semVerso).toEqual(["Arte: Mãe", "Envio minha arte e vocês ajustam"]);
+    // QA 28/09 (CL-34): a cor da peça aparece, com o nome em português.
+    expect(semVerso).toEqual(["Arte: Mãe", "Cor: preto", "Envio minha arte e vocês ajustam"]);
+    // Quem desenha a cor com a bolinha (CorDaLinha) tira ela do texto.
+    const semCor = resumoDaLinha({ product: produto, values: { text: "Mãe", cor: "#000000", art_service: "adjust" } } as any, { semCorDaPeca: true });
+    expect(semCor).toEqual(["Arte: Mãe", "Envio minha arte e vocês ajustam"]);
     const comVerso = resumoDaLinha({ product: produto, values: { text: "Mãe", text_back: "Te amo" } } as any);
     expect(comVerso[0]).toBe("Frente e verso");
   });

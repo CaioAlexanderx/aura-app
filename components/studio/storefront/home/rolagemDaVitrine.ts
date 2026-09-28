@@ -30,6 +30,13 @@
 // pedido não expira em 1,5 s como antes: vale até a grade fazer o layout
 // (com um teto largo só para não ficar pendurado).
 //
+// QA 28/09 (rodada 3): nada disto espera quadro de pintura. O
+// requestAnimationFrame e a rolagem suave só andam quando o navegador
+// pinta, e uma janela do Chrome coberta por outra continua "visível" sem
+// pintar — o clique em "Todas as peças" ficava pendurado até a roda do
+// mouse forçar um quadro. A rolagem é pedida no clique e conferida por
+// setTimeout (rolagemEmpacou).
+//
 // Puro no que decide (a memória é do módulo; o relógio e o caminho entram
 // por parâmetro): é regra, tem teste. O ouvinte do `popstate` é o único
 // pedaço de navegador, e é instalado uma vez.
@@ -41,6 +48,11 @@ export const VALIDADE_DA_ROLAGEM_MS = 30 * 60 * 1000;
 export const JANELA_DA_VOLTA_MS = 3000;
 /** Teto do pedido "Todas as peças": não é o que resolve (o layout da grade é). */
 export const VALIDADE_DO_PEDIDO_DA_GRADE_MS = 60 * 1000;
+
+/** Quando conferir se a rolagem suave andou (setTimeout, não quadro). */
+export const CONFERENCIA_DA_ROLAGEM_MS = 250;
+/** Quanto a home espera a grade ter altura antes de rolar o que der. */
+export const ESPERA_PELA_GRADE_MS = 4000;
 
 export type RolagemGuardada = { y: number; ts: number };
 
@@ -173,4 +185,14 @@ export function alvoDaRolagem(topoNoConteudo: number, alturaDoCabecalho: number)
   const t = Number(topoNoConteudo), c = Number(alturaDoCabecalho) || 0;
   if (!Number.isFinite(t)) return 0;
   return Math.max(0, Math.round(t - c + 1));
+}
+
+/**
+ * A rolagem suave não saiu do lugar (sem quadro de pintura, ela não anda):
+ * quem confere pula direto para o alvo. Andou um pouco — está a caminho,
+ * ou a cliente assumiu —, deixa.
+ */
+export function rolagemEmpacou(antes: number, agora: number, alvo: number): boolean {
+  const a = Number(antes) || 0, n = Number(agora) || 0, y = Number(alvo) || 0;
+  return Math.abs(n - a) < 2 && Math.abs(n - y) > 2;
 }

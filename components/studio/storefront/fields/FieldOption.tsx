@@ -43,7 +43,7 @@ export function FieldOption({
               key={c.value}
               onPress={() => onChange(c.value)}
               accessibilityRole="radio"
-              accessibilityState={{ checked: selected, selected }}
+              accessibilityState={{ checked: selected, selected }} aria-checked={selected}
               accessibilityLabel={precoTxt ? `${c.label}, ${precoTxt}` : c.label}
               style={[E.chip, selected && E.chipAtivo, { alignItems: "center" }]}
             >

@@ -97,7 +97,7 @@ export function FieldArtService({
             onPress={() => onChange(c.value)}
             style={[styles.optionCard, sel && styles.optionCardActive]}
             accessibilityRole="radio"
-            accessibilityState={{ checked: sel }}
+            accessibilityState={{ checked: sel }} aria-checked={sel}
             accessibilityLabel={c.label + (etiqueta ? ", " + etiqueta : ", incluso")}
           >
             <View style={[styles.radio, sel && styles.radioActive]}>

@@ -41,7 +41,7 @@ export function FieldColor({
                 // mais próximo em português (nomeDaCor).
                 accessibilityRole="radio"
                 accessibilityLabel={`${field.label}: ${choice?.label && choice.label !== c ? choice.label : nomeDaCor(c)}`}
-                accessibilityState={{ checked: selected, selected }}
+                accessibilityState={{ checked: selected, selected }} aria-checked={selected}
                 hitSlop={4}
                 style={{
                   width: 36, height: 36, borderRadius: 18,

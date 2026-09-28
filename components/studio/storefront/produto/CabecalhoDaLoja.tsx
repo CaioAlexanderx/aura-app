@@ -99,7 +99,7 @@ export function CabecalhoDaLoja({
                 key={chave}
                 onPress={() => sf.abrirGrupo(c.category, c.products)}
                 accessibilityRole="link"
-                accessibilityState={{ selected: ativa }}
+                accessibilityState={{ selected: ativa }} aria-selected={ativa}
                 style={({ hovered }: any) => ({ minHeight: 44, paddingHorizontal: 10, borderRadius: 10, justifyContent: "center", backgroundColor: hovered ? t.bg3 : "transparent" })}
               >
                 <Texto style={{ fontSize: 14, color: ativa ? t.ink : t.ink2, fontWeight: ativa ? "600" : "400" }}>{c.category?.name}</Texto>

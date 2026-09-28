@@ -37,6 +37,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Platform, Pressable } from "react-native";
 import { PersonalizationPreviewBase, type PreviewPalette } from "@/components/studio/PersonalizationPreview";
 import { valoresDoMotor } from "./valoresDoMotor";
+import { esperarFonteDaArte } from "./fonteDaArte";
 import type { CustomizationConfig } from "./types";
 import { usePaletaDaVitrine } from "./TemaDaVitrine";
 import { wash, type PaletaDaVitrine } from "./theme";
@@ -52,6 +53,7 @@ import { fonteDoMockup, useSpecDaFotoDoProduto } from "@/components/studio/visua
 import { corDaPeca } from "@/components/studio/visualEngine/corDaPeca";
 import { composeView, notaDaComposicao } from "@/components/studio/visualEngine/compose2d";
 import { Mug3DPreview } from "@/components/studio/visualEngine/Mug3DPreview";
+import type { Cenario } from "@/components/studio/visualEngine/compose3dMug";
 
 import { Texto } from "./TipografiaVitrine";
 // Paleta do mockup, derivada da paleta da vitrine — sem tocar no tema
@@ -141,7 +143,7 @@ function PdfNote({ size }: { size: number }) {
 
 export function LivePreview({
   config, values, size, productName, showLabel, slug, productId,
-  allowSideToggle = false, fotoProduto, lado, onFonte,
+  allowSideToggle = false, fotoProduto, lado, onFonte, fundo, cenario,
 }: {
   config: CustomizationConfig | null;
   values: Record<string, any>;
@@ -175,6 +177,13 @@ export function LivePreview({
    * na foto marcada, a cor da peça não pinta a foto (28/09/2026).
    */
   onFonte?: (fonte: "banco" | "foto" | "nenhuma") => void;
+  /**
+   * A cor do fundo em volta do 3D (hex): o estúdio do motor deriva dela o
+   * chão e a parede, e a peça fica no papel da loja (app#995).
+   */
+  fundo?: string;
+  /** O cenário do 3D: "nenhum" nas miniaturas (sacola, checkout). */
+  cenario?: Cenario;
 }) {
   const T = usePaletaDaVitrine();
   const canUseEngine = Platform.OS === "web" && !!slug && !!productId;
@@ -261,11 +270,27 @@ export function LivePreview({
   // Sheid em 04/09/2026). A cor e a fonte da arte seguem a mesma regra
   // do preview SVG: escolha do cliente, depois paleta da lojista.
   const motor = valoresDoMotor(config, safeValues, viewId);
-  const safeValuesKey = JSON.stringify([motor.values, motor.artColor, motor.font]);
+  // QA 28/09 (CL-26): o canvas desenha com a fonte que houver. Enquanto a
+  // fonte da arte não chega, o 3D recebe a peça sem o texto (e não o texto
+  // numa serifada que depois "vira" cursiva sozinha); o 2D espera dentro
+  // da composição (fonteDaArte.ts).
+  const [fontePronta, setFontePronta] = useState(() => esperarFonteDaArte(motor.font) === null);
+  useEffect(() => {
+    const espera = esperarFonteDaArte(motor.font);
+    if (!espera) { setFontePronta(true); return; }
+    let vivo = true;
+    setFontePronta(false);
+    espera.then(() => { if (vivo) setFontePronta(true); });
+    return () => { vivo = false; };
+  }, [motor.font]);
+  const safeValuesKey = JSON.stringify([motor.values, motor.artColor, motor.font, fontePronta]);
   // Identidade estável: o viewer 3D repinta a textura a cada objeto novo
   // que recebe, e um objeto novo por render era uma repintura por render.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const engineValues = useMemo(() => motor.values, [safeValuesKey]);
+  const engineValues = useMemo(
+    () => (fontePronta || !motor.values.text ? motor.values : { ...motor.values, text: undefined }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [safeValuesKey],
+  );
 
   // O lado escolhido pode sumir se a lojista desligar verso/meio com a
   // tela aberta — sem isso o cliente ficaria preso numa vista morta.
@@ -283,7 +308,7 @@ export function LivePreview({
             key={id}
             onPress={() => setViewId(id)}
             accessibilityRole="button"
-            accessibilityState={{ selected: sel }}
+            accessibilityState={{ selected: sel }} aria-selected={sel}
             accessibilityLabel={"Ver " + label}
             hitSlop={8}
             style={{
@@ -304,19 +329,27 @@ export function LivePreview({
   useEffect(() => {
     if (!engineView || !canvasRef.current) return;
     let vivo = true;
-    composeView(canvasRef.current, engineView, engineValues, {
-      showAreas: false,
-      pixelWidth: 800,
-      // A camiseta vetorial ficava bege com "preto" escolhido: a cor só
-      // chegava ao 3D. Agora o 2D recebe a mesma cor (e inverte as dobras
-      // quando ela é escura — ver dobrasParaCor).
-      garmentColor: corDaPeca(config, safeValues),
-      artColor: motor.artColor,
-      font: motor.font,
-    }).then((r) => {
-      // null = passada para trás por uma composição mais nova.
-      if (vivo && r) setNotaDoMotor(notaDaComposicao(r));
-    }).catch(() => undefined);
+    const compor = () => {
+      if (!vivo || !canvasRef.current) return;
+      composeView(canvasRef.current, engineView, motor.values, {
+        showAreas: false,
+        pixelWidth: 800,
+        // A camiseta vetorial ficava bege com "preto" escolhido: a cor só
+        // chegava ao 3D. Agora o 2D recebe a mesma cor (e inverte as dobras
+        // quando ela é escura — ver dobrasParaCor).
+        garmentColor: corDaPeca(config, safeValues),
+        artColor: motor.artColor,
+        font: motor.font,
+      }).then((r) => {
+        // null = passada para trás por uma composição mais nova.
+        if (vivo && r) setNotaDoMotor(notaDaComposicao(r));
+      }).catch(() => undefined);
+    };
+    // A fonte da arte primeiro (CL-26): desenhar antes dela é desenhar
+    // numa serifada que troca na próxima composição.
+    const espera = motor.values.text ? esperarFonteDaArte(motor.font) : null;
+    if (espera) espera.then(compor);
+    else compor();
     return () => { vivo = false; };
     // safeValuesKey representa safeValues de forma estável
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -332,6 +365,11 @@ export function LivePreview({
           values={engineValues}
           size={size}
           side={viewId}
+          // O lado é da página (prop `lado`): o palco tem o próprio
+          // Frente · Verso, com a medida do cadastro da peça.
+          semSeletorDeArea={lado !== undefined}
+          backdrop={fundo}
+          cenario={cenario}
           accentColor={T.primary}
           // S3 — a cor da louca vinha do default do motor (#F5F2EA) e
           // ninguem a alimentava: toda caneca renderizava bege, qualquer

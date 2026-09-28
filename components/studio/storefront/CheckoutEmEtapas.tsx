@@ -58,6 +58,8 @@ import { diaEHora, numeroDoPedido } from "./pedidoPorToken";
 import { parcelasDoPreco } from "./parcelamento";
 import { maskPlate } from "./courierPlate";
 import { resumoDaLinha } from "./resumoDaPeca";
+import { CorDaLinha } from "./ui/CorDaLinha";
+import { ROLAGEM_ESTAVEL } from "./produto/kitDaPagina";
 import { valoresDaSacola } from "./SacolaEmGaveta";
 import { BotaoOrcamentoDaSacola } from "./SacolaFechada";
 import { precoDaLinha, descontoDoPix, pecasNaSacola } from "./precoDaSacola";
@@ -199,7 +201,8 @@ function ItensDoResumo({ sf, compacto }: { sf: StorefrontState; compacto?: boole
           <MiniaturaDaLinha line={l} tamanho={compacto ? 44 : 52} quantidade={l.qty} corDaLoja={(sf.store as any)?.site?.primary_color} />
           <View style={{ flex: 1, minWidth: 0 }}>
             <Texto style={{ fontSize: 13.5, fontWeight: "700", color: T.ink }} numberOfLines={1}>{l.product.name}</Texto>
-            <Texto style={{ fontSize: 12, color: T.ink3 }} numberOfLines={2}>{resumoDaLinha(l).slice(0, 2).join(" · ")}</Texto>
+            <Texto style={{ fontSize: 12, color: T.ink3 }} numberOfLines={2}>{resumoDaLinha(l, { semCorDaPeca: true }).slice(0, 2).join(" · ")}</Texto>
+            <CorDaLinha line={l} cor={T.ink3} tamanho={12} borda={wash(T.ink, 0.25)} />
           </View>
           <Numero style={{ fontSize: 13.5, fontWeight: "600", color: T.ink }}>{dinheiro(v.linhas[i] ?? precoDaLinha(l).total)}</Numero>
         </View>
@@ -286,7 +289,7 @@ function ResumoRecolhivel({ sf, c, tipo, forma, etapa }: { sf: StorefrontState; 
       <Pressable
         onPress={() => setAberto((a) => !a)}
         accessibilityRole="button"
-        accessibilityState={{ expanded: aberto }}
+        accessibilityState={{ expanded: aberto }} aria-expanded={aberto}
         accessibilityLabel={(aberto ? "Esconder itens" : "Ver itens") + ", total " + dinheiro(c.total)}
         style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, minHeight: 56 }}
       >
@@ -338,7 +341,7 @@ function Opcao({
         onPress={onEscolher}
         disabled={desligada}
         accessibilityRole="radio"
-        accessibilityState={{ checked: escolhida, disabled: !!desligada }}
+        accessibilityState={{ checked: escolhida, disabled: !!desligada }} aria-checked={escolhida}
         accessibilityLabel={[titulo, preco, detalhe].filter(Boolean).join(", ")}
         style={{ flexDirection: "row", gap: 14, padding: escolhida ? 15 : 16, alignItems: "flex-start" }}
       >
@@ -474,9 +477,10 @@ function CheckoutFechado({ sf }: { sf: StorefrontState }) {
                 <MiniaturaDaLinha line={l} tamanho={52} quantidade={l.qty} corDaLoja={(sf.store as any)?.site?.primary_color} />
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Texto numberOfLines={1} style={{ fontSize: 14, fontWeight: "700", color: T.ink }}>{l.product.name}</Texto>
-                  {resumoDaLinha(l).length ? (
-                    <Texto numberOfLines={1} style={{ fontSize: 12.5, color: T.ink3 }}>{resumoDaLinha(l).join(" · ")}</Texto>
+                  {resumoDaLinha(l, { semCorDaPeca: true }).length ? (
+                    <Texto numberOfLines={1} style={{ fontSize: 12.5, color: T.ink3 }}>{resumoDaLinha(l, { semCorDaPeca: true }).join(" · ")}</Texto>
                   ) : null}
+                  <CorDaLinha line={l} cor={T.ink3} tamanho={12.5} borda={wash(T.ink, 0.25)} />
                 </View>
               </View>
             ))}
@@ -1145,7 +1149,7 @@ function CheckoutAberto({ sf }: { sf: StorefrontState }) {
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }} testID="checkout-em-etapas">
       <Cabecalho sf={sf} etapa={etapa} onVoltar={voltar} larga={larga} />
-      <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: larga ? 48 : 28 }} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scroll} style={[{ flex: 1 }, ROLAGEM_ESTAVEL]} contentContainerStyle={{ paddingBottom: larga ? 48 : 28 }} keyboardShouldPersistTaps="handled">
         <BarraDeEtapas etapa={etapa} onIr={irPara} />
         {larga ? (
           <View style={{ flexDirection: "row", gap: 24, width: "100%", maxWidth: 1040, alignSelf: "center", paddingHorizontal: 24, alignItems: "flex-start" }}>

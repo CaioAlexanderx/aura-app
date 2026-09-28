@@ -482,7 +482,7 @@ export function ProductConfigurator({
                     key={m.id}
                     onPress={() => sf.switchModel(m)}
                     accessibilityRole="button"
-                    accessibilityState={{ selected: sel }}
+                    accessibilityState={{ selected: sel }} aria-selected={sel}
                     accessibilityLabel={m.name}
                     style={{
                       minWidth: 104, padding: 8, borderRadius: 10,
@@ -542,7 +542,7 @@ export function ProductConfigurator({
                   <Pressable
                     onPress={() => setEditingAddBack(!editingAddBack)}
                     accessibilityRole="checkbox"
-                    accessibilityState={{ checked: editingAddBack }}
+                    accessibilityState={{ checked: editingAddBack }} aria-checked={editingAddBack}
                     accessibilityLabel={"Personalizar também o verso" + (backPrice > 0 ? ", mais " + dinheiro(backPrice) : "")}
                     style={{
                       flexDirection: "row", alignItems: "center", gap: 10,
@@ -621,7 +621,7 @@ export function ProductConfigurator({
                   <Pressable
                     onPress={() => setEditingAddMiddle(!editingAddMiddle)}
                     accessibilityRole="checkbox"
-                    accessibilityState={{ checked: editingAddMiddle }}
+                    accessibilityState={{ checked: editingAddMiddle }} aria-checked={editingAddMiddle}
                     accessibilityLabel={"Personalizar também o meio" + (middlePrice > 0 ? ", mais " + dinheiro(middlePrice) : "")}
                     style={{
                       flexDirection: "row", alignItems: "center", gap: 10,

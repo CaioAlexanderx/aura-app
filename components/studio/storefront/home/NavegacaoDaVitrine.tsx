@@ -198,7 +198,7 @@ function BarraDeCategorias({
         testID={"barra-" + e.tipo}
         onPress={() => abrirEntrada(sf, e, onVerLoja)}
         accessibilityRole="link"
-        accessibilityState={{ selected: eAtiva }}
+        accessibilityState={{ selected: eAtiva }} aria-selected={eAtiva}
         accessibilityLabel={e.rotulo}
         style={({ hovered }: any) => ({ height: 44, paddingHorizontal: 2, justifyContent: "center", opacity: hovered && !eAtiva ? 0.8 : 1 })}
       >
@@ -524,6 +524,7 @@ function LinhaDaGaveta({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={expandida === undefined ? undefined : { expanded: expandida }}
+      aria-expanded={expandida}
       style={({ hovered }: any) => ({
         minHeight: sub ? 46 : 50, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 12,
         borderRadius: sub ? 0 : 12, borderTopRightRadius: 12, borderBottomRightRadius: 12,

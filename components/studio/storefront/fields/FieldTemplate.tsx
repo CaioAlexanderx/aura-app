@@ -38,7 +38,7 @@ export function FieldTemplate({
               key={t.id}
               onPress={() => onChange(t.image_url)}
               accessibilityRole="radio"
-              accessibilityState={{ checked: value === t.image_url }}
+              accessibilityState={{ checked: value === t.image_url }} aria-checked={value === t.image_url}
               accessibilityLabel={t.name}
               style={{
                 width: 80, height: 80, borderRadius: 8,

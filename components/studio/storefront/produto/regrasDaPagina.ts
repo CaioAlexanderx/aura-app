@@ -337,6 +337,31 @@ export function legendaDoMockup(p: {
   return p.fonte === "foto" && p.temCampoDeCor ? LEGENDA_DA_COR_NA_FOTO : null;
 }
 
+/**
+ * O aviso de quando a cor da arte quase some na cor escolhida da peça
+ * (contraste abaixo de 1,8:1), ou null.
+ *
+ * QA 28/09 (item 11): no Mockup na foto, a foto não muda de cor — com a
+ * peça preta escolhida, a prévia mostra a arte azul-marinho bem visível
+ * sobre o branco fotografado, e o aviso "Essa cor quase some nesta peça"
+ * contradizia a imagem. O aviso continua (na produção a peça vai preta e
+ * a arte some mesmo), mas diz de qual peça está falando.
+ */
+export function avisoDeContraste(p: {
+  quaseSome: boolean;
+  /** A prévia é a foto marcada, que fica na cor fotografada. */
+  fotoNaCorFotografada?: boolean;
+  /** "preto" (leituraDaCor.nomeDaCor). */
+  nomeDaCorDaPeca?: string | null;
+}): string | null {
+  if (!p.quaseSome) return null;
+  if (p.fotoNaCorFotografada) {
+    const nome = String(p.nomeDaCorDaPeca || "").trim();
+    return `Essa cor quase some na peça${nome ? " em " + nome : " na cor escolhida"} (a foto mostra a cor fotografada). Experimente outra.`;
+  }
+  return "Essa cor quase some nesta peça. Experimente outra.";
+}
+
 /** O campo "Como você quer resolver a arte?", quando a peça tem. */
 export function campoDoServicoDeArte(cfg: CustomizationConfig | null | undefined): CustomizationField | null {
   return cfg?.fields?.find((f) => f.type === "option" && isArtServiceField(f)) || null;
@@ -643,4 +668,35 @@ export function areaDeImpressao(
 export function textoDaArea(a: AreaDeImpressao): string {
   const f = (n: number) => String(n).replace(".", ",");
   return `${f(a.larguraCm)} × ${f(a.alturaCm)} cm`;
+}
+
+/**
+ * A área de impressão de UM lado, do cadastro da peça: frente em
+ * `print_area`, verso em `back_print_area`, meio em `middle_print_area`.
+ * Sem cadastro do lado, a área do modelo visual com o mesmo nome
+ * (front/back/middle); sem nenhuma das duas, null.
+ *
+ * QA 28/09 (item 10): a "Básico 2" está cadastrada com frente 7 × 7 e
+ * costas 28 × 28, e o 3D dizia "Frente 28×35 cm / Costas 28×35 cm" — a
+ * medida do modelo, não a da peça. O palco mostra esta.
+ */
+export function areaDoLado(
+  cfg: CustomizationConfig | null | undefined,
+  lado: Lado,
+  areasDoModelo?: Array<{ id?: string; width_cm?: number; height_cm?: number }> | null,
+): AreaDeImpressao | null {
+  const chave = lado === "back" ? "back_print_area" : lado === "middle" ? "middle_print_area" : "print_area";
+  const pa: any = (cfg as any)?.[chave];
+  let w = cm(pa?.width_cm);
+  let h = cm(pa?.height_cm);
+  let origem: AreaDeImpressao["origem"] = "cadastro";
+  if (!(w && h)) {
+    const ids = lado === "back" ? ["back"] : lado === "middle" ? ["middle", "wrap"] : ["front", "panel"];
+    const a = (areasDoModelo || []).find((x) => ids.includes(String(x?.id || "")) && cm(x?.width_cm) && cm(x?.height_cm));
+    if (!a) return null;
+    w = cm(a.width_cm);
+    h = cm(a.height_cm);
+    origem = "modelo";
+  }
+  return { larguraCm: w, alturaCm: h, pxLargura: pixelsParaCm(w), pxAltura: pixelsParaCm(h), origem };
 }

@@ -26,7 +26,7 @@ import {
   FaixaDeAvisos, Hero, ComoFunciona, TiraDeCategorias,
   MaisPedidos, ArtesProntas, BlocoB2B, FaixaDeConfianca,
 } from "./HomeDaVitrine";
-import { ORDENS, ordenarEntradas, mostrarControles, colunasComDensidade, type OrdemVitrine } from "./ordenacaoVitrine";
+import { ORDENS, ordenarEntradas, mostrarControles, colunasComDensidade, modelosNasEntradas, rotuloDeModelos, type OrdemVitrine } from "./ordenacaoVitrine";
 import { Texto, useTipografia } from "./TipografiaVitrine";
 import { FaixaDaTemporada } from "./FaixaDaTemporada";
 export function ProductList({ sf }: { sf: StorefrontState }) {
@@ -213,7 +213,7 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
             }}
           >
             <Texto style={{ fontSize: 12, color: T.ink3, marginRight: "auto" }}>
-              {entradas.length} itens
+              {rotuloDeModelos(modelosNasEntradas(entradas as any))}
             </Texto>
 
             {ORDENS.map((o) => {
@@ -223,7 +223,7 @@ export function ProductList({ sf }: { sf: StorefrontState }) {
                   key={o.chave}
                   onPress={() => setOrdem(o.chave)}
                   accessibilityRole="button"
-                  accessibilityState={{ selected: sel }}
+                  accessibilityState={{ selected: sel }} aria-selected={sel}
                   style={{
                     paddingHorizontal: 11, paddingVertical: 6, borderRadius: 999,
                     borderWidth: 1,

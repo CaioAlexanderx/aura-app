@@ -65,7 +65,7 @@ export function StoreNav({ menu, ativa, onSelect, primary }: Props) {
         onHoverIn={temFilhas && telaLarga ? () => setAberto(item!.id) : undefined}
         onHoverOut={temFilhas && telaLarga ? fechar : undefined}
         accessibilityRole="button"
-        accessibilityState={{ selected: sel, expanded: temFilhas ? aberto === item?.id : undefined }}
+        accessibilityState={{ selected: sel, expanded: temFilhas ? aberto === item?.id : undefined }} aria-selected={sel} aria-expanded={temFilhas ? aberto === item?.id : undefined}
         accessibilityLabel={
           item === null ? "Ver todos os produtos" : `${item.name}, ${item.total} ${item.total === 1 ? "produto" : "produtos"}`
         }
@@ -258,7 +258,7 @@ export function StoreNav({ menu, ativa, onSelect, primary }: Props) {
               onPress={() => setAberto(mostrandoExtras ? null : "__mais__")}
               onHoverIn={telaLarga ? () => setAberto("__mais__") : undefined}
               accessibilityRole="button"
-              accessibilityState={{ expanded: mostrandoExtras }}
+              accessibilityState={{ expanded: mostrandoExtras }} aria-expanded={mostrandoExtras}
               accessibilityLabel={`Mais ${menu.extras.length} categorias`}
               style={({ pressed }) => ({
                 flexDirection: "row", alignItems: "center", gap: 5,

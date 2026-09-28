@@ -202,7 +202,7 @@ export function Botao({
       disabled={off}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel || rotulo}
-      accessibilityState={{ disabled: off, busy: !!carregando }}
+      accessibilityState={{ disabled: off, busy: !!carregando }} aria-busy={!!carregando}
       style={({ pressed }) => [
         {
           flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,

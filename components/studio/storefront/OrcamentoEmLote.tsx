@@ -356,7 +356,7 @@ export function OrcamentoEmLote({
                             key={p.id}
                             onPress={() => setProdutoId(p.id)}
                             accessibilityRole="button"
-                            accessibilityState={{ selected: sel }}
+                            accessibilityState={{ selected: sel }} aria-selected={sel}
                             // maxWidth: "Caneca Imperial com Alça e Borda Cromado
                             // Dourada 400ml" saía pela borda direita do celular,
                             // cortada no meio (visto em 04/09/2026).
@@ -459,7 +459,7 @@ export function OrcamentoEmLote({
                   onPress={() => (passo === 1 ? setPasso(2) : enviar())}
                   disabled={botaoTravado}
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: botaoTravado, busy: enviando }}
+                  accessibilityState={{ disabled: botaoTravado, busy: enviando }} aria-busy={enviando}
                   style={{
                     flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center",
                     backgroundColor: !botaoTravado ? tema.marcaFill : T.border,

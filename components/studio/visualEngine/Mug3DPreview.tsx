@@ -44,6 +44,13 @@ type Props = {
   backdrop?: string;
   /** O cenário em volta da peça: estúdio (padrão), gradiente 2D antigo ou nenhum (transparente). */
   cenario?: Cenario;
+  /**
+   * Esconde os chips de área (QA 28/09, itens 8 e 9). Na vitrine o lado é
+   * da página (Frente · Verso no palco, com a medida do CADASTRO da peça):
+   * os chips daqui repetiam o seletor com a medida do modelo ("28×35 cm"
+   * numa peça cadastrada com 7×7) e ficavam sob o selo "Sua peça".
+   */
+  semSeletorDeArea?: boolean;
 };
 
 // A legenda "caneca provisória (GLB real entra sem mudar o viewer)" era
@@ -52,6 +59,7 @@ export function Mug3DPreview({
   spec, values, size = 320,
   garmentColor = "#F5F2EA", artColor = "#D85A30", font, accentColor = "#1E3A8A", side,
   backdrop, cenario,
+  semSeletorDeArea = false,
 }: Props) {
   const canvasRef = useRef<any>(null);
   const handleRef = useRef<Mug3DHandle | null>(null);
@@ -80,15 +88,27 @@ export function Mug3DPreview({
   const [err, setErr] = useState<string | null>(null);
   const areas = spec.areas || [];
 
+  // O que a cliente escolheu por último. QA 28/09 (vitrine, rodada 3): a
+  // cor escolhida enquanto o three.js ainda carregava se perdia — o
+  // efeito de atualização rodava sem viewer, e o viewer nascia com a cor
+  // da montagem. Ao ficar pronto, ele recebe o estado mais recente.
+  const ultimo = useRef({ values, garmentColor, artColor, font, areaId });
+  ultimo.current = { values, garmentColor, artColor, font, areaId };
+
   useEffect(() => {
     if (Platform.OS !== "web" || !canvasRef.current) return;
     let cancelled = false;
+    const inicial = ultimo.current;
     // Fundo e cenário só valem na criação (o viewer monta a cena uma vez);
     // trocar de tema com o viewer aberto não acontece na vitrine.
     createModelViewer(canvasRef.current, spec, values, { garmentColor, artColor, font, areaId, backdrop, cenario })
       .then((h) => {
         if (cancelled) { h.dispose(); return; }
         handleRef.current = h;
+        const u = ultimo.current;
+        if (u.values !== inicial.values || u.garmentColor !== inicial.garmentColor || u.artColor !== inicial.artColor || u.font !== inicial.font || u.areaId !== inicial.areaId) {
+          h.update(u.values, { garmentColor: u.garmentColor, artColor: u.artColor, font: u.font, areaId: u.areaId });
+        }
       })
       .catch((e) => setErr(e?.message || "Erro ao iniciar o 3D"));
     return () => {
@@ -116,7 +136,7 @@ export function Mug3DPreview({
 
   return (
     <View style={{ alignItems: "center", gap: 8 }}>
-      {areas.length > 1 && (
+      {areas.length > 1 && !semSeletorDeArea && (
         <View style={{ flexDirection: "row", gap: 8 }}>
           {areas.map((a) => {
             const sel = a.id === areaId;

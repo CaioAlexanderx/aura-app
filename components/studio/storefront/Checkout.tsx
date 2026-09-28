@@ -160,7 +160,7 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
                   key={m.value}
                   onPress={() => sf.setDeliveryType(m.value)}
                   accessibilityRole="radio"
-                  accessibilityState={{ checked: sf.deliveryType === m.value, selected: sf.deliveryType === m.value }}
+                  accessibilityState={{ checked: sf.deliveryType === m.value, selected: sf.deliveryType === m.value }} aria-checked={sf.deliveryType === m.value}
                   style={[chip, sf.deliveryType === m.value && chipActive]}
                 >
                   <Texto style={[chipTxt, sf.deliveryType === m.value && chipTxtActive]}>{m.label}</Texto>
@@ -235,7 +235,7 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
             <Pressable
               onPress={() => sf.setPaymentMethod("pix")}
               accessibilityRole="radio"
-              accessibilityState={{ checked: sf.paymentMethod === "pix", selected: sf.paymentMethod === "pix" }}
+              accessibilityState={{ checked: sf.paymentMethod === "pix", selected: sf.paymentMethod === "pix" }} aria-checked={sf.paymentMethod === "pix"}
               style={[chip, sf.paymentMethod === "pix" && chipActive]}
             >
               <Texto style={[chipTxt, sf.paymentMethod === "pix" && chipTxtActive]}>Pix</Texto>
@@ -245,7 +245,7 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
             <Pressable
               onPress={() => sf.setPaymentMethod("card")}
               accessibilityRole="radio"
-              accessibilityState={{ checked: sf.paymentMethod === "card", selected: sf.paymentMethod === "card" }}
+              accessibilityState={{ checked: sf.paymentMethod === "card", selected: sf.paymentMethod === "card" }} aria-checked={sf.paymentMethod === "card"}
               style={[chip, sf.paymentMethod === "card" && chipActive]}
             >
               <Texto style={[chipTxt, sf.paymentMethod === "card" && chipTxtActive]}>Cartão</Texto>
@@ -255,7 +255,7 @@ export function Checkout({ sf }: { sf: StorefrontState }) {
             <Pressable
               onPress={() => sf.setPaymentMethod("on_delivery")}
               accessibilityRole="radio"
-              accessibilityState={{ checked: sf.paymentMethod === "on_delivery", selected: sf.paymentMethod === "on_delivery" }}
+              accessibilityState={{ checked: sf.paymentMethod === "on_delivery", selected: sf.paymentMethod === "on_delivery" }} aria-checked={sf.paymentMethod === "on_delivery"}
               style={[chip, sf.paymentMethod === "on_delivery" && chipActive]}
             >
               <Texto style={[chipTxt, sf.paymentMethod === "on_delivery" && chipTxtActive]}>
