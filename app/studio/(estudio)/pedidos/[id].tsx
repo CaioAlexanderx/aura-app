@@ -10,7 +10,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Linking,
-  Modal, TextInput,
+  Modal, TextInput, Image,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
@@ -27,10 +27,14 @@ import { studioApi, type StudioOrderDetail, type StudioProductionStatus, type St
 import { labelStudioStatus, colorStudioStatus } from "@/constants/studio-status";
 import { StudioBreadcrumb } from "@/components/studio/StudioBreadcrumb";
 import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
-import { rotuloDaChave, valorDaChave } from "@/components/studio/customizationConfig";
+import { rotuloDaChave, valorDaChave, chaveLateralVisivel, ladoComConteudo } from "@/components/studio/customizationConfig";
 import { BlocoPagamentoDoPedido } from "@/components/studio/BlocoPagamentoDoPedido";
-import { temBlocoDePagamento, situacaoDoPagamento, reais } from "@/components/studio/pagamentoDoPedido";
+import { temBlocoDePagamento, situacaoDoPagamento, reais, numeroDoPedido, comprovanteEhPdf } from "@/components/studio/pagamentoDoPedido";
 import { separarReferencia } from "@/components/studio/referenciaDoAjuste";
+import { ART_SERVICE_FIELD_ID, labelForArtServiceValue } from "@/components/studio/artService";
+import { nomeDaCor } from "@/components/studio/nomeDaCor";
+
+const fmtMoeda = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const NEXT: Record<StudioProductionStatus, StudioProductionStatus | null> = {
   pending_art: "approved",
@@ -64,6 +68,10 @@ function addDaysISO(n: number): string {
   return `${y}-${m}-${day}`;
 }
 
+function isUrlDeArquivo(v: any): boolean {
+  return typeof v === "string" && /^https?:\/\//i.test(v.trim());
+}
+
 // ── ItemCustomization ─────────────────────────────────────────────────────────────────────
 // FIX (bug #6 QA): personalização era exibida como JSON cru em fonte
 // monoespaçada. Agora renderiza PersonalizationPreview (mesmo componente
@@ -81,14 +89,17 @@ function ItemCustomization({
   const [showRaw, setShowRaw] = useState(false);
   const fieldsById: Record<string, CustomizationField> = {};
   for (const f of config?.fields || []) fieldsById[f.id] = f;
-  const entries = Object.entries(customization || {});
+  const entries = Object.entries(customization || {}).filter(([key, value]) =>
+    chaveLateralVisivel(key, value, config)
+  );
+  const ladoPreview = ladoComConteudo(config, customization || {});
 
   return (
     <View style={s.custBox}>
       <Text style={s.custTitle}>Personalização</Text>
       {config ? (
         <View style={{ alignItems: "center", marginVertical: 8 }}>
-          <PersonalizationPreview config={config} values={customization} size={160} showLabel={false} />
+          <PersonalizationPreview config={config} values={customization} size={160} showLabel={false} side={ladoPreview} />
         </View>
       ) : null}
       <View style={{ gap: 6, marginTop: 4 }}>
@@ -96,12 +107,68 @@ function ItemCustomization({
           <Text style={s.custRowValue}>—</Text>
         ) : entries.map(([key, value]) => {
           const label = rotuloDaChave(key, fieldsById);
-          const swatch = isHexColor(value);
+          const campo = fieldsById[key];
+
+          // FIX (achado 2e do QA): o serviço de arte gravava o valor cru
+          // (`designer`, `adjust`) — a lojista lia código, não o caminho
+          // que a cliente escolheu.
+          if (key === ART_SERVICE_FIELD_ID) {
+            return (
+              <View key={key} style={s.custRow}>
+                <Text style={s.custRowLabel}>{label}</Text>
+                <Text style={s.custRowValue} numberOfLines={2}>{labelForArtServiceValue(value)}</Text>
+              </View>
+            );
+          }
+
+          // FIX (achado 2d do QA): "Cor: #000000" — bolinha + nome em
+          // português (ou o rótulo que a lojista cadastrou pro swatch),
+          // com o hex ainda visível (menor) pra quem confere na prensa.
+          if (isHexColor(value)) {
+            const rotuloCadastrado = (campo?.config as any)?.choices?.find(
+              (c: any) => c?.value === value
+            )?.label;
+            return (
+              <View key={key} style={s.custRow}>
+                <Text style={s.custRowLabel}>{label}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 }}>
+                  <View style={[s.custSwatch, { backgroundColor: value }]} />
+                  <Text style={s.custRowValue} numberOfLines={1}>{nomeDaCor(value, rotuloCadastrado)}</Text>
+                  <Text style={s.custRowHex}>{String(value).toUpperCase()}</Text>
+                </View>
+              </View>
+            );
+          }
+
+          // FIX (achado 2c do QA): a foto/arquivo que a cliente mandou
+          // mostrava a URL crua inteira. Miniatura de 80px pra imagem
+          // (com link pra abrir o arquivo original); PDF vira só o link.
+          if (isUrlDeArquivo(value)) {
+            const ehPdf = comprovanteEhPdf(value);
+            return (
+              <View key={key} style={[s.custRow, { alignItems: "flex-start" }]}>
+                <Text style={s.custRowLabel}>{label}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  {!ehPdf ? (
+                    <Image source={{ uri: value }} style={s.custThumb} resizeMode="cover" />
+                  ) : null}
+                  <Pressable
+                    onPress={() => Linking.openURL(value)}
+                    accessibilityRole="link"
+                    accessibilityLabel={`Abrir ${label} em outra aba`}
+                    hitSlop={6}
+                  >
+                    <Text style={s.custFileLink}>Abrir arquivo</Text>
+                  </Pressable>
+                </View>
+              </View>
+            );
+          }
+
           return (
             <View key={key} style={s.custRow}>
               <Text style={s.custRowLabel}>{label}</Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 }}>
-                {swatch ? <View style={[s.custSwatch, { backgroundColor: value }]} /> : null}
                 <Text style={s.custRowValue} numberOfLines={2}>{valorDaChave(value)}</Text>
               </View>
             </View>
@@ -503,16 +570,21 @@ export default function StudioOrderDetail() {
         items={[
           { label: "Estúdio", href: "/studio" },
           { label: "Pedidos", href: "/studio/pedidos" },
-          { label: `#${order.id.slice(0, 8)}` },
+          { label: numeroDoPedido(order) },
         ]}
       />
       <View style={s.container}>
         {/* FIX (bug #19 QA): <Text style={s.h1}> fora do padrão — migrado
-            pra StudioPageHeader (mesmo componente usado no resto do app). */}
+            pra StudioPageHeader (mesmo componente usado no resto do app).
+            FIX (achado 2h do QA, 26/09/2026): o mesmo pedido mostrava três
+            identificadores diferentes (o "00001" cru do título, o uuid
+            fatiado da trilha, o uuid em caixa alta do cartão da Produção).
+            numeroDoPedido() é a fonte única — "Pedido 00001" em todo canto;
+            o uuid interno só existe pra debug (nenhuma tela mostra mais). */}
         <StudioPageHeader
           eyebrow="PEDIDOS"
-          title={order.display_name || order.customer_name || "Pedido"}
-          subtitle={`Criado em ${new Date(order.created_at).toLocaleString("pt-BR")} · ${order.item_count} item(ns) · ${reais(order.total_amount || 0)}`}
+          title={numeroDoPedido(order)}
+          subtitle={`Criado em ${new Date(order.created_at).toLocaleString("pt-BR")} · ${items.length} ${items.length === 1 ? "item" : "itens"} · ${reais(order.total_amount || 0)}`}
           rightSlot={
             <View style={[s.statusPill, { backgroundColor: statusCol.bg }]}>
               <Text style={[s.statusTxt, { color: statusCol.fg }]}>{labelStudioStatus(status)}</Text>
@@ -524,12 +596,16 @@ export default function StudioOrderDetail() {
           {next && (
             <Pressable onPress={advance} disabled={acting} style={[s.actionBtn, { backgroundColor: tk.primary }]}>
               <Icon name="arrow-right" size={16} color="#fff" />
-              <Text style={s.actionBtnTxt}>Avançar pra "{labelStudioStatus(next)}"</Text>
+              <Text style={s.actionBtnTxt}>Avançar para "{labelStudioStatus(next)}"</Text>
             </Pressable>
           )}
           {status === "pending_art" && (
-            <Pressable onPress={() => router.push("/studio/producao?intent=approval" as any)} style={[s.actionBtn, { backgroundColor: tk.accent }]}>
-              <Icon name="message-circle" size={16} color="#fff" />
+            <Pressable
+              onPress={() => router.push("/studio/producao?intent=approval" as any)}
+              style={[s.actionBtn, { backgroundColor: tk.accent }]}
+              accessibilityLabel="Solicitar aprovação de arte pelo WhatsApp"
+            >
+              <Icon name="whatsapp" size={16} color="#fff" />
               <Text style={s.actionBtnTxt}>Solicitar aprovação</Text>
             </Pressable>
           )}
@@ -568,22 +644,39 @@ export default function StudioOrderDetail() {
 
         <View style={s.section}>
           <Text style={s.sectionEyebrow}>ITENS DO PEDIDO</Text>
-          {items.map((it) => (
-            <View key={it.id} style={s.itemCard}>
-              <View style={{ flex: 1 }}>
-                <Text style={s.itemTitle}>{it.product_name}</Text>
-                <Text style={s.itemSub}>{it.quantity} × R$ {Number(it.unit_price || 0).toFixed(2)}</Text>
-                {it.customization ? (
-                  <ItemCustomization
-                    customization={it.customization}
-                    config={it.product_id ? configByProduct[it.product_id] : undefined}
-                    t={tk}
-                    s={s}
-                  />
-                ) : null}
+          {items.map((it) => {
+            const cfgDoItem = it.product_id ? configByProduct[it.product_id] : undefined;
+            // FIX (achado 2b do QA): o adicional do serviço de arte é
+            // cobrado UMA VEZ por linha (não multiplica pela quantidade —
+            // mesma regra de components/studio/storefront/precoDaSacola.ts).
+            // Sem ele, "1 × R$ 39,90" escondia o "+ R$ 10,00" que o total
+            // do pedido já cobrava.
+            const campoDeArte = (cfgDoItem?.fields || []).find((f) => f.id === ART_SERVICE_FIELD_ID);
+            const valorDeArte = campoDeArte ? it.customization?.[ART_SERVICE_FIELD_ID] : null;
+            const escolhaDeArte = (campoDeArte?.config as any)?.choices?.find((c: any) => c.value === valorDeArte);
+            const adicionalDeArte = Number(escolhaDeArte?.price_delta) || 0;
+            const totalDaLinha = Number(it.unit_price || 0) * Number(it.quantity || 0) + adicionalDeArte;
+            return (
+              <View key={it.id} style={s.itemCard}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.itemTitle}>{it.product_name}</Text>
+                  <Text style={s.itemSub}>
+                    {it.quantity} × R$ {fmtMoeda.format(Number(it.unit_price || 0))}
+                    {adicionalDeArte > 0 ? ` + R$ ${fmtMoeda.format(adicionalDeArte)} (${escolhaDeArte?.label || "serviço de arte"})` : ""}
+                    {adicionalDeArte > 0 ? ` · Total do item: R$ ${fmtMoeda.format(totalDaLinha)}` : ""}
+                  </Text>
+                  {it.customization ? (
+                    <ItemCustomization
+                      customization={it.customization}
+                      config={cfgDoItem}
+                      t={tk}
+                      s={s}
+                    />
+                  ) : null}
+                </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
 
         {approvals?.length ? (
@@ -661,6 +754,9 @@ function buildStyles(t: StudioPalette) {
   custRowLabel: { fontSize: 11.5, color: t.ink3, fontWeight: "600" },
   custRowValue: { fontSize: 12, color: t.ink, fontWeight: "600", textAlign: "right" },
   custSwatch: { width: 14, height: 14, borderRadius: 7, borderWidth: 1, borderColor: t.ink5 },
+  custRowHex: { fontSize: 10.5, color: t.ink3, fontWeight: "600" },
+  custThumb: { width: 80, height: 80, borderRadius: 8, backgroundColor: t.bg, borderWidth: 1, borderColor: t.ink5 },
+  custFileLink: { color: t.primary, fontWeight: "700", fontSize: 12.5, textDecorationLine: "underline" },
   custRawToggle: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 8, alignSelf: "flex-start" },
   custRawToggleTxt: { fontSize: 11, color: t.ink3, fontWeight: "700" },
   approvalRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: t.ink5 },

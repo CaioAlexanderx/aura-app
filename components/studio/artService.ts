@@ -101,6 +101,16 @@ export function dispensaEnvioDeArte(value: string | null | undefined): boolean {
   return value === ART_DESIGNER;
 }
 
+/**
+ * O rótulo que a cliente viu na vitrine ("Criem a arte pra mim"), pro
+ * valor cru gravado no pedido (`designer`). QA do detalhe do pedido
+ * (26/09/2026): a tela mostrava o código técnico direto.
+ */
+export function labelForArtServiceValue(value: string | null | undefined): string {
+  const escolha = buildArtServiceChoices(0, 0).find((c) => c.value === value);
+  return escolha ? escolha.label : String(value ?? "—");
+}
+
 /** O briefing faz sentido nos dois caminhos pagos, com pedidos diferentes. */
 export function briefingFor(value: string | null | undefined): { title: string; hint: string; placeholder: string } | null {
   if (value === ART_DESIGNER) {

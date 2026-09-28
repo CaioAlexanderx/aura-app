@@ -123,7 +123,7 @@ export const STUDIO_NAV: StudioNavItem[] = [
     label: 'Clientes',
     group: 'VENDAS',
     icon: 'users',
-    subtitle: 'Quem ja comprou, e o que pediu',
+    subtitle: 'Quem já comprou e o que pediu',
   },
 
   // ── GESTÃO ──────────────────────────────────────────────

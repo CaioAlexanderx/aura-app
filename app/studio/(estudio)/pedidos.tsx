@@ -27,7 +27,7 @@
 // ============================================================
 import { useState, useCallback, useMemo } from "react";
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, Modal,
+  View, Text, ScrollView, Pressable, StyleSheet, Modal, TextInput,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
@@ -52,6 +52,8 @@ import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import { AnimatedKpiCounter } from "@/components/studio/AnimatedKpiCounter";
 import { SeloDoPagamento } from "@/components/studio/SeloDoPagamento";
+import { labelStudioStatus } from "@/constants/studio-status";
+import { filtrarPedidosDoHub } from "@/components/studio/filtroDoHub";
 
 function fmtBRL(v: number) {
   return "R$ " + (Number(v) || 0).toFixed(2).replace(".", ",");
@@ -109,6 +111,10 @@ export default function StudioPedidosHub() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [products, setProducts] = useState<Array<{ id: string; name: string; price: number }>>([]);
   const [tab, setTab] = useState<"all" | "orders" | "bulk" | "receivable">("all");
+  // Achado 3a do QA (26/09/2026): busca local por nome, telefone ou
+  // número do pedido, sobre o feed já carregado — a API não tem
+  // parâmetro de busca (ver studioBulkHubApi.hubFeed).
+  const [busca, setBusca] = useState("");
   const { cobrar, cobrandoId } = useCobrarSaldo(company?.id);
 
   const load = useCallback(async () => {
@@ -162,6 +168,8 @@ export default function StudioPedidosHub() {
   // ele é a dependência (diferente do cobrar, este recarrega — a encomenda
   // quitada tem que sumir da aba "A receber" na hora).
   const baixa = useRegistrarPagamento(company?.id, { onSucesso: load });
+
+  const feedFiltrado = useMemo(() => filtrarPedidosDoHub(feed, busca), [feed, busca]);
 
   // Carrega produtos personalizáveis pra wizard de evento.
   // FIX (25/05): usa request() do projeto em vez de fetch direto —
@@ -218,7 +226,9 @@ export default function StudioPedidosHub() {
       {/* Alertas */}
       {alerts.length > 0 && (
         <View style={s.alertsBlock}>
-          <Text style={s.sectionLabel}>{alerts.length} ALERTAS PENDENTES</Text>
+          <Text style={s.sectionLabel}>
+            {alerts.length} {alerts.length === 1 ? "alerta pendente" : "alertas pendentes"}
+          </Text>
           {alerts.slice(0, 8).map((a, i) => {
             const tone = sev[a.severity] || sev.info;
             return (
@@ -238,6 +248,25 @@ export default function StudioPedidosHub() {
           })}
         </View>
       )}
+
+      {/* Busca — achado 3a do QA (26/09/2026): nome, telefone ou número
+          do pedido, filtro local sobre o feed já carregado. */}
+      <View style={s.buscaRow}>
+        <Icon name="search" size={15} color={t.ink3} />
+        <TextInput
+          value={busca}
+          onChangeText={setBusca}
+          placeholder="Buscar por nome, telefone ou número do pedido"
+          placeholderTextColor={t.ink4}
+          style={s.buscaInput}
+          accessibilityLabel="Buscar pedido por nome, telefone ou número"
+        />
+        {busca ? (
+          <Pressable onPress={() => setBusca("")} hitSlop={8} accessibilityLabel="Limpar busca">
+            <Icon name="x" size={15} color={t.ink3} />
+          </Pressable>
+        ) : null}
+      </View>
 
       {/* Tabs — FIX (bug #8 QA): "Marketplace" era rota órfã (nenhum
           router.push levava lá). Chip de atalho junto das tabs existentes,
@@ -291,9 +320,16 @@ export default function StudioPedidosHub() {
           primaryCta={{ label: "Configurar Loja Digital", onPress: () => router.push("/studio/vendas/loja-digital" as any) }}
         />
         )
+      ) : feedFiltrado.length === 0 && !loading ? (
+        <StudioEmpty
+          icon="search"
+          title="Nenhum pedido encontrado"
+          desc={`Nada bateu com "${busca}". Confira o nome, o telefone ou o número do pedido.`}
+          secondaryCta={{ label: "Limpar busca", onPress: () => setBusca("") }}
+        />
       ) : (
         <View style={s.feedList}>
-          {feed.map((item) => (
+          {feedFiltrado.map((item) => (
             <Pressable
               key={item.kind + "-" + item.id}
               style={s.feedRow}
@@ -312,7 +348,7 @@ export default function StudioPedidosHub() {
                   {item.name || (item.kind === "bulk" ? "Evento" : "Pedido")}
                 </Text>
                 <Text style={s.feedMeta}>
-                  {item.kind === "bulk" ? "Evento" : "Pedido"} · {item.qty} item{item.qty === 1 ? "" : "s"} · {fmtDate(item.created_at)}
+                  {item.kind === "bulk" ? "Evento" : "Pedido"} · {item.qty} {item.qty === 1 ? "item" : "itens"} · {fmtDate(item.created_at)}
                 </Text>
               </View>
               <View style={{ alignItems: "flex-end" }}>
@@ -386,7 +422,7 @@ export default function StudioPedidosHub() {
                   <>
                     <Text style={s.feedAmount}>{fmtBRL(item.amount)}</Text>
                     <View style={s.feedStatus}>
-                      <Text style={s.feedStatusTxt}>{item.status || "—"}</Text>
+                      <Text style={s.feedStatusTxt}>{labelStudioStatus(item.status)}</Text>
                     </View>
                     {/* 26/09/2026 (A1): Pix com comprovante ou "já paguei"
                         esperando a lojista conferir no detalhe do pedido. */}
@@ -467,6 +503,12 @@ function makeStyles(t: StudioPalette) {
     alertRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 12 },
     alertTitle: { fontSize: 13, fontWeight: "700" },
     alertSub: { fontSize: 11.5, marginTop: 2 },
+    buscaRow: {
+      flexDirection: "row", alignItems: "center", gap: 8,
+      backgroundColor: t.paperCard, borderRadius: 12, borderWidth: 1, borderColor: t.ink5,
+      paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12,
+    },
+    buscaInput: { flex: 1, fontSize: 13.5, color: t.ink, padding: 0 },
     tabsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12, flexWrap: "wrap" },
     tabs: { flexDirection: "row", gap: 6 },
     tab: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: t.bgSoft, borderWidth: 1, borderColor: t.ink5 },

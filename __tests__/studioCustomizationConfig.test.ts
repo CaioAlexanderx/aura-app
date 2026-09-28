@@ -21,6 +21,9 @@ import {
   artSourceRequired,
   makeField,
   makeArtServiceFields,
+  rotuloDaChave,
+  chaveLateralVisivel,
+  ladoComConteudo,
   ART_SERVICE_FIELD_ID,
   ART_SERVICE_BRIEF_ID,
   TEXT_MAX_CHARS_PADRAO,
@@ -40,6 +43,82 @@ function configDaSheid(): any {
     ],
   };
 }
+
+// QA do detalhe do pedido (26/09/2026, achado 2e): "art_service" cru
+// aparecia como rótulo quando o campo não estava no config carregado
+// (produto sem customization_config, ou config ainda carregando).
+describe("rotuloDaChave", () => {
+  it("usa o rótulo cadastrado quando o campo existe no config", () => {
+    expect(rotuloDaChave("art_service", { art_service: { label: "Quem faz a arte" } })).toBe("Quem faz a arte");
+  });
+
+  it("sem campo cadastrado, cai no rótulo padrão pras chaves conhecidas", () => {
+    expect(rotuloDaChave("art_service", {})).toBe("Quem cria a arte");
+    expect(rotuloDaChave("art_service_brief", {})).toBe("Briefing da arte");
+    expect(rotuloDaChave("has_back_selected", {})).toBe("Personalizar o verso");
+    expect(rotuloDaChave("has_middle_selected", {})).toBe("Personalizar o meio");
+  });
+
+  it("chave de cor lateral (<campo>_cor) cita o campo dono quando ele tem rótulo", () => {
+    expect(rotuloDaChave("text_cor", { text: { label: "Nome do pet" } })).toBe("Cor da arte — Nome do pet");
+    expect(rotuloDaChave("text_cor", {})).toBe("Cor da arte");
+  });
+
+  it("chave totalmente desconhecida devolve ela mesma (nunca quebra)", () => {
+    expect(rotuloDaChave("campo_esquisito", {})).toBe("campo_esquisito");
+  });
+});
+
+// QA do detalhe do pedido (26/09/2026, achado 2f): "Personalizar o
+// verso: Sim" aparecia mesmo quando o verso é incluso no produto (sem
+// cobrança) — a escolha da cliente não muda nada pra produção nesse caso.
+describe("chaveLateralVisivel", () => {
+  it("verso: só aparece quando é cobrado E a cliente escolheu", () => {
+    expect(chaveLateralVisivel("has_back_selected", true, { back_charge_enabled: true } as any)).toBe(true);
+    expect(chaveLateralVisivel("has_back_selected", true, { back_charge_enabled: false } as any)).toBe(false);
+    expect(chaveLateralVisivel("has_back_selected", true, undefined)).toBe(false);
+    expect(chaveLateralVisivel("has_back_selected", false, { back_charge_enabled: true } as any)).toBe(false);
+  });
+
+  it("meio segue a mesma regra do verso", () => {
+    expect(chaveLateralVisivel("has_middle_selected", true, { middle_charge_enabled: true } as any)).toBe(true);
+    expect(chaveLateralVisivel("has_middle_selected", true, { middle_charge_enabled: false } as any)).toBe(false);
+  });
+
+  it("qualquer outra chave sempre aparece", () => {
+    expect(chaveLateralVisivel("text", "Marina & João", undefined)).toBe(true);
+  });
+});
+
+// QA do detalhe do pedido (26/09/2026, achado 2g/4c): a prévia sempre
+// desenhava a frente; quando a personalização de verdade da cliente está
+// no verso, a miniatura mostrava o design de exemplo do catálogo.
+describe("ladoComConteudo", () => {
+  const cfgComVerso: any = {
+    has_back: true,
+    fields: [
+      { id: "template", type: "template", side: "front" },
+      { id: "text_back", type: "text", side: "back" },
+    ],
+  };
+
+  it("sem verso configurado, é sempre a frente", () => {
+    expect(ladoComConteudo({ has_back: false } as any, {})).toBe("front");
+    expect(ladoComConteudo(null, {})).toBe("front");
+  });
+
+  it("frente com conteúdo preenchido: mostra a frente", () => {
+    expect(ladoComConteudo(cfgComVerso, { template: "https://cdn/arte.png" })).toBe("front");
+  });
+
+  it("frente vazia (só o modelo de exemplo do catálogo) e verso com o texto da cliente: mostra o verso", () => {
+    expect(ladoComConteudo(cfgComVerso, { text_back: "Marina & João" })).toBe("back");
+  });
+
+  it("nada preenchido em nenhum lado: cai na frente (comportamento de sempre)", () => {
+    expect(ladoComConteudo(cfgComVerso, {})).toBe("front");
+  });
+});
 
 describe("ids canônicos", () => {
   it("troca f_<timestamp> pelo nome que o motor visual procura", () => {

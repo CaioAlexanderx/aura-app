@@ -52,10 +52,10 @@ export function FloatingApprovalButton() {
     <Pressable
       onPress={() => router.push('/studio/producao?intent=approval' as any)}
       style={styles.fab}
-      accessibilityLabel="Solicitar aprovação de arte ao cliente"
+      accessibilityLabel="Aprovar arte pelo WhatsApp"
     >
       <View style={[styles.fabInner, { backgroundColor: t.accent }]}>
-        <Icon name="message" size={22} color="#fff" />
+        <Icon name="whatsapp" size={22} color="#fff" />
       </View>
       <Text style={[styles.fabLabel, { color: t.ink2 ?? t.ink3 }]}>Aprovar arte</Text>
     </Pressable>

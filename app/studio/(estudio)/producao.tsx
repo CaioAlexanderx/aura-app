@@ -54,6 +54,7 @@ import { useCobrarSaldo } from "@/components/studio/useCobrarSaldo";
 import { useRegistrarPagamento } from "@/components/studio/useRegistrarPagamento";
 import { RegistrarPagamentoSheet } from "@/components/studio/RegistrarPagamentoSheet";
 import { resumoDaSemana, colunaGargalo, riscoDoCard } from "@/components/studio/fluxoDoQuadro";
+import { numeroDoPedido, situacaoDoPixNoCartao, reais } from "@/components/studio/pagamentoDoPedido";
 import {
   useStudioKanbanDnD,
   useDraggableCardRef,
@@ -188,6 +189,10 @@ function DraggableCard({
   const next = NEXT[col.key];
   const platformMeta = o.marketplace_platform ? PLATFORM_LABELS[o.marketplace_platform] : null;
   const isDragging = dnd.draggingId === o.id;
+  // Achado 4b do QA (26/09/2026): mesma fonte de dados que o Hub usa pro
+  // selo "Aguardando Pix", com o caso "pago" a mais (o cartão da fila
+  // quer confirmar que o Pix já caiu, o Hub não precisa mais dizer isso).
+  const pix = situacaoDoPixNoCartao(o);
 
   return (
     <Pressable
@@ -218,7 +223,7 @@ function DraggableCard({
         </View>
       )}
       <View style={s.cardHead}>
-        <Text style={s.cardId}>#{o.id.slice(0, 8).toUpperCase()}</Text>
+        <Text style={s.cardId}>{numeroDoPedido(o)}</Text>
         <View style={[s.slaChip,
                       sla.tone === "warm"  ? { backgroundColor: t.warningSoft } :
                       sla.tone === "late"  ? { backgroundColor: t.dangerSoft } : null]}>
@@ -229,15 +234,32 @@ function DraggableCard({
           </Text>
         </View>
       </View>
+      {/* QA (26/09/2026, achado 4a/2h): `display_name` aqui é o NÚMERO do
+          pedido (a view studio_orders já devolve o order_number puro pros
+          digitais, ou o prefixo PDV-/ML-/SHOP-/MKT- pros outros canais) —
+          não o nome da cliente. O nome de verdade é `customer_name`, que
+          já vinha selecionado à parte e nunca era mostrado aqui. */}
       <Text style={s.cardName} numberOfLines={1}>
-        {o.display_name || "Sem cadastro"}
+        {o.customer_name || o.display_name || "Sem cadastro"}
       </Text>
       <Text style={s.cardMeta}>
         {/* FIX (bug #18 QA): "1 items" — item_count às vezes chega como string
             do backend (COUNT() do Postgres), então "=== 1" (comparação
             estrita) nunca batia e sempre caía no plural. Number() normaliza. */}
-        {o.item_count} item{Number(o.item_count) === 1 ? "" : "s"} · R$ {Number(o.total_amount).toFixed(2)}
+        {o.item_count} {Number(o.item_count) === 1 ? "item" : "itens"} · {reais(o.total_amount)}
       </Text>
+      {pix ? (
+        <View style={[s.pixBadge, { backgroundColor: pix.tom === "sucesso" ? t.successSoft : t.warningSoft }]}>
+          <Icon
+            name={pix.tom === "sucesso" ? "check-circle" : "alert-circle"}
+            size={10}
+            color={pix.tom === "sucesso" ? t.successInk : t.warningInk}
+          />
+          <Text style={[s.pixBadgeTxt, { color: pix.tom === "sucesso" ? t.successInk : t.warningInk }]}>
+            {pix.rotulo}
+          </Text>
+        </View>
+      ) : null}
       {platformMeta && (
         <View style={[s.platformBadge, { backgroundColor: platformMeta.bg }]}>
           <Icon name="shopping-bag" size={10} color={platformMeta.fg} />
@@ -259,7 +281,7 @@ function DraggableCard({
         <View style={[s.balanceBadge, o.balance_status === "overdue" && { backgroundColor: t.dangerSoft }]}>
           <Icon name="dollar-sign" size={10} color={o.balance_status === "overdue" ? t.dangerInk : t.warningInk} />
           <Text style={[s.balanceBadgeTxt, o.balance_status === "overdue" && { color: t.dangerInk }]}>
-            R$ {Number(o.balance_amount).toFixed(2)} · {o.balance_status === "overdue" ? "venceu" : "vence"} {fmtDueShort(o.balance_due_date)}
+            {reais(o.balance_amount)} · {o.balance_status === "overdue" ? "venceu" : "vence"} {fmtDueShort(o.balance_due_date)}
           </Text>
         </View>
       )}
@@ -316,8 +338,9 @@ function DraggableCard({
           <Pressable
             style={s.btnApproval}
             onPress={(e) => { e.stopPropagation && e.stopPropagation(); onApproval(o); }}
+            accessibilityLabel="Solicitar aprovação de arte pelo WhatsApp"
           >
-            <Icon name="message-circle" size={12} color="#fff" />
+            <Icon name="whatsapp" size={12} color="#fff" />
             <Text style={s.btnApprovalTxt}>Solicitar aprovação</Text>
           </Pressable>
         )}
@@ -658,7 +681,7 @@ export default function StudioProducao() {
           // FIX (bug #18 QA): drag-and-drop é web-only (useStudioKanbanDnD),
           // então o copy não pode prometer "arraste" em mobile/nativo. Acento
           // de "botões" corrigido de quebra.
-          subtitle={dnd.isWeb ? "Arraste os cards (ou use os botões) pra mover." : "Use os botões dos cards pra mover entre as etapas."}
+          subtitle={dnd.isWeb ? "Arraste os cartões ou use os botões para mover." : "Use os botões dos cartões para mover entre as etapas."}
           rightSlot={
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               {/* K2: um botão, nada pra configurar antes. */}
@@ -868,6 +891,13 @@ function buildStyles(t: StudioPalette) {
       alignSelf: "flex-start", marginTop: 4,
     },
     approvalBadgeTxt: { fontSize: 10.5, color: t.infoInk, fontWeight: "700" },
+    // 26/09/2026 (achado 4b do QA) — situação do Pix no cartão.
+    pixBadge: {
+      flexDirection: "row", alignItems: "center", gap: 5,
+      paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
+      alignSelf: "flex-start", marginTop: 4,
+    },
+    pixBadgeTxt: { fontSize: 10.5, fontWeight: "800" },
     // 18/08/2026 (K4) — leitura do fluxo
     reguaWrap:   { paddingHorizontal: 20, paddingBottom: 10 },
     regua: {
