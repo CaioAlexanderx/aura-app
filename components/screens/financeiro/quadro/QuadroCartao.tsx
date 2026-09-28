@@ -25,9 +25,11 @@ type Props = {
   onInicio: (id: string) => void;
   onFim: () => void;
   onAcao: (cartao: CartaoQuadro, de: ColunaQuadro, mov: Movimento) => void;
+  /** Abre o "Editar lançamento" (valor com juros/mora, descrição, data...). */
+  onEditar?: (cartao: CartaoQuadro) => void;
 };
 
-export function QuadroCartao({ cartao, coluna, tipo, hoje, mes, arrastavel, arrastando, onInicio, onFim, onAcao }: Props) {
+export function QuadroCartao({ cartao, coluna, tipo, hoje, mes, arrastavel, arrastando, onInicio, onFim, onAcao, onEditar }: Props) {
   const ref = useDraggableCardRef(arrastavel && cartao.movable, cartao.id, onInicio, onFim);
   const { m } = useValoresOcultos();
   const r = rotulos(tipo);
@@ -72,6 +74,11 @@ export function QuadroCartao({ cartao, coluna, tipo, hoje, mes, arrastavel, arra
                 </Pressable>
               )}
             </>
+          )}
+          {onEditar && (
+            <Pressable onPress={() => onEditar(cartao)} style={s.btn} accessibilityRole="button" testID={"quadro-editar-" + cartao.id}>
+              <Text style={s.btnTxt}>Editar</Text>
+            </Pressable>
           )}
         </View>
       ) : (

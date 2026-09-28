@@ -7,6 +7,7 @@ import { useState, type ReactNode } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import { QuadroFinanceiro } from "./QuadroFinanceiro";
+import type { Transaction } from "@/components/screens/financeiro/types";
 
 export type VisaoLancamentos = "lista" | "quadro";
 const CHAVE = "aura.financeiro.visaoLancamentos";
@@ -22,7 +23,7 @@ function gravarVisao(v: VisaoLancamentos) {
   try { if (typeof localStorage !== "undefined") localStorage.setItem(CHAVE, v); } catch { /* aba anônima */ }
 }
 
-export function ListaOuQuadro({ podeQuadro, companyId, children }: { podeQuadro: boolean; companyId?: string | null; children: ReactNode }) {
+export function ListaOuQuadro({ podeQuadro, companyId, onEditar, children }: { podeQuadro: boolean; companyId?: string | null; onEditar?: (tx: Transaction) => void; children: ReactNode }) {
   const [visao, setVisao] = useState<VisaoLancamentos>(lerVisao);
   if (!podeQuadro || !companyId) return <>{children}</>;
 
@@ -38,7 +39,7 @@ export function ListaOuQuadro({ podeQuadro, companyId, children }: { podeQuadro:
           </Pressable>
         ))}
       </View>
-      {visao === "quadro" ? <QuadroFinanceiro companyId={companyId} /> : children}
+      {visao === "quadro" ? <QuadroFinanceiro companyId={companyId} onEditar={onEditar ? (l) => onEditar(l as Transaction) : undefined} /> : children}
     </View>
   );
 }

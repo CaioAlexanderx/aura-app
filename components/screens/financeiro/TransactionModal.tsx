@@ -249,6 +249,8 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
         qc.invalidateQueries({ queryKey: ["current-month-expenses", company.id] });
         qc.invalidateQueries({ queryKey: ["dashboard", company.id] });
         qc.invalidateQueries({ queryKey: ["dre", company.id] });
+        // 28/09/2026: o Quadro do Financeiro também abre este modal (Editar).
+        qc.invalidateQueries({ queryKey: ["transactions-board", company.id] });
         // Se vinculado a venda, invalida tambem a sale-detail e listagem
         if (isLinkedToSale) {
           qc.invalidateQueries({ queryKey: ["sales-list", company.id] });

@@ -2,7 +2,7 @@
 // selos de prazo, meses e a atualização otimista do cache.
 import {
   aplicarMovimento, diasEntre, mesDeOrigem, motivoDoBloqueio, movimento, nomeDoMes,
-  rotulos, seloDoPrazo, somarMes, corpoDoMovimento, type CartaoQuadro, type Quadro,
+  rotulos, seloDoPrazo, somarMes, corpoDoMovimento, cartaoParaLancamento, type CartaoQuadro, type Quadro,
 } from "@/utils/quadroFinanceiro";
 
 function cartao(over: Partial<CartaoQuadro>): CartaoQuadro {
@@ -113,5 +113,16 @@ describe("corpoDoMovimento (PATCH)", () => {
     expect(corpoDoMovimento({ id: "b", mov: "baixa", data: "2026-09-27", forma: "pix" })).toEqual({ status: "confirmed", paid_at: "2026-09-27", payment_method: "pix" });
     expect(corpoDoMovimento({ id: "c", mov: "desfazer" })).toEqual({ status: "pending" });
     expect(corpoDoMovimento({ id: "a", mov: "nova_data", data: "2026-10-05" })).toEqual({ due_date: "2026-10-05" });
+  });
+});
+
+describe("cartaoParaLancamento (botão Editar)", () => {
+  it("entrega ao modal o formato da lista, com o funcionário preservado", () => {
+    const t = cartaoParaLancamento(cartao({ id: "b", employee_id: "emp-1", employee_name: "Ana", payment_method: "pix" }), "expense");
+    expect(t).toMatchObject({ id: "b", desc: "Encomenda", type: "expense", amount: 100, due_date: "2026-09-30", payment_method: "pix", employee_id: "emp-1", employee_name: "Ana" });
+  });
+
+  it("sem funcionário manda null (undefined faria o modal apagar o vínculo)", () => {
+    expect(cartaoParaLancamento(cartao({}), "income").employee_id).toBeNull();
   });
 });

@@ -43,9 +43,11 @@ function texto(node: any): string {
   return texto(node.children);
 }
 
+const mockEditar = jest.fn();
+
 function render() {
   let t!: renderer.ReactTestRenderer;
-  act(() => { t = renderer.create(<QuadroFinanceiro companyId="c1" />); });
+  act(() => { t = renderer.create(<QuadroFinanceiro companyId="c1" onEditar={mockEditar} />); });
   return t;
 }
 
@@ -89,5 +91,12 @@ describe("QuadroFinanceiro", () => {
     act(() => { porTestID(t, "quadro-nova-data-a").props.onPress(); });
     act(() => { porTestID(t, "quadro-confirmar").props.onPress(); });
     expect(mockMover).toHaveBeenCalledWith({ id: "a", mov: "nova_data", data: "2026-10-05", forma: undefined });
+  });
+
+  it("Editar aparece nos cartões editáveis e abre o lançamento no formato do modal", () => {
+    const t = render();
+    expect(porTestID(t, "quadro-editar-c")).toBeUndefined();
+    act(() => { porTestID(t, "quadro-editar-a").props.onPress(); });
+    expect(mockEditar).toHaveBeenCalledWith(expect.objectContaining({ id: "a", desc: "Parcela calça", type: "income", amount: 97.5, employee_id: null }));
   });
 });
