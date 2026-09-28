@@ -24,13 +24,25 @@ const txt = (campo = "text", texto = "Helena", extra: any = {}) => ({
 });
 
 describe("layout padrão (sem ajuste)", () => {
-  test("só imagem: inteira, centralizada, com respiro", () => {
+  test("só imagem: inteira em 90% da altura, como o 2D de sempre", () => {
     const [it] = resolverArte(arte({ imagens: [img()] }), 20, 9, medir) as ItemImagem[];
     expect(it.cx).toBeCloseTo(10);
-    expect(it.cy).toBeCloseTo(4.5);
-    // 9 × 0,9 = 8,1 de altura → largura 10,8 (4:3), menor que 20 × 0,9
+    // compose2d: caixa de 0,9 H a partir do topo → centro em 0,45 H
+    expect(it.cy).toBeCloseTo(4.05);
     expect(it.h).toBeCloseTo(8.1);
     expect(it.w).toBeCloseTo(10.8);
+  });
+
+  test("sem ajuste, os números do 2D da main: imagem nos 62% de cima e texto no meio da faixa de baixo", () => {
+    const [im, t] = resolverArte(arte({ imagens: [img()], textos: [txt("text", "Oi")] }), 20, 9, medir) as [ItemImagem, ItemTexto];
+    expect(im.h).toBeCloseTo(9 * 0.62);
+    expect(im.cy).toBeCloseTo(9 * 0.31);
+    expect(t.px).toBeCloseTo(9 * 0.22);
+    expect(t.cy).toBeCloseTo(9 * 0.62 + (9 * 0.38) / 2);
+    // só texto: 0,3 H, no meio (#998)
+    const [so] = resolverArte(arte({ textos: [txt("text", "Oi")] }), 20, 9, medir) as ItemTexto[];
+    expect(so.px).toBeCloseTo(2.7);
+    expect(so.cy).toBeCloseTo(4.5);
   });
 
   test("imagem e dois textos: TODOS entram — imagem em cima, um texto por linha embaixo", () => {

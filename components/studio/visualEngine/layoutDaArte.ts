@@ -223,10 +223,13 @@ export function resolverArte(arte: ArteDoLado, W: number, H: number, medir: Medi
   const areaHcm = arte.areaCm && arte.areaCm.h > 0 ? arte.areaCm.h : null;
   const out: ItemDaArte[] = [];
 
-  // Faixas do padrão: as imagens ocupam 62% de cima quando há texto.
+  // Faixas do padrão — os números do 2D de sempre (compose2d,
+  // desenharArteNoRetangulo), para pedido sem ajuste sair igual: a
+  // imagem nos 62% de cima quando há texto, em 90% da altura quando não
+  // há; o texto centrado na faixa de baixo, ou no meio sem imagem (#998).
   const temTexto = textos.length > 0;
   const temImagem = imagens.length > 0;
-  const faixaImg = temTexto ? H * 0.62 : H;
+  const faixaImg = temTexto ? H * 0.62 : H * 0.9;
   const nImg = Math.max(1, imagens.length);
 
   imagens.forEach((im, i) => {
@@ -236,13 +239,13 @@ export function resolverArte(arte: ArteDoLado, W: number, H: number, medir: Medi
     if (aj && aj.larg) {
       w = aj.larg * W; cx = aj.cx * W; cy = aj.cy * H; rot = aj.rot || 0; encaixe = aj.encaixe || "livre";
     } else {
-      // Padrão: inteira numa coluna da faixa de cima, com respiro de 5%.
+      // Padrão: inteira numa coluna da faixa de cima (lado a lado quando
+      // há mais de uma).
       const colW = W / nImg;
-      const boxW = colW * (nImg > 1 ? 0.94 : 1) * (temTexto ? 1 : 0.9);
-      const boxH = faixaImg * 0.9;
-      w = Math.min(boxW, boxH / a);
+      const boxW = colW * (nImg > 1 ? 0.94 : 1);
+      w = Math.min(boxW, faixaImg / a);
       cx = colW * (i + 0.5);
-      cy = temTexto ? faixaImg / 2 : H / 2;
+      cy = faixaImg / 2;
       rot = aj ? aj.rot || 0 : 0;
       encaixe = "ajustar";
       if (aj) { cx = aj.cx * W; cy = aj.cy * H; }
@@ -264,7 +267,7 @@ export function resolverArte(arte: ArteDoLado, W: number, H: number, medir: Medi
     } else {
       const base = t.tam
         ? altDoTamanho(t.tam, areaHcm) * H
-        : temImagem ? linha * 0.58 : Math.min(linha * 0.6, H * 0.3);
+        : Math.min(temImagem ? linha * (0.22 / 0.38) : linha * 0.3, W * 0.6);
       // Cabe na largura: encolhe até 94% da área, como sempre.
       const larg = medir.largura(t.texto, t.fonte, base);
       px = larg > W * 0.94 ? base * (W * 0.94) / larg : base;
