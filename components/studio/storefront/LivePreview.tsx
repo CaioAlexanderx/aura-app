@@ -37,20 +37,11 @@ import { Icon } from "@/components/Icon";
 import type { VisualTemplate, VisualView } from "@/services/studioVisualApi";
 import { fetchStorefrontVisualTemplate } from "./visualTemplatePublic";
 
-// S3 — a cor escolhida no campo `color` e a cor da LOUCA no mockup 3D.
-// Sem isto o motor caia no default bege e a escolha do cliente nao
-// aparecia no preview — o oposto do que o mockup existe para mostrar.
-// Nao ha campo de cor, ou nada escolhido: devolve undefined e o motor usa
-// o proprio default, como antes.
-function corDaLouca(
-  cfg: CustomizationConfig | null | undefined,
-  values: Record<string, any>
-): string | undefined {
-  const campo = cfg?.fields?.find((f) => f.type === "color");
-  if (!campo) return undefined;
-  const v = values?.[campo.id];
-  return typeof v === "string" && /^#[0-9a-fA-F]{3,8}$/.test(v.trim()) ? v.trim() : undefined;
-}
+// S3 — a cor escolhida no campo `color` e a cor da PECA no mockup (3D e,
+// desde 27/09/2026, tambem no 2D). Sem isto o motor caia no default bege
+// e a escolha do cliente nao aparecia no preview — o oposto do que o
+// mockup existe para mostrar. A regra mora em visualEngine/corDaPeca.ts.
+import { corDaPeca } from "@/components/studio/visualEngine/corDaPeca";
 import { composeView } from "@/components/studio/visualEngine/compose2d";
 import { Mug3DPreview } from "@/components/studio/visualEngine/Mug3DPreview";
 
@@ -280,6 +271,10 @@ export function LivePreview({
     composeView(canvasRef.current, engineView, engineValues, {
       showAreas: false,
       pixelWidth: 800,
+      // A camiseta vetorial ficava bege com "preto" escolhido: a cor só
+      // chegava ao 3D. Agora o 2D recebe a mesma cor (e inverte as dobras
+      // quando ela é escura — ver dobrasParaCor).
+      garmentColor: corDaPeca(config, safeValues),
       artColor: motor.artColor,
       font: motor.font,
     });
@@ -301,7 +296,7 @@ export function LivePreview({
           // S3 — a cor da louca vinha do default do motor (#F5F2EA) e
           // ninguem a alimentava: toda caneca renderizava bege, qualquer
           // que fosse a cor escolhida. O parametro existia desde a F4.
-          garmentColor={corDaLouca(config, safeValues)}
+          garmentColor={corDaPeca(config, safeValues)}
           artColor={motor.artColor}
           font={motor.font}
         />

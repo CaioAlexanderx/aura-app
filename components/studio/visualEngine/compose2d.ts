@@ -16,6 +16,7 @@
 // 03/07/2026 — F1 do escopo Visualização 2D/3D (contrato no chat)
 // ============================================================
 import type { VisualArea, VisualView } from "@/services/studioVisualApi";
+import { hexToRgb } from "./mugScene";
 
 export type ComposeValues = Record<string, any>; // fieldId → valor (contrato do PersonalizationPreview)
 
@@ -47,6 +48,41 @@ function loadImage(url: string): Promise<HTMLImageElement | null> {
   });
 }
 
+// ── A tinta das dobras depende da cor da peça ────────────────
+// 27/09/2026: contorno, gola e dobras eram sempre preto com alfa. Numa
+// camiseta preta somem todos, e a peça vira uma silhueta chapada. Em
+// peça escura as dobras passam a ser claras (branco com alfa) e o realce
+// escuro — o mesmo desenho, com a tinta invertida.
+export type TintaDasDobras = {
+  escura: boolean;
+  /** "r,g,b" da tinta das dobras e do contorno. */
+  sombra: string;
+  /** "r,g,b" do realce ao lado de cada dobra. */
+  realce: string;
+};
+
+/** Luminância relativa (WCAG) de um hex; cor inválida conta como clara. */
+export function luminanciaRelativa(hex: string): number {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return 1;
+  const lin = (c: number) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * lin(rgb[0]) + 0.7152 * lin(rgb[1]) + 0.0722 * lin(rgb[2]);
+}
+
+// Abaixo disto o preto com alfa já não se distingue do tecido. Vermelho
+// (#EF4444, 0.22) e o violeta da marca (0.13) contam como escuros.
+const LUMINANCIA_ESCURA = 0.25;
+
+export function dobrasParaCor(hex: string): TintaDasDobras {
+  const escura = luminanciaRelativa(hex) < LUMINANCIA_ESCURA;
+  return escura
+    ? { escura, sombra: "255,255,255", realce: "0,0,0" }
+    : { escura, sombra: "0,0,0", realce: "255,255,255" };
+}
+
 // ── Garment vetorial provisório (camiseta, base 1000×760) ────
 function tshirtPath(ctx: CanvasRenderingContext2D, back: boolean) {
   ctx.beginPath();
@@ -70,11 +106,11 @@ function tshirtPath(ctx: CanvasRenderingContext2D, back: boolean) {
   ctx.closePath();
 }
 
-function drawFolds(ctx: CanvasRenderingContext2D, back: boolean, alpha: number) {
+function drawFolds(ctx: CanvasRenderingContext2D, back: boolean, alpha: number, tinta: TintaDasDobras) {
   ctx.save();
   tshirtPath(ctx, back);
   ctx.clip();
-  ctx.strokeStyle = "rgba(0,0,0," + alpha + ")";
+  ctx.strokeStyle = "rgba(" + tinta.sombra + "," + alpha + ")";
   ctx.lineWidth = 9;
   ctx.lineCap = "round";
   const cr = [
@@ -87,12 +123,12 @@ function drawFolds(ctx: CanvasRenderingContext2D, back: boolean, alpha: number) 
   for (const c of cr) {
     ctx.beginPath(); ctx.moveTo(c[0], c[1]); ctx.quadraticCurveTo(c[2], c[3], c[4], c[5]); ctx.stroke();
   }
-  ctx.strokeStyle = "rgba(255,255,255," + alpha * 1.4 + ")";
+  ctx.strokeStyle = "rgba(" + tinta.realce + "," + alpha * 1.4 + ")";
   ctx.lineWidth = 5;
   for (const c of cr) {
     ctx.beginPath(); ctx.moveTo(c[0], c[1] + 7); ctx.quadraticCurveTo(c[2], c[3] + 7, c[4], c[5] + 7); ctx.stroke();
   }
-  ctx.fillStyle = "rgba(0,0,0," + alpha * 1.2 + ")";
+  ctx.fillStyle = "rgba(" + tinta.sombra + "," + alpha * 1.2 + ")";
   ctx.beginPath(); ctx.ellipse(330, 320, 26, 60, 0.5, 0, 7); ctx.fill();
   ctx.beginPath(); ctx.ellipse(670, 320, 26, 60, -0.5, 0, 7); ctx.fill();
   ctx.restore();
@@ -133,6 +169,7 @@ export async function composeView(
 
   // 2. Produto: foto HD ou garment vetorial provisório
   const isVector = !view.photo_url;
+  const tinta = dobrasParaCor(o.garmentColor);
   if (view.photo_url) {
     const photo = await loadImage(view.photo_url);
     if (photo) ctx.drawImage(photo, 0, 0, view.base.w, view.base.h);
@@ -142,12 +179,12 @@ export async function composeView(
     tshirtPath(ctx, back);
     ctx.fillStyle = o.garmentColor;
     ctx.fill();
-    ctx.strokeStyle = "rgba(0,0,0,0.22)";
+    ctx.strokeStyle = "rgba(" + tinta.sombra + ",0.22)";
     ctx.lineWidth = 2;
     ctx.stroke();
     ctx.restore();
     if (!back) {
-      ctx.strokeStyle = "rgba(0,0,0,0.30)";
+      ctx.strokeStyle = "rgba(" + tinta.sombra + ",0.30)";
       ctx.lineWidth = 6;
       ctx.beginPath();
       ctx.moveTo(392, 128);
@@ -155,7 +192,7 @@ export async function composeView(
       ctx.quadraticCurveTo(560, 196, 608, 128);
       ctx.stroke();
     }
-    drawFolds(ctx, back, 0.06);
+    drawFolds(ctx, back, 0.06, tinta);
   }
 
   // 3. Sombras da foto real (multiply) — fase fotos HD
@@ -169,7 +206,7 @@ export async function composeView(
 
   // 5. Sombras por cima da arte (a arte "assenta" no tecido)
   if (isVector && view.garment && view.garment.shape === "tshirt") {
-    drawFolds(ctx, !!view.garment.back, 0.075);
+    drawFolds(ctx, !!view.garment.back, 0.075, tinta);
   } else if (shading) {
     ctx.save();
     ctx.globalCompositeOperation = "multiply";

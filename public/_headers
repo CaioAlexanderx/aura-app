@@ -8,6 +8,14 @@
 /fonts/*
   Cache-Control: public, max-age=31536000, immutable
 
+# Modelos 3D (GLB) do Studio. A vitrine roda em loja.getaura.com.br e o
+# viewer (three.js) busca o arquivo por XHR em app.getaura.com.br: sem CORS
+# o navegador recusa e a peça não aparece. Sem hash no nome: cache de um
+# dia, para uma troca de modelo chegar às lojas sem esperar um ano.
+/models/*
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=86400
+
 # Demais respostas (HTML/entry da SPA, JSON, etc.) — sempre revalidar para
 # não servir um index.html antigo apontando p/ chunks de build anterior.
 /*

@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teste 3D · camiseta em GLB</title>
+<!--
+  Página de teste manual do viewer GLB do Aura Studio, sem subir o app.
+  Reimplementa o essencial de compose3dMug.ts (three r128 + GLTFLoader do
+  CDN, peça centrada e escalada, CanvasTexture com flipY=false, arte na
+  área UV da spec) para conferir o modelo e as áreas no navegador.
+
+  Como abrir (o GLB e o JSON precisam vir por http, não por file://):
+    na raiz do repositório:  npx serve .      (ou: python -m http.server 8000)
+    depois:  http://localhost:3000/docs/studio/visual-templates/teste-3d.html
+  Parâmetros opcionais:
+    ?spec=./camiseta-basica-3d.json      (padrão)
+    ?glb=../../../public/models/camiseta-basica.glb   (padrão local; sem ele
+         usa a url da spec, que só existe depois do deploy)
+-->
+<style>
+  :root { --papel: #FBF8F3; --tinta: #1F1B16; --borda: #E2DCD2; }
+  body { margin: 0; font: 14px/1.4 system-ui, sans-serif; background: var(--papel); color: var(--tinta); }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; grid-template-columns: 1fr 300px; }
+  @media (max-width: 760px) { main { grid-template-columns: 1fr; } }
+  canvas#cena { width: 100%; aspect-ratio: 1 / 0.78; display: block; border: 1px solid var(--borda); border-radius: 12px; cursor: grab; touch-action: none; }
+  aside { display: grid; gap: 10px; align-content: start; }
+  label { display: grid; gap: 4px; font-weight: 600; font-size: 12px; }
+  input, select { font: inherit; padding: 6px 8px; border: 1px solid var(--borda); border-radius: 8px; background: #fff; }
+  #textura { width: 100%; border: 1px solid var(--borda); border-radius: 8px; background: #fff; }
+  #status { font-size: 12px; color: #6B6257; min-height: 1.4em; }
+  h1 { font-size: 16px; margin: 0 0 4px; grid-column: 1 / -1; }
+  small { color: #6B6257; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Camiseta em GLB · viewer de teste <small>(arraste para girar)</small></h1>
+  <div>
+    <canvas id="cena"></canvas>
+    <div id="status">carregando…</div>
+  </div>
+  <aside>
+    <label>Texto <input id="texto" value="Aura"></label>
+    <label>Cor da peça <input id="cor" type="color" value="#F5F2EA"></label>
+    <label>Cor da arte <input id="corArte" type="color" value="#D85A30"></label>
+    <label>Área <select id="area"></select></label>
+    <label><input id="mostrarArea" type="checkbox" checked> mostrar o retângulo da área e um círculo de prova</label>
+    <label>Textura pintada <canvas id="textura"></canvas></label>
+    <div id="info"></div>
+  </aside>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script>
+(async function () {
+  const q = new URLSearchParams(location.search);
+  const status = (m) => { document.getElementById("status").textContent = m; };
+  const specUrl = q.get("spec") || "./camiseta-basica-3d.json";
+  let template;
+  try {
+    template = await (await fetch(specUrl)).json();
+  } catch (e) {
+    status("Não consegui ler a spec em " + specUrl + " — abra por http (npx serve .), não por file://");
+    return;
+  }
+  const spec = template.spec || template;
+  const model = spec.model || {};
+  const glbUrl = q.get("glb") || (location.protocol === "file:" ? null : "../../../public/models/camiseta-basica.glb");
+  const url = glbUrl || model.url;
+  const ALTURA_ALVO = 2.3, FOV = model.camera && model.camera.fov || 32, DIST_PADRAO = 6.6;
+  const OCUP_V = ALTURA_ALVO / (2 * DIST_PADRAO * Math.tan((FOV / 2) * Math.PI / 180)), OCUP_H = 0.82;
+
+  const canvas = document.getElementById("cena");
+  const texCv = document.getElementById("textura");
+  texCv.width = model.texture && model.texture.w || 2048;
+  texCv.height = model.texture && model.texture.h || 1024;
+
+  const areaSel = document.getElementById("area");
+  for (const a of spec.areas || []) {
+    const op = document.createElement("option");
+    op.value = a.id; op.textContent = a.id + " · " + a.width_cm + "×" + a.height_cm + " cm";
+    areaSel.appendChild(op);
+  }
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color("#FBF8F3");
+  const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 100);
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
+  renderer.shadowMap.enabled = true;
+  scene.add(new THREE.HemisphereLight(0xfff6e8, 0xb9ae9e, 0.35));
+  const key = new THREE.DirectionalLight(0xfff3e4, 1.0); key.position.set(3.2, 6, 4.5); key.castShadow = true; scene.add(key);
+  const fill = new THREE.DirectionalLight(0xe8f0ff, 0.3); fill.position.set(-5, 2.5, 3); scene.add(fill);
+  const rim = new THREE.DirectionalLight(0xffffff, 0.5); rim.position.set(-2, 4, -5); scene.add(rim);
+  const chao = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ opacity: 0.2 }));
+  chao.rotation.x = -Math.PI / 2; chao.receiveShadow = true; scene.add(chao);
+
+  status("baixando " + url);
+  const gltf = await new Promise((res, rej) => new THREE.GLTFLoader().load(url, res, undefined, rej)).catch((e) => {
+    status("Falha ao carregar o GLB: " + (e && e.message || e)); return null;
+  });
+  if (!gltf) return;
+  const modelo = gltf.scene;
+  const meshes = []; modelo.traverse((o) => { if (o.isMesh) meshes.push(o); });
+  const nome = model.print_mesh;
+  let print = meshes.find((m) => m.name === nome || (m.material && m.material.name === nome));
+  if (!print) print = meshes.reduce((a, b) => (b.geometry.attributes.position.count > a.geometry.attributes.position.count ? b : a));
+  modelo.updateMatrixWorld(true);
+  const caixa0 = new THREE.Box3().setFromObject(modelo);
+  const tam0 = caixa0.getSize(new THREE.Vector3()), centro = caixa0.getCenter(new THREE.Vector3());
+  const k = (ALTURA_ALVO / tam0.y) * (model.scale || 1);
+  const pivo = new THREE.Group(); modelo.position.set(-centro.x, -centro.y, -centro.z); pivo.add(modelo); pivo.scale.setScalar(k);
+  const caixa = { width: tam0.x * k, height: tam0.y * k, depth: tam0.z * k };
+  chao.position.y = -caixa.height / 2 - 0.001;
+  const group = new THREE.Group(); group.add(pivo); group.rotation.y = ((model.rotation_y || 0) * Math.PI) / 180; scene.add(group);
+
+  // A trama do tecido, como em compose3dMug.ts: um ladrilho de fios (semente
+  // fixa) por cima da cor, e o mapa de normais assado no tamanho da textura.
+  const trama = document.createElement("canvas"); trama.width = 64; trama.height = 64;
+  (function () {
+    const c = trama.getContext("2d"); c.fillStyle = "#707070"; c.fillRect(0, 0, 64, 64);
+    let s = 7; const rnd = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+    for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+      const cima = (x + y) % 2 === 0, b = 128 + (cima ? 10 : -6) + Math.round((rnd() - 0.5) * 12);
+      c.fillStyle = "rgb(" + b + "," + b + "," + b + ")";
+      if (cima) c.fillRect(x * 8 + 1, y * 8, 6, 8); else c.fillRect(x * 8, y * 8 + 1, 8, 6);
+    }
+  })();
+  const normalMap = (function () {
+    const N = 64, src = trama.getContext("2d").getImageData(0, 0, N, N).data;
+    const h = (x, y) => src[(((y + N) % N) * N + ((x + N) % N)) * 4] / 255;
+    const lad = document.createElement("canvas"); lad.width = N; lad.height = N;
+    const lc = lad.getContext("2d"), out = lc.createImageData(N, N);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const dx = (h(x + 1, y) - h(x - 1, y)) * 2, dy = (h(x, y + 1) - h(x, y - 1)) * 2, len = Math.sqrt(dx * dx + dy * dy + 1), i = (y * N + x) * 4;
+      out.data[i] = Math.round((-dx / len * 0.5 + 0.5) * 255); out.data[i + 1] = Math.round((-dy / len * 0.5 + 0.5) * 255);
+      out.data[i + 2] = Math.round((1 / len * 0.5 + 0.5) * 255); out.data[i + 3] = 255;
+    }
+    lc.putImageData(out, 0, 0);
+    const cv = document.createElement("canvas"); cv.width = texCv.width; cv.height = texCv.height;
+    const c = cv.getContext("2d"); c.fillStyle = c.createPattern(lad, "repeat"); c.fillRect(0, 0, cv.width, cv.height);
+    const t = new THREE.CanvasTexture(cv); t.flipY = false; return t;
+  })();
+  const fab = model.materials && model.materials.fabric || {};
+  const ns = fab.normal_scale != null ? fab.normal_scale : 0.35;
+  const texture = new THREE.CanvasTexture(texCv);
+  texture.encoding = THREE.sRGBEncoding;
+  texture.flipY = false;
+  print.material = new THREE.MeshStandardMaterial({
+    map: texture, roughness: fab.roughness != null ? fab.roughness : 0.85, metalness: 0,
+    normalMap, normalScale: new THREE.Vector2(ns, ns), side: THREE.DoubleSide,
+  });
+  meshes.forEach((m) => { m.castShadow = true; });
+
+  document.getElementById("info").innerHTML =
+    "<small>meshes: " + meshes.map((m) => m.name + " (" + (m.material && m.material.name) + ", " + m.geometry.attributes.position.count + " v)").join("; ") +
+    "<br>impressão: <b>" + print.name + "</b><br>caixa original: " + tam0.x.toFixed(3) + " × " + tam0.y.toFixed(3) + " × " + tam0.z.toFixed(3) +
+    "<br>escala: " + k.toFixed(3) + " · textura " + texCv.width + "×" + texCv.height + "</small>";
+
+  function pintar() {
+    const ctx = texCv.getContext("2d");
+    const W = texCv.width, H = texCv.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = document.getElementById("cor").value;
+    ctx.fillRect(0, 0, W, H);
+    const padrao = ctx.createPattern(trama, "repeat");
+    ctx.save(); ctx.globalCompositeOperation = "overlay"; ctx.globalAlpha = 0.55; ctx.fillStyle = padrao; ctx.fillRect(0, 0, W, H); ctx.restore();
+    const area = (spec.areas || []).find((a) => a.id === areaSel.value) || (spec.areas || [])[0];
+    if (!area || !area.uv) { texture.needsUpdate = true; return; }
+    const uv = area.uv;
+    const x = uv.u0 * W, y = (1 - uv.v1) * H, w = (uv.u1 - uv.u0) * W, h = (uv.v1 - uv.v0) * H;
+    const texto = document.getElementById("texto").value;
+    const corArte = document.getElementById("corArte").value;
+    if (document.getElementById("mostrarArea").checked) {
+      ctx.save();
+      ctx.strokeStyle = "#7C3AED"; ctx.setLineDash([12, 8]); ctx.lineWidth = 4; ctx.strokeRect(x, y, w, h);
+      // círculo de prova: se aparecer como elipse na peça, a textura não
+      // tem a proporção certa (model.texture w:h)
+      ctx.setLineDash([]); ctx.beginPath(); ctx.arc(x + w / 2, y + h * 0.3, Math.min(w, h) * 0.18, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
+    if (texto) {
+      ctx.fillStyle = corArte; ctx.textAlign = "center";
+      let px = h * 0.28; ctx.font = "600 " + Math.round(px) + "px Georgia, serif";
+      while (px > 12 && ctx.measureText(texto).width > w * 0.92) { px -= 4; ctx.font = "600 " + Math.round(px) + "px Georgia, serif"; }
+      ctx.fillText(texto, x + w / 2, y + h * 0.55 + h * 0.45 * 0.6 + px * 0.3);
+    }
+    // a arte "assenta": a trama multiplicada por cima, só na área
+    ctx.save(); ctx.globalCompositeOperation = "multiply"; ctx.globalAlpha = 0.22; ctx.fillStyle = padrao; ctx.fillRect(x, y, w, h); ctx.restore();
+    texture.needsUpdate = true;
+  }
+
+  function resize() {
+    const w = canvas.clientWidth || 640, h = Math.round(w * 0.78);
+    renderer.setSize(w, h, false);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+    const vis = 2 * Math.tan((FOV / 2) * Math.PI / 180);
+    const ideal = Math.max(caixa.height / (vis * OCUP_V), caixa.width / (vis * camera.aspect * OCUP_H));
+    const dist = model.camera && model.camera.distance || Math.max(DIST_PADRAO, ideal);
+    const alt = model.camera && model.camera.height != null ? model.camera.height : 0.2;
+    camera.position.set(0, dist * alt, dist); camera.lookAt(0, -0.05, 0);
+  }
+
+  let dragging = false, lastX = 0, tocado = false;
+  canvas.addEventListener("pointerdown", (e) => { dragging = true; tocado = true; lastX = e.clientX; canvas.setPointerCapture(e.pointerId); });
+  canvas.addEventListener("pointermove", (e) => { if (!dragging) return; group.rotation.y += (e.clientX - lastX) * 0.011; lastX = e.clientX; });
+  canvas.addEventListener("pointerup", () => { dragging = false; });
+  for (const id of ["texto", "cor", "corArte", "area", "mostrarArea"]) document.getElementById(id).addEventListener("input", pintar);
+  window.addEventListener("resize", resize);
+
+  resize(); pintar();
+  status("ok · " + url);
+  (function loop() { if (!tocado) group.rotation.y += 0.004; renderer.render(scene, camera); requestAnimationFrame(loop); })();
+})();
+</script>
+</body>
+</html>

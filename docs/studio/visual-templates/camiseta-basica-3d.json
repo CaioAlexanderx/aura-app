@@ -1,0 +1,26 @@
+{
+  "key": "camiseta-basica-3d",
+  "name": "Camiseta básica (3D)",
+  "kind": "model3d",
+  "status": "published",
+  "spec": {
+    "schema": 1,
+    "model": {
+      "kind": "glb",
+      "url": "https://app.getaura.com.br/models/camiseta-basica.glb",
+      "scale": 1,
+      "rotation_y": 0,
+      "camera": { "height": 0.12 },
+      "print_mesh": "T-Shirt",
+      "texture": { "w": 2048, "h": 2048 },
+      "materials": {
+        "customer_color_targets": ["T-Shirt"],
+        "fabric": { "roughness": 0.88, "normal_scale": 0.35 }
+      }
+    },
+    "areas": [
+      { "id": "front", "width_cm": 21, "height_cm": 28, "uv": { "u0": 0.16, "v0": 0.12, "u1": 0.35, "v1": 0.37 } },
+      { "id": "back", "width_cm": 21, "height_cm": 28, "uv": { "u0": 0.66, "v0": 0.20, "u1": 0.85, "v1": 0.45 } }
+    ]
+  }
+}

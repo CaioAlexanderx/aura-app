@@ -13,7 +13,12 @@
 import { useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, Platform } from "react-native";
 import type { VisualTemplateSpec } from "@/services/studioVisualApi";
-import { createMugViewer, type Mug3DHandle } from "./compose3dMug";
+import { createModelViewer, type Mug3DHandle } from "./compose3dMug";
+import { areaParaLado, rotuloDaArea } from "./areasDaPeca";
+
+// 27/09/2026: o rótulo mudou de arquivo (areasDaPeca.ts) para ganhar
+// Frente/Costas da camiseta; quem importava daqui continua importando.
+export { rotuloDaArea };
 
 type Props = {
   spec: VisualTemplateSpec;
@@ -33,19 +38,8 @@ type Props = {
   side?: "front" | "back" | "middle";
 };
 
-// O nome da área de impressão, para quem compra. "Wrap 360°" e "9.7cm"
-// são jargão de oficina e ponto decimal de programador: a cliente lê
-// "Volta inteira" e "9,7 cm". A legenda "caneca provisória (GLB real
-// entra sem mudar o viewer)" era recado de desenvolvedor e ficou no ar
-// para a cliente da Sheid — saiu.
-export function rotuloDaArea(a: { id: string; width_cm?: number; height_cm?: number }): string {
-  const cm = (n?: number) => String(n ?? "").replace(".", ",");
-  if (a.id === "panel") {
-    return a.width_cm && a.height_cm ? "Painel " + cm(a.width_cm) + "×" + cm(a.height_cm) + " cm" : "Painel";
-  }
-  return "Volta inteira";
-}
-
+// A legenda "caneca provisória (GLB real entra sem mudar o viewer)" era
+// recado de desenvolvedor e ficou no ar para a cliente da Sheid — saiu.
 export function Mug3DPreview({
   spec, values, size = 320,
   garmentColor = "#F5F2EA", artColor = "#D85A30", font, accentColor = "#1E3A8A", side,
@@ -67,12 +61,12 @@ export function Mug3DPreview({
     geracao.current += 1;
   }
 
-  // O lado vindo de fora manda no viewer: "middle" é o wrap 360. Só
+  // O lado vindo de fora manda no viewer: "middle" é o wrap 360 da caneca;
+  // frente/verso são o painel na caneca e front/back na camiseta. Só
   // aplica se a spec realmente tiver a área, senão mantém a atual.
   useEffect(() => {
-    if (!side) return;
-    const alvo = side === "middle" ? "wrap" : "panel";
-    if ((spec.areas || []).some((a) => a.id === alvo)) setAreaId(alvo);
+    const alvo = areaParaLado(spec.areas, side);
+    if (alvo) setAreaId(alvo);
   }, [side, spec]);
   const [err, setErr] = useState<string | null>(null);
   const areas = spec.areas || [];
@@ -80,7 +74,7 @@ export function Mug3DPreview({
   useEffect(() => {
     if (Platform.OS !== "web" || !canvasRef.current) return;
     let cancelled = false;
-    createMugViewer(canvasRef.current, spec, values, { garmentColor, artColor, font, areaId })
+    createModelViewer(canvasRef.current, spec, values, { garmentColor, artColor, font, areaId })
       .then((h) => {
         if (cancelled) { h.dispose(); return; }
         handleRef.current = h;

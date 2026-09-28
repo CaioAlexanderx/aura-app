@@ -1,14 +1,16 @@
 // ============================================================
 // AURA STUDIO · visualEngine/compose3dMug — F4 (motor 3D caneca)
 //
-// Módulo puro (sem React): monta a cena three.js da caneca com a
-// personalização aplicada como CanvasTexture. Caneca PROCEDURAL
-// (corpo torneado + alça + borda) — provisória até os GLBs reais; a
-// spec já prevê model.kind='glb' + url e o viewer troca sem mudar quem
-// usa.
+// Módulo puro (sem React): monta a cena three.js da peça com a
+// personalização aplicada como CanvasTexture. A caneca é PROCEDURAL
+// (corpo torneado + alça + borda); desde 27/09/2026 qualquer outra peça
+// entra como GLB (`model.kind = 'glb'` + url), com a camiseta como
+// primeiro caso — a cena de estúdio, o update, o snapshot e o vídeo são
+// os mesmos para as duas.
 //
-// Áreas painel/wrap vêm da spec (uv por área). Mesmo contrato de
-// values do 2D: { text, image, ... } (fieldId → valor).
+// Áreas painel/wrap (e front/back na camiseta) vêm da spec (uv por
+// área). Mesmo contrato de values do 2D: { text, image, ... }
+// (fieldId → valor).
 //
 // Handle devolvido: update(), snapshot(px), recordTurntable(ms),
 // dispose(). Drag pra girar + auto-rotate até o 1º toque.
@@ -27,10 +29,17 @@
 // extra do CDN). Saída em sRGB, com as cores do modelo convertidas, para
 // o hex escolhido pelo cliente aparecer na tela como o hex que ele viu.
 //
+// 27/09/2026 — peça em GLB. O GLTFLoader do r128 é baixado do CDN só
+// quando a spec pede; a peça é centrada e escalada para a altura da
+// caneca (a cena inteira foi afinada para esse tamanho), a câmera recua
+// pela caixa do modelo (uma camiseta de mangas abertas é mais larga que
+// alta), e o mesh de impressão recebe a mesma CanvasTexture — com a cor
+// do tecido e uma trama fina gerada em canvas por baixo da arte.
+//
 // 03/07/2026 — F4/F5 do escopo Visualização 2D/3D (contrato no chat)
 // ============================================================
 import type { VisualArea, VisualTemplateSpec } from "@/services/studioVisualApi";
-import { loadThree } from "./threeLoader";
+import { loadThree, loadGLTFLoader, loadDRACOLoader, DRACO_DECODER_PATH } from "./threeLoader";
 import {
   readMugGeometry, heartPath, readMugMaterials, applyCustomerColor,
   readMugAccessories, latheProfile, squarePath, type MugMaterial,
@@ -39,6 +48,11 @@ import {
   backdropPalette, cameraDistance, contactShadowRadius, floorLevel,
   hexToRgba, CAMERA_FOV_GRAUS,
 } from "./mugScene";
+import {
+  readGlbModel, escalaDoModelo, cameraDistanceParaCaixa, floorLevelParaCaixa,
+  contactShadowRadiusParaCaixa, uvParaRetangulo, escolherMeshDeImpressao,
+  recebeCorDoCliente, type GlbModel, type Caixa,
+} from "./glbModel";
 
 export type Mug3DOptions = {
   garmentColor?: string;  // cor ESCOLHIDA pelo cliente (incide onde o modelo mandar)
@@ -48,7 +62,7 @@ export type Mug3DOptions = {
   bodyOpacity?: number;
   artColor?: string;      // cor do texto/emblema
   font?: string;
-  areaId?: string;        // 'panel' | 'wrap'
+  areaId?: string;        // 'panel' | 'wrap' | 'front' | 'back'
   /** Cor base do fundo (vira gradiente de estúdio). */
   backdrop?: string;
 };
@@ -91,40 +105,23 @@ function pickArea(spec: VisualTemplateSpec, areaId: string): VisualArea | null {
   return areas.find((a) => a.id === areaId) || areas[0] || null;
 }
 
-async function paintTexture(
-  texCv: HTMLCanvasElement,
+/**
+ * A arte (foto ou emblema + texto) na área escolhida. É o mesmo desenho
+ * para a caneca e para o GLB: o que muda entre eles é o fundo, pintado
+ * antes por quem chama.
+ */
+async function paintArt(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  H: number,
   spec: VisualTemplateSpec,
   values: Record<string, any>,
   o: Opcoes
 ) {
-  const ctx = texCv.getContext("2d");
-  if (!ctx) return;
-  const W = texCv.width, H = texCv.height;
-  // S11 — o fundo da textura e a cor do CORPO do modelo, nao a escolha do
-  // cliente. Numa caneca de alca colorida o corpo e branco e so a alca
-  // segue a cor escolhida; pintar tudo apagava o produto.
-  //
-  // Vidro: o fundo leva a opacidade do corpo e a arte fica opaca por
-  // cima — e um adesivo colado num copo, nao um copo pintado. Antes a
-  // opacidade era do material inteiro e a arte sumia junto com o vidro.
-  const alpha = typeof o.bodyOpacity === "number" ? o.bodyOpacity : 1;
-  const fundo = o.bodyColor || o.garmentColor;
-  ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = alpha < 1 ? hexToRgba(fundo, alpha) : fundo;
-  ctx.fillRect(0, 0, W, H);
-  // Faixa esmaltada no topo (S11). v cresce pra cima na UV e o canvas pra
-  // baixo, entao o topo da caneca e y=0 aqui.
-  if (o.bodyTopBand && o.bodyTopBand.height > 0) {
-    ctx.fillStyle = o.bodyTopBand.color;
-    ctx.fillRect(0, 0, W, Math.round(H * o.bodyTopBand.height));
-  }
-
   const area = pickArea(spec, o.areaId);
   if (!area || !area.uv) return;
-  const ax = area.uv.u0 * W;
-  const aw = (area.uv.u1 - area.uv.u0) * W;
-  const ay = (1 - area.uv.v1) * H; // v cresce pra cima na UV; canvas pra baixo
-  const ah = (area.uv.v1 - area.uv.v0) * H;
+  const r = uvParaRetangulo(area.uv, W, H);
+  const ax = r.x, aw = r.w, ay = r.y, ah = r.h;
 
   const text: string = values.text != null ? String(values.text) : "";
   const imageUrl: string | null = values.image || values.template || null;
@@ -165,6 +162,148 @@ async function paintTexture(
       ctx.font = "600 " + Math.round(fontPx) + "px " + o.font;
     }
     ctx.fillText(text, cx, ay + imgBoxH + (ah - imgBoxH) * 0.6 + fontPx * 0.3);
+  }
+}
+
+async function paintTexture(
+  texCv: HTMLCanvasElement,
+  spec: VisualTemplateSpec,
+  values: Record<string, any>,
+  o: Opcoes
+) {
+  const ctx = texCv.getContext("2d");
+  if (!ctx) return;
+  const W = texCv.width, H = texCv.height;
+  // S11 — o fundo da textura e a cor do CORPO do modelo, nao a escolha do
+  // cliente. Numa caneca de alca colorida o corpo e branco e so a alca
+  // segue a cor escolhida; pintar tudo apagava o produto.
+  //
+  // Vidro: o fundo leva a opacidade do corpo e a arte fica opaca por
+  // cima — e um adesivo colado num copo, nao um copo pintado. Antes a
+  // opacidade era do material inteiro e a arte sumia junto com o vidro.
+  const alpha = typeof o.bodyOpacity === "number" ? o.bodyOpacity : 1;
+  const fundo = o.bodyColor || o.garmentColor;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = alpha < 1 ? hexToRgba(fundo, alpha) : fundo;
+  ctx.fillRect(0, 0, W, H);
+  // Faixa esmaltada no topo (S11). v cresce pra cima na UV e o canvas pra
+  // baixo, entao o topo da caneca e y=0 aqui.
+  if (o.bodyTopBand && o.bodyTopBand.height > 0) {
+    ctx.fillStyle = o.bodyTopBand.color;
+    ctx.fillRect(0, 0, W, Math.round(H * o.bodyTopBand.height));
+  }
+
+  await paintArt(ctx, W, H, spec, values, o);
+}
+
+// ── Tecido (GLB) ─────────────────────────────────────────────
+
+/**
+ * Um ladrilho de trama: fios de urdidura e de trama alternando por cima
+ * e por baixo, em cinza médio com variação pequena. Gerado em canvas —
+ * nada é baixado — e com semente fixa, para o mesmo pedido render sempre
+ * o mesmo pixel (o hash da aprovação depende disso).
+ */
+function tramaDoTecido(): HTMLCanvasElement {
+  const cv = document.createElement("canvas");
+  cv.width = 64; cv.height = 64;
+  const ctx = cv.getContext("2d")!;
+  ctx.fillStyle = "#707070"; // o vão entre os fios
+  ctx.fillRect(0, 0, 64, 64);
+  const fio = 8;
+  let semente = 7;
+  const rnd = () => { semente = (semente * 9301 + 49297) % 233280; return semente / 233280; };
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const porCima = (x + y) % 2 === 0;
+      const b = 128 + (porCima ? 10 : -6) + Math.round((rnd() - 0.5) * 12);
+      ctx.fillStyle = "rgb(" + b + "," + b + "," + b + ")";
+      if (porCima) ctx.fillRect(x * fio + 1, y * fio, fio - 2, fio);
+      else ctx.fillRect(x * fio, y * fio + 1, fio, fio - 2);
+    }
+  }
+  return cv;
+}
+
+/**
+ * Mapa de normais da trama (altura = brilho do ladrilho), no tamanho da
+ * textura da arte. É assado no tamanho cheio, e não como ladrilho com
+ * `repeat`, porque no r128 o material só tem UMA transformação de UV — a
+ * do `map` — e o repeat do normalMap é ignorado: o ladrilho de 64px
+ * viraria oito quadrados gigantes sobre a camiseta inteira.
+ */
+function normalMapDaTrama(THREE: any, trama: HTMLCanvasElement, W: number, H: number, forca = 2) {
+  const N = trama.width;
+  const src = trama.getContext("2d")!.getImageData(0, 0, N, N).data;
+  const altura = (x: number, y: number) => src[(((y + N) % N) * N + ((x + N) % N)) * 4] / 255;
+  const ladrilho = document.createElement("canvas");
+  ladrilho.width = N; ladrilho.height = N;
+  const lctx = ladrilho.getContext("2d")!;
+  const out = lctx.createImageData(N, N);
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      const dx = (altura(x + 1, y) - altura(x - 1, y)) * forca;
+      const dy = (altura(x, y + 1) - altura(x, y - 1)) * forca;
+      const len = Math.sqrt(dx * dx + dy * dy + 1);
+      const i = (y * N + x) * 4;
+      out.data[i] = Math.round((-dx / len * 0.5 + 0.5) * 255);
+      out.data[i + 1] = Math.round((-dy / len * 0.5 + 0.5) * 255);
+      out.data[i + 2] = Math.round((1 / len * 0.5 + 0.5) * 255);
+      out.data[i + 3] = 255;
+    }
+  }
+  lctx.putImageData(out, 0, 0);
+  const cv = document.createElement("canvas");
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext("2d")!;
+  const padrao = ctx.createPattern(ladrilho, "repeat");
+  // Sem padrão (canvas sem suporte) o mapa fica "plano": normal (0,0,1).
+  ctx.fillStyle = padrao || "#8080ff";
+  ctx.fillRect(0, 0, W, H);
+  return new THREE.CanvasTexture(cv);
+}
+
+/**
+ * A textura da peça de tecido: cor do tecido, a trama por cima (overlay,
+ * para respeitar o tom escolhido), a arte, e a trama de novo só na área
+ * da arte, multiplicada — é o que faz a tinta "assentar" no tecido em vez
+ * de parecer um adesivo. Em tecido preto o overlay não muda nada; a trama
+ * ainda aparece pelo mapa de normais.
+ */
+async function paintFabricTexture(
+  texCv: HTMLCanvasElement,
+  spec: VisualTemplateSpec,
+  values: Record<string, any>,
+  o: Opcoes,
+  trama: HTMLCanvasElement
+) {
+  const ctx = texCv.getContext("2d");
+  if (!ctx) return;
+  const W = texCv.width, H = texCv.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = o.bodyColor || o.garmentColor;
+  ctx.fillRect(0, 0, W, H);
+  const padrao = ctx.createPattern(trama, "repeat");
+  if (padrao) {
+    ctx.save();
+    ctx.globalCompositeOperation = "overlay";
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = padrao;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  }
+
+  await paintArt(ctx, W, H, spec, values, o);
+
+  const area = pickArea(spec, o.areaId);
+  if (padrao && area && area.uv) {
+    const r = uvParaRetangulo(area.uv, W, H);
+    ctx.save();
+    ctx.globalCompositeOperation = "multiply";
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = padrao;
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.restore();
   }
 }
 
@@ -251,21 +390,24 @@ function makeMaterial(THREE: any, m: MugMaterial, extra: Record<string, any> = {
   });
 }
 
-export async function createMugViewer(
-  canvas: HTMLCanvasElement,
-  spec: VisualTemplateSpec,
-  values: Record<string, any>,
-  opts: Mug3DOptions = {}
-): Promise<Mug3DHandle> {
-  const THREE = await loadThree();
-  let o: Opcoes = { ...DEFAULTS, ...opts };
+// ── A peça em cena ───────────────────────────────────────────
+// O que cada tipo de peça entrega à cena compartilhada: o grupo que gira,
+// a textura da arte, onde fica o chão e a mancha, como aplicar a cor do
+// cliente e como pintar a textura. A caneca e o GLB implementam os dois
+// lados; o resto do viewer não sabe qual dos dois está na frente da câmera.
+type Peca = {
+  group: any;
+  texture: any;
+  chaoY: number;
+  raioSombra: number;
+  /** Caixa da peça já escalada (só o GLB precisa: a câmera se ajusta a ela). */
+  caixa: Caixa | null;
+  /** Atualiza os materiais com a cor escolhida e devolve as opções de pintura. */
+  aplicarOpcoes: (o: Opcoes) => Opcoes;
+  pintar: (cv: HTMLCanvasElement, values: Record<string, any>, o: Opcoes) => Promise<void>;
+};
 
-  const texW = spec.model?.texture?.w || 2048;
-  const texH = spec.model?.texture?.h || 1024;
-  const texCv = document.createElement("canvas");
-  texCv.width = texW;
-  texCv.height = texH;
-
+function montarCaneca(THREE: any, spec: VisualTemplateSpec, renderer: any, texCv: HTMLCanvasElement, o: Opcoes): Peca {
   // S3 — a forma vem do `spec`, com os numeros de antes como default.
   // Template sem bloco de geometria renderiza exatamente como renderizava
   // (ver mugGeometry.ts).
@@ -273,61 +415,9 @@ export async function createMugViewer(
   const acess = readMugAccessories(spec);
   const meiaAltura = G.body.height / 2;
 
-  const scene = new THREE.Scene();
-  scene.background = paintBackdrop(THREE, o.backdrop);
-  const dist = cameraDistance(G, acess);
-  const camera = new THREE.PerspectiveCamera(CAMERA_FOV_GRAUS, 1, 0.1, 100);
-  // Um pouco acima e olhando um pouco para baixo: e o enquadramento de
-  // foto de produto, e e o que deixa o chao e a sombra aparecerem.
-  camera.position.set(0, dist * 0.2, dist);
-  camera.lookAt(0, -0.05, 0);
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
-  renderer.outputEncoding = THREE.sRGBEncoding;
-  // Curva de filme: sem ela o branco da louca estourava e o corpo virava
-  // uma mancha chapada, sem o degrade de luz que da volume na foto.
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.2;
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  scene.environment = buildEnvironment(THREE, renderer);
-
-  function resize() {
-    // clientWidth=0 em canvas offscreen (geração de vídeo/render sem DOM):
-    // cai pra canvas.width setado pelo caller antes do createMugViewer.
-    const w = canvas.clientWidth || canvas.width || 320;
-    const h = canvas.clientHeight || Math.round(w * 0.78);
-    renderer.setSize(w, h, false);
-    renderer.setPixelRatio(Math.min((typeof window !== "undefined" && window.devicePixelRatio) || 1, 2));
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
-  }
-
-  // Tres pontos: principal quente (projeta a sombra), preenchimento frio
-  // e contraluz para descolar a peca do fundo. O ambiente vem do env map.
-  scene.add(new THREE.HemisphereLight(0xfff6e8, 0xb9ae9e, 0.25));
-  const key = new THREE.DirectionalLight(0xfff3e4, 1.0);
-  key.position.set(3.2, 6, 4.5);
-  key.castShadow = true;
-  key.shadow.mapSize.set(1024, 1024);
-  key.shadow.camera.near = 0.5;
-  key.shadow.camera.far = 30;
-  key.shadow.camera.left = -4.5; key.shadow.camera.right = 4.5;
-  key.shadow.camera.top = 4.5; key.shadow.camera.bottom = -4.5;
-  key.shadow.bias = -0.0006;
-  key.shadow.normalBias = 0.02;
-  scene.add(key);
-  const fill = new THREE.DirectionalLight(0xe8f0ff, 0.22); fill.position.set(-5, 2.5, 3); scene.add(fill);
-  const rimLight = new THREE.DirectionalLight(0xffffff, 0.5); rimLight.position.set(-2, 4, -5); scene.add(rimLight);
-
   // S11 — cor e material vem do MODELO; a escolha do cliente incide so
   // nas pecas que o template declara em `customer_color_targets`.
   let M = applyCustomerColor(readMugMaterials(spec), o.garmentColor);
-  // A PRIMEIRA pintura tambem precisa do fundo e da faixa certos: sem isto
-  // o mockup nascia com a cor escolhida no corpo e so acertava no primeiro
-  // update.
-  o.bodyColor = M.body.color;
-  o.bodyTopBand = M.body.topBand ?? null;
-  o.bodyOpacity = M.body.opacity;
 
   const texture = new THREE.CanvasTexture(texCv);
   texture.encoding = THREE.sRGBEncoding;
@@ -480,17 +570,241 @@ export async function createMugViewer(
   }
 
   group.rotation.y = Math.PI;
+
+  return {
+    group,
+    texture,
+    chaoY: floorLevel(G, acess),
+    raioSombra: contactShadowRadius(G, acess),
+    caixa: null,
+    aplicarOpcoes(opcoes) {
+      M = applyCustomerColor(readMugMaterials(spec), opcoes.garmentColor);
+      handleMat.color.set(M.handle.color).convertSRGBToLinear();
+      rimMat.color.set(M.rim.color).convertSRGBToLinear();
+      bottomMat.color.set(M.bottom.color).convertSRGBToLinear();
+      innerMat.color.set(M.interior.color).convertSRGBToLinear();
+      innerBottomMat.color.set(M.interior.color).convertSRGBToLinear();
+      // A PRIMEIRA pintura tambem precisa do fundo e da faixa certos: sem isto
+      // o mockup nascia com a cor escolhida no corpo e so acertava no primeiro
+      // update.
+      return { ...opcoes, bodyColor: M.body.color, bodyTopBand: M.body.topBand ?? null, bodyOpacity: M.body.opacity };
+    },
+    pintar: (cv, values, opcoes) => paintTexture(cv, spec, values, opcoes),
+  };
+}
+
+/**
+ * Carrega o GLB. O Draco só é baixado se o arquivo exigir: o GLTFLoader
+ * recusa um glTF com KHR_draco_mesh_compression sem decoder, e é essa
+ * recusa que dispara a segunda tentativa.
+ */
+async function carregarGltf(THREE: any, url: string): Promise<any> {
+  const GLTFLoader = await loadGLTFLoader();
+  const tentar = (draco: any) => new Promise<any>((resolve, reject) => {
+    const loader = new GLTFLoader();
+    if (draco) loader.setDRACOLoader(draco);
+    loader.load(url, resolve, undefined, reject);
+  });
+  try {
+    return await tentar(null);
+  } catch (e: any) {
+    const msg = String(e?.message || "");
+    if (!/DRACOLoader/i.test(msg)) {
+      throw new Error("Não foi possível carregar o modelo 3D" + (msg ? " (" + msg + ")" : ""));
+    }
+    const DRACOLoader = await loadDRACOLoader();
+    const draco = new DRACOLoader();
+    draco.setDecoderPath(DRACO_DECODER_PATH);
+    return tentar(draco);
+  }
+}
+
+async function montarGlb(
+  THREE: any, spec: VisualTemplateSpec, glb: GlbModel, renderer: any, texCv: HTMLCanvasElement, o: Opcoes,
+): Promise<Peca> {
+  const gltf = await carregarGltf(THREE, glb.url);
+  const modelo = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+  if (!modelo) throw new Error("O modelo 3D veio sem cena");
+  const meshes: any[] = [];
+  modelo.traverse((obj: any) => { if (obj.isMesh) meshes.push(obj); });
+  if (!meshes.length) throw new Error("O modelo 3D não tem malha");
+
+  const resumo = meshes.map((m) => ({
+    name: String(m.name || (m.parent && m.parent.name) || ""),
+    materialName: String((m.material && m.material.name) || ""),
+    vertices: (m.geometry && m.geometry.attributes && m.geometry.attributes.position)
+      ? m.geometry.attributes.position.count : 0,
+  }));
+  const iPrint = escolherMeshDeImpressao(resumo, glb.printMesh);
+  const print = meshes[iPrint];
+  // A cor que o arquivo dá ao tecido, para quando o cliente não escolhe
+  // (ou o template não deixa a cor incidir no mesh de impressão).
+  const corOriginal = print.material && print.material.color
+    ? "#" + print.material.color.clone().convertLinearToSRGB().getHexString()
+    : DEFAULTS.garmentColor;
+  const alvos = meshes.map((_m, i) => recebeCorDoCliente(resumo[i], i === iPrint, glb.customerColorTargets));
+
+  // Centra e escala pela altura — a cena inteira (luzes, câmera da sombra,
+  // chão) foi afinada para a altura da caneca, e um GLB pode vir em
+  // qualquer unidade.
+  modelo.updateMatrixWorld(true);
+  const caixa0 = new THREE.Box3().setFromObject(modelo);
+  const tam0 = caixa0.getSize(new THREE.Vector3());
+  const centro = caixa0.getCenter(new THREE.Vector3());
+  const k = escalaDoModelo({ width: tam0.x, height: tam0.y, depth: tam0.z }, glb.scale);
+  const pivo = new THREE.Group();
+  modelo.position.set(-centro.x, -centro.y, -centro.z);
+  pivo.add(modelo);
+  pivo.scale.setScalar(k);
+  const caixa: Caixa = { width: tam0.x * k, height: tam0.y * k, depth: tam0.z * k };
+
+  const texture = new THREE.CanvasTexture(texCv);
+  texture.encoding = THREE.sRGBEncoding;
+  // O glTF guarda v crescendo para baixo; a spec, para cima (ver
+  // glbModel.ts). Sem virar a imagem, o retângulo pintado em (1 - v1)·H
+  // cai exatamente onde o mesh o lê.
+  texture.flipY = false;
+  texture.anisotropy = renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1;
+  const trama = tramaDoTecido();
+  const normalMap = glb.fabric.normalScale > 0 ? normalMapDaTrama(THREE, trama, texCv.width, texCv.height) : null;
+  if (normalMap) normalMap.flipY = false;
+  print.material = new THREE.MeshStandardMaterial({
+    map: texture,
+    roughness: glb.fabric.roughness,
+    metalness: 0,
+    normalMap,
+    normalScale: new THREE.Vector2(glb.fabric.normalScale, glb.fabric.normalScale),
+    envMapIntensity: 0.5,
+    // Roupa é uma casca: pela gola e pelas mangas se vê o lado de dentro.
+    side: THREE.DoubleSide,
+  });
+  meshes.forEach((m, i) => {
+    m.castShadow = true;
+    if (i !== iPrint && m.material) {
+      // Material próprio para cada alvo de cor: dois meshes que dividem o
+      // mesmo material do arquivo não podem mudar de cor um pelo outro.
+      if (alvos[i]) m.material = m.material.clone();
+      if ("envMapIntensity" in m.material) m.material.envMapIntensity = 0.6;
+    }
+  });
+
+  const group = new THREE.Group();
+  group.add(pivo);
+  group.rotation.y = (glb.rotationY * Math.PI) / 180;
+
+  return {
+    group,
+    texture,
+    chaoY: floorLevelParaCaixa(caixa),
+    raioSombra: contactShadowRadiusParaCaixa(caixa),
+    caixa,
+    aplicarOpcoes(opcoes) {
+      meshes.forEach((m, i) => {
+        if (i !== iPrint && alvos[i] && m.material && m.material.color) {
+          m.material.color.set(opcoes.garmentColor).convertSRGBToLinear();
+        }
+      });
+      return {
+        ...opcoes,
+        bodyColor: alvos[iPrint] ? opcoes.garmentColor : corOriginal,
+        bodyTopBand: null,
+        bodyOpacity: 1,
+      };
+    },
+    pintar: (cv, values, opcoes) => paintFabricTexture(cv, spec, values, opcoes, trama),
+  };
+}
+
+export async function createModelViewer(
+  canvas: HTMLCanvasElement,
+  spec: VisualTemplateSpec,
+  values: Record<string, any>,
+  opts: Mug3DOptions = {}
+): Promise<Mug3DHandle> {
+  const THREE = await loadThree();
+  let o: Opcoes = { ...DEFAULTS, ...opts };
+  const glb = readGlbModel(spec);
+
+  const texW = glb ? glb.texture.w : (spec.model?.texture?.w || 2048);
+  const texH = glb ? glb.texture.h : (spec.model?.texture?.h || 1024);
+  const texCv = document.createElement("canvas");
+  texCv.width = texW;
+  texCv.height = texH;
+
+  const scene = new THREE.Scene();
+  scene.background = paintBackdrop(THREE, o.backdrop);
+  const camera = new THREE.PerspectiveCamera(glb ? glb.camera.fov : CAMERA_FOV_GRAUS, 1, 0.1, 100);
+  if (!glb) {
+    const dist = cameraDistance(readMugGeometry(spec), readMugAccessories(spec));
+    // Um pouco acima e olhando um pouco para baixo: e o enquadramento de
+    // foto de produto, e e o que deixa o chao e a sombra aparecerem.
+    camera.position.set(0, dist * 0.2, dist);
+    camera.lookAt(0, -0.05, 0);
+  }
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  // Curva de filme: sem ela o branco da louca estourava e o corpo virava
+  // uma mancha chapada, sem o degrade de luz que da volume na foto.
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  scene.environment = buildEnvironment(THREE, renderer);
+
+  // Tres pontos: principal quente (projeta a sombra), preenchimento frio
+  // e contraluz para descolar a peca do fundo. O ambiente vem do env map.
+  scene.add(new THREE.HemisphereLight(0xfff6e8, 0xb9ae9e, 0.25));
+  const key = new THREE.DirectionalLight(0xfff3e4, 1.0);
+  key.position.set(3.2, 6, 4.5);
+  key.castShadow = true;
+  key.shadow.mapSize.set(1024, 1024);
+  key.shadow.camera.near = 0.5;
+  key.shadow.camera.far = 30;
+  key.shadow.camera.left = -4.5; key.shadow.camera.right = 4.5;
+  key.shadow.camera.top = 4.5; key.shadow.camera.bottom = -4.5;
+  key.shadow.bias = -0.0006;
+  key.shadow.normalBias = 0.02;
+  scene.add(key);
+  const fill = new THREE.DirectionalLight(0xe8f0ff, 0.22); fill.position.set(-5, 2.5, 3); scene.add(fill);
+  const rimLight = new THREE.DirectionalLight(0xffffff, 0.5); rimLight.position.set(-2, 4, -5); scene.add(rimLight);
+
+  const peca: Peca = glb
+    ? await montarGlb(THREE, spec, glb, renderer, texCv, o)
+    : montarCaneca(THREE, spec, renderer, texCv, o);
+  const group = peca.group;
+  const texture = peca.texture;
   scene.add(group);
+
+  // A câmera do GLB depende da proporção do canvas (a largura da peça é
+  // que manda numa camiseta), então é posicionada a cada resize.
+  function posicionarCameraDoGlb(aspect: number) {
+    if (!glb || !peca.caixa) return;
+    const dist = glb.camera.distance ?? cameraDistanceParaCaixa(peca.caixa, aspect, glb.camera.fov);
+    camera.position.set(0, dist * glb.camera.height, dist);
+    camera.lookAt(0, -0.05, 0);
+  }
+
+  function resize() {
+    // clientWidth=0 em canvas offscreen (geração de vídeo/render sem DOM):
+    // cai pra canvas.width setado pelo caller antes do createMugViewer.
+    const w = canvas.clientWidth || canvas.width || 320;
+    const h = canvas.clientHeight || Math.round(w * 0.78);
+    renderer.setSize(w, h, false);
+    renderer.setPixelRatio(Math.min((typeof window !== "undefined" && window.devicePixelRatio) || 1, 2));
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    posicionarCameraDoGlb(w / h);
+  }
 
   // Chao: invisivel, so recebe a sombra projetada; e a mancha de contato
   // por cima, que segura a peca no chao mesmo onde a luz nao alcanca.
-  const chaoY = floorLevel(G, acess);
+  const chaoY = peca.chaoY;
   const chao = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ opacity: 0.2 }));
   chao.rotation.x = -Math.PI / 2;
   chao.position.y = chaoY - 0.001;
   chao.receiveShadow = true;
   scene.add(chao);
-  const raioSombra = contactShadowRadius(G, acess);
+  const raioSombra = peca.raioSombra;
   const contato = new THREE.Mesh(
     new THREE.PlaneGeometry(raioSombra * 2, raioSombra * 2),
     new THREE.MeshBasicMaterial({ map: paintContactShadow(THREE), transparent: true, depthWrite: false }),
@@ -537,21 +851,12 @@ export async function createMugViewer(
   // de uma mais nova é descartada.
   let pinturaAtual = 0;
   async function update(newValues: Record<string, any>, newOpts?: Mug3DOptions) {
-    o = { ...o, ...(newOpts || {}) };
-    M = applyCustomerColor(readMugMaterials(spec), o.garmentColor);
-    handleMat.color.set(M.handle.color).convertSRGBToLinear();
-    rimMat.color.set(M.rim.color).convertSRGBToLinear();
-    bottomMat.color.set(M.bottom.color).convertSRGBToLinear();
-    innerMat.color.set(M.interior.color).convertSRGBToLinear();
-    innerBottomMat.color.set(M.interior.color).convertSRGBToLinear();
-    o.bodyColor = M.body.color;
-    o.bodyTopBand = M.body.topBand ?? null;
-    o.bodyOpacity = M.body.opacity;
+    o = peca.aplicarOpcoes({ ...o, ...(newOpts || {}) });
     const minha = ++pinturaAtual;
     const rascunho = document.createElement("canvas");
     rascunho.width = texCv.width;
     rascunho.height = texCv.height;
-    await paintTexture(rascunho, spec, newValues, o);
+    await peca.pintar(rascunho, newValues, o);
     if (minha !== pinturaAtual || disposed) return;
     const ctx = texCv.getContext("2d");
     if (!ctx) return;
@@ -634,3 +939,6 @@ export async function createMugViewer(
 
   return { update, snapshot, recordTurntable, dispose };
 }
+
+/** O nome de antes da generalização: quem chama não precisa mudar. */
+export const createMugViewer = createModelViewer;

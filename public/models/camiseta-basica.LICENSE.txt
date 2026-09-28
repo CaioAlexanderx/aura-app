@@ -1,0 +1,26 @@
+camiseta-basica.glb
+====================
+
+Modelo: "T Shirt" — uma camiseta básica low-poly (gola careca, manga curta,
+um mesh só, UV com frente, costas e mangas separadas).
+Autor:   Nour
+Fonte:   https://poly.pizza/m/oZOt671DyI
+Arquivo: https://static.poly.pizza/466a6b4a-0689-4ec1-9df6-bd8859e37e85.glb
+Licença: Creative Commons Attribution 3.0 (CC BY 3.0)
+         https://creativecommons.org/licenses/by/3.0/
+
+MODIFICAÇÃO (27/09/2026): o original tem manga longa com punho. As mangas
+foram cortadas em x = ±0,245 (logo depois da costura que o modelo já
+tinha, que vira a bainha) com scripts/studio/encurtar-mangas-glb.mjs —
+malha, UV e material fora do corte estão como no original. Para
+reproduzir: baixe o arquivo acima e rode
+  node scripts/studio/encurtar-mangas-glb.mjs original.glb public/models/camiseta-basica.glb --corte=0.245
+
+A atribuição exigida pela licença é esta nota; se o modelo for exibido
+com créditos em algum lugar público, citar "T Shirt por Nour (Poly
+Pizza), CC BY 3.0, mangas encurtadas pela Aura".
+
+Como a Aura usa: template visual `camiseta-basica-3d`
+(docs/studio/visual-templates/camiseta-basica-3d.json), servido em
+https://app.getaura.com.br/models/camiseta-basica.glb com CORS aberto
+(public/_headers) porque a vitrine roda em loja.getaura.com.br.

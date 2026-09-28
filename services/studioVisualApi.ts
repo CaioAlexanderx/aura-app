@@ -34,12 +34,55 @@ export type VisualView = {
   areas: VisualArea[];
 };
 
-// model3d (F4): modelo procedural de caneca (GLB real entra depois
-// trocando model.kind → 'glb' + url, sem mudar o viewer).
+// model3d (F4): modelo procedural de caneca (`procedural-mug`, forma e
+// materiais em mugGeometry.ts) ou, desde 27/09/2026, qualquer peça em
+// GLB (`glb`). Nos dois casos `areas[]` são retângulos por UV com
+// `width_cm/height_cm`, pintados numa CanvasTexture; v cresce PARA CIMA
+// (a convenção do editor de UV do Blender — o viewer compensa o glTF).
+//
+// ── Regras da spec com model.kind = "glb" (leitura em glbModel.ts) ──
+//   url          absoluta (https://…): a vitrine roda em loja.getaura.com.br
+//                e um caminho relativo apontaria para o host errado.
+//   scale?       multiplicador sobre a normalização de altura. O viewer
+//                escala toda peça para a altura da caneca padrão (cena,
+//                luzes e sombra foram afinadas para esse tamanho); 1 = só
+//                isso. Padrão 1.
+//   rotation_y?  giro inicial em graus (a frente da peça de cara para a
+//                câmera). Padrão 0.
+//   camera?      { distance?, height?, fov? } — distância fixa (sem ela,
+//                calculada pela caixa do modelo e pela proporção do
+//                canvas), altura como fração da distância (padrão 0.2) e
+//                campo de visão vertical em graus (padrão 32).
+//   print_mesh?  nome do mesh (ou do material) que recebe a textura da
+//                arte. Sem ele, o mesh de mais vértices.
+//   texture      { w, h } da CanvasTexture. Quando o UV da peça não é
+//                isotrópico (u mais denso que v, comum em roupa), a
+//                proporção w:h é o que deixa o pixel quadrado no tecido —
+//                meça no modelo antes de publicar.
+//   materials.customer_color_targets?  nomes de mesh/material que
+//                recebem a cor escolhida pelo cliente. Ausente = o mesh
+//                de impressão (camiseta lisa inteira da cor). Vazio =
+//                cor fixa do arquivo.
+//   materials.fabric?  { roughness (0–1, padrão 0.85), normal_scale
+//                (0–3, padrão 0.35) } — aspereza do tecido e força da
+//                trama, que é gerada em canvas (nada é baixado).
 export type VisualModel3D = {
   kind: "procedural-mug" | "glb";
   url?: string | null;
   texture: { w: number; h: number };
+  scale?: number;
+  rotation_y?: number;
+  camera?: { distance?: number; height?: number; fov?: number };
+  print_mesh?: string;
+  /** Materiais: peças da caneca (mugGeometry.ts) ou, no GLB, alvos de cor e tecido. */
+  materials?: {
+    customer_color_targets?: string[];
+    fabric?: { roughness?: number; normal_scale?: number };
+    [parte: string]: any;
+  };
+  /** procedural-mug: forma e acessórios (mugGeometry.ts). */
+  geometry?: any;
+  accessories?: { spoon?: boolean; saucer?: boolean };
 };
 
 export type VisualTemplateSpec = {
