@@ -21,6 +21,7 @@ import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { useAuth } from "@/hooks/useAuth";
 import { studioApi, type StudioQuote, type StudioQuoteStatus } from "@/services/studioApi";
+import { temAjustePendente, COR_DO_AJUSTE } from "@/components/studio/orcamentoVideo/ajusteDoOrcamento";
 import { type StudioPalette } from "@/constants/studio-tokens";
 import { StudioScreen } from "@/components/studio/StudioScreen";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
@@ -201,7 +202,15 @@ export default function StudioOrcamentosScreen() {
                     <Text style={s.seloVideoTxt}>vídeo</Text>
                   </View>
                 ) : null}
-                <StatusPill status={q.status} />
+                {/* "Cliente pediu ajuste" (362): pedido registrado, ainda não
+                    reenviado. O selo toma o lugar do "Rascunho". */}
+                {temAjustePendente(q) ? (
+                  <View style={[pill.wrap, { backgroundColor: COR_DO_AJUSTE.bg }]}>
+                    <Text style={[pill.txt, { color: COR_DO_AJUSTE.text }]}>Ajuste pedido</Text>
+                  </View>
+                ) : (
+                  <StatusPill status={q.status} />
+                )}
               </View>
 
               <View style={s.cardBottom}>
