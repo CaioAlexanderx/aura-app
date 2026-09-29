@@ -235,7 +235,10 @@ describe("peça e arte", () => {
 
   test("valores do motor para o viewer", () => {
     const m = motorDaArte(cfg, {}, { texto: "Ana", imagem: "https://r2/a.png", cor: "#1F2937" });
-    expect(m.values).toEqual({ text: "Ana", image: "https://r2/a.png" });
+    // As chaves de sempre + a arte pela regra única (29/09/2026): o tamanho
+    // da arte tem os seus testes em orcamentoTamanhoDaArte.test.ts.
+    expect(m.values).toMatchObject({ text: "Ana", image: "https://r2/a.png" });
+    expect(m.values.__arte.imagens[0].url).toBe("https://r2/a.png");
     expect(m.opts.garmentColor).toBe("#1F2937");
   });
 

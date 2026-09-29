@@ -50,6 +50,9 @@ export type Ajuste = {
   dpi?: number;
 };
 
+/** Retângulo em frações da área (0..1): x, y = canto superior esquerdo. */
+export type CaixaAlvo = { x: number; y: number; w: number; h: number };
+
 /** A arte de UM lado, pronta para qualquer motor desenhar. */
 export type ArteDoLado = {
   v: 1;
@@ -57,7 +60,18 @@ export type ArteDoLado = {
   /** A área em cm (do cadastro do produto). null = sem medida: vale o retângulo do motor. */
   areaCm: { w: number; h: number } | null;
   tecnica: Tecnica;
-  imagens: Array<{ campo: string; url: string; ajuste: Ajuste | null; arquivo: { w: number; h: number } | null }>;
+  imagens: Array<{
+    campo: string; url: string; ajuste: Ajuste | null; arquivo: { w: number; h: number } | null;
+    /**
+     * Caixa-alvo (frações da área) onde a imagem entra INTEIRA e
+     * centralizada, no lugar da faixa padrão. Só vale sem ajuste. Quem
+     * usa: o vídeo do orçamento (29/09/2026); a vitrine não preenche, e
+     * sem ela o layout é o de sempre, byte a byte.
+     */
+    caixa?: CaixaAlvo;
+    /** Recortar a imagem pela caixa do conteúdo (borda transparente ou, na sublimação, branca) antes de desenhar. */
+    aparar?: boolean;
+  }>;
   textos: Array<{
     campo: string; texto: string; cor: string;
     /** Pilha CSS da fonte. */
@@ -238,6 +252,14 @@ export function resolverArte(arte: ArteDoLado, W: number, H: number, medir: Medi
     let w: number, cx: number, cy: number, rot: Rotacao, encaixe: Encaixe;
     if (aj && aj.larg) {
       w = aj.larg * W; cx = aj.cx * W; cy = aj.cy * H; rot = aj.rot || 0; encaixe = aj.encaixe || "livre";
+    } else if (im.caixa && !aj) {
+      // Caixa-alvo (orçamento em vídeo): inteira dentro da caixa, centrada.
+      const c = im.caixa;
+      w = Math.max(0.01, Math.min(c.w * W, (c.h * H) / a));
+      cx = (c.x + c.w / 2) * W;
+      cy = (c.y + c.h / 2) * H;
+      rot = 0;
+      encaixe = "ajustar";
     } else {
       // Padrão: inteira numa coluna da faixa de cima (lado a lado quando
       // há mais de uma).
