@@ -19,6 +19,8 @@ export type CartaoQuadro = {
   description: string;
   category: string;
   amount: number;
+  /** Valor do boleto quando a baixa foi com outro valor (amount = pago). */
+  original_amount?: number | null;
   status: "pending" | "confirmed";
   /** Data do lançamento (competência) — AAAA-MM-DD. */
   date: string | null;
@@ -145,7 +147,7 @@ export function rotuloDaForma(valor: string | null | undefined): string | null {
  * contagem e total das colunas afetadas. O backend decide a coluna de fato
  * no próximo GET; aqui "desfazer" de algo já vencido cai em Atrasado.
  */
-export function aplicarMovimento(q: Quadro, id: string, mov: Movimento, dados: { data?: string; forma?: string | null }): Quadro {
+export function aplicarMovimento(q: Quadro, id: string, mov: Movimento, dados: { data?: string; forma?: string | null; valorPago?: number | null }): Quadro {
   let de: ColunaQuadro | null = null;
   let cartao: CartaoQuadro | null = null;
   for (const k of ORDEM_DAS_COLUNAS) {
@@ -157,12 +159,15 @@ export function aplicarMovimento(q: Quadro, id: string, mov: Movimento, dados: {
   let para: ColunaQuadro;
   if (mov === "baixa") {
     novo = { ...novo, status: "confirmed", paid_at: dados.data ? dados.data + "T03:00:00.000Z" : new Date().toISOString(), payment_method: dados.forma ?? novo.payment_method };
+    const boleto = novo.original_amount ?? novo.amount;
+    if (dados.valorPago && Math.abs(dados.valorPago - boleto) >= 0.005) novo = { ...novo, amount: dados.valorPago, original_amount: boleto };
+    else if (dados.valorPago) novo = { ...novo, amount: boleto, original_amount: null };
     para = "feito";
   } else if (mov === "nova_data") {
     novo = { ...novo, date: dados.data || novo.date, due_date: dados.data || novo.due_date };
     para = novo.date && novo.date < q.today ? "atrasado" : "aberto";
   } else {
-    novo = { ...novo, status: "pending", paid_at: null };
+    novo = { ...novo, status: "pending", paid_at: null, amount: novo.original_amount ?? novo.amount, original_amount: null };
     para = novo.date && novo.date < q.today ? "atrasado" : "aberto";
   }
   const cols = { ...q.columns };
@@ -179,6 +184,8 @@ export type PedidoDeMovimento = {
   /** baixa: data do pagamento; nova_data: novo vencimento (AAAA-MM-DD). */
   data?: string;
   forma?: string | null;
+  /** baixa: valor pago (juros/desconto) — sem ele o backend usa o valor do lançamento. */
+  valorPago?: number | null;
 };
 
 /** Corpo do PATCH para cada movimento. */
@@ -187,6 +194,7 @@ export function corpoDoMovimento(p: PedidoDeMovimento): Record<string, any> {
     const corpo: Record<string, any> = { status: "confirmed" };
     if (p.data) corpo.paid_at = p.data;
     if (p.forma) corpo.payment_method = p.forma;
+    if (p.valorPago && p.valorPago > 0) corpo.paid_amount = p.valorPago;
     return corpo;
   }
   if (p.mov === "nova_data") return { due_date: p.data };
@@ -210,6 +218,7 @@ export function cartaoParaLancamento(c: CartaoQuadro, tipo: TipoQuadro) {
     source: "manual",
     due_date: c.due_date || c.date || undefined,
     paid_at: c.paid_at || undefined,
+    original_amount: c.original_amount ?? null,
     payment_method: c.payment_method,
     employee_id: c.employee_id ?? null,
     employee_name: c.employee_name,

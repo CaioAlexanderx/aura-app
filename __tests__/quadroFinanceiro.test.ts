@@ -126,3 +126,30 @@ describe("cartaoParaLancamento (botão Editar)", () => {
     expect(cartaoParaLancamento(cartao({}), "income").employee_id).toBeNull();
   });
 });
+
+describe("valor pago na baixa (28/09/2026)", () => {
+  it("corpo do PATCH leva paid_amount", () => {
+    expect(corpoDoMovimento({ id: "b", mov: "baixa", data: "2026-09-20", forma: "boleto", valorPago: 186.4 }))
+      .toEqual({ status: "confirmed", paid_at: "2026-09-20", payment_method: "boleto", paid_amount: 186.4 });
+  });
+
+  it("otimista: pagar com juros guarda o original e soma o pago na coluna", () => {
+    const q = aplicarMovimento(quadro(), "b", "baixa", { data: "2026-09-20", forma: "pix", valorPago: 450 });
+    expect(q.columns.feito.items[0]).toMatchObject({ id: "b", amount: 450, original_amount: 432 });
+    expect(q.columns.feito.total).toBe(1984.7);
+    expect(q.columns.aberto.total).toBe(0);
+  });
+
+  it("otimista: pagar exatamente o valor não cria original", () => {
+    const q = aplicarMovimento(quadro(), "b", "baixa", { valorPago: 432 });
+    expect(q.columns.feito.items[0]).toMatchObject({ amount: 432, original_amount: null });
+  });
+
+  it("otimista: desfazer volta o valor do boleto", () => {
+    const base = quadro();
+    base.columns.feito.items[0] = { ...base.columns.feito.items[0], amount: 260, original_amount: 250, date: "2026-09-29" };
+    const q = aplicarMovimento(base, "c", "desfazer", {});
+    const c = q.columns.aberto.items.find((x) => x.id === "c")!;
+    expect(c).toMatchObject({ amount: 250, original_amount: null, status: "pending" });
+  });
+});

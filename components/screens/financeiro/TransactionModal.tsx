@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { View, Text, StyleSheet, Pressable, TextInput, Platform, ScrollView, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
 import { toast } from "@/components/Toast";
-import { INCOME_CATS, EXPENSE_CATS } from "./types";
+import { INCOME_CATS, EXPENSE_CATS, fmt as fmtReais } from "./types";
 import type { Transaction } from "./types";
 import { maskCurrency, unmaskNumber } from "@/utils/masks";
 import { Icon } from "@/components/Icon";
@@ -17,6 +17,7 @@ import { RecurrenceSelector } from "./RecurrenceSelector";
 import { SaleDetailsSection } from "./SaleDetailsSection";
 import { isSaleLinkedTransaction, isCreditReceivableKey } from "@/utils/saleLink";
 import { valorDoPatch } from "@/utils/editarLancamento";
+import { camposDaSituacao, diferencaPaga, textoDaDiferenca, rotulosDaSituacao, type Situacao } from "@/utils/lancamentoPago";
 
 var isWeb = Platform.OS === "web";
 
@@ -122,6 +123,9 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
   // carne (credit_installments) e aos relatorios que filtram
   // category ILIKE 'Crediário%A Receber%'. Editar na mao aqui dessincroniza.
   var isCreditReceivable = isEditing && isCreditReceivableKey((editTransaction as any)?.idempotency_key);
+  // Lancamento ja pago que a lojista pode corrigir (data do pagamento). Venda
+  // do Caixa e crediario tem fluxo proprio.
+  var editandoPago = isEditing && editTransaction?.status === "confirmed" && !isLinkedToSale && !isCreditReceivable && !/^credi.rio/i.test(editTransaction?.category || "");
   var [txType, setTxType] = useState<"income" | "expense" | "sale">("income");
   var [mode, setMode] = useState<"unit" | "batch">("unit");
   var [amount, setAmount] = useState("");
@@ -156,6 +160,12 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
   var [variantLoading, setVariantLoading] = useState(false);
   var [saleCoupon, setSaleCoupon] = useState("");
   var [recurrence, setRecurrence] = useState("");
+  // 28/09/2026 (valor pago): "Já paguei" ou "Vou pagar" no cadastro; data e
+  // valor pagos quando ja pagou (boleto atrasado sai com juros).
+  var [situacao, setSituacao] = useState<Situacao>("pago");
+  var [pagoEmStr, setPagoEmStr] = useState(todayBR());
+  var [pagoEmInicial, setPagoEmInicial] = useState("");
+  var [valorPagoStr, setValorPagoStr] = useState("");
   // Toggle pra mostrar produtos com estoque 0 no picker de venda retroativa.
   // Padrão = false (esconde). Mesmo padrão do Caixa.
   var [showSaleOutOfStock, setShowSaleOutOfStock] = useState(false);
@@ -198,6 +208,8 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
       setUnitEmpId((editTransaction as any).employee_id || null);
       setUnitEmpName((editTransaction as any).employee_name || null);
       setUnitEmpSearch("");
+      var pagoEm = (editTransaction as any).paid_at ? isoToBR((editTransaction as any).paid_at) : "";
+      setPagoEmStr(pagoEm); setPagoEmInicial(pagoEm);
       setUnitEmpOpen(false);
     }
   }, [editTransaction]);
@@ -208,6 +220,7 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
     setCustSearch(""); setCustId(null); setCustName(null); setCustOpen(false);
     setEmpSearch(""); setEmpId(null); setEmpName(null); setEmpOpen(false);
     setSaleCoupon(""); setRecurrence("");
+    setSituacao("pago"); setPagoEmStr(todayBR()); setPagoEmInicial(""); setValorPagoStr("");
     setShowSaleOutOfStock(false);
     setUnitPayment(""); setUnitEmpId(null); setUnitEmpName(null); setUnitEmpSearch(""); setUnitEmpOpen(false);
   }
@@ -243,6 +256,12 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
           if (unitEmpId && unitEmpName) patchBody.employee_name = unitEmpName;
         }
 
+        // Lancamento pago: corrigir a data do pagamento (o status continua o mesmo).
+        if (editandoPago && pagoEmStr.trim() && pagoEmStr !== pagoEmInicial) {
+          var pagoIso = dateToISO(pagoEmStr);
+          if (!pagoIso) { toast.error("Data do pagamento inválida. Use DD/MM/AAAA"); setSaving(false); return; }
+          patchBody.status = "confirmed"; patchBody.paid_at = pagoIso;
+        }
         await companiesApi.updateTransaction(company.id, editTransaction!.id, patchBody);
         qc.invalidateQueries({ queryKey: ["transactions", company.id] });
         qc.invalidateQueries({ queryKey: ["transactions-prev", company.id] });
@@ -268,6 +287,11 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
         category: category || cats[0], due_date: dueDate,
         recurrence_type: recurrence || undefined,
       };
+      if (!isSale) {
+        var pagoEmIso = situacao === "pago" && pagoEmStr.trim() ? dateToISO(pagoEmStr) : null;
+        if (situacao === "pago" && pagoEmStr.trim() && !pagoEmIso) { toast.error("Data do pagamento inválida. Use DD/MM/AAAA"); return; }
+        Object.assign(newBody, camposDaSituacao({ situacao: situacao, valor: val, pagoEm: pagoEmIso, valorPago: parseAmount(valorPagoStr) || null }));
+      }
       if (unitPayment) newBody.payment_method = unitPayment;
       if (unitEmpId) {
         newBody.employee_id = unitEmpId;
@@ -393,6 +417,16 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
 
   // Conteudo do form unitario, declarado uma vez como elemento React (constante,
   // nao componente), pra ser embrulhado por <ScrollView> sem causar remount.
+  var rotSit = rotulosDaSituacao(txType === "expense" ? "expense" : "income");
+  var mostraPago = !isSale && ((!isEditing && situacao === "pago") || editandoPago);
+  var original = isEditing ? ((editTransaction as any)?.original_amount ?? null) : null;
+  var valorDigitado = parseAmount(amount);
+  // Cadastro: diferenca entre o valor pago digitado e o valor. Edicao: entre o
+  // valor (ja o pago) e o original do boleto.
+  var dif = !isEditing
+    ? (mostraPago && valorPagoStr ? diferencaPaga(parseAmount(valorPagoStr), valorDigitado) : null)
+    : (editandoPago ? diferencaPaga(valorDigitado, original) : null);
+  var difTexto = dif ? (isEditing && original != null ? "Valor original " + fmtReais(original) + " · " : "") + textoDaDiferenca(dif, txType === "expense" ? "expense" : "income", fmtReais) : "";
   var unitFormContent = (
     <>
       {/* SECAO DA VENDA — so quando editando lancamento que veio do PDV (Item 1 Eryca) */}
@@ -404,10 +438,25 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
         />
       )}
 
+      {/* 28/09/2026 (valor pago): no cadastro, "Já paguei" ou "Vou pagar". */}
+      {!isEditing && (
+        <View style={s.catGrid}>
+          {(["pago", "aberto"] as Situacao[]).map(function(sit) {
+            return <Pressable key={sit} onPress={function() { setSituacao(sit); }} style={[s.catBtn, situacao === sit && s.catBtnActive]} testID={"situacao-" + sit}><Text style={[s.catText, situacao === sit && s.catTextActive]}>{rotSit[sit]}</Text></Pressable>;
+          })}
+        </View>
+      )}
       <View style={s.rowFields}>
-        <View style={{ flex: 1 }}><Text style={s.label}>Valor (R$)</Text><TextInput style={[s.input, isCreditReceivable && { opacity: 0.6 }]} value={amount} editable={!isCreditReceivable} onChangeText={function(v) { setAmount(maskCurrency(v)); }} placeholder="R$ 0,00" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></View>
-        <View style={{ width: 130 }}><Text style={s.label}>Data</Text><TextInput style={s.input} value={dateStr} onChangeText={function(v) { setDateStr(maskDate(v)); }} placeholder="DD/MM/AAAA" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} /></View>
+        <View style={{ flex: 1 }}><Text style={s.label}>{editandoPago && original != null ? rotSit.valor + " (R$)" : "Valor (R$)"}</Text><TextInput style={[s.input, isCreditReceivable && { opacity: 0.6 }]} value={amount} editable={!isCreditReceivable} onChangeText={function(v) { setAmount(maskCurrency(v)); }} placeholder="R$ 0,00" placeholderTextColor={Colors.ink3} keyboardType="number-pad" /></View>
+        <View style={{ width: 130 }}><Text style={s.label}>{isLinkedToSale ? "Data" : "Vencimento"}</Text><TextInput style={s.input} value={dateStr} onChangeText={function(v) { setDateStr(maskDate(v)); }} placeholder="DD/MM/AAAA" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} /></View>
       </View>
+      {mostraPago && (
+        <View style={s.rowFields}>
+          {!isEditing && <View style={{ flex: 1 }}><Text style={s.label}>{rotSit.valor} (R$)</Text><TextInput style={s.input} value={valorPagoStr} onChangeText={function(v) { setValorPagoStr(maskCurrency(v)); }} placeholder={amount || "Igual ao valor"} placeholderTextColor={Colors.ink3} keyboardType="number-pad" testID="valor-pago" /></View>}
+          <View style={{ width: 130 }}><Text style={s.label}>{rotSit.data}</Text><TextInput style={s.input} value={pagoEmStr} onChangeText={function(v) { setPagoEmStr(maskDate(v)); }} placeholder="DD/MM/AAAA" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={10} testID="pago-em" /></View>
+        </View>
+      )}
+      {difTexto ? <Text style={[s.label, { color: Colors.amber, marginTop: -4 }]}>{difTexto}</Text> : null}
       <Text style={s.label}>Descrição</Text>
       <TextInput style={s.input} value={desc} onChangeText={setDesc} placeholder="Ex: Venda cliente Maria" placeholderTextColor={Colors.ink3} />
       <Text style={s.label}>Categoria</Text>

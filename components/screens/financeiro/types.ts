@@ -10,6 +10,8 @@ export type Transaction = {
   due_date?: string;
   created_at?: string;
   paid_at?: string;
+  /** Valor original (boleto) quando a baixa foi com outro valor — amount é o pago. */
+  original_amount?: number | null;
   // Sessao 22-23/04: campos novos pra editar/listar
   payment_method?: string | null;
   employee_id?: string | null;

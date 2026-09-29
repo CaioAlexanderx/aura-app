@@ -146,7 +146,7 @@ export function QuadroFinanceiro({ companyId, onEditar }: { companyId: string; o
         hoje={hoje}
         onFechar={() => setAlvo(null)}
         onConfirmar={(dados) => {
-          if (alvo) mover({ id: alvo.cartao.id, mov: alvo.mov, data: dados.data, forma: dados.forma });
+          if (alvo) mover({ id: alvo.cartao.id, mov: alvo.mov, data: dados.data, forma: dados.forma, valorPago: dados.valorPago });
           setAlvo(null);
         }}
       />

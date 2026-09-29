@@ -31,7 +31,7 @@ export function useQuadroFinanceiro(companyId: string | null | undefined, tipo: 
     onMutate: async (p) => {
       await qc.cancelQueries({ queryKey: chave });
       const antes = qc.getQueryData<Quadro>(chave);
-      if (antes) qc.setQueryData<Quadro>(chave, aplicarMovimento(antes, p.id, p.mov, { data: p.data, forma: p.forma }));
+      if (antes) qc.setQueryData<Quadro>(chave, aplicarMovimento(antes, p.id, p.mov, { data: p.data, forma: p.forma, valorPago: p.valorPago }));
       return { antes };
     },
     onError: (err: any, _p, ctx) => {
