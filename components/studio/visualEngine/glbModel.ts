@@ -215,6 +215,57 @@ export function fiosDoLadrilho(pxPorCm: number | null, ladrilhoPx = 64, fiosPorC
   return Math.max(4, Math.min(32, Math.round(ladrilhoPx / passoPx)));
 }
 
+// ── Acabamento (28/09/2026) ──────────────────────────────────
+// A camiseta gerada (scripts/studio/camisetaParametrica.js) escreve nos
+// `extras` do mesh onde ficam as costuras e a ribana em UV; o GLTFLoader
+// entrega isso em `mesh.userData.acabamento`. Com ele o viewer desenha
+// pesponto e vinco nas costuras e o canelado da ribana. Sem ele (outro
+// GLB, ou o arquivo antigo em cache), nada muda.
+
+export type CosturaUv = {
+  /** gola | ombro | cava | lateral: costura com vinco; bainha: pesponto reto. */
+  tipo: "gola" | "ombro" | "cava" | "lateral" | "bainha";
+  /** Polilinha em UV, v crescendo para cima (a convenção das áreas). */
+  pontos: [number, number][];
+};
+
+export type Acabamento = {
+  /** Centímetros por unidade de UV: é o que dá a escala dos fios e dos pespontos. */
+  cmPorUv: number;
+  /** Retângulo da ilha da ribana em UV (v para cima), ou null. */
+  ribana: { u0: number; v0: number; u1: number; v1: number } | null;
+  costuras: CosturaUv[];
+};
+
+const TIPOS_DE_COSTURA = new Set(["gola", "ombro", "cava", "lateral", "bainha"]);
+
+const uvValido = (p: any): p is [number, number] =>
+  Array.isArray(p) && p.length === 2 && p.every((x) => typeof x === "number" && Number.isFinite(x) && x >= 0 && x <= 1);
+
+/**
+ * Lê `userData.acabamento` de um mesh do GLB. Só entra o que está no
+ * formato conhecido (schema 1, UV em [0,1], tipos de costura desta
+ * lista); polilinha com menos de dois pontos ou ponto fora da textura
+ * é descartada. null = sem acabamento declarado.
+ */
+export function readAcabamento(userData: any): Acabamento | null {
+  const a = userData?.acabamento;
+  if (!a || typeof a !== "object" || a.schema !== 1) return null;
+  const cmPorUv = num(a.cmPorUv, 0, 1, 10000);
+  if (!cmPorUv) return null;
+  const r = a.ribana;
+  const ribana = r && typeof r === "object" && [r.u0, r.v0, r.u1, r.v1].every((x) => typeof x === "number" && x >= 0 && x <= 1) && r.u1 > r.u0 && r.v1 > r.v0
+    ? { u0: r.u0, v0: r.v0, u1: r.u1, v1: r.v1 }
+    : null;
+  const costuras: CosturaUv[] = [];
+  for (const c of Array.isArray(a.costuras) ? a.costuras : []) {
+    if (!c || !TIPOS_DE_COSTURA.has(c.tipo) || !Array.isArray(c.pontos)) continue;
+    const pontos = c.pontos.filter(uvValido);
+    if (pontos.length >= 2) costuras.push({ tipo: c.tipo, pontos });
+  }
+  return { cmPorUv, ribana, costuras };
+}
+
 export type RetanguloDaTextura = { x: number; y: number; w: number; h: number };
 
 /**

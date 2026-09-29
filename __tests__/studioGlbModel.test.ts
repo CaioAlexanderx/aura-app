@@ -11,7 +11,7 @@
 import {
   readGlbModel, isGlbSpec, escalaDoModelo, cameraDistanceParaCaixa, floorLevelParaCaixa,
   sombraDeContatoParaCaixa, uvParaRetangulo, escolherMeshDeImpressao, recebeCorDoCliente,
-  pixelsPorCm, fiosDoLadrilho, ALTURA_ALVO_DO_MODELO,
+  pixelsPorCm, fiosDoLadrilho, ALTURA_ALVO_DO_MODELO, readAcabamento,
 } from "@/components/studio/visualEngine/glbModel";
 import { MUG_GEOMETRY_PADRAO } from "@/components/studio/visualEngine/mugGeometry";
 import { CAMERA_DISTANCIA_PADRAO, CAMERA_FOV_GRAUS, cameraDistance } from "@/components/studio/visualEngine/mugScene";
@@ -233,6 +233,51 @@ describe("escolherMeshDeImpressao — quem recebe a arte", () => {
 
   it("sem meshes devolve -1", () => {
     expect(escolherMeshDeImpressao([], "T-Shirt")).toBe(-1);
+  });
+});
+
+describe("readAcabamento — as costuras e a ribana que o GLB declara em userData", () => {
+  const bom = {
+    acabamento: {
+      schema: 1, cmPorUv: 120,
+      ribana: { u0: 0.53, v0: 0.12, u1: 0.99, v1: 0.157 },
+      costuras: [
+        { tipo: "bainha", pontos: [[0.05, 0.41], [0.45, 0.41]] },
+        { tipo: "ombro", pontos: [[0.1, 0.9], [0.18, 0.95], [0.2, 0.97]] },
+      ],
+    },
+  };
+
+  it("lê o formato conhecido", () => {
+    const a = readAcabamento(bom)!;
+    expect(a.cmPorUv).toBe(120);
+    expect(a.ribana).toEqual({ u0: 0.53, v0: 0.12, u1: 0.99, v1: 0.157 });
+    expect(a.costuras.map((c) => c.tipo)).toEqual(["bainha", "ombro"]);
+  });
+
+  it("sem acabamento, sem schema conhecido ou sem escala: null (o viewer fica como era)", () => {
+    expect(readAcabamento(undefined)).toBeNull();
+    expect(readAcabamento({})).toBeNull();
+    expect(readAcabamento({ acabamento: { ...bom.acabamento, schema: 2 } })).toBeNull();
+    expect(readAcabamento({ acabamento: { ...bom.acabamento, cmPorUv: "x" } })).toBeNull();
+  });
+
+  it("descarta costura de tipo desconhecido, com ponto fora da textura ou com um ponto só; ribana inválida vira null", () => {
+    const a = readAcabamento({
+      acabamento: {
+        ...bom.acabamento,
+        ribana: { u0: 0.9, v0: 0.1, u1: 0.5, v1: 0.2 },
+        costuras: [
+          ...bom.acabamento.costuras,
+          { tipo: "ziper", pontos: [[0.1, 0.1], [0.2, 0.2]] },
+          { tipo: "cava", pontos: [[0.1, 0.1], [1.2, 0.2]] },
+          { tipo: "gola", pontos: [[0.1, 0.1]] },
+          { tipo: "lateral" },
+        ],
+      },
+    })!;
+    expect(a.ribana).toBeNull();
+    expect(a.costuras.map((c) => c.tipo)).toEqual(["bainha", "ombro"]);
   });
 });
 
