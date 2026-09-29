@@ -443,7 +443,7 @@ function Painel({ cid: cidInicial, quoteId, lojas, consolidado, logoDaLoja, onCl
   let subtitulo = "Escolha as peças, confira os valores e mande pelo WhatsApp";
   if (!cid) subtitulo = "Primeiro, a loja do orçamento";
   else if (catalogoAberto) subtitulo = "Toque numa peça do catálogo para adicionar. Você pode adicionar várias.";
-  else if (estado === "rascunho" && pecas.length) subtitulo = `${textoDePecas(pecas.length)} · toque numa peça para mudar quantidade, preço ou modelo`;
+  else if (estado === "rascunho" && pecas.length) subtitulo = `${textoDePecas(pecas.length)} · toque numa peça para enviar a arte e ver o vídeo`;
   else if (estado === "ajuste") subtitulo = `${versao || "Versão " + ((Number(quote?.versao) || 1))} · o cliente pediu mudança; edite e reenvie`;
   else if (estado === "enviado") subtitulo = `Enviado ${dataHora(quote?.sent_at)}${quote?.canal_envio ? " pelo WhatsApp" : ""} · em aberto até o cliente responder`;
   else if (estado === "aprovado") subtitulo = "Virou pedido · está na Produção";
@@ -524,6 +524,7 @@ function Painel({ cid: cidInicial, quoteId, lojas, consolidado, logoDaLoja, onCl
             <LinhaDaPeca
               key={p.chave}
               tema={tema}
+              cid={cid}
               peca={p}
               produto={p.product_id ? produtosPorId.get(p.product_id) || null : null}
               aberta={aberta === p.chave}
@@ -683,7 +684,8 @@ function Painel({ cid: cidInicial, quoteId, lojas, consolidado, logoDaLoja, onCl
     // No celular, com o catálogo aberto, o corpo inteiro é o catálogo.
     corpo = (
       <View style={{ flexDirection: estreito ? "column" : "row", gap: estreito ? 12 : 18, alignItems: "flex-start" }}>
-        <View style={{ flex: estreito ? undefined : 1.35, width: estreito ? "100%" : undefined, minWidth: 0, gap: 14 }}>{colunaDasPecas}</View>
+        {/* 29/09 (vídeo em primeiro plano): as peças ganham mais largura — a peça aberta é o palco do vídeo. */}
+        <View style={{ flex: estreito ? undefined : 1.6, width: estreito ? "100%" : undefined, minWidth: 0, gap: 14 }}>{colunaDasPecas}</View>
         {estreito && catalogoAberto ? null : (
           <View style={{ flex: estreito ? undefined : 1, width: estreito ? "100%" : undefined, minWidth: 0, gap: 14 }}>{colunaDireita}</View>
         )}
@@ -706,7 +708,7 @@ function Painel({ cid: cidInicial, quoteId, lojas, consolidado, logoDaLoja, onCl
         aria-modal
         accessibilityLabel={titulo}
         style={{
-          width: "100%", maxWidth: estreito ? undefined : 1040, height: estreito ? "100%" : undefined, maxHeight: estreito ? "100%" : "92%",
+          width: "100%", maxWidth: estreito ? undefined : 1160, height: estreito ? "100%" : undefined, maxHeight: estreito ? "100%" : "92%",
           backgroundColor: t.paperCardElev, borderRadius: estreito ? 0 : 18, borderWidth: estreito ? 0 : 1, borderColor: t.ink5,
           overflow: "hidden", flexDirection: "column",
           ...(Platform.OS === "web" && !estreito ? ({ boxShadow: isDark ? "0 24px 60px -18px rgba(0,0,0,0.8)" : "0 24px 60px -18px rgba(2,6,23,0.45)" } as any) : {}),

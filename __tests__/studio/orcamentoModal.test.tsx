@@ -48,6 +48,14 @@ jest.mock("@/components/studio/mockupPorProduto/MiniaturaDoModelo", () => ({ Min
 jest.mock("@/components/studio/orcamentoVideo/OrcamentoVideoModal", () => ({ OrcamentoVideoModal: "OrcamentoVideoModal" }));
 jest.mock("@/components/studio/orcamentoVideo/videoDoOrcamentoApi", () => ({ baixarVideoDoOrcamento: jest.fn(async () => null) }));
 jest.mock("@/components/studio/orcamentoVideo/PedidoDeAjusteModal", () => ({ PedidoDeAjusteModal: "PedidoDeAjusteModal" }));
+// O palco 3D é WebGL; aqui só importa que a peça aberta monta o estúdio.
+jest.mock("@/components/studio/orcamentoModal/PalcoDaPeca", () => ({ PalcoDaPeca: "PalcoDaPeca" }));
+const mockUpload = jest.fn(async () => ({ url: "https://r2/arte-frente.png" }));
+jest.mock("@/services/studioUploadApi", () => ({
+  pickImageBase64: jest.fn(async () => ({ base64: "QUJD", content_type: "image/png", size_mb: 0.1 })),
+  uploadStudioMockup: (...a: any[]) => (mockUpload as any)(...a),
+  fileToBase64Web: jest.fn(),
+}));
 
 const mockRequest = jest.fn();
 jest.mock("@/services/api", () => ({ request: (...a: any[]) => mockRequest(...a) }));
@@ -229,6 +237,46 @@ describe("modal do orçamento", () => {
     expect(body.items).toEqual([expect.objectContaining({ product_id: "p1", quantity: 2, unit_price: 39.9, visual_template_key: null })]);
     expect(body.validity_days).toBe(15);
     expect(mockApi.salvarCondicoesDoOrcamento).toHaveBeenCalledWith(CID, "q-novo", expect.objectContaining({ deposit_pct: 50, validity_days: 15 }));
+  });
+
+  test("peça aberta: o estúdio com o envio da arte por lugar, sem campo de texto", async () => {
+    let r!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      r = TestRenderer.create(<OrcamentoModal cid={CID} quoteId="novo" lojas={[{ id: CID, name: "Ateliê Lume" }]} onClose={jest.fn()} />);
+    });
+    await esperar();
+    await act(async () => { um(r, "escolher-pecas").props.onPress(); });
+    await act(async () => { um(r, "produto-p1").props.onPress(); });
+    await act(async () => { um(r, "acao-concluir").props.onPress(); });
+    const linha = r.root.findAll((n) => typeof n.props.testID === "string" && n.props.testID.startsWith("peca-linha-") && typeof n.type === "string")[0];
+    expect(textos(linha)).toContain("sem arte");
+    await act(async () => { linha.props.onPress(); });
+
+    expect(porId(r, "estudio-da-peca")).toHaveLength(1);
+    expect(porId(r, "palco-da-peca")).toHaveLength(1);
+    // Produto sem verso nem volta inteira: só a frente.
+    expect(porId(r, "lugar-front")).toHaveLength(1);
+    expect(porId(r, "lugar-back")).toHaveLength(0);
+    expect(porId(r, "modo-estendida")).toHaveLength(0);
+    // Sem campo de texto da arte.
+    expect(porId(r, "arte")).toHaveLength(0);
+
+    await act(async () => { um(r, "enviar-front").props.onPress(); });
+    await esperar();
+    await esperar();
+    expect(mockUpload).toHaveBeenCalledWith(CID, expect.objectContaining({ content_type: "image/png", kind: "customization" }));
+    expect(porId(r, "remover-front")).toHaveLength(1);
+    expect(porId(r, "ajuste-do-lugar")).toHaveLength(1);
+    await act(async () => { um(r, "ajuste-maior").props.onPress(); });
+    expect(textos(um(r, "ajuste-do-lugar"))).toContain("110%");
+
+    await act(async () => { um(r, "acao-salvar").props.onPress(); });
+    await esperar();
+    const [, body] = mockApi.createQuote.mock.calls[0];
+    expect(body.items[0].customization).toEqual({
+      image: "https://r2/arte-frente.png",
+      orcamento_ajustes: { front: { escala: 1.1, dx: 0, dy: 0 } },
+    });
   });
 
   test("enviado: Aprovar é o primário, campos só leitura, acompanhamento com o vídeo", async () => {

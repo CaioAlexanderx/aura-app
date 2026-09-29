@@ -10,24 +10,32 @@
 // conversa é no WhatsApp dela, e o orçamento fica em aberto no painel até
 // ela Aprovar (vira pedido) ou Fechar.
 //
-// DNA do TrocaModal (CLAUDE.md, regra 5): cabeçalho com subtítulo por
-// passo, barra numerada, corpo com rolagem, rodapé com o resumo à
-// esquerda e Voltar/Continuar à direita, passo final sem barra e
-// confirmação de saída. No celular vira tela cheia.
-//
-//   1 Peça     — item, cor da peça e arte (viewer 3D ao vivo)
-//   2 Prévia   — grava o giro, guarda o vídeo 30 dias, mensagem editável
-//   3 Enviar   — compartilhar com arquivo onde existir (celular e
-//                computador); senão baixar + copiar + abrir a conversa.
-//                Ou o canal "Link do orçamento" (página para o cliente)
-//   ✓ Enviado
+// DNA do TrocaModal (CLAUDE.md, regra 5): cabeçalho com subtítulo,
+// corpo com rolagem, rodapé com o resumo à esquerda e as ações à direita,
+// passo final de confirmação e confirmação de saída. No celular vira tela
+// cheia.
 //
 // 29/09/2026 (modal do orçamento, decisões 2 e 3 do PO): o passo
 // "Valores" saiu. Validade, sinal, Pix, parcelas, prazo e observação
 // moram no orçamento (components/studio/orcamentoModal) e chegam aqui já
-// salvos em `quote`. O envio por link, que era um botão paralelo no
-// editor, virou um canal dentro de Enviar. O modelo 3D da peça é o do
-// item do orçamento, se a lojista trocou (modeloDaPeca, backend 364).
+// salvos em `quote`. O envio por link virou um canal dentro de Enviar.
+// O modelo 3D da peça é o do item do orçamento, se a lojista trocou
+// (modeloDaPeca, backend 364).
+//
+// 29/09/2026 (vídeo em primeiro plano, mockup
+// docs/mockups/studio-orcamento-video-primeiro-plano.html): o assistente
+// de 3 passos (Peça → Prévia → Enviar) vira UM passo, Enviar. A arte, a
+// cor, o tamanho por lado e a prévia 3D moram na peça do orçamento
+// (orcamentoModal/EstudioDaPeca); aqui o vídeo é gravado sozinho ao
+// abrir, com TODAS as artes da peça girando (artesPorLado.motorDasArtes),
+// ao lado da mensagem e do canal. Só a peça do vídeo ainda se escolhe
+// aqui, quando o orçamento tem mais de uma.
+//
+//   Enviar   — vídeo (gravado ao abrir), mensagem editável e canal:
+//              compartilhar com arquivo onde existir (celular e
+//              computador); senão baixar + copiar + abrir a conversa. Ou
+//              o canal "Link do orçamento" (página para o cliente).
+//   ✓ Enviado
 //
 // Web-only (canvas, WebGL, WebCodecs): o editor nem mostra o botão no
 // nativo. Multi-CNPJ: tudo usa a empresa do orçamento (companyId da rota
@@ -44,15 +52,10 @@ import type { StudioPalette } from "@/constants/studio-tokens";
 import { studioApi, type StudioQuote, type StudioQuoteItem, type CanalDeEnvioDoOrcamento } from "@/services/studioApi";
 import { carregarFontesDaPeca } from "./modeloDaPeca";
 import { formaDaMiniaturaDoModelo } from "@/components/studio/mockupPorProduto/MiniaturaDoModelo";
-import { pickImageBase64, uploadStudioMockup } from "@/services/studioUploadApi";
-import { Mug3DPreview } from "@/components/studio/visualEngine/Mug3DPreview";
 import { valoresDasCondicoes, reais } from "./condicoesDoOrcamento";
 import { mensagemDoOrcamento, primeiroNome } from "./mensagemDoOrcamento";
-import {
-  tem3d, temFoto, coresDaPeca, arteDoItem, customizacaoComArte, motorDaArte, fotoSem3d,
-  ajustarTamanhoDaArte, ajusteDaArte, ESCALA_MIN, ESCALA_MAX,
-  type FontesDaPeca, type ArteDaPeca,
-} from "./pecaDoOrcamento";
+import { tem3d, temFoto, fotoSem3d, type FontesDaPeca } from "./pecaDoOrcamento";
+import { artesDoItem, motorDasArtes, ladosDaPeca, textoDasArtes } from "./artesPorLado";
 import { abrirPalco, gravarGiro, fotoDoPalco, DURACAO_S, type VideoGravado, type Palco } from "./gravarGiro";
 import { subirVideoDoOrcamento } from "./videoDoOrcamentoApi";
 import {
@@ -60,17 +63,14 @@ import {
   nomeDoArquivo, telefoneDoCliente,
 } from "./envioNoWhatsApp";
 
-type Passo = 1 | 2 | 3 | 4;
+type Passo = "enviar" | "enviado";
 type Canal = "whatsapp" | "link";
 type Gravacao = "ocioso" | "gravando" | "pronto" | "falhou" | "foto" | "semnada";
 type Upload = "nada" | "subindo" | "salvo" | "erro";
 
-const ROTULOS: Record<1 | 2 | 3, string> = { 1: "Peça", 2: "Prévia", 3: "Enviar" };
 const SUBTITULOS: Record<Passo, string> = {
-  1: "Escolha a peça e a cor, e confira a arte do cliente",
-  2: "Gravamos o giro de 7 s e montamos a mensagem",
-  3: "Mande para o WhatsApp do cliente",
-  4: "Pronto",
+  enviar: "O vídeo da peça, a mensagem e o WhatsApp do cliente",
+  enviado: "Pronto",
 };
 
 export type OrcamentoVideoModalProps = {
@@ -81,7 +81,7 @@ export type OrcamentoVideoModalProps = {
   nomeDaLoja: string;
   logoUrl?: string | null;
   onClose: () => void;
-  /** Orçamento mudou (itens com a arte, marcado como enviado, link gerado). */
+  /** Orçamento mudou (marcado como enviado, link gerado). */
   onAtualizou: (quote: StudioQuote, items?: StudioQuoteItem[]) => void;
 };
 
@@ -102,56 +102,55 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
   const { width } = useWindowDimensions();
   const estreito = width < 700;
   const s = useMemo(() => estilos(t, estreito), [t, estreito]);
-
   const aberto = quote.status === "draft" || quote.status === "sent";
-  const podeEditarArte = quote.status === "draft";
 
-  const [passo, setPasso] = useState<Passo>(1);
+  const [passo, setPasso] = useState<Passo>("enviar");
   const [querSair, setQuerSair] = useState(false);
   const [ocupado, setOcupado] = useState(false);
 
-  // ── Passo 1: peça ───────────────────────────────────────────
+  // ── A peça do vídeo ─────────────────────────────────────────
   const comProduto = useMemo(() => items.map((it, i) => ({ it, i })).filter(({ it }) => !!it.product_id), [items]);
   const [idx, setIdx] = useState<number>(comProduto[0]?.i ?? -1);
   const item = idx >= 0 ? items[idx] : null;
   const [fontes, setFontes] = useState<FontesDaPeca | null>(null);
-  const [carregandoPeca, setCarregandoPeca] = useState(false);
-  const [arte, setArte] = useState<ArteDaPeca>({ texto: "", imagem: null, cor: null });
-  const [arteMudou, setArteMudou] = useState(false);
+  const [carregandoPeca, setCarregandoPeca] = useState(!!item?.product_id);
   const [comLogo, setComLogo] = useState(true);
   const [seguirComFoto, setSeguirComFoto] = useState(false);
-  const [subindoArte, setSubindoArte] = useState(false);
 
   useEffect(() => {
     let vivo = true;
-    if (!item?.product_id) { setFontes(null); return; }
+    if (!item?.product_id) { setFontes(null); setCarregandoPeca(false); return; }
     setCarregandoPeca(true);
     carregarFontesDaPeca(companyId, item.product_id, item.visual_template_key)
       .then((f) => {
         if (!vivo) return;
         setFontes(f);
-        setArte(arteDoItem(f.cfg, item.customization));
-        setArteMudou(false);
         setSeguirComFoto(false);
       })
+      .catch(() => { if (vivo) setFontes(null); })
       .finally(() => { if (vivo) setCarregandoPeca(false); });
     return () => { vivo = false; };
   }, [companyId, item?.product_id, item?.visual_template_key, idx]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pode3d = tem3d(fontes);
   const podeFoto = temFoto(fontes);
-  const cores = coresDaPeca(fontes?.cfg);
+  const spec3d = pode3d ? fontes!.template!.spec! : null;
   // A peça define a técnica padrão (a sublimação da caneca recorta o branco).
   const formaDaPeca = fontes?.template ? formaDaMiniaturaDoModelo(fontes.template, fontes.template.spec) : null;
   const tipoDaPeca = formaDaPeca === "caneca" || formaDaPeca === "camiseta" ? formaDaPeca : null;
-  const motor = useMemo(() => motorDaArte(fontes?.cfg, item?.customization, arte, tipoDaPeca), [fontes, item, arte, tipoDaPeca]);
+  // As artes são as da peça no orçamento (frente, verso ou estendida), todas de uma vez.
+  const artes = useMemo(() => artesDoItem(fontes?.cfg, item?.customization), [fontes, item]);
+  const motor = useMemo(
+    () => motorDasArtes(fontes?.cfg, item?.customization, artes, spec3d, tipoDaPeca),
+    [fontes, item, artes, spec3d, tipoDaPeca],
+  );
 
   // ── Condições: as do orçamento, já salvas pelo modal do orçamento ──
   const validade = Math.max(1, Math.min(90, Number(quote.validity_days) || 7));
   const total = Number(quote.total) || 0;
   const valores = valoresDasCondicoes(quote);
 
-  // ── Passo 2: gravação ───────────────────────────────────────
+  // ── Gravação ────────────────────────────────────────────────
   const [gravacao, setGravacao] = useState<Gravacao>("ocioso");
   const [progresso, setProgresso] = useState(0);
   const [video, setVideo] = useState<VideoGravado | null>(null);
@@ -162,7 +161,7 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
   const palcoRef = useRef<Palco | null>(null);
   const tentativa = useRef(0);
 
-  useEffect(() => () => { palcoRef.current?.fechar(); }, []);
+  useEffect(() => () => { tentativa.current += 1; palcoRef.current?.fechar(); }, []);
   useEffect(() => {
     if (!video) { setVideoUrl(null); return; }
     const u = URL.createObjectURL(video.blob);
@@ -186,9 +185,9 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
   });
   const texto = textoEditado ?? textoGerado;
 
-  // O que foi gravado por último: voltar ao passo 1 e mudar peça, arte,
-  // cor ou logo pede gravação nova ao entrar de novo na prévia.
-  const assinatura = JSON.stringify([idx, arte, comLogo, seguirComFoto, fontes?.template?.key || null]);
+  // O vídeo é gravado sozinho ao abrir, e de novo quando muda a peça,
+  // o logo ou a troca por foto.
+  const assinatura = JSON.stringify([idx, item?.customization || null, comLogo, seguirComFoto, fontes?.template?.key || null]);
   const gravadoCom = useRef<string | null>(null);
 
   async function gravar(forcarFoto = false) {
@@ -207,7 +206,7 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
     try {
       palcoRef.current?.fechar();
       palcoRef.current = null;
-      const palco = await abrirPalco(fontes!.template!.spec!, motor.values, motor.opts);
+      const palco = await abrirPalco(spec3d!, motor.values, motor.opts);
       palcoRef.current = palco;
       const v = await gravarGiro(palco, marca, comLogo, (f) => { if (minha === tentativa.current) setProgresso(f); });
       if (minha !== tentativa.current) return;
@@ -232,6 +231,12 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
     }
   }
 
+  useEffect(() => {
+    if (passo !== "enviar" || carregandoPeca) return;
+    if (!item) { setGravacao("semnada"); return; }
+    if (gravadoCom.current !== assinatura) gravar();
+  }, [passo, carregandoPeca, assinatura]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function guardar(v: VideoGravado) {
     setUpload("subindo");
     try {
@@ -243,7 +248,7 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
     }
   }
 
-  // ── Passo 3: envio ──────────────────────────────────────────
+  // ── Envio ───────────────────────────────────────────────────
   const [telefone, setTelefone] = useState(quote.customer_phone || "");
   const arquivo = useMemo(() => {
     if (typeof File === "undefined") return null;
@@ -256,14 +261,15 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
   const [jaBaixou, setJaBaixou] = useState(false);
   const [canal, setCanal] = useState<Canal>("whatsapp");
   const [enviadoPor, setEnviadoPor] = useState<CanalDeEnvioDoOrcamento | "link" | null>(null);
+  const gravando = gravacao === "gravando";
 
-  async function marcarEnviado(canal: CanalDeEnvioDoOrcamento) {
+  async function marcarEnviado(c: CanalDeEnvioDoOrcamento) {
     setOcupado(true);
     try {
-      const r = await studioApi.marcarOrcamentoEnviado(companyId, quote.id, canal);
+      const r = await studioApi.marcarOrcamentoEnviado(companyId, quote.id, c);
       onAtualizou(r.quote);
-      setEnviadoPor(canal);
-      setPasso(4);
+      setEnviadoPor(c);
+      setPasso("enviado");
     } catch (e: any) {
       toast.error(e?.data?.error || e?.message || "Não deu para registrar o envio");
     } finally {
@@ -297,7 +303,7 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
       if (conversa) abrirConversa(conversa);
       copyToClipboard(textoDoLink(url)).catch(() => {});
       setEnviadoPor("link");
-      setPasso(4);
+      setPasso("enviado");
     } catch (e: any) {
       toast.error(e?.data?.error || e?.message || "Não deu para gerar o link do orçamento");
     } finally {
@@ -311,295 +317,62 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
     setJaBaixou(true);
   }
 
-  // ── Navegação ───────────────────────────────────────────────
-  async function avancar() {
-    if (passo === 1) {
-      if (podeEditarArte && arteMudou && item && fontes) {
-        setOcupado(true);
-        try {
-          const novos = items.map((it, i) => i === idx ? { ...it, customization: customizacaoComArte(fontes.cfg, it.customization, arte) } : it);
-          const q = await studioApi.updateQuote(companyId, quote.id, { items: novos.map((it, i) => ({ ...it, sort_order: i })) } as any);
-          onAtualizou(q, novos);
-          setArteMudou(false);
-        } catch (e: any) {
-          toast.error(e?.data?.error || e?.message || "Não deu para salvar a arte no orçamento");
-          setOcupado(false);
-          return;
-        }
-        setOcupado(false);
-      }
-      setTextoEditado(null);
-      setPasso(2);
-      if (gravadoCom.current !== assinatura || gravacao === "falhou") gravar();
-      return;
-    }
-    if (passo === 2) { setPasso(3); return; }
-  }
-
-  function voltar() { if (passo > 1 && passo < 4) setPasso((passo - 1) as Passo); }
   function pedirFechar() {
-    if (passo === 4 || (gravacao === "ocioso" && !arteMudou)) onClose();
+    if (passo === "enviado" || gravacao === "ocioso" || gravacao === "semnada") onClose();
     else setQuerSair(true);
   }
 
   // ── Rodapé ──────────────────────────────────────────────────
-  let info = `Total ${reais(total)}` + (valores.pix ? ` · ${reais(valores.pix.valor)} no Pix` : "");
-  let podeAvancar = true;
-  if (passo === 1) {
-    if (carregandoPeca) { podeAvancar = false; info = "Carregando a peça…"; }
-    else if (!item) { podeAvancar = true; info = "Sem peça com produto: vai só a mensagem"; }
-    else if (!pode3d && !podeFoto) { podeAvancar = true; info = "Sem 3D nem foto: vai só a mensagem"; }
-    else if (!pode3d) info = "Sem 3D: vai a foto da peça";
-  }
-  if (passo === 2) {
-    if (gravacao === "gravando") { podeAvancar = false; info = "Gravando…"; }
-    else if (gravacao === "falhou") { podeAvancar = false; info = "Tente de novo ou siga com a foto"; }
-    else if (gravacao === "pronto") info = upload === "salvo" ? `Vídeo pronto · ${DURACAO_S} s · guardado por 30 dias` : upload === "subindo" ? "Vídeo pronto · guardando…" : "Vídeo pronto";
-    else if (gravacao === "foto") info = "Vai a foto da peça";
-    else if (gravacao === "semnada") info = "Vai só a mensagem";
-  }
-  if (passo === 3) info = `Para ${quote.customer_name || "o cliente"}${telefone ? " · " + telefone : ""}`;
+  let info = `Para ${quote.customer_name || "o cliente"}${telefone ? " · " + telefone : ""} · ${reais(total)}`;
+  if (carregandoPeca) info = "Carregando a peça…";
+  else if (gravando) info = !pode3d || seguirComFoto ? "Preparando a foto…" : `Gravando o giro de ${DURACAO_S} s…`;
+  else if (gravacao === "falhou") info = "O vídeo não saiu: tente de novo ou siga com a foto";
+  const semArquivoAinda = carregandoPeca || gravando || gravacao === "falhou";
 
   // ─────────────────────────────────────────────────────────────
   const conteudo = (
     <View style={s.fundo}>
       <Pressable style={s.veu} onPress={pedirFechar} accessibilityLabel="Fechar" />
-      <View style={s.painel} accessibilityRole={"dialog" as any} accessibilityLabel="Orçamento em vídeo 3D">
+      <View style={s.painel} accessibilityRole={"dialog" as any} accessibilityLabel="Enviar o orçamento">
         {/* Cabeçalho */}
         <View style={s.cabeca}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
-            <View style={s.icone}><Icon name="camera" size={17} color={t.accentInk} /></View>
+            <View style={s.icone}><Icon name="whatsapp" size={17} color={t.accentInk} /></View>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={s.titulo}>{passo === 4 ? "Orçamento enviado" : "Enviar o orçamento"}</Text>
+              <Text style={s.titulo}>{passo === "enviado" ? "Orçamento enviado" : "Enviar o orçamento"}</Text>
               <Text style={s.subtitulo} numberOfLines={2}>{SUBTITULOS[passo]}</Text>
             </View>
           </View>
           <Pressable onPress={pedirFechar} style={s.fechar} accessibilityLabel="Fechar"><Icon name="x" size={18} color={t.ink3} /></Pressable>
         </View>
 
-        {passo < 4 && (
-          <View style={s.passos}>
-            {([1, 2, 3] as const).map((n) => {
-              const feito = passo > n, ativo = passo === n;
-              return (
-                <View key={n} style={s.passo}>
-                  <View style={[s.bola, feito && { backgroundColor: t.success, borderColor: t.success }, ativo && { backgroundColor: t.accent, borderColor: t.accent }]}>
-                    {feito ? <Icon name="check" size={11} color="#fff" /> : <Text style={[s.bolaTxt, ativo && { color: "#fff" }]}>{n}</Text>}
-                  </View>
-                  {(!estreito || ativo) && <Text style={[s.rotulo, ativo && { color: t.accentInk, fontWeight: "800" }, feito && { color: t.ink2 }]}>{ROTULOS[n]}</Text>}
-                  {n < 3 && <View style={[s.sep, feito && { backgroundColor: t.success }]} />}
-                </View>
-              );
-            })}
-          </View>
-        )}
-
         <ScrollView style={s.corpo} contentContainerStyle={s.corpoConteudo} keyboardShouldPersistTaps="handled">
-          {passo === 1 && (
+          {passo === "enviar" && (
             <View style={s.duas}>
+              {/* O vídeo */}
               <View style={s.col}>
-                {carregandoPeca ? (
-                  <View style={s.vazio}><ActivityIndicator color={t.primary} /></View>
-                ) : pode3d && !seguirComFoto ? (
-                  <View style={{ alignItems: "center", gap: 6 }}>
-                    <Mug3DPreview
-                      key={`${fontes!.template!.key}:${idx}`}
-                      spec={fontes!.template!.spec!}
-                      values={motor.values}
-                      size={estreito ? Math.min(width - 48, 380) : 360}
-                      garmentColor={motor.opts.garmentColor}
-                      artColor={motor.opts.artColor}
-                      font={motor.opts.font}
-                      cenario="estudio"
-                    />
-                    <Text style={s.nota}>O vídeo começa de frente e dá uma volta inteira.</Text>
-                  </View>
-                ) : (
-                  <View style={s.vazio}>
-                    <Icon name="box" size={26} color={t.ink3} />
-                    <Text style={s.vazioTit}>{item ? "Esta peça não tem modelo 3D" : "Sem peça para mostrar"}</Text>
-                    <Text style={s.vazioTxt}>
-                      {item
-                        ? podeFoto
-                          ? "Vai a foto da peça com a arte. Para o vídeo, escolha um modelo 3D na peça, em Modelo do mockup."
-                          : "Vai só a mensagem com os valores. Para o vídeo, escolha um modelo 3D na peça, em Modelo do mockup."
-                        : "O orçamento só tem itens avulsos: vai a mensagem com os valores."}
-                    </Text>
-                    {pode3d && seguirComFoto && (
-                      <Pressable onPress={() => setSeguirComFoto(false)} style={s.btnSec}><Text style={s.btnSecTxt}>Voltar ao 3D</Text></Pressable>
-                    )}
-                  </View>
-                )}
-              </View>
-
-              <View style={s.col}>
-                <Text style={s.secao}>Qual item vai no vídeo</Text>
-                {items.map((it, i) => {
-                  const ok = !!it.product_id;
-                  const marcado = i === idx;
-                  return (
-                    <Pressable
-                      key={i}
-                      disabled={!ok}
-                      onPress={() => { if (ok && i !== idx) { setIdx(i); setGravacao("ocioso"); } }}
-                      style={[s.opcao, marcado && s.opcaoMarcada, !ok && { opacity: 0.55 }]}
-                      accessibilityRole="radio"
-                      accessibilityState={{ checked: marcado, disabled: !ok }}
-                    >
-                      <View style={[s.radio, marcado && { borderColor: t.accent }]}>{marcado && <View style={s.radioPonto} />}</View>
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={s.opcaoTit} numberOfLines={2}>{it.description}</Text>
-                        <Text style={s.opcaoSub}>{ok ? `${textoDe(Number(it.quantity))} un.` : "Item avulso · entra só nos valores"}</Text>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-
-                {cores.length > 0 && (
-                  <>
-                    <Text style={s.secao}>Cor da peça</Text>
-                    <View style={s.cores}>
-                      {cores.map((c) => {
-                        const sel = (arte.cor || "").toLowerCase() === c.hex.toLowerCase();
-                        return (
-                          <Pressable
-                            key={c.hex}
-                            disabled={!podeEditarArte}
-                            onPress={() => { setArte({ ...arte, cor: c.hex }); setArteMudou(true); }}
-                            style={s.cor}
-                            accessibilityLabel={c.nome}
-                            accessibilityState={{ selected: sel }}
-                          >
-                            <View style={[s.corBola, { backgroundColor: c.hex }, sel && { borderColor: t.accent, borderWidth: 3 }]} />
-                            <Text style={[s.corNome, sel && { color: t.ink, fontWeight: "800" }]} numberOfLines={1}>{c.nome}</Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  </>
-                )}
-
-                <Text style={s.secao}>Arte do cliente</Text>
-                <TextInput
-                  style={[s.input, !podeEditarArte && s.inputOff]}
-                  value={arte.texto}
-                  editable={podeEditarArte}
-                  onChangeText={(v) => { setArte({ ...arte, texto: v }); setArteMudou(true); }}
-                  placeholder="Texto na peça (opcional)"
-                  placeholderTextColor={t.ink4}
-                />
-                <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                  <Pressable
-                    disabled={!podeEditarArte || subindoArte}
-                    style={[s.btnSec, (!podeEditarArte || subindoArte) && { opacity: 0.5 }]}
-                    onPress={async () => {
-                      const img = await pickImageBase64("image/png,image/jpeg,image/webp");
-                      if (!img) return;
-                      setSubindoArte(true);
-                      try {
-                        const up = await uploadStudioMockup(companyId, { content_base64: img.base64, content_type: img.content_type, kind: "customization" });
-                        setArte({ ...arte, imagem: up.url });
-                        setArteMudou(true);
-                      } catch (e: any) {
-                        toast.error(e?.data?.error || e?.message || "Não deu para subir a imagem");
-                      } finally {
-                        setSubindoArte(false);
-                      }
-                    }}
-                  >
-                    {subindoArte ? <ActivityIndicator size="small" color={t.primary} /> : <Icon name="image" size={15} color={t.ink} />}
-                    <Text style={s.btnSecTxt}>{arte.imagem ? "Trocar imagem" : "Enviar imagem"}</Text>
-                  </Pressable>
-                  {arte.imagem && podeEditarArte && (
-                    <Pressable style={s.link} onPress={() => { setArte({ ...arte, imagem: null }); setArteMudou(true); }}>
-                      <Text style={s.linkTxt}>Tirar imagem</Text>
-                    </Pressable>
-                  )}
-                </View>
-                <Text style={s.nota}>
-                  {podeEditarArte
-                    ? "O que você ajustar aqui fica no item do orçamento, e o pedido aprovado nasce com esta arte."
-                    : "Orçamento já enviado: a arte é a que está no orçamento."}
-                </Text>
-
-                <Pressable style={s.chave} onPress={() => setComLogo(!comLogo)} accessibilityRole="switch" accessibilityState={{ checked: comLogo }}>
-                  <View style={[s.sw, comLogo && { backgroundColor: t.success }]}><View style={[s.swBola, comLogo && { left: 19 }]} /></View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.opcaoTit}>Logo da loja no canto do vídeo</Text>
-                    <Text style={s.opcaoSub}>O vídeo circula encaminhado. A marca vai junto.</Text>
-                  </View>
-                </Pressable>
-
-                {pode3d && !seguirComFoto && podeFoto && (
-                  <Pressable style={s.link} onPress={() => setSeguirComFoto(true)}><Text style={s.linkTxt}>Mandar foto em vez de vídeo</Text></Pressable>
-                )}
-              </View>
-            </View>
-          )}
-
-          {passo === 2 && (
-            <View style={s.duas}>
-              <View style={s.col}>
-                {/* "Tamanho da arte" (29/09/2026, app#1013): a imagem entra
-                    sozinha na área de impressão; aqui a lojista aumenta ou
-                    diminui sobre o automático e grava de novo. Vale só para
-                    o vídeo. */}
-                {arte.imagem && gravacao !== "gravando" ? (
-                  <View style={s.tamanho} testID="tamanho-da-arte">
-                    <Text style={[s.opcaoTit, { flex: 1 }]}>Tamanho da arte · {Math.round(ajusteDaArte(arte).escala * 100)}%</Text>
-                    <Pressable
-                      style={[s.btnSec, s.btnQuadrado, ajusteDaArte(arte).escala <= ESCALA_MIN && { opacity: 0.45 }]}
-                      disabled={ajusteDaArte(arte).escala <= ESCALA_MIN}
-                      onPress={() => setArte(ajustarTamanhoDaArte(arte, { escala: Math.round((ajusteDaArte(arte).escala - 0.1) * 10) / 10 }))}
-                      accessibilityLabel="Diminuir a arte"
-                    >
-                      <Icon name="minus" size={16} color={t.ink} />
-                    </Pressable>
-                    <Pressable
-                      style={[s.btnSec, s.btnQuadrado, ajusteDaArte(arte).escala >= ESCALA_MAX && { opacity: 0.45 }]}
-                      disabled={ajusteDaArte(arte).escala >= ESCALA_MAX}
-                      onPress={() => setArte(ajustarTamanhoDaArte(arte, { escala: Math.round((ajusteDaArte(arte).escala + 0.1) * 10) / 10 }))}
-                      accessibilityLabel="Aumentar a arte"
-                    >
-                      <Icon name="plus" size={16} color={t.ink} />
-                    </Pressable>
-                    {([["arrow_left", "dx", -0.05, "Mover a arte para a esquerda"], ["chevron_up", "dy", -0.05, "Mover a arte para cima"], ["chevron_down", "dy", 0.05, "Mover a arte para baixo"], ["arrow_right", "dx", 0.05, "Mover a arte para a direita"]] as const).map(([icone, eixo, passo, rotulo]) => (
-                      <Pressable
-                        key={rotulo}
-                        style={[s.btnSec, s.btnQuadrado]}
-                        onPress={() => setArte(ajustarTamanhoDaArte(arte, { [eixo]: Math.round((ajusteDaArte(arte)[eixo] + passo) * 100) / 100 }))}
-                        accessibilityLabel={rotulo}
-                      >
-                        <Icon name={icone} size={16} color={t.ink} />
-                      </Pressable>
-                    ))}
-                    {arte.ajuste ? (
-                      <Pressable style={s.btnSec} onPress={() => setArte(ajustarTamanhoDaArte(arte, null))}><Text style={s.btnSecTxt}>Automático</Text></Pressable>
-                    ) : null}
-                    {gravadoCom.current !== assinatura ? (
-                      <Pressable style={[s.btnSec, { borderColor: t.accent }]} onPress={() => gravar()} testID="regravar-tamanho">
-                        <Icon name="refresh" size={14} color={t.ink} /><Text style={s.btnSecTxt}>Gravar com este tamanho</Text>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                ) : null}
                 <Text style={s.secao}>{gravacao === "foto" ? "Foto da peça" : `Vídeo · ${DURACAO_S} s · 720 × 900`}</Text>
-                <View style={s.videoCaixa}>
-                  {gravacao === "gravando" && (
+                <View style={s.videoCaixa} testID="video-do-orcamento">
+                  {(gravando || carregandoPeca) && (
                     <View style={s.gravando}>
                       <ActivityIndicator color="#fff" />
-                      <Text style={s.gravandoTxt}>{!pode3d || seguirComFoto ? "Preparando a foto…" : `Gravando o giro… ${Math.round(progresso * 100)}%`}</Text>
-                      <View style={s.barra}><View style={[s.barraCheia, { width: `${Math.round(progresso * 100)}%` as any }]} /></View>
+                      <Text style={s.gravandoTxt}>{carregandoPeca ? "Carregando a peça…" : !pode3d || seguirComFoto ? "Preparando a foto…" : `Gravando o giro… ${Math.round(progresso * 100)}%`}</Text>
+                      {!carregandoPeca && pode3d && !seguirComFoto ? <View style={s.barra}><View style={[s.barraCheia, { width: `${Math.round(progresso * 100)}%` as any }]} /></View> : null}
                     </View>
                   )}
                   {gravacao === "pronto" && videoUrl && Platform.OS === "web" &&
                     createElement("video", { src: videoUrl, autoPlay: true, loop: true, muted: true, playsInline: true, controls: true, style: { width: "100%", height: "100%", objectFit: "cover", display: "block", background: "#FBF8F3" } })}
                   {gravacao === "foto" && foto && Platform.OS === "web" &&
                     createElement(ImagemDoBlob, { blob: foto })}
-                  {(gravacao === "falhou" || gravacao === "semnada" || gravacao === "ocioso") && (
+                  {!carregandoPeca && (gravacao === "falhou" || gravacao === "semnada" || gravacao === "ocioso") && (
                     <View style={s.gravando}><Icon name={gravacao === "falhou" ? "alert-circle" : "message"} size={26} color="#fff" /></View>
                   )}
                 </View>
+                {pode3d && !seguirComFoto && !gravando ? (
+                  <Text style={s.nota}>
+                    {item ? `${textoDasArtes(artes, ladosDaPeca(fontes?.cfg, spec3d))} · ` : ""}A arte, a cor e o tamanho vêm da peça no orçamento. Para mudar, volte ao orçamento e abra a peça.
+                  </Text>
+                ) : null}
                 {gravacao === "pronto" && video && (
                   <View style={s.meta}>
                     <Text style={s.opcaoSub}>{video.ext.toUpperCase()} · {(video.blob.size / 1048576).toFixed(1).replace(".", ",")} MB</Text>
@@ -626,11 +399,79 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
                 )}
                 {gravacao === "semnada" && (
                   <View style={[s.aviso, { backgroundColor: t.warningSoft }]}>
-                    <Text style={[s.avisoTxt, { color: t.warningInk }]}>Sem modelo 3D nem foto marcada para esta peça: vai só a mensagem com os valores.</Text>
+                    <Text style={[s.avisoTxt, { color: t.warningInk }]}>
+                      {item ? "Sem modelo 3D nem foto marcada para esta peça: vai só a mensagem com os valores." : "O orçamento só tem itens avulsos: vai a mensagem com os valores."}
+                    </Text>
                   </View>
                 )}
+                {!carregandoPeca && item && !pode3d && gravacao !== "semnada" ? (
+                  <Text style={s.nota}>Esta peça não tem modelo 3D: vai a foto com a arte. Para o vídeo, escolha um modelo 3D na peça, em Modelo do mockup.</Text>
+                ) : null}
+
+                {item ? (
+                  <Pressable style={s.chave} onPress={() => setComLogo(!comLogo)} accessibilityRole="switch" accessibilityState={{ checked: comLogo }}>
+                    <View style={[s.sw, comLogo && { backgroundColor: t.success }]}><View style={[s.swBola, comLogo && { left: 19 }]} /></View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.opcaoTit}>Logo da loja no canto do vídeo</Text>
+                      <Text style={s.opcaoSub}>O vídeo circula encaminhado. A marca vai junto.</Text>
+                    </View>
+                  </Pressable>
+                ) : null}
+                {pode3d && !seguirComFoto && podeFoto && !gravando && (
+                  <Pressable style={s.link} onPress={() => setSeguirComFoto(true)}><Text style={s.linkTxt}>Mandar foto em vez de vídeo</Text></Pressable>
+                )}
+                {pode3d && seguirComFoto && !gravando && (
+                  <Pressable style={s.link} onPress={() => setSeguirComFoto(false)}><Text style={s.linkTxt}>Voltar ao vídeo</Text></Pressable>
+                )}
               </View>
+
+              {/* Peça, mensagem e canal */}
               <View style={s.col}>
+                {comProduto.length > 1 ? (
+                  <>
+                    <Text style={s.secao}>Peça do vídeo</Text>
+                    <View accessibilityRole={"radiogroup" as any} accessibilityLabel="Peça do vídeo" style={{ gap: 8 }}>
+                      {comProduto.map(({ it, i }) => {
+                        const marcado = i === idx;
+                        return (
+                          <Pressable
+                            key={i}
+                            disabled={gravando}
+                            onPress={() => { if (i !== idx) setIdx(i); }}
+                            style={[s.opcao, marcado && s.opcaoMarcada, gravando && !marcado && { opacity: 0.55 }]}
+                            accessibilityRole="radio"
+                            accessibilityState={{ checked: marcado, disabled: gravando }}
+                            testID={"peca-do-video-" + i}
+                          >
+                            <View style={[s.radio, marcado && { borderColor: t.accent }]}>{marcado && <View style={s.radioPonto} />}</View>
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                              <Text style={s.opcaoTit} numberOfLines={2}>{it.description}</Text>
+                              <Text style={s.opcaoSub}>{textoDe(Number(it.quantity))} un.</Text>
+                            </View>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </>
+                ) : null}
+
+                <Text style={s.secao}>Para</Text>
+                <View style={s.para}>
+                  <View style={s.avatar}><Text style={s.avatarTxt}>{(quote.customer_name || "?").trim().slice(0, 1).toUpperCase()}</Text></View>
+                  <View style={{ flex: 1, minWidth: 160 }}>
+                    <Text style={s.opcaoTit}>{quote.customer_name || "Cliente"}</Text>
+                    <TextInput
+                      style={[s.input, { marginTop: 4 }]}
+                      value={telefone}
+                      onChangeText={setTelefone}
+                      keyboardType="phone-pad"
+                      placeholder="WhatsApp do cliente"
+                      placeholderTextColor={t.ink4}
+                      accessibilityLabel="WhatsApp do cliente"
+                    />
+                  </View>
+                </View>
+
                 <Text style={s.secao}>Mensagem</Text>
                 <TextInput
                   style={[s.input, s.mensagem]}
@@ -646,104 +487,86 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
                   )}
                 </View>
                 <Text style={s.nota}>*asteriscos* viram negrito no WhatsApp. Sem link: valores e condições vão por extenso.</Text>
-              </View>
-            </View>
-          )}
 
-          {passo === 3 && (
-            <View style={{ gap: 12 }}>
-              <View style={s.para}>
-                <View style={s.avatar}><Text style={s.avatarTxt}>{(quote.customer_name || "?").trim().slice(0, 1).toUpperCase()}</Text></View>
-                <View style={{ flex: 1, minWidth: 160 }}>
-                  <Text style={s.opcaoTit}>{quote.customer_name || "Cliente"}</Text>
-                  <TextInput
-                    style={[s.input, { marginTop: 4 }]}
-                    value={telefone}
-                    onChangeText={setTelefone}
-                    keyboardType="phone-pad"
-                    placeholder="WhatsApp do cliente"
-                    placeholderTextColor={t.ink4}
-                  />
+                <Text style={s.secao}>Como mandar</Text>
+                <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }} accessibilityRole={"radiogroup" as any} accessibilityLabel="Como mandar">
+                  {([["whatsapp", anexo === "video" ? "Vídeo e mensagem" : anexo === "foto" ? "Foto e mensagem" : "Mensagem"], ["link", "Link do orçamento"]] as const).map(([id, rotulo]) => (
+                    <Pressable
+                      key={id}
+                      onPress={() => setCanal(id)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: canal === id }}
+                      testID={"canal-" + id}
+                      style={[s.opcao, { flexGrow: 1, flexBasis: 180, minHeight: 44 }, canal === id && s.opcaoMarcada]}
+                    >
+                      <View style={[s.radio, canal === id && { borderColor: t.accent }]}>{canal === id && <View style={s.radioPonto} />}</View>
+                      <Text style={s.opcaoTit}>{rotulo}</Text>
+                    </Pressable>
+                  ))}
                 </View>
-              </View>
 
-              <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }} accessibilityRole={"radiogroup" as any} accessibilityLabel="Como mandar">
-                {([["whatsapp", anexo === "video" ? "Vídeo e mensagem" : anexo === "foto" ? "Foto e mensagem" : "Mensagem"], ["link", "Link do orçamento"]] as const).map(([id, rotulo]) => (
-                  <Pressable
-                    key={id}
-                    onPress={() => setCanal(id)}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: canal === id }}
-                    testID={"canal-" + id}
-                    style={[s.opcao, { flexGrow: 1, flexBasis: 200, minHeight: 44 }, canal === id && s.opcaoMarcada]}
-                  >
-                    <View style={[s.radio, canal === id && { borderColor: t.accent }]}>{canal === id && <View style={s.radioPonto} />}</View>
-                    <Text style={s.opcaoTit}>{rotulo}</Text>
-                  </Pressable>
-                ))}
-              </View>
-
-              {canal === "link" ? (
-                <View style={[s.canal, s.canalMarcado]} testID="canal-link-detalhe">
-                  <View style={[s.canalIcone, { backgroundColor: t.primary }]}><Icon name="link" size={18} color="#fff" /></View>
-                  <View style={{ flex: 1, gap: 4 }}>
-                    <Text style={s.opcaoTit}>Link do orçamento</Text>
-                    <Text style={s.opcaoSub}>
-                      O cliente abre uma página com as peças e os valores e responde por lá: aceitar ou recusar. A conversa abre com o link escrito, e o link fica copiado.{quote.token ? " É o mesmo link que já foi enviado." : ""}
-                    </Text>
-                    {!telefoneDoCliente(telefone) && <Text style={[s.nota, { color: t.warningInk }]}>Sem WhatsApp com DDD: o link só fica copiado.</Text>}
-                  </View>
-                </View>
-              ) : arquivo && compartilhaArquivo ? (
-                <View style={[s.canal, s.canalMarcado]}>
-                  <View style={[s.canalIcone, { backgroundColor: "#25D366" }]}><Icon name="share" size={18} color="#fff" /></View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.opcaoTit}>Compartilhar no WhatsApp</Text>
-                    <Text style={s.opcaoSub}>
-                      {anexo === "video" ? "O vídeo e a mensagem vão juntos." : "A foto e a mensagem vão juntas."} Na lista do WhatsApp, escolha a conversa de {quote.customer_name || "seu cliente"}{telefoneDoCliente(telefone) ? ` · ${telefone}` : ""}. A mensagem também fica copiada: se ela não aparecer junto do {anexo === "video" ? "vídeo" : "arquivo"}, é só colar.
-                    </Text>
-                  </View>
-                </View>
-              ) : (
-                <View style={[s.canal, s.canalMarcado]}>
-                  <View style={[s.canalIcone, { backgroundColor: "#25D366" }]}><Icon name="whatsapp" size={18} color="#fff" /></View>
-                  <View style={{ flex: 1, gap: 8 }}>
-                    <Text style={s.opcaoTit}>{arquivo ? "Baixar, copiar e abrir a conversa" : "Abrir a conversa com a mensagem"}</Text>
-                    {arquivo ? (
+                {canal === "link" ? (
+                  <View style={[s.canal, s.canalMarcado]} testID="canal-link-detalhe">
+                    <View style={[s.canalIcone, { backgroundColor: t.primary }]}><Icon name="link" size={18} color="#fff" /></View>
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <Text style={s.opcaoTit}>Link do orçamento</Text>
                       <Text style={s.opcaoSub}>
-                        Este navegador não compartilha arquivo. 1) Baixe o {anexo === "video" ? "vídeo" : "arquivo"} (a mensagem fica copiada). 2) Abra a conversa: o texto já vai escrito. 3) Arraste o {anexo === "video" ? "vídeo" : "arquivo"} baixado para a conversa e envie.
+                        O cliente abre uma página com as peças e os valores e responde por lá: aceitar ou recusar. A conversa abre com o link escrito, e o link fica copiado.{quote.token ? " É o mesmo link que já foi enviado." : ""}
                       </Text>
-                    ) : (
-                      <Text style={s.opcaoSub}>A conversa abre com a mensagem pronta.</Text>
-                    )}
-                    <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-                      {arquivo && (
-                        <Pressable style={s.btnSec} onPress={baixarECopiar}>
-                          <Icon name="download" size={14} color={t.ink} />
-                          <Text style={s.btnSecTxt}>{jaBaixou ? "Baixar de novo" : anexo === "video" ? "Baixar vídeo" : "Baixar foto"}</Text>
-                        </Pressable>
-                      )}
-                      <Pressable
-                        style={[s.btnSec, !linkConversa && { opacity: 0.5 }]}
-                        disabled={!linkConversa}
-                        onPress={() => { if (linkConversa) abrirConversa(linkConversa); }}
-                      >
-                        <Icon name="whatsapp" size={14} color={t.ink} />
-                        <Text style={s.btnSecTxt}>Abrir conversa</Text>
-                      </Pressable>
-                      <Pressable style={s.btnSec} onPress={() => copyToClipboard(texto).then((ok) => ok && toast.success("Mensagem copiada")).catch(() => {})}>
-                        <Icon name="copy" size={14} color={t.ink} />
-                        <Text style={s.btnSecTxt}>Copiar mensagem</Text>
-                      </Pressable>
+                      {!telefoneDoCliente(telefone) && <Text style={[s.nota, { color: t.warningInk }]}>Sem WhatsApp com DDD: o link só fica copiado.</Text>}
                     </View>
-                    {!linkConversa && <Text style={[s.nota, { color: t.dangerInk }]}>Informe o WhatsApp do cliente com DDD.</Text>}
                   </View>
-                </View>
-              )}
+                ) : arquivo && compartilhaArquivo ? (
+                  <View style={[s.canal, s.canalMarcado]}>
+                    <View style={[s.canalIcone, { backgroundColor: "#25D366" }]}><Icon name="share" size={18} color="#fff" /></View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.opcaoTit}>Compartilhar no WhatsApp</Text>
+                      <Text style={s.opcaoSub}>
+                        {anexo === "video" ? "O vídeo e a mensagem vão juntos." : "A foto e a mensagem vão juntas."} Na lista do WhatsApp, escolha a conversa de {quote.customer_name || "seu cliente"}{telefoneDoCliente(telefone) ? ` · ${telefone}` : ""}. A mensagem também fica copiada: se ela não aparecer junto do {anexo === "video" ? "vídeo" : "arquivo"}, é só colar.
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={[s.canal, s.canalMarcado]}>
+                    <View style={[s.canalIcone, { backgroundColor: "#25D366" }]}><Icon name="whatsapp" size={18} color="#fff" /></View>
+                    <View style={{ flex: 1, gap: 8 }}>
+                      <Text style={s.opcaoTit}>{arquivo ? "Baixar, copiar e abrir a conversa" : "Abrir a conversa com a mensagem"}</Text>
+                      {arquivo ? (
+                        <Text style={s.opcaoSub}>
+                          Este navegador não compartilha arquivo. 1) Baixe o {anexo === "video" ? "vídeo" : "arquivo"} (a mensagem fica copiada). 2) Abra a conversa: o texto já vai escrito. 3) Arraste o {anexo === "video" ? "vídeo" : "arquivo"} baixado para a conversa e envie.
+                        </Text>
+                      ) : (
+                        <Text style={s.opcaoSub}>{semArquivoAinda ? "Espere o vídeo ficar pronto para mandar junto." : "A conversa abre com a mensagem pronta."}</Text>
+                      )}
+                      <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+                        {arquivo && (
+                          <Pressable style={s.btnSec} onPress={baixarECopiar}>
+                            <Icon name="download" size={14} color={t.ink} />
+                            <Text style={s.btnSecTxt}>{jaBaixou ? "Baixar de novo" : anexo === "video" ? "Baixar vídeo" : "Baixar foto"}</Text>
+                          </Pressable>
+                        )}
+                        <Pressable
+                          style={[s.btnSec, (!linkConversa || semArquivoAinda) && { opacity: 0.5 }]}
+                          disabled={!linkConversa || semArquivoAinda}
+                          onPress={() => { if (linkConversa) abrirConversa(linkConversa); }}
+                        >
+                          <Icon name="whatsapp" size={14} color={t.ink} />
+                          <Text style={s.btnSecTxt}>Abrir conversa</Text>
+                        </Pressable>
+                        <Pressable style={s.btnSec} onPress={() => copyToClipboard(texto).then((ok) => ok && toast.success("Mensagem copiada")).catch(() => {})}>
+                          <Icon name="copy" size={14} color={t.ink} />
+                          <Text style={s.btnSecTxt}>Copiar mensagem</Text>
+                        </Pressable>
+                      </View>
+                      {!linkConversa && <Text style={[s.nota, { color: t.dangerInk }]}>Informe o WhatsApp do cliente com DDD.</Text>}
+                    </View>
+                  </View>
+                )}
+              </View>
             </View>
           )}
 
-          {passo === 4 && (
+          {passo === "enviado" && (
             <View style={s.sucesso}>
               <View style={s.sucessoIcone}><Icon name="check" size={28} color={t.success} /></View>
               <Text style={s.sucessoTit}>Enviado para {quote.customer_name || "o cliente"}</Text>
@@ -757,36 +580,29 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
 
         {/* Rodapé */}
         <View style={s.pe}>
-          <Text style={s.peInfo} numberOfLines={2}>{passo === 4 ? "" : info}</Text>
+          <Text style={s.peInfo} numberOfLines={2}>{passo === "enviado" ? "" : info}</Text>
           <View style={s.peAcoes}>
-            {passo > 1 && passo < 4 && (
-              <Pressable style={s.btnSec} onPress={voltar} disabled={ocupado}><Text style={s.btnSecTxt}>← Voltar</Text></Pressable>
-            )}
-            {passo < 3 && (
-              <Pressable style={[s.btnPri, (!podeAvancar || ocupado) && { opacity: 0.45 }]} onPress={avancar} disabled={!podeAvancar || ocupado}>
-                {ocupado ? <ActivityIndicator size="small" color="#fff" /> : <Text style={s.btnPriTxt}>Continuar →</Text>}
-              </Pressable>
-            )}
-            {passo === 3 && canal === "link" && (
+            {passo === "enviar" && canal === "link" && (
               <Pressable style={[s.btnWa, ocupado && { opacity: 0.45 }]} onPress={enviarLink} disabled={ocupado} testID="enviar-link">
                 {ocupado ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="link" size={15} color="#fff" />}<Text style={s.btnPriTxt}>Enviar o link</Text>
               </Pressable>
             )}
-            {passo === 3 && canal === "whatsapp" && arquivo && compartilhaArquivo && (
-              <Pressable style={[s.btnWa, ocupado && { opacity: 0.45 }]} onPress={compartilhar} disabled={ocupado}>
+            {passo === "enviar" && canal === "whatsapp" && arquivo && compartilhaArquivo && (
+              <Pressable style={[s.btnWa, (ocupado || gravando) && { opacity: 0.45 }]} onPress={compartilhar} disabled={ocupado || gravando} testID="compartilhar">
                 <Icon name="share" size={15} color="#fff" /><Text style={s.btnPriTxt}>Compartilhar no WhatsApp</Text>
               </Pressable>
             )}
-            {passo === 3 && canal === "whatsapp" && !(arquivo && compartilhaArquivo) && (
+            {passo === "enviar" && canal === "whatsapp" && !(arquivo && compartilhaArquivo) && (
               <Pressable
-                style={[s.btnWa, (ocupado || !linkConversa) && { opacity: 0.45 }]}
-                disabled={ocupado || !linkConversa}
+                style={[s.btnWa, (ocupado || !linkConversa || semArquivoAinda) && { opacity: 0.45 }]}
+                disabled={ocupado || !linkConversa || semArquivoAinda}
                 onPress={() => marcarEnviado(arquivo ? "baixar" : "whatsapp")}
+                testID="ja-mandei"
               >
                 <Icon name="check" size={15} color="#fff" /><Text style={s.btnPriTxt}>Já mandei</Text>
               </Pressable>
             )}
-            {passo === 4 && (
+            {passo === "enviado" && (
               <Pressable style={s.btnPri} onPress={onClose}><Text style={s.btnPriTxt}>Voltar ao orçamento</Text></Pressable>
             )}
           </View>
@@ -810,7 +626,7 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
     </View>
   );
 
-  if (!aberto && passo !== 4) {
+  if (!aberto && passo !== "enviado") {
     // Proteção: o editor só abre o modal para orçamento em aberto.
     return null;
   }
@@ -848,12 +664,6 @@ function estilos(t: StudioPalette, estreito: boolean) {
     titulo: { fontSize: 16, fontWeight: "800", color: t.ink } as any,
     subtitulo: { fontSize: 12.5, color: t.ink3 } as any,
     fechar: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" } as any,
-    passos: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 18, paddingVertical: 10, backgroundColor: t.paperCard, borderBottomWidth: 1, borderBottomColor: t.ink5, flexWrap: "wrap" } as any,
-    passo: { flexDirection: "row", alignItems: "center", gap: 7 } as any,
-    bola: { width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: t.bgSoft, borderWidth: 1, borderColor: t.ink5 } as any,
-    bolaTxt: { fontSize: 11, fontWeight: "800", color: t.ink3 } as any,
-    rotulo: { fontSize: 12.5, color: t.ink3 } as any,
-    sep: { width: estreito ? 14 : 26, height: 2, borderRadius: 2, backgroundColor: t.ink5 } as any,
     // No celular o modal é tela cheia: o corpo ocupa o meio e o rodapé fica embaixo.
     corpo: { flexGrow: estreito ? 1 : 0, flexShrink: 1 } as any,
     corpoConteudo: { padding: 18 } as any,
@@ -861,31 +671,19 @@ function estilos(t: StudioPalette, estreito: boolean) {
     col: { flex: estreito ? undefined : 1, minWidth: 0, gap: 8 } as any,
     secao: { fontSize: 11, fontWeight: "800", color: t.ink3, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 6 } as any,
     nota: { fontSize: 12, color: t.ink3, lineHeight: 17 } as any,
-    vazio: { minHeight: 300, borderRadius: 16, borderWidth: 2, borderStyle: "dashed", borderColor: t.ink5, alignItems: "center", justifyContent: "center", padding: 22, gap: 8, backgroundColor: t.paperCard } as any,
-    vazioTit: { fontSize: 15, fontWeight: "800", color: t.ink, textAlign: "center" } as any,
-    vazioTxt: { fontSize: 12.5, color: t.ink3, textAlign: "center", maxWidth: 320 } as any,
     opcao: { flexDirection: "row", alignItems: "center", gap: 10, padding: 11, borderRadius: 12, borderWidth: 1.5, borderColor: t.ink5, backgroundColor: t.paperCard } as any,
     opcaoMarcada: { borderColor: t.accent, backgroundColor: t.accentSoft } as any,
     radio: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: t.ink4, alignItems: "center", justifyContent: "center" } as any,
     radioPonto: { width: 8, height: 8, borderRadius: 4, backgroundColor: t.accent } as any,
     opcaoTit: { fontSize: 13.5, fontWeight: "700", color: t.ink } as any,
     opcaoSub: { fontSize: 12, color: t.ink3, lineHeight: 17 } as any,
-    cores: { flexDirection: "row", gap: 10, flexWrap: "wrap" } as any,
-    cor: { alignItems: "center", gap: 4, width: 64, minHeight: 44 } as any,
-    corBola: { width: 38, height: 38, borderRadius: 19, borderWidth: 2, borderColor: t.ink5 } as any,
-    corNome: { fontSize: 11.5, color: t.ink3 } as any,
     input: { backgroundColor: t.bgSoft, borderWidth: 1.5, borderColor: t.ink5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: t.ink } as any,
-    inputOff: { opacity: 0.6 } as any,
-    rotuloCampo: { fontSize: 12, fontWeight: "700", color: t.ink2, marginTop: 4 } as any,
-    mensagem: { minHeight: 260, textAlignVertical: "top", fontSize: 13, lineHeight: 19 } as any,
+    mensagem: { minHeight: 220, textAlignVertical: "top", fontSize: 13, lineHeight: 19 } as any,
     chave: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, marginTop: 4 } as any,
     sw: { width: 40, height: 24, borderRadius: 12, backgroundColor: t.ink5 } as any,
     swBola: { position: "absolute", top: 3, left: 3, width: 18, height: 18, borderRadius: 9, backgroundColor: "#fff" } as any,
     link: { paddingVertical: 6 } as any,
     linkTxt: { fontSize: 12.5, fontWeight: "800", color: t.primary } as any,
-    cartao: { backgroundColor: t.paperCard, borderWidth: 1, borderColor: t.ink5, borderRadius: 14, paddingHorizontal: 14 } as any,
-    linhaItem: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: t.ink5 } as any,
-    valor: { fontSize: 14, fontWeight: "800", color: t.ink } as any,
     videoCaixa: { width: "100%", maxWidth: 380, aspectRatio: 0.8, alignSelf: "center", borderRadius: 16, overflow: "hidden", backgroundColor: "#1E293B" } as any,
     gravando: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, padding: 20 } as any,
     gravandoTxt: { color: "#fff", fontWeight: "700", fontSize: 13 } as any,
@@ -913,8 +711,6 @@ function estilos(t: StudioPalette, estreito: boolean) {
     btnWa: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#1DA851", paddingHorizontal: 16, paddingVertical: 11, borderRadius: 11, minHeight: 44, flexGrow: estreito ? 1 : 0 } as any,
     btnSec: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: t.paperCard, borderWidth: 1.5, borderColor: t.ink5, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 11, minHeight: 40 } as any,
     btnSecTxt: { color: t.ink, fontWeight: "700", fontSize: 13 } as any,
-    btnQuadrado: { width: 44, minHeight: 44, paddingHorizontal: 0 } as any,
-    tamanho: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 } as any,
     sairVeu: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(2,6,23,0.55)", alignItems: "center", justifyContent: "center", padding: 16 } as any,
     sairCaixa: { backgroundColor: t.paperCardElev, borderRadius: 16, padding: 18, maxWidth: 380, width: "100%" } as any,
   };

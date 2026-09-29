@@ -1,0 +1,1238 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light" data-peca="caneca" data-arte="uma" data-modo="duas" data-tela="peca">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Orçamento com vídeo em primeiro plano — Aura Studio</title>
+<!--
+  ============================================================
+  Mockup standalone — a peça do orçamento com o vídeo 3D em primeiro
+  plano e o envio da arte por lugar de personalização. 29/09/2026.
+  Regra 4 do CLAUDE.md: mudança visual forte nasce em mockup.
+  Parte de docs/mockups/studio-orcamento-modal.html (app#1014).
+
+  PEDIDO DO PO
+    "O destaque do orçamento é o vídeo. Ele precisa estar em primeiro
+    plano, com a opção de enviar a arte. Não precisa de campo de texto."
+    Um envio de imagem por lugar: camiseta frente e verso; caneca frente,
+    verso e estendida.
+
+  O QUE MOSTRA
+    A peça aberta no orçamento vira um estúdio: a prévia 3D grande,
+    girando (é o que vai no vídeo de 7 s), e logo abaixo os "lugares da
+    arte" como cartões de envio (tocar ou arrastar, miniatura, trocar,
+    remover), com tamanho e posição por lugar. A cor da peça continua.
+    Quantidade, preço e modelo do mockup descem para o fim da peça.
+    Sem campo de texto: a lojista traz o texto como imagem.
+
+    A caneca estendida (volta inteira) SUBSTITUI frente e verso: é uma
+    escolha "Frente e verso | Estendida" na caneca; as artes da frente e
+    do verso ficam guardadas enquanto a estendida estiver escolhida.
+
+    Tela "Enviar": o assistente de 3 passos (Peça → Prévia → Enviar)
+    vira um passo só. A arte, a cor e o tamanho já moram na peça.
+
+  VIABILIDADE DO MOTOR (compose3dMug.ts)
+    - `values.__artePorArea = { [areaId]: ArteDoLado }` já pinta várias
+      áreas na mesma textura (pintarArteDaVitrine; a render de aprovação
+      usa desde 28/09). Camiseta frente + costas: pronto, sem mudança.
+    - Caneca: a spec só tem `panel` (u 0,285–0,715, a 90° da alça, que
+      fica em u 0,25) e `wrap` (u 0,02–0,98). Não há área de verso:
+      `areaParaLado(areas, "back")` cai em `panel`, o mesmo da frente, e o
+      verso nunca é pintado. Mudança mínima e aditiva: verso DERIVADO do
+      painel com meia volta (u + 0,5, centro em u = 0, do outro lado da
+      alça) e o pintor desenhando de novo uma volta antes quando a área
+      atravessa a emenda (u1 > 1). Sem migration, sem mexer em specs.
+    - Estendida (`wrap`) cobre frente e verso: substitui os dois.
+    - Lados oferecidos = interseção do produto (frente sempre; verso com
+      `has_back`; estendida com `has_middle`) com as áreas do modelo.
+
+  ESTADOS (faixa escura no topo; também pela URL ?peca=&arte=&modo=&tela=&tema=)
+    peca: caneca · camiseta
+    arte: sem · uma · todas · enviando · erro
+    modo (caneca): duas (frente e verso) · estendida
+    tela: peca · enviar
+    tema: claro · escuro
+
+  SEM REDE: artes em SVG inline; a caneca é desenhada em canvas 2D (a
+  textura dá a volta no corpo, como a UV do motor) e a camiseta gira em
+  CSS 3D. Tocar num cartão vazio abre o seletor de arquivos de verdade e
+  a imagem escolhida aparece na peça (fica só no navegador).
+  Cliente e loja fictícios.
+  ============================================================
+-->
+<style>
+  :root {
+    --primary: #1E3A8A; --primary2: #3B82F6; --primary-soft: #DBEAFE; --primary-ghost: #EFF6FF;
+    --accent: #EC4899; --accent-soft: #FCE7F3; --accent-ink: #BE185D;
+    --bg: #E8E9F0; --bg-soft: #EEF0F5; --card: #F5F6FA; --card-elev: #FFFFFF;
+    --ink: #0F172A; --ink2: #334155; --ink3: #5E6A7A; --ink4: #94A3B8; --ink5: #CBD5E1;
+    --success: #10B981; --success-soft: #D1FAE5; --success-ink: #065F46;
+    --warning: #F59E0B; --warning-soft: #FEF3C7; --warning-ink: #92400E;
+    --danger: #DC2626; --danger-soft: #FEE2E2; --danger-ink: #991B1B;
+    --info-soft: #DBEAFE; --info-ink: #1E3A8A;
+    --wa: #1DA851;
+    --overlay: rgba(2,6,23,0.55);
+    --shadow-modal: 0 24px 60px -18px rgba(2,6,23,0.45);
+    --thumb: #ECEAE4;
+    --xadrez: #E7E5E0;
+    --foco: #3B82F6;
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    --primary: #3B82F6; --primary2: #60A5FA; --primary-soft: rgba(59,130,246,0.18); --primary-ghost: rgba(59,130,246,0.10);
+    --accent: #F472B6; --accent-soft: rgba(244,114,182,0.18); --accent-ink: #F9A8D4;
+    --bg: #0F172A; --bg-soft: #1E293B; --card: #1E293B; --card-elev: #273449;
+    --ink: #F8FAFC; --ink2: #CBD5E1; --ink3: #94A3B8; --ink4: #64748B; --ink5: #334155;
+    --success: #34D399; --success-soft: rgba(52,211,153,0.18); --success-ink: #6EE7B7;
+    --warning: #FBBF24; --warning-soft: rgba(251,191,36,0.18); --warning-ink: #FCD34D;
+    --danger: #EF4444; --danger-soft: rgba(239,68,68,0.18); --danger-ink: #FCA5A5;
+    --info-soft: rgba(96,165,250,0.18); --info-ink: #93C5FD;
+    --overlay: rgba(2,6,23,0.7);
+    --shadow-modal: 0 24px 60px -18px rgba(0,0,0,0.8);
+    --thumb: #E4E2DC;
+    --xadrez: #D9D6CF;
+    --foco: #93C5FD;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink); overflow-x: hidden;
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  button, input, textarea, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  [hidden] { display: none !important; }
+  .vh { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  :focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; }
+  svg.i { width: 18px; height: 18px; flex: none; }
+  svg.i.p { width: 16px; height: 16px; }
+
+  /* ── Faixa de controle (só do mockup) ─────────────────── */
+  .estados {
+    position: relative; z-index: 30;
+    background: #0B1224; color: #CBD5E1; padding: 10px 16px;
+    display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; font-size: 12.5px;
+  }
+  .estados b { color: #F8FAFC; font-weight: 700; margin-right: 4px; }
+  .estados .grupo { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .estados button {
+    background: transparent; border: 1px solid #334155; color: #CBD5E1;
+    padding: 4px 10px; border-radius: 999px; min-height: 28px;
+  }
+  .estados button[aria-pressed="true"] { background: #F472B6; border-color: #F472B6; color: #0F172A; font-weight: 700; }
+  .estados button[disabled] { opacity: .35; cursor: default; }
+
+  /* ── A página de baixo: lista de orçamentos ───────────── */
+  .fundo { padding: 18px 20px 40px; max-width: 1240px; margin: 0 auto; }
+  .fundo .eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); }
+  .fundo h1 { margin: 2px 0 14px; font-size: 22px; }
+  .fundo .linha-orc { background: var(--card); border: 1px solid var(--ink5); border-radius: 14px; padding: 14px 16px; margin-bottom: 10px; height: 76px; }
+
+  /* ── O modal ──────────────────────────────────────────── */
+  .veu { position: fixed; inset: 0; background: var(--overlay); z-index: 10; }
+  .modal {
+    position: fixed; z-index: 11; left: 50%; top: calc(50% + 24px); transform: translate(-50%, -50%);
+    width: min(1180px, calc(100vw - 40px)); max-height: calc(100vh - 96px);
+    background: var(--card-elev); border: 1px solid var(--ink5); border-radius: 18px; box-shadow: var(--shadow-modal);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .m-cabeca { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--ink5); }
+  .m-icone { width: 36px; height: 36px; border-radius: 10px; background: var(--primary-soft); color: var(--primary); display: grid; place-items: center; flex: none; }
+  .m-icone.wa { background: rgba(29,168,81,.14); color: var(--wa); }
+  .m-titulos { flex: 1; min-width: 0; }
+  .m-titulo { font-size: 16px; font-weight: 800; letter-spacing: -.2px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .m-sub { font-size: 12.5px; color: var(--ink3); margin-top: 1px; }
+  .m-fechar { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--ink5); background: var(--card); color: var(--ink3); display: grid; place-items: center; flex: none; }
+  .pill { border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+  .pill-draft { background: #F1F5F9; color: #64748B; }
+
+  .m-corpo { overflow: auto; flex: 1 1 auto; min-height: 0; padding: 16px 20px; }
+  .colunas { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+  .col { display: grid; gap: 14px; min-width: 0; }
+  .secao { background: var(--card); border: 1px solid var(--ink5); border-radius: 14px; padding: 14px; display: grid; gap: 10px; min-width: 0; }
+  .secao-cab { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .secao h3 { margin: 0; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink3); }
+  .ajuda { font-size: 12px; color: var(--ink3); margin: 0; line-height: 1.4; }
+
+  .m-rodape { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-top: 1px solid var(--ink5); background: var(--card); flex-wrap: wrap; }
+  .m-rodape .resumo { flex: 1; min-width: 180px; font-size: 13px; color: var(--ink2); }
+  .m-rodape .resumo small { display: block; color: var(--ink3); font-size: 12px; }
+  .m-rodape .botoes { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* botões */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 10px; padding: 0 16px; min-height: 40px; font-weight: 700; font-size: 13.5px; border: 1.5px solid transparent; white-space: nowrap; }
+  .btn-pri { background: var(--primary); color: #fff; }
+  .btn-wa { background: var(--wa); color: #fff; }
+  .btn-sec { background: var(--card-elev); border-color: var(--ink5); color: var(--ink); }
+  .btn-ter { background: transparent; color: var(--ink2); }
+  .btn-ter.perigo { color: var(--danger-ink); }
+  .btn-peq { min-height: 36px; padding: 0 12px; font-size: 13px; }
+  .btn-icone { width: 40px; height: 40px; min-height: 40px; padding: 0; border-radius: 10px; flex: none; }
+  .btn[disabled] { opacity: .45; cursor: default; }
+  @media (hover: hover) { .btn-sec:hover { border-color: var(--ink4); } .btn-ter:hover { background: var(--bg-soft); } }
+
+  /* campos */
+  .campo { display: grid; gap: 4px; min-width: 0; }
+  .campo label, .rot { font-size: 12px; font-weight: 700; color: var(--ink2); }
+  .campo input, .campo textarea, .campo .fake {
+    width: 100%; min-height: 40px; border-radius: 10px; border: 1.5px solid var(--ink5); background: var(--bg-soft);
+    padding: 8px 12px; outline: none; color: var(--ink);
+  }
+  .campo textarea { resize: vertical; min-height: 150px; line-height: 1.45; font-size: 13px; }
+  .campo .dica { font-size: 11.5px; color: var(--ink3); }
+  .campos-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { border: 1px solid var(--ink5); background: var(--bg-soft); color: var(--ink2); border-radius: 999px; padding: 0 12px; min-height: 36px; font-size: 12.5px; font-weight: 700; }
+  .chip[aria-pressed="true"] { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); }
+  html[data-theme="dark"] .chip[aria-pressed="true"] { color: var(--primary2); }
+
+  /* peças */
+  .pecas { display: grid; gap: 8px; }
+  .peca { border: 1.5px solid var(--ink5); border-radius: 12px; background: var(--card-elev); min-width: 0; }
+  .peca.aberta { border-color: var(--primary); }
+  .peca-linha { display: flex; align-items: center; gap: 10px; padding: 8px; width: 100%; background: none; border: 0; text-align: left; border-radius: 12px; min-height: 60px; color: var(--ink); }
+  .thumb { width: 44px; height: 44px; border-radius: 10px; background: var(--thumb); display: grid; place-items: center; flex: none; overflow: hidden; color: #64748B; }
+  .peca-info { flex: 1; min-width: 0; display: grid; gap: 2px; }
+  .peca-nome { font-weight: 700; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .peca-meta { font-size: 12px; color: var(--ink3); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .selo { font-size: 10.5px; font-weight: 800; border-radius: 5px; padding: 1px 6px; white-space: nowrap; }
+  .selo-3d { background: var(--primary-soft); color: var(--info-ink); }
+  .selo-arte { background: var(--accent-soft); color: var(--accent-ink); }
+  .selo-sem { background: var(--warning-soft); color: var(--warning-ink); }
+  .peca-total { font-weight: 800; font-size: 14px; white-space: nowrap; }
+  .peca-seta { width: 36px; height: 36px; display: grid; place-items: center; color: var(--ink3); flex: none; }
+  .peca.aberta .peca-seta { transform: rotate(180deg); }
+  .peca-edit { display: grid; gap: 14px; border-top: 1px solid var(--ink5); margin: 0 8px; padding: 12px 4px 12px; }
+
+  /* ── O estúdio: a prévia 3D em primeiro plano ─────────── */
+  .estudio { position: relative; border-radius: 14px; overflow: hidden; height: 400px; background: radial-gradient(120% 90% at 50% 38%, #FBF8F3 0%, #F1ECE4 58%, #E4DDD2 100%); border: 1px solid var(--ink5); touch-action: pan-y; }
+  html[data-theme="dark"] .estudio { border-color: #3B4A63; }
+  .estudio canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+  .estudio canvas:active { cursor: grabbing; }
+  .estudio .chao { position: absolute; left: 0; right: 0; bottom: 0; height: 32%; background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(120,100,80,.08) 100%); pointer-events: none; }
+  .selo-vivo { position: absolute; left: 12px; top: 12px; display: inline-flex; align-items: center; gap: 6px; background: rgba(15,23,42,.78); color: #F8FAFC; font-size: 12px; font-weight: 700; padding: 5px 10px 5px 8px; border-radius: 999px; }
+  .selo-vivo i { width: 8px; height: 8px; border-radius: 50%; background: #F472B6; box-shadow: 0 0 0 3px rgba(244,114,182,.3); animation: pulsa 1.6s ease-in-out infinite; }
+  @keyframes pulsa { 50% { box-shadow: 0 0 0 6px rgba(244,114,182,0); } }
+  .estudio .pausa { position: absolute; right: 12px; top: 12px; width: 40px; height: 40px; border-radius: 12px; border: 0; background: rgba(255,255,255,.88); color: #0F172A; display: grid; place-items: center; box-shadow: 0 2px 8px rgba(15,23,42,.15); }
+  .estudio .vistas { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; gap: 4px; background: rgba(255,255,255,.9); border-radius: 999px; padding: 4px; box-shadow: 0 2px 10px rgba(15,23,42,.14); }
+  .estudio .vistas button { border: 0; background: transparent; color: #334155; border-radius: 999px; padding: 0 12px; min-height: 32px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+  .estudio .vistas button[aria-pressed="true"] { background: #0F172A; color: #fff; }
+  .estudio .dica-giro { position: absolute; right: 14px; bottom: 18px; font-size: 11.5px; color: #6B6257; display: flex; align-items: center; gap: 4px; }
+  .estudio .liso { position: absolute; left: 50%; top: 56px; transform: translateX(-50%); background: rgba(255,255,255,.92); color: #334155; font-size: 12.5px; font-weight: 600; border-radius: 10px; padding: 6px 12px; box-shadow: 0 2px 8px rgba(15,23,42,.12); white-space: nowrap; }
+  .legenda-estudio { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink3); margin-top: -6px; flex-wrap: wrap; }
+  .legenda-estudio b { color: var(--ink2); }
+
+  /* camiseta em CSS 3D */
+  .tee-cena { position: absolute; inset: 0; display: grid; place-items: center; perspective: 1100px; pointer-events: none; }
+  .tee { position: relative; width: min(300px, 74%); aspect-ratio: 200 / 220; transform-style: preserve-3d; animation: giro 7s linear infinite; }
+  .tee.parada { animation-play-state: paused; }
+  .tee.fixa { animation: none; transition: transform .7s cubic-bezier(.3,.7,.2,1); }
+  @keyframes giro { from { transform: rotateY(0deg); } to { transform: rotateY(-360deg); } }
+  .tee .face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+  .tee .face.costas { transform: rotateY(180deg); }
+  .tee .face svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 16px 18px rgba(60,40,20,.18)); }
+  .tee .area { position: absolute; display: grid; place-items: center; overflow: visible; }
+  .tee .area img { max-width: 100%; max-height: 100%; display: block; transform-origin: 50% 50%; }
+  .tee .area.guia { outline: 1.5px dashed rgba(236,72,153,.75); outline-offset: 2px; border-radius: 3px; }
+  .tee-sombra { position: absolute; left: 50%; bottom: 9%; width: 46%; height: 18px; transform: translateX(-50%); background: radial-gradient(closest-side, rgba(60,40,20,.22), rgba(60,40,20,0)); pointer-events: none; }
+
+  /* ── Lugares da arte ─────────────────────────────────── */
+  .lugares-cab { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+  .lugares-cab h4 { margin: 0; font-size: 14px; font-weight: 800; }
+  .lugares-cab p { margin: 2px 0 0; font-size: 12px; color: var(--ink3); }
+  .segmento { display: inline-flex; background: var(--bg-soft); border: 1px solid var(--ink5); border-radius: 12px; padding: 3px; gap: 2px; }
+  .segmento button { border: 0; background: transparent; color: var(--ink2); border-radius: 9px; padding: 0 12px; min-height: 36px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+  .segmento button[aria-pressed="true"] { background: var(--card-elev); color: var(--ink); box-shadow: 0 1px 3px rgba(15,23,42,.14); }
+  .aviso-modo { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: var(--info-ink); background: var(--info-soft); border-radius: 10px; padding: 8px 10px; }
+
+  .lugares { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+  .lugares.um { grid-template-columns: 1fr; }
+  .lugar { position: relative; border: 1.5px solid var(--ink5); border-radius: 12px; background: var(--card-elev); padding: 10px; display: grid; gap: 8px; min-width: 0; }
+  .lugar.ativo { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .lugar.erro { border-color: var(--danger); }
+  .lugar.solta { border-color: var(--primary); border-style: dashed; background: var(--primary-ghost); }
+  .lugar-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .lugar-top b { font-size: 13.5px; }
+  .lugar-top .medida { font-size: 11.5px; color: var(--ink3); white-space: nowrap; }
+  .lugar-top .tag { margin-left: auto; font-size: 10.5px; font-weight: 800; color: var(--accent-ink); background: var(--accent-soft); border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+  .lugar-top .ok { margin-left: auto; color: var(--success); display: grid; }
+  .xadrez {
+    background-color: #fff;
+    background-image: linear-gradient(45deg, var(--xadrez) 25%, transparent 25%), linear-gradient(-45deg, var(--xadrez) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, var(--xadrez) 75%), linear-gradient(-45deg, transparent 75%, var(--xadrez) 75%);
+    background-size: 14px 14px; background-position: 0 0, 0 7px, 7px -7px, -7px 0;
+  }
+  .lugar-img { position: relative; height: 108px; border-radius: 9px; overflow: hidden; display: grid; place-items: center; }
+  .lugares.um .lugar-img { height: 92px; }
+  .lugar-img img { width: 92%; height: 86%; object-fit: contain; display: block; }
+  .lugar-img .barra { position: absolute; left: 10px; right: 10px; bottom: 10px; height: 6px; border-radius: 3px; background: rgba(15,23,42,.18); overflow: hidden; }
+  .lugar-img .barra i { display: block; height: 100%; background: var(--primary); border-radius: 3px; transition: width .2s; }
+  .lugar-img.subindo img { opacity: .45; filter: saturate(.6); }
+  .lugar-arq { font-size: 11.5px; color: var(--ink3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lugar-acoes { display: flex; gap: 6px; align-items: center; }
+  .lugar-acoes .btn { flex: 1; }
+  .lugar-acoes .btn-icone { flex: none; }
+  .soltar {
+    width: 100%; min-height: 150px; border: 2px dashed var(--ink5); border-radius: 10px; background: var(--bg-soft); color: var(--ink2);
+    display: grid; place-items: center; align-content: center; gap: 4px; padding: 12px; text-align: center;
+  }
+  .lugares.um .soltar { min-height: 120px; }
+  .soltar .ico { width: 40px; height: 40px; border-radius: 12px; background: var(--primary-ghost); color: var(--primary); display: grid; place-items: center; }
+  html[data-theme="dark"] .soltar .ico { color: var(--primary2); }
+  .soltar b { font-size: 13px; }
+  .soltar small { font-size: 11.5px; color: var(--ink3); }
+  @media (hover: hover) { .soltar:hover { border-color: var(--primary); background: var(--primary-ghost); } }
+  .erro-box { border-radius: 9px; background: var(--danger-soft); color: var(--danger-ink); padding: 10px; display: grid; gap: 2px; font-size: 12px; min-height: 108px; align-content: center; }
+  .erro-box b { font-size: 13px; display: flex; align-items: center; gap: 6px; }
+
+  /* ajuste por lugar */
+  .ajuste { border: 1px solid var(--ink5); border-radius: 12px; background: var(--card); padding: 10px 12px; display: grid; gap: 8px; }
+  .ajuste-cab { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .ajuste-cab b { font-size: 13px; }
+  .ajuste-cab .auto { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--primary); background: none; border: 0; min-height: 32px; }
+  html[data-theme="dark"] .ajuste-cab .auto { color: var(--primary2); }
+  .ajuste-linha { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .grupo-aj { display: flex; align-items: center; gap: 6px; }
+  .grupo-aj .rot { margin-right: 2px; }
+  .grupo-aj .val { min-width: 44px; text-align: center; font-weight: 800; font-size: 13px; }
+
+  /* cor da peça */
+  .cores { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .cor { display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid var(--ink5); background: var(--card-elev); border-radius: 999px; padding: 0 12px 0 5px; min-height: 36px; font-size: 12.5px; font-weight: 700; color: var(--ink2); }
+  .cor i { width: 24px; height: 24px; border-radius: 50%; border: 1px solid rgba(15,23,42,.18); }
+  .cor[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); color: var(--ink); }
+
+  .dados { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.4fr); gap: 10px; align-items: end; }
+  .stepper { display: inline-flex; align-items: center; border: 1.5px solid var(--ink5); border-radius: 10px; background: var(--bg-soft); overflow: hidden; }
+  .stepper button { width: 40px; height: 40px; border: 0; background: transparent; color: var(--ink); font-size: 18px; }
+  .stepper input { width: 48px; text-align: center; border: 0; background: transparent; min-height: 40px; padding: 0; }
+  .modelo { display: flex; align-items: center; gap: 8px; min-height: 40px; border: 1.5px solid var(--ink5); border-radius: 10px; background: var(--card-elev); padding: 0 10px; font-size: 13px; font-weight: 700; min-width: 0; }
+  .modelo span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .acoes-peca { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+
+  /* ── Tela Enviar (o assistente vira um passo só) ─────── */
+  .enviar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 18px; align-items: start; }
+  .video-caixa { position: relative; width: 100%; aspect-ratio: 4 / 5; max-height: 520px; border-radius: 16px; overflow: hidden; background: radial-gradient(120% 90% at 50% 38%, #FBF8F3 0%, #F1ECE4 58%, #E4DDD2 100%); border: 1px solid var(--ink5); }
+  .video-caixa canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .video-caixa .marca { position: absolute; left: 12px; bottom: 12px; font-size: 12px; font-weight: 800; color: #0F172A; background: rgba(255,255,255,.85); border-radius: 8px; padding: 4px 8px; }
+  .video-caixa .gravando { position: absolute; inset: auto 12px 12px 12px; background: rgba(15,23,42,.84); color: #fff; border-radius: 12px; padding: 10px 12px; display: grid; gap: 6px; font-size: 12.5px; font-weight: 700; }
+  .video-caixa .gravando .barra { height: 6px; border-radius: 3px; background: rgba(255,255,255,.2); overflow: hidden; }
+  .video-caixa .gravando .barra i { display: block; height: 100%; background: #F472B6; }
+  .video-caixa .play { position: absolute; right: 12px; bottom: 12px; display: flex; align-items: center; gap: 6px; background: rgba(15,23,42,.8); color: #fff; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 5px 10px; }
+  .guardado { font-size: 12px; color: var(--success-ink); display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+  .opcoes { display: grid; gap: 8px; }
+  .opcao { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1.5px solid var(--ink5); background: var(--card-elev); text-align: left; color: var(--ink); width: 100%; }
+  .opcao[aria-checked="true"] { border-color: var(--primary); background: var(--primary-ghost); }
+  .opcao .radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--ink4); display: grid; place-items: center; flex: none; }
+  .opcao[aria-checked="true"] .radio { border-color: var(--primary); }
+  .opcao[aria-checked="true"] .radio::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--primary); }
+  .opcao .t { flex: 1; min-width: 0; }
+  .opcao .t b { display: block; font-size: 13.5px; }
+  .opcao .t small { color: var(--ink3); font-size: 12px; }
+  .opcao .ic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: #fff; flex: none; }
+  .nota-enviar { font-size: 12px; color: var(--ink3); display: flex; gap: 6px; align-items: flex-start; }
+
+  /* ── Celular ──────────────────────────────────────────── */
+  @media (max-width: 760px) {
+    .fundo { padding: 14px 16px; }
+    .modal { left: 0; top: 0; transform: none; width: 100%; height: 100%; max-height: none; border-radius: 0; border: 0; position: fixed; }
+    .estados + .palco .modal { top: var(--faixa, 0px); height: calc(100% - var(--faixa, 0px)); }
+    .m-cabeca { padding: 12px 16px; }
+    .m-corpo { padding: 12px 16px; }
+    .m-rodape { padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); }
+    .m-rodape .botoes { width: 100%; }
+    .m-rodape .botoes .btn { flex: 1; }
+    .m-rodape .botoes .btn-wa { flex-basis: 100%; order: -1; min-height: 48px; }
+    .colunas, .enviar { grid-template-columns: 1fr; }
+    .peca-edit { margin: 0 4px; padding: 12px 2px; }
+    .estudio { height: 320px; margin: 0 -2px; }
+    .lugares { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .lugares.um { grid-template-columns: 1fr; }
+    .lugar { padding: 8px; }
+    .lugar-img { height: 92px; }
+    .soltar { min-height: 132px; }
+    .lugar-top .medida { display: none; }
+    .lugar-acoes .btn.trocar span { display: none; }
+    .dados { grid-template-columns: auto minmax(0, 1fr); }
+    .dados .modelo-campo { grid-column: 1 / -1; }
+    .estudio .dica-giro { display: none; }
+    .video-caixa { max-height: 380px; aspect-ratio: 1 / 1; }
+  }
+  @media (max-width: 380px) {
+    .lugares { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-up" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0-5 5m5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></symbol>
+    <symbol id="i-lixo" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M10 11v6m4-6v6M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12M9 7V4h6v3"/></symbol>
+    <symbol id="i-trocar" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 12a8 8 0 0 1 14-5.3L20 9M20 4v5h-5M20 12a8 8 0 0 1-14 5.3L4 15m0 5v-5h5"/></symbol>
+    <symbol id="i-pausa" viewBox="0 0 24 24"><path fill="currentColor" d="M7 5h3v14H7zM14 5h3v14h-3z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></symbol>
+    <symbol id="i-alerta" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.3 3.9 2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></symbol>
+    <symbol id="i-ok" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="m5 12 5 5 9-10"/></symbol>
+    <symbol id="i-seta" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6"/></symbol>
+    <symbol id="i-caixa" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="m12 3 8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12 4 7.5M12 12v9"/></symbol>
+    <symbol id="i-menos" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M6 12h12"/></symbol>
+    <symbol id="i-mais" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M12 6v12M6 12h12"/></symbol>
+    <symbol id="i-esq" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M19 12H5m0 0 6-6m-6 6 6 6"/></symbol>
+    <symbol id="i-dir" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h14m0 0-6-6m6 6-6 6"/></symbol>
+    <symbol id="i-cima" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M12 19V5m0 0-6 6m6-6 6 6"/></symbol>
+    <symbol id="i-baixo" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m0 0-6-6m6 6 6-6"/></symbol>
+    <symbol id="i-maos" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 12a8 8 0 0 0 16 0M4 12l-2-2m2 2 2-2M20 12l-2 2m2-2 2 2"/></symbol>
+    <symbol id="i-wa" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.3 14.2c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.5-3.9-4.7-4.1-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.3 0 .5l-.4.6-.4.4c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.9-1c.2-.3.4-.2.6-.1l1.9.9c.3.1.5.2.5.3.1.2.1.7-.1 1.3z"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 11v6m0-10h.01M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z"/></symbol>
+    <symbol id="i-video" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M3 6h12v12H3zM15 10l6-3v10l-6-3"/></symbol>
+  </defs>
+</svg>
+
+<div class="estados" role="toolbar" aria-label="Estados do mockup">
+  <div class="grupo"><b>Peça</b>
+    <button data-k="peca" data-v="caneca">Caneca</button>
+    <button data-k="peca" data-v="camiseta">Camiseta</button>
+  </div>
+  <div class="grupo"><b>Arte</b>
+    <button data-k="arte" data-v="sem">Sem arte</button>
+    <button data-k="arte" data-v="uma">Uma arte</button>
+    <button data-k="arte" data-v="todas">Todas</button>
+    <button data-k="arte" data-v="enviando">Enviando</button>
+    <button data-k="arte" data-v="erro">Erro no envio</button>
+  </div>
+  <div class="grupo"><b>Caneca</b>
+    <button data-k="modo" data-v="duas">Frente e verso</button>
+    <button data-k="modo" data-v="estendida">Estendida</button>
+  </div>
+  <div class="grupo"><b>Tela</b>
+    <button data-k="tela" data-v="peca">Peça no orçamento</button>
+    <button data-k="tela" data-v="enviar">Enviar</button>
+  </div>
+  <div class="grupo"><b>Tema</b>
+    <button data-k="tema" data-v="light">Claro</button>
+    <button data-k="tema" data-v="dark">Escuro</button>
+  </div>
+</div>
+
+<div class="palco">
+  <div class="fundo" aria-hidden="true">
+    <div class="eyebrow">Studio · Orçamentos</div>
+    <h1>Orçamentos</h1>
+    <div class="linha-orc"></div><div class="linha-orc"></div><div class="linha-orc"></div>
+  </div>
+  <div class="veu"></div>
+
+  <!-- ══ Tela 1: a peça no orçamento ══ -->
+  <div class="modal" id="modalPeca" role="dialog" aria-modal="true" aria-labelledby="tituloPeca">
+    <div class="m-cabeca">
+      <div class="m-icone"><svg class="i"><use href="#i-doc"/></svg></div>
+      <div class="m-titulos">
+        <div class="m-titulo" id="tituloPeca">Orçamento · Mariana Costa <span class="pill pill-draft">Rascunho</span></div>
+        <div class="m-sub">2 peças · toque numa peça para mudar a arte, a cor, a quantidade ou o preço</div>
+      </div>
+      <button class="m-fechar" aria-label="Fechar o orçamento"><svg class="i"><use href="#i-x"/></svg></button>
+    </div>
+
+    <div class="m-corpo">
+      <div class="colunas">
+        <div class="col">
+          <section class="secao" aria-labelledby="hPecas">
+            <div class="secao-cab">
+              <h3 id="hPecas">Peças · 2</h3>
+              <button class="btn btn-sec btn-peq"><svg class="i p"><use href="#i-mais"/></svg>Adicionar</button>
+            </div>
+            <div class="pecas">
+              <!-- A peça aberta -->
+              <div class="peca aberta">
+                <button class="peca-linha" aria-expanded="true">
+                  <span class="thumb"><svg class="i"><use href="#i-caixa"/></svg></span>
+                  <span class="peca-info">
+                    <span class="peca-nome" id="nomePeca">Caneca clássica 325 ml</span>
+                    <span class="peca-meta"><span id="metaPeca">12 × R$ 39,90</span> <span class="selo selo-3d" id="seloModelo">3D · Caneca clássica</span> <span class="selo selo-arte" id="seloArtes">1 arte</span></span>
+                  </span>
+                  <span class="peca-total" id="totalPeca">R$ 478,80</span>
+                  <span class="peca-seta"><svg class="i"><use href="#i-seta"/></svg></span>
+                </button>
+
+                <div class="peca-edit">
+                  <!-- O vídeo em primeiro plano -->
+                  <div class="estudio" id="estudio">
+                    <canvas id="cvCaneca" aria-label="Prévia 3D da caneca girando" role="img"></canvas>
+                    <div class="tee-cena" id="teeCena" hidden>
+                      <div class="tee" id="tee">
+                        <div class="face frente" id="teeFrente"></div>
+                        <div class="face costas" id="teeCostas"></div>
+                      </div>
+                      <div class="tee-sombra"></div>
+                    </div>
+                    <span class="selo-vivo"><i></i>Prévia ao vivo · é o vídeo de 7 s</span>
+                    <button class="pausa" id="btnPausa" aria-label="Pausar o giro"><svg class="i"><use href="#i-pausa"/></svg></button>
+                    <span class="liso" id="avisoLiso" hidden>Sem arte ainda: o vídeo mostra a peça lisa</span>
+                    <div class="vistas" id="vistas" role="group" aria-label="Virar a peça para"></div>
+                    <span class="dica-giro" id="dicaGiro"><svg class="i p"><use href="#i-maos"/></svg>Arraste para girar</span>
+                  </div>
+                  <div class="legenda-estudio"><svg class="i p"><use href="#i-video"/></svg><span>O cliente recebe <b>este giro em vídeo</b> no WhatsApp, com a sua marca.</span></div>
+
+                  <!-- Lugares da arte -->
+                  <div class="lugares-cab">
+                    <div>
+                      <h4>Artes da peça</h4>
+                      <p id="dicaLugares">Uma imagem por lugar. PNG com fundo transparente fica melhor; o texto com a fonte do cliente vai dentro da imagem.</p>
+                    </div>
+                    <div class="segmento" id="segModo" role="group" aria-label="Como a caneca é impressa">
+                      <button data-modo="duas">Frente e verso</button>
+                      <button data-modo="estendida">Estendida</button>
+                    </div>
+                  </div>
+                  <div class="aviso-modo" id="avisoModo" hidden><svg class="i p"><use href="#i-info"/></svg><span>A estendida dá a volta inteira na caneca e substitui frente e verso. As artes da frente e do verso ficam guardadas e voltam se você escolher "Frente e verso".</span></div>
+                  <div class="lugares" id="lugares"></div>
+                  <input type="file" id="arquivo" accept="image/png,image/jpeg,image/webp" class="vh" tabindex="-1" aria-hidden="true" />
+
+                  <div class="ajuste" id="ajuste" hidden></div>
+
+                  <div class="campo" id="blocoCor">
+                    <span class="rot">Cor da peça</span>
+                    <div class="cores" id="cores"></div>
+                  </div>
+
+                  <div class="dados">
+                    <div class="campo">
+                      <label>Quantidade</label>
+                      <div class="stepper"><button aria-label="Menos uma">−</button><input value="12" aria-label="Quantidade" inputmode="numeric" /><button aria-label="Mais uma">+</button></div>
+                    </div>
+                    <div class="campo">
+                      <label for="preco">Preço unitário (R$)</label>
+                      <input id="preco" value="39,90" inputmode="decimal" />
+                    </div>
+                    <div class="campo modelo-campo">
+                      <span class="rot">Modelo do mockup</span>
+                      <button class="modelo"><svg class="i p"><use href="#i-caixa"/></svg><span id="nomeModelo">Caneca clássica · 3D</span><svg class="i p"><use href="#i-seta"/></svg></button>
+                    </div>
+                  </div>
+
+                  <div class="acoes-peca">
+                    <button class="btn btn-ter perigo btn-peq">Tirar do orçamento</button>
+                    <button class="btn btn-sec btn-peq">Pronto</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- A outra peça, fechada -->
+              <div class="peca">
+                <button class="peca-linha" aria-expanded="false" id="outraPeca">
+                  <span class="thumb"><svg class="i"><use href="#i-caixa"/></svg></span>
+                  <span class="peca-info">
+                    <span class="peca-nome" id="nomeOutra">Camiseta algodão premium</span>
+                    <span class="peca-meta"><span id="metaOutra">1 × R$ 59,90</span> <span class="selo selo-3d" id="seloOutra">3D · Camiseta</span> <span class="selo selo-sem" id="artesOutra">sem arte</span></span>
+                  </span>
+                  <span class="peca-total" id="totalOutra">R$ 59,90</span>
+                  <span class="peca-seta"><svg class="i"><use href="#i-seta"/></svg></span>
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="col">
+          <section class="secao">
+            <h3>Cliente</h3>
+            <div class="campo"><label>Nome</label><input value="Mariana Costa" /></div>
+            <div class="campo"><label>WhatsApp</label><input value="(11) 98765-4321" inputmode="tel" /><span class="dica">É para este número que o orçamento vai.</span></div>
+          </section>
+          <section class="secao">
+            <h3>Condições</h3>
+            <div class="campo"><span class="rot">Validade</span>
+              <div class="chips"><button class="chip" aria-pressed="false">3 dias</button><button class="chip" aria-pressed="true">7 dias</button><button class="chip" aria-pressed="false">15 dias</button><button class="chip" aria-pressed="false">30 dias</button></div>
+              <span class="dica" style="font-size:11.5px;color:var(--ink3)">Vale até 06/10/2026</span>
+            </div>
+            <div class="campos-2">
+              <div class="campo"><label>Sinal para começar (%)</label><input value="50" inputmode="numeric" /><span class="dica">R$ 266,40</span></div>
+              <div class="campo"><label>Desconto no Pix (%)</label><input value="5" inputmode="numeric" /><span class="dica">R$ 506,16 no Pix</span></div>
+            </div>
+          </section>
+          <section class="secao">
+            <h3>Resumo</h3>
+            <div style="display:grid;gap:4px;font-size:13px">
+              <div style="display:flex;justify-content:space-between"><span>Caneca clássica 325 ml · 12</span><b>R$ 478,80</b></div>
+              <div style="display:flex;justify-content:space-between"><span>Camiseta algodão premium · 1</span><b>R$ 59,90</b></div>
+              <div style="display:flex;justify-content:space-between;color:var(--ink3)"><span>Desconto</span><span>− R$ 5,90</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:16px;margin-top:4px"><b>Total</b><b style="color:var(--primary)">R$ 532,80</b></div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <div class="m-rodape">
+      <div class="resumo">2 peças · 13 unidades · R$ 532,80<small id="resumoArtes">Alterações ainda não salvas</small></div>
+      <div class="botoes">
+        <button class="btn btn-ter">Cancelar</button>
+        <button class="btn btn-sec">Salvar rascunho</button>
+        <button class="btn btn-wa" data-ir="enviar"><svg class="i"><use href="#i-wa"/></svg>Enviar pelo WhatsApp</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Tela 2: Enviar (o assistente vira um passo só) ══ -->
+  <div class="modal" id="modalEnviar" role="dialog" aria-modal="true" aria-labelledby="tituloEnviar" hidden>
+    <div class="m-cabeca">
+      <div class="m-icone wa"><svg class="i"><use href="#i-wa"/></svg></div>
+      <div class="m-titulos">
+        <div class="m-titulo" id="tituloEnviar">Enviar o orçamento</div>
+        <div class="m-sub">Para Mariana Costa · (11) 98765-4321</div>
+      </div>
+      <button class="m-fechar" aria-label="Fechar" data-ir="peca"><svg class="i"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="m-corpo">
+      <div class="enviar">
+        <div>
+          <div class="video-caixa">
+            <canvas id="cvVideo" aria-label="Vídeo do orçamento" role="img"></canvas>
+            <span class="marca">Ateliê Flor de Sal</span>
+            <div class="gravando" id="gravando"><span id="txtGravando">Gravando o giro de 7 s… 0%</span><div class="barra"><i id="barraGrav" style="width:0%"></i></div></div>
+            <span class="play" id="play" hidden><svg class="i p"><use href="#i-play"/></svg>0:07</span>
+          </div>
+          <div class="guardado" id="guardado" hidden><svg class="i p"><use href="#i-ok"/></svg>Vídeo guardado por 30 dias</div>
+        </div>
+        <div style="display:grid;gap:14px;min-width:0">
+          <div class="campo">
+            <span class="rot">Peça do vídeo</span>
+            <div class="opcoes" role="radiogroup" aria-label="Peça do vídeo">
+              <button class="opcao" role="radio" aria-checked="true" data-video="caneca"><span class="radio"></span><span class="t"><b>Caneca clássica 325 ml</b><small id="artesVideoCaneca">frente e verso · 2 artes</small></span></button>
+              <button class="opcao" role="radio" aria-checked="false" data-video="camiseta"><span class="radio"></span><span class="t"><b>Camiseta algodão premium</b><small id="artesVideoCamiseta">sem arte</small></span></button>
+            </div>
+          </div>
+          <div class="campo">
+            <label for="msg">Mensagem</label>
+            <textarea id="msg">Oi, Mariana! Aqui é do Ateliê Flor de Sal. 😊
+Segue o seu orçamento, com o vídeo da peça:
+
+• 12 × Caneca clássica 325 ml — R$ 478,80
+• 1 × Camiseta algodão premium — R$ 59,90
+Desconto: R$ 5,90
+Total: R$ 532,80 (R$ 506,16 no Pix)
+
+Sinal de 50% (R$ 266,40) para começar. Vale até 06/10.</textarea>
+          </div>
+          <div class="campo">
+            <span class="rot">Como enviar</span>
+            <div class="opcoes" role="radiogroup" aria-label="Como enviar">
+              <button class="opcao" role="radio" aria-checked="true" data-canal="wa"><span class="radio"></span><span class="ic" style="background:#25D366"><svg class="i"><use href="#i-wa"/></svg></span><span class="t"><b>WhatsApp com o vídeo</b><small>O vídeo vai anexado na conversa</small></span></button>
+              <button class="opcao" role="radio" aria-checked="false" data-canal="link"><span class="radio"></span><span class="ic" style="background:var(--primary)"><svg class="i"><use href="#i-link"/></svg></span><span class="t"><b>Link do orçamento</b><small>Página com o vídeo, para o cliente aprovar</small></span></button>
+            </div>
+          </div>
+          <p class="nota-enviar"><svg class="i p"><use href="#i-info"/></svg><span>A arte, a cor e o tamanho vêm da peça no orçamento. Para mudar, volte ao orçamento: o vídeo é gravado de novo.</span></p>
+        </div>
+      </div>
+    </div>
+    <div class="m-rodape">
+      <div class="resumo">R$ 532,80 · vale até 06/10<small>O orçamento fica em aberto até você aprovar ou fechar</small></div>
+      <div class="botoes">
+        <button class="btn btn-ter" data-ir="peca">Voltar ao orçamento</button>
+        <button class="btn btn-wa" id="btnEnviarWa" disabled><svg class="i"><use href="#i-wa"/></svg>Enviar pelo WhatsApp</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var root = document.documentElement;
+
+  // ── As artes de exemplo (SVG inline, sem rede) ───────────
+  function uri(svg) { return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg); }
+  var ARTES = {
+    helena: { nome: "helena-frente.png", dim: "1800 × 1200", src: uri(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" width="600" height="400">' +
+      '<g fill="#F472B6"><path d="M92 92l8 18 18 8-18 8-8 18-8-18-18-8 18-8z"/><path d="M506 250l6 13 13 6-13 6-6 13-6-13-13-6 13-6z"/></g>' +
+      '<text x="300" y="220" text-anchor="middle" font-family="Georgia, \'Times New Roman\', serif" font-style="italic" font-weight="700" font-size="168" fill="#BE185D">Helena</text>' +
+      '<path d="M150 250 C 230 282, 370 282, 450 250" fill="none" stroke="#BE185D" stroke-width="6" stroke-linecap="round"/>' +
+      '<text x="300" y="318" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700" font-size="34" letter-spacing="12" fill="#1E3A8A">15 ANOS</text>' +
+      '</svg>') },
+    selo: { nome: "helena-verso.png", dim: "1200 × 1200", src: uri(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">' +
+      '<circle cx="200" cy="200" r="176" fill="#FDF2F8" stroke="#1E3A8A" stroke-width="10"/>' +
+      '<circle cx="200" cy="200" r="150" fill="none" stroke="#F472B6" stroke-width="4" stroke-dasharray="4 10"/>' +
+      '<text x="200" y="128" text-anchor="middle" font-family="Arial, sans-serif" font-weight="800" font-size="34" letter-spacing="8" fill="#1E3A8A">FESTA DA</text>' +
+      '<text x="200" y="262" text-anchor="middle" font-family="Georgia, serif" font-weight="700" font-size="150" fill="#BE185D">15</text>' +
+      '<text x="200" y="318" text-anchor="middle" font-family="Arial, sans-serif" font-weight="800" font-size="30" letter-spacing="10" fill="#1E3A8A">HELENA</text>' +
+      '</svg>') },
+    volta: { nome: "helena-estendida.png", dim: "2400 × 700", src: uri(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 400" width="1400" height="400">' +
+      '<path d="M0 300 C 175 240, 350 360, 525 300 S 875 240, 1050 300 S 1300 360, 1400 300 V400 H0z" fill="#FBCFE8"/>' +
+      '<path d="M0 340 C 175 290, 350 390, 525 340 S 875 290, 1050 340 S 1300 390, 1400 340 V400 H0z" fill="#F472B6"/>' +
+      '<g fill="#BE185D">' +
+      [80, 330, 610, 900, 1180].map(function (x, i) { var y = 90 + (i % 2) * 40; return '<circle cx="' + x + '" cy="' + y + '" r="16"/><g fill="#F9A8D4"><circle cx="' + (x - 22) + '" cy="' + y + '" r="14"/><circle cx="' + (x + 22) + '" cy="' + y + '" r="14"/><circle cx="' + x + '" cy="' + (y - 22) + '" r="14"/><circle cx="' + x + '" cy="' + (y + 22) + '" r="14"/></g>'; }).join("") +
+      '</g>' +
+      '<text x="700" y="232" text-anchor="middle" font-family="Georgia, serif" font-style="italic" font-weight="700" font-size="112" fill="#1E3A8A">Feliz 15 anos, Helena!</text>' +
+      '</svg>') },
+  };
+
+  // ── Peças e lugares (o que viria da spec + customization_config) ─
+  var PECAS = {
+    caneca: {
+      nome: "Caneca clássica 325 ml", meta: "12 × R$ 39,90", total: "R$ 478,80", modelo: "Caneca clássica · 3D", selo: "3D · Caneca clássica",
+      cores: [["#FFFFFF", "Branca"], ["#1F2937", "Preta"], ["#FBCFE8", "Rosa"]],
+      // has_back + has_middle no cadastro; áreas panel / back (derivada) / wrap na spec
+      lados: {
+        front: { rotulo: "Frente", medida: "9 × 9,7 cm", u0: 0.285, u1: 0.715, arte: "helena" },
+        back: { rotulo: "Verso", medida: "9 × 9,7 cm", u0: 0.785, u1: 1.215, arte: "selo" },
+        middle: { rotulo: "Estendida", medida: "volta inteira · 21 × 9,7 cm", u0: 0.02, u1: 0.98, arte: "volta" },
+      },
+    },
+    camiseta: {
+      nome: "Camiseta algodão premium", meta: "1 × R$ 59,90", total: "R$ 59,90", modelo: "Camiseta 3D · frente e costas", selo: "3D · Camiseta",
+      cores: [["#FFFFFF", "Branca"], ["#111827", "Preta"], ["#1E3A8A", "Azul-marinho"], ["#FBCFE8", "Rosa-bebê"]],
+      lados: {
+        front: { rotulo: "Frente", medida: "28 × 35 cm", arte: "helena" },
+        back: { rotulo: "Verso", medida: "28 × 35 cm", arte: "selo" },
+      },
+    },
+  };
+
+  var S = {
+    peca: "caneca", arte: "uma", modo: "duas", tela: "peca", tema: "light",
+    girando: true, ativo: "front",
+    cor: { caneca: "#FFFFFF", camiseta: "#FFFFFF" },
+    artes: { caneca: {}, camiseta: {} },   // lado -> { src, nome, dim }
+    ajustes: { caneca: {}, camiseta: {} }, // lado -> { escala, dx, dy }
+    envio: { caneca: {}, camiseta: {} },   // lado -> { estado: 'enviando'|'erro', pct, src, nome }
+  };
+
+  function ladosVisiveis(p) {
+    p = p || S.peca;
+    if (p === "caneca") return S.modo === "estendida" ? ["middle"] : ["front", "back"];
+    return ["front", "back"];
+  }
+
+  function aplicarPreset() {
+    ["caneca", "camiseta"].forEach(function (p) {
+      S.artes[p] = {}; S.envio[p] = {}; S.ajustes[p] = {};
+      var lados = ladosVisiveis(p);
+      var def = PECAS[p].lados;
+      function poe(l) { var a = ARTES[def[l].arte]; S.artes[p][l] = { src: a.src, nome: a.nome, dim: a.dim }; }
+      if (S.arte === "uma") poe(lados[0]);
+      if (S.arte === "todas") lados.forEach(poe);
+      if (S.arte === "enviando" || S.arte === "erro") {
+        var alvo = lados[lados.length - 1];
+        if (lados.length > 1) poe(lados[0]);
+        var a = ARTES[def[alvo].arte];
+        S.envio[p][alvo] = S.arte === "enviando"
+          ? { estado: "enviando", pct: 62, src: a.src, nome: a.nome }
+          : { estado: "erro", nome: a.nome };
+      }
+      // No modo estendida, frente e verso "guardados" (só para mostrar que voltam)
+      if (p === "caneca" && S.modo === "estendida" && (S.arte === "todas")) {
+        S.guardadas = true;
+      }
+    });
+    S.ativo = ladosVisiveis()[0];
+    var comArte = ladosVisiveis().filter(function (l) { return S.artes[S.peca][l]; });
+    if (comArte.length) S.ativo = comArte[comArte.length - 1] === "back" && S.arte === "uma" ? "front" : comArte[0];
+  }
+
+  // ── URL ──────────────────────────────────────────────────
+  var q = new URLSearchParams(location.search);
+  ["peca", "arte", "modo", "tela", "tema"].forEach(function (k) { if (q.get(k)) S[k] = q.get(k) === "escuro" ? "dark" : q.get(k) === "claro" ? "light" : q.get(k); });
+  aplicarPreset();
+
+  // ── Imagens carregadas (para o canvas) ───────────────────
+  var cache = {};
+  function img(src) {
+    if (!cache[src]) { var im = new Image(); im.onload = function () { pintarTextura(); desenharTudo(); }; im.src = src; cache[src] = im; }
+    return cache[src];
+  }
+
+  // ── Textura da caneca: a volta inteira do corpo, como a UV do motor ─
+  var TW = 1170, TH = 440; // 2πr × altura (r 4,1 cm, h 9,7 cm)
+  var tex = document.createElement("canvas"); tex.width = TW; tex.height = TH;
+  var V0 = 0.18, V1 = 0.82;
+  function arteDoLado(p, l) {
+    var a = S.artes[p][l];
+    var e = S.envio[p][l];
+    if (a) return a.src;
+    if (e && e.estado === "enviando") return e.src; // a prévia já usa a imagem enquanto sobe
+    return null;
+  }
+  function ajusteDo(p, l) { return S.ajustes[p][l] || { escala: 1, dx: 0, dy: 0 }; }
+  function pintarTextura() {
+    var c = tex.getContext("2d");
+    c.clearRect(0, 0, TW, TH);
+    c.fillStyle = S.cor.caneca; c.fillRect(0, 0, TW, TH);
+    var def = PECAS.caneca.lados;
+    var lados = S.peca === "caneca" ? ladosVisiveis("caneca") : ["front"];
+    lados.forEach(function (l) {
+      var src = arteDoLado("caneca", l); if (!src) return;
+      var im = img(src); if (!im.complete || !im.naturalWidth) return;
+      var d = def[l], aj = ajusteDo("caneca", l);
+      var ax = d.u0 * TW, aw = (d.u1 - d.u0) * TW, ay = (1 - V1) * TH, ah = (V1 - V0) * TH;
+      var k = Math.min(aw * 0.94 / im.naturalWidth, ah * 0.94 / im.naturalHeight) * aj.escala;
+      var w = im.naturalWidth * k, h = im.naturalHeight * k;
+      var x = ax + (aw - w) / 2 + aj.dx * aw, y = ay + (ah - h) / 2 + aj.dy * ah;
+      // O verso atravessa a emenda (u 0,785 → 1,215): pinta de novo uma volta antes.
+      c.drawImage(im, x, y, w, h);
+      if (x + w > TW) c.drawImage(im, x - TW, y, w, h);
+      if (l === S.ativo && S.tela === "peca") {
+        c.save(); c.setLineDash([10, 8]); c.lineWidth = 3; c.strokeStyle = "rgba(236,72,153,.8)";
+        c.strokeRect(ax + 3, ay + 3, aw - 6, ah - 6);
+        if (ax + aw > TW) c.strokeRect(ax - TW + 3, ay + 3, aw - 6, ah - 6);
+        c.restore();
+      }
+    });
+  }
+
+  // ── Desenho da caneca (cilindro + alça) ──────────────────
+  function sombraDe(hex, f) {
+    var n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+    return "rgb(" + Math.round(r * f) + "," + Math.round(g * f) + "," + Math.round(b * f) + ")";
+  }
+  function desenharCaneca(cv, theta) {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var W = cv.clientWidth, H = cv.clientHeight;
+    if (!W || !H) return;
+    if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    var ctx = cv.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    var R = Math.min(W * 0.2, H * 0.27), hs = R * 2.35, e = R * 0.24;
+    var cx = W / 2, top = H / 2 - hs / 2 - e * 0.2;
+    // sombra no chão
+    var g = ctx.createRadialGradient(cx, top + hs + e, 0, cx, top + hs + e, R * 1.7);
+    g.addColorStop(0, "rgba(70,50,30,.30)"); g.addColorStop(1, "rgba(70,50,30,0)");
+    ctx.save(); ctx.translate(cx, top + hs + e); ctx.scale(1, 0.22); ctx.translate(-cx, -(top + hs + e));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, top + hs + e, R * 1.7, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+
+    // alça: anel no plano que contém o eixo, em u = 0,25
+    var phH = Math.PI / 2 - theta;
+    var sH = Math.sin(phH), zH = Math.cos(phH);
+    var ringR = R * 0.55, tube = R * 0.2;
+    function alca() {
+      ctx.save();
+      ctx.lineWidth = tube; ctx.strokeStyle = sombraDe(S.cor.caneca === "#FFFFFF" ? "#F4F1EC" : S.cor.caneca, zH > 0 ? 0.95 : 0.8);
+      ctx.beginPath();
+      ctx.ellipse(cx + (R + ringR * 0.72) * sH, top + hs * 0.48, Math.max(ringR * Math.abs(sH), tube * 0.35), ringR, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.lineWidth = tube * 0.35; ctx.strokeStyle = "rgba(255,255,255,.35)"; ctx.stroke();
+      ctx.restore();
+    }
+    if (zH < 0) alca();
+
+    // corpo: cada coluna amostra a textura no ângulo que encara a câmera
+    var cols = Math.round(R * 2), colW = (R * 2) / cols;
+    for (var i = 0; i < cols; i++) {
+      var s = ((i + 0.5) / cols) * 2 - 1;
+      var phi = Math.asin(s);
+      var u = ((phi + theta) / (Math.PI * 2)) % 1; if (u < 0) u += 1;
+      var yOff = e * Math.sqrt(1 - s * s);
+      ctx.drawImage(tex, Math.min(TW - 1, u * TW), 0, 1, TH, cx - R + i * colW, top + yOff, colW + 0.8, hs);
+    }
+    // sombreamento do cilindro
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(cx, top, R, e, 0, 0, Math.PI);
+    ctx.lineTo(cx - R, top + hs);
+    ctx.ellipse(cx, top + hs, R, e, 0, Math.PI, 0, true);
+    ctx.closePath(); ctx.clip();
+    var lg = ctx.createLinearGradient(cx - R, 0, cx + R, 0);
+    lg.addColorStop(0, "rgba(40,30,20,.42)"); lg.addColorStop(0.18, "rgba(40,30,20,.08)");
+    lg.addColorStop(0.32, "rgba(255,255,255,.28)"); lg.addColorStop(0.4, "rgba(255,255,255,0)");
+    lg.addColorStop(0.75, "rgba(40,30,20,.06)"); lg.addColorStop(1, "rgba(40,30,20,.45)");
+    ctx.fillStyle = lg; ctx.fillRect(cx - R, top - e, R * 2, hs + e * 3);
+    ctx.restore();
+    // boca
+    ctx.save();
+    ctx.beginPath(); ctx.ellipse(cx, top, R, e, 0, 0, Math.PI * 2);
+    var ig = ctx.createLinearGradient(0, top - e, 0, top + e);
+    ig.addColorStop(0, sombraDe(S.cor.caneca === "#FFFFFF" ? "#EDE9E3" : S.cor.caneca, 0.72));
+    ig.addColorStop(1, sombraDe(S.cor.caneca === "#FFFFFF" ? "#F8F6F2" : S.cor.caneca, 0.95));
+    ctx.fillStyle = ig; ctx.fill();
+    ctx.lineWidth = 2.5; ctx.strokeStyle = sombraDe(S.cor.caneca === "#FFFFFF" ? "#FFFFFF" : S.cor.caneca, 1.1 > 1 ? 1 : 1); ctx.stroke();
+    ctx.lineWidth = 1; ctx.strokeStyle = "rgba(60,45,30,.25)"; ctx.stroke();
+    ctx.restore();
+    if (zH >= 0) alca();
+  }
+
+  // ── Camiseta (CSS 3D) ────────────────────────────────────
+  function svgCamiseta(cor, costas) {
+    var gola = costas
+      ? '<path d="M80 12 Q100 22 120 12" fill="none" stroke="rgba(0,0,0,.18)" stroke-width="3"/>'
+      : '<path d="M80 12 Q100 36 120 12" fill="none" stroke="rgba(0,0,0,.2)" stroke-width="3.5"/>';
+    return '<svg viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+      '<defs><linearGradient id="dob' + (costas ? "c" : "f") + '" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity=".16"/><stop offset=".25" stop-color="#000" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".08"/><stop offset=".8" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".18"/></linearGradient></defs>' +
+      '<path d="M60 14 L80 8 Q100 ' + (costas ? 20 : 30) + ' 120 8 L140 14 L188 42 L172 86 L150 76 L150 208 Q100 214 50 208 L50 76 L28 86 L12 42 Z" fill="' + cor + '" stroke="rgba(0,0,0,.12)" stroke-width="1"/>' +
+      '<path d="M60 14 L80 8 Q100 ' + (costas ? 20 : 30) + ' 120 8 L140 14 L188 42 L172 86 L150 76 L150 208 Q100 214 50 208 L50 76 L28 86 L12 42 Z" fill="url(#dob' + (costas ? "c" : "f") + ')"/>' +
+      gola +
+      '<path d="M50 76 L50 90 M150 76 L150 90" stroke="rgba(0,0,0,.12)" stroke-width="1.2"/>' +
+      '</svg>';
+  }
+  function areaTee(l) {
+    // frente: peito; costas: um pouco mais alto
+    return l === "front" ? { l: 29, t: 20, w: 42, h: 42 } : { l: 29, t: 15, w: 42, h: 46 };
+  }
+  function montarCamiseta() {
+    ["front", "back"].forEach(function (l) {
+      var el = document.getElementById(l === "front" ? "teeFrente" : "teeCostas");
+      var a = areaTee(l);
+      var src = arteDoLado("camiseta", l);
+      var aj = ajusteDo("camiseta", l);
+      var guia = S.ativo === l && S.peca === "camiseta";
+      el.innerHTML = svgCamiseta(S.cor.camiseta, l === "back") +
+        '<div class="area' + (guia ? " guia" : "") + '" style="left:' + a.l + '%;top:' + a.t + '%;width:' + a.w + '%;height:' + a.h + '%">' +
+        (src ? '<img alt="" src="' + src + '" style="transform:translate(' + (aj.dx * 100) + '%,' + (aj.dy * 100) + '%) scale(' + aj.escala + ')">' : "") +
+        "</div>";
+    });
+  }
+
+  // ── Giro ─────────────────────────────────────────────────
+  var theta = Math.PI, alvo = null, arrastando = false, ultimoX = 0, t0 = performance.now();
+  var cvC = document.getElementById("cvCaneca"), cvV = document.getElementById("cvVideo");
+  var VEL = (Math.PI * 2) / 7000; // uma volta em 7 s, como o vídeo
+  function thetaDoLado(l) { return l === "back" ? 0 : Math.PI; } // frente em u=0,5; verso em u=0
+  function curto(de, para) { var d = ((para - de) % (Math.PI * 2) + Math.PI * 3) % (Math.PI * 2) - Math.PI; return de + d; }
+  function quadro(t) {
+    var dt = Math.min(60, t - t0); t0 = t;
+    if (alvo !== null && !arrastando) {
+      var r = alvo - theta; if (Math.abs(r) < 0.003) { theta = alvo; alvo = null; } else theta += r * 0.14;
+    } else if (S.girando && !arrastando) theta += VEL * dt;
+    if (S.tela === "peca" && S.peca === "caneca") desenharCaneca(cvC, theta);
+    if (S.tela === "enviar" && S.videoPeca === "caneca") desenharCaneca(cvV, theta);
+    requestAnimationFrame(quadro);
+  }
+  cvC.addEventListener("pointerdown", function (e) { arrastando = true; alvo = null; ultimoX = e.clientX; cvC.setPointerCapture(e.pointerId); });
+  cvC.addEventListener("pointermove", function (e) { if (!arrastando) return; theta -= (e.clientX - ultimoX) * 0.012; ultimoX = e.clientX; });
+  cvC.addEventListener("pointerup", function () { arrastando = false; });
+  cvC.addEventListener("pointercancel", function () { arrastando = false; });
+
+  function virarPara(l) {
+    S.ativo = l;
+    if (S.peca === "caneca") { alvo = curto(theta, thetaDoLado(l === "middle" ? "front" : l)); S.girando = false; }
+    else {
+      var tee = document.getElementById("tee");
+      tee.classList.add("fixa");
+      tee.style.transform = "rotateY(" + (l === "back" ? -180 : 0) + "deg)";
+      S.girando = false;
+    }
+    render();
+  }
+  document.getElementById("btnPausa").addEventListener("click", function () {
+    S.girando = !S.girando;
+    if (S.girando) { alvo = null; var tee = document.getElementById("tee"); tee.classList.remove("fixa"); tee.style.transform = ""; }
+    render();
+  });
+
+  // ── Envio de arquivo (simulado, sem rede) ────────────────
+  var input = document.getElementById("arquivo");
+  var ladoDoEnvio = null;
+  function escolher(l) { ladoDoEnvio = l; input.value = ""; input.click(); }
+  function enviarArquivo(l, file) {
+    var p = S.peca;
+    var url = URL.createObjectURL(file);
+    S.envio[p][l] = { estado: "enviando", pct: 0, src: url, nome: file.name };
+    S.ativo = l; virarPara(l);
+    var passo = setInterval(function () {
+      var e = S.envio[p][l]; if (!e || e.estado !== "enviando") { clearInterval(passo); return; }
+      e.pct = Math.min(100, e.pct + 12);
+      if (e.pct >= 100) {
+        clearInterval(passo);
+        var im = new Image();
+        im.onload = function () { S.artes[p][l] = { src: url, nome: file.name, dim: im.naturalWidth + " × " + im.naturalHeight }; delete S.envio[p][l]; S.ajustes[p][l] = null; render(); };
+        im.src = url;
+      } else render();
+    }, 140);
+    render();
+  }
+  input.addEventListener("change", function () { if (input.files && input.files[0] && ladoDoEnvio) enviarArquivo(ladoDoEnvio, input.files[0]); });
+
+  // ── Render dos cartões ───────────────────────────────────
+  function el(html) { var d = document.createElement("div"); d.innerHTML = html.trim(); return d.firstChild; }
+  function nomeDoLadoMin(l) { return l === "front" ? "da frente" : l === "back" ? "do verso" : "da estendida"; }
+
+  function cartao(l) {
+    var p = S.peca, d = PECAS[p].lados[l], a = S.artes[p][l], e = S.envio[p][l];
+    var ativo = S.ativo === l && (a || (e && e.estado === "enviando"));
+    var cls = "lugar" + (ativo ? " ativo" : "") + (e && e.estado === "erro" ? " erro" : "");
+    var topo = '<div class="lugar-top"><b>' + d.rotulo + '</b><span class="medida">' + d.medida + '</span>' +
+      (ativo ? '<span class="tag">Ajustando</span>' : a ? '<span class="ok" aria-label="Arte salva"><svg class="i p"><use href="#i-ok"/></svg></span>' : "") + "</div>";
+    var corpo;
+    if (e && e.estado === "enviando") {
+      corpo = '<div class="lugar-img xadrez subindo"><img alt="" src="' + e.src + '"><div class="barra" role="progressbar" aria-valuenow="' + e.pct + '" aria-valuemin="0" aria-valuemax="100" aria-label="Enviando a arte ' + nomeDoLadoMin(l) + '"><i style="width:' + e.pct + '%"></i></div></div>' +
+        '<div class="lugar-arq">Enviando ' + e.nome + "… " + e.pct + "%</div>" +
+        '<div class="lugar-acoes"><button class="btn btn-sec btn-peq" data-acao="cancelar" data-lado="' + l + '">Cancelar</button></div>';
+    } else if (e && e.estado === "erro") {
+      corpo = '<div class="erro-box" role="alert"><b><svg class="i p"><use href="#i-alerta"/></svg>Não deu para enviar</b><span>' + e.nome + ' não foi salva. A conexão caiu no meio do envio.</span></div>' +
+        '<div class="lugar-acoes"><button class="btn btn-pri btn-peq" data-acao="tentar" data-lado="' + l + '">Tentar de novo</button><button class="btn btn-sec btn-peq" data-acao="escolher" data-lado="' + l + '">Outra imagem</button></div>';
+    } else if (a) {
+      corpo = '<button class="lugar-img xadrez" data-acao="ativar" data-lado="' + l + '" aria-label="Ajustar a arte ' + nomeDoLadoMin(l) + '" style="border:0;padding:0;width:100%"><img alt="Arte ' + nomeDoLadoMin(l) + '" src="' + a.src + '"></button>' +
+        '<div class="lugar-arq">' + a.nome + " · " + a.dim + "</div>" +
+        '<div class="lugar-acoes"><button class="btn btn-sec btn-peq trocar" data-acao="escolher" data-lado="' + l + '"><svg class="i p"><use href="#i-trocar"/></svg><span>Trocar</span></button>' +
+        '<button class="btn btn-sec btn-icone" data-acao="remover" data-lado="' + l + '" aria-label="Remover a arte ' + nomeDoLadoMin(l) + '"><svg class="i p"><use href="#i-lixo"/></svg></button></div>';
+    } else {
+      corpo = '<button class="soltar" data-acao="escolher" data-lado="' + l + '">' +
+        '<span class="ico"><svg class="i"><use href="#i-up"/></svg></span><b>Enviar a arte ' + nomeDoLadoMin(l) + '</b><small>Toque ou arraste a imagem<br>PNG, JPG ou WEBP</small></button>';
+    }
+    var c = el('<div class="' + cls + '" data-lado="' + l + '">' + topo + corpo + "</div>");
+    // arrastar e soltar
+    c.addEventListener("dragover", function (ev) { ev.preventDefault(); c.classList.add("solta"); });
+    c.addEventListener("dragleave", function () { c.classList.remove("solta"); });
+    c.addEventListener("drop", function (ev) {
+      ev.preventDefault(); c.classList.remove("solta");
+      var f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+      if (f && /^image\//.test(f.type)) enviarArquivo(l, f);
+    });
+    return c;
+  }
+
+  function painelAjuste() {
+    var box = document.getElementById("ajuste");
+    var p = S.peca, l = S.ativo, a = S.artes[p][l] || (S.envio[p][l] && S.envio[p][l].estado === "enviando");
+    if (!a || ladosVisiveis().indexOf(l) < 0) { box.hidden = true; return; }
+    box.hidden = false;
+    var aj = ajusteDo(p, l), auto = !S.ajustes[p][l];
+    var rot = PECAS[p].lados[l].rotulo;
+    box.innerHTML =
+      '<div class="ajuste-cab"><b>Tamanho e posição · ' + rot + "</b>" +
+      '<span class="ajuda">' + (auto ? "Automático: a arte ocupa a área de impressão, dentro da margem." : "Ajustado por você.") + "</span>" +
+      (auto ? "" : '<button class="auto" data-aj="auto">Voltar ao automático</button>') + "</div>" +
+      '<div class="ajuste-linha">' +
+      '<div class="grupo-aj"><span class="rot">Tamanho</span><button class="btn btn-sec btn-icone" data-aj="menor" aria-label="Diminuir a arte"' + (aj.escala <= 0.4 ? " disabled" : "") + '><svg class="i p"><use href="#i-menos"/></svg></button>' +
+      '<span class="val">' + Math.round(aj.escala * 100) + '%</span><button class="btn btn-sec btn-icone" data-aj="maior" aria-label="Aumentar a arte"' + (aj.escala >= 1.2 ? " disabled" : "") + '><svg class="i p"><use href="#i-mais"/></svg></button></div>' +
+      '<div class="grupo-aj"><span class="rot">Posição</span>' +
+      '<button class="btn btn-sec btn-icone" data-aj="esq" aria-label="Mover para a esquerda"><svg class="i p"><use href="#i-esq"/></svg></button>' +
+      '<button class="btn btn-sec btn-icone" data-aj="cima" aria-label="Mover para cima"><svg class="i p"><use href="#i-cima"/></svg></button>' +
+      '<button class="btn btn-sec btn-icone" data-aj="baixo" aria-label="Mover para baixo"><svg class="i p"><use href="#i-baixo"/></svg></button>' +
+      '<button class="btn btn-sec btn-icone" data-aj="dir" aria-label="Mover para a direita"><svg class="i p"><use href="#i-dir"/></svg></button></div>' +
+      "</div>";
+  }
+  document.getElementById("ajuste").addEventListener("click", function (ev) {
+    var b = ev.target.closest("[data-aj]"); if (!b) return;
+    var p = S.peca, l = S.ativo, aj = Object.assign({ escala: 1, dx: 0, dy: 0 }, S.ajustes[p][l] || {});
+    var k = b.getAttribute("data-aj");
+    if (k === "auto") { S.ajustes[p][l] = null; render(); return; }
+    if (k === "menor") aj.escala = Math.max(0.4, Math.round((aj.escala - 0.1) * 10) / 10);
+    if (k === "maior") aj.escala = Math.min(1.2, Math.round((aj.escala + 0.1) * 10) / 10);
+    if (k === "esq") aj.dx = Math.max(-0.3, Math.round((aj.dx - 0.05) * 100) / 100);
+    if (k === "dir") aj.dx = Math.min(0.3, Math.round((aj.dx + 0.05) * 100) / 100);
+    if (k === "cima") aj.dy = Math.max(-0.3, Math.round((aj.dy - 0.05) * 100) / 100);
+    if (k === "baixo") aj.dy = Math.min(0.3, Math.round((aj.dy + 0.05) * 100) / 100);
+    S.ajustes[p][l] = (aj.escala === 1 && aj.dx === 0 && aj.dy === 0) ? null : aj;
+    virarPara(l);
+  });
+
+  document.getElementById("lugares").addEventListener("click", function (ev) {
+    var b = ev.target.closest("[data-acao]"); if (!b) return;
+    var l = b.getAttribute("data-lado"), acao = b.getAttribute("data-acao"), p = S.peca;
+    if (acao === "escolher") escolher(l);
+    if (acao === "remover") { delete S.artes[p][l]; S.ajustes[p][l] = null; render(); }
+    if (acao === "ativar") virarPara(l);
+    if (acao === "cancelar") { delete S.envio[p][l]; render(); }
+    if (acao === "tentar") {
+      var d = PECAS[p].lados[l], a = ARTES[d.arte];
+      S.envio[p][l] = { estado: "enviando", pct: 20, src: a.src, nome: a.nome };
+      var t = setInterval(function () {
+        var e = S.envio[p][l]; if (!e) { clearInterval(t); return; }
+        e.pct += 16; if (e.pct >= 100) { clearInterval(t); delete S.envio[p][l]; S.artes[p][l] = { src: a.src, nome: a.nome, dim: a.dim }; }
+        render();
+      }, 150);
+      virarPara(l);
+    }
+  });
+
+  document.getElementById("segModo").addEventListener("click", function (ev) {
+    var b = ev.target.closest("[data-modo]"); if (!b) return;
+    trocarModo(b.getAttribute("data-modo"));
+  });
+  function trocarModo(m) {
+    if (S.modo === m) return;
+    // As artes de frente/verso e da estendida convivem guardadas; só a vista muda.
+    S.modo = m;
+    var p = "caneca", def = PECAS.caneca.lados;
+    if (m === "estendida" && !S.artes[p].middle && (S.arte === "todas")) { var a = ARTES.volta; S.artes[p].middle = { src: a.src, nome: a.nome, dim: a.dim }; }
+    S.ativo = ladosVisiveis()[0];
+    render();
+  }
+
+  function contarArtes(p) { return ladosVisiveis(p).filter(function (l) { return S.artes[p][l]; }).length; }
+  function textoArtes(p) {
+    var n = contarArtes(p);
+    if (!n) return "sem arte";
+    if (p === "caneca" && S.modo === "estendida") return "estendida";
+    return n === 1 ? "1 arte" : n + " artes";
+  }
+
+  // ── Render geral ─────────────────────────────────────────
+  function render() {
+    root.setAttribute("data-theme", S.tema);
+    root.setAttribute("data-peca", S.peca);
+    root.setAttribute("data-tela", S.tela);
+    document.querySelectorAll(".estados button").forEach(function (b) {
+      var k = b.getAttribute("data-k"), v = b.getAttribute("data-v");
+      b.setAttribute("aria-pressed", String(S[k] === v));
+      if (k === "modo") b.disabled = S.peca !== "caneca";
+    });
+    var faixa = document.querySelector(".estados").offsetHeight;
+    root.style.setProperty("--faixa", faixa + "px");
+
+    document.getElementById("modalPeca").hidden = S.tela !== "peca";
+    document.getElementById("modalEnviar").hidden = S.tela !== "enviar";
+
+    var P = PECAS[S.peca], outra = S.peca === "caneca" ? "camiseta" : "caneca", O = PECAS[outra];
+    document.getElementById("nomePeca").textContent = P.nome;
+    document.getElementById("metaPeca").textContent = P.meta;
+    document.getElementById("seloModelo").textContent = P.selo;
+    document.getElementById("totalPeca").textContent = P.total;
+    document.getElementById("nomeModelo").textContent = P.modelo;
+    var sa = document.getElementById("seloArtes"); sa.textContent = textoArtes(S.peca); sa.className = "selo " + (contarArtes(S.peca) ? "selo-arte" : "selo-sem");
+    document.getElementById("nomeOutra").textContent = O.nome;
+    document.getElementById("metaOutra").textContent = O.meta;
+    document.getElementById("seloOutra").textContent = O.selo;
+    document.getElementById("totalOutra").textContent = O.total;
+    var ao = document.getElementById("artesOutra"); ao.textContent = textoArtes(outra); ao.className = "selo " + (contarArtes(outra) ? "selo-arte" : "selo-sem");
+
+    // estúdio
+    var caneca = S.peca === "caneca";
+    cvC.hidden = !caneca;
+    document.getElementById("teeCena").hidden = caneca;
+    document.getElementById("dicaGiro").hidden = !caneca;
+    var tee = document.getElementById("tee");
+    tee.classList.toggle("parada", !S.girando);
+    var bp = document.getElementById("btnPausa");
+    bp.innerHTML = '<svg class="i"><use href="#i-' + (S.girando ? "pausa" : "play") + '"/></svg>';
+    bp.setAttribute("aria-label", S.girando ? "Pausar o giro" : "Girar de novo");
+    var lados = ladosVisiveis();
+    var comAlgo = lados.some(function (l) { return arteDoLado(S.peca, l); });
+    document.getElementById("avisoLiso").hidden = comAlgo;
+    var vistas = document.getElementById("vistas");
+    var vistasLados = caneca && S.modo === "estendida" ? [] : lados;
+    vistas.hidden = !vistasLados.length;
+    vistas.innerHTML = vistasLados.map(function (l) {
+      return '<button data-vista="' + l + '" aria-pressed="' + (!S.girando && S.ativo === l) + '">' + P.lados[l].rotulo + "</button>";
+    }).join("");
+
+    // lugares
+    document.getElementById("segModo").hidden = !caneca;
+    document.querySelectorAll("#segModo button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-modo") === S.modo)); });
+    document.getElementById("avisoModo").hidden = !(caneca && S.modo === "estendida");
+    var box = document.getElementById("lugares");
+    box.className = "lugares" + (lados.length === 1 ? " um" : "");
+    box.innerHTML = "";
+    lados.forEach(function (l) { box.appendChild(cartao(l)); });
+    painelAjuste();
+
+    // cores
+    document.getElementById("cores").innerHTML = P.cores.map(function (c) {
+      return '<button class="cor" data-cor="' + c[0] + '" aria-pressed="' + (S.cor[S.peca] === c[0]) + '"><i style="background:' + c[0] + '"></i>' + c[1] + "</button>";
+    }).join("");
+
+    pintarTextura();
+    if (!caneca) montarCamiseta();
+
+    var total = contarArtes("caneca") + contarArtes("camiseta");
+    document.getElementById("resumoArtes").textContent = total ? "Alterações ainda não salvas · " + total + (total === 1 ? " arte enviada" : " artes enviadas") : "Nenhuma arte ainda: o vídeo mostra as peças lisas";
+
+    if (S.tela === "enviar") renderEnviar();
+  }
+
+  document.getElementById("vistas").addEventListener("click", function (ev) {
+    var b = ev.target.closest("[data-vista]"); if (b) virarPara(b.getAttribute("data-vista"));
+  });
+  document.getElementById("cores").addEventListener("click", function (ev) {
+    var b = ev.target.closest("[data-cor]"); if (!b) return;
+    S.cor[S.peca] = b.getAttribute("data-cor"); render();
+  });
+
+  // ── Tela Enviar ──────────────────────────────────────────
+  var grav = null;
+  S.videoPeca = "caneca";
+  function renderEnviar() {
+    document.getElementById("artesVideoCaneca").textContent = (S.modo === "estendida" ? "estendida" : "frente e verso") + " · " + textoArtes("caneca");
+    document.getElementById("artesVideoCamiseta").textContent = "frente e verso · " + textoArtes("camiseta");
+    document.querySelectorAll("[data-video]").forEach(function (b) { b.setAttribute("aria-checked", String(b.getAttribute("data-video") === S.videoPeca)); });
+  }
+  function gravar() {
+    clearInterval(grav);
+    var pct = 0;
+    document.getElementById("gravando").hidden = false;
+    document.getElementById("play").hidden = true;
+    document.getElementById("guardado").hidden = true;
+    document.getElementById("btnEnviarWa").disabled = true;
+    S.girando = true; alvo = null;
+    grav = setInterval(function () {
+      pct = Math.min(100, pct + 4);
+      document.getElementById("txtGravando").textContent = "Gravando o giro de 7 s… " + pct + "%";
+      document.getElementById("barraGrav").style.width = pct + "%";
+      if (pct >= 100) {
+        clearInterval(grav);
+        document.getElementById("gravando").hidden = true;
+        document.getElementById("play").hidden = false;
+        document.getElementById("guardado").hidden = false;
+        document.getElementById("btnEnviarWa").disabled = false;
+      }
+    }, 120);
+  }
+  document.querySelectorAll("[data-video]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      S.videoPeca = b.getAttribute("data-video");
+      if (S.videoPeca !== S.peca) { S.peca = S.videoPeca; }
+      render(); gravar();
+    });
+  });
+  document.querySelectorAll("[data-canal]").forEach(function (b) {
+    b.addEventListener("click", function () { document.querySelectorAll("[data-canal]").forEach(function (x) { x.setAttribute("aria-checked", String(x === b)); }); });
+  });
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest("[data-ir]"); if (!b) return;
+    irPara(b.getAttribute("data-ir"));
+  });
+  function irPara(t) {
+    S.tela = t;
+    if (t === "enviar") { S.videoPeca = S.peca; render(); gravar(); } else render();
+  }
+
+  // Camiseta no vídeo: a mesma cena CSS, copiada para a caixa do vídeo
+  var teeNoVideo = null;
+  function sincronizarVideoCamiseta() {
+    var caixa = document.querySelector(".video-caixa");
+    if (S.tela === "enviar" && S.videoPeca === "camiseta") {
+      if (!teeNoVideo) {
+        teeNoVideo = document.getElementById("teeCena").cloneNode(true);
+        teeNoVideo.removeAttribute("id"); teeNoVideo.hidden = false;
+        teeNoVideo.querySelectorAll("[id]").forEach(function (n) { n.removeAttribute("id"); });
+        caixa.insertBefore(teeNoVideo, caixa.children[1]);
+      }
+      cvV.style.visibility = "hidden";
+    } else {
+      if (teeNoVideo) { teeNoVideo.remove(); teeNoVideo = null; }
+      cvV.style.visibility = "";
+    }
+  }
+  var renderBase = render;
+  render = function () { renderBase(); if (S.tela === "enviar") { if (teeNoVideo) { teeNoVideo.remove(); teeNoVideo = null; } sincronizarVideoCamiseta(); } else sincronizarVideoCamiseta(); };
+
+  // ── Faixa de controle ────────────────────────────────────
+  document.querySelector(".estados").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-k]"); if (!b || b.disabled) return;
+    var k = b.getAttribute("data-k"), v = b.getAttribute("data-v");
+    if (k === "tela") { irPara(v); return; }
+    S[k] = v;
+    if (k === "arte" || k === "peca" || k === "modo") { aplicarPreset(); S.girando = true; alvo = null; var tee = document.getElementById("tee"); tee.classList.remove("fixa"); tee.style.transform = ""; }
+    if (S.tela === "enviar") S.videoPeca = S.peca;
+    render();
+    if (S.tela === "enviar" && k !== "tema") gravar();
+  });
+  window.addEventListener("resize", function () { root.style.setProperty("--faixa", document.querySelector(".estados").offsetHeight + "px"); });
+
+  render();
+  if (S.tela === "enviar") gravar();
+  requestAnimationFrame(quadro);
+})();
+</script>
+</body>
+</html>
