@@ -20,6 +20,7 @@ function mapApiTransaction(t: any): Transaction {
     due_date: t.due_date || null,
     created_at: t.created_at || null,
     paid_at: t.paid_at || null,
+    original_amount: t.original_amount != null ? parseFloat(t.original_amount) : null,
     payment_method: t.payment_method || null,
     employee_id: t.employee_id || null,
     employee_name: t.employee_name || null,
@@ -257,7 +258,7 @@ export function useTransactionsApi(period?: PeriodKey, customStart?: string, cus
     },
   });
 
-  function createTransaction(body: { type: string; amount: number; description: string; category: string; due_date?: string; payment_method?: string; employee_id?: string }) {
+  function createTransaction(body: { type: string; amount: number; description: string; category: string; due_date?: string; payment_method?: string; employee_id?: string; status?: string; paid_at?: string; paid_amount?: number }) {
     if (consolidatedView) {
       toast.error("Selecione uma empresa específica para criar lancamentos");
       return;

@@ -603,7 +603,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
 
         {/* 28/09/2026: Quadro (Atrasado / A receber / Recebido) ao lado da lista. */}
         {activeTab === TAB_INDEX.lancamentos && !isLoading && !isError && (
-          <ListaOuQuadro podeQuadro={!consolidatedView && !isDemo} companyId={company?.id}>
+          <ListaOuQuadro podeQuadro={!consolidatedView && !isDemo} companyId={company?.id} onEditar={!isDemo && !consolidatedView ? handleEdit : undefined}>
           <TabLancamentos
             transactions={transactions}
             isLoading={isLoading}

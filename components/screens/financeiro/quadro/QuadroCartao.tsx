@@ -9,6 +9,7 @@ import { Fonts } from "@/constants/fonts";
 import { useDraggableCardRef } from "@/components/studio/kanban/useStudioKanbanDnD";
 import { useValoresOcultos } from "@/stores/valoresOcultos";
 import { fmt } from "@/components/screens/financeiro/types";
+import { diferencaPaga } from "@/utils/lancamentoPago";
 import {
   ddmm, mesDeOrigem, rotuloDaForma, rotulos, seloDoPrazo,
   type CartaoQuadro, type ColunaQuadro, type Movimento, type TipoQuadro,
@@ -25,16 +26,21 @@ type Props = {
   onInicio: (id: string) => void;
   onFim: () => void;
   onAcao: (cartao: CartaoQuadro, de: ColunaQuadro, mov: Movimento) => void;
+  /** Abre o "Editar lançamento" (valor com juros/mora, descrição, data...). */
+  onEditar?: (cartao: CartaoQuadro) => void;
 };
 
-export function QuadroCartao({ cartao, coluna, tipo, hoje, mes, arrastavel, arrastando, onInicio, onFim, onAcao }: Props) {
+export function QuadroCartao({ cartao, coluna, tipo, hoje, mes, arrastavel, arrastando, onInicio, onFim, onAcao, onEditar }: Props) {
   const ref = useDraggableCardRef(arrastavel && cartao.movable, cartao.id, onInicio, onFim);
   const { m } = useValoresOcultos();
   const r = rotulos(tipo);
   const selo = seloDoPrazo(cartao, coluna, hoje);
   const origem = coluna === "atrasado" ? mesDeOrigem(cartao, mes) : null;
   const forma = rotuloDaForma(cartao.payment_method);
-  const pagoEm = cartao.paid_at ? ddmm(cartao.paid_at.slice(0, 10)) : null;
+  // Dia do pagamento em São Paulo (baixa feita às 22h é 03h UTC do dia seguinte).
+  const pagoEm = cartao.paid_at ? ddmm(new Date(cartao.paid_at).toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" })) : null;
+  // Pago com juros ou desconto: o cartão mostra o valor original e a diferença.
+  const dif = coluna === "feito" ? diferencaPaga(cartao.amount, cartao.original_amount) : null;
 
   return (
     <View ref={ref} style={[s.card, arrastando && s.cardArrastando]} testID={"quadro-cartao-" + cartao.id}>
@@ -51,6 +57,11 @@ export function QuadroCartao({ cartao, coluna, tipo, hoje, mes, arrastavel, arra
         {coluna === "feito" && (
           <Text style={[s.chip, s.chipOk]}>
             {r.feito}{pagoEm ? " " + pagoEm : ""}{forma ? " · " + forma : ""}
+          </Text>
+        )}
+        {dif && (
+          <Text style={[s.chip, s.chipBreve]} testID={"quadro-diferenca-" + cartao.id}>
+            Original {m(fmt(cartao.original_amount as number))} · {dif.sentido === "mais" ? "+" : "−"}{m(fmt(dif.valor))}
           </Text>
         )}
         {cartao.recurrence_type && <Text style={s.chip}>Recorrente</Text>}
@@ -72,6 +83,11 @@ export function QuadroCartao({ cartao, coluna, tipo, hoje, mes, arrastavel, arra
                 </Pressable>
               )}
             </>
+          )}
+          {onEditar && (
+            <Pressable onPress={() => onEditar(cartao)} style={s.btn} accessibilityRole="button" testID={"quadro-editar-" + cartao.id}>
+              <Text style={s.btnTxt}>Editar</Text>
+            </Pressable>
           )}
         </View>
       ) : (

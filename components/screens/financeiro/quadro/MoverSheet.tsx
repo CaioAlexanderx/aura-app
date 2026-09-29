@@ -5,11 +5,13 @@
 // escondido falha no iPhone).
 // ============================================================
 import { useEffect, useState } from "react";
-import { View, Text, Pressable, StyleSheet, Modal, ScrollView } from "react-native";
+import { View, Text, Pressable, StyleSheet, Modal, ScrollView, TextInput } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import { CalendarioDoDia } from "@/components/CalendarioDoDia";
 import { useValoresOcultos } from "@/stores/valoresOcultos";
+import { maskCurrency, unmaskNumber } from "@/utils/masks";
+import { diferencaPaga, rotulosDaSituacao, textoDaDiferenca } from "@/utils/lancamentoPago";
 import { fmt } from "@/components/screens/financeiro/types";
 import {
   ddmm, FORMAS_DE_PAGAMENTO, rotulos,
@@ -23,7 +25,7 @@ type Props = {
   tipo: TipoQuadro;
   hoje: string;
   onFechar: () => void;
-  onConfirmar: (dados: { data?: string; forma?: string | null }) => void;
+  onConfirmar: (dados: { data?: string; forma?: string | null; valorPago?: number | null }) => void;
 };
 
 function somarDias(iso: string, n: number) {
@@ -51,11 +53,14 @@ export function MoverSheetConteudo({ alvo, tipo, hoje, onFechar, onConfirmar }: 
   const r = rotulos(tipo);
   const [data, setData] = useState(hoje);
   const [forma, setForma] = useState<string | null>("pix");
+  // Valor pago (boleto com juros): vem com o valor do lançamento; só troca quem pagou diferente.
+  const [valorPagoStr, setValorPagoStr] = useState("");
 
   useEffect(() => {
     if (!alvo) return;
     setData(alvo.mov === "nova_data" ? somarDias(hoje, 7) : hoje);
     setForma(alvo.cartao.payment_method || "pix");
+    setValorPagoStr(maskCurrency(String(Math.round(alvo.cartao.amount * 100))));
   }, [alvo, hoje]);
 
   if (!alvo) return null;
@@ -70,6 +75,12 @@ export function MoverSheetConteudo({ alvo, tipo, hoje, onFechar, onConfirmar }: 
       : cartao.description + " volta a ficar em aberto." + (jaVenceu ? " Como já venceu em " + ddmm(cartao.date) + ", vai para Atrasado." : "");
   const botao = mov === "baixa" ? "Confirmar" : mov === "nova_data" ? "Salvar data" : "Desfazer";
   const dataInvalida = mov === "nova_data" && data < hoje;
+  const nums = unmaskNumber(valorPagoStr);
+  const valorPago = nums ? parseInt(nums, 10) / 100 : 0;
+  const valorInvalido = mov === "baixa" && !(valorPago > 0);
+  const dif = mov === "baixa" && valorPago > 0 ? diferencaPaga(valorPago, cartao.amount) : null;
+  const rs = rotulosDaSituacao(tipo);
+  const bloqueado = dataInvalida || valorInvalido;
 
   return (
           <ScrollView contentContainerStyle={{ gap: 12 }}>
@@ -92,6 +103,15 @@ export function MoverSheetConteudo({ alvo, tipo, hoje, onFechar, onConfirmar }: 
 
             {mov === "baixa" && (
               <View style={{ gap: 6 }}>
+                <Text style={s.rotulo}>{rs.valor}</Text>
+                <TextInput value={valorPagoStr} onChangeText={(v) => setValorPagoStr(maskCurrency(v))} keyboardType="number-pad"
+                  style={s.input} placeholder="R$ 0,00" placeholderTextColor={Colors.ink3} testID="quadro-valor-pago" />
+                <Text style={s.dica}>{dif ? textoDaDiferenca(dif, tipo, (n) => m(fmt(n))) : "Pagou com juros ou desconto? Digite o valor que pagou."}</Text>
+              </View>
+            )}
+
+            {mov === "baixa" && (
+              <View style={{ gap: 6 }}>
                 <Text style={s.rotulo}>Forma de pagamento</Text>
                 <View style={s.formas}>
                   {FORMAS_DE_PAGAMENTO.map((f) => (
@@ -108,8 +128,8 @@ export function MoverSheetConteudo({ alvo, tipo, hoje, onFechar, onConfirmar }: 
             <View style={s.botoes}>
               <Pressable onPress={onFechar} style={s.btn} accessibilityRole="button"><Text style={s.btnTxt}>Cancelar</Text></Pressable>
               <Pressable
-                onPress={() => { if (!dataInvalida) onConfirmar({ data: mov === "desfazer" ? undefined : data, forma: mov === "baixa" ? forma : undefined }); }}
-                style={[s.btn, s.btnGo, dataInvalida && { opacity: 0.5 }]}
+                onPress={() => { if (!bloqueado) onConfirmar({ data: mov === "desfazer" ? undefined : data, forma: mov === "baixa" ? forma : undefined, valorPago: mov === "baixa" ? valorPago : undefined }); }}
+                style={[s.btn, s.btnGo, bloqueado && { opacity: 0.5 }]}
                 accessibilityRole="button" testID="quadro-confirmar"
               >
                 <Text style={[s.btnTxt, s.btnGoTxt]}>{botao}</Text>
@@ -126,6 +146,8 @@ const s = StyleSheet.create({
   texto: { fontSize: 13.5, color: Colors.ink2, lineHeight: 19 },
   rotulo: { fontSize: 10.5, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase", color: Colors.ink3 },
   aviso: { fontSize: 12, color: Colors.red, fontWeight: "600" },
+  dica: { fontSize: 12, color: Colors.ink3 },
+  input: { fontFamily: Fonts.mono, fontSize: 16, color: Colors.ink, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 10 },
   formas: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   forma: { borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg4, borderRadius: 8, paddingHorizontal: 11, paddingVertical: 7 },
   formaAtiva: { borderColor: Colors.violet, backgroundColor: Colors.violetD },

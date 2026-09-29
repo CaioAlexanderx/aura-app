@@ -25,7 +25,7 @@ const mockQuadro = {
       { id: "b", description: "Encomenda 4 blusas", category: "Venda a prazo", amount: 432, status: "pending", date: "2026-09-30", due_date: "2026-09-30", paid_at: null, payment_method: null, notes: null, employee_name: null, recurrence_type: null, recurrence_index: null, movable: true },
     ] },
     feito: { total: 1534.7, count: 10, items: [
-      { id: "c", description: "Pedido da vitrine", category: "Vendas", amount: 250, status: "confirmed", date: "2026-09-05", due_date: "2026-09-05", paid_at: "2026-09-05T03:00:00.000Z", payment_method: "pix", notes: null, employee_name: null, recurrence_type: null, recurrence_index: null, movable: false },
+      { id: "c", description: "Pedido da vitrine", category: "Vendas", amount: 250, original_amount: 240, status: "confirmed", date: "2026-09-05", due_date: "2026-09-05", paid_at: "2026-09-05T03:00:00.000Z", payment_method: "pix", notes: null, employee_name: null, recurrence_type: null, recurrence_index: null, movable: false },
     ], grupos: [{ date: "2026-09-27", origem: "caixa", count: 9, total: 1284.7 }] },
   },
 };
@@ -43,9 +43,11 @@ function texto(node: any): string {
   return texto(node.children);
 }
 
+const mockEditar = jest.fn();
+
 function render() {
   let t!: renderer.ReactTestRenderer;
-  act(() => { t = renderer.create(<QuadroFinanceiro companyId="c1" />); });
+  act(() => { t = renderer.create(<QuadroFinanceiro companyId="c1" onEditar={mockEditar} />); });
   return t;
 }
 
@@ -81,7 +83,21 @@ describe("QuadroFinanceiro", () => {
     act(() => { porTestID(t, "quadro-baixa-b").props.onPress(); });
     expect(texto(t.toJSON())).toMatch(/Recebido\?/);
     act(() => { porTestID(t, "quadro-confirmar").props.onPress(); });
-    expect(mockMover).toHaveBeenCalledWith({ id: "b", mov: "baixa", data: "2026-09-28", forma: "pix" });
+    expect(mockMover).toHaveBeenCalledWith({ id: "b", mov: "baixa", data: "2026-09-28", forma: "pix", valorPago: 432 });
+  });
+
+  it("valor pago diferente vai na confirmação e mostra a diferença", () => {
+    const t = render();
+    act(() => { porTestID(t, "quadro-baixa-b").props.onPress(); });
+    act(() => { porTestID(t, "quadro-valor-pago").props.onChangeText("45000"); });
+    expect(texto(t.toJSON())).toMatch(/R\$\s*18,00 a mais/);
+    act(() => { porTestID(t, "quadro-confirmar").props.onPress(); });
+    expect(mockMover).toHaveBeenCalledWith(expect.objectContaining({ id: "b", mov: "baixa", valorPago: 450 }));
+  });
+
+  it("cartão pago com outro valor mostra o original e a diferença", () => {
+    const s = texto(render().toJSON());
+    expect(s).toMatch(/Original\s+R\$\s*240,00\s+·\s+\+\s*R\$\s*10,00/);
   });
 
   it("Nova data no atrasado sugere uma semana depois de hoje", () => {
@@ -89,5 +105,12 @@ describe("QuadroFinanceiro", () => {
     act(() => { porTestID(t, "quadro-nova-data-a").props.onPress(); });
     act(() => { porTestID(t, "quadro-confirmar").props.onPress(); });
     expect(mockMover).toHaveBeenCalledWith({ id: "a", mov: "nova_data", data: "2026-10-05", forma: undefined });
+  });
+
+  it("Editar aparece nos cartões editáveis e abre o lançamento no formato do modal", () => {
+    const t = render();
+    expect(porTestID(t, "quadro-editar-c")).toBeUndefined();
+    act(() => { porTestID(t, "quadro-editar-a").props.onPress(); });
+    expect(mockEditar).toHaveBeenCalledWith(expect.objectContaining({ id: "a", desc: "Parcela calça", type: "income", amount: 97.5, employee_id: null }));
   });
 });
