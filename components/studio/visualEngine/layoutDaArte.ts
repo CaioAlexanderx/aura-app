@@ -87,6 +87,13 @@ export type ArteDoLado = {
   editando?: boolean;
   /** Campo com a caixa de seleção (edição). */
   selecionado?: string | null;
+  /**
+   * Posição livre do orçamento (29/09/2026): no 3D, a arte é pintada no
+   * PAINEL inteiro do lado (painelDaPeca), não na área de impressão, sem
+   * margem e sem corte na área; o ajuste da imagem é em fração do painel.
+   * Só o orçamento preenche; sem ela, tudo como sempre.
+   */
+  livre?: boolean;
 };
 
 export type ItemImagem = {

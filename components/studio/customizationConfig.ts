@@ -202,6 +202,10 @@ export function rotuloDaChave(
   if (chave === "image_back") return "Arte do verso";
   if (chave === "image_middle") return "Arte da volta inteira";
   if (chave === "orcamento_ajustes") return "Tamanho e posição no orçamento";
+  // Posição livre do orçamento: a ficha em cm não a representa; vai a prévia.
+  if (chave === "orcamento_previa_front") return "Prévia da arte livre — Frente";
+  if (chave === "orcamento_previa_back") return "Prévia da arte livre — Verso";
+  if (chave === "orcamento_previa_middle") return "Prévia da arte livre — Volta inteira";
 
   const mCor = chave.match(/^(.+)_cor$/);
   if (mCor) {
@@ -241,6 +245,8 @@ export function textoDosAjustesDoOrcamento(valor: unknown): string | null {
   const partes: string[] = [];
   for (const [lado, nome] of nomes) {
     const a = v[lado];
+    // Posição livre (29/09/2026): fora da área de impressão, sem cm.
+    if (a && typeof a === "object" && a.livre === true) { partes.push(`${nome}: posição livre, veja a prévia`); continue; }
     if (!a || typeof a !== "object" || typeof a.escala !== "number") continue;
     const pct = (n: number) => `${Math.round(Math.abs(n) * 100)}%`;
     const itens = [`${nome} ${pct(a.escala)}`];

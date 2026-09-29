@@ -12,7 +12,7 @@
 // não sai na impressão (nativeID ficha-nao-imprime).
 // ============================================================
 import { useState } from "react";
-import { View, Text, Pressable, Platform, StyleSheet } from "react-native";
+import { View, Text, Pressable, Platform, StyleSheet, Image } from "react-native";
 import type { CustomizationConfig } from "@/services/studioApi";
 import { arteDoLado } from "@/components/studio/storefront/valoresDoMotor";
 import { medidorDaVitrine, pixelsConhecidos, useVersaoDasMedidas } from "@/components/studio/storefront/produto/medidasDaArte";
@@ -42,10 +42,15 @@ export function ProvaDaArte({
   const [gerando, setGerando] = useState<string | null>(null);
   if (!config || Platform.OS !== "web") return null;
 
+  // Posição livre do orçamento (29/09/2026): a arte foi para fora da área
+  // de impressão, e a medida em cm da área não a representa. A oficina vê
+  // a prévia da peça, guardada no pedido.
+  const livres = lados.filter((l) => valores?.orcamento_ajustes?.[l]?.livre === true);
   const porLado = lados
+    .filter((l) => !livres.includes(l))
     .map((l) => ({ lado: l, arte: arteDoLado(config, valores, l, { arquivo: pixelsConhecidos }) }))
     .filter((x) => x.arte.areaCm && (x.arte.imagens.length || x.arte.textos.length));
-  if (!porLado.length) return null;
+  if (!porLado.length && !livres.length) return null;
 
   async function baixar(lado: "front" | "back" | "middle", arte: ArteDoLado) {
     setGerando(lado);
@@ -61,6 +66,19 @@ export function ProvaDaArte({
 
   return (
     <View style={s.caixa}>
+      {livres.map((lado) => {
+        const previa = typeof valores["orcamento_previa_" + lado] === "string" ? valores["orcamento_previa_" + lado] : null;
+        return (
+          <View key={lado} style={s.lado} testID={"prova-livre-" + lado}>
+            <Text style={s.titulo}>{NOME_DO_LADO[lado]} · posição livre, veja a prévia</Text>
+            {previa ? (
+              <Image source={{ uri: previa }} style={s.previa} resizeMode="contain" accessibilityLabel={`Prévia da arte livre — ${NOME_DO_LADO[lado]}`} />
+            ) : (
+              <Text style={s.linha}>A arte foi posicionada livre na peça no orçamento. Confira a prévia do orçamento antes de imprimir.</Text>
+            )}
+          </View>
+        );
+      })}
       {porLado.map(({ lado, arte }) => {
         const cm = arte.areaCm!;
         const itens = resolverArte(arte, cm.w, cm.h, medidorDaVitrine(pixelsConhecidos));
@@ -102,4 +120,5 @@ const s = StyleSheet.create({
   rotulo: { color: TINTA3 },
   botao: { alignSelf: "flex-start", borderWidth: 1, borderColor: TINTA, borderRadius: 6, paddingVertical: 5, paddingHorizontal: 10, marginTop: 4 },
   botaoTxt: { fontSize: 12, color: TINTA, fontWeight: "600" },
+  previa: { width: 260, height: 200, borderWidth: 1, borderColor: "#DDDDDD", borderRadius: 6, backgroundColor: "#FAFAFA" },
 });

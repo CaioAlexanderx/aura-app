@@ -13,7 +13,11 @@
 //     modelo têm (artesPorLado.ladosDaPeca): tocar ou arrastar, miniatura,
 //     trocar e remover; na caneca, "Frente e verso | Estendida" — a
 //     estendida dá a volta inteira e substitui as duas;
-//   - tamanho e posição por lado (o ajuste do #1013, por lado);
+//   - tamanho e posição por lado (o ajuste do #1013, por lado), ou a
+//     POSIÇÃO LIVRE (29/09/2026, arteLivre.ts): a arte em qualquer lugar
+//     do painel inteiro do lado, arrastada direto na peça 3D, com alça ou
+//     pinça para o tamanho, botões e teclado; a prévia da peça vai para a
+//     ficha (orcamento_previa_<lado>), que não representa posição livre;
 //   - a cor da peça, se o produto tiver cor.
 //
 // Tudo vai para o `customization` do item (artesPorLado.customizacaoComArtes)
@@ -27,15 +31,21 @@ import { toast } from "@/components/Toast";
 import type { VisualTemplate, VisualTemplateSpec } from "@/services/studioVisualApi";
 import { pickImageBase64, uploadStudioMockup, fileToBase64Web } from "@/services/studioUploadApi";
 import { formaDaMiniaturaDoModelo } from "@/components/studio/mockupPorProduto/MiniaturaDoModelo";
-import { areaDoLadoNoModelo } from "@/components/studio/visualEngine/areasDaPeca";
+import { areaDoLadoNoModelo, areaParaPintar } from "@/components/studio/visualEngine/areasDaPeca";
+import { painelLivre } from "@/components/studio/visualEngine/painelDaPeca";
 import { coresDaPeca } from "@/components/studio/orcamentoVideo/pecaDoOrcamento";
 import { ESCALA_MIN, ESCALA_MAX } from "@/components/studio/orcamentoVideo/tamanhoDaArte";
 import {
   artesDoItem, customizacaoComArtes, motorDasArtes, ladosDaPeca, ladosEmUso, ajustarLado, ajusteDoLado,
-  comImagem, ROTULO_DO_LADO, DO_LADO,
+  comImagem, livreDoLado, comLivre, comPrevia, ROTULO_DO_LADO, DO_LADO,
   type ArtesDaPeca, type LadoDaArte,
 } from "@/components/studio/orcamentoVideo/artesPorLado";
-import { PalcoDaPeca, type VistaDoPalco } from "./PalcoDaPeca";
+import {
+  alvoDoToque, distanciaAoCentro, moverLivre, escalarLivre, girarLivre, centralizar, encaixarNoPainel,
+  escalaMaxima, livreDaArea, PASSO_DA_ROTACAO, ESCALA_LIVRE_MIN,
+  type AjusteLivre,
+} from "@/components/studio/orcamentoVideo/arteLivre";
+import { PalcoDaPeca, type VistaDoPalco, type ArrasteNoPainel, type ToqueNoPainel, type ApiDoPalco } from "./PalcoDaPeca";
 import { Botao, Rotulo, type Tema } from "./ui";
 
 const TIPOS_ACEITOS = "image/png,image/jpeg,image/webp";
@@ -75,9 +85,21 @@ export function EstudioDaPeca({ tema, cid, chave, customization, cfg, template, 
 
   const forma = template && specDoPalco ? formaDaMiniaturaDoModelo(template, specDoPalco) : null;
   const peca = forma === "caneca" || forma === "camiseta" ? forma : null;
+
+  // ── Posição livre (29/09/2026) ─────────────────────────────
+  // O lado ativo na posição livre, com arte, numa peça 3D: a arte vai
+  // para o painel inteiro e a lojista arruma direto na peça.
+  const urlAtiva = artes.imagens[ativoValido] || null;
+  const livreAtivo = tem3d && editavel && urlAtiva ? livreDoLado(artes, ativoValido) : null;
+  const areaAtiva = specDoPalco ? areaDoLadoNoModelo(specDoPalco, ativoValido) : null;
+  const painel = useMemo(() => (specDoPalco && areaAtiva ? painelLivre(specDoPalco, areaAtiva) : null), [specDoPalco, areaAtiva]);
+  const aspArte = useAspecto(urlAtiva);
+  const aspPainel = painel ? painel.aspecto : 1;
+  const editandoLivre = !!(livreAtivo && painel);
+
   const motor = useMemo(
-    () => motorDasArtes(cfg, customization, artes, specDoPalco, peca),
-    [cfg, customization, artes, specDoPalco, peca],
+    () => motorDasArtes(cfg, customization, artes, specDoPalco, peca, editandoLivre ? ativoValido : null),
+    [cfg, customization, artes, specDoPalco, peca, editandoLivre, ativoValido],
   );
   const cores = coresDaPeca(cfg);
 
@@ -85,23 +107,27 @@ export function EstudioDaPeca({ tema, cid, chave, customization, cfg, template, 
   // sobre o que está no item agora, não sobre o de quando começou.
   const custRef = useRef(customization);
   custRef.current = customization;
+  // O `artes` mais recente: o fim de um envio (ou de um arraste) não
+  // sobrescreve o que a lojista mudou nesse meio-tempo.
+  const artesRef = useRef(artes);
+  artesRef.current = artes;
   function mudar(novo: ArtesDaPeca) {
+    artesRef.current = novo;
     setArtes(novo);
     onMudar(customizacaoComArtes(cfg, custRef.current, novo));
   }
 
-  function virarPara(lado: LadoDaArte) {
+  function virarPara(lado: LadoDaArte, livre = !!livreDoLado(artesRef.current, lado)) {
     setAtivo(lado);
     const area = specDoPalco ? areaDoLadoNoModelo(specDoPalco, lado) : null;
-    // A estendida não tem "de frente": a peça continua girando.
-    setVista((v) => ({ area: lado === "middle" ? null : area, n: v.n + 1 }));
+    // A estendida não tem "de frente": a peça continua girando. Na posição
+    // livre ela para de frente para o meio da volta, para a lojista arrumar.
+    setVista((v) => ({ area: lado === "middle" && !livre ? null : area, n: v.n + 1 }));
   }
 
   // ── Envio da imagem ────────────────────────────────────────
   // O `artes` mais recente, para o fim de um envio não sobrescrever o que
   // a lojista mudou enquanto a imagem subia.
-  const artesRef = useRef(artes);
-  artesRef.current = artes;
   async function enviar(lado: LadoDaArte, img: Imagem) {
     if (!cid) return;
     setEnvios((e) => ({ ...e, [lado]: { estado: "enviando", img } }));
@@ -134,6 +160,151 @@ export function EstudioDaPeca({ tema, cid, chave, customization, cfg, template, 
     }
   }
 
+  // O arraste na peça: mexe só no estado local enquanto o dedo anda (a
+  // textura repinta), e grava no item quando solta.
+  const livreRef = useRef({ lado: ativoValido, a: livreAtivo, asp: aspArte, aspP: aspPainel });
+  livreRef.current = { lado: ativoValido, a: livreAtivo, asp: aspArte, aspP: aspPainel };
+  const gesto = useRef<{ modo: "mover" | "escala" | "pinca" | null; u0: number; v0: number; d0: number; a0: AjusteLivre | null; mexeu: boolean }>({ modo: null, u0: 0, v0: 0, d0: 1, a0: null, mexeu: false });
+  const dedos = useRef(new Map<number, ToqueNoPainel>());
+  function gravarLivre(a: AjusteLivre, noItem: boolean) {
+    const novo = comLivre(artesRef.current, livreRef.current.lado, a);
+    if (noItem) mudar(novo);
+    else { artesRef.current = novo; setArtes(novo); }
+  }
+  const arrasteLivre = useMemo<ArrasteNoPainel>(() => ({
+    tocar(p, e) {
+      const L = livreRef.current;
+      const g = gesto.current;
+      if (!L.a || !p) return false;
+      // Segundo dedo sobre a arte que o primeiro pegou: pinça.
+      if (dedos.current.size >= 1 && g.modo && g.a0) {
+        dedos.current.set(e.pointerId, p);
+        const [a, b] = Array.from(dedos.current.values());
+        if (a && b) Object.assign(g, { modo: "pinca", a0: L.a, d0: Math.max(1e-3, Math.hypot(a.u - b.u, (a.v - b.v) * L.aspP)) });
+        return true;
+      }
+      // A folga é de TELA: 22 px no mouse e 30 no dedo.
+      const px = (e as any).pointerType === "touch" ? 30 : 22;
+      const folga = p.pxPorU && p.pxPorU > 0 ? px / p.pxPorU : 0.03;
+      const alvo = alvoDoToque(L.a, L.asp, L.aspP, p.u, p.v, folga);
+      if (!alvo) return false;
+      dedos.current.set(e.pointerId, p);
+      if (alvo === "canto") Object.assign(g, { modo: "escala", a0: L.a, d0: Math.max(1e-3, distanciaAoCentro(L.a, L.aspP, p.u, p.v)), mexeu: false });
+      else Object.assign(g, { modo: "mover", a0: L.a, u0: p.u, v0: p.v, mexeu: false });
+      return true;
+    },
+    mover(p, e) {
+      const L = livreRef.current;
+      const g = gesto.current;
+      if (!p || !g.modo || !g.a0) return;
+      if (dedos.current.has(e.pointerId)) dedos.current.set(e.pointerId, p);
+      const teto = escalaMaxima(L.asp, L.aspP);
+      let novo: AjusteLivre;
+      if (g.modo === "pinca") {
+        const [a, b] = Array.from(dedos.current.values());
+        if (!a || !b) return;
+        novo = escalarLivre(g.a0, Math.hypot(a.u - b.u, (a.v - b.v) * L.aspP) / g.d0, teto);
+      } else if (g.modo === "escala") {
+        novo = escalarLivre(g.a0, distanciaAoCentro(g.a0, L.aspP, p.u, p.v) / g.d0, teto);
+      } else {
+        novo = moverLivre(g.a0, p.u - g.u0, p.v - g.v0);
+        // Gruda no meio do painel (a linha do peito, o centro da caneca).
+        if (Math.abs(novo.u - 0.5) < 0.012) novo = { ...novo, u: 0.5 };
+      }
+      g.mexeu = true;
+      gravarLivre(novo, false);
+    },
+    soltar(e) {
+      dedos.current.delete(e.pointerId);
+      const g = gesto.current;
+      if (dedos.current.size === 0) {
+        if (g.mexeu) mudar(artesRef.current);
+        Object.assign(g, { modo: null, a0: null, mexeu: false });
+        return false;
+      }
+      // Sobrou um dedo depois da pinça: volta a mover a partir dele.
+      const [a] = Array.from(dedos.current.values());
+      const atual = livreDoLado(artesRef.current, livreRef.current.lado);
+      if (a && atual) Object.assign(g, { modo: "mover", a0: atual, u0: a.u, v0: a.v });
+      return true;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), []);
+
+  // Botões e teclado da posição livre.
+  const livreAcoes = {
+    mover: (du: number, dv: number) => { if (livreAtivo) gravarLivre(moverLivre(livreAtivo, du, dv), true); },
+    escalar: (f: number) => { if (livreAtivo) gravarLivre(escalarLivre(livreAtivo, f, escalaMaxima(aspArte, aspPainel)), true); },
+    girar: (g: number) => { if (livreAtivo) gravarLivre(girarLivre(livreAtivo, g), true); },
+    centralizar: () => { if (livreAtivo) gravarLivre(centralizar(livreAtivo), true); },
+    encaixar: () => { if (livreAtivo) gravarLivre(encaixarNoPainel(aspArte, aspPainel), true); },
+  };
+  function teclaLivre(ev: { key: string; shiftKey?: boolean; preventDefault?: () => void }) {
+    if (!livreAtivo) return;
+    const p = ev.shiftKey ? 0.05 : 0.01;
+    const setas: Record<string, [number, number]> = { ArrowLeft: [-p, 0], ArrowRight: [p, 0], ArrowUp: [0, -p], ArrowDown: [0, p] };
+    let feito = true;
+    if (setas[ev.key]) livreAcoes.mover(setas[ev.key][0], setas[ev.key][1]);
+    else if (ev.key === "+" || ev.key === "=") livreAcoes.escalar(1.05);
+    else if (ev.key === "-" || ev.key === "_") livreAcoes.escalar(1 / 1.05);
+    else if (ev.key === "]") livreAcoes.girar(PASSO_DA_ROTACAO);
+    else if (ev.key === "[") livreAcoes.girar(-PASSO_DA_ROTACAO);
+    else feito = false;
+    if (feito) ev.preventDefault?.();
+  }
+
+  // Entrar na posição livre: a arte começa onde o encaixe da área a punha.
+  function liberar(lado: LadoDaArte) {
+    const area = specDoPalco ? areaDoLadoNoModelo(specDoPalco, lado) : null;
+    const pn = specDoPalco && area ? painelLivre(specDoPalco, area) : null;
+    if (!pn) return;
+    const au = (areaParaPintar(specDoPalco!.areas as any, area!, (specDoPalco as any).model?.kind === "glb") as any)?.uv || null;
+    const a = au ? livreDaArea(ajusteDoLado(artes, lado), au, pn.uv, aspArte, pn.aspecto) : encaixarNoPainel(aspArte, pn.aspecto);
+    mudar(comLivre(artes, lado, a));
+    virarPara(lado, true);
+  }
+
+  // ── A prévia da peça para a ficha ──────────────────────────
+  // A ficha em cm não representa posição livre: vai a foto da peça, de
+  // frente para o lado, sem as alças. Tirada 1,5 s depois da última mexida,
+  // só quando a peça está parada de frente para o lado.
+  const palcoApi = useRef<ApiDoPalco | null>(null);
+  const motorLimpo = useMemo(
+    () => (editandoLivre ? motorDasArtes(cfg, customization, artes, specDoPalco, peca) : motor),
+    [editandoLivre, motor, cfg, customization, artes, specDoPalco, peca],
+  );
+  const motorLimpoRef = useRef(motorLimpo);
+  motorLimpoRef.current = motorLimpo;
+  const semPrevia = !!(livreAtivo && !artes.previas?.[ativoValido]);
+  const deFrente = !!(vista.area && vista.area === areaAtiva);
+  const chaveDaPrevia = livreAtivo ? JSON.stringify([ativoValido, livreAtivo, urlAtiva, artes.cor]) : "";
+  useEffect(() => {
+    if (!semPrevia || !deFrente || !cid || Platform.OS !== "web") return;
+    const lado = ativoValido;
+    const chave = chaveDaPrevia;
+    let vivo = true;
+    const t = setTimeout(async () => {
+      const api = palcoApi.current;
+      if (!api || gesto.current.modo) return;
+      try {
+        const m = motorLimpoRef.current;
+        const png = await api.previa(m.values, m.opts);
+        const prefixo = "data:image/png;base64,";
+        const base64 = png && png.startsWith(prefixo) ? png.slice(prefixo.length) : null;
+        if (!base64 || !vivo) return;
+        const up = await uploadStudioMockup(cid, { content_base64: base64, content_type: "image/png", kind: "customization" });
+        const atual = livreDoLado(artesRef.current, lado);
+        const ainda = !!atual && JSON.stringify([lado, atual, artesRef.current.imagens[lado] || null, artesRef.current.cor]) === chave;
+        if (up?.url && ainda) mudar(comPrevia(artesRef.current, lado, up.url));
+      } catch {
+        // Sem prévia, a ficha diz "posição livre, veja a prévia" e a lojista
+        // confere pelo orçamento; nada a avisar aqui.
+      }
+    }, 1500);
+    return () => { vivo = false; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [semPrevia, deFrente, chaveDaPrevia, cid]);
+
   const alturaDoPalco = estreito ? 300 : 380;
   const comArte = emUso.some((l) => !!artes.imagens[l]);
   const temVerso = lados.faces.includes("back");
@@ -148,9 +319,17 @@ export function EstudioDaPeca({ tema, cid, chave, customization, cfg, template, 
           borderColor: escuro ? "#3B4A63" : t.ink5, backgroundColor: "#F1ECE4",
         }}
         testID="palco-da-peca"
+        {...(editandoLivre && Platform.OS === "web" ? ({
+          focusable: true,
+          accessibilityLabel: "Peça em 3D: arraste a arte; setas movem, mais e menos mudam o tamanho, colchetes giram",
+          onKeyDown: (e: any) => teclaLivre({ key: e.nativeEvent?.key ?? e.key, shiftKey: e.nativeEvent?.shiftKey ?? e.shiftKey, preventDefault: () => e.preventDefault?.() }),
+        } as any) : {})}
       >
         {tem3d && Platform.OS === "web" ? (
-          <PalcoDaPeca spec={specDoPalco!} values={motor.values} opts={motor.opts} altura={alturaDoPalco} vista={vista} backdrop="#FBF8F3" />
+          <PalcoDaPeca
+            spec={specDoPalco!} values={motor.values} opts={motor.opts} altura={alturaDoPalco} vista={vista} backdrop="#FBF8F3"
+            painel={editandoLivre ? painel!.uv : null} arraste={editandoLivre ? arrasteLivre : null} apiRef={palcoApi}
+          />
         ) : (
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 20, gap: 6 }}>
             <Icon name="box" size={26} color="#6B6257" />
@@ -286,7 +465,11 @@ export function EstudioDaPeca({ tema, cid, chave, customization, cfg, template, 
       </View>
 
       {editavel && artes.imagens[ativoValido] ? (
-        <AjusteDoLugar tema={tema} lado={ativoValido} artes={artes} onMudar={(n) => { mudar(n); virarPara(ativoValido); }} />
+        <AjusteDoLugar
+          tema={tema} lado={ativoValido} artes={artes} onMudar={(n) => { mudar(n); virarPara(ativoValido); }}
+          podeLivre={!!(tem3d && painel)} livre={livreAtivo} teto={escalaMaxima(aspArte, aspPainel)}
+          onLiberar={() => liberar(ativoValido)} acoes={livreAcoes}
+        />
       ) : null}
 
       {cores.length > 0 ? (
@@ -299,7 +482,7 @@ export function EstudioDaPeca({ tema, cid, chave, customization, cfg, template, 
                 <Pressable
                   key={c.hex}
                   disabled={!editavel}
-                  onPress={() => mudar({ ...artes, cor: c.hex })}
+                  onPress={() => mudar({ ...artes, cor: c.hex, previas: {} })}
                   accessibilityRole="radio"
                   accessibilityLabel={c.nome}
                   accessibilityState={{ checked: sel, disabled: !editavel }}
@@ -482,13 +665,53 @@ function Xadrez({ altura, children }: { altura: number; children?: React.ReactNo
   );
 }
 
+/**
+ * Altura ÷ largura da imagem (1 até saber). A posição livre usa para a
+ * caixa da arte, o "Encaixar no painel" e o teto do tamanho.
+ */
+function useAspecto(url: string | null): number {
+  const [asp, setAsp] = useState<{ url: string | null; a: number }>({ url: null, a: 1 });
+  useEffect(() => {
+    if (!url) return;
+    let vivo = true;
+    try {
+      const getSize = (Image as any).getSize;
+      if (typeof getSize === "function") {
+        getSize(url, (w: number, h: number) => { if (vivo && w > 0 && h > 0) setAsp({ url, a: h / w }); }, () => {});
+      }
+    } catch {
+      // Sem medida, vale 1 (quadrada): só a caixa do toque fica aproximada.
+    }
+    return () => { vivo = false; };
+  }, [url]);
+  return asp.url === url ? asp.a : 1;
+}
+
+type AcoesLivres = {
+  mover: (du: number, dv: number) => void;
+  escalar: (f: number) => void;
+  girar: (graus: number) => void;
+  centralizar: () => void;
+  encaixar: () => void;
+};
+
 // ── Tamanho e posição de um lugar ────────────────────────────
-function AjusteDoLugar({ tema, lado, artes, onMudar }: { tema: Tema; lado: LadoDaArte; artes: ArtesDaPeca; onMudar: (a: ArtesDaPeca) => void }) {
+// Dois modos: na ÁREA de impressão (o encaixe do #1013, com margem) ou
+// LIVRE na peça (29/09/2026): a arte em qualquer lugar do painel inteiro,
+// arrastada direto na prévia 3D. Nada de centímetros na tela.
+function AjusteDoLugar({
+  tema, lado, artes, onMudar, podeLivre, livre, teto, onLiberar, acoes,
+}: {
+  tema: Tema; lado: LadoDaArte; artes: ArtesDaPeca; onMudar: (a: ArtesDaPeca) => void;
+  podeLivre: boolean; livre: AjusteLivre | null; teto: number; onLiberar: () => void; acoes: AcoesLivres;
+}) {
   const { t, estreito } = tema;
   const aj = ajusteDoLado(artes, lado);
   const auto = !artes.ajustes[lado];
-  const lado2 = estreito ? 44 : 36;
-  const quadrado = (icone: string, rotulo: string, f: () => void, off = false, testID?: string) => (
+  // Na posição livre os alvos são sempre de 44 px (arrastar é o principal,
+  // os botões são a alternativa de quem não arrasta).
+  const lado2 = estreito || livre ? 44 : 36;
+  const quadrado = (icone: string | null, rotulo: string, f: () => void, off = false, testID?: string, glifo?: string) => (
     <Pressable
       key={rotulo}
       onPress={off ? undefined : f}
@@ -496,12 +719,87 @@ function AjusteDoLugar({ tema, lado, artes, onMudar }: { tema: Tema; lado: LadoD
       accessibilityRole="button"
       accessibilityLabel={rotulo}
       testID={testID}
-      style={{ width: lado2, height: lado2, borderRadius: 10, borderWidth: 1.5, borderColor: t.ink5, backgroundColor: t.paperCardElev, alignItems: "center", justifyContent: "center", opacity: off ? 0.45 : 1 }}
+      style={{ minWidth: lado2, height: lado2, paddingHorizontal: glifo ? 8 : 0, borderRadius: 10, borderWidth: 1.5, borderColor: t.ink5, backgroundColor: t.paperCardElev, alignItems: "center", justifyContent: "center", opacity: off ? 0.45 : 1 }}
     >
-      <Icon name={icone as any} size={15} color={t.ink} />
+      {icone ? <Icon name={icone as any} size={15} color={t.ink} /> : <Text style={{ fontSize: 13, fontWeight: "800", color: t.ink }}>{glifo}</Text>}
+    </Pressable>
+  );
+  const texto = (rotulo: string, f: () => void, testID: string, destaque = false) => (
+    <Pressable
+      key={testID}
+      onPress={f}
+      accessibilityRole="button"
+      testID={testID}
+      style={{ minHeight: 44, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1.5, borderColor: destaque ? t.primary : t.ink5, backgroundColor: t.paperCardElev, justifyContent: "center" }}
+    >
+      <Text style={{ fontSize: 12.5, fontWeight: "700", color: destaque ? t.primary : t.ink }}>{rotulo}</Text>
     </Pressable>
   );
   const mover = (eixo: "dx" | "dy", passo: number) => onMudar(ajustarLado(artes, lado, { [eixo]: Math.round((aj[eixo] + passo) * 100) / 100 }));
+
+  const modos = podeLivre ? (
+    <View style={{ flexDirection: "row", backgroundColor: t.bgSoft, borderWidth: 1, borderColor: t.ink5, borderRadius: 12, padding: 3, gap: 2, alignSelf: "flex-start" }} accessibilityRole={"radiogroup" as any} accessibilityLabel="Onde a arte fica">
+      {([[false, "Na área de impressão"], [true, "Livre na peça"]] as const).map(([ehLivre, rotulo]) => {
+        const sel = !!livre === ehLivre;
+        return (
+          <Pressable
+            key={rotulo}
+            onPress={() => { if (sel) return; if (ehLivre) onLiberar(); else onMudar(ajustarLado(artes, lado, null)); }}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: sel }}
+            testID={ehLivre ? "modo-livre" : "modo-area"}
+            style={{ minHeight: 40, paddingHorizontal: 12, borderRadius: 9, justifyContent: "center", backgroundColor: sel ? t.paperCardElev : "transparent" }}
+          >
+            <Text style={{ fontSize: 12.5, fontWeight: "700", color: sel ? t.ink : t.ink2 }}>{rotulo}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  ) : null;
+
+  if (livre) {
+    const passo = 0.02;
+    return (
+      <View style={{ borderWidth: 1, borderColor: t.ink5, borderRadius: 12, backgroundColor: t.paperCard, padding: estreito ? 10 : 12, gap: 10 }} testID="ajuste-do-lugar">
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <Text style={{ fontSize: 13, fontWeight: "800", color: t.ink }}>Tamanho e posição · {ROTULO_DO_LADO[lado]}</Text>
+          <Text style={{ fontSize: 12, color: t.ink3, flexShrink: 1 }}>Livre: a arte vai a qualquer lugar da peça, até a borda.</Text>
+        </View>
+        {modos}
+        <Text style={{ fontSize: 12, color: t.ink3 }} testID="dica-livre">
+          {Platform.OS === "web"
+            ? "Arraste a arte na peça; fora dela, a peça gira. Puxe um canto (ou use dois dedos) para o tamanho. No teclado: setas, + e −, [ e ]."
+            : "Use os botões para posicionar a arte."}
+        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Rotulo t={t}>Tamanho</Rotulo>
+            {quadrado("minus", "Diminuir a arte", () => acoes.escalar(1 / 1.1), livre.escala <= ESCALA_LIVRE_MIN, "livre-menor")}
+            <Text style={{ minWidth: 44, textAlign: "center", fontWeight: "800", fontSize: 13, color: t.ink }} testID="livre-escala">{Math.round(livre.escala * 100)}%</Text>
+            {quadrado("plus", "Aumentar a arte", () => acoes.escalar(1.1), livre.escala >= teto, "livre-maior")}
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Rotulo t={t}>Posição</Rotulo>
+            {quadrado("arrow_left", "Mover a arte para a esquerda", () => acoes.mover(-passo, 0), false, "livre-esquerda")}
+            {quadrado("chevron_up", "Mover a arte para cima", () => acoes.mover(0, -passo), false, "livre-cima")}
+            {quadrado("chevron_down", "Mover a arte para baixo", () => acoes.mover(0, passo), false, "livre-baixo")}
+            {quadrado("arrow_right", "Mover a arte para a direita", () => acoes.mover(passo, 0), false, "livre-direita")}
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Rotulo t={t}>Girar</Rotulo>
+            {quadrado(null, `Girar a arte ${PASSO_DA_ROTACAO}° para a esquerda`, () => acoes.girar(-PASSO_DA_ROTACAO), false, "livre-girar-esq", `↺ ${PASSO_DA_ROTACAO}°`)}
+            {quadrado(null, `Girar a arte ${PASSO_DA_ROTACAO}° para a direita`, () => acoes.girar(PASSO_DA_ROTACAO), false, "livre-girar-dir", `↻ ${PASSO_DA_ROTACAO}°`)}
+            {livre.rotacao ? <Text style={{ fontSize: 12, color: t.ink3 }} testID="livre-rotacao">{String(livre.rotacao).replace(".", ",")}°</Text> : null}
+          </View>
+        </View>
+        <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+          {texto("Centralizar", acoes.centralizar, "livre-centralizar")}
+          {texto("Encaixar no painel", acoes.encaixar, "livre-encaixar", true)}
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={{ borderWidth: 1, borderColor: t.ink5, borderRadius: 12, backgroundColor: t.paperCard, padding: estreito ? 10 : 12, gap: 8 }} testID="ajuste-do-lugar">
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -513,6 +811,7 @@ function AjusteDoLugar({ tema, lado, artes, onMudar }: { tema: Tema; lado: LadoD
           </Pressable>
         ) : null}
       </View>
+      {modos}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <Rotulo t={t}>Tamanho</Rotulo>
