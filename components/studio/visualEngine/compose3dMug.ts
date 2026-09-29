@@ -115,6 +115,12 @@ export type Mug3DOptions = {
    * Só vale na criação do viewer; `update` e `trocarPeca` ignoram.
    */
   cenario?: Cenario;
+  /**
+   * Pixel ratio fixo do renderer. Sem ele, o do aparelho (até 2). A render
+   * de aprovação passa 1: o canvas fora da tela já tem o tamanho do vídeo,
+   * e o dpr 2 quadruplicava o trabalho por quadro (28/09/2026).
+   */
+  pixelRatio?: number;
 };
 
 export type Cenario = "estudio" | "gradiente" | "nenhum";
@@ -1092,6 +1098,11 @@ function descartarPeca(peca: Peca) {
   try { if (peca.texture && peca.texture.dispose) peca.texture.dispose(); } catch (_e) {}
 }
 
+/** Uma volta no laço de eventos: a página pinta entre dois passos pesados. */
+function cederAVez(): Promise<void> {
+  return new Promise((r) => setTimeout(r, 0));
+}
+
 function canvasDaTextura(spec: VisualTemplateSpec, glb: GlbModel | null): HTMLCanvasElement {
   const cv = document.createElement("canvas");
   cv.width = glb ? glb.texture.w : (spec.model?.texture?.w || 2048);
@@ -1134,6 +1145,7 @@ export async function createModelViewer(
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   if (cenario === "nenhum") renderer.setClearColor(0x000000, 0);
   scene.environment = buildEnvironment(THREE, renderer);
+  await cederAVez();
 
   // Tres pontos: principal quente (projeta a sombra), preenchimento frio
   // e contraluz para descolar a peca do fundo. O ambiente vem do env map.
@@ -1222,7 +1234,7 @@ export async function createModelViewer(
     const w = canvas.clientWidth || canvas.width || 320;
     const h = canvas.clientHeight || Math.round(w * 0.78);
     renderer.setSize(w, h, false);
-    renderer.setPixelRatio(Math.min((typeof window !== "undefined" && window.devicePixelRatio) || 1, 2));
+    renderer.setPixelRatio(o.pixelRatio || Math.min((typeof window !== "undefined" && window.devicePixelRatio) || 1, 2));
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     posicionarCameraDoGlb(w / h);
@@ -1500,6 +1512,13 @@ export async function createModelViewer(
 
   ajustarCenaAPeca();
   resize();
+  // Abertura em pedaços (28/09/2026): montar a cena, compilar os shaders
+  // e o primeiro quadro (textura + sombra) eram uma tarefa só de ~0,5 s,
+  // com a página parada ("Gerar do pedido" no modal de aprovação). Entre
+  // um passo e outro a página respira.
+  await cederAVez();
+  try { renderer.compile(scene, camera); } catch (_e) { /* o primeiro render compila */ }
+  await cederAVez();
   await update(values);
   loop();
 

@@ -958,15 +958,60 @@ function drawAreaNoQuad(
 }
 
 // ── Export HD — mesmo motor, resolução de impressão ──────────
+/** A vista composta em HD, num canvas (sem codificar). Null fora do navegador. */
+export async function exportCanvas(
+  view: VisualView,
+  values: ComposeValues,
+  opts: ComposeOptions = {},
+  pixelWidth = 2048
+): Promise<HTMLCanvasElement | null> {
+  if (typeof document === "undefined") return null;
+  const canvas = document.createElement("canvas");
+  await composeView(canvas, view, values, { ...opts, showAreas: false, pixelWidth });
+  return canvas;
+}
+
+/**
+ * O canvas num arquivo, com `toBlob` — assíncrono: a codificação não
+ * prende a página, ao contrário do `toDataURL` (28/09/2026: o PNG de
+ * 2048 px travava a aba por quase 1 s e saía com 5 a 11 MB). JPEG vai
+ * sobre branco: o que for transparente não vira preto. Null = canvas com
+ * imagem sem CORS (não dá para ler) ou navegador sem codificador.
+ */
+export function canvasParaBlob(
+  canvas: HTMLCanvasElement,
+  tipo: "image/png" | "image/jpeg" = "image/png",
+  qualidade = 0.9
+): Promise<Blob | null> {
+  let fonte = canvas;
+  if (tipo === "image/jpeg" && typeof document !== "undefined") {
+    fonte = document.createElement("canvas");
+    fonte.width = canvas.width;
+    fonte.height = canvas.height;
+    const ctx = fonte.getContext("2d");
+    if (!ctx) return Promise.resolve(null);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, fonte.width, fonte.height);
+    ctx.drawImage(canvas, 0, 0);
+  }
+  return new Promise((resolve) => {
+    try {
+      fonte.toBlob((b) => resolve(b && b.size ? b : null), tipo, qualidade);
+    } catch (_e) {
+      // Canvas tainted (imagem sem CORS) — caller mostra erro amigável
+      resolve(null);
+    }
+  });
+}
+
 export async function exportPng(
   view: VisualView,
   values: ComposeValues,
   opts: ComposeOptions = {},
   pixelWidth = 2048
 ): Promise<string | null> {
-  if (typeof document === "undefined") return null;
-  const canvas = document.createElement("canvas");
-  await composeView(canvas, view, values, { ...opts, showAreas: false, pixelWidth });
+  const canvas = await exportCanvas(view, values, opts, pixelWidth);
+  if (!canvas) return null;
   try {
     return canvas.toDataURL("image/png");
   } catch (_e) {

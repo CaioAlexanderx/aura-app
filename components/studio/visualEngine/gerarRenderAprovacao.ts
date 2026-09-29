@@ -21,11 +21,20 @@
 // mesma spec e pelo mesmo exportPng que a vitrine usa no preview. Os
 // valores passam por valoresDoMotor, como na vitrine, para a cor e a
 // fonte da arte aprovada serem as que o cliente viu.
+//
+// 28/09/2026 — Travamento do "Gerar do pedido" (QA): o PNG de 2048 px
+// saía com `toDataURL` (síncrono, até ~0,7 s por imagem com a aba parada),
+// frente e verso eram codificados, decodificados e codificados de novo
+// para ficar lado a lado, e o arquivo chegava a 11 MB. Agora as vistas
+// ficam em canvas até o fim, o arquivo é um JPEG 0,9 feito com `toBlob`
+// (assíncrono) e o base64 sai pelo FileReader. O 3D grava no canvas fora
+// da tela com pixelRatio 1 (1280 × 1000, o tamanho que o vídeo sempre
+// quis ter). `aoAvancar` diz a etapa para o botão mostrar o progresso.
 // ============================================================
 import { studioApi, type StudioOrderItem } from "@/services/studioApi";
 import { studioVisualApi, type VisualView } from "@/services/studioVisualApi";
 import { uploadStudioMockup } from "@/services/studioUploadApi";
-import { exportPng } from "./compose2d";
+import { canvasParaBlob, exportCanvas } from "./compose2d";
 import { valoresDoMotor, valoresComArte, type ValoresDoMotor } from "@/components/studio/storefront/valoresDoMotor";
 import { areaParaLado } from "./areasDaPeca";
 import type { CustomizationConfig } from "@/services/studioApi";
@@ -45,13 +54,26 @@ export type RenderGerado = {
   isVideo: boolean;
 };
 
+/** Etapas que o botão do modal mostra enquanto gera. */
+export type EtapaDoRender = "pedido" | "mockup" | "video" | "arquivo" | "envio";
+export type AoAvancar = (etapa: EtapaDoRender) => void;
+
+/** Formato do mockup estático: JPEG 0,9 — nítido na prova e bem menor que o PNG. */
+const TIPO_DO_MOCKUP = "image/jpeg" as const;
+const QUALIDADE_DO_MOCKUP = 0.9;
+
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
-    reader.onerror = () => reject(new Error("Erro ao ler o vídeo gerado"));
+    reader.onerror = () => reject(new Error("Erro ao ler o arquivo gerado"));
     reader.readAsDataURL(blob);
   });
+}
+
+/** Cede a vez à página: o spinner e o texto da etapa pintam entre um passo pesado e outro. */
+function cederAVez(): Promise<void> {
+  return new Promise((r) => setTimeout(r, 0));
 }
 
 // ── Formatação da arte (28/09/2026) ─────────────────────────
@@ -69,50 +91,55 @@ function temVerso(cfg: CustomizationConfig | null, customizacao: Record<string, 
   return m.arte.imagens.length || m.arte.textos.length ? m : null;
 }
 
-/** Duas imagens (data URL) lado a lado, na mesma altura, num PNG só. */
-async function ladoALado(urls: string[]): Promise<string | null> {
-  if (urls.length < 2 || typeof document === "undefined") return urls[0] || null;
-  const imgs = await Promise.all(urls.map((u) => new Promise<HTMLImageElement | null>((res) => {
-    const im = new Image();
-    im.onload = () => res(im);
-    im.onerror = () => res(null);
-    im.src = u;
-  })));
-  if (imgs.some((i) => !i)) return urls[0];
-  const h = Math.max(...imgs.map((i) => i!.height));
-  const larguras = imgs.map((i) => Math.round((i!.width * h) / i!.height));
+/** Dois canvas lado a lado, na mesma altura, num canvas só (sem codificar no meio). */
+function ladoALado(telas: HTMLCanvasElement[]): HTMLCanvasElement {
+  if (telas.length < 2 || typeof document === "undefined") return telas[0];
+  const h = Math.max(...telas.map((t) => t.height));
+  const larguras = telas.map((t) => Math.round((t.width * h) / t.height));
   const cv = document.createElement("canvas");
   cv.width = larguras.reduce((a, b) => a + b, 0);
   cv.height = h;
   const ctx = cv.getContext("2d");
-  if (!ctx) return urls[0];
+  if (!ctx) return telas[0];
   let x = 0;
-  imgs.forEach((im, i) => { ctx.drawImage(im!, x, 0, larguras[i], h); x += larguras[i]; });
-  try { return cv.toDataURL("image/png"); } catch { return urls[0]; }
+  telas.forEach((t, i) => { ctx.drawImage(t, x, 0, larguras[i], h); x += larguras[i]; });
+  return cv;
 }
 
-/** Frente (e verso, se tiver arte) de uma lista de vistas 2D, num PNG só. */
-async function pngDasVistas(
+/** Frente (e verso, se tiver arte) de uma lista de vistas 2D, num canvas só. */
+async function telaDasVistas(
   vistas: VisualView[],
   cfg: CustomizationConfig | null,
   customizacao: Record<string, any>,
   peca: string | null,
-): Promise<{ png: string | null; vista: VisualView }> {
+): Promise<{ tela: HTMLCanvasElement | null; vista: VisualView }> {
   const frente = valoresDoMotor(cfg, customizacao, "front", { peca });
   const vista = vistas[0];
-  const pngFrente = await exportPng(vista, valoresComArte(frente), { artColor: frente.artColor, font: frente.font }, 2048);
+  const telaFrente = await exportCanvas(vista, valoresComArte(frente), { artColor: frente.artColor, font: frente.font }, 2048);
   const verso = temVerso(cfg, customizacao);
   const vistaDoVerso = vistas.find((v) => v.id === "back") || (vistas[1] && vistas[1].id !== "middle" ? vistas[1] : null);
-  if (!pngFrente || !verso || !vistaDoVerso) return { png: pngFrente, vista };
+  if (!telaFrente || !verso || !vistaDoVerso) return { tela: telaFrente, vista };
+  await cederAVez();
   const versoCfg = valoresDoMotor(cfg, customizacao, "back", { peca });
-  const pngVerso = await exportPng(vistaDoVerso, valoresComArte(versoCfg), { artColor: versoCfg.artColor, font: versoCfg.font }, 2048);
-  return { png: pngVerso ? await ladoALado([pngFrente, pngVerso]) : pngFrente, vista };
+  const telaVerso = await exportCanvas(vistaDoVerso, valoresComArte(versoCfg), { artColor: versoCfg.artColor, font: versoCfg.font }, 2048);
+  return { tela: telaVerso ? ladoALado([telaFrente, telaVerso]) : telaFrente, vista };
+}
+
+/** O canvas do mockup em JPEG, já em base64 — tudo assíncrono. Null = canvas sem CORS. */
+async function arquivoDoMockup(tela: HTMLCanvasElement | null, aoAvancar?: AoAvancar): Promise<string | null> {
+  if (!tela) return null;
+  aoAvancar?.("arquivo");
+  await cederAVez();
+  const blob = await canvasParaBlob(tela, TIPO_DO_MOCKUP, QUALIDADE_DO_MOCKUP);
+  return blob ? blobToBase64(blob) : null;
 }
 
 export async function gerarRenderDoPedido(
   companyId: string,
-  orderId: string
+  orderId: string,
+  aoAvancar?: AoAvancar
 ): Promise<RenderGerado> {
+  aoAvancar?.("pedido");
   const detail = await studioApi.getOrder(companyId, orderId);
   const items: StudioOrderItem[] = detail?.items || [];
 
@@ -131,13 +158,17 @@ export async function gerarRenderDoPedido(
     const spec = cfg ? await specDaFotoDoProdutoMedida(cfg) : null;
     if (spec && spec.views && spec.views.length) {
       const customizacao: Record<string, any> = item.customization || {};
-      const { png, vista } = await pngDasVistas(spec.views, cfg, customizacao, null);
-      if (!png) {
+      aoAvancar?.("mockup");
+      await cederAVez();
+      const { tela, vista } = await telaDasVistas(spec.views, cfg, customizacao, null);
+      const b64 = await arquivoDoMockup(tela, aoAvancar);
+      if (!b64) {
         throw new Error("Não foi possível gerar o render (foto ou arte sem CORS?). Envie o mockup manualmente.");
       }
+      aoAvancar?.("envio");
       const enviado = await uploadStudioMockup(companyId, {
-        content_base64: png.split(",")[1],
-        content_type: "image/png",
+        content_base64: b64,
+        content_type: TIPO_DO_MOCKUP,
         kind: "approval",
       });
       if (!enviado?.url) throw new Error("Falha no upload do render");
@@ -147,7 +178,7 @@ export async function gerarRenderDoPedido(
         kind: "hd_2d",
         customization: customizacao,
         file_url: enviado.url,
-        content_type: "image/png",
+        content_type: TIPO_DO_MOCKUP,
         digital_order_item_id: item.id || null,
       });
       return {
@@ -188,7 +219,15 @@ export async function gerarRenderDoPedido(
     if (areaFrente) porArea[areaFrente] = frente3d.arte;
     if (areaVerso && areaVerso !== areaFrente) porArea[areaVerso] = valoresDoMotor(cfgT, customization, "back", { peca: pecaT }).arte;
     const valores3d = cfgT ? { ...frente3d.values, __artePorArea: porArea } : customization;
-    const viewer = await createMugViewer(cv, template.spec, valores3d, cfgT ? { artColor: frente3d.artColor, font: frente3d.font } : {});
+    aoAvancar?.("video");
+    await cederAVez();
+    // pixelRatio 1: o canvas fora da tela já tem 1280 × 1000; com o dpr 2
+    // de um notebook ele virava 2560 × 2000 (4× o trabalho por quadro) e o
+    // gravador perdia quadros.
+    const viewer = await createMugViewer(cv, template.spec, valores3d, {
+      ...(cfgT ? { artColor: frente3d.artColor, font: frente3d.font } : {}),
+      pixelRatio: 1,
+    });
     let blob: Blob | null = null;
     try {
       blob = await viewer.recordTurntable(3600);
@@ -199,7 +238,9 @@ export async function gerarRenderDoPedido(
       throw new Error("Navegador sem suporte à gravação de vídeo — envie um snapshot ou mockup manual.");
     }
     const contentType = blob.type && blob.type.indexOf("video/") === 0 ? blob.type.split(";")[0] : MIME_DO_VIDEO;
+    aoAvancar?.("arquivo");
     const b64 = await blobToBase64(blob);
+    aoAvancar?.("envio");
     const up = await uploadStudioMockup(companyId, {
       content_base64: b64,
       content_type: contentType,
@@ -234,16 +275,20 @@ export async function gerarRenderDoPedido(
 
   // Verso: quando a cliente personalizou o verso e o template tem a vista,
   // frente e verso saem lado a lado num PNG só (28/09/2026).
-  const { png: dataUrl, vista: view } = cfgT
-    ? await pngDasVistas(template.spec.views as VisualView[], cfgT, customization, pecaT)
-    : { png: await exportPng(template.spec.views[0], customization, {}, 2048), vista: template.spec.views[0] as VisualView };
-  if (!dataUrl) {
+  aoAvancar?.("mockup");
+  await cederAVez();
+  const { tela, vista: view } = cfgT
+    ? await telaDasVistas(template.spec.views as VisualView[], cfgT, customization, pecaT)
+    : { tela: await exportCanvas(template.spec.views[0], customization, {}, 2048), vista: template.spec.views[0] as VisualView };
+  const b64 = await arquivoDoMockup(tela, aoAvancar);
+  if (!b64) {
     throw new Error("Não foi possível gerar o render (imagem da arte sem CORS?). Envie o mockup manualmente.");
   }
 
+  aoAvancar?.("envio");
   const up = await uploadStudioMockup(companyId, {
-    content_base64: dataUrl.split(",")[1],
-    content_type: "image/png",
+    content_base64: b64,
+    content_type: TIPO_DO_MOCKUP,
     kind: "approval",
   });
   if (!up?.url) throw new Error("Falha no upload do render");
@@ -254,7 +299,7 @@ export async function gerarRenderDoPedido(
     kind: "hd_2d",
     customization,
     file_url: up.url,
-    content_type: "image/png",
+    content_type: TIPO_DO_MOCKUP,
     digital_order_item_id: item.id || null,
   });
 
