@@ -49,6 +49,8 @@ import { useAuthStore } from "@/stores/auth";
 import { OrcamentoVideoModal } from "@/components/studio/orcamentoVideo/OrcamentoVideoModal";
 import { baixarVideoDoOrcamento } from "@/components/studio/orcamentoVideo/videoDoOrcamentoApi";
 import { baixarArquivo, nomeDoArquivo } from "@/components/studio/orcamentoVideo/envioNoWhatsApp";
+import { PedidoDeAjusteModal } from "@/components/studio/orcamentoVideo/PedidoDeAjusteModal";
+import { temAjustePendente, rotuloDaVersao, COR_DO_AJUSTE } from "@/components/studio/orcamentoVideo/ajusteDoOrcamento";
 import { copyText } from "@/utils/clipboard";
 import { StudioScreen } from "@/components/studio/StudioScreen";
 import { StudioBreadcrumb } from "@/components/studio/StudioBreadcrumb";
@@ -61,6 +63,7 @@ import {
   type StudioQuoteStatus,
   type StudioQuoteCreated,
   type PricingBreakdown,
+  type AjusteDoOrcamento,
 } from "@/services/studioApi";
 
 // Item de linha local: estende StudioQuoteItem com image_url — cosmético
@@ -145,6 +148,14 @@ function StatusPill({ status }: { status: StudioQuoteStatus }) {
   return (
     <View style={[pill.wrap, { backgroundColor: c.bg }]}>
       <Text style={[pill.txt, { color: c.text }]}>{STATUS_LABEL[status] || status}</Text>
+    </View>
+  );
+}
+/** Selo "Ajuste pedido": o cliente pediu mudança e ainda não foi reenviado. */
+function SeloAjuste() {
+  return (
+    <View style={[pill.wrap, { backgroundColor: COR_DO_AJUSTE.bg }]} testID="selo-ajuste">
+      <Text style={[pill.txt, { color: COR_DO_AJUSTE.text }]}>Ajuste pedido</Text>
     </View>
   );
 }
@@ -434,6 +445,9 @@ export default function OrcamentoEditorScreen() {
   // orçamento: o editor sempre roda com UMA empresa escolhida (no
   // consolidado não há companyId e a tela nem carrega).
   const [videoModal, setVideoModal] = useState(false);
+  // "Cliente pediu ajuste" (28/09/2026, backend 362): histórico interno.
+  const [ajusteModal, setAjusteModal] = useState(false);
+  const [ajustes, setAjustes] = useState<AjusteDoOrcamento[]>([]);
   const nomeDaLoja = useAuthStore((st) => st.company?.name) || "";
   const logoDaLoja = useAuthStore((st) => st.companyLogo);
 
@@ -446,8 +460,9 @@ export default function OrcamentoEditorScreen() {
     if (!companyId) { setLoading(false); return; }
     setLoading(true);
     studioApi.getQuote(companyId, id!)
-      .then(({ quote: q, items: its }) => {
+      .then(({ quote: q, items: its, ajustes: hist }) => {
         setQuote(q);
+        setAjustes(hist || []);
         setCustomerName(q.customer_name || "");
         setCustomerPhone(q.customer_phone || "");
         setValidityDays(String(q.validity_days || 7));
@@ -634,6 +649,22 @@ export default function OrcamentoEditorScreen() {
     );
   }
 
+  // O cliente pediu mudança pelo WhatsApp: registra (interno) e o
+  // orçamento volta a draft para editar peça, arte, cor, valores e condições.
+  async function registrarAjuste(texto: string): Promise<boolean> {
+    if (!companyId || !quote) return false;
+    try {
+      const r = await studioApi.registrarAjusteDoOrcamento(companyId, quote.id, texto);
+      setQuote((antes) => ({ ...(antes || {}), ...r.quote } as StudioQuote));
+      setAjustes((antes) => [r.ajuste, ...antes]);
+      toast.success("Ajuste registrado. O orçamento voltou a ser editável.");
+      return true;
+    } catch (e: any) {
+      toast.error(e?.data?.error || e?.message || "Não deu para registrar o ajuste");
+      return false;
+    }
+  }
+
   async function handleManterVideo() {
     if (!companyId || !quote) return;
     try {
@@ -659,6 +690,8 @@ export default function OrcamentoEditorScreen() {
 
   const videoGuardado = !!(quote?.video_key || quote?.tem_video)
     && !!quote?.video_expira_em && new Date(quote.video_expira_em) > new Date();
+  const ajustePendente = temAjustePendente(quote);
+  const versaoLegivel = rotuloDaVersao(quote?.versao);
   const CANAL_LEGIVEL: Record<string, string> = {
     compartilhar: "pelo compartilhamento do WhatsApp",
     whatsapp: "pela conversa do WhatsApp",
@@ -723,7 +756,8 @@ export default function OrcamentoEditorScreen() {
           <Text style={s.h1} numberOfLines={1}>
             {isNew ? "Novo orçamento" : (customerName || "Orçamento")}
           </Text>
-          {quote && <StatusPill status={quote.status} />}
+          {/* Com ajuste pendente, o selo toma o lugar do "Rascunho". */}
+          {ajustePendente ? <SeloAjuste /> : quote ? <StatusPill status={quote.status} /> : null}
         </View>
 
         {error ? (
@@ -853,7 +887,9 @@ export default function OrcamentoEditorScreen() {
           <View style={s.section}>
             <Text style={s.sectionLabel}>Orçamento em vídeo</Text>
             {quote.canal_envio && quote.sent_at ? (
-              <Text style={s.tlValue}>Enviado {dataHora(quote.sent_at)} {CANAL_LEGIVEL[quote.canal_envio] || ""}.</Text>
+              <Text style={s.tlValue}>
+                {versaoLegivel ? `${versaoLegivel} · ` : ""}Enviado {dataHora(quote.sent_at)} {CANAL_LEGIVEL[quote.canal_envio] || ""}.
+              </Text>
             ) : null}
             {videoGuardado ? (
               <>
@@ -876,9 +912,28 @@ export default function OrcamentoEditorScreen() {
             ) : null}
             {quote.status === "sent" && !quote.token ? (
               <Text style={s.trackValidade}>
-                Em aberto: quando o cliente topar pelo WhatsApp, toque em Aprovar. Se não seguir, Fechar.
+                Em aberto: quando o cliente topar pelo WhatsApp, toque em Aprovar. Se pedir mudança,
+                Cliente pediu ajuste. Se não seguir, Fechar.
               </Text>
             ) : null}
+            {ajustePendente ? (
+              <Text style={s.trackValidade}>
+                Ajuste pedido: edite o orçamento e reenvie em vídeo. Ele vai como versão {(Number(quote.versao) || 1) + 1}.
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* Histórico de ajustes: interno, do mais novo ao mais antigo. */}
+        {ajustes.length > 0 ? (
+          <View style={s.section} testID="historico-ajustes">
+            <Text style={s.sectionLabel}>Histórico de ajustes</Text>
+            {ajustes.map((a) => (
+              <View key={a.id} style={s.trackNote}>
+                <Text style={s.trackNoteLabel}>Versão {a.versao} · {dataHora(a.created_at)}</Text>
+                <Text style={s.trackNoteTxt}>{a.texto}</Text>
+              </View>
+            ))}
           </View>
         ) : null}
 
@@ -1078,6 +1133,15 @@ export default function OrcamentoEditorScreen() {
                 <Icon name="x" size={16} color={t.ink2} />
                 <Text style={[s.btnPrimaryTxt, { color: t.ink2 }]}>Fechar</Text>
               </Pressable>
+              <Pressable
+                style={[s.btnAjuste, saving && s.btnDisabled]}
+                onPress={() => setAjusteModal(true)}
+                disabled={saving}
+                accessibilityLabel="Cliente pediu ajuste"
+              >
+                <Icon name="edit" size={16} color={COR_DO_AJUSTE.text} />
+                <Text style={[s.btnPrimaryTxt, { color: COR_DO_AJUSTE.text }]}>Cliente pediu ajuste</Text>
+              </Pressable>
             </View>
           )}
 
@@ -1110,6 +1174,16 @@ export default function OrcamentoEditorScreen() {
             if (q.validity_days) setValidityDays(String(q.validity_days));
             if (novos) setItems((antes) => antes.map((it, i) => ({ ...it, customization: novos[i]?.customization ?? it.customization })));
           }}
+        />
+      ) : null}
+
+      {quote ? (
+        <PedidoDeAjusteModal
+          visible={ajusteModal}
+          t={t}
+          versao={Number(quote.versao) || 1}
+          onClose={() => setAjusteModal(false)}
+          onConfirmar={registrarAjuste}
         />
       ) : null}
 
@@ -1241,14 +1315,19 @@ function buildStyles(t: StudioPalette) {
       flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
       backgroundColor: t.accent, paddingVertical: 14, borderRadius: 12,
     },
-    decisaoRow: { flexDirection: "row", gap: 10 },
+    // Três decisões: no celular a terceira desce para a linha de baixo.
+    decisaoRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
     btnAprovar: {
-      flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+      flexGrow: 1, flexBasis: 140, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
       backgroundColor: t.success, paddingVertical: 14, borderRadius: 12,
     },
     btnFechar: {
-      flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+      flexGrow: 1, flexBasis: 140, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
       backgroundColor: t.bgSoft, borderWidth: 1.5, borderColor: t.ink5, paddingVertical: 13, borderRadius: 12,
+    },
+    btnAjuste: {
+      flexGrow: 1, flexBasis: 200, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+      backgroundColor: COR_DO_AJUSTE.bg, paddingVertical: 14, borderRadius: 12,
     },
     btnConvert: {
       flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,

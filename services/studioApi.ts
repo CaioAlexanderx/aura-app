@@ -633,6 +633,20 @@ export type StudioQuote = {
   video_bytes?: number | null;
   video_expira_em?: string | null;
   canal_envio?: CanalDeEnvioDoOrcamento | null;
+  // ── "Cliente pediu ajuste" (28/09/2026, migration 362). Ausentes no
+  // backend de antes. `versao` é a versão que o cliente recebeu (1, 2...);
+  // `ajuste_pedido_em` acende o selo até o reenvio.
+  versao?: number | null;
+  ajuste_pedido_em?: string | null;
+};
+
+/** Pedido de ajuste registrado pela lojista (interno, nada vai ao cliente). */
+export type AjusteDoOrcamento = {
+  id: string;
+  texto: string;
+  /** A versão do orçamento que o cliente tinha visto. */
+  versao: number;
+  created_at: string;
 };
 
 export type CondicoesDoOrcamentoApi = {
@@ -655,6 +669,8 @@ export type VideoDoOrcamento = {
 export type StudioQuoteDetail = {
   quote: StudioQuote;
   items: StudioQuoteItem[];
+  /** Histórico de ajustes, do mais novo ao mais antigo (362). */
+  ajustes?: AjusteDoOrcamento[];
 };
 
 export type StudioQuoteCreated = StudioQuote & {
@@ -1015,6 +1031,8 @@ export const studioApi = {
     request<{ quote: StudioQuote }>(base(cid) + "/quotes/" + qid + "/marcar-enviado", { method: "POST", body: { canal }, retry: 0, timeout: 10000 }),
   fecharOrcamento: (cid: string, qid: string, motivo?: string) =>
     request<{ quote: StudioQuote }>(base(cid) + "/quotes/" + qid + "/fechar", { method: "POST", body: motivo ? { motivo } : {}, retry: 0, timeout: 10000 }),
+  registrarAjusteDoOrcamento: (cid: string, qid: string, texto: string) =>
+    request<{ quote: StudioQuote; ajuste: AjusteDoOrcamento }>(base(cid) + "/quotes/" + qid + "/ajuste", { method: "POST", body: { texto }, retry: 0, timeout: 10000 }),
   aprovarOrcamento: (cid: string, qid: string) =>
     request<{ order_id: string; quote: StudioQuote }>(base(cid) + "/quotes/" + qid + "/aprovar", { method: "POST", retry: 0, timeout: 15000 }),
 
