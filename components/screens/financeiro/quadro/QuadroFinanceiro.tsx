@@ -7,7 +7,7 @@
 // taxas da maquininha entram agrupadas por dia em Recebido/Pago.
 // Só em empresa individual — o consolidado não tem o endpoint.
 // ============================================================
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, useWindowDimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
@@ -18,11 +18,12 @@ import { todayLocalString } from "@/utils/dateOnly";
 import { fmt } from "@/components/screens/financeiro/types";
 import { useQuadroFinanceiro } from "@/hooks/useQuadroFinanceiro";
 import {
-  ORDEM_DAS_COLUNAS, cartaoParaLancamento, ddmm, motivoDoBloqueio, movimento, nomeDoMes, rotulos, somarMes,
+  ORDEM_DAS_COLUNAS, cartaoParaLancamento, corpoDoLote, ddmm, podeEntrarNoLote, textoDaDiferencaDoMes, textoDaSemana, motivoDoBloqueio, movimento, nomeDoMes, rotulos, somarMes,
   type CartaoQuadro, type ColunaDados, type ColunaQuadro, type Movimento, type Quadro, type TipoQuadro,
 } from "@/utils/quadroFinanceiro";
 import { QuadroCartao } from "./QuadroCartao";
 import { MoverSheet, type AlvoDoMovimento } from "./MoverSheet";
+import { LoteSheet } from "./LoteSheet";
 
 const COR_DA_COLUNA: Record<ColunaQuadro, string> = { atrasado: Colors.red, aberto: Colors.amber, feito: Colors.green };
 
@@ -39,7 +40,12 @@ export function QuadroFinanceiro({ companyId, onEditar }: { companyId: string; o
   const [tipo, setTipo] = useState<TipoQuadro>("income");
   const [mes, setMes] = useState(() => todayLocalString().slice(0, 7));
   const [alvo, setAlvo] = useState<AlvoDoMovimento>(null);
-  const { quadro, carregando, erro, recarregar, mover } = useQuadroFinanceiro(companyId, tipo, mes);
+  const { quadro, carregando, erro, recarregar, mover, pagarVarios, pagandoVarios } = useQuadroFinanceiro(companyId, tipo, mes);
+  // F2 "Pagar vários": marca cartões pendentes e dá baixa de uma vez.
+  const [selecionando, setSelecionando] = useState(false);
+  const [selecionados, setSelecionados] = useState<string[]>([]);
+  const [loteAberto, setLoteAberto] = useState(false);
+  useEffect(() => { setSelecionados([]); setSelecionando(false); setLoteAberto(false); }, [tipo, mes]);
   const { m } = useValoresOcultos();
   const { width } = useWindowDimensions();
   const largo = width >= 760;
@@ -66,6 +72,19 @@ export function QuadroFinanceiro({ companyId, onEditar }: { companyId: string; o
 
   const col = quadro?.columns;
   const soma = col ? col.atrasado.total + col.aberto.total + col.feito.total : 0;
+  const marcaveis = useMemo(() => {
+    if (!col) return [] as CartaoQuadro[];
+    return (["atrasado", "aberto"] as ColunaQuadro[]).flatMap((k) => col[k].items.filter((c) => podeEntrarNoLote(c, k)));
+  }, [col]);
+  const escolhidos = marcaveis.filter((c) => selecionados.includes(c.id));
+  const totalEscolhido = escolhidos.reduce((a, c) => a + c.amount, 0);
+  const alternarSelecao = useCallback((c: CartaoQuadro) => {
+    setSelecionados((x) => (x.includes(c.id) ? x.filter((i) => i !== c.id) : [...x, c.id]));
+  }, []);
+  const sairDaSelecao = () => { setSelecionando(false); setSelecionados([]); setLoteAberto(false); };
+  const fmtM = (n: number) => m(fmt(n));
+  const semana = textoDaSemana(tipo, quadro?.week, fmtM);
+  const difMes = col ? textoDaDiferencaDoMes(tipo, col.feito.diferenca, mes, fmtM) : null;
 
   return (
     <View style={s.wrap} testID="quadro-financeiro">
@@ -78,6 +97,12 @@ export function QuadroFinanceiro({ companyId, onEditar }: { companyId: string; o
             </Pressable>
           ))}
         </View>
+        {marcaveis.length > 1 && (
+          <Pressable onPress={() => (selecionando ? sairDaSelecao() : setSelecionando(true))}
+            style={[s.segBtn, s.btnVarios, selecionando && s.segAtivo]} accessibilityRole="button" testID="quadro-pagar-varios">
+            <Text style={[s.segTxt, selecionando && s.segTxtAtivo]}>{selecionando ? "Cancelar seleção" : (tipo === "expense" ? "Pagar vários" : "Receber vários")}</Text>
+          </Pressable>
+        )}
         <View style={s.mesNav}>
           <Pressable onPress={() => setMes(somarMes(mes, -1))} style={s.mesBtn} accessibilityLabel="Mês anterior"><Text style={s.mesSeta}>‹</Text></Pressable>
           <Text style={s.mesTxt}>{nomeDoMes(mes)}</Text>
@@ -97,8 +122,11 @@ export function QuadroFinanceiro({ companyId, onEditar }: { companyId: string; o
               <View key={k} style={{ width: (col[k].total / soma * 100) + "%" as any, backgroundColor: COR_DA_COLUNA[k] }} />
             ))}
           </View>
+          {semana && <Text style={s.faixaSemana} testID="quadro-semana">{semana}</Text>}
+          {difMes && <Text style={s.linhaDif} testID="quadro-diferenca-mes">{difMes}</Text>}
           <Text style={s.dica}>
-            {dnd.isWeb && largo ? "Arraste o cartão quando o dinheiro " + (tipo === "income" ? "entrar" : "sair") + ". " : ""}
+            {selecionando ? "Marque os lançamentos e toque em " + (tipo === "expense" ? "Pagar" : "Receber") + ". " : ""}
+            {!selecionando && dnd.isWeb && largo ? "Arraste o cartão quando o dinheiro " + (tipo === "income" ? "entrar" : "sair") + ". " : ""}
             O que vence e não é {r.verbo} passa sozinho para Atrasado. Crediário fica na tela do Crediário.
           </Text>
         </View>
@@ -135,10 +163,36 @@ export function QuadroFinanceiro({ companyId, onEditar }: { companyId: string; o
               onFim={dnd.onCardDragEnd}
               onAcao={abrirMovimento}
               onEditar={onEditar ? (c) => onEditar(cartaoParaLancamento(c, tipo)) : undefined}
+              selecionando={selecionando}
+              selecionados={selecionados}
+              onSelecionar={alternarSelecao}
             />
           ))}
         </View>
       )}
+
+      {selecionando && (
+        <View style={s.barraLote} testID="quadro-barra-lote">
+          <Text style={s.barraLoteTxt}>
+            {escolhidos.length} {escolhidos.length === 1 ? "selecionado" : "selecionados"} · {m(fmt(totalEscolhido))}
+          </Text>
+          <Pressable onPress={() => { if (escolhidos.length) setLoteAberto(true); }} disabled={!escolhidos.length || pagandoVarios}
+            style={[s.barraLoteBtn, (!escolhidos.length || pagandoVarios) && { opacity: 0.5 }]} accessibilityRole="button" testID="quadro-lote-abrir">
+            <Text style={s.barraLoteBtnTxt}>{tipo === "expense" ? "Pagar" : "Receber"} {escolhidos.length || ""}</Text>
+          </Pressable>
+        </View>
+      )}
+
+      <LoteSheet
+        cartoes={loteAberto ? escolhidos : null}
+        tipo={tipo}
+        hoje={hoje}
+        onFechar={() => setLoteAberto(false)}
+        onConfirmar={(dados) => {
+          pagarVarios(corpoDoLote(dados), { onSuccess: sairDaSelecao });
+          setLoteAberto(false);
+        }}
+      />
 
       <MoverSheet
         alvo={alvo}
@@ -161,6 +215,7 @@ function QuadroColuna(p: {
   onInicio: (id: string) => void; onFim: () => void;
   onAcao: (c: CartaoQuadro, de: ColunaQuadro, mov: Movimento) => void;
   onEditar?: (c: CartaoQuadro) => void;
+  selecionando?: boolean; selecionados?: string[]; onSelecionar?: (c: CartaoQuadro) => void;
 }) {
   const ref = useDropZoneRef<ColunaQuadro>(p.chave, p.onDrop, p.onHover);
   const { m } = useValoresOcultos();
@@ -196,6 +251,9 @@ function QuadroColuna(p: {
           onFim={p.onFim}
           onAcao={p.onAcao}
           onEditar={p.onEditar}
+          selecionando={p.selecionando}
+          selecionado={!!p.selecionados && p.selecionados.includes(c.id)}
+          onSelecionar={p.onSelecionar}
         />
       ))}
       {(p.dados.grupos || []).map((g) => (
@@ -230,6 +288,13 @@ const s = StyleSheet.create({
   resumoNum: { fontFamily: Fonts.mono, color: Colors.ink, fontWeight: "500" },
   barra: { height: 8, borderRadius: 99, overflow: "hidden", flexDirection: "row", backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border },
   dica: { fontSize: 12, color: Colors.ink3 },
+  btnVarios: { borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg3 },
+  faixaSemana: { fontSize: 12.5, fontWeight: "600", color: Colors.amber, backgroundColor: Colors.amberD, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, overflow: "hidden" },
+  linhaDif: { fontSize: 12.5, color: Colors.ink2 },
+  barraLote: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.violet, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
+  barraLoteTxt: { fontSize: 13, fontWeight: "600", color: Colors.ink },
+  barraLoteBtn: { backgroundColor: Colors.violet, borderRadius: 9, paddingHorizontal: 16, paddingVertical: 9 },
+  barraLoteBtnTxt: { color: "#fff", fontSize: 13, fontWeight: "700" },
   erro: { padding: 16, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg3 },
   erroTxt: { color: Colors.ink2, fontSize: 13 },
   board: { gap: 14 },

@@ -86,6 +86,8 @@ export var companiesApi = {
   transactions: function(companyId: string, params?: string) { return request<any>("/companies/" + companyId + "/transactions" + (params ? "?" + params : "")); },
   createTransaction: function(companyId: string, body: any) { return request<any>("/companies/" + companyId + "/transactions", { method: "POST", body: body }); },
   // Quadro do Financeiro (28/09/2026): Atrasado / A receber / Recebido do mês.
+  // Contas F2 (28/09/2026): pagar vários lançamentos de uma vez.
+  transactionsBaixaEmLote: function(companyId: string, body: any) { return request<any>("/companies/" + companyId + "/transactions/baixa-em-lote", { method: "POST", body: body }); },
   transactionsBoard: function(companyId: string, type: "income" | "expense", month: string) { return request<any>("/companies/" + companyId + "/transactions/board?type=" + type + "&month=" + encodeURIComponent(month)); },
   updateTransaction: function(companyId: string, txId: string, body: any) { return request<any>("/companies/" + companyId + "/transactions/" + txId, { method: "PATCH", body: body }); },
   deleteTransaction: function(companyId: string, txId: string) { return request<any>("/companies/" + companyId + "/transactions/" + txId, { method: "DELETE" }); },

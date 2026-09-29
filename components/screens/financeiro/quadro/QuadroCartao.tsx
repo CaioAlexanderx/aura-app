@@ -11,7 +11,7 @@ import { useValoresOcultos } from "@/stores/valoresOcultos";
 import { fmt } from "@/components/screens/financeiro/types";
 import { diferencaPaga } from "@/utils/lancamentoPago";
 import {
-  ddmm, mesDeOrigem, rotuloDaForma, rotulos, seloDoPrazo,
+  ddmm, mesDeOrigem, podeEntrarNoLote, rotuloDaForma, rotulos, seloDoPrazo,
   type CartaoQuadro, type ColunaQuadro, type Movimento, type TipoQuadro,
 } from "@/utils/quadroFinanceiro";
 
@@ -28,10 +28,15 @@ type Props = {
   onAcao: (cartao: CartaoQuadro, de: ColunaQuadro, mov: Movimento) => void;
   /** Abre o "Editar lançamento" (valor com juros/mora, descrição, data...). */
   onEditar?: (cartao: CartaoQuadro) => void;
+  /** F2 "Pagar vários": o cartão vira uma caixinha de marcar (sem arrastar nem botões). */
+  selecionando?: boolean;
+  selecionado?: boolean;
+  onSelecionar?: (cartao: CartaoQuadro) => void;
 };
 
-export function QuadroCartao({ cartao, coluna, tipo, hoje, mes, arrastavel, arrastando, onInicio, onFim, onAcao, onEditar }: Props) {
-  const ref = useDraggableCardRef(arrastavel && cartao.movable, cartao.id, onInicio, onFim);
+export function QuadroCartao({ cartao, coluna, tipo, hoje, mes, arrastavel, arrastando, onInicio, onFim, onAcao, onEditar, selecionando, selecionado, onSelecionar }: Props) {
+  const marcavel = !!selecionando && podeEntrarNoLote(cartao, coluna);
+  const ref = useDraggableCardRef(arrastavel && cartao.movable && !selecionando, cartao.id, onInicio, onFim);
   const { m } = useValoresOcultos();
   const r = rotulos(tipo);
   const selo = seloDoPrazo(cartao, coluna, hoje);
@@ -43,8 +48,14 @@ export function QuadroCartao({ cartao, coluna, tipo, hoje, mes, arrastavel, arra
   const dif = coluna === "feito" ? diferencaPaga(cartao.amount, cartao.original_amount) : null;
 
   return (
-    <View ref={ref} style={[s.card, arrastando && s.cardArrastando]} testID={"quadro-cartao-" + cartao.id}>
+    <View ref={ref} style={[s.card, arrastando && s.cardArrastando, selecionando && !marcavel && s.cardApagado, selecionado && s.cardSelecionado]} testID={"quadro-cartao-" + cartao.id}>
       <View style={s.linha1}>
+        {marcavel && (
+          <Pressable onPress={() => onSelecionar?.(cartao)} style={[s.caixa, selecionado && s.caixaMarcada]}
+            accessibilityRole="checkbox" accessibilityState={{ checked: !!selecionado }} testID={"quadro-marcar-" + cartao.id}>
+            {selecionado ? <Text style={s.caixaV}>✓</Text> : null}
+          </Pressable>
+        )}
         <Text style={s.desc} numberOfLines={2}>{cartao.description}</Text>
         <Text style={s.valor}>{m(fmt(cartao.amount))}</Text>
       </View>
@@ -66,7 +77,7 @@ export function QuadroCartao({ cartao, coluna, tipo, hoje, mes, arrastavel, arra
         )}
         {cartao.recurrence_type && <Text style={s.chip}>Recorrente</Text>}
       </View>
-      {cartao.movable ? (
+      {selecionando ? null : cartao.movable ? (
         <View style={s.acoes}>
           {coluna === "feito" ? (
             <Pressable onPress={() => onAcao(cartao, coluna, "desfazer")} style={s.btn} accessibilityRole="button" testID={"quadro-desfazer-" + cartao.id}>
@@ -100,6 +111,11 @@ export function QuadroCartao({ cartao, coluna, tipo, hoje, mes, arrastavel, arra
 const s = StyleSheet.create({
   card: { backgroundColor: Colors.bg3, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, padding: 12, gap: 7 },
   cardArrastando: { opacity: 0.45 },
+  cardApagado: { opacity: 0.5 },
+  cardSelecionado: { borderColor: Colors.violet, backgroundColor: Colors.violetD },
+  caixa: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: Colors.border2, alignItems: "center", justifyContent: "center", marginTop: -1 },
+  caixaMarcada: { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  caixaV: { color: "#fff", fontSize: 12, fontWeight: "800", lineHeight: 14 },
   linha1: { flexDirection: "row", gap: 8, alignItems: "flex-start", justifyContent: "space-between" },
   desc: { flex: 1, fontSize: 13, fontWeight: "600", color: Colors.ink, lineHeight: 17 },
   valor: { fontFamily: Fonts.mono, fontSize: 13, fontWeight: "500", color: Colors.ink, fontVariant: ["tabular-nums"] },
