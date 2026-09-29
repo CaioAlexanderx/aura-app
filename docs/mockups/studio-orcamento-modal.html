@@ -1,0 +1,898 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light" data-estado="itens" data-consol="nao" data-seletor="fechado" data-vista="unica">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Modal de orçamento — Aura Studio</title>
+<!--
+  ============================================================
+  Mockup standalone — o modal de orçamento do Aura Studio, 29/09/2026.
+  Regra 4 do CLAUDE.md: mudança visual forte nasce em mockup.
+  Diagnóstico: docs/studio/orcamento-modal-diagnostico.md
+
+  O QUE MOSTRA
+    Um modal só, no molde do cadastro de item (app#859 / ItemFormModal):
+    painel aberto sobre a lista de orçamentos, duas colunas no desktop e
+    tela cheia no celular. Peças à esquerda (catálogo aberto sem digitar,
+    modelo de mockup por peça), cliente + condições + resumo à direita,
+    rodapé com um primário só.
+
+  ESTADOS (faixa escura no topo, também pela URL ?estado=…&tema=…):
+    vazio · itens · catalogo · video · enviado · ajuste · aprovado
+    seletor=aberto abre o seletor de modelo da peça expandida
+    consol=sim mostra o chip da loja (multi-CNPJ)
+    vista=dupla mostra ao lado uma moldura de 390 px com o mesmo arquivo
+
+  SEM REDE: miniaturas em SVG inline; nada de fontes ou imagens externas.
+  Valores de exemplo: 12 canecas × 39,90 + 1 camiseta × 59,90 = 538,70;
+  desconto 5,90 → total 532,80; sinal 50 % = 266,40. Cliente e loja
+  fictícios.
+  ============================================================
+-->
+<style>
+  :root {
+    --primary: #1E3A8A; --primary2: #3B82F6; --primary-soft: #DBEAFE; --primary-ghost: #EFF6FF;
+    --accent: #EC4899; --accent-soft: #FCE7F3; --accent-ink: #BE185D;
+    --bg: #E8E9F0; --bg-soft: #EEF0F5; --card: #F5F6FA; --card-elev: #FFFFFF;
+    --ink: #0F172A; --ink2: #334155; --ink3: #5E6A7A; --ink4: #94A3B8; --ink5: #CBD5E1;
+    --success: #10B981; --success-soft: #D1FAE5; --success-ink: #065F46;
+    --warning: #F59E0B; --warning-soft: #FEF3C7; --warning-ink: #92400E;
+    --danger: #DC2626; --danger-soft: #FEE2E2; --danger-ink: #991B1B;
+    --info-soft: #DBEAFE; --info-ink: #1E3A8A;
+    --wa: #1DA851;
+    --overlay: rgba(2,6,23,0.55);
+    --shadow-modal: 0 24px 60px -18px rgba(2,6,23,0.45);
+    --shadow-pop: 0 18px 40px -12px rgba(15,23,42,0.35), 0 2px 6px rgba(15,23,42,0.08);
+    --thumb: #ECEAE4;
+    --foco: #3B82F6;
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    --primary: #3B82F6; --primary2: #60A5FA; --primary-soft: rgba(59,130,246,0.18); --primary-ghost: rgba(59,130,246,0.10);
+    --accent: #F472B6; --accent-soft: rgba(244,114,182,0.18); --accent-ink: #F9A8D4;
+    --bg: #0F172A; --bg-soft: #1E293B; --card: #1E293B; --card-elev: #273449;
+    --ink: #F8FAFC; --ink2: #CBD5E1; --ink3: #94A3B8; --ink4: #64748B; --ink5: #334155;
+    --success: #34D399; --success-soft: rgba(52,211,153,0.18); --success-ink: #6EE7B7;
+    --warning: #FBBF24; --warning-soft: rgba(251,191,36,0.18); --warning-ink: #FCD34D;
+    --danger: #EF4444; --danger-soft: rgba(239,68,68,0.18); --danger-ink: #FCA5A5;
+    --info-soft: rgba(96,165,250,0.18); --info-ink: #93C5FD;
+    --overlay: rgba(2,6,23,0.7);
+    --shadow-modal: 0 24px 60px -18px rgba(0,0,0,0.8);
+    --shadow-pop: 0 18px 40px -10px rgba(0,0,0,0.7), 0 0 0 1px rgba(148,163,184,0.12);
+    --thumb: #E4E2DC;
+    --foco: #93C5FD;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink); overflow-x: hidden;
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  button, input, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  [hidden] { display: none !important; }
+  .vh { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  :focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; }
+
+  /* ── Faixa de controle (só do mockup) ─────────────────── */
+  .estados {
+    background: #0B1224; color: #CBD5E1; padding: 10px 16px;
+    display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; font-size: 12.5px;
+  }
+  .estados b { color: #F8FAFC; font-weight: 700; margin-right: 4px; }
+  .estados .grupo { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .estados button {
+    background: transparent; border: 1px solid #334155; color: #CBD5E1;
+    padding: 4px 10px; border-radius: 999px; min-height: 28px;
+  }
+  .estados button[aria-pressed="true"] { background: #F472B6; border-color: #F472B6; color: #0F172A; font-weight: 700; }
+  html[data-embutido="1"] .estados { display: none; }
+
+  /* ── Vista dupla: moldura de celular ao lado ───────────── */
+  .palco { position: relative; min-height: calc(100vh - 48px); }
+  .moldura { display: none; }
+  html[data-vista="dupla"] .palco { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 0; }
+  html[data-vista="dupla"] .moldura {
+    display: block; padding: 24px 14px; background: #0B1224; border-left: 1px solid #1E293B;
+  }
+  .moldura .tel {
+    width: 390px; height: 780px; margin: 0 auto; border-radius: 34px; border: 8px solid #1E293B; overflow: hidden; background: #000;
+  }
+  .moldura iframe { width: 100%; height: 100%; border: 0; display: block; }
+  .moldura p { color: #94A3B8; font-size: 12px; text-align: center; margin: 10px 0 0; }
+  @media (max-width: 1100px) { html[data-vista="dupla"] .palco { grid-template-columns: 1fr; } html[data-vista="dupla"] .moldura { display: none; } }
+
+  /* ── A página de baixo: lista de orçamentos ───────────── */
+  .fundo { padding: 18px 20px 40px; max-width: 1240px; margin: 0 auto; }
+  .fundo .eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); }
+  .fundo h1 { margin: 2px 0 4px; font-size: 22px; }
+  .fundo .sub { color: var(--ink3); font-size: 13px; margin: 0 0 14px; }
+  .fundo .cabeca { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  .btn-novo { background: var(--primary); color: #fff; border: 0; border-radius: 999px; padding: 10px 16px; font-weight: 700; min-height: 44px; display: inline-flex; align-items: center; gap: 6px; }
+  .pills { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 4px 0 12px; }
+  .pills::-webkit-scrollbar { display: none; }
+  .pills span { white-space: nowrap; border: 1px solid var(--ink5); background: var(--bg-soft); color: var(--ink2); border-radius: 999px; padding: 7px 14px; font-size: 12.5px; font-weight: 600; }
+  .pills span.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .lista { display: grid; gap: 10px; }
+  .linha-orc { background: var(--card); border: 1px solid var(--ink5); border-radius: 14px; padding: 14px 16px; display: grid; gap: 8px; }
+  .linha-orc .top { display: flex; align-items: flex-start; gap: 10px; }
+  .linha-orc .nome { font-weight: 700; font-size: 15px; flex: 1; min-width: 0; }
+  .linha-orc .tel2 { color: var(--ink3); font-size: 12px; }
+  .linha-orc .bot { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .linha-orc .total { color: var(--primary); font-weight: 800; font-size: 17px; }
+  .linha-orc .data { color: var(--ink3); font-size: 12px; }
+  .chip-loja { font-size: 11px; font-weight: 700; color: var(--ink2); background: var(--bg-soft); border: 1px solid var(--ink5); border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+
+  .pill { border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+  .pill-draft { background: #F1F5F9; color: #64748B; }
+  .pill-sent { background: #DBEAFE; color: #1D4ED8; }
+  .pill-conv { background: #EDE9FE; color: #5B21B6; }
+  .pill-ajuste { background: #FEF3C7; color: #92400E; }
+  .pill-video { background: var(--accent-soft); color: var(--accent-ink); display: inline-flex; align-items: center; gap: 4px; }
+
+  /* ── O modal ──────────────────────────────────────────── */
+  .veu { position: fixed; inset: 0; background: var(--overlay); z-index: 10; }
+  html[data-embutido="1"] .veu { position: absolute; }
+  .modal {
+    position: fixed; z-index: 11; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: min(1040px, calc(100vw - 40px)); max-height: calc(100vh - 88px);
+    background: var(--card-elev); border: 1px solid var(--ink5); border-radius: 18px; box-shadow: var(--shadow-modal);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  html[data-vista="dupla"] .modal { left: calc((100vw - 420px) / 2); width: min(1040px, calc(100vw - 460px)); }
+  @media (max-width: 1100px) { html[data-vista="dupla"] .modal { left: 50%; width: min(1040px, calc(100vw - 40px)); } }
+
+  .m-cabeca { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--ink5); }
+  .m-icone { width: 36px; height: 36px; border-radius: 10px; background: var(--primary-soft); color: var(--primary); display: grid; place-items: center; flex: none; }
+  .m-titulos { flex: 1; min-width: 0; }
+  .m-titulo { font-size: 16px; font-weight: 800; letter-spacing: -.2px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .m-sub { font-size: 12.5px; color: var(--ink3); margin-top: 1px; }
+  .m-fechar { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--ink5); background: var(--card); color: var(--ink3); display: grid; place-items: center; flex: none; }
+
+  .aviso { display: flex; gap: 10px; align-items: center; padding: 10px 20px; font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--ink5); flex-wrap: wrap; }
+  .aviso .txt { flex: 1; min-width: 200px; }
+  .aviso small { display: block; font-weight: 500; opacity: .9; }
+  .aviso-ajuste { background: var(--warning-soft); color: var(--warning-ink); }
+  .aviso-ok { background: var(--success-soft); color: var(--success-ink); }
+  .aviso-info { background: var(--info-soft); color: var(--info-ink); }
+  .aviso-video { background: var(--accent-soft); color: var(--accent-ink); }
+
+  .m-corpo { overflow: auto; flex: 1 1 auto; min-height: 0; padding: 16px 20px; }
+  .colunas { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+  .col { display: grid; gap: 14px; min-width: 0; }
+
+  .secao { background: var(--card); border: 1px solid var(--ink5); border-radius: 14px; padding: 14px; display: grid; gap: 10px; min-width: 0; }
+  .secao-cab { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .secao h3 { margin: 0; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink3); }
+  .secao h3 b { color: var(--ink); font-weight: 800; }
+  .ajuda { font-size: 12px; color: var(--ink3); margin: 0; line-height: 1.4; }
+
+  /* botões */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 10px; padding: 0 16px; min-height: 40px; font-weight: 700; font-size: 13.5px; border: 1.5px solid transparent; white-space: nowrap; }
+  .btn-pri { background: var(--primary); color: #fff; }
+  .btn-wa { background: var(--wa); color: #fff; }
+  .btn-ok { background: var(--success); color: #fff; }
+  html[data-theme="dark"] .btn-ok { color: #052E1F; }
+  .btn-sec { background: var(--card-elev); border-color: var(--ink5); color: var(--ink); }
+  .btn-ter { background: transparent; color: var(--ink2); }
+  .btn-ter.perigo { color: var(--danger-ink); }
+  .btn-peq { min-height: 36px; padding: 0 12px; font-size: 13px; }
+  .btn[disabled], .btn[aria-disabled="true"] { opacity: .45; cursor: default; }
+  .btn-icone { width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: 10px; flex: none; }
+  @media (hover: hover) { .btn-sec:hover { border-color: var(--ink4); } .btn-ter:hover { background: var(--bg-soft); } }
+
+  /* campos */
+  .campo { display: grid; gap: 4px; min-width: 0; }
+  .campo label { font-size: 12px; font-weight: 700; color: var(--ink2); }
+  .campo input, .campo textarea, .campo .fake {
+    width: 100%; min-height: 40px; border-radius: 10px; border: 1.5px solid var(--ink5); background: var(--bg-soft);
+    padding: 8px 12px; outline: none; color: var(--ink);
+  }
+  .campo input::placeholder, .campo textarea::placeholder { color: var(--ink4); }
+  .campo input:focus-visible, .campo textarea:focus-visible { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); outline: none; }
+  .campo .dica { font-size: 11.5px; color: var(--ink3); }
+  .campo input[readonly] { opacity: .75; }
+  .campos-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .campos-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { border: 1px solid var(--ink5); background: var(--bg-soft); color: var(--ink2); border-radius: 999px; padding: 0 12px; min-height: 36px; font-size: 12.5px; font-weight: 700; }
+  .chip[aria-pressed="true"] { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); }
+  html[data-theme="dark"] .chip[aria-pressed="true"] { color: var(--primary2); }
+  details.mais summary { cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--primary); list-style: none; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; }
+  html[data-theme="dark"] details.mais summary { color: var(--primary2); }
+  details.mais summary::-webkit-details-marker { display: none; }
+  details.mais[open] summary .seta { transform: rotate(180deg); }
+  details.mais .dentro { display: grid; gap: 10px; padding-top: 6px; }
+
+  /* peças */
+  .vazio { border: 2px dashed var(--ink5); border-radius: 14px; padding: 28px 18px; text-align: center; display: grid; gap: 6px; justify-items: center; background: var(--card-elev); }
+  .vazio .ico { width: 48px; height: 48px; border-radius: 14px; background: var(--primary-ghost); color: var(--primary); display: grid; place-items: center; }
+  .vazio b { font-size: 15px; }
+  .vazio p { margin: 0; color: var(--ink3); font-size: 12.5px; max-width: 320px; }
+  .vazio .btn { margin-top: 8px; }
+
+  .pecas { display: grid; gap: 8px; }
+  .peca { border: 1.5px solid var(--ink5); border-radius: 12px; background: var(--card-elev); min-width: 0; }
+  .peca.aberta { border-color: var(--primary); }
+  .peca-linha { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 8px; width: 100%; background: none; border: 0; text-align: left; border-radius: 12px; min-height: 60px; color: var(--ink); }
+  .thumb { width: 44px; height: 44px; border-radius: 10px; background: var(--thumb); display: grid; place-items: center; flex: none; overflow: hidden; }
+  .thumb.p { width: 40px; height: 40px; }
+  .thumb svg { width: 32px; height: 32px; }
+  .thumb.p svg { width: 28px; height: 28px; }
+  .peca-info { flex: 1; min-width: 0; display: grid; gap: 2px; }
+  .peca-nome { font-weight: 700; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .peca-meta { font-size: 12px; color: var(--ink3); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .selo { font-size: 10.5px; font-weight: 800; border-radius: 5px; padding: 1px 6px; white-space: nowrap; }
+  .selo-3d { background: var(--primary-soft); color: var(--info-ink); }
+  .selo-2d { background: var(--accent-soft); color: var(--accent-ink); }
+  .selo-sem { background: var(--warning-soft); color: var(--warning-ink); }
+  .selo-her { background: var(--bg-soft); color: var(--ink3); border: 1px solid var(--ink5); }
+  .peca-total { font-weight: 800; font-size: 14px; white-space: nowrap; }
+  .peca-seta { width: 36px; height: 36px; display: grid; place-items: center; color: var(--ink3); flex: none; }
+  .peca.aberta .peca-seta { transform: rotate(180deg); }
+  .peca-edit { padding: 4px 12px 12px; display: grid; gap: 12px; border-top: 1px solid var(--ink5); margin: 0 8px; padding-top: 12px; }
+  .stepper { display: inline-flex; align-items: center; border: 1.5px solid var(--ink5); border-radius: 10px; background: var(--bg-soft); overflow: hidden; }
+  .stepper button { width: 40px; height: 40px; border: 0; background: transparent; color: var(--ink); font-size: 18px; }
+  .stepper input { width: 52px; text-align: center; border: 0; background: transparent; min-height: 40px; padding: 0; }
+  .modelo-linha { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; }
+  @media (max-width: 560px) { .modelo-linha { grid-template-columns: 1fr; } }
+  .gatilho {
+    position: relative; display: flex; align-items: center; gap: 10px; min-height: 50px; padding: 5px 10px 5px 5px; border-radius: 12px;
+    border: 1.5px solid var(--ink5); background: var(--card-elev); width: 100%; text-align: left; color: var(--ink);
+  }
+  .gatilho[aria-expanded="true"] { border-color: var(--primary); }
+  .mini { width: 46px; height: 36px; border-radius: 8px; background: var(--thumb); display: grid; place-items: center; flex: none; overflow: hidden; }
+  .mini svg { width: 30px; height: 26px; }
+  .mini.sem { background: var(--bg-soft); border: 1px solid var(--ink5); color: var(--ink4); }
+  .gatilho .g-nome { font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gatilho .g-meta { font-size: 11.5px; color: var(--ink3); display: flex; gap: 4px; align-items: center; min-width: 0; }
+  .gatilho .g-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gatilho .g-meta .selo { flex: none; overflow: visible; }
+  .previa { width: 120px; height: 92px; border-radius: 10px; background: var(--thumb); display: grid; place-items: center; overflow: hidden; }
+  .previa svg { width: 92px; height: 78px; }
+  .previa-cx { display: grid; gap: 4px; justify-items: center; }
+  .previa-cx small { font-size: 11px; color: var(--ink3); }
+  .acoes-peca { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+
+  /* seletor de modelo (popover no desktop, folha no celular) */
+  .seletor { display: none; }
+  html[data-seletor="aberto"] .seletor { display: block; }
+  .seletor-caixa {
+    position: absolute; z-index: 5; left: 0; top: calc(100% + 6px); width: min(400px, 100%); max-height: 300px;
+    background: var(--card-elev); border: 1px solid var(--ink5); border-radius: 14px; box-shadow: var(--shadow-pop); overflow: hidden; display: flex; flex-direction: column;
+  }
+  .seletor-lista { overflow: auto; padding: 6px; }
+  .grupo-mod { display: flex; justify-content: space-between; padding: 10px 8px 4px; font-size: 11px; font-weight: 800; letter-spacing: .06em; color: var(--ink3); text-transform: uppercase; }
+  .opcao { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 5px 8px 5px 5px; border-radius: 10px; border: 1.5px solid transparent; width: 100%; background: none; text-align: left; color: var(--ink); }
+  .opcao.ativa { background: var(--primary-ghost); }
+  .opcao.marcada { border-color: var(--primary); background: var(--primary-ghost); }
+  .opcao .o-nome { font-size: 13px; font-weight: 600; }
+  .opcao .o-meta { font-size: 11.5px; color: var(--ink3); }
+  .opcao .atual { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--info-ink); display: inline-flex; gap: 3px; align-items: center; white-space: nowrap; }
+  .seletor-rodape { border-top: 1px solid var(--ink5); padding: 8px 12px; font-size: 11.5px; color: var(--ink3); }
+  .seletor-rodape .toque { display: none; }
+  .seletor-folha-cab, .seletor-folha-acoes { display: none; }
+
+  /* catálogo */
+  .catalogo { display: grid; gap: 10px; }
+  .cat-topo { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .busca { position: relative; flex: 1 1 200px; min-width: 0; }
+  .busca svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--ink3); pointer-events: none; }
+  .busca input { width: 100%; min-height: 44px; border-radius: 10px; border: 1.5px solid var(--ink5); background: var(--card-elev); padding: 8px 12px 8px 36px; outline: none; }
+  .busca input::placeholder { color: var(--ink3); }
+  .busca input:focus-visible { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+  .cat-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; margin: 0 -14px; padding-left: 14px; padding-right: 14px; }
+  .cat-chips::-webkit-scrollbar { display: none; }
+  .cat-chips .chip { flex: none; }
+  .cat-grupo { display: grid; gap: 4px; }
+  .cat-grupo h4 { margin: 6px 0 2px; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink3); display: flex; justify-content: space-between; }
+  .cat-grupo h4 span { font-weight: 600; letter-spacing: 0; text-transform: none; }
+  .prod { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 6px 6px 6px 6px; border-radius: 12px; border: 1.5px solid transparent; background: var(--card-elev); width: 100%; text-align: left; color: var(--ink); }
+  .prod.no-orc { border-color: var(--success); }
+  @media (hover: hover) { .prod:hover { background: var(--primary-ghost); } }
+  .prod .p-info { flex: 1; min-width: 0; display: grid; gap: 2px; }
+  .prod .p-nome { font-weight: 700; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prod .p-meta { font-size: 12px; color: var(--ink3); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .prod .p-preco { font-weight: 800; white-space: nowrap; }
+  .prod .p-mais { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: var(--primary-soft); color: var(--primary); flex: none; }
+  html[data-theme="dark"] .prod .p-mais { color: var(--primary2); }
+  .prod .p-mais.ok { background: var(--success-soft); color: var(--success-ink); }
+  .avulso-form { border: 1.5px solid var(--primary); border-radius: 12px; padding: 12px; display: grid; gap: 10px; background: var(--card-elev); }
+  .cat-rodape { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding-top: 4px; }
+  .cat-rodape .n { font-size: 12.5px; color: var(--ink2); font-weight: 600; }
+
+  /* resumo e acompanhamento */
+  .resumo { display: grid; gap: 8px; }
+  .r-linha { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13.5px; color: var(--ink2); }
+  .r-linha input { width: 96px; text-align: right; min-height: 36px; }
+  .r-linha.total { border-top: 1px solid var(--ink5); padding-top: 8px; font-weight: 800; color: var(--ink); font-size: 15px; }
+  .r-linha.total b { color: var(--primary); font-size: 18px; }
+  html[data-theme="dark"] .r-linha.total b { color: var(--primary2); }
+  .tl { display: grid; gap: 8px; }
+  .tl div { display: flex; gap: 10px; align-items: center; font-size: 12.5px; }
+  .tl i { width: 9px; height: 9px; border-radius: 50%; background: var(--ink5); flex: none; }
+  .tl i.ok { background: var(--success); }
+  .tl b { width: 104px; color: var(--ink2); }
+  .tl span { color: var(--ink); }
+  .tl span.mudo { color: var(--ink3); font-style: italic; }
+  .video-card { display: flex; gap: 12px; align-items: center; border: 1px solid var(--ink5); border-radius: 12px; padding: 10px; background: var(--card-elev); flex-wrap: wrap; }
+  .video-card .quadro { width: 64px; height: 80px; border-radius: 8px; background: #1E293B; display: grid; place-items: center; color: #fff; flex: none; position: relative; overflow: hidden; }
+  .video-card .quadro svg { width: 44px; height: 44px; }
+  .video-card .quadro .play { position: absolute; right: 4px; bottom: 4px; width: 18px; height: 18px; border-radius: 50%; background: rgba(255,255,255,.9); display: grid; place-items: center; color: #0F172A; font-size: 9px; }
+  .video-card .vi { flex: 1; min-width: 140px; display: grid; gap: 2px; }
+  .video-card .vi b { font-size: 13.5px; }
+  .video-card .vi span { font-size: 12px; color: var(--ink3); }
+  .video-card .va { display: flex; gap: 6px; flex-wrap: wrap; }
+  .nota-ajuste { background: var(--bg-soft); border-left: 3px solid var(--warning); border-radius: 10px; padding: 10px 12px; display: grid; gap: 2px; }
+  .nota-ajuste small { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--ink3); }
+  .nota-ajuste span { font-size: 13px; }
+
+  /* rodapé */
+  .m-pe { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-top: 1px solid var(--ink5); background: var(--card); }
+  .m-pe .info { flex: 1; min-width: 0; font-size: 12.5px; color: var(--ink2); font-weight: 600; }
+  .m-pe .info small { display: block; font-weight: 500; color: var(--ink3); }
+  .m-pe .acoes { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+
+  /* confirmação de saída */
+  .sair { position: absolute; inset: 0; background: var(--overlay); display: none; place-items: center; padding: 16px; z-index: 20; }
+  html[data-estado="sair"] .sair { display: grid; }
+  .sair .cx { background: var(--card-elev); border: 1px solid var(--ink5); border-radius: 16px; padding: 18px; max-width: 380px; width: 100%; display: grid; gap: 8px; }
+  .sair h4 { margin: 0; font-size: 16px; }
+  .sair p { margin: 0; color: var(--ink2); font-size: 13px; line-height: 1.45; }
+  .sair .a { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+
+  /* ── Celular ──────────────────────────────────────────── */
+  @media (max-width: 700px) {
+    .modal { left: 0; top: 0; transform: none; width: 100vw; max-height: none; height: 100dvh; border-radius: 0; border: 0; }
+    html[data-embutido="1"] .modal { position: absolute; height: 100%; }
+    .m-cabeca { padding: 10px 14px; }
+    .m-fechar { width: 44px; height: 44px; }
+    .m-corpo { padding: 12px 14px 20px; }
+    .colunas { grid-template-columns: 1fr; gap: 12px; }
+    .secao { padding: 12px; }
+    .btn { min-height: 44px; }
+    .btn-peq { min-height: 44px; }
+    .chip { min-height: 44px; }
+    .m-pe { flex-direction: column; align-items: stretch; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); gap: 8px; }
+    .m-pe .acoes { display: grid; grid-template-columns: 1fr 1fr; }
+    .m-pe .acoes .btn-pri, .m-pe .acoes .btn-wa, .m-pe .acoes .btn-ok { grid-column: 1 / -1; order: -1; }
+    .m-pe .acoes .btn { white-space: normal; }
+    .campos-3 { grid-template-columns: 1fr 1fr; }
+    .cat-chips { margin: 0 -12px; padding-left: 12px; padding-right: 12px; }
+    /* o seletor vira folha de baixo com rodapé de toque */
+    .seletor-caixa { position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: auto; max-height: 88%; border-radius: 20px 20px 0 0; z-index: 30; }
+    .seletor-veu { position: fixed; inset: 0; background: var(--overlay); z-index: 29; }
+    .seletor-folha-cab { display: flex; align-items: center; gap: 8px; padding: 10px 8px 6px 16px; }
+    .seletor-folha-cab .t { flex: 1; min-width: 0; }
+    .seletor-folha-cab b { display: block; font-size: 15px; }
+    .seletor-folha-cab span { font-size: 12.5px; color: var(--ink3); }
+    .seletor-folha-cab .m-fechar { border: 0; background: transparent; }
+    .seletor-rodape .mouse { display: none; }
+    .seletor-rodape .toque { display: block; }
+    .seletor-rodape { padding: 10px 16px 6px; }
+    .seletor-folha-acoes { display: flex; gap: 8px; padding: 0 16px calc(14px + env(safe-area-inset-bottom)); }
+    .seletor-folha-acoes .btn-pri { flex: 1; }
+    .opcao .radio { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--ink4); flex: none; margin-left: 6px; display: grid; place-items: center; }
+    .opcao.marcada .radio { border-color: var(--primary); }
+    .opcao.marcada .radio::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--primary); }
+  }
+  @media (min-width: 701px) { .opcao .radio, .seletor-veu { display: none; } }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-caneca" viewBox="0 0 32 32"><path d="M6 8h15v14a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4z" fill="#F8F5EE" stroke="#8A8378" stroke-width="1.4"/><path d="M21 11h3a3.5 3.5 0 0 1 0 7h-3" fill="none" stroke="#8A8378" stroke-width="1.4"/><rect x="9" y="12" width="9" height="6" rx="1" fill="#1E3A8A" opacity=".85"/></symbol>
+  <symbol id="i-caneca-preta" viewBox="0 0 32 32"><path d="M6 8h15v14a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4z" fill="#1F2937" stroke="#111827" stroke-width="1.4"/><path d="M21 11h3a3.5 3.5 0 0 1 0 7h-3" fill="none" stroke="#111827" stroke-width="1.4"/><rect x="9" y="12" width="9" height="6" rx="1" fill="#F472B6" opacity=".9"/></symbol>
+  <symbol id="i-camiseta" viewBox="0 0 32 32"><path d="M11 5l5 2 5-2 6 4-3 5-2-1v13H10V13l-2 1-3-5z" fill="#F8F5EE" stroke="#8A8378" stroke-width="1.4" stroke-linejoin="round"/><rect x="12.5" y="13" width="7" height="6" rx="1" fill="#EC4899" opacity=".85"/></symbol>
+  <symbol id="i-embalagem" viewBox="0 0 32 32"><path d="M5 11l11-5 11 5v11l-11 5-11-5z" fill="#E7D9C0" stroke="#8A8378" stroke-width="1.4" stroke-linejoin="round"/><path d="M5 11l11 5 11-5M16 16v11" fill="none" stroke="#8A8378" stroke-width="1.4"/></symbol>
+  <symbol id="i-ecobag" viewBox="0 0 32 32"><path d="M8 11h16l2 15H6z" fill="#F1E7D0" stroke="#8A8378" stroke-width="1.4" stroke-linejoin="round"/><path d="M12 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="#8A8378" stroke-width="1.4"/><rect x="12" y="15" width="8" height="5" rx="1" fill="#1E3A8A" opacity=".8"/></symbol>
+  <symbol id="i-chaveiro" viewBox="0 0 32 32"><circle cx="12" cy="12" r="6" fill="#F8F5EE" stroke="#8A8378" stroke-width="1.4"/><circle cx="12" cy="12" r="2" fill="#8A8378"/><path d="M16 16l9 9m-3-5l2-2m-5 5l2-2" stroke="#8A8378" stroke-width="1.6" fill="none"/></symbol>
+  <symbol id="i-sem" viewBox="0 0 32 32"><circle cx="16" cy="16" r="10" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 12l8 8m0-8l-8 8" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-busca" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-mais" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-seta" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 3v5h5M10 12h6M10 16h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-cam" viewBox="0 0 24 24"><rect x="3" y="7" width="13" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M16 10l5-2v8l-5-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+  <symbol id="i-loja" viewBox="0 0 24 24"><path d="M4 9l1.5-4h13L20 9M4 9v11h16V9M4 9h16M9 20v-6h6v6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+</svg>
+
+<div class="estados" role="toolbar" aria-label="Estados do mockup">
+  <div class="grupo"><b>Tema</b>
+    <button data-set="tema=light">Claro</button><button data-set="tema=dark">Escuro</button></div>
+  <div class="grupo"><b>Estado</b>
+    <button data-set="estado=vazio">Vazio</button><button data-set="estado=itens">Com peças</button><button data-set="estado=catalogo">Escolhendo produto</button><button data-set="estado=video">Vídeo gerado</button><button data-set="estado=enviado">Enviado</button><button data-set="estado=ajuste">Ajuste pedido</button><button data-set="estado=aprovado">Aprovado</button><button data-set="estado=sair">Sair?</button></div>
+  <div class="grupo"><b>Seletor de modelo</b>
+    <button data-set="seletor=fechado">Fechado</button><button data-set="seletor=aberto">Aberto</button></div>
+  <div class="grupo"><b>Multi-CNPJ</b>
+    <button data-set="consol=nao">Uma loja</button><button data-set="consol=sim">Consolidado</button></div>
+  <div class="grupo"><b>Vista</b>
+    <button data-set="vista=unica">Esta largura</button><button data-set="vista=dupla">+ celular 390 ao lado</button></div>
+</div>
+
+<div class="palco">
+<div class="cena" style="position:relative; min-height: calc(100vh - 48px);">
+
+  <!-- ═══ A lista de orçamentos por baixo ═══ -->
+  <main class="fundo" aria-hidden="true">
+    <div class="cabeca">
+      <div>
+        <div class="eyebrow">Gestão · Orçamentos</div>
+        <h1>Orçamentos</h1>
+        <p class="sub">Crie, envie pelo WhatsApp e acompanhe. Aprovado vira pedido na Produção.</p>
+      </div>
+      <button class="btn-novo" type="button"><svg width="16" height="16"><use href="#i-mais"/></svg> Novo orçamento</button>
+    </div>
+    <div class="pills"><span class="on">Todos</span><span>Rascunho</span><span>Enviado</span><span>Ajuste pedido</span><span>Convertido</span><span>Encerrado</span></div>
+    <div class="lista">
+      <div class="linha-orc"><div class="top"><div class="nome">Mariana Costa<div class="tel2">(11) 98765-4321</div></div><span class="chip-loja" data-quando="consol=sim">Ateliê Lume · Centro</span><span class="pill pill-video"><svg width="11" height="11"><use href="#i-cam"/></svg>vídeo</span><span class="pill pill-sent">Enviado</span></div><div class="bot"><span class="total">R$ 532,80</span><span class="data">Válido até 06/10/2026</span></div></div>
+      <div class="linha-orc"><div class="top"><div class="nome">Escola Pequeno Príncipe<div class="tel2">(11) 3456-7890</div></div><span class="chip-loja" data-quando="consol=sim">Ateliê Lume · Vila Nova</span><span class="pill pill-ajuste">Ajuste pedido</span></div><div class="bot"><span class="total">R$ 1.890,00</span><span class="data">Criado 25/09/2026</span></div></div>
+      <div class="linha-orc"><div class="top"><div class="nome">Cliente não informado</div><span class="chip-loja" data-quando="consol=sim">Ateliê Lume · Centro</span><span class="pill pill-draft">Rascunho</span></div><div class="bot"><span class="total">R$ 0,00</span><span class="data">Criado 29/09/2026</span></div></div>
+      <div class="linha-orc"><div class="top"><div class="nome">Rafael Nunes<div class="tel2">(21) 99876-1234</div></div><span class="chip-loja" data-quando="consol=sim">Ateliê Lume · Centro</span><span class="pill pill-conv">Convertido</span></div><div class="bot"><span class="total">R$ 318,00</span><span class="data">Criado 20/09/2026</span></div></div>
+    </div>
+  </main>
+
+  <!-- ═══ O modal ═══ -->
+  <div class="veu"></div>
+  <section class="modal" role="dialog" aria-modal="true" aria-labelledby="m-titulo" aria-describedby="m-sub">
+
+    <header class="m-cabeca">
+      <div class="m-icone" aria-hidden="true"><svg width="18" height="18"><use href="#i-doc"/></svg></div>
+      <div class="m-titulos">
+        <div class="m-titulo" id="m-titulo">
+          <span data-quando="estado=vazio">Novo orçamento</span>
+          <span data-quando="estado=itens|catalogo|video|enviado|ajuste|aprovado|sair">Orçamento · Mariana Costa</span>
+          <span class="pill pill-draft" data-quando="estado=vazio|itens|catalogo|video|sair">Rascunho</span>
+          <span class="pill pill-sent" data-quando="estado=enviado">Enviado</span>
+          <span class="pill pill-ajuste" data-quando="estado=ajuste">Ajuste pedido</span>
+          <span class="pill pill-conv" data-quando="estado=aprovado">Convertido</span>
+          <span class="chip-loja" data-quando="consol=sim"><svg width="11" height="11" style="vertical-align:-1px"><use href="#i-loja"/></svg> Ateliê Lume · Centro</span>
+        </div>
+        <div class="m-sub" id="m-sub">
+          <span data-quando="estado=vazio">Escolha as peças, confira os valores e mande pelo WhatsApp</span>
+          <span data-quando="estado=itens|sair">2 peças · toque numa peça para mudar quantidade, preço ou modelo</span>
+          <span data-quando="estado=catalogo">Toque numa peça do catálogo para adicionar. Você pode adicionar várias.</span>
+          <span data-quando="estado=video">Vídeo pronto e guardado · falta mandar para o cliente</span>
+          <span data-quando="estado=enviado">Enviado 28/09 às 14:32 pelo WhatsApp · em aberto até o cliente responder</span>
+          <span data-quando="estado=ajuste">Versão 2 · o cliente pediu mudança; edite e reenvie</span>
+          <span data-quando="estado=aprovado">Virou pedido #1187 em 29/09 · está na Produção</span>
+        </div>
+      </div>
+      <button class="m-fechar" type="button" aria-label="Fechar"><svg width="18" height="18"><use href="#i-x"/></svg></button>
+    </header>
+
+    <div class="aviso aviso-ajuste" data-quando="estado=ajuste" role="status">
+      <svg width="18" height="18" aria-hidden="true"><use href="#i-doc"/></svg>
+      <div class="txt">O cliente pediu ajuste na versão 1<small>"Quer a caneca preta e o nome em letra maior." O orçamento voltou a ser editável. O vídeo anterior fica guardado até você gravar outro.</small></div>
+    </div>
+    <div class="aviso aviso-ok" data-quando="estado=aprovado" role="status">
+      <svg width="18" height="18" aria-hidden="true"><use href="#i-check"/></svg>
+      <div class="txt">Este orçamento virou o pedido #1187<small>Itens, arte, modelo e condições foram para a Produção. Aqui nada mais muda.</small></div>
+    </div>
+    <div class="aviso aviso-info" data-quando="estado=enviado" role="status">
+      <svg width="18" height="18" aria-hidden="true"><use href="#i-doc"/></svg>
+      <div class="txt">Em aberto: quando o cliente topar pelo WhatsApp, toque em Aprovar.<small>Se pedir mudança, "Cliente pediu ajuste". Se não seguir, "Fechar sem venda".</small></div>
+    </div>
+
+    <div class="m-corpo">
+      <div class="colunas">
+
+        <!-- ─── Coluna das peças ─── -->
+        <div class="col">
+
+          <!-- Catálogo aberto (toma o lugar da lista de peças) -->
+          <div class="secao" data-quando="estado=catalogo">
+            <div class="secao-cab">
+              <h3>Catálogo <b>· 14 produtos</b></h3>
+              <button class="chip" type="button" aria-pressed="false">+ Item avulso</button>
+            </div>
+            <div class="catalogo">
+              <div class="cat-topo">
+                <div class="busca"><svg width="16" height="16"><use href="#i-busca"/></svg><input type="search" placeholder="Buscar por nome, código ou categoria" aria-label="Buscar produto" /></div>
+              </div>
+              <div class="cat-chips" role="group" aria-label="Categoria">
+                <button class="chip" type="button" aria-pressed="true">Todos</button><button class="chip" type="button" aria-pressed="false">Canecas</button><button class="chip" type="button" aria-pressed="false">Camisetas</button><button class="chip" type="button" aria-pressed="false">Embalagens</button><button class="chip" type="button" aria-pressed="false">Brindes</button>
+              </div>
+              <div class="cat-grupo">
+                <h4>Mais usados <span>últimos 90 dias</span></h4>
+                <button class="prod no-orc" type="button" aria-label="Caneca clássica 325 ml, R$ 39,90, já no orçamento, adicionar mais uma">
+                  <span class="thumb p"><svg><use href="#i-caneca"/></svg></span>
+                  <span class="p-info"><span class="p-nome">Caneca clássica 325 ml</span><span class="p-meta"><span class="selo selo-3d">3D</span>Canecas · 31 orçamentos</span></span>
+                  <span class="p-preco">R$ 39,90</span>
+                  <span class="p-mais ok" aria-hidden="true"><svg width="18" height="18"><use href="#i-check"/></svg></span>
+                </button>
+                <button class="prod no-orc" type="button">
+                  <span class="thumb p"><svg><use href="#i-camiseta"/></svg></span>
+                  <span class="p-info"><span class="p-nome">Camiseta algodão premium</span><span class="p-meta"><span class="selo selo-2d">2D</span>Camisetas · 18 orçamentos</span></span>
+                  <span class="p-preco">R$ 59,90</span>
+                  <span class="p-mais ok" aria-hidden="true"><svg width="18" height="18"><use href="#i-check"/></svg></span>
+                </button>
+                <button class="prod" type="button">
+                  <span class="thumb p"><svg><use href="#i-embalagem"/></svg></span>
+                  <span class="p-info"><span class="p-nome">Caixa presente kraft</span><span class="p-meta"><span class="selo selo-sem">Sem mockup</span>Embalagens · 14 orçamentos</span></span>
+                  <span class="p-preco">R$ 4,50</span>
+                  <span class="p-mais" aria-hidden="true"><svg width="18" height="18"><use href="#i-mais"/></svg></span>
+                </button>
+              </div>
+              <div class="cat-grupo">
+                <h4>Recentes <span>que você usou por último</span></h4>
+                <button class="prod" type="button">
+                  <span class="thumb p"><svg><use href="#i-ecobag"/></svg></span>
+                  <span class="p-info"><span class="p-nome">Ecobag algodão cru</span><span class="p-meta"><span class="selo selo-2d">2D</span>Brindes</span></span>
+                  <span class="p-preco">R$ 24,90</span>
+                  <span class="p-mais" aria-hidden="true"><svg width="18" height="18"><use href="#i-mais"/></svg></span>
+                </button>
+                <button class="prod" type="button">
+                  <span class="thumb p"><svg><use href="#i-caneca-preta"/></svg></span>
+                  <span class="p-info"><span class="p-nome">Caneca mágica preta</span><span class="p-meta"><span class="selo selo-3d">3D</span>Canecas</span></span>
+                  <span class="p-preco">R$ 49,90</span>
+                  <span class="p-mais" aria-hidden="true"><svg width="18" height="18"><use href="#i-mais"/></svg></span>
+                </button>
+              </div>
+              <div class="cat-grupo">
+                <h4>Todos os produtos <span>A–Z</span></h4>
+                <button class="prod" type="button">
+                  <span class="thumb p"><svg><use href="#i-chaveiro"/></svg></span>
+                  <span class="p-info"><span class="p-nome">Chaveiro acrílico redondo</span><span class="p-meta"><span class="selo selo-sem">Sem mockup</span>Brindes</span></span>
+                  <span class="p-preco">R$ 8,90</span>
+                  <span class="p-mais" aria-hidden="true"><svg width="18" height="18"><use href="#i-mais"/></svg></span>
+                </button>
+                <button class="prod" type="button">
+                  <span class="thumb p"><svg><use href="#i-camiseta"/></svg></span>
+                  <span class="p-info"><span class="p-nome">Camiseta infantil</span><span class="p-meta"><span class="selo selo-2d">2D</span>Camisetas</span></span>
+                  <span class="p-preco">R$ 44,90</span>
+                  <span class="p-mais" aria-hidden="true"><svg width="18" height="18"><use href="#i-mais"/></svg></span>
+                </button>
+                <p class="ajuda" style="padding: 6px 6px 0">… mais 7 produtos. Role ou busque.</p>
+              </div>
+              <div class="cat-rodape">
+                <span class="n">2 peças no orçamento · R$ 538,70</span>
+                <button class="btn btn-pri" type="button">Concluir</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Lista de peças -->
+          <div class="secao" data-quando="estado=vazio|itens|video|enviado|ajuste|aprovado|sair">
+            <div class="secao-cab">
+              <h3>Peças <b data-quando="estado=itens|video|enviado|ajuste|aprovado|sair">· 2</b></h3>
+              <button class="btn btn-sec btn-peq" type="button" data-quando="estado=itens|video|ajuste|sair"><svg width="14" height="14"><use href="#i-mais"/></svg> Adicionar</button>
+            </div>
+
+            <div class="vazio" data-quando="estado=vazio">
+              <div class="ico" aria-hidden="true"><svg width="24" height="24"><use href="#i-doc"/></svg></div>
+              <b>Nenhuma peça ainda</b>
+              <p>Escolha do catálogo ou adicione um item avulso. O modelo 3D vem junto com o produto.</p>
+              <button class="btn btn-pri" type="button"><svg width="14" height="14"><use href="#i-mais"/></svg> Escolher peças</button>
+            </div>
+
+            <div class="pecas" data-quando="estado=itens|video|enviado|ajuste|aprovado|sair">
+              <!-- peça 1, fechada -->
+              <div class="peca">
+                <button class="peca-linha" type="button" aria-expanded="false">
+                  <span class="thumb"><svg><use href="#i-caneca"/></svg></span>
+                  <span class="peca-info">
+                    <span class="peca-nome">Caneca clássica 325 ml</span>
+                    <span class="peca-meta">12 × R$ 39,90 <span class="selo selo-3d">3D · Caneca clássica</span><span class="selo selo-her" data-quando="estado=itens|video|sair">do produto</span></span>
+                  </span>
+                  <span class="peca-total">R$ 478,80</span>
+                  <span class="peca-seta" aria-hidden="true"><svg width="16" height="16"><use href="#i-seta"/></svg></span>
+                </button>
+              </div>
+
+              <!-- peça 2: fechada quando enviado/aprovado, aberta quando editável -->
+              <div class="peca" data-quando="estado=enviado|aprovado">
+                <button class="peca-linha" type="button" aria-expanded="false">
+                  <span class="thumb"><svg><use href="#i-camiseta"/></svg></span>
+                  <span class="peca-info">
+                    <span class="peca-nome">Camiseta algodão premium</span>
+                    <span class="peca-meta">1 × R$ 59,90 <span class="selo selo-2d">2D · Camiseta frente</span> Arte: "Helena"</span>
+                  </span>
+                  <span class="peca-total">R$ 59,90</span>
+                  <span class="peca-seta" aria-hidden="true"><svg width="16" height="16"><use href="#i-seta"/></svg></span>
+                </button>
+              </div>
+
+              <div class="peca aberta" data-quando="estado=itens|video|ajuste|sair">
+                <button class="peca-linha" type="button" aria-expanded="true">
+                  <span class="thumb"><svg><use href="#i-camiseta"/></svg></span>
+                  <span class="peca-info">
+                    <span class="peca-nome">Camiseta algodão premium</span>
+                    <span class="peca-meta">1 × R$ 59,90 <span class="selo selo-2d">2D · Camiseta frente</span></span>
+                  </span>
+                  <span class="peca-total">R$ 59,90</span>
+                  <span class="peca-seta" aria-hidden="true"><svg width="16" height="16"><use href="#i-seta"/></svg></span>
+                </button>
+                <div class="peca-edit">
+                  <div class="campos-2">
+                    <div class="campo">
+                      <label for="qtd2">Quantidade</label>
+                      <div class="stepper"><button type="button" aria-label="Menos um">−</button><input id="qtd2" type="text" inputmode="decimal" value="1" /><button type="button" aria-label="Mais um">+</button></div>
+                    </div>
+                    <div class="campo">
+                      <label for="preco2">Preço unitário (R$)</label>
+                      <input id="preco2" type="text" inputmode="decimal" value="59,90" />
+                      <span class="dica">Sugerido pelo motor de preço · custo R$ 31,20</span>
+                    </div>
+                  </div>
+
+                  <div class="campo" style="position: relative">
+                    <label for="modelo2">Modelo do mockup</label>
+                    <div class="modelo-linha">
+                      <div style="position: relative; min-width: 0">
+                        <button class="gatilho" id="modelo2" type="button" aria-haspopup="listbox" aria-expanded="false" data-seletor-gatilho>
+                          <span class="mini"><svg><use href="#i-camiseta"/></svg></span>
+                          <span style="flex:1; min-width:0">
+                            <span class="g-nome" style="display:block">Camiseta · frente</span>
+                            <span class="g-meta"><span class="selo selo-2d">2D</span><span>Foto de estúdio · só frente</span><span class="selo selo-her">do produto</span></span>
+                          </span>
+                          <svg width="18" height="18" style="color: var(--ink3); flex:none"><use href="#i-seta"/></svg>
+                        </button>
+
+                        <!-- Seletor: popover (desktop) / folha (celular). Mesmo SeletorDeModelo da ficha. -->
+                        <div class="seletor">
+                          <div class="seletor-veu"></div>
+                          <div class="seletor-caixa" role="dialog" aria-label="Escolher modelo para Camiseta algodão premium">
+                            <div class="seletor-folha-cab"><div class="t"><b>Escolher modelo</b><span>Camiseta algodão premium · só neste orçamento</span></div><button class="m-fechar" type="button" aria-label="Fechar sem mudar"><svg width="18" height="18"><use href="#i-x"/></svg></button></div>
+                            <div class="seletor-lista" role="listbox" aria-label="Modelos">
+                              <div class="grupo-mod"><span>Do produto</span></div>
+                              <button class="opcao" type="button" role="option" aria-selected="true">
+                                <span class="mini"><svg><use href="#i-camiseta"/></svg></span>
+                                <span><span class="o-nome" style="display:block">Camiseta · frente</span><span class="o-meta">O que a ficha do produto usa hoje</span></span>
+                                <span class="atual"><svg width="13" height="13"><use href="#i-check"/></svg>Atual</span>
+                                <span class="radio" aria-hidden="true"></span>
+                              </button>
+                              <div class="grupo-mod"><span>3D · a cliente gira a peça</span><span>3</span></div>
+                              <button class="opcao marcada" type="button" role="option" aria-selected="false">
+                                <span class="mini"><svg><use href="#i-camiseta"/></svg></span>
+                                <span><span class="o-nome" style="display:block">Camiseta 3D · frente e costas</span><span class="o-meta">Frente e costas</span></span>
+                                <span class="radio" aria-hidden="true"></span>
+                              </button>
+                              <button class="opcao" type="button" role="option" aria-selected="false">
+                                <span class="mini"><svg><use href="#i-caneca"/></svg></span>
+                                <span><span class="o-nome" style="display:block">Caneca clássica</span><span class="o-meta">Painel e volta inteira</span></span>
+                                <span class="radio" aria-hidden="true"></span>
+                              </button>
+                              <button class="opcao" type="button" role="option" aria-selected="false">
+                                <span class="mini"><svg><use href="#i-caneca-preta"/></svg></span>
+                                <span><span class="o-nome" style="display:block">Caneca mágica</span><span class="o-meta">Painel e volta inteira</span></span>
+                                <span class="radio" aria-hidden="true"></span>
+                              </button>
+                              <div class="grupo-mod"><span>2D · a arte na foto da peça</span><span>2</span></div>
+                              <button class="opcao" type="button" role="option" aria-selected="false">
+                                <span class="mini"><svg><use href="#i-ecobag"/></svg></span>
+                                <span><span class="o-nome" style="display:block">Ecobag · frente</span><span class="o-meta">Foto de estúdio · só frente</span></span>
+                                <span class="radio" aria-hidden="true"></span>
+                              </button>
+                              <button class="opcao" type="button" role="option" aria-selected="false">
+                                <span class="mini sem"><svg width="18" height="18"><use href="#i-sem"/></svg></span>
+                                <span><span class="o-nome" style="display:block">Sem mockup</span><span class="o-meta">Vai a foto do produto, sem vídeo</span></span>
+                                <span class="radio" aria-hidden="true"></span>
+                              </button>
+                            </div>
+                            <div class="seletor-rodape"><span class="mouse">Passe o mouse para ver na prévia. Clique para usar só neste orçamento.</span><span class="toque">Você está vendo a prévia. Toque em Usar este modelo para gravar.</span></div>
+                            <div class="seletor-folha-acoes"><button class="btn btn-sec" type="button">Cancelar</button><button class="btn btn-pri" type="button">Usar este modelo</button></div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="previa-cx"><div class="previa" aria-hidden="true"><svg><use href="#i-camiseta"/></svg></div><small>prévia com "Helena"</small></div>
+                    </div>
+                    <span class="dica">Vem do produto. Trocar aqui vale só neste orçamento e é o que vai no vídeo 3D.</span>
+                  </div>
+
+                  <div class="campo">
+                    <label for="arte2">Arte do cliente (opcional)</label>
+                    <input id="arte2" type="text" value="Helena" placeholder="Texto na peça" />
+                    <span class="dica">Imagem e cor da peça você ajusta no vídeo, com a prévia ao vivo.</span>
+                  </div>
+
+                  <div class="acoes-peca">
+                    <button class="btn btn-ter perigo btn-peq" type="button">Tirar do orçamento</button>
+                    <button class="btn btn-sec btn-peq" type="button">Pronto</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ─── Coluna do cliente, condições e resumo ─── -->
+        <div class="col">
+
+          <div class="secao" data-quando="estado=video">
+            <h3>Vídeo do orçamento</h3>
+            <div class="video-card">
+              <div class="quadro" aria-hidden="true"><svg><use href="#i-caneca"/></svg><span class="play">▶</span></div>
+              <div class="vi"><b>Caneca clássica · 7 s · MP4</b><span>Gravado hoje às 11:05 · guardado até 29/10</span><span>Ainda não foi enviado</span></div>
+              <div class="va"><button class="btn btn-sec btn-peq" type="button">Ver</button><button class="btn btn-sec btn-peq" type="button">Gravar de novo</button></div>
+            </div>
+          </div>
+
+          <div class="secao" data-quando="estado=enviado|ajuste|aprovado">
+            <h3>Acompanhamento</h3>
+            <div class="tl">
+              <div><i class="ok"></i><b>Enviado</b><span>28/09 às 14:32 · pelo WhatsApp</span></div>
+              <div><i class="ok"></i><b>Cliente abriu</b><span data-quando="estado=enviado|ajuste|aprovado">28/09 às 15:10</span></div>
+              <div><i data-quando="estado=enviado"></i><i class="ok" data-quando="estado=ajuste|aprovado"></i><b>Resposta</b><span class="mudo" data-quando="estado=enviado">aguardando · válido até 06/10</span><span data-quando="estado=ajuste">Pediu ajuste · 29/09 às 09:40</span><span data-quando="estado=aprovado">Aprovado · 29/09 às 10:15</span></div>
+            </div>
+            <div class="video-card">
+              <div class="quadro" aria-hidden="true"><svg><use href="#i-caneca"/></svg><span class="play">▶</span></div>
+              <div class="vi"><b>Vídeo enviado · versão 1</b><span>Guardado até 28/10</span></div>
+              <div class="va"><button class="btn btn-sec btn-peq" type="button">Baixar</button><button class="btn btn-sec btn-peq" type="button">Manter +30 dias</button></div>
+            </div>
+            <div class="nota-ajuste" data-quando="estado=ajuste|aprovado"><small>Histórico · versão 1 · 29/09 às 09:40</small><span>Quer a caneca preta e o nome em letra maior.</span></div>
+          </div>
+
+          <div class="secao">
+            <h3>Cliente</h3>
+            <div class="campo"><label for="cli">Nome</label><input id="cli" type="text" value="Mariana Costa" placeholder="Quem vai receber o orçamento" data-ro data-vazio="" /></div>
+            <div class="campo"><label for="zap">WhatsApp</label><input id="zap" type="tel" inputmode="tel" value="(11) 98765-4321" placeholder="(DDD) número" data-ro data-vazio="" /><span class="dica">É para este número que o vídeo vai.</span></div>
+          </div>
+
+          <div class="secao">
+            <h3>Condições</h3>
+            <div class="campo">
+              <span class="campo" style="display:block"><label>Validade</label></span>
+              <div class="chips" role="group" aria-label="Validade em dias"><button class="chip" type="button" aria-pressed="false">3 dias</button><button class="chip" type="button" aria-pressed="true">7 dias</button><button class="chip" type="button" aria-pressed="false">15 dias</button><button class="chip" type="button" aria-pressed="false">30 dias</button></div>
+              <span class="dica">Vale até 06/10/2026</span>
+            </div>
+            <div class="campos-2">
+              <div class="campo"><label for="sinal">Sinal para começar (%)</label><input id="sinal" type="text" inputmode="decimal" value="50" placeholder="—" data-ro data-vazio="" /><span class="dica"><span data-quando="estado=vazio">vazio = sem sinal</span><span data-quando="estado=itens|catalogo|video|enviado|ajuste|aprovado|sair">R$ 266,40</span></span></div>
+              <div class="campo"><label for="pix">Desconto no Pix (%)</label><input id="pix" type="text" inputmode="decimal" value="5" placeholder="—" data-ro data-vazio="" /><span class="dica"><span data-quando="estado=vazio">vazio = sem desconto</span><span data-quando="estado=itens|catalogo|video|enviado|ajuste|aprovado|sair">R$ 506,16 no Pix</span></span></div>
+            </div>
+            <details class="mais">
+              <summary>Mais condições <svg class="seta" width="14" height="14"><use href="#i-seta"/></svg></summary>
+              <div class="dentro">
+                <div class="campos-2">
+                  <div class="campo"><label for="parc">Parcelas sem juros</label><input id="parc" type="text" inputmode="numeric" value="6" data-ro /><span class="dica">6× de R$ 88,80</span></div>
+                  <div class="campo"><label for="prazo">Prazo (dias úteis)</label><input id="prazo" type="text" inputmode="numeric" value="7" data-ro /><span class="dica">depois de aprovar a arte</span></div>
+                </div>
+                <div class="campo"><label for="obs">Observação (vai na mensagem)</label><textarea id="obs" rows="2" placeholder="Ex.: frete por conta do cliente" data-ro></textarea></div>
+              </div>
+            </details>
+          </div>
+
+          <div class="secao">
+            <h3>Resumo</h3>
+            <div class="resumo">
+              <div class="r-linha"><span>Subtotal<span data-quando="estado=itens|catalogo|video|enviado|ajuste|aprovado|sair"> · 13 unidades</span></span><span data-quando="estado=vazio">R$ 0,00</span><span data-quando="estado=catalogo">R$ 538,70</span><span data-quando="estado=itens|video|enviado|ajuste|aprovado|sair">R$ 538,70</span></div>
+              <div class="r-linha"><span>Desconto (R$)</span><span class="campo" style="margin:0"><input type="text" inputmode="decimal" value="5,90" placeholder="0,00" aria-label="Desconto em reais" data-ro data-vazio="" /></span></div>
+              <div class="r-linha" data-quando="estado=itens|catalogo|video|enviado|ajuste|aprovado|sair"><span>Sinal (50 %)</span><span>R$ 266,40</span></div>
+              <div class="r-linha total"><span>Total</span><b data-quando="estado=vazio">R$ 0,00</b><b data-quando="estado=itens|catalogo|video|enviado|ajuste|aprovado|sair">R$ 532,80</b></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="m-pe">
+      <div class="info">
+        <span data-quando="estado=vazio">Sem peças ainda<small>Adicione ao menos uma para enviar</small></span>
+        <span data-quando="estado=itens|sair">2 peças · 13 unidades · R$ 532,80<small>Salvo automaticamente ao fechar</small></span>
+        <span data-quando="estado=catalogo">2 peças no orçamento · R$ 538,70</span>
+        <span data-quando="estado=video">2 peças · R$ 532,80 · vídeo pronto<small>O envio abre o WhatsApp com o vídeo e a mensagem</small></span>
+        <span data-quando="estado=enviado">Total R$ 532,80 · R$ 506,16 no Pix<small>Válido até 06/10</small></span>
+        <span data-quando="estado=ajuste">2 peças · R$ 532,80<small>O reenvio vai como versão 2</small></span>
+        <span data-quando="estado=aprovado">Pedido #1187 · sinal de R$ 266,40 a receber</span>
+      </div>
+      <div class="acoes">
+        <!-- vazio -->
+        <button class="btn btn-ter" type="button" data-quando="estado=vazio">Cancelar</button>
+        <button class="btn btn-sec" type="button" data-quando="estado=vazio">Salvar rascunho</button>
+        <button class="btn btn-wa" type="button" data-quando="estado=vazio" aria-disabled="true">Enviar pelo WhatsApp</button>
+        <!-- com peças -->
+        <button class="btn btn-ter" type="button" data-quando="estado=itens|sair">Cancelar</button>
+        <button class="btn btn-sec" type="button" data-quando="estado=itens|sair">Salvar rascunho</button>
+        <button class="btn btn-wa" type="button" data-quando="estado=itens|sair"><svg width="15" height="15"><use href="#i-cam"/></svg> Enviar pelo WhatsApp</button>
+        <!-- catálogo -->
+        <button class="btn btn-sec" type="button" data-quando="estado=catalogo">Voltar às peças</button>
+        <button class="btn btn-pri" type="button" data-quando="estado=catalogo">Concluir</button>
+        <!-- vídeo gerado -->
+        <button class="btn btn-ter" type="button" data-quando="estado=video">Cancelar</button>
+        <button class="btn btn-sec" type="button" data-quando="estado=video">Salvar rascunho</button>
+        <button class="btn btn-wa" type="button" data-quando="estado=video"><svg width="15" height="15"><use href="#i-cam"/></svg> Enviar pelo WhatsApp</button>
+        <!-- enviado -->
+        <button class="btn btn-ter" type="button" data-quando="estado=enviado">Fechar sem venda</button>
+        <button class="btn btn-sec" type="button" data-quando="estado=enviado">Cliente pediu ajuste</button>
+        <button class="btn btn-ok" type="button" data-quando="estado=enviado"><svg width="15" height="15"><use href="#i-check"/></svg> Aprovar · vira pedido</button>
+        <!-- ajuste -->
+        <button class="btn btn-ter" type="button" data-quando="estado=ajuste">Fechar sem venda</button>
+        <button class="btn btn-sec" type="button" data-quando="estado=ajuste">Salvar rascunho</button>
+        <button class="btn btn-wa" type="button" data-quando="estado=ajuste"><svg width="15" height="15"><use href="#i-cam"/></svg> Reenviar pelo WhatsApp</button>
+        <!-- aprovado -->
+        <button class="btn btn-sec" type="button" data-quando="estado=aprovado">Fechar</button>
+        <button class="btn btn-pri" type="button" data-quando="estado=aprovado">Ver pedido #1187</button>
+      </div>
+    </footer>
+
+    <div class="sair" role="alertdialog" aria-labelledby="sair-t" aria-describedby="sair-d">
+      <div class="cx">
+        <h4 id="sair-t">Sair sem salvar?</h4>
+        <p id="sair-d">Você mudou 2 peças e o desconto. Se sair sem salvar, o orçamento fica como estava.</p>
+        <div class="a"><button class="btn btn-ter perigo" type="button">Descartar</button><button class="btn btn-pri" type="button">Salvar e sair</button></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+  <aside class="moldura" aria-label="Mesmo mockup a 390 px">
+    <div class="tel"><iframe id="tel" title="Celular 390 px"></iframe></div>
+    <p>390 × 780 · mesmo arquivo, mesmo estado</p>
+  </aside>
+</div>
+
+<script>
+(function () {
+  var html = document.documentElement;
+  var CHAVES = { tema: "data-theme", estado: "data-estado", seletor: "data-seletor", consol: "data-consol", vista: "data-vista" };
+  var PADRAO = { tema: "light", estado: "itens", seletor: "fechado", consol: "nao", vista: "unica" };
+
+  function ler() {
+    var p = new URLSearchParams(location.search), o = {};
+    Object.keys(CHAVES).forEach(function (k) { o[k] = p.get(k) || PADRAO[k]; });
+    if (p.get("embutido") === "1") html.setAttribute("data-embutido", "1");
+    return o;
+  }
+  function aplicar(o) {
+    Object.keys(CHAVES).forEach(function (k) { html.setAttribute(CHAVES[k], o[k]); });
+    document.querySelectorAll(".estados button[data-set]").forEach(function (b) {
+      var kv = b.getAttribute("data-set").split("=");
+      b.setAttribute("aria-pressed", o[kv[0]] === kv[1] ? "true" : "false");
+    });
+    document.querySelectorAll("[data-quando]").forEach(function (el) {
+      var ok = el.getAttribute("data-quando").split(" ").every(function (cond) {
+        var kv = cond.split("=");
+        return kv[1].split("|").indexOf(o[kv[0]]) >= 0;
+      });
+      el.hidden = !ok;
+    });
+    // Enviado e aprovado: campos só leitura.
+    var ro = o.estado === "enviado" || o.estado === "aprovado";
+    document.querySelectorAll("[data-ro]").forEach(function (i) { i.readOnly = ro; i.setAttribute("aria-readonly", ro ? "true" : "false"); });
+    // Novo orçamento: campos em branco.
+    document.querySelectorAll("[data-vazio]").forEach(function (i) {
+      if (i.dataset.orig === undefined) i.dataset.orig = i.value;
+      i.value = o.estado === "vazio" ? i.getAttribute("data-vazio") : i.dataset.orig;
+    });
+    document.querySelectorAll("[data-seletor-gatilho]").forEach(function (g) { g.setAttribute("aria-expanded", o.seletor === "aberto" ? "true" : "false"); });
+    // A moldura do celular carrega o mesmo arquivo, embutido.
+    var tel = document.getElementById("tel");
+    if (tel) {
+      var q = new URLSearchParams(); Object.keys(CHAVES).forEach(function (k) { if (k !== "vista") q.set(k, o[k]); }); q.set("embutido", "1");
+      var src = location.pathname + "?" + q.toString();
+      if (o.vista === "dupla") { if (tel.getAttribute("src") !== src) tel.setAttribute("src", src); }
+      else if (tel.getAttribute("src")) tel.removeAttribute("src");
+    }
+  }
+  var atual = ler();
+  aplicar(atual);
+  document.querySelectorAll(".estados button[data-set]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var kv = b.getAttribute("data-set").split("=");
+      atual[kv[0]] = kv[1];
+      var p = new URLSearchParams(location.search);
+      p.set(kv[0], kv[1]);
+      history.replaceState(null, "", location.pathname + "?" + p.toString());
+      aplicar(atual);
+    });
+  });
+  // Cliques de demonstração: gatilho abre/fecha o seletor; "Adicionar"/"Escolher peças" vão ao catálogo; "Concluir"/"Voltar" voltam.
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b || b.closest(".estados")) return;
+    var t = (b.textContent || "").trim();
+    if (b.hasAttribute("data-seletor-gatilho") || b.closest(".seletor-folha-acoes") || b.closest(".seletor-folha-cab") || b.closest(".opcao")) {
+      atual.seletor = atual.seletor === "aberto" ? "fechado" : "aberto"; aplicar(atual); return;
+    }
+    if (/^\+?\s*(Adicionar|Escolher peças)$/.test(t)) { atual.estado = "catalogo"; aplicar(atual); }
+    else if (t === "Concluir" || t === "Voltar às peças") { atual.estado = "itens"; aplicar(atual); }
+    else if (b.classList.contains("m-fechar") && b.closest(".m-cabeca") && ["itens", "video", "ajuste"].indexOf(atual.estado) >= 0) { atual.estado = "sair"; aplicar(atual); }
+    else if (t === "Descartar" || t === "Salvar e sair") { atual.estado = "itens"; aplicar(atual); }
+  });
+})();
+</script>
+</body>
+</html>
