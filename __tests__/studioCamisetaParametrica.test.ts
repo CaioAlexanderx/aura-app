@@ -72,10 +72,19 @@ describe("construirCamiseta — a malha-base é fechada, manifold e do tamanho c
     expect(Math.max(...peito.map((p: V3) => p[0])) - Math.min(...peito.map((p: V3) => p[0]))).toBeCloseTo(2 * PARAMETROS.meiaLarguraDoPeito, 0);
     expect(Math.max(...z) - Math.min(...z)).toBeGreaterThan(19);                // volume de torso ≈ 20 cm (28/09: eram 18, e de lado virava tubo achatado)
     expect(Math.max(...z) - Math.min(...z)).toBeLessThan(21.5);
-    // a manga cai abaixo da axila e termina fora do corpo
+    // a manga cai abaixo da axila e termina fora do corpo (a 40° ela
+    // alcança menos para o lado e mais para baixo do que a 30°)
     const manga = base.pos.filter((_: V3, i: number) => base.grupos[i] === "mangaDireita");
-    expect(Math.max(...manga.map((p: V3) => p[0]))).toBeGreaterThan(PARAMETROS.meiaLarguraDoPeito + 12);
-    expect(Math.min(...manga.map((p: V3) => p[1]))).toBeLessThan(PARAMETROS.alturaDaCava - 3);
+    expect(Math.max(...manga.map((p: V3) => p[0]))).toBeGreaterThan(PARAMETROS.meiaLarguraDoPeito + 10);
+    // (o lado da axila é mais curto, então a boca não desce tanto quanto o eixo sugere)
+    expect(Math.min(...manga.map((p: V3) => p[1]))).toBeLessThan(PARAMETROS.alturaDaCava - 2.5);
+    // e a boca é inclinada: a costura da axila (da axila ao ponto mais
+    // baixo da boca) é bem mais curta que os 20 cm da borda de cima
+    const fundoDaBoca = manga.reduce((m: V3, p: V3) => (p[1] < m[1] ? p : m));
+    const axila = base.medidas.axilas[0];
+    const costuraDaAxila = Math.hypot(fundoDaBoca[0] - axila[0], fundoDaBoca[1] - axila[1], fundoDaBoca[2] - axila[2]);
+    expect(costuraDaAxila).toBeLessThan(PARAMETROS.comprimentoDaManga - 3);
+    expect(costuraDaAxila).toBeGreaterThan(3);
     expect(Math.max(...x) + Math.min(...x)).toBeCloseTo(0, 6);                 // simétrica em x
   });
 
@@ -141,6 +150,43 @@ describe("UV — ilhas retangulares limpas, painéis nas faixas de u, projeção
     };
     expect(par("frente")).toBeGreaterThan(0);
     expect(par("costas")).toBeLessThan(0);
+  });
+});
+
+describe("acabamento — costuras e ribana em UV para o viewer (extras do mesh)", () => {
+  const A = base.acabamento;
+
+  it("a ribana ocupa a própria ilha, abaixo dos painéis, e as costuras são polilinhas em [0,1]", () => {
+    expect(A.schema).toBe(1);
+    expect(A.cmPorUv).toBe(PARAMETROS.cmPorUv);
+    expect(A.ribana.u0).toBeCloseTo(ilhasDeUv(PARAMETROS).ribana.u0, 6);
+    expect(A.ribana.v1).toBeLessThan(PARAMETROS.vBaseDosPaineis);
+    expect(A.ribana.u1).toBeLessThanOrEqual(1);
+    expect((A.ribana.v1 - A.ribana.v0) * PARAMETROS.cmPorUv).toBeCloseTo(2 * PARAMETROS.ribana + PARAMETROS.espessuraDaRibana, 1);
+    for (const c of A.costuras) {
+      expect(c.pontos.length).toBeGreaterThanOrEqual(2);
+      for (const [u, v] of c.pontos) { expect(u).toBeGreaterThanOrEqual(0); expect(u).toBeLessThanOrEqual(1); expect(v).toBeGreaterThanOrEqual(0); expect(v).toBeLessThanOrEqual(1); }
+    }
+  });
+
+  it("cada painel tem gola, dois ombros, duas cavas, duas laterais e o pesponto duplo; cada manga, a cava e o pesponto duplo", () => {
+    const tipos = (filtro: (c: any) => boolean) => A.costuras.filter(filtro).map((c: any) => c.tipo).sort();
+    const noPainel = (frente: boolean) => (c: any) => c.pontos.every(([u, v]: number[]) => (frente ? u < 0.5 : u >= 0.5) && v >= PARAMETROS.vBaseDosPaineis);
+    for (const frente of [true, false]) {
+      expect(tipos(noPainel(frente))).toEqual(["bainha", "bainha", "cava", "cava", "gola", "lateral", "lateral", "ombro", "ombro"]);
+    }
+    const naManga = (c: any) => c.pontos.every(([, v]: number[]) => v < PARAMETROS.vBaseDosPaineis);
+    expect(tipos(naManga)).toEqual(["bainha", "bainha", "bainha", "bainha", "cava", "cava"]);
+    // o pesponto da bainha do painel corre a 2,5 cm da barra (e a segunda agulha 0,6 cm abaixo)
+    const bainhasDaFrente = A.costuras.filter((c: any) => c.tipo === "bainha" && noPainel(true)(c)).map((c: any) => (c.pontos[0][1] - PARAMETROS.vBaseDosPaineis) * PARAMETROS.cmPorUv).sort();
+    expect(bainhasDaFrente[0]).toBeCloseTo(PARAMETROS.bainha - 0.6, 1);
+    expect(bainhasDaFrente[1]).toBeCloseTo(PARAMETROS.bainha, 1);
+  });
+
+  it("o GLB leva o acabamento nos extras do mesh, igual ao da malha-base", () => {
+    const lido = lerGlb(gerada.glb);
+    expect(lido.json.meshes[0].extras.acabamento).toEqual(A);
+    expect(JSON.stringify(A).length).toBeLessThan(20000); // cabe no JSON do GLB sem pesar
   });
 });
 

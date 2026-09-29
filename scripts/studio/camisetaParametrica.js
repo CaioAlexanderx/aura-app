@@ -28,7 +28,7 @@
 
 const {
   escreverGlb, soldar, estatisticasDeArestas, subdividirLoop, normaisSuaves,
-  aplicarDobras, oclusaoPorVertice, pesoDasDobras, minmax,
+  aplicarDobras, oclusaoPorVertice, oclusaoDeCavidade, pesoDasDobras, minmax,
 } = require("./refinarMalha.js");
 
 // ── Parâmetros (centímetros e graus) ─────────────────────────
@@ -65,11 +65,16 @@ const PARAMETROS = {
   profundidadeDaGolaFrente: 7,
   profundidadeDaGolaCostas: 1.5,
   inicioDaGola: 52,
-  // Ribana de 2 cm em pé na gola, com espessura (a faixa tem face externa,
-  // borda e face interna); a ribana inclina-se um pouco para dentro.
+  // Ribana de 2 cm na gola careca, com espessura (face externa, borda
+  // enrolada e face interna). 28/09/2026: a faixa subia em pé inclinada
+  // PARA DENTRO e lia como gola alta de manequim; agora sobe do pesponto
+  // abrindo para fora — mais na frente, onde o peito a afasta do pescoço,
+  // menos atrás — e a borda de cima enrola um pouco mais (`rolo`). Pela
+  // abertura se vê o avesso da ribana das costas, como na foto.
   ribana: 2,
-  espessuraDaRibana: 0.35,
-  inclinacaoDaRibana: 0.3,
+  espessuraDaRibana: 0.45,
+  aberturaDaRibana: { frente: 0.6, costas: 0.28 },
+  roloDaRibana: 0.45,
   // Bainhas: 2,5 cm na barra e 2 cm na boca da manga, dobradas para dentro
   // com uma espessura pequena (a dobra é o que se vê como bainha).
   bainha: 2.5,
@@ -86,16 +91,20 @@ const PARAMETROS = {
   // manequim fantasma fica mais achatado que uma elipse).
   expoenteDaSecao: 2.4,
   // Manga curta: 20 cm medidos da ponta do ombro pela borda de cima, eixo
-  // caído 30° abaixo da horizontal (28/09/2026: eram 20°, e a manga ficava
-  // dura e horizontal) e ainda vergando mais `quedaDaManga` cm até a boca,
-  // como tecido que pende. Boca aberta com 20 cm de largura plana e ~9 cm
-  // de profundidade — achatada, como uma manga pendurada, e não um tubo
-  // redondo (afina de leve da cava até a boca).
+  // caído 40° abaixo da horizontal (28/09/2026: eram 20°, depois 30°, e a
+  // manga ainda saía dura como um tubo) e ainda vergando mais
+  // `quedaDaManga` cm até a boca, como tecido que pende. Boca aberta com
+  // 20 cm de largura plana e ~9 cm de profundidade — achatada, como uma
+  // manga pendurada, e não um tubo redondo (afina de leve da cava até a
+  // boca). O lado de baixo da manga (a costura da axila) é mais curto que
+  // o de cima em `encurtamentoDaAxila` cm: a boca fica inclinada, não um
+  // corte perpendicular ao eixo.
   comprimentoDaManga: 20,
-  inclinacaoDaManga: 30,
-  quedaDaManga: 2.2,
-  meiaAlturaDaBocaDaManga: 10,
-  meiaProfundidadeDaManga: [5.4, 4.5],
+  inclinacaoDaManga: 40,
+  quedaDaManga: 3.2,
+  encurtamentoDaAxila: 4.5,
+  meiaAlturaDaBocaDaManga: 8.8,
+  meiaProfundidadeDaManga: [5.4, 5.7],
   // Até que fração do comprimento a manga ainda "lembra" o contorno da
   // cava antes de virar o tubo achatado da boca.
   transicaoDaManga: 0.55,
@@ -133,11 +142,20 @@ const PARAMETROS = {
   //   - relaxamento na cintura, nas laterais (o tecido junta onde não há
   //     corpo segurando).
   // Amplitudes em cm; `ondas` é o número de pregas na largura da frente.
+  // As costas (28/09/2026) não repetem a frente: pregas mais largas e mais
+  // baixas, dobras da axila mais deitadas e mais fracas, e uma prateleira
+  // de tecido solto abaixo das omoplatas (onde o manequim deixa de segurar
+  // o pano).
   caimento: {
     pregas: { amplitude: 0.55, ondas: 3.2, inicio: 34, semente: 23 },
-    axilas: { amplitude: 0.45, alcance: 17, passo: 6.5 },
+    pregasCostas: { amplitude: 0.42, ondas: 2.3, inicio: 30 },
+    axilas: { amplitude: 0.45, alcance: 17, passo: 6.5, inclinacao: 45 },
+    axilasCostas: { amplitude: 0.3, inclinacao: 30 },
     cintura: { amplitude: 0.35, altura: 27, largura: 7 },
+    omoplatas: { amplitude: 0.4, altura: 47, largura: 4.5 },
   },
+  // Oclusão de cavidade: o fundo de cada dobra escurece (refinarMalha.js).
+  cavidade: { ganho: 4.5, maximo: 0.3 },
 };
 
 // ── Álgebra pequena ──────────────────────────────────────────
@@ -331,6 +349,44 @@ function construirCamiseta(P = PARAMETROS) {
   const iFrente = (k, j) => baseFrente + k * (M + 1) + j;
   const iCostas = (k, j) => baseCostas + k * (M + 1) + j;
 
+  // ── Acabamento para o viewer (28/09/2026) ──
+  // As costuras em UV (v crescendo para cima, como a spec) e o retângulo
+  // da ilha da ribana vão nos `extras` do mesh: o viewer desenha o
+  // pesponto e o vinco no mapa de normais e na textura, e a ribana em
+  // canelado — o que uma foto de produto mostra e um render liso não.
+  // Tudo em UV porque a malha é refinada depois (o Loop preserva a UV das
+  // arestas das ilhas) e porque o viewer só conhece a textura.
+  const costuras = [];
+  const arred4 = (x) => Math.round(x * 10000) / 10000;
+  const uvDe = (i) => [uv[i][0], 1 - uv[i][1]];
+  // `desloc` (em cm, convertido para UV) empurra a linha para DENTRO do
+  // tecido: as costuras do molde ficam na aresta da ilha, e um pesponto
+  // desenhado em cima da aresta sairia cortado ao meio.
+  const costura = (tipo, pontos, desloc = [0, 0]) => {
+    costuras.push({ tipo, pontos: pontos.map(([u, v]) => [arred4(u + desloc[0] / cm), arred4(v + desloc[1] / cm)]) });
+  };
+  const RECUO = 0.35;
+  // painéis: gola (linha de cima, recuada sob a ribana), ombro, cava e
+  // lateral (colunas 0 e M, recuadas para o centro do painel), pesponto
+  // duplo da bainha (a linha em y = bainha existe de propósito; a segunda
+  // agulha corre 0,6 cm abaixo)
+  const kBainha = linhas.findIndex((l) => l.Y === P.bainha);
+  for (const frente of [true, false]) {
+    const idx = frente ? iFrente : iCostas;
+    const linhaDeK = (k) => Array.from({ length: M + 1 }, (_, j) => uvDe(idx(k, j)));
+    costura("gola", linhaDeK(R - 1), [0, -0.5]);
+    if (kBainha > 0) { costura("bainha", linhaDeK(kBainha)); costura("bainha", linhaDeK(kBainha), [0, -0.6]); }
+    for (const j of [0, M]) {
+      // coluna 0 é x > 0: na frente (u = 0.25 + x/cm) o centro fica em u
+      // menor; nas costas (u = 0.75 - x/cm), em u maior
+      const paraOCentro = (j === 0) === frente ? -RECUO : RECUO;
+      const coluna = (de, ate) => { const pts = []; for (let k = de; k <= ate; k++) pts.push(uvDe(idx(k, j))); return pts; };
+      costura("lateral", coluna(0, kAxila), [paraOCentro, 0]);
+      costura("cava", coluna(kAxila, kPonta), [paraOCentro, 0]);
+      costura("ombro", coluna(kPonta, R - 1), [paraOCentro, 0]);
+    }
+  }
+
   // ── Mangas: anéis ao longo do eixo, o primeiro é a própria cava ──
   const manga = (direita) => {
     const sx = direita ? 1 : -1;
@@ -363,12 +419,21 @@ function construirCamiseta(P = PARAMETROS) {
       const h = lerp(meiaAltura0, P.meiaAlturaDaBocaDaManga, s);
       const e = lerp(P.meiaProfundidadeDaManga[0], P.meiaProfundidadeDaManga[1], s);
       const beta = suave(s / P.transicaoDaManga);
+      // O plano do anel inclina aos poucos: vertical na cava (o anel 0 É a
+      // cava, em pé) e perpendicular ao eixo na boca. Com o plano já
+      // girado desde a cava, o topo da elipse ficava fora e acima da ponta
+      // do ombro e a cabeça da manga estufava (28/09/2026).
+      const cimaS = unitario(lerp3([0, 1, 0], cima, suave(s)));
       // vinco da bainha da manga, como na barra
       const vinco = L * (1 - s) <= P.bainhaDaManga ? P.espessuraDaBainha * 0.4 : 0;
       return cava.map((p, i) => {
         const varrido = soma(p, escala(eixo, L * s));
-        const elipse = soma(soma(centro, escala(cima, h * Math.sin(angulo[i]))), [0, 0, e * Math.cos(angulo[i])]);
-        const q = lerp3(varrido, elipse, beta);
+        const elipse = soma(soma(centro, escala(cimaS, h * Math.sin(angulo[i]))), [0, 0, e * Math.cos(angulo[i])]);
+        let q = lerp3(varrido, elipse, beta);
+        // o lado de baixo (axila) recua ao longo do eixo: a boca fica
+        // inclinada, mais curta por baixo, como numa manga que pende
+        const porBaixo = Math.max(0, -Math.sin(angulo[i]));
+        if (P.encurtamentoDaAxila) q = sub(q, escala(eixo, P.encurtamentoDaAxila * porBaixo * s * s));
         return vinco ? soma(q, escala(unitario(sub(q, centro)), vinco)) : q;
       });
     };
@@ -403,6 +468,12 @@ function construirCamiseta(P = PARAMETROS) {
         if (direita) quad(a, b, d, c); else quad(a, c, d, b);
       }
     }
+    // costuras da manga em UV: a cava (anel 0) e o pesponto da bainha da
+    // boca, `bainhaDaManga` cm antes da borda
+    costura("cava", aneis[0].map(uvDe), [0, RECUO]);
+    const vBainha = ilha.v0 + (L - P.bainhaDaManga) / cm;
+    costura("bainha", [[ilha.u0, vBainha], [ilha.u0 + perimetro / cm, vBainha]]);
+    costura("bainha", [[ilha.u0, vBainha], [ilha.u0 + perimetro / cm, vBainha]], [0, 0.6]);
     return { perimetro, comprimento: L + P.espessuraDaBainha + P.bainhaDaManga };
   };
 
@@ -426,15 +497,27 @@ function construirCamiseta(P = PARAMETROS) {
   for (let j = 0; j <= M; j++) gola.push(pos[iFrente(R - 1, j)]);
   for (let j = M - 1; j >= 1; j--) gola.push(pos[iCostas(R - 1, j)]);
   gola.push(gola[0]);
-  const direcaoDaRibana = (p) => unitario(sub([0, 1, 0], escala(horizontalParaFora(p), P.inclinacaoDaRibana)));
-  const ribanaTopo = gola.map((p) => soma(p, escala(direcaoDaRibana(p), P.ribana)));
-  const ribanaTopoDentro = ribanaTopo.map((p) => sub(p, escala(horizontalParaFora(p), P.espessuraDaRibana)));
-  const ribanaBaseDentro = gola.map((p) => sub(p, escala(horizontalParaFora(p), P.espessuraDaRibana)));
+  // A ribana sobe do pesponto abrindo para fora (mais na frente, menos
+  // atrás; a passagem é suave pelos ombros, em z ≈ 0) e a borda de cima
+  // enrola mais. Seis trilhos: face externa em três alturas, borda, face
+  // interna (meio e base) — a interna é o avesso que se vê pela abertura.
+  const Rb = P.ribana, Eb = P.espessuraDaRibana;
+  const ab = P.aberturaDaRibana || { frente: 0.3, costas: 0.3 };
+  const abertura = (p) => lerp(ab.costas, ab.frente, suave((p[2] + 4) / 8));
+  const direcao = (p, extra) => unitario(soma([0, 1, 0], escala(horizontalParaFora(p), abertura(p) + extra)));
+  const ribanaMeio = gola.map((p) => soma(p, escala(direcao(p, 0), Rb * 0.55)));
+  const ribanaTopo = ribanaMeio.map((p, i) => soma(p, escala(direcao(gola[i], P.roloDaRibana || 0), Rb * 0.45)));
+  const paraDentro = (p) => sub(p, escala(horizontalParaFora(p), Eb));
+  const alturasDaRibana = [0, Rb * 0.55, Rb, Rb + Eb, Rb + Eb + Rb * 0.45, 2 * Rb + Eb];
   const perimetroDaGola = faixa(
-    [gola, ribanaTopo, ribanaTopoDentro, ribanaBaseDentro],
-    { ...ilhas.ribana, alturas: [0, P.ribana, P.ribana + P.espessuraDaRibana, 2 * P.ribana + P.espessuraDaRibana] },
+    [gola, ribanaMeio, ribanaTopo, ribanaTopo.map(paraDentro), ribanaMeio.map(paraDentro), gola.map(paraDentro)],
+    { ...ilhas.ribana, alturas: alturasDaRibana },
     "ribana", true,
   );
+  const ribanaUv = {
+    u0: arred4(ilhas.ribana.u0), v0: arred4(ilhas.ribana.v0),
+    u1: arred4(ilhas.ribana.u0 + perimetroDaGola / cm), v1: arred4(ilhas.ribana.v0 + alturasDaRibana[alturasDaRibana.length - 1] / cm),
+  };
 
   // barra: a frente e as costas em ilhas separadas (a volta inteira não cabe
   // em 1,0 de u na mesma escala); as pontas coincidem e soldam.
@@ -455,6 +538,7 @@ function construirCamiseta(P = PARAMETROS) {
   orientarFaces(malha);
   return {
     ...malha,
+    acabamento: { schema: 1, cmPorUv: cm, ribana: ribanaUv, costuras },
     medidas: {
       linhas: R, colunas: M, perimetroDaGola, perimetroDaBarra,
       perimetroDaManga: mangaD.perimetro, comprimentoDaIlhaDaManga: mangaD.comprimento,
@@ -614,11 +698,16 @@ function refinarCamiseta(base, P = PARAMETROS, opcoes = {}) {
     nrm = normaisSuaves(malha.pos, malha.tris, malha.ids);
   }
   const O = P.oclusao;
-  const cor = opcoes.semOclusao ? null : oclusaoPorVertice(malha, {
+  let cor = opcoes.semOclusao ? null : oclusaoPorVertice(malha, {
     axilas: base.medidas.axilas.map((a) => escala(sub(a, centro), CM_PARA_METRO)),
     raioAxila: O.raioAxila * CM_PARA_METRO, forcaAxila: O.forcaAxila,
     raioGola: O.raioGola * CM_PARA_METRO, forcaGola: O.forcaGola,
   });
+  // o fundo das dobras escurece (cavidade), por cima da oclusão de região
+  if (cor && P.cavidade) {
+    const cav = oclusaoDeCavidade(malha, nrm, P.cavidade);
+    cor = cor.map((c, i) => c.map((x) => x * cav[i]));
+  }
   return { ...malha, nrm, cor };
 }
 
@@ -658,32 +747,42 @@ function aplicarCaimento(malha, nrm, P, centroCm, axilasCm) {
         const x = p[0], y = p[1] - yBarra, z = p[2]; // y = altura acima da barra
         const dentroDoTronco = Math.abs(x) < meiaLargura * 0.97;
         let d = 0;
+        const frente = z > 0 ? 1 : -1;
         if (dentroDoTronco) {
-          const frente = z > 0 ? 1 : -1;
-          // pregas verticais: sumindo rumo às costuras e crescendo da cintura à barra
-          const Pr = C.pregas;
+          // pregas verticais: sumindo rumo às costuras e crescendo da
+          // cintura à barra; as costas têm as suas (mais largas, mais baixas)
+          const Pr = frente > 0 ? C.pregas : { ...C.pregas, ...(C.pregasCostas || {}) };
           const lateral = suave((meiaLargura * 0.92 - Math.abs(x)) / (meiaLargura * 0.25));
           const vertical = suave((Pr.inicio * cm - y) / (Pr.inicio * cm * 0.55));
           const lambda = (2 * meiaLargura) / Pr.ondas;
-          const fase = fases[frente > 0 ? 0 : 1] + 0.35 * Math.sin(y / (0.12) + fases[2]);
-          const onda = Math.sin((2 * Math.PI * x) / lambda + fase) + 0.22 * Math.sin((2 * Math.PI * x) / (lambda * 0.55) + fases[3] + y / 0.11);
-          d += Pr.amplitude * cm * lateral * vertical * onda * (frente > 0 ? 1 : 0.85);
+          const fase = fases[frente > 0 ? 0 : 1] + 0.35 * Math.sin(y / (0.12) + fases[frente > 0 ? 2 : 4]);
+          const onda = Math.sin((2 * Math.PI * x) / lambda + fase) + 0.22 * Math.sin((2 * Math.PI * x) / (lambda * 0.55) + fases[frente > 0 ? 3 : 5] + y / 0.11);
+          d += Pr.amplitude * cm * lateral * vertical * onda;
           // cintura: relaxamento nas laterais
           const Ci = C.cintura;
           const gauss = Math.exp(-Math.pow((y - Ci.altura * cm) / (Ci.largura * cm), 2));
           const naLateral = Math.pow(Math.abs(x) / meiaLargura, 3);
           d -= Ci.amplitude * cm * gauss * naLateral;
+          // costas: prateleira de tecido solto abaixo das omoplatas
+          const Om = C.omoplatas;
+          if (frente < 0 && Om) {
+            const faixa = Math.exp(-Math.pow((y - Om.altura * cm) / (Om.largura * cm), 2));
+            const noMeio = suave((meiaLargura * 0.85 - Math.abs(x)) / (meiaLargura * 0.4));
+            d -= Om.amplitude * cm * faixa * noMeio * (0.7 + 0.3 * Math.cos((Math.PI * x) / meiaLargura));
+          }
         }
-        // dobras diagonais das axilas (no tronco e no começo da manga)
-        const Ax = C.axilas;
+        // dobras diagonais das axilas (no tronco e no começo da manga);
+        // atrás, mais deitadas e mais fracas
+        const Ax = frente > 0 ? C.axilas : { ...C.axilas, ...(C.axilasCostas || {}) };
+        const inclinacao = ((Ax.inclinacao != null ? Ax.inclinacao : 45) * Math.PI) / 180;
         for (const a of axilas) {
           const sx = Math.sign(a[0]) || 1;
           const dx = p[0] - a[0], dy = p[1] - a[1];
           const dist = Math.hypot(dx, dy, (p[2] - a[2]) * 0.5);
           if (dist > Ax.alcance * cm) continue;
-          // eixo da dobra: da axila para baixo e para dentro (45°); a onda é
+          // eixo da dobra: da axila para baixo e para dentro; a onda é
           // medida na perpendicular
-          const ax = -sx * Math.SQRT1_2, ay = -Math.SQRT1_2;
+          const ax = -sx * Math.cos(inclinacao), ay = -Math.sin(inclinacao);
           const ao = dx * ax + dy * ay;           // ao longo da dobra
           const perp = -dx * ay + dy * ax;        // perpendicular
           if (ao < 0) continue;                    // só para baixo/dentro da axila
@@ -692,9 +791,15 @@ function aplicarCaimento(malha, nrm, P, centroCm, axilasCm) {
         }
         // Só na horizontal: prega e relaxamento movem o tecido para dentro
         // e para fora, nunca para cima ou para baixo — a barra continua na
-        // mesma altura (só ondula em z) e a caixa não sai do centro.
+        // mesma altura (só ondula em z) e a caixa não sai do centro. No
+        // tronco a direção é a radial (do eixo para fora), não a normal:
+        // a face de dentro da bainha tem a normal oposta à do tecido e,
+        // deslocada por ela, atravessava o tecido onde a prega entra
+        // (visível desde que o avesso ficou mais escuro, 28/09/2026). Pela
+        // radial as duas camadas andam juntas. Nas mangas vale a normal.
         const n = normalPorId[w];
-        desloc[w] = escala(normalizarLocal([n[0], 0, n[2]]), d);
+        const direcao = dentroDoTronco ? [p[0], 0, p[2]] : [n[0], 0, n[2]];
+        desloc[w] = escala(normalizarLocal(direcao), d);
       }
       return soma(p, desloc[w]);
     }),
@@ -711,15 +816,19 @@ function normalizarLocal(n) {
   return l > 0 ? escala(n, 1 / l) : [0, 0, 0];
 }
 
-/** O JSON do glTF que embrulha a malha: uma cena, um nó, um material de algodão. */
-function esqueletoDoGlb() {
+/**
+ * O JSON do glTF que embrulha a malha: uma cena, um nó, um material de
+ * algodão. `acabamento` (costuras e ribana em UV) vai nos extras do mesh,
+ * onde o GLTFLoader o entrega ao viewer em `mesh.userData`.
+ */
+function esqueletoDoGlb(acabamento = null) {
   return {
     asset: { version: "2.0", generator: "Aura Studio · scripts/studio/gerar-camiseta-glb.mjs", extras: { origem: "modelo original da Aura, gerado por scripts/studio/gerar-camiseta-glb.mjs; nenhum asset de terceiros" } },
     scene: 0,
     scenes: [{ name: "Camiseta", nodes: [0] }],
     nodes: [{ name: "T-Shirt", mesh: 0 }],
     materials: [{ name: "Algodao", doubleSided: true, pbrMetallicRoughness: { baseColorFactor: [0.93, 0.92, 0.89, 1], metallicFactor: 0, roughnessFactor: 0.9 } }],
-    meshes: [{ name: "T-Shirt", primitives: [{ attributes: {}, indices: 0, material: 0 }] }],
+    meshes: [{ name: "T-Shirt", ...(acabamento ? { extras: { acabamento } } : {}), primitives: [{ attributes: {}, indices: 0, material: 0 }] }],
   };
 }
 
@@ -729,8 +838,9 @@ function gerarCamisetaGlb(P = PARAMETROS, opcoes = {}) {
   const base = construirCamiseta(params);
   const refinada = refinarCamiseta(base, params, opcoes);
   const nota = "gerado por scripts/studio/gerar-camiseta-glb.mjs (Loop x" + (opcoes.passadas != null ? opcoes.passadas : P.passadasDeLoop) +
-    ", normais suaves" + (opcoes.semDobras ? "" : ", dobras semente " + P.dobras.semente) + (opcoes.semOclusao ? "" : ", oclusão por vértice") + ")";
-  const glb = escreverGlb(esqueletoDoGlb(), refinada, nota);
+    ", normais suaves" + (opcoes.semDobras ? "" : ", dobras semente " + P.dobras.semente) + (opcoes.semOclusao ? "" : ", oclusão por vértice e cavidade") +
+    ", costuras e ribana em extras.acabamento)";
+  const glb = escreverGlb(esqueletoDoGlb(base.acabamento), refinada, nota);
   return { base, refinada, glb, nota };
 }
 

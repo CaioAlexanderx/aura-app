@@ -12,7 +12,7 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
 const {
   lerGlb, escreverGlb, soldar, estatisticasDeArestas, ilhasDeUv, subdividirLoop,
-  normaisSuaves, criarRuido, pesoDasDobras, aplicarDobras, oclusaoPorVertice,
+  normaisSuaves, criarRuido, pesoDasDobras, aplicarDobras, oclusaoPorVertice, oclusaoDeCavidade,
 } = require("../scripts/studio/refinarMalha.js");
 
 type V3 = [number, number, number];
@@ -204,8 +204,26 @@ describe("oclusão por vértice — escurece só perto das axilas e da gola", ()
   });
 });
 
+describe("oclusaoDeCavidade — o fundo de uma dobra escurece, a crista e o plano não", () => {
+  it("num tubo convexo tudo fica em 1; um vértice afundado para dentro escurece, até o teto", () => {
+    const liso = subdividirLoop(tubo());
+    const nrmLiso = normaisSuaves(liso.pos, liso.tris, liso.ids);
+    for (const f of oclusaoDeCavidade(liso, nrmLiso, { ganho: 4, maximo: 0.3 })) expect(f).toBeCloseTo(1, 6);
+    // afunda um vértice interior (fora da costura) rumo ao eixo: vale côncavo
+    const m: Malha = { ...liso, pos: liso.pos.map((p) => [...p] as V3) };
+    const i = m.pos.findIndex((p, k) => Math.abs(p[1] - 1) < 1e-9 && p[0] > 0.2 && p[2] > 0.2 && m.ids.filter((w) => w === m.ids[k]).length === 1);
+    expect(i).toBeGreaterThanOrEqual(0);
+    m.pos[i] = [m.pos[i][0] * 0.6, m.pos[i][1], m.pos[i][2] * 0.6];
+    const nrm = normaisSuaves(m.pos, m.tris, m.ids);
+    const fator = oclusaoDeCavidade(m, nrm, { ganho: 4, maximo: 0.3 });
+    expect(fator[i]).toBeLessThan(0.95);
+    expect(fator[i]).toBeGreaterThanOrEqual(0.7);
+    for (const f of fator) { expect(f).toBeGreaterThanOrEqual(0.7); expect(f).toBeLessThanOrEqual(1); }
+  });
+});
+
 describe("escreverGlb / lerGlb — o arquivo lê de volta o que foi escrito", () => {
-  it("posições, UVs, índices, cor e nome do mesh sobrevivem à ida e volta", () => {
+  it("posições, UVs, índices, cor, nome e extras do mesh sobrevivem à ida e volta", () => {
     const m = subdividirLoop(tubo());
     const nrm = normaisSuaves(m.pos, m.tris, m.ids);
     const cor = m.pos.map(() => [0.5, 0.5, 0.5]);
@@ -213,7 +231,7 @@ describe("escreverGlb / lerGlb — o arquivo lê de volta o que foi escrito", ()
       asset: { version: "2.0", extras: { modificado: "mangas" } }, scene: 0, scenes: [{ nodes: [0] }],
       nodes: [{ name: "T-Shirt", mesh: 0, translation: [0, 0.01, 0], scale: [0.99, 0.99, 0.99] }],
       materials: [{ name: "Top_shd" }],
-      meshes: [{ name: "T-Shirt", primitives: [{ attributes: { POSITION: 0 }, indices: 1, material: 0 }] }],
+      meshes: [{ name: "T-Shirt", extras: { acabamento: { schema: 1, costuras: [] } }, primitives: [{ attributes: { POSITION: 0 }, indices: 1, material: 0 }] }],
     };
     const buf = escreverGlb(json, { ...m, nrm, cor }, "refinado");
     expect(buf.toString("ascii", 0, 4)).toBe("glTF");
@@ -221,6 +239,7 @@ describe("escreverGlb / lerGlb — o arquivo lê de volta o que foi escrito", ()
     expect(buf.length % 4).toBe(0);
     const lido = lerGlb(buf);
     expect(lido.json.meshes[0].name).toBe("T-Shirt");
+    expect(lido.json.meshes[0].extras).toEqual({ acabamento: { schema: 1, costuras: [] } });
     expect(lido.json.nodes[0].translation).toEqual([0, 0.01, 0]);
     expect(lido.json.asset.extras.modificado).toBe("mangas; refinado");
     expect(lido.json.meshes[0].primitives[0].attributes.COLOR_0).toBeDefined();

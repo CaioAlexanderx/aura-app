@@ -48,6 +48,18 @@
 // vertical: luz principal mais alta e mancha de contato em elipse sob a
 // barra.
 //
+// 28/09/2026 (camiseta como foto de produto) — o que faltava para a peça
+// deixar de ler como manequim de tronco: a trama virou malha jersey
+// (colunas de laçadas, não xadrez de tecido plano); as costuras que o
+// GLB declara em `extras.acabamento` (gola, ombros, cavas, laterais e o
+// pesponto duplo das bainhas) ganham vinco no mapa de normais e fio na
+// textura; a ribana da gola sai canelada; a arte tem mapa de aspereza
+// próprio (tinta de DTF/silk é mais lisa que o algodão e pega o brilho da
+// luz principal, sem ficar chapada); e o avesso da peça, visto pela gola
+// e pelas mangas, é mais escuro que o direito (um retoque de shader por
+// `gl_FrontFacing`). A malha vem do gerador com ribana aberta, boca da
+// manga inclinada, costas com pregas próprias e oclusão de cavidade.
+//
 // 28/09/2026 (realismo da caneca + cenário) — a caneca deixou de ser um
 // cilindro fosco com um fio de borda: louça com lábio de espessura real
 // (lathe de meio círculo), interior contínuo com filete no fundo e
@@ -82,8 +94,8 @@ import {
 import {
   readGlbModel, escalaDoModelo, cameraDistanceParaCaixa, floorLevelParaCaixa,
   sombraDeContatoParaCaixa, uvParaRetangulo, escolherMeshDeImpressao,
-  recebeCorDoCliente, pixelsPorCm, fiosDoLadrilho,
-  type GlbModel, type Caixa, type SombraDeContato,
+  recebeCorDoCliente, pixelsPorCm, fiosDoLadrilho, readAcabamento,
+  type GlbModel, type Caixa, type SombraDeContato, type Acabamento,
 } from "./glbModel";
 // 28/09/2026 — formatação da arte: com `values.__arte` (vitrine) ou
 // `values.__artePorArea` (render de aprovação com frente e verso) quem
@@ -363,6 +375,13 @@ type Tecido = {
   trama: HTMLCanvasElement;
   /** Relevo das dobras finas no tamanho da textura, em cinza (128 = plano). */
   dobras: HTMLCanvasElement;
+  /** Relevo das costuras e do canelado da ribana (cinza, 128 = plano); null sem `acabamento` no GLB. */
+  acabamento: HTMLCanvasElement | null;
+  /** Os fios e pespontos por cima da cor (transparente onde não há costura); null sem `acabamento`. */
+  costuras: HTMLCanvasElement | null;
+  /** Mapa de aspereza (canal verde): branco no tecido, mais escuro onde há tinta. */
+  aspereza: HTMLCanvasElement;
+  asperezaTex: any;
 };
 
 /** Gerador determinístico: o mesmo pedido rende sempre o mesmo pixel (o hash da aprovação depende disso). */
@@ -372,34 +391,103 @@ function criarRnd(semente: number) {
 }
 
 /**
- * Um ladrilho de trama: fios de urdidura e de trama alternando por cima
- * e por baixo, em cinza médio com variação pequena. Gerado em canvas —
+ * Um ladrilho de malha jersey (28/09/2026; era um xadrez de tecido plano,
+ * que camiseta não tem): colunas de laçadas — cada coluna é um cordão
+ * vertical claro com o vão escuro ao lado, e as carreiras modulam de leve
+ * o brilho ao longo da coluna, com um grão por laçada. Gerado em canvas —
  * nada é baixado — e com semente fixa. `fios` por lado vem da escala da
- * peça (fiosDoLadrilho): num algodão são ~8 por cm, e o ladrilho de 64 px
- * cobre ~3,5 cm de tecido — cada fio tem 2 px e a trama vira um grão
- * fino, como numa foto de produto, em vez de um xadrez.
+ * peça (fiosDoLadrilho): num algodão são ~8 colunas por cm, e o ladrilho
+ * de 64 px cobre ~3,5 cm de tecido — cada coluna tem ~2 px e a malha vira
+ * um grão fino e riscado na vertical, como numa foto de produto.
  */
 function tramaDoTecido(fios = 8): HTMLCanvasElement {
   const N = 64;
   const cv = document.createElement("canvas");
   cv.width = N; cv.height = N;
   const ctx = cv.getContext("2d")!;
-  ctx.fillStyle = "#6e6e6e"; // o vão entre os fios
+  ctx.fillStyle = "#6a6a6a"; // o vão entre as colunas
   ctx.fillRect(0, 0, N, N);
   const passo = N / fios;
   const rnd = criarRnd(7);
-  for (let y = 0; y < fios; y++) {
-    for (let x = 0; x < fios; x++) {
-      const porCima = (x + y) % 2 === 0;
-      const b = 128 + (porCima ? 12 : -6) + Math.round((rnd() - 0.5) * 14);
+  for (let x = 0; x < fios; x++) {
+    for (let y = 0; y < fios; y++) {
+      // carreiras alternadas: a laçada de cima da coluna é um pouco mais
+      // clara que a de baixo (o V da malha)
+      const b = 128 + 10 + (y % 2 ? -4 : 4) + Math.round((rnd() - 0.5) * 16);
       ctx.fillStyle = "rgb(" + b + "," + b + "," + b + ")";
-      // Fios com 3/4 do passo: o quarto que sobra é o vão, e o canvas
+      // A coluna tem 2/3 do passo; o terço que sobra é o vão, e o canvas
       // interpola as frações de pixel.
-      if (porCima) ctx.fillRect(x * passo + passo * 0.12, y * passo, passo * 0.76, passo);
-      else ctx.fillRect(x * passo, y * passo + passo * 0.12, passo, passo * 0.76);
+      ctx.fillRect(x * passo + passo * 0.14, y * passo, passo * 0.66, passo);
     }
   }
   return cv;
+}
+
+/**
+ * O acabamento que o GLB declara (`extras.acabamento`, ver glbModel.ts),
+ * desenhado em UV no tamanho da textura:
+ *   - `relevo`: cinza (128 = plano) para o mapa de normais — vinco das
+ *     costuras (gola, ombros, cavas, laterais), o pesponto da bainha em
+ *     alto-relevo tracejado, e o canelado 1×1 da ribana;
+ *   - `fios`: transparente, com a sombra do vinco e o fio do pesponto,
+ *     por cima da cor (em tecido escuro quase não muda; o relevo é quem
+ *     dá a leitura).
+ * As medidas são em centímetros de tecido, pela escala do próprio GLB
+ * (`cmPorUv`): um pesponto tem ~1 mm de fio e ~3 mm de ponto em qualquer
+ * tamanho de textura.
+ */
+function relevoDoAcabamento(W: number, H: number, acab: Acabamento): { relevo: HTMLCanvasElement; fios: HTMLCanvasElement } {
+  const px = W / acab.cmPorUv; // pixels por cm
+  const relevo = document.createElement("canvas");
+  relevo.width = W; relevo.height = H;
+  const rc = relevo.getContext("2d")!;
+  rc.fillStyle = "#808080";
+  rc.fillRect(0, 0, W, H);
+  const fios = document.createElement("canvas");
+  fios.width = W; fios.height = H;
+  const fc = fios.getContext("2d")!;
+
+  const tracar = (c: CanvasRenderingContext2D, pontos: [number, number][]) => {
+    c.beginPath();
+    pontos.forEach(([u, v], i) => { const x = u * W, y = (1 - v) * H; if (i === 0) c.moveTo(x, y); else c.lineTo(x, y); });
+    c.stroke();
+  };
+  const linha = (c: CanvasRenderingContext2D, cor: string, larguraCm: number, tracejado: number[] | null) => {
+    c.strokeStyle = cor; c.lineWidth = Math.max(1, larguraCm * px); c.lineCap = "round"; c.lineJoin = "round";
+    c.setLineDash(tracejado ? tracejado.map((d) => d * px) : []);
+  };
+  for (const costura of acab.costuras) {
+    if (costura.tipo === "bainha") {
+      // pesponto reto: um sulco leve com o fio em alto-relevo, ponto de 2,8 mm
+      linha(rc, "#747474", 0.16, null); tracar(rc, costura.pontos);
+      linha(rc, "#a8a8a8", 0.09, [0.28, 0.12]); tracar(rc, costura.pontos);
+      linha(fc, "rgba(0,0,0,0.10)", 0.16, null); tracar(fc, costura.pontos);
+      linha(fc, "rgba(0,0,0,0.16)", 0.08, [0.28, 0.12]); tracar(fc, costura.pontos);
+    } else {
+      // costura fechada (overloque por dentro): vinco largo e macio com o
+      // fundo mais fundo, e o ponto correndo por cima
+      linha(rc, "#787878", 0.42, null); tracar(rc, costura.pontos);
+      linha(rc, "#606060", 0.18, null); tracar(rc, costura.pontos);
+      linha(rc, "#9a9a9a", 0.08, [0.22, 0.14]); tracar(rc, costura.pontos);
+      linha(fc, "rgba(0,0,0,0.20)", 0.2, null); tracar(fc, costura.pontos);
+      linha(fc, "rgba(0,0,0,0.12)", 0.07, [0.22, 0.14]); tracar(fc, costura.pontos);
+    }
+  }
+  if (acab.ribana) {
+    // canelado 1×1: cordões perpendiculares ao comprimento da faixa, 3 por cm
+    const r = uvParaRetangulo(acab.ribana, W, H);
+    const periodo = px / 3;
+    rc.setLineDash([]); fc.setLineDash([]);
+    for (let x = r.x; x < r.x + r.w; x += 1) {
+      const fase = ((x - r.x) / periodo) * Math.PI * 2;
+      const g = Math.round(128 + 30 * Math.sin(fase));
+      rc.fillStyle = "rgb(" + g + "," + g + "," + g + ")";
+      rc.fillRect(x, r.y, 1, r.h);
+      const sombra = Math.max(0, -Math.sin(fase)) * 0.14;
+      if (sombra > 0.01) { fc.fillStyle = "rgba(0,0,0," + sombra.toFixed(3) + ")"; fc.fillRect(x, r.y, 1, r.h); }
+    }
+  }
+  return { relevo, fios };
 }
 
 /**
@@ -458,12 +546,16 @@ function relevoDasDobras(W: number, H: number, pxPorCm: number | null, semente =
  * passo largo (±4 px) porque a onda tem dezenas de pixels e a diferença
  * entre vizinhos seria ruído de arredondamento.
  */
-function normalMapDoTecido(THREE: any, tecido: Tecido, W: number, H: number, forcaTrama = 3, forcaDobras = 16) {
+function normalMapDoTecido(THREE: any, tecido: Tecido, W: number, H: number, forcaTrama = 3, forcaDobras = 16, forcaAcabamento = 2.2) {
   const N = tecido.trama.width;
   const trama = tecido.trama.getContext("2d")!.getImageData(0, 0, N, N).data;
   const dobras = tecido.dobras.getContext("2d")!.getImageData(0, 0, W, H).data;
+  const acab = tecido.acabamento ? tecido.acabamento.getContext("2d")!.getImageData(0, 0, W, H).data : null;
   const alturaTrama = (x: number, y: number) => trama[(((y % N) + N) % N * N + ((x % N) + N) % N) * 4] / 255;
-  const alturaDobra = (x: number, y: number) => dobras[(Math.min(H - 1, Math.max(0, y)) * W + Math.min(W - 1, Math.max(0, x))) * 4] / 255;
+  const em = (x: number, y: number) => (Math.min(H - 1, Math.max(0, y)) * W + Math.min(W - 1, Math.max(0, x))) * 4;
+  const alturaDobra = (x: number, y: number) => dobras[em(x, y)] / 255;
+  // costuras e canelado: passo curto (±1 px), o vinco tem poucos pixels
+  const alturaAcab = acab ? (x: number, y: number) => acab[em(x, y)] / 255 : null;
   const cv = document.createElement("canvas");
   cv.width = W; cv.height = H;
   const ctx = cv.getContext("2d")!;
@@ -471,10 +563,14 @@ function normalMapDoTecido(THREE: any, tecido: Tecido, W: number, H: number, for
   const P = 4;
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
-      const dx = (alturaTrama(x + 1, y) - alturaTrama(x - 1, y)) * forcaTrama
+      let dx = (alturaTrama(x + 1, y) - alturaTrama(x - 1, y)) * forcaTrama
         + (alturaDobra(x + P, y) - alturaDobra(x - P, y)) / (2 * P) * forcaDobras;
-      const dy = (alturaTrama(x, y + 1) - alturaTrama(x, y - 1)) * forcaTrama
+      let dy = (alturaTrama(x, y + 1) - alturaTrama(x, y - 1)) * forcaTrama
         + (alturaDobra(x, y + P) - alturaDobra(x, y - P)) / (2 * P) * forcaDobras;
+      if (alturaAcab) {
+        dx += (alturaAcab(x + 1, y) - alturaAcab(x - 1, y)) * forcaAcabamento;
+        dy += (alturaAcab(x, y + 1) - alturaAcab(x, y - 1)) * forcaAcabamento;
+      }
       const len = Math.sqrt(dx * dx + dy * dy + 1);
       const i = (y * W + x) * 4;
       out.data[i] = Math.round((-dx / len * 0.5 + 0.5) * 255);
@@ -498,8 +594,15 @@ function normalMapDoTecido(THREE: any, tecido: Tecido, W: number, H: number, for
  *      área, e o retângulo aparecia como uma mancha mais escura no tecido;
  *   4. o relevo das dobras em soft-light sobre tudo, arte incluída, para a
  *      dobra ter leitura mesmo onde a luz bate de frente.
- * Em tecido preto o overlay e o soft-light quase não mudam nada; a trama
- * e as dobras aparecem pelo mapa de normais e pelo sheen do material.
+ * Entre 2 e 3 entram os fios das costuras (28/09/2026), quando o GLB os
+ * declara. Em tecido preto o overlay e o soft-light quase não mudam nada;
+ * a trama, as dobras e as costuras aparecem pelo mapa de normais e pelo
+ * sheen do material.
+ *
+ * Junto sai o mapa de aspereza (`tecido.aspereza`): branco no tecido e
+ * mais escuro onde há tinta — a tinta de DTF/silk é mais lisa que o
+ * algodão, e é assim que a arte pega o brilho da luz principal e ainda
+ * acompanha as dobras, em vez de ficar chapada.
  */
 async function paintFabricTexture(
   texCv: HTMLCanvasElement,
@@ -523,12 +626,14 @@ async function paintFabricTexture(
     ctx.fillRect(0, 0, W, H);
     ctx.restore();
   }
+  if (tecido.costuras) ctx.drawImage(tecido.costuras, 0, 0);
 
   const arte = document.createElement("canvas");
   arte.width = W; arte.height = H;
   const actx = arte.getContext("2d");
   if (actx) {
     await paintArt(actx, W, H, spec, values, o);
+    pintarAspereza(tecido, arte);
     if (padrao) {
       const assentada = document.createElement("canvas");
       assentada.width = W; assentada.height = H;
@@ -556,6 +661,29 @@ async function paintFabricTexture(
   ctx.globalAlpha = 0.22;
   ctx.drawImage(tecido.dobras, 0, 0);
   ctx.restore();
+}
+
+/** Aspereza da tinta: 0,6 da do tecido onde a arte tem alfa (silhueta da arte, em escala menor). */
+const ASPEREZA_DA_TINTA = "#999999";
+
+function pintarAspereza(tecido: Tecido, arte: HTMLCanvasElement) {
+  const a = tecido.aspereza;
+  const ctx = a.getContext("2d");
+  if (!ctx) return;
+  ctx.globalCompositeOperation = "source-over";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, a.width, a.height);
+  const silhueta = document.createElement("canvas");
+  silhueta.width = a.width; silhueta.height = a.height;
+  const sctx = silhueta.getContext("2d");
+  if (sctx) {
+    sctx.drawImage(arte, 0, 0, a.width, a.height);
+    sctx.globalCompositeOperation = "source-in";
+    sctx.fillStyle = ASPEREZA_DA_TINTA;
+    sctx.fillRect(0, 0, a.width, a.height);
+    ctx.drawImage(silhueta, 0, 0);
+  }
+  if (tecido.asperezaTex) tecido.asperezaTex.needsUpdate = true;
 }
 
 // ── Cena de estúdio ──────────────────────────────────────────
@@ -1017,9 +1145,22 @@ async function montarGlb(
   // A trama e as dobras em escala real: a spec diz quantos cm tem a área
   // e quantos pixels ela ocupa, e disso sai o passo dos fios.
   const pxPorCm = pixelsPorCm(spec, texCv.width);
+  // As costuras e a ribana que o GLB declara (extras do mesh → userData).
+  const acabamento = readAcabamento(print.userData);
+  const relevo = acabamento ? relevoDoAcabamento(texCv.width, texCv.height, acabamento) : null;
+  // Aspereza em metade da resolução: a silhueta da arte não precisa de
+  // mais, e a textura extra pesa um quarto na memória do celular.
+  const aspereza = document.createElement("canvas");
+  aspereza.width = Math.max(64, texCv.width / 2); aspereza.height = Math.max(64, texCv.height / 2);
+  const asperezaTex = new THREE.CanvasTexture(aspereza);
+  asperezaTex.flipY = false;
   const tecido: Tecido = {
     trama: tramaDoTecido(fiosDoLadrilho(pxPorCm)),
     dobras: relevoDasDobras(texCv.width, texCv.height, pxPorCm),
+    acabamento: relevo ? relevo.relevo : null,
+    costuras: relevo ? relevo.fios : null,
+    aspereza,
+    asperezaTex,
   };
   const normalMap = glb.fabric.normalScale > 0 ? normalMapDoTecido(THREE, tecido, texCv.width, texCv.height) : null;
   if (normalMap) normalMap.flipY = false;
@@ -1030,18 +1171,30 @@ async function montarGlb(
   const fabricMat = new Material({
     map: texture,
     roughness: glb.fabric.roughness,
+    // O mapa multiplica a aspereza: 1 no tecido, 0,6 na tinta.
+    roughnessMap: asperezaTex,
     metalness: 0,
     normalMap,
     normalScale: new THREE.Vector2(glb.fabric.normalScale, glb.fabric.normalScale),
     envMapIntensity: 0.45,
     // Roupa é uma casca: pela gola e pelas mangas se vê o lado de dentro.
     side: THREE.DoubleSide,
-    // Oclusão assada por vértice (COLOR_0: axilas, sob a gola) multiplica a textura.
+    // Oclusão assada por vértice (COLOR_0: axilas, sob a gola, fundo das dobras) multiplica a textura.
     vertexColors: !!(print.geometry && print.geometry.attributes && print.geometry.attributes.color),
   });
   // No r128 `sheen` é uma Color (null = desligado); em versões novas virou
   // número — só liga quando o material tem o formato que este código conhece.
   if (fabricMat.sheen === null) fabricMat.sheen = new THREE.Color(0.25, 0.25, 0.25);
+  // O avesso (faces de trás, vistas pela gola e pelas mangas) é mais
+  // escuro que o direito: dentro de uma camiseta pendurada a luz não
+  // entra. Um retoque no chunk de cor do shader do r128; se a versão do
+  // three não tiver o chunk, o replace não acha nada e fica como está.
+  fabricMat.onBeforeCompile = (shader: any) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <color_fragment>",
+      "#include <color_fragment>\n\tif ( ! gl_FrontFacing ) diffuseColor.rgb *= 0.5;",
+    );
+  };
   print.material = fabricMat;
   meshes.forEach((m, i) => {
     m.castShadow = true;

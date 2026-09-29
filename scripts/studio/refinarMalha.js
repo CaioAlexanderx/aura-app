@@ -118,13 +118,21 @@ function escreverGlb(json, malha, notaDeModificacao) {
   accessors.push({ bufferView: partes.length - 1, componentType: idx16 ? 5123 : 5125, count: idx.length, type: "SCALAR" });
   const prim = json.meshes[0].primitives[0];
   const extrasAntigos = (json.asset && json.asset.extras) || {};
+  // `extras` do mesh passam adiante: é por eles que a camiseta conta ao
+  // viewer onde ficam as costuras e a ribana em UV (o GLTFLoader os
+  // entrega em `mesh.userData`).
+  const extrasDoMesh = json.meshes[0].extras;
   const jsonNovo = {
     asset: {
       ...(json.asset || {}), version: "2.0",
       extras: { ...extrasAntigos, modificado: [extrasAntigos.modificado, notaDeModificacao].filter(Boolean).join("; ") },
     },
     scene: json.scene, scenes: json.scenes, nodes: json.nodes, materials: json.materials,
-    meshes: [{ name: json.meshes[0].name, primitives: [{ attributes, indices: accessors.length - 1, material: prim.material, mode: 4 }] }],
+    meshes: [{
+      name: json.meshes[0].name,
+      ...(extrasDoMesh ? { extras: extrasDoMesh } : {}),
+      primitives: [{ attributes, indices: accessors.length - 1, material: prim.material, mode: 4 }],
+    }],
     accessors, bufferViews, buffers: [{ byteLength: binNovo.length }],
   };
   let jsonBuf = Buffer.from(JSON.stringify(jsonNovo), "utf8");
@@ -542,7 +550,49 @@ function oclusaoPorVertice(malha, opcoes) {
   });
 }
 
+/**
+ * Oclusão de cavidade (28/09/2026): o fundo de cada dobra fica mais
+ * escuro, como numa foto — a luz não entra no vinco. Por vértice soldado,
+ * a curvatura média pelo laplaciano umbrella: quanto o centro dos
+ * vizinhos se afasta do ponto na direção da normal, dividido pelo
+ * comprimento médio das arestas (adimensional; independe da escala).
+ * Positivo = côncavo (vale) → escurece até `maximo`; convexo (crista)
+ * não clareia (a textura já é a cor cheia). Devolve um fator por vértice,
+ * 1 = nada, para multiplicar em COLOR_0.
+ *
+ *   ganho   quanto de curvatura vira sombra (≈ 3–6)
+ *   maximo  teto do escurecimento (0–1)
+ */
+function oclusaoDeCavidade(malha, nrm, opcoes = {}) {
+  const { pos, tris, ids } = malha;
+  const { ganho = 4, maximo = 0.28 } = opcoes;
+  const nIds = ids.reduce((m, i) => Math.max(m, i), -1) + 1;
+  const posSoldada = new Array(nIds);
+  const normalPorId = new Array(nIds).fill(null).map(() => [0, 0, 0]);
+  const vizinhos = Array.from({ length: nIds }, () => new Set());
+  pos.forEach((p, i) => { if (!posSoldada[ids[i]]) posSoldada[ids[i]] = p; normalPorId[ids[i]] = soma(normalPorId[ids[i]], nrm[i]); });
+  for (const t of tris) {
+    const w = t.map((i) => ids[i]);
+    for (let e = 0; e < 3; e++) { vizinhos[w[e]].add(w[(e + 1) % 3]); vizinhos[w[e]].add(w[(e + 2) % 3]); }
+  }
+  const fator = new Array(nIds);
+  for (let w = 0; w < nIds; w++) {
+    const P = posSoldada[w];
+    const viz = [...vizinhos[w]];
+    if (!P || viz.length < 3) { fator[w] = 1; continue; }
+    let centro = [0, 0, 0], arestaMedia = 0;
+    for (const v of viz) { const Q = posSoldada[v]; centro = soma(centro, Q); arestaMedia += Math.hypot(Q[0] - P[0], Q[1] - P[1], Q[2] - P[2]); }
+    centro = escala(centro, 1 / viz.length);
+    arestaMedia /= viz.length;
+    const n = normalizar(normalPorId[w]);
+    const d = centro[0] - P[0], e = centro[1] - P[1], f = centro[2] - P[2];
+    const curvatura = arestaMedia > 0 ? (d * n[0] + e * n[1] + f * n[2]) / arestaMedia : 0;
+    fator[w] = 1 - Math.min(maximo, Math.max(0, curvatura * ganho));
+  }
+  return pos.map((_, i) => fator[ids[i]]);
+}
+
 module.exports = {
   lerGlb, escreverGlb, soldar, estatisticasDeArestas, ilhasDeUv, subdividirLoop,
-  normaisSuaves, criarRuido, pesoDasDobras, aplicarDobras, oclusaoPorVertice, minmax,
+  normaisSuaves, criarRuido, pesoDasDobras, aplicarDobras, oclusaoPorVertice, oclusaoDeCavidade, minmax,
 };
