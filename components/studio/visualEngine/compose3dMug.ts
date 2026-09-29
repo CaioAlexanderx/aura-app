@@ -102,6 +102,7 @@ import {
 // pinta a área é o pintor único; sem elas, o desenho de sempre.
 import { arteDosValores, precarregarArte, pintarArteNaArea } from "./pintarArte";
 import { misturaDaTecnica, type ArteDoLado } from "./layoutDaArte";
+import { areaParaPintar, retangulosNaTextura } from "./areasDaPeca";
 
 export type Mug3DOptions = {
   garmentColor?: string;  // cor ESCOLHIDA pelo cliente (incide onde o modelo mandar)
@@ -317,21 +318,26 @@ async function pintarArteDaVitrine(
     ? (values.__artePorArea as Record<string, ArteDoLado>)
     : null;
   const lista: Array<[VisualArea | null, ArteDoLado | null]> = porArea
-    ? Object.keys(porArea).map((id) => [(spec.areas || []).find((a) => a.id === id) || null, arteDosValores({ __arte: porArea[id] })])
+    ? Object.keys(porArea).map((id) => [areaParaPintar(spec.areas, id, !!readGlbModel(spec)), arteDosValores({ __arte: porArea[id] })])
     : [[pickArea(spec, o.areaId), arteDosValores(values)]];
   const pixel = pixelDaTextura(spec, W, H);
   for (const [area, arte] of lista) {
     if (!area || !area.uv || !arte) continue;
     const r = uvParaRetangulo(area.uv, W, H);
     const imgs = await precarregarArte(arte, (u) => loadImg(u));
-    pintarArteNaArea(ctx, r, arte, imgs, {
-      mistura: misturaDaTecnica(arte.tecnica) === "multiply" ? "multiply" : null,
+    const opcoes = {
+      mistura: misturaDaTecnica(arte.tecnica) === "multiply" ? "multiply" as const : null,
       areaCmDoMotor: area.width_cm > 0 && area.height_cm > 0 ? { w: area.width_cm, h: area.height_cm } : null,
       transbordar: true,
       pixel,
       // A textura inteira aparece pequena na tela: a guia acompanha ela.
       linha: Math.max(W, H) * 0.004,
-    });
+    };
+    pintarArteNaArea(ctx, r, arte, imgs, opcoes);
+    // O verso da caneca (derivado do painel, orçamento 29/09) atravessa a
+    // emenda da textura: a parte que passa de u = 1 é pintada de novo uma
+    // volta antes. As áreas das specs não passam de 1: nada muda para elas.
+    for (const voltaAntes of retangulosNaTextura(area.uv, W, H).slice(1)) pintarArteNaArea(ctx, voltaAntes, arte, imgs, opcoes);
   }
 }
 
@@ -1548,7 +1554,9 @@ export async function createModelViewer(
   }
   /** Vira a área para a câmera: costas a meia-volta; painel da caneca pelo centro da UV. */
   function mostrarArea(areaId?: string) {
-    const area = pickArea(spec, areaId || o.areaId);
+    // O verso derivado da caneca (orçamento) também tem para onde virar;
+    // as áreas da spec saem como antes.
+    const area = areaParaPintar(spec.areas, areaId || o.areaId, !!glb) || pickArea(spec, areaId || o.areaId);
     userTouched = true;
     if (!glb && area && area.uv) {
       // Torno do three: o ponto de u está no ângulo φ = 2πu (x = sen φ,

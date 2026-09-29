@@ -196,6 +196,13 @@ export function rotuloDaChave(
   if (chave === "has_back_selected") return "Personalizar o verso";
   if (chave === "has_middle_selected") return "Personalizar o meio";
 
+  // Orçamento com vídeo (29/09/2026): a arte de cada lado que a lojista
+  // enviou fica no id canônico do lado quando o produto não tem o campo.
+  if (chave === "image") return "Arte da frente";
+  if (chave === "image_back") return "Arte do verso";
+  if (chave === "image_middle") return "Arte da volta inteira";
+  if (chave === "orcamento_ajustes") return "Tamanho e posição no orçamento";
+
   const mCor = chave.match(/^(.+)_cor$/);
   if (mCor) {
     const dono = camposPorId[mCor[1]]?.label;
@@ -218,8 +225,30 @@ export function valorDaChave(valor: unknown): string {
   if (valor === true) return "Sim";
   if (valor === false) return "Não";
   if (valor == null) return "—";
-  if (typeof valor === "object") return textoDoAjuste(valor as any);
+  if (typeof valor === "object") return textoDosAjustesDoOrcamento(valor) || textoDoAjuste(valor as any);
   return String(valor);
+}
+
+/**
+ * O tamanho e a posição que a lojista deu a cada lado no orçamento
+ * (`orcamento_ajustes`, 29/09/2026) em uma linha para a oficina:
+ * "Frente 120%, 5% à direita · Verso 80%". Null quando não é esse formato.
+ */
+export function textoDosAjustesDoOrcamento(valor: unknown): string | null {
+  if (!valor || typeof valor !== "object") return null;
+  const v = valor as Record<string, any>;
+  const nomes: Array<[string, string]> = [["front", "Frente"], ["back", "Verso"], ["middle", "Volta inteira"]];
+  const partes: string[] = [];
+  for (const [lado, nome] of nomes) {
+    const a = v[lado];
+    if (!a || typeof a !== "object" || typeof a.escala !== "number") continue;
+    const pct = (n: number) => `${Math.round(Math.abs(n) * 100)}%`;
+    const itens = [`${nome} ${pct(a.escala)}`];
+    if (typeof a.dx === "number" && a.dx) itens.push(`${pct(a.dx)} à ${a.dx > 0 ? "direita" : "esquerda"}`);
+    if (typeof a.dy === "number" && a.dy) itens.push(`${pct(a.dy)} para ${a.dy > 0 ? "baixo" : "cima"}`);
+    partes.push(itens.join(", "));
+  }
+  return partes.length ? partes.join(" · ") : null;
 }
 
 /**

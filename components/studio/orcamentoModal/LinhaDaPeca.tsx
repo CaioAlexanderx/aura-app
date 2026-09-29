@@ -6,6 +6,10 @@
 // LINHA com quantidade (− 1 +), preço, "Modelo do mockup" e a arte do
 // cliente, mais "Tirar do orçamento". Antes, mudar a quantidade era
 // tirar e pôr de novo, e voltava com 1.
+//
+// 29/09/2026 (vídeo em primeiro plano): aberta, a peça começa pelo
+// estúdio (EstudioDaPeca) — a prévia 3D girando e o envio da arte por
+// lugar. O campo de texto da arte saiu: o texto vem dentro da imagem.
 // ============================================================
 import React, { useEffect, useState } from "react";
 import { View, Text, Pressable, TextInput } from "react-native";
@@ -13,8 +17,10 @@ import { Icon } from "@/components/Icon";
 import type { StudioQuoteItem } from "@/services/studioApi";
 import type { VisualTemplate, VisualTemplateSpec } from "@/services/studioVisualApi";
 import { reais } from "@/components/studio/orcamentoVideo/condicoesDoOrcamento";
-import { arteDoItem, customizacaoComArte } from "@/components/studio/orcamentoVideo/pecaDoOrcamento";
+import { arteDoItem } from "@/components/studio/orcamentoVideo/pecaDoOrcamento";
+import { artesDoItem, ladosDaPeca, quantasArtes, textoDasArtes } from "@/components/studio/orcamentoVideo/artesPorLado";
 import { ModeloDaPeca } from "./ModeloDaPeca";
+import { EstudioDaPeca } from "./EstudioDaPeca";
 import {
   lerPreco, lerQuantidade, modeloEfetivo, seloDoModelo, textoDaQuantidade, textoDoPreco,
   type ProdutoDoCatalogo,
@@ -30,6 +36,8 @@ export type Peca = Omit<StudioQuoteItem, "id" | "sort_order"> & {
 
 type Props = {
   tema: Tema;
+  /** Empresa do orçamento (multi-CNPJ): o envio da arte vai para ela. */
+  cid: string | null;
   peca: Peca;
   produto: ProdutoDoCatalogo | null;
   aberta: boolean;
@@ -41,7 +49,7 @@ type Props = {
   onTirar: () => void;
 };
 
-export function LinhaDaPeca({ tema, peca, produto, aberta, editavel, templates, specs, onAlternar, onMudar, onTirar }: Props) {
+export function LinhaDaPeca({ tema, cid, peca, produto, aberta, editavel, templates, specs, onAlternar, onMudar, onTirar }: Props) {
   const { t } = tema;
   const [qtdTxt, setQtdTxt] = useState(textoDaQuantidade(peca.quantity));
   const [precoTxt, setPrecoTxt] = useState(textoDoPreco(peca.unit_price));
@@ -53,6 +61,12 @@ export function LinhaDaPeca({ tema, peca, produto, aberta, editavel, templates, 
   const efetivo = peca.product_id ? modeloEfetivo(peca.visual_template_key, produto?.visual_template_key) : null;
   const selo = efetivo ? seloDoModelo(efetivo.key, templates) : null;
   const nomeDoModelo = efetivo?.key ? templates.find((x) => x.key === efetivo.key)?.name || null : null;
+  const template = efetivo?.key ? templates.find((x) => x.key === efetivo.key) || null : null;
+  const spec = efetivo?.key ? specs[efetivo.key] || null : null;
+  const specDo3d = template?.kind === "model3d" ? spec : null;
+  const artes = artesDoItem(cfg, peca.customization);
+  const lados = ladosDaPeca(cfg, specDo3d);
+  const nArtes = peca.product_id ? quantasArtes(artes, lados) : 0;
 
   function passo(delta: number) {
     const n = Math.max(1, Math.round((peca.quantity + delta) * 1000) / 1000);
@@ -79,7 +93,7 @@ export function LinhaDaPeca({ tema, peca, produto, aberta, editavel, templates, 
             <Text style={{ fontSize: 12, color: t.ink3 }}>{textoDaQuantidade(peca.quantity)} × {reais(peca.unit_price)}</Text>
             {selo ? <Selo t={t} tipo={selo.tipo} rotulo={nomeDoModelo ? `${selo.rotulo} · ${nomeDoModelo}` : selo.rotulo} /> : <Selo t={t} tipo="herdado" rotulo="avulso" />}
             {efetivo && !efetivo.herdado ? <Selo t={t} tipo="herdado" rotulo="só aqui" /> : null}
-            {!aberta && arte.texto ? <Text numberOfLines={1} style={{ fontSize: 12, color: t.ink3, flexShrink: 1 }}>Arte: "{arte.texto}"</Text> : null}
+            {peca.product_id ? <Selo t={t} tipo={nArtes ? "2d" : "sem"} rotulo={textoDasArtes(artes, lados)} /> : null}
           </View>
         </View>
         <Text style={{ fontWeight: "800", fontSize: 14, color: t.ink }}>{reais(peca.quantity * peca.unit_price)}</Text>
@@ -90,6 +104,19 @@ export function LinhaDaPeca({ tema, peca, produto, aberta, editavel, templates, 
 
       {aberta ? (
         <View style={{ borderTopWidth: 1, borderTopColor: t.ink5, marginHorizontal: 8, paddingTop: 12, paddingBottom: 12, paddingHorizontal: 4, gap: 12 }}>
+          {peca.product_id && produto ? (
+            <EstudioDaPeca
+              tema={tema}
+              cid={cid}
+              chave={peca.chave}
+              customization={peca.customization ?? null}
+              cfg={cfg}
+              template={template}
+              spec={spec}
+              editavel={editavel}
+              onMudar={(c) => onMudar({ customization: c })}
+            />
+          ) : null}
           <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
             <View style={{ gap: 4 }}>
               <Rotulo t={t}>Quantidade</Rotulo>
@@ -143,19 +170,6 @@ export function LinhaDaPeca({ tema, peca, produto, aberta, editavel, templates, 
           ) : peca.product_id ? null : (
             <Text style={{ fontSize: 12, color: t.ink3 }}>Item avulso: entra só nos valores, sem mockup.</Text>
           )}
-
-          {peca.product_id ? (
-            <Campo
-              tema={tema}
-              rotulo="Arte do cliente (opcional)"
-              value={arte.texto}
-              editable={editavel}
-              placeholder="Texto na peça"
-              testID="arte"
-              onChangeText={(v) => onMudar({ customization: customizacaoComArte(cfg, peca.customization, { ...arte, texto: v }) })}
-              dica="Imagem e cor da peça você ajusta no vídeo, com a prévia ao vivo."
-            />
-          ) : null}
 
           <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
             {editavel ? <Botao tema={tema} tipo="perigo" pequeno rotulo="Tirar do orçamento" onPress={onTirar} testID="tirar" /> : null}
