@@ -468,10 +468,19 @@ export function usePdvState() {
     const cleaned = (code || "").trim();
     if (!cleaned) return false;
     if (origem === "leitor") flashScanFeedback(cleaned);
+    // 29/09/2026: código LIDO que não existe avisa e não vai para a busca —
+    // antes ia, e o bipe seguinte grudava nele até o lojista apagar. Texto
+    // DIGITADO (Enter na busca) continua virando busca.
+    const naoAchou = (motivo?: "rede") => {
+      if (origem === "busca") { setQuery(cleaned); return false; }
+      if (motivo === "rede") toast.error("Não deu para consultar o código " + cleaned + ". Confira a conexão e bipe de novo.");
+      else toast.error("Não achei produto com o código " + cleaned + ". Confira o cadastro ou busque pelo nome.");
+      return false;
+    };
 
     const localProduct = products.find(p => p.barcode === cleaned);
     if (localProduct) { handleAddProduct(localProduct); return true; }
-    if (!company?.id || isDemo) { setQuery(cleaned); return false; }
+    if (!company?.id || isDemo) return naoAchou();
 
     try {
       const result = await pdvApi.scan(company.id, cleaned);
@@ -503,11 +512,9 @@ export function usePdvState() {
         toast.success(bp.name);
         return true;
       }
-      setQuery(cleaned);
-      return false;
+      return naoAchou();
     } catch {
-      setQuery(cleaned);
-      return false;
+      return naoAchou("rede");
     }
   }
 

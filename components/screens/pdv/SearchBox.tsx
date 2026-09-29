@@ -6,6 +6,7 @@ import { View, Text, TextInput, StyleSheet, Platform } from "react-native";
 import { Colors, Glass } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { IS_WEB, webOnly } from "./types";
+import { criarDetector, OCIOSO_MS } from "@/utils/leituraRapida";
 
 type Props = {
   value: string;
@@ -20,10 +21,54 @@ type Props = {
    *  "ou código") via o código parado aqui e tinha de apagar antes do próximo
    *  bipe. Com isso o Enter do leitor lança o item e o pai limpa o campo. */
   onSubmit?: (v: string) => void;
+  /** 29/09/2026: leitura do leitor de código DENTRO da busca, com ou sem
+   *  Enter. Uma rajada rápida (ver utils/leituraRapida) vira bipe: o campo
+   *  volta ao texto de antes e o código vai para onScan. Sem isso, leitor
+   *  configurado sem Enter deixava o código na busca e o próximo bipe
+   *  grudava nele. Digitação normal continua sendo busca. */
+  onScan?: (code: string) => void;
 };
 
-export function SearchBox({ value, onChange, placeholder, maxWidth, onSubmit }: Props) {
+export function SearchBox({ value, onChange, placeholder, maxWidth, onSubmit, onScan }: Props) {
   const ref = useRef<TextInput | null>(null);
+  const detector = useRef(criarDetector()).current;
+  const ultimoValor = useRef(value);
+  const antesDaRajada = useRef(value);
+  const timer = useRef<any>(null);
+  useEffect(() => { ultimoValor.current = value; }, [value]);
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  // Fecha a rajada: se foi leitura, desfaz o texto que ela digitou e lança o código.
+  function fecharRajada(): boolean {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    const code = detector.leitura();
+    detector.reset();
+    if (!code || !onScan) return false;
+    ultimoValor.current = antesDaRajada.current;
+    onChange(antesDaRajada.current);
+    onScan(code);
+    return true;
+  }
+
+  function aoMudar(v: string) {
+    const anterior = ultimoValor.current || "";
+    if (onScan && v.length === anterior.length + 1 && v.startsWith(anterior)) {
+      // Um caractere a mais no fim: pode ser o leitor digitando.
+      if (detector.tecla(v.slice(-1), Date.now())) antesDaRajada.current = anterior;
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(fecharRajada, OCIOSO_MS);
+    } else {
+      // Apagou, colou, editou no meio: é a pessoa mexendo, não o leitor.
+      detector.reset();
+    }
+    ultimoValor.current = v;
+    onChange(v);
+  }
+
+  function aoEnviar(e: any) {
+    if (fecharRajada()) return;
+    onSubmit?.(e?.nativeEvent?.text ?? value);
+  }
 
   // Web keyboard shortcut: ⌘K / Ctrl+K focuses the input.
   useEffect(() => {
@@ -55,8 +100,9 @@ export function SearchBox({ value, onChange, placeholder, maxWidth, onSubmit }: 
         ref={ref}
         style={s.input as any}
         value={value}
-        onChangeText={onChange}
-        onSubmitEditing={onSubmit ? (e: any) => onSubmit(e?.nativeEvent?.text ?? value) : undefined}
+        onChangeText={aoMudar}
+        onSubmitEditing={onSubmit || onScan ? aoEnviar : undefined}
+        testID="pdv-busca"
         blurOnSubmit={false}
         returnKeyType="search"
         placeholder={placeholder || "Buscar produto ou código…"}
