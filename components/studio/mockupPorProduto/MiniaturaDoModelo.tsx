@@ -6,11 +6,17 @@
 //   - 2D com foto de estúdio: a própria foto do modelo (views[0].photo_url);
 //   - 3D em GLB que não é camiseta, ou spec ainda chegando: um quadro
 //     neutro com o ícone do tipo — nada de imagem inventada.
+//
+// 28/09/2026 — no web, assim que fica pronto, o retrato do visualizador
+// 3D atual (retratoDoModelo) toma o lugar do desenho: a caneca com
+// esmalte e a camiseta com gola e costuras, não o desenho chapado. Até
+// lá (ou se o retrato falhar), fica o que está descrito acima.
 // ============================================================
 import { View, Image, Platform } from "react-native";
 import type { VisualTemplate, VisualTemplateSpec } from "@/services/studioVisualApi";
 import { VisualTemplateThumb } from "@/components/studio/visualEngine/VisualTemplateThumb";
 import { Icon } from "@/components/Icon";
+import { useRetratoDoModelo } from "./retratoDoModelo";
 
 export type FormaDaMiniaturaDoModelo = "foto" | "caneca" | "camiseta" | "generica";
 
@@ -51,6 +57,7 @@ export function MiniaturaDoModelo({ template, spec, foto, largura = 46, altura =
     alignItems: "center" as const, justifyContent: "center" as const,
     backgroundColor: "#ECEAE4",
   };
+  const retrato = useRetratoDoModelo(template, spec);
   if (!template) {
     if (foto) {
       return (
@@ -62,6 +69,13 @@ export function MiniaturaDoModelo({ template, spec, foto, largura = 46, altura =
     return (
       <View style={[caixa, { backgroundColor: T.bgSoft, borderWidth: 1, borderColor: T.ink5 }]} aria-hidden>
         <Icon name="x_circle" size={18} color={T.ink4} />
+      </View>
+    );
+  }
+  if (retrato) {
+    return (
+      <View style={caixa} aria-hidden>
+        <Image source={{ uri: retrato }} style={{ width: largura, height: altura }} resizeMode="cover" />
       </View>
     );
   }

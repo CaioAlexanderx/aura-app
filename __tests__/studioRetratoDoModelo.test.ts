@@ -1,0 +1,117 @@
+// ============================================================
+// AURA Studio — 28/09/2026: retrato do modelo para as miniaturas
+//
+// A miniatura da ficha e da Aparência passa a ser uma foto do visualizador
+// 3D atual. Guardado aqui: um retrato por vez (um contexto WebGL só), o
+// viewer descartado depois, o cache por key@versão (memória e
+// localStorage), a foto de estúdio no 2D e o null quando o 3D falha.
+// ============================================================
+let mockAbertos = 0;
+let mockMaxAbertos = 0;
+const mockCriar = jest.fn();
+const mockTrocar = jest.fn();
+jest.mock("@/components/studio/visualEngine/compose3dMug", () => ({
+  createModelViewer: (...a: any[]) => mockCriar(...a),
+}));
+const mockCompose = jest.fn((..._a: any[]) => Promise.resolve({ luzDaFoto: "sem-foto" }));
+jest.mock("@/components/studio/visualEngine/compose2d", () => ({
+  composeView: (...a: any[]) => mockCompose(...a),
+}));
+
+import {
+  chaveDoRetrato, pedirRetrato, retratoPronto, limparRetratos, specDoRetrato, LARGURA_DO_RETRATO,
+} from "@/components/studio/mockupPorProduto/retratoDoModelo";
+
+const caneca: any = { schema: 1, model: { kind: "procedural-mug", texture: { w: 2048, h: 1024 } }, areas: [] };
+const camiseta: any = { schema: 1, model: { kind: "glb", url: "https://x/camiseta.glb" }, areas: [] };
+
+beforeAll(() => {
+  // jsdom não desenha: o canvas 2D é um dublê que devolve um JPEG.
+  jest.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(function (this: any, tipo: string) {
+    if (tipo !== "2d") return null as any;
+    return { fillRect: () => {}, drawImage: () => {}, set fillStyle(_v: string) {} } as any;
+  });
+  jest.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockImplementation(() => "data:image/jpeg;base64,AAA");
+});
+
+beforeEach(() => {
+  limparRetratos();
+  localStorage.clear();
+  mockAbertos = 0; mockMaxAbertos = 0;
+  mockCriar.mockReset();
+  mockCriar.mockImplementation(async (cv: HTMLCanvasElement, _spec: any, _v: any, opts: any) => {
+    mockAbertos++; mockMaxAbertos = Math.max(mockMaxAbertos, mockAbertos);
+    expect(opts).toMatchObject({ cenario: "nenhum", pixelRatio: 1 });
+    expect(cv.width).toBe(LARGURA_DO_RETRATO);
+    await new Promise((r) => setTimeout(r, 5));
+    return {
+      giroAutomatico: jest.fn(),
+      trocarPeca: (...a: any[]) => mockTrocar(...a),
+      snapshot: () => "data:image/png;base64,PNG",
+      dispose: () => { mockAbertos--; },
+    };
+  });
+  mockCompose.mockClear();
+  mockTrocar.mockReset();
+  mockTrocar.mockImplementation(async (_spec: any, _v: any, opts: any) => {
+    expect(opts).toMatchObject({ cenario: "nenhum", pixelRatio: 1 });
+  });
+});
+
+describe("retrato do modelo", () => {
+  it("chave por key@versão", () => {
+    expect(chaveDoRetrato({ key: "caneca", version: 3 })).toMatch(/caneca@3$/);
+    expect(chaveDoRetrato({ key: "caneca", version: 3 })).not.toBe(chaveDoRetrato({ key: "caneca", version: 4 }));
+  });
+
+  it("textura pequena no retrato, sem mexer na spec original", () => {
+    const r: any = specDoRetrato(camiseta);
+    expect(r.model.texture).toEqual({ w: 512, h: 256 });
+    expect(camiseta.model.texture).toBeUndefined();
+    expect((specDoRetrato(caneca) as any).model.texture).toEqual({ w: 512, h: 256 });
+  });
+
+  it("um viewer só para a fila (peças por trocarPeca), descartado no fim, JPEG guardado", async () => {
+    const [a, b] = await Promise.all([
+      pedirRetrato({ key: "caneca", version: 1, kind: "model3d" }, caneca),
+      pedirRetrato({ key: "camiseta", version: 1, kind: "model3d" }, camiseta),
+    ]);
+    expect(a).toBe("data:image/jpeg;base64,AAA");
+    expect(b).toBe("data:image/jpeg;base64,AAA");
+    expect(mockCriar).toHaveBeenCalledTimes(1);
+    expect(mockTrocar).toHaveBeenCalledTimes(1);
+    expect(mockTrocar.mock.calls[0][0].model.kind).toBe("glb");
+    expect(mockMaxAbertos).toBe(1);
+    expect(mockAbertos).toBe(0);
+    // guardado: o mesmo pedido não abre outro viewer, nem depois de esquecer a memória
+    limparRetratos();
+    expect(retratoPronto({ key: "caneca", version: 1 })).toBe("data:image/jpeg;base64,AAA");
+    await pedirRetrato({ key: "caneca", version: 1, kind: "model3d" }, caneca);
+    expect(mockCriar).toHaveBeenCalledTimes(1);
+  });
+
+  it("3D que falha (sem WebGL) dá null e não guarda nada", async () => {
+    mockCriar.mockImplementationOnce(async () => { throw new Error("sem WebGL"); });
+    const r = await pedirRetrato({ key: "garrafa", version: 1, kind: "model3d" }, camiseta);
+    expect(r).toBeNull();
+    expect(localStorage.length).toBe(0);
+  });
+
+  it("GLB sem URL utilizável não vira retrato de caneca", async () => {
+    const r = await pedirRetrato({ key: "camiseta-sem-url", version: 1, kind: "model3d" },
+      { schema: 1, model: { kind: "glb", url: "/models/camiseta.glb" } } as any);
+    expect(r).toBeNull();
+    expect(mockCriar).not.toHaveBeenCalled();
+  });
+
+  it("2D com foto de estúdio usa a própria foto; sem foto, o composeView", async () => {
+    const foto = await pedirRetrato({ key: "foto", version: 1, kind: "photo2d" },
+      { schema: 1, views: [{ id: "front", photo_url: "https://x/f.jpg" }] } as any);
+    expect(foto).toBe("https://x/f.jpg");
+    expect(mockCompose).not.toHaveBeenCalled();
+    const vetor = await pedirRetrato({ key: "vetor", version: 1, kind: "photo2d" },
+      { schema: 1, views: [{ id: "front", base: { w: 1000, h: 1000 }, garment: { shape: "tshirt" } }] } as any);
+    expect(vetor).toBe("data:image/jpeg;base64,AAA");
+    expect(mockCompose).toHaveBeenCalledTimes(1);
+  });
+});

@@ -43,7 +43,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   View, Text, Pressable, TextInput, ActivityIndicator,
-  StyleSheet, ScrollView, Modal, Platform, useWindowDimensions, Switch,
+  StyleSheet, ScrollView, Modal, Platform, useWindowDimensions, Switch, Image,
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
@@ -59,7 +59,9 @@ import {
 import { EnginePreview, invalidateProductTemplate } from "@/components/studio/visualEngine/EnginePreview";
 import { studioStorefrontUrl } from "@/utils/storefrontUrl";
 import VisualTemplateThumb from "@/components/studio/visualEngine/VisualTemplateThumb";
-import { studioVisualApi, type VisualTemplate } from "@/services/studioVisualApi";
+import { studioVisualApi, type VisualTemplate, type VisualTemplateSpec } from "@/services/studioVisualApi";
+import { useSpecsDosModelos } from "@/components/studio/mockupPorProduto/useSpecsDosModelos";
+import { useRetratoDoModelo } from "@/components/studio/mockupPorProduto/retratoDoModelo";
 import { PreviewWhatsAppModal } from "@/components/studio/PreviewWhatsAppModal";
 import { MockupNaFotoSecao } from "@/components/studio/MockupNaFotoSecao";
 import { SecaoTecnicaDeImpressao, SecaoTestarComUmaArte } from "@/components/studio/TecnicaETesteDaArte";
@@ -224,6 +226,9 @@ export function StudioPersonalizacaoPanel({
   const [visualTemplates, setVisualTemplates] = useState<VisualTemplate[]>([]);
   const [savingVisual, setSavingVisual] = useState(false);
   const [visualEpoch, setVisualEpoch] = useState(0);
+  // A lista não traz a spec: sem ela a miniatura não sabe se o 3D é
+  // caneca ou camiseta. Mesmo cache da aba Aparência (key@versão).
+  const specsDosModelos = useSpecsDosModelos(companyId, visualTemplates);
 
   // Lado desenhado no preview. Antes mostrava SEMPRE a frente, entao
   // quem configurava verso ou meio o fazia as cegas.
@@ -924,7 +929,7 @@ export function StudioPersonalizacaoPanel({
                   style={[s.mockupItem, active && s.mockupItemActive]}
                 >
                   <View style={s.mockupThumbWrap}>
-                    <VisualTemplateThumb kind={vt.kind} spec={vt.spec} size={88} />
+                    <MiniaturaDoMockup vt={vt} spec={specsDosModelos[vt.key] ?? vt.spec} />
                     <View style={[s.mockupKindBadge, { backgroundColor: vt.kind === "model3d" ? t.accent : t.primary }]}>
                       <Text style={s.mockupKindBadgeTxt}>{vt.kind === "model3d" ? "3D" : "2D"}</Text>
                     </View>
@@ -1507,6 +1512,19 @@ export function StudioPersonalizacaoPanel({
 // `choices` (de onde sai o price_delta, casado pelo hex/value).
 // ────────────────────────────────────────────────────────────
 type Choice = { label: string; value: string; price_delta?: number };
+
+// ── MiniaturaDoMockup — a miniatura de um modelo na grade (28/09/2026) ──
+// O retrato do visualizador 3D atual (caneca com esmalte, camiseta com
+// gola e costuras) quando fica pronto; até lá, o desenho 2D com a spec
+// certa — sem ela, a camiseta em GLB saía desenhada como caneca. Com a
+// spec ainda chegando, o quadro fica vazio em vez de chutar a forma.
+function MiniaturaDoMockup({ vt, spec }: { vt: VisualTemplate; spec: VisualTemplateSpec | null | undefined }) {
+  const retrato = useRetratoDoModelo(vt, spec);
+  if (retrato) {
+    return <Image source={{ uri: retrato }} style={{ width: 88, height: 67 }} resizeMode="cover" />;
+  }
+  return <VisualTemplateThumb kind={spec === undefined ? null : vt.kind} spec={spec} size={88} />;
+}
 
 // ── PrintAreaRow — L × A + posição numa linha só (Frente/Verso) ──
 function PrintAreaRow({
