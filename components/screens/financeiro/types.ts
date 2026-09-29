@@ -12,6 +12,8 @@ export type Transaction = {
   paid_at?: string;
   /** Valor original (boleto) quando a baixa foi com outro valor — amount é o pago. */
   original_amount?: number | null;
+  /** F3: nome do comprovante anexado (abre por GET /transactions/:id/receipt). */
+  receipt_filename?: string | null;
   // Sessao 22-23/04: campos novos pra editar/listar
   payment_method?: string | null;
   employee_id?: string | null;

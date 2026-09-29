@@ -12,6 +12,8 @@ import { CalendarioDoDia } from "@/components/CalendarioDoDia";
 import { useValoresOcultos } from "@/stores/valoresOcultos";
 import { maskCurrency, unmaskNumber } from "@/utils/masks";
 import { diferencaPaga, rotulosDaSituacao, textoDaDiferenca } from "@/utils/lancamentoPago";
+import { escolherComprovante, nomeCurto, type ArquivoDoComprovante } from "@/utils/comprovante";
+import { toast } from "@/components/Toast";
 import { fmt } from "@/components/screens/financeiro/types";
 import {
   ddmm, FORMAS_DE_PAGAMENTO, rotulos,
@@ -25,7 +27,7 @@ type Props = {
   tipo: TipoQuadro;
   hoje: string;
   onFechar: () => void;
-  onConfirmar: (dados: { data?: string; forma?: string | null; valorPago?: number | null }) => void;
+  onConfirmar: (dados: { data?: string; forma?: string | null; valorPago?: number | null; comprovante?: ArquivoDoComprovante | null }) => void;
 };
 
 function somarDias(iso: string, n: number) {
@@ -55,12 +57,15 @@ export function MoverSheetConteudo({ alvo, tipo, hoje, onFechar, onConfirmar }: 
   const [forma, setForma] = useState<string | null>("pix");
   // Valor pago (boleto com juros): vem com o valor do lançamento; só troca quem pagou diferente.
   const [valorPagoStr, setValorPagoStr] = useState("");
+  // F3: comprovante opcional (foto ou PDF), sobe depois da baixa.
+  const [comprovante, setComprovante] = useState<ArquivoDoComprovante | null>(null);
 
   useEffect(() => {
     if (!alvo) return;
     setData(alvo.mov === "nova_data" ? somarDias(hoje, 7) : hoje);
     setForma(alvo.cartao.payment_method || "pix");
     setValorPagoStr(maskCurrency(String(Math.round(alvo.cartao.amount * 100))));
+    setComprovante(null);
   }, [alvo, hoje]);
 
   if (!alvo) return null;
@@ -125,10 +130,28 @@ export function MoverSheetConteudo({ alvo, tipo, hoje, onFechar, onConfirmar }: 
               </View>
             )}
 
+            {mov === "baixa" && (
+              <View style={{ gap: 6 }}>
+                <Text style={s.rotulo}>Comprovante (opcional)</Text>
+                {comprovante ? (
+                  <View style={s.anexo}>
+                    <Text style={s.anexoNome} numberOfLines={1}>{nomeCurto(comprovante.filename)}</Text>
+                    <Pressable onPress={() => setComprovante(null)} accessibilityRole="button" testID="quadro-comprovante-remover"><Text style={s.anexoAcao}>Remover</Text></Pressable>
+                  </View>
+                ) : (
+                  <Pressable
+                    onPress={async () => { try { const a = await escolherComprovante(); if (a) setComprovante(a); } catch (e: any) { toast.error(e?.message || "Não deu para ler o arquivo."); } }}
+                    style={s.btnAnexar} accessibilityRole="button" testID="quadro-comprovante-anexar">
+                    <Text style={s.btnTxt}>Anexar foto ou PDF</Text>
+                  </Pressable>
+                )}
+              </View>
+            )}
+
             <View style={s.botoes}>
               <Pressable onPress={onFechar} style={s.btn} accessibilityRole="button"><Text style={s.btnTxt}>Cancelar</Text></Pressable>
               <Pressable
-                onPress={() => { if (!bloqueado) onConfirmar({ data: mov === "desfazer" ? undefined : data, forma: mov === "baixa" ? forma : undefined, valorPago: mov === "baixa" ? valorPago : undefined }); }}
+                onPress={() => { if (!bloqueado) onConfirmar({ data: mov === "desfazer" ? undefined : data, forma: mov === "baixa" ? forma : undefined, valorPago: mov === "baixa" ? valorPago : undefined, comprovante: mov === "baixa" ? comprovante : undefined }); }}
                 style={[s.btn, s.btnGo, bloqueado && { opacity: 0.5 }]}
                 accessibilityRole="button" testID="quadro-confirmar"
               >
@@ -147,6 +170,10 @@ const s = StyleSheet.create({
   rotulo: { fontSize: 10.5, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase", color: Colors.ink3 },
   aviso: { fontSize: 12, color: Colors.red, fontWeight: "600" },
   dica: { fontSize: 12, color: Colors.ink3 },
+  btnAnexar: { alignSelf: "flex-start", borderWidth: 1, borderStyle: "dashed", borderColor: Colors.border2, backgroundColor: Colors.bg4, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 8 },
+  anexo: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg4, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 8 },
+  anexoNome: { flex: 1, fontSize: 12.5, color: Colors.ink },
+  anexoAcao: { fontSize: 12, fontWeight: "600", color: Colors.red },
   input: { fontFamily: Fonts.mono, fontSize: 16, color: Colors.ink, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 10 },
   formas: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   forma: { borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg4, borderRadius: 8, paddingHorizontal: 11, paddingVertical: 7 },

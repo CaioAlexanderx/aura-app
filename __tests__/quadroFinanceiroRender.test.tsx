@@ -18,6 +18,14 @@ jest.mock("@/components/screens/financeiro/quadro/LoteSheet", () => {
 });
 jest.mock("@/components/CalendarioDoDia", () => ({ CalendarioDoDia: () => null }));
 jest.mock("@/components/Toast", () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn(), warning: jest.fn() } }));
+// F3: o seletor de arquivo e a abertura do comprovante são do navegador.
+const mockEscolher = jest.fn();
+const mockAbrir = jest.fn(async () => {});
+jest.mock("@/utils/comprovante", () => {
+  const real = jest.requireActual("@/utils/comprovante");
+  return { ...real, escolherComprovante: () => mockEscolher(), abrirComprovante: (c: string, t: string) => mockAbrir(c, t) };
+});
+jest.mock("@/services/studioUploadApi", () => ({ pickFileWeb: jest.fn(), fileToBase64Web: jest.fn() }));
 
 const mockMover = jest.fn();
 const mockPagarVarios = jest.fn();
@@ -32,7 +40,7 @@ const mockQuadro = {
       { id: "b", description: "Encomenda 4 blusas", category: "Venda a prazo", amount: 432, status: "pending", date: "2026-09-30", due_date: "2026-09-30", paid_at: null, payment_method: null, notes: null, employee_name: null, recurrence_type: null, recurrence_index: null, movable: true },
     ] },
     feito: { total: 1534.7, count: 10, items: [
-      { id: "c", description: "Pedido da vitrine", category: "Vendas", amount: 250, original_amount: 240, status: "confirmed", date: "2026-09-05", due_date: "2026-09-05", paid_at: "2026-09-05T03:00:00.000Z", payment_method: "pix", notes: null, employee_name: null, recurrence_type: null, recurrence_index: null, movable: false },
+      { id: "c", description: "Pedido da vitrine", category: "Vendas", amount: 250, original_amount: 240, receipt_filename: "pix-vitrine.png", status: "confirmed", date: "2026-09-05", due_date: "2026-09-05", paid_at: "2026-09-05T03:00:00.000Z", payment_method: "pix", notes: null, employee_name: null, recurrence_type: null, recurrence_index: null, movable: false },
     ], grupos: [{ date: "2026-09-27", origem: "caixa", count: 9, total: 1284.7 }], diferenca: { a_mais: 10, a_menos: 0, count_a_mais: 1 } },
   },
 };
@@ -90,7 +98,7 @@ describe("QuadroFinanceiro", () => {
     act(() => { porTestID(t, "quadro-baixa-b").props.onPress(); });
     expect(texto(t.toJSON())).toMatch(/Recebido\?/);
     act(() => { porTestID(t, "quadro-confirmar").props.onPress(); });
-    expect(mockMover).toHaveBeenCalledWith({ id: "b", mov: "baixa", data: "2026-09-28", forma: "pix", valorPago: 432 });
+    expect(mockMover).toHaveBeenCalledWith({ id: "b", mov: "baixa", data: "2026-09-28", forma: "pix", valorPago: 432, comprovante: null });
   });
 
   it("valor pago diferente vai na confirmação e mostra a diferença", () => {
@@ -149,5 +157,23 @@ describe("QuadroFinanceiro", () => {
     const t = render();
     act(() => { porTestID(t, "quadro-pagar-varios").props.onPress(); });
     expect(porTestID(t, "quadro-marcar-c")).toBeUndefined();
+  });
+
+  it("comprovante: anexar na baixa leva o arquivo junto do movimento", async () => {
+    const arq = { content: "QUJD", filename: "boleto-pago.pdf", content_type: "application/pdf", size: 3 };
+    mockEscolher.mockResolvedValueOnce(arq);
+    const t = render();
+    act(() => { porTestID(t, "quadro-baixa-b").props.onPress(); });
+    await act(async () => { await porTestID(t, "quadro-comprovante-anexar").props.onPress(); });
+    expect(texto(t.toJSON())).toMatch(/boleto-pago\.pdf/);
+    act(() => { porTestID(t, "quadro-confirmar").props.onPress(); });
+    expect(mockMover).toHaveBeenCalledWith(expect.objectContaining({ id: "b", mov: "baixa", comprovante: arq }));
+  });
+
+  it("comprovante: o cartão pago com anexo abre pelo clique", () => {
+    const t = render();
+    act(() => { porTestID(t, "quadro-comprovante-c").props.onPress(); });
+    expect(mockAbrir).toHaveBeenCalledWith("c1", "c");
+    expect(porTestID(t, "quadro-comprovante-b")).toBeUndefined();
   });
 });

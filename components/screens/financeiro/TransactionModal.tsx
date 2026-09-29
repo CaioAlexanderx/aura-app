@@ -18,6 +18,7 @@ import { SaleDetailsSection } from "./SaleDetailsSection";
 import { isSaleLinkedTransaction, isCreditReceivableKey } from "@/utils/saleLink";
 import { valorDoPatch } from "@/utils/editarLancamento";
 import { camposDaSituacao, diferencaPaga, textoDaDiferenca, rotulosDaSituacao, type Situacao } from "@/utils/lancamentoPago";
+import { abrirComprovante, anexarComprovante, escolherComprovante, nomeCurto, removerComprovante } from "@/utils/comprovante";
 
 var isWeb = Platform.OS === "web";
 
@@ -166,6 +167,10 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
   var [pagoEmStr, setPagoEmStr] = useState(todayBR());
   var [pagoEmInicial, setPagoEmInicial] = useState("");
   var [valorPagoStr, setValorPagoStr] = useState("");
+  // F3 (29/09/2026): comprovante do lançamento em edição — anexa/troca/remove
+  // na hora (não espera o Salvar).
+  var [comprovanteNome, setComprovanteNome] = useState<string | null>(null);
+  var [comprovanteOcupado, setComprovanteOcupado] = useState(false);
   // Toggle pra mostrar produtos com estoque 0 no picker de venda retroativa.
   // Padrão = false (esconde). Mesmo padrão do Caixa.
   var [showSaleOutOfStock, setShowSaleOutOfStock] = useState(false);
@@ -210,6 +215,7 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
       setUnitEmpSearch("");
       var pagoEm = (editTransaction as any).paid_at ? isoToBR((editTransaction as any).paid_at) : "";
       setPagoEmStr(pagoEm); setPagoEmInicial(pagoEm);
+      setComprovanteNome((editTransaction as any).receipt_filename || null);
       setUnitEmpOpen(false);
     }
   }, [editTransaction]);
@@ -457,6 +463,51 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
         </View>
       )}
       {difTexto ? <Text style={[s.label, { color: Colors.amber, marginTop: -4 }]}>{difTexto}</Text> : null}
+      {isEditing && !isLinkedToSale && company?.id && editTransaction && (
+        <View style={{ gap: 6 }}>
+          <Text style={s.label}>Comprovante</Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+            {comprovanteNome ? (
+              <>
+                <Text style={{ color: Colors.ink, fontSize: 13 }} numberOfLines={1}>{nomeCurto(comprovanteNome)}</Text>
+                <Pressable onPress={function() { abrirComprovante(company!.id, editTransaction!.id).catch(function(e: any) { toast.error(e?.message || "Não deu para abrir o comprovante."); }); }} style={s.catBtn} testID="comprovante-abrir"><Text style={s.catText}>Abrir</Text></Pressable>
+              </>
+            ) : null}
+            <Pressable disabled={comprovanteOcupado} testID="comprovante-anexar" style={[s.catBtn, comprovanteOcupado && { opacity: 0.5 }]}
+              onPress={async function() {
+                try {
+                  var arq = await escolherComprovante();
+                  if (!arq) return;
+                  setComprovanteOcupado(true);
+                  await anexarComprovante(company!.id, editTransaction!.id, arq);
+                  setComprovanteNome(arq.filename);
+                  qc.invalidateQueries({ queryKey: ["transactions", company!.id] });
+                  qc.invalidateQueries({ queryKey: ["transactions-board", company!.id] });
+                  toast.success("Comprovante anexado.");
+                } catch (e: any) { toast.error(e?.message || "Não deu para anexar o comprovante."); }
+                finally { setComprovanteOcupado(false); }
+              }}>
+              <Text style={s.catText}>{comprovanteNome ? "Trocar" : "Anexar foto ou PDF"}</Text>
+            </Pressable>
+            {comprovanteNome ? (
+              <Pressable disabled={comprovanteOcupado} testID="comprovante-remover" style={[s.catBtn, comprovanteOcupado && { opacity: 0.5 }]}
+                onPress={async function() {
+                  try {
+                    setComprovanteOcupado(true);
+                    await removerComprovante(company!.id, editTransaction!.id);
+                    setComprovanteNome(null);
+                    qc.invalidateQueries({ queryKey: ["transactions", company!.id] });
+                    qc.invalidateQueries({ queryKey: ["transactions-board", company!.id] });
+                    toast.success("Comprovante removido.");
+                  } catch (e: any) { toast.error(e?.message || "Não deu para remover o comprovante."); }
+                  finally { setComprovanteOcupado(false); }
+                }}>
+                <Text style={[s.catText, { color: Colors.red }]}>Remover</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      )}
       <Text style={s.label}>Descrição</Text>
       <TextInput style={s.input} value={desc} onChangeText={setDesc} placeholder="Ex: Venda cliente Maria" placeholderTextColor={Colors.ink3} />
       <Text style={s.label}>Categoria</Text>

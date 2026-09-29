@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { companiesApi } from "@/services/api";
 import { toast } from "@/components/Toast";
 import { invalidateFinanceiroQueries } from "@/hooks/useTransactions";
+import { anexarComprovante } from "@/utils/comprovante";
 import { aplicarMovimento, corpoDoLote, corpoDoMovimento, ddmm, rotulos, type PedidoDeMovimento, type Quadro, type TipoQuadro } from "@/utils/quadroFinanceiro";
 
 export { corpoDoMovimento, type PedidoDeMovimento };
@@ -27,7 +28,16 @@ export function useQuadroFinanceiro(companyId: string | null | undefined, tipo: 
   });
 
   const mover = useMutation({
-    mutationFn: (p: PedidoDeMovimento) => companiesApi.updateTransaction(companyId as string, p.id, corpoDoMovimento(p)),
+    // F3: a baixa grava primeiro; o comprovante sobe em seguida. Se só o
+    // arquivo falhar, a baixa vale e o aviso manda anexar pelo Editar.
+    mutationFn: async (p: PedidoDeMovimento) => {
+      const r = await companiesApi.updateTransaction(companyId as string, p.id, corpoDoMovimento(p));
+      if (p.mov === "baixa" && p.comprovante) {
+        try { await anexarComprovante(companyId as string, p.id, p.comprovante); }
+        catch (e: any) { toast.warning("A baixa foi feita, mas o comprovante não subiu" + (e?.message ? " (" + e.message + ")" : "") + ". Anexe pelo Editar."); }
+      }
+      return r;
+    },
     onMutate: async (p) => {
       await qc.cancelQueries({ queryKey: chave });
       const antes = qc.getQueryData<Quadro>(chave);
