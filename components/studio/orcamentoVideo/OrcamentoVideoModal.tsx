@@ -43,12 +43,14 @@ import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { studioApi, type StudioQuote, type StudioQuoteItem, type CanalDeEnvioDoOrcamento } from "@/services/studioApi";
 import { carregarFontesDaPeca } from "./modeloDaPeca";
+import { formaDaMiniaturaDoModelo } from "@/components/studio/mockupPorProduto/MiniaturaDoModelo";
 import { pickImageBase64, uploadStudioMockup } from "@/services/studioUploadApi";
 import { Mug3DPreview } from "@/components/studio/visualEngine/Mug3DPreview";
 import { valoresDasCondicoes, reais } from "./condicoesDoOrcamento";
 import { mensagemDoOrcamento, primeiroNome } from "./mensagemDoOrcamento";
 import {
   tem3d, temFoto, coresDaPeca, arteDoItem, customizacaoComArte, motorDaArte, fotoSem3d,
+  ajustarTamanhoDaArte, ajusteDaArte, ESCALA_MIN, ESCALA_MAX,
   type FontesDaPeca, type ArteDaPeca,
 } from "./pecaDoOrcamento";
 import { abrirPalco, gravarGiro, fotoDoPalco, DURACAO_S, type VideoGravado, type Palco } from "./gravarGiro";
@@ -139,7 +141,10 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
   const pode3d = tem3d(fontes);
   const podeFoto = temFoto(fontes);
   const cores = coresDaPeca(fontes?.cfg);
-  const motor = useMemo(() => motorDaArte(fontes?.cfg, item?.customization, arte), [fontes, item, arte]);
+  // A peça define a técnica padrão (a sublimação da caneca recorta o branco).
+  const formaDaPeca = fontes?.template ? formaDaMiniaturaDoModelo(fontes.template, fontes.template.spec) : null;
+  const tipoDaPeca = formaDaPeca === "caneca" || formaDaPeca === "camiseta" ? formaDaPeca : null;
+  const motor = useMemo(() => motorDaArte(fontes?.cfg, item?.customization, arte, tipoDaPeca), [fontes, item, arte, tipoDaPeca]);
 
   // ── Condições: as do orçamento, já salvas pelo modal do orçamento ──
   const validade = Math.max(1, Math.min(90, Number(quote.validity_days) || 7));
@@ -535,11 +540,49 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
           {passo === 2 && (
             <View style={s.duas}>
               <View style={s.col}>
-                {/* PONTO DE LIGAÇÃO "Tamanho da arte" (29/09/2026): o ajuste de
-                    tamanho e posição da arte está sendo feito em
-                    pecaDoOrcamento.ts (layoutDaArte/pintarArte). Quando a função
-                    existir, o controle entra aqui, acima do vídeo, e muda
-                    `motor` (motorDaArte) antes de chamar gravar() de novo. */}
+                {/* "Tamanho da arte" (29/09/2026, app#1013): a imagem entra
+                    sozinha na área de impressão; aqui a lojista aumenta ou
+                    diminui sobre o automático e grava de novo. Vale só para
+                    o vídeo. */}
+                {arte.imagem && gravacao !== "gravando" ? (
+                  <View style={s.tamanho} testID="tamanho-da-arte">
+                    <Text style={[s.opcaoTit, { flex: 1 }]}>Tamanho da arte · {Math.round(ajusteDaArte(arte).escala * 100)}%</Text>
+                    <Pressable
+                      style={[s.btnSec, s.btnQuadrado, ajusteDaArte(arte).escala <= ESCALA_MIN && { opacity: 0.45 }]}
+                      disabled={ajusteDaArte(arte).escala <= ESCALA_MIN}
+                      onPress={() => setArte(ajustarTamanhoDaArte(arte, { escala: Math.round((ajusteDaArte(arte).escala - 0.1) * 10) / 10 }))}
+                      accessibilityLabel="Diminuir a arte"
+                    >
+                      <Icon name="minus" size={16} color={t.ink} />
+                    </Pressable>
+                    <Pressable
+                      style={[s.btnSec, s.btnQuadrado, ajusteDaArte(arte).escala >= ESCALA_MAX && { opacity: 0.45 }]}
+                      disabled={ajusteDaArte(arte).escala >= ESCALA_MAX}
+                      onPress={() => setArte(ajustarTamanhoDaArte(arte, { escala: Math.round((ajusteDaArte(arte).escala + 0.1) * 10) / 10 }))}
+                      accessibilityLabel="Aumentar a arte"
+                    >
+                      <Icon name="plus" size={16} color={t.ink} />
+                    </Pressable>
+                    {([["arrow_left", "dx", -0.05, "Mover a arte para a esquerda"], ["chevron_up", "dy", -0.05, "Mover a arte para cima"], ["chevron_down", "dy", 0.05, "Mover a arte para baixo"], ["arrow_right", "dx", 0.05, "Mover a arte para a direita"]] as const).map(([icone, eixo, passo, rotulo]) => (
+                      <Pressable
+                        key={rotulo}
+                        style={[s.btnSec, s.btnQuadrado]}
+                        onPress={() => setArte(ajustarTamanhoDaArte(arte, { [eixo]: Math.round((ajusteDaArte(arte)[eixo] + passo) * 100) / 100 }))}
+                        accessibilityLabel={rotulo}
+                      >
+                        <Icon name={icone} size={16} color={t.ink} />
+                      </Pressable>
+                    ))}
+                    {arte.ajuste ? (
+                      <Pressable style={s.btnSec} onPress={() => setArte(ajustarTamanhoDaArte(arte, null))}><Text style={s.btnSecTxt}>Automático</Text></Pressable>
+                    ) : null}
+                    {gravadoCom.current !== assinatura ? (
+                      <Pressable style={[s.btnSec, { borderColor: t.accent }]} onPress={() => gravar()} testID="regravar-tamanho">
+                        <Icon name="refresh" size={14} color={t.ink} /><Text style={s.btnSecTxt}>Gravar com este tamanho</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ) : null}
                 <Text style={s.secao}>{gravacao === "foto" ? "Foto da peça" : `Vídeo · ${DURACAO_S} s · 720 × 900`}</Text>
                 <View style={s.videoCaixa}>
                   {gravacao === "gravando" && (
@@ -870,6 +913,8 @@ function estilos(t: StudioPalette, estreito: boolean) {
     btnWa: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#1DA851", paddingHorizontal: 16, paddingVertical: 11, borderRadius: 11, minHeight: 44, flexGrow: estreito ? 1 : 0 } as any,
     btnSec: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: t.paperCard, borderWidth: 1.5, borderColor: t.ink5, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 11, minHeight: 40 } as any,
     btnSecTxt: { color: t.ink, fontWeight: "700", fontSize: 13 } as any,
+    btnQuadrado: { width: 44, minHeight: 44, paddingHorizontal: 0 } as any,
+    tamanho: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 } as any,
     sairVeu: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(2,6,23,0.55)", alignItems: "center", justifyContent: "center", padding: 16 } as any,
     sairCaixa: { backgroundColor: t.paperCardElev, borderRadius: 16, padding: 18, maxWidth: 380, width: "100%" } as any,
   };
