@@ -166,6 +166,7 @@ export function QuadroFinanceiro({ companyId, onEditar }: { companyId: string; o
               selecionando={selecionando}
               selecionados={selecionados}
               onSelecionar={alternarSelecao}
+              companyId={companyId}
             />
           ))}
         </View>
@@ -200,7 +201,7 @@ export function QuadroFinanceiro({ companyId, onEditar }: { companyId: string; o
         hoje={hoje}
         onFechar={() => setAlvo(null)}
         onConfirmar={(dados) => {
-          if (alvo) mover({ id: alvo.cartao.id, mov: alvo.mov, data: dados.data, forma: dados.forma, valorPago: dados.valorPago });
+          if (alvo) mover({ id: alvo.cartao.id, mov: alvo.mov, data: dados.data, forma: dados.forma, valorPago: dados.valorPago, comprovante: dados.comprovante });
           setAlvo(null);
         }}
       />
@@ -216,6 +217,7 @@ function QuadroColuna(p: {
   onAcao: (c: CartaoQuadro, de: ColunaQuadro, mov: Movimento) => void;
   onEditar?: (c: CartaoQuadro) => void;
   selecionando?: boolean; selecionados?: string[]; onSelecionar?: (c: CartaoQuadro) => void;
+  companyId?: string;
 }) {
   const ref = useDropZoneRef<ColunaQuadro>(p.chave, p.onDrop, p.onHover);
   const { m } = useValoresOcultos();
@@ -254,6 +256,7 @@ function QuadroColuna(p: {
           selecionando={p.selecionando}
           selecionado={!!p.selecionados && p.selecionados.includes(c.id)}
           onSelecionar={p.onSelecionar}
+          companyId={p.companyId}
         />
       ))}
       {(p.dados.grupos || []).map((g) => (

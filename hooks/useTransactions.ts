@@ -21,6 +21,7 @@ function mapApiTransaction(t: any): Transaction {
     created_at: t.created_at || null,
     paid_at: t.paid_at || null,
     original_amount: t.original_amount != null ? parseFloat(t.original_amount) : null,
+    receipt_filename: t.receipt_filename || null,
     payment_method: t.payment_method || null,
     employee_id: t.employee_id || null,
     employee_name: t.employee_name || null,

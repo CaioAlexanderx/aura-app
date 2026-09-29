@@ -21,6 +21,8 @@ export type CartaoQuadro = {
   amount: number;
   /** Valor do boleto quando a baixa foi com outro valor (amount = pago). */
   original_amount?: number | null;
+  /** F3: nome do comprovante anexado. */
+  receipt_filename?: string | null;
   status: "pending" | "confirmed";
   /** Data do lançamento (competência) — AAAA-MM-DD. */
   date: string | null;
@@ -193,6 +195,8 @@ export type PedidoDeMovimento = {
   forma?: string | null;
   /** baixa: valor pago (juros/desconto) — sem ele o backend usa o valor do lançamento. */
   valorPago?: number | null;
+  /** F3: comprovante escolhido na confirmação (sobe depois da baixa). */
+  comprovante?: { content: string; filename: string; content_type: string; size: number } | null;
 };
 
 /** Corpo do PATCH para cada movimento. */
@@ -226,6 +230,7 @@ export function cartaoParaLancamento(c: CartaoQuadro, tipo: TipoQuadro) {
     due_date: c.due_date || c.date || undefined,
     paid_at: c.paid_at || undefined,
     original_amount: c.original_amount ?? null,
+    receipt_filename: c.receipt_filename ?? null,
     payment_method: c.payment_method,
     employee_id: c.employee_id ?? null,
     employee_name: c.employee_name,

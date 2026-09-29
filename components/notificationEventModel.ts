@@ -452,7 +452,7 @@ export const PREF_SECTIONS: PrefSection[] = [
   {
     titulo: 'Financeiro',
     linhas: [
-      { type: 'loja_conta_vencendo', nome: 'Conta a pagar vencendo', desc: 'Lembrete 2 dias antes do vencimento. Some depois que você vê.', padrao: true },
+      { type: 'loja_conta_vencendo', nome: 'Conta a pagar vencendo', desc: 'Lembrete 2 dias antes e no dia do vencimento. Some depois que você vê.', padrao: true },
     ],
   },
   {

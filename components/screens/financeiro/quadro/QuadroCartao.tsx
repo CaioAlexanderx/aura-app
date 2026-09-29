@@ -10,6 +10,8 @@ import { useDraggableCardRef } from "@/components/studio/kanban/useStudioKanbanD
 import { useValoresOcultos } from "@/stores/valoresOcultos";
 import { fmt } from "@/components/screens/financeiro/types";
 import { diferencaPaga } from "@/utils/lancamentoPago";
+import { abrirComprovante } from "@/utils/comprovante";
+import { toast } from "@/components/Toast";
 import {
   ddmm, mesDeOrigem, podeEntrarNoLote, rotuloDaForma, rotulos, seloDoPrazo,
   type CartaoQuadro, type ColunaQuadro, type Movimento, type TipoQuadro,
@@ -32,9 +34,11 @@ type Props = {
   selecionando?: boolean;
   selecionado?: boolean;
   onSelecionar?: (cartao: CartaoQuadro) => void;
+  /** F3: para abrir o comprovante anexado. */
+  companyId?: string;
 };
 
-export function QuadroCartao({ cartao, coluna, tipo, hoje, mes, arrastavel, arrastando, onInicio, onFim, onAcao, onEditar, selecionando, selecionado, onSelecionar }: Props) {
+export function QuadroCartao({ cartao, coluna, tipo, hoje, mes, arrastavel, arrastando, onInicio, onFim, onAcao, onEditar, selecionando, selecionado, onSelecionar, companyId }: Props) {
   const marcavel = !!selecionando && podeEntrarNoLote(cartao, coluna);
   const ref = useDraggableCardRef(arrastavel && cartao.movable && !selecionando, cartao.id, onInicio, onFim);
   const { m } = useValoresOcultos();
@@ -76,6 +80,13 @@ export function QuadroCartao({ cartao, coluna, tipo, hoje, mes, arrastavel, arra
           </Text>
         )}
         {cartao.recurrence_type && <Text style={s.chip}>Recorrente</Text>}
+        {cartao.receipt_filename && companyId && (
+          <Pressable
+            onPress={() => { abrirComprovante(companyId, cartao.id).catch((e) => toast.error(e?.message || "Não deu para abrir o comprovante.")); }}
+            accessibilityRole="link" accessibilityLabel={"Abrir comprovante " + cartao.receipt_filename} testID={"quadro-comprovante-" + cartao.id}>
+            <Text style={[s.chip, s.chipComprovante]}>Comprovante</Text>
+          </Pressable>
+        )}
       </View>
       {selecionando ? null : cartao.movable ? (
         <View style={s.acoes}>
@@ -125,6 +136,7 @@ const s = StyleSheet.create({
   chipBreve: { color: Colors.amber, backgroundColor: Colors.amberD },
   chipOk: { color: Colors.green, backgroundColor: Colors.greenD },
   chipOrigem: { color: Colors.violet3, backgroundColor: Colors.violetD },
+  chipComprovante: { color: Colors.violet3, backgroundColor: Colors.violetD, textDecorationLine: "underline" },
   acoes: { flexDirection: "row", gap: 6, marginTop: 2 },
   btn: { borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg4, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
   btnTxt: { fontSize: 11.5, fontWeight: "600", color: Colors.ink2 },

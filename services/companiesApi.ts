@@ -87,6 +87,10 @@ export var companiesApi = {
   createTransaction: function(companyId: string, body: any) { return request<any>("/companies/" + companyId + "/transactions", { method: "POST", body: body }); },
   // Quadro do Financeiro (28/09/2026): Atrasado / A receber / Recebido do mês.
   // Contas F2 (28/09/2026): pagar vários lançamentos de uma vez.
+  // Contas F3 (29/09/2026): comprovante anexado ao lançamento (R2 no backend).
+  transactionReceiptUpload: function(companyId: string, txId: string, body: { content: string; filename: string; content_type: string }) { return request<any>("/companies/" + companyId + "/transactions/" + txId + "/receipt", { method: "POST", body: body, timeout: 60000 }); },
+  transactionReceiptUrl: function(companyId: string, txId: string) { return request<any>("/companies/" + companyId + "/transactions/" + txId + "/receipt"); },
+  transactionReceiptDelete: function(companyId: string, txId: string) { return request<any>("/companies/" + companyId + "/transactions/" + txId + "/receipt", { method: "DELETE" }); },
   transactionsBaixaEmLote: function(companyId: string, body: any) { return request<any>("/companies/" + companyId + "/transactions/baixa-em-lote", { method: "POST", body: body }); },
   transactionsBoard: function(companyId: string, type: "income" | "expense", month: string) { return request<any>("/companies/" + companyId + "/transactions/board?type=" + type + "&month=" + encodeURIComponent(month)); },
   updateTransaction: function(companyId: string, txId: string, body: any) { return request<any>("/companies/" + companyId + "/transactions/" + txId, { method: "PATCH", body: body }); },
