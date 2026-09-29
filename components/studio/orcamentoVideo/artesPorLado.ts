@@ -17,7 +17,11 @@
 //   - `has_back_selected` / `has_middle_selected`, o opt-in de verso e de
 //     volta inteira que a vitrine grava;
 //   - o tamanho e a posição que a lojista escolheu em `orcamento_ajustes`
-//     ({ front: { escala, dx, dy }, ... }), só o que saiu do automático.
+//     ({ front: { escala, dx, dy }, ... }), só o que saiu do automático;
+//     na posição livre (arteLivre.ts), { livre: true, u, v, escala,
+//     rotacao? } no painel inteiro do lado;
+//   - a prévia da peça na posição livre em `orcamento_previa_<lado>` (a
+//     ficha em cm não representa posição livre: a oficina vê a prévia).
 // Textos que já estavam no item (vitrine, orçamento antigo) continuam lá
 // e aparecem na peça: aqui só não se digita texto novo.
 //
@@ -32,7 +36,8 @@ import { areaDoLadoNoModelo } from "@/components/studio/visualEngine/areasDaPeca
 import type { ArteDoLado } from "@/components/studio/visualEngine/layoutDaArte";
 import type { Mug3DOptions } from "@/components/studio/visualEngine/compose3dMug";
 import { ajustarTamanhoDaArte } from "./pecaDoOrcamento";
-import { arteNoTamanhoDoOrcamento, ajusteValido, ajusteEhPadrao, type AjusteDaArte } from "./tamanhoDaArte";
+import { arteNoTamanhoDoOrcamento, ajusteValido, ajusteEhPadrao, AJUSTE_PADRAO, type AjusteDaArte } from "./tamanhoDaArte";
+import { ehLivre, ajusteLivreValido, ajusteDoLayout, type AjusteLivre } from "./arteLivre";
 
 export type LadoDaArte = "front" | "back" | "middle";
 
@@ -46,11 +51,19 @@ export const DO_LADO: Record<LadoDaArte, string> = { front: "da frente", back: "
 /** Onde o tamanho e a posição por lado ficam no `customization` do item. */
 export const CHAVE_DOS_AJUSTES = "orcamento_ajustes";
 
+/** A prévia da peça com a arte livre do lado: `orcamento_previa_front`... */
+export const PREFIXO_DA_PREVIA = "orcamento_previa_";
+
+/** O ajuste de um lado: o do encaixe na área (#1013) ou a posição livre. */
+export type AjusteDoLado = AjusteDaArte | AjusteLivre;
+
 export type ArtesDaPeca = {
   /** A URL da imagem de cada lado (já enviada). */
   imagens: Partial<Record<LadoDaArte, string>>;
   /** Tamanho e posição por lado; ausente = automático. */
-  ajustes: Partial<Record<LadoDaArte, AjusteDaArte>>;
+  ajustes: Partial<Record<LadoDaArte, AjusteDoLado>>;
+  /** Prévia (URL) da peça com a arte livre do lado; some quando a arte muda. */
+  previas?: Partial<Record<LadoDaArte, string>>;
   /** Caneca: a volta inteira no lugar de frente e verso. */
   estendida: boolean;
   /** Cor da peça (hex) ou null. */
@@ -107,15 +120,22 @@ export function artesDoItem(cfg: CustomizationConfig | null | undefined, customi
     if (u) imagens[lado] = u;
   }
   const ajustes: ArtesDaPeca["ajustes"] = {};
+  const previas: NonNullable<ArtesDaPeca["previas"]> = {};
   const guardados = v[CHAVE_DOS_AJUSTES];
   if (guardados && typeof guardados === "object") {
     for (const lado of LADOS) {
       const a = guardados[lado];
-      if (a && typeof a === "object" && !ajusteEhPadrao(a)) ajustes[lado] = ajusteValido(a);
+      if (ehLivre(a)) {
+        ajustes[lado] = ajusteLivreValido(a);
+        const p = url(v[PREFIXO_DA_PREVIA + lado]);
+        if (p) previas[lado] = p;
+      } else if (a && typeof a === "object" && !ajusteEhPadrao(a)) ajustes[lado] = ajusteValido(a);
     }
   }
   const cor = corDaPeca(cfg as any, v) || (typeof v.cor_da_peca === "string" ? v.cor_da_peca : null);
-  return { imagens, ajustes, estendida: v.has_middle_selected === true, cor };
+  const out: ArtesDaPeca = { imagens, ajustes, estendida: v.has_middle_selected === true, cor };
+  if (Object.keys(previas).length) out.previas = previas;
+  return out;
 }
 
 /** O lado tem algo para imprimir (imagem ou texto) no customization? */
@@ -139,14 +159,18 @@ export function customizacaoComArtes(
   const out: Record<string, any> = { ...(customization || {}) };
   delete out.imagem; // a chave legível antiga vira a chave do lado
   const vaiNoPedido = (lado: LadoDaArte) => (artes.estendida ? lado === "middle" : lado !== "middle");
-  const ajustes: Record<string, AjusteDaArte> = {};
+  const ajustes: Record<string, AjusteDoLado> = {};
   for (const lado of LADOS) {
     const chave = chaveDaImagem(cfg, lado);
     const u = vaiNoPedido(lado) ? url(artes.imagens[lado]) : null;
+    const a = artes.ajustes[lado];
+    const previa = u && ehLivre(a) ? url(artes.previas?.[lado]) : null;
+    if (previa) out[PREFIXO_DA_PREVIA + lado] = previa;
+    else delete out[PREFIXO_DA_PREVIA + lado];
     if (u) {
       out[chave] = u;
-      const a = artes.ajustes[lado];
-      if (a && !ajusteEhPadrao(a)) ajustes[lado] = ajusteValido(a);
+      if (ehLivre(a)) ajustes[lado] = ajusteLivreValido(a);
+      else if (a && !ajusteEhPadrao(a)) ajustes[lado] = ajusteValido(a);
     } else {
       delete out[chave];
     }
@@ -170,18 +194,54 @@ export function customizacaoComArtes(
   return out;
 }
 
-/** Muda o tamanho e/ou a posição da arte de UM lado (null = volta ao automático). */
+function semPrevia(artes: ArtesDaPeca, lado: LadoDaArte): NonNullable<ArtesDaPeca["previas"]> {
+  const previas = { ...(artes.previas || {}) };
+  delete previas[lado];
+  return previas;
+}
+
+/**
+ * Muda o tamanho e/ou a posição da arte de UM lado no encaixe da área
+ * (null = volta ao automático). Um lado na posição livre volta à área.
+ */
 export function ajustarLado(artes: ArtesDaPeca, lado: LadoDaArte, mudanca: Partial<AjusteDaArte> | null): ArtesDaPeca {
-  const novo = ajustarTamanhoDaArte({ texto: "", imagem: null, cor: null, ajuste: artes.ajustes[lado] || null }, mudanca).ajuste;
+  const atual = artes.ajustes[lado];
+  const novo = ajustarTamanhoDaArte({ texto: "", imagem: null, cor: null, ajuste: atual && !ehLivre(atual) ? atual : null }, mudanca).ajuste;
   const ajustes = { ...artes.ajustes };
   if (novo) ajustes[lado] = novo;
   else delete ajustes[lado];
-  return { ...artes, ajustes };
+  return { ...artes, ajustes, previas: semPrevia(artes, lado) };
 }
 
-/** O ajuste em vigor no lado (o padrão, se a lojista não mexeu). */
+/** O ajuste da área em vigor no lado (o padrão, se a lojista não mexeu ou se o lado está livre). */
 export function ajusteDoLado(artes: ArtesDaPeca, lado: LadoDaArte): AjusteDaArte {
-  return ajusteValido(artes.ajustes[lado]);
+  const a = artes.ajustes[lado];
+  return ehLivre(a) ? { ...AJUSTE_PADRAO } : ajusteValido(a);
+}
+
+/** A posição livre do lado, ou null quando a arte está na área de impressão. */
+export function livreDoLado(artes: ArtesDaPeca, lado: LadoDaArte): AjusteLivre | null {
+  const a = artes.ajustes[lado];
+  return ehLivre(a) ? ajusteLivreValido(a) : null;
+}
+
+/**
+ * Põe o lado na posição livre (ou muda a posição livre). `null` volta à
+ * área de impressão, no automático. A prévia antiga sai: ela não mostra
+ * mais a arte onde ela está.
+ */
+export function comLivre(artes: ArtesDaPeca, lado: LadoDaArte, a: Partial<AjusteLivre> | null): ArtesDaPeca {
+  const ajustes = { ...artes.ajustes };
+  if (a) ajustes[lado] = ajusteLivreValido(a);
+  else delete ajustes[lado];
+  return { ...artes, ajustes, previas: semPrevia(artes, lado) };
+}
+
+/** Guarda a prévia (URL) da peça com a arte livre do lado. */
+export function comPrevia(artes: ArtesDaPeca, lado: LadoDaArte, u: string | null): ArtesDaPeca {
+  const previas = semPrevia(artes, lado);
+  if (u && ehLivre(artes.ajustes[lado])) previas[lado] = u;
+  return { ...artes, previas };
 }
 
 /** Põe ou troca a imagem de um lado; a troca volta o tamanho ao automático. */
@@ -191,7 +251,7 @@ export function comImagem(artes: ArtesDaPeca, lado: LadoDaArte, u: string | null
   if (u) imagens[lado] = u;
   else delete imagens[lado];
   delete ajustes[lado];
-  return { ...artes, imagens, ajustes };
+  return { ...artes, imagens, ajustes, previas: semPrevia(artes, lado) };
 }
 
 /** Quantas artes a peça leva agora (nos lados em uso). */
@@ -220,6 +280,8 @@ export function motorDasArtes(
   artes: ArtesDaPeca,
   spec: SpecMinima,
   peca?: string | null,
+  /** O lado que a lojista está arrumando na posição livre: a caixa e as alças aparecem na peça. */
+  editando?: LadoDaArte | null,
 ): { values: Record<string, any>; opts: Mug3DOptions } {
   const cust = customizacaoComArtes(cfg, customization, artes);
   const lados = ladosEmUso(artes, ladosDaPeca(cfg, spec));
@@ -235,7 +297,19 @@ export function motorDasArtes(
       arte = { ...arte, imagens: [...arte.imagens, { campo: chave, url: u, ajuste: null, arquivo: null }] };
     }
     if (!arte.imagens.length && !arte.textos.length) continue;
-    arte = arteNoTamanhoDoOrcamento(arte, artes.ajustes[lado]);
+    const aj = artes.ajustes[lado];
+    if (ehLivre(aj) && u) {
+      // Posição livre: só a imagem do orçamento, no painel inteiro do lado.
+      // Texto antigo do item fica fora da peça (a lojista traz o texto
+      // dentro da imagem); a imagem vai como veio, sem aparar a borda.
+      arte = {
+        ...arte, livre: true, textos: [],
+        imagens: [{ campo: chave, url: u, ajuste: ajusteDoLayout(ajusteLivreValido(aj)), arquivo: null }],
+        editando: editando === lado, selecionado: editando === lado ? chave : null,
+      };
+    } else {
+      arte = arteNoTamanhoDoOrcamento(arte, ehLivre(aj) ? null : aj);
+    }
     const area = spec ? areaDoLadoNoModelo(spec, lado) : null;
     if (area) porArea[area] = arte;
     if (!primeira) primeira = arte;

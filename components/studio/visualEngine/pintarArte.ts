@@ -209,7 +209,66 @@ export type OpcoesDoPintor = {
   transbordar?: boolean;
   /** Pixel não quadrado na peça (caneca): ver subAreaNoRetangulo. */
   pixel?: number | null;
+  /**
+   * Posição livre do orçamento (29/09/2026): `rect` é o PAINEL inteiro do
+   * lado, e a unidade é a da peça (a largura dividida pelo `pixel`), sem
+   * medida em cm, sem margem e sem a sub-área do produto. O corte é só na
+   * borda do painel.
+   */
+  livre?: boolean;
 };
+
+/** A arte livre no painel: só a borda do painel corta; na edição, a caixa e as alças da arte. */
+function pintarArteLivre(
+  ctx: CanvasRenderingContext2D,
+  rect: Retangulo,
+  arte: ArteDoLado,
+  imgs: ImagensDaArte,
+  opts: OpcoesDoPintor,
+): ItemDaArte[] {
+  // `pixel` = pixels da textura por unidade na horizontal ÷ na vertical: a
+  // largura do painel na peça, medida em pixels verticais, é rect.w ÷ pixel.
+  const W = rect.w / (opts.pixel && opts.pixel > 0 ? opts.pixel : 1), H = rect.h;
+  const sx = rect.w / W, sy = rect.h / H;
+  const itens = resolverArte(arte, W, H, medidorDoCanvas(ctx, imgs));
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(rect.x, rect.y, rect.w, rect.h);
+  ctx.clip();
+  ctx.globalCompositeOperation = opts.mistura === "multiply" ? "multiply" : "source-over";
+  pintarItens(ctx, itens, imgs, rect, sx, sy);
+  ctx.restore();
+  if (arte.editando) {
+    const lw = opts.linha || Math.max(1.5, Math.max(rect.w, rect.h) * 0.004);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(rect.x, rect.y, rect.w, rect.h);
+    ctx.clip();
+    ctx.strokeStyle = COR_DA_GUIA;
+    for (const it of itens) {
+      if (arte.selecionado && it.campo !== arte.selecionado) continue;
+      // A caixa gira com a arte: desenhada no referencial dela.
+      ctx.save();
+      ctx.translate(rect.x + it.cx * sx, rect.y + it.cy * sy);
+      ctx.scale(sx, sy);
+      ctx.rotate((it.rot * Math.PI) / 180);
+      const k = 1 / Math.max(1e-6, Math.min(sx, sy));
+      ctx.lineWidth = lw * k;
+      ctx.setLineDash([lw * 3 * k, lw * 2 * k]);
+      ctx.strokeRect(-it.w / 2, -it.h / 2, it.w, it.h);
+      ctx.setLineDash([]);
+      const q = lw * 5 * k;
+      ctx.fillStyle = "#FFFFFF";
+      for (const [px, py] of [[-it.w / 2, -it.h / 2], [it.w / 2, -it.h / 2], [it.w / 2, it.h / 2], [-it.w / 2, it.h / 2]]) {
+        ctx.fillRect(px - q / 2, py - q / 2, q, q);
+        ctx.strokeRect(px - q / 2, py - q / 2, q, q);
+      }
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+  return itens;
+}
 
 
 /**
@@ -223,6 +282,7 @@ export function pintarArteNaArea(
   imgs: ImagensDaArte,
   opts: OpcoesDoPintor = {},
 ): ItemDaArte[] {
+  if (opts.livre) return pintarArteLivre(ctx, rect, arte, imgs, opts);
   // A área do produto dentro da do motor (escala física); sem medida no
   // produto, vale a do motor no retângulo inteiro.
   arte = comAreaDoMotor(arte, opts.areaCmDoMotor);

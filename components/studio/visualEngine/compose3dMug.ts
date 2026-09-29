@@ -103,6 +103,7 @@ import {
 import { arteDosValores, precarregarArte, pintarArteNaArea } from "./pintarArte";
 import { misturaDaTecnica, type ArteDoLado } from "./layoutDaArte";
 import { areaParaPintar, retangulosNaTextura } from "./areasDaPeca";
+import { painelLivre } from "./painelDaPeca";
 
 export type Mug3DOptions = {
   garmentColor?: string;  // cor ESCOLHIDA pelo cliente (incide onde o modelo mandar)
@@ -190,8 +191,12 @@ export type Mug3DHandle = {
   update: (values: Record<string, any>, opts?: Mug3DOptions) => Promise<void>;
   /** Giro automático ligado/desligado (liga de novo mesmo depois de um toque). */
   giroAutomatico: (ligado: boolean) => void;
-  /** Onde o ponteiro cai na área de impressão (raycast → UV → área); null fora da peça. */
-  pontoNaArea: (clientX: number, clientY: number, areaId?: string) => PontoNaArea | null;
+  /**
+   * Onde o ponteiro cai na área de impressão (raycast → UV → área); null fora da peça.
+   * `uv` troca a área por outro retângulo UV (o painel inteiro da arte livre
+   * do orçamento, que na caneca pode passar de u = 1).
+   */
+  pontoNaArea: (clientX: number, clientY: number, areaId?: string, uv?: { u0: number; v0: number; u1: number; v1: number }) => PontoNaArea | null;
   /** Liga/desliga o arraste da arte (null = arrastar só gira a peça). */
   definirArraste: (a: ArrasteDaPeca | null) => void;
   /** Vira a peça para a área ficar de frente para a câmera. */
@@ -317,12 +322,23 @@ async function pintarArteDaVitrine(
   const porArea = values && values.__artePorArea && typeof values.__artePorArea === "object"
     ? (values.__artePorArea as Record<string, ArteDoLado>)
     : null;
-  const lista: Array<[VisualArea | null, ArteDoLado | null]> = porArea
-    ? Object.keys(porArea).map((id) => [areaParaPintar(spec.areas, id, !!readGlbModel(spec)), arteDosValores({ __arte: porArea[id] })])
-    : [[pickArea(spec, o.areaId), arteDosValores(values)]];
+  const lista: Array<[VisualArea | null, ArteDoLado | null, string]> = porArea
+    ? Object.keys(porArea).map((id) => [areaParaPintar(spec.areas, id, !!readGlbModel(spec)), arteDosValores({ __arte: porArea[id] }), id])
+    : [[pickArea(spec, o.areaId), arteDosValores(values), o.areaId]];
   const pixel = pixelDaTextura(spec, W, H);
-  for (const [area, arte] of lista) {
+  for (const [area, arte, id] of lista) {
     if (!area || !area.uv || !arte) continue;
+    // Posição livre do orçamento (29/09/2026): o painel inteiro do lado,
+    // sem a área de impressão. Sem `livre`, nada muda daqui para baixo.
+    const painel = arte.livre ? painelLivre(spec, id) : null;
+    if (painel) {
+      const imgs = await precarregarArte(arte, (u) => loadImg(u));
+      const mistura = misturaDaTecnica(arte.tecnica) === "multiply" ? "multiply" as const : null;
+      for (const r of retangulosNaTextura(painel.uv, W, H)) {
+        pintarArteNaArea(ctx, r, arte, imgs, { mistura, pixel, livre: true, linha: Math.max(W, H) * 0.003 });
+      }
+      continue;
+    }
     const r = uvParaRetangulo(area.uv, W, H);
     const imgs = await precarregarArte(arte, (u) => loadImg(u));
     const opcoes = {
@@ -1481,7 +1497,7 @@ export async function createModelViewer(
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
 
-  function pontoNaArea(clientX: number, clientY: number, areaId?: string): PontoNaArea | null {
+  function pontoNaArea(clientX: number, clientY: number, areaId?: string, uvDoRetangulo?: { u0: number; v0: number; u1: number; v1: number }): PontoNaArea | null {
     const malha = peca.malhaDaArte;
     if (!malha || typeof canvas.getBoundingClientRect !== "function") return null;
     const r = canvas.getBoundingClientRect();
@@ -1498,10 +1514,23 @@ export async function createModelViewer(
     const area = pickArea(spec, areaId || o.areaId);
     if (!area || !area.uv) return null;
     const W = texCv.width, H = texCv.height;
-    const ret = uvParaRetangulo(area.uv, W, H);
+    const ret = uvParaRetangulo(uvDoRetangulo || area.uv, W, H);
     // GLB: o v do glTF cresce para baixo e a textura vai com flipY
     // desligado (glbModel.ts) — a linha do canvas é o próprio v.
-    const x = hit.uv.x * W, y = (texture && texture.flipY === false ? hit.uv.y : 1 - hit.uv.y) * H;
+    let x = hit.uv.x * W;
+    const y = (texture && texture.flipY === false ? hit.uv.y : 1 - hit.uv.y) * H;
+    // Retângulo que atravessa a emenda (painel da caneca): o ponto antes
+    // do início dele é o mesmo uma volta depois.
+    if (uvDoRetangulo && x < ret.x && ret.x + ret.w > W) x += W;
+    if (uvDoRetangulo) {
+      return {
+        u: (x - ret.x) / ret.w, v: (y - ret.y) / ret.h, aspecto: ret.h / ret.w, areaCm: null, transborda: false,
+        pixel: pixelDaTextura(spec, W, H),
+        pxPorU: vizinho && vizinho.uv && Math.abs(vizinho.uv.x - hit.uv.x) > 1e-6 && Math.abs(vizinho.uv.x - hit.uv.x) < 0.5
+          ? 6 / (Math.abs(vizinho.uv.x - hit.uv.x) * W / ret.w)
+          : null,
+      };
+    }
     return {
       u: (x - ret.x) / ret.w, v: (y - ret.y) / ret.h, aspecto: ret.h / ret.w,
       areaCm: area.width_cm > 0 && area.height_cm > 0 ? { w: area.width_cm, h: area.height_cm } : null,
