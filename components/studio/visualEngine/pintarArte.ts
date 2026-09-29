@@ -37,6 +37,81 @@ export function arteTemConteudo(arte: ArteDoLado | null): boolean {
   return arte.imagens.length > 0 || arte.textos.some((t) => String(t.texto || "").trim()) || !!arte.guias;
 }
 
+// ── Recorte pela caixa do conteúdo (opcional, 29/09/2026) ────
+//
+// Logo com borda transparente (ou, na sublimação, com fundo branco) ocupa
+// o canvas inteiro mas só uma parte tem tinta: no vídeo do orçamento a
+// arte saía pequena. Com `aparar` na imagem da arte, ela é recortada pela
+// caixa do que tem tinta ANTES do layout medir o aspecto. Quem não pede
+// (a vitrine) recebe a imagem original, como sempre.
+
+/** Alfa abaixo disso (de 255) é vazio: ignora o pó de antialiasing e sombras quase invisíveis. */
+export const ALFA_MINIMO = 16;
+/** Na sublimação (multiply) o branco não imprime: cada canal a partir daqui conta como branco. */
+export const BRANCO_MINIMO = 245;
+const LADO_DA_MEDIDA = 512;
+const LADO_MAXIMO_DO_RECORTE = 2048;
+
+/**
+ * A caixa (px) do que tem tinta num ImageData RGBA; null se não há nada
+ * ou se o conteúdo já ocupa (quase) tudo. `branco`: pixel claro demais
+ * também é vazio.
+ */
+export function caixaDoConteudo(
+  rgba: ArrayLike<number>,
+  w: number,
+  h: number,
+  branco = false,
+): { x: number; y: number; w: number; h: number } | null {
+  if (!(w > 0) || !(h > 0) || rgba.length < w * h * 4) return null;
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y++) {
+    const linha = y * w * 4;
+    for (let x = 0; x < w; x++) {
+      const i = linha + x * 4;
+      if (rgba[i + 3] < ALFA_MINIMO) continue;
+      if (branco && rgba[i] >= BRANCO_MINIMO && rgba[i + 1] >= BRANCO_MINIMO && rgba[i + 2] >= BRANCO_MINIMO) continue;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+  }
+  if (x1 < 0) return null;
+  return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
+
+/** A imagem recortada pela caixa do conteúdo; null = não há o que recortar (ou não dá: sem canvas, CORS). */
+function imagemAparada(im: ImagemDaArte, branco: boolean): ImagemDaArte | null {
+  if (typeof document === "undefined") return null;
+  try {
+    const k = Math.min(1, LADO_DA_MEDIDA / Math.max(im.width, im.height));
+    const mw = Math.max(1, Math.round(im.width * k)), mh = Math.max(1, Math.round(im.height * k));
+    const medida = document.createElement("canvas");
+    medida.width = mw; medida.height = mh;
+    const mctx = medida.getContext("2d", { willReadFrequently: true } as any) as CanvasRenderingContext2D | null;
+    if (!mctx) return null;
+    mctx.drawImage(im, 0, 0, mw, mh);
+    const c = caixaDoConteudo(mctx.getImageData(0, 0, mw, mh).data, mw, mh, branco);
+    // Vazia (tudo transparente/branco) ou já cheia: fica a original.
+    if (!c || (c.w >= mw * 0.98 && c.h >= mh * 0.98)) return null;
+    // De volta aos pixels da imagem, com um pixel de folga da medida.
+    const sx = Math.max(0, Math.floor((c.x - 1) / k)), sy = Math.max(0, Math.floor((c.y - 1) / k));
+    const sw = Math.min(im.width - sx, Math.ceil((c.w + 2) / k)), sh = Math.min(im.height - sy, Math.ceil((c.h + 2) / k));
+    if (!(sw > 0) || !(sh > 0)) return null;
+    const r = Math.min(1, LADO_MAXIMO_DO_RECORTE / Math.max(sw, sh));
+    const out = document.createElement("canvas");
+    out.width = Math.max(1, Math.round(sw * r)); out.height = Math.max(1, Math.round(sh * r));
+    const octx = out.getContext("2d");
+    if (!octx) return null;
+    octx.drawImage(im, sx, sy, sw, sh, 0, 0, out.width, out.height);
+    return out;
+  } catch {
+    // Canvas sujo (imagem sem CORS) ou sem memória: segue com a original.
+    return null;
+  }
+}
+
 /** Todas as imagens da arte, carregadas pelo carregador de quem desenha. */
 export async function precarregarArte(
   arte: ArteDoLado | null,
@@ -46,7 +121,14 @@ export async function precarregarArte(
   if (!arte) return out;
   const urls = Array.from(new Set(arte.imagens.map((i) => i.url).filter(Boolean)));
   const imgs = await Promise.all(urls.map((u) => carregar(u).catch(() => null)));
-  urls.forEach((u, i) => { const im = imgs[i]; if (im && im.width > 0) out.set(u, im); });
+  urls.forEach((u, i) => {
+    const im = imgs[i];
+    if (!im || !(im.width > 0)) return;
+    // Só recorta quando TODA imagem com essa URL pede; a sublimação também
+    // descarta o branco (multiply: o branco some na peça).
+    const aparar = arte.imagens.filter((x) => x.url === u).every((x) => x.aparar);
+    out.set(u, (aparar && imagemAparada(im, arte.tecnica === "sublimacao")) || im);
+  });
   return out;
 }
 

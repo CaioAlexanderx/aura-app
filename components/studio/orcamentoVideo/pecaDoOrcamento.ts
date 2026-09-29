@@ -13,7 +13,7 @@
 // ============================================================
 import { studioApi, type CustomizationConfig } from "@/services/studioApi";
 import { studioVisualApi, type VisualTemplate } from "@/services/studioVisualApi";
-import { valoresDoMotor } from "@/components/studio/storefront/valoresDoMotor";
+import { valoresDoMotor, valoresComArte } from "@/components/studio/storefront/valoresDoMotor";
 import { corDaPeca } from "@/components/studio/visualEngine/corDaPeca";
 import { sideOf } from "@/components/studio/customizationConfig";
 import { nomeDaCor } from "@/components/studio/nomeDaCor";
@@ -21,6 +21,13 @@ import type { Mug3DOptions } from "@/components/studio/visualEngine/compose3dMug
 import { exportPng } from "@/components/studio/visualEngine/compose2d";
 import { specDaFotoDoProdutoMedida } from "@/components/studio/visualEngine/specDaFotoDoProduto";
 import { blobDoDataUrl } from "./gravarGiro";
+import {
+  arteNoTamanhoDoOrcamento, ajusteValido, ajusteEhPadrao, AJUSTE_PADRAO,
+  type AjusteDaArte,
+} from "./tamanhoDaArte";
+
+export type { AjusteDaArte };
+export { AJUSTE_PADRAO, ESCALA_MIN, ESCALA_MAX, DESLOCAMENTO_MAX } from "./tamanhoDaArte";
 
 export type FontesDaPeca = {
   cfg: CustomizationConfig | null;
@@ -31,6 +38,11 @@ export type ArteDaPeca = {
   texto: string;
   imagem: string | null;
   cor: string | null;
+  /**
+   * Tamanho e posição da imagem na peça, sobre o encaixe automático
+   * (ajustarTamanhoDaArte). Ausente = automático.
+   */
+  ajuste?: AjusteDaArte | null;
 };
 
 export type CorDaPeca = { hex: string; nome: string };
@@ -111,16 +123,50 @@ export function customizacaoComArte(
   return out;
 }
 
-/** Valores e opções do viewer para a arte escolhida. */
+/**
+ * Muda o tamanho e/ou a posição da imagem na peça (o controle da lojista).
+ * `escala` 1 = o encaixe automático; `dx`/`dy` em fração da área de
+ * impressão (+ = direita/baixo). Devolve a arte nova (para o setArte), com
+ * os valores dentro dos limites; o que não vier fica como está.
+ * `null` volta ao automático.
+ */
+export function ajustarTamanhoDaArte(arte: ArteDaPeca, mudanca: Partial<AjusteDaArte> | null): ArteDaPeca {
+  if (mudanca === null) return { ...arte, ajuste: null };
+  const novo = ajusteValido({ ...ajusteValido(arte.ajuste), ...mudanca });
+  return { ...arte, ajuste: ajusteEhPadrao(novo) ? null : novo };
+}
+
+/** O ajuste em vigor (o padrão, se a lojista não mexeu). */
+export function ajusteDaArte(arte: ArteDaPeca): AjusteDaArte {
+  return ajusteValido(arte.ajuste);
+}
+
+/**
+ * Valores e opções do viewer para a arte escolhida.
+ *
+ * A arte vai pela regra única (`__arte`, a mesma da vitrine), com o
+ * encaixe do orçamento (tamanhoDaArte): imagem inteira na área, dentro da
+ * margem de segurança, sem o espaço morto da regra antiga. Se o produto
+ * não tem os campos da arte (a imagem foi para as chaves legíveis), vale a
+ * regra antiga, que não depende dos campos. `peca` ("caneca"/"camiseta")
+ * define a técnica padrão quando o produto não escolheu uma.
+ */
 export function motorDaArte(
   cfg: CustomizationConfig | null | undefined,
   customization: Record<string, any> | null | undefined,
   arte: ArteDaPeca,
+  peca?: string | null,
 ): { values: Record<string, any>; opts: Mug3DOptions } {
-  const motor = valoresDoMotor(cfg as any, customizacaoComArte(cfg, customization, arte), "front");
-  const values: Record<string, any> = { ...motor.values };
+  const motor = valoresDoMotor(cfg as any, customizacaoComArte(cfg, customization, arte), "front", peca ? { peca } : {});
+  let values: Record<string, any> = { ...motor.values };
   if (arte.texto.trim()) values.text = arte.texto.trim();
   if (arte.imagem) values.image = arte.imagem;
+  const a = motor.arte;
+  const temAlgo = a.imagens.length > 0 || a.textos.length > 0;
+  const completa = (!arte.imagem || a.imagens.length > 0) && (!arte.texto.trim() || a.textos.length > 0);
+  if (temAlgo && completa) {
+    values = valoresComArte({ values, arte: arteNoTamanhoDoOrcamento(a, arte.ajuste) });
+  }
   const opts: Mug3DOptions = { artColor: motor.artColor, font: motor.font };
   if (arte.cor) opts.garmentColor = arte.cor;
   return { values, opts };
