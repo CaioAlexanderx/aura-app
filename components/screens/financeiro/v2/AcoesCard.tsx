@@ -15,6 +15,7 @@
 
 import { useMemo } from "react";
 import { View, Text, StyleSheet, Pressable, Platform, useWindowDimensions } from "react-native";
+import { destinoPrincipal, detalheDoAtraso, partesDoAtraso } from "@/utils/atrasos";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { fmt, parseDateLocal } from "../types";
@@ -34,6 +35,8 @@ type Action = {
   detail: string;
   cta: string;
   onPress?: () => void;
+  // F4: links por parte ("no crediário" / "no quadro"), abaixo do detalhe.
+  links?: { rotulo: string; onPress: () => void; testID: string }[];
   weight: number; // ordena a lista — maior aparece primeiro
 };
 
@@ -43,6 +46,10 @@ type Props = {
   consolidated?: boolean;
   onGoToLancamentos: () => void;
   onGoToDespesas?: () => void;
+  /** F4: leva ao Quadro, coluna Atrasado, no tipo pedido. Sem ele (consolidado), vai para Lançamentos. */
+  onVerAtrasados?: (tipo: "income" | "expense") => void;
+  /** F4: leva ao Crediário já filtrado em "em atraso". */
+  onVerCrediarioAtrasado?: () => void;
 };
 
 function toneColors(tone: Tone): { fg: string; bg: string } {
@@ -61,7 +68,7 @@ function daysUntil(raw?: string | null): number | null {
   return Math.round((d.getTime() - today.getTime()) / 86400000);
 }
 
-export function AcoesCard({ transactions, insights, consolidated, onGoToLancamentos, onGoToDespesas }: Props) {
+export function AcoesCard({ transactions, insights, consolidated, onGoToLancamentos, onGoToDespesas, onVerAtrasados, onVerCrediarioAtrasado }: Props) {
   var { width: vw } = useWindowDimensions();
   var NARROW = vw < 640;
 
@@ -71,18 +78,27 @@ export function AcoesCard({ transactions, insights, consolidated, onGoToLancamen
     // 1. Cobrar atrasados — vem do biggest_lever (server ou client-side).
     var lever = insights.biggest_lever;
     if (lever && lever.amount > 0) {
-      var oldest = lever.oldest_days != null && lever.oldest_days > 0
-        ? " A mais antiga está há " + lever.oldest_days + " dia" + (lever.oldest_days === 1 ? "" : "s") + " esperando."
-        : "";
+      // F4 (29/09/2026): o número misturava crediário e contas comuns; cada
+      // parte agora diz quanto é e leva para onde se resolve.
+      var partes = partesDoAtraso({ amount: lever.amount, count: lever.count }, lever.split);
+      var irCred = onVerCrediarioAtrasado && partes.crediario.count > 0 ? onVerCrediarioAtrasado : null;
+      var irContas = partes.contas.count > 0 ? (onVerAtrasados ? function() { onVerAtrasados!("income"); } : onGoToLancamentos) : null;
+      var principal = destinoPrincipal(partes) === "crediario" ? (irCred || irContas) : (irContas || irCred);
+      var links: { rotulo: string; onPress: () => void; testID: string }[] = [];
+      if (irCred && irContas) {
+        links.push({ rotulo: "Ver no crediário", onPress: irCred, testID: "atraso-link-crediario" });
+        links.push({ rotulo: "Ver no quadro", onPress: irContas, testID: "atraso-link-quadro" });
+      }
       list.push({
         id: "cobrar",
         tone: "critical",
         icon: "clock",
         title: "Cobre " + fmt(lever.amount) + " em atraso",
-        detail: lever.count + " conta" + (lever.count === 1 ? "" : "s") + " vencida" + (lever.count === 1 ? "" : "s") + "." + oldest +
+        detail: detalheDoAtraso(partes, fmt, { oldestDays: lever.oldest_days }) +
           (consolidated ? " Some de todas as empresas — abra uma pra cobrar." : ""),
-        cta: "Ver contas",
-        onPress: onGoToLancamentos,
+        cta: !irCred ? "Ver no quadro" : !irContas ? "Ver no crediário" : "Ver contas",
+        onPress: principal || onGoToLancamentos,
+        links: links.length ? links : undefined,
         weight: 100 + Math.min(20, lever.count),
       });
     }
@@ -230,6 +246,17 @@ export function AcoesCard({ transactions, insights, consolidated, onGoToLancamen
             <View style={s.rowBody}>
               <Text style={[s.rowTitle, { color: Colors.ink }]}>{a.title}</Text>
               <Text style={[s.rowDetail, { color: Colors.ink3 }]}>{a.detail}</Text>
+              {a.links && (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14, marginTop: 6 }}>
+                  {a.links.map(function(l) {
+                    return (
+                      <Pressable key={l.testID} onPress={l.onPress} accessibilityRole="link" testID={l.testID} hitSlop={6}>
+                        <Text style={{ color: Colors.violet3, fontSize: 12.5, fontWeight: "600" }}>{l.rotulo} ›</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
             </View>
             {!NARROW && (
               <View style={[s.rowCta, { borderColor: Colors.border2, backgroundColor: Colors.violetD }]}>

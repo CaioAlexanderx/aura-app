@@ -40,6 +40,8 @@ type Props = {
   onImport?: () => void;
   onGoToLancamentos: () => void;
   onGoToDespesas?: () => void;
+  onVerAtrasados?: (tipo: "income" | "expense") => void;
+  onVerCrediarioAtrasado?: () => void;
   onDelete?: (id: string) => void;
   onEdit?: (tx: Transaction) => void;
 };
@@ -59,7 +61,7 @@ function periodToComparative(p: PeriodKey): ComparativePeriod | null {
   }
 }
 
-export function TabVisaoGeral({ transactions, summary, previousSummary, period, customStart, customEnd, isLoading, isDemo, isError, onRetry, onNewTransaction, onImport, onGoToLancamentos, onGoToDespesas, onDelete, onEdit }: Props) {
+export function TabVisaoGeral({ transactions, summary, previousSummary, period, customStart, customEnd, isLoading, isDemo, isError, onRetry, onNewTransaction, onImport, onGoToLancamentos, onGoToDespesas, onVerAtrasados, onVerCrediarioAtrasado, onDelete, onEdit }: Props) {
   // Multi-CNPJ: detecta modo consolidado pra ajustar UI dos cards v2.
   // Em consolidated, BiggestLever mostra "Soma de todas as empresas" + dica
   // pra abrir empresa especifica antes de cobrar.
@@ -117,6 +119,8 @@ export function TabVisaoGeral({ transactions, summary, previousSummary, period, 
         consolidated={consolidatedView}
         onGoToLancamentos={onGoToLancamentos}
         onGoToDespesas={onGoToDespesas}
+        onVerAtrasados={onVerAtrasados}
+        onVerCrediarioAtrasado={onVerCrediarioAtrasado}
       />
 
       {/* === SECOES RECOLHIVEIS — UI mais limpa, expandir on demand ===

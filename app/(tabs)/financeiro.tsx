@@ -10,7 +10,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { TransactionModal } from "@/components/screens/financeiro/TransactionModal";
 import { TabVisaoGeral } from "@/components/screens/financeiro/TabVisaoGeral";
 import { TabLancamentos } from "@/components/screens/financeiro/TabLancamentos";
-import { ListaOuQuadro } from "@/components/screens/financeiro/quadro/ListaOuQuadro";
+import { ListaOuQuadro, type FocoDoQuadro } from "@/components/screens/financeiro/quadro/ListaOuQuadro";
 import { MonthExpensesBanner } from "@/components/screens/financeiro/MonthExpensesBanner";
 import { ExportDreModal } from "@/components/screens/financeiro/ExportDreModal";
 import { TABS, TAB_INDEX, fmt as fmtBRL } from "@/components/screens/financeiro/types";
@@ -146,10 +146,14 @@ function CrediarioReceivablesCard({ companyId }: { companyId: string }) {
           <Text style={rcv.kpiMeta}>{kpis.customers_open} cliente{kpis.customers_open !== 1 ? "s" : ""}</Text>
         </View>
         {kpis.total_overdue > 0 && (
-          <View style={rcv.kpi}>
-            <Text style={rcv.kpiLabel}>VENCIDO</Text>
+          // F4: o vencido leva direto aos clientes em atraso.
+          <Pressable
+            onPress={() => router.push((isStudio ? "/studio/pedidos" : "/(tabs)/crediario?filtro=atraso") as any)}
+            accessibilityRole="link" accessibilityLabel={"Vencido: " + fmtR(kpis.total_overdue) + ". Ver quem está em atraso"}
+            style={rcv.kpi} testID="crediario-vencido">
+            <Text style={rcv.kpiLabel}>VENCIDO ›</Text>
             <Text style={[rcv.kpiValue, { color: Colors.red }]}>{fmtR(kpis.total_overdue)}</Text>
-          </View>
+          </Pressable>
         )}
         <View style={rcv.kpi}>
           <Text style={rcv.kpiLabel}>RECEBIDO MÊS</Text>
@@ -194,12 +198,17 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
   var layout = getLayoutForWidth(vw);
   var IS_NARROW = vw < 480;
 
-  var params = useLocalSearchParams<{ tab?: string; focus?: string }>();
+  var params = useLocalSearchParams<{ tab?: string; focus?: string; visao?: string; tipo?: string }>();
   var paramTab = typeof params.tab === "string" ? params.tab : undefined;
   var paramFocus = typeof params.focus === "string" ? params.focus : undefined;
   var initialTab = paramTab && TAB_KEY_TO_INDEX[paramTab] !== undefined ? TAB_KEY_TO_INDEX[paramTab] : TAB_INDEX.visao;
 
   var [activeTab, setActiveTab] = useState(initialTab);
+  // F4 (29/09/2026): atraso clicado → Lançamentos, no Quadro, no tipo certo.
+  // Também por link: ?tab=lancamentos&visao=quadro&tipo=expense.
+  var [focoQuadro, setFocoQuadro] = useState<FocoDoQuadro>(
+    params.visao === "quadro" ? { tipo: params.tipo === "expense" ? "expense" : "income", n: 1 } : null
+  );
   var [period, setPeriod] = useState<PeriodKey>("month");
   var [showModal, setShowModal] = useState(false);
   var [showExport, setShowExport] = useState(false);
@@ -379,6 +388,22 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
   // TransactionRow e um View sem onPress. Instrucao falsa em codigo morto.
   function handleEdit(tx: Transaction) {
     setEditTx(tx); setShowModal(true);
+  }
+
+  // F4 (29/09/2026): atrasos clicáveis. Contas → Quadro (coluna Atrasado, no
+  // tipo certo); crediário → tela do Crediário já filtrada (no Studio, a aba
+  // "A receber" do Hub de Pedidos). No consolidado e na demonstração não há
+  // Quadro nem Crediário por loja: os cards seguem indo para Lançamentos.
+  var podeQuadroAtrasos = !consolidatedView && !isDemo && !!company?.id;
+  var isStudioShell = (company as any)?.vertical_active === "studio";
+
+  function irParaAtrasados(tipo: "income" | "expense") {
+    setFocoQuadro({ tipo: tipo, n: Date.now() });
+    handleTabSelect(TAB_INDEX.lancamentos);
+  }
+
+  function irParaCrediarioAtrasado() {
+    router.push((isStudioShell ? "/studio/pedidos" : "/(tabs)/crediario?filtro=atraso") as any);
   }
 
   function handleNewTransaction() {
@@ -569,6 +594,8 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
               onNewTransaction={handleNewTransaction}
               onImport={!importing && !consolidatedView ? handleImport : undefined}
               onGoToLancamentos={function() { handleTabSelect(TAB_INDEX.lancamentos); }}
+              onVerAtrasados={podeQuadroAtrasos ? irParaAtrasados : undefined}
+              onVerCrediarioAtrasado={podeQuadroAtrasos ? irParaCrediarioAtrasado : undefined}
               onGoToDespesas={function() { handleTabSelect(TAB_INDEX.despesas); }}
               onDelete={consolidatedView ? undefined : function(id) { setDeleteTarget(id); }}
               onEdit={!isDemo && !consolidatedView ? handleEdit : undefined}
@@ -588,6 +615,8 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
             period={period}
             consolidated={!!consolidatedView}
             onSeeItems={function() { handleTabSelect(TAB_INDEX.lancamentos); }}
+            onVerAtrasados={podeQuadroAtrasos ? irParaAtrasados : undefined}
+            onVerCrediarioAtrasado={podeQuadroAtrasos ? irParaCrediarioAtrasado : undefined}
           />
         )}
         {activeTab === TAB_INDEX.despesas && !isLoading && !isError && (
@@ -598,12 +627,14 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
             period={period}
             consolidated={!!consolidatedView}
             onSeeItems={function() { handleTabSelect(TAB_INDEX.lancamentos); }}
+            onVerAtrasados={podeQuadroAtrasos ? irParaAtrasados : undefined}
+            onVerCrediarioAtrasado={podeQuadroAtrasos ? irParaCrediarioAtrasado : undefined}
           />
         )}
 
         {/* 28/09/2026: Quadro (Atrasado / A receber / Recebido) ao lado da lista. */}
         {activeTab === TAB_INDEX.lancamentos && !isLoading && !isError && (
-          <ListaOuQuadro podeQuadro={!consolidatedView && !isDemo} companyId={company?.id} onEditar={!isDemo && !consolidatedView ? handleEdit : undefined}>
+          <ListaOuQuadro podeQuadro={!consolidatedView && !isDemo} companyId={company?.id} foco={focoQuadro} onEditar={!isDemo && !consolidatedView ? handleEdit : undefined}>
           <TabLancamentos
             transactions={transactions}
             isLoading={isLoading}

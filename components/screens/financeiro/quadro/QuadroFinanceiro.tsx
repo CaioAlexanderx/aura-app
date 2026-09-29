@@ -36,8 +36,19 @@ function acharColuna(q: Quadro | undefined, id: string | null): { coluna: Coluna
   return null;
 }
 
-export function QuadroFinanceiro({ companyId, onEditar }: { companyId: string; onEditar?: (lancamento: ReturnType<typeof cartaoParaLancamento>) => void }) {
-  const [tipo, setTipo] = useState<TipoQuadro>("income");
+export function QuadroFinanceiro({ companyId, onEditar, foco }: { companyId: string; onEditar?: (lancamento: ReturnType<typeof cartaoParaLancamento>) => void; foco?: { tipo: TipoQuadro; n: number } | null }) {
+  const [tipo, setTipo] = useState<TipoQuadro>(foco ? foco.tipo : "income");
+  // F4: veio de um atraso clicado — tipo certo, mês atual e a coluna Atrasado
+  // piscando alguns segundos para o olho achar.
+  const [destaqueAtraso, setDestaqueAtraso] = useState(false);
+  useEffect(() => {
+    if (!foco) return;
+    setTipo(foco.tipo);
+    setMes(todayLocalString().slice(0, 7));
+    setDestaqueAtraso(true);
+    const t = setTimeout(() => setDestaqueAtraso(false), 4000);
+    return () => clearTimeout(t);
+  }, [foco?.n]);
   const [mes, setMes] = useState(() => todayLocalString().slice(0, 7));
   const [alvo, setAlvo] = useState<AlvoDoMovimento>(null);
   const { quadro, carregando, erro, recarregar, mover, pagarVarios, pagandoVarios } = useQuadroFinanceiro(companyId, tipo, mes);
@@ -156,6 +167,7 @@ export function QuadroFinanceiro({ companyId, onEditar }: { companyId: string; o
               aceita={!!origem && !!movimento(origem, k)}
               recusa={!!origem && k === "atrasado" && origem !== "atrasado"}
               emFoco={dnd.hoverStatus === k}
+              destacar={destaqueAtraso && k === "atrasado"}
               limite={quadro?.limit_per_column || 150}
               onDrop={dnd.onDrop}
               onHover={dnd.onHoverChange}
@@ -218,6 +230,7 @@ function QuadroColuna(p: {
   onEditar?: (c: CartaoQuadro) => void;
   selecionando?: boolean; selecionados?: string[]; onSelecionar?: (c: CartaoQuadro) => void;
   companyId?: string;
+  destacar?: boolean;
 }) {
   const ref = useDropZoneRef<ColunaQuadro>(p.chave, p.onDrop, p.onHover);
   const { m } = useValoresOcultos();
@@ -228,7 +241,7 @@ function QuadroColuna(p: {
   const vazio = !p.dados.items.length && !(p.dados.grupos || []).length;
 
   return (
-    <View ref={ref} style={[s.coluna, p.largo && s.colunaLarga, p.aceita && p.emFoco && s.colunaFoco, p.recusa && s.colunaRecusa]} testID={"quadro-coluna-" + p.chave}>
+    <View ref={ref} style={[s.coluna, p.largo && s.colunaLarga, p.aceita && p.emFoco && s.colunaFoco, p.recusa && s.colunaRecusa, p.destacar && s.colunaDestaque]} testID={"quadro-coluna-" + p.chave}>
       <View style={s.colTopo}>
         <View style={s.colTitulo}>
           <View style={[s.ponto, { backgroundColor: COR_DA_COLUNA[p.chave] }]} />
@@ -306,6 +319,7 @@ const s = StyleSheet.create({
   colunaLarga: { flex: 1, minWidth: 0, minHeight: 320 },
   colunaFoco: { borderColor: Colors.violet, backgroundColor: Colors.violetD },
   colunaRecusa: { borderStyle: "dashed" },
+  colunaDestaque: { borderColor: Colors.red, borderWidth: 2 },
   colTopo: { gap: 2, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
   colTitulo: { flexDirection: "row", alignItems: "center", gap: 8 },
   ponto: { width: 8, height: 8, borderRadius: 4 },

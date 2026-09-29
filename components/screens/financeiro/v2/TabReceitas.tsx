@@ -58,6 +58,8 @@ type Props = {
   consolidated: boolean;
   // Leva pra aba Lancamentos: e la que estao os nomes por tras dos prazos.
   onSeeItems?: () => void;
+  onVerAtrasados?: (tipo: "income" | "expense") => void;
+  onVerCrediarioAtrasado?: () => void;
 };
 
 // 24/08/2026: o backend grava o crediario em categorias proprias, com nome de
@@ -109,7 +111,7 @@ function dailyIncomeSeries(txs: Transaction[]): { day: number; value: number }[]
   });
 }
 
-export function TabReceitas({ transactions, summary, previousSummary, period, consolidated, onSeeItems }: Props) {
+export function TabReceitas({ transactions, summary, previousSummary, period, consolidated, onSeeItems, onVerAtrasados, onVerCrediarioAtrasado }: Props) {
   var { width: vw } = useWindowDimensions();
   var NARROW = vw < 480;
   var IS_WIDE = vw > 768;
@@ -190,7 +192,7 @@ export function TabReceitas({ transactions, summary, previousSummary, period, co
             query de insights nao roda em demo e desiste depois de 1 retry num
             403 — o texto ficava eterno. Como este card subiu pra primeira
             dobra no F5, isso passou a ser a segunda coisa que o usuario ve. */}
-        {ib?.timeline ? <Timeline buckets={ib.timeline} kind="receivable" onSeeItems={onSeeItems} /> : (
+        {ib?.timeline ? <Timeline buckets={ib.timeline} kind="receivable" onSeeItems={onSeeItems} onVerAtrasados={onVerAtrasados ? function() { onVerAtrasados("income"); } : undefined} onVerCrediarioAtrasado={onVerCrediarioAtrasado} /> : (
           <View style={s.empty}>
             <Text style={[s.emptyText, { color: Colors.ink3 }]}>
               {receivable > 0
