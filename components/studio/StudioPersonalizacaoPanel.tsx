@@ -1521,7 +1521,8 @@ type Choice = { label: string; value: string; price_delta?: number };
 function MiniaturaDoMockup({ vt, spec }: { vt: VisualTemplate; spec: VisualTemplateSpec | null | undefined }) {
   const retrato = useRetratoDoModelo(vt, spec);
   if (retrato) {
-    return <Image source={{ uri: retrato }} style={{ width: 88, height: 67 }} resizeMode="cover" />;
+    // contain: o quadro tem a proporção do retrato (176×134 ÷ 2); nada é cortado.
+    return <Image source={{ uri: retrato }} style={{ width: 88, height: 67 }} resizeMode="contain" />;
   }
   return <VisualTemplateThumb kind={spec === undefined ? null : vt.kind} spec={spec} size={88} />;
 }

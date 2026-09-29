@@ -35,10 +35,12 @@ export const FUNDO_DO_RETRATO = "#ECEAE4";
 const PAUSA_ENTRE_RETRATOS_MS = 250;
 /** Margem da peça em cada lado do retrato (fração do lado). */
 export const MARGEM_DO_RETRATO = 0.1;
+/** Folga do enquadramento no viewer: sobra para a sombra, que não é da malha. */
+const FOLGA_DO_VIEWER = 0.22;
 /** Lado maior da textura da peça no retrato (a peça vai sem arte). */
 const TEXTURA_DO_RETRATO = 512;
 /** Muda quando o retrato mudar de cara: o que estava guardado deixa de valer. */
-const VERSAO_DO_RETRATO = "r2"; // r2: 1:0,76 e peça enquadrada pela caixa
+const VERSAO_DO_RETRATO = "r3"; // r3: recorte pelo alfa (peça e sombra) com margem conferida
 const PREFIXO_DO_ARMAZENAMENTO = "aura:studio:retrato:";
 
 type ModeloDoRetrato = Pick<VisualTemplate, "key" | "version" | "kind">;
@@ -89,52 +91,106 @@ function esperar(ms: number) {
   return new Promise<void>((r) => setTimeout(r, ms));
 }
 
-/** A caixa dos pixels com alfa num canvas 2D; null se vazio ou ilegível. */
-function caixaDesenhada(cv: HTMLCanvasElement): { x: number; y: number; w: number; h: number } | null {
-  try {
-    const ctx = cv.getContext("2d");
-    const img = ctx?.getImageData(0, 0, cv.width, cv.height);
-    if (!img) return null;
-    let x0 = cv.width, y0 = cv.height, x1 = -1, y1 = -1;
-    for (let y = 0; y < cv.height; y++) {
-      for (let x = 0; x < cv.width; x++) {
-        if (img.data[(y * cv.width + x) * 4 + 3] > 8) {
-          if (x < x0) x0 = x; if (x > x1) x1 = x;
-          if (y < y0) y0 = y; if (y > y1) y1 = y;
-        }
+// ── Enquadramento pelo resultado ──────────────────────────
+// O viewer enquadra a peça pela malha, mas a sombra fica fora da malha
+// (sai para o lado da luz): pela conta, a caneca ficava centrada e a
+// sombra encostava na borda esquerda, com a sobra toda à direita. Por
+// isso o retrato é tirado com folga (fora da tela, em 2x), o que ficou
+// no canvas — peça E sombra, pelo alfa — é recortado e posto no centro
+// com a margem, e o resultado é conferido nos pixels.
+
+/** Alfa mínimo do que conta como desenhado (a ponta mais fraca da sombra fica de fora). */
+const ALFA_DESENHADO = 12;
+
+export type CaixaNaImagem = { x0: number; y0: number; x1: number; y1: number };
+
+/** A caixa dos pixels com alfa acima do limiar (RGBA, linha a linha); null se vazia. */
+export function caixaPorAlfa(dados: ArrayLike<number>, w: number, h: number, limiar = ALFA_DESENHADO): CaixaNaImagem | null {
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (dados[(y * w + x) * 4 + 3] > limiar) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
       }
     }
-    return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
-  } catch (_e) {
-    return null;
   }
+  return x1 < 0 ? null : { x0, y0, x1, y1 };
+}
+
+export type Conferencia = {
+  ok: boolean;
+  margens: { esquerda: number; direita: number; topo: number; base: number };
+  desvio: { x: number; y: number };
+};
+
+/**
+ * Sobra de pelo menos `margemMin` (fração do lado) nos quatro lados e o
+ * centro do desenho a menos de `desvioMax` do meio.
+ */
+export function conferirEnquadramento(
+  c: CaixaNaImagem, w: number, h: number, margemMin = 0.08, desvioMax = 0.05,
+): Conferencia {
+  const margens = {
+    esquerda: c.x0 / w, direita: (w - 1 - c.x1) / w,
+    topo: c.y0 / h, base: (h - 1 - c.y1) / h,
+  };
+  const desvio = { x: ((c.x0 + c.x1) / 2 - (w - 1) / 2) / w, y: ((c.y0 + c.y1) / 2 - (h - 1) / 2) / h };
+  const ok = Math.min(margens.esquerda, margens.direita, margens.topo, margens.base) >= margemMin - 1e-9
+    && Math.abs(desvio.x) < desvioMax && Math.abs(desvio.y) < desvioMax;
+  return { ok, margens, desvio };
+}
+
+/** Os pixels de um canvas (WebGL ou 2D), por uma cópia 2D. */
+function pixelsDe(origem: HTMLCanvasElement): Uint8ClampedArray | null {
+  const t = document.createElement("canvas");
+  t.width = origem.width; t.height = origem.height;
+  const ctx = t.getContext("2d");
+  if (!ctx) return null;
+  ctx.drawImage(origem, 0, 0);
+  return ctx.getImageData(0, 0, t.width, t.height).data;
 }
 
 /**
- * O canvas (WebGL ou 2D) sobre o fundo neutro, em JPEG, no tamanho do
- * retrato. O 3D já vem do tamanho e enquadrado; o 2D (outra proporção)
- * entra inteiro, centrado, com a margem do retrato.
+ * O desenho do canvas (peça e sombra, pelo alfa) recortado e posto no
+ * centro do retrato com a margem, sobre o papel neutro, em JPEG. Em
+ * desenvolvimento, o resultado é conferido e registrado em
+ * `window.__conferenciasDoRetrato` (aviso no console se reprovar).
  */
-function paraJpeg(origem: HTMLCanvasElement, encaixar = false): string | null {
+function paraJpeg(origem: HTMLCanvasElement, rotulo: string): string | null {
   const w = origem.width, h = origem.height;
   if (!(w > 0) || !(h > 0)) return null;
+  const dados = pixelsDe(origem);
+  const c = (dados && caixaPorAlfa(dados, w, h)) || { x0: 0, y0: 0, x1: w - 1, y1: h - 1 };
+  const cw = c.x1 - c.x0 + 1, ch = c.y1 - c.y0 + 1;
   const cv = document.createElement("canvas");
   cv.width = LARGURA_DO_RETRATO; cv.height = ALTURA_DO_RETRATO;
   const ctx = cv.getContext("2d");
   if (!ctx) return null;
+  const k = Math.min(cv.width / cw, cv.height / ch) * (1 - 2 * MARGEM_DO_RETRATO);
+  const dw = cw * k, dh = ch * k;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(origem, c.x0, c.y0, cw, ch, (cv.width - dw) / 2, (cv.height - dh) / 2, dw, dh);
+  conferirNoDesenvolvimento(ctx, cv, rotulo);
+  // O papel por baixo do que já está desenhado.
+  ctx.globalCompositeOperation = "destination-over";
   ctx.fillStyle = FUNDO_DO_RETRATO;
   ctx.fillRect(0, 0, cv.width, cv.height);
-  if (encaixar) {
-    // A caixa do que foi desenhado (alfa > 0): a vista 2D tem sobra em volta.
-    const c = caixaDesenhada(origem) || { x: 0, y: 0, w, h };
-    const k = Math.min(cv.width / c.w, cv.height / c.h) * (1 - 2 * MARGEM_DO_RETRATO);
-    const dw = c.w * k, dh = c.h * k;
-    ctx.drawImage(origem, c.x, c.y, c.w, c.h, (cv.width - dw) / 2, (cv.height - dh) / 2, dw, dh);
-  } else {
-    ctx.drawImage(origem, 0, 0, cv.width, cv.height);
-  }
   const url = cv.toDataURL("image/jpeg", 0.85);
   return url && url.startsWith("data:image/jpeg") ? url : null;
+}
+
+function conferirNoDesenvolvimento(ctx: CanvasRenderingContext2D, cv: HTMLCanvasElement, rotulo: string) {
+  if (typeof __DEV__ !== "undefined" && !__DEV__) return;
+  try {
+    const caixa = caixaPorAlfa(ctx.getImageData(0, 0, cv.width, cv.height).data, cv.width, cv.height);
+    const r = caixa ? conferirEnquadramento(caixa, cv.width, cv.height) : null;
+    const w: any = typeof window !== "undefined" ? window : {};
+    (w.__conferenciasDoRetrato = w.__conferenciasDoRetrato || []).push({ modelo: rotulo, caixa, ...r });
+    if (!r?.ok) console.warn("[retratoDoModelo] enquadramento fora da margem:", rotulo, caixa, r);
+  } catch (_e) { /* conferência é só diagnóstico */ }
 }
 
 /** Solta o contexto WebGL já — sem esperar o coletor de lixo. */
@@ -169,9 +225,11 @@ let estudio: { cv: HTMLCanvasElement; viewer: Mug3DHandle } | null = null;
 // lados e um pouco de cima. A caneca repousa com a alça à esquerda: gira
 // para o 3/4 com a alça à direita. A camiseta repousa de frente: só um
 // quarto de volta pequeno, para a frente continuar sendo a frente.
+// O viewer deixa folga larga (a sombra cabe); o recorte pelo alfa é que
+// põe a margem final.
 export function enquadramentoDoRetrato(spec: VisualTemplateSpec) {
   const veste = spec.model?.kind === "glb";
-  return { margem: MARGEM_DO_RETRATO, giroGraus: veste ? -18 : 145, elevacaoGraus: veste ? 8 : 16 };
+  return { margem: FOLGA_DO_VIEWER, giroGraus: veste ? -18 : 145, elevacaoGraus: veste ? 8 : 16 };
 }
 function opcoesDoRetrato(spec: VisualTemplateSpec) {
   return { cenario: "nenhum" as const, pixelRatio: 1, retrato: enquadramentoDoRetrato(spec) };
@@ -193,8 +251,9 @@ async function retratar3D(specOriginal: VisualTemplateSpec): Promise<string | nu
   try {
     if (!estudio) {
       const cv = document.createElement("canvas");
-      cv.width = LARGURA_DO_RETRATO;
-      cv.height = ALTURA_DO_RETRATO;
+      // 2x: o recorte reduz, e a borda sai limpa.
+      cv.width = LARGURA_DO_RETRATO * 2;
+      cv.height = ALTURA_DO_RETRATO * 2;
       // Sem cenário: só a peça e a sombra de contato, sobre o papel neutro.
       // O estúdio encolhe a peça numa miniatura deste tamanho.
       let viewer: Mug3DHandle;
@@ -211,8 +270,8 @@ async function retratar3D(specOriginal: VisualTemplateSpec): Promise<string | nu
     const { cv, viewer } = estudio;
     viewer.giroAutomatico(false);
     viewer.resize(); // reenquadra depois da pintura (a peça nova já em cena)
-    if (!viewer.snapshot(LARGURA_DO_RETRATO)) return null;
-    return paraJpeg(cv);
+    if (!viewer.snapshot(cv.width)) return null;
+    return paraJpeg(cv, String(spec.model?.kind || "3d"));
   } catch (e) {
     descartarEstudio(); // a próxima peça começa de uma cena limpa
     throw e;
@@ -227,7 +286,7 @@ async function retratar2D(spec: VisualTemplateSpec): Promise<string | null> {
   const cv = document.createElement("canvas");
   // Sem backdrop: a peça vetorial sobre o papel do retrato, que o paraJpeg pinta.
   const r = await composeView(cv, vista, {}, { showAreas: false, pixelWidth: LARGURA_DO_RETRATO * 2, backdrop: null });
-  return r ? paraJpeg(cv, true) : null;
+  return r ? paraJpeg(cv, "photo2d") : null;
 }
 
 /** O retrato já feito (memória ou localStorage), sem pôr nada na fila. */
