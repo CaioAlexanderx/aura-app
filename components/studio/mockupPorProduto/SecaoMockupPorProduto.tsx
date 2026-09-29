@@ -39,7 +39,7 @@ import {
 const WEB = Platform.OS === "web";
 
 /** Equivalente em JS do `@media (hover: none)`: sem mouse, o caminho é o do toque. */
-function useSemHover(): boolean {
+export function useSemHover(): boolean {
   const [semHover, setSemHover] = useState(!WEB);
   useEffect(() => {
     if (!WEB || typeof window === "undefined" || !window.matchMedia) return;

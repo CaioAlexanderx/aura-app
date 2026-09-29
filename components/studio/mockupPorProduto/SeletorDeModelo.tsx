@@ -49,12 +49,14 @@ type Props = {
   onFechar: (devolverFoco: boolean) => void;
   /** A prévia da folha de baixo. */
   previaDaFolha?: React.ReactNode;
+  /** Dica do rodapé no toque antes de escolher (o orçamento diz "só neste orçamento"). */
+  dicaDoToque?: string;
   T: any;
 };
 
 export function SeletorDeModelo({
   produto, opcoes, atual, specs, folha, modoToque, ancora, ativo, candidato,
-  onAtivo, onSair, onConfirmar, onFechar, previaDaFolha, T,
+  onAtivo, onSair, onConfirmar, onFechar, previaDaFolha, dicaDoToque, T,
 }: Props) {
   const listaRef = useRef<any>(null);
   const hover = useRef<any>(null);
@@ -133,7 +135,7 @@ export function SeletorDeModelo({
     const escolhido = modoToque && o.key === candidato;
     const eAtivo = i === ativo;
     const spec = o.template ? specs[o.template.key] : null;
-    const meta = o.template ? metaDoModelo(o.template, spec) : metaDoNenhum(produto);
+    const meta = o.meta ?? (o.template ? metaDoModelo(o.template, spec) : metaDoNenhum(produto));
     itens.push(
       <Pressable
         key={o.key ?? "nenhum"}
@@ -210,7 +212,7 @@ export function SeletorDeModelo({
     <View style={{ padding: folha ? 16 : 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: T.ink5, gap: 8 }}>
       <Text style={{ fontSize: 12, color: T.ink3 }} testID="rodape-dica">
         {iguais
-          ? "Toque num modelo para ver na prévia. Nada muda na loja até você confirmar."
+          ? (dicaDoToque || "Toque num modelo para ver na prévia. Nada muda na loja até você confirmar.")
           : "Você está vendo a prévia. Toque em Usar este modelo para gravar."}
       </Text>
       <View style={{ flexDirection: "row", gap: 8 }}>

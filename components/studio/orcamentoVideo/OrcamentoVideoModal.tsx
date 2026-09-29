@@ -16,11 +16,18 @@
 // confirmação de saída. No celular vira tela cheia.
 //
 //   1 Peça     — item, cor da peça e arte (viewer 3D ao vivo)
-//   2 Valores  — condições que a LOJISTA define (nada vem da loja)
-//   3 Prévia   — grava o giro, guarda o vídeo 30 dias, mensagem editável
-//   4 Enviar   — compartilhar com arquivo onde existir (celular e
-//                computador); senão baixar + copiar + abrir a conversa
+//   2 Prévia   — grava o giro, guarda o vídeo 30 dias, mensagem editável
+//   3 Enviar   — compartilhar com arquivo onde existir (celular e
+//                computador); senão baixar + copiar + abrir a conversa.
+//                Ou o canal "Link do orçamento" (página para o cliente)
 //   ✓ Enviado
+//
+// 29/09/2026 (modal do orçamento, decisões 2 e 3 do PO): o passo
+// "Valores" saiu. Validade, sinal, Pix, parcelas, prazo e observação
+// moram no orçamento (components/studio/orcamentoModal) e chegam aqui já
+// salvos em `quote`. O envio por link, que era um botão paralelo no
+// editor, virou um canal dentro de Enviar. O modelo 3D da peça é o do
+// item do orçamento, se a lojista trocou (modeloDaPeca, backend 364).
 //
 // Web-only (canvas, WebGL, WebCodecs): o editor nem mostra o botão no
 // nativo. Multi-CNPJ: tudo usa a empresa do orçamento (companyId da rota
@@ -35,15 +42,13 @@ import { copyToClipboard } from "@/utils/clipboard";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { studioApi, type StudioQuote, type StudioQuoteItem, type CanalDeEnvioDoOrcamento } from "@/services/studioApi";
+import { carregarFontesDaPeca } from "./modeloDaPeca";
 import { pickImageBase64, uploadStudioMockup } from "@/services/studioUploadApi";
 import { Mug3DPreview } from "@/components/studio/visualEngine/Mug3DPreview";
+import { valoresDasCondicoes, reais } from "./condicoesDoOrcamento";
+import { mensagemDoOrcamento, primeiroNome } from "./mensagemDoOrcamento";
 import {
-  valoresDasCondicoes, erroDasCondicoes, lerNumero, reais, pct,
-  type CondicoesDoOrcamento,
-} from "./condicoesDoOrcamento";
-import { mensagemDoOrcamento } from "./mensagemDoOrcamento";
-import {
-  carregarFontes, tem3d, temFoto, coresDaPeca, arteDoItem, customizacaoComArte, motorDaArte, fotoSem3d,
+  tem3d, temFoto, coresDaPeca, arteDoItem, customizacaoComArte, motorDaArte, fotoSem3d,
   type FontesDaPeca, type ArteDaPeca,
 } from "./pecaDoOrcamento";
 import { abrirPalco, gravarGiro, fotoDoPalco, DURACAO_S, type VideoGravado, type Palco } from "./gravarGiro";
@@ -53,17 +58,17 @@ import {
   nomeDoArquivo, telefoneDoCliente,
 } from "./envioNoWhatsApp";
 
-type Passo = 1 | 2 | 3 | 4 | 5;
+type Passo = 1 | 2 | 3 | 4;
+type Canal = "whatsapp" | "link";
 type Gravacao = "ocioso" | "gravando" | "pronto" | "falhou" | "foto" | "semnada";
 type Upload = "nada" | "subindo" | "salvo" | "erro";
 
-const ROTULOS: Record<1 | 2 | 3 | 4, string> = { 1: "Peça", 2: "Valores", 3: "Prévia", 4: "Enviar" };
+const ROTULOS: Record<1 | 2 | 3, string> = { 1: "Peça", 2: "Prévia", 3: "Enviar" };
 const SUBTITULOS: Record<Passo, string> = {
   1: "Escolha a peça e a cor, e confira a arte do cliente",
-  2: "Valores do orçamento e as condições que você oferece",
-  3: "Gravamos o giro de 7 s e montamos a mensagem",
-  4: "Mande para o WhatsApp do cliente",
-  5: "Pronto",
+  2: "Gravamos o giro de 7 s e montamos a mensagem",
+  3: "Mande para o WhatsApp do cliente",
+  4: "Pronto",
 };
 
 export type OrcamentoVideoModalProps = {
@@ -74,7 +79,7 @@ export type OrcamentoVideoModalProps = {
   nomeDaLoja: string;
   logoUrl?: string | null;
   onClose: () => void;
-  /** Orçamento mudou (condições salvas, itens com a arte, marcado como enviado). */
+  /** Orçamento mudou (itens com a arte, marcado como enviado, link gerado). */
   onAtualizou: (quote: StudioQuote, items?: StudioQuoteItem[]) => void;
 };
 
@@ -119,7 +124,7 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
     let vivo = true;
     if (!item?.product_id) { setFontes(null); return; }
     setCarregandoPeca(true);
-    carregarFontes(companyId, item.product_id)
+    carregarFontesDaPeca(companyId, item.product_id, item.visual_template_key)
       .then((f) => {
         if (!vivo) return;
         setFontes(f);
@@ -129,36 +134,19 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
       })
       .finally(() => { if (vivo) setCarregandoPeca(false); });
     return () => { vivo = false; };
-  }, [companyId, item?.product_id, idx]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [companyId, item?.product_id, item?.visual_template_key, idx]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pode3d = tem3d(fontes);
   const podeFoto = temFoto(fontes);
   const cores = coresDaPeca(fontes?.cfg);
   const motor = useMemo(() => motorDaArte(fontes?.cfg, item?.customization, arte), [fontes, item, arte]);
 
-  // ── Passo 2: condições (da lojista, nada pré-preenchido pela loja) ──
-  const c0 = quote.condicoes || null;
-  const [pixTxt, setPixTxt] = useState(textoDe(c0?.pix_desconto_pct));
-  const [parcelasTxt, setParcelasTxt] = useState(textoDe(c0?.parcelas));
-  const [prazoTxt, setPrazoTxt] = useState(textoDe(c0?.prazo_dias_uteis));
-  const [obsTxt, setObsTxt] = useState(c0?.observacao || "");
-  const [sinalTxt, setSinalTxt] = useState(textoDe(quote.deposit_pct != null ? Number(quote.deposit_pct) : null));
-  const [validadeTxt, setValidadeTxt] = useState(String(quote.validity_days || 7));
-
-  const condicoes: CondicoesDoOrcamento = {
-    pix_desconto_pct: lerNumero(pixTxt),
-    parcelas: lerNumero(parcelasTxt),
-    prazo_dias_uteis: lerNumero(prazoTxt),
-    observacao: obsTxt.trim() || null,
-  };
-  const sinalPct = lerNumero(sinalTxt);
-  const validade = Math.max(1, Math.min(90, parseInt(validadeTxt, 10) || 7));
+  // ── Condições: as do orçamento, já salvas pelo modal do orçamento ──
+  const validade = Math.max(1, Math.min(90, Number(quote.validity_days) || 7));
   const total = Number(quote.total) || 0;
-  const sinalValor = sinalPct && sinalPct > 0 ? Math.round(total * sinalPct) / 100 : null;
-  const erroCond = erroDasCondicoes(condicoes) || (sinalPct !== null && (sinalPct <= 0 || sinalPct > 100) ? "Sinal entre 1% e 100%" : null);
-  const valores = valoresDasCondicoes({ total, deposit_pct: sinalPct, deposit_amount: sinalValor, condicoes });
+  const valores = valoresDasCondicoes(quote);
 
-  // ── Passo 3: gravação ───────────────────────────────────────
+  // ── Passo 2: gravação ───────────────────────────────────────
   const [gravacao, setGravacao] = useState<Gravacao>("ocioso");
   const [progresso, setProgresso] = useState(0);
   const [video, setVideo] = useState<VideoGravado | null>(null);
@@ -250,7 +238,7 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
     }
   }
 
-  // ── Passo 4: envio ──────────────────────────────────────────
+  // ── Passo 3: envio ──────────────────────────────────────────
   const [telefone, setTelefone] = useState(quote.customer_phone || "");
   const arquivo = useMemo(() => {
     if (typeof File === "undefined") return null;
@@ -261,7 +249,8 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
   const compartilhaArquivo = podeCompartilharArquivo(arquivo);
   const linkConversa = linkDaConversa(telefone, texto);
   const [jaBaixou, setJaBaixou] = useState(false);
-  const [enviadoPor, setEnviadoPor] = useState<CanalDeEnvioDoOrcamento | null>(null);
+  const [canal, setCanal] = useState<Canal>("whatsapp");
+  const [enviadoPor, setEnviadoPor] = useState<CanalDeEnvioDoOrcamento | "link" | null>(null);
 
   async function marcarEnviado(canal: CanalDeEnvioDoOrcamento) {
     setOcupado(true);
@@ -269,7 +258,7 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
       const r = await studioApi.marcarOrcamentoEnviado(companyId, quote.id, canal);
       onAtualizou(r.quote);
       setEnviadoPor(canal);
-      setPasso(5);
+      setPasso(4);
     } catch (e: any) {
       toast.error(e?.data?.error || e?.message || "Não deu para registrar o envio");
     } finally {
@@ -285,6 +274,30 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
     const r = await compartilharArquivo(arquivo, texto);
     if (r === "enviado") await marcarEnviado("compartilhar");
     else if (r === "falhou") toast.error("O compartilhamento não abriu. Use baixar e abrir a conversa.");
+  }
+
+  // Canal "Link do orçamento": a página pública em que o cliente aceita
+  // ou recusa. Era o botão "Enviar ao cliente" do editor antigo.
+  const textoDoLink = (url: string) => {
+    const nome = primeiroNome(quote.customer_name);
+    return `${nome ? `Oi, ${nome}! ` : ""}Segue o seu orçamento${nomeDaLoja ? ` da ${nomeDaLoja}` : ""}: ${url}`;
+  };
+  async function enviarLink() {
+    setOcupado(true);
+    try {
+      const r = await studioApi.sendQuote(companyId, quote.id);
+      onAtualizou(r);
+      const url = r.quote_url;
+      const conversa = linkDaConversa(telefone, textoDoLink(url));
+      if (conversa) abrirConversa(conversa);
+      copyToClipboard(textoDoLink(url)).catch(() => {});
+      setEnviadoPor("link");
+      setPasso(4);
+    } catch (e: any) {
+      toast.error(e?.data?.error || e?.message || "Não deu para gerar o link do orçamento");
+    } finally {
+      setOcupado(false);
+    }
   }
 
   function baixarECopiar() {
@@ -310,34 +323,17 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
         }
         setOcupado(false);
       }
-      setPasso(2);
-      return;
-    }
-    if (passo === 2) {
-      if (erroCond) { toast.error(erroCond); return; }
-      setOcupado(true);
-      try {
-        const r = await studioApi.salvarCondicoesDoOrcamento(companyId, quote.id, {
-          ...condicoes, deposit_pct: sinalPct, validity_days: validade,
-        });
-        onAtualizou(r.quote);
-      } catch (e: any) {
-        toast.error(e?.data?.error || e?.message || "Não deu para salvar as condições");
-        setOcupado(false);
-        return;
-      }
-      setOcupado(false);
       setTextoEditado(null);
-      setPasso(3);
+      setPasso(2);
       if (gravadoCom.current !== assinatura || gravacao === "falhou") gravar();
       return;
     }
-    if (passo === 3) { setPasso(4); return; }
+    if (passo === 2) { setPasso(3); return; }
   }
 
-  function voltar() { if (passo > 1 && passo < 5) setPasso((passo - 1) as Passo); }
+  function voltar() { if (passo > 1 && passo < 4) setPasso((passo - 1) as Passo); }
   function pedirFechar() {
-    if (passo === 5 || (gravacao === "ocioso" && !arteMudou)) onClose();
+    if (passo === 4 || (gravacao === "ocioso" && !arteMudou)) onClose();
     else setQuerSair(true);
   }
 
@@ -346,19 +342,18 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
   let podeAvancar = true;
   if (passo === 1) {
     if (carregandoPeca) { podeAvancar = false; info = "Carregando a peça…"; }
-    else if (!item) { podeAvancar = false; info = "O orçamento precisa de um item com produto"; }
+    else if (!item) { podeAvancar = true; info = "Sem peça com produto: vai só a mensagem"; }
     else if (!pode3d && !podeFoto) { podeAvancar = true; info = "Sem 3D nem foto: vai só a mensagem"; }
     else if (!pode3d) info = "Sem 3D: vai a foto da peça";
   }
-  if (passo === 2 && erroCond) { podeAvancar = false; info = erroCond; }
-  if (passo === 3) {
+  if (passo === 2) {
     if (gravacao === "gravando") { podeAvancar = false; info = "Gravando…"; }
     else if (gravacao === "falhou") { podeAvancar = false; info = "Tente de novo ou siga com a foto"; }
     else if (gravacao === "pronto") info = upload === "salvo" ? `Vídeo pronto · ${DURACAO_S} s · guardado por 30 dias` : upload === "subindo" ? "Vídeo pronto · guardando…" : "Vídeo pronto";
     else if (gravacao === "foto") info = "Vai a foto da peça";
     else if (gravacao === "semnada") info = "Vai só a mensagem";
   }
-  if (passo === 4) info = `Para ${quote.customer_name || "o cliente"}${telefone ? " · " + telefone : ""}`;
+  if (passo === 3) info = `Para ${quote.customer_name || "o cliente"}${telefone ? " · " + telefone : ""}`;
 
   // ─────────────────────────────────────────────────────────────
   const conteudo = (
@@ -370,16 +365,16 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
             <View style={s.icone}><Icon name="camera" size={17} color={t.accentInk} /></View>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={s.titulo}>{passo === 5 ? "Orçamento enviado" : "Orçamento em vídeo 3D"}</Text>
+              <Text style={s.titulo}>{passo === 4 ? "Orçamento enviado" : "Enviar o orçamento"}</Text>
               <Text style={s.subtitulo} numberOfLines={2}>{SUBTITULOS[passo]}</Text>
             </View>
           </View>
           <Pressable onPress={pedirFechar} style={s.fechar} accessibilityLabel="Fechar"><Icon name="x" size={18} color={t.ink3} /></Pressable>
         </View>
 
-        {passo < 5 && (
+        {passo < 4 && (
           <View style={s.passos}>
-            {([1, 2, 3, 4] as const).map((n) => {
+            {([1, 2, 3] as const).map((n) => {
               const feito = passo > n, ativo = passo === n;
               return (
                 <View key={n} style={s.passo}>
@@ -387,7 +382,7 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
                     {feito ? <Icon name="check" size={11} color="#fff" /> : <Text style={[s.bolaTxt, ativo && { color: "#fff" }]}>{n}</Text>}
                   </View>
                   {(!estreito || ativo) && <Text style={[s.rotulo, ativo && { color: t.accentInk, fontWeight: "800" }, feito && { color: t.ink2 }]}>{ROTULOS[n]}</Text>}
-                  {n < 4 && <View style={[s.sep, feito && { backgroundColor: t.success }]} />}
+                  {n < 3 && <View style={[s.sep, feito && { backgroundColor: t.success }]} />}
                 </View>
               );
             })}
@@ -421,9 +416,9 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
                     <Text style={s.vazioTxt}>
                       {item
                         ? podeFoto
-                          ? "Vai a foto da peça com a arte. Para o vídeo, vincule um modelo 3D em Loja digital › Aparência."
-                          : "Vai só a mensagem com os valores. Para o vídeo, vincule um modelo 3D em Loja digital › Aparência."
-                        : "Adicione ao orçamento um item com produto cadastrado."}
+                          ? "Vai a foto da peça com a arte. Para o vídeo, escolha um modelo 3D na peça, em Modelo do mockup."
+                          : "Vai só a mensagem com os valores. Para o vídeo, escolha um modelo 3D na peça, em Modelo do mockup."
+                        : "O orçamento só tem itens avulsos: vai a mensagem com os valores."}
                     </Text>
                     {pode3d && seguirComFoto && (
                       <Pressable onPress={() => setSeguirComFoto(false)} style={s.btnSec}><Text style={s.btnSecTxt}>Voltar ao 3D</Text></Pressable>
@@ -540,42 +535,11 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
           {passo === 2 && (
             <View style={s.duas}>
               <View style={s.col}>
-                <Text style={s.secao}>Do orçamento</Text>
-                <View style={s.cartao}>
-                  {items.map((it, i) => (
-                    <View key={i} style={s.linhaItem}>
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={s.opcaoTit} numberOfLines={2}>{it.description}</Text>
-                        <Text style={s.opcaoSub}>{textoDe(Number(it.quantity))} × {reais(Number(it.unit_price))}</Text>
-                      </View>
-                      <Text style={s.valor}>{reais(Number(it.quantity) * Number(it.unit_price))}</Text>
-                    </View>
-                  ))}
-                  {Number(quote.discount) > 0 && (
-                    <View style={s.linhaItem}><Text style={[s.opcaoSub, { flex: 1 }]}>Desconto do orçamento</Text><Text style={s.valor}>− {reais(Number(quote.discount))}</Text></View>
-                  )}
-                  <View style={[s.linhaItem, { borderBottomWidth: 0 }]}><Text style={[s.opcaoTit, { flex: 1 }]}>Total</Text><Text style={[s.valor, { color: t.primary, fontSize: 17 }]}>{reais(total)}</Text></View>
-                </View>
-                <Text style={s.nota}>Preço, quantidade e desconto são os do orçamento. Para mudar, edite o orçamento.</Text>
-              </View>
-              <View style={s.col}>
-                <Text style={s.secao}>Condições que vão na mensagem</Text>
-                <Text style={s.nota}>Só vai o que você preencher. Nada vem da configuração da loja.</Text>
-                <Campo t={t} s={s} rotulo="Desconto no Pix (%)" valor={pixTxt} onChange={setPixTxt} dica={valores.pix ? `${reais(valores.pix.valor)} no Pix` : "vazio = sem desconto"} />
-                <Campo t={t} s={s} rotulo="Parcelas sem juros no cartão" valor={parcelasTxt} onChange={setParcelasTxt} dica={valores.cartao ? `${valores.cartao.parcelas}x de ${reais(valores.cartao.valor)}` : "vazio = não menciona cartão"} />
-                <Campo t={t} s={s} rotulo="Sinal para começar (%)" valor={sinalTxt} onChange={setSinalTxt} dica={valores.sinal ? reais(valores.sinal.valor) : "vazio = sem sinal"} />
-                <Campo t={t} s={s} rotulo="Prazo de produção (dias úteis)" valor={prazoTxt} onChange={setPrazoTxt} dica={valores.prazo ? "depois que o cliente aprovar a arte" : "vazio = não menciona prazo"} />
-                <Campo t={t} s={s} rotulo="Validade (dias)" valor={validadeTxt} onChange={setValidadeTxt} dica={`vale até ${new Date(validaAte).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`} />
-                <Text style={s.rotuloCampo}>Observação (opcional)</Text>
-                <TextInput style={s.input} value={obsTxt} onChangeText={setObsTxt} maxLength={280} placeholder="Ex.: frete por conta do cliente" placeholderTextColor={t.ink4} />
-                {erroCond ? <Text style={[s.nota, { color: t.dangerInk }]}>{erroCond}</Text> : null}
-              </View>
-            </View>
-          )}
-
-          {passo === 3 && (
-            <View style={s.duas}>
-              <View style={s.col}>
+                {/* PONTO DE LIGAÇÃO "Tamanho da arte" (29/09/2026): o ajuste de
+                    tamanho e posição da arte está sendo feito em
+                    pecaDoOrcamento.ts (layoutDaArte/pintarArte). Quando a função
+                    existir, o controle entra aqui, acima do vídeo, e muda
+                    `motor` (motorDaArte) antes de chamar gravar() de novo. */}
                 <Text style={s.secao}>{gravacao === "foto" ? "Foto da peça" : `Vídeo · ${DURACAO_S} s · 720 × 900`}</Text>
                 <View style={s.videoCaixa}>
                   {gravacao === "gravando" && (
@@ -643,7 +607,7 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
             </View>
           )}
 
-          {passo === 4 && (
+          {passo === 3 && (
             <View style={{ gap: 12 }}>
               <View style={s.para}>
                 <View style={s.avatar}><Text style={s.avatarTxt}>{(quote.customer_name || "?").trim().slice(0, 1).toUpperCase()}</Text></View>
@@ -660,7 +624,34 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
                 </View>
               </View>
 
-              {arquivo && compartilhaArquivo ? (
+              <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }} accessibilityRole={"radiogroup" as any} accessibilityLabel="Como mandar">
+                {([["whatsapp", anexo === "video" ? "Vídeo e mensagem" : anexo === "foto" ? "Foto e mensagem" : "Mensagem"], ["link", "Link do orçamento"]] as const).map(([id, rotulo]) => (
+                  <Pressable
+                    key={id}
+                    onPress={() => setCanal(id)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: canal === id }}
+                    testID={"canal-" + id}
+                    style={[s.opcao, { flexGrow: 1, flexBasis: 200, minHeight: 44 }, canal === id && s.opcaoMarcada]}
+                  >
+                    <View style={[s.radio, canal === id && { borderColor: t.accent }]}>{canal === id && <View style={s.radioPonto} />}</View>
+                    <Text style={s.opcaoTit}>{rotulo}</Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              {canal === "link" ? (
+                <View style={[s.canal, s.canalMarcado]} testID="canal-link-detalhe">
+                  <View style={[s.canalIcone, { backgroundColor: t.primary }]}><Icon name="link" size={18} color="#fff" /></View>
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={s.opcaoTit}>Link do orçamento</Text>
+                    <Text style={s.opcaoSub}>
+                      O cliente abre uma página com as peças e os valores e responde por lá: aceitar ou recusar. A conversa abre com o link escrito, e o link fica copiado.{quote.token ? " É o mesmo link que já foi enviado." : ""}
+                    </Text>
+                    {!telefoneDoCliente(telefone) && <Text style={[s.nota, { color: t.warningInk }]}>Sem WhatsApp com DDD: o link só fica copiado.</Text>}
+                  </View>
+                </View>
+              ) : arquivo && compartilhaArquivo ? (
                 <View style={[s.canal, s.canalMarcado]}>
                   <View style={[s.canalIcone, { backgroundColor: "#25D366" }]}><Icon name="share" size={18} color="#fff" /></View>
                   <View style={{ flex: 1 }}>
@@ -709,12 +700,12 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
             </View>
           )}
 
-          {passo === 5 && (
+          {passo === 4 && (
             <View style={s.sucesso}>
               <View style={s.sucessoIcone}><Icon name="check" size={28} color={t.success} /></View>
               <Text style={s.sucessoTit}>Enviado para {quote.customer_name || "o cliente"}</Text>
               <Text style={s.sucessoTxt}>
-                {enviadoPor === "compartilhar" ? "Pelo compartilhamento do WhatsApp." : "Pela conversa do WhatsApp."} O orçamento fica em aberto: quando o cliente topar, toque em Aprovar para ele virar pedido. Se não seguir, Fechar.
+                {enviadoPor === "link" ? "Pelo link do orçamento." : enviadoPor === "compartilhar" ? "Pelo compartilhamento do WhatsApp." : "Pela conversa do WhatsApp."} O orçamento fica em aberto: quando o cliente topar, toque em Aprovar para ele virar pedido. Se não seguir, Fechar.
               </Text>
               {upload === "salvo" && <Text style={s.nota}>O vídeo fica guardado por 30 dias, e dá para manter por mais tempo no orçamento.</Text>}
             </View>
@@ -723,22 +714,27 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
 
         {/* Rodapé */}
         <View style={s.pe}>
-          <Text style={s.peInfo} numberOfLines={2}>{passo === 5 ? "" : info}</Text>
+          <Text style={s.peInfo} numberOfLines={2}>{passo === 4 ? "" : info}</Text>
           <View style={s.peAcoes}>
-            {passo > 1 && passo < 5 && (
+            {passo > 1 && passo < 4 && (
               <Pressable style={s.btnSec} onPress={voltar} disabled={ocupado}><Text style={s.btnSecTxt}>← Voltar</Text></Pressable>
             )}
-            {passo < 4 && (
+            {passo < 3 && (
               <Pressable style={[s.btnPri, (!podeAvancar || ocupado) && { opacity: 0.45 }]} onPress={avancar} disabled={!podeAvancar || ocupado}>
                 {ocupado ? <ActivityIndicator size="small" color="#fff" /> : <Text style={s.btnPriTxt}>Continuar →</Text>}
               </Pressable>
             )}
-            {passo === 4 && arquivo && compartilhaArquivo && (
+            {passo === 3 && canal === "link" && (
+              <Pressable style={[s.btnWa, ocupado && { opacity: 0.45 }]} onPress={enviarLink} disabled={ocupado} testID="enviar-link">
+                {ocupado ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="link" size={15} color="#fff" />}<Text style={s.btnPriTxt}>Enviar o link</Text>
+              </Pressable>
+            )}
+            {passo === 3 && canal === "whatsapp" && arquivo && compartilhaArquivo && (
               <Pressable style={[s.btnWa, ocupado && { opacity: 0.45 }]} onPress={compartilhar} disabled={ocupado}>
                 <Icon name="share" size={15} color="#fff" /><Text style={s.btnPriTxt}>Compartilhar no WhatsApp</Text>
               </Pressable>
             )}
-            {passo === 4 && !(arquivo && compartilhaArquivo) && (
+            {passo === 3 && canal === "whatsapp" && !(arquivo && compartilhaArquivo) && (
               <Pressable
                 style={[s.btnWa, (ocupado || !linkConversa) && { opacity: 0.45 }]}
                 disabled={ocupado || !linkConversa}
@@ -747,7 +743,7 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
                 <Icon name="check" size={15} color="#fff" /><Text style={s.btnPriTxt}>Já mandei</Text>
               </Pressable>
             )}
-            {passo === 5 && (
+            {passo === 4 && (
               <Pressable style={s.btnPri} onPress={onClose}><Text style={s.btnPriTxt}>Voltar ao orçamento</Text></Pressable>
             )}
           </View>
@@ -771,23 +767,11 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
     </View>
   );
 
-  if (!aberto && passo !== 5) {
+  if (!aberto && passo !== 4) {
     // Proteção: o editor só abre o modal para orçamento em aberto.
     return null;
   }
   return conteudo;
-}
-
-function Campo({ t, s, rotulo, valor, onChange, dica }: { t: StudioPalette; s: ReturnType<typeof estilos>; rotulo: string; valor: string; onChange: (v: string) => void; dica: string }) {
-  return (
-    <View style={{ gap: 4 }}>
-      <Text style={s.rotuloCampo}>{rotulo}</Text>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-        <TextInput style={[s.input, { width: 96 }]} value={valor} onChangeText={onChange} keyboardType="decimal-pad" placeholder="—" placeholderTextColor={t.ink4} />
-        <Text style={[s.opcaoSub, { flex: 1 }]}>{dica}</Text>
-      </View>
-    </View>
-  );
 }
 
 function ImagemDoBlob({ blob }: { blob: Blob }) {

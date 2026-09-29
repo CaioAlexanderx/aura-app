@@ -604,6 +604,17 @@ export type StudioQuoteItem = {
   pricing_meta?: any | null;
   customization?: any | null;
   sort_order?: number;
+  /** Modelo de mockup só deste orçamento (backend 364). null = herda do
+   *  produto; "sem-mockup" = tirado só aqui. Ausente no backend de antes. */
+  visual_template_key?: string | null;
+};
+
+/** "Mais usados" e "Recentes" do catálogo do orçamento, por CNPJ (backend 364). */
+export type ProdutoFrequenteDoOrcamento = { product_id: string; usos: number; ultima_vez: string | null };
+export type ProdutosFrequentesDoOrcamento = {
+  days: number;
+  mais_usados: ProdutoFrequenteDoOrcamento[];
+  recentes: ProdutoFrequenteDoOrcamento[];
 };
 
 export type StudioQuote = {
@@ -1022,6 +1033,11 @@ export const studioApi = {
     request<StudioQuoteDetail>(base(cid) + "/quotes/" + qid, { method: "GET", retry: 1, timeout: 8000 }),
   updateQuote: (cid: string, qid: string, body: Partial<{ customer_name: string; customer_phone: string; items: StudioQuoteItem[]; discount: number; validity_days: number; deposit_pct: number | null; deposit_amount: number | null; notes: string }>) =>
     request<StudioQuote>(base(cid) + "/quotes/" + qid, { method: "PATCH", body, retry: 0, timeout: 10000 }),
+  produtosFrequentesDoOrcamento: (cid: string, q?: { days?: number; limit?: number }) =>
+    request<ProdutosFrequentesDoOrcamento>(
+      base(cid) + "/quotes/produtos-frequentes?days=" + (q?.days ?? 90) + "&limit=" + (q?.limit ?? 8),
+      { method: "GET", retry: 1, timeout: 8000 },
+    ),
   deleteQuote: (cid: string, qid: string) =>
     request<{ deleted: true; id: string }>(base(cid) + "/quotes/" + qid, { method: "DELETE", retry: 0, timeout: 5000 }),
   sendQuote: (cid: string, qid: string) =>

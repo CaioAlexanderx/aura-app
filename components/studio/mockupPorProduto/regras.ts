@@ -126,6 +126,8 @@ export type OpcaoDoSeletor = {
   nome: string;
   grupo: GrupoDaOpcao;
   template: VisualTemplate | null;
+  /** Linha de baixo própria (o orçamento explica "Do produto" e "Sem mockup" do seu jeito). */
+  meta?: string;
 };
 
 /** "Sem mockup" primeiro; depois os modelos em 3D e em 2D, cada grupo na ordem da API (nome). */
