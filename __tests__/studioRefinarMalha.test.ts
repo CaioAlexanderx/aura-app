@@ -210,8 +210,8 @@ describe("oclusaoDeCavidade — o fundo de uma dobra escurece, a crista e o plan
     const nrmLiso = normaisSuaves(liso.pos, liso.tris, liso.ids);
     for (const f of oclusaoDeCavidade(liso, nrmLiso, { ganho: 4, maximo: 0.3 })) expect(f).toBeCloseTo(1, 6);
     // afunda um vértice interior (fora da costura) rumo ao eixo: vale côncavo
-    const m: Malha = { ...liso, pos: liso.pos.map((p) => [...p] as V3) };
-    const i = m.pos.findIndex((p, k) => Math.abs(p[1] - 1) < 1e-9 && p[0] > 0.2 && p[2] > 0.2 && m.ids.filter((w) => w === m.ids[k]).length === 1);
+    const m: Malha = { ...liso, pos: liso.pos.map((p: V3) => [...p] as V3) };
+    const i = m.pos.findIndex((p: V3, k: number) => Math.abs(p[1] - 1) < 1e-9 && p[0] > 0.2 && p[2] > 0.2 && m.ids.filter((w: number) => w === m.ids[k]).length === 1);
     expect(i).toBeGreaterThanOrEqual(0);
     m.pos[i] = [m.pos[i][0] * 0.6, m.pos[i][1], m.pos[i][2] * 0.6];
     const nrm = normaisSuaves(m.pos, m.tris, m.ids);
