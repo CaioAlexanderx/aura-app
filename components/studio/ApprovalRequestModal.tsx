@@ -28,7 +28,17 @@ import { type StudioPalette } from "@/constants/studio-tokens";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { studioApi, type StudioOrder, type StudioApprovalCreated } from "@/services/studioApi";
 import { studioVisualApi } from "@/services/studioVisualApi";
-import { gerarRenderDoPedido } from "@/components/studio/visualEngine/gerarRenderAprovacao";
+import { gerarRenderDoPedido, type EtapaDoRender } from "@/components/studio/visualEngine/gerarRenderAprovacao";
+
+// O que o botão diz em cada etapa do "Gerar do pedido" (28/09/2026: sem
+// isso a lojista via só o spinner e não sabia se a aba tinha travado).
+const TEXTO_DA_ETAPA: Record<EtapaDoRender, string> = {
+  pedido: "Lendo o pedido…",
+  mockup: "Montando o mockup…",
+  video: "Gravando o vídeo da peça…",
+  arquivo: "Preparando o arquivo…",
+  envio: "Enviando…",
+};
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { pickImageBase64, uploadStudioMockup } from "@/services/studioUploadApi";
@@ -58,6 +68,7 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
   const [renderHashShort, setRenderHashShort] = useState<string | null>(null);
   const [renderIsVideo, setRenderIsVideo] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [etapa, setEtapa] = useState<EtapaDoRender | null>(null);
   // FIX (achado do QA, LJ-36, 28/09/2026): quando o servidor falhava
   // (POST /studio/visual-renders 500), o botão girava e voltava ao
   // normal SEM mensagem nenhuma. Erro inline, sempre visível — não só o
@@ -96,7 +107,7 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
         if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => setTimeout(r, 0));
         else setTimeout(r, 0);
       });
-      const r = await gerarRenderDoPedido(company.id, order.id);
+      const r = await gerarRenderDoPedido(company.id, order.id, setEtapa);
       setMockupUrl(r.url);
       setRenderId(r.renderId);
       setRenderHashShort(r.contentHash.slice(0, 12));
@@ -118,6 +129,7 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
       toast.error(msg);
     } finally {
       setGenerating(false);
+      setEtapa(null);
     }
   }
 
@@ -249,7 +261,10 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
               disabled={generating}
             >
               {generating ? (
-                <ActivityIndicator color={t.primary} />
+                <>
+                  <ActivityIndicator color={t.primary} />
+                  {etapa ? <Text style={s.generateBtnTxt} testID="etapa-gerar-mockup">{TEXTO_DA_ETAPA[etapa]}</Text> : null}
+                </>
               ) : (
                 <>
                   <Icon name="zap" size={16} color={t.primary} />
