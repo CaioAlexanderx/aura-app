@@ -11,12 +11,19 @@ jest.mock("@/components/screens/financeiro/quadro/MoverSheet", () => {
   const R = require("react");
   return { ...real, MoverSheet: (p: any) => (p.alvo ? R.createElement(real.MoverSheetConteudo, p) : null) };
 });
+jest.mock("@/components/screens/financeiro/quadro/LoteSheet", () => {
+  const real = jest.requireActual("@/components/screens/financeiro/quadro/LoteSheet");
+  const R = require("react");
+  return { ...real, LoteSheet: (p: any) => (p.cartoes && p.cartoes.length ? R.createElement(real.LoteSheetConteudo, p) : null) };
+});
 jest.mock("@/components/CalendarioDoDia", () => ({ CalendarioDoDia: () => null }));
 jest.mock("@/components/Toast", () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn(), warning: jest.fn() } }));
 
 const mockMover = jest.fn();
+const mockPagarVarios = jest.fn();
 const mockQuadro = {
   type: "income", month: "2026-09", today: "2026-09-28", limit_per_column: 150,
+  week: { count: 2, total: 482, until: "2026-10-04" },
   columns: {
     atrasado: { total: 97.5, count: 1, items: [
       { id: "a", description: "Parcela calça", category: "Vendas", amount: 97.5, status: "pending", date: "2026-08-30", due_date: "2026-08-30", paid_at: null, payment_method: null, notes: null, employee_name: null, recurrence_type: null, recurrence_index: null, movable: true },
@@ -26,12 +33,12 @@ const mockQuadro = {
     ] },
     feito: { total: 1534.7, count: 10, items: [
       { id: "c", description: "Pedido da vitrine", category: "Vendas", amount: 250, original_amount: 240, status: "confirmed", date: "2026-09-05", due_date: "2026-09-05", paid_at: "2026-09-05T03:00:00.000Z", payment_method: "pix", notes: null, employee_name: null, recurrence_type: null, recurrence_index: null, movable: false },
-    ], grupos: [{ date: "2026-09-27", origem: "caixa", count: 9, total: 1284.7 }] },
+    ], grupos: [{ date: "2026-09-27", origem: "caixa", count: 9, total: 1284.7 }], diferenca: { a_mais: 10, a_menos: 0, count_a_mais: 1 } },
   },
 };
 
 jest.mock("@/hooks/useQuadroFinanceiro", () => ({
-  useQuadroFinanceiro: () => ({ quadro: mockQuadro, carregando: false, erro: false, recarregar: jest.fn(), mover: mockMover, salvando: false }),
+  useQuadroFinanceiro: () => ({ quadro: mockQuadro, carregando: false, erro: false, recarregar: jest.fn(), mover: mockMover, pagarVarios: mockPagarVarios, pagandoVarios: false, salvando: false }),
 }));
 
 import { QuadroFinanceiro } from "@/components/screens/financeiro/quadro/QuadroFinanceiro";
@@ -55,7 +62,7 @@ const porTestID = (t: renderer.ReactTestRenderer, id: string) =>
   t.root.findAll((n) => n.props && n.props.testID === id && typeof n.type !== "string")[0];
 
 describe("QuadroFinanceiro", () => {
-  beforeEach(() => mockMover.mockReset());
+  beforeEach(() => { mockMover.mockReset(); mockPagarVarios.mockReset(); });
 
   it("colunas na ordem Atrasado · A receber · Recebido", () => {
     const t = render();
@@ -112,5 +119,35 @@ describe("QuadroFinanceiro", () => {
     expect(porTestID(t, "quadro-editar-c")).toBeUndefined();
     act(() => { porTestID(t, "quadro-editar-a").props.onPress(); });
     expect(mockEditar).toHaveBeenCalledWith(expect.objectContaining({ id: "a", desc: "Parcela calça", type: "income", amount: 97.5, employee_id: null }));
+  });
+
+  it("faixa da semana e linha do que entrou a mais no mês", () => {
+    const s = texto(render().toJSON());
+    expect(s).toMatch(/A receber nesta semana: 2 lançamentos · R\$\s*482,00 \(até 04\/10\)/);
+    expect(s).toMatch(/Recebido a mais em setembro: R\$\s*10,00 \(1 recebimento\)/);
+  });
+
+  it("Receber vários: marca dois, confirma e manda um POST só", () => {
+    const t = render();
+    act(() => { porTestID(t, "quadro-pagar-varios").props.onPress(); });
+    expect(porTestID(t, "quadro-baixa-a")).toBeUndefined();
+    act(() => { porTestID(t, "quadro-marcar-a").props.onPress(); });
+    act(() => { porTestID(t, "quadro-marcar-b").props.onPress(); });
+    expect(texto(t.toJSON())).toMatch(/2\s+selecionados\s+·\s+R\$\s*529,50/);
+    act(() => { porTestID(t, "quadro-lote-abrir").props.onPress(); });
+    act(() => { porTestID(t, "lote-valor-a").props.onChangeText("10000"); });
+    act(() => { porTestID(t, "lote-confirmar").props.onPress(); });
+    expect(mockPagarVarios).toHaveBeenCalledTimes(1);
+    expect(mockPagarVarios.mock.calls[0][0]).toEqual({
+      items: [{ id: "a", paid_amount: 100 }, { id: "b" }],
+      paid_at: "2026-09-28",
+      payment_method: "pix",
+    });
+  });
+
+  it("cartão pago e travado não viram caixinha no modo de seleção", () => {
+    const t = render();
+    act(() => { porTestID(t, "quadro-pagar-varios").props.onPress(); });
+    expect(porTestID(t, "quadro-marcar-c")).toBeUndefined();
   });
 });

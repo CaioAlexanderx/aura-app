@@ -2,7 +2,7 @@
 // selos de prazo, meses e a atualização otimista do cache.
 import {
   aplicarMovimento, diasEntre, mesDeOrigem, motivoDoBloqueio, movimento, nomeDoMes,
-  rotulos, seloDoPrazo, somarMes, corpoDoMovimento, cartaoParaLancamento, type CartaoQuadro, type Quadro,
+  rotulos, seloDoPrazo, somarMes, corpoDoMovimento, cartaoParaLancamento, textoDaSemana, textoDaDiferencaDoMes, corpoDoLote, podeEntrarNoLote, type CartaoQuadro, type Quadro,
 } from "@/utils/quadroFinanceiro";
 
 function cartao(over: Partial<CartaoQuadro>): CartaoQuadro {
@@ -153,3 +153,35 @@ describe("valor pago na baixa (28/09/2026)", () => {
     expect(c).toMatchObject({ amount: 250, original_amount: null, status: "pending" });
   });
 });
+
+describe("F2: semana, juros do mês e lote", () => {
+  const fmt = (n: number) => "R$ " + n.toFixed(2).replace(".", ",");
+
+  it("textoDaSemana", () => {
+    expect(textoDaSemana("expense", { count: 3, total: 1240, until: "2026-10-04" }, fmt)).toBe("Vencem nesta semana: 3 contas · R$ 1240,00 (até 04/10)");
+    expect(textoDaSemana("expense", { count: 1, total: 50, until: null }, fmt)).toBe("Vencem nesta semana: 1 conta · R$ 50,00");
+    expect(textoDaSemana("expense", { count: 0, total: 0, until: null }, fmt)).toBeNull();
+    expect(textoDaSemana("income", undefined, fmt)).toBeNull();
+  });
+
+  it("textoDaDiferencaDoMes", () => {
+    expect(textoDaDiferencaDoMes("expense", { a_mais: 43.2, a_menos: 0, count_a_mais: 5 }, "2026-09", fmt)).toBe("Juros e multas pagos em setembro: R$ 43,20 (5 contas)");
+    expect(textoDaDiferencaDoMes("expense", { a_mais: 6.4, a_menos: 5, count_a_mais: 1 }, "2026-09", fmt)).toBe("Juros e multas pagos em setembro: R$ 6,40 (1 conta) · descontos R$ 5,00");
+    expect(textoDaDiferencaDoMes("expense", { a_mais: 0, a_menos: 5, count_a_mais: 0 }, "2026-09", fmt)).toBe("Descontos em setembro: R$ 5,00");
+    expect(textoDaDiferencaDoMes("expense", { a_mais: 0, a_menos: 0, count_a_mais: 0 }, "2026-09", fmt)).toBeNull();
+  });
+
+  it("corpoDoLote: valor pago só quando difere", () => {
+    const a = cartao({ id: "a", amount: 180 });
+    const b = cartao({ id: "b", amount: 99.9 });
+    expect(corpoDoLote({ itens: [{ cartao: a, valorPago: 186.4 }, { cartao: b, valorPago: 99.9 }], data: "2026-09-28", forma: "boleto" }))
+      .toEqual({ items: [{ id: "a", paid_amount: 186.4 }, { id: "b" }], paid_at: "2026-09-28", payment_method: "boleto" });
+  });
+
+  it("podeEntrarNoLote: pendente e editável", () => {
+    expect(podeEntrarNoLote(cartao({}), "atrasado")).toBe(true);
+    expect(podeEntrarNoLote(cartao({}), "feito")).toBe(false);
+    expect(podeEntrarNoLote(cartao({ movable: false }), "aberto")).toBe(false);
+  });
+});
+

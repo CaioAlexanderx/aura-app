@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { companiesApi } from "@/services/api";
 import { toast } from "@/components/Toast";
 import { invalidateFinanceiroQueries } from "@/hooks/useTransactions";
-import { aplicarMovimento, corpoDoMovimento, ddmm, rotulos, type PedidoDeMovimento, type Quadro, type TipoQuadro } from "@/utils/quadroFinanceiro";
+import { aplicarMovimento, corpoDoLote, corpoDoMovimento, ddmm, rotulos, type PedidoDeMovimento, type Quadro, type TipoQuadro } from "@/utils/quadroFinanceiro";
 
 export { corpoDoMovimento, type PedidoDeMovimento };
 
@@ -49,6 +49,21 @@ export function useQuadroFinanceiro(companyId: string | null | undefined, tipo: 
     },
   });
 
+  // F2: pagar vários de uma vez. Sem otimista (o servidor decide quem pula);
+  // o quadro recarrega no fim.
+  const lote = useMutation({
+    mutationFn: (corpo: ReturnType<typeof corpoDoLote>) => companiesApi.transactionsBaixaEmLote(companyId as string, corpo),
+    onSuccess: (r: any) => {
+      const n = Number(r?.updated) || 0;
+      const verbo = tipo === "expense" ? (n === 1 ? " pago" : " pagos") : (n === 1 ? " recebido" : " recebidos");
+      toast.success(n + (n === 1 ? " lançamento" : " lançamentos") + verbo + ".");
+      const pulados = Array.isArray(r?.skipped) ? r.skipped.length : 0;
+      if (pulados) toast.warning(pulados + (pulados === 1 ? " lançamento não recebeu" : " lançamentos não receberam") + " baixa: já estavam pagos ou mudam por outro fluxo.");
+    },
+    onError: (err: any) => { toast.error(err?.message || "Não deu para dar baixa. Confira a conexão e tente de novo."); },
+    onSettled: () => { invalidateFinanceiroQueries(qc, companyId); },
+  });
+
   return {
     quadro: consulta.data,
     carregando: consulta.isLoading,
@@ -56,5 +71,7 @@ export function useQuadroFinanceiro(companyId: string | null | undefined, tipo: 
     recarregar: consulta.refetch,
     mover: mover.mutate,
     salvando: mover.isPending,
+    pagarVarios: lote.mutate,
+    pagandoVarios: lote.isPending,
   };
 }

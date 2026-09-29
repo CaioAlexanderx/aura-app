@@ -38,7 +38,13 @@ export type CartaoQuadro = {
 
 export type GrupoQuadro = { date: string; origem: "caixa" | "taxas"; count: number; total: number };
 
-export type ColunaDados = { total: number; count: number; items: CartaoQuadro[]; grupos?: GrupoQuadro[] };
+/** F2: pago a mais (juros/multa) ou a menos (desconto) que o valor original, no mês. */
+export type DiferencaDoMes = { a_mais: number; a_menos: number; count_a_mais: number };
+
+export type ColunaDados = { total: number; count: number; items: CartaoQuadro[]; grupos?: GrupoQuadro[]; diferenca?: DiferencaDoMes };
+
+/** F2: pendentes de hoje até hoje+6, de qualquer mês. */
+export type SemanaDoQuadro = { count: number; total: number; until: string | null };
 
 export type Quadro = {
   type: TipoQuadro;
@@ -46,6 +52,7 @@ export type Quadro = {
   today: string;
   limit_per_column: number;
   columns: Record<ColunaQuadro, ColunaDados>;
+  week?: SemanaDoQuadro;
 };
 
 export const ORDEM_DAS_COLUNAS: ColunaQuadro[] = ["atrasado", "aberto", "feito"];
@@ -223,6 +230,46 @@ export function cartaoParaLancamento(c: CartaoQuadro, tipo: TipoQuadro) {
     employee_id: c.employee_id ?? null,
     employee_name: c.employee_name,
     idempotency_key: null,
+  };
+}
+
+// ── F2 (28/09/2026) ─────────────────────────────────────────
+
+/** Faixa do topo: "Vencem nesta semana: 2 contas · R$ 120,00 (até 04/10)". */
+export function textoDaSemana(tipo: TipoQuadro, w: SemanaDoQuadro | undefined, fmt: (n: number) => string): string | null {
+  if (!w || !w.count) return null;
+  const itens = w.count + (w.count === 1 ? (tipo === "expense" ? " conta" : " lançamento") : (tipo === "expense" ? " contas" : " lançamentos"));
+  const ate = w.until ? " (até " + ddmm(w.until) + ")" : "";
+  return (tipo === "expense" ? "Vencem nesta semana: " : "A receber nesta semana: ") + itens + " · " + fmt(w.total) + ate;
+}
+
+/** Linha do mês: "Juros e multas pagos em setembro: R$ 6,40 (1 conta) · descontos R$ 5,00". */
+export function textoDaDiferencaDoMes(tipo: TipoQuadro, d: DiferencaDoMes | undefined, mes: string, fmt: (n: number) => string): string | null {
+  if (!d || (!(d.a_mais > 0) && !(d.a_menos > 0))) return null;
+  const nomeMes = MESES[Number(mes.slice(5, 7)) - 1] || "";
+  const partes: string[] = [];
+  if (d.a_mais > 0) {
+    const qtd = d.count_a_mais ? " (" + d.count_a_mais + (d.count_a_mais === 1 ? (tipo === "expense" ? " conta" : " recebimento") : (tipo === "expense" ? " contas" : " recebimentos")) + ")" : "";
+    partes.push((tipo === "expense" ? "Juros e multas pagos em " : "Recebido a mais em ") + nomeMes + ": " + fmt(d.a_mais) + qtd);
+  }
+  if (d.a_menos > 0) partes.push((partes.length ? "descontos " : "Descontos em " + nomeMes + ": ") + fmt(d.a_menos));
+  return partes.join(" · ");
+}
+
+/** Cartões que podem entrar no "Pagar vários": pendentes (atrasado ou aberto) e movable. */
+export function podeEntrarNoLote(c: CartaoQuadro, coluna: ColunaQuadro): boolean {
+  return c.movable && coluna !== "feito";
+}
+
+export type ItemDoLote = { id: string; paid_amount?: number };
+
+/** Corpo do POST /baixa-em-lote: valor pago só vai quando difere do lançamento. */
+export function corpoDoLote(p: { itens: { cartao: CartaoQuadro; valorPago: number }[]; data?: string; forma?: string | null }) {
+  return {
+    items: p.itens.map(({ cartao, valorPago }) =>
+      valorPago > 0 && Math.abs(valorPago - cartao.amount) >= 0.005 ? { id: cartao.id, paid_amount: valorPago } : { id: cartao.id }),
+    paid_at: p.data || undefined,
+    payment_method: p.forma || undefined,
   };
 }
 
