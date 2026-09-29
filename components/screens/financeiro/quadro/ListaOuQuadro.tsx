@@ -3,7 +3,7 @@
 // A escolha fica lembrada por aparelho. Sem empresa individual (consolidado)
 // ou em demonstração, só a lista existe e a alternância nem aparece.
 // ============================================================
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import { QuadroFinanceiro } from "./QuadroFinanceiro";
@@ -23,8 +23,13 @@ function gravarVisao(v: VisaoLancamentos) {
   try { if (typeof localStorage !== "undefined") localStorage.setItem(CHAVE, v); } catch { /* aba anônima */ }
 }
 
-export function ListaOuQuadro({ podeQuadro, companyId, onEditar, children }: { podeQuadro: boolean; companyId?: string | null; onEditar?: (tx: Transaction) => void; children: ReactNode }) {
-  const [visao, setVisao] = useState<VisaoLancamentos>(lerVisao);
+/** F4: pedido de foco vindo de um atraso clicado (n muda a cada clique). */
+export type FocoDoQuadro = { tipo: "income" | "expense"; n: number } | null;
+
+export function ListaOuQuadro({ podeQuadro, companyId, onEditar, foco, children }: { podeQuadro: boolean; companyId?: string | null; onEditar?: (tx: Transaction) => void; foco?: FocoDoQuadro; children: ReactNode }) {
+  const [visao, setVisao] = useState<VisaoLancamentos>(() => (foco ? "quadro" : lerVisao()));
+  // Clicou num atraso: o Quadro abre (e fica lembrado), mesmo com a aba já montada.
+  useEffect(() => { if (foco) { setVisao("quadro"); gravarVisao("quadro"); } }, [foco?.n]);
   if (!podeQuadro || !companyId) return <>{children}</>;
 
   function trocar(v: VisaoLancamentos) { setVisao(v); gravarVisao(v); }
@@ -39,7 +44,7 @@ export function ListaOuQuadro({ podeQuadro, companyId, onEditar, children }: { p
           </Pressable>
         ))}
       </View>
-      {visao === "quadro" ? <QuadroFinanceiro companyId={companyId} onEditar={onEditar ? (l) => onEditar(l as Transaction) : undefined} /> : children}
+      {visao === "quadro" ? <QuadroFinanceiro companyId={companyId} foco={foco} onEditar={onEditar ? (l) => onEditar(l as Transaction) : undefined} /> : children}
     </View>
   );
 }

@@ -47,6 +47,8 @@ type Props = {
   consolidated: boolean;
   // Leva pra aba Lancamentos: e la que estao os nomes por tras dos prazos.
   onSeeItems?: () => void;
+  onVerAtrasados?: (tipo: "income" | "expense") => void;
+  onVerCrediarioAtrasado?: () => void;
 };
 
 function groupExpenseByCategory(txs: Transaction[]): { label: string; value: number; pct: number }[] {
@@ -76,7 +78,7 @@ function dailyExpenseSeries(txs: Transaction[]): { day: number; value: number }[
   });
 }
 
-export function TabDespesas({ transactions, summary, previousSummary, period, consolidated, onSeeItems }: Props) {
+export function TabDespesas({ transactions, summary, previousSummary, period, consolidated, onSeeItems, onVerAtrasados, onVerCrediarioAtrasado }: Props) {
   var { width: vw } = useWindowDimensions();
   var NARROW = vw < 480;
   var IS_WIDE = vw > 768;
@@ -153,7 +155,7 @@ export function TabDespesas({ transactions, summary, previousSummary, period, co
             contas. O titulo passa a descrever o que esta na tela. */}
         <Text style={[s.cardTitle, { color: Colors.ink }]}>Quando você vai pagar</Text>
         {/* Mesmo caso do TabReceitas: fallback nao pode ser spinner eterno. */}
-        {eb?.timeline ? <Timeline buckets={eb.timeline} kind="payable" onSeeItems={onSeeItems} /> : (
+        {eb?.timeline ? <Timeline buckets={eb.timeline} kind="payable" onSeeItems={onSeeItems} onVerAtrasados={onVerAtrasados ? function() { onVerAtrasados("expense"); } : undefined} onVerCrediarioAtrasado={onVerCrediarioAtrasado} /> : (
           <View style={s.empty}>
             <Text style={[s.emptyText, { color: Colors.ink3 }]}>
               {payable > 0

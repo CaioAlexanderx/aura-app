@@ -19,6 +19,7 @@
 // Solução: dowTrack recebe height:96 explícita; dowBars perde height+alignItems.
 
 import { View, Text, StyleSheet, Platform, Dimensions, Pressable } from "react-native";
+import { destinoPrincipal, detalheDoAtraso, partesDaFaixa } from "@/utils/atrasos";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { fmt, fmtK } from "../types";
@@ -205,9 +206,13 @@ export function HBarList({ items, kind }: { items: PaymentMethodSlice[]; kind: "
 // ============================================================
 // Timeline — atrasadas / esta_semana / este_mes / futuras
 // ============================================================
-export function Timeline({ buckets, kind, onSeeItems }: {
+export function Timeline({ buckets, kind, onSeeItems, onVerAtrasados, onVerCrediarioAtrasado }: {
   buckets: TimelineBuckets;
   kind: "receivable" | "payable";
+  // F4 (29/09/2026): "Atrasadas" leva ao Quadro (coluna Atrasado) e a parte do
+  // crediário, se houver, à tela do Crediário já filtrada.
+  onVerAtrasados?: () => void;
+  onVerCrediarioAtrasado?: () => void;
   // Leva pra lista de lancamentos, onde estao os nomes. O card mostra prazos;
   // quem quer saber DE QUEM precisa de um caminho, nao de um titulo que promete.
   onSeeItems?: () => void;
@@ -257,6 +262,39 @@ export function Timeline({ buckets, kind, onSeeItems }: {
       <View style={{ marginTop: 14, gap: 10 }}>
         {rows.map(function(r) {
           if (r.b.count === 0 && r.b.total === 0) return null;
+          if (r.key === "atrasadas" && (onVerAtrasados || onVerCrediarioAtrasado)) {
+            var partes = partesDaFaixa(r.b as any);
+            var irCred = onVerCrediarioAtrasado && partes.crediario.count > 0 ? onVerCrediarioAtrasado : null;
+            var irContas = onVerAtrasados && partes.contas.count > 0 ? onVerAtrasados : null;
+            var principal = destinoPrincipal(partes) === "crediario" ? (irCred || irContas) : (irContas || irCred);
+            var sub = partes.crediario.count > 0
+              ? detalheDoAtraso(partes, fmt, { rotuloContas: kind === "receivable" ? "a receber" : "a pagar" }).replace(/\.$/, "")
+              : r.b.count + " " + (r.b.count === 1 ? "lançamento" : "lançamentos") + " · " + r.urgentCopy;
+            return (
+              <View key={r.key} style={{ gap: 4 }}>
+                <Pressable onPress={principal || undefined} disabled={!principal} accessibilityRole="button" testID="timeline-atrasadas"
+                  accessibilityLabel={"Atrasadas: " + fmt(r.b.total) + ". Ver onde está o atraso"}
+                  style={({ hovered }: any) => [s.timelineRow, isWeb && hovered ? { opacity: 0.8 } : null, isWeb ? ({ cursor: "pointer" } as any) : null]}>
+                  <View style={[s.timelineDot, { backgroundColor: r.c }]} />
+                  <View style={s.timelineText}>
+                    <Text style={[s.timelineLabel, { color: Colors.ink }]}>{r.label} ›</Text>
+                    <Text style={[s.timelineSub, { color: Colors.ink3 }]}>{sub}</Text>
+                  </View>
+                  <Text style={[s.timelineValue, { color: r.c }]}>{fmtK(r.b.total)}</Text>
+                </Pressable>
+                {irCred && irContas && (
+                  <View style={{ flexDirection: "row", gap: 14, paddingLeft: 18 }}>
+                    <Pressable onPress={irCred} accessibilityRole="link" testID="timeline-link-crediario" hitSlop={6}>
+                      <Text style={{ color: Colors.violet3, fontSize: 12, fontWeight: "600" }}>Ver no crediário ›</Text>
+                    </Pressable>
+                    <Pressable onPress={irContas} accessibilityRole="link" testID="timeline-link-quadro" hitSlop={6}>
+                      <Text style={{ color: Colors.violet3, fontSize: 12, fontWeight: "600" }}>Ver no quadro ›</Text>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            );
+          }
           return (
             <View key={r.key} {...tip(r.label + ": " + r.b.count + " " + (r.b.count === 1 ? "lançamento" : "lançamentos") + " · " + fmt(r.b.total))} style={s.timelineRow}>
               <View style={[s.timelineDot, { backgroundColor: r.c }]} />

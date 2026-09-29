@@ -33,7 +33,8 @@ export type PaymentMethodSlice = {
   pct: number;
 };
 
-export type TimelineBucket = { total: number; count: number };
+// F4 (29/09/2026): parte do crediário dentro da faixa (resolve na tela do Crediário).
+export type TimelineBucket = { total: number; count: number; crediario?: { total: number; count: number } };
 export type TimelineBuckets = {
   atrasadas: TimelineBucket;
   esta_semana: TimelineBucket;
@@ -129,6 +130,8 @@ export type FinancialInsights = {
     impact_days: number;
     count: number;
     oldest_days?: number;
+    // F4: onde está cada parte do atraso (crediário → Crediário; contas → Quadro).
+    split?: { crediario: { amount: number; count: number }; contas: { amount: number; count: number } };
   } | null;
   income_breakdown?: IncomeBreakdown;
   expense_breakdown?: ExpenseBreakdown;

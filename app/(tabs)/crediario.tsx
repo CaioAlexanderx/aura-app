@@ -253,7 +253,7 @@ export default function CrediarioScreen() {
   const loadCompanies = useAuthStore((st) => st.loadCompanies);
   const switchCompany = useAuthStore((st) => st.switchCompany);
   const switching = useAuthStore((st) => st.switching);
-  const params = useLocalSearchParams<{ cliente?: string }>();
+  const params = useLocalSearchParams<{ cliente?: string; filtro?: string }>();
   const qc = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   // Fase 2 do Credito Livre (02/08/2026): esta tela nao tinha abas -- era
@@ -320,6 +320,12 @@ export default function CrediarioScreen() {
   const [sortOrder, setSortOrder] = useState<SortOrder>("balance");
   // F2: filtro único (todos | atraso | faixa de aging) — substitui chips + agingFilter.
   const [filterSel, setFilterSel] = useState<FilterSel>("todos");
+  // F4 (29/09/2026): o atraso clicado no Financeiro chega com ?filtro=atraso.
+  useEffect(() => {
+    if (params.filtro !== "atraso") return;
+    setFilterSel("atraso");
+    try { router.setParams({ filtro: undefined } as any); } catch {}
+  }, [params.filtro]);
 
   const toggleFilter = useCallback((f: FilterSel) => {
     setFilterSel(prev => (prev === f ? "todos" : f));
