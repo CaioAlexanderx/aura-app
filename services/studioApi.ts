@@ -56,6 +56,10 @@ export type CustomizationConfig = {
   // peça na prévia (sublimação = a arte pega a cor da peça; DTF = opaca,
   // o branco é impresso). Sem valor: o padrão da peça (layoutDaArte).
   tecnica?: "sublimacao" | "dtf" | "outra" | null;
+  // Serviço de arte (29/09/2026): true = os preços de ajuste/criação
+  // seguem `studio_settings.art_service_defaults`; o backend propaga o
+  // padrão da loja a quem segue. false/ausente = preços próprios.
+  art_service_use_store_default?: boolean;
 };
 export type CustomizationConfigResponse = {
   product_id: string; name: string; is_personalizable: boolean; config: CustomizationConfig | null;
@@ -386,6 +390,10 @@ export type StudioSettings = {
   revision_policy_text?: string;
   // Camada 1 P1: gate de produção opt-in
   require_deposit_for_production?: boolean;
+  // Serviço de arte (29/09/2026): o padrão da loja para "ajustar a arte da
+  // cliente" e "criar do zero". Os produtos com
+  // `customization_config.art_service_use_store_default` seguem este valor.
+  art_service_defaults?: { adjust_price: number; design_price: number } | null;
   [key: string]: any;
 };
 

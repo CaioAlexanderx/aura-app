@@ -7,6 +7,9 @@
 //     ABA (saveCustomizationConfig) com mockup_foto.front certo;
 //   - sem fotos: o estado vazio; com modelo da Aura: o aviso;
 //   - cantos cruzados: não deixa salvar.
+//
+// 29/09/2026 — ficha redesenhada: a marcação abre em modal pelo botão
+// "Marcar a área na foto" (bloco 1 sem modelo; no Avançado com modelo).
 // ============================================================
 import React from "react";
 import { render, screen, fireEvent, waitFor, configure, act } from "@testing-library/react-native";
@@ -23,6 +26,14 @@ configure({
   },
 } as any);
 
+// O Modal do react-native-web abre um portal no document, que o
+// renderizador de teste não tem: aqui ele só passa os filhos adiante.
+jest.mock("react-native", () => {
+  const RN = jest.requireActual("react-native");
+  const R = require("react");
+  const Modal = ({ visible, children }: any) => (visible === false ? null : R.createElement(R.Fragment, null, children));
+  return new Proxy(RN, { get: (alvo: any, k: string) => (k === "Modal" ? Modal : alvo[k]) });
+});
 jest.mock("react-native-svg", () => {
   const R = require("react");
   const stub = (nome: string) => (props: any) => R.createElement(nome, props, props.children);
@@ -30,6 +41,8 @@ jest.mock("react-native-svg", () => {
 });
 // StudioEmpty puxa o AuraStudioMark (reanimated); fora do assunto.
 jest.mock("@/components/studio/StudioEmpty", () => ({ StudioEmpty: () => null }));
+// O vinculador da galeria (StudioTemplatesPanel) puxa o StudioLoading (reanimated).
+jest.mock("@/components/studio/EscolherDaGaleriaModal", () => ({ EscolherDaGaleriaModal: () => null }));
 jest.mock("@/components/Toast", () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 jest.mock("@/components/studio/visualEngine/EnginePreview", () => ({
   EnginePreview: () => null,
@@ -51,6 +64,8 @@ jest.mock("@/services/studioApi", () => ({
     saveCustomizationConfig: (...a: any[]) => mockSave(...a),
     togglePersonalizable: jest.fn(),
     suggestTemplates: jest.fn(),
+    getSettings: () => Promise.resolve({ settings: {} }),
+    saveSettings: jest.fn(),
   },
 }));
 const mockVinculo = jest.fn();
@@ -93,6 +108,10 @@ async function montar(cfg: any, fotos = [FOTO1, FOTO2]) {
   render(
     <StudioPersonalizacaoPanel productId="p1" companyId="c1" productName="Camiseta" productPrice={59.9} slug="aura-qa" fotos={fotos} />
   );
+  // Com modelo vinculado o botão mora no Avançado; sem, no bloco 1. Abrir
+  // o Avançado antes cobre os dois casos.
+  await act(async () => { fireEvent.press(await screen.findByLabelText("Avançado")); });
+  await act(async () => { fireEvent.press(await screen.findByLabelText("Marcar a área na foto")); });
   await screen.findByText(AJUDA);
 }
 
@@ -142,7 +161,7 @@ it("primeira marcação: estado vazio, depois foto e salvar", async () => {
   });
 });
 
-it("produto sem fotos: o estado vazio da aba Dados", async () => {
+it("produto sem fotos: o estado vazio da aba Produto", async () => {
   await montar(configBase(), []);
   expect(screen.getByText("Este produto ainda não tem foto")).toBeTruthy();
   expect(screen.queryByLabelText("Salvar posição")).toBeNull();

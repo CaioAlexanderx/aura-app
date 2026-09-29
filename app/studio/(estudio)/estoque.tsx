@@ -8,7 +8,13 @@
 // 19/08/2026 — Enxugamento (análise de UI): os 4 accordions
 // (abre/fecha empilhado) viraram TABS fixas dentro da expansão:
 //
-//   [ Dados ] [ Personalização ] [ Ficha técnica ] [ Templates ]
+//   [ Produto ] [ Personalização ] [ Custo ]
+//
+// 29/09/2026 — ficha de personalização redesenhada: de 4 abas para 3.
+// "Dados" virou "Produto", "Ficha técnica" virou "Custo" (só o nome) e a
+// aba Templates saiu: o vinculador abre em modal pelo cartão "Arte da
+// cliente" (EscolherDaGaleriaModal). Ver
+// docs/studio/ficha-de-personalizacao-diagnostico.md.
 //
 // - 1 clique pra trocar de seção, nada de abre/fecha nem scroll longo.
 // - Dot de status colorido em cada tab (ok/parcial/vazio).
@@ -56,7 +62,6 @@ import { fotosDoProduto } from "@/components/studio/visualEngine/marcacaoDaFoto"
 import { isCanonicalConfig } from "@/components/studio/customizationConfig";
 import type { CustomizationConfig } from "@/services/studioApi";
 import StudioFichaTecnicaPanel from "@/components/studio/StudioFichaTecnicaPanel";
-import StudioTemplatesPanel from "@/components/studio/StudioTemplatesPanel";
 import StudioNewProductWizard from "@/components/studio/StudioNewProductWizard";
 import ProductGalleryEditor from "@/components/studio/ProductGalleryEditor";
 import VisualTemplateThumb from "@/components/studio/visualEngine/VisualTemplateThumb";
@@ -88,7 +93,7 @@ type StudioProduct = {
   visual_template_key?: string | null;
 };
 
-type SectionKey = "basico" | "personalizacao" | "ficha" | "templates";
+type SectionKey = "basico" | "personalizacao" | "ficha";
 type FilterKey = "all" | "personalizable" | "nonpersonalizable";
 
 type SectionStatus = "ok" | "partial" | "empty";
@@ -366,7 +371,7 @@ export default function StudioEstoque() {
             <StudioPageHeader
               eyebrow="ESTÚDIO · PRODUTOS & ESTOQUE"
               title="Catálogo Studio"
-              subtitle="Clique num produto para abrir tudo: dados básicos, personalização, ficha técnica e templates — na mesma tela."
+              subtitle="Clique num produto para abrir tudo: produto, personalização e custo — na mesma tela."
               rightSlot={headerRight}
             />
 
@@ -603,7 +608,7 @@ function ProductRow({
 
 // ───────────────────────────────────────────────────────────
 // ProductExpanded — produto expandido inline (mesma tela)
-// Sticky header + tabs (Dados · Personalização · Ficha · Templates)
+// Sticky header + tabs (Produto · Personalização · Custo)
 // ───────────────────────────────────────────────────────────
 function ProductExpanded({
   product, companyId, slug, t, s,
@@ -644,22 +649,14 @@ function ProductExpanded({
     return isCanonicalConfig(cfg) ? "ok" : "partial";
   }, [product.is_personalizable, product.customization_config]);
 
-  const templatesStatus: SectionStatus = useMemo(() => {
-    const c = product.template_count || 0;
-    if (c >= 3) return "ok";
-    if (c >= 1) return "partial";
-    return "empty";
-  }, [product.template_count]);
-
   const personalizableChip = product.is_personalizable;
   const templateChipQty = product.template_count || 0;
 
-  // Tabs: ficha técnica não tem status derivável do row → sem dot
+  // Tabs: o custo (ficha técnica) não tem status derivável do row → sem dot
   const tabs: Array<{ key: SectionKey; label: string; status: SectionStatus | null }> = [
-    { key: "basico",         label: "Dados",          status: basicoStatus },
+    { key: "basico",         label: "Produto",        status: basicoStatus },
     { key: "personalizacao", label: "Personalização", status: personalizacaoStatus },
-    { key: "ficha",          label: "Ficha técnica",  status: null },
-    { key: "templates",      label: "Templates",      status: templatesStatus },
+    { key: "ficha",          label: "Custo",          status: null },
   ];
 
   const statusDotColor = (status: SectionStatus | null): string | null => {
@@ -757,7 +754,9 @@ function ProductExpanded({
       </View>
 
       {/* Conteúdo da tab ativa */}
-      <View style={s.tabContent}>
+      {/* overflow visível na Personalização: com hidden, a prévia e o
+          Salvar (position: sticky) não grudariam na rolagem da página. */}
+      <View style={[s.tabContent, activeTab === "personalizacao" && { overflow: "visible" }]}>
         {activeTab === "basico" && (
           <View style={s.tabContentPad}>
             <BasicoForm
@@ -780,6 +779,10 @@ function ProductExpanded({
             slug={slug}
             onSaved={() => onSubpanelChanged()}
             fotos={fotosDoProduto(product.image_url, product.gallery_urls)}
+            templateCount={product.template_count || 0}
+            onTemplateCountChanged={(n) => {
+              if (n !== (product.template_count || 0)) onProductPatched({ template_count: n });
+            }}
           />
         )}
 
@@ -791,15 +794,6 @@ function ProductExpanded({
             productPrice={product.price}
             customizationConfig={product.customization_config}
             onSaved={() => onSubpanelChanged()}
-          />
-        )}
-
-        {activeTab === "templates" && (
-          <StudioTemplatesPanel
-            productId={product.id}
-            companyId={companyId}
-            productName={product.name}
-            onChanged={() => onSubpanelChanged()}
           />
         )}
       </View>
