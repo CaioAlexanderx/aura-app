@@ -133,7 +133,19 @@ export type Mug3DOptions = {
    * e o dpr 2 quadruplicava o trabalho por quadro (28/09/2026).
    */
   pixelRatio?: number;
+  /**
+   * Enquadramento de retrato (miniaturas, 28/09/2026). Sem ele, a câmera
+   * de sempre. Com ele: a peça gira `giroGraus` a partir do repouso, a
+   * câmera sobe `elevacaoGraus` e se afasta até a peça inteira caber
+   * centrada com `margem` (fração do lado) nos quatro lados; o canvas
+   * usa a própria altura (canvas.height) e o giro automático começa
+   * desligado. Passado na criação; vale também para as peças que entram
+   * por `trocarPeca`.
+   */
+  retrato?: EnquadramentoDeRetrato;
 };
+
+export type EnquadramentoDeRetrato = { margem: number; giroGraus: number; elevacaoGraus: number };
 
 export type Cenario = "estudio" | "gradiente" | "nenhum";
 
@@ -1381,16 +1393,71 @@ export async function createModelViewer(
     camera.lookAt(0, -0.05, 0);
   }
 
+  // Retrato (opção `retrato`): gira a peça e aproxima a câmera até a peça
+  // inteira caber centrada com a margem pedida. Mede pelos vértices da
+  // própria malha projetados na tela — a caixa alinhada aos eixos de uma
+  // caneca girada sobra muito — e corrige alvo e distância em poucas voltas.
+  function enquadrarRetrato(r: EnquadramentoDeRetrato) {
+    const ud = group.userData || (group.userData = {});
+    if (typeof ud.giroDoRetratoBase !== "number") ud.giroDoRetratoBase = group.rotation.y;
+    group.rotation.y = ud.giroDoRetratoBase + (r.giroGraus * Math.PI) / 180;
+    group.updateMatrixWorld(true);
+    const pontos: any[] = [];
+    group.traverse((obj: any) => {
+      const pos = obj.isMesh && obj.visible !== false && obj.geometry?.attributes?.position;
+      if (!pos) return;
+      const passo = Math.max(1, Math.floor(pos.count / 4000));
+      for (let i = 0; i < pos.count; i += passo) {
+        pontos.push(new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(obj.matrixWorld));
+      }
+    });
+    if (!pontos.length) return;
+    const caixa = new THREE.Box3().setFromPoints(pontos);
+    const alvo = caixa.getCenter(new THREE.Vector3());
+    const raio = caixa.getSize(new THREE.Vector3()).length() / 2 || 1;
+    const el = (r.elevacaoGraus * Math.PI) / 180;
+    const dir = new THREE.Vector3(0, Math.sin(el), Math.cos(el));
+    let dist = raio / Math.sin(((camera.fov / 2) * Math.PI) / 180);
+    const util = Math.max(0.2, 1 - 2 * r.margem); // fração do lado que a peça ocupa
+    const v = new THREE.Vector3();
+    const direita = new THREE.Vector3();
+    const cima = new THREE.Vector3();
+    for (let volta = 0; volta < 6; volta++) {
+      camera.position.copy(alvo).addScaledVector(dir, dist);
+      camera.lookAt(alvo);
+      camera.updateMatrixWorld(true);
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      for (const p of pontos) {
+        v.copy(p).project(camera);
+        if (v.x < x0) x0 = v.x; if (v.x > x1) x1 = v.x;
+        if (v.y < y0) y0 = v.y; if (v.y > y1) y1 = v.y;
+      }
+      // NDC vai de -1 a 1: o lado inteiro mede 2.
+      const ocupa = Math.max((x1 - x0) / 2, (y1 - y0) / 2);
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+      // Recentra: desloca o alvo pelo quanto o centro projetado fugiu.
+      const meiaAltura = Math.tan(((camera.fov / 2) * Math.PI) / 180) * dist;
+      direita.setFromMatrixColumn(camera.matrixWorld, 0);
+      cima.setFromMatrixColumn(camera.matrixWorld, 1);
+      alvo.addScaledVector(direita, cx * meiaAltura * camera.aspect);
+      alvo.addScaledVector(cima, cy * meiaAltura);
+      dist *= ocupa / util;
+    }
+    camera.position.copy(alvo).addScaledVector(dir, dist);
+    camera.lookAt(alvo);
+  }
+
   function resize() {
     // clientWidth=0 em canvas offscreen (geração de vídeo/render sem DOM):
     // cai pra canvas.width setado pelo caller antes do createMugViewer.
     const w = canvas.clientWidth || canvas.width || 320;
-    const h = canvas.clientHeight || Math.round(w * 0.78);
+    const h = canvas.clientHeight || (o.retrato && canvas.height) || Math.round(w * 0.78);
     renderer.setSize(w, h, false);
     renderer.setPixelRatio(o.pixelRatio || Math.min((typeof window !== "undefined" && window.devicePixelRatio) || 1, 2));
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     posicionarCameraDoGlb(w / h);
+    if (o.retrato) enquadrarRetrato(o.retrato);
   }
 
   let disposed = false;
@@ -1402,7 +1469,7 @@ export async function createModelViewer(
 
   // Edição da arte (28/09/2026): giro automático controlável e arraste
   // da arte na própria peça. Sem `arraste`, tudo segue como antes.
-  let giroAuto = true;
+  let giroAuto = !o.retrato;
   let arraste: ArrasteDaPeca | null = null;
   let arrastandoArte = false;
   const raycaster = new THREE.Raycaster();
@@ -1541,7 +1608,8 @@ export async function createModelViewer(
     // giro nem desliga a rotação automática.
     if (o.areaId !== areaAtual) {
       areaAtual = o.areaId;
-      irParaArea(areaAtual);
+      // No retrato a peça fica parada onde o enquadramento a pôs.
+      if (!o.retrato) irParaArea(areaAtual);
     }
     const minha = ++pinturaAtual;
     const rascunho = document.createElement("canvas");
