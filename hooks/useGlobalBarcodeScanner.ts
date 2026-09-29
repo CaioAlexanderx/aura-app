@@ -22,6 +22,7 @@
 // ============================================================
 import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
+import { criarDetector, OCIOSO_MS } from "@/utils/leituraRapida";
 
 type Options = {
   onScan: (code: string) => void;
@@ -51,6 +52,10 @@ export function useGlobalBarcodeScanner({
   const bufferRef = useRef<string>("");
   const lastKeyAtRef = useRef<number>(0);
   const onScanRef = useRef(onScan);
+  // 29/09/2026: leitor sem Enter no fim (ou com Tab). A rajada rápida vira
+  // leitura sozinha depois de OCIOSO_MS sem tecla — ver utils/leituraRapida.
+  const detectorRef = useRef(criarDetector());
+  const timerRef = useRef<any>(null);
 
   // Mantém ref atualizada sem re-bindar o listener.
   useEffect(() => {
@@ -59,6 +64,15 @@ export function useGlobalBarcodeScanner({
 
   useEffect(() => {
     if (!IS_WEB || !enabled || typeof window === "undefined") return;
+
+    function dispararRajada() {
+      timerRef.current = null;
+      const code = detectorRef.current.leitura();
+      detectorRef.current.reset();
+      if (!code) return;
+      bufferRef.current = "";
+      onScanRef.current(code);
+    }
 
     function handler(e: KeyboardEvent) {
       // Não captura se foco está em campo editável (operador digitando).
@@ -73,7 +87,17 @@ export function useGlobalBarcodeScanner({
       }
       lastKeyAtRef.current = now;
 
+      if (e.key === "Tab" && detectorRef.current.leitura()) {
+        // Leitor configurado com Tab no fim: é o fim da leitura, não troca de campo.
+        e.preventDefault();
+        if (timerRef.current) clearTimeout(timerRef.current);
+        dispararRajada();
+        return;
+      }
+
       if (e.key === "Enter") {
+        if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+        detectorRef.current.reset();
         const code = bufferRef.current;
         bufferRef.current = "";
         if (code.length >= minLength) {
@@ -87,11 +111,18 @@ export function useGlobalBarcodeScanner({
       // pontuação). Filtra teclas como Shift, Tab, F1, ArrowUp, etc.
       if (e.key && e.key.length === 1) {
         bufferRef.current += e.key;
+        detectorRef.current.tecla(e.key, now);
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(dispararRajada, OCIOSO_MS);
       }
     }
 
     window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    return () => {
+      window.removeEventListener("keydown", handler);
+      if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+      detectorRef.current.reset();
+    };
   }, [enabled, minLength, idleMs]);
 }
 

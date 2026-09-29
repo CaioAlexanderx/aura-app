@@ -284,7 +284,7 @@ function CaixaScreenInner() {
               {/* Busca + estado do leitor: o lojista já está olhando pra cá
                   quando vai bipar, então o status mora aqui. */}
               <View style={s.searchRow}>
-                <SearchBox value={query} onChange={setQuery} onSubmit={handleSearchSubmit} maxWidth={560} />
+                <SearchBox value={query} onChange={setQuery} onSubmit={handleSearchSubmit} onScan={handleScan} maxWidth={560} />
                 <ScannerStatusChip listening={scannerListening} lastCode={lastScannedCode} />
               </View>
 
@@ -396,7 +396,7 @@ function CaixaScreenInner() {
         )}
 
         <View style={s.searchRow}>
-          <SearchBox value={query} onChange={setQuery} onSubmit={handleSearchSubmit} />
+          <SearchBox value={query} onChange={setQuery} onSubmit={handleSearchSubmit} onScan={handleScan} />
           <ScannerStatusChip listening={scannerListening} lastCode={lastScannedCode} compact />
         </View>
 
