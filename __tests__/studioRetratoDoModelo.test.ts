@@ -19,7 +19,7 @@ jest.mock("@/components/studio/visualEngine/compose2d", () => ({
 }));
 
 import {
-  chaveDoRetrato, pedirRetrato, retratoPronto, limparRetratos, specDoRetrato, LARGURA_DO_RETRATO,
+  chaveDoRetrato, pedirRetrato, retratoPronto, limparRetratos, specDoRetrato, LARGURA_DO_RETRATO, ALTURA_DO_RETRATO,
 } from "@/components/studio/mockupPorProduto/retratoDoModelo";
 
 const caneca: any = { schema: 1, model: { kind: "procedural-mug", texture: { w: 2048, h: 1024 } }, areas: [] };
@@ -41,11 +41,14 @@ beforeEach(() => {
   mockCriar.mockReset();
   mockCriar.mockImplementation(async (cv: HTMLCanvasElement, _spec: any, _v: any, opts: any) => {
     mockAbertos++; mockMaxAbertos = Math.max(mockMaxAbertos, mockAbertos);
-    expect(opts).toMatchObject({ cenario: "nenhum", pixelRatio: 1 });
+    expect(opts).toMatchObject({ cenario: "nenhum", pixelRatio: 1, retrato: { margem: 0.1 } });
     expect(cv.width).toBe(LARGURA_DO_RETRATO);
+    expect(cv.height).toBe(ALTURA_DO_RETRATO);
+    expect(ALTURA_DO_RETRATO / LARGURA_DO_RETRATO).toBeCloseTo(67 / 88, 2);
     await new Promise((r) => setTimeout(r, 5));
     return {
       giroAutomatico: jest.fn(),
+      resize: jest.fn(),
       trocarPeca: (...a: any[]) => mockTrocar(...a),
       snapshot: () => "data:image/png;base64,PNG",
       dispose: () => { mockAbertos--; },
@@ -88,6 +91,12 @@ describe("retrato do modelo", () => {
     expect(retratoPronto({ key: "caneca", version: 1 })).toBe("data:image/jpeg;base64,AAA");
     await pedirRetrato({ key: "caneca", version: 1, kind: "model3d" }, caneca);
     expect(mockCriar).toHaveBeenCalledTimes(1);
+  });
+
+  it("versão antiga da chave sai do localStorage", () => {
+    localStorage.setItem("aura:studio:retrato:r1/caneca@1", "data:image/jpeg;base64,VELHO");
+    expect(retratoPronto({ key: "caneca", version: 1 })).toBeUndefined();
+    expect(localStorage.getItem("aura:studio:retrato:r1/caneca@1")).toBeNull();
   });
 
   it("3D que falha (sem WebGL) dá null e não guarda nada", async () => {

@@ -75,7 +75,9 @@ export function MiniaturaDoModelo({ template, spec, foto, largura = 46, altura =
   if (retrato) {
     return (
       <View style={caixa} aria-hidden>
-        <Image source={{ uri: retrato }} style={{ width: largura, height: altura }} resizeMode="cover" />
+        {/* contain: o retrato é 1:0,76 e a caixa varia (46×36, 120×92); o
+            fundo da caixa é o mesmo papel do retrato, a sobra não aparece. */}
+        <Image source={{ uri: retrato }} style={{ width: largura, height: altura }} resizeMode="contain" />
       </View>
     );
   }

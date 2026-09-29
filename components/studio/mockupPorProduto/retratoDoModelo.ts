@@ -24,16 +24,21 @@ import { createModelViewer, type Mug3DHandle } from "@/components/studio/visualE
 import { composeView } from "@/components/studio/visualEngine/compose2d";
 import { readGlbModel } from "@/components/studio/visualEngine/glbModel";
 
-/** Largura do retrato em px (a altura é a do viewer: 0,78 da largura). */
+/** Largura do retrato em px. */
 export const LARGURA_DO_RETRATO = 176;
+/** Altura ÷ largura: a da miniatura da ficha (88 × 67). A Aparência mostra inteiro (contain). */
+export const PROPORCAO_DO_RETRATO = 0.76;
+export const ALTURA_DO_RETRATO = Math.round(LARGURA_DO_RETRATO * PROPORCAO_DO_RETRATO);
 /** Fundo do retrato: o mesmo papel neutro da miniatura 2D. */
 export const FUNDO_DO_RETRATO = "#ECEAE4";
 /** Pausa entre dois retratos da fila. */
 const PAUSA_ENTRE_RETRATOS_MS = 250;
+/** Margem da peça em cada lado do retrato (fração do lado). */
+export const MARGEM_DO_RETRATO = 0.1;
 /** Lado maior da textura da peça no retrato (a peça vai sem arte). */
 const TEXTURA_DO_RETRATO = 512;
 /** Muda quando o retrato mudar de cara: o que estava guardado deixa de valer. */
-const VERSAO_DO_RETRATO = "r1";
+const VERSAO_DO_RETRATO = "r2"; // r2: 1:0,76 e peça enquadrada pela caixa
 const PREFIXO_DO_ARMAZENAMENTO = "aura:studio:retrato:";
 
 type ModeloDoRetrato = Pick<VisualTemplate, "key" | "version" | "kind">;
@@ -48,9 +53,25 @@ const prontos = new Map<string, string | null>();
 const pedidos = new Map<string, Promise<string | null>>();
 let fila: Promise<unknown> = Promise.resolve();
 
+// Retratos de versões antigas da chave ocupam o localStorage à toa: saem
+// na primeira leitura da sessão.
+let antigosLimpos = false;
+function limparVersoesAntigas() {
+  if (antigosLimpos) return;
+  antigosLimpos = true;
+  const atual = PREFIXO_DO_ARMAZENAMENTO + VERSAO_DO_RETRATO + "/";
+  const velhos: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith(PREFIXO_DO_ARMAZENAMENTO) && !k.startsWith(atual)) velhos.push(k);
+  }
+  velhos.forEach((k) => localStorage.removeItem(k));
+}
+
 function lerGuardado(chave: string): string | null {
   try {
     if (typeof localStorage === "undefined") return null;
+    limparVersoesAntigas();
     return localStorage.getItem(PREFIXO_DO_ARMAZENAMENTO + chave);
   } catch (_e) {
     return null;
@@ -68,17 +89,50 @@ function esperar(ms: number) {
   return new Promise<void>((r) => setTimeout(r, ms));
 }
 
-/** O canvas (WebGL ou 2D) sobre o fundo neutro, em JPEG. */
-function paraJpeg(origem: HTMLCanvasElement): string | null {
+/** A caixa dos pixels com alfa num canvas 2D; null se vazio ou ilegível. */
+function caixaDesenhada(cv: HTMLCanvasElement): { x: number; y: number; w: number; h: number } | null {
+  try {
+    const ctx = cv.getContext("2d");
+    const img = ctx?.getImageData(0, 0, cv.width, cv.height);
+    if (!img) return null;
+    let x0 = cv.width, y0 = cv.height, x1 = -1, y1 = -1;
+    for (let y = 0; y < cv.height; y++) {
+      for (let x = 0; x < cv.width; x++) {
+        if (img.data[(y * cv.width + x) * 4 + 3] > 8) {
+          if (x < x0) x0 = x; if (x > x1) x1 = x;
+          if (y < y0) y0 = y; if (y > y1) y1 = y;
+        }
+      }
+    }
+    return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+  } catch (_e) {
+    return null;
+  }
+}
+
+/**
+ * O canvas (WebGL ou 2D) sobre o fundo neutro, em JPEG, no tamanho do
+ * retrato. O 3D já vem do tamanho e enquadrado; o 2D (outra proporção)
+ * entra inteiro, centrado, com a margem do retrato.
+ */
+function paraJpeg(origem: HTMLCanvasElement, encaixar = false): string | null {
   const w = origem.width, h = origem.height;
   if (!(w > 0) || !(h > 0)) return null;
   const cv = document.createElement("canvas");
-  cv.width = w; cv.height = h;
+  cv.width = LARGURA_DO_RETRATO; cv.height = ALTURA_DO_RETRATO;
   const ctx = cv.getContext("2d");
   if (!ctx) return null;
   ctx.fillStyle = FUNDO_DO_RETRATO;
-  ctx.fillRect(0, 0, w, h);
-  ctx.drawImage(origem, 0, 0, w, h);
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  if (encaixar) {
+    // A caixa do que foi desenhado (alfa > 0): a vista 2D tem sobra em volta.
+    const c = caixaDesenhada(origem) || { x: 0, y: 0, w, h };
+    const k = Math.min(cv.width / c.w, cv.height / c.h) * (1 - 2 * MARGEM_DO_RETRATO);
+    const dw = c.w * k, dh = c.h * k;
+    ctx.drawImage(origem, c.x, c.y, c.w, c.h, (cv.width - dw) / 2, (cv.height - dh) / 2, dw, dh);
+  } else {
+    ctx.drawImage(origem, 0, 0, cv.width, cv.height);
+  }
   const url = cv.toDataURL("image/jpeg", 0.85);
   return url && url.startsWith("data:image/jpeg") ? url : null;
 }
@@ -111,7 +165,17 @@ export function specDoRetrato(spec: VisualTemplateSpec): VisualTemplateSpec {
 // refazer o ambiente — cada abertura custava ~300 ms de página parada),
 // e descartado quando a fila esvazia.
 let estudio: { cv: HTMLCanvasElement; viewer: Mug3DHandle } | null = null;
-const OPCOES_DO_RETRATO = { cenario: "nenhum" as const, pixelRatio: 1 };
+// Foto de produto, a peça inteira centrada com 10% de margem nos quatro
+// lados e um pouco de cima. A caneca repousa com a alça à esquerda: gira
+// para o 3/4 com a alça à direita. A camiseta repousa de frente: só um
+// quarto de volta pequeno, para a frente continuar sendo a frente.
+export function enquadramentoDoRetrato(spec: VisualTemplateSpec) {
+  const veste = spec.model?.kind === "glb";
+  return { margem: MARGEM_DO_RETRATO, giroGraus: veste ? -18 : 145, elevacaoGraus: veste ? 8 : 16 };
+}
+function opcoesDoRetrato(spec: VisualTemplateSpec) {
+  return { cenario: "nenhum" as const, pixelRatio: 1, retrato: enquadramentoDoRetrato(spec) };
+}
 
 function descartarEstudio() {
   if (!estudio) return;
@@ -130,22 +194,23 @@ async function retratar3D(specOriginal: VisualTemplateSpec): Promise<string | nu
     if (!estudio) {
       const cv = document.createElement("canvas");
       cv.width = LARGURA_DO_RETRATO;
-      cv.height = Math.round(LARGURA_DO_RETRATO * 0.78);
+      cv.height = ALTURA_DO_RETRATO;
       // Sem cenário: só a peça e a sombra de contato, sobre o papel neutro.
       // O estúdio encolhe a peça numa miniatura deste tamanho.
       let viewer: Mug3DHandle;
       try {
-        viewer = await createModelViewer(cv, spec, {}, OPCOES_DO_RETRATO);
+        viewer = await createModelViewer(cv, spec, {}, opcoesDoRetrato(spec));
       } catch (e) {
         soltarContexto(cv);
         throw e;
       }
       estudio = { cv, viewer };
     } else {
-      await estudio.viewer.trocarPeca(spec, {}, OPCOES_DO_RETRATO);
+      await estudio.viewer.trocarPeca(spec, {}, opcoesDoRetrato(spec));
     }
     const { cv, viewer } = estudio;
     viewer.giroAutomatico(false);
+    viewer.resize(); // reenquadra depois da pintura (a peça nova já em cena)
     if (!viewer.snapshot(LARGURA_DO_RETRATO)) return null;
     return paraJpeg(cv);
   } catch (e) {
@@ -160,8 +225,9 @@ async function retratar2D(spec: VisualTemplateSpec): Promise<string | null> {
   // A foto de estúdio do modelo é o melhor retrato que há (como na Aparência).
   if (vista.photo_url) return String(vista.photo_url);
   const cv = document.createElement("canvas");
-  const r = await composeView(cv, vista, {}, { showAreas: false, pixelWidth: LARGURA_DO_RETRATO, backdrop: FUNDO_DO_RETRATO });
-  return r ? paraJpeg(cv) : null;
+  // Sem backdrop: a peça vetorial sobre o papel do retrato, que o paraJpeg pinta.
+  const r = await composeView(cv, vista, {}, { showAreas: false, pixelWidth: LARGURA_DO_RETRATO * 2, backdrop: null });
+  return r ? paraJpeg(cv, true) : null;
 }
 
 /** O retrato já feito (memória ou localStorage), sem pôr nada na fila. */
@@ -206,6 +272,7 @@ export function pedirRetrato(t: ModeloDoRetrato, spec: VisualTemplateSpec): Prom
 /** Só para os testes: esquece os retratos em memória e a fila. */
 export function limparRetratos() {
   descartarEstudio();
+  antigosLimpos = false;
   prontos.clear();
   pedidos.clear();
   fila = Promise.resolve();
