@@ -458,7 +458,7 @@ export function MockupNaFotoSecao({
         <View style={[s.aviso, { backgroundColor: t.infoSoft }]} testID="aviso-modelo">
           <Icon name="info" size={15} color={t.infoInk} />
           <Text style={[s.avisoTxt, { color: t.infoInk }]}>
-            Este produto usa um modelo da Aura (3D ou foto de estúdio), e é ele que a vitrine mostra. A marcação na foto passa a valer se você escolher “Sem mockup” em Mockup do produto.
+            Este produto usa um modelo da Aura (3D ou foto de estúdio), e é ele que a vitrine mostra. A marcação na foto passa a valer se você escolher “Usar a foto do produto” em Como a peça aparece na loja.
           </Text>
         </View>
       ) : null}
@@ -467,7 +467,7 @@ export function MockupNaFotoSecao({
         <View style={[s.vazio, { minHeight: 180 }]} testID="sem-fotos">
           <View style={s.vazioIcone}><Icon name="image" size={24} color={t.primary} /></View>
           <Text style={s.vazioTitulo}>Este produto ainda não tem foto</Text>
-          <Text style={s.vazioTxt}>Adicione as fotos da peça na aba Dados. Depois volte aqui para marcar onde a arte cai.</Text>
+          <Text style={s.vazioTxt}>Adicione as fotos da peça na aba Produto. Depois volte aqui para marcar onde a arte cai.</Text>
         </View>
       ) : (
         <>

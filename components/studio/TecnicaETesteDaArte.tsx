@@ -22,11 +22,91 @@ import { LivePreview } from "@/components/studio/storefront/LivePreview";
 import { ControlesDaArte, FaixaDaPrevia, useEditorDaArte, useGiroAutomatico } from "@/components/studio/storefront/produto/EditorDaArte";
 import type { Tecnica } from "@/components/studio/visualEngine/layoutDaArte";
 
-const TECNICAS: Array<{ v: Tecnica; rotulo: string; explica: string }> = [
+export const TECNICAS: Array<{ v: Tecnica; rotulo: string; explica: string }> = [
   { v: "sublimacao", rotulo: "Sublimação", explica: "A arte entra na peça: o branco da arte vira a cor da peça. Funciona em peça clara." },
   { v: "dtf", rotulo: "DTF / transfer", explica: "A arte é impressa opaca, como está. Se o arquivo tiver fundo branco, ele aparece na peça." },
   { v: "outra", rotulo: "Outra", explica: "A prévia mistura a arte pela luz da peça, como antes." },
 ];
+
+/** Rótulo curto da técnica (resumo do "Avançado" da ficha). null = automática. */
+export function rotuloDaTecnica(tec: Tecnica | null | undefined): string {
+  return TECNICAS.find((x) => x.v === tec)?.rotulo ?? "Automática";
+}
+
+/** A frase que explica a técnica escolhida; sem escolha, o padrão por peça. */
+export function explicacaoDaTecnica(tec: Tecnica | null | undefined): string {
+  const info = TECNICAS.find((x) => x.v === tec);
+  return info
+    ? info.explica
+    : "Muda só como a arte aparece na prévia. Automática: caneca usa sublimação e camiseta usa DTF.";
+}
+
+/**
+ * O campo que recebe a arte de teste: o primeiro envio de arquivo da
+ * frente, senão o primeiro campo de galeria da frente. null = o produto
+ * não pede arte na frente, e o teste não tem onde cair.
+ */
+export function campoDaArteDeTeste(config: CustomizationConfig | null | undefined) {
+  const campos = config?.fields || [];
+  return campos.find((f) => f.type === "image" && (f.side || "front") === "front")
+    || campos.find((f) => f.type === "template" && (f.side || "front") === "front")
+    || null;
+}
+
+/**
+ * O editor da vitrine com uma arte de teste (ficha de personalização,
+ * 29/09/2026). É o miolo de `SecaoTestarComUmaArte`, sem o cartão nem o
+ * botão de arquivo: a ficha nova mostra isto DENTRO da prévia, no lugar
+ * da arte de exemplo. Nada é enviado nem salvo; quem cria e revoga a URL
+ * do arquivo é quem chama. Troque o `key` quando o arquivo mudar.
+ */
+export function EditorDeTesteDaArte({
+  config, productId, productName, slug, fotoProduto, arquivoUrl, size = 320,
+}: {
+  config: CustomizationConfig;
+  productId: string;
+  productName: string;
+  slug?: string | null;
+  fotoProduto?: string | null;
+  /** URL local (blob:) do arquivo escolhido. */
+  arquivoUrl: string;
+  size?: number;
+}) {
+  const campoImagem = campoDaArteDeTeste(config);
+  const campoTexto = (config.fields || []).find((f) => f.type === "text" && (f.side || "front") === "front" && f.id !== "art_service_brief");
+  const [valores, setValores] = useState<Record<string, any>>(() => {
+    const out: Record<string, any> = {};
+    if (campoImagem) out[campoImagem.id] = arquivoUrl;
+    if (campoTexto) out[campoTexto.id] = "Helena";
+    return out;
+  });
+  const [mostrarArea, setMostrarArea] = useState(true);
+  const [giro, setGiro] = useGiroAutomatico();
+  const set = (id: string, v: any) => setValores((x) => ({ ...x, [id]: v }));
+  const editor = useEditorDaArte({ cfg: config, values: valores, lado: "front", setValor: set, peca: null, mostrarArea });
+
+  const rotulos: Record<string, string> = {};
+  for (const f of config.fields || []) rotulos[f.id] = f.type === "image" || f.type === "template" ? "Imagem" : f.label || f.id;
+
+  return (
+    <View style={{ gap: 10, alignItems: "center" }} testID="editor-de-teste-da-arte">
+      <LivePreview
+        config={config}
+        values={valores}
+        size={size}
+        productName={productName}
+        showLabel={false}
+        slug={slug || undefined}
+        productId={productId}
+        fotoProduto={fotoProduto}
+        giroAutomatico={giro}
+        edicao={{ extras: editor.extras, arraste: editor.arraste, editando: editor.editando, informarMotor: editor.informarMotor }}
+      />
+      <FaixaDaPrevia editor={editor} mostrarArea={mostrarArea} onMostrarArea={setMostrarArea} giro={giro} onGiro={setGiro} tem3D={false} />
+      <ControlesDaArte editor={editor} rotulos={rotulos} />
+    </View>
+  );
+}
 
 export function SecaoTecnicaDeImpressao({
   config, onMudar,

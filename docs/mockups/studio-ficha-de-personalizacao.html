@@ -1,0 +1,994 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Ficha de personalização — redesenho</title>
+<!--
+  ============================================================
+  Mockup standalone — ficha de personalização do produto na Aura
+  Studio (Estoque › produto › aba Personalização), 28/09/2026.
+  Regra 4 do CLAUDE.md: mudança visual relevante nasce em mockup.
+
+  PEDIDO DO PO (28/09): "Achei a ficha de personalização muito extensa:
+  4 abas e muitas informações que não são exatamente importantes.
+  Repensar a ficha, simplificar e deixar fácil de usar."
+
+  Diagnóstico e decisões: docs/studio/ficha-de-personalizacao-diagnostico.md
+
+  O QUE ESTE ARQUIVO MOSTRA
+    - Três abas no produto aberto (Produto · Personalização · Custo),
+      no lugar de quatro. Templates virou parte do cartão "Arte".
+    - Aba Personalização com UMA prévia, sempre à vista: coluna fixa no
+      desktop; faixa fixa no topo no celular, que encolhe ao rolar.
+    - Cinco blocos e um "Avançado": interruptor de personalização,
+      como a peça aparece (seletor de modelo), onde imprime (chips
+      Frente · Verso · Volta inteira, com L × A e "a mais R$"), o que a
+      cliente escolhe (cartões Arte, Texto, Cor da peça, Opção), serviço
+      de arte; Avançado guarda técnica, posição, limite de letras e guia.
+    - Barra de Salvar fixa no rodapé, com resumo e marca de "não salvo".
+
+  ESTADOS (faixa escura no topo, só do mockup): produto novo (padrões
+  prontos), produto já configurado (caneca), camiseta com frente e
+  verso, caneca com volta inteira; tema claro e escuro; largura
+  automática ou celular 390. Endereço direto:
+  #estado=camiseta&tema=dark&largura=celular
+
+  O 3D É DE MENTIRA: camiseta e caneca são SVG desenhado aqui; no app a
+  prévia é o EnginePreview (GLB da camiseta, caneca procedural). As
+  miniaturas do seletor de modelo serão as do 3D real. Nada usa rede.
+  ============================================================
+-->
+<style>
+  :root {
+    --primary: #1E3A8A; --primary2: #3B82F6; --primary-soft: #DBEAFE; --primary-ghost: #EFF6FF;
+    --accent: #EC4899; --accent-soft: #FCE7F3; --accent-ink: #BE185D;
+    --bg: #E8E9F0; --bg-soft: #EEF0F5; --card: #F5F6FA; --card-elev: #FFFFFF;
+    --ink: #0F172A; --ink2: #334155; --ink3: #5E6A7A; --ink4: #94A3B8; --ink5: #CBD5E1;
+    --success: #10B981; --success-soft: #D1FAE5; --success-ink: #065F46;
+    --warning: #F59E0B; --warning-soft: #FEF3C7; --warning-ink: #92400E;
+    --danger: #DC2626; --danger-soft: #FEE2E2; --danger-ink: #991B1B;
+    --shadow: 0 8px 24px -6px rgba(30,58,138,0.18);
+    --shadow-pop: 0 18px 40px -12px rgba(15,23,42,0.35), 0 2px 6px rgba(15,23,42,0.08);
+    --stage: #E3E5EC;
+    --f-body: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+    --f-num: "Bricolage Grotesque", "DM Sans", "Segoe UI", system-ui, sans-serif;
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    --primary: #3B82F6; --primary2: #60A5FA; --primary-soft: rgba(59,130,246,0.18); --primary-ghost: rgba(59,130,246,0.10);
+    --accent: #F472B6; --accent-soft: rgba(244,114,182,0.18); --accent-ink: #F9A8D4;
+    --bg: #0F172A; --bg-soft: #1E293B; --card: #1E293B; --card-elev: #273449;
+    --ink: #F8FAFC; --ink2: #CBD5E1; --ink3: #94A3B8; --ink4: #64748B; --ink5: #334155;
+    --success: #34D399; --success-soft: rgba(52,211,153,0.18); --success-ink: #6EE7B7;
+    --warning: #FBBF24; --warning-soft: rgba(251,191,36,0.18); --warning-ink: #FCD34D;
+    --danger: #EF4444; --danger-soft: rgba(239,68,68,0.18); --danger-ink: #FCA5A5;
+    --shadow: 0 8px 24px -6px rgba(0,0,0,0.6);
+    --shadow-pop: 0 18px 40px -10px rgba(0,0,0,0.7), 0 0 0 1px rgba(148,163,184,0.12);
+    --stage: #141D31;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.45 var(--f-body); -webkit-text-size-adjust: 100%; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  [hidden] { display: none !important; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  :focus-visible { outline: 2px solid var(--primary2); outline-offset: 2px; }
+
+  /* ── Faixa de estados (só do mockup) ───────────────────── */
+  .estados {
+    background: #0B1224; color: #CBD5E1; padding: 10px 16px; position: relative; z-index: 100;
+    display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; font-size: 12.5px;
+  }
+  .estados b { color: #F8FAFC; font-weight: 700; margin-right: 2px; }
+  .estados .grupo { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .estados button { background: transparent; border: 1px solid #334155; color: #CBD5E1; padding: 4px 10px; border-radius: 999px; min-height: 30px; }
+  .estados button[aria-pressed="true"] { background: #F472B6; border-color: #F472B6; color: #0F172A; font-weight: 700; }
+
+  /* ── Moldura (celular 390) ─────────────────────────────── */
+  .moldura { position: relative; }
+  .rolagem { container-type: inline-size; container-name: tela; }
+  .moldura.celular { width: min(390px, 100%); margin: 16px auto; height: 844px; overflow: hidden; border-radius: 34px; background: var(--bg); }
+  @media (min-width: 520px) { .moldura.celular { outline: 10px solid #0d0d0d; } }
+  .moldura.celular .rolagem { height: 100%; overflow-y: auto; overscroll-behavior: contain; }
+
+  /* ============================================================
+     APP · Estoque › produto aberto
+     ============================================================ */
+  .pagina { max-width: 1440px; margin: 0 auto; padding: 20px 24px 40px; display: flex; flex-direction: column; gap: 14px; }
+  .topo-tela { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .topo-tela h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.4px; }
+  .topo-tela .migalha { color: var(--ink3); font-size: 12.5px; }
+  .voltar { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border-radius: 10px; background: var(--card-elev); border: 1.5px solid var(--ink5); color: var(--ink2); font-weight: 600; font-size: 13px; }
+
+  .cab-produto { display: flex; gap: 14px; align-items: center; padding: 14px 16px; border-radius: 14px; background: var(--card-elev); border: 1px solid var(--ink5); }
+  .cab-produto .foto { width: 64px; height: 64px; border-radius: 14px; background: var(--stage); flex: none; display: grid; place-items: center; overflow: hidden; }
+  .cab-produto .foto svg { width: 100%; height: 100%; }
+  .cab-produto .nome { font-size: 18px; font-weight: 800; letter-spacing: -0.3px; margin: 0; }
+  .cab-produto .meta { color: var(--ink3); font-size: 13px; margin-top: 2px; }
+  .cab-produto .meta b { color: var(--ink); font-weight: 800; font-family: var(--f-num); }
+  .selos { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .selo { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 3px 9px; font-size: 11px; font-weight: 700; }
+  .selo.prim { background: var(--primary-soft); color: var(--primary); }
+  .selo.acc { background: var(--accent-soft); color: var(--accent-ink); }
+
+  .abas { display: flex; gap: 4px; padding: 5px; border-radius: 12px; background: var(--card); border: 1px solid var(--ink5); }
+  .abas button { flex: 1; min-height: 44px; border: 0; border-radius: 9px; background: transparent; color: var(--ink2); font-weight: 700; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+  .abas button[aria-selected="true"] { background: var(--primary-soft); color: var(--primary); font-weight: 800; }
+  .abas .pt { width: 7px; height: 7px; border-radius: 50%; background: var(--ink4); }
+  .abas .pt.ok { background: var(--success); }
+  .abas .pt.meio { background: var(--warning); }
+
+  .conteudo { background: var(--card); border: 1px solid var(--ink5); border-radius: 14px; padding: 16px; }
+
+  /* ── Aba Personalização ─────────────────────────────────── */
+  .pz { display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 20px; align-items: start; }
+  .pz-previa { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 12px; }
+  .pz-form { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+  .cartao { background: var(--card-elev); border: 1px solid var(--ink5); border-radius: 14px; padding: 14px 16px; }
+  .cartao-cab { display: flex; align-items: center; gap: 10px; }
+  .cartao-cab .ic { width: 28px; height: 28px; border-radius: 8px; background: var(--primary-ghost); border: 1px solid var(--ink5); display: grid; place-items: center; color: var(--primary); flex: none; }
+  .cartao-cab .ic svg { width: 15px; height: 15px; }
+  .cartao-cab h2 { margin: 0; font-size: 14px; font-weight: 800; letter-spacing: -0.1px; flex: 1; min-width: 0; }
+  .cartao-cab .num { font-family: var(--f-num); font-size: 11px; font-weight: 800; color: var(--accent-ink); letter-spacing: 0.6px; }
+  .cartao-cab .dir { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .ajuda { color: var(--ink3); font-size: 12.5px; margin: 4px 0 0; }
+  .cartao-corpo { margin-top: 12px; display: flex; flex-direction: column; gap: 12px; }
+
+  .interruptor { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 14px; background: var(--card-elev); border: 1px solid var(--ink5); }
+  .interruptor .txt { flex: 1; min-width: 0; }
+  .interruptor .txt b { display: block; font-size: 14px; font-weight: 800; }
+  .interruptor .txt span { color: var(--ink3); font-size: 12.5px; }
+  .switch { position: relative; width: 48px; height: 28px; border-radius: 999px; border: 0; background: var(--ink5); padding: 0; flex: none; transition: background .2s; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.35); transition: transform .2s; }
+  .switch[aria-checked="true"] { background: var(--primary); }
+  .switch[aria-checked="true"]::after { transform: translateX(20px); }
+  .switch.acc[aria-checked="true"] { background: var(--accent); }
+
+  /* Campos de formulário */
+  .rotulo { display: block; font-size: 11px; font-weight: 800; color: var(--ink3); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 5px; }
+  .entrada { width: 100%; min-height: 44px; padding: 8px 12px; border-radius: 10px; border: 1.5px solid var(--ink5); background: var(--bg-soft); color: var(--ink); font-size: 14px; }
+  .entrada:focus { border-color: var(--primary2); outline: none; box-shadow: 0 0 0 3px var(--primary-soft); }
+  .entrada.n { width: 72px; text-align: center; font-family: var(--f-num); font-weight: 700; }
+  .entrada.moeda { width: 96px; font-family: var(--f-num); font-weight: 700; padding-left: 34px; }
+  .moeda-wrap { position: relative; display: inline-block; }
+  .moeda-wrap::before { content: "R$"; position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 12.5px; font-weight: 700; color: var(--ink3); }
+  .linha { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .x { color: var(--ink4); font-weight: 700; }
+  .un { color: var(--ink3); font-size: 12.5px; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { min-height: 44px; padding: 0 14px; border-radius: 12px; border: 1.5px solid var(--ink5); background: var(--card-elev); color: var(--ink2); font-weight: 700; font-size: 13.5px; display: inline-flex; align-items: center; gap: 8px; }
+  .chip[aria-pressed="true"], .chip[aria-checked="true"] { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
+  .chip .marca { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--ink4); display: grid; place-items: center; flex: none; }
+  .chip[aria-checked="true"] .marca { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .chip .marca svg { width: 11px; height: 11px; }
+  .chip.fixo { opacity: .95; }
+  .chip.fixo small { font-weight: 500; color: var(--ink3); font-size: 11.5px; }
+  .chip.peq { min-height: 36px; padding: 0 11px; font-size: 12.5px; border-radius: 10px; }
+
+  /* Onde imprime: uma linha por lado */
+  .lados { display: flex; flex-direction: column; gap: 8px; }
+  .lado { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 8px 12px; align-items: center; padding: 10px 12px; border-radius: 12px; background: var(--bg-soft); border: 1px solid var(--ink5); }
+  .lado .nome { font-weight: 800; font-size: 13.5px; }
+  .lado .nome small { display: block; font-weight: 500; color: var(--ink3); font-size: 11.5px; }
+  .lado .medidas { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .lado .amais { display: inline-flex; align-items: center; gap: 8px; color: var(--ink3); font-size: 12.5px; margin-left: 8px; }
+
+  /* Cartão de campo (o que a cliente escolhe) */
+  .campo { border: 1px solid var(--ink5); border-radius: 12px; background: var(--bg-soft); }
+  .campo-cab { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 6px 8px 6px 12px; border: 0; background: transparent; text-align: left; border-radius: 12px; }
+  .campo-cab .ic { width: 30px; height: 30px; border-radius: 9px; background: var(--card-elev); border: 1px solid var(--ink5); display: grid; place-items: center; color: var(--primary); flex: none; }
+  .campo-cab .ic svg { width: 15px; height: 15px; }
+  .campo-cab .ic.acc { color: var(--accent-ink); }
+  .campo-cab .t { flex: 1; min-width: 0; }
+  .campo-cab .t b { display: block; font-size: 14px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .campo-cab .t span { display: block; color: var(--ink3); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .campo-cab .seta { width: 44px; height: 44px; display: grid; place-items: center; color: var(--ink3); flex: none; transition: transform .2s; }
+  .campo[open] .campo-cab .seta { transform: rotate(180deg); }
+  .campo-corpo { padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 12px; border-top: 1px dashed var(--ink5); margin-top: 2px; padding-top: 12px; }
+  .campo-corpo .duas { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: end; }
+  .caixa { display: inline-flex; align-items: center; gap: 9px; min-height: 44px; cursor: pointer; font-weight: 600; font-size: 13.5px; }
+  .caixa input { width: 20px; height: 20px; margin: 0; accent-color: var(--primary); }
+  .campo-acoes { display: flex; gap: 6px; justify-content: flex-end; border-top: 1px dashed var(--ink5); padding-top: 8px; }
+  .ibtn { width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--ink5); background: var(--card-elev); color: var(--ink2); display: grid; place-items: center; }
+  .ibtn svg { width: 16px; height: 16px; }
+  .ibtn.perigo { color: var(--danger); }
+  .ibtn[disabled] { opacity: .35; cursor: default; }
+
+  .paleta { display: flex; flex-direction: column; gap: 6px; }
+  .cor { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto 44px; align-items: center; gap: 10px; }
+  .cor .sw { width: 28px; height: 28px; border-radius: 8px; border: 1px solid rgba(0,0,0,.15); }
+  .cor .hex { font-family: var(--f-num); font-weight: 700; font-size: 13px; }
+  .cor .hex small { display: block; font-family: var(--f-body); font-weight: 500; color: var(--ink3); font-size: 11.5px; }
+  .sw-add { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .sw-add button { width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--ink5); background: var(--card-elev); display: grid; place-items: center; }
+  .sw-add button i { width: 24px; height: 24px; border-radius: 7px; border: 1px solid rgba(0,0,0,.15); display: block; }
+  .sw-add .picker { border-style: dashed; color: var(--ink3); font-size: 18px; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 11px; border: 1.5px solid var(--ink5); background: var(--card-elev); color: var(--ink2); font-weight: 700; font-size: 13.5px; white-space: nowrap; }
+  .btn svg { width: 15px; height: 15px; }
+  .btn.prim { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .btn.cont { border-color: var(--primary); color: var(--primary); }
+  .btn.link { border-color: transparent; background: transparent; color: var(--primary); padding: 0 8px; }
+  .btn.peq { min-height: 36px; font-size: 12.5px; padding: 0 12px; border-radius: 9px; }
+  .btn[disabled] { opacity: .45; cursor: default; }
+
+  /* Seletor de modelo */
+  .seletor { position: relative; }
+  .seletor > button { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 8px 12px 8px 8px; border-radius: 12px; border: 1.5px solid var(--ink5); background: var(--bg-soft); text-align: left; }
+  .seletor .thumb { width: 48px; height: 48px; border-radius: 10px; background: var(--stage); display: grid; place-items: center; overflow: hidden; flex: none; }
+  .seletor .thumb svg { width: 100%; height: 100%; }
+  .seletor .t { flex: 1; min-width: 0; }
+  .seletor .t b { display: block; font-size: 14px; font-weight: 800; }
+  .seletor .t span { color: var(--ink3); font-size: 12px; }
+  .tag { display: inline-block; border-radius: 6px; padding: 1px 6px; font-size: 10.5px; font-weight: 800; letter-spacing: .3px; }
+  .tag.d3 { background: var(--accent-soft); color: var(--accent-ink); }
+  .tag.d2 { background: var(--primary-soft); color: var(--primary); }
+  .tag.loja { background: var(--success-soft); color: var(--success-ink); }
+  .lista-modelos { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 6px); background: var(--card-elev); border: 1px solid var(--ink5); border-radius: 14px; box-shadow: var(--shadow-pop); padding: 8px; max-height: 420px; overflow-y: auto; }
+  .lista-modelos .grupo { font-size: 11px; font-weight: 800; color: var(--ink3); letter-spacing: .5px; text-transform: uppercase; padding: 8px 10px 4px; }
+  .lista-modelos [role="option"] { width: 100%; display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 6px 8px; border-radius: 10px; border: 0; background: transparent; text-align: left; }
+  .lista-modelos [role="option"]:hover, .lista-modelos [role="option"]:focus-visible { background: var(--primary-ghost); }
+  .lista-modelos [role="option"][aria-selected="true"] { background: var(--primary-soft); }
+  .lista-modelos .thumb { width: 44px; height: 44px; border-radius: 9px; background: var(--stage); overflow: hidden; flex: none; }
+  .lista-modelos .thumb svg { width: 100%; height: 100%; }
+  .lista-modelos .t b { display: block; font-size: 13.5px; font-weight: 700; }
+  .lista-modelos .t span { color: var(--ink3); font-size: 12px; }
+
+  /* Serviço de arte: resumo + editar */
+  .resumo-servico { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13.5px; }
+  .resumo-servico b { font-family: var(--f-num); font-weight: 800; }
+
+  /* Avançado */
+  details.avancado { border: 1px dashed var(--ink5); border-radius: 14px; background: transparent; }
+  details.avancado summary { list-style: none; display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 12px; cursor: pointer; border-radius: 14px; }
+  details.avancado summary::-webkit-details-marker { display: none; }
+  details.avancado summary .t b { display: block; font-size: 14px; font-weight: 800; }
+  details.avancado summary .t span { color: var(--ink3); font-size: 12px; }
+  details.avancado summary .seta { margin-left: auto; width: 44px; height: 44px; display: grid; place-items: center; color: var(--ink3); transition: transform .2s; }
+  details.avancado[open] summary .seta { transform: rotate(180deg); }
+  details.avancado .corpo { padding: 4px 16px 16px; display: flex; flex-direction: column; gap: 16px; }
+  .guia { border: 2px dashed var(--ink5); border-radius: 10px; padding: 14px; text-align: center; color: var(--ink3); font-size: 12.5px; }
+  .guia b { display: block; color: var(--ink); font-size: 13.5px; }
+
+  /* Rodapé de salvar */
+  .rodape { position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: var(--card-elev); border: 1px solid var(--ink5); box-shadow: var(--shadow); }
+  .rodape .status { flex: 1; min-width: 0; font-size: 12.5px; color: var(--ink2); display: flex; align-items: center; gap: 8px; }
+  .rodape .status i { width: 8px; height: 8px; border-radius: 50%; background: var(--success); flex: none; }
+  .rodape .status.pendente i { background: var(--warning); }
+  .rodape .btn.prim { min-width: 140px; }
+
+  /* Prévia */
+  .previa { background: var(--card-elev); border: 1px solid var(--ink5); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .previa .lados-previa { display: flex; gap: 6px; }
+  .previa .lados-previa .chip { min-height: 36px; padding: 0 12px; font-size: 12.5px; border-radius: 10px; }
+  .palco { position: relative; border-radius: 12px; background: var(--stage); aspect-ratio: 1 / 1; overflow: hidden; }
+  .palco > [role="img"] { position: absolute; inset: 0; }
+  .palco svg { width: 100%; height: 100%; display: block; }
+  .palco .legenda { position: absolute; left: 10px; bottom: 8px; font-size: 11px; color: var(--ink3); background: color-mix(in srgb, var(--card-elev) 80%, transparent); padding: 3px 8px; border-radius: 999px; }
+  .palco .gira { position: absolute; right: 10px; bottom: 8px; font-size: 11px; color: var(--ink3); display: inline-flex; align-items: center; gap: 5px; background: color-mix(in srgb, var(--card-elev) 80%, transparent); padding: 3px 8px; border-radius: 999px; }
+  .previa-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+  .previa-acoes .btn { flex: 1; }
+  .previa-links { display: flex; gap: 4px; flex-wrap: wrap; }
+  .arte-teste { font-size: 12px; color: var(--ink3); display: flex; align-items: center; gap: 8px; }
+  .arte-teste b { color: var(--ink); }
+
+  /* Aviso */
+  .aviso { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; background: var(--warning-soft); color: var(--warning-ink); font-size: 12.5px; }
+  .aviso svg { width: 14px; height: 14px; flex: none; margin-top: 2px; }
+
+  /* Menu "Adicionar" */
+  .menu-add { position: absolute; z-index: 30; right: 0; top: calc(100% + 6px); width: 320px; background: var(--card-elev); border: 1px solid var(--ink5); border-radius: 14px; box-shadow: var(--shadow-pop); padding: 8px; }
+  .menu-add h3 { margin: 4px 10px 6px; font-size: 11px; font-weight: 800; color: var(--ink3); letter-spacing: .5px; text-transform: uppercase; }
+  .menu-add button { width: 100%; display: flex; gap: 10px; align-items: center; min-height: 52px; padding: 6px 10px; border: 0; border-radius: 10px; background: transparent; text-align: left; }
+  .menu-add button:hover, .menu-add button:focus-visible { background: var(--primary-ghost); }
+  .menu-add .ic { width: 30px; height: 30px; border-radius: 9px; background: var(--bg-soft); border: 1px solid var(--ink5); display: grid; place-items: center; color: var(--primary); flex: none; }
+  .menu-add .ic svg { width: 15px; height: 15px; }
+  .menu-add b { display: block; font-size: 13.5px; }
+  .menu-add span { display: block; color: var(--ink3); font-size: 12px; }
+  .fundo-menu { position: fixed; inset: 0; z-index: 25; }
+
+  /* ── Celular (container ≤ 767) ─────────────────────────── */
+  @container tela (max-width: 767px) {
+    .pagina { padding: 12px 16px 96px; gap: 10px; }
+    .topo-tela h1 { font-size: 19px; }
+    .cab-produto { padding: 12px; }
+    .cab-produto .foto { width: 52px; height: 52px; }
+    .cab-produto .nome { font-size: 16px; }
+    .abas button { font-size: 12.5px; padding: 0 6px; }
+    .conteudo { padding: 10px; }
+    .pz { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+    .pz-previa { position: sticky; top: 0; z-index: 6; gap: 8px; }
+    .previa { padding: 8px; box-shadow: var(--shadow); }
+    .previa .palco { aspect-ratio: auto; height: 190px; transition: height .2s; }
+    .previa.compacta .palco { height: 84px; }
+    .previa.compacta .previa-acoes, .previa.compacta .previa-links, .previa.compacta .legenda, .previa.compacta .gira { display: none; }
+    .previa.compacta .lados-previa .chip { min-height: 32px; }
+    .lado { grid-template-columns: minmax(0, 1fr); }
+    .lado .amais { margin-left: 0; }
+    .campo-corpo .duas { grid-template-columns: minmax(0, 1fr); }
+    .rodape { position: fixed; left: 12px; right: 12px; bottom: 12px; border-radius: 16px; }
+    .moldura.celular .rodape { position: sticky; left: auto; right: auto; bottom: 8px; }
+    .menu-add { position: fixed; left: 12px; right: 12px; bottom: 12px; top: auto; width: auto; border-radius: 18px; }
+    .lista-modelos { position: fixed; left: 12px; right: 12px; bottom: 12px; top: auto; border-radius: 18px; }
+    .moldura.celular .menu-add, .moldura.celular .lista-modelos { position: absolute; }
+    .cartao-cab .dir .btn span { display: none; }
+    .cartao-cab .dir .btn { padding: 0 12px; }
+  }
+  /* Toque: nada depende de hover; os alvos já são de 44 px. */
+  @media (hover: none) { .campo-cab:hover { background: transparent; } }
+  @media (hover: hover) { .campo-cab:hover { background: color-mix(in srgb, var(--card-elev) 60%, transparent); } }
+</style>
+</head>
+<body>
+
+<div class="estados" role="toolbar" aria-label="Estados do mockup">
+  <span class="grupo"><b>Estado</b>
+    <button data-g="estado" data-v="novo" aria-pressed="true">Produto novo</button>
+    <button data-g="estado" data-v="configurado" aria-pressed="false">Já configurado</button>
+    <button data-g="estado" data-v="camiseta" aria-pressed="false">Camiseta · frente e verso</button>
+    <button data-g="estado" data-v="caneca" aria-pressed="false">Caneca · volta inteira</button>
+  </span>
+  <span class="grupo"><b>Tema</b>
+    <button data-g="tema" data-v="light" aria-pressed="true">Claro</button>
+    <button data-g="tema" data-v="dark" aria-pressed="false">Escuro</button>
+  </span>
+  <span class="grupo"><b>Largura</b>
+    <button data-g="largura" data-v="auto" aria-pressed="true">Automática</button>
+    <button data-g="largura" data-v="celular" aria-pressed="false">Celular 390</button>
+  </span>
+</div>
+
+<div class="moldura" id="moldura">
+<div class="rolagem" id="rolagem">
+<main class="pagina">
+  <div class="topo-tela">
+    <div>
+      <div class="migalha">Estoque · Catálogo Studio</div>
+      <h1>Produto</h1>
+    </div>
+    <button class="voltar" type="button">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      Voltar para a lista
+    </button>
+  </div>
+
+  <div class="cab-produto">
+    <div class="foto" id="fotoProduto"></div>
+    <div style="min-width:0;flex:1">
+      <p class="nome" id="nomeProduto">Camiseta algodão penteado</p>
+      <div class="meta"><b id="precoProduto">R$ 59,90</b> · <span id="estoqueProduto">24 un em estoque</span></div>
+      <div class="selos">
+        <span class="selo prim">✦ Personalizável</span>
+        <span class="selo acc" id="seloModelo">Modelo 3D</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="abas" role="tablist" aria-label="Seções do produto">
+    <button role="tab" aria-selected="false" type="button"><i class="pt ok"></i>Produto</button>
+    <button role="tab" aria-selected="true" type="button"><i class="pt" id="ptPz"></i>Personalização</button>
+    <button role="tab" aria-selected="false" type="button"><i class="pt"></i>Custo</button>
+  </div>
+
+  <section class="conteudo" role="tabpanel" aria-label="Personalização">
+    <div class="pz">
+      <!-- ── Prévia ────────────────────────────────────────── -->
+      <aside class="pz-previa" id="colPrevia">
+        <div class="previa" id="previa">
+          <div class="lados-previa" id="ladosPrevia" role="tablist" aria-label="Lado da peça na prévia"></div>
+          <div class="palco">
+            <div id="palco" aria-label="Prévia da peça com a arte de exemplo" role="img"></div>
+            <span class="legenda" id="legendaPalco">Arte de exemplo</span>
+            <span class="gira" id="giraPalco" hidden>↻ gira na loja</span>
+          </div>
+          <div class="arte-teste" id="arteTeste" hidden>
+            <span>Testando com <b id="arteTesteNome">logo-helena.png</b> · não é salvo</span>
+            <button class="btn link peq" type="button" id="btnTirarArte">Tirar</button>
+          </div>
+          <div class="previa-acoes">
+            <button class="btn cont" type="button" id="btnTestar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+              Testar com a sua arte
+            </button>
+          </div>
+          <div class="previa-links">
+            <button class="btn link peq" type="button">Ver na loja ↗</button>
+            <button class="btn link peq" type="button">Enviar no WhatsApp</button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- ── Formulário ────────────────────────────────────── -->
+      <div class="pz-form">
+        <div class="interruptor">
+          <div class="txt">
+            <b>Este produto aceita personalização</b>
+            <span id="txtInterruptor">A cliente envia a arte e escolhe o que vai na peça.</span>
+          </div>
+          <button class="switch" type="button" role="switch" aria-checked="true" id="swPz" aria-label="Este produto aceita personalização"></button>
+        </div>
+
+        <div id="blocos" style="display:flex;flex-direction:column;gap:12px">
+          <div class="aviso" id="avisoNovo" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+            <span>Deixamos o mais comum pronto: frente, arte da cliente e nome na peça. Confira e salve, ou ajuste o que for diferente.</span>
+          </div>
+
+          <!-- 1 · Como a peça aparece -->
+          <section class="cartao" aria-labelledby="h1c">
+            <div class="cartao-cab">
+              <span class="num">1</span>
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg></span>
+              <h2 id="h1c">Como a peça aparece na loja</h2>
+            </div>
+            <div class="cartao-corpo">
+              <div class="seletor" id="seletor">
+                <button type="button" id="btnSeletor" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="thumb" id="seletorThumb"></span>
+                  <span class="t"><b id="seletorNome">Camiseta 3D</b><span id="seletorMeta">Modelo 3D · frente e verso</span></span>
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="color:var(--ink3)"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="lista-modelos" id="listaModelos" role="listbox" aria-label="Modelo da peça" hidden></div>
+              </div>
+              <div class="linha" id="linhaFoto" hidden>
+                <button class="btn" type="button">Marcar a área na foto</button>
+                <span class="un">A arte cai na foto da peça, na luz da foto. Só aparece sem um modelo escolhido.</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- 2 · Onde imprime -->
+          <section class="cartao" aria-labelledby="h2c">
+            <div class="cartao-cab">
+              <span class="num">2</span>
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></span>
+              <h2 id="h2c">Onde imprime</h2>
+            </div>
+            <div class="cartao-corpo">
+              <div class="chips" id="chipsLados" role="group" aria-label="Lados que recebem impressão"></div>
+              <div class="lados" id="linhasLados"></div>
+              <div class="aviso" id="avisoLadoSemCampo" hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+                <span id="txtLadoSemCampo"></span>
+              </div>
+            </div>
+          </section>
+
+          <!-- 3 · O que a cliente escolhe -->
+          <section class="cartao" aria-labelledby="h3c" style="position:relative">
+            <div class="cartao-cab">
+              <span class="num">3</span>
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+              <h2 id="h3c">O que a cliente escolhe</h2>
+              <div class="dir" style="position:relative">
+                <button class="btn peq" type="button" id="btnAdd" aria-haspopup="menu" aria-expanded="false">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                  <span>Adicionar</span>
+                </button>
+                <div class="menu-add" id="menuAdd" role="menu" hidden>
+                  <h3>O que adicionar</h3>
+                  <button role="menuitem" type="button" data-tipo="arte"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></span><div><b>Arte da cliente</b><span>Ela envia um arquivo ou escolhe da galeria</span></div></button>
+                  <button role="menuitem" type="button" data-tipo="texto"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg></span><div><b>Texto</b><span>Nome, frase ou data que ela digita</span></div></button>
+                  <button role="menuitem" type="button" data-tipo="cor"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></svg></span><div><b>Cor da peça</b><span>Ela escolhe entre as cores que você tem</span></div></button>
+                  <button role="menuitem" type="button" data-tipo="opcao"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span><div><b>Opção</b><span>Tamanho, sabor, acabamento: uma lista</span></div></button>
+                </div>
+              </div>
+            </div>
+            <div class="cartao-corpo" id="listaCampos"></div>
+          </section>
+
+          <!-- 4 · Serviço de arte -->
+          <section class="cartao" aria-labelledby="h4c">
+            <div class="cartao-cab">
+              <span class="num">4</span>
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="m2 2 7.6 7.6"/><circle cx="11" cy="11" r="2"/></svg></span>
+              <h2 id="h4c">Serviço de arte</h2>
+              <div class="dir"><button class="switch acc" type="button" role="switch" aria-checked="true" id="swServico" aria-label="Oferecer ajuste ou criação da arte"></button></div>
+            </div>
+            <div class="cartao-corpo" id="corpoServico">
+              <div class="resumo-servico" id="resumoServico">
+                <span>Ajustar a arte da cliente <b>R$ 15,00</b></span><span class="x">·</span>
+                <span>Criar do zero <b>R$ 40,00</b></span>
+                <span class="tag loja">padrão da loja</span>
+                <button class="btn link peq" type="button" id="btnMudarServico">Mudar só neste produto</button>
+              </div>
+              <div class="duas" id="editServico" hidden style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+                <div><label class="rotulo" for="svAjuste">Ajustar a arte (R$)</label><span class="moeda-wrap" style="display:block"><input class="entrada moeda" style="width:100%" id="svAjuste" value="15,00" inputmode="decimal" /></span></div>
+                <div><label class="rotulo" for="svCriar">Criar do zero (R$)</label><span class="moeda-wrap" style="display:block"><input class="entrada moeda" style="width:100%" id="svCriar" value="40,00" inputmode="decimal" /></span></div>
+                <div style="grid-column:1/-1"><button class="btn link peq" type="button" id="btnVoltarPadrao">Voltar ao padrão da loja</button></div>
+              </div>
+              <p class="ajuda" id="ajudaServico">Preço 0 mantém o caminho visível e sem custo. O briefing da cliente vai junto no pedido.</p>
+            </div>
+          </section>
+
+          <!-- Avançado -->
+          <details class="avancado" id="avancado">
+            <summary>
+              <span class="t"><b>Avançado</b><span id="resumoAvancado">Técnica automática · área centralizada · nome até 30 letras · sem guia de medidas</span></span>
+              <span class="seta"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+            </summary>
+            <div class="corpo">
+              <div>
+                <span class="rotulo">Técnica de impressão</span>
+                <div class="chips" id="chipsTecnica" role="radiogroup" aria-label="Técnica de impressão">
+                  <button class="chip peq" role="radio" aria-checked="true" type="button" data-v="auto">Automática</button>
+                  <button class="chip peq" role="radio" aria-checked="false" type="button" data-v="sub">Sublimação</button>
+                  <button class="chip peq" role="radio" aria-checked="false" type="button" data-v="dtf">DTF / transfer</button>
+                  <button class="chip peq" role="radio" aria-checked="false" type="button" data-v="outra">Outra</button>
+                </div>
+                <p class="ajuda" id="ajudaTecnica">Muda só como a arte aparece na prévia. Automática: camiseta usa DTF e caneca usa sublimação.</p>
+              </div>
+              <div id="posicoes"></div>
+              <div>
+                <label class="rotulo" for="maxLetras">Limite de letras nos textos</label>
+                <div class="linha"><input class="entrada n" id="maxLetras" value="30" inputmode="numeric" /><span class="un">letras por campo de texto</span></div>
+              </div>
+              <div>
+                <span class="rotulo">Guia de medidas</span>
+                <div class="guia"><b>Escolher arquivo</b>PNG, JPG, WEBP ou PDF, até 15 MB. A cliente vê "Ver guia de medidas" na loja.</div>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <div class="rodape" id="rodape">
+          <div class="status pendente" id="statusSalvar"><i></i><span id="txtStatus">Não salvo · Frente: 2 campos</span></div>
+          <button class="btn prim" type="button" id="btnSalvar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+            Salvar
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+</div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var SVG_NS = "http://www.w3.org/2000/svg";
+
+  // ── Dados do mockup ─────────────────────────────────────
+  var MODELOS = [
+    { key: "camiseta-3d", nome: "Camiseta 3D", tipo: "3D", forma: "camiseta", meta: "Modelo 3D · frente e verso", area: { front: [28, 38], back: [28, 38] } },
+    { key: "caneca-classica", nome: "Caneca clássica 325 ml", tipo: "3D", forma: "caneca", meta: "Modelo 3D · painel e volta inteira", area: { front: [9, 8], back: [9, 8], middle: [20, 8] } },
+    { key: "caneca-chopp", nome: "Caneca chopp 475 ml", tipo: "3D", forma: "caneca", meta: "Modelo 3D · painel e volta inteira", area: { front: [10, 11], back: [10, 11], middle: [22, 11] } },
+    { key: "baby-look", nome: "Baby look", tipo: "2D", forma: "camiseta", meta: "Foto de estúdio · frente e verso", area: { front: [24, 32], back: [24, 32] } },
+    { key: "ecobag", nome: "Ecobag de algodão cru", tipo: "2D", forma: "ecobag", meta: "Foto de estúdio · só frente", area: { front: [25, 30] } },
+    { key: null, nome: "Usar a foto do produto", tipo: "foto", forma: "foto", meta: "Você marca na foto onde a arte cai", area: { front: [20, 20], back: [20, 20], middle: [20, 8] } }
+  ];
+  var NOME_LADO = { front: "Frente", back: "Verso", middle: "Volta inteira" };
+  var SUB_LADO = { front: "", back: "", middle: "a arte dá a volta na peça" };
+
+  function campoArte(lado, obrig, arquivo, galeria, aberto) { return { tipo: "arte", lado: lado, rotulo: "Arte da cliente", obrig: obrig, arquivo: arquivo, galeria: galeria, aberto: !!aberto }; }
+  function campoTexto(lado, rotulo, obrig, aberto) { return { tipo: "texto", lado: lado, rotulo: rotulo, obrig: obrig, aberto: !!aberto }; }
+
+  var ESTADOS = {
+    novo: {
+      produto: { nome: "Camiseta algodão penteado", preco: "R$ 59,90", estoque: "24 un em estoque", forma: "camiseta" },
+      modelo: "camiseta-3d", lados: { front: true, back: false, middle: false }, extra: { back: "", middle: "" },
+      campos: [campoArte("front", true, true, false, true), campoTexto("front", "Nome na peça", false)],
+      salvo: false, novo: true
+    },
+    configurado: {
+      produto: { nome: "Caneca branca 325 ml", preco: "R$ 34,90", estoque: "58 un em estoque", forma: "caneca" },
+      modelo: "caneca-classica", lados: { front: true, back: false, middle: false }, extra: { back: "", middle: "" },
+      campos: [
+        campoArte("front", true, true, true),
+        campoTexto("front", "Nome na caneca", false),
+        { tipo: "cor", lado: "front", rotulo: "Cor da alça", obrig: true, aberto: true, cores: [["#FFFFFF", "Branca", ""], ["#0F172A", "Preta", "3,00"], ["#EF4444", "Vermelha", "3,00"]] }
+      ],
+      salvo: true
+    },
+    camiseta: {
+      produto: { nome: "Camiseta algodão penteado", preco: "R$ 59,90", estoque: "24 un em estoque", forma: "camiseta" },
+      modelo: "camiseta-3d", lados: { front: true, back: true, middle: false }, extra: { back: "8,00", middle: "" },
+      campos: [campoArte("front", true, true, false), campoTexto("front", "Nome na peça", false), campoArte("back", false, true, false, true)],
+      salvo: true
+    },
+    caneca: {
+      produto: { nome: "Caneca clássica 325 ml", preco: "R$ 39,90", estoque: "31 un em estoque", forma: "caneca" },
+      modelo: "caneca-classica", lados: { front: true, back: false, middle: true }, extra: { back: "", middle: "5,00" },
+      campos: [campoArte("front", true, true, true), campoArte("middle", false, true, false, true), campoTexto("front", "Nome na caneca", false),
+        { tipo: "opcao", lado: "front", rotulo: "Embalagem", obrig: false, opcoes: [["Caixa branca", ""], ["Caixa de presente", "6,00"]] }],
+      salvo: true
+    }
+  };
+
+  var ui = { estado: "novo", tema: "light", largura: "auto" };
+  var S = null;            // estado de trabalho (cópia do preset)
+  var ladoPrevia = "front";
+  var arteTeste = false;
+  var servicoLocal = false;
+
+  function clonar(o) { return JSON.parse(JSON.stringify(o)); }
+  function modelo() { for (var i = 0; i < MODELOS.length; i++) if (MODELOS[i].key === S.modelo) return MODELOS[i]; return MODELOS[MODELOS.length - 1]; }
+  function ladosAtivos() { return ["front", "back", "middle"].filter(function (l) { return S.lados[l]; }); }
+  function areaDe(lado) { if (!S.areas[lado]) { var a = (modelo().area[lado] || [20, 20]); S.areas[lado] = [a[0], a[1]]; } return S.areas[lado]; }
+  function marcarNaoSalvo() { S.salvo = false; renderRodape(); }
+
+  // ── Desenho da peça (SVG de mentira) ────────────────────
+  function el(tag, attrs, kids) {
+    var e = document.createElementNS(SVG_NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    (kids || []).forEach(function (c) { e.appendChild(c); });
+    return e;
+  }
+  function selo(cx, cy, r, comNome, escX) {
+    var g = el("g", { transform: "translate(" + cx + " " + cy + ") scale(" + (escX || 1) + " 1)" });
+    g.appendChild(el("circle", { cx: 0, cy: 0, r: r, fill: "#BE185D" }));
+    g.appendChild(el("circle", { cx: 0, cy: 0, r: r * 0.78, fill: "none", stroke: "#FBCFE8", "stroke-width": r * 0.06 }));
+    var t = el("text", { x: 0, y: r * 0.18, "text-anchor": "middle", "font-family": "Georgia, serif", "font-size": r * 0.62, fill: "#FDF2F8", "font-weight": "700" });
+    t.textContent = "HM"; g.appendChild(t);
+    if (comNome) { var n = el("text", { x: 0, y: r + 18, "text-anchor": "middle", "font-family": "Georgia, serif", "font-size": 15, fill: "#1E293B", "font-style": "italic" }); n.textContent = "Helena"; g.appendChild(n); }
+    return g;
+  }
+  function temTextoNoLado(lado) { return S.campos.some(function (c) { return c.tipo === "texto" && c.lado === lado; }); }
+  function temArteNoLado(lado) { return S.campos.some(function (c) { return c.tipo === "arte" && c.lado === lado; }); }
+
+  function desenhaCamiseta(svg, lado, mini) {
+    var corPeca = corDaPeca() || "#F1F0EC";
+    var escuro = corEscura(corPeca);
+    var corpo = "M96 44 L62 60 L36 112 L82 130 L82 264 L218 264 L218 130 L264 112 L238 60 L204 44 Q150 78 96 44 Z";
+    svg.appendChild(el("path", { d: corpo, fill: corPeca, stroke: escuro ? "#475569" : "#C9C7C0", "stroke-width": 1.5 }));
+    // sombras de dobra
+    svg.appendChild(el("path", { d: "M82 132 Q96 200 90 262", fill: "none", stroke: escuro ? "rgba(255,255,255,.08)" : "rgba(0,0,0,.06)", "stroke-width": 8 }));
+    svg.appendChild(el("path", { d: "M218 132 Q204 200 210 262", fill: "none", stroke: escuro ? "rgba(255,255,255,.08)" : "rgba(0,0,0,.06)", "stroke-width": 8 }));
+    // gola
+    if (lado === "front") svg.appendChild(el("path", { d: "M104 46 Q150 92 196 46", fill: "none", stroke: escuro ? "#64748B" : "#B9B6AE", "stroke-width": 5 }));
+    else svg.appendChild(el("path", { d: "M104 46 Q150 66 196 46", fill: "none", stroke: escuro ? "#64748B" : "#B9B6AE", "stroke-width": 5 }));
+    if (mini) return;
+    // área
+    var a = areaDe(lado); var w = Math.min(100, a[0] * 3.4), h = Math.min(130, a[1] * 3.4);
+    var x = 150 - w / 2, y = 108;
+    svg.appendChild(el("rect", { x: x, y: y, width: w, height: h, rx: 4, fill: "none", stroke: "#3B82F6", "stroke-width": 1.2, "stroke-dasharray": "5 4", opacity: .75 }));
+    var comNome = temTextoNoLado(lado);
+    if (temArteNoLado(lado) || arteTeste) svg.appendChild(selo(150, y + (comNome ? 42 : h / 2), 34, comNome));
+    else if (comNome) { var n = el("text", { x: 150, y: y + h / 2, "text-anchor": "middle", "font-family": "Georgia, serif", "font-size": 18, fill: "#1E293B", "font-style": "italic" }); n.textContent = "Helena"; svg.appendChild(n); }
+  }
+  function desenhaCaneca(svg, lado, mini) {
+    var corPeca = corDaPeca() || "#F7F7F5";
+    var escuro = corEscura(corPeca);
+    var defs = el("defs");
+    var g = el("linearGradient", { id: "cil", x1: 0, x2: 1, y1: 0, y2: 0 });
+    g.appendChild(el("stop", { offset: "0", "stop-color": escuro ? "#000" : "#000", "stop-opacity": escuro ? ".35" : ".16" }));
+    g.appendChild(el("stop", { offset: ".28", "stop-color": "#fff", "stop-opacity": escuro ? ".04" : ".0" }));
+    g.appendChild(el("stop", { offset: ".55", "stop-color": "#fff", "stop-opacity": escuro ? ".08" : ".22" }));
+    g.appendChild(el("stop", { offset: "1", "stop-color": "#000", "stop-opacity": escuro ? ".4" : ".2" }));
+    defs.appendChild(g); svg.appendChild(defs);
+    // alça
+    svg.appendChild(el("path", { d: "M206 118 C258 112 258 198 206 194", fill: "none", stroke: corPeca, "stroke-width": 20, "stroke-linecap": "round" }));
+    svg.appendChild(el("path", { d: "M206 118 C258 112 258 198 206 194", fill: "none", stroke: "url(#cil)", "stroke-width": 20, "stroke-linecap": "round" }));
+    // corpo
+    svg.appendChild(el("rect", { x: 78, y: 70, width: 130, height: 168, rx: 14, fill: corPeca }));
+    svg.appendChild(el("rect", { x: 78, y: 70, width: 130, height: 168, rx: 14, fill: "url(#cil)" }));
+    svg.appendChild(el("ellipse", { cx: 143, cy: 70, rx: 65, ry: 10, fill: escuro ? "#334155" : "#E7E7E4", stroke: escuro ? "#475569" : "#CFCFCA" }));
+    svg.appendChild(el("ellipse", { cx: 143, cy: 70, rx: 56, ry: 7, fill: escuro ? "#1E293B" : "#F2F2EF" }));
+    if (mini) return;
+    var comNome = temTextoNoLado(lado);
+    if (lado === "middle") {
+      // faixa que dá a volta: três cópias, as das pontas achatadas
+      var faixaY = 112, faixaH = 92;
+      svg.appendChild(el("rect", { x: 80, y: faixaY, width: 126, height: faixaH, fill: "none", stroke: "#3B82F6", "stroke-width": 1.2, "stroke-dasharray": "5 4", opacity: .75 }));
+      var clip = el("clipPath", { id: "faixa" }); clip.appendChild(el("rect", { x: 80, y: faixaY, width: 126, height: faixaH })); defs.appendChild(clip);
+      var gg = el("g", { "clip-path": "url(#faixa)" });
+      if (temArteNoLado("middle") || arteTeste) {
+        gg.appendChild(selo(92, faixaY + 40, 26, false, .45));
+        gg.appendChild(selo(143, faixaY + 40, 26, comNome));
+        gg.appendChild(selo(196, faixaY + 40, 26, false, .45));
+      } else { var n0 = el("text", { x: 143, y: faixaY + 52, "text-anchor": "middle", "font-family": "Georgia, serif", "font-size": 18, fill: "#1E293B", "font-style": "italic" }); n0.textContent = "Helena"; gg.appendChild(n0); }
+      svg.appendChild(gg);
+      svg.appendChild(el("rect", { x: 78, y: faixaY, width: 130, height: faixaH, fill: "url(#cil)", opacity: .6 }));
+    } else {
+      var a = areaDe(lado); var w = Math.min(96, a[0] * 9), h = Math.min(100, a[1] * 9);
+      var x = 143 - w / 2, y = 152 - h / 2;
+      svg.appendChild(el("rect", { x: x, y: y, width: w, height: h, rx: 4, fill: "none", stroke: "#3B82F6", "stroke-width": 1.2, "stroke-dasharray": "5 4", opacity: .75 }));
+      if (temArteNoLado(lado) || arteTeste) svg.appendChild(selo(143, y + (comNome ? 34 : h / 2), 26, comNome));
+      else if (comNome) { var n = el("text", { x: 143, y: 158, "text-anchor": "middle", "font-family": "Georgia, serif", "font-size": 18, fill: "#1E293B", "font-style": "italic" }); n.textContent = "Helena"; svg.appendChild(n); }
+    }
+  }
+  function desenhaEcobag(svg, lado, mini) {
+    svg.appendChild(el("path", { d: "M110 40 Q150 20 190 40 L186 92 L114 92 Z", fill: "none", stroke: "#B7A98A", "stroke-width": 8 }));
+    svg.appendChild(el("rect", { x: 70, y: 88, width: 160, height: 170, rx: 8, fill: "#E8DCC2", stroke: "#C9B995", "stroke-width": 1.5 }));
+    if (mini) return;
+    svg.appendChild(el("rect", { x: 105, y: 120, width: 90, height: 108, rx: 4, fill: "none", stroke: "#3B82F6", "stroke-width": 1.2, "stroke-dasharray": "5 4", opacity: .75 }));
+    if (temArteNoLado(lado) || arteTeste) svg.appendChild(selo(150, 160, 30, temTextoNoLado(lado)));
+  }
+  function desenhaFoto(svg, lado, mini) {
+    svg.appendChild(el("rect", { x: 40, y: 40, width: 220, height: 220, rx: 12, fill: "#D9DDE5" }));
+    svg.appendChild(el("path", { d: "M40 220 L120 150 L170 200 L200 170 L260 230 L260 260 L40 260 Z", fill: "#B9C1CF" }));
+    svg.appendChild(el("circle", { cx: 200, cy: 100, r: 18, fill: "#F1F5F9" }));
+    if (mini) return;
+    var t = el("text", { x: 150, y: 150, "text-anchor": "middle", "font-family": "system-ui, sans-serif", "font-size": 13, fill: "#475569" }); t.textContent = "Foto do produto"; svg.appendChild(t);
+    var t2 = el("text", { x: 150, y: 170, "text-anchor": "middle", "font-family": "system-ui, sans-serif", "font-size": 11, fill: "#64748B" }); t2.textContent = "marque a área para ver a arte"; svg.appendChild(t2);
+  }
+  function corDaPeca() {
+    var c = S.campos.filter(function (x) { return x.tipo === "cor" && x.rotulo.toLowerCase().indexOf("peça") >= 0; })[0];
+    return c && c.cores[0] ? c.cores[0][0] : null;
+  }
+  function corEscura(hex) { var n = parseInt(hex.slice(1), 16); var r = n >> 16, g = (n >> 8) & 255, b = n & 255; return (0.299 * r + 0.587 * g + 0.114 * b) < 128; }
+  function desenhaPeca(container, forma, lado, mini) {
+    container.innerHTML = "";
+    var svg = el("svg", { viewBox: "0 0 300 300", "aria-hidden": "true" });
+    var fn = { camiseta: desenhaCamiseta, caneca: desenhaCaneca, ecobag: desenhaEcobag, foto: desenhaFoto }[forma] || desenhaCamiseta;
+    fn(svg, lado, mini);
+    container.appendChild(svg);
+  }
+
+  // ── Render ──────────────────────────────────────────────
+  function renderCabecalho() {
+    $("nomeProduto").textContent = S.produto.nome;
+    $("precoProduto").textContent = S.produto.preco;
+    $("estoqueProduto").textContent = S.produto.estoque;
+    desenhaPeca($("fotoProduto"), S.produto.forma, "front", true);
+    var m = modelo();
+    $("seloModelo").textContent = m.key ? "Modelo " + m.tipo : "Mockup na foto";
+    $("ptPz").className = "pt " + (S.salvo ? "ok" : "meio");
+  }
+  function renderSeletor() {
+    var m = modelo();
+    $("seletorNome").textContent = m.nome;
+    $("seletorMeta").innerHTML = (m.key ? '<span class="tag ' + (m.tipo === "3D" ? "d3" : "d2") + '">' + m.tipo + "</span> " : "") + m.meta;
+    desenhaPeca($("seletorThumb"), m.forma, "front", true);
+    $("linhaFoto").hidden = !!m.key;
+    var lista = $("listaModelos"); lista.innerHTML = "";
+    var grupos = [["Modelos 3D", "3D"], ["Fotos de estúdio (2D)", "2D"], ["Sem modelo", "foto"]];
+    grupos.forEach(function (gr) {
+      var h = document.createElement("div"); h.className = "grupo"; h.textContent = gr[0]; lista.appendChild(h);
+      MODELOS.filter(function (x) { return x.tipo === gr[1]; }).forEach(function (x) {
+        var b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "option"); b.setAttribute("aria-selected", String(x.key === S.modelo));
+        var th = document.createElement("span"); th.className = "thumb"; desenhaPeca(th, x.forma, "front", true);
+        var t = document.createElement("span"); t.className = "t"; t.innerHTML = "<b>" + x.nome + "</b><span>" + x.meta + "</span>";
+        b.appendChild(th); b.appendChild(t);
+        b.addEventListener("click", function () { S.modelo = x.key; S.areas = {}; fecharSeletor(); renderTudo(); });
+        lista.appendChild(b);
+      });
+    });
+  }
+  function abrirSeletor() { $("listaModelos").hidden = false; $("btnSeletor").setAttribute("aria-expanded", "true"); mostrarFundo(fecharSeletor); var o = $("listaModelos").querySelector('[aria-selected="true"]'); if (o) o.focus(); }
+  function fecharSeletor() { $("listaModelos").hidden = true; $("btnSeletor").setAttribute("aria-expanded", "false"); tirarFundo(); }
+
+  var fundo = null;
+  function mostrarFundo(fechar) { tirarFundo(); fundo = document.createElement("div"); fundo.className = "fundo-menu"; fundo.addEventListener("click", fechar); document.body.appendChild(fundo); }
+  function tirarFundo() { if (fundo) { fundo.remove(); fundo = null; } }
+
+  function renderLados() {
+    var chips = $("chipsLados"); chips.innerHTML = "";
+    var m = modelo();
+    var disponiveis = ["front", "back", "middle"].filter(function (l) { return !!m.area[l]; });
+    disponiveis.forEach(function (l) {
+      var b = document.createElement("button"); b.type = "button"; b.className = "chip" + (l === "front" ? " fixo" : "");
+      b.setAttribute("role", "checkbox"); b.setAttribute("aria-checked", String(!!S.lados[l]));
+      b.innerHTML = '<span class="marca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>' + NOME_LADO[l] + (l === "front" ? " <small>sempre</small>" : "");
+      if (l === "front") { b.setAttribute("aria-disabled", "true"); }
+      else b.addEventListener("click", function () {
+        S.lados[l] = !S.lados[l];
+        if (!S.lados[l]) { S.campos.forEach(function (c) { if (c.lado === l) c.lado = "front"; }); if (ladoPrevia === l) ladoPrevia = "front"; }
+        marcarNaoSalvo(); renderTudo();
+      });
+      chips.appendChild(b);
+    });
+    var linhas = $("linhasLados"); linhas.innerHTML = "";
+    ladosAtivos().forEach(function (l) {
+      var a = areaDe(l);
+      var d = document.createElement("div"); d.className = "lado";
+      var nome = '<div class="nome">' + NOME_LADO[l] + (SUB_LADO[l] ? "<small>" + SUB_LADO[l] + "</small>" : "") + "</div>";
+      var med = '<div class="medidas">' +
+        '<label class="sr" for="w_' + l + '">Largura em cm</label><input class="entrada n" id="w_' + l + '" value="' + a[0] + '" inputmode="decimal" />' +
+        '<span class="x">×</span>' +
+        '<label class="sr" for="h_' + l + '">Altura em cm</label><input class="entrada n" id="h_' + l + '" value="' + a[1] + '" inputmode="decimal" /><span class="un">cm</span>' +
+        (l !== "front" ? '<span class="amais"><label for="x_' + l + '">a mais</label><span class="moeda-wrap"><input class="entrada moeda" id="x_' + l + '" value="' + (S.extra[l] || "") + '" placeholder="0,00" inputmode="decimal" /></span><span>vazio = sem cobrança</span></span>' : "") +
+        "</div>";
+      d.innerHTML = nome + med;
+      linhas.appendChild(d);
+      d.querySelector("#w_" + l).addEventListener("input", function (e) { a[0] = Number(String(e.target.value).replace(",", ".")) || a[0]; marcarNaoSalvo(); renderPrevia(); });
+      d.querySelector("#h_" + l).addEventListener("input", function (e) { a[1] = Number(String(e.target.value).replace(",", ".")) || a[1]; marcarNaoSalvo(); renderPrevia(); });
+      var x = d.querySelector("#x_" + l); if (x) x.addEventListener("input", function (e) { S.extra[l] = e.target.value; marcarNaoSalvo(); });
+    });
+    // aviso: lado ligado sem campo
+    var sem = ladosAtivos().filter(function (l) { return l !== "front" && !S.campos.some(function (c) { return c.lado === l; }); });
+    $("avisoLadoSemCampo").hidden = sem.length === 0;
+    if (sem.length) $("txtLadoSemCampo").textContent = NOME_LADO[sem[0]] + " está ligado, mas nenhum campo vai nele. A cliente não vai ver esse lado na loja. Adicione uma arte ou um texto e escolha o lado " + NOME_LADO[sem[0]].toLowerCase() + ".";
+    renderPosicoes();
+  }
+
+  var ICONE = {
+    arte: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>',
+    texto: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>',
+    cor: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></svg>',
+    opcao: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
+    seta: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
+    cima: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>',
+    baixo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
+    lixo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>'
+  };
+  function resumoCampo(c) {
+    var partes = [];
+    if (ladosAtivos().length > 1) partes.push(NOME_LADO[c.lado]);
+    partes.push(c.obrig ? "Obrigatório" : "Opcional");
+    if (c.tipo === "arte") partes.push(c.arquivo && c.galeria ? "arquivo ou galeria" : c.galeria ? "galeria da loja" : "envia o arquivo");
+    if (c.tipo === "texto") partes.push("até " + ($("maxLetras").value || 30) + " letras");
+    if (c.tipo === "cor") partes.push(c.cores.length + " cores" + (c.cores.some(function (x) { return x[2]; }) ? " · preço por cor" : ""));
+    if (c.tipo === "opcao") partes.push(c.opcoes.map(function (o) { return o[0]; }).join(", "));
+    return partes.join(" · ");
+  }
+  function renderCampos() {
+    var lista = $("listaCampos"); lista.innerHTML = "";
+    if (!S.campos.length) { var v = document.createElement("p"); v.className = "ajuda"; v.textContent = "Nada ainda. Adicione o que a cliente escolhe: a arte, um nome, a cor."; lista.appendChild(v); }
+    S.campos.forEach(function (c, i) {
+      var d = document.createElement("details"); d.className = "campo"; if (c.aberto) d.open = true;
+      var sum = document.createElement("summary"); sum.className = "campo-cab"; sum.style.listStyle = "none";
+      sum.innerHTML = '<span class="ic' + (c.tipo === "arte" ? " acc" : "") + '">' + ICONE[c.tipo] + '</span><span class="t"><b>' + c.rotulo + '</b><span>' + resumoCampo(c) + '</span></span><span class="seta">' + ICONE.seta + "</span>";
+      d.appendChild(sum);
+      var corpo = document.createElement("div"); corpo.className = "campo-corpo";
+      var h = "";
+      h += '<div class="duas"><div><label class="rotulo" for="rot_' + i + '">Como aparece para a cliente</label><input class="entrada" id="rot_' + i + '" value="' + c.rotulo + '" /></div>';
+      h += '<label class="caixa"><input type="checkbox" ' + (c.obrig ? "checked" : "") + ' data-obrig="' + i + '" />Obrigatório</label></div>';
+      if (ladosAtivos().length > 1) {
+        h += '<div><span class="rotulo">Em que lado</span><div class="chips" role="radiogroup" aria-label="Lado do campo">' + ladosAtivos().map(function (l) {
+          return '<button class="chip peq" type="button" role="radio" aria-checked="' + (c.lado === l) + '" data-lado="' + l + '">' + NOME_LADO[l] + "</button>";
+        }).join("") + "</div></div>";
+      }
+      if (c.tipo === "arte") {
+        h += '<div><span class="rotulo">De onde vem a arte</span><div class="chips">' +
+          '<button class="chip" type="button" role="checkbox" aria-checked="' + !!c.arquivo + '" data-origem="arquivo"><span class="marca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>Ela envia o arquivo</button>' +
+          '<button class="chip" type="button" role="checkbox" aria-checked="' + !!c.galeria + '" data-origem="galeria"><span class="marca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>Escolhe da galeria da loja</button>' +
+          "</div>" + (c.galeria ? '<div class="linha" style="margin-top:8px"><span class="un">Galeria: <b>todos os 12 templates</b> da loja</span><button class="btn link peq" type="button">Escolher só alguns</button><button class="btn link peq" type="button">Sugerir com IA</button></div>' : "") +
+          '<p class="ajuda">Se marcar os dois, vale qualquer um: arquivo ou galeria. Quem contrata a criação da arte fica dispensado.</p></div>';
+      }
+      if (c.tipo === "cor") {
+        h += '<div><span class="rotulo">Cores · preço a mais por cor</span><div class="paleta">' + c.cores.map(function (k, j) {
+          return '<div class="cor"><span class="sw" style="background:' + k[0] + '"></span><span class="hex">' + k[1] + '<small>' + k[0] + '</small></span><span class="moeda-wrap"><input class="entrada moeda" aria-label="A mais por ' + k[1] + '" value="' + k[2] + '" placeholder="0,00" inputmode="decimal" /></span><button class="ibtn" type="button" aria-label="Tirar a cor ' + k[1] + '" data-tirarcor="' + j + '">' + ICONE.lixo + "</button></div>";
+        }).join("") + '</div><div class="sw-add" style="margin-top:8px">' + ["#F97316", "#FACC15", "#22C55E", "#3B82F6", "#8B5CF6", "#EC4899"].map(function (k) { return '<button type="button" aria-label="Adicionar ' + k + '" data-addcor="' + k + '"><i style="background:' + k + '"></i></button>'; }).join("") + '<button type="button" class="picker" aria-label="Escolher uma cor exata">+</button></div></div>';
+      }
+      if (c.tipo === "opcao") {
+        h += '<div><span class="rotulo">Opções · preço a mais</span><div class="paleta">' + c.opcoes.map(function (o, j) {
+          return '<div class="cor" style="grid-template-columns:minmax(0,1fr) auto 44px"><span class="hex">' + o[0] + '</span><span class="moeda-wrap"><input class="entrada moeda" aria-label="A mais por ' + o[0] + '" value="' + o[1] + '" placeholder="0,00" inputmode="decimal" /></span><button class="ibtn" type="button" aria-label="Tirar a opção ' + o[0] + '" data-tiraropcao="' + j + '">' + ICONE.lixo + "</button></div>";
+        }).join("") + '</div><div class="linha" style="margin-top:8px"><input class="entrada" style="flex:1;min-width:140px" placeholder="Nova opção, ex.: Caixa de presente" aria-label="Nova opção" /><button class="btn peq" type="button">Adicionar</button></div></div>';
+      }
+      h += '<div class="campo-acoes"><button class="ibtn" type="button" aria-label="Mover para cima" data-mover="-1" ' + (i === 0 ? "disabled" : "") + ">" + ICONE.cima + '</button><button class="ibtn" type="button" aria-label="Mover para baixo" data-mover="1" ' + (i === S.campos.length - 1 ? "disabled" : "") + ">" + ICONE.baixo + '</button><button class="ibtn perigo" type="button" aria-label="Tirar este campo" data-tirar="1">' + ICONE.lixo + "</button></div>";
+      corpo.innerHTML = h; d.appendChild(corpo); lista.appendChild(d);
+
+      d.addEventListener("toggle", function () { c.aberto = d.open; });
+      corpo.querySelector("#rot_" + i).addEventListener("input", function (e) { c.rotulo = e.target.value; sum.querySelector("b").textContent = c.rotulo || "Sem nome"; marcarNaoSalvo(); });
+      corpo.querySelector("[data-obrig]").addEventListener("change", function (e) { c.obrig = e.target.checked; marcarNaoSalvo(); renderCampos(); });
+      corpo.querySelectorAll("[data-lado]").forEach(function (b) { b.addEventListener("click", function () { c.lado = b.getAttribute("data-lado"); marcarNaoSalvo(); renderTudo(); }); });
+      corpo.querySelectorAll("[data-origem]").forEach(function (b) { b.addEventListener("click", function () { var k = b.getAttribute("data-origem"); if ((k === "arquivo" ? c.galeria : c.arquivo) || !c[k]) c[k] = !c[k]; marcarNaoSalvo(); renderCampos(); }); });
+      corpo.querySelectorAll("[data-mover]").forEach(function (b) { b.addEventListener("click", function () { var d2 = Number(b.getAttribute("data-mover")); var j = i + d2; if (j < 0 || j >= S.campos.length) return; var t = S.campos[i]; S.campos[i] = S.campos[j]; S.campos[j] = t; marcarNaoSalvo(); renderCampos(); }); });
+      corpo.querySelector("[data-tirar]").addEventListener("click", function () { S.campos.splice(i, 1); marcarNaoSalvo(); renderTudo(); });
+      corpo.querySelectorAll("[data-addcor]").forEach(function (b) { b.addEventListener("click", function () { c.cores.push([b.getAttribute("data-addcor"), "Nova cor", ""]); marcarNaoSalvo(); renderTudo(); }); });
+      corpo.querySelectorAll("[data-tirarcor]").forEach(function (b) { b.addEventListener("click", function () { c.cores.splice(Number(b.getAttribute("data-tirarcor")), 1); marcarNaoSalvo(); renderTudo(); }); });
+      corpo.querySelectorAll("[data-tiraropcao]").forEach(function (b) { b.addEventListener("click", function () { c.opcoes.splice(Number(b.getAttribute("data-tiraropcao")), 1); marcarNaoSalvo(); renderCampos(); }); });
+    });
+  }
+  function adicionarCampo(tipo) {
+    var lado = ladoPrevia;
+    var novo = tipo === "arte" ? campoArte(lado, false, true, false, true)
+      : tipo === "texto" ? campoTexto(lado, "Frase na peça", false, true)
+      : tipo === "cor" ? { tipo: "cor", lado: lado, rotulo: "Cor da peça", obrig: true, aberto: true, cores: [["#FFFFFF", "Branca", ""], ["#0F172A", "Preta", ""]] }
+      : { tipo: "opcao", lado: lado, rotulo: "Tamanho", obrig: true, aberto: true, opcoes: [["P", ""], ["M", ""], ["G", ""], ["GG", "4,00"]] };
+    S.campos.forEach(function (c) { c.aberto = false; });
+    S.campos.push(novo); marcarNaoSalvo(); renderTudo();
+    var ult = $("listaCampos").lastElementChild; if (ult && ult.scrollIntoView) ult.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
+  function renderPosicoes() {
+    var p = $("posicoes"); p.innerHTML = '<span class="rotulo">Posição da área na peça</span>';
+    ladosAtivos().forEach(function (l) {
+      var d = document.createElement("div"); d.className = "linha"; d.style.marginBottom = "6px";
+      d.innerHTML = '<span class="un" style="min-width:96px;font-weight:700;color:var(--ink2)">' + NOME_LADO[l] + '</span><div class="chips" role="radiogroup" aria-label="Posição na ' + NOME_LADO[l] + '">' + ["Esquerda", "Centro", "Direita"].map(function (x) { return '<button class="chip peq" type="button" role="radio" aria-checked="' + (x === "Centro") + '">' + x + "</button>"; }).join("") + "</div>";
+      p.appendChild(d);
+    });
+  }
+
+  function renderPrevia() {
+    var m = modelo();
+    var lp = $("ladosPrevia"); lp.innerHTML = "";
+    var ativos = ladosAtivos();
+    if (ativos.indexOf(ladoPrevia) < 0) ladoPrevia = "front";
+    if (ativos.length > 1) ativos.forEach(function (l) {
+      var b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.setAttribute("role", "tab"); b.setAttribute("aria-selected", String(l === ladoPrevia)); b.setAttribute("aria-pressed", String(l === ladoPrevia)); b.textContent = NOME_LADO[l];
+      b.addEventListener("click", function () { ladoPrevia = l; renderPrevia(); });
+      lp.appendChild(b);
+    });
+    lp.hidden = ativos.length <= 1;
+    desenhaPeca($("palco"), m.forma, ladoPrevia, false);
+    $("giraPalco").hidden = !(ladoPrevia === "middle" || (m.tipo === "3D"));
+    $("giraPalco").textContent = ladoPrevia === "middle" ? "↻ a arte dá a volta" : "↻ gira na loja";
+    $("legendaPalco").textContent = arteTeste ? "Sua arte de teste" : (m.key ? "Arte de exemplo" : "Sem modelo: marque a área na foto");
+    $("arteTeste").hidden = !arteTeste;
+    $("btnTestar").hidden = arteTeste;
+  }
+  function renderServico() {
+    var on = $("swServico").getAttribute("aria-checked") === "true";
+    $("corpoServico").hidden = !on;
+    $("resumoServico").hidden = servicoLocal;
+    $("editServico").hidden = !servicoLocal;
+  }
+  function renderRodape() {
+    var partes = ladosAtivos().map(function (l) { var n = S.campos.filter(function (c) { return c.lado === l; }).length; return NOME_LADO[l] + ": " + n + (n === 1 ? " campo" : " campos"); });
+    var st = $("statusSalvar"); st.className = "status" + (S.salvo ? "" : " pendente");
+    $("txtStatus").textContent = (S.salvo ? "Salvo" : "Não salvo") + " · " + partes.join(" · ");
+    $("btnSalvar").disabled = S.salvo || S.campos.length === 0;
+    $("ptPz").className = "pt " + (S.salvo ? "ok" : "meio");
+  }
+  function renderAvancado() {
+    var tec = $("chipsTecnica").querySelector('[aria-checked="true"]').textContent;
+    var m = modelo();
+    $("resumoAvancado").textContent = "Técnica " + (tec === "Automática" ? "automática" : tec.toLowerCase()) + " · área centralizada · textos até " + ($("maxLetras").value || 30) + " letras · sem guia de medidas";
+    $("ajudaTecnica").textContent = tec === "Automática" ? "Muda só como a arte aparece na prévia. Automática: " + (m.forma === "caneca" ? "caneca usa sublimação" : "camiseta usa DTF") + "." :
+      tec === "Sublimação" ? "A arte entra na peça: o branco da arte vira a cor da peça. Funciona em peça clara." :
+      tec === "DTF / transfer" ? "A arte é impressa opaca, como está. Fundo branco no arquivo aparece na peça." : "A prévia mistura a arte pela luz da peça.";
+  }
+  function renderTudo() {
+    renderCabecalho(); renderSeletor(); renderLados(); renderCampos(); renderPrevia(); renderServico(); renderRodape(); renderAvancado();
+    $("avisoNovo").hidden = !S.novo;
+    var on = $("swPz").getAttribute("aria-checked") === "true";
+    $("blocos").hidden = !on; $("rodape").hidden = !on; $("colPrevia").hidden = !on;
+    $("txtInterruptor").textContent = on ? "A cliente envia a arte e escolhe o que vai na peça." : "Desligado: a peça é vendida como está, sem campos na loja.";
+  }
+
+  // ── Interações fixas ────────────────────────────────────
+  $("btnSeletor").addEventListener("click", function () { if ($("listaModelos").hidden) abrirSeletor(); else fecharSeletor(); });
+  $("btnAdd").addEventListener("click", function () {
+    var m = $("menuAdd"); if (m.hidden) { m.hidden = false; $("btnAdd").setAttribute("aria-expanded", "true"); mostrarFundo(fecharMenu); m.querySelector("button").focus(); } else fecharMenu();
+  });
+  function fecharMenu() { $("menuAdd").hidden = true; $("btnAdd").setAttribute("aria-expanded", "false"); tirarFundo(); }
+  $("menuAdd").querySelectorAll("[data-tipo]").forEach(function (b) { b.addEventListener("click", function () { fecharMenu(); adicionarCampo(b.getAttribute("data-tipo")); }); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") { fecharMenu(); fecharSeletor(); } });
+
+  $("swPz").addEventListener("click", function () { var on = this.getAttribute("aria-checked") === "true"; this.setAttribute("aria-checked", String(!on)); renderTudo(); });
+  $("swServico").addEventListener("click", function () { var on = this.getAttribute("aria-checked") === "true"; this.setAttribute("aria-checked", String(!on)); marcarNaoSalvo(); renderServico(); });
+  $("btnMudarServico").addEventListener("click", function () { servicoLocal = true; marcarNaoSalvo(); renderServico(); $("svAjuste").focus(); });
+  $("btnVoltarPadrao").addEventListener("click", function () { servicoLocal = false; marcarNaoSalvo(); renderServico(); });
+  $("btnTestar").addEventListener("click", function () { arteTeste = true; renderPrevia(); });
+  $("btnTirarArte").addEventListener("click", function () { arteTeste = false; renderPrevia(); });
+  $("btnSalvar").addEventListener("click", function () { S.salvo = true; S.novo = false; $("avisoNovo").hidden = true; renderRodape(); });
+  $("chipsTecnica").querySelectorAll("[role=radio]").forEach(function (b) { b.addEventListener("click", function () { $("chipsTecnica").querySelectorAll("[role=radio]").forEach(function (x) { x.setAttribute("aria-checked", "false"); }); b.setAttribute("aria-checked", "true"); marcarNaoSalvo(); renderAvancado(); }); });
+  $("maxLetras").addEventListener("input", function () { marcarNaoSalvo(); renderAvancado(); renderCampos(); });
+
+  // Prévia encolhe ao rolar (celular)
+  function aoRolar() {
+    var top = ui.largura === "celular" ? $("rolagem").scrollTop : (window.scrollY || document.documentElement.scrollTop);
+    $("previa").classList.toggle("compacta", top > 60 && (ui.largura === "celular" || window.innerWidth < 768));
+  }
+  window.addEventListener("scroll", aoRolar, { passive: true });
+  $("rolagem").addEventListener("scroll", aoRolar, { passive: true });
+
+  // ── Faixa de estados ────────────────────────────────────
+  function aplicarUi() {
+    document.documentElement.setAttribute("data-theme", ui.tema);
+    $("moldura").classList.toggle("celular", ui.largura === "celular");
+    document.querySelectorAll(".estados button").forEach(function (b) { b.setAttribute("aria-pressed", String(ui[b.getAttribute("data-g")] === b.getAttribute("data-v"))); });
+    location.hash = "estado=" + ui.estado + "&tema=" + ui.tema + "&largura=" + ui.largura;
+  }
+  function carregarEstado() {
+    S = clonar(ESTADOS[ui.estado]); S.areas = {}; ladoPrevia = "front"; arteTeste = false; servicoLocal = false;
+    $("swPz").setAttribute("aria-checked", "true"); $("swServico").setAttribute("aria-checked", "true"); $("avancado").open = false;
+    $("chipsTecnica").querySelectorAll("[role=radio]").forEach(function (x, i) { x.setAttribute("aria-checked", String(i === 0)); });
+    renderTudo();
+  }
+  document.querySelectorAll(".estados button").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var g = b.getAttribute("data-g"), v = b.getAttribute("data-v");
+      ui[g] = v; aplicarUi(); if (g === "estado") carregarEstado(); aoRolar();
+    });
+  });
+  (function lerHash() {
+    var h = location.hash.replace(/^#/, ""); if (!h) return;
+    h.split("&").forEach(function (par) { var kv = par.split("="); if (kv[0] in ui && kv[1]) ui[kv[0]] = kv[1]; });
+    if (!ESTADOS[ui.estado]) ui.estado = "novo";
+  })();
+  aplicarUi(); carregarEstado();
+})();
+</script>
+</body>
+</html>
