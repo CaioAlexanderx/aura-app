@@ -97,6 +97,7 @@ import {
   fraseDoMilheiro,
 } from "./matconQty";
 import { rotuloDoLadoDinheiro, rotuloDoPagamento } from "./rotulosDoCaixa";
+import { DiscountSection } from "./DiscountSection";
 import { CalculadoraAmbiente } from "@/components/matcon/CalculadoraAmbiente";
 import { LoteDoItem } from "@/components/matcon/LotePicker";
 import type { LotAllocation } from "@/services/matconApi";
@@ -179,6 +180,13 @@ type Props = {
   savingQuote?: boolean;
   savedQuote?: SavedQuoteCard | null;
   discountLabel?: string | null;
+  /** Desconto manual editável. Opcional para preservar os usos legados do painel. */
+  discountType?: "%" | "R$";
+  setDiscountType?: (type: "%" | "R$") => void;
+  discountValue?: string;
+  setDiscountValue?: (value: string) => void;
+  manualDiscountAmount?: number;
+  clearDiscount?: () => void;
   isProcessing?: boolean;
   /** Bloqueio "de requisito" (cliente/vendedora/caixa). Deixa o botão com
    *  aparência inativa mas AINDA clicável — ver comentário em finalizeInactive. */
@@ -227,6 +235,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     onLotAllocations,
     showOrcamento, onSaveQuote, savingQuote, savedQuote,
     discountLabel, isProcessing, finalizeDisabled, requiredHints,
+    discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
     emptyCta, headerSubtitle, compact, fill,
     cpfNaNota, onCpfNaNotaChange,
     pricePair, subtotalLabel,
@@ -537,6 +546,17 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           )}
 
           {/* Summary */}
+          {setDiscountType && setDiscountValue && clearDiscount ? (
+            <DiscountSection
+              total={subtotal}
+              discountType={discountType || "%"}
+              setDiscountType={setDiscountType}
+              discountValue={discountValue || ""}
+              setDiscountValue={setDiscountValue}
+              manualDiscountAmount={manualDiscountAmount || 0}
+              clearDiscount={clearDiscount}
+            />
+          ) : null}
           <View style={s.sumRow}>
             <Text style={s.sumK}>{subtotalLabel || "Subtotal"}</Text>
             <Text style={s.sumV}>{fmtCurrency(subtotal)}</Text>

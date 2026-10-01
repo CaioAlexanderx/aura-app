@@ -753,15 +753,21 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
     if (couponApplied?.code) saleData.coupon_code = couponApplied.code;
 
     if (cartaoOn) {
-      // Mesmos números que o totalComoNoServidor usou na tela.
-      if (descontosDaVenda.manualValor && descontosDaVenda.manualValor > 0) saleData.discount_amount = descontosDaVenda.manualValor;
-      else if (descontosDaVenda.manualPct && descontosDaVenda.manualPct > 0) saleData.discount_pct = descontosDaVenda.manualPct;
-    } else if (manualDiscountAmount > 0) {
-      if (discountType === "%") {
-        saleData.discount_pct = Math.min(parsedDiscount, MAX_DISCOUNT_PCT);
-      } else {
-        saleData.discount_amount = manualDiscountAmount;
+      // O endpoint recebe a regra escolhida no seletor, não os campos legados
+      // discount_pct/discount_amount. Mantemos a mesma base usada no cálculo
+      // local para que o valor exibido e o total recalculado no servidor fechem.
+      if (descontosDaVenda.manualValor && descontosDaVenda.manualValor > 0) {
+        saleData.discount_type = "fixed";
+        saleData.discount_value = descontosDaVenda.manualValor;
+      } else if (descontosDaVenda.manualPct && descontosDaVenda.manualPct > 0) {
+        saleData.discount_type = "percent";
+        saleData.discount_value = descontosDaVenda.manualPct;
       }
+    } else if (manualDiscountAmount > 0) {
+      saleData.discount_type = discountType === "%" ? "percent" : "fixed";
+      saleData.discount_value = discountType === "%"
+        ? Math.min(parsedDiscount, MAX_DISCOUNT_PCT)
+        : manualDiscountAmount;
     }
 
     // Crediário parcelado: adiciona installments no body da venda.
