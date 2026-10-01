@@ -108,6 +108,8 @@ export type PdvSettings = {
   // compensa a margem fisica do driver da impressora (pode ser negativo,
   // faixa -8..5). 0 = neutro (comportamento historico). O PUT do backend
   // faz merge, entao pode salvar so { label_offset_mm } sem resetar o resto.
+  // 01/10/2026: modelo dos termos da garantia de produto (null = padrão da Aura).
+  warranty_terms?: string | null;
   label_offset_mm?: number;
   label_cols?: number;
   // 31/08/2026 (Ordem de Servico, migration 313): opt-in — nem toda loja

@@ -13,12 +13,13 @@
 // ============================================================
 import { useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, TextInput } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
+import { GarantiasPanel } from "@/components/screens/os/GarantiasPanel";
 import { serviceOrdersApi, OS_STATUS_LABEL, type OsStatus, type ServiceOrder } from "@/services/serviceOrdersApi";
 
 const fmt = (n: number | string) => `R$ ${Number(n || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
@@ -51,6 +52,11 @@ const CHIPS: Array<{ key: OsStatus | "todas"; label: string }> = [
 export default function OsListScreen() {
   const { company } = useAuthStore();
   const { settings } = usePdvSettings();
+  // Aba "Garantias" (extensão da OS, 01/10/2026): só com o módulo ligado.
+  // ?tab=garantias abre direto nela.
+  const params = useLocalSearchParams<{ tab?: string }>();
+  const [aba, setAba] = useState<"ordens" | "garantias">(params.tab === "garantias" ? "garantias" : "ordens");
+  const abaAtiva = settings.os_enabled === true ? aba : "ordens";
   const [status, setStatus] = useState<OsStatus | "todas">("todas");
   const [busca, setBusca] = useState("");
   // q só vai pro backend no submit — digitar não dispara uma request por tecla.
@@ -89,6 +95,20 @@ export default function OsListScreen() {
         )}
       </View>
 
+      {settings.os_enabled === true && (
+        <View style={st.tabs}>
+          {([["ordens", "Ordens"], ["garantias", "Garantias"]] as const).map(([k, label]) => (
+            <Pressable key={k} onPress={() => setAba(k)} style={[st.tab, abaAtiva === k && st.tabOn]} testID={"os-aba-" + k}>
+              <Text style={[st.tabText, abaAtiva === k && st.tabTextOn]}>{label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {abaAtiva === "garantias" ? (
+        <GarantiasPanel />
+      ) : (
+      <>
       {settings.os_enabled !== true && (
         <View style={st.disabledBanner}>
           <Text style={st.disabledText}>
@@ -172,6 +192,8 @@ export default function OsListScreen() {
           {isFetching && <ActivityIndicator color={Colors.violet3} size="small" />}
         </View>
       )}
+      </>
+      )}
     </ScrollView>
   );
 }
@@ -179,6 +201,12 @@ export default function OsListScreen() {
 const st = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.bg },
   content: { padding: 20, paddingBottom: 56, maxWidth: 720, alignSelf: "center", width: "100%" },
+
+  tabs: { flexDirection: "row", gap: 4, padding: 3, borderRadius: 12, backgroundColor: Colors.bg2, borderWidth: 1, borderColor: Colors.border, marginBottom: 14 },
+  tab: { flex: 1, alignItems: "center", paddingVertical: 9, borderRadius: 9 },
+  tabOn: { backgroundColor: Colors.violet },
+  tabText: { fontSize: 13, fontWeight: "700", color: Colors.ink3 },
+  tabTextOn: { color: "#fff" },
 
   headerRow: { marginBottom: 16 },
   backBtn: { flexDirection: "row", alignItems: "center", gap: 4 },

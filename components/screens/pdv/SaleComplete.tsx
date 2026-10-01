@@ -40,6 +40,7 @@ import type { SaleResult } from "@/hooks/useCart";
 import { PAYMENTS } from "@/hooks/useCart";
 import { NfceActions, type NfceActionsItem } from "./NfceActions";
 import { OsActions } from "./OsActions";
+import { WarrantySaleActions } from "./WarrantySaleActions";
 import { openPrintWindow } from "@/services/printWindow";
 import type { NfcePaymentEntry } from "@/services/nfceApi";
 import { router } from "expo-router";
@@ -256,6 +257,12 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
             renderiza nada sem toggle/cliente/OS pronta. */}
         {company?.id && (
           <OsActions companyId={company.id} saleId={sale.id} customerId={sale.customerId} />
+        )}
+
+        {/* Garantia de produto (extensão da OS): emite o que foi escolhido
+            no PDV e oferece imprimir. Silencioso sem rascunho. */}
+        {company?.id && (
+          <WarrantySaleActions companyId={company.id} saleId={sale.id} saleKeys={(sale.items || []).map((i: any) => i.productId)} />
         )}
 
         <View style={[s.actions, { marginTop: 14 }]}>

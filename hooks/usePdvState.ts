@@ -92,6 +92,8 @@ import type { CrediarioConfirmPayload } from "@/components/screens/pdv/PdvModals
 import { openQuotePdf, type QuoteItem } from "@/utils/quotePdf";
 import { descontoDoCupom, lerConfigDoCartao, precoNoCartaoDoProduto } from "@/utils/precoNoCartao";
 import { normalizeText, buildProductHaystack, matchesQuery } from "@/utils/productSearch";
+import { warrantiesApi } from "@/services/warrantiesApi";
+import { useWarrantyDraft, diasValidos } from "@/stores/warrantyDraft";
 
 const PAGE_SIZE = 12;
 
@@ -853,12 +855,33 @@ export function usePdvState() {
   // texto puro — dizia o que faltava e deixava o lojista procurar sozinho.
   // "Cliente obrigatório" só vira botão quando o módulo Clientes está liberado
   // (com o gate de plano ativo o ActPerson está disabled e não abriria nada).
+  // Garantia de produto (extensão da OS): com a caixa marcada e produtos
+  // escolhidos, a venda só fecha com cliente de cadastro completo (nome, CPF,
+  // telefone) — senão a venda sairia e a garantia não, e o aviso viria tarde.
+  const warrantyDraft = useWarrantyDraft();
+  const warrantyItems = Object.keys(diasValidos(warrantyDraft.days, cart.map(i => i.productId)));
+  const warrantyActive = pdvSettings.os_enabled === true && warrantyDraft.on && warrantyItems.length > 0;
+  const warrantyCheck = useQuery({
+    queryKey: ["warranty-customer-check", company?.id, selectedCustomerId],
+    queryFn: () => warrantiesApi.customerCheck(company!.id, selectedCustomerId as string),
+    enabled: warrantyActive && !!company?.id && !!selectedCustomerId,
+    staleTime: 0,
+  });
+
   const requiredHints: RequiredHint[] = [];
   if (pdvSettings.require_customer && !selectedCustomerId) {
     requiredHints.push({
       label: "Cliente obrigatório",
       onPress: clientesEnabled ? () => customerPickerRef.current?.open() : undefined,
     });
+  }
+  if (warrantyActive && !selectedCustomerId) {
+    requiredHints.push({
+      label: "Cliente para a garantia",
+      onPress: clientesEnabled ? () => customerPickerRef.current?.open() : undefined,
+    });
+  } else if (warrantyActive && warrantyCheck.data && !warrantyCheck.data.complete) {
+    requiredHints.push({ label: "Completar cadastro (garantia)", onPress: warrantyDraft.openModal });
   }
   if (pdvSettings.require_seller && !selectedEmployeeId && !(sellerName || "").trim()) {
     requiredHints.push({
