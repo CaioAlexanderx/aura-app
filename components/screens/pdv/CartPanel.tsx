@@ -81,7 +81,7 @@
 //   · card do orçamento salvo com os dois totais.
 // Sem essas props o painel é byte a byte o de antes.
 // ============================================================
-import { Fragment, forwardRef, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, forwardRef, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator, TextInput } from "react-native";
 import { Colors, Glass, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -156,6 +156,8 @@ type Props = {
    *  produtos (linhas) desde o QA de 23/09/2026. */
   itemCount: number;
   payMethods: PayChip[];
+  /** Garantia de produto (caixa acima das modalidades). Só com a OS ligada. */
+  warrantySlot?: ReactNode;
   activePay: string;
   onPay: (k: string) => void;
   onInc: (id: string) => void;
@@ -220,7 +222,7 @@ const HEAD_INK_DIMMER = "rgba(255,255,255,0.55)";
 export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRef) {
   const {
     orderNumber, items, subtotal, discountAmount, total,
-    payMethods, activePay, onPay,
+    payMethods, activePay, onPay, warrantySlot,
     onInc, onDec, onSetQty, onPriceChange, onRemove, onClear, onFinalize, onGenerateQuote,
     onLotAllocations,
     showOrcamento, onSaveQuote, savingQuote, savedQuote,
@@ -442,6 +444,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
 
         {/* ── Pagamento / divisão / resumo / CPF (rolam junto) ─────────── */}
         <View style={s.checkoutBlock}>
+          {warrantySlot}
           {/* Payment chips — só quando NÃO está em modo split */}
           {!splitOn && (
             <View style={s.payGrid}>

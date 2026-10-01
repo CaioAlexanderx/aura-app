@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { WarrantyTermsEditor } from "./WarrantyTermsEditor";
 import { View, Text, StyleSheet, Switch, ActivityIndicator, Pressable, TextInput, Platform } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
@@ -250,6 +251,8 @@ export function PdvSettingsCard() {
           <Icon name="chevron_right" size={14} color={Colors.ink3} />
         </Pressable>
       )}
+      {/* Garantia de produto (extensão da OS): modelo dos termos impressos */}
+      {display.os_enabled === true && <WarrantyTermsEditor />}
 
       <View style={s.divider} />
 

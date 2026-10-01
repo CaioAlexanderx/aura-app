@@ -65,6 +65,8 @@ import {
 import { CategoryChips } from "@/components/screens/pdv/CategoryChips";
 import { ProductGrid } from "@/components/screens/pdv/ProductGrid";
 import { CartPanel } from "@/components/screens/pdv/CartPanel";
+import { WarrantyBox } from "@/components/screens/pdv/WarrantyBox";
+import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { CaixaButton } from "@/components/screens/pdv/CaixaButton";
 import { PdvModals } from "@/components/screens/pdv/PdvModals";
 import { IndicadoPorChip, IndicadoPorPontos } from "@/components/matcon/IndicadoPorChip";
@@ -123,6 +125,17 @@ function CaixaScreenInner() {
   // vazio — que é exatamente quando o ponto deve aparecer.
   const precisaCliente   = st.requiredHints.some(h => h.label === "Cliente obrigatório");
   const precisaVendedora = st.requiredHints.some(h => h.label === "Vendedora obrigatória");
+  // Garantia de produto: caixa acima das modalidades, só com a OS ligada.
+  const { settings: pdvSettingsGarantia } = usePdvSettings();
+  const warrantySlot = pdvSettingsGarantia.os_enabled === true && company?.id && cartProps.items.length > 0 ? (
+    <WarrantyBox
+      companyId={company.id}
+      items={cartProps.items.map((i: any) => ({ key: i.productId, name: i.name, qty: i.qty }))}
+      customerId={st.selectedCustomerId}
+      customerName={st.selectedCustomerName}
+      onPickCustomer={st.clientesEnabled ? () => st.customerPickerRef.current?.open() : undefined}
+    />
+  ) : null;
   const pdvPayMethods = crediarioEnabled
     ? cartProps.payMethods
     : cartProps.payMethods.filter((m: any) => m.key !== "crediario");
@@ -354,7 +367,7 @@ function CaixaScreenInner() {
             { width: st.cartWidth },
             IS_WEB && ({ height: "100%" } as any),
           ]}>
-            <CartPanel ref={cartHeadRef} {...cartProps} payMethods={pdvPayMethods} compact={vp.compact} fill />
+            <CartPanel ref={cartHeadRef} {...cartProps} payMethods={pdvPayMethods} warrantySlot={warrantySlot} compact={vp.compact} fill />
           </View>
         </View>
 
@@ -454,7 +467,7 @@ function CaixaScreenInner() {
         <ProductSection columns={2} dense />
 
         <View style={{ marginTop: 20 }}>
-          <CartPanel ref={cartHeadRef} {...cartProps} payMethods={pdvPayMethods} compact={vp.compact} />
+          <CartPanel ref={cartHeadRef} {...cartProps} payMethods={pdvPayMethods} warrantySlot={warrantySlot} compact={vp.compact} />
         </View>
       </ScrollView>
 
