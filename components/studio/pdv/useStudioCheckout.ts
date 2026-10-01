@@ -6,7 +6,7 @@
 // (sale_payments via POST, sync sale_date no backend).
 //
 // 05/06/2026 — porta do PDV Negócio (frontend only; backend já aceita):
-//   - Desconto manual %/R$ (teto 50%) → discount_pct / discount_amount
+//   - Desconto manual %/R$ (teto 50%) → discount_type / discount_value
 //   - Cupom do Financeiro (couponsApi.validate) → coupon_code
 //   - Split de pagamento → payments[] (valida balanceamento antes do POST)
 //   - Lápis de preço por item → unit_price (tabela) + item_discount (diff)
@@ -288,12 +288,10 @@ export function useStudioCheckout(cid: string | undefined) {
         }
         if (couponApplied?.code) saleBody.coupon_code = couponApplied.code;
         if (manual > 0) {
-          if (discountType === "%") {
-            const raw = parseFloat((discountValue || "").replace(",", ".")) || 0;
-            saleBody.discount_pct = Math.min(raw, MAX_DISCOUNT_PCT);
-          } else {
-            saleBody.discount_amount = manual;
-          }
+          saleBody.discount_type = discountType === "%" ? "percent" : "fixed";
+          saleBody.discount_value = discountType === "%"
+            ? Math.min(parseFloat((discountValue || "").replace(",", ".")) || 0, MAX_DISCOUNT_PCT)
+            : manual;
         }
 
         const saleRes = signalMode

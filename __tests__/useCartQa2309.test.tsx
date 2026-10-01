@@ -121,6 +121,29 @@ describe("tela final: a conta fecha com o que o servidor gravou", () => {
     expect(api.totalAfterCoupon).toBe(170);
     act(() => { api.finalizeSale(); });
     expect(api.lastSale).toMatchObject({ subtotal: 200, couponDiscount: 20, manualDiscount: 10, discount: 30, total: 170 });
+    expect(mockBodies[0]).toMatchObject({ discount_type: "fixed", discount_value: 10 });
+    expect(mockBodies[0]).not.toHaveProperty("discount_amount");
+    expect(mockBodies[0]).not.toHaveProperty("discount_pct");
+    tree.unmount();
+  });
+
+  test("desconto percentual envia a regra e o valor que o backend espera", () => {
+    const tree = montar();
+    act(() => { api.addToCart({ id: "p1", name: "Camiseta", price: 100 }); });
+    act(() => { api.setDiscountType("%"); api.setDiscountValue("12,5"); });
+    act(() => { api.finalizeSale(); });
+    expect(mockBodies[0]).toMatchObject({ discount_type: "percent", discount_value: 12.5 });
+    expect(mockBodies[0]).not.toHaveProperty("discount_amount");
+    expect(mockBodies[0]).not.toHaveProperty("discount_pct");
+    tree.unmount();
+  });
+
+  test("preço no cartão preserva a regra percentual no novo payload", () => {
+    const tree = montar(LIGADO);
+    act(() => { api.addToCart({ id: "p1", name: "Camiseta", price: 100, cardPrice: 111 }); });
+    act(() => { api.setDiscountType("%"); api.setDiscountValue("10"); });
+    act(() => { api.finalizeSale(); });
+    expect(mockBodies[0]).toMatchObject({ discount_type: "percent", discount_value: 10 });
     tree.unmount();
   });
 });
