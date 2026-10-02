@@ -238,7 +238,7 @@ export function usePdvState() {
     selectedEmployeeId, selectedEmployeeName, selectEmployee,
     sellerName, setSellerName,
     couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
-    discountType, discountValue, manualDiscountAmount,
+    discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
     cpfNaNota, setCpfNaNota,
     splitMode, toggleSplitMode,
     splitPayments, addSplitPayment, updateSplitPayment, removeSplitPayment,
