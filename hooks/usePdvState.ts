@@ -238,7 +238,7 @@ export function usePdvState() {
     selectedEmployeeId, selectedEmployeeName, selectEmployee,
     sellerName, setSellerName,
     couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
-    discountType, discountValue, manualDiscountAmount,
+    discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
     cpfNaNota, setCpfNaNota,
     splitMode, toggleSplitMode,
     splitPayments, addSplitPayment, updateSplitPayment, removeSplitPayment,
@@ -965,6 +965,12 @@ export function usePdvState() {
     savingQuote:       matconQuote.saving,
     savedQuote:        matconQuote.savedQuote,
     discountLabel,
+    discountType,
+    setDiscountType,
+    discountValue,
+    setDiscountValue,
+    manualDiscountAmount,
+    clearDiscount,
     isProcessing,
     // Bloqueio por requisito. O CartPanel usa isso só pra APARÊNCIA (opacidade
     // + sem brilho + aria-disabled) e mantém o Pressable ativo, porque é o
