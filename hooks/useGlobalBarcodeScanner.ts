@@ -68,8 +68,9 @@ export function useGlobalBarcodeScanner({
     function dispararRajada() {
       timerRef.current = null;
       const code = detectorRef.current.leitura();
-      detectorRef.current.reset();
+      // Pedaço curto fica: o resto da leitura pode chegar depois de um soluço.
       if (!code) return;
+      detectorRef.current.reset();
       bufferRef.current = "";
       onScanRef.current(code);
     }

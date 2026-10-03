@@ -10,7 +10,7 @@ import { TextInput } from "react-native";
 
 jest.mock("@/components/Icon", () => ({ Icon: () => null }));
 
-import { criarDetector } from "@/utils/leituraRapida";
+import { criarDetector, falhaDeConexao } from "@/utils/leituraRapida";
 import { SearchBox } from "@/components/screens/pdv/SearchBox";
 import { useGlobalBarcodeScanner } from "@/hooks/useGlobalBarcodeScanner";
 
@@ -47,6 +47,65 @@ describe("criarDetector", () => {
   });
 });
 
+// 03/10/2026 — Finesse: o código 2001485473363 partiu em "20014" (parado na
+// busca) + bipe de "85473363". Uma tecla atrasou mais que o limite no meio
+// da leitura.
+describe("criarDetector · soluço no meio da leitura", () => {
+  const teclar = (d: ReturnType<typeof criarDetector>, texto: string, inicio: number, passo: number) => {
+    let t = inicio;
+    const novas: boolean[] = [];
+    for (const c of texto) { novas.push(d.tecla(c, t)); t += passo; }
+    return { fim: t - passo, novas };
+  };
+
+  it("uma pausa curta não parte o código em dois", () => {
+    const d = criarDetector();
+    const a = teclar(d, "20014", 1000, 10);
+    const b = teclar(d, "85473363", a.fim + 90, 10);
+    expect(b.novas[0]).toBe(false);
+    expect(d.leitura()).toBe("2001485473363");
+  });
+
+  it("pausa maior que o tempo de fechar a rajada ainda emenda", () => {
+    const d = criarDetector();
+    const a = teclar(d, "20014", 1000, 10);
+    expect(d.leitura()).toBeNull(); // o temporizador fecharia aqui, sem leitura
+    teclar(d, "85473363", a.fim + 250, 10);
+    expect(d.leitura()).toBe("2001485473363");
+  });
+
+  it("pausa longa começa de novo", () => {
+    const d = criarDetector();
+    const a = teclar(d, "20014", 1000, 10);
+    const b = teclar(d, "85473363", a.fim + 800, 10);
+    expect(b.novas[0]).toBe(true);
+    expect(d.leitura()).toBe("85473363");
+  });
+
+  it("gente digitando rápido, com teclas coladas aos pares, continua sendo busca", () => {
+    const d = criarDetector();
+    let t = 1000;
+    for (const par of ["ca", "mi", "sa", "ve", "rd", "e "]) {
+      d.tecla(par[0], t); t += 30;
+      d.tecla(par[1], t); t += 110;
+    }
+    expect(d.leitura()).toBeNull();
+  });
+});
+
+describe("falhaDeConexao", () => {
+  it("404 do scan é código inexistente, não problema de conexão", () => {
+    expect(falhaDeConexao({ status: 404 })).toBe(false);
+    expect(falhaDeConexao({ status: 400 })).toBe(false);
+  });
+  it("sem resposta, timeout e erro do servidor são conexão", () => {
+    expect(falhaDeConexao({ status: 0, isNetworkError: true })).toBe(true);
+    expect(falhaDeConexao({ status: 500 })).toBe(true);
+    expect(falhaDeConexao(new Error("x"))).toBe(true);
+    expect(falhaDeConexao(undefined)).toBe(true);
+  });
+});
+
 // Busca controlada, como no Caixa.
 function Busca({ onScan, onSubmit }: { onScan: (c: string) => void; onSubmit?: (v: string) => void }) {
   const [v, setV] = React.useState("");
@@ -78,6 +137,23 @@ describe("SearchBox · leitor dentro da busca", () => {
     act(() => { jest.advanceTimersByTime(150); });
     expect(onScan).toHaveBeenCalledTimes(2);
     expect(onScan).toHaveBeenLastCalledWith("7890000000017");
+    expect(valor(t)).toBe("");
+  });
+
+  it("leitura com soluço no meio: lança o código inteiro e não deixa pedaço na busca", () => {
+    const onScan = jest.fn();
+    let t!: renderer.ReactTestRenderer;
+    act(() => { t = renderer.create(<Busca onScan={onScan} />); });
+
+    digitar(t, "20014", 10);
+    agora += 200;
+    act(() => { jest.advanceTimersByTime(200); }); // o temporizador fecha sem leitura
+    expect(onScan).not.toHaveBeenCalled();
+    digitar(t, "85473363", 10);
+    act(() => { jest.advanceTimersByTime(150); });
+
+    expect(onScan).toHaveBeenCalledTimes(1);
+    expect(onScan).toHaveBeenCalledWith("2001485473363");
     expect(valor(t)).toBe("");
   });
 
@@ -141,6 +217,17 @@ describe("useGlobalBarcodeScanner · leitor fora dos campos", () => {
     bipar("7890000000017");
     act(() => { jest.advanceTimersByTime(150); });
     expect(onScan.mock.calls.map((c) => c[0])).toEqual(["7891234567895", "7890000000017"]);
+  });
+
+  it("leitor sem Enter com soluço no meio: lê o código inteiro", () => {
+    const onScan = jest.fn();
+    act(() => { renderer.create(<Leitor onScan={onScan} />); });
+    bipar("20014");
+    agora += 200;
+    act(() => { jest.advanceTimersByTime(200); });
+    bipar("85473363");
+    act(() => { jest.advanceTimersByTime(150); });
+    expect(onScan.mock.calls.map((c) => c[0])).toEqual(["2001485473363"]);
   });
 
   it("com Enter lê uma vez só (o temporizador não dispara de novo)", () => {

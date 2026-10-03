@@ -67,6 +67,7 @@ import { usePdvSettings, validateSaleAgainstSettings } from "@/hooks/usePdvSetti
 import { usePagination } from "@/hooks/usePagination";
 import { useCategories } from "@/hooks/useCategories";
 import { expandirComDescendentes } from "@/utils/categoryFilter";
+import { falhaDeConexao } from "@/utils/leituraRapida";
 import { useGlobalBarcodeScanner } from "@/hooks/useGlobalBarcodeScanner";
 import { useViewport, productColumnsFor, cartWidthFor } from "@/hooks/useViewport";
 import { useCaixa } from "@/hooks/useCaixa";
@@ -515,8 +516,8 @@ export function usePdvState() {
         return true;
       }
       return naoAchou();
-    } catch {
-      return naoAchou("rede");
+    } catch (err) {
+      return naoAchou(falhaDeConexao(err) ? "rede" : undefined);
     }
   }
 

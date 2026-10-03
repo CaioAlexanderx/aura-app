@@ -42,8 +42,10 @@ export function SearchBox({ value, onChange, placeholder, maxWidth, onSubmit, on
   function fecharRajada(): boolean {
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }
     const code = detector.leitura();
-    detector.reset();
+    // Pedaço curto fica no detector: se o resto da leitura chegar logo depois
+    // de um soluço, ele emenda (ver utils/leituraRapida).
     if (!code || !onScan) return false;
+    detector.reset();
     ultimoValor.current = antesDaRajada.current;
     onChange(antesDaRajada.current);
     onScan(code);
