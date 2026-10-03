@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, Switch, Platform, ActivityIndicator, TextInput } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, Switch, Platform, ActivityIndicator, TextInput, Linking } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -11,6 +11,10 @@ import { ListSkeleton } from "@/components/ListSkeleton";
 import { PLAN_C, MODULE_LABELS } from "./types";
 import { ResyncSubscriptionButton } from "./ResyncSubscriptionButton";
 import { MODULE_PLAN_MAP, PLAN_LEVEL } from "@/hooks/useVisibleModules";
+import {
+  STAGE_TABS, stageOf, trialCountdown, isNewAccount, usageSummary, shortDate,
+  archiveLabel, sortForStage, waLink, lifecycleSummary, type Stage, type Tone,
+} from "./clientLifecycle";
 
 var isWeb = Platform.OS === "web";
 
@@ -30,6 +34,14 @@ type Client360 = {
   sub_vertical: string | null;
   // 12/05/2026: acessos extras pagos manualmente (vem do backend)
   extra_seats_granted?: number;
+  // Etapa do ciclo de vida + sinais de uso (backend: services/clientLifecycle).
+  stage?: Stage;
+  archive_reason?: "nao_aderiu" | "cancelado" | "inativo" | null;
+  owner_phone?: string | null;
+  access_code_used?: string | null;
+  sale_count?: number;
+  login_days?: number;
+  last_login_at?: string | null;
 };
 
 type ActivityData = {
@@ -66,13 +78,12 @@ var BILLING_LABELS: Record<string, { label: string; color: string }> = {
   cancelled: { label: "Cancelado", color: Colors.red },
 };
 
-var FILTERS = [
-  { key: "all", label: "Todos" },
-  { key: "at_risk", label: "Em risco" },
-  { key: "attention", label: "Atenção" },
-  { key: "healthy", label: "Saudáveis" },
-  { key: "trial", label: "Trial" },
-];
+var TONE_COLORS: Record<Tone, { bg: string; text: string }> = {
+  red:     { bg: Colors.redD,    text: Colors.red },
+  amber:   { bg: Colors.amberD,  text: Colors.amber },
+  neutral: { bg: Colors.violetD, text: Colors.violet3 },
+  muted:   { bg: Colors.bg4,     text: Colors.ink3 },
+};
 
 // Labels + plano minimo. Expande MODULE_LABELS pra cobrir todos os modulos reais
 // do MODULE_PLAN_MAP (alinhado com services/modules.js do backend).
@@ -141,7 +152,7 @@ export function ClientsAdmin() {
   // ate o proximo logout/login, porque /me so eh chamado no hydrate).
   var { token, isStaff, company: ownCompany } = useAuthStore();
   var qc = useQueryClient();
-  var [filter, setFilter] = useState("all");
+  var [stage, setStage] = useState<Stage>("trial");
   var [selectedId, setSelectedId] = useState<string | null>(null);
 
   // 12/05/2026: estados das novas secoes (notas + estender trial + extra seats)
@@ -290,12 +301,8 @@ export function ClientsAdmin() {
   if (isLoading) return <ListSkeleton rows={4} showCards />;
 
   var clients = data?.clients || [];
-  var filtered = clients.filter(function(c) {
-    if (filter === "all") return true;
-    if (filter === "trial") return c.billing_status === "trial";
-    if (filter === "at_risk") return c.risk_level === "at_risk" || c.risk_level === "critical";
-    return c.risk_level === filter;
-  });
+  var filtered = sortForStage(clients.filter(function(c) { return stageOf(c) === stage; }), stage);
+  var summary = lifecycleSummary(clients);
 
   function handleToggle(client: Client360, moduleKey: string, enabled: boolean) {
     // Determina se o valor desejado difere do default do plano.
@@ -851,23 +858,31 @@ export function ClientsAdmin() {
   // Lista de clientes
   return (
     <View>
-      {/* Filtros */}
+      {/* Resumo do funil */}
+      <View style={s.summaryRow}>
+        <View style={s.summaryTile}><Text style={s.summaryVal}>{summary.trial}</Text><Text style={s.summaryLabel}>em trial</Text></View>
+        <View style={s.summaryTile}><Text style={[s.summaryVal, summary.expiring > 0 && { color: Colors.amber }]}>{summary.expiring}</Text><Text style={s.summaryLabel}>vencem em 3 dias</Text></View>
+        <View style={s.summaryTile}><Text style={[s.summaryVal, summary.expired > 0 && { color: Colors.red }]}>{summary.expired}</Text><Text style={s.summaryLabel}>vencidos a recuperar</Text></View>
+        <View style={s.summaryTile}><Text style={s.summaryVal}>{summary.newThisWeek}</Text><Text style={s.summaryLabel}>novos em 7 dias</Text></View>
+      </View>
+
+      {/* Etapas */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 16 }} contentContainerStyle={{ flexDirection: "row", gap: 6 }}>
-        {FILTERS.map(function(f) {
-          var count = f.key === "all" ? clients.length
-            : f.key === "trial" ? clients.filter(function(c) { return c.billing_status === "trial"; }).length
-            : f.key === "at_risk" ? clients.filter(function(c) { return c.risk_level === "at_risk" || c.risk_level === "critical"; }).length
-            : clients.filter(function(c) { return c.risk_level === f.key; }).length;
+        {STAGE_TABS.map(function(t) {
+          var count = clients.filter(function(c) { return stageOf(c) === t.key; }).length;
           return (
-            <Pressable key={f.key} onPress={function() { setFilter(f.key); }} style={[s.chip, filter === f.key && s.chipActive]}>
-              <Text style={[s.chipText, filter === f.key && s.chipTextActive]}>{f.label} ({count})</Text>
+            <Pressable key={t.key} testID={"stage-tab-" + t.key} onPress={function() { setStage(t.key); }} style={[s.chip, stage === t.key && s.chipActive]}>
+              <Text style={[s.chipText, stage === t.key && s.chipTextActive]}>{t.label} ({count})</Text>
             </Pressable>
           );
         })}
       </ScrollView>
 
-      {/* Tabela */}
-      {filtered.length === 0 && <Text style={{ fontSize: 13, color: Colors.ink3, textAlign: "center", padding: 40 }}>Nenhum cliente encontrado</Text>}
+      {filtered.length === 0 && (
+        <Text style={{ fontSize: 13, color: Colors.ink3, textAlign: "center", padding: 40 }}>
+          {(STAGE_TABS.find(function(t) { return t.key === stage; }) || STAGE_TABS[0]).empty}
+        </Text>
+      )}
 
       {filtered.map(function(client) {
         var pc = PLAN_C[client.plan] || { color: Colors.ink3, label: client.plan || "?" };
@@ -875,23 +890,61 @@ export function ClientsAdmin() {
         var bc = BILLING_LABELS[client.billing_status] || { label: "?", color: Colors.ink3 };
         var displayName = client.trade_name || client.legal_name || "Sem nome";
         var vMeta = client.vertical_active ? VERTICAL_META.find(function(x) { return x.key === client.vertical_active; }) : null;
+        var inFunnel = stage === "trial" || stage === "vencido";
+        var cd = trialCountdown(client);
+        var tone = TONE_COLORS[cd.tone];
+        var usage = usageSummary(client);
+        var wa = waLink(client.owner_phone);
         return (
-          <Pressable key={client.id} onPress={function() { setSelectedId(client.id); }} style={[s.clientRow, isWeb && { cursor: "pointer", transition: "background-color 0.15s" } as any]}>
-            <View style={[s.healthDot, { backgroundColor: hc.bg }]}>
-              <Text style={[s.healthDotText, { color: hc.text }]}>{client.health_score || "?"}</Text>
-            </View>
+          <Pressable key={client.id} testID={"client-row-" + client.id} onPress={function() { setSelectedId(client.id); }} style={[s.clientRow, isWeb && { cursor: "pointer", transition: "background-color 0.15s" } as any]}>
+            {inFunnel ? (
+              <View style={[s.countdown, { backgroundColor: tone.bg }]}>
+                <Text style={[s.countdownVal, { color: tone.text }]}>{cd.value}</Text>
+                <Text style={[s.countdownUnit, { color: tone.text }]}>{cd.unit}</Text>
+              </View>
+            ) : (
+              <View style={[s.healthDot, { backgroundColor: stage === "cliente" ? hc.bg : Colors.bg4 }]}>
+                <Text style={[s.healthDotText, { color: stage === "cliente" ? hc.text : Colors.ink3 }]}>{stage === "cliente" ? (client.health_score || "?") : displayName[0].toUpperCase()}</Text>
+              </View>
+            )}
             <View style={{ flex: 1 }}>
-              <Text style={s.clientName} numberOfLines={1}>{displayName}</Text>
-              <Text style={s.clientMeta}>{client.owner_email} · {client.tx_count} tx · {fmtK(client.total_revenue)}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={[s.clientName, { flexShrink: 1 }]} numberOfLines={1}>{displayName}</Text>
+                {inFunnel && isNewAccount(client) && <View style={s.newBadge}><Text style={s.newBadgeText}>novo</Text></View>}
+              </View>
+              {inFunnel ? (
+                <>
+                  <Text style={s.clientMeta} numberOfLines={1}>
+                    {(client.owner_name || client.owner_email) + " · cadastro " + shortDate(client.created_at) + (client.access_code_used ? " · " + client.access_code_used : "")}
+                  </Text>
+                  <Text style={[s.clientUsage, usage.engaged && { color: Colors.green }]} numberOfLines={1}>
+                    {usage.text + (client.last_login_at ? " · último acesso " + shortDate(client.last_login_at) : "")}
+                  </Text>
+                </>
+              ) : stage === "arquivo" ? (
+                <Text style={s.clientMeta} numberOfLines={1}>{archiveLabel(client)}</Text>
+              ) : (
+                <Text style={s.clientMeta}>{client.owner_email} · {client.tx_count} tx · {fmtK(client.total_revenue)}</Text>
+              )}
             </View>
-            <View style={[s.badge, { backgroundColor: pc.color + "18" }]}><Text style={[s.badgeText, { color: pc.color }]}>{pc.label}</Text></View>
+            {!inFunnel && <View style={[s.badge, { backgroundColor: pc.color + "18" }]}><Text style={[s.badgeText, { color: pc.color }]}>{pc.label}</Text></View>}
             {(client.extra_seats_granted ?? 0) > 0 && (
               <View style={[s.badge, { backgroundColor: Colors.violet + "20" }]}>
                 <Text style={[s.badgeText, { color: Colors.violet3 }]}>+{client.extra_seats_granted}</Text>
               </View>
             )}
             {vMeta && <View style={[s.badge, { backgroundColor: vMeta.color + "18" }]}><Text style={[s.badgeText, { color: vMeta.color }]}>{vMeta.icon}</Text></View>}
-            <View style={[s.badge, { backgroundColor: bc.color + "18" }]}><Text style={[s.badgeText, { color: bc.color }]}>{bc.label}</Text></View>
+            {stage === "cliente" && <View style={[s.badge, { backgroundColor: bc.color + "18" }]}><Text style={[s.badgeText, { color: bc.color }]}>{bc.label}</Text></View>}
+            {wa && stage !== "cliente" && stage !== "interno" && (
+              <Pressable
+                testID={"client-wa-" + client.id}
+                accessibilityLabel={"WhatsApp de " + displayName}
+                onPress={function(e: any) { e?.stopPropagation?.(); Linking.openURL(wa as string); }}
+                style={s.waBtn}
+              >
+                <Icon name="whatsapp" size={16} color={Colors.green} />
+              </Pressable>
+            )}
             <Icon name="chevron_right" size={14} color={Colors.ink3} />
           </Pressable>
         );
@@ -910,6 +963,17 @@ var s = StyleSheet.create({
   healthDotText: { fontSize: 13, fontWeight: "800" },
   clientName: { fontSize: 14, fontWeight: "600", color: Colors.ink },
   clientMeta: { fontSize: 10, color: Colors.ink3, marginTop: 1 },
+  clientUsage: { fontSize: 11, color: Colors.ink3, marginTop: 2, fontWeight: "600" },
+  summaryRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 14 },
+  summaryTile: { flexGrow: 1, flexBasis: 130, backgroundColor: Colors.bg3, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, paddingVertical: 12, paddingHorizontal: 14 },
+  summaryVal: { fontSize: 22, fontWeight: "800", color: Colors.ink, letterSpacing: -0.5 },
+  summaryLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.3, marginTop: 2 },
+  countdown: { width: 54, height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  countdownVal: { fontSize: 17, fontWeight: "800", lineHeight: 20 },
+  countdownUnit: { fontSize: 8, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.3 },
+  newBadge: { backgroundColor: Colors.violetD, borderRadius: 5, paddingHorizontal: 6, paddingVertical: 1 },
+  newBadgeText: { fontSize: 9, fontWeight: "700", color: Colors.violet3, textTransform: "uppercase", letterSpacing: 0.3 },
+  waBtn: { width: 32, height: 32, borderRadius: 9, backgroundColor: Colors.greenD, alignItems: "center", justifyContent: "center" },
   badge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
   badgeText: { fontSize: 10, fontWeight: "600" },
   // Slide-over
