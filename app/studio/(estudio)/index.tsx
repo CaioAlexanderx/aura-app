@@ -29,11 +29,17 @@
 // sentido no produto. Painel volta ao estado normal: sem o card de
 // checklist no topo e sem os KPIs discretos (opacity reduzida)
 // enquanto ele estava visível.
+//
+// 05/10/2026 (celular, etapa 3): abaixo de 768 px o painel enxuga —
+// indicadores em grade de 2 colunas, sem selo de variação nem legenda
+// quando o período está zerado, e gráfico/Top 5/funil vazios viram uma
+// linha cada, no lugar de um cartão inteiro. Regras em
+// components/studio/telaEnxuta.ts. O desktop não muda.
 // ============================================================
 import { useEffect, useState, useMemo, useCallback, ReactNode } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator,
-  Platform, AccessibilityInfo, Image,
+  Platform, AccessibilityInfo, Image, useWindowDimensions,
 } from "react-native";
 import Svg, { Path, Circle, Line, Text as SvgText, Defs, LinearGradient, Stop, Rect } from "react-native-svg";
 import Reanimated, {
@@ -55,6 +61,7 @@ import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioScreen } from "@/components/studio/StudioScreen";
 import { useStudioFabClearance } from "@/components/studio/StudioShell/fabControl";
 import { itensDaFaixa } from "@/components/studio/precisaDeVoce";
+import { painelZerado, faturamentoVazio } from "@/components/studio/telaEnxuta";
 import type { StudioPalette } from "@/constants/studio-tokens";
 
 const AnimatedPath = Reanimated.createAnimatedComponent(Path);
@@ -171,7 +178,9 @@ export default function StudioPainel() {
   const auth = useAuthStore();
   const cid = (auth.company as any)?.id;
   const t = useStudioTokens();
-  const s = useMemo(() => buildStyles(t), [t]);
+  const { width } = useWindowDimensions();
+  const celular = width < 768;
+  const s = useMemo(() => buildStyles(t, celular), [t, celular]);
 
   // ─── Painel data ──────────────────────────────────────────
   const [period, setPeriod] = useState<Period>("7d");
@@ -220,6 +229,14 @@ export default function StudioPainel() {
   // Prejuizo no mes: faixa danger + valor em vermelho
   const isLoss = kpiLucro.value < 0;
 
+  // Celular: período zerado não tem variação para mostrar ("-100%") nem
+  // legenda que explique um zero; e bloco sem dado vira uma linha.
+  const zerado = celular && painelZerado(painel);
+  const semFaturamento = celular && faturamentoVazio(painel);
+  const semTop = celular && d.top_produtos.length === 0;
+  const semFunil = celular && d.funil_aprovacao.total_enviados === 0;
+  const periodoTxt = periodLabel(period).toLowerCase();
+
   return (
     <StudioScreen variant="board" scroll={false} padded={false}>
       <ScrollView
@@ -230,17 +247,21 @@ export default function StudioPainel() {
         {/* ═══════ HEADER + Toggle periodo ═══════ */}
         <View style={s.pageHeader}>
           <View style={{ flexShrink: 1, minWidth: 0 }}>
-            <Text style={s.eyebrow}>ESTÚDIO · PAINEL</Text>
-            <Text style={s.pageTitle}>Indicadores do dia</Text>
-            <Text style={s.pageSub}>Acompanhe vendas, pedidos e margem em tempo real.</Text>
+            <Text style={s.eyebrow} numberOfLines={1}>ESTÚDIO · PAINEL</Text>
+            <Text style={s.pageTitle} numberOfLines={celular ? 1 : undefined}>Indicadores do dia</Text>
+            {celular ? null : (
+              <Text style={s.pageSub}>Acompanhe vendas, pedidos e margem em tempo real.</Text>
+            )}
           </View>
-          <View style={s.togglePeriod}>
+          <View style={s.togglePeriod} testID="painel-periodo">
             {(["hoje", "7d", "30d"] as Period[]).map((p) => {
               const active = period === p;
               return (
                 <Pressable
                   key={p}
                   onPress={() => setPeriod(p)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
                   style={[s.toggleChip, active && s.toggleChipActive]}
                 >
                   <Text style={[s.toggleChipTxt, active && s.toggleChipTxtActive]}>
@@ -308,33 +329,37 @@ export default function StudioPainel() {
             })()}
 
             {/* ─── KPI row ─── */}
-            <View style={s.kpiRow}>
+            <View style={s.kpiRow} testID="painel-indicadores">
               <KpiCard
                 t={t}
+                compact={celular}
                 variant="primary"
                 label="Vendas no dia"
                 value={kpiVendas.value}
                 format="currency"
-                deltaPct={kpiVendas.delta_pct}
-                subLabel={kpiVendas.sub_label || "Hoje"}
+                deltaPct={zerado ? null : kpiVendas.delta_pct}
+                subLabel={zerado ? null : (kpiVendas.sub_label || (celular ? null : "Hoje"))}
               />
               <KpiCard
                 t={t}
+                compact={celular}
                 variant="accent"
                 label={"Ticket médio (" + (period === "hoje" ? "hoje" : period === "30d" ? "30d" : "7d") + ")"}
                 value={kpiTicket.value}
                 format="currency"
-                deltaPct={kpiTicket.delta_pct}
-                subLabel={kpiTicket.sub_label || "Período selecionado"}
+                deltaPct={zerado ? null : kpiTicket.delta_pct}
+                // "Período selecionado" repete o "(7d)" do rótulo: no celular sai.
+                subLabel={zerado ? null : (kpiTicket.sub_label || (celular ? null : "Período selecionado"))}
               />
               <KpiCard
                 t={t}
+                compact={celular}
                 variant={isLoss ? "danger" : "success"}
                 label="Lucro Líquido · mês"
                 value={kpiLucro.value}
                 format="currency"
-                deltaPct={kpiLucro.delta_pct}
-                subLabel={lucroSubLabel}
+                deltaPct={zerado ? null : kpiLucro.delta_pct}
+                subLabel={zerado ? null : lucroSubLabel}
                 valueIsNegative={isLoss}
               />
             </View>
@@ -342,6 +367,9 @@ export default function StudioPainel() {
             {/* ─── Charts row ─── */}
             <View style={s.chartsRow}>
               {/* Faturamento line chart */}
+              {semFaturamento ? (
+                <LinhaVazia t={t} testID="painel-vazio-faturamento" titulo="Faturamento" texto={"Sem vendas " + (period === "hoje" ? "hoje" : "em " + periodoTxt)} />
+              ) : (
               <HoverLift style={s.chartCardWide}>
                 <View style={s.chartHeader}>
                   <View style={{ flex: 1 }}>
@@ -356,8 +384,12 @@ export default function StudioPainel() {
                 </View>
                 <FaturamentoChart data={d.faturamento_serie} t={t} />
               </HoverLift>
+              )}
 
               {/* Top 5 produtos */}
+              {semTop ? (
+                <LinhaVazia t={t} testID="painel-vazio-top" titulo="Mais vendidos" texto="Nenhum produto vendido no período" />
+              ) : (
               <HoverLift style={s.chartCardNarrow}>
                 <View style={s.chartHeader}>
                   <View style={{ flex: 1 }}>
@@ -369,23 +401,29 @@ export default function StudioPainel() {
                 </View>
                 <TopProdutosList data={d.top_produtos} t={t} />
               </HoverLift>
+              )}
             </View>
 
             {/* ─── Funil aprovacao (full width) ─── */}
+            {semFunil ? (
+              <LinhaVazia t={t} testID="painel-vazio-funil" titulo="Aprovação de arte" texto="Nenhuma arte enviada no período" />
+            ) : (
             <HoverLift style={s.chartCardFull}>
               <View style={s.chartHeader}>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.chartEyebrow}>APROVAÇÃO DE ARTE (wa.me)</Text>
+                  {/* "(wa.me)" é o nome do link, não o que a lojista faz. */}
+                  <Text style={s.chartEyebrow}>{celular ? "ARTES ENVIADAS PELO WHATSAPP" : "APROVAÇÃO DE ARTE (wa.me)"}</Text>
                   <Text style={s.chartTitle}>
                     Funil de aprovação · {periodLabel(period).toLowerCase()}
                   </Text>
                 </View>
                 <Text style={s.chartMeta}>
-                  {d.funil_aprovacao.total_enviados} links enviados
+                  {d.funil_aprovacao.total_enviados} {celular ? "enviadas" : "links enviados"}
                 </Text>
               </View>
               <FunilAprovacao data={d.funil_aprovacao} t={t} />
             </HoverLift>
+            )}
           </View>
         )}
       </ScrollView>
@@ -398,9 +436,11 @@ export default function StudioPainel() {
 // Quando valueIsNegative, o valor numerico recebe a cor danger.
 // Fase 4: HoverLift desktop-only behind reduceMotion.
 function KpiCard({
-  t, variant, label, value, format, deltaPct, subLabel, valueIsNegative,
+  t, variant, label, value, format, deltaPct, subLabel, valueIsNegative, compact,
 }: {
   t: StudioPalette;
+  /** Celular: meia largura (grade de 2 colunas), tipografia menor. */
+  compact?: boolean;
   variant: "primary" | "accent" | "success" | "danger";
   label: string;
   value: number;
@@ -409,7 +449,7 @@ function KpiCard({
   subLabel: string | null;
   valueIsNegative?: boolean;
 }) {
-  const s = useMemo(() => buildKpiStyles(t), [t]);
+  const s = useMemo(() => buildKpiStyles(t, !!compact), [t, compact]);
   // QA item 19: eram hex fixos (só light) — migrado pra tokens dark-aware.
   const stripeColors: readonly string[] =
     variant === "primary" ? [t.primary, t.primary2] :
@@ -430,7 +470,7 @@ function KpiCard({
         style={s.stripe}
         pointerEvents="none"
       />
-      <Text style={s.label}>{label}</Text>
+      <Text style={s.label} numberOfLines={compact ? 1 : undefined}>{label}</Text>
       <View style={{ flexDirection: "row", alignItems: "baseline", flexWrap: "wrap" }}>
         <Text style={[s.value, valueIsNegative && s.valueNegative]}>{split.main}</Text>
         {split.decimals ? (
@@ -449,15 +489,37 @@ function KpiCard({
   );
 }
 
-function buildKpiStyles(t: StudioPalette) {
+// ═══════ Bloco sem dado, no celular ════════════════════════
+// Uma linha no lugar do cartão inteiro: o nome do bloco e por que está
+// vazio. Não é botão — não há para onde ir.
+function LinhaVazia({ t, titulo, texto, testID }: { t: StudioPalette; titulo: string; texto: string; testID?: string }) {
+  return (
+    <View
+      testID={testID}
+      style={{
+        width: "100%",
+        flexDirection: "row", alignItems: "center", gap: 8,
+        paddingVertical: 10, paddingHorizontal: 12,
+        backgroundColor: t.paperCard,
+        borderWidth: 1, borderColor: t.ink5, borderRadius: 12,
+      }}
+    >
+      <Text style={{ fontSize: 12.5, fontWeight: "800", color: t.ink2 }}>{titulo}</Text>
+      <Text style={{ flex: 1, textAlign: "right", fontSize: 12, color: t.ink3 }} numberOfLines={1}>{texto}</Text>
+    </View>
+  );
+}
+
+function buildKpiStyles(t: StudioPalette, compact = false) {
   return StyleSheet.create({
     card: {
-      flex: 1, minWidth: 220,
+      ...(compact
+        // 2 colunas em 343 px úteis; o terceiro cartão ocupa a linha de baixo inteira.
+        ? { flexGrow: 1, flexShrink: 1, flexBasis: "45%" as any, minWidth: 0, padding: 12, paddingTop: 14 }
+        : { flex: 1, minWidth: 220, padding: 18, paddingTop: 22 }),
       backgroundColor: t.paperCard,
       borderWidth: 1, borderColor: t.ink5,
       borderRadius: 14,
-      padding: 18,
-      paddingTop: 22,
       position: "relative",
       overflow: "hidden",
     },
@@ -475,15 +537,15 @@ function buildKpiStyles(t: StudioPalette) {
       marginBottom: 6,
     },
     value: {
-      fontSize: 26,
+      fontSize: compact ? 20 : 26,
       fontWeight: "800",
       color: t.ink,
       letterSpacing: -0.5,
-      lineHeight: 30,
+      lineHeight: compact ? 24 : 30,
     },
     valueNegative: { color: t.dangerInk },
     valueDecimals: {
-      fontSize: 18,
+      fontSize: compact ? 14 : 18,
       color: t.ink3,
       fontWeight: "700",
     },
@@ -502,8 +564,9 @@ function buildKpiStyles(t: StudioPalette) {
     deltaTxtDown:{ color: t.dangerInk },
     subLabel: {
       fontSize: 11,
-      color: t.ink4,
-      marginTop: 8,
+      // ink4 em 11 px não fecha contraste no cartão estreito do celular.
+      color: compact ? t.ink3 : t.ink4,
+      marginTop: compact ? 6 : 8,
     },
   });
 }
@@ -959,11 +1022,11 @@ function FunilAprovacao({
 }
 
 // ═══════ Styles ═══════════════════════════════════════════
-function buildStyles(t: StudioPalette) {
+function buildStyles(t: StudioPalette, celular = false) {
   return StyleSheet.create({
     scroll: { flex: 1, backgroundColor: t.bg },
     container: {
-      padding: 24,
+      padding: celular ? 16 : 24,
       paddingBottom: 60,
       maxWidth: 1280,
       alignSelf: "center",
@@ -975,17 +1038,17 @@ function buildStyles(t: StudioPalette) {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "flex-end",
-      marginBottom: 22,
-      gap: 16,
+      marginBottom: celular ? 12 : 22,
+      gap: celular ? 10 : 16,
       flexWrap: "wrap",
     },
     eyebrow: {
       fontSize: 11, color: t.accent, fontWeight: "800",
       letterSpacing: 1.4, textTransform: "uppercase",
-      marginBottom: 6,
+      marginBottom: celular ? 2 : 6,
     },
     pageTitle: {
-      fontSize: 28, fontWeight: "800",
+      fontSize: celular ? 20 : 28, fontWeight: "800",
       color: t.ink, letterSpacing: -0.6,
     },
     pageSub: { fontSize: 13, color: t.ink3, marginTop: 4 },
@@ -998,11 +1061,14 @@ function buildStyles(t: StudioPalette) {
       borderRadius: 999,
       padding: 4,
       gap: 2,
+      // Celular: a linha inteira, três alvos iguais de 44 px.
+      ...(celular ? { width: "100%" as const, padding: 0 } : null),
     },
     toggleChip: {
       paddingHorizontal: 16, paddingVertical: 7,
       borderRadius: 999,
       backgroundColor: "transparent",
+      ...(celular ? { flex: 1, minHeight: 44, alignItems: "center" as const, justifyContent: "center" as const } : null),
     },
     toggleChipActive: { backgroundColor: t.primary },
     toggleChipTxt: {
@@ -1015,36 +1081,36 @@ function buildStyles(t: StudioPalette) {
     kpiRow: {
       flexDirection: "row",
       flexWrap: "wrap",
-      gap: 14,
-      marginBottom: 18,
+      gap: celular ? 8 : 14,
+      marginBottom: celular ? 10 : 18,
     },
 
     // ── Charts row ──
     chartsRow: {
       flexDirection: "row",
       flexWrap: "wrap",
-      gap: 14,
-      marginBottom: 18,
+      gap: celular ? 8 : 14,
+      marginBottom: celular ? 8 : 18,
     },
     chartCardWide: {
       flexGrow: 3,
       flexShrink: 1,
       flexBasis: 420,
-      minWidth: 300,
+      minWidth: celular ? 0 : 300,
       backgroundColor: t.paperCard,
       borderWidth: 1, borderColor: t.ink5,
       borderRadius: 14,
-      padding: 18,
+      padding: celular ? 14 : 18,
     },
     chartCardNarrow: {
       flexGrow: 2,
       flexShrink: 1,
       flexBasis: 280,
-      minWidth: 280,
+      minWidth: celular ? 0 : 280,
       backgroundColor: t.paperCard,
       borderWidth: 1, borderColor: t.ink5,
       borderRadius: 14,
-      padding: 18,
+      padding: celular ? 14 : 18,
     },
     chartCardFull: {
       backgroundColor: t.paperCard,

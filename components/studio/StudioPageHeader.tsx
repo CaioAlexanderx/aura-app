@@ -37,6 +37,11 @@
 //     ação do cabeçalho já é a do botão flutuante da tela (uma ação
 //     principal por tela); passe outro nó para ações só do celular.
 //   - Sem `mobileActions`, o `rightSlot` desce para a linha de ações.
+//
+// 05/10/2026 (etapa 3): `mobileSubtitle` troca o subtítulo no celular.
+// Um subtítulo longo cortado em uma linha ("Visão unificada de todos os
+// canais: Loja Digi…") é ruído: passe uma frase curta, ou `null` para
+// esconder. Sem a prop, vale o subtítulo de sempre, em uma linha.
 // ============================================================
 import { ReactNode, useMemo } from "react";
 import { View, Text, StyleSheet, useWindowDimensions } from "react-native";
@@ -51,6 +56,7 @@ export function StudioPageHeader({
   subtitle,
   rightSlot,
   mobileActions,
+  mobileSubtitle,
   marginBottom = 18,
 }: {
   eyebrow?: string;
@@ -59,6 +65,8 @@ export function StudioPageHeader({
   rightSlot?: ReactNode;
   /** Só no celular: substitui o rightSlot. `null` = nenhuma ação no cabeçalho. */
   mobileActions?: ReactNode;
+  /** Só no celular: substitui o subtítulo. `null` = sem subtítulo. */
+  mobileSubtitle?: string | null;
   marginBottom?: number;
 }) {
   const t = useStudioTokens();
@@ -72,11 +80,12 @@ export function StudioPageHeader({
   const { width } = useWindowDimensions();
   if (width < 768) {
     const acoes = mobileActions !== undefined ? mobileActions : rightSlot;
+    const sub = mobileSubtitle !== undefined ? mobileSubtitle : subtitle;
     return (
       <View style={{ marginBottom: Math.min(marginBottom, 14) }} testID="studio-page-header-mobile">
         {resolvedEyebrow && <Text style={s.eyebrow} numberOfLines={1}>{resolvedEyebrow}</Text>}
         <Text style={[s.title, s.titleMobile]} numberOfLines={1} testID="studio-page-title">{title}</Text>
-        {subtitle && <Text style={[s.subtitle, s.subtitleMobile]} numberOfLines={1}>{subtitle}</Text>}
+        {sub ? <Text style={[s.subtitle, s.subtitleMobile]} numberOfLines={1} testID="studio-page-subtitle">{sub}</Text> : null}
         {acoes ? <View style={s.mobileActions} testID="studio-page-actions">{acoes}</View> : null}
       </View>
     );

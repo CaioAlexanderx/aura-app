@@ -14,11 +14,14 @@ type Props = {
   height?: number | "auto";
   showHandle?: boolean;
   showGradientHeader?: boolean;
+  /** Cabeçalho baixo: só a alça e o título, com menos respiro (o menu do
+   *  celular precisa da altura para a lista). */
+  compactHeader?: boolean;
 };
 
 export function StudioBottomSheet({
   visible, onClose, title, eyebrow, children,
-  height = "auto", showHandle = true, showGradientHeader = false,
+  height = "auto", showHandle = true, showGradientHeader = false, compactHeader = false,
 }: Props) {
   const t = useStudioTokens();
   const s = useMemo(() => buildStyles(t), [t]);
@@ -82,21 +85,21 @@ export function StudioBottomSheet({
             <StudioGradient
               colors={StudioGradients.brand as unknown as string[]}
               direction="135deg"
-              style={s.gradientHeader}
+              style={[s.gradientHeader, compactHeader && s.headerCompact]}
             >
-              {showHandle && <View style={s.handleLight} {...pan.panHandlers} />}
-              {eyebrow && <Text style={s.eyebrowLight}>{eyebrow}</Text>}
-              {title && <Text style={s.titleLight}>{title}</Text>}
+              {showHandle && <View style={[s.handleLight, compactHeader && { marginBottom: 4 }]} {...pan.panHandlers} />}
+              {eyebrow && !compactHeader && <Text style={s.eyebrowLight}>{eyebrow}</Text>}
+              {title && <Text style={[s.titleLight, compactHeader && s.titleCompact]}>{title}</Text>}
             </StudioGradient>
           )}
           {!showGradientHeader && (
-            <View style={s.normalHeader}>
-              {showHandle && <View style={s.handle} {...pan.panHandlers} />}
-              {eyebrow && <Text style={s.eyebrow}>{eyebrow}</Text>}
-              {title && <Text style={s.title}>{title}</Text>}
+            <View style={[s.normalHeader, compactHeader && s.headerCompact]}>
+              {showHandle && <View style={[s.handle, compactHeader && { marginBottom: 4 }]} {...pan.panHandlers} />}
+              {eyebrow && !compactHeader && <Text style={s.eyebrow}>{eyebrow}</Text>}
+              {title && <Text style={[s.title, compactHeader && s.titleCompact]}>{title}</Text>}
             </View>
           )}
-          <View style={s.body}>{children}</View>
+          <View style={[s.body, compactHeader && s.bodyCompact]}>{children}</View>
         </Animated.View>
       </View>
     </Modal>
@@ -137,6 +140,9 @@ function buildStyles(t: StudioPalette) {
   title: { fontSize: 17, color: t.ink, fontWeight: "800" },
   titleLight: { fontSize: 17, color: "#fff", fontWeight: "800" },
   body: { padding: 20, paddingBottom: 32 },
+  headerCompact: { paddingTop: 8, paddingBottom: 8, gap: 0 },
+  titleCompact: { fontSize: 14 },
+  bodyCompact: { padding: 16, paddingBottom: 24 },
   });
 }
 
