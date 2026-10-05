@@ -7,12 +7,16 @@
 //
 // 02/06/2026 (Shell clareza): MobileMenuItem exibe subtítulo quando
 // disponível (portas de venda). Labels derivados de GROUPS (nav.ts).
+//
+// 05/10/2026 (QA mobile): o Menu é a ÚNICA navegação do celular (os
+// atalhos da barra saíram) e ganhou o seletor de tema.
 // ============================================================
 import { useMemo } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
 import { Icon } from "@/components/Icon";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { StudioBottomSheet } from "@/components/studio/StudioBottomSheet";
+import { StudioThemeToggle } from "@/components/studio/StudioThemeToggle";
 import { GROUPS, makeTones } from "./types";
 import { makeMm } from "./styles";
 
@@ -70,6 +74,12 @@ export function MobileMenuSheet({
             active={pathname.startsWith("/studio/configuracoes")}
             onPress={() => { onNavigate("/studio/configuracoes"); onClose(); }}
           />
+          {/* Tema: saiu da barra do topo no celular (05/10/2026) — a barra
+              ficou com logo, sino e Menu. */}
+          <View style={[mm.item, { paddingVertical: 6 }]} testID="studio-menu-tema">
+            <Text style={[mm.itemTxt, { flex: 1 }]}>Tema</Text>
+            <StudioThemeToggle compact />
+          </View>
         </View>
       </ScrollView>
     </StudioBottomSheet>

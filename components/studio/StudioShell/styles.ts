@@ -170,9 +170,14 @@ export const makeStyles = (c: Tok) =>
       gap: 6,
     },
     mobileBarRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+    // Celular (05/10/2026): uma linha só — logo, sino e Menu.
+    mobileBarCompact: {
+      flexDirection: "row", alignItems: "center", gap: 8,
+      paddingTop: 6, paddingBottom: 6,
+    },
     mobileMenuBtn: {
       flexDirection: "row", alignItems: "center", gap: 6,
-      paddingHorizontal: 12, paddingVertical: 6,
+      height: 36, paddingHorizontal: 12,
       backgroundColor: c.primary, borderRadius: 999,
     },
     mobileMenuBtnTxt: { color: "#fff", fontWeight: "800", fontSize: 12 },

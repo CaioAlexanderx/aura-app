@@ -30,6 +30,7 @@ import { TemplateUploadWizard, clearTemplateUploadDraft } from "@/components/stu
 import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
+import { useStudioFabAction, useStudioFabHidden } from "@/components/studio/StudioShell/fabControl";
 
 export default function StudioGaleria() {
   const t = useStudioTokens();
@@ -41,6 +42,10 @@ export default function StudioGaleria() {
   const [filterCat, setFilterCat] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [wizardOpen, setWizardOpen] = useState(false);
+  // Celular (05/10/2026): a ação principal é o flutuante do shell — abre o
+  // mesmo envio do "Subir template" do cabeçalho, que some no celular.
+  useStudioFabAction(() => setWizardOpen(true));
+  useStudioFabHidden(wizardOpen);
   const [showNewCat, setShowNewCat] = useState(false);
   const [newCatName, setNewCatName] = useState("");
 
@@ -154,6 +159,7 @@ export default function StudioGaleria() {
         title="Templates de arte prontos"
         subtitle="Cadastre artes que o cliente pode escolher na hora da personalização."
         marginBottom={22}
+        mobileActions={null}
         rightSlot={
           <Pressable style={s.ctaPri} onPress={() => setWizardOpen(true)}>
             <Icon name="plus" size={16} color="#fff" />

@@ -54,6 +54,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
+import { useStudioFabAction, useStudioFabHidden, useStudioFabClearance } from "@/components/studio/StudioShell/fabControl";
 import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioScreen } from "@/components/studio/StudioScreen";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
@@ -340,6 +341,16 @@ export default function StudioEstoque() {
     [cid],
   );
 
+  // ── Botão flutuante do shell (celular) ───────────────────
+  // QA mobile (05/10/2026): o flutuante continuava na tela com a ficha
+  // aberta e cobria o Salvar da barra fixa e o campo Descrição. Com a
+  // ficha (ou o cadastro) aberta ele some. Na lista ele É a ação
+  // principal: abre o mesmo cadastro do "Novo produto" do cabeçalho, que
+  // por isso some no celular (mobileActions={null}).
+  useStudioFabHidden(!!expandedProduct || wizardOpen);
+  useStudioFabAction(() => setWizardOpen(true));
+  const fabClearance = useStudioFabClearance();
+
   // ── Header right slot ────────────────────────────────────
   const headerRight = expandedProduct ? null : (
     <Pressable onPress={() => setWizardOpen(true)} style={s.btnPri}>
@@ -351,7 +362,12 @@ export default function StudioEstoque() {
   return (
     <StudioScreen variant="board" scroll={false} padded={false}>
       <View style={s.container}>
-      <ScrollView contentContainerStyle={s.scrollContent}>
+      <ScrollView
+        contentContainerStyle={[
+          s.scrollContent,
+          !expandedProduct && fabClearance ? { paddingBottom: fabClearance } : null,
+        ]}
+      >
         {expandedProduct ? (
           <ProductExpanded
             product={expandedProduct}
@@ -373,6 +389,7 @@ export default function StudioEstoque() {
               title="Catálogo Studio"
               subtitle="Clique num produto para abrir tudo: produto, personalização e custo — na mesma tela."
               rightSlot={headerRight}
+              mobileActions={null}
             />
 
             {/* Filtros personalizable */}
