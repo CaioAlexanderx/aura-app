@@ -24,10 +24,15 @@
 // Integração (03/06/2026): eyebrow explícito removido — deriva
 // automaticamente via eyebrowForRoute(usePathname()) em
 // StudioPageHeader → resultado: "VENDAS · PEDIDOS".
+//
+// 05/10/2026 (celular, etapa 3): abaixo de 768 px a lista sobe para a
+// primeira tela — os 6 indicadores viram uma faixa de uma linha (rola de
+// lado), os alertas ficam recolhidos em "2 alertas" e as abas viram uma
+// linha só, com o atalho do Marketplace no fim. O desktop não muda.
 // ============================================================
 import { useState, useCallback, useMemo } from "react";
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, Modal, TextInput,
+  View, Text, ScrollView, Pressable, StyleSheet, Modal, TextInput, useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
@@ -57,6 +62,7 @@ import { filtrarPedidosDoHub } from "@/components/studio/filtroDoHub";
 import { numeroDoPedido } from "@/components/studio/pagamentoDoPedido";
 import { etapaDoPedido } from "@/components/studio/etapaDoPedido";
 import { rotuloDeItens } from "@/components/studio/rotuloDeItens";
+import { resumoDosAlertas } from "@/components/studio/telaEnxuta";
 
 function fmtBRL(v: number) {
   return "R$ " + (Number(v) || 0).toFixed(2).replace(".", ",");
@@ -103,7 +109,11 @@ export default function StudioPedidosHub() {
   const { company } = useAuthStore();
   const t = useStudioTokens();
   const sev = severityTone(t);
-  const s = useMemo(() => makeStyles(t), [t]);
+  const { width } = useWindowDimensions();
+  const celular = width < 768;
+  const s = useMemo(() => makeStyles(t, celular), [t, celular]);
+  // Celular: os alertas começam recolhidos numa linha ("2 alertas").
+  const [alertasAbertos, setAlertasAbertos] = useState(false);
   const [loading, setLoading] = useState(true);
   // FIX (bug #13 QA): erro engolido virava "Nenhum pedido no período" —
   // estado dedicado com retry, distinto do vazio de verdade.
@@ -222,6 +232,7 @@ export default function StudioPedidosHub() {
         // principal ("Novo pedido para evento", no shell); o atalho
         // "Aprovar arte" (FloatingApprovalButton no desktop) vira ação do
         // cabeçalho, e o "+ Novo pedido" some por repetir o flutuante.
+        mobileSubtitle={null}
         mobileActions={
           <Pressable
             style={s.acaoSec}
@@ -239,6 +250,28 @@ export default function StudioPedidosHub() {
       {/* KPIs */}
       {loading && !stats ? (
         <StudioLoading variant="skeleton-list" rows={5} />
+      ) : stats && celular ? (
+        // Celular: uma linha só. Os seis cabem rolando de lado; o que pede
+        // ação (atrasados) vem primeiro quando existe.
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={s.faixa}
+          contentContainerStyle={s.faixaConteudo}
+          testID="pedidos-faixa"
+        >
+          {stats.orders.overdue > 0 ? (
+            <Numero s={s} rotulo="Atrasados" valor={String(stats.orders.overdue)} cor={t.dangerInk} />
+          ) : null}
+          <Numero s={s} rotulo="Hoje" valor={String(stats.orders.orders_today)} />
+          <Numero s={s} rotulo="Em produção" valor={String(stats.orders.in_production)} />
+          <Numero s={s} rotulo="Aguardando arte" valor={String(stats.orders.pending_art)} />
+          <Numero s={s} rotulo="Prontos" valor={String(stats.orders.ready)} />
+          {stats.orders.overdue > 0 ? null : (
+            <Numero s={s} rotulo="Atrasados" valor="0" />
+          )}
+          <Numero s={s} rotulo="Receita 7d" valor={fmtBRL(stats.revenue.last_7d)} />
+        </ScrollView>
       ) : stats && (
         <View style={s.kpis}>
           <Kpi t={t} label="Pedidos hoje"    value={stats.orders.orders_today} icon="shopping-bag" color={t.primary} />
@@ -253,10 +286,29 @@ export default function StudioPedidosHub() {
       {/* Alertas */}
       {alerts.length > 0 && (
         <View style={s.alertsBlock}>
+          {celular ? (() => {
+            const resumo = resumoDosAlertas(alerts)!;
+            const tone = sev[resumo.gravidade];
+            return (
+              <Pressable
+                style={[s.alertasResumo, { backgroundColor: tone.bg }]}
+                onPress={() => setAlertasAbertos((v) => !v)}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: alertasAbertos }}
+                accessibilityLabel={`${resumo.rotulo}. Toque para ${alertasAbertos ? "recolher" : "ver"}.`}
+                testID="pedidos-alertas-resumo"
+              >
+                <Icon name={tone.icon as any} size={16} color={tone.color} />
+                <Text style={[s.alertTitle, { color: tone.color, flex: 1 }]}>{resumo.rotulo}</Text>
+                <Icon name={alertasAbertos ? "chevron-up" : "chevron-down"} size={16} color={tone.color} />
+              </Pressable>
+            );
+          })() : (
           <Text style={s.sectionLabel}>
             {alerts.length} {alerts.length === 1 ? "alerta pendente" : "alertas pendentes"}
           </Text>
-          {alerts.slice(0, 8).map((a, i) => {
+          )}
+          {(celular && !alertasAbertos ? [] : alerts.slice(0, 8)).map((a, i) => {
             const tone = sev[a.severity] || sev.info;
             // FIX (identificador interno, QA 28/09/2026): o alerta de
             // pedido atrasado usava o uuid em caixa alta. numeroDoPedido()
@@ -276,6 +328,7 @@ export default function StudioPedidosHub() {
                 key={i}
                 style={[s.alertRow, { backgroundColor: tone.bg }]}
                 onPress={() => router.push(href as any)}
+                testID="pedidos-alerta"
               >
                 <Icon name={tone.icon as any} size={16} color={tone.color} />
                 <View style={{ flex: 1 }}>
@@ -296,7 +349,7 @@ export default function StudioPedidosHub() {
         <TextInput
           value={busca}
           onChangeText={setBusca}
-          placeholder="Buscar por nome, telefone ou número do pedido"
+          placeholder={celular ? "Buscar nome, telefone ou número" : "Buscar por nome, telefone ou número do pedido"}
           placeholderTextColor={t.ink4}
           style={s.buscaInput}
           accessibilityLabel="Buscar pedido por nome, telefone ou número"
@@ -311,6 +364,40 @@ export default function StudioPedidosHub() {
       {/* Tabs — FIX (bug #8 QA): "Marketplace" era rota órfã (nenhum
           router.push levava lá). Chip de atalho junto das tabs existentes,
           visualmente distinto (navega pra outra tela, não filtra o feed). */}
+      {celular ? (
+        // Celular: uma linha que rola de lado, logo abaixo da busca — longe
+        // do canto do flutuante. O Marketplace vai no fim da mesma linha.
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={s.tabsFaixa}
+          contentContainerStyle={s.tabsFaixaConteudo}
+          testID="pedidos-abas"
+        >
+          {(["all", "orders", "bulk", "receivable"] as const).map((tk) => (
+            <Pressable
+              key={tk}
+              style={[s.tab, tab === tk && s.tabActive]}
+              onPress={() => setTab(tk)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: tab === tk }}
+            >
+              <Text style={[s.tabTxt, tab === tk && s.tabTxtActive]}>
+                {TAB_LABEL[tk]}
+              </Text>
+            </Pressable>
+          ))}
+          <Pressable
+            style={s.marketplaceChip}
+            onPress={() => router.push("/studio/pedidos/marketplace" as any)}
+            accessibilityRole="link"
+          >
+            <Icon name="shopping-bag" size={13} color={t.accentInk} />
+            <Text style={[s.marketplaceChipTxt, { color: t.accentInk }]}>Marketplace</Text>
+            <Icon name="chevron-right" size={12} color={t.accentInk} />
+          </Pressable>
+        </ScrollView>
+      ) : (
       <View style={s.tabsRow}>
         <View style={s.tabs}>
           {(["all", "orders", "bulk", "receivable"] as const).map((tk) => (
@@ -334,6 +421,7 @@ export default function StudioPedidosHub() {
           <Icon name="chevron-right" size={12} color={t.accent} />
         </Pressable>
       </View>
+      )}
 
       {/* Feed */}
       {loadError && feed.length === 0 && !loading ? (
@@ -341,7 +429,7 @@ export default function StudioPedidosHub() {
         <StudioEmpty
           tone="warning"
           icon="alert-circle"
-          title="Não deu pra carregar o Hub"
+          title="Não deu para carregar o Hub"
           desc={loadError}
           primaryCta={{ label: "Tentar de novo", onPress: load }}
         />
@@ -493,6 +581,23 @@ export default function StudioPedidosHub() {
   );
 }
 
+// Celular: um número da faixa (valor em cima, rótulo embaixo).
+function Numero({
+  s, rotulo, valor, cor,
+}: {
+  s: ReturnType<typeof makeStyles>;
+  rotulo: string;
+  valor: string;
+  cor?: string;
+}) {
+  return (
+    <View style={[s.numero, cor ? { borderColor: cor } : null]} accessibilityLabel={`${rotulo}: ${valor}`}>
+      <Text style={[s.numeroValor, cor ? { color: cor } : null]} numberOfLines={1}>{valor}</Text>
+      <Text style={s.numeroRotulo} numberOfLines={1}>{rotulo}</Text>
+    </View>
+  );
+}
+
 // Fase 6 residual (26/05): valor numérico passa pro AnimatedKpiCounter
 // — tween + pulse + badge +N quando incrementa. `kind="currency"` usa
 // fmtBRL como formatter; default = inteiro pt-BR.
@@ -528,14 +633,31 @@ function Kpi({
   );
 }
 
-function makeStyles(t: StudioPalette) {
+function makeStyles(t: StudioPalette, celular = false) {
   return StyleSheet.create({
+    // ── Celular (etapa 3) ──
+    // A faixa e as abas sangram até a borda da tela (o StudioScreen tem 16 px
+    // de margem): assim o corte do último item mostra que a linha rola.
+    faixa: { flexGrow: 0, marginHorizontal: -16, marginBottom: 10 },
+    faixaConteudo: { flexDirection: "row", gap: 6, paddingHorizontal: 16 },
+    numero: {
+      minWidth: 76, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 10,
+      backgroundColor: t.paperCard, borderWidth: 1, borderColor: t.ink5,
+    },
+    numeroValor: { fontSize: 15, fontWeight: "800", color: t.ink },
+    numeroRotulo: { fontSize: 10.5, fontWeight: "600", color: t.ink3, marginTop: 1 },
+    alertasResumo: {
+      flexDirection: "row", alignItems: "center", gap: 10,
+      minHeight: 44, paddingHorizontal: 12, borderRadius: 12,
+    },
+    tabsFaixa: { flexGrow: 0, marginHorizontal: -16, marginBottom: 10 },
+    tabsFaixaConteudo: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16 },
     scroll: { flex: 1, backgroundColor: t.bg },
     container: { padding: 28, paddingBottom: 60, maxWidth: 1100, alignSelf: "center", width: "100%" },
     // Convenção do app: primary CTAs são navy (primary), accent fica reservado pra status/highlights.
     acaoSec: {
       flexDirection: "row", alignItems: "center", gap: 6,
-      minHeight: 40, paddingHorizontal: 14, borderRadius: 999,
+      minHeight: 44, paddingHorizontal: 14, borderRadius: 999,
       backgroundColor: t.paperCardElev, borderWidth: 1.5, borderColor: t.ink5,
     },
     acaoSecTxt: { color: t.ink2, fontWeight: "700", fontSize: 13 },
@@ -548,19 +670,23 @@ function makeStyles(t: StudioPalette) {
     // Wrap pro counter alinhar à esquerda (component default = center).
     kpiCounterWrap: { alignItems: "flex-start", marginTop: 1 },
     sectionLabel: { fontSize: 11, color: t.ink3, fontWeight: "800", letterSpacing: 0.6, marginBottom: 8 },
-    alertsBlock: { marginBottom: 22, gap: 8 },
+    alertsBlock: { marginBottom: celular ? 10 : 22, gap: 8 },
     alertRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 12 },
     alertTitle: { fontSize: 13, fontWeight: "700" },
     alertSub: { fontSize: 11.5, marginTop: 2 },
     buscaRow: {
       flexDirection: "row", alignItems: "center", gap: 8,
       backgroundColor: t.paperCard, borderRadius: 12, borderWidth: 1, borderColor: t.ink5,
-      paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12,
+      paddingHorizontal: 14, paddingVertical: 10, marginBottom: celular ? 8 : 12,
+      ...(celular ? { minHeight: 44 } : null),
     },
     buscaInput: { flex: 1, fontSize: 13.5, color: t.ink, padding: 0 },
     tabsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12, flexWrap: "wrap" },
     tabs: { flexDirection: "row", gap: 6 },
-    tab: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: t.bgSoft, borderWidth: 1, borderColor: t.ink5 },
+    tab: {
+      paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: t.bgSoft, borderWidth: 1, borderColor: t.ink5,
+      ...(celular ? { minHeight: 44, justifyContent: "center" as const } : null),
+    },
     tabActive: { backgroundColor: t.primary, borderColor: t.primary },
     tabTxt: { fontSize: 12.5, color: t.ink2, fontWeight: "600" },
     tabTxtActive: { color: "#fff" },
@@ -568,6 +694,7 @@ function makeStyles(t: StudioPalette) {
       flexDirection: "row", alignItems: "center", gap: 5,
       paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999,
       backgroundColor: t.accentSoft, borderWidth: 1, borderColor: t.accent,
+      ...(celular ? { minHeight: 44 } : null),
     },
     marketplaceChipTxt: { fontSize: 12.5, color: t.accent, fontWeight: "700" },
     feedList: { gap: 6 },

@@ -10,11 +10,16 @@
 //   - Card "Equipe & acessos" com MembersSection reutilizado do varejo
 //   - Gate negocio+: plano essencial vê upsell, negocio/expansao/personalizado
 //     veem o componente completo (mesma lógica de fallback do varejo)
+//
+// 05/10/2026 (celular, etapa 3): abaixo de 768 px os textos de ajuda saem
+// de baixo de cada campo e vão para trás de um "?" ao lado do rótulo
+// (toque abre, toque fecha). Nos atalhos e nos modos, a ajuda fica mais
+// curta. O desktop mostra tudo como sempre.
 // ============================================================
 import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator,
-  TextInput, Switch,
+  TextInput, Switch, useWindowDimensions,
 } from "react-native";
 import { router } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -67,7 +72,7 @@ function EquipeGateStudio({ t }: { t: ReturnType<typeof useStudioTokens> }) {
 // pdv_settings COMPLETO (o backend substitui o jsonb inteiro,
 // então o payload parte sempre do GET com todas as chaves).
 // ============================================================
-function CardFeeCardStudio({ t, s }: { t: ReturnType<typeof useStudioTokens>; s: ReturnType<typeof buildStyles> }) {
+function CardFeeCardStudio({ t, s, celular = false }: { t: ReturnType<typeof useStudioTokens>; s: ReturnType<typeof buildStyles>; celular?: boolean }) {
   const { company } = useAuthStore();
   const { settings: serverSettings, isLoading, error, invalidate } = usePdvSettings();
   const [pendingSettings, setPendingSettings] = useState<PdvSettings | null>(null);
@@ -109,13 +114,17 @@ function CardFeeCardStudio({ t, s }: { t: ReturnType<typeof useStudioTokens>; s:
   return (
     <View style={s.card}>
       <Text style={s.cardTitle}>Taxa da maquininha</Text>
-      <Text style={s.cardSub}>Vale pras vendas no cartão do Studio inteiro. Salva na hora, sem precisar do botão lá embaixo.</Text>
+      <Text style={s.cardSub}>
+        {celular
+          ? "Vale para todas as vendas no cartão. Salva na hora."
+          : "Vale para as vendas no cartão do Studio inteiro. Salva na hora, sem precisar do botão lá embaixo."}
+      </Text>
       {isLoading ? (
         <ActivityIndicator size="small" color={t.primary} />
       ) : error ? (
         // Sem o GET não dá pra montar o payload completo — salvar aqui
         // zeraria as outras chaves do pdv_settings (o PUT substitui tudo).
-        <Text style={s.hint}>Não consegui carregar as configurações do caixa. Recarregue a página pra editar a taxa.</Text>
+        <Text style={s.hint}>Não consegui carregar as configurações do caixa. Recarregue a página para editar a taxa.</Text>
       ) : (
         <CardFeeSection display={display} saving={feeSaving} onToggle={toggle} palette={palette} />
       )}
@@ -127,8 +136,29 @@ export default function StudioConfiguracoes() {
   const { company } = useAuthStore();
   const t = useStudioTokens();
   const { mode, setMode } = useStudioTheme();
-  const s = useMemo(() => buildStyles(t), [t]);
+  const { width } = useWindowDimensions();
+  const celular = width < 768;
+  const s = useMemo(() => buildStyles(t, celular), [t, celular]);
   const qc = useQueryClient();
+
+  // Celular: a ajuda de cada campo fica atrás de um "?" (uma aberta por vez).
+  const [ajuda, setAjuda] = useState<string | null>(null);
+  const interrogacao = (chave: string, sobre: string) => (celular ? (
+    <Pressable
+      onPress={() => setAjuda((a) => (a === chave ? null : chave))}
+      hitSlop={10}
+      accessibilityRole="button"
+      accessibilityLabel={`Ajuda: ${sobre}`}
+      accessibilityState={{ expanded: ajuda === chave }}
+      style={[s.ajudaBtn, ajuda === chave && s.ajudaBtnOn]}
+      testID={"ajuda-" + chave}
+    >
+      <Text style={[s.ajudaBtnTxt, ajuda === chave && { color: "#fff" }]}>?</Text>
+    </Pressable>
+  ) : null);
+  const dica = (chave: string, texto: string, estilo: any) => (
+    !celular || ajuda === chave ? <Text style={estilo} testID={"dica-" + chave}>{texto}</Text> : null
+  );
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -275,15 +305,20 @@ export default function StudioConfiguracoes() {
       <View style={s.headerRow}>
         <View style={{ flex: 1 }}>
           <Text style={s.eyebrow}>CONFIGURAÇÕES · STUDIO</Text>
-          <Text style={s.title}>Ajustes do seu estúdio</Text>
-          <Text style={s.sub}>Prazos de produção, WhatsApp para aprovações e o que está habilitado no modo Studio.</Text>
+          <Text style={s.title} numberOfLines={celular ? 1 : undefined}>Ajustes do seu estúdio</Text>
+          {celular ? null : (
+            <Text style={s.sub}>Prazos de produção, WhatsApp para aprovações e o que está habilitado no modo Studio.</Text>
+          )}
         </View>
       </View>
 
       {/* Aparência */}
       <View style={s.card}>
-        <Text style={s.cardTitle}>Aparência</Text>
-        <Text style={s.cardSub}>Escolha o tema visual do Studio. Auto segue a preferência do sistema.</Text>
+        <View style={s.cardTitleRow}>
+          <Text style={s.cardTitle}>Aparência</Text>
+          {interrogacao("aparencia", "Aparência")}
+        </View>
+        {dica("aparencia", "Escolha o tema visual do Studio. Auto segue a preferência do sistema.", s.cardSub)}
         <View style={s.themeChipsRow}>
           {themeOptions.map((opt) => {
             const active = mode === opt.key;
@@ -299,29 +334,39 @@ export default function StudioConfiguracoes() {
 
       {/* SLA + WhatsApp */}
       <View style={s.card}>
-        <Text style={s.cardTitle}>Produção e aprovação</Text>
-        <Text style={s.cardSub}>O cliente vê o prazo no checkout; o WhatsApp é usado pra mandar mockup pra aprovar arte.</Text>
+        <View style={s.cardTitleRow}>
+          <Text style={s.cardTitle}>Produção e aprovação</Text>
+          {interrogacao("producao", "Produção e aprovação")}
+        </View>
+        {dica("producao", "O cliente vê o prazo no checkout; o WhatsApp é usado para mandar mockup para aprovar arte.", s.cardSub)}
 
         <View style={s.row}>
           <View style={{ flex: 1, minWidth: 140 }}>
-            <Text style={s.label}>Prazo padrão (dias úteis)</Text>
+            <View style={s.labelRow}>
+              <Text style={s.label}>Prazo padrão (dias úteis)</Text>
+              {interrogacao("prazo", "Prazo padrão")}
+            </View>
             <TextInput style={s.input} keyboardType="number-pad" value={slaDays} onChangeText={setSlaDays} placeholder="3" />
-            <Text style={s.hint}>Quantos dias úteis cada produto leva pra ficar pronto, em média.</Text>
+            {dica("prazo", "Quantos dias úteis cada produto leva para ficar pronto, em média.", s.hint)}
           </View>
           <View style={{ flex: 1, minWidth: 200 }}>
-            <Text style={s.label}>WhatsApp da loja</Text>
+            <View style={s.labelRow}>
+              <Text style={s.label}>WhatsApp da loja</Text>
+              {interrogacao("whatsapp", "WhatsApp da loja")}
+            </View>
             <TextInput style={s.input} keyboardType="phone-pad" value={waPhone} onChangeText={setWaPhone} placeholder="(11) 99999-9999" />
-            <Text style={s.hint}>Número usado nos links wa.me/... pra enviar mockup pro cliente.</Text>
+            {dica("whatsapp", "Número usado nos links wa.me/... para enviar mockup para o cliente.", s.hint)}
           </View>
         </View>
 
         {/* P1: Toggle gate de produção por sinal */}
         <View style={s.toggleRow}>
           <View style={{ flex: 1 }}>
-            <Text style={s.toggleLabel}>Exigir sinal pago para iniciar produção</Text>
-            <Text style={s.toggleSub}>
-              Quando ativo, o pedido não avança para "Em produção" sem sinal confirmado. O lojista pode forçar manualmente caso a caso.
-            </Text>
+            <View style={s.toggleLabelRow}>
+              <Text style={[s.toggleLabel, { flexShrink: 1 }]}>Exigir sinal pago para iniciar produção</Text>
+              {interrogacao("sinal", "Exigir sinal pago")}
+            </View>
+            {dica("sinal", 'Quando ativo, o pedido não avança para "Em produção" sem sinal confirmado. O lojista pode forçar manualmente caso a caso.', s.toggleSub)}
           </View>
           <Switch
             value={requireDeposit}
@@ -337,8 +382,10 @@ export default function StudioConfiguracoes() {
           pro lojista) e /studio/configuracoes/marketplace só era alcançável
           de dentro de uma tela de pedidos. Adiciona os dois acessos aqui. */}
       <View style={s.card}>
-        <Text style={s.cardTitle}>Vendas</Text>
-        <Text style={s.cardSub}>Regras de preço automático e anúncios em marketplaces.</Text>
+        <Text style={[s.cardTitle, celular && { marginBottom: 6 }]}>Vendas</Text>
+        {celular ? null : (
+          <Text style={s.cardSub}>Regras de preço automático e anúncios em marketplaces.</Text>
+        )}
 
         <Pressable style={s.linkRow} onPress={() => router.push("/studio/configuracoes/precificacao" as any)}>
           <View style={[s.linkIconWrap, { backgroundColor: t.primaryGhost }]}>
@@ -346,7 +393,9 @@ export default function StudioConfiguracoes() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={s.linkTitle}>Motor de Precificação</Text>
-            <Text style={s.linkSub}>Custo de arte, mão de obra, margem e faixas de tiragem por produto.</Text>
+            <Text style={s.linkSub} numberOfLines={celular ? 1 : undefined}>
+              {celular ? "Custos, margem e tiragem." : "Custo de arte, mão de obra, margem e faixas de tiragem por produto."}
+            </Text>
           </View>
           <Icon name="chevron-right" size={16} color={t.ink4} />
         </Pressable>
@@ -357,7 +406,9 @@ export default function StudioConfiguracoes() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={s.linkTitle}>Anúncios em Marketplaces</Text>
-            <Text style={s.linkSub}>Prazo de produção e preview do anúncio Studio-aware pra ML/Shopee.</Text>
+            <Text style={s.linkSub} numberOfLines={celular ? 1 : undefined}>
+              {celular ? "Prazo e prévia do anúncio." : "Prazo de produção e preview do anúncio Studio-aware para ML/Shopee."}
+            </Text>
           </View>
           <Icon name="chevron-right" size={16} color={t.ink4} />
         </Pressable>
@@ -365,13 +416,19 @@ export default function StudioConfiguracoes() {
 
       {/* Aprovação de arte */}
       <View style={s.card}>
-        <Text style={s.cardTitle}>Aprovação de arte</Text>
-        <Text style={s.cardSub}>Quando o cliente faz um pedido personalizado, você manda o mockup pra ele aprovar antes da produção começar.</Text>
+        <View style={s.cardTitleRow}>
+          <Text style={s.cardTitle}>Aprovação de arte</Text>
+          {interrogacao("aprovacao", "Aprovação de arte")}
+        </View>
+        {dica("aprovacao", "Quando o cliente faz um pedido personalizado, você manda o mockup para ele aprovar antes da produção começar.", s.cardSub)}
 
         <View style={s.toggleRow}>
           <View style={{ flex: 1 }}>
-            <Text style={s.toggleLabel}>Habilitar fluxo de aprovação</Text>
-            <Text style={s.toggleSub}>Pedidos personalizados ficam em "Aguardando arte" até aprovação</Text>
+            <View style={s.toggleLabelRow}>
+              <Text style={[s.toggleLabel, { flexShrink: 1 }]}>Habilitar fluxo de aprovação</Text>
+              {interrogacao("fluxo", "Fluxo de aprovação")}
+            </View>
+            {dica("fluxo", 'Pedidos personalizados ficam em "Aguardando arte" até aprovação', s.toggleSub)}
           </View>
           <Switch value={approvalEnabled} onValueChange={setApprovalEnabled} trackColor={{ false: t.ink5, true: t.primary }} thumbColor="#fff" />
         </View>
@@ -384,7 +441,9 @@ export default function StudioConfiguracoes() {
                 <Icon name="message-circle" size={16} color={approvalMode === "wa_me" ? "#fff" : t.primary} />
                 <View style={{ flex: 1 }}>
                   <Text style={[s.modeTitle, approvalMode === "wa_me" && { color: "#fff" }]}>wa.me link</Text>
-                  <Text style={[s.modeSub, approvalMode === "wa_me" && { color: "rgba(255,255,255,0.85)" }]}>Abre o WhatsApp do cliente com mensagem pronta. Sem mensalidade de API.</Text>
+                  <Text style={[s.modeSub, approvalMode === "wa_me" && { color: "rgba(255,255,255,0.85)" }]}>
+                    {celular ? "Abre o WhatsApp do cliente com a mensagem pronta." : "Abre o WhatsApp do cliente com mensagem pronta. Sem mensalidade de API."}
+                  </Text>
                 </View>
                 {approvalMode === "wa_me" && <Icon name="check" size={14} color="#fff" />}
               </Pressable>
@@ -392,7 +451,9 @@ export default function StudioConfiguracoes() {
                 <Icon name="headset" size={16} color={t.ink3} />
                 <View style={{ flex: 1 }}>
                   <Text style={[s.modeTitle, { color: t.ink3 }]}>WhatsApp Business API</Text>
-                  <Text style={s.modeSub}>Envio automático. Requer aprovação Meta (Hub Social Fase 6).</Text>
+                  <Text style={s.modeSub}>
+                    {celular ? "Envio automático." : "Envio automático. Requer aprovação Meta (Hub Social Fase 6)."}
+                  </Text>
                 </View>
                 <View style={{ backgroundColor: t.warningSoft, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
                   <Text style={{ color: t.warningInk, fontSize: 10, fontWeight: "800", letterSpacing: 0.4, textTransform: "uppercase" }}>Em breve</Text>
@@ -404,14 +465,15 @@ export default function StudioConfiguracoes() {
       </View>
 
       {/* Taxa da maquininha — save imediato, fora do botão Salvar */}
-      <CardFeeCardStudio t={t} s={s} />
+      <CardFeeCardStudio t={t} s={s} celular={celular} />
 
       {/* Equipe & acessos */}
       <View style={s.card}>
-        <Text style={s.cardTitle}>Equipe & acessos</Text>
-        <Text style={s.cardSub}>
-          Convide colaboradores, defina permissões por módulo e gerencie quem acessa o Studio.
-        </Text>
+        <View style={s.cardTitleRow}>
+          <Text style={s.cardTitle}>Equipe & acessos</Text>
+          {interrogacao("equipe", "Equipe e acessos")}
+        </View>
+        {dica("equipe", "Convide colaboradores, defina permissões por módulo e gerencie quem acessa o Studio.", s.cardSub)}
         {hasTeamCapacity
           ? <MembersSection />
           : <EquipeGateStudio t={t} />
@@ -428,15 +490,27 @@ export default function StudioConfiguracoes() {
   );
 }
 
-function buildStyles(t: ReturnType<typeof useStudioTokens>) {
+function buildStyles(t: ReturnType<typeof useStudioTokens>, celular = false) {
   return StyleSheet.create({
+    // ── Celular (etapa 3): ajuda atrás do "?" ──
+    cardTitleRow: { flexDirection: "row", alignItems: "center", gap: 8, ...(celular ? { marginBottom: 8 } : null) },
+    labelRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+    toggleLabelRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+    // 24 px visíveis + hitSlop de 10 = alvo de 44 px.
+    ajudaBtn: {
+      width: 24, height: 24, borderRadius: 12, marginBottom: 4,
+      borderWidth: 1.5, borderColor: t.ink4, backgroundColor: t.paperCardElev,
+      alignItems: "center", justifyContent: "center",
+    },
+    ajudaBtnOn: { backgroundColor: t.primary, borderColor: t.primary },
+    ajudaBtnTxt: { fontSize: 12.5, fontWeight: "800", color: t.ink2, lineHeight: 15 },
     scroll: { flex: 1, backgroundColor: t.bg },
     container: { padding: 28, paddingBottom: 60, maxWidth: 760, alignSelf: "center", width: "100%" },
-    headerRow: { marginBottom: 22 },
+    headerRow: { marginBottom: celular ? 12 : 22 },
     eyebrow: { fontSize: 11, color: t.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
-    title: { fontSize: 24, fontWeight: "800", color: t.ink, marginTop: 4, letterSpacing: -0.4 },
+    title: { fontSize: celular ? 20 : 24, fontWeight: "800", color: t.ink, marginTop: celular ? 2 : 4, letterSpacing: -0.4 },
     sub: { fontSize: 13.5, color: t.ink3, marginTop: 4 },
-    card: { backgroundColor: t.paperCard, borderRadius: 18, padding: 22, marginBottom: 16, borderWidth: 1, borderColor: t.ink5 },
+    card: { backgroundColor: t.paperCard, borderRadius: 18, padding: celular ? 16 : 22, marginBottom: celular ? 12 : 16, borderWidth: 1, borderColor: t.ink5 },
     cardTitle: { fontSize: 16, fontWeight: "800", color: t.ink, marginBottom: 4 },
     cardSub: { fontSize: 13, color: t.ink3, marginBottom: 14, lineHeight: 18 },
     themeChipsRow: { flexDirection: "row", gap: 8, marginTop: 4, flexWrap: "wrap" },

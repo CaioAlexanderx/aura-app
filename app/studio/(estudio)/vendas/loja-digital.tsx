@@ -56,6 +56,11 @@
 //     pela PaletaDoCanal — antes vinham com o tema do painel Negócio.
 //   · Aba ativa em navy com texto branco nos dois temas; alvos de 44 px
 //     no celular.
+//
+// 05/10/2026 (celular, etapa 3): abaixo de 768 px o banner "Loja Digital
+// pronta para personalizados" (~20% da tela) vira uma linha de status:
+// o selo "Publicada"/"Rascunho" e os botões "Ver loja" e "Copiar link".
+// O "Ver site" do cabeçalho some no celular (é o mesmo botão).
 // ============================================================
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Linking, Platform, useWindowDimensions } from "react-native";
@@ -75,6 +80,7 @@ import { Icon } from "@/components/Icon";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { IS_WIDE } from "@/components/screens/canal/shared";
 import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
+import { copyText } from "@/utils/clipboard";
 // Reuso do canal varejo (tabs já tematizadas via useAccent/useChannelStyles)
 import { TabMeuSite } from "@/components/screens/canal/TabMeuSite";
 import { TabDesign }  from "@/components/screens/canal/TabDesign";
@@ -231,8 +237,47 @@ export default function StudioVendasLojaDigital() {
               <Text style={s.viewSiteBtnTxt}>Ver site</Text>
             </Pressable>
           ) : undefined}
+          // Celular: "Ver loja" mora na linha de status, logo abaixo.
+          mobileActions={null}
+          mobileSubtitle={null}
         />
 
+        {celular ? (
+          <View style={s.statusRow} testID="loja-status">
+            <View style={[s.statusSelo, config.is_published ? s.statusSeloOn : null]}>
+              <View style={[s.statusPonto, { backgroundColor: config.is_published ? t.success : t.ink4 }]} />
+              <Text style={[s.statusSeloTxt, config.is_published ? { color: t.successInk } : null]}>
+                {config.is_published ? "Publicada" : "Rascunho"}
+              </Text>
+            </View>
+            <View style={{ flex: 1 }} />
+            {config.is_published && storefrontUrl ? (
+              <>
+                <Pressable
+                  onPress={() => Linking.openURL(storefrontUrl)}
+                  accessibilityRole="link"
+                  style={s.viewSiteBtn}
+                  testID="loja-ver"
+                >
+                  <Icon name="globe" size={13} color={t.primary} />
+                  <Text style={s.viewSiteBtnTxt}>Ver loja</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => copyText(storefrontUrl, "Link copiado")}
+                  accessibilityRole="button"
+                  style={s.viewSiteBtn}
+                  testID="loja-copiar"
+                >
+                  <Icon name="copy" size={13} color={t.primary} />
+                  <Text style={s.viewSiteBtnTxt}>Copiar link</Text>
+                </Pressable>
+              </>
+            ) : (
+              <Text style={s.statusDica} numberOfLines={1}>Publique em Meu Site</Text>
+            )}
+          </View>
+        ) : (
+        <>
         {/* Hero Studio — gradient navy→magenta (StudioGradients.brand) reforça
             presença do vertical. Texto e ícone passam pra branco/sobre-gradient. */}
         <StudioGradient
@@ -271,6 +316,8 @@ export default function StudioVendasLojaDigital() {
             </Text>
           </View>
         </StudioGradient>
+        </>
+        )}
 
         {/* Tabs Studio (8) — scroll horizontal em mobile, com fade-edges (Fase 2) */}
         <View style={s.tabsWrap}>
@@ -454,6 +501,18 @@ const buildStyles = (t: StudioPalette, isDark: boolean, celular: boolean) => Sty
     fontWeight: "700",
   },
 
+  // Celular: a linha de status no lugar do banner.
+  statusRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  statusSelo: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999,
+    backgroundColor: t.bgSoft, borderWidth: 1, borderColor: t.ink5,
+  },
+  statusSeloOn: { backgroundColor: t.successSoft, borderColor: t.success },
+  statusPonto: { width: 7, height: 7, borderRadius: 4 },
+  statusSeloTxt: { fontSize: 12, fontWeight: "800", color: t.ink3 },
+  statusDica: { fontSize: 12, color: t.ink3, flexShrink: 1 },
+
   hero: {
     flexDirection: "row",
     alignItems: "center",
@@ -510,7 +569,7 @@ const buildStyles = (t: StudioPalette, isDark: boolean, celular: boolean) => Sty
 
   tabsWrap: {
     position: "relative",
-    marginBottom: 18,
+    marginBottom: celular ? 12 : 18,
   },
   fadeLeft: {
     position: "absolute",

@@ -225,4 +225,6 @@ export const makeMm = (c: Tok) =>
       alignItems: "center", justifyContent: "center",
     },
     itemTxt: { fontSize: 14, color: c.ink2, fontWeight: "600" },
+    // Linha do tema, fixa no topo do menu do celular (o botão tem 44 px).
+    temaRow: { paddingVertical: 4, marginBottom: 12 },
   });

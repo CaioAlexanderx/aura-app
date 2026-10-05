@@ -10,6 +10,10 @@
 //
 // 05/10/2026 (QA mobile): o Menu é a ÚNICA navegação do celular (os
 // atalhos da barra saíram) e ganhou o seletor de tema.
+//
+// 05/10/2026 (etapa 3): o tema ficava no fim da lista, depois de rolar
+// tudo. Subiu para o topo, FORA da rolagem; e o cabeçalho em gradiente
+// ficou baixo (só a alça e "Menu"), para a lista ganhar a altura.
 // ============================================================
 import { useMemo } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
@@ -35,11 +39,16 @@ export function MobileMenuSheet({
     <StudioBottomSheet
       visible={visible}
       onClose={onClose}
-      eyebrow="AURA STUDIO"
-      title="Navegação"
+      title="Menu"
       showGradientHeader
+      compactHeader
     >
-      <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ gap: 14 }}>
+      {/* Tema: primeira coisa da gaveta, sempre à vista (não rola). */}
+      <View style={[mm.item, mm.temaRow]} testID="studio-menu-tema">
+        <Text style={[mm.itemTxt, { flex: 1 }]}>Tema</Text>
+        <StudioThemeToggle />
+      </View>
+      <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ gap: 14 }} testID="studio-menu-lista">
         <MobileMenuItem
           label="Início"
           icon="grid"
@@ -74,12 +83,6 @@ export function MobileMenuSheet({
             active={pathname.startsWith("/studio/configuracoes")}
             onPress={() => { onNavigate("/studio/configuracoes"); onClose(); }}
           />
-          {/* Tema: saiu da barra do topo no celular (05/10/2026) — a barra
-              ficou com logo, sino e Menu. */}
-          <View style={[mm.item, { paddingVertical: 6 }]} testID="studio-menu-tema">
-            <Text style={[mm.itemTxt, { flex: 1 }]}>Tema</Text>
-            <StudioThemeToggle compact />
-          </View>
         </View>
       </ScrollView>
     </StudioBottomSheet>

@@ -44,11 +44,17 @@
 //   - studioApi.listProductCategories carregado junto com produtos
 //   - chips de categoria abaixo dos chips personalizable/não-personalizable
 //   - filtragem por product.category === categoria.name (texto)
+//
+// 05/10/2026 (celular, etapa 3): abaixo de 768 px as duas fileiras de
+// chips viram a busca + um botão "Filtrar" (CatalogoFiltroSheet), com o
+// filtro ligado escrito embaixo. O selo "Personalizável" só aparece
+// quando separa uma linha da outra (telaEnxuta.ts) e o nome do produto
+// ocupa até 2 linhas. O desktop continua com os chips.
 // ============================================================
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator,
-  TextInput, Image, Platform, Switch,
+  TextInput, Image, Platform, Switch, useWindowDimensions,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
@@ -65,6 +71,8 @@ import type { CustomizationConfig } from "@/services/studioApi";
 import StudioFichaTecnicaPanel from "@/components/studio/StudioFichaTecnicaPanel";
 import StudioNewProductWizard from "@/components/studio/StudioNewProductWizard";
 import ProductGalleryEditor from "@/components/studio/ProductGalleryEditor";
+import { CatalogoFiltroSheet } from "@/components/studio/CatalogoFiltroSheet";
+import { filtrosAtivos, mostrarSeloPersonalizavel } from "@/components/studio/telaEnxuta";
 import VisualTemplateThumb from "@/components/studio/visualEngine/VisualTemplateThumb";
 import { Icon } from "@/components/Icon";
 import { request } from "@/services/api";
@@ -110,7 +118,9 @@ const FILTERS: Array<{ key: FilterKey; label: string }> = [
 // ───────────────────────────────────────────────────────────
 export default function StudioEstoque() {
   const t = useStudioTokens();
-  const s = useMemo(() => buildStyles(t), [t]);
+  const { width } = useWindowDimensions();
+  const celular = width < 768;
+  const s = useMemo(() => buildStyles(t, celular), [t, celular]);
 
   // 27/05/2026: alinhar com caixa.tsx + StudioShell + configuracoes — auth.company.id
   // (não user.company_id, que está undefined em algumas contas Studio que loga
@@ -129,6 +139,11 @@ export default function StudioEstoque() {
   // Filtro por categoria (#4)
   const [categories, setCategories] = useState<Array<{ id: string; name: string; color: string | null }>>([]);
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null); // null = "Todas"
+  // Celular: a folha de filtros (no lugar das duas fileiras de chips).
+  const [filtroAberto, setFiltroAberto] = useState(false);
+  const ativos = filtrosAtivos(filter, categoryFilter);
+  // No desktop o selo fica como sempre; no celular só quando informa.
+  const seloPersonalizavel = !celular || mostrarSeloPersonalizavel(filter, products);
 
   // Inline expand
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -390,8 +405,61 @@ export default function StudioEstoque() {
               subtitle="Clique num produto para abrir tudo: produto, personalização e custo — na mesma tela."
               rightSlot={headerRight}
               mobileActions={null}
+              mobileSubtitle={null}
             />
 
+            {celular ? (
+              <View style={{ gap: 6 }}>
+                <View style={s.buscaEFiltro}>
+                  <View style={s.searchWrap}>
+                    <Icon name="search" size={14} color={t.ink3} />
+                    <TextInput
+                      value={search}
+                      onChangeText={setSearch}
+                      placeholder="Buscar produto..."
+                      placeholderTextColor={t.ink4}
+                      style={s.searchInput}
+                      accessibilityLabel="Buscar produto"
+                    />
+                    {search.length > 0 && (
+                      <Pressable onPress={() => setSearch("")} hitSlop={14} accessibilityLabel="Limpar busca">
+                        <Icon name="x" size={14} color={t.ink3} />
+                      </Pressable>
+                    )}
+                  </View>
+                  <Pressable
+                    onPress={() => setFiltroAberto(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel={ativos.length ? `Filtrar. Filtro ligado: ${ativos.join(", ")}` : "Filtrar"}
+                    style={[s.filtrarBtn, ativos.length > 0 && s.filtrarBtnAtivo]}
+                    testID="catalogo-filtrar"
+                  >
+                    <Icon name="filter" size={14} color={ativos.length ? t.primary : t.ink2} />
+                    <Text style={[s.filtrarBtnTxt, ativos.length > 0 && { color: t.primary }]}>Filtrar</Text>
+                    {ativos.length > 0 ? (
+                      <View style={s.filtrarConta}>
+                        <Text style={s.filtrarContaTxt}>{ativos.length}</Text>
+                      </View>
+                    ) : null}
+                  </Pressable>
+                </View>
+                {ativos.length > 0 ? (
+                  <View style={s.filtroAtivoRow} testID="catalogo-filtro-ativo">
+                    <Text style={s.filtroAtivoTxt} numberOfLines={1}>{ativos.join(" · ")}</Text>
+                    <Pressable
+                      onPress={() => { setFilter("all"); setCategoryFilter(null); }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Limpar filtros"
+                      hitSlop={12}
+                      style={s.filtroAtivoLimpar}
+                    >
+                      <Text style={s.filtroAtivoLimparTxt}>Limpar</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+              </View>
+            ) : (
+            <>
             {/* Filtros personalizable */}
             <View style={s.filtersRow}>
               <View style={s.chipsRow}>
@@ -458,6 +526,8 @@ export default function StudioEstoque() {
                 })}
               </View>
             )}
+            </>
+            )}
 
             {/* Lista */}
             {loading ? (
@@ -491,6 +561,10 @@ export default function StudioEstoque() {
                     product={p}
                     t={t}
                     s={s}
+                    celular={celular}
+                    seloPersonalizavel={seloPersonalizavel}
+                    // Filtrando por categoria, o selo dela repete em toda linha.
+                    seloCategoria={!celular || categoryFilter === null}
                     onPress={() => setExpandedId(p.id)}
                     onToggleVisible={(next) => toggleStorefrontVisible(p.id, next)}
                   />
@@ -500,6 +574,20 @@ export default function StudioEstoque() {
           </>
         )}
       </ScrollView>
+
+      {/* Filtros no celular */}
+      {celular ? (
+        <CatalogoFiltroSheet
+          visible={filtroAberto}
+          onClose={() => setFiltroAberto(false)}
+          tipo={filter}
+          onTipo={setFilter}
+          categorias={categories}
+          categoria={categoryFilter}
+          onCategoria={setCategoryFilter}
+          total={visible.length}
+        />
+      ) : null}
 
       {/* Wizard novo produto */}
       <StudioNewProductWizard
@@ -523,9 +611,12 @@ export default function StudioEstoque() {
 // ProductRow — linha de produto na lista
 // ───────────────────────────────────────────────────────────
 function ProductRow({
-  product, onPress, t, s, onToggleVisible,
+  product, onPress, t, s, onToggleVisible, celular = false, seloPersonalizavel = true, seloCategoria = true,
 }: {
   product: StudioProduct;
+  celular?: boolean;
+  seloPersonalizavel?: boolean;
+  seloCategoria?: boolean;
   onPress: () => void;
   t: StudioPalette;
   s: ReturnType<typeof buildStyles>;
@@ -566,7 +657,7 @@ function ProductRow({
 
       {/* Info */}
       <View style={s.rowInfo}>
-        <Text style={s.rowName} numberOfLines={1}>{product.name}</Text>
+        <Text style={s.rowName} numberOfLines={celular ? 2 : 1}>{product.name}</Text>
         <View style={s.rowMetaRow}>
           <Text style={s.rowPrice}>{priceStr}</Text>
           <Text style={s.rowDot}>·</Text>
@@ -581,7 +672,7 @@ function ProductRow({
               <Text style={[s.tinyChipTxt, { color: t.ink3 }]}>Oculto na loja</Text>
             </View>
           )}
-          {product.is_personalizable && (
+          {product.is_personalizable && seloPersonalizavel && (
             <View style={[s.tinyChip, { backgroundColor: t.primarySoft }]}>
               <Icon name="sparkles" size={10} color={t.primary} />
               <Text style={[s.tinyChipTxt, { color: t.primary }]}>Personalizável</Text>
@@ -595,7 +686,7 @@ function ProductRow({
               </Text>
             </View>
           )}
-          {product.category ? (
+          {product.category && seloCategoria ? (
             <View style={[s.tinyChip, { backgroundColor: t.bgSoft }]}>
               <Icon name="tag" size={10} color={t.ink3} />
               <Text style={[s.tinyChipTxt, { color: t.ink3 }]}>{product.category}</Text>
@@ -610,6 +701,8 @@ function ProductRow({
           onPress={() => onToggleVisible?.(product.studio_storefront_visible === false)}
           hitSlop={8}
           style={s.eyeBtn}
+          accessibilityRole="button"
+          accessibilityLabel={product.studio_storefront_visible === false ? "Mostrar na Loja Digital" : "Ocultar da Loja Digital"}
         >
           <Icon
             name={product.studio_storefront_visible === false ? "eye_off" : "eye"}
@@ -993,10 +1086,13 @@ function BasicoForm({
 // ───────────────────────────────────────────────────────────
 // Styles
 // ───────────────────────────────────────────────────────────
-function buildStyles(t: StudioPalette) {
+function buildStyles(t: StudioPalette, celular = false) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: t.bg },
-    scrollContent: { padding: 24, paddingBottom: 80, gap: 18, maxWidth: 1440, alignSelf: "center", width: "100%" },
+    scrollContent: {
+      padding: celular ? 16 : 24, paddingBottom: 80, gap: celular ? 12 : 18,
+      maxWidth: 1440, alignSelf: "center", width: "100%",
+    },
 
     // CTA primário
     btnPri: {
@@ -1072,7 +1168,27 @@ function buildStyles(t: StudioPalette) {
       borderColor: t.ink5,
       borderRadius: 10,
       minWidth: 220,
+      ...(celular ? { flex: 1, minWidth: 0, minHeight: 44 } : null),
     },
+
+    // Celular: busca + "Filtrar" numa linha; o filtro ligado, embaixo.
+    buscaEFiltro: { flexDirection: "row", alignItems: "center", gap: 8 },
+    filtrarBtn: {
+      flexDirection: "row", alignItems: "center", gap: 6,
+      minHeight: 44, paddingHorizontal: 14, borderRadius: 10,
+      backgroundColor: t.paperCardElev, borderWidth: 1.5, borderColor: t.ink5,
+    },
+    filtrarBtnAtivo: { backgroundColor: t.primarySoft, borderColor: t.primary },
+    filtrarBtnTxt: { fontSize: 13, fontWeight: "700", color: t.ink2 },
+    filtrarConta: {
+      minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5,
+      backgroundColor: t.primary, alignItems: "center", justifyContent: "center",
+    },
+    filtrarContaTxt: { fontSize: 11, fontWeight: "800", color: "#fff" },
+    filtroAtivoRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 2 },
+    filtroAtivoTxt: { flex: 1, fontSize: 12, fontWeight: "700", color: t.ink2 },
+    filtroAtivoLimpar: { paddingVertical: 4, paddingHorizontal: 4 },
+    filtroAtivoLimparTxt: { fontSize: 12, fontWeight: "800", color: t.primary },
     searchInput: {
       flex: 1,
       fontSize: 13,
@@ -1219,6 +1335,9 @@ function buildStyles(t: StudioPalette) {
     row2: { flexDirection: "row", gap: 10 },
     visRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 6 },
     visHint: { fontSize: 11, color: t.ink3, lineHeight: 15 },
-    eyeBtn: { padding: 6, borderRadius: 8 },
+    // Celular: o olho é alvo próprio dentro de uma linha que navega — 44 px.
+    eyeBtn: celular
+      ? { width: 44, height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center" }
+      : { padding: 6, borderRadius: 8 },
   });
 }
