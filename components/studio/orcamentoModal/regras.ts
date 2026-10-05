@@ -17,6 +17,7 @@ import { precoNoPixDoOrcamento, lerNumero } from "@/components/studio/orcamentoV
 import { temAjustePendente } from "@/components/studio/orcamentoVideo/ajusteDoOrcamento";
 import { SEM_MODELO } from "@/components/studio/orcamentoVideo/modeloDaPeca";
 import { semAcento, type OpcaoDoSeletor } from "@/components/studio/mockupPorProduto/regras";
+import { rodapeNoCelular, type RodapeNoCelular } from "@/components/studio/modalNoCelularRegras";
 
 export { SEM_MODELO };
 
@@ -97,6 +98,33 @@ export function acoesDoRodape(
     default:
       return [{ id: "fechar", rotulo: "Fechar", tipo: "sec" }];
   }
+}
+
+/**
+ * O rodapé no celular (etapa 4, 05/10/2026): no máximo dois botões, o
+ * primário e um secundário. "Cancelar" e "Fechar" são o X do cabeçalho
+ * quando não há vaga; o que sobra ("Fechar sem venda") desce para o fim
+ * do corpo, em "Mais ações".
+ */
+export function acoesNoCelular(acoes: AcaoDoRodape[]): RodapeNoCelular<AcaoDoRodape> {
+  return rodapeNoCelular(acoes, {
+    ehPrimaria: (a) => TIPOS_PRIMARIOS.includes(a.tipo),
+    soFecha: (a) => a.id === "cancelar" || a.id === "fechar",
+    prefereSecundaria: (a) => a.tipo === "sec",
+  });
+}
+
+/** O rótulo que cabe em meia largura de 375 px. O completo fica no leitor de tela. */
+const ROTULO_NO_CELULAR: Partial<Record<IdDaAcao, string>> = {
+  salvar: "Salvar",
+  ajuste: "Pediu ajuste",
+  aprovar: "Aprovar",
+  converter: "Converter",
+  voltar_pecas: "Voltar",
+};
+export function rotuloNoCelular(a: AcaoDoRodape): string {
+  if (a.id === "enviar") return a.rotulo.startsWith("Reenviar") ? "Reenviar no WhatsApp" : "Enviar no WhatsApp";
+  return ROTULO_NO_CELULAR[a.id] || a.rotulo;
 }
 
 // ─── Catálogo ───────────────────────────────────────────────

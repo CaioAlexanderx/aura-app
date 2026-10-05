@@ -10,6 +10,7 @@ import { View, Text, TextInput, Pressable, Modal, StyleSheet, ActivityIndicator 
 import { Icon } from "@/components/Icon";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { LIMITE_DO_AJUSTE, erroDoAjuste } from "./ajusteDoOrcamento";
+import { focoAutomatico, respiroInferior, useModalNoCelular } from "@/components/studio/modalNoCelular";
 
 type Props = {
   visible: boolean;
@@ -23,6 +24,8 @@ type Props = {
 
 export function PedidoDeAjusteModal({ visible, t, versao, onClose, onConfirmar }: Props) {
   const s = useMemo(() => estilos(t), [t]);
+  // Etapa 4 (05/10): no celular a ajuda é uma linha e nada abre o teclado ao entrar.
+  const celular = useModalNoCelular();
   const [texto, setTexto] = useState("");
   const [tocou, setTocou] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -45,17 +48,21 @@ export function PedidoDeAjusteModal({ visible, t, versao, onClose, onConfirmar }
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={s.bg}>
-        <View style={s.card} testID="folha-ajuste">
+        <View style={[s.card, celular && s.cardCelular, celular && respiroInferior(16)]} testID="folha-ajuste">
           <View style={s.topo}>
-            <Text style={s.titulo}>Cliente pediu ajuste</Text>
-            <Pressable onPress={onClose} accessibilityLabel="Fechar" hitSlop={10}>
+            <Text style={s.titulo} numberOfLines={1}>Cliente pediu ajuste</Text>
+            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Fechar" hitSlop={10} style={celular ? s.fecharCelular : null} testID="folha-ajuste-fechar">
               <Icon name="x" size={20} color={t.ink3} />
             </Pressable>
           </View>
+          {celular ? (
+            <Text style={s.ajuda} numberOfLines={1} testID="folha-ajuste-ajuda">Versão {versao}. O orçamento volta a ser editável.</Text>
+          ) : (
           <Text style={s.ajuda}>
             Anote o que o cliente pediu na versão {versao}. O orçamento volta a ser editável e o vídeo
             atual fica guardado até você gerar outro. Só você vê esta anotação.
           </Text>
+          )}
 
           <Text style={s.rotulo}>O que o cliente pediu</Text>
           <TextInput
@@ -66,7 +73,8 @@ export function PedidoDeAjusteModal({ visible, t, versao, onClose, onConfirmar }
             maxLength={LIMITE_DO_AJUSTE}
             placeholder="Ex.: quer a caneca preta e o nome em letra maior"
             placeholderTextColor={t.ink4}
-            autoFocus
+            autoFocus={focoAutomatico(celular)}
+            testID="folha-ajuste-texto"
             accessibilityLabel="O que o cliente pediu"
           />
           <View style={s.linhaInfo}>
@@ -102,6 +110,8 @@ function estilos(t: StudioPalette) {
       backgroundColor: t.paperCardElev, borderTopLeftRadius: 20, borderTopRightRadius: 20,
       padding: 20, gap: 8, width: "100%", maxWidth: 560, alignSelf: "center",
     },
+    cardCelular: { maxWidth: undefined, paddingHorizontal: 14, paddingTop: 8 },
+    fecharCelular: { width: 44, height: 44, alignItems: "center", justifyContent: "center", marginRight: -10 },
     topo: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
     titulo: { fontSize: 17, fontWeight: "800", color: t.ink },
     ajuda: { fontSize: 13, color: t.ink3, lineHeight: 18, marginBottom: 6 },

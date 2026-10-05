@@ -18,6 +18,7 @@ import { Icon } from "@/components/Icon";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { StudioTemplatesPanel } from "@/components/studio/StudioTemplatesPanel";
+import { ehCelular } from "@/components/studio/modalNoCelular";
 
 type Props = {
   visible: boolean;
@@ -33,21 +34,22 @@ export function EscolherDaGaleriaModal({ visible, onClose, productId, companyId,
   const t = useStudioTokens();
   const s = useMemo(() => estilos(t), [t]);
   const { width: vw } = useWindowDimensions();
-  const cheia = vw < 720;
+  // Etapa 4 (05/10): a mesma largura do shell (768 px), não mais 720.
+  const cheia = ehCelular(vw);
 
   if (!visible) return null;
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <View style={[s.fundo, cheia && s.fundoCheio]}>
         <View style={[s.cartao, cheia && s.cartaoCheio]} testID="escolher-da-galeria">
-          <View style={s.cab}>
+          <View style={[s.cab, cheia && s.cabCheio]}>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={s.titulo} accessibilityRole="header">Escolher da galeria</Text>
+              <Text style={s.titulo} accessibilityRole="header" numberOfLines={1}>Escolher da galeria</Text>
               <Text style={s.sub} numberOfLines={1}>{productName}</Text>
             </View>
             <Pressable
               onPress={onClose}
-              style={s.fechar}
+              style={[s.fechar, cheia && { borderWidth: 0, backgroundColor: "transparent" }]}
               accessibilityRole="button"
               accessibilityLabel="Fechar a galeria"
               testID="escolher-da-galeria-fechar"
@@ -99,6 +101,7 @@ function estilos(t: StudioPalette) {
       borderBottomWidth: 1,
       borderBottomColor: t.ink5,
     },
+    cabCheio: { paddingLeft: 14, paddingRight: 6, paddingVertical: 4 },
     titulo: { fontSize: 16, fontWeight: "800", color: t.ink, letterSpacing: -0.2 },
     sub: { fontSize: 12.5, color: t.ink3, marginTop: 1 },
     fechar: {

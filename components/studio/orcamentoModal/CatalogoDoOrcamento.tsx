@@ -80,14 +80,15 @@ export function CatalogoDoOrcamento({ tema, produtos, erro, frequentes, template
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
           <Text numberOfLines={1} style={{ fontWeight: "700", fontSize: 13.5, color: t.ink }}>{p.name}</Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            {estreito ? <Text numberOfLines={1} style={{ fontWeight: "800", color: t.ink, fontSize: 13 }} testID={"preco-" + p.id}>{reais(p.price)}</Text> : null}
             <Selo t={t} tipo={selo.tipo} rotulo={selo.rotulo} />
             <Text numberOfLines={1} style={{ fontSize: 12, color: t.ink3, flexShrink: 1 }}>
               {[p.category, extra, ja ? `${String(ja).replace(".", ",")} no orçamento` : null].filter(Boolean).join(" · ")}
             </Text>
           </View>
         </View>
-        <Text style={{ fontWeight: "800", color: t.ink, fontSize: 13.5 }}>{reais(p.price)}</Text>
-        <View style={{ width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: ja ? t.successSoft : t.primarySoft }}>
+        {estreito ? null : <Text style={{ fontWeight: "800", color: t.ink, fontSize: 13.5 }}>{reais(p.price)}</Text>}
+        <View style={{ width: estreito ? 44 : 40, height: estreito ? 44 : 40, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: ja ? t.successSoft : t.primarySoft }}>
           <Icon name={ja ? "check" : "plus"} size={18} color={ja ? t.successInk : escuro ? t.primary2 : t.primary} />
         </View>
       </Pressable>
@@ -119,7 +120,7 @@ export function CatalogoDoOrcamento({ tema, produtos, erro, frequentes, template
     >
       {avulsoAberto ? (
         <View style={{ borderWidth: 1.5, borderColor: t.primary, borderRadius: 12, padding: 12, gap: 10, backgroundColor: t.paperCardElev }} testID="form-avulso">
-          <Campo tema={tema} rotulo="Descrição" value={desc} onChangeText={setDesc} placeholder="Ex.: criação da arte" autoFocus />
+          <Campo tema={tema} rotulo="Descrição" value={desc} onChangeText={setDesc} placeholder="Ex.: criação da arte" autoFocus={!estreito} />
           <View style={{ flexDirection: "row", gap: 10 }}>
             <View style={{ flex: 1 }}><Campo tema={tema} rotulo="Quantidade" value={qtd} onChangeText={setQtd} keyboardType="decimal-pad" /></View>
             <View style={{ flex: 1 }}><Campo tema={tema} rotulo="Preço unitário (R$)" value={preco} onChangeText={setPreco} keyboardType="decimal-pad" placeholder="0,00" /></View>

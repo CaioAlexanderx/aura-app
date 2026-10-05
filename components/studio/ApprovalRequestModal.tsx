@@ -43,6 +43,7 @@ import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { pickImageBase64, uploadStudioMockup } from "@/services/studioUploadApi";
 import { numeroDoPedido } from "@/components/studio/pagamentoDoPedido";
+import { useModalNoCelular } from "@/components/studio/modalNoCelular";
 
 type Props = {
   order: StudioOrder;
@@ -59,6 +60,8 @@ function isVideoUrl(v: string): boolean {
 export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
   const t = useStudioTokens();
   const s = useMemo(() => buildStyles(t), [t]);
+  // Etapa 4 (05/10): no celular o X entra na linha do título e a ajuda cabe numa linha.
+  const celular = useModalNoCelular();
   const { company } = useAuthStore();
   const [step, setStep] = useState(1);
   const [mockupUrl, setMockupUrl] = useState("");
@@ -217,17 +220,20 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
+      {celular ? null : (
       <View style={s.closeRow}>
         <Pressable onPress={onClose} style={s.closeBtn}>
           <Icon name="x" size={18} color={t.ink2} />
         </Pressable>
       </View>
+      )}
 
       <StudioWorkflow
         // FIX (achado do QA, 28/09/2026): identificador interno (uuid em
         // caixa alta) no título — numeroDoPedido() usa order_number quando
         // o backend manda; senão cai no mesmo fallback de sempre.
         title={`Solicitar aprovação — ${numeroDoPedido(order)}`}
+        onClose={onClose}
         steps={["Mockup", "Confirmar e enviar"]}
         current={step}
         onBack={step > 1 ? () => setStep((x) => x - 1) : undefined}
@@ -249,10 +255,14 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
         {step === 1 && (
           <View style={s.block}>
             <Text style={s.q}>Qual mockup vai enviar?</Text>
+            {celular ? (
+              <Text style={s.help} numberOfLines={1} testID="aprovacao-ajuda">Gere do pedido, suba um arquivo ou cole uma URL.</Text>
+            ) : (
             <Text style={s.help}>
               Gere direto do pedido com o motor visual (produto 3D vira vídeo girando!),
               suba do seu dispositivo ou cole uma URL pública (PNG, JPG, PDF até 15 MB).
             </Text>
+            )}
 
             {/* F2/F5: gerar render/vídeo a partir da customization do pedido */}
             <Pressable
@@ -337,10 +347,14 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
 
         {step === 2 && (
           <View style={s.block}>
-            <Text style={s.q}>Confirme o telefone e (opcional) ajuste a mensagem</Text>
+            <Text style={s.q}>{celular ? "Telefone e mensagem" : "Confirme o telefone e (opcional) ajuste a mensagem"}</Text>
+            {celular ? (
+              <Text style={s.help} numberOfLines={1} testID="aprovacao-ajuda">Você envia pelo seu WhatsApp.</Text>
+            ) : (
             <Text style={s.help}>
-              A loja envia pelo WhatsApp manualmente — assim funciona pra qualquer cliente sem precisar de aprovação da Meta.
+              A loja envia pelo WhatsApp manualmente — assim funciona para qualquer cliente sem precisar de aprovação da Meta.
             </Text>
+            )}
 
             <Text style={s.label}>Telefone do cliente (com DDD)</Text>
             <TextInput
@@ -354,7 +368,7 @@ export function ApprovalRequestModal({ order, onClose, onSent }: Props) {
             <Text style={[s.label, { marginTop: 14 }]}>Mensagem (opcional)</Text>
             <TextInput
               style={[s.input, { minHeight: 100 }]}
-              placeholder="Deixe em branco pra usar o texto padrão"
+              placeholder="Deixe em branco para usar o texto padrão"
               value={customMessage}
               onChangeText={setCustomMessage}
               multiline

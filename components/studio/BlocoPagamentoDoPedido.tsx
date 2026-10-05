@@ -27,6 +27,7 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
+import { botaoDoRodape, folhaDeBaixo, useModalNoCelular } from "@/components/studio/modalNoCelular";
 import { pagamentoDoPedidoDigitalApi } from "@/hooks/useDigitalOrders";
 import {
   situacaoDoPagamento, acoesDoPagamento, formaDoPagamento, reais, totalDoPedido,
@@ -49,6 +50,9 @@ type Confirmacao = "aprovar" | "recusar" | "cancelar" | null;
 
 export function BlocoPagamentoDoPedido({ pedido, companyIdDaSessao, onAtualizado }: Props) {
   const t = useStudioTokens();
+  // Etapa 4 (05/10): no celular a confirmação é folha de baixo, com dois botões de 44 px.
+  const celular = useModalNoCelular();
+  const folha = folhaDeBaixo(celular);
   const s = useMemo(() => buildStyles(t), [t]);
   const situacao = situacaoDoPagamento(pedido);
   const { podeAgir, rotuloConfirmar } = acoesDoPagamento(pedido);
@@ -269,8 +273,8 @@ export function BlocoPagamentoDoPedido({ pedido, companyIdDaSessao, onAtualizado
 
       {/* Confirmação antes de gravar — as duas ações mexem no pedido da cliente. */}
       <Modal visible={confirmacao !== null} transparent animationType="fade" onRequestClose={fechar}>
-        <View style={s.fundoModal}>
-          <View style={s.caixaModal}>
+        <View style={[s.fundoModal, folha.fundo]}>
+          <View style={[s.caixaModal, folha.caixa]} testID="folha-do-pagamento">
             {confirmacao === "aprovar" ? (
               <>
                 <Text style={s.tituloModal}>
@@ -327,11 +331,11 @@ export function BlocoPagamentoDoPedido({ pedido, companyIdDaSessao, onAtualizado
                 <Text style={s.erroTxt}>{erroAcao}</Text>
               </View>
             ) : null}
-            <View style={s.botoesModal}>
+            <View style={[s.botoesModal, celular && { flexWrap: "nowrap" }]} testID="folha-do-pagamento-botoes">
               <Pressable
                 onPress={fechar}
                 disabled={!!agindo}
-                style={[s.botao, s.botaoSecundario]}
+                style={[s.botao, s.botaoSecundario, botaoDoRodape(celular)]}
                 accessibilityRole="button"
               >
                 <Text style={[s.botaoTxt, { color: t.ink2 }]}>{desatualizado ? "Fechar" : "Voltar"}</Text>
@@ -341,7 +345,7 @@ export function BlocoPagamentoDoPedido({ pedido, companyIdDaSessao, onAtualizado
                 testID="btn-confirmar-acao"
                 onPress={executar}
                 disabled={!!agindo}
-                style={[s.botao, { backgroundColor: confirmacao === "aprovar" ? t.primary : t.danger }, agindo && s.desligado]}
+                style={[s.botao, { backgroundColor: confirmacao === "aprovar" ? t.primary : t.danger }, botaoDoRodape(celular, 1.6), agindo && s.desligado]}
                 accessibilityRole="button"
                 accessibilityState={{ disabled: !!agindo, busy: !!agindo }}
               >

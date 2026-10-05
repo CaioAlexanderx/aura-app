@@ -4,6 +4,7 @@ import { StudioGradient } from "@/components/studio/StudioGradient";
 import { StudioGradients } from "@/constants/studio-tokens";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
+import { respiroInferior } from "@/components/studio/modalNoCelular";
 
 type Props = {
   visible: boolean;
@@ -45,7 +46,7 @@ export function StudioBottomSheet({
   const translateY = slideAnim.interpolate({ inputRange: [0, 1], outputRange: [600, 0] });
   const backdropOpacity = backdropAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.6] });
 
-  // Pan responder pra fechar arrastando handle
+  // Pan responder para fechar arrastando a alça
   const pan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => showHandle,
@@ -89,17 +90,18 @@ export function StudioBottomSheet({
             >
               {showHandle && <View style={[s.handleLight, compactHeader && { marginBottom: 4 }]} {...pan.panHandlers} />}
               {eyebrow && !compactHeader && <Text style={s.eyebrowLight}>{eyebrow}</Text>}
-              {title && <Text style={[s.titleLight, compactHeader && s.titleCompact]}>{title}</Text>}
+              {title && <Text style={[s.titleLight, compactHeader && s.titleCompact]} numberOfLines={1}>{title}</Text>}
             </StudioGradient>
           )}
           {!showGradientHeader && (
             <View style={[s.normalHeader, compactHeader && s.headerCompact]}>
               {showHandle && <View style={[s.handle, compactHeader && { marginBottom: 4 }]} {...pan.panHandlers} />}
               {eyebrow && !compactHeader && <Text style={s.eyebrow}>{eyebrow}</Text>}
-              {title && <Text style={[s.title, compactHeader && s.titleCompact]}>{title}</Text>}
+              {title && <Text style={[s.title, compactHeader && s.titleCompact]} numberOfLines={1}>{title}</Text>}
             </View>
           )}
-          <View style={[s.body, compactHeader && s.bodyCompact]}>{children}</View>
+          {/* Etapa 4 (05/10): o respiro de baixo respeita a área segura do aparelho. */}
+          <View style={[s.body, compactHeader && s.bodyCompact, respiroInferior(compactHeader ? 24 : 32) as any]} testID="folha-corpo">{children}</View>
         </Animated.View>
       </View>
     </Modal>

@@ -40,6 +40,9 @@ import { request } from "@/services/api";
 import { studioApi } from "@/services/studioApi";
 import { toast } from "@/components/Toast";
 import { pickImageBase64, uploadStudioMockup } from "@/services/studioUploadApi";
+import {
+  CabecalhoCompacto, MaisOpcoes, botaoDoRodape, ehCelular, focoAutomatico, rodapeFixo,
+} from "@/components/studio/modalNoCelular";
 
 // ───────────────────────────────────────────────────────────
 // Tipos
@@ -78,6 +81,8 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
   const [loadingCategories, setLoadingCategories] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
+  // Celular (etapa 4): o SKU e a URL da foto ficam atrás de "Mais opções".
+  const [maisOpcoes, setMaisOpcoes] = useState(false);
 
   // ── Reset state quando modal fecha ──────────────────────
   useEffect(() => {
@@ -92,6 +97,7 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
         setNewCategoryName("");
         setShowNewCategoryInput(false);
         setImageUrl("");
+        setMaisOpcoes(false);
       }, 300);
       return () => clearTimeout(timer);
     }
@@ -133,7 +139,7 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
 
   // ── Upload de imagem (web + native) ─────────────────────
   // Cross-platform (QA celular): antes só funcionava no web, e no app a
-  // lojista esbarrava num toast pedindo pra colar URL — justo no fluxo mais
+  // lojista esbarrava num toast pedindo para colar URL — justo no fluxo mais
   // comum (foto tirada no próprio celular).
   async function handlePickImage() {
     const picked = await pickImageBase64().catch((e: any) => {
@@ -186,7 +192,7 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
     }
   }
 
-  // ── Submit: cria produto e entrega pro editor inline ────
+  // ── Submit: cria produto e entrega para o editor inline ──
   // (#4): envia `category` como texto (nome), não `category_id` (FK)
   async function submitCreate() {
     if (!canSubmit) return;
@@ -227,8 +233,42 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
 
   // ── Tamanho do modal: full em mobile, 720px max em desktop
   const isCompact = winWidth < 720;
-  const modalWidth = isCompact ? winWidth : Math.min(720, winWidth - 48);
-  const modalMaxHeight = isCompact ? winHeight : winHeight - 48;
+  // Regra do modal no celular (etapa 4): abaixo de 768 px o cabeçalho é de
+  // uma linha, nada abre o teclado ao entrar e o SKU e a URL ficam recolhidos.
+  const celular = ehCelular(winWidth);
+  const cheio = isCompact || celular;
+  const modalWidth = cheio ? winWidth : Math.min(720, winWidth - 48);
+  const modalMaxHeight = cheio ? winHeight : winHeight - 48;
+
+  const campoSku = (
+    <View style={styles.field}>
+      <Text style={styles.label}>SKU (opcional, gerado se vazio)</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Ex: CAM-PERS-001"
+        placeholderTextColor={t.ink4}
+        value={sku}
+        onChangeText={setSku}
+        autoCapitalize="characters"
+        testID="novo-produto-sku"
+      />
+    </View>
+  );
+  const campoUrlDaFoto = (
+    <>
+      <Text style={styles.hint}>{celular ? "Ou cole o endereço (URL) de uma foto" : "Ou cole uma URL pública abaixo"}</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="https://..."
+        placeholderTextColor={t.ink4}
+        value={imageUrl}
+        onChangeText={setImageUrl}
+        autoCapitalize="none"
+        autoCorrect={false}
+        testID="novo-produto-url-da-foto"
+      />
+    </>
+  );
 
   return (
     <Modal
@@ -245,11 +285,16 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
             {
               width: modalWidth,
               maxHeight: modalMaxHeight,
-              borderRadius: isCompact ? 0 : 18,
+              borderRadius: cheio ? 0 : 18,
             },
+            celular && { height: modalMaxHeight },
           ]}
+          testID="novo-produto"
         >
-          {/* Header com gradient */}
+          {/* Celular: cabeçalho de uma linha. Desktop: o gradiente de sempre. */}
+          {celular ? (
+            <CabecalhoCompacto t={t} titulo="Novo produto" onFechar={onClose} testID="novo-produto-cabecalho" />
+          ) : (
           <StudioGradient
             colors={[t.primary, t.accent]}
             direction="135deg"
@@ -269,11 +314,12 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
               </Pressable>
             </View>
           </StudioGradient>
+          )}
 
           {/* Body scrollavel */}
           <ScrollView
             style={styles.body}
-            contentContainerStyle={styles.bodyContent}
+            contentContainerStyle={[styles.bodyContent, celular && styles.bodyContentCelular]}
             keyboardShouldPersistTaps="handled"
           >
             <View style={{ gap: 14 }}>
@@ -286,7 +332,8 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
                   placeholderTextColor={t.ink4}
                   value={name}
                   onChangeText={setName}
-                  autoFocus
+                  autoFocus={focoAutomatico(celular)}
+                  testID="novo-produto-nome"
                 />
                 {name.length > 0 && !nameValid && (
                   <Text style={styles.errorTxt}>Pelo menos 2 caracteres</Text>
@@ -383,18 +430,8 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
                 )}
               </View>
 
-              {/* SKU */}
-              <View style={styles.field}>
-                <Text style={styles.label}>SKU (opcional, gerado se vazio)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ex: CAM-PERS-001"
-                  placeholderTextColor={t.ink4}
-                  value={sku}
-                  onChangeText={setSku}
-                  autoCapitalize="characters"
-                />
-              </View>
+              {/* SKU (no celular vai para "Mais opções") */}
+              {celular ? null : campoSku}
 
               {/* Foto */}
               <View style={styles.field}>
@@ -415,16 +452,7 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
                     )}
                   </Pressable>
                 </View>
-                <Text style={styles.hint}>Ou cole uma URL pública abaixo</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="https://..."
-                  placeholderTextColor={t.ink4}
-                  value={imageUrl}
-                  onChangeText={setImageUrl}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
+                {celular ? null : campoUrlDaFoto}
                 {!!imageUrl && /^https?:\/\//.test(imageUrl.trim()) && (
                   <View style={styles.imgPreview}>
                     <Image source={{ uri: imageUrl.trim() }} style={styles.imgPreviewImg} />
@@ -432,18 +460,27 @@ export function StudioNewProductWizard({ visible, onClose, companyId, onCreated 
                   </View>
                 )}
               </View>
+
+              {celular ? (
+                <MaisOpcoes t={t} aberto={maisOpcoes} onAlternar={() => setMaisOpcoes((v) => !v)} testID="novo-produto-mais-opcoes">
+                  {campoSku}
+                  <View style={styles.field}>{campoUrlDaFoto}</View>
+                </MaisOpcoes>
+              ) : null}
             </View>
           </ScrollView>
 
           {/* Footer sticky */}
-          <View style={styles.footer}>
-            <Pressable style={styles.btnSec} onPress={onClose} disabled={submitting}>
+          <View style={[styles.footer, rodapeFixo(celular)]} testID="novo-produto-rodape">
+            <Pressable style={[styles.btnSec, botaoDoRodape(celular)]} onPress={onClose} disabled={submitting} accessibilityRole="button">
               <Text style={styles.btnSecTxt}>Cancelar</Text>
             </Pressable>
             <Pressable
-              style={[styles.btnPri, !canSubmit && styles.btnDisabled]}
+              style={[styles.btnPri, botaoDoRodape(celular, 1.6), !canSubmit && styles.btnDisabled]}
               onPress={submitCreate}
               disabled={!canSubmit}
+              accessibilityRole="button"
+              testID="novo-produto-criar"
             >
               {submitting ? (
                 <ActivityIndicator size="small" color="#fff" />
@@ -524,6 +561,7 @@ function buildStyles(t: StudioPalette) {
     // ── Body ───────────────────────────────────────────────
     body: { flex: 1 },
     bodyContent: { padding: 22, paddingBottom: 12 },
+    bodyContentCelular: { padding: 14, paddingBottom: 16 },
 
     // ── Form fields ───────────────────────────────────────
     field: { gap: 6 },

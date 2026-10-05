@@ -48,11 +48,12 @@ import { CatalogoDoOrcamento } from "./CatalogoDoOrcamento";
 import { LinhaDaPeca, type Peca } from "./LinhaDaPeca";
 import { useCatalogoDoOrcamento } from "./useCatalogoDoOrcamento";
 import {
-  TIPOS_PRIMARIOS, acoesDoRodape, chipsDeValidade, estadoDoOrcamento, podeEditar, resumoDoOrcamento,
+  TIPOS_PRIMARIOS, acoesDoRodape, acoesNoCelular, rotuloNoCelular, chipsDeValidade, estadoDoOrcamento, podeEditar, resumoDoOrcamento,
   textoDePecas, textoDeUnidades, venceEm, lerPreco, textoDoPreco,
   type AcaoDoRodape, type EstadoDoOrcamento, type ProdutoDoCatalogo,
 } from "./regras";
 import { Botao, Campo, Chip, Dica, Rotulo, Secao, type Tema } from "./ui";
+import { ehCelular, respiroInferior } from "@/components/studio/modalNoCelular";
 
 export type LojaDoOrcamento = { id: string; name: string; logo_url?: string | null };
 
@@ -127,7 +128,9 @@ function Painel({ cid: cidInicial, quoteId, lojas, consolidado, logoDaLoja, onCl
   const router = useRouter();
   const { tokens: t, isDark } = useStudioTheme();
   const { width } = useWindowDimensions();
-  const estreito = width < 700;
+  // Etapa 4 (05/10): a mesma largura do shell. Abaixo de 768 px o modal é
+  // tela cheia, numa coluna só, e segue a regra do modal no celular.
+  const estreito = ehCelular(width);
   const tema: Tema = { t, escuro: isDark, estreito };
 
   const [cid, setCid] = useState<string | null>(cidInicial);
@@ -470,12 +473,15 @@ function Painel({ cid: cidInicial, quoteId, lojas, consolidado, logoDaLoja, onCl
   }
   const primaria = acoes.find((a) => TIPOS_PRIMARIOS.includes(a.tipo));
   const outras = acoes.filter((a) => a !== primaria);
+  // Celular: no máximo dois botões no rodapé; o que sobra desce para o corpo.
+  const noCelular = acoesNoCelular(acoes);
   const botaoDaAcao = (a: AcaoDoRodape, flex?: boolean) => (
     <Botao
       key={a.id}
       tema={tema}
       tipo={a.tipo}
-      rotulo={a.rotulo}
+      rotulo={estreito && flex ? rotuloNoCelular(a) : a.rotulo}
+      accessibilityLabel={a.rotulo}
       icone={a.id === "enviar" ? "whatsapp" : a.id === "aprovar" || a.id === "converter" ? "check" : undefined}
       desabilitado={a.desabilitada || (!!ocupado && ocupado !== a.id)}
       ocupado={ocupado === a.id}
@@ -689,6 +695,11 @@ function Painel({ cid: cidInicial, quoteId, lojas, consolidado, logoDaLoja, onCl
         {estreito && catalogoAberto ? null : (
           <View style={{ flex: estreito ? undefined : 1, width: estreito ? "100%" : undefined, minWidth: 0, gap: 14 }}>{colunaDireita}</View>
         )}
+        {estreito && !catalogoAberto && noCelular.resto.length ? (
+          <View style={{ width: "100%", flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center" }} testID="mais-acoes">
+            {noCelular.resto.map((a) => botaoDaAcao(a))}
+          </View>
+        ) : null}
       </View>
     );
   }
@@ -715,44 +726,46 @@ function Painel({ cid: cidInicial, quoteId, lojas, consolidado, logoDaLoja, onCl
         }}
       >
         {/* Cabeçalho */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: estreito ? 14 : 20, paddingVertical: estreito ? 10 : 14, borderBottomWidth: 1, borderBottomColor: t.ink5 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingLeft: estreito ? 14 : 20, paddingRight: estreito ? 6 : 20, paddingVertical: estreito ? 4 : 14, borderBottomWidth: 1, borderBottomColor: t.ink5 }} testID="cabecalho">
+          {estreito ? null : (
           <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: t.primarySoft, alignItems: "center", justifyContent: "center" }}>
             <Icon name="file_text" size={18} color={isDark ? t.primary2 : t.primary} />
           </View>
+          )}
           <View style={{ flex: 1, minWidth: 0 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <Text style={{ fontSize: 16, fontWeight: "800", color: t.ink, letterSpacing: -0.2 }} numberOfLines={1} testID="titulo">{titulo}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: estreito ? "nowrap" : "wrap" }}>
+              <Text style={{ fontSize: 16, fontWeight: "800", color: t.ink, letterSpacing: -0.2, flexShrink: 1 }} numberOfLines={1} testID="titulo">{titulo}</Text>
               {cid ? (
                 <View style={{ backgroundColor: selo.bg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 }} testID="selo-status">
                   <Text style={{ fontSize: 11, fontWeight: "700", color: selo.fg }}>{selo.txt}</Text>
                 </View>
               ) : null}
               {consolidado && loja ? (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: t.bgSoft, borderWidth: 1, borderColor: t.ink5, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 }} testID="chip-loja">
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: t.bgSoft, borderWidth: 1, borderColor: t.ink5, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2, flexShrink: 1, minWidth: 0 }} testID="chip-loja">
                   <Icon name="store" size={11} color={t.ink2} />
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: t.ink2 }}>{loja.name}</Text>
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: t.ink2, flexShrink: 1 }} numberOfLines={1}>{loja.name}</Text>
                 </View>
               ) : null}
             </View>
-            <Text style={{ fontSize: 12.5, color: t.ink3, marginTop: 1 }} numberOfLines={2}>{subtitulo}</Text>
+            <Text style={{ fontSize: estreito ? 12 : 12.5, color: t.ink3, marginTop: 1 }} numberOfLines={estreito ? 1 : 2} testID="subtitulo">{subtitulo}</Text>
           </View>
           <Pressable
             onPress={pedirFechar}
             accessibilityRole="button"
             accessibilityLabel="Fechar"
             testID="fechar-modal"
-            style={{ width: estreito ? 44 : 36, height: estreito ? 44 : 36, borderRadius: 10, borderWidth: 1, borderColor: t.ink5, backgroundColor: t.paperCard, alignItems: "center", justifyContent: "center" }}
+            style={{ width: estreito ? 44 : 36, height: estreito ? 44 : 36, borderRadius: 10, borderWidth: estreito ? 0 : 1, borderColor: t.ink5, backgroundColor: estreito ? "transparent" : t.paperCard, alignItems: "center", justifyContent: "center" }}
           >
             <Icon name="x" size={18} color={t.ink3} />
           </Pressable>
         </View>
 
         {aviso ? (
-          <View style={{ flexDirection: "row", gap: 10, alignItems: "center", paddingHorizontal: estreito ? 14 : 20, paddingVertical: 10, backgroundColor: aviso.bg, borderBottomWidth: 1, borderBottomColor: t.ink5 }} testID="aviso" accessibilityRole={"status" as any}>
+          <View style={{ flexDirection: "row", gap: 10, alignItems: "center", paddingHorizontal: estreito ? 14 : 20, paddingVertical: estreito ? 6 : 10, backgroundColor: aviso.bg, borderBottomWidth: 1, borderBottomColor: t.ink5 }} testID="aviso" accessibilityRole={"status" as any}>
             <Icon name={aviso.icone as any} size={18} color={aviso.fg} />
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ fontSize: 13, fontWeight: "700", color: aviso.fg }}>{aviso.titulo}</Text>
-              {aviso.texto ? <Text style={{ fontSize: 12.5, color: aviso.fg, opacity: 0.9 }}>{aviso.texto}</Text> : null}
+              <Text style={{ fontSize: 13, fontWeight: "700", color: aviso.fg }} numberOfLines={estreito ? 2 : undefined}>{aviso.titulo}</Text>
+              {aviso.texto && !estreito ? <Text style={{ fontSize: 12.5, color: aviso.fg, opacity: 0.9 }}>{aviso.texto}</Text> : null}
             </View>
           </View>
         ) : null}
@@ -765,20 +778,21 @@ function Painel({ cid: cidInicial, quoteId, lojas, consolidado, logoDaLoja, onCl
         <View
           style={{
             flexDirection: estreito ? "column" : "row", alignItems: estreito ? "stretch" : "center", gap: estreito ? 8 : 12,
-            paddingHorizontal: estreito ? 14 : 20, paddingVertical: estreito ? 10 : 12, borderTopWidth: 1, borderTopColor: t.ink5, backgroundColor: t.paperCard,
+            paddingHorizontal: estreito ? 14 : 20, paddingVertical: estreito ? undefined : 12, borderTopWidth: 1, borderTopColor: t.ink5, backgroundColor: t.paperCard,
+            ...(estreito ? { paddingTop: 8, gap: 6, ...respiroInferior(10) } : {}),
           }}
           testID="rodape"
         >
           <View style={{ flex: estreito ? undefined : 1, minWidth: 0 }}>
             <Text style={{ fontSize: 12.5, color: t.ink2, fontWeight: "600" }} numberOfLines={1} testID="rodape-info">{info}</Text>
-            {infoMenor ? <Text style={{ fontSize: 12, color: erroCond && editavel && infoMenor === erroCond ? t.dangerInk : t.ink3 }} numberOfLines={1}>{infoMenor}</Text> : null}
+            {infoMenor && (!estreito || (erroCond && editavel && infoMenor === erroCond)) ? <Text style={{ fontSize: 12, color: erroCond && editavel && infoMenor === erroCond ? t.dangerInk : t.ink3 }} numberOfLines={1}>{infoMenor}</Text> : null}
           </View>
           {!cid ? (
             <Botao tema={tema} tipo="ter" rotulo="Cancelar" onPress={onClose} />
           ) : estreito ? (
-            <View style={{ gap: 8 }} testID="rodape-acoes">
-              {primaria ? botaoDaAcao(primaria) : null}
-              {outras.length ? <View style={{ flexDirection: "row", gap: 8 }}>{outras.map((a) => botaoDaAcao(a, true))}</View> : null}
+            <View style={{ flexDirection: "row", gap: 8 }} testID="rodape-acoes">
+              {noCelular.secundaria ? botaoDaAcao(noCelular.secundaria, true) : null}
+              {noCelular.primaria ? <View style={{ flexGrow: 1.7, flexBasis: 0, minWidth: 0 }}>{botaoDaAcao(noCelular.primaria, true)}</View> : null}
             </View>
           ) : (
             <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }} testID="rodape-acoes">

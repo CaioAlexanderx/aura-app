@@ -16,6 +16,7 @@ import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { StudioScreen } from "@/components/studio/StudioScreen";
 import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
+import { respiroInferior } from "@/components/studio/modalNoCelular";
 import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
 import { Icon } from "@/components/Icon";
@@ -135,7 +136,7 @@ export default function StudioClientes() {
 
       <Modal visible={formAberto} transparent animationType="fade" onRequestClose={fecharForm}>
         <Pressable style={s.fundoModal} onPress={fecharForm}>
-          <Pressable style={s.folhaModal} onPress={() => {}}>
+          <Pressable style={[s.folhaModal, respiroInferior(16) as any]} onPress={() => {}}>
             <ScrollView keyboardShouldPersistTaps="handled">
               <AddCustomerForm
                 initialData={editando || undefined}

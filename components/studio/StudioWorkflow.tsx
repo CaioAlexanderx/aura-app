@@ -17,6 +17,7 @@ import {
 import { Icon } from "@/components/Icon";
 import { type StudioPalette } from "@/constants/studio-tokens";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
+import { botaoDoRodape, rodapeFixo, useModalNoCelular } from "@/components/studio/modalNoCelular";
 
 type Props = {
   title: string;
@@ -30,6 +31,8 @@ type Props = {
   draftKey?: string;
   draft?: any;
   onDraftRestored?: (draft: any) => void;
+  /** Celular (etapa 4): o fechar entra na linha do título, em vez de uma faixa só para o X. */
+  onClose?: () => void;
   children: React.ReactNode;
 };
 
@@ -67,10 +70,14 @@ export function StudioWorkflow({
   title, steps, current,
   onBack, onNext, onConcluir,
   primaryCta, primaryDisabled,
-  draftKey, draft, onDraftRestored,
+  draftKey, draft, onDraftRestored, onClose,
   children,
 }: Props) {
   const t = useStudioTokens();
+  // Regra do modal no celular: cabeçalho de uma linha (o "Passo 1 de 2" já
+  // diz onde a pessoa está, então a régua de passos some), rodapé com dois
+  // botões de 44 px e área segura.
+  const celular = useModalNoCelular();
   const s = useMemo(() => buildStyles(t), [t]);
   const [submitting, setSubmitting] = useState(false);
   const total = steps.length;
@@ -114,14 +121,19 @@ export function StudioWorkflow({
 
   return (
     <View style={s.wrap}>
-      <View style={s.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={s.eyebrow}>
+      <View style={[s.header, celular && s.headerCelular]} testID="workflow-cabecalho">
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={s.eyebrow} numberOfLines={1}>
             Passo {Math.min(current, total)} de {total} · {steps[current - 1] || ""}
           </Text>
-          <Text style={s.title}>{title}</Text>
+          <Text style={[s.title, celular && s.titleCelular]} numberOfLines={celular ? 1 : undefined} testID="workflow-titulo">{title}</Text>
         </View>
-        {draftKey && Platform.OS === "web" && (
+        {celular && onClose ? (
+          <Pressable onPress={onClose} style={s.fecharCelular} accessibilityRole="button" accessibilityLabel="Fechar" testID="workflow-fechar">
+            <Icon name="x" size={20} color={t.ink2} />
+          </Pressable>
+        ) : null}
+        {draftKey && Platform.OS === "web" && !celular && (
           <View style={s.draftChip}>
             <View style={s.draftDot} />
             <Text style={s.draftTxt}>Salvando rascunho</Text>
@@ -129,6 +141,7 @@ export function StudioWorkflow({
         )}
       </View>
 
+      {celular ? null : (
       <View style={s.stepper}>
         {steps.map((label, i) => {
           const idx = i + 1;
@@ -158,21 +171,25 @@ export function StudioWorkflow({
           );
         })}
       </View>
+      )}
 
-      <ScrollView style={s.body} contentContainerStyle={{ padding: 24, paddingBottom: 8 }}>
+      <ScrollView style={s.body} contentContainerStyle={celular ? { padding: 14, paddingBottom: 16 } : { padding: 24, paddingBottom: 8 }}>
         {children}
       </ScrollView>
 
-      <View style={s.footer}>
+      <View style={[s.footer, rodapeFixo(celular)]} testID="workflow-rodape">
         {current > 1 && onBack ? (
-          <Pressable style={s.btnSec} onPress={onBack}>
+          <Pressable style={[s.btnSec, botaoDoRodape(celular)]} onPress={onBack} accessibilityRole="button" testID="workflow-voltar">
             <Text style={s.btnSecTxt}>← Voltar</Text>
           </Pressable>
-        ) : <View />}
+        ) : celular ? null : <View />}
 
         <Pressable
+          accessibilityRole="button"
+          testID="workflow-primario"
           style={[
             s.btnPri,
+            botaoDoRodape(celular, 1.8),
             primaryDisabled && { opacity: 0.45 },
             isLast && { backgroundColor: t.mint },
           ]}
@@ -184,7 +201,7 @@ export function StudioWorkflow({
           ) : (
             <>
               {isLast && <Icon name="check" size={14} color="#fff" />}
-              <Text style={s.btnPriTxt}>{ctaLabel}</Text>
+              <Text style={[s.btnPriTxt, celular && { flexShrink: 1, textAlign: "center" }]} numberOfLines={celular ? 2 : undefined}>{ctaLabel}</Text>
               {!isLast && <Text style={s.btnPriTxt}> →</Text>}
             </>
           )}
@@ -207,6 +224,9 @@ const buildStyles = (t: StudioPalette) => StyleSheet.create({
     letterSpacing: 0.8, textTransform: "uppercase",
   },
   title: { fontSize: 22, fontWeight: "800", color: t.ink, marginTop: 4, letterSpacing: -0.3 },
+  headerCelular: { alignItems: "center", paddingLeft: 14, paddingRight: 6, paddingTop: 6, paddingBottom: 6, gap: 8 },
+  titleCelular: { fontSize: 16, marginTop: 0, letterSpacing: -0.2 },
+  fecharCelular: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   draftChip: {
     flexDirection: "row", alignItems: "center", gap: 7,
     backgroundColor: t.mintSoft,
