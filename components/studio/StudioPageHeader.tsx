@@ -27,9 +27,19 @@
 // 02/06/2026 (Shell clareza): quando nenhuma prop eyebrow for passada,
 // deriva automaticamente via eyebrowForRoute(usePathname()).
 // Se eyebrow for passado explicitamente, respeita sem modificação.
+//
+// 05/10/2026 (QA mobile): abaixo de 768 px o cabeçalho empilha. Título em
+// UMA linha (fonte menor, corta com reticências), subtítulo em uma linha
+// truncada, e as ações vão para uma linha própria embaixo — nunca dividem
+// a linha com o título (na Produção o título quebrava letra a letra ao
+// lado de "Modo vitrine" e "Atualizar").
+//   - `mobileActions` troca o `rightSlot` no celular. Passe `null` quando a
+//     ação do cabeçalho já é a do botão flutuante da tela (uma ação
+//     principal por tela); passe outro nó para ações só do celular.
+//   - Sem `mobileActions`, o `rightSlot` desce para a linha de ações.
 // ============================================================
 import { ReactNode, useMemo } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, useWindowDimensions } from "react-native";
 import { usePathname } from "expo-router";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
@@ -40,12 +50,15 @@ export function StudioPageHeader({
   title,
   subtitle,
   rightSlot,
+  mobileActions,
   marginBottom = 18,
 }: {
   eyebrow?: string;
   title: string;
   subtitle?: string;
   rightSlot?: ReactNode;
+  /** Só no celular: substitui o rightSlot. `null` = nenhuma ação no cabeçalho. */
+  mobileActions?: ReactNode;
   marginBottom?: number;
 }) {
   const t = useStudioTokens();
@@ -55,6 +68,19 @@ export function StudioPageHeader({
   // inside an expo-router screen so the router context is available.
   const pathname = usePathname();
   const resolvedEyebrow = eyebrow !== undefined ? eyebrow : eyebrowForRoute(pathname);
+
+  const { width } = useWindowDimensions();
+  if (width < 768) {
+    const acoes = mobileActions !== undefined ? mobileActions : rightSlot;
+    return (
+      <View style={{ marginBottom: Math.min(marginBottom, 14) }} testID="studio-page-header-mobile">
+        {resolvedEyebrow && <Text style={s.eyebrow} numberOfLines={1}>{resolvedEyebrow}</Text>}
+        <Text style={[s.title, s.titleMobile]} numberOfLines={1} testID="studio-page-title">{title}</Text>
+        {subtitle && <Text style={[s.subtitle, s.subtitleMobile]} numberOfLines={1}>{subtitle}</Text>}
+        {acoes ? <View style={s.mobileActions} testID="studio-page-actions">{acoes}</View> : null}
+      </View>
+    );
+  }
 
   return (
     <View style={[s.row, { marginBottom }]}>
@@ -104,6 +130,21 @@ function buildStyles(t: StudioPalette) {
   },
   rightSlot: {
     flexShrink: 0,
+  },
+  titleMobile: {
+    fontSize: 20,
+    marginTop: 2,
+  },
+  subtitleMobile: {
+    fontSize: 12.5,
+    marginTop: 2,
+  },
+  mobileActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 10,
   },
   });
 }

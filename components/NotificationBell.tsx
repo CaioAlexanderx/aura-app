@@ -148,7 +148,12 @@ export function NotificationBell({ tone = 'default', colors }: { tone?: BellTone
           background:     onDark ? 'rgba(255,255,255,0.12)' : C.bg3,
           cursor:         'pointer',
           flexShrink:     0,
-          transition:     'background 0.15s',
+          // QA mobile do Studio (05/10/2026): com paleta por fora o fundo só
+          // muda quando o TEMA muda, e o resto do shell troca na hora. A
+          // transição deixava o sino para trás (escuro no tema claro) onde
+          // a animação não anda — visto no navegador embutido. Sem `colors`
+          // (Negócio e demais shells) nada muda.
+          transition:     colors ? undefined : 'background 0.15s',
           animation:      glow
             ? `${onDark ? 'auraBellGlowOnDark' : 'auraBellGlow'} 2.2s ease-in-out infinite`
             : undefined,

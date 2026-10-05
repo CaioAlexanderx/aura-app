@@ -37,6 +37,7 @@ import { type StudioPalette } from "@/constants/studio-tokens";
 import { StudioScreen } from "@/components/studio/StudioScreen";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
+import { useStudioFabAction, useStudioFabHidden } from "@/components/studio/StudioShell/fabControl";
 import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioEmpty } from "@/components/studio/StudioEmpty";
 
@@ -156,6 +157,12 @@ export function ListaDeOrcamentos({ abrirId }: { abrirId?: string }) {
     setAberto({ cid: companyId || (lojas.length === 1 ? lojas[0].id : null), id: "novo" });
   }
 
+  // Celular (05/10/2026): "Novo orçamento" aparecia duas vezes (cabeçalho e
+  // flutuante). Fica só o flutuante, com a MESMA ação do botão do
+  // cabeçalho; com o orçamento aberto ele some.
+  useStudioFabAction(abrirNovo);
+  useStudioFabHidden(!!aberto);
+
   function fecharModal() {
     setAberto(null);
     if (abrirId) router.replace("/studio/gestao/orcamentos" as any);
@@ -186,6 +193,7 @@ export function ListaDeOrcamentos({ abrirId }: { abrirId?: string }) {
         eyebrow="GESTÃO · ORÇAMENTOS"
         title="Orçamentos"
         subtitle="Crie, envie pelo WhatsApp e acompanhe. Aprovado vira pedido na Produção."
+        mobileActions={null}
         rightSlot={
           <Pressable
             style={s.btnNew}

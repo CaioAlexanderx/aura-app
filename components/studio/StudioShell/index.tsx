@@ -13,6 +13,10 @@
 // acima do conteúdo (breadcrumb + busca + ThemeToggle).
 // Mobile/tablet sem topbar adicional — MobileBar permanece.
 //
+// 05/10/2026 (QA mobile): abaixo de 768 px o cabeçalho é UMA linha (logo,
+// sino, Menu), há UM flutuante por tela e a tela pode escondê-lo ou
+// entregar a ação dele (fabControl.ts).
+//
 // Cada peça mora em arquivo separado:
 //   types.ts, styles.ts, useFloat.ts, FloatingBubble.tsx,
 //   NavCircle.tsx, ChildBubble.tsx (+ ChildHoverBubble),
@@ -58,6 +62,7 @@ import { Topbar } from "./Topbar";
 import { MobileBar } from "./MobileBar";
 import { MobileMenuSheet } from "./MobileMenuSheet";
 import { resolveFab } from "./fab";
+import { useStudioFabState, STUDIO_MOBILE_MAX } from "./fabControl";
 
 export function StudioShell() {
   const router = useRouter();
@@ -65,7 +70,7 @@ export function StudioShell() {
   const pathname = usePathname() || "";
   const { width } = useWindowDimensions();
   const isWide = width >= 900;
-  const isMobile = width < 768;
+  const isMobile = width < STUDIO_MOBILE_MAX;
   const isTablet = width >= 768 && width < 900;
 
   const { user } = useAuthStore();
@@ -149,6 +154,9 @@ export function StudioShell() {
   const isHome = pathname === "/studio" || pathname === "/studio/";
 
   const fabConfig = useMemo(() => resolveFab(pathname), [pathname]);
+  // A tela pode esconder o flutuante (ficha aberta, modal, barra de salvar
+  // fixa) e entregar a ação dele — ver fabControl.ts.
+  const fabTela = useStudioFabState();
 
   // ─── Modo Vitrine (K2, 18/08/2026) ─────────────────────────
   // A vitrine é o board numa TV da loja ou na câmera de um story: sidebar,
@@ -180,12 +188,15 @@ export function StudioShell() {
           <Reanimated.View style={[animStyle, { flex: 1, minWidth: 0 }]}>
             <Slot />
           </Reanimated.View>
-          {fabConfig && (
+          {/* Celular (QA 05/10/2026): UM flutuante por tela, o da ação
+              principal da rota. O atalho "Aprovar arte" (que empilhava em
+              cima dele no Hub de Pedidos) virou ação do cabeçalho da tela. */}
+          {fabConfig && !fabTela.hidden && (
             <StudioFab
               icon={fabConfig.icon}
               label={fabConfig.label}
               accessibilityLabel={fabConfig.accessibilityLabel}
-              onPress={() => router.push(fabConfig.href as any)}
+              onPress={fabTela.action ?? (() => router.push(fabConfig.href as any))}
               position={{ bottom: 24, right: 20 }}
             />
           )}
@@ -196,7 +207,6 @@ export function StudioShell() {
             onNavigate={go}
             isHome={isHome}
           />
-          <FloatingApprovalButton />
         </View>
       </StudioAccentTheme>
     );
@@ -217,12 +227,12 @@ export function StudioShell() {
           <Reanimated.View style={[animStyle, { flex: 1, minWidth: 0 }]}>
             <Slot />
           </Reanimated.View>
-          {isTablet && fabConfig && (
+          {isTablet && fabConfig && !fabTela.hidden && (
             <StudioFab
               icon={fabConfig.icon}
               label={fabConfig.label}
               accessibilityLabel={fabConfig.accessibilityLabel}
-              onPress={() => router.push(fabConfig.href as any)}
+              onPress={fabTela.action ?? (() => router.push(fabConfig.href as any))}
               position={{ bottom: 24, right: 24 }}
             />
           )}

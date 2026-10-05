@@ -53,6 +53,7 @@ import { toast } from "@/components/Toast";
 import { StudioGradient } from "@/components/studio/StudioGradient";
 import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioScreen } from "@/components/studio/StudioScreen";
+import { useStudioFabClearance } from "@/components/studio/StudioShell/fabControl";
 import { itensDaFaixa } from "@/components/studio/precisaDeVoce";
 import type { StudioPalette } from "@/constants/studio-tokens";
 
@@ -164,6 +165,9 @@ const EMPTY_PAINEL: PainelData = {
 
 export default function StudioPainel() {
   const router = useRouter();
+  // Celular: folga no fim da rolagem para o flutuante não cobrir o último
+  // cartão (QA 05/10/2026).
+  const fabClearance = useStudioFabClearance();
   const auth = useAuthStore();
   const cid = (auth.company as any)?.id;
   const t = useStudioTokens();
@@ -218,7 +222,10 @@ export default function StudioPainel() {
 
   return (
     <StudioScreen variant="board" scroll={false} padded={false}>
-      <ScrollView style={s.scroll} contentContainerStyle={s.container}>
+      <ScrollView
+        style={s.scroll}
+        contentContainerStyle={[s.container, fabClearance ? { paddingBottom: fabClearance } : null]}
+      >
 
         {/* ═══════ HEADER + Toggle periodo ═══════ */}
         <View style={s.pageHeader}>

@@ -22,6 +22,10 @@
  * 30/05/2026 (Fase 1b · batch 4): migrado de StudioColors estático
  * pra useStudioTokens — light+dark via provider. Texto branco do
  * círculo accent permanece (alto contraste sobre magenta).
+ *
+ * 05/10/2026 (QA mobile): abaixo de 768 px o shell NÃO monta este botão —
+ * no celular fica um flutuante por tela, e "Aprovar arte" é ação do
+ * cabeçalho do Hub de Pedidos (pedidos.tsx). Tablet e desktop seguem aqui.
  */
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';

@@ -30,6 +30,7 @@ import Reanimated, {
   useSharedValue, useAnimatedStyle, withTiming, Easing,
 } from "react-native-reanimated";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
+import { useStudioFabClearance } from "@/components/studio/StudioShell/fabControl";
 
 export type StudioScreenVariant = "reading" | "grid" | "board";
 
@@ -163,6 +164,10 @@ export function StudioScreen({
   }, []);
   const maxWidth = MAX_WIDTH[variant];
   const pad = padded ? (isMobile ? 16 : 28) : 0;
+  // Celular com botão flutuante na rota: a rolagem termina com folga para
+  // o flutuante não cobrir a última linha (QA 05/10/2026). Só vale para a
+  // tela que rola aqui — as `scroll={false}` cuidam da própria rolagem.
+  const fabClearance = useStudioFabClearance();
 
   // Coluna alinhada à esquerda por padrão. board (sem maxWidth) ocupa tudo.
   const inner = {
@@ -170,7 +175,7 @@ export function StudioScreen({
     ...(maxWidth ? { maxWidth } : {}),
     alignSelf: align === "center" ? ("center" as const) : ("flex-start" as const),
     padding: pad,
-    paddingBottom: padded ? pad + 32 : 0,
+    paddingBottom: (padded ? pad + 32 : 0) + (scroll ? fabClearance : 0),
   };
 
   if (!scroll) {

@@ -217,6 +217,23 @@ export default function StudioPedidosHub() {
             <Text style={s.ctaPriTxt}>+ Novo pedido</Text>
           </Pressable>
         }
+        // Celular (QA 05/10/2026): eram dois flutuantes empilhados em cima
+        // dos alertas e da busca. O flutuante que fica é o da ação
+        // principal ("Novo pedido para evento", no shell); o atalho
+        // "Aprovar arte" (FloatingApprovalButton no desktop) vira ação do
+        // cabeçalho, e o "+ Novo pedido" some por repetir o flutuante.
+        mobileActions={
+          <Pressable
+            style={s.acaoSec}
+            onPress={() => router.push("/studio/producao?intent=approval" as any)}
+            accessibilityRole="button"
+            accessibilityLabel="Aprovar arte pelo WhatsApp"
+            testID="pedidos-aprovar-arte"
+          >
+            <Icon name="whatsapp" size={15} color={t.accentInk} />
+            <Text style={s.acaoSecTxt}>Aprovar arte</Text>
+          </Pressable>
+        }
       />
 
       {/* KPIs */}
@@ -516,6 +533,12 @@ function makeStyles(t: StudioPalette) {
     scroll: { flex: 1, backgroundColor: t.bg },
     container: { padding: 28, paddingBottom: 60, maxWidth: 1100, alignSelf: "center", width: "100%" },
     // Convenção do app: primary CTAs são navy (primary), accent fica reservado pra status/highlights.
+    acaoSec: {
+      flexDirection: "row", alignItems: "center", gap: 6,
+      minHeight: 40, paddingHorizontal: 14, borderRadius: 999,
+      backgroundColor: t.paperCardElev, borderWidth: 1.5, borderColor: t.ink5,
+    },
+    acaoSecTxt: { color: t.ink2, fontWeight: "700", fontSize: 13 },
     ctaPri: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: t.primary, paddingVertical: 11, paddingHorizontal: 18, borderRadius: 999 },
     ctaPriTxt: { color: "#fff", fontWeight: "700", fontSize: 13.5 },
     kpis: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 22 },
