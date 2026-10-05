@@ -393,7 +393,7 @@ export function EstudioDaPeca({ tema, cid, chave, customization, cfg, template, 
       {tem3d ? (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: -4 }}>
           <Icon name="camera" size={14} color={t.ink3} />
-          <Text style={{ fontSize: 12, color: t.ink3, flex: 1 }}>O cliente recebe este giro em vídeo no WhatsApp, com a sua marca.</Text>
+          <Text style={{ fontSize: 12, color: t.ink3, flex: 1 }} numberOfLines={estreito ? 1 : undefined} testID="ajuda-do-giro">{estreito ? "O cliente recebe este giro em vídeo." : "O cliente recebe este giro em vídeo no WhatsApp, com a sua marca."}</Text>
         </View>
       ) : null}
 
@@ -401,8 +401,10 @@ export function EstudioDaPeca({ tema, cid, chave, customization, cfg, template, 
       <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
         <View style={{ flexShrink: 1, flexBasis: 260, flexGrow: 1, gap: 2 }}>
           <Text style={{ fontSize: 14, fontWeight: "800", color: t.ink }}>Artes da peça</Text>
-          <Text style={{ fontSize: 12, color: t.ink3 }}>
-            Uma imagem por lugar. PNG com fundo transparente fica melhor; o texto com a fonte do cliente vai dentro da imagem.
+          <Text style={{ fontSize: 12, color: t.ink3 }} numberOfLines={estreito ? 1 : undefined} testID="ajuda-das-artes">
+            {estreito
+              ? "Uma imagem por lugar. PNG sem fundo fica melhor."
+              : "Uma imagem por lugar. PNG com fundo transparente fica melhor; o texto com a fonte do cliente vai dentro da imagem."}
           </Text>
         </View>
         {lados.estendida ? (

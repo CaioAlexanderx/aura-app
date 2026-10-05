@@ -5,6 +5,7 @@ import { StudioGradients, type StudioPalette } from "@/constants/studio-tokens";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { toast } from "@/components/Toast";
 import { studioStorefrontLabel } from "@/utils/storefrontUrl";
+import { botaoDoRodape, folhaDeBaixo, useModalNoCelular } from "@/components/studio/modalNoCelular";
 
 type Props = {
   visible: boolean;
@@ -25,6 +26,9 @@ type Props = {
 
 export function PreviewWhatsAppModal({ visible, onClose, product, shop }: Props) {
   const t = useStudioTokens();
+  // Etapa 4 (05/10): no celular é folha de baixo, sem a sobrelinha.
+  const celular = useModalNoCelular();
+  const folha = folhaDeBaixo(celular);
   const s = useMemo(() => buildStyles(t), [t]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -199,10 +203,10 @@ export function PreviewWhatsAppModal({ visible, onClose, product, shop }: Props)
 
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
-      <View style={s.overlay}>
-        <View style={s.card}>
-          <Text style={s.eyebrow}>PREVIEW WHATSAPP</Text>
-          <Text style={s.title}>Compartilhe seu produto</Text>
+      <View style={[s.overlay, folha.fundo]}>
+        <View style={[s.card, folha.caixa, celular && { padding: 14 }]} testID="preview-whatsapp">
+          {celular ? null : <Text style={s.eyebrow}>PREVIEW WHATSAPP</Text>}
+          <Text style={[s.title, celular && { fontSize: 16, marginTop: 0 }]} numberOfLines={1}>Compartilhe seu produto</Text>
           {generating ? (
             <View style={s.previewBox}>
               <ActivityIndicator color={t.primary} size="large" />
@@ -212,9 +216,9 @@ export function PreviewWhatsAppModal({ visible, onClose, product, shop }: Props)
             // @ts-ignore - native img on web
             <img src={dataUrl} alt="preview" style={{ width: 270, height: 480, borderRadius: 12, marginVertical: 16 } as any} />
           ) : null}
-          <View style={s.actions}>
-            <Pressable onPress={onClose} style={s.btnSec}><Text style={s.btnSecTxt}>Cancelar</Text></Pressable>
-            <Pressable onPress={handleShare} disabled={!dataUrl} style={[s.btnPri, !dataUrl && { opacity: 0.5 }]}>
+          <View style={[s.actions, celular && { alignSelf: "stretch" }]}>
+            <Pressable onPress={onClose} style={[s.btnSec, botaoDoRodape(celular)]}><Text style={s.btnSecTxt}>Cancelar</Text></Pressable>
+            <Pressable onPress={handleShare} disabled={!dataUrl} style={[s.btnPri, botaoDoRodape(celular, 1.6), !dataUrl && { opacity: 0.5 }]}>
               <Icon name="external-link" size={14} color="#fff" />
               <Text style={s.btnPriTxt}>Compartilhar</Text>
             </Pressable>

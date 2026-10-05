@@ -41,6 +41,7 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import type { StudioPalette } from "@/constants/studio-tokens";
+import { respiroInferior } from "@/components/studio/modalNoCelular";
 import {
   studioApi,
   type CustomizationConfig,
@@ -2023,9 +2024,9 @@ export function StudioPersonalizacaoPanel({
       {/* Sugestões IA */}
       {suggestOpen ? (
         <Modal visible transparent animationType="fade" onRequestClose={() => setSuggestOpen(false)}>
-          <View style={s.fundoModal}>
-            <View style={[s.caixaModal, { maxWidth: 480, padding: 16, gap: 8 }]}>
-              <Text style={s.tituloModal}>Sugestões IA de templates</Text>
+          <View style={[s.fundoModal, folha && s.fundoFolha]}>
+            <View style={[s.caixaModal, { maxWidth: 480, padding: 16, gap: 8 }, folha && s.caixaFolha]} testID="ficha-sugestoes">
+              <Text style={s.tituloModal} numberOfLines={1}>Sugestões IA de templates</Text>
               {suggestLoading ? (
                 <View style={{ paddingVertical: 24, alignItems: "center", gap: 8 }}>
                   <ActivityIndicator color={t.primary} />
@@ -2941,7 +2942,8 @@ function buildStyles(t: StudioPalette) {
       justifyContent: "center",
       padding: 20,
     },
-    fundoFolha: { justifyContent: "flex-end", padding: 12 },
+    // Etapa 4 (05/10): folha de baixo sem margem que aperte, cantos só em cima e área segura.
+    fundoFolha: { justifyContent: "flex-end", alignItems: "stretch", padding: 0 },
     fundoCheio: { padding: 0, alignItems: "stretch", justifyContent: "flex-start" },
     caixaModal: {
       width: "100%",
@@ -2952,7 +2954,11 @@ function buildStyles(t: StudioPalette) {
       borderColor: t.ink5,
       overflow: "hidden",
     },
-    caixaFolha: { maxWidth: undefined, borderRadius: 18 },
+    caixaFolha: {
+      maxWidth: undefined, maxHeight: "92%" as any,
+      borderTopLeftRadius: 18, borderTopRightRadius: 18, borderBottomLeftRadius: 0, borderBottomRightRadius: 0,
+      borderBottomWidth: 0, ...(respiroInferior(8) as any),
+    },
     caixaGrande: { maxWidth: 980, maxHeight: "92%" as any },
     caixaCheia: { maxWidth: undefined, maxHeight: undefined, flex: 1, borderRadius: 0, borderWidth: 0 },
     cabModal: {

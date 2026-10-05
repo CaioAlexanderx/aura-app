@@ -18,6 +18,7 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import { StudioGradient } from "@/components/studio/StudioGradient";
+import { CabecalhoCompacto, ehCelular, rodapeFixo } from "@/components/studio/modalNoCelular";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { studioApi, type StudioInput } from "@/services/studioApi";
@@ -75,7 +76,8 @@ export default function NovoInsumoModal({
   const t = useStudioTokens();
   const styles = useMemo(() => buildStyles(t), [t]);
   const { width } = useWindowDimensions();
-  const isMobile = width < 720;
+  // Etapa 4 (05/10): a mesma largura do shell (768 px) e a regra do modal no celular.
+  const isMobile = ehCelular(width);
 
   const [name, setName] = useState("");
   const [unit, setUnit] = useState<Unit>("un");
@@ -251,7 +253,10 @@ export default function NovoInsumoModal({
             isMobile ? styles.cardMobile : styles.cardDesktop,
           ]}
         >
-          {/* Header — gradient brand cross-platform */}
+          {/* Celular: cabeçalho de uma linha. Desktop: o gradiente de sempre. */}
+          {isMobile ? (
+            <CabecalhoCompacto t={t} titulo={editing ? "Editar insumo" : "Novo insumo"} onFechar={onClose} testID="insumo-cabecalho" />
+          ) : (
           <StudioGradient
             colors={[t.primary, t.accent]}
             direction="135deg"
@@ -265,10 +270,11 @@ export default function NovoInsumoModal({
                 : "Cadastre o item de matéria-prima e ele já entra na ficha do produto"}
             </Text>
           </StudioGradient>
+          )}
 
           {/* Body */}
           <ScrollView
-            style={styles.body}
+            style={[styles.body, isMobile && { flexGrow: 1 }]}
             contentContainerStyle={styles.bodyContent}
             keyboardShouldPersistTaps="handled"
           >
@@ -415,7 +421,7 @@ export default function NovoInsumoModal({
           </ScrollView>
 
           {/* Footer */}
-          <View style={styles.footer}>
+          <View style={[styles.footer, rodapeFixo(isMobile)]} testID="insumo-rodape">
             <Pressable
               onPress={onClose}
               disabled={submitting}

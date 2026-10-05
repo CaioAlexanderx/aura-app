@@ -50,7 +50,7 @@ type Props = {
 };
 
 export function LinhaDaPeca({ tema, cid, peca, produto, aberta, editavel, templates, specs, onAlternar, onMudar, onTirar }: Props) {
-  const { t } = tema;
+  const { t, estreito } = tema;
   const [qtdTxt, setQtdTxt] = useState(textoDaQuantidade(peca.quantity));
   const [precoTxt, setPrecoTxt] = useState(textoDoPreco(peca.unit_price));
   useEffect(() => { if (lerQuantidade(qtdTxt) !== peca.quantity) setQtdTxt(textoDaQuantidade(peca.quantity)); }, [peca.quantity]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -84,20 +84,27 @@ export function LinhaDaPeca({ tema, cid, peca, produto, aberta, editavel, templa
         aria-expanded={aberta}
         accessibilityLabel={`${peca.description}, ${textoDaQuantidade(peca.quantity)} de ${reais(peca.unit_price)}. ${aberta ? "Fechar" : editavel ? "Editar" : "Ver"}`}
         testID={"peca-linha-" + peca.chave}
-        style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 8, minHeight: 60 }}
+        style={{ flexDirection: "row", alignItems: estreito ? "flex-start" : "center", gap: estreito ? 8 : 10, padding: 8, minHeight: 60 }}
       >
         <FotoDoProduto t={t} uri={peca.image_url || produto?.image_url} />
-        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <View style={{ flex: 1, minWidth: 0, gap: estreito ? 3 : 2 }}>
           <Text numberOfLines={1} style={{ fontWeight: "700", fontSize: 13.5, color: t.ink }}>{peca.description}</Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <Text style={{ fontSize: 12, color: t.ink3 }}>{textoDaQuantidade(peca.quantity)} × {reais(peca.unit_price)}</Text>
+          {/* Celular (etapa 4): o preço tem linha própria, à direita, e os selos descem. */}
+          {estreito ? (
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }} testID="peca-valores">
+              <Text numberOfLines={1} style={{ fontSize: 12, color: t.ink3, flexShrink: 1 }}>{textoDaQuantidade(peca.quantity)} × {reais(peca.unit_price)}</Text>
+              <Text numberOfLines={1} style={{ fontWeight: "800", fontSize: 14, color: t.ink }} testID="peca-total">{reais(peca.quantity * peca.unit_price)}</Text>
+            </View>
+          ) : null}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }} testID="peca-selos">
+            {estreito ? null : <Text style={{ fontSize: 12, color: t.ink3 }}>{textoDaQuantidade(peca.quantity)} × {reais(peca.unit_price)}</Text>}
             {selo ? <Selo t={t} tipo={selo.tipo} rotulo={nomeDoModelo ? `${selo.rotulo} · ${nomeDoModelo}` : selo.rotulo} /> : <Selo t={t} tipo="herdado" rotulo="avulso" />}
             {efetivo && !efetivo.herdado ? <Selo t={t} tipo="herdado" rotulo="só aqui" /> : null}
             {peca.product_id ? <Selo t={t} tipo={nArtes ? "2d" : "sem"} rotulo={textoDasArtes(artes, lados)} /> : null}
           </View>
         </View>
-        <Text style={{ fontWeight: "800", fontSize: 14, color: t.ink }}>{reais(peca.quantity * peca.unit_price)}</Text>
-        <View style={{ width: 36, height: 36, alignItems: "center", justifyContent: "center", transform: [{ rotate: aberta ? "180deg" : "0deg" }] }}>
+        {estreito ? null : <Text style={{ fontWeight: "800", fontSize: 14, color: t.ink }}>{reais(peca.quantity * peca.unit_price)}</Text>}
+        <View style={{ width: estreito ? 28 : 36, height: 36, alignItems: "center", justifyContent: "center", transform: [{ rotate: aberta ? "180deg" : "0deg" }] }}>
           <Icon name="chevron_down" size={16} color={t.ink3} />
         </View>
       </Pressable>

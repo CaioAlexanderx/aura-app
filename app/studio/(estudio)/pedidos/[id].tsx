@@ -37,6 +37,7 @@ import { separarReferencia } from "@/components/studio/referenciaDoAjuste";
 import { ART_SERVICE_FIELD_ID, labelForArtServiceValue } from "@/components/studio/artService";
 import { nomeDaCor } from "@/components/studio/nomeDaCor";
 import { etapaDoPedido } from "@/components/studio/etapaDoPedido";
+import { botaoDoRodape, folhaDeBaixo, useModalNoCelular } from "@/components/studio/modalNoCelular";
 
 const fmtMoeda = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -202,6 +203,10 @@ function PaymentCard({ orderId, companyId, depositRequired, depositPaid, onDepos
   const { isDark } = useStudioTheme();
   const sem = useStudioSemantic();
   const ps = useMemo(() => buildPs(tk), [tk]);
+  // Etapa 4 (05/10): no celular as confirmações são folha de baixo, com dois botões de 44 px.
+  const celular = useModalNoCelular();
+  const folha = folhaDeBaixo(celular);
+  const btnFolha = botaoDoRodape(celular);
   const [payments, setPayments] = useState<StudioPayment[]>([]);
   const [loadingPay, setLoadingPay] = useState(true);
   // FIX (bug #13 QA): erro no fetch de pagamentos não dava toast nenhum —
@@ -347,27 +352,27 @@ function PaymentCard({ orderId, companyId, depositRequired, depositPaid, onDepos
       )}
 
       <Modal visible={markModal} transparent animationType="fade">
-        <View style={ps.modalOverlay}><View style={ps.modalBox}>
+        <View style={[ps.modalOverlay, folha.fundo]}><View style={[ps.modalBox, folha.caixa]} testID="folha-do-marco">
           <Text style={ps.modalTitle}>Confirmar recebimento</Text>
           <Text style={ps.modalBody}>Marcar {markTarget ? `R$ ${Number(markTarget.amount).toFixed(2)}` : ""} como recebido via Pix?</Text>
           <View style={{ flexDirection: "row", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
-            <Pressable style={[ps.modalBtn, { backgroundColor: tk.bgSoft }]} onPress={() => { setMarkModal(false); setMarkTarget(null); }}><Text style={{ color: tk.ink2, fontWeight: "600" }}>Cancelar</Text></Pressable>
-            <Pressable style={[ps.modalBtn, { backgroundColor: tk.success }]} disabled={acting} onPress={handleMarkPaid}><Text style={{ color: "#fff", fontWeight: "700" }}>{acting ? "Salvando..." : "Confirmar"}</Text></Pressable>
+            <Pressable style={[ps.modalBtn, { backgroundColor: tk.bgSoft }, btnFolha]} onPress={() => { setMarkModal(false); setMarkTarget(null); }}><Text style={{ color: tk.ink2, fontWeight: "600" }}>Cancelar</Text></Pressable>
+            <Pressable style={[ps.modalBtn, { backgroundColor: tk.success }, btnFolha]} disabled={acting} onPress={handleMarkPaid}><Text style={{ color: "#fff", fontWeight: "700" }}>{acting ? "Salvando..." : "Confirmar"}</Text></Pressable>
           </View>
         </View></View>
       </Modal>
 
       <Modal visible={chargeModal} transparent animationType="fade">
-        <View style={ps.modalOverlay}><View style={ps.modalBox}>
+        <View style={[ps.modalOverlay, folha.fundo]}><View style={[ps.modalBox, folha.caixa]} testID="folha-do-marco">
           <Text style={ps.modalTitle}>Informações de pagamento</Text>
           {chargeInfo?.pix_code ? <View style={ps.pixBox}><Text style={ps.pixLabel}>Chave Pix</Text><Text style={ps.pixCode}>{chargeInfo.pix_code}</Text></View> : null}
           {chargeInfo?.instructions ? <Text style={[ps.modalBody, { marginTop: 10 }]}>{chargeInfo.instructions}</Text> : null}
-          <Pressable style={[ps.modalBtn, { backgroundColor: tk.primary, marginTop: 16, alignSelf: "flex-end" }]} onPress={() => setChargeModal(false)}><Text style={{ color: "#fff", fontWeight: "700" }}>Fechar</Text></Pressable>
+          <Pressable style={[ps.modalBtn, { backgroundColor: tk.primary, marginTop: 16, alignSelf: "flex-end" }, celular && { alignSelf: "stretch", minHeight: 44, alignItems: "center", justifyContent: "center" }]} onPress={() => setChargeModal(false)}><Text style={{ color: "#fff", fontWeight: "700" }}>Fechar</Text></Pressable>
         </View></View>
       </Modal>
 
       <Modal visible={addModal} transparent animationType="fade">
-        <View style={ps.modalOverlay}><View style={ps.modalBox}>
+        <View style={[ps.modalOverlay, folha.fundo]}><View style={[ps.modalBox, folha.caixa]} testID="folha-do-marco">
           <Text style={ps.modalTitle}>Adicionar marco de pagamento</Text>
           <Text style={ps.inputLabel}>Tipo</Text>
           <View style={{ flexDirection: "row", gap: 6, marginBottom: 12 }}>
@@ -396,8 +401,8 @@ function PaymentCard({ orderId, companyId, depositRequired, depositPaid, onDepos
             ))}
           </View>
           <View style={{ flexDirection: "row", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
-            <Pressable style={[ps.modalBtn, { backgroundColor: tk.bgSoft }]} onPress={() => { setAddModal(false); setAddAmount(""); setAddDueAt(""); }}><Text style={{ color: tk.ink2, fontWeight: "600" }}>Cancelar</Text></Pressable>
-            <Pressable style={[ps.modalBtn, { backgroundColor: tk.primary }]} disabled={acting} onPress={handleAddMarco}><Text style={{ color: "#fff", fontWeight: "700" }}>{acting ? "Salvando..." : "Criar marco"}</Text></Pressable>
+            <Pressable style={[ps.modalBtn, { backgroundColor: tk.bgSoft }, btnFolha]} onPress={() => { setAddModal(false); setAddAmount(""); setAddDueAt(""); }}><Text style={{ color: tk.ink2, fontWeight: "600" }}>Cancelar</Text></Pressable>
+            <Pressable style={[ps.modalBtn, { backgroundColor: tk.primary }, btnFolha]} disabled={acting} onPress={handleAddMarco}><Text style={{ color: "#fff", fontWeight: "700" }}>{acting ? "Salvando..." : "Criar marco"}</Text></Pressable>
           </View>
         </View></View>
       </Modal>
@@ -549,7 +554,7 @@ export default function StudioOrderDetail() {
         <StudioEmpty
           tone={loadError ? "warning" : "default"}
           icon={loadError ? "alert-circle" : "search"}
-          title={loadError ? "Não deu pra carregar o pedido" : "Pedido não encontrado"}
+          title={loadError ? "Não deu para carregar o pedido" : "Pedido não encontrado"}
           desc={loadError || undefined}
           primaryCta={loadError ? { label: "Tentar de novo", onPress: load } : undefined}
           secondaryCta={{ label: "Voltar", onPress: () => router.back() }}

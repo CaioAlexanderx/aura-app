@@ -18,6 +18,7 @@ import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import { studioBulkHubApi, type BulkPricingPreview } from "@/services/studioBulkHubApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
+import { focoAutomatico, useModalNoCelular } from "@/components/studio/modalNoCelular";
 
 type Props = {
   onClose: () => void;
@@ -79,6 +80,8 @@ function addDaysISO(n: number): string {
 
 export function BulkOrderWizard({ onClose, onSaved, products }: Props) {
   const t = useStudioTokens();
+  // Etapa 4 (05/10): no celular o X entra na linha do título e nada abre o teclado ao entrar.
+  const celular = useModalNoCelular();
   const s = useMemo(() => buildStyles(t), [t]);
   const { company } = useAuthStore();
   const [step, setStep] = useState(1);
@@ -165,14 +168,17 @@ export function BulkOrderWizard({ onClose, onSaved, products }: Props) {
 
   return (
     <View style={{ flex: 1 }}>
+      {celular ? null : (
       <View style={s.closeRow}>
         <Pressable onPress={onClose} style={s.closeBtn}>
           <Icon name="x" size={18} color={t.ink2} />
         </Pressable>
       </View>
+      )}
 
       <StudioWorkflow
-        title="Novo pedido pra evento"
+        title="Novo pedido para evento"
+        onClose={onClose}
         steps={["Evento, produto e pessoas", "Preço e prazo"]}
         current={step}
         onBack={step > 1 ? () => setStep((x) => x - 1) : undefined}
@@ -195,7 +201,7 @@ export function BulkOrderWizard({ onClose, onSaved, products }: Props) {
               placeholder="Ex: Casamento Marília & João"
               value={draft.event_name}
               onChangeText={(v) => upd({ event_name: v })}
-              autoFocus
+              autoFocus={focoAutomatico(celular)}
             />
 
             <Text style={[s.label, { marginTop: 14 }]}>Cliente que está pedindo (opcional)</Text>

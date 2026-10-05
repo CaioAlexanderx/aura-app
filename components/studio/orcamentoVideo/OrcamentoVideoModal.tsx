@@ -89,6 +89,8 @@ function textoDe(n: number | null | undefined): string {
   return n === null || n === undefined ? "" : String(n).replace(".", ",");
 }
 
+import { ehCelular, respiroInferior } from "@/components/studio/modalNoCelular";
+
 export function OrcamentoVideoModal(props: OrcamentoVideoModalProps) {
   return (
     <WebPortal active={props.visible}>
@@ -100,7 +102,8 @@ export function OrcamentoVideoModal(props: OrcamentoVideoModalProps) {
 function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtualizou }: OrcamentoVideoModalProps) {
   const t = useStudioTokens();
   const { width } = useWindowDimensions();
-  const estreito = width < 700;
+  // Etapa 4 (05/10): a mesma largura do shell e a regra do modal no celular.
+  const estreito = ehCelular(width);
   const s = useMemo(() => estilos(t, estreito), [t, estreito]);
   const aberto = quote.status === "draft" || quote.status === "sent";
 
@@ -337,13 +340,13 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
         {/* Cabeçalho */}
         <View style={s.cabeca}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
-            <View style={s.icone}><Icon name="whatsapp" size={17} color={t.accentInk} /></View>
+            {estreito ? null : <View style={s.icone}><Icon name="whatsapp" size={17} color={t.accentInk} /></View>}
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={s.titulo}>{passo === "enviado" ? "Orçamento enviado" : "Enviar o orçamento"}</Text>
-              <Text style={s.subtitulo} numberOfLines={2}>{SUBTITULOS[passo]}</Text>
+              <Text style={s.titulo} numberOfLines={estreito ? 1 : undefined} testID="envio-titulo">{passo === "enviado" ? "Orçamento enviado" : "Enviar o orçamento"}</Text>
+              {estreito ? null : <Text style={s.subtitulo} numberOfLines={2}>{SUBTITULOS[passo]}</Text>}
             </View>
           </View>
-          <Pressable onPress={pedirFechar} style={s.fechar} accessibilityLabel="Fechar"><Icon name="x" size={18} color={t.ink3} /></Pressable>
+          <Pressable onPress={pedirFechar} style={s.fechar} accessibilityRole="button" accessibilityLabel="Fechar" testID="envio-fechar"><Icon name="x" size={18} color={t.ink3} /></Pressable>
         </View>
 
         <ScrollView style={s.corpo} contentContainerStyle={s.corpoConteudo} keyboardShouldPersistTaps="handled">
@@ -579,8 +582,8 @@ function Corpo({ companyId, quote, items, nomeDaLoja, logoUrl, onClose, onAtuali
         </ScrollView>
 
         {/* Rodapé */}
-        <View style={s.pe}>
-          <Text style={s.peInfo} numberOfLines={2}>{passo === "enviado" ? "" : info}</Text>
+        <View style={s.pe} testID="envio-rodape">
+          {estreito && (passo === "enviado" || !info) ? null : <Text style={s.peInfo} numberOfLines={estreito ? 1 : 2}>{passo === "enviado" ? "" : info}</Text>}
           <View style={s.peAcoes}>
             {passo === "enviar" && canal === "link" && (
               <Pressable style={[s.btnWa, ocupado && { opacity: 0.45 }]} onPress={enviarLink} disabled={ocupado} testID="enviar-link">
@@ -659,11 +662,14 @@ function estilos(t: StudioPalette, estreito: boolean) {
       overflow: "hidden", maxHeight: estreito ? ("100%" as any) : ("92%" as any), height: estreito ? ("100%" as any) : undefined,
       ...(web && !estreito ? ({ boxShadow: "0 24px 60px -18px rgba(2,6,23,0.7)" } as any) : {}),
     } as any,
-    cabeca: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 18, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: t.ink5 } as any,
+    cabeca: {
+      flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 18, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: t.ink5,
+      ...(estreito ? { paddingLeft: 14, paddingRight: 6, paddingVertical: 4, minHeight: 52 } : {}),
+    } as any,
     icone: { width: 36, height: 36, borderRadius: 10, backgroundColor: t.accentSoft, alignItems: "center", justifyContent: "center" } as any,
     titulo: { fontSize: 16, fontWeight: "800", color: t.ink } as any,
     subtitulo: { fontSize: 12.5, color: t.ink3 } as any,
-    fechar: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" } as any,
+    fechar: { width: estreito ? 44 : 36, height: estreito ? 44 : 36, borderRadius: 10, alignItems: "center", justifyContent: "center" } as any,
     // No celular o modal é tela cheia: o corpo ocupa o meio e o rodapé fica embaixo.
     corpo: { flexGrow: estreito ? 1 : 0, flexShrink: 1 } as any,
     corpoConteudo: { padding: 18 } as any,
@@ -703,7 +709,7 @@ function estilos(t: StudioPalette, estreito: boolean) {
     sucessoIcone: { width: 60, height: 60, borderRadius: 30, backgroundColor: t.successSoft, alignItems: "center", justifyContent: "center" } as any,
     sucessoTit: { fontSize: 19, fontWeight: "800", color: t.ink, textAlign: "center" } as any,
     sucessoTxt: { fontSize: 13.5, color: t.ink3, textAlign: "center", maxWidth: 480, lineHeight: 20 } as any,
-    pe: { flexDirection: estreito ? "column" : "row", alignItems: estreito ? "stretch" : "center", gap: 10, paddingHorizontal: 18, paddingVertical: 12, borderTopWidth: 1, borderTopColor: t.ink5, backgroundColor: t.paperCard } as any,
+    pe: { flexDirection: estreito ? "column" : "row", alignItems: estreito ? "stretch" : "center", gap: estreito ? 6 : 10, paddingHorizontal: estreito ? 14 : 18, paddingVertical: estreito ? undefined : 12, borderTopWidth: 1, borderTopColor: t.ink5, backgroundColor: t.paperCard, ...(estreito ? { paddingTop: 8, ...respiroInferior(10) } : {}) } as any,
     peInfo: { flex: estreito ? undefined : 1, fontSize: 12.5, color: t.ink2, fontWeight: "600" } as any,
     peAcoes: { flexDirection: "row", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" } as any,
     btnPri: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: t.primary, paddingHorizontal: 16, paddingVertical: 11, borderRadius: 11, minHeight: 44, flexGrow: estreito ? 1 : 0 } as any,

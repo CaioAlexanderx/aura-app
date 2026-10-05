@@ -310,7 +310,10 @@ describe("modal do orçamento", () => {
     expect(porId(r, "confirmacao")).toHaveLength(1);
   });
 
-  test("celular: tela cheia, alvos de 44 px e o primário em cima", async () => {
+  // Etapa 4 da limpeza do celular (05/10/2026): o rodapé tinha 3 botões em
+  // duas linhas (~20% da tela). Agora são dois, lado a lado; o "Cancelar" é
+  // o X do cabeçalho.
+  test("celular: tela cheia, alvos de 44 px e rodapé com dois botões", async () => {
     mockLargura = 390;
     let r!: TestRenderer.ReactTestRenderer;
     await act(async () => {
@@ -321,7 +324,64 @@ describe("modal do orçamento", () => {
     expect(um(r, "acao-enviar").props.style.minHeight).toBe(44);
     expect(um(r, "validade-7").props.style.minHeight).toBe(44);
     const acoes = um(r, "rodape-acoes").findAll((n: any) => typeof n.props.testID === "string" && n.props.testID.startsWith("acao-") && typeof n.type === "string");
-    expect(acoes[0].props.testID).toBe("acao-enviar");
+    expect(acoes.map((a: any) => a.props.testID)).toEqual(["acao-salvar", "acao-enviar"]);
+    expect(porId(r, "acao-cancelar")).toHaveLength(0);
+    // O rótulo curto na tela; o completo fica para o leitor de tela.
+    expect(textos(um(r, "acao-salvar"))).toBe("Salvar");
+    expect(um(r, "acao-salvar").props.accessibilityLabel).toBe("Salvar rascunho");
+    expect(um(r, "acao-enviar").props.accessibilityLabel).toBe("Enviar pelo WhatsApp");
+    // Cabeçalho de uma linha e área segura no rodapé.
+    expect(um(r, "subtitulo").props.numberOfLines).toBe(1);
+    expect(String(um(r, "rodape").props.style.paddingBottom)).toContain("safe-area-inset-bottom");
+  });
+
+  test("celular, enviado: Aprovar e Pediu ajuste no rodapé; Fechar sem venda desce para o corpo; o preço da peça tem linha própria", async () => {
+    mockLargura = 375;
+    mockApi.getQuote.mockResolvedValue({
+      quote: {
+        id: "q1", company_id: CID, status: "sent", customer_name: "Mariana Costa", customer_phone: "11987654321",
+        total: 478.8, discount: 0, validity_days: 7, deposit_pct: null, sent_at: "2026-09-28T17:32:00Z",
+        expires_at: "2026-10-06T17:32:00Z", canal_envio: "whatsapp", condicoes: null, versao: 1,
+      },
+      items: [{ id: "i1", product_id: "p1", description: "Caneca clássica 325 ml", quantity: 12, unit_price: 39.9, visual_template_key: "caneca-magica" }],
+      ajustes: [],
+    });
+    let r!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      r = TestRenderer.create(<OrcamentoModal cid={CID} quoteId="q1" lojas={[{ id: CID, name: "Ateliê Lume" }]} onClose={jest.fn()} />);
+    });
+    await esperar();
+    const acoes = um(r, "rodape-acoes").findAll((n: any) => typeof n.props.testID === "string" && n.props.testID.startsWith("acao-") && typeof n.type === "string");
+    expect(acoes.map((a: any) => a.props.testID)).toEqual(["acao-ajuste", "acao-aprovar"]);
+    const mais = um(r, "mais-acoes").findAll((n: any) => typeof n.props.testID === "string" && n.props.testID.startsWith("acao-") && typeof n.type === "string");
+    expect(mais.map((a: any) => a.props.testID)).toEqual(["acao-fechar_sem_venda"]);
+    // A ação que desceu continua funcionando.
+    await act(async () => { um(r, "acao-fechar_sem_venda").props.onPress(); });
+    expect(porId(r, "confirmacao")).toHaveLength(1);
+
+    // Linha da peça: quantidade × preço à esquerda e o total à direita, numa
+    // linha só deles; os selos descem para a linha de baixo.
+    const valores = um(r, "peca-valores");
+    expect(valores.props.style).toMatchObject({ flexDirection: "row", justifyContent: "space-between" });
+    expect(textos(valores)).toContain("12 × ");
+    expect(porId(r, "peca-total")).toHaveLength(1);
+    expect(textos(um(r, "peca-selos"))).toContain("3D · Caneca mágica");
+    expect(textos(um(r, "peca-selos"))).not.toContain("×");
+  });
+
+  test("desktop: o rodapé e a linha da peça continuam como eram", async () => {
+    mockLargura = 1440;
+    let r!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      r = TestRenderer.create(<OrcamentoModal cid={CID} quoteId="novo" lojas={[{ id: CID, name: "Ateliê Lume" }]} onClose={jest.fn()} />);
+    });
+    await esperar();
+    const acoes = um(r, "rodape-acoes").findAll((n: any) => typeof n.props.testID === "string" && n.props.testID.startsWith("acao-") && typeof n.type === "string");
+    expect(acoes.map((a: any) => a.props.testID)).toEqual(["acao-cancelar", "acao-salvar", "acao-enviar"]);
+    expect(textos(um(r, "acao-salvar"))).toBe("Salvar rascunho");
+    expect(um(r, "subtitulo").props.numberOfLines).toBe(2);
+    expect(um(r, "rodape").props.style.paddingBottom).toBeUndefined();
+    expect(porId(r, "mais-acoes")).toHaveLength(0);
   });
 
   test("consolidado: o orçamento novo pede a loja primeiro", async () => {

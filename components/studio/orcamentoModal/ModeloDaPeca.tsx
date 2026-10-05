@@ -113,9 +113,11 @@ export function ModeloDaPeca({ tema, produto, chave, templates, specs, editavel,
         </View>
       </View>
       <Dica t={t}>
-        {efetivo.herdado
-          ? "Vem do produto. Trocar aqui vale só neste orçamento e é o que vai no vídeo 3D."
-          : "Trocado só neste orçamento. Escolha Do produto para voltar ao da ficha."}
+        {estreito
+          ? (efetivo.herdado ? "Vem do produto. Trocar aqui vale só neste orçamento." : "Trocado só neste orçamento.")
+          : efetivo.herdado
+            ? "Vem do produto. Trocar aqui vale só neste orçamento e é o que vai no vídeo 3D."
+            : "Trocado só neste orçamento. Escolha Do produto para voltar ao da ficha."}
       </Dica>
 
       {aberto ? (

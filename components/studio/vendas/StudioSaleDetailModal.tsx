@@ -23,6 +23,7 @@ import { nfceApi } from "@/services/nfceApi";
 import { NfceActions, type NfceActionsItem } from "@/components/screens/pdv/NfceActions";
 import { money } from "@/components/studio/pdv/ui";
 import { Ic } from "@/components/studio/pdv/icons";
+import { respiroInferior, telaCheia, useModalNoCelular } from "@/components/studio/modalNoCelular";
 
 const webPointer = () => (Platform.OS === "web" ? ({ cursor: "pointer" } as any) : {});
 const webNoOutline = () => (Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {});
@@ -73,6 +74,9 @@ export function StudioSaleDetailModal({
   onChanged?: () => void;
 }) {
   const t = useStudioTokens();
+  // Etapa 4 (05/10): no celular o detalhe ocupa a tela toda, com cabeçalho de uma linha.
+  const celular = useModalNoCelular();
+  const casca = telaCheia(celular);
   const { token } = useAuthStore();
 
   const [detail, setDetail] = useState<SaleDetailFull | null>(null);
@@ -202,18 +206,18 @@ export function StudioSaleDetailModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 16 }}>
-        <View style={{ width: "100%", maxWidth: 560, maxHeight: "92%", backgroundColor: t.bg, borderRadius: 18, borderWidth: 1, borderColor: t.ink5, overflow: "hidden" }}>
+      <View style={[{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 16 }, casca.fundo]}>
+        <View style={[{ width: "100%", maxWidth: 560, maxHeight: "92%", backgroundColor: t.bg, borderRadius: 18, borderWidth: 1, borderColor: t.ink5, overflow: "hidden" }, casca.caixa]} testID="detalhe-da-venda">
           {/* Header */}
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, borderBottomWidth: 1, borderBottomColor: t.ink5 }}>
+          <View style={[{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, borderBottomWidth: 1, borderBottomColor: t.ink5 }, celular && { paddingLeft: 14, paddingRight: 6, paddingVertical: 4, minHeight: 52 }]}>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ fontSize: 11, color: t.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" }}>Vendas</Text>
-              <Text style={{ fontSize: 18, color: t.ink, fontWeight: "800" }} numberOfLines={1}>
+              {celular ? null : <Text style={{ fontSize: 11, color: t.accent, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" }}>Vendas</Text>}
+              <Text style={{ fontSize: celular ? 16 : 18, color: t.ink, fontWeight: "800" }} numberOfLines={1}>
                 {isTroca ? "Detalhe da troca" : "Detalhe da venda"}
               </Text>
-              {!!detail && <Text style={{ fontSize: 12, color: t.ink3, marginTop: 2 }}>{fmtDateTime(detail.sale.created_at)}</Text>}
+              {!!detail && <Text style={{ fontSize: 12, color: t.ink3, marginTop: celular ? 0 : 2 }} numberOfLines={1}>{fmtDateTime(detail.sale.created_at)}</Text>}
             </View>
-            <Pressable onPress={onClose} style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: t.paperCard, borderWidth: 1, borderColor: t.ink5, alignItems: "center", justifyContent: "center", ...webPointer() }}>
+            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Fechar" style={{ width: celular ? 44 : 36, height: celular ? 44 : 36, borderRadius: 10, backgroundColor: celular ? "transparent" : t.paperCard, borderWidth: celular ? 0 : 1, borderColor: t.ink5, alignItems: "center", justifyContent: "center", ...webPointer() }}>
               <Ic name="x" size={18} color={t.ink2} />
             </Pressable>
           </View>
@@ -345,7 +349,7 @@ export function StudioSaleDetailModal({
 
           {/* Footer de ações */}
           {!!detail && !loading && !confirmCancel && (
-            <View style={{ flexDirection: "row", gap: 10, padding: 16, borderTopWidth: 1, borderTopColor: t.ink5 }}>
+            <View style={[{ flexDirection: "row", gap: 10, padding: 16, borderTopWidth: 1, borderTopColor: t.ink5 }, celular && { paddingHorizontal: 14, paddingTop: 10, ...respiroInferior(10) }]} testID="detalhe-da-venda-rodape">
               {editing ? (
                 <>
                   <Pressable onPress={() => setEditing(false)} disabled={saving} style={{ flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: t.paperCardElev, borderWidth: 1, borderColor: t.ink5, alignItems: "center", ...webPointer() }}>

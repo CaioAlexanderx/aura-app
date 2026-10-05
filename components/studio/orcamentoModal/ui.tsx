@@ -50,7 +50,7 @@ export function Botao({
       }}
     >
       {ocupado ? <ActivityIndicator size="small" color={cor} /> : icone ? <Icon name={icone as any} size={15} color={cor} /> : null}
-      <Text style={{ color: cor, fontWeight: "700", fontSize: pequeno ? 13 : 13.5, textAlign: "center" }}>{rotulo}</Text>
+      <Text style={{ color: cor, fontWeight: "700", fontSize: pequeno ? 13 : 13.5, textAlign: "center", ...(estreito ? { flexShrink: 1 } : {}) }} numberOfLines={flex && estreito ? 1 : undefined}>{rotulo}</Text>
     </Pressable>
   );
 }
