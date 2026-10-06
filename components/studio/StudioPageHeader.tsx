@@ -44,6 +44,7 @@
 // esconder. Sem a prop, vale o subtítulo de sempre, em uma linha.
 // ============================================================
 import { ReactNode, useMemo } from "react";
+import { tourTarget } from "@/utils/tourTarget";
 import { View, Text, StyleSheet, useWindowDimensions } from "react-native";
 import { usePathname } from "expo-router";
 import type { StudioPalette } from "@/constants/studio-tokens";
@@ -84,7 +85,7 @@ export function StudioPageHeader({
     return (
       <View style={{ marginBottom: Math.min(marginBottom, 14) }} testID="studio-page-header-mobile">
         {resolvedEyebrow && <Text style={s.eyebrow} numberOfLines={1}>{resolvedEyebrow}</Text>}
-        <Text style={[s.title, s.titleMobile]} numberOfLines={1} testID="studio-page-title">{title}</Text>
+        <Text style={[s.title, s.titleMobile]} numberOfLines={1} testID="studio-page-title" {...tourTarget("studio.titulo")}>{title}</Text>
         {sub ? <Text style={[s.subtitle, s.subtitleMobile]} numberOfLines={1} testID="studio-page-subtitle">{sub}</Text> : null}
         {acoes ? <View style={s.mobileActions} testID="studio-page-actions">{acoes}</View> : null}
       </View>
@@ -95,7 +96,7 @@ export function StudioPageHeader({
     <View style={[s.row, { marginBottom }]}>
       <View style={{ flex: 1, minWidth: 0 }}>
         {resolvedEyebrow && <Text style={s.eyebrow}>{resolvedEyebrow}</Text>}
-        <Text style={s.title}>{title}</Text>
+        <Text style={s.title} {...tourTarget("studio.titulo")}>{title}</Text>
         {subtitle && <Text style={s.subtitle}>{subtitle}</Text>}
       </View>
       {rightSlot && <View style={s.rightSlot}>{rightSlot}</View>}

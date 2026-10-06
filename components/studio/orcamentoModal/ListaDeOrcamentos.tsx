@@ -22,6 +22,7 @@
 // o padrão de pedidos.tsx. Lógica de filtragem inalterada.
 // ============================================================
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { tourTarget } from "@/utils/tourTarget";
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
 } from "react-native";
@@ -200,6 +201,7 @@ export function ListaDeOrcamentos({ abrirId }: { abrirId?: string }) {
             onPress={abrirNovo}
             accessibilityRole="button"
             testID="novo-orcamento"
+            {...tourTarget("studio.novo_orcamento")}
           >
             <Icon name="plus" size={16} color="#fff" />
             <Text style={s.btnNewTxt}>Novo orçamento</Text>

@@ -20,6 +20,7 @@
 // (Decreto 24.492, art. 13 — a ótica não aconselha lente).
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
+import { tourTarget } from "@/utils/tourTarget";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, TextInput } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -306,7 +307,7 @@ export default function OticaNovaScreen() {
         <Icon name="chevron_left" size={16} color={Colors.violet3} />
         <Text style={st.backText}>Laboratório</Text>
       </Pressable>
-      <Text style={st.pageTitle}>Nova OS de óculos<Text style={{ color: Colors.violet }}>.</Text></Text>
+      <Text style={st.pageTitle} {...tourTarget("otica.nova_os_titulo")}>Nova OS de óculos<Text style={{ color: Colors.violet }}>.</Text></Text>
       <Text style={st.pageSubtitle}>A receita fica congelada na OS. O sinal vira venda no caixa e o saldo entra no crediário com vencimento na data prometida.</Text>
 
       {/* ══ CLIENTE ══ */}

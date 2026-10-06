@@ -52,6 +52,7 @@
 // ocupa até 2 linhas. O desktop continua com os chips.
 // ============================================================
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { tourTarget } from "@/utils/tourTarget";
 import {
   View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator,
   TextInput, Image, Platform, Switch, useWindowDimensions,
@@ -368,7 +369,7 @@ export default function StudioEstoque() {
 
   // ── Header right slot ────────────────────────────────────
   const headerRight = expandedProduct ? null : (
-    <Pressable onPress={() => setWizardOpen(true)} style={s.btnPri}>
+    <Pressable onPress={() => setWizardOpen(true)} style={s.btnPri} {...tourTarget("studio.catalogo_novo")}>
       <Icon name="plus" size={14} color="#fff" />
       <Text style={s.btnPriTxt}>Novo produto</Text>
     </Pressable>

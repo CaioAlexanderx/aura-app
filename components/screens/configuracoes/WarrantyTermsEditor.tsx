@@ -9,6 +9,7 @@
 // Formato: "## Título" abre uma seção, "- item" é marcador, o resto é parágrafo.
 // ============================================================
 import { useEffect, useState } from "react";
+import { tourTarget } from "@/utils/tourTarget";
 import { View, Text, StyleSheet, Pressable, TextInput, ScrollView } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
@@ -52,7 +53,7 @@ export function WarrantyTermsEditor() {
 
   return (
     <>
-      <Pressable onPress={() => setOpen(true)} style={s.link} testID="warranty-terms-open">
+      <Pressable onPress={() => setOpen(true)} style={s.link} testID="warranty-terms-open" {...tourTarget("config.termo_garantia")}>
         <Icon name="shield" size={14} color={Colors.violet3} />
         <Text style={s.linkText}>Termos da garantia</Text>
         <Icon name="chevron_right" size={14} color={Colors.ink3} />

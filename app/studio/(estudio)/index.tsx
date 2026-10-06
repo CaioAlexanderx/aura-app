@@ -59,6 +59,7 @@ import { toast } from "@/components/Toast";
 import { StudioGradient } from "@/components/studio/StudioGradient";
 import { StudioLoading } from "@/components/studio/StudioLoading";
 import { StudioScreen } from "@/components/studio/StudioScreen";
+import { PrimeirosPassosCard } from "@/components/onboarding/PrimeirosPassosCard";
 import { useStudioFabClearance } from "@/components/studio/StudioShell/fabControl";
 import { itensDaFaixa } from "@/components/studio/precisaDeVoce";
 import { painelZerado, faturamentoVazio } from "@/components/studio/telaEnxuta";
@@ -272,6 +273,18 @@ export default function StudioPainel() {
             })}
           </View>
         </View>
+
+        {/* ═══════ Primeiros passos do Studio (05/10/2026) ═══════
+            Mesmo cartão do Painel do Negócio, com as cores do Studio. */}
+        <PrimeirosPassosCard
+          palette={{
+            card: t.paperCardElev, border: t.ink5,
+            ink: t.ink, ink2: t.ink2, ink3: t.ink3,
+            accent: t.accent, accentSoft: t.accentSoft,
+            ok: t.mint, okSoft: t.mintSoft, okBorder: t.mint,
+            stepBg: t.paperCard,
+          }}
+        />
 
         {/* ═══════ Erro de carregamento (QA item 11) ═══════
             Distinto do "sem vendas no período": deixa claro que os zeros

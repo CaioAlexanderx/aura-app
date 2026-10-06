@@ -2,6 +2,7 @@
 // AURA. -- PDV/Caixa · Glass search box with ⌘K shortcut
 // ============================================================
 import { useEffect, useRef } from "react";
+import { tourTarget } from "@/utils/tourTarget";
 import { View, Text, TextInput, StyleSheet, Platform } from "react-native";
 import { Colors, Glass } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -96,7 +97,7 @@ export function SearchBox({ value, onChange, placeholder, maxWidth, onSubmit, on
   });
 
   return (
-    <View style={[s.box, maxWidth ? { maxWidth } : null, Platform.OS === "web" ? (webBox as any) : { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}>
+    <View {...tourTarget("pdv.busca")} style={[s.box, maxWidth ? { maxWidth } : null, Platform.OS === "web" ? (webBox as any) : { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border }]}>
       <Icon name="search" size={15} color={Colors.ink3} />
       <TextInput
         ref={ref}

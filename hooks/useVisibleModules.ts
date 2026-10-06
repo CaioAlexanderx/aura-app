@@ -107,6 +107,13 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   // 22/09/2026 (M4): compras (sugestao + pedido de compra) com chave propria.
   'matcon.compras':      'negocio',
   'matcon.config':       'essencial',
+  // 05/10/2026 -- Primeiros passos da frente (cartao no topo do Painel e do
+  // Inicio do Studio, components/onboarding/PrimeirosPassosCard.tsx). Nao e
+  // tela nem item de menu: e um bloco do Painel, mas com chave PROPRIA para
+  // poder ser escondido por empresa (module_overrides) e por permissao sem
+  // mexer no Painel. Essencial: todo plano ve os passos da propria frente
+  // (passo cuja tela o plano nao libera some do cartao).
+  'onboarding.primeiros_passos': 'essencial',
 };
 var PLAN_LEVEL: Record<string, number> = { essencial: 0, negocio: 1, expansao: 2 };
 
@@ -134,7 +141,10 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   financeiro:    ['financeiro', 'nfe'],
   relatorios:    ['contabilidade', 'suporte'],
   folha:         ['folha', 'agendamento'],
-  configuracoes: ['configuracoes'],
+  // 05/10/2026 -- primeiros passos entram na permissao de configuracoes: quem
+  // monta a loja (dono/admin) ve o cartao; vendedora/caixa nao. Dono sempre
+  // ve (o filtro de permissao so vale para membro).
+  configuracoes: ['configuracoes', 'onboarding.primeiros_passos'],
   // 15/05/2026 -- agentes adicionado; sem isso nao-owners nunca veiam mesmo com plano Expansao.
   // 30/08/2026 -- hub_social entra na mesma permissao: quem atende (agentes)
   // ve o hub. Granularidade propria fica pra quando o produto pedir.

@@ -166,6 +166,19 @@ export type ResyncSubscriptionResponse = {
   billing_sync: BillingSync;
 };
 
+export type SetSegmentBody = {
+  segment: "varejo" | "matcon" | "otica" | "assistencia" | "studio" | "outro";
+  extras?: "os"[];
+  disable?: ("matcon" | "otica" | "os")[];
+};
+export type SegmentFlags = { matcon_enabled: boolean; otica_enabled: boolean; os_enabled: boolean; studio_enabled: boolean };
+export type SetSegmentResponse = {
+  segment: SetSegmentBody["segment"] | null;
+  segment_source: "cnae" | "landing" | "user" | "staff" | null;
+  vertical_active: string | null;
+  flags: SegmentFlags;
+};
+
 export var adminApi = {
   dashboard: function() { return request<any>("/admin/dashboard"); },
   clients: function() { return request<any>("/admin/clients"); },
@@ -181,6 +194,14 @@ export var adminApi = {
   setVertical: function(companyId: string, vertical: string | null) {
     return request<{ company: any; changed: boolean; message: string }>(
       "/admin/clients/" + companyId + "/vertical", { method: "PATCH", body: { vertical: vertical }, retry: 0 }
+    );
+  },
+  // 05/10/2026 — Frente da empresa (Aura-backend #786). Grava
+  // segment_source='staff'. 409 STUDIO_PLAN_REQUIRED quando a frente e
+  // studio e o plano nao e Negocio ou superior.
+  setSegment: function(companyId: string, body: SetSegmentBody) {
+    return request<SetSegmentResponse>(
+      "/admin/clients/" + companyId + "/segment", { method: "PATCH", body: body, retry: 0 }
     );
   },
   // 19/05/2026 — Sub-vertical (Fase B1 do benchmark de mercado)

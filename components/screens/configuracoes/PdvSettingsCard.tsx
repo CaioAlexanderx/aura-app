@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { WarrantyTermsEditor } from "./WarrantyTermsEditor";
-import { View, Text, StyleSheet, Switch, ActivityIndicator, Pressable, TextInput, Platform } from "react-native";
+import { View, Text, StyleSheet, Switch, ActivityIndicator, Pressable, TextInput, Platform, Linking } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
@@ -12,6 +12,9 @@ import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { Card } from "@/components/screens/configuracoes/shared";
 import { CardFeeSection, type CardFeePalette } from "@/components/screens/configuracoes/CardFeeSection";
 import { CardPriceSection } from "@/components/screens/configuracoes/CardPriceSection";
+import { SEGMENT_LABEL } from "@/constants/primeirosPassos";
+import { waAura } from "@/constants/suporteAura";
+import type { Segmento } from "@/services/primeirosPassosApi";
 
 // ============================================================
 // AURA. — Configurações do Caixa (PDV) por empresa
@@ -50,8 +53,28 @@ const CARD_FEE_PALETTE: CardFeePalette = {
   boxBorder:   Colors.border2,
 };
 
+// 05/10/2026 (frente da empresa): Materiais de construção, Ótica e Ordem de
+// Serviço deixam de ser switches do cliente — a frente é escolhida no
+// cadastro e trocada pela equipe (Gestão Aura › Clientes › Frente). O
+// cliente vê "Sua frente" + o que está ligado; staff (is_staff, suporte)
+// continua alternando aqui. As flags do backend não mudam.
+const FRENTE_FLAGS: { key: "matcon_enabled" | "otica_enabled" | "os_enabled"; label: string }[] = [
+  { key: "matcon_enabled", label: "Materiais de construção" },
+  { key: "otica_enabled", label: "Ótica" },
+  { key: "os_enabled", label: "Ordem de Serviço" },
+];
+
+/** Nome da frente para leitura. Empresa antiga (segment NULL) não tem
+ *  frente gravada: Matcon/Ótica ligados dizem qual é; senão, loja em geral. */
+export function nomeDaFrente(segment: Segmento | null | undefined, display: Partial<PdvSettings>): string {
+  if (segment && SEGMENT_LABEL[segment]) return SEGMENT_LABEL[segment];
+  if (display.matcon_enabled === true) return SEGMENT_LABEL.matcon;
+  if (display.otica_enabled === true) return SEGMENT_LABEL.otica;
+  return SEGMENT_LABEL.varejo;
+}
+
 export function PdvSettingsCard() {
-  const { company } = useAuthStore();
+  const { company, isStaff } = useAuthStore();
   const { settings: serverSettings, isLoading, invalidate } = usePdvSettings();
   const [pendingSettings, setPendingSettings] = useState<PdvSettings | null>(null);
   const [saving, setSaving] = useState(false);
@@ -229,6 +252,26 @@ export function PdvSettingsCard() {
           nem toda loja emite OS; desligado, o modulo inteiro fica invisivel.
           A OS nasce na ENTRADA do equipamento (antes da venda) e so encosta
           numa venda ao ser entregue — ver CONTRACT_ORDEM_DE_SERVICO.md. */}
+      {/* Frente: leitura pro cliente; os switches abaixo só pra staff. */}
+      <View style={s.frenteBox} testID="pdv-settings-frente">
+        <Text style={s.rowLabel}>
+          Sua frente: <Text style={{ color: Colors.violet3 }}>{nomeDaFrente((company as any)?.segment ?? null, display)}</Text>
+        </Text>
+        {FRENTE_FLAGS.some(function(f) { return display[f.key] === true; }) && (
+          <Text style={s.rowDesc} testID="pdv-settings-frente-ligado">
+            Ligado: {FRENTE_FLAGS.filter(function(f) { return display[f.key] === true; }).map(function(f) { return f.label; }).join(" · ")}
+          </Text>
+        )}
+        <Pressable
+          onPress={function() { Linking.openURL(waAura("Quero mudar a frente da minha Aura")).catch(function() {}); }}
+          accessibilityRole="link"
+          testID="pdv-settings-frente-whatsapp"
+        >
+          <Text style={s.frenteLink}>Pra mudar, fale com a gente</Text>
+        </Pressable>
+      </View>
+
+      {isStaff && (
       <View style={s.row}>
         <View style={{ flex: 1 }}>
           <Text style={s.rowLabel}>Ordem de Serviço</Text>
@@ -240,8 +283,10 @@ export function PdvSettingsCard() {
           trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
           thumbColor={display.os_enabled === true ? Colors.violet : Colors.ink3}
           disabled={saving}
+          testID="pdv-settings-os"
         />
       </View>
+      )}
 
       {/* Link para a lista de OS — visivel apenas quando habilitado */}
       {display.os_enabled === true && (
@@ -254,13 +299,12 @@ export function PdvSettingsCard() {
       {/* Garantia de produto (extensão da OS): modelo dos termos impressos */}
       {display.os_enabled === true && <WarrantyTermsEditor />}
 
-      <View style={s.divider} />
-
       {/* 15/09/2026: Otica (migration 334). Semi-vertical sobre o shell
           Negocio, opt-in como a OS: ligada, aparece a secao "Otica" no menu
           (Laboratorio e Receitas). Nao depende do toggle de OS acima — a
           OS de oculos e um tipo proprio (kind='otica') com etapa de
           laboratorio e sinal na abertura. */}
+      {isStaff && (
       <View style={s.row}>
         <View style={{ flex: 1 }}>
           <Text style={s.rowLabel}>Ótica</Text>
@@ -275,6 +319,7 @@ export function PdvSettingsCard() {
           testID="pdv-settings-otica"
         />
       </View>
+      )}
 
       {display.otica_enabled === true && (
         <>
@@ -291,8 +336,6 @@ export function PdvSettingsCard() {
         </>
       )}
 
-      <View style={s.divider} />
-
       {/* 22/09/2026: Matcon (materiais de construção), migration ainda a
           definir no backend — ver docs/CONTRACT_MATCON.md. Mesmo desenho de
           opt-in da Ótica acima: ligado, aparecem unidades fracionadas
@@ -304,6 +347,7 @@ export function PdvSettingsCard() {
           produto, §4b do doc — a tela não vende o que não existe). Ela
           cresce a cada fase: M1 acrescenta "orçamento que vira pedido,
           entrega parcial"; M3 acrescenta "profissionais parceiros". */}
+      {isStaff && (
       <View style={s.row}>
         <View style={{ flex: 1 }}>
           <Text style={s.rowLabel}>Materiais de construção</Text>
@@ -323,6 +367,7 @@ export function PdvSettingsCard() {
           testID="pdv-settings-matcon"
         />
       </View>
+      )}
 
       {display.matcon_enabled === true && (
         // 22/09/2026: "/matcon/config" ainda não existe — nasce no PR de M0
@@ -468,6 +513,8 @@ const s = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: Colors.border,
   },
   caixaLinkText: { flex: 1, fontSize: 13, color: Colors.violet3, fontWeight: "600" },
+  frenteBox:   { paddingVertical: 10, gap: 4 },
+  frenteLink:  { fontSize: 12, color: Colors.violet3, fontWeight: "600", textDecorationLine: "underline", marginTop: 2 },
   savingHint:  { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
   savingText:  { fontSize: 11, color: Colors.ink3 },
   // Fase 7 — Restaurante
