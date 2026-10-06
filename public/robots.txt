@@ -1,0 +1,7 @@
+# Rastreio liberado de proposito. O painel sai da busca pelo
+# <meta name="robots" content="noindex, nofollow"> do index.html e pelo
+# X-Robots-Tag do _headers. Um Disallow aqui impediria o Google de ler
+# esse noindex e deixaria /login e /register presos como "indexada, mas
+# bloqueada pelo robots.txt".
+User-agent: *
+Allow: /

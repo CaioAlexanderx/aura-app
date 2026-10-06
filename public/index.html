@@ -5,6 +5,15 @@
     <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
     <meta name="google" content="notranslate" />
+    <!-- 06/10/2026: o painel (app.getaura.com.br) nao e pagina de busca.
+         O Search Console mostrava /login como soft 404 e /register
+         indexado; quem procura a Aura deve cair em www.getaura.com.br.
+         Junto com o X-Robots-Tag em public/_headers (o robots.txt libera
+         o rastreio de proposito, para o Google conseguir ler este noindex).
+         A vitrine Studio (loja.getaura.com.br) reaproveita esta casca, mas
+         o backend tira esta meta antes de servir (vitrineStudioShell.js),
+         entao a loja continua indexavel. -->
+    <meta name="robots" content="noindex, nofollow" />
     <title>Aura.</title>
 
     <!-- ============================================================

@@ -25,3 +25,11 @@
   Permissions-Policy: camera=(self), microphone=(), geolocation=()
   X-XSS-Protection: 1; mode=block
   Cache-Control: public, max-age=0, must-revalidate
+
+# Painel fora da busca (06/10/2026). So o host do painel: a regra com host
+# absoluto nao pega loja.getaura.com.br nem outro dominio que venha a
+# apontar para este Worker. Vale tambem para o fallback de SPA (/login,
+# /register...), que e asset como o index.html. Junto com a meta robots
+# do index.html; o robots.txt libera o rastreio para o noindex ser lido.
+https://app.getaura.com.br/*
+  X-Robots-Tag: noindex, nofollow
