@@ -9,6 +9,7 @@ import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { pdvSettingsApi, companiesApi, type PdvSettings } from "@/services/api";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
+import { lerVendaSemEstoque } from "@/utils/vendaSemEstoque";
 import { Card } from "@/components/screens/configuracoes/shared";
 import { CardFeeSection, type CardFeePalette } from "@/components/screens/configuracoes/CardFeeSection";
 import { CardPriceSection } from "@/components/screens/configuracoes/CardPriceSection";
@@ -25,6 +26,7 @@ import type { Segmento } from "@/services/primeirosPassosApi";
 //   - Ativar módulo de Abertura/Fechamento de Caixa
 //   - Ativar Crediário (fiado por cliente) — 09/05/2026
 //   - Modal de troco em venda dinheiro — 12/05/2026
+//   - Vender sem estoque — 06/10/2026
 //   - Taxa da maquininha (crédito/débito) — 17/08/2026
 //   - Cobro mais no cartão (preço no cartão) — 22/09/2026
 //   - Restaurante (Fase 7): NFC-e manual, comanda auto-print, taxa servico
@@ -216,6 +218,24 @@ export function PdvSettingsCard() {
           onValueChange={function(v) { toggle("cash_tender_modal_enabled", v); }}
           trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
           thumbColor={display.cash_tender_modal_enabled !== false ? Colors.violet : Colors.ink3}
+          disabled={saving}
+        />
+      </View>
+
+      <View style={s.divider} />
+
+      {/* 06/10/2026: Toggle vender sem estoque */}
+      <View style={s.row}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.rowLabel}>Vender sem estoque</Text>
+          <Text style={s.rowDesc}>Permite vender produto com o estoque zerado. O estoque não fica negativo: continua em zero até você lançar a quantidade</Text>
+        </View>
+        <Switch
+          testID="toggle-vender-sem-estoque"
+          value={lerVendaSemEstoque(display)}
+          onValueChange={function(v) { toggle("allow_sale_without_stock", v); }}
+          trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
+          thumbColor={lerVendaSemEstoque(display) ? Colors.violet : Colors.ink3}
           disabled={saving}
         />
       </View>

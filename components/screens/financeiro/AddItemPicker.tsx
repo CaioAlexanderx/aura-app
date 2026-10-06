@@ -7,6 +7,8 @@ import { useProducts } from "@/hooks/useProducts";
 import { useAuthStore } from "@/stores/auth";
 import { companiesApi } from "@/services/api";
 import { hexToName } from "@/utils/colorNames";
+import { usePdvSettings } from "@/hooks/usePdvSettings";
+import { faltaEstoqueParaVender, lerVendaSemEstoque } from "@/utils/vendaSemEstoque";
 
 // ============================================================
 // AURA. — Picker pra adicionar produto numa venda existente (EXTRA C)
@@ -44,6 +46,8 @@ export function AddItemPicker({
 }) {
   const { products } = useProducts();
   const { company } = useAuthStore();
+  const { settings: pdvSettings } = usePdvSettings();
+  const vendeSemEstoque = lerVendaSemEstoque(pdvSettings);
   const [search, setSearch] = useState("");
   const [qty, setQty] = useState("1");
   const [variantPending, setVariantPending] = useState<any>(null);
@@ -87,7 +91,9 @@ export function AddItemPicker({
       ? parseFloat(variant.stock_qty || 0)
       : parseFloat(product.stock || product.stock_qty || 0);
 
-    if (stockToCheck < parsedQty) {
+    // 06/10/2026: loja com "vender sem estoque" ligado não é barrada aqui —
+    // o backend (POST sale-items) segue a mesma chave.
+    if (faltaEstoqueParaVender(stockToCheck, parsedQty, vendeSemEstoque)) {
       toast.error("Estoque insuficiente: disponível " + stockToCheck + " un");
       return;
     }
