@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView, Platform, Image } from "react-native";
 import { Slot, usePathname, useRouter } from "expo-router";
+// 05/10/2026: tour dos primeiros passos (spotlight no botao da tela alvo).
+import { PendingTourHost } from "@/components/onboarding/PendingTourHost";
 import { Colors, useColors, useThemeStore } from "@/constants/colors";
 import { Fonts, GOOGLE_FONTS_CSS, cssDeExcecaoDeFonte } from "@/constants/fonts";
 import { useAuthStore } from "@/stores/auth";
@@ -926,6 +928,7 @@ export default function TabsLayout() {
         <NotificationBell />
       </div>
       <ToastContainer />
+      <PendingTourHost />
       <div style={{ flex: 1, overflow: "auto", position: "relative", minHeight: 0, minWidth: 0 } as any}>
         <PageTransition><Slot /></PageTransition>
       </div>
@@ -943,6 +946,7 @@ export default function TabsLayout() {
           <NotificationBell />
         </div>
         <ToastContainer />
+        <PendingTourHost />
         <PageTransition><Slot /></PageTransition>
       </div>
     </div>
@@ -958,6 +962,7 @@ export default function TabsLayout() {
         </View>
         <View key={themeKey} style={{ flex: 1 }}>
           <ToastContainer />
+          <PendingTourHost />
           <PageTransition><Slot /></PageTransition>
         </View>
         <MBar />

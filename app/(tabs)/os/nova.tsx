@@ -15,6 +15,7 @@
 //               a peça sairia duas vezes.
 // ============================================================
 import { useMemo, useState } from "react";
+import { tourTarget } from "@/utils/tourTarget";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, TextInput } from "react-native";
 import { router } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -164,7 +165,7 @@ export default function OsNovaScreen() {
         </Pressable>
       </View>
 
-      <Text style={st.pageTitle}>Nova Ordem de Serviço</Text>
+      <Text style={st.pageTitle} {...tourTarget("os.nova_titulo")}>Nova Ordem de Serviço</Text>
       <Text style={st.pageSubtitle}>Registre a entrada do equipamento. O orçamento pode ser preenchido agora ou depois, na bancada.</Text>
 
       {/* ══ CLIENTE ══ */}

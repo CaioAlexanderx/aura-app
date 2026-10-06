@@ -15,7 +15,7 @@
 // chamava refreshMe; o layout passa a chamar).
 // ============================================================
 import { useEffect } from "react";
-import { View, Text, Platform } from "react-native";
+import { View, Text, Platform, Pressable, Linking } from "react-native";
 import { StudioShell } from "@/components/studio/StudioShell";
 import { EmptyState } from "@/components/EmptyState";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
@@ -23,6 +23,8 @@ import { useAuthStore } from "@/stores/auth";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { PLAN_LEVEL } from "@/hooks/useVisibleModules";
 import { Fonts, GOOGLE_FONTS_CSS } from "@/constants/fonts";
+import { waAura } from "@/constants/suporteAura";
+import { PendingTourHost } from "@/components/onboarding/PendingTourHost";
 
 // ── Tipografia Aura no Studio (19/08/2026) ──────────────────
 // O link do Google Fonts só era injetado no layout do Negócio
@@ -146,16 +148,41 @@ export default function StudioLayout() {
           AURA STUDIO
         </Text>
         <Text style={{ fontSize: 22, color: tk.ink, fontWeight: "800", marginBottom: 24 }}>
-          Modo Studio desativado
+          Aura Studio ainda não ativado
         </Text>
+        {/* 05/10/2026: a frente Studio é ligada pela equipe (Gestão Aura ›
+            Clientes › Frente). A instrução antiga mandava o cliente a um
+            toggle que não existe para ele em Configurações. */}
         <EmptyState
           icon="settings"
           title="Studio não habilitado"
-          subtitle="Pra começar a vender personalizados (canecas, camisetas, brindes) ative o modo Studio em Configurações > PDV > Políticas do Caixa."
+          subtitle="O Aura Studio é ativado pela equipe Aura. Fale com a gente pelo WhatsApp."
         />
+        <Pressable
+          onPress={() => { Linking.openURL(waAura("Quero ativar o Aura Studio")).catch(() => {}); }}
+          accessibilityRole="link"
+          testID="studio-bloqueio-whatsapp"
+          style={{ alignSelf: "center", marginTop: 8, paddingVertical: 10, paddingHorizontal: 18, borderRadius: 10, backgroundColor: tk.accent }}
+        >
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>Falar no WhatsApp</Text>
+        </Pressable>
       </View>
     );
   }
 
-  return <StudioShell />;
+  // Tour dos primeiros passos (spotlight no botão da tela alvo), com a
+  // cor do Studio. Fora do StudioShell: o host usa portal no body.
+  return (
+    <>
+      <StudioShell />
+      <PendingTourHost
+        palette={{
+          surface: tk.paperCardElev || "#fff",
+          border: tk.ink5 || "rgba(0,0,0,0.1)",
+          ink: tk.ink, ink2: tk.ink2, ink3: tk.ink3,
+          accent: tk.accent, accentInk: "#fff",
+        }}
+      />
+    </>
+  );
 }

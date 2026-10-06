@@ -11,6 +11,7 @@
 // consegue cadastrar laboratório, como food.config.
 // ============================================================
 import { useEffect, useState } from "react";
+import { tourTarget } from "@/utils/tourTarget";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, TextInput, Switch } from "react-native";
 import { router } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -174,7 +175,7 @@ export default function OticaConfigScreen() {
             </View>
           </View>
         ) : (
-          <Pressable onPress={() => startEdit("new")} style={st.addBtn} testID="otica-lab-novo">
+          <Pressable onPress={() => startEdit("new")} style={st.addBtn} testID="otica-lab-novo" {...tourTarget("otica.lab_novo")}>
             <Icon name="plus" size={14} color={Colors.violet3} />
             <Text style={st.addBtnText}>Cadastrar laboratório</Text>
           </Pressable>

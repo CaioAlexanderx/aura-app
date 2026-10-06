@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { tourTarget } from "@/utils/tourTarget";
 import { Pressable, Text, View, StyleSheet, Platform, Animated } from "react-native";
 import { StudioGradient } from "@/components/studio/StudioGradient";
 import { Icon } from "@/components/Icon";
@@ -59,6 +60,7 @@ export function StudioFab({
           onPressOut={handlePressOut}
           accessibilityRole="button"
           accessibilityLabel={accessibilityLabel || label || "Ação"}
+          {...tourTarget("studio.fab")}
         >
           {/* StudioGradient (zero-deps): CSS linear-gradient no web, cor sólida central no native.
               Substitui o caminho antigo que ramificava Platform.OS web (CSS) vs native (LinearGradient

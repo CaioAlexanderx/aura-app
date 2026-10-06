@@ -16,6 +16,7 @@
 // Mockup aprovado: docs/mockups/otica-modulo.html, tela 4.
 // ============================================================
 import { useMemo, useState } from "react";
+import { tourTarget } from "@/utils/tourTarget";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, TextInput } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -156,7 +157,7 @@ export default function OticaReceitasScreen() {
               <Text style={st.ghostBtnText}>Exportar livro (CSV)</Text>
             </Pressable>
             {enabled && (
-              <Pressable onPress={() => setSheet(true)} style={st.newBtn} testID="otica-nova-receita">
+              <Pressable onPress={() => setSheet(true)} style={st.newBtn} testID="otica-nova-receita" {...tourTarget("otica.nova_receita")}>
                 <Icon name="plus" size={14} color="#fff" />
                 <Text style={st.newBtnText}>Nova receita</Text>
               </Pressable>

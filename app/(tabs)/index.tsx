@@ -32,6 +32,7 @@ import { BirthdaysCard } from "@/components/screens/dashboard/BirthdaysCard";
 import { DashboardEmptyState } from "@/components/screens/dashboard/DashboardEmptyState";
 import { ConsolidatedBreakdownCard } from "@/components/screens/dashboard/ConsolidatedBreakdownCard";
 import { CalendarioComercialCard } from "@/components/screens/dashboard/CalendarioComercialCard";
+import { PrimeirosPassosCard } from "@/components/onboarding/PrimeirosPassosCard";
 
 var FALLBACK_ROUTES: { mod: string; route: string }[] = [
   { mod: "pdv", route: "/pdv" },
@@ -271,6 +272,11 @@ export default function DashboardScreen() {
             tela de celular, só na web, só enquanto não estiver instalada e
             não tiver sido dispensado; o componente decide sozinho. */}
         {!isDemo && <InstallBanner />}
+
+        {/* 05/10/2026: primeiros passos da frente — cartão no fluxo da página
+            (não é modal nem banner flutuante). Some sozinho na visão
+            consolidada, sem frente, dispensado ou com tudo feito. */}
+        {!isDemo && !consolidatedView && <PrimeirosPassosCard />}
 
         {isLoading && !isDemo && <SkeletonDashboard />}
         {isEmpty && <DashboardEmptyState name={firstName} data={d} onPress={go} />}

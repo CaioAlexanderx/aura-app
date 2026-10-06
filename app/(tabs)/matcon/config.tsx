@@ -21,6 +21,7 @@
 // o único acesso é o link em Configurações › Caixa (PdvSettingsCard).
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
+import { tourTarget } from "@/utils/tourTarget";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Switch } from "react-native";
 import { router } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -287,7 +288,7 @@ export default function MatconConfigScreen() {
             <View style={st.divider} />
 
             {/* ── Prazo de entrega ── */}
-            <View style={st.frase}>
+            <View style={st.frase} {...tourTarget("matcon.entrega")}>
               <Text style={st.fraseText}>
                 Prometo a entrega para{" "}
                 <TextInput

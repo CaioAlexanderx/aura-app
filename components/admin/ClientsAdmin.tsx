@@ -10,6 +10,7 @@ import { toast } from "@/components/Toast";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { PLAN_C, MODULE_LABELS } from "./types";
 import { ResyncSubscriptionButton } from "./ResyncSubscriptionButton";
+import { FrenteSection, STUDIO_PLAN_MSG, isStudioPlanError } from "./FrenteSection";
 import { MODULE_PLAN_MAP, PLAN_LEVEL } from "@/hooks/useVisibleModules";
 import {
   STAGE_TABS, stageOf, trialCountdown, isNewAccount, usageSummary, shortDate,
@@ -239,7 +240,12 @@ export function ClientsAdmin() {
         toast.success("Vertical desativada");
       }
     },
-    onError: function(err: any) { toast.error(err?.data?.error || "Erro ao alterar vertical"); },
+    // 05/10/2026: o backend recusa Studio fora do Negócio+ (409
+    // STUDIO_PLAN_REQUIRED) — mesma mensagem da seção Frente.
+    onError: function(err: any, p: { companyId: string; vertical: VerticalKey | null }) {
+      if (p?.vertical === "studio" && isStudioPlanError(err)) { toast.error(STUDIO_PLAN_MSG); return; }
+      toast.error(err?.data?.error || "Erro ao alterar vertical");
+    },
   });
 
   // 19/05/2026 — Fase B1 benchmark: sub-vertical manual.
@@ -582,6 +588,9 @@ export function ClientsAdmin() {
           <ResyncSubscriptionButton companyId={sc.id} />
         </View>
 
+        {/* 05/10/2026: Frente da empresa (cadastro por frente). */}
+        <FrenteSection companyId={sc.id} />
+
         {/* Seletor de modulo vertical */}
         <View style={s.section}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -619,6 +628,9 @@ export function ClientsAdmin() {
                   <Text style={s.verticalIcon}>{v.icon}</Text>
                   <Text style={[s.verticalLabel, active && { color: v.color }]}>{v.label}</Text>
                   {active && <Text style={[s.verticalMeta, { color: v.color }]}>ativo</Text>}
+                  {!active && v.key === "studio" && (PLAN_LEVEL[sc.plan] ?? 0) < (PLAN_LEVEL["negocio"] ?? 1) && (
+                    <Text style={[s.verticalMeta, { color: Colors.ink3 }]} testID="vertical-studio-plano">{STUDIO_PLAN_MSG}</Text>
+                  )}
                   {!active && !v.ready && (
                     <View style={s.soonBadge}><Text style={s.soonText}>em breve</Text></View>
                   )}
@@ -630,7 +642,7 @@ export function ClientsAdmin() {
             Ativa uma tab dedicada no app do cliente com funcionalidades do segmento.
             {sc.suggested_vertical ? " Sugestão baseada no CNAE: " + sc.suggested_vertical + "." : ""}
             {" "}A vertical usa a precificacao do proprio plano — nao ha add-on separado.
-            {" "}O Aura Studio exige plano Negocio ou superior.
+            {" "}{STUDIO_PLAN_MSG}.
           </Text>
         </View>
 

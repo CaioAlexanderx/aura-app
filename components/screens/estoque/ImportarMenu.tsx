@@ -26,6 +26,7 @@
 //      menu fechava junto. Agora o resize só reposiciona o menu.
 // ============================================================
 import { useEffect, useRef, useState } from "react";
+import { tourTarget } from "@/utils/tourTarget";
 import { View, Text, Pressable, StyleSheet, Platform, ActivityIndicator } from "react-native";
 import { Colors, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -148,6 +149,7 @@ export function ImportarMenu({ onNota, onPlanilha, ocupado, compacto }: Props) {
         onPress={alternar}
         style={[s.botao, aberto && s.botaoAberto, compacto && s.botaoCompacto, SEM_SELECAO]}
         testID="importar-botao"
+        {...tourTarget("estoque.importar")}
         accessibilityLabel="Importar"
         accessibilityState={{ expanded: aberto } as any}
       >

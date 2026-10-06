@@ -1,4 +1,5 @@
 import { useState, useRef, useMemo, useEffect } from "react";
+import { tourTarget } from "@/utils/tourTarget";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions } from "react-native";
 import { Colors, useColors, useThemeStore } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
@@ -596,7 +597,7 @@ export default function EstoqueScreen() {
           </Text>}
         </Pressable>
       )}
-      <Pressable onPress={() => abrirCadastro("product")} style={s.addBtn}>
+      <Pressable onPress={() => abrirCadastro("product")} style={s.addBtn} {...tourTarget("estoque.novo_produto")}>
         <Icon name="package" size={14} color="#fff" />
         <Text style={s.addBtnText}>+ Produto</Text>
       </Pressable>

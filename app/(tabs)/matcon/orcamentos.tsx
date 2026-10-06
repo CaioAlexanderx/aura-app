@@ -42,6 +42,7 @@
 //     promete "este mês".
 // ============================================================
 import { useMemo, useState } from "react";
+import { tourTarget } from "@/utils/tourTarget";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, TextInput } from "react-native";
 import { router } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -288,7 +289,7 @@ function MatconOrcamentosScreen() {
               <Icon name="truck" size={14} color={Colors.ink} />
               <Text style={st.ghostBtnText}>Entregas</Text>
             </Pressable>
-            <Pressable onPress={() => router.push("/pdv" as any)} style={st.newBtn} testID="matcon-novo-orcamento">
+            <Pressable onPress={() => router.push("/pdv" as any)} style={st.newBtn} testID="matcon-novo-orcamento" {...tourTarget("matcon.novo_orcamento")}>
               <Icon name="plus" size={14} color="#fff" />
               <Text style={st.newBtnText}>Novo orçamento</Text>
             </Pressable>

@@ -1,4 +1,5 @@
 import { useState, useRef, useMemo } from "react";
+import { tourTarget } from "@/utils/tourTarget";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions, ActivityIndicator } from "react-native";
 import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
@@ -308,7 +309,7 @@ export default function ClientesScreen() {
           title="Clientes"
           subtitle={heroSub}
           actions={
-            <Pressable onPress={() => { setShowAdd(true); setEditTarget(null); setTab(0); }} style={s.addBtn}>
+            <Pressable onPress={() => { setShowAdd(true); setEditTarget(null); setTab(0); }} style={s.addBtn} {...tourTarget("clientes.novo")}>
               <Text style={s.addBtnText}>+ Adicionar cliente</Text>
             </Pressable>
           }
