@@ -78,6 +78,11 @@ export type PdvSettings = {
   // e em dinheiro (single ou parcela dinheiro em split-mode). Default
   // true em DEFAULT_SETTINGS — operador batuto/fila grande pode desligar.
   cash_tender_modal_enabled: boolean;
+  // 06/10/2026 (vender sem estoque): loja que não controla saldo vende
+  // mesmo com o produto zerado. Desligado por padrão; ligado, o saldo para
+  // em zero (o backend não deixa negativo). Leitura só por
+  // utils/vendaSemEstoque.lerVendaSemEstoque.
+  allow_sale_without_stock?: boolean;
   // 18/05/2026 (Fase 0 Aura Food, migration 118)
   food_mode_enabled?: boolean;
   service_fee_pct?: number;

@@ -19,6 +19,8 @@ import { isSaleLinkedTransaction, isCreditReceivableKey } from "@/utils/saleLink
 import { valorDoPatch } from "@/utils/editarLancamento";
 import { camposDaSituacao, diferencaPaga, textoDaDiferenca, rotulosDaSituacao, type Situacao } from "@/utils/lancamentoPago";
 import { abrirComprovante, anexarComprovante, escolherComprovante, nomeCurto, removerComprovante } from "@/utils/comprovante";
+import { usePdvSettings } from "@/hooks/usePdvSettings";
+import { apareceParaVender, lerVendaSemEstoque, produtoTemEstoque } from "@/utils/vendaSemEstoque";
 
 var isWeb = Platform.OS === "web";
 
@@ -101,14 +103,9 @@ function normalizeSearch(s: any): string {
     .trim();
 }
 
-// Helper: produto considerado em estoque pra fim de filtro do picker.
-// Produtos com variantes sempre passam (estoque está na variante).
-function productHasStock(p: any): boolean {
-  if (p?.has_variants === true) return true;
-  var raw = p?.stock ?? p?.stock_qty ?? 0;
-  var n = typeof raw === "number" ? raw : parseFloat(raw);
-  return !isNaN(n) && n > 0;
-}
+// Produto considerado em estoque pra fim de filtro do picker: mesma regra do
+// Caixa, em utils/vendaSemEstoque (produto com variantes sempre passa).
+var productHasStock = produtoTemEstoque;
 
 type SaleItem = { cartKey: string; productId: string; variantId?: string; name: string; price: number; qty: number };
 
@@ -174,6 +171,9 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
   // Toggle pra mostrar produtos com estoque 0 no picker de venda retroativa.
   // Padrão = false (esconde). Mesmo padrão do Caixa.
   var [showSaleOutOfStock, setShowSaleOutOfStock] = useState(false);
+  // 06/10/2026: loja que vende sem estoque vê os zerados direto na busca.
+  var { settings: pdvSettings } = usePdvSettings();
+  var vendeSemEstoque = lerVendaSemEstoque(pdvSettings);
 
   var [custSearch, setCustSearch] = useState("");
   var [custId, setCustId] = useState<string | null>(null);
@@ -357,14 +357,18 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
       return true;
     });
   }, [products, saleSearch, saleSearchActive]);
+  // Com "vender sem estoque" ligado o contador vai a zero de propósito: é ele
+  // que mostra o botão "Mostrar produtos zerados", e ali não há o que esconder.
   var saleZeroStockCount = useMemo(function() {
+    if (vendeSemEstoque) return 0;
     return saleTextMatches.reduce(function(acc, p) { return acc + (productHasStock(p) ? 0 : 1); }, 0);
-  }, [saleTextMatches]);
+  }, [saleTextMatches, vendeSemEstoque]);
   // Step 2: aplica filtro de estoque (se toggle off)
   var saleAllMatches = useMemo(function() {
-    if (showSaleOutOfStock) return saleTextMatches;
-    return saleTextMatches.filter(productHasStock);
-  }, [saleTextMatches, showSaleOutOfStock]);
+    return saleTextMatches.filter(function(p) {
+      return apareceParaVender(p, { mostrarZerados: showSaleOutOfStock, vendeSemEstoque: vendeSemEstoque });
+    });
+  }, [saleTextMatches, showSaleOutOfStock, vendeSemEstoque]);
   var saleFiltered = saleAllMatches.slice(0, SALE_PICKER_MAX_RESULTS);
   var saleHiddenCount = Math.max(0, saleAllMatches.length - saleFiltered.length);
 

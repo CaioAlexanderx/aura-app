@@ -93,6 +93,7 @@ import type { CrediarioConfirmPayload } from "@/components/screens/pdv/PdvModals
 import { openQuotePdf, type QuoteItem } from "@/utils/quotePdf";
 import { descontoDoCupom, lerConfigDoCartao, precoNoCartaoDoProduto } from "@/utils/precoNoCartao";
 import { normalizeText, buildProductHaystack, matchesQuery } from "@/utils/productSearch";
+import { apareceParaVender, lerVendaSemEstoque, produtoTemEstoque } from "@/utils/vendaSemEstoque";
 import { warrantiesApi } from "@/services/warrantiesApi";
 import { useWarrantyDraft, diasValidos } from "@/stores/warrantyDraft";
 
@@ -115,16 +116,6 @@ function parseCardPrice(v: any): number | null {
   return isFinite(n) && n > 0 ? n : null;
 }
 
-function getProductStock(p: any): number {
-  const v = p?.stock ?? p?.stock_qty ?? 0;
-  const n = typeof v === "number" ? v : parseFloat(v);
-  return isNaN(n) ? 0 : n;
-}
-
-function isProductInStock(p: any): boolean {
-  if (p?.has_variants === true) return true;
-  return getProductStock(p) > 0;
-}
 
 const PAY_ICONS: Record<string, string> = {
   pix:       "dollar",
@@ -178,6 +169,9 @@ export function usePdvState() {
   const caixaEnabled      = !!(pdvSettings as any)?.caixa_enabled;
   const cashTenderEnabled = (pdvSettings as any)?.cash_tender_modal_enabled !== false;
   const crediarioEnabled  = !!(pdvSettings as any)?.crediario_enabled;
+  // 06/10/2026: loja que vende sem estoque vê os zerados direto no Caixa —
+  // senão um cadastro recém-importado (tudo zerado) abriria vazio.
+  const vendeSemEstoque   = lerVendaSemEstoque(pdvSettings);
 
   // ── Caixa ──────────────────────────────────────────────────────────────
   const { sessaoAtiva, isAberto, isLoading: caixaLoading, invalidate: invalidateCaixa } = useCaixa();
@@ -397,9 +391,12 @@ export function usePdvState() {
     ];
   }, [products]);
 
+  // Com "vender sem estoque" ligado o contador vai a zero de propósito: é ele
+  // que decide se o botão "Mostrar zerados" aparece (app/(tabs)/pdv.tsx), e
+  // nessa loja não há o que esconder.
   const outOfStockCount = useMemo(
-    () => products.reduce((acc, p) => acc + (isProductInStock(p) ? 0 : 1), 0),
-    [products],
+    () => (vendeSemEstoque ? 0 : products.reduce((acc, p) => acc + (produtoTemEstoque(p) ? 0 : 1), 0)),
+    [products, vendeSemEstoque],
   );
 
   // ── Índice de busca ────────────────────────────────────────────────────────────
@@ -426,10 +423,10 @@ export function usePdvState() {
       return (
         matchesQuery(haystack, normQuery) &&
         (catsAceitas.length === 0 || catsAceitas.includes(p.category)) &&
-        (showOutOfStock || isProductInStock(p))
+        apareceParaVender(p, { mostrarZerados: showOutOfStock, vendeSemEstoque })
       );
     });
-  }, [products, productIndex, query, catsAceitas, showOutOfStock]);
+  }, [products, productIndex, query, catsAceitas, showOutOfStock, vendeSemEstoque]);
 
   const { paginated, page, totalPages, total: filteredTotal, goTo } =
     usePagination(filtered, PAGE_SIZE, query + cat + (showOutOfStock ? "1" : "0"));
