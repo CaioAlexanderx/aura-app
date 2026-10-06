@@ -8,7 +8,8 @@
 // nao ha app/+html.tsx):
 //
 //   · <meta name="robots" content="noindex, nofollow"> no index.html;
-//   · public/robots.txt com Disallow: /;
+//   · public/robots.txt LIBERA o rastreio (Allow: /): com Disallow o
+//     Google nao le o noindex e a URL fica "indexada, mas bloqueada";
 //   · X-Robots-Tag no _headers, so para o host app.getaura.com.br.
 //
 // Cuidado com a vitrine Studio: loja.getaura.com.br/<slug> e servida pelo
@@ -47,8 +48,15 @@ describe("index.html", () => {
 });
 
 describe("robots.txt", () => {
-  test("bloqueia o painel inteiro", () => {
-    expect(ler("public", "robots.txt")).toBe("User-agent: *\nDisallow: /\n");
+  const robots = ler("public", "robots.txt");
+  const regras = robots.split("\n").filter((l) => l.trim() && !l.startsWith("#"));
+
+  test("libera o rastreio, para o Google conseguir ler o noindex", () => {
+    expect(regras).toEqual(["User-agent: *", "Allow: /"]);
+  });
+
+  test("nenhum Disallow", () => {
+    expect(robots).not.toMatch(/^\s*Disallow/im);
   });
 });
 
