@@ -37,12 +37,21 @@
 //      depois de um 404: o backend pode ter chegado no meio do dia.
 //   Limite conhecido: o papel sai sem o número do orçamento (ele só existe
 //   depois da resposta do servidor).
+//
+// 07/10/2026 — EDITAR. Com `editing` (o orçamento aberto pelo "Editar" da
+// tela de Orçamentos), o mesmo clique imprime e salva POR CIMA: PATCH no
+// mesmo id, mesmo número, mesmo link público. Vão só os campos que o Caixa
+// conhece (itens, desconto, cliente, vendedor); validade, obra e
+// observação não são mandadas e por isso ficam como estavam. O desconto vai
+// sempre, até zero — senão tirar o desconto no Caixa não tiraria do
+// orçamento. `onSaved` avisa quem chamou (o Caixa sai do modo edição e
+// atualiza as listas).
 // ============================================================
 import { useState } from "react";
 import { router } from "expo-router";
 import { toast } from "@/components/Toast";
 import { openWhatsApp } from "@/utils/whatsapp";
-import { matconApi, type Quote, type QuoteItem } from "@/services/matconApi";
+import { matconApi, type Quote, type QuoteCreateBody, type QuoteItem } from "@/services/matconApi";
 import type { SavedQuoteCard } from "@/components/screens/pdv/CartPanel";
 import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
 
@@ -75,6 +84,14 @@ export type MatconQuoteCartLine = {
   unit?: string | null;
 };
 
+/** O orçamento que o Caixa está editando (aberto com `?quote=&edit=1`). */
+export type MatconQuoteEditing = {
+  id: string;
+  number: number;
+  /** Cliente que o orçamento tinha ao abrir — para saber se foi tirado. */
+  customerId: string | null;
+};
+
 export type UseMatconQuoteParams = {
   companyId: string | null | undefined;
   matconEnabled: boolean;
@@ -89,6 +106,10 @@ export type UseMatconQuoteParams = {
   /** Imprime o orçamento pelo caminho de sempre. Roda no clique, ANTES de
    *  salvar (ver o topo do arquivo). Sem ele, o botão só salva. */
   onPrint?: () => void;
+  /** Presente = o botão salva por cima deste orçamento em vez de criar outro. */
+  editing?: MatconQuoteEditing | null;
+  /** Depois de salvar (novo ou editado), com o orçamento que o servidor devolveu. */
+  onSaved?: (quote: Quote, info: { edited: boolean }) => void;
 };
 
 function fmtValor(n: number): string {
@@ -96,9 +117,11 @@ function fmtValor(n: number): string {
 }
 
 export function useMatconQuote(params: UseMatconQuoteParams) {
-  const { companyId, matconEnabled, cart, customerId, customerName, customerPhone, sellerId, discount, cardTotal, onPrint } = params;
+  const { companyId, matconEnabled, cart, customerId, customerName, customerPhone, sellerId, discount, cardTotal, onPrint, editing, onSaved } = params;
   const [saving, setSaving] = useState(false);
   const [lastQuote, setLastQuote] = useState<Quote | null>(null);
+  // O card diz "atualizado" quando o último salvar foi uma edição.
+  const [lastWasEdit, setLastWasEdit] = useState(false);
   // Total no cartão NO MOMENTO de salvar (o orçamento guarda o preço do dia).
   const [lastCardTotal, setLastCardTotal] = useState<number | null>(null);
 
@@ -126,23 +149,48 @@ export function useMatconQuote(params: UseMatconQuoteParams) {
         quantity: i.qty,
         unit_price: i.price,
       }));
-      const { quote } = await matconApi.createQuote(companyId, {
-        customer_id: customerId || undefined,
-        customer_name: customerId ? undefined : (customerName || undefined),
-        customer_phone: customerPhone || undefined,
-        seller_id: sellerId || undefined,
-        discount: discount && discount > 0 ? discount : undefined,
-        items,
-      });
+      let quote: Quote;
+      if (editing) {
+        const body: Partial<QuoteCreateBody> = {
+          items,
+          discount: discount && discount > 0 ? discount : 0,
+        };
+        if (customerId) {
+          body.customer_id = customerId;
+        } else if (editing.customerId) {
+          // Tinha cliente e o Caixa ficou sem: o orçamento também fica sem.
+          body.customer_id = null;
+          body.customer_name = null;
+          body.customer_phone = null;
+        }
+        if (sellerId) body.seller_id = sellerId;
+        quote = (await matconApi.updateQuote(companyId, editing.id, body)).quote;
+      } else {
+        quote = (await matconApi.createQuote(companyId, {
+          customer_id: customerId || undefined,
+          customer_name: customerId ? undefined : (customerName || undefined),
+          customer_phone: customerPhone || undefined,
+          seller_id: sellerId || undefined,
+          discount: discount && discount > 0 ? discount : undefined,
+          items,
+        })).quote;
+      }
+      const edited = !!editing;
       setLastQuote(quote);
+      setLastWasEdit(edited);
       setLastCardTotal(cardTotal != null && cardTotal > 0 ? cardTotal : null);
+      const feito = edited ? "atualizado" : "salvo";
       toast.success(imprimiu
-        ? "Orçamento #" + quote.number + " impresso e salvo em Orçamentos"
-        : "Orçamento #" + quote.number + " salvo em Orçamentos");
+        ? "Orçamento #" + quote.number + " impresso e " + feito + " em Orçamentos"
+        : "Orçamento #" + quote.number + " " + feito + " em Orçamentos");
+      if (onSaved) onSaved(quote, { edited });
     } catch (e: any) {
+      const acao = editing ? "as mudanças não ficaram guardadas" : "não ficou guardado";
       toast.error(textoDoErro(e, imprimiu
-        ? "O orçamento foi impresso, mas não ficou guardado em Orçamentos. Tente de novo daqui a pouco."
-        : "Não consegui salvar o orçamento. Tente de novo daqui a pouco."));
+        ? "O orçamento foi impresso, mas " + acao + " em Orçamentos. Tente de novo daqui a pouco."
+        : editing
+          ? "Não consegui salvar as mudanças do orçamento. Tente de novo daqui a pouco."
+          : "Não consegui salvar o orçamento. Tente de novo daqui a pouco."));
     } finally {
       setSaving(false);
     }
@@ -179,6 +227,7 @@ export function useMatconQuote(params: UseMatconQuoteParams) {
   const savedQuote: SavedQuoteCard | null = lastQuote
     ? {
         number: lastQuote.number,
+        ...(lastWasEdit ? { updated: true } : {}),
         validUntilLabel: fmtDiaMes(lastQuote.valid_until),
         total: lastQuote.total,
         ...(lastCardTotal != null ? { cardTotal: lastCardTotal } : {}),

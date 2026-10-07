@@ -228,6 +228,44 @@ describe("CartPanel · Matcon M1 — Orçamento (salvar/imprimir)", () => {
     tree.unmount();
   });
 
+  it("editingQuote: avisa o que está sendo editado, o botão vira 'Salvar orçamento' e Cancelar chama onCancel", () => {
+    mockPdvSettings = { matcon_enabled: true };
+    const onSaveQuote = jest.fn();
+    const onCancel = jest.fn();
+    const tree = montar({ onSaveQuote, editingQuote: { number: 12, onCancel } }, [CIMENTO]);
+
+    expect(tree.root.findAllByProps({ testID: "matcon-orcamento-editando" }).length).toBeGreaterThan(0);
+    const texto = flattenText(tree.toJSON());
+    expect(texto).toContain("Editando o orçamento #12");
+    expect(texto).toContain("Salvar orçamento");
+
+    act(() => { botaoSalvar(tree).props.onPress(); });
+    expect(onSaveQuote).toHaveBeenCalledTimes(1);
+
+    const cancelar = tree.root.findAllByProps({ testID: "matcon-orcamento-cancelar-edicao" })[0];
+    act(() => { cancelar.props.onPress(); });
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    tree.unmount();
+  });
+
+  it("sem editingQuote: nada de aviso de edição e o botão continua 'Orçamento'", () => {
+    mockPdvSettings = { matcon_enabled: true };
+    const tree = montar({ onSaveQuote: jest.fn() }, [CIMENTO]);
+    expect(tree.root.findAllByProps({ testID: "matcon-orcamento-editando" }).length).toBe(0);
+    expect(flattenText(tree.toJSON())).not.toContain("Salvar orçamento");
+    tree.unmount();
+  });
+
+  it("savedQuote.updated: o card diz 'atualizado'", () => {
+    mockPdvSettings = { matcon_enabled: true };
+    const tree = montar({
+      onSaveQuote: jest.fn(),
+      savedQuote: { number: 12, updated: true, validUntilLabel: "14/10", total: 380, onSendWhatsApp: jest.fn(), onViewEsteira: jest.fn() },
+    }, [CIMENTO]);
+    expect(flattenText(tree.toJSON())).toContain("Orçamento #12 atualizado.");
+    tree.unmount();
+  });
+
   it("savedQuote ausente (null) e toggle ON: não mostra o card", () => {
     mockPdvSettings = { matcon_enabled: true };
     const tree = montar({ onSaveQuote: jest.fn(), savedQuote: null }, [CIMENTO]);
