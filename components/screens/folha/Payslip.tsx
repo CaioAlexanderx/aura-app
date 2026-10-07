@@ -15,6 +15,11 @@ const PAYSLIP_TYPES: { key: PayslipType; label: string }[] = [
   { key: "decimo_terceiro", label: "13o Salário" },
 ];
 
+// 07/10/2026: o nome do funcionário entrava cru no <title>.
+function escTitulo(str: string): string {
+  return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 function generatePayslipHtml(emp: Employee, type: PayslipType, companyName: string, cnpj?: string) {
   const mensal = calcPayroll(emp);
   const ferias = calcFerias(emp);
@@ -77,7 +82,7 @@ function generatePayslipHtml(emp: Employee, type: PayslipType, companyName: stri
 
   // Full page version for PDF/print
   const fullPageHtml = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Holerite - ${emp.name}</title>
+<title>Holerite - ${escTitulo(emp.name)}</title>
 <style>
 @page{margin:16mm;size:A4}${CSS_ESCONDE_NA_IMPRESSAO}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -89,7 +94,7 @@ td.red{color:#dc2626}
 tr.total td{font-weight:700;border-top:1.5px solid #6d28d9;background:#ede9fe;font-size:12px}
 @media screen{.print-btn{display:block;margin:16px auto;padding:12px 32px;background:#6d28d9;color:#fff;border:none;border-radius:10px;font-size:14px;cursor:pointer;font-weight:700}}
 </style></head><body>
-<button type="button" class="print-btn no-print" aria-hidden="true" onclick="${ONCLICK_IMPRIMIR}">Imprimir / Salvar PDF</button>
+<button type="button" class="print-btn no-print" onclick="${ONCLICK_IMPRIMIR}">Imprimir / Salvar PDF</button>
 ${inlineHtml}
 ${SCRIPT_IMPRIMIR_SEM_BARRA}
 </body></html>`;

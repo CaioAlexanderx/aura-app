@@ -208,7 +208,7 @@ export function exportDreReport(opts: DreReportOpts): boolean {
     "@media print { .noprint { display: none !important; } }" +
     CSS_ESCONDE_NA_IMPRESSAO +
     "</style></head><body>" +
-    '<div class="noprint no-print" aria-hidden="true"><button type="button" onclick="' + ONCLICK_IMPRIMIR + '">Imprimir / Salvar PDF</button></div>' +
+    '<div class="noprint no-print"><button type="button" onclick="' + ONCLICK_IMPRIMIR + '">Imprimir / Salvar PDF</button></div>' +
     '<div class="head">' +
     '<div><div class="brand">Aura.<small>FINANCEIRO</small></div></div>' +
     '<div class="meta"><b>' + esc(opts.companyLabel) + "</b><br>Período: <b>" + esc(opts.periodLabel) + "</b><br>Emitido em " + esc(emitido) + "</div>" +

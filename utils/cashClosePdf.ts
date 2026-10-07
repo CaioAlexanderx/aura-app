@@ -184,7 +184,7 @@ export function buildCashClosePdfHtml(data: CashCloseData): string {
     "</style>" +
     "</head>" +
     "<body>" +
-    '<div class="actions no-print" aria-hidden="true"><button type="button" onclick="' + ONCLICK_IMPRIMIR + '">Imprimir / Salvar PDF</button></div>' +
+    '<div class="actions no-print"><button type="button" onclick="' + ONCLICK_IMPRIMIR + '">Imprimir / Salvar PDF</button></div>' +
     '<div class="head">' +
     '<div class="logo">' + escapeHtml((data.companyName || "?").charAt(0).toUpperCase()) + "</div>" +
     "<div>" +

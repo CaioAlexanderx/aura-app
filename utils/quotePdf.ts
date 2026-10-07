@@ -79,7 +79,8 @@ export type QuoteData = {
 };
 
 function fmt(n: number) {
-  return "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+  // 07/10/2026: sem o máximo, 7,35 × 9,50 saía "R$ 69,825".
+  return "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function escapeHtml(str: string) {
@@ -188,7 +189,7 @@ export function buildQuoteHtml(data: QuoteData): string {
 '</style>' +
 '</head>' +
 '<body>' +
-'  <div class="actions no-print" aria-hidden="true">' +
+'  <div class="actions no-print">' +
 '    <button type="button" onclick="' + ONCLICK_IMPRIMIR + '">Imprimir / Salvar PDF</button>' +
 '  </div>' +
 '  <div class="header">' +

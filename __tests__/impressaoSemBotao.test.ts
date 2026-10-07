@@ -93,7 +93,7 @@ function confere(html: string, seletorBarra: string) {
   // a aparência da barra (onde entra display) só existe na tela
   expect(semMediaScreen(css)).not.toMatch(new RegExp("\\" + seletorBarra + "\s*[{,]"));
   // (iii) o botão está dentro de .no-print, fora do fluxo de impressão
-  expect(html).toMatch(/<div class="[^"]*\bno-print\b[^"]*" aria-hidden="true">\s*<button type="button" onclick="auraImprimir\(this\)">Imprimir \/ Salvar PDF<\/button>\s*<\/div>/);
+  expect(html).toMatch(/<div class="[^"]*\bno-print\b[^"]*">\s*<button type="button" onclick="auraImprimir\(this\)">Imprimir \/ Salvar PDF<\/button>\s*<\/div>/);
   expect(html).toContain("function auraImprimir(btn)");
 }
 
@@ -115,5 +115,13 @@ describe("fechamento de caixa: botão fora do papel", () => {
     const html = buildCashClosePdfHtml(caixa);
     grava("fechamento_caixa", html);
     confere(html, ".actions");
+  });
+});
+
+describe("orçamento: valores com duas casas", () => {
+  test("7,35 × 9,50 imprime R$ 69,83, não R$ 69,825", () => {
+    const html = buildQuoteHtml({ ...base, items: [{ name: "Vergalhão", qty: 7.35, unit: "kg", unitPrice: 9.5 }] });
+    expect(html).toContain("R$ 69,83");
+    expect(html).not.toContain("69,825");
   });
 });
