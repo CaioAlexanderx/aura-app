@@ -706,9 +706,16 @@ export const creditApi = {
     if (opts.paid_at) qs.set("paid_at", opts.paid_at);
     return request<PaymentPlan>(`${base(companyId)}/customers/${customerId}/payments/preview?${qs}`);
   },
-  receiveFreePayment(companyId: string, customerId: string, body: { amount: number; account_id?: string | null; method?: string; paid_at?: string }) {
-    // A3-FE: Idempotency-Key via custom header to prevent double-debits on retry
-    const idempKey = "rfp-" + companyId + "-" + customerId + "-" + Date.now();
+  receiveFreePayment(
+    companyId: string, customerId: string,
+    body: { amount: number; account_id?: string | null; method?: string; paid_at?: string },
+    idempotencyKey?: string,
+  ) {
+    // Idempotency-Key: o chamador passa uma chave ESTÁVEL entre as tentativas
+    // do mesmo pedido (utils/crediarioRecebimento.novaChaveDeRecebimento) —
+    // é o que faz clique duplo e retry virarem replay no backend. Sem ela,
+    // vale a chave por chamada de antes (07/10/2026), que não deduplica nada.
+    const idempKey = idempotencyKey || ("rfp-" + companyId + "-" + customerId + "-" + Date.now());
     return request<PaymentPlan>(`${base(companyId)}/customers/${customerId}/payments`, { method: "POST", body, headers: { "Idempotency-Key": idempKey } });
   },
 
