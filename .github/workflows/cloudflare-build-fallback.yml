@@ -1,0 +1,63 @@
+name: Cloudflare build fallback
+
+# O deploy do app é do Cloudflare (Workers Builds, ligado a este repositório):
+# push na main = build. Em 07/10/2026 o aviso do push do #1029 se perdeu
+# durante um incidente da API do Cloudflare e nenhum build nasceu — o merge
+# ficou horas fora do ar sem ninguém ser avisado.
+#
+# Este workflow é a rede de segurança: depois de cada push na main ele espera
+# o Cloudflare registrar o check "Workers Builds" no commit. Se o check não
+# aparecer em 5 minutos, dispara o build pelo Deploy Hook do Worker
+# (Cloudflare › aura-app › Settings › Builds › Deploy Hooks), guardado no
+# secret CLOUDFLARE_DEPLOY_HOOK_URL. O hook constrói a ponta da main.
+#
+# Sem o secret o job REPROVA: o commit fica com X vermelho em vez de um
+# deploy que não aconteceu passar despercebido.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  checks: read
+
+concurrency:
+  group: cloudflare-build-fallback
+  cancel-in-progress: true
+
+jobs:
+  garantir-build:
+    name: build do Cloudflare iniciou
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Esperar o check do Cloudflare neste commit
+        id: espera
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 20); do
+            n=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" \
+                  --jq '[.check_runs[] | select(.app.slug == "cloudflare-workers-and-pages")] | length' || echo 0)
+            if [ "${n:-0}" -gt 0 ]; then
+              echo "Cloudflare registrou o build deste commit."
+              echo "iniciou=sim" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "Cloudflare não registrou build em 5 minutos."
+          echo "iniciou=nao" >> "$GITHUB_OUTPUT"
+
+      - name: Disparar o build pelo Deploy Hook
+        if: steps.espera.outputs.iniciou == 'nao'
+        env:
+          HOOK_URL: ${{ secrets.CLOUDFLARE_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$HOOK_URL" ]; then
+            echo "::error::O Cloudflare não iniciou o build deste commit e o secret CLOUDFLARE_DEPLOY_HOOK_URL não está configurado. Dispare o build pelo painel (aura-app › New deployment)."
+            exit 1
+          fi
+          curl --fail --silent --show-error --max-time 30 -X POST "$HOOK_URL" > /dev/null
+          echo "::warning::O Cloudflare não iniciou o build sozinho; disparado pelo Deploy Hook."
