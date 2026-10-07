@@ -132,9 +132,11 @@ describe("Configurações › Políticas do Caixa — frente", () => {
     const txt = flatten(tree.toJSON());
     expect(txt).toContain("Sua frente: Ótica");
     expect(txt).toContain("Ligado: Ótica");
-    expect(txt).toContain("Pra mudar, fale com a gente");
+    // 07/10/2026: o cliente troca a frente pela seta (frenteTrocadaPeloCliente.test.tsx)
+    expect(txt).not.toContain("Pra mudar, fale com a gente");
     expect(txt).toContain("Laboratórios, validade da receita e garantia");
-    expect(byId(tree, "pdv-settings-frente-whatsapp")).toHaveLength(1);
+    expect(byId(tree, "pdv-settings-frente-whatsapp")).toHaveLength(0);
+    expect(byId(tree, "pdv-settings-frente-trocar")).toHaveLength(1);
     tree.unmount();
   });
 

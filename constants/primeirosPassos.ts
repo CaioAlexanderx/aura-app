@@ -224,4 +224,7 @@ export const SEGMENT_LABEL: Record<Segmento, string> = {
   outro: "Outro",
 };
 
+/** 409 STUDIO_PLAN_REQUIRED (Gestão Aura e Configurações). */
+export const STUDIO_PLAN_MSG = "Studio exige plano Negócio ou superior";
+
 export const SEGMENTOS: Segmento[] = ["varejo", "matcon", "otica", "assistencia", "studio", "outro"];

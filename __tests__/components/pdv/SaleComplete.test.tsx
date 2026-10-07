@@ -22,8 +22,16 @@ jest.mock("expo-router", () => ({ router: { push: jest.fn() } }));
 
 import React from "react";
 import renderer, { act } from "react-test-renderer";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SaleComplete } from "@/components/screens/pdv/SaleComplete";
 import type { SaleResult } from "@/hooks/useCart";
+
+// A tela final monta WarrantySaleActions, que usa useQueryClient: sem
+// provider a tela cai com "No QueryClient set".
+function comQuery(el: React.ReactElement) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return <QueryClientProvider client={qc}>{el}</QueryClientProvider>;
+}
 
 function flattenText(node: any): string {
   if (node == null || node === false) return "";
@@ -59,7 +67,7 @@ const VENDA_176: SaleResult = {
 
 function montar(sale: SaleResult, matconEnabled = true) {
   let tree!: renderer.ReactTestRenderer;
-  act(() => { tree = renderer.create(<SaleComplete sale={sale} onNewSale={jest.fn()} matconEnabled={matconEnabled} />); });
+  act(() => { tree = renderer.create(comQuery(<SaleComplete sale={sale} onNewSale={jest.fn()} matconEnabled={matconEnabled} />)); });
   return tree;
 }
 
@@ -124,7 +132,7 @@ describe("tela final da venda — Matcon", () => {
     let tree!: renderer.ReactTestRenderer;
     act(() => {
       tree = renderer.create(
-        <SaleComplete sale={sale} onNewSale={jest.fn()} matconEnabled matconDeliveryDays={2} {...extra} />,
+        comQuery(<SaleComplete sale={sale} onNewSale={jest.fn()} matconEnabled matconDeliveryDays={2} {...extra} />),
       );
     });
     return tree;

@@ -4,7 +4,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { request, adminApi } from "@/services/api";
 import type { SetSegmentBody, SegmentFlags, SetSegmentResponse } from "@/services/adminApi";
-import { SEGMENT_LABEL, SEGMENTOS } from "@/constants/primeirosPassos";
+import { SEGMENT_LABEL, STUDIO_PLAN_MSG } from "@/constants/primeirosPassos";
+import { FrenteOpcoes } from "@/components/onboarding/FrenteOpcoes";
 import type { Segmento } from "@/services/primeirosPassosApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
@@ -22,7 +23,7 @@ import { toast } from "@/components/Toast";
 //   · 409 STUDIO_PLAN_REQUIRED → "Studio exige plano Negócio ou superior"
 // ============================================================
 
-export const STUDIO_PLAN_MSG = "Studio exige plano Negócio ou superior";
+export { STUDIO_PLAN_MSG };
 
 export function isStudioPlanError(err: any): boolean {
   if (!err) return false;
@@ -143,42 +144,14 @@ export function FrenteSection({ companyId }: { companyId: string }) {
         <Info label="CNAE" value={row?.cnae_principal || "—"} />
       </View>
 
-      <Text style={s.label}>Trocar para</Text>
-      <View style={s.grid}>
-        {SEGMENTOS.map((k) => {
-          const on = segment === k;
-          return (
-            <Pressable
-              key={k}
-              onPress={() => { setSegment(k); setErro(null); }}
-              style={[s.chip, on && s.chipOn]}
-              testID={"frente-opcao-" + k}
-              accessibilityRole="button"
-              accessibilityState={{ selected: on }}
-            >
-              <Text style={[s.chipText, on && s.chipTextOn]}>{SEGMENT_LABEL[k]}</Text>
-              {atual === k && <Text style={s.chipMeta}>atual</Text>}
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {segment !== "assistencia" && (
-        <>
-          <Text style={s.label}>Extra</Text>
-          <View style={s.grid}>
-            <Pressable
-              onPress={() => setExtraOs((v) => !v)}
-              style={[s.chip, extraOs && s.chipOn]}
-              testID="frente-extra-os"
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: extraOs }}
-            >
-              <Text style={[s.chipText, extraOs && s.chipTextOn]}>{extraOs ? "✓ " : "+ "}Ordem de Serviço</Text>
-            </Pressable>
-          </View>
-        </>
-      )}
+      {/* Quadros compartilhados com Configurações (FrenteOpcoes). */}
+      <FrenteOpcoes
+        selecionada={segment}
+        atual={atual}
+        onSelecionar={(k) => { setSegment(k); setErro(null); }}
+        extraOs={extraOs}
+        onAlternarExtraOs={() => setExtraOs((v) => !v)}
+      />
 
       <Text style={s.label}>Ligado agora</Text>
       {loadingFlags && !flags ? (
@@ -244,12 +217,6 @@ const s = StyleSheet.create({
   infoLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase" },
   infoValue: { fontSize: 13, color: Colors.ink, fontWeight: "600", marginTop: 3 },
   label: { fontSize: 11, color: Colors.ink3, fontWeight: "700", marginTop: 10, marginBottom: 6 },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { borderWidth: 1, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 6 },
-  chipOn: { borderColor: Colors.violet, backgroundColor: Colors.violet + "1F" },
-  chipText: { fontSize: 12, color: Colors.ink2, fontWeight: "600" },
-  chipTextOn: { color: Colors.violet3 },
-  chipMeta: { fontSize: 10, color: Colors.ink3 },
   flagRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, paddingVertical: 4 },
   flagText: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
   flagBtn: { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },

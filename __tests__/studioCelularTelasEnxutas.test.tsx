@@ -15,6 +15,7 @@
 // ============================================================
 import React from "react";
 import { create, act, type ReactTestRenderer } from "react-test-renderer";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 (global as any).__DEV__ = false;
 
@@ -142,7 +143,11 @@ import StudioPedidosHub from "@/app/studio/(estudio)/pedidos";
 const montados: ReactTestRenderer[] = [];
 async function montar(el: React.ReactElement): Promise<ReactTestRenderer> {
   let r!: ReactTestRenderer;
-  await act(async () => { r = create(el); });
+  // O Início monta o PrimeirosPassosCard (app#1026), que usa react-query:
+  // sem provider a tela inteira cai com "No QueryClient set". Um cliente
+  // novo por montagem, sem retry, como nos outros testes de tela.
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  await act(async () => { r = create(<QueryClientProvider client={qc}>{el}</QueryClientProvider>); });
   // As telas carregam num efeito assíncrono: mais uma volta para assentar.
   await act(async () => { await Promise.resolve(); });
   montados.push(r);
