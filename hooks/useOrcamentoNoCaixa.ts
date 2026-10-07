@@ -25,6 +25,14 @@
 // normalmente dispensa a busca; e só a montagem que continua viva aplica o
 // carrinho e mostra o aviso, que agora é um só:
 // "Orçamento #1 no carrinho — 2 itens".
+//
+// 07/10/2026 — "Editar" na tela de Orçamentos manda pra cá com
+// `?quote=<id>&edit=1`. É a mesma busca e o mesmo carrinho; o que muda é o
+// que o Caixa faz com ele (`aplicar` recebe `{ editando: true }` e o botão
+// "Orçamento" passa a salvar por cima do mesmo número, hooks/useMatconQuote).
+// De quebra: quando a URL fica sem `quote`, o hook esquece o último id — o
+// Caixa continua montado entre uma visita e outra, e abrir o MESMO
+// orçamento pela segunda vez não carregava nada.
 // ============================================================
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -46,23 +54,33 @@ export function orcamentoDaUrl(v: unknown): string | null {
   return id;
 }
 
-/** "Orçamento #1 no carrinho — 2 itens" */
-export function avisoDoOrcamento(quote: Pick<Quote, "number" | "items">): string {
+/** `edit` na URL: "1"/"true" ligam a edição; qualquer outra coisa, não. */
+export function edicaoDaUrl(v: unknown): boolean {
+  const bruto = Array.isArray(v) ? v[0] : v;
+  return bruto === "1" || bruto === "true";
+}
+
+/** "Orçamento #1 no carrinho — 2 itens" · editando: "Editando o orçamento #1 — 2 itens no carrinho" */
+export function avisoDoOrcamento(quote: Pick<Quote, "number" | "items">, editando?: boolean): string {
   const n = (quote.items || []).length;
-  return "Orçamento #" + quote.number + " no carrinho — " + n + (n === 1 ? " item" : " itens");
+  const itens = n + (n === 1 ? " item" : " itens");
+  if (editando) return "Editando o orçamento #" + quote.number + " — " + itens + " no carrinho";
+  return "Orçamento #" + quote.number + " no carrinho — " + itens;
 }
 
 export type UseOrcamentoNoCaixaParams = {
   /** `quote` cru de useLocalSearchParams. */
   quoteParam: unknown;
+  /** `edit` cru de useLocalSearchParams ("1" = abrir para editar). */
+  editParam?: unknown;
   companyId: string | null | undefined;
   /** pdv_settings.matcon_enabled — sem Matcon o efeito nunca dispara. */
   enabled: boolean;
   /** Monta o carrinho com o orçamento (usePdvState sabe como). */
-  aplicar: (quote: Quote) => void;
+  aplicar: (quote: Quote, opcoes: { editando: boolean }) => void;
 };
 
-export function useOrcamentoNoCaixa({ quoteParam, companyId, enabled, aplicar }: UseOrcamentoNoCaixaParams) {
+export function useOrcamentoNoCaixa({ quoteParam, editParam, companyId, enabled, aplicar }: UseOrcamentoNoCaixaParams) {
   const qc = useQueryClient();
   const carregadoRef = useRef<string | null>(null);
   // O `aplicar` de quem chama muda a cada render (produtos chegando etc.):
@@ -71,9 +89,14 @@ export function useOrcamentoNoCaixa({ quoteParam, companyId, enabled, aplicar }:
   aplicarRef.current = aplicar;
 
   const quoteId = orcamentoDaUrl(quoteParam);
+  // Lido na hora de aplicar: o `edit` some da URL junto com o `quote`.
+  const editandoRef = useRef(false);
+  if (quoteId) editandoRef.current = edicaoDaUrl(editParam);
 
   useEffect(() => {
-    if (!quoteId || !enabled || !companyId) return;
+    // URL sem orçamento: o próximo `?quote=` carrega, mesmo sendo o mesmo id.
+    if (!quoteId) { carregadoRef.current = null; return; }
+    if (!enabled || !companyId) return;
     if (carregadoRef.current === quoteId) return;
     carregadoRef.current = quoteId;
 
@@ -87,10 +110,11 @@ export function useOrcamentoNoCaixa({ quoteParam, companyId, enabled, aplicar }:
       .then(({ quote }) => {
         if (!vivo) return;
         terminou = true;
-        aplicarRef.current(quote);
-        toast.success(avisoDoOrcamento(quote));
+        const editando = editandoRef.current;
+        aplicarRef.current(quote, { editando });
+        toast.success(avisoDoOrcamento(quote, editando));
         // Tira o `quote` da URL: voltar/atualizar não remonta o carrinho.
-        try { router.setParams({ quote: undefined } as any); } catch {}
+        try { router.setParams({ quote: undefined, edit: undefined } as any); } catch {}
       })
       .catch(() => {
         if (!vivo) return;

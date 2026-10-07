@@ -56,7 +56,7 @@
 //     muda — é só mais um useEffect que nunca dispara.
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams } from "expo-router";
 
 import { useAuthStore } from "@/stores/auth";
@@ -76,9 +76,9 @@ import { couponsApi, employeesApi, pdvApi } from "@/services/api";
 import { nfceApi } from "@/services/nfceApi";
 import { creditApi } from "@/services/creditApi";
 import { readMatconSettings } from "@/constants/matcon";
-import { useMatconQuote } from "@/hooks/useMatconQuote";
+import { useMatconQuote, type MatconQuoteEditing } from "@/hooks/useMatconQuote";
 import { useMatconReferral } from "@/hooks/useMatconReferral";
-import { useOrcamentoNoCaixa } from "@/hooks/useOrcamentoNoCaixa";
+import { useOrcamentoNoCaixa, chaveDoOrcamento } from "@/hooks/useOrcamentoNoCaixa";
 
 import { toast } from "@/components/Toast";
 import { flyToCart } from "@/components/screens/pdv/flyToCart";
@@ -133,6 +133,7 @@ export const PAY_METHODS: PayChip[] = PAYMENTS.map(p => ({
 
 export function usePdvState() {
   const { company, isDemo } = useAuthStore();
+  const qc = useQueryClient();
   const { products } = useProducts();
   // D2 (F0): arvore para expandir o filtro de categoria na subarvore.
   const { flattened: categoriasFlat } = useCategories();
@@ -242,6 +243,17 @@ export function usePdvState() {
     splitStatus,
   } = useCart(cardCfg);
 
+  // ── Matcon M1 — editar orçamento (07/10/2026) ───────────────────────────
+  // "Editar" em /matcon/orcamentos abre o Caixa com ?quote=<id>&edit=1. O
+  // carrinho passa a SER o orçamento e o botão "Orçamento" salva por cima
+  // dele (useMatconQuote). Sai do modo ao salvar, ao cancelar ou quando o
+  // carrinho esvazia (Limpar, Nova venda, venda finalizada).
+  const [editingQuote, setEditingQuote] = useState<MatconQuoteEditing | null>(null);
+  useEffect(() => {
+    if (editingQuote && cart.length === 0) setEditingQuote(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart.length]);
+
   // ── Matcon M1 — "Salvar orçamento" ──────────────────────────────────────
   // useMatconQuote é quem sabe montar o QuoteCreateBody e falar com
   // matconApi; aqui só passamos o retrato atual do carrinho/cliente/
@@ -268,6 +280,14 @@ export function usePdvState() {
     // SALVA em seguida. O toast é do useMatconQuote ("impresso e salvo" ou
     // "impresso, mas não ficou guardado"), por isso aqui a impressão é muda.
     onPrint: () => handleGenerateQuote(null),
+    editing: editingQuote,
+    onSaved: (quote, info) => {
+      // O Caixa lê o orçamento desta chave ao abrir com ?quote= — sem isto,
+      // editar o mesmo orçamento de novo em seguida traria os itens velhos.
+      if (company?.id) qc.setQueryData(chaveDoOrcamento(company.id, quote.id), { quote });
+      qc.invalidateQueries({ queryKey: ["matcon-quotes"] });
+      if (info.edited) setEditingQuote(null);
+    },
   });
 
   // ── Matcon M3 — "Indicado por" (chip do Caixa) ───────────────────────────
@@ -321,12 +341,17 @@ export function usePdvState() {
   // único moram em hooks/useOrcamentoNoCaixa.ts (QA 23/09/2026: eram 4
   // avisos e um GET /quotes/undefined); aqui só dizemos COMO o orçamento
   // vira carrinho. Sem Matcon ou sem `?quote`, nada acontece.
-  const quoteRouteParams = useLocalSearchParams<{ quote?: string }>();
+  const quoteRouteParams = useLocalSearchParams<{ quote?: string; edit?: string }>();
   useOrcamentoNoCaixa({
     quoteParam: quoteRouteParams.quote,
+    editParam: quoteRouteParams.edit,
     companyId: company?.id,
     enabled: matcon.matcon_enabled,
-    aplicar: (quote) => {
+    aplicar: (quote, { editando }) => {
+      // Editando, o carrinho tem que ser o orçamento e mais nada: o que
+      // estava no balcão (o Caixa guarda o carrinho entre visitas) iria
+      // parar dentro dele ao salvar.
+      if (editando) rawNewSale();
       quote.items.forEach((it, idx) => {
         // Item sem product_id (avulso, digitado no orçamento) ganha uma
         // chave sintética só pra existir no carrinho — não bate com
@@ -348,6 +373,15 @@ export function usePdvState() {
         selectCustomer(quote.customer_id, quote.customer_name || null, quote.customer_phone || null);
       }
       setQuoteId(quote.id); // vai como quote_id no POST da venda (M1)
+      if (editando) {
+        // O desconto do orçamento volta como desconto em R$ — sem isto,
+        // salvar a edição apagaria o desconto que o cliente já viu.
+        if (quote.discount > 0) {
+          setDiscountType("R$");
+          setDiscountValue(quote.discount.toFixed(2).replace(".", ","));
+        }
+        setEditingQuote({ id: quote.id, number: quote.number, customerId: quote.customer_id || null });
+      }
     },
   });
 
@@ -962,6 +996,7 @@ export function usePdvState() {
     onSaveQuote:       matconQuote.saveQuote,
     savingQuote:       matconQuote.saving,
     savedQuote:        matconQuote.savedQuote,
+    editingQuote:      editingQuote ? { number: editingQuote.number, onCancel: newSale } : null,
     discountLabel,
     discountType,
     setDiscountType,

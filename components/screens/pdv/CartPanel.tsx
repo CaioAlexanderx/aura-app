@@ -129,6 +129,8 @@ export type PayChip = { key: string; label: string; icon: string };
  *  controla em hooks/useMatconQuote.ts, o CartPanel só renderiza. */
 export type SavedQuoteCard = {
   number: number;
+  /** O último salvar foi uma edição: o card diz "atualizado" em vez de "salvo". */
+  updated?: boolean;
   /** "29/09" — já formatado (o CartPanel não sabe de fuso/parse de data). */
   validUntilLabel: string;
   total: number;
@@ -179,6 +181,10 @@ type Props = {
   onSaveQuote?: () => void;
   savingQuote?: boolean;
   savedQuote?: SavedQuoteCard | null;
+  /** 07/10/2026: orçamento aberto pelo "Editar" da tela de Orçamentos. Com
+   *  ele o rodapé avisa o que está sendo editado e o botão "Orçamento" vira
+   *  "Salvar orçamento" (o onSaveQuote já sabe salvar por cima). */
+  editingQuote?: { number: number; onCancel: () => void } | null;
   discountLabel?: string | null;
   /** Desconto manual editável. Opcional para preservar os usos legados do painel. */
   discountType?: "%" | "R$";
@@ -233,7 +239,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     payMethods, activePay, onPay, warrantySlot,
     onInc, onDec, onSetQty, onPriceChange, onRemove, onClear, onFinalize, onGenerateQuote,
     onLotAllocations,
-    showOrcamento, onSaveQuote, savingQuote, savedQuote,
+    showOrcamento, onSaveQuote, savingQuote, savedQuote, editingQuote,
     discountLabel, isProcessing, finalizeDisabled, requiredHints,
     discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
     emptyCta, headerSubtitle, compact, fill,
@@ -633,11 +639,26 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
         {/* 22/09/2026 (Matcon M1): card "Orçamento #N salvo" — só com o
             toggle ligado e depois de salvar. Fica ACIMA dos hints/CTAs pra
             não sumir atrás do aviso de bloqueio. */}
-        {matcon.matcon_enabled && savedQuote && (
+        {matcon.matcon_enabled && editingQuote && (
+          <View style={s.quoteCard} testID="matcon-orcamento-editando">
+            <View style={s.quoteCardHead}>
+              <Text style={s.quoteCardTitle} numberOfLines={1}>
+                Editando o orçamento #{editingQuote.number}
+              </Text>
+              <Pressable onPress={editingQuote.onCancel} style={s.quoteCardGhostBtn} testID="matcon-orcamento-cancelar-edicao">
+                <Text style={s.quoteCardGhostTxt} numberOfLines={1}>Cancelar</Text>
+              </Pressable>
+            </View>
+            <Text style={s.quoteCardSub}>
+              Mude os itens e toque em Salvar orçamento. O número e o link do cliente continuam os mesmos.
+            </Text>
+          </View>
+        )}
+        {matcon.matcon_enabled && savedQuote && !editingQuote && (
           <View style={s.quoteCard} testID="matcon-orcamento-salvo-card">
             <View style={s.quoteCardHead}>
               <Text style={s.quoteCardTitle} numberOfLines={1}>
-                Orçamento #{savedQuote.number} salvo.
+                Orçamento #{savedQuote.number} {savedQuote.updated ? "atualizado" : "salvo"}.
               </Text>
               {savedQuote.onDismiss && (
                 <Pressable onPress={savedQuote.onDismiss} hitSlop={8}>
@@ -725,7 +746,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
               ) : (
                 <>
                   <Icon name="clipboard" size={15} color={Colors.violet3} />
-                  <Text style={s.ctaAltTxt} numberOfLines={1}>Orçamento</Text>
+                  <Text style={s.ctaAltTxt} numberOfLines={1}>{editingQuote ? "Salvar orçamento" : "Orçamento"}</Text>
                 </>
               )}
             </Pressable>

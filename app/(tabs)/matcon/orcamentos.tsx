@@ -224,6 +224,16 @@ function MatconOrcamentosScreen() {
     }
   }
 
+  // Editar é no Caixa: lá já existem a busca de produto, a quantidade e o
+  // preço. O orçamento da lista (o mais novo que temos) vai para a chave
+  // que o Caixa lê, e o `edit=1` faz o botão "Orçamento" de lá salvar por
+  // cima deste em vez de criar outro (hooks/useMatconQuote.ts).
+  function editarNoCaixa(quote: Quote) {
+    if (!company?.id || busyId) return;
+    qc.setQueryData(chaveDoOrcamento(company.id, quote.id), { quote });
+    router.push(`/pdv?quote=${quote.id}&edit=1` as any);
+  }
+
   async function refazerComPrecoDeHoje(quote: Quote) {
     if (!company?.id || busyId) return;
     setBusyId(quote.id);
@@ -365,6 +375,7 @@ function MatconOrcamentosScreen() {
               warnDays={warnDays}
               busy={busyId === quote.id}
               onWhats={() => enviarNoWhatsApp(quote)}
+              onEditar={() => editarNoCaixa(quote)}
               onConverter={() => converterEmPedido(quote)}
               onRefazer={() => refazerComPrecoDeHoje(quote)}
             />
@@ -376,11 +387,12 @@ function MatconOrcamentosScreen() {
   );
 }
 
-function QuoteCard({ quote, warnDays, busy, onWhats, onConverter, onRefazer }: {
+function QuoteCard({ quote, warnDays, busy, onWhats, onEditar, onConverter, onRefazer }: {
   quote: Quote;
   warnDays: number;
   busy: boolean;
   onWhats: () => void;
+  onEditar: () => void;
   onConverter: () => void;
   onRefazer: () => void;
 }) {
@@ -423,6 +435,12 @@ function QuoteCard({ quote, warnDays, busy, onWhats, onConverter, onRefazer }: {
               <Pressable onPress={onWhats} style={[st.miniBtn, st.miniBtnWa]} testID={`matcon-whats-${quote.number}`}>
                 <Icon name="whatsapp" size={13} color={Colors.green} />
                 <Text style={[st.miniBtnText, { color: Colors.green }]}>{quote.sent_at ? "Cobrar no WhatsApp" : "Enviar no WhatsApp"}</Text>
+              </Pressable>
+            )}
+            {aberto && !convertido && (
+              <Pressable onPress={onEditar} style={st.miniBtn} testID={`matcon-editar-${quote.number}`}>
+                <Icon name="edit" size={13} color={Colors.ink} />
+                <Text style={st.miniBtnText}>Editar</Text>
               </Pressable>
             )}
             {(aberto || aprovado) && !convertido && (

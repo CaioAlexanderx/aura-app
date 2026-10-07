@@ -127,6 +127,51 @@ describe("/matcon/orcamentos — a chamada falhou", () => {
   });
 });
 
+describe("/matcon/orcamentos — editar", () => {
+  const ABERTO = {
+    id: "q-aberto", number: 12, status: "open", customer_id: null, customer_name: "Dona Marlene",
+    valid_until: "2099-01-01", public_token: "t", items: [], subtotal: 100, discount: 0, total: 100,
+    created_at: "2026-10-07T10:00:00Z",
+  };
+
+  test("aberto tem 'Editar', que abre o Caixa com o orçamento em modo edição", async () => {
+    mockListQuotes.mockResolvedValue({ quotes: [ABERTO], summary: RESUMO_ZERO });
+    const { tree, qc } = await montar();
+    await esperar(tree, "matcon-lista-orcamentos");
+
+    const editar = tree.root.findAllByProps({ testID: "matcon-editar-12" }, { deep: false })[0];
+    expect(editar).toBeTruthy();
+    await act(async () => { editar.props.onPress(); });
+
+    const { router } = require("expo-router");
+    expect(router.push).toHaveBeenCalledWith("/pdv?quote=q-aberto&edit=1");
+    // O Caixa lê desta chave: o orçamento da lista já fica lá.
+    expect((qc.getQueryData(["matcon-quote", "empresa-1", "q-aberto"]) as any).quote.number).toBe(12);
+
+    tree.unmount();
+    qc.clear();
+  });
+
+  test("aprovado, perdido, vencido e o que já virou pedido não têm 'Editar'", async () => {
+    mockListQuotes.mockResolvedValue({
+      quotes: [
+        { ...ABERTO, id: "a", number: 1, status: "approved" },
+        { ...ABERTO, id: "b", number: 2, status: "lost" },
+        { ...ABERTO, id: "c", number: 3, status: "expired" },
+        { ...ABERTO, id: "d", number: 4, status: "open", converted_sale_id: "venda-1" },
+      ],
+      summary: RESUMO_ZERO,
+    });
+    const { tree, qc } = await montar();
+    await esperar(tree, "matcon-lista-orcamentos");
+    for (const n of [1, 2, 3, 4]) {
+      expect(tree.root.findAllByProps({ testID: "matcon-editar-" + n }).length).toBe(0);
+    }
+    tree.unmount();
+    qc.clear();
+  });
+});
+
 describe("/matcon/orcamentos — orçamento vencido", () => {
   test("vencido mostra 'Refazer com preço de hoje' e não 'Virar pedido'", async () => {
     mockListQuotes.mockResolvedValue({
