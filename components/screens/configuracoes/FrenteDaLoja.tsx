@@ -9,7 +9,7 @@ import { useAuthStore } from "@/stores/auth";
 import type { PdvSettings } from "@/services/api";
 import { SEGMENT_LABEL, SEGMENTOS, STUDIO_PLAN_MSG } from "@/constants/primeirosPassos";
 import { frenteApi, type Segmento } from "@/services/primeirosPassosApi";
-import { FrenteOpcoes } from "@/components/onboarding/FrenteOpcoes";
+import { FrenteOpcoes, type FrenteOpcoesPaleta } from "@/components/onboarding/FrenteOpcoes";
 
 // ============================================================
 // Configurações › Políticas do Caixa › "Sua frente" (07/10/2026)
@@ -27,6 +27,13 @@ import { FrenteOpcoes } from "@/components/onboarding/FrenteOpcoes";
 //     JWT e pode estar velho: abrir a grade revalida o /auth/me.
 //   · A frente é da empresa ativa. Na visão consolidada o card inteiro não
 //     é renderizado (app/(tabs)/configuracoes.tsx).
+//   · Também mora nas Configurações do Aura Studio (app/studio/(estudio)/
+//     configuracoes.tsx, com `paleta` do Studio): empresa Studio não chega
+//     em /configuracoes (o guard raiz devolve para /studio), então sem isso
+//     quem entrasse no Studio não saía sozinho. Saindo do Studio, o store é
+//     gravado com vertical_active nulo ANTES do redirecionamento para
+//     /(tabs) — é esse campo que o guard raiz lê; sem ele a pessoa seria
+//     devolvida ao Studio.
 //   · A confirmação é inline (sem overlay): modal fixo dentro do shell fica
 //     preso atrás da página no RNW.
 // ============================================================
@@ -46,6 +53,18 @@ export function nomeDaFrente(segment: Segmento | null | undefined, display: Part
   return SEGMENT_LABEL.varejo;
 }
 
+/** Cores para shells com tema próprio (Studio). Sem paleta = tema do varejo. */
+export type FrenteDaLojaPaleta = {
+  texto: string;
+  textoSuave: string;
+  destaque: string;
+  borda: string;
+  botao: string;
+  erro: string;
+  caixaFundo: string;
+  opcoes: FrenteOpcoesPaleta;
+};
+
 const PLANOS_COM_STUDIO = ["negocio", "expansao", "personalizado"];
 
 export const SO_O_DONO_MSG = "Só o dono da conta muda a frente";
@@ -61,11 +80,14 @@ export function mensagemDoErro(err: any): string {
   return ERRO_GENERICO_MSG;
 }
 
-export function FrenteDaLoja({ display, onChanged }: { display: Partial<PdvSettings>; onChanged?: () => void }) {
+export function FrenteDaLoja({ display, onChanged, paleta }: { display: Partial<PdvSettings>; onChanged?: () => void; paleta?: FrenteDaLojaPaleta }) {
+  const p = paleta;
   const { company, isStaff } = useAuthStore();
   const qc = useQueryClient();
 
-  const atual: Segmento | null = (company as any)?.segment ?? null;
+  const vertical = (company as any)?.vertical_active || null;
+  // Conta Studio antiga pode não ter segment gravado: a vertical diz a frente.
+  const atual: Segmento | null = (company as any)?.segment ?? (vertical === "studio" ? "studio" : null);
   const papel: string = (company as any)?.member_role || "owner";
   const podeTrocar = !!company?.id && (isStaff || papel === "owner" || papel === "admin");
   const osLigada = display.os_enabled === true;
@@ -80,7 +102,6 @@ export function FrenteDaLoja({ display, onChanged }: { display: Partial<PdvSetti
   // Studio só entra na grade se o plano tem (ou se já é a frente atual, pra
   // ela aparecer marcada). Empresa com outro módulo ativo (odonto, food...)
   // também não vê: o backend recusaria (409 VERTICAL_ACTIVE).
-  const vertical = (company as any)?.vertical_active || null;
   const temStudio = atual === "studio"
     || (PLANOS_COM_STUDIO.includes(String((company as any)?.plan || "")) && (!vertical || vertical === "studio"));
   const opcoes = SEGMENTOS.filter(function(k) { return k !== "studio" || temStudio; });
@@ -107,7 +128,11 @@ export function FrenteDaLoja({ display, onChanged }: { display: Partial<PdvSetti
     ? "Escolha a frente"
     : (mudouFrente || !mudouExtra) ? "Trocar para " + SEGMENT_LABEL[selecionada] : "Salvar";
 
-  const textoConfirmacao = !selecionada ? "" : mudouFrente
+  const saindoDoStudio = vertical === "studio" && !!selecionada && selecionada !== "studio";
+
+  const textoConfirmacao = !selecionada ? "" : mudouFrente && saindoDoStudio
+    ? "Sua Aura volta a abrir como " + SEGMENT_LABEL[selecionada] + ". Você sai do Aura Studio; seu catálogo e seus pedidos continuam guardados."
+    : mudouFrente
     ? "Sua Aura passa a abrir como " + SEGMENT_LABEL[selecionada] + ". O que a frente anterior ligava fica desligado."
       + (selecionada === "studio" ? " Você vai para o Aura Studio." : "")
     : (extraOs ? "A Ordem de Serviço fica ligada na sua loja." : "A Ordem de Serviço fica desligada na sua loja.");
@@ -116,6 +141,7 @@ export function FrenteDaLoja({ display, onChanged }: { display: Partial<PdvSetti
     if (!company?.id || !selecionada || salvando) return;
     const nova = selecionada;
     const trocou = mudouFrente;
+    const saiu = saindoDoStudio;
     setSalvando(true);
     setErro(null);
     try {
@@ -128,16 +154,26 @@ export function FrenteDaLoja({ display, onChanged }: { display: Partial<PdvSetti
       if (onChanged) onChanged();
       qc.invalidateQueries({ queryKey: ["pdv-settings"] });
       qc.invalidateQueries({ queryKey: ["first-steps"] });
-      // company.segment / vertical_active: grava já (o refreshMe pula um
-      // /auth/me que acabou de voltar) e revalida com o servidor.
+      // company.segment / vertical_active: grava já — o guard raiz decide o
+      // shell por vertical_active, e o refreshMe pula um /auth/me que acabou
+      // de voltar (janela de 3 s). Depois revalida com o servidor e grava de
+      // novo: um /auth/me que já estava em voo antes da troca devolveria a
+      // vertical antiga por cima.
       const st: any = useAuthStore.getState();
-      if (typeof st.updateCompany === "function") {
-        st.updateCompany({ segment: res.segment, vertical_active: res.vertical_active } as any);
+      const gravar = function() {
+        if (typeof st.updateCompany === "function") {
+          st.updateCompany({ segment: res.segment, vertical_active: res.vertical_active } as any);
+        }
+      };
+      gravar();
+      if (typeof st.refreshMe === "function") {
+        try { await st.refreshMe(); } catch {}
+        gravar();
       }
-      if (typeof st.refreshMe === "function") Promise.resolve(st.refreshMe()).catch(function() {});
       setConfirmando(false);
       setAberto(false);
-      if (trocou && res.segment === "studio") router.replace("/studio" as any);
+      if (trocou && saiu && res.vertical_active !== "studio") router.replace("/(tabs)" as any);
+      else if (trocou && res.segment === "studio") router.replace("/studio" as any);
     } catch (err: any) {
       const msg = mensagemDoErro(err);
       setErro(msg);
@@ -150,8 +186,8 @@ export function FrenteDaLoja({ display, onChanged }: { display: Partial<PdvSetti
 
   const ligados = FRENTE_FLAGS.filter(function(f) { return display[f.key] === true; });
   const linha = (
-    <Text style={[s.rowLabel, { flex: 1 }]}>
-      Sua frente: <Text style={{ color: Colors.violet3 }}>{nomeDaFrente(atual, display)}</Text>
+    <Text style={[s.rowLabel, { flex: 1 }, p && { color: p.texto }]}>
+      Sua frente: <Text style={{ color: p ? p.destaque : Colors.violet3 }}>{nomeDaFrente(atual, display)}</Text>
     </Text>
   );
 
@@ -167,14 +203,14 @@ export function FrenteDaLoja({ display, onChanged }: { display: Partial<PdvSetti
           accessibilityState={{ expanded: aberto }}
         >
           {linha}
-          <Icon name={aberto ? "chevron_up" : "chevron_down"} size={16} color={Colors.violet3} />
+          <Icon name={aberto ? "chevron_up" : "chevron_down"} size={16} color={p ? p.destaque : Colors.violet3} />
         </Pressable>
       ) : (
         <View style={s.cabecalho}>{linha}</View>
       )}
 
       {ligados.length > 0 && (
-        <Text style={s.rowDesc} testID="pdv-settings-frente-ligado">
+        <Text style={[s.rowDesc, p && { color: p.textoSuave }]} testID="pdv-settings-frente-ligado">
           Ligado: {ligados.map(function(f) { return f.label; }).join(" · ")}
         </Text>
       )}
@@ -191,27 +227,28 @@ export function FrenteDaLoja({ display, onChanged }: { display: Partial<PdvSetti
             rotuloOpcoes="Escolha a frente da sua loja"
             desabilitado={salvando}
             testIDPrefix="pdv-settings-frente"
+            paleta={p ? p.opcoes : undefined}
           />
 
-          {erro && <Text style={s.erro} testID="pdv-settings-frente-erro">{erro}</Text>}
+          {erro && <Text style={[s.erro, p && { color: p.erro }]} testID="pdv-settings-frente-erro">{erro}</Text>}
 
           {confirmando && podeSalvar ? (
-            <View style={s.confirmBox} testID="pdv-settings-frente-confirmacao">
-              <Text style={s.confirmText}>{textoConfirmacao}</Text>
+            <View style={[s.confirmBox, p && { borderColor: p.borda, backgroundColor: p.caixaFundo }]} testID="pdv-settings-frente-confirmacao">
+              <Text style={[s.confirmText, p && { color: p.texto }]}>{textoConfirmacao}</Text>
               <View style={s.confirmAcoes}>
                 <Pressable
                   onPress={function() { setConfirmando(false); }}
                   disabled={salvando}
-                  style={s.btnSec}
+                  style={[s.btnSec, p && { borderColor: p.borda }]}
                   testID="pdv-settings-frente-cancelar"
                   accessibilityRole="button"
                 >
-                  <Text style={s.btnSecText}>Cancelar</Text>
+                  <Text style={[s.btnSecText, p && { color: p.textoSuave }]}>Cancelar</Text>
                 </Pressable>
                 <Pressable
                   onPress={aplicar}
                   disabled={salvando}
-                  style={[s.btn, { flex: 1, marginTop: 0 }, salvando && { opacity: 0.5 }]}
+                  style={[s.btn, { flex: 1, marginTop: 0 }, p && { backgroundColor: p.botao }, salvando && { opacity: 0.5 }]}
                   testID="pdv-settings-frente-confirmar"
                   accessibilityRole="button"
                 >
@@ -225,7 +262,7 @@ export function FrenteDaLoja({ display, onChanged }: { display: Partial<PdvSetti
             <Pressable
               onPress={function() { if (podeSalvar) setConfirmando(true); }}
               disabled={!podeSalvar}
-              style={[s.btn, !podeSalvar && { opacity: 0.5 }]}
+              style={[s.btn, p && { backgroundColor: p.botao }, !podeSalvar && { opacity: 0.5 }]}
               testID="pdv-settings-frente-salvar"
               accessibilityRole="button"
               accessibilityState={{ disabled: !podeSalvar }}

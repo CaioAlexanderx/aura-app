@@ -30,6 +30,7 @@ import { studioApi, type StudioHealth } from "@/services/studioApi";
 import { pdvSettingsApi, type PdvSettings } from "@/services/api";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { CardFeeSection, type CardFeePalette } from "@/components/screens/configuracoes/CardFeeSection";
+import { FrenteDaLoja, type FrenteDaLojaPaleta } from "@/components/screens/configuracoes/FrenteDaLoja";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
@@ -128,6 +129,46 @@ function CardFeeCardStudio({ t, s, celular = false }: { t: ReturnType<typeof use
       ) : (
         <CardFeeSection display={display} saving={feeSaving} onToggle={toggle} palette={palette} />
       )}
+    </View>
+  );
+}
+
+// ============================================================
+// FRENTE DA LOJA — 07/10/2026
+// O cliente troca a própria frente (decisão do fundador). Empresa Studio é
+// devolvida de /configuracoes para cá pelo guard raiz, então a saída do
+// Studio precisa morar nesta tela: o mesmo controle do varejo
+// (FrenteDaLoja), com os tokens do Studio. Só dono/admin ou staff vê a
+// seta. Salva na hora, fora do botão "Salvar configurações".
+// ============================================================
+function FrenteCardStudio({ t, s }: { t: ReturnType<typeof useStudioTokens>; s: ReturnType<typeof buildStyles> }) {
+  const { settings, isLoading, invalidate } = usePdvSettings();
+  const paleta: FrenteDaLojaPaleta = useMemo(() => ({
+    texto:      t.ink,
+    textoSuave: t.ink3,
+    destaque:   t.primary,
+    borda:      t.ink5,
+    botao:      t.primary,
+    erro:       "#DC2626",
+    caixaFundo: t.paperCardElev,
+    opcoes: {
+      rotulo:   t.ink3,
+      borda:    t.ink5,
+      texto:    t.ink2,
+      selBorda: t.primary,
+      selFundo: t.bgSoft,
+      selTexto: t.primary,
+      meta:     t.ink3,
+    },
+  }), [t]);
+
+  return (
+    <View style={s.card} testID="studio-config-frente">
+      <Text style={s.cardTitle}>Frente da loja</Text>
+      <Text style={s.cardSub}>O ramo em que a sua Aura abre. Salva na hora.</Text>
+      {isLoading
+        ? <ActivityIndicator size="small" color={t.primary} />
+        : <FrenteDaLoja display={settings || {}} onChanged={invalidate} paleta={paleta} />}
     </View>
   );
 }
@@ -466,6 +507,9 @@ export default function StudioConfiguracoes() {
 
       {/* Taxa da maquininha — save imediato, fora do botão Salvar */}
       <CardFeeCardStudio t={t} s={s} celular={celular} />
+
+      {/* Frente da loja — é por aqui que se sai do Studio */}
+      <FrenteCardStudio t={t} s={s} />
 
       {/* Equipe & acessos */}
       <View style={s.card}>

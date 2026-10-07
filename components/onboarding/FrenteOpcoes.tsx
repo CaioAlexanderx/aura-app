@@ -19,7 +19,19 @@ import type { Segmento } from "@/services/primeirosPassosApi";
 //   · o extra não aparece quando a seleção é Assistência técnica (a frente
 //     já liga a Ordem de Serviço).
 //   · testIDs: <prefix>-opcao-<frente> e <prefix>-extra-os.
+//   · paleta     — só para shells com tema próprio (Aura Studio). Sem ela,
+//                  o desenho é exatamente o do Gestão Aura.
 // ============================================================
+
+export type FrenteOpcoesPaleta = {
+  rotulo: string;
+  borda: string;
+  texto: string;
+  selBorda: string;
+  selFundo: string;
+  selTexto: string;
+  meta: string;
+};
 
 type Props = {
   selecionada: Segmento | null;
@@ -32,16 +44,27 @@ type Props = {
   rotuloExtra?: string;
   desabilitado?: boolean;
   testIDPrefix?: string;
+  paleta?: FrenteOpcoesPaleta;
 };
 
 export function FrenteOpcoes({
   selecionada, atual = null, onSelecionar, extraOs, onAlternarExtraOs,
   opcoes = SEGMENTOS, rotuloOpcoes = "Trocar para", rotuloExtra = "Extra",
-  desabilitado = false, testIDPrefix = "frente",
+  desabilitado = false, testIDPrefix = "frente", paleta,
 }: Props) {
+  const p = paleta;
+  const chip = (on: boolean) => [
+    s.chip, p && { borderColor: p.borda },
+    on && s.chipOn, on && p && { borderColor: p.selBorda, backgroundColor: p.selFundo },
+  ];
+  const chipText = (on: boolean) => [
+    s.chipText, p && { color: p.texto },
+    on && s.chipTextOn, on && p && { color: p.selTexto },
+  ];
+  const label = [s.label, p && { color: p.rotulo }];
   return (
     <>
-      <Text style={s.label}>{rotuloOpcoes}</Text>
+      <Text style={label}>{rotuloOpcoes}</Text>
       <View style={s.grid}>
         {opcoes.map((k) => {
           const on = selecionada === k;
@@ -50,13 +73,13 @@ export function FrenteOpcoes({
               key={k}
               onPress={() => onSelecionar(k)}
               disabled={desabilitado}
-              style={[s.chip, on && s.chipOn]}
+              style={chip(on)}
               testID={testIDPrefix + "-opcao-" + k}
               accessibilityRole="button"
               accessibilityState={{ selected: on }}
             >
-              <Text style={[s.chipText, on && s.chipTextOn]}>{SEGMENT_LABEL[k]}</Text>
-              {atual === k && <Text style={s.chipMeta}>atual</Text>}
+              <Text style={chipText(on)}>{SEGMENT_LABEL[k]}</Text>
+              {atual === k && <Text style={[s.chipMeta, p && { color: p.meta }]}>atual</Text>}
             </Pressable>
           );
         })}
@@ -64,17 +87,17 @@ export function FrenteOpcoes({
 
       {selecionada !== "assistencia" && (
         <>
-          <Text style={s.label}>{rotuloExtra}</Text>
+          <Text style={label}>{rotuloExtra}</Text>
           <View style={s.grid}>
             <Pressable
               onPress={onAlternarExtraOs}
               disabled={desabilitado}
-              style={[s.chip, extraOs && s.chipOn]}
+              style={chip(extraOs)}
               testID={testIDPrefix + "-extra-os"}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: extraOs }}
             >
-              <Text style={[s.chipText, extraOs && s.chipTextOn]}>{extraOs ? "✓ " : "+ "}Ordem de Serviço</Text>
+              <Text style={chipText(extraOs)}>{extraOs ? "✓ " : "+ "}Ordem de Serviço</Text>
             </Pressable>
           </View>
         </>
