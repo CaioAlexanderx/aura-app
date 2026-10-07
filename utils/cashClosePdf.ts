@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import { CSS_ESCONDE_NA_IMPRESSAO, ONCLICK_IMPRIMIR, SCRIPT_IMPRIMIR_SEM_BARRA } from "@/utils/printBar";
 
 // ============================================================
 // AURA. — Cash Close PDF generator
@@ -170,14 +171,20 @@ export function buildCashClosePdfHtml(data: CashCloseData): string {
     ".pay-val { font-size: 11px; color: #18172b; width: 96px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }" +
     ".foot { padding: 14px 28px; border-top: 1px solid #ece8f5; background: #faf9fd; font-size: 10px; color: #6a608e; display: flex; justify-content: space-between; gap: 16px; align-items: center; }" +
     ".foot .brand { color: #6d28d9; font-weight: 700; }" +
+    // 07/10/2026: a barra só tem aparência na tela; na impressão, some
+    // (ver utils/printBar.ts — no orçamento, `.actions { display: flex }`
+    // declarado depois do @media print fazia o botão sair no papel).
+    "@media screen {" +
     ".actions { position: fixed; top: 16px; right: 16px; display: flex; gap: 8px; }" +
     ".actions button { background: #6d28d9; color: #fff; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 12px; }" +
     ".actions button:hover { background: #5b21b6; }" +
-    "@media print { body { padding: 0; } .no-print { display: none; } .head { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .bar { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }" +
+    "}" +
+    CSS_ESCONDE_NA_IMPRESSAO +
+    "@media print { body { padding: 0; } .head { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .bar { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }" +
     "</style>" +
     "</head>" +
     "<body>" +
-    '<div class="actions no-print"><button onclick="window.print()">Imprimir / Salvar PDF</button></div>' +
+    '<div class="actions no-print" aria-hidden="true"><button type="button" onclick="' + ONCLICK_IMPRIMIR + '">Imprimir / Salvar PDF</button></div>' +
     '<div class="head">' +
     '<div class="logo">' + escapeHtml((data.companyName || "?").charAt(0).toUpperCase()) + "</div>" +
     "<div>" +
@@ -234,6 +241,7 @@ export function buildCashClosePdfHtml(data: CashCloseData): string {
     '<span>Gerado por <span class="brand">Aura</span> - getaura.com.br</span>' +
     "<span>" + fmtDateTime(data.closedAtIso) + (data.sessaoLabel ? " - sessão " + escapeHtml(data.sessaoLabel) : "") + "</span>" +
     "</div>" +
+    SCRIPT_IMPRIMIR_SEM_BARRA +
     "</body>" +
     "</html>"
   );
