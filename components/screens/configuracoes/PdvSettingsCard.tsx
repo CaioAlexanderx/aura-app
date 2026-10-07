@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { WarrantyTermsEditor } from "./WarrantyTermsEditor";
-import { View, Text, StyleSheet, Switch, ActivityIndicator, Pressable, TextInput, Platform, Linking } from "react-native";
+import { View, Text, StyleSheet, Switch, ActivityIndicator, Pressable, TextInput, Platform } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
@@ -13,9 +13,7 @@ import { lerVendaSemEstoque } from "@/utils/vendaSemEstoque";
 import { Card } from "@/components/screens/configuracoes/shared";
 import { CardFeeSection, type CardFeePalette } from "@/components/screens/configuracoes/CardFeeSection";
 import { CardPriceSection } from "@/components/screens/configuracoes/CardPriceSection";
-import { SEGMENT_LABEL } from "@/constants/primeirosPassos";
-import { waAura } from "@/constants/suporteAura";
-import type { Segmento } from "@/services/primeirosPassosApi";
+import { FrenteDaLoja, nomeDaFrente } from "@/components/screens/configuracoes/FrenteDaLoja";
 
 // ============================================================
 // AURA. — Configurações do Caixa (PDV) por empresa
@@ -57,23 +55,10 @@ const CARD_FEE_PALETTE: CardFeePalette = {
 
 // 05/10/2026 (frente da empresa): Materiais de construção, Ótica e Ordem de
 // Serviço deixam de ser switches do cliente — a frente é escolhida no
-// cadastro e trocada pela equipe (Gestão Aura › Clientes › Frente). O
-// cliente vê "Sua frente" + o que está ligado; staff (is_staff, suporte)
-// continua alternando aqui. As flags do backend não mudam.
-const FRENTE_FLAGS: { key: "matcon_enabled" | "otica_enabled" | "os_enabled"; label: string }[] = [
-  { key: "matcon_enabled", label: "Materiais de construção" },
-  { key: "otica_enabled", label: "Ótica" },
-  { key: "os_enabled", label: "Ordem de Serviço" },
-];
-
-/** Nome da frente para leitura. Empresa antiga (segment NULL) não tem
- *  frente gravada: Matcon/Ótica ligados dizem qual é; senão, loja em geral. */
-export function nomeDaFrente(segment: Segmento | null | undefined, display: Partial<PdvSettings>): string {
-  if (segment && SEGMENT_LABEL[segment]) return SEGMENT_LABEL[segment];
-  if (display.matcon_enabled === true) return SEGMENT_LABEL.matcon;
-  if (display.otica_enabled === true) return SEGMENT_LABEL.otica;
-  return SEGMENT_LABEL.varejo;
-}
+// cadastro. 07/10/2026 (decisão do fundador): o cliente troca a própria
+// frente aqui, pela seta da linha "Sua frente" (FrenteDaLoja). Staff
+// (is_staff, suporte) continua alternando as flags nos switches abaixo.
+export { nomeDaFrente };
 
 export function PdvSettingsCard() {
   const { company, isStaff } = useAuthStore();
@@ -272,24 +257,8 @@ export function PdvSettingsCard() {
           nem toda loja emite OS; desligado, o modulo inteiro fica invisivel.
           A OS nasce na ENTRADA do equipamento (antes da venda) e so encosta
           numa venda ao ser entregue — ver CONTRACT_ORDEM_DE_SERVICO.md. */}
-      {/* Frente: leitura pro cliente; os switches abaixo só pra staff. */}
-      <View style={s.frenteBox} testID="pdv-settings-frente">
-        <Text style={s.rowLabel}>
-          Sua frente: <Text style={{ color: Colors.violet3 }}>{nomeDaFrente((company as any)?.segment ?? null, display)}</Text>
-        </Text>
-        {FRENTE_FLAGS.some(function(f) { return display[f.key] === true; }) && (
-          <Text style={s.rowDesc} testID="pdv-settings-frente-ligado">
-            Ligado: {FRENTE_FLAGS.filter(function(f) { return display[f.key] === true; }).map(function(f) { return f.label; }).join(" · ")}
-          </Text>
-        )}
-        <Pressable
-          onPress={function() { Linking.openURL(waAura("Quero mudar a frente da minha Aura")).catch(function() {}); }}
-          accessibilityRole="link"
-          testID="pdv-settings-frente-whatsapp"
-        >
-          <Text style={s.frenteLink}>Pra mudar, fale com a gente</Text>
-        </Pressable>
-      </View>
+      {/* Frente: o dono/admin troca pela seta; os switches abaixo só pra staff. */}
+      <FrenteDaLoja display={display} onChanged={invalidate} />
 
       {isStaff && (
       <View style={s.row}>
@@ -533,8 +502,6 @@ const s = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: Colors.border,
   },
   caixaLinkText: { flex: 1, fontSize: 13, color: Colors.violet3, fontWeight: "600" },
-  frenteBox:   { paddingVertical: 10, gap: 4 },
-  frenteLink:  { fontSize: 12, color: Colors.violet3, fontWeight: "600", textDecorationLine: "underline", marginTop: 2 },
   savingHint:  { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
   savingText:  { fontSize: 11, color: Colors.ink3 },
   // Fase 7 — Restaurante
