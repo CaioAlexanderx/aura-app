@@ -15,6 +15,7 @@
 // todos (confirmados e pendentes), com a coluna Status.
 import { Platform } from "react-native";
 import type { Transaction } from "@/components/screens/financeiro/types";
+import { CSS_ESCONDE_NA_IMPRESSAO, ONCLICK_IMPRIMIR, SCRIPT_IMPRIMIR_SEM_BARRA } from "@/utils/printBar";
 
 function round2(n: number): number { return Math.round((n + Number.EPSILON) * 100) / 100; }
 
@@ -199,11 +200,15 @@ export function exportDreReport(opts: DreReportOpts): boolean {
     ".annex .empty { text-align: center; color: #9ca3af; padding: 16px; }" +
     ".annex-title { page-break-before: always; }" +
     ".foot { margin-top: 24px; padding-top: 10px; border-top: 1px solid #e5e7eb; font-size: 9.5px; color: #9ca3af; text-align: center; }" +
-    "@media print { .noprint { display: none !important; } }" +
+    // 07/10/2026: a barra só tem aparência na tela (ver utils/printBar.ts).
+    "@media screen {" +
     ".noprint { position: fixed; top: 12px; right: 12px; }" +
     ".noprint button { background: #7c3aed; color: #fff; border: 0; padding: 10px 18px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }" +
+    "}" +
+    "@media print { .noprint { display: none !important; } }" +
+    CSS_ESCONDE_NA_IMPRESSAO +
     "</style></head><body>" +
-    '<div class="noprint"><button onclick="window.print()">Imprimir / Salvar PDF</button></div>' +
+    '<div class="noprint no-print"><button type="button" onclick="' + ONCLICK_IMPRIMIR + '">Imprimir / Salvar PDF</button></div>' +
     '<div class="head">' +
     '<div><div class="brand">Aura.<small>FINANCEIRO</small></div></div>' +
     '<div class="meta"><b>' + esc(opts.companyLabel) + "</b><br>Período: <b>" + esc(opts.periodLabel) + "</b><br>Emitido em " + esc(emitido) + "</div>" +
@@ -214,6 +219,7 @@ export function exportDreReport(opts: DreReportOpts): boolean {
     annexHtml(opts.transactions, opts.consolidated) +
     '<div class="foot">Relatório gerencial gerado pela Aura · não substitui a contabilidade oficial.</div>' +
     "<script>window.onload=function(){setTimeout(function(){window.print();},350);};</script>" +
+    SCRIPT_IMPRIMIR_SEM_BARRA +
     "</body></html>";
 
   var w = window.open("", "_blank");

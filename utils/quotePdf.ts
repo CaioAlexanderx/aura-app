@@ -33,10 +33,15 @@ import { Platform } from "react-native";
 // milheiro saía "1 mlh". Agora a quantidade vem por extenso e no plural
 // certo ("2 sacos", "12,5 m²") e o milheiro diz quantas peças são:
 // "1 milheiro (1.000 peças)".
+//
+// 07/10/2026: o botão "Imprimir / Salvar PDF" saía no papel — a regra que
+// o escondia na impressão perdia para `.actions { display: flex }`,
+// declarada depois. Ver utils/printBar.ts.
 // ============================================================
 
 import { qtdComUnidade, ehMilheiro } from "@/utils/matconUnits";
 import { milheiroParaUnidades } from "@/components/screens/pdv/matconQty";
+import { CSS_ESCONDE_NA_IMPRESSAO, ONCLICK_IMPRIMIR, SCRIPT_IMPRIMIR_SEM_BARRA } from "@/utils/printBar";
 
 /** Texto da coluna Quantidade do orçamento: "2 sacos", "12,5 m²",
  *  "1 milheiro (1.000 peças)". Sem unidade, o número como sempre saiu. */
@@ -74,7 +79,8 @@ export type QuoteData = {
 };
 
 function fmt(n: number) {
-  return "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+  // 07/10/2026: sem o máximo, 7,35 × 9,50 saía "R$ 69,825".
+  return "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function escapeHtml(str: string) {
@@ -172,15 +178,19 @@ export function buildQuoteHtml(data: QuoteData): string {
 '  .notes { margin-top: 20px; padding: 12px; background: #fffbeb; border-left: 4px solid #f59e0b; border-radius: 4px; font-size: 11px; color: #78350f; }' +
 '  .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 10px; color: #999; }' +
 '  .footer .brand { color: #6d28d9; font-weight: 700; letter-spacing: 0.5px; }' +
-'  @media print { body { padding: 16px; } .no-print { display: none; } }' +
-'  .actions { position: fixed; top: 16px; right: 16px; display: flex; gap: 8px; }' +
-'  .actions button { background: #6d28d9; color: #fff; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 12px; }' +
-'  .actions button:hover { background: #5b21b6; }' +
+'  @media screen {' +
+'    .actions { position: fixed; top: 16px; right: 16px; display: flex; gap: 8px; }' +
+'    .actions button { background: #6d28d9; color: #fff; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 12px; }' +
+'    .actions button:hover { background: #5b21b6; }' +
+'  }' +
+'  @page { size: A4; margin: 15mm; }' +
+'  @media print { body { padding: 16px; } }' +
+'  ' + CSS_ESCONDE_NA_IMPRESSAO +
 '</style>' +
 '</head>' +
 '<body>' +
 '  <div class="actions no-print">' +
-'    <button onclick="window.print()">Imprimir / Salvar PDF</button>' +
+'    <button type="button" onclick="' + ONCLICK_IMPRIMIR + '">Imprimir / Salvar PDF</button>' +
 '  </div>' +
 '  <div class="header">' +
 '    <div class="header-left">' +
@@ -221,6 +231,7 @@ export function buildQuoteHtml(data: QuoteData): string {
 '    <div>Orçamento gerado por <span class="brand">Aura</span> - getaura.com.br</div>' +
 '    <div style="margin-top: 4px;">Este orçamento não é documento fiscal.</div>' +
 '  </div>' +
+   SCRIPT_IMPRIMIR_SEM_BARRA +
 '</body>' +
 '</html>';
 }

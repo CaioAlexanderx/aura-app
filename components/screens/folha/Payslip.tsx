@@ -2,6 +2,7 @@ import { useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
+import { CSS_ESCONDE_NA_IMPRESSAO, ONCLICK_IMPRIMIR, SCRIPT_IMPRIMIR_SEM_BARRA } from "@/utils/printBar";
 import { toast } from "@/components/Toast";
 import { Icon } from "@/components/Icon";
 import { BASE_URL } from "@/services/api";
@@ -13,6 +14,11 @@ const PAYSLIP_TYPES: { key: PayslipType; label: string }[] = [
   { key: "ferias", label: "Férias" },
   { key: "decimo_terceiro", label: "13o Salário" },
 ];
+
+// 07/10/2026: o nome do funcionário entrava cru no <title>.
+function escTitulo(str: string): string {
+  return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
 
 function generatePayslipHtml(emp: Employee, type: PayslipType, companyName: string, cnpj?: string) {
   const mensal = calcPayroll(emp);
@@ -76,9 +82,9 @@ function generatePayslipHtml(emp: Employee, type: PayslipType, companyName: stri
 
   // Full page version for PDF/print
   const fullPageHtml = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Holerite - ${emp.name}</title>
+<title>Holerite - ${escTitulo(emp.name)}</title>
 <style>
-@page{margin:16mm;size:A4}@media print{.no-print{display:none!important}}
+@page{margin:16mm;size:A4}${CSS_ESCONDE_NA_IMPRESSAO}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:12px;color:#1a1a2e;line-height:1.5;max-width:700px;margin:0 auto;padding:20px}
 table{width:100%;border-collapse:collapse}
@@ -86,10 +92,11 @@ td{padding:7px 10px;font-size:11px;border-bottom:0.5px solid #e5e7eb}
 td.r{text-align:right;font-family:'Courier New',monospace}
 td.red{color:#dc2626}
 tr.total td{font-weight:700;border-top:1.5px solid #6d28d9;background:#ede9fe;font-size:12px}
-.print-btn{display:block;margin:16px auto;padding:12px 32px;background:#6d28d9;color:#fff;border:none;border-radius:10px;font-size:14px;cursor:pointer;font-weight:700}
+@media screen{.print-btn{display:block;margin:16px auto;padding:12px 32px;background:#6d28d9;color:#fff;border:none;border-radius:10px;font-size:14px;cursor:pointer;font-weight:700}}
 </style></head><body>
-<button class="print-btn no-print" onclick="window.print()">Imprimir / Salvar PDF</button>
+<button type="button" class="print-btn no-print" onclick="${ONCLICK_IMPRIMIR}">Imprimir / Salvar PDF</button>
 ${inlineHtml}
+${SCRIPT_IMPRIMIR_SEM_BARRA}
 </body></html>`;
 
   return { inlineHtml, fullPageHtml };
