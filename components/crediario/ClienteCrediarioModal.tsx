@@ -42,6 +42,9 @@ import { DateInput, parseBrDate, formatIsoToBr } from "@/components/inputs/DateI
 import { ModalPop } from "@/components/anim";
 import { ConfirmGate } from "@/components/ConfirmGate";
 import {
+  recebimentoRecente, mensagemDeRepeticao, novaChaveDeRecebimento, type UltimoRecebimento,
+} from "@/utils/crediarioRecebimento";
+import {
   fmt, fmtDate, todayBrSp, parseAmount, scoreColor,
   PAYMENT_METHODS, type Tab,
 } from "./ficha/fichaHelpers";
@@ -140,6 +143,14 @@ export function ClienteCrediarioModal({
   } | null>(null);
   const [printingReceipt, setPrintingReceipt] = useState(false);
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 07/10/2026 (recebimentos em dobro): o último recebimento feito NESTA ficha
+  // sobrevive ao "Concluir" — a ficha leva alguns segundos para recarregar o
+  // razão, e é nesse intervalo que o segundo Confirmar acontecia. Alimenta o
+  // aviso do gate (utils/crediarioRecebimento).
+  const [ultimoRecebimento, setUltimoRecebimento] = useState<UltimoRecebimento | null>(null);
+  // Chave de idempotência do recebimento: uma por pedido, descartada só no
+  // sucesso ou quando valor/forma/data mudam. Antes era gerada a cada chamada.
+  const freeKeyRef = useRef<string | null>(null);
   // Chave de idempotência da renegociação: gerada uma vez por sessão de
   // submissão e SÓ descartada no sucesso (ou ao fechar o painel). É isso que
   // permite o backend deduplicar o retry em vez de cancelar e recriar o carnê
@@ -153,8 +164,10 @@ export function ClienteCrediarioModal({
     renegKeyRef.current = null;
   }, [renegScope?.accountId, renegTotal, renegCount, renegFirstDue]);
 
-  // Qualquer mudança em valor/método/data reseta o gate (mesma regra do 2-step antigo).
-  useEffect(() => { setReceberGate(false); }, [freeAmt, freeMethod, freeDateBr, freeAccountId]);
+  // Qualquer mudança em valor/método/data reseta o gate (mesma regra do 2-step antigo)
+  // e descarta a chave de idempotência: é outro pedido.
+  useEffect(() => { setReceberGate(false); freeKeyRef.current = null; }, [freeAmt, freeMethod, freeDateBr, freeAccountId]);
+  useEffect(() => { setUltimoRecebimento(null); freeKeyRef.current = null; }, [visible, customerId]);
   useEffect(() => { if (!receberOpen) setReceiptResult(null); }, [receberOpen]);
   useEffect(() => { setReceiptResult(null); }, [customerId]);
 
@@ -511,13 +524,17 @@ export function ClienteCrediarioModal({
     if (amt <= 0) { toast.error("Informe um valor maior que zero"); return; }
     const paidAt = parseBrDate(freeDateBr) || undefined;
     setFreeSubmitting(true);
+    // A chave sobrevive a um erro: o retry do MESMO pedido é replay no backend.
+    if (!freeKeyRef.current) freeKeyRef.current = novaChaveDeRecebimento(companyId, customerId!);
     try {
       const res = await creditApi.receiveFreePayment(companyId, customerId!, {
         amount: amt,
         account_id: freeAccountId,
         method: freeMethod,
         paid_at: paidAt,
-      });
+      }, freeKeyRef.current);
+      freeKeyRef.current = null;
+      setUltimoRecebimento({ amount: amt, method: freeMethod, at: new Date().toISOString() });
       toast.success(
         res.credit_generated > 0
           ? `Recebido! Crédito gerado: ${fmt(res.credit_generated)}`
@@ -649,7 +666,14 @@ export function ClienteCrediarioModal({
 
   const freeAmtValue = parseAmount(freeAmt);
   const anyOverlayOpen = !!pixInstId || !!renegScope || !!editingDueDateInst || receberOpen;
-  const methodLabel = PAYMENT_METHODS.find(p => p.key === freeMethod)?.label || freeMethod;
+  const methodLabelOf = (key: string | null) => PAYMENT_METHODS.find(p => p.key === key)?.label || key || "";
+  const methodLabel = methodLabelOf(freeMethod);
+  // Recebimento igual há pouco (razão + último desta ficha): o gate avisa,
+  // não bloqueia — receber parcela a parcela de mesmo valor é uso legítimo.
+  const repetido = receberGate ? recebimentoRecente(detail?.transactions, ultimoRecebimento, freeAmtValue) : null;
+  const gateMessage = repetido
+    ? mensagemDeRepeticao(repetido, fmt, methodLabelOf)
+    : `Confirmar recebimento de ${fmt(freeAmtValue)} em ${methodLabel.toLowerCase()}?`;
 
   return (
     <ResponsiveSheet visible={visible} onClose={onClose} maxWidth={700}>
@@ -1023,7 +1047,8 @@ export function ClienteCrediarioModal({
               <View style={m.panelFoot}>
                 <ConfirmGate
                   visible={receberGate}
-                  message={`Confirmar recebimento de ${fmt(freeAmtValue)} em ${methodLabel.toLowerCase()}?`}
+                  message={gateMessage}
+                  confirmLabel={repetido ? "Sim, é outro" : undefined}
                   onConfirm={() => { setReceberGate(false); confirmFreePayment(); }}
                   onCancel={() => setReceberGate(false)}
                   loading={freeSubmitting}
