@@ -79,6 +79,8 @@ import { readMatconSettings } from "@/constants/matcon";
 import { useMatconQuote, type MatconQuoteEditing } from "@/hooks/useMatconQuote";
 import { useMatconReferral } from "@/hooks/useMatconReferral";
 import { useOrcamentoNoCaixa, chaveDoOrcamento } from "@/hooks/useOrcamentoNoCaixa";
+import { useCompanyProfile } from "@/hooks/useCompanyProfile";
+import { podeMostrarLogo } from "@/components/screens/pdv/MerchantLogo";
 
 import { toast } from "@/components/Toast";
 import { flyToCart } from "@/components/screens/pdv/flyToCart";
@@ -134,6 +136,8 @@ export const PAY_METHODS: PayChip[] = PAYMENTS.map(p => ({
 export function usePdvState() {
   const { company, isDemo } = useAuthStore();
   const qc = useQueryClient();
+  const companyLogo = useAuthStore(s => s.companyLogo);
+  const perfilDaEmpresa = useCompanyProfile();
   const { products } = useProducts();
   // D2 (F0): arvore para expandir o filtro de categoria na subarvore.
   const { flattened: categoriasFlat } = useCategories();
@@ -778,7 +782,16 @@ export function usePdvState() {
     }
     // 22/09/2026 (Matcon M0): a unidade vai junto pro orçamento impresso —
     // "12,5 m²" em vez de "12.5". Item sem unidade imprime como sempre.
-    const profile       = (company as any)?.profile || {};
+    // 07/10/2026: aqui se lia `company.profile`, que o store de auth nunca
+    // teve — logo, telefone e endereço saíam sempre vazios e o orçamento
+    // impresso mostrava só a inicial da loja. A fonte é o perfil da empresa
+    // (a mesma da logo do Caixa), com o gate de plano da logo.
+    const perfil        = perfilDaEmpresa.profile as any;
+    const profile       = {
+      logo_url: podeMostrarLogo(perfilDaEmpresa.plan) ? (perfilDaEmpresa.logoUrl || companyLogo || null) : null,
+      phone:    perfil?.phone || null,
+      address:  perfil?.address || null,
+    };
     // Preço no cartão: dois preços por linha e dois totais, "Dinheiro ou
     // PIX" e "No cartão" (decisão 4 do Caio — nunca "à vista").
     if (precoNoCartao) {
