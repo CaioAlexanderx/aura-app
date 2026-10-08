@@ -330,7 +330,14 @@ export type CreditHistoryEvent = {
   sale_id: string | null;
   account_id: string | null;
   items?: Array<{ product_name: string; quantity: number; unit_price: number; total: number }> | null;
-  payment?: { method: string | null } | null;
+  /** 08/10/2026: `allocations` = parcelas que o pagamento cobriu (por carnê);
+   *  `can_edit` = dá para editar/remover (tem a distribuição gravada).
+   *  Ausentes em backend antigo. */
+  payment?: {
+    method: string | null;
+    allocations?: import("@/utils/crediarioPagamento").AlocacaoDoPagamento[];
+    can_edit?: boolean;
+  } | null;
   meta?: Record<string, any>;
 };
 export type CreditHistoryPage = { events: CreditHistoryEvent[]; next_cursor: string | null };
@@ -528,6 +535,26 @@ export const creditApi = {
     return request<ReceivePaymentResult>(
       `${base(companyId)}/customer/${customerId}/payment`, { method: "POST", body, headers: { "Idempotency-Key": idempKey } }
     );
+  },
+  /** Remove um recebimento (DELETE /credit/payments/:id): parcelas, Financeiro
+   *  e caixa voltam ao que eram. Sem prazo desde 08/10/2026. */
+  undoPayment(companyId: string, transactionId: string) {
+    return request<{ undone: boolean; customer_id: string; new_balance: number; installments_reopened: number }>(
+      `${base(companyId)}/payments/${transactionId}`, { method: "DELETE" }
+    );
+  },
+  /** Corrige um recebimento (PATCH /credit/payments/:id). Mande só o que mudou.
+   *  O backend desfaz e relança: o id do pagamento muda (`transaction_id`). */
+  editPayment(
+    companyId: string,
+    transactionId: string,
+    body: Partial<{ amount: number; method: string; paid_at: string; customer_id: string }>,
+  ) {
+    return request<{
+      edited: boolean; transaction_id: string | null; previous_transaction_id: string;
+      customer_id: string; previous_customer_id: string; moved: boolean;
+      new_balance: number; previous_customer_balance: number | null;
+    }>(`${base(companyId)}/payments/${transactionId}`, { method: "PATCH", body });
   },
   undoTransaction(companyId: string, transactionId: string) {
     // cancelled_installments / reallocated_amount / credit_left: backend novo
