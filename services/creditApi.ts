@@ -51,6 +51,12 @@ export type CreditBalanceItem = {
   /** Parcelas vencidas cadastradas DEPOIS do próprio vencimento (carnê
    *  histórico digitalizado). Não é inadimplência: é "a conferir". */
   to_review_count?: number;
+  /** 08/10/2026 (Valen): quanto há em parcelas abertas e se isso passa do
+   *  saldo do razão (débito apagado com parcela viva). Com saldo zerado e
+   *  parcela aberta o backend manda overdue=false e a linha diz "Conferir",
+   *  nunca "Em atraso" — ninguém está em atraso de uma dívida que não existe. */
+  open_installments?: number;
+  ledger_mismatch?: boolean;
 };
 export type CreditTransaction = {
   id: string; sale_id: string | null; type: "debit" | "payment" | "refund";
@@ -82,6 +88,9 @@ export type CreditCustomerDetail = {
   last_activity_at: string | null; transactions: CreditTransaction[];
   open_installments?: CreditInstallment[];
   accounts?: CreditAccount[];
+  /** 08/10/2026: soma das parcelas abertas e se ela passa do saldo do razão. */
+  open_installments_total?: number;
+  ledger_mismatch?: boolean;
 };
 
 // ─── Parcelado ───────────────────────────────────────────────────────────────

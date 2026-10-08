@@ -69,6 +69,43 @@ export function isInstallmentOverdue(ins: InstallmentLike, graceDays = DEFAULT_G
   return late > graceDays;
 }
 
+type CustomerRowLike = {
+  balance?: number;
+  overdue?: boolean;
+  next_due_date?: string | null;
+  open_installments?: number;
+  ledger_mismatch?: boolean;
+};
+
+/**
+ * O cliente da lista está em atraso?
+ * (1) campo `overdue` do backend; (2) fallback next_due_date < hoje; (3) false.
+ */
+export function isCustomerOverdue(cust: CustomerRowLike): boolean {
+  if (typeof cust?.overdue === "boolean") return cust.overdue;
+  if (cust?.next_due_date) return String(cust.next_due_date).slice(0, 10) < todaySP();
+  return false;
+}
+
+export type StatusDaCarteira = "atraso" | "conferir" | "em_dia";
+
+/**
+ * Situação da linha da carteira (08/10/2026, Valen).
+ *
+ * "conferir": parcela aberta sem dívida no razão — o débito foi apagado e as
+ * parcelas ficaram. O backend já manda overdue=false (regra única, condição
+ * 5); aqui só se decide o rótulo: não é "Em atraso" (não há dívida) nem
+ * "Em dia" (há parcela solta). Com saldo > 0 e divergência o cliente deve de
+ * verdade, e a linha segue a regra de sempre.
+ */
+export function statusDaCarteira(cust: CustomerRowLike): StatusDaCarteira {
+  if (isCustomerOverdue(cust)) return "atraso";
+  const saldo = Number(cust?.balance) || 0;
+  const parcelas = Number(cust?.open_installments) || 0;
+  if (cust?.ledger_mismatch === true && saldo <= 0.009 && parcelas > 0.009) return "conferir";
+  return "em_dia";
+}
+
 /** Parcela retroativa vencida: carnê histórico digitalizado, a conferir. */
 export function needsReview(ins: InstallmentLike): boolean {
   if (typeof ins?.needs_review === "boolean") return ins.needs_review;

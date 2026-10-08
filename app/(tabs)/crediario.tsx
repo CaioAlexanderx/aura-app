@@ -7,6 +7,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import { clienteDaRota, rotaFichaNaLoja } from "@/utils/creditoOutraLoja";
+import { isCustomerOverdue, statusDaCarteira } from "@/utils/creditOverdue";
 import { Colors, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
@@ -98,19 +99,9 @@ function initials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-/**
- * Atraso pela regra ÚNICA do backend (services/credit/overdue.js):
- * data + carência + tolerância de resíduo, sem parcela retroativa.
- * (1) campo overdue explícito; (2) fallback next_due_date < hoje; (3) false.
- */
-function isCustomerOverdue(cust: CreditBalanceItem & { overdue?: boolean; next_due_date?: string | null }): boolean {
-  if (typeof cust.overdue === "boolean") return cust.overdue;
-  if (cust.next_due_date) {
-    const dueDateStr = cust.next_due_date.slice(0, 10);
-    return dueDateStr < todaySP();
-  }
-  return false;
-}
+// Atraso e "Conferir" da linha: utils/creditOverdue.ts (isCustomerOverdue,
+// statusDaCarteira) — a mesma fonte da ficha, testada em
+// __tests__/crediarioStatusDaCarteira.test.ts.
 
 /**
  * Data-base do aging. next_due_date é só "o próximo a vencer" — quem manda no
@@ -475,8 +466,9 @@ export default function CrediarioScreen() {
     .filter((c) => {
       if (filterSel === "todos") return true;
       if (filterSel === "atraso") return isCustomerOverdue(c as any);
-      // faixa de aging: "a_vencer" = em dia; demais por dias de atraso
-      if (filterSel === "a_vencer") return !isCustomerOverdue(c as any);
+      // faixa de aging: "a_vencer" = em dia (quem está "a conferir" não é
+      // em dia nem em atraso: só aparece em Todos); demais por dias de atraso
+      if (filterSel === "a_vencer") return statusDaCarteira(c as any) === "em_dia";
       return isCustomerOverdue(c as any) && agingBucket(daysLate(overdueRefDate(c as any))) === filterSel;
     })
     .sort((a, b) => {
@@ -756,6 +748,9 @@ export default function CrediarioScreen() {
           ) : (
             carteira.map((cust) => {
               const overdue = isCustomerOverdue(cust as any);
+              // Parcela aberta sem dívida no razão (débito apagado): nem
+              // vermelho nem verde — âmbar "Conferir", com o valor das parcelas.
+              const conferir = statusDaCarteira(cust as any) === "conferir";
               // dl só faz sentido quando o backend classificou como atraso:
               // dentro da carência o cliente é "Em dia" e não deve exibir "1 dias".
               const dl = overdue ? daysLate(overdueRefDate(cust as any)) : 0;
@@ -783,9 +778,9 @@ export default function CrediarioScreen() {
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={s.rowName} numberOfLines={1}>{cust.name}</Text>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
-                        <View style={[s.statusDot, { backgroundColor: overdue ? Colors.red : Colors.green }]} />
+                        <View style={[s.statusDot, { backgroundColor: overdue ? Colors.red : conferir ? Colors.amber : Colors.green }]} />
                         <Text style={s.rowMeta} numberOfLines={1}>
-                          {overdue ? "Em atraso" : "Em dia"}
+                          {overdue ? "Em atraso" : conferir ? "Conferir" : "Em dia"}
                           {!isWide && dl > 0 ? ` · ${dl}d` : ""}
                         </Text>
                       </View>
@@ -793,8 +788,8 @@ export default function CrediarioScreen() {
                   </View>
 
                   {/* Saldo */}
-                  <Text style={[s.rowBalance, { width: 110, color: overdue ? Colors.red : Colors.ink }]} numberOfLines={1}>
-                    {m(fmt(cust.balance))}
+                  <Text style={[s.rowBalance, { width: 110, color: overdue ? Colors.red : conferir ? Colors.amber : Colors.ink }]} numberOfLines={1}>
+                    {conferir ? m(fmt(cust.open_installments || 0)) : m(fmt(cust.balance))}
                   </Text>
 
                   {/* Maior atraso (desktop) — F2: pill colorida; overdue sem data ganha pill "Em atraso" */}
@@ -810,6 +805,12 @@ export default function CrediarioScreen() {
                       ) : overdue ? (
                         <View style={[s.latePill, { backgroundColor: Colors.amber + "1f", borderColor: Colors.amber + "55" }]}>
                           <Text style={[s.latePillText, { color: Colors.amber }]}>Em atraso</Text>
+                        </View>
+                      ) : conferir ? (
+                        /* Parcela sem dívida no razão: o débito foi apagado e a
+                           parcela ficou. Não é inadimplência — é conferência. */
+                        <View style={[s.latePill, { backgroundColor: Colors.amber + "14", borderColor: Colors.amber + "33" }]}>
+                          <Text style={[s.latePillText, { color: Colors.amber }]}>Conferir saldo</Text>
                         </View>
                       ) : toReview > 0 ? (
                         /* Parcela retroativa: carnê histórico cadastrado depois do

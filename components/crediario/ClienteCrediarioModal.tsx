@@ -266,6 +266,11 @@ export function ClienteCrediarioModal({
   // marcadas overdue. Agora usa is_overdue (data + carência + resíduo, sem
   // parcela retroativa), com fallback local para backend antigo.
   const hasOverdue = overdueAccounts.length > 0 || openInst.some(i => isInstallmentOverdue(i));
+  // 08/10/2026 (Valen): parcela aberta sem dívida no razão (débito apagado).
+  // O backend já não classifica como atraso; aqui o topo diz "Conferir" em
+  // vez de "Em dia" e mostra as duas contas que não batem.
+  const semSaldoNoRazao = !hasOverdue && detail?.ledger_mismatch === true && balance <= 0.009;
+  const corStatus = hasOverdue ? Colors.red : semSaldoNoRazao ? Colors.amber : Colors.green;
   /** Parcelas retroativas: carnê histórico a conferir — não é inadimplência. */
   const toReviewCount = openInst.filter(i => needsReview(i)).length;
 
@@ -696,12 +701,19 @@ export function ClienteCrediarioModal({
                 <View>
                   <Text style={m.custName}>{name}</Text>
                   <View style={m.custSub}>
-                    <View style={[m.dot, { backgroundColor: hasOverdue ? Colors.red : Colors.green }]} />
-                    <View style={[m.pill, { backgroundColor: (hasOverdue ? Colors.red : Colors.green) + "22" }]}>
-                      <Text style={[m.pillTxt, { color: hasOverdue ? Colors.red : Colors.green }]}>
-                        {hasOverdue ? "Em atraso" : "Em dia"}
+                    <View style={[m.dot, { backgroundColor: corStatus }]} />
+                    <View style={[m.pill, { backgroundColor: corStatus + "22" }]} testID="crediario-ficha-status">
+                      <Text style={[m.pillTxt, { color: corStatus }]}>
+                        {hasOverdue ? "Em atraso" : semSaldoNoRazao ? "Conferir" : "Em dia"}
                       </Text>
                     </View>
+                    {detail?.ledger_mismatch === true && (
+                      <View style={[m.pill, { backgroundColor: Colors.amber + "22" }]} testID="crediario-ficha-divergencia">
+                        <Text style={[m.pillTxt, { color: Colors.amber }]}>
+                          {`parcelas ${fmt(detail.open_installments_total || 0)} · saldo ${fmt(balance)}`}
+                        </Text>
+                      </View>
+                    )}
                     {!hasOverdue && toReviewCount > 0 && (
                       <View style={[m.pill, { backgroundColor: Colors.amber + "22" }]}>
                         <Text style={[m.pillTxt, { color: Colors.amber }]}>
