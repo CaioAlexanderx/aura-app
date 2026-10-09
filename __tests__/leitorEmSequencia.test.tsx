@@ -200,7 +200,10 @@ function Leitor({ onScan }: { onScan: (c: string) => void }) {
   return null;
 }
 function tecla(key: string) {
-  act(() => { window.dispatchEvent(new KeyboardEvent("keydown", { key })); });
+  // 09/10/2026: o leitor global mede o tempo pelo timeStamp do evento.
+  const ev = new KeyboardEvent("keydown", { key });
+  Object.defineProperty(ev, "timeStamp", { value: agora });
+  act(() => { window.dispatchEvent(ev); });
 }
 function bipar(codigo: string, fim?: "Enter" | "Tab") {
   for (const c of codigo) { tecla(c); agora += 10; }

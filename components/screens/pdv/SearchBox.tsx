@@ -7,7 +7,7 @@ import { View, Text, TextInput, StyleSheet, Platform } from "react-native";
 import { Colors, Glass } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { IS_WEB, webOnly } from "./types";
-import { criarDetector, OCIOSO_MS } from "@/utils/leituraRapida";
+import { criarDetector, criarLeitorDeCampo, OCIOSO_MS } from "@/utils/leituraRapida";
 
 type Props = {
   value: string;
@@ -26,7 +26,11 @@ type Props = {
    *  Enter. Uma rajada rápida (ver utils/leituraRapida) vira bipe: o campo
    *  volta ao texto de antes e o código vai para onScan. Sem isso, leitor
    *  configurado sem Enter deixava o código na busca e o próximo bipe
-   *  grudava nele. Digitação normal continua sendo busca. */
+   *  grudava nele. Digitação normal continua sendo busca.
+   *  09/10/2026: na web a leitura é reconhecida no keydown, pelo horário do
+   *  próprio evento, e o código é engolido antes de entrar no campo (ver
+   *  criarLeitorDeCampo). O caminho pelo onChangeText fica só para onde não
+   *  há keydown (app nativo). */
   onScan?: (code: string) => void;
 };
 
@@ -38,6 +42,31 @@ export function SearchBox({ value, onChange, placeholder, maxWidth, onSubmit, on
   const timer = useRef<any>(null);
   useEffect(() => { ultimoValor.current = value; }, [value]);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  // Web: leitor reconhecido no keydown do próprio campo, em captura.
+  const tecladoLigado = useRef(false);
+  const onChangeRef = useRef(onChange);
+  const onScanRef = useRef(onScan);
+  onChangeRef.current = onChange;
+  onScanRef.current = onScan;
+  const temLeitor = !!onScan;
+  useEffect(() => {
+    const el: any = ref.current;
+    if (!IS_WEB || !temLeitor || !el || typeof el.addEventListener !== "function") return;
+    const leitor = criarLeitorDeCampo({
+      valor: () => String(el.value ?? ""),
+      escrever: (v) => { ultimoValor.current = v; onChangeRef.current(v); },
+      onLeitura: (code) => onScanRef.current?.(code),
+    });
+    const aoTecla = (e: KeyboardEvent) => leitor.tecla(e);
+    el.addEventListener("keydown", aoTecla, true);
+    tecladoLigado.current = true;
+    return () => {
+      el.removeEventListener("keydown", aoTecla, true);
+      tecladoLigado.current = false;
+      leitor.cancelar();
+    };
+  }, [temLeitor]);
 
   // Fecha a rajada: se foi leitura, desfaz o texto que ela digitou e lança o código.
   function fecharRajada(): boolean {
@@ -55,7 +84,9 @@ export function SearchBox({ value, onChange, placeholder, maxWidth, onSubmit, on
 
   function aoMudar(v: string) {
     const anterior = ultimoValor.current || "";
-    if (onScan && v.length === anterior.length + 1 && v.startsWith(anterior)) {
+    if (tecladoLigado.current) {
+      // O keydown já cuida do leitor; aqui é só o texto.
+    } else if (onScan && v.length === anterior.length + 1 && v.startsWith(anterior)) {
       // Um caractere a mais no fim: pode ser o leitor digitando.
       if (detector.tecla(v.slice(-1), Date.now())) antesDaRajada.current = anterior;
       if (timer.current) clearTimeout(timer.current);
@@ -69,7 +100,7 @@ export function SearchBox({ value, onChange, placeholder, maxWidth, onSubmit, on
   }
 
   function aoEnviar(e: any) {
-    if (fecharRajada()) return;
+    if (!tecladoLigado.current && fecharRajada()) return;
     onSubmit?.(e?.nativeEvent?.text ?? value);
   }
 

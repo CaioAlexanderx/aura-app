@@ -81,7 +81,9 @@ export function useGlobalBarcodeScanner({
       // Modificadores → pula pra não interferir em atalhos (Ctrl+K, etc).
       if (e.ctrlKey || e.altKey || e.metaKey) return;
 
-      const now = Date.now();
+      // 09/10/2026: horário do próprio evento, não o de quando o código roda —
+      // com a tela ocupada o Date.now esticava a pausa e partia a leitura.
+      const now = e.timeStamp || Date.now();
       // Reset buffer se passou muito tempo desde a última tecla.
       if (now - lastKeyAtRef.current > idleMs) {
         bufferRef.current = "";
