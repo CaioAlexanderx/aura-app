@@ -7,6 +7,12 @@
 // sobem para ≥40px. Auto-load ao abrir a aba já acontece no shell.
 // Lógica preservada: recibo, devolução (B4/B5), excluir manual_debit,
 // paginação por cursor.
+//
+// 08/10/2026 (Looks da Jenny — R$ 200 na ficha da cliente errada, sem ter
+// como tirar): cada pagamento mostra, por carnê, as parcelas em que caiu e
+// ganha "Editar" (valor, dia, forma, cliente) e "Remover". Sem prazo. O
+// pagamento antigo, sem a divisão por parcela gravada, avisa que a correção é
+// pelo suporte em vez de esconder os botões sem explicar.
 // ============================================================
 import { useState } from "react";
 import { View, Text, Pressable, ActivityIndicator, StyleSheet } from "react-native";
@@ -20,6 +26,8 @@ import { eventNote } from "./eventNote";
 import { m } from "./fichaStyles";
 import { pdvApi } from "@/services/pdvApi";
 import { DevolucaoModal, type DevolucaoSale } from "@/components/crediario/DevolucaoModal";
+import { gruposPorCarne, diaSP } from "@/utils/crediarioPagamento";
+import { EditarPagamentoModal, type PagamentoEmEdicao } from "./EditarPagamentoModal";
 
 export type TabHistoricoProps = {
   histEvents: CreditHistoryEvent[];
@@ -31,12 +39,14 @@ export type TabHistoricoProps = {
   // contexto passado pelo shell (ClienteCrediarioModal)
   companyId: string;
   customerId: string;
+  /** Nome da cliente da ficha — vai para o "Corrigir pagamento". */
+  customerName?: string;
   onRefresh: () => void;
 };
 
 export function TabHistorico({
   histEvents, histCursor, histLoading, histLoaded, loadHistory, setHistLoaded,
-  companyId, onRefresh,
+  companyId, customerId, customerName, onRefresh,
 }: TabHistoricoProps) {
   const [printingId, setPrintingId] = useState<string | null>(null);
   const [loadingRefundId, setLoadingRefundId] = useState<string | null>(null);
@@ -45,6 +55,37 @@ export function TabHistorico({
   const [confirmRefundId, setConfirmRefundId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  // Pagamento: remover (ConfirmGate) e editar (modal).
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
+  const [editando, setEditando] = useState<PagamentoEmEdicao | null>(null);
+
+  function recarregar() {
+    onRefresh();
+    setHistLoaded(false);
+    loadHistory();
+  }
+
+  // Remove um recebimento (DELETE /credit/payments/:id): as parcelas que ele
+  // cobriu voltam a ficar em aberto e o Financeiro volta para "a receber".
+  async function handleRemovePayment(transactionId: string) {
+    setRemovingId(transactionId);
+    try {
+      const res = await creditApi.undoPayment(companyId, transactionId);
+      const n = res?.installments_reopened ?? 0;
+      toast.success(
+        n > 0
+          ? `Pagamento removido. ${n} ${n === 1 ? "parcela voltou" : "parcelas voltaram"} a ficar em aberto.`
+          : "Pagamento removido."
+      );
+      recarregar();
+    } catch (err: any) {
+      console.error("[crediário] undoPayment error:", err);
+      toast.error(err?.data?.error || "Não foi possível remover o pagamento. Tente novamente.");
+    } finally {
+      setRemovingId(null);
+    }
+  }
 
   async function handlePrintReceipt(transactionId: string) {
     setPrintingId(transactionId);
@@ -177,6 +218,14 @@ export function TabHistorico({
       // venda) que o endpoint genérico de "undo" pode não reverter corretamente.
       const canDelete = ev.type === "manual_debit";
       const isDeleting = deletingId === ev.id;
+      // Pagamento: parcelas que ele cobriu, por carnê, e se dá para corrigir.
+      const isPayment = ev.type === "payment";
+      const grupos = isPayment ? gruposPorCarne(ev.payment?.allocations) : [];
+      const canEditPayment = isPayment && ev.payment?.can_edit === true;
+      // Backend novo respondeu (can_edit veio) mas o pagamento é anterior à
+      // divisão por parcela: explica em vez de só não mostrar os botões.
+      const pagamentoAntigo = isPayment && ev.payment?.can_edit === false;
+      const isRemoving = removingId === ev.id;
       // 21/09/2026: descrição digitada no lançamento (meta.notes) — chegava do
       // backend e nunca aparecia; todo lançamento virava só "Débito manual".
       const note = eventNote(ev);
@@ -203,6 +252,28 @@ export function TabHistorico({
                 ))}
               </View>
             )}
+            {grupos.length > 0 && (
+              <View style={lc.alocBox} testID={`crediario-pagamento-parcelas-${ev.id}`}>
+                {grupos.map((g) => (
+                  <View key={g.chave} style={{ gap: 2 }}>
+                    <Text style={lc.alocCarne} numberOfLines={1}>{g.nome}</Text>
+                    {g.linhas.map((l) => (
+                      <View key={l.id} style={lc.alocRow}>
+                        <Text style={lc.alocLabel} numberOfLines={1}>
+                          {l.rotulo}{l.quitou ? " · quitada" : " · parcial"}
+                        </Text>
+                        <Text style={lc.alocVal}>{fmt(l.valor)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ))}
+              </View>
+            )}
+            {pagamentoAntigo && (
+              <Text style={lc.alocAntigo}>
+                Pagamento antigo, sem a divisão por parcela gravada. Para corrigir ou remover, fale com o suporte.
+              </Text>
+            )}
             {/* Ações: Recibo (payments), Devolver (purchases com sale_id) e Excluir (manual_debit) */}
             {(ev.type === "payment" || canRefund || canDelete) && (
               <View style={lc.actionRow}>
@@ -217,6 +288,42 @@ export function TabHistorico({
                       ? <ActivityIndicator size="small" color={Colors.violet3} style={{ width: 12, height: 12 }} />
                       : <Icon name="printer" size={12} color={Colors.violet3} />}
                     <Text style={lc.actionBtnTxt}>Recibo</Text>
+                  </Pressable>
+                )}
+                {canEditPayment && (
+                  <Pressable
+                    style={lc.actionBtn}
+                    onPress={() => {
+                      setConfirmRemoveId(null);
+                      setEditando({
+                        id: ev.id,
+                        amount: Math.abs(ev.amount),
+                        method: ev.payment?.method || null,
+                        paidAt: diaSP(ev.occurred_at),
+                        customerId,
+                        customerName: customerName || "esta cliente",
+                      });
+                    }}
+                    disabled={isRemoving}
+                    hitSlop={4}
+                    testID={`crediario-pagamento-editar-${ev.id}`}
+                  >
+                    <Icon name="edit" size={12} color={Colors.violet3} />
+                    <Text style={lc.actionBtnTxt}>Editar</Text>
+                  </Pressable>
+                )}
+                {canEditPayment && (
+                  <Pressable
+                    style={[lc.actionBtn, lc.actionBtnRed, isRemoving && { opacity: 0.5 }]}
+                    onPress={() => setConfirmRemoveId(prev => prev === ev.id ? null : ev.id)}
+                    disabled={isRemoving}
+                    hitSlop={4}
+                    testID={`crediario-pagamento-remover-${ev.id}`}
+                  >
+                    {isRemoving
+                      ? <ActivityIndicator size="small" color={Colors.red} style={{ width: 12, height: 12 }} />
+                      : <Icon name="trash" size={12} color={Colors.red} />}
+                    <Text style={[lc.actionBtnTxt, { color: Colors.red }]}>Remover</Text>
                   </Pressable>
                 )}
                 {canRefund && (
@@ -258,6 +365,17 @@ export function TabHistorico({
                 loading={isLoadingRefund}
               />
             )}
+            {canEditPayment && (
+              <ConfirmGate
+                visible={confirmRemoveId === ev.id}
+                message={`Remover o pagamento de ${fmt(Math.abs(ev.amount))}? As parcelas que ele pagou voltam a ficar em aberto.`}
+                confirmLabel="Sim, remover"
+                tone="red"
+                onConfirm={() => { setConfirmRemoveId(null); handleRemovePayment(ev.id); }}
+                onCancel={() => setConfirmRemoveId(null)}
+                loading={isRemoving}
+              />
+            )}
             {canDelete && (
               <ConfirmGate
                 visible={confirmDeleteId === ev.id}
@@ -288,6 +406,14 @@ export function TabHistorico({
       </View>
     )}
   </View>
+
+  <EditarPagamentoModal
+    visible={!!editando}
+    companyId={companyId}
+    pagamento={editando}
+    onClose={() => setEditando(null)}
+    onSaved={() => { setEditando(null); recarregar(); }}
+  />
 
   {/* B4: DevolucaoModal — renderizada fora do map para evitar aninhamento */}
   {refundSale && (
@@ -322,6 +448,15 @@ const lc = StyleSheet.create({
   legendDot: { width: 7, height: 7, borderRadius: 4 },
   legendTxt: { fontSize: 10.5, color: Colors.ink3, fontWeight: "600" },
   note: { fontSize: 12, color: Colors.ink2, marginTop: 3, lineHeight: 16 },
+  alocBox: {
+    marginTop: 6, gap: 6, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 9,
+    borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg2,
+  },
+  alocCarne: { fontSize: 10.5, fontWeight: "700", color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.3 },
+  alocRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  alocLabel: { flex: 1, fontSize: 12, color: Colors.ink2 },
+  alocVal: { fontSize: 12, fontWeight: "700", color: Colors.ink },
+  alocAntigo: { fontSize: 11.5, color: Colors.ink3, marginTop: 5, lineHeight: 16 },
   itemList: {
     marginTop: 5,
     gap: 3,
@@ -349,6 +484,7 @@ const lc = StyleSheet.create({
   },
   actionRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "flex-end",
     marginTop: 6,
     gap: 8,

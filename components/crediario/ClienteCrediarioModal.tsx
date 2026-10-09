@@ -826,6 +826,7 @@ export function ClienteCrediarioModal({
                     histLoaded={histLoaded} loadHistory={loadHistory} setHistLoaded={setHistLoaded}
                     companyId={companyId}
                     customerId={customerId!}
+                    customerName={name}
                     onRefresh={handleHistoricRefresh}
                   />
                 )}
