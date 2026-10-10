@@ -865,10 +865,10 @@ export function TabDesign({
 
       {ehStudio ? (
         <>
-          <SectionTitle title="Peça do destaque (quando não há banner)" />
+          <SectionTitle title="Peça do destaque" />
           <View style={cs.card} testID="peca-do-destaque">
             <Text style={cs.hint}>
-              Sem banner ativo, o topo da loja mostra esta peça com o mockup girando e as artes trocando sozinhas. No automático, é a primeira com prévia 3D{automatica ? ` (hoje: ${automatica.nome})` : ""}.
+              O topo da loja mostra esta peça com o mockup girando e as artes trocando sozinhas. Escolhendo uma peça, ela aparece logo abaixo dos seus banners; no automático, só quando não há banner ativo, e é a primeira com prévia 3D{automatica ? ` (hoje: ${automatica.nome})` : ""}.
             </Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 8 }}>
               {[{ id: "", nome: "Automático", foto: null, tresD: false } as PecaDoPainel, ...pecas].map((peca) => {
