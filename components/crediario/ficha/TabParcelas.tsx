@@ -7,24 +7,29 @@
 //
 // AGORA:
 //  - <ParcelaRow> único (compacto; breakdown + ações via accordion)
-//  - Carnês com Collapsible animado + chevron; "Receber" é o único
-//    CTA primário do carnê, demais ações viram botões ghost sm
 //  - "Receber valor livre" SAIU daqui — vive no sheet "Receber
 //    pagamento" do shell (CTA fixo no rodapé da ficha)
 // Toda a lógica (prefill, pix, renegociar, editar data) permanece no
 // shell e chega por props — este arquivo é só apresentação.
+//
+// 10/10/2026 — carnês por compra (mockup docs/mockups/
+// crediario-carnes-por-compra.html): o card "Carnês / contas" virou um
+// cartão por carnê (<CarneCard>), com "Compras anteriores" para o que não
+// tem carnê e "Quitados · N" recolhido no fim. A derivação de cada cartão
+// está em utils/crediarioCarne (testada sozinha). O selo de periodicidade
+// (Mensal/Quinzenal) saiu do cartão: não está no desenho aprovado.
 // ============================================================
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { isInstallmentOverdue, needsReview } from "@/utils/creditOverdue";
-import { View, Text, TextInput, Pressable, ActivityIndicator, Animated } from "react-native";
+import { View, Text, TextInput, Pressable, ActivityIndicator, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import type { CreditAccount, CreditInstallment } from "@/services/creditApi";
-import type { EscopoCarne } from "@/utils/crediarioCarne";
-import { Collapsible } from "@/components/anim";
+import { organizarCarnes, type ContaDoCarne, type EscopoCarne } from "@/utils/crediarioCarne";
 import { Button } from "@/components/Button";
 import { ParcelaRow, type ParcelaBreakdownLine } from "@/components/crediario/ParcelaRow";
-import { fmt, fmtDate, periodLabel } from "./fichaHelpers";
+import { CarneCard } from "./CarneCard";
+import { fmt, fmtDate } from "./fichaHelpers";
 import { m } from "./fichaStyles";
 
 // Soma do restante (principal em aberto) de uma lista de parcelas.
@@ -67,8 +72,9 @@ export type TabParcelasProps = {
   openInstallmentPix: (id: string) => void;
   /** 10/10/2026: abre a escolha A4/bobina no shell. accountId undefined = todos. */
   onImprimir: (accountId: EscopoCarne, label: string, parcelas: number) => void;
-  /** Abre o sheet "Receber pagamento" do shell com valor pré-preenchido. */
-  prefill: (v: number) => void;
+  /** Abre o sheet "Receber pagamento" do shell com valor pré-preenchido.
+   *  accountId (10/10/2026): o recebimento mira aquele carnê; sem ele, todos. */
+  prefill: (v: number, accountId?: string) => void;
   /** Saldo total em aberto do ledger — pode ser > 0 SEM nenhuma parcela
    *  (venda no crediário em 1x/fiado não gera agenda de parcelas). */
   openBalance: number;
@@ -80,14 +86,26 @@ export type TabParcelasProps = {
 };
 
 export function TabParcelas({
-  accounts, openInst, instByAccount, useCarneLayout,
+  accounts, openInst, useCarneLayout,
   handleCreateAccount, showNewAccount, setShowNewAccount, newAccountName, setNewAccountName, creatingAccount,
   expandedAccountId, setExpandedAccountId,
   handleEditDueDateOpen, onRenegociar, openInstallmentPix, onImprimir, prefill, openBalance,
-  companyId, customerId, phone, onCobrar, name,
+  customerId, phone, onCobrar, name,
 }: TabParcelasProps) {
   // Parcela expandida (uma por vez — progressive disclosure)
   const [expandedInstId, setExpandedInstId] = useState<string | null>(null);
+  const [verQuitados, setVerQuitados] = useState(false);
+
+  // 10/10/2026 — cartões de carnê. Além de quando já há carnê de verdade
+  // (useCarneLayout), valem quando o backend manda os campos de carnê por
+  // compra: aí o grupo sem carnê sozinho também vira o cartão "Compras
+  // anteriores". Backend antigo com cliente sem carnê: as três telas do fim
+  // deste arquivo, intactas.
+  const cartoes = useCarneLayout || accounts.some(a => a.remaining !== undefined || a.purchases !== undefined);
+  const { abertos, quitados } = useMemo(
+    () => organizarCarnes<CreditInstallment>(accounts as ContaDoCarne[], openInst, isInstallmentOverdue),
+    [accounts, openInst],
+  );
 
   const renderParcela = (ins: CreditInstallment) => {
     const rem = ins.remaining ?? (ins.amount_due - (ins.covered_amount || 0));
@@ -132,20 +150,28 @@ export function TabParcelas({
 
   return (
 <>
-  {useCarneLayout && (
-    <View style={m.card}>
-      <View style={m.cardTitleRow}>
-        <Text style={m.cardTitle}>Carnês / contas</Text>
-        <View style={{ flexDirection: "row", gap: 6 }}>
-          <Pressable style={m.newAccBtn} onPress={() => onImprimir(undefined, name, openInst.length)}>
-            <Text style={m.newAccTxt}>Imprimir todos</Text>
-          </Pressable>
+  {cartoes && (
+    <View style={{ marginBottom: 13 }}>
+      <View style={c.secRow}>
+        <Text style={m.cardTitle}>Em aberto · {abertos.length}</Text>
+        <View style={c.links}>
           <Pressable
-            style={m.newAccBtn}
-            onPress={() => { setShowNewAccount(v => !v); setNewAccountName(""); }}
+            style={c.link}
+            onPress={() => onImprimir(undefined, name, openInst.length)}
+            accessibilityRole="button"
+            testID="carnes-imprimir-todos"
           >
-            <Icon name="plus" size={12} color={Colors.violet3} />
-            <Text style={m.newAccTxt}>Novo carnê</Text>
+            <Text style={c.linkT}>Imprimir todos</Text>
+          </Pressable>
+          {/* "Novo carnê" manual continua existindo — discreto: o normal agora
+              é o carnê nascer da venda. */}
+          <Pressable
+            style={c.link}
+            onPress={() => { setShowNewAccount(v => !v); setNewAccountName(""); }}
+            accessibilityRole="button"
+            testID="carnes-novo-carne"
+          >
+            <Text style={[c.linkT, { color: Colors.ink3 }]}>Novo carnê</Text>
           </Pressable>
         </View>
       </View>
@@ -172,91 +198,69 @@ export function TabParcelas({
         </View>
       )}
 
-      {accounts.map((acc) => {
-        const isOverdueAcc = acc.overdue;
-        const statusColor = isOverdueAcc ? Colors.red : Colors.green;
-        const accKey = acc.id ?? "general";
-        const isExpanded = expandedAccountId === acc.id;
-        const accInst = instByAccount.get(acc.id) || [];
+      {abertos.map((carne) => {
+        const isExpanded = expandedAccountId === carne.id;
+        // Renegociar precisa de parcela para substituir. No grupo sem carnê o
+        // saldo sem agenda ainda pode ser parcelado (10/07, "Parcelar saldo").
+        const podeRenegociar = carne.parcelasAbertas.length > 0;
+        const podeParcelar = !podeRenegociar && carne.semCarne && carne.semParcelas;
         return (
-          <View key={accKey} style={m.accCard}>
-            {/* Cabeçalho do carnê (accordion) — colapsado mostra só o essencial */}
-            <Pressable
-              style={m.accTop}
-              onPress={() => setExpandedAccountId(isExpanded ? undefined : acc.id)}
-              accessibilityRole="button"
-              accessibilityLabel={`Carnê ${acc.name}, saldo ${fmt(acc.balance)}. Toque para ${isExpanded ? "recolher" : "expandir"}`}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={m.accName}>{acc.name}</Text>
-                <View style={m.accMeta}>
-                  <View style={[m.accBadge, { backgroundColor: statusColor + "18", borderColor: statusColor + "33" }]}>
-                    <Text style={[m.accBadgeTxt, { color: statusColor }]}>{isOverdueAcc ? "Em atraso" : "Em dia"}</Text>
-                  </View>
-                  {periodLabel(acc) ? (
-                    <View style={[m.accBadge, { backgroundColor: Colors.violet3 + "22", borderColor: Colors.violet3 + "44" }]}>
-                      <Text style={[m.accBadgeTxt, { color: Colors.violet3 }]}>{periodLabel(acc)}</Text>
-                    </View>
-                  ) : null}
-                  {accInst.length > 0 && (
-                    <Text style={m.accNextDue}>{accInst.length} parcela{accInst.length !== 1 ? "s" : ""}</Text>
-                  )}
-                </View>
-              </View>
-              <View style={{ alignItems: "flex-end", gap: 2 }}>
-                <Text style={[m.accBalance, { color: acc.balance > 0 ? Colors.red : Colors.ink3 }]}>
-                  {fmt(acc.balance)}
-                </Text>
-                {!!fmtDate(acc.next_due_date || "") && (
-                  <Text style={m.accNextDue}>Próx. {fmtDate(acc.next_due_date!)}</Text>
-                )}
-              </View>
-              <Animated.View style={isExpanded ? ({ transform: [{ rotate: "90deg" }] } as any) : undefined}>
-                <Icon name="chevron_right" size={15} color={isExpanded ? Colors.violet3 : Colors.ink3} />
-              </Animated.View>
-            </Pressable>
-
-            <Collapsible open={isExpanded}>
-              <View style={{ marginTop: 10 }}>
-                {accInst.length > 0
-                  ? accInst.map(renderParcela)
-                  : <Text style={m.emptyTxt}>Sem parcelas abertas neste carnê.</Text>}
-              </View>
-            </Collapsible>
-
-            {/* F4.3 (pente-fino): ações do carnê SEMPRE visíveis, como antes da F3 —
-                Renegociar escondido no accordion fez lojista achar que a função sumiu */}
-            <View style={m.accActions}>
-              <Button title="Receber" variant="primary" size="sm" onPress={() => prefill(acc.balance)} />
-              {accInst.length > 0 && (
-                <Button title="Renegociar" variant="ghost" size="sm" onPress={() => onRenegociar(acc.id, acc.name, sumRemaining(accInst))} />
-              )}
-              <Button title="Imprimir" variant="ghost" size="sm" onPress={() => onImprimir(acc.id, acc.name, accInst.length)} />
-              {!!phone && (
-                <Button title="Cobrar" variant="success" size="sm" onPress={() => onCobrar?.(customerId!, name, phone)} />
-              )}
-            </View>
-          </View>
+          <CarneCard
+            key={carne.key}
+            carne={carne}
+            expanded={isExpanded}
+            onToggle={() => setExpandedAccountId(isExpanded ? undefined : carne.id)}
+            renderParcela={renderParcela}
+            // Receber do carnê cai NESTE carnê; o grupo sem carnê não tem id
+            // para mirar e segue a regra de sempre (parcela mais antiga primeiro).
+            onReceber={() => prefill(carne.falta, carne.id ?? undefined)}
+            onImprimir={() => onImprimir(carne.id, carne.nome, carne.parcelasAbertas.length)}
+            onRenegociar={
+              podeRenegociar ? () => onRenegociar(carne.id, carne.nome, carne.somaParcelas)
+                : podeParcelar ? () => onRenegociar(null, "Saldo em aberto", carne.falta)
+                  : undefined
+            }
+            renegociarLabel={podeParcelar ? "Parcelar saldo" : "Renegociar"}
+            onCobrar={phone && onCobrar ? () => onCobrar(customerId!, name, phone) : undefined}
+          />
         );
       })}
 
-      {(() => {
-        const orphan = instByAccount.get(null) || [];
-        if (!orphan.length) return null;
-        return (
-          <View style={[m.accCard, { borderTopColor: Colors.border }]}>
-            <Text style={[m.accName, { color: Colors.ink3, marginBottom: 8 }]}>Sem carnê</Text>
-            {orphan.map(renderParcela)}
-            <View style={m.accActions}>
-              <Button title="Renegociar" variant="ghost" size="sm" onPress={() => onRenegociar(null, "Sem carnê", sumRemaining(orphan))} />
-            </View>
+      {abertos.length === 0 && (
+        <View style={[m.card, { alignItems: "center", paddingVertical: 22 }]}>
+          <Text style={m.emptyTxt}>Nenhum carnê em aberto. 🎉</Text>
+        </View>
+      )}
+
+      {quitados.length > 0 && (
+        <View style={{ marginTop: 6 }}>
+          <View style={c.secRow}>
+            <Text style={m.cardTitle}>Quitados · {quitados.length}</Text>
+            <Pressable
+              style={c.link}
+              onPress={() => setVerQuitados(v => !v)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: verQuitados }}
+              testID="carnes-quitados-toggle"
+            >
+              <Text style={c.linkT}>{verQuitados ? "Ocultar" : "Ver todos"}</Text>
+            </Pressable>
           </View>
-        );
-      })()}
+          {verQuitados && quitados.map(q => (
+            <View key={q.key} style={c.done} testID="carne-quitado">
+              <Text style={c.doneK}>
+                <Text style={{ color: Colors.green, fontWeight: "800" }}>✓ </Text>
+                {q.nome}{q.itensResumo ? ` · ${q.itensResumo}` : ""}
+              </Text>
+              {q.valorOriginal != null && <Text style={c.doneV}>{fmt(q.valorOriginal)}</Text>}
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   )}
 
-  {!useCarneLayout && openInst.length > 0 && (
+  {!cartoes && openInst.length > 0 && (
     <View style={m.card}>
       <View style={m.cardTitleRow}>
         <Text style={m.cardTitle}>Parcelas em aberto</Text>
@@ -284,7 +288,7 @@ export function TabParcelas({
   {/* Fix 10/07 (relato Jenniffer): saldo > 0 SEM parcelas (venda 1x/fiado não
       gera agenda) mostrava "Nenhuma parcela em aberto 🎉" — contradizia o
       EM ABERTO do topo e escondia o caminho para receber. */}
-  {!useCarneLayout && openInst.length === 0 && openBalance > 0 && (
+  {!cartoes && openInst.length === 0 && openBalance > 0 && (
     <View style={[m.card, { alignItems: "center", paddingVertical: 22 }]}>
       <Text style={m.cardTitle}>Saldo em aberto sem parcelas</Text>
       <Text style={[m.emptyTxt, { textAlign: "center", marginTop: 6, lineHeight: 18 }]}>
@@ -300,7 +304,7 @@ export function TabParcelas({
     </View>
   )}
 
-  {!useCarneLayout && openInst.length === 0 && openBalance <= 0 && (
+  {!cartoes && openInst.length === 0 && openBalance <= 0 && (
     <View style={[m.card, { alignItems: "center", paddingVertical: 26 }]}>
       <Text style={m.emptyTxt}>Nenhuma parcela em aberto. 🎉</Text>
     </View>
@@ -308,3 +312,23 @@ export function TabParcelas({
 </>
   );
 }
+
+// Cabeçalhos de seção e linhas de quitado (10/10/2026).
+const c = StyleSheet.create({
+  // flexWrap: em 360px os links descem para a linha de baixo em vez de
+  // espremer o título.
+  secRow: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    flexWrap: "wrap", columnGap: 10, marginBottom: 4, marginHorizontal: 2,
+  },
+  links: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: 14, marginLeft: "auto" as any },
+  // Link de texto com alvo de toque de 44px.
+  link: { minHeight: 44, justifyContent: "center" },
+  linkT: { fontSize: 12.5, fontWeight: "600", color: Colors.violet3 },
+  done: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10,
+    paddingVertical: 9, paddingHorizontal: 2, borderTopWidth: 1, borderTopColor: Colors.border,
+  },
+  doneK: { flex: 1, minWidth: 0, fontSize: 13, color: Colors.ink3 },
+  doneV: { fontSize: 13, color: Colors.ink3, fontVariant: ["tabular-nums"] as any },
+});

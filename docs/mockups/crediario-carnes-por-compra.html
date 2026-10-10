@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mockup — Carnês por compra (ficha do crediário)</title>
+<style>
+  :root {
+    --bg:#060816; --bg2:#090c1a; --bg3:#0e1228; --bg4:#141830;
+    --ink:#f0edff; --ink2:rgba(220,215,255,.75); --ink3:rgba(170,160,235,.65);
+    --border:rgba(140,130,220,.18); --border2:rgba(140,130,220,.32);
+    --violet:#7c3aed; --violet3:#a78bfa; --green:#34d399; --red:#f87171; --amber:#fbbf24;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:#02030a; color:var(--ink); font-size:14px; line-height:1.4; }
+  .wrap { display:flex; flex-wrap:wrap; gap:32px; justify-content:center; align-items:flex-start; padding:24px 16px 64px; }
+  .notes { max-width:360px; flex:1 1 300px; color:var(--ink2); font-size:13.5px; }
+  .notes h1 { font-size:18px; color:var(--ink); margin-bottom:4px; }
+  .notes .sub { font-size:12.5px; color:var(--ink3); margin-bottom:18px; }
+  .notes h2 { font-size:12px; text-transform:uppercase; letter-spacing:.07em; color:var(--violet3); margin:18px 0 6px; }
+  .notes li { margin:0 0 6px 18px; }
+  .notes b { color:var(--ink); }
+
+  .phone { width:390px; max-width:100%; background:var(--bg); border:1px solid var(--border2); border-radius:22px; overflow:hidden; display:flex; flex-direction:column; }
+  .top { padding:16px 16px 0; background:var(--bg2); border-bottom:1px solid var(--border); }
+  .who { display:flex; align-items:center; gap:10px; }
+  .av { width:38px; height:38px; border-radius:50%; background:var(--violet); display:grid; place-items:center; font-weight:800; }
+  .who b { display:block; font-size:15px; }
+  .who span { font-size:12px; color:var(--ink3); }
+  .kpis { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin:14px 0; }
+  .kpi { background:var(--bg3); border:1px solid var(--border); border-radius:11px; padding:9px 10px; }
+  .kpi small { display:block; font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink3); }
+  .kpi b { font-size:15px; font-variant-numeric:tabular-nums; }
+  .tabs { display:flex; gap:18px; }
+  .tabs span { padding:9px 0; font-size:13px; font-weight:600; color:var(--ink3); border-bottom:2px solid transparent; }
+  .tabs .on { color:var(--ink); border-color:var(--violet3); }
+
+  .body { padding:14px 14px 8px; }
+  .secrow { display:flex; align-items:center; justify-content:space-between; margin:4px 2px 10px; }
+  .secrow h3 { font-size:12px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink3); }
+  .link { font:inherit; font-size:12.5px; font-weight:600; color:var(--violet3); background:none; border:0; cursor:pointer; padding:6px 0; }
+
+  .carne { background:var(--bg3); border:1px solid var(--border); border-radius:14px; margin-bottom:11px; overflow:hidden; }
+  .carne.late { border-color:rgba(248,113,113,.4); }
+  .chead { width:100%; text-align:left; font:inherit; color:inherit; background:none; border:0; cursor:pointer; padding:13px 14px; display:block; }
+  .l1 { display:flex; justify-content:space-between; gap:10px; align-items:baseline; }
+  .l1 b { font-size:14px; }
+  .l1 .amt { font-size:15px; font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .items { font-size:12.5px; color:var(--ink2); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .prog { height:6px; border-radius:99px; background:var(--bg4); margin:10px 0 7px; overflow:hidden; }
+  .prog i { display:block; height:100%; background:var(--green); border-radius:99px; }
+  .l3 { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:12px; color:var(--ink3); }
+  .chip { font-size:11px; font-weight:700; padding:2px 8px; border-radius:99px; border:1px solid; }
+  .chip.ok { color:var(--green); border-color:rgba(52,211,153,.35); background:rgba(52,211,153,.1); }
+  .chip.late { color:var(--red); border-color:rgba(248,113,113,.4); background:rgba(248,113,113,.1); }
+  .chip.old { color:var(--amber); border-color:rgba(251,191,36,.4); background:rgba(251,191,36,.08); }
+  .chev { display:inline-block; transition:transform .15s; color:var(--ink3); margin-left:6px; }
+  .carne.open .chev { transform:rotate(90deg); color:var(--violet3); }
+
+  .cbody { display:none; border-top:1px solid var(--border); padding:12px 14px 14px; }
+  .carne.open .cbody { display:block; }
+  .lbl { font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink3); margin:0 0 6px; }
+  .row { display:flex; justify-content:space-between; gap:10px; padding:5px 0; font-size:13px; }
+  .row span:last-child { font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .row.sum { border-top:1px solid var(--border); margin-top:4px; padding-top:8px; font-weight:700; }
+  .paid { color:var(--ink3); }
+  .paid .ck { color:var(--green); margin-right:6px; }
+  .parc { display:flex; justify-content:space-between; align-items:center; gap:10px; background:var(--bg4); border:1px solid var(--border); border-radius:11px; padding:10px 12px; margin-top:7px; min-height:48px; }
+  .parc b { display:block; font-size:13px; }
+  .parc small { font-size:11.5px; color:var(--ink3); }
+  .parc.late small { color:var(--red); }
+  .parc .v { font-weight:800; font-variant-numeric:tabular-nums; }
+  .gap { height:14px; }
+  .acts { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:8px; }
+  .btn { font:inherit; font-size:13px; font-weight:700; border-radius:11px; padding:0 10px; min-height:44px; border:1px solid var(--border2); background:transparent; color:var(--ink); cursor:pointer; }
+  .btn.pri { background:var(--violet); border-color:var(--violet); color:#fff; width:100%; }
+  .done { display:flex; justify-content:space-between; padding:9px 2px; font-size:13px; color:var(--ink3); border-top:1px solid var(--border); }
+  .cta { position:sticky; bottom:0; padding:12px 14px 16px; background:linear-gradient(transparent,var(--bg) 30%); }
+
+  .sheet { margin:0 14px 14px; background:var(--bg2); border:1px solid var(--border2); border-radius:16px; padding:14px; }
+  .sheet h4 { font-size:14px; margin-bottom:2px; }
+  .sheet p { font-size:12px; color:var(--ink3); margin-bottom:10px; }
+  .opt { display:flex; gap:10px; align-items:center; border:1.5px solid var(--border); border-radius:11px; padding:10px; margin-bottom:8px; min-height:48px; }
+  .opt.sel { border-color:var(--violet3); background:rgba(124,58,237,.14); }
+  .opt b { display:block; font-size:13px; }
+  .opt span { font-size:11.5px; color:var(--ink3); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="notes">
+    <h1>Carnês por compra</h1>
+    <div class="sub">Mockup da aba "Carnês" na ficha do cliente — dados de exemplo, nada disto está no código ainda. Toque nos cartões para abrir e fechar.</div>
+
+    <h2>O que muda</h2>
+    <ul>
+      <li><b>Cada venda no crediário nasce como um carnê</b>, com os itens daquela compra e as parcelas dela. O nome é automático: "Compra de 13/09".</li>
+      <li><b>O cartão fechado já responde o essencial</b>: o que comprou, quanto falta, quantas pagou, quando vence a próxima.</li>
+      <li><b>Aberto</b>, mostra os itens, as parcelas pagas e as que faltam, e as ações só daquele carnê.</li>
+      <li><b>Imprimir</b> sai daquele carnê, em A4 ou bobina. "Imprimir todos" continua existindo no topo.</li>
+      <li><b>Quitados</b> ficam recolhidos no fim, para não poluir.</li>
+    </ul>
+
+    <h2>O que não muda</h2>
+    <ul>
+      <li><b>Receber pagamento</b> (valor livre) continua no rodapé e continua quitando a parcela mais antiga primeiro, em qualquer carnê.</li>
+      <li>Tocar numa parcela a pagar abre as mesmas ações de hoje: Receber, Pix, Alterar data.</li>
+    </ul>
+
+    <h2>Compras antigas</h2>
+    <ul>
+      <li>O que já existe sem carnê aparece num cartão único, <b>"Compras anteriores"</b>, com as compras e as parcelas juntas como estão hoje. Não dá para separar com segurança: as parcelas antigas não guardam de qual venda vieram.</li>
+    </ul>
+  </div>
+
+  <div class="phone">
+    <div class="top">
+      <div class="who"><div class="av">AO</div><div><b>Alexander Olivier</b><span>(66) 99645-6351</span></div></div>
+      <div class="kpis">
+        <div class="kpi"><small>Em aberto</small><b>R$ 745,00</b></div>
+        <div class="kpi"><small>Em atraso</small><b style="color:var(--red)">R$ 60,00</b></div>
+        <div class="kpi"><small>Próx. venc.</small><b>10/10</b></div>
+      </div>
+      <div class="tabs"><span>Conta</span><span class="on">Carnês</span><span>Histórico</span></div>
+    </div>
+
+    <div class="body">
+      <div class="secrow"><h3>Em aberto · 3</h3><button class="link">Imprimir todos</button></div>
+
+      <div class="carne open">
+        <button class="chead">
+          <div class="l1"><b>Compra de 13/09</b><span class="amt">R$ 140,00</span></div>
+          <div class="items">Vans Hylane 40/41 · 2× Slide Alta 40/41</div>
+          <div class="prog"><i style="width:50%"></i></div>
+          <div class="l3"><span>2 de 4 pagas · próx. 10/11</span><span><span class="chip ok">Em dia</span><span class="chev">›</span></span></div>
+        </button>
+        <div class="cbody">
+          <div class="lbl">Itens da compra</div>
+          <div class="row"><span>Vans Hylane 40/41</span><span>R$ 120,00</span></div>
+          <div class="row"><span>2× Slide Alta 40/41</span><span>R$ 160,00</span></div>
+          <div class="row sum"><span>Total da compra</span><span>R$ 280,00</span></div>
+          <div class="gap"></div>
+          <div class="lbl">Parcelas</div>
+          <div class="row paid"><span><span class="ck">✓</span>1/4 · paga em 13/09</span><span>R$ 70,00</span></div>
+          <div class="row paid"><span><span class="ck">✓</span>2/4 · paga em 08/10</span><span>R$ 70,00</span></div>
+          <div class="parc"><div><b>Parcela 3/4</b><small>vence 10/11 · no prazo</small></div><span class="v">R$ 70,00</span></div>
+          <div class="parc"><div><b>Parcela 4/4</b><small>vence 10/12 · no prazo</small></div><span class="v">R$ 70,00</span></div>
+          <div class="gap"></div>
+          <button class="btn pri">Receber R$ 140,00</button>
+          <div class="acts"><button class="btn">Imprimir</button><button class="btn">Renegociar</button><button class="btn">Cobrar</button></div>
+        </div>
+      </div>
+
+      <div class="carne late">
+        <button class="chead">
+          <div class="l1"><b>Compra de 14/09</b><span class="amt">R$ 180,00</span></div>
+          <div class="items">Vans Hylane 38/39 · Sapatênis Boss 40/41</div>
+          <div class="prog"><i style="width:25%"></i></div>
+          <div class="l3"><span>1 de 4 pagas · venceu 05/10</span><span><span class="chip late">Em atraso</span><span class="chev">›</span></span></div>
+        </button>
+        <div class="cbody">
+          <div class="lbl">Itens da compra</div>
+          <div class="row"><span>Vans Hylane 38/39</span><span>R$ 120,00</span></div>
+          <div class="row"><span>Sapatênis Boss 40/41</span><span>R$ 120,00</span></div>
+          <div class="row sum"><span>Total da compra</span><span>R$ 240,00</span></div>
+          <div class="gap"></div>
+          <div class="lbl">Parcelas</div>
+          <div class="row paid"><span><span class="ck">✓</span>1/4 · paga em 14/09</span><span>R$ 60,00</span></div>
+          <div class="parc late"><div><b>Parcela 2/4</b><small>venceu 05/10 · 5d de atraso</small></div><span class="v">R$ 60,00</span></div>
+          <div class="parc"><div><b>Parcela 3/4</b><small>vence 05/11 · no prazo</small></div><span class="v">R$ 60,00</span></div>
+          <div class="parc"><div><b>Parcela 4/4</b><small>vence 05/12 · no prazo</small></div><span class="v">R$ 60,00</span></div>
+          <div class="gap"></div>
+          <button class="btn pri">Receber R$ 180,00</button>
+          <div class="acts"><button class="btn">Imprimir</button><button class="btn">Renegociar</button><button class="btn">Cobrar</button></div>
+        </div>
+      </div>
+
+      <div class="carne">
+        <button class="chead">
+          <div class="l1"><b>Compras anteriores</b><span class="amt">R$ 425,00</span></div>
+          <div class="items">3 compras de antes dos carnês por compra</div>
+          <div class="prog"><i style="width:0%"></i></div>
+          <div class="l3"><span>0 de 1 paga · vence 10/10</span><span><span class="chip old">Sem carnê</span><span class="chev">›</span></span></div>
+        </button>
+        <div class="cbody">
+          <div class="lbl">Compras</div>
+          <div class="row"><span>13/09 · Slide Asuna 42/43, Slide Alta 38/39, Sandália Feminina 36/37</span><span>R$ 245,00</span></div>
+          <div class="row"><span>13/09 · Slide Asuna 40/41, Slide Alta 40/41</span><span>R$ 160,00</span></div>
+          <div class="row"><span>02/09 · Lançamento manual</span><span>R$ 20,00</span></div>
+          <div class="row sum"><span>Total</span><span>R$ 425,00</span></div>
+          <div class="gap"></div>
+          <div class="lbl">Parcelas</div>
+          <div class="parc"><div><b>Parcela 1/1</b><small>vence 10/10 · hoje</small></div><span class="v">R$ 425,00</span></div>
+          <div class="gap"></div>
+          <button class="btn pri">Receber R$ 425,00</button>
+          <div class="acts"><button class="btn">Imprimir</button><button class="btn">Renegociar</button><button class="btn">Cobrar</button></div>
+        </div>
+      </div>
+
+      <div class="secrow" style="margin-top:16px"><h3>Quitados · 2</h3><button class="link">Ver todos</button></div>
+      <div class="done"><span><span style="color:var(--green)">✓</span> Compra de 02/08 · Slide Alta 42/43</span><span>R$ 80,00</span></div>
+      <div class="done"><span><span style="color:var(--green)">✓</span> Compra de 11/07 · Vans Hylane 40/41</span><span>R$ 120,00</span></div>
+    </div>
+
+    <div class="sheet">
+      <h4>Imprimir carnê</h4>
+      <p>Compra de 13/09 · 2 parcelas a pagar</p>
+      <div class="opt sel"><div><b>Folha A4</b><span>Com logo e dados da loja. Parcelas destacáveis.</span></div></div>
+      <div class="opt"><div><b>Bobina térmica</b><span>58 ou 80 mm, na impressora do caixa.</span></div></div>
+      <button class="btn pri">Imprimir</button>
+    </div>
+
+    <div class="cta"><button class="btn pri">Receber pagamento</button></div>
+  </div>
+</div>
+<script>
+document.querySelectorAll(".chead").forEach(b => b.onclick = () => b.parentElement.classList.toggle("open"));
+</script>
+</body>
+</html>

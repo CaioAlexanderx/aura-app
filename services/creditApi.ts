@@ -27,7 +27,9 @@ import { request, BASE_URL } from "@/services/api";
 import type { GroupOpenItem } from "@/utils/creditoOutraLoja";
 import { useAuthStore } from "@/stores/auth";
 import { openPrintWindow } from "@/services/printWindow";
-import { carnePrintPath, type OpcoesDeImpressao } from "@/utils/crediarioCarne";
+import {
+  carnePrintPath, type OpcoesDeImpressao, type CompraDoCarne, type ParcelaPagaDoCarne,
+} from "@/utils/crediarioCarne";
 
 // ─── Fiado (legado) ────────────────────────────────────────────────────────
 // ── Teto de parcelas (21/08/2026) ────────────────────────────────────────
@@ -79,6 +81,27 @@ export type CreditAccount = {
   to_review_count?: number;
   period_unit: "day" | "week" | "month";
   period_count: number;
+  // ── Carnês por compra (10/10/2026, Aura-backend#803) ─────────────────
+  // Todos opcionais: backend anterior não manda nenhum, e a ficha cai no
+  // que já mostrava (nome, saldo, parcelas). A leitura fica em
+  // utils/crediarioCarne.derivarCarne — não espalhe `acc.remaining ?? ...`.
+  /** Itens da compra (ou das compras, no grupo sem carnê). */
+  purchases?: CompraDoCarne[];
+  purchases_total?: number;
+  total_amount?: number;
+  refunded_total?: number;
+  /** Parcelas do carnê, pagas e a pagar. 0 = venda 1x/fiado (sem parcelas). */
+  total_count?: number;
+  paid_count?: number;
+  paid_installments?: ParcelaPagaDoCarne[];
+  open_remaining?: number;
+  unscheduled?: number;
+  /** Quanto falta pagar. É ESTE o número do cartão — `balance` não desconta
+   *  recebimento livre. */
+  remaining?: number;
+  created_at?: string | null;
+  /** Carnês que foram juntados para formar este. */
+  merged_from?: Array<{ id: string; name: string }>;
 };
 
 export type CreditCustomerDetail = {

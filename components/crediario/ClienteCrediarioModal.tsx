@@ -287,6 +287,8 @@ export function ClienteCrediarioModal({
 
   const realCarnes = accounts.filter(a => a && a.id != null);
   const useCarneLayout = realCarnes.length > 0;
+  // Chips de carnê do "Receber pagamento": quitados ficam de fora.
+  const carnesParaReceber = realCarnes.filter(a => (a.remaining ?? a.balance) > 0.009 || a.id === freeAccountId);
 
   const nextDueDate = openInst.length > 0
     ? openInst.reduce((best, i) => {
@@ -355,6 +357,20 @@ export function ClienteCrediarioModal({
     setFreeAmt(str);
     setReceberOpen(true);
     triggerPreview(str, freeAccountId);
+  }
+
+  // 10/10/2026 (carnês por compra): "Receber" que vem da aba de carnês.
+  // Com accountId o recebimento mira AQUELE carnê — "Receber R$ 140,00" do
+  // cartão não pode cair na parcela mais antiga de outro. Sem accountId
+  // (parcela avulsa, grupo sem carnê) volta para "Todos", a regra de sempre.
+  // Separado do prefill porque os atalhos de valor do painel (R$ 50/100/200)
+  // usam o prefill e não podem desfazer o carnê escolhido nos chips.
+  function receberDaAba(v: number, accountId?: string) {
+    const str = v.toFixed(2).replace(".", ",");
+    setFreeAccountId(accountId);
+    setFreeAmt(str);
+    setReceberOpen(true);
+    triggerPreview(str, accountId);
   }
 
   async function handleCreateAccount() {
@@ -826,7 +842,7 @@ export function ClienteCrediarioModal({
                     handleEditDueDateOpen={handleEditDueDateOpen} onRenegociar={openRenegociar}
                     onImprimir={(accountId, label, parcelas) => setPrintScope({ accountId, label, parcelas })}
                     openInstallmentPix={openInstallmentPix}
-                    prefill={prefill}
+                    prefill={receberDaAba}
                     openBalance={totalBalance}
                     companyId={companyId} customerId={customerId!} phone={phone} onCobrar={onCobrar} name={name}
                   />
@@ -863,7 +879,9 @@ export function ClienteCrediarioModal({
           {/* F3: CTA fixo — abre o sheet "Receber pagamento" */}
           {!anyOverlayOpen && tab === "parcelas" && !detailQ.isLoading && (
             <View style={m.footer}>
-              <Pressable style={m.cta} onPress={() => setReceberOpen(true)}>
+              {/* Volta para "Todos": o Receber de um cartão mira o carnê dele, e
+                  o rodapé é o recebimento livre (parcela mais antiga primeiro). */}
+              <Pressable style={m.cta} onPress={() => { setFreeAccountId(undefined); setReceberOpen(true); }}>
                 <Text style={m.ctaTxt}>Receber pagamento</Text>
               </Pressable>
             </View>
@@ -951,7 +969,11 @@ export function ClienteCrediarioModal({
               <Text style={m.editDueDateSub}>
                 Digite um valor e veja como ele é aplicado nas parcelas antes de confirmar.
               </Text>
-                {realCarnes.length > 1 && (
+                {/* 10/10/2026: com carnê por compra a lista cresce — só entram os
+                    que ainda têm o que receber (e o que estiver escolhido). E
+                    aparece também com um carnê só quando o Receber veio do
+                    cartão dele: a lojista precisa VER para onde vai o dinheiro. */}
+                {(carnesParaReceber.length > 1 || freeAccountId !== undefined) && (
                   <View style={{ marginBottom: 12 }}>
                     <Text style={m.fieldLabel}>Carnê</Text>
                     <View style={m.chipRow}>
@@ -961,7 +983,7 @@ export function ClienteCrediarioModal({
                       >
                         <Text style={[m.chipTxt, freeAccountId === undefined && m.chipTxtOn]}>Todos</Text>
                       </Pressable>
-                      {realCarnes.map(acc => (
+                      {carnesParaReceber.map(acc => (
                         <Pressable
                           key={acc.id!}
                           style={[m.chip, freeAccountId === acc.id && m.chipOn]}
