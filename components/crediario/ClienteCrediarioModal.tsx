@@ -30,6 +30,7 @@ import { ResponsiveSheet } from "@/components/ResponsiveSheet";
 import {
   creditApi,
   printReceipt,
+  printCarne,
   MAX_INSTALLMENTS_CEILING,
   type CreditAccount, type CreditInstallment, type CustomerTermsOverrides,
   type CreditHistoryEvent, type PaymentPlan, type CreditPix,
@@ -53,6 +54,8 @@ import { TabParcelas } from "./ficha/TabParcelas";
 import { TabHistorico } from "./ficha/TabHistorico";
 import { TabConta } from "./ficha/TabConta";
 import { GrupoEmAberto } from "./ficha/GrupoEmAberto";
+import { ImprimirCarnePanel } from "./ficha/ImprimirCarnePanel";
+import type { EscopoCarne } from "@/utils/crediarioCarne";
 import { lojasComSaldo, mensagemErroRecebimento } from "@/utils/creditoOutraLoja";
 
 function translateStatus(status: string | null | undefined): string {
@@ -70,9 +73,12 @@ type Props = {
   companyId: string;
   customerId: string | null;
   customerName?: string | null;
+  /** Chave Pix da cobrança. undefined = ainda carregando (não acusa falta). */
   pixKey?: string | null;
   storeName?: string | null;
   onClose: () => void;
+  /** Leva às Configurações do Crediário (onde a chave Pix é cadastrada). */
+  onOpenSettings?: () => void;
   onCobrar?: (customerId: string, customerName: string, phone: string | null) => void;
   onChanged?: () => void;
   /** Lojas do grupo que este usuário pode abrir (faixa "também deve na..."). */
@@ -84,7 +90,7 @@ type Props = {
 
 export function ClienteCrediarioModal({
   visible, companyId, customerId, customerName, pixKey, storeName,
-  onClose, onCobrar, onChanged,
+  onClose, onCobrar, onChanged, onOpenSettings,
   accessibleCompanyIds, onOpenInCompany, switchingCompany,
 }: Props) {
   const qc = useQueryClient();
@@ -117,6 +123,10 @@ export function ClienteCrediarioModal({
   const [renegFirstDue, setRenegFirstDue] = useState("");
 
   const [renegSubmitting, setRenegSubmitting] = useState(false);
+
+  // ── 10/10/2026: escolha do formato ao imprimir (A4 ou bobina) ─────────
+  // accountId: string = aquele carnê; null = grupo sem carnê; undefined = todos.
+  const [printScope, setPrintScope] = useState<{ accountId: EscopoCarne; label: string; parcelas: number } | null>(null);
 
   const [histEvents, setHistEvents] = useState<CreditHistoryEvent[]>([]);
   const [histCursor, setHistCursor] = useState<string | null>(null);
@@ -207,6 +217,7 @@ export function ClienteCrediarioModal({
       setEditDueDateError("");
       setRenegScope(null);
       setRenegSubmitting(false);
+      setPrintScope(null);
       setHistEvents([]);
       setHistCursor(null);
       setHistLoaded(false);
@@ -670,7 +681,7 @@ export function ClienteCrediarioModal({
   const renegDelta = +(renegTotalVal - (renegScope?.openRemaining || 0)).toFixed(2);
 
   const freeAmtValue = parseAmount(freeAmt);
-  const anyOverlayOpen = !!pixInstId || !!renegScope || !!editingDueDateInst || receberOpen;
+  const anyOverlayOpen = !!pixInstId || !!renegScope || !!editingDueDateInst || receberOpen || !!printScope;
   const methodLabelOf = (key: string | null) => PAYMENT_METHODS.find(p => p.key === key)?.label || key || "";
   const methodLabel = methodLabelOf(freeMethod);
   // Recebimento igual há pouco (razão + último desta ficha): o gate avisa,
@@ -813,6 +824,7 @@ export function ClienteCrediarioModal({
                     setNewAccountName={setNewAccountName} creatingAccount={creatingAccount}
                     expandedAccountId={expandedAccountId} setExpandedAccountId={setExpandedAccountId}
                     handleEditDueDateOpen={handleEditDueDateOpen} onRenegociar={openRenegociar}
+                    onImprimir={(accountId, label, parcelas) => setPrintScope({ accountId, label, parcelas })}
                     openInstallmentPix={openInstallmentPix}
                     prefill={prefill}
                     openBalance={totalBalance}
@@ -1270,6 +1282,23 @@ export function ClienteCrediarioModal({
               </View>
              </ModalPop>
             </View>
+          )}
+
+          {printScope && (
+            <ImprimirCarnePanel
+              titulo={printScope.label}
+              parcelas={printScope.parcelas}
+              pixKey={pixKey}
+              onBack={() => setPrintScope(null)}
+              onClose={onClose}
+              onCadastrarPix={onOpenSettings}
+              onPrint={(formato) => {
+                // Síncrono, dentro do clique: a janela de impressão abre antes
+                // de qualquer await (services/printWindow).
+                printCarne(companyId, customerId!, { format: formato, accountId: printScope.accountId });
+                setPrintScope(null);
+              }}
+            />
           )}
 
           {editingDueDateInst && (

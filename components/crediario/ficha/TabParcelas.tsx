@@ -19,10 +19,8 @@ import { isInstallmentOverdue, needsReview } from "@/utils/creditOverdue";
 import { View, Text, TextInput, Pressable, ActivityIndicator, Animated } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import {
-  printCarne,
-  type CreditAccount, type CreditInstallment,
-} from "@/services/creditApi";
+import type { CreditAccount, CreditInstallment } from "@/services/creditApi";
+import type { EscopoCarne } from "@/utils/crediarioCarne";
 import { Collapsible } from "@/components/anim";
 import { Button } from "@/components/Button";
 import { ParcelaRow, type ParcelaBreakdownLine } from "@/components/crediario/ParcelaRow";
@@ -67,6 +65,8 @@ export type TabParcelasProps = {
   handleEditDueDateOpen: (inst: CreditInstallment) => void;
   onRenegociar: (accountId: string | null | undefined, scopeLabel: string, openRemaining: number) => void;
   openInstallmentPix: (id: string) => void;
+  /** 10/10/2026: abre a escolha A4/bobina no shell. accountId undefined = todos. */
+  onImprimir: (accountId: EscopoCarne, label: string, parcelas: number) => void;
   /** Abre o sheet "Receber pagamento" do shell com valor pré-preenchido. */
   prefill: (v: number) => void;
   /** Saldo total em aberto do ledger — pode ser > 0 SEM nenhuma parcela
@@ -83,7 +83,7 @@ export function TabParcelas({
   accounts, openInst, instByAccount, useCarneLayout,
   handleCreateAccount, showNewAccount, setShowNewAccount, newAccountName, setNewAccountName, creatingAccount,
   expandedAccountId, setExpandedAccountId,
-  handleEditDueDateOpen, onRenegociar, openInstallmentPix, prefill, openBalance,
+  handleEditDueDateOpen, onRenegociar, openInstallmentPix, onImprimir, prefill, openBalance,
   companyId, customerId, phone, onCobrar, name,
 }: TabParcelasProps) {
   // Parcela expandida (uma por vez — progressive disclosure)
@@ -136,13 +136,18 @@ export function TabParcelas({
     <View style={m.card}>
       <View style={m.cardTitleRow}>
         <Text style={m.cardTitle}>Carnês / contas</Text>
-        <Pressable
-          style={m.newAccBtn}
-          onPress={() => { setShowNewAccount(v => !v); setNewAccountName(""); }}
-        >
-          <Icon name="plus" size={12} color={Colors.violet3} />
-          <Text style={m.newAccTxt}>Novo carnê</Text>
-        </Pressable>
+        <View style={{ flexDirection: "row", gap: 6 }}>
+          <Pressable style={m.newAccBtn} onPress={() => onImprimir(undefined, name, openInst.length)}>
+            <Text style={m.newAccTxt}>Imprimir todos</Text>
+          </Pressable>
+          <Pressable
+            style={m.newAccBtn}
+            onPress={() => { setShowNewAccount(v => !v); setNewAccountName(""); }}
+          >
+            <Icon name="plus" size={12} color={Colors.violet3} />
+            <Text style={m.newAccTxt}>Novo carnê</Text>
+          </Pressable>
+        </View>
       </View>
 
       {showNewAccount && (
@@ -226,7 +231,7 @@ export function TabParcelas({
               {accInst.length > 0 && (
                 <Button title="Renegociar" variant="ghost" size="sm" onPress={() => onRenegociar(acc.id, acc.name, sumRemaining(accInst))} />
               )}
-              <Button title="Imprimir" variant="ghost" size="sm" onPress={() => printCarne(companyId, customerId!)} />
+              <Button title="Imprimir" variant="ghost" size="sm" onPress={() => onImprimir(acc.id, acc.name, accInst.length)} />
               {!!phone && (
                 <Button title="Cobrar" variant="success" size="sm" onPress={() => onCobrar?.(customerId!, name, phone)} />
               )}
@@ -265,7 +270,7 @@ export function TabParcelas({
           </Pressable>
           <Pressable
             style={[m.newAccBtn, { gap: 4 }]}
-            onPress={() => printCarne(companyId, customerId!)}
+            onPress={() => onImprimir(undefined, name, openInst.length)}
           >
             <Icon name="printer" size={12} color={Colors.violet3} />
             <Text style={m.newAccTxt}>Imprimir carnê</Text>

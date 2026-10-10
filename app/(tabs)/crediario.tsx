@@ -874,8 +874,11 @@ export default function CrediarioScreen() {
         companyId={company?.id || ""}
         customerId={modalCust?.id || null}
         customerName={modalCust?.name || null}
-        pixKey={(rulesQ.data as any)?.pix_key || null}
+        // undefined enquanto a régua não carregou: a ficha só acusa "sem chave
+        // Pix" (na escolha do formato do carnê) quando sabe que não há.
+        pixKey={rulesQ.data ? ((rulesQ.data as any)?.pix_key || null) : undefined}
         storeName={company?.name || null}
+        onOpenSettings={() => { setModalCust(null); router.push("/crediario/settings" as any); }}
         onCobrar={handleCobrar}
         onChanged={() => {
           qc.invalidateQueries({ queryKey: ["credit-balances", company?.id] });

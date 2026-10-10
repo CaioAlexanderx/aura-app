@@ -27,6 +27,7 @@ import { request, BASE_URL } from "@/services/api";
 import type { GroupOpenItem } from "@/utils/creditoOutraLoja";
 import { useAuthStore } from "@/stores/auth";
 import { openPrintWindow } from "@/services/printWindow";
+import { carnePrintPath, type OpcoesDeImpressao } from "@/utils/crediarioCarne";
 
 // ─── Fiado (legado) ────────────────────────────────────────────────────────
 // ── Teto de parcelas (21/08/2026) ────────────────────────────────────────
@@ -471,14 +472,18 @@ export type CreateAccountBody = {
 // ARMADILHA: GET /print/credit/:cid/carne exige Authorization header.
 // window.open() direto dá "Token não fornecido".
 // Solução: fetch com Bearer token → texto HTML → document.write em nova janela.
-export async function printCarne(companyId: string, customerId: string): Promise<void> {
+//
+// 10/10/2026 (Aura-backend#802): `opts.format` ("a4" | "bobina", padrão bobina)
+// e `opts.accountId` (um carnê só; null = grupo sem carnê). Sem opts a URL é
+// a de sempre — backend antigo ignora os parâmetros e imprime tudo em bobina.
+export async function printCarne(companyId: string, customerId: string, opts?: OpcoesDeImpressao): Promise<void> {
   if (typeof window === "undefined") return;
   // 18/07: via openPrintWindow (navega pra blob URL). O padrão antigo
   // (window.open("") + document.write + setTimeout window.print()) fazia o
   // auto-print morrer na criação do preview → "Falha na impressão". O
   // disparo agora é do autoPrintScript no HTML servido, não daqui.
   const token = useAuthStore.getState().token;
-  const url = BASE_URL + "/companies/" + companyId + "/print/credit/" + customerId + "/carne";
+  const url = BASE_URL + carnePrintPath(companyId, customerId, opts);
   const outcome = await openPrintWindow(async () => {
     const resp = await fetch(url, { headers: token ? { Authorization: "Bearer " + token } : {} });
     if (!resp.ok) return { ok: false as const, error: "Erro ao carregar carnê (" + resp.status + ")." };
