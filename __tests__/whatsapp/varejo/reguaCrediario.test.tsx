@@ -72,7 +72,7 @@ jest.mock("@/services/waApi", () => {
   };
 });
 
-import CrediarioSettingsScreen from "@/app/crediario/settings";
+import CrediarioSettingsScreen from "@/app/(tabs)/crediario/settings";
 
 const STATUS_LIBERADO = {
   connected: true,

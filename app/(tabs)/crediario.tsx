@@ -844,7 +844,7 @@ export default function CrediarioScreen() {
                     >
                       {triggeringId === cust.id
                         ? <ActivityIndicator size="small" color={Colors.green} />
-                        : <Icon name="message_circle" size={16} color={Colors.green} />}
+                        : <Icon name="whatsapp" size={16} color={Colors.green} />}
                     </Pressable>
                     <Icon name="chevron_right" size={15} color={Colors.ink3} />
                   </View>
