@@ -345,3 +345,106 @@ export function organizarCarnes<P extends ParcelaAbertaDoCarne>(
     quitados: ordenados.filter(c => c.quitado),
   };
 }
+
+// ─── Juntar carnês: seleção, intervalo e erros ───────────────────────────
+// O CRONOGRAMA da junção nunca é calculado aqui: vem do preview do backend
+// (centavos da última parcela, dia de vencimento em mês curto…). Este
+// trecho só decide o que pedir e como dizer.
+
+/** Só entra na junção o que ainda tem o que pagar. */
+export function carnesParaJuntar<P extends ParcelaAbertaDoCarne>(abertos: CarneDerivado<P>[]): CarneDerivado<P>[] {
+  return abertos.filter(c => c.falta > CENTAVO);
+}
+
+export type PlanoDaSelecao = {
+  /** Para account_ids: ids dos carnês, com "general" para o grupo sem carnê. */
+  accountIds: string[];
+  quantidade: number;
+  /** Soma do que falta nos carnês marcados (o total, se ninguém ajustar). */
+  total: number;
+  /** Quantas linhas de produto/compra os marcados somam (texto do aviso). */
+  produtos: number;
+  /** Juntar é de 2 em diante; um só é Renegociar. */
+  podeJuntar: boolean;
+};
+
+export function planoDaSelecao(
+  carnes: Array<Pick<CarneDerivado, "key" | "falta" | "compras">>,
+  selecionados: Iterable<string>,
+): PlanoDaSelecao {
+  const marcados = new Set(selecionados);
+  // Na ordem da lista (não na do clique): a mesma seleção gera sempre o
+  // mesmo pedido — é o que mantém a chave de idempotência estável.
+  const sel = carnes.filter(c => marcados.has(c.key));
+  return {
+    accountIds: sel.map(c => c.key),
+    quantidade: sel.length,
+    total: +sel.reduce((s, c) => s + c.falta, 0).toFixed(2),
+    produtos: sel.reduce((s, c) => s + c.compras.length, 0),
+    podeJuntar: sel.length >= 2,
+  };
+}
+
+export type IntervaloDaJuncao = { key: "mensal" | "quinzenal" | "semanal"; label: string; period_unit: "day" | "week" | "month"; period_count: number };
+
+/** Mesmas três periodicidades das Configurações do Crediário. */
+export const INTERVALOS_DA_JUNCAO: IntervaloDaJuncao[] = [
+  { key: "mensal", label: "Mensal", period_unit: "month", period_count: 1 },
+  { key: "quinzenal", label: "Quinzenal", period_unit: "week", period_count: 2 },
+  { key: "semanal", label: "Semanal", period_unit: "week", period_count: 1 },
+];
+
+/** AAAA-MM-DD um mês depois (dia 31 em mês curto cai no último dia). */
+export function umMesDepois(iso: string): string {
+  const mt = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso));
+  if (!mt) return iso;
+  let y = +mt[1], mo = +mt[2] + 1;
+  const d = +mt[3];
+  if (mo > 12) { mo = 1; y += 1; }
+  const ultimo = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  const dia = Math.min(d, ultimo);
+  return `${y}-${String(mo).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+}
+
+/** "Juntar 2 carnês em 4× de R$ 80,00" — o valor é o da 1ª parcela do preview. */
+export function rotuloDoBotaoDeJuntar(
+  quantidade: number, parcelas: number, valorDaParcela: number | null, fmt: (n: number) => string,
+): string {
+  if (quantidade < 2) return "Marque pelo menos 2 carnês";
+  const base = `Juntar ${quantidade} carnês em ${parcelas}×`;
+  return valorDaParcela != null ? `${base} de ${fmt(valorDaParcela)}` : base;
+}
+
+type ErroDeApi = { status?: number; isNetworkError?: boolean; message?: string; data?: { code?: string; error?: string } | null } | null | undefined;
+
+const ERROS_DA_JUNCAO: Record<string, string> = {
+  MERGE_NEEDS_TWO: "Marque pelo menos 2 carnês para juntar.",
+  INVALID_INSTALLMENTS: "Número de parcelas inválido. Confira e tente de novo.",
+  INVALID_TOTAL: "O total precisa ser maior que zero.",
+  INVALID_FIRST_DUE_DATE: "Confira a data do primeiro vencimento.",
+  CUSTOMER_NOT_FOUND: "Este cliente não foi encontrado nesta loja. Feche a ficha e abra de novo pela lista.",
+  CREDIT_ACCOUNT_NOT_FOUND: "Um dos carnês marcados não existe mais. Feche a ficha e abra de novo para atualizar a lista.",
+  CREDIT_ACCOUNT_CLOSED: "Um dos carnês marcados já foi quitado ou encerrado. Feche a ficha e abra de novo para atualizar a lista.",
+  NOTHING_OPEN: "Não há nada em aberto nos carnês marcados.",
+  CREDIARIO_DISABLED: "O crediário está desligado nesta loja. Ative em Configurações → PDV → Políticas do Caixa.",
+};
+
+/** A rota de juntar não existe no backend anterior ao #803: 404 SEM código. */
+export function juncaoIndisponivel(err: ErroDeApi): boolean {
+  return err?.status === 404 && !(err?.data?.code && ERROS_DA_JUNCAO[err.data.code]);
+}
+
+export const MSG_JUNCAO_INDISPONIVEL =
+  "Juntar carnês ainda não está disponível nesta loja — a função está sendo liberada. Tente de novo mais tarde; até lá, o Renegociar de cada carnê continua funcionando.";
+
+/** Erro do preview/apply do juntar em português claro. */
+export function mensagemErroJuncao(err: ErroDeApi): string {
+  const code = err?.data?.code;
+  if (code && ERROS_DA_JUNCAO[code]) return ERROS_DA_JUNCAO[code];
+  if (juncaoIndisponivel(err)) return MSG_JUNCAO_INDISPONIVEL;
+  if (err?.isNetworkError || err?.status === 0) {
+    return "Sem conexão com o servidor. Antes de tentar de novo, feche e abra a ficha para conferir se os carnês já foram juntados.";
+  }
+  if ((err?.status ?? 0) >= 500 && err?.message) return err.message;
+  return err?.data?.error || "Não foi possível juntar os carnês. Tente novamente.";
+}

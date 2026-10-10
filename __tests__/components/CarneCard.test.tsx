@@ -237,6 +237,14 @@ describe("TabParcelas — aba de carnês", () => {
     expect(props.setShowNewAccount).toHaveBeenCalled();
   });
 
+  it("Juntar carnês só aparece quando o shell diz que há 2+ com saldo", () => {
+    expect(porId(montarAba().t, "carnes-juntar")).toHaveLength(0);
+    const onJuntar = jest.fn();
+    const { t } = montarAba({ onJuntar });
+    act(() => { porId(t, "carnes-juntar")[0].props.onPress(); });
+    expect(onJuntar).toHaveBeenCalled();
+  });
+
   it("backend antigo sem carnê: a lista de parcelas de sempre", () => {
     const { t } = montarAba({ accounts: [], useCarneLayout: false });
     const txt = texto(t.toJSON());

@@ -72,6 +72,8 @@ export type TabParcelasProps = {
   openInstallmentPix: (id: string) => void;
   /** 10/10/2026: abre a escolha A4/bobina no shell. accountId undefined = todos. */
   onImprimir: (accountId: EscopoCarne, label: string, parcelas: number) => void;
+  /** 10/10/2026: abre o "Juntar carnês". Ausente = menos de 2 carnês com saldo. */
+  onJuntar?: () => void;
   /** Abre o sheet "Receber pagamento" do shell com valor pré-preenchido.
    *  accountId (10/10/2026): o recebimento mira aquele carnê; sem ele, todos. */
   prefill: (v: number, accountId?: string) => void;
@@ -89,7 +91,7 @@ export function TabParcelas({
   accounts, openInst, useCarneLayout,
   handleCreateAccount, showNewAccount, setShowNewAccount, newAccountName, setNewAccountName, creatingAccount,
   expandedAccountId, setExpandedAccountId,
-  handleEditDueDateOpen, onRenegociar, openInstallmentPix, onImprimir, prefill, openBalance,
+  handleEditDueDateOpen, onRenegociar, openInstallmentPix, onImprimir, onJuntar, prefill, openBalance,
   customerId, phone, onCobrar, name,
 }: TabParcelasProps) {
   // Parcela expandida (uma por vez — progressive disclosure)
@@ -155,6 +157,11 @@ export function TabParcelas({
       <View style={c.secRow}>
         <Text style={m.cardTitle}>Em aberto · {abertos.length}</Text>
         <View style={c.links}>
+          {!!onJuntar && (
+            <Pressable style={c.link} onPress={onJuntar} accessibilityRole="button" testID="carnes-juntar">
+              <Text style={c.linkT}>Juntar carnês</Text>
+            </Pressable>
+          )}
           <Pressable
             style={c.link}
             onPress={() => onImprimir(undefined, name, openInst.length)}

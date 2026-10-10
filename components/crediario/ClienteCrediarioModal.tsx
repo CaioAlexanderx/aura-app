@@ -55,7 +55,11 @@ import { TabHistorico } from "./ficha/TabHistorico";
 import { TabConta } from "./ficha/TabConta";
 import { GrupoEmAberto } from "./ficha/GrupoEmAberto";
 import { ImprimirCarnePanel } from "./ficha/ImprimirCarnePanel";
-import type { EscopoCarne } from "@/utils/crediarioCarne";
+import { JuntarCarnesPanel } from "./ficha/JuntarCarnesPanel";
+import {
+  organizarCarnes, carnesParaJuntar, CHAVE_SEM_CARNE, type ContaDoCarne, type EscopoCarne,
+} from "@/utils/crediarioCarne";
+import type { MergePlan } from "@/services/creditMerge";
 import { lojasComSaldo, mensagemErroRecebimento } from "@/utils/creditoOutraLoja";
 
 function translateStatus(status: string | null | undefined): string {
@@ -127,6 +131,10 @@ export function ClienteCrediarioModal({
   // ── 10/10/2026: escolha do formato ao imprimir (A4 ou bobina) ─────────
   // accountId: string = aquele carnê; null = grupo sem carnê; undefined = todos.
   const [printScope, setPrintScope] = useState<{ accountId: EscopoCarne; label: string; parcelas: number } | null>(null);
+
+  // ── 10/10/2026: juntar carnês. null = fechado; array = chaves já marcadas
+  // ao abrir (vazio pelo link do cabeçalho; o carnê de origem pelo Renegociar).
+  const [juntarPre, setJuntarPre] = useState<string[] | null>(null);
 
   const [histEvents, setHistEvents] = useState<CreditHistoryEvent[]>([]);
   const [histCursor, setHistCursor] = useState<string | null>(null);
@@ -218,6 +226,7 @@ export function ClienteCrediarioModal({
       setRenegScope(null);
       setRenegSubmitting(false);
       setPrintScope(null);
+      setJuntarPre(null);
       setHistEvents([]);
       setHistCursor(null);
       setHistLoaded(false);
@@ -296,6 +305,15 @@ export function ClienteCrediarioModal({
         return (!best || d < new Date(best).getTime()) ? i.due_date : best;
       }, "" as string)
     : "";
+
+  // Carnês que podem entrar numa junção (em aberto, com saldo). Com menos de
+  // dois não há o que juntar: as entradas somem.
+  const carnesJuntaveis = useMemo(
+    () => carnesParaJuntar(organizarCarnes<CreditInstallment>(accounts as ContaDoCarne[], openInst, isInstallmentOverdue).abertos),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [detail?.accounts, openInst],
+  );
+  const podeJuntar = carnesJuntaveis.length >= 2;
 
   const isBlocked = profile?.status === "blocked";
 
@@ -662,6 +680,26 @@ export function ClienteCrediarioModal({
     }
   }
 
+  // ── 10/10/2026: carnês juntados — avisa, recarrega e abre o carnê novo ──
+  function handleJuntou(res: MergePlan) {
+    const adj = res.adjustment;
+    const n = res.installments_count;
+    toast.success(
+      res.replayed
+        ? "Estes carnês já tinham sido juntados."
+        : adj?.type === "discount"
+          ? `Carnês juntados em ${n}x, com desconto de ${fmt(adj.amount)}.`
+          : adj?.type === "surcharge"
+            ? `Carnês juntados em ${n}x, com acréscimo de ${fmt(adj.amount)}.`
+            : `Carnês juntados em ${n}x.`
+    );
+    setJuntarPre(null);
+    // O carnê novo já aparece aberto quando a ficha recarregar.
+    if (res.account?.id) setExpandedAccountId(res.account.id);
+    setHistLoaded(false);
+    handleHistoricRefresh();
+  }
+
   // ── Callback de refresh compartilhado com a TabHistorico (pós-devolução) ──
   function handleHistoricRefresh() {
     qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
@@ -697,7 +735,7 @@ export function ClienteCrediarioModal({
   const renegDelta = +(renegTotalVal - (renegScope?.openRemaining || 0)).toFixed(2);
 
   const freeAmtValue = parseAmount(freeAmt);
-  const anyOverlayOpen = !!pixInstId || !!renegScope || !!editingDueDateInst || receberOpen || !!printScope;
+  const anyOverlayOpen = !!pixInstId || !!renegScope || !!editingDueDateInst || receberOpen || !!printScope || !!juntarPre;
   const methodLabelOf = (key: string | null) => PAYMENT_METHODS.find(p => p.key === key)?.label || key || "";
   const methodLabel = methodLabelOf(freeMethod);
   // Recebimento igual há pouco (razão + último desta ficha): o gate avisa,
@@ -841,6 +879,7 @@ export function ClienteCrediarioModal({
                     expandedAccountId={expandedAccountId} setExpandedAccountId={setExpandedAccountId}
                     handleEditDueDateOpen={handleEditDueDateOpen} onRenegociar={openRenegociar}
                     onImprimir={(accountId, label, parcelas) => setPrintScope({ accountId, label, parcelas })}
+                    onJuntar={podeJuntar ? () => setJuntarPre([]) : undefined}
                     openInstallmentPix={openInstallmentPix}
                     prefill={receberDaAba}
                     openBalance={totalBalance}
@@ -1273,6 +1312,20 @@ export function ClienteCrediarioModal({
                 style={m.dateInput}
               />
 
+              {/* 10/10/2026: a renegociação mexe num carnê só. Quem quer uma
+                  parcela única para tudo sai daqui para o Juntar, já com este
+                  carnê marcado. */}
+              {podeJuntar && carnesJuntaveis.some(cj => cj.key === (renegScope.accountId ?? CHAVE_SEM_CARNE)) && (
+                <Pressable
+                  onPress={() => { const k = renegScope.accountId ?? CHAVE_SEM_CARNE; setRenegScope(null); setJuntarPre([k]); }}
+                  style={{ minHeight: 44, justifyContent: "center", alignSelf: "flex-start", marginTop: 6 }}
+                  accessibilityRole="button"
+                  testID="reneg-juntar-com-outros"
+                >
+                  <Text style={{ fontSize: 12.5, fontWeight: "600", color: Colors.violet3 }}>Juntar com outros carnês</Text>
+                </Pressable>
+              )}
+
               {Math.abs(renegDelta) > 0.005 && (
                 <View style={m.renegDeltaRow}>
                   <Text style={m.renegDeltaLbl}>{renegDelta < 0 ? "Desconto no saldo" : "Acréscimo no saldo"}</Text>
@@ -1304,6 +1357,19 @@ export function ClienteCrediarioModal({
               </View>
              </ModalPop>
             </View>
+          )}
+
+          {juntarPre && (
+            <JuntarCarnesPanel
+              companyId={companyId}
+              customerId={customerId!}
+              customerName={name}
+              carnes={carnesJuntaveis}
+              preselecionados={juntarPre}
+              onBack={() => setJuntarPre(null)}
+              onClose={onClose}
+              onDone={handleJuntou}
+            />
           )}
 
           {printScope && (
