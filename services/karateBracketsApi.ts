@@ -231,6 +231,13 @@ export interface KataAdvanceResult {
    * — exigem novo kata. O avanço acontece mesmo assim.
    */
   tie_break_needed?: string[];
+  /**
+   * PR #799 (backend): ausentes confirmados (no_show) SEM nota na
+   * eliminatória são eliminados automaticamente no avanço — sem isso um
+   * único ausente travava a final. Opcionais: backend antigo não devolve.
+   */
+  absent?: number;
+  absent_entry_ids?: string[];
 }
 
 export interface KataOrderResult {

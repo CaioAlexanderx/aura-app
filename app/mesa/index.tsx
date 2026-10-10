@@ -53,6 +53,7 @@ import {
 import { NotasArbitros, NotasBreakdown, NotasSubmit } from "@/components/karate/NotasArbitros";
 import { findNextPendingMatch } from "@/components/karate/chaves/EventDayMode";
 import { roundLabel, AbsentPill, isAbsent } from "@/components/karate/chaves/shared";
+import { KataAdvanceCard } from "@/components/karate/chaves/KataAdvanceCard";
 
 // ── Constantes (mesmos valores do Modo Mesário interno) ─────
 const ATOSHI_SEC = 30;
@@ -175,7 +176,7 @@ function useMesaTokenBootstrap(): string | null {
 function useMesaWebChrome(competitionName: string | null) {
   useEffect(() => {
     if (Platform.OS !== "web" || typeof document === "undefined") return;
-    document.title = competitionName ? `Mesa · ${competitionName}` : "Mesa do Mêsário · Aura Karatê";
+    document.title = competitionName ? `Mesa · ${competitionName}` : "Mesa do Mesário · Aura Karatê";
   }, [competitionName]);
 }
 
@@ -1018,10 +1019,6 @@ function MesaKataPanel({
   const [judgeCount, setJudgeCount] = useState<number | undefined>(undefined);
   const [editingKey, setEditingKey] = useState<string | null>(null); // `${entry_id}:${phase}`
   const [saving, setSaving] = useState(false);
-  const [advanceCount, setAdvanceCount] = useState(8);
-  const [advancing, setAdvancing] = useState(false);
-  /** Onda B: empate persistente na linha de corte devolvido pelo advance. */
-  const [tieBreakNames, setTieBreakNames] = useState<string[] | null>(null);
   const [finalizing, setFinalizing] = useState(false);
   const [podium, setPodium] = useState<PodiumEntry[] | null>(null);
   const handleFlowError = usePanelErrorHandler(onCategoryMoved, onLinkInvalid);
@@ -1053,16 +1050,8 @@ function MesaKataPanel({
     .filter((r) => r.phase === "final")
     .sort((a, b) => (a.presentation_order ?? 999) - (b.presentation_order ?? 999)), [scores]);
 
-  const elimComplete = eliminatoria.length > 0 && eliminatoria.every((r) => r.nota != null);
   const hasFinal = final.length > 0;
   const hasFinalNota = final.some((r) => r.nota != null);
-
-  // Teto do "classificar N": nunca mais que o total da eliminatória.
-  useEffect(() => {
-    if (eliminatoria.length > 0) {
-      setAdvanceCount((n) => Math.max(2, Math.min(n, eliminatoria.length)));
-    }
-  }, [eliminatoria.length]);
 
   const openEditor = useCallback((row: KataScore) => {
     const key = `${row.entry_id}:${row.phase}`;
@@ -1085,25 +1074,12 @@ function MesaKataPanel({
     }
   }, [cat.id, loadScores, handleFlowError]);
 
-  const handleAdvance = useCallback(async () => {
-    setAdvancing(true);
-    try {
-      const result = await karateMesaApi.advanceKata(cat.id, { advance_count: advanceCount });
-      toast.success(`${result.advanced} atleta${result.advanced === 1 ? "" : "s"} classificado${result.advanced === 1 ? "" : "s"} para a final.`);
-      const tied = result.tie_break_needed || [];
-      setTieBreakNames(
-        tied.length
-          ? tied.map((id) => (scores || []).find((r) => r.entry_id === id)?.student_name || id)
-          : null
-      );
-      await loadScores();
-    } catch (e: any) {
-      if (handleFlowError(e)) return;
-      toast.error(e?.message || "Não foi possível classificar para a final.");
-    } finally {
-      setAdvancing(false);
-    }
-  }, [cat.id, advanceCount, scores, loadScores, handleFlowError]);
+  // Eliminatória → final: bloco compartilhado com o Modo Mesário e o painel
+  // da categoria (KataAdvanceCard). Ausente confirmado não trava a final.
+  const advanceToFinal = useCallback(
+    (advanceCount: number) => karateMesaApi.advanceKata(cat.id, { advance_count: advanceCount }),
+    [cat.id]
+  );
 
   const handleFinalize = useCallback(async () => {
     setFinalizing(true);
@@ -1223,70 +1199,16 @@ function MesaKataPanel({
         </View>
       )}
 
-      {!!tieBreakNames?.length && (
-        <View style={s.tieBreakBox}>
-          <Icon name="alert-circle" size={16} color={P.warn} />
-          <View style={{ flex: 1 }}>
-            <Text style={s.tieBreakTitle}>Empate persistente na linha de corte</Text>
-            <Text style={s.tieBreakTxt}>
-              Novo kata para: {tieBreakNames.join(", ")}. A classificação foi aplicada mesmo assim — refaça a apresentação e relance as notas para desempatar.
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => setTieBreakNames(null)}
-            accessibilityRole="button"
-            accessibilityLabel="Dispensar aviso de empate"
-            style={{ padding: 6 }}
-          >
-            <Icon name="close" size={14} color={C.ink3} />
-          </TouchableOpacity>
-        </View>
-      )}
-
       {renderPhase(`Eliminatória · ${eliminatoria.length}`, eliminatoria)}
 
-      {/* Classificação para a final — aparece quando a eliminatória fecha e a final ainda não existe */}
-      {elimComplete && !hasFinal && (
-        <View style={s.advanceCard}>
-          <View style={s.finalizeHead}>
-            <Icon name="flag" size={18} color={C.ink} />
-            <Text style={s.advanceTitle}>Eliminatória completa</Text>
-          </View>
-          <Text style={s.finalizeTxt}>Escolha quantos atletas classificam e monte a final.</Text>
-          <View style={s.stepperRow}>
-            <TouchableOpacity
-              style={[s.stepBtn, advanceCount <= 2 && s.btnDisabled]}
-              disabled={advanceCount <= 2}
-              onPress={() => setAdvanceCount((n) => Math.max(2, n - 1))}
-              accessibilityRole="button"
-              accessibilityLabel="Diminuir quantidade de classificados"
-            >
-              <Icon name="minus" size={18} color={C.ink} />
-            </TouchableOpacity>
-            <View style={s.stepValueBox}>
-              <Text style={s.stepValue}>{advanceCount}</Text>
-              <Text style={s.stepValueSub}>classificam</Text>
-            </View>
-            <TouchableOpacity
-              style={[s.stepBtn, advanceCount >= eliminatoria.length && s.btnDisabled]}
-              disabled={advanceCount >= eliminatoria.length}
-              onPress={() => setAdvanceCount((n) => Math.min(eliminatoria.length, n + 1))}
-              accessibilityRole="button"
-              accessibilityLabel="Aumentar quantidade de classificados"
-            >
-              <Icon name="plus" size={18} color={C.ink} />
-            </TouchableOpacity>
-          </View>
-          <KarateButton
-            label={advancing ? "Classificando..." : `Classificar os ${advanceCount} melhores para a final`}
-            variant="sumi"
-            size="lg"
-            loading={advancing}
-            disabled={advancing}
-            onPress={handleAdvance}
-          />
-        </View>
-      )}
+      {/* Classificação para a final — aparece quando a eliminatória fecha
+          (ausentes confirmados não contam) e a final ainda não existe. */}
+      <KataAdvanceCard
+        scores={scores}
+        advance={advanceToFinal}
+        onAdvanced={loadScores}
+        onError={handleFlowError}
+      />
 
       {hasFinal && renderPhase(`Final · ${final.length}`, final)}
 
@@ -1762,15 +1684,6 @@ const s = StyleSheet.create({
   finalizeTitle: { fontFamily: F.heading, fontSize: 19, fontWeight: "600", color: C.ink } as TextStyle,
   finalizeTxt: { fontFamily: F.body, fontSize: 13, color: C.ink2, lineHeight: 19 } as TextStyle,
 
-  // Classificação da eliminatória para a final (kata por notas)
-  advanceCard: { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border2, borderRadius: R.lg, padding: 16, gap: 10 } as ViewStyle,
-  advanceTitle: { fontFamily: F.heading, fontSize: 18, fontWeight: "600", color: C.ink } as TextStyle,
-  stepperRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12 } as ViewStyle,
-  stepBtn: { width: 56, height: 56, borderRadius: R.md, borderWidth: 1, borderColor: C.border2, backgroundColor: C.glassHi, alignItems: "center", justifyContent: "center" } as ViewStyle,
-  stepValueBox: { alignItems: "center", minWidth: 90 } as ViewStyle,
-  stepValue: { fontFamily: F.mono, fontSize: 34, color: C.ink } as TextStyle,
-  stepValueSub: { fontFamily: F.body, fontSize: 11, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase", color: C.ink3 } as TextStyle,
-
   // Pódio
   podiumCard: { backgroundColor: C.surface, borderWidth: 1, borderColor: P.redLine, borderRadius: R.lg, padding: 20, alignItems: "center", gap: 4 } as ViewStyle,
   podiumSeal: { width: 48, height: 48, borderRadius: 999, backgroundColor: P.red, alignItems: "center", justifyContent: "center", marginBottom: 6 } as ViewStyle,
@@ -1809,11 +1722,6 @@ const s = StyleSheet.create({
   // Onda B: o editor de nota virou o bloco compartilhado NotasArbitros —
   // aqui só a caixa que o acomoda entre duas linhas da bateria.
   notaEditorWrap: { marginTop: 4, marginBottom: 4 } as ViewStyle,
-
-  // Aviso de empate persistente na linha de corte (tie_break_needed)
-  tieBreakBox: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: P.warnWash, borderWidth: 1, borderColor: C.border2, borderRadius: R.md, padding: 12 } as ViewStyle,
-  tieBreakTitle: { fontFamily: F.body, fontSize: 13, fontWeight: "700", color: P.warn } as TextStyle,
-  tieBreakTxt: { fontFamily: F.body, fontSize: 12, color: C.ink2, lineHeight: 17, marginTop: 2 } as TextStyle,
 
   // Súmula — seção discreta abaixo do painel de operação
   sumulaBox: { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: R.md, overflow: "hidden" } as ViewStyle,

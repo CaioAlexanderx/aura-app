@@ -307,7 +307,8 @@ export function CriarTorneioModal({ visible, onClose, federationId, onCreated }:
           {/* header */}
           <View style={styles.head}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.eyebrow}>空  FPKT · Novo campeonato</Text>
+              {/* Neutro: nada de identidade de federação escrita no código (conta JKA via "FPKT"). */}
+              <Text style={styles.eyebrow}>空  Competições · Novo campeonato</Text>
               <Text style={styles.title}>Criar campeonato<Text style={{ color: P.red }}>.</Text></Text>
               <Text style={styles.sub}>Defina os dados e monte as categorias.</Text>
             </View>

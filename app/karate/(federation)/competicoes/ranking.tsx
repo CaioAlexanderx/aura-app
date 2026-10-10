@@ -106,7 +106,7 @@ export default function CompeticoesRanking() {
                       {r.gold > 0 && <Medal c={MEDAL[0]} n={r.gold} />}
                       {r.silver > 0 && <Medal c={MEDAL[1]} n={r.silver} />}
                       {r.bronze > 0 && <Medal c={MEDAL[2]} n={r.bronze} />}
-                      <Body muted style={{ fontSize: 11 }}>· {r.events_participated} etapas</Body>
+                      <Body muted style={{ fontSize: 11 }}>· {r.events_participated} {r.events_participated === 1 ? "etapa" : "etapas"}</Body>
                     </View>
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
