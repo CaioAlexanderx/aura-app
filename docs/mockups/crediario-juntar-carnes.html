@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mockup — Juntar carnês (crediário)</title>
+<style>
+  :root {
+    --bg:#060816; --bg2:#090c1a; --bg3:#0e1228; --bg4:#141830;
+    --ink:#f0edff; --ink2:rgba(220,215,255,.75); --ink3:rgba(170,160,235,.65);
+    --border:rgba(140,130,220,.18); --border2:rgba(140,130,220,.32);
+    --violet:#7c3aed; --violet3:#a78bfa; --green:#34d399; --red:#f87171;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:#02030a; color:var(--ink); font-size:14px; line-height:1.4; }
+  .wrap { display:flex; flex-wrap:wrap; gap:32px; justify-content:center; align-items:flex-start; padding:24px 16px 64px; }
+  .notes { max-width:340px; flex:1 1 280px; color:var(--ink2); font-size:13.5px; }
+  .notes h1 { font-size:18px; color:var(--ink); margin-bottom:4px; }
+  .notes .sub { font-size:12.5px; color:var(--ink3); margin-bottom:18px; }
+  .notes h2 { font-size:12px; text-transform:uppercase; letter-spacing:.07em; color:var(--violet3); margin:18px 0 6px; }
+  .notes li { margin:0 0 6px 18px; }
+  .notes b { color:var(--ink); }
+
+  .phone { width:390px; max-width:100%; background:var(--bg); border:1px solid var(--border2); border-radius:22px; overflow:hidden; }
+  .head { display:flex; align-items:center; gap:10px; padding:14px 16px; background:var(--bg2); border-bottom:1px solid var(--border); }
+  .head .x { width:44px; height:44px; margin:-10px -10px -10px -12px; display:grid; place-items:center; color:var(--ink3); font-size:20px; background:none; border:0; }
+  .head b { font-size:15px; display:block; }
+  .head span { font-size:12px; color:var(--ink3); }
+  .body { padding:14px; }
+  .step { font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--ink3); margin:4px 2px 9px; display:flex; gap:8px; align-items:center; }
+  .step i { font-style:normal; width:20px; height:20px; border-radius:50%; background:var(--violet); color:#fff; display:grid; place-items:center; font-weight:800; font-size:11px; }
+
+  .pick { display:flex; gap:12px; align-items:flex-start; background:var(--bg3); border:1.5px solid var(--border); border-radius:14px; padding:12px; margin-bottom:9px; cursor:pointer; min-height:48px; }
+  .pick.on { border-color:var(--violet3); background:rgba(124,58,237,.12); }
+  .box { width:22px; height:22px; border-radius:7px; border:2px solid var(--border2); flex:none; margin-top:1px; display:grid; place-items:center; font-size:13px; font-weight:900; color:transparent; }
+  .pick.on .box { background:var(--violet); border-color:var(--violet); color:#fff; }
+  .pick .in { flex:1; min-width:0; }
+  .l1 { display:flex; justify-content:space-between; gap:10px; align-items:baseline; }
+  .l1 b { font-size:14px; }
+  .l1 .amt { font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .meta { font-size:11.5px; color:var(--ink3); margin-top:1px; }
+  .meta .late { color:var(--red); }
+  .prods { margin-top:7px; border-top:1px dashed var(--border); padding-top:6px; }
+  .prods div { display:flex; justify-content:space-between; gap:10px; font-size:12.5px; color:var(--ink2); padding:1.5px 0; }
+  .prods span:last-child { font-variant-numeric:tabular-nums; white-space:nowrap; color:var(--ink3); }
+
+  .card { background:var(--bg3); border:1px solid var(--border); border-radius:14px; padding:14px; margin-bottom:10px; }
+  .tot { display:flex; justify-content:space-between; align-items:baseline; }
+  .tot small { font-size:12px; color:var(--ink3); }
+  .tot b { font-size:20px; font-variant-numeric:tabular-nums; }
+  .link { font:inherit; font-size:12.5px; font-weight:600; color:var(--violet3); background:none; border:0; cursor:pointer; padding:8px 0 0; }
+  .fl { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink3); margin:14px 0 6px; }
+  .stepper { display:flex; align-items:center; gap:12px; }
+  .stepper button { width:48px; height:48px; border-radius:12px; border:1px solid var(--border2); background:var(--bg4); color:var(--ink); font-size:22px; font-weight:700; cursor:pointer; }
+  .stepper .n { flex:1; text-align:center; }
+  .stepper .n b { font-size:22px; display:block; font-variant-numeric:tabular-nums; }
+  .stepper .n span { font-size:12.5px; color:var(--ink2); }
+  .chips { display:flex; gap:8px; flex-wrap:wrap; }
+  .chips button { font:inherit; font-size:13px; font-weight:600; min-height:44px; padding:0 14px; border-radius:11px; border:1px solid var(--border2); background:transparent; color:var(--ink2); cursor:pointer; }
+  .chips button.on { background:rgba(124,58,237,.2); border-color:var(--violet3); color:var(--ink); }
+  .date { display:flex; justify-content:space-between; align-items:center; min-height:48px; padding:0 13px; border-radius:11px; border:1px solid var(--border2); background:var(--bg4); font-weight:600; }
+  .date span { color:var(--violet3); font-size:12.5px; }
+  .sched div { display:flex; justify-content:space-between; font-size:13px; padding:5px 0; border-bottom:1px solid var(--border); }
+  .sched div:last-child { border:0; }
+  .sched span:last-child { font-variant-numeric:tabular-nums; font-weight:700; }
+  .warn { font-size:12px; color:var(--ink2); background:var(--bg2); border:1px dashed var(--border2); border-radius:11px; padding:10px 12px; margin-bottom:10px; }
+  .foot { position:sticky; bottom:0; padding:12px 14px 16px; background:linear-gradient(transparent,var(--bg) 25%); }
+  .btn { width:100%; font:inherit; font-size:14px; font-weight:700; color:#fff; background:var(--violet); border:0; border-radius:12px; min-height:50px; cursor:pointer; }
+  .btn:disabled { opacity:.4; cursor:default; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="notes">
+    <h1>Juntar carnês</h1>
+    <div class="sub">Mockup — dados de exemplo, nada disto está no código ainda. Marque e desmarque os carnês e mude o número de parcelas: os valores recalculam.</div>
+
+    <h2>Como funciona</h2>
+    <ul>
+      <li><b>Uma tela só, dois passos visíveis</b>: escolher os carnês e definir as parcelas novas. Sem assistente de várias páginas.</li>
+      <li><b>Cada carnê mostra os produtos</b> e quanto ainda falta, para a lojista conferir o que está juntando.</li>
+      <li><b>Parcelas novas</b>: número de parcelas com − e +, primeiro vencimento e intervalo. A lista das parcelas aparece antes de confirmar.</li>
+      <li><b>O total é o que falta pagar</b> nos carnês marcados. "Ajustar o total" abre o campo para dar desconto ou acréscimo, como a renegociação já faz hoje.</li>
+    </ul>
+
+    <h2>O que acontece ao confirmar</h2>
+    <ul>
+      <li>Os carnês marcados viram <b>um carnê só</b>, com todos os produtos e as parcelas novas.</li>
+      <li>As parcelas em aberto antigas somem; <b>o que já foi pago continua no histórico</b>.</li>
+      <li>O carnê novo imprime em A4 ou bobina como qualquer outro.</li>
+    </ul>
+
+    <h2>Onde fica</h2>
+    <ul>
+      <li>Link <b>"Juntar carnês"</b> no topo da lista (aparece com 2 ou mais em aberto) e dentro do <b>Renegociar</b> de cada carnê, que já abre com aquele carnê marcado.</li>
+    </ul>
+  </div>
+
+  <div class="phone">
+    <div class="head">
+      <button class="x" aria-label="Fechar">‹</button>
+      <div><b>Juntar carnês</b><span>Alexander Olivier</span></div>
+    </div>
+    <div class="body">
+      <div class="step"><i>1</i> Quais carnês juntar</div>
+      <div id="list"></div>
+
+      <div class="step" style="margin-top:18px"><i>2</i> Parcelas novas</div>
+      <div class="card">
+        <div class="tot"><small id="totLbl">Total a parcelar</small><b id="tot">R$ 0,00</b></div>
+        <button class="link">Ajustar o total (desconto ou acréscimo)</button>
+
+        <div class="fl">Número de parcelas</div>
+        <div class="stepper">
+          <button id="minus" aria-label="Menos uma parcela">−</button>
+          <div class="n"><b id="n">4×</b><span id="each">de R$ 0,00</span></div>
+          <button id="plus" aria-label="Mais uma parcela">+</button>
+        </div>
+
+        <div class="fl">Primeiro vencimento</div>
+        <div class="date">10/11/2026 <span>Alterar</span></div>
+
+        <div class="fl">Intervalo</div>
+        <div class="chips" id="iv">
+          <button data-d="30" class="on">Mensal</button><button data-d="15">Quinzenal</button><button data-d="7">Semanal</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="fl" style="margin-top:0">Como fica</div>
+        <div class="sched" id="sched"></div>
+      </div>
+
+      <div class="warn" id="warn"></div>
+    </div>
+    <div class="foot"><button class="btn" id="go">Juntar</button></div>
+  </div>
+</div>
+
+<script>
+const carnes = [
+  { nome: "Compra de 13/09", falta: 140, meta: "2 de 4 pagas · próx. 10/11", on: true,
+    prods: [["Vans Hylane 40/41", 120], ["2× Slide Alta 40/41", 160]] },
+  { nome: "Compra de 14/09", falta: 180, meta: '1 de 4 pagas · <span class="late">venceu 05/10</span>', on: true,
+    prods: [["Vans Hylane 38/39", 120], ["Sapatênis Boss 40/41", 120]] },
+  { nome: "Compra de 02/10", falta: 85, meta: "0 de 1 paga · vence 02/11", on: false,
+    prods: [["Sandália Feminina 36/37", 85]] },
+];
+let n = 4, dias = 30;
+const brl = v => "R$ " + v.toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+const $ = id => document.getElementById(id);
+
+function draw() {
+  $("list").innerHTML = carnes.map((c, i) => `
+    <div class="pick ${c.on ? "on" : ""}" data-i="${i}" role="checkbox" aria-checked="${c.on}" tabindex="0">
+      <div class="box">✓</div>
+      <div class="in">
+        <div class="l1"><b>${c.nome}</b><span class="amt">${brl(c.falta)}</span></div>
+        <div class="meta">${c.meta} · falta pagar</div>
+        <div class="prods">${c.prods.map(p => `<div><span>${p[0]}</span><span>${brl(p[1])}</span></div>`).join("")}</div>
+      </div>
+    </div>`).join("");
+  document.querySelectorAll(".pick").forEach(el => el.onclick = () => { carnes[el.dataset.i].on = !carnes[el.dataset.i].on; draw(); });
+
+  const sel = carnes.filter(c => c.on), total = sel.reduce((s, c) => s + c.falta, 0);
+  const base = Math.floor(total / n * 100) / 100, last = Math.round((total - base * (n - 1)) * 100) / 100;
+  $("tot").textContent = brl(total);
+  $("totLbl").textContent = sel.length ? `Falta pagar em ${sel.length} carnê${sel.length > 1 ? "s" : ""}` : "Total a parcelar";
+  $("n").textContent = n + "×";
+  $("each").textContent = "de " + brl(base);
+  const d0 = new Date(2026, 10, 10);
+  $("sched").innerHTML = Array.from({ length: n }, (_, i) => {
+    const d = new Date(d0);
+    if (dias === 30) d.setMonth(d.getMonth() + i); else d.setDate(d.getDate() + i * dias);
+    return `<div><span>Parcela ${i + 1}/${n} · ${d.toLocaleDateString("pt-BR")}</span><span>${brl(i === n - 1 ? last : base)}</span></div>`;
+  }).join("");
+  const ok = sel.length >= 2;
+  $("go").disabled = !ok;
+  $("go").textContent = ok ? `Juntar ${sel.length} carnês em ${n}× de ${brl(base)}` : "Marque pelo menos 2 carnês";
+  $("warn").innerHTML = ok
+    ? `Os ${sel.length} carnês viram <b>um só</b>, com ${sel.reduce((s, c) => s + c.prods.length, 0)} produtos. O que já foi pago continua no histórico.`
+    : "Para mudar as parcelas de um carnê só, use o Renegociar dele.";
+}
+$("minus").onclick = () => { if (n > 1) { n--; draw(); } };
+$("plus").onclick = () => { if (n < 24) { n++; draw(); } };
+document.querySelectorAll("#iv button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("#iv button").forEach(x => x.classList.toggle("on", x === b)); dias = +b.dataset.d; draw();
+});
+draw();
+</script>
+</body>
+</html>

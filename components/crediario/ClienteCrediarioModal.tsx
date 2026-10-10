@@ -30,6 +30,7 @@ import { ResponsiveSheet } from "@/components/ResponsiveSheet";
 import {
   creditApi,
   printReceipt,
+  printCarne,
   MAX_INSTALLMENTS_CEILING,
   type CreditAccount, type CreditInstallment, type CustomerTermsOverrides,
   type CreditHistoryEvent, type PaymentPlan, type CreditPix,
@@ -53,6 +54,12 @@ import { TabParcelas } from "./ficha/TabParcelas";
 import { TabHistorico } from "./ficha/TabHistorico";
 import { TabConta } from "./ficha/TabConta";
 import { GrupoEmAberto } from "./ficha/GrupoEmAberto";
+import { ImprimirCarnePanel } from "./ficha/ImprimirCarnePanel";
+import { JuntarCarnesPanel } from "./ficha/JuntarCarnesPanel";
+import {
+  organizarCarnes, carnesParaJuntar, CHAVE_SEM_CARNE, type ContaDoCarne, type EscopoCarne,
+} from "@/utils/crediarioCarne";
+import type { MergePlan } from "@/services/creditMerge";
 import { lojasComSaldo, mensagemErroRecebimento } from "@/utils/creditoOutraLoja";
 
 function translateStatus(status: string | null | undefined): string {
@@ -70,9 +77,13 @@ type Props = {
   companyId: string;
   customerId: string | null;
   customerName?: string | null;
+  /** Chave Pix que o QR do carnê usa (canal digital — NÃO a da régua de
+   *  cobrança). undefined = carregando ou leitura falhou (não acusa falta). */
   pixKey?: string | null;
   storeName?: string | null;
   onClose: () => void;
+  /** Leva aonde a chave Pix do QR é cadastrada (Canal Digital → Meu Site). */
+  onOpenSettings?: () => void;
   onCobrar?: (customerId: string, customerName: string, phone: string | null) => void;
   onChanged?: () => void;
   /** Lojas do grupo que este usuário pode abrir (faixa "também deve na..."). */
@@ -84,7 +95,7 @@ type Props = {
 
 export function ClienteCrediarioModal({
   visible, companyId, customerId, customerName, pixKey, storeName,
-  onClose, onCobrar, onChanged,
+  onClose, onCobrar, onChanged, onOpenSettings,
   accessibleCompanyIds, onOpenInCompany, switchingCompany,
 }: Props) {
   const qc = useQueryClient();
@@ -117,6 +128,14 @@ export function ClienteCrediarioModal({
   const [renegFirstDue, setRenegFirstDue] = useState("");
 
   const [renegSubmitting, setRenegSubmitting] = useState(false);
+
+  // ── 10/10/2026: escolha do formato ao imprimir (A4 ou bobina) ─────────
+  // accountId: string = aquele carnê; null = grupo sem carnê; undefined = todos.
+  const [printScope, setPrintScope] = useState<{ accountId: EscopoCarne; label: string; parcelas: number } | null>(null);
+
+  // ── 10/10/2026: juntar carnês. null = fechado; array = chaves já marcadas
+  // ao abrir (vazio pelo link do cabeçalho; o carnê de origem pelo Renegociar).
+  const [juntarPre, setJuntarPre] = useState<string[] | null>(null);
 
   const [histEvents, setHistEvents] = useState<CreditHistoryEvent[]>([]);
   const [histCursor, setHistCursor] = useState<string | null>(null);
@@ -207,6 +226,8 @@ export function ClienteCrediarioModal({
       setEditDueDateError("");
       setRenegScope(null);
       setRenegSubmitting(false);
+      setPrintScope(null);
+      setJuntarPre(null);
       setHistEvents([]);
       setHistCursor(null);
       setHistLoaded(false);
@@ -276,6 +297,8 @@ export function ClienteCrediarioModal({
 
   const realCarnes = accounts.filter(a => a && a.id != null);
   const useCarneLayout = realCarnes.length > 0;
+  // Chips de carnê do "Receber pagamento": quitados ficam de fora.
+  const carnesParaReceber = realCarnes.filter(a => (a.remaining ?? a.balance) > 0.009 || a.id === freeAccountId);
 
   const nextDueDate = openInst.length > 0
     ? openInst.reduce((best, i) => {
@@ -283,6 +306,15 @@ export function ClienteCrediarioModal({
         return (!best || d < new Date(best).getTime()) ? i.due_date : best;
       }, "" as string)
     : "";
+
+  // Carnês que podem entrar numa junção (em aberto, com saldo). Com menos de
+  // dois não há o que juntar: as entradas somem.
+  const carnesJuntaveis = useMemo(
+    () => carnesParaJuntar(organizarCarnes<CreditInstallment>(accounts as ContaDoCarne[], openInst, isInstallmentOverdue).abertos),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [detail?.accounts, openInst],
+  );
+  const podeJuntar = carnesJuntaveis.length >= 2;
 
   const isBlocked = profile?.status === "blocked";
 
@@ -344,6 +376,20 @@ export function ClienteCrediarioModal({
     setFreeAmt(str);
     setReceberOpen(true);
     triggerPreview(str, freeAccountId);
+  }
+
+  // 10/10/2026 (carnês por compra): "Receber" que vem da aba de carnês.
+  // Com accountId o recebimento mira AQUELE carnê — "Receber R$ 140,00" do
+  // cartão não pode cair na parcela mais antiga de outro. Sem accountId
+  // (parcela avulsa, grupo sem carnê) volta para "Todos", a regra de sempre.
+  // Separado do prefill porque os atalhos de valor do painel (R$ 50/100/200)
+  // usam o prefill e não podem desfazer o carnê escolhido nos chips.
+  function receberDaAba(v: number, accountId?: string) {
+    const str = v.toFixed(2).replace(".", ",");
+    setFreeAccountId(accountId);
+    setFreeAmt(str);
+    setReceberOpen(true);
+    triggerPreview(str, accountId);
   }
 
   async function handleCreateAccount() {
@@ -635,6 +681,26 @@ export function ClienteCrediarioModal({
     }
   }
 
+  // ── 10/10/2026: carnês juntados — avisa, recarrega e abre o carnê novo ──
+  function handleJuntou(res: MergePlan) {
+    const adj = res.adjustment;
+    const n = res.installments_count;
+    toast.success(
+      res.replayed
+        ? "Estes carnês já tinham sido juntados."
+        : adj?.type === "discount"
+          ? `Carnês juntados em ${n}x, com desconto de ${fmt(adj.amount)}.`
+          : adj?.type === "surcharge"
+            ? `Carnês juntados em ${n}x, com acréscimo de ${fmt(adj.amount)}.`
+            : `Carnês juntados em ${n}x.`
+    );
+    setJuntarPre(null);
+    // O carnê novo já aparece aberto quando a ficha recarregar.
+    if (res.account?.id) setExpandedAccountId(res.account.id);
+    setHistLoaded(false);
+    handleHistoricRefresh();
+  }
+
   // ── Callback de refresh compartilhado com a TabHistorico (pós-devolução) ──
   function handleHistoricRefresh() {
     qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
@@ -670,7 +736,7 @@ export function ClienteCrediarioModal({
   const renegDelta = +(renegTotalVal - (renegScope?.openRemaining || 0)).toFixed(2);
 
   const freeAmtValue = parseAmount(freeAmt);
-  const anyOverlayOpen = !!pixInstId || !!renegScope || !!editingDueDateInst || receberOpen;
+  const anyOverlayOpen = !!pixInstId || !!renegScope || !!editingDueDateInst || receberOpen || !!printScope || !!juntarPre;
   const methodLabelOf = (key: string | null) => PAYMENT_METHODS.find(p => p.key === key)?.label || key || "";
   const methodLabel = methodLabelOf(freeMethod);
   // Recebimento igual há pouco (razão + último desta ficha): o gate avisa,
@@ -778,7 +844,8 @@ export function ClienteCrediarioModal({
               {(["parcelas", "historico", "conta"] as Tab[]).map(t => (
                 <Pressable key={t} style={[m.tab, tab === t && m.tabOn]} onPress={() => setTab(t)}>
                   <Text style={[m.tabTxt, tab === t && m.tabTxtOn]}>
-                    {t === "parcelas" ? "Parcelas" : t === "historico" ? "Histórico" : `Conta${(hasTermsOverride || isBlocked) ? " •" : ""}`}
+                    {/* 10/10/2026: com carnê na ficha a aba se chama "Carnês" (mockup). */}
+                    {t === "parcelas" ? (useCarneLayout ? "Carnês" : "Parcelas") : t === "historico" ? "Histórico" : `Conta${(hasTermsOverride || isBlocked) ? " •" : ""}`}
                   </Text>
                 </Pressable>
               ))}
@@ -813,8 +880,10 @@ export function ClienteCrediarioModal({
                     setNewAccountName={setNewAccountName} creatingAccount={creatingAccount}
                     expandedAccountId={expandedAccountId} setExpandedAccountId={setExpandedAccountId}
                     handleEditDueDateOpen={handleEditDueDateOpen} onRenegociar={openRenegociar}
+                    onImprimir={(accountId, label, parcelas) => setPrintScope({ accountId, label, parcelas })}
+                    onJuntar={podeJuntar ? () => setJuntarPre([]) : undefined}
                     openInstallmentPix={openInstallmentPix}
-                    prefill={prefill}
+                    prefill={receberDaAba}
                     openBalance={totalBalance}
                     companyId={companyId} customerId={customerId!} phone={phone} onCobrar={onCobrar} name={name}
                   />
@@ -851,7 +920,9 @@ export function ClienteCrediarioModal({
           {/* F3: CTA fixo — abre o sheet "Receber pagamento" */}
           {!anyOverlayOpen && tab === "parcelas" && !detailQ.isLoading && (
             <View style={m.footer}>
-              <Pressable style={m.cta} onPress={() => setReceberOpen(true)}>
+              {/* Volta para "Todos": o Receber de um cartão mira o carnê dele, e
+                  o rodapé é o recebimento livre (parcela mais antiga primeiro). */}
+              <Pressable style={m.cta} onPress={() => { setFreeAccountId(undefined); setReceberOpen(true); }}>
                 <Text style={m.ctaTxt}>Receber pagamento</Text>
               </Pressable>
             </View>
@@ -939,7 +1010,11 @@ export function ClienteCrediarioModal({
               <Text style={m.editDueDateSub}>
                 Digite um valor e veja como ele é aplicado nas parcelas antes de confirmar.
               </Text>
-                {realCarnes.length > 1 && (
+                {/* 10/10/2026: com carnê por compra a lista cresce — só entram os
+                    que ainda têm o que receber (e o que estiver escolhido). E
+                    aparece também com um carnê só quando o Receber veio do
+                    cartão dele: a lojista precisa VER para onde vai o dinheiro. */}
+                {(carnesParaReceber.length > 1 || freeAccountId !== undefined) && (
                   <View style={{ marginBottom: 12 }}>
                     <Text style={m.fieldLabel}>Carnê</Text>
                     <View style={m.chipRow}>
@@ -949,7 +1024,7 @@ export function ClienteCrediarioModal({
                       >
                         <Text style={[m.chipTxt, freeAccountId === undefined && m.chipTxtOn]}>Todos</Text>
                       </Pressable>
-                      {realCarnes.map(acc => (
+                      {carnesParaReceber.map(acc => (
                         <Pressable
                           key={acc.id!}
                           style={[m.chip, freeAccountId === acc.id && m.chipOn]}
@@ -1239,6 +1314,20 @@ export function ClienteCrediarioModal({
                 style={m.dateInput}
               />
 
+              {/* 10/10/2026: a renegociação mexe num carnê só. Quem quer uma
+                  parcela única para tudo sai daqui para o Juntar, já com este
+                  carnê marcado. */}
+              {podeJuntar && carnesJuntaveis.some(cj => cj.key === (renegScope.accountId ?? CHAVE_SEM_CARNE)) && (
+                <Pressable
+                  onPress={() => { const k = renegScope.accountId ?? CHAVE_SEM_CARNE; setRenegScope(null); setJuntarPre([k]); }}
+                  style={{ minHeight: 44, justifyContent: "center", alignSelf: "flex-start", marginTop: 6 }}
+                  accessibilityRole="button"
+                  testID="reneg-juntar-com-outros"
+                >
+                  <Text style={{ fontSize: 12.5, fontWeight: "600", color: Colors.violet3 }}>Juntar com outros carnês</Text>
+                </Pressable>
+              )}
+
               {Math.abs(renegDelta) > 0.005 && (
                 <View style={m.renegDeltaRow}>
                   <Text style={m.renegDeltaLbl}>{renegDelta < 0 ? "Desconto no saldo" : "Acréscimo no saldo"}</Text>
@@ -1270,6 +1359,36 @@ export function ClienteCrediarioModal({
               </View>
              </ModalPop>
             </View>
+          )}
+
+          {juntarPre && (
+            <JuntarCarnesPanel
+              companyId={companyId}
+              customerId={customerId!}
+              customerName={name}
+              carnes={carnesJuntaveis}
+              preselecionados={juntarPre}
+              onBack={() => setJuntarPre(null)}
+              onClose={onClose}
+              onDone={handleJuntou}
+            />
+          )}
+
+          {printScope && (
+            <ImprimirCarnePanel
+              titulo={printScope.label}
+              parcelas={printScope.parcelas}
+              pixKey={pixKey}
+              onBack={() => setPrintScope(null)}
+              onClose={onClose}
+              onCadastrarPix={onOpenSettings}
+              onPrint={(formato) => {
+                // Síncrono, dentro do clique: a janela de impressão abre antes
+                // de qualquer await (services/printWindow).
+                printCarne(companyId, customerId!, { format: formato, accountId: printScope.accountId });
+                setPrintScope(null);
+              }}
+            />
           )}
 
           {editingDueDateInst && (

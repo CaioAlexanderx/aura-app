@@ -13,6 +13,10 @@ import { PreviaCrediarioModal } from "@/components/whatsapp/PreviaCrediarioModal
 
 // ============================================================
 // Configurações do Crediário (Hub F1, 05/06/2026)
+// 10/10/2026: movida de app/crediario/ para app/(tabs)/crediario/ — abria
+//   FORA do shell (sem sidebar/topbar). A URL não muda (/crediario/settings).
+//   Subtela do módulo crediário, sem item de menu: chave própria
+//   "crediario.config" nos dois mapas de useVisibleModules, como otica.config.
 // Fase 1 FE (07/06/2026):
 //   - Exibe period_unit/period_count (periodicidade)
 //   - Novo campo score_warn_min ("avisar quando score < X");
@@ -393,7 +397,11 @@ export default function CrediarioSettingsScreen() {
   return (
     <ScrollView style={st.screen} contentContainerStyle={st.content}>
       <View style={st.headerRow}>
-        <Pressable onPress={() => router.back()} style={st.backBtn}>
+        {/* 10/10/2026: a tela mudou para dentro do shell ((tabs)/crediario/settings,
+            mesma URL /crediario/settings). O voltar vai SEMPRE para o Crediário:
+            router.back() caía no Painel em link direto e voltava para o WhatsApp
+            quando a entrada era por lá, com o rótulo dizendo "Crediário". */}
+        <Pressable onPress={() => router.push("/(tabs)/crediario" as any)} style={st.backBtn} testID="crediario-config-voltar" accessibilityRole="button">
           <Icon name="chevron_right" size={16} color={Colors.violet3} style={{ transform: [{ rotate: "180deg" }] } as any} />
           <Text style={st.backText}>Crediário</Text>
         </Pressable>

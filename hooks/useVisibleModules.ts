@@ -35,6 +35,10 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   // chave fica fora do catalogo do ClientsAdmin por ora.
   cupons: 'essencial',
   crediario: 'negocio',
+  // 10/10/2026 -- Configuracoes do Crediario (app/(tabs)/crediario/settings)
+  // passam a abrir dentro do shell. Subtela do modulo, sem item de menu:
+  // chave PROPRIA (regra 3), mesmo plano do crediario -- como otica.config.
+  'crediario.config': 'negocio',
   agendamento: 'negocio',
   canal: 'negocio', whatsapp: 'negocio',
   // 16/09/2026 -- Reativacao por WhatsApp (app/clientes/reativacao.tsx) ganha
@@ -127,7 +131,8 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   // 14/09/2026 -- "cupons" entra pelo mesmo motivo (usava mod "pdv").
   pdv:           ['pdv', 'os', 'cupons'],
   // 15/05/2026 -- chave "vendas" controla /vendas + /crediario (nao herda mais do pdv).
-  vendas:        ['vendas', 'crediario'],
+  // 10/10/2026 -- crediario.config acompanha o crediario (mesma pessoa).
+  vendas:        ['vendas', 'crediario', 'crediario.config'],
   estoque:       ['estoque'],
   // 16/09/2026 -- o grupo "Clientes e WhatsApp" do menu passa a ser a casa das
   // quatro telas de relacionamento. "whatsapp" ja tinha plano em

@@ -257,7 +257,7 @@ export function CobrancaPreviewModal({
                 ]}
                 onPress={handleSend}
               >
-                <Icon name="message_circle" size={15} color="#fff" />
+                <Icon name="whatsapp" size={15} color="#fff" />
                 <Text style={cs.sendTxt}>Enviar pelo WhatsApp</Text>
               </Pressable>
             </View>

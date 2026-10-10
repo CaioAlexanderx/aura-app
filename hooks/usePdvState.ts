@@ -737,9 +737,20 @@ export function usePdvState() {
         first_due_date: payload.unify.first_due_date,
         amount:        totalAfterCoupon, // valor da nova compra
       };
-      finalizeSale(undefined, { installments: 1, first_due_date: payload.first_due_date });
+      // 10/10/2026 (Aura-backend#803): a venda já nasce NAQUELE carnê
+      // (credit_account_id) — sem isso o backend novo criaria um carnê só
+      // para ela. O /unify depois continua, como sempre, para montar o
+      // cronograma único.
+      finalizeSale(undefined, {
+        installments: 1,
+        first_due_date: payload.first_due_date,
+        credit_account_id: payload.unify.account_id,
+      });
     } else {
-      // Fluxo normal — inalterado
+      // Fluxo normal — inalterado: não manda carnê, o backend cria o da venda.
+      // Limpa uma unificação que tenha ficado pendurada de uma tentativa que
+      // falhou (ex.: 422 do carnê escolhido) — senão ela seria aplicada nesta.
+      pendingUnifyRef.current = null;
       finalizeSale(undefined, payload);
     }
   }

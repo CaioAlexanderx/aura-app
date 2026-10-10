@@ -321,6 +321,15 @@ export type PdvSaleResponse = {
     sale_number?: number | null;
     [k: string]: any;
   };
+  /** 10/10/2026 (Aura-backend#803): carnê em que a venda no crediário caiu —
+   *  o criado para ela (`account_created`) ou o escolhido para juntar. Ausente
+   *  em backend antigo e em venda sem crediário. Ainda sem uso na tela. */
+  credit?: {
+    account_id?: string | null;
+    account_name?: string | null;
+    account_created?: boolean;
+    [k: string]: any;
+  };
   [k: string]: any;
 };
 
