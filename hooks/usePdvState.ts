@@ -80,6 +80,8 @@ import { useMatconQuote, type MatconQuoteEditing } from "@/hooks/useMatconQuote"
 import { useMatconReferral } from "@/hooks/useMatconReferral";
 import { useOrcamentoNoCaixa, chaveDoOrcamento } from "@/hooks/useOrcamentoNoCaixa";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
+import { useComandaNoCaixa } from "@/hooks/useComandaNoCaixa";
+import { lerComandaEnabled } from "@/utils/comanda";
 import { podeMostrarLogo } from "@/components/screens/pdv/MerchantLogo";
 
 import { toast } from "@/components/Toast";
@@ -232,6 +234,7 @@ export function usePdvState() {
     itemCount, isProcessing,
     addToCart, setQty, updateQty, setUnitPrice, removeItem, finalizeSale, newSale: rawNewSale,
     setQuoteId,
+    comanda: comandaNoCarrinho, setComanda,
     referredProfessionalId, setReferredProfessionalId,
     setLotAllocations,
     selectedCustomerId, selectedCustomerName, selectedCustomerPhone, selectCustomer,
@@ -338,6 +341,24 @@ export function usePdvState() {
     rawNewSale();
     setQuery("");
   }
+
+  // ── Comandas (09/10/2026) ───────────────────────────────────────────────
+  // "Adicionar à comanda" manda o carrinho para a comanda N; "Fechar
+  // comanda" traz o consumo de volta e a venda segue normal. Só com
+  // pdv_settings.comanda_enabled; desligada, nada disso aparece.
+  const comandaEnabled = lerComandaEnabled(pdvSettings);
+  const comandas = useComandaNoCaixa({
+    companyId: company?.id,
+    enabled: comandaEnabled,
+    isDemo,
+    cart,
+    comanda: comandaNoCarrinho,
+    setComanda,
+    limpar: newSale,
+    addToCart,
+    setQty,
+    products,
+  });
 
   // ── Matcon M1 — Caixa abre orçamento convertido (`?quote={id}`) ─────────
   // A esteira de Orçamentos manda pra cá com `?quote=<id>` depois de
@@ -846,7 +867,10 @@ export function usePdvState() {
     !showTroca &&
     !showChangeModal &&
     !showNewCustomer &&
-    !showCrediario;
+    !showCrediario &&
+    // Número de comanda é digitado: o leitor não pode engolir as teclas.
+    !comandas.showAdicionar &&
+    !comandas.showFechar;
   useGlobalBarcodeScanner({ onScan: handleScan, enabled: scannerListening });
 
   // ── Dados derivados para renderização ────────────────────────────────────────────
@@ -1010,6 +1034,16 @@ export function usePdvState() {
     savingQuote:       matconQuote.saving,
     savedQuote:        matconQuote.savedQuote,
     editingQuote:      editingQuote ? { number: editingQuote.number, onCancel: newSale } : null,
+    // Comandas: null com a chave desligada = rodapé de sempre.
+    comanda: comandaEnabled
+      ? {
+          onAdd:   comandas.abrirAdicionar,
+          onClose: comandas.abrirFechar,
+          charging: comandaNoCarrinho
+            ? { number: comandaNoCarrinho.number, feePct: comandaNoCarrinho.feePct, onCancel: comandas.cancelarCobranca }
+            : null,
+        }
+      : null,
     discountLabel,
     discountType,
     setDiscountType,
@@ -1071,6 +1105,8 @@ export function usePdvState() {
     lastScannedCode, scannerListening,
     // Employees / NFC-e
     employees, autoEmitNfce,
+    // Comandas (modais em PdvModals)
+    comandas,
     // Cart
     payment, setPayment, lastSale, newSale, isProcessing,
     // Matcon M3 — chip "Indicado por" do Caixa (IndicadoPorChip)

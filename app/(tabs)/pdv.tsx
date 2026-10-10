@@ -169,6 +169,9 @@ function CaixaScreenInner() {
       saleTotal={st.crediarioModalAmount}
       onCrediarioConfirm={st.handleCrediarioConfirm}
       onCrediarioClose={st.closeCrediario}
+      comandas={st.comandas}
+      cartItemCount={cartProps.items.length}
+      cartTotal={cartProps.subtotal}
     />
   );
 

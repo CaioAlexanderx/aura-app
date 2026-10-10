@@ -83,6 +83,9 @@ export type PdvSettings = {
   // em zero (o backend não deixa negativo). Leitura só por
   // utils/vendaSemEstoque.lerVendaSemEstoque.
   allow_sale_without_stock?: boolean;
+  // 09/10/2026 (Comandas do Caixa, migration 368): liga "Adicionar à comanda"
+  // e "Fechar comanda" no Caixa. Leitura só por utils/comanda.lerComandaEnabled.
+  comanda_enabled?: boolean;
   // 18/05/2026 (Fase 0 Aura Food, migration 118)
   food_mode_enabled?: boolean;
   service_fee_pct?: number;
