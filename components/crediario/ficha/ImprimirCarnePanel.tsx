@@ -8,7 +8,9 @@
 //  - A última escolha fica lembrada no aparelho (localStorage); quem nunca
 //    escolheu começa na bobina, que é o que já saía antes.
 //  - Sem chave Pix o carnê sai sem QR Code: o aviso aparece AQUI, antes de
-//    gastar papel, com atalho para onde a chave é cadastrada.
+//    gastar papel, com atalho para onde a chave é cadastrada. A chave é a
+//    do canal digital (a que o QR usa), não a da régua de cobrança — ver
+//    utils/crediarioCarne.chavePixDoQr.
 //
 // É um painel da ficha (mesmo padrão de Receber/Pix/Renegociar: desliza por
 // cima, cabeçalho com ‹ Voltar, rodapé fixo). No mockup é um sheet de baixo;
@@ -111,7 +113,7 @@ export function ImprimirCarnePanel({
             <View style={s.warn} testID="imprimir-carne-sem-pix">
               <Text style={s.warnT}>
                 <Text style={{ fontWeight: "800", color: Colors.ink }}>Sem chave Pix cadastrada</Text>
-                , o carnê sai sem QR Code.
+                , o carnê sai sem QR Code. A chave fica em Canal Digital → Meu Site → Pagamentos.
               </Text>
               {!!onCadastrarPix && (
                 <Pressable

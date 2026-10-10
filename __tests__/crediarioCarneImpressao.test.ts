@@ -8,6 +8,7 @@
 // ============================================================
 import {
   carnePrintPath, lerFormatoCarne, salvarFormatoCarne, FORMATO_PADRAO,
+  chavePixDoQr, ROTA_DA_CHAVE_PIX_DO_QR,
 } from "@/utils/crediarioCarne";
 
 const EMP = "emp-1";
@@ -36,6 +37,33 @@ describe("carnePrintPath", () => {
   it("grupo sem carnê manda account=none; todos não manda account", () => {
     expect(carnePrintPath(EMP, CLI, { accountId: null })).toBe(BASE + "?account=none");
     expect(carnePrintPath(EMP, CLI, { format: "a4", accountId: undefined })).toBe(BASE + "?format=a4");
+  });
+});
+
+// 10/10/2026 (correção): o aviso "sem chave Pix" olha a chave que o QR usa
+// (digital_channel_config.pix_key), não a pix_key da régua de cobrança.
+describe("chavePixDoQr", () => {
+  it("com chave no canal digital, devolve a chave", () => {
+    expect(chavePixDoQr({ isSuccess: true, data: { pix_key: " loja@pix.com " } })).toBe("loja@pix.com");
+  });
+  it("config carregada sem chave: null (mostra o aviso)", () => {
+    expect(chavePixDoQr({ isSuccess: true, data: { pix_key: null } })).toBeNull();
+    expect(chavePixDoQr({ isSuccess: true, data: { pix_key: "   " } })).toBeNull();
+    expect(chavePixDoQr({ isSuccess: true, data: {} })).toBeNull();
+  });
+  it("carregando ou com erro: undefined (não acusa o que não conferiu)", () => {
+    expect(chavePixDoQr({ isSuccess: false, data: undefined })).toBeUndefined();
+    expect(chavePixDoQr({ isSuccess: false, data: { pix_key: null } })).toBeUndefined();
+    expect(chavePixDoQr({ isSuccess: true, data: null })).toBeUndefined();
+    expect(chavePixDoQr(undefined)).toBeUndefined();
+  });
+  it("a tela do crediário lê o canal digital, não a régua, e o atalho vai para o Meu Site", () => {
+    const fonte = require("fs").readFileSync(
+      require("path").join(__dirname, "..", "app", "(tabs)", "crediario.tsx"), "utf8");
+    expect(fonte).toContain("pixKey={chavePixDoQr(canalQ)}");
+    expect(fonte).toContain("/digital-channel`");
+    expect(fonte).toContain("router.push(ROTA_DA_CHAVE_PIX_DO_QR as any)");
+    expect(ROTA_DA_CHAVE_PIX_DO_QR).toBe("/canal?tab=site");
   });
 });
 

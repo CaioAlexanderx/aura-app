@@ -12,6 +12,8 @@ import { Colors, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useAuthStore } from "@/stores/auth";
 import { creditApi, valorAPagarParcela } from "@/services/creditApi";
+import { request } from "@/services/api";
+import { chavePixDoQr, ROTA_DA_CHAVE_PIX_DO_QR } from "@/utils/crediarioCarne";
 import { waApi, WA_CREDIARIO_TEMPLATES } from "@/services/waApi";
 import { isWaErrorCode, mapWaError, waAutoBlockers } from "@/components/whatsapp/waGuards";
 import { toast } from "@/components/Toast";
@@ -345,6 +347,17 @@ export default function CrediarioScreen() {
     queryFn: () => creditApi.listBalances(company!.id, { onlyOpen: true, q: searchQ || undefined }),
     enabled: !!company?.id,
     staleTime: 60_000,
+  });
+
+  // 10/10/2026: config do canal digital — de onde sai a chave Pix do QR do
+  // carnê. Mesma queryKey do useDigitalChannel (divide o cache com o Canal
+  // Digital). retry curto: se falhar, a ficha só deixa de mostrar o aviso.
+  const canalQ = useQuery({
+    queryKey: ["digitalChannel", company?.id],
+    queryFn: () => request<any>(`/companies/${company!.id}/digital-channel`),
+    enabled: !!company?.id,
+    staleTime: 60_000,
+    retry: 1,
   });
 
   const rulesQ = useQuery({
@@ -874,11 +887,12 @@ export default function CrediarioScreen() {
         companyId={company?.id || ""}
         customerId={modalCust?.id || null}
         customerName={modalCust?.name || null}
-        // undefined enquanto a régua não carregou: a ficha só acusa "sem chave
-        // Pix" (na escolha do formato do carnê) quando sabe que não há.
-        pixKey={rulesQ.data ? ((rulesQ.data as any)?.pix_key || null) : undefined}
+        // A chave do QR do carnê é a do canal digital, NÃO a pix_key da régua
+        // (essa só entra no texto da cobrança). undefined enquanto carrega ou
+        // se a leitura falhar: a ficha só acusa "sem chave Pix" quando sabe.
+        pixKey={chavePixDoQr(canalQ)}
         storeName={company?.name || null}
-        onOpenSettings={() => { setModalCust(null); router.push("/crediario/settings" as any); }}
+        onOpenSettings={() => { setModalCust(null); router.push(ROTA_DA_CHAVE_PIX_DO_QR as any); }}
         onCobrar={handleCobrar}
         onChanged={() => {
           qc.invalidateQueries({ queryKey: ["credit-balances", company?.id] });

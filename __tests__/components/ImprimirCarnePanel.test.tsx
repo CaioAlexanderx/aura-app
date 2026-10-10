@@ -60,6 +60,8 @@ describe("ImprimirCarnePanel", () => {
     const { t, props } = montar({ pixKey: null });
     expect(porId(t, "imprimir-carne-sem-pix")).toHaveLength(1);
     expect(texto(t.toJSON())).toContain("Sem chave Pix cadastrada");
+    // Diz onde a chave do QR mora (não é a das Configurações do Crediário).
+    expect(texto(t.toJSON())).toContain("Canal Digital → Meu Site → Pagamentos");
     apertar(t, "imprimir-carne-cadastrar-pix");
     expect(props.onCadastrarPix).toHaveBeenCalled();
   });

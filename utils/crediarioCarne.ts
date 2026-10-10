@@ -74,6 +74,30 @@ export function carnePrintPath(companyId: string, customerId: string, opts: Opco
   return qs.length ? path + "?" + qs.join("&") : path;
 }
 
+// ─── Impressão: a chave Pix que o QR do carnê usa ────────────────────────
+// 10/10/2026 (correção): o QR do carnê e o Pix por parcela saem de
+// digital_channel_config.pix_key (GET /companies/:id/digital-channel). A
+// pix_key das Configurações do Crediário (credit_collection_rules) é OUTRA:
+// só entra no texto da mensagem de cobrança. Uma loja pode ter uma e não a
+// outra — o aviso "sem chave Pix" tem que olhar a do QR.
+
+/** Onde a chave do QR é cadastrada no app: Canal Digital → Meu Site → Pagamentos. */
+export const ROTA_DA_CHAVE_PIX_DO_QR = "/canal?tab=site";
+
+/**
+ * Chave Pix do QR para o aviso do painel de impressão.
+ *   string    → tem chave;
+ *   null      → a config carregou e NÃO tem chave (mostra o aviso);
+ *   undefined → carregando ou a leitura falhou: não sei, não acuso.
+ */
+export function chavePixDoQr(
+  leitura: { isSuccess?: boolean; data?: { pix_key?: string | null } | null } | null | undefined,
+): string | null | undefined {
+  if (!leitura || leitura.isSuccess !== true || leitura.data == null) return undefined;
+  const chave = String(leitura.data.pix_key || "").trim();
+  return chave || null;
+}
+
 // ─── Cartão do carnê: derivação ──────────────────────────────────────────
 // Tipos estruturais (e não os de services/creditApi) para este arquivo não
 // depender do cliente HTTP: creditApi importa daqui, não o contrário.

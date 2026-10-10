@@ -77,11 +77,12 @@ type Props = {
   companyId: string;
   customerId: string | null;
   customerName?: string | null;
-  /** Chave Pix da cobrança. undefined = ainda carregando (não acusa falta). */
+  /** Chave Pix que o QR do carnê usa (canal digital — NÃO a da régua de
+   *  cobrança). undefined = carregando ou leitura falhou (não acusa falta). */
   pixKey?: string | null;
   storeName?: string | null;
   onClose: () => void;
-  /** Leva às Configurações do Crediário (onde a chave Pix é cadastrada). */
+  /** Leva aonde a chave Pix do QR é cadastrada (Canal Digital → Meu Site). */
   onOpenSettings?: () => void;
   onCobrar?: (customerId: string, customerName: string, phone: string | null) => void;
   onChanged?: () => void;
