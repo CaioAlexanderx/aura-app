@@ -230,6 +230,21 @@ export function pecaDoDestaque(
   return { produto: p, escolhida: false };
 }
 
+/**
+ * A peça do destaque aparece junto com os banners da lojista?
+ *
+ * Só quando ela ESCOLHEU a peça na aba Design e a peça ainda está na
+ * loja (10/10/2026, Sheid Mania: três banners e a caneca branca girando
+ * logo abaixo). No automático, loja com banner segue só com o banner,
+ * como sempre: a escolha é o que diz que a lojista quer os dois.
+ */
+export function destaqueComBanners(
+  store: StorePayload | null | undefined,
+  banners: BannerDaHome[],
+): boolean {
+  return banners.length > 0 && pecaDoDestaque(store)?.escolhida === true;
+}
+
 export type ArteDoDestaque = { rotulo: string; values: Record<string, any> };
 
 /** Nomes de exemplo quando a peça não tem arte pronta (mockup, tela 2). */

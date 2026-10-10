@@ -42,7 +42,7 @@ import {
 import { useReduzirMovimento } from "../movimento";
 import { noDeRolagem, noDom, useRolagemGuardada } from "./useRolagemGuardada";
 import {
-  artesDaHome, bannerAutomaticoDaHome, bannersDaHome, blocoParaEmpresas, descontoDoPix, gradeDaHome, itensDaFaixa, larguraDoCartao, mostrarTirarDuvida,
+  artesDaHome, bannerAutomaticoDaHome, bannersDaHome, blocoParaEmpresas, descontoDoPix, destaqueComBanners, gradeDaHome, itensDaFaixa, larguraDoCartao, mostrarTirarDuvida,
   selosDaHome, type ArteDaHome,
 } from "./regrasDaHome";
 
@@ -638,7 +638,12 @@ export function HomeDaVitrineNova({ sf, slug }: { sf: StorefrontState; slug: str
           {recado ? <RecadoDaHome texto={recado} desktop={desktop} onFechar={() => v?.deixarRecadoNaHome?.(null)} /> : null}
           <View onLayout={(e) => setFimDoTopo(e.nativeEvent.layout.y + e.nativeEvent.layout.height)}>
             {banners.length ? (
-              <HeroDeBanners sf={sf} banners={banners} largura={width} desktop={desktop} rolarPara={rolarPara} />
+              <>
+                <HeroDeBanners sf={sf} banners={banners} largura={width} desktop={desktop} rolarPara={rolarPara} />
+                {destaqueComBanners(store, banners) ? (
+                  <HeroDaPeca sf={sf} slug={slug} desktop={desktop} onVerLoja={verLoja} />
+                ) : null}
+              </>
             ) : (
               <>
                 {bannerAutomatico ? (

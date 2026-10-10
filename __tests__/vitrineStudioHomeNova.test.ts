@@ -13,7 +13,7 @@ import {
   lugarDaLoja, produtosDaArvore, alvoDaCategoria, menuDaLoja, trilhaDaCategoria, subcategorias,
   buscarNaVitrine, trechosDestacados, sugestoesDeBusca, mensagemDaBuscaVazia, selosDaHome,
   categoriaMaisForte, tituloParaEmpresas, blocoParaEmpresas, artesDaHome, mostrarTirarDuvida,
-  descontoDoPix, gradeDaHome, TITULO_FIXO_DO_HERO,
+  descontoDoPix, gradeDaHome, TITULO_FIXO_DO_HERO, destaqueComBanners,
 } from "@/components/studio/storefront/home/regrasDaHome";
 import { resolverTela } from "@/components/studio/storefront/rotasDaVitrine";
 import { agruparVitrine } from "@/components/studio/storefront/categoryGrouping";
@@ -155,6 +155,16 @@ describe("a peça do destaque sem banner", () => {
       .toMatchObject({ produto: { id: "tres-d" }, escolhida: false });
     expect(pecaDoDestaque(loja({ products: [peca("s", { image_url: null }), peca("f")] }))!.produto.id).toBe("f");
     expect(pecaDoDestaque(loja())).toBeNull();
+  });
+  test("com banner da lojista, a peça só acompanha quando foi escolhida na aba Design", () => {
+    const banner = [{ headline: "Dia das Mães", enabled: true }];
+    const escolhida = loja({ products: produtos, site: { hero_product_id: "outra-3d", banners: banner, banners_automaticos: false } });
+    const automatica = loja({ products: produtos, site: { banners: banner, banners_automaticos: false } });
+    const saiu = loja({ products: produtos, site: { hero_product_id: "saiu", banners: banner, banners_automaticos: false } });
+    expect(destaqueComBanners(escolhida, bannersDaHome(escolhida))).toBe(true);
+    expect(destaqueComBanners(automatica, bannersDaHome(automatica))).toBe(false);
+    expect(destaqueComBanners(saiu, bannersDaHome(saiu))).toBe(false);
+    expect(destaqueComBanners(escolhida, [])).toBe(false);
   });
   test("artes: as prontas da peça no campo de arte; sem elas, nomes de exemplo no campo de texto", () => {
     const comArte = peca("x", {
