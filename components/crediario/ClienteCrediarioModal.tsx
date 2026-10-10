@@ -843,7 +843,8 @@ export function ClienteCrediarioModal({
               {(["parcelas", "historico", "conta"] as Tab[]).map(t => (
                 <Pressable key={t} style={[m.tab, tab === t && m.tabOn]} onPress={() => setTab(t)}>
                   <Text style={[m.tabTxt, tab === t && m.tabTxtOn]}>
-                    {t === "parcelas" ? "Parcelas" : t === "historico" ? "Histórico" : `Conta${(hasTermsOverride || isBlocked) ? " •" : ""}`}
+                    {/* 10/10/2026: com carnê na ficha a aba se chama "Carnês" (mockup). */}
+                    {t === "parcelas" ? (useCarneLayout ? "Carnês" : "Parcelas") : t === "historico" ? "Histórico" : `Conta${(hasTermsOverride || isBlocked) ? " •" : ""}`}
                   </Text>
                 </Pressable>
               ))}
