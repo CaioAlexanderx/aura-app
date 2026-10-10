@@ -745,6 +745,11 @@ function EventLanding({
   const bannerUrl: string | null = (event as any)?.banner_url || null;
   const bannerHasText: boolean = (event as any)?.banner_has_text === true;
   const currentLot: any = (event as any)?.current_lot || null;
+  // Sem taxa nenhuma (nem lote pago, nem fee, nem from_price de categoria):
+  // a capa não pode prometer "Pagamento PIX" — o QA viu isso em evento gratuito.
+  const hasFee = currentLot
+    ? Number(currentLot.price_member ?? 0) > 0 || Number(currentLot.price_nonmember ?? 0) > 0
+    : Number(event?.fee_amount ?? 0) > 0 || Number((event as any)?.from_price ?? 0) > 0;
   const description: string = (event as any)?.description || "";
   // Aspecto natural do banner (sem cortar): busca as dimensões reais e aplica
   // como aspectRatio. Até carregar, usa um padrão largo p/ evitar salto grande.
@@ -803,7 +808,7 @@ function EventLanding({
       <KarateButton label={ctaLabel} onPress={onCta} style={{ marginTop: 16, width: "100%" } as any} />
       <View style={landing.secureRow}>
         <Icon name="shield" size={14} color={KarateColors.ink3} />
-        <Text style={landing.secureTxt}>Pagamento PIX · confirmação pela federação</Text>
+        <Text style={landing.secureTxt}>{hasFee ? "Pagamento PIX · confirmação pela federação" : "Sem taxa de inscrição · confirmação pela federação"}</Text>
       </View>
     </View>
   );

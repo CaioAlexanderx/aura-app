@@ -52,7 +52,7 @@ import { toast } from "@/components/Toast";
 import { CategoryBracketPanel } from "@/components/karate/chaves/CategoryBracketPanel";
 import { buildRosterHtml } from "@/components/karate/chaves/buildRosterHtml";
 import { buildRankingHtml, RankingRowLike } from "@/components/karate/chaves/buildRankingHtml";
-import { karateBracketsApi } from "@/services/karateBracketsApi";
+import { karateBracketsApi, BracketState } from "@/services/karateBracketsApi";
 import { formatEventDateNumeric } from "@/utils/eventDate";
 import { DelegacoesTab } from "@/components/karate/competicoes/DelegacoesTab";
 import { SetupTab } from "@/components/karate/competicoes/SetupTab";
@@ -130,7 +130,7 @@ type CategoryTab = "inscritos" | "chaves";
 export default function TorneioDetalhe() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { federationId, federationName } = useKarateFederation();
+  const { federationId, federationName, federationSlug } = useKarateFederation();
   const cid = String(id || "");
   const { width } = useWindowDimensions();
   const isWide = width >= WIDE_BREAKPOINT;
@@ -157,6 +157,7 @@ export default function TorneioDetalhe() {
   const [closing, setClosing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deletingCategory, setDeletingCategory] = useState(false);
 
   // ── Workspace: rail (categorias + Visão geral/Ranking geral) + abas ──
   const [selection, setSelection] = useState<RailSelection>({ kind: "overview" });
@@ -325,6 +326,34 @@ export default function TorneioDetalhe() {
     }
   };
 
+  // Exclui a categoria selecionada. 409 CATEGORY_IN_USE (inscrições ou
+  // chave) vem com a mensagem pronta do backend em `data.error`.
+  const handleDeleteCategory = async (cat: Category) => {
+    const ok = await confirmAsync({
+      title: "Excluir categoria?",
+      message: `Apaga a categoria "${cat.name}". Não dá para recuperar depois.`,
+      confirmLabel: "Excluir categoria",
+      destructive: true,
+    });
+    if (!ok) return;
+    setDeletingCategory(true);
+    try {
+      await karateCompetitionsApi.deleteCategory(federationId, cid, cat.id);
+      setSelection({ kind: "overview" });
+      setEntriesByCat((prev) => {
+        const next = { ...prev };
+        delete next[cat.id];
+        return next;
+      });
+      toast.success(`Categoria "${cat.name}" excluída.`);
+      load();
+    } catch (e: any) {
+      notify("Não foi possível excluir a categoria", e?.data?.error ?? e?.message ?? "Tente novamente.");
+    } finally {
+      setDeletingCategory(false);
+    }
+  };
+
   const saveResult = async (entry: Entry, placement: string, points: string) => {
     const body = {
       placement: placement ? parseInt(placement, 10) : null,
@@ -381,11 +410,14 @@ export default function TorneioDetalhe() {
   // karateBracketsApi.getKataScores para Kata/Kata Equipe). Buscado em
   // paralelo (Promise.all) para não serializar N requests.
   const [catProgress, setCatProgress] = useState<Record<string, boolean | null>>({});
+  // Pódio fechado (kumite: campeão no MESMO GET da chave). Kata não traz
+  // isso no getKataScores — lá vale o placement das inscrições já carregadas.
+  const [catChampion, setCatChampion] = useState<Record<string, boolean>>({});
   const [loadingProgress, setLoadingProgress] = useState(false);
   const isKataModality = useCallback((m: Modality) => m === "kata" || m === "team_kata", []);
 
   const loadOverviewProgress = useCallback(async () => {
-    if (!comp || comp.categories.length === 0) { setCatProgress({}); return; }
+    if (!comp || comp.categories.length === 0) { setCatProgress({}); setCatChampion({}); return; }
     setLoadingProgress(true);
     try {
       const entries = await Promise.all(
@@ -393,18 +425,20 @@ export default function TorneioDetalhe() {
           try {
             if (isKataModality(cat.modality)) {
               const scores = await karateBracketsApi.getKataScores(federationId, cid, cat.id);
-              return [cat.id, Array.isArray(scores) && scores.length > 0] as const;
+              return [cat.id, Array.isArray(scores) && scores.length > 0, false] as const;
             }
             const resp = await karateBracketsApi.getBracket(federationId, cid, cat.id);
-            return [cat.id, resp.status !== "not_generated"] as const;
+            const hasChampion = resp.status !== "not_generated" && !!(resp as BracketState).champion;
+            return [cat.id, resp.status !== "not_generated", hasChampion] as const;
           } catch {
             // Falha pontual numa categoria não deve derrubar o resumo inteiro —
             // marcamos como "desconhecido" (null) em vez de fingir "não gerada".
-            return [cat.id, null] as const;
+            return [cat.id, null, false] as const;
           }
         })
       );
-      setCatProgress(Object.fromEntries(entries));
+      setCatProgress(Object.fromEntries(entries.map(([catId, gen]) => [catId, gen])));
+      setCatChampion(Object.fromEntries(entries.map(([catId, , champ]) => [catId, champ])));
     } finally {
       setLoadingProgress(false);
     }
@@ -635,6 +669,7 @@ export default function TorneioDetalhe() {
                   comp={comp}
                   entriesByCat={entriesByCat}
                   catProgress={catProgress}
+                  catChampion={catChampion}
                   loadingProgress={loadingProgress}
                   isKataModality={isKataModality}
                   onSelectCategory={handleSelectCategory}
@@ -681,6 +716,10 @@ export default function TorneioDetalhe() {
                 rectificationDeadline={comp.rectification_deadline || null}
                 conferencePublishedAt={comp.conference_published_at || null}
                 bracketsPublishedAt={comp.brackets_published_at || null}
+                // Slug público da federação (identidade) — sem ele o link
+                // saía com o UUID. Fallback dentro do SetupTab: federationId.
+                publicSlug={federationSlug}
+                resultsConfig={comp.results_config ?? null}
                 onChanged={load}
               />
             )}
@@ -753,6 +792,15 @@ export default function TorneioDetalhe() {
                     hitSlop={8}
                   >
                     <Icon name="print" size={15} color={KarateColors.ink2} />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleDeleteCategory(selectedCategory)}
+                    disabled={deletingCategory}
+                    style={(state) => [styles.iconBtn, (state as { hovered?: boolean }).hovered && styles.iconBtnHover, deletingCategory && { opacity: 0.5 }]}
+                    accessibilityLabel={`Excluir categoria ${selectedCategory.name}`}
+                    hitSlop={8}
+                  >
+                    <Icon name="trash" size={15} color={KarateColors.ink2} />
                   </Pressable>
                 </View>
 
@@ -1174,11 +1222,13 @@ function RailItem({
 // loadOverviewProgress acima), total de inscritos e pendências de
 // pagamento (Entry.fee_paid — quando o dado existe no modelo).
 function VisaoGeral({
-  comp, entriesByCat, catProgress, loadingProgress, isKataModality, onSelectCategory, divisions,
+  comp, entriesByCat, catProgress, catChampion, loadingProgress, isKataModality, onSelectCategory, divisions,
 }: {
   comp: CompetitionDetail;
   entriesByCat: Record<string, Entry[]>;
   catProgress: Record<string, boolean | null>;
+  /** Categoria com pódio fechado (campeão na chave). */
+  catChampion: Record<string, boolean>;
   loadingProgress: boolean;
   isKataModality: (m: Modality) => boolean;
   onSelectCategory: (categoryId: string) => void;
@@ -1260,6 +1310,10 @@ function VisaoGeral({
             const kata = isKataModality(cat.modality);
             const status = catProgress[cat.id];
             const count = cat.entry_count ?? (entriesByCat[cat.id]?.length ?? 0);
+            // Pódio fechado: só com dado que a tela JÁ tem (campeão no GET da
+            // chave da Visão geral, ou colocação nas inscrições carregadas).
+            const concluded = !!catChampion[cat.id]
+              || (entriesByCat[cat.id] || []).some((e) => e.placement != null);
             // O chip diz o PRÓXIMO ATO, não o estado interno da linha: a linha
             // é clicável e leva exatamente para onde esse ato acontece.
             // Em Kata o que falta é sortear a ORDEM de apresentação — o chip
@@ -1268,6 +1322,7 @@ function VisaoGeral({
             let statusText = "—";
             let tone: ProgressTone = "pend";
             if (loadingProgress && status === undefined) { statusText = "Verificando..."; tone = "loading"; }
+            else if (status === true && concluded) { statusText = "Concluída"; tone = "done"; }
             else if (status === true) { statusText = kata ? "Ordem sorteada" : "Chave sorteada"; tone = "done"; }
             else if (status === false) { statusText = kata ? "Sortear ordem" : "Sortear chave"; tone = "pend"; }
             else if (status === null) { statusText = "Não deu para verificar"; tone = "unknown"; }
@@ -1521,11 +1576,16 @@ function CategoriaFormModal({ mode, category, federationId, competitionId, divis
       onSaved(saved);
     } catch (e: any) {
       const fallback = mode === "edit" ? "Não foi possível salvar a categoria. Tente novamente." : "Não foi possível criar a categoria. Tente novamente.";
-      const raw = e?.code || e?.message || "";
+      const code = e?.data?.code || e?.code || "";
+      const raw = code || e?.message || "";
       // 422 do backend quando a divisão é de outra competição — texto honesto.
       if (String(raw).includes("DIVISION_NOT_FOUND")) {
         setError("Essa divisão não pertence a este campeonato. Escolha uma divisão da lista.");
-      } else setError(e?.message ?? fallback);
+      } else {
+        // 409 BRACKET_EXISTS (trocar modalidade/sexo de categoria que já tem
+        // chave) e afins: o backend manda o texto pronto dizendo o que fazer.
+        setError(e?.data?.error || e?.message || fallback);
+      }
     } finally {
       setSaving(false);
     }

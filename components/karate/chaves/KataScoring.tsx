@@ -23,16 +23,17 @@
 // estrutura — mantidas como constante local (não há token de
 // medalha no DS Shoji); não são o acento vermelho genérico.
 // ============================================================
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, TouchableOpacity, Platform, StyleSheet, ViewStyle, TextStyle } from "react-native";
 import { Icon } from "@/components/Icon";
 import { KarateColors as C, ShojiPalette as P, KarateRadius as R, KarateFonts as F } from "@/constants/karateTheme";
 import { ShojiButton } from "@/components/karate/shoji";
 import { toast } from "@/components/Toast";
-import { karateBracketsApi, KataScore, KataPhase } from "@/services/karateBracketsApi";
+import { karateBracketsApi, KataScore, KataPhase, BracketStatus } from "@/services/karateBracketsApi";
 import { buildKataHtml } from "@/components/karate/chaves/buildKataHtml";
 import { NotasBreakdown, normalizeJudgeCount } from "@/components/karate/NotasArbitros";
 import { styles as S, MiniAvatar, AbsentPill, isAbsent } from "./shared";
+import { KataAdvanceCard } from "./KataAdvanceCard";
 import {
   useBracketDragAndDrop, useDraggableSlotRef, useSlotDropZoneRef, BracketSlotId,
 } from "./useBracketDragAndDrop";
@@ -49,11 +50,17 @@ const JUDGE_WORD: Record<number, string> = {
   3: "Três", 4: "Quatro", 5: "Cinco", 6: "Seis", 7: "Sete",
 };
 
+// Com a ordem em rascunho o backend recusa notas e reordenação (409
+// "Chave deve estar travada"). A tela diz isso ANTES do clique.
+const DRAFT_HINT = "Oficialize a ordem para lançar notas";
+
 export function KataView({
   catName, scores, onEditScore, federationId, cid, catId, competitionName, federationName, onReloaded,
-  judgeCount,
+  judgeCount, bracketStatus,
 }: {
   catName: string;
+  /** Estado real da chave: draft = ordem provisória (sem notas), locked = oficial. */
+  bracketStatus?: BracketStatus | null;
   scores: KataScore[];
   onEditScore: (s: KataScore) => void;
   /** Árbitros que dão nota nesta categoria (3..7). Só a dica de tela usa
@@ -69,6 +76,13 @@ export function KataView({
   onReloaded?: () => void | Promise<void>;
 }) {
   const [mode, setMode] = useState<ViewMode>("notas");
+  const isDraft = bracketStatus === "draft";
+  const isOfficial = bracketStatus === "locked";
+  // Sorteou de novo com o modo de ordem aberto: volta para Notas — salvar a
+  // ordem em rascunho seria recusado pelo backend.
+  useEffect(() => {
+    if (isDraft) setMode("notas");
+  }, [isDraft]);
   const [orderPhase, setOrderPhase] = useState<KataPhase>("eliminatoria");
   const [savingOrder, setSavingOrder] = useState(false);
   // Cópia local editável da ordem (só existe enquanto o usuário reordena
@@ -198,10 +212,23 @@ export function KataView({
           <Text style={S.cardTitle}>Chave · Kata</Text>
           <Text style={S.cardSub}>{catName} · por bateria — não é confronto 1×1</Text>
         </View>
-        <View style={[S.pill, S.pillAccent]}>
-          <Text style={[S.pillText, S.pillTextAccent]}>Apurado</Text>
-        </View>
+        {/* Selo = estado real da chave (antes era "Apurado" fixo). Sem
+            chave (dado legado só com notas) não afirma nada. */}
+        {(isDraft || isOfficial) && (
+          <View style={[S.pill, isOfficial ? S.pillAccent : S.pillNeutral]}>
+            <Text style={[S.pillText, isOfficial ? S.pillTextAccent : S.pillTextNeutral]}>
+              {isOfficial ? "Oficial" : "Ordem provisória"}
+            </Text>
+          </View>
+        )}
       </View>
+
+      {isDraft && (
+        <View style={S.infoRow}>
+          <Icon name="lock" size={13} color={C.ink3} />
+          <Text style={S.infoText}>{DRAFT_HINT}. Enquanto ela for provisória, também não dá para reordenar à mão.</Text>
+        </View>
+      )}
 
       {/* Barra de ações — modos + impressão */}
       <View style={ctrlStyles.actionsRow}>
@@ -213,8 +240,11 @@ export function KataView({
           <Text style={[ctrlStyles.toggleBtnText, mode === "notas" && ctrlStyles.toggleBtnTextActive]}>Notas</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[ctrlStyles.toggleBtn, mode === "ordem" && ctrlStyles.toggleBtnActive]}
+          style={[ctrlStyles.toggleBtn, mode === "ordem" && ctrlStyles.toggleBtnActive, isDraft && ctrlStyles.toggleBtnDisabled]}
           onPress={handleEnterOrderMode}
+          disabled={isDraft}
+          accessibilityState={{ disabled: isDraft }}
+          accessibilityHint={isDraft ? "Oficialize a ordem para reordenar" : undefined}
         >
           <Icon name="drag-handle" size={14} color={mode === "ordem" ? "#fdf8f2" : C.ink2} />
           <Text style={[ctrlStyles.toggleBtnText, mode === "ordem" && ctrlStyles.toggleBtnTextActive]}>Ordem de apresentação</Text>
@@ -270,9 +300,7 @@ export function KataView({
                       {s.advances ? "Classificada" : s.advances === false ? "Eliminada" : ""}
                     </Text>
                   </View>
-                  <TouchableOpacity onPress={() => onEditScore(s)} style={S.editScoreBtn}>
-                    <Icon name="edit" size={15} color={P.red} />
-                  </TouchableOpacity>
+                  <EditScoreButton score={s} locked={isDraft} onEdit={onEditScore} />
                 </View>
               ))}
             </View>
@@ -297,14 +325,24 @@ export function KataView({
                     {i < 3 && (
                       <Text style={[S.medalText, { color: MEDAL_COLORS[i] }]}>{MEDALS[i]}</Text>
                     )}
-                    <TouchableOpacity onPress={() => onEditScore(s)} style={S.editScoreBtn}>
-                      <Icon name="edit" size={15} color={P.red} />
-                    </TouchableOpacity>
+                    <EditScoreButton score={s} locked={isDraft} onEdit={onEditScore} />
                   </View>
                 ))}
               </View>
             )}
           </View>
+
+          {/* Eliminatória → final. Aqui só o classificar; o "Fechar
+              resultado" fica no Modo Mesário/mesa. */}
+          {!!federationId && !!cid && !!catId && (
+            <KataAdvanceCard
+              scores={scores}
+              advance={(advanceCount) => karateBracketsApi.advanceKata(federationId, cid, catId, { advance_count: advanceCount })}
+              onAdvanced={onReloaded}
+              disabledReason={isDraft ? `${DRAFT_HINT}.` : null}
+              style={ctrlStyles.advanceWrap}
+            />
+          )}
         </>
       )}
 
@@ -355,6 +393,28 @@ export function KataView({
         </>
       )}
     </View>
+  );
+}
+
+// ── EditScoreButton ──────────────────────────────────────────────────────
+// Com a ordem provisória o lápis fica apagado e diz por quê (texto visível
+// na linha de aviso acima + rótulo acessível) — sem depender de hover.
+function EditScoreButton({ score, locked, onEdit }: {
+  score: KataScore;
+  locked: boolean;
+  onEdit: (s: KataScore) => void;
+}) {
+  return (
+    <TouchableOpacity
+      onPress={() => onEdit(score)}
+      disabled={locked}
+      style={[S.editScoreBtn, locked && ctrlStyles.editBtnDisabled]}
+      accessibilityRole="button"
+      accessibilityLabel={locked ? `${DRAFT_HINT}: ${score.student_name}` : `Lançar notas de ${score.student_name}`}
+      accessibilityState={{ disabled: locked }}
+    >
+      <Icon name="edit" size={15} color={locked ? C.ink4 : P.red} />
+    </TouchableOpacity>
   );
 }
 
@@ -443,6 +503,9 @@ const ctrlStyles = StyleSheet.create({
   toggleBtnActive: { backgroundColor: C.ink, borderColor: C.ink } as ViewStyle,
   toggleBtnText: { fontFamily: F.body, fontSize: 12, fontWeight: "700", color: C.ink2 } as TextStyle,
   toggleBtnTextActive: { color: "#fdf8f2" } as TextStyle,
+  toggleBtnDisabled: { opacity: 0.45 } as ViewStyle,
+  editBtnDisabled: { opacity: 0.5 } as ViewStyle,
+  advanceWrap: { marginTop: 12 } as ViewStyle,
 
   phaseRow: { flexDirection: "row", gap: 8, marginBottom: 12 } as ViewStyle,
   phaseChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: R.pill, borderWidth: 1, borderColor: C.line, backgroundColor: P.glass2 } as ViewStyle,

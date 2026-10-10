@@ -49,7 +49,8 @@ import {
 } from "@/services/karateBracketsApi";
 import { NotasArbitros, NotasBreakdown, NotasSubmit } from "@/components/karate/NotasArbitros";
 import { findNextPendingMatch } from "@/components/karate/chaves/EventDayMode";
-import { roundLabel } from "@/components/karate/chaves/shared";
+import { roundLabel, AbsentPill, isAbsent } from "@/components/karate/chaves/shared";
+import { KataAdvanceCard } from "@/components/karate/chaves/KataAdvanceCard";
 
 // ── Constantes ──────────────────────────────────────────────
 const ATOSHI_SEC = 30;          // reta final: aviso "Atoshi Baraku"
@@ -844,6 +845,13 @@ function KataPanel({
 
   useEffect(() => { loadScores(); }, [loadScores]);
 
+  // Eliminatória → final — mesmo bloco da mesa pública (KataAdvanceCard).
+  // Antes só a mesa pública montava a final; a federação ficava sem saída.
+  const advanceToFinal = useCallback(
+    (advanceCount: number) => karateBracketsApi.advanceKata(federationId, cid, cat.id, { advance_count: advanceCount }),
+    [federationId, cid, cat.id]
+  );
+
   // Onda B: uma nota por árbitro. O TOTAL é computado pelo BACKEND —
   // aqui só recarregamos a bateria depois do PUT.
   const handleSaveNota = useCallback(async (row: KataScore, payload: NotasSubmit) => {
@@ -927,6 +935,12 @@ function KataPanel({
             onToggle={setEditingKey}
             onSave={handleSaveNota}
           />
+          {/* Ausente confirmado não trava: o backend o elimina no avanço. */}
+          <KataAdvanceCard
+            scores={scores}
+            advance={advanceToFinal}
+            onAdvanced={loadScores}
+          />
           {final.length > 0 && (
             <KataPhaseList
               title={`Final · ${final.length}`}
@@ -1000,9 +1014,11 @@ function KataPhaseList({
             >
               <Text style={s.kataOrder}>{r.presentation_order ?? "—"}</Text>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={s.kataName} numberOfLines={1}>{r.student_name}</Text>
+                <Text style={[s.kataName, isAbsent(r) && s.absentName]} numberOfLines={1}>{r.student_name}</Text>
                 {!!r.dojo_name && <Text style={s.kataDojo} numberOfLines={1}>{r.dojo_name}</Text>}
               </View>
+              {/* Ausente = só `no_show === true` (não credenciado ≠ ausente) — mesmo padrão da mesa pública. */}
+              {isAbsent(r) && <AbsentPill />}
               {r.advances === true && (
                 <View style={s.kataAdvChip}>
                   <Icon name="check" size={11} color={P.ok} />
@@ -1202,6 +1218,8 @@ const s = StyleSheet.create({
   kataOrder: { fontFamily: F.mono, fontSize: 13, color: C.ink3, width: 24, textAlign: "center" } as TextStyle,
   kataName: { fontFamily: F.body, fontSize: 13.5, fontWeight: "600", color: C.ink } as TextStyle,
   kataDojo: { fontFamily: F.body, fontSize: 11, color: C.ink3 } as TextStyle,
+  // Nome do ausente esmaecido — a pill AUSENTE ao lado carrega o aviso.
+  absentName: { opacity: 0.55 } as TextStyle,
   kataAdvChip: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: P.okWash, borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2 } as ViewStyle,
   kataAdvTxt: { fontFamily: F.body, fontSize: 10, fontWeight: "700", color: P.ok } as TextStyle,
 });

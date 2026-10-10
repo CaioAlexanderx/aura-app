@@ -11,6 +11,8 @@
 //      Vazio = modo legado (fee por inscrição, comportamento atual).
 //   3) CICLO — prazo de retificação + publicar/despublicar a conferência
 //      de inscrições e as chaves no portal público (com link copiável).
+//   4) PONTOS POR COLOCAÇÃO — quanto vale 1º..4º no ranking (results_config,
+//      backend #799), aplicado quando o resultado da categoria é fechado.
 // ============================================================
 import React, { useCallback, useState } from "react";
 import {
@@ -23,12 +25,12 @@ import { KarateButton } from "@/components/karate/KarateButton";
 import { confirmAsync } from "@/components/karate/ConfirmDialog";
 import { toast } from "@/components/Toast";
 import { copyToClipboard } from "@/utils/clipboard";
-import { buildMicrositeUrl } from "@/utils/microsite";
 import { formatIsoToBr, maskBrDate, parseBrDate } from "@/components/inputs/DateInput";
 import {
   karateCompetitionSetupApi, CompetitionDivision, PricingConfig,
 } from "@/services/karateCompetitionSetupApi";
 import { formatBRL } from "@/services/karateDelegationsApi";
+import { karateCompetitionsApi, CompetitionResultsConfig } from "@/services/karateCompetitionsApi";
 
 interface Props {
   federationId: string;
@@ -40,6 +42,8 @@ interface Props {
   rectificationDeadline: string | null;
   conferencePublishedAt: string | null;
   bracketsPublishedAt: string | null;
+  /** results_config do detalhe (pontos por colocação no ranking). */
+  resultsConfig?: CompetitionResultsConfig | null;
   onChanged: () => void;
 }
 
@@ -62,7 +66,7 @@ const maskMoney = (v: string): string => {
 
 export function SetupTab({
   federationId, competitionId, publicSlug, divisions, pricing,
-  rectificationDeadline, conferencePublishedAt, bracketsPublishedAt, onChanged,
+  rectificationDeadline, conferencePublishedAt, bracketsPublishedAt, resultsConfig, onChanged,
 }: Props) {
   return (
     <View style={s.panel}>
@@ -75,6 +79,12 @@ export function SetupTab({
         rectificationDeadline={rectificationDeadline}
         conferencePublishedAt={conferencePublishedAt}
         bracketsPublishedAt={bracketsPublishedAt}
+        onChanged={onChanged}
+      />
+      <PointsBlock
+        federationId={federationId}
+        competitionId={competitionId}
+        resultsConfig={resultsConfig}
         onChanged={onChanged}
       />
     </View>
@@ -358,8 +368,13 @@ function CycleBlock({
   const [savingDeadline, setSavingDeadline] = useState(false);
   const [pubBusy, setPubBusy] = useState<"conf" | "chaves" | null>(null);
 
+  // Link público pela rota do app (app/karate/[slug]/campeonato/[cid]).
+  // Era buildMicrositeUrl(slug, ...) → https://<slug>.getaura.com.br/...,
+  // mas o DNS curinga *.getaura.com.br ainda não existe e o link não abria
+  // (e saía com o UUID quando o slug não chegava). Volta ao
+  // buildMicrositeUrl quando o curinga do microsite estiver no ar.
   const slug = publicSlug || federationId;
-  const publicUrl = buildMicrositeUrl(slug, `/campeonato/${competitionId}`);
+  const publicUrl = `https://app.getaura.com.br/karate/${encodeURIComponent(slug)}/campeonato/${competitionId}`;
 
   const saveDeadline = async () => {
     const iso = deadlineBr.trim() ? parseBrDate(deadlineBr) : null;
@@ -448,6 +463,66 @@ function CycleBlock({
   );
 }
 
+// ── 4) Pontos por colocação (ranking) ───────────────────────
+// Vazio = 0 pontos. Enviado sempre com as quatro colocações para o backend
+// não misturar com a regra padrão.
+const PLACEMENTS = ["1", "2", "3", "4"] as const;
+
+function PointsBlock({ federationId, competitionId, resultsConfig, onChanged }: {
+  federationId: string; competitionId: string;
+  resultsConfig?: CompetitionResultsConfig | null; onChanged: () => void;
+}) {
+  const initial = resultsConfig?.points_by_placement || {};
+  const [points, setPoints] = useState<Record<string, string>>(() =>
+    Object.fromEntries(PLACEMENTS.map((k) => [k, initial[k] != null ? String(initial[k]) : ""]))
+  );
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    const points_by_placement: Record<string, number> = {};
+    for (const k of PLACEMENTS) points_by_placement[k] = toIntOrNull(points[k]) ?? 0;
+    setSaving(true);
+    try {
+      await karateCompetitionsApi.patchCompetition(federationId, competitionId, {
+        results_config: { points_by_placement },
+      });
+      toast.success("Pontos por colocação salvos.");
+      onChanged();
+    } catch (e: any) {
+      toast.error(e?.message || "Não foi possível salvar os pontos.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <View style={s.block}>
+      <Text style={s.blockTitle}>Pontos por colocação (ranking)</Text>
+      <Text style={s.blockHint}>
+        Aplicado quando o resultado da categoria é fechado; categorias já fechadas não são recalculadas.
+      </Text>
+      <View style={s.pairRow}>
+        {PLACEMENTS.map((k) => (
+          <View key={k} style={s.pointsField}>
+            <Text style={s.quotaLabel}>{k}º lugar</Text>
+            <TextInput
+              style={s.quotaInput}
+              value={points[k]}
+              onChangeText={(v) => setPoints((p) => ({ ...p, [k]: v.replace(/\D/g, "") }))}
+              placeholder="0" placeholderTextColor={C.ink4}
+              keyboardType="numeric" maxLength={3}
+              accessibilityLabel={`Pontos para o ${k}º lugar`}
+            />
+          </View>
+        ))}
+      </View>
+      <View style={{ alignItems: "flex-end" }}>
+        <KarateButton label={saving ? "Salvando..." : "Salvar pontos"} variant="sumi" size="md" onPress={save} disabled={saving} />
+      </View>
+    </View>
+  );
+}
+
 function PublishRow({ label, hint, publishedAt, busy, onToggle }: {
   label: string; hint: string; publishedAt: string | null; busy: boolean; onToggle: () => void;
 }) {
@@ -506,6 +581,7 @@ const s = StyleSheet.create({
   addBandTxt: { fontSize: 12.5, fontWeight: "700", color: C.primary } as TextStyle,
   pairRow: { flexDirection: "row", gap: 12, flexWrap: "wrap" } as ViewStyle,
   pairField: { width: 150 } as ViewStyle,
+  pointsField: { width: 96 } as ViewStyle,
   cycleRow: { flexDirection: "row", alignItems: "flex-end", gap: 10, flexWrap: "wrap" } as ViewStyle,
   pubRow: { flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap", borderTopWidth: 1, borderTopColor: C.border, paddingTop: 10 } as ViewStyle,
   pubDot: { width: 8, height: 8, borderRadius: 4 } as ViewStyle,

@@ -25,6 +25,8 @@
 //   • federationLogoUrl — só da identidade, NUNCA do JWT: o auth store
 //     não revalida o token, e uma logo trocada ficaria presa até o
 //     próximo login. null → o FederationLogo desenha o monograma.
+//   • federationSlug — slug público (companies.slug), também da
+//     identidade; usado nos links públicos (ex.: Configurar do campeonato).
 //
 // FAIL-SOFT: o fetch engole qualquer erro (404 enquanto o backend não
 // deployou a rota, 403, rede). Identidade visual não derruba o shell.
@@ -46,6 +48,9 @@ export interface KarateFederationContextValue {
   federationName: string;
   /** Logo da federação logada (null → monograma no FederationLogo). */
   federationLogoUrl: string | null;
+  /** Slug público da federação (companies.slug), da identidade. null até
+   *  ela responder — quem monta link público cai no federationId. */
+  federationSlug: string | null;
   karateRole: string | null;
   dojoId: string | null;
 }
@@ -54,6 +59,7 @@ const KarateFederationContext = createContext<KarateFederationContextValue>({
   federationId: "",
   federationName: FEDERATION_FALLBACK_NAME,
   federationLogoUrl: null,
+  federationSlug: null,
   karateRole: null,
   dojoId: null,
 });
@@ -98,6 +104,7 @@ export function KarateFederationProvider({ children }: { children: ReactNode }) 
       (companyIsDojo ? null : company?.name) ||
       FEDERATION_FALLBACK_NAME,
     federationLogoUrl: identity?.logo_url ?? null,
+    federationSlug: identity?.slug ?? null,
     karateRole: company?.karate_role ?? null,
     // dojo_id: presente quando company é karate_dojo; null para federação ou não-karatê.
     dojoId: company?.dojo_id ?? null,

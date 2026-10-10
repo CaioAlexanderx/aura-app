@@ -6,9 +6,10 @@
 // orquestrador — este componente é só apresentação. A lógica de
 // confrontos (bracket.rounds[0], byes, mesmo dojô) é preservada.
 //
-// Exporta TAMBÉM o KataDrawPanel (fim do arquivo): o equivalente
-// para as modalidades apuradas por notas (kata/team_kata/enbu),
-// onde não se sorteia chave e sim ORDEM DE APRESENTAÇÃO.
+// Exporta TAMBÉM o KataDrawPanel e o KataDraftPanel (fim do arquivo):
+// o equivalente para as modalidades apuradas por notas
+// (kata/team_kata/enbu), onde não se sorteia chave e sim ORDEM DE
+// APRESENTAÇÃO — antes (KataDraw) e depois do sorteio (KataDraft).
 // ============================================================
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ViewStyle } from "react-native";
@@ -263,6 +264,61 @@ export function KataDrawPanel({
   );
 }
 
+// ── KataDraftPanel (kata / team_kata / enbu, ordem sorteada em rascunho) ──
+// Depois do sorteio a ordem nasce PROVISÓRIA (chave em `draft`) e o backend
+// recusa notas e reordenação até ela ser oficializada (409 "Chave deve estar
+// travada"). Antes o botão de oficializar só existia no SorteioPanel do
+// kumite — em kata a federação ficava presa no rascunho, sem saber por quê.
+// Mesmo par de botões do kumite: sortear de novo / oficializar.
+export function KataDraftPanel({
+  catName, generating, locking, onGenerate, onLock,
+}: {
+  catName: string;
+  generating: boolean;
+  locking: boolean;
+  onGenerate: () => void;
+  onLock: () => void;
+}) {
+  const busy = generating || locking;
+  return (
+    <View style={[S.card, K.card, K.draftCard]}>
+      <View style={S.cardHead}>
+        <View style={K.headText}>
+          <Text style={S.cardTitle}>Ordem de apresentação</Text>
+          <Text style={S.cardSub}>{catName} · decidido por notas</Text>
+        </View>
+        <ShojiBadge status="neutral" label="Ordem provisória" />
+      </View>
+
+      <View style={S.infoRow}>
+        <Icon name="info" size={13} color={C.ink3} />
+        <Text style={S.infoText}>
+          Pode sortear de novo quantas vezes quiser. Ao oficializar, a ordem passa a valer e a mesa já pode lançar as notas.
+        </Text>
+      </View>
+
+      <View
+        style={[S.draftActions, busy && K.actionDisabled]}
+        pointerEvents={busy ? "none" : "auto"}
+        accessibilityState={{ disabled: busy }}
+      >
+        <ShojiButton
+          label={generating ? "Sorteando..." : "Sortear de novo"}
+          variant="ghost"
+          onPress={onGenerate}
+          style={{ flex: 1 }}
+        />
+        <ShojiButton
+          label={locking ? "Oficializando..." : "Oficializar ordem"}
+          variant="sumi"
+          onPress={onLock}
+          style={{ flex: 1 }}
+        />
+      </View>
+    </View>
+  );
+}
+
 // Largura máxima: bloco de ação lê melhor em coluna estreita; o botão é
 // dimensionado pelo conteúdo (alignSelf), nunca esticado na tela.
 const K = StyleSheet.create({
@@ -270,6 +326,7 @@ const K = StyleSheet.create({
   headText: { flex: 1, minWidth: 0, paddingRight: 8 } as ViewStyle,
   action: { alignSelf: "flex-start", marginTop: 2 } as ViewStyle,
   actionDisabled: { opacity: 0.45 } as ViewStyle,
+  draftCard: { marginBottom: 14 } as ViewStyle,
 });
 
 // ── DraftMatchCard ────────────────────────────────────────────────────────

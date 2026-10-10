@@ -39,7 +39,7 @@ import {
   DrawMethod,
 } from "@/services/karateBracketsApi";
 import { notify } from "@/utils/webAlert";
-import { SorteioPanel, KataDrawPanel } from "@/components/karate/chaves/SorteioPanel";
+import { SorteioPanel, KataDrawPanel, KataDraftPanel } from "@/components/karate/chaves/SorteioPanel";
 import { BracketView } from "@/components/karate/chaves/BracketView";
 import { KataView } from "@/components/karate/chaves/KataScoring";
 import { NotasArbitros, NotasSubmit } from "@/components/karate/NotasArbitros";
@@ -264,9 +264,14 @@ export function CategoryBracketPanel({
     setLocking(true);
     try {
       await karateBracketsApi.lockBracket(federationId, cid || "", catId);
-      await loadBracket();
+      // Kata: recarrega notas + estado da chave (o selo e o lançamento
+      // dependem do status locked).
+      if (isKataMode) await loadKata(); else await loadBracket();
     } catch (e: any) {
-      notify("Não foi possível oficializar a chave", e?.message ?? "Tente novamente.");
+      notify(
+        isKataMode ? "Não foi possível oficializar a ordem" : "Não foi possível oficializar a chave",
+        e?.message ?? "Tente novamente.",
+      );
     } finally {
       setLocking(false);
     }
@@ -357,9 +362,23 @@ export function CategoryBracketPanel({
         />
       )}
 
+      {/* ===== ORDEM PROVISÓRIA (kata sorteado, chave em draft) ===== */}
+      {/* Sem oficializar, o backend recusa notas e reordenação (409 "Chave
+          deve estar travada") — este bloco é a saída. */}
+      {!loading && !!catId && isKataMode && kataReady && hasDraft && (
+        <KataDraftPanel
+          catName={catName}
+          generating={generating}
+          locking={locking}
+          onGenerate={handleGenerate}
+          onLock={handleLock}
+        />
+      )}
+
       {/* ============= KATA VIEW ============= */}
       {!loading && !!catId && isKataMode && kataReady && (
         <KataView
+          bracketStatus={bracket?.status ?? null}
           catName={catName}
           scores={kataScores}
           onEditScore={(s) => setEditScore(s)}

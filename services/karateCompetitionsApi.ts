@@ -84,6 +84,16 @@ export interface CompetitionDetail extends Competition {
   conference_published_at?: string | null;
   brackets_published_at?: string | null;
   rectification_deadline?: string | null;
+  /**
+   * Pontos por colocação aplicados ao ranking quando o resultado da
+   * categoria é fechado (backend #799). Chaves "1".."8", inteiros >= 0.
+   * null/ausente = regra padrão do backend.
+   */
+  results_config?: CompetitionResultsConfig | null;
+}
+
+export interface CompetitionResultsConfig {
+  points_by_placement?: Record<string, number>;
 }
 
 export interface CategoryFitCheck {
@@ -264,6 +274,12 @@ export const karateCompetitionsApi = {
     }>
   ): Promise<Category> =>
     request(`/federation/${federationId}/competitions/${cid}/categories/${catId}`, { method: "PATCH", body }),
+
+  // Exclui categoria — DELETE /federation/:id/competitions/:cid/categories/:catId
+  // 409 CATEGORY_IN_USE (inscrições/chave) chega como ApiError com
+  // `data.error` já pronto em pt-BR — exibir esse texto.
+  deleteCategory: (federationId: string, cid: string, catId: string): Promise<{ ok: boolean; id?: string }> =>
+    request(`/federation/${federationId}/competitions/${cid}/categories/${catId}`, { method: "DELETE", retry: 0 }),
 
   // ── Inscrições / Resultados ─────────────────────────────
   listEntries: (federationId: string, cid: string, categoryId?: string): Promise<Entry[]> => {
