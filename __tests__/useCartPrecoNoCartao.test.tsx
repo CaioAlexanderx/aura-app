@@ -51,15 +51,16 @@ beforeEach(() => { mockBodies.length = 0; });
 describe("opção desligada — o carrinho de sempre", () => {
   test("item sem preço no cartão; crédito cobra o preço normal; payload de antes", () => {
     const tree = montar();
-    act(() => { api.addToCart({ id: "p1", name: "Cimento", price: 38, cardPrice: 50 }); });
-    expect(api.cart[0]).toEqual({ productId: "p1", name: "Cimento", price: 38, qty: 1, listPrice: 38, unit: undefined, purchaseUnit: undefined, purchaseFactor: undefined });
+    // id de cadastro de verdade (uuid): chave sintetica vai sem product_id (09/10/2026).
+    act(() => { api.addToCart({ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", name: "Cimento", price: 38, cardPrice: 50 }); });
+    expect(api.cart[0]).toEqual({ productId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", name: "Cimento", price: 38, qty: 1, listPrice: 38, unit: undefined, purchaseUnit: undefined, purchaseFactor: undefined });
     expect(api.precoNoCartao).toBeNull();
     act(() => { api.setPayment("cartao"); });
     expect(api.cart[0].price).toBe(38);
     expect(api.totalAfterCoupon).toBe(38);
     act(() => { api.finalizeSale(); });
     expect(mockBodies[0].items[0]).toEqual({
-      product_id: "p1", variant_id: undefined, quantity: 1, unit_price: 38,
+      product_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", variant_id: undefined, quantity: 1, unit_price: 38,
       item_discount: undefined, product_name_snapshot: "Cimento", lot_allocations: undefined,
     });
     expect(mockBodies[0].payment_method).toBe("cartao");

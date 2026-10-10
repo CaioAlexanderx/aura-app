@@ -185,6 +185,15 @@ type Props = {
    *  ele o rodapé avisa o que está sendo editado e o botão "Orçamento" vira
    *  "Salvar orçamento" (o onSaveQuote já sabe salvar por cima). */
   editingQuote?: { number: number; onCancel: () => void } | null;
+  /** 09/10/2026 (Comandas). Com ele: "Adicionar à comanda" ao lado de
+   *  "Dividir pagamento" e "Fechar comanda" no lugar de "Orçamento".
+   *  `charging` = este carrinho é o consumo de uma comanda sendo cobrada.
+   *  null/ausente (chave desligada) = rodapé de sempre. */
+  comanda?: {
+    onAdd: () => void;
+    onClose: () => void;
+    charging: { number: number; feePct: number; onCancel: () => void } | null;
+  } | null;
   discountLabel?: string | null;
   /** Desconto manual editável. Opcional para preservar os usos legados do painel. */
   discountType?: "%" | "R$";
@@ -239,7 +248,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     payMethods, activePay, onPay, warrantySlot,
     onInc, onDec, onSetQty, onPriceChange, onRemove, onClear, onFinalize, onGenerateQuote,
     onLotAllocations,
-    showOrcamento, onSaveQuote, savingQuote, savedQuote, editingQuote,
+    showOrcamento, onSaveQuote, savingQuote, savedQuote, editingQuote, comanda,
     discountLabel, isProcessing, finalizeDisabled, requiredHints,
     discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
     emptyCta, headerSubtitle, compact, fill,
@@ -492,13 +501,31 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           )}
 
           {/* Toggle "Dividir pagamento" — só aparece quando o pai wireou. */}
-          {splitAvailable && (
-            <Pressable onPress={onToggleSplit} style={s.splitToggle}>
-              <Icon name={splitOn ? "x" : "wallet"} size={13} color={Colors.violet3} />
-              <Text style={s.splitToggleTxt}>
-                {splitOn ? "Cancelar divisão" : "Dividir pagamento"}
-              </Text>
-            </Pressable>
+          {/* 09/10/2026 (Comandas): "Adicionar à comanda" mora ao lado. Some
+              enquanto o carrinho já é uma comanda sendo cobrada — lançar de
+              novo dobraria o consumo. */}
+          {(splitAvailable || (comanda && !comanda.charging)) && (
+            <View style={s.linksRow}>
+              {splitAvailable && (
+                <Pressable onPress={onToggleSplit} style={s.splitToggle}>
+                  <Icon name={splitOn ? "x" : "wallet"} size={13} color={Colors.violet3} />
+                  <Text style={s.splitToggleTxt}>
+                    {splitOn ? "Cancelar divisão" : "Dividir pagamento"}
+                  </Text>
+                </Pressable>
+              )}
+              {comanda && !comanda.charging && (
+                <Pressable
+                  testID="cta-adicionar-comanda"
+                  onPress={comanda.onAdd}
+                  disabled={items.length === 0}
+                  style={[s.splitToggle, items.length === 0 && { opacity: 0.45 }]}
+                >
+                  <Icon name="clipboard" size={13} color={Colors.violet3} />
+                  <Text style={s.splitToggleTxt}>Adicionar à comanda</Text>
+                </Pressable>
+              )}
+            </View>
           )}
 
           {/* Lista de splits */}
@@ -639,6 +666,24 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
         {/* 22/09/2026 (Matcon M1): card "Orçamento #N salvo" — só com o
             toggle ligado e depois de salvar. Fica ACIMA dos hints/CTAs pra
             não sumir atrás do aviso de bloqueio. */}
+        {comanda && comanda.charging && (
+          <View style={s.quoteCard} testID="comanda-cobrando">
+            <View style={s.quoteCardHead}>
+              <Text style={s.quoteCardTitle} numberOfLines={1}>
+                Cobrando a comanda {comanda.charging.number}
+              </Text>
+              <Pressable onPress={comanda.charging.onCancel} style={s.quoteCardGhostBtn} testID="comanda-cancelar-cobranca">
+                <Text style={s.quoteCardGhostTxt} numberOfLines={1}>Cancelar</Text>
+              </Pressable>
+            </View>
+            <Text style={s.quoteCardSub}>
+              {comanda.charging.feePct > 0
+                ? "Consumo com a taxa de serviço de " + comanda.charging.feePct + "%. "
+                : ""}
+              Ao finalizar a venda a comanda fecha. Cancelar deixa a comanda aberta.
+            </Text>
+          </View>
+        )}
         {matcon.matcon_enabled && editingQuote && (
           <View style={s.quoteCard} testID="matcon-orcamento-editando">
             <View style={s.quoteCardHead}>
@@ -734,7 +779,20 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           // onSaveQuote, ele continua imprimindo via onGenerateQuote, do
           // jeito que sempre foi.
           const quoteSaveMode = matcon.matcon_enabled && !!onSaveQuote;
-          const quoteBtn = quoteSaveMode ? (
+          // 09/10/2026 (Comandas): com a chave ligada, "Fechar comanda"
+          // ocupa o lugar do "Orçamento". Funciona com o carrinho vazio —
+          // é por ele que o consumo chega.
+          const quoteBtn = comanda ? (
+            <Pressable
+              testID="cta-fechar-comanda"
+              onPress={comanda.onClose}
+              disabled={!!isProcessing}
+              style={[s.ctaAlt, isProcessing && { opacity: 0.5 }]}
+            >
+              <Icon name="clipboard" size={15} color={Colors.violet3} />
+              <Text style={s.ctaAltTxt} numberOfLines={1}>Fechar comanda</Text>
+            </Pressable>
+          ) : quoteSaveMode ? (
             <Pressable
               testID="cta-salvar-orcamento"
               onPress={onSaveQuote}
@@ -1436,8 +1494,13 @@ const s = StyleSheet.create({
   // Toggle "Dividir pagamento" — link sutil (não compete com chips)
   splitToggle: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 6, paddingVertical: 6, marginBottom: 8,
-    alignSelf: "center",
+    gap: 6, paddingVertical: 6,
+  },
+  // "Dividir pagamento" e "Adicionar à comanda" lado a lado; em carrinho
+  // estreito um desce para baixo do outro em vez de cortar.
+  linksRow: {
+    flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "center",
+    columnGap: 18, rowGap: 0, marginBottom: 8,
   },
   splitToggleTxt: { fontSize: 11, color: Colors.violet3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
   // Painel de splits

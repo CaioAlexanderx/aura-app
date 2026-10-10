@@ -8,6 +8,7 @@ import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
 import { aoRecarregar, guardarVenda, recuperarVenda } from "@/utils/vendaGuardada";
+import { ehIdDeCatalogo } from "@/utils/comanda";
 import {
   CARTAO_DESLIGADO, contaComOServidor, ehCartao, editarPrecoNoDividido, editarPrecoProporcional, linhasNoMetodo, linhasRateadas,
   precoNoCartaoDoItem, r2, resolverDividido, statusDoDividido, totalComoNoServidor,
@@ -74,8 +75,12 @@ type VendaGuardada = {
   splitMode: boolean;
   splitPayments: PaymentEntry[];
   quoteId: string | null;
+  comanda?: ComandaNoCarrinho | null;
   lotAllocations: Record<string, LotAllocation[]>;
 };
+
+/** A comanda que este carrinho está cobrando (09/10/2026). */
+export type ComandaNoCarrinho = { id: string; number: number; feePct: number };
 
 export type SaleResult = {
   id: string;
@@ -127,6 +132,14 @@ const MAX_DISCOUNT_PCT = 50;
 
 // FIX 06/05/2026: pid estava retornando cartKey inteiro (incluía __variantId),
 // causando "invalid input syntax for type uuid" no backend ao finalizar split.
+// 09/10/2026: linha sem produto do cadastro (taxa de serviço da comanda, item
+// avulso de orçamento) tem chave sintética no carrinho. Mandá-la como
+// product_id derrubava a venda no backend ("invalid input syntax for type
+// uuid"); sem product_id o item entra só com o nome e não mexe em estoque.
+function idDoCadastro(pid: string): string | undefined {
+  return ehIdDeCatalogo(pid) ? pid : undefined;
+}
+
 function decomposeCartKey(cartKey: string): { pid: string; vid: string | null } {
   var idx = cartKey.indexOf("__");
   if (idx < 0) return { pid: cartKey, vid: null };
@@ -149,6 +162,13 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
   // pedido nasceria duas vezes (docs/CONTRACT_MATCON.md, convert). Zera
   // junto com o carrinho.
   var [quoteId, setQuoteId] = useState<string | null>(null);
+
+  // 09/10/2026 (Comandas): a comanda que montou este carrinho ("Fechar
+  // comanda"). Vai como comanda_id no POST da venda e o backend fecha a
+  // comanda na mesma transação. Zera junto com o carrinho, como o quoteId —
+  // e também quando o operador esvazia o carrinho na mão (efeito abaixo):
+  // carrinho vazio não está cobrando comanda nenhuma.
+  var [comanda, setComanda] = useState<ComandaNoCarrinho | null>(null);
 
   // 22/09/2026 (Matcon M3): id do profissional "indicado por" desta venda
   // (chip do Caixa — IndicadoPorChip via useMatconReferral). Vai como
@@ -246,7 +266,7 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
     couponCode, couponApplied, couponRule,
     discountType, discountValue, cpfNaNota,
     splitMode, splitPayments,
-    quoteId, lotAllocations,
+    quoteId, comanda, lotAllocations,
   };
   const vendaRef = useRef<VendaGuardada | null>(vendaAtual);
   vendaRef.current = vendaAtual;
@@ -288,9 +308,15 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
     setSplitMode(!!v.splitMode);
     setSplitPayments(Array.isArray(v.splitPayments) ? v.splitPayments : []);
     setQuoteId(v.quoteId ?? null);
+    setComanda(v.comanda && v.comanda.id ? v.comanda : null);
     setLotAllocationsMap(v.lotAllocations && typeof v.lotAllocations === "object" ? v.lotAllocations : {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
+
+  useEffect(() => {
+    if (comanda && cart.length === 0) setComanda(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart.length]);
 
   const saleMutation = useMutation({
     mutationFn: (body: any) => pdvApi.createSale(companyId!, body),
@@ -717,7 +743,7 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
         if (linhasDoPayload && linhasDoPayload[idx]) {
           var lp = linhasDoPayload[idx];
           return {
-            product_id: decomposed.pid,
+            product_id: idDoCadastro(decomposed.pid),
             variant_id: decomposed.vid || undefined,
             quantity: i.qty,
             unit_price: lp.unit_price,
@@ -729,7 +755,7 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
           };
         }
         return {
-          product_id: decomposed.pid,
+          product_id: idDoCadastro(decomposed.pid),
           variant_id: decomposed.vid || undefined,
           quantity: i.qty,
           unit_price: unitOriginal,
@@ -745,6 +771,8 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
       employee_id: selectedEmployeeId || undefined,
       seller_name: effectiveSellerName || undefined,
       quote_id: quoteId || undefined,
+      comanda_id: comanda ? comanda.id : undefined,
+      comanda_service_fee_pct: comanda && comanda.feePct > 0 ? comanda.feePct : undefined,
       referred_by_professional_id: referredProfessionalId || undefined,
     };
 
@@ -838,7 +866,7 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
           // recibo cai no UUID encurtado nesse caso.
           var saleNumber = typeof res?.sale?.sale_number === "number" ? res.sale.sale_number : null;
           setLastSale(buildLastSale(String(saleId), saleNumber, res?.sale, res?.matcon));
-          setCart([]); setQuoteId(null); setReferredProfessionalId(null); clearLotAllocations(); toast.success("Venda registrada!"); setIsProcessing(false); clearCoupon(); clearDiscount();
+          setCart([]); setQuoteId(null); setComanda(null); setReferredProfessionalId(null); clearLotAllocations(); toast.success("Venda registrada!"); setIsProcessing(false); clearCoupon(); clearDiscount();
           setSellerName("");
           setCpfNaNota("");
           // QA 23/09/2026 (decisão do Caio): a próxima venda começa limpa —
@@ -859,7 +887,7 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
       });
     } else {
       setLastSale(buildLastSale(Date.now().toString(36).toUpperCase().slice(-6)));
-      setCart([]); setQuoteId(null); setReferredProfessionalId(null); clearLotAllocations(); setIsProcessing(false);
+      setCart([]); setQuoteId(null); setComanda(null); setReferredProfessionalId(null); clearLotAllocations(); setIsProcessing(false);
       voltarAoPagamentoInicial();
     }
   }
@@ -872,7 +900,7 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
   }
 
   function newSale() {
-    setLastSale(null); setCart([]); setQuoteId(null); setReferredProfessionalId(null); clearLotAllocations(); setIsProcessing(false);
+    setLastSale(null); setCart([]); setQuoteId(null); setComanda(null); setReferredProfessionalId(null); clearLotAllocations(); setIsProcessing(false);
     setSelectedCustomerId(null); setSelectedCustomerName(null); setSelectedCustomerPhone(null);
     setSelectedEmployeeId(null); setSelectedEmployeeName(null);
     setSellerName("");
@@ -885,6 +913,7 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
 
   return {
     quoteId, setQuoteId,
+    comanda, setComanda,
     referredProfessionalId, setReferredProfessionalId,
     // Matcon M4 — o pai (usePdvState/cartProps) liga `setLotAllocations` no
     // `onLotAllocations` do CartPanel; sem isso a linha do lote continua

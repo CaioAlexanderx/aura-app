@@ -23,6 +23,8 @@ import { TrocaModal } from "@/components/screens/pdv/TrocaModal";
 import { OpenCloseCashModal } from "@/components/screens/pdv/OpenCloseCashModal";
 import { CashChangeModal } from "@/components/screens/pdv/CashChangeModal";
 import { CreditInstallmentModal } from "@/components/screens/pdv/CreditInstallmentModal";
+import { AdicionarAComandaModal, FecharComandaModal } from "@/components/screens/pdv/ComandaModals";
+import type { Comanda } from "@/utils/comanda";
 import type { Product } from "@/components/screens/estoque/types";
 
 // Re-export do tipo do modal para uso em usePdvState
@@ -62,6 +64,20 @@ export interface PdvModalsProps {
   saleTotal:          number;
   onCrediarioConfirm: (payload: import("@/components/screens/pdv/CreditInstallmentModal").ConfirmPayload) => void;
   onCrediarioClose:   () => void;
+  // ── Comandas (09/10/2026). Ausente = loja sem comanda, nada é montado.
+  comandas?: {
+    enabled: boolean;
+    showAdicionar: boolean;
+    fecharAdicionar: () => void;
+    lancando: boolean;
+    lancar: (numero: number) => void;
+    showFechar: boolean;
+    fecharFechar: () => void;
+    cobrar: (comanda: Comanda, taxaPct: number) => void;
+    recarregarAbertas: () => void;
+  };
+  cartItemCount?: number;
+  cartTotal?: number;
 }
 
 export function PdvModals({
@@ -71,6 +87,7 @@ export function PdvModals({
   showCaixaModal, companyName, companyCnpj, sessaoAtiva, onCloseCaixa, onCaixaSuccess,
   showChangeModal, cashModalAmount, cashModalIsSplit, onCancelChange, onConfirmChange,
   showCrediario, customerId, customerName, saleTotal, onCrediarioConfirm, onCrediarioClose,
+  comandas, cartItemCount, cartTotal,
 }: PdvModalsProps) {
   return (
     <>
@@ -116,6 +133,27 @@ export function PdvModals({
         onConfirm={onCrediarioConfirm}
         onClose={onCrediarioClose}
       />
+      {comandas && comandas.enabled && !!companyId && (
+        <>
+          <AdicionarAComandaModal
+            visible={comandas.showAdicionar}
+            companyId={companyId}
+            itemCount={cartItemCount || 0}
+            total={cartTotal || 0}
+            saving={comandas.lancando}
+            onClose={comandas.fecharAdicionar}
+            onConfirm={comandas.lancar}
+          />
+          <FecharComandaModal
+            visible={comandas.showFechar}
+            companyId={companyId}
+            loja={companyName}
+            onClose={comandas.fecharFechar}
+            onCobrar={comandas.cobrar}
+            onMudou={comandas.recarregarAbertas}
+          />
+        </>
+      )}
     </>
   );
 }

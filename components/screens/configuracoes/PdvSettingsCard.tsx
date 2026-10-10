@@ -10,6 +10,7 @@ import { useAuthStore } from "@/stores/auth";
 import { pdvSettingsApi, companiesApi, type PdvSettings } from "@/services/api";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { lerVendaSemEstoque } from "@/utils/vendaSemEstoque";
+import { lerComandaEnabled } from "@/utils/comanda";
 import { Card } from "@/components/screens/configuracoes/shared";
 import { CardFeeSection, type CardFeePalette } from "@/components/screens/configuracoes/CardFeeSection";
 import { CardPriceSection } from "@/components/screens/configuracoes/CardPriceSection";
@@ -221,6 +222,24 @@ export function PdvSettingsCard() {
           onValueChange={function(v) { toggle("allow_sale_without_stock", v); }}
           trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
           thumbColor={lerVendaSemEstoque(display) ? Colors.violet : Colors.ink3}
+          disabled={saving}
+        />
+      </View>
+
+      <View style={s.divider} />
+
+      {/* 09/10/2026: Comandas (bar, adega, lanchonete) */}
+      <View style={s.row}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.rowLabel}>Comandas</Text>
+          <Text style={s.rowDesc}>Lança o consumo no número da comanda e cobra tudo no fim. No Caixa aparecem "Adicionar à comanda" e "Fechar comanda" (no lugar de Orçamento)</Text>
+        </View>
+        <Switch
+          testID="toggle-comandas"
+          value={lerComandaEnabled(display)}
+          onValueChange={function(v) { toggle("comanda_enabled", v); }}
+          trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
+          thumbColor={lerComandaEnabled(display) ? Colors.violet : Colors.ink3}
           disabled={saving}
         />
       </View>
