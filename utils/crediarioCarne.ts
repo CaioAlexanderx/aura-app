@@ -415,6 +415,21 @@ export function rotuloDoBotaoDeJuntar(
   return valorDaParcela != null ? `${base} de ${fmt(valorDaParcela)}` : base;
 }
 
+/**
+ * Venda no Caixa juntada a um carnê existente (credit_account_id): os dois
+ * 422 novos do POST /pdv/sale. null = não é erro de carnê (segue o tratamento
+ * normal da venda). A venda NÃO foi registrada em nenhum dos dois casos.
+ */
+export function mensagemErroCarneDaVenda(code?: string | null): string | null {
+  if (code === "CREDIT_ACCOUNT_NOT_FOUND") {
+    return "A venda não foi registrada: o carnê escolhido para juntar não existe mais. Abra o crediário de novo e escolha outro carnê, ou finalize sem juntar.";
+  }
+  if (code === "CREDIT_ACCOUNT_CLOSED") {
+    return "A venda não foi registrada: o carnê escolhido para juntar já foi quitado ou encerrado. Abra o crediário de novo e escolha outro carnê, ou finalize sem juntar.";
+  }
+  return null;
+}
+
 type ErroDeApi = { status?: number; isNetworkError?: boolean; message?: string; data?: { code?: string; error?: string } | null } | null | undefined;
 
 const ERROS_DA_JUNCAO: Record<string, string> = {

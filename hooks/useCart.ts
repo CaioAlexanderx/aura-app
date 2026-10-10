@@ -9,6 +9,7 @@ import { toast } from "@/components/Toast";
 import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
 import { aoRecarregar, guardarVenda, recuperarVenda } from "@/utils/vendaGuardada";
 import { ehIdDeCatalogo } from "@/utils/comanda";
+import { mensagemErroCarneDaVenda } from "@/utils/crediarioCarne";
 import {
   CARTAO_DESLIGADO, contaComOServidor, ehCartao, editarPrecoNoDividido, editarPrecoProporcional, linhasNoMetodo, linhasRateadas,
   precoNoCartaoDoItem, r2, resolverDividido, statusDoDividido, totalComoNoServidor,
@@ -676,10 +677,13 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
    * @param crediario - parâmetros de parcelamento quando payment=crediario e installments>1.
    *                    Passados diretamente no body do POST /pdv/sale para o backend
    *                    criar as credit_installments inline (F1 creditLedger, 29/05/2026).
+   *                    credit_account_id (10/10/2026, Aura-backend#803): a lojista
+   *                    escolheu juntar a venda a um carnê existente. Sem ele o
+   *                    campo nem vai no JSON e o backend cria o carnê da venda.
    */
   function finalizeSale(
     saleDate?: string,
-    crediario?: { installments: number; first_due_date: string },
+    crediario?: { installments: number; first_due_date: string; credit_account_id?: string },
   ) {
     if (cart.length === 0 || isProcessing) return;
     // Bloqueio só quando split está ativo e não fecha
@@ -810,6 +814,13 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
       saleData.installments = crediario.installments;
       saleData.first_due_date = crediario.first_due_date;
     }
+    // 10/10/2026 (carnês por compra): venda juntada a um carnê existente.
+    // Vai mesmo com installments=1 (o fluxo de unificar manda a venda como
+    // débito puro e monta o cronograma depois, no /unify). Backend antigo
+    // ignora o campo.
+    if (crediario && crediario.credit_account_id && hasCreditPortion) {
+      saleData.credit_account_id = crediario.credit_account_id;
+    }
 
     // A conta da tela final. Dividido: a das linhas rateadas que vão no
     // POST (o cupom em % recalculado sobre elas, como o servidor faz);
@@ -877,8 +888,12 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
           // F3-3A (29/05/2026): trata 422 CREDIARIO_REQUIRES_CUSTOMER com mensagem acionavel.
           // ApiError.data contem o body JSON do backend; .code eh o codigo do erro.
           const errCode = err?.data?.code || err?.code;
+          // 10/10/2026: os dois 422 do carnê escolhido para juntar a venda.
+          const erroDoCarne = mensagemErroCarneDaVenda(errCode);
           if (errCode === "CREDIARIO_REQUIRES_CUSTOMER") {
             toast.error("Selecione um cliente antes de finalizar no crediário.");
+          } else if (erroDoCarne) {
+            toast.error(erroDoCarne);
           } else {
             toast.error(textoDoErro(err, "Não deu para registrar a venda. Tente de novo."));
           }

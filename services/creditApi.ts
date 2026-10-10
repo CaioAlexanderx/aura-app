@@ -438,6 +438,9 @@ export type ManualEntryPayload = {
   description?: string;
   account_id?: string | null;       // F3: carnê existente
   new_account_name?: string;        // F3: criar carnê inline
+  /** 10/10/2026 (Aura-backend#803): cria um carnê para este lançamento. Sem
+   *  new_account_name o backend nomeia "Lançamento de DD/MM". */
+  new_account?: boolean;
 };
 
 export type ManualEntryResult = {

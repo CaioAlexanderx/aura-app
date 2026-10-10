@@ -6,6 +6,12 @@
 //   - "Conta geral" (default) — sem account_id
 //   - escolher carnê existente — envia account_id
 //   - "Novo carnê" — campo de nome, envia new_account_name
+// 10/10/2026 (carnês por compra, Aura-backend#803): o padrão do seletor
+//   passou a ser "Novo carnê" — cada lançamento nasce como um carnê, igual
+//   à venda no Caixa. Manda new_account: true; o nome é opcional (vazio, o
+//   backend nomeia "Lançamento de DD/MM"). "Carnê existente" e "Conta geral"
+//   continuam como opções. Backend antigo ignora new_account: sem nome o
+//   lançamento cai na conta geral, que era o padrão de antes.
 //
 // feat(unify) (13/06/2026): quando accountMode=="existing" e o carnê
 // escolhido tiver parcelas abertas, aparece um toggle "Unificar parcelas".
@@ -165,7 +171,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
   const [description, setDescription]   = useState("");
 
   // F3: seletor de carnê
-  const [accountMode, setAccountMode]             = useState<AccountMode>("general");
+  const [accountMode, setAccountMode]             = useState<AccountMode>("new");
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [newAccountName, setNewAccountName]       = useState("");
   const [fetchedAccounts, setFetchedAccounts]     = useState<CreditAccount[]>([]);
@@ -209,7 +215,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
     setPeriodKind("mensal");
     setPeriodDays("20");
     setDescription("");
-    setAccountMode("general");
+    setAccountMode("new");
     setSelectedAccountId(null);
     setNewAccountName("");
     setFetchedAccounts([]);
@@ -339,10 +345,6 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
       return;
     }
 
-    if (accountMode === "new" && !newAccountName.trim()) {
-      toast.error("Informe o nome do novo carnê");
-      return;
-    }
     if (accountMode === "existing" && !selectedAccountId) {
       toast.error("Selecione um carnê");
       return;
@@ -382,7 +384,9 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
       period_count:  period.period_count,
       description:   description.trim() || undefined,
       account_id:       accountMode === "existing" ? selectedAccountId : undefined,
-      new_account_name: accountMode === "new" ? newAccountName.trim() : undefined,
+      // Nome vazio não vai: o backend nomeia sozinho ("Lançamento de DD/MM").
+      new_account:      accountMode === "new" ? true : undefined,
+      new_account_name: accountMode === "new" ? (newAccountName.trim() || undefined) : undefined,
     };
 
     // Gerada uma única vez por sessão de submissão: se este handleSubmit for
@@ -654,16 +658,16 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                   style={s.groupHead}
                   onPress={() => setCarneOpen(v => !v)}
                   accessibilityRole="button"
-                  accessibilityLabel={`Carnê: ${accountMode === "general" ? "Conta geral" : accountMode === "existing" ? (selectedAccount?.name || "escolher carnê") : (newAccountName || "novo carnê")}. Toque para ${carneOpen ? "recolher" : "alterar"}`}
+                  accessibilityLabel={`Carnê: ${accountMode === "general" ? "Conta geral" : accountMode === "existing" ? (selectedAccount?.name || "escolher carnê") : (newAccountName.trim() || "novo carnê")}. Toque para ${carneOpen ? "recolher" : "alterar"}`}
                 >
                   <View style={{ flex: 1 }}>
                     <Text style={s.groupTitle}>Carnê / conta</Text>
                     <Text style={s.groupSummary} numberOfLines={1}>
                       {accountMode === "general"
-                        ? "Conta geral (padrão)"
+                        ? "Conta geral"
                         : accountMode === "existing"
                           ? (selectedAccount?.name || "escolher carnê…") + (unifyEnabled ? " · unificar parcelas" : "")
-                          : (newAccountName ? `Novo: ${newAccountName}` : "novo carnê…")}
+                          : (newAccountName.trim() ? `Novo: ${newAccountName.trim()}` : "Novo carnê (padrão)")}
                     </Text>
                   </View>
                   <View style={carneOpen ? { transform: [{ rotate: "180deg" }] } : undefined}>
@@ -677,9 +681,9 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                   <>
                     <View style={s.accountModeRow}>
                       {([
-                        ["general", "Conta geral"],
-                        ["existing", "Carnê existente"],
                         ["new", "Novo carnê"],
+                        ["existing", "Carnê existente"],
+                        ["general", "Conta geral"],
                       ] as [AccountMode, string][]).map(([k, lbl]) => (
                         <Pressable
                           key={k}
@@ -813,12 +817,12 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                       <>
                         <TextInput
                           style={[s.input, { marginTop: 8 }]}
-                          placeholder="Nome do carnê (ex.: Compras de junho)"
+                          placeholder="Nome do carnê (opcional)"
                           placeholderTextColor={Colors.ink3}
                           value={newAccountName}
                           onChangeText={setNewAccountName}
                         />
-                        <Text style={s.dateHint}>Um novo carnê será criado com este lançamento.</Text>
+                        <Text style={s.dateHint}>Um novo carnê será criado com este lançamento. Sem nome, ele fica como "Lançamento de" e a data.</Text>
                       </>
                     )}
                   </>
