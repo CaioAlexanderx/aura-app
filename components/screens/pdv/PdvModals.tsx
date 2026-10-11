@@ -39,6 +39,10 @@ export interface PdvModalsProps {
   pendingProduct:        Product | null;
   onVariantSelected:     (v: { id: string; label: string; price: number; stock: number }) => void;
   onClosePendingProduct: () => void;
+  /** Código bipado que abriu o seletor (e a variante dele, se o servidor disse). */
+  pendingBipe?:          { code: string; variantId?: string } | null;
+  /** Bipe com o seletor aberto: confirma o tamanho marcado e segue. */
+  onScanAgain?:          (code: string) => void;
   // ── Troca
   showTroca:    boolean;
   companyId:    string;
@@ -82,7 +86,7 @@ export interface PdvModalsProps {
 
 export function PdvModals({
   showNewCustomer, onCloseNewCustomer, onCustomerCreated,
-  pendingProduct, onVariantSelected, onClosePendingProduct,
+  pendingProduct, onVariantSelected, onClosePendingProduct, pendingBipe, onScanAgain,
   showTroca, companyId, products, onCloseTroca,
   showCaixaModal, companyName, companyCnpj, sessaoAtiva, onCloseCaixa, onCaixaSuccess,
   showChangeModal, cashModalAmount, cashModalIsSplit, onCancelChange, onConfirmChange,
@@ -101,6 +105,10 @@ export function PdvModals({
         product={pendingProduct}
         onSelect={onVariantSelected}
         onClose={onClosePendingProduct}
+        keyboard
+        preselectVariantId={pendingBipe?.variantId || null}
+        preselectBarcode={pendingBipe?.code || null}
+        onScanAgain={onScanAgain}
       />
       <TrocaModal
         visible={showTroca}

@@ -11,13 +11,24 @@
 // o operador escolher um tamanho sem estoque (que falharia no submit com
 // "Estoque insuficiente"). Default false preserva o comportamento atual
 // do PDV/venda retroativa (que so sinaliza estoque baixo, sem bloquear).
+// 11/10/2026: bipe confirma o tamanho. O Caixa lancava direto a variante do
+// codigo bipado; agora abre este seletor com ela JA marcada ("Bipado") e os
+// outros tamanhos a vista — Enter confirma, setas trocam. Um bipe novo com o
+// seletor aberto confirma o tamanho marcado e segue para o proximo codigo.
+// Tudo opcional (`keyboard`, `preselect*`, `onScanAgain`): Troca e venda
+// retroativa continuam como estavam.
 // ============================================================
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { View, Text, Modal, Pressable, ScrollView, StyleSheet, ActivityIndicator, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { hexToName } from "@/utils/colorNames";
+import { criarDetector, OCIOSO_MS, CONFIRMA_OCIOSO_MS } from "@/utils/leituraRapida";
+
+/** Tempo em que o Enter e ignorado logo depois de o seletor marcar o tamanho
+ *  bipado: leitor que manda Enter duas vezes (CR+LF) nao confirma sozinho. */
+export var ENTER_LIBERADO_APOS_MS = 250;
 
 export type VariantChoice = {
   id: string;
@@ -88,31 +99,139 @@ function buildParentLabel(parentColor?: string, parentSize?: string): { label: s
   return { label: "Sem variante específica", sub: "genérico" };
 }
 
-export function VariantPickerModal({ visible, product, onSelect, onClose, blockOutOfStock = false }: {
+export function VariantPickerModal({
+  visible, product, onSelect, onClose, blockOutOfStock = false,
+  keyboard = false, preselectVariantId = null, preselectBarcode = null, onScanAgain,
+}: {
   visible: boolean;
   product: { id: string; name: string; price: number; color?: string; size?: string; stock?: number } | null;
   onSelect: (variant: VariantChoice) => void;
   onClose: () => void;
   blockOutOfStock?: boolean;
+  /** Enter confirma a variante marcada; setas trocam. So o Caixa liga. */
+  keyboard?: boolean;
+  /** Variante que o bipe identificou: abre ja marcada. */
+  preselectVariantId?: string | null;
+  /** Codigo bipado: marca a variante que tem esse codigo de barras. */
+  preselectBarcode?: string | null;
+  /** Bipe com o seletor aberto, depois de confirmar a variante marcada. */
+  onScanAgain?: (code: string) => void;
 }) {
   var { company } = useAuthStore();
   var [variants, setVariants] = useState<any[]>([]);
   var [loading, setLoading] = useState(false);
+  var [selId, setSelId] = useState<string | null>(null);
+  var [bipadoId, setBipadoId] = useState<string | null>(null);
+  var enterLiberadoEm = useRef(0);
+  var scrollRef = useRef<any>(null);
+  var posicoes = useRef<Record<string, number>>({});
+  var vivo = useRef<any>({});
 
   useEffect(function() {
     if (!visible || !product || !company?.id) { setVariants([]); return; }
     setLoading(true);
+    setVariants([]); // bipe em sequência troca o produto com o seletor aberto
     companiesApi.variants(company.id, product.id)
       .then(function(res) { setVariants(res.variants || []); })
       .catch(function() { setVariants([]); })
       .finally(function() { setLoading(false); });
   }, [visible, product?.id, company?.id]);
 
-  if (!visible || !product) return null;
-
   var activeVariants = variants.filter(function(v: any) { return v.is_active !== false; });
-  var parentColor = product.color || "";
-  var parentSize = product.size || "";
+  var parentColor = (product && product.color) || "";
+  var parentSize = (product && product.size) || "";
+
+  function escolhaDe(v: any): VariantChoice {
+    var preco = v.price_override ? parseFloat(v.price_override) : (product ? product.price : 0);
+    return { id: v.id, label: getLabel(v, parentColor, parentSize), price: preco, stock: parseInt(v.stock_qty) || 0, barcode: v.barcode };
+  }
+  function bloqueada(v: any): boolean {
+    return blockOutOfStock && (parseInt(v.stock_qty) || 0) <= 0;
+  }
+
+  // Tamanho bipado ja marcado quando as variantes chegam.
+  useEffect(function() {
+    if (!visible) { setSelId(null); setBipadoId(null); return; }
+    var alvo = (preselectVariantId ? activeVariants.find(function(v: any) { return v.id === preselectVariantId; }) : null)
+      || (preselectBarcode ? activeVariants.find(function(v: any) { return v.barcode && String(v.barcode) === preselectBarcode; }) : null);
+    if (alvo && bloqueada(alvo)) alvo = null;
+    setSelId(alvo ? alvo.id : null);
+    setBipadoId(alvo ? alvo.id : null);
+    enterLiberadoEm.current = Date.now() + ENTER_LIBERADO_APOS_MS;
+  }, [visible, variants, preselectVariantId, preselectBarcode, product?.id]);
+
+  // A variante marcada fica a vista (lista longa de tamanhos).
+  useEffect(function() {
+    if (!selId || !scrollRef.current || typeof scrollRef.current.scrollTo !== "function") return;
+    var y = posicoes.current[selId];
+    if (typeof y === "number") scrollRef.current.scrollTo({ y: Math.max(0, y - 120), animated: false });
+  }, [selId, loading]);
+
+  vivo.current = { activeVariants: activeVariants, selId: selId, onSelect: onSelect, onScanAgain: onScanAgain, escolhaDe: escolhaDe, bloqueada: bloqueada };
+
+  // Teclado (web): Enter confirma, setas trocam, bipe novo confirma e segue.
+  useEffect(function() {
+    if (!isWeb || !keyboard || !visible || typeof window === "undefined") return;
+    var det = criarDetector();
+    var timer: any = null;
+
+    function marcada(): VariantChoice | null {
+      var L = vivo.current;
+      var v = L.activeVariants.find(function(x: any) { return x.id === L.selId; });
+      return v && !L.bloqueada(v) ? L.escolhaDe(v) : null;
+    }
+    function bipeNovo() {
+      timer = null;
+      var code = det.leitura();
+      if (!code) return;
+      det.reset();
+      var L = vivo.current;
+      var atual = marcada();
+      if (!atual || !L.onScanAgain) return; // nada marcado: o bipe nao decide por ninguem
+      L.onSelect(atual);
+      L.onScanAgain(code);
+    }
+    function mover(passo: number) {
+      var L = vivo.current;
+      var ids = L.activeVariants.filter(function(v: any) { return !L.bloqueada(v); }).map(function(v: any) { return v.id; });
+      if (!ids.length) return;
+      var i = ids.indexOf(L.selId);
+      var prox = i < 0 ? (passo > 0 ? 0 : ids.length - 1) : Math.min(ids.length - 1, Math.max(0, i + passo));
+      setSelId(ids[prox]);
+    }
+    function aoTecla(e: KeyboardEvent) {
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      if (e.key === "Enter") {
+        // preventDefault tambem impede o Enter de "clicar" o botao que ficou
+        // com o foco atras do seletor.
+        e.preventDefault();
+        if (timer) { clearTimeout(timer); timer = null; }
+        if (det.leitura()) { bipeNovo(); return; }
+        det.reset();
+        if (e.repeat || Date.now() < enterLiberadoEm.current) return;
+        var atual = marcada();
+        if (atual) vivo.current.onSelect(atual);
+        return;
+      }
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        mover(e.key === "ArrowDown" ? 1 : -1);
+        return;
+      }
+      if (e.key && e.key.length === 1 && !e.repeat) {
+        det.tecla(e.key, e.timeStamp || Date.now());
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(bipeNovo, OCIOSO_MS + CONFIRMA_OCIOSO_MS);
+      }
+    }
+    window.addEventListener("keydown", aoTecla, true);
+    return function() {
+      window.removeEventListener("keydown", aoTecla, true);
+      if (timer) clearTimeout(timer);
+    };
+  }, [keyboard, visible]);
+
+  if (!visible || !product) return null;
   var parentHex = parentColor ? toHex(parentColor) : null;
   var parentLabel = buildParentLabel(parentColor, parentSize);
 
@@ -139,7 +258,7 @@ export function VariantPickerModal({ visible, product, onSelect, onClose, blockO
               <Text style={s.empty}>Nenhuma variante ativa encontrada</Text>
             </View>
           ) : (
-            <ScrollView style={{ maxHeight: 340 }} contentContainerStyle={{ gap: 8, padding: 16 }}>
+            <ScrollView ref={scrollRef} style={{ maxHeight: 340 }} contentContainerStyle={{ gap: 8, padding: 16 }}>
               {/* 07/05: produto pai pode ter stock proprio independente das variantes
                  (caso onde o usuario cadastrou estoque no pai antes de criar variantes,
                  ou onde sobrou estoque "generico" nao-categorizado). Quando product.stock > 0
@@ -173,19 +292,27 @@ export function VariantPickerModal({ visible, product, onSelect, onClose, blockO
                 var stock = parseInt(v.stock_qty) || 0;
                 var hex = getColor(v, parentColor);
                 var disabled = blockOutOfStock && stock <= 0;
+                var marcadaAqui = selId === v.id;
                 return (
                   <Pressable
                     key={v.id}
+                    testID={"variante-" + v.id}
+                    aria-selected={marcadaAqui}
+                    onLayout={function(e: any) { posicoes.current[v.id] = e.nativeEvent.layout.y; }}
                     disabled={disabled}
                     onPress={disabled ? undefined : function() { onSelect({ id: v.id, label: label, price: effectivePrice, stock: stock, barcode: v.barcode }); }}
                     style={[
                       s.variantRow,
                       disabled && s.variantRowDisabled,
+                      marcadaAqui && s.variantRowSel,
                       isWeb && !disabled && { cursor: "pointer", transition: "all 0.15s ease" } as any,
                     ]}>
                     {hex && <View style={[s.colorDot, { backgroundColor: hex }]} />}
                     <View style={{ flex: 1 }}>
-                      <Text style={s.variantLabel}>{label}</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                        <Text style={s.variantLabel}>{label}</Text>
+                        {bipadoId === v.id && <Text style={s.bipadoBadge}>Bipado</Text>}
+                      </View>
                       <Text style={s.variantMeta}>
                         R$ {effectivePrice.toFixed(2).replace(".", ",")}
                         {disabled ? "" : " · " + stock + " un"}
@@ -203,6 +330,13 @@ export function VariantPickerModal({ visible, product, onSelect, onClose, blockO
                 );
               })}
             </ScrollView>
+          )}
+          {isWeb && keyboard && !loading && activeVariants.length > 0 && (
+            <View style={s.footer}>
+              <Text style={s.footerText}>
+                {selId ? "Enter confirma · ↑ ↓ troca o tamanho · Esc cancela" : "↑ ↓ escolhe · Enter confirma · Esc cancela"}
+              </Text>
+            </View>
           )}
         </View>
       </View>
@@ -226,6 +360,19 @@ var s = StyleSheet.create({
     backgroundColor: Colors.bg4, borderRadius: 12, padding: 14,
     borderWidth: 1, borderColor: Colors.border,
   },
+  variantRowSel: {
+    borderColor: Colors.violet3,
+    borderWidth: 2,
+    padding: 13,
+    backgroundColor: "rgba(124,58,237,0.16)",
+  },
+  bipadoBadge: {
+    fontSize: 9, fontWeight: "800", color: "#fff", backgroundColor: Colors.violet,
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, overflow: "hidden",
+    textTransform: "uppercase", letterSpacing: 0.5,
+  },
+  footer: { paddingHorizontal: 20, paddingVertical: 10, borderTopWidth: 1, borderTopColor: Colors.border },
+  footerText: { fontSize: 11, color: Colors.ink3, textAlign: "center" },
   variantRowDisabled: {
     opacity: 0.5,
     backgroundColor: "rgba(255,255,255,0.02)",

@@ -148,6 +148,8 @@ function CaixaScreenInner() {
       pendingProduct={st.pendingProduct}
       onVariantSelected={handleVariantSelected}
       onClosePendingProduct={st.closePendingProduct}
+      pendingBipe={st.pendingBipe}
+      onScanAgain={handleScan}
       showTroca={st.showTroca}
       companyId={company?.id || ""}
       products={st.products}
