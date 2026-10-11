@@ -20,6 +20,7 @@ import { KarateLoginTransition } from "@/components/karate/KarateLoginTransition
 import { useKarateIntro } from "@/stores/karateIntro";
 import { ehVitrinePublica } from "@/components/studio/storefront/rotasDaVitrine";
 import { mostrarCarregandoSessao } from "@/utils/carregandoSessao";
+import { semAssinatura, destinoSemAssinatura } from "@/utils/muroDeAssinatura";
 
 const queryClient = new QueryClient();
 
@@ -282,15 +283,23 @@ function AuthGuard() {
     // (KarateBillingGate / DojoBillingGate, ver comentário acima). Sem essa
     // exclusão o redirect de 2026-06-18 (dispara em QUALQUER rota
     // autenticada) arranca o usuário de /karate antes do gate montar.
-    const needsCheckout    = !isDemo && !isStaff && emailVerified && !!company && isOwner && !hasActiveBilling && !isKarateFederation && !isKarateDojoVertical;
+    const needsCheckout    = semAssinatura({
+      billingStatus, trialActive, isDemo, isStaff, emailVerified,
+      temEmpresa: !!company, isOwner, isKarateFederation, isKarateDojoVertical,
+    });
+    void hasActiveBilling;
 
     // 2026-06-18: removida a condição de rota (inTabs || onDentalClinic || …).
     // O redirect agora dispara de QUALQUER rota autenticada, incluindo /empresas.
     // Antes, usuário com billing inativo que chegava em /empresas ficava preso
     // sem nunca ser encaminhado ao checkout.
-    if (token && needsCheckout && !onCheckout) {
-      router.replace("/(tabs)/checkout");
-      return;
+    //
+    // 11/10/2026: no shell Negócio o Caixa fica vivo — sem assinatura, qualquer
+    // outra tela leva ao Caixa, que mostra o aviso com o botão do checkout
+    // (utils/muroDeAssinatura). Verticais com casa própria seguem no checkout.
+    if (token && needsCheckout) {
+      const destino = destinoSemAssinatura(segments, { caixaVivo: !isOdonto && !isFood && !isStudio && !isKarate });
+      if (destino) { router.replace(destino as any); return; }
     }
   }, [token, user, company, isHydrated, isDemo, isStaff, trialActive, segments]);
 

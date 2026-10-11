@@ -507,6 +507,11 @@ export default function CheckoutScreen() {
     <ScrollView style={z.screen} contentContainerStyle={z.cnt}>
       <Text style={z.title}>Escolha seu plano</Text>
       <Text style={z.subtitle}>Sem contratos. Cancele quando quiser.</Text>
+      {/* 11/10/2026: o Caixa fica vivo sem assinatura; quem veio pelo aviso
+          pode voltar a vender sem assinar agora. */}
+      <Pressable testID="checkout-voltar-caixa" onPress={function () { router.replace("/(tabs)/pdv" as any); }} style={z.backLink}>
+        <Text style={z.backLinkText}>Continuar vendendo no Caixa</Text>
+      </Pressable>
 
       {activeDiscount && (
         <View style={z.discountCard}>

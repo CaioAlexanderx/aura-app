@@ -75,6 +75,9 @@ import { usePdvState } from "@/hooks/usePdvState";
 import { querAbrirTroca } from "@/utils/devolucaoOuTroca";
 import { productMinCardFor } from "@/hooks/useViewport";
 import type { Product } from "@/components/screens/estoque/types";
+import { useAuthStore } from "@/stores/auth";
+import { AvisoAssine } from "@/components/screens/pdv/AvisoAssine";
+import { semAssinatura } from "@/utils/muroDeAssinatura";
 
 const PAGE_SIZE = 12;
 
@@ -99,6 +102,21 @@ function CaixaScreenInner() {
   }, [params.troca]);
 
   const { company, isDemo, isNegocioPlus, clientesEnabled, vp, wide } = st;
+
+  // 11/10/2026: Caixa vivo sem assinatura — o aviso no topo é o único lugar da
+  // tela que fala de assinar (ver utils/muroDeAssinatura).
+  const auth = useAuthStore();
+  const mostrarAvisoAssine = semAssinatura({
+    billingStatus: (auth.company as any)?.billing_status,
+    trialActive: auth.trialActive,
+    isDemo: auth.isDemo,
+    isStaff: auth.isStaff,
+    emailVerified: !!(auth.user as any)?.email_verified,
+    temEmpresa: !!auth.company,
+    isOwner: ((auth.company as any)?.member_role || "owner") === "owner",
+    isKarateFederation: false,
+    isKarateDojoVertical: false,
+  });
   const { caixaEnabled, sessaoAtiva, isAberto, caixaLoading, invalidateCaixa } = st;
   const { employees, autoEmitNfce, scannerListening, lastScannedCode } = st;
   const { query, setQuery, cat, setCat, showOutOfStock, setShowOutOfStock } = st;
@@ -260,6 +278,7 @@ function CaixaScreenInner() {
             className={IS_WEB ? "caixa-scrollable" : undefined}
           >
             <View style={IS_WEB && vp.xxl ? ({ maxWidth: 1700, alignSelf: "center", width: "100%" } as any) : null}>
+              {mostrarAvisoAssine && <AvisoAssine trialEndsAt={auth.trialEndsAt} />}
 
               {/* Cabeçalho: a logo do lojista abre a tela, em 48px. Sem logo
                   (ou plano sem direito a ela) entra o tile violeta com a
@@ -391,6 +410,7 @@ function CaixaScreenInner() {
         style={{ flex: 1, backgroundColor: "transparent" }}
         contentContainerStyle={{ padding: 16, paddingBottom: 48 }}
       >
+        {mostrarAvisoAssine && <AvisoAssine trialEndsAt={auth.trialEndsAt} compact />}
         <View style={s.topRowMobile}>
           <MerchantLogo size={44} />
           <View style={{ flex: 1, minWidth: 0 }}>
