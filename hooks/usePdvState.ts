@@ -435,6 +435,9 @@ export function usePdvState() {
   // ── Estados de modais ────────────────────────────────────────────────────────
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [pendingProduct,  setPendingProduct]  = useState<Product | null>(null);
+  // 11/10/2026: o bipe não lança mais a variante direto — abre o seletor com
+  // o tamanho bipado já marcado, para o lojista conferir e confirmar no Enter.
+  const [pendingBipe, setPendingBipe] = useState<{ code: string; variantId?: string } | null>(null);
   const [showTroca,       setShowTroca]       = useState(false);
 
   // ── Categorias ───────────────────────────────────────────────────────────────
@@ -537,8 +540,15 @@ export function usePdvState() {
       return false;
     };
 
-    const localProduct = products.find(p => p.barcode === cleaned);
-    if (localProduct) { handleAddProduct(localProduct); return true; }
+    // Código do pai ou de um dos tamanhos (variant_barcodes vem na lista):
+    // acha na hora, sem ir ao servidor.
+    const localProduct = products.find(p => p.barcode === cleaned)
+      || products.find(p => Array.isArray((p as any).variant_barcodes) && (p as any).variant_barcodes.includes(cleaned));
+    if (localProduct) {
+      if (localProduct.has_variants) { setPendingBipe({ code: cleaned }); setPendingProduct(localProduct); }
+      else handleAddProduct(localProduct);
+      return true;
+    }
     if (!company?.id || isDemo) return naoAchou();
 
     try {
@@ -553,8 +563,9 @@ export function usePdvState() {
         // variante tem preço próprio — o addToCart leva na proporção.
         const parentCard   = parentLocal ? parentLocal.cardPrice : parseCardPrice((result.product as any).card_price);
         const parent: any  = parentLocal || { id: result.product.id, name: parentName, price: parentPrice, cardPrice: parentCard };
-        addToCart(parent, { id: result.variant_id, label: suffix, price });
-        toast.success(parentName + " · " + suffix);
+        // Não lança direto: o seletor abre com este tamanho marcado.
+        setPendingBipe({ code: cleaned, variantId: result.variant_id });
+        setPendingProduct(parent);
         return true;
       }
       if (result.match === "exact" && result.product) {
@@ -595,7 +606,7 @@ export function usePdvState() {
     p: Product,
     evt?: { x: number; y: number; accent: string; letter: string },
   ) {
-    if (p.has_variants) { setPendingProduct(p); return; }
+    if (p.has_variants) { setPendingBipe(null); setPendingProduct(p); return; }
     addToCart(p);
     if (evt && cartHeadRef.current && IS_WEB) {
       const target = cartHeadRef.current.getBoundingClientRect?.();
@@ -615,6 +626,7 @@ export function usePdvState() {
     if (!variant.id) { addToCart(pendingProduct); }
     else             { addToCart(pendingProduct, variant); }
     setPendingProduct(null);
+    setPendingBipe(null);
   }
 
   function handleFinalize() {
@@ -1135,8 +1147,8 @@ export function usePdvState() {
     products, query, setQuery, cat, setCat, showOutOfStock, setShowOutOfStock,
     categories, outOfStockCount, paginated, page, totalPages, filteredTotal, goTo, qtyById,
     // Modais (openers/closers nomeados)
-    pendingProduct,
-    closePendingProduct: () => setPendingProduct(null),
+    pendingProduct, pendingBipe,
+    closePendingProduct: () => { setPendingProduct(null); setPendingBipe(null); },
     showNewCustomer,
     openNewCustomer:  () => setShowNewCustomer(true),
     closeNewCustomer: () => setShowNewCustomer(false),
