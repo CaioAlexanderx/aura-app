@@ -63,7 +63,7 @@ export function AuraNoCelularKarateCard() {
 
   return (
     <View style={s.card}>
-      <Text style={s.cab}>Aura no celular</Text>
+      <Text style={s.cab}>Aplicativo</Text>
 
       {instalado ? (
         <>

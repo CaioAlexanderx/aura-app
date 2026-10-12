@@ -388,10 +388,12 @@ export default function ConfiguracoesScreen() {
             </View>
           </Card>
 
-          {/* AURA NO CELULAR — global (e do aparelho, nao da empresa).
+          {/* APLICATIVO — global (e do aparelho, nao da empresa).
               PWA 22/09/2026: a porta permanente para instalar como app; o
-              card do Painel some depois de "Agora nao", este fica. */}
-          <SectionTitle title="Aura no celular" />
+              card do Painel some depois de "Agora nao", este fica.
+              12/10/2026: era "Aura no celular"; o app instalado funciona
+              igual no computador, entao o nome e so "Aplicativo". */}
+          <SectionTitle title="Aplicativo" />
           <AuraNoCelularCard />
 
           {/* APARENCIA — global (preferencia do user) */}
