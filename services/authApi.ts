@@ -41,6 +41,8 @@ export type RegisterBody = {
   company_name?: string;
   phone?: string;
   cnpj?: string;
+  /** 12/10/2026: regime detectado pela Receita no cadastro; o backend grava na empresa nova. */
+  tax_regime?: string;
   access_code?: string;
   self_serve?: boolean;
   terms_accepted?: boolean;
