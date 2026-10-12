@@ -7,7 +7,8 @@
 //     chama onClose;
 //   - "Continuar preenchendo" fecha só a pergunta e mantém os dados;
 //   - "Descartar" fecha de verdade e zera o formulário;
-//   - salvar com sucesso fecha sem perguntar;
+//   - salvar com sucesso vai para a tela Pronto (redesenho 12/10/2026), e
+//     fechar dali não pergunta;
 //   - enquanto salva, fora/Esc são ignorados.
 // ResponsiveSheet é mockado (expõe onClose e onBackdropPress) no padrão do
 // CalculadoraAmbiente.test.tsx.
@@ -171,7 +172,9 @@ describe("CriarLancamentoModal · descartar o que foi preenchido", () => {
     expect(valorDe(t, "lancamento-valor")).toBe("150,00");
   });
 
-  it("salvar com sucesso fecha sem perguntar", async () => {
+  // Redesenho (12/10/2026): o sucesso vai para a tela Pronto em vez de fechar.
+  // De lá, fechar (X, fora, Esc ou "Fechar") não pergunta: já está salvo.
+  it("salvar com sucesso vai para Pronto e fecha sem perguntar", async () => {
     mockCreate.mockResolvedValue({});
     const { t, onClose } = montar();
     irParaDetalhes(t);
@@ -179,6 +182,8 @@ describe("CriarLancamentoModal · descartar o que foi preenchido", () => {
     apertar(t, "lancamento-criar");
     await flush();
     expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(existe(t, "lancamento-pronto")).toBe(true);
+    act(() => { mockSheet.onClose(); });
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(existe(t, "lancamento-confirmar-descarte")).toBe(false);
   });
@@ -206,6 +211,10 @@ describe("CriarLancamentoModal · descartar o que foi preenchido", () => {
     expect(onClose).not.toHaveBeenCalled();
     expect(existe(t, "lancamento-confirmar-descarte")).toBe(false);
     await act(async () => { soltar({}); await Promise.resolve(); await Promise.resolve(); });
+    // Salvou: tela Pronto, sem pergunta de descarte; o "Fechar" de lá fecha.
+    expect(existe(t, "lancamento-pronto")).toBe(true);
+    expect(existe(t, "lancamento-confirmar-descarte")).toBe(false);
+    apertar(t, "lancamento-pronto-fechar");
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
