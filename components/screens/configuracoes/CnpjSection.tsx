@@ -9,13 +9,22 @@ import { toast } from "@/components/Toast";
 import { Card, fmtCNPJ, regimeLabel, sh } from "./shared";
 
 // ── Derivação de regime a partir dos dados da Receita Federal ──
-// Usa natureza jurídica (determinístico para MEI) e porte.
-// Sem chute: só afirma o que a RF informa diretamente.
-function inferRegime(d: any): string {
-  const natCode = ((d.natureza_juridica?.id || "") + "").replace(/\D/g, "");
-  const porte   = ((d.porte?.descricao   || "") + "").toUpperCase().trim();
-  if (natCode === "2135" || porte === "MEI") return "mei";
-  if (porte.includes("MICRO") || porte.includes("PEQUENO")) return "simples_nacional";
+// 12/10/2026: a fonte é o bloco `simples` do cnpj.ws (optante do SIMEI →
+// MEI; optante do Simples → Simples; fora do Simples → Presumido, que a
+// Receita não distingue de Real). Antes era natureza 2135 → MEI, o que
+// marcava Empresário Individual no Simples como MEI, e porte → Simples,
+// o que marcava LTDA fora do Simples como Simples. Mesma regra do backend
+// (services/cnpj.js, regimeDaReceita). Sem o bloco, cai no porte.
+export function inferRegime(d: any): string {
+  const sim = (v: any) => String(v || "").trim().toLowerCase() === "sim";
+  const nao = (v: any) => ["não", "nao"].includes(String(v || "").trim().toLowerCase());
+  const s = d?.simples;
+  if (s && (sim(s.mei) || sim(s.simples) || nao(s.simples))) {
+    if (sim(s.mei)) return "mei";
+    if (sim(s.simples)) return "simples_nacional";
+    return "lucro_presumido";
+  }
+  const porte = ((d?.porte?.descricao || "") + "").toUpperCase().trim();
   if (porte === "DEMAIS") return "lucro_presumido";
   return "simples_nacional";
 }

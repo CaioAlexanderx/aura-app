@@ -254,6 +254,10 @@ export default function RegisterScreen() {
   const [codigo, setCodigo] = useState("");
   const [cnpjLoading, setCnpjLoading] = useState(false);
   const [cnpjFound, setCnpjFound] = useState<string | null>(null);
+  // 12/10/2026: regime que a consulta de CNPJ detectou pela Receita; vai no
+  // corpo do cadastro. Antes ficava só no localStorage e a empresa nascia
+  // com o default da coluna (simples_nacional) para todo mundo.
+  const [regimeDetectado, setRegimeDetectado] = useState<string | null>(null);
   const [cnpjError, setCnpjError] = useState<string | null>(null);
   const [codeValid, setCodeValid] = useState<boolean | null>(null);
   const [codeChecking, setCodeChecking] = useState(false);
@@ -330,13 +334,15 @@ export default function RegisterScreen() {
       if (data.phone) setTelefoneEmpresa(maskPhone(data.phone));
       else if (data.ddd_telefone_1) setTelefoneEmpresa(maskPhone("" + data.ddd_telefone_1 + (data.telefone_1 || "")));
       saveCnpjData(data);
-      saveDetectedRegime(data.is_mei || data.suggested_regime === "mei" ? "mei" : data.suggested_regime || "simples");
+      const regime = data.is_mei || data.suggested_regime === "mei" ? "mei" : data.suggested_regime || "simples";
+      saveDetectedRegime(regime);
+      setRegimeDetectado(data.suggested_regime || (data.is_mei ? "mei" : null));
     } catch (err: any) {
       setCnpjError(err?.name === "AbortError" ? "Consulta demorou demais. Tente novamente." : "Erro de conexão ao consultar CNPJ.");
     } finally { setCnpjLoading(false); }
   }
 
-  function handleCnpjChange(v: string) { const masked = maskCnpj(v); setCnpj(masked); setCnpjFound(null); setCnpjError(null); if (masked.replace(/\D/g, "").length === 14) lookupCNPJ(masked); }
+  function handleCnpjChange(v: string) { const masked = maskCnpj(v); setCnpj(masked); setCnpjFound(null); setCnpjError(null); setRegimeDetectado(null); if (masked.replace(/\D/g, "").length === 14) lookupCNPJ(masked); }
 
   async function handleCodeBlur() {
     const code = codigo.trim(); if (!code) { setCodeValid(null); return; }
@@ -395,6 +401,7 @@ export default function RegisterScreen() {
         company_name: empresa.trim(),
         phone: telefoneContato.replace(/\D/g, ""),
         cnpj: cnpj.replace(/\D/g, ""),
+        tax_regime: regimeDetectado || undefined,
         access_code: codigo.trim() || undefined,
         self_serve: true,
         terms_accepted: true,
