@@ -19,6 +19,7 @@ import { isWaErrorCode, mapWaError, waAutoBlockers } from "@/components/whatsapp
 import { toast } from "@/components/Toast";
 import type { AgingRow, CreditBalanceItem } from "@/services/creditApi";
 import { CriarLancamentoModal } from "@/components/crediario/CriarLancamentoModal";
+import { escolherRecentes } from "@/components/crediario/lancamento/calculos";
 import { ClienteCrediarioModal } from "@/components/crediario/ClienteCrediarioModal";
 import { CobrancaPreviewModal } from "@/components/crediario/CobrancaPreviewModal";
 import { CreditoLivreTab } from "@/components/crediario/CreditoLivreTab";
@@ -493,6 +494,16 @@ export default function CrediarioScreen() {
       return Number(b.balance) - Number(a.balance);
     });
 
+  // 12/10/2026 (redesenho do Novo lançamento): "Recentes" do passo 1 saem
+  // desta carteira, sem endpoint novo. Com a busca da tela ativa a carteira
+  // vem filtrada; aí usa o cache da carteira sem filtro, se houver.
+  const recentesDoLancamento = useMemo(() => {
+    const base = searchQ
+      ? qc.getQueryData<{ customers: CreditBalanceItem[] }>(["credit-balances", company?.id, ""])?.customers
+      : carteiraQ.data?.customers;
+    return escolherRecentes(base || []);
+  }, [searchQ, carteiraQ.data, qc, company?.id]);
+
   const isLoading = dashQ.isLoading || agingQ.isLoading;
 
   const pad = isWide ? 32 : 16;
@@ -880,7 +891,7 @@ export default function CrediarioScreen() {
 
       </>)}
 
-      <CriarLancamentoModal visible={showCriar} onClose={() => setShowCriar(false)} />
+      <CriarLancamentoModal visible={showCriar} onClose={() => setShowCriar(false)} recentes={recentesDoLancamento} />
 
       <ClienteCrediarioModal
         visible={!!modalCust}

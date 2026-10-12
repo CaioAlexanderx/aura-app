@@ -117,13 +117,19 @@ describe("usePdvState: juntar a venda a um carnê", () => {
 });
 
 describe("CriarLancamentoModal: o padrão é carnê novo", () => {
-  const fonte = fs.readFileSync(
-    path.join(__dirname, "..", "components", "crediario", "CriarLancamentoModal.tsx"), "utf8");
+  // Redesenho (12/10/2026): o modal virou casca e o formulário mora em
+  // components/crediario/lancamento/ (useReducer). Lê os dois lugares.
+  const pasta = path.join(__dirname, "..", "components", "crediario", "lancamento");
+  const fonte = [
+    path.join(__dirname, "..", "components", "crediario", "CriarLancamentoModal.tsx"),
+    ...fs.readdirSync(pasta).map((f: string) => path.join(pasta, f)),
+  ].map((f) => fs.readFileSync(f, "utf8")).join("\n");
 
   test("abre e reabre em 'Novo carnê'", () => {
-    expect(fonte).toContain('useState<AccountMode>("new")');
-    expect(fonte).toContain('setAccountMode("new");');
-    expect(fonte).not.toContain('setAccountMode("general");');
+    // estadoInicial() é o estado de abrir e o de todo reset.
+    expect(fonte).toContain('accountMode: "new",');
+    expect(fonte).toContain('if (a.type === "reset") return estadoInicial();');
+    expect(fonte).not.toContain('accountMode: "general"');
   });
 
   test("manda new_account: true e o nome só quando preenchido", () => {
