@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Novo lançamento no crediário</title>
+<style>
+  /* Layout: notas à esquerda; três quadros do modal (480px, como o sheet do desktop) lado a lado, quebrando em coluna no celular. Mesma paleta escura do app e do mockup dos carnês (10/10). */
+  :root {
+    --bg:#060816; --bg2:#090c1a; --bg3:#0e1228; --bg4:#141830;
+    --ink:#f0edff; --ink2:rgba(220,215,255,.75); --ink3:rgba(170,160,235,.65);
+    --border:rgba(140,130,220,.18); --border2:rgba(140,130,220,.32);
+    --violet:#7c3aed; --violet2:#8b5cf6; --violet3:#a78bfa; --violetD:rgba(109,40,217,.14);
+    --green:#34d399; --red:#f87171; --amber:#fbbf24;
+    --page:#02030a;
+    color-scheme: dark;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--page); color:var(--ink); font-size:14px; line-height:1.4; padding-inline:16px; padding-block:24px 64px; }
+  .wrap { display:flex; flex-wrap:wrap; gap:28px; justify-content:center; align-items:flex-start; }
+  .notes { max-width:340px; flex:1 1 280px; color:var(--ink2); font-size:13.5px; min-width:0; }
+  .notes h1 { font-size:18px; color:var(--ink); margin-bottom:4px; text-wrap:balance; }
+  .notes .sub { font-size:12.5px; color:var(--ink3); margin-bottom:18px; }
+  .notes h2 { font-size:12px; text-transform:uppercase; letter-spacing:.07em; color:var(--violet3); margin:18px 0 6px; }
+  .notes li { margin:0 0 6px 18px; }
+  .notes b { color:var(--ink); }
+
+  .frames { display:flex; flex-wrap:wrap; gap:22px; justify-content:center; flex:1 1 480px; min-width:0; }
+  .frame { width:480px; max-width:100%; }
+  .cap { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink3); margin:0 0 8px 4px; }
+  .sheet { background:var(--bg3); border:1px solid var(--border2); border-radius:20px; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 8px 40px rgba(0,0,0,.55); }
+
+  .head { display:flex; align-items:center; gap:12px; padding:16px 18px 12px; }
+  .hicon { width:36px; height:36px; border-radius:10px; background:var(--violetD); border:1px solid var(--border2); display:grid; place-items:center; color:var(--violet3); flex-shrink:0; }
+  .head b { display:block; font-size:16px; }
+  .head small { font-size:12.5px; color:var(--ink3); }
+  .head small .lnk { color:var(--violet3); font-weight:600; cursor:pointer; }
+  .x { margin-left:auto; width:32px; height:32px; border-radius:8px; background:var(--bg4); display:grid; place-items:center; color:var(--ink3); border:0; font:inherit; cursor:pointer; }
+
+  .body { padding:4px 18px 16px; display:flex; flex-direction:column; gap:14px; }
+  .lbl { font-size:12px; font-weight:600; color:var(--ink2); margin-bottom:6px; }
+  .lbl i { font-style:normal; font-weight:400; color:var(--ink3); }
+  .inp { display:flex; align-items:center; gap:10px; background:var(--bg2); border:1px solid var(--border2); border-radius:12px; padding:0 14px; min-height:44px; color:var(--ink); font-size:14px; }
+  .inp input { flex:1; min-width:0; background:none; border:0; color:var(--ink); font:inherit; outline:none; }
+  .inp input::placeholder { color:var(--ink3); }
+  .inp.focus { border-color:var(--violet3); box-shadow:0 0 0 3px rgba(139,92,246,.15); }
+
+  .sec { font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink3); margin:2px 2px 0; }
+  .list { border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+  .row { display:flex; align-items:center; gap:12px; padding:11px 12px; border-bottom:1px solid var(--border); background:var(--bg2); }
+  .row:last-child { border-bottom:0; }
+  .av { width:34px; height:34px; border-radius:50%; background:var(--violetD); border:1px solid var(--border2); display:grid; place-items:center; font-weight:800; color:var(--violet3); font-size:13px; flex-shrink:0; }
+  .row b { display:block; font-size:13.5px; }
+  .row span { font-size:12px; color:var(--ink3); }
+  .chip { font-size:11px; font-weight:700; padding:3px 9px; border-radius:99px; border:1px solid; white-space:nowrap; margin-left:auto; }
+  .chip.ok { color:var(--green); border-color:rgba(52,211,153,.35); background:rgba(52,211,153,.1); }
+  .chip.late { color:var(--red); border-color:rgba(248,113,113,.4); background:rgba(248,113,113,.1); }
+  .chip.zero { color:var(--ink3); border-color:var(--border); background:transparent; }
+  .row.new { color:var(--violet3); font-weight:600; font-size:13.5px; }
+  .row.new .av { background:transparent; }
+
+  .hero { background:var(--bg2); border:1px solid var(--border2); border-radius:14px; padding:14px 16px 12px; }
+  .hero .lbl { margin-bottom:2px; }
+  .hero .amt { display:flex; align-items:baseline; gap:8px; font-variant-numeric:tabular-nums; }
+  .hero .amt small { font-size:16px; color:var(--ink3); font-weight:600; }
+  .hero .amt input { font-size:34px; font-weight:800; letter-spacing:-.5px; background:none; border:0; color:var(--ink); width:100%; min-width:0; outline:none; font-family:inherit; }
+  .hero .per { font-size:13px; color:var(--violet3); font-weight:700; margin-top:2px; font-variant-numeric:tabular-nums; }
+
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .ch { font:inherit; font-size:13px; font-weight:700; color:var(--ink2); background:var(--bg2); border:1px solid var(--border2); border-radius:10px; padding:9px 13px; min-width:48px; cursor:pointer; }
+  .ch.on { background:var(--violet); border-color:var(--violet2); color:#fff; }
+  .ch.ghost { background:transparent; color:var(--violet3); border-style:dashed; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .quick { display:flex; gap:6px; margin-top:6px; }
+  .quick button { font:inherit; font-size:11.5px; font-weight:600; color:var(--violet3); background:var(--violetD); border:1px solid var(--border2); border-radius:8px; padding:5px 9px; cursor:pointer; }
+
+  .line { display:flex; align-items:center; gap:12px; background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:11px 14px; }
+  .line .ic { color:var(--violet3); flex-shrink:0; }
+  .line b { display:block; font-size:13px; }
+  .line span { font-size:12px; color:var(--ink3); }
+  .line .lnk { margin-left:auto; font-size:12.5px; font-weight:600; color:var(--violet3); background:none; border:0; font-family:inherit; cursor:pointer; white-space:nowrap; }
+  .line.open { border-color:var(--border2); flex-direction:column; align-items:stretch; gap:10px; }
+  .line.open .top { display:flex; align-items:center; gap:12px; }
+  .opts { display:flex; flex-direction:column; gap:8px; }
+  .opt { display:flex; gap:10px; align-items:center; border:1.5px solid var(--border); border-radius:11px; padding:10px 12px; min-height:46px; }
+  .opt.sel { border-color:var(--violet3); background:var(--violetD); }
+  .opt b { display:block; font-size:13px; }
+  .opt span { font-size:11.5px; color:var(--ink3); }
+  .opt .dot { width:16px; height:16px; border-radius:50%; border:2px solid var(--border2); flex-shrink:0; }
+  .opt.sel .dot { border-color:var(--violet3); background:var(--violet3); box-shadow:inset 0 0 0 3px var(--bg2); }
+  .opt .inp { flex:1; min-height:38px; margin-left:auto; max-width:200px; }
+
+  .more { display:flex; align-items:center; gap:10px; padding:4px 2px; color:var(--ink2); font-size:13px; font-weight:600; cursor:pointer; }
+  .more .sum { font-weight:400; color:var(--ink3); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .more .chev { margin-left:auto; color:var(--ink3); }
+  .moreBody { display:flex; flex-direction:column; gap:12px; padding:4px 0 2px; }
+  textarea.ta { background:var(--bg2); border:1px solid var(--border2); border-radius:12px; padding:10px 14px; color:var(--ink); font:inherit; font-size:14px; min-height:64px; resize:vertical; width:100%; }
+  .hint { font-size:11.5px; color:var(--ink3); margin-top:5px; }
+
+  .foot { border-top:1px solid var(--border); background:var(--bg2); padding:12px 18px 16px; display:flex; flex-direction:column; gap:10px; }
+  .summ { display:flex; justify-content:space-between; align-items:baseline; gap:12px; font-size:12.5px; color:var(--ink3); font-variant-numeric:tabular-nums; flex-wrap:wrap; }
+  .summ b { color:var(--ink); font-size:14px; }
+  .summ .v { color:var(--violet3); font-weight:700; }
+  .cta { font:inherit; font-size:14px; font-weight:800; color:#fff; background:var(--violet); border:0; border-radius:12px; min-height:48px; width:100%; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; }
+  .cta.sec { background:transparent; color:var(--ink); border:1px solid var(--border2); font-weight:700; }
+  .cta.sec.v { color:var(--violet3); }
+
+  .done { text-align:center; padding:26px 18px 8px; display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .okic { width:64px; height:64px; border-radius:50%; background:rgba(52,211,153,.12); border:1px solid rgba(52,211,153,.35); display:grid; place-items:center; color:var(--green); }
+  .done h3 { font-size:18px; }
+  .done p { font-size:13px; color:var(--ink2); max-width:320px; }
+  .ticket { margin:6px 18px 0; background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:12px 14px; display:flex; flex-direction:column; gap:6px; font-size:13px; }
+  .ticket .r { display:flex; justify-content:space-between; gap:10px; font-variant-numeric:tabular-nums; }
+  .ticket .r span:first-child { color:var(--ink3); }
+  .ticket .r.t { border-top:1px solid var(--border); padding-top:8px; margin-top:2px; font-weight:800; }
+  .acts { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:14px 18px 18px; }
+  .acts .cta { min-height:44px; font-size:13px; }
+  .acts .full { grid-column:1 / -1; }
+  svg { display:block; }
+  @media (prefers-reduced-motion: no-preference) { .ch, .opt, .cta { transition: background .12s ease, border-color .12s ease; } }
+  button:focus-visible, input:focus-visible, textarea:focus-visible { outline:2px solid var(--violet3); outline-offset:2px; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="notes">
+    <h1>Novo lançamento no crediário</h1>
+    <div class="sub">Mockup do modal redesenhado. Dados de exemplo; nada disto está no código. Os chips de parcelas respondem ao toque.</div>
+
+    <h2>O que incomoda hoje</h2>
+    <ul>
+      <li>Dois pontinhos de etapa e um ícone de porcentagem no cabeçalho; o cliente escolhido vira um chip com "x" no meio do formulário.</li>
+      <li>Parcelas e vencimento são campos de digitação; não se vê quanto fica cada parcela até rolar ao rodapé.</li>
+      <li>"Carnê / conta" aparece como três chips de configuração ("Novo carnê", "Carnê existente", "Conta geral"), sendo que desde 10/10 todo lançamento nasce como carnê.</li>
+      <li>"Descrição" não diz que o texto vai impresso no carnê.</li>
+      <li>Ao criar, o modal só fecha. O carnê que acabou de nascer não é oferecido para imprimir nem enviar.</li>
+      <li>Um arquivo de 1.386 linhas com 25 estados; os carnês do cliente são buscados sempre, mesmo quando ninguém vai usar "Carnê existente".</li>
+    </ul>
+
+    <h2>O que muda</h2>
+    <ul>
+      <li><b>Cabeçalho conta a etapa</b>: "Para quem?" e, depois, o nome do cliente com "trocar". Sem pontinhos.</li>
+      <li><b>Para quem?</b> lista os clientes recentes antes de digitar, com saldo e atraso. "Cadastrar novo cliente" é a última linha; o cadastro abre no lugar da lista.</li>
+      <li><b>Valor em destaque</b>, com "3x de R$ 140,00" ao vivo. Parcelas em chips; "outro" abre o número livre.</li>
+      <li><b>Vencimento com atalhos</b>: em 30 dias, dia 10.</li>
+      <li><b>Carnê é uma linha</b>: "Vai para um carnê novo, Compra de 12/10 · alterar". Alterar abre as três opções; unificar continua dentro de "Carnê existente".</li>
+      <li><b>Mais opções</b> segue recolhido, com resumo do que foi mexido. "Descrição" vira <b>"O que foi comprado"</b>, e diz que sai no carnê.</li>
+      <li><b>Rodapé fixo</b> com total, parcela, primeira e última data, e o botão "Lançar e criar carnê".</li>
+      <li><b>Pronto</b> (novo): resumo do que foi lançado e as saídas que a loja usa na hora: imprimir A4 ou bobina, enviar no WhatsApp, lançar outro.</li>
+    </ul>
+
+    <h2>Otimização</h2>
+    <ul>
+      <li>Três componentes (cliente, valores, pronto) e um único estado do formulário, em vez de 25 <code>useState</code>.</li>
+      <li>Carnês do cliente só carregam ao abrir "Carnê existente".</li>
+      <li>Prévia da unificação com espera de 400 ms, não a cada tecla.</li>
+      <li>Cronograma calculado uma vez por mudança de valor, parcelas ou data.</li>
+    </ul>
+
+    <h2>O que não muda</h2>
+    <ul>
+      <li>Contrato da API e a unificação de parcelas, com a confirmação em vermelho.</li>
+      <li>"Descartar este lançamento?" ao fechar com algo preenchido (PR 1047).</li>
+      <li>No celular o modal continua subindo como folha, com o mesmo conteúdo.</li>
+    </ul>
+  </div>
+
+  <div class="frames">
+
+    <!-- PASSO 1 -->
+    <div class="frame">
+      <div class="cap">1 · Para quem?</div>
+      <div class="sheet">
+        <div class="head">
+          <div class="hicon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M8 15h3"/></svg></div>
+          <div><b>Novo lançamento</b><small>Para quem?</small></div>
+          <button class="x" aria-label="Fechar">✕</button>
+        </div>
+        <div class="body">
+          <div class="inp focus"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="busca" placeholder="Nome ou telefone" aria-label="Buscar cliente"></div>
+          <div>
+            <div class="sec" style="margin-bottom:8px">Recentes</div>
+            <div class="list">
+              <div class="row"><div class="av">MS</div><div><b>Maria Souza</b><span>(66) 99645-6351 · R$ 280,00 em aberto</span></div><span class="chip ok">Em dia</span></div>
+              <div class="row"><div class="av">AO</div><div><b>Alexander Olivier</b><span>(66) 99811-2040 · R$ 745,00 em aberto</span></div><span class="chip late">Atraso 5d</span></div>
+              <div class="row"><div class="av">JR</div><div><b>Joana Ribeiro</b><span>(66) 99302-7781 · sem saldo</span></div><span class="chip zero">Quitada</span></div>
+              <div class="row new"><div class="av">+</div>Cadastrar novo cliente</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PASSO 2 -->
+    <div class="frame">
+      <div class="cap">2 · Quanto e como</div>
+      <div class="sheet">
+        <div class="head">
+          <div class="hicon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M8 15h3"/></svg></div>
+          <div><b>Novo lançamento</b><small>Maria Souza · <span class="lnk">trocar</span></small></div>
+          <button class="x" aria-label="Fechar">✕</button>
+        </div>
+        <div class="body">
+          <div class="hero">
+            <div class="lbl">Valor da compra</div>
+            <div class="amt"><small>R$</small><input id="valor" value="420,00" inputmode="numeric" aria-label="Valor"></div>
+            <div class="per" id="per">3x de R$ 140,00</div>
+          </div>
+          <div>
+            <div class="lbl">Parcelas</div>
+            <div class="chips" id="chips">
+              <button class="ch" data-n="1">1x</button><button class="ch" data-n="2">2x</button><button class="ch on" data-n="3">3x</button><button class="ch" data-n="4">4x</button><button class="ch" data-n="6">6x</button><button class="ch" data-n="10">10x</button><button class="ch" data-n="12">12x</button><button class="ch ghost" data-n="0">outro</button>
+            </div>
+          </div>
+          <div class="two">
+            <div>
+              <div class="lbl">1º vencimento</div>
+              <div class="inp"><input value="11/11/2026" aria-label="Primeiro vencimento"></div>
+              <div class="quick"><button>em 30 dias</button><button>dia 10</button></div>
+            </div>
+            <div>
+              <div class="lbl">Intervalo</div>
+              <div class="inp"><input value="Mensal" aria-label="Intervalo" readonly><span style="color:var(--ink3)">▾</span></div>
+            </div>
+          </div>
+
+          <div class="line">
+            <div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h5"/></svg></div>
+            <div><b>Vai para um carnê novo</b><span>Compra de 12/10 · o cliente recebe o carnê impresso</span></div>
+            <button class="lnk">alterar</button>
+          </div>
+
+          <div class="line open" aria-label="Opções de carnê, aberto">
+            <div class="top"><div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h5"/></svg></div><div><b>Onde este lançamento entra</b><span>ao tocar em "alterar"</span></div></div>
+            <div class="opts">
+              <div class="opt sel"><div class="dot"></div><div><b>Carnê novo</b><span>Compra de 12/10</span></div><div class="inp"><input placeholder="Nome (opcional)" aria-label="Nome do carnê"></div></div>
+              <div class="opt"><div class="dot"></div><div><b>Carnê existente</b><span>Compra de 13/09 · R$ 140,00 em aberto · unificar parcelas</span></div></div>
+              <div class="opt"><div class="dot"></div><div><b>Conta geral</b><span>sem carnê, como era antes</span></div></div>
+            </div>
+          </div>
+
+          <div class="more"><span>Mais opções</span><span class="sum">data da compra, juros, o que foi comprado</span><span class="chev">▾</span></div>
+          <div class="moreBody">
+            <div class="two">
+              <div><div class="lbl">Data da compra</div><div class="inp"><input value="12/10/2026" aria-label="Data da compra"></div><div class="hint">Mude para lançar uma compra antiga.</div></div>
+              <div><div class="lbl">Juros total <i>(opcional)</i></div><div class="inp"><input placeholder="0" aria-label="Juros"><span style="color:var(--ink3)">%</span></div></div>
+            </div>
+            <div><div class="lbl">O que foi comprado <i>(sai no carnê)</i></div><textarea class="ta" aria-label="O que foi comprado" placeholder="Ex.: Vans Hylane 40/41, 2× Slide Alta 40/41"></textarea></div>
+          </div>
+        </div>
+        <div class="foot">
+          <div class="summ"><span>Total <b>R$ 420,00</b></span><span class="v" id="summ">3x de R$ 140,00</span><span>11/11 a 11/01</span></div>
+          <button class="cta"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12l5 5L20 7"/></svg>Lançar e criar carnê</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PRONTO -->
+    <div class="frame">
+      <div class="cap">3 · Pronto (novo)</div>
+      <div class="sheet">
+        <div class="head">
+          <div class="hicon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M8 15h3"/></svg></div>
+          <div><b>Novo lançamento</b><small>Maria Souza</small></div>
+          <button class="x" aria-label="Fechar">✕</button>
+        </div>
+        <div class="done">
+          <div class="okic"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12l5 5L20 7"/></svg></div>
+          <h3>Lançado no crediário</h3>
+          <p>O carnê <b>Compra de 12/10</b> foi criado para Maria Souza. Saldo em aberto agora: R$ 700,00.</p>
+        </div>
+        <div class="ticket">
+          <div class="r"><span>Valor</span><span>R$ 420,00</span></div>
+          <div class="r"><span>Parcelas</span><span>3x de R$ 140,00 · mensal</span></div>
+          <div class="r"><span>Vencimentos</span><span>11/11 · 11/12 · 11/01</span></div>
+          <div class="r"><span>Comprado</span><span>Vans Hylane 40/41, 2× Slide Alta</span></div>
+          <div class="r t"><span>Total</span><span>R$ 420,00</span></div>
+        </div>
+        <div class="acts">
+          <button class="cta sec v"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9V3h12v6M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="7"/></svg>Imprimir A4</button>
+          <button class="cta sec v">Imprimir bobina</button>
+          <button class="cta sec">Enviar no WhatsApp</button>
+          <button class="cta sec">Lançar outro</button>
+          <button class="cta full">Fechar</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  (function () {
+    var chips = document.getElementById('chips');
+    var per = document.getElementById('per');
+    var summ = document.getElementById('summ');
+    var valor = document.getElementById('valor');
+    function total() {
+      var n = parseFloat(String(valor.value || '0').replace(/\./g, '').replace(',', '.'));
+      return isNaN(n) ? 0 : n;
+    }
+    function fmt(v) { return 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+    function render(n) {
+      var t = total();
+      var txt = n > 0 ? n + 'x de ' + fmt(t / n) : 'escolha o número de parcelas';
+      per.textContent = txt; summ.textContent = txt;
+    }
+    chips.addEventListener('click', function (e) {
+      var b = e.target.closest('.ch'); if (!b) return;
+      Array.prototype.forEach.call(chips.children, function (c) { c.classList.remove('on'); });
+      b.classList.add('on');
+      render(parseInt(b.getAttribute('data-n'), 10));
+    });
+    valor.addEventListener('input', function () {
+      var on = chips.querySelector('.ch.on');
+      render(on ? parseInt(on.getAttribute('data-n'), 10) : 3);
+    });
+  })();
+</script>
+</body>
+</html>
