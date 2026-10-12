@@ -119,10 +119,10 @@ describe("cada item é opt-in pelo toggle e tem módulo próprio", () => {
   });
 
   test("as quatro chaves já estão nos mapas de plano e de permissão", () => {
-    expect(MODULE_PLAN_MAP["matcon.orcamentos"]).toBe("negocio");
-    expect(MODULE_PLAN_MAP["matcon.entregas"]).toBe("negocio");
-    expect(MODULE_PLAN_MAP["matcon.profissionais"]).toBe("negocio");
-    expect(MODULE_PLAN_MAP["matcon.compras"]).toBe("negocio");
+    expect(MODULE_PLAN_MAP["matcon.orcamentos"]).toBe("essencial");
+    expect(MODULE_PLAN_MAP["matcon.entregas"]).toBe("essencial");
+    expect(MODULE_PLAN_MAP["matcon.profissionais"]).toBe("essencial");
+    expect(MODULE_PLAN_MAP["matcon.compras"]).toBe("essencial");
     expect(PERM_TO_MODULES["matcon.access"]).toEqual(
       expect.arrayContaining(["matcon.orcamentos", "matcon.entregas", "matcon.profissionais", "matcon.compras"]),
     );
