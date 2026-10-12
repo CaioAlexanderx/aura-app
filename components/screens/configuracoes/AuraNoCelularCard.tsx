@@ -1,5 +1,6 @@
 // ============================================================
-// AURA. — Configurações › Aura no celular
+// AURA. — Configurações › Aplicativo (era "Aura no celular" até 12/10/2026:
+// o app instalado funciona igual no computador, então o nome é só isso)
 //
 // Criado: 22/09/2026 (PWA Fase 1)
 //
@@ -65,7 +66,7 @@ export function AuraNoCelularCard() {
           <Icon name="check" size={20} color="#fff" />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={s.titulo}>Instalada neste celular</Text>
+          <Text style={s.titulo}>Instalada neste aparelho</Text>
           <Text style={s.descricao}>Você está usando a Aura pelo app.</Text>
         </View>
       </View>
@@ -75,7 +76,7 @@ export function AuraNoCelularCard() {
       <View style={s.rowInfo}>
         <View style={{ flex: 1 }}>
           <Text style={s.rowTitulo}>Instalar em outro aparelho</Text>
-          <Text style={s.rowDetalhe}>Abra {enderecoDoPainel} no celular e toque em Instalar.</Text>
+          <Text style={s.rowDetalhe}>Abra {enderecoDoPainel} no outro aparelho, celular ou computador, e toque em Instalar.</Text>
         </View>
       </View>
     </>
@@ -110,9 +111,9 @@ export function AuraNoCelularCard() {
         <Icon name="download" size={20} color="#fff" />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={s.titulo}>Leve a Aura para o celular</Text>
+        <Text style={s.titulo}>Instale a Aura como aplicativo</Text>
         <Text style={s.descricao}>
-          Abra <Text style={s.endereco}>{enderecoDoPainel}</Text> no navegador do celular e toque em Instalar.
+          Abra <Text style={s.endereco}>{enderecoDoPainel}</Text> no Chrome ou no Edge, no celular ou no computador, e toque em Instalar.
           Ícone na tela inicial, tela cheia e aviso de pedido novo.
         </Text>
       </View>

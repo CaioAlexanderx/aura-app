@@ -236,11 +236,11 @@ describe("encaixe nas telas", () => {
     expect(posInstall).toBeLessThan(posSkeleton);
   });
 
-  test("Configurações: seção 'Aura no celular' entre 'Minha conta' e 'Aparencia'", () => {
+  test("Configurações: seção 'Aplicativo' entre 'Minha conta' e 'Aparencia'", () => {
     const cfg = ler("app", "(tabs)", "configuracoes.tsx");
     expect(cfg).toMatch(/import \{ AuraNoCelularCard \} from "@\/components\/screens\/configuracoes\/AuraNoCelularCard";/);
     const conta = cfg.indexOf('<SectionTitle title="Minha conta" />');
-    const celular = cfg.indexOf('<SectionTitle title="Aura no celular" />');
+    const celular = cfg.indexOf('<SectionTitle title="Aplicativo" />');
     const aparencia = cfg.indexOf('<SectionTitle title="Aparencia" />');
     expect(conta).toBeGreaterThan(-1);
     expect(celular).toBeGreaterThan(conta);
