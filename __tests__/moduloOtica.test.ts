@@ -22,8 +22,8 @@ const MODS = ["otica.laboratorio", "otica.receitas", "otica.config"] as const;
 
 describe("módulo Ótica: chaves próprias nos dois mapas", () => {
   test("plano mínimo por tela", () => {
-    expect(MODULE_PLAN_MAP["otica.laboratorio"]).toBe("negocio");
-    expect(MODULE_PLAN_MAP["otica.receitas"]).toBe("negocio");
+    expect(MODULE_PLAN_MAP["otica.laboratorio"]).toBe("essencial");
+    expect(MODULE_PLAN_MAP["otica.receitas"]).toBe("essencial");
     expect(MODULE_PLAN_MAP["otica.config"]).toBe("essencial");
   });
 
@@ -36,12 +36,8 @@ describe("módulo Ótica: chaves próprias nos dois mapas", () => {
 });
 
 describe("módulo Ótica: visibilidade por plano", () => {
-  test("Essencial vê só a config; Negócio e Expansão veem tudo", () => {
-    const ess = computeVisibleModules("essencial", null, undefined);
-    expect(ess.has("otica.config")).toBe(true);
-    expect(ess.has("otica.laboratorio")).toBe(false);
-    expect(ess.has("otica.receitas")).toBe(false);
-    for (const plano of ["negocio", "expansao"]) {
+  test("a frente vale em qualquer plano: Essencial, Negócio e Expansão veem tudo", () => {
+    for (const plano of ["essencial", "negocio", "expansao"]) {
       const v = computeVisibleModules(plano, null, undefined);
       MODS.forEach((m) => expect(v.has(m)).toBe(true));
     }
@@ -78,9 +74,9 @@ describe("módulo Ótica: permissão do membro", () => {
     MODS.forEach((m) => expect(v.has(m)).toBe(true));
   });
 
-  test("permissão não vence o plano: otica.access no Essencial só libera a config", () => {
+  test("no Essencial, otica.access libera as telas da frente", () => {
     const v = computeVisibleModules("essencial", null, { is_owner: false, permissions: { "otica.access": true } });
     expect(v.has("otica.config")).toBe(true);
-    expect(v.has("otica.laboratorio")).toBe(false);
+    expect(v.has("otica.laboratorio")).toBe(true);
   });
 });

@@ -85,18 +85,18 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   // 15/09/2026 -- semi-vertical Otica sobre o shell Negocio. Sem shell
   // proprio: os itens entram no NAV do varejo e o opt-in e o toggle
   // pdv_settings.otica_enabled (filtrado no _layout, como a OS). Laboratorio
-  // e Receitas sao Negocio (a otica vive de crediario e WhatsApp, que ja
-  // sao Negocio); Config e Essencial pra qualquer plano conseguir cadastrar
-  // laboratorio e ligar/desligar. Cada tela com chave PROPRIA (regra 3).
-  'otica.laboratorio': 'negocio',
-  'otica.receitas':    'negocio',
+  // e Receitas eram Negocio ate 12/10/2026; a frente passou a valer em
+  // qualquer plano (quem assinava o Essencial perdia as telas da propria
+  // frente). Cada tela com chave PROPRIA (regra 3).
+  'otica.laboratorio': 'essencial',
+  'otica.receitas':    'essencial',
   'otica.config':      'essencial',
   // 22/09/2026 -- semi-vertical Matcon (materiais de construcao), mesmo
   // desenho da Otica acima: sem shell proprio, itens entram no NAV do
   // varejo e o opt-in e o toggle pdv_settings.matcon_enabled (filtrado
   // no _layout, como a OS e a Otica). Orcamentos/Entregas/Profissionais
-  // sao Negocio (matcon vive de crediario e WhatsApp pros profissionais
-  // parceiros, que ja sao Negocio); Config e Essencial pra qualquer
+  // eram Negocio ate 12/10/2026; a frente passou a valer em qualquer plano
+  // (mesma decisao da Otica acima). Config e Essencial pra qualquer
   // plano conseguir abrir /matcon/config e ligar/desligar o modulo. Cada
   // tela com chave PROPRIA (regra 3 do CLAUDE.md) -- nenhuma herda de
   // outra. Ver docs/matcon-faseamento-po-ux.md secao 1 (contrato de zero
@@ -105,11 +105,11 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   // regra da casa e "toda tela nova entra no mapa" (mesmo padrao do
   // registro de FUNDACAO do Dojo) -- elas so passam a ser navegaveis
   // quando as telas nascerem em M1/M3.
-  'matcon.orcamentos':   'negocio',
-  'matcon.entregas':     'negocio',
-  'matcon.profissionais':'negocio',
+  'matcon.orcamentos':   'essencial',
+  'matcon.entregas':     'essencial',
+  'matcon.profissionais':'essencial',
   // 22/09/2026 (M4): compras (sugestao + pedido de compra) com chave propria.
-  'matcon.compras':      'negocio',
+  'matcon.compras':      'essencial',
   'matcon.config':       'essencial',
   // 05/10/2026 -- Primeiros passos da frente (cartao no topo do Painel e do
   // Inicio do Studio, components/onboarding/PrimeirosPassosCard.tsx). Nao e

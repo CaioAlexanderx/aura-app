@@ -27,10 +27,10 @@ const MODS = ["matcon.orcamentos", "matcon.entregas", "matcon.profissionais", "m
 
 describe("módulo Matcon: chaves próprias nos dois mapas", () => {
   test("plano mínimo por tela", () => {
-    expect(MODULE_PLAN_MAP["matcon.orcamentos"]).toBe("negocio");
-    expect(MODULE_PLAN_MAP["matcon.entregas"]).toBe("negocio");
-    expect(MODULE_PLAN_MAP["matcon.profissionais"]).toBe("negocio");
-    expect(MODULE_PLAN_MAP["matcon.compras"]).toBe("negocio");
+    expect(MODULE_PLAN_MAP["matcon.orcamentos"]).toBe("essencial");
+    expect(MODULE_PLAN_MAP["matcon.entregas"]).toBe("essencial");
+    expect(MODULE_PLAN_MAP["matcon.profissionais"]).toBe("essencial");
+    expect(MODULE_PLAN_MAP["matcon.compras"]).toBe("essencial");
     expect(MODULE_PLAN_MAP["matcon.config"]).toBe("essencial");
   });
 
@@ -43,13 +43,8 @@ describe("módulo Matcon: chaves próprias nos dois mapas", () => {
 });
 
 describe("módulo Matcon: visibilidade por plano", () => {
-  test("Essencial vê só a config; Negócio e Expansão veem tudo", () => {
-    const ess = computeVisibleModules("essencial", null, undefined);
-    expect(ess.has("matcon.config")).toBe(true);
-    expect(ess.has("matcon.orcamentos")).toBe(false);
-    expect(ess.has("matcon.entregas")).toBe(false);
-    expect(ess.has("matcon.profissionais")).toBe(false);
-    for (const plano of ["negocio", "expansao"]) {
+  test("a frente vale em qualquer plano: Essencial, Negócio e Expansão veem tudo", () => {
+    for (const plano of ["essencial", "negocio", "expansao"]) {
       const v = computeVisibleModules(plano, null, undefined);
       MODS.forEach((m) => expect(v.has(m)).toBe(true));
     }
@@ -87,9 +82,9 @@ describe("módulo Matcon: permissão do membro", () => {
     MODS.forEach((m) => expect(v.has(m)).toBe(true));
   });
 
-  test("permissão não vence o plano: matcon.access no Essencial só libera a config", () => {
+  test("no Essencial, matcon.access libera as telas da frente", () => {
     const v = computeVisibleModules("essencial", null, { is_owner: false, permissions: { "matcon.access": true } });
     expect(v.has("matcon.config")).toBe(true);
-    expect(v.has("matcon.orcamentos")).toBe(false);
+    expect(v.has("matcon.orcamentos")).toBe(true);
   });
 });
