@@ -32,6 +32,12 @@ export const SHEET_NARROW_BP = 500;
 type Props = {
   visible: boolean;
   onClose: () => void;
+  /** Toque no fundo escurecido (fora do cartão). Opcional; sem ela, vale
+   *  `onClose` — o comportamento de sempre. Existe para as telas que têm o
+   *  que perder num clique fora (12/10/2026: lançamento do crediário e ficha
+   *  do cliente com painel aberto) e ainda querem Esc/voltar fechando normal.
+   *  Esc/voltar do Android continuam sempre em `onClose`. */
+  onBackdropPress?: () => void;
   /** Largura máxima do diálogo em telas largas (padrão 480; ficha usa 700). */
   maxWidth?: number;
   /** Fração da altura da janela que o sheet pode ocupar (padrão 0.92 no
@@ -41,7 +47,7 @@ type Props = {
   sheetStyle?: StyleProp<ViewStyle>;
 };
 
-export function ResponsiveSheet({ visible, onClose, maxWidth = 480, children, sheetStyle }: Props) {
+export function ResponsiveSheet({ visible, onClose, onBackdropPress, maxWidth = 480, children, sheetStyle }: Props) {
   const { width, height } = useWindowDimensions();
   const isNarrow = width < SHEET_NARROW_BP;
 
@@ -63,7 +69,7 @@ export function ResponsiveSheet({ visible, onClose, maxWidth = 480, children, sh
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable
         style={[s.backdrop, isNarrow ? s.backdropNarrow : s.backdropWide]}
-        onPress={onClose}
+        onPress={onBackdropPress ?? onClose}
         accessibilityLabel="Fechar"
       >
         <KeyboardAvoidingView
