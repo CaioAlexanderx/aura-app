@@ -72,6 +72,9 @@ function translateStatus(status: string | null | undefined): string {
   return status;
 }
 
+/** Toque no fundo escurecido enquanto um painel interno está aberto: nada. */
+const ignorarToqueNoFundo = () => {};
+
 type Props = {
   visible: boolean;
   companyId: string;
@@ -747,7 +750,11 @@ export function ClienteCrediarioModal({
     : `Confirmar recebimento de ${fmt(freeAmtValue)} em ${methodLabel.toLowerCase()}?`;
 
   return (
-    <ResponsiveSheet visible={visible} onClose={onClose} maxWidth={700}>
+    // 12/10/2026: com painel interno aberto (Receber, Renegociar, Juntar, Alterar
+    // data, Imprimir) o clique no fundo é ignorado — fechava a ficha e levava
+    // o que a lojista estava digitando. O painel tem o próprio voltar; Esc e
+    // voltar do Android seguem fechando como antes.
+    <ResponsiveSheet visible={visible} onClose={onClose} onBackdropPress={anyOverlayOpen ? ignorarToqueNoFundo : onClose} maxWidth={700}>
           <View style={m.head}>
             <Pressable onPress={onClose} style={m.crumb}>
               <View style={{ transform: [{ rotate: "180deg" }] }}>

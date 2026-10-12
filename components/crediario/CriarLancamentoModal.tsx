@@ -24,6 +24,15 @@
 //
 // Os carnês são buscados do backend após a seleção do cliente
 // (via creditApi.getCustomerHistory), não dependem de prop.
+//
+// 12/10/2026 (relato de cliente): clicar fora do modal fechava a janela e o
+// reset() apagava tudo o que a lojista tinha preenchido — minutos de trabalho.
+// Agora fora/Esc/voltar/X, COM algo preenchido, abrem a confirmação "Descartar
+// este lançamento?" dentro do próprio modal (mesmo desenho da saída do
+// ItemFormModal); sem nada preenchido fecha direto, como antes, e salvar com
+// sucesso fecha sem perguntar. A conta do "preenchido" mora em
+// utils/crediarioLancamento.ts.
+//
 // F4.3 (10/07): maxHeight 90vh no web (ModalPop quebrava o "90%") +
 // flexShrink nos ScrollViews do passo 1 — conteúdo sempre alcançável.
 // ============================================================
@@ -48,6 +57,7 @@ import { fmtDate } from "@/components/crediario/ficha/fichaHelpers";
 import { Collapsible } from "@/components/anim";
 import { ResponsiveSheet } from "@/components/ResponsiveSheet";
 import { ConfirmGate } from "@/components/ConfirmGate";
+import { lancamentoPreenchido, type PadroesDoLancamento } from "@/utils/crediarioLancamento";
 
 // ============================================================
 // F4 do redesign (08/07/2026 — spec §2.4): o passo 2 deixou de ser
@@ -140,6 +150,18 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
   const [mode, setMode]               = useState<Mode>("search");
   const [loading, setLoading]         = useState(false);
 
+  // Padrões com que o formulário nasceu (os que dependem do dia). Guardados
+  // para o "preenchido" comparar contra eles e não contra um "hoje" recalculado
+  // (virar a meia-noite com o modal aberto não pode contar como preenchimento).
+  const [padroesIniciais] = useState<PadroesDoLancamento>(() => ({
+    vencimento: defaultDueDate(),
+    hoje: todayBrSp(),
+  }));
+  const padroesRef = useRef<PadroesDoLancamento>(padroesIniciais);
+  // Confirmação de descarte (fora/Esc/voltar/X com algo preenchido).
+  const [confirmarDescarte, setConfirmarDescarte] = useState(false);
+  const continuarRef = useRef<any>(null);
+
   // Customer search
   const [searchQ, setSearchQ]               = useState("");
   const [searching, setSearching]           = useState(false);
@@ -164,8 +186,8 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
   const [amountRaw, setAmountRaw]     = useState("");
   const [installments, setInstallments] = useState("1");
   const [interestRate, setInterestRate] = useState("");
-  const [firstDueDate, setFirstDueDate] = useState(defaultDueDate());
-  const [entryDate, setEntryDate]       = useState(todayBrSp());
+  const [firstDueDate, setFirstDueDate] = useState(padroesIniciais.vencimento);
+  const [entryDate, setEntryDate]       = useState(padroesIniciais.hoje);
   const [periodKind, setPeriodKind]     = useState<PeriodKind>("mensal");
   const [periodDays, setPeriodDays]     = useState("20");
   const [description, setDescription]   = useState("");
@@ -184,7 +206,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
   // feat(unify): toggle de unificação (só disponível em accountMode=existing com saldo)
   const [unifyEnabled, setUnifyEnabled]           = useState(false);
   const [unifyInstallments, setUnifyInstallments] = useState("2");
-  const [unifyFirstDue, setUnifyFirstDue]         = useState(defaultDueDate());
+  const [unifyFirstDue, setUnifyFirstDue]         = useState(padroesIniciais.vencimento);
   const [unifyPreview, setUnifyPreview]           = useState<UnifyPlan | null>(null);
   const [unifyPreviewLoading, setUnifyPreviewLoading] = useState(false);
   const [unifyPreviewError, setUnifyPreviewError]     = useState<string | null>(null);
@@ -200,6 +222,9 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
   const unifyFirstDueIso = parseBrDate(unifyFirstDue);
 
   const reset = useCallback(() => {
+    const padroes = { vencimento: defaultDueDate(), hoje: todayBrSp() };
+    padroesRef.current = padroes;
+    setConfirmarDescarte(false);
     setStep("customer");
     setMode("search");
     setSearchQ("");
@@ -210,8 +235,8 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
     setAmountRaw("");
     setInstallments("1");
     setInterestRate("");
-    setFirstDueDate(defaultDueDate());
-    setEntryDate(todayBrSp());
+    setFirstDueDate(padroes.vencimento);
+    setEntryDate(padroes.hoje);
     setPeriodKind("mensal");
     setPeriodDays("20");
     setDescription("");
@@ -223,17 +248,44 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
     setAdvOpen(false);
     setUnifyEnabled(false);
     setUnifyInstallments("2");
-    setUnifyFirstDue(defaultDueDate());
+    setUnifyFirstDue(padroes.vencimento);
     setUnifyPreview(null);
     setUnifyPreviewError(null);
     setUnifyGateOpen(false);
     idempKeyRef.current = null;
   }, []);
 
+  // Fecha de verdade: zera o formulário e avisa o pai. Só o salvar com
+  // sucesso e o "Descartar" chamam isto direto.
   const handleClose = useCallback(() => {
     reset();
     onClose();
   }, [reset, onClose]);
+
+  const preenchido = lancamentoPreenchido(
+    {
+      selectedCustomer, newName, newPhone, amountRaw, installments, interestRate,
+      firstDueDate, entryDate, periodKind, description, accountMode,
+      selectedAccountId, newAccountName, unifyEnabled,
+    },
+    padroesRef.current,
+  );
+
+  // Fora, Esc/voltar e o X passam por aqui. Salvando, ignora: fechar no meio
+  // do envio zeraria a Idempotency-Key e o retry duplicaria o lançamento.
+  // Com a pergunta já aberta, novo fora/Esc vale como "continuar preenchendo".
+  const pedirFechar = useCallback(() => {
+    if (loading) return;
+    if (confirmarDescarte) { setConfirmarDescarte(false); return; }
+    if (preenchido) { setConfirmarDescarte(true); return; }
+    handleClose();
+  }, [loading, confirmarDescarte, preenchido, handleClose]);
+
+  // Foco padrão na opção segura (web): Enter/espaço não descarta por engano.
+  useEffect(() => {
+    if (!confirmarDescarte) return;
+    try { continuarRef.current?.focus?.(); } catch { /* sem foco programático: ok */ }
+  }, [confirmarDescarte]);
 
   const handleSearch = useCallback(
     (q: string) => {
@@ -465,7 +517,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
   ];
 
   return (
-    <ResponsiveSheet visible={visible} onClose={handleClose} maxWidth={480} sheetStyle={{ backgroundColor: Colors.bg3 }}>
+    <ResponsiveSheet visible={visible} onClose={pedirFechar} maxWidth={480} sheetStyle={{ backgroundColor: Colors.bg3 }}>
       <>
             {/* Header */}
             <View style={s.header}>
@@ -480,7 +532,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                   </Text>
                 </View>
               </View>
-              <Pressable onPress={handleClose} style={s.closeBtn} hitSlop={8}>
+              <Pressable onPress={pedirFechar} style={s.closeBtn} hitSlop={8} testID="lancamento-fechar" accessibilityRole="button" accessibilityLabel="Fechar">
                 <Icon name="x" size={18} color={Colors.ink3} />
               </Pressable>
             </View>
@@ -504,6 +556,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                     placeholderTextColor={Colors.ink3}
                     value={searchQ}
                     onChangeText={handleSearch}
+                    testID="lancamento-busca"
                     autoFocus
                   />
                   {searching && (
@@ -539,6 +592,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                 <Pressable
                   style={({ pressed }) => [s.newCustBtn, pressed && s.pressed]}
                   onPress={() => setMode("create")}
+                  testID="lancamento-novo-cliente"
                 >
                   <Icon name="user-plus" size={15} color={Colors.violet3} />
                   <Text style={s.newCustText}>Cadastrar novo cliente</Text>
@@ -564,6 +618,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                   placeholderTextColor={Colors.ink3}
                   value={newName}
                   onChangeText={setNewName}
+                  testID="lancamento-novo-nome"
                   autoFocus
                 />
 
@@ -574,12 +629,14 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                   placeholderTextColor={Colors.ink3}
                   value={newPhone}
                   onChangeText={(v) => setNewPhone(fmtPhone(v))}
+                  testID="lancamento-novo-telefone"
                   keyboardType="phone-pad"
                 />
 
                 <Pressable
                   style={({ pressed }) => [s.nextBtn, pressed && { opacity: 0.8 }]}
                   onPress={handleConfirmNewCustomer}
+                  testID="lancamento-novo-continuar"
                 >
                   <Text style={s.nextBtnText}>Continuar</Text>
                   <Icon name="arrow-right" size={15} color="#fff" />
@@ -621,6 +678,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                       setAmountRaw(digits ? fmtCurrency(digits) : "");
                     }}
                     keyboardType="numeric"
+                    testID="lancamento-valor"
                     autoFocus
                   />
                 </View>
@@ -955,6 +1013,7 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                     pressed && { opacity: 0.85 },
                     loading && { opacity: 0.6 },
                   ]}
+                  testID="lancamento-criar"
                   onPress={() => {
                     // feat(unify-confirm-gate): unificar cancela parcelas
                     // existentes — nunca dispara direto no 1º toque.
@@ -998,6 +1057,38 @@ export function CriarLancamentoModal({ visible, onClose }: Props) {
                 )}
               </View>
               </>
+            )}
+
+            {/* Confirmação de descarte — dentro do próprio sheet (sem window.confirm).
+                Desenho e tokens da saída do ItemFormModal (exitOverlay/exitCard). */}
+            {confirmarDescarte && (
+              <View style={s.exitOverlay} testID="lancamento-confirmar-descarte" accessibilityViewIsModal>
+                <View style={s.exitCard}>
+                  <Text style={s.exitTitle}>Descartar este lançamento?</Text>
+                  <Text style={s.exitMsg}>
+                    Você já começou a preencher. Se fechar agora, o que foi digitado será perdido.
+                  </Text>
+                  <View style={s.exitActions}>
+                    <Pressable
+                      ref={continuarRef}
+                      testID="lancamento-continuar"
+                      style={s.exitStay}
+                      onPress={() => setConfirmarDescarte(false)}
+                      accessibilityRole="button"
+                    >
+                      <Text style={s.exitStayTxt}>Continuar preenchendo</Text>
+                    </Pressable>
+                    <Pressable
+                      testID="lancamento-descartar"
+                      style={s.exitLeave}
+                      onPress={handleClose}
+                      accessibilityRole="button"
+                    >
+                      <Text style={s.exitLeaveTxt}>Descartar</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
             )}
       </>
     </ResponsiveSheet>
@@ -1265,4 +1356,31 @@ const s = StyleSheet.create({
   },
   footerSummaryLbl: { fontSize: 12.5, color: Colors.ink2 },
   footerSummaryStrong: { fontWeight: "800", color: Colors.ink, fontSize: 13.5 },
+  // ── Confirmação de descarte (12/10/2026) — mesmos tokens do exitCard do
+  // ItemFormModal; botões empilhados e com 44px de altura mínima para caber
+  // em 360px e ter alvo de toque decente (lá ficam lado a lado).
+  exitOverlay: {
+    position: "absolute" as any, top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center", justifyContent: "center", zIndex: 200, padding: 24,
+  },
+  exitCard: {
+    width: "100%", maxWidth: 380, borderRadius: 16, padding: 22,
+    backgroundColor: Colors.bg3, borderWidth: 1, borderColor: "rgba(124,58,237,0.25)",
+  },
+  exitTitle: { fontSize: 16, fontWeight: "700", color: Colors.ink, marginBottom: 8 },
+  exitMsg: { fontSize: 13, color: Colors.ink2, lineHeight: 19, marginBottom: 18 },
+  exitActions: { flexDirection: "column", gap: 10 },
+  exitStay: {
+    minHeight: 44, alignItems: "center", justifyContent: "center",
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10,
+    backgroundColor: "rgba(124,58,237,0.18)", borderWidth: 1, borderColor: "rgba(124,58,237,0.4)",
+  },
+  exitStayTxt: { fontSize: 13, fontWeight: "700", color: Colors.violet3 },
+  exitLeave: {
+    minHeight: 44, alignItems: "center", justifyContent: "center",
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10,
+    backgroundColor: "rgba(239,68,68,0.12)", borderWidth: 1, borderColor: "rgba(239,68,68,0.35)",
+  },
+  exitLeaveTxt: { fontSize: 13, fontWeight: "700", color: Colors.red },
 });
