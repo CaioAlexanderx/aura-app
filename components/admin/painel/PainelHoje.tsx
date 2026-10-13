@@ -6,7 +6,8 @@
 // grade de 12 colunas. Um card expande por vez, no lugar, e mostra as
 // listas por nome de loja. Mockup: docs/mockups/gestao-aura-painel.html.
 //
-// Os dados vêm de usePainelHoje — hoje estáticos, amanhã da API.
+// Os dados vêm de usePainelHoje (GET /admin/painel/*). Estados: carregando,
+// erro com "tentar de novo", vazio (nenhum bloco calculado) e o conteúdo.
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform, Dimensions, ActivityIndicator } from "react-native";
@@ -19,8 +20,8 @@ import { Sparkline } from "./Graficos";
 import { CatalogoBlocos, FichaClienteModal } from "./PainelModais";
 import { DEFINICOES, SECOES } from "./blocos";
 import { Paleta } from "./paleta";
-import { PAINEL_COM_DADOS_DE_EXEMPLO, usePainelHoje } from "./usePainelHoje";
-import type { Alerta, Bloco, BlocoId } from "./tipos";
+import { usePainelHoje } from "./usePainelHoje";
+import type { Alerta, Bloco, BlocoId, PainelHoje as PainelHojeDados } from "./tipos";
 
 var GAP = 12;
 var FUSO = "America/Sao_Paulo";
@@ -52,12 +53,43 @@ var COR_ALERTA: Record<Alerta["tipo"], { ponto: string; halo: string }> = {
   bom: { ponto: Colors.green, halo: Colors.greenD },
 };
 
+type Dados = ReturnType<typeof usePainelHoje>;
+
+function EstadoDaTela(props: { testID: string; carregando?: boolean; titulo: string; texto?: string; onTentar?: () => void }) {
+  return (
+    <View testID={props.testID} style={s.estado}>
+      {props.carregando ? <ActivityIndicator color={Colors.violet3} /> : <Icon name="alert" size={22} color={Colors.amber} />}
+      <Text style={s.estadoTitulo}>{props.titulo}</Text>
+      {props.texto ? <Text style={s.estadoTexto}>{props.texto}</Text> : null}
+      {props.onTentar ? (
+        <Pressable testID="painel-tentar-de-novo" onPress={props.onTentar} style={[s.btn, s.btnPrimario]} accessibilityRole="button">
+          <Icon name="refresh" size={13} color="#fff" />
+          <Text style={[s.btnText, { color: "#fff" }]}>Tentar de novo</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 export function PainelHoje() {
+  var dados = usePainelHoje();
+  if (dados.carregando) {
+    return <EstadoDaTela testID="painel-carregando" carregando titulo="Carregando o painel…" texto="Se o dia ainda não foi calculado, o cálculo leva alguns segundos." />;
+  }
+  if (dados.erro || !dados.painel) {
+    return <EstadoDaTela testID="painel-erro" titulo="Não consegui carregar o painel" texto="Confira a conexão e tente de novo." onTentar={dados.tentarDeNovo} />;
+  }
+  return <PainelConteudo dados={dados} painel={dados.painel} />;
+}
+
+function PainelConteudo(props: { dados: Dados; painel: PainelHojeDados }) {
   var router = useRouter();
-  var { painel, layoutPadrao, catalogo, recalcular } = usePainelHoje();
+  var painel = props.painel;
+  var { catalogo, recalcular, salvarLayout, exemplo, vazio } = props.dados;
   var [largura, setLargura] = useState(function() { return Math.max(320, Math.min(1240, Dimensions.get("window").width) - 40); });
   var [aberto, setAberto] = useState<BlocoId | null>(null);
-  var [ativos, setAtivos] = useState<BlocoId[]>(layoutPadrao);
+  var [ativos, setAtivos] = useState<BlocoId[]>(props.dados.ativos);
+  var [salvando, setSalvando] = useState(false);
   var [catalogoAberto, setCatalogoAberto] = useState(false);
   var [fichaDe, setFichaDe] = useState<string | null>(null);
   var [recalculando, setRecalculando] = useState(false);
@@ -82,6 +114,7 @@ export function PainelHoje() {
   function alternar(id: BlocoId) { setAberto(function(atual) { return atual === id ? null : id; }); }
 
   function abrirBloco(id: BlocoId) {
+    if (!DEFINICOES.some(function(d) { return d.id === id; })) return;
     if (ativos.indexOf(id) < 0) setAtivos(ativos.concat([id]));
     setAberto(id);
   }
@@ -92,17 +125,33 @@ export function PainelHoje() {
     if (a.bloco) abrirBloco(a.bloco);
   }
 
+  // Verbos que ainda não existem (Registrar contato, +7 dias).
   function aoVerbo(verbo: string, loja: string) {
-    toast.info("“" + verbo + "” para " + loja + " entra quando a API do painel estiver ligada.");
+    toast.info("“" + verbo + "” para " + loja + " entra em breve.");
   }
 
   async function aoRecalcular() {
     setRecalculando(true);
     try {
-      await recalcular();
-      toast.info(PAINEL_COM_DADOS_DE_EXEMPLO ? "Dados de exemplo de 13/10: o recálculo entra com a API." : "Painel recalculado.");
-    } catch { toast.error("Erro ao recalcular"); }
+      var r = await recalcular();
+      if (exemplo) toast.info("Dados de exemplo (desenvolvimento): o recálculo só roda com a API.");
+      else if (r.erros > 0) toast.error("Recalculado com " + r.erros + (r.erros === 1 ? " erro" : " erros") + ". O que deu certo ficou gravado.");
+      else toast.success("Painel recalculado.");
+    } catch { toast.error("Não consegui recalcular o painel. Tente de novo."); }
     finally { setRecalculando(false); }
+  }
+
+  // PUT /admin/painel/layout; o modal só fecha se o backend aceitou.
+  async function aoSalvarCatalogo(novos: BlocoId[]) {
+    setSalvando(true);
+    try {
+      await salvarLayout(novos);
+      setAtivos(novos);
+      if (aberto && novos.indexOf(aberto) < 0) setAberto(null);
+      setCatalogoAberto(false);
+      toast.success("Painel salvo.");
+    } catch { toast.error("Não consegui salvar o painel. Tente de novo."); }
+    finally { setSalvando(false); }
   }
 
   // Grade de 12 colunas: larguras do bloco no desktop, 2 por linha no tablet, 1 no celular.
@@ -132,8 +181,8 @@ export function PainelHoje() {
             <Text style={s.metaText}>Calculado às <Text style={s.metaForte}>{hora(painel.calculado_em)}</Text></Text>
             <Text style={s.metaText}>Próximo às <Text style={s.metaForte}>{hora(painel.proximo_calculo)}</Text></Text>
             {painel.fontes && painel.fontes.length ? <Text style={s.metaText}>Fontes: <Text style={s.metaForte}>{painel.fontes.join(" · ")}</Text></Text> : null}
-            {painel.ao_vivo ? <Pill variacao={{ texto: "ao vivo", tom: "sobe" }} /> : null}
-            {PAINEL_COM_DADOS_DE_EXEMPLO ? <Pill variacao={{ texto: "dados de exemplo · 13/10", tom: "alerta" }} /> : null}
+            {painel.ao_vivo ? <Pill variacao={{ texto: "calculado agora", tom: "sobe" }} /> : null}
+            {exemplo ? <Pill variacao={{ texto: "dados de exemplo · 13/10", tom: "alerta" }} /> : null}
           </View>
         </View>
         <View style={s.acts}>
@@ -199,9 +248,20 @@ export function PainelHoje() {
         </View>
       )}
 
+      {vazio && (
+        <EstadoDaTela
+          testID="painel-vazio"
+          titulo="Nenhum bloco calculado hoje"
+          texto="O cálculo do dia ainda não gravou nenhum bloco. Toque em Recalcular para rodar agora."
+        />
+      )}
+
       {/* Seções */}
-      {SECOES.map(function(sec, si) {
-        var defs = DEFINICOES.filter(function(d) { return d.secao === sec.id && ativos.indexOf(d.id) >= 0; });
+      {!vazio && SECOES.map(function(sec, si) {
+        // Dentro da seção, a ordem é a do layout salvo.
+        var defs = DEFINICOES
+          .filter(function(d) { return d.secao === sec.id && ativos.indexOf(d.id) >= 0; })
+          .sort(function(a, b) { return ativos.indexOf(a.id) - ativos.indexOf(b.id); });
         var ultima = si === SECOES.length - 1;
         if (defs.length === 0 && !ultima) return null;
         return (
@@ -243,16 +303,15 @@ export function PainelHoje() {
         itens={catalogo}
         ativos={ativos}
         onClose={function() { setCatalogoAberto(false); }}
-        onSalvar={function(novos) {
-          setAtivos(novos);
-          if (aberto && novos.indexOf(aberto) < 0) setAberto(null);
-          setCatalogoAberto(false);
-        }}
+        onSalvar={aoSalvarCatalogo}
+        salvando={salvando}
       />
       <FichaClienteModal
         companyId={fichaDe}
         onClose={function() { setFichaDe(null); }}
         onVerbo={aoVerbo}
+        onAviso={function(mensagem) { toast.info(mensagem); }}
+        // A rota de Clientes ainda não aceita parâmetro: abre a lista.
         onAbrirCliente={function() { setFichaDe(null); router.push("/gestao-aura-clientes" as any); }}
       />
     </View>
@@ -289,4 +348,7 @@ var s = StyleSheet.create({
   grade: { flexDirection: "row", flexWrap: "wrap", gap: GAP, marginBottom: 30 },
   adicionar: { minHeight: 150, borderWidth: 1, borderStyle: "dashed", borderColor: Colors.border2, borderRadius: 16, flexDirection: "row", gap: 6, alignItems: "center", justifyContent: "center", padding: 16 },
   adicionarText: { fontSize: 14, color: Colors.ink3 },
+  estado: { alignItems: "center", gap: 10, paddingVertical: 48, paddingHorizontal: 20, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 16 },
+  estadoTitulo: { fontSize: 16, fontWeight: "700", color: Colors.ink, textAlign: "center" },
+  estadoTexto: { fontSize: 13, color: Colors.ink3, textAlign: "center", maxWidth: 420 },
 });

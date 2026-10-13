@@ -1,0 +1,214 @@
+{
+  "id": "horario",
+  "titulo": "Horário de uso",
+  "periodo": 30,
+  "calculado_em": "2026-10-13T09:00:04.000Z",
+  "ao_vivo": false,
+  "valor": 16,
+  "unidade": "h",
+  "resumo": "pico · 121 vendas",
+  "fonte": "sales (America/Sao_Paulo)",
+  "indicadores": [
+    {
+      "rotulo": "Hora de pico",
+      "valor": "16h",
+      "nota": "121 vendas"
+    },
+    {
+      "rotulo": "Entre 10h e 18h",
+      "valor": "88%",
+      "nota": "das vendas"
+    },
+    {
+      "rotulo": "Vendas no período",
+      "valor": 172,
+      "nota": "30 dias"
+    },
+    {
+      "rotulo": "Janela segura para deploy",
+      "valor": "antes das 9h",
+      "nota": null
+    }
+  ],
+  "listas": [
+    {
+      "titulo": "Hora de pico por loja",
+      "colunas": [
+        {
+          "chave": "nome",
+          "rotulo": "Loja",
+          "tipo": "loja"
+        },
+        {
+          "chave": "vendas",
+          "rotulo": "Vendas 30d",
+          "tipo": "numero"
+        },
+        {
+          "chave": "hora_pico",
+          "rotulo": "Pico",
+          "tipo": "texto"
+        }
+      ],
+      "linhas": [
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Mercado Bela Vista",
+          "telefone": "11999900002",
+          "vendas": 120,
+          "hora_pico": "16h"
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+          "nome": "Papelaria Sol",
+          "telefone": "11999900008",
+          "vendas": 31,
+          "hora_pico": "16h"
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+          "nome": "Casa do Construtor",
+          "telefone": "11999900003",
+          "vendas": 18,
+          "hora_pico": "9h"
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000005",
+          "nome": "Ótica Visão",
+          "telefone": "11999900005",
+          "vendas": 3,
+          "hora_pico": "19h"
+        }
+      ]
+    }
+  ],
+  "series": [
+    {
+      "titulo": "Vendas por hora · 30 dias",
+      "tipo": "barras",
+      "pontos": [
+        {
+          "rotulo": "0",
+          "hora": 0,
+          "valor": 0
+        },
+        {
+          "rotulo": "1",
+          "hora": 1,
+          "valor": 0
+        },
+        {
+          "rotulo": "2",
+          "hora": 2,
+          "valor": 0
+        },
+        {
+          "rotulo": "3",
+          "hora": 3,
+          "valor": 0
+        },
+        {
+          "rotulo": "4",
+          "hora": 4,
+          "valor": 0
+        },
+        {
+          "rotulo": "5",
+          "hora": 5,
+          "valor": 0
+        },
+        {
+          "rotulo": "6",
+          "hora": 6,
+          "valor": 0
+        },
+        {
+          "rotulo": "7",
+          "hora": 7,
+          "valor": 0
+        },
+        {
+          "rotulo": "8",
+          "hora": 8,
+          "valor": 0
+        },
+        {
+          "rotulo": "9",
+          "hora": 9,
+          "valor": 18
+        },
+        {
+          "rotulo": "10",
+          "hora": 10,
+          "valor": 30
+        },
+        {
+          "rotulo": "11",
+          "hora": 11,
+          "valor": 0
+        },
+        {
+          "rotulo": "12",
+          "hora": 12,
+          "valor": 0
+        },
+        {
+          "rotulo": "13",
+          "hora": 13,
+          "valor": 0
+        },
+        {
+          "rotulo": "14",
+          "hora": 14,
+          "valor": 0
+        },
+        {
+          "rotulo": "15",
+          "hora": 15,
+          "valor": 0
+        },
+        {
+          "rotulo": "16",
+          "hora": 16,
+          "valor": 121
+        },
+        {
+          "rotulo": "17",
+          "hora": 17,
+          "valor": 0
+        },
+        {
+          "rotulo": "18",
+          "hora": 18,
+          "valor": 0
+        },
+        {
+          "rotulo": "19",
+          "hora": 19,
+          "valor": 3
+        },
+        {
+          "rotulo": "20",
+          "hora": 20,
+          "valor": 0
+        },
+        {
+          "rotulo": "21",
+          "hora": 21,
+          "valor": 0
+        },
+        {
+          "rotulo": "22",
+          "hora": 22,
+          "valor": 0
+        },
+        {
+          "rotulo": "23",
+          "hora": 23,
+          "valor": 0
+        }
+      ]
+    }
+  ],
+  "insight": "88% das vendas entre 10h e 18h. Deploy, migração e manutenção fora dessa janela."
+}

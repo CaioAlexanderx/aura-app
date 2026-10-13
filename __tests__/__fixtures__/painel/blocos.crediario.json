@@ -1,0 +1,115 @@
+{
+  "id": "crediario",
+  "titulo": "Crediário",
+  "periodo": 30,
+  "calculado_em": "2026-10-13T09:00:04.000Z",
+  "ao_vivo": false,
+  "valor": 123,
+  "unidade": "parcelas em 3 lojas",
+  "resumo": "R$ 9.690,70 vencidos",
+  "fonte": "credit_installments",
+  "indicadores": [
+    {
+      "rotulo": "Parcelas vencidas",
+      "valor": 123,
+      "nota": null
+    },
+    {
+      "rotulo": "Valor vencido",
+      "valor": 9690.7,
+      "nota": null
+    },
+    {
+      "rotulo": "Lojas com atraso",
+      "valor": 3,
+      "nota": null
+    },
+    {
+      "rotulo": "Clientes em atraso",
+      "valor": 48,
+      "nota": null
+    }
+  ],
+  "listas": [
+    {
+      "titulo": "Parcelas vencidas por loja",
+      "colunas": [
+        {
+          "chave": "nome",
+          "rotulo": "Loja",
+          "tipo": "loja"
+        },
+        {
+          "chave": "parcelas",
+          "rotulo": "Parcelas",
+          "tipo": "numero"
+        },
+        {
+          "chave": "clientes",
+          "rotulo": "Clientes",
+          "tipo": "numero"
+        },
+        {
+          "chave": "valor",
+          "rotulo": "Valor",
+          "tipo": "moeda"
+        },
+        {
+          "chave": "mais_antiga",
+          "rotulo": "Mais antiga",
+          "tipo": "data"
+        }
+      ],
+      "linhas": [
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Mercado Bela Vista",
+          "telefone": "11999900002",
+          "parcelas": 107,
+          "clientes": 41,
+          "valor": 8450.5,
+          "mais_antiga": "2026-06-10"
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+          "nome": "Papelaria Sol",
+          "telefone": "11999900008",
+          "parcelas": 12,
+          "clientes": 5,
+          "valor": 930,
+          "mais_antiga": "2026-09-30"
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+          "nome": "Casa do Construtor",
+          "telefone": "11999900003",
+          "parcelas": 4,
+          "clientes": 2,
+          "valor": 310.2,
+          "mais_antiga": "2026-10-01"
+        }
+      ]
+    }
+  ],
+  "series": [
+    {
+      "titulo": "Parcelas vencidas por loja",
+      "tipo": "barras_h",
+      "pontos": [
+        {
+          "rotulo": "Mercado Bela Vista",
+          "valor": 107
+        },
+        {
+          "rotulo": "Papelaria Sol",
+          "valor": 12
+        },
+        {
+          "rotulo": "Casa do Construtor",
+          "valor": 4
+        }
+      ]
+    }
+  ],
+  "insight": "Mercado Bela Vista e Papelaria Sol somam 97% do atraso da plataforma: o piloto da régua de cobrança começa por elas."
+}

@@ -1,0 +1,651 @@
+{
+  "id": "uso_funcionalidade",
+  "titulo": "Uso por funcionalidade",
+  "periodo": 30,
+  "calculado_em": "2026-10-13T09:00:04.000Z",
+  "ao_vivo": false,
+  "valor": 7,
+  "unidade": "módulos com uso amplo · 3 de nicho",
+  "resumo": "Base: 6 lojas com login em 30 dias",
+  "fonte": "tabelas de cada módulo (uso inferido)",
+  "indicadores": [
+    {
+      "rotulo": "Uso amplo",
+      "valor": 7,
+      "nota": "2+ lojas em 30 dias"
+    },
+    {
+      "rotulo": "De nicho",
+      "valor": 3,
+      "nota": null
+    },
+    {
+      "rotulo": "Sem uso no período",
+      "valor": 6,
+      "nota": "Ordens de serviço, Compras Matcon, Studio orçamentos, Vitrine, Aurinha (IA), WhatsApp"
+    },
+    {
+      "rotulo": "Lojas com login",
+      "valor": 6,
+      "nota": "30 dias"
+    }
+  ],
+  "listas": [
+    {
+      "titulo": "Por módulo",
+      "colunas": [
+        {
+          "chave": "rotulo",
+          "rotulo": "Módulo",
+          "tipo": "texto"
+        },
+        {
+          "chave": "lojas_7d",
+          "rotulo": "Lojas 7d",
+          "tipo": "numero"
+        },
+        {
+          "chave": "lojas_periodo",
+          "rotulo": "Lojas 30d",
+          "tipo": "numero"
+        },
+        {
+          "chave": "eventos_periodo",
+          "rotulo": "Eventos 30d",
+          "tipo": "numero"
+        },
+        {
+          "chave": "lojas_total",
+          "rotulo": "Já usaram",
+          "tipo": "numero"
+        }
+      ],
+      "linhas": [
+        {
+          "modulo": "estoque",
+          "rotulo": "Estoque",
+          "lojas_7d": 4,
+          "lojas_periodo": 5,
+          "eventos_periodo": 229,
+          "lojas_total": 6,
+          "lojas": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+              "nome": "Papelaria Sol"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+              "nome": "Mercado Bela Vista"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000005",
+              "nome": "Ótica Visão"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+              "nome": "Casa do Construtor"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000006",
+              "nome": "Bazar Novo"
+            }
+          ]
+        },
+        {
+          "modulo": "caixa",
+          "rotulo": "Caixa",
+          "lojas_7d": 4,
+          "lojas_periodo": 5,
+          "eventos_periodo": 176,
+          "lojas_total": 5,
+          "lojas": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+              "nome": "Mercado Bela Vista"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+              "nome": "Papelaria Sol"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+              "nome": "Casa do Construtor"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+              "nome": "Loja Aurora"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000005",
+              "nome": "Ótica Visão"
+            }
+          ]
+        },
+        {
+          "modulo": "clientes",
+          "rotulo": "Clientes",
+          "lojas_7d": 3,
+          "lojas_periodo": 3,
+          "eventos_periodo": 49,
+          "lojas_total": 3,
+          "lojas": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+              "nome": "Mercado Bela Vista"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+              "nome": "Papelaria Sol"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000005",
+              "nome": "Ótica Visão"
+            }
+          ]
+        },
+        {
+          "modulo": "crediario",
+          "rotulo": "Crediário",
+          "lojas_7d": 2,
+          "lojas_periodo": 2,
+          "eventos_periodo": 210,
+          "lojas_total": 2,
+          "lojas": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+              "nome": "Mercado Bela Vista"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+              "nome": "Papelaria Sol"
+            }
+          ]
+        },
+        {
+          "modulo": "abertura_caixa",
+          "rotulo": "Abertura de caixa",
+          "lojas_7d": 2,
+          "lojas_periodo": 2,
+          "eventos_periodo": 37,
+          "lojas_total": 2,
+          "lojas": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+              "nome": "Mercado Bela Vista"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+              "nome": "Papelaria Sol"
+            }
+          ]
+        },
+        {
+          "modulo": "importacao",
+          "rotulo": "Importação",
+          "lojas_7d": 2,
+          "lojas_periodo": 2,
+          "eventos_periodo": 2,
+          "lojas_total": 2,
+          "lojas": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000005",
+              "nome": "Ótica Visão"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000006",
+              "nome": "Bazar Novo"
+            }
+          ]
+        },
+        {
+          "modulo": "aura_notas",
+          "rotulo": "Aura Notas",
+          "lojas_7d": 2,
+          "lojas_periodo": 2,
+          "eventos_periodo": 100,
+          "lojas_total": 2,
+          "lojas": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+              "nome": "Mercado Bela Vista"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+              "nome": "Papelaria Sol"
+            }
+          ]
+        },
+        {
+          "modulo": "orcamentos_matcon",
+          "rotulo": "Orçamentos Matcon",
+          "lojas_7d": 1,
+          "lojas_periodo": 1,
+          "eventos_periodo": 7,
+          "lojas_total": 1,
+          "lojas": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+              "nome": "Casa do Construtor"
+            }
+          ]
+        },
+        {
+          "modulo": "studio_pedidos",
+          "rotulo": "Studio pedidos",
+          "lojas_7d": 0,
+          "lojas_periodo": 1,
+          "eventos_periodo": 1,
+          "lojas_total": 1,
+          "lojas": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+              "nome": "Loja Aurora"
+            }
+          ]
+        },
+        {
+          "modulo": "relatorios_email",
+          "rotulo": "Relatórios por e-mail",
+          "lojas_7d": 1,
+          "lojas_periodo": 1,
+          "eventos_periodo": 4,
+          "lojas_total": 1,
+          "lojas": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+              "nome": "Mercado Bela Vista"
+            }
+          ]
+        },
+        {
+          "modulo": "ordens_servico",
+          "rotulo": "Ordens de serviço",
+          "lojas_7d": 0,
+          "lojas_periodo": 0,
+          "eventos_periodo": 0,
+          "lojas_total": 1,
+          "lojas": []
+        },
+        {
+          "modulo": "compras_matcon",
+          "rotulo": "Compras Matcon",
+          "lojas_7d": 0,
+          "lojas_periodo": 0,
+          "eventos_periodo": 0,
+          "lojas_total": 0,
+          "lojas": []
+        },
+        {
+          "modulo": "studio_orcamentos",
+          "rotulo": "Studio orçamentos",
+          "lojas_7d": 0,
+          "lojas_periodo": 0,
+          "eventos_periodo": 0,
+          "lojas_total": 0,
+          "lojas": []
+        },
+        {
+          "modulo": "vitrine",
+          "rotulo": "Vitrine",
+          "lojas_7d": 0,
+          "lojas_periodo": 0,
+          "eventos_periodo": 0,
+          "lojas_total": 0,
+          "lojas": []
+        },
+        {
+          "modulo": "aurinha",
+          "rotulo": "Aurinha (IA)",
+          "lojas_7d": 0,
+          "lojas_periodo": 0,
+          "eventos_periodo": 0,
+          "lojas_total": 0,
+          "lojas": []
+        },
+        {
+          "modulo": "whatsapp",
+          "rotulo": "WhatsApp",
+          "lojas_7d": 0,
+          "lojas_periodo": 0,
+          "eventos_periodo": 0,
+          "lojas_total": 0,
+          "lojas": []
+        }
+      ]
+    },
+    {
+      "titulo": "Lojas por módulo · 30 dias",
+      "colunas": [
+        {
+          "chave": "modulo",
+          "rotulo": "Módulo",
+          "tipo": "texto"
+        },
+        {
+          "chave": "nome",
+          "rotulo": "Loja",
+          "tipo": "loja"
+        },
+        {
+          "chave": "eventos",
+          "rotulo": "Eventos",
+          "tipo": "numero"
+        },
+        {
+          "chave": "ultimo_uso",
+          "rotulo": "Último uso",
+          "tipo": "data"
+        }
+      ],
+      "linhas": [
+        {
+          "modulo": "Abertura de caixa",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Mercado Bela Vista",
+          "telefone": "11999900002",
+          "eventos": 26,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Abertura de caixa",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+          "nome": "Papelaria Sol",
+          "telefone": "11999900008",
+          "eventos": 11,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Aura Notas",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Mercado Bela Vista",
+          "telefone": "11999900002",
+          "eventos": 96,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Aura Notas",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+          "nome": "Papelaria Sol",
+          "telefone": "11999900008",
+          "eventos": 4,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Caixa",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Mercado Bela Vista",
+          "telefone": "11999900002",
+          "eventos": 120,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Caixa",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+          "nome": "Papelaria Sol",
+          "telefone": "11999900008",
+          "eventos": 31,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Caixa",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+          "nome": "Casa do Construtor",
+          "telefone": "11999900003",
+          "eventos": 18,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Caixa",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+          "nome": "Loja Aurora",
+          "telefone": "11999900001",
+          "eventos": 4,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Caixa",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000005",
+          "nome": "Ótica Visão",
+          "telefone": "11999900005",
+          "eventos": 3,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Clientes",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Mercado Bela Vista",
+          "telefone": "11999900002",
+          "eventos": 33,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Clientes",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+          "nome": "Papelaria Sol",
+          "telefone": "11999900008",
+          "eventos": 14,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Clientes",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000005",
+          "nome": "Ótica Visão",
+          "telefone": "11999900005",
+          "eventos": 2,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Crediário",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Mercado Bela Vista",
+          "telefone": "11999900002",
+          "eventos": 190,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Crediário",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+          "nome": "Papelaria Sol",
+          "telefone": "11999900008",
+          "eventos": 20,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Estoque",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+          "nome": "Papelaria Sol",
+          "telefone": "11999900008",
+          "eventos": 85,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Estoque",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Mercado Bela Vista",
+          "telefone": "11999900002",
+          "eventos": 80,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Estoque",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000005",
+          "nome": "Ótica Visão",
+          "telefone": "11999900005",
+          "eventos": 40,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Estoque",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+          "nome": "Casa do Construtor",
+          "telefone": "11999900003",
+          "eventos": 12,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Estoque",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000006",
+          "nome": "Bazar Novo",
+          "telefone": "11999900006",
+          "eventos": 12,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Importação",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000005",
+          "nome": "Ótica Visão",
+          "telefone": "11999900005",
+          "eventos": 1,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Importação",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000006",
+          "nome": "Bazar Novo",
+          "telefone": "11999900006",
+          "eventos": 1,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Orçamentos Matcon",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+          "nome": "Casa do Construtor",
+          "telefone": "11999900003",
+          "eventos": 7,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Relatórios por e-mail",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Mercado Bela Vista",
+          "telefone": "11999900002",
+          "eventos": 4,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Studio pedidos",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+          "nome": "Loja Aurora",
+          "telefone": "11999900001",
+          "eventos": 1,
+          "ultimo_uso": "2026-10-12"
+        }
+      ]
+    }
+  ],
+  "series": [
+    {
+      "titulo": "Lojas por módulo · 30 dias",
+      "tipo": "barras_h",
+      "pontos": [
+        {
+          "rotulo": "Estoque",
+          "valor": 5
+        },
+        {
+          "rotulo": "Caixa",
+          "valor": 5
+        },
+        {
+          "rotulo": "Clientes",
+          "valor": 3
+        },
+        {
+          "rotulo": "Crediário",
+          "valor": 2
+        },
+        {
+          "rotulo": "Abertura de caixa",
+          "valor": 2
+        },
+        {
+          "rotulo": "Importação",
+          "valor": 2
+        },
+        {
+          "rotulo": "Aura Notas",
+          "valor": 2
+        },
+        {
+          "rotulo": "Orçamentos Matcon",
+          "valor": 1
+        },
+        {
+          "rotulo": "Studio pedidos",
+          "valor": 1
+        },
+        {
+          "rotulo": "Relatórios por e-mail",
+          "valor": 1
+        },
+        {
+          "rotulo": "Ordens de serviço",
+          "valor": 0
+        },
+        {
+          "rotulo": "Compras Matcon",
+          "valor": 0
+        },
+        {
+          "rotulo": "Studio orçamentos",
+          "valor": 0
+        },
+        {
+          "rotulo": "Vitrine",
+          "valor": 0
+        },
+        {
+          "rotulo": "Aurinha (IA)",
+          "valor": 0
+        },
+        {
+          "rotulo": "WhatsApp",
+          "valor": 0
+        }
+      ]
+    },
+    {
+      "titulo": "Menos usados",
+      "tipo": "barras_h",
+      "pontos": [
+        {
+          "rotulo": "WhatsApp",
+          "valor": 0
+        },
+        {
+          "rotulo": "Aurinha (IA)",
+          "valor": 0
+        },
+        {
+          "rotulo": "Vitrine",
+          "valor": 0
+        },
+        {
+          "rotulo": "Studio orçamentos",
+          "valor": 0
+        },
+        {
+          "rotulo": "Compras Matcon",
+          "valor": 0
+        },
+        {
+          "rotulo": "Ordens de serviço",
+          "valor": 0
+        },
+        {
+          "rotulo": "Relatórios por e-mail",
+          "valor": 1
+        },
+        {
+          "rotulo": "Studio pedidos",
+          "valor": 1
+        },
+        {
+          "rotulo": "Orçamentos Matcon",
+          "valor": 1
+        }
+      ]
+    }
+  ],
+  "insight": "O uso é inferido pelas tabelas de cada módulo. Telas só de leitura (Relatórios, Painel, Etiquetas) aparecem em \"Telas visitadas\"."
+}

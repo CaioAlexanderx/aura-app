@@ -1,0 +1,206 @@
+{
+  "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+  "nome": "Loja Aurora",
+  "telefone": "11999900001",
+  "cliente": {
+    "id": "aaaaaaaa-0000-4000-8000-000000000001",
+    "trade_name": "Loja Aurora",
+    "legal_name": "Aurora Personalizados LTDA",
+    "plan": "negocio",
+    "is_active": true,
+    "billing_status": "active",
+    "billing_cycle": "annual",
+    "module_overrides": null,
+    "created_at": "2026-06-06T15:00:00.000Z",
+    "last_active_at": "2026-10-08T15:00:00.000Z",
+    "tax_regime": "simples",
+    "trial_ends_at": null,
+    "vertical_active": "studio",
+    "vertical_enabled_at": null,
+    "suggested_vertical": null,
+    "owner_email": "dona@lojaaurora.example",
+    "owner_name": "Helena Duarte",
+    "owner_phone": "11999900001",
+    "owner_is_staff": false,
+    "is_sandbox": false,
+    "access_code_used": null,
+    "has_subscription": true,
+    "health_score": 45,
+    "risk_level": "attention",
+    "activity_score": 25,
+    "usage_score": 5,
+    "payment_score": 25,
+    "adoption_score": 15,
+    "tx_count": 140,
+    "prod_count": 210,
+    "cust_count": 58,
+    "sale_count": 79,
+    "total_revenue": 18250.4,
+    "last_login_at": "2026-10-08T15:00:00.000Z",
+    "login_days": 3,
+    "first_sale_at": "2026-06-09T15:00:00.000Z",
+    "checkout_viewed_at": null,
+    "checkout_views": 0,
+    "stage": "cliente",
+    "archive_reason": null,
+    "trial_days_left": null,
+    "days_since_expiry": null,
+    "caixa_sessions": 14,
+    "last_caixa_at": "2026-09-21T15:00:00.000Z",
+    "imported_rows": 0,
+    "extra_seats_granted": 0,
+    "ativacao": {
+      "importou": true,
+      "abriu_caixa": true,
+      "vendeu": true,
+      "viu_checkout": false
+    }
+  },
+  "health": {
+    "score": 45,
+    "risk_level": "attention",
+    "activity_score": 25,
+    "usage_score": 5,
+    "payment_score": 25,
+    "adoption_score": 15
+  },
+  "logins": {
+    "ultimos_30d": 3,
+    "dias_ativos_30d": 3,
+    "ultimo_acesso": "2026-10-08T15:00:00.000Z"
+  },
+  "asaas": [
+    {
+      "evento": "PAYMENT_DELETED",
+      "quando": "2026-09-21T09:00:00.000Z",
+      "valor": 140.83,
+      "vencimento": "2026-10-14"
+    },
+    {
+      "evento": "PAYMENT_RECEIVED",
+      "quando": "2026-09-14T09:00:00.000Z",
+      "valor": 140.83,
+      "vencimento": "2026-09-14"
+    }
+  ],
+  "modulos": [
+    "Caixa",
+    "Studio pedidos",
+    "Estoque"
+  ],
+  "modulos_detalhe": [
+    {
+      "id": "caixa",
+      "nome": "Caixa",
+      "usou_30d": true,
+      "eventos_30d": 4,
+      "ultimo_uso": "2026-10-12T15:00:00.000Z"
+    },
+    {
+      "id": "studio_pedidos",
+      "nome": "Studio pedidos",
+      "usou_30d": true,
+      "eventos_30d": 1,
+      "ultimo_uso": "2026-10-12T15:00:00.000Z"
+    },
+    {
+      "id": "estoque",
+      "nome": "Estoque",
+      "usou_30d": false,
+      "eventos_30d": 0,
+      "ultimo_uso": "2026-10-12T15:00:00.000Z"
+    }
+  ],
+  "vendas_por_semana": [
+    {
+      "rotulo": "27/07",
+      "valor": 0
+    },
+    {
+      "rotulo": "03/08",
+      "valor": 0
+    },
+    {
+      "rotulo": "10/08",
+      "valor": 0
+    },
+    {
+      "rotulo": "17/08",
+      "valor": 0
+    },
+    {
+      "rotulo": "24/08",
+      "valor": 0
+    },
+    {
+      "rotulo": "31/08",
+      "valor": 6
+    },
+    {
+      "rotulo": "07/09",
+      "valor": 0
+    },
+    {
+      "rotulo": "14/09",
+      "valor": 3
+    },
+    {
+      "rotulo": "21/09",
+      "valor": 1
+    },
+    {
+      "rotulo": "28/09",
+      "valor": 0
+    },
+    {
+      "rotulo": "05/10",
+      "valor": 0
+    },
+    {
+      "rotulo": "12/10",
+      "valor": 0
+    }
+  ],
+  "alertas": [
+    {
+      "tipo": "pagante_anual_vencendo",
+      "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+      "titulo": "Loja Aurora vence amanhã",
+      "detalhe": "Anual · sem venda há 22 dias",
+      "verbo": "Ligar",
+      "bloco": "pagantes_sem_venda"
+    }
+  ],
+  "linha_do_tempo": [
+    {
+      "tipo": "login",
+      "quando": "2026-10-08T15:00:00.000Z",
+      "titulo": "Login",
+      "valor": null
+    },
+    {
+      "tipo": "pagamento",
+      "quando": "2026-09-21T09:00:00.000Z",
+      "titulo": "Cobrança apagada na Asaas",
+      "valor": 140.83
+    },
+    {
+      "tipo": "venda",
+      "quando": "2026-09-21T18:30:00.000Z",
+      "titulo": "Venda",
+      "valor": 189.9
+    },
+    {
+      "tipo": "nota",
+      "quando": "2026-09-21T18:31:00.000Z",
+      "titulo": "NFC-e autorizada",
+      "valor": 189.9
+    },
+    {
+      "tipo": "pagamento",
+      "quando": "2026-09-14T09:00:00.000Z",
+      "titulo": "Pagamento recebido",
+      "valor": 140.83
+    }
+  ]
+}

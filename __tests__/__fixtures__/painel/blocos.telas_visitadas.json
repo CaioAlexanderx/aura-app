@@ -1,0 +1,183 @@
+{
+  "id": "telas_visitadas",
+  "titulo": "Telas visitadas",
+  "periodo": 30,
+  "calculado_em": "2026-10-13T09:00:04.000Z",
+  "ao_vivo": false,
+  "valor": 3,
+  "unidade": "telas visitadas em 30 dias",
+  "resumo": "3 lojas enviaram navegação · mais vista: pdv",
+  "fonte": "screen_views (enviado pelo app)",
+  "indicadores": [
+    {
+      "rotulo": "Telas",
+      "valor": 3,
+      "nota": null
+    },
+    {
+      "rotulo": "Lojas com navegação",
+      "valor": 3,
+      "nota": "30 dias"
+    },
+    {
+      "rotulo": "Visitas",
+      "valor": 760,
+      "nota": "30 dias"
+    }
+  ],
+  "listas": [
+    {
+      "titulo": "Por tela",
+      "colunas": [
+        {
+          "chave": "tela",
+          "rotulo": "Tela",
+          "tipo": "texto"
+        },
+        {
+          "chave": "lojas_7d",
+          "rotulo": "Lojas 7d",
+          "tipo": "numero"
+        },
+        {
+          "chave": "lojas_periodo",
+          "rotulo": "Lojas 30d",
+          "tipo": "numero"
+        },
+        {
+          "chave": "visitas_periodo",
+          "rotulo": "Visitas 30d",
+          "tipo": "numero"
+        }
+      ],
+      "linhas": [
+        {
+          "tela": "pdv",
+          "lojas_7d": 2,
+          "lojas_periodo": 2,
+          "visitas_7d": 250,
+          "visitas_periodo": 735,
+          "lojas": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+              "nome": "Mercado Bela Vista"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+              "nome": "Papelaria Sol"
+            }
+          ]
+        },
+        {
+          "tela": "relatorios",
+          "lojas_7d": 1,
+          "lojas_periodo": 1,
+          "visitas_7d": 6,
+          "visitas_periodo": 22,
+          "lojas": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+              "nome": "Mercado Bela Vista"
+            }
+          ]
+        },
+        {
+          "tela": "etiquetas",
+          "lojas_7d": 0,
+          "lojas_periodo": 1,
+          "visitas_7d": 0,
+          "visitas_periodo": 3,
+          "lojas": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+              "nome": "Casa do Construtor"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "titulo": "Lojas por tela",
+      "colunas": [
+        {
+          "chave": "tela",
+          "rotulo": "Tela",
+          "tipo": "texto"
+        },
+        {
+          "chave": "nome",
+          "rotulo": "Loja",
+          "tipo": "loja"
+        },
+        {
+          "chave": "visitas",
+          "rotulo": "Visitas",
+          "tipo": "numero"
+        },
+        {
+          "chave": "ultima_visita",
+          "rotulo": "Última visita",
+          "tipo": "data"
+        }
+      ],
+      "linhas": [
+        {
+          "tela": "etiquetas",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+          "nome": "Casa do Construtor",
+          "telefone": "11999900003",
+          "visitas": 3,
+          "ultima_visita": "2026-10-02"
+        },
+        {
+          "tela": "pdv",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Mercado Bela Vista",
+          "telefone": "11999900002",
+          "visitas": 640,
+          "ultima_visita": "2026-10-13"
+        },
+        {
+          "tela": "pdv",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+          "nome": "Papelaria Sol",
+          "telefone": "11999900008",
+          "visitas": 95,
+          "ultima_visita": "2026-10-12"
+        },
+        {
+          "tela": "relatorios",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Mercado Bela Vista",
+          "telefone": "11999900002",
+          "visitas": 22,
+          "ultima_visita": "2026-10-12"
+        }
+      ]
+    }
+  ],
+  "series": [
+    {
+      "titulo": "Lojas por tela · 30 dias",
+      "tipo": "barras_h",
+      "pontos": [
+        {
+          "rotulo": "pdv",
+          "valor": 2,
+          "visitas": 735
+        },
+        {
+          "rotulo": "relatorios",
+          "valor": 1,
+          "visitas": 22
+        },
+        {
+          "rotulo": "etiquetas",
+          "valor": 1,
+          "visitas": 3
+        }
+      ]
+    }
+  ],
+  "insight": null
+}

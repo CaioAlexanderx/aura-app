@@ -1,0 +1,108 @@
+{
+  "id": "pagantes_sem_venda",
+  "titulo": "Pagantes sem venda",
+  "periodo": 7,
+  "calculado_em": "2026-10-13T09:00:04.000Z",
+  "ao_vivo": false,
+  "valor": 2,
+  "unidade": "de 5, há mais de 7 dias",
+  "resumo": "1 nunca vendeu pelo Caixa",
+  "fonte": "companies, sales",
+  "indicadores": [
+    {
+      "rotulo": "Sem venda há mais de 7 dias",
+      "valor": 1,
+      "nota": null
+    },
+    {
+      "rotulo": "Nunca venderam",
+      "valor": 1,
+      "nota": "dojôs e federação não usam o Caixa"
+    },
+    {
+      "rotulo": "Anuais parados",
+      "valor": 1,
+      "nota": null
+    }
+  ],
+  "listas": [
+    {
+      "titulo": "Pagantes sem venda",
+      "colunas": [
+        {
+          "chave": "nome",
+          "rotulo": "Loja",
+          "tipo": "loja"
+        },
+        {
+          "chave": "plano",
+          "rotulo": "Plano",
+          "tipo": "texto"
+        },
+        {
+          "chave": "ciclo",
+          "rotulo": "Ciclo",
+          "tipo": "texto"
+        },
+        {
+          "chave": "ultima_venda_em",
+          "rotulo": "Última venda",
+          "tipo": "data"
+        },
+        {
+          "chave": "dias_sem_venda",
+          "rotulo": "Dias sem venda",
+          "tipo": "numero"
+        },
+        {
+          "chave": "vence_em",
+          "rotulo": "Vence",
+          "tipo": "data"
+        }
+      ],
+      "linhas": [
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+          "nome": "Loja Aurora",
+          "telefone": "11999900001",
+          "plano": "Negócio",
+          "ciclo": "Anual",
+          "ultima_venda_em": "2026-09-21",
+          "dias_sem_venda": 22,
+          "vence_em": "2026-10-14",
+          "eh_dojo": false
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000004",
+          "nome": "Dojô Central",
+          "telefone": null,
+          "plano": "Essencial",
+          "ciclo": "Mensal",
+          "ultima_venda_em": null,
+          "dias_sem_venda": null,
+          "vence_em": null,
+          "eh_dojo": true
+        }
+      ]
+    }
+  ],
+  "series": [
+    {
+      "titulo": "Dias desde a última venda",
+      "tipo": "barras_h",
+      "pontos": [
+        {
+          "rotulo": "Loja Aurora",
+          "valor": 22,
+          "texto": "22 d"
+        },
+        {
+          "rotulo": "Dojô Central",
+          "valor": null,
+          "texto": "nunca"
+        }
+      ]
+    }
+  ],
+  "insight": "Loja Aurora: anual sem uso. É o churn que dá para evitar antes da renovação."
+}

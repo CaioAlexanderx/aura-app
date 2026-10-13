@@ -1,0 +1,199 @@
+{
+  "id": "frentes",
+  "titulo": "Frentes",
+  "periodo": 30,
+  "calculado_em": "2026-10-13T09:00:04.000Z",
+  "ao_vivo": false,
+  "valor": 2,
+  "unidade": "contas sem frente atribuída",
+  "resumo": "Studio 1 · Varejo 1 · Matcon 1 · Karatê 1 · Ótica 1 · Assistência 1",
+  "fonte": "companies (segment, vertical)",
+  "indicadores": [
+    {
+      "rotulo": "Sem frente",
+      "valor": 2,
+      "nota": "1 pagantes · 1 trials"
+    },
+    {
+      "rotulo": "Frentes com conta",
+      "valor": 6,
+      "nota": null
+    }
+  ],
+  "listas": [
+    {
+      "titulo": "Contas por frente",
+      "colunas": [
+        {
+          "chave": "nome",
+          "rotulo": "Loja",
+          "tipo": "loja"
+        },
+        {
+          "chave": "frente",
+          "rotulo": "Frente",
+          "tipo": "texto"
+        },
+        {
+          "chave": "situacao",
+          "rotulo": "Situação",
+          "tipo": "texto"
+        },
+        {
+          "chave": "plano",
+          "rotulo": "Plano",
+          "tipo": "texto"
+        }
+      ],
+      "linhas": [
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000007",
+          "nome": "Tech Assist",
+          "telefone": "11999900007",
+          "frente": "Assistência",
+          "situacao": "Trial",
+          "plano": "Negócio"
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000004",
+          "nome": "Dojô Central",
+          "telefone": null,
+          "frente": "Karatê",
+          "situacao": "Pagante",
+          "plano": "Essencial"
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+          "nome": "Casa do Construtor",
+          "telefone": "11999900003",
+          "frente": "Matcon",
+          "situacao": "Pagante",
+          "plano": "Essencial"
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000005",
+          "nome": "Ótica Visão",
+          "telefone": "11999900005",
+          "frente": "Ótica",
+          "situacao": "Trial",
+          "plano": "Negócio"
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000006",
+          "nome": "Bazar Novo",
+          "telefone": "11999900006",
+          "frente": "Sem frente",
+          "situacao": "Trial",
+          "plano": "Essencial"
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+          "nome": "Papelaria Sol",
+          "telefone": "11999900008",
+          "frente": "Sem frente",
+          "situacao": "Pagante",
+          "plano": "Negócio"
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+          "nome": "Loja Aurora",
+          "telefone": "11999900001",
+          "frente": "Studio",
+          "situacao": "Pagante",
+          "plano": "Negócio"
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Mercado Bela Vista",
+          "telefone": "11999900002",
+          "frente": "Varejo",
+          "situacao": "Pagante",
+          "plano": "Negócio"
+        }
+      ]
+    },
+    {
+      "titulo": "Sem frente atribuída",
+      "colunas": [
+        {
+          "chave": "nome",
+          "rotulo": "Loja",
+          "tipo": "loja"
+        },
+        {
+          "chave": "situacao",
+          "rotulo": "Situação",
+          "tipo": "texto"
+        },
+        {
+          "chave": "plano",
+          "rotulo": "Plano",
+          "tipo": "texto"
+        }
+      ],
+      "linhas": [
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000006",
+          "nome": "Bazar Novo",
+          "telefone": "11999900006",
+          "frente": "Sem frente",
+          "situacao": "Trial",
+          "plano": "Essencial"
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+          "nome": "Papelaria Sol",
+          "telefone": "11999900008",
+          "frente": "Sem frente",
+          "situacao": "Pagante",
+          "plano": "Negócio"
+        }
+      ]
+    }
+  ],
+  "series": [
+    {
+      "titulo": "Contas por frente",
+      "tipo": "barras_h",
+      "pontos": [
+        {
+          "rotulo": "Studio",
+          "valor": 1,
+          "pagantes": 1,
+          "trials": 0
+        },
+        {
+          "rotulo": "Varejo",
+          "valor": 1,
+          "pagantes": 1,
+          "trials": 0
+        },
+        {
+          "rotulo": "Matcon",
+          "valor": 1,
+          "pagantes": 1,
+          "trials": 0
+        },
+        {
+          "rotulo": "Karatê",
+          "valor": 1,
+          "pagantes": 1,
+          "trials": 0
+        },
+        {
+          "rotulo": "Ótica",
+          "valor": 1,
+          "pagantes": 0,
+          "trials": 1
+        },
+        {
+          "rotulo": "Assistência",
+          "valor": 1,
+          "pagantes": 0,
+          "trials": 1
+        }
+      ]
+    }
+  ],
+  "insight": "A frente só nasce no cadastro desde 06/10. As contas anteriores precisam de atribuição pela Gestão Aura."
+}

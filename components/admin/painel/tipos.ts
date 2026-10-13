@@ -1,23 +1,26 @@
 // ============================================================
-// Gestão Aura › Hoje — contrato de dados (13/10/2026)
+// Gestão Aura › Hoje — modelo de dados da TELA (13/10/2026)
 //
-// Espelha o que o backend vai devolver:
+// Estes tipos são o que os componentes consomem. O formato bruto da API
+// (Aura-backend #807) está em PainelApi* no services/adminApi.ts e é
+// traduzido por adaptadores.ts:
 //   GET /admin/painel/hoje                  → PainelHoje
 //   GET /admin/painel/blocos/:id            → BlocoDetalhe
 //   GET /admin/painel/clientes/:cid/ficha   → FichaCliente
-//   GET /admin/painel/layout                → { ativos: BlocoId[] }
+//   GET /admin/painel/layout                → { ativos: BlocoId[], ... }
 //
-// O que a tela precisa e o enunciado do contrato não fixou está marcado
-// como opcional (`legenda`, `destaques`, `formato` da lista), para a tela
-// continuar de pé se a API não mandar.
+// O que a tela precisa e a API não manda (`legenda`, `destaques`,
+// `formato` da lista) é derivado no adaptador ou fica opcional, para a
+// tela continuar de pé.
 // ============================================================
 
 export type BlocoId =
   | "cadastros" | "trials_degrau" | "pagantes" | "pagantes_sem_venda" | "receita"
   | "plataforma" | "fiscal" | "crediario" | "frentes" | "acesso"
   | "uso_funcionalidade" | "horario" | "adocao" | "telas_visitadas"
+  | "contatos"
   // Só no catálogo/mockup por enquanto — o backend ainda não calcula.
-  | "contatos" | "etiquetas" | "tempo_primeira_venda" | "aurinha" | "custos" | "nps";
+  | "etiquetas" | "tempo_primeira_venda" | "aurinha" | "custos" | "nps";
 
 // Estado de um número, de uma barra ou de uma etiqueta.
 export type Tom = "sobe" | "desce" | "alerta" | "neutro" | "teal" | "claro" | "mudo";
@@ -84,7 +87,15 @@ export type Indicador = { rotulo: string; valor: string; nota?: string; tom?: To
 export type Celula =
   | string
   | number
-  | { texto: string; tom?: Tom; etiqueta?: boolean; company_id?: string; verbo?: boolean; primario?: boolean };
+  | {
+      texto: string;
+      tom?: Tom;
+      etiqueta?: boolean;
+      company_id?: string;        // torna o nome clicável (abre a ficha)
+      telefone?: string | null;   // loja: mostra o telefone com link do WhatsApp
+      verbo?: boolean;
+      primario?: boolean;
+    };
 
 export type Lista = {
   titulo: string;
@@ -105,11 +116,15 @@ export type SerieDetalhe = {
   tipo: TipoGrafico;
   pontos: Ponto[];
   max?: number;
+  legenda?: [string, string];  // linha de 2 séries (valor, valor2)
 };
 
 export type Insight = { texto: string; tom: "neutro" | "alerta" | "risco" };
 
 export type BlocoDetalhe = {
+  periodo?: number;            // dias; o seletor 7/30/90 refaz a chamada
+  ao_vivo?: boolean;           // calculado na hora (período diferente do gravado)
+  calculado_em?: string;       // ISO
   indicadores: Indicador[];
   listas: Lista[];
   series: SerieDetalhe[];
@@ -121,6 +136,8 @@ export type BlocoDetalhe = {
 export type FichaCliente = {
   company_id: string;
   nome: string;
+  telefone?: string | null;    // verbo WhatsApp
+  alertas?: { tom: "neutro" | "alerta" | "risco"; texto: string }[];
   situacao: Variacao | null;
   resumo: string;
   indicadores: Indicador[];

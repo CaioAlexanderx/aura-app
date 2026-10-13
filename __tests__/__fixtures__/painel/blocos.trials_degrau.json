@@ -1,0 +1,309 @@
+{
+  "id": "trials_degrau",
+  "titulo": "Trials por degrau",
+  "periodo": 30,
+  "calculado_em": "2026-10-13T09:00:04.000Z",
+  "ao_vivo": false,
+  "valor": 4,
+  "unidade": "cadastros",
+  "resumo": "1 vencido · 1 assinou",
+  "fonte": "companies, products, sales, audit_log (checkout.viewed)",
+  "indicadores": [
+    {
+      "rotulo": "Cadastros",
+      "valor": 4,
+      "nota": "30 dias, sem dojôs"
+    },
+    {
+      "rotulo": "Trials vencidos",
+      "valor": 1,
+      "nota": null
+    },
+    {
+      "rotulo": "Venderam sem assinar",
+      "valor": 1,
+      "nota": "as ligações de hoje"
+    },
+    {
+      "rotulo": "Assinaram",
+      "valor": 1,
+      "nota": "25%"
+    }
+  ],
+  "listas": [
+    {
+      "titulo": "Só cadastro",
+      "colunas": [
+        {
+          "chave": "nome",
+          "rotulo": "Loja",
+          "tipo": "loja"
+        },
+        {
+          "chave": "produtos",
+          "rotulo": "Produtos",
+          "tipo": "numero"
+        },
+        {
+          "chave": "vendas",
+          "rotulo": "Vendas",
+          "tipo": "numero"
+        },
+        {
+          "chave": "vence_em",
+          "rotulo": "Vence",
+          "tipo": "data"
+        },
+        {
+          "chave": "vencido",
+          "rotulo": "Vencido",
+          "tipo": "booleano"
+        },
+        {
+          "chave": "plano",
+          "rotulo": "Plano",
+          "tipo": "texto"
+        }
+      ],
+      "linhas": []
+    },
+    {
+      "titulo": "Com produtos",
+      "colunas": [
+        {
+          "chave": "nome",
+          "rotulo": "Loja",
+          "tipo": "loja"
+        },
+        {
+          "chave": "produtos",
+          "rotulo": "Produtos",
+          "tipo": "numero"
+        },
+        {
+          "chave": "vendas",
+          "rotulo": "Vendas",
+          "tipo": "numero"
+        },
+        {
+          "chave": "vence_em",
+          "rotulo": "Vence",
+          "tipo": "data"
+        },
+        {
+          "chave": "vencido",
+          "rotulo": "Vencido",
+          "tipo": "booleano"
+        },
+        {
+          "chave": "plano",
+          "rotulo": "Plano",
+          "tipo": "texto"
+        }
+      ],
+      "linhas": [
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000006",
+          "nome": "Bazar Novo",
+          "telefone": "11999900006",
+          "degrau": "com_produtos",
+          "produtos": 12,
+          "vendas": 0,
+          "viu_checkout_em": null,
+          "criado_em": "2026-10-09",
+          "vence_em": "2026-10-16",
+          "vencido": false,
+          "plano": "Essencial",
+          "ciclo": null
+        }
+      ]
+    },
+    {
+      "titulo": "Venderam",
+      "colunas": [
+        {
+          "chave": "nome",
+          "rotulo": "Loja",
+          "tipo": "loja"
+        },
+        {
+          "chave": "produtos",
+          "rotulo": "Produtos",
+          "tipo": "numero"
+        },
+        {
+          "chave": "vendas",
+          "rotulo": "Vendas",
+          "tipo": "numero"
+        },
+        {
+          "chave": "vence_em",
+          "rotulo": "Vence",
+          "tipo": "data"
+        },
+        {
+          "chave": "vencido",
+          "rotulo": "Vencido",
+          "tipo": "booleano"
+        },
+        {
+          "chave": "plano",
+          "rotulo": "Plano",
+          "tipo": "texto"
+        }
+      ],
+      "linhas": [
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000005",
+          "nome": "Ótica Visão",
+          "telefone": "11999900005",
+          "degrau": "vendeu",
+          "produtos": 40,
+          "vendas": 3,
+          "viu_checkout_em": null,
+          "criado_em": "2026-10-06",
+          "vence_em": "2026-10-14",
+          "vencido": false,
+          "plano": "Negócio",
+          "ciclo": null
+        }
+      ]
+    },
+    {
+      "titulo": "Viram checkout",
+      "colunas": [
+        {
+          "chave": "nome",
+          "rotulo": "Loja",
+          "tipo": "loja"
+        },
+        {
+          "chave": "produtos",
+          "rotulo": "Produtos",
+          "tipo": "numero"
+        },
+        {
+          "chave": "vendas",
+          "rotulo": "Vendas",
+          "tipo": "numero"
+        },
+        {
+          "chave": "vence_em",
+          "rotulo": "Vence",
+          "tipo": "data"
+        },
+        {
+          "chave": "vencido",
+          "rotulo": "Vencido",
+          "tipo": "booleano"
+        },
+        {
+          "chave": "plano",
+          "rotulo": "Plano",
+          "tipo": "texto"
+        }
+      ],
+      "linhas": [
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000007",
+          "nome": "Tech Assist",
+          "telefone": "11999900007",
+          "degrau": "viu_checkout",
+          "produtos": 0,
+          "vendas": 0,
+          "viu_checkout_em": "2026-10-09T15:00:00.000Z",
+          "criado_em": "2026-10-01",
+          "vence_em": "2026-10-08",
+          "vencido": true,
+          "plano": "Negócio",
+          "ciclo": null
+        }
+      ]
+    },
+    {
+      "titulo": "Assinaram",
+      "colunas": [
+        {
+          "chave": "nome",
+          "rotulo": "Loja",
+          "tipo": "loja"
+        },
+        {
+          "chave": "produtos",
+          "rotulo": "Produtos",
+          "tipo": "numero"
+        },
+        {
+          "chave": "vendas",
+          "rotulo": "Vendas",
+          "tipo": "numero"
+        },
+        {
+          "chave": "vence_em",
+          "rotulo": "Vence",
+          "tipo": "data"
+        },
+        {
+          "chave": "vencido",
+          "rotulo": "Vencido",
+          "tipo": "booleano"
+        },
+        {
+          "chave": "plano",
+          "rotulo": "Plano",
+          "tipo": "texto"
+        }
+      ],
+      "linhas": [
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+          "nome": "Papelaria Sol",
+          "telefone": "11999900008",
+          "degrau": "assinou",
+          "produtos": 85,
+          "vendas": 31,
+          "viu_checkout_em": null,
+          "criado_em": "2026-09-20",
+          "vence_em": null,
+          "vencido": false,
+          "plano": "Negócio",
+          "ciclo": "Mensal"
+        }
+      ]
+    }
+  ],
+  "series": [
+    {
+      "titulo": "Funil",
+      "tipo": "funil",
+      "pontos": [
+        {
+          "rotulo": "Cadastraram",
+          "valor": 4,
+          "pct": 100
+        },
+        {
+          "rotulo": "Com produtos",
+          "valor": 3,
+          "pct": 75
+        },
+        {
+          "rotulo": "Venderam",
+          "valor": 2,
+          "pct": 50
+        },
+        {
+          "rotulo": "Viram checkout",
+          "valor": 1,
+          "pct": 25
+        },
+        {
+          "rotulo": "Assinaram",
+          "valor": 1,
+          "pct": 25
+        }
+      ]
+    }
+  ],
+  "insight": "0 de 4 nunca cadastraram um produto. 1 conta vendeu e ainda não assinou: são as ligações de hoje."
+}

@@ -1,0 +1,191 @@
+{
+  "id": "pagantes",
+  "titulo": "Pagantes",
+  "periodo": 30,
+  "calculado_em": "2026-10-13T09:00:04.000Z",
+  "ao_vivo": false,
+  "valor": 5,
+  "unidade": "ativos",
+  "resumo": "Vencem esta semana: Loja Aurora, Papelaria Sol",
+  "fonte": "companies, sales, audit_log",
+  "indicadores": [
+    {
+      "rotulo": "Pagantes",
+      "valor": 5,
+      "nota": null
+    },
+    {
+      "rotulo": "Anuais",
+      "valor": 2,
+      "nota": null
+    },
+    {
+      "rotulo": "Vencem em 7 dias",
+      "valor": 2,
+      "nota": null
+    },
+    {
+      "rotulo": "Sem cobrança registrada",
+      "valor": 1,
+      "nota": "sem assinatura na Asaas"
+    }
+  ],
+  "listas": [
+    {
+      "titulo": "Pagantes",
+      "colunas": [
+        {
+          "chave": "nome",
+          "rotulo": "Loja",
+          "tipo": "loja"
+        },
+        {
+          "chave": "plano",
+          "rotulo": "Plano",
+          "tipo": "texto"
+        },
+        {
+          "chave": "ciclo",
+          "rotulo": "Ciclo",
+          "tipo": "texto"
+        },
+        {
+          "chave": "vence_em",
+          "rotulo": "Vence",
+          "tipo": "data"
+        },
+        {
+          "chave": "vendas",
+          "rotulo": "Vendas 30d",
+          "tipo": "numero"
+        },
+        {
+          "chave": "dias_ativos",
+          "rotulo": "Dias ativos",
+          "tipo": "numero"
+        }
+      ],
+      "linhas": [
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+          "nome": "Casa do Construtor",
+          "telefone": "11999900003",
+          "plano": "Essencial",
+          "ciclo": "Anual",
+          "vence_em": "2026-09-15",
+          "vencimento_suspeito": true,
+          "vendas": 18,
+          "dias_ativos": 14,
+          "tem_cobranca": true,
+          "eh_dojo": false
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+          "nome": "Loja Aurora",
+          "telefone": "11999900001",
+          "plano": "Negócio",
+          "ciclo": "Anual",
+          "vence_em": "2026-10-14",
+          "vencimento_suspeito": false,
+          "vendas": 4,
+          "dias_ativos": 3,
+          "tem_cobranca": true,
+          "eh_dojo": false
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+          "nome": "Papelaria Sol",
+          "telefone": "11999900008",
+          "plano": "Negócio",
+          "ciclo": "Mensal",
+          "vence_em": "2026-10-20",
+          "vencimento_suspeito": false,
+          "vendas": 31,
+          "dias_ativos": 11,
+          "tem_cobranca": true,
+          "eh_dojo": false
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Mercado Bela Vista",
+          "telefone": "11999900002",
+          "plano": "Negócio",
+          "ciclo": "Mensal",
+          "vence_em": "2026-10-25",
+          "vencimento_suspeito": false,
+          "vendas": 120,
+          "dias_ativos": 26,
+          "tem_cobranca": true,
+          "eh_dojo": false
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000004",
+          "nome": "Dojô Central",
+          "telefone": null,
+          "plano": "Essencial",
+          "ciclo": "Mensal",
+          "vence_em": null,
+          "vencimento_suspeito": false,
+          "vendas": 0,
+          "dias_ativos": 0,
+          "tem_cobranca": false,
+          "eh_dojo": true
+        }
+      ]
+    },
+    {
+      "titulo": "Sem cobrança registrada",
+      "colunas": [
+        {
+          "chave": "nome",
+          "rotulo": "Loja",
+          "tipo": "loja"
+        },
+        {
+          "chave": "plano",
+          "rotulo": "Plano",
+          "tipo": "texto"
+        },
+        {
+          "chave": "ciclo",
+          "rotulo": "Ciclo",
+          "tipo": "texto"
+        }
+      ],
+      "linhas": [
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000004",
+          "nome": "Dojô Central",
+          "telefone": null,
+          "plano": "Essencial",
+          "ciclo": "Mensal",
+          "vence_em": null,
+          "vencimento_suspeito": false,
+          "vendas": 0,
+          "dias_ativos": 0,
+          "tem_cobranca": false,
+          "eh_dojo": true
+        }
+      ]
+    }
+  ],
+  "series": [
+    {
+      "titulo": "Por plano",
+      "tipo": "rosca",
+      "pontos": [
+        {
+          "rotulo": "Negócio",
+          "valor": 3,
+          "anuais": 1
+        },
+        {
+          "rotulo": "Essencial",
+          "valor": 2,
+          "anuais": 1
+        }
+      ]
+    }
+  ],
+  "insight": "1 pagante está com o próximo vencimento no passado (Casa do Construtor): a data gravada não confere com a Asaas."
+}

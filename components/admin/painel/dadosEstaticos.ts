@@ -2,10 +2,10 @@
 // Gestão Aura › Hoje — dados estáticos (banco de 13/10/2026)
 //
 // Mesmos números do mockup aprovado (docs/mockups/gestao-aura-painel.html),
-// no formato de components/admin/painel/tipos.ts. Somem quando
-// usePainelHoje passar a chamar a API.
+// no modelo da tela (tipos.ts). Só entram como fallback de desenvolvimento,
+// atrás de PAINEL_FALLBACK_DEV em usePainelHoje.ts — nunca em produção.
 // ============================================================
-import type { BlocoDetalhe, BlocoId, FichaCliente, ItemCatalogo, PainelHoje, Ponto } from "./tipos";
+import type { BlocoDetalhe, BlocoId, FichaCliente, PainelHoje, Ponto } from "./tipos";
 
 function pontos(rotulos: string[], valores: number[]): Ponto[] {
   return valores.map(function(v, i) { return { rotulo: rotulos[i] || "", valor: v }; });
@@ -423,30 +423,5 @@ export var FICHAS: Record<string, FichaCliente> = {
   },
 };
 
-// ── Catálogo (lista fixa por enquanto) ──────────────────────
-
-export var CATALOGO: ItemCatalogo[] = [
-  { id: "trials_degrau", titulo: "Trials por degrau", fonte: "clients-360" },
-  { id: "receita", titulo: "Receita", fonte: "Asaas + OFX" },
-  { id: "cadastros", titulo: "Cadastros", fonte: "companies por semana" },
-  { id: "pagantes", titulo: "Pagantes", fonte: "plano e ciclo" },
-  { id: "pagantes_sem_venda", titulo: "Pagantes sem venda", fonte: "sales por loja" },
-  { id: "acesso", titulo: "Acesso", fonte: "audit_log login" },
-  { id: "uso_funcionalidade", titulo: "Uso por funcionalidade", fonte: "tabelas por módulo" },
-  { id: "horario", titulo: "Horário de uso", fonte: "sales por hora" },
-  { id: "plataforma", titulo: "Plataforma", fonte: "sales por dia + canary" },
-  { id: "adocao", titulo: "Adoção por recurso", fonte: "pagantes por módulo" },
-  { id: "fiscal", titulo: "Fiscal", fonte: "NFC-e emitidas e rejeitadas" },
-  { id: "crediario", titulo: "Crediário", fonte: "parcelas vencidas" },
-  { id: "contatos", titulo: "Contatos", fonte: "formulário do site" },
-  { id: "frentes", titulo: "Frentes", fonte: "companies por frente" },
-  { id: "telas_visitadas", titulo: "Telas visitadas", fonte: "precisa de evento de navegação no app", aviso: true },
-  { id: "etiquetas", titulo: "Etiquetas impressas", fonte: "precisa de contador", aviso: true },
-  { id: "tempo_primeira_venda", titulo: "Tempo até a 1ª venda", fonte: "sales, companies" },
-  { id: "aurinha", titulo: "Aurinha", fonte: "depois do piloto" },
-  { id: "custos", titulo: "Custos", fonte: "lançamento mensal" },
-  { id: "nps", titulo: "NPS", fonte: "sem pesquisa no produto", aviso: true, em_construcao: true },
-];
-
-// Layout padrão (GET /admin/painel/layout): tudo que tem número hoje.
+// Layout padrão: tudo que tem número hoje (o catálogo mora em blocos.ts).
 export var LAYOUT_PADRAO: BlocoId[] = PAINEL_HOJE.blocos.map(function(b) { return b.id; });

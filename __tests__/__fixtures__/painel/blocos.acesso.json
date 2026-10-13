@@ -1,0 +1,219 @@
+{
+  "id": "acesso",
+  "titulo": "Acesso",
+  "periodo": 30,
+  "calculado_em": "2026-10-13T09:00:04.000Z",
+  "ao_vivo": false,
+  "valor": 4,
+  "unidade": "de 5 pagantes entraram em 30 dias",
+  "resumo": "1 pagante nunca entrou · 5 lojas ativas na semana",
+  "fonte": "audit_log (action 'login' e 'switch_company')",
+  "indicadores": [
+    {
+      "rotulo": "Logins · 30d",
+      "valor": 117,
+      "nota": "6 lojas"
+    },
+    {
+      "rotulo": "Dias ativos · mediana",
+      "valor": 11,
+      "nota": "pagantes, de 30"
+    },
+    {
+      "rotulo": "Login falhou",
+      "valor": 9,
+      "nota": "30 dias"
+    },
+    {
+      "rotulo": "Trocas de loja",
+      "valor": 40,
+      "nota": "grupos multi-CNPJ"
+    }
+  ],
+  "listas": [
+    {
+      "titulo": "Dias ativos por pagante · 30 dias",
+      "colunas": [
+        {
+          "chave": "nome",
+          "rotulo": "Loja",
+          "tipo": "loja"
+        },
+        {
+          "chave": "plano",
+          "rotulo": "Plano",
+          "tipo": "texto"
+        },
+        {
+          "chave": "dias_ativos",
+          "rotulo": "Dias ativos",
+          "tipo": "numero"
+        },
+        {
+          "chave": "ultimo_login",
+          "rotulo": "Último login",
+          "tipo": "data"
+        }
+      ],
+      "linhas": [
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Mercado Bela Vista",
+          "telefone": "11999900002",
+          "plano": "Negócio",
+          "situacao": "Pagante",
+          "dias_ativos": 26,
+          "ultimo_login": "2026-10-12",
+          "eh_dojo": false
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+          "nome": "Casa do Construtor",
+          "telefone": "11999900003",
+          "plano": "Essencial",
+          "situacao": "Pagante",
+          "dias_ativos": 14,
+          "ultimo_login": "2026-10-12",
+          "eh_dojo": false
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+          "nome": "Papelaria Sol",
+          "telefone": "11999900008",
+          "plano": "Negócio",
+          "situacao": "Pagante",
+          "dias_ativos": 11,
+          "ultimo_login": "2026-10-12",
+          "eh_dojo": false
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+          "nome": "Loja Aurora",
+          "telefone": "11999900001",
+          "plano": "Negócio",
+          "situacao": "Pagante",
+          "dias_ativos": 3,
+          "ultimo_login": "2026-10-12",
+          "eh_dojo": false
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000004",
+          "nome": "Dojô Central",
+          "telefone": null,
+          "plano": "Essencial",
+          "situacao": "Pagante",
+          "dias_ativos": 0,
+          "ultimo_login": null,
+          "eh_dojo": true
+        }
+      ]
+    },
+    {
+      "titulo": "Quem nunca entrou",
+      "colunas": [
+        {
+          "chave": "nome",
+          "rotulo": "Loja",
+          "tipo": "loja"
+        },
+        {
+          "chave": "situacao",
+          "rotulo": "Situação",
+          "tipo": "texto"
+        },
+        {
+          "chave": "plano",
+          "rotulo": "Plano",
+          "tipo": "texto"
+        }
+      ],
+      "linhas": [
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000004",
+          "nome": "Dojô Central",
+          "telefone": null,
+          "plano": "Essencial",
+          "situacao": "Pagante",
+          "dias_ativos": 0,
+          "ultimo_login": null,
+          "eh_dojo": true
+        }
+      ]
+    }
+  ],
+  "series": [
+    {
+      "titulo": "Lojas com login por semana",
+      "tipo": "linha",
+      "pontos": [
+        {
+          "rotulo": "24/08",
+          "valor": 0,
+          "pagantes": 0
+        },
+        {
+          "rotulo": "31/08",
+          "valor": 0,
+          "pagantes": 0
+        },
+        {
+          "rotulo": "07/09",
+          "valor": 0,
+          "pagantes": 0
+        },
+        {
+          "rotulo": "14/09",
+          "valor": 0,
+          "pagantes": 0
+        },
+        {
+          "rotulo": "21/09",
+          "valor": 0,
+          "pagantes": 0
+        },
+        {
+          "rotulo": "28/09",
+          "valor": 3,
+          "pagantes": 3
+        },
+        {
+          "rotulo": "05/10",
+          "valor": 4,
+          "pagantes": 3
+        },
+        {
+          "rotulo": "12/10",
+          "valor": 5,
+          "pagantes": 3
+        }
+      ]
+    },
+    {
+      "titulo": "Dias ativos por pagante · 30 dias",
+      "tipo": "barras_h",
+      "pontos": [
+        {
+          "rotulo": "Mercado Bela Vista",
+          "valor": 26
+        },
+        {
+          "rotulo": "Casa do Construtor",
+          "valor": 14
+        },
+        {
+          "rotulo": "Papelaria Sol",
+          "valor": 11
+        },
+        {
+          "rotulo": "Loja Aurora",
+          "valor": 3
+        },
+        {
+          "rotulo": "Dojô Central",
+          "valor": 0
+        }
+      ]
+    }
+  ],
+  "insight": "Dojô Central: pagando sem nunca ter entrado."
+}
