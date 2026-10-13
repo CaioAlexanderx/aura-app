@@ -279,7 +279,7 @@ function CaixaScreenInner() {
             className={IS_WEB ? "caixa-scrollable" : undefined}
           >
             <View style={IS_WEB && vp.xxl ? ({ maxWidth: 1700, alignSelf: "center", width: "100%" } as any) : null}>
-              {mostrarAvisoAssine && <AvisoAssine trialEndsAt={auth.trialEndsAt} />}
+              {mostrarAvisoAssine && <AvisoAssine trialEndsAt={auth.trialEndsAt} companyId={auth.company?.id} />}
 
               {/* Cabeçalho: a logo do lojista abre a tela, em 48px. Sem logo
                   (ou plano sem direito a ela) entra o tile violeta com a
@@ -411,7 +411,7 @@ function CaixaScreenInner() {
         style={{ flex: 1, backgroundColor: "transparent" }}
         contentContainerStyle={{ padding: 16, paddingBottom: 48 }}
       >
-        {mostrarAvisoAssine && <AvisoAssine trialEndsAt={auth.trialEndsAt} compact />}
+        {mostrarAvisoAssine && <AvisoAssine trialEndsAt={auth.trialEndsAt} companyId={auth.company?.id} compact />}
         <View style={s.topRowMobile}>
           <MerchantLogo size={44} />
           <View style={{ flex: 1, minWidth: 0 }}>

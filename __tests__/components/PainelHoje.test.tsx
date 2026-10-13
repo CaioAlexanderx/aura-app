@@ -335,7 +335,7 @@ describe("Gestão Aura › Hoje", () => {
     tree.unmount();
   });
 
-  it("ficha: WhatsApp abre wa.me, Abrir cliente leva à lista, Registrar contato avisa 'em breve'", async () => {
+  it("ficha: WhatsApp abre wa.me, Abrir cliente leva à lista da loja, Registrar contato avisa 'em breve'", async () => {
     const tree = await mount();
     await press(tree, "alerta-0");
     expect(text(tree)).toContain("Loja Aurora vence amanhã");   // alerta da própria ficha
@@ -347,7 +347,8 @@ describe("Gestão Aura › Hoje", () => {
     expect((toast.info as jest.Mock).mock.calls.pop()[0]).toContain("em breve");
 
     await press(tree, "ficha-abrir-cliente");
-    expect(mockPush).toHaveBeenCalledWith("/gestao-aura-clientes");
+    // Com a loja na rota: a tela de Clientes abre o painel dela (?loja=).
+    expect(mockPush).toHaveBeenCalledWith("/gestao-aura-clientes?loja=aaaaaaaa-0000-4000-8000-000000000001");
     expect(byTestId(tree, "ficha-modal")).toHaveLength(0);
     tree.unmount();
   });

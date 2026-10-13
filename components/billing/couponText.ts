@@ -58,6 +58,21 @@ export function describeCoupon(c: ValidateCouponResponse, totalPrice: number): C
   var recurring = c.recurring_value ?? totalPrice;
   var mo = function (v: number) { return fmtBRL(v) + "/mês"; };
 
+  // 13/10/2026 — PRIMEIROMES digitado à mão: trial_days é só a conta de hoje
+  // até a data de calendário, então falar em "49 dias grátis" confunde.
+  if (kind === "trial" && c.campaign) {
+    return {
+      kind: kind,
+      toast: "Promoção aplicada! 1ª cobrança em " + fmtDateBR(c.first_charge_date),
+      title: "Promoção " + code + " · sem cobrança hoje",
+      subtitle: "1ª cobrança em " + fmtDateBR(c.first_charge_date),
+      summaryLabel: null,
+      savings: 0,
+      chargedNow: 0,
+      afterNote: "Depois: " + mo(recurring) + " a partir de " + fmtDateBR(c.first_charge_date),
+    };
+  }
+
   if (kind === "trial") {
     var days = c.trial_days || 0;
     return {

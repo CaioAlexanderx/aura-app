@@ -311,8 +311,11 @@ function PainelConteudo(props: { dados: Dados; painel: PainelHojeDados }) {
         onClose={function() { setFichaDe(null); }}
         onVerbo={aoVerbo}
         onAviso={function(mensagem) { toast.info(mensagem); }}
-        // A rota de Clientes ainda não aceita parâmetro: abre a lista.
-        onAbrirCliente={function() { setFichaDe(null); router.push("/gestao-aura-clientes" as any); }}
+        // Abre a lista de Clientes já com o painel desta loja (?loja=).
+        onAbrirCliente={function(companyId) {
+          setFichaDe(null);
+          router.push(("/gestao-aura-clientes?loja=" + encodeURIComponent(companyId)) as any);
+        }}
       />
     </View>
   );

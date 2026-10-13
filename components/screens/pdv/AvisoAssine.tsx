@@ -5,21 +5,30 @@
 // Este é o único lugar da tela que fala de assinatura: uma faixa no topo com
 // o motivo e um botão que leva ao checkout. Nada de botão desabilitado nem
 // isca espalhada pela tela (premissa de 16/09).
+//
+// 13/10/2026: com a promoção do primeiro mês ativa (GET /billing/promocao-ativa,
+// elegivel:true) a faixa ganha uma linha "Assine até 31/10 sem pagar novembro".
+// A consulta é a mesma do checkout, com cache em módulo (hooks/usePromocaoAtiva).
 // ============================================================
 import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
 import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { ROTA_CHECKOUT, textoDoAviso } from "@/utils/muroDeAssinatura";
+import { usePromocaoAtiva } from "@/hooks/usePromocaoAtiva";
+import { fraseDaFaixa } from "@/utils/promocaoPrimeiroMes";
 
 type Props = {
   trialEndsAt?: string | null;
+  /** Empresa atual: com ela a faixa consulta a promoção do primeiro mês. */
+  companyId?: string | null;
   /** Mobile: título e botão numa coluna. */
   compact?: boolean;
 };
 
-export function AvisoAssine({ trialEndsAt, compact = false }: Props) {
+export function AvisoAssine({ trialEndsAt, companyId, compact = false }: Props) {
   const { titulo, corpo } = textoDoAviso(trialEndsAt);
+  const promocao = usePromocaoAtiva(companyId);
   return (
     <View testID="caixa-aviso-assine" style={[s.faixa, compact && s.faixaCompact]} accessibilityRole="alert">
       <View style={s.icone}>
@@ -28,6 +37,7 @@ export function AvisoAssine({ trialEndsAt, compact = false }: Props) {
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={s.titulo}>{titulo}</Text>
         <Text style={s.corpo}>{corpo}</Text>
+        {promocao && <Text testID="caixa-aviso-promocao" style={s.promo}>{fraseDaFaixa(promocao)}</Text>}
       </View>
       <Pressable
         testID="caixa-aviso-assinar"
@@ -63,6 +73,7 @@ const s = StyleSheet.create({
   },
   titulo: { fontSize: 13, fontWeight: "700", color: Colors.ink },
   corpo: { fontSize: 12, color: Colors.ink2, marginTop: 2, lineHeight: 16 },
+  promo: { fontSize: 12, fontWeight: "700", color: Colors.violet3, marginTop: 4, lineHeight: 16 },
   botao: {
     paddingHorizontal: 14, height: 36,
     borderRadius: 10,
