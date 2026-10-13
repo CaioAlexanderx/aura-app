@@ -1,0 +1,237 @@
+{
+  "hoje": "2026-10-13",
+  "ate": "2026-11-30",
+  "janela_dias": 14,
+  "janela": {
+    "de": "2026-09-29",
+    "ate": "2026-10-12"
+  },
+  "folga_pct": 20,
+  "escopo": "loja",
+  "empresas": [
+    "aaaaaaaa-0000-4000-8000-000000000001"
+  ],
+  "itens": [
+    {
+      "product_id": "cccccccc-0000-4000-8000-000000000001",
+      "variant_id": "dddddddd-0000-4000-8000-000000000001",
+      "nome": "Vestido Midi Canelado",
+      "variante": "Preto / M",
+      "codigo": "7890000000011",
+      "unidade": "un",
+      "loja": {
+        "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+        "nome": "Boutique Aurora — Matriz"
+      },
+      "compartilhado": false,
+      "estoque": 10,
+      "preco": 129.9,
+      "vendas_na_janela": 24,
+      "dias_com_loja_aberta": 12,
+      "ultima_venda": "2026-10-12T19:10:00.000Z",
+      "ritmo_diario": 2,
+      "dias_ate_acabar": 4,
+      "data_prevista": "2026-10-17",
+      "faltara": true,
+      "demanda_ate_a_data": 84,
+      "unidades_faltantes": 74,
+      "sugestao_compra": 91,
+      "valor_em_risco": 9612.6
+    },
+    {
+      "product_id": "cccccccc-0000-4000-8000-000000000004",
+      "variant_id": null,
+      "nome": "Meia Cano Curto Kit 3 Pares",
+      "variante": null,
+      "codigo": "7890000000042",
+      "unidade": "un",
+      "loja": {
+        "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+        "nome": "Boutique Aurora — Filial"
+      },
+      "compartilhado": true,
+      "estoque": 30,
+      "preco": 24.9,
+      "vendas_na_janela": 16,
+      "dias_com_loja_aberta": 14,
+      "ultima_venda": "2026-10-12T19:10:00.000Z",
+      "ritmo_diario": 1.14,
+      "dias_ate_acabar": 26,
+      "data_prevista": "2026-11-08",
+      "faltara": true,
+      "demanda_ate_a_data": 56,
+      "unidades_faltantes": 26,
+      "sugestao_compra": 38,
+      "valor_em_risco": 647.4
+    },
+    {
+      "product_id": "cccccccc-0000-4000-8000-000000000002",
+      "variant_id": null,
+      "nome": "Cinto Couro Fivela Dourada",
+      "variante": null,
+      "codigo": "CCF-01",
+      "unidade": "un",
+      "loja": {
+        "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+        "nome": "Boutique Aurora — Matriz"
+      },
+      "compartilhado": false,
+      "estoque": 60,
+      "preco": 79.9,
+      "vendas_na_janela": 24,
+      "dias_com_loja_aberta": 12,
+      "ultima_venda": "2026-10-12T19:10:00.000Z",
+      "ritmo_diario": 2,
+      "dias_ate_acabar": 34,
+      "data_prevista": "2026-11-16",
+      "faltara": true,
+      "demanda_ate_a_data": 84,
+      "unidades_faltantes": 24,
+      "sugestao_compra": 41,
+      "valor_em_risco": 1917.6
+    },
+    {
+      "product_id": "cccccccc-0000-4000-8000-000000000003",
+      "variant_id": "dddddddd-0000-4000-8000-000000000003",
+      "nome": "Calça Jeans Wide Leg",
+      "variante": "40",
+      "codigo": "7890000000035",
+      "unidade": "un",
+      "loja": {
+        "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+        "nome": "Boutique Aurora — Matriz"
+      },
+      "compartilhado": false,
+      "estoque": 40,
+      "preco": 159.9,
+      "vendas_na_janela": 6,
+      "dias_com_loja_aberta": 12,
+      "ultima_venda": "2026-10-12T19:10:00.000Z",
+      "ritmo_diario": 0.5,
+      "dias_ate_acabar": 92,
+      "data_prevista": "2027-01-13",
+      "faltara": false,
+      "demanda_ate_a_data": 21,
+      "unidades_faltantes": 0,
+      "sugestao_compra": 0,
+      "valor_em_risco": 0
+    }
+  ],
+  "zerados": [
+    {
+      "product_id": "cccccccc-0000-4000-8000-000000000005",
+      "variant_id": "dddddddd-0000-4000-8000-000000000005",
+      "nome": "Blusa Básica Algodão",
+      "variante": "Branco / P",
+      "codigo": "BBA-BRANCO-P",
+      "unidade": "un",
+      "loja": {
+        "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+        "nome": "Boutique Aurora — Matriz"
+      },
+      "compartilhado": false,
+      "estoque": 0,
+      "preco": 59.9,
+      "vendas_na_janela": 12,
+      "dias_com_loja_aberta": 12,
+      "ultima_venda": "2026-10-12T19:10:00.000Z",
+      "ritmo_diario": 1,
+      "dias_ate_acabar": 0,
+      "data_prevista": "2026-10-13",
+      "faltara": true,
+      "demanda_ate_a_data": 42,
+      "unidades_faltantes": 42,
+      "sugestao_compra": 51,
+      "valor_em_risco": 2515.8
+    }
+  ],
+  "resumo": {
+    "itens_com_venda": 5,
+    "itens_em_risco": 3,
+    "unidades_faltantes": 124,
+    "valor_em_risco": 12177.6,
+    "sugestao_total": 170,
+    "primeira_ruptura": "2026-10-17",
+    "zerados": 1,
+    "top": [
+      {
+        "product_id": "cccccccc-0000-4000-8000-000000000001",
+        "variant_id": "dddddddd-0000-4000-8000-000000000001",
+        "nome": "Vestido Midi Canelado",
+        "variante": "Preto / M",
+        "codigo": "7890000000011",
+        "unidade": "un",
+        "loja": {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+          "nome": "Boutique Aurora — Matriz"
+        },
+        "compartilhado": false,
+        "estoque": 10,
+        "preco": 129.9,
+        "vendas_na_janela": 24,
+        "dias_com_loja_aberta": 12,
+        "ultima_venda": "2026-10-12T19:10:00.000Z",
+        "ritmo_diario": 2,
+        "dias_ate_acabar": 4,
+        "data_prevista": "2026-10-17",
+        "faltara": true,
+        "demanda_ate_a_data": 84,
+        "unidades_faltantes": 74,
+        "sugestao_compra": 91,
+        "valor_em_risco": 9612.6
+      },
+      {
+        "product_id": "cccccccc-0000-4000-8000-000000000002",
+        "variant_id": null,
+        "nome": "Cinto Couro Fivela Dourada",
+        "variante": null,
+        "codigo": "CCF-01",
+        "unidade": "un",
+        "loja": {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+          "nome": "Boutique Aurora — Matriz"
+        },
+        "compartilhado": false,
+        "estoque": 60,
+        "preco": 79.9,
+        "vendas_na_janela": 24,
+        "dias_com_loja_aberta": 12,
+        "ultima_venda": "2026-10-12T19:10:00.000Z",
+        "ritmo_diario": 2,
+        "dias_ate_acabar": 34,
+        "data_prevista": "2026-11-16",
+        "faltara": true,
+        "demanda_ate_a_data": 84,
+        "unidades_faltantes": 24,
+        "sugestao_compra": 41,
+        "valor_em_risco": 1917.6
+      },
+      {
+        "product_id": "cccccccc-0000-4000-8000-000000000004",
+        "variant_id": null,
+        "nome": "Meia Cano Curto Kit 3 Pares",
+        "variante": null,
+        "codigo": "7890000000042",
+        "unidade": "un",
+        "loja": {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Boutique Aurora — Filial"
+        },
+        "compartilhado": true,
+        "estoque": 30,
+        "preco": 24.9,
+        "vendas_na_janela": 16,
+        "dias_com_loja_aberta": 14,
+        "ultima_venda": "2026-10-12T19:10:00.000Z",
+        "ritmo_diario": 1.14,
+        "dias_ate_acabar": 26,
+        "data_prevista": "2026-11-08",
+        "faltara": true,
+        "demanda_ate_a_data": 56,
+        "unidades_faltantes": 26,
+        "sugestao_compra": 38,
+        "valor_em_risco": 647.4
+      }
+    ]
+  }
+}

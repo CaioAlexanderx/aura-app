@@ -16,12 +16,13 @@ import { useVisibleModules, MODULE_PLAN_MAP, PLAN_LEVEL } from "@/hooks/useVisib
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { useSidebarLayout, applyLayoutToNav } from "@/hooks/useSidebarLayout";
 import { moduloEstaOculto } from "@/constants/modulosOcultos";
+import { useBlackFridayLiberada } from "@/hooks/useBlackFridayLiberada";
 import { SidebarEditor } from "@/components/SidebarEditor";
 import { CompanySwitcher } from "@/components/CompanySwitcher"; // M1-06: Multi-CNPJ switcher
 import { NotificationBell } from "@/components/NotificationBell";
 
 const LOGO_SVG="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
-type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string; mod?: string; staff?: boolean; osToggle?: boolean; oticaToggle?: boolean; matconToggle?: boolean };
+type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string; mod?: string; staff?: boolean; osToggle?: boolean; oticaToggle?: boolean; matconToggle?: boolean; temporada?: boolean };
 type NavSection = { s: string; i: NavItem[] };
 
 // ============================================================
@@ -72,7 +73,12 @@ const VERTICAL_NAV: Record<string, { label: string; icon: string }> = {
 };
 
 const NAV: NavSection[] = [
-  { s: "Principal", i: [{ r: "/", l: "Painel", ic: "dashboard", mod: "painel" },{ r: "/financeiro", l: "Financeiro", ic: "wallet", mod: "financeiro" },{ r: "/nfe", l: "NF-e", ic: "file_text", mod: "nfe" }]},
+  // 13/10/2026 — "Black Friday" logo abaixo de Painel: pagina da temporada de
+  // fim de ano (o que vai faltar, assento, vale-troca, placar). Chave PROPRIA
+  // "black_friday" (regra 3, ja em MODULE_PLAN_MAP/PERM_TO_MODULES). `temporada`
+  // esconde o item fora do periodo (constants/blackFriday.ts), como os toggles
+  // escondem OS/Otica/Matcon — filtrado em buildRawNav.
+  { s: "Principal", i: [{ r: "/", l: "Painel", ic: "dashboard", mod: "painel" },{ r: "/black-friday", l: "Black Friday", ic: "tag", mod: "black_friday", temporada: true },{ r: "/financeiro", l: "Financeiro", ic: "wallet", mod: "financeiro" },{ r: "/nfe", l: "NF-e", ic: "file_text", mod: "nfe" }]},
   { s: "Contábil", i: [{ r: "/contabilidade", l: "Contabilidade", ic: "calculator", mod: "contabilidade" },{ r: "/suporte", l: "Seu Analista", ic: "headset", mod: "suporte" }]},
   // /vendas (15/05/2026) — modulo proprio "vendas"; nao herda mais do pdv.
   // Permite controlar visibilidade separadamente do Caixa (ex: Kaila/Vitoria).
@@ -248,7 +254,7 @@ function isA(p: string, r: string) {
 // Usado tanto na renderizacao (depois aplica layout) quanto pra
 // passar como baseNav pro SidebarEditor (cliente ve TUDO no editor).
 // ============================================================
-function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical: string | null | undefined, osEnabled?: boolean, oticaEnabled?: boolean, matconEnabled?: boolean): NavSection[] {
+function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical: string | null | undefined, osEnabled?: boolean, oticaEnabled?: boolean, matconEnabled?: boolean, blackFridayOn?: boolean): NavSection[] {
   const base = NAV.map(section => ({
     ...section,
     i: section.i.filter(item => {
@@ -265,6 +271,10 @@ function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical:
       // os dois itens marcados `matconToggle: true`: loja sem o toggle nao
       // ve secao nenhuma.
       if (item.matconToggle && matconEnabled !== true) return false;
+      // 13/10/2026 — pagina de temporada: some fora do periodo (de 13/10/2026
+      // ate 02/02/2027) e, por enquanto, para quem nao e conta de teste
+      // (BLACK_FRIDAY_LIBERADA_PARA_TODOS, constants/blackFriday.ts).
+      if (item.temporada && blackFridayOn !== true) return false;
       // 21/09/2026 — feature que ainda nao esta operante fica fora do
       // menu (constants/modulosOcultos.ts). Filtro de APRESENTACAO: o
       // item segue declarado no NAV e o plano/permissao dele continuam
@@ -519,13 +529,14 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
   const osEnabled = pdvSettingsNav.os_enabled === true;
   const oticaEnabled = pdvSettingsNav.otica_enabled === true;
   const matconEnabled = pdvSettingsNav.matcon_enabled === true;
+  const blackFridayOn = useBlackFridayLiberada();
   const activeVertical = (co as any)?.vertical_active as string | null | undefined;
 
   // rawFilteredNav: NAV cru (so plano/staff/vertical), passado pro editor pra
   // cliente ver TUDO disponivel.
   const rawFilteredNav = useMemo(
-    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled),
-    [visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled]
+    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn),
+    [visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn]
   );
 
   // filteredNav: rawFilteredNav + customizacoes do cliente aplicadas.
@@ -789,6 +800,7 @@ function MBar() {
   const osEnabled = pdvSettingsNav.os_enabled === true;
   const oticaEnabled = pdvSettingsNav.otica_enabled === true;
   const matconEnabled = pdvSettingsNav.matcon_enabled === true;
+  const blackFridayOn = useBlackFridayLiberada();
   const activeVertical = (co as any)?.vertical_active as string | null | undefined;
 
   // 4 tabs fixas no rodape (nao editaveis pelo cliente).
@@ -802,8 +814,8 @@ function MBar() {
 
   // rawFilteredNav: mesma logica do desktop, base unica de items disponiveis.
   const rawFilteredNav = useMemo(
-    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled),
-    [visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled]
+    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn),
+    [visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn]
   );
 
   // filteredNav: aplica layout custom do cliente.
