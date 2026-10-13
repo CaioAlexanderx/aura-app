@@ -17,6 +17,11 @@
 //     Shoji, então a ROUPA é de cada um (dois componentes honestos, como
 //     no guia do iPhone), mas a FRASE é uma só, senão as duas versam
 //     diferente sobre a mesma coisa em duas semanas.
+//
+// 13/10/2026 — janela de congelamento: dentro dela uma versão nova que não
+// é hotfix vira "pausada" (services/atualizarApp) e NÃO recarrega. O segundo
+// toque de "indisponivel" continua recarregando na fé: é pedido explícito de
+// quem está sem saída, e sem hash não há versão nova para decidir sobre.
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -43,6 +48,11 @@ export function detalheDaAtualizacao(estado: EstadoDaAtualizacao): string {
     case "nova":
       return "Versão nova encontrada. Recarregando...";
     case "atualizado":
+      return "Você já está na versão mais nova.";
+    case "pausada":
+      // Janela de congelamento: o lojista não sabe que existe, e para ele a
+      // versão liberada é a que ele tem. A explicação é só da equipe
+      // (hooks/useAvisoDeCongelamento).
       return "Você já está na versão mais nova.";
     case "indisponivel":
       return "Não deu para verificar agora. Toque de novo para recarregar.";

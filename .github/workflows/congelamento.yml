@@ -1,0 +1,40 @@
+name: Janela de congelamento
+
+# Decisão de 13/10/2026: sem deploy de 24/11 a 01/12 e de 20/12 a 02/01
+# (horário de Brasília, bordas inclusivas), salvo hotfix aprovado pelo Caio.
+# As datas moram em constants/janelasDeCongelamento.json.
+#
+# Este job reprova o push na main DENTRO da janela quando a mensagem do commit
+# não tem [hotfix]. Ele não impede o build do Cloudflare (o deploy é de lá);
+# deixa o commit com X vermelho e o motivo no log, e o app não troca de
+# bundle sem o hotfix marcado (services/atualizarApp). Como marcar e quem
+# aprova: docs/CONGELAMENTO.md.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      agora:
+        description: "Simular o relógio (ISO, ex.: 2026-11-25T12:00:00-03:00). Vazio = agora."
+        required: false
+
+jobs:
+  guarda:
+    name: deploy fora da janela de congelamento (ou hotfix)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # A mensagem entra por variável de ambiente, nunca interpolada no
+      # script: texto de commit é entrada não confiável.
+      - name: Guardar a janela
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          CONGELAMENTO_AGORA: ${{ github.event.inputs.agora }}
+        run: node scripts/congelamento.js guardar

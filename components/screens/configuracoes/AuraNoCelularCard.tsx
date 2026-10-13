@@ -38,6 +38,7 @@ import { useInstalarApp } from "@/hooks/useInstalarApp";
 import { GuiaInstalarIphone } from "@/components/GuiaInstalarIphone";
 import { Card, sh } from "@/components/screens/configuracoes/shared";
 import { detalheDaAtualizacao, rotuloDaAtualizacao, useAtualizarApp } from "@/hooks/useAtualizarApp";
+import { useAvisoDeCongelamento } from "@/hooks/useAvisoDeCongelamento";
 import { ativarAviso, desativarAviso, estadoDoAviso, type EstadoDoAviso } from "@/services/webPush";
 
 export function AuraNoCelularCard() {
@@ -136,21 +137,25 @@ export function AuraNoCelularCard() {
 // ------------------------------------------------------------
 function LinhaDeAtualizacao() {
   const { estado, atualizar, ocupado } = useAtualizarApp();
+  // Só staff, e só dentro da janela de congelamento (docs/CONGELAMENTO.md).
+  const aviso = useAvisoDeCongelamento();
+  const emDia = estado === "atualizado" || estado === "pausada";
 
   return (
     <View style={s.rowInfo}>
       <View style={{ flex: 1 }}>
         <Text style={s.rowTitulo}>Versão do app</Text>
         <Text style={s.rowDetalhe}>{detalheDaAtualizacao(estado)}</Text>
+        {aviso ? <Text style={s.rowDetalhe}>{aviso}</Text> : null}
       </View>
       <Pressable
         onPress={atualizar}
         disabled={ocupado}
-        style={[s.pill, estado === "atualizado" ? s.pillOn : s.pillNeutro]}
+        style={[s.pill, emDia ? s.pillOn : s.pillNeutro]}
         accessibilityRole="button"
         accessibilityLabel="Atualizar a Aura para a versão mais nova"
       >
-        <Text style={[s.pillTexto, { color: estado === "atualizado" ? Colors.green : Colors.violet3 }]}>
+        <Text style={[s.pillTexto, { color: emDia ? Colors.green : Colors.violet3 }]}>
           {rotuloDaAtualizacao(estado)}
         </Text>
       </Pressable>

@@ -27,7 +27,11 @@
     // Se algum dia voltar "Cannot find module" pra um desses no build: o
     // certo e adicionar ao package.json e commitar o lock junto, nao
     // ressuscitar o --no-save aqui.
-    "command": "npx expo export -p web"
+    //
+    // 13/10/2026: depois do export, grava dist/version.json ({ hash, hotfix })
+    // para a janela de congelamento (docs/CONGELAMENTO.md). O script nunca
+    // sai com erro: se falhar, o app trata o bundle como nao-hotfix.
+    "command": "npx expo export -p web && node scripts/congelamento.js gerar-versao"
   },
   "assets": {
     "directory": "dist",

@@ -1,0 +1,7 @@
+{
+  "fuso": "America/Sao_Paulo (UTC-3, sem horário de verão)",
+  "janelas": [
+    { "inicio": "2026-11-24", "fim": "2026-12-01", "motivo": "Black Friday" },
+    { "inicio": "2026-12-20", "fim": "2027-01-02", "motivo": "Fim de ano" }
+  ]
+}

@@ -36,7 +36,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Colors } from "@/constants/colors";
-import { hashCarregado, hashServido } from "@/services/atualizarApp";
+import { atualizacaoLiberada, hashCarregado, hashServido } from "@/services/atualizarApp";
 
 const ENABLED = false;
 
@@ -65,6 +65,10 @@ export function UpdateBanner() {
       if (!alive || !served) return;
       if (!baseline.current) { baseline.current = served; return; }
       if (served !== baseline.current) {
+        // Janela de congelamento (13/10/2026): bundle novo que não é hotfix
+        // não aparece. Não marca `shown`, então o próximo poll reavalia.
+        if (!(await atualizacaoLiberada(served))) return;
+        if (!alive) return;
         shown.current = true;
         setReady(true);
       }

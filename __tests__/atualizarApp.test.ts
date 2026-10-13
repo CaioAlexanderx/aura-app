@@ -20,15 +20,21 @@
 import fs from "fs";
 import path from "path";
 import {
+  atualizacaoLiberada,
   atualizarAgora,
   hashCarregado,
   hashServido,
+  hotfixServido,
   LIMITE_DO_SW_MS,
   verificarAtualizacao,
+  VERSION_URL,
 } from "@/services/atualizarApp";
 
 const HASH_RODANDO = "aaaa1111";
 const HASH_SERVIDO = "bbbb2222";
+// Relógio fixo: fora e dentro da janela de congelamento (24/11 a 01/12/2026).
+const FORA_DA_JANELA = new Date("2026-10-13T12:00:00-03:00");
+const DENTRO_DA_JANELA = new Date("2026-11-25T12:00:00-03:00");
 
 function htmlServindo(hash: string): string {
   return `<!DOCTYPE html><html><body><script src="/_expo/static/js/web/entry-${hash}.js" defer></script></body></html>`;
@@ -119,7 +125,7 @@ describe("verificarAtualizacao", () => {
   test("hashes diferentes → nova", async () => {
     const w = janelaFalsa({ hashRodando: HASH_RODANDO });
     const buscar = jest.fn().mockResolvedValue(respostaOk(htmlServindo(HASH_SERVIDO)));
-    await expect(verificarAtualizacao({ w, buscar })).resolves.toBe("nova");
+    await expect(verificarAtualizacao({ w, buscar, agora: FORA_DA_JANELA })).resolves.toBe("nova");
   });
 
   test("sem hash rodando → indisponivel, e nem chega a bater no servidor", async () => {
@@ -133,6 +139,84 @@ describe("verificarAtualizacao", () => {
     const w = janelaFalsa({ hashRodando: HASH_RODANDO });
     const buscar = jest.fn().mockRejectedValue(new Error("offline"));
     await expect(verificarAtualizacao({ w, buscar })).resolves.toBe("indisponivel");
+  });
+});
+
+/** Servidor de mentira: "/" serve um HTML, "/version.json" serve o que vier. */
+function servidor(opcoes: { hash: string; versao?: any; versaoQuebrada?: boolean; versao404?: boolean }) {
+  return jest.fn().mockImplementation(async (url: string) => {
+    if (url === VERSION_URL) {
+      if (opcoes.versao404) return { ok: false, text: () => Promise.resolve("") };
+      if (opcoes.versaoQuebrada) return respostaOk("<html>nao e json</html>");
+      return respostaOk(JSON.stringify(opcoes.versao));
+    }
+    return respostaOk(htmlServindo(opcoes.hash));
+  });
+}
+
+describe("janela de congelamento: verificarAtualizacao", () => {
+  const w = () => janelaFalsa({ hashRodando: HASH_RODANDO });
+
+  test("FORA da janela, versão nova segue sendo 'nova' e nem olha o version.json", async () => {
+    const buscar = servidor({ hash: HASH_SERVIDO, versao: { hash: HASH_SERVIDO, hotfix: false } });
+    await expect(verificarAtualizacao({ w: w(), buscar, agora: FORA_DA_JANELA })).resolves.toBe("nova");
+    expect(buscar).not.toHaveBeenCalledWith(VERSION_URL, expect.anything());
+  });
+
+  test("DENTRO da janela, versão nova SEM hotfix → pausada", async () => {
+    const buscar = servidor({ hash: HASH_SERVIDO, versao: { hash: HASH_SERVIDO, hotfix: false } });
+    await expect(verificarAtualizacao({ w: w(), buscar, agora: DENTRO_DA_JANELA })).resolves.toBe("pausada");
+  });
+
+  test("DENTRO da janela, versão nova COM hotfix → nova", async () => {
+    const buscar = servidor({ hash: HASH_SERVIDO, versao: { hash: HASH_SERVIDO, hotfix: true } });
+    await expect(verificarAtualizacao({ w: w(), buscar, agora: DENTRO_DA_JANELA })).resolves.toBe("nova");
+    expect(buscar).toHaveBeenCalledWith(VERSION_URL, { cache: "no-store" });
+  });
+
+  test("DENTRO da janela, sem version.json / quebrado / de outro bundle → pausada (na dúvida, congelado)", async () => {
+    for (const buscar of [
+      servidor({ hash: HASH_SERVIDO, versao404: true }),
+      servidor({ hash: HASH_SERVIDO, versaoQuebrada: true }),
+      servidor({ hash: HASH_SERVIDO, versao: { hash: "cccc3333", hotfix: true } }),
+      servidor({ hash: HASH_SERVIDO, versao: { hotfix: true } }),
+      servidor({ hash: HASH_SERVIDO, versao: { hash: HASH_SERVIDO, hotfix: "true" } }),
+      jest.fn().mockImplementation(async (url: string) => {
+        if (url === VERSION_URL) throw new Error("offline");
+        return respostaOk(htmlServindo(HASH_SERVIDO));
+      }),
+    ]) {
+      await expect(verificarAtualizacao({ w: w(), buscar, agora: DENTRO_DA_JANELA })).resolves.toBe("pausada");
+    }
+  });
+
+  test("DENTRO da janela, 'atualizado' e 'indisponivel' continuam iguais", async () => {
+    const igual = servidor({ hash: HASH_RODANDO, versao: { hash: HASH_RODANDO, hotfix: false } });
+    await expect(verificarAtualizacao({ w: w(), buscar: igual, agora: DENTRO_DA_JANELA })).resolves.toBe("atualizado");
+    const offline = jest.fn().mockRejectedValue(new Error("offline"));
+    await expect(verificarAtualizacao({ w: w(), buscar: offline, agora: DENTRO_DA_JANELA })).resolves.toBe("indisponivel");
+  });
+
+  test("a borda: 01/12 23h59 ainda pausa; 02/12 00h00 libera", async () => {
+    const buscar = servidor({ hash: HASH_SERVIDO, versao: { hash: HASH_SERVIDO, hotfix: false } });
+    await expect(
+      verificarAtualizacao({ w: w(), buscar, agora: new Date("2026-12-01T23:59:59-03:00") }),
+    ).resolves.toBe("pausada");
+    await expect(
+      verificarAtualizacao({ w: w(), buscar, agora: new Date("2026-12-02T00:00:00-03:00") }),
+    ).resolves.toBe("nova");
+  });
+});
+
+describe("janela de congelamento: atualizacaoLiberada / hotfixServido", () => {
+  test("fora da janela sempre libera; dentro, só hotfix do mesmo hash", async () => {
+    const hotfix = servidor({ hash: HASH_SERVIDO, versao: { hash: HASH_SERVIDO, hotfix: true } });
+    const comum = servidor({ hash: HASH_SERVIDO, versao: { hash: HASH_SERVIDO, hotfix: false } });
+    const w = janelaFalsa({});
+    await expect(atualizacaoLiberada(HASH_SERVIDO, { w, buscar: comum, agora: FORA_DA_JANELA })).resolves.toBe(true);
+    await expect(atualizacaoLiberada(HASH_SERVIDO, { w, buscar: comum, agora: DENTRO_DA_JANELA })).resolves.toBe(false);
+    await expect(atualizacaoLiberada(HASH_SERVIDO, { w, buscar: hotfix, agora: DENTRO_DA_JANELA })).resolves.toBe(true);
+    await expect(hotfixServido(HASH_SERVIDO, { w, buscar: undefined })).resolves.toBe(false);
   });
 });
 
@@ -185,7 +269,7 @@ describe("uma leitura de versão só, e o aviso automático segue desligado", ()
   const BANNER = ler("components", "UpdateBanner.tsx");
 
   test("UpdateBanner consome o serviço e não tem uma segunda cópia da leitura", () => {
-    expect(BANNER).toMatch(/import \{ hashCarregado, hashServido \} from "@\/services\/atualizarApp";/);
+    expect(BANNER).toMatch(/import \{ atualizacaoLiberada, hashCarregado, hashServido \} from "@\/services\/atualizarApp";/);
     expect(BANNER).not.toMatch(/function (loadedEntryHash|servedEntryHash)/);
     expect(BANNER).not.toMatch(/_expo\/static/);
   });
