@@ -139,31 +139,37 @@ export function PlacarDoDiaCard(props: { companyId: string; isOwner: boolean }) 
             <Text style={s.rotulo}>Enviar o placar do dia</Text>
             <Text testID="placar-situacao" style={s.nota}>{situacao}</Text>
           </View>
-          <Switch
-            testID="placar-toggle"
-            value={d.enabled}
-            onValueChange={function(v) { salvar({ enabled: v }); }}
-            disabled={!props.isOwner || salvando}
-            trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
-            thumbColor={d.enabled ? Colors.violet : Colors.ink3}
-          />
+          {props.isOwner ? (
+            <Switch
+              testID="placar-toggle"
+              value={d.enabled}
+              onValueChange={function(v) { salvar({ enabled: v }); }}
+              disabled={salvando}
+              trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
+              thumbColor={d.enabled ? Colors.violet : Colors.ink3}
+            />
+          ) : null}
         </View>
 
         <View style={s.row}>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={s.rotulo}>Receber o ano todo</Text>
-            <Text style={s.nota}>
-              Sem isto, o placar chega só na temporada ({temporada}).
+            <Text testID="placar-ano-todo-nota" style={s.nota}>
+              {props.isOwner || !d.always
+                ? "Sem isto, o placar chega só na temporada (" + temporada + ")."
+                : "Ligado: o placar chega o ano todo, não só na temporada."}
             </Text>
           </View>
-          <Switch
-            testID="placar-ano-todo"
-            value={d.always}
-            onValueChange={function(v) { salvar({ enabled: d!.enabled, always: v }); }}
-            disabled={!props.isOwner || salvando}
-            trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
-            thumbColor={d.always ? Colors.violet : Colors.ink3}
-          />
+          {props.isOwner ? (
+            <Switch
+              testID="placar-ano-todo"
+              value={d.always}
+              onValueChange={function(v) { salvar({ enabled: d!.enabled, always: v }); }}
+              disabled={salvando}
+              trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
+              thumbColor={d.always ? Colors.violet : Colors.ink3}
+            />
+          ) : null}
         </View>
 
         {!props.isOwner ? (

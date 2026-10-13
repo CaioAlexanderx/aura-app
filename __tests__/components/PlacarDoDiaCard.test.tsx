@@ -227,11 +227,12 @@ describe("toggles", () => {
 });
 
 describe("quem não é dono", () => {
-  it("vê o estado, mas os controles ficam travados e sem ações", async () => {
-    api.get.mockResolvedValue(ESTADO({ whatsapp_connected: false, owner_phone_present: false, template_approved: false }));
+  it("vê o estado, mas não vê os controles nem as ações", async () => {
+    api.get.mockResolvedValue(ESTADO({ enabled: true, always: true, whatsapp_connected: false, owner_phone_present: false, template_approved: false }));
     const tree = await mount({ isOwner: false });
-    expect(byTestId(tree, "placar-toggle")[0].props.disabled).toBe(true);
-    expect(byTestId(tree, "placar-ano-todo")[0].props.disabled).toBe(true);
+    expect(existe(tree, "placar-toggle")).toBe(false);
+    expect(existe(tree, "placar-ano-todo")).toBe(false);
+    expect(plano(byTestId(tree, "placar-situacao")[0])).toBe("Ligado o ano todo");
     expect(existe(tree, "placar-so-dono")).toBe(true);
     expect(existe(tree, "placar-faltas")).toBe(true);
     expect(existe(tree, "placar-conectar-whatsapp")).toBe(false);
