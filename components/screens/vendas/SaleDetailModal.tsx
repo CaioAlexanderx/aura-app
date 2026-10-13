@@ -276,7 +276,7 @@ export function SaleDetailModal({
         // 13/10/2026: 2ª via de venda de nov/dez leva o vale-troca enquanto o
         // prazo vale (utils/valeTroca.ts).
         const html = cupomComVale(await resp.text(), {
-          companyId: effectiveCompanyId, saleId, vendaEm: (sale as any)?.created_at,
+          companyId: effectiveCompanyId, saleId, vendaEm: (sale as any)?.created_at, config: pdvSettings,
         });
         return { ok: true as const, html };
       });

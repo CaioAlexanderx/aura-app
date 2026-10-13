@@ -116,13 +116,25 @@ export function deveImprimirVale(p: {
 
 // ─── Preferência da loja ─────────────────────────────────────
 //
-// Padrão: LIGADO (o bloco só sai no período de qualquer forma). Guardada no
-// navegador, por loja: a chave nova em companies.pdv_settings precisa entrar
-// na whitelist do backend (routes/pdvSettings.js descarta chave desconhecida
-// em silêncio) — ver "Fora do PR" na descrição. Mesma abordagem do som de
-// pedido (utils/somDePedido.ts): nunca quebra a tela se não houver storage.
+// Padrão: LIGADO (o bloco só sai no período de qualquer forma). Desde o
+// Aura-backend#813 a preferência mora em companies.pdv_settings
+// (vale_troca_enabled), a mesma do resto das Políticas do Caixa — vale para
+// todos os computadores e para quem imprime a 2ª via em outra máquina.
+//
+// Antes (app#1056) ela era guardada só neste navegador. Quem desligou lá não
+// pode ver o vale voltar sozinho, então o valor antigo é lido UMA vez:
+//   · enquanto não migrou, "0" no navegador vale como desligado;
+//   · usePdvSettings grava vale_troca_enabled:false no servidor e marca a loja
+//     como migrada (marcarValeTrocaMigrado); dali em diante o navegador é
+//     ignorado — manda o servidor.
+// Nunca quebra a tela se não houver storage (mesma abordagem do som de
+// pedido, utils/somDePedido.ts).
 
 const CHAVE_PREFERENCIA = "aura:vale-troca-no-cupom:";
+const CHAVE_MIGRADO = "aura:vale-troca-migrado:";
+
+/** O que a preferência lê de pdv_settings (ausente = backend sem o campo). */
+export type ConfigDoVale = { vale_troca_enabled?: boolean | null } | null | undefined;
 
 function storage(): Storage | null {
   try {
@@ -133,22 +145,53 @@ function storage(): Storage | null {
   }
 }
 
-export function lerValeTrocaLigado(companyId: string | null | undefined): boolean {
+function lerDoNavegador(chave: string, companyId: string | null | undefined): string | null {
   const st = storage();
-  if (!st || !companyId) return true;
+  if (!st || !companyId) return null;
   try {
-    return st.getItem(CHAVE_PREFERENCIA + companyId) !== "0";
+    return st.getItem(chave + companyId);
   } catch {
-    return true;
+    return null;
   }
 }
 
-export function salvarValeTrocaLigado(companyId: string | null | undefined, ligado: boolean): void {
+/** A loja já passou o valor do navegador para o servidor? */
+function jaMigrou(companyId: string | null | undefined): boolean {
+  return lerDoNavegador(CHAVE_MIGRADO, companyId) === "1";
+}
+
+/**
+ * O vale sai no cupom desta loja? `config` é o pdv_settings carregado.
+ * Servidor com false → desligado. Sem migrar ainda, "0" guardado no navegador
+ * (app#1056) também vale como desligado. Fora isso, ligado.
+ */
+export function lerValeTrocaLigado(companyId: string | null | undefined, config?: ConfigDoVale): boolean {
+  if (config && config.vale_troca_enabled === false) return false;
+  if (config && config.vale_troca_enabled === true) return true;
+  // Servidor sem resposta (backend antigo ou ainda carregando): o valor do
+  // navegador só conta enquanto a loja não migrou.
+  if (jaMigrou(companyId)) return true;
+  return lerDoNavegador(CHAVE_PREFERENCIA, companyId) !== "0";
+}
+
+/**
+ * Há um "desligado" só no navegador que o servidor ainda não conhece?
+ * É a hora de gravar vale_troca_enabled:false em pdv_settings.
+ */
+export function valeTrocaPrecisaMigrar(companyId: string | null | undefined, config: ConfigDoVale): boolean {
+  if (!companyId || !config || config.vale_troca_enabled === false) return false;
+  if (jaMigrou(companyId)) return false;
+  return lerDoNavegador(CHAVE_PREFERENCIA, companyId) === "0";
+}
+
+/** Marca a loja como migrada: o valor do navegador não é mais lido. */
+export function marcarValeTrocaMigrado(companyId: string | null | undefined): void {
   const st = storage();
   if (!st || !companyId) return;
   try {
-    st.setItem(CHAVE_PREFERENCIA + companyId, ligado ? "1" : "0");
+    st.setItem(CHAVE_MIGRADO + companyId, "1");
+    st.removeItem(CHAVE_PREFERENCIA + companyId);
   } catch {
-    /* sem storage: a preferência vale só até recarregar */
+    /* sem storage: migra de novo na próxima sessão, sem efeito colateral */
   }
 }

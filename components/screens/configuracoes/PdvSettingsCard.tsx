@@ -12,7 +12,7 @@ import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { lerVendaSemEstoque } from "@/utils/vendaSemEstoque";
 import { lerComandaEnabled } from "@/utils/comanda";
 import {
-  lerValeTrocaLigado, salvarValeTrocaLigado, formatarDiaBR,
+  lerValeTrocaLigado, marcarValeTrocaMigrado, formatarDiaBR,
   VALE_TROCA_VENDAS_DE, VALE_TROCA_VENDAS_ATE, VALE_TROCA_PRAZO_ATE,
 } from "@/utils/valeTroca";
 import { Card } from "@/components/screens/configuracoes/shared";
@@ -32,8 +32,9 @@ import { FrenteDaLoja, nomeDaFrente } from "@/components/screens/configuracoes/F
 //   - Vender sem estoque — 06/10/2026
 //   - Taxa da maquininha (crédito/débito) — 17/08/2026
 //   - Cobro mais no cartão (preço no cartão) — 22/09/2026
-//   - Vale-troca no cupom (QR de fim de ano) — 13/10/2026; preferência deste
-//     navegador, não vai ao backend (ver utils/valeTroca.ts)
+//   - Vale-troca no cupom (QR de fim de ano) — 13/10/2026; pdv_settings.
+//     vale_troca_enabled (Aura-backend#813), o mesmo caminho dos outros
+//     toggles (ver utils/valeTroca.ts)
 //   - Restaurante (Fase 7): NFC-e manual, comanda auto-print, taxa servico
 //
 // Persistido em companies.pdv_settings (jsonb).
@@ -73,11 +74,11 @@ export function PdvSettingsCard() {
   const [pendingSettings, setPendingSettings] = useState<PdvSettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [feeInput, setFeeInput] = useState<string>("");
-  // 13/10/2026: vale-troca no cupom — preferência local, por loja (padrão ligado).
-  const [valeTrocaLigado, setValeTrocaLigado] = useState<boolean>(() => lerValeTrocaLigado(company?.id));
 
   // Usa pendingSettings durante save (optimistic), senao usa o do server
   const display = pendingSettings || serverSettings;
+  // 13/10/2026: vale-troca no cupom (padrão ligado), de pdv_settings.
+  const valeTrocaLigado = lerValeTrocaLigado(company?.id, display);
   const isFoodVertical = (company as any)?.vertical_active === "food";
 
   // 22/09/2026 (preço no cartão): "342 produtos seguem os 11% · 18 com preço
@@ -108,6 +109,8 @@ export function PdvSettingsCard() {
     setSaving(true);
     try {
       await pdvSettingsApi.save(company.id, next);
+      // O servidor passou a ser a fonte: o valor antigo do navegador não conta mais.
+      if (key === "vale_troca_enabled") marcarValeTrocaMigrado(company.id);
       invalidate();
       setPendingSettings(null);
     } catch (err: any) {
@@ -244,18 +247,16 @@ export function PdvSettingsCard() {
           <Text style={s.rowDesc}>
             {"Nas vendas de " + formatarDiaBR(VALE_TROCA_VENDAS_DE) + " a " + formatarDiaBR(VALE_TROCA_VENDAS_ATE) +
               ", o cupom sai com um QR. Quem ganhou o presente troca até " + formatarDiaBR(VALE_TROCA_PRAZO_ATE) +
-              " sem o comprador: você bipa o QR no Caixa e a troca abre com a venda carregada. Vale para este computador."}
+              " sem o comprador: você bipa o QR no Caixa e a troca abre com a venda carregada. Vale para todos os computadores da loja."}
           </Text>
         </View>
         <Switch
           testID="toggle-vale-troca"
           value={valeTrocaLigado}
-          onValueChange={function(v) {
-            setValeTrocaLigado(v);
-            salvarValeTrocaLigado(company?.id, v);
-          }}
+          onValueChange={function(v) { toggle("vale_troca_enabled", v); }}
           trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
           thumbColor={valeTrocaLigado ? Colors.violet : Colors.ink3}
+          disabled={saving}
         />
       </View>
 

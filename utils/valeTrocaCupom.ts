@@ -19,6 +19,7 @@
 import {
   deveImprimirVale,
   lerValeTrocaLigado,
+  type ConfigDoVale,
   montarCodigoDoVale,
   prazoDoVale,
   textoDoPrazoNoCupom,
@@ -111,10 +112,12 @@ export function cupomComVale(
     saleId: string;
     vendaEm: Date | string | number | null | undefined;
     hoje?: Date;
+    /** pdv_settings da loja (vale_troca_enabled); sem ele vale o que o navegador guardou. */
+    config?: ConfigDoVale;
   },
 ): string {
   try {
-    const ligado = lerValeTrocaLigado(p.companyId);
+    const ligado = lerValeTrocaLigado(p.companyId, p.config);
     if (!deveImprimirVale({ vendaEm: p.vendaEm, hoje: p.hoje, ligado })) return html;
     return injetarValeNoCupom(html, p.saleId, prazoDoVale(p.vendaEm) || undefined);
   } catch {
