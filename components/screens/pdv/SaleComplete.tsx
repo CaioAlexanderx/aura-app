@@ -47,6 +47,7 @@ import type { NfcePaymentEntry } from "@/services/nfceApi";
 import { router } from "expo-router";
 import { frasesMatconDaVenda } from "./matconDaVenda";
 import { cupomComVale } from "@/utils/valeTrocaCupom";
+import type { ConfigDoVale } from "@/utils/valeTroca";
 
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
@@ -54,7 +55,7 @@ function paymentLabel(key: string): string {
   return PAYMENTS.find(p => p.key === key)?.label || key;
 }
 
-function openPrintReceipt(companyId: string, saleId: string, token: string | null, vendaEm: Date) {
+function openPrintReceipt(companyId: string, saleId: string, token: string | null, vendaEm: Date, config?: ConfigDoVale) {
   if (!token || !companyId) { toast.error("Sessão expirada"); return; }
   if (Platform.OS !== "web" || typeof window === "undefined") {
     toast.info("Impressão disponível apenas na versão web");
@@ -71,7 +72,7 @@ function openPrintReceipt(companyId: string, saleId: string, token: string | nul
     // 13/10/2026: vendas de nov/dez saem com o bloco "Vale-troca" (QR) — ver
     // utils/valeTroca.ts. Fora do período, ou com a loja desligando, o HTML do
     // backend segue intacto.
-    const html = cupomComVale(await res.text(), { companyId, saleId, vendaEm });
+    const html = cupomComVale(await res.text(), { companyId, saleId, vendaEm, config });
     return { ok: true as const, html };
   }).then((r) => {
     if (r === "blocked") toast.error("Pop-up bloqueado. Permita pop-ups para imprimir.");
@@ -91,9 +92,11 @@ type Props = {
   matconDeliveryDays?: number;
   /** Nome de quem indicou (a resposta da venda não traz). */
   referralName?: string | null;
+  /** pdv_settings da loja: o vale-troca do cupom lê vale_troca_enabled daqui. */
+  pdvSettings?: ConfigDoVale;
 };
 
-export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, referralName }: Props) {
+export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, referralName, pdvSettings }: Props) {
   const { company, token } = useAuthStore();
   // Instante em que a tela final abriu = o da venda (o vale-troca do cupom
   // vale pelo dia da venda, não pelo da impressão).
@@ -145,7 +148,7 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
 
   function handlePrint() {
     if (!company?.id) return;
-    openPrintReceipt(company.id, sale.id, token, vendaEm);
+    openPrintReceipt(company.id, sale.id, token, vendaEm, pdvSettings);
   }
 
   return (

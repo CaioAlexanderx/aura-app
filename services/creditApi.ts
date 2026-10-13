@@ -179,6 +179,9 @@ export type CreditPlanConfig = {
   auto_block_days: number;
   period_unit?: PeriodUnit;
   period_count?: number;
+  /** 13/10/2026 (Aura-backend#816): até quantos dias à frente a 1ª parcela
+   *  pode cair em POST /credit/installments (90 hoje). Só leitura. */
+  first_due_date_max_days?: number;
   /** Fase 1: aviso quando score < score_warn_min. Nunca bloqueia — só alerta. */
   score_warn_min?: number | null;
   // ── Fase 2: encargos por atraso (opt-in, default OFF) ──────
@@ -449,6 +452,9 @@ export type ManualEntryResult = {
   installments: CreditInstallment[];
   new_balance: number;
   account_id: string | null;
+  /** Aura-backend#816: a 1ª parcela e as datas (YYYY-MM-DD) como o servidor gravou. */
+  first_due_date?: string;
+  due_dates?: string[];
 };
 
 // ─── Recebimento (F3) ───────────────────────────────────────────────────────
@@ -650,10 +656,12 @@ export const creditApi = {
   // ── Installments ─────────────────────────────────────────────────────────────────────
   createInstallments(companyId: string, body: {
     customer_id: string; sale_id?: string; total_amount: number;
-    installments: number; first_due_date: string;
+    installments: number;
+    /** Opcional desde o Aura-backend#816 (padrão: hoje + 1 mês; janela em plan-config). */
+    first_due_date?: string;
     period_unit?: PeriodUnit; period_count?: number;
   }) {
-    return request<{ installments: CreditInstallment[] }>(
+    return request<{ installments: CreditInstallment[]; first_due_date?: string; due_dates?: string[] }>(
       `${base(companyId)}/installments`, { method: "POST", body }
     );
   },

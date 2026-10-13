@@ -21,6 +21,7 @@ import { Icon } from "@/components/Icon";
 import { printCarne } from "@/services/creditApi";
 import { buildWhatsAppUrl, openWhatsApp } from "@/utils/whatsapp";
 import { e } from "./estilos";
+import { formatIsoToBr } from "@/components/inputs/DateInput";
 import { fmtCur, diaMes, listaDeDatas, primeiroNome } from "./calculos";
 import type { ResumoDoLancamento } from "./useLancamentoForm";
 
@@ -63,7 +64,9 @@ export function TelaPronto({ companyId, resumo: r, onLancarOutro, onFechar }: Pr
     ["Valor", fmtCur(r.valor)],
     ["Parcelas", `${r.parcelas}x de ${fmtCur(r.valorParcela)}${r.periodo ? ` · ${r.periodo}` : ""}`],
   ];
-  if (r.datas.length > 0) linhas.push(["Vencimentos", listaDeDatas(r.datas)]);
+  // Com ano: "10/01" sozinho some quando a 1ª parcela cai no ano que vem.
+  if (r.datas.length > 0) linhas.push(["1ª parcela", formatIsoToBr(r.datas[0])]);
+  if (r.datas.length > 1) linhas.push(["Vencimentos", listaDeDatas(r.datas)]);
   if (r.comprado) linhas.push(["Comprado", r.comprado]);
 
   return (

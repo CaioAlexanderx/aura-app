@@ -161,7 +161,9 @@ export type WaTemplatePreset =
   // Fases 7/8 — categoria MARKETING na Meta, mais cara por mensagem que
   // as de cobrança (UTILITY) e sujeita a limite por usuário.
   | "reativacao_cupom"
-  | "aniversario_cupom";
+  | "aniversario_cupom"
+  // 13/10/2026 — placar do dia (UTILITY): resumo de fim de dia ao dono.
+  | "placar_dia";
 
 /** Quais templates já estão APPROVED na Meta. Chave ausente = não. */
 export type WaTemplatesReady = Partial<Record<WaTemplatePreset, boolean>> & Record<string, boolean | undefined>;

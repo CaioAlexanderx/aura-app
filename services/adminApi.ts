@@ -255,6 +255,43 @@ export type PainelApiFicha = {
   alertas: PainelApiAlerta[];
   linha_do_tempo: { tipo: string; quando: string; titulo: string; valor: number | null }[];
 };
+// Ficha da conversa do WhatsApp da Aura (Aura-backend#815). `telefone` só tem
+// dígitos; `telefone_mascarado` é o que a lista mostra. 404 = id inexistente,
+// de outro tenant ou número não ligado.
+export type PainelApiConversaMensagem = {
+  id: string;
+  direcao: "recebida" | "enviada";
+  autor: "cliente" | "aurinha" | "humano";
+  texto: string;
+  quando: string;
+};
+export type PainelApiConversa = {
+  conversa_id: string;
+  canal: string;
+  telefone: string;
+  telefone_formatado: string | null;
+  telefone_mascarado: string | null;
+  link_whatsapp: string | null;
+  nome: string | null;
+  empresa: { company_id: string; nome: string } | null;
+  status: string | null;
+  primeiro_contato_em: string | null;
+  ultima_mensagem_cliente_em: string | null;
+  ultima_mensagem_humana_em: string | null;
+  aguardando_resposta_desde: string | null;
+  contato_atual: {
+    chegou_em: string | null;
+    situacao: string | null;
+    situacao_rotulo: string | null;
+    primeira_resposta_humana_em: string | null;
+    primeira_resposta_aurinha_em: string | null;
+    espera_min: number | null;
+    sem_resposta_humana_desde: string | null;
+  } | null;
+  contatos_na_conversa: number;
+  mensagens: PainelApiConversaMensagem[];
+  truncada: boolean;
+};
 export type PainelApiLayout = {
   padrao: boolean;
   atualizado_em: string | null;
@@ -470,6 +507,12 @@ export var adminApi = {
     },
     layout: function() {
       return request<PainelApiLayout>("/admin/painel/layout");
+    },
+    // Bloco Contatos: a conversa de um contato do WhatsApp (últimas 200 mensagens).
+    contatos: {
+      conversa: function(conversaId: string) {
+        return request<PainelApiConversa>("/admin/painel/contatos/" + encodeURIComponent(conversaId), { timeout: 30000 });
+      },
     },
     salvarLayout: function(blocos: { id: string; visivel: boolean }[]) {
       return request<PainelApiLayout>("/admin/painel/layout", { method: "PUT", body: { blocos: blocos }, retry: 0 });

@@ -126,7 +126,10 @@ describe("adaptarDetalhe", () => {
     }
     expect(adaptarDetalhe("fiscal", fx("blocos.fiscal")).periodo).toBe(7);
     expect(adaptarDetalhe("plataforma", fx("blocos.plataforma")).periodo).toBe(14);
-    expect(adaptarDetalhe("contatos", fx("blocos.contatos")).insight).toBeNull();
+    // Contatos: quem está esperando resposta pede atenção (âmbar).
+    expect(adaptarDetalhe("contatos", fx("blocos.contatos")).insight).toEqual({
+      texto: "3 contatos aguardam resposta (1 já falou com a Aurinha).", tom: "alerta",
+    });
     expect(adaptarDetalhe("pagantes_sem_venda", fx("blocos.pagantes_sem_venda")).insight).toMatchObject({ tom: "alerta" });
     expect(adaptarDetalhe("cadastros", fx("blocos.cadastros")).insight).toMatchObject({ tom: "neutro" });
   });
@@ -153,12 +156,29 @@ describe("adaptarDetalhe", () => {
     const acesso = adaptarDetalhe("acesso", fx("blocos.acesso")).listas;
     expect(acesso[1].linhas[0][0]).toMatchObject({ texto: "Dojô Central", telefone: null });   // sem telefone
 
+    // Contatos (Aura-backend#815): WhatsApp da Aura + site.
     const contatos = adaptarDetalhe("contatos", fx("blocos.contatos")).listas[0];
-    expect(contatos.linhas[0][0]).toBe("11/10 14:20");
-    expect(contatos.linhas[0][1]).toBe("Marina Prado");
-    expect(contatos.linhas[0][2]).toEqual({ texto: "(11) 98888-0001", telefone: "11988880001" });
-    expect(contatos.linhas[0][5]).toMatchObject({ texto: "Contatado", etiqueta: true });
-    expect(contatos.linhas[1][5]).toMatchObject({ texto: "Novo", tom: "alerta" });
+    expect(contatos.colunas).toEqual([
+      "Quando", "Quem", "Telefone", "Cidade", "Canal", "Primeira resposta", "Demorou", "Situação", "Empresa",
+    ]);
+    // WhatsApp sem nome: o telefone mascarado vira o nome, abre a conversa e não é link
+    expect(contatos.linhas[0][0]).toBe("13/10 08:50");
+    expect(contatos.linhas[0][1]).toEqual({ texto: "+55 11 *****-0004", conversa_id: "dddddddd-0000-4000-8000-000000000004" });
+    expect(contatos.linhas[0][2]).toBe("+55 11 *****-0004");
+    expect(contatos.linhas[0][7]).toMatchObject({ texto: "Sem resposta", etiqueta: true, tom: "desce" });
+    expect(contatos.linhas[1][7]).toMatchObject({ texto: "Aurinha", tom: "alerta" });
+    // WhatsApp com nome, resposta e empresa: nome abre a conversa, empresa abre a ficha
+    expect(contatos.linhas[2][1]).toEqual({ texto: "Renata Lima", conversa_id: "dddddddd-0000-4000-8000-000000000001" });
+    expect(contatos.linhas[2][5]).toBe("13/10 08:10");
+    expect(contatos.linhas[2][6]).toBe("8 h 30 min");
+    expect(contatos.linhas[2][7]).toMatchObject({ texto: "Caio", tom: "sobe" });
+    expect(contatos.linhas[2][8]).toEqual({ texto: "Mercado Bela Vista", company_id: "aaaaaaaa-0000-4000-8000-000000000002" });
+    // Site: como antes (sem conversa, telefone inteiro com link)
+    expect(contatos.linhas[3][0]).toBe("11/10 14:20");
+    expect(contatos.linhas[3][1]).toBe("Marina Prado");
+    expect(contatos.linhas[3][2]).toEqual({ texto: "(11) 98888-0001", telefone: "11988880001" });
+    expect(contatos.linhas[3][7]).toMatchObject({ texto: "Contatado", etiqueta: true });
+    expect(contatos.linhas[5][7]).toMatchObject({ texto: "Novo", tom: "alerta" });
 
     const adocao = adaptarDetalhe("adocao", fx("blocos.adocao")).listas[1];
     expect(adocao.linhas.length).toBe(80);

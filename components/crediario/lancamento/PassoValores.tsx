@@ -6,8 +6,9 @@
 //     só se via a parcela rolando até o rodapé);
 //   - parcelas em chips (1x 2x 3x 4x 6x 10x 12x) + "outro" para o número
 //     livre até MAX_INSTALLMENTS_CEILING;
-//   - 1º vencimento com atalhos "em 30 dias" e "dia 10"; ao lado, o
-//     Intervalo (a periodicidade que morava em "Mais opções");
+//   - "Primeira parcela em" com atalhos "em 30 dias" e "dia 10" (e "Janeiro",
+//     em novembro e dezembro: vende agora, a 1ª parcela cai no ano que vem);
+//     ao lado, o Intervalo (a periodicidade que morava em "Mais opções");
 //   - o carnê vira UMA linha ("Vai para um carnê novo · alterar"). Desde
 //     10/10 todo lançamento nasce como carnê; "alterar" abre as três opções
 //     em cartões. Os carnês do cliente só são buscados nesse toque. A
@@ -28,7 +29,9 @@ import { ConfirmGate } from "@/components/ConfirmGate";
 import { e } from "./estilos";
 import {
   fmtCur, fmtCurrency, fmtDateSafe, emDias, proximoDia, faixaDeDatas, PERIODOS, rotuloDoPeriodo,
+  hojeIsoSp, mostrarAtalhoJaneiro, janeiroDoProximoAno, avisoDaPrimeiraParcela,
 } from "./calculos";
+import { parseBrDate } from "@/components/inputs/DateInput";
 import { OPCOES_DE_CARNE, type LancamentoForm } from "./useLancamentoForm";
 
 const CHIPS_DE_PARCELAS = [1, 2, 3, 4, 6, 10, 12];
@@ -38,7 +41,7 @@ const SUB_DA_OPCAO: Record<string, string> = {
 };
 
 export function PassoValores({ form }: { form: LancamentoForm }) {
-  const { st, set, valores, selectableAccounts, selectedAccount, canUnify, alternarCarne, pedirCriar, enviar } = form;
+  const { st, set, valores, janelaDias, selectableAccounts, selectedAccount, canUnify, alternarCarne, pedirCriar, enviar } = form;
   const { amountNum, nParcelas, rateNum, totalComJuros, valorParcela, datas } = valores;
   const unify = st.unifyEnabled;
   const preview = st.unifyPreview;
@@ -47,6 +50,20 @@ export function PassoValores({ form }: { form: LancamentoForm }) {
   // ("Lançamento de DD/MM", pela data da compra).
   const nomeDoCarneNovo = st.newAccountName.trim() || `Lançamento de ${st.entryDate.slice(0, 5)}`;
   const clienteNovo = !st.selectedCustomer;
+
+  // ── Primeira parcela: atalho "Janeiro" e aviso ──
+  const hojeIso = hojeIsoSp();
+  const comAtalhoJaneiro = mostrarAtalhoJaneiro(hojeIso);
+  // "Janeiro" é o dia 10; se a lojista já escolheu outro dia para o 1º
+  // vencimento (diferente do que o formulário trouxe), mantém o dia dela.
+  const diaEscolhido = st.firstDueDate !== st.padroes.vencimento
+    ? parseInt((parseBrDate(st.firstDueDate) || "").slice(8, 10), 10)
+    : NaN;
+  const aviso = avisoDaPrimeiraParcela(st.firstDueDate, {
+    maxDias: janelaDias, hojeIso, compraBr: st.entryDate,
+  });
+  const textoDoAviso = st.erroPrimeiraParcela || aviso?.texto || null;
+  const avisoEhErro = !!st.erroPrimeiraParcela || !!aviso?.bloqueia;
 
   const parcelaNosChips = !st.parcelasLivre && CHIPS_DE_PARCELAS.includes(parseInt(st.installments, 10)) && String(parseInt(st.installments, 10)) === st.installments;
 
@@ -176,14 +193,14 @@ export function PassoValores({ form }: { form: LancamentoForm }) {
             {/* ── 1º vencimento + Intervalo ── */}
             <View style={e.two}>
               <View style={e.col}>
-                <Text style={e.label}>1º vencimento</Text>
+                <Text style={e.label}>Primeira parcela em</Text>
                 <DateInput
                   style={e.input}
                   value={st.firstDueDate}
                   onChangeText={(v) => set({ firstDueDate: v })}
                   placeholder="dd/mm/aaaa"
                   testID="lancamento-vencimento"
-                  accessibilityLabel="Primeiro vencimento"
+                  accessibilityLabel="Primeira parcela em"
                 />
                 <View style={e.quick}>
                   <Pressable style={e.quickBtn} onPress={() => set({ firstDueDate: emDias(30) })} testID="lancamento-venc-30d" accessibilityRole="button">
@@ -192,7 +209,27 @@ export function PassoValores({ form }: { form: LancamentoForm }) {
                   <Pressable style={e.quickBtn} onPress={() => set({ firstDueDate: proximoDia(10) })} testID="lancamento-venc-dia10" accessibilityRole="button">
                     <Text style={e.quickTxt}>dia 10</Text>
                   </Pressable>
+                  {comAtalhoJaneiro && (
+                    <Pressable
+                      style={e.quickBtn}
+                      onPress={() => set({ firstDueDate: janeiroDoProximoAno(hojeIso, diaEscolhido) })}
+                      testID="lancamento-venc-janeiro"
+                      accessibilityRole="button"
+                      accessibilityLabel="Primeira parcela em janeiro"
+                    >
+                      <Text style={e.quickTxt}>Janeiro</Text>
+                    </Pressable>
+                  )}
                 </View>
+                {textoDoAviso && (
+                  <Text
+                    style={[e.hint, { color: avisoEhErro ? Colors.red : Colors.amber }]}
+                    testID="lancamento-vencimento-aviso"
+                    accessibilityRole={avisoEhErro ? "alert" : undefined}
+                  >
+                    {textoDoAviso}
+                  </Text>
+                )}
               </View>
               <View style={e.col}>
                 <Text style={e.label}>Intervalo</Text>

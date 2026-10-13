@@ -1,6 +1,8 @@
+import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { pdvSettingsApi, type PdvSettings } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
+import { valeTrocaPrecisaMigrar, marcarValeTrocaMigrado } from "@/utils/valeTroca";
 
 // ============================================================
 // AURA. — Hook das configuracoes do PDV
@@ -28,6 +30,13 @@ const DEFAULT_SETTINGS: PdvSettings = {
   cash_tender_modal_enabled: true,
 };
 
+// Lojas cuja migração do vale-troca já foi disparada nesta sessão: o hook roda
+// em várias telas ao mesmo tempo e o PUT sai uma vez só.
+const migracaoDoValeIniciada = new Set<string>();
+
+/** Só para testes: esquece quais lojas já tentaram migrar nesta sessão. */
+export function _resetMigracaoDoVale() { migracaoDoValeIniciada.clear(); }
+
 export function usePdvSettings() {
   const { token, company } = useAuthStore();
   const qc = useQueryClient();
@@ -43,8 +52,27 @@ export function usePdvSettings() {
     retry: 1,
   });
 
+  // 13/10/2026: o "vale-troca desligado" que a loja guardou só no navegador
+  // (app#1056) sobe para pdv_settings.vale_troca_enabled uma vez; depois o
+  // navegador é ignorado (utils/valeTroca.ts). Falhou (ex.: sem permissão de
+  // dono): enquanto não migra, o "0" do navegador continua valendo.
+  const loaded = data?.settings as PdvSettings | undefined;
+  const companyId = company?.id;
+  useEffect(function() {
+    if (!loaded || !companyId || migracaoDoValeIniciada.has(companyId)) return;
+    if (!valeTrocaPrecisaMigrar(companyId, loaded)) return;
+    migracaoDoValeIniciada.add(companyId);
+    // O objeto inteiro, como o PdvSettingsCard grava: não depende de o PUT fazer merge.
+    pdvSettingsApi.save(companyId, Object.assign({}, loaded, { vale_troca_enabled: false }))
+      .then(function() {
+        marcarValeTrocaMigrado(companyId);
+        qc.invalidateQueries({ queryKey: ["pdv-settings", companyId] });
+      })
+      .catch(function() { /* tenta de novo na próxima sessão */ });
+  }, [loaded, companyId, qc]);
+
   return {
-    settings: (data?.settings as PdvSettings | undefined) || DEFAULT_SETTINGS,
+    settings: loaded || DEFAULT_SETTINGS,
     isLoading: isLoading,
     error: error as Error | null,
     invalidate: function() { qc.invalidateQueries({ queryKey: ["pdv-settings", company?.id] }); },

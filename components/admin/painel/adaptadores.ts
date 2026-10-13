@@ -8,12 +8,12 @@
 // do PR e os comentários de cada função.
 // ============================================================
 import type {
-  PainelApiAlerta, PainelApiBlocoResumo, PainelApiDetalhe, PainelApiFicha,
+  PainelApiAlerta, PainelApiBlocoResumo, PainelApiConversa, PainelApiDetalhe, PainelApiFicha,
   PainelApiHoje, PainelApiLayout, PainelApiLista, PainelApiPonto,
 } from "@/services/adminApi";
 import { CATALOGO, DEFINICOES } from "./blocos";
 import type {
-  Alerta, Bloco, BlocoDetalhe, BlocoId, Celula, Destaque, FichaCliente, Indicador,
+  Alerta, Bloco, BlocoDetalhe, BlocoId, Celula, ConversaContato, Destaque, FichaCliente, Indicador,
   ItemCatalogo, Lista, PainelHoje, Ponto, SerieDetalhe, Tom, TipoGrafico, Variacao,
 } from "./tipos";
 
@@ -222,6 +222,12 @@ var ROTULO_SITUACAO: Record<string, string> = {
 };
 function capitalizar(t: string): string { return t.charAt(0).toUpperCase() + t.slice(1); }
 
+// Situação do contato: do site (status do lead) e do WhatsApp (quem respondeu).
+var TOM_DA_SITUACAO: Record<string, Tom> = {
+  pagante: "sobe", trial: "alerta", novo: "alerta",
+  "sem resposta": "desce", aurinha: "alerta", caio: "sobe",
+};
+
 function celulaDe(col: PainelApiLista["colunas"][0], row: Record<string, any>): Celula {
   var v = row[col.chave];
   switch (col.tipo) {
@@ -237,12 +243,16 @@ function celulaDe(col: PainelApiLista["colunas"][0], row: Record<string, any>): 
     case "booleano": return v ? { texto: "Sim", tom: "sobe", etiqueta: true } : { texto: "Não", tom: "mudo", etiqueta: true };
     default: {
       if (v == null || v === "") return "—";
-      if (col.chave === "telefone") return { texto: formatarTelefone(String(v)), telefone: String(v) };
+      if (col.chave === "telefone") {
+        // WhatsApp: a lista mostra o número mascarado ("+55 11 *****-0002"), sem link.
+        if (String(v).indexOf("*") >= 0) return String(v);
+        return { texto: formatarTelefone(String(v)), telefone: String(v) };
+      }
       if (col.chave === "situacao" || col.chave === "status") {
         var cru = String(v);
         var texto = ROTULO_SITUACAO[cru.toLowerCase()] || capitalizar(cru);
         var t = texto.toLowerCase();
-        return { texto: texto, etiqueta: true, tom: t === "pagante" ? "sobe" : t === "trial" || t === "novo" ? "alerta" : "mudo" };
+        return { texto: texto, etiqueta: true, tom: TOM_DA_SITUACAO[t] || "mudo" };
       }
       return String(v);
     }
@@ -253,7 +263,22 @@ function adaptarLista(l: PainelApiLista): Lista {
   return {
     titulo: l.titulo,
     colunas: l.colunas.map(function(c) { return c.rotulo; }),
-    linhas: l.linhas.map(function(row) { return l.colunas.map(function(c) { return celulaDe(c, row); }); }),
+    linhas: l.linhas.map(function(row) {
+      return l.colunas.map(function(c) {
+        var cel = celulaDe(c, row);
+        // Contato do WhatsApp (Aura-backend#815): o nome abre a conversa (sem
+        // nome, vale o telefone mascarado) e a empresa abre a ficha da loja.
+        if (row.conversa_id) {
+          if (c.chave === "nome") {
+            return { texto: typeof cel === "string" && cel !== "—" ? cel : String(row.telefone || "Contato"), conversa_id: String(row.conversa_id) };
+          }
+          if (c.chave === "empresa" && row.company_id && typeof cel === "string" && cel !== "—") {
+            return { texto: cel, company_id: String(row.company_id) };
+          }
+        }
+        return cel;
+      });
+    }),
   };
 }
 
@@ -288,7 +313,7 @@ function adaptarCartoes(l: PainelApiLista): Lista {
 
 // O insight vem como texto; o tom (cor da caixa) é da tela: blocos que
 // apontam problema usam âmbar.
-var INSIGHT_ALERTA: string[] = ["pagantes_sem_venda", "fiscal", "crediario", "acesso", "pagantes", "receita"];
+var INSIGHT_ALERTA: string[] = ["pagantes_sem_venda", "fiscal", "crediario", "acesso", "pagantes", "receita", "contatos"];
 
 function adaptarSerie(id: string, s: PainelApiDetalhe["series"][0]): SerieDetalhe {
   var pontos = adaptarPontos(id, s.pontos || [], s.tipo);
@@ -310,6 +335,69 @@ export function adaptarDetalhe(id: string, raw: PainelApiDetalhe): BlocoDetalhe 
     listas: (raw.listas || []).map(id === "trials_degrau" ? adaptarCartoes : adaptarLista),
     series: (raw.series || []).map(function(s) { return adaptarSerie(id, s); }),
     insight: raw.insight ? { texto: raw.insight, tom: INSIGHT_ALERTA.indexOf(id) >= 0 ? "alerta" : "neutro" } : null,
+  };
+}
+
+// ── Conversa de um contato do WhatsApp ──────────────────────
+
+// 510 → "8 h 30 min"; 45 → "45 min"; 120 → "2 h".
+function duracao(min: number): string {
+  var m = Math.max(0, Math.round(min));
+  if (m < 60) return m + " min";
+  var h = Math.floor(m / 60);
+  var r = m % 60;
+  return h + " h" + (r ? " " + r + " min" : "");
+}
+
+var QUEM_FALOU: Record<string, string> = { aurinha: "Aurinha", humano: "Caio" };
+
+export function adaptarConversa(raw: PainelApiConversa): ConversaContato {
+  var telefone = raw.telefone_formatado || raw.telefone_mascarado || (raw.telefone ? formatarTelefone(raw.telefone) : "");
+  var atual = raw.contato_atual;
+  var rotulo = atual && (atual.situacao_rotulo || atual.situacao) ? String(atual.situacao_rotulo || atual.situacao) : null;
+  var situacao: Variacao | null = rotulo ? { texto: rotulo, tom: TOM_DA_SITUACAO[rotulo.toLowerCase()] || "mudo" } : null;
+
+  var indicadores: Indicador[] = [];
+  if (raw.primeiro_contato_em) indicadores.push({ rotulo: "Primeiro contato", valor: dataHora(raw.primeiro_contato_em) });
+  if (atual && atual.primeira_resposta_humana_em) {
+    indicadores.push({
+      rotulo: "Primeira resposta do Caio",
+      valor: dataHora(atual.primeira_resposta_humana_em),
+      nota: atual.espera_min != null ? "depois de " + duracao(atual.espera_min) : undefined,
+    });
+  } else if (atual && atual.primeira_resposta_aurinha_em) {
+    indicadores.push({ rotulo: "Primeira resposta da Aurinha", valor: dataHora(atual.primeira_resposta_aurinha_em), nota: "o Caio ainda não respondeu" });
+  }
+  if (raw.aguardando_resposta_desde) {
+    indicadores.push({ rotulo: "Sem resposta desde", valor: dataHora(raw.aguardando_resposta_desde), tom: "desce" });
+  }
+  if (raw.contatos_na_conversa > 1) {
+    indicadores.push({ rotulo: "Contatos nesta conversa", valor: String(raw.contatos_na_conversa) });
+  }
+
+  var nome = raw.nome ? String(raw.nome) : null;
+  return {
+    conversa_id: raw.conversa_id,
+    titulo: nome || telefone || "Contato",
+    telefone: telefone,
+    link: raw.link_whatsapp || null,
+    empresa: raw.empresa ? { company_id: String(raw.empresa.company_id), nome: String(raw.empresa.nome) } : null,
+    situacao: situacao,
+    indicadores: indicadores,
+    // O backend já manda em ordem; ordenar por `quando` garante a cronologia.
+    mensagens: (raw.mensagens || [])
+      .slice()
+      .sort(function(a, b) { return Date.parse(a.quando) - Date.parse(b.quando); })
+      .map(function(m) {
+        return {
+          id: m.id,
+          autor: m.autor,
+          quem: m.autor === "cliente" ? (nome ? nome.split(/\s+/)[0] : "Cliente") : QUEM_FALOU[m.autor] || m.autor,
+          quando: dataHora(m.quando),
+          texto: m.texto,
+        };
+      }),
+    truncada: !!raw.truncada,
   };
 }
 
