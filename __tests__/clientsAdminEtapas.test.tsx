@@ -42,6 +42,11 @@ async function mount() {
   await act(async () => {
     tree = renderer.create(<QueryClientProvider client={qc}><ClientsAdmin /></QueryClientProvider>);
   });
+  // Espera a lista chegar (o esqueleto some) em vez de contar ticks: com a máquina
+  // carregada, 1 tick não bastava e o teste falhava de forma intermitente.
+  for (let i = 0; i < 30 && tree!.root.findAllByType("ListSkeleton" as any).length > 0; i++) {
+    await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
+  }
   await act(async () => { await Promise.resolve(); });
   return tree!;
 }

@@ -1,5 +1,5 @@
 import { ScrollView, StyleSheet, View, Text, Pressable } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { IS_WIDE } from "@/constants/helpers";
@@ -9,6 +9,10 @@ import { ClientsAdmin } from "@/components/admin";
 export default function GestaoAuraClientesScreen() {
   var router = useRouter();
   var { isStaff } = useAuthStore();
+  // 13/10/2026: ?loja=<company_id> abre o painel desse cliente ("Abrir cliente"
+  // da ficha na tela Hoje). Na web o parâmetro pode vir como lista.
+  var params = useLocalSearchParams<{ loja?: string | string[] }>();
+  var lojaParam = Array.isArray(params.loja) ? params.loja[0] : params.loja;
   if (!isStaff) return null;
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={s.cnt}>
@@ -27,7 +31,7 @@ export default function GestaoAuraClientesScreen() {
           </View>
         </View>
       </View>
-      <ClientsAdmin />
+      <ClientsAdmin initialId={lojaParam || null} />
     </ScrollView>
   );
 }

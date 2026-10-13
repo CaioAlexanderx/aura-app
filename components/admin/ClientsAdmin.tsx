@@ -7,8 +7,13 @@
 // checkout, mais o último acesso real) e os cards de trial/vencido ganharam
 // uma linha compacta com os quatro pontos. Os dados vêm só do
 // /admin/clients-360 — nenhum endpoint novo.
+//
+// 13/10/2026: `initialId` abre o painel lateral de um cliente (rota
+// /gestao-aura-clientes?loja=<company_id>, usada pelo "Abrir cliente" da ficha
+// da tela Hoje) e muda para a aba em que a loja está (trial, vencidos,
+// clientes, arquivo, internos).
 // ============================================================
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Switch, Platform, ActivityIndicator, TextInput, Linking } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -165,7 +170,7 @@ function computeVisible(plan: string, overrides: Record<string, boolean> | null,
   return { visible: false, reason: "plan_required" };
 }
 
-export function ClientsAdmin() {
+export function ClientsAdmin({ initialId }: { initialId?: string | null } = {}) {
   // company aqui eh a empresa do proprio usuario logado (staff).
   // Usamos isso pra sincronizar o store local quando o admin altera
   // plano/vertical/modulos da propria empresa (senao o app NAO reflete
@@ -173,7 +178,10 @@ export function ClientsAdmin() {
   var { token, isStaff, company: ownCompany } = useAuthStore();
   var qc = useQueryClient();
   var [stage, setStage] = useState<Stage>("trial");
-  var [selectedId, setSelectedId] = useState<string | null>(null);
+  var [selectedId, setSelectedId] = useState<string | null>(initialId || null);
+  // Última `initialId` cuja aba já foi aplicada (só uma vez por loja, para o
+  // "Voltar aos clientes" e as trocas de aba seguintes não serem desfeitas).
+  var abaAplicadaDe = useRef<string | null>(null);
 
   // 12/05/2026: estados das novas secoes (notas + estender trial + extra seats)
   var [noteDraft, setNoteDraft] = useState("");
@@ -190,6 +198,25 @@ export function ClientsAdmin() {
   });
 
   var selectedClient = selectedId ? (data?.clients || []).find(function(c) { return c.id === selectedId; }) : null;
+
+  // Parâmetro ?loja= mudou com a tela já montada (outra ficha → "Abrir cliente").
+  useEffect(function() {
+    if (initialId) setSelectedId(initialId);
+  }, [initialId]);
+
+  // Com a lista carregada: leva à aba da loja; loja que não está na lista
+  // (id inválido, outra conta) volta à lista com um aviso em vez de painel vazio.
+  useEffect(function() {
+    if (!initialId || !data || abaAplicadaDe.current === initialId) return;
+    abaAplicadaDe.current = initialId;
+    var alvo = data.clients.find(function(c) { return c.id === initialId; });
+    if (alvo) {
+      setStage(stageOf(alvo));
+    } else {
+      setSelectedId(function(atual) { return atual === initialId ? null : atual; });
+      toast.info("Não encontrei essa loja na lista de clientes.");
+    }
+  }, [initialId, data]);
 
   // 12/05/2026: sincroniza input de extra seats com o valor atual do cliente
   // quando seleciona novo cliente ou quando o backend invalida a query.
@@ -426,7 +453,7 @@ export function ClientsAdmin() {
 
     return (
       <View>
-        <Pressable onPress={function() { setSelectedId(null); }} style={s.backBtn}>
+        <Pressable testID="client-voltar" onPress={function() { setSelectedId(null); }} style={s.backBtn}>
           <Text style={s.backText}>{"<"} Voltar aos clientes</Text>
         </Pressable>
 
