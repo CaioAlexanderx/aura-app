@@ -10,6 +10,8 @@ import type { ValidateCouponResponse } from "@/services/billingApi";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { describeCoupon, discountInEffectText, DISCOUNT_LOSS_TEXT, pickOpenInvoice } from "@/components/billing/couponText";
+import { usePromocaoAtiva, limparPromocaoAtiva } from "@/hooks/usePromocaoAtiva";
+import { diaMes } from "@/utils/promocaoPrimeiroMes";
 
 var isWeb = Platform.OS === "web";
 
@@ -20,6 +22,10 @@ var PLANS = [
 ];
 
 var ANNUAL_DISCOUNT = 1 / 6; // 2 meses grátis
+
+// Com mensagem do backend na tela de sucesso (data da 1ª cobrança), dá tempo de
+// ler antes de redirecionar; o botão "Continuar" leva na hora.
+var MENSAGEM_MS = 7000;
 
 // Acesso extra de equipe: R$19/mês por seat acima do limite do plano.
 // Espelha SEAT_PRICE_BRL do backend (services/memberSeats.js). O seat é
@@ -172,6 +178,9 @@ export default function CheckoutScreen() {
   var [loading, setLoading] = useState(false);
   var [tokenizing, setTokenizing] = useState(false);
   var [success, setSuccess] = useState(false);
+  // 13/10/2026 — texto do backend na tela de sucesso (promoção aplicada sozinha
+  // ou cupom de dias grátis): diz a data da 1ª cobrança e o valor.
+  var [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Pix state
   var [pixQr, setPixQr] = useState<string | null>(null);
@@ -226,8 +235,23 @@ export default function CheckoutScreen() {
   // N primeiras mensalidades).
   var couponView = couponApplied ? describeCoupon(couponApplied, totalPrice) : null;
   var couponTrialDays = couponApplied?.trial_days || 0;
-  var chargedNow = couponView ? couponView.chargedNow : totalPrice;
   var isFreeTrialCoupon = couponTrialDays > 0;
+
+  // 13/10/2026 — promoção "primeiro mês pelo calendário" (backend#808). O
+  // /subscribe aplica o cupom PRIMEIROMES sozinho quando a empresa é elegível e
+  // nenhum cupom foi informado; cupom informado prevalece e nada se soma. Então
+  // a promoção só aparece no resumo enquanto não há cupom aplicado na tela.
+  var promocao = usePromocaoAtiva(isDemo ? null : company?.id);
+  var promoAplicada = !!promocao && !couponApplied;
+  var promoPrimeiraCobranca = promoAplicada
+    ? promocao!.primeira_cobranca_em
+    : (couponApplied?.campaign ? couponApplied.first_charge_date || null : null);
+  var chargedNow = promoAplicada ? 0 : (couponView ? couponView.chargedNow : totalPrice);
+  var semCobrancaHoje = isFreeTrialCoupon || promoAplicada;
+  // "Assinar · 1ª cobrança em 01/12" (promoção) x "Ativar 7 dias grátis" (cupom).
+  var rotuloSemCobranca = promoPrimeiraCobranca
+    ? "Assinar · 1ª cobrança em " + diaMes(promoPrimeiraCobranca)
+    : "Ativar " + couponTrialDays + " dias grátis";
 
   // 11/09/2026 — desconto de varios meses EM ANDAMENTO. Assinar de novo aqui
   // (a unica forma de trocar plano/ciclo/pagamento no app) encerra o desconto;
@@ -316,12 +340,16 @@ export default function CheckoutScreen() {
     setLoading(true);
     try {
       var res = await billingApi.subscribe(company.id, selectedPlan, "PIX", isAnnual ? "annual" : "monthly", { endDate: annualEndDate, totalCycles: isAnnual ? 12 : undefined, accessCode: couponApplied?.code, cpfCnpj: taxIdValid ? taxIdDigits : undefined });
-      // Cupom de dias gratis no Pix: nao ha o que pagar hoje, entao nao vem QR.
-      if (couponApplied?.trial_days) {
+      // Cupom de dias gratis (digitado ou aplicado pelo backend, como a promocao
+      // do primeiro mes) no Pix: nao ha o que pagar hoje, entao nao vem QR.
+      var gratisHoje = (res.coupon?.trial_days || 0) > 0 || !!couponApplied?.trial_days;
+      if (gratisHoje) {
+        limparPromocaoAtiva(company.id);
+        setSuccessMessage(res.message || null);
         setSuccess(true);
-        toast.success(res.message || couponApplied.trial_days + " dias grátis ativados!");
+        toast.success(res.message || (couponApplied?.trial_days || res.coupon?.trial_days) + " dias grátis ativados!");
         await hydrate();
-        setTimeout(function () { router.replace("/(tabs)/" as any); }, 2000);
+        setTimeout(function () { router.replace("/(tabs)/" as any); }, res.message ? MENSAGEM_MS : 2000);
         return;
       }
       if (res.pix_qr_code) {
@@ -356,7 +384,7 @@ export default function CheckoutScreen() {
       });
 
       // 2. Assinar — cycle correto: "annual" gera assinatura mensal com endDate 12 meses
-      await billingApi.subscribe(company.id, selectedPlan, "CREDIT_CARD", isAnnual ? "annual" : "monthly", {
+      var subRes = await billingApi.subscribe(company.id, selectedPlan, "CREDIT_CARD", isAnnual ? "annual" : "monthly", {
         endDate: annualEndDate,
         totalCycles: isAnnual ? 12 : undefined,
         accessCode: couponApplied?.code,
@@ -368,10 +396,12 @@ export default function CheckoutScreen() {
         holderAddress: holderAddressStreet,
       });
 
+      limparPromocaoAtiva(company.id);
+      setSuccessMessage(subRes?.message || null);
       setSuccess(true);
-      toast.success("Assinatura ativada!");
+      toast.success(subRes?.message || "Assinatura ativada!");
       await hydrate();
-      setTimeout(function () { router.replace("/(tabs)/" as any); }, 2000);
+      setTimeout(function () { router.replace("/(tabs)/" as any); }, subRes?.message ? MENSAGEM_MS : 2000);
     } catch (err: any) {
       toast.error(err instanceof ApiError ? err.message : "Erro ao processar cartão");
     } finally { setTokenizing(false); }
@@ -496,8 +526,14 @@ export default function CheckoutScreen() {
       <View style={[z.screen, { justifyContent: "center", alignItems: "center" }]}>
         <View style={z.successCard}>
           <View style={z.successIcon}><Icon name="check" size={32} color={Colors.green} /></View>
-          <Text style={z.successTitle}>Pagamento confirmado!</Text>
+          <Text style={z.successTitle}>{successMessage ? "Assinatura ativada!" : "Pagamento confirmado!"}</Text>
+          {successMessage && <Text testID="checkout-sucesso-mensagem" style={z.successMsg}>{successMessage}</Text>}
           <Text style={z.successSub}>Plano {plan.label} ativo. Redirecionando...</Text>
+          {successMessage && (
+            <Pressable testID="checkout-sucesso-continuar" onPress={function () { router.replace("/(tabs)/" as any); }} style={z.successBtn}>
+              <Text style={z.payBtnText}>Continuar</Text>
+            </Pressable>
+          )}
         </View>
       </View>
     );
@@ -507,6 +543,19 @@ export default function CheckoutScreen() {
     <ScrollView style={z.screen} contentContainerStyle={z.cnt}>
       <Text style={z.title}>Escolha seu plano</Text>
       <Text style={z.subtitle}>Sem contratos. Cancele quando quiser.</Text>
+
+      {/* 13/10/2026: promoção do calendário. O aviso só existe quando o backend
+          diz elegivel:true; erro de API ou inelegível não muda nada na tela. */}
+      {promocao && (
+        <View testID="checkout-promocao" style={z.promoCard}>
+          <Text style={z.promoTitle}>{promocao.titulo}</Text>
+          <Text style={z.promoText}>{promocao.descricao}</Text>
+          <Text style={z.promoDate}>{"Primeira cobrança em " + diaMes(promocao.primeira_cobranca_em)}</Text>
+          {!!couponApplied && !couponApplied.campaign && (
+            <Text style={z.promoNote}>Você aplicou um cupom: vale o cupom, a promoção não soma.</Text>
+          )}
+        </View>
+      )}
       {/* 11/10/2026: o Caixa fica vivo sem assinatura; quem veio pelo aviso
           pode voltar a vender sem assinar agora. */}
       <Pressable testID="checkout-voltar-caixa" onPress={function () { router.replace("/(tabs)/pdv" as any); }} style={z.backLink}>
@@ -590,7 +639,7 @@ export default function CheckoutScreen() {
           <Icon name="wallet" size={16} color={method === "pix" ? Colors.violet3 : Colors.ink3} />
           <Text style={[z.methodTxt, method === "pix" && z.methodTxtActive]}>Pix</Text>
         </Pressable>
-        <Pressable onPress={function () { setMethod("card"); }} style={[z.methodBtn, method === "card" && z.methodBtnActive]}>
+        <Pressable testID="checkout-metodo-cartao" onPress={function () { setMethod("card"); }} style={[z.methodBtn, method === "card" && z.methodBtnActive]}>
           <Icon name="cart" size={16} color={method === "card" ? Colors.violet3 : Colors.ink3} />
           <Text style={[z.methodTxt, method === "card" && z.methodTxtActive]}>Cartão</Text>
         </Pressable>
@@ -611,6 +660,7 @@ export default function CheckoutScreen() {
                 editable={!couponLoading}
               />
               <Pressable
+                testID="checkout-cupom-aplicar"
                 onPress={handleApplyCoupon}
                 disabled={couponLoading || !couponInput.trim()}
                 style={[z.couponBtn, (couponLoading || !couponInput.trim()) && { opacity: 0.5 }]}
@@ -657,10 +707,15 @@ export default function CheckoutScreen() {
         )}
 
         <View style={[z.summaryRow, z.summaryTotalRow]}>
-          <Text style={z.summaryTotalLabel}>{isFreeTrialCoupon ? "Você paga hoje" : "Total hoje"}</Text>
-          <Text style={z.summaryTotalValue}>{isFreeTrialCoupon ? "R$ 0,00" : fmt(chargedNow)}</Text>
+          <Text style={z.summaryTotalLabel}>{semCobrancaHoje ? "Você paga hoje" : "Total hoje"}</Text>
+          <Text style={z.summaryTotalValue}>{semCobrancaHoje ? "R$ 0,00" : fmt(chargedNow)}</Text>
         </View>
-        {(couponView || extraSeats > 0) && (
+        {promoAplicada && (
+          <Text testID="checkout-promocao-resumo" style={z.promoSummary}>
+            {"Hoje: R$ 0 · a partir de " + diaMes(promocao!.primeira_cobranca_em) + ": " + fmt(totalPrice)}
+          </Text>
+        )}
+        {(couponView || extraSeats > 0) && !promoAplicada && (
           <Text style={z.annualNote}>
             {couponView ? couponView.afterNote : "Cobrado mensalmente"}
           </Text>
@@ -687,8 +742,8 @@ export default function CheckoutScreen() {
                 : <Text style={z.taxIdHint}>Exigido pelo banco para gerar o Pix. Não tem CNPJ? Use seu CPF.</Text>}
             </View>
           )}
-          <Pressable onPress={handlePixSubscribe} disabled={loading || blockedByDiscount || blockedByTaxId} style={[z.payBtn, (loading || blockedByDiscount || blockedByTaxId) && { opacity: 0.5 }]}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={z.payBtnText}>{isFreeTrialCoupon ? "Ativar " + couponTrialDays + " dias grátis" : "Gerar Pix - " + fmt(chargedNow)}</Text>}
+          <Pressable testID="checkout-pagar-pix" onPress={handlePixSubscribe} disabled={loading || blockedByDiscount || blockedByTaxId} style={[z.payBtn, (loading || blockedByDiscount || blockedByTaxId) && { opacity: 0.5 }]}>
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={z.payBtnText}>{semCobrancaHoje ? rotuloSemCobranca : "Gerar Pix - " + fmt(chargedNow)}</Text>}
           </Pressable>
         </View>
       )}
@@ -745,8 +800,8 @@ export default function CheckoutScreen() {
             <TextInput style={z.cardInput} value={cardAddressStreet} onChangeText={setCardAddressStreet} placeholder="Rua..." />
           </View>
 
-          <Pressable onPress={handleCardSubscribe} disabled={tokenizing || !cardValid || blockedByDiscount} style={[z.payBtn, (tokenizing || !cardValid || blockedByDiscount) && { opacity: 0.5 }]}>
-            {tokenizing ? <ActivityIndicator color="#fff" /> : <Text style={z.payBtnText}>{isFreeTrialCoupon ? "Ativar " + couponTrialDays + " dias grátis (sem cobrança hoje)" : "Assinar Agora - " + fmt(chargedNow)}</Text>}
+          <Pressable testID="checkout-pagar-cartao" onPress={handleCardSubscribe} disabled={tokenizing || !cardValid || blockedByDiscount} style={[z.payBtn, (tokenizing || !cardValid || blockedByDiscount) && { opacity: 0.5 }]}>
+            {tokenizing ? <ActivityIndicator color="#fff" /> : <Text style={z.payBtnText}>{semCobrancaHoje ? rotuloSemCobranca + " (sem cobrança hoje)" : "Assinar Agora - " + fmt(chargedNow)}</Text>}
           </Pressable>
         </View>
       )}
@@ -833,4 +888,12 @@ var z = StyleSheet.create({
   successIcon: { width: 72, height: 72, borderRadius: 36, backgroundColor: Colors.greenD, alignItems: "center", justifyContent: "center" },
   successTitle: { fontSize: 22, fontWeight: "800", color: Colors.ink },
   successSub: { fontSize: 14, color: Colors.ink3 },
+  successMsg: { fontSize: 14, color: Colors.ink, textAlign: "center", lineHeight: 20, maxWidth: 420 },
+  successBtn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 32, marginTop: 8 },
+  promoCard: { backgroundColor: Colors.violetD, borderRadius: 14, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: Colors.violet + "55" },
+  promoTitle: { fontSize: 14, fontWeight: "800", color: Colors.violet3, marginBottom: 4 },
+  promoText: { fontSize: 12, color: Colors.ink, lineHeight: 17 },
+  promoDate: { fontSize: 12, fontWeight: "700", color: Colors.violet3, marginTop: 8 },
+  promoNote: { fontSize: 11, color: Colors.ink3, marginTop: 6 },
+  promoSummary: { fontSize: 12, fontWeight: "700", color: Colors.green, marginTop: 8 },
 });

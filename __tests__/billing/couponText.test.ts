@@ -85,6 +85,30 @@ test("discountInEffectText diz até quando vale", () => {
     .toBe("Seu cupom NEGOCIO50 dá R$ 50,00 de desconto em cada mensalidade que vence antes de 16/12/2026.");
 });
 
+describe("describeCoupon · PRIMEIROMES digitado à mão (13/10/2026)", () => {
+  test("cupom de campanha fala de 1ª cobrança em data de calendário, não de 'N dias grátis'", () => {
+    var v = describeCoupon({
+      valid: true, code: "PRIMEIROMES", discount_pct: 0, trial_days: 49, campaign: true,
+      first_charge_value: 0, recurring_value: 169, first_charge_date: "2026-12-01",
+    }, 169);
+    expect(v.kind).toBe("trial");
+    expect(v.title).toBe("Promoção PRIMEIROMES · sem cobrança hoje");
+    expect(v.subtitle).toBe("1ª cobrança em 01/12/2026");
+    expect(v.toast).toBe("Promoção aplicada! 1ª cobrança em 01/12/2026");
+    expect(v.chargedNow).toBe(0);
+    expect(v.afterNote).toBe("Depois: R$ 169,00/mês a partir de 01/12/2026");
+    expect(JSON.stringify(v)).not.toContain("dias grátis");
+  });
+
+  test("cupom de dias grátis comum segue igual", () => {
+    var v = describeCoupon({
+      valid: true, code: "INDICA7", discount_pct: 0, trial_days: 7, first_charge_value: 0,
+      recurring_value: 169, first_charge_date: "2026-10-20",
+    }, 169);
+    expect(v.title).toBe("7 dias grátis · INDICA7");
+  });
+});
+
 describe("pickOpenInvoice", () => {
   var inv = function (id: string, status: string, due: string, url: string | null = "https://asaas/i/" + id): BillingInvoice {
     return { id: id, value: 119, status: status, due_date: due, payment_date: null, billing_type: "PIX", invoice_url: url, bank_slip_url: null };
