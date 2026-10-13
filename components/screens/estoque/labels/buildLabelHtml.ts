@@ -272,7 +272,80 @@ type BuildOptions = {
   // pdv_settings.label_offset_mm e o slider da pagina de impressao envia
   // ajustes ao app via postMessage pra persistir.
   offsetMm?: number;
+  // 13/10/2026 (Divina D'Lux / Elgin L42 Pro): calibracao da IMPRESSORA,
+  // guardada por computador (labelPrinterPrefs), so para os modelos com vao
+  // entre linhas (labelSupportsCalibration). Tudo ausente/no padrao =>
+  // nenhum byte muda (fixtures em __tests__/etiquetaByteAByte.test.ts).
+  //   continuous  — "minha impressora esta em modo continuo": o trabalho
+  //                 inteiro sai numa UNICA pagina de altura passo x linhas
+  //                 (como o 58mm faz com rowsPerPage). A posicao de cada
+  //                 linha vira geometria pura da pagina; nao depende do
+  //                 driver avancar o passo certo a cada pagina.
+  //   rowPitchMm  — passo entre linhas (etiqueta + vao). Padrao = o
+  //                 pageHeightMm do modelo.
+  //   offsetYMm   — deslocamento vertical (positivo desce).
+  continuous?: boolean;
+  rowPitchMm?: number;
+  offsetYMm?: number;
+  // Marcas de calibracao (so a impressao de teste, buildLabelTestHtml):
+  // cantos de cada etiqueta e uma regua de 0 a 20mm na borda esquerda da
+  // 1a coluna. Desenhadas como fundo da celula — nao entram no fluxo, nao
+  // mexem no .bc-box nem no SVG (zona LOCKED).
+  calibrationMarks?: boolean;
 };
+
+// ----- Calibracao da impressora (13/10/2026) -----
+// Faixa do ajuste de passo em torno do padrao do modelo e do deslocamento
+// vertical. O passo nunca fica menor que a altura da etiqueta.
+export const LABEL_PITCH_RANGE_MM = 3;
+export const LABEL_OFFSET_Y_RANGE_MM = 10;
+
+function round1(n: number): number { return Math.round(n * 10) / 10; }
+function round2(n: number): number { return Math.round(n * 100) / 100; }
+
+/** Modelos em que modo continuo, passo e deslocamento vertical valem: rolo
+ *  com vao entre linhas e 1 linha por pagina ("105x21" e "30x25"). O 99x21
+ *  (Finesse, LOCKED) e o 58mm (ja continuo, com rowsPerPage) ficam de fora. */
+export function labelSupportsCalibration(size: LabelSizeKey | undefined): boolean {
+  const preset = LABEL_SIZE_PRESETS[size || DEFAULT_LABEL_SIZE];
+  return !!preset && (preset.rowGapMm || 0) > 0 && !preset.rowsPerPage;
+}
+
+/** Passo entre linhas efetivo (mm, com decimos). Padrao do modelo quando o
+ *  ajuste esta ausente, invalido ou o modelo nao aceita calibracao. */
+export function labelRowPitchMm(size: LabelSizeKey | undefined, rowPitchMm?: number | null): number {
+  const preset = LABEL_SIZE_PRESETS[size || DEFAULT_LABEL_SIZE];
+  if (!labelSupportsCalibration(size) || rowPitchMm == null) return preset.pageHeightMm;
+  const raw = Number(rowPitchMm);
+  if (!Number.isFinite(raw)) return preset.pageHeightMm;
+  const min = Math.max(preset.cellHeightMm, preset.pageHeightMm - LABEL_PITCH_RANGE_MM);
+  return round1(Math.min(Math.max(raw, min), preset.pageHeightMm + LABEL_PITCH_RANGE_MM));
+}
+
+/** Deslocamento vertical efetivo (mm, com decimos); 0 fora dos modelos com vao. */
+export function labelOffsetYMm(size: LabelSizeKey | undefined, offsetYMm?: number | null): number {
+  if (!labelSupportsCalibration(size) || offsetYMm == null) return 0;
+  const raw = Number(offsetYMm);
+  if (!Number.isFinite(raw)) return 0;
+  return round1(Math.min(Math.max(raw, -LABEL_OFFSET_Y_RANGE_MM), LABEL_OFFSET_Y_RANGE_MM));
+}
+
+/** Altura (mm) da pagina de impressao de um trabalho com `totalRows` linhas.
+ *  Fora do modo continuo e a altura de sempre (passo x linhas por pagina). */
+export function labelSheetHeightMm(
+  size: LabelSizeKey | undefined,
+  totalRows: number,
+  cal?: { continuous?: boolean; rowPitchMm?: number | null; offsetYMm?: number | null },
+): number {
+  const preset = LABEL_SIZE_PRESETS[size || DEFAULT_LABEL_SIZE];
+  const pitch = labelRowPitchMm(size, cal && cal.rowPitchMm);
+  if (cal && cal.continuous === true && labelSupportsCalibration(size)) {
+    // Deslocamento para baixo estica a pagina, senao a ultima linha cortaria.
+    return round2(pitch * Math.max(1, totalRows) + Math.max(0, labelOffsetYMm(size, cal.offsetYMm)));
+  }
+  return pitch * (preset.rowsPerPage || 1);
+}
+// -------------------------------------------------
 
 export function buildLabelHtml(items: LabelItem[], options: BuildOptions): string {
   const isQR = options.mode === "qr";
@@ -283,8 +356,11 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   // Margens laterais (so presets com padLeftMm). A da direita fecha a largura
   // da pagina pra table-layout:fixed nao esticar a celula. 0 => nada emitido.
   const padLeftMm = preset.padLeftMm || 0;
-  // Altura da PAGINA de impressao = passo da linha x linhas por pagina.
-  const pageSheetHeightMm = preset.pageHeightMm * (preset.rowsPerPage || 1);
+  // Calibracao da impressora (13/10/2026). No padrao: pitchMm ===
+  // preset.pageHeightMm, offsetYMm === 0 e continuous === false.
+  const pitchMm = labelRowPitchMm(options.labelSize, options.rowPitchMm);
+  const offsetYMm = labelOffsetYMm(options.labelSize, options.offsetYMm);
+  const continuous = options.continuous === true && labelSupportsCalibration(options.labelSize);
   const padRightMm = padLeftMm > 0 ? Math.max(0, preset.pageWidthMm - padLeftMm - preset.cols * preset.cellWidthMm - (preset.cols - 1) * colGapMm) : 0;
   const rawOffset = Number(options.offsetMm);
   const offsetMm = Number.isFinite(rawOffset) ? Math.min(Math.max(rawOffset, -8), 5) : 0;
@@ -380,6 +456,9 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
     rowsHtml += "<tr>" + (padLeftMm > 0 ? '<td class="padl"></td>' : "") + cells.slice(r, r + COLS).join(colSep) + (padLeftMm > 0 ? '<td class="padr"></td>' : "") + "</tr>\n";
   }
   const totalRows = cells.length / COLS;
+  // Altura da PAGINA de impressao = passo da linha x linhas por pagina; no
+  // modo continuo, passo x TODAS as linhas do trabalho (pagina unica).
+  const pageSheetHeightMm = labelSheetHeightMm(options.labelSize, totalRows, { continuous: continuous, rowPitchMm: pitchMm, offsetYMm: offsetYMm });
 
   let html = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">';
   html += '<title>Etiquetas Aura - ' + totalLabels + ' etiquetas</title>';
@@ -399,7 +478,11 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += 'body{font-family:Arial,Helvetica,sans-serif;background:#f5f5f5;color:#000}';
   // Offset de calibracao: translateX na tabela inteira — nao mexe em barra,
   // fonte nem geometria da celula. Com offsetMm=0 nada e emitido (byte-identico).
-  html += 'table{border-collapse:collapse;width:' + preset.pageWidthMm + 'mm;table-layout:fixed' + (offsetMm !== 0 ? ';transform:translateX(' + offsetMm + 'mm)' : '') + '}tr{height:' + preset.pageHeightMm + 'mm;page-break-inside:avoid}';
+  html += 'table{border-collapse:collapse;width:' + preset.pageWidthMm + 'mm;table-layout:fixed' + (offsetYMm !== 0 ? ';transform:translate(' + offsetMm + 'mm,' + offsetYMm + 'mm)' : offsetMm !== 0 ? ';transform:translateX(' + offsetMm + 'mm)' : '') + '}tr{height:' + pitchMm + 'mm;page-break-inside:avoid}';
+  // Modo continuo: a pagina mede exatamente passo x linhas. A ultima linha
+  // cede 0,3mm do VAO (nunca da etiqueta) pra soma das linhas nao passar da
+  // pagina por arredondamento do navegador e jogar a ultima numa 2a pagina.
+  if (continuous) html += 'tr:last-child{height:' + round2(Math.max(preset.cellHeightMm, pitchMm - 0.3)) + 'mm}';
   html += '.cell{width:' + preset.cellWidthMm + 'mm;height:' + preset.cellHeightMm + 'mm;overflow:hidden;vertical-align:top;padding:0}';
   // Coluna espacadora = vao horizontal entre etiquetas (so quando colGapMm>0).
   if (padLeftMm > 0) html += '.padl{width:' + padLeftMm + 'mm;padding:0;border:none}.padr{width:' + padRightMm + 'mm;padding:0;border:none}';
@@ -488,6 +571,28 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   // Editorial em QR (25/09/2026): nome inteiro e em negrito (termica 203dpi).
   if (isEditorial) html += '.qr-inner .name{font-weight:700;font-size:6pt}';
 
+  // Marcas de calibracao (so a impressao de teste). Fundo da celula: canto
+  // de 1,2mm nos 4 cantos de cada etiqueta e, na 1a coluna, regua de 0 a
+  // 20mm na borda esquerda (traco a cada 1mm, maior a cada 5mm). Tracos de
+  // 0,25mm = 2 pontos da termica de 203dpi. Tudo dentro de 1,2mm da borda:
+  // o .bc-box comeca a 1,5mm (max-width = largura - 3mm, centralizado).
+  if (options.calibrationMarks) {
+    const h = '0.25mm', l = '1.2mm', k = 'linear-gradient(#000,#000)';
+    const corners = [k, k, k, k, k, k, k, k].join(',');
+    const cornerSize = [l + ' ' + h, h + ' ' + l, l + ' ' + h, h + ' ' + l, l + ' ' + h, h + ' ' + l, l + ' ' + h, h + ' ' + l].join(',');
+    // Cantos de baixo medidos a partir do TOPO (altura da etiqueta): o <td>
+    // estica ate o passo da linha, e "bottom" cairia no vao, fora da etiqueta.
+    const yH = round2(preset.cellHeightMm - 0.25) + 'mm', yV = round2(preset.cellHeightMm - 1.2) + 'mm';
+    const cornerPos = '0 0,0 0,100% 0,100% 0,0 ' + yH + ',0 ' + yV + ',100% ' + yH + ',100% ' + yV;
+    html += '.cell{background-image:' + corners + ';background-size:' + cornerSize + ';background-position:' + cornerPos + ';background-repeat:no-repeat;-webkit-print-color-adjust:exact;print-color-adjust:exact}';
+    const rulerMm = Math.min(20, Math.floor(preset.cellHeightMm));
+    html += 'tr td.cell:first-of-type{background-image:' + corners +
+      ',repeating-linear-gradient(to bottom,#000 0,#000 ' + h + ',transparent ' + h + ',transparent 5mm)' +
+      ',repeating-linear-gradient(to bottom,#000 0,#000 ' + h + ',transparent ' + h + ',transparent 1mm)' +
+      ';background-size:' + cornerSize + ',' + l + ' ' + (rulerMm + 0.25) + 'mm,0.7mm ' + (rulerMm + 0.25) + 'mm' +
+      ';background-position:' + cornerPos + ',0 0,0 0}';
+  }
+
   // ===== GUIA VISUAL PRE-IMPRESSAO (livre, so tela) =====
   // 26/08/2026: compactado pra uma faixa de linha unica — a loja imprime
   // varias vezes ao dia e o paredao vermelho de 4 passos + slider aberto
@@ -551,7 +656,7 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += 'var rng=document.getElementById("offsetRange");';
   html += 'var val=document.getElementById("offsetVal");';
   html += 'if(rng&&tbl){';
-  html += 'rng.addEventListener("input",function(){val.textContent=rng.value+"mm";tbl.style.transform="translateX("+rng.value+"mm)";});';
+  html += 'rng.addEventListener("input",function(){val.textContent=rng.value+"mm";tbl.style.transform="' + (offsetYMm !== 0 ? 'translate("+rng.value+"mm,' + offsetYMm + 'mm)' : 'translateX("+rng.value+"mm)') + '";});';
   html += 'rng.addEventListener("change",function(){if(window.opener){try{window.opener.postMessage({type:"aura:label-offset",value:parseFloat(rng.value)},"*");}catch(e){}}});';
   html += '}';
   html += '})();</scr' + 'ipt>';
@@ -624,4 +729,99 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   }
   html += '</body></html>';
   return html;
+}
+
+// ============================================================================
+// Impressao de teste e pre-visualizacao (13/10/2026, Divina D'Lux)
+//
+// Calibrar a impressora gastava um rolo: cada tentativa era um trabalho
+// inteiro. As duas funcoes abaixo so CHAMAM o buildLabelHtml — o HTML das
+// etiquetas de verdade nao passa por aqui.
+// ============================================================================
+
+/** Produto de exemplo da linha de teste. Codigo interno (prefixo 200), nao
+ *  bate com nenhum produto de verdade se alguem bipar a etiqueta de teste. */
+export const LABEL_TEST_ITEM = { name: "Produto de exemplo", price: 99.9, size: "M", color: "Preto" };
+
+/** Linha de teste: `rows` linhas (1 por padrao = 3 etiquetas no rolo de 3
+ *  colunas; 2 para conferir o passo entre linhas) de um produto de exemplo,
+ *  com marcas nos cantos e regua de 0 a 20mm. Respeita modelo, modo
+ *  continuo, passo e deslocamentos — e exatamente o que o trabalho real faria. */
+export function buildLabelTestHtml(options: BuildOptions & { rows?: number }): string {
+  const preset = LABEL_SIZE_PRESETS[options.labelSize || DEFAULT_LABEL_SIZE];
+  const rows = Math.min(3, Math.max(1, Math.round(Number(options.rows) || 1)));
+  const item: LabelItem = {
+    name: LABEL_TEST_ITEM.name, price: LABEL_TEST_ITEM.price, size: LABEL_TEST_ITEM.size, color: LABEL_TEST_ITEM.color,
+    barcode: generateEAN13("aura-etiqueta-de-teste"), qty: preset.cols * rows,
+  };
+  return buildLabelHtml([item], {
+    mode: options.mode, storeName: options.storeName, showStoreName: options.showStoreName, labelSize: options.labelSize,
+    offsetMm: options.offsetMm, continuous: options.continuous, rowPitchMm: options.rowPitchMm, offsetYMm: options.offsetYMm,
+    calibrationMarks: true,
+  });
+}
+
+/** 1mm em px do CSS (96 px por polegada) — a escala da pre-visualizacao. */
+export const CSS_PX_PER_MM = 96 / 25.4;
+/** Margem (mm) que as reguas ocupam em volta da pagina na pre-visualizacao. */
+export const LABEL_PREVIEW_RULER_MM = 10;
+/** No modo continuo a "pagina" e o trabalho inteiro; a tela mostra ate aqui. */
+export const LABEL_PREVIEW_MAX_ROWS = 12;
+
+/** Geometria da 1a pagina que a pre-visualizacao mostra. */
+export function labelPreviewGeometry(items: LabelItem[], options: BuildOptions): { rows: number; labels: number; widthMm: number; heightMm: number } {
+  const preset = LABEL_SIZE_PRESETS[options.labelSize || DEFAULT_LABEL_SIZE];
+  const continuous = options.continuous === true && labelSupportsCalibration(options.labelSize);
+  const total = items.reduce(function (s, i) { return s + Math.max(0, i.qty); }, 0);
+  const totalRows = Math.max(1, Math.ceil(total / preset.cols));
+  const rows = Math.min(totalRows, continuous ? LABEL_PREVIEW_MAX_ROWS : (preset.rowsPerPage || 1));
+  return {
+    rows: rows,
+    labels: Math.min(total, rows * preset.cols),
+    widthMm: preset.pageWidthMm,
+    heightMm: labelSheetHeightMm(options.labelSize, rows, { continuous: continuous, rowPitchMm: options.rowPitchMm, offsetYMm: options.offsetYMm }),
+  };
+}
+
+/** Pre-visualizacao em escala real da 1a pagina (pra iframe srcdoc): o MESMO
+ *  HTML da impressao, so com as primeiras etiquetas, sem as barras de setup,
+ *  com o contorno da pagina e reguas em mm em cima e a esquerda. So tela. */
+export function buildLabelPreviewHtml(items: LabelItem[], options: BuildOptions): string {
+  const geo = labelPreviewGeometry(items, options);
+  const first: LabelItem[] = [];
+  let left = geo.labels;
+  items.forEach(function (item) {
+    const q = Math.min(Math.max(0, item.qty), left);
+    if (q > 0) { first.push(Object.assign({}, item, { qty: q })); left -= q; }
+  });
+  const html = buildLabelHtml(first, options);
+  const marker = '</style></head><body>';
+  const at = html.indexOf(marker);
+  if (at < 0) return html;
+
+  const m = LABEL_PREVIEW_RULER_MM;
+  const ink = '#475569';
+  function ticks(dir: string, anchor: string, size: (len: string) => string): string {
+    return [['10mm', '4mm'], ['5mm', '2.8mm'], ['1mm', '1.6mm']].map(function (t) {
+      return 'repeating-linear-gradient(' + dir + ',' + ink + ' 0,' + ink + ' 0.2mm,transparent 0.2mm,transparent ' + t[0] + ') ' + anchor + '/' + size(t[1]) + ' no-repeat';
+    }).join(',');
+  }
+  let css = '.setup-guide,.preview-bar{display:none!important}body{background:#eef2f7}';
+  css += '.preview-wrap{position:absolute;left:' + m + 'mm;top:' + m + 'mm;padding:0;gap:0;align-items:flex-start}';
+  css += '.preview-wrap table{border:none}.preview-wrap .cell{border:none}.preview-wrap .cell>div{outline:1px dashed #cbd5e1;outline-offset:-1px}';
+  css += '.pv-page{position:absolute;left:' + m + 'mm;top:' + m + 'mm;width:' + geo.widthMm + 'mm;height:' + geo.heightMm + 'mm;background:#fff;outline:1px solid #a78bfa}';
+  css += '.pv-rule{position:absolute;font:6.5pt -apple-system,"Segoe UI",Arial,sans-serif;color:' + ink + '}.pv-rule span{position:absolute;line-height:1}';
+  css += '.pv-x{left:' + m + 'mm;top:0;width:' + (geo.widthMm + 0.2) + 'mm;height:' + m + 'mm;background:' + ticks('to right', 'left bottom', function (len) { return '100% ' + len; }) + '}';
+  css += '.pv-x span{top:2mm;transform:translateX(-50%)}';
+  css += '.pv-y{left:0;top:' + m + 'mm;width:' + m + 'mm;height:' + (geo.heightMm + 0.2) + 'mm;background:' + ticks('to bottom', 'right top', function (len) { return len + ' 100%'; }) + '}';
+  css += '.pv-y span{right:4.6mm;transform:translateY(-50%)}';
+  css += '.pv-end{position:absolute;left:0;top:' + (m + geo.heightMm) + 'mm;width:' + (m + geo.widthMm + 4) + 'mm;height:4mm}';
+
+  let body = '<div class="pv-page"></div><div class="pv-rule pv-x">';
+  for (let x = 0; x <= geo.widthMm; x += 10) body += '<span style="left:' + x + 'mm">' + x + '</span>';
+  body += '</div><div class="pv-rule pv-y">';
+  for (let y = 0; y <= geo.heightMm; y += 10) body += '<span style="top:' + y + 'mm">' + y + '</span>';
+  body += '</div><div class="pv-end"></div>';
+
+  return html.slice(0, at) + css + marker + body + html.slice(at + marker.length);
 }
