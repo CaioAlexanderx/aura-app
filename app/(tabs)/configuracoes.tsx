@@ -15,6 +15,7 @@ import { ProfileHero } from "@/components/screens/configuracoes/ProfileHero";
 import { CnpjSection } from "@/components/screens/configuracoes/CnpjSection";
 import { PdvSettingsCard } from "@/components/screens/configuracoes/PdvSettingsCard";
 import { AuraNoCelularCard } from "@/components/screens/configuracoes/AuraNoCelularCard";
+import { AssentoTemporadaCard } from "@/components/screens/configuracoes/AssentoTemporadaCard";
 import { useConfigProfile } from "@/components/screens/configuracoes/useConfigProfile";
 import { SectionTitle, Card, EditField, InfoRow, PLANS, AURA_WHATSAPP, AURA_EMAIL, sh } from "@/components/screens/configuracoes/shared";
 
@@ -133,7 +134,7 @@ const pcg = StyleSheet.create({
 export default function ConfiguracoesScreen() {
   // MULTICNPJ Onda 2.6: detecta consolidatedView e divide a tela em
   // secoes globais (sempre visiveis) vs per-company (com gate em consolidated).
-  const { user, company, isDemo, token, availableCompanies, consolidatedView, switchCompany } = useAuthStore();
+  const { user, company, isDemo, token, availableCompanies, consolidatedView, switchCompany, isStaff } = useAuthStore();
   const profile = useConfigProfile();
 
   // ============================================================
@@ -324,6 +325,16 @@ export default function ConfiguracoesScreen() {
               </Pressable>
             </View>
           </Card>
+
+          {/* ASSENTO DE TEMPORADA — per-company (a cobranca e da empresa que paga).
+              13/10/2026: so aparece de 01/10/2026 a 31/01/2027; so o dono contrata. */}
+          {!consolidatedView && company?.id ? (
+            <AssentoTemporadaCard
+              companyId={company.id}
+              plano={plan}
+              isOwner={((company as any)?.member_role || "owner") === "owner" || !!isStaff}
+            />
+          ) : null}
 
           {/* MINHAS EMPRESAS — sempre visivel */}
           <SectionTitle title="Empresas" />

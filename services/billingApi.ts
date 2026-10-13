@@ -134,6 +134,58 @@ export type DojoGateResponse = {
   billing_status: string | null;
 };
 
+// 13/10/2026 (Aura-backend #811) — assento de temporada: um acesso extra com
+// validade fixa que expira sozinho. GET/POST/DELETE em
+// /companies/:id/billing/seat-pass (POST e DELETE só o dono ou a Aura).
+export type SeatPassCobranca = {
+  forma: "assinatura_asaas" | "cortesia";
+  valor_unitario: number;
+  valor_mensal: number;
+  mensalidades_ate_o_fim: number;
+  valor_maximo_total: number;
+  de: string;                    // YYYY-MM-DD
+  ate: string;                   // YYYY-MM-DD
+  texto: string;                 // pronto para a tela
+};
+export type SeatPass = {
+  id: string;
+  qty: number;
+  status: "ativo" | "expirado" | "cancelado" | string;
+  agendado: boolean;             // contratado, começa em starts_at
+  aplicado: boolean;             // já somado aos acessos da loja
+  starts_at: string;
+  ends_at: string;
+  cortesia: boolean;
+  origem: string;
+  sync_pendente: boolean;
+  encerrado_em: string | null;
+  motivo_encerramento: string | null;
+  criado_em: string;
+  cobranca: SeatPassCobranca;
+};
+export type SeatPassEstado = {
+  temporada: { id: string; nome: string; starts_at: string; ends_at: string };
+  preco_assento_mensal: number;
+  pode_contratar: boolean;
+  // temporada_encerrada | limite_de_assentos | sem_assinatura | plano_nao_suportado | null
+  motivo_bloqueio: string | null;
+  limite_restante: number;
+  assentos_ativos: number;
+  assentos_agendados: number;
+  valor_mensal_atual: number;
+  valido_ate: string | null;
+  passes: SeatPass[];
+  // Só com ?qty=N e a temporada aberta.
+  previa?: SeatPassCobranca & { qty: number };
+};
+export type SeatPassContratado = {
+  passe: SeatPass;
+  cobranca: SeatPassCobranca;
+  comeca_em: string;
+  aplicado_agora: boolean;
+  mensagem: string;
+};
+
 export var billingApi = {
   status: function(companyId: string) { return request<BillingStatusResponse>("/companies/" + companyId + "/billing/status"); },
   tokenize: function(companyId: string, cardData: {
@@ -186,4 +238,17 @@ export var billingApi = {
   // mesmo endpoint, resposta decidida pelo backend a partir da vertical
   // da company do companyId informado.
   karateGate: function<T = KarateGateResponse>(companyId: string) { return request<T>("/companies/" + companyId + "/billing/karate-gate"); },
+  // Assento de temporada (13/10/2026, #811). 409 SEM_ASSINATURA / TEMPORADA_ENCERRADA /
+  // LIMITE_DE_ASSENTOS, 503 MIGRATION_PENDING (rota existe, tabela ainda não).
+  seatPass: {
+    estado: function(companyId: string, qty?: number) {
+      return request<SeatPassEstado>("/companies/" + companyId + "/billing/seat-pass" + (qty ? "?qty=" + qty : ""));
+    },
+    contratar: function(companyId: string, qty: number) {
+      return request<SeatPassContratado>("/companies/" + companyId + "/billing/seat-pass", { method: "POST", body: { qty: qty }, retry: 0, timeout: 30000 });
+    },
+    cancelar: function(companyId: string, passId: string) {
+      return request<{ cancelado: boolean; assentos_removidos: number }>("/companies/" + companyId + "/billing/seat-pass/" + encodeURIComponent(passId), { method: "DELETE", retry: 0, timeout: 30000 });
+    },
+  },
 };

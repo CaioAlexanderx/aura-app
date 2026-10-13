@@ -26,6 +26,10 @@ type Props = {
   onAlternar: () => void;
   onAbrirLoja: (companyId: string) => void;
   onVerbo: (verbo: string, loja: string) => void;
+  // Seção própria do bloco, abaixo do detalhe (ex.: extrato OFX na Receita),
+  // e títulos de listas do detalhe que ela substitui.
+  secaoExtra?: React.ReactNode;
+  ocultarListas?: string[];
 };
 
 export function Pill(props: { variacao: Variacao }) {
@@ -279,7 +283,7 @@ function SeletorDePeriodo(props: { id: BlocoId; ativo?: number; atualizando: boo
 }
 
 // Só monta com o card aberto: é quem busca GET /admin/painel/blocos/:id.
-function DetalheCarregado(props: Pick<Props, "definicao" | "onAbrirLoja" | "onVerbo">) {
+function DetalheCarregado(props: Pick<Props, "definicao" | "onAbrirLoja" | "onVerbo" | "secaoExtra" | "ocultarListas">) {
   var id = props.definicao.id;
   var [periodo, setPeriodo] = useState<number | undefined>(undefined);
   var { detalhe, carregando, atualizando, erro, tentarDeNovo } = usePainelBloco(id, periodo);
@@ -295,6 +299,10 @@ function DetalheCarregado(props: Pick<Props, "definicao" | "onAbrirLoja" | "onVe
     );
   }
   if (!detalhe) return <Text style={s.vazio}>Sem detalhe para este bloco ainda.</Text>;
+  var ocultas = props.ocultarListas || [];
+  var visivel = ocultas.length
+    ? Object.assign({}, detalhe, { listas: detalhe.listas.filter(function(l) { return ocultas.indexOf(l.titulo) < 0; }) })
+    : detalhe;
   return (
     <View style={{ gap: 14 }}>
       <SeletorDePeriodo
@@ -304,7 +312,8 @@ function DetalheCarregado(props: Pick<Props, "definicao" | "onAbrirLoja" | "onVe
         aoVivo={!!detalhe.ao_vivo}
         onTrocar={setPeriodo}
       />
-      <DetalheDoBloco detalhe={detalhe} onAbrirLoja={props.onAbrirLoja} onVerbo={props.onVerbo} />
+      <DetalheDoBloco detalhe={visivel} onAbrirLoja={props.onAbrirLoja} onVerbo={props.onVerbo} />
+      {props.secaoExtra || null}
     </View>
   );
 }
@@ -362,7 +371,7 @@ export var BlocoCard = forwardRef<View, Props>(function BlocoCard(props, ref) {
           </View>
           {props.aberto && (
             <View style={s.detalhe} testID={"bloco-detalhe-" + def.id}>
-              <DetalheCarregado definicao={def} onAbrirLoja={props.onAbrirLoja} onVerbo={props.onVerbo} />
+              <DetalheCarregado definicao={def} onAbrirLoja={props.onAbrirLoja} onVerbo={props.onVerbo} secaoExtra={props.secaoExtra} ocultarListas={props.ocultarListas} />
             </View>
           )}
         </>

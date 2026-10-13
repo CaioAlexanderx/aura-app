@@ -16,6 +16,7 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { BlocoCard, Pill } from "./BlocoCard";
+import { ExtratoBancario } from "./ExtratoOfx";
 import { Sparkline } from "./Graficos";
 import { CatalogoBlocos, FichaClienteModal } from "./PainelModais";
 import { DEFINICOES, SECOES } from "./blocos";
@@ -46,6 +47,10 @@ function larguraDe(largura: number, n: number): number | string {
   if (n <= 1) return "100%";
   return Math.floor((largura - GAP * (n - 1)) / n);
 }
+
+// Receita: a conferência com o extrato vira a seção interativa (OFX), então a
+// lista genérica que o backend manda sai do detalhe.
+var LISTAS_SUBSTITUIDAS: Partial<Record<BlocoId, string[]>> = { receita: ["Conferência com o extrato"] };
 
 var COR_ALERTA: Record<Alerta["tipo"], { ponto: string; halo: string }> = {
   risco: { ponto: Colors.red, halo: Colors.redD },
@@ -284,6 +289,8 @@ function PainelConteudo(props: { dados: Dados; painel: PainelHojeDados }) {
                     onAlternar={function() { alternar(def.id); }}
                     onAbrirLoja={setFichaDe}
                     onVerbo={aoVerbo}
+                    secaoExtra={def.id === "receita" ? <ExtratoBancario /> : undefined}
+                    ocultarListas={LISTAS_SUBSTITUIDAS[def.id]}
                   />
                 );
               })}
