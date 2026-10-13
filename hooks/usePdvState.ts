@@ -72,6 +72,7 @@ import { lerCodigoDoVale } from "@/utils/valeTroca";
 import { useGlobalBarcodeScanner } from "@/hooks/useGlobalBarcodeScanner";
 import { useViewport, productColumnsFor, cartWidthFor } from "@/hooks/useViewport";
 import { useCaixa } from "@/hooks/useCaixa";
+import { clientesNoCaixaHabilitado } from "@/utils/clientesNoCaixa";
 
 import { couponsApi, employeesApi, pdvApi } from "@/services/api";
 import { nfceApi } from "@/services/nfceApi";
@@ -166,12 +167,12 @@ export function usePdvState() {
   // Encanto: 3 vendedoras cadastradas, picker vazio no PDV).
   const extraSeatsGranted = Number((company as any)?.extra_seats_granted || 0);
   const hasTeamCapacity = isNegocioPlus || extraSeatsGranted > 0;
+  // 13/10/2026 (INC-2026-10-13-01): Clientes e Essencial desde 11/05/2026
+  // (MODULE_PLAN_MAP). O default aqui era isNegocioPlus e deixava o botao
+  // "Cliente" do Caixa desabilitado no Essencial. Agora segue o mapa + o
+  // override da empresa (utils/clientesNoCaixa.ts).
   const moduleOverrides = ((company as any)?.module_overrides ?? {}) as Record<string, boolean>;
-  const isModuleEnabled = (key: string, planDefault: boolean) =>
-    moduleOverrides[key] === true ? true
-    : moduleOverrides[key] === false ? false
-    : planDefault;
-  const clientesEnabled = isModuleEnabled("clientes", isNegocioPlus);
+  const clientesEnabled = clientesNoCaixaHabilitado(plan, moduleOverrides);
 
   // ── Toggles PDV settings ───────────────────────────────────────────────────────
   const caixaEnabled      = !!(pdvSettings as any)?.caixa_enabled;
