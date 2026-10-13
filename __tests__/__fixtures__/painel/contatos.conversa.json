@@ -1,0 +1,52 @@
+{
+  "conversa_id": "dddddddd-0000-4000-8000-000000000001",
+  "canal": "whatsapp",
+  "telefone": "5511999900002",
+  "telefone_formatado": "+55 11 99990-0002",
+  "telefone_mascarado": "+55 11 *****-0002",
+  "link_whatsapp": "https://wa.me/5511999900002",
+  "nome": "Renata Lima",
+  "empresa": {
+    "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+    "nome": "Mercado Bela Vista"
+  },
+  "status": "humano",
+  "primeiro_contato_em": "2026-10-13T02:40:00.000Z",
+  "ultima_mensagem_cliente_em": "2026-10-13T02:40:00.000Z",
+  "ultima_mensagem_humana_em": "2026-10-13T11:10:00.000Z",
+  "aguardando_resposta_desde": null,
+  "contato_atual": {
+    "chegou_em": "2026-10-13T02:40:00.000Z",
+    "situacao": "humano",
+    "situacao_rotulo": "Caio",
+    "primeira_resposta_humana_em": "2026-10-13T11:10:00.000Z",
+    "primeira_resposta_aurinha_em": "2026-10-13T02:40:19.000Z",
+    "espera_min": 510,
+    "sem_resposta_humana_desde": null
+  },
+  "contatos_na_conversa": 1,
+  "mensagens": [
+    {
+      "id": "m04",
+      "direcao": "recebida",
+      "autor": "cliente",
+      "texto": "Oi, vocês fazem integração\ncom iFood?",
+      "quando": "2026-10-13T02:40:00.000Z"
+    },
+    {
+      "id": "m05",
+      "direcao": "enviada",
+      "autor": "aurinha",
+      "texto": "Oi! Aqui é a Aurinha, da Aura. Anotei sua mensagem e o Caio te responde às 8h.",
+      "quando": "2026-10-13T02:40:20.000Z"
+    },
+    {
+      "id": "m06",
+      "direcao": "enviada",
+      "autor": "humano",
+      "texto": "Oi, Renata! Fazemos sim.",
+      "quando": "2026-10-13T11:10:00.000Z"
+    }
+  ],
+  "truncada": false
+}

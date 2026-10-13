@@ -92,6 +92,7 @@ export type Celula =
       tom?: Tom;
       etiqueta?: boolean;
       company_id?: string;        // torna o nome clicável (abre a ficha)
+      conversa_id?: string;       // contato do WhatsApp: abre a conversa
       telefone?: string | null;   // loja: mostra o telefone com link do WhatsApp
       verbo?: boolean;
       primario?: boolean;
@@ -145,6 +146,28 @@ export type FichaCliente = {
   modulos: { nome: string; usa: boolean }[];
   linha_do_tempo: { data: string; texto: string }[];
   fontes: string;
+};
+
+// ── Conversa de um contato do WhatsApp ──────────────────────
+
+export type MensagemDaConversa = {
+  id: string;
+  autor: "cliente" | "aurinha" | "humano";
+  quem: string;                // "Marina", "Aurinha", "Caio"
+  quando: string;              // "13/10 11:10"
+  texto: string;
+};
+
+export type ConversaContato = {
+  conversa_id: string;
+  titulo: string;              // nome do contato, ou o telefone
+  telefone: string;            // formatado, completo
+  link: string | null;         // wa.me
+  empresa: { company_id: string; nome: string } | null;
+  situacao: Variacao | null;
+  indicadores: Indicador[];
+  mensagens: MensagemDaConversa[];   // cronológica
+  truncada: boolean;
 };
 
 // ── Catálogo ────────────────────────────────────────────────

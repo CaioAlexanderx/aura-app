@@ -26,6 +26,8 @@ type Props = {
   onAlternar: () => void;
   onAbrirLoja: (companyId: string) => void;
   onVerbo: (verbo: string, loja: string) => void;
+  // Contato do WhatsApp (bloco Contatos): abre a conversa.
+  onAbrirConversa?: (conversaId: string) => void;
   // Seção própria do bloco, abaixo do detalhe (ex.: extrato OFX na Receita),
   // e títulos de listas do detalhe que ela substitui.
   secaoExtra?: React.ReactNode;
@@ -88,7 +90,7 @@ function colunaNumerica(lista: Lista, col: number): boolean {
 // Listas longas (80 linhas de "quem usa e quem não usa") abrem em 10.
 var LINHAS_VISIVEIS = 10;
 
-function Tabela(props: { lista: Lista; onAbrirLoja: (cid: string) => void }) {
+function Tabela(props: { lista: Lista; onAbrirLoja: (cid: string) => void; onAbrirConversa?: (conversaId: string) => void }) {
   var lista = props.lista;
   var [todas, setTodas] = useState(false);
   var n = lista.colunas.length;
@@ -111,6 +113,23 @@ function Tabela(props: { lista: Lista; onAbrirLoja: (cid: string) => void }) {
                   var c = linha[ci];
                   var base = [s.tdBox, ci === 0 && s.tdPrimeira, numericas[ci] && { alignItems: "flex-end" as const }];
                   if (c == null) return <View key={ci} style={base} />;
+                  if (typeof c === "object" && c.conversa_id) {
+                    // Contato do WhatsApp: o nome abre a conversa.
+                    var conv = c.conversa_id;
+                    return (
+                      <View key={ci} style={base}>
+                        <Pressable
+                          testID={"contato-" + conv}
+                          style={s.limite}
+                          onPress={function() { if (props.onAbrirConversa) props.onAbrirConversa(conv); }}
+                          accessibilityRole="button"
+                          accessibilityLabel={"Abrir a conversa de " + c.texto}
+                        >
+                          <Text style={[s.td, s.loja]} numberOfLines={1}>{c.texto}</Text>
+                        </Pressable>
+                      </View>
+                    );
+                  }
                   if (typeof c === "object" && c.company_id) {
                     // Loja: o nome abre a ficha; o telefone abre o WhatsApp.
                     var cid = c.company_id;
@@ -208,7 +227,12 @@ function ColunaDeCartoes(props: { lista: Lista; onAbrirLoja: (cid: string) => vo
   );
 }
 
-export function DetalheDoBloco(props: { detalhe: BlocoDetalhe; onAbrirLoja: (cid: string) => void; onVerbo: (verbo: string, loja: string) => void }) {
+export function DetalheDoBloco(props: {
+  detalhe: BlocoDetalhe;
+  onAbrirLoja: (cid: string) => void;
+  onVerbo: (verbo: string, loja: string) => void;
+  onAbrirConversa?: (conversaId: string) => void;
+}) {
   var d = props.detalhe;
   var tabelas = d.listas.filter(function(l) { return l.formato !== "cartoes"; });
   var cartoes = d.listas.filter(function(l) { return l.formato === "cartoes"; });
@@ -241,7 +265,7 @@ export function DetalheDoBloco(props: { detalhe: BlocoDetalhe; onAbrirLoja: (cid
             return (
               <View key={"t" + i} style={l.colunas.length > 3 ? s.colCheia : s.col}>
                 <Text style={[s.rotulo, { marginBottom: 8 }]}>{l.titulo}</Text>
-                <Tabela lista={l} onAbrirLoja={props.onAbrirLoja} />
+                <Tabela lista={l} onAbrirLoja={props.onAbrirLoja} onAbrirConversa={props.onAbrirConversa} />
               </View>
             );
           })}
@@ -283,7 +307,7 @@ function SeletorDePeriodo(props: { id: BlocoId; ativo?: number; atualizando: boo
 }
 
 // Só monta com o card aberto: é quem busca GET /admin/painel/blocos/:id.
-function DetalheCarregado(props: Pick<Props, "definicao" | "onAbrirLoja" | "onVerbo" | "secaoExtra" | "ocultarListas">) {
+function DetalheCarregado(props: Pick<Props, "definicao" | "onAbrirLoja" | "onVerbo" | "onAbrirConversa" | "secaoExtra" | "ocultarListas">) {
   var id = props.definicao.id;
   var [periodo, setPeriodo] = useState<number | undefined>(undefined);
   var { detalhe, carregando, atualizando, erro, tentarDeNovo } = usePainelBloco(id, periodo);
@@ -312,7 +336,7 @@ function DetalheCarregado(props: Pick<Props, "definicao" | "onAbrirLoja" | "onVe
         aoVivo={!!detalhe.ao_vivo}
         onTrocar={setPeriodo}
       />
-      <DetalheDoBloco detalhe={visivel} onAbrirLoja={props.onAbrirLoja} onVerbo={props.onVerbo} />
+      <DetalheDoBloco detalhe={visivel} onAbrirLoja={props.onAbrirLoja} onVerbo={props.onVerbo} onAbrirConversa={props.onAbrirConversa} />
       {props.secaoExtra || null}
     </View>
   );
@@ -371,7 +395,7 @@ export var BlocoCard = forwardRef<View, Props>(function BlocoCard(props, ref) {
           </View>
           {props.aberto && (
             <View style={s.detalhe} testID={"bloco-detalhe-" + def.id}>
-              <DetalheCarregado definicao={def} onAbrirLoja={props.onAbrirLoja} onVerbo={props.onVerbo} secaoExtra={props.secaoExtra} ocultarListas={props.ocultarListas} />
+              <DetalheCarregado definicao={def} onAbrirLoja={props.onAbrirLoja} onVerbo={props.onVerbo} onAbrirConversa={props.onAbrirConversa} secaoExtra={props.secaoExtra} ocultarListas={props.ocultarListas} />
             </View>
           )}
         </>
