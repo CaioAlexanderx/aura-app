@@ -42,6 +42,15 @@ type Section = {
 
 var SECTIONS: Section[] = [
   {
+    key: "hoje",
+    icon: "activity",
+    title: "Hoje",
+    description: "Blocos que se calculam sozinhos — trials, receita, acesso, uso e alertas com o nome de cada loja.",
+    route: "/gestao-aura-hoje",
+    color: Colors.violet,
+    highlight: true,
+  },
+  {
     key: "prospeccao",
     icon: "target",
     title: "Prospecção",

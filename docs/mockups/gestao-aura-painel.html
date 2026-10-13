@@ -1,0 +1,490 @@
+<title>Painel Gestão Aura</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#f4f3f9;--surface:#fff;--surface-2:#f9f8fc;--fg:#17132b;--fg-2:#4b4763;--muted:#8a86a0;--line:#e8e6f0;--line-2:#d9d6e6;
+  --accent:#7c3aed;--accent-2:#c4b5fd;--accent-soft:#f3eefe;--accent-fg:#5b21b6;
+  --teal:#0d9488;--teal-soft:#e0f5f2;--amber:#d97706;--amber-soft:#fdf3e3;--red:#dc2626;--red-soft:#fdeaea;--green:#16a34a;--green-soft:#e6f6ea;
+  --shadow:0 1px 2px rgba(23,19,43,.05),0 10px 30px rgba(23,19,43,.07);--r:16px;
+  --grid:#edeaf5;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#110f1c;--surface:#1a1727;--surface-2:#211d31;--fg:#f3f0fb;--fg-2:#c9c4dc;--muted:#8f8aa6;--line:#2a2640;--line-2:#3a3554;
+  --accent:#a78bfa;--accent-2:#6d4fd1;--accent-soft:#27213f;--accent-fg:#d9ccff;
+  --teal:#2dd4bf;--teal-soft:#15302d;--amber:#fbbf24;--amber-soft:#362a12;--red:#f87171;--red-soft:#3a1c1c;--green:#4ade80;--green-soft:#15301e;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);--grid:#2a2640;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#110f1c;--surface:#1a1727;--surface-2:#211d31;--fg:#f3f0fb;--fg-2:#c9c4dc;--muted:#8f8aa6;--line:#2a2640;--line-2:#3a3554;
+  --accent:#a78bfa;--accent-2:#6d4fd1;--accent-soft:#27213f;--accent-fg:#d9ccff;
+  --teal:#2dd4bf;--teal-soft:#15302d;--amber:#fbbf24;--amber-soft:#362a12;--red:#f87171;--red-soft:#3a1c1c;--green:#4ade80;--green-soft:#15301e;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);--grid:#2a2640;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:1240px;margin:0 auto;padding-block:22px 60px;padding-inline:16px}
+h1,h2,h3,h4{margin:0;font-family:Manrope,Inter,sans-serif;letter-spacing:-.015em;text-wrap:balance}
+.num{font-family:Manrope,Inter,sans-serif;font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:0;padding:0}
+.btn{border:1px solid var(--line-2);background:var(--surface);border-radius:10px;padding:8px 13px;font-weight:500;display:inline-flex;align-items:center;gap:6px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.sm{padding:5px 10px;font-size:12px;border-radius:8px}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--accent-fg)}
+.lbl{font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+
+/* header */
+.hdr{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+.hdr h1{font-size:26px;font-weight:800}
+.hdr .meta{color:var(--muted);font-size:13px;margin-top:4px;display:flex;gap:14px;flex-wrap:wrap}
+.hdr .meta b{color:var(--fg-2);font-weight:500}
+.hdr .acts{display:flex;gap:8px;flex-wrap:wrap}
+.tabs{display:flex;gap:2px;margin-bottom:22px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs span{padding:10px 14px;color:var(--muted);white-space:nowrap;font-weight:500}
+.tabs span.on{color:var(--fg);border-bottom:2px solid var(--accent);margin-bottom:-1px}
+
+/* headline strip */
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:14px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:end;min-width:0}
+.kpi .lbl{grid-column:1/-1}
+.kpi .v{font-size:30px;font-weight:800;line-height:1}
+.kpi .d{font-size:12px;color:var(--muted);margin-top:6px}
+.kpi svg{width:92px;height:36px;grid-row:2/4;align-self:end}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;vertical-align:middle}
+.pill.up{background:var(--green-soft);color:var(--green)}
+.pill.down{background:var(--red-soft);color:var(--red)}
+.pill.warn{background:var(--amber-soft);color:var(--amber)}
+.pill.mute{background:var(--accent-soft);color:var(--accent-fg)}
+
+/* alerts */
+.alerts{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-bottom:28px}
+.alert{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;text-align:left}
+.alert i{width:10px;height:10px;border-radius:50%;background:var(--amber);box-shadow:0 0 0 4px var(--amber-soft)}
+.alert.red i{background:var(--red);box-shadow:0 0 0 4px var(--red-soft)}
+.alert.green i{background:var(--green);box-shadow:0 0 0 4px var(--green-soft)}
+.alert b{display:block;font-weight:600}
+.alert small{color:var(--muted);font-size:12px}
+.alert .go{color:var(--accent-fg);font-weight:600;white-space:nowrap}
+
+/* sections + cards */
+.sec{display:flex;justify-content:space-between;align-items:baseline;margin:6px 0 12px}
+.sec h2{font-size:17px;font-weight:700}
+.sec span{color:var(--muted);font-size:12px}
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px;margin-bottom:30px}
+.card{grid-column:span 4;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px 14px;display:flex;flex-direction:column;gap:10px;min-width:0;transition:box-shadow .15s}
+.card:hover{box-shadow:var(--shadow)}
+.card.w6{grid-column:span 6}.card.w8{grid-column:span 8}.card.w12{grid-column:span 12}
+.card.open{grid-column:1/-1}
+@media (max-width:980px){.card,.card.w6,.card.w8{grid-column:span 6}}
+@media (max-width:640px){.card,.card.w6,.card.w8{grid-column:span 12}}
+.ch{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.ch h3{font-size:14px;font-weight:700}
+.ch p{margin:2px 0 0;font-size:12px;color:var(--muted)}
+.ch .tools{display:flex;gap:4px;flex:none}
+.ic{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--muted);border:1px solid transparent}
+.ic:hover{background:var(--accent-soft);color:var(--accent-fg)}
+.card.open .ic.ex{background:var(--accent-soft);color:var(--accent-fg)}
+.hero{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.hero .v{font-size:32px;font-weight:800;line-height:1}
+.hero .u{font-size:13px;color:var(--muted)}
+.chart{min-height:72px}
+.chart svg{display:block;width:100%;height:auto}
+.foot{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;color:var(--muted);margin-top:auto}
+.foot b{color:var(--fg-2);font-weight:500}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+
+/* expanded detail */
+.detail{display:none;border-top:1px solid var(--line);padding-top:14px;margin-top:4px;gap:16px}
+.card.open .detail{display:grid}
+.card.open>.chart svg,.card.open>.hb{max-width:680px}
+.detail .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
+.detail .cols>div{min-width:0}
+.detail h4{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.insight{display:flex;gap:10px;align-items:flex-start;background:var(--accent-soft);border-radius:10px;padding:10px 12px;font-size:13px;color:var(--fg-2)}
+.insight b{color:var(--accent-fg);font-weight:600}
+.insight.warn{background:var(--amber-soft)}.insight.warn b{color:var(--amber)}
+.insight.red{background:var(--red-soft)}.insight.red b{color:var(--red)}
+.mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+.mini div{background:var(--surface-2);border-radius:10px;padding:10px 12px}
+.mini .lbl{font-size:10px}
+.mini .v{font-size:20px;font-weight:800;line-height:1.2}
+.mini small{font-size:11px;color:var(--muted)}
+
+/* hbars */
+.hb{display:grid;gap:6px}
+.hb .r{display:grid;grid-template-columns:minmax(90px,150px) 1fr 44px;gap:10px;align-items:center;font-size:12px}
+.hb .n{color:var(--fg-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hb .t{height:10px;background:var(--surface-2);border-radius:5px;overflow:hidden}
+.hb .f{height:100%;border-radius:5px;background:var(--accent)}
+.hb .f.teal{background:var(--teal)}.hb .f.amber{background:var(--amber)}.hb .f.red{background:var(--red)}.hb .f.light{background:var(--accent-2)}
+.hb .v{text-align:right;font-weight:600}
+
+/* tables */
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line);background:var(--surface-2);white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.r,th.r{text-align:right}
+.name{font-weight:600;color:var(--accent-fg)}
+.tag{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent-fg)}
+.tag.g{background:var(--green-soft);color:var(--green)}.tag.a{background:var(--amber-soft);color:var(--amber)}.tag.r{background:var(--red-soft);color:var(--red)}.tag.m{background:var(--surface-2);color:var(--muted)}
+.steps{display:grid;grid-template-columns:repeat(5,minmax(170px,1fr));gap:10px;overflow-x:auto;padding-bottom:4px}
+.steps>div{background:var(--surface-2);border-radius:12px;padding:10px}
+.steps h5{margin:0 0 8px;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between}
+.steps h5 b{color:var(--fg);font-size:14px;font-family:Manrope}
+.pc{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-bottom:6px;font-size:12px}
+.pc.late{border-color:var(--red)}
+.pc b{display:block;font-size:13px;color:var(--accent-fg)}
+.pc span{color:var(--muted)}
+.pc .a{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+.more{color:var(--muted);font-size:12px;text-align:center;padding:4px}
+.axis{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:2px}
+
+/* modal */
+.scrim{position:fixed;inset:0;background:rgba(17,15,28,.5);display:none;align-items:flex-start;justify-content:center;padding:4vh 16px;overflow:auto;z-index:50}
+.scrim.on{display:flex}
+.modal{background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);width:min(760px,100%);max-height:92vh;display:flex;flex-direction:column;overflow:hidden}
+.mh{display:flex;justify-content:space-between;gap:12px;padding:18px 20px 12px;border-bottom:1px solid var(--line)}
+.mh h2{font-size:18px}
+.mh p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.x{background:var(--accent-soft);color:var(--accent-fg);border-radius:8px;width:30px;height:30px;font-size:16px;flex:none}
+.mb{padding:16px 20px;overflow:auto;display:grid;gap:16px}
+.mf{padding:12px 20px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;align-items:center;color:var(--muted);font-size:12px}
+.cat{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.cat label{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer}
+.cat input{margin-top:3px;accent-color:var(--accent)}
+.cat b{display:block;font-weight:600}
+.cat small{color:var(--muted);display:block;font-size:12px}
+.tl{display:grid;gap:6px;font-size:13px}
+.tl div{display:grid;grid-template-columns:60px 1fr;gap:10px}
+.tl span:first-child{color:var(--muted);font-variant-numeric:tabular-nums}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+</style>
+
+<div class="wrap">
+  <div class="hdr">
+    <div>
+      <div class="lbl">Gestão Aura · Hoje</div>
+      <h1>Terça, 13 de outubro</h1>
+      <div class="meta"><span>Calculado às <b>06:00</b></span><span>Próximo às <b>12:00</b></span><span>Fontes: <b>banco Aura · Asaas · site</b></span></div>
+    </div>
+    <div class="acts"><button class="btn" onclick="openM('m-cat')">＋ Bloco</button><button class="btn">Reordenar</button><button class="btn primary">Recalcular</button></div>
+  </div>
+  <div class="tabs"><span class="on">Hoje</span><span>Clientes</span><span>Receita</span><span>Produto</span><span>Plataforma</span><span>Ferramentas</span></div>
+
+  <div class="strip">
+    <div class="kpi"><span class="lbl">MRR real · Asaas</span><div class="v num">R$ 1.651</div><svg id="sp-mrr"></svg><div class="d"><span class="pill up">+16%</span> em 30 dias</div></div>
+    <div class="kpi"><span class="lbl">Pagantes</span><div class="v num">18</div><svg id="sp-pag"></svg><div class="d"><span class="pill up">+2</span> Qbonita, Luciano</div></div>
+    <div class="kpi"><span class="lbl">Lojas ativas na semana</span><div class="v num">28</div><svg id="sp-ativas"></svg><div class="d"><span class="pill up">+3</span> 15 de 18 pagantes</div></div>
+    <div class="kpi"><span class="lbl">Vendas · 7 dias</span><div class="v num">259</div><svg id="sp-vendas"></svg><div class="d"><span class="pill down">−4%</span> vs semana anterior</div></div>
+  </div>
+
+  <div class="alerts">
+    <button class="alert red" onclick="openM('m-ficha')"><i></i><span><b>Sheid Mania vence amanhã</b><small>Anual · sem venda há 22 dias · 3 logins no mês</small></span><span class="go">Ligar →</span></button>
+    <button class="alert" onclick="toggle('c-trials')"><i></i><span><b>3 trials com venda vencem em 48h</b><small>Vitor Matheus · Ana Lourdes · Luís Henrique</small></span><span class="go">Oferecer →</span></button>
+    <button class="alert green" onclick="toggle('c-receita')"><i></i><span><b>R$ 140,83 recebido ontem</b><small>Asaas · sem loja vinculada</small></span><span class="go">Vincular →</span></button>
+  </div>
+
+  <!-- NEGÓCIO -->
+  <div class="sec"><h2>Negócio</h2><span>4 blocos</span></div>
+  <div class="grid">
+    <article class="card w6" id="c-trials">
+      <div class="ch"><div><h3>Trials por degrau</h3><p>Cadastros dos últimos 30 dias, sem os dojôs</p></div><div class="tools"><button class="ic ex" onclick="toggle('c-trials')" title="Expandir">⤢</button></div></div>
+      <div class="hero"><span class="v num">29</span><span class="u">cadastros</span><span class="pill warn">6 vencidos</span></div>
+      <div class="chart" id="ch-funnel"></div>
+      <div class="foot"><span>Checkout instrumentado em <b>13/10</b></span><span>Fonte: clients-360</span></div>
+      <div class="detail">
+        <div class="insight"><span>💡</span><span><b>13 de 29</b> nunca cadastraram um produto. É o degrau da importação por planilha e da Aurinha de boas-vindas. Os <b>5 que venderam</b> são as ligações de hoje.</span></div>
+        <div class="steps">
+          <div><h5>Só cadastro <b>13</b></h5>
+            <div class="pc"><b>Infortech Group</b><span>há 3 dias · vence 17/10</span><div class="a"><button class="btn sm">WhatsApp</button><button class="btn sm ghost">+7 dias</button></div></div>
+            <div class="pc"><b>Rolão Mat. Construção</b><span>matcon · vence 14/10</span><div class="a"><button class="btn sm">WhatsApp</button></div></div>
+            <div class="pc late"><b>Technocell</b><span>vencido 12/10</span></div>
+            <div class="pc late"><b>Pefect House</b><span>vencido 05/10 · negociando</span></div>
+            <div class="more">+ 9 contas</div></div>
+          <div><h5>Com produtos <b>9</b></h5>
+            <div class="pc"><b>Nalia Miranda</b><span>152 produtos · vence 15/10</span><div class="a"><button class="btn sm">Chamar para o Caixa</button></div></div>
+            <div class="pc"><b>Kauinny Santo</b><span>94 produtos · vence hoje</span><div class="a"><button class="btn sm">Ligar</button><button class="btn sm ghost">+7 dias</button></div></div>
+            <div class="pc"><b>Jéssica Costa</b><span>152 produtos · vence hoje</span><div class="a"><button class="btn sm">Ligar</button></div></div>
+            <div class="more">+ 6 contas</div></div>
+          <div><h5>Venderam <b>5</b></h5>
+            <div class="pc"><b>Vitor Matheus</b><span>3 vendas · vence 18/10</span><div class="a"><button class="btn sm primary">Oferecer plano</button></div></div>
+            <div class="pc"><b>Ana Lourdes · Ótica</b><span>3 vendas · vence 15/10</span><div class="a"><button class="btn sm primary">Oferecer plano</button></div></div>
+            <div class="pc"><b>Luís Henrique</b><span>11 vendas · vence 14/10</span><div class="a"><button class="btn sm primary">Oferecer plano</button></div></div>
+            <div class="pc late"><b>GF Amorim</b><span>52 vendas · vencido 02/10 · Caixa vivo</span></div>
+            <div class="pc late"><b>Vera Modas</b><span>6 vendas · vencido 21/09</span></div></div>
+          <div><h5>Viram checkout <b>0</b></h5><div class="more">Conta a partir de hoje</div></div>
+          <div><h5>Assinaram <b>2</b></h5>
+            <div class="pc"><b>Qbonita</b><span>Negócio anual · 57 vendas</span></div>
+            <div class="pc"><b>Luciano Messias</b><span>Essencial anual · matcon</span></div></div>
+        </div>
+      </div>
+    </article>
+
+    <article class="card w6" id="c-receita">
+      <div class="ch"><div><h3>Receita</h3><p>MRR real pela Asaas, anual dividido por 12</p></div><div class="tools"><button class="ic ex" onclick="toggle('c-receita')" title="Expandir">⤢</button></div></div>
+      <div class="hero"><span class="v num">R$ 1.651</span><span class="pill up">+R$ 234</span><span class="u">em 30 dias</span></div>
+      <div class="chart" id="ch-mrr"></div>
+      <div class="foot"><span>Recebido em outubro <b>R$ 281,66</b></span><span>Método antigo: R$ 2.872</span></div>
+      <div class="detail">
+        <div class="mini">
+          <div><span class="lbl">Setembro</span><div class="v num">R$ 1.227</div><small>9 pagamentos</small></div>
+          <div><span class="lbl">Outubro</span><div class="v num">R$ 282</div><small>2 até dia 12</small></div>
+          <div><span class="lbl">Atrasado</span><div class="v num">R$ 0</div><small>30 dias</small></div>
+          <div><span class="lbl">Ticket médio</span><div class="v num">R$ 138</div><small>por assinatura</small></div>
+        </div>
+        <div class="cols">
+          <div><h4>Movimento do MRR · 30 dias</h4><div class="hb" id="hb-wf"></div></div>
+          <div><h4>Por plano e ciclo</h4><div class="chart" id="ch-donut"></div></div>
+          <div><h4>Conciliação com o banco</h4>
+            <div class="tw"><table><tr><th>Mês</th><th class="r">Asaas</th><th class="r">Banco</th><th></th></tr>
+            <tr><td>Agosto</td><td class="r num">1.108</td><td class="r num">1.108</td><td><span class="tag g">fechou</span></td></tr>
+            <tr><td>Setembro</td><td class="r num">1.227</td><td class="r num">—</td><td><span class="tag a">sem extrato</span></td></tr>
+            <tr><td>Outubro</td><td class="r num">282</td><td class="r num">—</td><td><span class="tag m">em curso</span></td></tr></table></div>
+            <button class="btn sm" style="margin-top:8px">Anexar extrato OFX</button></div>
+        </div>
+        <div class="insight warn"><span>⚠️</span><span><b>3 pagamentos sem loja vinculada</b> (29/09, 03/10, 12/10) e <b>3 assinaturas</b> com próximo vencimento no passado. O cálculo mostra, não esconde.</span></div>
+      </div>
+    </article>
+
+    <article class="card" id="c-cad">
+      <div class="ch"><div><h3>Cadastros</h3><p>Por semana, últimas 7</p></div><div class="tools"><button class="ic ex" onclick="toggle('c-cad')">⤢</button></div></div>
+      <div class="hero"><span class="v num">11</span><span class="u">em 7 dias</span><span class="pill up">+2</span></div>
+      <div class="chart" id="ch-cad"></div>
+      <div class="foot"><span><b>9</b> self-service · <b>2</b> por código</span></div>
+      <div class="detail"><div class="cols"><div><h4>Origem · 30 dias</h4><div class="hb" id="hb-origem"></div></div><div><h4>Frente escolhida</h4><div class="hb" id="hb-frente"></div></div></div></div>
+    </article>
+
+    <article class="card" id="c-pag">
+      <div class="ch"><div><h3>Pagantes</h3><p>Plano e ciclo</p></div><div class="tools"><button class="ic ex" onclick="toggle('c-pag')">⤢</button></div></div>
+      <div class="hero"><span class="v num">18</span><span class="u">ativos</span><span class="pill up">+2 · 30d</span></div>
+      <div class="chart" id="ch-plan"></div>
+      <div class="foot"><span>Vencem esta semana: <b>Sheid, Jenniffer</b></span></div>
+      <div class="detail"><div class="tw"><table><tr><th>Loja</th><th>Plano</th><th>Ciclo</th><th>Vence</th><th class="r">Vendas 30d</th><th class="r">Dias ativos</th></tr>
+        <tr><td class="name">Sheid Mania</td><td>Negócio</td><td>Anual</td><td><span class="tag r">13/10</span></td><td class="r num">9</td><td class="r num">3</td></tr>
+        <tr><td class="name">Jenniffer Rocha</td><td>Negócio</td><td>Anual</td><td>19/10</td><td class="r num">89</td><td class="r num">21</td></tr>
+        <tr><td class="name">Davi Calçados Matriz</td><td>Negócio</td><td>Anual</td><td>23/10</td><td class="r num">43</td><td class="r num">23</td></tr>
+        <tr><td class="name">Finesse</td><td>Negócio</td><td>Anual</td><td><span class="tag a">08/08?</span></td><td class="r num">368</td><td class="r num">26</td></tr>
+        <tr><td class="name">Encanto Presentes</td><td>Essencial</td><td>Anual</td><td><span class="tag a">15/09?</span></td><td class="r num">75</td><td class="r num">26</td></tr></table></div><div class="more">+ 13 lojas</div></div>
+    </article>
+
+    <article class="card" id="c-semvenda">
+      <div class="ch"><div><h3>Pagantes sem venda</h3><p>Dias desde a última venda</p></div><div class="tools"><button class="ic ex" onclick="toggle('c-semvenda')">⤢</button></div></div>
+      <div class="hero"><span class="v num">7</span><span class="u">de 18, há mais de 7 dias</span></div>
+      <div class="hb" id="hb-semvenda"></div>
+      <div class="foot"><span>Dojôs e Federação não usam o Caixa</span></div>
+      <div class="detail"><div class="insight red"><span>🔴</span><span><b>Sheid Mania</b> e <b>Fernanda Rangel</b> são anuais sem uso: o churn que dá para evitar antes da renovação.</span></div></div>
+    </article>
+  </div>
+
+  <!-- PRODUTO E USO -->
+  <div class="sec"><h2>Produto e uso</h2><span>Quem entra, o que usa, quando usa</span></div>
+  <div class="grid">
+    <article class="card w6" id="c-acesso">
+      <div class="ch"><div><h3>Acesso</h3><p>Lojas com login na semana · pagantes em destaque</p></div><div class="tools"><button class="ic ex" onclick="toggle('c-acesso')">⤢</button></div></div>
+      <div class="hero"><span class="v num">15<span class="u" style="font-size:18px">/18</span></span><span class="u">pagantes entraram em 30 dias</span><span class="pill warn">3 nunca entraram</span></div>
+      <div class="chart" id="ch-acesso"></div>
+      <div class="legend"><span><i style="background:var(--accent)"></i>Todas as lojas</span><span><i style="background:var(--teal)"></i>Pagantes</span></div>
+      <div class="detail">
+        <div class="mini">
+          <div><span class="lbl">Logins · 30d</span><div class="v num">838</div><small>40 lojas</small></div>
+          <div><span class="lbl">Dias ativos · mediana</span><div class="v num">19</div><small>pagantes, de 30</small></div>
+          <div><span class="lbl">Login falhou</span><div class="v num">96</div><small>30 dias</small></div>
+          <div><span class="lbl">Trocas de loja</span><div class="v num">648</div><small>6 grupos multi-CNPJ</small></div>
+        </div>
+        <div class="cols"><div><h4>Dias ativos por pagante · 30 dias</h4><div class="hb" id="hb-engaj"></div></div>
+        <div><h4>Quem não entra</h4>
+          <div class="tw"><table><tr><th>Loja</th><th>Plano</th><th>Último login</th><th></th></tr>
+          <tr><td class="name">Shobukan São Paulo</td><td>Essencial</td><td>nunca</td><td><span class="tag m">dojô</span></td></tr>
+          <tr><td class="name">Bassai Dai Academia</td><td>Essencial</td><td>nunca</td><td><span class="tag m">dojô</span></td></tr>
+          <tr><td class="name">Kano Dojo</td><td>Essencial</td><td>nunca</td><td><span class="tag m">dojô</span></td></tr>
+          <tr><td class="name">Sheid Mania</td><td>Negócio</td><td>08/10</td><td><span class="tag r">3 dias no mês</span></td></tr>
+          <tr><td class="name">Luciano Messias</td><td>Essencial</td><td>12/10</td><td><span class="tag a">5 dias, novo</span></td></tr></table></div>
+          <div class="insight" style="margin-top:10px"><span>💡</span><span>Os 3 dojôs são contas do Karatê sem Caixa: medir por <b>atletas cadastrados</b>, não por login.</span></div></div></div>
+      </div>
+    </article>
+
+    <article class="card w6" id="c-uso">
+      <div class="ch"><div><h3>Uso por funcionalidade</h3><p>Lojas que usaram cada módulo em 30 dias</p></div><div class="tools"><button class="ic ex" onclick="toggle('c-uso')">⤢</button></div></div>
+      <div class="hero"><span class="v num">4</span><span class="u">módulos com uso amplo · 10 de nicho</span></div>
+      <div class="hb" id="hb-uso"></div>
+      <div class="foot"><span>Base: <b>40</b> lojas com login no período</span><span>Tabelas por módulo</span></div>
+      <div class="detail">
+        <div class="cols">
+          <div><h4>Menos usados · oportunidade ou ruído</h4><div class="hb" id="hb-uso-menos"></div></div>
+          <div><h4>Por módulo</h4>
+            <div class="tw"><table><tr><th>Módulo</th><th class="r">Lojas 7d</th><th class="r">Lojas 30d</th><th class="r">Eventos 30d</th><th class="r">Já usaram</th></tr>
+            <tr><td>Estoque</td><td class="r num">15</td><td class="r num">22</td><td class="r num">5.881</td><td class="r num">30</td></tr>
+            <tr><td>Clientes</td><td class="r num">14</td><td class="r num">22</td><td class="r num">824</td><td class="r num">27</td></tr>
+            <tr><td>Caixa</td><td class="r num">14</td><td class="r num">17</td><td class="r num">854</td><td class="r num">18</td></tr>
+            <tr><td>Crediário</td><td class="r num">12</td><td class="r num">14</td><td class="r num">1.174</td><td class="r num">16</td></tr>
+            <tr><td>Abertura de caixa</td><td class="r num">7</td><td class="r num">9</td><td class="r num">55</td><td class="r num">14</td></tr>
+            <tr><td>Importação</td><td class="r num">2</td><td class="r num">4</td><td class="r num">11</td><td class="r num">9</td></tr>
+            <tr><td>Aura Notas</td><td class="r num">3</td><td class="r num">3</td><td class="r num">55</td><td class="r num">3</td></tr>
+            <tr><td>Vitrine</td><td class="r num">0</td><td class="r num">2</td><td class="r num">11</td><td class="r num">6</td></tr></table></div></div>
+        </div>
+        <div class="insight warn"><span>⚠️</span><span>Hoje o uso é inferido pelas <b>tabelas de cada módulo</b>. Telas só de leitura (Relatórios, Painel, Etiquetas) ficam invisíveis até o app registrar <b>evento de navegação</b>.</span></div>
+      </div>
+    </article>
+
+    <article class="card" id="c-hora">
+      <div class="ch"><div><h3>Horário de uso</h3><p>Vendas por hora · 30 dias</p></div><div class="tools"><button class="ic ex" onclick="toggle('c-hora')">⤢</button></div></div>
+      <div class="hero"><span class="v num">16h</span><span class="u">pico · 123 vendas</span></div>
+      <div class="chart" id="ch-hora"></div>
+      <div class="foot"><span>Janela segura para deploy: <b>antes das 9h</b></span></div>
+      <div class="detail"><div class="insight"><span>💡</span><span><b>86%</b> das vendas entre 10h e 18h. Deploy, migração e manutenção fora dessa janela.</span></div></div>
+    </article>
+
+    <article class="card" id="c-plat">
+      <div class="ch"><div><h3>Plataforma</h3><p>Vendas por dia · 14 dias</p></div><div class="tools"><button class="ic ex" onclick="toggle('c-plat')">⤢</button></div></div>
+      <div class="hero"><span class="v num">17</span><span class="u">vendas ontem</span><span class="pill up">canary ok</span></div>
+      <div class="chart" id="ch-vendas"></div>
+      <div class="foot"><span>Recorde: <b>76</b> na sexta 10/10</span></div>
+      <div class="detail"><div class="mini"><div><span class="lbl">Lojas vendendo · 24h</span><div class="v num">5</div></div><div><span class="lbl">Venda sintética</span><div class="v num" style="color:var(--green)">ok</div><small>há 4 min</small></div><div><span class="lbl">Erros 5xx · 24h</span><div class="v num">0</div></div><div><span class="lbl">Incidentes · 30d</span><div class="v num">1</div><small>build mudo 11/10</small></div></div></div>
+    </article>
+
+    <article class="card" id="c-feat">
+      <div class="ch"><div><h3>Adoção por recurso</h3><p>Pagantes que usam · de 18</p></div><div class="tools"><button class="ic ex" onclick="toggle('c-feat')">⤢</button></div></div>
+      <div class="hb" id="hb-adocao"></div>
+      <div class="foot"><span>NFC-e: <b>3</b> lojas emitem, <b>15</b> não</span></div>
+      <div class="detail"><div class="insight"><span>💡</span><span><b>Aura Notas</b> e <b>Relatórios por e-mail</b> têm 3 lojas cada. Ou o recurso não é encontrado, ou não é necessário: a resposta vem da próxima ligação de ativação.</span></div></div>
+    </article>
+  </div>
+
+  <!-- OPERAÇÃO -->
+  <div class="sec"><h2>Operação</h2><span>Fiscal, crediário, contatos, frentes</span></div>
+  <div class="grid">
+    <article class="card" id="c-fiscal">
+      <div class="ch"><div><h3>Fiscal</h3><p>NFC-e · 7 dias</p></div><div class="tools"><button class="ic ex" onclick="toggle('c-fiscal')">⤢</button></div></div>
+      <div class="hero"><span class="v num">1</span><span class="u">rejeitada de 53 emitidas</span><span class="pill up">98%</span></div>
+      <div class="chart" id="ch-fiscal"></div>
+      <div class="foot"><span>Certificados a vencer em 30 dias: <b>0</b></span></div>
+      <div class="detail"><div class="tw"><table><tr><th>Loja</th><th class="r">Emitidas</th><th class="r">Rejeitadas</th><th>Último motivo</th></tr><tr><td class="name">Finesse</td><td class="r num">41</td><td class="r num">1</td><td>CFOP inválido</td></tr><tr><td class="name">Encanto</td><td class="r num">9</td><td class="r num">0</td><td>—</td></tr><tr><td class="name">Davi Matriz</td><td class="r num">3</td><td class="r num">0</td><td>—</td></tr></table></div></div>
+    </article>
+
+    <article class="card" id="c-cred">
+      <div class="ch"><div><h3>Crediário</h3><p>Parcelas vencidas por loja</p></div><div class="tools"><button class="ic ex" onclick="toggle('c-cred')">⤢</button></div></div>
+      <div class="hero"><span class="v num">361</span><span class="u">parcelas em 11 lojas</span></div>
+      <div class="hb" id="hb-cred"></div>
+      <div class="foot"><span>Argumento para a <b>régua de cobrança</b></span></div>
+      <div class="detail"><div class="insight"><span>💡</span><span>Jenniffer e Maria Eduarda somam <b>52%</b> do atraso da plataforma. Piloto da régua de WhatsApp começa por elas.</span></div></div>
+    </article>
+
+    <article class="card" id="c-cont">
+      <div class="ch"><div><h3>Contatos</h3><p>Site hoje · WhatsApp quando a API entrar</p></div><div class="tools"><button class="ic ex" onclick="toggle('c-cont')">⤢</button></div></div>
+      <div class="hero"><span class="v num">2</span><span class="u">na semana</span><span class="pill up">0 sem resposta</span></div>
+      <div class="chart" id="ch-cont"></div>
+      <div class="foot"><span>Último: <b>sáb 11/10</b>, formulário do site</span></div>
+      <div class="detail"><div class="tw"><table><tr><th>Quando</th><th>Quem</th><th>Canal</th><th>Status</th></tr><tr><td>11/10 14:20</td><td class="name">Talita Franklim</td><td>site</td><td><span class="tag g">respondido</span></td></tr><tr><td>08/10 09:05</td><td class="name">Nalia Miranda</td><td>site</td><td><span class="tag g">respondido</span></td></tr></table></div></div>
+    </article>
+
+    <article class="card" id="c-frentes">
+      <div class="ch"><div><h3>Frentes</h3><p>Pagantes e trials por frente</p></div><div class="tools"><button class="ic ex" onclick="toggle('c-frentes')">⤢</button></div></div>
+      <div class="hb" id="hb-frentes"></div>
+      <div class="foot"><span><b>29</b> trials sem frente atribuída</span></div>
+      <div class="detail"><div class="insight warn"><span>⚠️</span><span>A frente só nasce no cadastro desde 06/10. As contas anteriores precisam de atribuição pela Gestão Aura.</span></div></div>
+    </article>
+
+    <button class="card" style="border-style:dashed;align-items:center;justify-content:center;color:var(--muted);min-height:150px" onclick="openM('m-cat')">＋ Adicionar bloco do catálogo</button>
+  </div>
+</div>
+
+<!-- FICHA -->
+<div class="scrim" id="m-ficha" onclick="if(event.target===this)closeM(this)">
+  <div class="modal" role="dialog">
+    <div class="mh"><div><span class="tag r">risco</span> <h2 style="display:inline">Sheid Mania Personalizados</h2><p>Negócio anual · pagante desde 06/06 · Studio · vence amanhã</p></div><button class="x" onclick="closeM(this)">×</button></div>
+    <div class="mb">
+      <div class="mini"><div><span class="lbl">Última venda</span><div class="v num">21/09</div><small>22 dias</small></div><div><span class="lbl">Dias ativos · 30d</span><div class="v num">3</div><small>último login 08/10</small></div><div><span class="lbl">Vendas · 30d</span><div class="v num">9</div><small>79 no total</small></div><div><span class="lbl">Asaas</span><div class="v num">pago</div><small>14/09 · R$ 140,83</small></div></div>
+      <div><h4 class="lbl" style="margin-bottom:6px">Vendas por semana · 12 semanas</h4><div class="chart" id="ch-ficha"></div></div>
+      <div><h4 class="lbl" style="margin-bottom:6px">Módulos que usa</h4><div class="chips"><span class="tag g">Caixa</span><span class="tag g">Estoque</span><span class="tag g">Studio pedidos</span><span class="tag m">Crediário</span><span class="tag m">Aura Notas</span><span class="tag m">Vitrine</span></div></div>
+      <div class="tl"><div><span>13/10</span><span>Aparece em <b>Pagantes sem venda</b>, <b>Pagantes · vence</b> e <b>Acesso · quem não entra</b></span></div><div><span>21/09</span><span>Última venda · Asaas apagou 2 cobranças</span></div><div><span>14/09</span><span>Pagamento recebido</span></div></div>
+    </div>
+    <div class="mf"><span>Fontes: sales, audit_log, Asaas</span><div><button class="btn sm">WhatsApp</button> <button class="btn sm">Registrar contato</button> <button class="btn sm primary">Abrir cliente</button></div></div>
+  </div>
+</div>
+
+<!-- CATÁLOGO -->
+<div class="scrim" id="m-cat" onclick="if(event.target===this)closeM(this)">
+  <div class="modal" role="dialog">
+    <div class="mh"><div><h2>Catálogo de blocos</h2><p>Um bloco só entra se o número se calcula sozinho.</p></div><button class="x" onclick="closeM(this)">×</button></div>
+    <div class="mb"><div class="cat">
+      <label><input type="checkbox" checked><span><b>Trials por degrau</b><small>clients-360</small></span></label>
+      <label><input type="checkbox" checked><span><b>Receita</b><small>Asaas + OFX</small></span></label>
+      <label><input type="checkbox" checked><span><b>Acesso</b><small>audit_log login</small></span></label>
+      <label><input type="checkbox" checked><span><b>Uso por funcionalidade</b><small>tabelas por módulo</small></span></label>
+      <label><input type="checkbox" checked><span><b>Horário de uso</b><small>sales por hora</small></span></label>
+      <label><input type="checkbox" checked><span><b>Adoção por recurso</b><small>pagantes por módulo</small></span></label>
+      <label><input type="checkbox"><span><b>Telas visitadas</b><small style="color:var(--amber)">precisa de evento de navegação no app</small></span></label>
+      <label><input type="checkbox"><span><b>Etiquetas impressas</b><small style="color:var(--amber)">precisa de contador</small></span></label>
+      <label><input type="checkbox"><span><b>Tempo até a 1ª venda</b><small>sales, companies</small></span></label>
+      <label><input type="checkbox"><span><b>Aurinha</b><small>depois do piloto</small></span></label>
+      <label><input type="checkbox"><span><b>Custos</b><small>lançamento mensal</small></span></label>
+      <label><input type="checkbox" disabled><span><b>NPS</b><small style="color:var(--amber)">sem pesquisa no produto</small></span></label>
+    </div></div>
+    <div class="mf"><span>13 ativos · 5 disponíveis · 1 em construção</span><div><button class="btn sm ghost" onclick="closeM(this)">Cancelar</button> <button class="btn sm primary" onclick="closeM(this)">Salvar painel</button></div></div>
+  </div>
+</div>
+
+<script>
+/* ---------- helpers ---------- */
+var NS='http://www.w3.org/2000/svg';
+function el(t,a){var e=document.createElementNS(NS,t);for(var k in a)e.setAttribute(k,a[k]);return e}
+function svgIn(id,w,h){var c=document.getElementById(id);var s=c.tagName==='svg'?c:el('svg',{});s.setAttribute('viewBox','0 0 '+w+' '+h);if(c!==s){c.innerHTML='';c.appendChild(s)}return s}
+function spark(id,vals,color){var w=92,h=36,s=svgIn(id,w,h),mx=Math.max.apply(null,vals),mn=Math.min.apply(null,vals);var pts=vals.map(function(v,i){return [i*(w-4)/(vals.length-1)+2,h-3-(v-mn)/(mx-mn||1)*(h-8)]});
+ var d='M'+pts.map(function(p){return p[0]+','+p[1]}).join('L');s.appendChild(el('path',{d:d+'L'+pts[pts.length-1][0]+','+h+'L'+pts[0][0]+','+h+'Z',fill:color,opacity:.12}));s.appendChild(el('path',{d:d,fill:'none',stroke:color,'stroke-width':2,'stroke-linejoin':'round'}));var l=pts[pts.length-1];s.appendChild(el('circle',{cx:l[0],cy:l[1],r:2.5,fill:color}))}
+function bars(id,vals,labels,o){o=o||{};var w=320,h=o.h||90,pad=18,s=svgIn(id,w,h),mx=Math.max.apply(null,vals),n=vals.length,bw=(w-4)/n;
+ [0.5,1].forEach(function(f){var y=h-pad-(h-pad-8)*f;s.appendChild(el('line',{x1:0,x2:w,y1:y,y2:y,stroke:'var(--grid)','stroke-width':1}));});
+ vals.forEach(function(v,i){var bh=(h-pad-8)*v/(mx||1),x=i*bw+2,col=o.color||'var(--accent)';if(o.hi&&o.hi(i,v))col=o.hiColor||'var(--teal)';if(o.lastLight&&i===n-1)col='var(--accent-2)';
+  s.appendChild(el('rect',{x:x+bw*.15,y:h-pad-bh,width:bw*.7,height:bh,rx:3,fill:col}));
+  if(o.values&&(v===mx||o.values==='all')){var t=el('text',{x:x+bw/2,y:h-pad-bh-3,'text-anchor':'middle','font-size':9,fill:'var(--muted)','font-family':'Manrope','font-weight':700});t.textContent=v;s.appendChild(t)}
+  if(labels&&labels[i]){var t2=el('text',{x:x+bw/2,y:h-4,'text-anchor':'middle','font-size':9,fill:'var(--muted)'});t2.textContent=labels[i];s.appendChild(t2)}})}
+function lines(id,series,labels,o){o=o||{};var w=o.w||360,h=o.h||110,padL=22,padB=16,s=svgIn(id,w,h),all=[].concat.apply([],series.map(function(x){return x.v})),mx=o.max||Math.max.apply(null,all),n=series[0].v.length;
+ [0,0.5,1].forEach(function(f){var y=h-padB-(h-padB-10)*f;s.appendChild(el('line',{x1:padL,x2:w,y1:y,y2:y,stroke:'var(--grid)'}));var t=el('text',{x:padL-4,y:y+3,'text-anchor':'end','font-size':9,fill:'var(--muted)'});t.textContent=Math.round(mx*f);s.appendChild(t)});
+ series.forEach(function(sr){var pts=sr.v.map(function(v,i){return [padL+i*(w-padL-6)/(n-1),h-padB-(h-padB-10)*v/(mx||1)]});var d='M'+pts.map(function(p){return p[0]+','+p[1]}).join('L');
+  if(sr.area)s.appendChild(el('path',{d:d+'L'+pts[n-1][0]+','+(h-padB)+'L'+pts[0][0]+','+(h-padB)+'Z',fill:sr.c,opacity:.1}));
+  s.appendChild(el('path',{d:d,fill:'none',stroke:sr.c,'stroke-width':2.2,'stroke-linejoin':'round'}));pts.forEach(function(p,i){s.appendChild(el('circle',{cx:p[0],cy:p[1],r:i===n-1?3.5:2.2,fill:sr.c}))});
+  if(sr.labelLast){var t=el('text',{x:pts[n-1][0]-6,y:pts[n-1][1]-7,'text-anchor':'end','font-size':10,fill:sr.c,'font-family':'Manrope','font-weight':700});t.textContent=sr.v[n-1];s.appendChild(t)}});
+ labels.forEach(function(l,i){if(!l)return;var t=el('text',{x:padL+i*(w-padL-6)/(n-1),y:h-3,'text-anchor':i===0?'start':i===n-1?'end':'middle','font-size':9,fill:'var(--muted)'});t.textContent=l;s.appendChild(t)})}
+function funnel(id,steps,w){w=w||360;var h=96,s=svgIn(id,w,h),mx=steps[0].v,bh=14,gap=4;steps.forEach(function(st,i){var y=i*(bh+gap),bw=Math.max(3,(w-150)*st.v/mx);s.appendChild(el('rect',{x:120,y:y,width:bw,height:bh,rx:4,fill:st.c||'var(--accent)',opacity:st.v?1:.25}));
+ var t=el('text',{x:114,y:y+11,'text-anchor':'end','font-size':11,fill:'var(--fg-2)'});t.textContent=st.l;s.appendChild(t);var v=el('text',{x:124+bw,y:y+11,'font-size':11,fill:'var(--fg)','font-family':'Manrope','font-weight':700});v.textContent=st.v+(st.p?'  ·  '+st.p:'');s.appendChild(v)})}
+function donut(id,parts){var w=360,h=120,s=svgIn(id,w,h),r=42,cx=62,cy=60,C=2*Math.PI*r,tot=parts.reduce(function(a,p){return a+p.v},0),off=0;
+ parts.forEach(function(p){var len=C*p.v/tot;s.appendChild(el('circle',{cx:cx,cy:cy,r:r,fill:'none',stroke:p.c,'stroke-width':14,'stroke-dasharray':len+' '+(C-len),'stroke-dashoffset':-off,transform:'rotate(-90 '+cx+' '+cy+')'}));off+=len});
+ var t=el('text',{x:cx,y:cy+7,'text-anchor':'middle','font-size':22,'font-family':'Manrope','font-weight':800,fill:'var(--fg)'});t.textContent=tot;s.appendChild(t);
+ parts.forEach(function(p,i){var y=30+i*22;s.appendChild(el('rect',{x:130,y:y-9,width:10,height:10,rx:3,fill:p.c}));var l=el('text',{x:146,y:y,'font-size':12,fill:'var(--fg-2)'});l.textContent=p.l;s.appendChild(l);var v=el('text',{x:w-10,y:y,'text-anchor':'end','font-size':12,'font-family':'Manrope','font-weight':700,fill:'var(--fg)'});v.textContent=p.v+(p.s?' · '+p.s:'');s.appendChild(v)})}
+function hbars(id,rows,o){o=o||{};var c=document.getElementById(id),mx=o.max||Math.max.apply(null,rows.map(function(r){return r.v}));c.innerHTML='';rows.forEach(function(r){var d=document.createElement('div');d.className='r';
+ d.innerHTML='<span class="n">'+r.l+'</span><span class="t"><span class="f '+(r.c||'')+'" style="width:'+(100*r.v/mx)+'%"></span></span><span class="v num">'+(r.t||r.v)+'</span>';c.appendChild(d)})}
+
+/* ---------- data (banco de 13/10) ---------- */
+spark('sp-mrr',[234,516,685,826,1417,1651],'var(--accent)');
+spark('sp-pag',[11,12,13,14,16,18],'var(--accent)');
+spark('sp-ativas',[13,12,11,11,16,19,25,28],'var(--teal)');
+spark('sp-vendas',[229,258,270,259],'var(--accent)');
+
+funnel('ch-funnel',[{l:'Cadastraram',v:29},{l:'Com produtos',v:16,p:'55%'},{l:'Venderam',v:7,p:'24%'},{l:'Viram checkout',v:0,p:'desde hoje'},{l:'Assinaram',v:2,p:'7%',c:'var(--teal)'}],560);
+lines('ch-mrr',[{v:[234,516,685,826,1417,1651],c:'var(--accent)',area:true,labelLast:true}],['Mai','Jun','Jul','Ago','Set','Out'],{h:110,w:560});
+hbars('hb-wf',[{l:'Início 12/09',v:1417,t:'1.417'},{l:'Novos',v:234,t:'+234',c:'teal'},{l:'Upgrades',v:0,t:'0'},{l:'Cancelados',v:0,t:'0',c:'red'},{l:'Hoje',v:1651,t:'1.651'}]);
+donut('ch-donut',[{l:'Negócio anual',v:8,s:'R$ 1.127',c:'var(--accent)'},{l:'Negócio mensal',v:2,s:'R$ 338',c:'var(--accent-2)'},{l:'Essencial anual',v:2,s:'R$ 186',c:'var(--teal)'}]);
+bars('ch-cad',[1,1,15,4,9,9,3],['31/08','07/09','14/09','21/09','28/09','05/10','12/10'],{values:true,lastLight:true});
+hbars('hb-origem',[{l:'Site (self-service)',v:24},{l:'Código de convite',v:4,c:'teal'},{l:'Gestão Aura',v:1,c:'light'}]);
+hbars('hb-frente',[{l:'Sem frente',v:29,c:'light'},{l:'Varejo',v:3},{l:'Outro',v:2},{l:'Matcon',v:1},{l:'Ótica',v:1},{l:'Assistência',v:1}]);
+donut('ch-plan',[{l:'Negócio',v:12,s:'10 anual',c:'var(--accent)'},{l:'Essencial',v:5,s:'2 anual',c:'var(--teal)'},{l:'Expansão',v:1,s:'interno',c:'var(--accent-2)'}]);
+hbars('hb-semvenda',[{l:'Fernanda Rangel',v:56,t:'56 d',c:'red'},{l:'Sheid Mania',v:22,t:'22 d',c:'red'},{l:'Federação Paulista',v:90,t:'nunca',c:'light'},{l:'3 dojôs JKA',v:90,t:'nunca',c:'light'}],{max:90});
+
+lines('ch-acesso',[{v:[13,12,11,11,16,19,25,28],c:'var(--accent)',area:true,labelLast:true},{v:[11,10,10,10,12,14,15,15],c:'var(--teal)',labelLast:true}],['17/08','','31/08','','14/09','','28/09','05/10'],{h:110,max:30,w:560});
+hbars('hb-engaj',[{l:'Finesse',v:26},{l:'Valen Eletrônicos',v:26},{l:'Encanto Presentes',v:26},{l:'Maria Eduarda',v:24},{l:'Davi Matriz',v:23},{l:'Jenniffer Rocha',v:21},{l:'Fernanda Rangel',v:19},{l:'MHT Alimentos',v:16},{l:'Federação Paulista',v:13},{l:'Qbonita',v:11},{l:'Davi Villa Branca',v:8,c:'amber'},{l:'Luciano Messias',v:5,c:'amber'},{l:'Sheid Mania',v:3,c:'red'},{l:'3 dojôs JKA',v:0,t:'0',c:'red'}],{max:30});
+hbars('hb-uso',[{l:'Estoque',v:22},{l:'Clientes',v:22},{l:'Caixa',v:17},{l:'Crediário',v:14},{l:'Abertura de caixa',v:9,c:'light'},{l:'Importação',v:4,c:'light'},{l:'Aura Notas',v:3,c:'light'},{l:'Ordens de serviço',v:3,c:'light'}],{max:40});
+hbars('hb-uso-menos',[{l:'Studio pedidos',v:3,c:'amber'},{l:'Relatórios por e-mail',v:3,c:'amber'},{l:'Orçamentos Matcon',v:3,c:'amber'},{l:'Vitrine',v:2,c:'amber'},{l:'WhatsApp',v:1,c:'red'},{l:'Studio orçamentos',v:1,c:'red'},{l:'Compras Matcon',v:1,c:'red'},{l:'Etiquetas',v:0,t:'?',c:'light'}],{max:40});
+bars('ch-hora',[4,16,59,82,70,75,93,76,123,104,73,50,8,2,11],['8','','10','','12','','14','','16','','18','','20','','22'],{values:true,hi:function(i,v){return v===123}});
+bars('ch-vendas',[32,29,43,38,38,1,32,17,57,48,41,76,3,17],['29','','1/10','','','','5','','','','','10','','12'],{values:true,hi:function(i){return i===13}});
+hbars('hb-adocao',[{l:'Caixa',v:14,t:'14/18'},{l:'Estoque',v:14,t:'14/18'},{l:'Clientes',v:13,t:'13/18'},{l:'Crediário',v:10,t:'10/18'},{l:'Aura Notas',v:3,t:'3/18',c:'amber'},{l:'Relatórios',v:3,t:'3/18',c:'amber'},{l:'Vitrine',v:2,t:'2/18',c:'red'}],{max:18});
+bars('ch-fiscal',[6,9,7,11,8,0,12],['ter','qua','qui','sex','sáb','dom','seg'],{h:80,color:'var(--teal)'});
+hbars('hb-cred',[{l:'Jenniffer Rocha',v:107},{l:'Maria Eduarda',v:80},{l:'Valen Eletrônicos',v:63},{l:'Fernanda Rangel',v:31},{l:'Finesse',v:28},{l:'outras 6',v:52,c:'light'}]);
+bars('ch-cont',[1,0,2,1,0,3,2],['31/08','','','','','','12/10'],{h:80,values:true});
+hbars('hb-frentes',[{l:'Varejo',v:3,t:'3 trials'},{l:'Matcon',v:3,t:'2 pag · 1'},{l:'Karatê',v:9,t:'9 dojôs',c:'teal'},{l:'Ótica',v:1,t:'1 trial'},{l:'Assistência',v:1,t:'1 trial'},{l:'Studio',v:1,t:'1 pag'}],{max:9});
+bars('ch-ficha',[9,7,8,6,5,8,4,3,2,0,0,0],['jul','','','','ago','','','','set','','','out'],{h:80,values:'all'});
+
+/* ---------- interactions ---------- */
+function toggle(id){var c=document.getElementById(id);var was=c.classList.contains('open');document.querySelectorAll('.card.open').forEach(function(x){x.classList.remove('open')});if(!was){c.classList.add('open');c.scrollIntoView({behavior:'smooth',block:'start'})}}
+function openM(id){document.getElementById(id).classList.add('on');document.body.style.overflow='hidden'}
+function closeM(x){var s=x.classList&&x.classList.contains('scrim')?x:x.closest('.scrim');s.classList.remove('on');document.body.style.overflow=''}
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){document.querySelectorAll('.scrim.on').forEach(function(s){s.classList.remove('on')});document.body.style.overflow=''}});
+</script>

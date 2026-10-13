@@ -1,0 +1,292 @@
+// ============================================================
+// Gestão Aura › Hoje (13/10/2026)
+//
+// Tela única de blocos que se calculam sozinhos: faixa de indicadores,
+// alertas com verbo e três seções (Negócio, Produto e uso, Operação) numa
+// grade de 12 colunas. Um card expande por vez, no lugar, e mostra as
+// listas por nome de loja. Mockup: docs/mockups/gestao-aura-painel.html.
+//
+// Os dados vêm de usePainelHoje — hoje estáticos, amanhã da API.
+// ============================================================
+import { useEffect, useMemo, useRef, useState } from "react";
+import { View, Text, StyleSheet, Pressable, Platform, Dimensions, ActivityIndicator } from "react-native";
+import { useRouter } from "expo-router";
+import { Colors } from "@/constants/colors";
+import { Icon } from "@/components/Icon";
+import { toast } from "@/components/Toast";
+import { BlocoCard, Pill } from "./BlocoCard";
+import { Sparkline } from "./Graficos";
+import { CatalogoBlocos, FichaClienteModal } from "./PainelModais";
+import { DEFINICOES, SECOES } from "./blocos";
+import { Paleta } from "./paleta";
+import { PAINEL_COM_DADOS_DE_EXEMPLO, usePainelHoje } from "./usePainelHoje";
+import type { Alerta, Bloco, BlocoId } from "./tipos";
+
+var GAP = 12;
+var FUSO = "America/Sao_Paulo";
+
+function dataPorExtenso(iso: string): string {
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return "Hoje";
+  var txt = d.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", timeZone: FUSO }).replace("-feira", "");
+  return txt.charAt(0).toUpperCase() + txt.slice(1);
+}
+function hora(iso: string): string {
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: FUSO });
+}
+
+// Quantos itens de largura mínima `min` cabem por linha.
+function porLinha(largura: number, min: number, teto: number): number {
+  return Math.max(1, Math.min(teto, Math.floor((largura + GAP) / (min + GAP))));
+}
+function larguraDe(largura: number, n: number): number | string {
+  if (n <= 1) return "100%";
+  return Math.floor((largura - GAP * (n - 1)) / n);
+}
+
+var COR_ALERTA: Record<Alerta["tipo"], { ponto: string; halo: string }> = {
+  risco: { ponto: Colors.red, halo: Colors.redD },
+  atencao: { ponto: Colors.amber, halo: Colors.amberD },
+  bom: { ponto: Colors.green, halo: Colors.greenD },
+};
+
+export function PainelHoje() {
+  var router = useRouter();
+  var { painel, layoutPadrao, catalogo, recalcular } = usePainelHoje();
+  var [largura, setLargura] = useState(function() { return Math.max(320, Math.min(1240, Dimensions.get("window").width) - 40); });
+  var [aberto, setAberto] = useState<BlocoId | null>(null);
+  var [ativos, setAtivos] = useState<BlocoId[]>(layoutPadrao);
+  var [catalogoAberto, setCatalogoAberto] = useState(false);
+  var [fichaDe, setFichaDe] = useState<string | null>(null);
+  var [recalculando, setRecalculando] = useState(false);
+  var cards = useRef<Record<string, any>>({});
+
+  var blocoPorId = useMemo(function() {
+    var mapa: Record<string, Bloco> = {};
+    painel.blocos.forEach(function(b) { mapa[b.id] = b; });
+    return mapa;
+  }, [painel]);
+
+  // Ao expandir, o card vai para a largura toda e muda de lugar: rolar até ele.
+  useEffect(function() {
+    if (!aberto || Platform.OS !== "web") return;
+    var t = setTimeout(function() {
+      var no = cards.current[aberto as string];
+      if (no && typeof no.scrollIntoView === "function") no.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
+    return function() { clearTimeout(t); };
+  }, [aberto]);
+
+  function alternar(id: BlocoId) { setAberto(function(atual) { return atual === id ? null : id; }); }
+
+  function abrirBloco(id: BlocoId) {
+    if (ativos.indexOf(id) < 0) setAtivos(ativos.concat([id]));
+    setAberto(id);
+  }
+
+  // Alerta de uma loja abre a ficha dela; os demais expandem o bloco.
+  function aoTocarAlerta(a: Alerta) {
+    if (a.company_id) { setFichaDe(a.company_id); return; }
+    if (a.bloco) abrirBloco(a.bloco);
+  }
+
+  function aoVerbo(verbo: string, loja: string) {
+    toast.info("“" + verbo + "” para " + loja + " entra quando a API do painel estiver ligada.");
+  }
+
+  async function aoRecalcular() {
+    setRecalculando(true);
+    try {
+      await recalcular();
+      toast.info(PAINEL_COM_DADOS_DE_EXEMPLO ? "Dados de exemplo de 13/10: o recálculo entra com a API." : "Painel recalculado.");
+    } catch { toast.error("Erro ao recalcular"); }
+    finally { setRecalculando(false); }
+  }
+
+  // Grade de 12 colunas: larguras do bloco no desktop, 2 por linha no tablet, 1 no celular.
+  var modo: "desktop" | "tablet" | "celular" = largura >= 980 ? "desktop" : largura > 640 ? "tablet" : "celular";
+  function larguraDoCard(colunas: number, estaAberto: boolean): number | string {
+    if (estaAberto || modo === "celular") return "100%";
+    return larguraDe(largura, modo === "tablet" ? 2 : 12 / colunas);
+  }
+
+  var destaques = painel.destaques || [];
+  var nDestaques = porLinha(largura, 220, 4);
+  var nAlertas = porLinha(largura, 280, 3);
+  var botaoReordenar = (
+    <Pressable testID="painel-reordenar" disabled style={[s.btn, { opacity: 0.5 }]} accessibilityRole="button" accessibilityLabel="Reordenar blocos (em breve)" accessibilityState={{ disabled: true }}>
+      <Text style={s.btnText}>Reordenar</Text>
+    </Pressable>
+  );
+
+  return (
+    <View testID="painel-hoje" onLayout={function(e) { var w = Math.round(e.nativeEvent.layout.width); if (w > 0 && w !== largura) setLargura(w); }}>
+      {/* Cabeçalho */}
+      <View style={s.hdr}>
+        <View style={{ flexShrink: 1, minWidth: 0 }}>
+          <Text style={s.rotulo}>Gestão Aura · Hoje</Text>
+          <Text style={s.h1}>{dataPorExtenso(painel.calculado_em)}</Text>
+          <View style={s.meta}>
+            <Text style={s.metaText}>Calculado às <Text style={s.metaForte}>{hora(painel.calculado_em)}</Text></Text>
+            <Text style={s.metaText}>Próximo às <Text style={s.metaForte}>{hora(painel.proximo_calculo)}</Text></Text>
+            {painel.fontes && painel.fontes.length ? <Text style={s.metaText}>Fontes: <Text style={s.metaForte}>{painel.fontes.join(" · ")}</Text></Text> : null}
+            {painel.ao_vivo ? <Pill variacao={{ texto: "ao vivo", tom: "sobe" }} /> : null}
+            {PAINEL_COM_DADOS_DE_EXEMPLO ? <Pill variacao={{ texto: "dados de exemplo · 13/10", tom: "alerta" }} /> : null}
+          </View>
+        </View>
+        <View style={s.acts}>
+          <Pressable testID="painel-abrir-catalogo" onPress={function() { setCatalogoAberto(true); }} style={s.btn} accessibilityRole="button">
+            <Icon name="plus" size={13} color={Colors.ink} />
+            <Text style={s.btnText}>Adicionar bloco</Text>
+          </Pressable>
+          {Platform.OS === "web"
+            ? <div title="Reordenar por arraste chega numa próxima entrega" style={{ display: "flex" }}>{botaoReordenar}</div>
+            : botaoReordenar}
+          <Pressable testID="painel-recalcular" onPress={aoRecalcular} disabled={recalculando} style={[s.btn, s.btnPrimario]} accessibilityRole="button">
+            {recalculando ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="refresh" size={13} color="#fff" />}
+            <Text style={[s.btnText, { color: "#fff" }]}>Recalcular</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Faixa de indicadores */}
+      {destaques.length > 0 && (
+        <View style={s.faixa} testID="painel-destaques">
+          {destaques.map(function(d) {
+            return (
+              <Pressable
+                key={d.id}
+                testID={"destaque-" + d.id}
+                disabled={!d.bloco}
+                onPress={function() { if (d.bloco) abrirBloco(d.bloco); }}
+                style={[s.kpi, { width: larguraDe(largura, nDestaques) as any }]}
+              >
+                <Text style={s.rotulo} numberOfLines={1}>{d.rotulo}</Text>
+                <View style={s.kpiCorpo}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={s.kpiValor} numberOfLines={1}>{d.valor}</Text>
+                    <View style={s.kpiNota}>
+                      {d.variacao ? <Pill variacao={d.variacao} /> : null}
+                      <Text style={s.kpiNotaText} numberOfLines={1}>{d.nota}</Text>
+                    </View>
+                  </View>
+                  <Sparkline valores={d.serie} tom={d.tom} />
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+
+      {/* Alertas com verbo */}
+      {painel.alertas.length > 0 && (
+        <View style={s.alertas} testID="painel-alertas">
+          {painel.alertas.map(function(a, i) {
+            var cor = COR_ALERTA[a.tipo] || COR_ALERTA.atencao;
+            return (
+              <Pressable key={i} testID={"alerta-" + i} onPress={function() { aoTocarAlerta(a); }} style={[s.alerta, { width: larguraDe(largura, nAlertas) as any }]} accessibilityRole="button">
+                <View style={[s.alertaHalo, { backgroundColor: cor.halo }]}><View style={[s.alertaPonto, { backgroundColor: cor.ponto }]} /></View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={s.alertaTitulo}>{a.titulo}</Text>
+                  <Text style={s.alertaDetalhe}>{a.detalhe}</Text>
+                </View>
+                <Text style={s.alertaVerbo}>{a.verbo} →</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+
+      {/* Seções */}
+      {SECOES.map(function(sec, si) {
+        var defs = DEFINICOES.filter(function(d) { return d.secao === sec.id && ativos.indexOf(d.id) >= 0; });
+        var ultima = si === SECOES.length - 1;
+        if (defs.length === 0 && !ultima) return null;
+        return (
+          <View key={sec.id} testID={"painel-secao-" + sec.id}>
+            <View style={s.sec}>
+              <Text style={s.h2}>{sec.titulo}</Text>
+              <Text style={s.secNota}>{sec.nota || (defs.length + (defs.length === 1 ? " bloco" : " blocos"))}</Text>
+            </View>
+            <View style={s.grade}>
+              {defs.map(function(def) {
+                var estaAberto = aberto === def.id;
+                return (
+                  <BlocoCard
+                    key={def.id}
+                    ref={function(no) { cards.current[def.id] = no; }}
+                    definicao={def}
+                    bloco={blocoPorId[def.id] || null}
+                    aberto={estaAberto}
+                    largura={larguraDoCard(def.colunas, estaAberto)}
+                    onAlternar={function() { alternar(def.id); }}
+                    onAbrirLoja={setFichaDe}
+                    onVerbo={aoVerbo}
+                  />
+                );
+              })}
+              {ultima && (
+                <Pressable testID="painel-adicionar-bloco" onPress={function() { setCatalogoAberto(true); }} style={[s.adicionar, { width: larguraDoCard(4, false) as any }]} accessibilityRole="button">
+                  <Icon name="plus" size={14} color={Colors.ink3} />
+                  <Text style={s.adicionarText}>Adicionar bloco do catálogo</Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
+        );
+      })}
+
+      <CatalogoBlocos
+        visible={catalogoAberto}
+        itens={catalogo}
+        ativos={ativos}
+        onClose={function() { setCatalogoAberto(false); }}
+        onSalvar={function(novos) {
+          setAtivos(novos);
+          if (aberto && novos.indexOf(aberto) < 0) setAberto(null);
+          setCatalogoAberto(false);
+        }}
+      />
+      <FichaClienteModal
+        companyId={fichaDe}
+        onClose={function() { setFichaDe(null); }}
+        onVerbo={aoVerbo}
+        onAbrirCliente={function() { setFichaDe(null); router.push("/gestao-aura-clientes" as any); }}
+      />
+    </View>
+  );
+}
+
+var s = StyleSheet.create({
+  rotulo: { fontSize: 11, fontWeight: "600", letterSpacing: 1, textTransform: "uppercase", color: Colors.ink3 },
+  hdr: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", gap: 16, flexWrap: "wrap", marginBottom: 20 },
+  h1: { fontSize: 26, fontWeight: "800", color: Colors.ink, letterSpacing: -0.4, marginTop: 2 },
+  meta: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: 14, rowGap: 4, marginTop: 4 },
+  metaText: { fontSize: 13, color: Colors.ink3 },
+  metaForte: { fontWeight: "500", color: Colors.ink2 },
+  acts: { flexDirection: "row", gap: 8, flexWrap: "wrap", maxWidth: "100%" },
+  btn: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg3, borderRadius: 10, paddingHorizontal: 13, paddingVertical: 8 },
+  btnPrimario: { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  btnText: { fontSize: 14, fontWeight: "500", color: Colors.ink },
+  faixa: { flexDirection: "row", flexWrap: "wrap", gap: GAP, marginBottom: 14 },
+  kpi: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 16, paddingHorizontal: 18, paddingVertical: 16, gap: 6, minWidth: 0 },
+  kpiCorpo: { flexDirection: "row", alignItems: "flex-end", gap: 12 },
+  kpiValor: { fontSize: 30, lineHeight: 32, fontWeight: "800", color: Colors.ink, letterSpacing: -0.5 },
+  kpiNota: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 },
+  kpiNotaText: { flexShrink: 1, fontSize: 12, color: Colors.ink3 },
+  alertas: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 28 },
+  alerta: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, minWidth: 0 },
+  alertaHalo: { width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  alertaPonto: { width: 10, height: 10, borderRadius: 5 },
+  alertaTitulo: { fontSize: 14, fontWeight: "600", color: Colors.ink },
+  alertaDetalhe: { fontSize: 12, color: Colors.ink3 },
+  alertaVerbo: { fontSize: 14, fontWeight: "600", color: Paleta.accentTexto },
+  sec: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginTop: 6, marginBottom: 12 },
+  h2: { fontSize: 17, fontWeight: "700", color: Colors.ink },
+  secNota: { fontSize: 12, color: Colors.ink3 },
+  grade: { flexDirection: "row", flexWrap: "wrap", gap: GAP, marginBottom: 30 },
+  adicionar: { minHeight: 150, borderWidth: 1, borderStyle: "dashed", borderColor: Colors.border2, borderRadius: 16, flexDirection: "row", gap: 6, alignItems: "center", justifyContent: "center", padding: 16 },
+  adicionarText: { fontSize: 14, color: Colors.ink3 },
+});
