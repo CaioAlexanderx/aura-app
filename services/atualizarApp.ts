@@ -22,12 +22,24 @@
 // sendo o backend expor um /version dizendo QUAL vertical mudou. Até lá o
 // caminho é este: o usuário pede a atualização quando quer, custo zero de
 // ruído.
+//
+// 13/10/2026 — JANELA DE CONGELAMENTO. Dentro das janelas de utils/
+// janelaDeCongelamento.ts (Black Friday e fim de ano) uma versão nova só
+// vale se o build a marcou como hotfix: o build grava dist/version.json
+// (scripts/congelamento.js gerar-versao) com { hash, hotfix }. Sem o
+// arquivo, ou com hash que não bate com o servido, vale "não é hotfix" — na
+// dúvida, congelado. Fora da janela nada disso é lido: comportamento igual
+// ao de antes. Ver docs/CONGELAMENTO.md.
 // ============================================================
+import { emCongelamento } from "@/utils/janelaDeCongelamento";
 
 /** Hash do bundle dentro do HTML servido por "/". */
 export const ENTRY_RE = /\/_expo\/static\/js\/web\/entry-([a-f0-9]+)\.js/;
 /** Hash no src de uma script tag já carregada (pode ser caminho relativo). */
 export const ENTRY_SRC_RE = /entry-([a-f0-9]+)\.js/;
+
+/** Onde o build publica a marca de versão (hotfix ou não). */
+export const VERSION_URL = "/version.json";
 
 /** Quanto esperamos pelo update() do service worker antes de recarregar. */
 export const LIMITE_DO_SW_MS = 2500;
@@ -37,6 +49,8 @@ export type ResultadoDaVerificacao =
   | "atualizado"
   /** o servidor serve outro bundle */
   | "nova"
+  /** há bundle novo, mas estamos em congelamento e ele não é hotfix: fica quieto */
+  | "pausada"
   /** não deu para comparar: sem hash (dev), offline, fetch bloqueado */
   | "indisponivel";
 
@@ -44,6 +58,8 @@ export type ResultadoDaVerificacao =
 export type DependenciasDaAtualizacao = {
   w?: any;
   buscar?: (entrada: any, init?: any) => Promise<any>;
+  /** "Agora", para os testes da janela de congelamento. */
+  agora?: Date;
 };
 
 function janela(deps?: DependenciasDaAtualizacao): any {
@@ -86,6 +102,47 @@ export async function hashServido(deps?: DependenciasDaAtualizacao): Promise<str
   }
 }
 
+/**
+ * O bundle servido foi marcado como hotfix no build? `false` quando o
+ * arquivo não existe, não é JSON, não diz `hotfix: true` ou é de outro
+ * bundle (o hash amarra a marca: um version.json velho, de cache de borda
+ * ou de deploy no meio, nunca libera um bundle que não é o dele).
+ */
+export async function hotfixServido(
+  hashDoBundleServido: string,
+  deps?: DependenciasDaAtualizacao,
+): Promise<boolean> {
+  const w = janela(deps);
+  const buscar =
+    deps && "buscar" in deps
+      ? deps.buscar
+      : typeof w?.fetch === "function"
+        ? w.fetch.bind(w)
+        : null;
+  if (!buscar) return false;
+  try {
+    const res = await buscar(VERSION_URL, { cache: "no-store" });
+    if (!res || !res.ok) return false;
+    const v = JSON.parse(await res.text());
+    return v?.hotfix === true && v?.hash === hashDoBundleServido;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Este bundle servido pode substituir o que está rodando? Fora da janela de
+ * congelamento sempre (nem lê o version.json); dentro, só se for hotfix.
+ */
+export async function atualizacaoLiberada(
+  hashDoBundleServido: string,
+  deps?: DependenciasDaAtualizacao,
+): Promise<boolean> {
+  const agora = deps?.agora ?? new Date(Date.now());
+  if (!emCongelamento(agora)) return true;
+  return hotfixServido(hashDoBundleServido, deps);
+}
+
 export async function verificarAtualizacao(
   deps?: DependenciasDaAtualizacao,
 ): Promise<ResultadoDaVerificacao> {
@@ -95,7 +152,8 @@ export async function verificarAtualizacao(
   if (!carregado) return "indisponivel";
   const servido = await hashServido(deps);
   if (!servido) return "indisponivel";
-  return servido === carregado ? "atualizado" : "nova";
+  if (servido === carregado) return "atualizado";
+  return (await atualizacaoLiberada(servido, deps)) ? "nova" : "pausada";
 }
 
 function comLimite<T>(p: Promise<T>, ms: number): Promise<T | null> {

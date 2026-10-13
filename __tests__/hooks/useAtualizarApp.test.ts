@@ -70,6 +70,31 @@ describe("um toque resolve", () => {
   });
 });
 
+describe("janela de congelamento: versão nova sem hotfix", () => {
+  test("estado 'pausada': NÃO recarrega e o botão volta a ficar livre", async () => {
+    mockVerificar.mockResolvedValue("pausada");
+    const { result } = renderHook(() => useAtualizarApp());
+
+    await act(async () => { await result.current.atualizar(); });
+
+    expect(result.current.estado).toBe("pausada");
+    expect(mockAtualizar).not.toHaveBeenCalled();
+    expect(result.current.ocupado).toBe(false);
+  });
+
+  test("tocar de novo verifica outra vez (o hotfix pode ter chegado)", async () => {
+    mockVerificar.mockResolvedValue("pausada");
+    const { result } = renderHook(() => useAtualizarApp());
+
+    await act(async () => { await result.current.atualizar(); });
+    mockVerificar.mockResolvedValue("nova");
+    await act(async () => { await result.current.atualizar(); });
+
+    expect(mockVerificar).toHaveBeenCalledTimes(2);
+    expect(mockAtualizar).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("quando não dá para verificar", () => {
   test("primeiro toque só informa; o segundo recarrega na fé", async () => {
     mockVerificar.mockResolvedValue("indisponivel");
@@ -141,6 +166,8 @@ describe("o texto é um só para os dois cards", () => {
     expect(detalheDaAtualizacao("parado")).toMatch(/[uú]ltima vers[aã]o publicada/i);
     expect(detalheDaAtualizacao("verificando")).toMatch(/Procurando/i);
     expect(detalheDaAtualizacao("atualizado")).toMatch(/j[aá] est[aá] na vers[aã]o mais nova/i);
+    // congelamento: o lojista não lê nada de "pausada" nem de "janela"
+    expect(detalheDaAtualizacao("pausada")).toBe(detalheDaAtualizacao("atualizado"));
     expect(detalheDaAtualizacao("nova")).toMatch(/Recarregando/i);
     expect(detalheDaAtualizacao("indisponivel")).toMatch(/Toque de novo/i);
   });
@@ -148,6 +175,7 @@ describe("o texto é um só para os dois cards", () => {
   test("o rótulo diz 'Recarregar' justamente quando não deu para verificar", () => {
     expect(rotuloDaAtualizacao("parado")).toBe("Atualizar");
     expect(rotuloDaAtualizacao("atualizado")).toBe("Atualizar");
+    expect(rotuloDaAtualizacao("pausada")).toBe("Atualizar");
     expect(rotuloDaAtualizacao("verificando")).toBe("...");
     expect(rotuloDaAtualizacao("nova")).toBe("...");
     expect(rotuloDaAtualizacao("indisponivel")).toBe("Recarregar");

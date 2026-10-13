@@ -39,6 +39,7 @@ import { useInstalarApp } from "@/hooks/useInstalarApp";
 import { isMicrositeHost } from "@/utils/microsite";
 import { GuiaInstalarKarate } from "@/components/karate/GuiaInstalarKarate";
 import { detalheDaAtualizacao, rotuloDaAtualizacao, useAtualizarApp } from "@/hooks/useAtualizarApp";
+import { useAvisoDeCongelamento } from "@/hooks/useAvisoDeCongelamento";
 import { ativarAviso, desativarAviso, estadoDoAviso, type EstadoDoAviso } from "@/services/webPush";
 
 export function AuraNoCelularKarateCard() {
@@ -132,21 +133,25 @@ export function AuraNoCelularKarateCard() {
 // ------------------------------------------------------------
 function LinhaDeAtualizacao() {
   const { estado, atualizar, ocupado } = useAtualizarApp();
+  // Só staff, e só dentro da janela de congelamento (docs/CONGELAMENTO.md).
+  const aviso = useAvisoDeCongelamento();
+  const emDia = estado === "atualizado" || estado === "pausada";
 
   return (
     <View style={s.row}>
       <View style={{ flex: 1 }}>
         <Text style={s.rowTitulo}>Versão do app</Text>
         <Text style={s.rowDetalhe}>{detalheDaAtualizacao(estado)}</Text>
+        {aviso ? <Text style={s.rowDetalhe}>{aviso}</Text> : null}
       </View>
       <Pressable
         onPress={atualizar}
         disabled={ocupado}
-        style={[s.pill, estado === "atualizado" ? s.pillOn : s.pillNeutro]}
+        style={[s.pill, emDia ? s.pillOn : s.pillNeutro]}
         accessibilityRole="button"
         accessibilityLabel="Atualizar o Aura Karatê para a versão mais nova"
       >
-        <Text style={[s.pillTxt, { color: estado === "atualizado" ? KarateColors.ok : KarateColors.ink2 }]}>
+        <Text style={[s.pillTxt, { color: emDia ? KarateColors.ok : KarateColors.ink2 }]}>
           {rotuloDaAtualizacao(estado)}
         </Text>
       </Pressable>
