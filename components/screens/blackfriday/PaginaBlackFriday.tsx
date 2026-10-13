@@ -10,7 +10,7 @@
 //   1. O que vai faltar      (OQueVaiFaltar)
 //   2. Assento de temporada  (AssentoTemporadaCard, o mesmo de Configurações)
 //   3. Vale-troca no cupom   (espelho do toggle de Políticas do Caixa)
-//   4. Placar do dia         (cartão de outra frente — slot abaixo)
+//   4. Placar do dia         (PlacarDoDiaCard, app#1060)
 //
 // Seção que a loja não tem some; nada de cartão bloqueado ou isca.
 // Mockup: docs/mockups/black-friday.html.
@@ -28,12 +28,7 @@ import { OQueVaiFaltar } from "./OQueVaiFaltar";
 import { SecaoCard } from "./SecaoCard";
 import { ValeTrocaEspelho } from "./ValeTrocaEspelho";
 import { secoesDaPagina } from "./secoes";
-// "Placar do dia": o cartão está sendo criado por outra frente
-// (components/screens/blackfriday/PlacarDoDiaCard.tsx, PR app#1060, assinatura
-// `PlacarDoDiaCard({ companyId, isOwner })`). Quando o arquivo
-// existir, descomente o import e o bloco "placar" mais abaixo, e acrescente a
-// chave `placar` em secoes.ts. Enquanto isso a seção não aparece.
-// import { PlacarDoDiaCard } from "./PlacarDoDiaCard";
+import { PlacarDoDiaCard } from "./PlacarDoDiaCard";
 
 export function PaginaBlackFriday() {
   const visible = useVisibleModules();
@@ -82,13 +77,11 @@ export function PaginaBlackFriday() {
         </SecaoCard>
       )}
 
-      {/* "placar": slot reservado — ver o comentário do import acima.
-      {tem("placar") && (
-        <SecaoCard testID="bf-secao-placar" numero={numero("placar")} titulo="Placar do dia" porQueAgora="...">
+      {tem("placar") && company?.id && (
+        <SecaoCard testID="bf-secao-placar" numero={numero("placar")} titulo={textos("placar").titulo} porQueAgora={textos("placar").porQueAgora}>
           <PlacarDoDiaCard companyId={company.id} isOwner={isOwner} />
         </SecaoCard>
       )}
-      */}
     </View>
   );
 }

@@ -22,10 +22,10 @@
          período (de hoje até 02/02/2027)
        · cabeçalho = ScreenHero; seções em cartões na ordem:
          1. O que vai faltar  2. Assento de temporada
-         3. Vale-troca no cupom  4. Placar do dia (espaço reservado)
+         3. Vale-troca no cupom  4. Placar do dia (PlacarDoDiaCard, app#1060)
        · seção que o plano/visão não tem DESAPARECE (nada de bloqueado ou
-         isca) — assento e vale-troca são por empresa e não aparecem no
-         consolidado
+         isca) — assento, vale-troca e placar são por empresa e não aparecem
+         no consolidado; o placar só existe em plano com WhatsApp
        · dentro de "O que vai faltar": data-alvo, janela, resumo, lista
          pela data prevista, "já zerou" à parte, busca, copiar lista
 
@@ -255,6 +255,8 @@
   .tg p { margin: 0; font-size: 13px; color: var(--ink3); line-height: 1.55; max-width: 620px; }
   .sw { width: 44px; height: 26px; border-radius: 999px; background: var(--violet); position: relative; flex-shrink: 0; }
   .sw::after { content: ""; position: absolute; right: 3px; top: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; }
+  .sw.off { background: rgba(120,100,240,0.25); }
+  .sw.off::after { right: auto; left: 3px; }
   .slot { border: 1px dashed var(--border2); border-radius: 14px; padding: 22px; text-align: center; color: var(--ink3); font-size: 13px; }
   .badge-novo { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; background: rgba(251,191,36,0.12); color: var(--amber); margin-left: 8px; vertical-align: middle; }
   .page { max-width: none; margin: 0; }
@@ -268,7 +270,7 @@
   <b>Mockup standalone</b> · 13/10/2026 · antes do código (regra 4 do CLAUDE.md). Página <b>Black Friday</b> (rota
   <code>/black-friday</code>, chave <code>black_friday</code>): item do menu logo abaixo de <b>Painel</b>, visível de
   13/10/2026 até 02/02/2027 e some depois. Cada seção é um cartão com título, uma linha de "por que agora" e o conteúdo.
-  <b>No consolidado</b> as seções por empresa (assento, vale-troca) somem — não há bloqueio nem isca. Dados da seção 1:
+  <b>No consolidado</b> as seções por empresa (assento, vale-troca, placar) somem, e o placar só existe em plano com WhatsApp — não há bloqueio nem isca. Dados da seção 1:
   fixture <code>ruptura.grupo.json</code> do backend. Os botões abaixo só alternam o que a tela mostra.
 </div>
 
@@ -348,16 +350,22 @@
       <div class="st"><span class="num-sec">3</span>Vale-troca no cupom</div>
       <div class="why"><b>Por que agora:</b> janeiro é o mês da troca de presente, e quem ganhou raramente vem com o comprador. O cupom sai com um QR e a troca abre com a venda carregada.</div>
       <div class="tg">
-        <p>Nas vendas de 01/11/2026 a 31/12/2026, o cupom sai com um QR. Quem ganhou o presente troca até 31/01/2027 sem o comprador: você bipa o QR no Caixa e a troca abre com a venda carregada. Vale para este computador.</p>
+        <p>Nas vendas de 01/11/2026 a 31/12/2026, o cupom sai com um QR. Quem ganhou o presente troca até 31/01/2027 sem o comprador: você bipa o QR no Caixa e a troca abre com a venda carregada. Vale para todos os computadores da loja.</p>
         <div class="sw"></div>
       </div>
     </div>
 
     <!-- 4 -->
-    <div class="secao-card">
-      <div class="st"><span class="num-sec">4</span>Placar do dia <span class="badge-novo">em breve</span></div>
-      <div class="why"><b>Por que agora:</b> no dia da Black Friday o dono quer ver, sem abrir relatório, quanto já vendeu e contra quê.</div>
-      <div class="slot">Espaço reservado — o cartão do Placar do dia (outra frente) entra aqui. Sem ele, a seção não aparece.</div>
+    <div class="secao-card" id="sec-placar">
+      <div class="st"><span class="num-sec">4</span>Placar do dia</div>
+      <div class="why"><b>Por que agora:</b> no movimento da temporada o dono quer saber quanto a loja vendeu sem abrir relatório: ao fim do dia o placar chega no WhatsApp.</div>
+      <div class="tg">
+        <p>Todo fim de dia, o dono recebe no WhatsApp o placar da loja: vendas, ticket médio, o que mais saiu, comparação com o mês anterior e o que entrou do crediário.</p>
+        <div class="sw off"></div>
+      </div>
+      <div class="kv" style="margin-top:12px"><span>Situação</span><span>Desligado</span></div>
+      <div class="kv"><span>WhatsApp da loja</span><span>Conectado</span></div>
+      <div class="kv"><span>Modelo da mensagem</span><span>Aprovado</span></div>
     </div>
   </div>
 </div>
@@ -454,6 +462,7 @@
     // assento e vale-troca são por empresa: somem no consolidado (nada de bloqueado/isca)
     document.getElementById('sec-assento').style.display = vis === 'grupo' ? 'none' : '';
     document.getElementById('sec-vale').style.display = vis === 'grupo' ? 'none' : '';
+    document.getElementById('sec-placar').style.display = vis === 'grupo' ? 'none' : '';
     var sub = vis === 'grupo'
       ? 'Dos <b>6 itens</b> que venderam nos últimos 14 dias, <span class="warn">' + itens.length + ' não chegam até 30/11</span> no ritmo atual e <b>1</b> já zerou. A primeira ruptura é em <b>17/10</b>.'
       : 'Dos <b>5 itens</b> que venderam nos últimos 14 dias, <span class="warn">' + itens.length + ' não chegam até 30/11</span> no ritmo atual e <b>1</b> já zerou. A primeira ruptura é em <b>17/10</b>.';
