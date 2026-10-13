@@ -16,6 +16,7 @@ import { CnpjSection } from "@/components/screens/configuracoes/CnpjSection";
 import { PdvSettingsCard } from "@/components/screens/configuracoes/PdvSettingsCard";
 import { AuraNoCelularCard } from "@/components/screens/configuracoes/AuraNoCelularCard";
 import { AssentoTemporadaCard } from "@/components/screens/configuracoes/AssentoTemporadaCard";
+import { PlacarDoDiaCard } from "@/components/screens/configuracoes/PlacarDoDiaCard";
 import { useConfigProfile } from "@/components/screens/configuracoes/useConfigProfile";
 import { SectionTitle, Card, EditField, InfoRow, PLANS, AURA_WHATSAPP, AURA_EMAIL, sh } from "@/components/screens/configuracoes/shared";
 
@@ -363,6 +364,13 @@ export default function ConfiguracoesScreen() {
             <>
               <SectionTitle title="Vendas" />
               <PdvSettingsCard />
+              {/* 13/10/2026: placar do dia no WhatsApp do dono (Aura-backend#816). So o dono liga. */}
+              {company?.id ? (
+                <PlacarDoDiaCard
+                  companyId={company.id}
+                  isOwner={((company as any)?.member_role || "owner") === "owner" || !!isStaff}
+                />
+              ) : null}
               <Pressable onPress={() => router.push("/(tabs)/cupons")} style={s.linkCard}>
                 <View style={s.linkCardIcon}>
                   <Icon name="star" size={18} color={Colors.violet3} />
