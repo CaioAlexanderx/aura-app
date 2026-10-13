@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aura — Black Friday</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&family=Instrument+Serif:ital@0;1&display=swap" />
+<style>
+  /* ============================================================
+     Mockup standalone — página "Black Friday", 13/10/2026.
+     Regra 4 do CLAUDE.md: mockup antes do código.
+
+     Decisão do Caio (13/10): "O que vai faltar" NÃO é aba do Estoque. É a
+     primeira seção de uma página nova, "Black Friday", no menu logo abaixo
+     de Painel, que reúne as funções da temporada: cada uma num cartão com
+     título, uma linha de "por que agora" e o conteúdo.
+
+     O que o mockup fixa:
+       · item "Black Friday" no menu, abaixo de Painel; some fora do
+         período (de hoje até 02/02/2027)
+       · cabeçalho = ScreenHero; seções em cartões na ordem:
+         1. O que vai faltar  2. Assento de temporada
+         3. Vale-troca no cupom  4. Placar do dia (espaço reservado)
+       · seção que o plano/visão não tem DESAPARECE (nada de bloqueado ou
+         isca) — assento e vale-troca são por empresa e não aparecem no
+         consolidado
+       · dentro de "O que vai faltar": data-alvo, janela, resumo, lista
+         pela data prevista, "já zerou" à parte, busca, copiar lista
+
+     Dados da seção 1: fixture do backend (tests/fixtures/estoque/
+     ruptura.grupo.json, Aura-backend#814). Use a barra de anotações para
+     alternar loja/consolidado e o estado da seção 1.
+     ============================================================ */
+  :root {
+    --bg: #06081a;
+    --bg2: #0a0c1f;
+    --bg3: rgba(20,14,38,0.55);
+    --bg4: #141830;
+    --border: rgba(120,100,240,0.18);
+    --border2: rgba(167,139,250,0.30);
+    --ink: #f0edff;
+    --ink2: #cfc7ee;
+    --ink3: #9a93bb;
+    --violet: #7c3aed;
+    --violet3: #a78bfa;
+    --green: #34d399;
+    --amber: #fbbf24;
+    --red: #f87171;
+  }
+  * { box-sizing: border-box; font-variant-numeric: tabular-nums; }
+  body {
+    margin: 0; padding: 40px 24px 80px;
+    background:
+      radial-gradient(ellipse at 20% 0%, rgba(109,40,217,0.16) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, rgba(139,92,246,0.10) 0%, transparent 45%),
+      var(--bg);
+    color: var(--ink);
+    font-family: 'DM Sans', -apple-system, sans-serif;
+    min-height: 100vh;
+  }
+  .page { max-width: 1100px; margin: 0 auto 40px; }
+  .nota {
+    max-width: 1100px; margin: 0 auto 20px; padding: 14px 16px;
+    border: 1px dashed var(--border2); border-radius: 12px;
+    font-size: 12.5px; color: var(--ink3); line-height: 1.55;
+  }
+  .nota b { color: var(--violet3); }
+  .nota code { color: var(--violet3); font-family: 'DM Mono', monospace; font-size: 11.5px; }
+  .toolbar {
+    max-width: 1100px; margin: 0 auto 28px; display: flex; gap: 18px; flex-wrap: wrap;
+    align-items: center; font-size: 12px; color: var(--ink3);
+  }
+  .toolbar .grp { display: flex; gap: 6px; align-items: center; }
+  .toolbar button {
+    font: inherit; font-size: 12px; padding: 6px 12px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--bg3); color: var(--ink3); cursor: pointer;
+  }
+  .toolbar button.on { background: var(--violet); border-color: var(--violet); color: #fff; font-weight: 600; }
+
+  /* ── Cabeçalho compartilhado (ScreenHero) ───────────────── */
+  .hero { padding: 16px 4px 18px; }
+  .hero-eyebrow {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--ink3);
+  }
+  .glyph { width: 14px; height: 14px; flex-shrink: 0; }
+  .pill-badge {
+    padding: 3px 8px; border-radius: 999px;
+    background: rgba(255,255,255,0.05); color: var(--ink3);
+    border: 1px solid var(--border);
+    font-size: 10px; letter-spacing: 0.08em;
+  }
+  .hero-title {
+    font-family: 'Instrument Serif', serif; font-size: 64px; line-height: 0.95;
+    letter-spacing: -0.025em; font-weight: 400; margin: 0;
+  }
+  .hero-title span { color: var(--violet3); }
+  .hero-sub { font-size: 14px; color: var(--ink3); margin-top: 10px; max-width: 720px; line-height: 21px; }
+  .hero-sub b { color: var(--ink); font-weight: 600; }
+  .hero-sub .warn { color: var(--amber); font-weight: 600; }
+
+  /* ── Filtros: data-alvo + janela ────────────────────────── */
+  .filtros { display: flex; gap: 22px; flex-wrap: wrap; align-items: flex-end; margin: 4px 0 18px; }
+  .filtro .rot {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--ink3); margin-bottom: 7px;
+  }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip {
+    padding: 8px 14px; border-radius: 999px; font-size: 13px;
+    border: 1px solid var(--border); background: var(--bg3); color: var(--ink3);
+  }
+  .chip.on { background: var(--violet); border-color: var(--violet); color: #fff; font-weight: 600; }
+  .chip small { opacity: 0.75; margin-left: 6px; font-size: 11px; }
+  .filtro .ajuda { font-size: 11.5px; color: var(--ink3); margin-top: 6px; max-width: 360px; line-height: 1.45; }
+
+  /* ── Resumo ─────────────────────────────────────────────── */
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .card {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 16px; padding: 16px 18px;
+  }
+  .card .k {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink3);
+  }
+  .card .v { font-size: 28px; font-weight: 700; margin-top: 8px; letter-spacing: -0.02em; }
+  .card .s { font-size: 12px; color: var(--ink3); margin-top: 4px; }
+  .card.red .v { color: var(--red); }
+  .card.amber .v { color: var(--amber); }
+
+  /* ── Busca + copiar ─────────────────────────────────────── */
+  .barra { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .busca {
+    flex: 1 1 280px; padding: 12px 14px; border-radius: 12px; font: inherit; font-size: 14px;
+    border: 1px solid var(--border); background: var(--bg3); color: var(--ink);
+  }
+  .busca::placeholder { color: var(--ink3); }
+  .btn {
+    padding: 12px 16px; border-radius: 12px; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--violet); background: var(--violet); color: #fff; white-space: nowrap;
+  }
+  .btn.ok { background: rgba(52,211,153,0.14); border-color: var(--green); color: var(--green); }
+
+  /* ── Lista ──────────────────────────────────────────────── */
+  .tabela { border: 1px solid var(--border); border-radius: 16px; overflow: hidden; background: var(--bg3); }
+  .thead, .linha {
+    display: grid; align-items: center; gap: 12px; padding: 12px 18px;
+    grid-template-columns: minmax(0, 2.4fr) 1.3fr 0.7fr 0.8fr 1.1fr 0.9fr 1fr;
+  }
+  .tabela.loja .thead, .tabela.loja .linha { grid-template-columns: minmax(0, 2.6fr) 0.7fr 0.8fr 1.2fr 0.9fr 1fr; }
+  .tabela.loja .c-loja { display: none; }
+  .thead {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink3);
+    border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.02);
+  }
+  .linha { border-bottom: 1px solid var(--border); font-size: 13.5px; }
+  .linha:last-child { border-bottom: 0; }
+  .nome { font-weight: 600; }
+  .var { color: var(--ink3); font-size: 12px; margin-top: 2px; }
+  .cod { color: var(--ink3); font-size: 11px; font-family: 'DM Mono', monospace; margin-top: 2px; }
+  .num { text-align: right; }
+  .thead .num { text-align: right; }
+  .acaba { font-weight: 600; }
+  .acaba small { display: block; color: var(--ink3); font-weight: 400; font-size: 11.5px; margin-top: 2px; }
+  .acaba.urg { color: var(--red); }
+  .acaba.med { color: var(--amber); }
+  .compra { font-weight: 700; color: var(--violet3); }
+  .risco { color: var(--ink2); }
+  .loja-tag {
+    display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 11.5px;
+    background: rgba(124,58,237,0.12); color: var(--violet3); border: 1px solid var(--border);
+  }
+  .comp-nota { font-size: 10.5px; color: var(--amber); margin-top: 4px; }
+  .selo-zerou {
+    display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 10.5px; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    background: rgba(248,113,113,0.12); color: var(--red); border: 1px solid rgba(248,113,113,0.35);
+  }
+  .secao {
+    display: flex; align-items: center; gap: 10px; margin: 26px 4px 10px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink3);
+  }
+  .secao .linha-sec { flex: 1; height: 1px; background: linear-gradient(90deg, var(--border) 0%, transparent 100%); }
+  .secao-ajuda { font-size: 12.5px; color: var(--ink3); margin: 0 4px 10px; max-width: 640px; line-height: 1.5; }
+
+  /* ── Estados ────────────────────────────────────────────── */
+  .estado {
+    border: 1px dashed var(--border2); border-radius: 16px; padding: 44px 24px; text-align: center;
+    background: var(--bg3);
+  }
+  .estado .ic {
+    width: 48px; height: 48px; border-radius: 14px; margin: 0 auto 14px; display: flex;
+    align-items: center; justify-content: center; font-size: 22px; background: rgba(52,211,153,0.12); color: var(--green);
+  }
+  .estado.erro .ic { background: rgba(248,113,113,0.12); color: var(--red); }
+  .estado h3 { margin: 0 0 6px; font-size: 17px; }
+  .estado p { margin: 0 auto; font-size: 13.5px; color: var(--ink3); max-width: 460px; line-height: 1.5; }
+  .skel { height: 58px; border-radius: 12px; margin-bottom: 8px;
+    background: linear-gradient(90deg, var(--bg3) 25%, rgba(167,139,250,0.10) 50%, var(--bg3) 75%);
+    background-size: 200% 100%; animation: sh 1.4s linear infinite; border: 1px solid var(--border); }
+  @keyframes sh { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+  /* ── Celular ────────────────────────────────────────────── */
+  .celular {
+    width: 375px; margin: 0 auto 0; border: 1px solid var(--border2); border-radius: 28px;
+    padding: 18px 14px 22px; background: var(--bg2);
+  }
+  .celular .hero-title { font-size: 38px; }
+  .celular .cards { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .celular .card { padding: 12px 14px; }
+  .celular .card .v { font-size: 21px; }
+  .celular .filtros { gap: 14px; }
+  .cartao {
+    border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; margin-bottom: 8px; background: var(--bg3);
+  }
+  .cartao .topo { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+  .cartao .meio { display: flex; gap: 14px; margin-top: 10px; font-size: 12px; color: var(--ink3); flex-wrap: wrap; }
+  .cartao .meio b { color: var(--ink); font-weight: 600; }
+  .cartao .base { display: flex; justify-content: space-between; margin-top: 10px; align-items: baseline; }
+  .rotulo-mobile {
+    max-width: 1100px; margin: 0 auto 14px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--ink3);
+  }
+
+  @media (max-width: 860px) {
+    .cards { grid-template-columns: 1fr 1fr; }
+    .hero-title { font-size: 38px; }
+    .thead { display: none; }
+    .linha, .tabela.loja .linha { grid-template-columns: 1fr 1fr; }
+  }
+
+  /* ── Página Black Friday ────────────────────────────────── */
+  .layout { max-width: 1280px; margin: 0 auto 40px; display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 28px; }
+  .menu { border: 1px solid var(--border); border-radius: 16px; background: var(--bg3); padding: 12px 8px; align-self: start; font-size: 13.5px; }
+  .menu .sec { font-size: 10px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink3); padding: 6px 10px 8px; }
+  .menu .it { padding: 9px 10px; border-radius: 10px; color: var(--ink2); display: flex; gap: 9px; align-items: center; }
+  .menu .it i { width: 8px; height: 8px; border-radius: 3px; background: rgba(167,139,250,0.35); display: inline-block; }
+  .menu .it.on { background: rgba(124,58,237,0.16); color: #fff; font-weight: 600; border: 1px solid var(--border2); }
+  .menu .it.on i { background: var(--violet3); }
+  .menu .novo { margin-left: auto; font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 6px; border-radius: 999px; background: rgba(52,211,153,0.14); color: var(--green); }
+  .secao-card { border: 1px solid var(--border); border-radius: 20px; background: rgba(14,10,30,0.55); padding: 22px 22px 24px; margin-bottom: 18px; }
+  .secao-card .st { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+  .secao-card .why { font-size: 13px; color: var(--ink3); margin: 4px 0 18px; line-height: 1.5; max-width: 700px; }
+  .secao-card .why b { color: var(--violet3); font-weight: 600; }
+  .secao-card .num-sec { display: inline-block; width: 22px; height: 22px; border-radius: 8px; background: rgba(124,58,237,0.18); color: var(--violet3); font-size: 12px; font-weight: 700; text-align: center; line-height: 22px; margin-right: 8px; }
+  .sub-hero { font-size: 14px; color: var(--ink3); margin: -2px 0 16px; line-height: 21px; }
+  .sub-hero b { color: var(--ink); font-weight: 600; }
+  .sub-hero .warn { color: var(--amber); font-weight: 600; }
+  .kv { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; font-size: 13.5px; border-bottom: 1px solid var(--border); }
+  .kv:last-of-type { border-bottom: 0; }
+  .kv span:first-child { color: var(--ink3); }
+  .tg { display: flex; gap: 16px; align-items: center; justify-content: space-between; }
+  .tg p { margin: 0; font-size: 13px; color: var(--ink3); line-height: 1.55; max-width: 620px; }
+  .sw { width: 44px; height: 26px; border-radius: 999px; background: var(--violet); position: relative; flex-shrink: 0; }
+  .sw::after { content: ""; position: absolute; right: 3px; top: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; }
+  .slot { border: 1px dashed var(--border2); border-radius: 14px; padding: 22px; text-align: center; color: var(--ink3); font-size: 13px; }
+  .badge-novo { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; background: rgba(251,191,36,0.12); color: var(--amber); margin-left: 8px; vertical-align: middle; }
+  .page { max-width: none; margin: 0; }
+  .secao-card .filtros { margin-top: 0; }
+  @media (max-width: 1000px) { .layout { grid-template-columns: 1fr; } .menu { display: none; } }
+</style>
+</head>
+<body>
+
+<div class="nota">
+  <b>Mockup standalone</b> · 13/10/2026 · antes do código (regra 4 do CLAUDE.md). Página <b>Black Friday</b> (rota
+  <code>/black-friday</code>, chave <code>black_friday</code>): item do menu logo abaixo de <b>Painel</b>, visível de
+  13/10/2026 até 02/02/2027 e some depois. Cada seção é um cartão com título, uma linha de "por que agora" e o conteúdo.
+  <b>No consolidado</b> as seções por empresa (assento, vale-troca) somem — não há bloqueio nem isca. Dados da seção 1:
+  fixture <code>ruptura.grupo.json</code> do backend. Os botões abaixo só alternam o que a tela mostra.
+</div>
+
+<div class="toolbar">
+  <div class="grp">Visão:
+    <button data-vis="grupo" class="on">Consolidado (2 lojas)</button>
+    <button data-vis="loja">Uma loja</button>
+  </div>
+  <div class="grp">"O que vai faltar":
+    <button data-est="lista" class="on">Com itens</button>
+    <button data-est="carregando">Carregando</button>
+    <button data-est="vazio">Nada vai faltar</button>
+    <button data-est="erro">Erro</button>
+  </div>
+</div>
+
+<div class="layout" id="desktop">
+  <div class="menu">
+    <div class="sec">Principal</div>
+    <div class="it"><i></i>Painel</div>
+    <div class="it on"><i></i>Black Friday <span class="novo">temporada</span></div>
+    <div class="it"><i></i>Financeiro</div>
+    <div class="it"><i></i>NF-e</div>
+    <div class="sec" style="margin-top:10px">Vendas</div>
+    <div class="it"><i></i>Caixa</div>
+    <div class="it"><i></i>Estoque</div>
+    <div class="it"><i></i>Fornecedores</div>
+  </div>
+
+  <div class="page">
+    <div class="hero">
+      <div class="hero-eyebrow">
+        <svg class="glyph" viewBox="0 0 24 24"><defs><radialGradient id="g" cx="50%" cy="50%"><stop offset="0%" stop-color="#7c3aed" stop-opacity=".85"/><stop offset="100%" stop-color="#7c3aed" stop-opacity="0"/></radialGradient></defs><circle cx="12" cy="12" r="10" fill="none" stroke="#7c3aed" stroke-opacity=".3"/><circle cx="12" cy="12" r="10" fill="url(#g)"/><circle cx="12" cy="12" r="3.2" fill="#7c3aed"/></svg>
+        <span>Aura<span style="color:var(--violet)">.</span> · Temporada</span>
+        <span class="pill-badge" id="badge-vis">Consolidado · 2 empresas</span>
+      </div>
+      <h1 class="hero-title">Black Friday<span>.</span></h1>
+      <div class="hero-sub">Tudo da temporada num lugar só, até 02/02/2027: o que comprar antes de acabar, quem contratar para a equipe e o que oferecer ao cliente.</div>
+    </div>
+
+    <!-- 1 -->
+    <div class="secao-card">
+      <div class="st"><span class="num-sec">1</span>O que vai faltar</div>
+      <div class="why"><b>Por que agora:</b> compra de fim de ano se faz em outubro. Veja o que acaba antes de 30/11 no ritmo atual e quanto comprar de cada item.</div>
+      <div class="sub-hero" id="sub-desktop"></div>
+      <div class="filtros">
+        <div class="filtro">
+          <div class="rot">Até quando</div>
+          <div class="chips">
+            <span class="chip on">Black Friday<small>30/11</small></span>
+            <span class="chip">Natal<small>24/12</small></span>
+            <span class="chip">Outra data…</span>
+          </div>
+        </div>
+        <div class="filtro">
+          <div class="rot">Ritmo das últimas</div>
+          <div class="chips">
+            <span class="chip">7 dias</span><span class="chip on">14 dias</span><span class="chip">30 dias</span>
+          </div>
+        </div>
+      </div>
+      <div id="area-desktop"></div>
+    </div>
+
+    <!-- 2 -->
+    <div class="secao-card" id="sec-assento">
+      <div class="st"><span class="num-sec">2</span>Assento de temporada</div>
+      <div class="why"><b>Por que agora:</b> a loja vende mais e precisa de mais gente no balcão. Um acesso extra de 01/11/2026 a 31/01/2027, pelo preço de um acesso extra, que expira sozinho.</div>
+      <div class="kv"><span>Validade</span><span>01/11/2026 a 31/01/2027</span></div>
+      <div class="kv"><span>Valor por assento</span><span>R$ 19,00 por mensalidade</span></div>
+      <div class="kv"><span>Situação</span><span>Nenhum assento contratado</span></div>
+      <div style="margin-top:14px"><button class="btn">+ Contratar assento</button></div>
+    </div>
+
+    <!-- 3 -->
+    <div class="secao-card" id="sec-vale">
+      <div class="st"><span class="num-sec">3</span>Vale-troca no cupom</div>
+      <div class="why"><b>Por que agora:</b> janeiro é o mês da troca de presente, e quem ganhou raramente vem com o comprador. O cupom sai com um QR e a troca abre com a venda carregada.</div>
+      <div class="tg">
+        <p>Nas vendas de 01/11/2026 a 31/12/2026, o cupom sai com um QR. Quem ganhou o presente troca até 31/01/2027 sem o comprador: você bipa o QR no Caixa e a troca abre com a venda carregada. Vale para este computador.</p>
+        <div class="sw"></div>
+      </div>
+    </div>
+
+    <!-- 4 -->
+    <div class="secao-card">
+      <div class="st"><span class="num-sec">4</span>Placar do dia <span class="badge-novo">em breve</span></div>
+      <div class="why"><b>Por que agora:</b> no dia da Black Friday o dono quer ver, sem abrir relatório, quanto já vendeu e contra quê.</div>
+      <div class="slot">Espaço reservado — o cartão do Placar do dia (outra frente) entra aqui. Sem ele, a seção não aparece.</div>
+    </div>
+  </div>
+</div>
+
+<div class="rotulo-mobile">Celular · 375 px</div>
+<div class="celular" id="celular">
+  <div class="hero">
+    <div class="hero-eyebrow"><span>Aura<span style="color:var(--violet)">.</span> · Temporada</span></div>
+    <h1 class="hero-title">Black Friday<span>.</span></h1>
+  </div>
+  <div class="secao-card" style="padding:16px 14px">
+    <div class="st" style="font-size:17px"><span class="num-sec">1</span>O que vai faltar</div>
+    <div class="why"><b>Por que agora:</b> compra de fim de ano se faz em outubro.</div>
+    <div class="sub-hero" id="sub-mobile"></div>
+    <div id="area-mobile"></div>
+  </div>
+  <div class="secao-card" style="padding:16px 14px">
+    <div class="st" style="font-size:17px"><span class="num-sec">2</span>Assento de temporada</div>
+    <div class="why"><b>Por que agora:</b> equipe extra de 01/11 a 31/01.</div>
+    <div class="kv"><span>Valor</span><span>R$ 19,00/mês</span></div>
+    <div style="margin-top:12px"><button class="btn" style="width:100%">+ Contratar assento</button></div>
+  </div>
+  <div class="secao-card" style="padding:16px 14px">
+    <div class="st" style="font-size:17px"><span class="num-sec">3</span>Vale-troca no cupom</div>
+    <div class="tg"><p style="font-size:12px">Cupom das vendas de 01/11 a 31/12 sai com QR; troca até 31/01/2027.</p><div class="sw"></div></div>
+  </div>
+</div>
+
+<script>
+  var HOJE = new Date(2026, 9, 13);
+  var ATE = '30/11';
+  var ITENS_GRUPO = [
+    { nome: 'Vestido Midi Canelado', variante: 'Preto / M', codigo: '7890000000011', loja: 'Matriz', comp: false, estoque: 10, ritmo: 2, dias: 4, data: '17/10', compra: 91, risco: 9612.60 },
+    { nome: 'Bolsa Tiracolo Caramelo', variante: null, codigo: '7890000000066', loja: 'Filial', comp: false, estoque: 5, ritmo: 0.5, dias: 9, data: '22/10', compra: 25, risco: 3703.05 },
+    { nome: 'Meia Cano Curto Kit 3 Pares', variante: null, codigo: '7890000000042', loja: 'Filial', comp: true, estoque: 30, ritmo: 1.14, dias: 26, data: '08/11', compra: 38, risco: 647.40 },
+    { nome: 'Cinto Couro Fivela Dourada', variante: null, codigo: 'CCF-01', loja: 'Matriz', comp: false, estoque: 60, ritmo: 2, dias: 34, data: '16/11', compra: 41, risco: 1917.60 }
+  ];
+  var ZERADOS = [
+    { nome: 'Blusa Básica Algodão', variante: 'Branco / P', codigo: 'BBA-BRANCO-P', loja: 'Matriz', comp: false, estoque: 0, ritmo: 1, compra: 51, risco: 2515.80 }
+  ];
+  var ITENS_LOJA = [ITENS_GRUPO[0], ITENS_GRUPO[2], ITENS_GRUPO[3]];
+
+  var brl = function (v) { return 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+  var ritmo = function (v) { return String(v).replace('.', ',') + '/dia'; };
+  var cls = function (d) { return d <= 7 ? 'urg' : d <= 21 ? 'med' : ''; };
+
+  var vis = 'grupo', est = 'lista';
+
+  function linhaDesktop(it, zerado) {
+    var lojaTag = '<span class="loja-tag">' + it.loja + '</span>' + (it.comp ? '<div class="comp-nota">estoque compartilhado</div>' : '');
+    var acaba = zerado
+      ? '<span class="selo-zerou">já zerou</span>'
+      : '<div class="acaba ' + cls(it.dias) + '">' + it.data + '<small>em ' + it.dias + ' dias</small></div>';
+    return '<div class="linha">' +
+      '<div><div class="nome">' + it.nome + '</div>' +
+      (it.variante ? '<div class="var">' + it.variante + '</div>' : '') +
+      '<div class="cod">' + it.codigo + '</div></div>' +
+      '<div class="c-loja">' + lojaTag + '</div>' +
+      '<div class="num">' + it.estoque + ' un</div>' +
+      '<div class="num">' + ritmo(it.ritmo) + '</div>' +
+      '<div>' + acaba + '</div>' +
+      '<div class="num compra">comprar ' + it.compra + '</div>' +
+      '<div class="num risco">' + brl(it.risco) + '</div>' +
+      '</div>';
+  }
+  function cabecalho() {
+    return '<div class="thead"><div>Produto</div><div class="c-loja">Loja</div><div class="num">Estoque</div><div class="num">Ritmo</div><div>Acaba em</div><div class="num">Sugestão</div><div class="num">Em risco</div></div>';
+  }
+  function cartaoMobile(it, zerado) {
+    return '<div class="cartao"><div class="topo"><div><div class="nome">' + it.nome + '</div>' +
+      (it.variante ? '<div class="var">' + it.variante + '</div>' : '') +
+      (vis === 'grupo' ? '<div style="margin-top:6px"><span class="loja-tag">' + it.loja + '</span>' + (it.comp ? '<div class="comp-nota">estoque compartilhado</div>' : '') + '</div>' : '') +
+      '</div>' + (zerado ? '<span class="selo-zerou">já zerou</span>' : '<div class="acaba ' + cls(it.dias) + '" style="text-align:right">' + it.data + '<small>em ' + it.dias + ' dias</small></div>') + '</div>' +
+      '<div class="meio"><span>Estoque <b>' + it.estoque + ' un</b></span><span>Ritmo <b>' + ritmo(it.ritmo) + '</b></span></div>' +
+      '<div class="base"><span class="compra">Comprar ' + it.compra + ' un</span><span class="risco">' + brl(it.risco) + ' em risco</span></div></div>';
+  }
+
+  function cartoes(itens, zerados) {
+    // Valor em risco = soma só dos itens que vão faltar (resumo.valor_em_risco
+    // do backend); o que já zerou fica de fora, é outra conversa.
+    var risco = itens.reduce(function (a, i) { return a + i.risco; }, 0);
+    return '<div class="cards">' +
+      '<div class="card amber"><div class="k">Itens que vão faltar</div><div class="v">' + itens.length + '</div><div class="s">até ' + ATE + ' no ritmo atual</div></div>' +
+      '<div class="card red"><div class="k">Valor em risco</div><div class="v">' + brl(risco) + '</div><div class="s">venda que não acontece sem reposição</div></div>' +
+      '<div class="card"><div class="k">Primeira ruptura</div><div class="v">' + itens[0].data + '</div><div class="s">' + itens[0].nome + '</div></div>' +
+      '<div class="card"><div class="k">Já zerados</div><div class="v">' + zerados.length + '</div><div class="s">venderam na janela e acabaram</div></div>' +
+      '</div>';
+  }
+
+  function render() {
+    var itens = vis === 'grupo' ? ITENS_GRUPO : ITENS_LOJA;
+    var zerados = ZERADOS;
+    document.getElementById('badge-vis').textContent = vis === 'grupo' ? 'Consolidado · 2 empresas' : 'Boutique Aurora — Matriz';
+    // assento e vale-troca são por empresa: somem no consolidado (nada de bloqueado/isca)
+    document.getElementById('sec-assento').style.display = vis === 'grupo' ? 'none' : '';
+    document.getElementById('sec-vale').style.display = vis === 'grupo' ? 'none' : '';
+    var sub = vis === 'grupo'
+      ? 'Dos <b>6 itens</b> que venderam nos últimos 14 dias, <span class="warn">' + itens.length + ' não chegam até 30/11</span> no ritmo atual e <b>1</b> já zerou. A primeira ruptura é em <b>17/10</b>.'
+      : 'Dos <b>5 itens</b> que venderam nos últimos 14 dias, <span class="warn">' + itens.length + ' não chegam até 30/11</span> no ritmo atual e <b>1</b> já zerou. A primeira ruptura é em <b>17/10</b>.';
+    var ad = document.getElementById('area-desktop');
+    var am = document.getElementById('area-mobile');
+    var tab = vis === 'loja' ? 'tabela loja' : 'tabela';
+    var d = '', m = '';
+
+    if (est === 'carregando') {
+      document.getElementById('sub-desktop').innerHTML = 'Calculando o ritmo de venda das últimas 2 semanas…';
+      document.getElementById('sub-mobile').innerHTML = 'Calculando o ritmo de venda…';
+      d = m = '<div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div>';
+    } else if (est === 'vazio') {
+      document.getElementById('sub-desktop').innerHTML = 'Dos <b>6 itens</b> que venderam nos últimos 14 dias, <b>nenhum</b> acaba antes de 30/11.';
+      document.getElementById('sub-mobile').innerHTML = document.getElementById('sub-desktop').innerHTML;
+      d = m = '<div class="estado"><div class="ic">✓</div><h3>Nada vai faltar até 30/11 no ritmo atual</h3>' +
+        '<p>Todo item que vendeu nos últimos 14 dias tem estoque para chegar até lá. Se a Black Friday for puxar mais venda que o normal, tente uma janela menor (7 dias) — ela pega o ritmo mais recente.</p></div>';
+    } else if (est === 'erro') {
+      document.getElementById('sub-desktop').innerHTML = '';
+      document.getElementById('sub-mobile').innerHTML = '';
+      d = m = '<div class="estado erro"><div class="ic">!</div><h3>Não consegui calcular o que vai faltar</h3>' +
+        '<p>Algo falhou ao buscar as vendas e o estoque. Nada foi alterado na sua loja. Tente de novo em instantes.</p>' +
+        '<div style="margin-top:16px"><button class="btn">Tentar de novo</button></div></div>';
+    } else {
+      document.getElementById('sub-desktop').innerHTML = sub;
+      document.getElementById('sub-mobile').innerHTML = sub;
+      d += cartoes(itens, zerados);
+      d += '<div class="barra"><input class="busca" placeholder="Buscar por nome, variante ou código…" />' +
+        '<button class="btn" id="copiar">Copiar lista de compra (' + (itens.length + zerados.length) + ')</button></div>';
+      d += '<div class="' + tab + '">' + cabecalho() + itens.map(function (i) { return linhaDesktop(i, false); }).join('') + '</div>';
+      d += '<div class="secao"><span>Já zerou</span><span class="linha-sec"></span></div>';
+      d += '<p class="secao-ajuda">Venderam nas últimas 2 semanas e estão com estoque zerado agora. Ficam à parte: não "vão" faltar, já faltaram.</p>';
+      d += '<div class="' + tab + '">' + zerados.map(function (i) { return linhaDesktop(i, true); }).join('') + '</div>';
+
+      m += cartoes(itens, zerados);
+      m += '<div class="barra"><input class="busca" placeholder="Buscar por nome ou código…" /><button class="btn" style="width:100%">Copiar lista de compra (' + (itens.length + zerados.length) + ')</button></div>';
+      m += itens.map(function (i) { return cartaoMobile(i, false); }).join('');
+      m += '<div class="secao"><span>Já zerou</span><span class="linha-sec"></span></div>';
+      m += zerados.map(function (i) { return cartaoMobile(i, true); }).join('');
+    }
+    ad.innerHTML = d; am.innerHTML = m;
+
+    var b = document.getElementById('copiar');
+    if (b) b.onclick = function () {
+      b.textContent = 'Lista copiada ✓'; b.classList.add('ok');
+      setTimeout(function () { b.textContent = 'Copiar lista de compra (' + (itens.length + zerados.length) + ')'; b.classList.remove('ok'); }, 1800);
+    };
+  }
+
+  document.querySelectorAll('[data-vis]').forEach(function (b) {
+    b.onclick = function () {
+      vis = b.dataset.vis;
+      document.querySelectorAll('[data-vis]').forEach(function (x) { x.classList.toggle('on', x === b); });
+      render();
+    };
+  });
+  document.querySelectorAll('[data-est]').forEach(function (b) {
+    b.onclick = function () {
+      est = b.dataset.est;
+      document.querySelectorAll('[data-est]').forEach(function (x) { x.classList.toggle('on', x === b); });
+      render();
+    };
+  });
+  render();
+  if (location.hash === '#loja') document.querySelector('[data-vis="loja"]').click();
+</script>
+</body>
+</html>
