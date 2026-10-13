@@ -18,6 +18,7 @@ import { UpdateBanner } from "@/components/UpdateBanner";
 import { GlobalOverlays } from "@/components/GlobalOverlays";
 import { KarateLoginTransition } from "@/components/karate/KarateLoginTransition";
 import { useKarateIntro } from "@/stores/karateIntro";
+import { useRegistroDeTelas } from "@/hooks/useRegistroDeTelas";
 import { ehVitrinePublica } from "@/components/studio/storefront/rotasDaVitrine";
 import { mostrarCarregandoSessao } from "@/utils/carregandoSessao";
 import { semAssinatura, destinoSemAssinatura } from "@/utils/muroDeAssinatura";
@@ -52,6 +53,10 @@ function AuthGuard() {
   const consumeKarateIntro = useKarateIntro((st) => st.consume);
   const segments = useSegments();
   const router = useRouter();
+
+  // 13/10/2026: conta as telas visitadas e manda em lote (Gestão Aura).
+  // Aqui, e só aqui — o AuthGuard monta uma vez, no layout raiz.
+  useRegistroDeTelas();
 
   useEffect(() => {
     hydrate();
