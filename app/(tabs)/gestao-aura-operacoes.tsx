@@ -1,33 +1,38 @@
 import { ScrollView, StyleSheet, View, Text, Pressable } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { IS_WIDE } from "@/constants/helpers";
 import { useAuthStore } from "@/stores/auth";
-import { OperacoesAdmin } from "@/components/admin";
+import { OperacoesAdmin } from "@/components/admin/OperacoesAdmin";
+import { ferramentaByKey } from "@/components/admin/ferramentas";
 
 export default function GestaoAuraOperacoesScreen() {
   var router = useRouter();
   var { isStaff } = useAuthStore();
+  var params = useLocalSearchParams<{ ferramenta?: string }>();
+  // ?ferramenta=sla|consultorias|pipeline abre uma das telas do grupo
+  // "Ferramentas" do hub; sem o parâmetro, Operações é só a Equipe Aura.
+  var ferramenta = ferramentaByKey(Array.isArray(params.ferramenta) ? params.ferramenta[0] : params.ferramenta);
   if (!isStaff) return null;
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={s.cnt}>
       <View style={s.header}>
         <Pressable onPress={function() { router.push("/gestao-aura" as any); }} style={s.backBtn}>
           <Icon name="chevron_left" size={16} color={Colors.violet3} />
-          <Text style={s.backText}>Central de Comando</Text>
+          <Text style={s.backText}>{ferramenta ? "Central de Comando › Ferramentas" : "Central de Comando"}</Text>
         </Pressable>
         <View style={s.titleRow}>
           <View style={[s.titleIcon, { backgroundColor: "#f472b6" + "22", borderColor: "#f472b6" + "44" }]}>
             <Icon name="settings" size={18} color="#f472b6" />
           </View>
           <View>
-            <Text style={s.title}>Operações</Text>
-            <Text style={s.subtitle}>Onboarding, SLA e consultorias</Text>
+            <Text style={s.title}>{ferramenta ? ferramenta.title : "Operações"}</Text>
+            <Text style={s.subtitle}>{ferramenta ? ferramenta.description : "Equipe Aura"}</Text>
           </View>
         </View>
       </View>
-      <OperacoesAdmin />
+      <OperacoesAdmin ferramenta={ferramenta ? ferramenta.key : null} />
     </ScrollView>
   );
 }

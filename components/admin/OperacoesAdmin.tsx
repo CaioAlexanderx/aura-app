@@ -1,11 +1,11 @@
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useQuery } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { Icon } from "@/components/Icon";
 import { EquipeAdmin } from "./EquipeAdmin";
-import { useState } from "react";
+import { ferramentaByKey } from "./ferramentas";
 
 type Stage = { key: string; label: string; count: number; clients: any[] };
 type PipelineData = { total: number; stages: Stage[] };
@@ -18,33 +18,26 @@ var STAGE_COLORS = [Colors.red, Colors.amber, Colors.amber, Colors.violet3, Colo
 var STATUS_COLORS: Record<string, { bg: string; text: string }> = { scheduled: { bg: Colors.violetD, text: Colors.violet3 }, completed: { bg: Colors.greenD, text: Colors.green }, cancelled: { bg: Colors.redD, text: Colors.red } };
 var CATEGORY_LABELS: Record<string, string> = { setup: "Setup", training: "Treinamento", automation: "Automação", integration: "Integração", data_analysis: "Análise de dados" };
 
-export function OperacoesAdmin() {
-  var [section, setSection] = useState("pipeline");
-  var { data: pipeline, isLoading: loadP } = useQuery<PipelineData>({ queryKey: ["admin-pipeline"], queryFn: function() { return request("/admin/onboarding/pipeline"); }, staleTime: 120_000 });
-  var { data: sla, isLoading: loadS } = useQuery<SlaData>({ queryKey: ["admin-sla"], queryFn: function() { return request("/admin/metrics/sla"); }, staleTime: 120_000 });
-  var { data: consult } = useQuery<ConsultData>({ queryKey: ["admin-consultations"], queryFn: function() { return request("/admin/consultations"); }, staleTime: 120_000 });
-
-  if (loadP || loadS) return <ListSkeleton rows={3} showCards />;
-
-  var SECTIONS = [
-    { key: "pipeline", label: "Pipeline" },
-    { key: "sla", label: "SLA" },
-    { key: "consultorias", label: "Consultorias" },
-    { key: "equipe", label: "Equipe" },
-  ];
-
+/** Por que a tela está escondida — lembrete no topo de cada ferramenta. */
+function PorQueEscondida({ ferramentaKey }: { ferramentaKey: string }) {
+  var f = ferramentaByKey(ferramentaKey);
+  if (!f) return null;
   return (
-    <View>
-      {/* Sub-nav */}
-      <View style={s.subNav}>
-        {SECTIONS.map(function(sec) {
-          return <Pressable key={sec.key} onPress={function() { setSection(sec.key); }} style={[s.subBtn, section === sec.key && s.subBtnActive]}>
-            <Text style={[s.subText, section === sec.key && s.subTextActive]}>{sec.label}</Text>
-          </Pressable>;
-        })}
-      </View>
+    <View style={s.why} testID="ferramenta-porque">
+      <Icon name="alert" size={13} color={Colors.amber} />
+      <Text style={s.whyText}>{f.why}</Text>
+    </View>
+  );
+}
 
-      {section === "pipeline" && pipeline && (
+function PipelineSection() {
+  var { data: pipeline, isLoading } = useQuery<PipelineData>({ queryKey: ["admin-pipeline"], queryFn: function() { return request("/admin/onboarding/pipeline"); }, staleTime: 120_000 });
+  if (isLoading) return <ListSkeleton rows={3} showCards />;
+  var total = pipeline ? pipeline.total : 0;
+  return (
+    <View testID="ferramenta-pipeline">
+      <PorQueEscondida ferramentaKey="pipeline" />
+      {pipeline && (
         <View>
           <Text style={s.sectionTitle}>Pipeline de onboarding</Text>
           <View style={s.pipelineRow}>
@@ -66,17 +59,26 @@ export function OperacoesAdmin() {
           </View>
           <View style={s.funnelBar}>
             {pipeline.stages.map(function(stage, i) {
-              var pct = pipeline.total > 0 ? Math.max(5, Math.round((stage.count / pipeline.total) * 100)) : 20;
+              var pct = total > 0 ? Math.max(5, Math.round((stage.count / total) * 100)) : 20;
               var color = STAGE_COLORS[i] || Colors.ink3;
               return <View key={stage.key} style={[s.funnelSeg, { flex: pct, backgroundColor: color + "33" }]}>
-                <Text style={[s.funnelPct, { color: color }]}>{Math.round((stage.count/pipeline.total)*100)||0}%</Text>
+                <Text style={[s.funnelPct, { color: color }]}>{Math.round((stage.count/total)*100)||0}%</Text>
               </View>;
             })}
           </View>
         </View>
       )}
+    </View>
+  );
+}
 
-      {section === "sla" && sla && (
+function SlaSection() {
+  var { data: sla, isLoading } = useQuery<SlaData>({ queryKey: ["admin-sla"], queryFn: function() { return request("/admin/metrics/sla"); }, staleTime: 120_000 });
+  if (isLoading) return <ListSkeleton rows={3} showCards />;
+  return (
+    <View testID="ferramenta-sla">
+      <PorQueEscondida ferramentaKey="sla" />
+      {sla && (
         <View>
           <Text style={s.sectionTitle}>SLA de suporte</Text>
           <View style={s.slaGrid}>
@@ -104,45 +106,63 @@ export function OperacoesAdmin() {
           </View>
         </View>
       )}
+    </View>
+  );
+}
 
-      {section === "consultorias" && (
-        <View>
-          <Text style={s.sectionTitle}>Consultorias</Text>
-          {consult && (
-            <View style={s.consultKpis}>
-              <View style={s.consultKpi}><Text style={s.consultKpiVal}>{consult.total}</Text><Text style={s.consultKpiLabel}>Total</Text></View>
-              <View style={s.consultKpi}><Text style={[s.consultKpiVal, { color: Colors.violet3 }]}>{consult.total_hours}h</Text><Text style={s.consultKpiLabel}>Horas</Text></View>
-              <View style={s.consultKpi}><Text style={[s.consultKpiVal, { color: Colors.green }]}>{fmt(consult.total_revenue)}</Text><Text style={s.consultKpiLabel}>Receita</Text></View>
-            </View>
-          )}
-          {(!consult || consult.consultations.length === 0) && <Text style={s.empty}>Nenhuma consultoria registrada. Use a API POST /admin/consultations para criar.</Text>}
-          {consult && consult.consultations.map(function(c) {
-            var sc = STATUS_COLORS[c.status] || STATUS_COLORS.scheduled;
-            return (
-              <View key={c.id} style={s.consultRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.consultClient}>{c.trade_name || "Cliente avulso"}</Text>
-                  <Text style={s.consultMeta}>{CATEGORY_LABELS[c.category] || c.category} \u00b7 {c.duration_hours}h \u00b7 {new Date(c.date).toLocaleDateString("pt-BR")}</Text>
-                </View>
-                <Text style={s.consultAmount}>{fmt(c.amount || 0)}</Text>
-                <View style={[s.statusBadge, { backgroundColor: sc.bg }]}><Text style={[s.statusText, { color: sc.text }]}>{c.status}</Text></View>
+function ConsultoriasSection() {
+  var { data: consult } = useQuery<ConsultData>({ queryKey: ["admin-consultations"], queryFn: function() { return request("/admin/consultations"); }, staleTime: 120_000 });
+  return (
+    <View testID="ferramenta-consultorias">
+      <PorQueEscondida ferramentaKey="consultorias" />
+      <View>
+        <Text style={s.sectionTitle}>Consultorias</Text>
+        {consult && (
+          <View style={s.consultKpis}>
+            <View style={s.consultKpi}><Text style={s.consultKpiVal}>{consult.total}</Text><Text style={s.consultKpiLabel}>Total</Text></View>
+            <View style={s.consultKpi}><Text style={[s.consultKpiVal, { color: Colors.violet3 }]}>{consult.total_hours}h</Text><Text style={s.consultKpiLabel}>Horas</Text></View>
+            <View style={s.consultKpi}><Text style={[s.consultKpiVal, { color: Colors.green }]}>{fmt(consult.total_revenue)}</Text><Text style={s.consultKpiLabel}>Receita</Text></View>
+          </View>
+        )}
+        {(!consult || consult.consultations.length === 0) && <Text style={s.empty}>Nenhuma consultoria registrada. Use a API POST /admin/consultations para criar.</Text>}
+        {consult && consult.consultations.map(function(c) {
+          var sc = STATUS_COLORS[c.status] || STATUS_COLORS.scheduled;
+          return (
+            <View key={c.id} style={s.consultRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.consultClient}>{c.trade_name || "Cliente avulso"}</Text>
+                <Text style={s.consultMeta}>{CATEGORY_LABELS[c.category] || c.category} \u00b7 {c.duration_hours}h \u00b7 {new Date(c.date).toLocaleDateString("pt-BR")}</Text>
               </View>
-            );
-          })}
-        </View>
-      )}
+              <Text style={s.consultAmount}>{fmt(c.amount || 0)}</Text>
+              <View style={[s.statusBadge, { backgroundColor: sc.bg }]}><Text style={[s.statusText, { color: sc.text }]}>{c.status}</Text></View>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
 
-      {section === "equipe" && <EquipeAdmin />}
+/**
+ * Operações = Equipe Aura. SLA, Consultorias e Pipeline de onboarding saíram da
+ * tela principal e só abrem pelos cartões de "Ferramentas" no hub, que passam
+ * `ferramenta` (via ?ferramenta=sla|consultorias|pipeline). Sem o parâmetro,
+ * nenhuma das três consultas dessas telas é disparada.
+ */
+export function OperacoesAdmin({ ferramenta }: { ferramenta?: string | null }) {
+  if (ferramenta === "pipeline") return <PipelineSection />;
+  if (ferramenta === "sla") return <SlaSection />;
+  if (ferramenta === "consultorias") return <ConsultoriasSection />;
+  return (
+    <View>
+      <EquipeAdmin />
     </View>
   );
 }
 
 var s = StyleSheet.create({
-  subNav: { flexDirection: "row", gap: 4, marginBottom: 16, backgroundColor: Colors.bg3, borderRadius: 10, padding: 3, borderWidth: 1, borderColor: Colors.border },
-  subBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: "center" },
-  subBtnActive: { backgroundColor: Colors.violet },
-  subText: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
-  subTextActive: { color: "#fff", fontWeight: "700" },
+  why: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: Colors.amberD, borderRadius: 10, borderWidth: 1, borderColor: Colors.amber + "33", padding: 12, marginBottom: 16 },
+  whyText: { flex: 1, fontSize: 12, color: Colors.ink3, lineHeight: 18 },
   sectionTitle: { fontSize: 14, fontWeight: "700", color: Colors.ink, marginBottom: 14 },
   // Pipeline
   pipelineRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
