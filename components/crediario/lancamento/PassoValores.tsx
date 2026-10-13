@@ -41,7 +41,7 @@ const SUB_DA_OPCAO: Record<string, string> = {
 };
 
 export function PassoValores({ form }: { form: LancamentoForm }) {
-  const { st, set, valores, selectableAccounts, selectedAccount, canUnify, alternarCarne, pedirCriar, enviar } = form;
+  const { st, set, valores, janelaDias, selectableAccounts, selectedAccount, canUnify, alternarCarne, pedirCriar, enviar } = form;
   const { amountNum, nParcelas, rateNum, totalComJuros, valorParcela, datas } = valores;
   const unify = st.unifyEnabled;
   const preview = st.unifyPreview;
@@ -60,7 +60,7 @@ export function PassoValores({ form }: { form: LancamentoForm }) {
     ? parseInt((parseBrDate(st.firstDueDate) || "").slice(8, 10), 10)
     : NaN;
   const aviso = avisoDaPrimeiraParcela(st.firstDueDate, {
-    maxDias: st.janelaDias, hojeIso, compraBr: st.entryDate,
+    maxDias: janelaDias, hojeIso, compraBr: st.entryDate,
   });
   const textoDoAviso = st.erroPrimeiraParcela || aviso?.texto || null;
   const avisoEhErro = !!st.erroPrimeiraParcela || !!aviso?.bloqueia;

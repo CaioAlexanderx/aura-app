@@ -23,7 +23,7 @@
 // installments=1 + applyUnify) e a conta do "preenchido" para a pergunta de
 // descarte (utils/crediarioLancamento.ts).
 // ============================================================
-import { useReducer, useRef, useCallback, useEffect, useMemo } from "react";
+import { useReducer, useRef, useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth";
 import {
@@ -93,8 +93,6 @@ export type EstadoDoForm = {
   parcelasLivre: boolean;
   interestRate: string;
   firstDueDate: string;
-  /** first_due_date_max_days do plan-config (só aviso; ver avisoDaPrimeiraParcela). */
-  janelaDias: number | null;
   /** Erro da API sobre a 1ª parcela, mostrado junto do campo até a data mudar. */
   erroPrimeiraParcela: string | null;
   entryDate: string;
@@ -144,7 +142,6 @@ export function estadoInicial(): EstadoDoForm {
     parcelasLivre: false,
     interestRate: "",
     firstDueDate: padroes.vencimento,
-    janelaDias: null,
     erroPrimeiraParcela: null,
     entryDate: padroes.hoje,
     periodKind: "mensal",
@@ -193,8 +190,7 @@ function normalizar(prev: EstadoDoForm, next: EstadoDoForm): EstadoDoForm {
 }
 
 function reducer(st: EstadoDoForm, a: Acao): EstadoDoForm {
-  // A janela é da loja, não do lançamento: sobrevive ao "lançar outro".
-  if (a.type === "reset") return { ...estadoInicial(), janelaDias: st.janelaDias };
+  if (a.type === "reset") return estadoInicial();
   if (a.type === "escolherCliente") {
     const mesmo = (st.selectedCustomer?.id ?? null) === (a.cliente?.id ?? null);
     // Outro cliente: os carnês e a escolha de carnê eram do anterior.
@@ -260,8 +256,11 @@ export function useLancamentoForm() {
     dispatch({ type: "reset" });
   }, []);
 
-  // first_due_date_max_days: buscado uma vez, só quando o formulário chega ao
-  // passo dos valores (o modal fica montado na tela e nem sempre é aberto).
+  // first_due_date_max_days (plan-config; só aviso, ver avisoDaPrimeiraParcela).
+  // É da loja, não do lançamento: fica fora do reducer e sobrevive ao "lançar
+  // outro". Buscado uma vez, só quando o formulário chega ao passo dos valores
+  // (o modal fica montado na tela e nem sempre é aberto).
+  const [janelaDias, setJanelaDias] = useState<number | null>(null);
   const janelaPedida = useRef(false);
   const companyIdDaJanela = company?.id;
   useEffect(() => {
@@ -271,12 +270,12 @@ export function useLancamentoForm() {
       try {
         const cfg = await creditApi.getPlanConfig(companyIdDaJanela);
         const dias = Number(cfg?.first_due_date_max_days);
-        if (dias > 0) set({ janelaDias: dias });
+        if (dias > 0) setJanelaDias(dias);
       } catch {
         /* sem a janela só some o aviso; o servidor continua valendo */
       }
     })();
-  }, [st.step, companyIdDaJanela, set]);
+  }, [st.step, companyIdDaJanela]);
 
   // ── Seletores memoizados ─────────────────────────────────────────────────
   const valores = useMemo(
@@ -586,6 +585,7 @@ export function useLancamentoForm() {
     st,
     set,
     reset,
+    janelaDias,
     valores,
     ...carnesDerivados,
     unifyFirstDueIso,
