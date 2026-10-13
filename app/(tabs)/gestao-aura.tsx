@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -7,6 +8,9 @@ import { useQuery } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { PageHeader } from "@/components/PageHeader";
 import { IS_WIDE } from "@/constants/helpers";
+import {
+  FERRAMENTAS, ferramentaRoute, loadFerramentasAberto, saveFerramentasAberto,
+} from "@/components/admin/ferramentas";
 
 var isWeb = Platform.OS === "web";
 
@@ -87,7 +91,7 @@ var SECTIONS: Section[] = [
     key: "operacoes",
     icon: "settings",
     title: "Operações",
-    description: "Pipeline de onboarding, SLA de suporte e consultorias.",
+    description: "Equipe Aura — quem tem acesso à gestão e com qual papel.",
     route: "/gestao-aura-operacoes",
     color: "#f472b6",
   },
@@ -137,6 +141,14 @@ export default function GestaoAuraScreen() {
     staleTime: 60_000,
   });
 
+  // Ferramentas: grupo recolhido por padrão; o estado fica no dispositivo.
+  var [ferramentasAberto, setFerramentasAberto] = useState<boolean>(function() { return loadFerramentasAberto(); });
+  function toggleFerramentas() {
+    var next = !ferramentasAberto;
+    setFerramentasAberto(next);
+    saveFerramentasAberto(next);
+  }
+
   if (!isStaff && !isDemo) {
     return (
       <View style={s.guard}>
@@ -181,13 +193,6 @@ export default function GestaoAuraScreen() {
           label: "margem bruta",
           value: overview.margin.pct + "%",
           color: overview.margin.pct >= 60 ? Colors.green : Colors.amber,
-        };
-      case "operacoes":
-        if (!overview) return null;
-        return {
-          label: "em onboarding",
-          value: String(overview.clients.new_this_month),
-          color: Colors.ink3,
         };
       default:
         return null;
@@ -274,6 +279,57 @@ export default function GestaoAuraScreen() {
           );
         })}
       </View>
+
+      {/* Ferramentas: telas que existem mas o processo ainda não alimenta */}
+      <View style={s.tools} testID="ferramentas">
+        <Pressable
+          testID="ferramentas-toggle"
+          onPress={toggleFerramentas}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: ferramentasAberto }}
+          style={[s.toolsHead, isWeb && { cursor: "pointer" } as any]}
+        >
+          <Icon name="tool" size={16} color={Colors.ink3} />
+          <View style={{ flex: 1 }}>
+            <Text style={s.toolsTitle}>Ferramentas</Text>
+            <Text style={s.toolsSub}>
+              {FERRAMENTAS.length + " telas escondidas porque o processo por trás delas ainda não roda. Nada foi apagado."}
+            </Text>
+          </View>
+          <Icon name={ferramentasAberto ? "chevron_up" : "chevron_down"} size={14} color={Colors.ink3} />
+        </Pressable>
+
+        {ferramentasAberto && (
+          <View style={s.grid} testID="ferramentas-lista">
+            {FERRAMENTAS.map(function(f) {
+              return (
+                <Pressable
+                  key={f.key}
+                  testID={"ferramenta-card-" + f.key}
+                  onPress={function() { router.push(ferramentaRoute(f.key) as any); }}
+                  style={[s.card, isWeb && { cursor: "pointer" } as any]}
+                >
+                  <View style={[s.cardAccent, { backgroundColor: f.color }]} />
+                  <View style={s.cardTop}>
+                    <View style={[s.cardIcon, { backgroundColor: f.color + "18", borderColor: f.color + "33" }]}>
+                      <Icon name={f.icon as any} size={20} color={f.color} />
+                    </View>
+                  </View>
+                  <Text style={s.cardTitle}>{f.title}</Text>
+                  <Text style={s.cardDesc}>{f.description}</Text>
+                  <View style={s.toolWhy}>
+                    <Text style={s.toolWhyText}>{f.why}</Text>
+                  </View>
+                  <View style={s.cardFooter}>
+                    <Text style={[s.cardLink, { color: f.color }]}>Abrir</Text>
+                    <Icon name="chevron_right" size={12} color={f.color} />
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+      </View>
     </ScrollView>
   );
 }
@@ -313,6 +369,13 @@ var s = StyleSheet.create({
   cardDesc: { fontSize: 12, color: Colors.ink3, lineHeight: 18, paddingHorizontal: 16, marginBottom: 14 },
   cardFooter: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 16, paddingBottom: 16 },
   cardLink: { fontSize: 12, fontWeight: "700" },
+  // Ferramentas
+  tools: { marginTop: 28, gap: 12 },
+  toolsHead: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg3, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, paddingVertical: 12, paddingHorizontal: 14 },
+  toolsTitle: { fontSize: 14, fontWeight: "700", color: Colors.ink },
+  toolsSub: { fontSize: 11, color: Colors.ink3, marginTop: 2, lineHeight: 16 },
+  toolWhy: { marginHorizontal: 16, marginBottom: 14, backgroundColor: Colors.amberD, borderRadius: 8, borderWidth: 1, borderColor: Colors.amber + "33", paddingVertical: 8, paddingHorizontal: 10 },
+  toolWhyText: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
   // Guard
   guard: { flex: 1, justifyContent: "center", alignItems: "center", padding: 40 },
   guardTitle: { fontSize: 18, fontWeight: "700", color: Colors.ink, marginTop: 16, textAlign: "center" },
