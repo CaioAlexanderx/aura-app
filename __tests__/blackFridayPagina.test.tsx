@@ -14,7 +14,9 @@
 // 4. o assento reaproveita o cartão de Configurações (sem moldura) e lá
 //    fica só o atalho; o vale-troca é espelho do MESMO estado do toggle de
 //    Políticas do Caixa;
-// 5. o Estoque não ganhou aba nem item novo.
+// 5. o Estoque não ganhou aba nem item novo;
+// 6. a página está OCULTA por enquanto: só staff e conta de teste (is_sandbox)
+//    veem — menu e rota — até BLACK_FRIDAY_LIBERADA_PARA_TODOS virar true.
 // ============================================================
 import React from "react";
 import fs from "fs";
@@ -69,7 +71,11 @@ jest.mock("@/components/screens/configuracoes/AssentoTemporadaCard", () => {
 });
 
 import { computeVisibleModules, MODULE_PLAN_MAP, PERM_TO_MODULES } from "@/hooks/useVisibleModules";
-import { BLACK_FRIDAY_ATE, BLACK_FRIDAY_DE, BLACK_FRIDAY_MOD, blackFridayAtivo } from "@/constants/blackFriday";
+import {
+  BLACK_FRIDAY_ATE, BLACK_FRIDAY_DE, BLACK_FRIDAY_LIBERADA_PARA_TODOS, BLACK_FRIDAY_MOD,
+  blackFridayAtivo, blackFridayLiberada, ehContaDeTeste,
+} from "@/constants/blackFriday";
+import BlackFridayRota from "@/app/(tabs)/black-friday";
 import { secoesDaPagina } from "@/components/screens/blackfriday/secoes";
 import { PaginaBlackFriday } from "@/components/screens/blackfriday/PaginaBlackFriday";
 import { AtalhoAssento } from "@/components/screens/blackfriday/AtalhoAssento";
@@ -96,7 +102,7 @@ function fixarHoje(iso: string) {
 beforeEach(() => {
   jest.clearAllMocks();
   fixarHoje("2026-10-13");
-  mockAuth = { company: { id: CID, plan: "negocio", member_role: "owner" }, consolidatedView: false, availableCompanies: [{ id: CID }], isStaff: false };
+  mockAuth = { company: { id: CID, plan: "negocio", member_role: "owner" }, consolidatedView: false, availableCompanies: [{ id: CID }], isStaff: false, isDemo: false, user: { is_staff: false } };
   mockVisible = new Set(["estoque", "configuracoes", "whatsapp", BLACK_FRIDAY_MOD]);
   mockPdv = { cash_tender_modal_enabled: true };
   mockSalvar.mockResolvedValue({});
@@ -129,8 +135,10 @@ describe("item do menu", () => {
     expect(linha).toContain('{ r: "/black-friday", l: "Black Friday", ic: "tag", mod: "black_friday", temporada: true }');
   });
 
-  it("é filtrado pelo período antes de qualquer outro filtro do buildRawNav", () => {
-    expect(LAYOUT).toContain("if (item.temporada && !blackFridayAtivo()) return false;");
+  it("é filtrado por período e por quem vê (hook), no Sidebar e no MBar", () => {
+    expect(LAYOUT).toContain("if (item.temporada && blackFridayOn !== true) return false;");
+    expect(Array.from(LAYOUT.matchAll(/const blackFridayOn = useBlackFridayLiberada\(\);/g))).toHaveLength(2);
+    expect(Array.from(LAYOUT.matchAll(/matconEnabled, blackFridayOn\)/g))).toHaveLength(2);
   });
 
   it("nenhum outro item do NAV herda a chave", () => {
@@ -369,7 +377,80 @@ describe("vale-troca: espelho do mesmo estado (pdv_settings)", () => {
 
 // ── 4. Configurações: só o atalho ────────────────────────────
 
+describe("quem vê a página (oculta por enquanto)", () => {
+  const lojista = { isStaff: false, isDemo: false, user: { is_staff: false }, company: { is_sandbox: false } };
+  const noPeriodo = "2026-11-30";
+
+  it("a constante de liberação geral nasce desligada", () => {
+    expect(BLACK_FRIDAY_LIBERADA_PARA_TODOS).toBe(false);
+  });
+
+  it("lojista comum NÃO vê, mesmo dentro do período", () => {
+    expect(blackFridayAtivo(noPeriodo)).toBe(true);
+    expect(blackFridayLiberada(lojista, noPeriodo)).toBe(false);
+  });
+
+  it("staff vê (isStaff do store ou is_staff do usuário)", () => {
+    expect(blackFridayLiberada({ ...lojista, isStaff: true }, noPeriodo)).toBe(true);
+    expect(blackFridayLiberada({ ...lojista, user: { is_staff: true } }, noPeriodo)).toBe(true);
+  });
+
+  it("conta de teste (empresa sandbox) vê", () => {
+    expect(ehContaDeTeste({ ...lojista, company: { is_sandbox: true } })).toBe(true);
+    expect(blackFridayLiberada({ ...lojista, company: { is_sandbox: true } }, noPeriodo)).toBe(true);
+  });
+
+  it("com a constante em true libera para todo mundo — dentro do período", () => {
+    expect(blackFridayLiberada(lojista, noPeriodo, true)).toBe(true);
+    expect(blackFridayLiberada(lojista, "2026-10-12", true)).toBe(false);
+    expect(blackFridayLiberada(lojista, "2027-02-03", true)).toBe(false);
+  });
+
+  it("staff também respeita o período", () => {
+    expect(blackFridayLiberada({ ...lojista, isStaff: true }, "2027-02-03")).toBe(false);
+    expect(blackFridayLiberada({ ...lojista, isStaff: true }, "2026-10-12")).toBe(false);
+  });
+
+  it("acesso direto pela URL: lojista comum cai no Painel e não renderiza a página", () => {
+    const r = montar(<BlackFridayRota />);
+    expect(r.toJSON()).toBeNull();
+    expect(mockReplace).toHaveBeenCalledWith("/");
+  });
+
+  it("acesso direto pela URL: staff vê a página e nada redireciona", () => {
+    mockAuth = { ...mockAuth, isStaff: true };
+    const r = montar(<BlackFridayRota />);
+    expect(r.root.findAllByProps({ testID: "pagina-black-friday" }, { deep: false })).toHaveLength(1);
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it("acesso direto pela URL: conta de teste vê a página", () => {
+    mockAuth = { ...mockAuth, company: { ...mockAuth.company, is_sandbox: true } };
+    const r = montar(<BlackFridayRota />);
+    expect(r.root.findAllByProps({ testID: "pagina-black-friday" }, { deep: false })).toHaveLength(1);
+  });
+
+  it("staff sem o módulo (override/permissão) também cai no Painel", () => {
+    mockAuth = { ...mockAuth, isStaff: true };
+    mockVisible = new Set(["estoque"]);
+    const r = montar(<BlackFridayRota />);
+    expect(r.toJSON()).toBeNull();
+    expect(mockReplace).toHaveBeenCalledWith("/");
+  });
+
+  it("fora do período nem staff entra", () => {
+    jest.useRealTimers();
+    fixarHoje("2027-02-10");
+    mockAuth = { ...mockAuth, isStaff: true };
+    const r = montar(<BlackFridayRota />);
+    expect(r.toJSON()).toBeNull();
+    expect(mockReplace).toHaveBeenCalledWith("/");
+  });
+});
+
 describe("atalho em Configurações › Plano", () => {
+  beforeEach(() => { mockAuth = { ...mockAuth, isStaff: true }; });
+
   it("leva à página Black Friday", () => {
     const r = montar(<AtalhoAssento />);
     const atalho = r.root.findAllByProps({ testID: "atalho-assento-black-friday" }, { deep: false })[0];
@@ -378,7 +459,11 @@ describe("atalho em Configurações › Plano", () => {
     expect(mockPush).toHaveBeenCalledWith("/black-friday");
   });
 
-  it("some junto com a página: fora do período, sem o módulo ou depois da janela do assento", () => {
+  it("some junto com a página: lojista comum, sem o módulo, fora do período ou depois da janela do assento", () => {
+    mockAuth = { ...mockAuth, isStaff: false };
+    expect(montar(<AtalhoAssento />).toJSON()).toBeNull(); // oculta por enquanto
+
+    mockAuth = { ...mockAuth, isStaff: true };
     mockVisible = new Set(["estoque", "configuracoes"]);
     expect(montar(<AtalhoAssento />).toJSON()).toBeNull();
 

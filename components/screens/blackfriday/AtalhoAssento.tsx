@@ -11,12 +11,14 @@ import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useVisibleModules } from "@/hooks/useVisibleModules";
-import { BLACK_FRIDAY_MOD, BLACK_FRIDAY_ROTA, blackFridayAtivo } from "@/constants/blackFriday";
+import { BLACK_FRIDAY_MOD, BLACK_FRIDAY_ROTA } from "@/constants/blackFriday";
+import { useBlackFridayLiberada } from "@/hooks/useBlackFridayLiberada";
 import { assentoTemporadaVisivel } from "@/components/screens/configuracoes/assentoTemporada";
 
 export function AtalhoAssento() {
   const visible = useVisibleModules();
-  if (!blackFridayAtivo() || !assentoTemporadaVisivel() || !visible.has(BLACK_FRIDAY_MOD)) return null;
+  const liberada = useBlackFridayLiberada();
+  if (!liberada || !assentoTemporadaVisivel() || !visible.has(BLACK_FRIDAY_MOD)) return null;
   return (
     <Pressable
       onPress={() => router.push(BLACK_FRIDAY_ROTA as any)}

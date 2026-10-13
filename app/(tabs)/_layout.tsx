@@ -16,7 +16,7 @@ import { useVisibleModules, MODULE_PLAN_MAP, PLAN_LEVEL } from "@/hooks/useVisib
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { useSidebarLayout, applyLayoutToNav } from "@/hooks/useSidebarLayout";
 import { moduloEstaOculto } from "@/constants/modulosOcultos";
-import { blackFridayAtivo } from "@/constants/blackFriday";
+import { useBlackFridayLiberada } from "@/hooks/useBlackFridayLiberada";
 import { SidebarEditor } from "@/components/SidebarEditor";
 import { CompanySwitcher } from "@/components/CompanySwitcher"; // M1-06: Multi-CNPJ switcher
 import { NotificationBell } from "@/components/NotificationBell";
@@ -254,7 +254,7 @@ function isA(p: string, r: string) {
 // Usado tanto na renderizacao (depois aplica layout) quanto pra
 // passar como baseNav pro SidebarEditor (cliente ve TUDO no editor).
 // ============================================================
-function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical: string | null | undefined, osEnabled?: boolean, oticaEnabled?: boolean, matconEnabled?: boolean): NavSection[] {
+function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical: string | null | undefined, osEnabled?: boolean, oticaEnabled?: boolean, matconEnabled?: boolean, blackFridayOn?: boolean): NavSection[] {
   const base = NAV.map(section => ({
     ...section,
     i: section.i.filter(item => {
@@ -272,8 +272,9 @@ function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical:
       // ve secao nenhuma.
       if (item.matconToggle && matconEnabled !== true) return false;
       // 13/10/2026 — pagina de temporada: some fora do periodo (de 13/10/2026
-      // ate 02/02/2027, constants/blackFriday.ts).
-      if (item.temporada && !blackFridayAtivo()) return false;
+      // ate 02/02/2027) e, por enquanto, para quem nao e conta de teste
+      // (BLACK_FRIDAY_LIBERADA_PARA_TODOS, constants/blackFriday.ts).
+      if (item.temporada && blackFridayOn !== true) return false;
       // 21/09/2026 — feature que ainda nao esta operante fica fora do
       // menu (constants/modulosOcultos.ts). Filtro de APRESENTACAO: o
       // item segue declarado no NAV e o plano/permissao dele continuam
@@ -528,13 +529,14 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
   const osEnabled = pdvSettingsNav.os_enabled === true;
   const oticaEnabled = pdvSettingsNav.otica_enabled === true;
   const matconEnabled = pdvSettingsNav.matcon_enabled === true;
+  const blackFridayOn = useBlackFridayLiberada();
   const activeVertical = (co as any)?.vertical_active as string | null | undefined;
 
   // rawFilteredNav: NAV cru (so plano/staff/vertical), passado pro editor pra
   // cliente ver TUDO disponivel.
   const rawFilteredNav = useMemo(
-    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled),
-    [visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled]
+    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn),
+    [visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn]
   );
 
   // filteredNav: rawFilteredNav + customizacoes do cliente aplicadas.
@@ -798,6 +800,7 @@ function MBar() {
   const osEnabled = pdvSettingsNav.os_enabled === true;
   const oticaEnabled = pdvSettingsNav.otica_enabled === true;
   const matconEnabled = pdvSettingsNav.matcon_enabled === true;
+  const blackFridayOn = useBlackFridayLiberada();
   const activeVertical = (co as any)?.vertical_active as string | null | undefined;
 
   // 4 tabs fixas no rodape (nao editaveis pelo cliente).
@@ -811,8 +814,8 @@ function MBar() {
 
   // rawFilteredNav: mesma logica do desktop, base unica de items disponiveis.
   const rawFilteredNav = useMemo(
-    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled),
-    [visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled]
+    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn),
+    [visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn]
   );
 
   // filteredNav: aplica layout custom do cliente.
