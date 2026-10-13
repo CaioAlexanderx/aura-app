@@ -1,3 +1,13 @@
+// ============================================================
+// Gestão Aura › Clientes
+//
+// 12/10/2026: funil do trial. O self-service converteu 0 de 21 contas em
+// 120 dias e a tela não dizia onde cada conta parou. O slide-over ganhou a
+// seção "Ativação" (importou estoque → abriu o Caixa → vendeu → viu o
+// checkout, mais o último acesso real) e os cards de trial/vencido ganharam
+// uma linha compacta com os quatro pontos. Os dados vêm só do
+// /admin/clients-360 — nenhum endpoint novo.
+// ============================================================
 import { useState, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Switch, Platform, ActivityIndicator, TextInput, Linking } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -14,7 +24,8 @@ import { FrenteSection, STUDIO_PLAN_MSG, isStudioPlanError } from "./FrenteSecti
 import { MODULE_PLAN_MAP, PLAN_LEVEL } from "@/hooks/useVisibleModules";
 import {
   STAGE_TABS, stageOf, trialCountdown, isNewAccount, usageSummary, shortDate,
-  archiveLabel, sortForStage, waLink, lifecycleSummary, type Stage, type Tone,
+  archiveLabel, sortForStage, waLink, lifecycleSummary, activationSteps, lastAccessOf,
+  type Stage, type Tone, type Activation,
 } from "./clientLifecycle";
 
 var isWeb = Platform.OS === "web";
@@ -43,6 +54,14 @@ type Client360 = {
   sale_count?: number;
   login_days?: number;
   last_login_at?: string | null;
+  // 12/10/2026: funil do trial (backend: /admin/clients-360).
+  first_sale_at?: string | null;
+  caixa_sessions?: number;
+  last_caixa_at?: string | null;
+  imported_rows?: number;
+  checkout_viewed_at?: string | null;
+  checkout_views?: number;
+  ativacao?: Activation | null;
 };
 
 type ActivityData = {
@@ -400,6 +419,10 @@ export function ClientsAdmin() {
     var pendingExtraSeats = parseInt(extraSeatsStr, 10);
     var pendingValid = isFinite(pendingExtraSeats) && pendingExtraSeats >= 0 && pendingExtraSeats <= 100;
     var pendingChanged = pendingValid && pendingExtraSeats !== currentExtraSeats;
+    // 12/10/2026: degraus do funil do trial + último acesso real
+    var steps = activationSteps(sc);
+    var lastAccess = lastAccessOf(sc);
+    var loginDays = sc.login_days || 0;
 
     return (
       <View>
@@ -431,6 +454,28 @@ export function ClientsAdmin() {
               <Text style={[s.badgeText, { color: Colors.violet3 }]}>+{currentExtraSeats} {currentExtraSeats === 1 ? "acesso extra" : "acessos extras"}</Text>
             </View>
           )}
+        </View>
+
+        {/* 12/10/2026: Ativação — em que degrau do trial a conta parou */}
+        <View style={s.section} testID="ativacao-secao">
+          <Text style={s.sectionTitle}>Ativação</Text>
+          <View style={s.stepsRow}>
+            {steps.map(function(st) {
+              return (
+                <View key={st.key} style={s.step} testID={"ativacao-passo-" + st.key + (st.done ? "-feito" : "-pendente")}>
+                  <View style={s.stepHead}>
+                    <View style={[s.stepDot, { backgroundColor: st.done ? Colors.green : Colors.ink3 }]} />
+                    <Text style={[s.stepLabel, !st.done && { color: Colors.ink3 }]} numberOfLines={1}>{st.label}</Text>
+                  </View>
+                  <Text style={s.stepDetail}>{st.detail}</Text>
+                </View>
+              );
+            })}
+          </View>
+          <Text style={s.lastAccess} testID="ativacao-ultimo-acesso">
+            {"Último acesso: " + (lastAccess ? shortDate(lastAccess) + " (" + relativeDays(lastAccess).label + ")" : "nunca registrado")
+              + " · " + loginDays + (loginDays === 1 ? " dia" : " dias") + " com login"}
+          </Text>
         </View>
 
         {/* 12/05/2026: Estender Trial — visivel quando billing_status=trial ou trial_ends_at set */}
@@ -907,6 +952,9 @@ export function ClientsAdmin() {
         var tone = TONE_COLORS[cd.tone];
         var usage = usageSummary(client);
         var wa = waLink(client.owner_phone);
+        // 12/10/2026: pontos de ativação só para quem ainda está no funil.
+        var clientStage = stageOf(client);
+        var showSteps = clientStage === "trial" || clientStage === "vencido";
         return (
           <Pressable key={client.id} testID={"client-row-" + client.id} onPress={function() { setSelectedId(client.id); }} style={[s.clientRow, isWeb && { cursor: "pointer", transition: "background-color 0.15s" } as any]}>
             {inFunnel ? (
@@ -930,8 +978,21 @@ export function ClientsAdmin() {
                     {(client.owner_name || client.owner_email) + " · cadastro " + shortDate(client.created_at) + (client.access_code_used ? " · " + client.access_code_used : "")}
                   </Text>
                   <Text style={[s.clientUsage, usage.engaged && { color: Colors.green }]} numberOfLines={1}>
-                    {usage.text + (client.last_login_at ? " · último acesso " + shortDate(client.last_login_at) : "")}
+                    {usage.text + (lastAccessOf(client) ? " · último acesso " + shortDate(lastAccessOf(client)) : "")}
                   </Text>
+                  {showSteps && (
+                    <View style={s.miniSteps} testID={"client-ativacao-" + client.id}>
+                      {activationSteps(client).map(function(st, i) {
+                        return (
+                          <View key={st.key} style={s.miniStep} testID={"client-ativacao-" + client.id + "-" + st.key + (st.done ? "-feito" : "-pendente")}>
+                            {i > 0 && <Text style={s.miniSep}>·</Text>}
+                            <View style={[s.miniDot, { backgroundColor: st.done ? Colors.green : Colors.ink3 }]} />
+                            <Text style={[s.miniLabel, st.done && { color: Colors.green }]}>{st.short}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
                 </>
               ) : stage === "arquivo" ? (
                 <Text style={s.clientMeta} numberOfLines={1}>{archiveLabel(client)}</Text>
@@ -985,6 +1046,12 @@ var s = StyleSheet.create({
   countdownUnit: { fontSize: 8, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.3 },
   newBadge: { backgroundColor: Colors.violetD, borderRadius: 5, paddingHorizontal: 6, paddingVertical: 1 },
   newBadgeText: { fontSize: 9, fontWeight: "700", color: Colors.violet3, textTransform: "uppercase", letterSpacing: 0.3 },
+  // 12/10/2026: linha compacta de ativação no card
+  miniSteps: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", marginTop: 4 },
+  miniStep: { flexDirection: "row", alignItems: "center" },
+  miniSep: { fontSize: 10, color: Colors.ink3, marginHorizontal: 5 },
+  miniDot: { width: 6, height: 6, borderRadius: 3, marginRight: 4 },
+  miniLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "600" },
   waBtn: { width: 32, height: 32, borderRadius: 9, backgroundColor: Colors.greenD, alignItems: "center", justifyContent: "center" },
   badge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
   badgeText: { fontSize: 10, fontWeight: "600" },
@@ -1071,6 +1138,14 @@ var s = StyleSheet.create({
   },
   soonText: { fontSize: 8, color: Colors.amber, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.3 },
   verticalHint: { fontSize: 10, color: Colors.ink3, marginTop: 10, lineHeight: 14 },
+  // 12/10/2026: Ativação (funil do trial)
+  stepsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  step: { flexGrow: 1, flexBasis: 140, backgroundColor: Colors.bg4, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: Colors.border },
+  stepHead: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
+  stepDot: { width: 8, height: 8, borderRadius: 4 },
+  stepLabel: { fontSize: 12, fontWeight: "700", color: Colors.ink, flexShrink: 1 },
+  stepDetail: { fontSize: 10, color: Colors.ink3, lineHeight: 14 },
+  lastAccess: { fontSize: 11, color: Colors.ink3, marginTop: 10, fontWeight: "600" },
   // 12/05/2026: Estender Trial
   trialStatusRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border, marginBottom: 12 },
   trialStatusLabel: { fontSize: 11, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.3 },

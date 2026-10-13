@@ -5,6 +5,12 @@
 // quem acabou de se cadastrar, quem venceu ontem e quem nunca aderiu. A
 // etapa vem calculada do backend (src/services/clientLifecycle.js); o
 // cálculo daqui é só o fallback para um backend que ainda não a devolve.
+//
+// 12/10/2026: degraus de ativação do trial (importou estoque → abriu o
+// Caixa → vendeu → viu o checkout). O self-service converteu 0 de 21 contas
+// e o Caio precisa bater o olho em onde cada conta parou. O backend devolve
+// `ativacao` no /admin/clients-360; activationSteps monta os rótulos e o
+// detalhe de cada degrau (e recalcula pelos campos se `ativacao` não vier).
 // ============================================================
 
 export type Stage = "trial" | "vencido" | "cliente" | "arquivo" | "interno";
@@ -23,8 +29,21 @@ export type LifecycleClient = {
   cust_count?: number;
   login_days?: number;
   last_login_at?: string | null;
+  last_active_at?: string | null;
   health_score?: number | null;
+  // 12/10/2026: funil do trial (backend: GET /admin/clients-360).
+  first_sale_at?: string | null;
+  caixa_sessions?: number;
+  last_caixa_at?: string | null;
+  imported_rows?: number;
+  checkout_viewed_at?: string | null;
+  checkout_views?: number;
+  ativacao?: Activation | null;
 };
+
+export type Activation = { importou: boolean; abriu_caixa: boolean; vendeu: boolean; viu_checkout: boolean };
+export type ActivationKey = keyof Activation;
+export type ActivationStep = { key: ActivationKey; label: string; short: string; done: boolean; detail: string };
 
 var DAY_MS = 86400000;
 var HOUR_MS = 3600000;
@@ -132,4 +151,55 @@ export function lifecycleSummary(list: LifecycleClient[], now: number = Date.now
       return st !== "interno" && (now - new Date(c.created_at).getTime()) / DAY_MS <= 7;
     }).length,
   };
+}
+
+// ── Ativação do trial (12/10/2026) ────────────────────────────
+// Mesma regra do backend: estoque conta planilha/XML importado OU 10+
+// produtos cadastrados à mão.
+var IMPORT_MIN_PRODUCTS = 10;
+
+export function activationOf(c: LifecycleClient): Activation {
+  if (c.ativacao) return c.ativacao;
+  return {
+    importou: (c.imported_rows || 0) > 0 || (c.prod_count || 0) >= IMPORT_MIN_PRODUCTS,
+    abriu_caixa: (c.caixa_sessions || 0) > 0,
+    vendeu: (c.sale_count || 0) > 0 || !!c.first_sale_at,
+    viu_checkout: (c.checkout_views || 0) > 0 || !!c.checkout_viewed_at,
+  };
+}
+
+export function activationSteps(c: LifecycleClient): ActivationStep[] {
+  var a = activationOf(c);
+  var prods = c.prod_count || 0;
+  var rows = c.imported_rows || 0;
+  var caixas = c.caixa_sessions || 0;
+  var sales = c.sale_count || 0;
+  var views = c.checkout_views || 0;
+
+  var estoque = plural(prods, "produto", "produtos") + (rows > 0 ? " · " + plural(rows, "linha importada", "linhas importadas") : "");
+  var caixa = caixas > 0
+    ? plural(caixas, "vez", "vezes") + (c.last_caixa_at ? " · último " + shortDate(c.last_caixa_at) : "")
+    : "nunca abriu";
+  var venda = c.first_sale_at
+    ? "1ª venda " + shortDate(c.first_sale_at) + " · " + plural(sales, "venda", "vendas")
+    : sales > 0 ? plural(sales, "venda", "vendas") : "nenhuma venda";
+  var checkout = c.checkout_viewed_at
+    ? shortDate(c.checkout_viewed_at) + " · " + plural(Math.max(views, 1), "vez", "vezes")
+    : "não chegou";
+
+  return [
+    { key: "importou",     label: "Importou estoque", short: "estoque",  done: a.importou,     detail: estoque },
+    { key: "abriu_caixa",  label: "Abriu o Caixa",    short: "caixa",    done: a.abriu_caixa,  detail: caixa },
+    { key: "vendeu",       label: "Vendeu",           short: "venda",    done: a.vendeu,       detail: venda },
+    { key: "viu_checkout", label: "Viu o checkout",   short: "checkout", done: a.viu_checkout, detail: checkout },
+  ];
+}
+
+// Último acesso real: o mais recente entre last_active_at (gravado a cada
+// request desde 12/10/2026) e o último login do audit_log.
+export function lastAccessOf(c: LifecycleClient): string | null {
+  var a = c.last_active_at ? new Date(c.last_active_at).getTime() : 0;
+  var b = c.last_login_at ? new Date(c.last_login_at).getTime() : 0;
+  if (!a && !b) return null;
+  return a >= b ? (c.last_active_at as string) : (c.last_login_at as string);
 }
