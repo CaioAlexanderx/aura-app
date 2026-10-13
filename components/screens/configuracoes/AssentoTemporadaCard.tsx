@@ -55,12 +55,17 @@ function estiloDoPasse(p: SeatPass): string {
   return "até " + dataBr(p.ends_at);
 }
 
-export function AssentoTemporadaCard(props: { companyId: string; isOwner: boolean; plano?: string }) {
+// `semMoldura` (13/10/2026): na página Black Friday o cartão vem dentro de uma
+// seção que já tem título e moldura — só o conteúdo é renderizado. Em
+// Configurações a moldura (SectionTitle + Card) continua a de sempre.
+type AssentoProps = { companyId: string; isOwner: boolean; plano?: string; semMoldura?: boolean };
+
+export function AssentoTemporadaCard(props: AssentoProps) {
   if (!assentoTemporadaVisivel()) return null;
   return <AssentoTemporada {...props} />;
 }
 
-function AssentoTemporada(props: { companyId: string; isOwner: boolean; plano?: string }) {
+function AssentoTemporada(props: AssentoProps) {
   var cid = props.companyId;
   var qc = useQueryClient();
   var refreshMe = useAuthStore(function(st) { return st.refreshMe; });
@@ -310,6 +315,9 @@ function AssentoTemporada(props: { companyId: string; isOwner: boolean; plano?: 
     );
   }
 
+  if (props.semMoldura) {
+    return <View testID="assento-temporada" style={{ gap: 12 }}>{corpo}</View>;
+  }
   return (
     <View testID="assento-temporada">
       <SectionTitle title="Assento de temporada" />

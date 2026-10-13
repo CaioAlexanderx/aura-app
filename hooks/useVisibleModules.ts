@@ -8,6 +8,15 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   painel: 'essencial', financeiro: 'essencial', nfe: 'essencial',
   contabilidade: 'essencial', suporte: 'essencial', pdv: 'essencial',
   estoque: 'essencial', configuracoes: 'essencial',
+  // 13/10/2026 -- pagina "Black Friday" (/black-friday): funcoes da temporada
+  // de fim de ano reunidas (o que vai faltar, assento de temporada, vale-troca
+  // no cupom, placar do dia). Chave PROPRIA (regra 3), mesmo plano do Estoque
+  // (essencial). A pagina so existe de 13/10/2026 a 02/02/2027
+  // (constants/blackFriday.ts) e cada secao some sozinha se a loja nao tem a
+  // funcao (permissao, visao consolidada). O backend (services/modules.js)
+  // ainda NAO conhece a chave: PUT de override com "black_friday" volta 400,
+  // entao ela fica fora do catalogo do ClientsAdmin por ora.
+  black_friday: 'essencial',
   // 11/05/2026 -- Clientes basico movido pro Essencial (gate de plano
   // removido em private.js do backend). Limite 1000 registros; CRM
   // avancado (ranking, retencao, aniversariantes, crediario) continua
@@ -133,7 +142,11 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   // 15/05/2026 -- chave "vendas" controla /vendas + /crediario (nao herda mais do pdv).
   // 10/10/2026 -- crediario.config acompanha o crediario (mesma pessoa).
   vendas:        ['vendas', 'crediario', 'crediario.config'],
-  estoque:       ['estoque'],
+  // 13/10/2026 -- a pagina Black Friday acompanha quem decide a compra
+  // (estoque) e quem monta a loja (configuracoes: assento e vale-troca).
+  // Nao existe permissao propria no backend; cada secao da pagina checa o
+  // modulo da propria funcao, entao quem tem so uma das duas ve so o que e seu.
+  estoque:       ['estoque', 'black_friday'],
   // 16/09/2026 -- o grupo "Clientes e WhatsApp" do menu passa a ser a casa das
   // quatro telas de relacionamento. "whatsapp" ja tinha plano em
   // MODULE_PLAN_MAP mas NAO tinha permissao aqui: na pratica, membro nao-dono
@@ -149,7 +162,7 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   // 05/10/2026 -- primeiros passos entram na permissao de configuracoes: quem
   // monta a loja (dono/admin) ve o cartao; vendedora/caixa nao. Dono sempre
   // ve (o filtro de permissao so vale para membro).
-  configuracoes: ['configuracoes', 'onboarding.primeiros_passos'],
+  configuracoes: ['configuracoes', 'onboarding.primeiros_passos', 'black_friday'],
   // 15/05/2026 -- agentes adicionado; sem isso nao-owners nunca veiam mesmo com plano Expansao.
   // 30/08/2026 -- hub_social entra na mesma permissao: quem atende (agentes)
   // ve o hub. Granularidade propria fica pra quando o produto pedir.
