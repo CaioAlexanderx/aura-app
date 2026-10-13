@@ -68,6 +68,7 @@ import { usePagination } from "@/hooks/usePagination";
 import { useCategories } from "@/hooks/useCategories";
 import { expandirComDescendentes } from "@/utils/categoryFilter";
 import { falhaDeConexao } from "@/utils/leituraRapida";
+import { lerCodigoDoVale } from "@/utils/valeTroca";
 import { useGlobalBarcodeScanner } from "@/hooks/useGlobalBarcodeScanner";
 import { useViewport, productColumnsFor, cartWidthFor } from "@/hooks/useViewport";
 import { useCaixa } from "@/hooks/useCaixa";
@@ -439,6 +440,9 @@ export function usePdvState() {
   // o tamanho bipado já marcado, para o lojista conferir e confirmar no Enter.
   const [pendingBipe, setPendingBipe] = useState<{ code: string; variantId?: string } | null>(null);
   const [showTroca,       setShowTroca]       = useState(false);
+  // 13/10/2026 (vale-troca): QR do cupom bipado no Caixa — a Troca abre com
+  // essa venda já carregada. Null = Troca aberta pelo botão, busca de sempre.
+  const [valeTroca, setValeTroca] = useState<{ saleId: string } | null>(null);
 
   // ── Categorias ───────────────────────────────────────────────────────────────
   const categories = useMemo(() => {
@@ -529,6 +533,15 @@ export function usePdvState() {
   async function handleScan(code: string, origem: "leitor" | "busca" = "leitor"): Promise<boolean> {
     const cleaned = (code || "").trim();
     if (!cleaned) return false;
+    // 13/10/2026: QR do vale-troca (AURA-TROCA:<venda>) — vale em qualquer
+    // entrada do Caixa (leitor global, busca, código manual). Abre a Troca com
+    // a venda carregada; nunca é produto nem texto de busca.
+    const vale = lerCodigoDoVale(cleaned);
+    if (vale) {
+      setValeTroca({ saleId: vale.saleId });
+      setShowTroca(true);
+      return true;
+    }
     if (origem === "leitor") flashScanFeedback(cleaned);
     // 29/09/2026: código LIDO que não existe avisa e não vai para a busca —
     // antes ia, e o bipe seguinte grudava nele até o lojista apagar. Texto
@@ -599,7 +612,7 @@ export function usePdvState() {
     if (!cleaned) return;
     setQuery("");
     const lancou = await handleScan(cleaned, "busca");
-    if (lancou) flashScanFeedback(cleaned);
+    if (lancou && !lerCodigoDoVale(cleaned)) flashScanFeedback(cleaned);
   }
 
   function handleAddProduct(
@@ -1155,8 +1168,9 @@ export function usePdvState() {
     customers, customerOptions, customerRecentCount,
     sellerPickerRef, customerPickerRef,
     showTroca,
-    openTroca:  () => setShowTroca(true),
-    closeTroca: () => setShowTroca(false),
+    valeTroca,
+    openTroca:  () => { setValeTroca(null); setShowTroca(true); },
+    closeTroca: () => { setShowTroca(false); setValeTroca(null); },
     // Handlers
     handleScan, handleSearchSubmit, handleAddProduct, handleVariantSelected, handleFinalize,
     handleValidateCoupon, handleGenerateQuote,

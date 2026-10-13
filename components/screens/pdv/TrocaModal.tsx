@@ -55,8 +55,17 @@
 //     boolean e pré-seleciona "Crédito na loja" no mount.
 //   - products passa também pro Step2Returns (opcional) — fallback de
 //     unit/purchase_factor quando o item da venda não os traz.
+//
+// 13/10/2026 (vale-troca por QR no cupom — utils/valeTroca.ts):
+//   - prop `vale`: o Caixa bipou um QR AURA-TROCA:<venda>. O modal abre,
+//     busca a venda direto (sem passar pela busca do Step 1) e já entra no
+//     Step 2. Bipar o QR no campo do Step 1 faz o mesmo.
+//   - ValeTrocaBanner mostra "lido pelo vale-troca" e o prazo; prazo vencido
+//     avisa, não bloqueia. Venda inexistente/de fora do grupo: aviso claro e
+//     o Step 1 segue disponível para a busca de sempre.
+//   - O resto do fluxo (passos, payload, fiscal) não muda.
 // ============================================================
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   View, Text, Pressable, StyleSheet,
   ActivityIndicator, ScrollView,
@@ -72,6 +81,8 @@ import { Step2Returns } from "./troca/Step2Returns";
 import { Step3NewItems } from "./troca/Step3NewItems";
 import { Step4Confirm, inferFiscalStrategy, canConfirmStep4 } from "./troca/Step4Confirm";
 import { Step5Success } from "./troca/Step5Success";
+import { ValeTrocaBanner, type ValeNoWizard } from "./troca/ValeTrocaBanner";
+import { buscarVendaDoVale } from "./troca/valeTrocaBusca";
 
 import type {
   Step, SelectedSaleRow, ReturnEntry, NewEntry,
@@ -95,6 +106,9 @@ type Props = {
   products: any[];
   onClose: () => void;
   onSuccess?: (result: any) => void;
+  /** 13/10/2026: vale-troca lido no Caixa (QR do cupom). Abre o modal com a
+   *  venda carregada, no passo 2. */
+  vale?: { saleId: string } | null;
 };
 
 // Gera idempotency_key usando crypto.randomUUID quando disponivel,
@@ -143,7 +157,7 @@ function inferSettlement(
 }
 
 export function TrocaModal({
-  visible, companyId, products, onClose, onSuccess,
+  visible, companyId, products, onClose, onSuccess, vale,
 }: Props) {
   const [step, setStep] = useState<StepV3>(1);
   const [submitting, setSubmitting] = useState(false);
@@ -164,6 +178,16 @@ export function TrocaModal({
 
   const [successResult, setSuccessResult] = useState<any | null>(null);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+
+  // 13/10/2026 (vale-troca): a venda lida pelo QR, o aviso de venda não
+  // encontrada e o "carregando". valeReq descarta resposta de leitura antiga.
+  const [valeLido, setValeLido] = useState<ValeNoWizard | null>(null);
+  const [valeAviso, setValeAviso] = useState<string | null>(null);
+  const [valeCarregando, setValeCarregando] = useState(false);
+  // O vale vindo do Caixa já foi resolvido (achou ou não)? Antes disso o modal
+  // não monta a busca do passo 1 — seria uma consulta à toa por baixo da leitura.
+  const [valeResolvido, setValeResolvido] = useState(false);
+  const valeReq = useRef(0);
 
   const returnedValue = useMemo(
     () => returnEntries.reduce((s, e) => s + e.returnQty * effectiveUnitPrice(e.item), 0),
@@ -192,11 +216,56 @@ export function TrocaModal({
       setShowExitConfirm(false);
       setIdempotencyKey("");
       setDevolverValor(false);
+      valeReq.current++;
+      setValeLido(null);
+      setValeAviso(null);
+      setValeCarregando(false);
+      setValeResolvido(false);
     } else {
       // Gera chave uma unica vez ao abrir.
       setIdempotencyKey(genIdempotencyKey());
     }
   }, [visible]);
+
+  // 13/10/2026 (vale-troca): carrega a venda do QR e pula para o passo 2.
+  // Chamado pelo Caixa (prop `vale`) e pelo campo do Step 1 (QR bipado com o
+  // modal já aberto).
+  const abrirVale = useCallback(async (saleId: string) => {
+    const req = ++valeReq.current;
+    setValeCarregando(true);
+    setValeAviso(null);
+    const r = await buscarVendaDoVale(companyId, saleId);
+    if (req !== valeReq.current) return;
+    // Ordem importa: "carregando" só cai por último, com o passo já trocado —
+    // sem lote automático de estado (teste/legado) o passo 1 não monta por um
+    // instante e dispara a busca de vendas recentes à toa.
+    if (!r.ok) {
+      setValeLido(null);
+      setValeAviso(r.mensagem);
+      setStep(1);
+      setValeCarregando(false);
+      setValeResolvido(true);
+      return;
+    }
+    setReturnEntries([]);
+    setNewEntries([]);
+    setSelectedSales([{ ...r.venda, items: r.venda.items || [] } as SelectedSaleRow]);
+    setValeLido({
+      saleId: r.venda.id,
+      prazoAte: r.prazoAte,
+      vencido: r.vencido,
+      filial: r.venda.is_cross_filial ? r.venda.company_name : null,
+    });
+    setStep(2);
+    setValeCarregando(false);
+    setValeResolvido(true);
+  }, [companyId]);
+
+  const valeDoCaixa = vale?.saleId || null;
+  const lendoVale = valeCarregando || (!!valeDoCaixa && !valeResolvido);
+  useEffect(() => {
+    if (visible && valeDoCaixa) abrirVale(valeDoCaixa);
+  }, [visible, valeDoCaixa, abrirVale]);
 
   useEffect(() => {
     const ids = new Set(selectedSales.map((s) => s.id));
@@ -476,16 +545,26 @@ export function TrocaModal({
           </View>
         )}
 
+        {step !== 5 && (
+          <ValeTrocaBanner carregando={lendoVale} aviso={valeAviso} vale={valeLido} />
+        )}
+
         <ScrollView
           style={s.body}
           contentContainerStyle={s.bodyContent}
           keyboardShouldPersistTaps="handled"
         >
-          {step === 1 && (
+          {step === 1 && !lendoVale && (
             <Step1Search
               companyId={companyId}
               selectedSales={selectedSales}
-              onChangeSelected={setSelectedSales}
+              onChangeSelected={(next) => {
+                // Mexer na seleção à mão desfaz a origem "vale-troca".
+                if (valeLido && !next.some((x) => x.id === valeLido.saleId)) setValeLido(null);
+                setValeAviso(null);
+                setSelectedSales(next);
+              }}
+              onVale={abrirVale}
             />
           )}
           {step === 2 && (
@@ -549,6 +628,8 @@ export function TrocaModal({
                 setRefundSplits([]);
                 setCustomerAddress(EMPTY_ADDRESS);
                 setSuccessResult(null);
+                setValeLido(null);
+                setValeAviso(null);
               }}
             />
           )}

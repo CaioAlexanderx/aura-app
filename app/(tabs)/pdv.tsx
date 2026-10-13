@@ -169,6 +169,7 @@ function CaixaScreenInner() {
       pendingBipe={st.pendingBipe}
       onScanAgain={handleScan}
       showTroca={st.showTroca}
+      valeTroca={st.valeTroca}
       companyId={company?.id || ""}
       products={st.products}
       onCloseTroca={st.closeTroca}

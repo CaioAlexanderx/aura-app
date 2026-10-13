@@ -11,6 +11,10 @@ import { pdvSettingsApi, companiesApi, type PdvSettings } from "@/services/api";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { lerVendaSemEstoque } from "@/utils/vendaSemEstoque";
 import { lerComandaEnabled } from "@/utils/comanda";
+import {
+  lerValeTrocaLigado, salvarValeTrocaLigado, formatarDiaBR,
+  VALE_TROCA_VENDAS_DE, VALE_TROCA_VENDAS_ATE, VALE_TROCA_PRAZO_ATE,
+} from "@/utils/valeTroca";
 import { Card } from "@/components/screens/configuracoes/shared";
 import { CardFeeSection, type CardFeePalette } from "@/components/screens/configuracoes/CardFeeSection";
 import { CardPriceSection } from "@/components/screens/configuracoes/CardPriceSection";
@@ -28,6 +32,8 @@ import { FrenteDaLoja, nomeDaFrente } from "@/components/screens/configuracoes/F
 //   - Vender sem estoque — 06/10/2026
 //   - Taxa da maquininha (crédito/débito) — 17/08/2026
 //   - Cobro mais no cartão (preço no cartão) — 22/09/2026
+//   - Vale-troca no cupom (QR de fim de ano) — 13/10/2026; preferência deste
+//     navegador, não vai ao backend (ver utils/valeTroca.ts)
 //   - Restaurante (Fase 7): NFC-e manual, comanda auto-print, taxa servico
 //
 // Persistido em companies.pdv_settings (jsonb).
@@ -67,6 +73,8 @@ export function PdvSettingsCard() {
   const [pendingSettings, setPendingSettings] = useState<PdvSettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [feeInput, setFeeInput] = useState<string>("");
+  // 13/10/2026: vale-troca no cupom — preferência local, por loja (padrão ligado).
+  const [valeTrocaLigado, setValeTrocaLigado] = useState<boolean>(() => lerValeTrocaLigado(company?.id));
 
   // Usa pendingSettings durante save (optimistic), senao usa o do server
   const display = pendingSettings || serverSettings;
@@ -223,6 +231,31 @@ export function PdvSettingsCard() {
           trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
           thumbColor={lerVendaSemEstoque(display) ? Colors.violet : Colors.ink3}
           disabled={saving}
+        />
+      </View>
+
+      <View style={s.divider} />
+
+      {/* 13/10/2026: Vale-troca no cupom (QR de fim de ano). Só imprime nas
+          vendas do período; o switch só desliga o bloco. */}
+      <View style={s.row}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.rowLabel}>Vale-troca no cupom</Text>
+          <Text style={s.rowDesc}>
+            {"Nas vendas de " + formatarDiaBR(VALE_TROCA_VENDAS_DE) + " a " + formatarDiaBR(VALE_TROCA_VENDAS_ATE) +
+              ", o cupom sai com um QR. Quem ganhou o presente troca até " + formatarDiaBR(VALE_TROCA_PRAZO_ATE) +
+              " sem o comprador: você bipa o QR no Caixa e a troca abre com a venda carregada. Vale para este computador."}
+          </Text>
+        </View>
+        <Switch
+          testID="toggle-vale-troca"
+          value={valeTrocaLigado}
+          onValueChange={function(v) {
+            setValeTrocaLigado(v);
+            salvarValeTrocaLigado(company?.id, v);
+          }}
+          trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
+          thumbColor={valeTrocaLigado ? Colors.violet : Colors.ink3}
         />
       </View>
 

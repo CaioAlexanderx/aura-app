@@ -21,6 +21,10 @@
 //   item" pra dar contexto ao operador.
 //   onSubmitEditing dispara busca imediata (scanner termina em Enter —
 //   sem esperar debounce de 280ms).
+//
+// 13/10/2026 — vale-troca: o QR do cupom (AURA-TROCA:<venda>) bipado neste
+//   campo não vira busca: vai para onVale, que carrega a venda direto e
+//   avança o wizard. O campo é limpo na hora (o bipe seguinte cai limpo).
 // ============================================================
 import { useState, useEffect, useMemo, useRef } from "react";
 import {
@@ -32,11 +36,14 @@ import { Icon } from "@/components/Icon";
 import { trocaApi, type SaleForTroca, type SearchForTrocaParams } from "@/services/trocaApi";
 import type { SelectedSaleRow } from "./types";
 import { fmtBRL } from "./types";
+import { lerCodigoDoVale } from "@/utils/valeTroca";
 
 type Props = {
   companyId: string;
   selectedSales: SelectedSaleRow[];
   onChangeSelected: (next: SelectedSaleRow[]) => void;
+  /** 13/10/2026: o campo recebeu um QR de vale-troca (ID da venda). */
+  onVale?: (saleId: string) => void;
 };
 
 type DetectResult =
@@ -75,7 +82,7 @@ function detectQuery(raw: string): DetectResult {
   return { kind: "text", params: { q: v } };
 }
 
-export function Step1Search({ companyId, selectedSales, onChangeSelected }: Props) {
+export function Step1Search({ companyId, selectedSales, onChangeSelected, onVale }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SaleForTroca[]>([]);
   const [loading, setLoading] = useState(false);
@@ -103,6 +110,14 @@ export function Step1Search({ companyId, selectedSales, onChangeSelected }: Prop
   }, [query]);
 
   async function runSearch(rawQ: string) {
+    // Vale-troca (QR do cupom): não é busca, é a venda inteira.
+    const vale = onVale ? lerCodigoDoVale(rawQ) : null;
+    if (vale && onVale) {
+      lastReqRef.current++; // descarta busca em voo
+      setQuery("");
+      onVale(vale.saleId);
+      return;
+    }
     const det = detectQuery(rawQ);
     const reqId = ++lastReqRef.current;
     setLoading(true);
@@ -164,6 +179,7 @@ export function Step1Search({ companyId, selectedSales, onChangeSelected }: Prop
   const detected = useMemo(() => detectQuery(query), [query]);
   const detectedLabel = useMemo(() => {
     if (!query.trim()) return "";
+    if (lerCodigoDoVale(query)) return "Detectei: vale-troca — abrindo a venda";
     if (detected.kind === "barcode") return "Detectei: código de barras — procurando vendas com este item";
     if (detected.kind === "text") {
       if (detected.params.nfce_chave) return "Detectei: chave da NFC-e";
@@ -226,6 +242,7 @@ export function Step1Search({ companyId, selectedSales, onChangeSelected }: Prop
           { label: "CPF" },
           { label: "Nome" },
           { label: "Nº NFC-e" },
+          { label: "QR do vale-troca" },
         ].map((h) => (
           <View key={h.label} style={s.hint}>
             <Text style={s.hintTxt}>{h.label}</Text>

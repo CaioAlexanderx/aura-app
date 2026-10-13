@@ -45,6 +45,8 @@ export interface PdvModalsProps {
   onScanAgain?:          (code: string) => void;
   // ── Troca
   showTroca:    boolean;
+  /** 13/10/2026: vale-troca lido no Caixa; a Troca abre com esta venda. */
+  valeTroca?:   { saleId: string } | null;
   companyId:    string;
   products:     Product[];
   onCloseTroca: () => void;
@@ -87,7 +89,7 @@ export interface PdvModalsProps {
 export function PdvModals({
   showNewCustomer, onCloseNewCustomer, onCustomerCreated,
   pendingProduct, onVariantSelected, onClosePendingProduct, pendingBipe, onScanAgain,
-  showTroca, companyId, products, onCloseTroca,
+  showTroca, valeTroca, companyId, products, onCloseTroca,
   showCaixaModal, companyName, companyCnpj, sessaoAtiva, onCloseCaixa, onCaixaSuccess,
   showChangeModal, cashModalAmount, cashModalIsSplit, onCancelChange, onConfirmChange,
   showCrediario, customerId, customerName, saleTotal, onCrediarioConfirm, onCrediarioClose,
@@ -115,6 +117,7 @@ export function PdvModals({
         companyId={companyId}
         products={products}
         onClose={onCloseTroca}
+        vale={valeTroca}
       />
       <OpenCloseCashModal
         visible={showCaixaModal}
