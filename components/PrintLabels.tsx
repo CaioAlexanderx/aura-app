@@ -11,7 +11,13 @@ import { readMatconSettings } from "@/constants/matcon";
 import { ehIphoneInstalado } from "@/services/instalarApp";
 import { avisarImpressaoNoIphone } from "@/components/ImpressaoNoIphone";
 import { hexToName } from "@/utils/colorNames";
-import { buildLabelHtml, buildLabelName, validateLabelItems, isValidEAN13, generateEAN13, LABEL_SIZE_PRESETS, LABEL_SIZE_KEYS, DEFAULT_LABEL_SIZE } from "@/components/screens/estoque/labels/buildLabelHtml";
+import {
+  buildLabelHtml, buildLabelName, validateLabelItems, isValidEAN13, generateEAN13, LABEL_SIZE_PRESETS, LABEL_SIZE_KEYS, DEFAULT_LABEL_SIZE,
+  buildLabelTestHtml, buildLabelPreviewHtml, labelPreviewGeometry, labelSupportsCalibration,
+} from "@/components/screens/estoque/labels/buildLabelHtml";
+import { loadLabelPrinterPrefs, saveLabelPrinterPrefs, defaultLabelPrinterPrefs, labelPrinterBuildOptions, type LabelPrinterPrefs } from "@/components/screens/estoque/labels/labelPrinterPrefs";
+import { LabelPrinterCalibration, mmBr } from "@/components/screens/estoque/labels/LabelPrinterCalibration";
+import { LabelPreviewModal } from "@/components/screens/estoque/labels/LabelPreviewModal";
 import { defaultLabelQty, unitLabelForList } from "@/components/screens/estoque/labels/labelDefaults";
 import {
   filtrarEtiquetas, categoriasDe, filtrosAtivos, lerOrdemEtiquetas, salvarOrdemEtiquetas,
@@ -188,6 +194,23 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     return function() { window.removeEventListener("message", onMessage); };
   }, [isWeb, company?.id]);
 
+  // 13/10/2026 (Divina D'Lux / Elgin L42 Pro): calibracao da IMPRESSORA —
+  // modo continuo, passo entre linhas e deslocamento vertical. Fica neste
+  // computador (localStorage por empresa e por modelo), nao no pdv_settings:
+  // a impressora e do PC. So os modelos com vao entre linhas; no padrao nada
+  // e passado ao buildLabelHtml e a etiqueta sai igual a de sempre.
+  var temCalibracao = isWeb && labelSupportsCalibration(labelSize);
+  var [printerPrefs, setPrinterPrefsState] = useState<LabelPrinterPrefs>(function() { return defaultLabelPrinterPrefs(labelSize); });
+  useEffect(function() {
+    setPrinterPrefsState(isWeb ? loadLabelPrinterPrefs(company?.id, labelSize) : defaultLabelPrinterPrefs(labelSize));
+  }, [isWeb, company?.id, labelSize]);
+  function setPrinterPrefs(next: LabelPrinterPrefs) {
+    setPrinterPrefsState(next);
+    saveLabelPrinterPrefs(company?.id, labelSize, next);
+  }
+  var printerOpts = temCalibracao ? labelPrinterBuildOptions(labelSize, printerPrefs) : {};
+  var [preview, setPreview] = useState<{ html: string; widthMm: number; heightMm: number; labels: number } | null>(null);
+
   var productsWithCode = useMemo(
     function() { return products.filter(function(p) { return p.barcode || p.code; }); }, [products]);
 
@@ -320,7 +343,19 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
 
   // Executa a impressao com os itens ja prontos (barcodes validos EAN-13)
   function doPrint(items: LabelItem[]) {
-    var html = buildLabelHtml(items, { mode: mode, storeName: storeName, showStoreName: showStoreName, labelSize: labelSize, offsetMm: labelOffsetMm });
+    var html = buildLabelHtml(items, { mode: mode, storeName: storeName, showStoreName: showStoreName, labelSize: labelSize, offsetMm: labelOffsetMm, ...printerOpts });
+    abrirImpressao(html, totalLabels + " etiqueta(s) abertas para impressão");
+  }
+
+  // 13/10/2026: linha de teste — produto de exemplo com marcas de calibracao,
+  // pra acertar a impressora gastando 1 ou 2 linhas em vez de um rolo.
+  function handleTestPrint(rows: number) {
+    if (!isWeb) return;
+    var html = buildLabelTestHtml({ mode: mode, storeName: storeName, showStoreName: showStoreName, labelSize: labelSize, offsetMm: labelOffsetMm, ...printerOpts, rows: rows });
+    abrirImpressao(html, (rows > 1 ? rows + " linhas" : "Linha") + " de teste aberta" + (rows > 1 ? "s" : "") + " para impressão");
+  }
+
+  function abrirImpressao(html: string, aviso: string) {
     try {
       // 22/09/2026 (PWA Fase 2): no iPhone com a Aura instalada a janela de
       // impressão é morta; explica o caminho pelo Safari em vez de abrir nada.
@@ -329,7 +364,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       var url = URL.createObjectURL(blob);
       var w = window.open(url, "_blank");
       if (!w) { var w2 = window.open("", "_blank"); if (w2) { w2.document.write(html); w2.document.close(); } else { toast.error("Popup bloqueado — permita popups para app.getaura.com.br"); return; } }
-      toast.success(totalLabels + " etiqueta(s) abertas para impressão");
+      toast.success(aviso);
     } catch (err) { console.error("[PrintLabels] Error:", err); toast.error("Erro ao gerar etiquetas"); }
   }
 
@@ -384,6 +419,29 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
 
     // Todos tem EAN-13 valido — imprime direto
     doPrint(items);
+  }
+
+  // 13/10/2026: pre-visualizacao em escala real da 1a pagina, sem imprimir e
+  // sem gravar nada. Produto sem EAN-13 aparece com o codigo que a impressao
+  // vai gerar (mesma formula deterministica do handlePrint); gravar no
+  // cadastro continua sendo so no "Imprimir".
+  function handlePreview() {
+    if (!isWeb || selectedIds.length === 0) { toast.error("Selecione pelo menos um produto"); return; }
+    setInvalidCodes([]);
+    var items = buildItems();
+    if (!items || items.length === 0) { toast.error("Nenhum item selecionado. Marque o produto pai ou pelo menos uma variante."); return; }
+    var invalid = validateLabelItems(items);
+    if (invalid.length > 0) {
+      setInvalidCodes(invalid);
+      toast.error(invalid.length + " produto(s) com código inválido — corrija antes de imprimir");
+      return;
+    }
+    var shown = items.map(function(item) {
+      return isValidEAN13(item.barcode) ? item : { ...item, barcode: generateEAN13(item.barcode || item.name) };
+    });
+    var opts = { mode: mode, storeName: storeName, showStoreName: showStoreName, labelSize: labelSize, offsetMm: labelOffsetMm, ...printerOpts };
+    var geo = labelPreviewGeometry(shown, opts);
+    setPreview({ html: buildLabelPreviewHtml(shown, opts), widthMm: geo.widthMm, heightMm: geo.heightMm, labels: geo.labels });
   }
 
   // Confirma a geracao de EAN-13 e imprime substituindo os codigos
@@ -501,6 +559,10 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
           <Text style={s.storeToggleText}>Incluir nome da loja no topo: <Text style={s.storeTogglePreview}>{storeName.toUpperCase()}</Text></Text>
         </Pressable>
       ) : null}
+
+      {temCalibracao && (
+        <LabelPrinterCalibration labelSize={labelSize} prefs={printerPrefs} onChange={setPrinterPrefs} onTest={handleTestPrint} />
+      )}
 
       <View style={s.toolbar}>
         <View style={s.searchBox}>
@@ -829,13 +891,33 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
         </View>
       )}
 
-      <Pressable onPress={handlePrint} style={[s.printBtn, totalLabels === 0 && { opacity: 0.5 }]} disabled={totalLabels === 0}>
-        <Icon name="file_text" size={16} color="#fff" />
-        <Text style={s.printBtnText}>Imprimir {totalLabels} etiqueta(s)</Text>
-      </Pressable>
+      <View style={s.printRow}>
+        {isWeb && (
+          <Pressable onPress={handlePreview} style={[s.previewBtn, totalLabels === 0 && { opacity: 0.5 }]} disabled={totalLabels === 0} testID="etiquetas-ver-tamanho-real">
+            <Icon name="search" size={14} color={Colors.violet3} />
+            <Text style={s.previewBtnText}>Ver em tamanho real</Text>
+          </Pressable>
+        )}
+        <Pressable onPress={handlePrint} style={[s.printBtn, { flex: 1 }, totalLabels === 0 && { opacity: 0.5 }]} disabled={totalLabels === 0}>
+          <Icon name="file_text" size={16} color="#fff" />
+          <Text style={s.printBtnText}>Imprimir {totalLabels} etiqueta(s)</Text>
+        </Pressable>
+      </View>
+      {preview && (
+        <LabelPreviewModal
+          html={preview.html}
+          widthMm={preview.widthMm}
+          heightMm={preview.heightMm}
+          labels={preview.labels}
+          totalLabels={totalLabels}
+          continuous={!!printerOpts.continuous}
+          onClose={function() { setPreview(null); }}
+          onPrint={function() { setPreview(null); handlePrint(); }}
+        />
+      )}
       <View style={s.setupHint}>
         <Icon name="alert" size={12} color={Colors.amber} />
-        <Text style={s.setupText}>Chrome: Ctrl+P, papel {labelPreset.pageWidthMm}x{labelPreset.pageHeightMm}mm, Margens: Nenhuma, Escala: 100%. A quantidade padrão é baseada no estoque de cada variante{matconEnabled ? ", exceto em unidades fracionadas (m, m², m³, kg, L, ton) e milheiro, que começam em 1" : ""}.</Text>
+        <Text style={s.setupText}>Chrome: Ctrl+P, papel {printerOpts.continuous ? labelPreset.pageWidthMm + "mm de largura e a altura do trabalho inteiro (passo de " + mmBr(printerPrefs.rowPitchMm) + " × número de linhas; a página de impressão mostra a medida)" : labelPreset.pageWidthMm + "x" + (printerOpts.rowPitchMm != null ? printerOpts.rowPitchMm : labelPreset.pageHeightMm) + "mm"}, Margens: Nenhuma, Escala: 100%. A quantidade padrão é baseada no estoque de cada variante{matconEnabled ? ", exceto em unidades fracionadas (m, m², m³, kg, L, ton) e milheiro, que começam em 1" : ""}.</Text>
       </View>
     </View>
   );
@@ -935,6 +1017,9 @@ var s = StyleSheet.create({
   qtyLabel: { fontSize: 10, color: Colors.ink3, marginLeft: 2 },
   printBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 14 },
   printBtnText: { fontSize: 14, color: "#fff", fontWeight: "700" },
+  printRow: { flexDirection: "row", alignItems: "stretch", gap: 8, flexWrap: "wrap" },
+  previewBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, borderWidth: 1, borderColor: Colors.border2 },
+  previewBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
   setupHint: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: Colors.amberD, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.amber + "33" },
   setupText: { fontSize: 10, color: Colors.amber, flex: 1, lineHeight: 16 },
   // Painel codigos invalidos (placeholder)
