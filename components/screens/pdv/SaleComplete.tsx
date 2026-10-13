@@ -28,6 +28,7 @@
 // esta venda". As frases vêm de ./matconDaVenda.ts a partir de
 // `sale.matcon` (resposta do POST); sem `matcon`, nada muda na tela.
 // ============================================================
+import { useRef } from "react";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
@@ -45,6 +46,7 @@ import { openPrintWindow } from "@/services/printWindow";
 import type { NfcePaymentEntry } from "@/services/nfceApi";
 import { router } from "expo-router";
 import { frasesMatconDaVenda } from "./matconDaVenda";
+import { cupomComVale } from "@/utils/valeTrocaCupom";
 
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
@@ -52,7 +54,7 @@ function paymentLabel(key: string): string {
   return PAYMENTS.find(p => p.key === key)?.label || key;
 }
 
-function openPrintReceipt(companyId: string, saleId: string, token: string | null) {
+function openPrintReceipt(companyId: string, saleId: string, token: string | null, vendaEm: Date) {
   if (!token || !companyId) { toast.error("Sessão expirada"); return; }
   if (Platform.OS !== "web" || typeof window === "undefined") {
     toast.info("Impressão disponível apenas na versão web");
@@ -66,7 +68,11 @@ function openPrintReceipt(companyId: string, saleId: string, token: string | nul
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return { ok: false as const, error: "Erro ao gerar cupom" };
-    return { ok: true as const, html: await res.text() };
+    // 13/10/2026: vendas de nov/dez saem com o bloco "Vale-troca" (QR) — ver
+    // utils/valeTroca.ts. Fora do período, ou com a loja desligando, o HTML do
+    // backend segue intacto.
+    const html = cupomComVale(await res.text(), { companyId, saleId, vendaEm });
+    return { ok: true as const, html };
   }).then((r) => {
     if (r === "blocked") toast.error("Pop-up bloqueado. Permita pop-ups para imprimir.");
   });
@@ -89,6 +95,9 @@ type Props = {
 
 export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, referralName }: Props) {
   const { company, token } = useAuthStore();
+  // Instante em que a tela final abriu = o da venda (o vale-troca do cupom
+  // vale pelo dia da venda, não pelo da impressão).
+  const vendaEm = useRef(new Date()).current;
   const matconFrases = frasesMatconDaVenda(sale.matcon, {
     diasDeEntrega: matconDeliveryDays ?? 2,
     nomeDoIndicado: referralName,
@@ -136,7 +145,7 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
 
   function handlePrint() {
     if (!company?.id) return;
-    openPrintReceipt(company.id, sale.id, token);
+    openPrintReceipt(company.id, sale.id, token, vendaEm);
   }
 
   return (

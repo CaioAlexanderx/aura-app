@@ -8,6 +8,7 @@ import { useSaleDetail, useCancelSale, useUpdateSaleSeller, useEmitNfce, useReem
 import { employeesApi, request, BASE_URL } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { openPrintWindow } from "@/services/printWindow";
+import { cupomComVale } from "@/utils/valeTrocaCupom";
 import { DevolucaoModal } from "@/components/crediario/DevolucaoModal";
 import { router } from "expo-router";
 import { ROTA_TROCA_PDV, rotuloDevolvido, mensagemCancelamento, avisoRetornosAtivos } from "@/utils/devolucaoOuTroca";
@@ -272,7 +273,12 @@ export function SaleDetailModal({
       const outcome = await openPrintWindow(async () => {
         const resp = await fetch(url, { headers: token ? { Authorization: "Bearer " + token } : {} });
         if (!resp.ok) return { ok: false as const, error: "Erro ao carregar recibo (" + resp.status + ")." };
-        return { ok: true as const, html: await resp.text() };
+        // 13/10/2026: 2ª via de venda de nov/dez leva o vale-troca enquanto o
+        // prazo vale (utils/valeTroca.ts).
+        const html = cupomComVale(await resp.text(), {
+          companyId: effectiveCompanyId, saleId, vendaEm: (sale as any)?.created_at,
+        });
+        return { ok: true as const, html };
       });
       if (outcome === "blocked") toast.error("Permita pop-ups para imprimir o recibo.");
     } finally {
