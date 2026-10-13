@@ -29,7 +29,8 @@ import { SecaoCard } from "./SecaoCard";
 import { ValeTrocaEspelho } from "./ValeTrocaEspelho";
 import { secoesDaPagina } from "./secoes";
 // "Placar do dia": o cartão está sendo criado por outra frente
-// (components/screens/blackfriday/PlacarDoDiaCard.tsx). Quando o arquivo
+// (components/screens/blackfriday/PlacarDoDiaCard.tsx, PR app#1060, assinatura
+// `PlacarDoDiaCard({ companyId, isOwner })`). Quando o arquivo
 // existir, descomente o import e o bloco "placar" mais abaixo, e acrescente a
 // chave `placar` em secoes.ts. Enquanto isso a seção não aparece.
 // import { PlacarDoDiaCard } from "./PlacarDoDiaCard";
@@ -84,7 +85,7 @@ export function PaginaBlackFriday() {
       {/* "placar": slot reservado — ver o comentário do import acima.
       {tem("placar") && (
         <SecaoCard testID="bf-secao-placar" numero={numero("placar")} titulo="Placar do dia" porQueAgora="...">
-          <PlacarDoDiaCard />
+          <PlacarDoDiaCard companyId={company.id} isOwner={isOwner} />
         </SecaoCard>
       )}
       */}
