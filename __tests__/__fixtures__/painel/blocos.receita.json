@@ -1,0 +1,284 @@
+{
+  "id": "receita",
+  "titulo": "Receita",
+  "periodo": 30,
+  "calculado_em": "2026-10-13T09:00:04.000Z",
+  "ao_vivo": false,
+  "valor": 553,
+  "unidade": "R$ por mês",
+  "resumo": "Recebido em out: R$ 309,83",
+  "fonte": "companies + tabela de preços (anual ÷ 12) · webhook_logs (Asaas)",
+  "indicadores": [
+    {
+      "rotulo": "Recebido · Set",
+      "valor": 479.66,
+      "nota": "3 pagamentos"
+    },
+    {
+      "rotulo": "Recebido · Out",
+      "valor": 309.83,
+      "nota": "2 pagamentos"
+    },
+    {
+      "rotulo": "Atrasado",
+      "valor": 74.17,
+      "nota": "no mês"
+    },
+    {
+      "rotulo": "Ticket médio",
+      "valor": 138.25,
+      "nota": "por assinatura"
+    },
+    {
+      "rotulo": "Sem cobrança registrada",
+      "valor": 89,
+      "nota": "1 pagante"
+    }
+  ],
+  "listas": [
+    {
+      "titulo": "Por plano e ciclo",
+      "colunas": [
+        {
+          "chave": "plano_ciclo",
+          "rotulo": "Plano e ciclo",
+          "tipo": "texto"
+        },
+        {
+          "chave": "lojas",
+          "rotulo": "Lojas",
+          "tipo": "numero"
+        },
+        {
+          "chave": "mrr",
+          "rotulo": "MRR",
+          "tipo": "moeda"
+        }
+      ],
+      "linhas": [
+        {
+          "plano_ciclo": "Negócio mensal",
+          "lojas": 2,
+          "mrr": 338
+        },
+        {
+          "plano_ciclo": "Negócio anual",
+          "lojas": 1,
+          "mrr": 140.83
+        },
+        {
+          "plano_ciclo": "Essencial anual",
+          "lojas": 1,
+          "mrr": 74.17
+        }
+      ]
+    },
+    {
+      "titulo": "Assinaturas",
+      "colunas": [
+        {
+          "chave": "nome",
+          "rotulo": "Loja",
+          "tipo": "loja"
+        },
+        {
+          "chave": "plano",
+          "rotulo": "Plano",
+          "tipo": "texto"
+        },
+        {
+          "chave": "ciclo",
+          "rotulo": "Ciclo",
+          "tipo": "texto"
+        },
+        {
+          "chave": "mrr",
+          "rotulo": "MRR",
+          "tipo": "moeda"
+        }
+      ],
+      "linhas": [
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Mercado Bela Vista",
+          "telefone": "11999900002",
+          "plano": "Negócio",
+          "ciclo": "Mensal",
+          "mrr": 169,
+          "tem_cobranca": true
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+          "nome": "Papelaria Sol",
+          "telefone": "11999900008",
+          "plano": "Negócio",
+          "ciclo": "Mensal",
+          "mrr": 169,
+          "tem_cobranca": true
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+          "nome": "Loja Aurora",
+          "telefone": "11999900001",
+          "plano": "Negócio",
+          "ciclo": "Anual",
+          "mrr": 140.83,
+          "tem_cobranca": true
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+          "nome": "Casa do Construtor",
+          "telefone": "11999900003",
+          "plano": "Essencial",
+          "ciclo": "Anual",
+          "mrr": 74.17,
+          "tem_cobranca": true
+        }
+      ]
+    },
+    {
+      "titulo": "Sem cobrança registrada",
+      "colunas": [
+        {
+          "chave": "nome",
+          "rotulo": "Loja",
+          "tipo": "loja"
+        },
+        {
+          "chave": "plano",
+          "rotulo": "Plano",
+          "tipo": "texto"
+        },
+        {
+          "chave": "ciclo",
+          "rotulo": "Ciclo",
+          "tipo": "texto"
+        },
+        {
+          "chave": "mrr",
+          "rotulo": "Valor de tabela",
+          "tipo": "moeda"
+        }
+      ],
+      "linhas": [
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000004",
+          "nome": "Dojô Central",
+          "telefone": null,
+          "plano": "Essencial",
+          "ciclo": "Mensal",
+          "mrr": 89,
+          "tem_cobranca": false
+        }
+      ]
+    },
+    {
+      "titulo": "Eventos da Asaas · 30 dias",
+      "colunas": [
+        {
+          "chave": "quando",
+          "rotulo": "Quando",
+          "tipo": "data_hora"
+        },
+        {
+          "chave": "nome",
+          "rotulo": "Loja",
+          "tipo": "loja"
+        },
+        {
+          "chave": "evento",
+          "rotulo": "Evento",
+          "tipo": "texto"
+        },
+        {
+          "chave": "valor",
+          "rotulo": "Valor",
+          "tipo": "moeda"
+        }
+      ],
+      "linhas": [
+        {
+          "company_id": null,
+          "nome": "Sem loja vinculada",
+          "telefone": null,
+          "evento": "Recebido",
+          "valor": 140.83,
+          "quando": "2026-10-12T13:10:00.000Z",
+          "sem_loja": true
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Mercado Bela Vista",
+          "telefone": "11999900002",
+          "evento": "Recebido",
+          "valor": 169,
+          "quando": "2026-10-05T09:00:00.000Z",
+          "sem_loja": false
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+          "nome": "Casa do Construtor",
+          "telefone": "11999900003",
+          "evento": "Atrasado",
+          "valor": 74.17,
+          "quando": "2026-10-02T09:00:00.000Z",
+          "sem_loja": false
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+          "nome": "Loja Aurora",
+          "telefone": "11999900001",
+          "evento": "Apagado",
+          "valor": 140.83,
+          "quando": "2026-09-21T09:00:00.000Z",
+          "sem_loja": false
+        }
+      ]
+    }
+  ],
+  "series": [
+    {
+      "titulo": "MRR por mês",
+      "tipo": "linha",
+      "pontos": [
+        {
+          "rotulo": "Ago",
+          "mes": "2026-08",
+          "valor": 140.83
+        },
+        {
+          "rotulo": "Set",
+          "mes": "2026-09",
+          "valor": 310.83
+        },
+        {
+          "rotulo": "Out",
+          "mes": "2026-10",
+          "valor": 553
+        }
+      ]
+    },
+    {
+      "titulo": "Por plano e ciclo",
+      "tipo": "rosca",
+      "pontos": [
+        {
+          "rotulo": "Negócio mensal",
+          "valor": 2,
+          "mrr": 338
+        },
+        {
+          "rotulo": "Negócio anual",
+          "valor": 1,
+          "mrr": 140.83
+        },
+        {
+          "rotulo": "Essencial anual",
+          "valor": 1,
+          "mrr": 74.17
+        }
+      ]
+    }
+  ],
+  "insight": "1 pagante sem cobrança registrada (R$ 89,00 fora do MRR) · 1 pagamento sem loja vinculada em 30 dias. O cálculo mostra, não esconde."
+}

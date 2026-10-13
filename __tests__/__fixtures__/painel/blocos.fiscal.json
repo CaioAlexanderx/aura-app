@@ -1,0 +1,122 @@
+{
+  "id": "fiscal",
+  "titulo": "Fiscal",
+  "periodo": 7,
+  "calculado_em": "2026-10-13T09:00:04.000Z",
+  "ao_vivo": false,
+  "valor": 1,
+  "unidade": "rejeitada de 34 emitidas",
+  "resumo": "97% autorizadas · 2 lojas emitem",
+  "fonte": "nfce_emissions",
+  "indicadores": [
+    {
+      "rotulo": "Emitidas",
+      "valor": 34,
+      "nota": "7 dias"
+    },
+    {
+      "rotulo": "Rejeitadas",
+      "valor": 1,
+      "nota": null
+    },
+    {
+      "rotulo": "Autorizadas",
+      "valor": "97%",
+      "nota": null
+    },
+    {
+      "rotulo": "Lojas emitindo",
+      "valor": 2,
+      "nota": null
+    }
+  ],
+  "listas": [
+    {
+      "titulo": "NFC-e por loja · 7 dias",
+      "colunas": [
+        {
+          "chave": "nome",
+          "rotulo": "Loja",
+          "tipo": "loja"
+        },
+        {
+          "chave": "emitidas",
+          "rotulo": "Emitidas",
+          "tipo": "numero"
+        },
+        {
+          "chave": "rejeitadas",
+          "rotulo": "Rejeitadas",
+          "tipo": "numero"
+        },
+        {
+          "chave": "ultimo_motivo",
+          "rotulo": "Último motivo",
+          "tipo": "texto"
+        }
+      ],
+      "linhas": [
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Mercado Bela Vista",
+          "telefone": "11999900002",
+          "emitidas": 30,
+          "rejeitadas": 1,
+          "ultimo_motivo": "Rejeição 327: CFOP inválido"
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+          "nome": "Papelaria Sol",
+          "telefone": "11999900008",
+          "emitidas": 4,
+          "rejeitadas": 0,
+          "ultimo_motivo": null
+        }
+      ]
+    }
+  ],
+  "series": [
+    {
+      "titulo": "NFC-e por dia",
+      "tipo": "barras",
+      "pontos": [
+        {
+          "rotulo": "07/10",
+          "valor": 0,
+          "rejeitadas": 0
+        },
+        {
+          "rotulo": "08/10",
+          "valor": 0,
+          "rejeitadas": 0
+        },
+        {
+          "rotulo": "09/10",
+          "valor": 0,
+          "rejeitadas": 0
+        },
+        {
+          "rotulo": "10/10",
+          "valor": 21,
+          "rejeitadas": 1
+        },
+        {
+          "rotulo": "11/10",
+          "valor": 0,
+          "rejeitadas": 0
+        },
+        {
+          "rotulo": "12/10",
+          "valor": 13,
+          "rejeitadas": 0
+        },
+        {
+          "rotulo": "13/10",
+          "valor": 0,
+          "rejeitadas": 0
+        }
+      ]
+    }
+  ],
+  "insight": "Mercado Bela Vista (1): rejeição em 7 dias."
+}

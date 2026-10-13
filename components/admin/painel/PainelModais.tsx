@@ -12,6 +12,7 @@ import { BarrasVerticais } from "./Graficos";
 import { CaixaInsight, Indicadores, Pill } from "./BlocoCard";
 import { Paleta, TextoRico } from "./paleta";
 import { useFichaCliente } from "./usePainelHoje";
+import { abrirWhatsApp } from "./whatsapp";
 import type { BlocoId, ItemCatalogo } from "./tipos";
 
 function PainelModal(props: {
@@ -57,6 +58,7 @@ export function CatalogoBlocos(props: {
   ativos: BlocoId[];
   onClose: () => void;
   onSalvar: (ativos: BlocoId[]) => void;
+  salvando?: boolean;          // PUT /layout em andamento
 }) {
   var [marcados, setMarcados] = useState<BlocoId[]>(props.ativos);
   // Reabrir descarta o que foi marcado e não salvo.
@@ -84,7 +86,7 @@ export function CatalogoBlocos(props: {
           <Text style={m.footText} testID="catalogo-contagem">{nAtivos} ativos · {disponiveis} disponíveis · {emConstrucao} em construção</Text>
           <View style={m.footAcoes}>
             <Pressable testID="catalogo-cancelar" onPress={props.onClose} style={m.btnGhost}><Text style={m.btnGhostText}>Cancelar</Text></Pressable>
-            <Pressable testID="catalogo-salvar" onPress={function() { props.onSalvar(marcados); }} style={m.btnPrimario}><Text style={m.btnPrimarioText}>Salvar painel</Text></Pressable>
+            <Pressable testID="catalogo-salvar" disabled={props.salvando} onPress={function() { props.onSalvar(marcados); }} style={[m.btnPrimario, props.salvando && { opacity: 0.6 }]}><Text style={m.btnPrimarioText}>{props.salvando ? "Salvando…" : "Salvar painel"}</Text></Pressable>
           </View>
         </>
       }
@@ -124,9 +126,10 @@ export function FichaClienteModal(props: {
   companyId: string | null;
   onClose: () => void;
   onAbrirCliente: (companyId: string) => void;
-  onVerbo: (verbo: string, loja: string) => void;
+  onVerbo: (verbo: string, loja: string) => void;   // verbos que ainda não existem: "em breve"
+  onAviso: (mensagem: string) => void;
 }) {
-  var { ficha, carregando } = useFichaCliente(props.companyId);
+  var { ficha, carregando, erro, tentarDeNovo } = useFichaCliente(props.companyId);
   var cid = props.companyId;
   return (
     <PainelModal
@@ -140,19 +143,37 @@ export function FichaClienteModal(props: {
         <>
           <Text style={m.footText}>Fontes: {ficha.fontes}</Text>
           <View style={m.footAcoes}>
-            <Pressable onPress={function() { props.onVerbo("WhatsApp", ficha!.nome); }} style={m.btn}><Text style={m.btnText}>WhatsApp</Text></Pressable>
-            <Pressable onPress={function() { props.onVerbo("Registrar contato", ficha!.nome); }} style={m.btn}><Text style={m.btnText}>Registrar contato</Text></Pressable>
+            <Pressable
+              testID="ficha-whatsapp"
+              onPress={function() {
+                if (!abrirWhatsApp(ficha!.telefone)) props.onAviso(ficha!.nome + " não tem telefone cadastrado.");
+              }}
+              style={m.btn}
+              accessibilityRole="link"
+            >
+              <Text style={m.btnText}>WhatsApp</Text>
+            </Pressable>
+            <Pressable testID="ficha-registrar-contato" onPress={function() { props.onVerbo("Registrar contato", ficha!.nome); }} style={m.btn}><Text style={m.btnText}>Registrar contato</Text></Pressable>
             <Pressable testID="ficha-abrir-cliente" onPress={function() { props.onAbrirCliente(ficha!.company_id); }} style={m.btnPrimario}><Text style={m.btnPrimarioText}>Abrir cliente</Text></Pressable>
           </View>
         </>
       ) : undefined}
     >
       {carregando ? <ActivityIndicator color={Colors.violet3} /> : null}
-      {!carregando && !ficha ? (
-        <CaixaInsight insight={{ tom: "neutro", texto: "Esta loja ainda não tem ficha nos dados de exemplo. A ficha completa entra com a API do painel." }} />
+      {!carregando && !ficha && erro ? (
+        <View style={{ gap: 8, alignItems: "flex-start" }} testID="ficha-erro">
+          <CaixaInsight insight={{ tom: "risco", texto: "Não consegui carregar a ficha desta loja." }} />
+          <Pressable testID="ficha-tentar-de-novo" onPress={tentarDeNovo} style={m.btn} accessibilityRole="button"><Text style={m.btnText}>Tentar de novo</Text></Pressable>
+        </View>
+      ) : null}
+      {!carregando && !ficha && !erro ? (
+        <CaixaInsight insight={{ tom: "neutro", texto: "Esta loja ainda não tem ficha." }} />
       ) : null}
       {ficha ? (
         <>
+          {(ficha.alertas || []).map(function(a, i) {
+            return <CaixaInsight key={"a" + i} insight={{ tom: a.tom, texto: a.texto }} />;
+          })}
           <Indicadores itens={ficha.indicadores} />
           {ficha.serie ? (
             <View>

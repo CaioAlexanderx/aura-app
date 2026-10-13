@@ -1,0 +1,26 @@
+{
+  "ok": true,
+  "dia": "2026-10-13",
+  "duracao_ms": 0,
+  "blocos": [
+    "acesso",
+    "adocao",
+    "cadastros",
+    "contatos",
+    "crediario",
+    "fiscal",
+    "frentes",
+    "horario",
+    "pagantes",
+    "pagantes_sem_venda",
+    "plataforma",
+    "receita",
+    "telas_visitadas",
+    "trials_degrau",
+    "uso_funcionalidade"
+  ],
+  "alertas": 4,
+  "health_atualizados": 7,
+  "mrr_total": 553,
+  "erros": []
+}

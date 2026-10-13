@@ -1,0 +1,176 @@
+{
+  "id": "cadastros",
+  "titulo": "Cadastros",
+  "periodo": 30,
+  "calculado_em": "2026-10-13T09:00:04.000Z",
+  "ao_vivo": false,
+  "valor": 1,
+  "unidade": "em 7 dias",
+  "resumo": "0 self-service · 1 por código",
+  "fonte": "companies",
+  "indicadores": [
+    {
+      "rotulo": "Em 7 dias",
+      "valor": 1,
+      "nota": null
+    },
+    {
+      "rotulo": "Em 30 dias",
+      "valor": 4,
+      "nota": null
+    },
+    {
+      "rotulo": "Por código de convite",
+      "valor": 1,
+      "nota": "30 dias"
+    }
+  ],
+  "listas": [
+    {
+      "titulo": "Cadastros · 30 dias",
+      "colunas": [
+        {
+          "chave": "nome",
+          "rotulo": "Loja",
+          "tipo": "loja"
+        },
+        {
+          "chave": "criado_em",
+          "rotulo": "Cadastro",
+          "tipo": "data"
+        },
+        {
+          "chave": "origem",
+          "rotulo": "Origem",
+          "tipo": "texto"
+        },
+        {
+          "chave": "frente",
+          "rotulo": "Frente",
+          "tipo": "texto"
+        },
+        {
+          "chave": "plano",
+          "rotulo": "Plano",
+          "tipo": "texto"
+        },
+        {
+          "chave": "status",
+          "rotulo": "Situação",
+          "tipo": "texto"
+        }
+      ],
+      "linhas": [
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000006",
+          "nome": "Bazar Novo",
+          "telefone": "11999900006",
+          "criado_em": "2026-10-09",
+          "origem": "Código de convite",
+          "frente": "Sem frente",
+          "plano": "Essencial",
+          "status": "trial"
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000005",
+          "nome": "Ótica Visão",
+          "telefone": "11999900005",
+          "criado_em": "2026-10-06",
+          "origem": "Site (self-service)",
+          "frente": "Ótica",
+          "plano": "Negócio",
+          "status": "trial"
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000007",
+          "nome": "Tech Assist",
+          "telefone": "11999900007",
+          "criado_em": "2026-10-01",
+          "origem": "Site (self-service)",
+          "frente": "Assistência",
+          "plano": "Negócio",
+          "status": "trial"
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+          "nome": "Papelaria Sol",
+          "telefone": "11999900008",
+          "criado_em": "2026-09-20",
+          "origem": "Site (self-service)",
+          "frente": "Sem frente",
+          "plano": "Negócio",
+          "status": "active"
+        }
+      ]
+    }
+  ],
+  "series": [
+    {
+      "titulo": "Cadastros por semana",
+      "tipo": "barras",
+      "pontos": [
+        {
+          "rotulo": "31/08",
+          "valor": 0
+        },
+        {
+          "rotulo": "07/09",
+          "valor": 0
+        },
+        {
+          "rotulo": "14/09",
+          "valor": 1
+        },
+        {
+          "rotulo": "21/09",
+          "valor": 0
+        },
+        {
+          "rotulo": "28/09",
+          "valor": 1
+        },
+        {
+          "rotulo": "05/10",
+          "valor": 2
+        },
+        {
+          "rotulo": "12/10",
+          "valor": 0
+        }
+      ]
+    },
+    {
+      "titulo": "Origem · 30 dias",
+      "tipo": "barras_h",
+      "pontos": [
+        {
+          "rotulo": "Site (self-service)",
+          "valor": 3
+        },
+        {
+          "rotulo": "Código de convite",
+          "valor": 1
+        }
+      ]
+    },
+    {
+      "titulo": "Frente escolhida",
+      "tipo": "barras_h",
+      "pontos": [
+        {
+          "rotulo": "Sem frente",
+          "valor": 2
+        },
+        {
+          "rotulo": "Ótica",
+          "valor": 1
+        },
+        {
+          "rotulo": "Assistência",
+          "valor": 1
+        }
+      ]
+    }
+  ],
+  "insight": "2 de 4 cadastros em 30 dias estão sem frente atribuída."
+}

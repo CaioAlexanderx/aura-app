@@ -179,6 +179,98 @@ export type SetSegmentResponse = {
   flags: SegmentFlags;
 };
 
+// ── Painel Hoje (13/10/2026, Aura-backend #807) ─────────────────────────────
+// Formato bruto de /admin/painel/*. A tela não usa estes tipos direto:
+// components/admin/painel/adaptadores.ts traduz para o modelo da tela.
+// Exemplos reais: __tests__/__fixtures__/painel/*.json.
+export type PainelApiPonto = {
+  rotulo: string;
+  valor: number | null;
+  texto?: string;        // rótulo pronto ("22 d", "nunca", "4/5")
+  [extra: string]: any;  // pct, pagantes, anuais, trials, visitas, rejeitadas, mrr…
+};
+export type PainelApiBlocoResumo = {
+  id: string;
+  titulo: string;
+  grupo: "negocio" | "produto" | "operacao";
+  valor: number | null;
+  unidade: string | null;
+  variacao: { d7: number | null; d30: number | null } | null;
+  serie: PainelApiPonto[];
+  resumo: string | null;
+  fonte: string | null;
+};
+export type PainelApiAlerta = {
+  tipo: string;          // pagante_anual_vencendo | trial_com_venda_vencendo | pagamento_sem_loja | nfce_rejeitada
+  company_id: string | null;
+  titulo: string;
+  detalhe: string | null;
+  verbo: string | null;
+  bloco: string | null;
+};
+export type PainelApiHoje = {
+  dia: string;
+  calculado_em: string;
+  proximo_calculo: string;
+  ao_vivo: boolean;
+  blocos: PainelApiBlocoResumo[];
+  alertas: PainelApiAlerta[];
+};
+export type PainelApiColuna = {
+  chave: string;
+  rotulo: string;
+  tipo: "texto" | "loja" | "numero" | "moeda" | "data" | "data_hora" | "booleano";
+};
+export type PainelApiLista = {
+  titulo: string;
+  colunas: PainelApiColuna[];
+  linhas: Record<string, any>[];
+};
+export type PainelApiDetalhe = {
+  id: string;
+  titulo: string;
+  periodo: number;
+  calculado_em: string;
+  ao_vivo: boolean;
+  valor: number | null;
+  unidade: string | null;
+  resumo: string | null;
+  fonte: string | null;
+  indicadores: { rotulo: string; valor: number | string | null; nota: string | null }[];
+  listas: PainelApiLista[];
+  series: { titulo: string; tipo: "barras" | "barras_h" | "linha" | "rosca" | "funil"; pontos: PainelApiPonto[] }[];
+  insight: string | null;
+};
+export type PainelApiFicha = {
+  company_id: string;
+  nome: string;
+  telefone: string | null;
+  cliente: Record<string, any>;
+  health: { score: number; risk_level: string; [k: string]: any } | null;
+  logins: { ultimos_30d: number; dias_ativos_30d: number; ultimo_acesso: string | null };
+  asaas: { evento: string; quando: string; valor: number | null; vencimento: string | null }[];
+  modulos: string[];
+  modulos_detalhe: { id: string; nome: string; usou_30d: boolean; eventos_30d: number; ultimo_uso: string | null }[];
+  vendas_por_semana: { rotulo: string; valor: number }[];
+  alertas: PainelApiAlerta[];
+  linha_do_tempo: { tipo: string; quando: string; titulo: string; valor: number | null }[];
+};
+export type PainelApiLayout = {
+  padrao: boolean;
+  atualizado_em: string | null;
+  blocos: { id: string; visivel: boolean; titulo: string; grupo: string }[];
+};
+export type PainelApiRecalcular = {
+  ok: boolean;
+  dia: string;
+  duracao_ms: number;
+  blocos: string[];
+  alertas: number;
+  health_atualizados: number;
+  mrr_total: number;
+  erros: any[];
+};
+
 export var adminApi = {
   dashboard: function() { return request<any>("/admin/dashboard"); },
   clients: function() { return request<any>("/admin/clients"); },
@@ -307,6 +399,29 @@ export var adminApi = {
     },
     remove: function(id: string) {
       return request<{ deleted: boolean }>("/admin/notifications/banners/" + id, { method: "DELETE", retry: 0 });
+    },
+  },
+  // Gestão Aura › Hoje (13/10/2026, Aura-backend #807). `hoje` e `bloco`
+  // podem calcular ao vivo (alguns segundos), por isso o timeout maior.
+  painel: {
+    hoje: function() {
+      return request<PainelApiHoje>("/admin/painel/hoje", { timeout: 30000 });
+    },
+    bloco: function(id: string, periodo?: number) {
+      var q = periodo ? "?periodo=" + periodo : "";
+      return request<PainelApiDetalhe>("/admin/painel/blocos/" + encodeURIComponent(id) + q, { timeout: 30000 });
+    },
+    ficha: function(companyId: string) {
+      return request<PainelApiFicha>("/admin/painel/clientes/" + encodeURIComponent(companyId) + "/ficha", { timeout: 30000 });
+    },
+    layout: function() {
+      return request<PainelApiLayout>("/admin/painel/layout");
+    },
+    salvarLayout: function(blocos: { id: string; visivel: boolean }[]) {
+      return request<PainelApiLayout>("/admin/painel/layout", { method: "PUT", body: { blocos: blocos }, retry: 0 });
+    },
+    recalcular: function() {
+      return request<PainelApiRecalcular>("/admin/painel/recalcular", { method: "POST", retry: 0, timeout: 120000 });
     },
   },
   // Pedidos de disparo preparados pelo Claude; só executam com aprovação.

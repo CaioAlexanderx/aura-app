@@ -1,0 +1,139 @@
+{
+  "id": "contatos",
+  "titulo": "Contatos",
+  "periodo": 30,
+  "calculado_em": "2026-10-13T09:00:04.000Z",
+  "ao_vivo": false,
+  "valor": 2,
+  "unidade": "na semana",
+  "resumo": "Último: 11/10, formulário do site",
+  "fonte": "sales_leads (source 'site', 'site_partial')",
+  "indicadores": [
+    {
+      "rotulo": "Na semana",
+      "valor": 2,
+      "nota": null
+    },
+    {
+      "rotulo": "Em 30 dias",
+      "valor": 3,
+      "nota": null
+    },
+    {
+      "rotulo": "Ainda sem atendimento",
+      "valor": 1,
+      "nota": null
+    },
+    {
+      "rotulo": "Viraram conta",
+      "valor": 1,
+      "nota": null
+    }
+  ],
+  "listas": [
+    {
+      "titulo": "Contatos · 30 dias",
+      "colunas": [
+        {
+          "chave": "quando",
+          "rotulo": "Quando",
+          "tipo": "data_hora"
+        },
+        {
+          "chave": "nome",
+          "rotulo": "Quem",
+          "tipo": "texto"
+        },
+        {
+          "chave": "telefone",
+          "rotulo": "Telefone",
+          "tipo": "texto"
+        },
+        {
+          "chave": "cidade",
+          "rotulo": "Cidade",
+          "tipo": "texto"
+        },
+        {
+          "chave": "canal",
+          "rotulo": "Canal",
+          "tipo": "texto"
+        },
+        {
+          "chave": "situacao",
+          "rotulo": "Situação",
+          "tipo": "texto"
+        }
+      ],
+      "linhas": [
+        {
+          "company_id": null,
+          "nome": "Marina Prado",
+          "telefone": "11988880001",
+          "cidade": "Jacareí",
+          "canal": "site",
+          "situacao": "contacted",
+          "quando": "2026-10-11T17:20:00.000Z",
+          "dia": "2026-10-11"
+        },
+        {
+          "company_id": null,
+          "nome": "Otávio Reis",
+          "telefone": "11988880002",
+          "cidade": "São José dos Campos",
+          "canal": "site (incompleto)",
+          "situacao": "new",
+          "quando": "2026-10-08T12:05:00.000Z",
+          "dia": "2026-10-08"
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000006",
+          "nome": "Bazar Novo",
+          "telefone": "11999900006",
+          "cidade": "Jacareí",
+          "canal": "site",
+          "situacao": "won",
+          "quando": "2026-09-25T14:00:00.000Z",
+          "dia": "2026-09-25"
+        }
+      ]
+    }
+  ],
+  "series": [
+    {
+      "titulo": "Contatos por semana",
+      "tipo": "barras",
+      "pontos": [
+        {
+          "rotulo": "31/08",
+          "valor": 0
+        },
+        {
+          "rotulo": "07/09",
+          "valor": 0
+        },
+        {
+          "rotulo": "14/09",
+          "valor": 0
+        },
+        {
+          "rotulo": "21/09",
+          "valor": 1
+        },
+        {
+          "rotulo": "28/09",
+          "valor": 0
+        },
+        {
+          "rotulo": "05/10",
+          "valor": 2
+        },
+        {
+          "rotulo": "12/10",
+          "valor": 0
+        }
+      ]
+    }
+  ],
+  "insight": null
+}

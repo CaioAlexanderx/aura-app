@@ -1,0 +1,114 @@
+{
+  "requisicao": {
+    "blocos": [
+      {
+        "id": "receita",
+        "visivel": true
+      },
+      {
+        "id": "pagantes",
+        "visivel": true
+      },
+      {
+        "id": "contatos",
+        "visivel": false
+      }
+    ]
+  },
+  "resposta": {
+    "padrao": false,
+    "atualizado_em": "2026-10-13T12:00:00.000Z",
+    "blocos": [
+      {
+        "id": "receita",
+        "visivel": true,
+        "titulo": "Receita",
+        "grupo": "negocio"
+      },
+      {
+        "id": "pagantes",
+        "visivel": true,
+        "titulo": "Pagantes",
+        "grupo": "negocio"
+      },
+      {
+        "id": "contatos",
+        "visivel": false,
+        "titulo": "Contatos",
+        "grupo": "operacao"
+      },
+      {
+        "id": "trials_degrau",
+        "visivel": true,
+        "titulo": "Trials por degrau",
+        "grupo": "negocio"
+      },
+      {
+        "id": "cadastros",
+        "visivel": true,
+        "titulo": "Cadastros",
+        "grupo": "negocio"
+      },
+      {
+        "id": "pagantes_sem_venda",
+        "visivel": true,
+        "titulo": "Pagantes sem venda",
+        "grupo": "negocio"
+      },
+      {
+        "id": "acesso",
+        "visivel": true,
+        "titulo": "Acesso",
+        "grupo": "produto"
+      },
+      {
+        "id": "uso_funcionalidade",
+        "visivel": true,
+        "titulo": "Uso por funcionalidade",
+        "grupo": "produto"
+      },
+      {
+        "id": "horario",
+        "visivel": true,
+        "titulo": "Horário de uso",
+        "grupo": "produto"
+      },
+      {
+        "id": "plataforma",
+        "visivel": true,
+        "titulo": "Plataforma",
+        "grupo": "produto"
+      },
+      {
+        "id": "adocao",
+        "visivel": true,
+        "titulo": "Adoção por recurso",
+        "grupo": "produto"
+      },
+      {
+        "id": "telas_visitadas",
+        "visivel": true,
+        "titulo": "Telas visitadas",
+        "grupo": "produto"
+      },
+      {
+        "id": "fiscal",
+        "visivel": true,
+        "titulo": "Fiscal",
+        "grupo": "operacao"
+      },
+      {
+        "id": "crediario",
+        "visivel": true,
+        "titulo": "Crediário",
+        "grupo": "operacao"
+      },
+      {
+        "id": "frentes",
+        "visivel": true,
+        "titulo": "Frentes",
+        "grupo": "operacao"
+      }
+    ]
+  }
+}

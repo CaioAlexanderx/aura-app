@@ -1,0 +1,855 @@
+{
+  "dia": "2026-10-13",
+  "calculado_em": "2026-10-13T09:00:04.000Z",
+  "proximo_calculo": "2026-10-14T09:00:00.000Z",
+  "ao_vivo": false,
+  "blocos": [
+    {
+      "id": "trials_degrau",
+      "titulo": "Trials por degrau",
+      "grupo": "negocio",
+      "valor": 4,
+      "unidade": "cadastros",
+      "variacao": {
+        "d7": null,
+        "d30": null
+      },
+      "serie": [
+        {
+          "rotulo": "Cadastraram",
+          "valor": 4,
+          "pct": 100
+        },
+        {
+          "rotulo": "Com produtos",
+          "valor": 3,
+          "pct": 75
+        },
+        {
+          "rotulo": "Venderam",
+          "valor": 2,
+          "pct": 50
+        },
+        {
+          "rotulo": "Viram checkout",
+          "valor": 1,
+          "pct": 25
+        },
+        {
+          "rotulo": "Assinaram",
+          "valor": 1,
+          "pct": 25
+        }
+      ],
+      "resumo": "1 vencido · 1 assinou",
+      "fonte": "companies, products, sales, audit_log (checkout.viewed)"
+    },
+    {
+      "id": "receita",
+      "titulo": "Receita",
+      "grupo": "negocio",
+      "valor": 553,
+      "unidade": "R$ por mês",
+      "variacao": {
+        "d7": 73.34,
+        "d30": null
+      },
+      "serie": [
+        {
+          "rotulo": "Ago",
+          "mes": "2026-08",
+          "valor": 140.83
+        },
+        {
+          "rotulo": "Set",
+          "mes": "2026-09",
+          "valor": 310.83
+        },
+        {
+          "rotulo": "Out",
+          "mes": "2026-10",
+          "valor": 553
+        }
+      ],
+      "resumo": "Recebido em out: R$ 309,83",
+      "fonte": "companies + tabela de preços (anual ÷ 12) · webhook_logs (Asaas)"
+    },
+    {
+      "id": "cadastros",
+      "titulo": "Cadastros",
+      "grupo": "negocio",
+      "valor": 1,
+      "unidade": "em 7 dias",
+      "variacao": {
+        "d7": null,
+        "d30": null
+      },
+      "serie": [
+        {
+          "rotulo": "31/08",
+          "valor": 0
+        },
+        {
+          "rotulo": "07/09",
+          "valor": 0
+        },
+        {
+          "rotulo": "14/09",
+          "valor": 1
+        },
+        {
+          "rotulo": "21/09",
+          "valor": 0
+        },
+        {
+          "rotulo": "28/09",
+          "valor": 1
+        },
+        {
+          "rotulo": "05/10",
+          "valor": 2
+        },
+        {
+          "rotulo": "12/10",
+          "valor": 0
+        }
+      ],
+      "resumo": "0 self-service · 1 por código",
+      "fonte": "companies"
+    },
+    {
+      "id": "pagantes",
+      "titulo": "Pagantes",
+      "grupo": "negocio",
+      "valor": 5,
+      "unidade": "ativos",
+      "variacao": {
+        "d7": 1,
+        "d30": 2
+      },
+      "serie": [
+        {
+          "rotulo": "Negócio",
+          "valor": 3,
+          "anuais": 1
+        },
+        {
+          "rotulo": "Essencial",
+          "valor": 2,
+          "anuais": 1
+        }
+      ],
+      "resumo": "Vencem esta semana: Loja Aurora, Papelaria Sol",
+      "fonte": "companies, sales, audit_log"
+    },
+    {
+      "id": "pagantes_sem_venda",
+      "titulo": "Pagantes sem venda",
+      "grupo": "negocio",
+      "valor": 2,
+      "unidade": "de 5, há mais de 7 dias",
+      "variacao": {
+        "d7": null,
+        "d30": null
+      },
+      "serie": [
+        {
+          "rotulo": "Loja Aurora",
+          "valor": 22,
+          "texto": "22 d"
+        },
+        {
+          "rotulo": "Dojô Central",
+          "valor": null,
+          "texto": "nunca"
+        }
+      ],
+      "resumo": "1 nunca vendeu pelo Caixa",
+      "fonte": "companies, sales"
+    },
+    {
+      "id": "acesso",
+      "titulo": "Acesso",
+      "grupo": "produto",
+      "valor": 4,
+      "unidade": "de 5 pagantes entraram em 30 dias",
+      "variacao": {
+        "d7": null,
+        "d30": null
+      },
+      "serie": [
+        {
+          "rotulo": "24/08",
+          "valor": 0,
+          "pagantes": 0
+        },
+        {
+          "rotulo": "31/08",
+          "valor": 0,
+          "pagantes": 0
+        },
+        {
+          "rotulo": "07/09",
+          "valor": 0,
+          "pagantes": 0
+        },
+        {
+          "rotulo": "14/09",
+          "valor": 0,
+          "pagantes": 0
+        },
+        {
+          "rotulo": "21/09",
+          "valor": 0,
+          "pagantes": 0
+        },
+        {
+          "rotulo": "28/09",
+          "valor": 3,
+          "pagantes": 3
+        },
+        {
+          "rotulo": "05/10",
+          "valor": 4,
+          "pagantes": 3
+        },
+        {
+          "rotulo": "12/10",
+          "valor": 5,
+          "pagantes": 3
+        }
+      ],
+      "resumo": "1 pagante nunca entrou · 5 lojas ativas na semana",
+      "fonte": "audit_log (action 'login' e 'switch_company')"
+    },
+    {
+      "id": "uso_funcionalidade",
+      "titulo": "Uso por funcionalidade",
+      "grupo": "produto",
+      "valor": 7,
+      "unidade": "módulos com uso amplo · 3 de nicho",
+      "variacao": {
+        "d7": null,
+        "d30": null
+      },
+      "serie": [
+        {
+          "rotulo": "Estoque",
+          "valor": 5
+        },
+        {
+          "rotulo": "Caixa",
+          "valor": 5
+        },
+        {
+          "rotulo": "Clientes",
+          "valor": 3
+        },
+        {
+          "rotulo": "Crediário",
+          "valor": 2
+        },
+        {
+          "rotulo": "Abertura de caixa",
+          "valor": 2
+        },
+        {
+          "rotulo": "Importação",
+          "valor": 2
+        },
+        {
+          "rotulo": "Aura Notas",
+          "valor": 2
+        },
+        {
+          "rotulo": "Orçamentos Matcon",
+          "valor": 1
+        },
+        {
+          "rotulo": "Studio pedidos",
+          "valor": 1
+        },
+        {
+          "rotulo": "Relatórios por e-mail",
+          "valor": 1
+        },
+        {
+          "rotulo": "Ordens de serviço",
+          "valor": 0
+        },
+        {
+          "rotulo": "Compras Matcon",
+          "valor": 0
+        },
+        {
+          "rotulo": "Studio orçamentos",
+          "valor": 0
+        },
+        {
+          "rotulo": "Vitrine",
+          "valor": 0
+        },
+        {
+          "rotulo": "Aurinha (IA)",
+          "valor": 0
+        },
+        {
+          "rotulo": "WhatsApp",
+          "valor": 0
+        }
+      ],
+      "resumo": "Base: 6 lojas com login em 30 dias",
+      "fonte": "tabelas de cada módulo (uso inferido)"
+    },
+    {
+      "id": "horario",
+      "titulo": "Horário de uso",
+      "grupo": "produto",
+      "valor": 16,
+      "unidade": "h",
+      "variacao": {
+        "d7": null,
+        "d30": null
+      },
+      "serie": [
+        {
+          "rotulo": "0",
+          "hora": 0,
+          "valor": 0
+        },
+        {
+          "rotulo": "1",
+          "hora": 1,
+          "valor": 0
+        },
+        {
+          "rotulo": "2",
+          "hora": 2,
+          "valor": 0
+        },
+        {
+          "rotulo": "3",
+          "hora": 3,
+          "valor": 0
+        },
+        {
+          "rotulo": "4",
+          "hora": 4,
+          "valor": 0
+        },
+        {
+          "rotulo": "5",
+          "hora": 5,
+          "valor": 0
+        },
+        {
+          "rotulo": "6",
+          "hora": 6,
+          "valor": 0
+        },
+        {
+          "rotulo": "7",
+          "hora": 7,
+          "valor": 0
+        },
+        {
+          "rotulo": "8",
+          "hora": 8,
+          "valor": 0
+        },
+        {
+          "rotulo": "9",
+          "hora": 9,
+          "valor": 18
+        },
+        {
+          "rotulo": "10",
+          "hora": 10,
+          "valor": 30
+        },
+        {
+          "rotulo": "11",
+          "hora": 11,
+          "valor": 0
+        },
+        {
+          "rotulo": "12",
+          "hora": 12,
+          "valor": 0
+        },
+        {
+          "rotulo": "13",
+          "hora": 13,
+          "valor": 0
+        },
+        {
+          "rotulo": "14",
+          "hora": 14,
+          "valor": 0
+        },
+        {
+          "rotulo": "15",
+          "hora": 15,
+          "valor": 0
+        },
+        {
+          "rotulo": "16",
+          "hora": 16,
+          "valor": 121
+        },
+        {
+          "rotulo": "17",
+          "hora": 17,
+          "valor": 0
+        },
+        {
+          "rotulo": "18",
+          "hora": 18,
+          "valor": 0
+        },
+        {
+          "rotulo": "19",
+          "hora": 19,
+          "valor": 3
+        },
+        {
+          "rotulo": "20",
+          "hora": 20,
+          "valor": 0
+        },
+        {
+          "rotulo": "21",
+          "hora": 21,
+          "valor": 0
+        },
+        {
+          "rotulo": "22",
+          "hora": 22,
+          "valor": 0
+        },
+        {
+          "rotulo": "23",
+          "hora": 23,
+          "valor": 0
+        }
+      ],
+      "resumo": "pico · 121 vendas",
+      "fonte": "sales (America/Sao_Paulo)"
+    },
+    {
+      "id": "plataforma",
+      "titulo": "Plataforma",
+      "grupo": "produto",
+      "valor": 13,
+      "unidade": "vendas ontem",
+      "variacao": {
+        "d7": null,
+        "d30": null
+      },
+      "serie": [
+        {
+          "rotulo": "29/09",
+          "dia": "2026-09-29",
+          "valor": 0
+        },
+        {
+          "rotulo": "30/09",
+          "dia": "2026-09-30",
+          "valor": 0
+        },
+        {
+          "rotulo": "01/10",
+          "dia": "2026-10-01",
+          "valor": 0
+        },
+        {
+          "rotulo": "02/10",
+          "dia": "2026-10-02",
+          "valor": 0
+        },
+        {
+          "rotulo": "03/10",
+          "dia": "2026-10-03",
+          "valor": 17
+        },
+        {
+          "rotulo": "04/10",
+          "dia": "2026-10-04",
+          "valor": 0
+        },
+        {
+          "rotulo": "05/10",
+          "dia": "2026-10-05",
+          "valor": 0
+        },
+        {
+          "rotulo": "06/10",
+          "dia": "2026-10-06",
+          "valor": 0
+        },
+        {
+          "rotulo": "07/10",
+          "dia": "2026-10-07",
+          "valor": 0
+        },
+        {
+          "rotulo": "08/10",
+          "dia": "2026-10-08",
+          "valor": 0
+        },
+        {
+          "rotulo": "09/10",
+          "dia": "2026-10-09",
+          "valor": 0
+        },
+        {
+          "rotulo": "10/10",
+          "dia": "2026-10-10",
+          "valor": 27
+        },
+        {
+          "rotulo": "11/10",
+          "dia": "2026-10-11",
+          "valor": 3
+        },
+        {
+          "rotulo": "12/10",
+          "dia": "2026-10-12",
+          "valor": 13
+        }
+      ],
+      "resumo": "43 vendas em 7 dias · 2 lojas venderam ontem",
+      "fonte": "sales"
+    },
+    {
+      "id": "adocao",
+      "titulo": "Adoção por recurso",
+      "grupo": "produto",
+      "valor": 2,
+      "unidade": "recursos usados por metade dos 5 pagantes",
+      "variacao": {
+        "d7": null,
+        "d30": null
+      },
+      "serie": [
+        {
+          "rotulo": "Caixa",
+          "valor": 4,
+          "texto": "4/5"
+        },
+        {
+          "rotulo": "Estoque",
+          "valor": 3,
+          "texto": "3/5"
+        },
+        {
+          "rotulo": "Clientes",
+          "valor": 2,
+          "texto": "2/5"
+        },
+        {
+          "rotulo": "Crediário",
+          "valor": 2,
+          "texto": "2/5"
+        },
+        {
+          "rotulo": "Abertura de caixa",
+          "valor": 2,
+          "texto": "2/5"
+        },
+        {
+          "rotulo": "Aura Notas",
+          "valor": 2,
+          "texto": "2/5"
+        },
+        {
+          "rotulo": "Orçamentos Matcon",
+          "valor": 1,
+          "texto": "1/5"
+        },
+        {
+          "rotulo": "Studio pedidos",
+          "valor": 1,
+          "texto": "1/5"
+        },
+        {
+          "rotulo": "Relatórios por e-mail",
+          "valor": 1,
+          "texto": "1/5"
+        },
+        {
+          "rotulo": "Importação",
+          "valor": 0,
+          "texto": "0/5"
+        },
+        {
+          "rotulo": "Ordens de serviço",
+          "valor": 0,
+          "texto": "0/5"
+        },
+        {
+          "rotulo": "Compras Matcon",
+          "valor": 0,
+          "texto": "0/5"
+        },
+        {
+          "rotulo": "Studio orçamentos",
+          "valor": 0,
+          "texto": "0/5"
+        },
+        {
+          "rotulo": "Vitrine",
+          "valor": 0,
+          "texto": "0/5"
+        },
+        {
+          "rotulo": "Aurinha (IA)",
+          "valor": 0,
+          "texto": "0/5"
+        },
+        {
+          "rotulo": "WhatsApp",
+          "valor": 0,
+          "texto": "0/5"
+        }
+      ],
+      "resumo": "Caixa 4/5 · Estoque 3/5 · Clientes 2/5",
+      "fonte": "tabelas de cada módulo, só pagantes"
+    },
+    {
+      "id": "telas_visitadas",
+      "titulo": "Telas visitadas",
+      "grupo": "produto",
+      "valor": 3,
+      "unidade": "telas visitadas em 30 dias",
+      "variacao": {
+        "d7": null,
+        "d30": null
+      },
+      "serie": [
+        {
+          "rotulo": "pdv",
+          "valor": 2,
+          "visitas": 735
+        },
+        {
+          "rotulo": "relatorios",
+          "valor": 1,
+          "visitas": 22
+        },
+        {
+          "rotulo": "etiquetas",
+          "valor": 1,
+          "visitas": 3
+        }
+      ],
+      "resumo": "3 lojas enviaram navegação · mais vista: pdv",
+      "fonte": "screen_views (enviado pelo app)"
+    },
+    {
+      "id": "fiscal",
+      "titulo": "Fiscal",
+      "grupo": "operacao",
+      "valor": 1,
+      "unidade": "rejeitada de 34 emitidas",
+      "variacao": {
+        "d7": null,
+        "d30": null
+      },
+      "serie": [
+        {
+          "rotulo": "07/10",
+          "valor": 0,
+          "rejeitadas": 0
+        },
+        {
+          "rotulo": "08/10",
+          "valor": 0,
+          "rejeitadas": 0
+        },
+        {
+          "rotulo": "09/10",
+          "valor": 0,
+          "rejeitadas": 0
+        },
+        {
+          "rotulo": "10/10",
+          "valor": 21,
+          "rejeitadas": 1
+        },
+        {
+          "rotulo": "11/10",
+          "valor": 0,
+          "rejeitadas": 0
+        },
+        {
+          "rotulo": "12/10",
+          "valor": 13,
+          "rejeitadas": 0
+        },
+        {
+          "rotulo": "13/10",
+          "valor": 0,
+          "rejeitadas": 0
+        }
+      ],
+      "resumo": "97% autorizadas · 2 lojas emitem",
+      "fonte": "nfce_emissions"
+    },
+    {
+      "id": "crediario",
+      "titulo": "Crediário",
+      "grupo": "operacao",
+      "valor": 123,
+      "unidade": "parcelas em 3 lojas",
+      "variacao": {
+        "d7": null,
+        "d30": null
+      },
+      "serie": [
+        {
+          "rotulo": "Mercado Bela Vista",
+          "valor": 107
+        },
+        {
+          "rotulo": "Papelaria Sol",
+          "valor": 12
+        },
+        {
+          "rotulo": "Casa do Construtor",
+          "valor": 4
+        }
+      ],
+      "resumo": "R$ 9.690,70 vencidos",
+      "fonte": "credit_installments"
+    },
+    {
+      "id": "contatos",
+      "titulo": "Contatos",
+      "grupo": "operacao",
+      "valor": 2,
+      "unidade": "na semana",
+      "variacao": {
+        "d7": null,
+        "d30": null
+      },
+      "serie": [
+        {
+          "rotulo": "31/08",
+          "valor": 0
+        },
+        {
+          "rotulo": "07/09",
+          "valor": 0
+        },
+        {
+          "rotulo": "14/09",
+          "valor": 0
+        },
+        {
+          "rotulo": "21/09",
+          "valor": 1
+        },
+        {
+          "rotulo": "28/09",
+          "valor": 0
+        },
+        {
+          "rotulo": "05/10",
+          "valor": 2
+        },
+        {
+          "rotulo": "12/10",
+          "valor": 0
+        }
+      ],
+      "resumo": "Último: 11/10, formulário do site",
+      "fonte": "sales_leads (source 'site', 'site_partial')"
+    },
+    {
+      "id": "frentes",
+      "titulo": "Frentes",
+      "grupo": "operacao",
+      "valor": 2,
+      "unidade": "contas sem frente atribuída",
+      "variacao": {
+        "d7": null,
+        "d30": null
+      },
+      "serie": [
+        {
+          "rotulo": "Studio",
+          "valor": 1,
+          "pagantes": 1,
+          "trials": 0
+        },
+        {
+          "rotulo": "Varejo",
+          "valor": 1,
+          "pagantes": 1,
+          "trials": 0
+        },
+        {
+          "rotulo": "Matcon",
+          "valor": 1,
+          "pagantes": 1,
+          "trials": 0
+        },
+        {
+          "rotulo": "Karatê",
+          "valor": 1,
+          "pagantes": 1,
+          "trials": 0
+        },
+        {
+          "rotulo": "Ótica",
+          "valor": 1,
+          "pagantes": 0,
+          "trials": 1
+        },
+        {
+          "rotulo": "Assistência",
+          "valor": 1,
+          "pagantes": 0,
+          "trials": 1
+        }
+      ],
+      "resumo": "Studio 1 · Varejo 1 · Matcon 1 · Karatê 1 · Ótica 1 · Assistência 1",
+      "fonte": "companies (segment, vertical)"
+    }
+  ],
+  "alertas": [
+    {
+      "tipo": "pagante_anual_vencendo",
+      "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+      "titulo": "Loja Aurora vence amanhã",
+      "detalhe": "Anual · sem venda há 22 dias",
+      "verbo": "Ligar",
+      "bloco": "pagantes_sem_venda"
+    },
+    {
+      "tipo": "trial_com_venda_vencendo",
+      "company_id": "aaaaaaaa-0000-4000-8000-000000000005",
+      "titulo": "Ótica Visão: trial com venda vence amanhã",
+      "detalhe": "3 vendas no trial",
+      "verbo": "Oferecer",
+      "bloco": "trials_degrau"
+    },
+    {
+      "tipo": "pagamento_sem_loja",
+      "company_id": null,
+      "titulo": "R$ 140,83 recebido sem loja vinculada",
+      "detalhe": "Asaas · 12/10",
+      "verbo": "Vincular",
+      "bloco": "receita"
+    },
+    {
+      "tipo": "nfce_rejeitada",
+      "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+      "titulo": "Mercado Bela Vista: 1 NFC-e rejeitada em 7 dias",
+      "detalhe": "Rejeição 327: CFOP inválido",
+      "verbo": "Ver",
+      "bloco": "fiscal"
+    }
+  ]
+}

@@ -6,15 +6,17 @@
 // (um aberto por vez): aberto, o card ocupa a largura toda e mostra o
 // detalhe — indicadores pequenos, gráficos e listas por loja, insight.
 // ============================================================
-import { forwardRef } from "react";
+import { forwardRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { Grafico } from "./Graficos";
+import { formatarTelefone } from "./adaptadores";
 import { Paleta, TextoRico, coresDaEtiqueta, corDoTom } from "./paleta";
 import { usePainelBloco } from "./usePainelHoje";
+import { abrirWhatsApp } from "./whatsapp";
 import type { DefinicaoBloco } from "./blocos";
-import type { Bloco, BlocoDetalhe, Celula, Indicador, Insight, Lista, Variacao } from "./tipos";
+import type { Bloco, BlocoDetalhe, BlocoId, Celula, Indicador, Insight, Lista, Variacao } from "./tipos";
 
 type Props = {
   definicao: DefinicaoBloco;
@@ -75,14 +77,20 @@ function colunaNumerica(lista: Lista, col: number): boolean {
   return lista.linhas.every(function(l) {
     var c = l[col];
     if (typeof c === "number") return true;
-    return typeof c === "string" && /^[\d.,—-]+$/.test(c);
+    return typeof c === "string" && /^((R\$\s)?[\d.,]+%?|[—-])$/.test(c);
   });
 }
 
+// Listas longas (80 linhas de "quem usa e quem não usa") abrem em 10.
+var LINHAS_VISIVEIS = 10;
+
 function Tabela(props: { lista: Lista; onAbrirLoja: (cid: string) => void }) {
   var lista = props.lista;
+  var [todas, setTodas] = useState(false);
   var n = lista.colunas.length;
   var numericas = lista.colunas.map(function(_, i) { return i > 0 && colunaNumerica(lista, i); });
+  var longa = lista.linhas.length > LINHAS_VISIVEIS;
+  var linhas = longa && !todas ? lista.linhas.slice(0, LINHAS_VISIVEIS) : lista.linhas;
   return (
     <View>
       <ScrollView horizontal style={s.tabelaWrap} contentContainerStyle={{ flexGrow: 1 }} showsHorizontalScrollIndicator={false}>
@@ -92,18 +100,35 @@ function Tabela(props: { lista: Lista; onAbrirLoja: (cid: string) => void }) {
               return <Text key={i} style={[s.th, i === 0 && s.tdPrimeira, numericas[i] && s.direita]} numberOfLines={1}>{col}</Text>;
             })}
           </View>
-          {lista.linhas.map(function(linha, li) {
+          {linhas.map(function(linha, li) {
             return (
-              <View key={li} style={[s.tr, li === lista.linhas.length - 1 && { borderBottomWidth: 0 }]}>
+              <View key={li} style={[s.tr, li === linhas.length - 1 && { borderBottomWidth: 0 }]}>
                 {lista.colunas.map(function(_, ci) {
                   var c = linha[ci];
                   var base = [s.tdBox, ci === 0 && s.tdPrimeira, numericas[ci] && { alignItems: "flex-end" as const }];
                   if (c == null) return <View key={ci} style={base} />;
                   if (typeof c === "object" && c.company_id) {
+                    // Loja: o nome abre a ficha; o telefone abre o WhatsApp.
                     var cid = c.company_id;
+                    var tel = c.telefone;
                     return (
-                      <Pressable key={ci} style={base} testID={"loja-" + cid} onPress={function() { props.onAbrirLoja(cid); }}>
-                        <Text style={[s.td, s.loja]} numberOfLines={1}>{c.texto}</Text>
+                      <View key={ci} style={base}>
+                        <Pressable testID={"loja-" + cid} style={s.limite} onPress={function() { props.onAbrirLoja(cid); }} accessibilityRole="button">
+                          <Text style={[s.td, s.loja]} numberOfLines={1}>{c.texto}</Text>
+                        </Pressable>
+                        {tel ? (
+                          <Pressable testID={"whatsapp-" + cid} style={s.limite} onPress={function() { abrirWhatsApp(tel); }} accessibilityRole="link" accessibilityLabel={"WhatsApp de " + c.texto}>
+                            <Text style={s.tel} numberOfLines={1}>{formatarTelefone(tel)}</Text>
+                          </Pressable>
+                        ) : null}
+                      </View>
+                    );
+                  }
+                  if (typeof c === "object" && c.telefone) {
+                    var tel2 = c.telefone;
+                    return (
+                      <Pressable key={ci} style={base} testID={"whatsapp-" + tel2.replace(/\D/g, "")} onPress={function() { abrirWhatsApp(tel2); }} accessibilityRole="link">
+                        <Text style={[s.td, s.tel]} numberOfLines={1}>{c.texto}</Text>
                       </Pressable>
                     );
                   }
@@ -121,6 +146,11 @@ function Tabela(props: { lista: Lista; onAbrirLoja: (cid: string) => void }) {
           })}
         </View>
       </ScrollView>
+      {longa ? (
+        <Pressable testID="tabela-ver-todas" onPress={function() { setTodas(!todas); }} accessibilityRole="button" style={s.verTodas}>
+          <Text style={s.verTodasText}>{todas ? "Mostrar menos" : "Ver todas (" + lista.linhas.length + ")"}</Text>
+        </Pressable>
+      ) : null}
       {lista.mais ? <Text style={s.mais}>{lista.mais}</Text> : null}
     </View>
   );
@@ -149,7 +179,16 @@ function ColunaDeCartoes(props: { lista: Lista; onAbrirLoja: (cid: string) => vo
               <View style={s.cartaoAcoes}>
                 {verbos.map(function(v, vi) {
                   return (
-                    <Pressable key={vi} style={[s.btnSm, v.primario && s.btnSmPrimario]} onPress={function() { props.onVerbo(v.texto, textoDa(loja)); }}>
+                    <Pressable
+                      key={vi}
+                      testID={v.telefone && cid ? "whatsapp-" + cid : undefined}
+                      style={[s.btnSm, v.primario && s.btnSmPrimario]}
+                      onPress={function() {
+                        // WhatsApp é real; os demais verbos ainda avisam "em breve".
+                        if (v.telefone) abrirWhatsApp(v.telefone);
+                        else props.onVerbo(v.texto, textoDa(loja));
+                      }}
+                    >
                       <Text style={[s.btnSmText, v.primario && { color: "#fff" }]}>{v.texto}</Text>
                     </Pressable>
                   );
@@ -159,6 +198,7 @@ function ColunaDeCartoes(props: { lista: Lista; onAbrirLoja: (cid: string) => vo
           </View>
         );
       })}
+      {lista.linhas.length === 0 ? <Text style={s.vazio}>Nenhuma loja neste degrau.</Text> : null}
       {lista.mais ? <Text style={s.mais}>{lista.mais}</Text> : null}
     </View>
   );
@@ -183,13 +223,19 @@ export function DetalheDoBloco(props: { detalhe: BlocoDetalhe; onAbrirLoja: (cid
             return (
               <View key={"s" + i} style={s.col}>
                 <Text style={[s.rotulo, { marginBottom: 8 }]}>{sr.titulo}</Text>
-                <Grafico tipo={sr.tipo} pontos={sr.pontos} opcoes={{ max: sr.max }} />
+                <Grafico tipo={sr.tipo} pontos={sr.pontos} opcoes={{ max: sr.max, valores: sr.tipo === "barras" ? "max" : undefined }} />
+                {sr.legenda ? (
+                  <View style={[s.legenda, { marginTop: 6 }]}>
+                    <View style={s.legendaItem}><View style={[s.amostra, { backgroundColor: Paleta.accent }]} /><Text style={s.legendaText}>{sr.legenda[0]}</Text></View>
+                    <View style={s.legendaItem}><View style={[s.amostra, { backgroundColor: Paleta.teal }]} /><Text style={s.legendaText}>{sr.legenda[1]}</Text></View>
+                  </View>
+                ) : null}
               </View>
             );
           })}
           {tabelas.map(function(l, i) {
             return (
-              <View key={"t" + i} style={s.col}>
+              <View key={"t" + i} style={l.colunas.length > 3 ? s.colCheia : s.col}>
                 <Text style={[s.rotulo, { marginBottom: 8 }]}>{l.titulo}</Text>
                 <Tabela lista={l} onAbrirLoja={props.onAbrirLoja} />
               </View>
@@ -201,12 +247,66 @@ export function DetalheDoBloco(props: { detalhe: BlocoDetalhe; onAbrirLoja: (cid
   );
 }
 
+// 7, 30 e 90 dias. O padrão do bloco (14 em Plataforma) entra como chip
+// próprio quando não é um dos três.
+function SeletorDePeriodo(props: { id: BlocoId; ativo?: number; atualizando: boolean; aoVivo: boolean; onTrocar: (dias: number) => void }) {
+  var opcoes = [7, 30, 90];
+  if (props.ativo && opcoes.indexOf(props.ativo) < 0) opcoes = [props.ativo].concat(opcoes).sort(function(a, b) { return a - b; });
+  return (
+    <View style={s.periodoRow}>
+      <Text style={s.rotulo}>Período</Text>
+      <View style={s.chips}>
+        {opcoes.map(function(n) {
+          var on = n === props.ativo;
+          return (
+            <Pressable
+              key={n}
+              testID={"periodo-" + props.id + "-" + n}
+              onPress={function() { if (!on) props.onTrocar(n); }}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on }}
+              style={[s.chip, on && s.chipOn]}
+            >
+              <Text style={[s.chipText, on && { color: "#fff" }]}>{n + " dias"}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {props.atualizando ? <ActivityIndicator size="small" color={Colors.violet3} /> : null}
+      {props.aoVivo ? <Pill variacao={{ texto: "calculado agora", tom: "sobe" }} /> : null}
+    </View>
+  );
+}
+
 // Só monta com o card aberto: é quem busca GET /admin/painel/blocos/:id.
 function DetalheCarregado(props: Pick<Props, "definicao" | "onAbrirLoja" | "onVerbo">) {
-  var { detalhe, carregando } = usePainelBloco(props.definicao.id);
-  if (carregando) return <ActivityIndicator color={Colors.violet3} />;
+  var id = props.definicao.id;
+  var [periodo, setPeriodo] = useState<number | undefined>(undefined);
+  var { detalhe, carregando, atualizando, erro, tentarDeNovo } = usePainelBloco(id, periodo);
+  if (carregando) return <ActivityIndicator testID={"bloco-carregando-" + id} color={Colors.violet3} />;
+  if (!detalhe && erro) {
+    return (
+      <View style={s.erro} testID={"bloco-erro-" + id}>
+        <Text style={s.vazio}>Não consegui carregar o detalhe deste bloco.</Text>
+        <Pressable testID={"bloco-tentar-de-novo-" + id} onPress={tentarDeNovo} accessibilityRole="button" style={s.btnSm}>
+          <Text style={s.btnSmText}>Tentar de novo</Text>
+        </Pressable>
+      </View>
+    );
+  }
   if (!detalhe) return <Text style={s.vazio}>Sem detalhe para este bloco ainda.</Text>;
-  return <DetalheDoBloco detalhe={detalhe} onAbrirLoja={props.onAbrirLoja} onVerbo={props.onVerbo} />;
+  return (
+    <View style={{ gap: 14 }}>
+      <SeletorDePeriodo
+        id={id}
+        ativo={periodo != null ? periodo : detalhe.periodo}
+        atualizando={atualizando}
+        aoVivo={!!detalhe.ao_vivo}
+        onTrocar={setPeriodo}
+      />
+      <DetalheDoBloco detalhe={detalhe} onAbrirLoja={props.onAbrirLoja} onVerbo={props.onVerbo} />
+    </View>
+  );
 }
 
 export var BlocoCard = forwardRef<View, Props>(function BlocoCard(props, ref) {
@@ -302,17 +402,28 @@ var s = StyleSheet.create({
   insightText: { flex: 1, fontSize: 13, lineHeight: 19, color: Colors.ink2 },
   cols: { flexDirection: "row", flexWrap: "wrap", gap: 18 },
   col: { flexGrow: 1, flexBasis: 280, minWidth: 0, maxWidth: "100%" },
+  colCheia: { flexBasis: "100%", flexGrow: 1, minWidth: 0, maxWidth: "100%" },
   tabelaWrap: { borderWidth: 1, borderColor: Colors.border, borderRadius: 12 },
   tr: { flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: Colors.border },
   trHead: { backgroundColor: Colors.bg4 },
   th: { flex: 1, paddingHorizontal: 10, paddingVertical: 8, fontSize: 11, fontWeight: "600", letterSpacing: 0.6, textTransform: "uppercase", color: Colors.ink3 },
-  tdBox: { flex: 1, paddingHorizontal: 10, paddingVertical: 8, minWidth: 0, alignItems: "flex-start" },
+  tdBox: { flex: 1, paddingHorizontal: 10, paddingVertical: 8, minWidth: 0, alignItems: "flex-start", overflow: "hidden" },
+  limite: { maxWidth: "100%" },
   tdPrimeira: { flex: 1.6 },
   td: { fontSize: 13, color: Colors.ink2 },
   tdNome: { fontWeight: "600", color: Colors.ink },
   loja: { fontWeight: "600", color: Paleta.accentTexto },
   direita: { textAlign: "right" },
   mais: { fontSize: 12, color: Colors.ink3, textAlign: "center", padding: 6 },
+  tel: { fontSize: 11, color: Colors.ink3, textDecorationLine: "underline" },
+  verTodas: { alignSelf: "center", paddingVertical: 8, paddingHorizontal: 12 },
+  verTodasText: { fontSize: 12, fontWeight: "600", color: Paleta.accentTexto },
+  periodoRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 10 },
+  chips: { flexDirection: "row", gap: 6 },
+  chip: { borderWidth: 1, borderColor: Colors.border2, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 4, backgroundColor: Colors.bg3 },
+  chipOn: { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  chipText: { fontSize: 12, fontWeight: "600", color: Colors.ink2 },
+  erro: { gap: 8, alignItems: "flex-start" },
   degrau: { width: 196, backgroundColor: Colors.bg4, borderRadius: 12, padding: 10 },
   degrauHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 6 },
   degrauTotal: { fontSize: 14, fontWeight: "800", color: Colors.ink },
