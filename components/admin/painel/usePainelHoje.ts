@@ -12,10 +12,10 @@ import { adminApi } from "@/services/adminApi";
 import { CATALOGO } from "./blocos";
 import { DETALHES, FICHAS, LAYOUT_PADRAO, PAINEL_HOJE } from "./dadosEstaticos";
 import {
-  adaptarDetalhe, adaptarFicha, adaptarHoje, adaptarLayout, corpoDoLayout, montarCatalogo,
+  adaptarConversa, adaptarDetalhe, adaptarFicha, adaptarHoje, adaptarLayout, corpoDoLayout, montarCatalogo,
 } from "./adaptadores";
 import type { LayoutPainel } from "./adaptadores";
-import type { BlocoDetalhe, BlocoId, FichaCliente, ItemCatalogo, PainelHoje } from "./tipos";
+import type { BlocoDetalhe, BlocoId, ConversaContato, FichaCliente, ItemCatalogo, PainelHoje } from "./tipos";
 
 // Só desenvolvimento: ligue para desenhar a tela sem a API.
 export var PAINEL_FALLBACK_DEV = { dadosDeExemplo: false };
@@ -29,6 +29,7 @@ var CHAVES: Record<string, unknown[]> = {
   layout: ["admin-painel-layout"],
   bloco: ["admin-painel-bloco"],
   ficha: ["admin-painel-ficha"],
+  conversa: ["admin-painel-conversa"],
 };
 
 var LAYOUT_DE_EXEMPLO: LayoutPainel = { ativos: LAYOUT_PADRAO, conhecidos: [], padrao: true };
@@ -46,6 +47,11 @@ var fonte = {
   ficha: async function(companyId: string): Promise<FichaCliente | null> {
     if (usandoDadosDeExemplo()) return FICHAS[companyId] || null;
     return adaptarFicha(await adminApi.painel.ficha(companyId));
+  },
+  // Sem dados de exemplo: a conversa só existe na API (WhatsApp da Aura).
+  conversa: async function(conversaId: string): Promise<ConversaContato | null> {
+    if (usandoDadosDeExemplo()) return null;
+    return adaptarConversa(await adminApi.painel.contatos.conversa(conversaId));
   },
   layout: async function(): Promise<LayoutPainel> {
     if (usandoDadosDeExemplo()) return LAYOUT_DE_EXEMPLO;
@@ -135,6 +141,25 @@ export function usePainelBloco(id: BlocoId | null, periodo?: number) {
     detalhe: q.data || null,
     carregando: q.isLoading,
     atualizando: q.isFetching && !q.isLoading,
+    erro: q.isError,
+    tentarDeNovo: function() { q.refetch(); },
+  };
+}
+
+// GET /admin/painel/contatos/:conversaId. 404 (conversa de outro tenant,
+// número desligado) chega como erro e a tela diz que não achou.
+export function useConversaContato(conversaId: string | null) {
+  var exemplo = usandoDadosDeExemplo();
+  var q = useQuery<ConversaContato | null>({
+    queryKey: CHAVES.conversa.concat([conversaId, String(exemplo)]),
+    queryFn: function() { return fonte.conversa(conversaId as string); },
+    enabled: !!conversaId,
+    staleTime: 30_000,
+    retry: false,
+  });
+  return {
+    conversa: q.data || null,
+    carregando: q.isLoading,
     erro: q.isError,
     tentarDeNovo: function() { q.refetch(); },
   };

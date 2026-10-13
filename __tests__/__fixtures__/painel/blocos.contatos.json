@@ -4,29 +4,49 @@
   "periodo": 30,
   "calculado_em": "2026-10-13T09:00:04.000Z",
   "ao_vivo": false,
-  "valor": 2,
+  "valor": 6,
   "unidade": "na semana",
-  "resumo": "Último: 11/10, formulário do site",
-  "fonte": "sales_leads (source 'site', 'site_partial')",
+  "resumo": "Último: 13/10, WhatsApp",
+  "fonte": "hub_messages/hub_conversations (WhatsApp da Aura) + sales_leads (source 'site', 'site_partial')",
   "indicadores": [
     {
       "rotulo": "Na semana",
+      "valor": 6,
+      "nota": "4 WhatsApp · 2 site"
+    },
+    {
+      "rotulo": "Em 30 dias",
+      "valor": 8,
+      "nota": "5 WhatsApp · 3 site"
+    },
+    {
+      "rotulo": "Sem resposta agora",
+      "valor": 3,
+      "nota": "1 só com a Aurinha"
+    },
+    {
+      "rotulo": "Primeira resposta (mediana)",
+      "valor": "4 h 21 min",
+      "nota": "2 respondidos"
+    },
+    {
+      "rotulo": "Respondidos pela Aurinha",
       "valor": 2,
       "nota": null
     },
     {
-      "rotulo": "Em 30 dias",
-      "valor": 3,
-      "nota": null
+      "rotulo": "De madrugada (21h às 8h)",
+      "valor": 2,
+      "nota": "WhatsApp"
     },
     {
-      "rotulo": "Ainda sem atendimento",
+      "rotulo": "Site ainda sem atendimento",
       "valor": 1,
       "nota": null
     },
     {
       "rotulo": "Viraram conta",
-      "valor": 1,
+      "valor": 2,
       "nota": null
     }
   ],
@@ -60,13 +80,71 @@
           "tipo": "texto"
         },
         {
+          "chave": "primeira_resposta",
+          "rotulo": "Primeira resposta",
+          "tipo": "data_hora"
+        },
+        {
+          "chave": "tempo_ate_resposta",
+          "rotulo": "Demorou",
+          "tipo": "texto"
+        },
+        {
           "chave": "situacao",
           "rotulo": "Situação",
+          "tipo": "texto"
+        },
+        {
+          "chave": "empresa",
+          "rotulo": "Empresa",
           "tipo": "texto"
         }
       ],
       "linhas": [
         {
+          "conversa_id": "dddddddd-0000-4000-8000-000000000004",
+          "company_id": null,
+          "nome": null,
+          "telefone": "+55 11 *****-0004",
+          "cidade": null,
+          "canal": "whatsapp",
+          "situacao": "Sem resposta",
+          "quando": "2026-10-13T11:50:00.000Z",
+          "dia": "2026-10-13",
+          "primeira_resposta": null,
+          "tempo_ate_resposta": null,
+          "empresa": null
+        },
+        {
+          "conversa_id": "dddddddd-0000-4000-8000-000000000002",
+          "company_id": null,
+          "nome": null,
+          "telefone": "+55 12 *****-0077",
+          "cidade": null,
+          "canal": "whatsapp",
+          "situacao": "Aurinha",
+          "quando": "2026-10-13T08:30:00.000Z",
+          "dia": "2026-10-13",
+          "primeira_resposta": null,
+          "tempo_ate_resposta": null,
+          "empresa": null
+        },
+        {
+          "conversa_id": "dddddddd-0000-4000-8000-000000000001",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Renata Lima",
+          "telefone": "+55 11 *****-0002",
+          "cidade": null,
+          "canal": "whatsapp",
+          "situacao": "Caio",
+          "quando": "2026-10-13T02:40:00.000Z",
+          "dia": "2026-10-12",
+          "primeira_resposta": "2026-10-13T11:10:00.000Z",
+          "tempo_ate_resposta": "8 h 30 min",
+          "empresa": "Mercado Bela Vista"
+        },
+        {
+          "conversa_id": null,
           "company_id": null,
           "nome": "Marina Prado",
           "telefone": "11988880001",
@@ -74,9 +152,27 @@
           "canal": "site",
           "situacao": "contacted",
           "quando": "2026-10-11T17:20:00.000Z",
-          "dia": "2026-10-11"
+          "dia": "2026-10-11",
+          "primeira_resposta": null,
+          "tempo_ate_resposta": null,
+          "empresa": null
         },
         {
+          "conversa_id": "dddddddd-0000-4000-8000-000000000003",
+          "company_id": null,
+          "nome": "Paulo Mendes",
+          "telefone": "+55 11 *****-0003",
+          "cidade": null,
+          "canal": "whatsapp",
+          "situacao": "Caio",
+          "quando": "2026-10-11T17:00:00.000Z",
+          "dia": "2026-10-11",
+          "primeira_resposta": "2026-10-11T17:12:00.000Z",
+          "tempo_ate_resposta": "12 min",
+          "empresa": null
+        },
+        {
+          "conversa_id": null,
           "company_id": null,
           "nome": "Otávio Reis",
           "telefone": "11988880002",
@@ -84,9 +180,27 @@
           "canal": "site (incompleto)",
           "situacao": "new",
           "quando": "2026-10-08T12:05:00.000Z",
-          "dia": "2026-10-08"
+          "dia": "2026-10-08",
+          "primeira_resposta": null,
+          "tempo_ate_resposta": null,
+          "empresa": null
         },
         {
+          "conversa_id": "dddddddd-0000-4000-8000-000000000005",
+          "company_id": null,
+          "nome": null,
+          "telefone": "+55 11 *****-0005",
+          "cidade": null,
+          "canal": "whatsapp",
+          "situacao": "Sem resposta",
+          "quando": "2026-10-05T13:00:00.000Z",
+          "dia": "2026-10-05",
+          "primeira_resposta": null,
+          "tempo_ate_resposta": null,
+          "empresa": null
+        },
+        {
+          "conversa_id": null,
           "company_id": "aaaaaaaa-0000-4000-8000-000000000006",
           "nome": "Bazar Novo",
           "telefone": "11999900006",
@@ -94,46 +208,217 @@
           "canal": "site",
           "situacao": "won",
           "quando": "2026-09-25T14:00:00.000Z",
-          "dia": "2026-09-25"
+          "dia": "2026-09-25",
+          "primeira_resposta": null,
+          "tempo_ate_resposta": null,
+          "empresa": "Bazar Novo"
         }
       ]
     }
   ],
   "series": [
     {
-      "titulo": "Contatos por semana",
+      "titulo": "Contatos por dia · 14 dias",
       "tipo": "barras",
       "pontos": [
         {
-          "rotulo": "31/08",
+          "rotulo": "30/09",
+          "dia": "2026-09-30",
           "valor": 0
         },
         {
-          "rotulo": "07/09",
+          "rotulo": "01/10",
+          "dia": "2026-10-01",
           "valor": 0
         },
         {
-          "rotulo": "14/09",
+          "rotulo": "02/10",
+          "dia": "2026-10-02",
           "valor": 0
         },
         {
-          "rotulo": "21/09",
-          "valor": 1
+          "rotulo": "03/10",
+          "dia": "2026-10-03",
+          "valor": 0
         },
         {
-          "rotulo": "28/09",
+          "rotulo": "04/10",
+          "dia": "2026-10-04",
           "valor": 0
         },
         {
           "rotulo": "05/10",
+          "dia": "2026-10-05",
+          "valor": 1
+        },
+        {
+          "rotulo": "06/10",
+          "dia": "2026-10-06",
+          "valor": 0
+        },
+        {
+          "rotulo": "07/10",
+          "dia": "2026-10-07",
+          "valor": 0
+        },
+        {
+          "rotulo": "08/10",
+          "dia": "2026-10-08",
+          "valor": 1
+        },
+        {
+          "rotulo": "09/10",
+          "dia": "2026-10-09",
+          "valor": 0
+        },
+        {
+          "rotulo": "10/10",
+          "dia": "2026-10-10",
+          "valor": 0
+        },
+        {
+          "rotulo": "11/10",
+          "dia": "2026-10-11",
           "valor": 2
         },
         {
           "rotulo": "12/10",
+          "dia": "2026-10-12",
+          "valor": 1
+        },
+        {
+          "rotulo": "13/10",
+          "dia": "2026-10-13",
+          "valor": 2
+        }
+      ]
+    },
+    {
+      "titulo": "Contatos por hora do dia · 30 dias",
+      "tipo": "barras",
+      "pontos": [
+        {
+          "rotulo": "0",
+          "hora": 0,
           "valor": 0
+        },
+        {
+          "rotulo": "1",
+          "hora": 1,
+          "valor": 0
+        },
+        {
+          "rotulo": "2",
+          "hora": 2,
+          "valor": 0
+        },
+        {
+          "rotulo": "3",
+          "hora": 3,
+          "valor": 0
+        },
+        {
+          "rotulo": "4",
+          "hora": 4,
+          "valor": 0
+        },
+        {
+          "rotulo": "5",
+          "hora": 5,
+          "valor": 1
+        },
+        {
+          "rotulo": "6",
+          "hora": 6,
+          "valor": 0
+        },
+        {
+          "rotulo": "7",
+          "hora": 7,
+          "valor": 0
+        },
+        {
+          "rotulo": "8",
+          "hora": 8,
+          "valor": 1
+        },
+        {
+          "rotulo": "9",
+          "hora": 9,
+          "valor": 1
+        },
+        {
+          "rotulo": "10",
+          "hora": 10,
+          "valor": 1
+        },
+        {
+          "rotulo": "11",
+          "hora": 11,
+          "valor": 1
+        },
+        {
+          "rotulo": "12",
+          "hora": 12,
+          "valor": 0
+        },
+        {
+          "rotulo": "13",
+          "hora": 13,
+          "valor": 0
+        },
+        {
+          "rotulo": "14",
+          "hora": 14,
+          "valor": 2
+        },
+        {
+          "rotulo": "15",
+          "hora": 15,
+          "valor": 0
+        },
+        {
+          "rotulo": "16",
+          "hora": 16,
+          "valor": 0
+        },
+        {
+          "rotulo": "17",
+          "hora": 17,
+          "valor": 0
+        },
+        {
+          "rotulo": "18",
+          "hora": 18,
+          "valor": 0
+        },
+        {
+          "rotulo": "19",
+          "hora": 19,
+          "valor": 0
+        },
+        {
+          "rotulo": "20",
+          "hora": 20,
+          "valor": 0
+        },
+        {
+          "rotulo": "21",
+          "hora": 21,
+          "valor": 0
+        },
+        {
+          "rotulo": "22",
+          "hora": 22,
+          "valor": 0
+        },
+        {
+          "rotulo": "23",
+          "hora": 23,
+          "valor": 1
         }
       ]
     }
   ],
-  "insight": null
+  "insight": "3 contatos aguardam resposta (1 já falou com a Aurinha)."
 }

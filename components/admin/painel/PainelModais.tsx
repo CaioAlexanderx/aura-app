@@ -11,7 +11,7 @@ import { Icon } from "@/components/Icon";
 import { BarrasVerticais } from "./Graficos";
 import { CaixaInsight, Indicadores, Pill } from "./BlocoCard";
 import { Paleta, TextoRico } from "./paleta";
-import { useFichaCliente } from "./usePainelHoje";
+import { useConversaContato, useFichaCliente } from "./usePainelHoje";
 import { abrirWhatsApp } from "./whatsapp";
 import type { BlocoId, ItemCatalogo } from "./tipos";
 
@@ -205,7 +205,133 @@ export function FichaClienteModal(props: {
   );
 }
 
+// ── Conversa de um contato do WhatsApp ──────────────────────
+
+// Cor da bolha por quem falou: cliente (à esquerda), Aurinha e Caio (à direita).
+function bolhaDe(autor: "cliente" | "aurinha" | "humano") {
+  if (autor === "cliente") return { alinha: "flex-start" as const, bg: Colors.bg4, fg: Colors.ink };
+  if (autor === "aurinha") return { alinha: "flex-end" as const, bg: Paleta.accentSuave, fg: Colors.ink };
+  return { alinha: "flex-end" as const, bg: Colors.violet, fg: "#fff" };
+}
+
+export function ConversaContatoModal(props: {
+  conversaId: string | null;
+  onClose: () => void;
+  onAbrirLoja: (companyId: string) => void;
+  onAviso: (mensagem: string) => void;
+}) {
+  var { conversa, carregando, erro, tentarDeNovo } = useConversaContato(props.conversaId);
+  var cid = props.conversaId;
+  return (
+    <PainelModal
+      visible={!!cid}
+      id="conversa-modal"
+      titulo={conversa ? conversa.titulo : "Conversa do WhatsApp"}
+      subtitulo={conversa ? conversa.telefone + (conversa.empresa ? " · " + conversa.empresa.nome : "") : undefined}
+      antesDoTitulo={conversa && conversa.situacao ? <Pill variacao={conversa.situacao} /> : null}
+      onClose={props.onClose}
+      rodape={conversa ? (
+        <>
+          <Text style={m.footText}>Fonte: WhatsApp da Aura</Text>
+          <View style={m.footAcoes}>
+            <Pressable
+              testID="conversa-whatsapp"
+              onPress={function() {
+                if (!abrirWhatsApp(conversa!.link || conversa!.telefone)) props.onAviso("Este contato não tem telefone utilizável.");
+              }}
+              style={m.btn}
+              accessibilityRole="link"
+            >
+              <Text style={m.btnText}>Abrir no WhatsApp</Text>
+            </Pressable>
+            {conversa.empresa ? (
+              <Pressable
+                testID="conversa-abrir-empresa"
+                onPress={function() { props.onAbrirLoja(conversa!.empresa!.company_id); }}
+                style={m.btnPrimario}
+                accessibilityRole="button"
+              >
+                <Text style={m.btnPrimarioText}>Abrir ficha de {conversa.empresa.nome}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </>
+      ) : undefined}
+    >
+      {carregando ? <ActivityIndicator testID="conversa-carregando" color={Colors.violet3} /> : null}
+      {!carregando && !conversa && erro ? (
+        <View style={{ gap: 8, alignItems: "flex-start" }} testID="conversa-erro">
+          <CaixaInsight insight={{ tom: "risco", texto: "Não consegui carregar esta conversa. Ela pode ter sido removida ou o número da Aura não está ligado." }} />
+          <Pressable testID="conversa-tentar-de-novo" onPress={tentarDeNovo} style={m.btn} accessibilityRole="button"><Text style={m.btnText}>Tentar de novo</Text></Pressable>
+        </View>
+      ) : null}
+      {conversa ? (
+        <>
+          <View style={m.contatoDados}>
+            <View>
+              <Text style={m.rotulo}>Telefone</Text>
+              <Pressable
+                testID="conversa-telefone"
+                onPress={function() { if (!abrirWhatsApp(conversa!.link || conversa!.telefone)) props.onAviso("Este contato não tem telefone utilizável."); }}
+                accessibilityRole="link"
+                accessibilityLabel={"Abrir o WhatsApp de " + conversa.telefone}
+              >
+                <Text style={m.linkTel}>{conversa.telefone}</Text>
+              </Pressable>
+            </View>
+            <View>
+              <Text style={m.rotulo}>Empresa</Text>
+              {conversa.empresa ? (
+                <Pressable testID="conversa-empresa" onPress={function() { props.onAbrirLoja(conversa!.empresa!.company_id); }} accessibilityRole="button">
+                  <Text style={m.linkTel}>{conversa.empresa.nome}</Text>
+                </Pressable>
+              ) : (
+                <Text style={m.semEmpresa} testID="conversa-sem-empresa">Sem empresa vinculada</Text>
+              )}
+            </View>
+            {conversa.situacao ? (
+              <View>
+                <Text style={m.rotulo}>Situação</Text>
+                <View style={{ alignSelf: "flex-start" }}><Pill variacao={conversa.situacao} /></View>
+              </View>
+            ) : null}
+          </View>
+
+          <Indicadores itens={conversa.indicadores} />
+
+          <View style={{ gap: 8 }}>
+            <Text style={m.rotulo}>Mensagens</Text>
+            {conversa.truncada ? (
+              <Text style={m.footText} testID="conversa-truncada">Mostrando só as últimas 200 mensagens desta conversa.</Text>
+            ) : null}
+            {conversa.mensagens.length === 0 ? (
+              <Text style={m.footText}>Nenhuma mensagem nesta conversa.</Text>
+            ) : null}
+            {conversa.mensagens.map(function(msg) {
+              var b = bolhaDe(msg.autor);
+              return (
+                <View key={msg.id} testID={"mensagem-" + msg.id} style={{ alignItems: b.alinha }}>
+                  <View style={[m.bolha, { backgroundColor: b.bg }]}>
+                    <Text style={[m.bolhaQuem, { color: b.fg }]}>{msg.quem} · {msg.quando}</Text>
+                    <Text style={[m.bolhaTexto, { color: b.fg }]}>{msg.texto}</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </>
+      ) : null}
+    </PainelModal>
+  );
+}
+
 var m = StyleSheet.create({
+  contatoDados: { flexDirection: "row", flexWrap: "wrap", columnGap: 28, rowGap: 10 },
+  linkTel: { fontSize: 14, fontWeight: "600", color: Paleta.accentTexto },
+  semEmpresa: { fontSize: 14, color: Colors.ink3 },
+  bolha: { maxWidth: "88%", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, gap: 2 },
+  bolhaQuem: { fontSize: 11, fontWeight: "600", opacity: 0.8 },
+  bolhaTexto: { fontSize: 14, lineHeight: 20 },
   scrim: { flex: 1, backgroundColor: "rgba(17,15,28,0.5)", alignItems: "center", justifyContent: "center", padding: 16 },
   modal: { width: "100%", maxWidth: 760, maxHeight: "92%", backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 18, overflow: "hidden" },
   head: { flexDirection: "row", justifyContent: "space-between", gap: 12, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: Colors.border },

@@ -88,6 +88,9 @@ export type PdvSettings = {
   // 09/10/2026 (Comandas do Caixa, migration 368): liga "Adicionar à comanda"
   // e "Fechar comanda" no Caixa. Leitura só por utils/comanda.lerComandaEnabled.
   comanda_enabled?: boolean;
+  // 13/10/2026 (Aura-backend#813): vale-troca (QR) no cupom das vendas de
+  // nov/dez. Default true. Leitura só por utils/valeTroca.lerValeTrocaLigado.
+  vale_troca_enabled?: boolean;
   // 18/05/2026 (Fase 0 Aura Food, migration 118)
   food_mode_enabled?: boolean;
   service_fee_pct?: number;

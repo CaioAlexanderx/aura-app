@@ -18,7 +18,7 @@ import { toast } from "@/components/Toast";
 import { BlocoCard, Pill } from "./BlocoCard";
 import { ExtratoBancario } from "./ExtratoOfx";
 import { Sparkline } from "./Graficos";
-import { CatalogoBlocos, FichaClienteModal } from "./PainelModais";
+import { CatalogoBlocos, ConversaContatoModal, FichaClienteModal } from "./PainelModais";
 import { DEFINICOES, SECOES } from "./blocos";
 import { Paleta } from "./paleta";
 import { usePainelHoje } from "./usePainelHoje";
@@ -97,6 +97,7 @@ function PainelConteudo(props: { dados: Dados; painel: PainelHojeDados }) {
   var [salvando, setSalvando] = useState(false);
   var [catalogoAberto, setCatalogoAberto] = useState(false);
   var [fichaDe, setFichaDe] = useState<string | null>(null);
+  var [conversaDe, setConversaDe] = useState<string | null>(null);
   var [recalculando, setRecalculando] = useState(false);
   var cards = useRef<Record<string, any>>({});
 
@@ -288,6 +289,7 @@ function PainelConteudo(props: { dados: Dados; painel: PainelHojeDados }) {
                     largura={larguraDoCard(def.colunas, estaAberto)}
                     onAlternar={function() { alternar(def.id); }}
                     onAbrirLoja={setFichaDe}
+                    onAbrirConversa={setConversaDe}
                     onVerbo={aoVerbo}
                     secaoExtra={def.id === "receita" ? <ExtratoBancario /> : undefined}
                     ocultarListas={LISTAS_SUBSTITUIDAS[def.id]}
@@ -312,6 +314,13 @@ function PainelConteudo(props: { dados: Dados; painel: PainelHojeDados }) {
         onClose={function() { setCatalogoAberto(false); }}
         onSalvar={aoSalvarCatalogo}
         salvando={salvando}
+      />
+      <ConversaContatoModal
+        conversaId={conversaDe}
+        onClose={function() { setConversaDe(null); }}
+        // A empresa vinculada abre a ficha dela (a conversa fecha: um modal por vez).
+        onAbrirLoja={function(companyId) { setConversaDe(null); setFichaDe(companyId); }}
+        onAviso={function(mensagem) { toast.info(mensagem); }}
       />
       <FichaClienteModal
         companyId={fichaDe}
