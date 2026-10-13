@@ -35,6 +35,7 @@ import { parseBrDate } from "@/components/inputs/DateInput";
 import { lancamentoPreenchido, type PadroesDoLancamento } from "@/utils/crediarioLancamento";
 import {
   parseCurrencyInput, defaultDueDate, todayBrSp, periodToPayload, cronograma, rotuloDoPeriodo,
+  mensagemDoErroDePrimeiraParcela,
   type PeriodKind, type AccountMode, type CustomerOption,
 } from "./calculos";
 
@@ -92,6 +93,10 @@ export type EstadoDoForm = {
   parcelasLivre: boolean;
   interestRate: string;
   firstDueDate: string;
+  /** first_due_date_max_days do plan-config (só aviso; ver avisoDaPrimeiraParcela). */
+  janelaDias: number | null;
+  /** Erro da API sobre a 1ª parcela, mostrado junto do campo até a data mudar. */
+  erroPrimeiraParcela: string | null;
   entryDate: string;
   periodKind: PeriodKind;
   periodDays: string;
@@ -139,6 +144,8 @@ export function estadoInicial(): EstadoDoForm {
     parcelasLivre: false,
     interestRate: "",
     firstDueDate: padroes.vencimento,
+    janelaDias: null,
+    erroPrimeiraParcela: null,
     entryDate: padroes.hoje,
     periodKind: "mensal",
     periodDays: "20",
@@ -170,6 +177,10 @@ type Acao =
 /** Regras que amarram um campo a outro (antes eram useEffects). */
 function normalizar(prev: EstadoDoForm, next: EstadoDoForm): EstadoDoForm {
   let out = next;
+  // O erro do servidor era sobre a data de antes.
+  if (out.erroPrimeiraParcela && out.firstDueDate !== prev.firstDueDate) {
+    out = { ...out, erroPrimeiraParcela: null };
+  }
   // Desliga unify se sair de "Carnê existente".
   if (out.accountMode !== "existing" && out.unifyEnabled) out = { ...out, unifyEnabled: false };
   // Fecha o gate se a unificação, a prévia ou o carnê mudarem.
@@ -182,7 +193,8 @@ function normalizar(prev: EstadoDoForm, next: EstadoDoForm): EstadoDoForm {
 }
 
 function reducer(st: EstadoDoForm, a: Acao): EstadoDoForm {
-  if (a.type === "reset") return estadoInicial();
+  // A janela é da loja, não do lançamento: sobrevive ao "lançar outro".
+  if (a.type === "reset") return { ...estadoInicial(), janelaDias: st.janelaDias };
   if (a.type === "escolherCliente") {
     const mesmo = (st.selectedCustomer?.id ?? null) === (a.cliente?.id ?? null);
     // Outro cliente: os carnês e a escolha de carnê eram do anterior.
@@ -247,6 +259,24 @@ export function useLancamentoForm() {
     idempKeyRef.current = null;
     dispatch({ type: "reset" });
   }, []);
+
+  // first_due_date_max_days: buscado uma vez, só quando o formulário chega ao
+  // passo dos valores (o modal fica montado na tela e nem sempre é aberto).
+  const janelaPedida = useRef(false);
+  const companyIdDaJanela = company?.id;
+  useEffect(() => {
+    if (st.step !== "details" || janelaPedida.current || !companyIdDaJanela) return;
+    janelaPedida.current = true;
+    (async () => {
+      try {
+        const cfg = await creditApi.getPlanConfig(companyIdDaJanela);
+        const dias = Number(cfg?.first_due_date_max_days);
+        if (dias > 0) set({ janelaDias: dias });
+      } catch {
+        /* sem a janela só some o aviso; o servidor continua valendo */
+      }
+    })();
+  }, [st.step, companyIdDaJanela, set]);
 
   // ── Seletores memoizados ─────────────────────────────────────────────────
   const valores = useMemo(
@@ -493,10 +523,15 @@ export function useLancamentoForm() {
       const conta = (s.carnes?.accounts || []).find((a) => a.id === selectedAccountId) || null;
       const usarUnificado = unificou && !!unifyPreview;
       const doBackend = (result?.installments || []).filter((p) => p && p.due_date);
+      const datasDoBackend = (result?.due_dates || []).filter(Boolean).map((d) => String(d).slice(0, 10));
       if (!usarUnificado && doBackend.length > 0) {
         v.nParcelas = doBackend.length;
         v.valorParcela = Number(doBackend[0].amount_due) || v.valorParcela;
         v.datas = doBackend.map((p) => String(p.due_date).slice(0, 10));
+      } else if (!usarUnificado && datasDoBackend.length > 0) {
+        // Resposta com due_dates[] (e first_due_date) mas sem as parcelas.
+        v.nParcelas = datasDoBackend.length;
+        v.datas = datasDoBackend;
       } else if (unifyEnabled && !usarUnificado) {
         // Unificação falhou: ficou só o débito (installments=1).
         v.nParcelas = 1;
@@ -527,8 +562,10 @@ export function useLancamentoForm() {
       };
       set({ loading: false, unifyGateOpen: false, confirmarDescarte: false, step: "pronto", resultado: resumo });
     } catch (err: any) {
-      toast.error(err?.message || "Erro ao criar lançamento");
-      set({ loading: false });
+      // 422/400 da 1ª parcela: a mensagem fica também junto do campo.
+      const daParcela = mensagemDoErroDePrimeiraParcela(err);
+      toast.error(daParcela || err?.message || "Erro ao criar lançamento");
+      set({ loading: false, ...(daParcela ? { erroPrimeiraParcela: daParcela } : {}) });
     }
   }, [company, qc, set]);
 

@@ -11,11 +11,12 @@
 //   - cronograma: datas de cada parcela a partir do 1º vencimento, só para
 //     mostrar (rodapé "11/11 a 11/01" e a tela Pronto). Quem grava as
 //     parcelas é o backend;
-//   - atalhos do 1º vencimento ("em 30 dias", "dia 10");
+//   - atalhos do 1º vencimento ("em 30 dias", "dia 10", e "Janeiro" em
+//     novembro e dezembro) e o aviso da janela da primeira parcela;
 //   - recentes do passo 1: quais clientes da carteira aparecem antes de
 //     digitar e o chip de cada um ("Em dia" / "Atraso Nd" / "Quitada").
 // ============================================================
-import { formatIsoToBr } from "@/components/inputs/DateInput";
+import { formatIsoToBr, parseBrDate } from "@/components/inputs/DateInput";
 import { fmtDate } from "@/components/crediario/ficha/fichaHelpers";
 import { daysLate, statusDaCarteira } from "@/utils/creditOverdue";
 import type { CreditBalanceItem, PeriodUnit } from "@/services/creditApi";
@@ -99,6 +100,89 @@ export function proximoDia(dia: number, hojeIso: string = hojeIsoSp()): string {
   const [y, m, d] = hojeIso.split("-").map((x) => parseInt(x, 10));
   const alvo = d < dia ? new Date(Date.UTC(y, m - 1, dia)) : new Date(Date.UTC(y, m, dia));
   return formatIsoToBr(isoDeUtc(alvo));
+}
+
+/** O atalho "Janeiro" aparece em novembro e dezembro (vender agora, 1ª parcela no ano que vem). */
+export function mostrarAtalhoJaneiro(hojeIso: string = hojeIsoSp()): boolean {
+  const mes = parseInt(hojeIso.slice(5, 7), 10);
+  return mes === 11 || mes === 12;
+}
+
+/**
+ * Atalho "Janeiro": o dia `dia` (padrão 10) de janeiro do ano seguinte, ou do
+ * mesmo ano quando hoje já é janeiro. Dia que não existe em janeiro (>31)
+ * encosta no último; dia inválido vira 10.
+ */
+export function janeiroDoProximoAno(hojeIso: string = hojeIsoSp(), dia = 10): string {
+  const [y, m] = hojeIso.split("-").map((x) => parseInt(x, 10));
+  const ano = m >= 2 ? y + 1 : y;
+  const d = Number.isFinite(dia) && dia >= 1 ? Math.min(Math.floor(dia), 31) : 10;
+  return formatIsoToBr(`${ano}-01-${String(d).padStart(2, "0")}`);
+}
+
+/** Dias corridos entre dois YYYY-MM-DD (b − a). */
+function diasEntre(aIso: string, bIso: string): number {
+  return Math.round((Date.parse(bIso + "T00:00:00Z") - Date.parse(aIso + "T00:00:00Z")) / 86400000);
+}
+
+export type AvisoDaPrimeiraParcela = {
+  texto: string;
+  /** true = a data não é uma data (o envio já recusa); false = só um aviso. */
+  bloqueia: boolean;
+};
+
+/**
+ * O que dizer da "Primeira parcela em" antes de enviar. A janela de
+ * `first_due_date_max_days` (GET /credit/plan-config) é a do backend para
+ * POST /credit/installments; /manual-entry aceita qualquer data (carnê
+ * digitalizado, compra antiga), então aqui ela só AVISA — quem recusa é o
+ * servidor, e o erro dele volta por mensagemDoErroDePrimeiraParcela.
+ */
+export function avisoDaPrimeiraParcela(
+  primeiraBr: string,
+  opts: { maxDias?: number | null; hojeIso?: string; compraBr?: string } = {},
+): AvisoDaPrimeiraParcela | null {
+  const texto = (primeiraBr || "").trim();
+  if (!texto) return null;
+  const iso = parseBrDate(texto);
+  if (!iso) {
+    // Só reclama quando a data já foi toda digitada.
+    return texto.length >= 10 ? { texto: "Data inválida — use dd/mm/aaaa.", bloqueia: true } : null;
+  }
+  const hoje = opts.hojeIso || hojeIsoSp();
+  const compraIso = opts.compraBr ? parseBrDate(opts.compraBr) : null;
+  const dias = diasEntre(hoje, iso);
+  // Compra de hoje com a 1ª parcela no passado: nasce vencida (compra antiga
+  // é outro assunto, e é permitida).
+  if (dias < 0 && (!compraIso || compraIso >= hoje)) {
+    return { texto: "Essa data já passou — a parcela nasce vencida.", bloqueia: false };
+  }
+  const max = Number(opts.maxDias);
+  if (max > 0 && dias > max) {
+    return {
+      texto: `Mais de ${max} dias à frente (até ${emDias(max, hoje)}). Confira o ano.`,
+      bloqueia: false,
+    };
+  }
+  return null;
+}
+
+/** Mensagem para o erro da API sobre a 1ª parcela (422/400); null = outro erro. */
+export function mensagemDoErroDePrimeiraParcela(err: any): string | null {
+  const codigo = err?.data?.code ?? err?.code;
+  if (codigo === "FIRST_DUE_DATE_PAST") {
+    return "A primeira parcela não pode ser em uma data que já passou. Escolha hoje ou uma data à frente.";
+  }
+  if (codigo === "FIRST_DUE_DATE_TOO_FAR") {
+    const dias = Number(err?.data?.max_days);
+    const ate = formatIsoToBr(String(err?.data?.max_date || "").slice(0, 10));
+    const limite = dias > 0 ? `até ${dias} dias a partir de hoje` : "dentro da janela permitida";
+    return `A primeira parcela pode ser ${limite}${ate ? ` (${ate})` : ""}.`;
+  }
+  if (codigo === "FIRST_DUE_DATE_INVALID") {
+    return "Data da primeira parcela inválida — use dd/mm/aaaa.";
+  }
+  return null;
 }
 
 export function periodToPayload(kind: PeriodKind, customDays: string): { period_unit: PeriodUnit; period_count: number } {
