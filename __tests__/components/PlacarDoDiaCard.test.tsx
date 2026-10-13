@@ -1,5 +1,5 @@
 // ============================================================
-// Configurações › Vendas › Placar do dia no WhatsApp (13/10/2026)
+// Black Friday › Placar do dia no WhatsApp (13/10/2026)
 //
 // Aura-backend#816: GET/PUT /companies/:id/placar-do-dia e o template
 // `placar_dia` (POST /whatsapp/templates { preset }). O cartão mostra o
@@ -18,7 +18,7 @@ jest.mock("expo-router", () => ({ router: { push: (...a: any[]) => mockPush(...a
 jest.mock("@/services/placarApi", () => ({ placarApi: { get: jest.fn(), save: jest.fn() } }));
 jest.mock("@/services/waApi", () => ({ waApi: { createTemplate: jest.fn() } }));
 
-import { PlacarDoDiaCard } from "@/components/screens/configuracoes/PlacarDoDiaCard";
+import { PlacarDoDiaCard } from "@/components/screens/blackfriday/PlacarDoDiaCard";
 import { placarApi } from "@/services/placarApi";
 import { waApi } from "@/services/waApi";
 import { toast } from "@/components/Toast";

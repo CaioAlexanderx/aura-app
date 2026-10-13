@@ -1,10 +1,13 @@
 // ============================================================
-// AURA. — Configurações › Vendas › Placar do dia no WhatsApp (13/10/2026)
+// AURA. — Black Friday › Placar do dia no WhatsApp (13/10/2026)
 //
 // Todo fim de dia o dono recebe, no WhatsApp, o placar da loja: vendas,
 // ticket médio, o que mais saiu, comparação com o mês anterior e o que
 // entrou do crediário. Backend: Aura-backend#816, GET/PUT
 // /companies/:id/placar-do-dia.
+//
+// Componente autocontido (companyId + isOwner): quem monta a página da
+// temporada importa este arquivo; ele faz as próprias chamadas.
 //
 // Regras da tela:
 //   · o estado vem do GET, que já diz o que falta para o placar chegar:
