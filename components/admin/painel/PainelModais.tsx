@@ -15,7 +15,7 @@ import { useFichaCliente } from "./usePainelHoje";
 import { abrirWhatsApp } from "./whatsapp";
 import type { BlocoId, ItemCatalogo } from "./tipos";
 
-function PainelModal(props: {
+export function PainelModal(props: {
   visible: boolean;
   id: string;                 // vira o testID da casca e do botão de fechar
   titulo: string;

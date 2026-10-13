@@ -271,6 +271,60 @@ export type PainelApiRecalcular = {
   erros: any[];
 };
 
+// Extrato OFX × Asaas (13/10/2026, Aura-backend #810). Rotas adminOnly em
+// /admin/painel/ofx. Ids de extrato e de lançamento são BIGINT (string).
+export type OfxValorN = { n: number; valor: number };
+export type OfxExtratoResumoMes = { id: string; nome_arquivo: string | null; importado_em: string; total_creditos: number; linhas: number };
+export type OfxMes = {
+  mes: string;                       // "2026-10"
+  rotulo: string;                    // "Out/2026"
+  asaas: number;
+  pagamentos: number;
+  banco: number | null;              // null = mês sem extrato
+  diferenca: number | null;          // banco − asaas
+  status: "sem extrato" | "conciliado" | "pendências";
+  detalhe: string | null;
+  conciliado: OfxValorN | null;
+  pendentes: OfxValorN | null;
+  sem_credito: OfxValorN | null;
+  extratos: OfxExtratoResumoMes[];
+};
+export type OfxExtratosResponse = { dia?: string; meses: OfxMes[] };
+export type OfxLancamento = {
+  id: string;
+  data: string;                      // "YYYY-MM-DD"
+  valor: number;                     // crédito > 0, débito < 0
+  descricao: string | null;
+  fitid: string | null;
+  tipo: string;                      // "credito" | "debito"
+  status: "pendente" | "conciliado" | "ignorado";
+  conciliado_com: string | null;
+  com_taxa: boolean;
+};
+export type OfxPagamentoDisponivel = { pagamento_id: string; log_id: string | null; company_id: string | null; valor: number; liquido: number | null; data: string };
+export type OfxExtratoDetalhe = {
+  extrato: { id: string; mes: string; nome_arquivo: string | null; importado_em: string; importado_por?: string | null; total_creditos: number; linhas: number };
+  resumo: {
+    creditos: number; total_creditos: number; debitos: number;
+    conciliados: { n: number; valor: number; com_taxa: number };
+    pendentes: OfxValorN; ignorados: OfxValorN;
+  };
+  lancamentos: OfxLancamento[];
+  pagamentos_disponiveis: OfxPagamentoDisponivel[];
+};
+export type OfxImportacao = {
+  ok: boolean;
+  duplicado: boolean;
+  extrato?: { id: string; mes: string; nome_arquivo: string | null };
+  extrato_id?: string;
+  importados: number;
+  duplicados: number;
+  creditos?: number;
+  conciliados?: number;
+  com_taxa?: number;
+  pendentes?: number;
+};
+
 export var adminApi = {
   dashboard: function() { return request<any>("/admin/dashboard"); },
   clients: function() { return request<any>("/admin/clients"); },
@@ -422,6 +476,42 @@ export var adminApi = {
     },
     recalcular: function() {
       return request<PainelApiRecalcular>("/admin/painel/recalcular", { method: "POST", retry: 0, timeout: 120000 });
+    },
+    // Extrato OFX × Asaas (#810). O arquivo vai como texto em JSON (o backend
+    // não tem multipart); `mes` (YYYY-MM) escolhe o mês quando o OFX cobre outro.
+    ofx: {
+      extratos: function(meses?: number) {
+        return request<OfxExtratosResponse>("/admin/painel/ofx/extratos" + (meses ? "?meses=" + meses : ""), { timeout: 30000 });
+      },
+      detalhe: function(id: string) {
+        return request<OfxExtratoDetalhe>("/admin/painel/ofx/extratos/" + encodeURIComponent(id), { timeout: 30000 });
+      },
+      importar: function(corpo: { ofx_content: string; mes?: string; nome_arquivo?: string }) {
+        return request<OfxImportacao>("/admin/painel/ofx/extratos", { method: "POST", body: corpo, retry: 0, timeout: 60000 });
+      },
+      conciliar: function(extratoId: string, lancamentoId: string, pagamentoId: string) {
+        return request<{ ok: boolean; lancamento: OfxLancamento }>(
+          "/admin/painel/ofx/extratos/" + encodeURIComponent(extratoId) + "/lancamentos/" + encodeURIComponent(lancamentoId) + "/conciliar",
+          { method: "POST", body: { pagamento_id: pagamentoId }, retry: 0 },
+        );
+      },
+      ignorar: function(extratoId: string, lancamentoId: string) {
+        return request<{ ok: boolean; lancamento: OfxLancamento }>(
+          "/admin/painel/ofx/extratos/" + encodeURIComponent(extratoId) + "/lancamentos/" + encodeURIComponent(lancamentoId) + "/ignorar",
+          { method: "POST", retry: 0 },
+        );
+      },
+      reabrir: function(extratoId: string, lancamentoId: string) {
+        return request<{ ok: boolean; lancamento: OfxLancamento }>(
+          "/admin/painel/ofx/extratos/" + encodeURIComponent(extratoId) + "/lancamentos/" + encodeURIComponent(lancamentoId) + "/reabrir",
+          { method: "POST", retry: 0 },
+        );
+      },
+      apagar: function(extratoId: string) {
+        return request<{ ok: boolean; id: string; lancamentos_removidos: number }>(
+          "/admin/painel/ofx/extratos/" + encodeURIComponent(extratoId), { method: "DELETE", retry: 0 },
+        );
+      },
     },
   },
   // Pedidos de disparo preparados pelo Claude; só executam com aprovação.

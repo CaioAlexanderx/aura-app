@@ -33,6 +33,8 @@ jest.mock("@/services/adminApi", () => ({
   adminApi: {
     painel: {
       hoje: jest.fn(), bloco: jest.fn(), ficha: jest.fn(), layout: jest.fn(), salvarLayout: jest.fn(), recalcular: jest.fn(),
+      // Extrato OFX (seção do bloco Receita): coberto em ExtratoOfxReceita.test.tsx.
+      ofx: { extratos: jest.fn(), detalhe: jest.fn() },
     },
   },
 }));
@@ -73,6 +75,7 @@ beforeEach(() => {
     blocos: blocos.map((b) => ({ ...b, titulo: b.id, grupo: "negocio" })),
   }));
   api.recalcular.mockImplementation(async () => fx("recalcular"));
+  (api as any).ofx.extratos.mockImplementation(async () => ({ meses: [] }));
   abrirUrl = jest.spyOn(Linking, "openURL").mockResolvedValue(undefined as any);
 });
 
