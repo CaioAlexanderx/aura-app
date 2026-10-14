@@ -10,8 +10,10 @@
 // Este teste segura quatro coisas:
 //   1. as chaves existem nos DOIS mapas (regra 3 do CLAUDE.md) e ninguém herda
 //      o mod de outra tela — em especial, "clientes.reativacao" NÃO é "clientes";
-//   2. o plano mínimo é o do canal (Negócio), não o de /clientes (Essencial):
-//      disparo de marketing não pode cair no Essencial por tabela;
+//   2. o plano mínimo: o WhatsApp (canal da Meta) é Negócio; a Reativação é
+//      Essencial desde 14/10/2026 (card t3-06, decisão do Caio de 13/10): o
+//      Essencial a usa pelo wa.me, sem conectar o número. O DISPARO pela API
+//      continua só no Negócio (a tela só o desenha lá);
 //   3. só a permissão `clientes` libera a reativação para um membro;
 //   4. a ordem dos grupos no NAV e a prioridade do menu "Mais" — o motivo de
 //      toda a mudança. Ordem é comportamento aqui, não estética: o grupo abaixo
@@ -50,15 +52,14 @@ function itensDoGrupo(nomeDoGrupo: string): { r: string; mod: string | null }[] 
 }
 
 describe("Reativação: chaves próprias nos dois mapas", () => {
-  test("clientes.reativacao existe em MODULE_PLAN_MAP, no plano Negócio", () => {
-    expect(MODULE_PLAN_MAP["clientes.reativacao"]).toBe("negocio");
+  test("clientes.reativacao existe em MODULE_PLAN_MAP, no plano Essencial (wa.me)", () => {
+    expect(MODULE_PLAN_MAP["clientes.reativacao"]).toBe("essencial");
   });
 
-  test("não herda o plano de /clientes (Essencial) nem inventa um novo", () => {
-    expect(MODULE_PLAN_MAP["clientes"]).toBe("essencial");
-    expect(MODULE_PLAN_MAP["clientes.reativacao"]).not.toBe(MODULE_PLAN_MAP["clientes"]);
-    // Mesmo teto do canal por onde a mensagem sai.
-    expect(MODULE_PLAN_MAP["clientes.reativacao"]).toBe(MODULE_PLAN_MAP["whatsapp"]);
+  test("tem chave própria: o plano é decisão dela, não herança de /clientes", () => {
+    expect(Object.prototype.hasOwnProperty.call(MODULE_PLAN_MAP, "clientes.reativacao")).toBe(true);
+    // O canal da Meta continua um degrau acima.
+    expect(MODULE_PLAN_MAP["whatsapp"]).toBe("negocio");
   });
 
   test("whatsapp continua com chave própria no Negócio", () => {
@@ -115,10 +116,10 @@ describe("Reativação: permissão do membro", () => {
 });
 
 describe("Reativação: visibilidade por plano", () => {
-  test("Essencial vê Clientes mas não a Reativação nem o WhatsApp", () => {
+  test("Essencial vê Clientes e a Reativação (wa.me), mas não o WhatsApp da Meta", () => {
     const v = computeVisibleModules("essencial", null, undefined);
     expect(v.has("clientes")).toBe(true);
-    expect(v.has("clientes.reativacao")).toBe(false);
+    expect(v.has("clientes.reativacao")).toBe(true);
     expect(v.has("whatsapp")).toBe(false);
   });
 
@@ -131,10 +132,10 @@ describe("Reativação: visibilidade por plano", () => {
     }
   });
 
-  test("override true vende a reativação como add-on no Essencial", () => {
-    const v = computeVisibleModules("essencial", { "clientes.reativacao": true }, undefined);
+  test("override true vende o WhatsApp da Meta como add-on no Essencial", () => {
+    const v = computeVisibleModules("essencial", { whatsapp: true }, undefined);
+    expect(v.has("whatsapp")).toBe(true);
     expect(v.has("clientes.reativacao")).toBe(true);
-    expect(v.has("whatsapp")).toBe(false);
   });
 
   test("override false esconde só a reativação", () => {
@@ -144,13 +145,14 @@ describe("Reativação: visibilidade por plano", () => {
     expect(v.has("clientes")).toBe(true);
   });
 
-  test("permissão não vence o plano: `clientes` no Essencial não libera a reativação", () => {
+  test("permissão não vence o plano: `clientes` no Essencial não libera o WhatsApp da Meta", () => {
     const v = computeVisibleModules("essencial", null, {
       is_owner: false,
       permissions: { clientes: true },
     });
     expect(v.has("clientes")).toBe(true);
-    expect(v.has("clientes.reativacao")).toBe(false);
+    expect(v.has("clientes.reativacao")).toBe(true);
+    expect(v.has("whatsapp")).toBe(false);
   });
 });
 

@@ -1,28 +1,25 @@
 // ============================================================
-// Módulos ocultos do menu (21/09/2026).
+// Módulos ocultos do menu: o mecanismo (21/09/2026) e o estado atual.
 //
-// Pedido do Caio: WhatsApp e Reativação saem da sidebar por enquanto,
-// porque as duas não estão operantes. O risco que este teste cobre não
-// é "o item desapareceu" — é o jeito COMO ele desapareceu.
+// Em 21/09 o Caio tirou WhatsApp e Reativação da sidebar "por enquanto".
+// Em 13/10 decidiu religá-las, e em 14/10 o card t3-06 removeu as duas
+// chaves de MODULOS_OCULTOS. O mecanismo FICA (lista vazia + filtro em
+// buildRawNav): é o jeito de esconder a próxima tela sem apagar o item do
+// NAV nem o teste que segura a ordem do grupo.
 //
-// Esconder apagando o item do NAV teria funcionado e teria custado o
-// registro da decisão de 16/09 (o grupo subiu de posição justamente
-// para essas telas pararem de ser invisíveis) mais o teste que segura
-// aquela ordem. Então o teste aqui trava o desenho escolhido:
+// O que este teste segura:
 //
-//   1. as duas chaves estão em MODULOS_OCULTOS;
-//   2. o item CONTINUA declarado no NAV — reativar é uma linha;
-//   3. plano e permissão continuam intactos, ou seja o filtro é de
-//      apresentação e não de entitlement: quando a chave sair da
-//      lista, quem via volta a ver e quem não via continua sem ver;
-//   4. o filtro está no buildRawNav, que é o único caminho comum da
-//      Sidebar (web), da MBar (mobile) e do baseNav do SidebarEditor.
-//      Filtrar em qualquer outro lugar deixaria uma das três portas
-//      aberta.
+//   1. a lista está vazia: as duas telas voltaram ao menu;
+//   2. os itens continuam declarados no NAV e com plano e permissão por
+//      baixo (o filtro é de apresentação, não de entitlement);
+//   3. o filtro continua no buildRawNav, o único caminho comum da Sidebar
+//      (web), da MBar (mobile) e do baseNav do SidebarEditor;
+//   4. plano: o WhatsApp (canal da Meta) segue no Negócio e some no
+//      Essencial, sem botão desabilitado; a Reativação vale para o Essencial
+//      porque o toque de um clique usa o wa.me (decisão de 13/10).
 //
-// Como em __tests__/moduloReativacaoNoMenu.test.ts, o item 4 lê o
-// fonte do _layout: importá-lo puxaria expo-router e react-native-web
-// inteiros para conferir uma chamada de função.
+// Como em __tests__/moduloReativacaoNoMenu.test.ts, o item 3 lê o fonte do
+// _layout: importá-lo puxaria expo-router e react-native-web inteiros.
 // ============================================================
 jest.mock("@/services/api", () => ({ request: jest.fn() }));
 jest.mock("@/stores/auth", () => ({ useAuthStore: jest.fn() }));
@@ -42,7 +39,8 @@ const LAYOUT = fs.readFileSync(
   "utf8",
 );
 
-const OCULTOS = ["whatsapp", "clientes.reativacao"];
+// As duas telas que ficaram ocultas de 21/09 a 14/10/2026.
+const RELIGADAS = ["whatsapp", "clientes.reativacao"];
 
 // Todas as chaves `mod` declaradas no NAV, na ordem do fonte.
 function modsDoNav(): string[] {
@@ -60,59 +58,57 @@ function corpoDoBuildRawNav(): string {
   return LAYOUT.slice(i, LAYOUT.indexOf("\n}", i));
 }
 
-describe("as duas telas estão na lista de ocultos", () => {
-  test("WhatsApp e Reativação estão ocultos", () => {
-    OCULTOS.forEach((m) => expect(MODULOS_OCULTOS.has(m)).toBe(true));
+describe("WhatsApp e Reativação voltaram ao menu (t3-06)", () => {
+  test("a lista de ocultos está vazia", () => {
+    expect(Array.from(MODULOS_OCULTOS)).toEqual([]);
   });
 
-  test("a lista não escondeu nada além dessas duas", () => {
-    expect(Array.from(MODULOS_OCULTOS).sort()).toEqual([...OCULTOS].sort());
+  test("as duas chaves religadas não estão na lista", () => {
+    RELIGADAS.forEach((m) => expect(MODULOS_OCULTOS.has(m)).toBe(false));
+    RELIGADAS.forEach((m) => expect(moduloEstaOculto(m)).toBe(false));
   });
 
-  test("toda chave oculta existe de fato no NAV", () => {
+  test("toda chave que vier a ser oculta precisa existir no NAV", () => {
     const doNav = new Set(modsDoNav());
     MODULOS_OCULTOS.forEach((m) => expect(doNav.has(m)).toBe(true));
   });
 
-  test("moduloEstaOculto: só a chave exata esconde", () => {
-    expect(moduloEstaOculto("whatsapp")).toBe(true);
-    expect(moduloEstaOculto("clientes.reativacao")).toBe(true);
-    // Item sem `mod` (ex. /vertical, /gestao-aura) nunca é escondido aqui.
+  test("moduloEstaOculto: sem `mod` ou vazio nunca esconde", () => {
     expect(moduloEstaOculto(undefined)).toBe(false);
     expect(moduloEstaOculto("")).toBe(false);
-    // Prefixo não vale: esconder a reativação não esconde /clientes.
     expect(moduloEstaOculto("clientes")).toBe(false);
-    expect(moduloEstaOculto("canal")).toBe(false);
   });
 });
 
-describe("o esconderijo é de apresentação, não de entitlement", () => {
+describe("plano e permissão por baixo do menu", () => {
   test("as chaves continuam declaradas no NAV", () => {
     const doNav = modsDoNav();
-    OCULTOS.forEach((m) => expect(doNav).toContain(m));
+    RELIGADAS.forEach((m) => expect(doNav).toContain(m));
   });
 
-  test("continuam em MODULE_PLAN_MAP, no plano do canal", () => {
-    OCULTOS.forEach((m) => expect(MODULE_PLAN_MAP[m]).toBe("negocio"));
+  test("WhatsApp segue no Negócio; Reativação vale para o Essencial (wa.me)", () => {
+    expect(MODULE_PLAN_MAP["whatsapp"]).toBe("negocio");
+    expect(MODULE_PLAN_MAP["clientes.reativacao"]).toBe("essencial");
   });
 
   test("continuam em PERM_TO_MODULES sob a permissão clientes", () => {
     expect(PERM_TO_MODULES["clientes"]).toEqual(
-      expect.arrayContaining(OCULTOS),
+      expect.arrayContaining(RELIGADAS),
     );
   });
 
-  test("computeVisibleModules não mudou: o dono no Negócio segue com as duas", () => {
+  test("o dono no Negócio vê as duas", () => {
     const v = computeVisibleModules("negocio", null, {
       is_owner: true,
       permissions: null,
     });
-    OCULTOS.forEach((m) => expect(v.has(m)).toBe(true));
+    RELIGADAS.forEach((m) => expect(v.has(m)).toBe(true));
   });
 
-  test("e o Essencial segue sem elas, como antes", () => {
+  test("o Essencial vê a Reativação e NÃO vê o WhatsApp da Meta", () => {
     const v = computeVisibleModules("essencial", null, undefined);
-    OCULTOS.forEach((m) => expect(v.has(m)).toBe(false));
+    expect(v.has("clientes.reativacao")).toBe(true);
+    expect(v.has("whatsapp")).toBe(false);
     expect(v.has("clientes")).toBe(true);
   });
 });

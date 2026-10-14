@@ -52,6 +52,9 @@ import { PreviaMarketingModal } from "@/components/whatsapp/PreviaMarketingModal
 import { alvoParaDias, faixaInfo } from "@/components/screens/clientes/diasSemComprar";
 import { ScreenHero } from "@/components/ScreenHero";
 import { SummaryCard } from "@/components/SummaryCard";
+import { ChamarSumidos } from "@/components/screens/clientes/ChamarSumidos";
+import { openWhatsApp } from "@/utils/whatsapp";
+import { criarMarcasDeChamado, diaMesBR, mensagemDeChamado } from "@/utils/chamarSumidos";
 
 /** Teto do backend por disparo. Repetido aqui só para avisar ANTES do clique. */
 const MAX_POR_DISPARO = 50;
@@ -83,7 +86,18 @@ const LABEL_CURTO_FALTA_CONFIGURAR: Record<string, string> = {
   TEMPLATE: "template aprovado",
 };
 
+// 14/10/2026 (t3-06): a Reativação volta ao menu e vale para o Essencial, que
+// NÃO conecta o número da Meta e usa o wa.me ("Chamar", um toque por cliente).
+// O disparo pela API paga (prévia, cota, automático semanal) é desta tela
+// abaixo, só do Negócio. No Essencial ela nem é desenhada: nada de card de
+// upgrade nem botão desabilitado (premissa de 16/09).
 export default function ReativacaoScreen() {
+  const plano = useAuthStore((s) => (s.company as any)?.plan);
+  if (String(plano || "").toLowerCase() === "essencial") return <ChamarSumidos />;
+  return <ReativacaoMeta />;
+}
+
+function ReativacaoMeta() {
   const { company } = useAuthStore();
   const companyId = company?.id || "";
 
@@ -165,6 +179,17 @@ export default function ReativacaoScreen() {
   useEffect(() => { carregarLista(); }, [carregarLista]);
   useEffect(() => { carregarWa(); }, [carregarWa]);
   useEffect(() => { carregarSettings(); }, [carregarSettings]);
+
+  // ── "Chamar" por wa.me (t3-06): o mesmo toque do Essencial, no Negócio ──
+  const marcas = useMemo(() => criarMarcasDeChamado(companyId), [companyId]);
+  const [chamados, setChamados] = useState<Record<string, number>>({});
+  useEffect(() => { setChamados(marcas.ler()); }, [marcas]);
+  function chamar(c: ReactivationCustomer) {
+    // Síncrono no toque: o navegador bloqueia o pop-up depois de um await.
+    if (openWhatsApp(c.phone, mensagemDeChamado(c.name, company?.name))) {
+      setChamados(marcas.marcar(c.id));
+    }
+  }
 
   // ── Guardas ─────────────────────────────────────────────
   const blockers = waMarketingBlockers(waStatus, {
@@ -430,7 +455,24 @@ export default function ReativacaoScreen() {
                             contatado{quando ? ` em ${quando}` : ""}
                           </Text>
                         )}
+                        {!!chamados[c.id] && (
+                          <Text style={st.contatado} testID={`reativacao-chamado-${c.id}`}>
+                            chamado em {diaMesBR(chamados[c.id])}
+                          </Text>
+                        )}
                       </View>
+                      {!!c.phone && (
+                        <Pressable
+                          onPress={() => chamar(c)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Chamar ${c.name} no WhatsApp`}
+                          style={st.chamar}
+                          testID={`reativacao-chamar-${c.id}`}
+                        >
+                          <Icon name="whatsapp" size={13} color={Colors.violet3} />
+                          <Text style={st.chamarTxt}>Chamar</Text>
+                        </Pressable>
+                      )}
                     </Pressable>
                   );
                 })}
@@ -563,6 +605,11 @@ const st = StyleSheet.create({
   nome: { fontSize: 13, fontWeight: "700", color: Colors.ink },
   meta: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
   contatado: { fontSize: 10.5, color: Colors.violet3, fontWeight: "700", marginTop: 3 },
+  chamar: {
+    flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: Colors.border2,
+    borderRadius: 9, paddingHorizontal: 10, minHeight: 36, justifyContent: "center", alignSelf: "center",
+  },
+  chamarTxt: { fontSize: 12, fontWeight: "700", color: Colors.violet3 },
 
   autoHead: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   verificando: { fontSize: 11, color: Colors.ink3, marginTop: 9, fontStyle: "italic" },

@@ -22,6 +22,12 @@
 // • Quem está no Essencial VÊ a contagem. O produto pago é o disparo,
 //   não o número — esconder o número é esconder o argumento do upgrade.
 //   O botão, aí, leva a /(tabs)/planos.
+//   [SUBSTITUÍDO em 14/10/2026, card t3-06: decisão do Caio, 13/10. A
+//   contagem-com-upgrade (app#887) saiu: contradizia a premissa de 16/09
+//   (no Essencial o que o plano não tem SOME). O Essencial usa a Reativação
+//   pelo wa.me, um toque por cliente, sem conectar o número da Meta: o
+//   botão agora é "Chamar quem sumiu" e leva à mesma tela. Nenhum texto
+//   ou botão de upgrade sobra aqui.]
 //
 // Nada aqui depende de hover (regra 7 do CLAUDE.md): o estado das
 // pílulas é o que informa, e ele é permanente, não revelado no ponteiro.
@@ -41,7 +47,7 @@ const MAX_DIAS = 999;
 export interface ReativacaoEntradaProps {
   /** A lista que a tela já carregou — no consolidado, de todas as lojas. */
   customers: Customer[];
-  /** Plano atual. "essencial" = vê o número, mas o botão leva a planos. */
+  /** Plano atual. "essencial" = sem disparo pela Meta: o botão leva ao "Chamar" por wa.me. */
   plan?: string | null;
   /** Enquanto a lista não chegou, o bloco não finge que a base é zero. */
   carregando?: boolean;
@@ -68,7 +74,9 @@ export function ReativacaoEntrada({
     st?.refreshMe?.();
   }, []);
 
-  const bloqueado = String(plan || "").toLowerCase() === "essencial";
+  // Essencial não conecta o número da Meta: chama com um toque, pelo wa.me.
+  // Não é bloqueio nem upgrade — é o caminho do plano.
+  const semMeta = String(plan || "").toLowerCase() === "essencial";
 
   const { quantos, total } = useMemo(() => {
     const agora = Date.now();
@@ -104,7 +112,6 @@ export function ReativacaoEntrada({
   }
 
   function abrir() {
-    if (bloqueado) { router.push("/(tabs)/planos"); return; }
     router.push(`/clientes/reativacao?dias=${dias}`);
   }
 
@@ -119,8 +126,8 @@ export function ReativacaoEntrada({
 
       {!compacto && (
         <Text style={s.sub}>
-          {bloqueado
-            ? "Você tem gente parada na base. O disparo do cupom faz parte do plano Negócio."
+          {semMeta
+            ? "Veja quem parou de comprar e chame com um toque: o WhatsApp abre no seu número, com a mensagem pronta."
             : "Um cupom com prazo curto para quem parou de comprar. Mensagem de marketing — paga e só para quem autorizou."}
         </Text>
       )}
@@ -194,18 +201,18 @@ export function ReativacaoEntrada({
       <Pressable
         onPress={abrir}
         accessibilityRole="button"
-        style={[s.btn, bloqueado && s.btnGhost]}
+        style={s.btn}
         testID={idBase}
       >
-        <Text style={[s.btnTxt, bloqueado && s.btnTxtGhost]}>
-          {bloqueado ? "Conhecer o plano Negócio" : "Ver e mandar cupom"}
+        <Text style={s.btnTxt}>
+          {semMeta ? "Chamar quem sumiu" : "Ver e mandar cupom"}
         </Text>
       </Pressable>
 
       {!compacto && (
         <Text style={s.rodape}>
-          {bloqueado
-            ? "A contagem é sua e continua aqui. O disparo é que depende do plano."
+          {semMeta
+            ? "Abre a lista de quem sumiu, ordenada por quanto gastou. Você revisa a mensagem e envia pelo seu WhatsApp."
             : "Abre a lista de quem sumiu, ordenada por quanto gastou. Nada sai sem a prévia."}
         </Text>
       )}
