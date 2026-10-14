@@ -213,8 +213,21 @@ export type LabelItem = {
 // Mesma mecanica de colGapMm/rowGapMm do "30x25"; o barcode e o da Finesse
 // (BARCODE_OPTS, mesma largura de 33mm). O desenho do texto e o "editorial"
 // (ver `design` abaixo).
+// "40x25" (14/10/2026, resma BC-2249 40x25mm, 2000 etiquetas, impressora
+// termica de CUPOM 80mm modelo VT-8360): 2 colunas COM vao. Mesma mecanica
+// de colGapMm/rowGapMm do "30x25" e do "105x21"; o desenho e o da Finesse e
+// o barcode e o BARCODE_OPTS (LOCKED). Desenho "editorial" (o mesmo aprovado
+// para o "105x21", pedido do Caio em 14/10 para a Toda Linda / Kauinny).
+// Geometria MEDIDA na loja (teste de 14/10): o papel tem ~82mm (2 x 40 + vao),
+// mas a cabeca da impressora so alcanca ~72mm — uma pagina de 80mm era
+// reduzida pelo driver a ~90%. Por isso a pagina e de 72mm (impressa a 100%,
+// centralizada no rolo) e cada celula tem 35mm: 5mm de cada borda externa do
+// papel ficam fora da cabeca, e o conteudo cabe nos 35mm de etiqueta que
+// sobram (o barcode da Finesse tem 33mm). Pagina em pe (rowsPerPage 3 =
+// 72x82,5mm): pagina mais larga que alta o driver imprime em paisagem e gira
+// tudo (mesmo caso do "58mm"). Passo da linha 27,5mm (25 de etiqueta + 2,5 de vao): 27 derivava para cima e 28 derivava para baixo (~0,6mm por linha) nos testes de 12 etiquetas na loja em 14/10; 27,5 e o ponto entre os dois e o vao comum de rolo 40x25.
 // NUNCA mudar os numeros do preset "99x21".
-export type LabelSizeKey = "99x21" | "105x21" | "30x25" | "58mm";
+export type LabelSizeKey = "99x21" | "105x21" | "30x25" | "58mm" | "40x25";
 
 export const LABEL_SIZE_PRESETS: Record<LabelSizeKey, {
   pageWidthMm: number;
@@ -249,14 +262,30 @@ export const LABEL_SIZE_PRESETS: Record<LabelSizeKey, {
   // tamanho/cor ao lado do preco e o codigo de barras no rodape (MESMO
   // .bc-box/SVG/BARCODE_OPTS). Ausente => layout Finesse (byte-identico).
   design?: "editorial";
+  // Editorial "compacto" (14/10/2026, Toda Linda / 40x25): mais respiro em
+  // volta do texto e fontes ~8% menores. NAO toca no .bc-box nem no SVG (o
+  // barcode segue o BARCODE_OPTS, LOCKED). So emite CSS neste preset; o
+  // "105x21" continua byte-identico.
+  edCompact?: boolean;
+  // Deslocamento vertical FIXO do conteudo (mm, positivo desce), embutido no
+  // modelo. Preset de pagina com varias linhas (rowsPerPage) nao aceita a
+  // calibracao por computador; esta e a compensacao do ponto de partida do
+  // rolo medida na loja. Ausente => 0 (byte-identico).
+  baseOffsetYMm?: number;
+  // Aceita a calibracao por computador (passo, deslocamento vertical, modo
+  // continuo) mesmo com rowsPerPage. Sem rolo com sensor de vao o ponto de
+  // partida varia por impressora; a loja acerta sozinha. Ausente => so os
+  // modelos de 1 linha por pagina com vao aceitam (byte-identico).
+  calibratable?: boolean;
   uiLabel: string;
 }> = {
   "99x21": { pageWidthMm: 99, pageHeightMm: 21, cols: 3, cellWidthMm: 33, cellHeightMm: 21, uiLabel: "33x21mm (3 colunas)" },
   "105x21": { pageWidthMm: 105, pageHeightMm: 23.5, cols: 3, cellWidthMm: 33, cellHeightMm: 21, colGapMm: 3, rowGapMm: 2.5, design: "editorial", uiLabel: "33x21mm com vão (3 colunas · papel 105mm)" },
   "30x25": { pageWidthMm: 94, pageHeightMm: 27, cols: 3, cellWidthMm: 30, cellHeightMm: 25, colGapMm: 2, rowGapMm: 2, uiLabel: "30x25mm (3 colunas)" },
   "58mm":  { pageWidthMm: 58, pageHeightMm: 28, cols: 1, cellWidthMm: 46, cellHeightMm: 25, rowGapMm: 3, padLeftMm: 6, cutMarks: true, bcModuleMm: 0.375, bcBarHeightMm: 9, rowsPerPage: 3, uiLabel: "Bobina 58mm (1 por linha)" },
+  "40x25": { pageWidthMm: 72, pageHeightMm: 27.5, cols: 2, cellWidthMm: 35, cellHeightMm: 25, colGapMm: 2, rowGapMm: 2.5, rowsPerPage: 3, design: "editorial", edCompact: true, calibratable: true, uiLabel: "40x25mm (2 colunas · impressora 80mm)" },
 };
-export const LABEL_SIZE_KEYS: LabelSizeKey[] = ["99x21", "105x21", "30x25", "58mm"];
+export const LABEL_SIZE_KEYS: LabelSizeKey[] = ["99x21", "105x21", "30x25", "58mm", "40x25"];
 export const DEFAULT_LABEL_SIZE: LabelSizeKey = "99x21";
 // -------------------------------------------
 
@@ -308,7 +337,7 @@ function round2(n: number): number { return Math.round(n * 100) / 100; }
  *  (Finesse, LOCKED) e o 58mm (ja continuo, com rowsPerPage) ficam de fora. */
 export function labelSupportsCalibration(size: LabelSizeKey | undefined): boolean {
   const preset = LABEL_SIZE_PRESETS[size || DEFAULT_LABEL_SIZE];
-  return !!preset && (preset.rowGapMm || 0) > 0 && !preset.rowsPerPage;
+  return !!preset && (preset.calibratable === true || ((preset.rowGapMm || 0) > 0 && !preset.rowsPerPage));
 }
 
 /** Passo entre linhas efetivo (mm, com decimos). Padrao do modelo quando o
@@ -341,7 +370,9 @@ export function labelSheetHeightMm(
   const pitch = labelRowPitchMm(size, cal && cal.rowPitchMm);
   if (cal && cal.continuous === true && labelSupportsCalibration(size)) {
     // Deslocamento para baixo estica a pagina, senao a ultima linha cortaria.
-    return round2(pitch * Math.max(1, totalRows) + Math.max(0, labelOffsetYMm(size, cal.offsetYMm)));
+    // Modelo de pagina em pe (rowsPerPage): nunca menos que as linhas de uma
+    // pagina, senao a folha fica mais larga que alta e o driver gira tudo.
+    return round2(pitch * Math.max(1, totalRows, preset.rowsPerPage || 0) + Math.max(0, labelOffsetYMm(size, cal.offsetYMm)));
   }
   return pitch * (preset.rowsPerPage || 1);
 }
@@ -359,7 +390,10 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   // Calibracao da impressora (13/10/2026). No padrao: pitchMm ===
   // preset.pageHeightMm, offsetYMm === 0 e continuous === false.
   const pitchMm = labelRowPitchMm(options.labelSize, options.rowPitchMm);
-  const offsetYMm = labelOffsetYMm(options.labelSize, options.offsetYMm);
+  const baseYMm = preset.baseOffsetYMm || 0;
+  const offsetYMm = baseYMm === 0
+    ? labelOffsetYMm(options.labelSize, options.offsetYMm)
+    : round1(labelOffsetYMm(options.labelSize, options.offsetYMm) + baseYMm);
   const continuous = options.continuous === true && labelSupportsCalibration(options.labelSize);
   const padRightMm = padLeftMm > 0 ? Math.max(0, preset.pageWidthMm - padLeftMm - preset.cols * preset.cellWidthMm - (preset.cols - 1) * colGapMm) : 0;
   const rawOffset = Number(options.offsetMm);
@@ -559,6 +593,19 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
     // Preco no cartao (so lojas Matcon): 1 linha a mais, nome cai pra 1 linha.
     html += '.bc-inner.ed .card-line{font-size:5pt;font-weight:700;line-height:1;white-space:nowrap;width:100%;text-align:right}';
     html += '.bc-inner.ed.ed-card .name{-webkit-line-clamp:1}';
+    // Compacto: depois de tudo, ganha por ordem. Padding lateral de 1,9mm
+    // (celula 35 - 3,8 = 31,2mm) ainda comporta o barcode de ~30mm sem
+    // escalar o SVG; vertical 1,5mm em cima e 1,3mm embaixo.
+    if (preset.edCompact) {
+      html += '.bc-inner.ed{padding:1.5mm 1.9mm 1.3mm}';
+      html += '.bc-inner.ed .store{font-size:4.2pt;letter-spacing:1.2pt}';
+      html += '.bc-inner.ed .name{font-size:6pt}';
+      html += '.bc-inner.ed .row .variant{font-size:4.1pt}';
+      html += '.bc-inner.ed .price{font-size:9pt}';
+      html += '.bc-inner.ed .price .cur{font-size:5pt}';
+      html += '.bc-inner.ed.stack .name{font-size:5.6pt}';
+      html += '.bc-inner.ed.stack .price{font-size:8.5pt}';
+    }
   }
 
   // QR layout
@@ -711,7 +758,7 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
     html += 'function fit(){document.querySelectorAll(".bc-inner.ed").forEach(function(b){';
     html += 'b.classList.remove("stack");';
     html += 'var n=b.querySelector(".name");if(!n)return;';
-    html += 'var pt=6.5;n.style.fontSize=pt+"pt";';
+    html += 'var pt=' + (preset.edCompact ? '6' : '6.5') + ';n.style.fontSize=pt+"pt";';
     html += 'while(n.scrollHeight>n.clientHeight+1&&pt>5.2){pt-=0.25;n.style.fontSize=pt+"pt";}';
     html += 'var v=b.querySelector(".row .variant");if(!v||!v.textContent)return;';
     html += 'v.style.letterSpacing="";v.style.fontSize="";';

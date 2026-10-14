@@ -22,7 +22,7 @@ const opts = { mode: "barcode" as const, storeName: "Divina D'Lux", showStoreNam
 
 describe("preset 105x21 (33x21 com vão, editorial)", () => {
   test("números do preset e posição no seletor", () => {
-    expect(LABEL_SIZE_KEYS).toEqual(["99x21", "105x21", "30x25", "58mm"]);
+    expect(LABEL_SIZE_KEYS).toEqual(["99x21", "105x21", "30x25", "58mm", "40x25"]);
     const p = LABEL_SIZE_PRESETS["105x21"];
     expect(p).toEqual({
       pageWidthMm: 105, pageHeightMm: 23.5, cols: 3, cellWidthMm: 33, cellHeightMm: 21,

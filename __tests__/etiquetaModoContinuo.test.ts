@@ -39,7 +39,8 @@ const tabela = (html: string) => html.slice(html.indexOf('<table id="labelsTable
 const semPagina = (html: string) => html.replace(/@page\{[^}]*\}/, "@page{}").replace(/Papel <b>[^<]*<\/b>/, "Papel <b></b>");
 
 describe("opções novas no padrão não mudam um byte", () => {
-  test.each(LABEL_SIZE_KEYS.flatMap((s) => [[s, "barcode"], [s, "qr"]] as const))("%s %s — padrão explícito = fixture de origin/main", (size, mode) => {
+  // "40x25" (14/10/2026) é posterior aos fixtures: tem teste próprio.
+  test.each(LABEL_SIZE_KEYS.filter((s) => s !== "40x25").flatMap((s) => [[s, "barcode"], [s, "qr"]] as const))("%s %s — padrão explícito = fixture de origin/main", (size, mode) => {
     const html = buildLabelHtml(ITENS, {
       ...base(size, mode), continuous: false, rowPitchMm: LABEL_SIZE_PRESETS[size].pageHeightMm, offsetYMm: 0, calibrationMarks: false,
     });
@@ -52,8 +53,8 @@ describe("opções novas no padrão não mudam um byte", () => {
     expect(html).toBe(fixture(size + "-barcode-com-variante"));
   });
 
-  test("só os modelos com vão entre linhas aceitam", () => {
-    expect(LABEL_SIZE_KEYS.filter(labelSupportsCalibration)).toEqual(["105x21", "30x25"]);
+  test("só os modelos com vão entre linhas (e o 40x25, calibrável) aceitam", () => {
+    expect(LABEL_SIZE_KEYS.filter(labelSupportsCalibration)).toEqual(["105x21", "30x25", "40x25"]);
   });
 
   test("os números dos modelos continuam os mesmos", () => {
