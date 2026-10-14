@@ -127,6 +127,15 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   // mexer no Painel. Essencial: todo plano ve os passos da propria frente
   // (passo cuja tela o plano nao libera some do cartao).
   'onboarding.primeiros_passos': 'essencial',
+  // 14/10/2026 -- Check-in de entrada (app/checkin.tsx, cartao t1-12 parte 2):
+  // 3 perguntas em chip depois da escolha de frente e antes do Painel. Tela
+  // cheia sem item de menu (como 'crediario.config'): chave PROPRIA (regra 3)
+  // para poder ser escondida por empresa (module_overrides) e por permissao.
+  // Essencial: vale para todo cadastro novo; a tela filtra as opcoes que o
+  // plano nao tem (somem, nunca desabilitam). O backend (services/modules.js)
+  // ainda NAO conhece a chave: PUT de override volta 400, entao ela fica fora
+  // do catalogo do ClientsAdmin por ora (mesmo caso de "os" e "cupons").
+  'onboarding.checkin': 'essencial',
 };
 var PLAN_LEVEL: Record<string, number> = { essencial: 0, negocio: 1, expansao: 2 };
 
@@ -162,7 +171,9 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   // 05/10/2026 -- primeiros passos entram na permissao de configuracoes: quem
   // monta a loja (dono/admin) ve o cartao; vendedora/caixa nao. Dono sempre
   // ve (o filtro de permissao so vale para membro).
-  configuracoes: ['configuracoes', 'onboarding.primeiros_passos', 'black_friday'],
+  // 14/10/2026 -- o check-in de entrada acompanha quem monta a loja
+  // (dono/admin), como os primeiros passos: vendedora/caixa nao e perguntada.
+  configuracoes: ['configuracoes', 'onboarding.primeiros_passos', 'onboarding.checkin', 'black_friday'],
   // 15/05/2026 -- agentes adicionado; sem isso nao-owners nunca veiam mesmo com plano Expansao.
   // 30/08/2026 -- hub_social entra na mesma permissao: quem atende (agentes)
   // ve o hub. Granularidade propria fica pra quando o produto pedir.
