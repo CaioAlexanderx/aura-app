@@ -1,54 +1,23 @@
 // ============================================================
 // Gestão Aura › Hoje — Catálogo de blocos e Ficha do cliente.
 //
-// Os dois usam a mesma casca (PainelModal): Modal do RN (na web já sai em
-// portal no body, fora do shell), clique fora e Esc fecham.
+// Os dois usam a mesma casca (PainelModal, em PainelModal.tsx): Modal do RN
+// (na web já sai em portal no body, fora do shell), clique fora e Esc fecham.
 // ============================================================
 import { useEffect, useState } from "react";
-import { Modal, View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { BarrasVerticais } from "./Graficos";
+import { PainelModal } from "./PainelModal";
 import { CaixaInsight, Indicadores, Pill } from "./BlocoCard";
 import { Paleta, TextoRico } from "./paleta";
 import { useConversaContato, useFichaCliente } from "./usePainelHoje";
 import { abrirWhatsApp } from "./whatsapp";
 import type { BlocoId, ItemCatalogo } from "./tipos";
 
-export function PainelModal(props: {
-  visible: boolean;
-  id: string;                 // vira o testID da casca e do botão de fechar
-  titulo: string;
-  subtitulo?: string;
-  antesDoTitulo?: React.ReactNode;
-  rodape?: React.ReactNode;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <Modal visible={props.visible} transparent animationType="fade" onRequestClose={props.onClose}>
-      <View style={m.scrim} testID={props.id}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={props.onClose} accessibilityLabel="Fechar" />
-        <View style={m.modal} accessibilityRole={"dialog" as any}>
-          <View style={m.head}>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <View style={m.tituloRow}>
-                {props.antesDoTitulo}
-                <Text style={m.titulo}>{props.titulo}</Text>
-              </View>
-              {props.subtitulo ? <Text style={m.subtitulo}>{props.subtitulo}</Text> : null}
-            </View>
-            <Pressable testID={props.id + "-fechar"} onPress={props.onClose} style={m.fechar} accessibilityRole="button" accessibilityLabel="Fechar">
-              <Icon name="x" size={16} color={Paleta.accentTexto} />
-            </Pressable>
-          </View>
-          <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={m.body}>{props.children}</ScrollView>
-          {props.rodape ? <View style={m.foot}>{props.rodape}</View> : null}
-        </View>
-      </View>
-    </Modal>
-  );
-}
+// A casca mora em PainelModal.tsx; reexportada para quem já importava daqui.
+export { PainelModal };
 
 // ── Catálogo ────────────────────────────────────────────────
 
@@ -126,7 +95,8 @@ export function FichaClienteModal(props: {
   companyId: string | null;
   onClose: () => void;
   onAbrirCliente: (companyId: string) => void;
-  onVerbo: (verbo: string, loja: string) => void;   // verbos que ainda não existem: "em breve"
+  onRegistrarContato: (companyId: string) => void;   // abre RegistrarContatoModal por cima da ficha
+  onEstenderTrial?: (companyId: string, nome: string) => void;   // abre a confirmação de +7 dias
   onAviso: (mensagem: string) => void;
 }) {
   var { ficha, carregando, erro, tentarDeNovo } = useFichaCliente(props.companyId);
@@ -153,7 +123,10 @@ export function FichaClienteModal(props: {
             >
               <Text style={m.btnText}>WhatsApp</Text>
             </Pressable>
-            <Pressable testID="ficha-registrar-contato" onPress={function() { props.onVerbo("Registrar contato", ficha!.nome); }} style={m.btn}><Text style={m.btnText}>Registrar contato</Text></Pressable>
+            <Pressable testID="ficha-registrar-contato" onPress={function() { props.onRegistrarContato(ficha!.company_id); }} style={m.btn} accessibilityRole="button"><Text style={m.btnText}>Registrar contato</Text></Pressable>
+            {ficha.em_trial && props.onEstenderTrial ? (
+              <Pressable testID="ficha-estender-trial" onPress={function() { props.onEstenderTrial!(ficha!.company_id, ficha!.nome); }} style={m.btn} accessibilityRole="button"><Text style={m.btnText}>+7 dias de teste</Text></Pressable>
+            ) : null}
             <Pressable testID="ficha-abrir-cliente" onPress={function() { props.onAbrirCliente(ficha!.company_id); }} style={m.btnPrimario}><Text style={m.btnPrimarioText}>Abrir cliente</Text></Pressable>
           </View>
         </>
@@ -189,6 +162,27 @@ export function FichaClienteModal(props: {
               })}
             </View>
           </View>
+          {ficha.contatos && ficha.contatos.length > 0 ? (
+            <View style={{ gap: 8 }} testID="ficha-contatos">
+              <Text style={m.rotulo}>Contatos da equipe</Text>
+              {ficha.contatos.slice(0, 3).map(function(ct) {
+                return (
+                  <View key={ct.id} style={m.contato} testID={"ficha-contato-" + ct.id}>
+                    <View style={m.tlRow}>
+                      <Text style={m.tlData}>{ct.data}</Text>
+                      <Text style={m.contatoTitulo}>{ct.titulo}{ct.motivo ? " · " + ct.motivo : ""}</Text>
+                    </View>
+                    <Text style={m.contatoTexto}>{ct.texto}</Text>
+                    {ct.proximo ? (
+                      <Text style={[m.contatoProximo, ct.atrasado && { color: Colors.red }]}>
+                        {"Próximo passo: " + ct.proximo + (ct.atrasado ? " (atrasado)" : "")}
+                      </Text>
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
+          ) : null}
           <View style={{ gap: 6 }}>
             {ficha.linha_do_tempo.map(function(ev, i) {
               return (
@@ -332,15 +326,6 @@ var m = StyleSheet.create({
   bolha: { maxWidth: "88%", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, gap: 2 },
   bolhaQuem: { fontSize: 11, fontWeight: "600", opacity: 0.8 },
   bolhaTexto: { fontSize: 14, lineHeight: 20 },
-  scrim: { flex: 1, backgroundColor: "rgba(17,15,28,0.5)", alignItems: "center", justifyContent: "center", padding: 16 },
-  modal: { width: "100%", maxWidth: 760, maxHeight: "92%", backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 18, overflow: "hidden" },
-  head: { flexDirection: "row", justifyContent: "space-between", gap: 12, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  tituloRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
-  titulo: { fontSize: 18, fontWeight: "800", color: Colors.ink, flexShrink: 1 },
-  subtitulo: { fontSize: 13, color: Colors.ink3, marginTop: 4 },
-  fechar: { width: 30, height: 30, borderRadius: 8, backgroundColor: Paleta.accentSuave, alignItems: "center", justifyContent: "center" },
-  body: { paddingHorizontal: 20, paddingVertical: 16, gap: 16 },
-  foot: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8, paddingHorizontal: 20, paddingVertical: 12, borderTopWidth: 1, borderTopColor: Colors.border },
   footText: { fontSize: 12, color: Colors.ink3 },
   footAcoes: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   btn: { borderWidth: 1, borderColor: Colors.border2, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
@@ -357,6 +342,10 @@ var m = StyleSheet.create({
   catFonte: { fontSize: 12, color: Colors.ink3 },
   rotulo: { fontSize: 11, fontWeight: "600", letterSpacing: 0.8, textTransform: "uppercase", color: Colors.ink3, marginBottom: 6 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  contato: { gap: 2, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: Colors.bg4 },
+  contatoTitulo: { flex: 1, fontSize: 13, fontWeight: "600", color: Colors.ink },
+  contatoTexto: { fontSize: 13, lineHeight: 19, color: Colors.ink2, marginLeft: 60 },
+  contatoProximo: { fontSize: 12, color: Paleta.accentTexto, marginLeft: 60 },
   tlRow: { flexDirection: "row", gap: 10 },
   tlData: { width: 50, fontSize: 13, color: Colors.ink3 },
   tlTexto: { flex: 1, fontSize: 13, lineHeight: 19, color: Colors.ink2 },

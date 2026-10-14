@@ -48,6 +48,8 @@
     "caixa_sessions": 14,
     "last_caixa_at": "2026-09-21T15:00:00.000Z",
     "imported_rows": 0,
+    "trial_mode": "fixo",
+    "started_by_sale_at": null,
     "extra_seats_granted": 0,
     "ativacao": {
       "importou": true,
@@ -171,7 +173,62 @@
       "bloco": "pagantes_sem_venda"
     }
   ],
+  "contatos": [
+    {
+      "id": 7,
+      "quando": "2026-10-12T14:00:00.000Z",
+      "titulo": "Contato por WhatsApp: Pediu um tempo",
+      "body": "Pediu até sexta para ver o preço do anual",
+      "canal": "whatsapp",
+      "resultado": "pediu_tempo",
+      "proximo_passo": "Ligar de novo",
+      "proximo_passo_em": "2026-10-16",
+      "motivo": null,
+      "prorrogou_dias": null,
+      "marcador": null,
+      "autor": "Caio"
+    },
+    {
+      "id": 3,
+      "quando": "2026-10-02T10:30:00.000Z",
+      "titulo": "Contato por Ligação: Respondeu",
+      "body": "Importação da planilha pedida",
+      "canal": "ligacao",
+      "resultado": "respondeu",
+      "proximo_passo": null,
+      "proximo_passo_em": null,
+      "motivo": null,
+      "prorrogou_dias": 7,
+      "marcador": "importacao_assistida_pedida",
+      "autor": "Caio"
+    }
+  ],
+  "checkin": {
+    "como_chegou": "indicacao",
+    "fiado": "sim",
+    "quem_decide": "dono"
+  },
   "linha_do_tempo": [
+    {
+      "tipo": "contato",
+      "quando": "2026-10-12T14:00:00.000Z",
+      "titulo": "Contato por WhatsApp: Pediu um tempo",
+      "valor": null,
+      "contato": {
+        "id": 7,
+        "quando": "2026-10-12T14:00:00.000Z",
+        "titulo": "Contato por WhatsApp: Pediu um tempo",
+        "body": "Pediu até sexta para ver o preço do anual",
+        "canal": "whatsapp",
+        "resultado": "pediu_tempo",
+        "proximo_passo": "Ligar de novo",
+        "proximo_passo_em": "2026-10-16",
+        "motivo": null,
+        "prorrogou_dias": null,
+        "marcador": null,
+        "autor": "Caio"
+      }
+    },
     {
       "tipo": "login",
       "quando": "2026-10-08T15:00:00.000Z",
@@ -179,10 +236,30 @@
       "valor": null
     },
     {
-      "tipo": "pagamento",
-      "quando": "2026-09-21T09:00:00.000Z",
-      "titulo": "Cobrança apagada na Asaas",
-      "valor": 140.83
+      "tipo": "contato",
+      "quando": "2026-10-02T10:30:00.000Z",
+      "titulo": "Contato por Ligação: Respondeu",
+      "valor": null,
+      "contato": {
+        "id": 3,
+        "quando": "2026-10-02T10:30:00.000Z",
+        "titulo": "Contato por Ligação: Respondeu",
+        "body": "Importação da planilha pedida",
+        "canal": "ligacao",
+        "resultado": "respondeu",
+        "proximo_passo": null,
+        "proximo_passo_em": null,
+        "motivo": null,
+        "prorrogou_dias": 7,
+        "marcador": "importacao_assistida_pedida",
+        "autor": "Caio"
+      }
+    },
+    {
+      "tipo": "nota",
+      "quando": "2026-09-21T18:31:00.000Z",
+      "titulo": "NFC-e autorizada",
+      "valor": 189.9
     },
     {
       "tipo": "venda",
@@ -191,10 +268,10 @@
       "valor": 189.9
     },
     {
-      "tipo": "nota",
-      "quando": "2026-09-21T18:31:00.000Z",
-      "titulo": "NFC-e autorizada",
-      "valor": 189.9
+      "tipo": "pagamento",
+      "quando": "2026-09-21T09:00:00.000Z",
+      "titulo": "Cobrança apagada na Asaas",
+      "valor": 140.83
     },
     {
       "tipo": "pagamento",

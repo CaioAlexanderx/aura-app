@@ -35,7 +35,11 @@ jest.mock("@/services/adminApi", () => ({
       hoje: jest.fn(), bloco: jest.fn(), ficha: jest.fn(), layout: jest.fn(), salvarLayout: jest.fn(), recalcular: jest.fn(),
       // Extrato OFX (seção do bloco Receita): coberto em ExtratoOfxReceita.test.tsx.
       ofx: { extratos: jest.fn(), detalhe: jest.fn() },
+      // Registrar contato (backend #836).
+      contatos: { registrar: jest.fn() },
     },
+    // +7 dias de teste (rota que já existia).
+    extendTrial: jest.fn(),
   },
 }));
 
@@ -338,16 +342,13 @@ describe("Gestão Aura › Hoje", () => {
     tree.unmount();
   });
 
-  it("ficha: WhatsApp abre wa.me, Abrir cliente leva à lista da loja, Registrar contato avisa 'em breve'", async () => {
+  it("ficha: WhatsApp abre wa.me e Abrir cliente leva à lista da loja", async () => {
     const tree = await mount();
     await press(tree, "alerta-0");
     expect(text(tree)).toContain("Loja Aurora vence amanhã");   // alerta da própria ficha
 
     await press(tree, "ficha-whatsapp");
     expect(abrirUrl).toHaveBeenCalledWith("https://wa.me/5511999900001");
-
-    await press(tree, "ficha-registrar-contato");
-    expect((toast.info as jest.Mock).mock.calls.pop()[0]).toContain("em breve");
 
     await press(tree, "ficha-abrir-cliente");
     // Com a loja na rota: a tela de Clientes abre o painel dela (?loja=).
@@ -444,7 +445,7 @@ describe("Gestão Aura › Hoje", () => {
     await press(tree, "painel-abrir-catalogo");
     expect(byTestId(tree, "catalogo-modal")).toHaveLength(1);
     expect(text(tree)).toContain("Catálogo de blocos");
-    expect([].concat(byTestId(tree, "catalogo-contagem")[0].props.children).join("")).toBe("15 ativos · 0 disponíveis · 5 em construção");
+    expect([].concat(byTestId(tree, "catalogo-contagem")[0].props.children).join("")).toBe("16 ativos · 0 disponíveis · 5 em construção");
     // O que o backend não calcula fica travado.
     for (const id of ["nps", "custos", "etiquetas", "aurinha", "tempo_primeira_venda"]) {
       expect(byTestId(tree, "catalogo-item-" + id)[0].props.disabled).toBe(true);
@@ -464,9 +465,12 @@ describe("Gestão Aura › Hoje", () => {
     await press(tree, "catalogo-salvar");
     expect(api.salvarLayout).toHaveBeenCalledTimes(1);
     const corpo = api.salvarLayout.mock.calls[0][0] as { id: string; visivel: boolean }[];
-    expect(corpo).toHaveLength(15);
+    // 16: o layout do backend já conhece o Check-in (#835), que o hoje gravado ainda não traz.
+    expect(corpo).toHaveLength(16);
     expect(corpo[corpo.length - 1]).toEqual({ id: "fiscal", visivel: false });
-    expect(corpo.filter((b) => b.visivel).map((b) => b.id)).toEqual(IDS.filter((id) => id !== "fiscal"));
+    expect(corpo.filter((b) => b.visivel).map((b) => b.id)).toEqual(
+      IDS.slice(0, 5).concat(["checkin"], IDS.slice(5)).filter((id) => id !== "fiscal")
+    );
     expect(corpo.map((b) => b.id)).not.toContain("nps");
     expect(byTestId(tree, "catalogo-modal")).toHaveLength(0);
     expect(byTestId(tree, "bloco-fiscal")).toHaveLength(0);

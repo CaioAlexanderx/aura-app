@@ -241,6 +241,50 @@ export type PainelApiDetalhe = {
   series: { titulo: string; tipo: "barras" | "barras_h" | "linha" | "rosca" | "funil"; pontos: PainelApiPonto[] }[];
   insight: string | null;
 };
+// Registrar contato (Aura-backend, migration 383). Uma linha de
+// company_admin_notes (empresa) ou de lead_interactions (lead sem conta).
+export type PainelApiContatoCanal = "whatsapp" | "ligacao" | "email" | "presencial";
+export type PainelApiContatoResultado =
+  "respondeu" | "sem_resposta" | "pediu_tempo" | "combinou_ligacao" | "quer_assinar" | "nao_quer";
+export type PainelApiContatoMotivo =
+  "estoque_na_entrada" | "preco_plano" | "fiscal" | "atrito_produto" | "funcionalidade"
+  | "frente_errada" | "ritmo_do_cliente" | "concorrente" | "elogio";
+export type PainelApiContatoMarcador = "importacao_assistida_pedida" | "importacao_assistida_entregue";
+export type PainelApiContatoCheckin = { como_chegou?: string; fiado?: string; quem_decide?: string };
+// Corpo do POST /admin/painel/contatos: company_id OU lead_id.
+export type PainelApiContatoCorpo = {
+  company_id?: string;
+  lead_id?: string;
+  canal: PainelApiContatoCanal;
+  resultado: PainelApiContatoResultado;
+  body: string;
+  proximo_passo?: string;
+  proximo_passo_em?: string;      // YYYY-MM-DD
+  motivo?: PainelApiContatoMotivo;
+  prorrogou_dias?: number;
+  marcador?: PainelApiContatoMarcador;
+  checkin?: PainelApiContatoCheckin;
+};
+export type PainelApiContatoSalvo = {
+  id: number | string;
+  created_at: string;
+  checkin_gravado?: boolean;      // só quando o corpo trouxe checkin
+};
+// Item de GET /admin/painel/clientes/:cid/ficha → contatos[] e linha_do_tempo[].contato.
+export type PainelApiContatoDaFicha = {
+  id: number;
+  quando: string;
+  titulo: string;
+  body: string;
+  canal: PainelApiContatoCanal | null;
+  resultado: PainelApiContatoResultado | null;
+  proximo_passo: string | null;
+  proximo_passo_em: string | null;   // YYYY-MM-DD
+  motivo: PainelApiContatoMotivo | null;
+  prorrogou_dias: number | null;
+  marcador: PainelApiContatoMarcador | null;
+  autor: string | null;
+};
 export type PainelApiFicha = {
   company_id: string;
   nome: string;
@@ -253,7 +297,10 @@ export type PainelApiFicha = {
   modulos_detalhe: { id: string; nome: string; usou_30d: boolean; eventos_30d: number; ultimo_uso: string | null }[];
   vendas_por_semana: { rotulo: string; valor: number }[];
   alertas: PainelApiAlerta[];
-  linha_do_tempo: { tipo: string; quando: string; titulo: string; valor: number | null }[];
+  linha_do_tempo: { tipo: string; quando: string; titulo: string; valor: number | null; contato?: PainelApiContatoDaFicha }[];
+  // Registrar contato / check-in (backend #836; ficha de antes não traz).
+  contatos?: PainelApiContatoDaFicha[];
+  checkin?: Record<string, any> | null;
 };
 // Ficha da conversa do WhatsApp da Aura (Aura-backend#815). `telefone` só tem
 // dígitos; `telefone_mascarado` é o que a lista mostra. 404 = id inexistente,
@@ -509,9 +556,14 @@ export var adminApi = {
       return request<PainelApiLayout>("/admin/painel/layout");
     },
     // Bloco Contatos: a conversa de um contato do WhatsApp (últimas 200 mensagens).
+    // Registrar contato (backend #836): POST grava na nota da empresa ou no
+    // lead; retry 0 porque gravar duas vezes é pior que errar uma.
     contatos: {
       conversa: function(conversaId: string) {
         return request<PainelApiConversa>("/admin/painel/contatos/" + encodeURIComponent(conversaId), { timeout: 30000 });
+      },
+      registrar: function(corpo: PainelApiContatoCorpo) {
+        return request<PainelApiContatoSalvo>("/admin/painel/contatos", { method: "POST", body: corpo, retry: 0, timeout: 30000 });
       },
     },
     salvarLayout: function(blocos: { id: string; visivel: boolean }[]) {
