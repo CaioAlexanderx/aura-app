@@ -19,6 +19,7 @@ import { GlobalOverlays } from "@/components/GlobalOverlays";
 import { KarateLoginTransition } from "@/components/karate/KarateLoginTransition";
 import { useKarateIntro } from "@/stores/karateIntro";
 import { useRegistroDeTelas } from "@/hooks/useRegistroDeTelas";
+import { useRevalidarMe } from "@/hooks/useRevalidarMe";
 import { ehVitrinePublica } from "@/components/studio/storefront/rotasDaVitrine";
 import { mostrarCarregandoSessao } from "@/utils/carregandoSessao";
 import { semAssinatura, destinoSemAssinatura } from "@/utils/muroDeAssinatura";
@@ -57,6 +58,11 @@ function AuthGuard() {
   // 13/10/2026: conta as telas visitadas e manda em lote (Gestão Aura).
   // Aqui, e só aqui — o AuthGuard monta uma vez, no layout raiz.
   useRegistroDeTelas();
+
+  // 14/10/2026 (t2-16): frente/módulo/plano mudados pela Gestão Aura chegam
+  // à loja com a aba aberta (revalida o /auth/me a cada 2 min e ao voltar o
+  // foco, no máximo 1 por minuto). Aqui, uma vez, para todos os shells.
+  useRevalidarMe();
 
   useEffect(() => {
     hydrate();
