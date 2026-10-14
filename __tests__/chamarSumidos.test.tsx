@@ -75,7 +75,7 @@ jest.mock("@/components/ResponsiveSheet", () => ({
 import { ChamarSumidos } from "@/components/screens/clientes/ChamarSumidos";
 import ReativacaoScreen from "@/app/(tabs)/clientes/reativacao";
 import {
-  criarMarcasDeChamado, diaMesBR, listarSumidos, mensagemDeChamado, primeiroNome,
+  criarMarcasDeChamado, diaMesBR, listarSumidos, mensagemDeChamado, primeiroNome, rotuloDeChamado,
 } from "@/utils/chamarSumidos";
 
 const AGORA = new Date(2026, 9, 14, 12, 0, 0).getTime(); // 14/10/2026
@@ -157,6 +157,20 @@ describe("mensagem e marca de chamado", () => {
   test("diaMesBR", () => {
     expect(diaMesBR(new Date(2026, 9, 3).getTime())).toBe("03/10");
   });
+
+  // Pendência da Nina (14/10): a marca é só deste aparelho/navegador, o
+  // rótulo precisa dizer isso.
+  test("rotuloDeChamado diz que a marca é deste aparelho", () => {
+    expect(rotuloDeChamado(new Date(2026, 9, 3).getTime())).toBe("chamado neste aparelho em 03/10");
+  });
+
+  test("rotuloDeChamado sem data legível: 'chamado neste aparelho'", () => {
+    expect(rotuloDeChamado(undefined)).toBe("chamado neste aparelho");
+    expect(rotuloDeChamado(null)).toBe("chamado neste aparelho");
+    expect(rotuloDeChamado(0)).toBe("chamado neste aparelho");
+    expect(rotuloDeChamado(NaN)).toBe("chamado neste aparelho");
+    expect(rotuloDeChamado(true)).toBe("chamado neste aparelho");
+  });
 });
 
 describe("tela do Essencial", () => {
@@ -205,6 +219,8 @@ describe("tela do Essencial", () => {
     expect(telefone).toBe("5511999998888");
     expect(texto).toBe(mensagemDeChamado("Ana Souza", "Loja da Ana"));
     expect(achar(t, "reativacao-essencial-chamado-a").length).toBe(1);
+    expect(textoTudo(t)).toContain("chamado neste aparelho em 14/10");
+    expect(textoTudo(t)).not.toContain("chamado em ");
     expect(textoTudo(t)).toContain("Chamar de novo");
     t.unmount();
   });
@@ -249,6 +265,10 @@ describe("tela do Essencial", () => {
     const botao = achar(t, "reativacao-chamar-c1")[0];
     await act(async () => { botao.props.onPress(); });
     expect(mockAbrir).toHaveBeenCalledTimes(1);
+    // A marca da linha do Negócio usa o mesmo rótulo ("neste aparelho").
+    expect(achar(t, "reativacao-chamado-c1").length).toBe(1);
+    expect(textoTudo(t)).toContain("chamado neste aparelho em 14/10");
+    expect(textoTudo(t)).not.toContain("chamado em ");
     t.unmount();
   });
 });

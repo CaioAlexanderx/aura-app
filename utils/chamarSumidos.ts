@@ -141,3 +141,14 @@ export function diaMesBR(ts: number): string {
   const d = new Date(ts);
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
+
+/**
+ * Rótulo da marca de "Chamar". A marca é só deste aparelho/navegador (não há
+ * rota no backend), então o texto diz isso: quem chamou pelo celular não vê a
+ * marca no computador, e a loja não deve achar que o sistema registrou.
+ * Sem data legível: "chamado neste aparelho".
+ */
+export function rotuloDeChamado(quando: unknown): string {
+  const ts = typeof quando === "number" && Number.isFinite(quando) && quando > 0 ? quando : null;
+  return ts === null ? "chamado neste aparelho" : `chamado neste aparelho em ${diaMesBR(ts)}`;
+}

@@ -25,7 +25,7 @@ import { openWhatsApp } from "@/utils/whatsapp";
 import { fmt } from "./types";
 import { CORTES_DIAS, CORTE_PADRAO } from "./diasSemComprar";
 import {
-  criarMarcasDeChamado, diaMesBR, listarSumidos, mensagemDeChamado,
+  criarMarcasDeChamado, listarSumidos, mensagemDeChamado, rotuloDeChamado,
 } from "@/utils/chamarSumidos";
 
 const POR_PAGINA = 30;
@@ -140,9 +140,9 @@ export function ChamarSumidos() {
                     <Text style={s.meta} numberOfLines={1}>
                       há {c.dias} dias sem comprar · {fmt(c.gasto)}
                     </Text>
-                    {!!quando && (
+                    {quando !== undefined && quando !== null && (
                       <Text style={s.chamado} testID={`reativacao-essencial-chamado-${c.id}`}>
-                        chamado em {diaMesBR(quando)}
+                        {rotuloDeChamado(quando)}
                       </Text>
                     )}
                   </View>

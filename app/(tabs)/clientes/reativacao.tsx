@@ -54,7 +54,7 @@ import { ScreenHero } from "@/components/ScreenHero";
 import { SummaryCard } from "@/components/SummaryCard";
 import { ChamarSumidos } from "@/components/screens/clientes/ChamarSumidos";
 import { openWhatsApp } from "@/utils/whatsapp";
-import { criarMarcasDeChamado, diaMesBR, mensagemDeChamado } from "@/utils/chamarSumidos";
+import { criarMarcasDeChamado, mensagemDeChamado, rotuloDeChamado } from "@/utils/chamarSumidos";
 
 /** Teto do backend por disparo. Repetido aqui só para avisar ANTES do clique. */
 const MAX_POR_DISPARO = 50;
@@ -455,9 +455,9 @@ function ReativacaoMeta() {
                             contatado{quando ? ` em ${quando}` : ""}
                           </Text>
                         )}
-                        {!!chamados[c.id] && (
+                        {chamados[c.id] !== undefined && chamados[c.id] !== null && (
                           <Text style={st.contatado} testID={`reativacao-chamado-${c.id}`}>
-                            chamado em {diaMesBR(chamados[c.id])}
+                            {rotuloDeChamado(chamados[c.id])}
                           </Text>
                         )}
                       </View>
