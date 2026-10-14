@@ -25,7 +25,7 @@ type Props = {
   largura: number | string;
   onAlternar: () => void;
   onAbrirLoja: (companyId: string) => void;
-  onVerbo: (verbo: string, loja: string) => void;
+  onVerbo: (verbo: string, loja: string, companyId?: string) => void;
   // Contato do WhatsApp (bloco Contatos): abre a conversa.
   onAbrirConversa?: (conversaId: string) => void;
   // Seção própria do bloco, abaixo do detalhe (ex.: extrato OFX na Receita),
@@ -180,7 +180,7 @@ function Tabela(props: { lista: Lista; onAbrirLoja: (cid: string) => void; onAbr
 }
 
 // Uma coluna de cartões por loja (degraus do trial).
-function ColunaDeCartoes(props: { lista: Lista; onAbrirLoja: (cid: string) => void; onVerbo: (verbo: string, loja: string) => void }) {
+function ColunaDeCartoes(props: { lista: Lista; onAbrirLoja: (cid: string) => void; onVerbo: (verbo: string, loja: string, companyId?: string) => void }) {
   var lista = props.lista;
   return (
     <View style={s.degrau}>
@@ -207,9 +207,10 @@ function ColunaDeCartoes(props: { lista: Lista; onAbrirLoja: (cid: string) => vo
                       testID={v.telefone && cid ? "whatsapp-" + cid : undefined}
                       style={[s.btnSm, v.primario && s.btnSmPrimario]}
                       onPress={function() {
-                        // WhatsApp é real; os demais verbos ainda avisam "em breve".
+                        // WhatsApp é direto; os demais verbos vão para a tela, que
+                        // sabe o que fazer com a loja (Registrar contato, +7 dias).
                         if (v.telefone) abrirWhatsApp(v.telefone);
-                        else props.onVerbo(v.texto, textoDa(loja));
+                        else props.onVerbo(v.texto, textoDa(loja), cid);
                       }}
                     >
                       <Text style={[s.btnSmText, v.primario && { color: "#fff" }]}>{v.texto}</Text>
@@ -230,7 +231,7 @@ function ColunaDeCartoes(props: { lista: Lista; onAbrirLoja: (cid: string) => vo
 export function DetalheDoBloco(props: {
   detalhe: BlocoDetalhe;
   onAbrirLoja: (cid: string) => void;
-  onVerbo: (verbo: string, loja: string) => void;
+  onVerbo: (verbo: string, loja: string, companyId?: string) => void;
   onAbrirConversa?: (conversaId: string) => void;
 }) {
   var d = props.detalhe;

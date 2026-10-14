@@ -1,0 +1,295 @@
+{
+  "id": "checkin",
+  "titulo": "Check-in",
+  "periodo": 30,
+  "calculado_em": "2026-10-13T09:00:04.000Z",
+  "ao_vivo": false,
+  "valor": 33,
+  "unidade": "% com produto em 24 h",
+  "resumo": "3 cadastros desde 01/10 · 1 respondeu · 1 pulou",
+  "fonte": "companies, products, sales, audit_log",
+  "indicadores": [
+    {
+      "rotulo": "Cadastros desde a subida",
+      "valor": 3,
+      "nota": "a partir de 01/10 · 2 viram a tela"
+    },
+    {
+      "rotulo": "Produto em 24 h",
+      "valor": "33%",
+      "nota": "1 de 3 · 0 aguardando · base 57%"
+    },
+    {
+      "rotulo": "Venda em 7 dias",
+      "valor": "50%",
+      "nota": "1 de 2 · 1 aguardando · base 17%"
+    },
+    {
+      "rotulo": "Produto em 24 h · só quem viu a tela",
+      "valor": "50%",
+      "nota": "1 de 2"
+    },
+    {
+      "rotulo": "Tempo até o 5º produto (mediana)",
+      "valor": 2.2,
+      "nota": "horas · 1 chegou ao 5º"
+    },
+    {
+      "rotulo": "Regra de parada",
+      "valor": "aguardando",
+      "nota": "limite 57% · 2 de 15 cadastros com a tela · interruptor ligado"
+    },
+    {
+      "rotulo": "Importação assistida",
+      "valor": 1,
+      "nota": "0 sem entrega registrada · mediana 4,5 h"
+    }
+  ],
+  "listas": [
+    {
+      "titulo": "Cadastros desde a subida",
+      "colunas": [
+        {
+          "chave": "nome",
+          "rotulo": "Loja",
+          "tipo": "loja"
+        },
+        {
+          "chave": "criado_em",
+          "rotulo": "Cadastro",
+          "tipo": "data_hora"
+        },
+        {
+          "chave": "viu_tela",
+          "rotulo": "Viu a tela",
+          "tipo": "booleano"
+        },
+        {
+          "chave": "comeco",
+          "rotulo": "Por onde começar",
+          "tipo": "texto"
+        },
+        {
+          "chave": "onde_anota",
+          "rotulo": "Onde anota",
+          "tipo": "texto"
+        },
+        {
+          "chave": "produtos_faixa",
+          "rotulo": "Quantos produtos",
+          "tipo": "texto"
+        },
+        {
+          "chave": "como_chegou",
+          "rotulo": "Como chegou",
+          "tipo": "texto"
+        },
+        {
+          "chave": "fiado",
+          "rotulo": "Fiado",
+          "tipo": "texto"
+        },
+        {
+          "chave": "quem_decide",
+          "rotulo": "Quem decide",
+          "tipo": "texto"
+        },
+        {
+          "chave": "produto_24h",
+          "rotulo": "Produto em 24 h",
+          "tipo": "texto"
+        },
+        {
+          "chave": "horas_ate_1o_produto",
+          "rotulo": "Horas até o 1º produto",
+          "tipo": "numero"
+        },
+        {
+          "chave": "horas_ate_5o_produto",
+          "rotulo": "Horas até o 5º produto",
+          "tipo": "numero"
+        },
+        {
+          "chave": "venda_7d",
+          "rotulo": "Venda em 7 dias",
+          "tipo": "texto"
+        }
+      ],
+      "linhas": [
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000006",
+          "nome": "Bazar Novo",
+          "telefone": "11999900006",
+          "criado_em": "2026-10-09T15:00:00.000Z",
+          "viu_tela": true,
+          "respondeu": false,
+          "pulou": true,
+          "comeco": null,
+          "onde_anota": null,
+          "produtos_faixa": null,
+          "como_chegou": null,
+          "fiado": null,
+          "quem_decide": null,
+          "horas_ate_1o_produto": 29,
+          "horas_ate_5o_produto": null,
+          "produto_24h": "Não",
+          "venda_7d": "Aguardando"
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000005",
+          "nome": "Ótica Visão",
+          "telefone": "11999900005",
+          "criado_em": "2026-10-06T13:00:00.000Z",
+          "viu_tela": true,
+          "respondeu": true,
+          "pulou": false,
+          "comeco": "vender",
+          "onde_anota": "caderno",
+          "produtos_faixa": "ate_50",
+          "como_chegou": "indicacao",
+          "fiado": null,
+          "quem_decide": null,
+          "horas_ate_1o_produto": 1.5,
+          "horas_ate_5o_produto": 2.2,
+          "produto_24h": "Sim",
+          "venda_7d": "Sim"
+        },
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000007",
+          "nome": "Tech Assist",
+          "telefone": "11999900007",
+          "criado_em": "2026-10-01T13:00:00.000Z",
+          "viu_tela": false,
+          "respondeu": false,
+          "pulou": false,
+          "comeco": null,
+          "onde_anota": null,
+          "produtos_faixa": null,
+          "como_chegou": null,
+          "fiado": null,
+          "quem_decide": null,
+          "horas_ate_1o_produto": null,
+          "horas_ate_5o_produto": null,
+          "produto_24h": "Não",
+          "venda_7d": "Não"
+        }
+      ]
+    },
+    {
+      "titulo": "Importação assistida",
+      "colunas": [
+        {
+          "chave": "nome",
+          "rotulo": "Loja",
+          "tipo": "loja"
+        },
+        {
+          "chave": "pedida_em",
+          "rotulo": "Pedida",
+          "tipo": "data_hora"
+        },
+        {
+          "chave": "entregue_em",
+          "rotulo": "Entregue",
+          "tipo": "data_hora"
+        },
+        {
+          "chave": "horas",
+          "rotulo": "Horas",
+          "tipo": "numero"
+        }
+      ],
+      "linhas": [
+        {
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000005",
+          "nome": "Ótica Visão",
+          "telefone": "11999900005",
+          "pedida_em": "2026-10-06T15:00:00.000Z",
+          "entregue_em": "2026-10-06T19:30:00.000Z",
+          "horas": 4.5
+        }
+      ]
+    }
+  ],
+  "series": [
+    {
+      "titulo": "Cadastros por semana",
+      "tipo": "barras",
+      "pontos": [
+        {
+          "rotulo": "07/09",
+          "valor": 0
+        },
+        {
+          "rotulo": "14/09",
+          "valor": 0
+        },
+        {
+          "rotulo": "21/09",
+          "valor": 0
+        },
+        {
+          "rotulo": "28/09",
+          "valor": 1
+        },
+        {
+          "rotulo": "05/10",
+          "valor": 2
+        },
+        {
+          "rotulo": "12/10",
+          "valor": 0
+        }
+      ]
+    },
+    {
+      "titulo": "Tela do check-in",
+      "tipo": "barras_h",
+      "pontos": [
+        {
+          "rotulo": "Viram a tela",
+          "valor": 2
+        },
+        {
+          "rotulo": "Responderam",
+          "valor": 1
+        },
+        {
+          "rotulo": "Pularam",
+          "valor": 1
+        }
+      ]
+    },
+    {
+      "titulo": "Por onde começar",
+      "tipo": "barras_h",
+      "pontos": [
+        {
+          "rotulo": "vender",
+          "valor": 1
+        }
+      ]
+    },
+    {
+      "titulo": "Onde anota o que tem",
+      "tipo": "barras_h",
+      "pontos": [
+        {
+          "rotulo": "caderno",
+          "valor": 1
+        }
+      ]
+    },
+    {
+      "titulo": "Quantos produtos",
+      "tipo": "barras_h",
+      "pontos": [
+        {
+          "rotulo": "ate_50",
+          "valor": 1
+        }
+      ]
+    }
+  ],
+  "insight": "2 de 15 cadastros com a tela para fechar a regra de parada (limite 57% com produto em 24 h)."
+}

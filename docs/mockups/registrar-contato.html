@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Registrar contato · Gestão Aura</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#f4f3f9;--surface:#fff;--surface-2:#f9f8fc;--fg:#17132b;--fg-2:#4b4763;--muted:#8a86a0;--line:#e8e6f0;--line-2:#d9d6e6;
+  --accent:#7c3aed;--accent-2:#c4b5fd;--accent-soft:#f3eefe;--accent-fg:#5b21b6;
+  --teal:#0d9488;--teal-soft:#e0f5f2;--amber:#d97706;--amber-soft:#fdf3e3;--red:#dc2626;--red-soft:#fdeaea;--green:#16a34a;--green-soft:#e6f6ea;
+  --shadow:0 1px 2px rgba(23,19,43,.05),0 10px 30px rgba(23,19,43,.07);
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#110f1c;--surface:#1a1727;--surface-2:#211d31;--fg:#f3f0fb;--fg-2:#c9c4dc;--muted:#8f8aa6;--line:#2a2640;--line-2:#3a3554;
+  --accent:#a78bfa;--accent-2:#6d4fd1;--accent-soft:#27213f;--accent-fg:#d9ccff;
+  --teal:#2dd4bf;--teal-soft:#15302d;--amber:#fbbf24;--amber-soft:#362a12;--red:#f87171;--red-soft:#3a1c1c;--green:#4ade80;--green-soft:#15301e;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#110f1c;--surface:#1a1727;--surface-2:#211d31;--fg:#f3f0fb;--fg-2:#c9c4dc;--muted:#8f8aa6;--line:#2a2640;--line-2:#3a3554;
+  --accent:#a78bfa;--accent-2:#6d4fd1;--accent-soft:#27213f;--accent-fg:#d9ccff;
+  --teal:#2dd4bf;--teal-soft:#15302d;--amber:#fbbf24;--amber-soft:#362a12;--red:#f87171;--red-soft:#3a1c1c;--green:#4ade80;--green-soft:#15301e;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+h1,h2,h3{margin:0;font-family:Manrope,Inter,sans-serif;letter-spacing:-.015em}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:0;padding:0}
+input,textarea{font:inherit;color:var(--fg)}
+.wrap{max-width:980px;margin:0 auto;padding:22px 16px 60px}
+.nota{color:var(--muted);font-size:13px;margin:6px 0 18px;max-width:720px}
+.nota b{color:var(--fg-2);font-weight:600}
+.estados{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+.estados button{border:1px solid var(--line-2);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--fg-2)}
+.estados button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* ficha ao fundo (esmaecida) */
+.cena{position:relative;border:1px solid var(--line);border-radius:18px;background:var(--surface-2);padding:18px;min-height:700px;overflow:hidden}
+.fundo{filter:saturate(.7);opacity:.55}
+.fundo h2{font-size:18px;font-weight:800}
+.fundo p{color:var(--muted);margin:2px 0 14px;font-size:13px}
+.fundo .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.fundo .kpis div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.fundo .kpis small{display:block;color:var(--muted);font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:600}
+.fundo .kpis b{font-family:Manrope;font-size:18px}
+.scrim{position:absolute;inset:0;background:rgba(17,15,28,.5);display:flex;align-items:flex-start;justify-content:center;padding:18px}
+
+/* modal (casca do painel) */
+.modal{background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);width:min(640px,100%);display:flex;flex-direction:column;overflow:hidden}
+.head{display:flex;gap:12px;align-items:center;padding:16px 20px 12px;border-bottom:1px solid var(--line)}
+.head .ico{width:34px;height:34px;border-radius:10px;background:var(--accent-soft);color:var(--accent-fg);display:grid;place-items:center;font-weight:800;flex:none}
+.head h3{font-size:17px;font-weight:800}
+.head small{display:block;color:var(--muted);font-size:12px}
+.head .x{margin-left:auto;width:30px;height:30px;border-radius:8px;background:var(--accent-soft);color:var(--accent-fg);display:grid;place-items:center}
+.corpo{padding:14px 20px 4px;display:grid;gap:14px}
+.lbl{font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;display:flex;gap:8px;align-items:baseline}
+.lbl em{font-style:normal;letter-spacing:0;text-transform:none;font-weight:500;color:var(--muted)}
+.lbl .obr{color:var(--red);letter-spacing:0}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line-2);background:var(--surface);border-radius:10px;padding:7px 11px;font-weight:500;font-size:13px;color:var(--fg-2)}
+.chip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-fg);font-weight:600}
+.chip.risco.on{background:var(--red-soft);border-color:var(--red);color:var(--red)}
+.chip.bom.on{background:var(--green-soft);border-color:var(--green);color:var(--green)}
+.grade6{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.grade6 .chip{text-align:center;padding:9px 8px}
+@media (max-width:520px){.grade6{grid-template-columns:repeat(2,1fr)}}
+.campo{width:100%;border:1px solid var(--line-2);background:var(--surface);border-radius:10px;padding:9px 12px;outline:none}
+.campo:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.linha{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.linha .campo{flex:1;min-width:180px}
+.data{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.data .quando{color:var(--muted);font-size:12px;margin-left:4px}
+.dica{font-size:12px;color:var(--muted);margin-top:4px}
+.erro{color:var(--red);font-size:12px;margin-top:4px}
+.avisoMotivo{background:var(--red-soft);border:1px solid var(--red);border-radius:12px;padding:10px 12px}
+.avisoMotivo .lbl{color:var(--red)}
+details{border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
+details>summary{cursor:pointer;list-style:none;padding:10px 12px;font-weight:600;display:flex;justify-content:space-between;gap:8px;align-items:center}
+details>summary::-webkit-details-marker{display:none}
+details>summary span{font-weight:500;color:var(--muted);font-size:12px}
+details .in{padding:2px 12px 12px;display:grid;gap:12px}
+.foot{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:12px 20px;border-top:1px solid var(--line);margin-top:10px}
+.foot .tempo{font-size:12px;color:var(--muted)}
+.foot .acts{display:flex;gap:6px}
+.btn{border:1px solid var(--line-2);background:var(--surface);border-radius:8px;padding:7px 12px;font-weight:500;font-size:13px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.btn.ghost{border-color:transparent;color:var(--accent-fg);font-weight:600}
+.toast{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);background:var(--fg);color:var(--bg);border-radius:10px;padding:9px 14px;font-weight:600;font-size:13px;box-shadow:var(--shadow)}
+.sucesso{padding:34px 20px;text-align:center;display:grid;gap:8px;justify-items:center}
+.sucesso .ok{width:46px;height:46px;border-radius:50%;background:var(--green-soft);color:var(--green);display:grid;place-items:center;font-size:22px;font-weight:800}
+.sucesso h3{font-size:17px}
+.sucesso p{margin:0;color:var(--muted);max-width:360px}
+.hidden{display:none !important}
+.lista{display:grid;gap:12px;margin-top:22px}
+.lista h3{font-size:15px}
+.lista ul{margin:6px 0 0;padding-left:18px;color:var(--fg-2)}
+.lista li{margin:3px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 style="font-size:24px;font-weight:800">Registrar contato</h1>
+  <p class="nota">Mockup do botão <b>Registrar contato</b> da ficha do cliente (Gestão Aura › Hoje e Clientes) e do verbo dos alertas do Painel, hoje "em breve". Meta: <b>registrar em 10 segundos</b> — um toque no resultado, um no canal, uma frase, uma data. Casca do modal igual à da ficha (mesmo DNA do TrocaModal: cabeçalho com ícone, corpo, rodapé com Cancelar e ação principal).</p>
+
+  <div class="estados" id="estados">
+    <button data-e="vazio" class="on">Aberto</button>
+    <button data-e="naoquer">Resultado "Não quer"</button>
+    <button data-e="completo">Preenchido</button>
+    <button data-e="erro">Erro ao salvar</button>
+    <button data-e="ok">Salvo</button>
+  </div>
+
+  <div class="cena">
+    <div class="fundo" aria-hidden="true">
+      <h2>Loja Aurora</h2>
+      <p>Negócio anual · cliente desde 06/06 · Helena Duarte</p>
+      <div class="kpis">
+        <div><small>Saúde</small><b>45/100</b></div>
+        <div><small>Logins · 30d</small><b>3</b></div>
+        <div><small>Último acesso</small><b>08/10</b></div>
+        <div><small>Vendas</small><b>79</b></div>
+      </div>
+    </div>
+
+    <div class="scrim">
+      <div class="modal" role="dialog" aria-label="Registrar contato" id="modal">
+        <div id="formulario">
+          <div class="head">
+            <div class="ico">✆</div>
+            <div>
+              <h3>Registrar contato</h3>
+              <small>Loja Aurora · (11) 99990-0001</small>
+            </div>
+            <button class="x" aria-label="Fechar">✕</button>
+          </div>
+
+          <div class="corpo">
+            <div>
+              <div class="lbl">Como foi <span class="obr">*</span></div>
+              <div class="grade6" id="resultado">
+                <button class="chip" data-v="respondeu">Respondeu</button>
+                <button class="chip" data-v="sem_resposta">Sem resposta</button>
+                <button class="chip" data-v="pediu_tempo">Pediu um tempo</button>
+                <button class="chip" data-v="combinou_ligacao">Combinou ligação</button>
+                <button class="chip bom" data-v="quer_assinar">Quer assinar</button>
+                <button class="chip risco" data-v="nao_quer">Não quer</button>
+              </div>
+            </div>
+
+            <div>
+              <div class="lbl">Canal</div>
+              <div class="chips" id="canal">
+                <button class="chip on" data-v="whatsapp">WhatsApp</button>
+                <button class="chip" data-v="ligacao">Ligação</button>
+                <button class="chip" data-v="email">E-mail</button>
+                <button class="chip" data-v="presencial">Presencial</button>
+              </div>
+            </div>
+
+            <div class="avisoMotivo hidden" id="blocoMotivo">
+              <div class="lbl">O que pesou <span class="obr">* obrigatório quando não quer</span></div>
+              <div class="chips" id="motivo">
+                <button class="chip" data-v="estoque_na_entrada">Estoque na entrada</button>
+                <button class="chip" data-v="preco_plano">Preço do plano</button>
+                <button class="chip" data-v="fiscal">Fiscal</button>
+                <button class="chip" data-v="atrito_produto">Atrito no produto</button>
+                <button class="chip" data-v="funcionalidade">Falta funcionalidade</button>
+                <button class="chip" data-v="frente_errada">Frente errada</button>
+                <button class="chip" data-v="ritmo_do_cliente">Ritmo do cliente</button>
+                <button class="chip" data-v="concorrente">Concorrente</button>
+                <button class="chip" data-v="elogio">Elogio</button>
+              </div>
+            </div>
+
+            <div>
+              <div class="lbl">O que aconteceu <span class="obr">*</span> <em id="contador">0/500</em></div>
+              <input class="campo" id="frase" maxlength="500" placeholder="Uma frase: ex. Pediu até sexta para ver o preço do anual">
+              <div class="erro hidden" id="erroFrase">Escreva uma frase do que aconteceu.</div>
+            </div>
+
+            <div>
+              <div class="lbl">Próximo passo <em>opcional</em></div>
+              <input class="campo" id="proximo" maxlength="120" placeholder="ex. Ligar de novo">
+              <div class="data">
+                <button class="chip" data-d="1">+1 dia</button>
+                <button class="chip" data-d="3">+3 dias</button>
+                <button class="chip" data-d="7">+7 dias</button>
+                <button class="chip" data-d="0">Sem data</button>
+                <span class="quando" id="quando">sem data</span>
+              </div>
+            </div>
+
+            <div class="chips" id="marcador" style="align-items:center">
+              <span class="lbl" style="margin:0">Importação assistida <em>opcional</em></span>
+              <button class="chip" data-v="importacao_assistida_pedida">Pedida</button>
+              <button class="chip" data-v="importacao_assistida_entregue">Entregue</button>
+            </div>
+
+            <details id="checkin">
+              <summary>Check-in <span>opcional · 3 toques · grava na ficha, uma vez por conta</span></summary>
+              <div class="in">
+                <div>
+                  <div class="lbl">Como chegou</div>
+                  <div class="chips" id="comoChegou">
+                    <button class="chip" data-v="indicacao">Indicação</button>
+                    <button class="chip" data-v="botao_whatsapp_site">Botão WhatsApp do site</button>
+                    <button class="chip" data-v="cadastro_direto">Cadastro direto</button>
+                    <button class="chip" data-v="ia">IA</button>
+                    <button class="chip" data-v="google">Google</button>
+                    <button class="chip" data-v="instagram">Instagram</button>
+                    <button class="chip" data-v="prospeccao_caio">Prospecção do Caio</button>
+                    <button class="chip" data-v="outro">Outro</button>
+                  </div>
+                </div>
+                <div>
+                  <div class="lbl">Vende fiado</div>
+                  <div class="chips" id="fiado">
+                    <button class="chip" data-v="sim">Sim</button>
+                    <button class="chip" data-v="nao">Não</button>
+                    <button class="chip" data-v="as_vezes">Às vezes</button>
+                  </div>
+                </div>
+                <div>
+                  <div class="lbl">Quem decide a compra</div>
+                  <div class="chips" id="quemDecide">
+                    <button class="chip" data-v="dono">Dono</button>
+                    <button class="chip" data-v="socio">Sócio</button>
+                    <button class="chip" data-v="gerente">Gerente</button>
+                    <button class="chip" data-v="outro">Outro</button>
+                  </div>
+                </div>
+              </div>
+            </details>
+          </div>
+
+          <div class="foot">
+            <span class="tempo">Salva em <b>company_admin_notes</b> · a Cassie lê às 7h30</span>
+            <div class="acts">
+              <button class="btn ghost" id="cancelar">Cancelar</button>
+              <button class="btn primary" id="salvar" disabled>Salvar contato</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="sucesso" class="sucesso hidden">
+          <div class="ok">✓</div>
+          <h3>Contato registrado</h3>
+          <p id="resumoSucesso"></p>
+          <button class="btn primary" id="fechar">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lista">
+    <h3>Decisões do desenho</h3>
+    <ul>
+      <li><b>Resultado em 6 toques grandes</b> (um por linha de menu): é o campo que a Cassie lê primeiro; sem rolagem e sem abrir lista.</li>
+      <li><b>Canal já vem em WhatsApp</b> (é o canal de quase todo contato); um toque para trocar.</li>
+      <li><b>"O que pesou" só aparece com "Não quer"</b> e trava o Salvar enquanto estiver vazio. É a mesma lista de 9 classes do relatório de perdas.</li>
+      <li><b>Próximo passo</b> com atalhos +1, +3 e +7 dias; "Sem data" limpa. A data mostra o dia da semana para não errar.</li>
+      <li><b>Importação assistida</b> é um marcador opcional: o tempo entre "pedida" e "entregue" é lido pelo bloco Check-in do painel.</li>
+      <li><b>Check-in</b> fechado por padrão; como chegou vale uma vez por conta (a primeira gravação fica).</li>
+      <li><b>Abre na ficha e nos alertas</b>: o verbo do alerta abre este mesmo modal já com a loja. Em celular o modal ocupa a largura toda e rola por dentro.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+(function () {
+  var $ = function (s) { return document.querySelector(s); };
+  var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
+  var st = { resultado: null, canal: 'whatsapp', motivo: null, marcador: null, dias: null, comoChegou: null, fiado: null, quemDecide: null };
+
+  function grupo(id, chave, unico) {
+    $$('#' + id + ' .chip').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var v = b.dataset.v;
+        st[chave] = unico && st[chave] === v ? null : v;
+        atualizar();
+      });
+    });
+  }
+  grupo('resultado', 'resultado', false);
+  grupo('canal', 'canal', false);
+  grupo('motivo', 'motivo', true);
+  grupo('marcador', 'marcador', true);
+  grupo('comoChegou', 'comoChegou', true);
+  grupo('fiado', 'fiado', true);
+  grupo('quemDecide', 'quemDecide', true);
+
+  $$('.data .chip').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var d = parseInt(b.dataset.d, 10);
+      st.dias = d > 0 ? d : null;
+      atualizar();
+    });
+  });
+
+  var DIAS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+  function dataEm(n) { var d = new Date(); d.setDate(d.getDate() + n); return d; }
+  function fmt(d) { return DIAS[d.getDay()] + ', ' + ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2); }
+
+  function marcar(id, valor) {
+    $$('#' + id + ' .chip').forEach(function (b) { b.classList.toggle('on', b.dataset.v === valor); });
+  }
+
+  function atualizar() {
+    marcar('resultado', st.resultado);
+    marcar('canal', st.canal);
+    marcar('motivo', st.motivo);
+    marcar('marcador', st.marcador);
+    marcar('comoChegou', st.comoChegou);
+    marcar('fiado', st.fiado);
+    marcar('quemDecide', st.quemDecide);
+    $$('.data .chip').forEach(function (b) {
+      var d = parseInt(b.dataset.d, 10);
+      b.classList.toggle('on', d > 0 ? st.dias === d : st.dias === null);
+    });
+    $('#quando').textContent = st.dias ? fmt(dataEm(st.dias)) : 'sem data';
+    $('#blocoMotivo').classList.toggle('hidden', st.resultado !== 'nao_quer');
+    var frase = $('#frase').value.trim();
+    $('#contador').textContent = $('#frase').value.length + '/500';
+    var valido = !!st.resultado && !!st.canal && frase.length > 0 && (st.resultado !== 'nao_quer' || !!st.motivo);
+    $('#salvar').disabled = !valido;
+  }
+  $('#frase').addEventListener('input', atualizar);
+
+  function reset() {
+    st = { resultado: null, canal: 'whatsapp', motivo: null, marcador: null, dias: null, comoChegou: null, fiado: null, quemDecide: null };
+    $('#frase').value = ''; $('#proximo').value = '';
+    $('#formulario').classList.remove('hidden'); $('#sucesso').classList.add('hidden');
+    $('#erroSalvar') && $('#erroSalvar').remove();
+    $('#checkin').open = false;
+    atualizar();
+  }
+
+  function estado(e) {
+    $$('#estados button').forEach(function (b) { b.classList.toggle('on', b.dataset.e === e); });
+    reset();
+    if (e === 'naoquer') { st.resultado = 'nao_quer'; st.canal = 'ligacao'; $('#frase').value = 'Achou o plano caro para o tamanho da loja'; atualizar(); }
+    if (e === 'completo' || e === 'erro' || e === 'ok') {
+      st.resultado = 'pediu_tempo'; st.canal = 'whatsapp'; st.dias = 3; st.marcador = null; st.comoChegou = 'indicacao'; st.fiado = 'sim'; st.quemDecide = 'dono';
+      $('#frase').value = 'Pediu até sexta para ver o preço do anual'; $('#proximo').value = 'Ligar de novo';
+      $('#checkin').open = true; atualizar();
+    }
+    if (e === 'erro') {
+      var p = document.createElement('div'); p.id = 'erroSalvar'; p.className = 'erro';
+      p.style.cssText = 'padding:0 20px 8px'; p.textContent = 'Não consegui salvar o contato. Confira a conexão e tente de novo; nada foi gravado.';
+      $('.foot').parentNode.insertBefore(p, $('.foot'));
+    }
+    if (e === 'ok') salvar();
+  }
+  $$('#estados button').forEach(function (b) { b.addEventListener('click', function () { estado(b.dataset.e); }); });
+
+  function salvar() {
+    $('#formulario').classList.add('hidden'); $('#sucesso').classList.remove('hidden');
+    var r = { respondeu: 'Respondeu', sem_resposta: 'Sem resposta', pediu_tempo: 'Pediu um tempo', combinou_ligacao: 'Combinou ligação', quer_assinar: 'Quer assinar', nao_quer: 'Não quer' }[st.resultado] || '';
+    $('#resumoSucesso').textContent = r + (st.dias ? ' · próximo passo ' + fmt(dataEm(st.dias)) : '') + '. Já aparece na linha do tempo da ficha.';
+  }
+  $('#salvar').addEventListener('click', salvar);
+  $('#cancelar').addEventListener('click', reset);
+  $('#fechar').addEventListener('click', reset);
+  atualizar();
+})();
+</script>
+</body>
+</html>

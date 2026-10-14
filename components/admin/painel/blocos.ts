@@ -29,6 +29,7 @@ export var DEFINICOES: DefinicaoBloco[] = [
   { id: "cadastros", titulo: "Cadastros", subtitulo: "Por semana, últimas 7", secao: "negocio", colunas: 4, grafico: "barras", opcoes: { valores: "max", ultimoClaro: true } },
   { id: "pagantes", titulo: "Pagantes", subtitulo: "Plano e ciclo", secao: "negocio", colunas: 4, grafico: "rosca" },
   { id: "pagantes_sem_venda", titulo: "Pagantes sem venda", subtitulo: "Dias desde a última venda", secao: "negocio", colunas: 4, grafico: "barras_h", opcoes: { max: 90 } },
+  { id: "checkin", titulo: "Check-in", subtitulo: "Cadastros novos: produto em 24 h, venda em 7 dias, regra de parada", secao: "negocio", colunas: 4, grafico: "barras" },
   { id: "tempo_primeira_venda", titulo: "Tempo até a 1ª venda", subtitulo: "Do cadastro à primeira venda", secao: "negocio", colunas: 4, grafico: "barras" },
   { id: "custos", titulo: "Custos", subtitulo: "Lançamento mensal", secao: "negocio", colunas: 4, grafico: "barras" },
   // Produto e uso
@@ -57,6 +58,7 @@ export var CATALOGO: ItemCatalogo[] = [
   { id: "cadastros", titulo: "Cadastros", fonte: "companies por semana" },
   { id: "pagantes", titulo: "Pagantes", fonte: "plano e ciclo" },
   { id: "pagantes_sem_venda", titulo: "Pagantes sem venda", fonte: "sales por loja" },
+  { id: "checkin", titulo: "Check-in", fonte: "companies, products e sales dos cadastros novos" },
   { id: "acesso", titulo: "Acesso", fonte: "audit_log login" },
   { id: "uso_funcionalidade", titulo: "Uso por funcionalidade", fonte: "tabelas por módulo" },
   { id: "horario", titulo: "Horário de uso", fonte: "sales por hora" },

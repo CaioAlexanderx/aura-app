@@ -19,6 +19,11 @@ import { BlocoCard, Pill } from "./BlocoCard";
 import { ExtratoBancario } from "./ExtratoOfx";
 import { Sparkline } from "./Graficos";
 import { CatalogoBlocos, ConversaContatoModal, FichaClienteModal } from "./PainelModais";
+import { RegistrarContatoModal } from "./RegistrarContatoModal";
+import type { AlvoRegistro } from "./RegistrarContatoModal";
+import { EstenderTrialModal } from "./EstenderTrialModal";
+import type { AlvoTrial } from "./EstenderTrialModal";
+import { ehVerboDeContato, ehVerboDeTrial } from "./registrarContato";
 import { DEFINICOES, SECOES } from "./blocos";
 import { Paleta } from "./paleta";
 import { usePainelHoje } from "./usePainelHoje";
@@ -98,6 +103,8 @@ function PainelConteudo(props: { dados: Dados; painel: PainelHojeDados }) {
   var [catalogoAberto, setCatalogoAberto] = useState(false);
   var [fichaDe, setFichaDe] = useState<string | null>(null);
   var [conversaDe, setConversaDe] = useState<string | null>(null);
+  var [registrarDe, setRegistrarDe] = useState<AlvoRegistro | null>(null);
+  var [estenderDe, setEstenderDe] = useState<AlvoTrial | null>(null);
   var [recalculando, setRecalculando] = useState(false);
   var cards = useRef<Record<string, any>>({});
 
@@ -131,8 +138,12 @@ function PainelConteudo(props: { dados: Dados; painel: PainelHojeDados }) {
     if (a.bloco) abrirBloco(a.bloco);
   }
 
-  // Verbos que ainda não existem (Registrar contato, +7 dias).
-  function aoVerbo(verbo: string, loja: string) {
+  // Verbo de uma loja: contato (Ligar, Oferecer plano, Registrar contato) abre
+  // o Registrar contato; "+7 dias" abre a confirmação do teste. Sem a loja
+  // (companyId), ou verbo que ainda não existe, avisa "em breve".
+  function aoVerbo(verbo: string, loja: string, companyId?: string) {
+    if (companyId && ehVerboDeTrial(verbo)) { setEstenderDe({ company_id: companyId, nome: loja }); return; }
+    if (companyId && ehVerboDeContato(verbo)) { setRegistrarDe({ company_id: companyId, nome: loja }); return; }
     toast.info("“" + verbo + "” para " + loja + " entra em breve.");
   }
 
@@ -247,7 +258,19 @@ function PainelConteudo(props: { dados: Dados; painel: PainelHojeDados }) {
                   <Text style={s.alertaTitulo}>{a.titulo}</Text>
                   <Text style={s.alertaDetalhe}>{a.detalhe}</Text>
                 </View>
-                <Text style={s.alertaVerbo}>{a.verbo} →</Text>
+                {a.company_id && ehVerboDeContato(a.verbo) ? (
+                  // O verbo do alerta de uma loja registra o contato direto.
+                  <Pressable
+                    testID={"verbo-do-alerta-" + i}
+                    onPress={function() { setRegistrarDe({ company_id: a.company_id as string }); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={a.verbo + ": registrar contato"}
+                  >
+                    <Text style={s.alertaVerbo}>{a.verbo} →</Text>
+                  </Pressable>
+                ) : (
+                  <Text style={s.alertaVerbo}>{a.verbo} →</Text>
+                )}
               </Pressable>
             );
           })}
@@ -325,7 +348,8 @@ function PainelConteudo(props: { dados: Dados; painel: PainelHojeDados }) {
       <FichaClienteModal
         companyId={fichaDe}
         onClose={function() { setFichaDe(null); }}
-        onVerbo={aoVerbo}
+        onRegistrarContato={function(companyId) { setRegistrarDe({ company_id: companyId }); }}
+        onEstenderTrial={function(companyId, nome) { setEstenderDe({ company_id: companyId, nome: nome }); }}
         onAviso={function(mensagem) { toast.info(mensagem); }}
         // Abre a lista de Clientes já com o painel desta loja (?loja=).
         onAbrirCliente={function(companyId) {
@@ -333,6 +357,9 @@ function PainelConteudo(props: { dados: Dados; painel: PainelHojeDados }) {
           router.push(("/gestao-aura-clientes?loja=" + encodeURIComponent(companyId)) as any);
         }}
       />
+      {/* Por cima da ficha: registrar o contato e estender o teste. */}
+      <RegistrarContatoModal alvo={registrarDe} onClose={function() { setRegistrarDe(null); }} />
+      <EstenderTrialModal alvo={estenderDe} onClose={function() { setEstenderDe(null); }} />
     </View>
   );
 }

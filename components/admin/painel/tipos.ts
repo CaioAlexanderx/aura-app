@@ -18,6 +18,8 @@ export type BlocoId =
   | "cadastros" | "trials_degrau" | "pagantes" | "pagantes_sem_venda" | "receita"
   | "plataforma" | "fiscal" | "crediario" | "frentes" | "acesso"
   | "uso_funcionalidade" | "horario" | "adocao" | "telas_visitadas"
+  // Check-in do prospect (Aura-backend #835): produto em 24 h e venda em 7 dias.
+  | "checkin"
   | "contatos"
   // Só no catálogo/mockup por enquanto — o backend ainda não calcula.
   | "etiquetas" | "tempo_primeira_venda" | "aurinha" | "custos" | "nps";
@@ -134,10 +136,24 @@ export type BlocoDetalhe = {
 
 // ── Ficha do cliente ────────────────────────────────────────
 
+// Contato registrado pela equipe (Registrar contato, backend #836).
+export type ContatoDaFicha = {
+  id: number;
+  data: string;                // "12/10"
+  titulo: string;              // "Contato por WhatsApp: Pediu um tempo"
+  texto: string;               // a frase do que aconteceu
+  proximo: string | null;      // "Ligar de novo · sexta, 16/10"
+  atrasado: boolean;           // próximo passo com data já passada
+  motivo: string | null;       // rótulo de "o que pesou"
+};
+
 export type FichaCliente = {
   company_id: string;
   nome: string;
   telefone?: string | null;    // verbo WhatsApp
+  em_trial?: boolean;          // libera "+7 dias de teste"
+  contatos?: ContatoDaFicha[];
+  checkin?: Record<string, any> | null;   // companies.checkin (como_chegou, fiado, quem_decide…)
   alertas?: { tom: "neutro" | "alerta" | "risco"; texto: string }[];
   situacao: Variacao | null;
   resumo: string;

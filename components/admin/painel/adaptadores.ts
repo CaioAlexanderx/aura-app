@@ -8,12 +8,13 @@
 // do PR e os comentários de cada função.
 // ============================================================
 import type {
-  PainelApiAlerta, PainelApiBlocoResumo, PainelApiConversa, PainelApiDetalhe, PainelApiFicha,
+  PainelApiAlerta, PainelApiBlocoResumo, PainelApiContatoDaFicha, PainelApiConversa, PainelApiDetalhe, PainelApiFicha,
   PainelApiHoje, PainelApiLayout, PainelApiLista, PainelApiPonto,
 } from "@/services/adminApi";
 import { CATALOGO, DEFINICOES } from "./blocos";
+import { rotuloDoMotivo } from "./registrarContato";
 import type {
-  Alerta, Bloco, BlocoDetalhe, BlocoId, Celula, ConversaContato, Destaque, FichaCliente, Indicador,
+  Alerta, Bloco, BlocoDetalhe, BlocoId, Celula, ContatoDaFicha, ConversaContato, Destaque, FichaCliente, Indicador,
   ItemCatalogo, Lista, PainelHoje, Ponto, SerieDetalhe, Tom, TipoGrafico, Variacao,
 } from "./tipos";
 
@@ -465,9 +466,39 @@ export function adaptarFicha(raw: PainelApiFicha): FichaCliente {
       : null,
     modulos: modulos,
     linha_do_tempo: (raw.linha_do_tempo || []).map(function(e) {
+      // Contato da equipe: o título diz canal e resultado, a frase vem junto.
+      if (e.contato && e.contato.body) {
+        return { data: dataCurta(String(e.quando).slice(0, 10)), texto: e.titulo + " — " + e.contato.body };
+      }
       return { data: dataCurta(String(e.quando).slice(0, 10)), texto: e.titulo + (e.valor != null ? " · " + brl(e.valor, true) : "") };
     }),
+    em_trial: c.stage === "trial",
+    contatos: (raw.contatos || []).map(function(ct) { return adaptarContato(ct); }),
+    checkin: raw.checkin || null,
     fontes: "banco Aura · Asaas · audit_log",
+  };
+}
+
+// "2026-10-16" → "sexta, 16/10"
+var SEMANA_CURTA = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+function diaComSemana(ymd: string): string {
+  var p = ymd.split("-").map(Number);
+  var d = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
+  return SEMANA_CURTA[d.getUTCDay()] + ", " + String(p[2]).padStart(2, "0") + "/" + String(p[1]).padStart(2, "0");
+}
+
+export function adaptarContato(c: PainelApiContatoDaFicha, hoje: string = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10)): ContatoDaFicha {
+  var partes: string[] = [];
+  if (c.proximo_passo) partes.push(c.proximo_passo);
+  if (c.proximo_passo_em) partes.push(diaComSemana(c.proximo_passo_em));
+  return {
+    id: c.id,
+    data: dataCurta(String(c.quando).slice(0, 10)),
+    titulo: c.titulo,
+    texto: c.body,
+    proximo: partes.length ? partes.join(" · ") : null,
+    atrasado: !!c.proximo_passo_em && c.proximo_passo_em < hoje,
+    motivo: c.motivo ? (rotuloDoMotivo(c.motivo) || c.motivo) : null,
   };
 }
 
