@@ -190,7 +190,9 @@ export function ScreenHero({ eyebrow, title, subtitle, live, badge, actions }: S
 // ============================================================
 // 16/09/2026 (I1.3) — `testID` opcional: /whatsapp precisava manter os
 // testIDs históricos das abas (wa-varejo-aba-N) ao migrar pro padrão.
-export type ScreenTabItem = { key: string; label: string; locked?: boolean; testID?: string };
+// 14/10/2026: `dot` opcional — ponto colorido ao lado do rótulo (cor do estado,
+// ex.: certificado A1 da NF-e). Ausente = nada muda para as outras telas.
+export type ScreenTabItem = { key: string; label: string; locked?: boolean; testID?: string; dot?: string };
 
 type ScreenTabsProps = {
   tabs: ScreenTabItem[];
@@ -225,6 +227,7 @@ export function ScreenTabs({ tabs, active, onSelect }: ScreenTabsProps) {
           >
             <Text style={[tb.text, { color: C.ink3 }, on && { color: "#fff", fontWeight: "600" }]}>{t.label}</Text>
             {t.locked && <Icon name="lock" size={10} color={on ? "#fff" : C.ink3} />}
+            {!!t.dot && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: t.dot }} />}
           </Pressable>
         );
       })}

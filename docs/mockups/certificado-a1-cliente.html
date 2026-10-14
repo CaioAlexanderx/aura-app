@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mockup — Aba Certificado A1 (cliente)</title>
+<style>
+:root{
+  --bg:#0b0b12; --bg2:#13131d; --card:#1a1a26; --card2:#20202e; --bd:#2a2a3a;
+  --tx:#f4f4f8; --tx2:#a0a0b8; --vi:#7c3aed; --vi2:#a78bfa;
+  --gr:#22c55e; --am:#f59e0b; --rd:#ef4444;
+  --gr-bg:rgba(34,197,94,.10); --am-bg:rgba(245,158,11,.10); --rd-bg:rgba(239,68,68,.10);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--tx);font-family:Inter,"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer}
+svg{flex:none}
+
+/* ---------- barra de controle do mockup (fora da tela) ---------- */
+.ctl{position:sticky;top:0;z-index:20;background:rgba(11,11,18,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--bd);padding:10px 16px}
+.ctl-in{max-width:1320px;margin:0 auto;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:flex-start}
+.ctl h1{font-size:13px;font-weight:600;margin:0 0 6px;color:var(--tx2);letter-spacing:.2px}
+.grp{display:flex;flex-direction:column;gap:4px}
+.grp-l{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:#6f6f88}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:transparent;border:1px solid var(--bd);color:var(--tx2);border-radius:999px;padding:4px 11px;font-size:12px}
+.chip:hover{border-color:#44445c;color:var(--tx)}
+.chip[aria-pressed="true"]{background:rgba(124,58,237,.18);border-color:var(--vi);color:#fff}
+.sw{display:flex;gap:0;border:1px solid var(--bd);border-radius:8px;overflow:hidden}
+.sw button{background:transparent;border:0;padding:4px 11px;font-size:12px;color:var(--tx2)}
+.sw button[aria-pressed="true"]{background:rgba(124,58,237,.22);color:#fff}
+.hint{font-size:11px;color:#6f6f88;max-width:260px}
+
+/* ---------- layout geral ---------- */
+.wrap{max-width:1320px;margin:0 auto;padding:20px 16px 48px;display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:24px;align-items:start}
+@media (max-width:1100px){.wrap{grid-template-columns:minmax(0,1fr)}}
+.stage{display:flex;justify-content:center;background:
+  radial-gradient(circle at 1px 1px,#1c1c28 1px,transparent 0) 0 0/18px 18px;border:1px dashed var(--bd);border-radius:14px;padding:24px 12px}
+.frame{container-type:inline-size;width:100%;max-width:940px;background:var(--bg2);border:1px solid var(--bd);border-radius:14px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.45)}
+.frame.mobile{max-width:375px;border-radius:26px;border-width:2px}
+
+/* ---------- tela do app ---------- */
+.app{padding:20px 20px 28px}
+.app-top{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;justify-content:space-between;margin-bottom:14px}
+.app h2{font-size:20px;font-weight:700;margin:0;letter-spacing:-.2px}
+.co{display:inline-flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:6px 10px;font-size:12px;color:var(--tx2);max-width:100%}
+.co b{color:var(--tx);font-weight:600}
+.co .sep{opacity:.4}
+.co button{background:none;border:0;padding:0;color:var(--vi2);font-size:12px;display:inline-flex;align-items:center;gap:3px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--bd);overflow-x:auto;scrollbar-width:none;margin:0 -20px 20px;padding:0 20px}
+.tabs::-webkit-scrollbar{display:none}
+.tab{background:none;border:0;border-bottom:2px solid transparent;padding:10px 12px;color:var(--tx2);white-space:nowrap;font-size:13px;display:inline-flex;align-items:center;gap:7px;margin-bottom:-1px;cursor:default}
+.tab.on{color:#fff;border-bottom-color:var(--vi2);font-weight:600}
+.dot{width:8px;height:8px;border-radius:50%}
+.dot.g{background:var(--gr)}.dot.a{background:var(--am)}.dot.r{background:var(--rd)}
+
+.banner{display:flex;gap:12px;align-items:flex-start;border:1px solid;border-radius:12px;padding:12px 14px;margin-bottom:16px}
+.banner.a{background:var(--am-bg);border-color:rgba(245,158,11,.4)}
+.banner.r{background:var(--rd-bg);border-color:rgba(239,68,68,.45)}
+.banner.g{background:var(--gr-bg);border-color:rgba(34,197,94,.4)}
+.banner b{display:block;font-weight:600;margin-bottom:1px}
+.banner p{margin:0;color:var(--tx2)}
+.banner.a svg{color:var(--am)}.banner.r svg{color:var(--rd)}.banner.g svg{color:var(--gr)}
+
+.two{display:grid;grid-template-columns:1.25fr 1fr;gap:16px;align-items:stretch}
+@container (max-width:640px){
+  .two{grid-template-columns:minmax(0,1fr)}
+  .app{padding:16px 16px 24px}
+  .tabs{margin:0 -16px 18px;padding:0 16px}
+  .cert-top{flex-direction:column}
+  .cert-actions{width:100%}
+  .cert-actions .btn{width:100%}
+}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:18px}
+.card h3{margin:0 0 4px;font-size:15px;font-weight:700;display:flex;gap:8px;align-items:center}
+.card .sub{margin:0 0 14px;color:var(--tx2);font-size:13px}
+.card.help{display:flex;flex-direction:column}
+.card.help .grow{flex:1}
+
+.steps{list-style:none;margin:0 0 16px;padding:0;display:grid;gap:10px}
+.steps li{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--tx2)}
+.steps .n{width:22px;height:22px;border-radius:50%;background:rgba(124,58,237,.18);color:var(--vi2);font-weight:700;font-size:12px;display:grid;place-items:center;flex:none;margin-top:1px}
+.steps b{color:var(--tx);font-weight:600}
+
+label.fl{display:block;font-size:12px;font-weight:600;margin:0 0 6px;color:var(--tx)}
+.field{margin-bottom:14px}
+.filebox{display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--bd);border-radius:10px;padding:6px 6px 6px 12px;min-height:46px}
+.filebox .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tx2);font-size:13px;display:flex;align-items:center;gap:8px}
+.filebox .name.has{color:var(--tx)}
+.filebox.err{border-color:var(--rd);box-shadow:0 0 0 3px rgba(239,68,68,.15)}
+.pw{position:relative}
+.pw input{width:100%;height:46px;background:var(--bg2);border:1px solid var(--bd);border-radius:10px;color:var(--tx);padding:0 46px 0 12px;font:inherit;outline:none}
+.pw input:focus{border-color:var(--vi2);box-shadow:0 0 0 3px rgba(124,58,237,.25)}
+.pw input.err{border-color:var(--rd);box-shadow:0 0 0 3px rgba(239,68,68,.15)}
+.pw input:disabled,.filebox.dis{opacity:.6}
+.eye{position:absolute;right:4px;top:3px;width:40px;height:40px;background:none;border:0;border-radius:8px;color:var(--tx2);display:grid;place-items:center}
+.eye:hover{color:var(--tx);background:rgba(255,255,255,.05)}
+.help-t{font-size:12px;color:#7d7d96;margin-top:6px}
+.err-t{display:flex;gap:7px;align-items:flex-start;color:#fca5a5;font-size:13px;margin-top:8px}
+.err-t svg{color:var(--rd);margin-top:2px}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:10px;border:1px solid transparent;min-height:44px;padding:0 18px;font-weight:600;font-size:14px;transition:filter .15s,background .15s,border-color .15s}
+.btn.pri{background:linear-gradient(135deg,#7c3aed,#9d5cf6);color:#fff;box-shadow:0 6px 18px rgba(124,58,237,.35)}
+.btn.pri:hover:not(:disabled){filter:brightness(1.08)}
+.btn.pri:disabled{background:#2a2a3a;color:#7d7d96;box-shadow:none;cursor:not-allowed}
+.btn.sec{background:transparent;border-color:#3a3a50;color:var(--tx)}
+.btn.sec:hover{border-color:var(--vi2);background:rgba(124,58,237,.1)}
+.btn.wa{background:transparent;border-color:rgba(34,197,94,.55);color:#86efac}
+.btn.wa:hover{background:var(--gr-bg)}
+.btn.ghost{background:none;color:var(--tx2);padding:0 10px;min-height:44px}
+.btn.ghost:hover{color:var(--tx)}
+.btn.sm{min-height:38px;padding:0 14px;font-size:13px}
+.btn.full{width:100%}
+.spin{animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.row-a{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:16px}
+
+.sec-note{display:flex;gap:8px;align-items:flex-start;color:var(--tx2);font-size:12px;margin-top:14px;padding-top:12px;border-top:1px solid var(--bd)}
+.sec-note svg{color:var(--vi2);margin-top:1px}
+
+.msg{background:var(--bg2);border:1px solid var(--bd);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--tx2);margin:12px 0}
+.msg b{display:block;color:#7d7d96;font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.7px;margin-bottom:3px}
+
+/* cartão do certificado */
+.cert{border:1px solid;border-radius:12px;padding:18px;margin-bottom:16px;background:var(--card)}
+.cert.g{border-color:rgba(34,197,94,.5);background:linear-gradient(180deg,var(--gr-bg),var(--card) 70%)}
+.cert.a{border-color:rgba(245,158,11,.55);background:linear-gradient(180deg,var(--am-bg),var(--card) 70%)}
+.cert.r{border-color:rgba(239,68,68,.55);background:linear-gradient(180deg,var(--rd-bg),var(--card) 70%)}
+.cert-top{display:flex;gap:16px;justify-content:space-between;align-items:flex-start}
+.cert-head{display:flex;gap:12px;align-items:flex-start;min-width:0}
+.cert-ico{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;flex:none}
+.cert.g .cert-ico{background:rgba(34,197,94,.16);color:var(--gr)}
+.cert.a .cert-ico{background:rgba(245,158,11,.16);color:var(--am)}
+.cert.r .cert-ico{background:rgba(239,68,68,.16);color:var(--rd)}
+.status{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.7px}
+.cert.g .status{color:var(--gr)}.cert.a .status{color:var(--am)}.cert.r .status{color:var(--rd)}
+.cert h3{margin:2px 0 0;font-size:17px;font-weight:700}
+.cert .cnpj{color:var(--tx2);font-size:13px}
+.cert-meta{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.07)}
+.meta-i{font-size:12px;color:var(--tx2)}
+.meta-i b{display:block;color:var(--tx);font-size:14px;font-weight:600}
+.pill{display:inline-block;border-radius:999px;padding:2px 10px;font-weight:700;font-size:13px}
+.cert.g .pill{background:rgba(34,197,94,.16);color:#86efac}
+.cert.a .pill{background:rgba(245,158,11,.18);color:#fcd34d}
+.cert.r .pill{background:rgba(239,68,68,.18);color:#fca5a5}
+.cert-actions{display:flex;flex-direction:column;gap:8px;flex:none}
+.cert-text{margin:14px 0 0;color:var(--tx2);font-size:13px}
+.cert-text b{color:var(--tx)}
+
+.who{display:flex;gap:12px;align-items:flex-start}
+.who svg{color:var(--tx2);margin-top:2px}
+
+/* ---------- notas ---------- */
+.notes{background:var(--bg2);border:1px solid var(--bd);border-radius:14px;padding:18px;position:sticky;top:96px}
+.notes h2{font-size:14px;margin:0 0 12px;display:flex;gap:8px;align-items:center}
+.notes ol{margin:0;padding:0;list-style:none;display:grid;gap:12px;counter-reset:n}
+.notes li{counter-increment:n;font-size:12.5px;color:var(--tx2);padding-left:30px;position:relative}
+.notes li::before{content:counter(n);position:absolute;left:0;top:0;width:20px;height:20px;border-radius:6px;background:rgba(124,58,237,.18);color:var(--vi2);font-weight:700;font-size:11px;display:grid;place-items:center}
+.notes li b{color:var(--tx);font-weight:600}
+.notes code{background:var(--card);border:1px solid var(--bd);border-radius:5px;padding:0 5px;font-size:11.5px;color:var(--vi2)}
+@media (max-width:1100px){.notes{position:static}}
+
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(20px);background:#262636;border:1px solid #3a3a50;border-radius:10px;padding:10px 14px;font-size:13px;opacity:0;pointer-events:none;transition:.25s;z-index:50;max-width:92vw}
+.toast.on{opacity:1;transform:translateX(-50%)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+
+<div class="ctl">
+  <div class="ctl-in">
+    <div class="grp" style="flex:1 1 520px">
+      <h1>Mockup da aba “Certificado A1” — painel de Notas fiscais (cliente)</h1>
+      <div class="chips" id="stateChips" role="group" aria-label="Estado da tela"></div>
+    </div>
+    <div class="grp">
+      <span class="grp-l">Largura</span>
+      <div class="sw" id="swW"><button data-w="mobile">Celular 375</button><button data-w="desk">Computador</button></div>
+    </div>
+    <div class="grp">
+      <span class="grp-l">Quem está vendo</span>
+      <div class="sw" id="swR"><button data-r="dono">Dono</button><button data-r="func">Funcionário</button></div>
+    </div>
+    <div class="grp">
+      <span class="grp-l">Lojas</span>
+      <div class="sw" id="swM"><button data-m="one">1 empresa</button><button data-m="multi">Várias empresas</button></div>
+    </div>
+    <div class="grp"><span class="grp-l">Teste rápido</span><span class="hint">No estado “Sem certificado”, escolha um arquivo, digite uma senha e envie. Senha “errada” mostra o erro de senha.</span></div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="stage"><div class="frame" id="frame"><div class="app" id="app"></div></div></div>
+
+  <aside class="notes" aria-label="Notas para quem implementa">
+    <h2>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>
+      Notas para quem implementa
+    </h2>
+    <ol>
+      <li><b>Só o dono vê o botão de enviar.</b> Funcionário vê o status (válido, vencendo, vencido) e um aviso “peça ao dono da empresa”. Alterne em “Quem está vendo”.</li>
+      <li><b>Certificado do mesmo CNPJ.</b> Se o CNPJ do arquivo for diferente do da empresa ativa, mostrar a mensagem específica (estado “CNPJ diferente”) citando os dois CNPJs. Nunca a mensagem genérica de arquivo inválido.</li>
+      <li><b>Várias empresas (multi-CNPJ).</b> A aba mostra no topo qual empresa está ativa. Cada empresa tem o próprio certificado. Trocar a empresa recarrega o status da aba e limpa arquivo e senha digitados.</li>
+      <li><b>Tamanho do arquivo.</b> Sugestão: até 1 MB, só <code>.pfx</code> e <code>.p12</code>. Validar no aparelho antes de enviar e repetir a validação no servidor. Valor a confirmar com o backend.</li>
+      <li><b>Senha.</b> Nunca guardar em estado persistido, log ou analytics. Limpar o campo após qualquer resposta do servidor (sucesso ou erro) e manter o foco no campo se o erro for de senha.</li>
+      <li><b>Ajuda pelo WhatsApp.</b> A mensagem pronta só avisa que o cliente quer ajuda (empresa e CNPJ). Nunca pedir arquivo ou senha por conversa. Variar o texto entre “cadastrar” e “renovar”. Número da Aura a definir.</li>
+      <li><b>Estados e prazos.</b> Âmbar quando faltarem menos de 30 dias; vermelho depois de vencido (emissão bloqueada). O ponto colorido na aba espelha o estado. Ao trocar, o certificado atual segue valendo até o novo ser aceito.</li>
+      <li><b>Acessibilidade e toque.</b> Alvos de pelo menos 44 px, erros anunciados para leitor de tela (<code>aria-live</code>), nada que dependa de passar o mouse.</li>
+    </ol>
+  </aside>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function(){
+  var EMP = {nome:'Padaria Estrela do Sul Ltda', cnpj:'12.345.678/0001-90'};
+  var OUTRO_CNPJ = '98.765.432/0001-10';
+
+  var STATES = [
+    {id:'sem',g:'Sem certificado',l:'Sem certificado'},
+    {id:'enviando',g:'Envio',l:'Enviando'},
+    {id:'erro-senha',g:'Envio',l:'Erro: senha incorreta'},
+    {id:'erro-vencido',g:'Envio',l:'Erro: arquivo vencido'},
+    {id:'erro-invalido',g:'Envio',l:'Erro: arquivo inválido'},
+    {id:'erro-cnpj',g:'Envio',l:'Erro: CNPJ diferente'},
+    {id:'sucesso',g:'Envio',l:'Sucesso após envio'},
+    {id:'valido',g:'Com certificado',l:'Válido'},
+    {id:'troca',g:'Com certificado',l:'Válido, trocando'},
+    {id:'vencendo',g:'Com certificado',l:'Vencendo'},
+    {id:'vencido',g:'Com certificado',l:'Vencido'}
+  ];
+
+  var I = {
+    lock:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>',
+    shield:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>',
+    shieldWarn:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M12 8v4M12 15.5v.01"/></svg>',
+    shieldX:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9.5 9.5l5 5M14.5 9.5l-5 5"/></svg>',
+    warn:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><path d="M12 9v4M12 17v.01"/></svg>',
+    xcirc:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>',
+    check:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12.5l3 3 5-6"/></svg>',
+    file:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5"/></svg>',
+    eye:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+    eyeOff:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.9 17.9A10.9 10.9 0 0112 19C5 19 1 12 1 12a18.5 18.5 0 015.1-5.9M9.9 5.1A10.4 10.4 0 0112 5c7 0 11 7 11 7a18.5 18.5 0 01-2.2 3.2M1 1l22 22"/><path d="M14.1 14.1a3 3 0 01-4.2-4.2"/></svg>',
+    wa:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 01-12.6 7.3L3 20.5l1.7-5.2A8.4 8.4 0 1121 11.5z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1.3-1.5-2-1-1 .7a3.5 3.5 0 01-1.6-1.6l.7-1-1-2z"/></svg>',
+    spin:'<svg class="spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 3a9 9 0 019 9" /><circle cx="12" cy="12" r="9" opacity=".25"/></svg>',
+    chev:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
+    user:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/></svg>',
+    store:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1.5-5h15L21 9M3 9v11h18V9M3 9h18M9 20v-6h6v6"/></svg>',
+    info:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8v.01"/></svg>'
+  };
+
+  var S = {s:'sem', w:'desk', r:'dono', m:'multi', file:'', pass:'', show:false, open:false, timer:null};
+
+  function $(id){return document.getElementById(id)}
+  function esc(t){return String(t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+
+  var FILE_OK = 'certificado-padaria-estrela.pfx';
+  function preset(id){
+    clearTimeout(S.timer);
+    S.s = id; S.show = false; S.open = false;
+    if(id==='sem'){S.file='';S.pass='';}
+    else if(id==='enviando'||id==='erro-senha'){S.file=FILE_OK;S.pass='senha-digitada';}
+    else if(id==='erro-vencido'){S.file='certificado-2025.pfx';S.pass='senha-digitada';}
+    else if(id==='erro-invalido'){S.file='fotos-da-loja.zip';S.pass='senha-digitada';}
+    else if(id==='erro-cnpj'){S.file='certificado-outra-empresa.pfx';S.pass='senha-digitada';}
+    else {S.file='';S.pass='';}
+    if(id==='troca'||id==='vencido'){S.open=true;}
+    render();
+  }
+
+  /* ---------- peças ---------- */
+  function helpMsg(kind){
+    var base = kind==='renovar' ? 'renovar o certificado digital A1' : 'cadastrar o certificado digital A1';
+    return 'Olá, Aura! Quero ajuda para '+base+' da minha empresa '+EMP.nome+' (CNPJ '+EMP.cnpj+').';
+  }
+  function helpCard(kind, title){
+    return '<div class="card help">'+
+      '<h3>'+I.wa.replace('width="18" height="18"','width="20" height="20"')+(title||'Quero ajuda da Aura')+'</h3>'+
+      '<p class="sub">Prefere não mexer com isso? A equipe da Aura cuida do cadastro com você, sem pressa e sem termos difíceis.</p>'+
+      '<div class="grow">'+
+        '<div class="msg"><b>Mensagem que vai pronta no WhatsApp</b>'+esc(helpMsg(kind))+'</div>'+
+      '</div>'+
+      '<button class="btn wa full" data-act="wa">'+I.wa+'Chamar a Aura no WhatsApp</button>'+
+      '<div class="sec-note">'+I.lock+'<span>Não envie o arquivo nem a senha pela conversa. A equipe te orienta por lá.</span></div>'+
+    '</div>';
+  }
+
+  function formCard(opts){
+    opts = opts||{};
+    var busy = S.s==='enviando';
+    var sn = S.s;
+    var fileErr = (sn==='erro-vencido'||sn==='erro-invalido'||sn==='erro-cnpj');
+    var pwErr = sn==='erro-senha';
+    var ready = S.file && S.pass && !busy;
+    var title = opts.troca ? 'Enviar um novo certificado' : 'Eu mesmo cadastro';
+    var sub = opts.troca ? 'O certificado atual continua valendo até o novo ser aceito.' : 'Leva uns 2 minutos. Você só precisa do arquivo e da senha do certificado.';
+    var steps = opts.troca ? '' :
+      '<ol class="steps">'+
+        '<li><span class="n">1</span><span><b>Tenha o arquivo do certificado A1 em mãos.</b> É o arquivo que termina em .pfx ou .p12, que você recebeu ao comprar o certificado digital. O contador ou quem vendeu o certificado pode reenviar.</span></li>'+
+        '<li><span class="n">2</span><span><b>Escolha o arquivo</b> aqui embaixo.</span></li>'+
+        '<li><span class="n">3</span><span><b>Digite a senha do certificado</b>, a mesma que você criou quando o emitiu.</span></li>'+
+      '</ol>';
+    var fileMsg = '';
+    if(sn==='erro-vencido') fileMsg = 'Este certificado já venceu em 12/09/2026. Peça a renovação a quem emitiu o certificado e envie o arquivo novo.';
+    if(sn==='erro-invalido') fileMsg = 'Não conseguimos ler este arquivo. Escolha o arquivo do certificado A1, que termina em .pfx ou .p12.';
+    if(sn==='erro-cnpj') fileMsg = 'Este certificado é da empresa de CNPJ '+OUTRO_CNPJ+', e a empresa ativa é '+EMP.nome+' (CNPJ '+EMP.cnpj+'). Envie o certificado desta empresa.';
+    var pwMsg = pwErr ? 'A senha está incorreta. Confira e tente de novo. Se não lembra, a Aura pode te ajudar.' : '';
+    return '<div class="card">'+
+      '<h3>'+I.lock.replace('16','20')+title+'</h3>'+
+      '<p class="sub">'+sub+'</p>'+steps+
+      '<div class="field">'+
+        '<label class="fl" for="fileBtn">Arquivo do certificado</label>'+
+        '<div class="filebox'+(fileErr?' err':'')+(busy?' dis':'')+'">'+
+          '<span class="name'+(S.file?' has':'')+'">'+I.file+'<span style="overflow:hidden;text-overflow:ellipsis">'+(S.file?esc(S.file):'Nenhum arquivo escolhido')+'</span></span>'+
+          '<button type="button" class="btn sec sm" id="fileBtn" data-act="pick"'+(busy?' disabled':'')+'>'+(S.file?'Trocar arquivo':'Escolher arquivo')+'</button>'+
+          '<input type="file" id="fileIn" accept=".pfx,.p12" class="sr" tabindex="-1" aria-hidden="true">'+
+        '</div>'+
+        (fileErr?'<div class="err-t" role="alert">'+I.xcirc+'<span>'+esc(fileMsg)+'</span></div>':'<div class="help-t">Arquivos .pfx ou .p12, de até 1 MB.</div>')+
+      '</div>'+
+      '<div class="field">'+
+        '<label class="fl" for="pw">Senha do certificado</label>'+
+        '<div class="pw"><input id="pw" type="'+(S.show?'text':'password')+'" autocomplete="off" placeholder="Digite a senha" value="'+esc(S.pass)+'"'+(pwErr?' class="err"':'')+(busy?' disabled':'')+' aria-invalid="'+(pwErr?'true':'false')+'">'+
+          '<button type="button" class="eye" data-act="eye" aria-label="'+(S.show?'Ocultar senha':'Mostrar senha')+'">'+(S.show?I.eyeOff:I.eye)+'</button></div>'+
+        (pwErr?'<div class="err-t" role="alert">'+I.xcirc+'<span>'+esc(pwMsg)+'</span></div>':'')+
+      '</div>'+
+      (busy?'<div class="help-t" style="margin:-4px 0 12px" role="status">Estamos conferindo o certificado. Leva alguns segundos, não feche esta tela.</div>':'')+
+      '<div class="row-a" style="margin-top:6px">'+
+        '<button class="btn pri" id="sendBtn" data-act="send"'+(ready?'':' disabled')+' style="flex:1 1 200px">'+(busy?I.spin+'Enviando…':'Enviar certificado')+'</button>'+
+        (opts.troca&&!busy?'<button class="btn ghost" data-act="cancel">Cancelar</button>':'')+
+      '</div>'+
+      '<div class="sec-note">'+I.lock+'<span>Seu certificado é guardado criptografado e a senha não fica salva.</span></div>'+
+    '</div>';
+  }
+
+  function certCard(kind){
+    var cfg = {
+      g:{ico:I.shield, st:'Certificado válido', pill:'faltam 290 dias', per:'Válido de 12/03/2026 a 12/03/2027', note:'Tudo certo. Sua empresa pode emitir notas normalmente.'},
+      a:{ico:I.shieldWarn, st:'Vence em breve', pill:'faltam 19 dias', per:'Válido de 02/11/2025 a 02/11/2026', note:'Renove antes de vencer. Se o certificado vencer, a emissão de notas fica bloqueada até você enviar o novo.'},
+      r:{ico:I.shieldX, st:'Certificado vencido', pill:'venceu há 32 dias', per:'Válido de 12/09/2025 a 12/09/2026', note:'Enquanto não enviar um certificado novo, sua empresa não consegue emitir notas fiscais.'},
+      s:{ico:I.shield, st:'Certificado cadastrado', pill:'faltam 356 dias', per:'Válido de 14/10/2026 a 14/10/2027', note:''}
+    }[kind==='s'?'s':kind];
+    var cls = kind==='s'?'g':kind;
+    var actions = '';
+    if(S.r==='dono'){
+      if(kind==='g') actions = '<button class="btn sec" data-act="open">Trocar certificado</button>';
+      if(kind==='a') actions = '<button class="btn pri" data-act="open">Enviar o certificado renovado</button><button class="btn wa" data-act="wa">'+I.wa+'Quero ajuda para renovar</button>';
+      if(kind==='r') actions = '<button class="btn wa" data-act="wa">'+I.wa+'Quero ajuda para renovar</button>';
+    }
+    return '<div class="cert '+cls+'">'+
+      '<div class="cert-top">'+
+        '<div class="cert-head"><div class="cert-ico">'+cfg.ico+'</div>'+
+          '<div style="min-width:0"><div class="status">'+cfg.st+'</div><h3>'+esc(EMP.nome)+'</h3><div class="cnpj">CNPJ '+EMP.cnpj+'</div></div></div>'+
+        (actions?'<div class="cert-actions">'+actions+'</div>':'')+
+      '</div>'+
+      '<div class="cert-meta">'+
+        '<div class="meta-i">Titular<b>'+esc(EMP.nome)+'</b></div>'+
+        '<div class="meta-i">Validade<b>'+cfg.per+'</b></div>'+
+        '<div class="meta-i">Prazo<b><span class="pill">'+cfg.pill+'</span></b></div>'+
+      '</div>'+
+      (cfg.note?'<p class="cert-text">'+cfg.note+'</p>':'')+
+    '</div>';
+  }
+
+  function onlyOwner(){
+    return '<div class="card"><div class="who">'+I.user+'<div><h3 style="margin-bottom:2px">Só o dono da empresa cadastra o certificado</h3>'+
+      '<p class="sub" style="margin:0">Peça ao dono para abrir esta aba e enviar o certificado, ou para chamar a Aura. Você pode acompanhar a situação aqui.</p></div></div></div>';
+  }
+
+  /* ---------- tela ---------- */
+  function render(){
+    var st = S.s, dono = S.r==='dono';
+    var tabDot = ({sem:'a',enviando:'a','erro-senha':'a','erro-vencido':'a','erro-invalido':'a','erro-cnpj':'a',sucesso:'g',valido:'g',troca:'g',vencendo:'a',vencido:'r'})[st];
+    var multi = S.m==='multi';
+    var h = '';
+    h += '<div class="app-top"><h2>Notas fiscais</h2>'+
+      '<div class="co">'+I.store+'<span>Empresa ativa: <b>'+esc(EMP.nome)+'</b></span><span class="sep">·</span><span>'+EMP.cnpj+'</span>'+
+      (multi?'<span class="sep">·</span><button type="button" data-act="co">Trocar empresa '+I.chev+'</button>':'')+'</div></div>';
+    h += '<div class="tabs" role="tablist">'+
+      '<span class="tab" role="tab">Documentos</span><span class="tab" role="tab">Emitir NFS-e</span><span class="tab" role="tab">Emitir NFC-e</span>'+
+      '<span class="tab on" role="tab" aria-selected="true">Certificado A1<span class="dot '+tabDot+'"></span></span></div>';
+    if(multi) h += '<p class="help-t" style="margin:-8px 0 16px">Cada empresa tem o seu próprio certificado. O que você vê abaixo vale só para a empresa ativa.</p>';
+
+    var noCert = ['sem','enviando','erro-senha','erro-vencido','erro-invalido','erro-cnpj'].indexOf(st)>=0;
+    if(noCert){
+      h += '<div class="banner a">'+I.warn+'<div><b>Nenhum certificado cadastrado</b><p>Sem o certificado digital A1, a emissão de notas fiscais fica bloqueada. Cadastre agora para liberar.</p></div></div>';
+      if(dono) h += '<div class="two">'+formCard()+helpCard('cadastrar')+'</div>';
+      else h += onlyOwner();
+    } else if(st==='sucesso'){
+      h += '<div class="banner g">'+I.check+'<div><b>Certificado cadastrado com sucesso</b><p>Pronto! Sua empresa já pode emitir notas fiscais. A senha não ficou salva.</p></div></div>';
+      h += certCard('s');
+      h += '<div class="row-a" style="margin-top:0"><button class="btn pri" data-act="goto">Emitir uma nota agora</button><button class="btn ghost" data-act="done">Ver certificado</button></div>';
+    } else {
+      var kind = st==='vencendo'?'a':(st==='vencido'?'r':'g');
+      h += certCard(kind);
+      if(dono && S.open){
+        h += '<div class="two">'+formCard({troca:true})+helpCard(kind==='g'?'cadastrar':'renovar', kind==='g'?'Prefere ajuda da Aura?':'Quero ajuda para renovar')+'</div>';
+      } else if(!dono){
+        h += onlyOwner();
+      }
+    }
+    $('app').innerHTML = h;
+    bind();
+    chips();
+  }
+
+  function bind(){
+    var app = $('app');
+    var fi = $('fileIn'), pw = $('pw');
+    if(fi) fi.addEventListener('change', function(){
+      if(fi.files && fi.files[0]){ S.file = fi.files[0].name; if(S.s.indexOf('erro')===0) S.s='sem'; render(); }
+    });
+    if(pw) pw.addEventListener('input', function(){
+      S.pass = pw.value;
+      if(S.s==='erro-senha'){S.s='sem'; pw.classList.remove('err');}
+      var b=$('sendBtn'); if(b) b.disabled = !(S.file && S.pass);
+    });
+    app.querySelectorAll('[data-act]').forEach(function(el){
+      el.addEventListener('click', function(e){
+        var a = el.getAttribute('data-act');
+        if(a==='pick'){ fi.click(); }
+        else if(a==='eye'){ S.show=!S.show; var v=pw.value; render(); $('pw').value=v; }
+        else if(a==='open'){ S.open=true; render(); }
+        else if(a==='cancel'){ S.open=false; S.file=''; S.pass=''; if(S.s==='troca') S.s='valido'; render(); }
+        else if(a==='wa'){ toast('No app real isto abre o WhatsApp da Aura com a mensagem pronta (sem arquivo e sem senha).'); }
+        else if(a==='co'){ toast('Abre a lista de empresas da conta; a aba recarrega para a empresa escolhida.'); }
+        else if(a==='goto'){ toast('Leva para a aba Emitir NFC-e.'); }
+        else if(a==='done'){ S.s='valido'; render(); }
+        else if(a==='send'){ send(); }
+      });
+    });
+  }
+
+  function send(){
+    var fname = (S.file||'').toLowerCase();
+    if(!/\.(pfx|p12)$/.test(fname)){ S.s='erro-invalido'; render(); return; }
+    S.s='enviando'; render();
+    S.timer = setTimeout(function(){
+      if(S.pass.toLowerCase()==='errada'){ S.s='erro-senha'; S.pass=''; render(); var p=$('pw'); if(p) p.focus(); }
+      else { S.s='sucesso'; S.pass=''; render(); }
+    }, 1500);
+  }
+
+  /* ---------- controles do mockup ---------- */
+  function chips(){
+    var wrap = $('stateChips'), html='', last='';
+    STATES.forEach(function(x){
+      if(x.g!==last){ html += (last?'<span style="width:100%;height:0"></span>':'')+'<span class="grp-l" style="align-self:center;min-width:92px">'+x.g+'</span>'; last=x.g; }
+      html += '<button class="chip" data-s="'+x.id+'" aria-pressed="'+(S.s===x.id)+'">'+x.l+'</button>';
+    });
+    wrap.innerHTML = html;
+    wrap.querySelectorAll('.chip').forEach(function(b){ b.onclick=function(){ preset(b.getAttribute('data-s')); }; });
+    [['swW','w','data-w'],['swR','r','data-r'],['swM','m','data-m']].forEach(function(t){
+      $(t[0]).querySelectorAll('button').forEach(function(b){
+        b.setAttribute('aria-pressed', String(S[t[1]]===b.getAttribute(t[2])));
+      });
+    });
+    $('frame').classList.toggle('mobile', S.w==='mobile');
+  }
+  [['swW','w','data-w'],['swR','r','data-r'],['swM','m','data-m']].forEach(function(t){
+    $(t[0]).addEventListener('click', function(e){
+      var b = e.target.closest('button'); if(!b) return;
+      S[t[1]] = b.getAttribute(t[2]); render();
+    });
+  });
+
+  var tt;
+  function toast(m){ var t=$('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(tt); tt=setTimeout(function(){t.classList.remove('on')},3200); }
+
+  S.w = 'desk';
+  render();
+})();
+</script>
+</body>
+</html>

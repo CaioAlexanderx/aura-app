@@ -14,9 +14,13 @@ export type NfeDoc = {
   value: number; issued_at: string | null; cancelled_at: string | null; created_at: string;
 };
 
-// Aba Configuração some — certificado A1 é cadastrado direto via console
-// da Nuvem Fiscal (decisão registrada no plano).
-export const TABS = ["Documentos", "Emitir NFS-e", "Emitir NFC-e"];
+// Aba Configuração some — certificado A1 era cadastrado direto via console
+// da Nuvem Fiscal (decisão registrada no plano). 14/10/2026: o dono passa a
+// cadastrar o próprio certificado A1 na aba "Certificado A1" (TabCertificado),
+// com o mesmo formato da Gestão Aura. Fica por último: os índices das outras
+// abas (setTab(1), setTab(2) em app/(tabs)/nfe.tsx) não mudam.
+export const TABS = ["Documentos", "Emitir NFS-e", "Emitir NFC-e", "Certificado A1"];
+export const TAB_CERTIFICADO = TABS.indexOf("Certificado A1");
 
 export const fmt = (n: number) => `R$ ${Number(n || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
