@@ -156,6 +156,22 @@ function meAcabouDeVoltar(token: string): boolean {
   return !!_ultimoMe && _ultimoMe.token === token && Date.now() - _ultimoMe.em < JANELA_DO_ME_MS;
 }
 
+// Campos que o /auth/me preenche: o que difere do estado atual (objetos
+// comparados por conteúdo, primitivos por valor). Vazio = nada a gravar.
+function mudancasDoMe(atual: Record<string, any>, proximo: Record<string, any>): Record<string, any> {
+  const patch: Record<string, any> = {};
+  for (const k of Object.keys(proximo)) {
+    const a = atual[k];
+    const b = proximo[k];
+    if (a === b) continue;
+    if (a && b && typeof a === "object" && typeof b === "object") {
+      try { if (JSON.stringify(a) === JSON.stringify(b)) continue; } catch { /* grava */ }
+    }
+    patch[k] = b;
+  }
+  return patch;
+}
+
 /** Só para testes: zera o controle do /auth/me entre casos. */
 export function __zerarControleDoMe(): void {
   _meEmVoo = null;
@@ -373,7 +389,12 @@ export const useAuthStore = create<AuthState>((set, get) => {
         const trialEnd = (company as any)?.trial_ends_at;
         const trialActive = !!(trialEnd && new Date(trialEnd) > new Date());
         const staff = !!(user?.is_staff || (user?.email || "").endsWith("@getaura.com.br"));
-        set({
+        // 14/10/2026 (t2-16): a revalidação agora roda em segundo plano
+        // (useRevalidarMe), com a loja usando o app. Só grava o que mudou:
+        // resposta igual não troca a referência de `company`/`user`, então
+        // nenhuma tela re-renderiza nem refaz efeito que dependa dela.
+        const atual = get();
+        const proximo: Partial<AuthState> = {
           user,
           company: consolidatedFromApi ? null : (company ?? null),
           isStaff: staff,
@@ -381,7 +402,9 @@ export const useAuthStore = create<AuthState>((set, get) => {
           trialEndsAt: trialEnd || null,
           consolidatedView: consolidatedFromApi,
           companyCount,
-        });
+        };
+        const patch = mudancasDoMe(atual, proximo);
+        if (Object.keys(patch).length > 0) set(patch);
       } catch (err: any) {
         console.warn("[AUTH] refreshMe failed:", err?.message || err);
       }
