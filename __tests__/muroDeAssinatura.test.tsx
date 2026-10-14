@@ -75,3 +75,59 @@ describe("AvisoAssine", () => {
     expect(textoDoAviso("2026-10-02").titulo).toBe("Seu período de teste terminou");
   });
 });
+
+// 14/10/2026 (decisão da Nina, aprovada pelo Caio): o título do muro depende
+// de a loja ter vendido ou não durante o teste (company.trial).
+describe("título do muro conforme company.trial", () => {
+  const FIM = "2026-10-02T00:00:00Z";
+  const trial = (extra: Record<string, unknown> = {}) => ({
+    mode: "primeira_venda",
+    ends_at: FIM,
+    started_by_sale_at: null,
+    dias_restantes: 0,
+    teto_em: FIM,
+    aguardando_primeira_venda: false, // vencido: o servidor não "aguarda" mais
+    dias_apos_primeira_venda: 7,
+    ...extra,
+  });
+  const CORPO = "O Caixa continua funcionando. Estoque, clientes, relatórios e o resto ficam bloqueados até você assinar.";
+
+  it("vencido sem nunca ter vendido: 'Seu período de teste terminou'", () => {
+    const t = textoDoAviso(FIM, trial());
+    expect(t.titulo).toBe("Seu período de teste terminou");
+    expect(t.corpo).toBe(CORPO);
+  });
+
+  it("vencido depois de vender: 'Seus 7 dias de teste terminaram'", () => {
+    const t = textoDoAviso(FIM, trial({ started_by_sale_at: "2026-09-25T12:00:00Z" }));
+    expect(t.titulo).toBe("Seus 7 dias de teste terminaram");
+    expect(t.corpo).toBe(CORPO);
+  });
+
+  it("modo fixo (código, cupom, extensão) e backend sem o bloco: texto neutro", () => {
+    expect(textoDoAviso(FIM, trial({ mode: "fixo", started_by_sale_at: "2026-09-25T12:00:00Z" })).titulo)
+      .toBe("Seu período de teste terminou");
+    expect(textoDoAviso(FIM, null).titulo).toBe("Seu período de teste terminou");
+    expect(textoDoAviso(FIM, undefined).titulo).toBe("Seu período de teste terminou");
+    expect(textoDoAviso(FIM, "lixo").titulo).toBe("Seu período de teste terminou");
+  });
+
+  it("sem trial_ends_at continua 'Sua assinatura está inativa', mesmo com bloco", () => {
+    expect(textoDoAviso(null, trial({ started_by_sale_at: "2026-09-25T12:00:00Z" })).titulo)
+      .toBe("Sua assinatura está inativa");
+  });
+
+  it("o componente repassa company.trial ao texto", () => {
+    let t!: renderer.ReactTestRenderer;
+    act(() => {
+      t = renderer.create(
+        <AvisoAssine trialEndsAt={FIM} trial={trial({ started_by_sale_at: "2026-09-25T12:00:00Z" })} />,
+      );
+    });
+    expect(JSON.stringify(t.toJSON())).toContain("Seus 7 dias de teste terminaram");
+    act(() => { t.update(<AvisoAssine trialEndsAt={FIM} trial={trial()} />); });
+    const out = JSON.stringify(t.toJSON());
+    expect(out).toContain("Seu período de teste terminou");
+    expect(out).not.toContain("Seus 7 dias");
+  });
+});

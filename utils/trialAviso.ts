@@ -24,7 +24,13 @@
 //     contando a partir de trial_ends_at (legadoDias);
 //   · o único caso em que o contador aparece antes da venda é o fim do teto
 //     (2 dias ou menos): ali o teste acaba de verdade e mentir "7 dias" seria
-//     pior que mostrar a contagem.
+//     pior que mostrar a contagem ("Faltam N dias do período de teste e você
+//     ainda não fez a primeira venda").
+//
+// 14/10/2026 (decisão da Nina, aprovada pelo Caio): no fim do teto, sem
+// venda, o aviso não repete "Os 7 dias começam na sua primeira venda" (que
+// contradiz a contagem): diz quantos dias faltam, que a primeira venda ainda
+// não aconteceu e que é preciso assinar. Nunca cita os 15 dias.
 //
 // Os textos moram todos em TEXTOS_TRIAL: o texto que a loja lê passa pela
 // aprovação do Caio (card t2-05), então trocar uma frase é editar aqui.
@@ -60,9 +66,18 @@ function diasTxt(n: number): string {
   return n === 1 ? "1 dia restante" : `${n} dias restantes`;
 }
 
+/** "Faltam 2 dias", "Falta 1 dia"; zero vira o aviso de que termina hoje. */
+function semVendaFim(n: number): string {
+  if (n <= 0) return "Seu período de teste termina hoje e você ainda não fez a primeira venda.";
+  if (n === 1) return "Falta 1 dia do período de teste e você ainda não fez a primeira venda.";
+  return `Faltam ${n} dias do período de teste e você ainda não fez a primeira venda.`;
+}
+
 export const TEXTOS_TRIAL = {
   contador: (n: number) => `Teste grátis · ${diasTxt(n)}`,
   urgente: "Seu período de teste termina em breve. Assine para não perder acesso.",
+  semVendaFimTitulo: semVendaFim,
+  semVendaFimCorpo: "Assine para não perder o acesso.",
   fixo: (plano: string) => `Você está no período de teste do plano ${plano}.`,
   semVendaTitulo: (n: number) => `Teste grátis de ${n} dias`,
   semVendaCorpo: (n: number) => `Os ${n} dias começam na sua primeira venda no Caixa.`,
@@ -120,11 +135,22 @@ export function avisoDoTrial(
     };
   }
 
+  // Fim do teto sem nenhuma venda: contador e a explicação do que falta.
+  if (info && info.mode === "primeira_venda" && info.aguardando_primeira_venda) {
+    return {
+      estado: "sem_venda",
+      titulo: TEXTOS_TRIAL.semVendaFimTitulo(dias),
+      corpo: TEXTOS_TRIAL.semVendaFimCorpo,
+      urgente: true,
+      dias,
+    };
+  }
+
   const urgente = dias <= DIAS_URGENTE;
   const emCurso = !!info && info.mode === "primeira_venda" && !info.aguardando_primeira_venda;
   const estado: AvisoTrial["estado"] = !info ? "legado"
     : info.mode === "fixo" ? "fixo"
-    : emCurso ? "em_curso" : "sem_venda"; // sem_venda aqui = fim do teto, com contador
+    : emCurso ? "em_curso" : "sem_venda";
   const corpo = urgente
     ? TEXTOS_TRIAL.urgente
     : emCurso && info
@@ -132,6 +158,15 @@ export function avisoDoTrial(
       : TEXTOS_TRIAL.fixo(opts.plano);
 
   return { estado, titulo: TEXTOS_TRIAL.contador(dias), corpo, urgente, dias };
+}
+
+/**
+ * A empresa já fez a primeira venda no trial? Só o modo primeira_venda sabe
+ * (started_by_sale_at). Modo fixo (código de acesso, cupom, extensão) e bloco
+ * ausente: false, e quem usa trata como "não sabemos", com texto neutro.
+ */
+export function vendeuNoTrial(trial: TrialInfo | null | undefined): boolean {
+  return !!trial && trial.mode === "primeira_venda" && !!trial.started_by_sale_at;
 }
 
 /** Dias até trial_ends_at: SÓ para backend sem o bloco `trial` (legado). */

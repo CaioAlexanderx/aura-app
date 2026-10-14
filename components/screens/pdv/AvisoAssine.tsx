@@ -20,14 +20,16 @@ import { fraseDaFaixa } from "@/utils/promocaoPrimeiroMes";
 
 type Props = {
   trialEndsAt?: string | null;
+  /** company.trial do /auth/me: decide entre "terminou" e "Seus 7 dias terminaram". */
+  trial?: unknown;
   /** Empresa atual: com ela a faixa consulta a promoção do primeiro mês. */
   companyId?: string | null;
   /** Mobile: título e botão numa coluna. */
   compact?: boolean;
 };
 
-export function AvisoAssine({ trialEndsAt, companyId, compact = false }: Props) {
-  const { titulo, corpo } = textoDoAviso(trialEndsAt);
+export function AvisoAssine({ trialEndsAt, trial, companyId, compact = false }: Props) {
+  const { titulo, corpo } = textoDoAviso(trialEndsAt, trial);
   const promocao = usePromocaoAtiva(companyId);
   return (
     <View testID="caixa-aviso-assine" style={[s.faixa, compact && s.faixaCompact]} accessibilityRole="alert">
