@@ -16,6 +16,7 @@ import { VerifyEmailBanner } from "@/components/VerifyEmailBanner";
 import { InstallBanner } from "@/components/InstallBanner";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 import { useVisibleModules } from "@/hooks/useVisibleModules";
+import { useCheckinGate } from "@/hooks/useCheckin";
 // 29/08/2026: helper compartilhado de plural (o ranking mostrava "1 vendas").
 import { pluralize } from "@/utils/plural";
 
@@ -142,6 +143,10 @@ export default function DashboardScreen() {
   var router = useRouter();
   var queryClient = useQueryClient();
   var visibleMods = useVisibleModules();
+  // 14/10/2026 (t1-12 parte 2): cadastro novo passa pelo check-in de entrada
+  // (3 perguntas em chip, Pular sempre visivel) antes do Painel. So leva ate
+  // la quando o backend diz `habilitado`; erro ou 404 = segue no Painel.
+  useCheckinGate();
   var { tradeName } = useCompanyProfile();
   var [redirecting, setRedirecting] = useState(false);
   var [refreshing, setRefreshing] = useState(false);
