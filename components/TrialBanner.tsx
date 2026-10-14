@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
+import { avisoDoTrial, diasLegado, lerTrial } from "@/utils/trialAviso";
 
 var PLAN_LABELS: Record<string, string> = {
   essencial: "Essencial",
@@ -20,26 +21,26 @@ export function TrialBanner() {
 
   if (isDemo || !trialActive || !trialEndsAt) return null;
 
-  const now = new Date();
-  const end = new Date(trialEndsAt);
-  const daysLeft = Math.max(0, Math.ceil((end.getTime() - now.getTime()) / 86400000));
-  const urgent = daysLeft <= 2;
-
   const planLabel = PLAN_LABELS[company?.plan ?? ""] ?? (company?.plan ?? "teste");
+
+  // 14/10/2026 (card t2-05): o texto vem do bloco company.trial do backend
+  // (modo, primeira venda, dias restantes). Sem o bloco, conta a partir de
+  // trial_ends_at como sempre. Ver utils/trialAviso.ts.
+  const aviso = avisoDoTrial(lerTrial((company as any)?.trial), {
+    plano: planLabel,
+    legadoDias: diasLegado(trialEndsAt),
+  });
+  const urgent = aviso.urgente;
 
   return (
     <View style={[s.banner, urgent && s.bannerUrgent]}>
       <View style={s.left}>
         <Icon name="star" size={16} color={urgent ? Colors.red : Colors.amber} />
         <View style={s.textWrap}>
-          <Text style={[s.title, urgent && { color: Colors.red }]}>
-            Teste grátis · {daysLeft} {daysLeft === 1 ? "dia restante" : "dias restantes"}
+          <Text testID="trial-banner-titulo" style={[s.title, urgent && { color: Colors.red }]}>
+            {aviso.titulo}
           </Text>
-          <Text style={s.sub}>
-            {urgent
-              ? "Seu período de teste termina em breve. Assine para não perder acesso."
-              : `Você está no período de teste do plano ${planLabel}.`}
-          </Text>
+          <Text testID="trial-banner-corpo" style={s.sub}>{aviso.corpo}</Text>
         </View>
       </View>
       <Pressable onPress={() => router.push("/planos" as any)} style={s.btn}>
