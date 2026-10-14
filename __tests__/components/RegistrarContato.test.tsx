@@ -40,7 +40,7 @@ jest.mock("@/services/adminApi", () => ({
 }));
 
 import { PainelHoje } from "@/components/admin/painel/PainelHoje";
-import { hojeBRT, rotuloDaData, somarDias } from "@/components/admin/painel/registrarContato";
+import { MSG_ERRO_PADRAO, hojeBRT, rotuloDaData, somarDias } from "@/components/admin/painel/registrarContato";
 import { adminApi } from "@/services/adminApi";
 import { toast } from "@/components/Toast";
 
@@ -199,6 +199,22 @@ describe("Registrar contato", () => {
     tree.unmount();
   });
 
+  it("falha sem mensagem (rede, timeout) não afirma que nada foi gravado", async () => {
+    registrar.mockRejectedValueOnce({});
+    const tree = await mount();
+    await press(tree, "alerta-0");
+    await press(tree, "ficha-registrar-contato");
+    await press(tree, "contato-resultado-respondeu");
+    await escrever(tree, "contato-frase", "Mandou o catálogo");
+    await press(tree, "contato-salvar");
+
+    const msg = [].concat(byTestId(tree, "contato-erro")[0].findAllByType(require("react-native").Text)[0].props.children).join("");
+    expect(msg).toBe(MSG_ERRO_PADRAO);
+    expect(msg).toContain("confira na ficha antes de tentar de novo");
+    expect(text(tree)).not.toContain("nada foi gravado");
+    tree.unmount();
+  });
+
   it("dois toques em Salvar mandam um contato só", async () => {
     let soltar: (v: any) => void = () => {};
     registrar.mockImplementation(() => new Promise((res) => { soltar = res; }));
@@ -325,6 +341,10 @@ describe("Ficha com contatos e +7 dias de teste", () => {
     await press(tree, "ficha-estender-trial");
     expect(byTestId(tree, "estender-trial")).toHaveLength(1);
     expect(extendTrial).not.toHaveBeenCalled();                          // confirmação primeiro
+    // A rota soma ao vencimento (teste ativo) ou conta de hoje (já vencido).
+    expect(text(tree)).toContain("7 dias depois do vencimento atual");
+    expect(text(tree)).toContain("Se o teste já venceu, a contagem começa de hoje");
+    expect(text(tree)).not.toContain("depois da data atual");
 
     await press(tree, "trial-confirmar");
     expect(extendTrial).toHaveBeenCalledTimes(1);

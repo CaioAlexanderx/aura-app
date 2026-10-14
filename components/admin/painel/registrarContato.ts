@@ -75,6 +75,10 @@ export var QUEM_DECIDE: Opcao<string>[] = [
   { id: "outro", rotulo: "Outro" },
 ];
 
+// Erro sem mensagem do servidor (rede, timeout): o contato pode ter entrado.
+export var MSG_ERRO_PADRAO =
+  "Não conseguimos confirmar se o contato foi salvo; confira na ficha antes de tentar de novo.";
+
 export var ATALHOS_DE_DATA = [1, 3, 7];
 export var MAX_FRASE = 500;
 export var MAX_PROXIMO_PASSO = 120;

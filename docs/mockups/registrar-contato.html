@@ -347,7 +347,7 @@ details .in{padding:2px 12px 12px;display:grid;gap:12px}
     }
     if (e === 'erro') {
       var p = document.createElement('div'); p.id = 'erroSalvar'; p.className = 'erro';
-      p.style.cssText = 'padding:0 20px 8px'; p.textContent = 'Não consegui salvar o contato. Confira a conexão e tente de novo; nada foi gravado.';
+      p.style.cssText = 'padding:0 20px 8px'; p.textContent = 'Não conseguimos confirmar se o contato foi salvo; confira na ficha antes de tentar de novo.';
       $('.foot').parentNode.insertBefore(p, $('.foot'));
     }
     if (e === 'ok') salvar();

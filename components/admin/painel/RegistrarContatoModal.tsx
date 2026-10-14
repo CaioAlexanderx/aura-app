@@ -25,7 +25,7 @@ import { Paleta } from "./paleta";
 import { useFichaCliente } from "./usePainelHoje";
 import {
   ATALHOS_DE_DATA, CANAIS, COMO_CHEGOU, FIADO, MARCADORES, MAX_FRASE, MAX_PROXIMO_PASSO, MOTIVOS, QUEM_DECIDE,
-  RESULTADOS, formVazio, hojeBRT, montarCorpo, rotuloDaData, somarDias, validar,
+  MSG_ERRO_PADRAO, RESULTADOS, formVazio, hojeBRT, montarCorpo, rotuloDaData, somarDias, validar,
 } from "./registrarContato";
 import type { FormContato, Opcao } from "./registrarContato";
 
@@ -134,7 +134,8 @@ export function RegistrarContatoModal(props: Props) {
       props.onClose();
     } catch (e: any) {
       // Mensagem do backend (400 com o campo, 404, 503 migration pendente).
-      setErro((e && e.message) || "Não consegui salvar o contato. Confira a conexão e tente de novo; nada foi gravado.");
+      // Num timeout o contato pode ter entrado: nunca afirmar "nada foi gravado".
+      setErro((e && e.message) || MSG_ERRO_PADRAO);
     } finally {
       setEnviando(false);
     }

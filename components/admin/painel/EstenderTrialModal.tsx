@@ -79,8 +79,9 @@ export function EstenderTrialModal(props: { alvo: AlvoTrial | null; onClose: () 
       }
     >
       <Text style={e.texto}>
-        O teste de {alvo ? alvo.nome : "a loja"} passa a vencer {DIAS_DE_TESTE} dias depois da data atual. Se já venceu, a contagem
-        começa de hoje. Depois de dar, o primeiro uso do Caixa não encurta mais esse prazo.
+        {"O teste de " + (alvo ? alvo.nome : "a loja") + " passa a vencer " + DIAS_DE_TESTE + " dias depois do vencimento atual. "
+          + "Se o teste já venceu, a contagem começa de hoje. "
+          + "Depois de dar, o primeiro uso do Caixa não encurta mais esse prazo."}
       </Text>
       {erro ? <Text style={e.erro} testID="trial-erro">{erro}</Text> : null}
     </PainelModal>
