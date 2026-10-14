@@ -5,10 +5,13 @@
 //
 // Este teste monta o layout REAL das abas (app/(tabs)/_layout.tsx) com o
 // Caixa (useCart) no lugar do <Slot />, clica no item do menu lateral e
-// confere o sessionStorage no instante da recarga. Depois "recarrega":
+// confere o storage no instante da recarga. Depois "recarrega":
 // jest.resetModules() zera tudo o que vive em memória (store do tema,
 // registro de guardiões, estado do React), como o navegador faz; só o
-// sessionStorage da aba sobrevive.
+// storage sobrevive.
+//
+// 14/10/2026: a guarda passou para o localStorage, por empresa + usuário, e a
+// leitura não apaga mais (a guarda é contínua). O fluxo do tema é o mesmo.
 //
 // Causa raiz: o toggle fazia set({ isDark }) e o layout embrulha a página
 // num <div key={themeKey}>. A chave nova desmontava e REMONTAVA o Caixa nos
@@ -55,7 +58,7 @@ jest.mock("@/stores/auth", () => {
   const { create } = require("zustand");
   const useAuthStore = create(() => ({
     company: null,
-    user: { name: "Geovana" },
+    user: { id: "user-1", name: "Geovana" },
     token: "tok",
     isDemo: false,
     refreshMe: () => Promise.resolve(),
@@ -79,7 +82,8 @@ jest.mock("expo-router", () => {
   };
 });
 
-const CHAVE = "aura:caixa:venda-em-andamento";
+const CHAVE = "aura:caixa:venda:empresa-1:user-1";
+const PREFIXO = "aura:caixa:venda:";
 
 type Pagina = {
   renderer: any;
@@ -94,9 +98,9 @@ let storageNaRecarga: Record<string, string> | null;
 
 function fotoDoStorage() {
   const snap: Record<string, string> = {};
-  for (let i = 0; i < window.sessionStorage.length; i++) {
-    const k = window.sessionStorage.key(i)!;
-    snap[k] = window.sessionStorage.getItem(k)!;
+  for (let i = 0; i < window.localStorage.length; i++) {
+    const k = window.localStorage.key(i)!;
+    if (k.indexOf(PREFIXO) === 0) snap[k] = window.localStorage.getItem(k)!;
   }
   return snap;
 }
@@ -151,7 +155,6 @@ function fechar(p: Pagina) {
 
 beforeEach(() => {
   jest.useFakeTimers();
-  window.sessionStorage.clear();
   window.localStorage.clear();
   document.cookie = "aura_theme=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
   recargas = 0;
@@ -162,7 +165,7 @@ afterEach(() => {
 });
 
 describe("Menu lateral: trocar o tema com venda no Caixa", () => {
-  test("a venda está no sessionStorage na hora da recarga e volta quando a empresa chega", () => {
+  test("a venda está guardada (localStorage) na hora da recarga e volta quando a empresa chega", () => {
     const p1 = abrirPagina("empresa-1");
     montarVenda(p1);
     expect(caixa().cart).toHaveLength(2);
@@ -179,14 +182,14 @@ describe("Menu lateral: trocar o tema com venda no Caixa", () => {
     // voltou). A venda ESPERA, não é descartada.
     const p2 = abrirPagina(null);
     expect(caixa().cart).toHaveLength(0);
-    expect(window.sessionStorage.getItem(CHAVE)).not.toBeNull();
+    expect(window.localStorage.getItem(CHAVE)).not.toBeNull();
 
     p2.renderer.act(() => { p2.auth.setState({ company: { id: "empresa-1", plan: "negocio" } }); });
     expect(caixa().cart.map((i) => [i.productId, i.qty])).toEqual([["piso", 18.56], ["cim", 1]]);
     expect(caixa().payment).toBe("cartao");
     expect(caixa().selectedCustomerName).toBe("Dona Maria");
-    // Leitura única.
-    expect(window.sessionStorage.getItem(CHAVE)).toBeNull();
+    // A guarda é contínua: a leitura não apaga, o carrinho regrava a venda.
+    expect(window.localStorage.getItem(CHAVE)).not.toBeNull();
     fechar(p2);
   });
 
@@ -208,7 +211,7 @@ describe("Menu lateral: trocar o tema com venda no Caixa", () => {
 
     const p2 = abrirPagina("empresa-2");
     expect(caixa().cart).toHaveLength(0);
-    expect(window.sessionStorage.getItem(CHAVE)).not.toBeNull();
+    expect(window.localStorage.getItem(CHAVE)).not.toBeNull();
     p2.renderer.act(() => { p2.auth.setState({ company: { id: "empresa-1", plan: "negocio" } }); });
     expect(caixa().cart).toHaveLength(2);
     fechar(p2);

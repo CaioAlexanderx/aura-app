@@ -77,6 +77,7 @@ import { productMinCardFor } from "@/hooks/useViewport";
 import type { Product } from "@/components/screens/estoque/types";
 import { useAuthStore } from "@/stores/auth";
 import { AvisoAssine } from "@/components/screens/pdv/AvisoAssine";
+import { AvisoVendaRecuperada } from "@/components/screens/pdv/AvisoVendaRecuperada";
 import { semAssinatura } from "@/utils/muroDeAssinatura";
 
 const PAGE_SIZE = 12;
@@ -280,6 +281,14 @@ function CaixaScreenInner() {
           >
             <View style={IS_WEB && vp.xxl ? ({ maxWidth: 1700, alignSelf: "center", width: "100%" } as any) : null}>
               {mostrarAvisoAssine && <AvisoAssine trialEndsAt={auth.trialEndsAt} companyId={auth.company?.id} />}
+              {st.vendaRecuperada && (
+                <AvisoVendaRecuperada
+                  itens={st.vendaRecuperada.itens}
+                  conferirValores={st.vendaRecuperada.conferirValores}
+                  onLimpar={st.limparVendaRecuperada}
+                  onDispensar={st.dispensarVendaRecuperada}
+                />
+              )}
 
               {/* Cabeçalho: a logo do lojista abre a tela, em 48px. Sem logo
                   (ou plano sem direito a ela) entra o tile violeta com a
@@ -412,6 +421,14 @@ function CaixaScreenInner() {
         contentContainerStyle={{ padding: 16, paddingBottom: 48 }}
       >
         {mostrarAvisoAssine && <AvisoAssine trialEndsAt={auth.trialEndsAt} companyId={auth.company?.id} compact />}
+        {st.vendaRecuperada && (
+          <AvisoVendaRecuperada
+            itens={st.vendaRecuperada.itens}
+            conferirValores={st.vendaRecuperada.conferirValores}
+            onLimpar={st.limparVendaRecuperada}
+            onDispensar={st.dispensarVendaRecuperada}
+          />
+        )}
         <View style={s.topRowMobile}>
           <MerchantLogo size={44} />
           <View style={{ flex: 1, minWidth: 0 }}>

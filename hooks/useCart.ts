@@ -7,7 +7,7 @@ import type { LotAllocation } from "@/services/matconApi";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
-import { aoRecarregar, guardarVenda, recuperarVenda } from "@/utils/vendaGuardada";
+import { aoRecarregar, apagarVendaGuardada, guardarVenda, recuperarVenda } from "@/utils/vendaGuardada";
 import { ehIdDeCatalogo } from "@/utils/comanda";
 import { mensagemErroCarneDaVenda } from "@/utils/crediarioCarne";
 import {
@@ -56,8 +56,8 @@ export type PaymentEntry = {
   auto?: boolean;
 };
 
-/** A venda em andamento, como vai para o sessionStorage antes de a página
- *  recarregar (troca de tema — utils/vendaGuardada). */
+/** A venda em andamento, como vai para o localStorage (por empresa e
+ *  usuário, 24 h — utils/vendaGuardada). */
 type VendaGuardada = {
   cart: CartItem[];
   payment: string;
@@ -155,7 +155,12 @@ function round2(n: number): number {
 // (utils/precoNoCartao.lerConfigDoCartao). Sem ela — ou com ela desligada —
 // todo o caminho é o de antes: nenhum item ganha preço no cartão, a vista é
 // o próprio estado e o payload sai idêntico.
-export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
+export function useCart(
+  cardCfg: ConfigDoCartao = CARTAO_DESLIGADO,
+  // 14/10/2026: `recuperar: false` = não restaura a venda guardada (Caixa
+  // aberto com ?quote=: o carrinho é o do orçamento). Vale só na montagem.
+  opcoes: { recuperar?: boolean } = {},
+) {
   const cartaoOn = cardCfg.enabled === true;
   // 22/09/2026 (Matcon M1): id do orçamento que montou este carrinho
   // (Caixa aberto com ?quote=). Vai como quote_id no POST da venda — o
@@ -215,7 +220,7 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
   function clearLotAllocations() {
     setLotAllocationsMap(function (prev) { return Object.keys(prev).length === 0 ? prev : {}; });
   }
-  const { company, isDemo } = useAuthStore();
+  const { company, isDemo, user } = useAuthStore();
   const qc = useQueryClient();
   const companyId = company?.id;
 
@@ -253,13 +258,14 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
   const [splitMode, setSplitMode] = useState(false);
   const [splitPayments, setSplitPayments] = useState<PaymentEntry[]>([]);
 
-  // ── A venda sobrevive à troca de tema (QA 23/09/2026) ───────────
-  // Trocar claro/escuro recarrega a página (as cores são congeladas na
-  // importação) e o carrinho sumia sem aviso. Antes da recarga o toggle
-  // chama guardarAntesDeRecarregar(); aqui a venda em andamento vai para o
-  // sessionStorage desta aba e, ao voltar, é recuperada — só na mesma
-  // empresa e só uma vez (utils/vendaGuardada). O "indicado por" não
-  // viaja: quem manda nele é o chip do usePdvState.
+  // ── A venda em andamento sobrevive à troca de página (14/10/2026) ───
+  // Antes (QA 23/09/2026) só a troca de tema guardava a venda. Agora ela é
+  // gravada a cada mudança (debounce curto) e ao sair da tela, no
+  // localStorage, numa chave por EMPRESA + USUÁRIO, com validade de 24 h
+  // (utils/vendaGuardada). Ao abrir o Caixa com o carrinho vazio ela volta em
+  // silêncio e `vendaRecuperada` acende a faixa "Venda recuperada (N itens)".
+  // O "indicado por" não viaja: quem manda nele é o chip do usePdvState.
+  const usuarioId = user?.id ? String(user.id) : null;
   const vendaAtual: VendaGuardada | null = cart.length === 0 ? null : {
     cart, payment,
     selectedCustomerId, selectedCustomerName, selectedCustomerPhone,
@@ -273,26 +279,94 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
   vendaRef.current = vendaAtual;
   const empresaRef = useRef(companyId);
   empresaRef.current = companyId;
-  // O guardião lê pelos refs: registrado uma vez, na montagem, já vale para
-  // o primeiro item que entrar. Devolve true quando guardou (o toggle avisa).
-  useEffect(() => aoRecarregar(() => {
-    if (!vendaRef.current) return false;
-    return guardarVenda(empresaRef.current, vendaRef.current);
-  }), []);
+  const usuarioRef = useRef(usuarioId);
+  usuarioRef.current = usuarioId;
+  // Demo não guarda nada (empresa de mentira).
+  const demoRef = useRef(isDemo);
+  demoRef.current = isDemo;
+  // Venda sendo registrada agora: nada é regravado até o servidor responder.
+  // Sem isto, sair da tela com a venda em voo (o callback do mutate não roda
+  // depois do unmount) deixaria o carrinho guardado de uma venda que o
+  // servidor já registrou — e voltar ao Caixa a refaria.
+  const finalizandoRef = useRef(false);
+  // Esta tela já teve itens: carrinho que VOLTA a ficar vazio apaga a guarda.
+  // (Vazio na abertura não apaga: é quando a guarda ainda vai ser restaurada.)
+  const jaTeveItens = useRef(false);
+  // Restaurar é decisão da abertura (o Caixa aberto com ?quote= monta o
+  // carrinho do orçamento e não pode herdar a venda antiga): fixa no mount.
+  const podeRecuperar = useRef(opcoes.recuperar !== false);
 
-  // Recuperação: só com a empresa conhecida. Na abertura o /auth/me ainda
-  // não voltou (company null) ou a empresa ativa pode ser outra (multi-CNPJ)
-  // — em vez de desistir, tenta de novo a cada empresa que chegar, até
-  // recuperar uma vez. Venda de outra empresa fica guardada (recuperarVenda
-  // não apaga). Carrinho que já começou nesta página não é sobrescrito.
+  function guardarAgora(): boolean {
+    if (demoRef.current || finalizandoRef.current || !vendaRef.current) return false;
+    return guardarVenda(empresaRef.current, usuarioRef.current, vendaRef.current);
+  }
+  function apagarGuarda() {
+    apagarVendaGuardada(empresaRef.current, usuarioRef.current);
+  }
+
+  // Troca de tema: descarga síncrona antes do reload (o debounce abaixo ainda
+  // pode estar esperando). Devolve true quando guardou (o toggle avisa).
+  useEffect(() => aoRecarregar(guardarAgora),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  []);
+
+  // Guarda a cada mudança. Debounce curto: digitar a quantidade ou o desconto
+  // não grava a cada tecla. O cleanup cancela o pendente; quem leva o último
+  // estado ao sair da tela é o efeito de unmount, logo abaixo.
+  useEffect(() => {
+    if (cart.length === 0) {
+      if (jaTeveItens.current) {
+        jaTeveItens.current = false;
+        apagarGuarda();
+      }
+      return;
+    }
+    jaTeveItens.current = true;
+    if (isProcessing || finalizandoRef.current) return;
+    const t = setTimeout(guardarAgora, 400);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    cart, payment, selectedCustomerId, selectedCustomerName, selectedCustomerPhone,
+    selectedEmployeeId, selectedEmployeeName, sellerName, couponCode, couponApplied, couponRule,
+    discountType, discountValue, cpfNaNota, splitMode, splitPayments, quoteId, comanda, lotAllocations,
+    isProcessing, companyId, usuarioId,
+  ]);
+
+  // Saiu da tela (trocou de página): leva o último estado, sem esperar o
+  // debounce. Carrinho vazio ou venda em voo: não toca na guarda.
+  useEffect(() => () => { guardarAgora(); },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  []);
+
+  // A venda que acabou de voltar (faixa "Venda recuperada"). Some quando o
+  // carrinho esvazia ou o lojista dispensa.
+  const [recuperada, setRecuperada] = useState<{ itens: CartItem[] } | null>(null);
+  useEffect(() => {
+    if (recuperada && cart.length === 0) setRecuperada(null);
+  }, [cart.length, recuperada]);
+
+  // Recuperação: só com a empresa E o usuário conhecidos. Na abertura o
+  // /auth/me ainda não voltou (company null) ou a empresa ativa pode ser
+  // outra (multi-CNPJ) — em vez de desistir, tenta de novo a cada empresa que
+  // chegar, até recuperar uma vez. Venda de outra empresa fica guardada.
+  // Carrinho que já começou nesta página NUNCA é sobrescrito.
   const jaRecuperou = useRef(false);
   useEffect(() => {
-    if (jaRecuperou.current || !companyId) return;
+    if (jaRecuperou.current || !podeRecuperar.current || demoRef.current || !companyId || !usuarioId) return;
     if (vendaRef.current) return;
-    const v = recuperarVenda<VendaGuardada>(companyId);
-    if (!v || !Array.isArray(v.cart) || v.cart.length === 0) return;
+    const v = recuperarVenda<VendaGuardada>(companyId, usuarioId);
+    if (!v || !Array.isArray(v.cart)) return;
+    // Não confia no que veio do storage: item sem id, sem quantidade ou sem
+    // preço válido fica de fora.
+    const itens = v.cart.filter(function (i) {
+      return !!i && typeof i.productId === "string" && i.productId !== ""
+        && isFinite(i.qty) && i.qty > 0 && isFinite(i.price) && i.price >= 0;
+    });
+    if (itens.length === 0) { apagarVendaGuardada(companyId, usuarioId); return; }
     jaRecuperou.current = true;
-    setCart(v.cart);
+    setCart(itens);
+    setRecuperada({ itens: itens });
     if (v.payment) setPayment(v.payment);
     setSelectedCustomerId(v.selectedCustomerId ?? null);
     setSelectedCustomerName(v.selectedCustomerName ?? null);
@@ -312,7 +386,7 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
     setComanda(v.comanda && v.comanda.id ? v.comanda : null);
     setLotAllocationsMap(v.lotAllocations && typeof v.lotAllocations === "object" ? v.lotAllocations : {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId]);
+  }, [companyId, usuarioId]);
 
   useEffect(() => {
     if (comanda && cart.length === 0) setComanda(null);
@@ -695,6 +769,13 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
     }
 
     setIsProcessing(true);
+    // 14/10/2026: a venda sai do carrinho guardado ANTES do POST. Se o
+    // lojista trocar de página com a venda em voo (o callback do mutate não
+    // roda depois do unmount) o servidor registra e a guarda já não existe —
+    // voltar ao Caixa não refaz a venda. Se o POST falhar com a tela aberta,
+    // o onError libera e o efeito de guarda regrava o carrinho.
+    finalizandoRef.current = true;
+    apagarGuarda();
 
     // Vista do chip: com a opção desligada é o próprio `cart` (mesmo payload
     // de sempre); ligada, `price`/`listPrice` já são os do método escolhido.
@@ -877,6 +958,8 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
           // recibo cai no UUID encurtado nesse caso.
           var saleNumber = typeof res?.sale?.sale_number === "number" ? res.sale.sale_number : null;
           setLastSale(buildLastSale(String(saleId), saleNumber, res?.sale, res?.matcon));
+          finalizandoRef.current = false;
+          apagarGuarda();
           setCart([]); setQuoteId(null); setComanda(null); setReferredProfessionalId(null); clearLotAllocations(); toast.success("Venda registrada!"); setIsProcessing(false); clearCoupon(); clearDiscount();
           setSellerName("");
           setCpfNaNota("");
@@ -897,10 +980,15 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
           } else {
             toast.error(textoDoErro(err, "Não deu para registrar a venda. Tente de novo."));
           }
+          // A venda não saiu: o carrinho volta a ser guardado, já.
+          finalizandoRef.current = false;
+          guardarAgora();
           setIsProcessing(false);
         },
       });
     } else {
+      finalizandoRef.current = false;
+      apagarGuarda();
       setLastSale(buildLastSale(Date.now().toString(36).toUpperCase().slice(-6)));
       setCart([]); setQuoteId(null); setComanda(null); setReferredProfessionalId(null); clearLotAllocations(); setIsProcessing(false);
       voltarAoPagamentoInicial();
@@ -915,6 +1003,10 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
   }
 
   function newSale() {
+    // 14/10/2026: nova venda / Limpar / lançar na comanda: a guarda sai junto.
+    finalizandoRef.current = false;
+    apagarGuarda();
+    setRecuperada(null);
     setLastSale(null); setCart([]); setQuoteId(null); setComanda(null); setReferredProfessionalId(null); clearLotAllocations(); setIsProcessing(false);
     setSelectedCustomerId(null); setSelectedCustomerName(null); setSelectedCustomerPhone(null);
     setSelectedEmployeeId(null); setSelectedEmployeeName(null);
@@ -955,5 +1047,9 @@ export function useCart(cardCfg: ConfigDoCartao = CARTAO_DESLIGADO) {
     // Preço no cartão: a conta do dividido numa frase só, nas duas línguas
     // (null com a opção desligada).
     splitStatus,
+    // 14/10/2026: a venda que o Caixa restaurou ao abrir (null = nenhuma, ou
+    // já limpa/dispensada) e o botão de dispensar a faixa.
+    vendaRecuperada: recuperada,
+    dispensarVendaRecuperada: () => setRecuperada(null),
   };
 }

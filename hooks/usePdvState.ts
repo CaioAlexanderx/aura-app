@@ -84,6 +84,7 @@ import { useOrcamentoNoCaixa, chaveDoOrcamento } from "@/hooks/useOrcamentoNoCai
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 import { useComandaNoCaixa } from "@/hooks/useComandaNoCaixa";
 import { lerComandaEnabled } from "@/utils/comanda";
+import { algumPrecoMudou } from "@/utils/vendaRecuperada";
 import { podeMostrarLogo } from "@/components/screens/pdv/MerchantLogo";
 
 import { toast } from "@/components/Toast";
@@ -231,6 +232,11 @@ export function usePdvState() {
     !!nfceConfigData?.config?.auto_emit_nfce && nfceConfigData?.config?.is_active;
 
   // ── Cart ──────────────────────────────────────────────────────────────
+  // 14/10/2026: Caixa aberto com ?quote= monta o carrinho do orçamento — não
+  // restaura a venda guardada por cima (o useCart decide isso só na
+  // montagem). Os parâmetros sobem para cá; a esteira do orçamento (mais
+  // abaixo) lê os mesmos.
+  const quoteRouteParams = useLocalSearchParams<{ quote?: string; edit?: string }>();
   const {
     cart, payment, setPayment, lastSale, total: totalRaw, totalAfterCoupon,
     itemCount, isProcessing,
@@ -250,7 +256,8 @@ export function usePdvState() {
     splitRemaining, splitIsBalanced,
     precoNoCartao, couponDiscount: cartCouponDiscount, setCouponRule,
     splitStatus,
-  } = useCart(cardCfg);
+    vendaRecuperada, dispensarVendaRecuperada,
+  } = useCart(cardCfg, { recuperar: !quoteRouteParams.quote });
 
   // ── Matcon M1 — editar orçamento (07/10/2026) ───────────────────────────
   // "Editar" em /matcon/orcamentos abre o Caixa com ?quote=<id>&edit=1. O
@@ -344,6 +351,19 @@ export function usePdvState() {
     setQuery("");
   }
 
+  // ── Venda recuperada (14/10/2026) ───────────────────────────────────────
+  // O useCart restaurou a venda guardada ao abrir o Caixa: a faixa do topo
+  // mostra quantos itens voltaram e, se algum preço de tabela mudou no
+  // catálogo desde então, pede para conferir os valores (só avisa; o preço
+  // do carrinho segue o que o lojista tinha). "Limpar" é a Nova venda.
+  const avisoVendaRecuperada = useMemo(() => {
+    if (!vendaRecuperada || cart.length === 0) return null;
+    return {
+      itens: vendaRecuperada.itens.length,
+      conferirValores: algumPrecoMudou(vendaRecuperada.itens, products as any),
+    };
+  }, [vendaRecuperada, cart.length, products]);
+
   // ── Comandas (09/10/2026) ───────────────────────────────────────────────
   // "Adicionar à comanda" manda o carrinho para a comanda N; "Fechar
   // comanda" traz o consumo de volta e a venda segue normal. Só com
@@ -368,7 +388,6 @@ export function usePdvState() {
   // único moram em hooks/useOrcamentoNoCaixa.ts (QA 23/09/2026: eram 4
   // avisos e um GET /quotes/undefined); aqui só dizemos COMO o orçamento
   // vira carrinho. Sem Matcon ou sem `?quote`, nada acontece.
-  const quoteRouteParams = useLocalSearchParams<{ quote?: string; edit?: string }>();
   useOrcamentoNoCaixa({
     quoteParam: quoteRouteParams.quote,
     editParam: quoteRouteParams.edit,
@@ -1146,6 +1165,10 @@ export function usePdvState() {
     comandas,
     // Cart
     payment, setPayment, lastSale, newSale, isProcessing,
+    // Faixa "Venda recuperada (N itens)" — null = nada a mostrar.
+    vendaRecuperada: avisoVendaRecuperada,
+    limparVendaRecuperada: newSale,
+    dispensarVendaRecuperada,
     // Matcon M3 — chip "Indicado por" do Caixa (IndicadoPorChip)
     referral: matconReferral,
     selectedCustomerId, selectedCustomerName, selectCustomer,
