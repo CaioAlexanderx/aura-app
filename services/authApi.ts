@@ -13,6 +13,20 @@ export type LoginResponse = {
     module_overrides?: Record<string, boolean>;
     trial_active?: boolean;
     trial_ends_at?: string;
+    /**
+     * 13/10/2026 (backend#817): regra do trial (modo, data da 1ª venda, teto,
+     * dias restantes). Ausente em backend anterior; leia com lerTrial()
+     * (utils/trialAviso.ts), nunca recalcule as datas no cliente.
+     */
+    trial?: {
+      mode: "fixo" | "primeira_venda";
+      ends_at: string | null;
+      started_by_sale_at: string | null;
+      dias_restantes: number | null;
+      teto_em: string | null;
+      aguardando_primeira_venda: boolean;
+      dias_apos_primeira_venda: number;
+    } | null;
     vertical_active?: VerticalKey | null;
     // Identidade permanente da empresa (canônica). vertical_active reflete o
     // módulo ligado; as duas nascem iguais no cadastro de dojô (F11).

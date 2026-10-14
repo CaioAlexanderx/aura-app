@@ -33,6 +33,12 @@
       "grupo": "negocio"
     },
     {
+      "id": "checkin",
+      "visivel": true,
+      "titulo": "Check-in",
+      "grupo": "negocio"
+    },
+    {
       "id": "acesso",
       "visivel": true,
       "titulo": "Acesso",

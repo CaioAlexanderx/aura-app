@@ -25,6 +25,7 @@ import { toast } from "@/components/Toast";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { PLAN_C, MODULE_LABELS } from "./types";
 import { ResyncSubscriptionButton } from "./ResyncSubscriptionButton";
+import { RegistrarContatoModal } from "./painel/RegistrarContatoModal";
 import { FrenteSection, STUDIO_PLAN_MSG, isStudioPlanError } from "./FrenteSection";
 import { MODULE_PLAN_MAP, PLAN_LEVEL } from "@/hooks/useVisibleModules";
 import {
@@ -185,6 +186,8 @@ export function ClientsAdmin({ initialId }: { initialId?: string | null } = {}) 
 
   // 12/05/2026: estados das novas secoes (notas + estender trial + extra seats)
   var [noteDraft, setNoteDraft] = useState("");
+  // 14/10/2026: Registrar contato estruturado (resultado, canal, próximo passo).
+  var [registrarAberto, setRegistrarAberto] = useState(false);
   var [trialDaysStr, setTrialDaysStr] = useState("7");
   var [trialReason, setTrialReason] = useState("");
   var [extraSeatsStr, setExtraSeatsStr] = useState("0");
@@ -456,6 +459,12 @@ export function ClientsAdmin({ initialId }: { initialId?: string | null } = {}) 
         <Pressable testID="client-voltar" onPress={function() { setSelectedId(null); }} style={s.backBtn}>
           <Text style={s.backText}>{"<"} Voltar aos clientes</Text>
         </Pressable>
+
+        {/* 14/10/2026: Registrar contato (company_admin_notes estruturada) */}
+        <RegistrarContatoModal
+          alvo={registrarAberto ? { company_id: sc.id, nome: sc.trade_name || sc.legal_name, telefone: sc.owner_phone || null } : null}
+          onClose={function() { setRegistrarAberto(false); }}
+        />
 
         {/* Header */}
         <View style={s.slideHeader}>
@@ -854,6 +863,9 @@ export function ClientsAdmin({ initialId }: { initialId?: string | null } = {}) 
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <Text style={s.sectionTitle}>Notas internas</Text>
             {notesMutation.isPending && <ActivityIndicator size="small" color={Colors.violet3} />}
+            <Pressable testID="client-registrar-contato" onPress={function() { setRegistrarAberto(true); }} style={s.registrarBtn} accessibilityRole="button">
+              <Text style={s.registrarBtnText}>Registrar contato</Text>
+            </Pressable>
           </View>
           <TextInput
             value={noteDraft}
@@ -1192,6 +1204,8 @@ var s = StyleSheet.create({
   seatsBoxSub: { fontSize: 9, color: Colors.ink3, marginTop: 2, fontWeight: "600" },
   // 12/05/2026: Notas internas
   noteInput: { backgroundColor: Colors.bg4, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, paddingVertical: 10, paddingHorizontal: 12, fontSize: 13, color: Colors.ink, minHeight: 60, textAlignVertical: "top" },
+  registrarBtn: { borderWidth: 1, borderColor: Colors.violet, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
+  registrarBtnText: { color: Colors.violet3, fontSize: 12, fontWeight: "700" },
   noteBtn: { backgroundColor: Colors.violet, borderRadius: 10, paddingVertical: 10, alignItems: "center", marginTop: 8 },
   noteBtnText: { color: "#fff", fontSize: 12, fontWeight: "700" },
   notesEmpty: { fontSize: 11, color: Colors.ink3, textAlign: "center", marginTop: 16, lineHeight: 16 },

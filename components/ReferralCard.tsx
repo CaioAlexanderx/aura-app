@@ -6,6 +6,22 @@ import { referralsApi } from "@/services/api";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 
+// 14/10/2026 (campanha de indicação, aprovada pelo Caio e pela Célia): o
+// indicador ganha 1 mês grátis quando o indicado paga a primeira mensalidade;
+// o indicado testa 7 dias e tem 20% no primeiro mês. Antes o texto prometia
+// 20% ao indicador, o que nenhum código cumpria.
+const DESCRICAO =
+  "Indique um lojista e ganhe 1 mês grátis quando ele pagar a primeira mensalidade. " +
+  "Quem você indicar testa 7 dias grátis e ganha 20% no primeiro mês.";
+
+export function mensagemIndicacao(codigo: string): string {
+  return (
+    "Oi! Uso a Aura na minha loja: caixa, estoque e fiado num lugar só. " +
+    "Com o meu código " + codigo + " você testa 7 dias grátis e ganha 20% de desconto na primeira mensalidade. " +
+    "Começa por aqui: https://getaura.com.br/r/" + codigo
+  );
+}
+
 export function ReferralCard() {
   const { user, isDemo, token } = useAuthStore();
   const [code, setCode] = useState<string | null>(null);
@@ -54,12 +70,7 @@ export function ReferralCard() {
 
   function shareWhatsApp() {
     if (!code) return;
-    const msg = encodeURIComponent(
-      "Oi! Estou usando a Aura pra gerenciar meu negócio e esta sendo incrivel. " +
-      "Vou te dar 20% de desconto no primeiro mes.\n\n" +
-      "Use o código " + code + " ou acesse:\n" +
-      "https://getaura.com.br/r/" + code
-    );
+    const msg = encodeURIComponent(mensagemIndicacao(code));
     const url = "https://wa.me/?text=" + msg;
     if (Platform.OS === "web") window.open(url, "_blank");
   }
@@ -71,9 +82,7 @@ export function ReferralCard() {
           <Icon name="star" size={20} color={Colors.violet3} />
           <Text style={s.title}>Indique e ganhe</Text>
         </View>
-        <Text style={s.desc}>
-          Ganhe 20% de desconto indicando amigos. Quem você indicar também ganha 20% no primeiro mês.
-        </Text>
+        <Text style={s.desc}>{DESCRICAO}</Text>
         <View style={s.codeBox}>
           <Text style={s.codeLabel}>Seu código</Text>
           <Text style={s.codeValue}>REF-DEMO</Text>
@@ -89,9 +98,7 @@ export function ReferralCard() {
         <Icon name="star" size={20} color={Colors.violet3} />
         <Text style={s.title}>Indique e ganhe</Text>
       </View>
-      <Text style={s.desc}>
-        Ganhe 20% de desconto indicando amigos. Quem você indicar também ganha 20% no primeiro mês.
-      </Text>
+      <Text style={s.desc}>{DESCRICAO}</Text>
 
       {code ? (
         <>
@@ -111,9 +118,10 @@ export function ReferralCard() {
           </View>
           {stats.total > 0 && (
             <View style={s.statsRow}>
-              <View style={s.stat}><Text style={s.statNum}>{stats.completed}</Text><Text style={s.statLabel}>Concluidas</Text></View>
+              {/* "Cadastros" = quem entrou pelo seu código; "Pendentes" = aguardando
+                  a primeira mensalidade. Sem "Descontos" até a recompensa existir. */}
+              <View style={s.stat}><Text style={s.statNum}>{stats.total}</Text><Text style={s.statLabel}>Cadastros</Text></View>
               <View style={s.stat}><Text style={s.statNum}>{stats.pending}</Text><Text style={s.statLabel}>Pendentes</Text></View>
-              <View style={s.stat}><Text style={[s.statNum, { color: Colors.green }]}>{stats.completed}</Text><Text style={s.statLabel}>Descontos</Text></View>
             </View>
           )}
         </>

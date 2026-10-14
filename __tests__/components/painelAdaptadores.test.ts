@@ -5,7 +5,7 @@
 // copiadas de tests/fixtures/painel em __tests__/__fixtures__/painel.
 // ============================================================
 import {
-  adaptarDetalhe, adaptarFicha, adaptarHoje, adaptarLayout, adaptarPontos,
+  adaptarContato, adaptarDetalhe, adaptarFicha, adaptarHoje, adaptarLayout, adaptarPontos,
   brl, corpoDoLayout, dataCurta, dataHora, formatarTelefone, montarCatalogo,
 } from "@/components/admin/painel/adaptadores";
 import { DEFINICOES } from "@/components/admin/painel/blocos";
@@ -16,6 +16,10 @@ const IDS: string[] = [
   "trials_degrau", "receita", "cadastros", "pagantes", "pagantes_sem_venda", "acesso", "uso_funcionalidade",
   "horario", "plataforma", "adocao", "telas_visitadas", "fiscal", "crediario", "contatos", "frentes",
 ];
+
+// O layout do backend (GET /layout) já traz o bloco Check-in (backend #835), que
+// o hoje.json gravado ainda não tem.
+const IDS_LAYOUT: string[] = IDS.slice(0, 5).concat(["checkin"], IDS.slice(5));
 
 describe("formatação", () => {
   it("reais, datas, telefone", () => {
@@ -211,6 +215,20 @@ describe("adaptarDetalhe", () => {
     expect(assinaram.slice(2).map((c: any) => c.texto)).toEqual(["WhatsApp"]);   // quem assinou não ganha +7 dias
   });
 
+  it("checkin: indicadores, regra de parada, lista de cadastros e importação assistida", () => {
+    const d = adaptarDetalhe("checkin", fx("blocos.checkin"));
+    expect(d.indicadores.map((i) => i.rotulo)).toEqual([
+      "Cadastros desde a subida", "Produto em 24 h", "Venda em 7 dias", "Produto em 24 h · só quem viu a tela",
+      "Tempo até o 5º produto (mediana)", "Regra de parada", "Importação assistida",
+    ]);
+    expect(d.listas.map((l) => l.titulo)).toEqual(["Cadastros desde a subida", "Importação assistida"]);
+    const cadastros = d.listas[0];
+    expect(cadastros.colunas).toContain("Viu a tela");
+    expect(cadastros.colunas).toContain("Horas até o 5º produto");
+    expect(cadastros.linhas.length).toBe(3);
+    expect(d.series.map((s) => s.titulo)).toContain("Tela do check-in");
+  });
+
   it("séries do detalhe: tipo mantido, legenda da linha de duas séries", () => {
     const a = adaptarDetalhe("acesso", fx("blocos.acesso")).series;
     expect(a[0]).toMatchObject({ tipo: "linha", legenda: ["Todas as lojas", "Pagantes"] });
@@ -245,8 +263,47 @@ describe("adaptarFicha", () => {
     ]);
     expect(ficha.serie!.titulo).toBe("Vendas por semana");
     expect(ficha.serie!.pontos.length).toBe(12);
-    expect(ficha.linha_do_tempo[1]).toEqual({ data: "21/09", texto: "Cobrança apagada na Asaas · R$ 140,83" });
+    expect(ficha.linha_do_tempo.find((e) => e.texto.startsWith("Cobrança apagada"))).toEqual({ data: "21/09", texto: "Cobrança apagada na Asaas · R$ 140,83" });
     expect(ficha.alertas).toEqual([{ tom: "risco", texto: "Loja Aurora vence amanhã — Anual · sem venda há 22 dias" }]);
+  });
+
+  it("contatos da equipe entram na linha do tempo (mais recente primeiro) e na lista própria", () => {
+    expect(ficha.linha_do_tempo[0]).toEqual({
+      data: "12/10", texto: "Contato por WhatsApp: Pediu um tempo — Pediu até sexta para ver o preço do anual",
+    });
+    expect(ficha.linha_do_tempo.map((e) => e.data)).toEqual(["12/10", "08/10", "02/10", "21/09", "21/09", "21/09", "14/09"]);
+    expect(ficha.contatos!.map((c) => [c.id, c.titulo, c.texto, c.proximo, c.motivo])).toEqual([
+      [7, "Contato por WhatsApp: Pediu um tempo", "Pediu até sexta para ver o preço do anual", "Ligar de novo · sexta, 16/10", null],
+      [3, "Contato por Ligação: Respondeu", "Importação da planilha pedida", null, null],
+    ]);
+    expect(ficha.checkin).toEqual({ como_chegou: "indicacao", fiado: "sim", quem_decide: "dono" });
+    expect(ficha.em_trial).toBe(false);
+  });
+
+  it("próximo passo com data passada fica atrasado; motivo vira rótulo", () => {
+    const raw = fx("clientes.ficha");
+    const c = raw.contatos[0];
+    expect(adaptarContato(c, "2026-10-16").atrasado).toBe(false);
+    expect(adaptarContato(c, "2026-10-17").atrasado).toBe(true);
+    expect(adaptarContato({ ...c, proximo_passo_em: null, proximo_passo: null }, "2026-10-17")).toMatchObject({ proximo: null, atrasado: false });
+    expect(adaptarContato({ ...c, resultado: "nao_quer", motivo: "preco_plano" }).motivo).toBe("Preço do plano");
+  });
+
+  it("ficha de antes do backend #836 (sem contatos nem checkin) segue igual", () => {
+    const raw = fx("clientes.ficha");
+    delete raw.contatos;
+    delete raw.checkin;
+    raw.linha_do_tempo = raw.linha_do_tempo.filter((e: any) => e.tipo !== "contato");
+    const f = adaptarFicha(raw);
+    expect(f.contatos).toEqual([]);
+    expect(f.checkin).toBeNull();
+    expect(f.linha_do_tempo.length).toBe(5);
+  });
+
+  it("em trial: libera o +7 dias de teste", () => {
+    const raw = fx("clientes.ficha");
+    raw.cliente.stage = "trial";
+    expect(adaptarFicha(raw).em_trial).toBe(true);
   });
 
   it("sem health nem módulos detalhados não quebra", () => {
@@ -266,14 +323,14 @@ describe("layout e catálogo", () => {
   it("GET /layout: visíveis na ordem + todos os conhecidos", () => {
     const l = adaptarLayout(fx("layout.get"));
     expect(l.padrao).toBe(true);
-    expect(l.ativos).toEqual(IDS);
-    expect(l.conhecidos.length).toBe(15);
+    expect(l.ativos).toEqual(IDS_LAYOUT);
+    expect(l.conhecidos.length).toBe(16);
 
     const salvo = adaptarLayout(fx("layout.put").resposta);
     expect(salvo.padrao).toBe(false);
     expect(salvo.ativos.slice(0, 2)).toEqual(["receita", "pagantes"]);
     expect(salvo.ativos).not.toContain("contatos");
-    expect(salvo.conhecidos.length).toBe(15);
+    expect(salvo.conhecidos.length).toBe(16);
   });
 
   it("corpo do PUT: visíveis na ordem, depois os desligados; ids desconhecidos ficam de fora", () => {
@@ -286,8 +343,8 @@ describe("layout e catálogo", () => {
 
   it("catálogo: o que o backend conhece liga; o resto do mockup fica em construção", () => {
     const itens = montarCatalogo(adaptarLayout(fx("layout.get")).conhecidos);
-    expect(itens.length).toBe(20);
-    expect(itens.filter((i) => !i.em_construcao).length).toBe(15);
+    expect(itens.length).toBe(21);
+    expect(itens.filter((i) => !i.em_construcao).length).toBe(16);
     expect(itens.filter((i) => i.em_construcao).map((i) => i.id).sort()).toEqual(
       ["aurinha", "custos", "etiquetas", "nps", "tempo_primeira_venda"]
     );

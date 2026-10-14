@@ -1,0 +1,439 @@
+// ============================================================
+// Check-in de entrada (cartão t1-12, parte 2; 14/10/2026).
+//
+// Depois da escolha de frente e antes do Painel: 3 perguntas em chip, nenhum
+// campo digitado, "Pular" sempre visível. Contrato fixo com o backend:
+//   GET /companies/:id/checkin → { habilitado, respondido, pulou, versao, respostas }
+//   PUT /companies/:id/checkin { comeco?, onde_anota?, produtos_faixa?, pulou? }
+//
+// O que este teste segura:
+//   1. quando mostrar e quando esconder (regra pura);
+//   2. erro de rede / 404 / formato estranho = não mostrar, nunca bloquear;
+//   3. cada chip grava na hora, em PUT parcial; "Pular" grava `pulou: true`;
+//   4. opção que o plano não tem SOME (Essencial), nunca desabilitada;
+//   5. módulo próprio nos mapas e funcionando no Essencial;
+//   6. fonte: sem campo digitado, rotas do contrato, gate no Painel.
+// ============================================================
+import fs from "fs";
+import path from "path";
+import React from "react";
+import renderer, { act } from "react-test-renderer";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
+
+const mockReplace = jest.fn();
+jest.mock("expo-router", () => ({
+  useRouter: () => ({ replace: (...a: any[]) => mockReplace(...a), push: jest.fn() }),
+  router: { replace: (...a: any[]) => mockReplace(...a) },
+}));
+
+let mockAuth: any;
+jest.mock("@/stores/auth", () => ({
+  useAuthStore: Object.assign(
+    function (selector: any) { return typeof selector === "function" ? selector(mockAuth) : mockAuth; },
+    { getState: () => mockAuth },
+  ),
+}));
+
+let mockModulos: Set<string> = new Set();
+jest.mock("@/hooks/useVisibleModules", () => {
+  const real = jest.requireActual("@/hooks/useVisibleModules");
+  return { ...real, useVisibleModules: () => mockModulos };
+});
+
+const mockGet = jest.fn();
+const mockPut = jest.fn();
+jest.mock("@/services/checkinApi", () => {
+  const real = jest.requireActual("@/services/checkinApi");
+  return {
+    ...real,
+    checkinApi: { get: (...a: any[]) => mockGet(...a), put: (...a: any[]) => mockPut(...a) },
+  };
+});
+
+import { CheckinEntrada } from "@/components/onboarding/CheckinEntrada";
+import { useCheckinGate, __zerarCheckinDaSessao } from "@/hooks/useCheckin";
+import { MOD_CHECKIN, PERGUNTAS_CHECKIN, MAX_RESPOSTA } from "@/constants/checkin";
+import { computeVisibleModules, MODULE_PLAN_MAP, PERM_TO_MODULES } from "@/hooks/useVisibleModules";
+import {
+  abrirCom, corpoCompleto, corpoDaResposta, corpoDoPular, deveMostrarCheckin, lerCheckin,
+  opcoesVisiveis, quantasRespostas, type ContextoDoCheckin,
+} from "@/utils/checkinRegras";
+
+const raiz = (p: string) => fs.readFileSync(path.join(__dirname, "..", p), "utf8");
+
+const CTX: ContextoDoCheckin = {
+  temEmpresa: true, isStaff: false, isDemo: false, consolidado: false, papel: "owner", moduloVisivel: true,
+};
+const HABILITADO = { habilitado: true, respondido: false, pulou: false, versao: 1, respostas: {} };
+
+// ── 1. regra pura ────────────────────────────────────────────
+describe("quando mostrar", () => {
+  test("habilitado, sem resposta e sem ter pulado: mostra", () => {
+    expect(deveMostrarCheckin(lerCheckin(HABILITADO), CTX)).toBe(true);
+  });
+
+  test("desligado (interruptor), respondido ou pulado: esconde", () => {
+    expect(deveMostrarCheckin(lerCheckin({ ...HABILITADO, habilitado: false }), CTX)).toBe(false);
+    expect(deveMostrarCheckin(lerCheckin({ ...HABILITADO, respondido: true }), CTX)).toBe(false);
+    expect(deveMostrarCheckin(lerCheckin({ ...HABILITADO, pulou: true }), CTX)).toBe(false);
+  });
+
+  test("sem estado (erro, 404, fora do formato): esconde", () => {
+    expect(deveMostrarCheckin(null, CTX)).toBe(false);
+    expect(deveMostrarCheckin(undefined, CTX)).toBe(false);
+    expect(lerCheckin(undefined)).toBeNull();
+    expect(lerCheckin({ error: "Not found" })).toBeNull();
+    expect(lerCheckin("habilitado")).toBeNull();
+  });
+
+  test("conta interna, demo, consolidado, módulo escondido ou membro comum: esconde", () => {
+    const e = lerCheckin(HABILITADO);
+    expect(deveMostrarCheckin(e, { ...CTX, isStaff: true })).toBe(false);
+    expect(deveMostrarCheckin(e, { ...CTX, isDemo: true })).toBe(false);
+    expect(deveMostrarCheckin(e, { ...CTX, consolidado: true })).toBe(false);
+    expect(deveMostrarCheckin(e, { ...CTX, moduloVisivel: false })).toBe(false);
+    expect(deveMostrarCheckin(e, { ...CTX, temEmpresa: false })).toBe(false);
+    expect(deveMostrarCheckin(e, { ...CTX, papel: "vendedor" })).toBe(false);
+    expect(deveMostrarCheckin(e, { ...CTX, papel: "admin" })).toBe(true);
+    expect(deveMostrarCheckin(e, { ...CTX, papel: undefined })).toBe(true);
+  });
+
+  test("lerCheckin descarta resposta fora do limite de 40 caracteres", () => {
+    const e = lerCheckin({ ...HABILITADO, respostas: { comeco: "x".repeat(41), onde_anota: "caderno" } });
+    expect(e?.respostas).toEqual({ onde_anota: "caderno" });
+  });
+});
+
+// ── 3. corpo do PUT ──────────────────────────────────────────
+describe("PUT parcial", () => {
+  test("uma resposta vira um corpo de uma chave só", () => {
+    expect(corpoDaResposta("comeco", "estoque")).toEqual({ comeco: "estoque" });
+    expect(corpoDaResposta("onde_anota", "planilha")).toEqual({ onde_anota: "planilha" });
+    expect(corpoDaResposta("produtos_faixa", "ate_50")).toEqual({ produtos_faixa: "ate_50" });
+  });
+
+  test("valor que não é opção da pergunta não vai ao backend", () => {
+    expect(corpoDaResposta("comeco", "qualquer coisa")).toBeNull();
+    expect(corpoDaResposta("onde_anota", "estoque")).toBeNull();
+  });
+
+  test("pular grava só `pulou: true`", () => {
+    expect(corpoDoPular()).toEqual({ pulou: true });
+  });
+
+  test("reenvio completo leva só o que foi marcado", () => {
+    expect(corpoCompleto({ comeco: "caixa", produtos_faixa: "ate_50" })).toEqual({
+      comeco: "caixa", produtos_faixa: "ate_50",
+    });
+    expect(quantasRespostas({ comeco: "caixa" })).toBe(1);
+  });
+
+  test("todo valor tem até 40 caracteres e é único dentro da pergunta", () => {
+    for (const p of PERGUNTAS_CHECKIN) {
+      const valores = p.opcoes.map((o) => o.valor);
+      expect(new Set(valores).size).toBe(valores.length);
+      valores.forEach((v) => expect(v.length).toBeLessThanOrEqual(MAX_RESPOSTA));
+    }
+  });
+});
+
+// ── 4. plano: some, não desabilita ───────────────────────────
+describe("opções por plano", () => {
+  const comeco = PERGUNTAS_CHECKIN[0];
+
+  test("Essencial não vê fiado nem loja online; vê o resto que o plano tem", () => {
+    const visiveis = computeVisibleModules("essencial", null, undefined);
+    const valores = opcoesVisiveis(comeco, visiveis).map((o) => o.valor);
+    expect(valores).not.toContain("fiado");
+    expect(valores).not.toContain("loja_online");
+    expect(valores).toEqual(expect.arrayContaining(["estoque", "caixa", "nota_fiscal", "outra"]));
+  });
+
+  test("Negócio vê todas as sete", () => {
+    const visiveis = computeVisibleModules("negocio", null, { is_owner: true, permissions: null });
+    expect(opcoesVisiveis(comeco, visiveis).map((o) => o.valor)).toEqual([
+      "estoque", "caixa", "fiado", "nota_fiscal", "loja_online", "sumidos", "outra",
+    ]);
+  });
+
+  test("override de módulo também esconde a opção", () => {
+    const visiveis = computeVisibleModules("negocio", { crediario: false }, undefined);
+    expect(opcoesVisiveis(comeco, visiveis).map((o) => o.valor)).not.toContain("fiado");
+  });
+
+  test("as outras duas perguntas valem para todos os planos", () => {
+    const visiveis = computeVisibleModules("essencial", null, undefined);
+    expect(opcoesVisiveis(PERGUNTAS_CHECKIN[1], visiveis)).toHaveLength(4);
+    expect(opcoesVisiveis(PERGUNTAS_CHECKIN[2], visiveis)).toHaveLength(4);
+  });
+});
+
+// ── "Vamos abrir com" ────────────────────────────────────────
+describe("abrirCom", () => {
+  test("nada respondido: nada", () => {
+    expect(abrirCom({})).toBeNull();
+  });
+
+  test("estoque + planilha grande: importar a planilha, com a razão", () => {
+    const a = abrirCom({ comeco: "estoque", onde_anota: "planilha", produtos_faixa: "de_301_a_1000" });
+    expect(a?.titulo).toBe("Importar sua planilha");
+    expect(a?.sub).toBe("Com 301 a 1.000 produtos, a planilha é o caminho mais rápido.");
+  });
+
+  test("estoque + caderno: os 5 primeiros produtos", () => {
+    expect(abrirCom({ comeco: "estoque", onde_anota: "caderno" })?.titulo).toBe("Cadastrar seus 5 primeiros produtos");
+  });
+
+  test("caixa: a frase do teste só vale para conta em modo primeira venda", () => {
+    expect(abrirCom({ comeco: "caixa" }, { testeComecaNaVenda: true })?.sub)
+      .toBe("Com um produto de teste. Sua primeira venda também começa o seu teste.");
+    expect(abrirCom({ comeco: "caixa" })?.sub).toBe("Com um produto de teste.");
+  });
+
+  test("só respondeu as outras: ainda abre com algo", () => {
+    expect(abrirCom({ produtos_faixa: "ate_50" })?.titulo).toBe("Cadastrar seus produtos");
+  });
+});
+
+// ── 5. módulo próprio ────────────────────────────────────────
+describe("módulo próprio (armadilha 3)", () => {
+  test("chave nos dois mapas, no Essencial", () => {
+    expect(MOD_CHECKIN).toBe("onboarding.checkin");
+    expect(MODULE_PLAN_MAP[MOD_CHECKIN]).toBe("essencial");
+    expect(PERM_TO_MODULES.configuracoes).toContain(MOD_CHECKIN);
+  });
+
+  test("o Essencial vê o módulo; override false esconde; membro sem configurações não", () => {
+    expect(computeVisibleModules("essencial", null, undefined).has(MOD_CHECKIN)).toBe(true);
+    expect(computeVisibleModules("essencial", { [MOD_CHECKIN]: false }, undefined).has(MOD_CHECKIN)).toBe(false);
+    const membro = computeVisibleModules("negocio", null, { is_owner: false, permissions: { pdv: true } });
+    expect(membro.has(MOD_CHECKIN)).toBe(false);
+  });
+});
+
+// ── a tela e o gate, com a rede simulada ─────────────────────
+function Sonda() { useCheckinGate(); return null; }
+
+function renderComClient(el: React.ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return { client, ui: <QueryClientProvider client={client}>{el}</QueryClientProvider> };
+}
+
+function resetar() {
+  mockReplace.mockReset(); mockGet.mockReset(); mockPut.mockReset();
+  mockPut.mockResolvedValue({ ok: true });
+  __zerarCheckinDaSessao();
+  mockAuth = {
+    token: "t", isStaff: false, isDemo: false, consolidatedView: false,
+    company: { id: "loja-1", name: "Loja", plan: "essencial", member_role: "owner", trial: { mode: "primeira_venda" } },
+  };
+  mockModulos = new Set(["estoque", "pdv", "nfe", "painel", MOD_CHECKIN]);
+}
+
+async function montar(el: React.ReactElement) {
+  const { ui, client } = renderComClient(el);
+  let tree: any;
+  await act(async () => { tree = renderer.create(ui); });
+  // react-query resolve em alguns ticks: esvazia a fila antes de olhar a tela.
+  for (let i = 0; i < 8; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  return { tree, client };
+}
+const achar = (t: any, id: string) => t.root.findAllByProps({ testID: id });
+
+describe("a tela", () => {
+  beforeEach(resetar);
+
+  test("habilitado: mostra as 3 perguntas, Pular e Continuar apagado", async () => {
+    mockGet.mockResolvedValue(HABILITADO);
+    const { tree } = await montar(<CheckinEntrada />);
+    expect(achar(tree, "checkin-raiz").length).toBeGreaterThan(0);
+    ["comeco", "onde_anota", "produtos_faixa"].forEach((c) =>
+      expect(achar(tree, `checkin-pergunta-${c}`).length).toBeGreaterThan(0));
+    expect(achar(tree, "checkin-pular").length).toBeGreaterThan(0);
+    expect(achar(tree, "checkin-continuar")[0].props.disabled).toBe(true);
+    expect(mockReplace).not.toHaveBeenCalled();
+    tree.unmount();
+  });
+
+  test("Essencial: as opções que o plano não tem não aparecem (nem desabilitadas)", async () => {
+    mockGet.mockResolvedValue(HABILITADO);
+    const { tree } = await montar(<CheckinEntrada />);
+    expect(achar(tree, "checkin-chip-comeco-estoque").length).toBeGreaterThan(0);
+    expect(achar(tree, "checkin-chip-comeco-fiado").length).toBe(0);
+    expect(achar(tree, "checkin-chip-comeco-loja_online").length).toBe(0);
+    tree.unmount();
+  });
+
+  test("cada chip grava na hora, em PUT parcial, e o Continuar libera", async () => {
+    mockGet.mockResolvedValue(HABILITADO);
+    const { tree } = await montar(<CheckinEntrada />);
+    await act(async () => { achar(tree, "checkin-chip-comeco-estoque")[0].props.onPress(); });
+    expect(mockPut).toHaveBeenLastCalledWith("loja-1", { comeco: "estoque" });
+    await act(async () => { achar(tree, "checkin-chip-onde_anota-planilha")[0].props.onPress(); });
+    expect(mockPut).toHaveBeenLastCalledWith("loja-1", { onde_anota: "planilha" });
+    await act(async () => { achar(tree, "checkin-chip-produtos_faixa-de_301_a_1000")[0].props.onPress(); });
+    expect(mockPut).toHaveBeenLastCalledWith("loja-1", { produtos_faixa: "de_301_a_1000" });
+    expect(mockPut).toHaveBeenCalledTimes(3);
+    expect(achar(tree, "checkin-continuar")[0].props.disabled).toBe(false);
+    expect(achar(tree, "checkin-abrir-com").length).toBeGreaterThan(0);
+    tree.unmount();
+  });
+
+  test("trocar a resposta regrava só aquela chave", async () => {
+    mockGet.mockResolvedValue(HABILITADO);
+    const { tree } = await montar(<CheckinEntrada />);
+    await act(async () => { achar(tree, "checkin-chip-comeco-estoque")[0].props.onPress(); });
+    await act(async () => { achar(tree, "checkin-chip-comeco-caixa")[0].props.onPress(); });
+    expect(mockPut).toHaveBeenLastCalledWith("loja-1", { comeco: "caixa" });
+    tree.unmount();
+  });
+
+  test("Continuar segue para o Painel e não repete a tela", async () => {
+    mockGet.mockResolvedValue(HABILITADO);
+    const { tree, client } = await montar(<CheckinEntrada />);
+    await act(async () => { achar(tree, "checkin-chip-comeco-caixa")[0].props.onPress(); });
+    await act(async () => { achar(tree, "checkin-continuar")[0].props.onPress(); });
+    expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
+    expect((client.getQueryData(["checkin", "loja-1"]) as any).respondido).toBe(true);
+    tree.unmount();
+  });
+
+  test("Pular grava `pulou: true` e segue sem esperar a rede", async () => {
+    mockGet.mockResolvedValue(HABILITADO);
+    mockPut.mockReturnValue(new Promise(() => {})); // nunca resolve
+    const { tree, client } = await montar(<CheckinEntrada />);
+    await act(async () => { achar(tree, "checkin-pular")[0].props.onPress(); });
+    expect(mockPut).toHaveBeenCalledWith("loja-1", { pulou: true });
+    expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
+    expect((client.getQueryData(["checkin", "loja-1"]) as any).pulou).toBe(true);
+    tree.unmount();
+  });
+
+  test("PUT que falha não derruba a tela; o Continuar reenvia tudo", async () => {
+    mockGet.mockResolvedValue(HABILITADO);
+    const { tree } = await montar(<CheckinEntrada />);
+    mockPut.mockRejectedValueOnce(new Error("rede"));
+    await act(async () => { achar(tree, "checkin-chip-comeco-caixa")[0].props.onPress(); });
+    await act(async () => { await Promise.resolve(); });
+    mockPut.mockResolvedValue({ ok: true });
+    await act(async () => { achar(tree, "checkin-continuar")[0].props.onPress(); });
+    expect(mockPut).toHaveBeenLastCalledWith("loja-1", { comeco: "caixa" });
+    expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
+    tree.unmount();
+  });
+
+  test("retoma o que já estava gravado", async () => {
+    mockGet.mockResolvedValue({ ...HABILITADO, respostas: { comeco: "caixa" } });
+    const { tree } = await montar(<CheckinEntrada />);
+    const chip = achar(tree, "checkin-chip-comeco-caixa")[0];
+    expect(chip.props.accessibilityState.selected).toBe(true);
+    expect(achar(tree, "checkin-continuar")[0].props.disabled).toBe(false);
+    tree.unmount();
+  });
+
+  test("backend sem a rota (404/erro): vai direto ao Painel, sem mostrar nada", async () => {
+    mockGet.mockRejectedValue(Object.assign(new Error("Not found"), { status: 404 }));
+    const { tree } = await montar(<CheckinEntrada />);
+    expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
+    expect(achar(tree, "checkin-raiz").length).toBe(0);
+    tree.unmount();
+  });
+
+  test("interruptor desligado ou já respondido: vai direto ao Painel", async () => {
+    mockGet.mockResolvedValue({ ...HABILITADO, habilitado: false });
+    const a = await montar(<CheckinEntrada />);
+    expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
+    a.tree.unmount();
+
+    mockReplace.mockReset();
+    mockGet.mockResolvedValue({ ...HABILITADO, respondido: true });
+    const b = await montar(<CheckinEntrada />);
+    expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
+    b.tree.unmount();
+  });
+
+  test("nenhum campo digitado na tela", async () => {
+    mockGet.mockResolvedValue(HABILITADO);
+    const { tree } = await montar(<CheckinEntrada />);
+    expect(tree.root.findAllByType("input" as any).length).toBe(0);
+    expect(JSON.stringify(tree.toJSON())).not.toMatch(/"type":"input"|textarea/);
+    tree.unmount();
+  });
+});
+
+describe("o gate do Painel", () => {
+  beforeEach(resetar);
+
+  test("habilitado: leva a /checkin uma vez só", async () => {
+    mockGet.mockResolvedValue(HABILITADO);
+    const a = await montar(<Sonda />);
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+    expect(mockReplace).toHaveBeenCalledWith("/checkin");
+    await act(async () => { a.tree.unmount(); });
+    const b = await montar(<Sonda />);
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+    b.tree.unmount();
+  });
+
+  test("backend sem a rota ou com erro: o Painel segue sem redirecionar", async () => {
+    mockGet.mockRejectedValue(new Error("rede"));
+    const { tree } = await montar(<Sonda />);
+    expect(mockGet).toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
+    tree.unmount();
+  });
+
+  test("desligado, respondido ou pulado: não leva", async () => {
+    for (const estado of [
+      { ...HABILITADO, habilitado: false }, { ...HABILITADO, respondido: true }, { ...HABILITADO, pulou: true },
+    ]) {
+      resetar();
+      mockGet.mockResolvedValue(estado);
+      const { tree } = await montar(<Sonda />);
+      expect(mockReplace).not.toHaveBeenCalled();
+      tree.unmount();
+    }
+  });
+
+  test("conta interna, consolidado, membro comum ou módulo escondido: nem consulta", async () => {
+    const casos: Array<() => void> = [
+      () => { mockAuth.isStaff = true; },
+      () => { mockAuth.consolidatedView = true; },
+      () => { mockAuth.company.member_role = "vendedor"; },
+      () => { mockModulos = new Set(["painel"]); },
+    ];
+    for (const ajusta of casos) {
+      resetar();
+      ajusta();
+      mockGet.mockResolvedValue(HABILITADO);
+      const { tree } = await montar(<Sonda />);
+      expect(mockGet).not.toHaveBeenCalled();
+      expect(mockReplace).not.toHaveBeenCalled();
+      tree.unmount();
+    }
+  });
+});
+
+// ── 6. fonte ─────────────────────────────────────────────────
+describe("fonte", () => {
+  test("a tela não tem campo digitado", () => {
+    const src = raiz("components/onboarding/CheckinEntrada.tsx");
+    expect(src).not.toMatch(/TextInput|<input|keyboardType/);
+  });
+
+  test("rotas do contrato com o backend, sem renomear", () => {
+    const src = raiz("services/checkinApi.ts");
+    expect(src).toContain('"/companies/" + companyId + "/checkin"');
+    expect(src).toContain('method: "PUT"');
+    ["comeco", "onde_anota", "produtos_faixa", "pulou"].forEach((c) => expect(src).toContain(c));
+  });
+
+  test("o Painel chama o gate e a rota /checkin existe", () => {
+    const painel = raiz("app/(tabs)/index.tsx");
+    expect(painel).toContain('import { useCheckinGate } from "@/hooks/useCheckin";');
+    expect(painel).toContain("useCheckinGate();");
+    expect(fs.existsSync(path.join(__dirname, "..", "app/checkin.tsx"))).toBe(true);
+  });
+});
