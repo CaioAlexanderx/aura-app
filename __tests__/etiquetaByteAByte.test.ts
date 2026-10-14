@@ -16,6 +16,12 @@ import fs from "fs";
 import path from "path";
 import { buildLabelHtml, LABEL_SIZE_KEYS } from "@/components/screens/estoque/labels/buildLabelHtml";
 
+// Os 4 modelos que já existiam quando os fixtures foram gravados. Modelo novo
+// (ex.: "40x25", 14/10/2026) não tem fixture de origem: o guarda dele é o
+// teste próprio (etiqueta40x25.test.ts) e este continua exigindo byte a byte
+// só dos que clientes usam hoje.
+const MODELOS_ORIGINAIS = LABEL_SIZE_KEYS.filter((k) => ["99x21", "105x21", "30x25", "58mm"].indexOf(k) >= 0);
+
 const FIX_DIR = path.join(__dirname, "__fixtures__", "labels", "byte-a-byte");
 
 // Sem variante: produto simples, nome longo (>16 letras), preço com milhar,
@@ -42,7 +48,7 @@ type Caso = { nome: string; items: any[]; opts: any };
 
 function casos(): Caso[] {
   const lista: Caso[] = [];
-  LABEL_SIZE_KEYS.forEach(function (size) {
+  MODELOS_ORIGINAIS.forEach(function (size) {
     (["barcode", "qr"] as const).forEach(function (mode) {
       const base = { mode: mode, storeName: "Divina D'Lux", showStoreName: true, labelSize: size };
       lista.push({ nome: size + "-" + mode + "-sem-variante", items: SEM_VARIANTE, opts: base });
