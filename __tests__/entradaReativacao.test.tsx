@@ -10,8 +10,9 @@
 //    escolhe duas vezes;
 // 3. quem nunca comprou não entra na conta — ausência de compra não é
 //    abandono, e um cupom de "volte" para ele sairia errado;
-// 4. no Essencial a CONTAGEM continua visível e só o botão muda de
-//    destino: o produto pago é o disparo, não o número;
+// 4. no Essencial a contagem continua visível e o botão vira "Chamar quem
+//    sumiu" (wa.me, sem Meta) — NUNCA "Conhecer o plano": a contagem com
+//    upgrade (app#887) saiu em 14/10/2026 (card t3-06, premissa de 16/09);
 // 5. no consolidado a conta soma as lojas (MULTICNPJ);
 // 6. e, o mais importante: a porta abre com a tela. Ela já esteve só na
 //    aba Retenção — secundária e Negócio+ — e foi por estar escondida
@@ -187,10 +188,10 @@ describe("o corte viaja para a tela de detalhe", () => {
   });
 });
 
-describe("plano Essencial: número visível, botão para planos", () => {
+describe("plano Essencial: número visível, botão leva ao Chamar por wa.me", () => {
   beforeEach(() => { mockPush.mockClear(); mockRefreshMe.mockClear(); });
 
-  it("a contagem continua aparecendo — é ela o argumento do upgrade", async () => {
+  it("a contagem continua aparecendo", async () => {
     let tree: any;
     await act(async () => { tree = montar({ plan: "essencial" }); });
     expect(texto(tree, "porta-contagem")).toContain("3");
@@ -198,12 +199,21 @@ describe("plano Essencial: número visível, botão para planos", () => {
     tree.unmount();
   });
 
-  it("o botão vai para planos, não para o disparo", async () => {
+  it("o botão leva à Reativação, com o corte, e nunca a planos", async () => {
     let tree: any;
     await act(async () => { tree = montar({ plan: "essencial" }); });
     await act(async () => { achar(tree, "porta").props.onPress(); });
-    expect(mockPush).toHaveBeenCalledWith("/(tabs)/planos");
-    expect(mockPush).not.toHaveBeenCalledWith(expect.stringContaining("/clientes/reativacao"));
+    expect(mockPush).toHaveBeenCalledWith("/clientes/reativacao?dias=60");
+    expect(mockPush).not.toHaveBeenCalledWith("/(tabs)/planos");
+    tree.unmount();
+  });
+
+  it("sem botão de upgrade nem texto de plano na porta (premissa de 16/09)", async () => {
+    let tree: any;
+    await act(async () => { tree = montar({ plan: "essencial" }); });
+    const json = JSON.stringify(tree.toJSON());
+    expect(json).toContain("Chamar quem sumiu");
+    expect(json).not.toMatch(/Conhecer o plano|plano Negócio|depende do plano/);
     tree.unmount();
   });
 });
@@ -236,7 +246,7 @@ describe("a porta abre com a tela: aba Lista de Clientes", () => {
     tree.unmount();
   });
 
-  it("no Essencial a porta continua na Lista — o gate é do disparo, não do número", async () => {
+  it("no Essencial a porta continua na Lista e leva ao Chamar por wa.me", async () => {
     mockHook = estado({ plan: "essencial" });
     let tree: any;
     await act(async () => { tree = montarTela(); });
@@ -244,7 +254,8 @@ describe("a porta abre com a tela: aba Lista de Clientes", () => {
     await act(async () => {
       tree.root.findAllByProps({ testID: "clientes-ir-para-reativacao" })[0].props.onPress();
     });
-    expect(mockPush).toHaveBeenCalledWith("/(tabs)/planos");
+    expect(mockPush).toHaveBeenCalledWith("/clientes/reativacao?dias=60");
+    expect(mockPush).not.toHaveBeenCalledWith("/(tabs)/planos");
     tree.unmount();
   });
 

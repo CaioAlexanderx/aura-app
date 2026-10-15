@@ -11,7 +11,9 @@ import { toast } from "@/components/Toast";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { pluralize } from "@/utils/plural";
 import { Icon } from "@/components/Icon";
-import { TABS, STATUS_MAP, EmissionRow, fmt, ns, openDanfeTermica, isFailedStatus } from "@/components/screens/nfe/shared";
+import { TABS, TAB_CERTIFICADO, STATUS_MAP, EmissionRow, fmt, ns, openDanfeTermica, isFailedStatus } from "@/components/screens/nfe/shared";
+import { TabCertificado, useFiscalCertificate } from "@/components/screens/nfe/TabCertificado";
+import { estadoDoCertificado, pontoDaAba } from "@/utils/certificadoA1";
 import { EmitNfseForm } from "@/components/screens/nfe/EmitNfseForm";
 import { EmitNfceForm, type NfcePrefill } from "@/components/screens/nfe/EmitNfceForm";
 import { RegimeFiscal } from "@/components/screens/nfe/TabConfig";
@@ -73,6 +75,13 @@ function NfeScreenInner({ embedded }: { embedded?: boolean }) {
   });
   const emissions: NfceEmission[] = data?.emissions || [];
   const stats = data?.stats;
+
+  // 14/10/2026: ponto colorido da aba "Certificado A1" (mesma query da aba, então
+  // abrir a aba não repete a chamada). Falha ao carregar = sem ponto, nada quebra.
+  const certQuery = useFiscalCertificate(!isDemo ? company?.id : null);
+  const certDot = certQuery.data
+    ? { ok: Colors.green, aviso: Colors.amber, erro: Colors.red }[pontoDaAba(estadoDoCertificado(certQuery.data.cert))]
+    : undefined;
 
   // Atualiza flag hasProcessing quando emissions mudam
   useEffect(() => {
@@ -288,7 +297,7 @@ function NfeScreenInner({ embedded }: { embedded?: boolean }) {
       )}
 
       <ScreenTabs
-        tabs={TABS.map((t) => ({ key: t, label: t }))}
+        tabs={TABS.map((t, i) => ({ key: t, label: t, dot: i === TAB_CERTIFICADO ? certDot : undefined }))}
         active={TABS[tab]}
         onSelect={(k) => setTab(TABS.indexOf(k))}
       />
@@ -377,6 +386,13 @@ function NfeScreenInner({ embedded }: { embedded?: boolean }) {
           prefill={reemitPrefill}
           onClearPrefill={() => setReemitPrefill(null)}
         />
+      )}
+
+      {/* 14/10/2026: o dono cadastra o próprio certificado A1 (ou pede ajuda da
+          Aura). `key` por empresa: trocar de empresa remonta e descarta senha
+          e arquivo digitados. Não é módulo novo: herda o gate do NF-e. */}
+      {tab === TAB_CERTIFICADO && company?.id && (
+        <TabCertificado key={company.id} companyId={company.id} onEmitir={() => setTab(2)} />
       )}
 
       {/* Modal inline de cancelamento (com input para motivo, regra SEFAZ ≥ 15 chars) */}

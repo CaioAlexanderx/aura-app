@@ -15,6 +15,7 @@ import {
   type CreateCompanyBody,
   type CreateCompanyResponse,
 } from "@/services/multicnpj";
+import { apagarTodasAsVendasGuardadas, apagarVendasDeOutrosUsuarios } from "@/utils/vendaGuardada";
 
 const KEY = "aura_token";
 const REFRESH_KEY = "aura_refresh_token";
@@ -77,7 +78,10 @@ type AuthState = {
   hydrate: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   register: (body: RegisterBody) => Promise<void>;
-  logout: () => Promise<void>;
+  // 14/10/2026: o logout apaga a venda do Caixa guardada neste navegador
+  // (tem cliente e CPF). Sessão que EXPIROU (401) mantém: a chave é por
+  // usuário, e quem volta a entrar retoma o carrinho em vez de perdê-lo.
+  logout: (opcoes?: { manterVendaGuardada?: boolean }) => Promise<void>;
   setCompanyLogo: (logo: string) => void;
   // Atualiza campos da company no store (usado apos salvar perfil)
   updateCompany: (partial: Partial<Company & { phone?: string; email?: string; address?: string; cnpj?: string }>) => void;
@@ -202,7 +206,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
     // logout() já: limpa storage (token + refreshToken), reseta state,
     // redireciona pra "/" após 100ms. Reset do guard no finally pra não
     // travar caso logout() lance.
-    state.logout().finally(() => {
+    state.logout({ manterVendaGuardada: true }).finally(() => {
       // Mantém true até o redirect acontecer; o reload destrói o módulo.
       // Em mobile (sem reload), libera após pequeno delay pra evitar
       // re-trigger imediato por requests em fila.
@@ -300,6 +304,9 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
         await storage.set(token);
         if (refreshToken) await refreshStorage.set(refreshToken);
+        // 14/10/2026: troca de usuário no navegador — a venda guardada de
+        // outro usuário (sessão expirada) não fica para este.
+        apagarVendasDeOutrosUsuarios(user?.id);
 
         const trialEnd = (company as any)?.trial_ends_at;
         const staff = !!(user?.is_staff || (user?.email || "").endsWith("@getaura.com.br"));
@@ -410,9 +417,16 @@ export const useAuthStore = create<AuthState>((set, get) => {
       }
     },
 
-    logout: async () => {
+    logout: async (opcoes) => {
       if (Platform.OS === "web" && typeof window !== "undefined") {
         try { localStorage.setItem("aura_theme", "dark"); } catch {}
+      }
+      // Saída de verdade: a venda guardada do Caixa não fica para o próximo
+      // a entrar neste navegador (utils/vendaGuardada). O botão chama
+      // logout() sem argumento — ou com o evento do clique —, então só o
+      // valor exato true mantém.
+      if (!(opcoes && (opcoes as any).manterVendaGuardada === true)) {
+        apagarTodasAsVendasGuardadas();
       }
       // Limpa storage ANTES de resetar state, garantindo que mesmo se o
       // redirect falhar, o próximo boot não rehidrata sessão expirada.
