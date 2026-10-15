@@ -72,13 +72,36 @@ describe("modo primeira_venda, ainda sem venda", () => {
     expect(a.titulo).toBe("Teste grátis de 10 dias");
   });
 
-  test("no fim do teto (2 dias ou menos) o contador volta, em vermelho", () => {
+  // 14/10/2026 (decisão da Nina): no fim do teto, sem venda, o aviso diz o
+  // que falta em vez de repetir "Os 7 dias começam na sua primeira venda".
+  test("sem venda e 2 dias ou menos: 'Faltam 2 dias ... ainda não fez a primeira venda', em vermelho", () => {
     const a = avisoDoTrial(bloco({ dias_restantes: DIAS_URGENTE }), { plano: PLANO, legadoDias: 2 });
-    expect(a.titulo).toBe("Teste grátis · 2 dias restantes");
+    expect(a.estado).toBe("sem_venda");
+    expect(`${a.titulo} ${a.corpo}`).toBe(
+      "Faltam 2 dias do período de teste e você ainda não fez a primeira venda. Assine para não perder o acesso.",
+    );
     expect(a.urgente).toBe(true);
-    expect(a.corpo).toBe(TEXTOS_TRIAL.urgente);
+    expect(a.dias).toBe(2);
+  });
+
+  test("sem venda: conjuga 1 dia e 0 dia", () => {
     const um = avisoDoTrial(bloco({ dias_restantes: 1 }), { plano: PLANO, legadoDias: 1 });
-    expect(um.titulo).toBe("Teste grátis · 1 dia restante");
+    expect(`${um.titulo} ${um.corpo}`).toBe(
+      "Falta 1 dia do período de teste e você ainda não fez a primeira venda. Assine para não perder o acesso.",
+    );
+    const zero = avisoDoTrial(bloco({ dias_restantes: 0 }), { plano: PLANO, legadoDias: 0 });
+    expect(`${zero.titulo} ${zero.corpo}`).toBe(
+      "Seu período de teste termina hoje e você ainda não fez a primeira venda. Assine para não perder o acesso.",
+    );
+    expect(zero.urgente).toBe(true);
+  });
+
+  test("sem venda: nunca mais diz que os 7 dias começam na primeira venda quando o fim está perto", () => {
+    for (const d of [0, 1, 2]) {
+      const a = avisoDoTrial(bloco({ dias_restantes: d }), { plano: PLANO, legadoDias: d });
+      expect(a.titulo + " " + a.corpo).not.toContain("começam na sua primeira venda");
+      expect(a.titulo).not.toContain("Teste grátis");
+    }
   });
 
   test("com 3 dias ainda é o texto sem contador", () => {

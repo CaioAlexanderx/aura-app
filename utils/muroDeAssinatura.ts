@@ -16,6 +16,8 @@
 // a própria casa e o próprio gate; para eles o comportamento é o antigo.
 // ============================================================
 
+import { lerTrial, vendeuNoTrial } from "@/utils/trialAviso";
+
 export type EstadoDeAssinatura = {
   billingStatus?: string | null;
   trialActive: boolean;
@@ -54,12 +56,29 @@ export function destinoSemAssinatura(segments: readonly string[], opts: { caixaV
   return ROTA_CAIXA;
 }
 
-/** Texto do aviso no topo do Caixa. */
-export function textoDoAviso(trialEndsAt: string | null | undefined): { titulo: string; corpo: string } {
+/**
+ * Texto do aviso no topo do Caixa.
+ *
+ * 14/10/2026 (decisão da Nina, aprovada pelo Caio): "Seus 7 dias de teste
+ * terminaram" só para quem fez a primeira venda (os 7 dias contaram de
+ * verdade). Quem nunca vendeu lê "Seu período de teste terminou", sem
+ * número: os 7 dias nunca chegaram a começar. Modo fixo e backend sem o
+ * bloco `company.trial` também ficam com o texto neutro.
+ *
+ * @param trial company.trial como veio do /auth/me (lido com defesa)
+ */
+export function textoDoAviso(
+  trialEndsAt: string | null | undefined,
+  trial?: unknown,
+): { titulo: string; corpo: string } {
   const teveTrial = !!trialEndsAt;
+  const info = lerTrial(trial);
+  const titulo = vendeuNoTrial(info) && info
+    ? `Seus ${info.dias_apos_primeira_venda} dias de teste terminaram`
+    : "Seu período de teste terminou";
   return teveTrial
     ? {
-        titulo: "Seu período de teste terminou",
+        titulo,
         corpo: "O Caixa continua funcionando. Estoque, clientes, relatórios e o resto ficam bloqueados até você assinar.",
       }
     : {
