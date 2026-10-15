@@ -1,0 +1,813 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mockup - Etiqueta na minha medida</title>
+<style>
+:root{
+  --bg:#f7f7fb; --card:#fff; --bd:#e7e5f0; --tx:#1f1b2e; --tx2:#6b6585;
+  --pri:#7c3aed; --pri2:#8b5cf6; --pri-soft:#f3edff;
+  --ok:#16a34a; --ok-soft:#e8f8ee; --warn:#d97706; --warn-soft:#fff6e5; --err:#dc2626; --err-soft:#fdecec;
+  --r:12px;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:3px solid rgba(124,58,237,.45);outline-offset:2px}
+svg.ic{flex:none;display:block}
+
+/* ---------- barra do mockup ---------- */
+.wrap{max-width:1400px;margin:0 auto;padding:16px}
+.mtop{background:#fff;border:1px solid var(--bd);border-radius:var(--r);padding:14px 16px;margin-bottom:16px}
+.mtop h1{font-size:18px;margin:0 0 2px}
+.mtop p{margin:0 0 10px;color:var(--tx2);font-size:13px}
+.ctls{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:flex-end}
+.ctl{display:flex;flex-direction:column;gap:4px}
+.ctl>span{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--tx2)}
+.seg{display:inline-flex;border:1px solid var(--bd);border-radius:10px;overflow:hidden;background:#fff}
+.seg button{border:0;background:#fff;padding:7px 11px;font-size:13px;font-weight:600;color:var(--tx2);border-right:1px solid var(--bd)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--pri-soft);color:var(--pri)}
+.ctl select{border:1px solid var(--bd);border-radius:10px;padding:7px 10px;font-size:13px;background:#fff;color:var(--tx)}
+.states{display:flex;flex-wrap:wrap;gap:6px}
+.states button{border:1px dashed #cfc9e4;background:#fff;border-radius:999px;padding:5px 11px;font-size:12px;font-weight:600;color:var(--tx2)}
+.states button:hover{border-color:var(--pri);color:var(--pri)}
+
+.main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px;align-items:start}
+@media (max-width:1050px){.main{grid-template-columns:1fr}}
+.stage{display:flex;justify-content:center;min-width:0}
+.devwrap{position:relative;max-width:100%}
+.devwrap.mobile{width:375px}
+.devwrap.desk{width:100%;max-width:1000px}
+.toast{position:absolute;left:50%;bottom:16px;transform:translate(-50%,20px);background:#1f1b2e;color:#fff;border-radius:12px;padding:10px 14px;font-size:14px;opacity:0;pointer-events:none;transition:.25s;z-index:60;max-width:92%;text-align:center}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+.device{position:relative;background:var(--bg);overflow:hidden;border:1px solid var(--bd);box-shadow:0 12px 40px rgba(31,27,46,.13)}
+.device.mobile{height:780px;border-radius:26px}
+.device.desk{height:740px;border-radius:14px}
+
+/* ---------- tela de Etiquetas (fundo) ---------- */
+.app{display:flex;height:100%}
+.side{width:176px;background:#fff;border-right:1px solid var(--bd);padding:16px 10px;flex:none}
+.side .brand{font-weight:800;color:var(--pri);font-size:18px;padding:2px 10px 14px}
+.side div.it{padding:9px 10px;border-radius:10px;color:var(--tx2);font-weight:600;font-size:14px}
+.side div.it.on{background:var(--pri-soft);color:var(--pri)}
+.screen{flex:1;min-width:0;display:flex;flex-direction:column}
+.topb{display:flex;align-items:center;gap:12px;padding:14px 16px;background:#fff;border-bottom:1px solid var(--bd);font-weight:700}
+.desk .topb{display:none}
+.page{padding:16px;overflow:auto;flex:1}
+.page h2{margin:0;font-size:22px}
+.page .sub{margin:2px 0 14px;color:var(--tx2);font-size:14px}
+.card{background:#fff;border:1px solid var(--bd);border-radius:var(--r);padding:14px;margin-bottom:14px}
+.lbl{font-weight:700;font-size:14px;margin-bottom:6px}
+.sel{position:relative}
+.seltrigger{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:50px;border:1.5px solid var(--bd);border-radius:12px;background:#fff;padding:0 14px;font-size:16px;font-weight:600;text-align:left}
+.seltrigger[aria-expanded=true]{border-color:var(--pri);box-shadow:0 0 0 3px rgba(124,58,237,.15)}
+.sellist{position:absolute;z-index:10;left:0;right:0;top:56px;margin:0;padding:6px;list-style:none;background:#fff;border:1px solid var(--bd);border-radius:12px;box-shadow:0 12px 30px rgba(31,27,46,.18)}
+.sellist li{display:flex;align-items:center;border-radius:10px}
+.sellist li+li{margin-top:2px}
+.opt{flex:1;display:flex;align-items:center;justify-content:space-between;gap:8px;border:0;background:transparent;min-height:46px;padding:0 10px;text-align:left;border-radius:10px;font-size:15px}
+.opt:hover{background:#f6f3fd}
+.opt .s2{display:block;font-size:12px;color:var(--tx2)}
+.opt.on{background:var(--pri-soft);font-weight:700}
+.opt.plus{color:var(--pri);font-weight:700}
+.sellist .sep{height:1px;background:var(--bd);margin:6px 4px;padding:0}
+.pencil{border:0;background:transparent;width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--pri)}
+.pencil:hover{background:#efe7ff}
+.prev-entry{margin-top:12px;background:#fafafd;border:1px dashed #d9d4ea;border-radius:12px;padding:10px;text-align:center}
+.prev-entry small{display:block;color:var(--tx2);font-size:12px;margin-top:4px}
+.prod{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--bd);font-size:14px}
+.prod:first-of-type{border-top:0}
+.prod b{font-weight:600}
+.prod span{color:var(--tx2)}
+
+/* ---------- botoes ---------- */
+.btn{min-height:46px;padding:0 18px;border-radius:12px;border:1px solid var(--bd);background:#fff;font-weight:700;display:inline-flex;align-items:center;justify-content:center;gap:8px;text-align:center}
+.btn:hover{border-color:#cfc9e4;background:#fcfbff}
+.btn.pri{background:linear-gradient(135deg,var(--pri2),var(--pri));color:#fff;border-color:var(--pri);box-shadow:0 2px 8px rgba(124,58,237,.28)}
+.btn.pri:hover{filter:brightness(1.05)}
+.btn.ok{background:linear-gradient(135deg,#22c55e,var(--ok));color:#fff;border-color:var(--ok);box-shadow:0 2px 8px rgba(22,163,74,.28)}
+.btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none;filter:none}
+.btn.big{min-height:62px;font-size:18px;width:100%;border-radius:14px}
+.linkbtn{border:0;background:transparent;color:var(--pri);font-weight:700;padding:8px 2px;min-height:40px;display:inline-flex;align-items:center;gap:6px;font-size:14px}
+.linkbtn.muted{color:var(--tx2);font-weight:600}
+.linkbtn[disabled]{color:var(--ok);cursor:default}
+
+/* ---------- modal / wizard ---------- */
+.scrim{position:absolute;inset:0;background:rgba(31,27,46,.45);z-index:20}
+.modal{position:absolute;z-index:21;background:#fff;display:flex;flex-direction:column;container-type:inline-size;box-shadow:0 20px 60px rgba(31,27,46,.3)}
+.mobile .modal{left:0;right:0;bottom:0;height:95%;border-radius:20px 20px 0 0}
+.desk .modal{left:50%;top:50%;transform:translate(-50%,-50%);width:min(800px,94%);height:min(690px,95%);border-radius:16px}
+.mhead{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 6px 18px}
+.mtitle{font-weight:800;font-size:16px}
+.iconbtn{width:44px;height:44px;border-radius:12px;border:0;background:transparent;display:flex;align-items:center;justify-content:center;color:var(--tx2)}
+.iconbtn:hover{background:#f3f2f8}
+.stepper{display:flex;align-items:flex-start;list-style:none;margin:0;padding:6px 18px 12px;border-bottom:1px solid var(--bd)}
+.stepper li{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;position:relative;font-size:12px;font-weight:600;color:var(--tx2)}
+.stepper li+li::before{content:"";position:absolute;top:15px;right:50%;width:100%;height:2px;background:var(--bd)}
+.stepper li.done+li::before,.stepper li.cur::before{background:var(--pri)}
+.stepper button{all:unset;display:flex;flex-direction:column;align-items:center;gap:4px;position:relative;z-index:1;cursor:default}
+.stepper li.done button{cursor:pointer}
+.dot{width:32px;height:32px;border-radius:50%;border:2px solid var(--bd);background:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:var(--tx2)}
+.cur .dot{background:linear-gradient(135deg,var(--pri2),var(--pri));border-color:var(--pri);color:#fff}
+.done .dot{background:var(--pri-soft);border-color:var(--pri);color:var(--pri)}
+.cur{color:var(--tx)}
+.mbody{flex:1;overflow:auto;padding:16px 18px 22px;scroll-behavior:smooth}
+.mfoot{display:flex;gap:10px;padding:12px 18px;border-top:1px solid var(--bd);background:#fff;border-radius:0 0 16px 16px}
+.mfoot .btn{flex:1}
+.mfoot .btn.back{flex:0 0 auto;min-width:110px}
+.stephead h3{margin:0 0 4px;font-size:21px;line-height:1.25}
+.stephead p{margin:0 0 14px;color:var(--tx2);font-size:14.5px}
+
+.split{display:block}
+.col-prev{position:sticky;top:0;z-index:5;background:#fff;padding:2px 0 10px;margin-bottom:6px;border-bottom:1px solid var(--bd)}
+@container (min-width:620px){
+  .split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.08fr);gap:24px;align-items:start}
+  .col-prev{order:2;position:static;border-bottom:0;padding:0;margin:0}
+  .col-prev .prevcard{position:sticky;top:0}
+  .col-form{order:1}
+}
+.prevcard{background:#faf9fe;border:1px solid var(--bd);border-radius:14px;padding:10px 10px 8px}
+.prevcard .ptitle{font-size:12px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.04em;display:flex;justify-content:space-between;gap:8px}
+.prevcard .pcap{font-size:12.5px;color:var(--tx2);margin-top:4px;text-align:center}
+.mobile .prevcard .pcap.hide-m{display:none}
+svg.roll{display:block;width:100%;height:auto;margin:2px auto;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+
+.grp{margin-bottom:16px}
+.hint{font-size:13px;color:var(--tx2);margin:0 0 8px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{min-height:44px;padding:0 14px;border-radius:999px;border:1.5px solid var(--bd);background:#fff;font-weight:700;font-size:15px}
+.chip:hover{border-color:#cfc9e4}
+.chip.on{border-color:var(--pri);background:var(--pri-soft);color:var(--pri)}
+.fields2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.field label{font-weight:700;font-size:14px}
+.inp{display:flex;align-items:center;border:1.5px solid var(--bd);border-radius:12px;background:#fff;min-height:52px;padding:0 12px}
+.inp:focus-within{border-color:var(--pri);box-shadow:0 0 0 3px rgba(124,58,237,.15)}
+.inp input{border:0;outline:0;flex:1;min-width:0;font:inherit;font-size:19px;font-weight:700;background:transparent;color:inherit}
+.inp .u{color:var(--tx2);font-weight:700;margin-left:6px}
+.inp.bad{border-color:var(--err);background:#fffafa}
+.inp.dis{background:#f4f3f8}
+.inp.dis input{color:#a19cb5}
+.err{color:#b91c1c;font-size:13px;font-weight:600}
+.note{display:flex;gap:10px;align-items:flex-start;border-radius:12px;padding:10px 12px;font-size:13.5px;margin:10px 0}
+.note.tip{background:var(--pri-soft);color:#4c2a8f}
+.note.warn{background:var(--warn-soft);color:#8a4b00;border:1px solid #f6d9a3}
+.note.okk{background:var(--ok-soft);color:#14532d;border:1px solid #bde8cb}
+.note.inf{background:#f3f2f8;color:var(--tx)}
+.note b{font-weight:800}
+.note .btn{min-height:38px;padding:0 12px;font-size:13px;margin-top:8px;border-color:#e8bf72;background:#fff}
+.rulerdiag{margin:0 0 0 auto;flex:none}
+.cols{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.colbtn{border:1.5px solid var(--bd);background:#fff;border-radius:12px;min-height:76px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-weight:700;font-size:13px;padding:6px 4px}
+.colbtn.on{border-color:var(--pri);background:var(--pri-soft);color:var(--pri)}
+.colbtn small{font-weight:600;color:var(--tx2);font-size:12px}
+.colbtn.on small{color:var(--pri)}
+
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--tx2);justify-content:center;margin-top:2px}
+.legend i{display:inline-block;width:18px;height:0;border-top:3px solid var(--pri);vertical-align:middle;margin-right:5px;border-radius:2px}
+.legend i.g{border-top:2px dashed var(--ok)}
+
+/* ---------- passo 2 e 3 ---------- */
+.bigcall{font-size:20px;font-weight:800;line-height:1.3;margin:2px 0 8px}
+.explain{list-style:none;margin:0 0 14px;padding:0;display:grid;gap:8px}
+.explain li{display:flex;gap:10px;align-items:flex-start;font-size:14.5px}
+.explain .n{width:26px;height:26px;border-radius:50%;background:var(--pri-soft);color:var(--pri);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex:none}
+.pstat{min-height:30px;margin-top:10px;font-size:14px}
+.pstat .row{display:flex;align-items:center;gap:8px}
+.spin{width:18px;height:18px;border:3px solid #e1d7fb;border-top-color:var(--pri);border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+details{border:1px solid var(--bd);border-radius:12px;background:#fff;margin-top:12px}
+details>summary{list-style:none;cursor:pointer;min-height:46px;padding:0 14px;display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px}
+details>summary::-webkit-details-marker{display:none}
+details>summary .chev{margin-left:auto;transition:transform .2s;color:var(--tx2)}
+details[open]>summary .chev{transform:rotate(180deg)}
+details .dbody{padding:2px 14px 14px;font-size:14px}
+.dpad{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:4px}
+.dp{min-height:76px;border-radius:14px;border:1.5px solid var(--bd);background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-weight:700;font-size:13px;line-height:1.2;padding:6px;color:var(--tx)}
+.dp svg{color:var(--pri)}
+.dp:hover{border-color:var(--pri);background:#faf7ff}
+.dp:active{transform:scale(.97);background:var(--pri-soft)}
+.dp.c{border:0;background:transparent;pointer-events:none}
+.status3{margin:8px 0 12px;min-height:44px}
+.fineRow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--bd)}
+.fineRow:first-of-type{border-top:0}
+.fineRow .nm{font-weight:700}
+.fineRow .nm small{display:block;font-weight:500;color:var(--tx2);font-size:12px}
+.stp{display:flex;align-items:center;gap:8px}
+.stp button{width:46px;height:46px;border-radius:12px;border:1.5px solid var(--bd);background:#fff;font-size:22px;font-weight:700;display:flex;align-items:center;justify-content:center;line-height:1}
+.stp button:hover{border-color:var(--pri);color:var(--pri)}
+.stp b{min-width:84px;text-align:center;font-size:17px;font-variant-numeric:tabular-nums}
+.actions3{display:grid;gap:10px;margin-top:14px}
+.under{display:flex;justify-content:center;margin-top:6px}
+
+/* ---------- passo 4 ---------- */
+.done4{text-align:center;padding:4px 0 8px}
+.bigok{width:64px;height:64px;border-radius:50%;background:var(--ok-soft);color:var(--ok);display:flex;align-items:center;justify-content:center;margin:0 auto 10px}
+.done4 h3{margin:0 0 4px;font-size:22px;line-height:1.25}
+.sum{background:#fff;border:1px solid var(--bd);border-radius:14px;overflow:hidden;margin-top:12px}
+.sum .thumb{background:#faf9fe;padding:10px;border-bottom:1px solid var(--bd)}
+.sumrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border-top:1px solid var(--bd);font-size:14px}
+.sum .thumb+.sumrow{border-top:0}
+.sumrow span{color:var(--tx2);font-size:12.5px;display:block}
+.sumrow b{font-weight:700}
+.sumrow .linkbtn{font-size:13px;flex:none}
+
+/* ---------- molduras do teste ---------- */
+.frameg{--c:#7c3aed;transition:transform .45s cubic-bezier(.2,.8,.2,1)}
+.frameg.ok{--c:#16a34a}
+.fr{fill:none;stroke:var(--c)}
+.frf{fill:var(--c);stroke:none}
+
+/* ---------- notas ---------- */
+.notes{background:#fff;border:1px solid var(--bd);border-radius:var(--r);padding:16px;position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto}
+@media (max-width:1050px){.notes{position:static;max-height:none}}
+.notes h2{font-size:16px;margin:0 0 4px}
+.notes h3{font-size:13px;margin:14px 0 4px;text-transform:uppercase;letter-spacing:.04em;color:var(--pri)}
+.notes ul{margin:0;padding-left:18px;font-size:13.5px;color:var(--tx)}
+.notes li{margin:3px 0}
+.notes code{background:#f3f2f8;border-radius:6px;padding:1px 5px;font-size:12.5px}
+.notes .warnb{background:var(--warn-soft);border:1px solid #f6d9a3;border-radius:10px;padding:8px 10px;font-size:13px;margin-top:8px}
+.notes table{border-collapse:collapse;width:100%;font-size:13px;margin-top:4px}
+.notes td{border-top:1px solid var(--bd);padding:4px 6px}
+.notes td:first-child{color:var(--tx2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <section class="mtop" aria-label="Controles do mockup">
+    <h1>Mockup: etiqueta na minha medida</h1>
+    <p>Self-service de etiqueta. Tudo aqui é clicável: digite medidas, toque nas setas, navegue pelos passos. Os controles abaixo são só do mockup, não fazem parte da tela.</p>
+    <div class="ctls">
+      <div class="ctl"><span>Largura</span>
+        <div class="seg" id="segDev"><button data-act="device" data-v="mobile">Celular 375</button><button data-act="device" data-v="desk">Computador</button></div>
+      </div>
+      <div class="ctl"><span>Ir direto ao passo</span>
+        <div class="seg" id="segView">
+          <button data-act="view" data-v="entry">Tela Etiquetas</button>
+          <button data-act="view" data-v="1">1 Medida</button>
+          <button data-act="view" data-v="2">2 Teste</button>
+          <button data-act="view" data-v="3">3 Ajuste</button>
+          <button data-act="view" data-v="4">4 Pronto</button>
+        </div>
+      </div>
+      <div class="ctl"><span>Como a impressora errou (só no mockup)</span>
+        <select id="selErr">
+          <option value="a">Esquerda 2,0 mm e cima 1,0 mm</option>
+          <option value="b">Direita 1,5 mm e baixo 0,5 mm</option>
+          <option value="c">Esquerda 1,3 mm e baixo 0,7 mm (pede ajuste fino)</option>
+          <option value="d">Saiu certo</option>
+        </select>
+      </div>
+      <div class="ctl"><span>Ver estados especiais</span>
+        <div class="states" id="states">
+          <button data-act="state" data-v="narrow">Aviso: etiqueta estreita</button>
+          <button data-act="state" data-v="invalid">Erro: fora do limite</button>
+          <button data-act="state" data-v="multi">3 lado a lado</button>
+          <button data-act="state" data-v="wide">Etiqueta baixa e larga</button>
+          <button data-act="state" data-v="limit">Ajuste no limite</button>
+          <button data-act="state" data-v="fresh">Lista antes de salvar</button>
+          <button data-act="state" data-v="saved">Lista depois de salvar</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="main">
+    <div class="stage">
+      <div class="devwrap mobile" id="devwrap">
+        <div class="device mobile" id="device"></div>
+        <div class="toast" id="toast" role="status" aria-live="polite"></div>
+      </div>
+    </div>
+
+    <aside class="notes" aria-label="Notas para quem implementa">
+      <h2>Notas para quem implementa</h2>
+      <div class="warnb"><b>Regra de ouro:</b> a etiqueta dos modelos atuais (40x25, 30x25, 105x21, 99x21, 58 mm) não pode mudar nem um pixel. Quem não usar "Minha medida" tem de imprimir exatamente o mesmo HTML de hoje. Fixtures byte a byte antes de mergear.</div>
+
+      <h3>Onde fica guardado</h3>
+      <ul>
+        <li>Por computador: <code>localStorage</code> do navegador, porque a impressora é do computador. Não vai para o backend nem para a empresa (vale igual no single-company e no consolidado multi-CNPJ).</li>
+        <li>Por medida: o ajuste é indexado pela medida (<code>largura x altura x colunas</code>). Mudou a medida, o ajuste daquela medida é recarregado (ou começa em zero se nunca testou).</li>
+        <li>Tudo em try/catch: se o navegador bloquear o armazenamento, a função funciona na sessão e avisa "não consegui guardar neste computador".</li>
+        <li>Na primeira versão há uma única "Minha etiqueta" por computador. Pergunta aberta: precisa de várias?</li>
+      </ul>
+
+      <h3>Limites e formato</h3>
+      <table>
+        <tr><td>Largura</td><td>15 a 110 mm</td></tr>
+        <tr><td>Altura</td><td>10 a 80 mm</td></tr>
+        <tr><td>Espaço entre etiquetas</td><td>0 a 20 mm (padrão 3 mm lado a lado, 2 mm de cima para baixo)</td></tr>
+        <tr><td>Lado a lado</td><td>1, 2 ou 3</td></tr>
+        <tr><td>Ajuste</td><td>até ±8 mm em cada direção; toque = 0,5 mm; ajuste fino = 0,1 mm</td></tr>
+      </table>
+      <ul>
+        <li>Aceitar vírgula e ponto; arredondar a 0,1 mm; mensagem de erro no campo, sem travar a digitação.</li>
+        <li>Ao chegar em ±8 mm: avisar e não passar disso.</li>
+      </ul>
+
+      <h3>Convenção do ajuste</h3>
+      <ul>
+        <li>Horizontal: <b>+ move para a direita</b>, − para a esquerda. Vertical: <b>+ desce</b>, − sobe.</li>
+        <li>"Saiu para a esquerda" soma +0,5 (corrige no sentido contrário). "Saiu para cima" soma +0,5 vertical.</li>
+        <li>O teste e a impressão real aplicam o mesmo deslocamento sobre a mesma medida.</li>
+      </ul>
+
+      <h3>Teste de impressão</h3>
+      <ul>
+        <li>Mesma função que gera o HTML da etiqueta real, mesma medida, mesmo ajuste. O conteúdo é trocado por moldura (1 mm para dentro da borda), cruz no centro e setas nas quatro bordas.</li>
+        <li>Imprime uma linha: uma etiqueta de teste por coluna.</li>
+        <li>No passo 3 a ilustração é <b>didática</b>: o app não enxerga o papel. A moldura começa deslocada de forma ilustrativa e anda a cada toque. Confirmar com o Caio se o texto basta ou se vale um exemplo fixo "torta para a esquerda".</li>
+      </ul>
+
+      <h3>Etiqueta e código de barras</h3>
+      <ul>
+        <li>Ajuste automático do conteúdo: se largura/altura &gt; 2,6, layout horizontal (texto à esquerda, código à direita); senão, vertical.</li>
+        <li>Aviso âmbar abaixo de 25 mm de largura (código pode não ser lido). Não bloqueia, só sugere.</li>
+        <li>O atalho "105 x 21" é uma etiqueta única de 105 mm. O modelo atual de 3 colunas continua no seletor; para 3 colunas de 33 mm, use 33 x 21 com 3 lado a lado. Confirmar se o atalho deve preencher isso.</li>
+      </ul>
+
+      <h3>Padrões do app</h3>
+      <ul>
+        <li>Wizard no padrão TrocaModal: passos numerados no topo, Voltar/Continuar no rodapé, um assunto por passo.</li>
+        <li>Nada depende de hover: lápis e botões sempre visíveis, alvos de toque de 44 px ou mais.</li>
+        <li>Mensagens de status com <code>aria-live</code>; a cor nunca é o único sinal (ícone + texto).</li>
+        <li>Entrada: "+ Minha medida" no seletor de modelo; depois de salva vira "Minha etiqueta L x A mm" com lápis (abre o passo 1 já preenchido).</li>
+        <li>Sem gate de plano proposto. Confirmar antes de implementar.</li>
+      </ul>
+    </aside>
+  </div>
+</div>
+
+<script>
+/* ============ utilidades ============ */
+const $ = (s, r=document) => r.querySelector(s);
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+const r1 = n => Math.round(n*10)/10;
+const fmt = n => r1(Math.abs(n)).toFixed(1).replace('.',',');           // 0,5
+const fmtMm = n => { const r=r1(n); return Number.isInteger(r)? String(r) : String(r).replace('.',','); };
+const sgn = n => (r1(n)>0?'+':r1(n)<0?'−':'')+fmt(n);                // +0,5  -1,0  0,0
+const ICON = {
+  ruler:'<path d="M3 16.5 16.5 3l4.5 4.5L7.5 21z"/><path d="M7 12.5l2 2M10 9.5l2 2M13 6.5l2 2"/>',
+  check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  arrowL:'<path d="M19 12H5M11 6l-6 6 6 6"/>', arrowR:'<path d="M5 12h14M13 6l6 6-6 6"/>',
+  arrowU:'<path d="M12 19V5M6 11l6-6 6 6"/>', arrowD:'<path d="M12 5v14M6 13l6 6 6-6"/>',
+  pencil:'<path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 013 3L8 19z"/><path d="M14.5 6.5l3 3"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  printer:'<path d="M7 9V3h10v6"/><rect x="4" y="9" width="16" height="8" rx="2"/><path d="M7 14h10v7H7z"/>',
+  computer:'<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  warn:'<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.5"/>',
+  info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.5"/>',
+  close:'<path d="M6 6l12 12M18 6L6 18"/>', chev:'<path d="M6 9l6 6 6-6"/>',
+  undo:'<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/>',
+  sliders:'<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>',
+  menu:'<path d="M4 7h16M4 12h16M4 17h16"/>'
+};
+const ic = (n, s=20, sw=2) => `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
+
+/* ============ estado ============ */
+const DEF = {gapX:3, gapY:2};
+const LIM = {w:[15,110], h:[10,80], gap:[0,20], off:8};
+const CHIPS = [[40,25],[30,25],[50,30],[60,40],[105,21]];
+const ERRS = {a:[-2,-1], b:[1.5,.5], c:[-1.3,.7], d:[0,0]};
+const MODELS = [
+  {id:'40x25', name:'40 x 25 mm', w:40, h:25, cols:1, gapX:0, gapY:2},
+  {id:'30x25', name:'30 x 25 mm', w:30, h:25, cols:1, gapX:0, gapY:2},
+  {id:'105x21', name:'105 x 21 mm', w:33, h:21, cols:3, gapX:3, gapY:2},
+  {id:'99x21', name:'99 x 21 mm', w:31, h:21, cols:3, gapX:3, gapY:2},
+  {id:'58', name:'Rolo de 58 mm', w:52, h:30, cols:1, gapX:0, gapY:2}
+];
+const S = {
+  device:'mobile', view:'entry', _last:null,
+  w:50, h:30, cols:1, gapX:DEF.gapX, gapY:DEF.gapY,
+  wTxt:'50', hTxt:'30', gapXTxt:String(DEF.gapX), gapYTxt:String(DEF.gapY),
+  err:{}, valid:true,
+  offX:0, offY:0, errX:-2, errY:-1,
+  last:null, p2:'idle', p3:'idle',
+  saved:false, editing:false, entrySel:'40x25', listOpen:true
+};
+let uid = 0, toastT;
+
+/* ============ desenho: codigo de barras, etiqueta, rolo ============ */
+const BAR = [2,1,1,2,3,1,1,2,1,3,2,1,1,1,2,2,1,3,1,2,1,1,3,2,2,1,1,1,2,3,1,2,1,2,2,1,3,1,1,2,1,1,2,3,1,2,2,1];
+function barcode(x,y,w,h){
+  const tot = BAR.reduce((a,b)=>a+b,0), mw = w/tot; let cx = x, o = '';
+  BAR.forEach((m,i)=>{ if(i%2===0) o += `<rect x="${cx.toFixed(3)}" y="${y.toFixed(3)}" width="${(m*mw).toFixed(3)}" height="${h.toFixed(3)}" fill="#1f1b2e"/>`; cx += m*mw; });
+  return o;
+}
+const fit = (t, maxW, maxFs) => Math.min(maxFs, maxW/(t.length*0.56));
+const TX = (t,x,y,fs,wt,col,an) => `<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" font-size="${fs.toFixed(2)}" font-weight="${wt}" fill="${col||'#1f1b2e'}" text-anchor="${an||'start'}">${t}</text>`;
+
+function labelContent(x,y,w,h){
+  const p = Math.max(1.2, Math.min(w,h)*0.07), iw = w-2*p, ih = h-2*p, X = x+p, Y = y+p;
+  const name = iw < 32 ? 'Camiseta Básica' : 'Camiseta Algodão Básica';
+  const variant = 'M · Azul', price = 'R$ 59,90', code = '7891234567895';
+  let o = '';
+  if(w/h > 2.6){
+    const tw = iw*0.46, bw = iw*0.5;
+    const fN = fit(name,tw,h*0.2), fV = fit(variant,tw,h*0.16), fP = fit(price,tw,h*0.3);
+    let ty = Y+fN*0.85;
+    o += TX(name,X,ty,fN,700);
+    ty += fV*1.3; o += TX(variant,X,ty,fV,500,'#6b6585');
+    ty += fP*1.15; o += TX(price,X,ty,fP,800);
+    o += barcode(X+iw-bw, Y+ih*0.04, bw, ih*0.68);
+    o += TX(code,X+iw-bw/2,Y+ih*0.98,Math.min(ih*0.2,bw/(13*0.62)),500,'#1f1b2e','middle');
+  } else {
+    const fN = fit(name,iw,h*0.12), fP = fit(price,iw*0.5,h*0.17), fV = fit(variant,iw*0.45,h*0.1);
+    const y1 = Y+fN*0.85, y2 = y1+fP*1.18;
+    o += TX(name,X,y1,fN,700);
+    o += TX(variant,X,y2,fV,500,'#6b6585');
+    o += TX(price,X+iw,y2,fP,800,'#1f1b2e','end');
+    const showNum = h >= 24, numH = showNum ? Math.min(3, h*0.1) : 0;
+    const by = y2+fP*0.28, bh = Math.max(h*0.14, Y+ih-numH-by);
+    o += barcode(X,by,iw,bh);
+    if(showNum) o += TX(code,X+iw/2,by+bh+numH*0.85,Math.min(numH*0.9,iw/(13*0.62)),500,'#1f1b2e','middle');
+  }
+  return o;
+}
+function arrow(x1,y1,x2,y2,hs){
+  const a = Math.atan2(y2-y1,x2-x1), c = Math.cos(a), s = Math.sin(a);
+  const p1 = [x2-hs*c+hs*0.55*s, y2-hs*s-hs*0.55*c], p2 = [x2-hs*c-hs*0.55*s, y2-hs*s+hs*0.55*c];
+  return `<line class="fr" x1="${x1}" y1="${y1}" x2="${x2-hs*0.6*c}" y2="${y2-hs*0.6*s}" stroke-width=".35" stroke-linecap="round"/><polygon class="frf" points="${x2},${y2} ${p1[0]},${p1[1]} ${p2[0]},${p2[1]}"/>`;
+}
+function frameShapes(x,y,w,h){
+  const f = 1.2, fx = x+f, fy = y+f, fw = w-2*f, fh = h-2*f, cx = x+w/2, cy = y+h/2;
+  const L = Math.min(w,h)*0.17, al = Math.min(3.4, Math.min(w,h)*0.14), g = 1.0, hs = Math.min(1.1, al*0.4);
+  return `<rect class="fr" x="${fx}" y="${fy}" width="${fw}" height="${fh}" stroke-width=".55" rx=".6"/>
+    <line class="fr" x1="${cx-L}" y1="${cy}" x2="${cx+L}" y2="${cy}" stroke-width=".35"/><line class="fr" x1="${cx}" y1="${cy-L}" x2="${cx}" y2="${cy+L}" stroke-width=".35"/>
+    ${arrow(cx,fy+g+al,cx,fy+g,hs)}${arrow(cx,fy+fh-g-al,cx,fy+fh-g,hs)}${arrow(fx+g+al,cy,fx+g,cy,hs)}${arrow(fx+fw-g-al,cy,fx+fw-g,cy,hs)}`;
+}
+
+/* o: {w,h,cols,gapX,gapY, mode:'content'|'test', dims, rows, dx, dy, ghost, ok, minW, maxH} */
+function rollSVG(o){
+  const w=o.w, h=o.h, cols=o.cols, gx = cols>1 ? o.gapX : 0, gy = o.gapY;
+  const mode = o.mode||'content', dims = !!o.dims;
+  const rows = o.rows || Math.max(2, Math.min(3, Math.round(105/(h+gy))));
+  const m = 3, rollW = cols*w+(cols-1)*gx+2*m;
+  const exR = dims?20:0, exT = dims?10:0, exB = (dims && cols>1)?8:0;
+  const cW = rollW+exR, vbW = Math.max(cW, o.minW||70), ox = (vbW-cW)/2;
+  const padT = Math.max(gy,2.5);
+  const rollH = padT*2 + rows*h + (rows-1)*gy;
+  const vbH = exT+rollH+exB+1.5;
+  const id = 'm'+(++uid), fs = Math.max(2.6, Math.min(4.6, vbW/22));
+  const lx = c => ox+m+c*(w+gx), ly = r => exT+padT+r*(h+gy);
+  const C = '#7c3aed';
+  let s = `<svg class="roll" viewBox="0 0 ${vbW.toFixed(2)} ${vbH.toFixed(2)}" style="max-height:${o.maxH||360}px" role="img" aria-label="Ilustração do rolo com etiquetas de ${fmtMm(w)} por ${fmtMm(h)} milímetros">`;
+  s += `<defs><linearGradient id="${id}g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".1" stop-color="#fff"/><stop offset=".9" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <mask id="${id}" maskUnits="userSpaceOnUse" x="0" y="${exT}" width="${vbW.toFixed(2)}" height="${rollH.toFixed(2)}"><rect x="0" y="${exT}" width="${vbW.toFixed(2)}" height="${rollH.toFixed(2)}" fill="url(#${id}g)"/></mask></defs>`;
+  s += `<g mask="url(#${id})"><rect x="${ox}" y="${exT}" width="${rollW}" height="${rollH}" fill="#e4e1f0"/>`;
+  const rx = Math.min(1.6, w/8);
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+    s += `<rect x="${lx(c)}" y="${ly(r)}" width="${w}" height="${h}" rx="${rx}" fill="#fff" stroke="#cfc9e4" stroke-width=".3"/>`;
+    if(mode==='content') s += labelContent(lx(c),ly(r),w,h);
+  }
+  s += `</g>`;
+  if(dims){
+    const y = exT-4.4, x1 = lx(0), x2 = lx(0)+w;
+    s += `<g stroke="${C}" stroke-width=".28" fill="none" stroke-linecap="round">
+      <path d="M${x1} ${ly(0)-.8}V${y-1}M${x2} ${ly(0)-.8}V${y-1}" stroke-dasharray=".9 .9" opacity=".55"/>
+      <path d="M${x1} ${y}H${x2}M${x1} ${y-1}V${y+1}M${x2} ${y-1}V${y+1}"/></g>`;
+    s += TX(fmtMm(w)+' mm',(x1+x2)/2,y-1.8,fs,800,C,'middle');
+    const xr = ox+rollW+4.5, lr = lx(cols-1)+w, t0 = ly(0), t1 = ly(0)+h;
+    s += `<g stroke="${C}" stroke-width=".28" fill="none" stroke-linecap="round">
+      <path d="M${lr+.8} ${t0}H${xr+1}M${lr+.8} ${t1}H${xr+1}" stroke-dasharray=".9 .9" opacity=".55"/>
+      <path d="M${xr} ${t0}V${t1}M${xr-1} ${t0}H${xr+1}M${xr-1} ${t1}H${xr+1}"/></g>`;
+    s += TX(fmtMm(h)+' mm',xr+2,(t0+t1)/2+fs*0.35,fs,800,C);
+    if(rows>1 && gy>0){
+      const bw = (String(fmtMm(gy)).length+3)*fs*0.5, bh = fs*1.15, cxg = lx(0)+w/2, cyg = ly(0)+h+gy/2;
+      s += `<rect x="${cxg-bw/2}" y="${cyg-bh/2}" width="${bw}" height="${bh}" rx="${bh/2}" fill="${C}"/>`+TX(fmtMm(gy)+' mm',cxg,cyg+fs*0.3,fs*0.8,700,'#fff','middle');
+    }
+    if(cols>1 && gx>0){
+      const xa = lx(0)+w, xb = lx(1), yb = ly(rows-1)+h+Math.max(1.2,padT*0.5), cxg = (xa+xb)/2;
+      s += `<g stroke="${C}" stroke-width=".28" fill="none"><path d="M${xa} ${ly(rows-1)+h}V${yb+1}M${xb} ${ly(rows-1)+h}V${yb+1}" stroke-dasharray=".9 .9" opacity=".55"/><path d="M${xa} ${yb}H${xb}"/></g>`;
+      s += TX(fmtMm(gx)+' mm',cxg,yb+fs*1.15,fs*0.85,800,C,'middle');
+    }
+  }
+  if(mode==='test'){
+    for(let c=0;c<cols;c++){
+      if(o.ghost) s += `<g stroke="#16a34a" fill="none" stroke-dasharray="1.2 .9" opacity=".75"><rect x="${lx(c)+1.2}" y="${ly(0)+1.2}" width="${w-2.4}" height="${h-2.4}" stroke-width=".4" rx=".6"/></g>`;
+      s += `<g class="frameg${o.ok?' ok':''}" style="transform:translate(${o.dx||0}px,${o.dy||0}px)">${frameShapes(lx(c),ly(0),w,h)}</g>`;
+    }
+  }
+  return s+'</svg>';
+}
+
+/* ============ validacao ============ */
+function parseNum(t){ const x = String(t).trim(); if(!/^\d+([.,]\d*)?$/.test(x)) return NaN; return parseFloat(x.replace(',','.')); }
+function readField(k){
+  const t = S[k+'Txt'], [lo,hi] = k==='w'?LIM.w : k==='h'?LIM.h : LIM.gap;
+  if(String(t).trim()==='') return {ok:false,msg:'Digite um número'};
+  const v = parseNum(t);
+  if(isNaN(v)) return {ok:false,msg:'Use só números. Exemplo: 50 ou 2,5'};
+  if(v<lo||v>hi) return {ok:false,msg:`Use um valor entre ${lo} e ${hi} mm`};
+  return {ok:true,v};
+}
+function sync(){
+  S.err = {};
+  ['w','h','gapX','gapY'].forEach(k=>{
+    if(k==='gapX' && S.cols===1) return;
+    const r = readField(k);
+    if(r.ok) S[k] = r1(r.v); else S.err[k] = r.msg;
+  });
+  S.valid = !Object.keys(S.err).length;
+}
+const isDefaultGap = () => !S.err.gapX && !S.err.gapY && S.gapY===DEF.gapY && (S.cols===1 || S.gapX===DEF.gapX);
+const custName = () => `Minha etiqueta ${fmtMm(S.w)} x ${fmtMm(S.h)} mm`;
+const colsTxt = () => S.cols===1 ? 'Uma etiqueta por linha' : `${S.cols} etiquetas lado a lado`;
+const adjTxt = () => `Horizontal ${sgn(S.offX)} mm · Vertical ${sgn(S.offY)} mm`;
+const custom = () => ({w:S.w,h:S.h,cols:S.cols,gapX:S.gapX,gapY:S.gapY});
+
+/* ============ tela de fundo: Etiquetas ============ */
+function entryScreen(){
+  const sel = S.entrySel==='custom' && S.saved ? {...custom(), name:custName()} : (MODELS.find(m=>m.id===S.entrySel)||MODELS[0]);
+  const items = MODELS.map(m=>`<li><button class="opt${S.entrySel===m.id?' on':''}" data-act="pick" data-id="${m.id}"><span>${m.name}</span>${S.entrySel===m.id?ic('check',18):''}</button></li>`).join('');
+  const tail = S.saved
+    ? `<li class="sep"></li><li><button class="opt${S.entrySel==='custom'?' on':''}" data-act="pick" data-id="custom"><span>${custName()}<span class="s2">${S.cols>1?S.cols+' lado a lado · ':''}ajuste guardado neste computador</span></span>${S.entrySel==='custom'?ic('check',18):''}</button><button class="pencil" data-act="edit" aria-label="Editar minha etiqueta">${ic('pencil',20)}</button></li>`
+    : `<li class="sep"></li><li><button class="opt plus" data-act="newCustom">${ic('plus',18,2.4)}<span style="flex:1;margin-left:4px">Minha medida</span></button></li>`;
+  const list = S.listOpen ? `<ul class="sellist" role="listbox" aria-label="Modelos de etiqueta">${items}${tail}</ul>` : '';
+  const side = S.device==='desk' ? `<aside class="side"><div class="brand">Aura</div><div class="it">Painel</div><div class="it">Caixa</div><div class="it">Estoque</div><div class="it on">Etiquetas</div><div class="it">Clientes</div><div class="it">Financeiro</div></aside>` : '';
+  return `<div class="app">${side}<main class="screen">
+    <div class="topb">${ic('menu',22)}<span>Etiquetas</span></div>
+    <div class="page">
+      <h2>Etiquetas</h2><p class="sub">Escolha o modelo, marque os produtos e imprima.</p>
+      <div class="card">
+        <div class="lbl">Modelo da etiqueta</div>
+        <div class="sel"><button class="seltrigger" data-act="toggleList" aria-haspopup="listbox" aria-expanded="${S.listOpen}"><span>${sel.name}</span>${ic('chev',20)}</button>${list}</div>
+        <div class="prev-entry">${rollSVG({...sel,mode:'content',rows:2,minW:60,maxH:150})}<small>Prévia ilustrativa</small></div>
+      </div>
+      <div class="card">
+        <div class="lbl">Produtos para imprimir</div>
+        <div class="prod"><b>Camiseta Algodão Básica · M · Azul</b><span>2 un</span></div>
+        <div class="prod"><b>Camiseta Algodão Básica · G · Preta</b><span>3 un</span></div>
+        <div style="margin-top:8px"><button class="btn pri" style="width:100%" data-act="toast" data-t="No app real, aqui abre a impressão.">${ic('printer',20)} Imprimir etiquetas</button></div>
+      </div>
+    </div></main></div>`;
+}
+
+/* ============ modal ============ */
+const STEPS = ['Medida','Teste','Ajuste','Pronto'];
+function modal(){
+  const v = S.view;
+  const stepper = STEPS.map((n,i)=>{
+    const k = i+1, cls = k<v?'done':k===v?'cur':'';
+    const inner = `<span class="dot">${k<v?ic('check',16,3):k}</span><span>${n}</span>`;
+    return `<li class="${cls}">${k<v?`<button data-act="goto" data-step="${k}" aria-label="Voltar ao passo ${k}: ${n}">${inner}</button>`:`<button tabindex="-1" ${k===v?'aria-current="step"':''}>${inner}</button>`}</li>`;
+  }).join('');
+  const parts = v===1?step1():v===2?step2():v===3?step3():step4();
+  return `<div class="scrim"></div><section class="modal" role="dialog" aria-modal="true" aria-label="Minha medida de etiqueta">
+    <header class="mhead"><div class="mtitle">${S.editing?'Editar minha etiqueta':'Minha medida de etiqueta'}</div><button class="iconbtn" data-act="close" aria-label="Fechar">${ic('close',22)}</button></header>
+    <ol class="stepper" aria-label="Passos">${stepper}</ol>
+    <div class="mbody">${parts.body}</div>
+    <footer class="mfoot">${parts.foot}</footer></section>`;
+}
+
+/* ---- passo 1 ---- */
+function field(key,label,dis){
+  return `<div class="field"><label for="f_${key}">${label}</label>
+    <div class="inp${dis?' dis':''}" id="i_${key}"><input id="f_${key}" data-fld="${key}" inputmode="decimal" autocomplete="off" value="${esc(S[key+'Txt'])}" ${dis?'disabled':''} aria-describedby="e_${key}"><span class="u">mm</span></div>
+    <div class="err" id="e_${key}" role="alert"></div></div>`;
+}
+function colGlyph(n){
+  let r=''; const w=n===1?20:n===2?14:10, gap=3, tot=n*w+(n-1)*gap, x0=(40-tot)/2;
+  for(let i=0;i<n;i++) r += `<rect x="${x0+i*(w+gap)}" y="3" width="${w}" height="20" rx="3" fill="currentColor" opacity=".22" stroke="currentColor" stroke-width="1.5"/>`;
+  return `<svg width="40" height="26" viewBox="0 0 40 26" aria-hidden="true">${r}</svg>`;
+}
+function step1(){
+  const cols = [1,2,3].map(n=>`<button class="colbtn" data-act="cols" data-n="${n}" aria-pressed="false">${colGlyph(n)}<span>${n}</span><small>${n===1?'só uma':'lado a lado'}</small></button>`).join('');
+  const chips = CHIPS.map(c=>`<button class="chip" data-act="chip" data-w="${c[0]}" data-h="${c[1]}" aria-pressed="false">${c[0]} x ${c[1]}</button>`).join('');
+  const diag = `<svg class="rulerdiag" width="86" height="46" viewBox="0 0 86 46" aria-hidden="true"><rect x="2" y="6" width="82" height="34" rx="4" fill="#e4e1f0"/><rect x="12" y="12" width="62" height="22" rx="3" fill="#fff" stroke="#7c3aed" stroke-width="1.5"/><path d="M12 4h62M12 1v6M74 1v6" stroke="#7c3aed" stroke-width="1.5" fill="none"/></svg>`;
+  return {body:`
+    <div class="stephead"><h3>Qual é o tamanho da sua etiqueta?</h3><p>Comece por um atalho ou digite a medida em milímetros (mm).</p></div>
+    <div class="split">
+      <div class="col-prev"><div class="prevcard" aria-live="polite">
+        <div class="ptitle"><span>Assim vai ficar o seu rolo</span><span id="pinfo"></span></div>
+        <div id="prev1"></div>
+        <div class="pcap hide-m">Ilustração em escala. O nome, o tamanho, o preço e o código de barras se ajustam sozinhos ao espaço.</div>
+      </div></div>
+      <div class="col-form">
+        <div class="grp"><div class="lbl">Atalhos</div><div class="chips">${chips}</div></div>
+        <div class="grp">
+          <div class="fields2">${field('w','Largura')}${field('h','Altura')}</div>
+          <div id="warn1"></div>
+          <div class="note tip">${ic('ruler',22)}<div><b>Meça só a etiqueta,</b> sem o papel em volta.</div>${diag}</div>
+        </div>
+        <div class="grp"><div class="lbl">Quantas etiquetas lado a lado no rolo?</div><div class="cols">${cols}</div></div>
+        <div class="grp"><div class="lbl">Espaço entre uma etiqueta e outra</div>
+          <p class="hint">É a faixa de papel liso que fica entre duas etiquetas.</p>
+          <div class="fields2">${field('gapX','Lado a lado',S.cols===1)}${field('gapY','De cima para baixo')}</div>
+          <div id="gapnote" class="hint" style="margin:6px 0 0"></div>
+          <button class="linkbtn" id="gapBtn" data-act="defgap">Não sei, usar o padrão</button>
+        </div>
+      </div>
+    </div>`,
+    foot:`<button class="btn back" data-act="close">Cancelar</button><button class="btn pri" id="next1" data-act="next">Continuar ${ic('arrowR',18)}</button>`};
+}
+function upd1(){
+  sync();
+  const dev = S.device==='mobile';
+  const p = $('#prev1'); if(!p) return;
+  p.innerHTML = rollSVG({...custom(), mode:'content', dims:true, rows: dev?2:undefined, maxH: dev?200:400, minW: dev?60:70});
+  $('#pinfo').textContent = `${fmtMm(S.w)} x ${fmtMm(S.h)} mm`;
+  ['w','h','gapX','gapY'].forEach(k=>{
+    const e = $('#e_'+k), b = $('#i_'+k); if(!e) return;
+    e.textContent = S.err[k]||''; b.classList.toggle('bad', !!S.err[k]);
+  });
+  const gx = $('#f_gapX'); gx.disabled = S.cols===1; $('#i_gapX').classList.toggle('dis', S.cols===1);
+  document.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed', String(+c.dataset.w===S.w && +c.dataset.h===S.h && S.cols===1 && !S.err.w && !S.err.h)));
+  document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on', c.getAttribute('aria-pressed')==='true'));
+  document.querySelectorAll('.colbtn').forEach(c=>{const on=+c.dataset.n===S.cols; c.classList.toggle('on',on); c.setAttribute('aria-pressed',String(on));});
+  let wn = '';
+  if(!S.err.w && S.w < 25) wn = `<div class="note warn" role="alert">${ic('warn',22)}<div><b>Etiqueta estreita.</b> Com menos de 25 mm de largura o código de barras pode não ser lido pelo leitor. Aumente a largura ou use uma etiqueta de 30 mm.<br><button class="btn" data-act="w30">Usar 30 mm de largura</button></div></div>`;
+  $('#warn1').innerHTML = wn;
+  $('#gapnote').textContent = S.cols===1 ? '“Lado a lado” só vale com 2 ou 3 etiquetas no rolo.' : '';
+  const gb = $('#gapBtn'), d = isDefaultGap();
+  gb.disabled = d; gb.innerHTML = d ? ic('check',18,2.6)+' Usando o padrão' : 'Não sei, usar o padrão';
+  $('#next1').disabled = !S.valid;
+}
+
+/* ---- passo 2 ---- */
+function p2html(k){
+  const st = S[k];
+  if(st==='sending') return `<div class="row"><div class="spin"></div><span>Enviando para a impressora…</span></div>`;
+  if(st==='sent') return `<div class="note okk" style="margin:0" role="status">${ic('check',22,2.6)}<div><b>Teste enviado.</b> ${k==='p3'?`Saiu com o ajuste de hoje (${adjTxt()}). `:''}Pegue a etiqueta que saiu e olhe a moldura.</div></div>`;
+  return '';
+}
+function step2(){
+  const many = S.cols>1 ? `Sai uma linha inteira, com ${S.cols} etiquetas de teste. Olhe a da esquerda.` : 'Gasta só uma etiqueta.';
+  return {body:`
+    <div class="stephead"><h3>Imprima uma etiqueta de teste</h3><p>Vamos conferir se a impressão cai no lugar certo. É rápido.</p></div>
+    <div class="split">
+      <div class="col-prev"><div class="prevcard">
+        <div class="ptitle"><span>O que vai sair</span><span>${fmtMm(S.w)} x ${fmtMm(S.h)} mm</span></div>
+        ${rollSVG({...custom(), mode:'test', rows:2, dx:0, dy:0, minW:64, maxH: S.device==='mobile'?170:340})}
+        <div class="legend"><span><i></i>Moldura</span><span>Cruz no centro</span><span>Setas nas bordas</span></div>
+      </div></div>
+      <div class="col-form">
+        <p class="bigcall">Repare se a moldura ficou dentro da etiqueta.</p>
+        <ol class="explain">
+          <li><span class="n">1</span><span>Toque em <b>Imprimir teste</b>. ${many}</span></li>
+          <li><span class="n">2</span><span>Olhe a etiqueta que saiu: a moldura e a cruz devem ficar <b>bem no meio</b>, com a borda em volta inteira.</span></li>
+          <li><span class="n">3</span><span>Se ficou torta, sem problema: no próximo passo a gente corrige.</span></li>
+        </ol>
+        <button class="btn pri big" data-act="print2" id="b2">${ic('printer',24)} Imprimir teste</button>
+        <div class="pstat" id="p2" aria-live="polite">${p2html('p2')}</div>
+        <details><summary>${ic('info',18)} Não saiu nada?<span class="chev">${ic('chev',18)}</span></summary>
+          <div class="dbody">Confira se a impressora está ligada e se é a escolhida na janela de impressão. Se o rolo estiver errado, a etiqueta pode sair em branco; nesse caso, refaça o teste.</div></details>
+      </div>
+    </div>`,
+    foot:`<button class="btn back" data-act="back">${ic('arrowL',18)} Voltar</button><button class="btn pri" data-act="next">Já imprimi, continuar ${ic('arrowR',18)}</button>`};
+}
+
+/* ---- passo 3 ---- */
+function step3(){
+  const dx = S.errX+S.offX, dy = S.errY+S.offY, ok = Math.abs(dx)<0.25 && Math.abs(dy)<0.25;
+  const b = (d,a,txt) => `<button class="dp ${d}" data-act="nudge" data-d="${a}" aria-label="${txt}">${ic(d==='U'?'arrowU':d==='D'?'arrowD':d==='L'?'arrowL':'arrowR',26,2.4)}<span>${txt}</span></button>`;
+  return {body:`
+    <div class="stephead"><h3>Como saiu o teste?</h3><p>Olhe a etiqueta que saiu e toque no lado para onde a moldura foi. Cada toque corrige 0,5 mm no sentido contrário.</p></div>
+    <div class="split">
+      <div class="col-prev"><div class="prevcard">
+        <div class="ptitle"><span>Sua etiqueta de teste</span><span>${fmtMm(S.w)} x ${fmtMm(S.h)} mm</span></div>
+        ${rollSVG({...custom(), mode:'test', rows:2, dx, dy, ok, ghost:true, minW:64, maxH: S.device==='mobile'?170:340})}
+        <div class="legend"><span><i></i>Moldura impressa</span><span><i class="g"></i>Onde deveria ficar</span></div>
+      </div></div>
+      <div class="col-form">
+        <div class="status3" id="msg3" aria-live="polite"></div>
+        <div class="dpad">
+          <span></span>${b('U','U','Saiu para cima')}<span></span>
+          ${b('L','L','Saiu para a esquerda')}<div class="dp c">${colGlyph(1)}</div>${b('R','R','Saiu para a direita')}
+          <span></span>${b('D','D','Saiu para baixo')}<span></span>
+        </div>
+        <details id="fine"><summary>${ic('sliders',18)} Ajuste fino<span class="chev">${ic('chev',18)}</span></summary>
+          <div class="dbody">
+            <p class="hint" style="margin-top:0">Passos de 0,1 mm. Os números mostram quanto a impressão está deslocada.</p>
+            <div class="fineRow"><div class="nm">Horizontal<small>+ para a direita · − para a esquerda</small></div><div class="stp"><button data-act="fine" data-ax="x" data-d="-0.1" aria-label="Horizontal menos 0,1 milímetro">−</button><b id="fx"></b><button data-act="fine" data-ax="x" data-d="0.1" aria-label="Horizontal mais 0,1 milímetro">+</button></div></div>
+            <div class="fineRow"><div class="nm">Vertical<small>+ para baixo · − para cima</small></div><div class="stp"><button data-act="fine" data-ax="y" data-d="-0.1" aria-label="Vertical menos 0,1 milímetro">−</button><b id="fy"></b><button data-act="fine" data-ax="y" data-d="0.1" aria-label="Vertical mais 0,1 milímetro">+</button></div></div>
+          </div></details>
+        <div class="actions3">
+          <button class="btn" data-act="print3" id="b3">${ic('printer',20)} Imprimir de novo</button>
+          <div class="pstat" id="p3" aria-live="polite" style="margin:0">${p2html('p3')}</div>
+        </div>
+        <div class="under"><button class="linkbtn muted" data-act="reset">${ic('undo',16)} Voltar ao padrão</button></div>
+      </div>
+    </div>`,
+    foot:`<button class="btn back" data-act="back">${ic('arrowL',18)} Voltar</button><button class="btn ok" data-act="okay">${ic('check',20,3)} Ficou certo</button>`};
+}
+function upd3(first){
+  const dx = S.errX+S.offX, dy = S.errY+S.offY, ok = Math.abs(dx)<0.25 && Math.abs(dy)<0.25;
+  document.querySelectorAll('.modal .frameg').forEach(g=>{ g.style.transform = `translate(${dx}px,${dy}px)`; g.classList.toggle('ok',ok); });
+  const fx = $('#fx'), fy = $('#fy'); if(fx) fx.textContent = sgn(S.offX)+' mm'; if(fy) fy.textContent = sgn(S.offY)+' mm';
+  const m = $('#msg3'); if(!m) return;
+  const L = S.last; let h;
+  if(L && L.t==='limit') h = `<div class="note warn" style="margin:0" role="alert">${ic('warn',22)}<div><b>Chegou no limite de 8 mm.</b> Se ainda está torta, confira o tamanho da etiqueta no passo 1 e se o rolo está bem encaixado na impressora.</div></div>`;
+  else if(ok) h = `<div class="note okk" style="margin:0">${ic('check',22,2.6)}<div><b>A moldura está no lugar certo.</b> Se na sua etiqueta também ficou assim, toque em <b>Ficou certo</b>. Para conferir de verdade, use <b>Imprimir de novo</b>.</div></div>`;
+  else if(L && L.t==='move') h = `<div class="note inf" style="margin:0">${ic('info',22)}<div>Movi a moldura <b>${fmt(L.d)} mm</b> para ${L.dir}. Ainda não está no meio? Toque de novo.</div></div>`;
+  else h = `<div class="note inf" style="margin:0">${ic('info',22)}<div>A ilustração mostra um exemplo de etiqueta que saiu torta. Toque no lado para onde a <b>sua</b> moldura foi.</div></div>`;
+  m.innerHTML = h;
+}
+
+/* ---- passo 4 ---- */
+function step4(){
+  const gapTxt = (S.cols>1 ? `${fmtMm(S.gapX)} mm lado a lado · ` : '') + `${fmtMm(S.gapY)} mm de cima para baixo` + (isDefaultGap()?' (padrão)':'');
+  return {body:`
+    <div class="done4"><div class="bigok">${ic('check',34,3)}</div>
+      <h3>Sua etiqueta ${fmtMm(S.w)} x ${fmtMm(S.h)} mm está salva neste computador</h3>
+      <p class="hint" style="margin:0">Ela já aparece na lista de modelos como “${custName()}”.</p></div>
+    <div class="split" style="margin-top:6px">
+      <div class="col-prev" style="position:static;border:0;padding:0;margin:0"><div class="sum" style="margin-top:6px"><div class="thumb">${rollSVG({...custom(), mode:'content', rows:2, minW:60, maxH: S.device==='mobile'?150:300})}</div>
+        <div class="sumrow" style="justify-content:center;color:var(--tx2);font-size:12.5px">Prévia ilustrativa</div></div></div>
+      <div class="col-form">
+        <div class="sum" style="margin-top:6px">
+          <div class="sumrow"><div><span>Tamanho</span><b>${fmtMm(S.w)} x ${fmtMm(S.h)} mm</b></div><button class="linkbtn" data-act="goto" data-step="1">${ic('pencil',16)} Alterar</button></div>
+          <div class="sumrow"><div><span>No rolo</span><b>${colsTxt()}</b></div><button class="linkbtn" data-act="goto" data-step="1">${ic('pencil',16)} Alterar</button></div>
+          <div class="sumrow"><div><span>Espaço entre etiquetas</span><b>${gapTxt}</b></div><button class="linkbtn" data-act="goto" data-step="1">${ic('pencil',16)} Alterar</button></div>
+          <div class="sumrow"><div><span>Ajuste da impressão</span><b>${adjTxt()}</b></div><button class="linkbtn" data-act="goto" data-step="3">${ic('pencil',16)} Alterar</button></div>
+        </div>
+        <div class="note inf">${ic('computer',22)}<div>O ajuste fica <b>neste computador</b>, porque a impressora é do computador. Em outro computador, é só repetir o teste (leva 1 minuto).</div></div>
+      </div>
+    </div>`,
+    foot:`<button class="btn back" data-act="finish" data-print="0">Fechar</button><button class="btn pri" data-act="finish" data-print="1">${ic('printer',20)} Imprimir etiquetas agora</button>`};
+}
+
+/* ============ render ============ */
+function render(){
+  const dev = $('#device'), mb = dev.querySelector('.mbody'), st = mb?mb.scrollTop:0;
+  $('#devwrap').className = 'devwrap '+S.device; dev.className = 'device '+S.device;
+  dev.innerHTML = entryScreen() + (S.view==='entry' ? '' : modal());
+  const nb = dev.querySelector('.mbody'); if(nb){ nb.style.scrollBehavior='auto'; nb.scrollTop = S._last===S.view ? st : 0; nb.style.scrollBehavior=''; }
+  S._last = S.view;
+  if(S.view===1) upd1();
+  if(S.view===3) upd3();
+  document.querySelectorAll('#segDev button').forEach(b=>b.classList.toggle('on', b.dataset.v===S.device));
+  document.querySelectorAll('#segView button').forEach(b=>b.classList.toggle('on', b.dataset.v===String(S.view)));
+}
+function toast(t){ const e=$('#toast'); e.textContent=t; e.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>e.classList.remove('on'),2600); }
+function setTxt(){ S.wTxt=fmtMm(S.w); S.hTxt=fmtMm(S.h); S.gapXTxt=fmtMm(S.gapX); S.gapYTxt=fmtMm(S.gapY); }
+function syncInputs(){ ['w','h','gapX','gapY'].forEach(k=>{const i=$('#f_'+k); if(i) i.value=S[k+'Txt'];}); }
+function fakePrint(k){
+  if(S[k]==='sending') return;
+  S[k]='sending'; const el=$('#p'+k.slice(1)); if(el) el.innerHTML=p2html(k);
+  const btn = $(k==='p2'?'#b2':'#b3'); if(btn) btn.disabled=true;
+  setTimeout(()=>{ S[k]='sent'; const e=$('#p'+k.slice(1)); if(e) e.innerHTML=p2html(k); const bb=$(k==='p2'?'#b2':'#b3'); if(bb) bb.disabled=false; },1300);
+}
+function nudge(ax,d){
+  const key = ax==='x'?'offX':'offY'; let v = r1(S[key]+d);
+  if(Math.abs(v) > LIM.off){ v = Math.sign(v)*LIM.off; S.last = {t:'limit'}; }
+  else S.last = {t:'move', d:Math.abs(d), dir: ax==='x' ? (d>0?'a direita':'a esquerda') : (d>0?'baixo':'cima')};
+  S[key] = v; upd3();
+}
+
+/* ============ eventos ============ */
+document.addEventListener('input', e=>{
+  const f = e.target.dataset && e.target.dataset.fld; if(!f) return;
+  S[f+'Txt'] = e.target.value; upd1();
+});
+document.addEventListener('change', e=>{
+  if(e.target.id==='selErr'){ [S.errX,S.errY] = ERRS[e.target.value]; S.offX=0; S.offY=0; S.last=null; if(S.view===3) render(); }
+});
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && S.view!=='entry'){ S.view='entry'; render(); } });
+document.addEventListener('click', e=>{
+  const t = e.target.closest('[data-act]'); if(!t || t.disabled) return;
+  const d = t.dataset, a = d.act;
+  if(a==='device'){ S.device=d.v; render(); }
+  else if(a==='view'){ S.view = d.v==='entry'?'entry':+d.v; if(S.view==='entry') S.listOpen=true; render(); }
+  else if(a==='state'){ preset(d.v); }
+  else if(a==='toggleList'){ S.listOpen=!S.listOpen; render(); }
+  else if(a==='pick'){ S.entrySel=d.id; S.listOpen=false; render(); }
+  else if(a==='newCustom'){ S.editing=false; S.view=1; S.listOpen=false; render(); }
+  else if(a==='edit'){ S.editing=true; S.view=1; S.listOpen=false; render(); }
+  else if(a==='close'){ S.view='entry'; S.listOpen=false; render(); }
+  else if(a==='toast'){ toast(d.t); }
+  else if(a==='chip'){ S.w=+d.w; S.h=+d.h; S.cols=1; setTxt(); syncInputs(); upd1(); }
+  else if(a==='cols'){ S.cols=+d.n; if(S.cols>1 && !S.gapX){ S.gapX=DEF.gapX; S.gapXTxt=String(DEF.gapX); } syncInputs(); upd1(); }
+  else if(a==='defgap'){ S.gapX=DEF.gapX; S.gapY=DEF.gapY; S.gapXTxt=String(DEF.gapX); S.gapYTxt=String(DEF.gapY); syncInputs(); upd1(); }
+  else if(a==='w30'){ S.w=30; S.wTxt='30'; syncInputs(); upd1(); }
+  else if(a==='next'){ if(S.view===1){ sync(); if(!S.valid) return; } S.view = Math.min(4,S.view+1); render(); }
+  else if(a==='back'){ S.view = Math.max(1,S.view-1); render(); }
+  else if(a==='goto'){ S.view=+d.step; render(); }
+  else if(a==='print2'){ fakePrint('p2'); }
+  else if(a==='print3'){ fakePrint('p3'); }
+  else if(a==='nudge'){ nudge(d.d==='L'||d.d==='R'?'x':'y', d.d==='L'?.5 : d.d==='R'?-.5 : d.d==='U'?.5 : -.5); }
+  else if(a==='fine'){ nudge(d.ax, +d.d); }
+  else if(a==='reset'){ S.offX=0; S.offY=0; S.last=null; upd3(); toast('Ajuste zerado: voltou ao padrão.'); }
+  else if(a==='okay'){ S.saved=true; S.entrySel='custom'; S.view=4; render(); }
+  else if(a==='finish'){ S.view='entry'; S.saved=true; S.entrySel='custom'; S.listOpen=false; S.editing=false; render(); if(d.print==='1') toast('Abrindo a impressão com “'+custName()+'”.'); }
+});
+function preset(v){
+  S.err={}; S.last=null; S.editing=false;
+  const reset = ()=>{ S.w=50;S.h=30;S.cols=1;S.gapX=DEF.gapX;S.gapY=DEF.gapY; setTxt(); };
+  if(v==='narrow'){ reset(); S.w=20; S.h=25; setTxt(); S.view=1; }
+  else if(v==='invalid'){ reset(); S.wTxt='140'; S.view=1; }
+  else if(v==='multi'){ reset(); S.w=33; S.h=21; S.cols=3; setTxt(); S.view=1; }
+  else if(v==='wide'){ reset(); S.w=105; S.h=21; setTxt(); S.view=1; }
+  else if(v==='limit'){ S.offX=LIM.off; S.offY=-LIM.off; S.last={t:'limit'}; S.view=3; }
+  else if(v==='fresh'){ S.saved=false; S.entrySel='40x25'; S.view='entry'; S.listOpen=true; }
+  else if(v==='saved'){ reset(); S.saved=true; S.entrySel='custom'; S.view='entry'; S.listOpen=true; }
+  render();
+}
+render();
+</script>
+</body>
+</html>

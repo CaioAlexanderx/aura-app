@@ -13,12 +13,16 @@ import { avisarImpressaoNoIphone } from "@/components/ImpressaoNoIphone";
 import { hexToName } from "@/utils/colorNames";
 import {
   buildLabelHtml, buildLabelName, validateLabelItems, isValidEAN13, generateEAN13, LABEL_SIZE_PRESETS, LABEL_SIZE_KEYS, DEFAULT_LABEL_SIZE,
-  buildLabelTestHtml, buildLabelPreviewHtml, labelPreviewGeometry, labelSupportsCalibration,
+  buildLabelTestHtml, buildLabelPreviewHtml, labelPreviewGeometry, labelSupportsCalibration, buildCustomLabelTestHtml,
 } from "@/components/screens/estoque/labels/buildLabelHtml";
 import { loadLabelPrinterPrefs, saveLabelPrinterPrefs, defaultLabelPrinterPrefs, labelPrinterBuildOptions, type LabelPrinterPrefs } from "@/components/screens/estoque/labels/labelPrinterPrefs";
 import { LabelPrinterCalibration, mmBr } from "@/components/screens/estoque/labels/LabelPrinterCalibration";
 import { LabelPreviewModal } from "@/components/screens/estoque/labels/LabelPreviewModal";
 import { defaultLabelQty, unitLabelForList } from "@/components/screens/estoque/labels/labelDefaults";
+// 15/10/2026: "Minha medida" (medida livre em mm, por computador).
+import { customLabelPreset, nomeDaMedida, mmTxt, type CustomLabelSpec } from "@/components/screens/estoque/labels/customLabel";
+import { lerMinhasMedidas, salvarMedida, apagarMedida, escolherMedida } from "@/components/screens/estoque/labels/customLabelStorage";
+import { MinhaMedidaWizard } from "@/components/screens/estoque/labels/MinhaMedidaWizard";
 import {
   filtrarEtiquetas, categoriasDe, filtrosAtivos, lerOrdemEtiquetas, salvarOrdemEtiquetas,
   ORDENS_ETIQUETAS, PERIODOS, diaParaBr, hojeEmSaoPaulo, diasComCadastro, marcasDoCalendario, type PeriodoCadastro,
@@ -199,7 +203,56 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   // computador (localStorage por empresa e por modelo), nao no pdv_settings:
   // a impressora e do PC. So os modelos com vao entre linhas; no padrao nada
   // e passado ao buildLabelHtml e a etiqueta sai igual a de sempre.
-  var temCalibracao = isWeb && labelSupportsCalibration(labelSize);
+  // 15/10/2026 — "Minha medida": a loja salva quantas medidas quiser, cada
+  // uma com o proprio ajuste, NESTE computador e por empresa ativa
+  // (customLabelStorage). medidaAtiva != null = a impressao usa a medida
+  // livre; null = o modelo fixo de sempre (pdv_settings.label_size so
+  // conhece os fixos). Medida que o navegador nao deixou guardar fica so
+  // nesta visita (estado).
+  var [medidas, setMedidas] = useState<CustomLabelSpec[]>([]);
+  var [medidaAtiva, setMedidaAtiva] = useState<CustomLabelSpec | null>(null);
+  var [wizardMedida, setWizardMedida] = useState<{ inicial: CustomLabelSpec | null } | null>(null);
+  var [apagandoMedida, setApagandoMedida] = useState<string | null>(null);
+  useEffect(function() {
+    if (!isWeb) return;
+    var lido = lerMinhasMedidas(company?.id);
+    setMedidas(lido.medidas);
+    setMedidaAtiva(lido.escolhida ? lido.medidas.find(function(m) { return m.id === lido.escolhida; }) || null : null);
+  }, [isWeb, company?.id]);
+  var nomeDoModelo = medidaAtiva ? nomeDaMedida(medidaAtiva) : labelPreset.uiLabel;
+  var customOpts = medidaAtiva ? { customSpec: medidaAtiva } : {};
+
+  function escolherModeloFixo(key: LabelSizeKey) {
+    if (medidaAtiva) { setMedidaAtiva(null); escolherMedida(company?.id, null); }
+    setLabelSize(key);
+  }
+  function escolherMinhaMedida(m: CustomLabelSpec) {
+    setMedidaAtiva(m);
+    setSizeMenuOpen(false);
+    escolherMedida(company?.id, m.id);
+  }
+  function salvarMinhaMedida(m: CustomLabelSpec): boolean {
+    var r = salvarMedida(company?.id, m);
+    var salva = r.medida || m;
+    setMedidas(function(prev) {
+      var achou = false;
+      var lista = prev.map(function(x) { if (x.id !== salva.id) return x; achou = true; return salva; });
+      return achou ? lista : lista.concat([salva]);
+    });
+    setMedidaAtiva(salva);
+    escolherMedida(company?.id, salva.id);
+    if (!r.guardou) toast.error("Não consegui guardar a medida neste computador — ela vale até você fechar a Aura");
+    return r.guardou;
+  }
+  function confirmarApagarMedida(id: string) {
+    var guardou = apagarMedida(company?.id, id);
+    setMedidas(function(prev) { return prev.filter(function(x) { return x.id !== id; }); });
+    if (medidaAtiva && medidaAtiva.id === id) setMedidaAtiva(null);
+    setApagandoMedida(null);
+    if (guardou) toast.success("Medida apagada deste computador");
+  }
+
+  var temCalibracao = isWeb && !medidaAtiva && labelSupportsCalibration(labelSize);
   var [printerPrefs, setPrinterPrefsState] = useState<LabelPrinterPrefs>(function() { return defaultLabelPrinterPrefs(labelSize); });
   useEffect(function() {
     setPrinterPrefsState(isWeb ? loadLabelPrinterPrefs(company?.id, labelSize) : defaultLabelPrinterPrefs(labelSize));
@@ -342,8 +395,12 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   }
 
   // Executa a impressao com os itens ja prontos (barcodes validos EAN-13)
-  function doPrint(items: LabelItem[]) {
-    var html = buildLabelHtml(items, { mode: mode, storeName: storeName, showStoreName: showStoreName, labelSize: labelSize, offsetMm: labelOffsetMm, ...printerOpts });
+  // `medida` (opcional): a medida livre recem-salva no wizard, antes de o
+  // estado medidaAtiva atualizar. Sem medida livre as opcoes sao as de sempre.
+  function doPrint(items: LabelItem[], medida?: CustomLabelSpec) {
+    // So um spec de verdade (nunca o evento de um onPress repassado).
+    var cOpts = medida && typeof medida === "object" && typeof (medida as any).larguraMm === "number" ? { customSpec: medida } : customOpts;
+    var html = buildLabelHtml(items, { mode: mode, storeName: storeName, showStoreName: showStoreName, labelSize: labelSize, offsetMm: labelOffsetMm, ...printerOpts, ...cOpts });
     abrirImpressao(html, totalLabels + " etiqueta(s) abertas para impressão");
   }
 
@@ -368,7 +425,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     } catch (err) { console.error("[PrintLabels] Error:", err); toast.error("Erro ao gerar etiquetas"); }
   }
 
-  function handlePrint() {
+  function handlePrint(medida?: CustomLabelSpec) {
     if (!isWeb || !company?.id || !token || selectedIds.length === 0) { toast.error("Selecione pelo menos um produto"); return; }
 
     // Reset paineis anteriores
@@ -418,7 +475,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     }
 
     // Todos tem EAN-13 valido — imprime direto
-    doPrint(items);
+    doPrint(items, medida);
   }
 
   // 13/10/2026: pre-visualizacao em escala real da 1a pagina, sem imprimir e
@@ -439,7 +496,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     var shown = items.map(function(item) {
       return isValidEAN13(item.barcode) ? item : { ...item, barcode: generateEAN13(item.barcode || item.name) };
     });
-    var opts = { mode: mode, storeName: storeName, showStoreName: showStoreName, labelSize: labelSize, offsetMm: labelOffsetMm, ...printerOpts };
+    var opts = { mode: mode, storeName: storeName, showStoreName: showStoreName, labelSize: labelSize, offsetMm: labelOffsetMm, ...printerOpts, ...customOpts };
     var geo = labelPreviewGeometry(shown, opts);
     setPreview({ html: buildLabelPreviewHtml(shown, opts), widthMm: geo.widthMm, heightMm: geo.heightMm, labels: geo.labels });
   }
@@ -487,6 +544,14 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     doPrint(resolvedItems);
   }
 
+  // Ilustracao do wizard com um produto de verdade (o 1o marcado), se houver.
+  function exemploDaEtiqueta() {
+    var p = products.find(function(pr) { return selectedIds.includes(pr.id); });
+    if (!p) return undefined;
+    var variacao = [p.size, p.color && !/^#/.test(p.color) ? p.color : ""].filter(Boolean).join(" · ");
+    return { nome: p.name, variacao: variacao, preco: "R$ " + Number(p.price || 0).toFixed(2).replace(".", ","), codigo: String(p.barcode || p.code || "") };
+  }
+
   function renderColorIndicator(colorVal: string) {
     if (!colorVal) return null;
     var hex = colorNameToHex(colorVal);
@@ -513,7 +578,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     <View style={s.container}>
       <View style={s.header} testID="etiquetas-cabecalho">
         <View style={{ flex: 1, minWidth: 200 }}>
-          <Text style={s.title}>Etiquetas {labelPreset.uiLabel} — Padrão EAN-13</Text>
+          <Text style={s.title}>Etiquetas {nomeDoModelo} — Padrão EAN-13</Text>
           <Text style={s.hint}>Selecione os produtos. Produto com código válido mas fora do padrão de código de barras (EAN-13) recebe um código interno automaticamente; sem nenhum código válido cadastrado, corrija no Estoque antes de imprimir.</Text>
         </View>
         <View style={{ gap: 6, alignItems: "flex-end" }}>
@@ -530,23 +595,63 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
               style={s.sizeSelectBtn}
               accessibilityRole="button"
               accessibilityState={{ expanded: sizeMenuOpen }}
-              accessibilityLabel={"Modelo de etiqueta: " + labelPreset.uiLabel}
+              accessibilityLabel={"Modelo de etiqueta: " + nomeDoModelo}
             >
               <Text style={s.sizeSelectLbl}>Modelo:</Text>
-              <Text style={s.sizeSelectVal} numberOfLines={1}>{labelPreset.uiLabel}</Text>
+              <Text style={s.sizeSelectVal} numberOfLines={1}>{nomeDoModelo}</Text>
               <Icon name={sizeMenuOpen ? "chevron_up" : "chevron_down"} size={12} color={Colors.ink3} />
             </Pressable>
             {sizeMenuOpen && (
               <View style={s.sizeMenu}>
                 {LABEL_SIZE_OPTIONS.map(function(key) {
-                  var active = labelSize === key;
+                  var active = !medidaAtiva && labelSize === key;
                   return (
-                    <Pressable key={key} onPress={function() { setLabelSize(key); }} style={[s.sizeMenuItem, active && s.sizeMenuItemActive]} accessibilityRole="menuitem">
+                    <Pressable key={key} onPress={function() { escolherModeloFixo(key); }} style={[s.sizeMenuItem, active && s.sizeMenuItemActive]} accessibilityRole="menuitem">
                       <Text style={[s.sizeMenuTxt, active && s.sizeMenuTxtActive]}>{LABEL_SIZE_PRESETS[key].uiLabel}</Text>
                       {active && <Icon name="check" size={12} color={Colors.violet3} />}
                     </Pressable>
                   );
                 })}
+                {/* 15/10/2026: "Minha medida". Lapis e lixeira sempre
+                    visiveis (nada de hover-reveal), alvos de 44 px. */}
+                {isWeb && <View style={s.sizeMenuSep} />}
+                {isWeb && medidas.map(function(m) {
+                  var active = !!medidaAtiva && medidaAtiva.id === m.id;
+                  if (apagandoMedida === m.id) {
+                    return (
+                      <View key={m.id} style={s.medidaConfirma} testID={"etiquetas-medida-confirma-" + m.id}>
+                        <Text style={s.medidaConfirmaTxt}>Apagar “{nomeDaMedida(m)}” deste computador?</Text>
+                        <View style={s.medidaConfirmaAcoes}>
+                          <Pressable onPress={function() { setApagandoMedida(null); }} style={s.medidaConfirmaBtn} testID="etiquetas-medida-apagar-cancelar"><Text style={s.medidaConfirmaBtnTxt}>Cancelar</Text></Pressable>
+                          <Pressable onPress={function() { confirmarApagarMedida(m.id); }} style={[s.medidaConfirmaBtn, s.medidaConfirmaBtnApagar]} testID="etiquetas-medida-apagar-sim"><Text style={[s.medidaConfirmaBtnTxt, { color: Colors.red }]}>Apagar</Text></Pressable>
+                        </View>
+                      </View>
+                    );
+                  }
+                  return (
+                    <View key={m.id} style={[s.medidaRow, active && s.sizeMenuItemActive]}>
+                      <Pressable onPress={function() { escolherMinhaMedida(m); }} style={s.medidaPick} accessibilityRole="menuitem" testID={"etiquetas-medida-" + m.id}>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={[s.sizeMenuTxt, active && s.sizeMenuTxtActive]} numberOfLines={1}>{nomeDaMedida(m)}</Text>
+                          <Text style={s.medidaSub} numberOfLines={1}>{m.colunas > 1 ? m.colunas + " lado a lado · " : ""}ajuste guardado neste computador</Text>
+                        </View>
+                        {active && <Icon name="check" size={12} color={Colors.violet3} />}
+                      </Pressable>
+                      <Pressable onPress={function() { setSizeMenuOpen(false); setWizardMedida({ inicial: m }); }} style={s.medidaIcone} accessibilityRole="button" accessibilityLabel={"Editar " + nomeDaMedida(m)} testID={"etiquetas-medida-editar-" + m.id}>
+                        <Icon name="pencil" size={16} color={Colors.violet3} />
+                      </Pressable>
+                      <Pressable onPress={function() { setApagandoMedida(m.id); }} style={s.medidaIcone} accessibilityRole="button" accessibilityLabel={"Apagar " + nomeDaMedida(m)} testID={"etiquetas-medida-apagar-" + m.id}>
+                        <Icon name="trash" size={16} color={Colors.ink3} />
+                      </Pressable>
+                    </View>
+                  );
+                })}
+                {isWeb && (
+                  <Pressable onPress={function() { setSizeMenuOpen(false); setWizardMedida({ inicial: null }); }} style={s.medidaNova} accessibilityRole="menuitem" testID="etiquetas-minha-medida">
+                    <Icon name="plus" size={14} color={Colors.violet3} />
+                    <Text style={s.medidaNovaTxt}>Minha medida</Text>
+                  </Pressable>
+                )}
               </View>
             )}
           </View>
@@ -898,7 +1003,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
             <Text style={s.previewBtnText}>Ver em tamanho real</Text>
           </Pressable>
         )}
-        <Pressable onPress={handlePrint} style={[s.printBtn, { flex: 1 }, totalLabels === 0 && { opacity: 0.5 }]} disabled={totalLabels === 0}>
+        <Pressable onPress={function() { handlePrint(); }} style={[s.printBtn, { flex: 1 }, totalLabels === 0 && { opacity: 0.5 }]} disabled={totalLabels === 0}>
           <Icon name="file_text" size={16} color="#fff" />
           <Text style={s.printBtnText}>Imprimir {totalLabels} etiqueta(s)</Text>
         </Pressable>
@@ -915,9 +1020,24 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
           onPrint={function() { setPreview(null); handlePrint(); }}
         />
       )}
+      {wizardMedida && (
+        <MinhaMedidaWizard
+          key={wizardMedida.inicial ? wizardMedida.inicial.id : "nova"}
+          inicial={wizardMedida.inicial}
+          exemplo={exemploDaEtiqueta()}
+          onImprimirTeste={function(m) { abrirImpressao(buildCustomLabelTestHtml(m), "Teste de posição aberto para impressão"); }}
+          onSalvar={salvarMinhaMedida}
+          onFechar={function() { setWizardMedida(null); }}
+          onImprimirAgora={function(m) {
+            setWizardMedida(null);
+            if (totalLabels === 0) { toast.info("Medida pronta. Marque os produtos e toque em Imprimir."); return; }
+            handlePrint(m);
+          }}
+        />
+      )}
       <View style={s.setupHint}>
         <Icon name="alert" size={12} color={Colors.amber} />
-        <Text style={s.setupText}>Chrome: Ctrl+P, papel {printerOpts.continuous ? labelPreset.pageWidthMm + "mm de largura e a altura do trabalho inteiro (passo de " + mmBr(printerPrefs.rowPitchMm) + " × número de linhas; a página de impressão mostra a medida)" : labelPreset.pageWidthMm + "x" + (printerOpts.rowPitchMm != null ? printerOpts.rowPitchMm : labelPreset.pageHeightMm) + "mm"}, Margens: Nenhuma, Escala: 100%. A quantidade padrão é baseada no estoque de cada variante{matconEnabled ? ", exceto em unidades fracionadas (m, m², m³, kg, L, ton) e milheiro, que começam em 1" : ""}.</Text>
+        <Text style={s.setupText}>Chrome: Ctrl+P, papel {medidaAtiva ? mmTxt(customLabelPreset(medidaAtiva).pageWidthMm) + "x" + mmTxt(customLabelPreset(medidaAtiva).pageHeightMm) + "mm" : printerOpts.continuous ? labelPreset.pageWidthMm + "mm de largura e a altura do trabalho inteiro (passo de " + mmBr(printerPrefs.rowPitchMm) + " × número de linhas; a página de impressão mostra a medida)" : labelPreset.pageWidthMm + "x" + (printerOpts.rowPitchMm != null ? printerOpts.rowPitchMm : labelPreset.pageHeightMm) + "mm"}, Margens: Nenhuma, Escala: 100%. A quantidade padrão é baseada no estoque de cada variante{matconEnabled ? ", exceto em unidades fracionadas (m, m², m³, kg, L, ton) e milheiro, que começam em 1" : ""}.</Text>
       </View>
     </View>
   );
@@ -946,6 +1066,20 @@ var s = StyleSheet.create({
   sizeMenuItemActive: { backgroundColor: Colors.violetD },
   sizeMenuTxt: { fontSize: 12, color: Colors.ink2 },
   sizeMenuTxtActive: { color: Colors.violet3, fontWeight: "700" },
+  // "Minha medida" (15/10/2026): alvos de 44 px, lapis/lixeira sempre visiveis.
+  sizeMenuSep: { height: 1, backgroundColor: Colors.border, marginVertical: 4, marginHorizontal: 6 },
+  medidaRow: { flexDirection: "row", alignItems: "center", minHeight: 44 },
+  medidaPick: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, paddingHorizontal: 12, paddingVertical: 4 },
+  medidaSub: { fontSize: 10.5, color: Colors.ink3, marginTop: 1 },
+  medidaIcone: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: 8 },
+  medidaNova: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, paddingHorizontal: 12 },
+  medidaNovaTxt: { fontSize: 12.5, color: Colors.violet3, fontWeight: "700" },
+  medidaConfirma: { paddingHorizontal: 12, paddingVertical: 8, gap: 6, backgroundColor: Colors.redD },
+  medidaConfirmaTxt: { fontSize: 12, color: Colors.ink, fontWeight: "600" },
+  medidaConfirmaAcoes: { flexDirection: "row", justifyContent: "flex-end", gap: 8 },
+  medidaConfirmaBtn: { minHeight: 44, paddingHorizontal: 14, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, justifyContent: "center", backgroundColor: Colors.bg3 },
+  medidaConfirmaBtnApagar: { borderColor: Colors.red + "66" },
+  medidaConfirmaBtnTxt: { fontSize: 12.5, fontWeight: "700", color: Colors.ink2 },
   storeToggle: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg3, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: Colors.border },
   storeToggleText: { fontSize: 12, color: Colors.ink2, flex: 1 },
   storeTogglePreview: { fontWeight: "700", color: Colors.violet3, letterSpacing: 0.5 },
