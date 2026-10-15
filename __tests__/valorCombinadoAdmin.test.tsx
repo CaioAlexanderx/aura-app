@@ -23,6 +23,7 @@ jest.mock("@/components/admin/painel/PainelModal", () => {
 });
 
 var mockAdmin = {
+  customSubscription: jest.fn(),
   setCustomSubscription: jest.fn(),
   clearCustomSubscription: jest.fn(),
 };
@@ -42,13 +43,20 @@ async function digita(tree: renderer.ReactTestRenderer, id: string, valor: strin
   await act(async () => { byTestId(tree, id)[0].props.onChangeText(valor); });
 }
 
-async function mount(atual: unknown) {
+const EMPRESA = { plan: "negocio", billing_cycle: "annual", billing_status: "active", extra_seats_granted: 1, has_subscription: true };
+
+async function mount(atual: unknown, minimo = 5) {
+  mockAdmin.customSubscription.mockResolvedValue({ custom_subscription: atual, company: EMPRESA, min_value: minimo });
+  return montar();
+}
+
+async function montar() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   let tree: renderer.ReactTestRenderer;
   await act(async () => {
     tree = renderer.create(
       <QueryClientProvider client={qc}>
-        <ValorCombinadoSection companyId="emp-1" nome="Loja do Luis" plano="negocio" ciclo="annual" atual={atual} />
+        <ValorCombinadoSection companyId="emp-1" nome="Loja do Luis" plano="negocio" ciclo="annual" />
       </QueryClientProvider>
     );
   });
@@ -71,10 +79,38 @@ describe("Gestão Aura — bloco do valor combinado", () => {
     tree.unmount();
   });
 
-  it("servidor sem o campo (undefined): não afirma tabela", async () => {
-    const tree = await mount(undefined);
-    expect(text(tree)).toContain("não informado pelo servidor");
-    expect(text(tree)).not.toContain("Valor de tabela");
+  it("lê pelo GET dedicado, com a chave por empresa", async () => {
+    const tree = await mount(null);
+    expect(mockAdmin.customSubscription).toHaveBeenCalledWith("emp-1");
+    tree.unmount();
+  });
+
+  it("carregando: mostra o indicador e ainda não oferece os botões", async () => {
+    mockAdmin.customSubscription.mockReturnValue(new Promise(() => {}));
+    const tree = await montar();
+    expect(byTestId(tree, "valor-combinado-carregando")).toHaveLength(1);
+    expect(byTestId(tree, "valor-combinado-definir")).toHaveLength(0);
+    tree.unmount();
+  });
+
+  it("503 (migration pendente): 'indisponível no momento', sem botões e sem quebrar", async () => {
+    mockAdmin.customSubscription.mockRejectedValue({ status: 503, message: "migration 386 pendente" });
+    const tree = await montar();
+    expect(byTestId(tree, "valor-combinado-indisponivel")).toHaveLength(1);
+    expect(text(tree)).toContain("indisponível no momento");
+    expect(byTestId(tree, "valor-combinado-definir")).toHaveLength(0);
+    tree.unmount();
+  });
+
+  it("erro comum: avisa e 'tentar de novo' refaz a leitura", async () => {
+    mockAdmin.customSubscription.mockRejectedValueOnce({ status: 500, message: "boom" });
+    mockAdmin.customSubscription.mockResolvedValue({ custom_subscription: null, company: EMPRESA, min_value: 5 });
+    const tree = await montar();
+    expect(byTestId(tree, "valor-combinado-erro-carga")).toHaveLength(1);
+    await press(tree, "valor-combinado-tentar-de-novo");
+    await espera();
+    expect(mockAdmin.customSubscription).toHaveBeenCalledTimes(2);
+    expect(byTestId(tree, "valor-combinado-definir")).toHaveLength(1);
     tree.unmount();
   });
 
@@ -114,14 +150,14 @@ describe("Gestão Aura — bloco do valor combinado", () => {
     tree.unmount();
   });
 
-  it("valor abaixo do mínimo não grava", async () => {
-    const tree = await mount(null);
+  it("valor abaixo do mínimo do servidor (min_value) não grava", async () => {
+    const tree = await mount(null, 10);
     await press(tree, "valor-combinado-definir");
-    await digita(tree, "valor-combinado-valor", "3");
+    await digita(tree, "valor-combinado-valor", "8");
     await digita(tree, "valor-combinado-motivo", "teste");
     await press(tree, "valor-combinado-revisar");
     expect(byTestId(tree, "valor-combinado-revisao")).toHaveLength(0);
-    expect(text(tree)).toContain("O mínimo é R$ 5,00 por mês.");
+    expect(text(tree)).toContain("O mínimo é R$ 10,00 por mês.");
     expect(mockAdmin.setCustomSubscription).not.toHaveBeenCalled();
     tree.unmount();
   });

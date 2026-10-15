@@ -9,7 +9,7 @@ import {
   valorCombinadoDaCotacao, totalDoCheckout, textoValorPorMes, formatarBRL,
   lerValorDigitado, validarValorCombinado, corpoDoValorCombinado, formInicialValorCombinado,
   lerValorCombinado, resumoDoValorCombinado, ROTULO_VALOR_COMBINADO, VALOR_COMBINADO_MINIMO,
-  TEXTO_CONFIRMACAO_VALOR_COMBINADO,
+  TEXTO_CONFIRMACAO_VALOR_COMBINADO, VALOR_COMBINADO_MAXIMO, NOTA_VALOR_COMBINADO_MAX,
 } from "@/utils/valorCombinado";
 
 const COTACAO = { plan: "negocio", cycle: "annual", value: 211.2, custom: true, table_value: 159.83 };
@@ -97,6 +97,18 @@ describe("Gestão Aura › formulário do valor combinado", () => {
     expect(validarValorCombinado({ ...OK, motivo: " " }).erros.motivo).toBeTruthy();
     expect(validarValorCombinado({ ...OK, plano: "ouro" }).erros.plano).toBeTruthy();
     expect(validarValorCombinado({ ...OK, ciclo: "weekly" }).erros.ciclo).toBeTruthy();
+  });
+
+  it("usa o mínimo do servidor e respeita o teto e o tamanho da observação", () => {
+    expect(validarValorCombinado({ ...OK, valor: "8" }, 10).erros.valor).toContain("R$ 10,00");
+    expect(validarValorCombinado({ ...OK, valor: "8" }, 5).ok).toBe(true);
+    expect(validarValorCombinado({ ...OK, valor: "8" }, null).ok).toBe(true);
+    expect(VALOR_COMBINADO_MAXIMO).toBe(100000);
+    expect(validarValorCombinado({ ...OK, valor: "100.000,00" }).ok).toBe(true);
+    expect(validarValorCombinado({ ...OK, valor: "100.000,01" }).erros.valor).toContain("máximo");
+    expect(NOTA_VALOR_COMBINADO_MAX).toBe(1000);
+    expect(validarValorCombinado({ ...OK, nota: "x".repeat(1000) }).ok).toBe(true);
+    expect(validarValorCombinado({ ...OK, nota: "x".repeat(1001) }).erros.nota).toBeTruthy();
   });
 
   it("lê o bloco do backend e resume para a ficha", () => {

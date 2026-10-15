@@ -167,9 +167,8 @@ export type ResyncSubscriptionResponse = {
 };
 
 // 14/10/2026 — Valor combinado da assinatura (Aura-backend, PUT/DELETE
-// /admin/clients/:cid/custom-subscription). O bloco `custom_subscription`
-// (value, plan, cycle, note, set_at, set_by) vem no /clients-360; null/ausente
-// = a empresa paga o valor de tabela.
+// /admin/clients/:cid/custom-subscription). O bloco vem do GET dedicado (não do
+// clients-360); null = a empresa paga o valor de tabela. 503 = migration pendente.
 export type SetCustomSubscriptionBody = {
   value: number;
   plan: string;
@@ -177,9 +176,34 @@ export type SetCustomSubscriptionBody = {
   note?: string | null;
   reason: string;
 };
+// Resposta do PUT e do DELETE (Aura-backend#840). `applies` diz quando passa a
+// valer: no próximo checkout, a assinatura que já existe na Asaas não muda.
 export type CustomSubscriptionResponse = {
   custom_subscription?: Record<string, any> | null;
+  previous?: Record<string, any> | null;
+  applies?: "next_checkout" | string;
   message?: string;
+};
+// GET /admin/clients/:cid/custom-subscription — o bloco NÃO vem no clients-360.
+export type CustomSubscriptionDetail = {
+  custom_subscription: null | {
+    value: number | string;
+    plan: string;
+    cycle: string;
+    note: string | null;
+    set_at: string | null;
+    set_by: string | null;
+    set_by_name?: string | null;
+    table_value: number | string | null;
+  };
+  company: {
+    plan: string;
+    billing_cycle: string;
+    billing_status: string | null;
+    extra_seats_granted: number;
+    has_subscription: boolean;
+  };
+  min_value: number;
 };
 
 export type SetSegmentBody = {
@@ -513,6 +537,11 @@ export var adminApi = {
   // 14/10/2026 — define / remove o valor mensal combinado da empresa. Vale só
   // para o plano e o ciclo gravados; o checkout e o sync de acessos extras da
   // assinatura leem esse valor no backend.
+  customSubscription: function(companyId: string) {
+    return request<CustomSubscriptionDetail>(
+      "/admin/clients/" + companyId + "/custom-subscription", { retry: 0 }
+    );
+  },
   setCustomSubscription: function(companyId: string, body: SetCustomSubscriptionBody) {
     return request<CustomSubscriptionResponse>(
       "/admin/clients/" + companyId + "/custom-subscription",
@@ -521,7 +550,8 @@ export var adminApi = {
   },
   clearCustomSubscription: function(companyId: string, reason: string) {
     return request<CustomSubscriptionResponse>(
-      "/admin/clients/" + companyId + "/custom-subscription",
+      // Motivo no corpo e na query: alguns proxies descartam o corpo do DELETE.
+      "/admin/clients/" + companyId + "/custom-subscription?reason=" + encodeURIComponent(reason),
       { method: "DELETE", body: { reason: reason }, retry: 0 }
     );
   },

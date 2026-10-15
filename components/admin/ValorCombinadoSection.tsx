@@ -6,9 +6,11 @@
 // valor diferente é a equipe, aqui. O cliente só vê o valor no checkout normal
 // ("Valor combinado") e paga como sempre — nada de link de cobrança.
 //
-// Backend: PUT/DELETE /admin/clients/:cid/custom-subscription (admin_audit_log,
-// action='set_custom_subscription'). O valor vale só para o plano e o ciclo
-// gravados e protege a assinatura do reajuste automático de acessos extras.
+// Backend (Aura-backend#840): GET/PUT/DELETE /admin/clients/:cid/custom-subscription
+// (admin_audit_log, action='set_custom_subscription'). O valor vale só para o
+// plano e o ciclo gravados e protege a assinatura do reajuste automático de
+// acessos extras. O bloco é lido pelo GET dedicado ao abrir a ficha (não vem
+// no clients-360); 503 = migration pendente → "indisponível no momento".
 //
 // Dois passos no mesmo modal (formulário → revisão com a confirmação), no DNA
 // do modal da Gestão Aura (PainelModal), como o Registrar contato.
@@ -16,7 +18,7 @@
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, Pressable, TextInput, ActivityIndicator } from "react-native";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { toast } from "@/components/Toast";
 import { adminApi } from "@/services/adminApi";
@@ -33,19 +35,60 @@ import type { FormValorCombinado } from "@/utils/valorCombinado";
 type Props = {
   companyId: string;
   nome: string;
+  // Plano e ciclo da empresa na lista; o GET traz os da empresa e prevalece.
   plano?: string | null;
   ciclo?: string | null;
-  // Bloco `custom_subscription` do clients-360. undefined = o servidor ainda
-  // não devolve o campo (backend antigo): a tela não afirma "tabela".
-  atual?: unknown;
 };
 
 type Aberto = null | "definir" | "remover";
 
+export var CHAVE_VALOR_COMBINADO = "admin-custom-subscription";
+
 export function ValorCombinadoSection(props: Props) {
   var [aberto, setAberto] = useState<Aberto>(null);
-  var cs = lerValorCombinado(props.atual);
-  var servidorSemCampo = props.atual === undefined;
+  // Carrega ao abrir a ficha; a chave é por empresa.
+  var q = useQuery({
+    queryKey: [CHAVE_VALOR_COMBINADO, props.companyId],
+    queryFn: function() { return adminApi.customSubscription(props.companyId); },
+    retry: false,
+    staleTime: 30000,
+  });
+  var detalhe = q.data;
+  var atual = detalhe ? detalhe.custom_subscription : null;
+  var cs = lerValorCombinado(atual);
+  var indisponivel = q.isError && ((q.error as any)?.status === 503);
+  var plano = (detalhe && detalhe.company && detalhe.company.plan) || props.plano;
+  var ciclo = (detalhe && detalhe.company && detalhe.company.billing_cycle) || props.ciclo;
+  var minimo = detalhe && typeof detalhe.min_value === "number" ? detalhe.min_value : null;
+
+  if (q.isLoading) {
+    return (
+      <View style={s.section} testID="valor-combinado-bloco">
+        <Text style={s.sectionTitle}>Valor combinado da assinatura</Text>
+        <ActivityIndicator testID="valor-combinado-carregando" size="small" color={Colors.violet3} style={{ alignSelf: "flex-start" }} />
+      </View>
+    );
+  }
+
+  if (q.isError || !detalhe) {
+    return (
+      <View style={s.section} testID="valor-combinado-bloco">
+        <Text style={s.sectionTitle}>Valor combinado da assinatura</Text>
+        {indisponivel ? (
+          <Text testID="valor-combinado-indisponivel" style={s.nota}>Valor combinado indisponível no momento. Tente de novo em instantes.</Text>
+        ) : (
+          <>
+            <Text testID="valor-combinado-erro-carga" style={s.nota}>Não consegui carregar o valor combinado desta empresa.</Text>
+            <View style={s.acoes}>
+              <Pressable testID="valor-combinado-tentar-de-novo" onPress={function() { q.refetch(); }} style={s.btnGhost} accessibilityRole="button">
+                <Text style={s.btnGhostText}>Tentar de novo</Text>
+              </Pressable>
+            </View>
+          </>
+        )}
+      </View>
+    );
+  }
 
   return (
     <View style={s.section} testID="valor-combinado-bloco">
@@ -53,10 +96,13 @@ export function ValorCombinadoSection(props: Props) {
       <View style={s.valorRow}>
         <Text style={s.valorLabel}>Valor atual</Text>
         <Text testID="valor-combinado-atual" style={[s.valorTexto, cs && { color: Colors.violet3 }]}>
-          {servidorSemCampo ? "não informado pelo servidor" : resumoDoValorCombinado(props.atual)}
+          {resumoDoValorCombinado(atual)}
         </Text>
       </View>
       {cs && cs.note ? <Text style={s.nota}>{cs.note}</Text> : null}
+      {cs && detalhe.custom_subscription && detalhe.custom_subscription.set_by_name ? (
+        <Text style={s.nota}>{"Definido por " + detalhe.custom_subscription.set_by_name}</Text>
+      ) : null}
       <View style={s.acoes}>
         <Pressable testID="valor-combinado-definir" onPress={function() { setAberto("definir"); }} style={s.btnPrimario} accessibilityRole="button">
           <Text style={s.btnPrimarioText}>{cs ? "Alterar valor combinado" : "Definir valor combinado"}</Text>
@@ -77,9 +123,10 @@ export function ValorCombinadoSection(props: Props) {
         onClose={function() { setAberto(null); }}
         companyId={props.companyId}
         nome={props.nome}
-        plano={props.plano}
-        ciclo={props.ciclo}
-        atual={props.atual}
+        plano={plano}
+        ciclo={ciclo}
+        atual={atual}
+        minimo={minimo}
       />
     </View>
   );
@@ -93,6 +140,7 @@ function ValorCombinadoModal(props: {
   plano?: string | null;
   ciclo?: string | null;
   atual?: unknown;
+  minimo?: number | null;
 }) {
   var qc = useQueryClient();
   var modo = props.aberto;
@@ -112,7 +160,7 @@ function ValorCombinadoModal(props: {
     setErro(null);
   }, [modo, props.companyId]);
 
-  var v = useMemo(function() { return validarValorCombinado(form); }, [form]);
+  var v = useMemo(function() { return validarValorCombinado(form, props.minimo); }, [form, props.minimo]);
   var cs = lerValorCombinado(props.atual);
 
   function mudar(parcial: Partial<FormValorCombinado>) {
@@ -132,7 +180,10 @@ function ValorCombinadoModal(props: {
     try {
       await adminApi.setCustomSubscription(props.companyId, corpoDoValorCombinado(form, v.valor));
       toast.success(props.nome + ": valor combinado de " + formatarBRL(v.valor) + "/mês gravado.");
-      await qc.invalidateQueries({ queryKey: ["admin-clients-360"] });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: [CHAVE_VALOR_COMBINADO, props.companyId] }),
+        qc.invalidateQueries({ queryKey: ["admin-clients-360"] }),
+      ]);
       props.onClose();
     } catch (e: any) {
       setErro((e && (e.data?.error || e.message)) || "Não consegui gravar o valor combinado. Confira a conexão e tente de novo.");
@@ -151,7 +202,10 @@ function ValorCombinadoModal(props: {
     try {
       await adminApi.clearCustomSubscription(props.companyId, motivo);
       toast.success(props.nome + ": valor combinado removido.");
-      await qc.invalidateQueries({ queryKey: ["admin-clients-360"] });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: [CHAVE_VALOR_COMBINADO, props.companyId] }),
+        qc.invalidateQueries({ queryKey: ["admin-clients-360"] }),
+      ]);
       props.onClose();
     } catch (e: any) {
       setErro((e && (e.data?.error || e.message)) || "Não consegui remover o valor combinado. Confira a conexão e tente de novo.");
@@ -294,6 +348,7 @@ function ValorCombinadoModal(props: {
               multiline
               style={[m.input, { minHeight: 60 }]}
             />
+            {tentou && v.erros.nota ? <Text style={m.erroCampo}>{v.erros.nota}</Text> : null}
           </View>
 
           <View>

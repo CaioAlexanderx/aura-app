@@ -18,6 +18,9 @@
 
 // Mesmo piso do backend (MIN_CHARGE_BRL em services/billingPricing.js).
 export var VALOR_COMBINADO_MINIMO = 5;
+// Limites do PUT (Aura-backend#840): R$ 100.000 e observação de até 1000 caracteres.
+export var VALOR_COMBINADO_MAXIMO = 100000;
+export var NOTA_VALOR_COMBINADO_MAX = 1000;
 
 export var ROTULO_VALOR_COMBINADO = "Valor combinado";
 
@@ -32,6 +35,8 @@ export var TEXTO_REMOCAO_VALOR_COMBINADO =
 export type QuoteResponse = {
   plan?: string;
   cycle?: string;
+  billing_type?: string;
+  extra_seats?: number;
   value?: number | string | null;
   custom?: boolean;
   table_value?: number | string | null;
@@ -185,11 +190,17 @@ export type ValidacaoValorCombinado = {
   valor: number | null;
 };
 
-export function validarValorCombinado(f: FormValorCombinado): ValidacaoValorCombinado {
+/**
+ * @param minimo `min_value` que o servidor devolve no GET; sem ele, o piso conhecido (R$ 5).
+ */
+export function validarValorCombinado(f: FormValorCombinado, minimo?: number | null): ValidacaoValorCombinado {
   var erros: ValidacaoValorCombinado["erros"] = {};
+  var piso = typeof minimo === "number" && isFinite(minimo) && minimo > 0 ? minimo : VALOR_COMBINADO_MINIMO;
   var valor = lerValorDigitado(f.valor);
   if (valor === null) erros.valor = "Informe o valor mensal, por exemplo 211,20.";
-  else if (valor < VALOR_COMBINADO_MINIMO) erros.valor = "O mínimo é " + formatarBRL(VALOR_COMBINADO_MINIMO) + " por mês.";
+  else if (valor < piso) erros.valor = "O mínimo é " + formatarBRL(piso) + " por mês.";
+  else if (valor > VALOR_COMBINADO_MAXIMO) erros.valor = "O máximo é " + formatarBRL(VALOR_COMBINADO_MAXIMO) + " por mês.";
+  if (f.nota.trim().length > NOTA_VALOR_COMBINADO_MAX) erros.nota = "A observação aceita até " + NOTA_VALOR_COMBINADO_MAX + " caracteres.";
   if (!PLANOS_VALOR_COMBINADO.some(function (p) { return p.key === f.plano; })) erros.plano = "Escolha o plano.";
   if (f.ciclo !== "monthly" && f.ciclo !== "annual") erros.ciclo = "Escolha o ciclo.";
   if (f.motivo.trim().length < 3) erros.motivo = "Diga o motivo: fica no log de auditoria.";
