@@ -59,7 +59,15 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   // tem o canal. O backend (services/modules.js) ainda NAO conhece a chave:
   // PUT de override com "clientes.reativacao" volta 400, entao ela fica fora
   // do catalogo do ClientsAdmin por ora (mesmo caso de "os" e "cupons").
-  'clientes.reativacao': 'negocio',
+  //
+  // 14/10/2026 -- passa para 'essencial' (decisao do Caio, 13/10; card
+  // t3-06): a regra do "toque de um clique" vale para os dois planos. A
+  // lista de quem sumiu e o botao "Chamar" (wa.me, abre o WhatsApp da
+  // propria loja com a mensagem pronta) sao os mesmos no Essencial e no
+  // Negocio; o DISPARO pela API da Meta continua so para quem conecta o
+  // numero (e a tela so o mostra no Negocio). 'whatsapp' (o canal da Meta)
+  // segue 'negocio' e some no Essencial, sem botao desabilitado.
+  'clientes.reativacao': 'essencial',
   agentes: 'expansao',
   // 30/08/2026 -- Hub Social (Aurinha): secao "Atendimento" dentro da aba
   // Agentes, com chave PROPRIA (regra da casa) para poder ser vendida como

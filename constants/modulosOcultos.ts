@@ -7,56 +7,49 @@
 // MODULE_PLAN_MAP e permissão em PERM_TO_MODULES, mas que ainda não
 // devem aparecer na navegação porque a feature não está operante.
 //
-// Pedido do Caio (21/09): WhatsApp e Reativação saem da sidebar "por
-// enquanto" — as duas telas existem e abrem, mas o fluxo não está
-// pronto para o cliente final.
+// HISTÓRICO
+//   21/09/2026  WhatsApp ('whatsapp') e Reativação ('clientes.reativacao')
+//               saíram da sidebar "por enquanto": o fluxo pela API paga da
+//               Meta não estava pronto para o cliente final.
+//   14/10/2026  As duas VOLTARAM (decisão do Caio, 13/10; card t3-06). A
+//               Reativação ganhou o caminho sem a Meta — "Chamar" abre o
+//               WhatsApp da própria loja com a mensagem pronta (wa.me) — e
+//               por isso vale também para o Essencial. A lista ficou vazia
+//               de propósito: o mecanismo (e o filtro em buildRawNav) continua
+//               aqui para a próxima feature que precise ficar fora do menu
+//               sem apagar o item do NAV.
 //
-// POR QUE AQUI, e não apagando o item do NAV:
+// POR QUE ESTE MECANISMO, e não apagando o item do NAV:
 //
 //   1. O NAV carrega o registro da decisão de 16/09 — o grupo
-//      "Clientes e WhatsApp" subiu para a quarta posição EXATAMENTE
-//      para essas duas telas deixarem de ser invisíveis (uma conta de
-//      trial cancelou sem nunca abrir nenhuma das duas). Apagar os
-//      itens apagaria esse histórico junto com o teste que o segura
+//      "Clientes e WhatsApp" subiu para a quarta posição para essas telas
+//      deixarem de ser invisíveis. Apagar os itens apagaria esse histórico
+//      junto com o teste que o segura
 //      (__tests__/moduloReativacaoNoMenu.test.ts).
 //
-//   2. Reativar é remover uma linha DESTE arquivo. Sem tocar em NAV,
-//      em MODULE_PLAN_MAP, em PERM_TO_MODULES nem no layout salvo do
-//      cliente.
+//   2. Esconder é adicionar uma linha DESTE arquivo; mostrar de novo é
+//      removê-la. Sem tocar em NAV, em MODULE_PLAN_MAP, em PERM_TO_MODULES
+//      nem no layout salvo do cliente.
 //
-//   3. O filtro é de APRESENTAÇÃO. Plano e permissão continuam
-//      valendo por baixo, então quando a chave sair daqui a
-//      visibilidade volta a ser exatamente a de antes — inclusive
-//      para quem está no Essencial, que continua não vendo.
+//   3. O filtro é de APRESENTAÇÃO. Plano e permissão continuam valendo por
+//      baixo.
 //
-// O QUE ISTO NÃO FAZ: não desliga a rota. Quem tiver a URL salva
-// continua abrindo a tela, e os botões que já apontam para ela de
-// dentro de outras telas continuam funcionando. Se o objetivo passar
-// a ser bloquear o acesso, o lugar é um gate na própria tela (ou
-// tirar a chave de MODULE_PLAN_MAP), não este arquivo.
+// O QUE ISTO NÃO FAZ: não desliga a rota. Quem tiver a URL salva continua
+// abrindo a tela. Se o objetivo for bloquear o acesso, o lugar é um gate
+// na própria tela (ou tirar a chave de MODULE_PLAN_MAP), não este arquivo.
 // ============================================================
 
 export const MODULOS_OCULTOS: ReadonlySet<string> = new Set<string>([
-  // Disparo e conversa pelo WhatsApp oficial.
-  'whatsapp',
-  // Reativação por WhatsApp (app/(tabs)/clientes/reativacao.tsx).
-  'clientes.reativacao',
+  // (vazio desde 14/10/2026 — ver histórico acima)
 ]);
 
 // ============================================================
 // PENDÊNCIA CONHECIDA — o rótulo do grupo.
 //
-// Com `whatsapp` oculto, o cabeçalho "Clientes e WhatsApp" anuncia
-// uma tela que não está mais no grupo. Cosmético, e deixado como
-// está de propósito: um rótulo derivado em buildRawNav valeria só
-// para quem NÃO customizou a sidebar, porque applyLayoutToNav
-// (hooks/useSidebarLayout.ts) reagrupa pelo NOME de seção gravado no
-// layout salvo e ignoraria o rótulo novo. Meia correção, divergindo
-// silenciosamente entre dois grupos de cliente, é pior que nenhuma.
-//
-// Se incomodar, o caminho honesto é renomear a seção no NAV e ajustar
-// __tests__/moduloReativacaoNoMenu.test.ts — aceitando que quem já
-// salvou layout continua vendo o nome antigo até reeditar.
+// O grupo "Clientes e WhatsApp" volta a ter as quatro telas no Negócio. No
+// Essencial ele mostra Clientes e Reativação (o WhatsApp oficial é da
+// Meta/Negócio e some, sem botão desabilitado: premissa de 16/09), então o
+// cabeçalho continua verdadeiro nos dois casos.
 // ============================================================
 
 export function moduloEstaOculto(mod?: string): boolean {
