@@ -117,6 +117,8 @@ interface DanfeImportModalProps {
 // utils/ncm.ts. Aqui NAO passamos categoria: a coluna nasce chumbada em
 // "Calçados" pra toda linha do XML, e default nao e escolha da lojista --
 // usar isso como veto vetaria toda loja que não vende calçado.
+// 15/10/2026 (INC-2026-10-15-01): a categoria nasce VAZIA (sem categoria) e
+// as opcoes sao as categorias DA LOJA (mesmas do cadastro de produto).
 
 // ─── Utilitários ─────────────────────────────────────────────────────────────
 
@@ -127,9 +129,23 @@ function applyMarkup(costBrl: number, pct: number): string {
 
 const MARKUP_PRESETS = [30, 50, 80, 100, 150];
 
-const ALL_CATEGORIES = [
-  "Calçados", "Bolsas", "Acessórios", "Roupas", "Meias", "Outros",
-];
+// 15/10/2026 (INC-2026-10-15-01): o backend (POST /companies/:id/products)
+// le `cost_price` e `stock_qty`. O modal mandava `cost` e `stock`, que sumiam
+// em silencio: 397 produtos da loja Geisiane entraram com custo e estoque 0.
+// Corpo de criacao isolado aqui pra um teste segurar os nomes dos campos.
+export function montarCorpoProdutoNovo(it: EditableItem) {
+  const cost = parseInt(unmaskNumber(it.cost_edit) || "0", 10) / 100;
+  const price = parseInt(unmaskNumber(it.price) || "0", 10) / 100;
+  return {
+    name: it.name,
+    price,
+    cost_price: cost,
+    ncm: it.ncm_edit || null,
+    color: it.color || null,
+    category: it.category || null,
+    stock_qty: it.quantity,
+  };
+}
 
 // ─── Componente principal ────────────────────────────────────────────────────
 
@@ -145,6 +161,7 @@ export function DanfeImportModal({
   const [importing, setImporting] = useState(false);
   const [importedCount, setImportedCount] = useState(0);
   const [markupPct, setMarkupPct] = useState("");
+  const [failedCount, setFailedCount] = useState(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // 22/09/2026 (Matcon M0). Catálogo atual só é buscado com o toggle
@@ -167,6 +184,20 @@ export function DanfeImportModal({
     enabled: matconEnabled && !!companyId && visible,
     staleTime: 60000,
   });
+  // 15/10/2026: categorias DA LOJA (mesma fonte e mesma chave de cache do
+  // cadastro de produto, useProductCategories). Sempre da empresa recebida
+  // por prop: no consolidado multi-CNPJ a importacao e da loja escolhida.
+  const { data: categoriasRaw } = useQuery({
+    queryKey: ["product-categories", companyId, "product"],
+    queryFn: () => companiesApi.productCategories(companyId, "product"),
+    enabled: !!companyId && visible,
+    staleTime: 60000,
+  });
+  const categoriasDaLoja: string[] = useMemo(() => {
+    const arr = (categoriasRaw as any)?.categories;
+    if (!Array.isArray(arr)) return [];
+    return arr.map((c: any) => String(c?.name || "").trim()).filter(Boolean);
+  }, [categoriasRaw]);
   const catalogo: any[] = useMemo(() => {
     const arr = (catalogoRaw as any)?.products || (catalogoRaw as any)?.rows || catalogoRaw;
     return Array.isArray(arr) ? arr : [];
@@ -204,6 +235,11 @@ export function DanfeImportModal({
     );
   }, []);
 
+  // Aplica a categoria a todas as linhas SELECIONADAS (mesma regra da margem).
+  const applyBulkCategory = useCallback((cat: string) => {
+    setItems(prev => prev.map(it => (it.selected ? { ...it, category: cat } : it)));
+  }, []);
+
   function handleFileChange(e: any) {
     const file = e.target?.files?.[0];
     if (!file) return;
@@ -235,7 +271,7 @@ export function DanfeImportModal({
               cost_edit: maskCurrency(String(Math.round(it.unit_cost * 100))),
               ncm_edit: it.ncm || "",
               color: "",
-              category: "Calçados",
+              category: "",
               selected: true,
               linkedProductId: vinculado ? (vinculado.id || vinculado.product_id || null) : null,
               linkedProductUnit: vinculado ? (vinculado.unit || null) : null,
@@ -262,6 +298,8 @@ export function DanfeImportModal({
     setPedidosRecebidos([]);
     setAvisoEntrada(null);
     let count = 0;
+    let falhas = 0;
+    setFailedCount(0);
     // Matcon: o que virou estoque de um produto, do jeito que esta na nota
     // (unidade de COMPRA, sem converter). Linha desmarcada nunca entra; a
     // que falhou ao gravar tambem nao.
@@ -271,8 +309,6 @@ export function DanfeImportModal({
         // Fix #4: usa custo editado; Fix NCM: usa ncm_edit
         const costCents = parseInt(unmaskNumber(it.cost_edit) || "0", 10);
         const cost = costCents / 100;
-        const priceCents = parseInt(unmaskNumber(it.price) || "0", 10);
-        const price = priceCents / 100;
 
         // 22/09/2026 (Matcon M0): item vinculado a um produto existente
         // com "Compro por" preenchido — a qtd da nota (unidade de compra)
@@ -307,15 +343,7 @@ export function DanfeImportModal({
           }
           entradas.push({ product_id: it.linkedProductId, quantity: it.quantity, unit_cost: cost });
         } else {
-          const criado: any = await companiesApi.createProduct(companyId, {
-            name: it.name,
-            price,
-            cost,
-            ncm: it.ncm_edit || null,
-            color: it.color || null,
-            category: it.category || null,
-            stock: it.quantity,
-          });
+          const criado: any = await companiesApi.createProduct(companyId, montarCorpoProdutoNovo(it));
           // Produto novo tambem ganha "quem vendeu e por quanto" — a
           // sugestao de compra da proxima vez ja sabe a quem pedir.
           if (matconEnabled) {
@@ -325,7 +353,9 @@ export function DanfeImportModal({
         count++;
         setImportedCount(count);
       } catch {
-        // silencia erros individuais — continua importando os demais
+        // Um item com erro nao derruba os demais, mas agora e CONTADO: o
+        // resumo diz "X importados, Y com erro" (antes sumia em silencio).
+        falhas++;
       }
     }
     // Matcon M4: uma chamada so, para a MESMA empresa dos PATCH acima
@@ -339,6 +369,7 @@ export function DanfeImportModal({
     setImporting(false);
     setStep("done");
     setImportedCount(count);
+    setFailedCount(falhas);
   }
 
   function handleClose() {
@@ -351,6 +382,7 @@ export function DanfeImportModal({
     setError(null);
     setMarkupPct("");
     setImportedCount(0);
+    setFailedCount(0);
     onClose();
   }
 
@@ -468,6 +500,25 @@ export function DanfeImportModal({
               </Pressable>
             </View>
           </View>
+
+          {/* Categoria em massa — categorias da loja, mesmo estilo da margem */}
+          {categoriasDaLoja.length > 0 && (
+            <View style={s.markupRow} testID="danfe-categoria-massa">
+              <Text style={s.markupLabel}>Aplicar categoria às linhas selecionadas:</Text>
+              <View style={s.markupPresets}>
+                {categoriasDaLoja.map(c => (
+                  <Pressable
+                    key={c}
+                    testID={"danfe-categoria-massa-" + c}
+                    style={s.markupPresetBtn}
+                    onPress={() => applyBulkCategory(c)}
+                  >
+                    <Text style={s.markupPresetTxt}>{c}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          )}
 
           {/* Tabela */}
           <ScrollView horizontal showsHorizontalScrollIndicator style={s.tableScroll}>
@@ -658,12 +709,18 @@ export function DanfeImportModal({
                           cursor: "pointer",
                         } as any}
                       >
-                        {ALL_CATEGORIES.map(c => (
+                        <option value="">Sem categoria</option>
+                        {/* categoria que nao esta mais na lista da loja continua
+                            visivel ate a lojista trocar */}
+                        {it.category && !categoriasDaLoja.includes(it.category) && (
+                          <option value={it.category}>{it.category}</option>
+                        )}
+                        {categoriasDaLoja.map(c => (
                           <option key={c} value={c}>{c}</option>
                         ))}
                       </select>
                     ) : (
-                      <Text style={[s.cellText, s.colCat]}>{it.category}</Text>
+                      <Text style={[s.cellText, s.colCat]}>{it.category || "Sem categoria"}</Text>
                     )}
                   </View>
                 );
@@ -707,8 +764,13 @@ export function DanfeImportModal({
             <Text style={s.doneTitle}>
               {importedCount} produto{importedCount !== 1 ? "s" : ""} importado
               {importedCount !== 1 ? "s" : ""}
+              {failedCount > 0 ? ", " + failedCount + " com erro" : ""}
             </Text>
-            <Text style={s.doneSub}>O estoque foi atualizado com sucesso.</Text>
+            <Text style={s.doneSub}>
+              {failedCount > 0
+                ? "Os que deram erro não foram cadastrados. Confira o estoque antes de importar de novo, para não duplicar."
+                : "O estoque foi atualizado com sucesso."}
+            </Text>
             {frasesDosPedidos(pedidosRecebidos).map((frase, i) => (
               <Text key={i} testID={"danfe-pedido-" + i} style={s.donePedido}>{frase}</Text>
             ))}
