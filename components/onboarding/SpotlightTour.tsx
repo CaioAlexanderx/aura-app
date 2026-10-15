@@ -97,6 +97,16 @@ const TOOLTIP_GAP = 14;  // espaço entre alvo e tooltip
 const SCROLL_WAIT_MS = 400;
 const POLL_MS = 150;
 
+// prefers-reduced-motion: quem pediu menos movimento recebe o salto direto
+// até o alvo, sem a rolagem animada.
+export function reduzMovimento(): boolean {
+  try {
+    return typeof window !== "undefined"
+      && typeof window.matchMedia === "function"
+      && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch { return false; }
+}
+
 function useEscape(open: boolean, onEsc: () => void) {
   useEffect(() => {
     if (!open || Platform.OS !== "web" || typeof window === "undefined") return;
@@ -220,7 +230,7 @@ export function SpotlightTour({
         return;
       }
       targetRef.current = target;
-      try { target.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" }); } catch {}
+      try { target.scrollIntoView({ behavior: reduzMovimento() ? "auto" : "smooth", block: "center", inline: "nearest" }); } catch {}
       measureT = setTimeout(() => {
         if (cancelled) return;
         const r = target.getBoundingClientRect();

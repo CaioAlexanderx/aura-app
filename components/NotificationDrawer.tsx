@@ -52,6 +52,7 @@ import {
 import { NotificationPrefs } from '@/components/NotificationPrefs';
 import { WebPortal } from '@/components/WebPortal';
 import { useRouter } from 'expo-router';
+import { rotaDoCtaDoBanner } from '@/utils/focoIndicacao';
 
 type DrawerView = 'feed' | 'prefs';
 
@@ -440,7 +441,8 @@ function BannerFrame({ html, title }: { html: string; title: string }) {
 function BannerCard({ b, onDismiss, C, router }: { b: AppBanner; onDismiss: () => void; C: any; router: any }) {
   const handleCta = useCallback(() => {
     if (b.cta_route) {
-      router?.push(b.cta_route as any);
+      // 14/10/2026 (tq-11): banner de indicação abre Configurações já focado no cartão.
+      router?.push((rotaDoCtaDoBanner(b) || b.cta_route) as any);
       onDismiss();
     } else if (b.cta_url) {
       Linking.openURL(b.cta_url).catch(() => {});

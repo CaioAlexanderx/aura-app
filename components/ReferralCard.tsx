@@ -5,6 +5,8 @@ import { useAuthStore } from "@/stores/auth";
 import { referralsApi } from "@/services/api";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
+import { tourTarget } from "@/utils/tourTarget";
+import { ALVO_INDICACAO } from "@/utils/focoIndicacao";
 
 // 14/10/2026 (campanha de indicação, aprovada pelo Caio e pela Célia): o
 // indicador ganha 1 mês grátis quando o indicado paga a primeira mensalidade;
@@ -77,7 +79,7 @@ export function ReferralCard() {
 
   if (isDemo) {
     return (
-      <View style={s.card}>
+      <View style={s.card} {...tourTarget(ALVO_INDICACAO)}>
         <View style={s.header}>
           <Icon name="star" size={20} color={Colors.violet3} />
           <Text style={s.title}>Indique e ganhe</Text>
@@ -93,7 +95,7 @@ export function ReferralCard() {
   }
 
   return (
-    <View style={s.card}>
+    <View style={s.card} {...tourTarget(ALVO_INDICACAO)}>
       <View style={s.header}>
         <Icon name="star" size={20} color={Colors.violet3} />
         <Text style={s.title}>Indique e ganhe</Text>
