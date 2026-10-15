@@ -32,6 +32,10 @@
 // ============================================================================
 
 import { hexToName } from "@/utils/colorNames";
+// 15/10/2026: "Minha medida" (medida livre em mm). O spec vira um preset e
+// passa por este mesmo renderizador; sem `customSpec` nada muda (fixtures em
+// __tests__/etiquetasDouradas.test.ts).
+import { customLabelPreset, mmTxt, type CustomLabelSpec } from "@/components/screens/estoque/labels/customLabel";
 
 // ----- LOCKED: parametros do barcode (validados por Finesse) -----
 // Alterar isso quebra a leitura do scanner. Testar SEMPRE com POS fisico.
@@ -229,7 +233,7 @@ export type LabelItem = {
 // NUNCA mudar os numeros do preset "99x21".
 export type LabelSizeKey = "99x21" | "105x21" | "30x25" | "58mm" | "40x25";
 
-export const LABEL_SIZE_PRESETS: Record<LabelSizeKey, {
+export type LabelPreset = {
   pageWidthMm: number;
   pageHeightMm: number;
   cols: number;
@@ -278,7 +282,9 @@ export const LABEL_SIZE_PRESETS: Record<LabelSizeKey, {
   // modelos de 1 linha por pagina com vao aceitam (byte-identico).
   calibratable?: boolean;
   uiLabel: string;
-}> = {
+};
+
+export const LABEL_SIZE_PRESETS: Record<LabelSizeKey, LabelPreset> = {
   "99x21": { pageWidthMm: 99, pageHeightMm: 21, cols: 3, cellWidthMm: 33, cellHeightMm: 21, uiLabel: "33x21mm (3 colunas)" },
   "105x21": { pageWidthMm: 105, pageHeightMm: 23.5, cols: 3, cellWidthMm: 33, cellHeightMm: 21, colGapMm: 3, rowGapMm: 2.5, design: "editorial", uiLabel: "33x21mm com vão (3 colunas · papel 105mm)" },
   "30x25": { pageWidthMm: 94, pageHeightMm: 27, cols: 3, cellWidthMm: 30, cellHeightMm: 25, colGapMm: 2, rowGapMm: 2, uiLabel: "30x25mm (3 colunas)" },
@@ -321,6 +327,16 @@ type BuildOptions = {
   // 1a coluna. Desenhadas como fundo da celula — nao entram no fluxo, nao
   // mexem no .bc-box nem no SVG (zona LOCKED).
   calibrationMarks?: boolean;
+  // 15/10/2026 — "Minha medida" (customLabel.ts). Com o spec, a geometria
+  // vem dele (labelSize é ignorado) e o ajuste X/Y também: offsetMm da loja,
+  // modo contínuo, passo e deslocamento vertical por computador não valem
+  // para a medida livre (o ajuste dela já é por computador). Ausente => nada
+  // muda nos modelos fixos.
+  customSpec?: CustomLabelSpec | null;
+  // Só com customSpec (buildCustomLabelTestHtml): cada etiqueta vira a
+  // moldura de teste (moldura 1 mm para dentro da borda, cruz no centro e
+  // setas nas 4 bordas), com a mesma geometria e o mesmo ajuste.
+  testFrame?: boolean;
 };
 
 // ----- Calibracao da impressora (13/10/2026) -----
@@ -380,7 +396,11 @@ export function labelSheetHeightMm(
 
 export function buildLabelHtml(items: LabelItem[], options: BuildOptions): string {
   const isQR = options.mode === "qr";
-  const preset = LABEL_SIZE_PRESETS[options.labelSize || DEFAULT_LABEL_SIZE];
+  // "Minha medida" (15/10/2026): null em todo modelo fixo — cada uso abaixo
+  // e um `custom ? ... : <expressao de antes>`.
+  const custom = options.customSpec ? customLabelPreset(options.customSpec) : null;
+  const testFrame = !!custom && options.testFrame === true;
+  const preset: LabelPreset = custom || LABEL_SIZE_PRESETS[options.labelSize || DEFAULT_LABEL_SIZE];
   const COLS = preset.cols;
   // Vao horizontal entre colunas (0 = etiquetas coladas, comportamento original).
   const colGapMm = preset.colGapMm || 0;
@@ -389,17 +409,19 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   const padLeftMm = preset.padLeftMm || 0;
   // Calibracao da impressora (13/10/2026). No padrao: pitchMm ===
   // preset.pageHeightMm, offsetYMm === 0 e continuous === false.
-  const pitchMm = labelRowPitchMm(options.labelSize, options.rowPitchMm);
+  // Medida livre: passo = altura + espaco entre linhas, 1 linha por pagina,
+  // e o ajuste X/Y e o do proprio spec.
+  const pitchMm = custom ? custom.pageHeightMm : labelRowPitchMm(options.labelSize, options.rowPitchMm);
   const baseYMm = preset.baseOffsetYMm || 0;
-  const offsetYMm = baseYMm === 0
+  const offsetYMm = custom ? custom.ajusteYMm : baseYMm === 0
     ? labelOffsetYMm(options.labelSize, options.offsetYMm)
     : round1(labelOffsetYMm(options.labelSize, options.offsetYMm) + baseYMm);
-  const continuous = options.continuous === true && labelSupportsCalibration(options.labelSize);
+  const continuous = !custom && options.continuous === true && labelSupportsCalibration(options.labelSize);
   const padRightMm = padLeftMm > 0 ? Math.max(0, preset.pageWidthMm - padLeftMm - preset.cols * preset.cellWidthMm - (preset.cols - 1) * colGapMm) : 0;
   const rawOffset = Number(options.offsetMm);
-  const offsetMm = Number.isFinite(rawOffset) ? Math.min(Math.max(rawOffset, -8), 5) : 0;
+  const offsetMm = custom ? custom.ajusteXMm : Number.isFinite(rawOffset) ? Math.min(Math.max(rawOffset, -8), 5) : 0;
   const storeHeader = options.showStoreName && options.storeName ? esc(options.storeName.toUpperCase()) : "";
-  const totalLabels = items.reduce((s, i) => s + i.qty, 0);
+  const totalLabels = testFrame ? COLS : items.reduce((s, i) => s + i.qty, 0);
   // Desenho "editorial" (preset "105x21", 25/09/2026). Tudo que ele emite
   // (CSS, fonte, script de ajuste, marcacao) fica atras desta flag: os
   // presets sem `design` saem byte-identicos.
@@ -480,6 +502,11 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
     }
   });
 
+  // Teste de posicao da medida livre: uma linha, uma moldura por coluna.
+  if (testFrame) {
+    for (let c = 0; c < COLS; c++) cells.push('<td class="cell">' + molduraDeTesteSvg(preset.cellWidthMm, preset.cellHeightMm) + '</td>');
+  }
+
   while (cells.length % COLS !== 0) cells.push('<td class="cell"></td>');
 
   // Insere colunas espacadoras (vao) entre as celulas de cada linha. Com
@@ -492,10 +519,10 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   const totalRows = cells.length / COLS;
   // Altura da PAGINA de impressao = passo da linha x linhas por pagina; no
   // modo continuo, passo x TODAS as linhas do trabalho (pagina unica).
-  const pageSheetHeightMm = labelSheetHeightMm(options.labelSize, totalRows, { continuous: continuous, rowPitchMm: pitchMm, offsetYMm: offsetYMm });
+  const pageSheetHeightMm = custom ? pitchMm : labelSheetHeightMm(options.labelSize, totalRows, { continuous: continuous, rowPitchMm: pitchMm, offsetYMm: offsetYMm });
 
   let html = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">';
-  html += '<title>Etiquetas Aura - ' + totalLabels + ' etiquetas</title>';
+  html += testFrame ? '<title>Teste de posição da etiqueta</title>' : '<title>Etiquetas Aura - ' + totalLabels + ' etiquetas</title>';
   if (!isQR) html += '<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></scr' + 'ipt>';
   // Editorial: Montserrat (Google Fonts) so nesse desenho; Arial de reserva.
   if (isEditorial && !isQR) html += '<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&display=swap" rel="stylesheet">';
@@ -606,6 +633,20 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
       html += '.bc-inner.ed.stack .name{font-size:5.6pt}';
       html += '.bc-inner.ed.stack .price{font-size:8.5pt}';
     }
+    // Medida livre maior que 33x21: texto proporcional (customLabel.ts,
+    // escalaTexto). So emitido com customSpec; .bc-box/SVG nao mudam.
+    if (custom && custom.escalaTexto !== 1) {
+      const k = custom.escalaTexto, cp = !!preset.edCompact;
+      const pt = function (n: number) { return round1(n * k) + 'pt'; };
+      html += '.bc-inner.ed .store{font-size:' + pt(cp ? 4.2 : 4.6) + '}';
+      html += '.bc-inner.ed .name{font-size:' + pt(cp ? 6 : 6.5) + '}';
+      html += '.bc-inner.ed .row .variant{font-size:' + pt(cp ? 4.1 : 4.4) + '}';
+      html += '.bc-inner.ed .price{font-size:' + pt(cp ? 9 : 9.5) + '}';
+      html += '.bc-inner.ed .price .cur{font-size:' + pt(cp ? 5 : 5.5) + '}';
+      html += '.bc-inner.ed.stack .name{font-size:' + pt(cp ? 5.6 : 6) + '}';
+      html += '.bc-inner.ed.stack .price{font-size:' + pt(cp ? 8.5 : 9) + '}';
+      html += '.bc-inner.ed .card-line{font-size:' + pt(5) + '}';
+    }
   }
 
   // QR layout
@@ -676,12 +717,20 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += '<label class="confirm"><input type="checkbox" id="confirmSetup"> Setup conferido</label>';
   html += '<span class="specs">Papel <b>' + preset.pageWidthMm + '&times;' + pageSheetHeightMm + 'mm</b> &middot; Margens <b>Nenhuma</b> &middot; Escala <b>100%</b> &middot; Cabe&ccedil;alho/rodap&eacute; <b>desligados</b></span>';
   html += '</div>';
+  if (custom) {
+    // Medida livre: o ajuste e o do spec (por computador). Sem o slider, que
+    // gravaria o deslocamento da LOJA (pdv_settings) usado pelos fixos.
+    html += '<div class="offset-row" id="offsetRow">';
+    html += '<span class="offset-hint">Ajuste desta medida: horizontal ' + mmTxt(custom.ajusteXMm) + ' mm, vertical ' + mmTxt(custom.ajusteYMm) + ' mm. Para mudar, abra &ldquo;' + esc(custom.uiLabel) + '&rdquo; na Aura e refa&ccedil;a o teste.</span>';
+    html += '</div>';
+  } else {
   html += '<div class="offset-row" id="offsetRow">';
   html += '<label for="offsetRange">Etiqueta saindo cortada? Deslocar:</label>';
   html += '<input type="range" id="offsetRange" min="-6" max="2" step="0.5" value="' + offsetMm + '">';
   html += '<span class="val" id="offsetVal">' + offsetMm + 'mm</span>';
   html += '<span class="offset-hint">Arraste at&eacute; centralizar &mdash; fica salvo para a loja.</span>';
   html += '</div>';
+  }
   html += '</div>';
 
   html += '<div class="preview-wrap"><table id="labelsTable">' + rowsHtml + '</table></div>';
@@ -758,16 +807,20 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
     html += 'function fit(){document.querySelectorAll(".bc-inner.ed").forEach(function(b){';
     html += 'b.classList.remove("stack");';
     html += 'var n=b.querySelector(".name");if(!n)return;';
-    html += 'var pt=' + (preset.edCompact ? '6' : '6.5') + ';n.style.fontSize=pt+"pt";';
+    // Medida livre maior: os mesmos pontos de partida/minimos, na escala do
+    // texto (customLabel.ts). Fixos: as strings de sempre.
+    const kTxt = custom && custom.escalaTexto !== 1 ? custom.escalaTexto : 0;
+    const ptTxt = function (n: number, fixo: string) { return kTxt ? String(round1(n * kTxt)) : fixo; };
+    html += 'var pt=' + ptTxt(preset.edCompact ? 6 : 6.5, preset.edCompact ? '6' : '6.5') + ';n.style.fontSize=pt+"pt";';
     html += 'while(n.scrollHeight>n.clientHeight+1&&pt>5.2){pt-=0.25;n.style.fontSize=pt+"pt";}';
     html += 'var v=b.querySelector(".row .variant");if(!v||!v.textContent)return;';
     html += 'v.style.letterSpacing="";v.style.fontSize="";';
     html += 'if(over(v))v.style.letterSpacing="0";';
-    html += 'var vp=4.4;';
-    html += 'while(over(v)&&vp>4.0){vp-=0.2;v.style.fontSize=vp+"pt";}';
+    html += 'var vp=' + ptTxt(4.4, '4.4') + ';';
+    html += 'while(over(v)&&vp>' + ptTxt(4, '4.0') + '){vp-=0.2;v.style.fontSize=vp+"pt";}';
     html += 'if(over(v)){';
-    html += 'b.classList.add("stack");n.style.fontSize="";v.style.letterSpacing="";v.style.fontSize="";vp=4.4;';
-    html += 'while(over(v)&&vp>3.8){vp-=0.2;v.style.fontSize=vp+"pt";}';
+    html += 'b.classList.add("stack");n.style.fontSize="";v.style.letterSpacing="";v.style.fontSize="";vp=' + ptTxt(4.4, '4.4') + ';';
+    html += 'while(over(v)&&vp>' + ptTxt(3.8, '3.8') + '){vp-=0.2;v.style.fontSize=vp+"pt";}';
     html += '}';
     html += '});}';
     html += 'if(document.fonts&&document.fonts.ready){document.fonts.ready.then(fit);}else{fit();}';
@@ -808,6 +861,46 @@ export function buildLabelTestHtml(options: BuildOptions & { rows?: number }): s
   });
 }
 
+// ----- Teste de posicao da "Minha medida" (15/10/2026) -----
+// Mockup docs/mockups/etiqueta-self-service.html, passo 2: em vez do
+// produto, cada etiqueta sai com uma moldura 1 mm para dentro da borda, uma
+// cruz no centro e setas apontando para as 4 bordas. Tracos de 0,3 mm (a
+// termica de 203dpi apaga abaixo de 0,25 mm). O lojista olha para onde a
+// moldura foi e corrige no passo 3.
+
+/** SVG da moldura de teste, em mm reais (viewBox em mm). */
+export function molduraDeTesteSvg(wMm: number, hMm: number): string {
+  const f = 1, fw = round2(wMm - 2 * f), fh = round2(hMm - 2 * f);
+  const cx = round2(wMm / 2), cy = round2(hMm / 2);
+  const menor = Math.min(wMm, hMm);
+  const L = round2(menor * 0.17);
+  const al = round2(Math.min(3.4, menor * 0.14)), g = 1, hs = round2(Math.min(1.1, al * 0.4));
+  function seta(x1: number, y1: number, x2: number, y2: number): string {
+    const a = Math.atan2(y2 - y1, x2 - x1), c = Math.cos(a), s = Math.sin(a);
+    const p1 = round2(x2 - hs * c + hs * 0.55 * s) + ',' + round2(y2 - hs * s - hs * 0.55 * c);
+    const p2 = round2(x2 - hs * c - hs * 0.55 * s) + ',' + round2(y2 - hs * s + hs * 0.55 * c);
+    return '<line x1="' + round2(x1) + '" y1="' + round2(y1) + '" x2="' + round2(x2 - hs * 0.6 * c) + '" y2="' + round2(y2 - hs * 0.6 * s) + '"/>' +
+      '<polygon points="' + round2(x2) + ',' + round2(y2) + ' ' + p1 + ' ' + p2 + '" fill="#000" stroke="none"/>';
+  }
+  const top = f + g, bot = hMm - f - g, esq = f + g, dir = wMm - f - g;
+  return '<svg class="tf" xmlns="http://www.w3.org/2000/svg" width="' + wMm + 'mm" height="' + hMm + 'mm" viewBox="0 0 ' + wMm + ' ' + hMm + '" fill="none" stroke="#000" stroke-width="0.3" stroke-linecap="round" style="display:block">' +
+    '<rect x="' + f + '" y="' + f + '" width="' + fw + '" height="' + fh + '" rx="0.6"/>' +
+    '<line x1="' + round2(cx - L) + '" y1="' + cy + '" x2="' + round2(cx + L) + '" y2="' + cy + '"/>' +
+    '<line x1="' + cx + '" y1="' + round2(cy - L) + '" x2="' + cx + '" y2="' + round2(cy + L) + '"/>' +
+    seta(cx, top + al, cx, top) + seta(cx, bot - al, cx, bot) + seta(esq + al, cy, esq, cy) + seta(dir - al, cy, dir, cy) +
+    '</svg>';
+}
+
+/** Teste de posicao da medida livre: uma linha (uma moldura por coluna) com
+ *  a MESMA geometria e o MESMO ajuste X/Y da etiqueta real — passa pelo
+ *  buildLabelHtml como qualquer etiqueta. */
+export function buildCustomLabelTestHtml(spec: CustomLabelSpec): string {
+  return buildLabelHtml([{ name: "Teste de posição", price: 0, barcode: "", size: "", color: "", qty: 0 }], {
+    mode: "barcode", storeName: "", showStoreName: false, customSpec: spec, testFrame: true,
+  });
+}
+// -----------------------------------------------------------
+
 /** 1mm em px do CSS (96 px por polegada) — a escala da pre-visualizacao. */
 export const CSS_PX_PER_MM = 96 / 25.4;
 /** Margem (mm) que as reguas ocupam em volta da pagina na pre-visualizacao. */
@@ -817,8 +910,9 @@ export const LABEL_PREVIEW_MAX_ROWS = 12;
 
 /** Geometria da 1a pagina que a pre-visualizacao mostra. */
 export function labelPreviewGeometry(items: LabelItem[], options: BuildOptions): { rows: number; labels: number; widthMm: number; heightMm: number } {
-  const preset = LABEL_SIZE_PRESETS[options.labelSize || DEFAULT_LABEL_SIZE];
-  const continuous = options.continuous === true && labelSupportsCalibration(options.labelSize);
+  const custom = options.customSpec ? customLabelPreset(options.customSpec) : null;
+  const preset: LabelPreset = custom || LABEL_SIZE_PRESETS[options.labelSize || DEFAULT_LABEL_SIZE];
+  const continuous = !custom && options.continuous === true && labelSupportsCalibration(options.labelSize);
   const total = items.reduce(function (s, i) { return s + Math.max(0, i.qty); }, 0);
   const totalRows = Math.max(1, Math.ceil(total / preset.cols));
   const rows = Math.min(totalRows, continuous ? LABEL_PREVIEW_MAX_ROWS : (preset.rowsPerPage || 1));
@@ -826,7 +920,8 @@ export function labelPreviewGeometry(items: LabelItem[], options: BuildOptions):
     rows: rows,
     labels: Math.min(total, rows * preset.cols),
     widthMm: preset.pageWidthMm,
-    heightMm: labelSheetHeightMm(options.labelSize, rows, { continuous: continuous, rowPitchMm: options.rowPitchMm, offsetYMm: options.offsetYMm }),
+    // Medida livre: 1 linha por pagina, altura = passo (etiqueta + espaco).
+    heightMm: custom ? custom.pageHeightMm : labelSheetHeightMm(options.labelSize, rows, { continuous: continuous, rowPitchMm: options.rowPitchMm, offsetYMm: options.offsetYMm }),
   };
 }
 
