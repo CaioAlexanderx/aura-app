@@ -14,6 +14,9 @@
 //     deslocada é ILUSTRATIVA (decisão do Caio): quem diz como saiu é o
 //     lojista pelos botões.
 //   4 Pronto — resumo com "Alterar" por item e "Imprimir etiquetas agora".
+//     15/10/2026: nome opcional na lista ("40x25 balcão") e, com a conta
+//     guardando as medidas (naConta), o texto diz que vale para todos os
+//     computadores da loja, com a dica de duas medidas para duas impressoras.
 //
 // Touch: nada de hover; alvos de 44 px ou mais; no celular o rolo fica fixo
 // no topo do passo 1. Só web (a impressão de etiqueta é web). WebPortal: a
@@ -25,7 +28,7 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { WebPortal } from "@/components/WebPortal";
 import {
-  MEDIDA_PADRAO, etiquetaPequenaDemais, nomeDaMedida, mmTxt, novoIdMedida, type CustomLabelSpec,
+  MEDIDA_PADRAO, NOME_MEDIDA_MAX, etiquetaPequenaDemais, rotuloDaMedida, mmTxt, novoIdMedida, type CustomLabelSpec,
 } from "@/components/screens/estoque/labels/customLabel";
 import {
   ATALHOS_MEDIDA, ROTULO_DIRECAO, corrigirDirecao, ajusteFino, mensagemMovimento, sinalMm, textoAjuste,
@@ -39,8 +42,10 @@ type Props = {
   /** Produto de verdade para a ilustração (o 1o marcado), se houver. */
   exemplo?: ExemploDeEtiqueta;
   onImprimirTeste: (spec: CustomLabelSpec) => void;
-  /** Salva a medida; devolve se conseguiu guardar neste computador. */
+  /** Salva a medida; devolve se conseguiu guardar (na conta ou neste computador). */
   onSalvar: (spec: CustomLabelSpec) => boolean;
+  /** 15/10/2026: a medida vai para a conta da loja (vale em todos os computadores). */
+  naConta?: boolean;
   onFechar: () => void;
   onImprimirAgora: (spec: CustomLabelSpec) => void;
 };
@@ -65,7 +70,7 @@ function Nota({ tipo, icone, children, testID }: { tipo: "dica" | "aviso" | "ok"
   );
 }
 
-export function MinhaMedidaWizard({ inicial, exemplo, onImprimirTeste, onSalvar, onFechar, onImprimirAgora }: Props) {
+export function MinhaMedidaWizard({ inicial, exemplo, onImprimirTeste, onSalvar, onFechar, onImprimirAgora, naConta }: Props) {
   var dim = useWindowDimensions();
   var estreito = dim.width < 700;
 
@@ -84,6 +89,9 @@ export function MinhaMedidaWizard({ inicial, exemplo, onImprimirTeste, onSalvar,
   var [finoAberto, setFinoAberto] = useState(false);
   var [ajudaAberta, setAjudaAberta] = useState(false);
   var [guardou, setGuardou] = useState(true);
+  var [nome, setNome] = useState<string>(base.nome || "");
+  // Último nome salvo: o campo do passo 4 grava ao sair dele, ao fechar ou ao imprimir.
+  var nomeSalvo = useRef<string>(base.nome || "");
 
   var lido = useMemo(function () { return medidaDosCampos(base, txt, colunas); }, [base, txt, colunas]);
   // Enquanto o lojista digita um valor inválido, a ilustração fica na última medida válida.
@@ -91,6 +99,7 @@ export function MinhaMedidaWizard({ inicial, exemplo, onImprimirTeste, onSalvar,
   if (lido.spec) ultima.current = lido.spec;
   var medida = ultima.current;
   var final: CustomLabelSpec = { ...medida, ajusteXMm: ajuste.x, ajusteYMm: ajuste.y };
+  if (nome.trim()) final.nome = nome.trim(); else delete final.nome;
 
   function irPara(p: Passo) {
     if (p === 3 && passo !== 3) { setOrigem3(ajuste); setMsg3(null); setTesteDeNovo(false); }
@@ -115,7 +124,13 @@ export function MinhaMedidaWizard({ inicial, exemplo, onImprimirTeste, onSalvar,
   }
   function ficouCerto() {
     setGuardou(onSalvar(final));
+    nomeSalvo.current = nome.trim();
     setPasso(4);
+  }
+  function salvarNomeSeMudou() {
+    if (passo !== 4 || nome.trim() === nomeSalvo.current) return;
+    nomeSalvo.current = nome.trim();
+    setGuardou(onSalvar(final));
   }
 
   if (Platform.OS !== "web" || typeof document === "undefined") return null;
@@ -338,8 +353,8 @@ export function MinhaMedidaWizard({ inicial, exemplo, onImprimirTeste, onSalvar,
     <View>
       <View style={s.done}>
         <View style={s.bigOk}><Icon name="check" size={30} color={Colors.green} /></View>
-        <Text style={s.doneTit}>{guardou ? "Sua etiqueta " + mmTxt(medida.larguraMm) + " x " + mmTxt(medida.alturaMm) + " mm está salva neste computador" : "Sua etiqueta " + mmTxt(medida.larguraMm) + " x " + mmTxt(medida.alturaMm) + " mm está pronta"}</Text>
-        <Text style={[s.hint, { textAlign: "center" }]}>Ela já aparece na lista de modelos como “{nomeDaMedida(medida)}”.</Text>
+        <Text style={s.doneTit}>{guardou ? "Sua etiqueta " + mmTxt(medida.larguraMm) + " x " + mmTxt(medida.alturaMm) + " mm está salva " + (naConta ? "na sua conta" : "neste computador") : "Sua etiqueta " + mmTxt(medida.larguraMm) + " x " + mmTxt(medida.alturaMm) + " mm está pronta"}</Text>
+        <Text style={[s.hint, { textAlign: "center" }]}>Ela já aparece na lista de modelos como “{rotuloDaMedida(final)}”.</Text>
       </View>
       {!guardou && (
         <Nota tipo="aviso" icone="alert" testID="medida-nao-guardou"><Text style={s.notaTxt}><Text style={s.b}>Não consegui guardar neste computador.</Text> O navegador bloqueou o armazenamento: a medida vale até você fechar a Aura.</Text></Nota>
@@ -358,7 +373,28 @@ export function MinhaMedidaWizard({ inicial, exemplo, onImprimirTeste, onSalvar,
             {linhaResumo("Espaço entre etiquetas", textoEspacos(medida), 1, "espaco")}
             {linhaResumo("Ajuste da impressão", textoAjuste(ajuste), 3, "ajuste")}
           </View>
-          <Nota tipo="info" icone="info"><Text style={s.notaTxt}>O ajuste fica <Text style={s.b}>neste computador</Text>, porque a impressora é do computador. Em outro computador, é só repetir o teste (leva 1 minuto).</Text></Nota>
+          <View style={[s.field, { marginTop: 12 }]}>
+            <Text style={s.fieldLbl} nativeID="rot-nome">Nome na lista (opcional)</Text>
+            <View style={s.inp}>
+              <TextInput
+                value={nome}
+                onChangeText={function (v) { setNome(v.slice(0, NOME_MEDIDA_MAX)); }}
+                onBlur={salvarNomeSeMudou}
+                onSubmitEditing={salvarNomeSeMudou}
+                maxLength={NOME_MEDIDA_MAX}
+                placeholder="Ex.: 40x25 balcão"
+                placeholderTextColor={Colors.ink3}
+                style={[s.inpTxt, { fontSize: 16, fontWeight: "600" }]}
+                accessibilityLabel="Nome da medida na lista de modelos (opcional)"
+                testID="medida-nome"
+              />
+            </View>
+          </View>
+          {naConta ? (
+            <Nota tipo="info" icone="info" testID="medida-na-conta"><Text style={s.notaTxt}>A medida e o ajuste ficam <Text style={s.b}>salvos na sua conta</Text> e valem para todos os computadores da loja. Se a loja tem duas impressoras que imprimem diferente, crie duas medidas, uma para cada (ex.: “40x25 balcão” e “40x25 estoque”).</Text></Nota>
+          ) : (
+            <Nota tipo="info" icone="info"><Text style={s.notaTxt}>O ajuste fica <Text style={s.b}>neste computador</Text>, porque a impressora é do computador. Em outro computador, é só repetir o teste (leva 1 minuto).</Text></Nota>
+          )}
         </View>
       </View>
     </View>
@@ -392,8 +428,8 @@ export function MinhaMedidaWizard({ inicial, exemplo, onImprimirTeste, onSalvar,
   } else {
     rodape = (
       <>
-        <Pressable onPress={onFechar} style={[s.btn, s.btnVoltar]} testID="medida-fechar"><Text style={s.btnTxt}>Fechar</Text></Pressable>
-        <Pressable onPress={function () { onImprimirAgora(final); }} style={[s.btn, s.btnPri, s.btnFlex]} testID="medida-imprimir-agora"><Icon name="print" size={18} color="#fff" /><Text style={s.btnPriTxt}>Imprimir etiquetas agora</Text></Pressable>
+        <Pressable onPress={function () { salvarNomeSeMudou(); onFechar(); }} style={[s.btn, s.btnVoltar]} testID="medida-fechar"><Text style={s.btnTxt}>Fechar</Text></Pressable>
+        <Pressable onPress={function () { salvarNomeSeMudou(); onImprimirAgora(final); }} style={[s.btn, s.btnPri, s.btnFlex]} testID="medida-imprimir-agora"><Icon name="print" size={18} color="#fff" /><Text style={s.btnPriTxt}>Imprimir etiquetas agora</Text></Pressable>
       </>
     );
   }
@@ -411,7 +447,7 @@ export function MinhaMedidaWizard({ inicial, exemplo, onImprimirTeste, onSalvar,
       <View style={s.head}>
         <View style={s.headIco}><Icon name="ruler" size={16} color={Colors.violet3} /></View>
         <Text style={s.headTit}>{editando ? "Editar minha etiqueta" : "Minha medida de etiqueta"}</Text>
-        <Pressable onPress={onFechar} style={s.fechar} accessibilityRole="button" accessibilityLabel="Fechar" testID="medida-x"><Icon name="x" size={18} color={Colors.ink3} /></Pressable>
+        <Pressable onPress={function () { salvarNomeSeMudou(); onFechar(); }} style={s.fechar} accessibilityRole="button" accessibilityLabel="Fechar" testID="medida-x"><Icon name="x" size={18} color={Colors.ink3} /></Pressable>
       </View>
       <View style={s.stepBar} accessibilityLabel="Passos">
         {PASSOS.map(function (pp, idx) {

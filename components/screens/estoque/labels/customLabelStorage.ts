@@ -16,6 +16,12 @@
 // quebra: leitura devolve vazio e escrita devolve `guardou: false` para a
 // tela avisar "não consegui guardar neste computador".
 //
+// 15/10/2026 (decisão do Caio): as medidas passam a ser salvas na CONTA da
+// loja (pdv_settings.label_custom_specs, labelAccountSync.ts) e valem para
+// todos os computadores; este armazenamento vira CACHE (abrir rápido,
+// funcionar sem rede) e a conta vence em conflito. "escolhida" continua
+// por computador: é preferência de quem imprime.
+//
 // Puro, sem React.
 // ============================================================================
 import { sanitizarMedida, type CustomLabelSpec } from "@/components/screens/estoque/labels/customLabel";
@@ -104,6 +110,15 @@ export function escolherMedida(companyId: string | null | undefined, id: string 
   if (id !== null && !atual.medidas.some(function (m) { return m.id === id; })) return false;
   if (atual.escolhida === id) return true;
   return gravar(companyId, { medidas: atual.medidas, escolhida: id });
+}
+
+/** Troca a lista do cache pela lista da conta, mantendo a medida escolhida
+ *  neste computador se ela ainda existir. Devolve o que ficou. */
+export function substituirMedidas(companyId: string | null | undefined, medidas: CustomLabelSpec[]): MinhasMedidas {
+  var atual = lerMinhasMedidas(companyId);
+  var limpo = sanitizarMinhasMedidas({ medidas: medidas, escolhida: atual.escolhida });
+  gravar(companyId, limpo);
+  return limpo;
 }
 
 /** A medida escolhida por último neste computador, ou null. */

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Pressable, Platform, ScrollView, TextInput } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -15,13 +15,21 @@ import {
   buildLabelHtml, buildLabelName, validateLabelItems, isValidEAN13, generateEAN13, LABEL_SIZE_PRESETS, LABEL_SIZE_KEYS, DEFAULT_LABEL_SIZE,
   buildLabelTestHtml, buildLabelPreviewHtml, labelPreviewGeometry, labelSupportsCalibration, buildCustomLabelTestHtml,
 } from "@/components/screens/estoque/labels/buildLabelHtml";
-import { loadLabelPrinterPrefs, saveLabelPrinterPrefs, defaultLabelPrinterPrefs, labelPrinterBuildOptions, type LabelPrinterPrefs } from "@/components/screens/estoque/labels/labelPrinterPrefs";
+import {
+  loadLabelPrinterPrefs, saveLabelPrinterPrefs, defaultLabelPrinterPrefs, labelPrinterBuildOptions, loadAllLabelPrinterPrefs, saveAllLabelPrinterPrefs,
+  sanitizeLabelPrinterPrefs, isDefaultLabelPrinterPrefs, type LabelPrinterPrefs, type LabelPrinterPrefsMap,
+} from "@/components/screens/estoque/labels/labelPrinterPrefs";
+// 15/10/2026: medidas e calibração salvas na CONTA (pdv_settings).
+import {
+  planoDaConta, criarGravadorDaConta, marcarMigracao, medidasParaConta, calibracaoParaConta, MAX_MEDIDAS_NA_CONTA,
+  CHAVE_MEDIDAS, CHAVE_CALIBRACAO, type PatchEtiquetaNaConta,
+} from "@/components/screens/estoque/labels/labelAccountSync";
 import { LabelPrinterCalibration, mmBr } from "@/components/screens/estoque/labels/LabelPrinterCalibration";
 import { LabelPreviewModal } from "@/components/screens/estoque/labels/LabelPreviewModal";
 import { defaultLabelQty, unitLabelForList } from "@/components/screens/estoque/labels/labelDefaults";
 // 15/10/2026: "Minha medida" (medida livre em mm, por computador).
-import { customLabelPreset, nomeDaMedida, mmTxt, type CustomLabelSpec } from "@/components/screens/estoque/labels/customLabel";
-import { lerMinhasMedidas, salvarMedida, apagarMedida, escolherMedida } from "@/components/screens/estoque/labels/customLabelStorage";
+import { customLabelPreset, rotuloDaMedida, mmTxt, type CustomLabelSpec } from "@/components/screens/estoque/labels/customLabel";
+import { lerMinhasMedidas, salvarMedida, apagarMedida, escolherMedida, substituirMedidas } from "@/components/screens/estoque/labels/customLabelStorage";
 import { MinhaMedidaWizard } from "@/components/screens/estoque/labels/MinhaMedidaWizard";
 import {
   filtrarEtiquetas, categoriasDe, filtrosAtivos, lerOrdemEtiquetas, salvarOrdemEtiquetas,
@@ -166,15 +174,21 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   // da Finesse — o ajuste vivia so no dialogo do Chrome e evaporava). O valor
   // persiste em pdv_settings.label_offset_mm; 0 = neutro (comportamento antigo).
   var [labelOffsetMm, setLabelOffsetMm] = useState(0);
+  // 15/10/2026: o mesmo GET traz as medidas e a calibracao salvas na conta;
+  // quem processa e o efeito de sincronia mais abaixo (contaLida).
+  var [contaLida, setContaLida] = useState<{ cid: string; settings: any } | null>(null);
   useEffect(function() {
+    setContaLida(null);
     if (!isWeb || !company?.id) return;
-    pdvSettingsApi.get(company.id).then(function(res) {
+    var cid = company.id;
+    pdvSettingsApi.get(cid).then(function(res) {
       var v = Number(res.settings && res.settings.label_offset_mm);
       if (Number.isFinite(v)) setLabelOffsetMm(v);
       // Modelo salvo da loja vence a escolha antiga do navegador.
       var sz = res.settings && (res.settings as any).label_size;
       if (sz && (LABEL_SIZE_KEYS as string[]).indexOf(sz) >= 0) setLabelSizeState(sz as LabelSizeKey);
-    }).catch(function() { /* sem calibracao salva -> neutro */ });
+      setContaLida({ cid: cid, settings: res && res.settings });
+    }).catch(function() { /* sem calibracao salva -> neutro; medidas seguem no navegador */ });
   }, [isWeb, company?.id]);
 
   // A pagina de impressao (blob) envia o ajuste do slider via postMessage.
@@ -209,18 +223,83 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   // livre; null = o modelo fixo de sempre (pdv_settings.label_size so
   // conhece os fixos). Medida que o navegador nao deixou guardar fica so
   // nesta visita (estado).
+  // 15/10/2026 (pedido do Caio, "para nao perder a configuracao"): medidas e
+  // calibracao passam a ter a CONTA como fonte (pdv_settings
+  // label_custom_specs / label_printer_prefs, labelAccountSync.ts) e valem
+  // para a loja inteira. O navegador vira cache: a tela abre com ele e troca
+  // pelo da conta quando o GET volta. Backend sem as chaves (naConta=false):
+  // tudo segue so no navegador, como antes. A medida escolhida por ultimo
+  // continua por computador (preferencia de quem imprime).
   var [medidas, setMedidas] = useState<CustomLabelSpec[]>([]);
   var [medidaAtiva, setMedidaAtiva] = useState<CustomLabelSpec | null>(null);
   var [wizardMedida, setWizardMedida] = useState<{ inicial: CustomLabelSpec | null } | null>(null);
   var [apagandoMedida, setApagandoMedida] = useState<string | null>(null);
+  var [naConta, setNaConta] = useState(false);
+  // Espelhos para montar o estado INTEIRO que sobe para a conta (lista toda,
+  // mapa de calibracao todo) sem depender do ciclo do setState.
+  var medidasRef = useRef<CustomLabelSpec[]>([]);
+  var calibracaoRef = useRef<LabelPrinterPrefsMap>({});
+  var cidRef = useRef<string | null>(null);
+  cidRef.current = company?.id || null;
+  var gravadorRef = useRef<ReturnType<typeof criarGravadorDaConta> | null>(null);
+  if (!gravadorRef.current) {
+    gravadorRef.current = criarGravadorDaConta({
+      salvar: function(cid, patch) { return pdvSettingsApi.saveLabelConfig(cid, patch); },
+      aoFalhar: function() { toast.warning("Não deu para salvar na conta, tente de novo"); },
+    });
+  }
+  // Saiu da tela com gravacao pendente: grava ja (nao perde o ultimo toque).
+  useEffect(function() { return function() { if (gravadorRef.current) gravadorRef.current.descarregar(); }; }, []);
+  function gravarNaConta(patch: PatchEtiquetaNaConta) {
+    if (!naConta || !company?.id || !gravadorRef.current) return;
+    gravadorRef.current.agendar(company.id, patch);
+  }
+  function mudarMedidas(lista: CustomLabelSpec[]) {
+    medidasRef.current = lista;
+    setMedidas(lista);
+  }
+
   useEffect(function() {
+    setNaConta(false);
     if (!isWeb) return;
     var lido = lerMinhasMedidas(company?.id);
-    setMedidas(lido.medidas);
+    mudarMedidas(lido.medidas);
     setMedidaAtiva(lido.escolhida ? lido.medidas.find(function(m) { return m.id === lido.escolhida; }) || null : null);
+    calibracaoRef.current = loadAllLabelPrinterPrefs(company?.id);
   }, [isWeb, company?.id]);
-  var nomeDoModelo = medidaAtiva ? nomeDaMedida(medidaAtiva) : labelPreset.uiLabel;
+
+  // Sincronia com a conta (depois do GET de pdv_settings).
+  useEffect(function() {
+    if (!isWeb || !contaLida || contaLida.cid !== company?.id) return;
+    var cid = contaLida.cid;
+    var plano = planoDaConta(cid, contaLida.settings, { medidas: medidasRef.current, calibracao: calibracaoRef.current });
+    if (plano.modo !== "conta") return; // backend antigo: so navegador
+    setNaConta(true);
+    if (plano.medidas) {
+      // A conta vence: o cache do navegador vira a lista da conta.
+      var ficou = substituirMedidas(cid, plano.medidas);
+      mudarMedidas(ficou.medidas);
+      setMedidaAtiva(ficou.escolhida ? ficou.medidas.find(function(m) { return m.id === ficou.escolhida; }) || null : null);
+    }
+    if (plano.calibracao) {
+      saveAllLabelPrinterPrefs(cid, plano.calibracao);
+      calibracaoRef.current = plano.calibracao;
+      setPrinterPrefsState(sanitizeLabelPrinterPrefs(labelSize, plano.calibracao[labelSize]));
+    }
+    plano.marcarSemSubir.forEach(function(ch) { marcarMigracao(cid, ch); });
+    var subir = plano.subir;
+    if (Object.keys(subir).length > 0) {
+      // Migracao unica: so sobe o que a conta ainda nao tem (null).
+      pdvSettingsApi.saveLabelConfig(cid, subir).then(function() {
+        if (subir.label_custom_specs) marcarMigracao(cid, CHAVE_MEDIDAS);
+        if (subir.label_printer_prefs) marcarMigracao(cid, CHAVE_CALIBRACAO);
+      }).catch(function() { /* tenta de novo na proxima visita */ });
+    }
+  }, [isWeb, contaLida, company?.id]);
+
+  var nomeDoModelo = medidaAtiva ? rotuloDaMedida(medidaAtiva) : labelPreset.uiLabel;
   var customOpts = medidaAtiva ? { customSpec: medidaAtiva } : {};
+  var ondeFica = naConta ? "da conta" : "deste computador";
 
   function escolherModeloFixo(key: LabelSizeKey) {
     if (medidaAtiva) { setMedidaAtiva(null); escolherMedida(company?.id, null); }
@@ -231,25 +310,40 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     setSizeMenuOpen(false);
     escolherMedida(company?.id, m.id);
   }
+  function abrirNovaMedida() {
+    setSizeMenuOpen(false);
+    if (naConta && medidasRef.current.length >= MAX_MEDIDAS_NA_CONTA) {
+      toast.warning("A conta guarda até " + MAX_MEDIDAS_NA_CONTA + " medidas. Apague uma que não usa para criar outra.");
+      return;
+    }
+    setWizardMedida({ inicial: null });
+  }
   function salvarMinhaMedida(m: CustomLabelSpec): boolean {
     var r = salvarMedida(company?.id, m);
     var salva = r.medida || m;
-    setMedidas(function(prev) {
-      var achou = false;
-      var lista = prev.map(function(x) { if (x.id !== salva.id) return x; achou = true; return salva; });
-      return achou ? lista : lista.concat([salva]);
-    });
+    var achou = false;
+    var lista = medidasRef.current.map(function(x) { if (x.id !== salva.id) return x; achou = true; return salva; });
+    if (!achou) lista = lista.concat([salva]);
+    mudarMedidas(lista);
     setMedidaAtiva(salva);
     escolherMedida(company?.id, salva.id);
+    if (naConta) {
+      gravarNaConta({ label_custom_specs: medidasParaConta(lista) });
+      return true; // vai para a conta; se a rede falhar, o aviso aparece
+    }
     if (!r.guardou) toast.error("Não consegui guardar a medida neste computador — ela vale até você fechar a Aura");
     return r.guardou;
   }
   function confirmarApagarMedida(id: string) {
     var guardou = apagarMedida(company?.id, id);
-    setMedidas(function(prev) { return prev.filter(function(x) { return x.id !== id; }); });
+    var lista = medidasRef.current.filter(function(x) { return x.id !== id; });
+    mudarMedidas(lista);
     if (medidaAtiva && medidaAtiva.id === id) setMedidaAtiva(null);
     setApagandoMedida(null);
-    if (guardou) toast.success("Medida apagada deste computador");
+    if (naConta) {
+      gravarNaConta({ label_custom_specs: medidasParaConta(lista) });
+      toast.success("Medida apagada");
+    } else if (guardou) toast.success("Medida apagada deste computador");
   }
 
   var temCalibracao = isWeb && !medidaAtiva && labelSupportsCalibration(labelSize);
@@ -260,6 +354,11 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   function setPrinterPrefs(next: LabelPrinterPrefs) {
     setPrinterPrefsState(next);
     saveLabelPrinterPrefs(company?.id, labelSize, next);
+    var mapa: LabelPrinterPrefsMap = Object.assign({}, calibracaoRef.current);
+    var limpo = sanitizeLabelPrinterPrefs(labelSize, next);
+    if (isDefaultLabelPrinterPrefs(labelSize, limpo)) delete mapa[labelSize]; else mapa[labelSize] = limpo;
+    calibracaoRef.current = mapa;
+    gravarNaConta({ label_printer_prefs: calibracaoParaConta(mapa) });
   }
   var printerOpts = temCalibracao ? labelPrinterBuildOptions(labelSize, printerPrefs) : {};
   var [preview, setPreview] = useState<{ html: string; widthMm: number; heightMm: number; labels: number } | null>(null);
@@ -620,7 +719,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                   if (apagandoMedida === m.id) {
                     return (
                       <View key={m.id} style={s.medidaConfirma} testID={"etiquetas-medida-confirma-" + m.id}>
-                        <Text style={s.medidaConfirmaTxt}>Apagar “{nomeDaMedida(m)}” deste computador?</Text>
+                        <Text style={s.medidaConfirmaTxt}>Apagar “{rotuloDaMedida(m)}” {ondeFica}?{naConta ? " Some em todos os computadores da loja." : ""}</Text>
                         <View style={s.medidaConfirmaAcoes}>
                           <Pressable onPress={function() { setApagandoMedida(null); }} style={s.medidaConfirmaBtn} testID="etiquetas-medida-apagar-cancelar"><Text style={s.medidaConfirmaBtnTxt}>Cancelar</Text></Pressable>
                           <Pressable onPress={function() { confirmarApagarMedida(m.id); }} style={[s.medidaConfirmaBtn, s.medidaConfirmaBtnApagar]} testID="etiquetas-medida-apagar-sim"><Text style={[s.medidaConfirmaBtnTxt, { color: Colors.red }]}>Apagar</Text></Pressable>
@@ -632,22 +731,22 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
                     <View key={m.id} style={[s.medidaRow, active && s.sizeMenuItemActive]}>
                       <Pressable onPress={function() { escolherMinhaMedida(m); }} style={s.medidaPick} accessibilityRole="menuitem" testID={"etiquetas-medida-" + m.id}>
                         <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text style={[s.sizeMenuTxt, active && s.sizeMenuTxtActive]} numberOfLines={1}>{nomeDaMedida(m)}</Text>
-                          <Text style={s.medidaSub} numberOfLines={1}>{m.colunas > 1 ? m.colunas + " lado a lado · " : ""}ajuste guardado neste computador</Text>
+                          <Text style={[s.sizeMenuTxt, active && s.sizeMenuTxtActive]} numberOfLines={1}>{rotuloDaMedida(m)}</Text>
+                          <Text style={s.medidaSub} numberOfLines={1}>{m.nome ? mmTxt(m.larguraMm) + " x " + mmTxt(m.alturaMm) + " mm · " : ""}{m.colunas > 1 ? m.colunas + " lado a lado · " : ""}{naConta ? "ajuste salvo na conta" : "ajuste guardado neste computador"}</Text>
                         </View>
                         {active && <Icon name="check" size={12} color={Colors.violet3} />}
                       </Pressable>
-                      <Pressable onPress={function() { setSizeMenuOpen(false); setWizardMedida({ inicial: m }); }} style={s.medidaIcone} accessibilityRole="button" accessibilityLabel={"Editar " + nomeDaMedida(m)} testID={"etiquetas-medida-editar-" + m.id}>
+                      <Pressable onPress={function() { setSizeMenuOpen(false); setWizardMedida({ inicial: m }); }} style={s.medidaIcone} accessibilityRole="button" accessibilityLabel={"Editar " + rotuloDaMedida(m)} testID={"etiquetas-medida-editar-" + m.id}>
                         <Icon name="pencil" size={16} color={Colors.violet3} />
                       </Pressable>
-                      <Pressable onPress={function() { setApagandoMedida(m.id); }} style={s.medidaIcone} accessibilityRole="button" accessibilityLabel={"Apagar " + nomeDaMedida(m)} testID={"etiquetas-medida-apagar-" + m.id}>
+                      <Pressable onPress={function() { setApagandoMedida(m.id); }} style={s.medidaIcone} accessibilityRole="button" accessibilityLabel={"Apagar " + rotuloDaMedida(m)} testID={"etiquetas-medida-apagar-" + m.id}>
                         <Icon name="trash" size={16} color={Colors.ink3} />
                       </Pressable>
                     </View>
                   );
                 })}
                 {isWeb && (
-                  <Pressable onPress={function() { setSizeMenuOpen(false); setWizardMedida({ inicial: null }); }} style={s.medidaNova} accessibilityRole="menuitem" testID="etiquetas-minha-medida">
+                  <Pressable onPress={abrirNovaMedida} style={s.medidaNova} accessibilityRole="menuitem" testID="etiquetas-minha-medida">
                     <Icon name="plus" size={14} color={Colors.violet3} />
                     <Text style={s.medidaNovaTxt}>Minha medida</Text>
                   </Pressable>
@@ -666,7 +765,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
       ) : null}
 
       {temCalibracao && (
-        <LabelPrinterCalibration labelSize={labelSize} prefs={printerPrefs} onChange={setPrinterPrefs} onTest={handleTestPrint} />
+        <LabelPrinterCalibration labelSize={labelSize} prefs={printerPrefs} onChange={setPrinterPrefs} onTest={handleTestPrint} naConta={naConta} />
       )}
 
       <View style={s.toolbar}>
@@ -1027,6 +1126,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
           exemplo={exemploDaEtiqueta()}
           onImprimirTeste={function(m) { abrirImpressao(buildCustomLabelTestHtml(m), "Teste de posição aberto para impressão"); }}
           onSalvar={salvarMinhaMedida}
+          naConta={naConta}
           onFechar={function() { setWizardMedida(null); }}
           onImprimirAgora={function(m) {
             setWizardMedida(null);
