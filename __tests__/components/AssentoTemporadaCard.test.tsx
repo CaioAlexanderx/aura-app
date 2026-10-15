@@ -290,6 +290,16 @@ describe("contratar", () => {
     tree.unmount();
   });
 
+  it("409 VALOR_CUSTOMIZADO no POST: texto claro, sem erro genérico", async () => {
+    api.contratar.mockRejectedValue(Object.assign(new Error("x"), { status: 409, data: { code: "VALOR_CUSTOMIZADO" } }));
+    const tree = await mount();
+    await press(tree, "assento-contratar");
+    await press(tree, "assento-contratar-confirmar");
+    expect(text(tree)).toContain("Esta empresa tem valor combinado; fale com a equipe.");
+    expect(text(tree)).not.toContain("Não consegui contratar");
+    tree.unmount();
+  });
+
   it("502 (Asaas fora): nada foi concedido nem cobrado", async () => {
     api.contratar.mockRejectedValue(Object.assign(new Error("x"), { status: 502, data: { code: "FALHA_ASAAS" } }));
     const tree = await mount();
@@ -350,6 +360,14 @@ describe("sem como contratar", () => {
     expect(text(tree)).toContain("precisa de uma assinatura ativa");
     await press(tree, "assento-ir-checkout");
     expect(mockPush).toHaveBeenCalledWith("/(tabs)/checkout?plan=essencial");
+    tree.unmount();
+  });
+
+  it("valor combinado vigente: sem botão e com o motivo claro", async () => {
+    api.estado.mockImplementation(async () => ESTADO({ pode_contratar: false, motivo_bloqueio: "valor_customizado" }));
+    const tree = await mount();
+    expect(byTestId(tree, "assento-contratar")).toHaveLength(0);
+    expect(text(tree)).toContain("Esta empresa tem valor combinado; fale com a equipe.");
     tree.unmount();
   });
 

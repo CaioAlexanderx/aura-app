@@ -37,6 +37,9 @@ export function mensagemDoAssento(err: any, acao: string): string {
   if (code === "SEM_ASSINATURA") return "Para contratar o assento, a empresa precisa de uma assinatura ativa.";
   if (code === "TEMPORADA_ENCERRADA") return "A temporada terminou: não dá mais para contratar.";
   if (code === "LIMITE_DE_ASSENTOS") return "A empresa já está no limite de assentos de temporada.";
+  // 14/10/2026 (Aura-backend#840): com valor combinado vigente a assinatura não
+  // é reajustada sozinha, então o assento de temporada não se contrata pela tela.
+  if (code === "VALOR_CUSTOMIZADO") return "Esta empresa tem valor combinado; fale com a equipe.";
   if (status === 403) return "Só o dono da empresa pode contratar ou cancelar o assento de temporada.";
   if (status === 502 || code === "FALHA_ASAAS") return "Não consegui ajustar a assinatura agora. Nada foi concedido nem cobrado: tente de novo em instantes.";
   if (err && err.isNetworkError) return "Sem conexão com o servidor. Tente de novo.";
@@ -48,6 +51,7 @@ var MOTIVO_SEM_COMPRA: Record<string, string> = {
   temporada_encerrada: "A temporada terminou: não dá mais para contratar.",
   limite_de_assentos: "A empresa já contratou o máximo de assentos de temporada.",
   plano_nao_suportado: "O plano atual não permite contratar assento de temporada pela tela. Fale com o suporte.",
+  valor_customizado: "Esta empresa tem valor combinado; fale com a equipe.",
 };
 
 function estiloDoPasse(p: SeatPass): string {

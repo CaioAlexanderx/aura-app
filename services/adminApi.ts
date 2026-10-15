@@ -147,7 +147,7 @@ export type ExtendTrialResponse = {
 // ou { updated: false, skipped: <motivo> }.
 export type BillingSync = {
   updated: boolean;
-  skipped?: string;          // 'value_unchanged' | 'cancelled' | 'no_subscription' | 'invalid_plan' | 'fetch_failed' | 'subscription_<status>' | 'error'
+  skipped?: string;          // 'value_unchanged' | 'valor_customizado' | 'cancelled' | 'no_subscription' | 'invalid_plan' | 'fetch_failed' | 'subscription_<status>' | 'error'
   value?: number;            // valor novo da assinatura (plano + 19 x seats)
   previousValue?: number;    // valor que estava no Asaas antes do PUT
   subscriptionId?: string;
@@ -164,6 +164,46 @@ export type ResyncSubscriptionResponse = {
   extra_seats_granted: number;
   billing_status: string | null;
   billing_sync: BillingSync;
+};
+
+// 14/10/2026 — Valor combinado da assinatura (Aura-backend, PUT/DELETE
+// /admin/clients/:cid/custom-subscription). O bloco vem do GET dedicado (não do
+// clients-360); null = a empresa paga o valor de tabela. 503 = migration pendente.
+export type SetCustomSubscriptionBody = {
+  value: number;
+  plan: string;
+  cycle: string;
+  note?: string | null;
+  reason: string;
+};
+// Resposta do PUT e do DELETE (Aura-backend#840). `applies` diz quando passa a
+// valer: no próximo checkout, a assinatura que já existe na Asaas não muda.
+export type CustomSubscriptionResponse = {
+  custom_subscription?: Record<string, any> | null;
+  previous?: Record<string, any> | null;
+  applies?: "next_checkout" | string;
+  message?: string;
+};
+// GET /admin/clients/:cid/custom-subscription — o bloco NÃO vem no clients-360.
+export type CustomSubscriptionDetail = {
+  custom_subscription: null | {
+    value: number | string;
+    plan: string;
+    cycle: string;
+    note: string | null;
+    set_at: string | null;
+    set_by: string | null;
+    set_by_name?: string | null;
+    table_value: number | string | null;
+  };
+  company: {
+    plan: string;
+    billing_cycle: string;
+    billing_status: string | null;
+    extra_seats_granted: number;
+    has_subscription: boolean;
+  };
+  min_value: number;
 };
 
 export type SetSegmentBody = {
@@ -492,6 +532,27 @@ export var adminApi = {
     return request<ResyncSubscriptionResponse>(
       "/admin/clients/" + companyId + "/resync-subscription",
       { method: "POST", body: { reason: reason || null }, retry: 0 }
+    );
+  },
+  // 14/10/2026 — define / remove o valor mensal combinado da empresa. Vale só
+  // para o plano e o ciclo gravados; o checkout e o sync de acessos extras da
+  // assinatura leem esse valor no backend.
+  customSubscription: function(companyId: string) {
+    return request<CustomSubscriptionDetail>(
+      "/admin/clients/" + companyId + "/custom-subscription", { retry: 0 }
+    );
+  },
+  setCustomSubscription: function(companyId: string, body: SetCustomSubscriptionBody) {
+    return request<CustomSubscriptionResponse>(
+      "/admin/clients/" + companyId + "/custom-subscription",
+      { method: "PUT", body: body, retry: 0 }
+    );
+  },
+  clearCustomSubscription: function(companyId: string, reason: string) {
+    return request<CustomSubscriptionResponse>(
+      // Motivo no corpo e na query: alguns proxies descartam o corpo do DELETE.
+      "/admin/clients/" + companyId + "/custom-subscription?reason=" + encodeURIComponent(reason),
+      { method: "DELETE", body: { reason: reason }, retry: 0 }
     );
   },
   auditLog: function(params?: { company_id?: string; action?: string; limit?: number }) {

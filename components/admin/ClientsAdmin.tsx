@@ -25,6 +25,7 @@ import { toast } from "@/components/Toast";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { PLAN_C, MODULE_LABELS } from "./types";
 import { ResyncSubscriptionButton } from "./ResyncSubscriptionButton";
+import { ValorCombinadoSection } from "./ValorCombinadoSection";
 import { RegistrarContatoModal } from "./painel/RegistrarContatoModal";
 import { FrenteSection, STUDIO_PLAN_MSG, isStudioPlanError } from "./FrenteSection";
 import { MODULE_PLAN_MAP, PLAN_LEVEL } from "@/hooks/useVisibleModules";
@@ -668,6 +669,14 @@ export function ClientsAdmin({ initialId }: { initialId?: string | null } = {}) 
           </Text>
           <ResyncSubscriptionButton companyId={sc.id} />
         </View>
+
+        {/* 14/10/2026: valor combinado da assinatura (caso Luis Henrique, 2 lojas). */}
+        <ValorCombinadoSection
+          companyId={sc.id}
+          nome={sc.trade_name || sc.legal_name || "Loja"}
+          plano={sc.plan}
+          ciclo={sc.billing_cycle}
+        />
 
         {/* 05/10/2026: Frente da empresa (cadastro por frente). */}
         <FrenteSection companyId={sc.id} />

@@ -12,6 +12,7 @@ import { toast } from "@/components/Toast";
 import { describeCoupon, discountInEffectText, DISCOUNT_LOSS_TEXT, pickOpenInvoice } from "@/components/billing/couponText";
 import { usePromocaoAtiva, limparPromocaoAtiva } from "@/hooks/usePromocaoAtiva";
 import { diaMes } from "@/utils/promocaoPrimeiroMes";
+import { totalDoCheckout, textoValorPorMes, ROTULO_VALOR_COMBINADO } from "@/utils/valorCombinado";
 
 var isWeb = Platform.OS === "web";
 
@@ -227,7 +228,21 @@ export default function CheckoutScreen() {
   // debitado em "R$ 93,17". Agora o resumo e os botões exibem o total real.
   var extraSeats = parseInt(String((company as any)?.extra_seats_granted ?? 0), 10) || 0;
   var seatsPrice = extraSeats * SEAT_PRICE_BRL;
-  var totalPrice = Math.round((price + seatsPrice) * 100) / 100;
+  var tabelaTotal = Math.round((price + seatsPrice) * 100) / 100;
+
+  // 14/10/2026 — valor combinado da empresa (Gestão Aura). O backend devolve o
+  // valor mensal certo para o plano/ciclo/forma escolhidos; só vale com
+  // custom:true. Sem a rota (backend antigo), erro ou resposta estranha, o
+  // total segue sendo o de tabela acima: o checkout nunca depende desta chamada.
+  var { data: cotacao } = useQuery({
+    queryKey: ["billing-quote", company?.id, selectedPlan, cycle, method],
+    queryFn: function () { return billingApi.quote(company!.id, selectedPlan, cycle, method === "card" ? "CREDIT_CARD" : "PIX"); },
+    enabled: !!company?.id && !isDemo,
+    retry: false, staleTime: 30000,
+  });
+  var cotado = totalDoCheckout(tabelaTotal, cotacao, selectedPlan, cycle);
+  var valorCombinado = cotado.combinado;
+  var totalPrice = cotado.total;
 
   // Com cupom, o backend e a fonte da verdade do valor (ele recalcula com o
   // plano/ciclo/seats reais da empresa). A tela so exibe o que ele devolveu.
@@ -686,14 +701,20 @@ export default function CheckoutScreen() {
       </View>
 
       <View style={z.summaryCard}>
+        {valorCombinado && (
+          <View testID="checkout-valor-combinado" style={z.combinadoRow}>
+            <View style={z.combinadoBadge}><Text style={z.combinadoBadgeText}>{ROTULO_VALOR_COMBINADO}</Text></View>
+            <Text style={z.combinadoText}>{textoValorPorMes(totalPrice)}</Text>
+          </View>
+        )}
         <View style={z.summaryRow}>
           <Text style={z.summaryLabel}>{plan.label} ({isAnnual ? "anual" : "mensal"})</Text>
-          <Text style={z.summaryValue}>{fmtMo(price)}</Text>
+          <Text style={z.summaryValue}>{fmtMo(valorCombinado ? totalPrice : price)}</Text>
         </View>
-        {isAnnual && (
+        {isAnnual && !valorCombinado && (
           <Text style={z.annualNote}>Cobrado mensalmente · economia de {fmt(annualSavings)}/ano</Text>
         )}
-        {extraSeats > 0 && (
+        {extraSeats > 0 && !valorCombinado && (
           <View style={z.summaryRow}>
             <Text style={z.summaryLabel}>{extraSeats} acesso{extraSeats > 1 ? "s" : ""} extra{extraSeats > 1 ? "s" : ""} de equipe</Text>
             <Text style={z.summaryValue}>{fmtMo(seatsPrice)}</Text>
@@ -715,7 +736,7 @@ export default function CheckoutScreen() {
             {"Hoje: R$ 0 · a partir de " + diaMes(promocao!.primeira_cobranca_em) + ": " + fmt(totalPrice)}
           </Text>
         )}
-        {(couponView || extraSeats > 0) && !promoAplicada && (
+        {(couponView || (extraSeats > 0 && !valorCombinado)) && !promoAplicada && (
           <Text style={z.annualNote}>
             {couponView ? couponView.afterNote : "Cobrado mensalmente"}
           </Text>
@@ -895,5 +916,9 @@ var z = StyleSheet.create({
   promoText: { fontSize: 12, color: Colors.ink, lineHeight: 17 },
   promoDate: { fontSize: 12, fontWeight: "700", color: Colors.violet3, marginTop: 8 },
   promoNote: { fontSize: 11, color: Colors.ink3, marginTop: 6 },
+  combinadoRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" },
+  combinadoBadge: { backgroundColor: Colors.violetD, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: Colors.violet + "55" },
+  combinadoBadgeText: { fontSize: 11, fontWeight: "700", color: Colors.violet3 },
+  combinadoText: { fontSize: 12, color: Colors.ink3, fontWeight: "600" },
   promoSummary: { fontSize: 12, fontWeight: "700", color: Colors.green, marginTop: 8 },
 });

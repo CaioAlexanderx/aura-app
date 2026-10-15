@@ -1,4 +1,7 @@
 import { request } from "./api";
+import type { QuoteResponse } from "@/utils/valorCombinado";
+
+export type { QuoteResponse };
 
 export type TokenizeResponse = {
   credit_card_token: string;
@@ -167,7 +170,7 @@ export type SeatPassEstado = {
   temporada: { id: string; nome: string; starts_at: string; ends_at: string };
   preco_assento_mensal: number;
   pode_contratar: boolean;
-  // temporada_encerrada | limite_de_assentos | sem_assinatura | plano_nao_suportado | null
+  // temporada_encerrada | limite_de_assentos | sem_assinatura | plano_nao_suportado | valor_customizado | null
   motivo_bloqueio: string | null;
   limite_restante: number;
   assentos_ativos: number;
@@ -232,6 +235,16 @@ export var billingApi = {
   promocaoAtiva: function(companyId: string) {
     return request<PromocaoAtivaResponse>("/companies/" + companyId + "/billing/promocao-ativa", { retry: 0 });
   },
+  // 14/10/2026 — valor mensal da empresa para o plano/ciclo/forma escolhidos
+  // (valor combinado pela equipe ou tabela). O checkout só usa a resposta com
+  // custom:true; erro ou 404 (backend sem a rota) deixa o cálculo de tabela.
+  quote: function(companyId: string, plan: string, cycle: string, billingType: string) {
+    return request<QuoteResponse>(
+      "/companies/" + companyId + "/billing/quote?plan=" + encodeURIComponent(plan) +
+        "&cycle=" + encodeURIComponent(cycle) + "&billing_type=" + encodeURIComponent(billingType),
+      { retry: 0, timeout: 8000 }
+    );
+  },
   // Karatê: estado do gate de cobrança. Federação usa o contrato default
   // (KarateGateResponse: state ok|blocked); dojô (F3c) passa o generic
   // explicitamente pro contrato required/plan/total (DojoGateResponse) —
@@ -239,7 +252,7 @@ export var billingApi = {
   // da company do companyId informado.
   karateGate: function<T = KarateGateResponse>(companyId: string) { return request<T>("/companies/" + companyId + "/billing/karate-gate"); },
   // Assento de temporada (13/10/2026, #811). 409 SEM_ASSINATURA / TEMPORADA_ENCERRADA /
-  // LIMITE_DE_ASSENTOS, 503 MIGRATION_PENDING (rota existe, tabela ainda não).
+  // LIMITE_DE_ASSENTOS / VALOR_CUSTOMIZADO (Aura-backend#840: empresa com valor combinado), 503 MIGRATION_PENDING (rota existe, tabela ainda não).
   seatPass: {
     estado: function(companyId: string, qty?: number) {
       return request<SeatPassEstado>("/companies/" + companyId + "/billing/seat-pass" + (qty ? "?qty=" + qty : ""));
