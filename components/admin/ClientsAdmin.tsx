@@ -25,6 +25,7 @@ import { toast } from "@/components/Toast";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { PLAN_C, MODULE_LABELS } from "./types";
 import { ResyncSubscriptionButton } from "./ResyncSubscriptionButton";
+import { ValorCombinadoSection } from "./ValorCombinadoSection";
 import { RegistrarContatoModal } from "./painel/RegistrarContatoModal";
 import { FrenteSection, STUDIO_PLAN_MSG, isStudioPlanError } from "./FrenteSection";
 import { MODULE_PLAN_MAP, PLAN_LEVEL } from "@/hooks/useVisibleModules";
@@ -52,6 +53,9 @@ type Client360 = {
   sub_vertical: string | null;
   // 12/05/2026: acessos extras pagos manualmente (vem do backend)
   extra_seats_granted?: number;
+  // 14/10/2026: valor mensal combinado da assinatura (backend: clients-360).
+  // null = tabela; undefined = servidor sem o campo ainda.
+  custom_subscription?: Record<string, any> | null;
   // Etapa do ciclo de vida + sinais de uso (backend: services/clientLifecycle).
   stage?: Stage;
   archive_reason?: "nao_aderiu" | "cancelado" | "inativo" | null;
@@ -668,6 +672,15 @@ export function ClientsAdmin({ initialId }: { initialId?: string | null } = {}) 
           </Text>
           <ResyncSubscriptionButton companyId={sc.id} />
         </View>
+
+        {/* 14/10/2026: valor combinado da assinatura (caso Luis Henrique, 2 lojas). */}
+        <ValorCombinadoSection
+          companyId={sc.id}
+          nome={sc.trade_name || sc.legal_name || "Loja"}
+          plano={sc.plan}
+          ciclo={sc.billing_cycle}
+          atual={sc.custom_subscription}
+        />
 
         {/* 05/10/2026: Frente da empresa (cadastro por frente). */}
         <FrenteSection companyId={sc.id} />

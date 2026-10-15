@@ -1,4 +1,7 @@
 import { request } from "./api";
+import type { QuoteResponse } from "@/utils/valorCombinado";
+
+export type { QuoteResponse };
 
 export type TokenizeResponse = {
   credit_card_token: string;
@@ -231,6 +234,16 @@ export var billingApi = {
   // do billing: o backend avalia a elegibilidade com a linha de companies.
   promocaoAtiva: function(companyId: string) {
     return request<PromocaoAtivaResponse>("/companies/" + companyId + "/billing/promocao-ativa", { retry: 0 });
+  },
+  // 14/10/2026 — valor mensal da empresa para o plano/ciclo/forma escolhidos
+  // (valor combinado pela equipe ou tabela). O checkout só usa a resposta com
+  // custom:true; erro ou 404 (backend sem a rota) deixa o cálculo de tabela.
+  quote: function(companyId: string, plan: string, cycle: string, billingType: string) {
+    return request<QuoteResponse>(
+      "/companies/" + companyId + "/billing/quote?plan=" + encodeURIComponent(plan) +
+        "&cycle=" + encodeURIComponent(cycle) + "&billing_type=" + encodeURIComponent(billingType),
+      { retry: 0, timeout: 8000 }
+    );
   },
   // Karatê: estado do gate de cobrança. Federação usa o contrato default
   // (KarateGateResponse: state ok|blocked); dojô (F3c) passa o generic

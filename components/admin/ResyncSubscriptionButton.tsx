@@ -39,6 +39,8 @@ function describeSync(sync: any): { ok: boolean; msg: string } {
   switch (sync.skipped) {
     case "value_unchanged":
       return { ok: true, msg: "Assinatura já está no valor correto (" + fmtBrl(sync.value) + "/mês)." };
+    case "valor_customizado":
+      return { ok: true, msg: "Assinatura com valor combinado: não foi alterada (o valor combinado já inclui os acessos extras)." };
     case "cancelled":
       return { ok: false, msg: "Empresa está com billing cancelado — reative o billing antes de ressincronizar." };
     case "no_subscription":

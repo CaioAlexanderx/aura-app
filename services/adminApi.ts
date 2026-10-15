@@ -147,7 +147,7 @@ export type ExtendTrialResponse = {
 // ou { updated: false, skipped: <motivo> }.
 export type BillingSync = {
   updated: boolean;
-  skipped?: string;          // 'value_unchanged' | 'cancelled' | 'no_subscription' | 'invalid_plan' | 'fetch_failed' | 'subscription_<status>' | 'error'
+  skipped?: string;          // 'value_unchanged' | 'valor_customizado' | 'cancelled' | 'no_subscription' | 'invalid_plan' | 'fetch_failed' | 'subscription_<status>' | 'error'
   value?: number;            // valor novo da assinatura (plano + 19 x seats)
   previousValue?: number;    // valor que estava no Asaas antes do PUT
   subscriptionId?: string;
@@ -164,6 +164,22 @@ export type ResyncSubscriptionResponse = {
   extra_seats_granted: number;
   billing_status: string | null;
   billing_sync: BillingSync;
+};
+
+// 14/10/2026 — Valor combinado da assinatura (Aura-backend, PUT/DELETE
+// /admin/clients/:cid/custom-subscription). O bloco `custom_subscription`
+// (value, plan, cycle, note, set_at, set_by) vem no /clients-360; null/ausente
+// = a empresa paga o valor de tabela.
+export type SetCustomSubscriptionBody = {
+  value: number;
+  plan: string;
+  cycle: string;
+  note?: string | null;
+  reason: string;
+};
+export type CustomSubscriptionResponse = {
+  custom_subscription?: Record<string, any> | null;
+  message?: string;
 };
 
 export type SetSegmentBody = {
@@ -492,6 +508,21 @@ export var adminApi = {
     return request<ResyncSubscriptionResponse>(
       "/admin/clients/" + companyId + "/resync-subscription",
       { method: "POST", body: { reason: reason || null }, retry: 0 }
+    );
+  },
+  // 14/10/2026 — define / remove o valor mensal combinado da empresa. Vale só
+  // para o plano e o ciclo gravados; o checkout e o sync de acessos extras da
+  // assinatura leem esse valor no backend.
+  setCustomSubscription: function(companyId: string, body: SetCustomSubscriptionBody) {
+    return request<CustomSubscriptionResponse>(
+      "/admin/clients/" + companyId + "/custom-subscription",
+      { method: "PUT", body: body, retry: 0 }
+    );
+  },
+  clearCustomSubscription: function(companyId: string, reason: string) {
+    return request<CustomSubscriptionResponse>(
+      "/admin/clients/" + companyId + "/custom-subscription",
+      { method: "DELETE", body: { reason: reason }, retry: 0 }
     );
   },
   auditLog: function(params?: { company_id?: string; action?: string; limit?: number }) {
