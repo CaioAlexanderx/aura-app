@@ -3,8 +3,9 @@
 //
 // Cartão da aba Etiquetas, só nos modelos com vão entre linhas (105x21 e
 // 30x25): modo contínuo, passo entre linhas, deslocamento vertical e a
-// impressão de teste. Tudo fica guardado NESTE computador (labelPrinterPrefs)
-// — a impressora é do PC, não da loja. No padrão, a etiqueta não muda.
+// impressão de teste. No padrão, a etiqueta não muda. 15/10/2026: com o
+// backend novo a calibração fica salva na CONTA e vale para todos os
+// computadores da loja (naConta); sem ele, só neste computador.
 // ============================================================================
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -18,13 +19,15 @@ type Props = {
   onChange: (prefs: LabelPrinterPrefs) => void;
   /** Imprime `rows` linhas de teste (1 = uma linha; 2 = confere o passo). */
   onTest: (rows: number) => void;
+  /** 15/10/2026: a calibração vai para a conta da loja (labelAccountSync). */
+  naConta?: boolean;
 };
 
 export function mmBr(n: number): string {
   return n.toFixed(1).replace(".", ",") + " mm";
 }
 
-export function LabelPrinterCalibration({ labelSize, prefs, onChange, onTest }: Props) {
+export function LabelPrinterCalibration({ labelSize, prefs, onChange, onTest, naConta }: Props) {
   var preset = LABEL_SIZE_PRESETS[labelSize];
   var def = defaultLabelPrinterPrefs(labelSize);
   var noPadrao = isDefaultLabelPrinterPrefs(labelSize, prefs);
@@ -76,7 +79,7 @@ export function LabelPrinterCalibration({ labelSize, prefs, onChange, onTest }: 
         )}
       </View>
       <Text style={s.ajuda}>
-        Padrão do modelo: passo de {mmBr(def.rowPitchMm)} (etiqueta + vão). Deslocamento positivo desce a impressão; negativo sobe. Esses ajustes ficam guardados neste computador.
+        Padrão do modelo: passo de {mmBr(def.rowPitchMm)} (etiqueta + vão). Deslocamento positivo desce a impressão; negativo sobe. {naConta ? "Esses ajustes ficam salvos na sua conta e valem para todos os computadores da loja." : "Esses ajustes ficam guardados neste computador."}
       </Text>
 
       <View style={s.testes}>

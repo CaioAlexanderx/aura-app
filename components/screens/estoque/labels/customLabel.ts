@@ -41,7 +41,13 @@ export type CustomLabelSpec = {
   ajusteXMm: number;
   /** Ajuste da impressão: + para baixo, − para cima. */
   ajusteYMm: number;
+  /** 15/10/2026: nome opcional na lista ("40x25 balcão"), até 40 caracteres.
+   *  Serve para a loja com duas impressoras que erram diferente ter duas
+   *  medidas do mesmo tamanho. Não entra na etiqueta impressa. */
+  nome?: string;
 };
+
+export const NOME_MEDIDA_MAX = 40;
 
 export const MEDIDA_LIMITES = {
   larguraMm: [15, 110] as const,
@@ -90,7 +96,8 @@ export function sanitizarMedida(raw: any): CustomLabelSpec | null {
   if (!Number.isFinite(numero(raw.larguraMm)) || !Number.isFinite(numero(raw.alturaMm))) return null;
   var L = MEDIDA_LIMITES;
   var cols = numero(raw.colunas);
-  return {
+  var nome = typeof raw.nome === "string" ? raw.nome.trim().slice(0, NOME_MEDIDA_MAX).trim() : "";
+  var spec: CustomLabelSpec = {
     id: id,
     larguraMm: naFaixa(raw.larguraMm, L.larguraMm[0], L.larguraMm[1], MEDIDA_PADRAO.larguraMm),
     alturaMm: naFaixa(raw.alturaMm, L.alturaMm[0], L.alturaMm[1], MEDIDA_PADRAO.alturaMm),
@@ -100,6 +107,9 @@ export function sanitizarMedida(raw: any): CustomLabelSpec | null {
     ajusteXMm: naFaixa(raw.ajusteXMm, -L.ajusteMm, L.ajusteMm, 0),
     ajusteYMm: naFaixa(raw.ajusteYMm, -L.ajusteMm, L.ajusteMm, 0),
   };
+  // Só com nome de verdade: sem nome o spec fica idêntico ao de antes.
+  if (nome) spec.nome = nome;
+  return spec;
 }
 
 /** Id novo para uma medida (só precisa ser único neste navegador). */
@@ -116,6 +126,13 @@ export function mmTxt(n: number): string {
 /** Nome no seletor de modelo: "Minha etiqueta 50 x 30 mm". */
 export function nomeDaMedida(spec: Pick<CustomLabelSpec, "larguraMm" | "alturaMm">): string {
   return "Minha etiqueta " + mmTxt(spec.larguraMm) + " x " + mmTxt(spec.alturaMm) + " mm";
+}
+
+/** Nome na lista de modelos: o nome que a loja deu ("40x25 balcão") ou,
+ *  sem nome, "Minha etiqueta 50 x 30 mm". */
+export function rotuloDaMedida(spec: Pick<CustomLabelSpec, "larguraMm" | "alturaMm" | "nome">): string {
+  var nome = typeof spec.nome === "string" ? spec.nome.trim() : "";
+  return nome || nomeDaMedida(spec);
 }
 
 /** Aviso (não bloqueia): com menos de 25 mm de largura o código de barras

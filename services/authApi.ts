@@ -139,6 +139,12 @@ export type PdvSettings = {
   warranty_terms?: string | null;
   label_offset_mm?: number;
   label_cols?: number;
+  // 15/10/2026 (Aura-backend, feat/pdv-settings-etiquetas-na-conta): medidas
+  // próprias e calibração da impressora salvas na CONTA. null = a loja nunca
+  // salvou; ausente = backend antigo. Leitura e escrita só por
+  // components/screens/estoque/labels/labelAccountSync.ts.
+  label_custom_specs?: any[] | null;
+  label_printer_prefs?: Record<string, any> | null;
   // 31/08/2026 (Ordem de Servico, migration 313): opt-in — nem toda loja
   // emite OS. Desligado, o modulo inteiro some (menu, tela, botao no PDV).
   // O backend bloqueia so a ESCRITA quando desligado; leitura e impressao
@@ -198,7 +204,24 @@ export var pdvSettingsApi = {
   get: function(companyId: string) { return request<{ settings: PdvSettings }>("/companies/" + companyId + "/pdv-settings", { retry: 1 }); },
   // 26/08/2026: o PUT do backend faz MERGE com o salvo (nao replace), entao
   // o contrato real e um parcial — pode enviar so a chave que mudou.
+  // 15/10/2026: várias telas gravam o objeto INTEIRO que carregaram (cartão
+  // do PDV, Studio, vale-troca). Uma cópia velha levaria junto medidas e
+  // calibração de etiqueta antigas e apagaria o que outro computador acabou
+  // de salvar. Por isso o save genérico nunca envia essas chaves; só o
+  // saveLabelConfig, chamado pela tela de Etiquetas, grava.
   save: function(companyId: string, settings: Partial<PdvSettings>) {
-    return request<{ settings: PdvSettings }>("/companies/" + companyId + "/pdv-settings", { method: "PUT", body: { settings: settings }, retry: 0 });
+    var body: any = settings;
+    if (settings && typeof settings === "object" && ("label_custom_specs" in settings || "label_printer_prefs" in settings)) {
+      body = Object.assign({}, settings);
+      delete body.label_custom_specs;
+      delete body.label_printer_prefs;
+    }
+    return request<{ settings: PdvSettings }>("/companies/" + companyId + "/pdv-settings", { method: "PUT", body: { settings: body }, retry: 0 });
+  },
+  saveLabelConfig: function(companyId: string, patch: { label_custom_specs?: any[]; label_printer_prefs?: Record<string, any> }) {
+    var body: any = {};
+    if (patch && "label_custom_specs" in patch) body.label_custom_specs = patch.label_custom_specs;
+    if (patch && "label_printer_prefs" in patch) body.label_printer_prefs = patch.label_printer_prefs;
+    return request<{ settings: PdvSettings }>("/companies/" + companyId + "/pdv-settings", { method: "PUT", body: { settings: body }, retry: 0 });
   },
 };

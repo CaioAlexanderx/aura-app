@@ -10,6 +10,12 @@
 // Sem nada salvo (ou sem localStorage) devolve o padrão: tudo desligado, e o
 // HTML da etiqueta sai byte a byte igual ao de sempre.
 //
+// 15/10/2026 (decisão do Caio): a calibração passa a ser salva na CONTA da
+// loja (pdv_settings.label_printer_prefs, labelAccountSync.ts) e vale para
+// todos os computadores; o localStorage abaixo vira cache (abrir rápido,
+// funcionar sem rede). Loja com duas impressoras que erram diferente usa
+// duas medidas próprias.
+//
 // Puro, sem React — testável direto e usado por PrintLabels.tsx.
 // ============================================================================
 
@@ -79,6 +85,41 @@ export function saveLabelPrinterPrefs(companyId: string | null | undefined, size
     if (isDefaultLabelPrinterPrefs(size, clean)) delete all[size]; else all[size] = clean;
     if (Object.keys(all).length === 0) st.removeItem(STORAGE_PREFIX + companyId);
     else st.setItem(STORAGE_PREFIX + companyId, JSON.stringify(all));
+  } catch (e) { /* sem storage: vale só nesta visita */ }
+}
+
+// 15/10/2026 — calibração na CONTA (pdv_settings.label_printer_prefs): o
+// navegador vira cache. O mapa tem só os modelos que aceitam calibração e
+// só o que difere do padrão (modelo no padrão = ausente), igual ao que este
+// módulo sempre guardou no navegador.
+export type LabelPrinterPrefsMap = Partial<Record<LabelSizeKey, LabelPrinterPrefs>>;
+
+/** Normaliza um mapa por modelo (navegador ou conta). Lixo vira {}. */
+export function sanitizeLabelPrinterPrefsMap(raw: any): LabelPrinterPrefsMap {
+  var out: LabelPrinterPrefsMap = {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  (Object.keys(LABEL_SIZE_PRESETS) as LabelSizeKey[]).forEach(function(size) {
+    if (!labelSupportsCalibration(size) || !raw[size] || typeof raw[size] !== "object") return;
+    var clean = sanitizeLabelPrinterPrefs(size, raw[size]);
+    if (!isDefaultLabelPrinterPrefs(size, clean)) out[size] = clean;
+  });
+  return out;
+}
+
+/** Toda a calibração guardada no navegador para a empresa. */
+export function loadAllLabelPrinterPrefs(companyId: string | null | undefined): LabelPrinterPrefsMap {
+  if (!companyId) return {};
+  return sanitizeLabelPrinterPrefsMap(readAll(companyId));
+}
+
+/** Troca o cache do navegador pelo mapa inteiro (o que veio da conta). */
+export function saveAllLabelPrinterPrefs(companyId: string | null | undefined, map: LabelPrinterPrefsMap): void {
+  var st = storage();
+  if (!st || !companyId) return;
+  try {
+    var clean = sanitizeLabelPrinterPrefsMap(map);
+    if (Object.keys(clean).length === 0) st.removeItem(STORAGE_PREFIX + companyId);
+    else st.setItem(STORAGE_PREFIX + companyId, JSON.stringify(clean));
   } catch (e) { /* sem storage: vale só nesta visita */ }
 }
 
