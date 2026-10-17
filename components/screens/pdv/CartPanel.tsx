@@ -101,6 +101,7 @@ import { DiscountSection } from "./DiscountSection";
 import { CalculadoraAmbiente } from "@/components/matcon/CalculadoraAmbiente";
 import { LoteDoItem } from "@/components/matcon/LotePicker";
 import type { LotAllocation } from "@/services/matconApi";
+import { rotuloDaComanda } from "@/utils/comanda";
 
 export type CartDisplayItem = {
   productId: string;
@@ -186,13 +187,17 @@ type Props = {
    *  "Salvar orçamento" (o onSaveQuote já sabe salvar por cima). */
   editingQuote?: { number: number; onCancel: () => void } | null;
   /** 09/10/2026 (Comandas). Com ele: "Adicionar à comanda" ao lado de
-   *  "Dividir pagamento" e "Fechar comanda" no lugar de "Orçamento".
+   *  "Dividir pagamento" e "Comandas (N)" no lugar de "Orçamento" (17/10,
+   *  tc-02: era "Fechar comanda"; agora abre o painel das abertas).
    *  `charging` = este carrinho é o consumo de uma comanda sendo cobrada.
    *  null/ausente (chave desligada) = rodapé de sempre. */
   comanda?: {
     onAdd: () => void;
-    onClose: () => void;
-    charging: { number: number; feePct: number; onCancel: () => void } | null;
+    /** Abre o painel das comandas abertas. */
+    onList: () => void;
+    /** Quantas estão abertas (0 = sem contagem no botão). */
+    openCount?: number;
+    charging: { number: number; name?: string | null; feePct: number; onCancel: () => void } | null;
   } | null;
   discountLabel?: string | null;
   /** Desconto manual editável. Opcional para preservar os usos legados do painel. */
@@ -670,7 +675,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           <View style={s.quoteCard} testID="comanda-cobrando">
             <View style={s.quoteCardHead}>
               <Text style={s.quoteCardTitle} numberOfLines={1}>
-                Cobrando a comanda {comanda.charging.number}
+                Cobrando a comanda {rotuloDaComanda(comanda.charging.number, comanda.charging.name)}
               </Text>
               <Pressable onPress={comanda.charging.onCancel} style={s.quoteCardGhostBtn} testID="comanda-cancelar-cobranca">
                 <Text style={s.quoteCardGhostTxt} numberOfLines={1}>Cancelar</Text>
@@ -779,18 +784,25 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           // onSaveQuote, ele continua imprimindo via onGenerateQuote, do
           // jeito que sempre foi.
           const quoteSaveMode = matcon.matcon_enabled && !!onSaveQuote;
-          // 09/10/2026 (Comandas): com a chave ligada, "Fechar comanda"
+          // 09/10/2026 (Comandas): com a chave ligada, o botão das comandas
           // ocupa o lugar do "Orçamento". Funciona com o carrinho vazio —
-          // é por ele que o consumo chega.
+          // é por ele que o consumo chega. 17/10 (tc-02): "Comandas (N)"
+          // abre o painel das abertas; sem nenhuma aberta, sem contagem.
           const quoteBtn = comanda ? (
             <Pressable
-              testID="cta-fechar-comanda"
-              onPress={comanda.onClose}
+              testID="cta-comandas"
+              onPress={comanda.onList}
               disabled={!!isProcessing}
               style={[s.ctaAlt, isProcessing && { opacity: 0.5 }]}
+              accessibilityLabel={comanda.openCount ? "Comandas, " + comanda.openCount + " abertas" : "Comandas"}
             >
               <Icon name="clipboard" size={15} color={Colors.violet3} />
-              <Text style={s.ctaAltTxt} numberOfLines={1}>Fechar comanda</Text>
+              <Text style={s.ctaAltTxt} numberOfLines={1}>Comandas</Text>
+              {!!comanda.openCount && comanda.openCount > 0 && (
+                <View style={s.comandasBadge} testID="cta-comandas-contagem">
+                  <Text style={s.comandasBadgeTxt}>{comanda.openCount > 99 ? "99+" : comanda.openCount}</Text>
+                </View>
+              )}
             </Pressable>
           ) : quoteSaveMode ? (
             <Pressable
@@ -1619,6 +1631,8 @@ const s = StyleSheet.create({
   ctaSecTxt: { fontSize: 13, color: Colors.ink, fontWeight: "700" },
   ctaAlt: { flex: 1.3, height: 46, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Glass.lineFaint, borderWidth: 1, borderColor: "rgba(124,58,237,0.3)" },
   ctaAltTxt: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
+  comandasBadge: { minWidth: 20, height: 20, paddingHorizontal: 6, borderRadius: 10, backgroundColor: Colors.violet, alignItems: "center", justifyContent: "center" },
+  comandasBadgeTxt: { fontSize: 11, fontWeight: "700", color: "#fff" },
   // Card "Orçamento #N salvo" — mockup docs/mockups/matcon-modulo.html
   // (bloco "Salvar orçamento" do #carrinho).
   quoteCard: {

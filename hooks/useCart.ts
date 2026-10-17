@@ -80,8 +80,9 @@ type VendaGuardada = {
   lotAllocations: Record<string, LotAllocation[]>;
 };
 
-/** A comanda que este carrinho está cobrando (09/10/2026). */
-export type ComandaNoCarrinho = { id: string; number: number; feePct: number };
+/** A comanda que este carrinho está cobrando (09/10/2026). `name` (17/10,
+ *  tc-01) só para o aviso de cobrança; a venda leva apenas o id. */
+export type ComandaNoCarrinho = { id: string; number: number; feePct: number; name?: string | null };
 
 export type SaleResult = {
   id: string;

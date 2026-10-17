@@ -95,6 +95,33 @@ describe("AdicionarAComandaModal", () => {
     expect(onConfirm).toHaveBeenCalledWith(7);
   });
 
+  it("nome: vazio não vai; escrito vai aparado junto do número", () => {
+    const { tree, onConfirm } = montar();
+    act(() => { porId(tree, "comanda-numero").props.onChangeText("7"); });
+    act(() => { porId(tree, "comanda-lancar").props.onPress(); });
+    expect(onConfirm).toHaveBeenLastCalledWith(7);
+    expect(onConfirm.mock.calls[0]).toHaveLength(1);
+
+    act(() => { porId(tree, "comanda-nome").props.onChangeText("  João  "); });
+    expect(texto(porId(tree, "comanda-dica"))).toBe("A comanda 7 · João será aberta com estes itens.");
+    act(() => { porId(tree, "comanda-nome").props.onSubmitEditing(); });
+    expect(onConfirm).toHaveBeenLastCalledWith(7, "João");
+    expect(porId(tree, "comanda-nome").props.maxLength).toBe(40);
+  });
+
+  it("comanda aberta com nome: a ficha mostra, o campo vem preenchido e trocar avisa", () => {
+    mockAbertas = [{ id: "c-12", number: 12, name: "João", status: "open", opened_at: "", items_count: 2, subtotal: 74 }];
+    const { tree, onConfirm } = montar();
+    expect(texto(porId(tree, "comanda-aberta-12"))).toContain("João");
+    act(() => { porId(tree, "comanda-aberta-12").props.onPress(); });
+    expect(porId(tree, "comanda-nome").props.value).toBe("João");
+    expect(texto(porId(tree, "comanda-dica"))).toBe("A comanda 12 · João já tem R$ 74,00. Estes itens somam a ela.");
+    act(() => { porId(tree, "comanda-nome").props.onChangeText("João e Ana"); });
+    expect(texto(porId(tree, "comanda-dica"))).toContain("O nome passa a ser João e Ana.");
+    act(() => { porId(tree, "comanda-lancar").props.onPress(); });
+    expect(onConfirm).toHaveBeenCalledWith(12, "João e Ana");
+  });
+
   it("tocar numa comanda aberta preenche o número e avisa que soma", () => {
     const { tree, onConfirm } = montar();
     act(() => { porId(tree, "comanda-aberta-12").props.onPress(); });
@@ -140,6 +167,15 @@ describe("FecharComandaModal", () => {
     act(() => { porId(tree, "fechar-comanda-taxa").props.onPress(); });
     act(() => { porId(tree, "fechar-comanda-cobrar").props.onPress(); });
     expect(onCobrar).toHaveBeenLastCalledWith(COMANDA, 0);
+  });
+
+  it("consumo de comanda com nome mostra número e nome", async () => {
+    mockApi.get.mockResolvedValue({ comanda: { ...COMANDA, name: "João" } });
+    const { tree } = montar();
+    act(() => { porId(tree, "fechar-comanda-numero").props.onChangeText("12"); });
+    act(() => { porId(tree, "fechar-comanda-buscar").props.onPress(); });
+    await esperar();
+    expect(texto(porId(tree, "fechar-comanda-consumo"))).toContain("Consumo da comanda 12 · João");
   });
 
   it("comanda que não existe: aviso e Cobrar continua travado", async () => {
