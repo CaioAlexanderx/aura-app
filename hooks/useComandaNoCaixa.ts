@@ -18,7 +18,7 @@ import { toast } from "@/components/Toast";
 import { comandaApi } from "@/services/comandaApi";
 import { chaveDasComandas } from "@/components/screens/pdv/ComandaModals";
 import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
-import { itensParaAComanda, linhasParaOCarrinho, type Comanda, type ItemDoCarrinho } from "@/utils/comanda";
+import { itensParaAComanda, linhasParaOCarrinho, nomeDaComanda, rotuloDaComanda, type Comanda, type ItemDoCarrinho } from "@/utils/comanda";
 import type { ComandaNoCarrinho } from "@/hooks/useCart";
 
 type ProdutoDoCatalogo = { id: string; price: number; cardPrice?: number | null };
@@ -54,20 +54,25 @@ export function useComandaNoCaixa(p: UseComandaNoCaixaParams) {
 
   function abrirAdicionar() {
     if (p.cart.length === 0) { toast.info("Adicione produtos antes de mandar para a comanda"); return; }
-    if (p.comanda) { toast.info("Este carrinho já é a comanda " + p.comanda.number + ". Finalize ou cancele a cobrança."); return; }
+    if (p.comanda) { toast.info("Este carrinho já é a comanda " + rotuloDaComanda(p.comanda.number, p.comanda.name) + ". Finalize ou cancele a cobrança."); return; }
     setShowAdicionar(true);
   }
 
-  function lancar(numero: number) {
+  /** `nome` (17/10, tc-01) é opcional: vazio não manda nada e o nome que a
+   *  comanda já tinha fica. */
+  function lancar(numero: number, nome?: string) {
     if (!p.companyId || lancando) return;
     if (p.isDemo) { toast.info("Comandas não funcionam na conta de demonstração"); return; }
     const itens = itensParaAComanda(p.cart);
     if (itens.length === 0) return;
+    const n = nomeDaComanda(nome);
     setLancando(true);
-    comandaApi.addItems(p.companyId, numero, itens)
+    (n ? comandaApi.addItems(p.companyId, numero, itens, n) : comandaApi.addItems(p.companyId, numero, itens))
       .then(function (r) {
+        // backend antigo devolve sem name: o aviso fica só com o número
+        const rotulo = rotuloDaComanda(numero, r.comanda?.name);
         toast.success(
-          (r.opened ? "Comanda " + numero + " aberta" : "Lançado na comanda " + numero) +
+          (r.opened ? "Comanda " + rotulo + " aberta" : "Lançado na comanda " + rotulo) +
           " · total " + fmt(r.comanda.subtotal)
         );
         setShowAdicionar(false);
@@ -95,16 +100,16 @@ export function useComandaNoCaixa(p: UseComandaNoCaixaParams) {
       });
       p.setQty(l.key, l.qty);
     });
-    p.setComanda({ id: c.id, number: c.number, feePct: taxaPct });
+    p.setComanda({ id: c.id, number: c.number, feePct: taxaPct, ...(c.name ? { name: c.name } : {}) });
     setShowFechar(false);
-    toast.success("Comanda " + c.number + " no carrinho. Escolha o pagamento e finalize.");
+    toast.success("Comanda " + rotuloDaComanda(c.number, c.name) + " no carrinho. Escolha o pagamento e finalize.");
   }
 
   /** Desiste de cobrar: o carrinho sai, a comanda continua aberta. */
   function cancelarCobranca() {
-    const n = p.comanda?.number;
+    const c = p.comanda;
     p.limpar();
-    if (n != null) toast.info("A comanda " + n + " continua aberta");
+    if (c) toast.info("A comanda " + rotuloDaComanda(c.number, c.name) + " continua aberta");
   }
 
   return {

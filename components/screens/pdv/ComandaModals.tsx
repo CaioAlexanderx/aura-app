@@ -2,7 +2,9 @@
 // AURA. — Comandas do Caixa: os dois modais (09/10/2026)
 //
 //   · AdicionarAComandaModal — o carrinho vai para a comanda N. O operador
-//     digita o número (ou toca numa das abertas) e confirma.
+//     digita o número (ou toca numa das abertas) e confirma. Nome opcional
+//     (17/10, tc-01): "a 12 do João"; com a comanda já aberta o nome dela vem
+//     preenchido, e trocar ali troca o nome. Em branco nunca apaga.
 //   · FecharComandaModal — digita o número, vê o consumo listado e somado,
 //     decide se entra a taxa de serviço de 10%, imprime a conferência e
 //     manda cobrar no Caixa.
@@ -21,6 +23,7 @@ import { comandaApi, type ComandaResumo } from "@/services/comandaApi";
 import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
 import {
   numeroDaComanda, taxaDeServico, htmlDoConsumo, TAXA_DE_SERVICO_PCT, type Comanda,
+  nomeDaComanda, rotuloDaComanda, MAX_NOME_DA_COMANDA,
 } from "@/utils/comanda";
 
 function fmt(v: number): string {
@@ -67,6 +70,9 @@ function Abertas(props: { lista: ComandaResumo[]; onPick: (n: number) => void; a
               style={[s.chip, on && s.chipOn]}
             >
               <Text style={[s.chipNum, on && { color: "#fff" }]}>{c.number}</Text>
+              {!!c.name && (
+                <Text style={[s.chipNome, on && { color: "rgba(255,255,255,0.9)" }]} numberOfLines={1}>{c.name}</Text>
+              )}
               <Text style={[s.chipVal, on && { color: "rgba(255,255,255,0.85)" }]}>{fmt(c.subtotal)}</Text>
             </Pressable>
           );
@@ -86,19 +92,24 @@ type AdicionarProps = {
   total: number;
   saving: boolean;
   onClose: () => void;
-  onConfirm: (number: number) => void;
+  /** `name` só vem quando o operador escreveu (ou manteve) um nome. */
+  onConfirm: (number: number, name?: string) => void;
 };
 
 export function AdicionarAComandaModal(props: AdicionarProps) {
   const { visible, companyId, itemCount, total, saving, onClose, onConfirm } = props;
   const [texto, setTexto] = useState("");
+  const [nome, setNome] = useState("");
+  // O operador mexeu no nome? Então o nome da comanda escolhida não passa
+  // por cima do que ele escreveu.
+  const nomeTocado = useRef(false);
   const inputRef = useRef<TextInput>(null);
   const abertas = useAbertas(companyId, visible);
   const lista = abertas.data?.comandas || [];
 
   useEffect(function () {
     if (!visible) return;
-    setTexto("");
+    setTexto(""); setNome(""); nomeTocado.current = false;
     const t = focar(inputRef);
     return function () { clearTimeout(t); };
   }, [visible]);
@@ -106,10 +117,26 @@ export function AdicionarAComandaModal(props: AdicionarProps) {
   const numero = numeroDaComanda(texto);
   const jaAberta = numero != null ? lista.find(function (c) { return c.number === numero; }) : undefined;
   const pronto = numero != null && !saving;
+  const nomeLimpo = nomeDaComanda(nome);
+
+  // Comanda já aberta com nome: o nome dela vem no campo.
+  useEffect(function () {
+    if (nomeTocado.current) return;
+    setNome(jaAberta?.name || "");
+  }, [jaAberta?.id, jaAberta?.name]);
 
   function confirmar() {
     if (numero == null || saving) return;
-    onConfirm(numero);
+    if (nomeLimpo) onConfirm(numero, nomeLimpo);
+    else onConfirm(numero);
+  }
+
+  function dicaDoNumero(n: number): string {
+    if (!jaAberta) return "A comanda " + rotuloDaComanda(n, nomeLimpo) + " será aberta com estes itens.";
+    const atual = nomeDaComanda(jaAberta.name);
+    let dica = "A comanda " + rotuloDaComanda(n, atual) + " já tem " + fmt(jaAberta.subtotal) + ". Estes itens somam a ela.";
+    if (nomeLimpo && nomeLimpo !== atual) dica += " O nome passa a ser " + nomeLimpo + ".";
+    return dica;
   }
 
   return (
@@ -141,12 +168,23 @@ export function AdicionarAComandaModal(props: AdicionarProps) {
               placeholderTextColor={Colors.ink3}
               style={s.input}
             />
+            <View style={s.labelRow}>
+              <Text style={[s.label, { marginBottom: 0 }]}>Nome</Text>
+              <Text style={s.labelOpt}>opcional</Text>
+            </View>
+            <TextInput
+              testID="comanda-nome"
+              value={nome}
+              onChangeText={function (v) { nomeTocado.current = true; setNome(v.slice(0, MAX_NOME_DA_COMANDA)); }}
+              onSubmitEditing={confirmar}
+              maxLength={MAX_NOME_DA_COMANDA}
+              autoCapitalize="words"
+              placeholder="Ex.: João, Mesa do fundo"
+              placeholderTextColor={Colors.ink3}
+              style={s.inputNome}
+            />
             {numero != null && (
-              <Text style={s.hint}>
-                {jaAberta
-                  ? "A comanda " + numero + " já tem " + fmt(jaAberta.subtotal) + ". Estes itens somam a ela."
-                  : "A comanda " + numero + " será aberta com estes itens."}
-              </Text>
+              <Text style={s.hint} testID="comanda-dica">{dicaDoNumero(numero)}</Text>
             )}
             <Abertas lista={lista} ativa={numero} onPick={function (n) { setTexto(String(n)); }} />
           </ScrollView>
@@ -324,7 +362,7 @@ export function FecharComandaModal(props: FecharProps) {
 
             {comanda && (
               <View style={{ marginTop: 14 }} testID="fechar-comanda-consumo">
-                <Text style={s.label}>Consumo da comanda {comanda.number}</Text>
+                <Text style={s.label}>Consumo da comanda {rotuloDaComanda(comanda.number, comanda.name)}</Text>
                 {comanda.items.length === 0 && <Text style={s.hint}>Esta comanda está sem itens.</Text>}
                 {comanda.items.map(function (it) {
                   return (
@@ -425,9 +463,15 @@ const s = StyleSheet.create({
   body: { flexShrink: 1, flexGrow: 0 },
   bodyContent: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 14 },
   label: { fontSize: 11, color: Colors.ink3, marginBottom: 6, fontWeight: "600" },
+  labelRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginTop: 12, marginBottom: 6 },
+  labelOpt: { fontSize: 10.5, color: Colors.ink3 },
   input: {
     paddingVertical: 12, paddingHorizontal: 16, backgroundColor: Colors.bg, borderRadius: 12,
     borderWidth: 1, borderColor: Colors.border2, color: Colors.ink, fontSize: 22, fontWeight: "600",
+  },
+  inputNome: {
+    paddingVertical: 11, paddingHorizontal: 14, backgroundColor: Colors.bg, borderRadius: 12,
+    borderWidth: 1, borderColor: Colors.border2, color: Colors.ink, fontSize: 15, fontWeight: "500",
   },
   hint: { fontSize: 12, color: Colors.ink2, marginTop: 8 },
   erro: { fontSize: 12, color: Colors.red, marginTop: 8, fontWeight: "600" },
@@ -435,11 +479,12 @@ const s = StyleSheet.create({
   buscaBtn: { minWidth: 92, borderRadius: 12, backgroundColor: Colors.violet, alignItems: "center", justifyContent: "center", paddingHorizontal: 14 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
-    minWidth: 76, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 10, alignItems: "center",
+    minWidth: 76, maxWidth: 150, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 10, alignItems: "center",
     backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border,
   },
   chipOn: { backgroundColor: Colors.violet, borderColor: Colors.violet },
   chipNum: { fontSize: 15, fontWeight: "700", color: Colors.ink },
+  chipNome: { fontSize: 11, fontWeight: "600", color: Colors.ink2, marginTop: 1 },
   chipVal: { fontSize: 10.5, color: Colors.ink3, marginTop: 1 },
   linha: {
     flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8,

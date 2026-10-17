@@ -1096,7 +1096,7 @@ export function usePdvState() {
           onAdd:   comandas.abrirAdicionar,
           onClose: comandas.abrirFechar,
           charging: comandaNoCarrinho
-            ? { number: comandaNoCarrinho.number, feePct: comandaNoCarrinho.feePct, onCancel: comandas.cancelarCobranca }
+            ? { number: comandaNoCarrinho.number, name: comandaNoCarrinho.name ?? null, feePct: comandaNoCarrinho.feePct, onCancel: comandas.cancelarCobranca }
             : null,
         }
       : null,
