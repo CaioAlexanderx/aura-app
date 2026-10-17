@@ -1,7 +1,7 @@
 // Comandas do Caixa (09/10/2026, adega do Luis Henrique): as contas puras.
 import {
   numeroDaComanda, itensParaAComanda, linhasParaOCarrinho, taxaDeServico, htmlDoConsumo,
-  lerComandaEnabled, ehIdDeCatalogo, chaveDaTaxa, type Comanda,
+  lerComandaEnabled, ehIdDeCatalogo, chaveDaTaxa, nomeDaComanda, rotuloDaComanda, type Comanda,
 } from "../utils/comanda";
 
 const P1 = "11111111-1111-4111-8111-111111111111";
@@ -121,5 +121,28 @@ describe("htmlDoConsumo", () => {
     const html = htmlDoConsumo({ comanda: COMANDA, loja: "Adega", taxaPct: 0 });
     expect(html).not.toContain("Taxa de serviço");
     expect(html).toContain("R$ 111,50");
+  });
+});
+
+describe("nome da comanda (17/10, tc-01)", () => {
+  it("nomeDaComanda apara, colapsa espaço e corta em 40", () => {
+    expect(nomeDaComanda("  João  ")).toBe("João");
+    expect(nomeDaComanda("Mesa   do fundo")).toBe("Mesa do fundo");
+    expect(nomeDaComanda("x".repeat(60))).toBe("x".repeat(40));
+    expect(nomeDaComanda("   ")).toBe("");
+    expect(nomeDaComanda(null)).toBe("");
+    expect(nomeDaComanda(undefined)).toBe("");
+  });
+  it("rotuloDaComanda: só o número sem nome, número · nome com nome", () => {
+    expect(rotuloDaComanda(12)).toBe("12");
+    expect(rotuloDaComanda(12, null)).toBe("12");
+    expect(rotuloDaComanda(12, "  ")).toBe("12");
+    expect(rotuloDaComanda(12, "João")).toBe("12 · João");
+  });
+  it("o cupom de conferência leva o nome escapado; sem nome fica como sempre", () => {
+    const com = htmlDoConsumo({ comanda: { ...COMANDA, name: "João <3" }, loja: "Adega", taxaPct: 0 });
+    expect(com).toContain("COMANDA 12 · João &lt;3");
+    const sem = htmlDoConsumo({ comanda: COMANDA, loja: "Adega", taxaPct: 0 });
+    expect(sem).toContain("COMANDA 12</div>");
   });
 });

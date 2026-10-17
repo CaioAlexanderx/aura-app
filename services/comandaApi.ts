@@ -12,6 +12,8 @@ import type { Comanda, ItemParaAComanda } from "@/utils/comanda";
 export type ComandaResumo = {
   id: string;
   number: number;
+  /** Nome opcional (17/10, tc-01). Ausente/null = só o número. */
+  name?: string | null;
   status: string;
   opened_at: string;
   items_count: number;
@@ -29,10 +31,13 @@ export const comandaApi = {
   get: function (companyId: string, number: number) {
     return request<{ comanda: Comanda }>(base(companyId) + "/" + number);
   },
-  /** Lança consumo. Abre a comanda se o número ainda não estiver aberto. */
-  addItems: function (companyId: string, number: number, items: ItemParaAComanda[]) {
+  /** Lança consumo. Abre a comanda se o número ainda não estiver aberto.
+   *  `name` (opcional, 17/10): grava na abertura; com a comanda já aberta,
+   *  troca o nome. Sem `name` o corpo é o de sempre e o nome fica como está. */
+  addItems: function (companyId: string, number: number, items: ItemParaAComanda[], name?: string) {
     return request<{ comanda: Comanda; opened: boolean; added: number }>(
-      base(companyId) + "/" + number + "/items", { method: "POST", body: { items: items }, retry: 0 }
+      base(companyId) + "/" + number + "/items",
+      { method: "POST", body: name ? { items: items, name: name } : { items: items }, retry: 0 }
     );
   },
   removeItem: function (companyId: string, number: number, itemId: string) {

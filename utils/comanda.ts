@@ -13,6 +13,8 @@
 //   · linhasParaOCarrinho    — comanda → linhas do carrinho, com a taxa de
 //                              serviço como uma linha própria;
 //   · taxaDeServico          — 10% do consumo, em centavos certos;
+//   · nomeDaComanda /
+//     rotuloDaComanda        — o nome opcional (17/10, tc-01) e o "12 · João";
 //   · htmlDoConsumo          — o cupom de conferência (não é venda).
 // ============================================================
 
@@ -39,6 +41,22 @@ export function numeroDaComanda(texto: string | number | null | undefined): numb
   if (!/^\d{1,4}$/.test(s)) return null;
   const n = parseInt(s, 10);
   return n >= 1 && n <= 9999 ? n : null;
+}
+
+/** Até quantos caracteres vai o nome da comanda (o backend corta igual). */
+export const MAX_NOME_DA_COMANDA = 40;
+
+/** O nome digitado como o backend grava: aparado, espaços colapsados, até
+ *  40 caracteres. Vazio → "" (não manda nome). */
+export function nomeDaComanda(texto: string | null | undefined): string {
+  const s = String(texto == null ? "" : texto).replace(/\s+/g, " ").trim();
+  return Array.from(s).slice(0, MAX_NOME_DA_COMANDA).join("").trim();
+}
+
+/** "12" ou "12 · João" — como a comanda aparece nas fichas e nos avisos. */
+export function rotuloDaComanda(number: number, name?: string | null): string {
+  const n = nomeDaComanda(name);
+  return n ? number + " · " + n : String(number);
 }
 
 const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
@@ -88,6 +106,9 @@ export type ItemDaComanda = {
 export type Comanda = {
   id: string;
   number: number;
+  /** Nome opcional (17/10, tc-01; backend migration 389). Ausente/null =
+   *  só o número (backend antigo ou comanda aberta sem nome). */
+  name?: string | null;
   status: string;
   opened_at: string;
   items: ItemDaComanda[];
@@ -173,11 +194,77 @@ export function htmlDoConsumo(opts: { comanda: Comanda; loja: string; taxaPct: n
     "h1{font-size:15px;margin:0 0 2px;text-align:center}.c{text-align:center}.l{border-top:1px solid #000;margin:6px 0}" +
     "table{width:100%;border-collapse:collapse}td{padding:2px 0;vertical-align:top}.v{text-align:right;white-space:nowrap;padding-left:6px}" +
     ".t td{font-weight:700;font-size:14px;padding-top:4px}.n{font-size:10px;text-align:center;margin-top:8px}</style></head><body>" +
-    "<h1>" + esc(loja) + "</h1><div class=\"c\">COMANDA " + comanda.number + "</div><div class=\"c\">" + esc(quando) + "</div>" +
+    "<h1>" + esc(loja) + "</h1><div class=\"c\">COMANDA " + esc(rotuloDaComanda(comanda.number, comanda.name)) + "</div><div class=\"c\">" + esc(quando) + "</div>" +
     "<div class=\"l\"></div><table>" + linhas + "</table><div class=\"l\"></div><table>" +
     "<tr><td>Consumo</td><td class=\"v\">" + brl(comanda.subtotal) + "</td></tr>" +
     (taxa > 0 ? "<tr><td>Taxa de serviço (" + taxaPct + "%)</td><td class=\"v\">" + brl(taxa) + "</td></tr>" : "") +
     "<tr class=\"t\"><td>TOTAL</td><td class=\"v\">" + brl(total) + "</td></tr></table>" +
     "<div class=\"n\">Conferência de consumo. Não é documento fiscal.</div>" +
     "<script>window.onload=function(){window.print();}</script></body></html>";
+}
+
+// ── Painel das abertas (17/10/2026, tc-02) ───────────────────
+// O painel "Comandas" do Caixa lista todas as abertas com há quanto tempo
+// cada uma está aberta. As contas ficam aqui (testadas em
+// __tests__/comandasAbertasPainel.test.tsx).
+
+/** Daqui (minutos) em diante o tempo fica âmbar: quem ainda não pagou. Fixo
+ *  por decisão do Caio (17/10); vira configuração só se alguma loja pedir. */
+export const ALERTA_DA_COMANDA_MIN = 180;
+
+/** Minutos desde `opened_at`. Data inválida → null (o painel não mostra
+ *  tempo nem alerta). Relógio da máquina atrasado não dá tempo negativo. */
+export function minutosAberta(openedAt: string | null | undefined, agora: number): number | null {
+  if (!openedAt) return null;
+  const t = Date.parse(openedAt);
+  if (!isFinite(t)) return null;
+  return Math.max(0, Math.floor((agora - t) / 60000));
+}
+
+/** "agora", "há 18 min", "há 2h14", "há 3h", "há 2 dias". */
+export function tempoDaComanda(min: number | null): string {
+  if (min == null) return "";
+  if (min < 1) return "agora";
+  if (min < 60) return "há " + min + " min";
+  if (min >= 48 * 60) return "há " + Math.floor(min / 1440) + " dias";
+  const h = Math.floor(min / 60), m = min % 60;
+  return "há " + h + "h" + (m ? String(m).padStart(2, "0") : "");
+}
+
+export function comandaVelha(min: number | null): boolean {
+  return min != null && min >= ALERTA_DA_COMANDA_MIN;
+}
+
+export type OrdemDasComandas = "antigas" | "numero";
+
+type ParaOrdenar = { number: number; opened_at?: string | null };
+
+/** "antigas" (padrão): a aberta há mais tempo primeiro; sem data vai para o
+ *  fim. "numero": crescente. Não muda a lista recebida. */
+export function ordenarComandas<T extends ParaOrdenar>(lista: T[], ordem: OrdemDasComandas): T[] {
+  const copia = (lista || []).slice();
+  if (ordem === "numero") return copia.sort(function (a, b) { return a.number - b.number; });
+  return copia.sort(function (a, b) {
+    const ta = a.opened_at ? Date.parse(a.opened_at) : NaN;
+    const tb = b.opened_at ? Date.parse(b.opened_at) : NaN;
+    const va = isFinite(ta), vb = isFinite(tb);
+    if (va && vb && ta !== tb) return ta - tb;
+    if (va !== vb) return va ? -1 : 1;
+    return a.number - b.number;
+  });
+}
+
+function semAcento(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+/** Busca do painel: número que começa com o digitado ou nome que contém o
+ *  texto (sem diferença de acento nem de maiúscula). */
+export function filtrarComandas<T extends { number: number; name?: string | null }>(lista: T[], busca: string): T[] {
+  const q = semAcento(String(busca || "").trim());
+  if (!q) return lista;
+  return lista.filter(function (c) {
+    if (/^\d+$/.test(q) && String(c.number).startsWith(q)) return true;
+    return !!c.name && semAcento(c.name).includes(q);
+  });
 }

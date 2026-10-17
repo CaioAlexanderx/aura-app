@@ -83,6 +83,7 @@ import { useMatconReferral } from "@/hooks/useMatconReferral";
 import { useOrcamentoNoCaixa, chaveDoOrcamento } from "@/hooks/useOrcamentoNoCaixa";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 import { useComandaNoCaixa } from "@/hooks/useComandaNoCaixa";
+import { useComandasAbertas } from "@/components/screens/pdv/ComandasAbertasPanel";
 import { lerComandaEnabled } from "@/utils/comanda";
 import { algumPrecoMudou } from "@/utils/vendaRecuperada";
 import { podeMostrarLogo } from "@/components/screens/pdv/MerchantLogo";
@@ -381,6 +382,10 @@ export function usePdvState() {
     setQty,
     products,
   });
+  // 17/10/2026 (tc-02): quantas estão abertas, para o "Comandas (N)" do
+  // rodapé. Mesma chave do painel e dos modais.
+  const comandasAbertas = useComandasAbertas(company?.id, comandaEnabled && !isDemo);
+  const comandasAbertasCount = comandasAbertas.data?.comandas?.length ?? 0;
 
   // ── Matcon M1 — Caixa abre orçamento convertido (`?quote={id}`) ─────────
   // A esteira de Orçamentos manda pra cá com `?quote=<id>` depois de
@@ -926,7 +931,9 @@ export function usePdvState() {
     !showCrediario &&
     // Número de comanda é digitado: o leitor não pode engolir as teclas.
     !comandas.showAdicionar &&
-    !comandas.showFechar;
+    !comandas.showFechar &&
+    // Busca do painel das abertas também é digitada.
+    !comandas.showPainel;
   useGlobalBarcodeScanner({ onScan: handleScan, enabled: scannerListening });
 
   // ── Dados derivados para renderização ────────────────────────────────────────────
@@ -1094,9 +1101,10 @@ export function usePdvState() {
     comanda: comandaEnabled
       ? {
           onAdd:   comandas.abrirAdicionar,
-          onClose: comandas.abrirFechar,
+          onList:  comandas.abrirPainel,
+          openCount: comandasAbertasCount,
           charging: comandaNoCarrinho
-            ? { number: comandaNoCarrinho.number, feePct: comandaNoCarrinho.feePct, onCancel: comandas.cancelarCobranca }
+            ? { number: comandaNoCarrinho.number, name: comandaNoCarrinho.name ?? null, feePct: comandaNoCarrinho.feePct, onCancel: comandas.cancelarCobranca }
             : null,
         }
       : null,
