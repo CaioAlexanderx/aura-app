@@ -16,6 +16,7 @@ import {
   type CreateCompanyResponse,
 } from "@/services/multicnpj";
 import { apagarTodasAsVendasGuardadas, apagarVendasDeOutrosUsuarios } from "@/utils/vendaGuardada";
+import { marcarLogin, limparMarcaDeLogin } from "@/services/aberturaAposLogin";
 
 const KEY = "aura_token";
 const REFRESH_KEY = "aura_refresh_token";
@@ -304,6 +305,9 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
         await storage.set(token);
         if (refreshToken) await refreshStorage.set(refreshToken);
+        // 17/10/2026 (t2-14): a 1ª tela depois do login é abertura de login,
+        // não retorno (services/registroDeTelas separa as duas).
+        marcarLogin();
         // 14/10/2026: troca de usuário no navegador — a venda guardada de
         // outro usuário (sessão expirada) não fica para este.
         apagarVendasDeOutrosUsuarios(user?.id);
@@ -345,6 +349,8 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
         await storage.set(token);
         if (refreshToken) await refreshStorage.set(refreshToken);
+        // 17/10/2026 (t2-14): a 1ª tela depois do cadastro é abertura de login.
+        marcarLogin();
 
         const trialEnd = (company as any)?.trial_ends_at;
 
@@ -418,6 +424,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
     },
 
     logout: async (opcoes) => {
+      limparMarcaDeLogin();
       if (Platform.OS === "web" && typeof window !== "undefined") {
         try { localStorage.setItem("aura_theme", "dark"); } catch {}
       }

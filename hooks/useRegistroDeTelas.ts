@@ -16,6 +16,7 @@
 import { useEffect, useRef } from "react";
 import { useSegments } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
+import { consumirMarcaDeLogin } from "@/services/aberturaAposLogin";
 import {
   criarRegistroDeTelas,
   nomeDaTela,
@@ -47,6 +48,9 @@ export function useRegistroDeTelas(): void {
     }
     if (ultimaTela.current === tela) return;
     ultimaTela.current = tela;
-    registro.registrar(tela, token);
+    // 17/10/2026 (t2-14): a 1ª tela depois de login/cadastro vai marcada como
+    // abertura de login; o resto é retorno. A marca é consumida só aqui, já
+    // com sessão e tela contáveis (telas de autenticação não gastam a marca).
+    registro.registrar(tela, token, { aposLogin: consumirMarcaDeLogin() });
   }, [registro, tela, token]);
 }

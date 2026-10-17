@@ -192,6 +192,63 @@ describe("registro — acúmulo e envio", () => {
   });
 });
 
+describe("registro — abertura vinda do login (t2-14)", () => {
+  let enviar: jest.Mock;
+  let relogio: number;
+  const agora = () => new Date(relogio);
+
+  beforeEach(() => {
+    relogio = Date.UTC(2026, 9, 17, 12, 0, 0);
+    enviar = jest.fn().mockResolvedValue({});
+  });
+
+  test("aposLogin:true leva apos_login:1; count continua sendo o total", () => {
+    const r = criarRegistroDeTelas(enviar, agora);
+    r.registrar("painel", "tk", { aposLogin: true });
+    r.descarregar();
+    expect(enviar.mock.calls[0][1]).toEqual([
+      { screen: "painel", count: 1, first_at: "2026-10-17T12:00:00.000Z", last_at: "2026-10-17T12:00:00.000Z", apos_login: 1 },
+    ]);
+  });
+
+  test("sem marca de login, o item tem exatamente o formato de antes (sem apos_login)", () => {
+    const r = criarRegistroDeTelas(enviar, agora);
+    r.registrar("painel", "tk");
+    r.registrar("pdv", "tk", {});
+    r.registrar("estoque", "tk", { aposLogin: false });
+    r.descarregar();
+    for (const v of enviar.mock.calls[0][1]) expect(v).not.toHaveProperty("apos_login");
+  });
+
+  test("login seguido de retornos à mesma tela: count 3, apos_login 1 (retorno = 2)", () => {
+    const r = criarRegistroDeTelas(enviar, agora);
+    r.registrar("painel", "tk", { aposLogin: true });
+    relogio += 5000;
+    r.registrar("painel", "tk");
+    relogio += 5000;
+    r.registrar("painel", "tk", { aposLogin: false });
+    r.descarregar();
+    expect(enviar.mock.calls[0][1][0]).toMatchObject({ screen: "painel", count: 3, apos_login: 1 });
+  });
+
+  test("retorno primeiro e login depois na mesma tela também soma certo", () => {
+    const r = criarRegistroDeTelas(enviar, agora);
+    r.registrar("painel", "tk");
+    r.registrar("painel", "tk", { aposLogin: true });
+    r.descarregar();
+    expect(enviar.mock.calls[0][1][0]).toMatchObject({ count: 2, apos_login: 1 });
+  });
+
+  test("o lote do login de outra empresa sai com o token antigo e a marca dele", () => {
+    const r = criarRegistroDeTelas(enviar, agora);
+    r.registrar("painel", "tk-A", { aposLogin: true });
+    r.registrar("pdv", "tk-B"); // trocou de empresa: lote A sai agora
+    expect(enviar).toHaveBeenCalledTimes(1);
+    expect(enviar.mock.calls[0][0]).toBe("tk-A");
+    expect(enviar.mock.calls[0][1][0]).toMatchObject({ screen: "painel", apos_login: 1 });
+  });
+});
+
 describe("registro — falha some em silêncio", () => {
   let debug: jest.SpyInstance;
   beforeEach(() => {

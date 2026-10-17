@@ -29,6 +29,7 @@ jest.mock("@/stores/auth", () => ({
 
 import { useRegistroDeTelas } from "@/hooks/useRegistroDeTelas";
 import { INTERVALO_DO_LOTE_MS } from "@/services/registroDeTelas";
+import { marcarLogin, limparMarcaDeLogin } from "@/services/aberturaAposLogin";
 
 function Sonda() {
   useRegistroDeTelas();
@@ -144,6 +145,60 @@ describe("useRegistroDeTelas", () => {
     expect(mockRequest.mock.calls[1][1].token).toBe("tk-B");
     expect(telasEnviadas(1)).toEqual([["estoque", 1]]);
     m.desmontar();
+  });
+
+  describe("abertura vinda do login (t2-14)", () => {
+    const lote = () => mockRequest.mock.calls[0][1].body.views;
+    const enviarLote = () => act(() => { jest.advanceTimersByTime(INTERVALO_DO_LOTE_MS); });
+    beforeEach(() => limparMarcaDeLogin());
+
+    test("a 1ª tela depois do login vai com apos_login; as seguintes são retorno", () => {
+      mockSegments = ["(tabs)"];
+      marcarLogin();
+      const m = montar();
+      mockSegments = ["(tabs)", "pdv"];
+      m.refazer();
+      mockSegments = ["(tabs)"]; // volta ao Painel: retorno
+      m.refazer();
+      enviarLote();
+      expect(lote()).toEqual([
+        expect.objectContaining({ screen: "painel", count: 2, apos_login: 1 }),
+        expect.objectContaining({ screen: "pdv", count: 1 }),
+      ]);
+      expect(lote()[1]).not.toHaveProperty("apos_login");
+      m.desmontar();
+    });
+
+    test("re-render da mesma tela não conta de novo nem gasta outra marca", () => {
+      mockSegments = ["(tabs)"];
+      marcarLogin();
+      const m = montar();
+      m.refazer();
+      m.refazer();
+      enviarLote();
+      expect(lote()).toEqual([expect.objectContaining({ screen: "painel", count: 1, apos_login: 1 })]);
+      m.desmontar();
+    });
+
+    test("sessão restaurada (sem login) não marca", () => {
+      mockSegments = ["(tabs)"];
+      const m = montar();
+      enviarLote();
+      expect(lote()[0]).toMatchObject({ screen: "painel", count: 1 });
+      expect(lote()[0]).not.toHaveProperty("apos_login");
+      m.desmontar();
+    });
+
+    test("tela de autenticação não gasta a marca: ela vai para a 1ª tela contável", () => {
+      mockSegments = ["(auth)", "login"];
+      marcarLogin();
+      const m = montar();
+      mockSegments = ["(tabs)"];
+      m.refazer();
+      enviarLote();
+      expect(lote()).toEqual([expect.objectContaining({ screen: "painel", apos_login: 1 })]);
+      m.desmontar();
+    });
   });
 
   test("404 do backend não derruba nada", async () => {

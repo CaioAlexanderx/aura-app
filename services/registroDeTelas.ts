@@ -42,6 +42,13 @@ export type VisitaDeTela = {
   count: number;
   first_at: string;
   last_at: string;
+  /**
+   * 17/10/2026 (t2-14) — quantas das `count` visitas foram a primeira tela
+   * aberta logo depois de um login/cadastro (e não um retorno). Só vai no
+   * lote quando > 0: sem login, o item tem exatamente o formato de antes.
+   * `count` segue sendo o total.
+   */
+  apos_login?: number;
 };
 
 const ehGrupo = (s: string) => /^\(.*\)$/.test(s);
@@ -91,8 +98,11 @@ async function enviarAoBackend(token: string, views: VisitaDeTela[], aoSair: boo
 }
 
 export type RegistroDeTelas = {
-  /** Conta uma entrada na tela, no lote do token informado. */
-  registrar: (tela: string, token: string) => void;
+  /**
+   * Conta uma entrada na tela, no lote do token informado. `aposLogin: true`
+   * marca esta entrada como a abertura que veio do login (t2-14).
+   */
+  registrar: (tela: string, token: string, opcoes?: { aposLogin?: boolean }) => void;
   /** Manda o lote pendente (se houver) e zera o acumulado. */
   descarregar: (aoSair?: boolean) => void;
   /** Quantas telas distintas esperam envio. */
@@ -141,9 +151,10 @@ export function criarRegistroDeTelas(
     }
   }
 
-  function registrar(tela: string, token: string) {
+  function registrar(tela: string, token: string, opcoes?: { aposLogin?: boolean }) {
     try {
       if (!tela || !token) return;
+      const aposLogin = opcoes?.aposLogin === true;
       // Outra empresa/sessão: o que ficou pendente sai com o token antigo.
       if (lote && lote.token !== token) descarregar();
       if (!lote) lote = { token, telas: new Map() };
@@ -152,8 +163,11 @@ export function criarRegistroDeTelas(
       if (atual) {
         atual.count += 1;
         atual.last_at = agoraISO;
+        if (aposLogin) atual.apos_login = (atual.apos_login ?? 0) + 1;
       } else if (lote.telas.size < MAX_TELAS_EM_MEMORIA) {
-        lote.telas.set(tela, { screen: tela, count: 1, first_at: agoraISO, last_at: agoraISO });
+        const nova: VisitaDeTela = { screen: tela, count: 1, first_at: agoraISO, last_at: agoraISO };
+        if (aposLogin) nova.apos_login = 1;
+        lote.telas.set(tela, nova);
       }
     } catch (e) {
       falhou(e);
