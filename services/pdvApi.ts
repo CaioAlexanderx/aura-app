@@ -27,9 +27,17 @@ export type PdvSaleDetail = {
   [key: string]: any;      // outros campos da venda (total, status, etc)
 };
 
+// 17/10/2026 (tq-15, Aura-backend#850): chave de idempotência da venda.
+// O MESMO valor em toda nova tentativa da mesma venda (inclusive as que o
+// request() faz sozinho na queda de rede) faz o servidor devolver a venda já
+// registrada em vez de gravar outra. Sem a chave, o POST é o de sempre.
+function cabecalhoDaChave(idempotencyKey?: string | null): Record<string, string> | undefined {
+  return idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined;
+}
+
 export var pdvApi = {
-  createSale: function(companyId: string, body: any) {
-    return request<any>("/companies/" + companyId + "/pdv/sale", { method: "POST", body: body });
+  createSale: function(companyId: string, body: any, opts?: { idempotencyKey?: string | null }) {
+    return request<any>("/companies/" + companyId + "/pdv/sale", { method: "POST", body: body, headers: cabecalhoDaChave(opts?.idempotencyKey) });
   },
   // 17/08/2026 (F3) — venda com sinal: recebe parte agora, saldo numa data
   // combinada. Endpoint próprio, e não /pdv/sale com payments[]: o saldo é

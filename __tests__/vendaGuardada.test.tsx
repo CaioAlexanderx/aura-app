@@ -216,9 +216,11 @@ describe("Caixa: guardar a cada mudança", () => {
     montarVenda();
     esperarDebounce();
     const campos = Object.keys(guardado().dados).sort();
+    // idempotencyKey (17/10/2026, tq-15): uuid aleatório da venda, não é
+    // credencial — viaja para a outra aba mandar a mesma chave.
     expect(campos).toEqual([
       "cart", "comanda", "couponApplied", "couponCode", "couponRule", "cpfNaNota", "discountType", "discountValue",
-      "lotAllocations", "payment", "quoteId", "selectedCustomerId", "selectedCustomerName", "selectedCustomerPhone",
+      "idempotencyKey", "lotAllocations", "payment", "quoteId", "selectedCustomerId", "selectedCustomerName", "selectedCustomerPhone",
       "selectedEmployeeId", "selectedEmployeeName", "sellerName", "splitMode", "splitPayments",
     ].sort());
     act(() => { t.unmount(); });
