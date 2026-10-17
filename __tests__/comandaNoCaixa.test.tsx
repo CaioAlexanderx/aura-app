@@ -192,3 +192,34 @@ test("4. carrinho que já é uma comanda não é lançado de novo", () => {
   expect(toast.info).toHaveBeenCalledWith("Este carrinho já é a comanda 12. Finalize ou cancele a cobrança.");
   tree.unmount();
 });
+
+test("5. nome (17/10, tc-01): lançar com nome manda o nome; cobrar leva o nome ao aviso", async () => {
+  mockAddItems.mockResolvedValue({ comanda: { ...COMANDA, name: "João", subtotal: 25 }, opened: true, added: 1 });
+  const tree = montar();
+  act(() => { cart.addToCart({ id: GIN, name: "Copão Gin", price: 25 }); });
+  act(() => { comandas.lancar(12, "  João  "); });
+  await esperar();
+  expect(mockAddItems).toHaveBeenCalledWith("empresa-1", 12, [
+    { product_id: GIN, variant_id: null, name: "Copão Gin", unit: null, quantity: 1, unit_price: 25 },
+  ], "João");
+  expect(toast.success).toHaveBeenCalledWith("Comanda 12 · João aberta · total R$ 25,00");
+
+  // nome em branco: o POST é o de sempre (o nome que a comanda tinha fica)
+  mockAddItems.mockClear();
+  act(() => { cart.addToCart({ id: GIN, name: "Copão Gin", price: 25 }); });
+  act(() => { comandas.lancar(12, "   "); });
+  await esperar();
+  expect(mockAddItems.mock.calls[0]).toHaveLength(3);
+
+  act(() => { comandas.cobrar({ ...COMANDA, name: "João" }, 0); });
+  expect(cart.comanda).toEqual({ id: COMANDA.id, number: 12, feePct: 0, name: "João" });
+  expect(toast.success).toHaveBeenLastCalledWith("Comanda 12 · João no carrinho. Escolha o pagamento e finalize.");
+  act(() => { comandas.cancelarCobranca(); });
+  expect(toast.info).toHaveBeenCalledWith("A comanda 12 · João continua aberta");
+  // a venda continua levando só o id
+  act(() => { comandas.cobrar({ ...COMANDA, name: "João" }, 0); });
+  act(() => { cart.finalizeSale(); });
+  expect(mockBodies[0].comanda_id).toBe(COMANDA.id);
+  expect(JSON.stringify(mockBodies[0])).not.toContain("João");
+  tree.unmount();
+});

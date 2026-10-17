@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Comandas abertas no Caixa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" />
+<style>
+  /* ============================================================
+     Mockup standalone — cards tc-01 e tc-02 do board (17/10/2026).
+
+     tc-01 "Possibilitar abrir a comanda com um Nome"
+     tc-02 "Possibilitar visualizar comandas abertas"
+
+     Hoje (app#1043 em diante): a comanda é só o NÚMERO do cartão. As
+     abertas aparecem como fichas pequenas (número + valor) DENTRO dos
+     modais "Adicionar à comanda" e "Fechar comanda". Não há lugar para
+     ver todas de uma vez, nem há quanto tempo cada uma está aberta.
+
+     Proposta:
+       · botão "Comandas" com a contagem no lugar do "Fechar comanda"
+         do rodapé do carrinho; abre o painel das abertas;
+       · cada comanda: número, nome, total, há quanto tempo, nº de
+         itens; ações "Cobrar" e "Lançar mais" sempre visíveis (sem
+         hover-reveal: funciona igual no toque);
+       · campo "Nome" opcional no modal de lançar (até 40 caracteres).
+
+     Tokens: constants/colors.ts (Dark e Light). Só HTML/CSS e um pouco
+     de JS para trocar estados. Nada aqui é código do app.
+     ============================================================ */
+  :root {
+    --bg: #060816; --bg2: #090c1a; --bg3: #0e1228; --bg4: #141830;
+    --ink: #f0edff; --ink2: rgba(220,215,255,0.75); --ink3: rgba(170,160,235,0.65);
+    --line: rgba(255,255,255,0.07); --line2: rgba(120,100,240,0.22);
+    --violet: #7c3aed; --violet2: #8b5cf6; --violet3: #a78bfa; --violet4: #c4b5fd;
+    --violetD: rgba(109,40,217,0.14);
+    --green: #34d399; --greenD: rgba(52,211,153,0.10);
+    --red: #f87171; --redD: rgba(248,113,113,0.10);
+    --amber: #fbbf24; --amberD: rgba(251,191,36,0.10);
+    --glass: rgba(255,255,255,0.035);
+    --backdrop: rgba(0,0,0,0.65);
+    --serif: 'Instrument Serif', Georgia, serif;
+    --sans: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mono: 'DM Mono', 'SF Mono', Menlo, monospace;
+  }
+  :root[data-theme="light"] {
+    --bg: #e6e4f0; --bg2: #fafbff; --bg3: #ffffff; --bg4: #e3dff0;
+    --ink: #18172b; --ink2: #3b3461; --ink3: #6a608e;
+    --line: rgba(109,40,217,0.22); --line2: rgba(120,100,240,0.30);
+    --violet3: #6d28d9; --violet4: #5b21b6; --violetD: rgba(109,40,217,0.06);
+    --green: #059669; --greenD: rgba(5,150,105,0.08);
+    --red: #dc2626; --redD: rgba(220,38,38,0.06);
+    --amber: #b45309; --amberD: rgba(217,119,6,0.10);
+    --glass: rgba(255,255,255,0.7);
+    --backdrop: rgba(24,23,43,0.45);
+  }
+  * { box-sizing: border-box; font-variant-numeric: tabular-nums; }
+  body { margin: 0; padding: 32px 16px 90px; background: var(--bg); color: var(--ink); font-family: var(--sans); min-height: 100vh; }
+  button, input { font-family: inherit; }
+  code { font-family: var(--mono); font-size: 11.5px; color: var(--violet3); }
+  .wrap { max-width: 1480px; margin: 0 auto; }
+  h1.doc { font-family: var(--serif); font-weight: 400; font-size: 42px; line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 10px; }
+  h1.doc span { color: var(--violet); }
+  .doc-sub { color: var(--ink3); font-size: 13.5px; line-height: 1.6; max-width: 860px; margin: 0 0 20px; }
+  .nota { padding: 13px 15px; border: 1px dashed var(--line2); border-radius: 12px; font-size: 12.5px; color: var(--ink3); line-height: 1.6; margin: 0 0 20px; max-width: 1100px; }
+  .nota b { color: var(--violet3); }
+  .secao { margin: 40px 0 12px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--violet3); }
+  .legenda { font-size: 12.5px; color: var(--ink3); line-height: 1.65; max-width: 1100px; margin: 10px 0 0; }
+  .legenda b { color: var(--violet3); }
+  .telas { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+  .rotulo { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--green); margin-bottom: 8px; }
+
+  .ctl { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; padding: 10px 12px; border: 1px solid var(--line2); border-radius: 12px; background: var(--bg2); margin: 0 0 16px; position: sticky; top: 8px; z-index: 60; }
+  .ctl-g { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .ctl-g > span { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink3); margin-right: 2px; }
+  .ctl button { padding: 5px 10px; border-radius: 8px; border: 1px dashed var(--line2); background: transparent; color: var(--ink2); font-size: 11.5px; cursor: pointer; }
+  .ctl button.on { background: var(--violet); color: #fff; border-style: solid; border-color: var(--violet); }
+
+  /* ── Desktop ───────────────────────────────────────────── */
+  .scaler { width: 100%; overflow-x: auto; }
+  .desk { width: 1440px; height: 860px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); display: flex; overflow: hidden; position: relative; }
+  .side { width: 72px; flex-shrink: 0; background: var(--bg2); border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; padding: 16px 0; gap: 10px; }
+  .side i { width: 34px; height: 34px; border-radius: 10px; background: var(--bg3); display: block; }
+  .side i.on { background: var(--violetD); box-shadow: inset 0 0 0 1px var(--violet); }
+  .cat { flex: 1; min-width: 0; padding: 24px; }
+  .cartcol { width: 400px; flex-shrink: 0; padding: 24px 24px 24px 0; }
+  .title { font-size: 26px; font-weight: 700; letter-spacing: -0.4px; }
+  .search { display: flex; align-items: center; padding: 11px 16px; border-radius: 12px; background: var(--glass); border: 1px solid var(--line); max-width: 560px; font-size: 13px; color: var(--ink3); margin: 14px 0 12px; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .pcard { border-radius: 16px; padding: 12px; background: var(--glass); border: 1px solid var(--line); }
+  .pimg { height: 96px; border-radius: 12px; margin-bottom: 10px; background: radial-gradient(circle at 30% 30%, rgba(167,139,250,0.35), rgba(167,139,250,0.07) 70%); border: 1px solid rgba(167,139,250,0.25); }
+  .pname { font-size: 13px; font-weight: 600; }
+  .pprice { font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--violet3); margin-top: 6px; }
+
+  .cart { border-radius: 18px; border: 1px solid var(--line2); background: var(--bg2); overflow: hidden; height: 100%; display: flex; flex-direction: column; }
+  .carthead { padding: 16px 18px; background: linear-gradient(135deg, rgba(124,58,237,0.92), rgba(109,40,217,0.85)); color: #fff; }
+  .carthead .k { font-size: 9px; letter-spacing: 1.2px; text-transform: uppercase; color: rgba(255,255,255,0.7); font-weight: 700; }
+  .carthead .tot { font-size: 30px; font-weight: 800; letter-spacing: -1px; margin-top: 2px; }
+  .cartbody { flex: 1; overflow-y: auto; padding: 12px 16px; }
+  .item { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .item small { display: block; color: var(--ink3); font-size: 11px; margin-top: 2px; }
+  .vazio { color: var(--ink3); font-size: 12.5px; text-align: center; padding: 40px 10px; }
+  .cartfoot { padding: 12px 16px 16px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+  .links { display: flex; gap: 8px; }
+  .link { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--violet3); padding: 7px 10px; border-radius: 9px; background: var(--violetD); border: 1px solid var(--line2); }
+  .ctas { display: flex; gap: 8px; }
+  .ctaAlt { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; height: 48px; border-radius: 12px; background: var(--bg4); border: 1px solid var(--line2); font-size: 13px; font-weight: 600; color: var(--ink); position: relative; }
+  .ctaAlt.novo { box-shadow: 0 0 0 2px var(--violet); }
+  .badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--violet); color: #fff; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+  .ctaPri { flex: 1.4; display: flex; align-items: center; justify-content: center; height: 48px; border-radius: 12px; background: var(--violet); color: #fff; font-size: 14px; font-weight: 700; }
+  .ctaPri.off { background: var(--violetD); color: var(--ink3); }
+  .tag-novo { position: absolute; top: -9px; right: 8px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.06em; padding: 2px 6px; border-radius: 5px; background: var(--green); color: #052e22; font-weight: 700; }
+
+  /* aviso de cobrança (quoteCard do CartPanel) */
+  .quoteCard { border-radius: 12px; border: 1px solid var(--line2); background: var(--violetD); padding: 10px 12px; }
+  .quoteHead { display: flex; align-items: center; gap: 8px; }
+  .quoteTitle { flex: 1; font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .quoteTitle em { font-style: normal; color: var(--violet3); }
+  .ghostBtn { font-size: 11.5px; font-weight: 600; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--line2); color: var(--ink2); }
+  .quoteSub { font-size: 11.5px; color: var(--ink3); margin-top: 4px; line-height: 1.45; }
+
+  /* ── Painel das abertas (desktop: gaveta à direita, via WebPortal) ── */
+  .overlay { position: absolute; inset: 0; background: var(--backdrop); display: flex; justify-content: flex-end; z-index: 20; }
+  .drawer { width: 620px; height: 100%; background: var(--bg2); border-left: 1px solid var(--line2); display: flex; flex-direction: column; }
+  .dHead { display: flex; align-items: center; gap: 12px; padding: 18px 20px 14px; border-bottom: 1px solid var(--line); }
+  .hIcon { width: 32px; height: 32px; border-radius: 10px; background: var(--violetD); display: flex; align-items: center; justify-content: center; color: var(--violet3); flex-shrink: 0; }
+  .dTitle { font-size: 15px; font-weight: 600; }
+  .dSub { font-size: 11.5px; color: var(--ink3); margin-top: 2px; }
+  .dSub b { color: var(--ink); }
+  .x { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--ink3); margin-left: auto; }
+  .tools { display: flex; gap: 8px; padding: 12px 20px; border-bottom: 1px solid var(--line); align-items: center; flex-wrap: wrap; }
+  .busca { flex: 1; min-width: 180px; height: 38px; border-radius: 10px; border: 1px solid var(--line2); background: var(--bg); color: var(--ink3); font-size: 13px; display: flex; align-items: center; padding: 0 12px; gap: 8px; }
+  .seg { display: flex; border: 1px solid var(--line2); border-radius: 10px; overflow: hidden; }
+  .seg span { font-size: 11.5px; font-weight: 600; padding: 9px 11px; color: var(--ink3); }
+  .seg span.on { background: var(--violet); color: #fff; }
+  .lista { flex: 1; overflow-y: auto; padding: 14px 20px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-content: start; }
+  .cmd { border-radius: 14px; border: 1px solid var(--line); background: var(--bg3); padding: 12px 12px 10px; display: flex; flex-direction: column; gap: 8px; }
+  .cmd.velha { border-color: rgba(251,191,36,0.45); }
+  .cTop { display: flex; align-items: flex-start; gap: 10px; }
+  .num { min-width: 52px; height: 52px; padding: 0 8px; border-radius: 12px; background: var(--violetD); border: 1px solid var(--line2); display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 800; color: var(--ink); letter-spacing: -0.5px; }
+  .cInfo { flex: 1; min-width: 0; }
+  .nome { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nome.sem { color: var(--ink3); font-weight: 500; font-style: italic; }
+  .meta { font-size: 11.5px; color: var(--ink3); margin-top: 3px; display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+  .tempo.alerta { color: var(--amber); font-weight: 700; }
+  .total { font-family: var(--mono); font-size: 17px; font-weight: 700; color: var(--ink); text-align: right; white-space: nowrap; }
+  .cAct { display: flex; gap: 8px; }
+  .bSec { flex: 1; height: 38px; border-radius: 10px; background: var(--bg4); border: 1px solid var(--line2); font-size: 12.5px; font-weight: 600; color: var(--ink); display: flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
+  .bPri { flex: 1; height: 38px; border-radius: 10px; background: var(--violet); font-size: 12.5px; font-weight: 700; color: #fff; display: flex; align-items: center; justify-content: center; white-space: nowrap; }
+  .dFoot { padding: 12px 20px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--ink3); display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .vazioPainel { grid-column: 1 / -1; text-align: center; padding: 60px 20px; color: var(--ink3); font-size: 13px; line-height: 1.6; }
+
+  /* ── Celular 375 ───────────────────────────────────────── */
+  .phone { width: 375px; height: 780px; border-radius: 26px; border: 1px solid var(--line); background: var(--bg); overflow: hidden; display: flex; flex-direction: column; position: relative; flex-shrink: 0; }
+  .pbar { height: 30px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; font-size: 11px; color: var(--ink3); font-family: var(--mono); }
+  .pcontent { flex: 1; padding: 6px 16px 16px; overflow: hidden; }
+  .phone .overlay { align-items: flex-end; }
+  .sheet { width: 100%; max-height: 92%; background: var(--bg2); border-radius: 20px 20px 0 0; border-top: 1px solid var(--line2); display: flex; flex-direction: column; }
+  .grab { width: 40px; height: 4px; border-radius: 2px; background: var(--line2); margin: 8px auto 0; }
+  .phone .dHead { padding: 12px 16px 10px; }
+  .phone .tools { padding: 10px 16px; }
+  .phone .seg span { padding: 9px 9px; }
+  .phone .lista { grid-template-columns: 1fr; padding: 12px 16px 16px; gap: 10px; }
+  .phone .num { min-width: 46px; height: 46px; font-size: 19px; }
+  .phone .bSec, .phone .bPri { height: 42px; }  /* alvo de toque >= 42 px */
+  .phone .dFoot { padding: 10px 16px 14px; }
+
+  /* ── Modal de lançar (tc-01) ──────────────────────────── */
+  .mbox { width: 480px; border-radius: 20px; border: 1px solid var(--line2); background: var(--bg2); overflow: hidden; display: flex; flex-direction: column; }
+  .mHead { display: flex; align-items: center; gap: 12px; padding: 18px 20px 14px; border-bottom: 1px solid var(--line); }
+  .mBody { padding: 14px 18px; }
+  .lbl { font-size: 11px; color: var(--ink3); margin-bottom: 6px; font-weight: 600; display: flex; justify-content: space-between; }
+  .lbl .opt { font-weight: 500; }
+  .inpNum { padding: 12px 16px; background: var(--bg); border-radius: 12px; border: 1px solid var(--line2); font-size: 22px; font-weight: 600; color: var(--ink); }
+  .inpNum.foco { border-color: var(--violet); box-shadow: 0 0 0 3px rgba(124,58,237,0.18); }
+  .inpNome { padding: 11px 14px; background: var(--bg); border-radius: 12px; border: 1px solid var(--line2); font-size: 15px; font-weight: 500; color: var(--ink); }
+  .inpNome.ph { color: var(--ink3); font-weight: 400; }
+  .cont { font-family: var(--mono); font-size: 10px; color: var(--ink3); text-align: right; margin-top: 4px; }
+  .hint { font-size: 12px; color: var(--ink2); margin-top: 8px; line-height: 1.45; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { min-width: 84px; max-width: 140px; padding: 8px 10px; border-radius: 10px; text-align: center; background: var(--bg4); border: 1px solid var(--line); }
+  .chip.on { background: var(--violet); border-color: var(--violet); color: #fff; }
+  .chip b { display: block; font-size: 15px; }
+  .chip .cn { display: block; font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+  .chip small { display: block; font-size: 10.5px; color: var(--ink3); margin-top: 1px; }
+  .chip.on small, .chip.on .cn { color: rgba(255,255,255,0.85); }
+  .mAct { display: flex; gap: 10px; padding: 12px 18px 16px; border-top: 1px solid var(--line); }
+  .mAct .bSec { height: 44px; } .mAct .bPri { flex: 1.4; height: 44px; }
+  .phone .mbox { width: 100%; border-radius: 20px; }
+  .phone .modalWrap { position: absolute; inset: 0; background: var(--backdrop); display: flex; align-items: center; padding: 16px; z-index: 20; }
+
+  .dec { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; max-width: 1200px; }
+  .decCard { border: 1px solid var(--line2); border-radius: 12px; padding: 12px 14px; background: var(--bg2); font-size: 12.5px; line-height: 1.6; color: var(--ink2); }
+  .decCard h3 { margin: 0 0 6px; font-size: 13px; color: var(--ink); }
+  .decCard .rec { color: var(--green); font-weight: 700; }
+  @media (max-width: 700px) { h1.doc { font-size: 32px; } .mbox { width: 100%; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 class="doc">Comandas <span>abertas</span> no Caixa</h1>
+  <p class="doc-sub">
+    Cards <b>tc-01</b> (abrir a comanda com um nome) e <b>tc-02</b> (ver as comandas abertas). Hoje a comanda
+    é só o número do cartão, e as abertas aparecem em fichas pequenas dentro dos modais de lançar e de fechar.
+    Este mockup propõe um painel com todas as abertas e o campo Nome no lançamento.
+  </p>
+  <div class="nota">
+    <b>O que já está em PR (tc-01):</b> o nome opcional no modal de lançar, nas fichas das abertas e no aviso de cobrança.
+    <b>O que espera o seu OK (tc-02):</b> o painel das abertas abaixo (seções 1 e 2). Nada dele foi implementado.
+    A comanda é sempre da loja aberta no Caixa; no consolidado multi-CNPJ o Caixa já opera numa empresa só, então
+    o painel lista as comandas dessa empresa (o backend filtra por <code>company_id</code>).
+  </div>
+
+  <div class="ctl">
+    <div class="ctl-g"><span>Tema</span><button data-theme-btn="dark" class="on">Escuro</button><button data-theme-btn="light">Claro</button></div>
+    <div class="ctl-g"><span>Carrinho</span><button data-cart="cheio" class="on">Com 3 itens</button><button data-cart="vazio">Vazio</button></div>
+    <div class="ctl-g"><span>Abertas</span><button data-lista="cheia" class="on">6 comandas</button><button data-lista="nenhuma">Nenhuma</button></div>
+    <div class="ctl-g"><span>Ordem</span><button data-ordem="antigas" class="on">Mais antigas</button><button data-ordem="numero">Número</button></div>
+  </div>
+
+  <div class="secao">1 · Computador — painel das abertas (tc-02)</div>
+  <div class="scaler"><div class="desk" id="desk"></div></div>
+  <p class="legenda">
+    <b>Entrada:</b> o botão "Fechar comanda" do rodapé do carrinho vira <b>"Comandas"</b> com a contagem das abertas
+    (some a contagem quando não há nenhuma). Abre uma gaveta à direita, montada com <code>WebPortal</code> (overlay dentro do shell).
+    <b>Cada comanda:</b> número em destaque, nome (ou "sem nome"), há quanto tempo está aberta, nº de itens e o total.
+    Acima de 3 horas o tempo fica âmbar, para lembrar quem ainda não pagou.
+    <b>Cobrar</b> leva o consumo ao carrinho e abre a conferência (taxa de 10%, imprimir, tirar item), a mesma do "Fechar comanda" de hoje.
+    <b>Lançar mais</b> com o carrinho cheio manda os itens para essa comanda (abre o modal de lançar já com o número e o nome);
+    com o carrinho vazio, fecha o painel e lembra de adicionar os produtos primeiro.
+    A lista se atualiza ao abrir e a cada 30 s com o painel aberto (dois caixas na mesma loja).
+  </p>
+
+  <div class="secao">2 · Celular 375 px — o mesmo painel como folha de baixo</div>
+  <div class="telas">
+    <div><div class="rotulo">Painel aberto</div><div class="phone" id="phoneLista"></div></div>
+    <div><div class="rotulo">Aviso de cobrança no carrinho</div><div class="phone" id="phoneCobrando"></div></div>
+  </div>
+  <p class="legenda">
+    Uma coluna, botões com 42 px de altura (alvo de toque). As ações ficam sempre visíveis: nada depende de passar o mouse.
+    O aviso de cobrança mostra <b>número e nome</b> (já no PR do tc-01).
+  </p>
+
+  <div class="secao">3 · Modal "Adicionar à comanda" com o campo Nome (tc-01, já em PR)</div>
+  <div class="telas">
+    <div><div class="rotulo">Comanda nova</div><div id="modalNova"></div></div>
+    <div><div class="rotulo">Comanda já aberta (nome vem preenchido)</div><div id="modalExistente"></div></div>
+    <div><div class="rotulo">Celular 375 px</div><div class="phone" id="phoneModal"></div></div>
+  </div>
+  <p class="legenda">
+    O nome é <b>opcional</b> e vai até 40 caracteres ("João", "Mesa do fundo", "Moto azul"). Tocar numa comanda aberta preenche o número
+    e o nome dela; trocar o nome ali atualiza a comanda. Deixar em branco nunca apaga um nome que já existe.
+    Enter em qualquer um dos dois campos lança: o jeito rápido de hoje (número + Enter) continua igual.
+  </p>
+
+  <div class="secao">4 · Decisões para o seu OK</div>
+  <div class="dec">
+    <div class="decCard"><h3>Onde entra o painel</h3>
+      Botão "Comandas (N)" no lugar do "Fechar comanda" do rodapé. <span class="rec">Recomendo.</span>
+      Alternativa: manter "Fechar comanda" e pôr "Comandas" na barra de ações acima do catálogo.</div>
+    <div class="decCard"><h3>"Lançar mais" com carrinho vazio</h3>
+      Fecha o painel e avisa "Adicione os produtos e toque em Adicionar à comanda". <span class="rec">Recomendo</span> (simples, sem estado novo).
+      Alternativa: deixar a comanda "marcada" no rodapé para o próximo lançamento.</div>
+    <div class="decCard"><h3>Alerta de tempo</h3>
+      Âmbar acima de 3 horas aberta. Fixo por enquanto; vira configuração só se alguma loja pedir.</div>
+    <div class="decCard"><h3>Ordem padrão</h3>
+      "Mais antigas" primeiro (quem está há mais tempo sem pagar). "Número" fica como segunda opção.</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var estado = { cart: 'cheio', lista: 'cheia', ordem: 'antigas' };
+  var AGORA = new Date('2026-10-17T23:40:00-03:00').getTime();
+  var COMANDAS = [
+    { n: 12, nome: 'João', abertaMin: 134, itens: 6, total: 148 },
+    { n: 3, nome: 'Mesa do fundo', abertaMin: 212, itens: 11, total: 236.5 },
+    { n: 27, nome: '', abertaMin: 18, itens: 2, total: 37 },
+    { n: 8, nome: 'Carla e amigas', abertaMin: 75, itens: 4, total: 92 },
+    { n: 41, nome: 'Moto azul', abertaMin: 41, itens: 3, total: 54.5 },
+    { n: 5, nome: 'Seu Zé', abertaMin: 265, itens: 9, total: 121 }
+  ];
+  var CARRINHO = [
+    { nome: 'Copão Gin + Energético', q: 2, v: 50 },
+    { nome: 'Cerveja 600 ml', q: 1, v: 14 },
+    { nome: 'Porção de batata', q: 1, v: 32 }
+  ];
+
+  function brl(v) { return 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function tempo(min) { if (min < 60) return 'há ' + min + ' min'; var h = Math.floor(min / 60), m = min % 60; return 'há ' + h + 'h' + (m ? String(m).padStart(2, '0') : ''); }
+  function lista() {
+    if (estado.lista === 'nenhuma') return [];
+    var l = COMANDAS.slice();
+    l.sort(estado.ordem === 'numero' ? function (a, b) { return a.n - b.n; } : function (a, b) { return b.abertaMin - a.abertaMin; });
+    return l;
+  }
+  function soma(l) { return l.reduce(function (s, c) { return s + c.total; }, 0); }
+  var ic = {
+    clip: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>',
+    x: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+    busca: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>',
+    mais: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>'
+  };
+
+  function cartaoComanda(c) {
+    var velha = c.abertaMin >= 180;
+    var lancar = estado.cart === 'cheio' ? 'Lançar 3 itens' : 'Lançar mais';
+    return '<div class="cmd' + (velha ? ' velha' : '') + '">' +
+      '<div class="cTop"><div class="num">' + c.n + '</div>' +
+      '<div class="cInfo"><div class="nome' + (c.nome ? '' : ' sem') + '">' + (c.nome || 'sem nome') + '</div>' +
+      '<div class="meta"><span class="tempo' + (velha ? ' alerta' : '') + '">' + tempo(c.abertaMin) + '</span><span>·</span><span>' + c.itens + ' ' + (c.itens === 1 ? 'item' : 'itens') + '</span></div></div>' +
+      '<div class="total">' + brl(c.total) + '</div></div>' +
+      '<div class="cAct"><div class="bSec">' + ic.mais + lancar + '</div><div class="bPri">Cobrar</div></div>' +
+      '</div>';
+  }
+
+  function painel(classe) {
+    var l = lista();
+    var corpo = l.length
+      ? l.map(cartaoComanda).join('')
+      : '<div class="vazioPainel">Nenhuma comanda aberta agora.<br>Para abrir, adicione produtos ao carrinho e toque em <b>Adicionar à comanda</b>.</div>';
+    return '<div class="' + classe + '">' + (classe === 'sheet' ? '<div class="grab"></div>' : '') +
+      '<div class="dHead"><div class="hIcon">' + ic.clip + '</div><div><div class="dTitle">Comandas abertas</div>' +
+      '<div class="dSub">' + (l.length ? '<b>' + l.length + '</b> abertas · <b>' + brl(soma(l)) + '</b> a receber' : 'Nenhuma aberta') + '</div></div>' +
+      '<div class="x">' + ic.x + '</div></div>' +
+      (l.length ? '<div class="tools"><div class="busca">' + ic.busca + 'Buscar por número ou nome</div>' +
+        '<div class="seg"><span class="' + (estado.ordem === 'antigas' ? 'on' : '') + '">Mais antigas</span><span class="' + (estado.ordem === 'numero' ? 'on' : '') + '">Número</span></div></div>' : '') +
+      '<div class="lista">' + corpo + '</div>' +
+      '<div class="dFoot"><span>Atualizado agora</span><span>Comanda nova: carrinho › Adicionar à comanda</span></div>' +
+      '</div>';
+  }
+
+  function carrinho(opts) {
+    var cheio = estado.cart === 'cheio' || opts.cobrando;
+    var itens = opts.cobrando
+      ? [{ nome: 'Copão Gin + Energético', q: 4, v: 100 }, { nome: 'Cerveja 600 ml', q: 2, v: 28 }, { nome: 'Taxa de serviço (10%)', q: 1, v: 14.8 }]
+      : CARRINHO;
+    var total = cheio ? itens.reduce(function (s, i) { return s + i.v; }, 0) : 0;
+    var nAbertas = lista().length;
+    var corpo = cheio
+      ? itens.map(function (i) { return '<div class="item"><div>' + i.nome + '<small>' + i.q + ' × ' + brl(i.v / i.q) + '</small></div><b>' + brl(i.v) + '</b></div>'; }).join('')
+      : '<div class="vazio">Carrinho vazio.<br>Bipe ou toque num produto.</div>';
+    var aviso = opts.cobrando
+      ? '<div class="quoteCard"><div class="quoteHead"><div class="quoteTitle">Cobrando a comanda 12 · <em>João</em></div><div class="ghostBtn">Cancelar</div></div>' +
+        '<div class="quoteSub">Consumo com a taxa de serviço de 10%. Ao finalizar a venda a comanda fecha. Cancelar deixa a comanda aberta.</div></div>'
+      : '';
+    var links = !opts.cobrando && cheio ? '<div class="links"><div class="link">Dividir pagamento</div><div class="link">' + ic.clip + 'Adicionar à comanda</div></div>' : '';
+    return '<div class="cart"><div class="carthead"><div class="k">Total da venda</div><div class="tot">' + brl(total) + '</div></div>' +
+      '<div class="cartbody">' + corpo + '</div>' +
+      '<div class="cartfoot">' + aviso + links +
+      '<div class="ctas"><div class="ctaAlt' + (opts.destacar ? ' novo' : '') + '">' + (opts.destacar ? '<span class="tag-novo">NOVO</span>' : '') + ic.clip + 'Comandas' + (nAbertas ? ' <span class="badge">' + nAbertas + '</span>' : '') + '</div>' +
+      '<div class="ctaPri' + (cheio ? '' : ' off') + '">Finalizar ' + (cheio ? brl(total) : '') + '</div></div>' +
+      '</div></div>';
+  }
+
+  function catalogo(compacto) {
+    var nomes = ['Copão Gin', 'Cerveja 600 ml', 'Dose Whisky', 'Porção de batata', 'Água 500 ml', 'Refrigerante lata', 'Energético', 'Gelo 5 kg'];
+    var precos = [25, 14, 18.5, 32, 4, 6, 12, 15];
+    var n = compacto ? 4 : 8;
+    var g = '';
+    for (var i = 0; i < n; i++) g += '<div class="pcard"><div class="pimg"' + (compacto ? ' style="height:60px"' : '') + '></div><div class="pname">' + nomes[i] + '</div><div class="pprice">' + brl(precos[i]) + '</div></div>';
+    return '<div class="title"' + (compacto ? ' style="font-size:20px"' : '') + '>Caixa</div><div class="search">Buscar produto ou bipar</div><div class="grid"' + (compacto ? ' style="grid-template-columns:1fr 1fr;gap:10px"' : '') + '>' + g + '</div>';
+  }
+
+  function modal(o) {
+    var chips = COMANDAS.slice(0, 4).map(function (c) {
+      var on = o.existente && c.n === 12;
+      return '<div class="chip' + (on ? ' on' : '') + '"><b>' + c.n + '</b>' + (c.nome ? '<span class="cn">' + c.nome + '</span>' : '') + '<small>' + brl(c.total) + '</small></div>';
+    }).join('');
+    var num = o.existente ? '12' : '15';
+    var nome = o.existente ? 'João' : '';
+    var hint = o.existente
+      ? 'A comanda 12 · João já tem R$ 148,00. Estes itens somam a ela.'
+      : 'A comanda 15 será aberta com estes itens.';
+    return '<div class="mbox">' +
+      '<div class="mHead"><div class="hIcon">' + ic.clip + '</div><div style="flex:1"><div class="dTitle">Adicionar à comanda</div><div class="dSub">3 itens · R$ 96,00</div></div><div class="x" style="margin-left:0">' + ic.x + '</div></div>' +
+      '<div class="mBody">' +
+      '<div class="lbl">Número da comanda</div><div class="inpNum' + (o.existente ? '' : ' foco') + '">' + num + '</div>' +
+      '<div class="lbl" style="margin-top:12px"><span>Nome</span><span class="opt">opcional</span></div>' +
+      '<div class="inpNome' + (nome ? '' : ' ph') + '">' + (nome || 'Ex.: João, Mesa do fundo') + '</div>' +
+      '<div class="cont">' + nome.length + '/40</div>' +
+      '<div class="hint">' + hint + '</div>' +
+      '<div style="margin-top:14px"><div class="lbl">Comandas abertas</div><div class="chips">' + chips + '</div></div>' +
+      '</div>' +
+      '<div class="mAct"><div class="bSec">Cancelar</div><div class="bPri">Lançar na comanda ' + num + '</div></div>' +
+      '</div>';
+  }
+
+  function render() {
+    document.getElementById('desk').innerHTML =
+      '<div class="side"><i></i><i class="on"></i><i></i><i></i><i></i></div>' +
+      '<div class="cat">' + catalogo(false) + '</div>' +
+      '<div class="cartcol">' + carrinho({ destacar: true }) + '</div>' +
+      '<div class="overlay">' + painel('drawer') + '</div>';
+
+    document.getElementById('phoneLista').innerHTML =
+      '<div class="pbar"><span>23:40</span><span>Caixa</span></div>' +
+      '<div class="pcontent">' + catalogo(true) + '</div>' +
+      '<div class="overlay">' + painel('sheet') + '</div>';
+
+    document.getElementById('phoneCobrando').innerHTML =
+      '<div class="pbar"><span>23:41</span><span>Caixa</span></div>' +
+      '<div class="pcontent" style="display:flex;flex-direction:column;padding-bottom:12px">' + carrinho({ cobrando: true }) + '</div>';
+
+    document.getElementById('modalNova').innerHTML = modal({ existente: false });
+    document.getElementById('modalExistente').innerHTML = modal({ existente: true });
+    document.getElementById('phoneModal').innerHTML =
+      '<div class="pbar"><span>23:40</span><span>Caixa</span></div>' +
+      '<div class="pcontent">' + catalogo(true) + '</div>' +
+      '<div class="modalWrap">' + modal({ existente: true }) + '</div>';
+  }
+
+  function grupo(attr, chave) {
+    document.querySelectorAll('[' + attr + ']').forEach(function (b) {
+      b.addEventListener('click', function () {
+        document.querySelectorAll('[' + attr + ']').forEach(function (x) { x.classList.toggle('on', x === b); });
+        estado[chave] = b.getAttribute(attr);
+        render();
+      });
+    });
+  }
+  grupo('data-cart', 'cart');
+  grupo('data-lista', 'lista');
+  grupo('data-ordem', 'ordem');
+  document.querySelectorAll('[data-theme-btn]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('[data-theme-btn]').forEach(function (x) { x.classList.toggle('on', x === b); });
+      document.documentElement.setAttribute('data-theme', b.getAttribute('data-theme-btn'));
+    });
+  });
+  // A tela de 1440 px encolhe para caber na janela (sem rolagem lateral).
+  function caber() {
+    document.querySelectorAll('.desk').forEach(function (x) {
+      x.style.zoom = Math.min(1, x.parentElement.clientWidth / 1442);
+    });
+  }
+  window.addEventListener('resize', caber);
+  render();
+  caber();
+})();
+</script>
+</body>
+</html>

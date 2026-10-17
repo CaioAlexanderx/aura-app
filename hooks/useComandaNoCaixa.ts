@@ -11,14 +11,18 @@
 //
 // Desistir de cobrar ("Cancelar" no aviso do carrinho) só limpa o carrinho:
 // a comanda continua aberta, do jeito que estava.
+//
+// 17/10/2026 (tc-02): o painel das abertas (ComandasAbertasPanel) entra por
+// "Comandas (N)" no rodapé. "Cobrar" dele abre a conferência já com a
+// comanda; "Lançar mais" abre o modal de lançar já com o número.
 // ============================================================
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/Toast";
 import { comandaApi } from "@/services/comandaApi";
 import { chaveDasComandas } from "@/components/screens/pdv/ComandaModals";
 import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
-import { itensParaAComanda, linhasParaOCarrinho, type Comanda, type ItemDoCarrinho } from "@/utils/comanda";
+import { itensParaAComanda, linhasParaOCarrinho, nomeDaComanda, rotuloDaComanda, type Comanda, type ItemDoCarrinho } from "@/utils/comanda";
 import type { ComandaNoCarrinho } from "@/hooks/useCart";
 
 type ProdutoDoCatalogo = { id: string; price: number; cardPrice?: number | null };
@@ -47,27 +51,75 @@ export function useComandaNoCaixa(p: UseComandaNoCaixaParams) {
   const [showAdicionar, setShowAdicionar] = useState(false);
   const [showFechar, setShowFechar] = useState(false);
   const [lancando, setLancando] = useState(false);
+  // Painel das abertas (17/10, tc-02). Dele saem "Lançar mais" e "Cobrar",
+  // que abrem os modais de sempre já com o número da comanda escolhida.
+  const [showPainel, setShowPainel] = useState(false);
+  const [numeroParaLancar, setNumeroParaLancar] = useState<number | null>(null);
+  const [numeroParaCobrar, setNumeroParaCobrar] = useState<number | null>(null);
 
   function recarregarAbertas() {
     if (p.companyId) qc.invalidateQueries({ queryKey: chaveDasComandas(p.companyId) });
   }
 
+  // O carrinho largou a comanda (venda feita, cobrança cancelada): a
+  // contagem do botão "Comandas" tem que acompanhar.
+  const comandaId = p.comanda ? p.comanda.id : null;
+  const comandaAnterior = useRef<string | null>(comandaId);
+  useEffect(function () {
+    if (comandaAnterior.current && !comandaId) recarregarAbertas();
+    comandaAnterior.current = comandaId;
+  }, [comandaId]);
+
+  /** Pode mandar o carrinho para uma comanda? Senão avisa e diz não. */
+  function podeLancar(): boolean {
+    if (p.cart.length === 0) { toast.info("Adicione produtos antes de mandar para a comanda"); return false; }
+    if (p.comanda) { toast.info("Este carrinho já é a comanda " + rotuloDaComanda(p.comanda.number, p.comanda.name) + ". Finalize ou cancele a cobrança."); return false; }
+    return true;
+  }
+
   function abrirAdicionar() {
-    if (p.cart.length === 0) { toast.info("Adicione produtos antes de mandar para a comanda"); return; }
-    if (p.comanda) { toast.info("Este carrinho já é a comanda " + p.comanda.number + ". Finalize ou cancele a cobrança."); return; }
+    if (!podeLancar()) return;
+    setNumeroParaLancar(null);
     setShowAdicionar(true);
   }
 
-  function lancar(numero: number) {
+  /** "Lançar mais" do painel. Carrinho vazio (decisão do Caio, 17/10): fecha
+   *  o painel e lembra o caminho, sem estado novo. */
+  function lancarMais(c: { number: number }) {
+    if (p.cart.length === 0) {
+      setShowPainel(false);
+      toast.info("Adicione os produtos e toque em Adicionar à comanda");
+      return;
+    }
+    if (!podeLancar()) return;
+    setShowPainel(false);
+    setNumeroParaLancar(c.number);
+    setShowAdicionar(true);
+  }
+
+  /** "Cobrar" do painel: a conferência de sempre (taxa, imprimir, tirar
+   *  item), já com esta comanda. De lá o "Cobrar" chama `cobrar`. */
+  function cobrarDoPainel(c: { number: number }) {
+    setShowPainel(false);
+    setNumeroParaCobrar(c.number);
+    setShowFechar(true);
+  }
+
+  /** `nome` (17/10, tc-01) é opcional: vazio não manda nada e o nome que a
+   *  comanda já tinha fica. */
+  function lancar(numero: number, nome?: string) {
     if (!p.companyId || lancando) return;
     if (p.isDemo) { toast.info("Comandas não funcionam na conta de demonstração"); return; }
     const itens = itensParaAComanda(p.cart);
     if (itens.length === 0) return;
+    const n = nomeDaComanda(nome);
     setLancando(true);
-    comandaApi.addItems(p.companyId, numero, itens)
+    (n ? comandaApi.addItems(p.companyId, numero, itens, n) : comandaApi.addItems(p.companyId, numero, itens))
       .then(function (r) {
+        // backend antigo devolve sem name: o aviso fica só com o número
+        const rotulo = rotuloDaComanda(numero, r.comanda?.name);
         toast.success(
-          (r.opened ? "Comanda " + numero + " aberta" : "Lançado na comanda " + numero) +
+          (r.opened ? "Comanda " + rotulo + " aberta" : "Lançado na comanda " + rotulo) +
           " · total " + fmt(r.comanda.subtotal)
         );
         setShowAdicionar(false);
@@ -95,22 +147,24 @@ export function useComandaNoCaixa(p: UseComandaNoCaixaParams) {
       });
       p.setQty(l.key, l.qty);
     });
-    p.setComanda({ id: c.id, number: c.number, feePct: taxaPct });
+    p.setComanda({ id: c.id, number: c.number, feePct: taxaPct, ...(c.name ? { name: c.name } : {}) });
     setShowFechar(false);
-    toast.success("Comanda " + c.number + " no carrinho. Escolha o pagamento e finalize.");
+    toast.success("Comanda " + rotuloDaComanda(c.number, c.name) + " no carrinho. Escolha o pagamento e finalize.");
   }
 
   /** Desiste de cobrar: o carrinho sai, a comanda continua aberta. */
   function cancelarCobranca() {
-    const n = p.comanda?.number;
+    const c = p.comanda;
     p.limpar();
-    if (n != null) toast.info("A comanda " + n + " continua aberta");
+    if (c) toast.info("A comanda " + rotuloDaComanda(c.number, c.name) + " continua aberta");
   }
 
   return {
     enabled: p.enabled,
     showAdicionar, abrirAdicionar, fecharAdicionar: () => setShowAdicionar(false),
-    showFechar, abrirFechar: () => setShowFechar(true), fecharFechar: () => setShowFechar(false),
+    showFechar, abrirFechar: () => { setNumeroParaCobrar(null); setShowFechar(true); }, fecharFechar: () => setShowFechar(false),
+    showPainel, abrirPainel: () => setShowPainel(true), fecharPainel: () => setShowPainel(false),
+    numeroParaLancar, numeroParaCobrar, lancarMais, cobrarDoPainel,
     lancando, lancar, cobrar, cancelarCobranca, recarregarAbertas,
   };
 }
