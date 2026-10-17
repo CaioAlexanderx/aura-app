@@ -24,6 +24,7 @@ import { OpenCloseCashModal } from "@/components/screens/pdv/OpenCloseCashModal"
 import { CashChangeModal } from "@/components/screens/pdv/CashChangeModal";
 import { CreditInstallmentModal } from "@/components/screens/pdv/CreditInstallmentModal";
 import { AdicionarAComandaModal, FecharComandaModal } from "@/components/screens/pdv/ComandaModals";
+import { ComandasAbertasPanel } from "@/components/screens/pdv/ComandasAbertasPanel";
 import type { Comanda } from "@/utils/comanda";
 import type { Product } from "@/components/screens/estoque/types";
 
@@ -81,6 +82,13 @@ export interface PdvModalsProps {
     fecharFechar: () => void;
     cobrar: (comanda: Comanda, taxaPct: number) => void;
     recarregarAbertas: () => void;
+    // Painel das abertas (17/10/2026, tc-02).
+    showPainel: boolean;
+    fecharPainel: () => void;
+    numeroParaLancar: number | null;
+    numeroParaCobrar: number | null;
+    lancarMais: (c: { number: number }) => void;
+    cobrarDoPainel: (c: { number: number }) => void;
   };
   cartItemCount?: number;
   cartTotal?: number;
@@ -154,6 +162,7 @@ export function PdvModals({
             saving={comandas.lancando}
             onClose={comandas.fecharAdicionar}
             onConfirm={comandas.lancar}
+            numeroInicial={comandas.numeroParaLancar}
           />
           <FecharComandaModal
             visible={comandas.showFechar}
@@ -162,6 +171,15 @@ export function PdvModals({
             onClose={comandas.fecharFechar}
             onCobrar={comandas.cobrar}
             onMudou={comandas.recarregarAbertas}
+            numeroInicial={comandas.numeroParaCobrar}
+          />
+          <ComandasAbertasPanel
+            visible={comandas.showPainel}
+            companyId={companyId}
+            cartItemCount={cartItemCount || 0}
+            onClose={comandas.fecharPainel}
+            onCobrar={comandas.cobrarDoPainel}
+            onLancar={comandas.lancarMais}
           />
         </>
       )}

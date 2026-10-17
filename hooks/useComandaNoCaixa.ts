@@ -11,8 +11,12 @@
 //
 // Desistir de cobrar ("Cancelar" no aviso do carrinho) só limpa o carrinho:
 // a comanda continua aberta, do jeito que estava.
+//
+// 17/10/2026 (tc-02): o painel das abertas (ComandasAbertasPanel) entra por
+// "Comandas (N)" no rodapé. "Cobrar" dele abre a conferência já com a
+// comanda; "Lançar mais" abre o modal de lançar já com o número.
 // ============================================================
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/Toast";
 import { comandaApi } from "@/services/comandaApi";
@@ -47,15 +51,58 @@ export function useComandaNoCaixa(p: UseComandaNoCaixaParams) {
   const [showAdicionar, setShowAdicionar] = useState(false);
   const [showFechar, setShowFechar] = useState(false);
   const [lancando, setLancando] = useState(false);
+  // Painel das abertas (17/10, tc-02). Dele saem "Lançar mais" e "Cobrar",
+  // que abrem os modais de sempre já com o número da comanda escolhida.
+  const [showPainel, setShowPainel] = useState(false);
+  const [numeroParaLancar, setNumeroParaLancar] = useState<number | null>(null);
+  const [numeroParaCobrar, setNumeroParaCobrar] = useState<number | null>(null);
 
   function recarregarAbertas() {
     if (p.companyId) qc.invalidateQueries({ queryKey: chaveDasComandas(p.companyId) });
   }
 
+  // O carrinho largou a comanda (venda feita, cobrança cancelada): a
+  // contagem do botão "Comandas" tem que acompanhar.
+  const comandaId = p.comanda ? p.comanda.id : null;
+  const comandaAnterior = useRef<string | null>(comandaId);
+  useEffect(function () {
+    if (comandaAnterior.current && !comandaId) recarregarAbertas();
+    comandaAnterior.current = comandaId;
+  }, [comandaId]);
+
+  /** Pode mandar o carrinho para uma comanda? Senão avisa e diz não. */
+  function podeLancar(): boolean {
+    if (p.cart.length === 0) { toast.info("Adicione produtos antes de mandar para a comanda"); return false; }
+    if (p.comanda) { toast.info("Este carrinho já é a comanda " + rotuloDaComanda(p.comanda.number, p.comanda.name) + ". Finalize ou cancele a cobrança."); return false; }
+    return true;
+  }
+
   function abrirAdicionar() {
-    if (p.cart.length === 0) { toast.info("Adicione produtos antes de mandar para a comanda"); return; }
-    if (p.comanda) { toast.info("Este carrinho já é a comanda " + rotuloDaComanda(p.comanda.number, p.comanda.name) + ". Finalize ou cancele a cobrança."); return; }
+    if (!podeLancar()) return;
+    setNumeroParaLancar(null);
     setShowAdicionar(true);
+  }
+
+  /** "Lançar mais" do painel. Carrinho vazio (decisão do Caio, 17/10): fecha
+   *  o painel e lembra o caminho, sem estado novo. */
+  function lancarMais(c: { number: number }) {
+    if (p.cart.length === 0) {
+      setShowPainel(false);
+      toast.info("Adicione os produtos e toque em Adicionar à comanda");
+      return;
+    }
+    if (!podeLancar()) return;
+    setShowPainel(false);
+    setNumeroParaLancar(c.number);
+    setShowAdicionar(true);
+  }
+
+  /** "Cobrar" do painel: a conferência de sempre (taxa, imprimir, tirar
+   *  item), já com esta comanda. De lá o "Cobrar" chama `cobrar`. */
+  function cobrarDoPainel(c: { number: number }) {
+    setShowPainel(false);
+    setNumeroParaCobrar(c.number);
+    setShowFechar(true);
   }
 
   /** `nome` (17/10, tc-01) é opcional: vazio não manda nada e o nome que a
@@ -115,7 +162,9 @@ export function useComandaNoCaixa(p: UseComandaNoCaixaParams) {
   return {
     enabled: p.enabled,
     showAdicionar, abrirAdicionar, fecharAdicionar: () => setShowAdicionar(false),
-    showFechar, abrirFechar: () => setShowFechar(true), fecharFechar: () => setShowFechar(false),
+    showFechar, abrirFechar: () => { setNumeroParaCobrar(null); setShowFechar(true); }, fecharFechar: () => setShowFechar(false),
+    showPainel, abrirPainel: () => setShowPainel(true), fecharPainel: () => setShowPainel(false),
+    numeroParaLancar, numeroParaCobrar, lancarMais, cobrarDoPainel,
     lancando, lancar, cobrar, cancelarCobranca, recarregarAbertas,
   };
 }
