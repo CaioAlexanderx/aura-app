@@ -37,6 +37,7 @@ var mockBilling = {
   tokenize: jest.fn(),
   validateCoupon: jest.fn(),
   invoices: jest.fn(),
+  checkoutViewed: jest.fn(async () => ({ registrado: true })),
 };
 class MockApiError extends Error { data: any; constructor(m: string, data?: any) { super(m); this.data = data; } }
 jest.mock("@/services/api", () => ({ get billingApi() { return mockBilling; }, get ApiError() { return MockApiError; } }));
@@ -87,6 +88,15 @@ beforeEach(() => {
   mockBilling.status.mockResolvedValue({ billing_status: "trial", needs_cpf_cnpj: false, discount: null });
   mockBilling.promocaoAtiva.mockResolvedValue(PROMO);
   (global as any).fetch = jest.fn(async () => ({ json: async () => ({ erro: true }) }));
+});
+
+describe("Checkout — instrumentação (t2-04)", () => {
+  it("abrir a tela avisa o backend uma vez, mesmo com vários re-renders (status, promoção, quote)", async () => {
+    const tree = await mount();
+    expect(mockBilling.checkoutViewed).toHaveBeenCalledTimes(1);
+    expect(mockBilling.checkoutViewed).toHaveBeenCalledWith("emp-1");
+    tree.unmount();
+  });
 });
 
 describe("Checkout — aviso da promoção", () => {
