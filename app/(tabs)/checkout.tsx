@@ -11,6 +11,7 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { describeCoupon, discountInEffectText, DISCOUNT_LOSS_TEXT, pickOpenInvoice } from "@/components/billing/couponText";
 import { usePromocaoAtiva, limparPromocaoAtiva } from "@/hooks/usePromocaoAtiva";
+import { useCheckoutViewed } from "@/hooks/useCheckoutViewed";
 import { diaMes } from "@/utils/promocaoPrimeiroMes";
 import { totalDoCheckout, textoValorPorMes, ROTULO_VALOR_COMBINADO } from "@/utils/valorCombinado";
 
@@ -154,6 +155,9 @@ function allowedPlanKeys(company: any): string[] {
 export default function CheckoutScreen() {
   var params = useLocalSearchParams<{ plan?: string }>();
   var { company, hydrate, logout, trialActive, isDemo, isStaff } = useAuthStore();
+  // 17/10/2026 (t2-04): conta a abertura da tela (degrau "viu checkout" do
+  // painel). Demo e staff não contam; uma vez por abertura, mesmo com re-render.
+  useCheckoutViewed(isDemo || isStaff ? null : company?.id);
   var allowedPlans = allowedPlanKeys(company);
   var visiblePlans = PLANS.filter(function (p) { return allowedPlans.indexOf(p.key) >= 0; });
   var restrictedByVertical = visiblePlans.length < PLANS.length;

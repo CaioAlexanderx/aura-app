@@ -191,6 +191,12 @@ export type SeatPassContratado = {
 
 export var billingApi = {
   status: function(companyId: string) { return request<BillingStatusResponse>("/companies/" + companyId + "/billing/status"); },
+  // 17/10/2026 (t2-04) — a tela de checkout abriu (hooks/useCheckoutViewed).
+  // Backend: POST /billing/checkout-viewed grava audit_log 'checkout.viewed'
+  // (no máximo 1 por empresa a cada 24h, também durante o trial).
+  checkoutViewed: function(companyId: string) {
+    return request<{ registrado: boolean }>("/companies/" + companyId + "/billing/checkout-viewed", { method: "POST", body: {}, retry: 0 });
+  },
   tokenize: function(companyId: string, cardData: {
     card_number: string; card_expiry_month: string; card_expiry_year: string; card_ccv: string;
     holder_name: string; holder_cpf: string; holder_postal_code?: string; holder_address_number?: string; holder_address?: string;
