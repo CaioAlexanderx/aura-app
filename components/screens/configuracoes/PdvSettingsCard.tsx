@@ -266,7 +266,7 @@ export function PdvSettingsCard() {
       <View style={s.row}>
         <View style={{ flex: 1 }}>
           <Text style={s.rowLabel}>Comandas</Text>
-          <Text style={s.rowDesc}>Lança o consumo no número da comanda e cobra tudo no fim. No Caixa aparecem "Adicionar à comanda" e "Fechar comanda" (no lugar de Orçamento)</Text>
+          <Text style={s.rowDesc}>Lança o consumo no número da comanda e cobra tudo no fim. No Caixa aparecem "Adicionar à comanda" e "Comandas", com as abertas (no lugar de Orçamento)</Text>
         </View>
         <Switch
           testID="toggle-comandas"

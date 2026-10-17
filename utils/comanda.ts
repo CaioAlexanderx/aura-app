@@ -202,3 +202,69 @@ export function htmlDoConsumo(opts: { comanda: Comanda; loja: string; taxaPct: n
     "<div class=\"n\">Conferência de consumo. Não é documento fiscal.</div>" +
     "<script>window.onload=function(){window.print();}</script></body></html>";
 }
+
+// ── Painel das abertas (17/10/2026, tc-02) ───────────────────
+// O painel "Comandas" do Caixa lista todas as abertas com há quanto tempo
+// cada uma está aberta. As contas ficam aqui (testadas em
+// __tests__/comandasAbertasPainel.test.tsx).
+
+/** Daqui (minutos) em diante o tempo fica âmbar: quem ainda não pagou. Fixo
+ *  por decisão do Caio (17/10); vira configuração só se alguma loja pedir. */
+export const ALERTA_DA_COMANDA_MIN = 180;
+
+/** Minutos desde `opened_at`. Data inválida → null (o painel não mostra
+ *  tempo nem alerta). Relógio da máquina atrasado não dá tempo negativo. */
+export function minutosAberta(openedAt: string | null | undefined, agora: number): number | null {
+  if (!openedAt) return null;
+  const t = Date.parse(openedAt);
+  if (!isFinite(t)) return null;
+  return Math.max(0, Math.floor((agora - t) / 60000));
+}
+
+/** "agora", "há 18 min", "há 2h14", "há 3h", "há 2 dias". */
+export function tempoDaComanda(min: number | null): string {
+  if (min == null) return "";
+  if (min < 1) return "agora";
+  if (min < 60) return "há " + min + " min";
+  if (min >= 48 * 60) return "há " + Math.floor(min / 1440) + " dias";
+  const h = Math.floor(min / 60), m = min % 60;
+  return "há " + h + "h" + (m ? String(m).padStart(2, "0") : "");
+}
+
+export function comandaVelha(min: number | null): boolean {
+  return min != null && min >= ALERTA_DA_COMANDA_MIN;
+}
+
+export type OrdemDasComandas = "antigas" | "numero";
+
+type ParaOrdenar = { number: number; opened_at?: string | null };
+
+/** "antigas" (padrão): a aberta há mais tempo primeiro; sem data vai para o
+ *  fim. "numero": crescente. Não muda a lista recebida. */
+export function ordenarComandas<T extends ParaOrdenar>(lista: T[], ordem: OrdemDasComandas): T[] {
+  const copia = (lista || []).slice();
+  if (ordem === "numero") return copia.sort(function (a, b) { return a.number - b.number; });
+  return copia.sort(function (a, b) {
+    const ta = a.opened_at ? Date.parse(a.opened_at) : NaN;
+    const tb = b.opened_at ? Date.parse(b.opened_at) : NaN;
+    const va = isFinite(ta), vb = isFinite(tb);
+    if (va && vb && ta !== tb) return ta - tb;
+    if (va !== vb) return va ? -1 : 1;
+    return a.number - b.number;
+  });
+}
+
+function semAcento(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+/** Busca do painel: número que começa com o digitado ou nome que contém o
+ *  texto (sem diferença de acento nem de maiúscula). */
+export function filtrarComandas<T extends { number: number; name?: string | null }>(lista: T[], busca: string): T[] {
+  const q = semAcento(String(busca || "").trim());
+  if (!q) return lista;
+  return lista.filter(function (c) {
+    if (/^\d+$/.test(q) && String(c.number).startsWith(q)) return true;
+    return !!c.name && semAcento(c.name).includes(q);
+  });
+}

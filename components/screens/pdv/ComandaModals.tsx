@@ -94,10 +94,13 @@ type AdicionarProps = {
   onClose: () => void;
   /** `name` só vem quando o operador escreveu (ou manteve) um nome. */
   onConfirm: (number: number, name?: string) => void;
+  /** "Lançar mais" do painel das abertas (17/10, tc-02): o número já vem
+   *  preenchido (e o nome dela, pela lista das abertas). */
+  numeroInicial?: number | null;
 };
 
 export function AdicionarAComandaModal(props: AdicionarProps) {
-  const { visible, companyId, itemCount, total, saving, onClose, onConfirm } = props;
+  const { visible, companyId, itemCount, total, saving, onClose, onConfirm, numeroInicial } = props;
   const [texto, setTexto] = useState("");
   const [nome, setNome] = useState("");
   // O operador mexeu no nome? Então o nome da comanda escolhida não passa
@@ -109,7 +112,7 @@ export function AdicionarAComandaModal(props: AdicionarProps) {
 
   useEffect(function () {
     if (!visible) return;
-    setTexto(""); setNome(""); nomeTocado.current = false;
+    setTexto(numeroInicial ? String(numeroInicial) : ""); setNome(""); nomeTocado.current = false;
     const t = focar(inputRef);
     return function () { clearTimeout(t); };
   }, [visible]);
@@ -222,10 +225,13 @@ type FecharProps = {
   onCobrar: (comanda: Comanda, taxaPct: number) => void;
   /** Avisa o Caixa que a lista de abertas mudou (item tirado, cancelada). */
   onMudou?: () => void;
+  /** "Cobrar" do painel das abertas (17/10, tc-02): abre já buscando esta
+   *  comanda, direto na conferência. */
+  numeroInicial?: number | null;
 };
 
 export function FecharComandaModal(props: FecharProps) {
-  const { visible, companyId, loja, onClose, onCobrar, onMudou } = props;
+  const { visible, companyId, loja, onClose, onCobrar, onMudou, numeroInicial } = props;
   const [texto, setTexto] = useState("");
   const [comanda, setComanda] = useState<Comanda | null>(null);
   const [buscando, setBuscando] = useState(false);
@@ -243,6 +249,11 @@ export function FecharComandaModal(props: FecharProps) {
   useEffect(function () {
     if (!visible) return;
     setTexto(""); setComanda(null); setErro(null); setComTaxa(false); setConfirmaCancelar(false);
+    if (numeroInicial) {
+      setTexto(String(numeroInicial));
+      buscar(numeroInicial);
+      return;
+    }
     const t = focar(inputRef);
     return function () { clearTimeout(t); };
   }, [visible]);
