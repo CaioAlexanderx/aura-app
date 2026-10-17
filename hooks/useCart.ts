@@ -78,7 +78,27 @@ type VendaGuardada = {
   quoteId: string | null;
   comanda?: ComandaNoCarrinho | null;
   lotAllocations: Record<string, LotAllocation[]>;
+  /** 17/10/2026 (tq-15): a chave de idempotência da venda viaja junto —
+   *  duas abas com o mesmo carrinho restaurado mandam a MESMA chave.
+   *  Ausente em venda guardada antes disso (a aba fica com a sua). */
+  idempotencyKey?: string;
 };
+
+// 17/10/2026 (tq-15, Aura-backend#850): chave de idempotência da venda. Um
+// uuid por carrinho, enviado no cabeçalho Idempotency-Key do POST /pdv/sale.
+// Nasce com o carrinho, vai junto na venda guardada e só é renovada depois de
+// uma venda concluída (ou quando o servidor avisa que a chave já foi usada
+// com outros itens). Timeout seguido de nova tentativa, a repetição
+// automática do request() e a segunda aba mandam a mesma chave: o servidor
+// devolve a venda já registrada em vez de gravar outra.
+export function novaChaveDaVenda(): string {
+  try {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  } catch {}
+  // Sem crypto.randomUUID (nativo antigo): não criptográfica, mas única o
+  // bastante por empresa — e no formato que o backend aceita.
+  return "v" + Date.now().toString(36) + Math.random().toString(36).slice(2, 12) + Math.random().toString(36).slice(2, 12);
+}
 
 /** A comanda que este carrinho está cobrando (09/10/2026). `name` (17/10,
  *  tc-01) só para o aviso de cobrança; a venda leva apenas o id. */
@@ -259,6 +279,12 @@ export function useCart(
   const [splitMode, setSplitMode] = useState(false);
   const [splitPayments, setSplitPayments] = useState<PaymentEntry[]>([]);
 
+  // tq-15: a chave da venda em andamento (ver novaChaveDaVenda). O ref é o
+  // que o POST lê: o mesmo valor da tela no momento de finalizar.
+  const [chaveDaVenda, setChaveDaVenda] = useState<string>(novaChaveDaVenda);
+  const chaveDaVendaRef = useRef(chaveDaVenda);
+  chaveDaVendaRef.current = chaveDaVenda;
+
   // ── A venda em andamento sobrevive à troca de página (14/10/2026) ───
   // Antes (QA 23/09/2026) só a troca de tema guardava a venda. Agora ela é
   // gravada a cada mudança (debounce curto) e ao sair da tela, no
@@ -275,6 +301,7 @@ export function useCart(
     discountType, discountValue, cpfNaNota,
     splitMode, splitPayments,
     quoteId, comanda, lotAllocations,
+    idempotencyKey: chaveDaVenda,
   };
   const vendaRef = useRef<VendaGuardada | null>(vendaAtual);
   vendaRef.current = vendaAtual;
@@ -331,7 +358,7 @@ export function useCart(
     cart, payment, selectedCustomerId, selectedCustomerName, selectedCustomerPhone,
     selectedEmployeeId, selectedEmployeeName, sellerName, couponCode, couponApplied, couponRule,
     discountType, discountValue, cpfNaNota, splitMode, splitPayments, quoteId, comanda, lotAllocations,
-    isProcessing, companyId, usuarioId,
+    chaveDaVenda, isProcessing, companyId, usuarioId,
   ]);
 
   // Saiu da tela (trocou de página): leva o último estado, sem esperar o
@@ -386,6 +413,9 @@ export function useCart(
     setQuoteId(v.quoteId ?? null);
     setComanda(v.comanda && v.comanda.id ? v.comanda : null);
     setLotAllocationsMap(v.lotAllocations && typeof v.lotAllocations === "object" ? v.lotAllocations : {});
+    // tq-15: a venda restaurada continua com a chave dela (outra aba pode
+    // estar com o mesmo carrinho). Guardada antes disso: fica a desta aba.
+    if (typeof v.idempotencyKey === "string" && v.idempotencyKey) setChaveDaVenda(v.idempotencyKey);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, usuarioId]);
 
@@ -395,7 +425,7 @@ export function useCart(
   }, [cart.length]);
 
   const saleMutation = useMutation({
-    mutationFn: (body: any) => pdvApi.createSale(companyId!, body),
+    mutationFn: (body: any) => pdvApi.createSale(companyId!, body, { idempotencyKey: chaveDaVendaRef.current }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["products", companyId] });
       qc.invalidateQueries({ queryKey: ["dashboard", companyId] });
@@ -959,6 +989,8 @@ export function useCart(
           // recibo cai no UUID encurtado nesse caso.
           var saleNumber = typeof res?.sale?.sale_number === "number" ? res.sale.sale_number : null;
           setLastSale(buildLastSale(String(saleId), saleNumber, res?.sale, res?.matcon));
+          // tq-15: venda concluída — a próxima é outra venda, com outra chave.
+          setChaveDaVenda(novaChaveDaVenda());
           finalizandoRef.current = false;
           apagarGuarda();
           setCart([]); setQuoteId(null); setComanda(null); setReferredProfessionalId(null); clearLotAllocations(); toast.success("Venda registrada!"); setIsProcessing(false); clearCoupon(); clearDiscount();
@@ -974,6 +1006,11 @@ export function useCart(
           const errCode = err?.data?.code || err?.code;
           // 10/10/2026: os dois 422 do carnê escolhido para juntar a venda.
           const erroDoCarne = mensagemErroCarneDaVenda(errCode);
+          // tq-15: a chave deste carrinho já registrou uma venda com OUTROS
+          // itens (a aba velha que ficou com a chave e montou outra venda). A
+          // mensagem do servidor diz qual; a chave é trocada e o próximo
+          // "Finalizar" registra esta como venda nova.
+          if (errCode === "IDEMPOTENCY_KEY_REUSED") setChaveDaVenda(novaChaveDaVenda());
           if (errCode === "CREDIARIO_REQUIRES_CUSTOMER") {
             toast.error("Selecione um cliente antes de finalizar no crediário.");
           } else if (erroDoCarne) {
