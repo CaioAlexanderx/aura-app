@@ -13,6 +13,8 @@
 //   · linhasParaOCarrinho    — comanda → linhas do carrinho, com a taxa de
 //                              serviço como uma linha própria;
 //   · taxaDeServico          — 10% do consumo, em centavos certos;
+//   · nomeDaComanda /
+//     rotuloDaComanda        — o nome opcional (17/10, tc-01) e o "12 · João";
 //   · htmlDoConsumo          — o cupom de conferência (não é venda).
 // ============================================================
 
@@ -39,6 +41,22 @@ export function numeroDaComanda(texto: string | number | null | undefined): numb
   if (!/^\d{1,4}$/.test(s)) return null;
   const n = parseInt(s, 10);
   return n >= 1 && n <= 9999 ? n : null;
+}
+
+/** Até quantos caracteres vai o nome da comanda (o backend corta igual). */
+export const MAX_NOME_DA_COMANDA = 40;
+
+/** O nome digitado como o backend grava: aparado, espaços colapsados, até
+ *  40 caracteres. Vazio → "" (não manda nome). */
+export function nomeDaComanda(texto: string | null | undefined): string {
+  const s = String(texto == null ? "" : texto).replace(/\s+/g, " ").trim();
+  return Array.from(s).slice(0, MAX_NOME_DA_COMANDA).join("").trim();
+}
+
+/** "12" ou "12 · João" — como a comanda aparece nas fichas e nos avisos. */
+export function rotuloDaComanda(number: number, name?: string | null): string {
+  const n = nomeDaComanda(name);
+  return n ? number + " · " + n : String(number);
 }
 
 const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
@@ -88,6 +106,9 @@ export type ItemDaComanda = {
 export type Comanda = {
   id: string;
   number: number;
+  /** Nome opcional (17/10, tc-01; backend migration 389). Ausente/null =
+   *  só o número (backend antigo ou comanda aberta sem nome). */
+  name?: string | null;
   status: string;
   opened_at: string;
   items: ItemDaComanda[];
@@ -173,7 +194,7 @@ export function htmlDoConsumo(opts: { comanda: Comanda; loja: string; taxaPct: n
     "h1{font-size:15px;margin:0 0 2px;text-align:center}.c{text-align:center}.l{border-top:1px solid #000;margin:6px 0}" +
     "table{width:100%;border-collapse:collapse}td{padding:2px 0;vertical-align:top}.v{text-align:right;white-space:nowrap;padding-left:6px}" +
     ".t td{font-weight:700;font-size:14px;padding-top:4px}.n{font-size:10px;text-align:center;margin-top:8px}</style></head><body>" +
-    "<h1>" + esc(loja) + "</h1><div class=\"c\">COMANDA " + comanda.number + "</div><div class=\"c\">" + esc(quando) + "</div>" +
+    "<h1>" + esc(loja) + "</h1><div class=\"c\">COMANDA " + esc(rotuloDaComanda(comanda.number, comanda.name)) + "</div><div class=\"c\">" + esc(quando) + "</div>" +
     "<div class=\"l\"></div><table>" + linhas + "</table><div class=\"l\"></div><table>" +
     "<tr><td>Consumo</td><td class=\"v\">" + brl(comanda.subtotal) + "</td></tr>" +
     (taxa > 0 ? "<tr><td>Taxa de serviço (" + taxaPct + "%)</td><td class=\"v\">" + brl(taxa) + "</td></tr>" : "") +

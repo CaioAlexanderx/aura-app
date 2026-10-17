@@ -101,6 +101,7 @@ import { DiscountSection } from "./DiscountSection";
 import { CalculadoraAmbiente } from "@/components/matcon/CalculadoraAmbiente";
 import { LoteDoItem } from "@/components/matcon/LotePicker";
 import type { LotAllocation } from "@/services/matconApi";
+import { rotuloDaComanda } from "@/utils/comanda";
 
 export type CartDisplayItem = {
   productId: string;
@@ -192,7 +193,7 @@ type Props = {
   comanda?: {
     onAdd: () => void;
     onClose: () => void;
-    charging: { number: number; feePct: number; onCancel: () => void } | null;
+    charging: { number: number; name?: string | null; feePct: number; onCancel: () => void } | null;
   } | null;
   discountLabel?: string | null;
   /** Desconto manual editável. Opcional para preservar os usos legados do painel. */
@@ -670,7 +671,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           <View style={s.quoteCard} testID="comanda-cobrando">
             <View style={s.quoteCardHead}>
               <Text style={s.quoteCardTitle} numberOfLines={1}>
-                Cobrando a comanda {comanda.charging.number}
+                Cobrando a comanda {rotuloDaComanda(comanda.charging.number, comanda.charging.name)}
               </Text>
               <Pressable onPress={comanda.charging.onCancel} style={s.quoteCardGhostBtn} testID="comanda-cancelar-cobranca">
                 <Text style={s.quoteCardGhostTxt} numberOfLines={1}>Cancelar</Text>
