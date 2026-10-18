@@ -113,6 +113,10 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   // SO com Matcon ligado — restricao do Caio (loja sem Matcon, incl. kg/L,
   // mantem o padrao de sempre = estoque).
   var matconEnabled = readMatconSettings(pdvSettings).matcon_enabled;
+  // 18/10/2026 (card f1-16): desenho da etiqueta escolhido em Configuracoes
+  // (pdv_settings.label_design). null/ausente = o padrao do modelo — o
+  // buildLabelHtml sai byte a byte como antes da opcao.
+  var labelDesign = pdvSettings.label_design;
   var [mode, setMode] = useState<"barcode" | "qr">("barcode");
   var [labelSize, setLabelSizeState] = useState<LabelSizeKey>(loadStoredLabelSize);
   var labelPreset = LABEL_SIZE_PRESETS[labelSize];
@@ -499,7 +503,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   function doPrint(items: LabelItem[], medida?: CustomLabelSpec) {
     // So um spec de verdade (nunca o evento de um onPress repassado).
     var cOpts = medida && typeof medida === "object" && typeof (medida as any).larguraMm === "number" ? { customSpec: medida } : customOpts;
-    var html = buildLabelHtml(items, { mode: mode, storeName: storeName, showStoreName: showStoreName, labelSize: labelSize, offsetMm: labelOffsetMm, ...printerOpts, ...cOpts });
+    var html = buildLabelHtml(items, { mode: mode, storeName: storeName, showStoreName: showStoreName, labelSize: labelSize, offsetMm: labelOffsetMm, design: labelDesign, ...printerOpts, ...cOpts });
     abrirImpressao(html, totalLabels + " etiqueta(s) abertas para impressão");
   }
 
@@ -507,7 +511,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
   // pra acertar a impressora gastando 1 ou 2 linhas em vez de um rolo.
   function handleTestPrint(rows: number) {
     if (!isWeb) return;
-    var html = buildLabelTestHtml({ mode: mode, storeName: storeName, showStoreName: showStoreName, labelSize: labelSize, offsetMm: labelOffsetMm, ...printerOpts, rows: rows });
+    var html = buildLabelTestHtml({ mode: mode, storeName: storeName, showStoreName: showStoreName, labelSize: labelSize, offsetMm: labelOffsetMm, design: labelDesign, ...printerOpts, rows: rows });
     abrirImpressao(html, (rows > 1 ? rows + " linhas" : "Linha") + " de teste aberta" + (rows > 1 ? "s" : "") + " para impressão");
   }
 
@@ -595,7 +599,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
     var shown = items.map(function(item) {
       return isValidEAN13(item.barcode) ? item : { ...item, barcode: generateEAN13(item.barcode || item.name) };
     });
-    var opts = { mode: mode, storeName: storeName, showStoreName: showStoreName, labelSize: labelSize, offsetMm: labelOffsetMm, ...printerOpts, ...customOpts };
+    var opts = { mode: mode, storeName: storeName, showStoreName: showStoreName, labelSize: labelSize, offsetMm: labelOffsetMm, design: labelDesign, ...printerOpts, ...customOpts };
     var geo = labelPreviewGeometry(shown, opts);
     setPreview({ html: buildLabelPreviewHtml(shown, opts), widthMm: geo.widthMm, heightMm: geo.heightMm, labels: geo.labels });
   }
