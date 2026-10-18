@@ -149,6 +149,35 @@ describe("adaptarDetalhe", () => {
     expect(adaptarDetalhe("adocao", fx("blocos.adocao")).indicadores[0].nota).toBeUndefined();   // null some
   });
 
+  it("telas visitadas: entrada e retorno por tela, o total de visitas intacto e o aviso de desde quando", () => {
+    const d = adaptarDetalhe("telas_visitadas", fx("blocos.telas_visitadas"));
+    const porTela = d.listas[0];
+    expect(porTela.colunas).toEqual([
+      "Tela", "Lojas 7d", "Lojas 30d", "Visitas 30d", "Entrada", "Retorno",
+    ]);
+    // pdv: 735 visitas no período; destas, 5 foram a 1ª tela depois do login e 245 retornos (desde 17/10)
+    expect(porTela.linhas[0]).toEqual(["pdv", 2, 2, 735, 5, 245]);
+    const porLoja = d.listas[1];
+    expect(porLoja.colunas).toEqual(["Tela", "Loja", "Visitas", "Entrada", "Retorno", "Última visita"]);
+    expect(porLoja.linhas.find((l) => l[0] === "pdv")!.slice(2, 5)).toEqual([640, 4, 206]);
+    expect(d.indicadores.map((i) => [i.rotulo, i.valor, i.nota])).toContainEqual(["Entradas (após login)", "5", "desde 17/10"]);
+    expect(d.indicadores.map((i) => [i.rotulo, i.valor])).toContainEqual(["Visitas", "760"]);
+    // série própria de entrada x retorno, com o texto pronto na barra
+    expect(d.series[1].titulo).toBe("Entrada e retorno por tela · desde 17/10");
+    expect(d.series[1].pontos[0]).toMatchObject({ rotulo: "pdv", valor: 250, texto: "5 entrada · 245 retorno" });
+    // a primeira série segue como era: lojas por tela, com as visitas totais no texto
+    expect(d.series[0].pontos[0]).toMatchObject({ rotulo: "pdv", valor: 2, texto: "2 lojas · 735 vis." });
+    // o bloco diz desde quando a separação vale
+    expect(d.insight!.texto).toContain("desde 17/10");
+  });
+
+  it("telas visitadas sem a marca (backend antes da migration 391): entrada e retorno viram traço, não zero", () => {
+    const cru = fx("blocos.telas_visitadas");
+    for (const l of cru.listas[0].linhas) { l.entrada_periodo = null; l.retorno_periodo = null; }
+    const d = adaptarDetalhe("telas_visitadas", cru);
+    expect(d.listas[0].linhas[0]).toEqual(["pdv", 2, 2, 735, "—", "—"]);
+  });
+
   it("listas: células por tipo de coluna", () => {
     const cred = adaptarDetalhe("crediario", fx("blocos.crediario")).listas[0];
     expect(cred.colunas).toEqual(["Loja", "Parcelas", "Clientes", "Valor", "Mais antiga"]);

@@ -23,11 +23,21 @@
       "rotulo": "Visitas",
       "valor": 760,
       "nota": "30 dias"
+    },
+    {
+      "rotulo": "Entradas (após login)",
+      "valor": 5,
+      "nota": "desde 17/10"
+    },
+    {
+      "rotulo": "Retornos",
+      "valor": 251,
+      "nota": "desde 17/10"
     }
   ],
   "listas": [
     {
-      "titulo": "Por tela",
+      "titulo": "Por tela · entrada e retorno desde 17/10",
       "colunas": [
         {
           "chave": "tela",
@@ -48,6 +58,16 @@
           "chave": "visitas_periodo",
           "rotulo": "Visitas 30d",
           "tipo": "numero"
+        },
+        {
+          "chave": "entrada_periodo",
+          "rotulo": "Entrada",
+          "tipo": "numero"
+        },
+        {
+          "chave": "retorno_periodo",
+          "rotulo": "Retorno",
+          "tipo": "numero"
         }
       ],
       "linhas": [
@@ -57,6 +77,8 @@
           "lojas_periodo": 2,
           "visitas_7d": 250,
           "visitas_periodo": 735,
+          "entrada_periodo": 5,
+          "retorno_periodo": 245,
           "lojas": [
             {
               "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
@@ -74,6 +96,8 @@
           "lojas_periodo": 1,
           "visitas_7d": 6,
           "visitas_periodo": 22,
+          "entrada_periodo": 0,
+          "retorno_periodo": 6,
           "lojas": [
             {
               "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
@@ -87,6 +111,8 @@
           "lojas_periodo": 1,
           "visitas_7d": 0,
           "visitas_periodo": 3,
+          "entrada_periodo": 0,
+          "retorno_periodo": 0,
           "lojas": [
             {
               "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
@@ -97,7 +123,7 @@
       ]
     },
     {
-      "titulo": "Lojas por tela",
+      "titulo": "Lojas por tela · entrada e retorno desde 17/10",
       "colunas": [
         {
           "chave": "tela",
@@ -115,6 +141,16 @@
           "tipo": "numero"
         },
         {
+          "chave": "entrada",
+          "rotulo": "Entrada",
+          "tipo": "numero"
+        },
+        {
+          "chave": "retorno",
+          "rotulo": "Retorno",
+          "tipo": "numero"
+        },
+        {
           "chave": "ultima_visita",
           "rotulo": "Última visita",
           "tipo": "data"
@@ -127,6 +163,8 @@
           "nome": "Casa do Construtor",
           "telefone": "11999900003",
           "visitas": 3,
+          "entrada": 0,
+          "retorno": 0,
           "ultima_visita": "2026-10-02"
         },
         {
@@ -135,6 +173,8 @@
           "nome": "Mercado Bela Vista",
           "telefone": "11999900002",
           "visitas": 640,
+          "entrada": 4,
+          "retorno": 206,
           "ultima_visita": "2026-10-13"
         },
         {
@@ -143,6 +183,8 @@
           "nome": "Papelaria Sol",
           "telefone": "11999900008",
           "visitas": 95,
+          "entrada": 1,
+          "retorno": 39,
           "ultima_visita": "2026-10-12"
         },
         {
@@ -151,6 +193,8 @@
           "nome": "Mercado Bela Vista",
           "telefone": "11999900002",
           "visitas": 22,
+          "entrada": 0,
+          "retorno": 6,
           "ultima_visita": "2026-10-12"
         }
       ]
@@ -164,20 +208,42 @@
         {
           "rotulo": "pdv",
           "valor": 2,
-          "visitas": 735
+          "visitas": 735,
+          "entrada": 5,
+          "retorno": 245
         },
         {
           "rotulo": "relatorios",
           "valor": 1,
-          "visitas": 22
+          "visitas": 22,
+          "entrada": 0,
+          "retorno": 6
         },
         {
           "rotulo": "etiquetas",
           "valor": 1,
-          "visitas": 3
+          "visitas": 3,
+          "entrada": 0,
+          "retorno": 0
+        }
+      ]
+    },
+    {
+      "titulo": "Entrada e retorno por tela · desde 17/10",
+      "tipo": "barras_h",
+      "pontos": [
+        {
+          "rotulo": "pdv",
+          "valor": 250,
+          "texto": "5 entrada · 245 retorno"
+        },
+        {
+          "rotulo": "relatorios",
+          "valor": 6,
+          "texto": "0 entrada · 6 retorno"
         }
       ]
     }
   ],
-  "insight": null
+  "insight": "Entrada é a primeira tela aberta logo depois de entrar (quase sempre o Painel); retorno é o usuário abrir a tela de novo. Entrada e retorno contam desde 17/10 (a marca passou a ser gravada às 20h10 desse dia); antes disso só existe o total de visitas."
 }

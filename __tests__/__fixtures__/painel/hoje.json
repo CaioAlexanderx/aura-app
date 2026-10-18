@@ -630,17 +630,23 @@
         {
           "rotulo": "pdv",
           "valor": 2,
-          "visitas": 735
+          "visitas": 735,
+          "entrada": 5,
+          "retorno": 245
         },
         {
           "rotulo": "relatorios",
           "valor": 1,
-          "visitas": 22
+          "visitas": 22,
+          "entrada": 0,
+          "retorno": 6
         },
         {
           "rotulo": "etiquetas",
           "valor": 1,
-          "visitas": 3
+          "visitas": 3,
+          "entrada": 0,
+          "retorno": 0
         }
       ],
       "resumo": "3 lojas enviaram navegação · mais vista: pdv",
