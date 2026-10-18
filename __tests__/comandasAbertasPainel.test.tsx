@@ -181,6 +181,14 @@ describe("ComandasAbertasPanel", () => {
     expect(porId(tree, "painel-comandas-sem-resultado")).toBeTruthy();
   });
 
+  it("placeholder da busca: completo na gaveta, curto no celular (375 px não corta)", () => {
+    const desk = montarPainel();
+    expect(porId(desk.tree, "painel-comandas-busca").props.placeholder).toBe("Buscar por número ou nome");
+    mockLargura = 375;
+    const cel = montarPainel();
+    expect(porId(cel.tree, "painel-comandas-busca").props.placeholder).toBe("Número ou nome");
+  });
+
   it("nenhuma aberta: mostra o caminho e esconde busca e ordem", () => {
     mockAbertas = [];
     const { tree } = montarPainel();
