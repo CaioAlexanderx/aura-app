@@ -28,6 +28,7 @@ import { BarcodeQRSection } from "@/components/BarcodeQRSection";
 import { suggestNcm, formatNcmDisplay, ncmFamilyByCode, getNcmStatus } from "@/utils/ncm";
 import { suggestCest, getCestStatus, formatCestDisplay, cestFamilyByCode, isStLikely } from "@/utils/cest";
 import { Campo, Entrada, MiniBtn, Nota, Secao, s } from "./ui";
+import { AvisoDeNcm } from "./AvisoDeNcm";
 import { gerarSku, nomeDoTipo, statusCodigos, type CorDoItem, type ItemType, type Selo } from "./types";
 import { PERFIL_PADRAO, exemploDeCodigo, type PerfilDoCadastro } from "./perfis";
 
@@ -148,6 +149,7 @@ export function SecaoCodigos(p: Props) {
           )}
           {ncmStatus === "valid" && <Text style={{ color: Colors.green }}>{"✓ " + ncmFamilia}</Text>}
         </Text>
+        <AvisoDeNcm ncm={p.ncm} />
       </Campo>
     </Secao>
   );
@@ -283,6 +285,7 @@ export function SecaoNotaFiscal(p: PropsDaNota) {
           </Text>
         ) : null}
         {ncmStatus === "valid" ? <Text style={[s.hint, { color: Colors.green }]}>{"✓ " + ncmFamilia}</Text> : null}
+        <AvisoDeNcm ncm={p.ncm} />
       </Pergunta>
 
       <Pergunta n={2} titulo="Código do imposto antecipado (CEST)" descricao="7 números. Cimento, tinta, fio, cano e piso quase sempre têm.">
