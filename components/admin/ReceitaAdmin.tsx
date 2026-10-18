@@ -9,7 +9,7 @@ var fmt = function(n: number) { return "R$ " + n.toFixed(2).replace(".", ",").re
 var fmtK = function(n: number) { return n >= 1000 ? "R$ " + (n/1000).toFixed(1).replace(".",",") + "k" : fmt(n); };
 
 type Waterfall = { previous_mrr: number; current_mrr: number; new_mrr: number; expansion_mrr: number; churn_mrr: number; contraction_mrr: number; net_change: number; net_revenue_retention: number };
-type UnitEcon = { paying_clients: number; mrr: number; arpu: number; churn: { rate_pct: number; count_3m: number }; ltv: { value: number; months: number }; cac: { value: number }; ltv_cac_ratio: number | null; costs: { total: number; breakdown: { category: string; amount: number }[] }; margin: { gross: number; pct: number } };
+type UnitEcon = { paying_clients: number; mrr: number; arpu: number; churn: { rate_pct: number; count_3m: number }; ltv: { value: number; months: number }; cac: { value: number | null }; ltv_cac_ratio: number | null; costs: { total: number | null; lancado?: boolean; rotulo?: string | null; breakdown: { category: string; label?: string; amount: number }[] }; margin: { gross: number | null; pct: number | null } };
 type Forecast = { current_mrr: number; growth_rate_pct: number; projections: { month: number; mrr: number; arr: number }[]; milestones: { mrr_1k: number | null; mrr_5k: number | null; mrr_10k: number | null } };
 type TrendItem = { month: string; mrr_total: number; mrr_essencial: number; mrr_negocio: number; mrr_expansao: number; clients_total: number };
 
@@ -54,7 +54,7 @@ export function ReceitaAdmin() {
         <View style={s.econGrid}>
           <EconCard label="ARPU" value={fmt(u.arpu)} sub="por cliente" />
           <EconCard label="LTV" value={fmtK(u.ltv.value)} sub={u.ltv.months + " meses"} />
-          <EconCard label="CAC" value={u.cac.value > 0 ? fmt(u.cac.value) : "N/A"} sub={u.cac.value > 0 ? "por aquisição" : "Sem marketing"} />
+          <EconCard label="CAC" value={u.cac.value != null && u.cac.value > 0 ? fmt(u.cac.value) : "N/A"} sub={u.cac.value != null && u.cac.value > 0 ? "por aquisição" : u.cac.value == null ? "sem custo lançado" : "Sem marketing"} />
           <EconCard label="LTV/CAC" value={u.ltv_cac_ratio ? u.ltv_cac_ratio + "x" : "N/A"} sub={u.ltv_cac_ratio && u.ltv_cac_ratio >= 3 ? "Saudavel" : u.ltv_cac_ratio ? "Abaixo de 3x" : ""} color={u.ltv_cac_ratio && u.ltv_cac_ratio >= 3 ? Colors.green : Colors.amber} />
         </View>
       </View>
@@ -65,26 +65,26 @@ export function ReceitaAdmin() {
         <View style={s.costsRow}>
           <View style={s.costTotal}>
             <Text style={s.costTotalLabel}>Total custos</Text>
-            <Text style={s.costTotalVal}>{fmt(u.costs.total)}</Text>
+            <Text style={s.costTotalVal}>{u.costs.total == null ? "sem custo lançado" : fmt(u.costs.total)}</Text>
           </View>
           <View style={s.costTotal}>
             <Text style={s.costTotalLabel}>Margem bruta</Text>
-            <Text style={[s.costTotalVal, { color: u.margin.pct >= 60 ? Colors.green : Colors.amber }]}>{u.margin.pct}%</Text>
+            <Text style={[s.costTotalVal, { color: u.margin.pct == null ? Colors.ink3 : u.margin.pct >= 60 ? Colors.green : Colors.amber }]}>{u.margin.pct == null ? "—" : u.margin.pct + "%"}</Text>
           </View>
           <View style={s.costTotal}>
             <Text style={s.costTotalLabel}>Lucro bruto</Text>
-            <Text style={[s.costTotalVal, { color: u.margin.gross >= 0 ? Colors.green : Colors.red }]}>{fmtK(u.margin.gross)}</Text>
+            <Text style={[s.costTotalVal, { color: u.margin.gross == null ? Colors.ink3 : u.margin.gross >= 0 ? Colors.green : Colors.red }]}>{u.margin.gross == null ? "—" : fmtK(u.margin.gross)}</Text>
           </View>
         </View>
         {u.costs.breakdown.length > 0 && (
           <View style={s.costBreakdown}>
             {u.costs.breakdown.map(function(c) {
-              var pct = u.costs.total > 0 ? Math.round((c.amount / u.costs.total) * 100) : 0;
+              var pct = u.costs.total != null && u.costs.total > 0 ? Math.round((c.amount / u.costs.total) * 100) : 0;
               var color = CATEGORY_COLORS[c.category] || Colors.ink3;
               return (
                 <View key={c.category} style={s.costItem}>
                   <View style={[s.costDot, { backgroundColor: color }]} />
-                  <Text style={s.costName}>{CATEGORY_LABELS[c.category] || c.category}</Text>
+                  <Text style={s.costName}>{CATEGORY_LABELS[c.category] || c.label || c.category}</Text>
                   <View style={{ flex: 1 }} />
                   <Text style={s.costVal}>{fmt(c.amount)}</Text>
                   <Text style={s.costPct}>{pct}%</Text>
@@ -93,7 +93,7 @@ export function ReceitaAdmin() {
             })}
           </View>
         )}
-        {u.costs.breakdown.length === 0 && <Text style={s.noCosts}>Nenhum custo registrado este mês. Use POST /admin/costs para registrar.</Text>}
+        {u.costs.breakdown.length === 0 && <Text style={s.noCosts}>{u.costs.total == null ? "Mês sem custo lançado. Lance em Painel, Lançar custo do mês." : "Nenhum custo registrado este mês."}</Text>}
       </View>
 
       {/* MRR Trend */}
