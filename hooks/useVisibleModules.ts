@@ -144,6 +144,13 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   // ainda NAO conhece a chave: PUT de override volta 400, entao ela fica fora
   // do catalogo do ClientsAdmin por ora (mesmo caso de "os" e "cupons").
   'onboarding.checkin': 'essencial',
+  // 18/10/2026 -- Oferta "vamos configurar juntos" (components/onboarding/
+  // ConfigurarJuntosCard.tsx, card f2-04): cartao no Painel, logo abaixo dos
+  // primeiros passos. Nao e tela nem item de menu: chave PROPRIA (regra 3)
+  // para poder ser escondida por empresa e por permissao. Essencial: quem
+  // acabou de se cadastrar. O backend (services/modules.js) ainda NAO conhece
+  // a chave (mesmo caso de 'onboarding.checkin').
+  'onboarding.configurar_juntos': 'essencial',
 };
 var PLAN_LEVEL: Record<string, number> = { essencial: 0, negocio: 1, expansao: 2 };
 
@@ -181,7 +188,9 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   // ve (o filtro de permissao so vale para membro).
   // 14/10/2026 -- o check-in de entrada acompanha quem monta a loja
   // (dono/admin), como os primeiros passos: vendedora/caixa nao e perguntada.
-  configuracoes: ['configuracoes', 'onboarding.primeiros_passos', 'onboarding.checkin', 'black_friday'],
+  // 18/10/2026 -- a oferta de configurar junto acompanha quem monta a loja
+  // (dono/admin), como os primeiros passos e o check-in.
+  configuracoes: ['configuracoes', 'onboarding.primeiros_passos', 'onboarding.checkin', 'onboarding.configurar_juntos', 'black_friday'],
   // 15/05/2026 -- agentes adicionado; sem isso nao-owners nunca veiam mesmo com plano Expansao.
   // 30/08/2026 -- hub_social entra na mesma permissao: quem atende (agentes)
   // ve o hub. Granularidade propria fica pra quando o produto pedir.

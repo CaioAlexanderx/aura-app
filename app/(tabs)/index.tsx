@@ -34,6 +34,7 @@ import { DashboardEmptyState } from "@/components/screens/dashboard/DashboardEmp
 import { ConsolidatedBreakdownCard } from "@/components/screens/dashboard/ConsolidatedBreakdownCard";
 import { CalendarioComercialCard } from "@/components/screens/dashboard/CalendarioComercialCard";
 import { PrimeirosPassosCard } from "@/components/onboarding/PrimeirosPassosCard";
+import { ConfigurarJuntosCard } from "@/components/onboarding/ConfigurarJuntosCard";
 
 var FALLBACK_ROUTES: { mod: string; route: string }[] = [
   { mod: "pdv", route: "/pdv" },
@@ -282,6 +283,10 @@ export default function DashboardScreen() {
             (não é modal nem banner flutuante). Some sozinho na visão
             consolidada, sem frente, dispensado ou com tudo feito. */}
         {!isDemo && !consolidatedView && <PrimeirosPassosCard />}
+        {/* 18/10/2026 (f2-04): oferta de 20 minutos "configurar junto" pelo
+            WhatsApp, cartão no fluxo logo abaixo dos primeiros passos. O
+            servidor decide se aparece (cadastro novo, sem assinatura). */}
+        {!isDemo && !consolidatedView && <ConfigurarJuntosCard />}
 
         {isLoading && !isDemo && <SkeletonDashboard />}
         {isEmpty && <DashboardEmptyState name={firstName} data={d} onPress={go} />}
