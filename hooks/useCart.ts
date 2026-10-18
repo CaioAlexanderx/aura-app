@@ -660,6 +660,19 @@ export function useCart(
     });
   }
 
+  // 17/10/2026 (tc-04, "Dividir a conta" da comanda): o dividido já nasce
+  // com uma parte por pessoa. É o mesmo dividido de sempre — o operador
+  // ainda pode trocar forma ou valor no carrinho, e a venda só sai quando
+  // a soma fecha (finalizeSale).
+  function dividirPagamento(partes: PaymentEntry[]) {
+    const entradas = (partes || [])
+      .filter(p => p && p.method && (Number(p.value) || 0) > 0)
+      .map(p => ({ method: p.method, value: round2(p.value) }));
+    if (entradas.length === 0) return;
+    setSplitMode(true);
+    setSplitPayments(entradas);
+  }
+
   // ── Cart ops ────────────────────────────────────────────────
 
   // 22/09/2026 (Matcon M0): os 3 campos novos do produto são opcionais no
@@ -1079,7 +1092,7 @@ export function useCart(
     discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
     cpfNaNota, setCpfNaNota,
     // Multi-pagamento
-    splitMode, toggleSplitMode,
+    splitMode, toggleSplitMode, dividirPagamento,
     splitPayments: splitPaymentsVista, addSplitPayment, updateSplitPayment, removeSplitPayment, clearSplitPayments,
     splitTotal, splitRemaining, splitIsBalanced,
     // Preço no cartão: a conta do dividido numa frase só, nas duas línguas
