@@ -149,6 +149,26 @@ describe("adaptarDetalhe", () => {
     expect(adaptarDetalhe("adocao", fx("blocos.adocao")).indicadores[0].nota).toBeUndefined();   // null some
   });
 
+  it("uso por funcionalidade: Ótica, Matcon, Agenda e Cupons com número; Etiquetas 'sem medida' em vez de zero", () => {
+    const d = adaptarDetalhe("uso_funcionalidade", fx("blocos.uso_funcionalidade"));
+    const porModulo = d.listas[0];
+    expect(porModulo.colunas).toEqual(["Módulo", "Lojas 7d", "Lojas 30d", "Eventos 30d", "Já usaram"]);
+    const linha = (rotulo: string) => porModulo.linhas.find((l) => l[0] === rotulo)!;
+    expect(linha("Ótica")).toEqual(["Ótica", 1, 1, 7, 1]);              // OS de ótica + receitas
+    expect(linha("Parceiros Matcon")).toEqual(["Parceiros Matcon", 1, 1, 3, 1]);
+    expect(linha("Cupons")).toEqual(["Cupons", 2, 2, 10, 2]);
+    expect(linha("Entregas Matcon")).toBeDefined();
+    expect(linha("Agenda")).toEqual(["Agenda", 1, 1, 12, 2]);
+    // Etiquetas não tem fonte no banco: o aviso na primeira coluna de número, traço nas outras, nada de 0
+    expect(linha("Etiquetas")).toEqual(["Etiquetas", "sem medida", "—", "—", "—"]);
+    expect(d.indicadores.map((i) => [i.rotulo, i.valor, i.nota])).toContainEqual(["Sem medida", "1", "Etiquetas"]);
+    expect(d.insight!.texto).toContain("Etiquetas está sem medida");
+    // e a linha 'sem_medida' só vale quando o número vem nulo: um valor real nunca é trocado pelo aviso
+    const cru = fx("blocos.uso_funcionalidade");
+    cru.listas[0].linhas.find((l: any) => l.modulo === "etiquetas").lojas_periodo = 3;
+    expect(adaptarDetalhe("uso_funcionalidade", cru).listas[0].linhas.find((l) => l[0] === "Etiquetas")).toEqual(["Etiquetas", "sem medida", 3, "—", "—"]);
+  });
+
   it("telas visitadas: entrada e retorno por tela, o total de visitas intacto e o aviso de desde quando", () => {
     const d = adaptarDetalhe("telas_visitadas", fx("blocos.telas_visitadas"));
     const porTela = d.listas[0];
@@ -214,7 +234,7 @@ describe("adaptarDetalhe", () => {
     expect(contatos.linhas[5][7]).toMatchObject({ texto: "Novo", tom: "alerta" });
 
     const adocao = adaptarDetalhe("adocao", fx("blocos.adocao")).listas[1];
-    expect(adocao.linhas.length).toBe(80);
+    expect(adocao.linhas.length).toBe(105);   // 21 recursos x 5 pagantes
     expect(adocao.linhas[0][2]).toMatchObject({ texto: "Sim", etiqueta: true });
 
     const receita = adaptarDetalhe("receita", fx("blocos.receita")).listas;

@@ -260,13 +260,24 @@ function celulaDe(col: PainelApiLista["colunas"][0], row: Record<string, any>): 
   }
 }
 
+// Funcionalidade que o painel não consegue medir (Etiquetas no Uso por
+// funcionalidade, Aura-backend t3-01): a linha vem com `sem_medida: true` e os
+// números nulos. A primeira coluna numérica diz "sem medida"; as outras ficam
+// em traço. Zero afirmaria que ninguém usa.
+var TEXTO_SEM_MEDIDA = "sem medida";
+
 function adaptarLista(l: PainelApiLista): Lista {
+  var primeiraNumerica = -1;
+  l.colunas.forEach(function(c, i) { if (primeiraNumerica < 0 && c.tipo === "numero") primeiraNumerica = i; });
   return {
     titulo: l.titulo,
     colunas: l.colunas.map(function(c) { return c.rotulo; }),
     linhas: l.linhas.map(function(row) {
-      return l.colunas.map(function(c) {
+      return l.colunas.map(function(c, ci) {
         var cel = celulaDe(c, row);
+        if (row.sem_medida === true && c.tipo === "numero" && row[c.chave] == null) {
+          return ci === primeiraNumerica ? TEXTO_SEM_MEDIDA : "—";
+        }
         // Contato do WhatsApp (Aura-backend#815): o nome abre a conversa (sem
         // nome, vale o telefone mascarado) e a empresa abre a ficha da loja.
         if (row.conversa_id) {

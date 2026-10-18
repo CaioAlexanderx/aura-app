@@ -261,6 +261,18 @@ describe("Gestão Aura › Hoje", () => {
     tree.unmount();
   });
 
+  it("Uso por funcionalidade: Ótica, Matcon, Agenda e Cupons com número; Etiquetas aparece 'sem medida', não zero", async () => {
+    const tree = await mount();
+    await press(tree, "bloco-expandir-uso_funcionalidade");
+    const out = text(tree);
+    for (const rotulo of ["Ótica", "Entregas Matcon", "Parceiros Matcon", "Agenda", "Cupons", "Etiquetas"]) expect(out).toContain(rotulo);
+    expect(out).toContain("sem medida");
+    // indicador e insight dizem a mesma coisa
+    expect(out).toContain("Sem medida");
+    expect(out).toContain("Etiquetas está sem medida");
+    tree.unmount();
+  });
+
   it("Telas visitadas: entrada e retorno por tela na tabela, com o 'desde 17/10' no título da lista e no aviso", async () => {
     const tree = await mount();
     await press(tree, "bloco-expandir-telas_visitadas");
@@ -283,7 +295,7 @@ describe("Gestão Aura › Hoje", () => {
   it("lista longa abre em 10 linhas e 'Ver todas' mostra o resto", async () => {
     const tree = await mount();
     await press(tree, "bloco-expandir-adocao");
-    // 80 linhas de "Quem usa e quem não usa": 16 recursos x 5 pagantes.
+    // Linhas de "Quem usa e quem não usa": um por recurso e pagante.
     expect(byTestId(tree, "tabela-ver-todas").length).toBeGreaterThan(0);
     const antes = idsStartingWith(tree, "loja-").length;
     await act(async () => { byTestId(tree, "tabela-ver-todas")[byTestId(tree, "tabela-ver-todas").length - 1].props.onPress(); });
