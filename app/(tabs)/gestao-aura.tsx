@@ -18,7 +18,7 @@ type Overview = {
   clients: { total: number; paying: number; trial: number; overdue: number; new_this_month: number };
   mrr: { total: number; growth_pct: number };
   churn: { rate_pct: number };
-  margin: { pct: number };
+  margin: { pct: number | null };
 };
 
 type LeadStats = {
@@ -191,8 +191,8 @@ export default function GestaoAuraScreen() {
         if (!overview) return null;
         return {
           label: "margem bruta",
-          value: overview.margin.pct + "%",
-          color: overview.margin.pct >= 60 ? Colors.green : Colors.amber,
+          value: overview.margin.pct == null ? "sem custo" : overview.margin.pct + "%",
+          color: overview.margin.pct == null ? Colors.ink3 : overview.margin.pct >= 60 ? Colors.green : Colors.amber,
         };
       default:
         return null;

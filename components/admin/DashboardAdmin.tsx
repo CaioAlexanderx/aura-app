@@ -16,8 +16,9 @@ type Overview = {
   mrr: { total: number; by_plan: Record<string, number>; growth_pct: number; previous: number; arr: number };
   arpu: number;
   churn: { count: number; mrr_lost: number; rate_pct: number };
-  costs: { current_month: number };
-  margin: { gross: number; pct: number };
+  // null = mês sem custo lançado (backend t2-21): nunca mostrar como R$ 0
+  costs: { current_month: number | null; lancado?: boolean; rotulo?: string | null };
+  margin: { gross: number | null; pct: number | null };
   goal: { mrr_target: number; clients_target: number; mrr_progress: number | null; clients_progress: number | null } | null;
   usage: { transactions_month: number; sales_month: number; total_products: number; total_customers: number };
 };
@@ -126,8 +127,8 @@ export function DashboardAdmin() {
         </View>
         <View style={s.kpiCard}>
           <Text style={s.kpiLabel}>Margem bruta</Text>
-          <Text style={[s.kpiVal, { color: o.margin.pct >= 60 ? Colors.green : Colors.amber }]}>{o.margin.pct}%</Text>
-          <Text style={s.kpiSub}>{fmtK(o.margin.gross)}</Text>
+          <Text style={[s.kpiVal, { color: o.margin.pct == null ? Colors.ink3 : o.margin.pct >= 60 ? Colors.green : Colors.amber }]}>{o.margin.pct == null ? "—" : o.margin.pct + "%"}</Text>
+          <Text style={s.kpiSub}>{o.margin.gross == null ? "sem custo lançado" : fmtK(o.margin.gross)}</Text>
         </View>
         <View style={s.kpiCard}>
           <Text style={s.kpiLabel}>Novos (mes)</Text>
