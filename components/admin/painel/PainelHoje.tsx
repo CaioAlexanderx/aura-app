@@ -22,6 +22,7 @@ import { CatalogoBlocos, ConversaContatoModal, FichaClienteModal } from "./Paine
 import { RegistrarContatoModal } from "./RegistrarContatoModal";
 import type { AlvoRegistro } from "./RegistrarContatoModal";
 import { EstenderTrialModal } from "./EstenderTrialModal";
+import { LancarCustoModal } from "./LancarCustoModal";
 import type { AlvoTrial } from "./EstenderTrialModal";
 import { ehVerboDeContato, ehVerboDeTrial } from "./registrarContato";
 import { DEFINICOES, SECOES } from "./blocos";
@@ -57,6 +58,20 @@ function larguraDe(largura: number, n: number): number | string {
 // lista genérica que o backend manda sai do detalhe.
 var LISTAS_SUBSTITUIDAS: Partial<Record<BlocoId, string[]>> = { receita: ["Conferência com o extrato"] };
 
+// Bloco Custos: o botão de lançamento. Só para a equipe Aura (user.role
+// admin, o mesmo que o backend exige em POST /admin/painel/custos).
+function LancarCustoBotao(props: { onPress: () => void }) {
+  return (
+    <View style={s.custoSecao} testID="custos-secao-lancar">
+      <Text style={s.custoNota}>Custos de cada mês, por categoria e com a origem do dinheiro. Corrigir um mês já lançado também é por aqui.</Text>
+      <Pressable testID="custos-lancar" onPress={props.onPress} style={[s.btn, s.btnPrimario]} accessibilityRole="button">
+        <Icon name="plus" size={13} color="#fff" />
+        <Text style={[s.btnText, { color: "#fff" }]}>Lançar custo do mês</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 var COR_ALERTA: Record<Alerta["tipo"], { ponto: string; halo: string }> = {
   risco: { ponto: Colors.red, halo: Colors.redD },
   atencao: { ponto: Colors.amber, halo: Colors.amberD },
@@ -81,7 +96,9 @@ function EstadoDaTela(props: { testID: string; carregando?: boolean; titulo: str
   );
 }
 
-export function PainelHoje() {
+// `podeLancarCusto`: quem chama decide pelo user.role === "admin" (equipe
+// Aura). companyRole "admin" é o dono da loja e não vale.
+export function PainelHoje(props: { podeLancarCusto?: boolean } = {}) {
   var dados = usePainelHoje();
   if (dados.carregando) {
     return <EstadoDaTela testID="painel-carregando" carregando titulo="Carregando o painel…" texto="Se o dia ainda não foi calculado, o cálculo leva alguns segundos." />;
@@ -89,10 +106,10 @@ export function PainelHoje() {
   if (dados.erro || !dados.painel) {
     return <EstadoDaTela testID="painel-erro" titulo="Não consegui carregar o painel" texto="Confira a conexão e tente de novo." onTentar={dados.tentarDeNovo} />;
   }
-  return <PainelConteudo dados={dados} painel={dados.painel} />;
+  return <PainelConteudo dados={dados} painel={dados.painel} podeLancarCusto={!!props.podeLancarCusto} />;
 }
 
-function PainelConteudo(props: { dados: Dados; painel: PainelHojeDados }) {
+function PainelConteudo(props: { dados: Dados; painel: PainelHojeDados; podeLancarCusto: boolean }) {
   var router = useRouter();
   var painel = props.painel;
   var { catalogo, recalcular, salvarLayout, exemplo, vazio } = props.dados;
@@ -105,6 +122,8 @@ function PainelConteudo(props: { dados: Dados; painel: PainelHojeDados }) {
   var [conversaDe, setConversaDe] = useState<string | null>(null);
   var [registrarDe, setRegistrarDe] = useState<AlvoRegistro | null>(null);
   var [estenderDe, setEstenderDe] = useState<AlvoTrial | null>(null);
+  var [lancandoCusto, setLancandoCusto] = useState(false);
+  var podeLancarCusto = props.podeLancarCusto;
   var [recalculando, setRecalculando] = useState(false);
   var cards = useRef<Record<string, any>>({});
 
@@ -314,7 +333,9 @@ function PainelConteudo(props: { dados: Dados; painel: PainelHojeDados }) {
                     onAbrirLoja={setFichaDe}
                     onAbrirConversa={setConversaDe}
                     onVerbo={aoVerbo}
-                    secaoExtra={def.id === "receita" ? <ExtratoBancario /> : undefined}
+                    secaoExtra={def.id === "receita" ? <ExtratoBancario />
+                      : def.id === "custos" && podeLancarCusto ? <LancarCustoBotao onPress={function() { setLancandoCusto(true); }} />
+                      : undefined}
                     ocultarListas={LISTAS_SUBSTITUIDAS[def.id]}
                   />
                 );
@@ -360,6 +381,7 @@ function PainelConteudo(props: { dados: Dados; painel: PainelHojeDados }) {
       {/* Por cima da ficha: registrar o contato e estender o teste. */}
       <RegistrarContatoModal alvo={registrarDe} onClose={function() { setRegistrarDe(null); }} />
       <EstenderTrialModal alvo={estenderDe} onClose={function() { setEstenderDe(null); }} />
+      {podeLancarCusto ? <LancarCustoModal visible={lancandoCusto} onClose={function() { setLancandoCusto(false); }} /> : null}
     </View>
   );
 }
@@ -397,4 +419,6 @@ var s = StyleSheet.create({
   estado: { alignItems: "center", gap: 10, paddingVertical: 48, paddingHorizontal: 20, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, borderRadius: 16 },
   estadoTitulo: { fontSize: 16, fontWeight: "700", color: Colors.ink, textAlign: "center" },
   estadoTexto: { fontSize: 13, color: Colors.ink3, textAlign: "center", maxWidth: 420 },
+  custoSecao: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10, borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 14, marginTop: 4 },
+  custoNota: { flex: 1, minWidth: 200, fontSize: 13, color: Colors.ink3 },
 });

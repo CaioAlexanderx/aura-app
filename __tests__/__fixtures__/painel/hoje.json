@@ -168,6 +168,54 @@
       "fonte": "companies, sales"
     },
     {
+      "id": "custos",
+      "titulo": "Custos",
+      "grupo": "negocio",
+      "valor": null,
+      "unidade": "R$ no mês",
+      "variacao": {
+        "d7": null,
+        "d30": null
+      },
+      "serie": [
+        {
+          "rotulo": "Mai",
+          "mes": "2026-05",
+          "valor": null,
+          "texto": "sem lançamento"
+        },
+        {
+          "rotulo": "Jun",
+          "mes": "2026-06",
+          "valor": 250
+        },
+        {
+          "rotulo": "Jul",
+          "mes": "2026-07",
+          "valor": null,
+          "texto": "sem lançamento"
+        },
+        {
+          "rotulo": "Ago",
+          "mes": "2026-08",
+          "valor": 300
+        },
+        {
+          "rotulo": "Set",
+          "mes": "2026-09",
+          "valor": 871.17
+        },
+        {
+          "rotulo": "Out",
+          "mes": "2026-10",
+          "valor": null,
+          "texto": "sem lançamento"
+        }
+      ],
+      "resumo": "Outubro sem custo lançado · setembro: R$ 871,17",
+      "fonte": "aura_revenue_snapshot (custos_detalhe, lançamento mensal)"
+    },
+    {
       "id": "acesso",
       "titulo": "Acesso",
       "grupo": "produto",

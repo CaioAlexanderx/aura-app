@@ -21,8 +21,10 @@ export type BlocoId =
   // Check-in do prospect (Aura-backend #835): produto em 24 h e venda em 7 dias.
   | "checkin"
   | "contatos"
+  // Custos do mês (card f5-06): aura_revenue_snapshot, lançamento na Gestão Aura.
+  | "custos"
   // Só no catálogo/mockup por enquanto — o backend ainda não calcula.
-  | "etiquetas" | "tempo_primeira_venda" | "aurinha" | "custos" | "nps";
+  | "etiquetas" | "tempo_primeira_venda" | "aurinha" | "nps";
 
 // Estado de um número, de uma barra ou de uma etiqueta.
 export type Tom = "sobe" | "desce" | "alerta" | "neutro" | "teal" | "claro" | "mudo";

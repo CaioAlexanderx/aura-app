@@ -395,6 +395,37 @@ export type PainelApiRecalcular = {
   erros: any[];
 };
 
+// Custos do mês (18/10/2026, card f5-06). GET e POST /admin/painel/custos,
+// só equipe Aura (user.role admin). Grava em aura_revenue_snapshot.
+export type PainelApiCustoCategoria = "infraestrutura" | "anthropic" | "meta" | "outros" | "demais";
+export type PainelApiCustoOrigem = "empresa" | "socio" | "estimativa";
+export type PainelApiCustosMes = {
+  mes: string;                       // YYYY-MM
+  existe_linha: boolean;
+  mrr_total: number | null;
+  total_costs: number;
+  taxas_asaas: number | null;
+  das: number | null;
+  sem_abertura: number | null;
+  categorias: {
+    id: PainelApiCustoCategoria;
+    rotulo: string;
+    ajuda: string;
+    valor: number | null;
+    origem: PainelApiCustoOrigem | null;
+    observacao: string | null;
+    lancado_em: string | null;
+  }[];
+  origens: { id: PainelApiCustoOrigem; rotulo: string }[];
+  criou_linha?: boolean;
+  painel_atualizado?: boolean;
+};
+export type PainelApiCustosCorpo = {
+  mes: string;
+  categorias: Partial<Record<PainelApiCustoCategoria, { valor: number; origem: PainelApiCustoOrigem; observacao?: string | null }>>;
+  motivo?: string | null;
+};
+
 // Extrato OFX × Asaas (13/10/2026, Aura-backend #810). Rotas adminOnly em
 // /admin/painel/ofx. Ids de extrato e de lançamento são BIGINT (string).
 export type OfxValorN = { n: number; valor: number };
@@ -632,6 +663,16 @@ export var adminApi = {
     },
     recalcular: function() {
       return request<PainelApiRecalcular>("/admin/painel/recalcular", { method: "POST", retry: 0, timeout: 120000 });
+    },
+    // Lançamento mensal de custos (card f5-06). retry 0: gravar duas vezes
+    // não erra o número (o POST substitui a categoria), mas gera auditoria dupla.
+    custos: {
+      mes: function(mes?: string) {
+        return request<PainelApiCustosMes>("/admin/painel/custos" + (mes ? "?mes=" + encodeURIComponent(mes) : ""), { timeout: 30000 });
+      },
+      lancar: function(corpo: PainelApiCustosCorpo) {
+        return request<PainelApiCustosMes>("/admin/painel/custos", { method: "POST", body: corpo, retry: 0, timeout: 30000 });
+      },
     },
     // Extrato OFX × Asaas (#810). O arquivo vai como texto em JSON (o backend
     // não tem multipart); `mes` (YYYY-MM) escolhe o mês quando o OFX cobre outro.

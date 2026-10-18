@@ -31,7 +31,7 @@ export var DEFINICOES: DefinicaoBloco[] = [
   { id: "pagantes_sem_venda", titulo: "Pagantes sem venda", subtitulo: "Dias desde a última venda", secao: "negocio", colunas: 4, grafico: "barras_h", opcoes: { max: 90 } },
   { id: "checkin", titulo: "Check-in", subtitulo: "Cadastros novos: produto em 24 h, venda em 7 dias, regra de parada", secao: "negocio", colunas: 4, grafico: "barras" },
   { id: "tempo_primeira_venda", titulo: "Tempo até a 1ª venda", subtitulo: "Do cadastro à primeira venda", secao: "negocio", colunas: 4, grafico: "barras" },
-  { id: "custos", titulo: "Custos", subtitulo: "Lançamento mensal", secao: "negocio", colunas: 4, grafico: "barras" },
+  { id: "custos", titulo: "Custos", subtitulo: "Por mês, lançados à mão · margem do mês", secao: "negocio", colunas: 4, grafico: "barras" },
   // Produto e uso
   { id: "acesso", titulo: "Acesso", subtitulo: "Lojas com login na semana · pagantes em destaque", secao: "produto", colunas: 6, grafico: "linha", legenda: ["Todas as lojas", "Pagantes"] },
   { id: "uso_funcionalidade", titulo: "Uso por funcionalidade", subtitulo: "Lojas que usaram cada módulo em 30 dias", secao: "produto", colunas: 6, grafico: "barras_h" },
@@ -72,6 +72,6 @@ export var CATALOGO: ItemCatalogo[] = [
   { id: "etiquetas", titulo: "Etiquetas impressas", fonte: "precisa de contador", aviso: true },
   { id: "tempo_primeira_venda", titulo: "Tempo até a 1ª venda", fonte: "sales, companies" },
   { id: "aurinha", titulo: "Aurinha", fonte: "depois do piloto" },
-  { id: "custos", titulo: "Custos", fonte: "lançamento mensal" },
+  { id: "custos", titulo: "Custos", fonte: "aura_revenue_snapshot, lançamento mensal" },
   { id: "nps", titulo: "NPS", fonte: "sem pesquisa no produto", aviso: true, em_construcao: true },
 ];

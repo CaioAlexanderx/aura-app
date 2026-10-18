@@ -62,6 +62,12 @@
         "grupo": "negocio"
       },
       {
+        "id": "custos",
+        "visivel": true,
+        "titulo": "Custos",
+        "grupo": "negocio"
+      },
+      {
         "id": "acesso",
         "visivel": true,
         "titulo": "Acesso",
