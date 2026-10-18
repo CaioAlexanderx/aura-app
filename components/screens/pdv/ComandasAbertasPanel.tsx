@@ -136,7 +136,7 @@ function PainelAberto(props: Props) {
           testID="painel-comandas-busca"
           value={busca}
           onChangeText={setBusca}
-          placeholder="Buscar por número ou nome"
+          placeholder={gaveta ? "Buscar por número ou nome" : "Número ou nome"}
           placeholderTextColor={Colors.ink3}
           style={s.buscaInput}
         />
