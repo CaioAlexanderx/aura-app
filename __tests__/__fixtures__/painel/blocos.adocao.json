@@ -21,8 +21,8 @@
     },
     {
       "rotulo": "Usados por até um quarto",
-      "valor": 3,
-      "nota": "Orçamentos Matcon, Studio pedidos, Relatórios por e-mail"
+      "valor": 6,
+      "nota": "Orçamentos Matcon, Studio pedidos, Relatórios por e-mail, Entregas Matcon, Parceiros Matcon, Agenda"
     }
   ],
   "listas": [
@@ -263,6 +263,42 @@
           ]
         },
         {
+          "recurso": "cupons",
+          "rotulo": "Cupons",
+          "usam": 2,
+          "de": 5,
+          "texto": "2/5",
+          "lojas_usam": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+              "nome": "Mercado Bela Vista",
+              "telefone": "11999900002"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+              "nome": "Papelaria Sol",
+              "telefone": "11999900008"
+            }
+          ],
+          "lojas_nao_usam": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+              "nome": "Loja Aurora",
+              "telefone": "11999900001"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+              "nome": "Casa do Construtor",
+              "telefone": "11999900003"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000004",
+              "nome": "Dojô Central",
+              "telefone": null
+            }
+          ]
+        },
+        {
           "recurso": "orcamentos_matcon",
           "rotulo": "Orçamentos Matcon",
           "usam": 1,
@@ -337,6 +373,114 @@
         {
           "recurso": "relatorios_email",
           "rotulo": "Relatórios por e-mail",
+          "usam": 1,
+          "de": 5,
+          "texto": "1/5",
+          "lojas_usam": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+              "nome": "Mercado Bela Vista",
+              "telefone": "11999900002"
+            }
+          ],
+          "lojas_nao_usam": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+              "nome": "Loja Aurora",
+              "telefone": "11999900001"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+              "nome": "Casa do Construtor",
+              "telefone": "11999900003"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000004",
+              "nome": "Dojô Central",
+              "telefone": null
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+              "nome": "Papelaria Sol",
+              "telefone": "11999900008"
+            }
+          ]
+        },
+        {
+          "recurso": "entregas_matcon",
+          "rotulo": "Entregas Matcon",
+          "usam": 1,
+          "de": 5,
+          "texto": "1/5",
+          "lojas_usam": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+              "nome": "Casa do Construtor",
+              "telefone": "11999900003"
+            }
+          ],
+          "lojas_nao_usam": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+              "nome": "Loja Aurora",
+              "telefone": "11999900001"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+              "nome": "Mercado Bela Vista",
+              "telefone": "11999900002"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000004",
+              "nome": "Dojô Central",
+              "telefone": null
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+              "nome": "Papelaria Sol",
+              "telefone": "11999900008"
+            }
+          ]
+        },
+        {
+          "recurso": "parceiros_matcon",
+          "rotulo": "Parceiros Matcon",
+          "usam": 1,
+          "de": 5,
+          "texto": "1/5",
+          "lojas_usam": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+              "nome": "Casa do Construtor",
+              "telefone": "11999900003"
+            }
+          ],
+          "lojas_nao_usam": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+              "nome": "Loja Aurora",
+              "telefone": "11999900001"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+              "nome": "Mercado Bela Vista",
+              "telefone": "11999900002"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000004",
+              "nome": "Dojô Central",
+              "telefone": null
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+              "nome": "Papelaria Sol",
+              "telefone": "11999900008"
+            }
+          ]
+        },
+        {
+          "recurso": "agenda",
+          "rotulo": "Agenda",
           "usam": 1,
           "de": 5,
           "texto": "1/5",
@@ -614,6 +758,41 @@
               "telefone": "11999900008"
             }
           ]
+        },
+        {
+          "recurso": "otica",
+          "rotulo": "Ótica",
+          "usam": 0,
+          "de": 5,
+          "texto": "0/5",
+          "lojas_usam": [],
+          "lojas_nao_usam": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+              "nome": "Loja Aurora",
+              "telefone": "11999900001"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+              "nome": "Mercado Bela Vista",
+              "telefone": "11999900002"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+              "nome": "Casa do Construtor",
+              "telefone": "11999900003"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000004",
+              "nome": "Dojô Central",
+              "telefone": null
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+              "nome": "Papelaria Sol",
+              "telefone": "11999900008"
+            }
+          ]
         }
       ]
     },
@@ -848,6 +1027,41 @@
           "usa": false
         },
         {
+          "recurso": "Cupons",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Mercado Bela Vista",
+          "telefone": "11999900002",
+          "usa": true
+        },
+        {
+          "recurso": "Cupons",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+          "nome": "Papelaria Sol",
+          "telefone": "11999900008",
+          "usa": true
+        },
+        {
+          "recurso": "Cupons",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+          "nome": "Loja Aurora",
+          "telefone": "11999900001",
+          "usa": false
+        },
+        {
+          "recurso": "Cupons",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+          "nome": "Casa do Construtor",
+          "telefone": "11999900003",
+          "usa": false
+        },
+        {
+          "recurso": "Cupons",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000004",
+          "nome": "Dojô Central",
+          "telefone": null,
+          "usa": false
+        },
+        {
           "recurso": "Orçamentos Matcon",
           "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
           "nome": "Casa do Construtor",
@@ -953,6 +1167,111 @@
           "usa": false
         },
         {
+          "recurso": "Entregas Matcon",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+          "nome": "Casa do Construtor",
+          "telefone": "11999900003",
+          "usa": true
+        },
+        {
+          "recurso": "Entregas Matcon",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+          "nome": "Loja Aurora",
+          "telefone": "11999900001",
+          "usa": false
+        },
+        {
+          "recurso": "Entregas Matcon",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Mercado Bela Vista",
+          "telefone": "11999900002",
+          "usa": false
+        },
+        {
+          "recurso": "Entregas Matcon",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000004",
+          "nome": "Dojô Central",
+          "telefone": null,
+          "usa": false
+        },
+        {
+          "recurso": "Entregas Matcon",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+          "nome": "Papelaria Sol",
+          "telefone": "11999900008",
+          "usa": false
+        },
+        {
+          "recurso": "Parceiros Matcon",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+          "nome": "Casa do Construtor",
+          "telefone": "11999900003",
+          "usa": true
+        },
+        {
+          "recurso": "Parceiros Matcon",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+          "nome": "Loja Aurora",
+          "telefone": "11999900001",
+          "usa": false
+        },
+        {
+          "recurso": "Parceiros Matcon",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Mercado Bela Vista",
+          "telefone": "11999900002",
+          "usa": false
+        },
+        {
+          "recurso": "Parceiros Matcon",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000004",
+          "nome": "Dojô Central",
+          "telefone": null,
+          "usa": false
+        },
+        {
+          "recurso": "Parceiros Matcon",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+          "nome": "Papelaria Sol",
+          "telefone": "11999900008",
+          "usa": false
+        },
+        {
+          "recurso": "Agenda",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Mercado Bela Vista",
+          "telefone": "11999900002",
+          "usa": true
+        },
+        {
+          "recurso": "Agenda",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+          "nome": "Loja Aurora",
+          "telefone": "11999900001",
+          "usa": false
+        },
+        {
+          "recurso": "Agenda",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+          "nome": "Casa do Construtor",
+          "telefone": "11999900003",
+          "usa": false
+        },
+        {
+          "recurso": "Agenda",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000004",
+          "nome": "Dojô Central",
+          "telefone": null,
+          "usa": false
+        },
+        {
+          "recurso": "Agenda",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+          "nome": "Papelaria Sol",
+          "telefone": "11999900008",
+          "usa": false
+        },
+        {
           "recurso": "Importação",
           "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
           "nome": "Loja Aurora",
@@ -1192,6 +1511,41 @@
         },
         {
           "recurso": "WhatsApp",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+          "nome": "Papelaria Sol",
+          "telefone": "11999900008",
+          "usa": false
+        },
+        {
+          "recurso": "Ótica",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000001",
+          "nome": "Loja Aurora",
+          "telefone": "11999900001",
+          "usa": false
+        },
+        {
+          "recurso": "Ótica",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Mercado Bela Vista",
+          "telefone": "11999900002",
+          "usa": false
+        },
+        {
+          "recurso": "Ótica",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+          "nome": "Casa do Construtor",
+          "telefone": "11999900003",
+          "usa": false
+        },
+        {
+          "recurso": "Ótica",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000004",
+          "nome": "Dojô Central",
+          "telefone": null,
+          "usa": false
+        },
+        {
+          "recurso": "Ótica",
           "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
           "nome": "Papelaria Sol",
           "telefone": "11999900008",
@@ -1236,6 +1590,11 @@
           "texto": "2/5"
         },
         {
+          "rotulo": "Cupons",
+          "valor": 2,
+          "texto": "2/5"
+        },
+        {
           "rotulo": "Orçamentos Matcon",
           "valor": 1,
           "texto": "1/5"
@@ -1247,6 +1606,21 @@
         },
         {
           "rotulo": "Relatórios por e-mail",
+          "valor": 1,
+          "texto": "1/5"
+        },
+        {
+          "rotulo": "Entregas Matcon",
+          "valor": 1,
+          "texto": "1/5"
+        },
+        {
+          "rotulo": "Parceiros Matcon",
+          "valor": 1,
+          "texto": "1/5"
+        },
+        {
+          "rotulo": "Agenda",
           "valor": 1,
           "texto": "1/5"
         },
@@ -1284,9 +1658,14 @@
           "rotulo": "WhatsApp",
           "valor": 0,
           "texto": "0/5"
+        },
+        {
+          "rotulo": "Ótica",
+          "valor": 0,
+          "texto": "0/5"
         }
       ]
     }
   ],
-  "insight": "Orçamentos Matcon (1/5), Studio pedidos (1/5), Relatórios por e-mail (1/5): ou o recurso não é encontrado, ou não é necessário. A resposta vem da próxima ligação de ativação."
+  "insight": "Orçamentos Matcon (1/5), Studio pedidos (1/5), Relatórios por e-mail (1/5), Entregas Matcon (1/5), Parceiros Matcon (1/5), Agenda (1/5): ou o recurso não é encontrado, ou não é necessário. A resposta vem da próxima ligação de ativação."
 }

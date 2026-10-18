@@ -83,7 +83,7 @@ function colunaNumerica(lista: Lista, col: number): boolean {
   return lista.linhas.every(function(l) {
     var c = l[col];
     if (typeof c === "number") return true;
-    return typeof c === "string" && /^((R\$\s)?[\d.,]+%?|[—-])$/.test(c);
+    return typeof c === "string" && /^((R\$\s)?[\d.,]+%?|[—-]|sem medida)$/.test(c);
   });
 }
 

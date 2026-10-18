@@ -226,8 +226,8 @@
       "id": "uso_funcionalidade",
       "titulo": "Uso por funcionalidade",
       "grupo": "produto",
-      "valor": 7,
-      "unidade": "módulos com uso amplo · 3 de nicho",
+      "valor": 8,
+      "unidade": "módulos com uso amplo · 7 de nicho",
       "variacao": {
         "d7": null,
         "d30": null
@@ -262,6 +262,14 @@
           "valor": 2
         },
         {
+          "rotulo": "Cupons",
+          "valor": 2
+        },
+        {
+          "rotulo": "Agenda",
+          "valor": 1
+        },
+        {
           "rotulo": "Orçamentos Matcon",
           "valor": 1
         },
@@ -271,6 +279,18 @@
         },
         {
           "rotulo": "Relatórios por e-mail",
+          "valor": 1
+        },
+        {
+          "rotulo": "Ótica",
+          "valor": 1
+        },
+        {
+          "rotulo": "Entregas Matcon",
+          "valor": 1
+        },
+        {
+          "rotulo": "Parceiros Matcon",
           "valor": 1
         },
         {
@@ -563,6 +583,11 @@
           "texto": "2/5"
         },
         {
+          "rotulo": "Cupons",
+          "valor": 2,
+          "texto": "2/5"
+        },
+        {
           "rotulo": "Orçamentos Matcon",
           "valor": 1,
           "texto": "1/5"
@@ -574,6 +599,21 @@
         },
         {
           "rotulo": "Relatórios por e-mail",
+          "valor": 1,
+          "texto": "1/5"
+        },
+        {
+          "rotulo": "Entregas Matcon",
+          "valor": 1,
+          "texto": "1/5"
+        },
+        {
+          "rotulo": "Parceiros Matcon",
+          "valor": 1,
+          "texto": "1/5"
+        },
+        {
+          "rotulo": "Agenda",
           "valor": 1,
           "texto": "1/5"
         },
@@ -609,6 +649,11 @@
         },
         {
           "rotulo": "WhatsApp",
+          "valor": 0,
+          "texto": "0/5"
+        },
+        {
+          "rotulo": "Ótica",
           "valor": 0,
           "texto": "0/5"
         }

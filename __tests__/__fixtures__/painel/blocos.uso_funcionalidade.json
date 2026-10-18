@@ -4,25 +4,30 @@
   "periodo": 30,
   "calculado_em": "2026-10-13T09:00:04.000Z",
   "ao_vivo": false,
-  "valor": 7,
-  "unidade": "módulos com uso amplo · 3 de nicho",
+  "valor": 8,
+  "unidade": "módulos com uso amplo · 7 de nicho",
   "resumo": "Base: 6 lojas com login em 30 dias",
   "fonte": "tabelas de cada módulo (uso inferido)",
   "indicadores": [
     {
       "rotulo": "Uso amplo",
-      "valor": 7,
+      "valor": 8,
       "nota": "2+ lojas em 30 dias"
     },
     {
       "rotulo": "De nicho",
-      "valor": 3,
+      "valor": 7,
       "nota": null
     },
     {
       "rotulo": "Sem uso no período",
       "valor": 6,
       "nota": "Ordens de serviço, Compras Matcon, Studio orçamentos, Vitrine, Aurinha (IA), WhatsApp"
+    },
+    {
+      "rotulo": "Sem medida",
+      "valor": 1,
+      "nota": "Etiquetas"
     },
     {
       "rotulo": "Lojas com login",
@@ -216,6 +221,38 @@
           ]
         },
         {
+          "modulo": "cupons",
+          "rotulo": "Cupons",
+          "lojas_7d": 2,
+          "lojas_periodo": 2,
+          "eventos_periodo": 10,
+          "lojas_total": 2,
+          "lojas": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+              "nome": "Mercado Bela Vista"
+            },
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+              "nome": "Papelaria Sol"
+            }
+          ]
+        },
+        {
+          "modulo": "agenda",
+          "rotulo": "Agenda",
+          "lojas_7d": 1,
+          "lojas_periodo": 1,
+          "eventos_periodo": 12,
+          "lojas_total": 2,
+          "lojas": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+              "nome": "Mercado Bela Vista"
+            }
+          ]
+        },
+        {
           "modulo": "orcamentos_matcon",
           "rotulo": "Orçamentos Matcon",
           "lojas_7d": 1,
@@ -254,6 +291,48 @@
             {
               "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
               "nome": "Mercado Bela Vista"
+            }
+          ]
+        },
+        {
+          "modulo": "otica",
+          "rotulo": "Ótica",
+          "lojas_7d": 1,
+          "lojas_periodo": 1,
+          "eventos_periodo": 7,
+          "lojas_total": 1,
+          "lojas": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000005",
+              "nome": "Ótica Visão"
+            }
+          ]
+        },
+        {
+          "modulo": "entregas_matcon",
+          "rotulo": "Entregas Matcon",
+          "lojas_7d": 1,
+          "lojas_periodo": 1,
+          "eventos_periodo": 2,
+          "lojas_total": 1,
+          "lojas": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+              "nome": "Casa do Construtor"
+            }
+          ]
+        },
+        {
+          "modulo": "parceiros_matcon",
+          "rotulo": "Parceiros Matcon",
+          "lojas_7d": 1,
+          "lojas_periodo": 1,
+          "eventos_periodo": 3,
+          "lojas_total": 1,
+          "lojas": [
+            {
+              "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+              "nome": "Casa do Construtor"
             }
           ]
         },
@@ -310,6 +389,17 @@
           "eventos_periodo": 0,
           "lojas_total": 0,
           "lojas": []
+        },
+        {
+          "modulo": "etiquetas",
+          "rotulo": "Etiquetas",
+          "sem_medida": true,
+          "motivo": "imprimir etiqueta não grava nada no banco (só a calibração, sem data)",
+          "lojas_7d": null,
+          "lojas_periodo": null,
+          "eventos_periodo": null,
+          "lojas_total": null,
+          "lojas": []
         }
       ]
     },
@@ -352,6 +442,14 @@
           "nome": "Papelaria Sol",
           "telefone": "11999900008",
           "eventos": 11,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Agenda",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Mercado Bela Vista",
+          "telefone": "11999900002",
+          "eventos": 12,
           "ultimo_uso": "2026-10-12"
         },
         {
@@ -451,6 +549,30 @@
           "ultimo_uso": "2026-10-12"
         },
         {
+          "modulo": "Cupons",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
+          "nome": "Mercado Bela Vista",
+          "telefone": "11999900002",
+          "eventos": 9,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Cupons",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
+          "nome": "Papelaria Sol",
+          "telefone": "11999900008",
+          "eventos": 1,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Entregas Matcon",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+          "nome": "Casa do Construtor",
+          "telefone": "11999900003",
+          "eventos": 2,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
           "modulo": "Estoque",
           "company_id": "aaaaaaaa-0000-4000-8000-000000000008",
           "nome": "Papelaria Sol",
@@ -515,6 +637,22 @@
           "ultimo_uso": "2026-10-12"
         },
         {
+          "modulo": "Ótica",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000005",
+          "nome": "Ótica Visão",
+          "telefone": "11999900005",
+          "eventos": 7,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
+          "modulo": "Parceiros Matcon",
+          "company_id": "aaaaaaaa-0000-4000-8000-000000000003",
+          "nome": "Casa do Construtor",
+          "telefone": "11999900003",
+          "eventos": 3,
+          "ultimo_uso": "2026-10-12"
+        },
+        {
           "modulo": "Relatórios por e-mail",
           "company_id": "aaaaaaaa-0000-4000-8000-000000000002",
           "nome": "Mercado Bela Vista",
@@ -567,6 +705,14 @@
           "valor": 2
         },
         {
+          "rotulo": "Cupons",
+          "valor": 2
+        },
+        {
+          "rotulo": "Agenda",
+          "valor": 1
+        },
+        {
           "rotulo": "Orçamentos Matcon",
           "valor": 1
         },
@@ -576,6 +722,18 @@
         },
         {
           "rotulo": "Relatórios por e-mail",
+          "valor": 1
+        },
+        {
+          "rotulo": "Ótica",
+          "valor": 1
+        },
+        {
+          "rotulo": "Entregas Matcon",
+          "valor": 1
+        },
+        {
+          "rotulo": "Parceiros Matcon",
           "valor": 1
         },
         {
@@ -633,6 +791,18 @@
           "valor": 0
         },
         {
+          "rotulo": "Parceiros Matcon",
+          "valor": 1
+        },
+        {
+          "rotulo": "Entregas Matcon",
+          "valor": 1
+        },
+        {
+          "rotulo": "Ótica",
+          "valor": 1
+        },
+        {
           "rotulo": "Relatórios por e-mail",
           "valor": 1
         },
@@ -643,9 +813,13 @@
         {
           "rotulo": "Orçamentos Matcon",
           "valor": 1
+        },
+        {
+          "rotulo": "Agenda",
+          "valor": 1
         }
       ]
     }
   ],
-  "insight": "O uso é inferido pelas tabelas de cada módulo. Telas só de leitura (Relatórios, Painel, Etiquetas) aparecem em \"Telas visitadas\"."
+  "insight": "O uso é inferido pelas tabelas de cada módulo. Telas só de leitura (Relatórios, Painel) aparecem em \"Telas visitadas\". Etiquetas está sem medida: imprimir etiqueta não grava nada no banco (só a calibração, sem data)."
 }
