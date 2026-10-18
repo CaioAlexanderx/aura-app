@@ -268,3 +268,74 @@ export function filtrarComandas<T extends { number: number; name?: string | null
     return !!c.name && semAcento(c.name).includes(q);
   });
 }
+
+// ── Dividir a conta (17/10/2026, tc-04) ──────────────────────
+// Mockup aprovado pelo Caio em 17/10 (Nina): "Cobrar comanda" ganha o modo
+// "Dividir a conta". É UMA venda com um pagamento por pessoa — o pagamento
+// misto que o Caixa já faz (POST /pdv/sale com payments[]). A nota fiscal sai
+// uma vez, com as formas de cada um. O botão só libera quando a soma das
+// partes bate com o total da comanda (taxa incluída, se marcada).
+
+/** Quantas pessoas dá para escolher. */
+export const PESSOAS_NA_DIVISAO = [2, 3, 4, 5, 6];
+
+/** As formas de cada parte (chaves do Caixa, as mesmas de PAYMENTS no
+ *  useCart). Débito e crediário continuam no dividido do carrinho. */
+export const FORMAS_NA_DIVISAO = [
+  { key: "pix", label: "Pix" },
+  { key: "cartao", label: "Cartão" },
+  { key: "dinheiro", label: "Dinheiro" },
+] as const;
+
+export type ParteDaConta = { method: string; value: number };
+
+/** O que o modal de cobrar manda ao Caixa além da comanda e da taxa. */
+export type OpcoesDaCobranca = {
+  /** "Dividir a conta": uma parte por pessoa, somando o total. */
+  partes?: ParteDaConta[];
+};
+
+/** O total em `n` partes iguais, em centavos certos. Os centavos que sobram
+ *  vão para a primeira pessoa (160 / 3 → 53,34 + 53,33 + 53,33). */
+export function partesIguais(total: number, n: number): number[] {
+  const pessoas = Math.floor(Number(n) || 0);
+  if (pessoas < 1) return [];
+  const centavos = Math.max(0, Math.round((Number(total) || 0) * 100));
+  const base = Math.floor(centavos / pessoas);
+  const partes = new Array(pessoas).fill(base);
+  partes[0] += centavos - base * pessoas;
+  return partes.map(function (c) { return c / 100; });
+}
+
+/** Soma das partes, em centavos certos. */
+export function somaDasPartes(valores: number[]): number {
+  const c = (valores || []).reduce(function (s, v) { return s + Math.round((Number(v) || 0) * 100); }, 0);
+  return c / 100;
+}
+
+/** Quanto falta (positivo) ou sobra (negativo) para as partes fecharem com
+ *  o total. 0 = confere. */
+export function diferencaDaDivisao(valores: number[], total: number): number {
+  return (Math.round((Number(total) || 0) * 100) - Math.round(somaDasPartes(valores) * 100)) / 100;
+}
+
+/** As partes fecham com o total (ao centavo) e nenhuma é zero ou negativa? */
+export function divisaoConfere(valores: number[], total: number): boolean {
+  if (!valores || valores.length === 0) return false;
+  if (valores.some(function (v) { return !(Number(v) > 0); })) return false;
+  return diferencaDaDivisao(valores, total) === 0;
+}
+
+/** "53,33", "R$ 1.234,50", "53.33" → número. Vazio ou inválido → null. */
+export function valorDigitado(texto: string | null | undefined): number | null {
+  let s = String(texto == null ? "" : texto).replace(/[R$\s]/g, "");
+  if (!s) return null;
+  if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
+  if (!/^\d+(\.\d{0,2})?$/.test(s)) return null;
+  return Math.round(parseFloat(s) * 100) / 100;
+}
+
+/** 53.3 → "53,30" (o que vai no campo de valor). */
+export function valorNoCampo(v: number): string {
+  return (Number(v) || 0).toFixed(2).replace(".", ",");
+}

@@ -15,6 +15,11 @@
 // 17/10/2026 (tc-02): o painel das abertas (ComandasAbertasPanel) entra por
 // "Comandas (N)" no rodapé. "Cobrar" dele abre a conferência já com a
 // comanda; "Lançar mais" abre o modal de lançar já com o número.
+//
+// 17/10/2026 (tc-04): "Dividir a conta" no modal de cobrar. O consumo vira
+// o carrinho do mesmo jeito e o dividido do Caixa já nasce com uma parte por
+// pessoa (`dividir`, o dividirPagamento do useCart): uma venda só, com um
+// pagamento por pessoa.
 // ============================================================
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -22,7 +27,7 @@ import { toast } from "@/components/Toast";
 import { comandaApi } from "@/services/comandaApi";
 import { chaveDasComandas } from "@/components/screens/pdv/ComandaModals";
 import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
-import { itensParaAComanda, linhasParaOCarrinho, nomeDaComanda, rotuloDaComanda, type Comanda, type ItemDoCarrinho } from "@/utils/comanda";
+import { itensParaAComanda, linhasParaOCarrinho, nomeDaComanda, rotuloDaComanda, type Comanda, type ItemDoCarrinho, type OpcoesDaCobranca, type ParteDaConta } from "@/utils/comanda";
 import type { ComandaNoCarrinho } from "@/hooks/useCart";
 
 type ProdutoDoCatalogo = { id: string; price: number; cardPrice?: number | null };
@@ -40,7 +45,11 @@ export type UseComandaNoCaixaParams = {
   addToCart: (p: any) => void;
   setQty: (key: string, qty: number) => void;
   products: ProdutoDoCatalogo[];
+  /** Liga o dividido do carrinho com estas partes (useCart.dividirPagamento).
+   *  Sem ele, "Dividir a conta" cobra como "Cobrar tudo". */
+  dividir?: (partes: ParteDaConta[]) => void;
 };
+
 
 function fmt(v: number): string {
   return "R$ " + (Number(v) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -136,7 +145,7 @@ export function useComandaNoCaixa(p: UseComandaNoCaixaParams) {
 
   /** O consumo da comanda vira o carrinho. O que estava no balcão sai: a
    *  venda que fecha a comanda tem que ser a comanda e mais nada. */
-  function cobrar(c: Comanda, taxaPct: number) {
+  function cobrar(c: Comanda, taxaPct: number, opcoes?: OpcoesDaCobranca) {
     p.limpar();
     linhasParaOCarrinho(c, taxaPct).forEach(function (l) {
       const doCatalogo = p.products.find(function (x) { return x.id === l.key.split("__")[0]; });
@@ -149,6 +158,12 @@ export function useComandaNoCaixa(p: UseComandaNoCaixaParams) {
     });
     p.setComanda({ id: c.id, number: c.number, feePct: taxaPct, ...(c.name ? { name: c.name } : {}) });
     setShowFechar(false);
+    const partes = opcoes && opcoes.partes ? opcoes.partes : [];
+    if (partes.length > 1 && p.dividir) {
+      p.dividir(partes);
+      toast.success("Comanda " + rotuloDaComanda(c.number, c.name) + " no carrinho, dividida em " + partes.length + ". Confira e finalize.");
+      return;
+    }
     toast.success("Comanda " + rotuloDaComanda(c.number, c.name) + " no carrinho. Escolha o pagamento e finalize.");
   }
 

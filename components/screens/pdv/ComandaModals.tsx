@@ -8,6 +8,11 @@
 //   · FecharComandaModal — digita o número, vê o consumo listado e somado,
 //     decide se entra a taxa de serviço de 10%, imprime a conferência e
 //     manda cobrar no Caixa.
+//     17/10/2026 (tc-04, mockup da Nina aprovado pelo Caio): o modal virou
+//     "Cobrar comanda" com modos. "Cobrar tudo" é o de sempre e continua o
+//     padrão; "Dividir a conta" escolhe quantas pessoas, o valor e a forma
+//     de cada uma, e só libera o botão quando a soma bate com o total (taxa
+//     incluída). Vira UMA venda com um pagamento por pessoa.
 //
 // Nenhum dos dois faz conta: número, taxa e cupom vêm de utils/comanda.
 // A venda em si é a de sempre — o modal só devolve a comanda para o Caixa
@@ -24,6 +29,9 @@ import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
 import {
   numeroDaComanda, taxaDeServico, htmlDoConsumo, TAXA_DE_SERVICO_PCT, type Comanda,
   nomeDaComanda, rotuloDaComanda, MAX_NOME_DA_COMANDA,
+  minutosAberta, tempoDaComanda,
+  PESSOAS_NA_DIVISAO, FORMAS_NA_DIVISAO, partesIguais, somaDasPartes, diferencaDaDivisao, divisaoConfere,
+  valorDigitado, valorNoCampo, type OpcoesDaCobranca,
 } from "@/utils/comanda";
 
 function fmt(v: number): string {
@@ -221,14 +229,20 @@ type FecharProps = {
   /** Nome da loja no topo do cupom de conferência. */
   loja: string;
   onClose: () => void;
-  /** Leva o consumo para o carrinho do Caixa. `taxaPct` é 0 ou 10. */
-  onCobrar: (comanda: Comanda, taxaPct: number) => void;
+  /** Leva o consumo para o carrinho do Caixa. `taxaPct` é 0 ou 10.
+   *  "Cobrar tudo" chama só com os dois; "Dividir a conta" manda as partes. */
+  onCobrar: (comanda: Comanda, taxaPct: number, opcoes?: OpcoesDaCobranca) => void;
   /** Avisa o Caixa que a lista de abertas mudou (item tirado, cancelada). */
   onMudou?: () => void;
   /** "Cobrar" do painel das abertas (17/10, tc-02): abre já buscando esta
    *  comanda, direto na conferência. */
   numeroInicial?: number | null;
 };
+
+/** Os modos do modal de cobrar (mockup tc-04). */
+export type ModoDeCobrar = "tudo" | "dividir";
+
+const PESSOAS_PADRAO = 3;
 
 export function FecharComandaModal(props: FecharProps) {
   const { visible, companyId, loja, onClose, onCobrar, onMudou, numeroInicial } = props;
@@ -239,6 +253,11 @@ export function FecharComandaModal(props: FecharProps) {
   const [comTaxa, setComTaxa] = useState(false);
   const [ocupado, setOcupado] = useState(false);
   const [confirmaCancelar, setConfirmaCancelar] = useState(false);
+  // tc-04: modo e a divisão (uma linha por pessoa: valor digitado e forma).
+  const [modo, setModo] = useState<ModoDeCobrar>("tudo");
+  const [pessoas, setPessoas] = useState(PESSOAS_PADRAO);
+  const [valores, setValores] = useState<string[]>([]);
+  const [formas, setFormas] = useState<string[]>([]);
   const inputRef = useRef<TextInput>(null);
   const abertas = useAbertas(companyId, visible);
   const lista = abertas.data?.comandas || [];
@@ -249,6 +268,7 @@ export function FecharComandaModal(props: FecharProps) {
   useEffect(function () {
     if (!visible) return;
     setTexto(""); setComanda(null); setErro(null); setComTaxa(false); setConfirmaCancelar(false);
+    setModo("tudo"); setPessoas(PESSOAS_PADRAO);
     if (numeroInicial) {
       setTexto(String(numeroInicial));
       buscar(numeroInicial);
@@ -261,7 +281,7 @@ export function FecharComandaModal(props: FecharProps) {
   function buscar(n: number | null) {
     if (n == null) { setErro("Digite o número da comanda."); return; }
     const vez = ++buscaRef.current;
-    setBuscando(true); setErro(null); setComanda(null); setConfirmaCancelar(false);
+    setBuscando(true); setErro(null); setComanda(null); setConfirmaCancelar(false); setModo("tudo");
     comandaApi.get(companyId, n)
       .then(function (r) {
         if (vez !== buscaRef.current) return;
@@ -306,6 +326,34 @@ export function FecharComandaModal(props: FecharProps) {
   const totalFinal = comanda ? Math.round((comanda.subtotal + taxa) * 100) / 100 : 0;
   const temConsumo = !!comanda && comanda.items.length > 0;
 
+  // Dividir: as partes iguais se refazem quando muda o número de pessoas ou
+  // o total (taxa marcada, item tirado). O que o operador digitou numa parte
+  // vale até lá. A forma de cada pessoa fica.
+  useEffect(function () {
+    if (modo !== "dividir") return;
+    setValores(partesIguais(totalFinal, pessoas).map(valorNoCampo));
+    setFormas(function (antes) {
+      return Array.from({ length: pessoas }, function (_, i) { return antes[i] || "pix"; });
+    });
+  }, [modo, pessoas, totalFinal]);
+
+  const valoresDasPartes = valores.map(function (t) { return valorDigitado(t) ?? 0; });
+  const divisaoOk = modo === "dividir" && divisaoConfere(valoresDasPartes, totalFinal);
+  const podeCobrar = temConsumo && (modo !== "dividir" || divisaoOk);
+
+  function cobrar() {
+    if (!comanda || !podeCobrar) return;
+    if (modo === "dividir") {
+      onCobrar(comanda, taxaPct, {
+        partes: valoresDasPartes.map(function (v, i) { return { method: formas[i] || "pix", value: v }; }),
+      });
+      return;
+    }
+    onCobrar(comanda, taxaPct);
+  }
+
+  const minutos = comanda ? minutosAberta(comanda.opened_at, Date.now()) : null;
+
   function imprimir() {
     if (!comanda) return;
     const html = htmlDoConsumo({ comanda: comanda, loja: loja, taxaPct: taxaPct });
@@ -329,8 +377,14 @@ export function FecharComandaModal(props: FecharProps) {
           <View style={s.header}>
             <View style={s.headerIcon}><Icon name="clipboard" size={18} color={Colors.violet3} /></View>
             <View style={{ flex: 1 }}>
-              <Text style={s.title}>Fechar comanda</Text>
-              <Text style={s.sub}>Digite o número para ver o consumo</Text>
+              <Text style={s.title} testID="fechar-comanda-titulo">
+                {comanda ? "Cobrar comanda " + rotuloDaComanda(comanda.number, comanda.name) : "Cobrar comanda"}
+              </Text>
+              <Text style={s.sub}>
+                {comanda
+                  ? comanda.items.length + (comanda.items.length === 1 ? " item" : " itens") + (minutos != null ? " · aberta " + tempoDaComanda(minutos) : "")
+                  : "Digite o número para ver o consumo"}
+              </Text>
             </View>
             <Pressable onPress={onClose} hitSlop={10}><Icon name="x" size={18} color={Colors.ink3} /></Pressable>
           </View>
@@ -374,8 +428,27 @@ export function FecharComandaModal(props: FecharProps) {
             {comanda && (
               <View style={{ marginTop: 14 }} testID="fechar-comanda-consumo">
                 <Text style={s.label}>Consumo da comanda {rotuloDaComanda(comanda.number, comanda.name)}</Text>
+                {temConsumo && (
+                  <View style={s.seg} testID="fechar-comanda-modos">
+                    {([["tudo", "Cobrar tudo"], ["dividir", "Dividir a conta"]] as const).map(function ([k, rot]) {
+                      const on = modo === k;
+                      return (
+                        <Pressable
+                          key={k}
+                          testID={"fechar-comanda-modo-" + k}
+                          onPress={function () { setModo(k); setConfirmaCancelar(false); }}
+                          style={[s.segBtn, on && s.segOn]}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: on }}
+                        >
+                          <Text style={[s.segTxt, on && { color: "#fff" }]}>{rot}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                )}
                 {comanda.items.length === 0 && <Text style={s.hint}>Esta comanda está sem itens.</Text>}
-                {comanda.items.map(function (it) {
+                {modo === "tudo" && comanda.items.map(function (it) {
                   return (
                     <View key={it.id} style={s.linha}>
                       <Text style={s.linhaQtd}>{fmtQtd(it.quantity)}x</Text>
@@ -420,16 +493,34 @@ export function FecharComandaModal(props: FecharProps) {
                   </View>
                 </View>
 
+                {modo === "dividir" && (
+                  <Divisao
+                    total={totalFinal}
+                    pessoas={pessoas}
+                    onPessoas={setPessoas}
+                    valores={valores}
+                    onValor={function (i, v) {
+                      setValores(function (antes) { const n = antes.slice(); n[i] = v; return n; });
+                    }}
+                    formas={formas}
+                    onForma={function (i, k) {
+                      setFormas(function (antes) { const n = antes.slice(); n[i] = k; return n; });
+                    }}
+                  />
+                )}
+
                 <View style={s.secundarias}>
                   <Pressable testID="fechar-comanda-imprimir" onPress={imprimir} disabled={!temConsumo} style={[s.ghost, !temConsumo && { opacity: 0.5 }]}>
                     <Icon name="file_text" size={13} color={Colors.ink} />
                     <Text style={s.ghostTxt}>Imprimir consumo</Text>
                   </Pressable>
-                  <Pressable testID="fechar-comanda-cancelar" onPress={cancelarComanda} disabled={ocupado} style={s.ghost}>
-                    <Text style={[s.ghostTxt, { color: Colors.red }]}>
-                      {confirmaCancelar ? "Toque de novo para cancelar" : "Cancelar comanda"}
-                    </Text>
-                  </Pressable>
+                  {modo === "tudo" && (
+                    <Pressable testID="fechar-comanda-cancelar" onPress={cancelarComanda} disabled={ocupado} style={s.ghost}>
+                      <Text style={[s.ghostTxt, { color: Colors.red }]}>
+                        {confirmaCancelar ? "Toque de novo para cancelar" : "Cancelar comanda"}
+                      </Text>
+                    </Pressable>
+                  )}
                 </View>
               </View>
             )}
@@ -439,11 +530,11 @@ export function FecharComandaModal(props: FecharProps) {
             <Pressable onPress={onClose} style={s.btnSec}><Text style={s.btnSecTxt}>Voltar</Text></Pressable>
             <Pressable
               testID="fechar-comanda-cobrar"
-              onPress={function () { if (comanda && temConsumo) onCobrar(comanda, taxaPct); }}
-              disabled={!temConsumo}
-              style={[s.btnPri, !temConsumo && s.btnPriOff]}
+              onPress={cobrar}
+              disabled={!podeCobrar}
+              style={[s.btnPri, !podeCobrar && s.btnPriOff]}
             >
-              <Text style={[s.btnPriTxt, !temConsumo && { color: "rgba(255,255,255,0.55)" }]}>
+              <Text style={[s.btnPriTxt, !podeCobrar && { color: "rgba(255,255,255,0.55)" }]}>
                 {temConsumo ? "Cobrar " + fmt(totalFinal) : "Cobrar no Caixa"}
               </Text>
             </Pressable>
@@ -451,6 +542,108 @@ export function FecharComandaModal(props: FecharProps) {
         </View>
       </View>
     </Modal>
+  );
+}
+
+// ── Dividir a conta (tc-04) ──────────────────────────────────
+
+type DivisaoProps = {
+  total: number;
+  pessoas: number;
+  onPessoas: (n: number) => void;
+  valores: string[];
+  onValor: (i: number, texto: string) => void;
+  formas: string[];
+  onForma: (i: number, forma: string) => void;
+};
+
+function Divisao(props: DivisaoProps) {
+  const { total, pessoas, onPessoas, valores, onValor, formas, onForma } = props;
+  const numeros = valores.map(function (t) { return valorDigitado(t) ?? 0; });
+  const soma = somaDasPartes(numeros);
+  const dif = diferencaDaDivisao(numeros, total);
+  const confere = divisaoConfere(numeros, total);
+  let aviso = "Confere com a comanda";
+  if (!confere) {
+    if (dif > 0) aviso = "Faltam " + fmt(dif);
+    else if (dif < 0) aviso = "Sobram " + fmt(-dif);
+    else aviso = "Cada pessoa precisa de um valor";
+  }
+  return (
+    <View style={{ marginTop: 12 }} testID="fechar-comanda-divisao">
+      <Text style={s.label}>Quantas pessoas</Text>
+      <View style={s.chips}>
+        {PESSOAS_NA_DIVISAO.map(function (n) {
+          const on = n === pessoas;
+          return (
+            <Pressable
+              key={n}
+              testID={"dividir-pessoas-" + n}
+              onPress={function () { onPessoas(n); }}
+              style={[s.chipPessoas, on && s.chipOn]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on }}
+            >
+              <Text style={[s.chipNum, on && { color: "#fff" }]}>{n}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <View style={{ marginTop: 6 }}>
+        {valores.map(function (v, i) {
+          return (
+            <View key={i} style={s.pessoa} testID={"dividir-pessoa-" + i}>
+              <View style={s.pessoaTopo}>
+                <Text style={s.pessoaNome}>Pessoa {i + 1}</Text>
+                <TextInput
+                  testID={"dividir-valor-" + i}
+                  value={v}
+                  onChangeText={function (t) { onValor(i, t.replace(/[^\d,.]/g, "").slice(0, 12)); }}
+                  keyboardType={Platform.OS === "web" ? "default" : "decimal-pad"}
+                  inputMode="decimal"
+                  accessibilityLabel={"Valor da pessoa " + (i + 1)}
+                  style={s.pessoaValor}
+                />
+              </View>
+              <View style={s.formas}>
+                {FORMAS_NA_DIVISAO.map(function (f) {
+                  const on = (formas[i] || "pix") === f.key;
+                  return (
+                    <Pressable
+                      key={f.key}
+                      testID={"dividir-forma-" + i + "-" + f.key}
+                      onPress={function () { onForma(i, f.key); }}
+                      style={[s.forma, on && s.formaOn]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                    >
+                      <Text style={[s.formaTxt, on && { color: Colors.violet3 }]}>{f.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          );
+        })}
+      </View>
+
+      <View style={s.somaBox}>
+        <View style={s.resumoRow}>
+          <Text style={s.resumoLbl}>Soma das partes</Text>
+          <Text style={s.resumoVal} testID="dividir-soma">{fmt(soma)}</Text>
+        </View>
+        <View style={s.resumoRow}>
+          <Text style={[s.resumoLbl, { color: confere ? Colors.green : Colors.amber, fontWeight: "600" }]} testID="dividir-confere">
+            {aviso}
+          </Text>
+          {confere && <Icon name="check" size={14} color={Colors.green} />}
+        </View>
+      </View>
+      <Text style={s.nota}>
+        Uma venda só, com um pagamento por pessoa. A nota fiscal sai uma vez, com as formas de pagamento de cada um. Os centavos que sobram vão para a primeira pessoa.
+      </Text>
+    </View>
   );
 }
 
@@ -530,4 +723,29 @@ const s = StyleSheet.create({
   btnPri: { flex: 1.4, paddingVertical: 12, borderRadius: 10, backgroundColor: Colors.violet, alignItems: "center", justifyContent: "center" },
   btnPriOff: { backgroundColor: Colors.violetD },
   btnPriTxt: { fontSize: 13, fontWeight: "600", color: "#fff" },
+  // tc-04: modos e divisão. Alvos de toque >= 42 px, nada de hover.
+  seg: { flexDirection: "row", borderWidth: 1, borderColor: Colors.border2, borderRadius: 12, overflow: "hidden" as any, marginBottom: 6 },
+  segBtn: { flex: 1, minHeight: 42, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
+  segOn: { backgroundColor: Colors.violet },
+  segTxt: { fontSize: 12, fontWeight: "600", color: Colors.ink3, textAlign: "center" },
+  chipPessoas: {
+    minWidth: 44, minHeight: 42, paddingHorizontal: 12, borderRadius: 10, alignItems: "center", justifyContent: "center",
+    backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border,
+  },
+  pessoa: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border, gap: 6 },
+  pessoaTopo: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  pessoaNome: { fontSize: 13, fontWeight: "700", color: Colors.ink },
+  pessoaValor: {
+    width: 120, minHeight: 40, paddingHorizontal: 10, borderRadius: 9, borderWidth: 1, borderColor: Colors.border2,
+    backgroundColor: Colors.bg, color: Colors.ink, fontSize: 15, fontWeight: "700", textAlign: "right",
+  },
+  formas: { flexDirection: "row", gap: 6 },
+  forma: { flex: 1, minHeight: 36, borderRadius: 9, borderWidth: 1, borderColor: Colors.border, alignItems: "center", justifyContent: "center" },
+  formaOn: { borderColor: Colors.violet, backgroundColor: Colors.violetD },
+  formaTxt: { fontSize: 12, fontWeight: "600", color: Colors.ink3 },
+  somaBox: {
+    marginTop: 10, borderWidth: 1, borderColor: Colors.border2, borderRadius: 12, backgroundColor: Colors.bg3,
+    paddingHorizontal: 12, paddingVertical: 4,
+  },
+  nota: { fontSize: 11.5, color: Colors.ink3, marginTop: 8, lineHeight: 17 },
 });

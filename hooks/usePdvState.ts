@@ -252,7 +252,7 @@ export function usePdvState() {
     couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
     discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
     cpfNaNota, setCpfNaNota,
-    splitMode, toggleSplitMode,
+    splitMode, toggleSplitMode, dividirPagamento,
     splitPayments, addSplitPayment, updateSplitPayment, removeSplitPayment,
     splitRemaining, splitIsBalanced,
     precoNoCartao, couponDiscount: cartCouponDiscount, setCouponRule,
@@ -381,6 +381,7 @@ export function usePdvState() {
     addToCart,
     setQty,
     products,
+    dividir: dividirPagamento,
   });
   // 17/10/2026 (tc-02): quantas estão abertas, para o "Comandas (N)" do
   // rodapé. Mesma chave do painel e dos modais.
