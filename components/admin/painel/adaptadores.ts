@@ -67,7 +67,9 @@ function plural(n: number, um: string, varios: string): string {
 // ── Cabeçalho, blocos e alertas ─────────────────────────────
 
 // Em quais blocos "subir" é ruim: a cor da variação inverte.
-var MENOR_E_MELHOR: string[] = ["pagantes_sem_venda", "crediario", "fiscal"];
+var MENOR_E_MELHOR: string[] = ["pagantes_sem_venda", "crediario", "fiscal", "custos"];
+// Blocos cujo número é dinheiro: a variação sai em reais.
+var EM_REAIS: string[] = ["receita", "custos"];
 
 // A API manda a variação como diferença absoluta em 7 e 30 dias (ou null
 // nos primeiros dias de histórico). A pill mostra a de 7 dias, ou a de 30.
@@ -77,7 +79,7 @@ function adaptarVariacao(id: string, v: PainelApiBlocoResumo["variacao"]): Varia
   if (n == null) return null;
   var janela = v.d7 != null ? "7d" : "30d";
   var abs = Math.abs(n);
-  var corpo = id === "receita" ? brl(abs) : numero(abs);
+  var corpo = EM_REAIS.indexOf(id) >= 0 ? brl(abs) : numero(abs);
   var sinal = n > 0 ? "+" : n < 0 ? "−" : "";
   var invertido = MENOR_E_MELHOR.indexOf(id) >= 0;
   var tom: Tom = n === 0 ? "neutro" : ((n > 0) !== invertido ? "sobe" : "desce");
@@ -204,7 +206,7 @@ export function adaptarHoje(raw: PainelApiHoje): PainelHoje {
 
 // A API não tipa os indicadores: só os blocos abaixo têm valores em reais.
 function indicadorEmReais(id: string, rotulo: string): boolean {
-  if (id === "receita") return true;
+  if (id === "receita" || id === "custos") return true;
   if (id === "crediario") return /^valor/i.test(rotulo);
   return false;
 }
@@ -314,7 +316,7 @@ function adaptarCartoes(l: PainelApiLista): Lista {
 
 // O insight vem como texto; o tom (cor da caixa) é da tela: blocos que
 // apontam problema usam âmbar.
-var INSIGHT_ALERTA: string[] = ["pagantes_sem_venda", "fiscal", "crediario", "acesso", "pagantes", "receita", "contatos"];
+var INSIGHT_ALERTA: string[] = ["pagantes_sem_venda", "fiscal", "crediario", "acesso", "pagantes", "receita", "contatos", "custos"];
 
 function adaptarSerie(id: string, s: PainelApiDetalhe["series"][0]): SerieDetalhe {
   var pontos = adaptarPontos(id, s.pontos || [], s.tipo);

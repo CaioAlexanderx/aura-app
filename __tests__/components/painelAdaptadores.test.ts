@@ -13,13 +13,13 @@ import { DEFINICOES } from "@/components/admin/painel/blocos";
 const fx = (nome: string) => JSON.parse(JSON.stringify(require("../__fixtures__/painel/" + nome + ".json")));
 
 const IDS: string[] = [
-  "trials_degrau", "receita", "cadastros", "pagantes", "pagantes_sem_venda", "acesso", "uso_funcionalidade",
+  "trials_degrau", "receita", "cadastros", "pagantes", "pagantes_sem_venda", "custos", "acesso", "uso_funcionalidade",
   "horario", "plataforma", "adocao", "telas_visitadas", "fiscal", "crediario", "contatos", "frentes",
 ];
 
 // O layout do backend (GET /layout) já traz o bloco Check-in (backend #835), que
-// o hoje.json gravado ainda não tem.
-const IDS_LAYOUT: string[] = IDS.slice(0, 5).concat(["checkin"], IDS.slice(5));
+// o hoje.json gravado ainda não tem. Custos (card f5-06) vem logo depois dele.
+const IDS_LAYOUT: string[] = IDS.slice(0, 5).concat(["checkin", "custos"], IDS.slice(6));
 
 describe("formatação", () => {
   it("reais, datas, telefone", () => {
@@ -40,7 +40,7 @@ describe("adaptarHoje", () => {
   const hoje = adaptarHoje(fx("hoje"));
   const bloco = (id: string) => hoje.blocos.find((b) => b.id === id)!;
 
-  it("traz os 15 blocos e todos têm definição de apresentação", () => {
+  it("traz os 16 blocos e todos têm definição de apresentação", () => {
     expect(hoje.blocos.map((b) => b.id).sort()).toEqual(IDS.slice().sort());
     const defs = DEFINICOES.map((d) => d.id as string);
     for (const b of hoje.blocos) expect(defs).toContain(b.id);
@@ -324,13 +324,13 @@ describe("layout e catálogo", () => {
     const l = adaptarLayout(fx("layout.get"));
     expect(l.padrao).toBe(true);
     expect(l.ativos).toEqual(IDS_LAYOUT);
-    expect(l.conhecidos.length).toBe(16);
+    expect(l.conhecidos.length).toBe(17);
 
     const salvo = adaptarLayout(fx("layout.put").resposta);
     expect(salvo.padrao).toBe(false);
     expect(salvo.ativos.slice(0, 2)).toEqual(["receita", "pagantes"]);
     expect(salvo.ativos).not.toContain("contatos");
-    expect(salvo.conhecidos.length).toBe(16);
+    expect(salvo.conhecidos.length).toBe(17);
   });
 
   it("corpo do PUT: visíveis na ordem, depois os desligados; ids desconhecidos ficam de fora", () => {
@@ -344,9 +344,9 @@ describe("layout e catálogo", () => {
   it("catálogo: o que o backend conhece liga; o resto do mockup fica em construção", () => {
     const itens = montarCatalogo(adaptarLayout(fx("layout.get")).conhecidos);
     expect(itens.length).toBe(21);
-    expect(itens.filter((i) => !i.em_construcao).length).toBe(16);
+    expect(itens.filter((i) => !i.em_construcao).length).toBe(17);
     expect(itens.filter((i) => i.em_construcao).map((i) => i.id).sort()).toEqual(
-      ["aurinha", "custos", "etiquetas", "nps", "tempo_primeira_venda"]
+      ["aurinha", "etiquetas", "nps", "tempo_primeira_venda"]
     );
     expect(itens.find((i) => i.id === "telas_visitadas")!.aviso).toBeUndefined();
   });

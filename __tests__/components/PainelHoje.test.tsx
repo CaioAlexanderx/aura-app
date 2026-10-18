@@ -234,7 +234,7 @@ describe("Gestão Aura › Hoje", () => {
     tree.unmount();
   });
 
-  it("cada um dos 15 blocos expande e renderiza indicadores, listas, séries e insight da API", async () => {
+  it("cada um dos 16 blocos expande e renderiza indicadores, listas, séries e insight da API", async () => {
     const tree = await mount();
     for (const id of IDS) {
       const raw = fx("blocos." + id);
@@ -445,9 +445,9 @@ describe("Gestão Aura › Hoje", () => {
     await press(tree, "painel-abrir-catalogo");
     expect(byTestId(tree, "catalogo-modal")).toHaveLength(1);
     expect(text(tree)).toContain("Catálogo de blocos");
-    expect([].concat(byTestId(tree, "catalogo-contagem")[0].props.children).join("")).toBe("16 ativos · 0 disponíveis · 5 em construção");
+    expect([].concat(byTestId(tree, "catalogo-contagem")[0].props.children).join("")).toBe("17 ativos · 0 disponíveis · 4 em construção");
     // O que o backend não calcula fica travado.
-    for (const id of ["nps", "custos", "etiquetas", "aurinha", "tempo_primeira_venda"]) {
+    for (const id of ["nps", "etiquetas", "aurinha", "tempo_primeira_venda"]) {
       expect(byTestId(tree, "catalogo-item-" + id)[0].props.disabled).toBe(true);
     }
     expect(byTestId(tree, "catalogo-item-contatos")[0].props.disabled).toBeFalsy();
@@ -465,8 +465,9 @@ describe("Gestão Aura › Hoje", () => {
     await press(tree, "catalogo-salvar");
     expect(api.salvarLayout).toHaveBeenCalledTimes(1);
     const corpo = api.salvarLayout.mock.calls[0][0] as { id: string; visivel: boolean }[];
-    // 16: o layout do backend já conhece o Check-in (#835), que o hoje gravado ainda não traz.
-    expect(corpo).toHaveLength(16);
+    // 17: o layout do backend já conhece o Check-in (#835), que o hoje gravado
+    // ainda não traz, e o Custos (card f5-06).
+    expect(corpo).toHaveLength(17);
     expect(corpo[corpo.length - 1]).toEqual({ id: "fiscal", visivel: false });
     expect(corpo.filter((b) => b.visivel).map((b) => b.id)).toEqual(
       IDS.slice(0, 5).concat(["checkin"], IDS.slice(5)).filter((id) => id !== "fiscal")

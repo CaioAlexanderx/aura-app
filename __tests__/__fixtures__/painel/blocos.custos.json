@@ -1,0 +1,326 @@
+{
+  "id": "custos",
+  "titulo": "Custos",
+  "periodo": 30,
+  "calculado_em": "2026-10-13T09:00:04.000Z",
+  "ao_vivo": false,
+  "valor": null,
+  "unidade": "R$ no mês",
+  "resumo": "Outubro sem custo lançado · setembro: R$ 871,17",
+  "fonte": "aura_revenue_snapshot (custos_detalhe, lançamento mensal)",
+  "indicadores": [
+    {
+      "rotulo": "Custos · Out",
+      "valor": null,
+      "nota": "sem lançamento"
+    },
+    {
+      "rotulo": "Margem bruta · Out",
+      "valor": null,
+      "nota": "sem custo lançado"
+    },
+    {
+      "rotulo": "Custos · Set",
+      "valor": 871.17,
+      "nota": "margem -R$ 560,34"
+    },
+    {
+      "rotulo": "Resultado · Set",
+      "valor": -632.63,
+      "nota": "depois de taxas da Asaas e DAS"
+    }
+  ],
+  "listas": [
+    {
+      "titulo": "Por categoria · Set/2026",
+      "colunas": [
+        {
+          "chave": "categoria",
+          "rotulo": "Categoria",
+          "tipo": "texto"
+        },
+        {
+          "chave": "valor",
+          "rotulo": "Valor",
+          "tipo": "moeda"
+        },
+        {
+          "chave": "origem",
+          "rotulo": "Origem",
+          "tipo": "texto"
+        },
+        {
+          "chave": "observacao",
+          "rotulo": "Observação",
+          "tipo": "texto"
+        },
+        {
+          "chave": "lancado_em",
+          "rotulo": "Lançado em",
+          "tipo": "data_hora"
+        }
+      ],
+      "linhas": [
+        {
+          "categoria": "Anthropic",
+          "valor": 550,
+          "origem": "Conta pessoal do sócio",
+          "observacao": "paga em conta pessoal do socio",
+          "lancado_em": null
+        },
+        {
+          "categoria": "Demais (sem abertura)",
+          "valor": 321.17,
+          "origem": "não informada",
+          "observacao": "sem abertura por categoria neste snapshot",
+          "lancado_em": null
+        }
+      ]
+    },
+    {
+      "titulo": "Por mês",
+      "colunas": [
+        {
+          "chave": "mes_rotulo",
+          "rotulo": "Mês",
+          "tipo": "texto"
+        },
+        {
+          "chave": "mrr",
+          "rotulo": "MRR",
+          "tipo": "moeda"
+        },
+        {
+          "chave": "custos",
+          "rotulo": "Custos",
+          "tipo": "moeda"
+        },
+        {
+          "chave": "margem",
+          "rotulo": "Margem",
+          "tipo": "moeda"
+        },
+        {
+          "chave": "taxas_asaas",
+          "rotulo": "Taxas Asaas",
+          "tipo": "moeda"
+        },
+        {
+          "chave": "das",
+          "rotulo": "DAS",
+          "tipo": "moeda"
+        },
+        {
+          "chave": "resultado",
+          "rotulo": "Resultado",
+          "tipo": "moeda"
+        },
+        {
+          "chave": "situacao",
+          "rotulo": "Situação",
+          "tipo": "texto"
+        }
+      ],
+      "linhas": [
+        {
+          "mes_rotulo": "Out/2026",
+          "mrr": 553,
+          "custos": null,
+          "margem": null,
+          "taxas_asaas": null,
+          "das": null,
+          "resultado": null,
+          "situacao": "Sem lançamento"
+        },
+        {
+          "mes_rotulo": "Set/2026",
+          "mrr": 310.83,
+          "custos": 871.17,
+          "margem": -560.34,
+          "taxas_asaas": 26.95,
+          "das": 45.34,
+          "resultado": -632.63,
+          "situacao": "Parte sem abertura"
+        },
+        {
+          "mes_rotulo": "Ago/2026",
+          "mrr": 140.83,
+          "custos": 300,
+          "margem": -159.17,
+          "taxas_asaas": 12,
+          "das": null,
+          "resultado": -171.17,
+          "situacao": "Lançado"
+        },
+        {
+          "mes_rotulo": "Jul/2026",
+          "mrr": null,
+          "custos": null,
+          "margem": null,
+          "taxas_asaas": null,
+          "das": null,
+          "resultado": null,
+          "situacao": "Sem lançamento"
+        },
+        {
+          "mes_rotulo": "Jun/2026",
+          "mrr": 90,
+          "custos": 250,
+          "margem": -160,
+          "taxas_asaas": null,
+          "das": null,
+          "resultado": -160,
+          "situacao": "Parte sem abertura"
+        },
+        {
+          "mes_rotulo": "Mai/2026",
+          "mrr": null,
+          "custos": null,
+          "margem": null,
+          "taxas_asaas": null,
+          "das": null,
+          "resultado": null,
+          "situacao": "Sem lançamento"
+        }
+      ]
+    },
+    {
+      "titulo": "Lançamentos por mês e categoria",
+      "colunas": [
+        {
+          "chave": "mes_rotulo",
+          "rotulo": "Mês",
+          "tipo": "texto"
+        },
+        {
+          "chave": "categoria",
+          "rotulo": "Categoria",
+          "tipo": "texto"
+        },
+        {
+          "chave": "valor",
+          "rotulo": "Valor",
+          "tipo": "moeda"
+        },
+        {
+          "chave": "origem",
+          "rotulo": "Origem",
+          "tipo": "texto"
+        },
+        {
+          "chave": "observacao",
+          "rotulo": "Observação",
+          "tipo": "texto"
+        }
+      ],
+      "linhas": [
+        {
+          "mes_rotulo": "Set/2026",
+          "categoria": "Anthropic",
+          "valor": 550,
+          "origem": "Conta pessoal do sócio",
+          "observacao": "paga em conta pessoal do socio",
+          "lancado_em": null
+        },
+        {
+          "mes_rotulo": "Set/2026",
+          "categoria": "Demais (sem abertura)",
+          "valor": 321.17,
+          "origem": "não informada",
+          "observacao": "sem abertura por categoria neste snapshot",
+          "lancado_em": null
+        },
+        {
+          "mes_rotulo": "Ago/2026",
+          "categoria": "Infraestrutura",
+          "valor": 120,
+          "origem": "Conta da empresa",
+          "observacao": "Railway e Supabase",
+          "lancado_em": "2026-09-02T13:00:00.000Z"
+        },
+        {
+          "mes_rotulo": "Ago/2026",
+          "categoria": "Meta",
+          "valor": 80,
+          "origem": "Conta da empresa",
+          "observacao": null,
+          "lancado_em": "2026-09-02T13:00:00.000Z"
+        },
+        {
+          "mes_rotulo": "Ago/2026",
+          "categoria": "Outros",
+          "valor": 100,
+          "origem": "Estimativa",
+          "observacao": null,
+          "lancado_em": "2026-09-02T13:00:00.000Z"
+        },
+        {
+          "mes_rotulo": "Jun/2026",
+          "categoria": "Sem abertura",
+          "valor": 250,
+          "origem": "não informada",
+          "observacao": "total do snapshot, sem categoria",
+          "lancado_em": null
+        }
+      ]
+    }
+  ],
+  "series": [
+    {
+      "titulo": "Custos por mês",
+      "tipo": "barras",
+      "pontos": [
+        {
+          "rotulo": "Mai",
+          "mes": "2026-05",
+          "valor": null,
+          "texto": "sem lançamento"
+        },
+        {
+          "rotulo": "Jun",
+          "mes": "2026-06",
+          "valor": 250
+        },
+        {
+          "rotulo": "Jul",
+          "mes": "2026-07",
+          "valor": null,
+          "texto": "sem lançamento"
+        },
+        {
+          "rotulo": "Ago",
+          "mes": "2026-08",
+          "valor": 300
+        },
+        {
+          "rotulo": "Set",
+          "mes": "2026-09",
+          "valor": 871.17
+        },
+        {
+          "rotulo": "Out",
+          "mes": "2026-10",
+          "valor": null,
+          "texto": "sem lançamento"
+        }
+      ]
+    },
+    {
+      "titulo": "Por categoria · Set/2026",
+      "tipo": "rosca",
+      "pontos": [
+        {
+          "rotulo": "Anthropic",
+          "valor": 550,
+          "texto": "R$ 550,00"
+        },
+        {
+          "rotulo": "Demais (sem abertura)",
+          "valor": 321.17,
+          "texto": "R$ 321,17"
+        }
+      ]
+    }
+  ],
+  "insight": "Outubro ainda sem custo lançado: sem ele não há margem nem caixa projetado do mês. Lance em \"Lançar custo do mês\" · 2 meses têm R$ 571,17 sem abertura por categoria (Jun, Set)."
+}

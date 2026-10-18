@@ -10,8 +10,11 @@ import { PainelHoje } from "@/components/admin/painel/PainelHoje";
 // menu é `staff: true`), o gate é o isStaff.
 export default function GestaoAuraHojeScreen() {
   var router = useRouter();
-  var { isStaff } = useAuthStore();
+  var { isStaff, user } = useAuthStore();
   if (!isStaff) return null;
+  // Lançar custo do mês: só a equipe Aura (user.role admin, o que o backend
+  // exige). O papel na empresa (companyRole/member_role "admin") não conta.
+  var podeLancarCusto = !!user && user.role === "admin";
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={s.cnt}>
       <Pressable onPress={function() { router.push("/gestao-aura" as any); }} style={s.backBtn}>
@@ -19,7 +22,7 @@ export default function GestaoAuraHojeScreen() {
         <Text style={s.backText}>Central de Comando</Text>
       </Pressable>
       <View>
-        <PainelHoje />
+        <PainelHoje podeLancarCusto={podeLancarCusto} />
       </View>
     </ScrollView>
   );
