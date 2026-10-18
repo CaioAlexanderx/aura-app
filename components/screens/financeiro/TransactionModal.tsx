@@ -20,6 +20,7 @@ import { valorDoPatch } from "@/utils/editarLancamento";
 import { camposDaSituacao, diferencaPaga, textoDaDiferenca, rotulosDaSituacao, type Situacao } from "@/utils/lancamentoPago";
 import { abrirComprovante, anexarComprovante, escolherComprovante, nomeCurto, removerComprovante } from "@/utils/comprovante";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
+import { useChaveDaVenda } from "@/hooks/useChaveDaVenda";
 import { apareceParaVender, lerVendaSemEstoque, produtoTemEstoque } from "@/utils/vendaSemEstoque";
 
 var isWeb = Platform.OS === "web";
@@ -153,6 +154,11 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
   var [saleItems, setSaleItems] = useState<SaleItem[]>([]);
   var [salePayment, setSalePayment] = useState("pix");
   var [saleSaving, setSaleSaving] = useState(false);
+  // 18/10/2026 (tq-18): chave de idempotência da venda retroativa. A mesma em
+  // toda nova tentativa (timeout e "Registrar" de novo, repetição automática
+  // do request()), inclusive fechando e reabrindo o modal; nova depois da
+  // venda registrada ou de um 409 IDEMPOTENCY_KEY_REUSED.
+  var chaveDaVenda = useChaveDaVenda(company?.id ? "financeiro-venda:" + company.id : null);
   var [variantPending, setVariantPending] = useState<any>(null);
   var [variantOptions, setVariantOptions] = useState<any[]>([]);
   var [variantLoading, setVariantLoading] = useState(false);
@@ -398,11 +404,12 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
     var iso = dateToISO(dateStr); if (!iso) { toast.error("Data inválida. Use DD/MM/AAAA"); return; }
     if (!company?.id) return; setSaleSaving(true);
     try {
-      await pdvApi.createSale(company.id, { items: saleItems.map(function(i) { return { product_id: i.productId, variant_id: i.variantId || undefined, quantity: i.qty, unit_price: i.price, product_name_snapshot: i.name }; }), payment_method: salePayment, sale_date: iso, customer_id: custId || undefined, employee_id: empId || undefined, coupon_code: saleCoupon || undefined });
+      await pdvApi.createSale(company.id, { items: saleItems.map(function(i) { return { product_id: i.productId, variant_id: i.variantId || undefined, quantity: i.qty, unit_price: i.price, product_name_snapshot: i.name }; }), payment_method: salePayment, sale_date: iso, customer_id: custId || undefined, employee_id: empId || undefined, coupon_code: saleCoupon || undefined }, { idempotencyKey: chaveDaVenda.atual() });
+      chaveDaVenda.concluida();
       toast.success("Venda retroativa registrada!");
       qc.invalidateQueries({ queryKey: ["products", company.id] }); qc.invalidateQueries({ queryKey: ["transactions", company.id] }); qc.invalidateQueries({ queryKey: ["dashboard", company.id] }); qc.invalidateQueries({ queryKey: ["customers", company.id] }); qc.invalidateQueries({ queryKey: ["employees", company.id] });
       onSaleCreated?.(); reset(); onClose();
-    } catch (err: any) { toast.error(err?.message || "Erro ao registrar venda"); } finally { setSaleSaving(false); }
+    } catch (err: any) { chaveDaVenda.aposErro(err); toast.error(err?.message || "Erro ao registrar venda"); } finally { setSaleSaving(false); }
   }
 
   if (!visible) return null;

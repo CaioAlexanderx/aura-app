@@ -43,8 +43,10 @@ export var pdvApi = {
   // combinada. Endpoint próprio, e não /pdv/sale com payments[]: o saldo é
   // DERIVADO do total calculado no servidor, e o cliente é resolvido (ou
   // criado) dentro da mesma transação da venda.
-  createSaleComSinal: function(companyId: string, body: any) {
-    return request<any>("/companies/" + companyId + "/pdv/sale-com-sinal", { method: "POST", body: body });
+  // 18/10/2026 (tq-18): aceita a mesma chave do createSale (o backend
+  // delega ao handleSale, que respeita o Idempotency-Key).
+  createSaleComSinal: function(companyId: string, body: any, opts?: { idempotencyKey?: string | null }) {
+    return request<any>("/companies/" + companyId + "/pdv/sale-com-sinal", { method: "POST", body: body, headers: cabecalhoDaChave(opts?.idempotencyKey) });
   },
   scan: function(companyId: string, code: string) {
     return request<PdvScanResult>("/companies/" + companyId + "/pdv/scan/" + encodeURIComponent(code), { retry: 0, timeout: 5000 });

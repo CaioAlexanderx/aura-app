@@ -616,6 +616,17 @@ export function SecaoEstoque(p: Props) {
             </View>
           )}
 
+          {/* Nenhuma cor nem tamanho ainda: a grade só nasce quando a pessoa
+              adiciona. Sem este aviso, salvava-se o produto achando que ela
+              aparecia sozinha (INC-2026-10-17-02). */}
+          {!matriz && !umEixo && (
+            <View style={st.semGrade} testID="estoque-sem-grade">
+              <Text style={s.hint}>
+                {"Adicione as cores e " + (matcon ? "as medidas" : "os tamanhos") + " acima para preencher o estoque de cada variação."}
+              </Text>
+            </View>
+          )}
+
           {umEixo && (
             <View style={st.grade}>
               <View style={[st.linha, st.linhaCab]}>
@@ -689,6 +700,10 @@ const st = {
   grade: {
     marginTop: 4, borderWidth: 1, borderColor: Colors.border, borderRadius: 9,
     backgroundColor: Colors.bg3, overflow: "hidden" as const,
+  },
+  semGrade: {
+    marginTop: 4, borderWidth: 1, borderStyle: "dashed" as const, borderColor: Colors.border2, borderRadius: 9,
+    paddingHorizontal: 12, paddingVertical: 10,
   },
   linha: {
     flexDirection: "row" as const, alignItems: "center" as const, gap: 8,

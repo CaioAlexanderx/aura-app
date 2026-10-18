@@ -32,6 +32,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useCustomers } from "@/hooks/useCustomers";
 import { useProducts } from "@/hooks/useProducts";
 import { pdvApi } from "@/services/pdvApi";
+import { useChaveDaVenda } from "@/hooks/useChaveDaVenda";
 import { serviceOrdersApi, type ServiceOrderItem } from "@/services/serviceOrdersApi";
 import {
   oticaApi, OTICA_SETTINGS_DEFAULTS, LENS_USES, LENS_USE_LABEL, LENS_TREATMENTS,
@@ -167,6 +168,12 @@ export default function OticaNovaScreen() {
 
   const [saving, setSaving] = useState(false);
   const [depositSaleId, setDepositSaleId] = useState<string | null>(null);
+  // 18/10/2026 (tq-18): o depositSaleId só protege depois que a resposta da
+  // venda chega. No timeout (venda gravada, resposta perdida) e na repetição
+  // automática do request(), quem impede o segundo sinal é a chave de
+  // idempotência: a mesma em toda nova tentativa desta OS, inclusive saindo
+  // e abrindo a tela de novo (escopo por empresa, ver useChaveDaVenda).
+  const chaveDaVenda = useChaveDaVenda(company?.id ? "otica-os-sinal:" + company.id : null);
 
   function toggleTreatment(t: string) {
     setTreatments((prev) => prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]);
@@ -265,7 +272,8 @@ export default function OticaNovaScreen() {
           notes: "Óculos — sinal na abertura da OS",
           sinal: { method: sinalMethod, amount: Number(sinalNum.toFixed(2)) },
           saldo_due_date: parseBrDate(promised)!,
-        });
+        }, { idempotencyKey: chaveDaVenda.atual() });
+        chaveDaVenda.concluida();
         saleId = sale?.sale_id || sale?.id || sale?.sale?.id || null;
         setDepositSaleId(saleId);
       }
@@ -293,6 +301,8 @@ export default function OticaNovaScreen() {
       toast.success(`OS #${res.order.os_number} aberta${saleId ? " · sinal registrado" : ""}`);
       router.replace(("/otica/" + res.order.id) as any);
     } catch (err: any) {
+      // tq-18: só o 409 IDEMPOTENCY_KEY_REUSED troca a chave da venda.
+      chaveDaVenda.aposErro(err);
       toast.error(err?.data?.error || "Não deu para abrir a OS");
     } finally {
       setSaving(false);
