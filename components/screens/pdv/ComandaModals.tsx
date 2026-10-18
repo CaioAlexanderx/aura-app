@@ -13,6 +13,10 @@
 //     padrão; "Dividir a conta" escolhe quantas pessoas, o valor e a forma
 //     de cada uma, e só libera o botão quando a soma bate com o total (taxa
 //     incluída). Vira UMA venda com um pagamento por pessoa.
+//     "Alguns itens" (só com o backend que cobra em partes, migration 392):
+//     marca o que a pessoa consumiu (nas linhas com mais de uma unidade,
+//     ajusta a quantidade); a taxa sai sobre o que está sendo cobrado; a
+//     comanda continua aberta com o resto até não sobrar item.
 //
 // Nenhum dos dois faz conta: número, taxa e cupom vêm de utils/comanda.
 // A venda em si é a de sempre — o modal só devolve a comanda para o Caixa
@@ -32,6 +36,7 @@ import {
   minutosAberta, tempoDaComanda,
   PESSOAS_NA_DIVISAO, FORMAS_NA_DIVISAO, partesIguais, somaDasPartes, diferencaDaDivisao, divisaoConfere,
   valorDigitado, valorNoCampo, type OpcoesDaCobranca,
+  cobraEmPartes, temPasso, totalDaSelecao, type SelecaoDeItens, type ItemDaComanda,
 } from "@/utils/comanda";
 
 function fmt(v: number): string {
@@ -240,7 +245,7 @@ type FecharProps = {
 };
 
 /** Os modos do modal de cobrar (mockup tc-04). */
-export type ModoDeCobrar = "tudo" | "dividir";
+export type ModoDeCobrar = "tudo" | "dividir" | "itens";
 
 const PESSOAS_PADRAO = 3;
 
@@ -258,6 +263,8 @@ export function FecharComandaModal(props: FecharProps) {
   const [pessoas, setPessoas] = useState(PESSOAS_PADRAO);
   const [valores, setValores] = useState<string[]>([]);
   const [formas, setFormas] = useState<string[]>([]);
+  // "Alguns itens": id do item → quantidade marcada.
+  const [sel, setSel] = useState<SelecaoDeItens>({});
   const inputRef = useRef<TextInput>(null);
   const abertas = useAbertas(companyId, visible);
   const lista = abertas.data?.comandas || [];
@@ -268,7 +275,7 @@ export function FecharComandaModal(props: FecharProps) {
   useEffect(function () {
     if (!visible) return;
     setTexto(""); setComanda(null); setErro(null); setComTaxa(false); setConfirmaCancelar(false);
-    setModo("tudo"); setPessoas(PESSOAS_PADRAO);
+    setModo("tudo"); setPessoas(PESSOAS_PADRAO); setSel({});
     if (numeroInicial) {
       setTexto(String(numeroInicial));
       buscar(numeroInicial);
@@ -281,7 +288,7 @@ export function FecharComandaModal(props: FecharProps) {
   function buscar(n: number | null) {
     if (n == null) { setErro("Digite o número da comanda."); return; }
     const vez = ++buscaRef.current;
-    setBuscando(true); setErro(null); setComanda(null); setConfirmaCancelar(false); setModo("tudo");
+    setBuscando(true); setErro(null); setComanda(null); setConfirmaCancelar(false); setModo("tudo"); setSel({});
     comandaApi.get(companyId, n)
       .then(function (r) {
         if (vez !== buscaRef.current) return;
@@ -322,8 +329,14 @@ export function FecharComandaModal(props: FecharProps) {
   }
 
   const taxaPct = comTaxa ? TAXA_DE_SERVICO_PCT : 0;
-  const taxa = comanda ? taxaDeServico(comanda.subtotal, taxaPct) : 0;
-  const totalFinal = comanda ? Math.round((comanda.subtotal + taxa) * 100) / 100 : 0;
+  // O que está sendo cobrado: a comanda toda, ou só os itens marcados. A
+  // taxa de serviço sai sobre isso.
+  const emPartes = cobraEmPartes(comanda);
+  const porItens = modo === "itens" && emPartes;
+  const base = comanda ? (porItens ? totalDaSelecao(comanda, sel) : comanda.subtotal) : 0;
+  const taxa = comanda ? taxaDeServico(base, taxaPct) : 0;
+  const totalFinal = comanda ? Math.round((base + taxa) * 100) / 100 : 0;
+  const ficaNaComanda = comanda ? Math.round((comanda.subtotal - base) * 100) / 100 : 0;
   const temConsumo = !!comanda && comanda.items.length > 0;
 
   // Dividir: as partes iguais se refazem quando muda o número de pessoas ou
@@ -339,10 +352,29 @@ export function FecharComandaModal(props: FecharProps) {
 
   const valoresDasPartes = valores.map(function (t) { return valorDigitado(t) ?? 0; });
   const divisaoOk = modo === "dividir" && divisaoConfere(valoresDasPartes, totalFinal);
-  const podeCobrar = temConsumo && (modo !== "dividir" || divisaoOk);
+  const podeCobrar = temConsumo && (modo !== "dividir" || divisaoOk) && (!porItens || base > 0);
+
+  function marcar(it: ItemDaComanda) {
+    setSel(function (antes) {
+      const n = { ...antes };
+      n[it.id] = (antes[it.id] || 0) > 0 ? 0 : Number(it.quantity) || 0;
+      return n;
+    });
+  }
+  function passo(it: ItemDaComanda, d: number) {
+    setSel(function (antes) {
+      const n = { ...antes };
+      n[it.id] = Math.max(0, Math.min(Number(it.quantity) || 0, (antes[it.id] || 0) + d));
+      return n;
+    });
+  }
 
   function cobrar() {
     if (!comanda || !podeCobrar) return;
+    if (porItens) {
+      onCobrar(comanda, taxaPct, { itens: sel });
+      return;
+    }
     if (modo === "dividir") {
       onCobrar(comanda, taxaPct, {
         partes: valoresDasPartes.map(function (v, i) { return { method: formas[i] || "pix", value: v }; }),
@@ -430,7 +462,10 @@ export function FecharComandaModal(props: FecharProps) {
                 <Text style={s.label}>Consumo da comanda {rotuloDaComanda(comanda.number, comanda.name)}</Text>
                 {temConsumo && (
                   <View style={s.seg} testID="fechar-comanda-modos">
-                    {([["tudo", "Cobrar tudo"], ["dividir", "Dividir a conta"]] as const).map(function ([k, rot]) {
+                    {(emPartes
+                      ? ([["tudo", "Cobrar tudo"], ["dividir", "Dividir a conta"], ["itens", "Alguns itens"]] as const)
+                      : ([["tudo", "Cobrar tudo"], ["dividir", "Dividir a conta"]] as const)
+                    ).map(function ([k, rot]) {
                       const on = modo === k;
                       return (
                         <Pressable
@@ -448,6 +483,48 @@ export function FecharComandaModal(props: FecharProps) {
                   </View>
                 )}
                 {comanda.items.length === 0 && <Text style={s.hint}>Esta comanda está sem itens.</Text>}
+                {!!comanda.parcial && (
+                  <Text style={s.hint} testID="fechar-comanda-ja-pago">
+                    Parte já cobrada: {fmt(comanda.paid_subtotal || 0)}. Aqui está só o que falta.
+                  </Text>
+                )}
+                {porItens && comanda.items.map(function (it) {
+                  const q = Math.min(Number(sel[it.id]) || 0, Number(it.quantity) || 0);
+                  const on = q > 0;
+                  return (
+                    <View key={it.id} style={s.linha} testID={"itens-linha-" + it.id}>
+                      <Pressable
+                        testID={"itens-marcar-" + it.id}
+                        onPress={function () { marcar(it); }}
+                        style={s.itemMarcar}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: on }}
+                        accessibilityLabel={(on ? "Desmarcar " : "Marcar ") + it.name}
+                      >
+                        <View style={[s.checkItem, on && s.checkOn]}>
+                          {on && <Icon name="check" size={13} color="#fff" />}
+                        </View>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={s.linhaNome} numberOfLines={2}>{it.name}</Text>
+                          <Text style={s.linhaSub}>{fmtQtd(it.quantity)} × {fmt(it.unit_price)}</Text>
+                        </View>
+                      </Pressable>
+                      {temPasso(it.quantity) ? (
+                        <View style={s.passo}>
+                          <Pressable testID={"itens-menos-" + it.id} onPress={function () { passo(it, -1); }} style={s.passoBtn} accessibilityLabel={"Menos " + it.name}>
+                            <Text style={s.passoTxt}>−</Text>
+                          </Pressable>
+                          <Text style={s.passoQtd} testID={"itens-qtd-" + it.id}>{q}</Text>
+                          <Pressable testID={"itens-mais-" + it.id} onPress={function () { passo(it, 1); }} style={s.passoBtn} accessibilityLabel={"Mais " + it.name}>
+                            <Text style={s.passoTxt}>+</Text>
+                          </Pressable>
+                        </View>
+                      ) : (
+                        <Text style={s.linhaVal}>{fmt(it.total)}</Text>
+                      )}
+                    </View>
+                  );
+                })}
                 {modo === "tudo" && comanda.items.map(function (it) {
                   return (
                     <View key={it.id} style={s.linha}>
@@ -469,8 +546,8 @@ export function FecharComandaModal(props: FecharProps) {
 
                 <View style={s.resumo}>
                   <View style={s.resumoRow}>
-                    <Text style={s.resumoLbl}>Consumo</Text>
-                    <Text style={s.resumoVal}>{fmt(comanda.subtotal)}</Text>
+                    <Text style={s.resumoLbl}>{porItens ? "Cobrando agora" : "Consumo"}</Text>
+                    <Text style={s.resumoVal} testID="fechar-comanda-base">{fmt(base)}</Text>
                   </View>
                   <Pressable
                     testID="fechar-comanda-taxa"
@@ -491,7 +568,18 @@ export function FecharComandaModal(props: FecharProps) {
                     <Text style={s.totalLbl}>Total</Text>
                     <Text style={s.totalVal} testID="fechar-comanda-total">{fmt(totalFinal)}</Text>
                   </View>
+                  {porItens && (
+                    <View style={s.resumoRow}>
+                      <Text style={s.resumoLbl}>Fica na comanda</Text>
+                      <Text style={s.resumoVal} testID="fechar-comanda-fica">{fmt(ficaNaComanda)}</Text>
+                    </View>
+                  )}
                 </View>
+                {porItens && (
+                  <Text style={s.nota}>
+                    Vira uma venda com nota própria. A comanda continua aberta com o que sobrou e só fecha quando não restar item.
+                  </Text>
+                )}
 
                 {modo === "dividir" && (
                   <Divisao
@@ -535,7 +623,7 @@ export function FecharComandaModal(props: FecharProps) {
               style={[s.btnPri, !podeCobrar && s.btnPriOff]}
             >
               <Text style={[s.btnPriTxt, !podeCobrar && { color: "rgba(255,255,255,0.55)" }]}>
-                {temConsumo ? "Cobrar " + fmt(totalFinal) : "Cobrar no Caixa"}
+                {!temConsumo ? "Cobrar no Caixa" : (porItens && base <= 0 ? "Marque os itens" : "Cobrar " + fmt(totalFinal))}
               </Text>
             </Pressable>
           </View>
@@ -697,6 +785,15 @@ const s = StyleSheet.create({
   linhaQtd: { fontSize: 12.5, color: Colors.ink2, fontWeight: "700", minWidth: 34 },
   linhaNome: { flex: 1, fontSize: 13, color: Colors.ink },
   linhaVal: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
+  // tc-04 "Alguns itens": a linha inteira marca (alvo grande); o − / + fica
+  // separado, sem disparar a marcação.
+  linhaSub: { fontSize: 11, color: Colors.ink3, marginTop: 1 },
+  itemMarcar: { flex: 1, minWidth: 0, minHeight: 42, flexDirection: "row", alignItems: "center", gap: 10 },
+  checkItem: { width: 22, height: 22, borderRadius: 7, borderWidth: 1.5, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
+  passo: { flexDirection: "row", alignItems: "center", gap: 6 },
+  passoBtn: { width: 36, height: 36, borderRadius: 9, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
+  passoTxt: { fontSize: 16, fontWeight: "700", color: Colors.violet3 },
+  passoQtd: { minWidth: 18, textAlign: "center", fontSize: 14, fontWeight: "700", color: Colors.ink },
   linhaX: { width: 24, height: 24, borderRadius: 6, alignItems: "center", justifyContent: "center", backgroundColor: Colors.bg4 },
   resumo: { marginTop: 10, gap: 2 },
   resumoRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 7 },

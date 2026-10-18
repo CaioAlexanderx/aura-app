@@ -101,8 +101,14 @@ export function novaChaveDaVenda(): string {
 }
 
 /** A comanda que este carrinho está cobrando (09/10/2026). `name` (17/10,
- *  tc-01) só para o aviso de cobrança; a venda leva apenas o id. */
-export type ComandaNoCarrinho = { id: string; number: number; feePct: number; name?: string | null };
+ *  tc-01) só para o aviso de cobrança.
+ *  `itemIds`/`itemQty` (17/10, tc-04): os itens da comanda que esta venda
+ *  cobra (comanda_item_ids / comanda_item_qty no POST). Ausentes = a comanda
+ *  inteira, como antes. */
+export type ComandaNoCarrinho = {
+  id: string; number: number; feePct: number; name?: string | null;
+  itemIds?: string[]; itemQty?: Record<string, number>;
+};
 
 export type SaleResult = {
   id: string;
@@ -902,6 +908,10 @@ export function useCart(
       quote_id: quoteId || undefined,
       comanda_id: comanda ? comanda.id : undefined,
       comanda_service_fee_pct: comanda && comanda.feePct > 0 ? comanda.feePct : undefined,
+      // tc-04: só estes itens da comanda (sem eles, a comanda inteira).
+      comanda_item_ids: comanda && comanda.itemIds && comanda.itemIds.length > 0 ? comanda.itemIds : undefined,
+      comanda_item_qty: comanda && comanda.itemIds && comanda.itemIds.length > 0 && comanda.itemQty && Object.keys(comanda.itemQty).length > 0
+        ? comanda.itemQty : undefined,
       referred_by_professional_id: referredProfessionalId || undefined,
     };
 

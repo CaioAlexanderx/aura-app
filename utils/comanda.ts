@@ -114,6 +114,12 @@ export type Comanda = {
   items: ItemDaComanda[];
   items_count: number;
   subtotal: number;
+  /** 17/10/2026 (tc-04, backend migration 392): algum item já foi cobrado
+   *  numa venda parcial. `items`/`subtotal` são só o que falta cobrar.
+   *  Ausente = backend sem cobrança parcial (aí "Alguns itens" não aparece). */
+  parcial?: boolean;
+  /** Consumo já cobrado (backend 392). */
+  paid_subtotal?: number;
 };
 
 /** Valor da taxa de serviço sobre o consumo. */
@@ -293,7 +299,65 @@ export type ParteDaConta = { method: string; value: number };
 export type OpcoesDaCobranca = {
   /** "Dividir a conta": uma parte por pessoa, somando o total. */
   partes?: ParteDaConta[];
+  /** "Alguns itens": id do item da comanda → quantidade cobrada agora. */
+  itens?: SelecaoDeItens;
 };
+
+// ── Cobrar alguns itens (17/10/2026, tc-04) ──────────────────
+// Quem vai embora antes paga o que consumiu: a venda leva só os itens
+// marcados (comanda_item_ids; comanda_item_qty para parte de uma linha, como
+// 2 das 4 cervejas) e a comanda continua aberta com o resto até não sobrar
+// item. Só com o backend da migration 392 — é ele que devolve `parcial`.
+
+/** id do item da comanda → quantidade a cobrar agora (0 = não cobra). */
+export type SelecaoDeItens = Record<string, number>;
+
+/** O backend sabe cobrar parte da comanda? (devolve `parcial`). */
+export function cobraEmPartes(c: Pick<Comanda, "parcial"> | null | undefined): boolean {
+  return !!c && typeof c.parcial === "boolean";
+}
+
+/** Linha com mais de uma unidade inteira ganha o − / +; o resto (kg,
+ *  fração) só marca ou desmarca a linha inteira. */
+export function temPasso(quantidade: number): boolean {
+  const q = Number(quantidade) || 0;
+  return q > 1 && Number.isInteger(q);
+}
+
+function qtdNaSelecao(it: ItemDaComanda, sel: SelecaoDeItens): number {
+  const q = Number(sel[it.id]) || 0;
+  if (q <= 0) return 0;
+  return Math.min(q, Number(it.quantity) || 0);
+}
+
+/** Quanto vale o que está marcado. */
+export function totalDaSelecao(c: Comanda, sel: SelecaoDeItens): number {
+  return round2((c.items || []).reduce(function (s, it) { return s + qtdNaSelecao(it, sel) * (Number(it.unit_price) || 0); }, 0));
+}
+
+/** A comanda só com o que está marcado (quantidade e total da parte): é ela
+ *  que vira o carrinho, e a taxa de serviço sai sobre esse subtotal. */
+export function comandaSoComOsItens(c: Comanda, sel: SelecaoDeItens): Comanda {
+  const items = (c.items || []).filter(function (it) { return qtdNaSelecao(it, sel) > 0; }).map(function (it) {
+    const q = qtdNaSelecao(it, sel);
+    return { ...it, quantity: q, total: round2(q * (Number(it.unit_price) || 0)) };
+  });
+  return { ...c, items: items, items_count: items.length, subtotal: round2(items.reduce(function (s, it) { return s + it.total; }, 0)) };
+}
+
+/** O que vai no POST da venda: os ids cobrados e, só para a linha cobrada
+ *  em parte, a quantidade. Sem nada marcado → ids vazio. */
+export function itensCobrados(c: Comanda, sel: SelecaoDeItens): { ids: string[]; qtd: Record<string, number> } {
+  const ids: string[] = [];
+  const qtd: Record<string, number> = {};
+  for (const it of c.items || []) {
+    const q = qtdNaSelecao(it, sel);
+    if (q <= 0) continue;
+    ids.push(it.id);
+    if (q < (Number(it.quantity) || 0)) qtd[it.id] = q;
+  }
+  return { ids: ids, qtd: qtd };
+}
 
 /** O total em `n` partes iguais, em centavos certos. Os centavos que sobram
  *  vão para a primeira pessoa (160 / 3 → 53,34 + 53,33 + 53,33). */
