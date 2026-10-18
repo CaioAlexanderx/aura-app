@@ -139,6 +139,10 @@ export type PdvSettings = {
   warranty_terms?: string | null;
   label_offset_mm?: number;
   label_cols?: number;
+  // 18/10/2026 (card f1-16, Aura-backend#862): desenho da etiqueta.
+  // null/ausente = padrão do modelo (105x21 e 40x25 editoriais, os outros
+  // clássicos). Leitura só por buildLabelHtml.labelDesignEfetivo.
+  label_design?: "classico" | "editorial" | null;
   // 15/10/2026 (Aura-backend, feat/pdv-settings-etiquetas-na-conta): medidas
   // próprias e calibração da impressora salvas na CONTA. null = a loja nunca
   // salvou; ausente = backend antigo. Leitura e escrita só por

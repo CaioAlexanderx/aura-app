@@ -295,6 +295,34 @@ export const LABEL_SIZE_KEYS: LabelSizeKey[] = ["99x21", "105x21", "30x25", "58m
 export const DEFAULT_LABEL_SIZE: LabelSizeKey = "99x21";
 // -------------------------------------------
 
+// ----- Desenho da etiqueta, opcao da loja (18/10/2026, card f1-16) -----
+// pdv_settings.label_design: "classico" (layout Finesse) | "editorial"
+// (desenho C: Montserrat, loja no topo, ajuste automatico) | null/ausente.
+// Ausente = o desenho PADRAO do modelo (`design` do preset), byte a byte o
+// HTML de antes da opcao (fixtures em __tests__/etiquetasDouradas.test.ts).
+// So troca o desenho do TEXTO: geometria (pagina, celula, vao), .bc-box, SVG
+// e BARCODE_OPTS sao os mesmos nos dois desenhos.
+// A opcao vale nos modelos de celula 33x21 e 30x25 (99x21, 105x21, 30x25).
+// 40x25 (editorial compacto), bobina 58mm (barcode proprio, bcModuleMm) e a
+// "Minha medida" ficam com o desenho de hoje nesta entrega.
+export type LabelDesign = "classico" | "editorial";
+export const LABEL_DESIGN_SIZES: LabelSizeKey[] = ["99x21", "105x21", "30x25"];
+
+/** Desenho padrao do modelo (o de sempre, sem escolha da loja). */
+export function labelDesignPadrao(size: LabelSizeKey | undefined): LabelDesign {
+  const preset = LABEL_SIZE_PRESETS[size || DEFAULT_LABEL_SIZE];
+  return preset && preset.design === "editorial" ? "editorial" : "classico";
+}
+
+/** Desenho que sai na impressao: a escolha da loja, quando valida e o modelo
+ *  aceita a opcao; senao o padrao do modelo. */
+export function labelDesignEfetivo(size: LabelSizeKey | undefined, design?: string | null): LabelDesign {
+  const key = size || DEFAULT_LABEL_SIZE;
+  if ((design === "classico" || design === "editorial") && LABEL_DESIGN_SIZES.indexOf(key) >= 0) return design;
+  return labelDesignPadrao(key);
+}
+// -------------------------------------------
+
 type BuildOptions = {
   mode: "barcode" | "qr";
   storeName: string;
@@ -337,6 +365,10 @@ type BuildOptions = {
   // moldura de teste (moldura 1 mm para dentro da borda, cruz no centro e
   // setas nas 4 bordas), com a mesma geometria e o mesmo ajuste.
   testFrame?: boolean;
+  // 18/10/2026 (card f1-16) — pdv_settings.label_design. Ausente/null =
+  // desenho padrao do modelo (nada muda). Ignorado com customSpec e nos
+  // modelos fora de LABEL_DESIGN_SIZES (ver labelDesignEfetivo).
+  design?: LabelDesign | null;
 };
 
 // ----- Calibracao da impressora (13/10/2026) -----
@@ -425,7 +457,12 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   // Desenho "editorial" (preset "105x21", 25/09/2026). Tudo que ele emite
   // (CSS, fonte, script de ajuste, marcacao) fica atras desta flag: os
   // presets sem `design` saem byte-identicos.
-  const isEditorial = preset.design === "editorial";
+  // 18/10/2026 (f1-16): nos modelos fixos o desenho pode vir da loja
+  // (options.design); ausente, labelDesignEfetivo devolve o `design` do
+  // preset — a mesma flag de antes. Medida livre: sempre o do spec.
+  const isEditorial = custom
+    ? preset.design === "editorial"
+    : labelDesignEfetivo(options.labelSize, options.design) === "editorial";
 
   const cells: string[] = [];
   let labelIdx = 0;
@@ -617,6 +654,14 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
     html += '.bc-inner.ed.stack .row{flex-wrap:wrap;gap:0.2mm}';
     html += '.bc-inner.ed.stack .row .variant{max-width:100%}';
     html += '.bc-inner.ed.stack .price{width:100%;text-align:right;font-size:9pt}'; // 9pt: com 9,5pt a celula empilhada encolhia o barcode 1,6%; com 9pt, 0,2%
+    // 18/10/2026 (f1-16): editorial por opcao da loja numa celula alta
+    // (30x25). Na celula de 30mm o selo quase sempre empilha, e o nome em
+    // 1 linha cortava ("Vestido Midi Tule..."); com 25mm de altura sobra
+    // espaco para as 2 linhas. So emitido nesse caso: 105x21, 40x25 e Minha
+    // medida (editoriais de fabrica) nao mudam um byte.
+    if (!custom && preset.design !== "editorial" && preset.cellHeightMm >= 25) {
+      html += '.bc-inner.ed.stack .name{-webkit-line-clamp:2}';
+    }
     // Preco no cartao (so lojas Matcon): 1 linha a mais, nome cai pra 1 linha.
     html += '.bc-inner.ed .card-line{font-size:5pt;font-weight:700;line-height:1;white-space:nowrap;width:100%;text-align:right}';
     html += '.bc-inner.ed.ed-card .name{-webkit-line-clamp:1}';
@@ -857,7 +902,7 @@ export function buildLabelTestHtml(options: BuildOptions & { rows?: number }): s
   return buildLabelHtml([item], {
     mode: options.mode, storeName: options.storeName, showStoreName: options.showStoreName, labelSize: options.labelSize,
     offsetMm: options.offsetMm, continuous: options.continuous, rowPitchMm: options.rowPitchMm, offsetYMm: options.offsetYMm,
-    calibrationMarks: true,
+    calibrationMarks: true, design: options.design,
   });
 }
 

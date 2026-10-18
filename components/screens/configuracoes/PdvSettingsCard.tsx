@@ -19,6 +19,17 @@ import { Card } from "@/components/screens/configuracoes/shared";
 import { CardFeeSection, type CardFeePalette } from "@/components/screens/configuracoes/CardFeeSection";
 import { CardPriceSection } from "@/components/screens/configuracoes/CardPriceSection";
 import { FrenteDaLoja, nomeDaFrente } from "@/components/screens/configuracoes/FrenteDaLoja";
+import {
+  LABEL_DESIGN_SIZES, LABEL_SIZE_KEYS, DEFAULT_LABEL_SIZE, LABEL_SIZE_PRESETS, labelDesignPadrao,
+  type LabelDesign, type LabelSizeKey,
+} from "@/components/screens/estoque/labels/buildLabelHtml";
+
+// 18/10/2026 (card f1-16): desenho da etiqueta, opção da loja. Só muda o
+// texto da etiqueta; tamanho, vão e código de barras são os mesmos.
+const DESENHOS_DA_ETIQUETA: Array<{ key: LabelDesign; nome: string; hint: string }> = [
+  { key: "classico", nome: "Clássico", hint: "Código de barras no meio, nome e preço embaixo" },
+  { key: "editorial", nome: "Editorial", hint: "Loja no topo, nome inteiro do produto, preço em destaque e código no rodapé" },
+];
 
 // ============================================================
 // AURA. — Configurações do Caixa (PDV) por empresa
@@ -102,7 +113,16 @@ export function PdvSettingsCard() {
     return { auto: arr.length - manual, manual };
   }, [produtosData]);
 
-  async function toggle(key: keyof PdvSettings, value: boolean | number) {
+  // Desenho da etiqueta: a escolha salva ou, sem escolha (null), o padrão do
+  // modelo da loja — o que ela imprime hoje.
+  const rawSize = (display as any).label_size;
+  const modeloDaLoja: LabelSizeKey = (LABEL_SIZE_KEYS as string[]).indexOf(rawSize) >= 0 ? rawSize : DEFAULT_LABEL_SIZE;
+  const desenhoAtivo: LabelDesign = display.label_design === "classico" || display.label_design === "editorial"
+    ? display.label_design
+    : labelDesignPadrao(modeloDaLoja);
+  const modeloAceitaDesenho = LABEL_DESIGN_SIZES.indexOf(modeloDaLoja) >= 0;
+
+  async function toggle(key: keyof PdvSettings, value: boolean | number | string) {
     if (!company?.id || saving) return;
     const next: PdvSettings = { ...display, [key]: value } as PdvSettings;
     setPendingSettings(next);
@@ -432,6 +452,39 @@ export function PdvSettingsCard() {
           despesa a parte, na data da venda (competencia, nao repasse).
           18/08/2026: secao extraida pra CardFeeSection — o Studio renderiza
           a mesma secao com tokens proprios em app/studio/(estudio)/configuracoes. */}
+      {/* 18/10/2026 (card f1-16): desenho da etiqueta (pdv_settings.
+          label_design). Sem escolha = padrão do modelo; vale em todos os
+          computadores da loja. */}
+      <Text style={s.groupHeader}>Etiquetas</Text>
+      <View style={s.rowCol}>
+        <Text style={s.rowLabel}>Desenho da etiqueta</Text>
+        <Text style={s.rowDesc}>
+          {"Vale para as etiquetas 33x21mm e 30x25mm, em todos os computadores da loja. O tamanho e o código de barras não mudam." +
+            (modeloAceitaDesenho ? "" : " O seu modelo (" + LABEL_SIZE_PRESETS[modeloDaLoja].uiLabel + ") continua com o desenho de hoje.")}
+        </Text>
+        <View style={s.chips}>
+          {DESENHOS_DA_ETIQUETA.map(function(d) {
+            const ativo = desenhoAtivo === d.key;
+            return (
+              <Pressable
+                key={d.key}
+                testID={"desenho-etiqueta-" + d.key}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: ativo, disabled: saving }}
+                disabled={saving}
+                onPress={function() { if (display.label_design !== d.key) toggle("label_design", d.key); }}
+                style={[s.chip, ativo && s.chipOn]}
+              >
+                <Text style={[s.chipNome, ativo && s.chipNomeOn]}>{d.nome}</Text>
+                <Text style={s.chipHint}>{d.hint}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={s.divider} />
+
       <Text style={s.groupHeader}>Cartão</Text>
       <CardFeeSection display={display} saving={saving} onToggle={toggle} palette={CARD_FEE_PALETTE} />
 
@@ -548,6 +601,13 @@ const s = StyleSheet.create({
   rowLabel:    { fontSize: 13, color: Colors.ink, fontWeight: "600" },
   rowDesc:     { fontSize: 11, color: Colors.ink3, marginTop: 2, lineHeight: 15 },
   divider:     { height: 1, backgroundColor: Colors.border, marginVertical: 2 },
+  rowCol:      { paddingVertical: 10 },
+  chips:       { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
+  chip:        { flexGrow: 1, flexBasis: 200, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg3 },
+  chipOn:      { borderColor: Colors.violet, backgroundColor: Colors.violetD },
+  chipNome:    { fontSize: 13, color: Colors.ink, fontWeight: "700" },
+  chipNomeOn:  { color: Colors.violet3 },
+  chipHint:    { fontSize: 11, color: Colors.ink3, marginTop: 3, lineHeight: 15 },
   groupHeader: { fontSize: 10, color: Colors.ink3, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase", marginTop: 6 },
   caixaLink:   {
     flexDirection: "row", alignItems: "center", gap: 8,
