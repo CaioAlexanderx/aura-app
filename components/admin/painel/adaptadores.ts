@@ -229,6 +229,8 @@ function capitalizar(t: string): string { return t.charAt(0).toUpperCase() + t.s
 var TOM_DA_SITUACAO: Record<string, Tom> = {
   pagante: "sobe", trial: "alerta", novo: "alerta",
   "sem resposta": "desce", aurinha: "alerta", caio: "sobe",
+  // Bloco Custos: custo pago na conta pessoal do sócio, fora do caixa da empresa.
+  "aporte do sócio": "alerta",
 };
 
 function celulaDe(col: PainelApiLista["colunas"][0], row: Record<string, any>): Celula {

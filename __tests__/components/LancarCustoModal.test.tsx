@@ -51,10 +51,10 @@ const fx = (nome: string) => JSON.parse(JSON.stringify(require("../__fixtures__/
 const OUTUBRO = {
   mes: "2026-10", existe_linha: true, mrr_total: 1843.93, total_costs: 0, taxas_asaas: null, das: null, sem_abertura: null,
   categorias: [
-    { id: "infraestrutura", rotulo: "Infraestrutura", ajuda: "Railway, Supabase, Cloudflare, domínio", valor: null, origem: null, observacao: null, lancado_em: null },
+    { id: "infraestrutura", rotulo: "Infraestrutura", ajuda: "Supabase, Railway e domínio", valor: null, origem: null, observacao: null, lancado_em: null },
     { id: "anthropic", rotulo: "Anthropic", ajuda: "API e assinatura do Claude", valor: null, origem: null, observacao: null, lancado_em: null },
-    { id: "meta", rotulo: "Meta", ajuda: "WhatsApp Business e anúncios", valor: null, origem: null, observacao: null, lancado_em: null },
-    { id: "outros", rotulo: "Outros", ajuda: "Ferramentas e o que não cabe acima", valor: null, origem: null, observacao: null, lancado_em: null },
+    { id: "meta", rotulo: "Meta", ajuda: "Anúncios", valor: null, origem: null, observacao: null, lancado_em: null },
+    { id: "outros", rotulo: "Outros", ajuda: "Jim.com, Pássaro Marrom, alimentação", valor: null, origem: null, observacao: null, lancado_em: null },
   ],
   origens: [{ id: "empresa", rotulo: "Conta da empresa" }, { id: "socio", rotulo: "Conta pessoal do sócio" }, { id: "estimativa", rotulo: "Estimativa" }],
 };
@@ -117,6 +117,11 @@ describe("bloco Custos", () => {
     const det = text(tree);
     expect(det).toContain("R$ 871,17");
     expect(det).toContain("Conta pessoal do sócio");
+    // rótulos da Financeiro (18/10): aporte do sócio, DAS pago, receita do snapshot
+    expect(det).toContain("Aporte do sócio");
+    expect(det).toContain("DAS pago (do snapshot)");
+    expect(det).toContain("Receita do snapshot");
+    expect(det).not.toContain('"MRR"');
     tree.unmount();
   });
 
@@ -154,6 +159,9 @@ describe("bloco Custos", () => {
     await digitar(tree, "custo-obs-infraestrutura", "Railway + Supabase");
     await digitar(tree, "custo-valor-anthropic", "550");
     await press(tree, "custo-origem-anthropic-socio");
+    expect(byTestId(tree, "custo-aporte-anthropic")).toHaveLength(1);
+    expect(byTestId(tree, "custo-aporte-infraestrutura")).toHaveLength(0);
+    expect(text(tree)).toContain("Compras pessoais (retirada) não entram.");
     await digitar(tree, "custo-motivo", "fechamento parcial");
     expect([].concat(byTestId(tree, "custo-total")[0].props.children).join("")).toMatch(/R\$ 730,40$/);
     expect(byTestId(tree, "custo-salvar")[0].props.disabled).toBe(false);

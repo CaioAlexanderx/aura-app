@@ -28,6 +28,9 @@ import {
 } from "./lancarCusto";
 import type { LinhaDoForm } from "./lancarCusto";
 
+// Dica combinada com a Financeiro (18/10/2026), perto das categorias.
+export var DICA_CATEGORIAS = "infraestrutura = Supabase, Railway e domínio · anthropic · meta = anúncios · outros = Jim.com, Pássaro Marrom, alimentação · demais = só o que ainda não tem categoria. Compras pessoais (retirada) não entram.";
+
 var MSG_ERRO = "Não consegui salvar. Confira a conexão e tente de novo: se o custo tiver entrado, ele aparece no bloco.";
 
 type Props = {
@@ -109,7 +112,7 @@ export function LancarCustoModal(props: Props) {
       visible={props.visible}
       id="lancar-custo"
       titulo="Lançar custo do mês"
-      subtitulo="Custos da Aura por categoria. Taxas da Asaas e DAS ficam fora."
+      subtitulo="Custos da Aura por categoria. Taxas da Asaas e DAS pago ficam fora."
       antesDoTitulo={<View style={c.ico}><Icon name="dollar" size={16} color={Paleta.accentTexto} /></View>}
       onClose={props.onClose}
       rodape={
@@ -147,10 +150,15 @@ export function LancarCustoModal(props: Props) {
         {q.data ? (
           <Text style={c.nota} testID="custo-situacao">
             {q.data.existe_linha
-              ? "Gravado hoje: " + brl(q.data.total_costs, true) + (q.data.mrr_total != null ? " · MRR " + brl(q.data.mrr_total, true) : "")
-              : "Mês ainda sem linha no snapshot: o lançamento cria a linha e o cálculo diário completa o MRR."}
+              ? "Gravado hoje: " + brl(q.data.total_costs, true) + (q.data.mrr_total != null ? " · receita do snapshot " + brl(q.data.mrr_total, true) : "")
+              : "Mês ainda sem linha no snapshot: o lançamento cria a linha e o cálculo diário completa a receita."}
           </Text>
         ) : null}
+      </View>
+
+      <View style={c.dica} testID="custo-dica">
+        <Icon name="info" size={13} color={Colors.ink3} />
+        <Text style={c.dicaText}>{DICA_CATEGORIAS}</Text>
       </View>
 
       {q.isLoading ? (
@@ -205,6 +213,12 @@ export function LancarCustoModal(props: Props) {
                 placeholderTextColor={Colors.ink3}
                 style={c.campo}
               />
+              {l.origem === "socio" ? (
+                <View style={c.aporte} testID={"custo-aporte-" + l.id}>
+                  <Text style={c.aporteText}>Aporte do sócio</Text>
+                  <Text style={c.nota}>custo do mês, mas não saiu do caixa da empresa</Text>
+                </View>
+              ) : null}
               {e ? <Text style={c.erro} testID={"custo-erro-" + l.id}>{e}</Text> : null}
             </View>
           );
@@ -254,6 +268,10 @@ var c = StyleSheet.create({
   valor: { flex: 1, paddingVertical: 8, fontSize: 15, fontWeight: "600", color: Colors.ink, textAlign: "right" },
   campo: { borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg3, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, fontSize: 14, color: Colors.ink },
   erro: { fontSize: 12, color: Colors.red },
+  dica: { flexDirection: "row", alignItems: "flex-start", gap: 6, backgroundColor: Colors.bg4, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
+  dicaText: { flex: 1, fontSize: 12, lineHeight: 17, color: Colors.ink3 },
+  aporte: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
+  aporteText: { fontSize: 11, fontWeight: "700", color: Colors.amber, backgroundColor: Colors.amberD, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, overflow: "hidden" },
   estado: { paddingVertical: 24, alignItems: "center" },
   caixaErro: { flexDirection: "row", alignItems: "flex-start", gap: 8, borderWidth: 1, borderColor: Colors.red, backgroundColor: Colors.redD, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
   caixaErroText: { flex: 1, fontSize: 13, color: Colors.red, lineHeight: 18 },

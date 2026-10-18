@@ -27,7 +27,7 @@
     {
       "rotulo": "Resultado · Set",
       "valor": -632.63,
-      "nota": "depois de taxas da Asaas e DAS"
+      "nota": "depois de taxas da Asaas e DAS pago (do snapshot) · provisório até o fechamento do mês"
     }
   ],
   "listas": [
@@ -50,6 +50,11 @@
           "tipo": "texto"
         },
         {
+          "chave": "status",
+          "rotulo": "Caixa",
+          "tipo": "texto"
+        },
+        {
           "chave": "observacao",
           "rotulo": "Observação",
           "tipo": "texto"
@@ -65,6 +70,7 @@
           "categoria": "Anthropic",
           "valor": 550,
           "origem": "Conta pessoal do sócio",
+          "status": "Aporte do sócio",
           "observacao": "paga em conta pessoal do socio",
           "lancado_em": null
         },
@@ -72,6 +78,7 @@
           "categoria": "Demais (sem abertura)",
           "valor": 321.17,
           "origem": "não informada",
+          "status": null,
           "observacao": "sem abertura por categoria neste snapshot",
           "lancado_em": null
         }
@@ -87,7 +94,7 @@
         },
         {
           "chave": "mrr",
-          "rotulo": "MRR",
+          "rotulo": "Receita do snapshot",
           "tipo": "moeda"
         },
         {
@@ -107,7 +114,7 @@
         },
         {
           "chave": "das",
-          "rotulo": "DAS",
+          "rotulo": "DAS pago (do snapshot)",
           "tipo": "moeda"
         },
         {
@@ -208,6 +215,11 @@
           "tipo": "texto"
         },
         {
+          "chave": "status",
+          "rotulo": "Caixa",
+          "tipo": "texto"
+        },
+        {
           "chave": "observacao",
           "rotulo": "Observação",
           "tipo": "texto"
@@ -219,6 +231,7 @@
           "categoria": "Anthropic",
           "valor": 550,
           "origem": "Conta pessoal do sócio",
+          "status": "Aporte do sócio",
           "observacao": "paga em conta pessoal do socio",
           "lancado_em": null
         },
@@ -227,6 +240,7 @@
           "categoria": "Demais (sem abertura)",
           "valor": 321.17,
           "origem": "não informada",
+          "status": null,
           "observacao": "sem abertura por categoria neste snapshot",
           "lancado_em": null
         },
@@ -235,6 +249,7 @@
           "categoria": "Infraestrutura",
           "valor": 120,
           "origem": "Conta da empresa",
+          "status": null,
           "observacao": "Railway e Supabase",
           "lancado_em": "2026-09-02T13:00:00.000Z"
         },
@@ -243,6 +258,7 @@
           "categoria": "Meta",
           "valor": 80,
           "origem": "Conta da empresa",
+          "status": null,
           "observacao": null,
           "lancado_em": "2026-09-02T13:00:00.000Z"
         },
@@ -251,6 +267,7 @@
           "categoria": "Outros",
           "valor": 100,
           "origem": "Estimativa",
+          "status": null,
           "observacao": null,
           "lancado_em": "2026-09-02T13:00:00.000Z"
         },
@@ -259,6 +276,7 @@
           "categoria": "Sem abertura",
           "valor": 250,
           "origem": "não informada",
+          "status": null,
           "observacao": "total do snapshot, sem categoria",
           "lancado_em": null
         }
@@ -322,5 +340,5 @@
       ]
     }
   ],
-  "insight": "Outubro ainda sem custo lançado: sem ele não há margem nem caixa projetado do mês. Lance em \"Lançar custo do mês\" · 2 meses têm R$ 571,17 sem abertura por categoria (Jun, Set)."
+  "insight": "Outubro ainda sem custo lançado: sem ele não há margem nem caixa projetado do mês. Lance em \"Lançar custo do mês\" · 2 meses têm R$ 571,17 sem abertura por categoria (Jun, Set) · Resultado depois de taxas e DAS é provisório até o fechamento do mês · O DAS pago (do snapshot) está deslocado em um mês em relação à receita: o DAS gravado num mês é o da receita do mês anterior · De jun a set a receita do snapshot é a cobrança com vencimento no mês, não o MRR contratual: a comparação mês a mês não é da mesma medida · R$ 550,00 de Set é aporte do sócio: custo de competência que não saiu do caixa da empresa."
 }
