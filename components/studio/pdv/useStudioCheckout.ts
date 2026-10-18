@@ -22,6 +22,7 @@ import { pdvApi } from "@/services/pdvApi";
 import { request } from "@/services/api";
 import { couponsApi } from "@/services/couponsApi";
 import { nfceApi } from "@/services/nfceApi";
+import { useChaveDaVenda } from "@/hooks/useChaveDaVenda";
 import type { CartLine, SaleDone, PaymentEntry } from "./types";
 import {
   round2,
@@ -54,6 +55,12 @@ export function useStudioCheckout(cid: string | undefined) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<SaleDone | null>(null);
+  // 18/10/2026 (tq-18): chave de idempotência da venda (Idempotency-Key).
+  // A mesma em toda nova tentativa desta venda — o timeout seguido de
+  // "Fechar venda" de novo, a repetição automática do request() e a volta à
+  // tela (escopo por empresa, ver useChaveDaVenda) — e nova
+  // depois da venda registrada ou de um 409 IDEMPOTENCY_KEY_REUSED.
+  const chaveDaVenda = useChaveDaVenda(cid ? "studio-checkout:" + cid : null);
 
   // ── Config fiscal (nfce_config) — gate de exibição + auto-emissão ──
   const [fiscalEnabled, setFiscalEnabled] = useState(false);
@@ -294,9 +301,12 @@ export function useStudioCheckout(cid: string | undefined) {
             : manual;
         }
 
+        const opcoesDaVenda = { idempotencyKey: chaveDaVenda.atual() };
         const saleRes = signalMode
-          ? await pdvApi.createSaleComSinal(cid, saleBody)
-          : await pdvApi.createSale(cid, saleBody);
+          ? await pdvApi.createSaleComSinal(cid, saleBody, opcoesDaVenda)
+          : await pdvApi.createSale(cid, saleBody, opcoesDaVenda);
+        // tq-18: venda registrada — a próxima é outra venda, com outra chave.
+        chaveDaVenda.concluida();
         const saleId = saleRes?.sale?.id;
         const saleItems: any[] = saleRes?.sale?.items || [];
 
@@ -371,13 +381,16 @@ export function useStudioCheckout(cid: string | undefined) {
         });
         return true;
       } catch (e: any) {
+        // tq-18: só o 409 IDEMPOTENCY_KEY_REUSED troca a chave (a mensagem do
+        // servidor diz qual venda já foi registrada com ela).
+        chaveDaVenda.aposErro(e);
         setError(e?.message || "Erro ao fechar venda");
         return false;
       } finally {
         setSending(false);
       }
     },
-    [cid, pay, notes, customer, phone, cpf, discountType, discountValue, couponApplied, splitMode, splitPayments, autoEmitNfce, fiscalEnabled, signalMode, signalValue, signalMethod, signalDueDate, promisedDate],
+    [cid, pay, notes, customer, phone, cpf, discountType, discountValue, couponApplied, splitMode, splitPayments, autoEmitNfce, fiscalEnabled, signalMode, signalValue, signalMethod, signalDueDate, promisedDate, chaveDaVenda],
   );
 
   const reset = useCallback(() => {

@@ -10,6 +10,7 @@ import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
 import { aoRecarregar, apagarVendaGuardada, guardarVenda, recuperarVenda } from "@/utils/vendaGuardada";
 import { ehIdDeCatalogo } from "@/utils/comanda";
 import { mensagemErroCarneDaVenda } from "@/utils/crediarioCarne";
+import { novaChaveDaVenda } from "@/utils/chaveDaVenda";
 import {
   CARTAO_DESLIGADO, contaComOServidor, ehCartao, editarPrecoNoDividido, editarPrecoProporcional, linhasNoMetodo, linhasRateadas,
   precoNoCartaoDoItem, r2, resolverDividido, statusDoDividido, totalComoNoServidor,
@@ -91,14 +92,9 @@ type VendaGuardada = {
 // com outros itens). Timeout seguido de nova tentativa, a repetição
 // automática do request() e a segunda aba mandam a mesma chave: o servidor
 // devolve a venda já registrada em vez de gravar outra.
-export function novaChaveDaVenda(): string {
-  try {
-    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  } catch {}
-  // Sem crypto.randomUUID (nativo antigo): não criptográfica, mas única o
-  // bastante por empresa — e no formato que o backend aceita.
-  return "v" + Date.now().toString(36) + Math.random().toString(36).slice(2, 12) + Math.random().toString(36).slice(2, 12);
-}
+// 18/10/2026 (tq-18): a função mora em utils/chaveDaVenda (o Studio, a Ótica e
+// o Financeiro usam a mesma) e segue exportada daqui como antes.
+export { novaChaveDaVenda };
 
 /** A comanda que este carrinho está cobrando (09/10/2026). `name` (17/10,
  *  tc-01) só para o aviso de cobrança; a venda leva apenas o id. */
