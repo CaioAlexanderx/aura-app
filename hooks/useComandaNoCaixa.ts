@@ -20,6 +20,13 @@
 // o carrinho do mesmo jeito e o dividido do Caixa já nasce com uma parte por
 // pessoa (`dividir`, o dividirPagamento do useCart): uma venda só, com um
 // pagamento por pessoa.
+//
+// "Alguns itens" (mesmo card): só os itens marcados viram o carrinho, e a
+// venda leva os ids deles (ComandaNoCarrinho.itemIds/itemQty). A comanda
+// continua aberta com o resto. Com o backend que sabe cobrar em partes
+// (`parcial` na comanda), "Cobrar tudo" também manda os ids que estavam na
+// tela: item lançado por outro caixa nesse meio tempo fica na comanda em vez
+// de ser fechado sem ter sido cobrado.
 // ============================================================
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -27,7 +34,10 @@ import { toast } from "@/components/Toast";
 import { comandaApi } from "@/services/comandaApi";
 import { chaveDasComandas } from "@/components/screens/pdv/ComandaModals";
 import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
-import { itensParaAComanda, linhasParaOCarrinho, nomeDaComanda, rotuloDaComanda, type Comanda, type ItemDoCarrinho, type OpcoesDaCobranca, type ParteDaConta } from "@/utils/comanda";
+import {
+  itensParaAComanda, linhasParaOCarrinho, nomeDaComanda, rotuloDaComanda, cobraEmPartes, comandaSoComOsItens, itensCobrados,
+  type Comanda, type ItemDoCarrinho, type OpcoesDaCobranca, type ParteDaConta,
+} from "@/utils/comanda";
 import type { ComandaNoCarrinho } from "@/hooks/useCart";
 
 type ProdutoDoCatalogo = { id: string; price: number; cardPrice?: number | null };
@@ -146,8 +156,18 @@ export function useComandaNoCaixa(p: UseComandaNoCaixaParams) {
   /** O consumo da comanda vira o carrinho. O que estava no balcão sai: a
    *  venda que fecha a comanda tem que ser a comanda e mais nada. */
   function cobrar(c: Comanda, taxaPct: number, opcoes?: OpcoesDaCobranca) {
+    // "Alguns itens": o carrinho é só a parte marcada (a taxa sai sobre ela).
+    const sel = opcoes && opcoes.itens ? itensCobrados(c, opcoes.itens) : null;
+    if (sel && sel.ids.length === 0) return;
+    const parte = sel && opcoes && opcoes.itens ? comandaSoComOsItens(c, opcoes.itens) : c;
+    // Com o backend da 392 a venda sempre diz quais itens cobra: "Cobrar
+    // tudo" manda os que estavam na tela.
+    const ids = sel ? sel.ids : (cobraEmPartes(c) ? (c.items || []).map(function (it) { return it.id; }) : []);
+    const qtd = sel ? sel.qtd : {};
+    const ehParte = !!sel && (sel.ids.length < (c.items || []).length || Object.keys(sel.qtd).length > 0);
+
     p.limpar();
-    linhasParaOCarrinho(c, taxaPct).forEach(function (l) {
+    linhasParaOCarrinho(parte, taxaPct).forEach(function (l) {
       const doCatalogo = p.products.find(function (x) { return x.id === l.key.split("__")[0]; });
       p.addToCart({
         id: l.key, name: l.name, price: l.price, unit: l.unit,
@@ -156,8 +176,21 @@ export function useComandaNoCaixa(p: UseComandaNoCaixaParams) {
       });
       p.setQty(l.key, l.qty);
     });
-    p.setComanda({ id: c.id, number: c.number, feePct: taxaPct, ...(c.name ? { name: c.name } : {}) });
+    p.setComanda({
+      id: c.id, number: c.number, feePct: taxaPct,
+      ...(c.name ? { name: c.name } : {}),
+      ...(ids.length > 0 ? { itemIds: ids } : {}),
+      ...(Object.keys(qtd).length > 0 ? { itemQty: qtd } : {}),
+    });
     setShowFechar(false);
+    if (ehParte) {
+      const n = parte.items.length;
+      toast.success(
+        "Comanda " + rotuloDaComanda(c.number, c.name) + ": " + n + (n === 1 ? " item" : " itens") +
+        " no carrinho. O resto continua na comanda."
+      );
+      return;
+    }
     const partes = opcoes && opcoes.partes ? opcoes.partes : [];
     if (partes.length > 1 && p.dividir) {
       p.dividir(partes);

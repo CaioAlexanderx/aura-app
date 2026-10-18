@@ -5,6 +5,11 @@
 // identificada pelo NÚMERO que a loja usa no cartão. Fechar não tem rota: o
 // Caixa cobra o consumo como uma venda e manda `comanda_id` no POST da venda
 // (hooks/useCart.ts) — o backend fecha a comanda junto.
+//
+// 17/10/2026 (tc-04, Aura-backend migration 392): a venda pode levar só
+// alguns itens (comanda_item_ids / comanda_item_qty); a comanda fecha quando
+// não sobra item. As leituras passam a trazer só o que falta cobrar, com
+// `parcial` e `paid_subtotal`.
 // ============================================================
 import { request } from "./api";
 import type { Comanda, ItemParaAComanda } from "@/utils/comanda";
@@ -16,8 +21,14 @@ export type ComandaResumo = {
   name?: string | null;
   status: string;
   opened_at: string;
+  /** Itens e total do que FALTA cobrar (com o backend da 392). */
   items_count: number;
   subtotal: number;
+  /** 17/10/2026 (tc-04): parte já cobrada numa venda parcial. Ausente =
+   *  backend sem cobrança parcial. */
+  parcial?: boolean;
+  /** Consumo já cobrado (o "já pago" do painel). */
+  paid_subtotal?: number;
 };
 
 const base = (companyId: string) => "/companies/" + companyId + "/comandas";

@@ -15,6 +15,11 @@
 //                   painel e lembra de adicionar os produtos primeiro.
 // Âmbar a partir de 3 h aberta (fixo). Ordem padrão: mais antigas primeiro.
 //
+// 17/10/2026 (tc-04): comanda com parte já cobrada (alguém pagou alguns
+// itens e foi embora) ganha a etiqueta "Parcial" e mostra o que resta e o
+// que já foi pago — a lojista não precisa lembrar. Vem do backend
+// (`parcial`, `paid_subtotal`, migration 392); sem ele, nada muda.
+//
 // A lista é a mesma do react-query dos modais (chaveDasComandas) e se
 // atualiza ao abrir e a cada 30 s com o painel aberto (dois caixas na
 // mesma loja). A comanda é sempre da empresa aberta no Caixa: o backend
@@ -250,11 +255,12 @@ function Cartao(props: {
   const velha = comandaVelha(min);
   const nome = nomeDaComanda(c.name);
   const itens = Number(c.items_count) || 0;
+  const parcial = c.parcial === true;
   const lancar = cartItemCount > 0
     ? "Lançar " + cartItemCount + " " + (cartItemCount === 1 ? "item" : "itens")
     : "Lançar mais";
   return (
-    <View style={[s.cmd, gaveta && s.cmdGrade, velha && s.cmdVelha]} testID={"painel-comanda-" + c.number}>
+    <View style={[s.cmd, gaveta && s.cmdGrade, (velha || parcial) && s.cmdVelha]} testID={"painel-comanda-" + c.number}>
       <View style={s.cTop}>
         <View style={[s.num, !gaveta && s.numSheet]}>
           <Text style={[s.numTxt, !gaveta && { fontSize: 19 }]}>{c.number}</Text>
@@ -271,9 +277,19 @@ function Cartao(props: {
               </>
             )}
             <Text style={s.metaTxt}>{itens} {itens === 1 ? "item" : "itens"}</Text>
+            {parcial && (
+              <View style={s.tagParcial} testID={"painel-comanda-parcial-" + c.number}>
+                <Text style={s.tagParcialTxt}>Parcial</Text>
+              </View>
+            )}
           </View>
         </View>
-        <Text style={s.total}>{fmt(c.subtotal)}</Text>
+        <View style={{ alignItems: "flex-end" }}>
+          <Text style={s.total}>{fmt(c.subtotal)}</Text>
+          {parcial && (
+            <Text style={s.jaPago} testID={"painel-comanda-pago-" + c.number}>já pago {fmt(c.paid_subtotal || 0)}</Text>
+          )}
+        </View>
       </View>
       <View style={s.cAct}>
         <Pressable
@@ -379,6 +395,9 @@ const s = StyleSheet.create({
   metaTxt: { fontSize: 11.5, color: Colors.ink3 },
   metaAlerta: { color: Colors.amber, fontWeight: "700" },
   total: { fontFamily: MONO, fontSize: 17, fontWeight: "700", color: Colors.ink, textAlign: "right" },
+  jaPago: { fontSize: 10.5, color: Colors.ink3, marginTop: 1, textAlign: "right" },
+  tagParcial: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: Colors.amberD },
+  tagParcialTxt: { fontSize: 10.5, fontWeight: "700", color: Colors.amber, letterSpacing: 0.4 },
   cAct: { flexDirection: "row", gap: 8 },
   bSec: {
     flex: 1, height: 38, borderRadius: 10, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border2,
