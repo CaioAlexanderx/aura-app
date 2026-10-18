@@ -261,6 +261,25 @@ describe("Gestão Aura › Hoje", () => {
     tree.unmount();
   });
 
+  it("Telas visitadas: entrada e retorno por tela na tabela, com o 'desde 17/10' no título da lista e no aviso", async () => {
+    const tree = await mount();
+    await press(tree, "bloco-expandir-telas_visitadas");
+    const out = text(tree);
+    expect(out).toContain("Por tela · entrada e retorno desde 17/10");
+    expect(out).toContain("Entradas (após login)");
+    expect(out).toContain("Retornos");
+    // cabeçalhos curtos (o título da lista leva a data)
+    expect(out).toContain("Entrada");
+    expect(out).toContain("Retorno");
+    // pdv: 735 visitas no período e, destas, 5 entradas e 245 retornos
+    expect(out).toContain("735");
+    expect(out).toContain("245");
+    expect(out).toContain("Entrada e retorno por tela · desde 17/10");
+    expect(out).toContain("5 entrada · 245 retorno");
+    expect(out).toContain("Entrada é a primeira tela aberta logo depois de entrar");
+    tree.unmount();
+  });
+
   it("lista longa abre em 10 linhas e 'Ver todas' mostra o resto", async () => {
     const tree = await mount();
     await press(tree, "bloco-expandir-adocao");
