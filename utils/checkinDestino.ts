@@ -11,11 +11,13 @@
 //   comeco = estoque      → depende do tamanho e de onde anota:
 //     mais de 300 (de_301_a_1000, mais_de_1000) ou outro_sistema
 //                         → importação assistida (wa.me da Aura) + cadastro
-//     51 a 300 (de_51_a_300) ou caderno
+//     planilha com até 300 → convite "Importar sua planilha" no Estoque
+//     51 a 300 (de_51_a_300), caderno ou nao_anoto
 //                         → destinoDoEstoqueMedio() — hoje o "um por um";
 //                           o tq-34 troca pela tela "Como você quer trazer
 //                           seus produtos?"
 //     até 50 e o resto    → cadastro "um por um" (modal Novo item do Estoque)
+//   (caminhoDoEstoque decide; o texto do "Vamos abrir com" usa a mesma regra)
 //   comeco = fiado        → Novo lançamento do crediário (plano libera)
 //   comeco = nota_fiscal  → aba Certificado A1 das Notas fiscais
 //   comeco = loja_online  → Canal Digital (plano libera)
@@ -79,9 +81,12 @@ export function destinoDaPrimeiraVenda(ctx: ContextoDoDestino): DestinoCheckin {
 }
 
 /**
- * 51 a 300 produtos, ou quem anota no caderno.
+ * 51 a 300 produtos, "Caderno" ou "Ainda não anoto".
  * TODO(tq-34): trocar pela tela "Como você quer trazer seus produtos?"
  * (Um por um · Quero ajuda · Planilha). Até lá, o mesmo do "até 50".
+ * Junto, o "Vamos abrir com" troca para TEXTO_ESTOQUE_MEDIO_TQ34
+ * (utils/checkinRegras.ts): "Trazer seus produtos do seu jeito" /
+ * "Um por um, por planilha ou com a nossa ajuda.".
  */
 export function destinoDoEstoqueMedio(): DestinoCheckin {
   return { rota: ROTA_NOVO_PRODUTO, motivo: "cadastro_um_por_um" };
@@ -101,21 +106,52 @@ export function mensagemImportacaoAssistida(
   return "Oi! Acabei de criar a conta da " + nome + " na Aura e quero ajuda para trazer meus produtos" + detalhe + ".";
 }
 
-function destinoDoEstoque(respostas: CheckinRespostas, ctx: ContextoDoDestino): DestinoCheckin {
-  if (!ctx.modulos.has("estoque")) return PAINEL;
+/**
+ * Caminho do estoque, decidido UMA vez e usado pelo destino e pelo texto do
+ * "Vamos abrir com" (abrirCom), para os dois nunca divergirem.
+ *   assistida  mais de 300 produtos ou "Outro sistema" (o maior vence:
+ *              "Caderno" com mais de 1.000 é assistida)
+ *   planilha   "Planilha" com até 300 produtos (ou sem faixa)
+ *   medio      "Caderno", "Ainda não anoto" ou 51 a 300 — TODO(tq-34)
+ *   um_por_um  o resto (até 50, ou só "Organizar meu estoque")
+ */
+export type CaminhoDoEstoque = "assistida" | "planilha" | "medio" | "um_por_um";
+
+export function caminhoDoEstoque(respostas: CheckinRespostas): CaminhoDoEstoque {
   const faixa = respostas.produtos_faixa || "";
   const anota = respostas.onde_anota || "";
-  // O maior vence: "caderno" com mais de 1.000 produtos é importação assistida.
-  if (faixa === "de_301_a_1000" || faixa === "mais_de_1000" || anota === "outro_sistema") {
-    return {
-      // Enquanto a Aura importa, a loja já começa pelo primeiro produto.
-      rota: ROTA_NOVO_PRODUTO,
-      whatsapp: waAura(mensagemImportacaoAssistida(ctx.loja, respostas)),
-      motivo: "importacao_assistida",
-    };
+  if (faixa === "de_301_a_1000" || faixa === "mais_de_1000" || anota === "outro_sistema") return "assistida";
+  if (anota === "planilha") return "planilha";
+  if (faixa === "de_51_a_300" || anota === "caderno" || anota === "nao_anoto") return "medio";
+  return "um_por_um";
+}
+
+/** Abre o Estoque com o convite "Importar sua planilha" (lê `importar`). */
+export const ROTA_IMPORTAR_PLANILHA = "/estoque?importar=planilha";
+
+/** Texto do convite no Estoque: o mesmo do "Vamos abrir com". */
+export const TEXTO_CONVITE_PLANILHA = {
+  titulo: "Importar sua planilha",
+  sub: "Você confere tudo antes de gravar.",
+} as const;
+
+function destinoDoEstoque(respostas: CheckinRespostas, ctx: ContextoDoDestino): DestinoCheckin {
+  if (!ctx.modulos.has("estoque")) return PAINEL;
+  switch (caminhoDoEstoque(respostas)) {
+    case "assistida":
+      return {
+        // Enquanto a Aura importa, a loja já começa pelo primeiro produto.
+        rota: ROTA_NOVO_PRODUTO,
+        whatsapp: waAura(mensagemImportacaoAssistida(ctx.loja, respostas)),
+        motivo: "importacao_assistida",
+      };
+    case "planilha":
+      return { rota: ROTA_IMPORTAR_PLANILHA, motivo: "importar_planilha" };
+    case "medio":
+      return destinoDoEstoqueMedio();
+    default:
+      return { rota: ROTA_NOVO_PRODUTO, motivo: "cadastro_um_por_um" };
   }
-  if (faixa === "de_51_a_300" || anota === "caderno") return destinoDoEstoqueMedio();
-  return { rota: ROTA_NOVO_PRODUTO, motivo: "cadastro_um_por_um" };
 }
 
 /** Destino do Continuar. Nada respondido (ou Pular) = Painel. */
@@ -176,6 +212,11 @@ export function depoisVaiAoCaixa(v: string | string[] | null | undefined): boole
 /** Crediário: ?novo=1 abre o "Novo lançamento". */
 export function querNovoFiado(v: string | string[] | null | undefined): boolean {
   return primeiro(v) === "1";
+}
+
+/** Estoque: ?importar=planilha mostra o convite "Importar sua planilha". */
+export function querImportarPlanilha(v: string | string[] | null | undefined): boolean {
+  return primeiro(v) === "planilha";
 }
 
 /** Notas fiscais: ?tab=certificado abre a aba "Certificado A1". */

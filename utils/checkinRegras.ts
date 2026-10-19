@@ -15,6 +15,7 @@ import {
 import type { CheckinEstado, CheckinPutBody, CheckinRespostas } from "@/services/checkinApi";
 import { PLANOS_COM_STUDIO, SEGMENTOS } from "@/constants/primeirosPassos";
 import type { Segmento } from "@/services/primeirosPassosApi";
+import { TEXTO_CONVITE_PLANILHA, caminhoDoEstoque } from "@/utils/checkinDestino";
 
 function texto(v: unknown): string | null {
   return typeof v === "string" && v.length > 0 && v.length <= MAX_RESPOSTA ? v : null;
@@ -125,12 +126,38 @@ export function quantasRespostas(respostas: CheckinRespostas): number {
 
 // ── "Vamos abrir com" (mockup aprovado) ─────────────────────
 
+/** `sub` vazio = sem subtítulo. */
 export type AbrirCom = { titulo: string; sub: string };
 
-function rotuloDe(chave: ChaveResposta, valor: string | null | undefined): string {
-  const p = PERGUNTAS_CHECKIN.find((x) => x.chave === chave);
-  return p?.opcoes.find((o) => o.valor === valor)?.rotulo || "";
-}
+// 19/10/2026 (tq-31): textos decididos pela Nina, alinhados ao destino do
+// Continuar (utils/checkinDestino.ts). A Aura não cria produto de teste:
+// "Com um produto de teste" saiu. Nenhum texto cita o teto do teste.
+const TESTE_NA_VENDA = "Sua primeira venda também começa o seu teste.";
+const NOME_E_PRECO = "Nome e preço bastam.";
+
+export const TEXTOS_ABRIR_COM = {
+  caixaSemProduto: "Cadastrar um produto e fazer a primeira venda",
+  caixaComProduto: "Fazer a primeira venda no Caixa",
+  fiado: { titulo: "Cadastrar um cliente e lançar o primeiro fiado", sub: "Leva uns 2 minutos." },
+  notaFiscal: { titulo: "Configurar a nota fiscal", sub: "Você cadastra o certificado ou a Aura ajuda pelo WhatsApp." },
+  lojaOnline: { titulo: "Montar sua loja online", sub: "Os produtos que você cadastrar já aparecem nela." },
+  sumidos: { titulo: "Trazer sua lista de clientes", sub: "Depois você vê quem não volta há 60 dias e chama com um toque." },
+  painel: { titulo: "Ver o seu Painel", sub: "De lá você faz a primeira venda quando quiser." },
+  planilha: { titulo: TEXTO_CONVITE_PLANILHA.titulo, sub: TEXTO_CONVITE_PLANILHA.sub },
+  assistida: {
+    titulo: "Trazer seus produtos com a nossa ajuda",
+    sub: "Você manda a planilha ou o arquivo do outro sistema pelo WhatsApp. Costuma levar de uma hora a um dia.",
+  },
+  // TODO(tq-34): quando a tela "Como você quer trazer seus produtos?" existir,
+  // o caminho "medio" passa a usar TEXTO_ESTOQUE_MEDIO_TQ34.
+  primeirosProdutos: { titulo: "Cadastrar seus primeiros produtos", sub: "Nome e preço bastam. Os outros você traz depois." },
+} as const;
+
+/** TODO(tq-34): texto futuro do caminho "medio" (Caderno, Ainda não anoto, 51 a 300). */
+export const TEXTO_ESTOQUE_MEDIO_TQ34 = {
+  titulo: "Trazer seus produtos do seu jeito",
+  sub: "Um por um, por planilha ou com a nossa ajuda.",
+} as const;
 
 /**
  * O que a loja vê em destaque depois das respostas. null = nada respondido
@@ -139,10 +166,12 @@ function rotuloDe(chave: ChaveResposta, valor: string | null | undefined): strin
  * @param opts.testeComecaNaVenda true só para conta no modo `primeira_venda`
  *   (company.trial.mode): a frase "sua primeira venda também começa o seu
  *   teste" não vale para conta de código de acesso ou convite (modo fixo).
+ * @param opts.temProduto a loja já tem produto (destino do "Vender no
+ *   caixa"); null/undefined = não sei, e o texto segue o destino sem produto.
  */
 export function abrirCom(
   respostas: CheckinRespostas,
-  opts: { testeComecaNaVenda?: boolean } = {},
+  opts: { testeComecaNaVenda?: boolean; temProduto?: boolean | null } = {},
 ): AbrirCom | null {
   const a = respostas.comeco || "";
   const c = respostas.onde_anota || "";
@@ -151,44 +180,39 @@ export function abrirCom(
 
   switch (a) {
     case "caixa":
+      if (opts.temProduto === true) {
+        return { titulo: TEXTOS_ABRIR_COM.caixaComProduto, sub: opts.testeComecaNaVenda ? TESTE_NA_VENDA : "" };
+      }
       return {
-        titulo: "Fazer a primeira venda no Caixa",
-        sub: opts.testeComecaNaVenda
-          ? "Com um produto de teste. Sua primeira venda também começa o seu teste."
-          : "Com um produto de teste.",
+        titulo: TEXTOS_ABRIR_COM.caixaSemProduto,
+        sub: opts.testeComecaNaVenda ? NOME_E_PRECO + " " + TESTE_NA_VENDA : NOME_E_PRECO,
       };
     case "fiado":
-      return { titulo: "Cadastrar um cliente e lançar o primeiro fiado", sub: "Leva uns 2 minutos." };
+      return { ...TEXTOS_ABRIR_COM.fiado };
     case "nota_fiscal":
-      return { titulo: "Configurar a nota fiscal", sub: "A Aura te leva passo a passo." };
+      return { ...TEXTOS_ABRIR_COM.notaFiscal };
     case "loja_online":
-      return { titulo: "Montar sua loja online", sub: "Os produtos que você cadastrar já aparecem nela." };
+      return { ...TEXTOS_ABRIR_COM.lojaOnline };
     case "sumidos":
-      return {
-        titulo: "Trazer sua lista de clientes",
-        sub: "Depois você vê quem não volta há 60 dias e chama com um toque.",
-      };
+      return { ...TEXTOS_ABRIR_COM.sumidos };
     case "outra":
-      return { titulo: "Cadastrar seus 5 primeiros produtos", sub: "Os outros você cadastra depois." };
-    default:
+      return { ...TEXTOS_ABRIR_COM.painel };
+    case "estoque":
+    case "":
       break;
+    default:
+      // Valor desconhecido: o Continuar leva ao Painel.
+      return { ...TEXTOS_ABRIR_COM.painel };
   }
 
-  // "Organizar meu estoque" ou só respondeu as outras duas perguntas.
-  if (c === "planilha" || c === "outro_sistema") {
-    const grande = n === "de_301_a_1000" || n === "mais_de_1000";
-    return {
-      titulo: "Importar sua planilha",
-      sub: grande
-        ? `Com ${rotuloDe("produtos_faixa", n).toLowerCase()} produtos, a planilha é o caminho mais rápido.`
-        : "Você confere tudo antes de gravar.",
-    };
+  // "Organizar meu estoque" ou só respondeu as outras duas perguntas: a
+  // mesma regra do destino.
+  switch (caminhoDoEstoque(respostas)) {
+    case "assistida":
+      return { ...TEXTOS_ABRIR_COM.assistida };
+    case "planilha":
+      return { ...TEXTOS_ABRIR_COM.planilha };
+    default:
+      return { ...TEXTOS_ABRIR_COM.primeirosProdutos };
   }
-  if (c === "caderno" || c === "nao_anoto") {
-    return {
-      titulo: "Cadastrar seus 5 primeiros produtos",
-      sub: "Enter passa para o próximo. Os outros você cadastra depois.",
-    };
-  }
-  return { titulo: "Cadastrar seus produtos", sub: "Um por um ou por planilha." };
 }
