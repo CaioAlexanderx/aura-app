@@ -3,7 +3,17 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { IS_WIDE, webOnly } from "./types";
 
-export function EmptyDashboard({ name, onPress }: { name: string; onPress: (p: string) => void }) {
+// 19/10/2026 (tq-32): "Fazer a primeira venda" entra como botão PRINCIPAL,
+// acima dos três de sempre. Quem decide se aparece e para onde leva é
+// usePrimeiraVenda (DashboardEmptyState); sem `onPrimeiraVenda`, a tela é a
+// de antes.
+export const TEXTO_PRIMEIRA_VENDA = "Fazer a primeira venda";
+
+export function EmptyDashboard({ name, onPress, onPrimeiraVenda }: {
+  name: string;
+  onPress: (p: string) => void;
+  onPrimeiraVenda?: () => void;
+}) {
   const webCard = webOnly({
     background: "linear-gradient(135deg, rgba(124,58,237,0.15), rgba(79,91,213,0.05))",
     backdropFilter: "blur(18px) saturate(140%)",
@@ -22,6 +32,18 @@ export function EmptyDashboard({ name, onPress }: { name: string; onPress: (p: s
       </View>
       <Text style={s.title}>Bem-vindo, {name}!</Text>
       <Text style={s.sub}>Seu painel vai ganhar vida à medida que você usar a Aura. Comece por uma destas ações:</Text>
+      {!!onPrimeiraVenda && (
+        <Pressable
+          style={s.primary}
+          onPress={onPrimeiraVenda}
+          accessibilityRole="button"
+          testID="painel-primeira-venda"
+          {...({ dataSet: { auraHover: "card" } } as any)}
+        >
+          <Icon name="cart" size={18} color="#fff" />
+          <Text style={s.primaryText}>{TEXTO_PRIMEIRA_VENDA}</Text>
+        </Pressable>
+      )}
       <View style={s.actions}>
         <Pressable style={s.action} onPress={() => onPress("/financeiro")} accessibilityRole="button" {...({ dataSet: { auraHover: "card" } } as any)}>
           <Icon name="dollar" size={18} color={Colors.green} />
@@ -50,6 +72,14 @@ const s = StyleSheet.create({
   ringInner: { width: 78, height: 78, borderRadius: 39, backgroundColor: Colors.bg2, alignItems: "center", justifyContent: "center" },
   title: { fontSize: 22, fontWeight: "700", color: Colors.ink, marginBottom: 10, letterSpacing: -0.3 },
   sub: { fontSize: 13, color: Colors.ink3, textAlign: "center", lineHeight: 20, marginBottom: 24, maxWidth: 380 },
+  // Botão principal: cheio, violeta, a largura toda; o realce é só o
+  // [data-aura-hover="card"] do Painel, que não esconde nada em touch.
+  primary: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
+    backgroundColor: Colors.violet, borderRadius: 14, minHeight: 50,
+    paddingHorizontal: 18, paddingVertical: 14, width: "100%", marginBottom: 10,
+  },
+  primaryText: { fontSize: 15, color: "#fff", fontWeight: "700" },
   actions: { flexDirection: IS_WIDE ? "row" : "column", gap: 10, width: "100%" },
   action: {
     flexDirection: "row", alignItems: "center", gap: 10,
