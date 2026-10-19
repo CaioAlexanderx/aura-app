@@ -243,15 +243,20 @@ describe("abrirCom", () => {
     expect(ab({ comeco: "estoque", onde_anota: "outro_sistema" })).toEqual(esperado);
   });
 
-  test("caderno, ainda não anoto ou 51 a 300 (até o tq-34): os primeiros produtos", () => {
-    const esperado = { titulo: "Cadastrar seus primeiros produtos", sub: "Nome e preço bastam. Os outros você traz depois." };
+  test("caderno, ainda não anoto ou 51 a 300 (tq-34): do seu jeito", () => {
+    const esperado = { titulo: "Trazer seus produtos do seu jeito", sub: "Um por um, por planilha ou com a nossa ajuda." };
+    expect(TEXTO_ESTOQUE_MEDIO_TQ34).toEqual(esperado);
     expect(ab({ comeco: "estoque", onde_anota: "caderno" })).toEqual(esperado);
     expect(ab({ comeco: "estoque", onde_anota: "nao_anoto" })).toEqual(esperado);
     expect(ab({ comeco: "estoque", produtos_faixa: "de_51_a_300" })).toEqual(esperado);
+    expect(ab({ onde_anota: "caderno" })).toEqual(esperado);
+  });
+
+  test("até 50 (ou só Organizar meu estoque): os primeiros produtos", () => {
+    const esperado = { titulo: "Cadastrar seus primeiros produtos", sub: "Nome e preço bastam. Os outros você traz depois." };
     expect(ab({ produtos_faixa: "ate_50" })).toEqual(esperado);
-    expect(TEXTO_ESTOQUE_MEDIO_TQ34).toEqual({
-      titulo: "Trazer seus produtos do seu jeito", sub: "Um por um, por planilha ou com a nossa ajuda.",
-    });
+    expect(ab({ comeco: "estoque" })).toEqual(esperado);
+    expect(ab({ comeco: "estoque", produtos_faixa: "ate_50" })).toEqual(esperado);
   });
 
   test("nenhum texto cita produto de teste nem o teto de 15 dias", () => {
@@ -411,6 +416,21 @@ describe("a tela", () => {
     ]);
     expect(JSON.stringify(tree.toJSON())).not.toContain("checkin-raiz");
     expect(mockReplace).toHaveBeenCalledWith("/estoque?importar=planilha");
+    tree.unmount();
+  });
+
+  test("Continuar com estoque no caderno, 51 a 300 (tq-34): Como você quer trazer seus produtos?", async () => {
+    mockGet.mockResolvedValue(HABILITADO);
+    mockModulos = new Set([...mockModulos, "onboarding.trazer_produtos"]);
+    const abrir = jest.spyOn(window, "open").mockImplementation(() => null);
+    const { tree } = await continuarCom([
+      "checkin-chip-comeco-estoque", "checkin-chip-onde_anota-caderno", "checkin-chip-produtos_faixa-de_51_a_300",
+    ]);
+    expect(JSON.stringify(tree.toJSON())).not.toContain("checkin-raiz");
+    expect(mockReplace).toHaveBeenCalledWith("/trazer-produtos");
+    // o WhatsApp só abre se a pessoa escolher "Quero ajuda" na tela seguinte
+    expect(abrir).not.toHaveBeenCalled();
+    abrir.mockRestore();
     tree.unmount();
   });
 

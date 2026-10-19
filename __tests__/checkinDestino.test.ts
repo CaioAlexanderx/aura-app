@@ -22,6 +22,7 @@ import {
   temProdutoNaResposta,
 } from "@/utils/checkinDestino";
 import { abrirCom } from "@/utils/checkinRegras";
+import { MOD_TRAZER_PRODUTOS, ROTA_TRAZER_PRODUTOS } from "@/constants/trazerProdutos";
 
 const raiz = (p: string) => fs.readFileSync(path.join(__dirname, "..", p), "utf8");
 
@@ -35,9 +36,9 @@ describe("uma linha por resposta (plano Negócio, loja sem produto)", () => {
   test.each([
     ["Vender no caixa, sem produto", { comeco: "caixa" }, ROTA_NOVO_PRODUTO_E_CAIXA, "primeiro_produto_e_caixa"],
     ["Organizar meu estoque, até 50", { comeco: "estoque", produtos_faixa: "ate_50" }, ROTA_NOVO_PRODUTO, "cadastro_um_por_um"],
-    ["Organizar meu estoque, 51 a 300", { comeco: "estoque", produtos_faixa: "de_51_a_300" }, ROTA_NOVO_PRODUTO, "cadastro_um_por_um"],
-    ["Organizar meu estoque, Caderno", { comeco: "estoque", onde_anota: "caderno" }, ROTA_NOVO_PRODUTO, "cadastro_um_por_um"],
-    ["Organizar meu estoque, Ainda não anoto", { comeco: "estoque", onde_anota: "nao_anoto" }, ROTA_NOVO_PRODUTO, "cadastro_um_por_um"],
+    ["Organizar meu estoque, 51 a 300", { comeco: "estoque", produtos_faixa: "de_51_a_300" }, ROTA_TRAZER_PRODUTOS, "trazer_produtos"],
+    ["Organizar meu estoque, Caderno", { comeco: "estoque", onde_anota: "caderno" }, ROTA_TRAZER_PRODUTOS, "trazer_produtos"],
+    ["Organizar meu estoque, Ainda não anoto", { comeco: "estoque", onde_anota: "nao_anoto" }, ROTA_TRAZER_PRODUTOS, "trazer_produtos"],
     ["Organizar meu estoque, Planilha até 300", { comeco: "estoque", onde_anota: "planilha", produtos_faixa: "de_51_a_300" }, ROTA_IMPORTAR_PLANILHA, "importar_planilha"],
     ["Organizar meu estoque, Planilha sem faixa", { comeco: "estoque", onde_anota: "planilha" }, ROTA_IMPORTAR_PLANILHA, "importar_planilha"],
     ["Organizar meu estoque, Planilha com mais de 300", { comeco: "estoque", onde_anota: "planilha", produtos_faixa: "de_301_a_1000" }, ROTA_NOVO_PRODUTO, "importacao_assistida"],
@@ -72,21 +73,35 @@ describe("regras de cada linha", () => {
     expect(d.motivo).toBe("importacao_assistida");
   });
 
-  test("51 a 300, Caderno e Ainda não anoto passam pela função do tq-34 (hoje, o um por um)", () => {
-    expect(destinoDoEstoqueMedio()).toEqual({ rota: ROTA_NOVO_PRODUTO, motivo: "cadastro_um_por_um" });
+  test("51 a 300, Caderno e Ainda não anoto vão à tela do tq-34 (Como você quer trazer seus produtos?)", () => {
+    expect(ROTA_TRAZER_PRODUTOS).toBe("/trazer-produtos");
+    expect(destinoDoEstoqueMedio(ctx())).toEqual({ rota: ROTA_TRAZER_PRODUTOS, motivo: "trazer_produtos" });
     expect(caminhoDoEstoque({ produtos_faixa: "de_51_a_300" })).toBe("medio");
     expect(caminhoDoEstoque({ onde_anota: "caderno" })).toBe("medio");
     expect(caminhoDoEstoque({ onde_anota: "nao_anoto" })).toBe("medio");
     const src = raiz("utils/checkinDestino.ts");
-    expect(src).toContain("TODO(tq-34)");
-    expect(src).toMatch(/case "medio":\s*return destinoDoEstoqueMedio\(\);/);
+    expect(src).not.toContain("TODO(tq-34)");
+    expect(src).toMatch(/case "medio":\s*return destinoDoEstoqueMedio\(ctx\);/);
+    expect(fs.existsSync(path.join(__dirname, "..", "app/trazer-produtos.tsx"))).toBe(true);
+  });
+
+  test("Essencial vai à tela; com a chave da tela escondida, o um por um de antes", () => {
+    expect(destinoDoCheckin({ comeco: "estoque", onde_anota: "caderno" }, ctx({ modulos: ESSENCIAL })).rota).toBe(ROTA_TRAZER_PRODUTOS);
+    const semTela = computeVisibleModules("essencial", { [MOD_TRAZER_PRODUTOS]: false }, undefined);
+    expect(destinoDoCheckin({ comeco: "estoque", onde_anota: "caderno" }, ctx({ modulos: semTela }))).toEqual({
+      rota: ROTA_NOVO_PRODUTO, motivo: "cadastro_um_por_um",
+    });
+    // sem Estoque, nem a tela: Painel (a regra do estoque vem antes)
+    expect(destinoDoCheckin({ comeco: "estoque", onde_anota: "caderno" }, ctx({ modulos: new Set([MOD_TRAZER_PRODUTOS]) })).rota).toBe(ROTA_PAINEL);
   });
 
   test("o texto do 'Vamos abrir com' segue o mesmo caminho do destino", () => {
     const casos: any[] = [
       [{ comeco: "estoque", onde_anota: "planilha" }, "Importar sua planilha", "importar_planilha"],
       [{ comeco: "estoque", onde_anota: "outro_sistema" }, "Trazer seus produtos com a nossa ajuda", "importacao_assistida"],
-      [{ comeco: "estoque", onde_anota: "caderno" }, "Cadastrar seus primeiros produtos", "cadastro_um_por_um"],
+      [{ comeco: "estoque", onde_anota: "caderno" }, "Trazer seus produtos do seu jeito", "trazer_produtos"],
+      [{ comeco: "estoque", produtos_faixa: "de_51_a_300" }, "Trazer seus produtos do seu jeito", "trazer_produtos"],
+      [{ comeco: "estoque", produtos_faixa: "ate_50" }, "Cadastrar seus primeiros produtos", "cadastro_um_por_um"],
       [{ comeco: "caixa" }, "Cadastrar um produto e fazer a primeira venda", "primeiro_produto_e_caixa"],
       [{ comeco: "outra" }, "Ver o seu Painel", "painel"],
     ];

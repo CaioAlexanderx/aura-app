@@ -148,12 +148,15 @@ export const TEXTOS_ABRIR_COM = {
     titulo: "Trazer seus produtos com a nossa ajuda",
     sub: "Você manda a planilha ou o arquivo do outro sistema pelo WhatsApp. Costuma levar de uma hora a um dia.",
   },
-  // TODO(tq-34): quando a tela "Como você quer trazer seus produtos?" existir,
-  // o caminho "medio" passa a usar TEXTO_ESTOQUE_MEDIO_TQ34.
+  // Até 50 produtos (ou só "Organizar meu estoque"). O caminho "medio" usa
+  // TEXTO_ESTOQUE_MEDIO_TQ34 desde o tq-34.
   primeirosProdutos: { titulo: "Cadastrar seus primeiros produtos", sub: "Nome e preço bastam. Os outros você traz depois." },
 } as const;
 
-/** TODO(tq-34): texto futuro do caminho "medio" (Caderno, Ainda não anoto, 51 a 300). */
+/**
+ * Caminho "medio" (Caderno, Ainda não anoto, 51 a 300): o Continuar abre a
+ * tela "Como você quer trazer seus produtos?" (tq-34).
+ */
 export const TEXTO_ESTOQUE_MEDIO_TQ34 = {
   titulo: "Trazer seus produtos do seu jeito",
   sub: "Um por um, por planilha ou com a nossa ajuda.",
@@ -212,6 +215,8 @@ export function abrirCom(
       return { ...TEXTOS_ABRIR_COM.assistida };
     case "planilha":
       return { ...TEXTOS_ABRIR_COM.planilha };
+    case "medio":
+      return { ...TEXTO_ESTOQUE_MEDIO_TQ34 };
     default:
       return { ...TEXTOS_ABRIR_COM.primeirosProdutos };
   }
