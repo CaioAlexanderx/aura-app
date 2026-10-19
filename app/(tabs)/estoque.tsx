@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo, useEffect } from "react";
 import { tourTarget } from "@/utils/tourTarget";
+import { useRouter } from "expo-router";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions } from "react-native";
 import { Colors, useColors, useThemeStore } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
@@ -23,14 +24,12 @@ import { PrintLabels } from "@/components/PrintLabels";
 import { Pagination } from "@/components/Pagination";
 import { ScrollableChips } from "@/components/ScrollableChips";
 import { MergeDuplicatesModal } from "@/components/MergeDuplicatesModal";
-import { CategoriesModal } from "@/components/screens/estoque/CategoriesModal";
 import { QuickBatchProductsModal } from "@/components/QuickBatchProductsModal";
 import { DanfeImportModal } from "@/components/screens/estoque/DanfeImportModal";
 import { LinkProductModal } from "@/components/LinkProductModal";
 import { usePagination } from "@/hooks/usePagination";
 import { TABS, DEFAULT_CATEGORIES, fmt } from "@/components/screens/estoque/types";
 import type { Product } from "@/components/screens/estoque/types";
-import type { CategoryType } from "@/services/api";
 import { arrayToCSV, downloadCSV, PRODUCT_COLUMNS } from "@/utils/csv";
 import { productMatchesSearch } from "@/utils/productSearch";
 import { resumoValorEstoque, legendaValorEstoque } from "@/utils/valorEstoque";
@@ -43,6 +42,7 @@ import { router, useLocalSearchParams } from "expo-router";
 // chegam com ?novo=produto (abre o Novo item) e, no caminho da primeira
 // venda, &depois=pdv (fechar depois de salvar leva ao Caixa).
 import { depoisVaiAoCaixa, querNovoProduto, ROTA_CAIXA } from "@/utils/checkinDestino";
+import { ConvitePlanilha } from "@/components/screens/estoque/ConvitePlanilha";
 import { temProdutoQueryKey } from "@/hooks/useTemProduto";
 import { Icon } from "@/components/Icon";
 import { productLinksApi, type AggregatedProduct } from "@/services/productLinks";
@@ -62,6 +62,7 @@ import { ProductGridWeb } from "@/components/screens/estoque/ProductGridWeb";
 // Estoque só liga com matcon_enabled + empresa emitindo nota fiscal.
 import { readMatconSettings } from "@/constants/matcon";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
+import { useVisibleModules } from "@/hooks/useVisibleModules";
 import { nfceApi } from "@/services/nfceApi";
 // 23/09/2026 (QA producao, item 5): estoque consolidado (AggregatedView)
 // usava "un" fixo e Math.round — errado pra produto fracionado (m², kg).
@@ -123,7 +124,6 @@ function SummaryCard({ label, value, color, sub, onPress }: { label: string; val
   </Pressable>;
 }
 
-type CategoriesModalState = { open: boolean; initialType?: CategoryType };
 
 // ────────────────────────────────────────────────────────────
 // MSL-06: View AGREGADA (modo "Todas as empresas")
@@ -315,7 +315,10 @@ export default function EstoqueScreen() {
   // categoria do produto recem-criado passou para o ItemFormModal.
   const { flattened: categoriasFlat } = useCategories();
   const { categoryNames: managedCategoryNames } = useProductCategories();
+  const router = useRouter();
   const { company, availableCompanies, consolidatedView } = useAuthStore();
+  // 18/10/2026 (card p-36): "mudar" o desenho da etiqueta leva a Configurações.
+  const podeMudarDesenho = useVisibleModules().has("configuracoes");
   // 22/09/2026 (Matcon M2): aviso fiscal (CEST) da aba Alertas. Loja sem o
   // módulo nunca lê nfce_config aqui — o aviso nem calcula (AlertsList).
   const { settings: pdvSettings } = usePdvSettings();
@@ -366,7 +369,6 @@ export default function EstoqueScreen() {
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [showDanfeModal, setShowDanfeModal] = useState(false);
-  const [categoriesModal, setCategoriesModal] = useState<CategoriesModalState>({ open: false });
   // 22/09/2026: botão "Importar planilha" na barra de ações — antes o
   // ServerImport só aparecia no estado vazio (0 produtos), então quem já
   // tinha itens cadastrados não achava como importar mais. Mesmo fluxo do
@@ -475,17 +477,22 @@ export default function EstoqueScreen() {
   // 09/09/2026: o modal cuida de tudo num Salvar só (POST/PATCH +
   // vínculo de categoria + PUT /variations + fila de fotos). A tela só
   // abre, fecha e recarrega o que depende da lista.
-  // ?novo=produto: abre o cadastro uma vez por chegada. `depois=pdv` vale só
-  // para esse cadastro: fechar sem salvar fica no Estoque.
-  const params = useLocalSearchParams<{ novo?: string; depois?: string }>();
+  // ?novo=produto: abre o cadastro na chegada. `depois=pdv` vale só para
+  // esse cadastro: fechar sem salvar fica no Estoque. O parâmetro NÃO é
+  // limpo no mount (montagem dupla: a segunda montagem, a visível, precisa
+  // ainda vê-lo); sai da URL quando a pessoa fecha o cadastro. O setParams
+  // com undefined vira "undefined", que querNovoProduto rejeita.
+  // ?importar=planilha: ConvitePlanilha (mesmo cuidado, mais a marca de sessão).
+  const params = useLocalSearchParams<{ novo?: string; depois?: string; importar?: string }>();
   const caixaDepoisRef = useRef(false);
   const salvouRef = useRef(false);
+  const veioPeloParamRef = useRef(false);
   useEffect(() => {
     if (!querNovoProduto(params.novo) || consolidatedView) return;
+    veioPeloParamRef.current = true;
     caixaDepoisRef.current = depoisVaiAoCaixa(params.depois);
     salvouRef.current = false;
     abrirCadastro("product");
-    try { router.setParams({ novo: undefined, depois: undefined } as any); } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.novo]);
 
@@ -502,6 +509,10 @@ export default function EstoqueScreen() {
     const irAoCaixa = caixaDepoisRef.current && salvouRef.current;
     caixaDepoisRef.current = false;
     salvouRef.current = false;
+    if (veioPeloParamRef.current) {
+      veioPeloParamRef.current = false;
+      try { router.setParams({ novo: undefined, depois: undefined } as any); } catch {}
+    }
     if (irAoCaixa) router.push(ROTA_CAIXA as any);
   }
 
@@ -702,6 +713,15 @@ export default function EstoqueScreen() {
           </View>
         )}
 
+        {/* 19/10/2026 (tq-31): quem respondeu "planilha" no check-in chega
+            com ?importar=planilha (components/screens/estoque/ConvitePlanilha). */}
+        <ConvitePlanilha
+          importar={params.importar}
+          escondido={consolidatedView || importPlanilha.aberto}
+          ocupado={importPlanilha.ocupado}
+          onEscolher={importPlanilha.escolherArquivo}
+        />
+
         {canLinkProducts && products.length > 0 && (
           <View style={s.multicnpjHint}>
             <Icon name="bag" size={14} color="#7c3aed" />
@@ -851,11 +871,35 @@ export default function EstoqueScreen() {
 
             {/* Category filter — multi-select dropdown (wide) ou ScrollableChips (narrow) */}
             {isWebWide ? (
-              <View style={{ marginBottom: 14 } as any}>
+              <View style={{ marginBottom: 14, flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" } as any}>
                 <CategoryDropdownWeb categories={allCategories} selected={catsMulti} onChange={setCatsMulti} />
+                {!isDemo && (
+                  <Pressable
+                    onPress={() => router.push("/catalogo/organizar")}
+                    style={s.catBtn}
+                    accessibilityRole="button"
+                    testID="estoque-organizar-categorias"
+                  >
+                    <Icon name="layers" size={14} color={Colors.violet3} />
+                    <Text style={s.catBtnText}>Organizar categorias</Text>
+                  </Pressable>
+                )}
               </View>
             ) : (
-              <ScrollableChips items={filterCategories} active={catFilter} onSelect={setCatFilter} />
+              <>
+                <ScrollableChips items={filterCategories} active={catFilter} onSelect={setCatFilter} />
+                {!isDemo && (
+                  <Pressable
+                    onPress={() => router.push("/catalogo/organizar")}
+                    style={[s.catBtn, { alignSelf: "flex-start", marginBottom: 12 }]}
+                    accessibilityRole="button"
+                    testID="estoque-organizar-categorias"
+                  >
+                    <Icon name="layers" size={14} color={Colors.violet3} />
+                    <Text style={s.catBtnText}>Organizar categorias</Text>
+                  </Pressable>
+                )}
+              </>
             )}
 
             {/* 12/05/2026: barra de acoes em lote — visivel apenas quando bulkMode=true */}
@@ -918,7 +962,7 @@ export default function EstoqueScreen() {
           />
         )}
         {/* Aba 2: Etiquetas (era 3 antes da Curva ABC migrar) */}
-        {activeTab === 2 && <PrintLabels products={products} selectedIds={labelSelection} onSelectionChange={setLabelSelection} />}
+        {activeTab === 2 && <PrintLabels products={products} selectedIds={labelSelection} onSelectionChange={setLabelSelection} podeMudarDesenho={podeMudarDesenho} />}
 
       </ScrollView>
 
@@ -947,11 +991,6 @@ export default function EstoqueScreen() {
           onBaixarProblemas={importPlanilha.baixarProblemas}
         />
       </WebPortal>
-      <CategoriesModal
-        visible={categoriesModal.open}
-        initialType={categoriesModal.initialType}
-        onClose={() => setCategoriesModal({ open: false })}
-      />
       {linkTarget && company?.id && (
         <LinkProductModal
           visible={!!linkTarget}
@@ -1062,8 +1101,7 @@ const s = StyleSheet.create({
     lineHeight: 14,
   },
   listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
-  emptyImport: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, marginTop: 12 },
-  emptyImportIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
+  emptyImport: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, marginTop: 12 },  emptyImportIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
   emptyImportTitle: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
   emptyImportDesc: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
   demoBanner: { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },

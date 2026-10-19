@@ -152,8 +152,11 @@ export function CheckinEntrada() {
   }
 
   const aberta = useMemo(
-    () => abrirCom(respostas, { testeComecaNaVenda: (company as any)?.trial?.mode === "primeira_venda" }),
-    [respostas, company],
+    () => abrirCom(respostas, {
+      testeComecaNaVenda: (company as any)?.trial?.mode === "primeira_venda",
+      temProduto: temProdutoQ.data ?? null,
+    }),
+    [respostas, company, temProdutoQ.data],
   );
   const respondidas = quantasRespostas(respostas);
   const duasColunas = width >= LARGURA_DUAS_COLUNAS;
@@ -212,7 +215,7 @@ export function CheckinEntrada() {
         <Text style={[s.abrirGrande, { color: aberta ? C.ink : C.ink3, fontWeight: aberta ? "700" : "500" }]}>
           {aberta ? aberta.titulo : TEXTOS_CHECKIN.abrirComVazio}
         </Text>
-        {!!aberta && <Text style={[s.abrirMais, { color: C.ink2 }]}>{aberta.sub}</Text>}
+        {!!aberta?.sub && <Text style={[s.abrirMais, { color: C.ink2 }]}>{aberta.sub}</Text>}
       </View>
 
       <View style={s.rodape}>

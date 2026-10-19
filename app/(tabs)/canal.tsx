@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { View, Text, ScrollView, StyleSheet, Pressable, Linking } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
@@ -44,6 +44,7 @@ export default function CanalDigitalScreen() {
     if (aba !== null) setTab(aba);
   }, [params.tab, params.order_id]);
   const { company } = useAuthStore();
+  const router = useRouter();
   const {
     config, isLoading,
     saveConfig, isSaving,
@@ -68,7 +69,11 @@ export default function CanalDigitalScreen() {
           <Text style={s.lockTitle}>Canal Digital</Text>
           <Text style={s.lockDesc}>Crie sua loja online em minutos. Vitrine de produtos, domínio personalizado e mais.</Text>
           <View style={s.lockBadge}><Text style={s.lockBadgeText}>Disponível no plano Negócio</Text></View>
-          <Pressable style={s.upgradeBtn}><Text style={s.upgradeBtnText}>Ver planos</Text></Pressable>
+          {/* 19/10/2026 (p-33): o botão existia sem onPress. Quem chega aqui pela URL
+              ou por um atalho de outra tela vê o caminho para os planos. */}
+          <Pressable style={s.upgradeBtn} onPress={() => router.push("/(tabs)/planos" as any)} accessibilityRole="button">
+            <Text style={s.upgradeBtnText}>Ver planos</Text>
+          </Pressable>
         </View>
       </ScrollView>
     );

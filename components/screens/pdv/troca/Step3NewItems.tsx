@@ -40,6 +40,11 @@
 //     TrocaModal.tsx, que limpa o carrinho, marca o estado devolverValor
 //     e avança pro Step4Confirm com o destino já em "Crédito na loja").
 //     Toggle off, ou sem onDevolverValor passado: texto de sempre.
+//
+// 19/10/2026 (tq-30, INC-2026-10-19-01): bipe que o servidor acha pelo
+// código ou SKU do pai, fora da lista local, entrava sem variant_id (baixava
+// o pai e nenhum tamanho). Com variante ativa, abre o seletor; sem, segue
+// direto (utils/varianteAtivaNoBipe).
 // ============================================================
 import { useState, useMemo, useEffect, useRef } from "react";
 import {
@@ -52,6 +57,7 @@ import { toast } from "@/components/Toast";
 import { VariantPickerModal, type VariantChoice } from "@/components/VariantPickerModal";
 import { useAuthStore } from "@/stores/auth";
 import { pdvApi } from "@/services/pdvApi";
+import { temVarianteAtiva } from "@/utils/varianteAtivaNoBipe";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { readMatconSettings } from "@/constants/matcon";
 import type { NewEntry } from "./types";
@@ -240,6 +246,19 @@ export function Step3NewItems({
           if (full) {
             addProduct(full, "barcode"); // abre seletor se has_variants
             if (!full.has_variants) toast.success(`✓ ${full.name || full.title}`);
+            setScanBuffer("");
+            return;
+          }
+          // 19/10/2026 (tq-30): fora da lista local, pai com tamanho ativo
+          // abre o seletor (nada marcado) em vez de entrar sem variant_id.
+          if (await temVarianteAtiva(company.id, res.product)) {
+            setPendingProduct({
+              id: res.product.id,
+              name: (res.product as any).name || "Produto",
+              price: Number(res.effective_price || (res.product as any).price || 0),
+              stock_qty: (res.product as any).stock_qty,
+              has_variants: true,
+            });
             setScanBuffer("");
             return;
           }

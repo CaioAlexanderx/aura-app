@@ -145,7 +145,7 @@ function ReativacaoMeta() {
       setClientes(Array.isArray(d?.priority_reactivation) ? d.priority_reactivation : []);
       setMetrics((d?.metrics || {}) as Record<string, number>);
     } catch (e: any) {
-      // 403 = plano sem o módulo. Não é falha: é o plano.
+      // 403 = plano sem o módulo (JWT velho). Não é falha: a tela cai no ChamarSumidos.
       if (e?.status === 403) setSemAcesso(true);
       else setErroLista(e?.data?.error || e?.message || "Não foi possível carregar a lista.");
       setClientes([]);
@@ -295,6 +295,13 @@ function ReativacaoMeta() {
 
   const autoTravado = !auto && (waLoading || blockers.length > 0);
 
+  // 403 = o backend só libera esta tela a Negócio/Expansão. Chegar aqui
+  // com 403 quer dizer que o plano do login está desatualizado (o wrapper
+  // da rota ainda leu "negócio" do JWT, mas a empresa é Essencial). Nada
+  // de caixa de plano nem "Ver planos" (premissa de 16/09): mostra a mesma
+  // tela que o Essencial vê, "Chamar" por wa.me.
+  if (semAcesso) return <ChamarSumidos />;
+
   return (
     <ScrollView style={st.screen} contentContainerStyle={st.content}>
       <View style={st.headerRow}>
@@ -322,214 +329,197 @@ function ReativacaoMeta() {
         }
       />
 
-      {semAcesso && (
-        <View style={st.card} testID="reativacao-sem-plano">
-          <Text style={st.cardTitle}>Disponível no plano Negócio</Text>
-          <Text style={st.cardSub}>
-            A reativação de clientes pelo WhatsApp oficial faz parte do plano Negócio. Fale com a
-            Aura para migrar — a lista de quem sumiu continua no painel de retenção.
-          </Text>
-          <Pressable onPress={() => router.push("/(tabs)/planos")} style={st.primaryBtn} accessibilityRole="button">
-            <Text style={st.primaryTxt}>Ver planos</Text>
+      {/* ── Resumo dos segmentos — faixa de indicadores padrão
+          (mesmo SummaryCard que /estoque usa na variante estreita),
+          no lugar dos três cards escritos à mão que já diziam a
+          mesma coisa que o subtítulo do cabeçalho acima. ── */}
+      <View style={st.metrics} testID="reativacao-metricas">
+        <SummaryCard label="EM RISCO" value={String(metrics.at_risk ?? 0)} color={Colors.amber} />
+        <SummaryCard label="INATIVOS" value={String(metrics.dormant ?? 0)} color={Colors.ink2} />
+        <SummaryCard label="PERDIDOS" value={String(metrics.lost ?? 0)} color={Colors.red} />
+      </View>
+
+      {/* ── Bloqueios do canal ──
+          I1.3 — "conecte o número" + "template não aprovado" (os dois
+          avisos de quem ainda não configurou nada) ocupavam a dobra
+          inteira em dois cards; agora é uma linha de checklist só.
+          Os demais motivos (token, consentimento, cota…) continuam
+          com a frase inteira: cada um pede uma ação diferente. */}
+      {!waLoading && blockers.length > 0 && (
+        <View style={st.blockBox} testID="reativacao-bloqueios">
+          {blockersConfigurar.length > 0 && (
+            <View style={st.blockRow}>
+              <Icon name="alert" size={12} color={Colors.amber} />
+              <Text style={st.blockTxt}>
+                Falta configurar: {blockersConfigurar.map((b) => LABEL_CURTO_FALTA_CONFIGURAR[b.code] || b.label).join(" · ")}
+              </Text>
+            </View>
+          )}
+          {blockersOutros.map((b) => (
+            <View key={b.code} style={st.blockRow}>
+              <Icon name="alert" size={12} color={Colors.amber} />
+              <Text style={st.blockTxt}>{b.label}</Text>
+            </View>
+          ))}
+          <Pressable
+            onPress={() => router.push("/(tabs)/whatsapp")}
+            accessibilityRole="button"
+            style={st.link}
+            testID="reativacao-configurar-wa"
+          >
+            <Icon name="arrow_right" size={13} color={Colors.violet3} />
+            <Text style={st.linkTxt}>Configurar WhatsApp</Text>
           </Pressable>
         </View>
       )}
 
-      {!semAcesso && (
-        <>
-          {/* ── Resumo dos segmentos — faixa de indicadores padrão
-              (mesmo SummaryCard que /estoque usa na variante estreita),
-              no lugar dos três cards escritos à mão que já diziam a
-              mesma coisa que o subtítulo do cabeçalho acima. ── */}
-          <View style={st.metrics} testID="reativacao-metricas">
-            <SummaryCard label="EM RISCO" value={String(metrics.at_risk ?? 0)} color={Colors.amber} />
-            <SummaryCard label="INATIVOS" value={String(metrics.dormant ?? 0)} color={Colors.ink2} />
-            <SummaryCard label="PERDIDOS" value={String(metrics.lost ?? 0)} color={Colors.red} />
-          </View>
-
-          {/* ── Bloqueios do canal ──
-              I1.3 — "conecte o número" + "template não aprovado" (os dois
-              avisos de quem ainda não configurou nada) ocupavam a dobra
-              inteira em dois cards; agora é uma linha de checklist só.
-              Os demais motivos (token, consentimento, cota…) continuam
-              com a frase inteira: cada um pede uma ação diferente. */}
-          {!waLoading && blockers.length > 0 && (
-            <View style={st.blockBox} testID="reativacao-bloqueios">
-              {blockersConfigurar.length > 0 && (
-                <View style={st.blockRow}>
-                  <Icon name="alert" size={12} color={Colors.amber} />
-                  <Text style={st.blockTxt}>
-                    Falta configurar: {blockersConfigurar.map((b) => LABEL_CURTO_FALTA_CONFIGURAR[b.code] || b.label).join(" · ")}
-                  </Text>
-                </View>
-              )}
-              {blockersOutros.map((b) => (
-                <View key={b.code} style={st.blockRow}>
-                  <Icon name="alert" size={12} color={Colors.amber} />
-                  <Text style={st.blockTxt}>{b.label}</Text>
-                </View>
-              ))}
-              <Pressable
-                onPress={() => router.push("/(tabs)/whatsapp")}
-                accessibilityRole="button"
-                style={st.link}
-                testID="reativacao-configurar-wa"
-              >
-                <Icon name="arrow_right" size={13} color={Colors.violet3} />
-                <Text style={st.linkTxt}>Configurar WhatsApp</Text>
-              </Pressable>
-            </View>
-          )}
-
-          {/* ── Quem receber ── */}
-          <Text style={st.sectionTitle}>Quem receber</Text>
-          <View style={st.card}>
-            <View style={st.chips}>
-              {ALVOS.map((a) => (
-                <Pressable
-                  key={a.key}
-                  onPress={() => { setAlvo(a.key); setSelecionados(new Set()); }}
-                  style={[st.chip, alvo === a.key && st.chipOn]}
-                  testID={`reativacao-alvo-${a.key}`}
-                >
-                  <Text style={[st.chipTxt, alvo === a.key && st.chipTxtOn]}>{a.label}</Text>
-                </Pressable>
-              ))}
-            </View>
-            {diasParam != null && (
-              <Text style={st.origem} testID="reativacao-filtro-origem">
-                Você veio do corte de {diasParam} dias sem comprar — marcamos o alvo mais próximo.
-                Troque acima se quiser outro.
-              </Text>
-            )}
-            <Text style={st.hint}>
-              {ALVOS.find((a) => a.key === alvo)?.desc}. A lista abaixo é a prioritária: os que mais
-              gastaram entre os que sumiram. Sem marcar ninguém, o envio vale para o segmento inteiro
-              (no máximo {MAX_POR_DISPARO} por disparo).
-            </Text>
-
-            {carregando && <View style={st.loadingBox}><ActivityIndicator color={Colors.violet3} /></View>}
-
-            {!carregando && !!erroLista && (
-              <View style={st.loadingBox}>
-                <Text style={st.errTxt}>{erroLista}</Text>
-                <Pressable onPress={carregarLista} accessibilityRole="button">
-                  <Text style={st.retryTxt}>Tentar de novo</Text>
-                </Pressable>
-              </View>
-            )}
-
-            {!carregando && !erroLista && doAlvo.length === 0 && (
-              <Text style={st.vazio} testID="reativacao-vazio">
-                Ninguém neste segmento agora — o que é uma boa notícia.
-              </Text>
-            )}
-
-            {!carregando && !erroLista && doAlvo.length > 0 && (
-              <View style={st.lista} testID="reativacao-lista">
-                {doAlvo.map((c) => {
-                  const marcado = selecionados.has(c.id);
-                  const contatado = String(c.reactivation_status || "") === "contacted";
-                  const quando = fmtDayMonthBR(c.contacted_at);
-                  return (
-                    <Pressable
-                      key={c.id}
-                      onPress={() => alternarSelecao(c.id)}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: marcado }}
-                      style={[st.linha, marcado && st.linhaOn]}
-                      testID={`reativacao-cliente-${c.id}`}
-                    >
-                      <View style={[st.box, marcado && st.boxOn]}>
-                        {marcado && <Icon name="check" size={12} color="#fff" />}
-                      </View>
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={st.nome} numberOfLines={1}>{c.name}</Text>
-                        <Text style={st.meta} numberOfLines={1}>
-                          {fmtBRL(c.total_spent)}
-                          {typeof c.days_since_purchase === "number" ? ` · há ${c.days_since_purchase} dias sem comprar` : ""}
-                          {!c.phone ? " · sem telefone" : ""}
-                        </Text>
-                        {contatado && (
-                          <Text style={st.contatado} testID={`reativacao-contatado-${c.id}`}>
-                            contatado{quando ? ` em ${quando}` : ""}
-                          </Text>
-                        )}
-                        {chamados[c.id] !== undefined && chamados[c.id] !== null && (
-                          <Text style={st.contatado} testID={`reativacao-chamado-${c.id}`}>
-                            {rotuloDeChamado(chamados[c.id])}
-                          </Text>
-                        )}
-                      </View>
-                      {!!c.phone && (
-                        <Pressable
-                          onPress={() => chamar(c)}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Chamar ${c.name} no WhatsApp`}
-                          style={st.chamar}
-                          testID={`reativacao-chamar-${c.id}`}
-                        >
-                          <Icon name="whatsapp" size={13} color={Colors.violet3} />
-                          <Text style={st.chamarTxt}>Chamar</Text>
-                        </Pressable>
-                      )}
-                    </Pressable>
-                  );
-                })}
-              </View>
-            )}
-
+      {/* ── Quem receber ── */}
+      <Text style={st.sectionTitle}>Quem receber</Text>
+      <View style={st.card}>
+        <View style={st.chips}>
+          {ALVOS.map((a) => (
             <Pressable
-              onPress={() => { setErroEnvio(null); setResultado(null); setPreviaEnvio(true); }}
-              disabled={!podeEnviar || quantidadeEnvio === 0 || enviando}
-              accessibilityRole="button"
-              style={[st.primaryBtn, (!podeEnviar || quantidadeEnvio === 0 || enviando) && st.btnDisabled]}
-              testID={podeEnviar ? "reativacao-enviar" : "reativacao-enviar-travado"}
+              key={a.key}
+              onPress={() => { setAlvo(a.key); setSelecionados(new Set()); }}
+              style={[st.chip, alvo === a.key && st.chipOn]}
+              testID={`reativacao-alvo-${a.key}`}
             >
-              <Icon name="whatsapp" size={14} color="#fff" />
-              <Text style={st.primaryTxt}>
-                {selecionadosDoAlvo.length > 0
-                  ? `Enviar cupom para ${selecionadosDoAlvo.length} selecionados`
-                  : "Enviar cupom de reativação por WhatsApp"}
-              </Text>
+              <Text style={[st.chipTxt, alvo === a.key && st.chipTxtOn]}>{a.label}</Text>
             </Pressable>
+          ))}
+        </View>
+        {diasParam != null && (
+          <Text style={st.origem} testID="reativacao-filtro-origem">
+            Você veio do corte de {diasParam} dias sem comprar — marcamos o alvo mais próximo.
+            Troque acima se quiser outro.
+          </Text>
+        )}
+        <Text style={st.hint}>
+          {ALVOS.find((a) => a.key === alvo)?.desc}. A lista abaixo é a prioritária: os que mais
+          gastaram entre os que sumiram. Sem marcar ninguém, o envio vale para o segmento inteiro
+          (no máximo {MAX_POR_DISPARO} por disparo).
+        </Text>
 
-            {!!resultado && <Text style={st.resultado} testID="reativacao-resultado">{resultado}</Text>}
-            {!!erroEnvio && <Text style={st.errTxt} testID="reativacao-erro">{erroEnvio}</Text>}
-          </View>
+        {carregando && <View style={st.loadingBox}><ActivityIndicator color={Colors.violet3} /></View>}
 
-          {/* ── Automático semanal ── */}
-          <Text style={st.sectionTitle}>Reativação automática</Text>
-          <View style={st.card}>
-            <View style={st.autoHead}>
-              <View style={{ flex: 1 }}>
-                <Text style={st.cardTitle}>Reativação automática semanal</Text>
-                <Text style={st.cardSub}>
-                  Uma vez por semana a loja manda o cupom para quem entrou em risco, num lote
-                  pequeno. O teto é baixo de propósito: marketing em volume derruba a qualidade do
-                  número na Meta, e número rebaixado para de enviar até a cobrança.
-                </Text>
-              </View>
-              <Switch
-                value={auto}
-                onValueChange={(v) => { setAutoErr(null); if (!v) salvarAuto(false); else setPreviaAuto(true); }}
-                disabled={autoTravado || autoSaving}
-                trackColor={{ false: Colors.bg4 as any, true: Colors.violet }}
-                thumbColor="#fff"
-                accessibilityLabel="Reativação automática semanal"
-                accessibilityState={{ disabled: autoTravado || autoSaving, checked: auto }}
-                testID={autoTravado ? "reativacao-auto-travado" : "reativacao-auto"}
-              />
-            </View>
-            {waLoading && !auto && (
-              <Text style={st.verificando} testID="reativacao-auto-verificando">
-                Verificando a conexão do WhatsApp da loja…
-              </Text>
-            )}
-            {!!autoErr && <Text style={st.errTxt} testID="reativacao-auto-erro">{autoErr}</Text>}
+        {!carregando && !!erroLista && (
+          <View style={st.loadingBox}>
+            <Text style={st.errTxt}>{erroLista}</Text>
+            <Pressable onPress={carregarLista} accessibilityRole="button">
+              <Text style={st.retryTxt}>Tentar de novo</Text>
+            </Pressable>
           </View>
-        </>
-      )}
+        )}
+
+        {!carregando && !erroLista && doAlvo.length === 0 && (
+          <Text style={st.vazio} testID="reativacao-vazio">
+            Ninguém neste segmento agora — o que é uma boa notícia.
+          </Text>
+        )}
+
+        {!carregando && !erroLista && doAlvo.length > 0 && (
+          <View style={st.lista} testID="reativacao-lista">
+            {doAlvo.map((c) => {
+              const marcado = selecionados.has(c.id);
+              const contatado = String(c.reactivation_status || "") === "contacted";
+              const quando = fmtDayMonthBR(c.contacted_at);
+              return (
+                <Pressable
+                  key={c.id}
+                  onPress={() => alternarSelecao(c.id)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: marcado }}
+                  style={[st.linha, marcado && st.linhaOn]}
+                  testID={`reativacao-cliente-${c.id}`}
+                >
+                  <View style={[st.box, marcado && st.boxOn]}>
+                    {marcado && <Icon name="check" size={12} color="#fff" />}
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={st.nome} numberOfLines={1}>{c.name}</Text>
+                    <Text style={st.meta} numberOfLines={1}>
+                      {fmtBRL(c.total_spent)}
+                      {typeof c.days_since_purchase === "number" ? ` · há ${c.days_since_purchase} dias sem comprar` : ""}
+                      {!c.phone ? " · sem telefone" : ""}
+                    </Text>
+                    {contatado && (
+                      <Text style={st.contatado} testID={`reativacao-contatado-${c.id}`}>
+                        contatado{quando ? ` em ${quando}` : ""}
+                      </Text>
+                    )}
+                    {chamados[c.id] !== undefined && chamados[c.id] !== null && (
+                      <Text style={st.contatado} testID={`reativacao-chamado-${c.id}`}>
+                        {rotuloDeChamado(chamados[c.id])}
+                      </Text>
+                    )}
+                  </View>
+                  {!!c.phone && (
+                    <Pressable
+                      onPress={() => chamar(c)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Chamar ${c.name} no WhatsApp`}
+                      style={st.chamar}
+                      testID={`reativacao-chamar-${c.id}`}
+                    >
+                      <Icon name="whatsapp" size={13} color={Colors.violet3} />
+                      <Text style={st.chamarTxt}>Chamar</Text>
+                    </Pressable>
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+
+        <Pressable
+          onPress={() => { setErroEnvio(null); setResultado(null); setPreviaEnvio(true); }}
+          disabled={!podeEnviar || quantidadeEnvio === 0 || enviando}
+          accessibilityRole="button"
+          style={[st.primaryBtn, (!podeEnviar || quantidadeEnvio === 0 || enviando) && st.btnDisabled]}
+          testID={podeEnviar ? "reativacao-enviar" : "reativacao-enviar-travado"}
+        >
+          <Icon name="whatsapp" size={14} color="#fff" />
+          <Text style={st.primaryTxt}>
+            {selecionadosDoAlvo.length > 0
+              ? `Enviar cupom para ${selecionadosDoAlvo.length} selecionados`
+              : "Enviar cupom de reativação por WhatsApp"}
+          </Text>
+        </Pressable>
+
+        {!!resultado && <Text style={st.resultado} testID="reativacao-resultado">{resultado}</Text>}
+        {!!erroEnvio && <Text style={st.errTxt} testID="reativacao-erro">{erroEnvio}</Text>}
+      </View>
+
+      {/* ── Automático semanal ── */}
+      <Text style={st.sectionTitle}>Reativação automática</Text>
+      <View style={st.card}>
+        <View style={st.autoHead}>
+          <View style={{ flex: 1 }}>
+            <Text style={st.cardTitle}>Reativação automática semanal</Text>
+            <Text style={st.cardSub}>
+              Uma vez por semana a loja manda o cupom para quem entrou em risco, num lote
+              pequeno. O teto é baixo de propósito: marketing em volume derruba a qualidade do
+              número na Meta, e número rebaixado para de enviar até a cobrança.
+            </Text>
+          </View>
+          <Switch
+            value={auto}
+            onValueChange={(v) => { setAutoErr(null); if (!v) salvarAuto(false); else setPreviaAuto(true); }}
+            disabled={autoTravado || autoSaving}
+            trackColor={{ false: Colors.bg4 as any, true: Colors.violet }}
+            thumbColor="#fff"
+            accessibilityLabel="Reativação automática semanal"
+            accessibilityState={{ disabled: autoTravado || autoSaving, checked: auto }}
+            testID={autoTravado ? "reativacao-auto-travado" : "reativacao-auto"}
+          />
+        </View>
+        {waLoading && !auto && (
+          <Text style={st.verificando} testID="reativacao-auto-verificando">
+            Verificando a conexão do WhatsApp da loja…
+          </Text>
+        )}
+        {!!autoErr && <Text style={st.errTxt} testID="reativacao-auto-erro">{autoErr}</Text>}
+      </View>
 
       <PreviaMarketingModal
         visible={previaEnvio}

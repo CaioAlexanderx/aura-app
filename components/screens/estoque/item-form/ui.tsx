@@ -43,7 +43,7 @@ export function Campo({
 
 // ── chip clicável ───────────────────────────────────────────
 export function Chip({
-  label, active, onPress, dashed, icon, swatch, onRemove, removeLabel, accessibilityLabel,
+  label, active, onPress, dashed, icon, swatch, onRemove, removeLabel, accessibilityLabel, valor,
 }: {
   label: string;
   active?: boolean;
@@ -57,17 +57,22 @@ export function Chip({
   // unidade mostra "saco" mas o valor gravado — e o rótulo pra achar o
   // botão — continua "sc").
   accessibilityLabel?: string;
+  // 18/10/2026 (p-35): chip de um valor digitado (os tamanhos). Texto com
+  // mais contraste no tema escuro e o × com área de toque de 32 px — no web
+  // o hitSlop não vale, então a área é o próprio botão (margem negativa
+  // para o chip não crescer na altura).
+  valor?: boolean;
 }) {
   return (
     <View style={[s.chip, active && s.chipAtivo, dashed && s.chipTracejado]}>
       <Pressable onPress={onPress} style={s.chipMain} accessibilityLabel={accessibilityLabel || label}>
         {swatch ? <View style={[s.swatch, { backgroundColor: swatch }]} /> : null}
         {icon ? <Icon name={icon as any} size={12} color={active || dashed ? Colors.violet3 : Colors.ink3} /> : null}
-        <Text style={[s.chipTxt, active && s.chipTxtAtivo, dashed && s.chipTxtAtivo]}>{label}</Text>
+        <Text style={[s.chipTxt, valor && s.chipTxtValor, active && s.chipTxtAtivo, dashed && s.chipTxtAtivo]}>{label}</Text>
       </Pressable>
       {onRemove ? (
-        <Pressable onPress={onRemove} hitSlop={8} accessibilityLabel={removeLabel || ("Remover " + label)}>
-          <Text style={s.chipRm}>×</Text>
+        <Pressable onPress={onRemove} hitSlop={8} style={valor ? s.chipRmAlvo : undefined} accessibilityLabel={removeLabel || ("Remover " + label)}>
+          <Text style={[s.chipRm, valor && s.chipTxtValor]}>×</Text>
         </Pressable>
       ) : null}
     </View>
@@ -217,6 +222,11 @@ export const s = StyleSheet.create({
   chipTxt: { fontSize: 12, color: Colors.ink3, fontWeight: "500" },
   chipTxtAtivo: { color: Colors.violet3, fontWeight: "700" },
   chipRm: { fontSize: 14, color: Colors.ink3, lineHeight: 15, paddingHorizontal: 2 },
+  chipTxtValor: { color: Colors.ink2 },
+  chipRmAlvo: {
+    minWidth: 32, minHeight: 32, alignItems: "center", justifyContent: "center",
+    marginVertical: -8, marginLeft: -4, marginRight: -8,
+  },
   swatch: { width: 12, height: 12, borderRadius: 4, borderWidth: 1, borderColor: "rgba(0,0,0,0.15)" },
   nota: {
     flexDirection: "row", gap: 9, alignItems: "flex-start",

@@ -113,18 +113,6 @@ describe('ReconciliacaoBancaria', () => {
   });
 });
 
-describe('MarketplaceDashboard', () => {
-  it('should calculate total GMV across platforms', () => {
-    // TODO: ML=10k, Shopee=5k => GMV=15k
-    expect(true).toBe(true);
-  });
-
-  it('should filter orders by platform', () => {
-    // TODO: click ML card, assert only ML orders shown
-    expect(true).toBe(true);
-  });
-});
-
 describe('NfceDashboard', () => {
   it('should show config alert when not configured', () => {
     // TODO: isConfigured=false

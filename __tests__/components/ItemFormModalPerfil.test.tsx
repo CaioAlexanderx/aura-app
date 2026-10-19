@@ -348,3 +348,120 @@ describe("ItemFormModal — sem Matcon, 'Salvar e cadastrar outro' continua limp
     tree.unmount();
   });
 });
+
+// ============================================================
+// Categoria do cadastro (p-35, decisão do Caio relatada em 19/10/2026).
+// Um vestido nasceu em "Calçados" porque o cadastro novo lia a última
+// categoria do localStorage — e a EDIÇÃO de um produto também gravava
+// essa chave. Agora o cadastro novo abre sem categoria; ela só passa no
+// "Salvar e cadastrar outro", em memória.
+// ============================================================
+const AVISO_HERDADA = "A mesma do último cadastro";
+
+async function escolherCategoria(tree: any, nome: string) {
+  await clicar(porLabel(tree, "Escolher categoria"));
+  await clicar(porLabel(tree, "+ Nova"));
+  act(() => { inputPorPlaceholder(tree, "Nome da nova categoria").props.onChangeText(nome); });
+  await clicar(botao(tree, "Usar"));
+}
+
+function produtoDeCalcados(): any {
+  return {
+    id: "p-1", name: "Sandália rasteira", code: "SAN-001", barcode: "", category: "Calçados",
+    price: 12990, cost: 6000, stock: 4, minStock: 1, unit: "un", brand: "", notes: "",
+    color: "", size: "", has_variants: false,
+  };
+}
+
+describe("ItemFormModal — categoria não vaza entre cadastros", () => {
+  let gravacoes: Array<[string, string]>;
+  let leituras: string[];
+
+  beforeEach(() => {
+    gravacoes = [];
+    leituras = [];
+    // Um storage de verdade (guarda o que recebe): se o código voltasse a
+    // gravar/ler a "última categoria", o vestido herdaria "Calçados" aqui.
+    const guardado: Record<string, string> = {};
+    (global as any).localStorage = {
+      getItem: (k: string) => { leituras.push(k); return k in guardado ? guardado[k] : null; },
+      setItem: (k: string, v: string) => { gravacoes.push([k, v]); guardado[k] = v; },
+      removeItem: (k: string) => { delete guardado[k]; },
+    };
+  });
+  afterEach(() => { delete (global as any).localStorage; });
+
+  test("cadastro novo abre sem categoria", () => {
+    const tree = montar();
+    const t = texto(tree);
+    expect(t).toContain("Escolher categoria");
+    expect(t).not.toContain(AVISO_HERDADA);
+    expect(leituras.filter((k) => k.indexOf("ategoria") >= 0)).toEqual([]);
+    tree.unmount();
+  });
+
+  test("'Salvar e cadastrar outro' leva a categoria para o próximo item", async () => {
+    const tree = montar();
+    preencherNomeEPreco(tree, "Vestido midi", "18990", "Ex.: Vestido midi floral");
+    await escolherCategoria(tree, "Vestidos");
+    await clicar(botao(tree, "Salvar e cadastrar outro"));
+    expect(mockAddProduct).toHaveBeenCalledTimes(1);
+    const t = texto(tree);
+    expect(t).toContain("Vestidos");
+    expect(t).toContain(AVISO_HERDADA);
+    tree.unmount();
+  });
+
+  test("a categoria herdada só vive naquela sessão: fechar e abrir de novo vem vazio", async () => {
+    let tree = montar();
+    preencherNomeEPreco(tree, "Vestido midi", "18990", "Ex.: Vestido midi floral");
+    await escolherCategoria(tree, "Vestidos");
+    await clicar(botao(tree, "Salvar produto"));
+    tree.unmount();
+
+    tree = montar();
+    expect(texto(tree)).not.toContain("Vestidos");
+    expect(texto(tree)).not.toContain(AVISO_HERDADA);
+    tree.unmount();
+  });
+
+  test("editar um produto e depois abrir cadastro novo: vem sem categoria", async () => {
+    let tree: any;
+    act(() => { tree = renderer.create(<ItemFormModal visible onClose={jest.fn()} editProduct={produtoDeCalcados()} />); });
+    act(() => { inputPorPlaceholder(tree, "Ex.: Vestido midi floral").props.onChangeText("Sandália rasteira nova"); });
+    await clicar(botao(tree, "Salvar alterações"));
+    expect(mockUpdateProduct).toHaveBeenCalledTimes(1);
+    tree.unmount();
+
+    tree = montar();
+    expect(texto(tree)).not.toContain("Calçados");
+    expect(texto(tree)).not.toContain(AVISO_HERDADA);
+    tree.unmount();
+  });
+
+  test("nada é lido nem gravado no localStorage em todo o fluxo", async () => {
+    const tree = montar();
+    preencherNomeEPreco(tree, "Vestido midi", "18990", "Ex.: Vestido midi floral");
+    await escolherCategoria(tree, "Vestidos");
+    await clicar(botao(tree, "Salvar e cadastrar outro"));
+    tree.unmount();
+    expect(gravacoes).toEqual([]);
+    expect(leituras.filter((k) => k.indexOf("ategoria") >= 0)).toEqual([]);
+  });
+
+  test("Matcon: o 'cadastrar outro' segue herdando; o cadastro novo abre vazio", async () => {
+    mockPdvSettings = { matcon_enabled: true, matcon_units: ["m²", "m³", "sc", "pç"] };
+    let tree = montar();
+    expect(texto(tree)).not.toContain(AVISO_HERDADA);
+    preencherNomeEPreco(tree, "Cimento CP-II 50 kg", "3690", EX_MATCON);
+    await escolherCategoria(tree, "Cimento");
+    await clicar(botao(tree, "Salvar e cadastrar outro"));
+    expect(texto(tree)).toContain("Cimento");
+    expect(texto(tree)).toContain(AVISO_HERDADA);
+    tree.unmount();
+
+    tree = montar();
+    expect(texto(tree)).not.toContain(AVISO_HERDADA);
+    tree.unmount();
+  });
+});
