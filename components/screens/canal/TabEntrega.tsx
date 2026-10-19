@@ -385,9 +385,9 @@ export function TabEntrega({ config, saveConfig, isSaving, vitrine = "comum", on
     setBusinessHours(next);
     // Só salva a grade inteira válida (19/10/2026): HH:MM, os dois campos
     // preenchidos (ou os dois vazios) e fechamento diferente da abertura.
-    // Fechar depois da meia-noite (18:00 às 02:00) vale. Desde que
-    // "Fechada" recusa pedido no servidor, salvar um dia pela metade
-    // fecharia a loja enquanto a lojista ainda digita.
+    // Fechar depois da meia-noite (18:00 às 02:00) vale. Salvar um dia pela
+    // metade poria o selo "Fechada" e o aviso "será entregue a partir de..."
+    // errados na vitrine enquanto a lojista ainda digita.
     if (horarioPodeSalvar(DAYS.map(({ key: k }) => next[k]))) {
       scheduleSave({ business_hours: next });
     }
@@ -753,7 +753,7 @@ export function TabEntrega({ config, saveConfig, isSaving, vitrine = "comum", on
           <Text style={s.cardHeadHint}>
             {alwaysOpen
               ? 'Cliente vê "Aberta" no topo da loja, sempre'
-              : 'Fora do horário a loja aparece "Fechada" e não recebe pedidos'}
+              : 'Fora do horário a loja aparece "Fechada" e o cliente é avisado de que o pedido será entregue quando ela abrir'}
           </Text>
         </View>
         <View style={s.always24Row}>

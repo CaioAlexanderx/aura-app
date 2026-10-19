@@ -1,7 +1,8 @@
 // ============================================================
 // Horário que passa da meia-noite no painel (19/10/2026).
 //
-// Desde 19/10 a loja "Fechada" recusa pedido no servidor. Então a grade
+// Fora do horário a vitrine mostra "Fechada" e avisa que o pedido será
+// entregue quando a loja abrir (decisão de 19/10). Então a grade
 // precisa aceitar a adega que abre 18:00 e fecha 02:00 (e dizer "fecha no
 // dia seguinte"), e não pode salvar abertura igual ao fechamento nem dia
 // pela metade enquanto a lojista digita. Mesma regra do backend
@@ -101,9 +102,11 @@ describe("a grade de horários", () => {
     expect(t.filter((x) => x === "Fecha no dia seguinte")).toHaveLength(3);
   });
 
-  test("o cabeçalho avisa que fechada não recebe pedido", () => {
+  test("o cabeçalho diz que, fechada, o cliente é avisado da entrega", () => {
     const { r } = montar(ADEGA);
-    expect(textos(r.toJSON()).join(" ")).toMatch(/não recebe pedidos/);
+    const t = textos(r.toJSON()).join(" ");
+    expect(t).toMatch(/o cliente é avisado de que o pedido será entregue quando ela abrir/);
+    expect(t).not.toMatch(/não recebe pedidos/);
   });
 
   test("fechar depois da meia-noite salva", () => {

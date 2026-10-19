@@ -55,8 +55,9 @@ export function textosDoPrazo(vitrine: "comum" | "studio" = "comum") {
 // ============================================================
 // Horário de funcionamento (19/10/2026)
 //
-// Desde 19/10 "Fechada" recusa o pedido no servidor, então um horário sem
-// sentido fecha a loja de verdade. A regra é a mesma do backend
+// Fora do horário a vitrine mostra "Fechada" e avisa o cliente de que o
+// pedido será entregue quando a loja abrir (o pedido entra normalmente).
+// Um horário sem sentido põe o selo e o aviso errados. A regra é a mesma do backend
 // (services/horarioDaLoja.js):
 //   • fechar depois da meia-noite é válido — 18:00 às 02:00 vale até as
 //     02:00 do dia seguinte;
