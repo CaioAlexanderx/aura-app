@@ -7,7 +7,6 @@
 //
 // 14/05/2026: interceptação do crediário parcelado em
 // handleFinalize() — showCrediario + handleCrediarioConfirm.
-// handleOpenCrediario() — atalho direto via botão ActCrediario (F6).
 //
 // 26/05/2026 (crediario fase 1): handleCrediarioConfirm agora
 // recebe { installments, first_due_date } do modal e repassa
@@ -806,19 +805,6 @@ export function usePdvState() {
     }
   }
 
-  function handleOpenCrediario() {
-    if (cart.length === 0) {
-      toast.info("Adicione produtos ao carrinho antes de usar o crediário");
-      return;
-    }
-    if (!selectedCustomerId) {
-      toast.error("Selecione um cliente para usar o crediário parcelado");
-      return;
-    }
-    setPayment("crediario");
-    setShowCrediario(true);
-  }
-
   async function handleValidateCoupon(code: string) {
     if (!company?.id) return { ok: false, error: "Empresa não identificada" };
     try {
@@ -1164,7 +1150,6 @@ export function usePdvState() {
     showCrediario,
     crediarioModalAmount,
     handleCrediarioConfirm,
-    handleOpenCrediario,
     closeCrediario: () => setShowCrediario(false),
     // Scanner
     lastScannedCode, scannerListening,
