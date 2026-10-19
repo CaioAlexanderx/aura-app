@@ -57,7 +57,7 @@ export var PERIODS: { key: PeriodKey; label: string }[] = [
   { key: "year", label: "Anual" },
   { key: "prev_year", label: "Ant." },
   { key: "all", label: "Todos" },
-  { key: "custom", label: "Periodo" },
+  { key: "custom", label: "Período" },
 ];
 
 // F6 (24/08/2026): 6 abas -> 4.

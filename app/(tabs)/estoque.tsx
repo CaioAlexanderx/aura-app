@@ -56,6 +56,7 @@ import { ProductGridWeb } from "@/components/screens/estoque/ProductGridWeb";
 // Estoque só liga com matcon_enabled + empresa emitindo nota fiscal.
 import { readMatconSettings } from "@/constants/matcon";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
+import { useVisibleModules } from "@/hooks/useVisibleModules";
 import { nfceApi } from "@/services/nfceApi";
 // 23/09/2026 (QA producao, item 5): estoque consolidado (AggregatedView)
 // usava "un" fixo e Math.round — errado pra produto fracionado (m², kg).
@@ -310,6 +311,8 @@ export default function EstoqueScreen() {
   const { flattened: categoriasFlat } = useCategories();
   const { categoryNames: managedCategoryNames } = useProductCategories();
   const { company, availableCompanies, consolidatedView } = useAuthStore();
+  // 18/10/2026 (card p-36): "mudar" o desenho da etiqueta leva a Configurações.
+  const podeMudarDesenho = useVisibleModules().has("configuracoes");
   // 22/09/2026 (Matcon M2): aviso fiscal (CEST) da aba Alertas. Loja sem o
   // módulo nunca lê nfce_config aqui — o aviso nem calcula (AlertsList).
   const { settings: pdvSettings } = usePdvSettings();
@@ -892,7 +895,7 @@ export default function EstoqueScreen() {
           />
         )}
         {/* Aba 2: Etiquetas (era 3 antes da Curva ABC migrar) */}
-        {activeTab === 2 && <PrintLabels products={products} selectedIds={labelSelection} onSelectionChange={setLabelSelection} />}
+        {activeTab === 2 && <PrintLabels products={products} selectedIds={labelSelection} onSelectionChange={setLabelSelection} podeMudarDesenho={podeMudarDesenho} />}
 
       </ScrollView>
 

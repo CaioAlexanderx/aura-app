@@ -31,6 +31,7 @@ import { defaultLabelQty, unitLabelForList } from "@/components/screens/estoque/
 import { customLabelPreset, rotuloDaMedida, mmTxt, type CustomLabelSpec } from "@/components/screens/estoque/labels/customLabel";
 import { lerMinhasMedidas, salvarMedida, apagarMedida, escolherMedida, substituirMedidas } from "@/components/screens/estoque/labels/customLabelStorage";
 import { MinhaMedidaWizard } from "@/components/screens/estoque/labels/MinhaMedidaWizard";
+import { DesenhoDaEtiquetaLinha } from "@/components/screens/estoque/DesenhoDaEtiquetaLinha";
 import {
   filtrarEtiquetas, categoriasDe, filtrosAtivos, lerOrdemEtiquetas, salvarOrdemEtiquetas,
   ORDENS_ETIQUETAS, PERIODOS, diaParaBr, hojeEmSaoPaulo, diasComCadastro, marcasDoCalendario, type PeriodoCadastro,
@@ -44,6 +45,9 @@ type Props = {
   products: Product[];
   selectedIds: string[];
   onSelectionChange: (ids: string[]) => void;
+  // 18/10/2026 (card p-36): quem abre Configurações vê o "mudar" na linha do
+  // desenho. Vem do Estoque (useVisibleModules), que já tem o QueryClient.
+  podeMudarDesenho?: boolean;
 };
 
 type EAN13Entry = { name: string; originalCode: string; generated: string; productId?: string; variantId?: string };
@@ -104,7 +108,7 @@ function loadStoredLabelSize(): LabelSizeKey {
   return DEFAULT_LABEL_SIZE;
 }
 
-export function PrintLabels({ products, selectedIds, onSelectionChange }: Props) {
+export function PrintLabels({ products, selectedIds, onSelectionChange, podeMudarDesenho }: Props) {
   var { company, token } = useAuthStore();
   // 22/09/2026 (preco no cartao): so a opcao da loja — desligada, nada muda.
   var { settings: pdvSettings } = usePdvSettings();
@@ -760,6 +764,10 @@ export function PrintLabels({ products, selectedIds, onSelectionChange }: Props)
           </View>
         </View>
       </View>
+
+      {/* 18/10/2026 (card p-36): o desenho que sai na impressão deste modelo
+          e o atalho para a escolha (Configurações › Políticas do Caixa). */}
+      <DesenhoDaEtiquetaLinha labelSize={labelSize} labelDesign={labelDesign} medida={medidaAtiva} podeMudar={podeMudarDesenho === true} />
 
       {storeName ? (
         <Pressable onPress={function() { setShowStoreName(!showStoreName); }} style={s.storeToggle}>
