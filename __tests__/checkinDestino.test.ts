@@ -175,10 +175,20 @@ describe("parâmetros nas telas de destino", () => {
 
   test("Estoque mostra o convite da planilha com ?importar=planilha (o seletor abre no toque)", () => {
     const src = raiz("app/(tabs)/estoque.tsx");
-    expect(src).toContain("querImportarPlanilha(params.importar)");
-    expect(src).toContain("setConvitePlanilha(true);");
-    expect(src).toMatch(/testID="estoque-convite-planilha-escolher"/);
-    expect(src).toMatch(/onPress=\{importPlanilha\.escolherArquivo\}[\s\S]{0,200}estoque-convite-planilha-escolher/);
+    expect(src).toContain("<ConvitePlanilha");
+    expect(src).toContain("importar={params.importar}");
+    expect(src).toContain("onEscolher={importPlanilha.escolherArquivo}");
+  });
+
+  test("montagem dupla: nenhum parâmetro é limpo no mount; sai da URL só quando a pessoa fecha", () => {
+    const estoque = raiz("app/(tabs)/estoque.tsx");
+    const efeito = estoque.slice(estoque.indexOf("if (!querNovoProduto(params.novo)"), estoque.indexOf("}, [params.novo]);"));
+    expect(efeito).not.toContain("setParams");
+    expect(estoque).toMatch(/if \(veioPeloParamRef\.current\) \{\s*veioPeloParamRef\.current = false;\s*try \{ router\.setParams\(\{ novo: undefined, depois: undefined \}/);
+    const cred = raiz("app/(tabs)/crediario.tsx");
+    const efeitoCred = cred.slice(cred.indexOf("if (!querNovoFiado(params.novo)"), cred.indexOf("function fecharCriar()"));
+    expect(efeitoCred).not.toContain("setParams");
+    expect(cred).toContain("onClose={fecharCriar}");
   });
 
   test("Estoque abre o Novo item com ?novo=produto e só vai ao Caixa depois de salvar", () => {
@@ -193,7 +203,7 @@ describe("parâmetros nas telas de destino", () => {
   test("Crediário abre o Novo lançamento com ?novo=1", () => {
     const src = raiz("app/(tabs)/crediario.tsx");
     expect(src).toContain("querNovoFiado(params.novo)");
-    expect(src).toMatch(/querNovoFiado\(params\.novo\) \|\| consolidatedView\) return;\s*setShowCriar\(true\);/);
+    expect(src).toMatch(/querNovoFiado\(params\.novo\) \|\| consolidatedView\) return;\s*fiadoPeloParamRef\.current = true;\s*setShowCriar\(true\);/);
   });
 
   test("Notas fiscais abre a aba Certificado A1 com ?tab=certificado", () => {
