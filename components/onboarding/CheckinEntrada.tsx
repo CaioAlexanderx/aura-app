@@ -15,9 +15,17 @@
 //   · opção que o plano não tem some (Essencial: sem fiado, sem loja online),
 //     nunca desabilitada;
 //   · nada de hover (regra 7 do CLAUDE.md): o estado do chip é permanente.
+//
+// 19/10/2026 (card tq-31): o Continuar leva à primeira tela conforme a
+// resposta (utils/checkinDestino.ts), não mais sempre ao Painel. O plano do
+// JWT pode estar velho (CLAUDE.md, armadilha 1): a tela revalida o
+// /auth/me no mount e o Continuar espera essa revalidação (no máximo
+// LIMITE_DA_ESPERA_MS) antes de decidir por plano. A importação assistida
+// abre o wa.me no MESMO toque, antes de qualquer espera (senão o navegador
+// bloqueia a aba nova). Pular continua indo ao Painel.
 // ============================================================
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator, useWindowDimensions } from "react-native";
+import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator, useWindowDimensions, Linking, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useColors } from "@/constants/colors";
@@ -25,13 +33,29 @@ import { Fonts } from "@/constants/fonts";
 import { useAuthStore } from "@/stores/auth";
 import { useVisibleModules } from "@/hooks/useVisibleModules";
 import { useCheckin } from "@/hooks/useCheckin";
+import { garantirTemProduto, useTemProduto } from "@/hooks/useTemProduto";
 import { PERGUNTAS_CHECKIN, TEXTOS_CHECKIN, type ChaveResposta } from "@/constants/checkin";
 import { checkinApi, checkinQueryKey, type CheckinEstado, type CheckinRespostas } from "@/services/checkinApi";
 import {
   abrirCom, corpoCompleto, corpoDaResposta, corpoDoPular, opcoesVisiveis, quantasRespostas,
 } from "@/utils/checkinRegras";
+import { ROTA_PAINEL, destinoDoCheckin } from "@/utils/checkinDestino";
 
-const ROTA_PAINEL = "/(tabs)";
+/** Quanto o Continuar espera o /auth/me e a contagem de produtos. */
+export const LIMITE_DA_ESPERA_MS = 4000;
+
+function comLimite<T>(p: Promise<T>, ms: number): Promise<T | undefined> {
+  return Promise.race([p, new Promise<undefined>((r) => setTimeout(() => r(undefined), ms))]);
+}
+
+/** Abre o link num toque só. Web: nova aba, síncrono. Nativo: Linking. */
+function abrirLink(url: string) {
+  if (Platform.OS === "web") {
+    if (typeof window !== "undefined" && typeof window.open === "function") window.open(url, "_blank", "noopener");
+  } else {
+    Linking.openURL(url).catch(() => {});
+  }
+}
 const LARGURA_DUAS_COLUNAS = 760;
 
 export function CheckinEntrada() {
@@ -43,11 +67,26 @@ export function CheckinEntrada() {
   const companyId = company?.id || null;
   const modulos = useVisibleModules();
   const { data, isLoading } = useCheckin(companyId, !!companyId);
+  const habilitada = !!data && data.habilitado && !data.respondido && !data.pulou;
+  // Já pergunta se a loja tem produto enquanto ela responde (destino do Caixa).
+  const temProdutoQ = useTemProduto(companyId, habilitada);
+  // O destino é decidido depois de um await: lê sempre a versão mais nova.
+  const modulosRef = useRef(modulos);
+  modulosRef.current = modulos;
+  const revalidacao = useRef<Promise<unknown>>(Promise.resolve());
 
   const [respostas, setRespostas] = useState<CheckinRespostas>({});
   const semeado = useRef(false);
   const algumPutFalhou = useRef(false);
   const saindo = useRef(false);
+
+  // Plano stale no JWT (CLAUDE.md, armadilha 1): revalida no mount.
+  useEffect(() => {
+    const st: any = useAuthStore.getState?.() || {};
+    if (typeof st.refreshMe === "function") {
+      revalidacao.current = Promise.resolve().then(() => st.refreshMe()).catch(() => {});
+    }
+  }, []);
 
   // Retoma o que já estava gravado (quem marcou e fechou a aba).
   useEffect(() => {
@@ -82,12 +121,28 @@ export function CheckinEntrada() {
     checkinApi.put(companyId, corpo).catch(() => { algumPutFalhou.current = true; });
   }
 
-  function continuar() {
+  async function continuar() {
+    if (saindo.current) return;
+    // Marca antes de atualizar o cache: o efeito acima (respondido = true)
+    // não pode mandar ao Painel enquanto o destino é decidido.
+    saindo.current = true;
     if (companyId && algumPutFalhou.current) {
       checkinApi.put(companyId, corpoCompleto(respostas)).catch(() => {});
     }
+    const loja = (company as any)?.name || null;
+    // 1) wa.me no mesmo toque (importação assistida), antes de qualquer espera.
+    const previa = destinoDoCheckin(respostas, { modulos, temProduto: temProdutoQ.data ?? null, loja });
+    if (previa.whatsapp) abrirLink(previa.whatsapp);
     atualizarCache({ respondido: true, respostas });
-    seguirParaOPainel();
+    // 2) plano revalidado e contagem de produtos, com limite: nunca prende.
+    const [, temProduto] = (await comLimite(
+      Promise.all([revalidacao.current, companyId ? garantirTemProduto(queryClient, companyId) : Promise.resolve(null)]),
+      LIMITE_DA_ESPERA_MS,
+    )) || [undefined, null];
+    // Deixa o React aplicar o /auth/me novo antes de ler os módulos.
+    await new Promise((r) => setTimeout(r, 0));
+    const destino = destinoDoCheckin(respostas, { modulos: modulosRef.current, temProduto: temProduto ?? null, loja });
+    router.replace(destino.rota as any);
   }
 
   function pular() {

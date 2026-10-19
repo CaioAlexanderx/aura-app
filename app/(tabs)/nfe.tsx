@@ -20,6 +20,8 @@ import { RegimeFiscal } from "@/components/screens/nfe/TabConfig";
 import { RequireCompanyScope } from "@/components/RequireCompanyScope";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { readMatconSettings, type MatconSettings } from "@/constants/matcon";
+import { useLocalSearchParams } from "expo-router";
+import { querAbaCertificado } from "@/utils/checkinDestino";
 
 // IS_NARROW: breakpoint para KPI cards compactos em telas estreitas (<500px)
 const IS_NARROW = typeof window !== "undefined" ? window.innerWidth < 500 : false;
@@ -42,7 +44,13 @@ const IS_NARROW = typeof window !== "undefined" ? window.innerWidth < 500 : fals
 function NfeScreenInner({ embedded }: { embedded?: boolean }) {
   const { company, isDemo } = useAuthStore();
   const qc = useQueryClient();
-  const [tab, setTab] = useState(0);
+  // 19/10/2026 (tq-31): quem escolheu "Emitir nota fiscal" no check-in chega
+  // com ?tab=certificado e abre direto na aba "Certificado A1".
+  const params = useLocalSearchParams<{ tab?: string }>();
+  const [tab, setTab] = useState(() => (querAbaCertificado(params.tab) ? TAB_CERTIFICADO : 0));
+  useEffect(() => {
+    if (querAbaCertificado(params.tab)) setTab(TAB_CERTIFICADO);
+  }, [params.tab]);
 
   // 22/09/2026 (Matcon M2 — fiscal do Simples, docs/CONTRACT_MATCON.md
   // §M2): a config da NF-e (nfce_config) não tem tela própria hoje — só

@@ -38,6 +38,12 @@ import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { companiesApi } from "@/services/api";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { router, useLocalSearchParams } from "expo-router";
+// 19/10/2026 (tq-31): o Continuar do check-in e o "Fazer a primeira venda"
+// chegam com ?novo=produto (abre o Novo item) e, no caminho da primeira
+// venda, &depois=pdv (fechar depois de salvar leva ao Caixa).
+import { depoisVaiAoCaixa, querNovoProduto, ROTA_CAIXA } from "@/utils/checkinDestino";
+import { temProdutoQueryKey } from "@/hooks/useTemProduto";
 import { Icon } from "@/components/Icon";
 import { productLinksApi, type AggregatedProduct } from "@/services/productLinks";
 // Sidebar-style premium components (Estoque v2 — 08/05/2026).
@@ -469,6 +475,20 @@ export default function EstoqueScreen() {
   // 09/09/2026: o modal cuida de tudo num Salvar só (POST/PATCH +
   // vínculo de categoria + PUT /variations + fila de fotos). A tela só
   // abre, fecha e recarrega o que depende da lista.
+  // ?novo=produto: abre o cadastro uma vez por chegada. `depois=pdv` vale só
+  // para esse cadastro: fechar sem salvar fica no Estoque.
+  const params = useLocalSearchParams<{ novo?: string; depois?: string }>();
+  const caixaDepoisRef = useRef(false);
+  const salvouRef = useRef(false);
+  useEffect(() => {
+    if (!querNovoProduto(params.novo) || consolidatedView) return;
+    caixaDepoisRef.current = depoisVaiAoCaixa(params.depois);
+    salvouRef.current = false;
+    abrirCadastro("product");
+    try { router.setParams({ novo: undefined, depois: undefined } as any); } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.novo]);
+
   function abrirCadastro(tipo: "product" | "service", prod?: Product | null) {
     setEditProduct(prod || null);
     setFormType(prod ? (prod.unit === "srv" ? "service" : "product") : tipo);
@@ -479,10 +499,16 @@ export default function EstoqueScreen() {
   function fecharCadastro() {
     setFormOpen(false);
     setEditProduct(null);
+    const irAoCaixa = caixaDepoisRef.current && salvouRef.current;
+    caixaDepoisRef.current = false;
+    salvouRef.current = false;
+    if (irAoCaixa) router.push(ROTA_CAIXA as any);
   }
 
   function aposSalvarItem() {
+    salvouRef.current = true;
     qc.invalidateQueries({ queryKey: ["products", company?.id] });
+    qc.invalidateQueries({ queryKey: temProdutoQueryKey(company?.id) });
     setTimeout(() => refetchDupGroups(), 500);
   }
 

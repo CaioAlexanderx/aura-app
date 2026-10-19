@@ -52,6 +52,14 @@ jest.mock("@/services/checkinApi", () => {
   };
 });
 
+// 19/10/2026 (tq-31): a loja já tem produto? (destino do "Vender no caixa")
+let mockTemProduto: boolean | null = false;
+jest.mock("@/hooks/useTemProduto", () => ({
+  temProdutoQueryKey: (cid: any) => ["tem-produto", cid || null],
+  useTemProduto: () => ({ data: mockTemProduto }),
+  garantirTemProduto: () => Promise.resolve(mockTemProduto),
+}));
+
 import { CheckinEntrada } from "@/components/onboarding/CheckinEntrada";
 import { useCheckinGate, __zerarCheckinDaSessao } from "@/hooks/useCheckin";
 import { MOD_CHECKIN, PERGUNTAS_CHECKIN, MAX_RESPOSTA } from "@/constants/checkin";
@@ -224,6 +232,7 @@ function renderComClient(el: React.ReactElement) {
 function resetar() {
   mockReplace.mockReset(); mockGet.mockReset(); mockPut.mockReset();
   mockPut.mockResolvedValue({ ok: true });
+  mockTemProduto = false;
   __zerarCheckinDaSessao();
   mockAuth = {
     token: "t", isStaff: false, isDemo: false, consolidatedView: false,
@@ -290,13 +299,81 @@ describe("a tela", () => {
     tree.unmount();
   });
 
-  test("Continuar segue para o Painel e não repete a tela", async () => {
+  // 19/10/2026 (tq-31): o Continuar leva à tela da resposta.
+  async function continuarCom(chips: string[]) {
+    const m = await montar(<CheckinEntrada />);
+    for (const id of chips) await act(async () => { achar(m.tree, id)[0].props.onPress(); });
+    await act(async () => { await achar(m.tree, "checkin-continuar")[0].props.onPress(); });
+    for (let i = 0; i < 4; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    return m;
+  }
+
+  test("Continuar com 'Outra coisa' segue para o Painel e não repete a tela", async () => {
     mockGet.mockResolvedValue(HABILITADO);
-    const { tree, client } = await montar(<CheckinEntrada />);
-    await act(async () => { achar(tree, "checkin-chip-comeco-caixa")[0].props.onPress(); });
-    await act(async () => { achar(tree, "checkin-continuar")[0].props.onPress(); });
+    const { tree, client } = await continuarCom(["checkin-chip-comeco-outra"]);
+    expect(mockReplace).toHaveBeenCalledTimes(1);
     expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
     expect((client.getQueryData(["checkin", "loja-1"]) as any).respondido).toBe(true);
+    tree.unmount();
+  });
+
+  test("Continuar com 'Vender no caixa', sem produto: cadastro do primeiro produto e depois o Caixa", async () => {
+    mockGet.mockResolvedValue(HABILITADO);
+    const { tree } = await continuarCom(["checkin-chip-comeco-caixa"]);
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+    expect(mockReplace).toHaveBeenCalledWith("/estoque?novo=produto&depois=pdv");
+    tree.unmount();
+  });
+
+  test("Continuar com 'Vender no caixa', com produto: direto ao Caixa", async () => {
+    mockGet.mockResolvedValue(HABILITADO);
+    mockTemProduto = true;
+    const { tree } = await continuarCom(["checkin-chip-comeco-caixa"]);
+    expect(mockReplace).toHaveBeenCalledWith("/pdv");
+    tree.unmount();
+  });
+
+  test("Continuar com estoque grande: abre o WhatsApp da Aura no mesmo toque e o cadastro", async () => {
+    mockGet.mockResolvedValue(HABILITADO);
+    const abrir = jest.spyOn(window, "open").mockImplementation(() => null);
+    const { tree } = await continuarCom([
+      "checkin-chip-comeco-estoque", "checkin-chip-onde_anota-outro_sistema", "checkin-chip-produtos_faixa-mais_de_1000",
+    ]);
+    expect(abrir).toHaveBeenCalledTimes(1);
+    expect(String(abrir.mock.calls[0][0])).toMatch(/^https:\/\/wa\.me\/5511956305269\?text=/);
+    expect(mockReplace).toHaveBeenCalledWith("/estoque?novo=produto");
+    abrir.mockRestore();
+    tree.unmount();
+  });
+
+  test("Continuar com 'Emitir nota fiscal': aba Certificado A1", async () => {
+    mockGet.mockResolvedValue(HABILITADO);
+    const { tree } = await continuarCom(["checkin-chip-comeco-nota_fiscal"]);
+    expect(mockReplace).toHaveBeenCalledWith("/nfe?tab=certificado");
+    tree.unmount();
+  });
+
+  test("Continuar com 'Controlar fiado' no Negócio: Novo lançamento do crediário", async () => {
+    mockGet.mockResolvedValue(HABILITADO);
+    mockModulos = new Set(["estoque", "pdv", "nfe", "painel", "crediario", MOD_CHECKIN]);
+    const { tree } = await continuarCom(["checkin-chip-comeco-fiado"]);
+    expect(mockReplace).toHaveBeenCalledWith("/crediario?novo=1");
+    tree.unmount();
+  });
+
+  test("o plano é revalidado no mount e o Continuar espera a revalidação", async () => {
+    mockGet.mockResolvedValue(HABILITADO);
+    let soltar: () => void = () => {};
+    mockAuth.refreshMe = jest.fn(() => new Promise<void>((r) => { soltar = r; }));
+    const { tree } = await montar(<CheckinEntrada />);
+    expect(mockAuth.refreshMe).toHaveBeenCalledTimes(1);
+    await act(async () => { achar(tree, "checkin-chip-comeco-nota_fiscal")[0].props.onPress(); });
+    await act(async () => { achar(tree, "checkin-continuar")[0].props.onPress(); });
+    for (let i = 0; i < 4; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(mockReplace).not.toHaveBeenCalled();
+    await act(async () => { soltar(); });
+    for (let i = 0; i < 4; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(mockReplace).toHaveBeenCalledWith("/nfe?tab=certificado");
     tree.unmount();
   });
 
@@ -318,9 +395,10 @@ describe("a tela", () => {
     await act(async () => { achar(tree, "checkin-chip-comeco-caixa")[0].props.onPress(); });
     await act(async () => { await Promise.resolve(); });
     mockPut.mockResolvedValue({ ok: true });
-    await act(async () => { achar(tree, "checkin-continuar")[0].props.onPress(); });
+    await act(async () => { await achar(tree, "checkin-continuar")[0].props.onPress(); });
+    for (let i = 0; i < 4; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
     expect(mockPut).toHaveBeenLastCalledWith("loja-1", { comeco: "caixa" });
-    expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
+    expect(mockReplace).toHaveBeenCalledWith("/estoque?novo=produto&depois=pdv");
     tree.unmount();
   });
 
