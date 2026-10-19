@@ -23,9 +23,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
 
 const mockReplace = jest.fn();
+// Navegador raiz montado (INC-2026-10-19-02): `key` nula = ainda não montou.
+let mockNavState: any = { key: "raiz" };
 jest.mock("expo-router", () => ({
   useRouter: () => ({ replace: (...a: any[]) => mockReplace(...a), push: jest.fn() }),
   router: { replace: (...a: any[]) => mockReplace(...a) },
+  useRootNavigationState: () => mockNavState,
 }));
 
 let mockAuth: any;
@@ -286,8 +289,9 @@ function resetar() {
   mockPut.mockResolvedValue({ ok: true });
   mockTemProduto = false;
   __zerarCheckinDaSessao();
+  mockNavState = { key: "raiz" };
   mockAuth = {
-    token: "t", isStaff: false, isDemo: false, consolidatedView: false,
+    token: "t", isHydrated: true, isStaff: false, isDemo: false, consolidatedView: false,
     // Conta com frente: as três perguntas de sempre (a da frente, tq-33,
     // tem o próprio teste em checkinFrente.test.tsx).
     company: { id: "loja-1", name: "Loja", plan: "essencial", member_role: "owner", segment: "varejo", trial: { mode: "primeira_venda" } },
@@ -513,6 +517,97 @@ describe("a tela", () => {
     expect(tree.root.findAllByType("input" as any).length).toBe(0);
     expect(JSON.stringify(tree.toJSON())).not.toMatch(/"type":"input"|textarea/);
     tree.unmount();
+  });
+});
+
+// ── INC-2026-10-19-02: recarga direto em /checkin ───────────
+// O <Slot/> do layout raiz mostra /checkin antes de a sessão voltar
+// (isHydrated falso, company nula) e antes de o navegador raiz montar. Um
+// router.replace nessa hora lança "Attempted to navigate before mounting the
+// Root Layout component" e a pessoa via "Algo deu errado".
+describe("recarga direto na rota", () => {
+  beforeEach(resetar);
+
+  function antesDaSessao() {
+    mockAuth = { ...mockAuth, isHydrated: false, token: null, company: null };
+    mockNavState = undefined;
+  }
+  function sessaoRestaurada(company: any) {
+    mockAuth = { ...mockAuth, isHydrated: true, token: "t", company };
+    mockNavState = { key: "raiz" };
+  }
+  const LOJA = { id: "loja-1", name: "Loja", plan: "essencial", member_role: "owner", segment: "varejo" };
+
+  async function montarAntesDaSessao() {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const ui = () => <QueryClientProvider client={client}><CheckinEntrada /></QueryClientProvider>;
+    let tree: any;
+    await act(async () => { tree = renderer.create(ui()); });
+    for (let i = 0; i < 8; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    const atualizar = async () => {
+      await act(async () => { tree.update(ui()); });
+      for (let i = 0; i < 8; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    };
+    return { tree, atualizar };
+  }
+
+  test("sessão ainda não restaurada: não navega, não consulta e mostra o carregando", async () => {
+    antesDaSessao();
+    mockGet.mockResolvedValue(HABILITADO);
+    const { tree } = await montarAntesDaSessao();
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(achar(tree, "checkin-carregando").length).toBeGreaterThan(0);
+    expect(achar(tree, "checkin-raiz").length).toBe(0);
+    tree.unmount();
+  });
+
+  test("sessão restaurada mas navegador raiz ainda não montado: não navega", async () => {
+    antesDaSessao();
+    mockAuth = { ...mockAuth, isHydrated: true, token: "t", company: null };
+    mockNavState = { key: undefined };
+    const { tree } = await montarAntesDaSessao();
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(achar(tree, "checkin-carregando").length).toBeGreaterThan(0);
+    tree.unmount();
+  });
+
+  test("depois de restaurar, com check-in pendente: mostra as perguntas e fica na tela", async () => {
+    antesDaSessao();
+    mockGet.mockResolvedValue(HABILITADO);
+    const m = await montarAntesDaSessao();
+    expect(mockReplace).not.toHaveBeenCalled();
+    sessaoRestaurada(LOJA);
+    await m.atualizar();
+    expect(mockGet).toHaveBeenCalledWith("loja-1");
+    expect(achar(m.tree, "checkin-raiz").length).toBeGreaterThan(0);
+    ["comeco", "onde_anota", "produtos_faixa"].forEach((c) =>
+      expect(achar(m.tree, `checkin-pergunta-${c}`).length).toBeGreaterThan(0));
+    expect(mockReplace).not.toHaveBeenCalled();
+    m.tree.unmount();
+  });
+
+  test("depois de restaurar, sem empresa: vai ao Painel só depois de pronto", async () => {
+    antesDaSessao();
+    const m = await montarAntesDaSessao();
+    expect(mockReplace).not.toHaveBeenCalled();
+    sessaoRestaurada(null);
+    await m.atualizar();
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+    expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
+    m.tree.unmount();
+  });
+
+  test("depois de restaurar, com check-in já respondido: vai ao Painel só depois de pronto", async () => {
+    antesDaSessao();
+    mockGet.mockResolvedValue({ ...HABILITADO, respondido: true });
+    const m = await montarAntesDaSessao();
+    expect(mockReplace).not.toHaveBeenCalled();
+    sessaoRestaurada(LOJA);
+    await m.atualizar();
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+    expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
+    m.tree.unmount();
   });
 });
 
