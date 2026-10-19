@@ -232,51 +232,6 @@ export function preservarValores<T>(chaves: string[], anterior: Record<string, T
   return out;
 }
 
-// ── última categoria usada ──────────────────────────────────
-// Por empresa + tipo. Web usa localStorage; nativo (e web sem storage)
-// cai numa memória de módulo — some ao recarregar, o que é aceitável.
-export type UltimaCategoria = {
-  primaryCategoryId: string | null;
-  alsoInIds: string[];
-  legado: string;
-};
-
-const memoriaCategoria: Record<string, UltimaCategoria> = {};
-
-export function chaveUltimaCategoria(companyId: string, type: ItemType): string {
-  return "aura.cadastroItem.ultimaCategoria." + companyId + "." + type;
-}
-
-export function lerUltimaCategoria(companyId: string | undefined | null, type: ItemType): UltimaCategoria | null {
-  if (!companyId) return null;
-  const k = chaveUltimaCategoria(companyId, type);
-  try {
-    if (typeof localStorage !== "undefined" && localStorage) {
-      const raw = localStorage.getItem(k);
-      if (raw) {
-        const v = JSON.parse(raw);
-        if (v && typeof v === "object") {
-          return {
-            primaryCategoryId: v.primaryCategoryId ?? null,
-            alsoInIds: Array.isArray(v.alsoInIds) ? v.alsoInIds : [],
-            legado: String(v.legado || ""),
-          };
-        }
-      }
-    }
-  } catch (_) { /* storage bloqueado: cai na memória de módulo */ }
-  return memoriaCategoria[k] || null;
-}
-
-export function gravarUltimaCategoria(companyId: string | undefined | null, type: ItemType, v: UltimaCategoria): void {
-  if (!companyId) return;
-  const k = chaveUltimaCategoria(companyId, type);
-  memoriaCategoria[k] = v;
-  try {
-    if (typeof localStorage !== "undefined" && localStorage) localStorage.setItem(k, JSON.stringify(v));
-  } catch (_) { /* idem */ }
-}
-
 // ── códigos ─────────────────────────────────────────────────
 export function gerarSku(nome: string): string {
   const prefix = (nome || "").slice(0, 3).toUpperCase().replace(/[^A-Z]/g, "X") || "PRD";

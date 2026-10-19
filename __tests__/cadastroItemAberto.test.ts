@@ -26,15 +26,12 @@
 import {
   calcMargem,
   chaveDaMatriz,
-  chaveUltimaCategoria,
   contarSlots,
   duracaoParaMinutos,
   faltaNcm,
   fotosDaCor,
-  gravarUltimaCategoria,
   idsComFotoEm,
   lerDuracaoDoServico,
-  lerUltimaCategoria,
   mascaraDeValor,
   matrizDaGrade,
   matrizZerada,
@@ -360,30 +357,9 @@ describe("4. matriz de variações e a grade local", () => {
   });
 });
 
-describe("5. última categoria usada, por empresa e por tipo", () => {
-  const valor = { primaryCategoryId: "cat-1", alsoInIds: ["cat-2"], legado: "Vestidos" };
-
-  test("grava e lê de volta", () => {
-    gravarUltimaCategoria("emp-1", "product", valor);
-    expect(lerUltimaCategoria("emp-1", "product")).toEqual(valor);
-  });
-
-  test("produto e serviço não se misturam", () => {
-    gravarUltimaCategoria("emp-1", "product", valor);
-    expect(lerUltimaCategoria("emp-1", "service")).toBeNull();
-  });
-
-  test("empresas não se misturam (multi-CNPJ)", () => {
-    gravarUltimaCategoria("emp-1", "product", valor);
-    expect(lerUltimaCategoria("emp-2", "product")).toBeNull();
-    expect(chaveUltimaCategoria("emp-1", "product")).not.toBe(chaveUltimaCategoria("emp-2", "product"));
-  });
-
-  test("sem empresa não grava nem lê", () => {
-    expect(lerUltimaCategoria(undefined, "product")).toBeNull();
-    expect(() => gravarUltimaCategoria(null, "product", valor)).not.toThrow();
-  });
-});
+// 5. (a "última categoria usada" por empresa e tipo saiu em 19/10/2026: a
+// categoria só passa no "Salvar e cadastrar outro", em memória — coberto em
+// components/ItemFormModalPerfil.test.tsx.)
 
 describe("6. os selos de cada seção", () => {
   test("nome e preço vazios são erro — é o que o rodapé repete", () => {
