@@ -27,7 +27,7 @@
 // grade de hoje, com outro nome). Sem lote ligado, a opção de lote nem
 // aparece. Sem o perfil, a seção é a de hoje.
 // ============================================================
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -42,6 +42,7 @@ import {
 } from "./types";
 import { PERFIL_PADRAO, type PerfilDoCadastro } from "./perfis";
 import { estoqueEmDecimal, parseQtyInput, toPackages, rotuloEmbalagem, fmtQty, nomeDaUnidade } from "@/utils/matconUnits";
+import { dividirTamanhos, juntarTamanhos } from "@/utils/dividirTamanhos";
 
 const PRESET_COLORS = [
   "#ef4444", "#f97316", "#eab308", "#22c55e",
@@ -51,6 +52,8 @@ const PRESET_COLORS = [
 
 // RN Web transforma em data-enter-local="1" (ver cabeçalho).
 const ENTER_LOCAL = { enterLocal: "1" };
+// Campo de novo tamanho: o nativeID vira id no DOM (foco e colagem, web).
+const ID_NOVO_TAM = "estoque-novo-tamanho";
 
 
 type Props = {
@@ -113,13 +116,45 @@ export function SecaoEstoque(p: Props) {
     setAbrirCor(false);
     setCorLivre(null);
   }
+  // 18/10/2026 (p-35): "P, M, G" vira três tamanhos (regra de divisão em
+  // utils/dividirTamanhos), mesclados sem duplicar e na ordem PP, P, M,
+  // G... O campo NÃO fecha: quem cadastra grade digita vários seguidos
+  // (como a paleta de cor). Quem fecha é o "+ Tamanho".
   function addTam() {
-    const t = novoTam.trim();
-    if (!t || p.tamanhos.indexOf(t) >= 0) { setNovoTam(""); return; }
-    p.onTamanhos([...p.tamanhos, t]);
+    const novos = dividirTamanhos(novoTam, perfil.id === "matcon" ? "matcon" : "padrao");
     setNovoTam("");
-    setAbrirTam(false);
+    focarNovoTam();
+    if (!novos.length) return;
+    const lista = juntarTamanhos(p.tamanhos, novos);
+    if (lista.join("\u0000") !== p.tamanhos.join("\u0000")) p.onTamanhos(lista);
   }
+  function focarNovoTam() {
+    if (!IS_WEB || typeof document === "undefined") return;
+    const el = document.getElementById(ID_NOVO_TAM) as HTMLElement | null;
+    if (el && document.activeElement !== el) el.focus();
+  }
+  // Campo de uma linha no web descarta a quebra de linha do que se cola
+  // (coluna de planilha "P↵M↵G" virava "PMG"). Na colagem com quebra de
+  // linha, ela vira "; ", que também separa.
+  const colarTamRef = useRef<(e: ClipboardEvent) => void>(() => {});
+  colarTamRef.current = (e: ClipboardEvent) => {
+    const colado = e.clipboardData ? e.clipboardData.getData("text") : "";
+    if (!/[\r\n]/.test(colado)) return;
+    e.preventDefault();
+    const el = e.target as HTMLInputElement;
+    const ini = el.selectionStart ?? novoTam.length;
+    const fim = el.selectionEnd ?? novoTam.length;
+    const meio = colado.split(/\r?\n|\r/).map((x) => x.trim()).filter(Boolean).join("; ");
+    setNovoTam(novoTam.slice(0, ini) + meio + novoTam.slice(fim));
+  };
+  useEffect(() => {
+    if (!abrirTam || !IS_WEB || typeof document === "undefined") return;
+    const el = document.getElementById(ID_NOVO_TAM);
+    if (!el) return;
+    const ouvir = (e: Event) => colarTamRef.current(e as ClipboardEvent);
+    el.addEventListener("paste", ouvir);
+    return () => el.removeEventListener("paste", ouvir);
+  }, [abrirTam]);
 
   // SELETOR NATIVO DE COR. O onChange do React num <input type="color">
   // dispara a cada evento `input` — ou seja, a cada passo do arrasto. Antes
@@ -504,25 +539,32 @@ export function SecaoEstoque(p: Props) {
             <Campo label={perfil.estoque.rotuloDosTamanhos} style={{ flex: 1 }}>
               <View style={s.chips}>
                 {Z.map((z) => (
-                  <Chip key={z} label={z} onRemove={() => p.onTamanhos(Z.filter((x) => x !== z))} removeLabel={"Remover " + z} />
+                  <Chip key={z} valor label={z} onRemove={() => p.onTamanhos(Z.filter((x) => x !== z))} removeLabel={"Remover " + z} />
                 ))}
                 <Chip label={perfil.estoque.botaoDeTamanho} dashed onPress={() => setAbrirTam(!abrirTam)} />
               </View>
               {abrirTam && (
-                <View style={[s.linha2, { marginTop: 8 }]}>
-                  <Entrada
-                    value={novoTam}
-                    onChangeText={setNovoTam}
-                    onSubmitEditing={addTam}
-                    placeholder={perfil.estoque.exemploDeTamanho}
-                    style={{ flex: 1 }}
-                    dataSet={ENTER_LOCAL}
-                    autoFocus
-                  />
-                  <Pressable onPress={addTam} style={st.addBtn} accessibilityLabel="Adicionar tamanho">
-                    <Icon name="plus" size={14} color="#fff" />
-                  </Pressable>
-                </View>
+                <>
+                  <View style={[s.linha2, { marginTop: 8 }]}>
+                    <Entrada
+                      nativeID={ID_NOVO_TAM}
+                      value={novoTam}
+                      onChangeText={setNovoTam}
+                      onSubmitEditing={addTam}
+                      blurOnSubmit={false}
+                      placeholder={perfil.estoque.exemploDeTamanho}
+                      style={{ flex: 1 }}
+                      dataSet={ENTER_LOCAL}
+                      autoFocus
+                    />
+                    <Pressable onPress={addTam} style={st.addBtn} accessibilityLabel="Adicionar tamanho">
+                      <Icon name="plus" size={14} color="#fff" />
+                    </Pressable>
+                  </View>
+                  <Text testID="dica-tamanhos" style={[s.hint, st.dicaTam]}>
+                    {matcon ? "Separe por vírgula e espaço (1,5 mm, 2,5 mm)" : "Separe por vírgula"}
+                  </Text>
+                </>
               )}
             </Campo>
           </View>
@@ -762,6 +804,9 @@ const st = {
     width: 40, borderRadius: 9, backgroundColor: Colors.violet,
     alignItems: "center" as const, justifyContent: "center" as const,
   },
+  // Dica do campo de tamanho: ink2 em vez do ink3 da dica comum, para ler
+  // bem no tema escuro (token do tema, troca sozinho no claro).
+  dicaTam: { color: Colors.ink2 },
 };
 
 export default SecaoEstoque;
