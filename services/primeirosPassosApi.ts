@@ -29,8 +29,16 @@ export var primeirosPassosApi = {
 // Configurações: PATCH /companies/:id/segment (routes/companySegment.js).
 //   extras ausente = não mexe na Ordem de Serviço; [] = desliga; ["os"] = liga.
 //   400 SEGMENT_INVALID · 403 (membro comum) · 409 STUDIO_PLAN_REQUIRED
-export type TrocarFrenteBody = { segment: Segmento; extras?: "os"[] };
+//
+// 19/10/2026 (tq-33): o check-in manda `only_if_empty: true` — grava só se a
+// conta ainda não tem frente. O suporte no backend vem em PR à parte; até lá
+// o campo é ignorado. Com ele, frente já existente volta
+// { applied: false, segment } (a gravada, sem mudar nada). O cartão
+// "Sua frente" de Configurações NÃO manda o campo: lá a troca é consciente.
+export type TrocarFrenteBody = { segment: Segmento; extras?: "os"[]; only_if_empty?: boolean };
 export type TrocarFrenteResponse = {
+  /** Só com only_if_empty: false = a conta já tinha frente e nada mudou. */
+  applied?: boolean;
   segment: Segmento | null;
   segment_source: "cnae" | "landing" | "user" | "staff" | null;
   vertical_active: string | null;

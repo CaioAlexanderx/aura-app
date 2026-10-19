@@ -228,3 +228,7 @@ export const SEGMENT_LABEL: Record<Segmento, string> = {
 export const STUDIO_PLAN_MSG = "Studio exige plano Negócio ou superior";
 
 export const SEGMENTOS: Segmento[] = ["varejo", "matcon", "otica", "assistencia", "studio", "outro"];
+
+/** Planos que podem ter a frente Personalizados (Studio); espelha o
+ *  STUDIO_PLANS do backend (services/segment.js). No Essencial ela some. */
+export const PLANOS_COM_STUDIO = ["negocio", "expansao", "personalizado"];
