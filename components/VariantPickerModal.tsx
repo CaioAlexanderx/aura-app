@@ -17,6 +17,10 @@
 // seletor aberto confirma o tamanho marcado e segue para o proximo codigo.
 // Tudo opcional (`keyboard`, `preselect*`, `onScanAgain`): Troca e venda
 // retroativa continuam como estavam.
+// 18/10/2026 (p-35): as variantes aparecem em ordem (cor, depois tamanho:
+// PP, P, M, G, GG... e numeros em ordem) em vez da ordem de criacao, e a
+// linha do produto pai ("Sem variante especifica") vai para o fim da lista.
+// Setas, Enter e o tamanho bipado seguem a ordem exibida.
 // ============================================================
 import { useState, useEffect, useRef } from "react";
 import { View, Text, Modal, Pressable, ScrollView, StyleSheet, ActivityIndicator, Platform } from "react-native";
@@ -25,6 +29,7 @@ import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { hexToName } from "@/utils/colorNames";
 import { criarDetector, OCIOSO_MS, CONFIRMA_OCIOSO_MS } from "@/utils/leituraRapida";
+import { ordenarVariantes, type ChaveDeVariante } from "@/utils/ordemDeTamanhos";
 
 /** Tempo em que o Enter e ignorado logo depois de o seletor marcar o tamanho
  *  bipado: leitor que manda Enter duas vezes (CR+LF) nao confirma sozinho. */
@@ -71,6 +76,25 @@ function getLabel(v: any, parentColor?: string, parentSize?: string): string {
     return inherited.length > 0 ? suffix + " · " + inherited.join(" · ") : suffix;
   }
   return parts.join(" · ");
+}
+
+// Cor e tamanho que decidem a ordem da lista. Cor pelo nome (o hex vira
+// "Azul", "Preto"...); sem atributo nenhum, o sufixo do SKU faz as vezes de
+// tamanho, como no rotulo.
+function chaveDaVariante(v: any): ChaveDeVariante {
+  var attrs = v.attributes || [];
+  var cor: string | null = null;
+  var tamanho: string | null = null;
+  for (var a of attrs) {
+    var val = a && a.value != null ? String(a.value).trim() : "";
+    if (!val) continue;
+    var nome = String((a && (a.attribute || a.name)) || "").trim().toLowerCase();
+    var ehHex = /^#[0-9a-fA-F]{6}$/.test(val);
+    if (cor === null && (nome === "cor" || ehHex)) cor = ehHex ? hexToName(val) : val;
+    else if (tamanho === null && nome === "tamanho") tamanho = val;
+  }
+  if (attrs.length === 0 && v.sku_suffix) tamanho = String(v.sku_suffix);
+  return { cor: cor, tamanho: tamanho };
 }
 
 function getColor(v: any, parentColor?: string): string | null {
@@ -137,7 +161,10 @@ export function VariantPickerModal({
       .finally(function() { setLoading(false); });
   }, [visible, product?.id, company?.id]);
 
-  var activeVariants = variants.filter(function(v: any) { return v.is_active !== false; });
+  var activeVariants = ordenarVariantes(
+    variants.filter(function(v: any) { return v.is_active !== false; }),
+    chaveDaVariante,
+  );
   var parentColor = (product && product.color) || "";
   var parentSize = (product && product.size) || "";
 
@@ -259,33 +286,6 @@ export function VariantPickerModal({
             </View>
           ) : (
             <ScrollView ref={scrollRef} style={{ maxHeight: 340 }} contentContainerStyle={{ gap: 8, padding: 16 }}>
-              {/* 07/05: produto pai pode ter stock proprio independente das variantes
-                 (caso onde o usuario cadastrou estoque no pai antes de criar variantes,
-                 ou onde sobrou estoque "generico" nao-categorizado). Quando product.stock > 0
-                 oferecemos a opcao de vender sem variante — id="" sinaliza parent-only.
-                 08/05: rotulo deriva da cor+tamanho do pai (nao mais "generico" hardcoded). */}
-              {(product.stock || 0) > 0 && (
-                <Pressable
-                  onPress={function() { onSelect({ id: "", label: parentLabel.label, price: product.price, stock: product.stock || 0 }); }}
-                  style={[s.variantRow, s.parentRow, isWeb && { cursor: "pointer", transition: "all 0.15s ease" } as any]}
-                >
-                  <View
-                    style={[
-                      s.colorDot,
-                      parentHex
-                        ? { backgroundColor: parentHex }
-                        : { backgroundColor: "rgba(167,139,250,0.25)", borderStyle: "dashed" },
-                    ]}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.variantLabel}>{parentLabel.label}</Text>
-                    <Text style={s.variantMeta}>
-                      R$ {product.price.toFixed(2).replace(".", ",")} · {product.stock} un · {parentLabel.sub}
-                    </Text>
-                  </View>
-                  <View style={s.stockBadge}><Text style={s.stockText}>{product.stock}</Text></View>
-                </Pressable>
-              )}
               {activeVariants.map(function(v: any) {
                 var label = getLabel(v, parentColor, parentSize);
                 var effectivePrice = v.price_override ? parseFloat(v.price_override) : product.price;
@@ -329,6 +329,35 @@ export function VariantPickerModal({
                   </Pressable>
                 );
               })}
+              {/* 07/05: produto pai pode ter stock proprio independente das variantes
+                 (caso onde o usuario cadastrou estoque no pai antes de criar variantes,
+                 ou onde sobrou estoque "generico" nao-categorizado). Quando product.stock > 0
+                 oferecemos a opcao de vender sem variante — id="" sinaliza parent-only.
+                 08/05: rotulo deriva da cor+tamanho do pai (nao mais "generico" hardcoded).
+                 18/10: vem por ultimo, depois dos tamanhos. */}
+              {(product.stock || 0) > 0 && (
+                <Pressable
+                  testID="variante-do-pai"
+                  onPress={function() { onSelect({ id: "", label: parentLabel.label, price: product.price, stock: product.stock || 0 }); }}
+                  style={[s.variantRow, s.parentRow, isWeb && { cursor: "pointer", transition: "all 0.15s ease" } as any]}
+                >
+                  <View
+                    style={[
+                      s.colorDot,
+                      parentHex
+                        ? { backgroundColor: parentHex }
+                        : { backgroundColor: "rgba(167,139,250,0.25)", borderStyle: "dashed" },
+                    ]}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.variantLabel}>{parentLabel.label}</Text>
+                    <Text style={s.variantMeta}>
+                      R$ {product.price.toFixed(2).replace(".", ",")} · {product.stock} un · {parentLabel.sub}
+                    </Text>
+                  </View>
+                  <View style={s.stockBadge}><Text style={s.stockText}>{product.stock}</Text></View>
+                </Pressable>
+              )}
             </ScrollView>
           )}
           {isWeb && keyboard && !loading && activeVariants.length > 0 && (
