@@ -42,7 +42,8 @@ import { router, useLocalSearchParams } from "expo-router";
 // 19/10/2026 (tq-31): o Continuar do check-in e o "Fazer a primeira venda"
 // chegam com ?novo=produto (abre o Novo item) e, no caminho da primeira
 // venda, &depois=pdv (fechar depois de salvar leva ao Caixa).
-import { depoisVaiAoCaixa, querImportarPlanilha, querNovoProduto, ROTA_CAIXA, TEXTO_CONVITE_PLANILHA } from "@/utils/checkinDestino";
+import { depoisVaiAoCaixa, querNovoProduto, ROTA_CAIXA } from "@/utils/checkinDestino";
+import { ConvitePlanilha } from "@/components/screens/estoque/ConvitePlanilha";
 import { temProdutoQueryKey } from "@/hooks/useTemProduto";
 import { Icon } from "@/components/Icon";
 import { productLinksApi, type AggregatedProduct } from "@/services/productLinks";
@@ -475,25 +476,22 @@ export default function EstoqueScreen() {
   // 09/09/2026: o modal cuida de tudo num Salvar só (POST/PATCH +
   // vínculo de categoria + PUT /variations + fila de fotos). A tela só
   // abre, fecha e recarrega o que depende da lista.
-  // ?novo=produto: abre o cadastro uma vez por chegada. `depois=pdv` vale só
-  // para esse cadastro: fechar sem salvar fica no Estoque.
+  // ?novo=produto: abre o cadastro na chegada. `depois=pdv` vale só para
+  // esse cadastro: fechar sem salvar fica no Estoque. O parâmetro NÃO é
+  // limpo no mount (montagem dupla: a segunda montagem, a visível, precisa
+  // ainda vê-lo); sai da URL quando a pessoa fecha o cadastro. O setParams
+  // com undefined vira "undefined", que querNovoProduto rejeita.
+  // ?importar=planilha: ConvitePlanilha (mesmo cuidado, mais a marca de sessão).
   const params = useLocalSearchParams<{ novo?: string; depois?: string; importar?: string }>();
   const caixaDepoisRef = useRef(false);
   const salvouRef = useRef(false);
-  // ?importar=planilha: convite no fluxo para escolher a planilha.
-  const [convitePlanilha, setConvitePlanilha] = useState(false);
-  useEffect(() => {
-    if (!querImportarPlanilha(params.importar) || consolidatedView) return;
-    setConvitePlanilha(true);
-    try { router.setParams({ importar: undefined } as any); } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.importar]);
+  const veioPeloParamRef = useRef(false);
   useEffect(() => {
     if (!querNovoProduto(params.novo) || consolidatedView) return;
+    veioPeloParamRef.current = true;
     caixaDepoisRef.current = depoisVaiAoCaixa(params.depois);
     salvouRef.current = false;
     abrirCadastro("product");
-    try { router.setParams({ novo: undefined, depois: undefined } as any); } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.novo]);
 
@@ -510,6 +508,10 @@ export default function EstoqueScreen() {
     const irAoCaixa = caixaDepoisRef.current && salvouRef.current;
     caixaDepoisRef.current = false;
     salvouRef.current = false;
+    if (veioPeloParamRef.current) {
+      veioPeloParamRef.current = false;
+      try { router.setParams({ novo: undefined, depois: undefined } as any); } catch {}
+    }
     if (irAoCaixa) router.push(ROTA_CAIXA as any);
   }
 
@@ -711,29 +713,13 @@ export default function EstoqueScreen() {
         )}
 
         {/* 19/10/2026 (tq-31): quem respondeu "planilha" no check-in chega
-            com ?importar=planilha. O seletor de arquivo do navegador só abre
-            com um toque da pessoa, então a tela mostra o convite no fluxo,
-            com o mesmo "Escolher planilha" da importação de sempre. */}
-        {convitePlanilha && !importPlanilha.aberto && (
-          <View style={s.convitePlanilha} testID="estoque-convite-planilha">
-            <View style={s.emptyImportIcon}><Icon name="upload" size={18} color={Colors.violet3} /></View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={s.emptyImportTitle}>{TEXTO_CONVITE_PLANILHA.titulo}</Text>
-              <Text style={s.emptyImportDesc}>{TEXTO_CONVITE_PLANILHA.sub}</Text>
-            </View>
-            <Pressable
-              onPress={importPlanilha.escolherArquivo}
-              disabled={importPlanilha.ocupado}
-              style={[s.batchBtnSmall, importPlanilha.ocupado && { opacity: 0.6 }]}
-              testID="estoque-convite-planilha-escolher"
-            >
-              <Text style={s.batchBtnSmallText}>Escolher planilha</Text>
-            </Pressable>
-            <Pressable onPress={() => setConvitePlanilha(false)} style={{ padding: 8 }} testID="estoque-convite-planilha-fechar">
-              <Text style={[s.emptyImportDesc, { textDecorationLine: "underline" }]}>Agora não</Text>
-            </Pressable>
-          </View>
-        )}
+            com ?importar=planilha (components/screens/estoque/ConvitePlanilha). */}
+        <ConvitePlanilha
+          importar={params.importar}
+          escondido={consolidatedView || importPlanilha.aberto}
+          ocupado={importPlanilha.ocupado}
+          onEscolher={importPlanilha.escolherArquivo}
+        />
 
         {canLinkProducts && products.length > 0 && (
           <View style={s.multicnpjHint}>
@@ -1095,9 +1081,7 @@ const s = StyleSheet.create({
     lineHeight: 14,
   },
   listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
-  emptyImport: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, marginTop: 12 },
-  convitePlanilha: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12, backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border2, marginBottom: 16 },
-  emptyImportIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
+  emptyImport: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, marginTop: 12 },  emptyImportIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
   emptyImportTitle: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
   emptyImportDesc: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
   demoBanner: { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },

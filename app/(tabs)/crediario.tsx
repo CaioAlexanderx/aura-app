@@ -259,13 +259,22 @@ export default function CrediarioScreen() {
   const [showCriar, setShowCriar] = useState(false);
   // 19/10/2026 (tq-31): "Controlar fiado" no check-in chega com ?novo=1 e
   // abre o Novo lançamento. Na visão consolidada não abre (o lançamento é
-  // de uma loja só).
+  // de uma loja só). O parâmetro não é limpo no mount (montagem dupla: a
+  // segunda montagem, a visível, precisa vê-lo); sai da URL ao fechar.
+  const fiadoPeloParamRef = useRef(false);
   useEffect(() => {
     if (!querNovoFiado(params.novo) || consolidatedView) return;
+    fiadoPeloParamRef.current = true;
     setShowCriar(true);
-    try { router.setParams({ novo: undefined } as any); } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.novo]);
+  function fecharCriar() {
+    setShowCriar(false);
+    if (fiadoPeloParamRef.current) {
+      fiadoPeloParamRef.current = false;
+      try { router.setParams({ novo: undefined } as any); } catch {}
+    }
+  }
   const [modalCust, setModalCust] = useState<{ id: string; name: string } | null>(null);
   const [cobrancaPreview, setCobrancaPreview] = useState<CobrancaPreviewState | null>(null);
 
@@ -901,7 +910,7 @@ export default function CrediarioScreen() {
 
       </>)}
 
-      <CriarLancamentoModal visible={showCriar} onClose={() => setShowCriar(false)} recentes={recentesDoLancamento} />
+      <CriarLancamentoModal visible={showCriar} onClose={fecharCriar} recentes={recentesDoLancamento} />
 
       <ClienteCrediarioModal
         visible={!!modalCust}
