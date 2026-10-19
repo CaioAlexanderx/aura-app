@@ -54,6 +54,11 @@ const PRESET_COLORS = [
 const ENTER_LOCAL = { enterLocal: "1" };
 // Campo de novo tamanho: o nativeID vira id no DOM (foco e colagem, web).
 const ID_NOVO_TAM = "estoque-novo-tamanho";
+// Atalhos de um toque ao lado do "+ Tamanho" (p-35). Só fora do Matcon.
+export const ATALHOS_DE_TAMANHO: { rotulo: string; acessivel: string; tamanhos: string[] }[] = [
+  { rotulo: "P M G GG", acessivel: "Adicionar P, M, G e GG", tamanhos: ["P", "M", "G", "GG"] },
+  { rotulo: "34 a 44", acessivel: "Adicionar 34, 36, 38, 40, 42 e 44", tamanhos: ["34", "36", "38", "40", "42", "44"] },
+];
 
 
 type Props = {
@@ -127,6 +132,10 @@ export function SecaoEstoque(p: Props) {
     if (!novos.length) return;
     const lista = juntarTamanhos(p.tamanhos, novos);
     if (lista.join("\u0000") !== p.tamanhos.join("\u0000")) p.onTamanhos(lista);
+  }
+  function faltaAlgum(tamanhos: string[]) {
+    const tem = new Set(p.tamanhos.map((t) => t.trim().toLocaleUpperCase("pt-BR")));
+    return tamanhos.some((t) => !tem.has(t.toLocaleUpperCase("pt-BR")));
   }
   function focarNovoTam() {
     if (!IS_WEB || typeof document === "undefined") return;
@@ -542,6 +551,21 @@ export function SecaoEstoque(p: Props) {
                   <Chip key={z} valor label={z} onRemove={() => p.onTamanhos(Z.filter((x) => x !== z))} removeLabel={"Remover " + z} />
                 ))}
                 <Chip label={perfil.estoque.botaoDeTamanho} dashed onPress={() => setAbrirTam(!abrirTam)} />
+                {/* 18/10/2026 (p-35): grades prontas num toque, mescladas com o
+                   que já existe. Fora do Matcon (lá são medidas). Some quando
+                   todos os tamanhos do atalho já estão na lista. */}
+                {!matcon && ATALHOS_DE_TAMANHO.map((a) => (
+                  faltaAlgum(a.tamanhos) ? (
+                    <Chip
+                      key={a.rotulo}
+                      label={a.rotulo}
+                      icon="plus"
+                      dashed
+                      accessibilityLabel={a.acessivel}
+                      onPress={() => p.onTamanhos(juntarTamanhos(p.tamanhos, a.tamanhos))}
+                    />
+                  ) : null
+                ))}
               </View>
               {abrirTam && (
                 <>
