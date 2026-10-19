@@ -32,6 +32,13 @@ export const SECOES_COM_FOCO: Record<string, SecaoComFoco> = {
     titulo: "Seu código de indicação fica aqui",
     texto: "Copie o código ou mande pelo WhatsApp para um lojista que você conhece.",
   },
+  // 18/10/2026 (card p-36): "Desenho: ... · mudar" na aba Etiquetas do Estoque.
+  "desenho-etiqueta": {
+    chave: "desenho-etiqueta",
+    alvo: "configuracoes.desenho-etiqueta",
+    titulo: "Desenho da etiqueta",
+    texto: "Toque em Clássico ou Editorial. Vale para as próximas impressões.",
+  },
 };
 
 export function secaoRegistrada(chave: string): SecaoComFoco | null {

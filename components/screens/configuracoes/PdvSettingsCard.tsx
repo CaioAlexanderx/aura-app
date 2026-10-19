@@ -19,6 +19,9 @@ import { Card } from "@/components/screens/configuracoes/shared";
 import { CardFeeSection, type CardFeePalette } from "@/components/screens/configuracoes/CardFeeSection";
 import { CardPriceSection } from "@/components/screens/configuracoes/CardPriceSection";
 import { FrenteDaLoja, nomeDaFrente } from "@/components/screens/configuracoes/FrenteDaLoja";
+import { MiniaturaDesenhoEtiqueta } from "@/components/screens/configuracoes/MiniaturaDesenhoEtiqueta";
+import { tourTarget } from "@/utils/tourTarget";
+import { alvoDaSecao } from "@/utils/focoNaSecao";
 import {
   LABEL_DESIGN_SIZES, LABEL_SIZE_KEYS, DEFAULT_LABEL_SIZE, LABEL_SIZE_PRESETS, labelDesignPadrao,
   type LabelDesign, type LabelSizeKey,
@@ -455,11 +458,17 @@ export function PdvSettingsCard() {
       {/* 18/10/2026 (card f1-16): desenho da etiqueta (pdv_settings.
           label_design). Sem escolha = padrão do modelo; vale em todos os
           computadores da loja. */}
+      {/* 18/10/2026 (card p-36): miniatura de cada desenho, e o texto diz
+          primeiro a quais modelos a escolha vale (LABEL_DESIGN_SIZES:
+          99x21 e 105x21, ambos 33x21, e 30x25). A aba Etiquetas do Estoque
+          traz "Desenho: ... · mudar", que abre esta seção pelo foco
+          (/configuracoes?foco=desenho-etiqueta, utils/focoNaSecao). */}
       <Text style={s.groupHeader}>Etiquetas</Text>
-      <View style={s.rowCol}>
+      <View style={s.rowCol} {...tourTarget(alvoDaSecao("desenho-etiqueta"))}>
         <Text style={s.rowLabel}>Desenho da etiqueta</Text>
+        <Text style={s.rowDescForte} testID="desenho-etiqueta-modelos">Vale para as etiquetas 33x21mm (com ou sem vão) e 30x25mm.</Text>
         <Text style={s.rowDesc}>
-          {"Vale para as etiquetas 33x21mm e 30x25mm, em todos os computadores da loja. O tamanho e o código de barras não mudam." +
+          {"As de 40x25mm, a bobina 58mm e a Minha medida têm desenho fixo. O tamanho e o código de barras não mudam. A escolha vale em todos os computadores da loja." +
             (modeloAceitaDesenho ? "" : " O seu modelo (" + LABEL_SIZE_PRESETS[modeloDaLoja].uiLabel + ") continua com o desenho de hoje.")}
         </Text>
         <View style={s.chips}>
@@ -475,8 +484,13 @@ export function PdvSettingsCard() {
                 onPress={function() { if (display.label_design !== d.key) toggle("label_design", d.key); }}
                 style={[s.chip, ativo && s.chipOn]}
               >
-                <Text style={[s.chipNome, ativo && s.chipNomeOn]}>{d.nome}</Text>
-                <Text style={s.chipHint}>{d.hint}</Text>
+                <View style={s.chipCorpo}>
+                  <MiniaturaDesenhoEtiqueta desenho={d.key} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={[s.chipNome, ativo && s.chipNomeOn]}>{d.nome}</Text>
+                    <Text style={s.chipHint}>{d.hint}</Text>
+                  </View>
+                </View>
               </Pressable>
             );
           })}
@@ -608,6 +622,8 @@ const s = StyleSheet.create({
   chipNome:    { fontSize: 13, color: Colors.ink, fontWeight: "700" },
   chipNomeOn:  { color: Colors.violet3 },
   chipHint:    { fontSize: 11, color: Colors.ink3, marginTop: 3, lineHeight: 15 },
+  chipCorpo:   { flexDirection: "row", alignItems: "center", gap: 10 },
+  rowDescForte:{ fontSize: 12, color: Colors.ink, fontWeight: "600", marginTop: 2, lineHeight: 16 },
   groupHeader: { fontSize: 10, color: Colors.ink3, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase", marginTop: 6 },
   caixaLink:   {
     flexDirection: "row", alignItems: "center", gap: 8,
