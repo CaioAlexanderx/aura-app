@@ -681,11 +681,11 @@ export function AddCompanyModal({ visible, onClose }: Props) {
                   <Pressable
                     onPress={() => {
                       handleClose();
-                      // Redireciona pra Configurações > Faturamento
+                      // Vai direto para a tela de planos.
                       try {
                         // eslint-disable-next-line @typescript-eslint/no-var-requires
                         const { router } = require("expo-router");
-                        router.push("/configuracoes");
+                        router.push("/(tabs)/planos");
                       } catch {}
                     }}
                     style={{

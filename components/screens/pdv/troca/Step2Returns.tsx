@@ -260,7 +260,7 @@ export function Step2Returns({
       />
 
       {selectedSales.length === 0 ? (
-        <Text style={s.emptyTxt}>Nenhuma venda selecionada — volte ao Step 1.</Text>
+        <Text style={s.emptyTxt}>Nenhuma venda selecionada. Volte ao primeiro passo (Venda) e escolha a venda.</Text>
       ) : (
         selectedSales.map((sale) => {
           const isCollapsed = collapsed.has(sale.id);

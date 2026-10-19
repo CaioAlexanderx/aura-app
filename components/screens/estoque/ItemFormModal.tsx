@@ -78,8 +78,8 @@ import { PERFIL_PADRAO, perfilDoCadastro } from "./item-form/perfis";
 import { usaLote } from "@/utils/matconLots";
 import { matconApi } from "@/services/matconApi";
 import {
-  capaDa, chaveDaCor, duracaoParaMinutos, gerarCodigoServico, gravarUltimaCategoria,
-  lerDuracaoDoServico, lerUltimaCategoria, mascaraDeValor, matrizDaGrade, gravacaoDaDuracao, mesclarPaiNaGrade, motivosQueBloqueiam, normalizarMapaDaGrade, temProgressoAlemDoNome, totalDaMatriz,
+  capaDa, chaveDaCor, duracaoParaMinutos, gerarCodigoServico,
+  lerDuracaoDoServico, mascaraDeValor, matrizDaGrade, gravacaoDaDuracao, mesclarPaiNaGrade, motivosQueBloqueiam, normalizarMapaDaGrade, temProgressoAlemDoNome, totalDaMatriz,
   nomeDoTipo, ordenarFilaDeFotos, preservarValores, resumoDoItem, rotuloDoBotaoSalvar,
   rotuloDoProgresso, subtituloDoModal, textoDeEdicao, textoDoBloqueio, tituloDoModal,
   usaDuasColunas, valorDaMascara, novaLinhaDeLote, lotesParaGravar, totalDosLotes,
@@ -88,9 +88,13 @@ import {
 } from "./item-form/types";
 
 // "Salvar e cadastrar outro" no perfil Matcon: o que passa para o próximo
-// produto (decisão do Caio, 22/09/2026). A categoria já passa sozinha
-// (última usada); o resto — nome, preço, custo, estoque, fotos, descrição —
-// começa limpo.
+// produto (decisão do Caio, 22/09/2026). O resto — nome, preço, custo,
+// estoque, fotos, descrição — começa limpo.
+//
+// A categoria é outra regra, valendo para todo perfil (decisão do Caio,
+// 19/10/2026): o cadastro novo abre SEM categoria, e ela só passa adiante
+// no "Salvar e cadastrar outro", da sessão atual do modal para o próximo
+// item, em memória — nada vai para o localStorage nem sobrevive ao fechar.
 type Manter = {
   unidade: string;
   purchaseUnit: string | null;
@@ -102,6 +106,9 @@ type Manter = {
 };
 
 const VAZIO: CategorySelection = { primaryCategoryId: null, alsoInIds: [] };
+
+// A categoria que o "Salvar e cadastrar outro" leva para o próximo item.
+type CategoriaHerdada = { selecao: CategorySelection; legado: string };
 
 // A largura manda no layout inteiro: duas colunas no desktop, uma coluna
 // em folha de baixo abaixo de 900 (e sempre no nativo).
@@ -321,7 +328,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     : (primeiraPendente ? "data:" + primeiraPendente.contentType + ";base64," + primeiraPendente.base64 : null);
 
   // ── semear / limpar ──────────────────────────────────────
-  const semear = useCallback((prod: Product | null, tipo: ItemType, manter?: Manter | null) => {
+  const semear = useCallback((prod: Product | null, tipo: ItemType, manter?: Manter | null, herdar?: CategoriaHerdada | null) => {
     const t: ItemType = prod ? (prod.unit === "srv" ? "service" : "product") : tipo;
     setAlvo(prod);
     setType(t);
@@ -391,10 +398,11 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       setLegado(prod.category || "");
       setUltimaUsada(false);
     } else {
-      const u = lerUltimaCategoria(company?.id, t);
-      setSelecao(u ? { primaryCategoryId: u.primaryCategoryId, alsoInIds: u.alsoInIds } : VAZIO);
-      setLegado(u?.legado || "");
-      setUltimaUsada(!!u && (!!u.primaryCategoryId || !!u.legado));
+      // Cadastro novo abre sem categoria. Só o "cadastrar outro" traz a
+      // do item que acabou de ser salvo.
+      setSelecao(herdar ? herdar.selecao : VAZIO);
+      setLegado(herdar ? herdar.legado : "");
+      setUltimaUsada(!!herdar && (!!herdar.selecao.primaryCategoryId || !!herdar.legado));
     }
   }, [company?.id, matcon.matcon_enabled]);
 
@@ -641,11 +649,6 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
           void subirFila(alvo!.id);
         }
         if (categoriaSuja) vincularCategoria(alvo!.id);
-        gravarUltimaCategoria(company?.id, type, {
-          primaryCategoryId: selecao.primaryCategoryId,
-          alsoInIds: selecao.alsoInIds,
-          legado: categoriaFinal,
-        });
         setSujo(false);
         setGradeSuja(false);
         setCategoriaSuja(false);
@@ -664,11 +667,6 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
 
       // Vínculo da árvore: só existe depois que a linha existe.
       vincularCategoria(criado.id);
-      gravarUltimaCategoria(company?.id, type, {
-        primaryCategoryId: selecao.primaryCategoryId,
-        alsoInIds: selecao.alsoInIds,
-        legado: categoriaFinal,
-      });
 
       // Foto de uma cor que saiu da grade antes do Salvar não sobe órfã.
       const coresVivas = isProduto && stockMode === "variants" ? cores.map((c) => chaveDaCor(c.hex)) : [];
@@ -703,11 +701,15 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       void subirFila(criado.id);
 
       if (cadastrarOutro) {
-        // Perfil Matcon: categoria (já vem sozinha), unidade, "compro por" e
-        // as respostas fiscais passam para o próximo produto.
+        // A categoria passa para o próximo produto em qualquer perfil (em
+        // memória, só desta sessão do modal). Perfil Matcon: unidade,
+        // "compro por" e as respostas fiscais também.
         semear(null, type, perfil.manterNoProximo ? {
           unidade, purchaseUnit, purchaseFactorTxt, ncm, cest, icmsStPaid, origem,
-        } : null);
+        } : null, {
+          selecao: { primaryCategoryId: selecao.primaryCategoryId, alsoInIds: selecao.alsoInIds },
+          legado: categoriaEscolhida || "",
+        });
         toast.success("Salvo. Próximo item");
       } else {
         onClose();
@@ -859,10 +861,10 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
         onPress={travado || ativo ? undefined : () => {
           setType(alvoTipo);
           setSujo(true);
-          const u = lerUltimaCategoria(company?.id, alvoTipo);
-          setSelecao(u ? { primaryCategoryId: u.primaryCategoryId, alsoInIds: u.alsoInIds } : VAZIO);
-          setLegado(u?.legado || "");
-          setUltimaUsada(!!u && (!!u.primaryCategoryId || !!u.legado));
+          // Categoria de produto não vale para serviço (e vice-versa).
+          setSelecao(VAZIO);
+          setLegado("");
+          setUltimaUsada(false);
         }}
         disabled={travado}
         accessibilityLabel={travado ? rotulo + " (o tipo não muda depois de criado)" : rotulo}

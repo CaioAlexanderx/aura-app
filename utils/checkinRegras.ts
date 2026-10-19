@@ -13,6 +13,8 @@ import {
   type ChaveResposta, type OpcaoCheckin, type PerguntaCheckin,
 } from "@/constants/checkin";
 import type { CheckinEstado, CheckinPutBody, CheckinRespostas } from "@/services/checkinApi";
+import { PLANOS_COM_STUDIO, SEGMENTOS } from "@/constants/primeirosPassos";
+import type { Segmento } from "@/services/primeirosPassosApi";
 import { TEXTO_CONVITE_PLANILHA, caminhoDoEstoque } from "@/utils/checkinDestino";
 
 function texto(v: unknown): string | null {
@@ -95,6 +97,27 @@ export function corpoCompleto(respostas: CheckinRespostas): CheckinPutBody {
     if (v && corpoDaResposta(p.chave, v)) corpo[p.chave] = v;
   }
   return corpo as CheckinPutBody;
+}
+
+// ── Pergunta da frente (tq-33) ──────────────────────────────
+
+/**
+ * A conta não tem frente gravada? Só então o check-in pergunta "O que a sua
+ * loja vende?". Empresa com vertical ativa (Studio antigo sem segment,
+ * odonto, food…) já tem a frente dita pela vertical: não pergunta.
+ */
+export function precisaPerguntarFrente(company: unknown): boolean {
+  if (!company || typeof company !== "object") return false;
+  const c = company as Record<string, unknown>;
+  const segment = typeof c.segment === "string" ? c.segment.trim() : "";
+  const vertical = typeof c.vertical_active === "string" ? c.vertical_active.trim() : "";
+  return !segment && !vertical;
+}
+
+/** As frentes do cartão "Sua frente": Personalizados só nos planos com Studio. */
+export function opcoesDeFrente(plano: string | null | undefined): Segmento[] {
+  const comStudio = PLANOS_COM_STUDIO.includes(String(plano || ""));
+  return SEGMENTOS.filter((s) => s !== "studio" || comStudio);
 }
 
 export function quantasRespostas(respostas: CheckinRespostas): number {

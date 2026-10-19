@@ -26,6 +26,7 @@
 // ============================================================
 import { useFinancialComparative } from "@/hooks/useFinancialComparative";
 import { EmptyDashboard } from "./EmptyDashboard";
+import { usePrimeiraVenda } from "@/hooks/usePrimeiraVenda";
 import { NewMonthCard } from "./NewMonthCard";
 import {
   brToday, previousMonthOf, monthNameBR,
@@ -57,12 +58,23 @@ export function DashboardEmptyState({ name, data, onPress }: Props) {
     loadingHistory: q.isLoading,
   });
 
+  // 19/10/2026 (tq-32): "Fazer a primeira venda", só na conta nova.
+  const primeiraVenda = usePrimeiraVenda(kind === "conta-nova");
+
   // Enquanto o histórico não chega, não mostramos nada: piscar o texto
   // errado (seja o onboarding, seja o card de mês novo) é justamente o
   // problema que este componente existe pra resolver.
   if (kind === "carregando") return null;
 
-  if (kind === "conta-nova") return <EmptyDashboard name={name} onPress={onPress} />;
+  if (kind === "conta-nova") {
+    return (
+      <EmptyDashboard
+        name={name}
+        onPress={onPress}
+        onPrimeiraVenda={primeiraVenda.mostrar ? () => { void primeiraVenda.ir(); } : undefined}
+      />
+    );
+  }
 
   return (
     <NewMonthCard

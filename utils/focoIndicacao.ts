@@ -6,13 +6,19 @@
 // Agora o banner leva para /configuracoes?foco=indicacao e a tela rola até
 // o cartão e o destaca (spotlight, CLAUDE.md armadilha 6).
 //
+// 18/10/2026 (card p-19): o foco virou mecanismo de qualquer seção
+// (utils/focoNaSecao.ts). Aqui fica só o que é do banner de indicação.
+//
 // Funções puras, sem React nem expo-router, para testar sem montar tela.
 // ============================================================
 
-export const ROTA_CONFIGURACOES = "/configuracoes";
-export const PARAM_FOCO = "foco";
+import {
+  ROTA_CONFIGURACOES, PARAM_FOCO, SECOES_COM_FOCO, focoDoParametro, rotaDeConfiguracoesNaSecao,
+} from "@/utils/focoNaSecao";
+
+export { ROTA_CONFIGURACOES, PARAM_FOCO, focoDoParametro };
 export const FOCO_INDICACAO = "indicacao";
-export const ROTA_CONFIGURACOES_INDICACAO = ROTA_CONFIGURACOES + "?" + PARAM_FOCO + "=" + FOCO_INDICACAO;
+export const ROTA_CONFIGURACOES_INDICACAO = rotaDeConfiguracoesNaSecao(FOCO_INDICACAO);
 
 // Os banners de indicação ainda não têm um campo de tipo: nascem com o
 // título "Indique um lojista e ganhe ...". Detecção por título é o critério
@@ -20,7 +26,7 @@ export const ROTA_CONFIGURACOES_INDICACAO = ROTA_CONFIGURACOES + "?" + PARAM_FOC
 export const TITULO_BANNER_INDICACAO = "Indique um lojista";
 
 // Chave do alvo do spotlight (utils/tourTarget).
-export const ALVO_INDICACAO = "configuracoes.indicacao";
+export const ALVO_INDICACAO = SECOES_COM_FOCO[FOCO_INDICACAO].alvo;
 
 function semAcento(s: string): string {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -48,16 +54,6 @@ export function rotaDoCtaDoBanner(banner: { cta_route?: string | null; title?: s
     return ROTA_CONFIGURACOES_INDICACAO;
   }
   return rota;
-}
-
-// expo-router entrega o parâmetro como string, array ou undefined
-// (e, por armadilha conhecida, a string "undefined").
-export function focoDoParametro(raw: unknown): string | null {
-  const v = Array.isArray(raw) ? raw[0] : raw;
-  if (typeof v !== "string") return null;
-  const t = v.trim().toLowerCase();
-  if (!t || t === "undefined" || t === "null") return null;
-  return t;
 }
 
 export function pedeFocoNaIndicacao(raw: unknown): boolean {

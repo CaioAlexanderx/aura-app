@@ -412,8 +412,10 @@ export default function RegisterScreen() {
       });
       toast.success(isDojo ? "Conta do dojo criada!" : "Conta criada com sucesso!");
       // Self-service: todo cadastro nasce com trial (7d Negocio sem codigo, ou o plano do codigo).
-      // Pagamento fica pra depois do trial -> sempre vai pro onboarding.
-      setTimeout(() => router.replace("/(tabs)/onboarding"), 300);
+      // Pagamento fica pra depois do trial. Vai pro Painel (como o convite acima): ele
+      // leva ao /checkin e o AuthGuard desvia verificacao de e-mail e verticais.
+      // 18/10/2026: antes ia pra /(tabs)/onboarding, tela aposentada que renderiza null.
+      setTimeout(() => router.replace("/(tabs)/" as any), 300);
     } catch (err) {
       // 409 tem dois significados; o `code` do backend desempata.
       if (err instanceof ApiError && err.status === 409) {
