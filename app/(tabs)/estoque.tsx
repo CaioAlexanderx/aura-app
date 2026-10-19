@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo, useEffect } from "react";
 import { tourTarget } from "@/utils/tourTarget";
+import { useRouter } from "expo-router";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform, Dimensions } from "react-native";
 import { Colors, useColors, useThemeStore } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
@@ -23,14 +24,12 @@ import { PrintLabels } from "@/components/PrintLabels";
 import { Pagination } from "@/components/Pagination";
 import { ScrollableChips } from "@/components/ScrollableChips";
 import { MergeDuplicatesModal } from "@/components/MergeDuplicatesModal";
-import { CategoriesModal } from "@/components/screens/estoque/CategoriesModal";
 import { QuickBatchProductsModal } from "@/components/QuickBatchProductsModal";
 import { DanfeImportModal } from "@/components/screens/estoque/DanfeImportModal";
 import { LinkProductModal } from "@/components/LinkProductModal";
 import { usePagination } from "@/hooks/usePagination";
 import { TABS, DEFAULT_CATEGORIES, fmt } from "@/components/screens/estoque/types";
 import type { Product } from "@/components/screens/estoque/types";
-import type { CategoryType } from "@/services/api";
 import { arrayToCSV, downloadCSV, PRODUCT_COLUMNS } from "@/utils/csv";
 import { productMatchesSearch } from "@/utils/productSearch";
 import { resumoValorEstoque, legendaValorEstoque } from "@/utils/valorEstoque";
@@ -63,6 +62,7 @@ import { ProductGridWeb } from "@/components/screens/estoque/ProductGridWeb";
 // Estoque só liga com matcon_enabled + empresa emitindo nota fiscal.
 import { readMatconSettings } from "@/constants/matcon";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
+import { useVisibleModules } from "@/hooks/useVisibleModules";
 import { nfceApi } from "@/services/nfceApi";
 // 23/09/2026 (QA producao, item 5): estoque consolidado (AggregatedView)
 // usava "un" fixo e Math.round — errado pra produto fracionado (m², kg).
@@ -124,7 +124,6 @@ function SummaryCard({ label, value, color, sub, onPress }: { label: string; val
   </Pressable>;
 }
 
-type CategoriesModalState = { open: boolean; initialType?: CategoryType };
 
 // ────────────────────────────────────────────────────────────
 // MSL-06: View AGREGADA (modo "Todas as empresas")
@@ -316,7 +315,10 @@ export default function EstoqueScreen() {
   // categoria do produto recem-criado passou para o ItemFormModal.
   const { flattened: categoriasFlat } = useCategories();
   const { categoryNames: managedCategoryNames } = useProductCategories();
+  const router = useRouter();
   const { company, availableCompanies, consolidatedView } = useAuthStore();
+  // 18/10/2026 (card p-36): "mudar" o desenho da etiqueta leva a Configurações.
+  const podeMudarDesenho = useVisibleModules().has("configuracoes");
   // 22/09/2026 (Matcon M2): aviso fiscal (CEST) da aba Alertas. Loja sem o
   // módulo nunca lê nfce_config aqui — o aviso nem calcula (AlertsList).
   const { settings: pdvSettings } = usePdvSettings();
@@ -367,7 +369,6 @@ export default function EstoqueScreen() {
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [showDanfeModal, setShowDanfeModal] = useState(false);
-  const [categoriesModal, setCategoriesModal] = useState<CategoriesModalState>({ open: false });
   // 22/09/2026: botão "Importar planilha" na barra de ações — antes o
   // ServerImport só aparecia no estado vazio (0 produtos), então quem já
   // tinha itens cadastrados não achava como importar mais. Mesmo fluxo do
@@ -870,11 +871,35 @@ export default function EstoqueScreen() {
 
             {/* Category filter — multi-select dropdown (wide) ou ScrollableChips (narrow) */}
             {isWebWide ? (
-              <View style={{ marginBottom: 14 } as any}>
+              <View style={{ marginBottom: 14, flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" } as any}>
                 <CategoryDropdownWeb categories={allCategories} selected={catsMulti} onChange={setCatsMulti} />
+                {!isDemo && (
+                  <Pressable
+                    onPress={() => router.push("/catalogo/organizar")}
+                    style={s.catBtn}
+                    accessibilityRole="button"
+                    testID="estoque-organizar-categorias"
+                  >
+                    <Icon name="layers" size={14} color={Colors.violet3} />
+                    <Text style={s.catBtnText}>Organizar categorias</Text>
+                  </Pressable>
+                )}
               </View>
             ) : (
-              <ScrollableChips items={filterCategories} active={catFilter} onSelect={setCatFilter} />
+              <>
+                <ScrollableChips items={filterCategories} active={catFilter} onSelect={setCatFilter} />
+                {!isDemo && (
+                  <Pressable
+                    onPress={() => router.push("/catalogo/organizar")}
+                    style={[s.catBtn, { alignSelf: "flex-start", marginBottom: 12 }]}
+                    accessibilityRole="button"
+                    testID="estoque-organizar-categorias"
+                  >
+                    <Icon name="layers" size={14} color={Colors.violet3} />
+                    <Text style={s.catBtnText}>Organizar categorias</Text>
+                  </Pressable>
+                )}
+              </>
             )}
 
             {/* 12/05/2026: barra de acoes em lote — visivel apenas quando bulkMode=true */}
@@ -937,7 +962,7 @@ export default function EstoqueScreen() {
           />
         )}
         {/* Aba 2: Etiquetas (era 3 antes da Curva ABC migrar) */}
-        {activeTab === 2 && <PrintLabels products={products} selectedIds={labelSelection} onSelectionChange={setLabelSelection} />}
+        {activeTab === 2 && <PrintLabels products={products} selectedIds={labelSelection} onSelectionChange={setLabelSelection} podeMudarDesenho={podeMudarDesenho} />}
 
       </ScrollView>
 
@@ -966,11 +991,6 @@ export default function EstoqueScreen() {
           onBaixarProblemas={importPlanilha.baixarProblemas}
         />
       </WebPortal>
-      <CategoriesModal
-        visible={categoriesModal.open}
-        initialType={categoriesModal.initialType}
-        onClose={() => setCategoriesModal({ open: false })}
-      />
       {linkTarget && company?.id && (
         <LinkProductModal
           visible={!!linkTarget}

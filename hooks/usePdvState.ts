@@ -7,7 +7,6 @@
 //
 // 14/05/2026: interceptação do crediário parcelado em
 // handleFinalize() — showCrediario + handleCrediarioConfirm.
-// handleOpenCrediario() — atalho direto via botão ActCrediario (F6).
 //
 // 26/05/2026 (crediario fase 1): handleCrediarioConfirm agora
 // recebe { installments, first_due_date } do modal e repassa
@@ -69,6 +68,7 @@ import { useCategories } from "@/hooks/useCategories";
 import { expandirComDescendentes } from "@/utils/categoryFilter";
 import { falhaDeConexao } from "@/utils/leituraRapida";
 import { lerCodigoDoVale } from "@/utils/valeTroca";
+import { temVarianteAtiva } from "@/utils/varianteAtivaNoBipe";
 import { useGlobalBarcodeScanner } from "@/hooks/useGlobalBarcodeScanner";
 import { useViewport, productColumnsFor, cartWidthFor } from "@/hooks/useViewport";
 import { useCaixa } from "@/hooks/useCaixa";
@@ -617,6 +617,14 @@ export function usePdvState() {
           cardPrice: parseCardPrice((result.product as any).card_price),
           refPrice: parseFloat((result.product as any).price) || undefined,
         };
+        // 19/10/2026 (tq-30): pai com tamanho ativo não entra sem tamanho.
+        // Abre o seletor como no bipe local: o código vai como preselect
+        // (tamanho com esse código vem marcado; código só do pai, nada).
+        if (await temVarianteAtiva(company.id, result.product)) {
+          setPendingBipe({ code: cleaned });
+          setPendingProduct(bp);
+          return true;
+        }
         addToCart(bp);
         toast.success(bp.name);
         return true;
@@ -804,19 +812,6 @@ export function usePdvState() {
       pendingUnifyRef.current = null;
       finalizeSale(undefined, payload);
     }
-  }
-
-  function handleOpenCrediario() {
-    if (cart.length === 0) {
-      toast.info("Adicione produtos ao carrinho antes de usar o crediário");
-      return;
-    }
-    if (!selectedCustomerId) {
-      toast.error("Selecione um cliente para usar o crediário parcelado");
-      return;
-    }
-    setPayment("crediario");
-    setShowCrediario(true);
   }
 
   async function handleValidateCoupon(code: string) {
@@ -1164,7 +1159,6 @@ export function usePdvState() {
     showCrediario,
     crediarioModalAmount,
     handleCrediarioConfirm,
-    handleOpenCrediario,
     closeCrediario: () => setShowCrediario(false),
     // Scanner
     lastScannedCode, scannerListening,

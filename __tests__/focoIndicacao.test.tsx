@@ -79,9 +79,10 @@ describe("ligações na fonte", () => {
   it("Configurações lê o parâmetro e monta o destaque depois do cartão", () => {
     const src = lerFonte("app", "(tabs)", "configuracoes.tsx");
     expect(src).toContain("useLocalSearchParams");
-    expect(src).toContain("pedeFocoNaIndicacao(params?.foco)");
+    // 18/10/2026 (p-19): o foco virou genérico (utils/focoNaSecao.ts).
+    expect(src).toContain("secaoDoFoco(params?.foco)");
     expect(src.indexOf("<ReferralCard />")).toBeGreaterThan(-1);
-    expect(src.indexOf("<FocoIndicacao")).toBeGreaterThan(src.indexOf("<ReferralCard />"));
+    expect(src.indexOf("<FocoNaSecao")).toBeGreaterThan(src.indexOf("<ReferralCard />"));
   });
   it("o cartão carrega a marca que o spotlight procura, nos dois estados", () => {
     const src = lerFonte("components", "ReferralCard.tsx");
@@ -97,7 +98,7 @@ describe("ligações na fonte", () => {
   });
 });
 
-describe("FocoIndicacao", () => {
+describe("destaque do cartão de indicação (FocoNaSecao)", () => {
   beforeEach(() => {
     jest.useFakeTimers();
   });
@@ -118,10 +119,13 @@ describe("FocoIndicacao", () => {
     return d;
   }
 
+  // 18/10/2026 (p-19): o destaque é o FocoNaSecao genérico com a seção
+  // "indicacao" do registro, exatamente o que Configurações monta.
   function renderiza(ativo: boolean) {
-    const { FocoIndicacao } = require("@/components/screens/configuracoes/FocoIndicacao");
+    const { FocoNaSecao } = require("@/components/screens/configuracoes/FocoNaSecao");
+    const { secaoDoFoco } = require("@/utils/focoNaSecao");
     let tree!: renderer.ReactTestRenderer;
-    act(() => { tree = renderer.create(<FocoIndicacao ativo={ativo} />); });
+    act(() => { tree = renderer.create(<FocoNaSecao secao={secaoDoFoco(ativo ? "indicacao" : undefined)} />); });
     return tree;
   }
 

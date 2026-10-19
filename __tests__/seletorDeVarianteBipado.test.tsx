@@ -199,3 +199,78 @@ describe("seletor de variante · tamanho bipado", () => {
     expect(marcada()).toBe("v39");
   });
 });
+
+// 18/10/2026 (p-35): a lista sai em ordem de cor e tamanho, não na ordem em
+// que a grade foi criada. (A linha do produto pai, que ficava por último,
+// saiu em 19/10: INC-2026-10-19-01.)
+const AZUL = "#3b82f6";
+const PRETO = "#000000";
+const VERMELHO = "#ef4444";
+const attrs = (cor: string | null, tam: string | null) => [
+  ...(cor ? [{ attribute: "Cor", value: cor }] : []),
+  ...(tam ? [{ attribute: "Tamanho", value: tam }] : []),
+];
+const GRADE = [
+  { id: "vermG", stock_qty: "2", barcode: "7900000000101", is_active: true, attributes: attrs(VERMELHO, "G") },
+  { id: "azulGG", stock_qty: "2", barcode: "7900000000102", is_active: true, attributes: attrs(AZUL, "GG") },
+  { id: "pretoP", stock_qty: "2", barcode: "7900000000103", is_active: true, attributes: attrs(PRETO, "P") },
+  { id: "azulP", stock_qty: "2", barcode: "7900000000104", is_active: true, attributes: attrs(AZUL, "P") },
+  { id: "azulM", stock_qty: "2", barcode: "7900000000105", is_active: true, attributes: attrs(AZUL, "M") },
+  { id: "azulPP", stock_qty: "2", barcode: "7900000000106", is_active: true, attributes: attrs(AZUL, "PP") },
+];
+const ordemNaTela = () =>
+  Array.from(document.querySelectorAll('[data-testid^="variante-"]')).map((el) =>
+    el.getAttribute("data-testid")!.replace("variante-", ""));
+
+describe("seletor de variante · ordem da lista", () => {
+  beforeEach(() => { mockVariants.mockImplementation(() => Promise.resolve({ variants: GRADE as any })); });
+  afterEach(() => { mockVariants.mockImplementation(() => Promise.resolve({ variants: VARIANTES })); });
+
+  it("ordena por cor (alfabética) e depois por tamanho (PP, P, M, G, GG)", async () => {
+    await abrir({});
+    expect(ordemNaTela()).toEqual(["azulPP", "azulP", "azulM", "azulGG", "pretoP", "vermG"]);
+  });
+
+  it("numeração sai em ordem numérica, não na ordem de criação", async () => {
+    mockVariants.mockImplementation(() => Promise.resolve({ variants: [
+      { id: "t40", stock_qty: "1", is_active: true, attributes: attrs(null, "40") },
+      { id: "t8", stock_qty: "1", is_active: true, attributes: attrs(null, "8") },
+      { id: "t36", stock_qty: "1", is_active: true, attributes: attrs(null, "36") },
+    ] as any }));
+    await abrir({});
+    expect(ordemNaTela()).toEqual(["t8", "t36", "t40"]);
+  });
+
+  // 19/10/2026 (INC-2026-10-19-01): a linha do pai saiu de vez quando há
+  // variante ativa (ver __tests__/seletorSemLinhaDoPai.test.tsx).
+  it("com variante ativa, a lista é só de tamanhos: sem a linha do pai", async () => {
+    await abrir({ product: { ...PRODUTO, stock: 12 } });
+    const ids = ordemNaTela();
+    expect(ids).toHaveLength(6);
+    expect(ids).not.toContain("do-pai");
+    expect(document.body.textContent).not.toContain("Sem variante específica");
+  });
+
+  it("setas seguem a ordem exibida e não caem na linha do pai", async () => {
+    await abrir({ product: { ...PRODUTO, stock: 12 } });
+    liberarEnter();
+    await tecla("ArrowDown");
+    expect(marcada()).toBe("azulPP");
+    await tecla("ArrowDown");
+    expect(marcada()).toBe("azulP");
+    for (let i = 0; i < 10; i++) await tecla("ArrowDown");
+    expect(marcada()).toBe("vermG"); // última variante; não há linha do pai depois dela
+    await tecla("ArrowUp");
+    expect(marcada()).toBe("pretoP");
+    await tecla("Enter");
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "pretoP", label: "Preto · P" }));
+  });
+
+  it("o bipe ainda marca a variante certa com a lista reordenada", async () => {
+    await abrir({ preselectBarcode: "7900000000104" });
+    expect(marcada()).toBe("azulP");
+    liberarEnter();
+    await tecla("ArrowDown");
+    expect(marcada()).toBe("azulM");
+  });
+});

@@ -1,4 +1,6 @@
-// This file has been deprecated. Onboarding was removed in session 08/04/2026.
-// Register flow now goes directly to Dashboard with ProfileBanner.
-// See: A1 in EXECUTION_PLAN.md
-export default function OnboardingScreen() { return null; }
+// Tela aposentada em 08/04/2026 (o cadastro passou a ir direto pro Painel).
+// Fica so como rede de seguranca: link antigo ou favorito cai no Painel em vez
+// de uma tela em branco (antes: `return null`).
+import { Redirect } from "expo-router";
+
+export default function OnboardingScreen() { return <Redirect href={"/(tabs)/" as any} />; }
