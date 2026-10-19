@@ -69,6 +69,7 @@ jest.mock("@/hooks/useCategoryTree", () => {
 import OrganizarCatalogoScreen from "@/app/catalogo/organizar";
 import { useCategories } from "@/hooks/useCategories";
 import { useCategoryTree, parseCategoryError } from "@/hooks/useCategoryTree";
+import { useAuthStore } from "@/stores/auth";
 
 const mockCategories = useCategories as unknown as jest.Mock;
 const mockTree = useCategoryTree as unknown as jest.Mock;
@@ -181,6 +182,83 @@ describe("C1 — Organizar catálogo", () => {
     expect(t.some((x) => x.includes("Feminino › Calçados"))).toBe(false);
     // "Tornar categoria principal" é sempre válido.
     expect(t).toContain("Tornar categoria principal");
+  });
+});
+
+// Banner de categoria vive na vitrine do Canal Digital (plano Negocio+).
+// Quem nao tem o Canal nao ve o botao "banner" nem a frase que o explica;
+// o resto da arvore (criar, renomear, mover, excluir) continua igual.
+describe("Organizar catálogo — banner só para quem tem o Canal Digital", () => {
+  const refreshMe = jest.fn().mockResolvedValue(undefined);
+
+  function comPlano(plan: string, module_overrides?: Record<string, boolean>) {
+    (useAuthStore as any).setState({
+      company: { id: "c1", plan, module_overrides: module_overrides ?? null },
+      refreshMe,
+    });
+  }
+
+  beforeEach(() => { jest.clearAllMocks(); });
+  afterAll(() => { (useAuthStore as any).setState({ company: null }); });
+
+  function temBotaoBanner(r: any) {
+    return r.root.findAll((n: any) => typeof n.props?.testID === "string" && n.props.testID.startsWith("banner-"))
+      .length > 0;
+  }
+  function temFraseBanner(r: any) {
+    return textos(r).some((x) => x.includes("podem ter um banner na sua loja"));
+  }
+
+  test("Essencial: sem botão banner e sem a frase", () => {
+    comPlano("essencial");
+    const { r } = montar();
+    expect(temBotaoBanner(r)).toBe(false);
+    expect(temFraseBanner(r)).toBe(false);
+  });
+
+  test("Essencial: o resto da tela fica igual (criar, mover, excluir)", () => {
+    comPlano("essencial");
+    const { r } = montar();
+    const t = textos(r);
+    expect(t).toContain("+ categoria principal");
+    expect(t).toContain("mover");
+    expect(t).toContain("excluir");
+    expect(t).toContain("+ sub");
+  });
+
+  test("Negócio: botão banner só na categoria principal, com a frase", () => {
+    comPlano("negocio");
+    const { r } = montar();
+    expect(temFraseBanner(r)).toBe(true);
+    const botoes = r.root.findAll((n: any) => typeof n.props?.testID === "string" && n.props.testID.startsWith("banner-"));
+    // Pressable do botão: um só, o de Feminino (nível 0).
+    expect(botoes.map((n: any) => n.props.testID)).toEqual(["banner-cat-feminino"]);
+  });
+
+  test("Expansão também vê o banner", () => {
+    comPlano("expansao");
+    const { r } = montar();
+    expect(temBotaoBanner(r)).toBe(true);
+  });
+
+  test("override de módulo libera o Canal no Essencial", () => {
+    comPlano("essencial", { canal: true });
+    const { r } = montar();
+    expect(temBotaoBanner(r)).toBe(true);
+    expect(temFraseBanner(r)).toBe(true);
+  });
+
+  test("override de módulo desliga o Canal no Negócio", () => {
+    comPlano("negocio", { canal: false });
+    const { r } = montar();
+    expect(temBotaoBanner(r)).toBe(false);
+    expect(temFraseBanner(r)).toBe(false);
+  });
+
+  test("revalida /auth/me ao abrir (plano do login pode estar velho)", () => {
+    comPlano("essencial");
+    montar();
+    expect(refreshMe).toHaveBeenCalled();
   });
 });
 

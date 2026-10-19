@@ -26,7 +26,7 @@
 // Nenhum seletor de tipo. Os endpoints novos são product-only (DEC-03);
 // o CRUD legado segue bilíngue só por retrocompatibilidade.
 // ============================================================
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from "react-native";
@@ -35,6 +35,8 @@ import { useColors } from "@/constants/colors";
 import { useCategories, canHaveChildren } from "@/hooks/useCategories";
 import { useCategoryTree } from "@/hooks/useCategoryTree";
 import { useBannerDeCategoria } from "@/hooks/useBannerDeCategoria";
+import { useAuthStore } from "@/stores/auth";
+import { computeVisibleModules } from "@/hooks/useVisibleModules";
 import { SPECS } from "@/components/screens/canal/specsDeImagem";
 import type { Category } from "@/services/categoriesApi";
 
@@ -45,6 +47,20 @@ export default function OrganizarCatalogoScreen() {
   const banner = useBannerDeCategoria();
   const C = useColors();
   const router = useRouter();
+  // Banner de categoria vive na vitrine do Canal Digital (plano Negocio+).
+  // Quem nao tem o Canal nao ve o botao nem a frase: no Essencial o que o
+  // plano nao tem some. Mesma regra do menu (computeVisibleModules): override
+  // de modulo antes do plano. O plano vem do login e pode estar velho
+  // (CLAUDE.md, armadilha 1), entao revalida /auth/me ao abrir.
+  const company = useAuthStore((st) => st.company);
+  const refreshMe = useAuthStore((st) => st.refreshMe);
+  useEffect(() => {
+    if (typeof refreshMe === "function") refreshMe().catch(() => {});
+  }, [refreshMe]);
+  const temCanal = useMemo(
+    () => computeVisibleModules(company?.plan, (company as any)?.module_overrides, null).has("canal"),
+    [company?.plan, (company as any)?.module_overrides]
+  );
   const { tree, flattened, isLoading, create, isCreating, refetch } = useCategories();
   const { rename, remove, move, isRemoving } = useCategoryTree();
 
@@ -160,7 +176,7 @@ export default function OrganizarCatalogoScreen() {
                 <Text style={s.acao}>+ sub</Text>
               </Pressable>
             ) : null}
-            {nivel === 0 ? (
+            {nivel === 0 && temCanal ? (
               <Pressable
                 onPress={() => banner.escolherEEnviar(cat.id)}
                 accessibilityRole="button"
@@ -218,11 +234,14 @@ export default function OrganizarCatalogoScreen() {
         que está abaixo.
       </Text>
       {/* A medida sai de specsDeImagem.ts — a mesma que o resto do painel
-          usa. Escrita aqui de novo, viraria a segunda fonte. */}
-      <Text style={s.sub}>
-        As categorias principais podem ter um banner na sua loja ({SPECS.categoria.resumo}).
-        Sem banner, a categoria aparece com um fundo da sua cor.
-      </Text>
+          usa. Escrita aqui de novo, viraria a segunda fonte. So aparece
+          para quem tem o Canal Digital (ver temCanal acima). */}
+      {temCanal ? (
+        <Text style={s.sub} testID="organizar-frase-banner">
+          As categorias principais podem ter um banner na sua loja ({SPECS.categoria.resumo}).
+          Sem banner, a categoria aparece com um fundo da sua cor.
+        </Text>
+      ) : null}
 
       {isLoading ? <ActivityIndicator color={C.ink3} /> : null}
 
