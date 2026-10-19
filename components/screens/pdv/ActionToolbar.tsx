@@ -8,7 +8,8 @@
 // 07/05 · ActTroca — 5º card, F5, sem popover.
 // 07/05 · fix scanner: removido mousedown outside-click do ActBarcode.
 // 11/05 · ActBarcode redesenhado — scanner GLOBAL, card vira indicador.
-// 14/05 · ActCrediario — 6º card opcional (crediario_enabled), F6.
+// 14/05 · ActCrediario (F6) — removido em 18/10/2026: nada o renderizava; o crediário
+//          abre pela forma de pagamento (handleFinalize), não por atalho.
 // 16/05 · COMPACT MODE em viewports estreitos (<960px).
 // 17/05 · Threshold ajustado para <480px (só mobile portrait).
 // 13/06 · ActTroca: label "Trocar" → "Trocar / Devolver".
@@ -48,7 +49,6 @@ export const ACT_LABELS = {
   vendedora: { curto: "Vendedora",           longo: "Selecionar a vendedora da venda" },
   cupom:     { curto: "Cupom",               longo: "Aplicar cupom de desconto" },
   troca:     { curto: "Troca ou devolução",  longo: "Iniciar uma troca ou devolução" },
-  crediario: { curto: "Crediário",           longo: "Parcelar a venda no crediário" },
   leitor:    { curto: "Digitar código",      longo: "Digitar um código de barras à mão (o leitor USB/Bluetooth continua ativo)" },
   mais:      { curto: "Mais…",               longo: "Mais ações do caixa: cupom e troca ou devolução" },
 } as const;
@@ -543,28 +543,6 @@ export function ActTroca({ onOpen }: { onOpen: () => void }) {
       atalho="F5"
       onClick={onOpen}
       a11y={a11yDoBotao(ACT_LABELS.troca.longo, "F5")}
-    />
-  );
-}
-
-// ═══════════ 5) Crediário parcelado ═══════════
-export function ActCrediario({ onOpen, hasCustomer = false }: { onOpen: () => void; hasCustomer?: boolean }) {
-  useEffect(() => {
-    if (!IS_WEB) return;
-    function handler(e: KeyboardEvent) {
-      if (e.key === "F6") { e.preventDefault(); onOpen(); }
-    }
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onOpen]);
-
-  return (
-    <ActBtn
-      rotulo={ACT_LABELS.crediario.curto}
-      atalho="F6"
-      ativo={hasCustomer}
-      onClick={onOpen}
-      a11y={a11yDoBotao(ACT_LABELS.crediario.longo, "F6", hasCustomer ? "cliente selecionado" : null)}
     />
   );
 }

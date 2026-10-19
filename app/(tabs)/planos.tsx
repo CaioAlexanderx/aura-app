@@ -50,7 +50,7 @@ const PLANS = [
       "Atribuicao de vendas por vendedor no caixa",
       // Financeiro
       "Financeiro completo (contas a pagar e receber)",
-      "Conciliação bancaria (OFX)",
+      "Conciliação bancária (OFX)",
       "DRE básica e categorização automática",
       "Lancamentos recorrentes",
       "Recebimento por Pix com QR Code",
@@ -196,7 +196,7 @@ export default function PlanosScreen() {
       <Text style={s.title}>Planos da Aura.</Text>
       <Text style={s.subtitle}>Escolha o plano ideal para o seu negócio</Text>
 
-      {trialActive && <View style={s.trialBanner}><Text style={s.trialText}>Periodo de teste - {trialDays} dias restantes</Text></View>}
+      {trialActive && <View style={s.trialBanner}><Text style={s.trialText}>Período de teste - {trialDays} dias restantes</Text></View>}
 
       {billingStatus && !trialActive && billingStatus.billing_status !== "inactive" && (
         <View style={s.statusBanner}><Text style={s.statusText}>Plano {billingStatus.plan} - {billingStatus.billing_status === "active" ? "Ativo" : billingStatus.billing_status}</Text></View>
