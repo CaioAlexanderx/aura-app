@@ -42,7 +42,7 @@ import { router, useLocalSearchParams } from "expo-router";
 // 19/10/2026 (tq-31): o Continuar do check-in e o "Fazer a primeira venda"
 // chegam com ?novo=produto (abre o Novo item) e, no caminho da primeira
 // venda, &depois=pdv (fechar depois de salvar leva ao Caixa).
-import { depoisVaiAoCaixa, querNovoProduto, ROTA_CAIXA } from "@/utils/checkinDestino";
+import { depoisVaiAoCaixa, querImportarPlanilha, querNovoProduto, ROTA_CAIXA, TEXTO_CONVITE_PLANILHA } from "@/utils/checkinDestino";
 import { temProdutoQueryKey } from "@/hooks/useTemProduto";
 import { Icon } from "@/components/Icon";
 import { productLinksApi, type AggregatedProduct } from "@/services/productLinks";
@@ -477,9 +477,17 @@ export default function EstoqueScreen() {
   // abre, fecha e recarrega o que depende da lista.
   // ?novo=produto: abre o cadastro uma vez por chegada. `depois=pdv` vale só
   // para esse cadastro: fechar sem salvar fica no Estoque.
-  const params = useLocalSearchParams<{ novo?: string; depois?: string }>();
+  const params = useLocalSearchParams<{ novo?: string; depois?: string; importar?: string }>();
   const caixaDepoisRef = useRef(false);
   const salvouRef = useRef(false);
+  // ?importar=planilha: convite no fluxo para escolher a planilha.
+  const [convitePlanilha, setConvitePlanilha] = useState(false);
+  useEffect(() => {
+    if (!querImportarPlanilha(params.importar) || consolidatedView) return;
+    setConvitePlanilha(true);
+    try { router.setParams({ importar: undefined } as any); } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.importar]);
   useEffect(() => {
     if (!querNovoProduto(params.novo) || consolidatedView) return;
     caixaDepoisRef.current = depoisVaiAoCaixa(params.depois);
@@ -699,6 +707,31 @@ export default function EstoqueScreen() {
             <View style={s.headerActions}>
               {ActionButtons()}
             </View>
+          </View>
+        )}
+
+        {/* 19/10/2026 (tq-31): quem respondeu "planilha" no check-in chega
+            com ?importar=planilha. O seletor de arquivo do navegador só abre
+            com um toque da pessoa, então a tela mostra o convite no fluxo,
+            com o mesmo "Escolher planilha" da importação de sempre. */}
+        {convitePlanilha && !importPlanilha.aberto && (
+          <View style={s.convitePlanilha} testID="estoque-convite-planilha">
+            <View style={s.emptyImportIcon}><Icon name="upload" size={18} color={Colors.violet3} /></View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={s.emptyImportTitle}>{TEXTO_CONVITE_PLANILHA.titulo}</Text>
+              <Text style={s.emptyImportDesc}>{TEXTO_CONVITE_PLANILHA.sub}</Text>
+            </View>
+            <Pressable
+              onPress={importPlanilha.escolherArquivo}
+              disabled={importPlanilha.ocupado}
+              style={[s.batchBtnSmall, importPlanilha.ocupado && { opacity: 0.6 }]}
+              testID="estoque-convite-planilha-escolher"
+            >
+              <Text style={s.batchBtnSmallText}>Escolher planilha</Text>
+            </Pressable>
+            <Pressable onPress={() => setConvitePlanilha(false)} style={{ padding: 8 }} testID="estoque-convite-planilha-fechar">
+              <Text style={[s.emptyImportDesc, { textDecorationLine: "underline" }]}>Agora não</Text>
+            </Pressable>
           </View>
         )}
 
@@ -1063,6 +1096,7 @@ const s = StyleSheet.create({
   },
   listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
   emptyImport: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, marginTop: 12 },
+  convitePlanilha: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12, backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border2, marginBottom: 16 },
   emptyImportIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
   emptyImportTitle: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
   emptyImportDesc: { fontSize: 11, color: Colors.ink3, marginTop: 2 },

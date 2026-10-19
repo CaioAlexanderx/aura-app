@@ -16,10 +16,12 @@ import { AURA_WHATSAPP_NUMERO } from "@/constants/suporteAura";
 import { PERGUNTAS_CHECKIN } from "@/constants/checkin";
 import {
   ROTA_CAIXA, ROTA_CANAL, ROTA_CERTIFICADO, ROTA_NOVO_FIADO, ROTA_NOVO_PRODUTO, ROTA_NOVO_PRODUTO_E_CAIXA,
-  ROTA_PAINEL, ROTA_REATIVACAO,
-  depoisVaiAoCaixa, destinoDaPrimeiraVenda, destinoDoCheckin, destinoDoEstoqueMedio, mensagemImportacaoAssistida,
-  querAbaCertificado, querNovoFiado, querNovoProduto, temProdutoNaResposta,
+  ROTA_PAINEL, ROTA_REATIVACAO, ROTA_IMPORTAR_PLANILHA,
+  caminhoDoEstoque, depoisVaiAoCaixa, destinoDaPrimeiraVenda, destinoDoCheckin, destinoDoEstoqueMedio,
+  mensagemImportacaoAssistida, querAbaCertificado, querImportarPlanilha, querNovoFiado, querNovoProduto,
+  temProdutoNaResposta,
 } from "@/utils/checkinDestino";
+import { abrirCom } from "@/utils/checkinRegras";
 
 const raiz = (p: string) => fs.readFileSync(path.join(__dirname, "..", p), "utf8");
 
@@ -35,6 +37,10 @@ describe("uma linha por resposta (plano Negócio, loja sem produto)", () => {
     ["Organizar meu estoque, até 50", { comeco: "estoque", produtos_faixa: "ate_50" }, ROTA_NOVO_PRODUTO, "cadastro_um_por_um"],
     ["Organizar meu estoque, 51 a 300", { comeco: "estoque", produtos_faixa: "de_51_a_300" }, ROTA_NOVO_PRODUTO, "cadastro_um_por_um"],
     ["Organizar meu estoque, Caderno", { comeco: "estoque", onde_anota: "caderno" }, ROTA_NOVO_PRODUTO, "cadastro_um_por_um"],
+    ["Organizar meu estoque, Ainda não anoto", { comeco: "estoque", onde_anota: "nao_anoto" }, ROTA_NOVO_PRODUTO, "cadastro_um_por_um"],
+    ["Organizar meu estoque, Planilha até 300", { comeco: "estoque", onde_anota: "planilha", produtos_faixa: "de_51_a_300" }, ROTA_IMPORTAR_PLANILHA, "importar_planilha"],
+    ["Organizar meu estoque, Planilha sem faixa", { comeco: "estoque", onde_anota: "planilha" }, ROTA_IMPORTAR_PLANILHA, "importar_planilha"],
+    ["Organizar meu estoque, Planilha com mais de 300", { comeco: "estoque", onde_anota: "planilha", produtos_faixa: "de_301_a_1000" }, ROTA_NOVO_PRODUTO, "importacao_assistida"],
     ["Organizar meu estoque, 301 a 1.000", { comeco: "estoque", produtos_faixa: "de_301_a_1000" }, ROTA_NOVO_PRODUTO, "importacao_assistida"],
     ["Organizar meu estoque, mais de 1.000", { comeco: "estoque", produtos_faixa: "mais_de_1000" }, ROTA_NOVO_PRODUTO, "importacao_assistida"],
     ["Organizar meu estoque, Outro sistema", { comeco: "estoque", onde_anota: "outro_sistema" }, ROTA_NOVO_PRODUTO, "importacao_assistida"],
@@ -66,11 +72,30 @@ describe("regras de cada linha", () => {
     expect(d.motivo).toBe("importacao_assistida");
   });
 
-  test("51 a 300 e Caderno passam pela função do tq-34 (hoje, o um por um)", () => {
+  test("51 a 300, Caderno e Ainda não anoto passam pela função do tq-34 (hoje, o um por um)", () => {
     expect(destinoDoEstoqueMedio()).toEqual({ rota: ROTA_NOVO_PRODUTO, motivo: "cadastro_um_por_um" });
+    expect(caminhoDoEstoque({ produtos_faixa: "de_51_a_300" })).toBe("medio");
+    expect(caminhoDoEstoque({ onde_anota: "caderno" })).toBe("medio");
+    expect(caminhoDoEstoque({ onde_anota: "nao_anoto" })).toBe("medio");
     const src = raiz("utils/checkinDestino.ts");
     expect(src).toContain("TODO(tq-34)");
-    expect(src).toMatch(/faixa === "de_51_a_300" \|\| anota === "caderno"\) return destinoDoEstoqueMedio\(\)/);
+    expect(src).toMatch(/case "medio":\s*return destinoDoEstoqueMedio\(\);/);
+  });
+
+  test("o texto do 'Vamos abrir com' segue o mesmo caminho do destino", () => {
+    const casos: any[] = [
+      [{ comeco: "estoque", onde_anota: "planilha" }, "Importar sua planilha", "importar_planilha"],
+      [{ comeco: "estoque", onde_anota: "outro_sistema" }, "Trazer seus produtos com a nossa ajuda", "importacao_assistida"],
+      [{ comeco: "estoque", onde_anota: "caderno" }, "Cadastrar seus primeiros produtos", "cadastro_um_por_um"],
+      [{ comeco: "caixa" }, "Cadastrar um produto e fazer a primeira venda", "primeiro_produto_e_caixa"],
+      [{ comeco: "outra" }, "Ver o seu Painel", "painel"],
+    ];
+    for (const [r, titulo, motivo] of casos) {
+      expect(abrirCom(r, { temProduto: false })?.titulo).toBe(titulo);
+      expect(destinoDoCheckin(r, ctx()).motivo).toBe(motivo);
+    }
+    expect(abrirCom({ comeco: "caixa" }, { temProduto: true })?.titulo).toBe("Fazer a primeira venda no Caixa");
+    expect(destinoDoCheckin({ comeco: "caixa" }, ctx({ temProduto: true })).rota).toBe(ROTA_CAIXA);
   });
 
   test("importação assistida: wa.me da Aura com a mensagem pronta (mesmo número do app#1092)", () => {
@@ -144,6 +169,16 @@ describe("parâmetros nas telas de destino", () => {
     expect(querNovoFiado("undefined")).toBe(false);
     expect(querAbaCertificado("certificado")).toBe(true);
     expect(querAbaCertificado("0")).toBe(false);
+    expect(querImportarPlanilha("planilha")).toBe(true);
+    expect(querImportarPlanilha("undefined")).toBe(false);
+  });
+
+  test("Estoque mostra o convite da planilha com ?importar=planilha (o seletor abre no toque)", () => {
+    const src = raiz("app/(tabs)/estoque.tsx");
+    expect(src).toContain("querImportarPlanilha(params.importar)");
+    expect(src).toContain("setConvitePlanilha(true);");
+    expect(src).toMatch(/testID="estoque-convite-planilha-escolher"/);
+    expect(src).toMatch(/onPress=\{importPlanilha\.escolherArquivo\}[\s\S]{0,200}estoque-convite-planilha-escolher/);
   });
 
   test("Estoque abre o Novo item com ?novo=produto e só vai ao Caixa depois de salvar", () => {
