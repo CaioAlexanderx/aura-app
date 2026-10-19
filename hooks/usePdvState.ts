@@ -68,6 +68,7 @@ import { useCategories } from "@/hooks/useCategories";
 import { expandirComDescendentes } from "@/utils/categoryFilter";
 import { falhaDeConexao } from "@/utils/leituraRapida";
 import { lerCodigoDoVale } from "@/utils/valeTroca";
+import { temVarianteAtiva } from "@/utils/varianteAtivaNoBipe";
 import { useGlobalBarcodeScanner } from "@/hooks/useGlobalBarcodeScanner";
 import { useViewport, productColumnsFor, cartWidthFor } from "@/hooks/useViewport";
 import { useCaixa } from "@/hooks/useCaixa";
@@ -616,6 +617,14 @@ export function usePdvState() {
           cardPrice: parseCardPrice((result.product as any).card_price),
           refPrice: parseFloat((result.product as any).price) || undefined,
         };
+        // 19/10/2026 (tq-30): pai com tamanho ativo não entra sem tamanho.
+        // Abre o seletor como no bipe local: o código vai como preselect
+        // (tamanho com esse código vem marcado; código só do pai, nada).
+        if (await temVarianteAtiva(company.id, result.product)) {
+          setPendingBipe({ code: cleaned });
+          setPendingProduct(bp);
+          return true;
+        }
         addToCart(bp);
         toast.success(bp.name);
         return true;
