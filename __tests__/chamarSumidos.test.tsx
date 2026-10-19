@@ -271,6 +271,34 @@ describe("tela do Essencial", () => {
     expect(textoTudo(t)).not.toContain("chamado em ");
     t.unmount();
   });
+
+  // Plano velho no login: o JWT diz "negócio", a empresa é Essencial. O
+  // backend responde 403 e a tela NÃO mostra caixa de plano com "Ver
+  // planos": cai na mesma tela que o Essencial vê (premissa de 16/09).
+  test("Negócio com 403 da Meta (plano velho no login) cai no ChamarSumidos, sem caixa de plano", async () => {
+    mockPlano = "negocio";
+    mockMetaGet.mockRejectedValueOnce({ status: 403 } as any);
+    let t: any;
+    await act(async () => { t = renderer.create(<ReativacaoScreen />); });
+    expect(mockMetaGet).toHaveBeenCalled();
+    expect(achar(t, "reativacao-essencial").length).toBeGreaterThan(0);
+    expect(achar(t, "reativacao-sem-plano").length).toBe(0);
+    const tudo = textoTudo(t);
+    expect(tudo).not.toContain("Disponível no plano Negócio");
+    expect(tudo).not.toContain("Ver planos");
+    // E a lista de quem sumiu está lá, com o toque "Chamar".
+    expect(tudo).toContain("Ana Souza");
+    t.unmount();
+  });
+
+  test("outro erro da Meta (não 403) segue na tela da Meta, sem virar ChamarSumidos", async () => {
+    mockPlano = "negocio";
+    mockMetaGet.mockRejectedValueOnce({ status: 500, message: "falhou" } as any);
+    let t: any;
+    await act(async () => { t = renderer.create(<ReativacaoScreen />); });
+    expect(achar(t, "reativacao-essencial").length).toBe(0);
+    t.unmount();
+  });
 });
 
 describe("fonte", () => {
@@ -278,5 +306,8 @@ describe("fonte", () => {
     const src = fs.readFileSync(path.join(__dirname, "..", "app/(tabs)/clientes/reativacao.tsx"), "utf8");
     expect(src).toContain("return <ChamarSumidos />");
     expect(src.indexOf("function ReativacaoMeta")).toBeGreaterThan(src.indexOf("export default function ReativacaoScreen"));
+    // O 403 devolve a mesma tela; a caixa "Disponível no plano Negócio" saiu.
+    expect(src).toContain("if (semAcesso) return <ChamarSumidos />");
+    expect(src).not.toContain("reativacao-sem-plano");
   });
 });
