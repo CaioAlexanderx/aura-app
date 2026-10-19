@@ -1,0 +1,41 @@
+name: Testes (jest)
+
+# Roda a suíte jest inteira em todo PR para a main e em todo push na main.
+# Até aqui o único check do repositório era o "no-base64 / parse"; todo
+# "testes passando" vinha do clone de quem escreveu a mudança (tq-37).
+#
+# O job reprova quando QUALQUER teste falha. Suítes que já falhavam na main
+# quando este workflow nasceu ficam isoladas, uma a uma e com motivo, em
+# testPathIgnorePatterns do jest.config.js (nada some sem aparecer lá).
+#
+# Não roda tsc: o projeto tem erros de tipo antigos. Um check de "não pode
+# subir" fica para depois (ver a descrição do PR que criou este arquivo).
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: jest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  jest:
+    name: jest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci --no-audit --no-fund
+
+      - name: Rodar a suíte
+        run: npx jest --maxWorkers=2 --ci
