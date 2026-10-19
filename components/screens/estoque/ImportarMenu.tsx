@@ -31,6 +31,7 @@ import { View, Text, Pressable, StyleSheet, Platform, ActivityIndicator } from "
 import { Colors, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { WebPortal } from "@/components/WebPortal";
+import { propsDoModelo, TEXTO_BAIXAR_MODELO } from "./BaixarModelo";
 
 type Props = {
   onNota: () => void;
@@ -49,6 +50,10 @@ export const OPCOES_IMPORTAR = {
   planilha: {
     titulo: "Planilha (Excel ou CSV)",
     texto: "Cadastra vários produtos de uma vez",
+  },
+  modelo: {
+    titulo: TEXTO_BAIXAR_MODELO,
+    texto: "Planilha pronta, com as colunas que a importação entende",
   },
 } as const;
 
@@ -138,6 +143,17 @@ export function ImportarMenu({ onNota, onPlanilha, ocupado, compacto }: Props) {
           onPress={() => escolher(onPlanilha)}
           desabilitada={ocupado}
         />
+        <View style={s.divisor} />
+        {/* tq-36: é um link de download de verdade (<a href download> no web). O menu fecha
+            um instante depois do toque, para o navegador começar o download antes do <a>
+            sair da tela. */}
+        <Opcao
+          testID="importar-opcao-modelo"
+          icone="download"
+          titulo={OPCOES_IMPORTAR.modelo.titulo}
+          texto={OPCOES_IMPORTAR.modelo.texto}
+          link={propsDoModelo(() => { setTimeout(() => setAberto(false), 250); })}
+        />
       </View>
     </View>
   );
@@ -162,16 +178,19 @@ export function ImportarMenu({ onNota, onPlanilha, ocupado, compacto }: Props) {
   );
 }
 
-function Opcao({ icone, titulo, texto, onPress, desabilitada, testID }: {
-  icone: string; titulo: string; texto: string; onPress: () => void; desabilitada?: boolean; testID: string;
+function Opcao({ icone, titulo, texto, onPress, desabilitada, testID, link }: {
+  icone: string; titulo: string; texto: string; onPress?: () => void; desabilitada?: boolean; testID: string;
+  /** Props de link (href/download no web, Linking no nativo) no lugar do onPress. */
+  link?: Record<string, unknown>;
 }) {
   return (
     <Pressable
-      onPress={desabilitada ? undefined : onPress}
+      {...(link as any)}
+      {...(link ? {} : { onPress: desabilitada ? undefined : onPress })}
       disabled={desabilitada}
       style={({ pressed }: any) => [s.opcao, pressed && s.opcaoPress, desabilitada && { opacity: 0.5 }]}
       testID={testID}
-      accessibilityRole={"menuitem" as any}
+      accessibilityRole={(link ? (link as any).accessibilityRole : "menuitem") as any}
     >
       <View style={s.opcaoIco}><Icon name={icone} size={16} color={Colors.violet3} /></View>
       <View style={{ flex: 1, minWidth: 0 }}>
