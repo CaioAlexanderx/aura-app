@@ -151,6 +151,13 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   // acabou de se cadastrar. O backend (services/modules.js) ainda NAO conhece
   // a chave (mesmo caso de 'onboarding.checkin').
   'onboarding.configurar_juntos': 'essencial',
+  // 19/10/2026 -- "Como voce quer trazer seus produtos?" (app/trazer-produtos.tsx,
+  // card tq-34): Um por um, Quero ajuda e Planilha, para onde o check-in leva
+  // quem tem de 51 a 300 produtos ou anota no caderno. Tela cheia sem item de
+  // menu (como 'onboarding.checkin'): chave PROPRIA (regra 3). Essencial. O
+  // backend (services/modules.js) ainda NAO conhece a chave (mesmo caso de
+  // 'onboarding.checkin').
+  'onboarding.trazer_produtos': 'essencial',
 };
 var PLAN_LEVEL: Record<string, number> = { essencial: 0, negocio: 1, expansao: 2 };
 
@@ -190,7 +197,10 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   // (dono/admin), como os primeiros passos: vendedora/caixa nao e perguntada.
   // 18/10/2026 -- a oferta de configurar junto acompanha quem monta a loja
   // (dono/admin), como os primeiros passos e o check-in.
-  configuracoes: ['configuracoes', 'onboarding.primeiros_passos', 'onboarding.checkin', 'onboarding.configurar_juntos', 'black_friday'],
+  // 19/10/2026 -- "Como voce quer trazer seus produtos?" (tq-34) e a
+  // continuacao do check-in: acompanha quem monta a loja, como ele. A tela
+  // ainda exige o modulo 'estoque' (os tres destinos sao do Estoque).
+  configuracoes: ['configuracoes', 'onboarding.primeiros_passos', 'onboarding.checkin', 'onboarding.configurar_juntos', 'black_friday', 'onboarding.trazer_produtos'],
   // 15/05/2026 -- agentes adicionado; sem isso nao-owners nunca veiam mesmo com plano Expansao.
   // 30/08/2026 -- hub_social entra na mesma permissao: quem atende (agentes)
   // ve o hub. Granularidade propria fica pra quando o produto pedir.

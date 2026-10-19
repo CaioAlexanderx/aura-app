@@ -13,9 +13,8 @@
 //                         → importação assistida (wa.me da Aura) + cadastro
 //     planilha com até 300 → convite "Importar sua planilha" no Estoque
 //     51 a 300 (de_51_a_300), caderno ou nao_anoto
-//                         → destinoDoEstoqueMedio() — hoje o "um por um";
-//                           o tq-34 troca pela tela "Como você quer trazer
-//                           seus produtos?"
+//                         → destinoDoEstoqueMedio(): a tela "Como você quer
+//                           trazer seus produtos?" (tq-34, /trazer-produtos)
 //     até 50 e o resto    → cadastro "um por um" (modal Novo item do Estoque)
 //   (caminhoDoEstoque decide; o texto do "Vamos abrir com" usa a mesma regra)
 //   comeco = fiado        → Novo lançamento do crediário (plano libera)
@@ -34,6 +33,7 @@
 // ============================================================
 import type { CheckinRespostas } from "@/services/checkinApi";
 import { waAura } from "@/constants/suporteAura";
+import { MOD_TRAZER_PRODUTOS, ROTA_TRAZER_PRODUTOS } from "@/constants/trazerProdutos";
 
 export const ROTA_PAINEL = "/(tabs)";
 export const ROTA_CAIXA = "/pdv";
@@ -81,15 +81,16 @@ export function destinoDaPrimeiraVenda(ctx: ContextoDoDestino): DestinoCheckin {
 }
 
 /**
- * 51 a 300 produtos, "Caderno" ou "Ainda não anoto".
- * TODO(tq-34): trocar pela tela "Como você quer trazer seus produtos?"
- * (Um por um · Quero ajuda · Planilha). Até lá, o mesmo do "até 50".
- * Junto, o "Vamos abrir com" troca para TEXTO_ESTOQUE_MEDIO_TQ34
- * (utils/checkinRegras.ts): "Trazer seus produtos do seu jeito" /
- * "Um por um, por planilha ou com a nossa ajuda.".
+ * 51 a 300 produtos, "Caderno" ou "Ainda não anoto": a tela "Como você quer
+ * trazer seus produtos?" (Um por um · Quero ajuda · Planilha), card tq-34.
+ * O "Vamos abrir com" mostra TEXTO_ESTOQUE_MEDIO_TQ34 (utils/checkinRegras.ts):
+ * "Trazer seus produtos do seu jeito" / "Um por um, por planilha ou com a
+ * nossa ajuda.". Com a chave da tela escondida (override ou permissão), o
+ * "um por um" de antes.
  */
-export function destinoDoEstoqueMedio(): DestinoCheckin {
-  return { rota: ROTA_NOVO_PRODUTO, motivo: "cadastro_um_por_um" };
+export function destinoDoEstoqueMedio(ctx: ContextoDoDestino): DestinoCheckin {
+  if (!ctx.modulos.has(MOD_TRAZER_PRODUTOS)) return { rota: ROTA_NOVO_PRODUTO, motivo: "cadastro_um_por_um" };
+  return { rota: ROTA_TRAZER_PRODUTOS, motivo: "trazer_produtos" };
 }
 
 /** Texto pronto da importação assistida. Sem nome da loja, "minha loja". */
@@ -112,7 +113,7 @@ export function mensagemImportacaoAssistida(
  *   assistida  mais de 300 produtos ou "Outro sistema" (o maior vence:
  *              "Caderno" com mais de 1.000 é assistida)
  *   planilha   "Planilha" com até 300 produtos (ou sem faixa)
- *   medio      "Caderno", "Ainda não anoto" ou 51 a 300 — TODO(tq-34)
+ *   medio      "Caderno", "Ainda não anoto" ou 51 a 300 (tela do tq-34)
  *   um_por_um  o resto (até 50, ou só "Organizar meu estoque")
  */
 export type CaminhoDoEstoque = "assistida" | "planilha" | "medio" | "um_por_um";
@@ -148,7 +149,7 @@ function destinoDoEstoque(respostas: CheckinRespostas, ctx: ContextoDoDestino): 
     case "planilha":
       return { rota: ROTA_IMPORTAR_PLANILHA, motivo: "importar_planilha" };
     case "medio":
-      return destinoDoEstoqueMedio();
+      return destinoDoEstoqueMedio(ctx);
     default:
       return { rota: ROTA_NOVO_PRODUTO, motivo: "cadastro_um_por_um" };
   }
