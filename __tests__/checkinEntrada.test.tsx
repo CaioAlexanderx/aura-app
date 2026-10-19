@@ -52,6 +52,14 @@ jest.mock("@/services/checkinApi", () => {
   };
 });
 
+// 19/10/2026 (tq-31): a loja já tem produto? (destino do "Vender no caixa")
+let mockTemProduto: boolean | null = false;
+jest.mock("@/hooks/useTemProduto", () => ({
+  temProdutoQueryKey: (cid: any) => ["tem-produto", cid || null],
+  useTemProduto: () => ({ data: mockTemProduto }),
+  garantirTemProduto: () => Promise.resolve(mockTemProduto),
+}));
+
 import { CheckinEntrada } from "@/components/onboarding/CheckinEntrada";
 import { useCheckinGate, __zerarCheckinDaSessao } from "@/hooks/useCheckin";
 import { MOD_CHECKIN, PERGUNTAS_CHECKIN, MAX_RESPOSTA } from "@/constants/checkin";
@@ -59,6 +67,7 @@ import { computeVisibleModules, MODULE_PLAN_MAP, PERM_TO_MODULES } from "@/hooks
 import {
   abrirCom, corpoCompleto, corpoDaResposta, corpoDoPular, deveMostrarCheckin, lerCheckin,
   opcoesVisiveis, quantasRespostas, type ContextoDoCheckin,
+  TEXTOS_ABRIR_COM, TEXTO_ESTOQUE_MEDIO_TQ34,
 } from "@/utils/checkinRegras";
 
 const raiz = (p: string) => fs.readFileSync(path.join(__dirname, "..", p), "utf8");
@@ -176,24 +185,75 @@ describe("abrirCom", () => {
     expect(abrirCom({})).toBeNull();
   });
 
-  test("estoque + planilha grande: importar a planilha, com a razão", () => {
-    const a = abrirCom({ comeco: "estoque", onde_anota: "planilha", produtos_faixa: "de_301_a_1000" });
-    expect(a?.titulo).toBe("Importar sua planilha");
-    expect(a?.sub).toBe("Com 301 a 1.000 produtos, a planilha é o caminho mais rápido.");
+  // 19/10/2026 (tq-31): textos decididos pela Nina, alinhados ao destino.
+  const ab = (r: any, o: any = {}) => abrirCom(r, o);
+
+  test("Vender no caixa, sem produto (modo primeira venda e modo fixo)", () => {
+    expect(ab({ comeco: "caixa" }, { testeComecaNaVenda: true, temProduto: false })).toEqual({
+      titulo: "Cadastrar um produto e fazer a primeira venda",
+      sub: "Nome e preço bastam. Sua primeira venda também começa o seu teste.",
+    });
+    expect(ab({ comeco: "caixa" }, { temProduto: false })).toEqual({
+      titulo: "Cadastrar um produto e fazer a primeira venda", sub: "Nome e preço bastam.",
+    });
+    // sem saber se tem produto: o destino é o cadastro, o texto também
+    expect(ab({ comeco: "caixa" }, { testeComecaNaVenda: true })?.titulo).toBe("Cadastrar um produto e fazer a primeira venda");
   });
 
-  test("estoque + caderno: os 5 primeiros produtos", () => {
-    expect(abrirCom({ comeco: "estoque", onde_anota: "caderno" })?.titulo).toBe("Cadastrar seus 5 primeiros produtos");
+  test("Vender no caixa, com produto", () => {
+    expect(ab({ comeco: "caixa" }, { testeComecaNaVenda: true, temProduto: true })).toEqual({
+      titulo: "Fazer a primeira venda no Caixa", sub: "Sua primeira venda também começa o seu teste.",
+    });
+    // modo fixo: o teste não começa na venda, então sem subtítulo
+    expect(ab({ comeco: "caixa" }, { temProduto: true })).toEqual({ titulo: "Fazer a primeira venda no Caixa", sub: "" });
   });
 
-  test("caixa: a frase do teste só vale para conta em modo primeira venda", () => {
-    expect(abrirCom({ comeco: "caixa" }, { testeComecaNaVenda: true })?.sub)
-      .toBe("Com um produto de teste. Sua primeira venda também começa o seu teste.");
-    expect(abrirCom({ comeco: "caixa" })?.sub).toBe("Com um produto de teste.");
+  test("fiado, loja online e sumidos: sem mudança", () => {
+    expect(ab({ comeco: "fiado" })).toEqual({ titulo: "Cadastrar um cliente e lançar o primeiro fiado", sub: "Leva uns 2 minutos." });
+    expect(ab({ comeco: "loja_online" })).toEqual({ titulo: "Montar sua loja online", sub: "Os produtos que você cadastrar já aparecem nela." });
+    expect(ab({ comeco: "sumidos" })).toEqual({
+      titulo: "Trazer sua lista de clientes", sub: "Depois você vê quem não volta há 60 dias e chama com um toque.",
+    });
   });
 
-  test("só respondeu as outras: ainda abre com algo", () => {
-    expect(abrirCom({ produtos_faixa: "ate_50" })?.titulo).toBe("Cadastrar seus produtos");
+  test("nota fiscal e outra coisa", () => {
+    expect(ab({ comeco: "nota_fiscal" })).toEqual({
+      titulo: "Configurar a nota fiscal", sub: "Você cadastra o certificado ou a Aura ajuda pelo WhatsApp.",
+    });
+    expect(ab({ comeco: "outra" })).toEqual({ titulo: "Ver o seu Painel", sub: "De lá você faz a primeira venda quando quiser." });
+  });
+
+  test("estoque com planilha até 300: importar a planilha", () => {
+    const esperado = { titulo: "Importar sua planilha", sub: "Você confere tudo antes de gravar." };
+    expect(ab({ comeco: "estoque", onde_anota: "planilha" })).toEqual(esperado);
+    expect(ab({ comeco: "estoque", onde_anota: "planilha", produtos_faixa: "ate_50" })).toEqual(esperado);
+    expect(ab({ comeco: "estoque", onde_anota: "planilha", produtos_faixa: "de_51_a_300" })).toEqual(esperado);
+  });
+
+  test("estoque com mais de 300 ou outro sistema: com a nossa ajuda", () => {
+    const esperado = {
+      titulo: "Trazer seus produtos com a nossa ajuda",
+      sub: "Você manda a planilha ou o arquivo do outro sistema pelo WhatsApp. Costuma levar de uma hora a um dia.",
+    };
+    expect(ab({ comeco: "estoque", onde_anota: "planilha", produtos_faixa: "de_301_a_1000" })).toEqual(esperado);
+    expect(ab({ comeco: "estoque", produtos_faixa: "mais_de_1000" })).toEqual(esperado);
+    expect(ab({ comeco: "estoque", onde_anota: "outro_sistema" })).toEqual(esperado);
+  });
+
+  test("caderno, ainda não anoto ou 51 a 300 (até o tq-34): os primeiros produtos", () => {
+    const esperado = { titulo: "Cadastrar seus primeiros produtos", sub: "Nome e preço bastam. Os outros você traz depois." };
+    expect(ab({ comeco: "estoque", onde_anota: "caderno" })).toEqual(esperado);
+    expect(ab({ comeco: "estoque", onde_anota: "nao_anoto" })).toEqual(esperado);
+    expect(ab({ comeco: "estoque", produtos_faixa: "de_51_a_300" })).toEqual(esperado);
+    expect(ab({ produtos_faixa: "ate_50" })).toEqual(esperado);
+    expect(TEXTO_ESTOQUE_MEDIO_TQ34).toEqual({
+      titulo: "Trazer seus produtos do seu jeito", sub: "Um por um, por planilha ou com a nossa ajuda.",
+    });
+  });
+
+  test("nenhum texto cita produto de teste nem o teto de 15 dias", () => {
+    const todos = JSON.stringify(TEXTOS_ABRIR_COM) + JSON.stringify(TEXTO_ESTOQUE_MEDIO_TQ34);
+    expect(todos).not.toMatch(/produto de teste|15 dias|teto/i);
   });
 });
 
@@ -224,6 +284,7 @@ function renderComClient(el: React.ReactElement) {
 function resetar() {
   mockReplace.mockReset(); mockGet.mockReset(); mockPut.mockReset();
   mockPut.mockResolvedValue({ ok: true });
+  mockTemProduto = false;
   __zerarCheckinDaSessao();
   mockAuth = {
     token: "t", isStaff: false, isDemo: false, consolidatedView: false,
@@ -290,13 +351,102 @@ describe("a tela", () => {
     tree.unmount();
   });
 
-  test("Continuar segue para o Painel e não repete a tela", async () => {
+  // 19/10/2026 (tq-31): o Continuar leva à tela da resposta.
+  async function continuarCom(chips: string[]) {
+    const m = await montar(<CheckinEntrada />);
+    for (const id of chips) await act(async () => { achar(m.tree, id)[0].props.onPress(); });
+    await act(async () => { await achar(m.tree, "checkin-continuar")[0].props.onPress(); });
+    for (let i = 0; i < 4; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    return m;
+  }
+
+  test("Continuar com 'Outra coisa' segue para o Painel e não repete a tela", async () => {
     mockGet.mockResolvedValue(HABILITADO);
-    const { tree, client } = await montar(<CheckinEntrada />);
-    await act(async () => { achar(tree, "checkin-chip-comeco-caixa")[0].props.onPress(); });
-    await act(async () => { achar(tree, "checkin-continuar")[0].props.onPress(); });
+    const { tree, client } = await continuarCom(["checkin-chip-comeco-outra"]);
+    expect(mockReplace).toHaveBeenCalledTimes(1);
     expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
     expect((client.getQueryData(["checkin", "loja-1"]) as any).respondido).toBe(true);
+    tree.unmount();
+  });
+
+  test("Continuar com 'Vender no caixa', sem produto: cadastro do primeiro produto e depois o Caixa", async () => {
+    mockGet.mockResolvedValue(HABILITADO);
+    const { tree } = await continuarCom(["checkin-chip-comeco-caixa"]);
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+    expect(mockReplace).toHaveBeenCalledWith("/estoque?novo=produto&depois=pdv");
+    tree.unmount();
+  });
+
+  test("Continuar com 'Vender no caixa', com produto: direto ao Caixa", async () => {
+    mockGet.mockResolvedValue(HABILITADO);
+    mockTemProduto = true;
+    const { tree } = await continuarCom(["checkin-chip-comeco-caixa"]);
+    expect(mockReplace).toHaveBeenCalledWith("/pdv");
+    tree.unmount();
+  });
+
+  test("Continuar com estoque grande: abre o WhatsApp da Aura no mesmo toque e o cadastro", async () => {
+    mockGet.mockResolvedValue(HABILITADO);
+    const abrir = jest.spyOn(window, "open").mockImplementation(() => null);
+    const { tree } = await continuarCom([
+      "checkin-chip-comeco-estoque", "checkin-chip-onde_anota-outro_sistema", "checkin-chip-produtos_faixa-mais_de_1000",
+    ]);
+    expect(abrir).toHaveBeenCalledTimes(1);
+    expect(String(abrir.mock.calls[0][0])).toMatch(/^https:\/\/wa\.me\/5511956305269\?text=/);
+    expect(mockReplace).toHaveBeenCalledWith("/estoque?novo=produto");
+    abrir.mockRestore();
+    tree.unmount();
+  });
+
+  test("Continuar com estoque em planilha (até 300): abre a importação de planilha do Estoque", async () => {
+    mockGet.mockResolvedValue(HABILITADO);
+    const { tree } = await continuarCom([
+      "checkin-chip-comeco-estoque", "checkin-chip-onde_anota-planilha", "checkin-chip-produtos_faixa-de_51_a_300",
+    ]);
+    expect(JSON.stringify(tree.toJSON())).not.toContain("checkin-raiz");
+    expect(mockReplace).toHaveBeenCalledWith("/estoque?importar=planilha");
+    tree.unmount();
+  });
+
+  test("o 'Vamos abrir com' muda com a loja já tendo produto", async () => {
+    mockGet.mockResolvedValue(HABILITADO);
+    mockTemProduto = true;
+    const { tree } = await montar(<CheckinEntrada />);
+    await act(async () => { achar(tree, "checkin-chip-comeco-caixa")[0].props.onPress(); });
+    const json = JSON.stringify(tree.toJSON());
+    expect(json).toContain("Fazer a primeira venda no Caixa");
+    expect(json).toContain("Sua primeira venda também começa o seu teste.");
+    tree.unmount();
+  });
+
+  test("Continuar com 'Emitir nota fiscal': aba Certificado A1", async () => {
+    mockGet.mockResolvedValue(HABILITADO);
+    const { tree } = await continuarCom(["checkin-chip-comeco-nota_fiscal"]);
+    expect(mockReplace).toHaveBeenCalledWith("/nfe?tab=certificado");
+    tree.unmount();
+  });
+
+  test("Continuar com 'Controlar fiado' no Negócio: Novo lançamento do crediário", async () => {
+    mockGet.mockResolvedValue(HABILITADO);
+    mockModulos = new Set(["estoque", "pdv", "nfe", "painel", "crediario", MOD_CHECKIN]);
+    const { tree } = await continuarCom(["checkin-chip-comeco-fiado"]);
+    expect(mockReplace).toHaveBeenCalledWith("/crediario?novo=1");
+    tree.unmount();
+  });
+
+  test("o plano é revalidado no mount e o Continuar espera a revalidação", async () => {
+    mockGet.mockResolvedValue(HABILITADO);
+    let soltar: () => void = () => {};
+    mockAuth.refreshMe = jest.fn(() => new Promise<void>((r) => { soltar = r; }));
+    const { tree } = await montar(<CheckinEntrada />);
+    expect(mockAuth.refreshMe).toHaveBeenCalledTimes(1);
+    await act(async () => { achar(tree, "checkin-chip-comeco-nota_fiscal")[0].props.onPress(); });
+    await act(async () => { achar(tree, "checkin-continuar")[0].props.onPress(); });
+    for (let i = 0; i < 4; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(mockReplace).not.toHaveBeenCalled();
+    await act(async () => { soltar(); });
+    for (let i = 0; i < 4; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(mockReplace).toHaveBeenCalledWith("/nfe?tab=certificado");
     tree.unmount();
   });
 
@@ -318,9 +468,10 @@ describe("a tela", () => {
     await act(async () => { achar(tree, "checkin-chip-comeco-caixa")[0].props.onPress(); });
     await act(async () => { await Promise.resolve(); });
     mockPut.mockResolvedValue({ ok: true });
-    await act(async () => { achar(tree, "checkin-continuar")[0].props.onPress(); });
+    await act(async () => { await achar(tree, "checkin-continuar")[0].props.onPress(); });
+    for (let i = 0; i < 4; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
     expect(mockPut).toHaveBeenLastCalledWith("loja-1", { comeco: "caixa" });
-    expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
+    expect(mockReplace).toHaveBeenCalledWith("/estoque?novo=produto&depois=pdv");
     tree.unmount();
   });
 
