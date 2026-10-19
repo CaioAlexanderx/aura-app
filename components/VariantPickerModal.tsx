@@ -21,6 +21,15 @@
 // PP, P, M, G, GG... e numeros em ordem) em vez da ordem de criacao, e a
 // linha do produto pai ("Sem variante especifica") vai para o fim da lista.
 // Setas, Enter e o tamanho bipado seguem a ordem exibida.
+// 19/10/2026 (INC-2026-10-19-01): a linha do produto pai ("Sem variante
+// especifica") saiu. Vender por ela baixava o estoque do pai e nenhum
+// tamanho, enquanto Caixa, Estoque e Painel mostram a soma das variantes:
+// a peca vendida continuava "disponivel". Regra (Produto, Nina): com pelo
+// menos uma variante ativa, nao ha linha do pai; a lojista escolhe o
+// tamanho. Variante ativa = a mesma lista que o seletor ja exibe
+// (`activeVariants`, is_active !== false). Sem variante ativa o seletor
+// segue como era: "Nenhuma variante ativa encontrada" e nada para escolher
+// (a linha do pai so existia dentro da lista de variantes).
 // ============================================================
 import { useState, useEffect, useRef } from "react";
 import { View, Text, Modal, Pressable, ScrollView, StyleSheet, ActivityIndicator, Platform } from "react-native";
@@ -106,21 +115,6 @@ function getColor(v: any, parentColor?: string): string | null {
   // Fallback to parent color
   if (parentColor) return toHex(parentColor);
   return null;
-}
-
-// Rotulo da opcao "vender o pai diretamente" — preferimos os atributos do
-// proprio pai (cor + tamanho) em vez de um generico "Sem variante específica".
-function buildParentLabel(parentColor?: string, parentSize?: string): { label: string; sub: string } {
-  var parts: string[] = [];
-  if (parentColor) {
-    var nm = hexToName(parentColor) || parentColor;
-    parts.push(nm);
-  }
-  if (parentSize) parts.push(parentSize);
-  if (parts.length > 0) {
-    return { label: parts.join(" · "), sub: "estoque do produto pai" };
-  }
-  return { label: "Sem variante específica", sub: "genérico" };
 }
 
 export function VariantPickerModal({
@@ -260,7 +254,6 @@ export function VariantPickerModal({
 
   if (!visible || !product) return null;
   var parentHex = parentColor ? toHex(parentColor) : null;
-  var parentLabel = buildParentLabel(parentColor, parentSize);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -329,35 +322,9 @@ export function VariantPickerModal({
                   </Pressable>
                 );
               })}
-              {/* 07/05: produto pai pode ter stock proprio independente das variantes
-                 (caso onde o usuario cadastrou estoque no pai antes de criar variantes,
-                 ou onde sobrou estoque "generico" nao-categorizado). Quando product.stock > 0
-                 oferecemos a opcao de vender sem variante — id="" sinaliza parent-only.
-                 08/05: rotulo deriva da cor+tamanho do pai (nao mais "generico" hardcoded).
-                 18/10: vem por ultimo, depois dos tamanhos. */}
-              {(product.stock || 0) > 0 && (
-                <Pressable
-                  testID="variante-do-pai"
-                  onPress={function() { onSelect({ id: "", label: parentLabel.label, price: product.price, stock: product.stock || 0 }); }}
-                  style={[s.variantRow, s.parentRow, isWeb && { cursor: "pointer", transition: "all 0.15s ease" } as any]}
-                >
-                  <View
-                    style={[
-                      s.colorDot,
-                      parentHex
-                        ? { backgroundColor: parentHex }
-                        : { backgroundColor: "rgba(167,139,250,0.25)", borderStyle: "dashed" },
-                    ]}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.variantLabel}>{parentLabel.label}</Text>
-                    <Text style={s.variantMeta}>
-                      R$ {product.price.toFixed(2).replace(".", ",")} · {product.stock} un · {parentLabel.sub}
-                    </Text>
-                  </View>
-                  <View style={s.stockBadge}><Text style={s.stockText}>{product.stock}</Text></View>
-                </Pressable>
-              )}
+              {/* 19/10 (INC-2026-10-19-01): sem linha do produto pai. Ela so
+                 aparecia aqui, com variante ativa na lista, e vendia sem
+                 baixar tamanho nenhum. */}
             </ScrollView>
           )}
           {isWeb && keyboard && !loading && activeVariants.length > 0 && (
@@ -406,11 +373,6 @@ var s = StyleSheet.create({
     opacity: 0.5,
     backgroundColor: "rgba(255,255,255,0.02)",
   },
-  parentRow: {
-    backgroundColor: "rgba(124,58,237,0.08)",
-    borderColor: "rgba(167,139,250,0.25)",
-    borderStyle: "dashed",
-  } as any,
   colorDot: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.2)" },
   variantLabel: { fontSize: 14, color: Colors.ink, fontWeight: "600" },
   variantMeta: { fontSize: 11, color: Colors.ink3, marginTop: 2 },

@@ -201,7 +201,8 @@ describe("seletor de variante · tamanho bipado", () => {
 });
 
 // 18/10/2026 (p-35): a lista sai em ordem de cor e tamanho, não na ordem em
-// que a grade foi criada, e a linha do produto pai fica por último.
+// que a grade foi criada. (A linha do produto pai, que ficava por último,
+// saiu em 19/10: INC-2026-10-19-01.)
 const AZUL = "#3b82f6";
 const PRETO = "#000000";
 const VERMELHO = "#ef4444";
@@ -240,18 +241,14 @@ describe("seletor de variante · ordem da lista", () => {
     expect(ordemNaTela()).toEqual(["t8", "t36", "t40"]);
   });
 
-  it("a linha do produto pai (Sem variante específica) vem por último", async () => {
+  // 19/10/2026 (INC-2026-10-19-01): a linha do pai saiu de vez quando há
+  // variante ativa (ver __tests__/seletorSemLinhaDoPai.test.tsx).
+  it("com variante ativa, a lista é só de tamanhos: sem a linha do pai", async () => {
     await abrir({ product: { ...PRODUTO, stock: 12 } });
     const ids = ordemNaTela();
-    expect(ids).toHaveLength(7);
-    expect(ids[ids.length - 1]).toBe("do-pai");
-    expect(document.querySelector('[data-testid="variante-do-pai"]')!.textContent).toContain("Sem variante específica");
-  });
-
-  it("clicar na linha do pai continua vendendo sem variante", async () => {
-    await abrir({ product: { ...PRODUTO, stock: 12 } });
-    await act(() => { (document.querySelector('[data-testid="variante-do-pai"]') as HTMLElement).click(); });
-    expect(onSelect).toHaveBeenCalledWith({ id: "", label: "Sem variante específica", price: 249.99, stock: 12 });
+    expect(ids).toHaveLength(6);
+    expect(ids).not.toContain("do-pai");
+    expect(document.body.textContent).not.toContain("Sem variante específica");
   });
 
   it("setas seguem a ordem exibida e não caem na linha do pai", async () => {
@@ -262,7 +259,7 @@ describe("seletor de variante · ordem da lista", () => {
     await tecla("ArrowDown");
     expect(marcada()).toBe("azulP");
     for (let i = 0; i < 10; i++) await tecla("ArrowDown");
-    expect(marcada()).toBe("vermG"); // última variante; o pai fica fora das setas, como antes
+    expect(marcada()).toBe("vermG"); // última variante; não há linha do pai depois dela
     await tecla("ArrowUp");
     expect(marcada()).toBe("pretoP");
     await tecla("Enter");
