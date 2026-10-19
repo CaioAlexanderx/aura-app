@@ -34,6 +34,7 @@
 //     mesmo padrao do SaleComplete (venda normal).
 // ============================================================
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { View, Text, Pressable, StyleSheet, Linking, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -43,7 +44,7 @@ import { NfceActions, type NfceActionsItem } from "../NfceActions";
 import type { SelectedSaleRow, PaymentSplit } from "./types";
 import { fmtBRL } from "./types";
 import { resumoSucesso } from "./devolucaoUtil";
-import type { NfcePaymentEntry } from "@/services/nfceApi";
+import { nfceApi, type NfcePaymentEntry } from "@/services/nfceApi";
 
 type Props = {
   companyId: string;
@@ -85,8 +86,7 @@ export function Step5Success({
   paymentSplits,
   onClose, onNew,
 }: Props) {
-  const { company, token } = useAuthStore();
-  const autoEmit = !!(company as any)?.nfce_config?.auto_emit_nfce;
+  const { token, isDemo } = useAuthStore();
 
   const trocaSaleId = result?.sale?.id || result?.original_sale_ids?.[0] || "";
   const isCrossFilial = Boolean(result?.cross_filial);
@@ -151,6 +151,18 @@ export function Step5Success({
     .replace("cartao_debito", "debito");
 
   const showNfce = netAmount > 0 && nfceItems.length > 0 && !!trocaSaleId && !!fiscalCompanyId;
+
+  // tq-25: mesma fonte e mesma regra do Caixa (usePdvState.autoEmitNfce).
+  // Só consulta quando a nota vai aparecer (showNfce); sem config / erro /
+  // carregando => false (segue sem emitir sozinho, como antes).
+  const { data: nfceConfigData } = useQuery({
+    queryKey:  ["nfce-config", fiscalCompanyId],
+    queryFn:   () => nfceApi.getConfig(fiscalCompanyId),
+    enabled:   showNfce && !isDemo,
+    staleTime: 5 * 60_000,
+  });
+  const autoEmit =
+    !!nfceConfigData?.config?.auto_emit_nfce && !!nfceConfigData?.config?.is_active;
 
   // C6.2 — handler de reemissao fiscal.
   // Usa getApiBase() + fetch com Authorization header — mesmo padrao de
