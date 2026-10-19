@@ -280,7 +280,7 @@ function CaixaScreenInner() {
             className={IS_WEB ? "caixa-scrollable" : undefined}
           >
             <View style={IS_WEB && vp.xxl ? ({ maxWidth: 1700, alignSelf: "center", width: "100%" } as any) : null}>
-              {mostrarAvisoAssine && <AvisoAssine trialEndsAt={auth.trialEndsAt} trial={(auth.company as any)?.trial} companyId={auth.company?.id} />}
+              {mostrarAvisoAssine && <AvisoAssine trialEndsAt={auth.trialEndsAt} trial={(auth.company as any)?.trial} />}
               {st.vendaRecuperada && (
                 <AvisoVendaRecuperada
                   itens={st.vendaRecuperada.itens}
@@ -420,7 +420,7 @@ function CaixaScreenInner() {
         style={{ flex: 1, backgroundColor: "transparent" }}
         contentContainerStyle={{ padding: 16, paddingBottom: 48 }}
       >
-        {mostrarAvisoAssine && <AvisoAssine trialEndsAt={auth.trialEndsAt} trial={(auth.company as any)?.trial} companyId={auth.company?.id} compact />}
+        {mostrarAvisoAssine && <AvisoAssine trialEndsAt={auth.trialEndsAt} trial={(auth.company as any)?.trial} compact />}
         {st.vendaRecuperada && (
           <AvisoVendaRecuperada
             itens={st.vendaRecuperada.itens}
