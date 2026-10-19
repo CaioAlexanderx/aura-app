@@ -1,11 +1,11 @@
 // ============================================================
-// Checkout × promoção "primeiro mês pelo calendário" (13/10/2026)
+// Checkout sem a campanha PRIMEIROMES (19/10/2026)
 //
-// Quem assina até 31/10 não paga novembro: a 1ª cobrança é em 01/12. O backend
-// (#808) aplica o cupom PRIMEIROMES sozinho e responde GET /promocao-ativa.
-// O checkout só mostra: aviso no topo + "Hoje: R$ 0 · a partir de 01/12" no
-// resumo; com erro de API ou elegivel:false a tela fica como sempre foi.
-// Depois de assinar, a mensagem do backend aparece na tela de sucesso.
+// Decisão do Caio (19/10): a promoção "Assine até 31/10 e não pague novembro"
+// saiu do produto. O checkout mostra só o preço normal e o cupom digitado,
+// mesmo que a API ainda devolva uma promoção (backend antigo, cache). Cupom
+// digitado, cupom de dias grátis e a mensagem do backend na tela de sucesso
+// seguem funcionando.
 // ============================================================
 import React from "react";
 import renderer, { act } from "react-test-renderer";
@@ -30,8 +30,9 @@ jest.mock("@/stores/auth", () => ({
   }),
 }));
 
-var mockBilling = {
+var mockBilling: any = {
   status: jest.fn(),
+  // Mesmo que a API ainda responda a rota da campanha, o app não a consulta.
   promocaoAtiva: jest.fn(),
   subscribe: jest.fn(),
   tokenize: jest.fn(),
@@ -44,9 +45,8 @@ jest.mock("@/services/api", () => ({ get billingApi() { return mockBilling; }, g
 jest.mock("@/services/billingApi", () => ({ get billingApi() { return mockBilling; } }));
 
 import CheckoutScreen from "@/app/(tabs)/checkout";
-import { _resetPromocaoAtiva } from "@/hooks/usePromocaoAtiva";
 
-const PROMO = {
+const PROMO_DA_API = {
   codigo: "PRIMEIROMES",
   titulo: "Assine até 31/10 e não pague novembro",
   descricao: "Quem assina até 31/10 não paga novembro: a primeira cobrança só acontece em 01/12/2026.",
@@ -54,7 +54,10 @@ const PROMO = {
   primeira_cobranca_em: "2026-12-01",
   elegivel: true,
 };
-const MENSAGEM = "Promoção PRIMEIROMES aplicada! Nenhuma cobrança até 01/12/2026 — a primeira mensalidade de R$ 169,00 será nessa data.";
+const TEXTOS_DA_CAMPANHA = [
+  "não pague novembro", "Primeira cobrança em", "1ª cobrança em 01/12", "Hoje: R$ 0",
+  "PRIMEIROMES", "a promoção não soma", "Assinar · 1ª cobrança",
+];
 
 const espera = (ms = 15) => act(async () => { await new Promise((r) => setTimeout(r, ms)); });
 
@@ -84,14 +87,13 @@ async function digita(tree: renderer.ReactTestRenderer, placeholder: string, val
 
 beforeEach(() => {
   jest.clearAllMocks();
-  _resetPromocaoAtiva();
   mockBilling.status.mockResolvedValue({ billing_status: "trial", needs_cpf_cnpj: false, discount: null });
-  mockBilling.promocaoAtiva.mockResolvedValue(PROMO);
+  mockBilling.promocaoAtiva.mockResolvedValue(PROMO_DA_API);
   (global as any).fetch = jest.fn(async () => ({ json: async () => ({ erro: true }) }));
 });
 
 describe("Checkout — instrumentação (t2-04)", () => {
-  it("abrir a tela avisa o backend uma vez, mesmo com vários re-renders (status, promoção, quote)", async () => {
+  it("abrir a tela avisa o backend uma vez, mesmo com vários re-renders (status, quote)", async () => {
     const tree = await mount();
     expect(mockBilling.checkoutViewed).toHaveBeenCalledTimes(1);
     expect(mockBilling.checkoutViewed).toHaveBeenCalledWith("emp-1");
@@ -99,91 +101,103 @@ describe("Checkout — instrumentação (t2-04)", () => {
   });
 });
 
-describe("Checkout — aviso da promoção", () => {
-  it("elegível: aviso no topo com título, descrição e data; resumo mostra Hoje R$ 0 e o valor a partir de 01/12", async () => {
-    const tree = await mount();
-    expect(mockBilling.promocaoAtiva).toHaveBeenCalledWith("emp-1");
-    expect(byTestId(tree, "checkout-promocao")).toHaveLength(1);
-    const out = text(tree);
-    expect(out).toContain(PROMO.titulo);
-    expect(out).toContain(PROMO.descricao);
-    expect(out).toContain("Primeira cobrança em 01/12");
-    expect(out).toContain("Hoje: R$ 0 · a partir de 01/12: R$ 169,00");
-    // Hoje não se cobra nada: o botão não promete valor.
-    expect(out).toContain("Assinar · 1ª cobrança em 01/12");
-    expect(out).not.toContain("Gerar Pix - R$ 169,00");
-    tree.unmount();
-  });
-
-  it("inelegível (elegivel:false): nada muda na tela", async () => {
-    mockBilling.promocaoAtiva.mockResolvedValue({ ...PROMO, elegivel: false });
+describe("Checkout — sem a campanha", () => {
+  it("mesmo com a API devolvendo uma promoção elegível, a tela mostra só o preço normal", async () => {
     const tree = await mount();
     expect(byTestId(tree, "checkout-promocao")).toHaveLength(0);
     expect(byTestId(tree, "checkout-promocao-resumo")).toHaveLength(0);
     const out = text(tree);
-    expect(out).not.toContain("Hoje: R$ 0");
+    for (const t of TEXTOS_DA_CAMPANHA) expect(out).not.toContain(t);
     expect(out).toContain("Gerar Pix - R$ 169,00");
+    expect(out).toContain("Total hoje");
+    // O app nem pergunta: a rota da campanha deixou de ser chamada.
+    expect(mockBilling.promocaoAtiva).not.toHaveBeenCalled();
     tree.unmount();
   });
 
-  it("erro de API: nada muda na tela e nada quebra", async () => {
-    mockBilling.promocaoAtiva.mockRejectedValue(new Error("500"));
+  it("assinar sem cupom: o app não manda código e a tela segue no Pix com o QR", async () => {
+    mockBilling.subscribe.mockResolvedValue({
+      plan: "negocio", cycle: "monthly", value: 169, billing_type: "PIX", charged_now: 169,
+      pix_qr_code: "QR", pix_copy_paste: "000201", pix_expiration: "2026-10-20T00:00:00Z",
+    });
     const tree = await mount();
-    expect(byTestId(tree, "checkout-promocao")).toHaveLength(0);
-    expect(text(tree)).toContain("Gerar Pix - R$ 169,00");
-    expect(mockToast.error).not.toHaveBeenCalled();
+    await press(tree, "checkout-pagar-pix");
+
+    expect(mockBilling.subscribe).toHaveBeenCalledTimes(1);
+    expect(mockBilling.subscribe.mock.calls[0][4].accessCode).toBeUndefined();
+    expect(byTestId(tree, "checkout-sucesso-mensagem")).toHaveLength(0);
+    expect(text(tree)).toContain("Copiar código Pix");
     tree.unmount();
   });
+});
 
-  it("com cupom comum aplicado, vale o cupom: o resumo deixa de falar da promoção", async () => {
+describe("Checkout — cupom digitado", () => {
+  it("cupom de desconto: o valor da 1ª cobrança vem do backend e a tela só mostra", async () => {
     mockBilling.validateCoupon.mockResolvedValue({
       valid: true, code: "DEZ", type: "discount", discount_pct: 10,
-      first_charge_value: 152.1, recurring_value: 169, first_charge_date: "2026-10-13",
+      first_charge_value: 152.1, recurring_value: 169, first_charge_date: "2026-10-19",
     });
     const tree = await mount();
     await digita(tree, "CUPOM OU CÓDIGO DE INDICAÇÃO", "DEZ");
     await press(tree, "checkout-cupom-aplicar");
 
-    expect(byTestId(tree, "checkout-promocao-resumo")).toHaveLength(0);
     const out = text(tree);
-    expect(out).toContain("Você aplicou um cupom: vale o cupom, a promoção não soma.");
     expect(out).toContain("Gerar Pix - R$ 152,10");
+    expect(out).toContain("Mensalidades seguintes: R$ 169,00/mês");
+    for (const t of TEXTOS_DA_CAMPANHA) expect(out).not.toContain(t);
     tree.unmount();
   });
-});
 
-describe("Checkout — tela de sucesso com a mensagem do backend", () => {
-  it("Pix: promoção aplicada pelo backend → sem QR, sem polling, mensagem na tela", async () => {
+  it("cupom de dias grátis no Pix: botão 'Ativar 7 dias grátis', sem QR, mensagem do backend na tela", async () => {
+    mockBilling.validateCoupon.mockResolvedValue({
+      valid: true, code: "INDICA7", type: "trial", discount_pct: 0, trial_days: 7,
+      first_charge_value: 0, recurring_value: 169, first_charge_date: "2026-10-26",
+    });
     mockBilling.subscribe.mockResolvedValue({
       plan: "negocio", cycle: "monthly", value: 169, billing_type: "PIX", charged_now: 0,
-      coupon: { code: "PRIMEIROMES", trial_days: 49, discount_pct: 0, discount_amount: 169, automatic: true, campaign: true, first_charge_date: "2026-12-01" },
-      message: MENSAGEM,
+      coupon: { code: "INDICA7", trial_days: 7, discount_pct: 0 },
+      message: "7 dias grátis ativados! A primeira mensalidade de R$ 169,00 será em 26/10/2026.",
     });
     const tree = await mount();
+    await digita(tree, "CUPOM OU CÓDIGO DE INDICAÇÃO", "INDICA7");
+    await press(tree, "checkout-cupom-aplicar");
+
+    const antes = text(tree);
+    expect(antes).toContain("Ativar 7 dias grátis");
+    expect(antes).toContain("Você paga hoje");
+
     await press(tree, "checkout-pagar-pix");
-
-    // Nenhum cupom foi digitado: o app não manda código, o backend aplica sozinho.
-    expect(mockBilling.subscribe).toHaveBeenCalledTimes(1);
-    expect(mockBilling.subscribe.mock.calls[0][0]).toBe("emp-1");
-    expect(mockBilling.subscribe.mock.calls[0][4].accessCode).toBeUndefined();
-
-    const msg = byTestId(tree, "checkout-sucesso-mensagem");
-    expect(msg).toHaveLength(1);
-    expect(text(tree)).toContain(MENSAGEM);
+    expect(mockBilling.subscribe.mock.calls[0][4].accessCode).toBe("INDICA7");
+    expect(text(tree)).toContain("A primeira mensalidade de R$ 169,00 será em 26/10/2026.");
     expect(mockHydrate).toHaveBeenCalled();
-    // Com mensagem para ler, "Continuar" leva embora na hora.
-    expect(byTestId(tree, "checkout-sucesso-continuar")).toHaveLength(1);
     await act(async () => { byTestId(tree, "checkout-sucesso-continuar")[0].props.onPress(); });
     expect(mockReplace).toHaveBeenCalledWith("/(tabs)/");
     tree.unmount();
   });
 
-  it("Cartão: a mensagem do backend também aparece", async () => {
+  it("PRIMEIROMES digitado à mão (campanha encerrada): texto genérico de dias grátis, sem frase da promoção", async () => {
+    mockBilling.validateCoupon.mockResolvedValue({
+      valid: true, code: "PRIMEIROMES", type: "trial", discount_pct: 0, trial_days: 49,
+      first_charge_value: 0, recurring_value: 169, first_charge_date: "2026-12-01",
+    });
+    const tree = await mount();
+    await digita(tree, "CUPOM OU CÓDIGO DE INDICAÇÃO", "PRIMEIROMES");
+    await press(tree, "checkout-cupom-aplicar");
+
+    const out = text(tree);
+    expect(out).toContain("49 dias grátis");
+    expect(out).not.toContain("Promoção PRIMEIROMES");
+    expect(out).not.toContain("não pague novembro");
+    tree.unmount();
+  });
+});
+
+describe("Checkout — cartão", () => {
+  it("a mensagem do backend aparece na tela de sucesso e no toast", async () => {
+    const MSG = "Assinatura ativada! Seu cartão ficou salvo.";
     mockBilling.tokenize.mockResolvedValue({ credit_card_token: "tok_1" });
     mockBilling.subscribe.mockResolvedValue({
-      plan: "negocio", cycle: "monthly", value: 169, billing_type: "CREDIT_CARD", charged_now: 0,
-      coupon: { code: "PRIMEIROMES", trial_days: 49, discount_pct: 0, automatic: true, campaign: true, first_charge_date: "2026-12-01" },
-      message: MENSAGEM + " Seu cartão ficou salvo.",
+      plan: "negocio", cycle: "monthly", value: 169, billing_type: "CREDIT_CARD", charged_now: 169, message: MSG,
     });
     const tree = await mount();
     await press(tree, "checkout-metodo-cartao");
@@ -198,26 +212,13 @@ describe("Checkout — tela de sucesso com a mensagem do backend", () => {
     await digita(tree, "Rua...", "Praça da Sé");
     await espera();
 
+    expect(text(tree)).toContain("Assinar Agora - R$ 169,00");
     await press(tree, "checkout-pagar-cartao");
 
     expect(mockBilling.tokenize).toHaveBeenCalledTimes(1);
     expect(mockBilling.subscribe).toHaveBeenCalledTimes(1);
-    expect(text(tree)).toContain(MENSAGEM + " Seu cartão ficou salvo.");
-    expect(mockToast.success).toHaveBeenCalledWith(MENSAGEM + " Seu cartão ficou salvo.");
-    tree.unmount();
-  });
-
-  it("assinatura comum (sem cupom): tela de sucesso como antes, sem mensagem nem botão Continuar", async () => {
-    mockBilling.promocaoAtiva.mockResolvedValue({ ...PROMO, elegivel: false });
-    mockBilling.subscribe.mockResolvedValue({
-      plan: "negocio", cycle: "monthly", value: 169, billing_type: "PIX", charged_now: 169,
-      pix_qr_code: "QR", pix_copy_paste: "000201", pix_expiration: "2026-10-14T00:00:00Z",
-    });
-    const tree = await mount();
-    await press(tree, "checkout-pagar-pix");
-    // Veio QR: a tela segue no Pix, esperando o pagamento — não é sucesso.
-    expect(byTestId(tree, "checkout-sucesso-mensagem")).toHaveLength(0);
-    expect(text(tree)).toContain("Copiar código Pix");
+    expect(text(tree)).toContain(MSG);
+    expect(mockToast.success).toHaveBeenCalledWith(MSG);
     tree.unmount();
   });
 });

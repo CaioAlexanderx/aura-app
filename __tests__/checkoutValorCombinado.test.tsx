@@ -30,7 +30,6 @@ jest.mock("@/stores/auth", () => ({
 
 var mockBilling: any = {
   status: jest.fn(),
-  promocaoAtiva: jest.fn(),
   quote: jest.fn(),
   subscribe: jest.fn(),
   tokenize: jest.fn(),
@@ -42,7 +41,6 @@ jest.mock("@/services/api", () => ({ get billingApi() { return mockBilling; }, g
 jest.mock("@/services/billingApi", () => ({ get billingApi() { return mockBilling; } }));
 
 import CheckoutScreen from "@/app/(tabs)/checkout";
-import { _resetPromocaoAtiva } from "@/hooks/usePromocaoAtiva";
 
 const espera = (ms = 15) => act(async () => { await new Promise((r) => setTimeout(r, ms)); });
 
@@ -68,11 +66,9 @@ const COTACAO = { plan: "negocio", cycle: "annual", value: 211.2, custom: true, 
 
 beforeEach(() => {
   jest.clearAllMocks();
-  _resetPromocaoAtiva();
   // Negócio anual com 1 acesso extra: tabela = 140,83 + 19 = R$ 159,83.
   mockCompany = { id: "emp-1", plan: "negocio", billing_cycle: "annual", billing_status: "pending", cnpj: "", vertical_active: null, extra_seats_granted: 1 };
   mockBilling.status.mockResolvedValue({ billing_status: "pending", needs_cpf_cnpj: false, discount: null });
-  mockBilling.promocaoAtiva.mockResolvedValue(null);
   (global as any).fetch = jest.fn(async () => ({ json: async () => ({ erro: true }) }));
 });
 

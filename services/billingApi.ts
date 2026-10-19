@@ -27,25 +27,8 @@ export type SubscribeResponse = {
     // 11/09/2026 — desconto em reais e por varios meses
     discount_value?: number; discount_months?: number;
     discounted_value?: number | null; first_full_due_date?: string | null;
-    // 13/10/2026 — promoção PRIMEIROMES: o backend aplica sozinho quando a
-    // empresa é elegível e não informou cupom (automatic), e devolve a data
-    // de calendário da 1ª cobrança.
-    discount_amount?: number; automatic?: boolean; campaign?: boolean;
-    first_charge_date?: string | null;
   } | null;
   message?: string;
-};
-
-// 13/10/2026 — GET /companies/:id/billing/promocao-ativa (backend#808).
-// `elegivel` já considera prazo, histórico da empresa e resgate prévio: é o
-// que o /subscribe vai fazer. Prazo, data e textos vivem só no backend.
-export type PromocaoAtivaResponse = {
-  codigo: string;
-  titulo: string;
-  descricao: string;
-  termina_em: string;            // ISO (instante final, UTC)
-  primeira_cobranca_em: string;  // YYYY-MM-DD
-  elegivel: boolean;
 };
 
 // 13/07/2026 — POST /companies/:id/billing/validate-coupon
@@ -70,9 +53,6 @@ export type ValidateCouponResponse = {
   discounted_value?: number | null;      // cada mensalidade com desconto
   discounted_months?: number;            // 0 em cupom de dias gratis
   first_full_charge_date?: string | null; // 1a mensalidade cheia (prevista)
-  // 13/10/2026 — true quando o cupom é o da promoção de calendário (PRIMEIROMES):
-  // trial_days é só a conta até first_charge_date, não "N dias grátis".
-  campaign?: boolean;
 };
 
 // GET /companies/:id/billing/status
@@ -236,11 +216,6 @@ export var billingApi = {
   invoices: function(companyId: string) { return request<{ total: number; invoices: BillingInvoice[] }>("/companies/" + companyId + "/billing/invoices"); },
   generatePix: function(companyId: string, paymentId: string) { return request<any>("/companies/" + companyId + "/billing/generate-pix/" + paymentId, { method: "POST" }); },
   plans: function() { return request<any>("/billing/plans"); },
-  // 13/10/2026 — promoção do calendário (primeiro mês). Por empresa, como o resto
-  // do billing: o backend avalia a elegibilidade com a linha de companies.
-  promocaoAtiva: function(companyId: string) {
-    return request<PromocaoAtivaResponse>("/companies/" + companyId + "/billing/promocao-ativa", { retry: 0 });
-  },
   // 14/10/2026 — valor mensal da empresa para o plano/ciclo/forma escolhidos
   // (valor combinado pela equipe ou tabela). O checkout só usa a resposta com
   // custom:true; erro ou 404 (backend sem a rota) deixa o cálculo de tabela.
