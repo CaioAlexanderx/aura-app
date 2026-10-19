@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, type MutableRefObject } from "react";
 import { View, Text, StyleSheet, Pressable, TextInput, Platform, Switch, Linking, Image } from "react-native";
 import { usePaletaDoCanal, type PaletaDoCanalTokens } from "./paletaDoCanal";
 import { useAuthStore } from "@/stores/auth";
@@ -40,9 +40,15 @@ type Props = {
    * não salva, e a tela pergunta antes de trocar de aba.
    */
   onAlteracoes?: (alterada: boolean) => void;
+  /**
+   * 19/10/2026 (tq-49): a tela entrega uma ref e a aba a preenche com o
+   * MESMO handleSave dos botões Salvar. Serve à pergunta "Salvar antes de
+   * sair?" ao trocar de aba. Resolve true quando gravou, false se falhou.
+   */
+  salvarRef?: MutableRefObject<(() => Promise<boolean>) | null>;
 };
 
-export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequestingDomain, uploadImage, isUploadingImage, setupPix, isSettingUpPix, onAlteracoes }: Props) {
+export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequestingDomain, uploadImage, isUploadingImage, setupPix, isSettingUpPix, onAlteracoes, salvarRef }: Props) {
   const cs = useChannelStyles();
   const accent = useAccent();
   const p = usePaletaDoCanal();
@@ -170,7 +176,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   // Saiu da aba: nada pendente por aqui.
   useEffect(() => () => onAlteracoes?.(false), [onAlteracoes]);
 
-  async function handleSave() {
+  async function handleSave(): Promise<boolean> {
     // Corpo com TODAS as chaves de texto, campo vazio = null (apagar).
     // Ver CHAVES_DE_TEXTO em meuSite.ts.
     const corpo = corpoDoMeuSite(formAtual, politicaPadrao);
@@ -179,7 +185,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
       resposta = await saveConfig(corpo);
     } catch {
       // O hook já mostrou o erro; a edição continua na tela.
-      return;
+      return false;
     }
     // A tela passa a mostrar o que o servidor GRAVOU: ele apara o desconto
     // (35 vira 30) e normaliza as redes. Sem isto ela via 35 depois de
@@ -193,7 +199,16 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
     // sem nenhuma confirmação — a lojista não sabia se salvou de verdade.
     // O erro já era avisado (toast do hook); faltava o sucesso.
     toast.success("Configurações salvas.");
+    return true;
   }
+
+  // Sem lista de dependências de propósito: a ref sempre aponta para o
+  // handleSave da renderização atual (formulário e `salvo` em dia).
+  useEffect(() => {
+    if (!salvarRef) return;
+    salvarRef.current = handleSave;
+    return () => { salvarRef.current = null; };
+  });
 
   async function handleRequestDomain() {
     const d = domainInput.trim().toLowerCase();

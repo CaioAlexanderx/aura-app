@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { View, Text, ScrollView, StyleSheet, Pressable, Linking } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, Linking, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { useDigitalChannel } from "@/hooks/useDigitalChannel";
 import { ScreenHero, ScreenTabs } from "@/components/ScreenHero";
 import { Icon } from "@/components/Icon";
 import { ListSkeleton } from "@/components/ListSkeleton";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { WebPortal } from "@/components/WebPortal";
 import { IS_WIDE, TABS } from "@/components/screens/canal/shared";
 import { TabMeuSite } from "@/components/screens/canal/TabMeuSite";
 import { TabDesign } from "@/components/screens/canal/TabDesign";
@@ -38,11 +40,56 @@ export default function CanalDigitalScreen() {
   const params = useLocalSearchParams<{ tab?: string; order_id?: string }>();
   const [tab, setTab] = useState(() => abaDoEndereco(params.tab) ?? 0);
   const pedidoDoEndereco = typeof params.order_id === "string" ? params.order_id : undefined;
+  // 19/10/2026 (tq-49): Meu Site avisa quando tem alteração não salva
+  // (contrato `onAlteracoes`). Trocar de aba nesse estado joga a edição fora;
+  // então pergunta antes. NÃO há gravação automática: salvar é sempre decisão
+  // da lojista ("Salvar" aqui chama o mesmo handleSave dos botões da aba).
+  const [alteracaoNoSite, setAlteracaoNoSite] = useState(false);
+  const [abaPendente, setAbaPendente] = useState<number | null>(null);
+  const [salvandoAntesDeSair, setSalvandoAntesDeSair] = useState(false);
+  const salvarSiteRef = useRef<(() => Promise<boolean>) | null>(null);
+  const avisarAlteracoes = useCallback((v: boolean) => setAlteracaoNoSite(v), []);
+  const siteSujo = tab === 0 && alteracaoNoSite;
+
+  const irParaAba = useCallback((next: number) => {
+    setAbaPendente(null);
+    setAlteracaoNoSite(false);
+    setTab(next);
+  }, []);
+  // Clique numa aba (ou no aviso/link com a tela já aberta): com Meu Site
+  // sujo, pergunta; sem alteração, troca direto.
+  const trocarDeAba = useCallback((next: number) => {
+    if (next === tab) return;
+    if (siteSujo) setAbaPendente(next);
+    else irParaAba(next);
+  }, [tab, siteSujo, irParaAba]);
+
   // Clique no aviso com a tela ja aberta: o endereco muda, a aba acompanha.
   useEffect(() => {
     const aba = abaDoEndereco(params.tab);
-    if (aba !== null) setTab(aba);
+    if (aba !== null) trocarDeAba(aba);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.tab, params.order_id]);
+
+  // Recarregar ou fechar a página com alteração não salva: o navegador pergunta.
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined" || !siteSujo) return;
+    const segurar = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", segurar);
+    return () => window.removeEventListener("beforeunload", segurar);
+  }, [siteSujo]);
+
+  async function salvarEIr() {
+    if (abaPendente === null || salvandoAntesDeSair) return;
+    const destino = abaPendente;
+    setSalvandoAntesDeSair(true);
+    let gravou = false;
+    try { gravou = (await salvarSiteRef.current?.()) === true; } catch { gravou = false; }
+    setSalvandoAntesDeSair(false);
+    // Falhou: o erro já foi avisado pelo hook; a edição continua na tela.
+    if (gravou) irParaAba(destino);
+    else setAbaPendente(null);
+  }
   const { company } = useAuthStore();
   const router = useRouter();
   const {
@@ -109,7 +156,7 @@ export default function CanalDigitalScreen() {
       <ScreenTabs
         tabs={TABS.map((t) => ({ key: t, label: t }))}
         active={TABS[tab]}
-        onSelect={(k) => setTab(TABS.indexOf(k))}
+        onSelect={(k) => trocarDeAba(TABS.indexOf(k))}
       />
       {isLoading ? <ListSkeleton rows={4} /> : (
         <>
@@ -124,6 +171,8 @@ export default function CanalDigitalScreen() {
               isUploadingImage={isUploadingImage}
               setupPix={setupPix}
               isSettingUpPix={isSettingUpPix}
+              onAlteracoes={avisarAlteracoes}
+              salvarRef={salvarSiteRef}
             />
           )}
           {tab === 1 && (
@@ -145,6 +194,20 @@ export default function CanalDigitalScreen() {
           {tab === 4 && <TabPedidos companyId={company?.id} orderIdInicial={pedidoDoEndereco} />}
         </>
       )}
+      <WebPortal active={abaPendente !== null}>
+        <ConfirmDialog
+          visible={abaPendente !== null}
+          title="Alterações não salvas"
+          message="Você tem alterações não salvas em Meu Site. Salvar antes de sair?"
+          confirmLabel={salvandoAntesDeSair ? "Salvando..." : "Salvar"}
+          destructive={false}
+          onConfirm={salvarEIr}
+          secondaryLabel="Descartar"
+          onSecondary={() => { if (!salvandoAntesDeSair && abaPendente !== null) irParaAba(abaPendente); }}
+          cancelLabel="Continuar editando"
+          onCancel={() => { if (!salvandoAntesDeSair) setAbaPendente(null); }}
+        />
+      </WebPortal>
     </ScrollView>
   );
 }
