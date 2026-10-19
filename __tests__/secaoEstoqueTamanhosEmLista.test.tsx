@@ -124,3 +124,37 @@ describe("SecaoEstoque — tamanhos digitados em lista", () => {
     expect(estilo.minHeight).toBeGreaterThanOrEqual(32);
   });
 });
+
+// p-35 (PR C): atalhos de um toque "P M G GG" e "34 a 44".
+const atalho = (tree: renderer.ReactTestRenderer, rotulo: string) =>
+  achar(tree, (n) => n.props.accessibilityLabel === rotulo && typeof n.props.onPress === "function")[0];
+const PMG = "Adicionar P, M, G e GG";
+const NUM = "Adicionar 34, 36, 38, 40, 42 e 44";
+
+describe("SecaoEstoque — atalhos de tamanho", () => {
+  it("\"P M G GG\" adiciona os quatro de uma vez, mesclando com os existentes", () => {
+    const onTamanhos = jest.fn();
+    const tree = montar({ onTamanhos, tamanhos: ["PP", "m"] });
+    act(() => { atalho(tree, PMG).props.onPress(); });
+    expect(onTamanhos).toHaveBeenCalledWith(["PP", "P", "m", "G", "GG"]);
+  });
+
+  it("\"34 a 44\" adiciona 34, 36, 38, 40, 42 e 44", () => {
+    const onTamanhos = jest.fn();
+    const tree = montar({ onTamanhos, tamanhos: ["38"] });
+    act(() => { atalho(tree, NUM).props.onPress(); });
+    expect(onTamanhos).toHaveBeenCalledWith(["34", "36", "38", "40", "42", "44"]);
+  });
+
+  it("some quando todos os tamanhos do atalho já estão na lista", () => {
+    const tree = montar({ tamanhos: ["P", "M", "G", "gg"] });
+    expect(atalho(tree, PMG)).toBeUndefined();
+    expect(atalho(tree, NUM)).toBeTruthy();
+  });
+
+  it("no Matcon os atalhos não aparecem", () => {
+    const tree = montar({ perfil: PERFIL_MATCON });
+    expect(atalho(tree, PMG)).toBeUndefined();
+    expect(atalho(tree, NUM)).toBeUndefined();
+  });
+});
