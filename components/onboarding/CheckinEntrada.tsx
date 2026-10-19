@@ -23,6 +23,12 @@
 // LIMITE_DA_ESPERA_MS) antes de decidir por plano. A importação assistida
 // abre o wa.me no MESMO toque, antes de qualquer espera (senão o navegador
 // bloqueia a aba nova). Pular continua indo ao Painel.
+//
+// 19/10/2026 (card tq-33, decisão da Nina): conta sem frente
+// (companies.segment vazio) vê antes uma pergunta a mais, "O que a sua loja
+// vende?", com as frentes do cartão "Sua frente" de Configurações. Um toque
+// grava pela mesma rota (PATCH /companies/:id/segment → segment_source
+// 'user'). Quem já tem frente segue com as três perguntas de sempre.
 // ============================================================
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator, useWindowDimensions, Linking, Platform } from "react-native";
@@ -34,11 +40,17 @@ import { useAuthStore } from "@/stores/auth";
 import { useVisibleModules } from "@/hooks/useVisibleModules";
 import { useCheckin } from "@/hooks/useCheckin";
 import { garantirTemProduto, useTemProduto } from "@/hooks/useTemProduto";
-import { PERGUNTAS_CHECKIN, TEXTOS_CHECKIN, type ChaveResposta } from "@/constants/checkin";
+import { PERGUNTAS_CHECKIN, TEXTOS_CHECKIN, TEXTOS_FRENTE_CHECKIN, type ChaveResposta } from "@/constants/checkin";
 import { checkinApi, checkinQueryKey, type CheckinEstado, type CheckinRespostas } from "@/services/checkinApi";
 import {
-  abrirCom, corpoCompleto, corpoDaResposta, corpoDoPular, opcoesVisiveis, quantasRespostas,
+  abrirCom, corpoCompleto, corpoDaResposta, corpoDoPular, opcoesDeFrente, opcoesVisiveis,
+  precisaPerguntarFrente, quantasRespostas,
 } from "@/utils/checkinRegras";
+// 19/10/2026 (tq-33): pergunta da frente — mesma lista e mesma rota do
+// cartão "Sua frente" de Configurações.
+import { SEGMENT_LABEL } from "@/constants/primeirosPassos";
+import { frenteApi, type Segmento, type TrocarFrenteResponse } from "@/services/primeirosPassosApi";
+import { mensagemDoErro } from "@/components/screens/configuracoes/FrenteDaLoja";
 import { ROTA_PAINEL, destinoDoCheckin } from "@/utils/checkinDestino";
 
 /** Quanto o Continuar espera o /auth/me e a contagem de produtos. */
@@ -79,6 +91,18 @@ export function CheckinEntrada() {
   const semeado = useRef(false);
   const algumPutFalhou = useRef(false);
   const saindo = useRef(false);
+
+  // ── Frente (tq-33): só para conta sem `segment` gravado ──
+  // `frente` = o que foi gravado NESTA tela. A pergunta continua na tela
+  // depois do toque (o store passa a ter o segment, e a regra sozinha a
+  // esconderia no meio da resposta).
+  const [frente, setFrente] = useState<Segmento | null>(null);
+  const [gravandoFrente, setGravandoFrente] = useState(false);
+  const [erroFrente, setErroFrente] = useState<string | null>(null);
+  const [frenteJaGravada, setFrenteJaGravada] = useState(false);
+  const frenteGravada = useRef<Segmento | null>(null);
+  const respostaFrente = useRef<TrocarFrenteResponse | null>(null);
+  const mostrarFrente = !frenteJaGravada && (frente !== null || precisaPerguntarFrente(company));
 
   // Plano stale no JWT (CLAUDE.md, armadilha 1): revalida no mount.
   useEffect(() => {
@@ -121,8 +145,55 @@ export function CheckinEntrada() {
     checkinApi.put(companyId, corpo).catch(() => { algumPutFalhou.current = true; });
   }
 
+  /**
+   * Um toque grava a frente: PATCH /companies/:id/segment (frenteApi.trocar,
+   * a rota do cartão "Sua frente"; o backend grava segment_source = 'user').
+   * Antes, espera o /auth/me revalidado: se a conta já ganhou uma frente
+   * (outra aba, Gestão Aura), não sobrescreve e a pergunta some.
+   */
+  async function escolherFrente(seg: Segmento) {
+    if (!companyId || gravandoFrente || seg === frente) return;
+    const anterior = frente;
+    setFrente(seg);
+    setErroFrente(null);
+    setGravandoFrente(true);
+    try {
+      await revalidacao.current;
+      const st: any = useAuthStore.getState?.() || {};
+      const atual = (st.company?.segment as string | null | undefined) || null;
+      if (atual && atual !== frenteGravada.current) {
+        setFrente(null);
+        setFrenteJaGravada(true);
+        return;
+      }
+      const res = await frenteApi.trocar(companyId, { segment: seg });
+      frenteGravada.current = (res?.segment as Segmento) || seg;
+      respostaFrente.current = res || null;
+      // Só o segment agora: a vertical do Studio (se for o caso) entra no
+      // Continuar — o guard raiz troca de shell por vertical_active, e isso
+      // no meio do check-in tiraria a pessoa da tela.
+      if (typeof st.updateCompany === "function") st.updateCompany({ segment: frenteGravada.current } as any);
+      queryClient.invalidateQueries({ queryKey: ["pdv-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["first-steps"] });
+    } catch (err: any) {
+      setFrente(anterior);
+      setErroFrente(mensagemDoErro(err));
+    } finally {
+      setGravandoFrente(false);
+    }
+  }
+
   async function continuar() {
     if (saindo.current) return;
+    // Personalizados (Studio): a frente nova abre o Aura Studio.
+    if (respostaFrente.current?.vertical_active === "studio") {
+      saindo.current = true;
+      atualizarCache({ respondido: true, respostas });
+      const st: any = useAuthStore.getState?.() || {};
+      if (typeof st.updateCompany === "function") st.updateCompany({ vertical_active: "studio" } as any);
+      router.replace("/studio" as any);
+      return;
+    }
     // Marca antes de atualizar o cache: o efeito acima (respondido = true)
     // não pode mandar ao Painel enquanto o destino é decidido.
     saindo.current = true;
@@ -155,7 +226,7 @@ export function CheckinEntrada() {
     () => abrirCom(respostas, { testeComecaNaVenda: (company as any)?.trial?.mode === "primeira_venda" }),
     [respostas, company],
   );
-  const respondidas = quantasRespostas(respostas);
+  const respondidas = quantasRespostas(respostas) + (frente ? 1 : 0);
   const duasColunas = width >= LARGURA_DUAS_COLUNAS;
   const mostrandoTela = !isLoading && !!data && data.habilitado && !data.respondido && !data.pulou;
 
@@ -167,8 +238,41 @@ export function CheckinEntrada() {
     );
   }
 
+  const perguntaFrente = mostrarFrente ? (
+    <View style={s.pergunta} testID="checkin-pergunta-frente">
+      <Text style={[s.perguntaTxt, { color: C.ink }]} accessibilityRole="header">{TEXTOS_FRENTE_CHECKIN.pergunta}</Text>
+      <View style={s.chips} accessibilityRole="radiogroup">
+        {opcoesDeFrente((company as any)?.plan).map((seg) => {
+          const on = frente === seg;
+          return (
+            <Pressable
+              key={seg}
+              onPress={() => { void escolherFrente(seg); }}
+              disabled={gravandoFrente}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: on, checked: on, busy: on && gravandoFrente }}
+              style={[
+                s.chip,
+                { borderColor: C.border, backgroundColor: "transparent" },
+                on && { borderColor: C.violet, backgroundColor: C.violetD },
+              ]}
+              testID={`checkin-chip-frente-${seg}`}
+            >
+              <Text style={[s.chipTxt, { color: C.ink2 }, on && { color: C.violet3 }]}>{SEGMENT_LABEL[seg]}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {gravandoFrente && <Text style={[s.nota, { color: C.ink3, textAlign: "left" }]}>{TEXTOS_FRENTE_CHECKIN.gravando}</Text>}
+      {!!erroFrente && (
+        <Text style={[s.nota, { color: C.red, textAlign: "left" }]} testID="checkin-frente-erro">{erroFrente}</Text>
+      )}
+    </View>
+  ) : null;
+
   const perguntas = (
     <View style={s.col}>
+      {perguntaFrente}
       {PERGUNTAS_CHECKIN.map((p) => {
         const opcoes = opcoesVisiveis(p, modulos);
         if (opcoes.length === 0) return null;
@@ -246,9 +350,11 @@ export function CheckinEntrada() {
           <Text style={[s.tempo, { color: C.ink3 }]}>{TEXTOS_CHECKIN.tempo}</Text>
         </View>
         <View style={s.cabeca}>
-          <Text style={[s.saudacao, { color: C.ink3 }]}>{TEXTOS_CHECKIN.saudacao}</Text>
+          <Text style={[s.saudacao, { color: C.ink3 }]}>
+            {mostrarFrente ? TEXTOS_FRENTE_CHECKIN.saudacao : TEXTOS_CHECKIN.saudacao}
+          </Text>
           <Text style={[s.titulo, { color: C.ink, fontFamily: Fonts.heading }]} accessibilityRole="header">
-            {TEXTOS_CHECKIN.titulo}
+            {mostrarFrente ? TEXTOS_FRENTE_CHECKIN.titulo : TEXTOS_CHECKIN.titulo}
           </Text>
           <Text style={[s.sub, { color: C.ink2 }]}>{TEXTOS_CHECKIN.subtitulo}</Text>
         </View>

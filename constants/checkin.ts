@@ -89,3 +89,19 @@ export const TEXTOS_CHECKIN = {
   pular: "Pular por enquanto",
   rodape: "Você muda isso depois em Configurações.",
 } as const;
+
+// 19/10/2026 (card tq-33, decisão da Nina): conta SEM frente gravada
+// (companies.segment vazio — 7 de 20 cadastros desde 05/10, a consulta do
+// CNPJ não trouxe o CNAE) vê uma pergunta a mais, antes das três. As
+// opções são as mesmas do cartão "Sua frente" de Configurações
+// (SEGMENTOS/SEGMENT_LABEL de constants/primeirosPassos.ts) e um toque grava
+// pela mesma rota (PATCH /companies/:id/segment, que grava
+// segment_source = 'user'). Quem já tem frente não vê.
+export const TEXTOS_FRENTE_CHECKIN = {
+  pergunta: "O que a sua loja vende?",
+  /** Saudação no lugar de "Sua Aura já abre como loja em geral." (que seria falsa). */
+  saudacao: "Sua Aura já está pronta.",
+  /** Com a pergunta a mais, o título não pode dizer "Três". */
+  titulo: "Quatro perguntas para abrir do seu jeito",
+  gravando: "Gravando…",
+} as const;

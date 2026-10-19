@@ -7,7 +7,7 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import type { PdvSettings } from "@/services/api";
-import { SEGMENT_LABEL, SEGMENTOS, STUDIO_PLAN_MSG } from "@/constants/primeirosPassos";
+import { PLANOS_COM_STUDIO, SEGMENT_LABEL, SEGMENTOS, STUDIO_PLAN_MSG } from "@/constants/primeirosPassos";
 import { frenteApi, type Segmento } from "@/services/primeirosPassosApi";
 import { FrenteOpcoes, type FrenteOpcoesPaleta } from "@/components/onboarding/FrenteOpcoes";
 
@@ -65,7 +65,6 @@ export type FrenteDaLojaPaleta = {
   opcoes: FrenteOpcoesPaleta;
 };
 
-const PLANOS_COM_STUDIO = ["negocio", "expansao", "personalizado"];
 
 export const SO_O_DONO_MSG = "Só o dono da conta muda a frente";
 export const ERRO_GENERICO_MSG = "Não deu pra trocar a frente. Tente de novo.";

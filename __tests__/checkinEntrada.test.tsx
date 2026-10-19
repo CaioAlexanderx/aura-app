@@ -236,7 +236,9 @@ function resetar() {
   __zerarCheckinDaSessao();
   mockAuth = {
     token: "t", isStaff: false, isDemo: false, consolidatedView: false,
-    company: { id: "loja-1", name: "Loja", plan: "essencial", member_role: "owner", trial: { mode: "primeira_venda" } },
+    // Conta com frente: as três perguntas de sempre (a da frente, tq-33,
+    // tem o próprio teste em checkinFrente.test.tsx).
+    company: { id: "loja-1", name: "Loja", plan: "essencial", member_role: "owner", segment: "varejo", trial: { mode: "primeira_venda" } },
   };
   mockModulos = new Set(["estoque", "pdv", "nfe", "painel", MOD_CHECKIN]);
 }
