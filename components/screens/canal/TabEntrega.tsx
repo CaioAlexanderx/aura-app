@@ -32,6 +32,7 @@ import type { AccentTokens } from "@/contexts/AccentTheme";
 import {
   AVISO_SEM_RECEBIMENTO, desligarPedeConfirmacao, semComoReceber, textosDoPrazo,
   type CampoDeRecebimento,
+  avisoDoDia, horarioPodeSalvar, situacaoDoDia,
 } from "./entrega";
 
 // Narrow mode: phones estreitas (<480px) precisam stack do mode-grid
@@ -382,12 +383,12 @@ export function TabEntrega({ config, saveConfig, isSaving, vitrine = "comum", on
     nextDay.closed = isClosed;
     const next: BusinessHours = { ...businessHours, [key]: nextDay };
     setBusinessHours(next);
-    // Valida HH:MM antes de salvar — se inválido, deixa o usuário corrigir
-    const allValid = DAYS.every(({ key: k }) => {
-      const d = next[k];
-      return isValidTime(d.open) && isValidTime(d.close);
-    });
-    if (allValid) {
+    // Só salva a grade inteira válida (19/10/2026): HH:MM, os dois campos
+    // preenchidos (ou os dois vazios) e fechamento diferente da abertura.
+    // Fechar depois da meia-noite (18:00 às 02:00) vale. Desde que
+    // "Fechada" recusa pedido no servidor, salvar um dia pela metade
+    // fecharia a loja enquanto a lojista ainda digita.
+    if (horarioPodeSalvar(DAYS.map(({ key: k }) => next[k]))) {
       scheduleSave({ business_hours: next });
     }
   }
@@ -752,7 +753,7 @@ export function TabEntrega({ config, saveConfig, isSaving, vitrine = "comum", on
           <Text style={s.cardHeadHint}>
             {alwaysOpen
               ? 'Cliente vê "Aberta" no topo da loja, sempre'
-              : 'Cliente vê "Aberta / Fechada" no topo da loja'}
+              : 'Fora do horário a loja aparece "Fechada" e não recebe pedidos'}
           </Text>
         </View>
         <View style={s.always24Row}>
@@ -781,6 +782,9 @@ export function TabEntrega({ config, saveConfig, isSaving, vitrine = "comum", on
           {DAYS.map(({ key, label }) => {
             const day = businessHours[key];
             const isClosed = !day.open && !day.close;
+            const situacao = situacaoDoDia(day.open, day.close);
+            const aviso = avisoDoDia(situacao);
+            const erroNoDia = situacao === "igual";
             return (
               <View key={key} style={s.hourRow}>
                 <Text style={s.hourLabel}>{label}</Text>
@@ -789,7 +793,7 @@ export function TabEntrega({ config, saveConfig, isSaving, vitrine = "comum", on
                   <TextInput
                     style={[
                       s.hourInput,
-                      day.open && !isValidTime(day.open) && s.hourInputError,
+                      ((day.open && !isValidTime(day.open)) || erroNoDia) && s.hourInputError,
                     ]}
                     value={day.open}
                     onChangeText={(v) => updateHourDay(key, { open: maskTime(v) })}
@@ -804,7 +808,7 @@ export function TabEntrega({ config, saveConfig, isSaving, vitrine = "comum", on
                   <TextInput
                     style={[
                       s.hourInput,
-                      day.close && !isValidTime(day.close) && s.hourInputError,
+                      ((day.close && !isValidTime(day.close)) || erroNoDia) && s.hourInputError,
                     ]}
                     value={day.close}
                     onChangeText={(v) => updateHourDay(key, { close: maskTime(v) })}
@@ -833,6 +837,14 @@ export function TabEntrega({ config, saveConfig, isSaving, vitrine = "comum", on
                     {isClosed ? "Fechada" : "Aberta"}
                   </Text>
                 </View>
+                {aviso ? (
+                  <Text
+                    testID={`aviso-horario-${key}`}
+                    style={[s.hourAviso, situacao !== "vira_a_noite" && { color: p.redInk }]}
+                  >
+                    {aviso}
+                  </Text>
+                ) : null}
               </View>
             );
           })}
@@ -1183,6 +1195,7 @@ function buildStyles(accent: AccentTokens, p: PaletaDoCanalTokens) {
 
   hourRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     gap: 10,
     paddingVertical: 8,
@@ -1232,6 +1245,8 @@ function buildStyles(accent: AccentTokens, p: PaletaDoCanalTokens) {
   },
   hourDot: { width: 8, height: 8, borderRadius: 4 },
   hourStatusText: { fontSize: 11, fontWeight: "700" },
+  // "Fecha no dia seguinte" / erro do dia: linha inteira, alinhada aos campos.
+  hourAviso: { width: "100%", paddingLeft: 50, fontSize: 11, lineHeight: 15, color: p.ink3 },
 
   // Preview
   previewCard: {

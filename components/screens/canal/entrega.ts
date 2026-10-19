@@ -51,3 +51,55 @@ export function textosDoPrazo(vitrine: "comum" | "studio" = "comum") {
     entregaAjuda: "Texto livre. Ex: \"Em 2-4 horas\", \"No mesmo dia\", \"1-3 dias úteis\".",
   };
 }
+
+// ============================================================
+// Horário de funcionamento (19/10/2026)
+//
+// Desde 19/10 "Fechada" recusa o pedido no servidor, então um horário sem
+// sentido fecha a loja de verdade. A regra é a mesma do backend
+// (services/horarioDaLoja.js):
+//   • fechar depois da meia-noite é válido — 18:00 às 02:00 vale até as
+//     02:00 do dia seguinte;
+//   • abertura igual ao fechamento não é intervalo e não é salvo;
+//   • dia com só um dos dois preenchidos espera a lojista terminar.
+// ============================================================
+
+export type SituacaoDoDia = "fechado" | "incompleto" | "formato" | "igual" | "normal" | "vira_a_noite";
+
+function minutos(v: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec((v || "").trim());
+  if (!m) return null;
+  const h = parseInt(m[1], 10);
+  const mn = parseInt(m[2], 10);
+  if (h > 23 || mn > 59) return null;
+  return h * 60 + mn;
+}
+
+/** Como a tela lê um dia da grade. */
+export function situacaoDoDia(abre: string, fecha: string): SituacaoDoDia {
+  const a = (abre || "").trim();
+  const f = (fecha || "").trim();
+  if (!a && !f) return "fechado";
+  if (!a || !f) return "incompleto";
+  const ma = minutos(a);
+  const mf = minutos(f);
+  if (ma == null || mf == null) return "formato";
+  if (ma === mf) return "igual";
+  return mf < ma ? "vira_a_noite" : "normal";
+}
+
+/** A grade inteira pode ir para o servidor? */
+export function horarioPodeSalvar(dias: Array<{ open: string; close: string }>): boolean {
+  return dias.every((d) => {
+    const s = situacaoDoDia(d.open, d.close);
+    return s === "fechado" || s === "normal" || s === "vira_a_noite";
+  });
+}
+
+/** O texto curto embaixo da linha do dia; "" quando não há o que dizer. */
+export function avisoDoDia(s: SituacaoDoDia): string {
+  if (s === "vira_a_noite") return "Fecha no dia seguinte";
+  if (s === "igual") return "Fechamento igual à abertura. Se fecha depois da meia-noite, use o horário do dia seguinte (ex.: 18:00 às 02:00).";
+  if (s === "formato") return "Use HH:MM, de 00:00 a 23:59.";
+  return "";
+}
