@@ -166,7 +166,16 @@ export function CheckinEntrada() {
         setFrenteJaGravada(true);
         return;
       }
-      const res = await frenteApi.trocar(companyId, { segment: seg });
+      // only_if_empty: o servidor só grava se a conta ainda não tem frente
+      // (backend em PR à parte; até lá o campo é ignorado).
+      const res = await frenteApi.trocar(companyId, { segment: seg, only_if_empty: true });
+      if (res && res.applied === false) {
+        // A frente já existia: sucesso, nada muda na tela. O store fica com
+        // a frente que o servidor tem (a próxima escolha compara com ela).
+        frenteGravada.current = (res.segment as Segmento) || null;
+        if (res.segment && typeof st.updateCompany === "function") st.updateCompany({ segment: res.segment } as any);
+        return;
+      }
       frenteGravada.current = (res?.segment as Segmento) || seg;
       respostaFrente.current = res || null;
       // Só o segment agora: a vertical do Studio (se for o caso) entra no

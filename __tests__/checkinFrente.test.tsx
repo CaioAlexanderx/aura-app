@@ -61,6 +61,7 @@ jest.mock("@/services/primeirosPassosApi", () => {
 });
 
 import { CheckinEntrada } from "@/components/onboarding/CheckinEntrada";
+import { FrenteDaLoja } from "@/components/screens/configuracoes/FrenteDaLoja";
 import { MOD_CHECKIN } from "@/constants/checkin";
 import { SEGMENT_LABEL, SEGMENTOS } from "@/constants/primeirosPassos";
 import { opcoesDeFrente, precisaPerguntarFrente } from "@/utils/checkinRegras";
@@ -150,7 +151,8 @@ describe("a tela", () => {
     const chamadas = chamadasDaFrente();
     expect(chamadas).toHaveLength(1);
     expect(chamadas[0][0]).toBe("/companies/loja-1/segment");
-    expect(chamadas[0][1]).toMatchObject({ method: "PATCH", body: { segment: "matcon" } });
+    // o check-in manda only_if_empty (grava só se a conta ainda não tem frente)
+    expect(chamadas[0][1]).toEqual({ method: "PATCH", body: { segment: "matcon", only_if_empty: true } });
     expect(mockAuth.updateCompany).toHaveBeenCalledWith({ segment: "matcon" });
     // a pergunta continua na tela, marcada, e o Continuar libera
     const chip = achar(tree, "checkin-chip-frente-matcon")[0];
@@ -187,6 +189,43 @@ describe("a tela", () => {
     await esvaziar();
     expect(chamadasDaFrente()).toHaveLength(0);
     expect(achar(tree, "checkin-pergunta-frente").length).toBe(0);
+    tree.unmount();
+  });
+
+  test("resposta { applied: false, segment }: sucesso, nada muda na tela", async () => {
+    resetar();
+    mockRequest.mockResolvedValueOnce({ applied: false, segment: "otica", segment_source: "cnae", vertical_active: null, flags: {} });
+    const tree = await montar();
+    await act(async () => { achar(tree, "checkin-chip-frente-matcon")[0].props.onPress(); });
+    await esvaziar();
+    expect(chamadasDaFrente()).toHaveLength(1);
+    // a escolha continua marcada, sem erro, e o Continuar libera
+    expect(achar(tree, "checkin-chip-frente-matcon")[0].props.accessibilityState.selected).toBe(true);
+    expect(achar(tree, "checkin-frente-erro").length).toBe(0);
+    expect(achar(tree, "checkin-pergunta-frente").length).toBeGreaterThan(0);
+    expect(achar(tree, "checkin-continuar")[0].props.disabled).toBe(false);
+    // o store fica com a frente do servidor, não com a escolhida
+    expect(mockAuth.updateCompany).toHaveBeenCalledWith({ segment: "otica" });
+    expect(mockAuth.updateCompany).not.toHaveBeenCalledWith({ segment: "matcon" });
+    tree.unmount();
+  });
+
+  test("o cartão 'Sua frente' de Configurações NÃO manda only_if_empty", async () => {
+    resetar({ segment: "varejo" });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let tree: any;
+    await act(async () => {
+      tree = renderer.create(<QueryClientProvider client={client}><FrenteDaLoja display={{}} /></QueryClientProvider>);
+    });
+    await act(async () => { achar(tree, "pdv-settings-frente-trocar")[0].props.onPress(); });
+    await act(async () => { achar(tree, "pdv-settings-frente-opcao-matcon")[0].props.onPress(); });
+    await act(async () => { achar(tree, "pdv-settings-frente-salvar")[0].props.onPress(); });
+    await act(async () => { await achar(tree, "pdv-settings-frente-confirmar")[0].props.onPress(); });
+    await esvaziar();
+    const chamadas = chamadasDaFrente();
+    expect(chamadas).toHaveLength(1);
+    expect(chamadas[0][1].body.segment).toBe("matcon");
+    expect(chamadas[0][1].body).not.toHaveProperty("only_if_empty");
     tree.unmount();
   });
 
@@ -238,7 +277,9 @@ describe("fonte", () => {
   test("reaproveita a lista e a rota do cartão 'Sua frente'", () => {
     const src = fs.readFileSync(path.join(__dirname, "..", "components/onboarding/CheckinEntrada.tsx"), "utf8");
     expect(src).toContain('import { frenteApi, type Segmento, type TrocarFrenteResponse } from "@/services/primeirosPassosApi";');
-    expect(src).toContain("frenteApi.trocar(companyId, { segment: seg })");
+    expect(src).toContain("frenteApi.trocar(companyId, { segment: seg, only_if_empty: true })");
+    expect(fs.readFileSync(path.join(__dirname, "..", "components/screens/configuracoes/FrenteDaLoja.tsx"), "utf8"))
+      .not.toContain("only_if_empty");
     const regras = fs.readFileSync(path.join(__dirname, "..", "utils/checkinRegras.ts"), "utf8");
     expect(regras).toContain('import { PLANOS_COM_STUDIO, SEGMENTOS } from "@/constants/primeirosPassos";');
     const cartao = fs.readFileSync(path.join(__dirname, "..", "components/screens/configuracoes/FrenteDaLoja.tsx"), "utf8");
