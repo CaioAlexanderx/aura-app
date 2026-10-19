@@ -17,6 +17,16 @@ import { valeTrocaPrecisaMigrar, marcarValeTrocaMigrado } from "@/utils/valeTroc
 // nao usa simplesmente desliga em Configuracoes > PDV > Politicas do
 // Caixa. Backend tambem atualizado (migration 106 + ALTER COLUMN DEFAULT).
 //
+// 19/10/2026 (decisao do Caio): caixa_enabled volta a default=false, junto
+// de require_seller/require_customer. Controle de caixa (abrir antes de
+// vender), vendedor e cliente obrigatorios eram o "bloqueador gigantesco da
+// primeira venda" da conta nova. O backend nasce igual (migration 399). Vale
+// so para quem NUNCA salvou: o default so aparece enquanto o GET nao
+// respondeu (ou falhou) e o app salva o objeto inteiro que leu — com true
+// aqui, um save nessa janela gravaria o caixa ligado sem ninguem escolher.
+// Quem salvou caixa_enabled=true no servidor continua com true (o valor do
+// servidor sempre vence este default). crediario_enabled segue true.
+//
 // 12/05/2026: cash_tender_modal_enabled — default true. Controla se o
 // modal de troco em venda dinheiro abre (single ou parcela dinheiro
 // em split-mode). Operador batuto/fila grande pode desligar.
@@ -25,7 +35,7 @@ import { valeTrocaPrecisaMigrar, marcarValeTrocaMigrado } from "@/utils/valeTroc
 const DEFAULT_SETTINGS: PdvSettings = {
   require_customer:          false,
   require_seller:            false,
-  caixa_enabled:             true,
+  caixa_enabled:             false,
   crediario_enabled:         true,
   cash_tender_modal_enabled: true,
 };
