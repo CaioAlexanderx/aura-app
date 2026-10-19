@@ -16,8 +16,8 @@ import { CnpjSection } from "@/components/screens/configuracoes/CnpjSection";
 import { PdvSettingsCard } from "@/components/screens/configuracoes/PdvSettingsCard";
 import { AuraNoCelularCard } from "@/components/screens/configuracoes/AuraNoCelularCard";
 import { AtalhoAssento } from "@/components/screens/blackfriday/AtalhoAssento";
-import { FocoIndicacao } from "@/components/screens/configuracoes/FocoIndicacao";
-import { pedeFocoNaIndicacao } from "@/utils/focoIndicacao";
+import { FocoNaSecao } from "@/components/screens/configuracoes/FocoNaSecao";
+import { secaoDoFoco } from "@/utils/focoNaSecao";
 import { useConfigProfile } from "@/components/screens/configuracoes/useConfigProfile";
 import { SectionTitle, Card, EditField, InfoRow, PLANS, AURA_WHATSAPP, AURA_EMAIL, sh } from "@/components/screens/configuracoes/shared";
 
@@ -140,8 +140,10 @@ export default function ConfiguracoesScreen() {
   const profile = useConfigProfile();
   // 14/10/2026 (tq-11): /configuracoes?foco=indicacao (banner do sino) rola
   // até o cartão "Indique e ganhe" e o destaca. Sem o cartão na tela, não faz nada.
+  // 18/10/2026 (card p-19): vale para qualquer seção do registro em
+  // utils/focoNaSecao.ts (?foco=<chave>).
   const params = useLocalSearchParams<{ foco?: string | string[] }>();
-  const focoIndicacao = pedeFocoNaIndicacao(params?.foco);
+  const secaoEmFoco = secaoDoFoco(params?.foco);
 
   // ============================================================
   // 12/05/2026 — FIX EquipeGate stale plan (caso Maria/Encanto):
@@ -452,7 +454,7 @@ export default function ConfiguracoesScreen() {
           )}
 
           <View style={{ marginTop: 20 }}><ReferralCard /></View>
-          <FocoIndicacao ativo={focoIndicacao} />
+          <FocoNaSecao secao={secaoEmFoco} />
 
           {isDemo && (
             <View style={s.demoBanner}>
