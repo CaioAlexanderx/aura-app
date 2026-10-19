@@ -17,9 +17,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
 
 const mockReplace = jest.fn();
+// Navegador raiz montado (INC-2026-10-19-02): `key` nula = ainda não montou.
+let mockNavState: any = { key: "raiz" };
 jest.mock("expo-router", () => ({
   useRouter: () => ({ replace: (...a: any[]) => mockReplace(...a), push: jest.fn() }),
   router: { replace: (...a: any[]) => mockReplace(...a) },
+  useRootNavigationState: () => mockNavState,
 }));
 
 let mockAuth: any;
@@ -77,8 +80,9 @@ function resetar(company: any = {}) {
     flags: { matcon_enabled: false, otica_enabled: false, os_enabled: false, studio_enabled: false },
   }));
   mockModulos = new Set(["estoque", "pdv", "nfe", "painel", MOD_CHECKIN]);
+  mockNavState = { key: "raiz" };
   mockAuth = {
-    token: "t", isStaff: false, isDemo: false, consolidatedView: false,
+    token: "t", isHydrated: true, isStaff: false, isDemo: false, consolidatedView: false,
     updateCompany: jest.fn((p: any) => { mockAuth.company = { ...mockAuth.company, ...p }; }),
     company: { id: "loja-1", name: "Loja", plan: "essencial", member_role: "owner", segment: null, vertical_active: null, ...company },
   };

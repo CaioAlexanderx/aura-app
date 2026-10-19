@@ -29,10 +29,20 @@
 // vende?", com as frentes do cartão "Sua frente" de Configurações. Um toque
 // grava pela mesma rota (PATCH /companies/:id/segment → segment_source
 // 'user'). Quem já tem frente segue com as três perguntas de sempre.
+//
+// 19/10/2026 (INC-2026-10-19-02): abrir /checkin direto (recarga) caía em
+// "Algo deu errado". O <Slot/> do layout raiz mostra esta rota antes de a
+// sessão ser restaurada; sem companyId a consulta ficava desligada,
+// isLoading era falso e o efeito "direto ao Painel" chamava router.replace
+// antes de o navegador raiz montar ("Attempted to navigate before mounting
+// the Root Layout component"). Agora a tela espera a sessão (isHydrated,
+// como os layouts de dental/food) e o navegador raiz
+// (useRootNavigationState().key, como app/(tabs)/financeiro.tsx) antes de
+// decidir ou navegar; até lá, o carregando de sempre.
 // ============================================================
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator, useWindowDimensions, Linking, Platform } from "react-native";
-import { useRouter } from "expo-router";
+import { useRootNavigationState, useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useColors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
@@ -76,9 +86,14 @@ export function CheckinEntrada() {
   const queryClient = useQueryClient();
   const { width } = useWindowDimensions();
   const company = useAuthStore((s) => s.company);
+  // Recarga direto em /checkin: a sessão ainda não foi restaurada e o
+  // navegador raiz ainda não montou. Nada é decidido antes dos dois.
+  const isHydrated = useAuthStore((s) => s.isHydrated);
+  const navState = useRootNavigationState();
+  const pronta = !!isHydrated && navState?.key != null;
   const companyId = company?.id || null;
   const modulos = useVisibleModules();
-  const { data, isLoading } = useCheckin(companyId, !!companyId);
+  const { data, isLoading } = useCheckin(companyId, !!isHydrated && !!companyId);
   const habilitada = !!data && data.habilitado && !data.respondido && !data.pulou;
   // Já pergunta se a loja tem produto enquanto ela responde (destino do Caixa).
   const temProdutoQ = useTemProduto(companyId, habilitada);
@@ -126,10 +141,11 @@ export function CheckinEntrada() {
   }, [router]);
 
   // Sem sessão de empresa, sem rota, erro ou desligada: direto ao Painel.
+  // Só com a sessão restaurada e o navegador raiz pronto (INC-2026-10-19-02).
   useEffect(() => {
-    if (isLoading) return;
+    if (!pronta || isLoading) return;
     if (!companyId || !data || !data.habilitado || data.respondido || data.pulou) seguirParaOPainel();
-  }, [isLoading, companyId, data, seguirParaOPainel]);
+  }, [pronta, isLoading, companyId, data, seguirParaOPainel]);
 
   function atualizarCache(parcial: Partial<CheckinEstado>) {
     queryClient.setQueryData<CheckinEstado | null>(checkinQueryKey(companyId), (atual) =>
@@ -193,7 +209,7 @@ export function CheckinEntrada() {
   }
 
   async function continuar() {
-    if (saindo.current) return;
+    if (saindo.current || !pronta) return;
     // Personalizados (Studio): a frente nova abre o Aura Studio.
     if (respostaFrente.current?.vertical_active === "studio") {
       saindo.current = true;
@@ -226,6 +242,7 @@ export function CheckinEntrada() {
   }
 
   function pular() {
+    if (!pronta) return;
     if (companyId) checkinApi.put(companyId, corpoDoPular()).catch(() => {});
     atualizarCache({ pulou: true });
     seguirParaOPainel();
@@ -240,7 +257,7 @@ export function CheckinEntrada() {
   );
   const respondidas = quantasRespostas(respostas) + (frente ? 1 : 0);
   const duasColunas = width >= LARGURA_DUAS_COLUNAS;
-  const mostrandoTela = !isLoading && !!data && data.habilitado && !data.respondido && !data.pulou;
+  const mostrandoTela = pronta && !isLoading && !!data && data.habilitado && !data.respondido && !data.pulou;
 
   if (!mostrandoTela) {
     return (
