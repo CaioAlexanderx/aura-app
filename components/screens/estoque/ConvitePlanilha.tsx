@@ -13,6 +13,7 @@
 //     (sessionStorage, decisão da Nina): não volta ao remontar nem se o
 //     check-in mandar ?importar=planilha de novo. Sem storage (privado,
 //     nativo, bloqueado), vale só enquanto a tela está montada; nunca quebra.
+//   · "Baixar modelo" (tq-36) entrega a planilha modelo e NÃO encerra o convite.
 //   · Só então o parâmetro sai da URL. O setParams com undefined vira a
 //     string "undefined", que querImportarPlanilha rejeita.
 // ============================================================
@@ -22,6 +23,7 @@ import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { TEXTO_CONVITE_PLANILHA, querImportarPlanilha } from "@/utils/checkinDestino";
+import { BaixarModelo } from "./BaixarModelo";
 
 export const CHAVE_CONVITE_PLANILHA = "aura_convite_planilha_encerrado";
 
@@ -84,6 +86,8 @@ export function ConvitePlanilha({ importar, escondido, ocupado, onEscolher }: Pr
       >
         <Text style={s.botaoTxt}>Escolher planilha</Text>
       </Pressable>
+      {/* Baixar o modelo NÃO encerra o convite: a pessoa baixa, preenche e volta para escolher. */}
+      <BaixarModelo testID="estoque-convite-planilha-modelo" />
       <Pressable onPress={encerrar} accessibilityRole="button" style={s.agoraNao} testID="estoque-convite-planilha-fechar">
         <Text style={[s.sub, { textDecorationLine: "underline", marginTop: 0 }]}>Agora não</Text>
       </Pressable>

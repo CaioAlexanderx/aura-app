@@ -31,6 +31,7 @@ import {
   type ResumoImport,
 } from "@/utils/importPrevia";
 import type { FaseImport } from "@/hooks/useImportProdutos";
+import { BaixarModelo } from "./BaixarModelo";
 
 const IS_WEB = Platform.OS === "web";
 const LOTE_LISTA = 50;
@@ -260,6 +261,10 @@ function Conferencia({ resumo }: { resumo: ResumoImport }) {
             Não achamos a coluna com {resumo.faltando.join(" nem com ")}. Sem ela, as linhas não entram. Confira o nome da coluna na planilha.
           </Text>
         )}
+        {/* tq-36: o modelo já vem com os nomes de coluna que a importação reconhece. */}
+        <View style={{ marginTop: 8 }}>
+          <BaixarModelo estilo="link" testID="import-baixar-modelo" />
+        </View>
       </View>
 
       <View style={s.tiles}>
