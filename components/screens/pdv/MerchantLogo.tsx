@@ -20,9 +20,12 @@
 //   O logo do Canal Digital é outro registro (config do site), não é o da
 //   empresa — por isso não é lido nesta tela.
 //
-// Sem logo (ou plano sem direito a logo) cai no tile violeta com a inicial da
-// loja, o mesmo do rodapé do menu lateral. Nunca a logo da Aura: quem está na
-// tela é a loja, não a gente.
+// Sem logo cai no tile violeta com a inicial da loja, o mesmo do rodapé do
+// menu lateral. Nunca a logo da Aura: quem está na tela é a loja, não a gente.
+//
+// 20/10/2026 (decisão do Caio): a logo aparece em TODOS os planos. Antes havia
+// um gate (só Negócio, Expansão e Personalizado) e o Essencial via a inicial
+// mesmo com a logo cadastrada em Configurações.
 // ============================================================
 import { useState, useEffect } from "react";
 import { View, Text, Image, StyleSheet, Platform } from "react-native";
@@ -31,13 +34,6 @@ import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 import { useAuthStore } from "@/stores/auth";
 import { IS_WEB } from "./types";
 
-/** Planos que mostram a logo do lojista — mesma regra da BrandBanner. */
-const PLANOS_COM_LOGO = ["negocio", "expansao", "personalizado"];
-
-export function podeMostrarLogo(plan?: string | null): boolean {
-  return PLANOS_COM_LOGO.indexOf(String(plan || "").toLowerCase()) >= 0;
-}
-
 /** Inicial da loja pro tile violeta. Sem nome, "L" de loja — nunca "A". */
 export function initialDaLoja(name?: string | null): string {
   const t = String(name || "").trim();
@@ -45,11 +41,11 @@ export function initialDaLoja(name?: string | null): string {
   return t.charAt(0).toUpperCase();
 }
 
-/** Nome + logo da loja, já com o gate de plano aplicado. */
+/** Nome + logo da loja (qualquer plano). */
 export function useMerchantBrand() {
-  const { logoUrl, plan, tradeName } = useCompanyProfile();
+  const { logoUrl, tradeName } = useCompanyProfile();
   const companyLogo = useAuthStore(s => s.companyLogo);
-  const url = podeMostrarLogo(plan) ? (logoUrl || companyLogo || null) : null;
+  const url = logoUrl || companyLogo || null;
   return { logoUrl: url, name: tradeName || "", initial: initialDaLoja(tradeName) };
 }
 

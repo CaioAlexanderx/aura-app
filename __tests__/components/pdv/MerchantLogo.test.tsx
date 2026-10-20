@@ -1,7 +1,8 @@
 // Fase 0 · I0.3 — a logo do lojista some do painel roxo de 200px e abre o
-// cabeçalho (48px) e o carrinho vazio (120px). Sem logo (ou plano sem
-// direito a ela), cai no tile violeta com a inicial da loja — nunca a logo
-// da Aura.
+// cabeçalho (48px) e o carrinho vazio (120px). Sem logo, cai no tile violeta
+// com a inicial da loja — nunca a logo da Aura.
+// 20/10/2026 (decisão do Caio): a logo aparece em todos os planos, inclusive
+// no Essencial; não há mais gate de plano.
 import React from "react";
 import renderer, { act } from "react-test-renderer";
 
@@ -26,7 +27,7 @@ jest.mock("@/stores/auth", () => ({
   },
 }));
 
-import { MerchantLogo, podeMostrarLogo, initialDaLoja } from "@/components/screens/pdv/MerchantLogo";
+import { MerchantLogo, initialDaLoja } from "@/components/screens/pdv/MerchantLogo";
 
 // React quebra texto interpolado em nós separados — achatamos a árvore
 // RENDERIZADA (toJSON, já mapeada pro DOM via react-native-web). Mesmo
@@ -44,18 +45,7 @@ beforeEach(() => {
   mockCompanyLogo = null;
 });
 
-describe("podeMostrarLogo / initialDaLoja", () => {
-  it("planos com direito à logo: negocio, expansao, personalizado", () => {
-    expect(podeMostrarLogo("negocio")).toBe(true);
-    expect(podeMostrarLogo("expansao")).toBe(true);
-    expect(podeMostrarLogo("personalizado")).toBe(true);
-  });
-
-  it("planos sem direito à logo (ex.: essencial) caem pro tile", () => {
-    expect(podeMostrarLogo("essencial")).toBe(false);
-    expect(podeMostrarLogo(null)).toBe(false);
-  });
-
+describe("initialDaLoja", () => {
   it("inicial da loja: primeira letra maiúscula; sem nome, 'L' de loja (nunca 'A')", () => {
     expect(initialDaLoja("Finesse")).toBe("F");
     expect(initialDaLoja("bella moda")).toBe("B");
@@ -65,7 +55,7 @@ describe("podeMostrarLogo / initialDaLoja", () => {
 });
 
 describe("MerchantLogo — cabeçalho (size 48) e carrinho vazio (size 120)", () => {
-  it("com logo cadastrada e plano habilitado: renderiza a imagem inteira (contain), não corta", () => {
+  it("com logo cadastrada: renderiza a imagem inteira (contain), não corta", () => {
     mockProfile = { logoUrl: "https://cdn.aura/logo-finesse.png", plan: "negocio", tradeName: "Finesse" };
     let t!: renderer.ReactTestRenderer;
     act(() => {
@@ -98,13 +88,37 @@ describe("MerchantLogo — cabeçalho (size 48) e carrinho vazio (size 120)", ()
     expect(flattenText(t.toJSON())).toBe("F");
   });
 
-  it("plano sem direito à logo: mesmo com logoUrl no profile, mostra o tile (gate de plano)", () => {
-    mockProfile = { logoUrl: "https://cdn.aura/logo-finesse.png", plan: "essencial", tradeName: "Finesse" };
+  it.each(["essencial", "negocio", "expansao", "personalizado", ""])(
+    "plano %p com logo cadastrada: mostra a logo (sem gate de plano)",
+    (plan) => {
+      mockProfile = { logoUrl: "https://cdn.aura/logo-finesse.png", plan, tradeName: "Finesse" };
+      let t!: renderer.ReactTestRenderer;
+      act(() => {
+        t = renderer.create(<MerchantLogo size={48} />);
+      });
+      const img = t.root.findByType("img" as any);
+      expect(img.props.src).toBe("https://cdn.aura/logo-finesse.png");
+    },
+  );
+
+  it("Essencial sem logo: cai no tile com a inicial, como nos outros planos", () => {
+    mockProfile = { logoUrl: null, plan: "essencial", tradeName: "Finesse" };
     let t!: renderer.ReactTestRenderer;
     act(() => {
       t = renderer.create(<MerchantLogo size={48} />);
     });
     expect(t.root.findAllByType("img" as any).length).toBe(0);
+    expect(flattenText(t.toJSON())).toBe("F");
+  });
+
+  it("Essencial com logo só no auth store (profile ainda sem resposta): mostra a imagem", () => {
+    mockProfile = { logoUrl: null, plan: "essencial", tradeName: "Finesse" };
+    mockCompanyLogo = "https://cdn.aura/fallback-logo.png";
+    let t!: renderer.ReactTestRenderer;
+    act(() => {
+      t = renderer.create(<MerchantLogo size={48} />);
+    });
+    expect(t.root.findByType("img" as any).props.src).toBe("https://cdn.aura/fallback-logo.png");
   });
 
   it("fallback: sem logoUrl no profile mas com companyLogo no auth store, ainda mostra a imagem", () => {

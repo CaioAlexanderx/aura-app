@@ -86,7 +86,6 @@ import { useComandaNoCaixa } from "@/hooks/useComandaNoCaixa";
 import { useComandasAbertas } from "@/components/screens/pdv/ComandasAbertasPanel";
 import { lerComandaEnabled } from "@/utils/comanda";
 import { algumPrecoMudou } from "@/utils/vendaRecuperada";
-import { podeMostrarLogo } from "@/components/screens/pdv/MerchantLogo";
 
 import { toast } from "@/components/Toast";
 import { flyToCart } from "@/components/screens/pdv/flyToCart";
@@ -863,10 +862,11 @@ export function usePdvState() {
     // 07/10/2026: aqui se lia `company.profile`, que o store de auth nunca
     // teve — logo, telefone e endereço saíam sempre vazios e o orçamento
     // impresso mostrava só a inicial da loja. A fonte é o perfil da empresa
-    // (a mesma da logo do Caixa), com o gate de plano da logo.
+    // (a mesma da logo do Caixa). 20/10/2026: sem gate de plano — a logo sai
+    // em qualquer plano (decisão do Caio).
     const perfil        = perfilDaEmpresa.profile as any;
     const profile       = {
-      logo_url: podeMostrarLogo(perfilDaEmpresa.plan) ? (perfilDaEmpresa.logoUrl || companyLogo || null) : null,
+      logo_url: perfilDaEmpresa.logoUrl || companyLogo || null,
       phone:    perfil?.phone || null,
       address:  perfil?.address || null,
     };
