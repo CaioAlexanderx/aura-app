@@ -55,6 +55,8 @@ export type RegisterBody = {
   company_name?: string;
   phone?: string;
   cnpj?: string;
+  /** 20/10/2026: conta sem CNPJ ("Não tenho CNPJ"). Só vai quando não há cnpj; o backend valida os dígitos e recusa CPF de outra conta (409 CPF_ALREADY_REGISTERED). */
+  cpf?: string;
   /** 12/10/2026: regime detectado pela Receita no cadastro; o backend grava na empresa nova. */
   tax_regime?: string;
   access_code?: string;

@@ -23,6 +23,8 @@ export function ProfileBanner() {
   // Calculate completion from API data (same fields as useConfigProfile)
   const companyName = profile?.trade_name || profile?.legal_name || company?.name || "";
   const cnpj = profile?.cnpj || "";
+  // 20/10/2026: conta sem CNPJ, cadastrada com CPF — o documento ja esta la.
+  const cpf = profile?.cpf || "";
   const email = profile?.email || user?.email || "";
   const phone = profile?.phone || "";
   const address = profile?.address || "";
@@ -30,7 +32,7 @@ export function ProfileBanner() {
 
   const checks: [boolean, string][] = [
     [!!companyName && companyName !== "Minha Empresa", "Nome da empresa"],
-    [!!cnpj, "CNPJ"],
+    [!!cnpj || !!cpf, "CNPJ"],
     [!!email, "E-mail"],
     [!!phone, "Telefone"],
     [!!address, "Endereço"],

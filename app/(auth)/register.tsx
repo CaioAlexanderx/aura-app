@@ -14,7 +14,8 @@ import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { useLgpdConsentInset } from "@/components/LGPDConsent";
-import { maskCnpj, maskPhone } from "@/utils/masks";
+import { maskCnpj, maskCpf, maskPhone } from "@/utils/masks";
+import { cpfDoCadastroValido, documentoDoCadastro, conflitoDoCadastro } from "@/utils/documentoEmpresa";
 
 const LOGO_SVG = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
 const API_BASE = "https://aura-backend-production-f805.up.railway.app/api/v1";
@@ -259,6 +260,14 @@ export default function RegisterScreen() {
   // com o default da coluna (simples_nacional) para todo mundo.
   const [regimeDetectado, setRegimeDetectado] = useState<string | null>(null);
   const [cnpjError, setCnpjError] = useState<string | null>(null);
+  // 20/10/2026: conta sem CNPJ. "Não tenho CNPJ" troca o campo do CNPJ por
+  // CPF + nome da loja (sem consulta à Receita); "Tenho CNPJ" volta ao fluxo
+  // de sempre, que não muda em nada para quem tem CNPJ.
+  const [semCnpj, setSemCnpj] = useState(false);
+  const [cpf, setCpf] = useState("");
+  // Consulta de CNPJ em voo quando a pessoa troca para CPF: a resposta chega
+  // depois e nao pode preencher nada.
+  const semCnpjRef = useRef(false);
   const [codeValid, setCodeValid] = useState<boolean | null>(null);
   const [codeChecking, setCodeChecking] = useState(false);
   // Aceite dos Termos de Uso — obrigatorio para prosseguir no cadastro
@@ -329,6 +338,7 @@ export default function RegisterScreen() {
       if (res.status === 422) { const err = await res.json().catch(() => ({})); setCnpjError(err.error || "CNPJ com situação irregular."); return; }
       if (!res.ok) { const err2 = await res.json().catch(() => ({})); setCnpjError(err2.error || "Erro na consulta (" + res.status + ")."); return; }
       const data = await res.json();
+      if (semCnpjRef.current) return;
       const companyName = data.legal_name || data.trade_name || data.razao_social || data.nome_fantasia || "";
       setEmpresa(companyName); setCnpjFound(companyName);
       if (data.phone) setTelefoneEmpresa(maskPhone(data.phone));
@@ -340,6 +350,16 @@ export default function RegisterScreen() {
     } catch (err: any) {
       setCnpjError(err?.name === "AbortError" ? "Consulta demorou demais. Tente novamente." : "Erro de conexão ao consultar CNPJ.");
     } finally { setCnpjLoading(false); }
+  }
+
+  // Troca CNPJ <-> CPF limpando o que a outra forma preencheu: nunca manda
+  // os dois, nem o nome que veio da Receita para uma conta com CPF.
+  function alternarSemCnpj(next: boolean) {
+    if (cnpjFound && empresa === cnpjFound) setEmpresa("");
+    setCnpj(""); setCnpjFound(null); setCnpjError(null); setRegimeDetectado(null); setCnpjLoading(false);
+    setCpf("");
+    semCnpjRef.current = next;
+    setSemCnpj(next);
   }
 
   function handleCnpjChange(v: string) { const masked = maskCnpj(v); setCnpj(masked); setCnpjFound(null); setCnpjError(null); setRegimeDetectado(null); if (masked.replace(/\D/g, "").length === 14) lookupCNPJ(masked); }
@@ -362,12 +382,15 @@ export default function RegisterScreen() {
   // termsAccepted e obrigatorio para avancar — previne POST sem aceite
   const step1Valid = nome.trim().length > 0 && emailValid && passValid && termsAccepted;
   const cnpjValid = cnpj.replace(/\D/g, "").length === 14 && !!cnpjFound && !cnpjError;
+  const cpfValid = cpfDoCadastroValido(cpf);
+  const cpfCompleto = cpf.replace(/\D/g, "").length === 11;
+  const documentoValid = semCnpj ? cpfValid : cnpjValid;
   const contatoValid = telefoneContato.replace(/\D/g, "").length >= 10;
   // F11: dojo so fecha o cadastro com a federacao escolhida (o backend
   // devolve 400 FEDERATION_REQUIRED sem ela). Varejo: exatamente a mesma
   // regra de antes.
   const federationValid = !isDojo || !!federationId;
-  const step2Valid = empresa.length > 0 && contatoValid && cnpjValid && federationValid;
+  const step2Valid = (semCnpj ? empresa.trim().length > 0 : empresa.length > 0) && contatoValid && documentoValid && federationValid;
 
   function nextStep() { if (!step1Valid) { toast.error(!termsAccepted ? "Você precisa aceitar os Termos de Uso para continuar" : "Preencha todos os campos corretamente"); return; } setStep(1); }
 
@@ -389,9 +412,11 @@ export default function RegisterScreen() {
   }
 
   async function handleRegister() {
-    if (!cnpjValid) { toast.error("CNPJ obrigatório. Insira um CNPJ válido."); return; }
+    if (semCnpj) {
+      if (!cpfValid) { toast.error("CPF inválido. Confira os números."); return; }
+    } else if (!cnpjValid) { toast.error("CNPJ obrigatório. Insira um CNPJ válido."); return; }
     if (!contatoValid) { toast.error("Informe seu telefone para contato."); return; }
-    if (!empresa) { toast.error(isDojo ? "Preencha o nome do dojo" : "Preencha o nome da empresa"); return; }
+    if (semCnpj ? !empresa.trim() : !empresa) { toast.error(isDojo ? "Preencha o nome do dojo" : semCnpj ? "Preencha o nome da sua loja" : "Preencha o nome da empresa"); return; }
     if (isDojo && !federationId) { toast.error("Escolha a federação do seu dojo"); return; }
     try {
       await register({
@@ -400,8 +425,8 @@ export default function RegisterScreen() {
         password: senha,
         company_name: empresa.trim(),
         phone: telefoneContato.replace(/\D/g, ""),
-        cnpj: cnpj.replace(/\D/g, ""),
-        tax_regime: regimeDetectado || undefined,
+        // Com CNPJ: cnpj + regime da Receita, como sempre. Sem CNPJ: só o CPF.
+        ...documentoDoCadastro({ semCnpj, cnpj, cpf, regimeDetectado }),
         access_code: codigo.trim() || undefined,
         self_serve: true,
         terms_accepted: true,
@@ -421,7 +446,8 @@ export default function RegisterScreen() {
       if (err instanceof ApiError && err.status === 409) {
         // F11: CNPJ ja cadastrado — o dojo NUNCA entra numa empresa existente
         // (nao ha reivindicacao silenciosa de registro alheio). Fica no passo 2.
-        if ((err.data as any)?.code === "CNPJ_ALREADY_REGISTERED") {
+        // 20/10/2026: CPF de outra conta — mesmo tratamento (fica no passo 2).
+        if (conflitoDoCadastro((err.data as any)?.code) !== "email") {
           toast.error(err.message);
           return;
         }
@@ -590,19 +616,37 @@ export default function RegisterScreen() {
       {!isInviteFlow && step === 1 && (
         <View>
           {branchBlock}
-          <View style={s.field}>
-            <Text style={s.label}>CNPJ *</Text>
-            <View style={[s.inputWrap, cnpjFound && { borderColor: Colors.green }, cnpjError && { borderColor: Colors.red }]}>
-              <Icon name="file_text" size={16} color={cnpjFound ? Colors.green : cnpjError ? Colors.red : Colors.ink3} />
-              <TextInput style={[s.input, inputOutline]} {...webInputProps} value={cnpj} onChangeText={handleCnpjChange} placeholder="00.000.000/0000-00" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={18} />
-              {cnpjLoading && <ActivityIndicator size="small" color={Colors.violet3} />}
+          {semCnpj ? (
+            <View style={s.field}>
+              <Text style={s.label}>Seu CPF *</Text>
+              <View style={[s.inputWrap, cpfValid && { borderColor: Colors.green }, cpfCompleto && !cpfValid && { borderColor: Colors.red }]}>
+                <Icon name="file_text" size={16} color={cpfValid ? Colors.green : cpfCompleto ? Colors.red : Colors.ink3} />
+                <TextInput style={[s.input, inputOutline]} {...webInputProps} value={cpf} onChangeText={(v: string) => setCpf(maskCpf(v))} placeholder="000.000.000-00" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={14} testID="cadastro-cpf" />
+              </View>
+              {cpfCompleto && !cpfValid && <View style={s.cnpjErrWrap}><Text style={s.cnpjErr}>CPF inválido. Confira os números.</Text></View>}
+              <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4 }}>Você pode usar a Aura sem CNPJ. Se abrir um depois, é só informar em Configurações.</Text>
+              <Pressable onPress={() => alternarSemCnpj(false)} style={s.docToggle} accessibilityRole="button" testID="cadastro-tenho-cnpj">
+                <Text style={s.docToggleText}>Tenho CNPJ</Text>
+              </Pressable>
             </View>
-            {cnpjFound && <View style={s.cnpjOk}><Icon name="check" size={12} color={Colors.green} /><Text style={s.cnpjOkText}>{cnpjFound}</Text></View>}
-            {cnpjError && <View style={s.cnpjErrWrap}><Text style={s.cnpjErr}>{cnpjError}</Text><Pressable onPress={() => { if (cnpj.replace(/\D/g, "").length === 14) lookupCNPJ(cnpj); }}><Text style={s.cnpjRetry}>Tentar novamente</Text></Pressable></View>}
-            {!cnpjFound && !cnpjError && !cnpjLoading && <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4 }}>Ao digitar o CNPJ, os dados serão preenchidos automaticamente.</Text>}
-          </View>
-          <View style={s.field}><Text style={s.label}>{isDojo ? "Nome do dojo *" : "Nome da empresa *"}</Text><View style={s.inputWrap}><Icon name={isDojo ? "building" : "briefcase"} size={16} color={Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={empresa} onChangeText={setEmpresa} placeholder={isDojo ? "Dojo Shotokan Centro" : "Minha Empresa Ltda"} placeholderTextColor={Colors.ink3} autoComplete="organization" /></View>{cnpjFound && <Text style={{ fontSize: 10, color: Colors.green, marginTop: 4, fontStyle: "italic" }}>Preenchido pelo CNPJ</Text>}</View>
-          <View style={s.field}><Text style={s.label}>{isDojo ? "Telefone do dojo" : "Telefone da empresa"}</Text><View style={[s.inputWrap, telefoneEmpresa ? { borderColor: Colors.green + "66" } : {}]}><Icon name="message" size={16} color={Colors.ink3} /><TextInput style={[s.input, inputOutline, { opacity: telefoneEmpresa ? 0.7 : 1 }]} {...webInputProps} value={telefoneEmpresa} onChangeText={(v: string) => setTelefoneEmpresa(maskPhone(v))} placeholder="Preenchido pelo CNPJ" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} /></View>{telefoneEmpresa && cnpjFound && <Text style={{ fontSize: 10, color: Colors.green, marginTop: 4, fontStyle: "italic" }}>Preenchido pelo CNPJ</Text>}</View>
+          ) : (
+            <View style={s.field}>
+              <Text style={s.label}>CNPJ *</Text>
+              <View style={[s.inputWrap, cnpjFound && { borderColor: Colors.green }, cnpjError && { borderColor: Colors.red }]}>
+                <Icon name="file_text" size={16} color={cnpjFound ? Colors.green : cnpjError ? Colors.red : Colors.ink3} />
+                <TextInput style={[s.input, inputOutline]} {...webInputProps} value={cnpj} onChangeText={handleCnpjChange} placeholder="00.000.000/0000-00" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={18} />
+                {cnpjLoading && <ActivityIndicator size="small" color={Colors.violet3} />}
+              </View>
+              {cnpjFound && <View style={s.cnpjOk}><Icon name="check" size={12} color={Colors.green} /><Text style={s.cnpjOkText}>{cnpjFound}</Text></View>}
+              {cnpjError && <View style={s.cnpjErrWrap}><Text style={s.cnpjErr}>{cnpjError}</Text><Pressable onPress={() => { if (cnpj.replace(/\D/g, "").length === 14) lookupCNPJ(cnpj); }}><Text style={s.cnpjRetry}>Tentar novamente</Text></Pressable></View>}
+              {!cnpjFound && !cnpjError && !cnpjLoading && <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4 }}>Ao digitar o CNPJ, os dados serão preenchidos automaticamente.</Text>}
+              <Pressable onPress={() => alternarSemCnpj(true)} style={s.docToggle} accessibilityRole="button" testID="cadastro-sem-cnpj">
+                <Text style={s.docToggleText}>Não tenho CNPJ</Text>
+              </Pressable>
+            </View>
+          )}
+          <View style={s.field}><Text style={s.label}>{isDojo ? "Nome do dojo *" : semCnpj ? "Nome da sua loja *" : "Nome da empresa *"}</Text><View style={s.inputWrap}><Icon name={isDojo ? "building" : "briefcase"} size={16} color={Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={empresa} onChangeText={setEmpresa} placeholder={isDojo ? "Dojo Shotokan Centro" : semCnpj ? "Loja da Maria" : "Minha Empresa Ltda"} placeholderTextColor={Colors.ink3} autoComplete="organization" /></View>{cnpjFound && <Text style={{ fontSize: 10, color: Colors.green, marginTop: 4, fontStyle: "italic" }}>Preenchido pelo CNPJ</Text>}</View>
+          <View style={s.field}><Text style={s.label}>{isDojo ? "Telefone do dojo" : "Telefone da empresa"}</Text><View style={[s.inputWrap, telefoneEmpresa ? { borderColor: Colors.green + "66" } : {}]}><Icon name="message" size={16} color={Colors.ink3} /><TextInput style={[s.input, inputOutline, { opacity: telefoneEmpresa ? 0.7 : 1 }]} {...webInputProps} value={telefoneEmpresa} onChangeText={(v: string) => setTelefoneEmpresa(maskPhone(v))} placeholder={semCnpj ? "(12) 3333-0000" : "Preenchido pelo CNPJ"} placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} /></View>{telefoneEmpresa && cnpjFound && <Text style={{ fontSize: 10, color: Colors.green, marginTop: 4, fontStyle: "italic" }}>Preenchido pelo CNPJ</Text>}</View>
           <View style={s.field}><Text style={s.label}>Seu telefone para contato *</Text><View style={[s.inputWrap, contatoValid && { borderColor: Colors.green }]}><Icon name="message" size={16} color={contatoValid ? Colors.green : Colors.ink3} /><TextInput style={[s.input, inputOutline]} {...webInputProps} value={telefoneContato} onChangeText={(v: string) => setTelefoneContato(maskPhone(v))} placeholder="(12) 99999-0000" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} autoComplete="tel" /></View><Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4 }}>WhatsApp ou celular para a Aura entrar em contato.</Text></View>
           <View style={s.field}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -623,7 +667,7 @@ export default function RegisterScreen() {
               {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>{isDojo ? "Criar conta do dojo" : "Criar conta"}</Text>}
             </Pressable>
           </View>
-          {!step2Valid && cnpj.length > 0 && !cnpjLoading && !cnpjFound && <Text style={{ fontSize: 10, color: Colors.amber, textAlign: "center", marginTop: 8 }}>Aguardando validação do CNPJ para liberar o cadastro.</Text>}
+          {!step2Valid && !semCnpj && cnpj.length > 0 && !cnpjLoading && !cnpjFound && <Text style={{ fontSize: 10, color: Colors.amber, textAlign: "center", marginTop: 8 }}>Aguardando validação do CNPJ para liberar o cadastro.</Text>}
           {!step2Valid && isDojo && !federationId && !fedLoading && <Text style={{ fontSize: 10, color: Colors.amber, textAlign: "center", marginTop: 8 }}>Escolha a federação para liberar o cadastro.</Text>}
         </View>
       )}
@@ -734,6 +778,9 @@ const s = StyleSheet.create({
   cnpjErrWrap: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 6, backgroundColor: Colors.redD, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
   cnpjErr: { fontSize: 10, color: Colors.red, flex: 1 },
   cnpjRetry: { fontSize: 10, color: Colors.violet3, fontWeight: "600", marginLeft: 8 },
+  // 20/10/2026: link discreto "Não tenho CNPJ" / "Tenho CNPJ" (mesmo tom do "Tentar novamente").
+  docToggle: { alignSelf: "flex-start", marginTop: 8, paddingVertical: 2 },
+  docToggleText: { fontSize: 11, color: Colors.violet3, fontWeight: "600", textDecorationLine: "underline" },
   btn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 16, alignItems: "center", marginBottom: 16, marginTop: 4 },
   btnText: { color: "#fff", fontSize: 15, fontWeight: "700", letterSpacing: 0.3 },
   backBtn: { backgroundColor: Colors.bg4, borderRadius: 12, paddingVertical: 16, paddingHorizontal: 20, alignItems: "center", marginBottom: 16, marginTop: 4, borderWidth: 1, borderColor: Colors.border },

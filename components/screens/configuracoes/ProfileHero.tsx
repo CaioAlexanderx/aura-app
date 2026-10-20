@@ -5,18 +5,21 @@ import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { BASE_URL } from "@/services/api";
 import { fmtCNPJ, regimeLabel } from "./shared";
+import { textoDoDocumento } from "@/utils/documentoEmpresa";
 import type { ProfileField } from "./shared";
 
 type Props = {
   companyName: string;
   cnpj: string;
+  /** 20/10/2026: conta sem CNPJ, cadastrada com CPF. */
+  cpf?: string;
   taxRegime: string;
   profileFields: ProfileField[];
   onLogoSaved?: (url: string) => void;
   onLogoRemoved?: () => void;
 };
 
-export function ProfileHero({ companyName, cnpj, taxRegime, profileFields, onLogoSaved, onLogoRemoved }: Props) {
+export function ProfileHero({ companyName, cnpj, cpf, taxRegime, profileFields, onLogoSaved, onLogoRemoved }: Props) {
   const { company, token, companyLogo, setCompanyLogo } = useAuthStore();
   const completeDone = profileFields.filter(f => f.ok).length;
   const completePct  = Math.round((completeDone / profileFields.length) * 100);
@@ -78,7 +81,9 @@ export function ProfileHero({ companyName, cnpj, taxRegime, profileFields, onLog
         <Text style={s.heroName} numberOfLines={1}>{companyName || "Minha Empresa"}</Text>
         {cnpj
           ? <Text style={s.heroSub}>{fmtCNPJ(cnpj)}{taxRegime ? " \u00b7 " + regimeLabel(taxRegime) : ""}</Text>
-          : <Text style={[s.heroSub, { color: Colors.amber }]}>CNPJ não informado</Text>}
+          : cpf
+            ? <Text style={s.heroSub}>{textoDoDocumento({ cpf })} · sem CNPJ</Text>
+            : <Text style={[s.heroSub, { color: Colors.amber }]}>CNPJ não informado</Text>}
         <View style={s.progressRow}>
           <View style={s.progressTrack}><View style={[s.progressFill, { width: completePct + "%" as any }]} /></View>
           <Text style={s.progressLabel}>{completePct}%</Text>

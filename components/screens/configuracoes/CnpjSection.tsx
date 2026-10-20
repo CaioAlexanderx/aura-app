@@ -38,11 +38,13 @@ type CnpjPreview = {
 
 type Props = {
   cnpj:        string;
+  /** 20/10/2026: conta sem CNPJ, cadastrada com CPF. */
+  cpf?:        string;
   taxRegime:   string;
   onCnpjSaved: (cnpj: string, preview: CnpjPreview) => void;
 };
 
-export function CnpjSection({ cnpj, taxRegime, onCnpjSaved }: Props) {
+export function CnpjSection({ cnpj, cpf, taxRegime, onCnpjSaved }: Props) {
   const { company, isDemo } = useAuthStore();
   const [cnpjInput,   setCnpjInput]   = useState("");
   const [cnpjSaving,  setCnpjSaving]  = useState(false);
@@ -139,10 +141,19 @@ export function CnpjSection({ cnpj, taxRegime, onCnpjSaved }: Props) {
   // ── Sem CNPJ — input editável ─────────────────────────────────
   return (
     <Card>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 12 }}>
-        <Icon name="alert" size={14} color={Colors.amber} />
-        <Text style={{ fontSize: 12, color: Colors.amber, fontWeight: "600" }}>CNPJ não informado</Text>
-      </View>
+      {cpf ? (
+        // 20/10/2026: conta que nasceu com CPF. O CNPJ entra aqui quando ela abrir o seu.
+        <View style={{ marginBottom: 12 }} testID="cnpj-section-cpf">
+          <Text style={s.regLabel}>CPF</Text>
+          <Text style={[s.regValue, { marginBottom: 6 }]}>{fmtCNPJ(cpf)}</Text>
+          <Text style={sh.fieldHint}>Sua conta usa CPF. Nota fiscal precisa de CNPJ: quando abrir o seu, informe abaixo.</Text>
+        </View>
+      ) : (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 12 }}>
+          <Icon name="alert" size={14} color={Colors.amber} />
+          <Text style={{ fontSize: 12, color: Colors.amber, fontWeight: "600" }}>CNPJ não informado</Text>
+        </View>
+      )}
 
       <Text style={sh.fieldLabel}>Seu CNPJ</Text>
       <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>

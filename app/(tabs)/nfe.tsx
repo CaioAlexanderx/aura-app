@@ -22,6 +22,8 @@ import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { readMatconSettings, type MatconSettings } from "@/constants/matcon";
 import { useLocalSearchParams } from "expo-router";
 import { querAbaCertificado } from "@/utils/checkinDestino";
+import { useCompanyProfile } from "@/hooks/useCompanyProfile";
+import { contaSemCnpj, MSG_NOTA_PRECISA_CNPJ } from "@/utils/documentoEmpresa";
 
 // IS_NARROW: breakpoint para KPI cards compactos em telas estreitas (<500px)
 const IS_NARROW = typeof window !== "undefined" ? window.innerWidth < 500 : false;
@@ -44,6 +46,11 @@ const IS_NARROW = typeof window !== "undefined" ? window.innerWidth < 500 : fals
 function NfeScreenInner({ embedded }: { embedded?: boolean }) {
   const { company, isDemo } = useAuthStore();
   const qc = useQueryClient();
+  // 20/10/2026: conta sem CNPJ (cadastro com CPF). A tela abre normalmente;
+  // um aviso curto diz que nota fiscal precisa de CNPJ e onde informar.
+  // O backend recusa a emissao com o mesmo texto (CNPJ_REQUIRED).
+  const { profile: perfilDaEmpresa } = useCompanyProfile();
+  const semCnpj = contaSemCnpj(perfilDaEmpresa);
   // 19/10/2026 (tq-31): quem escolheu "Emitir nota fiscal" no check-in chega
   // com ?tab=certificado e abre direto na aba "Certificado A1".
   const params = useLocalSearchParams<{ tab?: string }>();
@@ -267,6 +274,13 @@ function NfeScreenInner({ embedded }: { embedded?: boolean }) {
             </>
           }
         />
+      )}
+
+      {semCnpj && (
+        <View style={s.reemitPendingBanner} testID="nfe-precisa-cnpj">
+          <Icon name="info" size={14} color={Colors.violet3} />
+          <Text style={s.reemitPendingText}>{MSG_NOTA_PRECISA_CNPJ}</Text>
+        </View>
       )}
 
       <View style={s.kpis}>
