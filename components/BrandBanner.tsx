@@ -144,8 +144,11 @@ function LogoImage({ src, sizes, fallbackName }: {
 
 export function BrandBanner({ mode = "block" }: Props) {
   var { logoUrl, plan, tradeName } = useCompanyProfile();
-  var canShow = plan === "negocio" || plan === "expansao" || plan === "personalizado";
-  if (!canShow) return null;
+  // 20/10/2026 (decisão do Caio): a logo cadastrada aparece em qualquer plano.
+  // Sem logo, fica como era: Negócio, Expansão e Personalizado veem a inicial;
+  // os outros planos não veem nada (não nasce um bloco novo no Painel).
+  var planoComInicial = plan === "negocio" || plan === "expansao" || plan === "personalizado";
+  if (!logoUrl && !planoComInicial) return null;
 
   var sizes = SIZES[mode];
 
