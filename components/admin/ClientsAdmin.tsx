@@ -28,6 +28,7 @@ import { ResyncSubscriptionButton } from "./ResyncSubscriptionButton";
 import { ValorCombinadoSection } from "./ValorCombinadoSection";
 import { RegistrarContatoModal } from "./painel/RegistrarContatoModal";
 import { FrenteSection, STUDIO_PLAN_MSG, isStudioPlanError } from "./FrenteSection";
+import { textoDoDocumento } from "@/utils/documentoEmpresa";
 import { MODULE_PLAN_MAP, PLAN_LEVEL } from "@/hooks/useVisibleModules";
 import {
   STAGE_TABS, stageOf, trialCountdown, isNewAccount, usageSummary, shortDate,
@@ -57,6 +58,10 @@ type Client360 = {
   stage?: Stage;
   archive_reason?: "nao_aderiu" | "cancelado" | "inativo" | null;
   owner_phone?: string | null;
+  // 20/10/2026: documento da conta (backend: /admin/clients-360). Sem CNPJ,
+  // o CPF do cadastro "Não tenho CNPJ" (migration 400).
+  cnpj?: string | null;
+  cpf?: string | null;
   access_code_used?: string | null;
   sale_count?: number;
   login_days?: number;
@@ -473,6 +478,7 @@ export function ClientsAdmin({ initialId }: { initialId?: string | null } = {}) 
           <View style={{ flex: 1 }}>
             <Text style={s.slideName}>{sc.trade_name || sc.legal_name}</Text>
             <Text style={s.slideEmail}>{sc.owner_email}</Text>
+            {textoDoDocumento(sc) ? <Text style={s.slideEmail} testID="ficha-documento">{textoDoDocumento(sc)}</Text> : null}
           </View>
           <View style={[s.healthBadgeLg, { backgroundColor: hc.bg }]}>
             <Text style={[s.healthScoreLg, { color: hc.text }]}>{sc.health_score || 0}</Text>

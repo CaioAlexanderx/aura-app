@@ -235,6 +235,7 @@ export default function ConfiguracoesScreen() {
         <ProfileHero
           companyName={profile.companyName}
           cnpj={profile.cnpj}
+          cpf={profile.cpf}
           taxRegime={profile.taxRegime}
           profileFields={profile.profileFields}
           onLogoSaved={profile.saveLogoUrl}
@@ -301,7 +302,7 @@ export default function ConfiguracoesScreen() {
 
               {/* DADOS REGISTRAIS */}
               <SectionTitle title="Dados registrais" />
-              <CnpjSection cnpj={profile.cnpj} taxRegime={profile.taxRegime} onCnpjSaved={profile.onCnpjSaved} />
+              <CnpjSection cnpj={profile.cnpj} cpf={profile.cpf} taxRegime={profile.taxRegime} onCnpjSaved={profile.onCnpjSaved} />
             </>
           )}
 

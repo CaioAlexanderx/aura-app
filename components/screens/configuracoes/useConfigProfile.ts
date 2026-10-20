@@ -13,6 +13,8 @@ export function useConfigProfile() {
   const [email,       setEmail]       = useState(user?.email || "");
   const [phone,       setPhone]       = useState("");
   const [cnpj,        setCnpj]        = useState("");
+  // 20/10/2026: conta sem CNPJ, cadastrada com CPF (backend: migration 400).
+  const [cpf,         setCpf]         = useState("");
   const [taxRegime,   setTaxRegime]   = useState("");
   const [loading,     setLoading]     = useState(true);
   const [saving,      setSaving]      = useState(false);
@@ -24,7 +26,8 @@ export function useConfigProfile() {
 
   const profileFields: ProfileField[] = [
     { label: "Nome",     ok: !!companyName },
-    { label: "CNPJ",     ok: !!cnpj },
+    // Conta com CPF ja tem documento; o CNPJ pode vir depois (Dados registrais).
+    { label: !cnpj && cpf ? "CPF" : "CNPJ", ok: !!cnpj || !!cpf },
     { label: "E-mail",   ok: !!email && !emailError },
     { label: "Telefone", ok: !!phone && !phoneError },
     { label: "Endereço", ok: !!address },
@@ -41,6 +44,7 @@ export function useConfigProfile() {
       const ph   = p.phone      || "";
       const addr = p.address    || "";
       const cn   = p.cnpj       || "";
+      setCpf(p.cpf || "");
       const reg  = p.tax_regime || "";
       setCompanyName(name); setCnpj(cn); setEmail(em);
       setPhone(ph); setAddress(addr); setTaxRegime(reg);
@@ -123,7 +127,7 @@ export function useConfigProfile() {
     address, setAddress,
     email, setEmail,
     phone, setPhone,
-    cnpj, taxRegime,
+    cnpj, cpf, taxRegime,
     loading, saving, savedOk,
     emailError, phoneError, hasErrors,
     profileFields,
