@@ -47,6 +47,11 @@ type Props = {
   cardTone?: "stage" | "theme";
   /** Muda `n` para o orbe reagir de novo ("hmm" no erro, "happy" no acerto). */
   orbSignal?: { mood: OrbMood; n: number } | null;
+  /**
+   * Etapa do cadastro ("1", "2", "3"). Vira data-step no palco e as duas
+   * massas de luz se deslocam com ela (regra [data-step] do mockup).
+   */
+  step?: string;
   testID?: string;
 };
 
@@ -67,8 +72,11 @@ function injectOnce() {
   } catch {}
 }
 
-/** A logo da Aura em vetor, para animar (o <symbol id="orb"> do mockup). */
-function OrbSvg() {
+/**
+ * A logo da Aura em vetor, para animar (o <symbol id="orb"> do mockup).
+ * Exportada para o crachá do cadastro: fora de `.as-orb` os arcos não animam.
+ */
+export function OrbSvg() {
   return (
     <svg viewBox="0 0 120 120" aria-hidden="true" focusable="false">
       <defs>
@@ -89,7 +97,7 @@ function OrbSvg() {
   );
 }
 
-function WebStage({ children, cardTone = "theme", orbSignal, testID }: Props) {
+function WebStage({ children, cardTone = "theme", orbSignal, step, testID }: Props) {
   const consentInset = useLgpdConsentInset();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -173,7 +181,7 @@ function WebStage({ children, cardTone = "theme", orbSignal, testID }: Props) {
 
   const solid = cardTone === "theme" && IS_LIGHT_MODE;
   return (
-    <div ref={rootRef} className="aura-stage" data-testid={testID || "auth-stage"} onInput={onInput}>
+    <div ref={rootRef} className="aura-stage" data-testid={testID || "auth-stage"} data-step={step} onInput={onInput}>
       <div className="as-aura" aria-hidden="true"><div className="as-blob as-b1" /><div className="as-blob as-b2" /></div>
       <canvas ref={canvasRef} className="as-waves" aria-hidden="true" />
       <div className="as-grain" aria-hidden="true" />

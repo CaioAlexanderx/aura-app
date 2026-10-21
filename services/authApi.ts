@@ -1,4 +1,6 @@
 import { request } from "./api";
+import type { LeadBody } from "@/utils/leadDoCadastro";
+import type { OrigemDoCadastro } from "@/utils/origemDoCadastro";
 
 export type VerticalKey = "odonto" | "barber" | "food" | "studio" | "estetica" | "pet" | "academia" | "karate_federation" | "karate_dojo";
 
@@ -71,6 +73,10 @@ export type RegisterBody = {
   // É DECLARAÇÃO DE INTENÇÃO — define o roteamento técnico, não filia: a
   // filiação vem do aceite da federação, depois do cadastro.
   federation_id?: string;
+  /** 21/10/2026 (tq-68): token do lead das etapas (POST /auth/signup-lead); o backend liga o lead à conta. */
+  lead_token?: string;
+  /** Origem do cadastro (utm, referrer, ref do link). O backend sanitiza; inválida vira null e nunca bloqueia. */
+  origem?: OrigemDoCadastro;
 };
 export type CodeValidation = { valid: boolean; type?: string; plan?: string; discount_pct?: number; trial_days?: number; error?: string };
 export type VerificationResponse = { sent?: boolean; destination?: string; expires_in?: number; already_verified?: boolean; valid?: boolean; email_verified?: boolean; phone_verified?: boolean; error?: string; reason?: string; retry_after?: number; deduped?: boolean; otp_available?: boolean; attempts_left?: number; already_used?: boolean };
@@ -190,6 +196,9 @@ export var authApi = {
   // verify-email usava me(token!) e ficava preso em 401 silencioso quando o
   // access token (1h) expirava durante a espera.
   meSession: function() { return request<Omit<LoginResponse, "token">>("/auth/me", { method: "POST", retry: 0 }); },
+  // 21/10/2026 (tq-68): lead do cadastro por etapa. Sem token (rota pública),
+  // sem refresh e sem nova tentativa: quem chama nunca espera nem trava nisso.
+  signupLead: function(body: LeadBody) { return request<{ lead_token: string | null; etapa: number; whatsapp_confirmado: boolean }>("/auth/signup-lead", { method: "POST", body: body, token: null, retry: 0, timeout: 8000 }); },
   validateCode: function(code: string) { return request<CodeValidation>("/auth/validate-code", { method: "POST", body: { code: code }, retry: 0 }); },
   forgotPassword: function(email: string) { return request<{ message: string }>("/auth/forgot-password", { method: "POST", body: { email: email }, retry: 0 }); },
   resetPassword: function(token: string, password: string) { return request<{ message: string }>("/auth/reset-password", { method: "POST", body: { token: token, password: password }, retry: 0 }); },
