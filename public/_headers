@@ -33,3 +33,8 @@
 # do index.html; o robots.txt libera o rastreio para o noindex ser lido.
 https://app.getaura.com.br/*
   X-Robots-Tag: noindex, nofollow
+  # 21/10/2026: depois de uma visita por https, o navegador passa a trocar
+  # http:// por https:// sozinho, antes de pedir a página (um cliente abriu
+  # o painel sem https e o login falhava por CORS). Só este host, sem
+  # includeSubDomains: loja.getaura.com.br e os outros não passam por aqui.
+  Strict-Transport-Security: max-age=31536000
