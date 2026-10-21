@@ -59,45 +59,54 @@ export function startStageCanvas(
     drawFrame(animated ? nowMs() : 0, 0);
   }
 
+  // Brilho que corre pela espiral: alfa extra por ângulo, em dois lóbulos
+  // (um forte, um fraco no lado oposto), com borda suave.
+  function brilho(ang: number, a: number): number {
+    const d = Math.abs((((ang - a) % TAU) + TAU + Math.PI) % TAU - Math.PI); // distância angular 0..π
+    const d2 = Math.abs((((ang - a - Math.PI) % TAU) + TAU + Math.PI) % TAU - Math.PI);
+    const l1 = Math.max(0, 1 - d / 0.38), l2 = Math.max(0, 1 - d2 / 0.38);
+    return l1 * l1 * 0.16 + l2 * l2 * 0.08;
+  }
+
+  // Traça uma volta da espiral por segmentos angulares. Cada segmento tem a
+  // sua cor sólida (prata com o alfa da distância ao centro mais o brilho):
+  // sem gradiente, sem composite. O reflexo com `globalCompositeOperation:
+  // "lighter"` sobre um conic-gradient (versão anterior) saía como um setor
+  // branco opaco em parte dos Chromes no Windows (print do Caio, 22/10).
+  function traco(cx: number, cy: number, b: number, off: number, rot: number, maxR: number, lw: number, base: number, ganho: number, a: number) {
+    const passo = 0.08, porSeg = 10; // 10 passos (~0,8 rad) por segmento
+    let t = 0, x0 = cx + Math.cos(rot) * off, y0 = cy + Math.sin(rot) * off;
+    for (;;) {
+      const rIni = b * t + off; if (rIni > maxR) break;
+      c.beginPath(); c.moveTo(x0, y0);
+      let i = 0;
+      for (; i < porSeg; i++) {
+        t += passo; const rr = b * t + off; if (rr > maxR) break;
+        x0 = cx + Math.cos(t + rot) * rr; y0 = cy + Math.sin(t + rot) * rr;
+        c.lineTo(x0, y0);
+      }
+      const rMed = Math.min(maxR, rIni + b * passo * porSeg * 0.5);
+      // alfa radial: nasce atrás do cartão (0), sobe perto, cai nas bordas
+      const u = rMed / maxR;
+      const radial = u < 0.18 ? (u / 0.18) * 0.9 : u < 0.55 ? 1 - ((u - 0.18) / 0.37) * 0.3 : Math.max(0, 1 - (u - 0.55) / 0.45) * 0.7;
+      const alfa = Math.min(0.34, radial * (base + brilho(t + rot, a) * ganho));
+      c.strokeStyle = "rgba(230,224,248," + alfa.toFixed(3) + ")"; c.lineWidth = lw; c.stroke();
+      if (i < porSeg) break;
+    }
+  }
+
   function spiral(now: number, W: number, H: number) {
-    // espiral a partir do centro do palco; prata com brilho que corre,
-    // opaca o bastante para não brigar com o cartão
+    // espiral de Arquimedes a partir do centro do palco; prata, opaca o
+    // bastante para não brigar com o cartão (0,16 no desktop, 0,10 no celular)
     const cx = W / 2, cy = H * 0.48, mobile = W < 520;
     const maxR = Math.hypot(W, H) * 0.62;
     const b = mobile ? 9 : 13;
     const rot = animated ? now / 60000 : 0;
-    const g = c.createRadialGradient(cx, cy, 120, cx, cy, maxR);
-    g.addColorStop(0, "rgba(255,255,255,0)");
-    g.addColorStop(0.18, "rgba(236,232,250," + (mobile ? 0.10 : 0.16) + ")");
-    g.addColorStop(0.55, "rgba(214,205,240," + (mobile ? 0.07 : 0.11) + ")");
-    g.addColorStop(1, "rgba(200,190,235,0)");
-    c.beginPath();
-    for (let t = 0; ; t += 0.08) {
-      const rr = b * t; if (rr > maxR) break;
-      const x = cx + Math.cos(t + rot) * rr, y = cy + Math.sin(t + rot) * rr;
-      if (t) c.lineTo(x, y); else c.moveTo(x, y);
-    }
-    c.strokeStyle = g; c.lineWidth = 1; c.stroke();
-    // segunda volta, deslocada meia-volta e mais fina: leitura de metal escovado
-    c.beginPath();
-    for (let t = 0; ; t += 0.08) {
-      const rr = b * t + b / 2; if (rr > maxR) break;
-      const x = cx + Math.cos(t + rot + 0.6) * rr, y = cy + Math.sin(t + rot + 0.6) * rr;
-      if (t) c.lineTo(x, y); else c.moveTo(x, y);
-    }
-    c.globalAlpha = 0.45; c.strokeStyle = g; c.lineWidth = 0.6; c.stroke(); c.globalAlpha = 1;
-    // reflexo: uma faixa clara que gira devagar sobre a espiral
     const a = animated ? (now / 9000) % TAU : -0.9;
-    const anyCtx = c as any;
-    if (typeof anyCtx.createConicGradient === "function") {
-      const hg = anyCtx.createConicGradient(a, cx, cy) as CanvasGradient;
-      hg.addColorStop(0, "rgba(255,255,255,0)"); hg.addColorStop(0.06, "rgba(255,255,255,0.10)"); hg.addColorStop(0.12, "rgba(255,255,255,0)");
-      hg.addColorStop(0.5, "rgba(255,255,255,0)"); hg.addColorStop(0.56, "rgba(255,255,255,0.06)"); hg.addColorStop(0.62, "rgba(255,255,255,0)");
-      hg.addColorStop(1, "rgba(255,255,255,0)");
-      c.globalCompositeOperation = "lighter"; c.fillStyle = hg;
-      c.beginPath(); c.arc(cx, cy, maxR, 0, TAU); c.fill();
-      c.globalCompositeOperation = "source-over";
-    }
+    const base = mobile ? 0.10 : 0.16;
+    traco(cx, cy, b, 0, rot, maxR, 1, base, 1, a);
+    // segunda volta, deslocada meia-volta e mais fina: leitura de metal escovado
+    traco(cx, cy, b, b / 2, rot + 0.6, maxR, 0.6, base * 0.45, 0.45, a);
   }
 
   function drawFrame(now: number, dt: number) {

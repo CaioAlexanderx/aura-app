@@ -97,6 +97,14 @@ export const AUTH_STAGE_CSS = `
 [data-as-inp][data-as-inp] { transition: border-color 200ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1), background-color 200ms cubic-bezier(0.4, 0, 0.2, 1); }
 [data-as-inp][data-as-inp]:focus-within { border-color: rgba(196,181,253,0.85); background-color: rgba(124,58,237,0.10); box-shadow: 0 0 0 3px rgba(167,139,250,0.16), inset 0 0 18px rgba(167,139,250,0.08); }
 [data-as-inp] input::placeholder { color: rgba(184,172,223,0.55); }
+/* preenchimento automático do Chrome/Safari: sem isso o campo vira branco com
+   texto preto em cima do vidro escuro (print do Caio, 22/10). A sombra interna
+   cobre o fundo que o navegador força, e o text-fill mantém a cor do texto. */
+[data-as-inp] input:-webkit-autofill, [data-as-inp] input:-webkit-autofill:hover, [data-as-inp] input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #0e0826 inset; box-shadow: 0 0 0 1000px #0e0826 inset;
+  -webkit-text-fill-color: ${Stage.ink}; caret-color: ${Stage.ink}; border-radius: 8px;
+  transition: background-color 2147483647s ease-in-out 0s; }
+[data-as-inp] input:autofill { background-color: #0e0826 !important; color: ${Stage.ink} !important; }
 [data-as-btn][data-as-btn] { position: relative; overflow: hidden; background-image: linear-gradient(135deg, #9d6cff, #7c3aed 55%, #5b21b6);
   box-shadow: 0 12px 28px rgba(124,58,237,0.38), inset 0 1px 0 rgba(255,255,255,0.32), inset 0 -1px 0 rgba(0,0,0,0.25);
   transition: transform 120ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 120ms cubic-bezier(0.4, 0, 0.2, 1); }
