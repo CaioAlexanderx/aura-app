@@ -10,6 +10,7 @@
 // tamanho do arquivo). O link do WhatsApp leva só empresa e CNPJ.
 // ============================================================
 import { maskCnpj } from "@/utils/masks";
+import { AURA_WHATSAPP_NUMERO, waAura } from "@/constants/suporteAura";
 
 // ── contrato com o backend (/companies/:id/fiscal-certificate) ──
 export type CertInfo = {
@@ -25,8 +26,8 @@ export type CertInfo = {
 export const TAMANHO_MAX_BYTES = 256 * 1024;
 /** Faltando menos que isso, a aba avisa (âmbar). */
 export const DIAS_PARA_AVISAR = 30;
-/** Número da Aura no WhatsApp (decisão do Caio, 14/10/2026). */
-export const WHATSAPP_AURA = "5511956305269";
+/** Número da Aura no WhatsApp (decisão do Caio, 14/10/2026); vem de constants/suporteAura.ts. */
+export const WHATSAPP_AURA = AURA_WHATSAPP_NUMERO;
 
 // ── estado do certificado ───────────────────────────────────
 export type EstadoCertificado = "sem" | "valido" | "vencendo" | "vencido";
@@ -105,7 +106,7 @@ export function mensagemDeAjuda(empresa: { nome: string; cnpj?: string | null },
 }
 
 export function linkDeAjuda(empresa: { nome: string; cnpj?: string | null }, tipo: TipoAjuda = "cadastrar"): string {
-  return "https://wa.me/" + WHATSAPP_AURA + "?text=" + encodeURIComponent(mensagemDeAjuda(empresa, tipo));
+  return waAura(mensagemDeAjuda(empresa, tipo));
 }
 
 // ── arquivo escolhido (validação no aparelho, antes de enviar) ──

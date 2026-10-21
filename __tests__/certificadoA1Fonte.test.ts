@@ -143,7 +143,8 @@ describe("não mexe no legado", () => {
   });
 
   it("usa o número e o texto de ajuda aprovados", () => {
-    expect(util).toMatch(/5511956305269/);
+    expect(util).toMatch(/constants\/suporteAura/);
+    expect(util).not.toMatch(/55119563|55129912/);
     expect(util).toMatch(/Olá! Quero ajuda para/);
   });
 });

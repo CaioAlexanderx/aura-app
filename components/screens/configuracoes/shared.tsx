@@ -1,5 +1,6 @@
 import { View, Text, TextInput, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
+import { waAura } from "@/constants/suporteAura";
 
 export const PLANS: Record<string, { label: string; price: string }> = {
   essencial:     { label: "Essencial",     price: "R$ 89/mês"    },
@@ -9,7 +10,7 @@ export const PLANS: Record<string, { label: string; price: string }> = {
 };
 
 export const CONFIG_KEY = "aura_config";
-export const AURA_WHATSAPP = "https://wa.me/5512991234567";
+export const AURA_WHATSAPP = waAura();
 export const AURA_EMAIL    = "contato@getaura.com.br";
 
 export function regimeLabel(raw: string): string {

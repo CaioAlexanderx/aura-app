@@ -8,9 +8,10 @@ import { useQuery } from "@tanstack/react-query";
 import { billingApi } from "@/services/api";
 import { discountInEffectText } from "@/components/billing/couponText";
 import { router } from "expo-router";
+import { waAura } from "@/constants/suporteAura";
 
 const IS = typeof window !== "undefined" ? window.innerWidth > 768 : false;
-const AURA_WHATSAPP = "https://wa.me/5511956305269?text=Ol%C3%A1%2C%20gostaria%20de%20saber%20mais%20sobre%20a%20consultoria%20da%20Aura";
+const AURA_WHATSAPP = waAura("Olá, gostaria de saber mais sobre a consultoria da Aura");
 
 // PLAN-01/02 (12/05/2026): feature list expandida pra refletir tudo
 // que cada plano entrega. Decisao comercial: percepcao do consumidor
