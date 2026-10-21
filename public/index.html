@@ -38,6 +38,22 @@
          garante que services/instalarApp.ts o encontre; o preventDefault
          segura a barrinha automática do Chrome para o card do Painel
          decidir o momento. -->
+    <!-- 21/10/2026: cliente abriu http://app.getaura.com.br no Safari (barra
+         "Não Seguro"). A página carrega, mas o backend só aceita a origem
+         https:// (ALLOWED_ORIGINS), então todo login dava "Erro de conexão".
+         Troca para https antes de qualquer JS do app. Só nos domínios da
+         Aura: localhost e previews seguem em http. Junto com o
+         Strict-Transport-Security em public/_headers. -->
+    <script>
+      (function () {
+        try {
+          var l = window.location;
+          if (l.protocol === 'http:' && /(^|\.)getaura\.com\.br$/.test(l.hostname)) {
+            l.replace('https://' + l.host + l.pathname + l.search + l.hash);
+          }
+        } catch (e) {}
+      })();
+    </script>
     <script>
       window.addEventListener('beforeinstallprompt', function (e) {
         e.preventDefault();
