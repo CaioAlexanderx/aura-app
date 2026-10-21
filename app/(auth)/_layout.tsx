@@ -1,5 +1,5 @@
 import { Stack } from "expo-router";
-import { Colors } from "@/constants/colors";
+import { Stage } from "@/constants/colors";
 import { ToastContainer } from "@/components/Toast";
 
 // 29/08/2026 (QA da porta de entrada) — o banner de LGPD e montado no root
@@ -8,19 +8,21 @@ import { ToastContainer } from "@/components/Toast";
 // divisor "ou" do login.
 //
 // Regra para TODA tela nova de (auth): nada de conteudo debaixo do banner.
-// Cada tela e um container 100vh proprio (nao ha wrapper comum que possa
-// receber o padding), entao a tela chama `useLgpdConsentInset()` de
-// components/LGPDConsent e soma o valor ao paddingBottom do container que
-// centraliza o cartao — com boxSizing "border-box", para o container seguir
-// com 100vh e o cartao apenas centralizar na area livre. Com o banner fora da
-// tela o inset e 0: no desktop, e depois do aceite, nao sobra vao nenhum.
+// 21/10/2026 (tq-67): as telas de (auth) agora montam o palco comum
+// (components/auth/AuthStage), e e ELE que chama `useLgpdConsentInset()` de
+// components/LGPDConsent e soma o valor ao paddingBottom da area que
+// centraliza o cartao (boxSizing "border-box"; o palco fica parado e so o
+// conteudo rola). Tela nova de (auth): use o AuthStage, nao um container
+// proprio. Com o banner fora da tela o inset e 0: no desktop, e depois do
+// aceite, nao sobra vao nenhum.
 export default function AuthLayout() {
   return (
     <>
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: Colors.bg },
+          // Palco sempre escuro: sem clarão do tema claro antes do palco pintar.
+          contentStyle: { backgroundColor: Stage.bg },
         }}
       />
       <ToastContainer />

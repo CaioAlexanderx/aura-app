@@ -223,3 +223,23 @@ export var LightPalette = Light;
 // `bg: "#e6e4f0"`). Uma paleta por fora (Studio, também `as const`, com
 // hex DIFERENTES) não bateria nesses literais — só no formato.
 export type AuraColors = { [K in keyof typeof Light]: string };
+
+// ── Palco da porta de entrada (tq-67, 21/10/2026) ──────────────
+// As telas de (auth) — login, cadastro, esqueci/redefinir senha e
+// confirmação de e-mail — ficam sobre um palco SEMPRE escuro
+// (components/auth/AuthStage), com o mesmo tom em qualquer tema: é a
+// primeira impressão da Aura, não uma tela do painel. Por isso estes tokens
+// não seguem IS_DARK. Fonte: mockup aprovado "Porta de entrada v4".
+//
+// Os violetas são os de sempre (primária #7c3aed). Os tons novos são dois:
+//   verde metálico — acerto. `okMetal` é o metal escuro (borda, selo) e
+//                    `okText` o texto claro; nunca o verde de status do app.
+//   pêssego        — aviso/erro sem alarme (ex.: "Essa senha não bateu").
+export var Stage = {
+  bg: "#04020f", bg2: "#07041a", bg3: "#0f0828",
+  ink: "#f3efff", ink2: "rgba(226,219,255,0.80)", ink3: "rgba(184,172,223,0.84)",
+  violet: "#7c3aed", violet2: "#8b5cf6", violet3: "#a78bfa", violet4: "#c4b5fd", lilac: "#e9e3ff",
+  silver: "#e6e2f4",
+  okMetal: "#3f9d7a", okText: "#8fd3b4",
+  peach: "#f0bf9a", peachInk: "#f6d9c2", peachD: "rgba(240,191,154,0.10)", peachLine: "rgba(240,191,154,0.45)",
+} as const;
