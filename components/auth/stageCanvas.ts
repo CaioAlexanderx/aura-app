@@ -46,9 +46,27 @@ export function startStageCanvas(
   let raf = 0;
   let running = false;
   let stopped = false;
-  const dpr = Math.min((typeof window !== "undefined" && window.devicePixelRatio) || 1, 2);
+  // A razão de pixels muda com o zoom do navegador e ao mover a janela
+  // para outro monitor. Lida a cada fit(): gravada uma vez só, o bitmap
+  // ficava com o tamanho antigo e esticado (linhas grossas e claras, Chrome
+  // do Caio em 21/10: zoom 80% no carregamento, depois 2x).
+  const lerDpr = () => Math.min((typeof window !== "undefined" && window.devicePixelRatio) || 1, 2);
+  let dpr = lerDpr();
+  let mq: MediaQueryList | null = null;
+  // Quando a razão muda, o Chrome nem sempre dispara resize: escuta a
+  // media query da resolução atual (one-shot, rearmada a cada fit).
+  function armarDpr() {
+    try {
+      if (mq) mq.removeEventListener("change", onDprChange);
+      mq = typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(resolution: " + window.devicePixelRatio + "dppx)") : null;
+      if (mq) mq.addEventListener("change", onDprChange);
+    } catch { mq = null; }
+  }
+  function onDprChange() { if (!stopped) fit(); }
 
   function fit() {
+    dpr = lerDpr();
+    armarDpr();
     const r = host.getBoundingClientRect();
     cv.width = Math.max(1, Math.round(r.width * dpr));
     cv.height = Math.max(1, Math.round(r.height * dpr));
@@ -173,7 +191,7 @@ export function startStageCanvas(
     raf = 0;
   }
 
-  function stop() { pause(); stopped = true; rings = []; }
+  function stop() { pause(); stopped = true; rings = []; try { if (mq) mq.removeEventListener("change", onDprChange); } catch {} mq = null; }
 
   fit();
   resume();
