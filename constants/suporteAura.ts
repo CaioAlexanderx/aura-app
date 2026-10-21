@@ -2,6 +2,7 @@
 // número; cada tela passa o texto pronto da conversa.
 export const AURA_WHATSAPP_NUMERO = "5511956305269";
 
-export function waAura(texto: string): string {
+export function waAura(texto?: string): string {
+  if (!texto) return "https://wa.me/" + AURA_WHATSAPP_NUMERO;
   return "https://wa.me/" + AURA_WHATSAPP_NUMERO + "?text=" + encodeURIComponent(texto);
 }

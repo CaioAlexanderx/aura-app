@@ -30,6 +30,7 @@ import {
 } from "react-native";
 import { Icon } from "@/components/Icon";
 import { KarateColors, KarateRadius } from "@/constants/karateTheme";
+import { waAura } from "@/constants/suporteAura";
 import { KarateButton } from "@/components/karate/KarateButton";
 import {
   karateDojoBillingApi, DojoBaasStatusResponse, DojoBillingProvider,
@@ -45,9 +46,6 @@ const PROVIDER_LABELS: Record<DojoBillingProvider, string> = {
   pix_manual: "Chave PIX própria",
   baas: "Conta Aura (integrada)",
 };
-
-// Mesmo número usado em app/(tabs)/suporte.tsx (AURA_WA) — padrão do app.
-const AURA_SUPPORT_WA = "5512991234567";
 
 export function ContaAuraCard({ federationId }: Props) {
   const [loading, setLoading] = useState(true);
@@ -105,9 +103,7 @@ export function ContaAuraCard({ federationId }: Props) {
   };
 
   const openSupport = () => {
-    const url = `https://wa.me/${AURA_SUPPORT_WA}?text=${encodeURIComponent(
-      "Olá! Minha ativação da Conta Aura foi recusada e preciso de ajuda."
-    )}`;
+    const url = waAura("Olá! Minha ativação da Conta Aura foi recusada e preciso de ajuda.");
     if (Platform.OS === "web") window.open(url, "_blank");
     else Linking.openURL(url);
   };

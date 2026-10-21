@@ -9,9 +9,9 @@ import { ListSkeleton } from "@/components/ListSkeleton";
 import { useAuthStore } from "@/stores/auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/Toast";
+import { waAura } from "@/constants/suporteAura";
 
 var API = "https://aura-backend-production-f805.up.railway.app/api/v1";
-var AURA_WA = "5512991234567"; // WhatsApp Aura
 var AURA_EMAIL = "suporte@getaura.com.br";
 
 var CATEGORIES = [
@@ -122,7 +122,7 @@ export default function SuporteScreen() {
           </View>
           <View style={s.contactRow}>
             <Pressable style={s.contactBtn} onPress={function() { Linking.openURL('mailto:' + AURA_EMAIL); }}><Icon name="mail" size={14} color={Colors.violet3} /><Text style={s.contactBtnT}>Email</Text></Pressable>
-            <Pressable style={s.contactBtn} onPress={function() { Linking.openURL('https://wa.me/' + AURA_WA); }}><Icon name="phone" size={14} color="#10B981" /><Text style={s.contactBtnT}>WhatsApp</Text></Pressable>
+            <Pressable style={s.contactBtn} onPress={function() { Linking.openURL(waAura()); }}><Icon name="phone" size={14} color="#10B981" /><Text style={s.contactBtnT}>WhatsApp</Text></Pressable>
             <Pressable style={[s.contactBtn, { backgroundColor: Colors.violet }]} onPress={function() { setView('new'); }}><Icon name="chat" size={14} color="#fff" /><Text style={[s.contactBtnT, { color: '#fff' }]}>Nova solicitação</Text></Pressable>
           </View>
         </HoverCard>
