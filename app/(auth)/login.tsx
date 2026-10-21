@@ -1,133 +1,51 @@
-import { useState, useEffect, useRef } from "react";
+// ============================================================
+// AURA. — Login (tq-67, 21/10/2026: palco compartilhado + saudações vivas)
+//
+// Layout e textos do #scr-login do mockup aprovado "Porta de entrada v4".
+// A LÓGICA é a de antes, sem mudança: mesma chamada de login, convite por
+// link (aceite depois do login), entrada Shoji do Karatê (trigger + /karate),
+// e-mail vindo pela URL (?email=, handoff do /comecar) e o resto do caminho
+// (verificação de e-mail e verticais) com o AuthGuard, que decide depois do
+// router.replace("/(tabs)").
+//
+// O que mudou de comportamento, de propósito:
+//   - senha errada (ApiError 401) aparece na linha pêssego do mockup, no
+//     cartão, em vez de toast; os outros erros seguem no toast de sempre;
+//   - a saudação vem de utils/saudacao (hora, data especial, dia da
+//     semana) e chama pelo primeiro nome do último login neste aparelho
+//     (utils/primeiroNomeNoAparelho). O convite mantém o título próprio.
+// ============================================================
+import { useState, useRef } from "react";
 import {
   View, Text, TextInput, Pressable, ActivityIndicator,
-  StyleSheet, Platform, ScrollView, Image, Animated, Easing,
-  useWindowDimensions,
+  StyleSheet, Platform, useWindowDimensions,
 } from "react-native";
 import { Link, router, useLocalSearchParams } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { ApiError } from "@/services/api";
 import { inviteApi } from "@/services/inviteApi";
-import { Colors } from "@/constants/colors";
+import { Stage } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
-import { useLgpdConsentInset } from "@/components/LGPDConsent";
 import { useKarateIntro } from "@/stores/karateIntro";
+import { AuthStage, type OrbMood } from "@/components/auth/AuthStage";
+import { greeting } from "@/utils/saudacao";
+import { lerPrimeiroNome, guardarPrimeiroNome } from "@/utils/primeiroNomeNoAparelho";
 
-const LOGO_SVG = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
 const isWeb = Platform.OS === "web";
 // DESIGN-29: animação de login Shoji é exibida só quando o vertical é karatê.
 const KARATE_VERTICALS = ["karate_federation", "karate_dojo"];
-
-// Web-only CSS: aura rings, particles, grid, magnetic button, input focus
-if (typeof document !== "undefined" && !document.getElementById("aura-login-v2-css")) {
-  const st = document.createElement("style");
-  st.id = "aura-login-v2-css";
-  st.textContent = `
-    @keyframes auraPulse {
-      0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.6; }
-      50% { transform: translate(-50%, -50%) scale(1.08); opacity: 0.3; }
-    }
-    @keyframes auraDraw {
-      from { stroke-dashoffset: 880; opacity: 0; }
-      to { stroke-dashoffset: 0; opacity: 1; }
-    }
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes gridShift {
-      from { transform: translate(0, 0); }
-      to { transform: translate(40px, 40px); }
-    }
-    @keyframes floatParticle {
-      0%, 100% { transform: translate(0, 0); opacity: 0; }
-      10%, 90% { opacity: 1; }
-      50% { transform: translate(var(--dx), var(--dy)); }
-    }
-    .v2-card { animation: fadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both; }
-    .v2-hero { animation: fadeUp 1s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both; }
-    .v2-input:focus {
-      border-color: #7c3aed !important;
-      box-shadow: 0 0 0 3px rgba(124,58,237,0.18), inset 0 0 12px rgba(124,58,237,0.08) !important;
-      outline: none !important;
-    }
-    .v2-btn { position: relative; overflow: hidden; transition: transform .18s ease, box-shadow .18s ease; }
-    .v2-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(124,58,237,0.45); }
-    .v2-btn:active { transform: translateY(0); }
-    .v2-btn::before {
-      content: ""; position: absolute; inset: 0;
-      background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.3) 50%, transparent 70%);
-      transform: translateX(-100%);
-    }
-    .v2-btn:hover::before { transform: translateX(100%); transition: transform 0.7s ease; }
-    .v2-aura-ring { position: absolute; top: 50%; left: 50%; border-radius: 50%; border: 1px solid rgba(167,139,250,0.3); pointer-events: none; }
-    .v2-grid {
-      position: absolute; inset: 0;
-      background-image:
-        linear-gradient(rgba(124,58,237,0.06) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(124,58,237,0.06) 1px, transparent 1px);
-      background-size: 40px 40px;
-      animation: gridShift 20s linear infinite;
-      pointer-events: none;
-      mask-image: radial-gradient(ellipse at center, black 40%, transparent 80%);
-      -webkit-mask-image: radial-gradient(ellipse at center, black 40%, transparent 80%);
-    }
-    .v2-particle {
-      position: absolute; width: 3px; height: 3px; border-radius: 50%;
-      background: rgba(167,139,250,0.8); pointer-events: none;
-      animation: floatParticle var(--dur) ease-in-out infinite;
-      animation-delay: var(--delay);
-    }
-  `;
-  document.head.appendChild(st);
-}
-
-function AuraRings() {
-  if (!isWeb) return null;
-  const rings = [240, 380, 540, 720];
-  return (
-    <>
-      {rings.map((size, i) => (
-        <div
-          key={size}
-          className="v2-aura-ring"
-          style={{
-            width: size, height: size,
-            animation: `auraPulse ${6 + i * 0.8}s ease-in-out ${i * 0.3}s infinite`,
-            borderColor: i === 0 ? "rgba(167,139,250,0.45)" : "rgba(167,139,250,0.15)",
-          } as any}
-        />
-      ))}
-    </>
-  );
-}
-
-function Particles({ count = 24 }: { count?: number }) {
-  if (!isWeb) return null;
-  const particles = Array.from({ length: count }, (_, i) => {
-    const x = Math.random() * 100;
-    const y = Math.random() * 100;
-    const dx = (Math.random() - 0.5) * 80;
-    const dy = (Math.random() - 0.5) * 80;
-    const dur = 8 + Math.random() * 8;
-    const delay = Math.random() * 10;
-    return (
-      <div
-        key={i}
-        className="v2-particle"
-        style={{
-          left: `${x}%`, top: `${y}%`,
-          // @ts-ignore
-          "--dx": `${dx}px`, "--dy": `${dy}px`,
-          "--dur": `${dur}s`, "--delay": `-${delay}s`,
-        } as any}
-      />
-    );
-  });
-  return <>{particles}</>;
-}
+// Ganchos de CSS do palco (components/auth/authStageCss): o RNW 0.19 só
+// repassa data-* (dataSet), não className.
+const hook = (k: string) => (isWeb ? ({ dataSet: { [k]: "1" } } as any) : {});
+const noOutline = isWeb ? ({ outlineWidth: 0, outlineStyle: "none" } as any) : {};
+// Serifada e mono vão INLINE (objeto solto, fora do StyleSheet.create): o
+// painel injeta `html body [class]`/`[dir]` com a DM Sans, e essa regra fica
+// na página depois do logout. Ela vence a classe atômica do RNW, mas perde
+// para estilo inline (ver app/(tabs)/_layout.tsx, useWebFonts).
+const serif = { fontFamily: Fonts.heading };
+const mono = { fontFamily: Fonts.mono };
 
 export default function LoginScreen() {
   // `email`/`from`: handoff do checkout do site (/comecar) — pré-preenche o
@@ -135,30 +53,28 @@ export default function LoginScreen() {
   const { invite_token, email: emailParam } = useLocalSearchParams<{ invite_token?: string; email?: string }>();
   const isInviteFlow = !!invite_token;
   const { width } = useWindowDimensions();
-  const isDesktop = isWeb && width >= 960;
-  // 29/08/2026: espaco reservado para o banner de LGPD (0 quando ele nao esta
-  // na tela) — sem isso ele cobria o divisor "ou" e o rodape em 375px.
-  const consentInset = useLgpdConsentInset();
+  const narrow = width <= 480;
 
   const [email, setEmail] = useState(typeof emailParam === "string" ? emailParam : "");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
+  const [wrongPass, setWrongPass] = useState(false);
+  const [orbSignal, setOrbSignal] = useState<{ mood: OrbMood; n: number } | null>(null);
+  const passRef = useRef<TextInput | null>(null);
   const { login, isLoading } = useAuthStore();
+  // Sorteada uma vez por visita: re-render não troca a frase na cara da pessoa.
+  const [saudacao] = useState(() => greeting(new Date(), lerPrimeiroNome()));
 
-  // Native fade-in for mobile
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(20)).current;
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 600, delay: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 600, delay: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-    ]).start();
-  }, []);
+  const orb = (mood: OrbMood) => setOrbSignal((p) => ({ mood, n: (p?.n || 0) + 1 }));
 
   async function handleLogin() {
-    if (!email || !password) { toast.error("Preencha e-mail e senha"); return; }
+    if (!email || !password) { orb("hmm"); toast.error("Preencha e-mail e senha"); return; }
+    setWrongPass(false);
     try {
       await login(email.trim().toLowerCase(), password);
+      // Só o primeiro nome, só neste aparelho (nunca o e-mail).
+      guardarPrimeiroNome(useAuthStore.getState().user?.name);
+      orb("happy");
       if (isInviteFlow && invite_token) {
         try {
           await inviteApi.accept(invite_token);
@@ -179,213 +95,159 @@ export default function LoginScreen() {
       if (KARATE_VERTICALS.includes(vertical)) { useKarateIntro.getState().trigger(); router.replace("/karate"); return; }
       router.replace("/(tabs)");
     } catch (err) {
-      // Senha errada chega como ApiError 401 com a mensagem do backend. O que
-      // não é ApiError não veio do servidor: não dá para afirmar que a senha
-      // está errada.
+      orb("hmm");
+      // Senha errada chega como ApiError 401 com a mensagem do backend: vira
+      // a linha pêssego do cartão. O que não é ApiError não veio do servidor:
+      // não dá para afirmar que a senha está errada (toast de sempre).
+      if (err instanceof ApiError && err.status === 401) { setWrongPass(true); return; }
       const msg = err instanceof ApiError ? err.message : "Não foi possível entrar. Tente novamente.";
       toast.error(msg);
     }
   }
 
-  const formCard = (
-    <View style={s.card} {...(isWeb ? { className: "v2-card" } as any : {})}>
-      <View style={s.logoRow}>
-        <Image source={{ uri: LOGO_SVG }} style={s.logo} resizeMode="contain" />
-        <Text style={s.brand}>Aura<Text style={{ color: Colors.violet }}>.</Text></Text>
+  const sayStyle = [s.say, narrow && s.sayNarrow, serif];
+
+  return (
+    <AuthStage cardTone="stage" orbSignal={orbSignal} testID="login-stage">
+      <View style={s.top}>
+        <Text style={s.brand}>Aura<Text style={s.brandDot}>.</Text></Text>
+        <Text style={[s.tag, mono]}>ENTRAR</Text>
       </View>
 
       {isInviteFlow && (
         <View style={s.inviteBanner}>
-          <Icon name="users" size={14} color={Colors.violet3} />
+          <Icon name="users" size={14} color={Stage.violet3} />
           <Text style={s.inviteBannerText}>Faça login para aceitar o convite e entrar na equipe</Text>
         </View>
       )}
 
-      <Text style={s.title}>{isInviteFlow ? "Entrar para aceitar convite" : "Bem-vindo de volta"}</Text>
-      <Text style={s.subtitle}>Entre na sua conta e continue de onde parou</Text>
+      {isInviteFlow ? (
+        <>
+          <Text style={sayStyle} role="heading" aria-level={1} testID="login-say">Entrar para aceitar convite</Text>
+          <Text style={s.sub}>Entre na sua conta e continue de onde parou</Text>
+        </>
+      ) : (
+        <>
+          <Text style={sayStyle} role="heading" aria-level={1} testID="login-say">
+            {saudacao.say.map((p, i) => (p.em ? <Text key={i} style={[s.em, serif]}>{p.text}</Text> : <Text key={i} style={serif}>{p.text}</Text>))}
+          </Text>
+          <Text style={s.sub} testID="login-sub">{saudacao.sub}</Text>
+        </>
+      )}
+
+      {wrongPass && (
+        <View style={s.errLine} role="alert" testID="login-err">
+          <Icon name="alert" size={14} color={Stage.peachInk} />
+          <Text style={s.errText}>
+            <Text>Essa senha não bateu. Quer tentar de novo ou </Text>
+            <Text style={s.errLink} onPress={() => router.push("/(auth)/forgot-password")} role="link">redefinir</Text>
+            <Text>?</Text>
+          </Text>
+        </View>
+      )}
 
       <View style={s.field}>
         <Text style={s.label}>E-mail</Text>
-        <View style={s.inputWrap}>
-          <Icon name="mail" size={16} color={Colors.ink3} />
+        <View style={s.inp} {...hook("asInp")}>
+          <Icon name="mail" size={16} color={Stage.ink3} />
           <TextInput
-            style={[s.input, isWeb && { outlineWidth: 0 } as any]}
-            {...(isWeb ? { className: "v2-input" } as any : {})}
-            value={email} onChangeText={setEmail}
-            placeholder="seu@email.com" placeholderTextColor={Colors.ink3}
+            style={[s.input, noOutline]}
+            value={email}
+            onChangeText={(v) => { setEmail(v); if (wrongPass) setWrongPass(false); }}
+            placeholder="seu@email.com" placeholderTextColor="rgba(184,172,223,0.55)"
             autoCapitalize="none" keyboardType="email-address"
-            autoComplete="email"
+            autoComplete="email" accessibilityLabel="E-mail"
+            returnKeyType="next" onSubmitEditing={() => passRef.current?.focus()}
+            testID="login-email"
           />
         </View>
       </View>
 
       <View style={s.field}>
         <Text style={s.label}>Senha</Text>
-        <View style={s.inputWrap}>
-          <Icon name="lock" size={16} color={Colors.ink3} />
+        <View style={[s.inp, wrongPass && s.inpErr]} {...hook("asInp")}>
+          <Icon name="lock" size={16} color={Stage.ink3} />
           <TextInput
-            style={[s.input, isWeb && { outlineWidth: 0 } as any]}
-            {...(isWeb ? { className: "v2-input" } as any : {})}
-            value={password} onChangeText={setPassword}
-            placeholder="********" placeholderTextColor={Colors.ink3}
+            ref={passRef}
+            style={[s.input, noOutline]}
+            value={password}
+            onChangeText={(v) => { setPassword(v); if (wrongPass) setWrongPass(false); }}
+            placeholder="••••••••" placeholderTextColor="rgba(184,172,223,0.55)"
             secureTextEntry={!showPass}
-            autoComplete="current-password"
+            autoComplete="current-password" accessibilityLabel="Senha"
             onSubmitEditing={handleLogin}
+            testID="login-senha"
           />
-          <Pressable onPress={() => setShowPass(!showPass)} style={s.eyeBtn}>
-            <Text style={s.eyeText}>{showPass ? "Ocultar" : "Ver"}</Text>
+          <Pressable onPress={() => setShowPass(!showPass)} style={s.ghost} accessibilityLabel={showPass ? "Ocultar senha" : "Mostrar senha"} {...hook("asGhost")}>
+            <Text style={s.ghostText}>{showPass ? "Ocultar" : "Ver"}</Text>
           </Pressable>
         </View>
       </View>
 
-      <Link href="/(auth)/forgot-password" style={s.forgotRow}>
-        <Text style={s.forgotText}>Esqueci minha senha</Text>
-      </Link>
+      <View style={s.forgotRow}>
+        <Link href="/(auth)/forgot-password" style={s.lnk} {...hook("asLink")}>Esqueci minha senha</Link>
+      </View>
 
       <Pressable
-        style={[s.btn, isLoading && { opacity: 0.7 }]}
-        {...(isWeb ? { className: "v2-btn" } as any : {})}
+        style={[s.btn, narrow && s.btnNarrow, isLoading && { opacity: 0.7 }]}
+        {...hook("asBtn")}
         onPress={handleLogin} disabled={isLoading}
+        accessibilityRole="button"
+        testID="login-entrar"
       >
         {isLoading ? <ActivityIndicator color="#fff" /> : (
-          <Text style={s.btnText}>{isInviteFlow ? "Entrar e aceitar convite" : "Entrar"}</Text>
+          <Text style={[s.btnText, narrow && s.btnTextNarrow]}>{isInviteFlow ? "Entrar e aceitar convite" : "Entrar"}</Text>
         )}
       </Pressable>
 
-      <View style={s.dividerRow}>
-        <View style={s.dividerLine} />
+      <View style={s.divider}>
+        <View style={s.dividerLine} {...hook("asDivider")} />
         <Text style={s.dividerText}>ou</Text>
-        <View style={s.dividerLine} />
+        <View style={s.dividerLine} {...hook("asDivider")} />
       </View>
 
-      <View style={s.footerRow}>
-        <Text style={s.footerText}>Não tem conta? </Text>
-        <Link href={isInviteFlow ? `/(auth)/register?invite_token=${invite_token}` : "/(auth)/register"}>
-          <Text style={s.link}>Criar conta grátis</Text>
-        </Link>
+      <View style={s.linksCenter}>
+        <Text style={s.muted}>Primeira vez por aqui?</Text>
+        <Link href={isInviteFlow ? `/(auth)/register?invite_token=${invite_token}` : "/(auth)/register"} style={s.lnk} {...hook("asLink")}>Criar conta grátis</Link>
       </View>
 
-      <Text style={s.footerTag}>Aura. - Tecnologia para Negócios</Text>
-    </View>
-  );
-
-  // WEB: split desktop layout with cinematic hero
-  if (isWeb) {
-    return (
-      <div style={{
-        // 29/08/2026: overflowY auto (era `overflow: hidden`) — com o espaco
-        // reservado para o banner de LGPD, telas baixas precisam poder rolar
-        // em vez de cortar o cartao.
-        minHeight: "100vh", width: "100%", position: "relative",
-        overflowX: "hidden", overflowY: "auto",
-        background: `
-          radial-gradient(ellipse at 20% 30%, rgba(124,58,237,0.18) 0%, transparent 55%),
-          radial-gradient(ellipse at 80% 70%, rgba(139,92,246,0.10) 0%, transparent 50%),
-          ${Colors.bg}
-        `,
-      } as any}>
-        <div className="v2-grid" />
-        <Particles count={28} />
-
-        {isDesktop ? (
-          // DESKTOP: split hero + form
-          <div style={{ display: "flex", minHeight: "100vh", position: "relative", zIndex: 1, boxSizing: "border-box", paddingBottom: consentInset } as any}>
-            {/* Hero side */}
-            <div style={{
-              flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between",
-              padding: "60px 80px", position: "relative",
-            } as any}>
-              {/* Aura rings behind */}
-              <div style={{ position: "absolute", top: "50%", left: "50%", width: 0, height: 0 } as any}>
-                <AuraRings />
-              </div>
-
-              {/* Logo */}
-              <div className="v2-hero" style={{ display: "flex", alignItems: "center", gap: 12, position: "relative", zIndex: 2 } as any}>
-                <img src={LOGO_SVG} style={{ width: 32, height: 32 }} />
-                <span style={{ fontSize: 22, fontWeight: 800, color: Colors.ink, letterSpacing: -0.5 }}>
-                  Aura<span style={{ color: Colors.violet }}>.</span>
-                </span>
-              </div>
-
-              {/* Hero text block */}
-              <div className="v2-hero" style={{ display: "flex", flexDirection: "column", gap: 28, position: "relative", zIndex: 2 } as any}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 3.5, textTransform: "uppercase", color: Colors.violet3 }}>
-                  Gestão Inteligente
-                </div>
-                <div style={{ fontFamily: Fonts.heading, fontSize: 56, lineHeight: 1.08, color: Colors.ink, letterSpacing: -2, maxWidth: 480 }}>
-                  Seu <em style={{ fontStyle: "italic", color: Colors.violet3 }}>negócio</em> inteiro na palma da mão.
-                </div>
-                <div style={{ fontSize: 14, color: Colors.ink2, maxWidth: 420, lineHeight: 1.6 }}>
-                  Vender, controlar estoque e emitir nota sem dor de cabeça.
-                </div>
-              </div>
-
-              {/* Spacer pra manter o justify-content: space-between balanceado
-                  apos remocao do bloco de footer (SEGURANCA / LGPD / SUPORTE) */}
-              <div style={{ minHeight: 1 } as any} />
-            </div>
-
-            {/* Form side */}
-            <div style={{
-              width: 480, display: "flex", alignItems: "center", justifyContent: "center",
-              padding: "40px 60px", position: "relative", zIndex: 2,
-            } as any}>
-              {formCard}
-            </div>
-          </div>
-        ) : (
-          // WEB MOBILE/TABLET: centered
-          <div style={{
-            minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-            padding: 20, paddingBottom: 20 + consentInset, boxSizing: "border-box",
-            position: "relative", zIndex: 2,
-          } as any}>
-            <div style={{ position: "absolute", top: "50%", left: "50%", width: 0, height: 0 } as any}>
-              <AuraRings />
-            </div>
-            {formCard}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // NATIVE mobile: animated ScrollView
-  return (
-    <ScrollView contentContainerStyle={s.mobileContainer}>
-      <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY }], width: "100%", alignItems: "center" }}>
-        {formCard}
-      </Animated.View>
-    </ScrollView>
+      <Text style={s.foot}>Aura. · Tecnologia para negócios</Text>
+    </AuthStage>
   );
 }
 
+const sans = Fonts.body;
 const s = StyleSheet.create({
-  mobileContainer: { flexGrow: 1, backgroundColor: Colors.bg, padding: 20, justifyContent: "center", alignItems: "center" },
-  card: { width: "100%", maxWidth: 400, backgroundColor: Colors.bg3, borderRadius: 24, padding: 32, borderWidth: 1, borderColor: Colors.border2 },
-  logoRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 28 },
-  logo: { width: 36, height: 36 },
-  brand: { fontSize: 24, fontWeight: "800", color: Colors.ink, letterSpacing: -0.5 },
-  inviteBanner: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: Colors.violetD, borderRadius: 10, padding: 10, marginBottom: 16, borderWidth: 1, borderColor: Colors.border2 },
-  inviteBannerText: { fontSize: 12, color: Colors.violet3, flex: 1, lineHeight: 18 },
-  title: { fontSize: 22, color: Colors.ink, fontWeight: "700", textAlign: "center", marginBottom: 6, ...(isWeb ? { fontFamily: Fonts.heading, fontWeight: "400" as any, fontSize: 28 } : {}) },
-  subtitle: { fontSize: 13, color: Colors.ink3, textAlign: "center", marginBottom: 28 },
-  field: { marginBottom: 16 },
-  label: { fontSize: 11, color: Colors.ink3, marginBottom: 6, fontWeight: "600", letterSpacing: 0.5, textTransform: "uppercase" },
-  inputWrap: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg4, borderRadius: 12, borderWidth: 1.5, borderColor: Colors.border, paddingHorizontal: 14 },
-  input: { flex: 1, fontSize: 14, color: Colors.ink, paddingVertical: 14 },
-  eyeBtn: { paddingVertical: 8, paddingHorizontal: 4 },
-  eyeText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
-  forgotRow: { alignSelf: "flex-end", marginBottom: 20, marginTop: -4 },
-  forgotText: { fontSize: 12, color: Colors.violet3, fontWeight: "500" },
-  btn: { backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 16, alignItems: "center", marginBottom: 20 },
-  btnText: { color: "#fff", fontSize: 15, fontWeight: "700", letterSpacing: 0.3 },
-  dividerRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 20 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
-  dividerText: { fontSize: 11, color: Colors.ink3 },
-  footerRow: { flexDirection: "row", justifyContent: "center", marginBottom: 16 },
-  footerText: { fontSize: 13, color: Colors.ink3 },
-  link: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
-  footerTag: { fontSize: 11, color: Colors.ink3, textAlign: "center", opacity: 0.5 },
+  top: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10 },
+  brand: { fontFamily: sans, fontWeight: "800", fontSize: 17, letterSpacing: -0.3, color: Stage.ink2 },
+  brandDot: { color: Stage.violet3 },
+  tag: { fontSize: 10, color: Stage.ink3, letterSpacing: 0.6 },
+  inviteBanner: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: "rgba(196,181,253,0.06)", borderRadius: 14, padding: 10, marginBottom: 12, borderWidth: 1, borderColor: "rgba(230,226,244,0.10)" },
+  inviteBannerText: { fontFamily: sans, fontSize: 12, color: Stage.ink2, flex: 1, lineHeight: 18 },
+  say: { fontSize: 32, lineHeight: 34, letterSpacing: -0.4, color: Stage.ink, textAlign: "center", marginBottom: 6, fontWeight: "400" },
+  sayNarrow: { fontSize: 27, lineHeight: 29 },
+  em: { fontStyle: "italic", color: Stage.violet4 },
+  sub: { fontFamily: sans, fontSize: 13.5, lineHeight: 20, color: Stage.ink2, textAlign: "center", marginBottom: 16 },
+  errLine: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, backgroundColor: Stage.peachD, borderWidth: 1, borderColor: Stage.peachLine, marginBottom: 12 },
+  errText: { fontFamily: sans, fontSize: 12.5, lineHeight: 18, color: Stage.peachInk, flex: 1 },
+  errLink: { color: Stage.peachInk, textDecorationLine: "underline", fontWeight: "600" },
+  field: { marginBottom: 12, gap: 6 },
+  label: { fontFamily: sans, fontSize: 11, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase", color: Stage.ink3 },
+  inp: { flexDirection: "row", alignItems: "center", gap: 8, height: 48, paddingLeft: 12, paddingRight: 6, borderRadius: 12, backgroundColor: "rgba(7,4,22,0.42)", borderWidth: 1, borderColor: "rgba(230,226,244,0.11)" },
+  inpErr: { borderColor: "rgba(240,191,154,0.75)" },
+  input: { flex: 1, minWidth: 0, height: "100%", fontFamily: sans, fontSize: 15, color: Stage.ink, backgroundColor: "transparent", borderWidth: 0 },
+  ghost: { minHeight: 36, minWidth: 36, paddingHorizontal: 8, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  ghostText: { fontFamily: sans, fontSize: 12, fontWeight: "600", color: Stage.violet3 },
+  forgotRow: { flexDirection: "row", justifyContent: "flex-end", marginTop: -6, marginBottom: 10 },
+  lnk: { fontFamily: sans, fontSize: 12.5, fontWeight: "600", color: Stage.violet3, paddingVertical: 6, minHeight: 36, textDecorationLine: "none", ...(isWeb ? ({ display: "inline-flex", alignItems: "center" } as any) : {}) },
+  btn: { height: 50, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingHorizontal: 16, backgroundColor: Stage.violet, marginTop: 4 },
+  btnNarrow: {},
+  btnText: { fontFamily: sans, color: "#fff", fontSize: 15, fontWeight: "700" },
+  btnTextNarrow: { fontSize: 14 },
+  divider: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 14, marginBottom: 6 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: "rgba(230,226,244,0.12)" },
+  dividerText: { fontFamily: sans, fontSize: 11, color: Stage.ink3 },
+  linksCenter: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6, flexWrap: "wrap" },
+  muted: { fontFamily: sans, fontSize: 12.5, color: Stage.ink3 },
+  foot: { fontFamily: sans, marginTop: 14, textAlign: "center", fontSize: 11, color: Stage.ink3, letterSpacing: 0.2 },
 });
