@@ -156,6 +156,25 @@ function labelVariantParts(size: string, color: string): string[] {
   return parts.filter(Boolean);
 }
 
+// Tag vertical (22/10/2026): cor por nome (hex -> nome PT, como no
+// editorial) e preco com separador de milhar ("1.234,56").
+function labelColorName(color: string): string {
+  if (!color) return "";
+  if (/^#[0-9A-Fa-f]{6}$/.test(color)) return hexToName(color);
+  return String(color).trim();
+}
+function priceBr(n: number): string {
+  const p = n.toFixed(2).split(".");
+  return p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "," + p[1];
+}
+// SKU impresso na tag vertical. Vazio e placeholder ("---", que o cadastro
+// grava quando nao ha SKU) somem: a linha "Cod:" nao sai.
+function labelSkuText(sku: string | null | undefined): string {
+  const t = String(sku == null ? "" : sku).trim();
+  if (!t || BARCODE_PLACEHOLDERS.has(t) || BARCODE_PLACEHOLDERS.has(t.toLowerCase()) || /^[.\-\s_]+$/.test(t)) return "";
+  return t;
+}
+
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -176,6 +195,10 @@ export type LabelItem = {
   // "cartao R$ X" numa linha menor embaixo. Ausente/null = etiqueta de
   // sempre, byte a byte.
   cardPrice?: number | null;
+  // 22/10/2026 (tag vertical, customLabel.ts): codigo interno (SKU) do
+  // produto, impresso como "Cod: 221" so no desenho "tag vertical". Os
+  // outros desenhos nao leem este campo (HTML byte a byte igual).
+  sku?: string;
 };
 
 // ----- Presets de tamanho de etiqueta -----
@@ -265,7 +288,9 @@ export type LabelPreset = {
   // esquerda, Montserrat em negrito, nome inteiro em ate 2 linhas, selo de
   // tamanho/cor ao lado do preco e o codigo de barras no rodape (MESMO
   // .bc-box/SVG/BARCODE_OPTS). Ausente => layout Finesse (byte-identico).
-  design?: "editorial";
+  // 22/10/2026: "tagVertical" so existe na "Minha medida" em pe (altura >=
+  // 1,5 x largura, customLabel.ts). Nenhum modelo fixo usa.
+  design?: "editorial" | "tagVertical";
   // Editorial "compacto" (14/10/2026, Toda Linda / 40x25): mais respiro em
   // volta do texto e fontes ~8% menores. NAO toca no .bc-box nem no SVG (o
   // barcode segue o BARCODE_OPTS, LOCKED). So emite CSS neste preset; o
@@ -460,8 +485,12 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   // 18/10/2026 (f1-16): nos modelos fixos o desenho pode vir da loja
   // (options.design); ausente, labelDesignEfetivo devolve o `design` do
   // preset — a mesma flag de antes. Medida livre: sempre o do spec.
+  // 22/10/2026: "Minha medida" em pe (customLabel.ts, ehTagVertical) usa o
+  // desenho "tag vertical" so na etiqueta com codigo de barras. QR e o teste
+  // de posicao da medida em pe seguem no editorial, byte a byte como antes.
+  const isTagVertical = !!custom && preset.design === "tagVertical" && !isQR && !testFrame;
   const isEditorial = custom
-    ? preset.design === "editorial"
+    ? preset.design === "editorial" || (preset.design === "tagVertical" && !isTagVertical)
     : labelDesignEfetivo(options.labelSize, options.design) === "editorial";
 
   const cells: string[] = [];
@@ -500,6 +529,26 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
           (storeHeader ? '<div class="store">' + storeHeader + '</div>' : '') +
           '<div class="name">' + labelName + '</div>' + priceBlock + '</div></div></td>'
         );
+      } else if (isTagVertical) {
+        // ===== Desenho "tag vertical" (22/10/2026, customLabel.ts) =====
+        // Ordem: store -> name -> cod -> var -> bc-box -> price. O .bc-box e
+        // o <svg id="bc-N" data-code="..."> sao a MESMA string do layout
+        // Finesse (LOCKED) — so a posicao na coluna muda.
+        const sku = labelSkuText(item.sku);
+        const cor = labelColorName(item.color);
+        const tam = item.size ? String(item.size).trim() : "";
+        cells.push(
+          '<td class="cell"><div class="bc-inner tv">' +
+          (storeHeader ? '<div class="store">' + storeHeader + '</div>' : '') +
+          '<div class="name">' + esc(item.name) + '</div>' +
+          (sku ? '<div class="cod">Cód: ' + esc(sku) + '</div>' : '') +
+          (cor || tam ? '<div class="var">' + (cor ? '<span>C: ' + esc(cor) + '</span>' : '') + (tam ? '<span>T: ' + esc(tam) + '</span>' : '') + '</div>' : '') +
+          '<div class="bc-box"><svg id="bc-' + labelIdx + '" data-code="' + code + '"></svg></div>' +
+          '<div class="price"><span class="cur">R$</span>' + priceBr(item.price) + '</div>' +
+          (hasCard ? '<div class="card-line">Cartão <b>R$ ' + priceBr(item.cardPrice as number) + '</b></div>' : '') +
+          '</div></td>'
+        );
+        // =============================================================
       } else if (isEditorial) {
         // ===== Desenho "editorial" (25/09/2026, preset "105x21") =====
         // Ordem: store -> name -> row (selo tamanho/cor + preco) -> bc-box.
@@ -562,7 +611,7 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   html += testFrame ? '<title>Teste de posição da etiqueta</title>' : '<title>Etiquetas Aura - ' + totalLabels + ' etiquetas</title>';
   if (!isQR) html += '<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></scr' + 'ipt>';
   // Editorial: Montserrat (Google Fonts) so nesse desenho; Arial de reserva.
-  if (isEditorial && !isQR) html += '<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&display=swap" rel="stylesheet">';
+  if ((isEditorial || isTagVertical) && !isQR) html += '<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&display=swap" rel="stylesheet">';
   // Valores derivados do preset. Pro preset default "99x21" estes calculos
   // reproduzem exatamente os numeros LOCKED originais (33-3=30, min(33,21)-4=17).
   const bcBoxMaxWidthMm = preset.cellWidthMm - 3;
@@ -692,6 +741,26 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
       html += '.bc-inner.ed.stack .price{font-size:' + pt(cp ? 8.5 : 9) + '}';
       html += '.bc-inner.ed .card-line{font-size:' + pt(5) + '}';
     }
+  }
+
+  // Desenho "tag vertical" (22/10/2026, customLabel.ts). So emitido nele:
+  // nenhum outro desenho ganha um byte. Vem DEPOIS do CSS base e ganha por
+  // especificidade. O .bc-box segue o da zona LOCKED (flex-grow, max-width
+  // largura - 3mm, SVG centralizado) e ocupa o espaco livre entre o texto e
+  // o preco; a unica regra a mais e o flex-shrink:0 de todos os blocos, que
+  // impede o navegador de espremer o .bc-box (e o SVG) se o texto crescer.
+  if (isTagVertical && custom) {
+    const k = custom.tagEscala || 1;
+    const pt = function (n: number) { return round2(n * k) + 'pt'; };
+    html += '.bc-inner.tv{justify-content:flex-start;gap:0.6mm;padding:' + (custom.tagTopoMm || 0) + 'mm 1.5mm 2.5mm;font-family:Montserrat,Arial,Helvetica,sans-serif}';
+    html += '.bc-inner.tv>div{flex-shrink:0}';
+    html += '.bc-inner.tv .store{font-size:' + pt(6.5) + ';letter-spacing:0.4pt;margin-bottom:0.4mm}';
+    html += '.bc-inner.tv .name{font-size:' + pt(8.5) + ';font-weight:700;line-height:1.1;width:100%;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word;max-height:none}';
+    html += '.bc-inner.tv .cod,.bc-inner.tv .var{font-size:' + pt(7) + ';font-weight:700;line-height:1.1;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
+    html += '.bc-inner.tv .var span+span{margin-left:2.5mm}';
+    html += '.bc-inner.tv .price{font-size:' + pt(16) + ';font-weight:900;line-height:1;letter-spacing:-0.3pt;white-space:nowrap;max-width:100%;overflow:hidden}';
+    html += '.bc-inner.tv .price .cur{font-size:0.62em;font-weight:700;letter-spacing:0;margin-right:0.6mm}';
+    html += '.bc-inner.tv .card-line{font-size:' + pt(6.5) + ';font-weight:700;line-height:1;white-space:nowrap;max-width:100%;overflow:hidden}';
   }
 
   // QR layout
@@ -867,6 +936,28 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
     html += 'b.classList.add("stack");n.style.fontSize="";v.style.letterSpacing="";v.style.fontSize="";vp=' + ptTxt(4.4, '4.4') + ';';
     html += 'while(over(v)&&vp>' + ptTxt(3.8, '3.8') + '){vp-=0.2;v.style.fontSize=vp+"pt";}';
     html += '}';
+    html += '});}';
+    html += 'if(document.fonts&&document.fonts.ready){document.fonts.ready.then(fit);}else{fit();}';
+    html += 'window.addEventListener("load",fit);';
+    html += '})();</scr' + 'ipt>';
+  }
+  if (isTagVertical && custom) {
+    // Ajuste automatico da tag vertical, depois das fontes. So encolhe
+    // quando precisa: loja e linhas de codigo/variante numa linha so, nome
+    // em ate 2 linhas, preco na largura da tag. Nao toca no .bc-box nem no SVG.
+    const k = custom.tagEscala || 1;
+    const n2 = function (n: number) { return String(round2(n * k)); };
+    html += '<script>(function(){';
+    html += 'function over(el){var r=document.createRange();r.selectNodeContents(el);return r.getBoundingClientRect().width>el.clientWidth+0.05;}';
+    html += 'function tall(el){return el.scrollHeight>el.clientHeight+1;}';
+    html += 'function shrink(el,pt,min,test){el.style.fontSize="";while(test(el)&&pt>min){pt=Math.max(min,pt-0.25);el.style.fontSize=pt+"pt";}}';
+    html += 'function fit(){document.querySelectorAll(".bc-inner.tv").forEach(function(b){';
+    html += 'var q=function(s){return b.querySelector(s);};';
+    html += 'if(q(".store"))shrink(q(".store"),' + n2(6.5) + ',' + n2(5) + ',over);';
+    html += 'if(q(".name"))shrink(q(".name"),' + n2(8.5) + ',' + n2(6.5) + ',tall);';
+    html += 'if(q(".cod"))shrink(q(".cod"),' + n2(7) + ',' + n2(5.5) + ',over);';
+    html += 'if(q(".var"))shrink(q(".var"),' + n2(7) + ',' + n2(5.5) + ',over);';
+    html += 'if(q(".price"))shrink(q(".price"),' + n2(16) + ',' + n2(10) + ',over);';
     html += '});}';
     html += 'if(document.fonts&&document.fonts.ready){document.fonts.ready.then(fit);}else{fit();}';
     html += 'window.addEventListener("load",fit);';

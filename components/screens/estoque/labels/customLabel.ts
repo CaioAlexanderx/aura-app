@@ -24,6 +24,30 @@
 //     (escalaTexto, até 1,8x), limitado pela altura que sobra para o código
 //     de barras não ser espremido. O código de barras NUNCA escala: segue o
 //     BARCODE_OPTS (LOCKED), lido pela pistola.
+//
+// REGRA DA "TAG VERTICAL" (22/10/2026, Doce Encanto, Zebra ZD220, tag de
+// couchê em pé 35x60 mm, 3 colunas, rolo de 105 mm, sem vão):
+//   medida própria EM PÉ, com alturaMm >= 1,5 x larguraMm, usa o desenho
+//   "tag vertical" em vez do editorial. Qualquer outra medida e TODOS os
+//   modelos fixos continuam exatamente como antes (fixtures douradas em
+//   __tests__/etiquetaMedidaLivreDourada.test.ts e etiquetasDouradas.test.ts).
+//   - Por que proporção e não um campo "desenho" na medida: o backend só
+//     guarda os campos numéricos da medida (label_custom_specs) e
+//     descartaria um campo novo. A regra liga o desenho só pelos números que
+//     já estão gravados na conta.
+//   - Conta exata, em décimos de mm (35 x 52,5 entra; 35 x 52,4 não).
+//   - Desenho, de cima para baixo e centralizado: respiro no topo para a
+//     fenda/furo da tag (~7 mm; 12% da altura em tag mais baixa), nome da
+//     loja numa linha (Montserrat em negrito, a mesma do editorial), nome
+//     do produto em até 2 linhas, "Cód: <SKU>" (código interno do cadastro;
+//     sem SKU, ou com o "---" do cadastro, a linha some),
+//     "C: <cor>  T: <tamanho>" (só com variante), código de barras (o MESMO
+//     .bc-box/SVG/BARCODE_OPTS, LOCKED, que nunca escala) e o preço grande
+//     no rodapé. Texto proporcional à largura (35 mm = 1x).
+//   - Só a etiqueta com código de barras muda. QR e o teste de posição
+//     (moldura) da medida em pé saem como antes.
+//   - Para desfazer: ehTagVertical devolver false (ou reverter o PR); a
+//     medida da loja continua gravada e volta ao editorial.
 // ============================================================================
 import type { LabelPreset } from "@/components/screens/estoque/labels/buildLabelHtml";
 
@@ -151,10 +175,35 @@ export function escalaTexto(spec: Pick<CustomLabelSpec, "larguraMm" | "alturaMm"
   return Math.round(k * 20) / 20;
 }
 
+/** Tag vertical: altura >= 1,5 x largura (em pé). Conta em décimos de mm,
+ *  sem erro de ponto flutuante: 35 x 52,5 entra, 35 x 52,4 não. */
+export const PROPORCAO_TAG_VERTICAL = 1.5;
+export function ehTagVertical(spec: Pick<CustomLabelSpec, "larguraMm" | "alturaMm">): boolean {
+  var w = Math.round(Number(spec.larguraMm) * 10), h = Math.round(Number(spec.alturaMm) * 10);
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0) return false;
+  return h * 2 >= w * 3;
+}
+
+/** Respiro no topo da tag vertical (fenda/furo da tag): 7 mm, ou 12% da
+ *  altura em tag mais baixa que ~58 mm. */
+export function tagTopoMm(spec: Pick<CustomLabelSpec, "alturaMm">): number {
+  return round1(Math.min(7, spec.alturaMm * 0.12));
+}
+
+/** Escala do texto da tag vertical em relação à tag de 35 mm de largura
+ *  (0,75x a 1,5x, de 0,05 em 0,05). O código de barras não escala. */
+export function tagEscala(spec: Pick<CustomLabelSpec, "larguraMm">): number {
+  var k = Math.min(1.5, Math.max(0.75, spec.larguraMm / 35));
+  return Math.round(k * 20) / 20;
+}
+
 export type CustomLabelPreset = LabelPreset & {
   ajusteXMm: number;
   ajusteYMm: number;
   escalaTexto: number;
+  /** Só na tag vertical (ehTagVertical). */
+  tagTopoMm?: number;
+  tagEscala?: number;
 };
 
 /** O spec vira um preset equivalente aos fixos: página = colunas × largura +
@@ -180,5 +229,12 @@ export function customLabelPreset(spec: CustomLabelSpec): CustomLabelPreset {
   if (gapX > 0) preset.colGapMm = gapX;
   if (s.espacoLinhaMm > 0) preset.rowGapMm = s.espacoLinhaMm;
   if (w >= 35 && h >= 25) preset.edCompact = true;
+  // Tag vertical (regra no topo do arquivo). edCompact e escalaTexto ficam
+  // como estão: QR e o teste de posição da medida em pé seguem o editorial.
+  if (ehTagVertical(s)) {
+    preset.design = "tagVertical";
+    preset.tagTopoMm = tagTopoMm(s);
+    preset.tagEscala = tagEscala(s);
+  }
   return preset;
 }

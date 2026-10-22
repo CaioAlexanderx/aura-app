@@ -20,10 +20,13 @@ import { rotaDeConfiguracoesNaSecao } from "@/utils/focoNaSecao";
 // preset da Minha medida) sem mudar nada do que é impresso.
 // ============================================================
 
-export const NOME_DO_DESENHO: Record<LabelDesign, string> = { classico: "Clássico", editorial: "Editorial" };
+// "tagVertical" (22/10/2026): só a Minha medida em pé (customLabel.ts,
+// altura >= 1,5 x largura) sai nele; não é uma escolha da loja.
+export type DesenhoImpresso = LabelDesign | "tagVertical";
+export const NOME_DO_DESENHO: Record<DesenhoImpresso, string> = { classico: "Clássico", editorial: "Editorial", tagVertical: "Tag vertical" };
 
 export type ResumoDoDesenho = {
-  desenho: LabelDesign;
+  desenho: DesenhoImpresso;
   // O modelo atual aceita a escolha da loja (33x21 e 30x25)?
   escolhivel: boolean;
 };
@@ -38,7 +41,8 @@ export function resumoDoDesenho(
   medida: CustomLabelSpec | null | undefined,
 ): ResumoDoDesenho {
   if (medida) {
-    return { desenho: customLabelPreset(medida).design === "editorial" ? "editorial" : "classico", escolhivel: false };
+    const d = customLabelPreset(medida).design;
+    return { desenho: d === "editorial" || d === "tagVertical" ? d : "classico", escolhivel: false };
   }
   const key = labelSize || DEFAULT_LABEL_SIZE;
   return { desenho: labelDesignEfetivo(key, labelDesign), escolhivel: LABEL_DESIGN_SIZES.indexOf(key) >= 0 };

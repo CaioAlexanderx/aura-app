@@ -11,7 +11,7 @@
 // vertical.
 // ============================================================================
 import {
-  MEDIDA_LIMITES, MEDIDA_PADRAO, mmTxt, type CustomLabelSpec,
+  MEDIDA_LIMITES, MEDIDA_PADRAO, mmTxt, ehTagVertical, tagTopoMm, type CustomLabelSpec,
 } from "@/components/screens/estoque/labels/customLabel";
 
 export const PASSO_TOQUE_MM = 0.5;
@@ -172,7 +172,22 @@ function conteudo(x: number, y: number, w: number, h: number, ex: ExemploDeEtiqu
   var p = Math.max(1.2, Math.min(w, h) * 0.07), iw = w - 2 * p, ih = h - 2 * p, X = x + p, Y = y + p;
   var nome = iw < 32 && ex.nome.length > 16 ? ex.nome.slice(0, 15).trim() + "…" : ex.nome;
   var o = "";
-  if (w / h > 2.6) {
+  if (ehTagVertical({ larguraMm: w, alturaMm: h })) {
+    // Tag vertical (22/10/2026, customLabel.ts): respiro no topo, loja, nome,
+    // variação, código de barras no meio e o preço grande no rodapé, tudo
+    // centralizado — a mesma ordem do que sai na impressão.
+    var cx = x + w / 2, tw2 = w - 3, top = y + tagTopoMm({ alturaMm: h });
+    var fL = Math.min(w * 0.065, 2.4), fN3 = caber(nome, tw2, w * 0.085), fV3 = caber(ex.variacao, tw2, w * 0.07), fP3 = caber(ex.preco, tw2, w * 0.17);
+    var ty3 = top + fL * 0.85;
+    o += texto("SUA LOJA", cx, ty3, fL, 800, TINTA, "middle");
+    ty3 += fN3 * 1.35; o += texto(nome, cx, ty3, fN3, 700, TINTA, "middle");
+    if (ex.variacao) { ty3 += fV3 * 1.35; o += texto(ex.variacao, cx, ty3, fV3, 500, "#6b6585", "middle"); }
+    var py = y + h - 2.5, bw3 = Math.min(tw2, 29), bh3 = Math.min(7, h * 0.12), numH3 = Math.min(2.4, h * 0.05);
+    var livre = py - fP3 * 0.85 - ty3, by3 = ty3 + Math.max(1, (livre - bh3 - numH3) / 2);
+    o += barras(cx - bw3 / 2, by3, bw3, bh3);
+    o += texto(ex.codigo, cx, by3 + bh3 + numH3 * 0.85, Math.min(numH3 * 0.9, bw3 / (13 * 0.62)), 500, TINTA, "middle");
+    o += texto(ex.preco, cx, py, fP3, 800, TINTA, "middle");
+  } else if (w / h > 2.6) {
     var tw = iw * 0.46, bw = iw * 0.5;
     var fN = caber(nome, tw, h * 0.2), fV = caber(ex.variacao, tw, h * 0.16), fP = caber(ex.preco, tw, h * 0.3);
     var ty = Y + fN * 0.85;

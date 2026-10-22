@@ -87,6 +87,13 @@ describe("resumoDoDesenho: o que a tela diz é o que sai na impressão", () => {
     expect(resumoDoDesenho("99x21", "classico", MEDIDA)).toEqual({ desenho: impresso, escolhivel: false });
   });
 
+  it("Minha medida em pé (35x60): diz 'tag vertical', que é o que sai na impressão", () => {
+    const emPe = { ...MEDIDA, larguraMm: 35, alturaMm: 60, colunas: 3, espacoLadoMm: 0, espacoLinhaMm: 0 };
+    const html = buildLabelHtml(ITENS_DOURADOS, { mode: "barcode", storeName: "Loja", showStoreName: true, customSpec: emPe });
+    expect(html).toContain('class="bc-inner tv"');
+    expect(resumoDoDesenho("99x21", "editorial", emPe)).toEqual({ desenho: "tagVertical", escolhivel: false });
+  });
+
   it("só 33x21 (99x21 e 105x21) e 30x25 aceitam a escolha", () => {
     expect(LABEL_SIZE_KEYS.filter((k) => resumoDoDesenho(k, null, null).escolhivel)).toEqual(["99x21", "105x21", "30x25"]);
   });
