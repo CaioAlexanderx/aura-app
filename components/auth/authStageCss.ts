@@ -23,8 +23,10 @@ export const AUTH_STAGE_CSS_ID = "aura-auth-stage-css";
 // Em loop (pausam com a aba oculta). A entrada do cartão (as-cardIn) fica
 // de fora da pausa: pausada no primeiro quadro, o cartão nasceria invisível
 // numa aba aberta em segundo plano.
-const EM_LOOP = [".as-blob", ".as-card::before", ".as-orb", ".as-orb .as-arc", ".as-orb .as-core"];
-const TODOS = [...EM_LOOP, ".as-card"];
+// tq-68: o brilho dos espaços vazios do crachá ([data-as-ph]) também é loop;
+// a entrada da etapa, do carimbo e da tinta do crachá são de uma vez só.
+const EM_LOOP = [".as-blob", ".as-card::before", ".as-orb", ".as-orb .as-arc", ".as-orb .as-core", "[data-as-ph]"];
+const TODOS = [...EM_LOOP, ".as-card", "[data-as-step]", "[data-as-stamp]", "[data-as-ink]"];
 const sob = (raiz: string, lista: string[]) => lista.map((s) => raiz + " " + s).join(", ");
 
 export const AUTH_STAGE_CSS = `
@@ -116,12 +118,43 @@ export const AUTH_STAGE_CSS = `
   [data-as-ghost][data-as-ghost]:hover { background-color: rgba(167,139,250,0.10); }
 }
 
+/* cadastro em etapas (tq-68): luz que anda com a etapa, entrada da etapa,
+   crachá, trilho, medidor da senha, seletor, caixa dos Termos e carimbo */
+.as-blob { transition: transform 1.6s cubic-bezier(0.16, 1, 0.3, 1); }
+.aura-stage[data-step="2"] .as-b1 { transform: translate(24%, 12%); }
+.aura-stage[data-step="2"] .as-b2 { transform: translate(-16%, -12%); }
+.aura-stage[data-step="3"] .as-b1 { transform: translate(-4%, 26%) scale(0.9); }
+.aura-stage[data-step="3"] .as-b2 { transform: translate(-30%, -40%) scale(1.15); }
+[data-as-step][data-as-step] { animation: as-stepIn 320ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes as-stepIn { from { opacity: 0; transform: translateX(26px); } to { opacity: 1; transform: none; } }
+[data-as-idcard][data-as-idcard] { background-image: linear-gradient(135deg, rgba(196,181,253,0.10), rgba(7,4,22,0.35)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.10); }
+[data-as-mono][data-as-mono] { box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), inset 0 0 0 1px rgba(230,226,244,0.12), 0 6px 16px rgba(124,58,237,0.25); }
+[data-as-mono] svg { width: 100%; height: 100%; display: block; transition: opacity 280ms cubic-bezier(0.4, 0, 0.2, 1); }
+[data-as-mono="empty"] svg { opacity: 0.4; filter: saturate(0.6); }
+[data-as-mono="half"] svg { opacity: 0.72; }
+[data-as-ph][data-as-ph] { background-image: linear-gradient(90deg, rgba(230,226,244,0.08), rgba(230,226,244,0.16), rgba(230,226,244,0.08)); background-size: 200% 100%; animation: as-shimmer 2.4s linear infinite; }
+@keyframes as-shimmer { to { background-position: -200% 0; } }
+[data-as-ink][data-as-ink] { animation: as-ink 520ms cubic-bezier(0.4, 0, 0.2, 1) both; }
+@keyframes as-ink { from { opacity: 0; filter: blur(4px); translate: 0 3px; } to { opacity: 1; filter: blur(0); translate: 0 0; } }
+[data-as-rail][data-as-rail] { transition: width 280ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 280ms cubic-bezier(0.4, 0, 0.2, 1); }
+[data-as-rail="done"] { background-image: linear-gradient(90deg, ${Stage.violet2}, ${Stage.violet4}); }
+[data-as-rail="now"] { background-image: linear-gradient(90deg, ${Stage.violet}, ${Stage.lilac}); box-shadow: 0 0 14px rgba(196,181,253,0.6); }
+[data-as-meter="on"] { background-image: linear-gradient(90deg, ${Stage.violet2}, ${Stage.violet4}); box-shadow: 0 0 8px rgba(167,139,250,0.45); }
+[data-as-meter="full"] { background-image: linear-gradient(135deg, #1f5a43 0%, #3f9d7a 38%, #9be3c6 50%, #3f9d7a 62%, #1f5a43 100%); box-shadow: 0 0 10px rgba(63,157,122,0.45); }
+[data-as-seg="on"] { background-image: linear-gradient(135deg, rgba(139,92,246,0.55), rgba(91,33,182,0.40)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.18); }
+[data-as-box="on"] { background-image: linear-gradient(135deg, ${Stage.violet2}, ${Stage.violet}); box-shadow: 0 0 12px rgba(124,58,237,0.5); }
+[data-as-okk][data-as-okk] { box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 0 0 3px rgba(63,157,122,0.12); }
+[data-as-stamp][data-as-stamp] { background-image: linear-gradient(135deg, rgba(196,181,253,0.14), rgba(124,58,237,0.06)); animation: as-stampIn 520ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes as-stampIn { 0% { opacity: 0; transform: scale(1.18) rotate(-3deg); filter: blur(3px); } 60% { opacity: 1; transform: scale(0.985) rotate(0.5deg); filter: blur(0); } 100% { transform: none; } }
+[data-as-btn][aria-disabled="true"] { box-shadow: none; cursor: not-allowed; }
+
 /* orçamento de desempenho */
 ${sob(".as-static", TODOS)} { animation: none !important; }
+.as-static .as-blob, .as-static [data-as-rail] { transition: none !important; }
 ${sob(".as-paused", EM_LOOP)} { animation-play-state: paused !important; }
 @media (prefers-reduced-motion: reduce) {
   ${sob(".aura-stage", TODOS)} { animation: none !important; }
-  [data-as-btn][data-as-btn], [data-as-inp][data-as-inp] { transition: none !important; }
+  [data-as-btn][data-as-btn], [data-as-inp][data-as-inp], .aura-stage .as-blob, [data-as-rail][data-as-rail] { transition: none !important; }
 }
 
 /* celular: regras .stage-wrap.mobile e @media (max-width:480px) do mockup */
