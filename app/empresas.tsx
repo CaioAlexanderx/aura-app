@@ -8,7 +8,10 @@
 //   - Cobrança consolidada (R$ X/mês total) no topo
 //   - Trocar pra qualquer uma (mesmo fluxo do switcher)
 //   - Tornar principal (M2-03 transfer-primary, recarrega após)
-//   - Remover empresa secundária (não a primary)
+//   - Remover empresa secundária (não a primary). 22/10/2026
+//     (INC-2026-10-22-01, tq-103): o botão some quando é a única empresa
+//     ativa do dono, e a confirmação exige digitar o nome da empresa
+//     (regras em utils/removerEmpresa.ts)
 //   - Adicionar nova empresa (abre AddCompanyModal)
 //   - Estoque compartilhado entre as empresas (StockSharingCard, 25/09/2026)
 // ============================================================
@@ -21,8 +24,8 @@ import {
   ActivityIndicator,
   RefreshControl,
   Platform,
-  Alert,
   Modal,
+  TextInput,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useColors, Colors } from "@/constants/colors";
@@ -39,6 +42,14 @@ import {
 } from "@/services/multicnpj";
 import { AddCompanyModal } from "@/components/AddCompanyModal";
 import { StockSharingCard } from "@/components/StockSharingCard";
+import {
+  podeRemoverEmpresa,
+  nomeParaConfirmar,
+  nomeConfere,
+  mensagemDoErroAoRemover,
+  ehUltimaEmpresa,
+  TEXTO_CONFIRMAR_REMOCAO,
+} from "@/utils/removerEmpresa";
 
 function planBadgeColor(plan: string) {
   switch ((plan || "").toLowerCase()) {
@@ -65,6 +76,9 @@ export default function MinhasEmpresasScreen() {
   const [addOpen, setAddOpen] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<FullCompany | null>(null);
+  // Confirmação forte: a lojista digita o nome da empresa.
+  const [nomeDigitado, setNomeDigitado] = useState("");
+  const [erroRemover, setErroRemover] = useState<string | null>(null);
   // M2-03 transfer-primary
   const [transferringId, setTransferringId] = useState<string | null>(null);
   const [confirmTransfer, setConfirmTransfer] = useState<FullCompany | null>(null);
@@ -111,28 +125,36 @@ export default function MinhasEmpresasScreen() {
     }
   }
 
+  function abrirConfirmacaoRemover(c: FullCompany) {
+    setNomeDigitado("");
+    setErroRemover(null);
+    setConfirmRemove(c);
+  }
+
+  function fecharConfirmacaoRemover() {
+    setConfirmRemove(null);
+    setNomeDigitado("");
+    setErroRemover(null);
+  }
+
   async function handleRemove(c: FullCompany) {
     if (removingId) return;
+    if (!nomeConfere(nomeDigitado, nomeParaConfirmar(c))) return;
     setRemovingId(c.id);
+    setErroRemover(null);
     try {
       const res = await userCompaniesApi.remove(c.id);
       toast.success(res.note || "Empresa removida");
-      setConfirmRemove(null);
+      fecharConfirmacaoRemover();
       // Atualiza lista local + recarrega switcher do auth store
       await fetchData();
       loadCompanies().catch(() => {});
     } catch (err: any) {
-      const data = err?.data;
-      if (data?.error === "HAS_SALES") {
-        Alert.alert(
-          "Não foi possível remover",
-          data.message + "\n\nVendas registradas: " + data.sales_count,
-        );
-      } else if (data?.error === "CANNOT_REMOVE_PRIMARY") {
-        Alert.alert("Empresa principal", data.message);
-      } else {
-        toast.error(err?.message || "Erro ao remover empresa");
-      }
+      // A mensagem do servidor aparece dentro da confirmação (Alert.alert
+      // não mostra nada no web). 409 LAST_COMPANY: a lista local estava
+      // velha; recarrega para o botão sumir.
+      setErroRemover(mensagemDoErroAoRemover(err));
+      if (ehUltimaEmpresa(err)) fetchData();
     } finally {
       setRemovingId(null);
     }
@@ -171,6 +193,8 @@ export default function MinhasEmpresasScreen() {
       setTransferringId(null);
     }
   }
+
+  const nomeOk = !!confirmRemove && nomeConfere(nomeDigitado, nomeParaConfirmar(confirmRemove));
 
   if (loading) {
     return (
@@ -483,9 +507,10 @@ export default function MinhasEmpresasScreen() {
                   )}
                 </Pressable>
               )}
-              {!c.is_primary && (
+              {podeRemoverEmpresa(c, companies) && (
                 <Pressable
-                  onPress={() => setConfirmRemove(c)}
+                  testID={"empresa-remover-" + c.id}
+                  onPress={() => abrirConfirmacaoRemover(c)}
                   disabled={isRemoving || switching || isTransferring}
                   style={{
                     flexDirection: "row",
@@ -684,10 +709,10 @@ export default function MinhasEmpresasScreen() {
         visible={!!confirmRemove}
         transparent
         animationType="fade"
-        onRequestClose={() => setConfirmRemove(null)}
+        onRequestClose={fecharConfirmacaoRemover}
       >
         <Pressable
-          onPress={() => setConfirmRemove(null)}
+          onPress={fecharConfirmacaoRemover}
           style={{
             flex: 1,
             backgroundColor: "rgba(0,0,0,0.6)",
@@ -724,12 +749,57 @@ export default function MinhasEmpresasScreen() {
             <Text style={{ fontSize: 16, fontWeight: "700", color: C.ink, marginBottom: 8 }}>
               Remover {confirmRemove?.name || confirmRemove?.legal_name}?
             </Text>
-            <Text style={{ fontSize: 13, color: C.ink3, lineHeight: 19, marginBottom: 16 }}>
-              A empresa será desativada. O histórico de notas fiscais e dados cadastrais ficam preservados, mas você não poderá mais operá-la. Sua mensalidade será reduzida no próximo ciclo.
+            <Text style={{ fontSize: 13, color: C.ink3, lineHeight: 19, marginBottom: 14 }}>
+              {TEXTO_CONFIRMAR_REMOCAO}
             </Text>
+            <Text style={{ fontSize: 12, color: C.ink, fontWeight: "600", marginBottom: 6 }}>
+              Para confirmar, digite o nome da empresa:{" "}
+              <Text style={{ fontWeight: "800" }}>{confirmRemove ? nomeParaConfirmar(confirmRemove) : ""}</Text>
+            </Text>
+            <TextInput
+              testID="remover-empresa-nome"
+              value={nomeDigitado}
+              onChangeText={(v) => { setNomeDigitado(v); setErroRemover(null); }}
+              placeholder={confirmRemove ? nomeParaConfirmar(confirmRemove) : ""}
+              placeholderTextColor={C.ink3 + "80"}
+              autoCapitalize="none"
+              autoCorrect={false}
+              accessibilityLabel="Nome da empresa para confirmar a remoção"
+              style={{
+                borderWidth: 1,
+                borderColor: C.border,
+                borderRadius: 10,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                fontSize: 14,
+                color: C.ink,
+                backgroundColor: C.bg,
+                marginBottom: erroRemover ? 10 : 16,
+              }}
+            />
+            {erroRemover && (
+              <View
+                testID="remover-empresa-erro"
+                style={{
+                  backgroundColor: "#dc262612",
+                  borderRadius: 10,
+                  padding: 12,
+                  borderWidth: 1,
+                  borderColor: "#dc262640",
+                  marginBottom: 16,
+                  flexDirection: "row",
+                  gap: 8,
+                }}
+              >
+                <Icon name="alert" size={14} color="#dc2626" />
+                <Text style={{ fontSize: 12, color: "#dc2626", flex: 1, lineHeight: 17 }}>
+                  {erroRemover}
+                </Text>
+              </View>
+            )}
             <View style={{ flexDirection: "row", gap: 8 }}>
               <Pressable
-                onPress={() => setConfirmRemove(null)}
+                onPress={fecharConfirmacaoRemover}
                 style={{
                   flex: 1,
                   paddingVertical: 12,
@@ -744,15 +814,17 @@ export default function MinhasEmpresasScreen() {
                 </Text>
               </Pressable>
               <Pressable
+                testID="remover-empresa-confirmar"
                 onPress={() => confirmRemove && handleRemove(confirmRemove)}
-                disabled={!!removingId}
+                disabled={!!removingId || !nomeOk}
+                accessibilityState={{ disabled: !!removingId || !nomeOk }}
                 style={{
                   flex: 1,
                   paddingVertical: 12,
                   borderRadius: 10,
                   backgroundColor: "#dc2626",
                   alignItems: "center",
-                  opacity: removingId ? 0.5 : 1,
+                  opacity: removingId || !nomeOk ? 0.5 : 1,
                 }}
               >
                 {removingId ? (
