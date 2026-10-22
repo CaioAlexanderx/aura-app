@@ -83,7 +83,7 @@ const empresa = (over: any) => ({
 });
 
 const MSG_ULTIMA =
-  "Esta é a sua única empresa. Para trocar o CNPJ ou os dados, edite em Configurações → Dados da empresa.";
+  "Esta é a sua única empresa. Para mudar nome, endereço ou contato, edite em Configurações. Para trocar o CNPJ, fale com o suporte da Aura.";
 
 describe("regras de remover empresa", () => {
   test("única empresa do dono (sem principal, o caso real): sem botão", () => {
