@@ -87,6 +87,13 @@ var COLOR_NAME_TO_HEX: Record<string, string> = {
   "bordo": "#800020", vinho: "#722f37", "azul escuro": "#1e3a5f", "verde agua": "#7fffd4",
 };
 
+// 22/10/2026: código interno (SKU) do produto, o mesmo que o Estoque mostra
+// na coluna de código. Só o desenho "tag vertical" imprime ("Cód: 221");
+// os outros desenhos ignoram o campo e saem byte a byte como antes.
+function skuDoProduto(p: Product): string {
+  return String((p as any).sku || p.code || "").trim();
+}
+
 function colorNameToHex(name: string): string | null {
   if (/^#[0-9a-fA-F]{6}$/.test(name)) return name;
   var hexMatch = name.match(/#[0-9a-fA-F]{6}/);
@@ -483,7 +490,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
 
       if (hasAnyVariant) {
         if (includeParentInPrint[id]) {
-          items.push({ name: p.name, price: p.price, barcode: p.barcode || p.code, size: p.size || "", color: p.color || "", qty: getQty(id), productId: id, ...comCartao(p.price, p) });
+          items.push({ name: p.name, price: p.price, barcode: p.barcode || p.code, size: p.size || "", color: p.color || "", qty: getQty(id), productId: id, sku: skuDoProduto(p), ...comCartao(p.price, p) });
         }
         if (selVars && selVars.size > 0) {
           variants.forEach(function(v: any) {
@@ -491,11 +498,11 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
             var sc = variantSizeColor(v);
             var effectivePrice = v.price_override ? parseFloat(v.price_override) : p.price;
             var effectiveBarcode = v.barcode || p.barcode || p.code;
-            items.push({ name: p.name, price: effectivePrice, barcode: effectiveBarcode, size: sc.size, color: sc.color, qty: getQty(id + "__" + v.id), productId: id, variantId: v.id, ...comCartao(effectivePrice, p as Product) });
+            items.push({ name: p.name, price: effectivePrice, barcode: effectiveBarcode, size: sc.size, color: sc.color, qty: getQty(id + "__" + v.id), productId: id, variantId: v.id, sku: skuDoProduto(p as Product), ...comCartao(effectivePrice, p as Product) });
           });
         }
       } else {
-        items.push({ name: p.name, price: p.price, barcode: p.barcode || p.code, size: p.size || "", color: p.color || "", qty: getQty(id), productId: id, ...comCartao(p.price, p) });
+        items.push({ name: p.name, price: p.price, barcode: p.barcode || p.code, size: p.size || "", color: p.color || "", qty: getQty(id), productId: id, sku: skuDoProduto(p), ...comCartao(p.price, p) });
       }
     });
     return items;
