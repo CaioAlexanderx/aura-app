@@ -149,11 +149,15 @@ const MORE_PRIORIDADE = ["/clientes", "/whatsapp", "/clientes/reativacao"];
 function useWebFonts() {
   useEffect(() => {
     if (Platform.OS !== "web") return;
-    if (document.getElementById("aura-fonts")) return;
-    const p1 = document.createElement("link"); p1.rel = "preconnect"; p1.href = "https://fonts.googleapis.com"; document.head.appendChild(p1);
-    const p2 = document.createElement("link"); p2.rel = "preconnect"; p2.href = "https://fonts.gstatic.com"; p2.crossOrigin = ""; document.head.appendChild(p2);
-    const lk = document.createElement("link"); lk.id = "aura-fonts"; lk.rel = "stylesheet"; lk.href = GOOGLE_FONTS_CSS; document.head.appendChild(lk);
-    const st = document.createElement("style"); st.id = "aura-font-override";
+    // O AuthStage também pode criar `aura-fonts` antes do painel montar.
+    // A presença do link evita duplicá-lo, mas NÃO deve pular os CSS do painel.
+    if (!document.getElementById("aura-fonts")) {
+      const p1 = document.createElement("link"); p1.rel = "preconnect"; p1.href = "https://fonts.googleapis.com"; document.head.appendChild(p1);
+      const p2 = document.createElement("link"); p2.rel = "preconnect"; p2.href = "https://fonts.gstatic.com"; p2.crossOrigin = ""; document.head.appendChild(p2);
+      const lk = document.createElement("link"); lk.id = "aura-fonts"; lk.rel = "stylesheet"; lk.href = GOOGLE_FONTS_CSS; document.head.appendChild(lk);
+    }
+    if (!document.getElementById("aura-font-override")) {
+      const st = document.createElement("style"); st.id = "aura-font-override";
     // ============================================================
     // A regra de fonte do painel — SEM !important.
     //
@@ -184,7 +188,8 @@ function useWebFonts() {
       // o estilo inline que o proprio componente possa ter deixado pra tras.
       + cssDeExcecaoDeFonte() + "\n"
       + "@keyframes auraShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }";
-    document.head.appendChild(st);
+      document.head.appendChild(st);
+    }
     document.documentElement.lang = "pt-BR";
     if (!document.getElementById("aura-favicon")) { const fav = document.createElement("link"); fav.id = "aura-favicon"; fav.rel = "icon"; fav.type = "image/png"; fav.href = "https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png"; document.head.appendChild(fav); }
     if (!document.getElementById("aura-wow-css")) { const wc = document.createElement("style"); wc.id = "aura-wow-css"; wc.textContent = "* { font-variant-numeric: tabular-nums; } a, button, [role=button] { cursor: pointer !important; } ::selection { background: rgba(124,58,237,0.3); color: inherit; } ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: rgba(124,58,237,0.25); border-radius: 3px; } ::-webkit-scrollbar-thumb:hover { background: rgba(124,58,237,0.4); } @keyframes auraStagger { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } } .skip-nav { position: absolute; left: -9999px; top: 4px; z-index: 9999; background: #7c3aed; color: #fff; padding: 8px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; text-decoration: none; } .skip-nav:focus { left: 8px; } @keyframes auraBounce { 0% { transform: scale(1); } 40% { transform: scale(1.12); } 70% { transform: scale(0.95); } 100% { transform: scale(1); } }"; document.head.appendChild(wc); }
