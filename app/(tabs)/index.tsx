@@ -8,6 +8,7 @@ import { meAggregatesApi } from "@/services/meAggregates";
 import { Colors, Glass } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { TrialBanner } from "@/components/TrialBanner";
+import { AvisoDeAtrasoNoPainel } from "@/components/AvisoDeAtrasoNoPainel";
 import { SkeletonDashboard, SkeletonStyle } from "@/components/Skeleton";
 import { toast } from "@/components/Toast";
 import { ProfileBanner } from "@/components/ProfileBanner";
@@ -233,6 +234,8 @@ export default function DashboardScreen() {
       <AuraDesignStyle />
       <AuraBackdrop />
       <TrialBanner />
+      {/* tq-86: mensalidade em aberto, antes da pausa das telas (dia 7). */}
+      <AvisoDeAtrasoNoPainel />
       <SkeletonStyle />
       <ScrollView
         style={s.scroll}

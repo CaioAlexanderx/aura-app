@@ -55,6 +55,7 @@ jest.mock("@/services/api", () => {
 import { ApiError } from "@/services/api";
 import { CHAVE_PRIMEIRO_NOME } from "@/utils/primeiroNomeNoAparelho";
 import LoginScreen from "@/app/(auth)/login";
+import { guardarDestino, lerDestino, __zerarDestino } from "@/utils/destinoDepoisDoLogin";
 
 function textos(node: any, out: string[] = []): string[] {
   if (node == null) return out;
@@ -85,6 +86,7 @@ beforeEach(() => {
   mockParams = {};
   mockState = { user: null, company: null };
   localStorage.removeItem(CHAVE_PRIMEIRO_NOME);
+  __zerarDestino();
 });
 afterEach(() => { jest.useRealTimers(); jest.restoreAllMocks(); });
 
@@ -163,4 +165,42 @@ test("campos vazios: toast de sempre e nenhuma chamada", async () => {
   await act(async () => { await porId(t, "login-entrar", "onPress").props.onPress(); });
   expect(mockToastError).toHaveBeenCalledWith("Preencha e-mail e senha");
   expect(mockLogin).not.toHaveBeenCalled();
+});
+
+// 24/10/2026 (tq-91): link aberto sem sessão volta para a tela pedida.
+test("link aberto sem sessão: depois do login volta para a tela do link, com a query", async () => {
+  guardarDestino("/crediario?filtro=atraso&empresa=abc");
+  mockLogin.mockImplementationOnce(async () => { mockState = { user: { name: "Carol" }, company: { vertical: "varejo" } }; });
+  const t = montar();
+  await digitarEEntrar(t, "carol@loja.com", "Certa123");
+  expect(mockReplace).toHaveBeenCalledWith("/crediario?filtro=atraso&empresa=abc");
+  expect(mockReplace).not.toHaveBeenCalledWith("/(tabs)");
+});
+
+test("destino lido antes de entrar: vale mesmo se o AuthGuard já consumiu durante o login", async () => {
+  guardarDestino("/financeiro");
+  mockLogin.mockImplementationOnce(async () => { __zerarDestino(); mockState = { user: { name: "Carol" }, company: {} }; });
+  const t = montar();
+  await digitarEEntrar(t, "carol@loja.com", "Certa123");
+  expect(mockReplace).toHaveBeenCalledWith("/financeiro");
+});
+
+test("Karatê mantém a entrada Shoji em /karate, mesmo com destino guardado", async () => {
+  guardarDestino("/financeiro");
+  mockLogin.mockImplementationOnce(async () => { mockState = { user: { name: "Sensei" }, company: { vertical_active: "karate_dojo" } }; });
+  const t = montar();
+  await digitarEEntrar(t, "dojo@x.com", "Certa123");
+  expect(mockTrigger).toHaveBeenCalledTimes(1);
+  expect(mockReplace).toHaveBeenCalledWith("/karate");
+  expect(mockReplace).not.toHaveBeenCalledWith("/financeiro");
+});
+
+test("convite mantém o caminho dele e apaga destino velho", async () => {
+  guardarDestino("/financeiro");
+  mockParams = { invite_token: "tok-1" };
+  mockLogin.mockImplementationOnce(async () => { mockState = { user: { name: "Bia" }, company: {} }; });
+  const t = montar();
+  await digitarEEntrar(t, "bia@x.com", "Certa123");
+  expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
+  expect(lerDestino()).toBeNull();
 });

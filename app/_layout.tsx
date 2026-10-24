@@ -22,7 +22,9 @@ import { useRegistroDeTelas } from "@/hooks/useRegistroDeTelas";
 import { useRevalidarMe } from "@/hooks/useRevalidarMe";
 import { ehVitrinePublica } from "@/components/studio/storefront/rotasDaVitrine";
 import { mostrarCarregandoSessao } from "@/utils/carregandoSessao";
-import { semAssinatura, destinoSemAssinatura } from "@/utils/muroDeAssinatura";
+import { semAssinatura, destinoSemAssinatura, caixaPausado, estadoDaLoja } from "@/utils/muroDeAssinatura";
+import { guardarDestino, consumirDestino, limparDestino } from "@/utils/destinoDepoisDoLogin";
+import { useEmpresaPeloLink } from "@/hooks/useEmpresaPeloLink";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +50,13 @@ function checkVerifiedParam() {
   return verified;
 }
 
+// tq-91: caminho + query da tela aberta agora (só web: no nativo não há URL
+// de link para guardar).
+function caminhoAtual(): string | null {
+  if (Platform.OS !== "web" || typeof window === "undefined") return null;
+  try { return window.location.pathname + window.location.search; } catch { return null; }
+}
+
 function AuthGuard() {
   const { token, user, company, isHydrated, isDemo, isStaff, trialActive, hydrate } = useAuthStore();
   const karateIntroPending = useKarateIntro((st) => st.pending);
@@ -63,6 +72,10 @@ function AuthGuard() {
   // à loja com a aba aberta (revalida o /auth/me a cada 2 min e ao voltar o
   // foco, no máximo 1 por minuto). Aqui, uma vez, para todos os shells.
   useRevalidarMe();
+
+  // tq-92 (24/10/2026): ?empresa=<company_id> troca a empresa ANTES da tela.
+  // Enquanto a troca está pendente, o carregamento neutro fica no lugar.
+  const trocandoEmpresa = useEmpresaPeloLink();
 
   useEffect(() => {
     hydrate();
@@ -234,6 +247,10 @@ function AuthGuard() {
     const isKarateDojoVertical = karateVerticalKey === "karate_dojo";
 
     if (!token && !inAuth) {
+      // tq-91 (24/10/2026): o link aberto sem sessão volta para esta tela
+      // depois do login. Só caminho interno (utils/destinoDepoisDoLogin); o
+      // botão Sair não deixa a tela de onde saiu como destino.
+      guardarDestino(caminhoAtual());
       router.replace("/(auth)/login");
       return;
     }
@@ -243,24 +260,26 @@ function AuthGuard() {
       return;
     }
 
+    // tq-91: entrou (login, cadastro ou e-mail confirmado) → volta para a
+    // tela do link, se houver; senão, a casa da vertical. Karatê mantém a
+    // entrada Shoji em /karate. Uma vertical que não é a da tela guardada
+    // é corrigida pelos redirects logo abaixo, como sempre.
+    const casa =
+      isOdonto ? "/dental/(clinic)/hoje" :
+      isFood   ? "/food/(salao)/mesas"   :
+      isStudio ? "/studio/(estudio)"     :
+      isKarate ? "/karate"               :
+      "/(tabs)";
+    const destinoDaEntrada = () => {
+      if (isKarate) { limparDestino(); return casa; }
+      return consumirDestino() || casa;
+    };
     if (token && (emailVerified || isDemo || isInternalAura) && inAuth && !onVerify) {
-      router.replace(
-        isOdonto ? "/dental/(clinic)/hoje" :
-        isFood   ? "/food/(salao)/mesas"   :
-        isStudio ? "/studio/(estudio)"     :
-        isKarate ? "/karate"               :
-        "/(tabs)"
-      );
+      router.replace(destinoDaEntrada() as any);
       return;
     }
     if (token && (emailVerified || isInternalAura) && onVerify) {
-      router.replace(
-        isOdonto ? "/dental/(clinic)/hoje" :
-        isFood   ? "/food/(salao)/mesas"   :
-        isStudio ? "/studio/(estudio)"     :
-        isKarate ? "/karate"               :
-        "/(tabs)"
-      );
+      router.replace(destinoDaEntrada() as any);
       return;
     }
 
@@ -285,20 +304,16 @@ function AuthGuard() {
       return;
     }
 
-    const billingStatus    = (company as any)?.billing_status;
-    const hasActiveBilling = billingStatus === "active" || trialActive;
-    const memberRole       = (company as any)?.member_role || "owner";
-    const isOwner          = memberRole === "owner";
+    // 24/10/2026 (tq-86): o estado do muro sai de estadoDaLoja, com as datas
+    // do atraso do objeto da empresa (/auth/me): em atraso, as telas pausam
+    // no dia 7 e o Caixa no dia 14 (utils/muroDeAssinatura).
+    const estadoDoMuro     = estadoDaLoja({ company, user, trialActive, isDemo, isStaff });
     // 2026-07-17 (hotfix FPKT) + F3c (19/07): federação E dojô de karatê são
     // excluídos do checkout genérico — cada um tem o gate próprio dele
     // (KarateBillingGate / DojoBillingGate, ver comentário acima). Sem essa
     // exclusão o redirect de 2026-06-18 (dispara em QUALQUER rota
     // autenticada) arranca o usuário de /karate antes do gate montar.
-    const needsCheckout    = semAssinatura({
-      billingStatus, trialActive, isDemo, isStaff, emailVerified,
-      temEmpresa: !!company, isOwner, isKarateFederation, isKarateDojoVertical,
-    });
-    void hasActiveBilling;
+    const needsCheckout    = semAssinatura({ ...estadoDoMuro, isKarateFederation, isKarateDojoVertical });
 
     // 2026-06-18: removida a condição de rota (inTabs || onDentalClinic || …).
     // O redirect agora dispara de QUALQUER rota autenticada, incluindo /empresas.
@@ -308,15 +323,19 @@ function AuthGuard() {
     // 11/10/2026: no shell Negócio o Caixa fica vivo — sem assinatura, qualquer
     // outra tela leva ao Caixa, que mostra o aviso com o botão do checkout
     // (utils/muroDeAssinatura). Verticais com casa própria seguem no checkout.
+    //
+    // 24/10/2026 (tq-86): no dia 14 de atraso o Caixa também pausa e o shell
+    // Negócio vai ao checkout, como as outras verticais.
     if (token && needsCheckout) {
-      const destino = destinoSemAssinatura(segments, { caixaVivo: !isOdonto && !isFood && !isStudio && !isKarate });
+      const caixaVivo = !isOdonto && !isFood && !isStudio && !isKarate && !caixaPausado(estadoDoMuro);
+      const destino = destinoSemAssinatura(segments, { caixaVivo });
       if (destino) { router.replace(destino as any); return; }
     }
   }, [token, user, company, isHydrated, isDemo, isStaff, trialActive, segments]);
 
   return (
     <>
-      {mostrarCarregandoSessao(segments, isHydrated) ? <CarregandoSessao /> : <Slot />}
+      {mostrarCarregandoSessao(segments, isHydrated) || trocandoEmpresa ? <CarregandoSessao /> : <Slot />}
       {karateIntroPending && <KarateLoginTransition onDone={consumeKarateIntro} />}
     </>
   );

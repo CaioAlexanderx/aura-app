@@ -42,6 +42,10 @@ export type LoginResponse = {
     vertical?: VerticalKey | null;
     member_role?: string;
     billing_status?: string | null;
+    /** tq-86 (24/10/2026): datas do atraso (YYYY-MM-DD ou null). Ausentes em backend anterior. */
+    billing_overdue_since?: string | null;
+    billing_pause_screens_on?: string | null;
+    billing_pause_caixa_on?: string | null;
     access_code_used?: boolean;
     // Track G (acesso real): federação resolvida + papel karatê. federation_id =
     // company.id (federação) ou federation_id do pai (dojô); null fora de karatê.

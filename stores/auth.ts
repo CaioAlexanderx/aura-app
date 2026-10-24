@@ -17,6 +17,7 @@ import {
 } from "@/services/multicnpj";
 import { apagarTodasAsVendasGuardadas, apagarVendasDeOutrosUsuarios } from "@/utils/vendaGuardada";
 import { marcarLogin, limparMarcaDeLogin } from "@/services/aberturaAposLogin";
+import { marcarSaidaVoluntaria } from "@/utils/destinoDepoisDoLogin";
 
 const KEY = "aura_token";
 const REFRESH_KEY = "aura_refresh_token";
@@ -434,6 +435,10 @@ export const useAuthStore = create<AuthState>((set, get) => {
       // valor exato true mantém.
       if (!(opcoes && (opcoes as any).manterVendaGuardada === true)) {
         apagarTodasAsVendasGuardadas();
+        // tq-91: no Sair, a tela de onde a pessoa saiu não vira destino do
+        // próximo login. Sessão expirada (401) guarda: quem entra de novo
+        // volta para onde estava.
+        marcarSaidaVoluntaria();
       }
       // Limpa storage ANTES de resetar state, garantindo que mesmo se o
       // redirect falhar, o próximo boot não rehidrata sessão expirada.
@@ -531,6 +536,11 @@ export const useAuthStore = create<AuthState>((set, get) => {
             billing_status: cc.billing_status,
             access_code_used: cc.access_code_used,
           };
+          // tq-86: datas do atraso só quando o backend manda (campo ausente =
+          // backend anterior, e o muro mantém o comportamento de antes).
+          for (const k of ["billing_overdue_since", "billing_pause_screens_on", "billing_pause_caixa_on"] as const) {
+            if (k in cc) newCompany[k] = (cc as any)[k] ?? null;
+          }
 
           set({
             token: newToken,

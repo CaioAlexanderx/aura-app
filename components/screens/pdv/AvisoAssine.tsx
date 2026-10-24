@@ -5,12 +5,17 @@
 // Este é o único lugar da tela que fala de assinatura: uma faixa no topo com
 // o motivo e um botão que leva ao checkout. Nada de botão desabilitado nem
 // isca espalhada pela tela (premissa de 16/09).
+//
+// 24/10/2026 (tq-86): a mesma faixa avisa o atraso. Antes da pausa das
+// telas, no Caixa e no Painel, com a data da pausa; com as telas pausadas,
+// no Caixa, com a data em que o Caixa pausa. O botão leva ao checkout, onde
+// a mensalidade em aberto é paga.
 // ============================================================
 import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
 import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { ROTA_CHECKOUT, textoDoAviso } from "@/utils/muroDeAssinatura";
+import { ROTA_CHECKOUT, textoDoAviso, type AvisoDeAtraso } from "@/utils/muroDeAssinatura";
 
 type Props = {
   trialEndsAt?: string | null;
@@ -18,14 +23,18 @@ type Props = {
   trial?: unknown;
   /** Mobile: título e botão numa coluna. */
   compact?: boolean;
+  /** tq-86: avisoDeAtraso() da loja; troca o texto e o botão. */
+  atraso?: AvisoDeAtraso | null;
+  testID?: string;
 };
 
-export function AvisoAssine({ trialEndsAt, trial, compact = false }: Props) {
-  const { titulo, corpo } = textoDoAviso(trialEndsAt, trial);
+export function AvisoAssine({ trialEndsAt, trial, compact = false, atraso = null, testID = "caixa-aviso-assine" }: Props) {
+  const { titulo, corpo } = textoDoAviso(trialEndsAt, trial, atraso);
+  const botao = atraso ? "Pagar a mensalidade" : "Assinar agora";
   return (
-    <View testID="caixa-aviso-assine" style={[s.faixa, compact && s.faixaCompact]} accessibilityRole="alert">
+    <View testID={testID} style={[s.faixa, compact && s.faixaCompact]} accessibilityRole="alert">
       <View style={s.icone}>
-        <Icon name="lock" size={16} color={Colors.amber} />
+        <Icon name={atraso?.fase === "liberado" ? "alert" : "lock"} size={16} color={Colors.amber} />
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={s.titulo}>{titulo}</Text>
@@ -35,9 +44,9 @@ export function AvisoAssine({ trialEndsAt, trial, compact = false }: Props) {
         testID="caixa-aviso-assinar"
         onPress={() => router.push(ROTA_CHECKOUT as any)}
         style={[s.botao, compact && s.botaoCompact, Platform.OS === "web" && ({ cursor: "pointer" } as any)]}
-        accessibilityLabel="Assinar agora e liberar o resto do sistema"
+        accessibilityLabel={atraso ? "Pagar a mensalidade em aberto" : "Assinar agora e liberar o resto do sistema"}
       >
-        <Text style={s.botaoTxt}>Assinar agora</Text>
+        <Text style={s.botaoTxt}>{botao}</Text>
       </Pressable>
     </View>
   );
