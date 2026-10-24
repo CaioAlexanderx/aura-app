@@ -63,11 +63,18 @@ const RANKING: any = {
   ],
 };
 
-const CATEGORIES: any = [
-  { category: "Calçados", total_products: 18, total_revenue: 4000, total_qty: 210, share_pct: 40 },
-  { category: "Blusas", total_products: 24, total_revenue: 2500, total_qty: 340, share_pct: 25 },
-  { category: "Bolsas", total_products: 9, total_revenue: 1500, total_qty: 61, share_pct: 15 },
-];
+// Formato REAL de GET /products/categories: a rota responde
+// `{ period, categories }`, não a lista crua. A fixture antiga era uma lista
+// e por isso o teste passava enquanto a tela quebrava em produção com
+// "t.reduce is not a function" (24/10/2026).
+const CATEGORIES: any = {
+  period: "month",
+  categories: [
+    { category: "Calçados", total_products: 18, total_revenue: 4000, total_qty: 210, share_pct: 40 },
+    { category: "Blusas", total_products: 24, total_revenue: 2500, total_qty: 340, share_pct: 25 },
+    { category: "Bolsas", total_products: 9, total_revenue: 1500, total_qty: 61, share_pct: 15 },
+  ],
+};
 
 function flattenText(node: any): string {
   if (node == null || node === false) return "";
@@ -136,6 +143,30 @@ describe("AbcCurveCard — seletor Por produto / Por categoria", () => {
     expect(flattenText(tree.toJSON())).toContain("Curva ABC por categoria");
     expect(mockProductsCategories).toHaveBeenCalled();
     expect(window.localStorage.getItem("aura.financeiro.abc.viewMode")).toBe("categoria");
+    tree.unmount();
+  });
+
+  it("'Por categoria' com a resposta real { period, categories } lista as categorias e a frase de leitura", async () => {
+    const tree = await montar();
+    act(() => { achar(tree, "Ver curva ABC por categoria").props.onPress(); });
+    await flush(tree);
+
+    const text = flattenText(tree.toJSON());
+    expect(text).toContain("Calçados");
+    expect(text).toContain("Blusas");
+    expect(text).toContain("Bolsas");
+    // 4000 de 8000 = 50% (A); 6500/8000 = 81,25% já passa de 80 → só Calçados em A
+    expect(text).toContain("1 categoria faz 80% da receita: Calçados");
+    tree.unmount();
+  });
+
+  it("'Por categoria' com corpo inesperado mostra 'Sem vendas no período' em vez de quebrar", async () => {
+    mockProductsCategories.mockReset().mockImplementation(() => Promise.resolve({ period: "month" }));
+    const tree = await montar();
+    act(() => { achar(tree, "Ver curva ABC por categoria").props.onPress(); });
+    await flush(tree);
+
+    expect(flattenText(tree.toJSON())).toContain("Sem vendas no período");
     tree.unmount();
   });
 

@@ -21,7 +21,7 @@ import { useMemo, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Platform } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
-import { companiesApi, type ProductCategoryRanking } from "@/services/companiesApi";
+import { companiesApi, type ProductCategoryRanking, type ProductCategoriesResponse } from "@/services/companiesApi";
 import { useAuthStore } from "@/stores/auth";
 import { useCategories } from "@/hooks/useCategories";
 import { DonutChart } from "@/components/charts/DonutChart";
@@ -32,7 +32,7 @@ import {
   type PeriodKey, type Grade, type ClassFilter,
 } from "./abcShared";
 import {
-  classifyABC, sumRevenue, buildReadingSentence, buildCategoryLookup, buildCategoryDisplayRows,
+  classifyABC, sumRevenue, normalizeCategoryRanking, buildReadingSentence, buildCategoryLookup, buildCategoryDisplayRows,
   categoryCsvRows, CATEGORY_CSV_HEADERS,
   type ClassifiedCategory,
 } from "./abcCategoryUtils";
@@ -52,7 +52,7 @@ export function AbcPorCategoria({ period, onDrillToProduct }: Props) {
   const [page, setPage] = useState(1);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  const { data, isLoading, isError, refetch, isFetching } = useQuery<ProductCategoryRanking[]>({
+  const { data, isLoading, isError, refetch, isFetching } = useQuery<ProductCategoriesResponse | ProductCategoryRanking[]>({
     queryKey: ["productsCategories", companyId, period],
     queryFn: () => companiesApi.productsCategories(companyId!, period),
     enabled: !!companyId && !consolidatedView,
@@ -62,7 +62,10 @@ export function AbcPorCategoria({ period, onDrillToProduct }: Props) {
 
   const { flattened: categoryTree } = useCategories();
 
-  const categories = useMemo<ProductCategoryRanking[]>(() => data || [], [data]);
+  // A rota responde { period, categories } — não a lista crua. Antes era
+  // `data || []`, que passava o objeto adiante e quebrava no .reduce do
+  // sumRevenue (24/10/2026). Ver normalizeCategoryRanking.
+  const categories = useMemo<ProductCategoryRanking[]>(() => normalizeCategoryRanking(data), [data]);
   const totalRevenue = useMemo(() => sumRevenue(categories), [categories]);
   const totalQty = useMemo(() => categories.reduce((s, c) => s + toNum(c.total_qty), 0), [categories]);
 
