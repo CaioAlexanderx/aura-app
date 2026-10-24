@@ -26,6 +26,7 @@ jest.mock("expo-router", () => ({
   Slot: () => null,
   useRouter: () => ({ replace: mockReplace, push: jest.fn() }),
   useSegments: () => mockSegments,
+  useGlobalSearchParams: () => ({}),
 }));
 
 // Sessão hidratada e ninguém logado — o caso da cliente que abre o link.
@@ -34,7 +35,7 @@ jest.mock("@/stores/auth", () => {
     token: null, user: null, company: null, isHydrated: true,
     isDemo: false, isStaff: false, trialActive: false, hydrate: () => {},
   };
-  const useAuthStore: any = () => estado;
+  const useAuthStore: any = (sel?: (s: any) => any) => (sel ? sel(estado) : estado);
   useAuthStore.getState = () => estado;
   useAuthStore.setState = () => {};
   return { useAuthStore };

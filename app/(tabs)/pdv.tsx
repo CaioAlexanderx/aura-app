@@ -78,7 +78,7 @@ import type { Product } from "@/components/screens/estoque/types";
 import { useAuthStore } from "@/stores/auth";
 import { AvisoAssine } from "@/components/screens/pdv/AvisoAssine";
 import { AvisoVendaRecuperada } from "@/components/screens/pdv/AvisoVendaRecuperada";
-import { semAssinatura } from "@/utils/muroDeAssinatura";
+import { semAssinatura, avisoDeAtraso, estadoDaLoja } from "@/utils/muroDeAssinatura";
 
 const PAGE_SIZE = 12;
 
@@ -106,18 +106,13 @@ function CaixaScreenInner() {
 
   // 11/10/2026: Caixa vivo sem assinatura — o aviso no topo é o único lugar da
   // tela que fala de assinar (ver utils/muroDeAssinatura).
+  // 24/10/2026 (tq-86): em atraso a mesma faixa avisa a data da pausa
+  // (antes do dia 7, sem bloquear nada) e, com as telas pausadas, até quando
+  // o Caixa vende. Datas do objeto da empresa do /auth/me.
   const auth = useAuthStore();
-  const mostrarAvisoAssine = semAssinatura({
-    billingStatus: (auth.company as any)?.billing_status,
-    trialActive: auth.trialActive,
-    isDemo: auth.isDemo,
-    isStaff: auth.isStaff,
-    emailVerified: !!(auth.user as any)?.email_verified,
-    temEmpresa: !!auth.company,
-    isOwner: ((auth.company as any)?.member_role || "owner") === "owner",
-    isKarateFederation: false,
-    isKarateDojoVertical: false,
-  });
+  const estadoDoMuro = { ...estadoDaLoja(auth), isKarateFederation: false, isKarateDojoVertical: false };
+  const atraso = avisoDeAtraso(estadoDoMuro);
+  const mostrarAvisoAssine = semAssinatura(estadoDoMuro) || !!atraso;
   const { caixaEnabled, sessaoAtiva, isAberto, caixaLoading, invalidateCaixa } = st;
   const { employees, autoEmitNfce, scannerListening, lastScannedCode } = st;
   const { query, setQuery, cat, setCat, showOutOfStock, setShowOutOfStock } = st;
@@ -280,7 +275,7 @@ function CaixaScreenInner() {
             className={IS_WEB ? "caixa-scrollable" : undefined}
           >
             <View style={IS_WEB && vp.xxl ? ({ maxWidth: 1700, alignSelf: "center", width: "100%" } as any) : null}>
-              {mostrarAvisoAssine && <AvisoAssine trialEndsAt={auth.trialEndsAt} trial={(auth.company as any)?.trial} />}
+              {mostrarAvisoAssine && <AvisoAssine trialEndsAt={auth.trialEndsAt} trial={(auth.company as any)?.trial} atraso={atraso} />}
               {st.vendaRecuperada && (
                 <AvisoVendaRecuperada
                   itens={st.vendaRecuperada.itens}
@@ -420,7 +415,7 @@ function CaixaScreenInner() {
         style={{ flex: 1, backgroundColor: "transparent" }}
         contentContainerStyle={{ padding: 16, paddingBottom: 48 }}
       >
-        {mostrarAvisoAssine && <AvisoAssine trialEndsAt={auth.trialEndsAt} trial={(auth.company as any)?.trial} compact />}
+        {mostrarAvisoAssine && <AvisoAssine trialEndsAt={auth.trialEndsAt} trial={(auth.company as any)?.trial} atraso={atraso} compact />}
         {st.vendaRecuperada && (
           <AvisoVendaRecuperada
             itens={st.vendaRecuperada.itens}

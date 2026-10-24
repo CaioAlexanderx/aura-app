@@ -26,6 +26,17 @@
   X-XSS-Protection: 1; mode=block
   Cache-Control: public, max-age=0, must-revalidate
 
+# 24/10/2026: imagens dos e-mails (logo e assinatura), por URL fixa e
+# versionada: https://app.getaura.com.br/email/<nome>-v1.png. Trocar a
+# imagem = arquivo novo (-v2), nunca sobrescrever, então o cache é longo.
+# O "! Cache-Control" tira o max-age=0 do /* acima: sem ele o Cloudflare
+# junta os dois valores na mesma linha (medido em 24/10 no /_expo/* e no
+# /models/*: "public, max-age=0, must-revalidate, public, max-age=...").
+/email/*
+  ! Cache-Control
+  Cache-Control: public, max-age=31536000, immutable
+  Access-Control-Allow-Origin: *
+
 # Painel fora da busca (06/10/2026). So o host do painel: a regra com host
 # absoluto nao pega loja.getaura.com.br nem outro dominio que venha a
 # apontar para este Worker. Vale tambem para o fallback de SPA (/login,

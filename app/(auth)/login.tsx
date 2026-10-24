@@ -14,6 +14,11 @@
 //   - a saudação vem de utils/saudacao (hora, data especial, dia da
 //     semana) e chama pelo primeiro nome do último login neste aparelho
 //     (utils/primeiroNomeNoAparelho). O convite mantém o título próprio.
+//
+// 24/10/2026 (tq-91): link aberto sem sessão volta para a tela pedida. O
+// AuthGuard guardou o destino (utils/destinoDepoisDoLogin); aqui o login lê
+// antes de entrar e vai para ele em vez do /(tabs). Convite e Karatê
+// (Shoji) mantêm o caminho deles.
 // ============================================================
 import { useState, useRef } from "react";
 import {
@@ -32,6 +37,7 @@ import { useKarateIntro } from "@/stores/karateIntro";
 import { AuthStage, type OrbMood } from "@/components/auth/AuthStage";
 import { greeting } from "@/utils/saudacao";
 import { lerPrimeiroNome, guardarPrimeiroNome } from "@/utils/primeiroNomeNoAparelho";
+import { lerDestino, limparDestino } from "@/utils/destinoDepoisDoLogin";
 
 const isWeb = Platform.OS === "web";
 // DESIGN-29: animação de login Shoji é exibida só quando o vertical é karatê.
@@ -70,6 +76,11 @@ export default function LoginScreen() {
   async function handleLogin() {
     if (!email || !password) { orb("hmm"); toast.error("Preencha e-mail e senha"); return; }
     setWrongPass(false);
+    // tq-91: lido ANTES de entrar — o AuthGuard consome o destino assim que o
+    // token chega, e os dois precisam ir para o mesmo lugar. O convite tem o
+    // caminho dele: destino velho não vale.
+    if (isInviteFlow) limparDestino();
+    const destino = isInviteFlow ? null : lerDestino();
     try {
       await login(email.trim().toLowerCase(), password);
       // Só o primeiro nome, só neste aparelho (nunca o e-mail).
@@ -93,7 +104,7 @@ export default function LoginScreen() {
       // cada AÇÃO de login com senha (uma vez por sessão). Não é montada no
       // shell, então não reaparece em refresh/navegação. Karatê → /karate.
       if (KARATE_VERTICALS.includes(vertical)) { useKarateIntro.getState().trigger(); router.replace("/karate"); return; }
-      router.replace("/(tabs)");
+      router.replace((destino || "/(tabs)") as any);
     } catch (err) {
       orb("hmm");
       // Senha errada chega como ApiError 401 com a mensagem do backend: vira

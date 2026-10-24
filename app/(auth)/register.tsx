@@ -50,6 +50,7 @@ import { cpfDoCadastroValido, documentoDoCadastro, conflitoDoCadastro } from "@/
 import { regGreeting } from "@/utils/saudacao";
 import { lerOrigemDoNavegador, codigoDoLink } from "@/utils/origemDoCadastro";
 import { gravarLeadSemTravar, linhaDoCarimbo } from "@/utils/leadDoCadastro";
+import { lerDestino } from "@/utils/destinoDepoisDoLogin";
 
 const API_BASE = "https://aura-backend-production-f805.up.railway.app/api/v1";
 // Versao dos Termos de Uso vigente — atualizar aqui quando publicar nova versao
@@ -445,6 +446,9 @@ export default function RegisterScreen() {
     if (isDojo && !federationId) { toast.error("Escolha a federação do seu dojo"); return; }
     const L = leadRef.current;
     const leadToken = L.token && L.email === emailNorm ? L.token : null;
+    // tq-91: lido ANTES do cadastro — o AuthGuard consome o destino assim
+    // que o token chega.
+    const destino = lerDestino();
     try {
       await register({
         name: nome.trim(),
@@ -470,7 +474,8 @@ export default function RegisterScreen() {
       // Self-service: todo cadastro nasce com trial (7d Negocio sem codigo, ou o plano do codigo).
       // Vai pro Painel (como o convite acima): ele leva ao /checkin e o
       // AuthGuard desvia verificacao de e-mail e verticais.
-      setTimeout(() => router.replace("/(tabs)/" as any), 300);
+      // tq-91: se veio de um link aberto sem sessão, volta para ele.
+      setTimeout(() => router.replace((destino || "/(tabs)/") as any), 300);
     } catch (err) {
       orb("hmm");
       // 409 tem dois significados; o `code` do backend desempata.

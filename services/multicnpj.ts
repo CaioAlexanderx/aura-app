@@ -114,6 +114,10 @@ export type SwitchCompanyResponse = {
     is_primary: boolean;
     module_overrides: Record<string, boolean>;
     billing_status: BillingStatus | null;
+    /** tq-86 (24/10/2026): datas do atraso (YYYY-MM-DD ou null). Ausentes em backend anterior. */
+    billing_overdue_since?: string | null;
+    billing_pause_screens_on?: string | null;
+    billing_pause_caixa_on?: string | null;
     trial_active: boolean;
     trial_ends_at: string | null;
     ai_enabled: boolean;
