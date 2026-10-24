@@ -20,7 +20,7 @@ describe("request() sem resposta do servidor", () => {
     expect(err).toBeInstanceOf(ApiError);
     expect(err.isNetworkError).toBe(true);
     expect(err.code).toBe("network");
-    expect(err.message).toBe("Erro de conexão. Verifique sua internet.");
+    expect(err.message).toBe("Não conseguimos falar com a Aura agora. Confira sua internet e tente de novo. Se continuar, a gente ajuda pelo WhatsApp.");
   });
 
   it("senha errada segue como 401 com a mensagem do backend", async () => {

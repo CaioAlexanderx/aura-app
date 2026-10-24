@@ -51,6 +51,7 @@ import { regGreeting } from "@/utils/saudacao";
 import { lerOrigemDoNavegador, codigoDoLink } from "@/utils/origemDoCadastro";
 import { gravarLeadSemTravar, linhaDoCarimbo } from "@/utils/leadDoCadastro";
 import { lerDestino } from "@/utils/destinoDepoisDoLogin";
+import { MSG_CNPJ_INDISPONIVEL } from "@/utils/mensagensDoApp";
 
 const API_BASE = "https://aura-backend-production-f805.up.railway.app/api/v1";
 // Versao dos Termos de Uso vigente — atualizar aqui quando publicar nova versao
@@ -354,7 +355,7 @@ export default function RegisterScreen() {
       setRegimeDetectado(data.suggested_regime || (data.is_mei ? "mei" : null));
       orb("happy");
     } catch (err: any) {
-      setCnpjError(err?.name === "AbortError" ? "Consulta demorou demais. Tente novamente." : "Erro de conexão ao consultar CNPJ.");
+      setCnpjError(err?.name === "AbortError" ? "Consulta demorou demais. Tente novamente." : MSG_CNPJ_INDISPONIVEL);
     } finally { setCnpjLoading(false); }
   }
 

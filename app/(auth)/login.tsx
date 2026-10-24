@@ -38,6 +38,7 @@ import { AuthStage, type OrbMood } from "@/components/auth/AuthStage";
 import { greeting } from "@/utils/saudacao";
 import { lerPrimeiroNome, guardarPrimeiroNome } from "@/utils/primeiroNomeNoAparelho";
 import { lerDestino, limparDestino } from "@/utils/destinoDepoisDoLogin";
+import { MSG_LOGIN_FALTA_DADO } from "@/utils/mensagensDoApp";
 
 const isWeb = Platform.OS === "web";
 // DESIGN-29: animação de login Shoji é exibida só quando o vertical é karatê.
@@ -74,7 +75,7 @@ export default function LoginScreen() {
   const orb = (mood: OrbMood) => setOrbSignal((p) => ({ mood, n: (p?.n || 0) + 1 }));
 
   async function handleLogin() {
-    if (!email || !password) { orb("hmm"); toast.error("Preencha e-mail e senha"); return; }
+    if (!email || !password) { orb("hmm"); toast.error(MSG_LOGIN_FALTA_DADO); return; }
     setWrongPass(false);
     // tq-91: lido ANTES de entrar — o AuthGuard consome o destino assim que o
     // token chega, e os dois precisam ir para o mesmo lugar. O convite tem o

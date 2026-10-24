@@ -163,7 +163,7 @@ test("convite por link: título próprio e aceite depois do login", async () => 
 test("campos vazios: toast de sempre e nenhuma chamada", async () => {
   const t = montar();
   await act(async () => { await porId(t, "login-entrar", "onPress").props.onPress(); });
-  expect(mockToastError).toHaveBeenCalledWith("Preencha e-mail e senha");
+  expect(mockToastError).toHaveBeenCalledWith("Falta o e-mail e a senha por aqui.");
   expect(mockLogin).not.toHaveBeenCalled();
 });
 

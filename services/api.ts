@@ -7,6 +7,9 @@
 // (cabecalho X-Aura-App). Sem react-native em instalarApp.ts, este import
 // e seguro aqui, que e carregado antes de tudo.
 import { estaInstalado } from "@/services/instalarApp";
+import {
+  MSG_SEM_CONEXAO, MSG_SEM_CONEXAO_NA_SESSAO, MSG_SESSAO_TERMINOU, MSG_ERRO_NOSSO, MSG_DEMOROU_DEMAIS, MSG_ERRO_SEM_EXPLICACAO,
+} from "@/utils/mensagensDoApp";
 
 var BASE_URL =
   (typeof process !== "undefined" && process.env?.EXPO_PUBLIC_API_URL) ||
@@ -117,15 +120,15 @@ export async function request<T>(path: string, opts: RequestOpts = {}): Promise<
             // Falha terminal: refresh token expirado/revogado. Dispara logout
             // imediatamente — não continua pro retry loop (não adianta repetir).
             if (_onUnauthorized) _onUnauthorized();
-            throw new ApiError((data as any).error || "Sessão expirada", 401, data, false, "session_expired");
+            throw new ApiError((data as any).error || MSG_SESSAO_TERMINOU, 401, data, false, "session_expired");
           }
           // network_error no refresh: NÃO desloga o user (pode ser internet
           // intermitente). Lança ApiError de rede pro caller saber.
-          throw new ApiError("Falha de conexão ao renovar sessão. Verifique sua internet.", 0, null, true, "network");
+          throw new ApiError(MSG_SEM_CONEXAO_NA_SESSAO, 0, null, true, "network");
         }
         // 401 após retry: sessão realmente inválida.
         if (_onUnauthorized) _onUnauthorized();
-        throw new ApiError((data as any).error || "Sessão expirada", 401, data, false, "session_expired");
+        throw new ApiError((data as any).error || MSG_SESSAO_TERMINOU, 401, data, false, "session_expired");
       }
       if (res.status === 401) throw new ApiError((data as any).error || "Não autorizado", 401, data, false, "unauthorized");
       if (res.status === 429 && attempt < retry) { await new Promise(function(r) { setTimeout(r, 1000 * (attempt + 1)); }); continue; }
@@ -136,9 +139,13 @@ export async function request<T>(path: string, opts: RequestOpts = {}): Promise<
         // (11/08/2026): a tela de aprovação de filiação mostrava "verifique
         // sua conexão" para um 500 real do backend, mandando o operador
         // investigar o lugar errado.
-        throw new ApiError((data as any).error || "Não foi possível concluir por um erro do nosso servidor — a falha foi nossa, não sua. Tente de novo em instantes; se a ação não tiver desfazer, confira se ela já foi concluída antes de repetir.", res.status, data, false, "server_error");
+        throw new ApiError((data as any).error || MSG_ERRO_NOSSO, res.status, data, false, "server_error");
       }
-      if (!res.ok) throw new ApiError((data as any).error || "Erro HTTP " + res.status, res.status, data);
+      if (!res.ok) {
+        // O código HTTP não vai para a lojista: fica em ApiError.status e no console.
+        if (!(data as any).error) console.warn("[api] resposta " + res.status + " sem texto em " + path);
+        throw new ApiError((data as any).error || MSG_ERRO_SEM_EXPLICACAO, res.status, data);
+      }
       return data as T;
     } catch (err: any) {
       lastError = err;
@@ -152,7 +159,7 @@ export async function request<T>(path: string, opts: RequestOpts = {}): Promise<
       // Por isso a mensagem não incentiva repetir sem checar antes —
       // especialmente crítico em ações sem desfazer pela tela.
       if (err && err.name === "AbortError") {
-        throw new ApiError("Não recebemos resposta a tempo. A operação pode ter sido concluída mesmo assim — confira antes de tentar de novo.", 0, null, true, "timeout");
+        throw new ApiError(MSG_DEMOROU_DEMAIS, 0, null, true, "timeout");
       }
       if (attempt < retry) { await new Promise(function(r) { setTimeout(r, 800 * (attempt + 1)); }); continue; }
     }
@@ -163,7 +170,7 @@ export async function request<T>(path: string, opts: RequestOpts = {}): Promise<
   // "E-mail ou senha incorretos." para um cliente cuja requisição nem chegou
   // ao backend (17/09/2026). Sai sempre como ApiError de rede.
   if (lastError instanceof ApiError) throw lastError;
-  throw new ApiError("Erro de conexão. Verifique sua internet.", 0, null, true, "network");
+  throw new ApiError(MSG_SEM_CONEXAO, 0, null, true, "network");
 }
 
 export { BASE_URL };

@@ -31,6 +31,9 @@ import { FinanceiroTopbar, TabReceitas, TabDespesas } from "@/components/screens
 import { creditApi } from "@/services/creditApi";
 import { ScreenHero, ScreenTabs } from "@/components/ScreenHero";
 import { pluralize } from "@/utils/plural";
+import { ResultadoImportacaoModal } from "@/components/screens/financeiro/ResultadoImportacaoModal";
+import { textoDaImportacao, TEXTO_ARQUIVO_VAZIO, type TextoDaImportacao } from "@/utils/importacaoLancamentos";
+import { MSG_SESSAO_TERMINOU, MSG_ERRO_SEM_EXPLICACAO } from "@/utils/mensagensDoApp";
 
 // 01/09/2026 (QA onda 2 — cabeçalho unificado): a tela abria com o kicker
 // pequeno "FINANCEIRO ·" da Topbar. Agora abre com o mesmo ScreenHero das
@@ -215,6 +218,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
   var [editTx, setEditTx] = useState<Transaction | null>(null);
   var [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   var [importing, setImporting] = useState(false);
+  var [resultadoImport, setResultadoImport] = useState<TextoDaImportacao | null>(null);
   var scrollRef = useRef<any>(null);
 
   var [customStartBR, setCustomStartBR] = useState("");
@@ -360,23 +364,29 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
       toast.error("Escolha uma empresa no seletor para importar lançamentos");
       return;
     }
-    if (!company?.id || !token) { toast.error("Sua sessão expirou. Entre novamente."); return; }
+    if (!company?.id || !token) { toast.error(MSG_SESSAO_TERMINOU); return; }
     try {
       setImporting(true);
       var rows = await pickFileAndParse();
-      if (rows.length === 0) { toast.error("Arquivo vazio"); setImporting(false); return; }
+      if (rows.length === 0) { setResultadoImport({ titulo: "Arquivo sem linhas", resumo: TEXTO_ARQUIVO_VAZIO, motivos: [], oferecerAjuda: true }); setImporting(false); return; }
       var res = await fetch(BASE_URL + "/companies/" + company.id + "/transactions/batch?partial=true", {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
         body: JSON.stringify({ transactions: rows }),
       });
       var data = await res.json();
-      if (!res.ok) { toast.error(data.error || "Erro " + res.status); setImporting(false); return; }
+      // O código HTTP não vai para a lojista (fica só no console).
+      if (!res.ok) { console.warn("[importar-lancamentos] resposta " + res.status); toast.error(data.error || MSG_ERRO_SEM_EXPLICACAO); setImporting(false); return; }
       // FIX 24/08/2026 (QA Financeiro A5): antes invalidava so ["transactions"],
       // deixando Health Score, comparativo, banner do mes e Painel com numeros
       // velhos depois de um import de centenas de lancamentos.
       invalidateFinanceiroQueries(qc, company.id);
-      toast.success(data.saved > 0 ? data.saved + " lançamentos importados!" + (data.error_count > 0 ? " (" + data.error_count + " com erro)" : "") : "0 lançamentos válidos");
-    } catch (err: any) { toast.error("Erro ao importar: " + (err?.message || "tente novamente")); } finally { setImporting(false); }
+      var texto = textoDaImportacao(data);
+      if (texto.oferecerAjuda) setResultadoImport(texto); else toast.success(texto.resumo);
+    } catch (err: any) {
+      // "no file" = a pessoa fechou o seletor; "web only" e "too large" já avisaram por toast.
+      var jaTratado = err && (err.message === "no file" || err.message === "web only" || err.message === "too large");
+      if (!jaTratado) { console.warn("[importar-lancamentos]", err); toast.error(MSG_ERRO_SEM_EXPLICACAO); }
+    } finally { setImporting(false); }
   }
 
   function handleSaleCreated() {
@@ -652,6 +662,15 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
           </ListaOuQuadro>
         )}
 
+        <ResultadoImportacaoModal
+          visible={!!resultadoImport}
+          titulo={resultadoImport ? resultadoImport.titulo : ""}
+          resumo={resultadoImport ? resultadoImport.resumo : ""}
+          motivos={resultadoImport ? resultadoImport.motivos : []}
+          oferecerAjuda={resultadoImport ? resultadoImport.oferecerAjuda : false}
+          onPedirAjuda={function() { setResultadoImport(null); router.push("/suporte" as any); }}
+          onFechar={function() { setResultadoImport(null); }}
+        />
         <ConfirmDialog visible={!!deleteTarget} title="Excluir lançamento?" message="Esta ação não pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={function() { if (deleteTarget) { deleteTransaction(deleteTarget); setDeleteTarget(null); } }} onCancel={function() { setDeleteTarget(null); }} />
         {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
       </ScrollView>
