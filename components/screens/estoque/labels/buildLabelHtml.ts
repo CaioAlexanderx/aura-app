@@ -754,7 +754,9 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
     const pt = function (n: number) { return round2(n * k) + 'pt'; };
     html += '.bc-inner.tv{justify-content:flex-start;gap:0.6mm;padding:' + (custom.tagTopoMm || 0) + 'mm 1.5mm 2.5mm;font-family:Montserrat,Arial,Helvetica,sans-serif}';
     html += '.bc-inner.tv>div{flex-shrink:0}';
-    html += '.bc-inner.tv .store{font-size:' + pt(6.5) + ';letter-spacing:0.4pt;margin-bottom:0.4mm}';
+    // 24/10/2026: a loja sai maior que o nome do produto (que vai de 8,5pt a
+    // 6,5pt): 10pt em negrito, e o ajuste so a desce ate 9pt (> 8,5pt).
+    html += '.bc-inner.tv .store{font-size:' + pt(10) + ';font-weight:700;line-height:1.1;letter-spacing:0.3pt;margin-bottom:0.4mm}';
     html += '.bc-inner.tv .name{font-size:' + pt(8.5) + ';font-weight:700;line-height:1.1;width:100%;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word;max-height:none}';
     html += '.bc-inner.tv .cod,.bc-inner.tv .var{font-size:' + pt(7) + ';font-weight:700;line-height:1.1;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
     html += '.bc-inner.tv .var span+span{margin-left:2.5mm}';
@@ -953,7 +955,9 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
     html += 'function shrink(el,pt,min,test){el.style.fontSize="";while(test(el)&&pt>min){pt=Math.max(min,pt-0.25);el.style.fontSize=pt+"pt";}}';
     html += 'function fit(){document.querySelectorAll(".bc-inner.tv").forEach(function(b){';
     html += 'var q=function(s){return b.querySelector(s);};';
-    html += 'if(q(".store"))shrink(q(".store"),' + n2(6.5) + ',' + n2(5) + ',over);';
+    // Loja: 10pt ate 9pt (sempre acima dos 8,5pt maximos do nome); se ainda
+    // nao couber, tira o espacamento entre letras. Numa linha so.
+    html += 'if(q(".store")){q(".store").style.letterSpacing="";shrink(q(".store"),' + n2(10) + ',' + n2(9) + ',over);if(over(q(".store")))q(".store").style.letterSpacing="0";}';
     html += 'if(q(".name"))shrink(q(".name"),' + n2(8.5) + ',' + n2(6.5) + ',tall);';
     html += 'if(q(".cod"))shrink(q(".cod"),' + n2(7) + ',' + n2(5.5) + ',over);';
     html += 'if(q(".var"))shrink(q(".var"),' + n2(7) + ',' + n2(5.5) + ',over);';
