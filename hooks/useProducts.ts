@@ -202,8 +202,11 @@ export function useProducts() {
 
   const deleteMutation = useMutation({
     mutationFn: (prodId: string) => companiesApi.deleteProduct(companyId!, prodId),
+    // 24/10/2026: o backend nao nega mais exclusao confirmada (anula o
+    // historico ou arquiva, e responde deleted: true nos dois casos). O que
+    // sobrar de erro e de verdade (rede, servidor): mostra o motivo.
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["products", companyId] }); toast.success("Produto excluido"); },
-    onError: () => toast.error("Erro ao excluir produto"),
+    onError: (err: any) => toast.error(err?.message || "Erro ao excluir produto"),
   });
 
   // D1 (F0): passa a DEVOLVER o produto criado. O cadastro precisa do id

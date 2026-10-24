@@ -81,7 +81,11 @@ export function useConfigProfile() {
       if (res.email !== undefined) setEmail(res.email);
       if (res.phone !== undefined) setPhone(res.phone);
       if (res.address !== undefined) setAddress(res.address);
-      updateCompany({ name: res.trade_name || res.name || company.name });
+      updateCompany({
+        name: res.trade_name || res.name || company.name,
+        // 24/10/2026: nome fantasia novo ja vale na etiqueta, sem novo login.
+        ...(res.trade_name !== undefined ? { trade_name: res.trade_name || null } : {}),
+      });
       syncProfileCache({
         companyName: res.trade_name || res.name || companyName,
         cnpj, email: res.email || email, phone: res.phone || phone,

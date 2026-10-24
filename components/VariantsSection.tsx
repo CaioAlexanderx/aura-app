@@ -127,7 +127,7 @@ export function VariantsSection({ productId, productName, basePrice, variants, o
       await companiesApi.deleteVariant(company.id, productId, variantId);
       toast.success('Variante removida');
       onUpdate();
-    } catch { toast.error('Erro ao remover'); }
+    } catch (err: any) { toast.error(err?.message || 'Erro ao remover'); }
   }
 
   const fmt = (v: number) => `R$ ${v.toFixed(2).replace('.', ',')}`;

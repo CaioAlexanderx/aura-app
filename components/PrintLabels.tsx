@@ -29,6 +29,7 @@ import { LabelPreviewModal } from "@/components/screens/estoque/labels/LabelPrev
 import { defaultLabelQty, unitLabelForList } from "@/components/screens/estoque/labels/labelDefaults";
 // 15/10/2026: "Minha medida" (medida livre em mm, por computador).
 import { customLabelPreset, rotuloDaMedida, mmTxt, type CustomLabelSpec } from "@/components/screens/estoque/labels/customLabel";
+import { nomeDaLojaDaEmpresa, mostrarNomeDaLoja } from "@/components/screens/estoque/labels/nomeDaLoja";
 import { lerMinhasMedidas, salvarMedida, apagarMedida, escolherMedida, substituirMedidas } from "@/components/screens/estoque/labels/customLabelStorage";
 import { MinhaMedidaWizard } from "@/components/screens/estoque/labels/MinhaMedidaWizard";
 import { DesenhoDaEtiquetaLinha } from "@/components/screens/estoque/DesenhoDaEtiquetaLinha";
@@ -171,7 +172,9 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
   var [menuFiltro, setMenuFiltro] = useState<"ordem" | "categoria" | "calendario" | null>(null);
   function setOrdem(o: OrdemEstoque) { setOrdemState(o); salvarOrdemEtiquetas(o); setMenuFiltro(null); }
   var [quantities, setQuantities] = useState<Record<string, number>>({});
-  var [showStoreName, setShowStoreName] = useState(true);
+  // 24/10/2026: null = a lojista nao mexeu no toggle neste modelo; vale o
+  // padrao (desligado; ligado so na tag vertical — nomeDaLoja.ts).
+  var [escolhaNomeDaLoja, setEscolhaNomeDaLoja] = useState<boolean | null>(null);
   var [variantCache, setVariantCache] = useState<Record<string, any[]>>({});
   var [selectedVariants, setSelectedVariants] = useState<Record<string, Set<string>>>({});
   var [includeParentInPrint, setIncludeParentInPrint] = useState<Record<string, boolean>>({});
@@ -183,7 +186,8 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
   var [pendingPrintItems, setPendingPrintItems] = useState<LabelItem[]>([]);
 
   var isWeb = Platform.OS === "web";
-  var storeName = (company && (company.trade_name || company.legal_name)) || "";
+  // 24/10/2026: nome fantasia; backend antigo (sem trade_name) usa company.name.
+  var storeName = nomeDaLojaDaEmpresa(company);
 
   // 26/08/2026: calibracao de offset por loja (causa raiz do corte recorrente
   // da Finesse — o ajuste vivia so no dialogo do Chrome e evaporava). O valor
@@ -313,6 +317,10 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
   }, [isWeb, contaLida, company?.id]);
 
   var nomeDoModelo = medidaAtiva ? rotuloDaMedida(medidaAtiva) : labelPreset.uiLabel;
+  var showStoreName = mostrarNomeDaLoja(escolhaNomeDaLoja, medidaAtiva, mode);
+  // Trocou de modelo ou de medida: o toggle volta ao padrao daquele modelo.
+  var idDaMedidaAtiva = medidaAtiva ? medidaAtiva.id : null;
+  useEffect(function() { setEscolhaNomeDaLoja(null); }, [labelSize, idDaMedidaAtiva]);
   var customOpts = medidaAtiva ? { customSpec: medidaAtiva } : {};
   var ondeFica = naConta ? "da conta" : "deste computador";
 
@@ -513,8 +521,13 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
   // estado medidaAtiva atualizar. Sem medida livre as opcoes sao as de sempre.
   function doPrint(items: LabelItem[], medida?: CustomLabelSpec) {
     // So um spec de verdade (nunca o evento de um onPress repassado).
-    var cOpts = medida && typeof medida === "object" && typeof (medida as any).larguraMm === "number" ? { customSpec: medida } : customOpts;
-    var html = buildLabelHtml(items, { mode: mode, storeName: storeName, showStoreName: showStoreName, labelSize: labelSize, offsetMm: labelOffsetMm, design: labelDesign, ...printerOpts, ...cOpts });
+    var medidaNova = medida && typeof medida === "object" && typeof (medida as any).larguraMm === "number" ? medida : null;
+    var cOpts = medidaNova ? { customSpec: medidaNova } : customOpts;
+    // Medida recem-salva no wizard (outra que a ativa): vale o padrao dela.
+    var nomeLigado = medidaNova && (!medidaAtiva || medidaAtiva.id !== medidaNova.id)
+      ? mostrarNomeDaLoja(null, medidaNova, mode)
+      : showStoreName;
+    var html = buildLabelHtml(items, { mode: mode, storeName: storeName, showStoreName: nomeLigado, labelSize: labelSize, offsetMm: labelOffsetMm, design: labelDesign, ...printerOpts, ...cOpts });
     abrirImpressao(html, totalLabels + " etiqueta(s) abertas para impressão");
   }
 
@@ -777,7 +790,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
       <DesenhoDaEtiquetaLinha labelSize={labelSize} labelDesign={labelDesign} medida={medidaAtiva} podeMudar={podeMudarDesenho === true} />
 
       {storeName ? (
-        <Pressable onPress={function() { setShowStoreName(!showStoreName); }} style={s.storeToggle}>
+        <Pressable testID="etiquetas-nome-da-loja" accessibilityRole="checkbox" accessibilityState={{ checked: showStoreName }} onPress={function() { setEscolhaNomeDaLoja(!showStoreName); }} style={s.storeToggle}>
           <View style={[s.checkbox, showStoreName && s.checkboxSelected]}>{showStoreName && <Icon name="check" size={10} color="#fff" />}</View>
           <Text style={s.storeToggleText}>Incluir nome da loja no topo: <Text style={s.storeTogglePreview}>{storeName.toUpperCase()}</Text></Text>
         </Pressable>

@@ -518,6 +518,9 @@ export const useAuthStore = create<AuthState>((set, get) => {
           const newCompany: any = {
             id: cc.id,
             name: cc.name,
+            // 24/10/2026: a etiqueta usa o nome fantasia no topo.
+            trade_name: cc.trade_name ?? null,
+            legal_name: cc.legal_name ?? null,
             plan: cc.plan,
             onboarding_step: cc.onboarding_step || "",
             module_overrides: cc.module_overrides || {},
