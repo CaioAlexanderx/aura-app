@@ -116,8 +116,38 @@ describe("conteúdo da tag 35x60", () => {
   test("respiro de 7 mm no topo, laterais de 1,5 mm (32 mm úteis = largura do .bc-box) e preço grande", () => {
     expect(html).toContain(".bc-inner.tv{justify-content:flex-start;gap:0.6mm;padding:7mm 1.5mm 2.5mm;");
     expect(html).toContain(".bc-inner.tv .price{font-size:16pt;font-weight:900;");
-    expect(html).toContain(".bc-inner.tv .store{font-size:6.5pt;");
+    expect(html).toContain(".bc-inner.tv .store{font-size:10pt;font-weight:700;");
     expect(html).toContain(".bc-inner.tv .name{font-size:8.5pt;");
+  });
+
+  test("a loja sai MAIOR que o nome do produto: font-size da .store > máximo da .name, em toda escala", () => {
+    const tam = (h: string, sel: string) => {
+      const i = h.indexOf(".bc-inner.tv " + sel + "{font-size:");
+      const m = i < 0 ? null : h.slice(i).match(/font-size:([0-9.]+)pt/);
+      return m ? parseFloat(m[1]) : NaN;
+    };
+    expect(tam(html, ".store")).toBe(10);
+    expect(tam(html, ".name")).toBe(8.5);
+    expect(tam(html, ".store")).toBeGreaterThan(tam(html, ".name"));
+    // Largura da tag muda a escala do texto (0,75x a 1,5x): a relação se mantém,
+    // inclusive no piso do ajuste (loja nunca desce abaixo de 9pt contra 8,5pt do nome).
+    [{ larguraMm: 30, alturaMm: 60 }, { larguraMm: 35, alturaMm: 60 }, { larguraMm: 50, alturaMm: 80 }, { larguraMm: 20, alturaMm: 45 }].forEach((d) => {
+      const h = buildLabelHtml(ITENS_COM_VARIANTE, { ...BASE, customSpec: medida({ ...d, colunas: 1 }) });
+      expect(tam(h, ".store")).toBeGreaterThan(tam(h, ".name"));
+      const k = tagEscala(d);
+      const loja = h.match(/shrink\(q\("\.store"\),([0-9.]+),([0-9.]+),over\)/);
+      const nome = h.match(/shrink\(q\("\.name"\),([0-9.]+),([0-9.]+),tall\)/);
+      expect(loja && nome).toBeTruthy();
+      expect(parseFloat(loja![1])).toBe(Math.round(10 * k * 100) / 100);
+      expect(parseFloat(loja![2])).toBeGreaterThan(parseFloat(nome![1])); // piso da loja > teto do nome
+    });
+  });
+
+  test("loja em negrito, numa linha só, e o ajuste a encolhe para caber (sem tocar no .bc-box)", () => {
+    expect(html).toMatch(/\.bc-inner\.tv \.store\{font-size:10pt;font-weight:700;line-height:1\.1;/);
+    expect(html).toContain('shrink(q(".store"),10,9,over)');
+    expect(html).toContain('q(".store").style.letterSpacing="0"');
+    expect(html).not.toMatch(/\.bc-inner \.store\{[^}]*10pt/); // a .store dos outros desenhos não mudou
   });
 
   test("só o CSS da tag: nada do editorial nem do Finesse em cima dela", () => {
