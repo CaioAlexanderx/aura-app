@@ -39,6 +39,14 @@ export const SECOES_COM_FOCO: Record<string, SecaoComFoco> = {
     titulo: "Desenho da etiqueta",
     texto: "Toque em Clássico ou Editorial. Vale para as próximas impressões.",
   },
+  // 24/10/2026 (tq-89): "Ajustar meus e-mails" no rodapé dos e-mails da Aura
+  // (Aura-backend#896) leva a /configuracoes?foco=emails&empresa=<id>.
+  emails: {
+    chave: "emails",
+    alvo: "configuracoes.emails",
+    titulo: "Seus e-mails da Aura",
+    texto: "Escolha para onde vão os avisos, o dia do relatório e o que você quer receber.",
+  },
 };
 
 export function secaoRegistrada(chave: string): SecaoComFoco | null {

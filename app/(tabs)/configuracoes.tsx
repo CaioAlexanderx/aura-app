@@ -17,7 +17,9 @@ import { PdvSettingsCard } from "@/components/screens/configuracoes/PdvSettingsC
 import { AuraNoCelularCard } from "@/components/screens/configuracoes/AuraNoCelularCard";
 import { AtalhoAssento } from "@/components/screens/blackfriday/AtalhoAssento";
 import { FocoNaSecao } from "@/components/screens/configuracoes/FocoNaSecao";
-import { secaoDoFoco } from "@/utils/focoNaSecao";
+import { secaoDoFoco, alvoDaSecao, rotaDeConfiguracoesNaSecao } from "@/utils/focoNaSecao";
+import { tourTarget } from "@/utils/tourTarget";
+import { SecaoEmails } from "@/components/screens/configuracoes/EmailsSection";
 import { useConfigProfile } from "@/components/screens/configuracoes/useConfigProfile";
 import { SectionTitle, Card, EditField, InfoRow, PLANS, AURA_WHATSAPP, AURA_EMAIL, sh } from "@/components/screens/configuracoes/shared";
 
@@ -56,19 +58,21 @@ const g = StyleSheet.create({
 // esta em modo consolidado. Algumas configs sao especificas de uma empresa
 // (identidade, dados registrais, vendas, equipe) e nao fazem sentido agregadas.
 // Outras (perfil do dono, plano, empresas, aparencia, suporte) seguem visiveis.
-function PerCompanyGate({ availableCompanies, switchToCompany }: {
+function PerCompanyGate({ availableCompanies, switchToCompany, titulo, descricao }: {
   availableCompanies: any[];
   switchToCompany: (id: string) => void;
+  // 24/10/2026 (tq-89): a seção E-mails reaproveita o aviso com o próprio texto.
+  titulo?: string;
+  descricao?: string;
 }) {
   return (
     <View style={pcg.wrap}>
       <View style={pcg.row}>
         <Icon name="bag" size={16} color="#a78bfa" />
         <View style={{ flex: 1 }}>
-          <Text style={pcg.title}>Configurações por empresa</Text>
+          <Text style={pcg.title}>{titulo || "Configurações por empresa"}</Text>
           <Text style={pcg.desc}>
-            Identidade, dados registrais, equipe e políticas de venda são específicas de cada CNPJ.
-            Selecione uma empresa para configura-la.
+            {descricao || "Identidade, dados registrais, equipe e políticas de venda são específicas de cada CNPJ. Selecione uma empresa para configura-la."}
           </Text>
         </View>
       </View>
@@ -136,7 +140,7 @@ const pcg = StyleSheet.create({
 export default function ConfiguracoesScreen() {
   // MULTICNPJ Onda 2.6: detecta consolidatedView e divide a tela em
   // secoes globais (sempre visiveis) vs per-company (com gate em consolidated).
-  const { user, company, isDemo, token, availableCompanies, consolidatedView, switchCompany } = useAuthStore();
+  const { user, company, isDemo, token, availableCompanies, consolidatedView, switchCompany, isStaff } = useAuthStore();
   const profile = useConfigProfile();
   // 14/10/2026 (tq-11): /configuracoes?foco=indicacao (banner do sino) rola
   // até o cartão "Indique e ganhe" e o destaca. Sem o cartão na tela, não faz nada.
@@ -218,13 +222,20 @@ export default function ConfiguracoesScreen() {
     || extraSeatsGranted;
   const totalCompanies = availableCompanies?.length || 1;
 
-  function handleSwitchToCompany(companyId: string) {
+  function handleSwitchToCompany(companyId: string, destino?: string) {
     // Switch + redireciona pra propria tela de Config (deep link mantido).
     if (typeof window !== "undefined") {
       try { window.localStorage.setItem("aura_post_switch_redirect", "/configuracoes"); } catch {}
+      // 24/10/2026 (tq-89): quem escolhe a empresa pela seção E-mails volta
+      // já na seção (reloadAfterSwitch lê o sessionStorage).
+      if (destino) { try { window.sessionStorage.setItem("aura_post_switch_redirect", destino); } catch {} }
     }
     switchCompany(companyId);
   }
+
+  // E-mails no consolidado: só as empresas de que a pessoa é dona (o backend
+  // recusa as outras) ou todas, para a equipe Aura.
+  const empresasDoDono = (availableCompanies || []).filter((c: any) => isStaff || c.role === "owner");
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
@@ -389,6 +400,24 @@ export default function ConfiguracoesScreen() {
               <SectionTitle title="Equipe" />
               {hasTeamCapacity ? <MembersSection /> : <EquipeGate />}
             </>
+          )}
+
+          {/* E-MAILS — per-company, so o dono (tq-89, 24/10/2026). Depois de
+              Equipe e antes de Minha conta. Secao de Configuracoes: sem mod
+              nem MODULE_PLAN_MAP proprio (a tela usa "configuracoes"). Abre
+              direto por ?foco=emails (utils/focoNaSecao). No consolidado, o
+              aviso de escolher a empresa, que volta direto para a secao. */}
+          {!consolidatedView && <SecaoEmails />}
+          {consolidatedView && empresasDoDono.length > 0 && (
+            <View testID="emails-consolidado" {...tourTarget(alvoDaSecao("emails"))}>
+              <SectionTitle title="E-mails" />
+              <PerCompanyGate
+                availableCompanies={empresasDoDono}
+                switchToCompany={(id) => handleSwitchToCompany(id, rotaDeConfiguracoesNaSecao("emails"))}
+                titulo="E-mails por empresa"
+                descricao="Os endereços de aviso, o relatório da semana e os outros e-mails da Aura são de cada CNPJ. Selecione uma empresa para ajustar."
+              />
+            </View>
           )}
 
           {/* MINHA CONTA — global (perfil do user, nao da empresa) */}
