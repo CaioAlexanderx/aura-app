@@ -62,6 +62,18 @@ export type ProductCategoryRanking = {
   share_pct: number;
 };
 
+// Corpo da resposta de GET /companies/:id/products/categories. A rota
+// (aura-backend src/routes/productsRanking.js) responde
+// `res.json({ period, categories: data })` — um OBJETO, não a lista crua.
+// O client tipava a resposta como ProductCategoryRanking[] e a visão por
+// categoria da curva ABC chamava .reduce no objeto (crash em produção,
+// 24/10/2026). Quem consome deve passar por normalizeCategoryRanking
+// (abcCategoryUtils.ts), que aceita os dois formatos.
+export type ProductCategoriesResponse = {
+  period: string;
+  categories: ProductCategoryRanking[];
+};
+
 // A rota já aceita start_date/end_date via resolvePeriod (mesma função do
 // ranking) — só o client não expunha isso ainda. period continua aceitando
 // string (compat com a chamada antiga productsCategories(cid, period)).
@@ -189,6 +201,6 @@ export var companiesApi = {
     var opts: ProductsCategoriesOpts = typeof periodOrOpts === 'string'
       ? { period: periodOrOpts }
       : (periodOrOpts || {});
-    return request<ProductCategoryRanking[]>("/companies/" + companyId + "/products/categories?" + buildCategoriesQuery(opts));
+    return request<ProductCategoriesResponse>("/companies/" + companyId + "/products/categories?" + buildCategoriesQuery(opts));
   },
 };

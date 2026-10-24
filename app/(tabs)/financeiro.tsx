@@ -286,9 +286,12 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
   // antes ele rolava ate um card no meio da aba Receitas; agora leva direto
   // pra tela dedicada. replace() pra "voltar" nao cair de novo no redirect.
   // Mesma ressalva do Studio acima.
+  // 24/10/2026: a tela foi para dentro de (tabs) (mesma URL). ?de=receitas
+  // diz ao Voltar de lá para qual aba devolver — o replace tira o Financeiro
+  // da pilha, e sem isso o Voltar caía no Painel.
   useEffect(function() {
     if (paramFocus !== "abc" || embedded || !navReady) return;
-    safeReplace("/financeiro/produtos");
+    safeReplace("/financeiro/produtos?de=receitas");
   }, [paramFocus, embedded, navReady, safeReplace]);
 
   // Enquanto o redirect nao acontece, nao renderiza a tela por baixo — evita
@@ -617,6 +620,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
             onSeeItems={function() { handleTabSelect(TAB_INDEX.lancamentos); }}
             onVerAtrasados={podeQuadroAtrasos ? irParaAtrasados : undefined}
             onVerCrediarioAtrasado={podeQuadroAtrasos ? irParaCrediarioAtrasado : undefined}
+            abcHref={embedded ? "/studio/gestao/financeiro/produtos" : "/financeiro/produtos"}
           />
         )}
         {activeTab === TAB_INDEX.despesas && !isLoading && !isError && (

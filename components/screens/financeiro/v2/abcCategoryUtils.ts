@@ -40,10 +40,28 @@ import type { FlatCategory } from "@/hooks/useCategories";
 
 export type Classifiable = { total_revenue: number };
 
+// ── Formato da resposta ─────────────────────────────────────
+// GET /products/categories responde `{ period, categories: [...] }` (ver
+// ProductCategoriesResponse em services/companiesApi.ts). A tela tratava
+// a resposta como lista e o primeiro .reduce (sumRevenue) derrubava a
+// visão por categoria inteira: "t.reduce is not a function" (24/10/2026).
+// Aceita o objeto real, a lista crua (caso a rota mude ou um cache antigo
+// devolva a lista) e qualquer outra coisa vira lista vazia — nunca derruba
+// a tela.
+export function normalizeCategoryRanking(raw: unknown): ProductCategoryRanking[] {
+  if (Array.isArray(raw)) return raw as ProductCategoryRanking[];
+  if (raw && typeof raw === "object") {
+    const categories = (raw as { categories?: unknown }).categories;
+    if (Array.isArray(categories)) return categories as ProductCategoryRanking[];
+  }
+  return [];
+}
+
 export function classifyABC<T extends Classifiable>(
   items: T[],
   totalRevenue: number
 ): (T & { accumulated_pct: number; abc: Grade })[] {
+  if (!Array.isArray(items)) return [];
   let accumulated = 0;
   return items.map((item) => {
     accumulated += item.total_revenue;
@@ -60,6 +78,7 @@ export type ClassifiedCategory = ProductCategoryRanking & { accumulated_pct: num
 // separado. Replicar isso aqui evita um total_revenue de fonte diferente
 // (ex.: de sales/analytics) divergir do que a tabela realmente soma.
 export function sumRevenue(items: Classifiable[]): number {
+  if (!Array.isArray(items)) return 0;
   return items.reduce((sum, it) => sum + (it.total_revenue || 0), 0);
 }
 
