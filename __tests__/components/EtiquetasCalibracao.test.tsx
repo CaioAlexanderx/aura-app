@@ -101,13 +101,18 @@ test("linha de teste abre 3 etiquetas de exemplo com os ajustes; 2 linhas no con
   expect((htmlsAbertos[0].match(/<td class="cell">/g) || []).length).toBe(3);
   expect(htmlsAbertos[0]).toContain("@page{margin:0;size:105mm 23.5mm}");
   expect(htmlsAbertos[0]).toContain(".cell{background-image:");
-  expect(htmlsAbertos[0]).toContain("DIVINA D'LUX");
+  // 24/10/2026: modelo fixo sai SEM o nome da loja por padrão (nomeDaLoja.ts);
+  // a lojista marca o toggle e o nome entra.
+  expect(htmlsAbertos[0]).not.toContain("DIVINA D'LUX");
+  aperta(t, "etiquetas-nome-da-loja");
+  aperta(t, "etiquetas-linha-de-teste");
+  expect(htmlsAbertos[1]).toContain("DIVINA D'LUX");
 
   aperta(t, "etiquetas-modo-continuo");
   aperta(t, "etiquetas-passo-menos");
   aperta(t, "etiquetas-duas-linhas-de-teste");
-  expect(htmlsAbertos[1]).toContain("@page{margin:0;size:105mm 46.8mm}");
-  expect((htmlsAbertos[1].match(/<tr>/g) || []).length).toBe(2);
+  expect(htmlsAbertos[2]).toContain("@page{margin:0;size:105mm 46.8mm}");
+  expect((htmlsAbertos[2].match(/<tr>/g) || []).length).toBe(2);
   t.unmount();
 });
 

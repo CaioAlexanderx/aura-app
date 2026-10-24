@@ -230,7 +230,8 @@ test("lista: medida salva com lápis (abre preenchida) e lixeira com confirmaç�
   act(() => { t.root.findAll((n) => n.props && n.props.onPress && flatten(n.children).startsWith("Imprimir 1 etiqueta"), { deep: false })[0].props.onPress(); });
   const esperado = buildLabelHtml(
     [{ name: "Blusa Canelada", price: 59.9, barcode: "7891033948208", size: "", color: "", qty: 1, productId: "p1" }],
-    { mode: "barcode", storeName: "Toda Linda", showStoreName: true, labelSize: "99x21", offsetMm: 0 },
+    // 24/10/2026: sem marcar o toggle, modelo fixo sai sem o nome da loja.
+    { mode: "barcode", storeName: "Toda Linda", showStoreName: false, labelSize: "99x21", offsetMm: 0 },
   );
   expect(htmls).toHaveLength(1);
   expect(htmls[0]).toBe(esperado);

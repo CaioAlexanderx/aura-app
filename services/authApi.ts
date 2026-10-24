@@ -10,6 +10,13 @@ export type LoginResponse = {
   company: {
     id: string;
     name: string;
+    /**
+     * 24/10/2026: nome fantasia e razão social separados (o `name` segue a
+     * razão social primeiro). Ausentes em backend anterior: a etiqueta cai
+     * em `name` (components/screens/estoque/labels/nomeDaLoja.ts).
+     */
+    trade_name?: string | null;
+    legal_name?: string | null;
     plan: string;
     onboarding_step: string;
     module_overrides?: Record<string, boolean>;
