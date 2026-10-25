@@ -5,6 +5,7 @@
 // data da pausa (a mesma faixa do Caixa, components/screens/pdv/AvisoAssine).
 // Depois da pausa o shell Negócio leva ao Caixa, que mostra a faixa dele.
 // Só o dono vê; staff, demo e Karatê ficam fora (utils/muroDeAssinatura).
+// 25/10/2026 (item 11): a faixa traz o botão "Preciso de ajuda" do AvisoAssine.
 // ============================================================
 import { View } from "react-native";
 import { useAuthStore } from "@/stores/auth";

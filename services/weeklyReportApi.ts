@@ -10,6 +10,8 @@
 //   -> 404 { code: 'company_not_found' }
 // ─────────────────────────────────────────────────
 
+import { MSG_SEM_CONEXAO } from "@/utils/mensagensDoApp";
+
 const BASE_URL =
   (typeof process !== "undefined" && process.env?.EXPO_PUBLIC_API_URL) ||
   "https://aura-backend-production-f805.up.railway.app/api/v1";
@@ -162,6 +164,6 @@ export async function fetchWeeklyReport(token: string): Promise<WeeklyReportResu
     }
     return { ok: true, data: body as WeeklyReport };
   } catch (_err) {
-    return { ok: false, error: { code: "network", message: "Erro de conexão. Verifique sua internet e tente novamente." } };
+    return { ok: false, error: { code: "network", message: MSG_SEM_CONEXAO } };
   }
 }

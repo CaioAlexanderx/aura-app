@@ -22,6 +22,11 @@ import BarberScreen from '@/components/verticals/BarberScreen';
 // Studio (hotfix 2026-05-25): mesmo padrao. Porta dedicada em
 // /studio/(estudio). Caso Sheid Mania — sem o redirect aqui, deep-link
 // em /(tabs)/vertical caía no fallback "Módulo Vertical" generico.
+//
+// 25/10/2026 (tom das mensagens, item 12): "Nenhum módulo vertical ativo" é
+// texto interno. Só a equipe Aura (isStaff) vê; a lojista sem vertical que
+// chega aqui por link antigo vai para o Painel (o menu só mostra /vertical
+// quando há vertical ativa).
 // ============================================================
 
 const VERTICAL_NAMES: Record<string, string> = {
@@ -39,8 +44,13 @@ const VERTICAL_NAMES: Record<string, string> = {
 const READY_VERTICALS = ['barber'];
 
 export default function VerticalTab() {
-  const { company } = useAuthStore();
+  const { company, isStaff } = useAuthStore();
   const activeVertical = (company as any)?.vertical_active ?? null;
+
+  // Sem vertical: tela interna, só para a equipe Aura.
+  if (!activeVertical && !isStaff) {
+    return <Redirect href="/(tabs)" />;
+  }
 
   // Odonto tem porta dedicada — redireciona pra la.
   if (activeVertical === 'odonto') {

@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { toast } from "@/components/Toast";
 import { pluralize } from "@/utils/plural";
+import { VAZIO_CUPONS } from "@/utils/mensagensDoApp";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 const fmt = (n: number) => `R$ ${Number(n).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
@@ -253,12 +254,13 @@ export default function CuponsScreen() {
       )}
 
       {!isLoading && coupons.length === 0 && !showForm && (
+        // 25/10/2026 (tom das mensagens, item 12): reconhece, sugere e um botão.
         <EmptyState
           icon="star"
           iconColor={Colors.violet3}
-          title="Nenhum cupom criado"
-          subtitle="Crie cupons de desconto para oferecer aos seus clientes no caixa."
-          actionLabel="Criar primeiro cupom"
+          title={VAZIO_CUPONS.titulo}
+          subtitle={VAZIO_CUPONS.texto}
+          actionLabel={VAZIO_CUPONS.botao}
           onAction={() => setShowForm(true)}
         />
       )}

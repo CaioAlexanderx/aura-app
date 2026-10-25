@@ -7,6 +7,7 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { tourTarget } from "@/utils/tourTarget";
 import { ALVO_INDICACAO } from "@/utils/focoIndicacao";
+import { COMO_FUNCIONA_INDICACAO } from "@/utils/mensagensDoApp";
 
 // 14/10/2026 (campanha de indicação, aprovada pelo Caio e pela Célia): o
 // indicador ganha 1 mês grátis quando o indicado paga a primeira mensalidade;
@@ -15,6 +16,36 @@ import { ALVO_INDICACAO } from "@/utils/focoIndicacao";
 const DESCRICAO =
   "Indique um lojista e ganhe 1 mês grátis quando ele pagar a primeira mensalidade. " +
   "Quem você indicar testa 7 dias grátis e ganha 20% no primeiro mês.";
+
+// 25/10/2026 (tom das mensagens, extra 2): "Como funciona" recolhível com as
+// regras que valem hoje (COMO_FUNCIONA_INDICACAO, utils/mensagensDoApp).
+function ComoFunciona() {
+  const [aberto, setAberto] = useState(false);
+  return (
+    <View style={s.comoWrap}>
+      <Pressable
+        testID="indicacao-como-funciona"
+        onPress={() => setAberto((v) => !v)}
+        style={[s.comoBtn, Platform.OS === "web" && ({ cursor: "pointer" } as any)]}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: aberto }}
+      >
+        <Text style={s.comoBtnText}>Como funciona</Text>
+        <Icon name={aberto ? "chevron_up" : "chevron_down"} size={14} color={Colors.violet3} />
+      </Pressable>
+      {aberto && (
+        <View testID="indicacao-regras" style={s.comoLista}>
+          {COMO_FUNCIONA_INDICACAO.map((regra) => (
+            <View key={regra} style={s.comoItem}>
+              <Text style={s.comoBullet}>•</Text>
+              <Text style={s.comoTexto}>{regra}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
 
 export function mensagemIndicacao(codigo: string): string {
   return (
@@ -85,6 +116,7 @@ export function ReferralCard() {
           <Text style={s.title}>Indique e ganhe</Text>
         </View>
         <Text style={s.desc}>{DESCRICAO}</Text>
+        <ComoFunciona />
         <View style={s.codeBox}>
           <Text style={s.codeLabel}>Seu código</Text>
           <Text style={s.codeValue}>REF-DEMO</Text>
@@ -101,6 +133,7 @@ export function ReferralCard() {
         <Text style={s.title}>Indique e ganhe</Text>
       </View>
       <Text style={s.desc}>{DESCRICAO}</Text>
+      <ComoFunciona />
 
       {code ? (
         <>
@@ -148,7 +181,14 @@ const s = StyleSheet.create({
   card: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: Colors.border, marginBottom: 16 },
   header: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 },
   title: { fontSize: 16, fontWeight: "700", color: Colors.ink },
-  desc: { fontSize: 12, color: Colors.ink3, lineHeight: 18, marginBottom: 16 },
+  desc: { fontSize: 12, color: Colors.ink3, lineHeight: 18, marginBottom: 8 },
+  comoWrap: { marginBottom: 16 },
+  comoBtn: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", paddingVertical: 4 },
+  comoBtnText: { fontSize: 12, fontWeight: "600", color: Colors.violet3 },
+  comoLista: { marginTop: 6, gap: 6, backgroundColor: Colors.bg4, borderRadius: 10, padding: 12 },
+  comoItem: { flexDirection: "row", gap: 6 },
+  comoBullet: { fontSize: 12, color: Colors.ink3, lineHeight: 18 },
+  comoTexto: { flex: 1, fontSize: 12, color: Colors.ink2, lineHeight: 18 },
   codeBox: { backgroundColor: Colors.violetD, borderRadius: 12, padding: 16, alignItems: "center", marginBottom: 12, borderWidth: 1, borderColor: Colors.border2 },
   codeLabel: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 },
   codeValue: { fontSize: 22, fontWeight: "800", color: Colors.violet3, letterSpacing: 2 },

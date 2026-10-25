@@ -10,12 +10,19 @@
 // telas, no Caixa e no Painel, com a data da pausa; com as telas pausadas,
 // no Caixa, com a data em que o Caixa pausa. O botão leva ao checkout, onde
 // a mensalidade em aberto é paga.
+//
+// 25/10/2026 (tom das mensagens, item 11, aprovado pelo Caio): em atraso, um
+// segundo botão discreto, "Preciso de ajuda", abre o WhatsApp da Aura com o
+// pedido de ajuda já escrito. É um botão comum (funciona no toque), sem
+// hover. O texto da faixa não muda. "O Caixa segue liberado" no aviso de fim
+// do teste só com caixaVivo (shell Negócio/varejo).
 // ============================================================
-import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
+import { View, Text, Pressable, StyleSheet, Platform, Linking } from "react-native";
 import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { ROTA_CHECKOUT, textoDoAviso, type AvisoDeAtraso } from "@/utils/muroDeAssinatura";
+import { linkPedidoDeAjuda } from "@/utils/mensagensDoApp";
 
 type Props = {
   trialEndsAt?: string | null;
@@ -25,11 +32,13 @@ type Props = {
   compact?: boolean;
   /** tq-86: avisoDeAtraso() da loja; troca o texto e o botão. */
   atraso?: AvisoDeAtraso | null;
+  /** temCaixaVivo(company): shell Negócio/varejo, onde o Caixa segue depois do teste. */
+  caixaVivo?: boolean;
   testID?: string;
 };
 
-export function AvisoAssine({ trialEndsAt, trial, compact = false, atraso = null, testID = "caixa-aviso-assine" }: Props) {
-  const { titulo, corpo } = textoDoAviso(trialEndsAt, trial, atraso);
+export function AvisoAssine({ trialEndsAt, trial, compact = false, atraso = null, caixaVivo = false, testID = "caixa-aviso-assine" }: Props) {
+  const { titulo, corpo } = textoDoAviso(trialEndsAt, trial, atraso, { caixaVivo });
   const botao = atraso ? "Pagar a mensalidade" : "Assinar agora";
   return (
     <View testID={testID} style={[s.faixa, compact && s.faixaCompact]} accessibilityRole="alert">
@@ -40,14 +49,27 @@ export function AvisoAssine({ trialEndsAt, trial, compact = false, atraso = null
         <Text style={s.titulo}>{titulo}</Text>
         <Text style={s.corpo}>{corpo}</Text>
       </View>
-      <Pressable
-        testID="caixa-aviso-assinar"
-        onPress={() => router.push(ROTA_CHECKOUT as any)}
-        style={[s.botao, compact && s.botaoCompact, Platform.OS === "web" && ({ cursor: "pointer" } as any)]}
-        accessibilityLabel={atraso ? "Pagar a mensalidade em aberto" : "Assinar agora e liberar o resto do sistema"}
-      >
-        <Text style={s.botaoTxt}>{botao}</Text>
-      </Pressable>
+      <View style={[s.botoes, compact && s.botoesCompact]}>
+        <Pressable
+          testID="caixa-aviso-assinar"
+          onPress={() => router.push(ROTA_CHECKOUT as any)}
+          style={[s.botao, compact && s.botaoCompact, Platform.OS === "web" && ({ cursor: "pointer" } as any)]}
+          accessibilityLabel={atraso ? "Pagar a mensalidade em aberto" : "Assinar agora e liberar o resto do sistema"}
+        >
+          <Text style={s.botaoTxt}>{botao}</Text>
+        </Pressable>
+        {atraso && (
+          <Pressable
+            testID="caixa-aviso-ajuda"
+            onPress={() => { Linking.openURL(linkPedidoDeAjuda()).catch(() => {}); }}
+            style={[s.ajuda, compact && s.botaoCompact, Platform.OS === "web" && ({ cursor: "pointer" } as any)]}
+            accessibilityRole="link"
+            accessibilityLabel="Preciso de ajuda: abre uma conversa com a Aura no WhatsApp"
+          >
+            <Text style={s.ajudaTxt}>Preciso de ajuda</Text>
+          </Pressable>
+        )}
+      </View>
     </View>
   );
 }
@@ -81,7 +103,18 @@ const s = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
     flexShrink: 0,
   },
-  botaoCompact: { width: "100%", marginTop: 4 },
+  botaoCompact: { width: "100%" },
+  botoes: { flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 0, flexWrap: "wrap" },
+  botoesCompact: { width: "100%", flexDirection: "column", alignItems: "stretch", gap: 6, marginTop: 4 },
+  ajuda: {
+    paddingHorizontal: 12, height: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.35)",
+    alignItems: "center", justifyContent: "center",
+    flexShrink: 0,
+  },
+  ajudaTxt: { fontSize: 13, fontWeight: "600", color: Colors.ink2 },
   botaoTxt: { fontSize: 13, fontWeight: "700", color: "#fff" },
 });
 

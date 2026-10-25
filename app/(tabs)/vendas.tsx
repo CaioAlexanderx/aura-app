@@ -13,7 +13,8 @@ import { useAuthStore } from "@/stores/auth";
 import { companiesApi } from "@/services/api";
 import { useQuery } from "@tanstack/react-query";
 import type { SalesListItem, SalesFilters } from "@/services/api";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, router } from "expo-router";
+import { vazioDeVendas } from "@/utils/mensagensDoApp";
 import {
   periodToRange, spCurrentMonth,
   PAGE_SIZE, MONTH_NAMES,
@@ -197,6 +198,18 @@ export default function VendasScreen() {
 
   function handleEditTransaction(txId: string) {
     setEditingTxId(txId);
+  }
+
+  // Lista vazia (item 12): o texto e o botão dependem do que está filtrando.
+  const vazio = vazioDeVendas({
+    periodo: period,
+    mes: MONTH_NAMES[monthAnchor.m].toLowerCase() + " de " + monthAnchor.y,
+    filtrando: !!search.trim() || status !== "all",
+  });
+  function acaoDoVazio() {
+    if (vazio.acao === "caixa") { router.push("/(tabs)/pdv" as any); return; }
+    if (vazio.acao === "limpar") { setSearch(""); setStatus("all"); }
+    setPeriod("all");
   }
 
   // Como o periodo aparece escrito na linha de metricas do cabecalho.
@@ -410,19 +423,16 @@ export default function VendasScreen() {
         </View>
       )}
 
+      {/* 25/10/2026 (tom das mensagens, item 12): reconhece, diz o que fazer
+          e um botão — abrir o Caixa, ver o histórico inteiro ou limpar os filtros. */}
       {!isLoading && !error && sales.length === 0 && effectivePage === 0 && (
         <EmptyState
           icon="cart"
           iconColor={Colors.violet3}
-          title="Nenhuma venda encontrada"
-          subtitle={
-            period === "all"
-              ? "Vendas feitas no Caixa aparecem aqui pra conferência."
-              : period === "month"
-              ? "Nenhuma venda em " + MONTH_NAMES[monthAnchor.m] + " de " + monthAnchor.y +
-                ". Use as setas do mês pra procurar em outro período."
-              : "Nenhuma venda no período selecionado. Vendas feitas no Caixa aparecem aqui pra conferência."
-          }
+          title={vazio.titulo}
+          subtitle={vazio.texto}
+          actionLabel={vazio.botao}
+          onAction={acaoDoVazio}
         />
       )}
 

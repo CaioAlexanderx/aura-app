@@ -197,6 +197,20 @@ export function estadoDaLoja(a: {
   };
 }
 
+/**
+ * A loja está no shell Negócio/varejo, onde o Caixa segue depois do teste?
+ * Mesma leitura do AuthGuard (app/_layout.tsx): Odonto, Food e Studio pela
+ * vertical_active; Karatê por vertical_active ou vertical. Só decide TEXTO
+ * (25/10/2026, itens 8 e 10): fora do varejo nenhum aviso promete o Caixa.
+ */
+export function temCaixaVivo(company: unknown): boolean {
+  const c = (company && typeof company === "object" ? company : {}) as Record<string, unknown>;
+  const ativa = c.vertical_active;
+  if (ativa === "odonto" || ativa === "food" || ativa === "studio") return false;
+  const karate = (c.vertical_active ?? c.vertical) as unknown;
+  return karate !== "karate_federation" && karate !== "karate_dojo";
+}
+
 export const ROTA_CAIXA = "/(tabs)/pdv";
 export const ROTA_CHECKOUT = "/(tabs)/checkout";
 
@@ -229,13 +243,22 @@ export function destinoSemAssinatura(segments: readonly string[], opts: { caixaV
  * mensalidade em aberto e da data em que o Caixa pausa (textoDoAtraso), não
  * do teste. Sem as datas, o texto de sempre.
  *
+ * 25/10/2026 (tom das mensagens, item 10, aprovado pelo Caio): sem
+ * "bloqueados" nem "regularizada". O corpo diz o que a pessoa mantém. "O
+ * Caixa segue liberado" só com opts.caixaVivo (shell Negócio/varejo); nas
+ * outras verticais o texto fala só dos dados guardados. "Fica guardado"
+ * pode (retenção confirmada); "para sempre", nunca. O título já diz que o
+ * teste terminou, então o corpo não repete "Seu teste terminou".
+ *
  * @param trial company.trial como veio do /auth/me (lido com defesa)
  * @param atraso avisoDeAtraso() da loja, quando houver
+ * @param opts.caixaVivo temCaixaVivo(company): o Caixa segue depois do teste
  */
 export function textoDoAviso(
   trialEndsAt: string | null | undefined,
   trial?: unknown,
   atraso?: AvisoDeAtraso | null,
+  opts: { caixaVivo?: boolean } = {},
 ): { titulo: string; corpo: string } {
   if (atraso) return textoDoAtraso(atraso);
   const teveTrial = !!trialEndsAt;
@@ -243,13 +266,16 @@ export function textoDoAviso(
   const titulo = vendeuNoTrial(info) && info
     ? `Seus ${info.dias_apos_primeira_venda} dias de teste terminaram`
     : "Seu período de teste terminou";
+  const vivo = !!opts.caixaVivo;
   return teveTrial
-    ? {
-        titulo,
-        corpo: "O Caixa continua funcionando. Estoque, clientes, relatórios e o resto ficam bloqueados até você assinar.",
-      }
-    : {
-        titulo: "Sua assinatura está inativa",
-        corpo: "O Caixa continua funcionando. O resto volta assim que a assinatura for regularizada.",
-      };
+    ? { titulo, corpo: vivo ? TEXTOS_DO_MURO.testeCaixaVivo : TEXTOS_DO_MURO.teste }
+    : { titulo: "Sua assinatura está inativa", corpo: vivo ? TEXTOS_DO_MURO.inativaCaixaVivo : TEXTOS_DO_MURO.inativa };
 }
+
+/** Corpos do aviso do muro (item 10). Os com "CaixaVivo" só no shell Negócio/varejo. */
+export const TEXTOS_DO_MURO = {
+  testeCaixaVivo: "O Caixa segue liberado para você vender. O resto fica guardado e volta assim que você escolher o plano.",
+  teste: "Seus dados ficam guardados e voltam assim que você escolher o plano.",
+  inativaCaixaVivo: "O Caixa segue liberado. O resto volta assim que você ativar a assinatura de novo.",
+  inativa: "Seus dados ficam guardados e voltam assim que você ativar a assinatura de novo.",
+} as const;
