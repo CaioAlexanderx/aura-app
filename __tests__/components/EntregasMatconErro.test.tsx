@@ -43,7 +43,7 @@ const RESUMO_ZERO = {
 };
 
 function erroDeRede() {
-  return Object.assign(new Error("Erro de conexão. Verifique sua internet."), { status: 0, isNetworkError: true, code: "network" });
+  return Object.assign(new Error("Não conseguimos falar com a Aura agora. Confira sua internet e tente de novo. Se continuar, a gente ajuda pelo WhatsApp."), { status: 0, isNetworkError: true, code: "network" });
 }
 function flatten(node: any): string {
   if (node == null || node === false) return "";

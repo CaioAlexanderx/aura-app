@@ -18,6 +18,7 @@ import {
 import { apagarTodasAsVendasGuardadas, apagarVendasDeOutrosUsuarios } from "@/utils/vendaGuardada";
 import { marcarLogin, limparMarcaDeLogin } from "@/services/aberturaAposLogin";
 import { marcarSaidaVoluntaria } from "@/utils/destinoDepoisDoLogin";
+import { MSG_SESSAO_TERMINOU } from "@/utils/mensagensDoApp";
 
 const KEY = "aura_token";
 const REFRESH_KEY = "aura_refresh_token";
@@ -201,7 +202,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
       try {
         window.sessionStorage.setItem(
           "aura_session_expired_msg",
-          "Sua sessão expirou. Entre novamente."
+          MSG_SESSAO_TERMINOU
         );
       } catch {}
     }
