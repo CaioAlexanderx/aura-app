@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { aiApi } from "@/services/api";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, TextInput, ActivityIndicator } from "react-native";
@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { HubView } from "@/components/screens/hub/HubView";
 import { useVisibleModules } from "@/hooks/useVisibleModules";
 import { pluralize } from "@/utils/plural";
+import { VAZIO_ATIVIDADES } from "@/utils/mensagensDoApp";
 
 // 01/09/2026 (QA onda 2 — cabeçalho unificado): saiu o PageHeader + subtítulo
 // solto, entrou o ScreenHero (mesmo cabeçalho de /estoque, /clientes, /vendas).
@@ -87,6 +88,13 @@ export default function AgentesScreen() {
   const [chatHistory, setChatHistory] = useState<{ role: string; content: string }[]>([]);
   const [chatResponse, setChatResponse] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  // Estado vazio da atividade (item 12): o botão leva ao campo da conversa.
+  const scrollRef = useRef<ScrollView>(null);
+  const chatInputRef = useRef<TextInput>(null);
+  function irParaConversa() {
+    scrollRef.current?.scrollToEnd({ animated: true });
+    chatInputRef.current?.focus();
+  }
 
   const chatMutation = useMutation({
     mutationFn: () => aiApi.chat(company!.id, chatMsg, chatCtx, chatHistory),
@@ -164,7 +172,7 @@ export default function AgentesScreen() {
   }
 
   return (
-    <ScrollView style={z.screen} contentContainerStyle={z.content}>
+    <ScrollView ref={scrollRef} style={z.screen} contentContainerStyle={z.content}>
       <ScreenHero
         eyebrow="Trabalho automático"
         title="Agentes"
@@ -233,8 +241,10 @@ export default function AgentesScreen() {
         <EmptyState
           icon="star"
           iconColor={Colors.violet3}
-          title="Nenhuma atividade ainda"
-          subtitle="Os agentes vão registrar ações aqui conforme analisam seus dados. Comece conversando com um agente abaixo."
+          title={VAZIO_ATIVIDADES.titulo}
+          subtitle={VAZIO_ATIVIDADES.texto}
+          actionLabel={VAZIO_ATIVIDADES.botao}
+          onAction={irParaConversa}
         />
       )}
 
@@ -266,7 +276,7 @@ export default function AgentesScreen() {
           </View>
         )}
         <View style={z.chatInputRow}>
-          <TextInput style={z.chatInput} value={chatMsg} onChangeText={setChatMsg}
+          <TextInput ref={chatInputRef} style={z.chatInput} value={chatMsg} onChangeText={setChatMsg}
             placeholder="Pergunte algo ao agente..." placeholderTextColor={Colors.ink3}
             onSubmitEditing={handleSendChat} editable={!chatLoading} />
           <Pressable onPress={handleSendChat} style={[z.chatSendBtn, chatLoading && { opacity: 0.5 }]}>

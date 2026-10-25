@@ -78,7 +78,7 @@ import type { Product } from "@/components/screens/estoque/types";
 import { useAuthStore } from "@/stores/auth";
 import { AvisoAssine } from "@/components/screens/pdv/AvisoAssine";
 import { AvisoVendaRecuperada } from "@/components/screens/pdv/AvisoVendaRecuperada";
-import { semAssinatura, avisoDeAtraso, estadoDaLoja } from "@/utils/muroDeAssinatura";
+import { semAssinatura, avisoDeAtraso, estadoDaLoja, temCaixaVivo } from "@/utils/muroDeAssinatura";
 
 const PAGE_SIZE = 12;
 
@@ -275,7 +275,7 @@ function CaixaScreenInner() {
             className={IS_WEB ? "caixa-scrollable" : undefined}
           >
             <View style={IS_WEB && vp.xxl ? ({ maxWidth: 1700, alignSelf: "center", width: "100%" } as any) : null}>
-              {mostrarAvisoAssine && <AvisoAssine trialEndsAt={auth.trialEndsAt} trial={(auth.company as any)?.trial} atraso={atraso} />}
+              {mostrarAvisoAssine && <AvisoAssine trialEndsAt={auth.trialEndsAt} trial={(auth.company as any)?.trial} atraso={atraso} caixaVivo={temCaixaVivo(auth.company)} />}
               {st.vendaRecuperada && (
                 <AvisoVendaRecuperada
                   itens={st.vendaRecuperada.itens}
@@ -415,7 +415,7 @@ function CaixaScreenInner() {
         style={{ flex: 1, backgroundColor: "transparent" }}
         contentContainerStyle={{ padding: 16, paddingBottom: 48 }}
       >
-        {mostrarAvisoAssine && <AvisoAssine trialEndsAt={auth.trialEndsAt} trial={(auth.company as any)?.trial} atraso={atraso} compact />}
+        {mostrarAvisoAssine && <AvisoAssine trialEndsAt={auth.trialEndsAt} trial={(auth.company as any)?.trial} atraso={atraso} caixaVivo={temCaixaVivo(auth.company)} compact />}
         {st.vendaRecuperada && (
           <AvisoVendaRecuperada
             itens={st.vendaRecuperada.itens}

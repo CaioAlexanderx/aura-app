@@ -1,9 +1,11 @@
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet, Linking } from "react-native";
 import { useRouter } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
 import { avisoDoTrial, diasLegado, lerTrial } from "@/utils/trialAviso";
+import { temCaixaVivo } from "@/utils/muroDeAssinatura";
+import { linkPedidoDeAjuda } from "@/utils/mensagensDoApp";
 
 var PLAN_LABELS: Record<string, string> = {
   essencial: "Essencial",
@@ -26,9 +28,12 @@ export function TrialBanner() {
   // 14/10/2026 (card t2-05): o texto vem do bloco company.trial do backend
   // (modo, primeira venda, dias restantes). Sem o bloco, conta a partir de
   // trial_ends_at como sempre. Ver utils/trialAviso.ts.
+  // 25/10/2026 (itens 8 e 9): "o Caixa continua com você" só no shell
+  // Negócio/varejo; no fim do teto sem venda, o aviso oferece ajuda.
   const aviso = avisoDoTrial(lerTrial((company as any)?.trial), {
     plano: planLabel,
     legadoDias: diasLegado(trialEndsAt),
+    caixaVivo: temCaixaVivo(company),
   });
   const urgent = aviso.urgente;
 
@@ -43,9 +48,22 @@ export function TrialBanner() {
           <Text testID="trial-banner-corpo" style={s.sub}>{aviso.corpo}</Text>
         </View>
       </View>
-      <Pressable onPress={() => router.push("/planos" as any)} style={s.btn}>
-        <Text style={s.btnText}>Assinar agora</Text>
-      </Pressable>
+      <View style={s.btns}>
+        {aviso.ajuda && (
+          <Pressable
+            testID="trial-banner-ajuda"
+            onPress={() => { Linking.openURL(linkPedidoDeAjuda()).catch(() => {}); }}
+            style={s.btnAjuda}
+            accessibilityRole="link"
+            accessibilityLabel="Falar com a gente: abre uma conversa com a Aura no WhatsApp"
+          >
+            <Text style={s.btnAjudaText}>Falar com a gente</Text>
+          </Pressable>
+        )}
+        <Pressable onPress={() => router.push("/planos" as any)} style={s.btn}>
+          <Text style={s.btnText}>Assinar agora</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -61,6 +79,9 @@ const s = StyleSheet.create({
   textWrap: { flex: 1 },
   title: { fontSize: 13, fontWeight: "700", color: Colors.amber },
   sub: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
+  btns: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  btnAjuda: { borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: Colors.violet },
+  btnAjudaText: { color: Colors.violet3, fontSize: 12, fontWeight: "700" },
   btn: { backgroundColor: Colors.violet, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 9 },
   btnText: { color: "#fff", fontSize: 12, fontWeight: "700" },
 });

@@ -8,6 +8,7 @@ import renderer, { act } from "react-test-renderer";
 jest.mock("@/components/Icon", () => ({ Icon: () => null }));
 const mockPush = jest.fn();
 jest.mock("expo-router", () => ({ router: { push: (...a: any[]) => mockPush(...a), replace: jest.fn() } }));
+import { Linking } from "react-native";
 
 import {
   semAssinatura, destinoSemAssinatura, textoDoAviso, ROTA_CAIXA, ROTA_CHECKOUT,
@@ -177,5 +178,39 @@ describe("faixa de atraso no Caixa e no Painel", () => {
       textoDoAtraso({ fase: "telas_pausadas", pausaTelasEm: "17/10", pausaCaixaEm: null }),
     ];
     for (const t of textos) for (const re of PROIBIDAS) expect(t.titulo + " " + t.corpo).not.toMatch(re);
+  });
+});
+
+// 25/10/2026 (tom das mensagens, item 11, aprovado pelo Caio): a faixa de
+// atraso ganha um segundo botão discreto, "Preciso de ajuda", que abre o
+// WhatsApp da Aura com o pedido de ajuda já escrito. O texto não muda.
+describe("faixa de atraso: Preciso de ajuda", () => {
+  const LINK = "https://wa.me/5511956305269?text=" + encodeURIComponent("Oi, preciso de ajuda com a minha conta da Aura.");
+
+  it.each([
+    ["Painel, antes da pausa", { fase: "liberado" as const, pausaTelasEm: "17/10", pausaCaixaEm: "24/10" }, "painel-aviso-atraso"],
+    ["Caixa, telas pausadas", { fase: "telas_pausadas" as const, pausaTelasEm: "17/10", pausaCaixaEm: "24/10" }, "caixa-aviso-assine"],
+  ])("%s: o botão abre o WhatsApp da Aura com a mensagem pronta", (_nome, a, testID) => {
+    const abrir = jest.spyOn(Linking, "openURL").mockResolvedValue(true as any);
+    let r!: renderer.ReactTestRenderer;
+    act(() => { r = renderer.create(<AvisoAssine atraso={a} testID={testID} />); });
+    const botoes = r.root.findAllByProps({ testID: "caixa-aviso-ajuda" }, { deep: false });
+    expect(botoes).toHaveLength(1);
+    expect(JSON.stringify(r.toJSON())).toContain("Preciso de ajuda");
+    // O texto da faixa é o mesmo de antes.
+    expect(JSON.stringify(r.toJSON())).toContain(textoDoAtraso(a).titulo);
+    act(() => { botoes[0].props.onPress(); });
+    expect(abrir).toHaveBeenCalledWith(LINK);
+    // O botão principal continua levando ao checkout.
+    expect(r.root.findAllByProps({ testID: "caixa-aviso-assinar" }, { deep: false })).toHaveLength(1);
+    abrir.mockRestore();
+  });
+
+  it("o componente usa o link central, sem número solto", () => {
+    const fs = jest.requireActual("fs");
+    const p = jest.requireActual("path");
+    const src = fs.readFileSync(p.join(__dirname, "..", "components", "screens", "pdv", "AvisoAssine.tsx"), "utf8");
+    expect(src).toContain("linkPedidoDeAjuda()");
+    expect(src).not.toMatch(/\d{10,}/);
   });
 });

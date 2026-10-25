@@ -24,8 +24,8 @@
 //     contando a partir de trial_ends_at (legadoDias);
 //   · o único caso em que o contador aparece antes da venda é o fim do teto
 //     (2 dias ou menos): ali o teste acaba de verdade e mentir "7 dias" seria
-//     pior que mostrar a contagem ("Faltam N dias do período de teste e você
-//     ainda não fez a primeira venda").
+//     pior que mostrar a contagem (hoje: "Seu teste termina amanhã.", ver
+//     25/10 abaixo).
 //
 // 14/10/2026 (decisão da Nina, aprovada pelo Caio): no fim do teto, sem
 // venda, o aviso não repete "Os 7 dias começam na sua primeira venda" (que
@@ -34,6 +34,17 @@
 //
 // Os textos moram todos em TEXTOS_TRIAL: o texto que a loja lê passa pela
 // aprovação do Caio (card t2-05), então trocar uma frase é editar aqui.
+//
+// 25/10/2026 (tom das mensagens, itens 8 e 9, aprovados pelo Caio):
+//   · fim do teste: "Seu teste está acabando. Se estiver gostando, é só
+//     escolher o plano." A frase "O Caixa continua com você de qualquer
+//     jeito." só entra com opts.caixaVivo (shell Negócio/varejo, onde o
+//     Caixa segue depois do teste). Odonto, Food e Studio vão ao checkout no
+//     fim do teste e leem o texto sem o Caixa.
+//   · fim do teto sem venda: em vez de "você ainda não fez a primeira venda"
+//     e "Assine para não perder o acesso", o aviso diz quando o teste termina
+//     ("amanhã" quando dias_restantes é 1, a mesma conta de sempre) e oferece
+//     ajuda (ajuda: true → botão "Falar com a gente" no banner).
 // ============================================================
 
 export type TrialModo = "fixo" | "primeira_venda";
@@ -56,6 +67,8 @@ export type AvisoTrial = {
   urgente: boolean;
   /** Dias restantes quando o título traz contador; null quando não traz. */
   dias: number | null;
+  /** Mostrar o botão "Falar com a gente" (fim do teto sem primeira venda). */
+  ajuda: boolean;
 };
 
 /** Dias restantes a partir dos quais o aviso fica vermelho. */
@@ -66,18 +79,21 @@ function diasTxt(n: number): string {
   return n === 1 ? "1 dia restante" : `${n} dias restantes`;
 }
 
-/** "Faltam 2 dias", "Falta 1 dia"; zero vira o aviso de que termina hoje. */
+/** Quando o teste termina: hoje (0), amanhã (1) ou em N dias. Mesma conta de dias_restantes. */
 function semVendaFim(n: number): string {
-  if (n <= 0) return "Seu período de teste termina hoje e você ainda não fez a primeira venda.";
-  if (n === 1) return "Falta 1 dia do período de teste e você ainda não fez a primeira venda.";
-  return `Faltam ${n} dias do período de teste e você ainda não fez a primeira venda.`;
+  if (n <= 0) return "Seu teste termina hoje.";
+  if (n === 1) return "Seu teste termina amanhã.";
+  return `Seu teste termina em ${n} dias.`;
 }
 
 export const TEXTOS_TRIAL = {
   contador: (n: number) => `Teste grátis · ${diasTxt(n)}`,
-  urgente: "Seu período de teste termina em breve. Assine para não perder acesso.",
+  urgente: "Seu teste está acabando. Se estiver gostando, é só escolher o plano.",
+  /** Só no shell Negócio/varejo, onde o Caixa segue depois do teste. */
+  urgenteCaixaVivo:
+    "Seu teste está acabando. Se estiver gostando, é só escolher o plano. O Caixa continua com você de qualquer jeito.",
   semVendaFimTitulo: semVendaFim,
-  semVendaFimCorpo: "Assine para não perder o acesso.",
+  semVendaFimCorpo: "Se alguma coisa travou na primeira venda, a gente ajuda agora.",
   fixo: (plano: string) => `Você está no período de teste do plano ${plano}.`,
   semVendaTitulo: (n: number) => `Teste grátis de ${n} dias`,
   semVendaCorpo: (n: number) => `Os ${n} dias começam na sua primeira venda no Caixa.`,
@@ -116,10 +132,12 @@ export function lerTrial(raw: unknown): TrialInfo | null {
  * @param opts.plano  rótulo do plano ("Negócio")
  * @param opts.legadoDias  dias contados a partir de trial_ends_at, usados só
  *                    quando não há bloco (ou ele não traz dias_restantes)
+ * @param opts.caixaVivo  shell Negócio/varejo (o Caixa segue depois do teste);
+ *                    sem ele, nenhum texto promete o Caixa
  */
 export function avisoDoTrial(
   trial: TrialInfo | null | undefined,
-  opts: { plano: string; legadoDias: number },
+  opts: { plano: string; legadoDias: number; caixaVivo?: boolean },
 ): AvisoTrial {
   const info = trial || null;
   const dias = info && info.dias_restantes != null ? info.dias_restantes : Math.max(0, opts.legadoDias);
@@ -132,6 +150,7 @@ export function avisoDoTrial(
       corpo: TEXTOS_TRIAL.semVendaCorpo(n),
       urgente: false,
       dias: null,
+      ajuda: false,
     };
   }
 
@@ -143,6 +162,7 @@ export function avisoDoTrial(
       corpo: TEXTOS_TRIAL.semVendaFimCorpo,
       urgente: true,
       dias,
+      ajuda: true,
     };
   }
 
@@ -152,12 +172,12 @@ export function avisoDoTrial(
     : info.mode === "fixo" ? "fixo"
     : emCurso ? "em_curso" : "sem_venda";
   const corpo = urgente
-    ? TEXTOS_TRIAL.urgente
+    ? (opts.caixaVivo ? TEXTOS_TRIAL.urgenteCaixaVivo : TEXTOS_TRIAL.urgente)
     : emCurso && info
       ? TEXTOS_TRIAL.emCurso(info.dias_apos_primeira_venda, opts.plano)
       : TEXTOS_TRIAL.fixo(opts.plano);
 
-  return { estado, titulo: TEXTOS_TRIAL.contador(dias), corpo, urgente, dias };
+  return { estado, titulo: TEXTOS_TRIAL.contador(dias), corpo, urgente, dias, ajuda: false };
 }
 
 /**

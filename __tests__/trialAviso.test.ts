@@ -74,26 +74,37 @@ describe("modo primeira_venda, ainda sem venda", () => {
 
   // 14/10/2026 (decisão da Nina): no fim do teto, sem venda, o aviso diz o
   // que falta em vez de repetir "Os 7 dias começam na sua primeira venda".
-  test("sem venda e 2 dias ou menos: 'Faltam 2 dias ... ainda não fez a primeira venda', em vermelho", () => {
+  // 25/10/2026 (item 9, aprovado pelo Caio): sem "você ainda não fez" nem
+  // "Assine para não perder o acesso"; diz quando termina e oferece ajuda.
+  test("sem venda e 2 dias ou menos: quando termina e a oferta de ajuda, em vermelho", () => {
     const a = avisoDoTrial(bloco({ dias_restantes: DIAS_URGENTE }), { plano: PLANO, legadoDias: 2 });
     expect(a.estado).toBe("sem_venda");
     expect(`${a.titulo} ${a.corpo}`).toBe(
-      "Faltam 2 dias do período de teste e você ainda não fez a primeira venda. Assine para não perder o acesso.",
+      "Seu teste termina em 2 dias. Se alguma coisa travou na primeira venda, a gente ajuda agora.",
     );
     expect(a.urgente).toBe(true);
     expect(a.dias).toBe(2);
+    expect(a.ajuda).toBe(true);
   });
 
-  test("sem venda: conjuga 1 dia e 0 dia", () => {
+  test("sem venda: 1 dia é 'amanhã' e 0 é 'hoje' (mesma conta de dias_restantes)", () => {
     const um = avisoDoTrial(bloco({ dias_restantes: 1 }), { plano: PLANO, legadoDias: 1 });
     expect(`${um.titulo} ${um.corpo}`).toBe(
-      "Falta 1 dia do período de teste e você ainda não fez a primeira venda. Assine para não perder o acesso.",
+      "Seu teste termina amanhã. Se alguma coisa travou na primeira venda, a gente ajuda agora.",
     );
+    expect(um.ajuda).toBe(true);
     const zero = avisoDoTrial(bloco({ dias_restantes: 0 }), { plano: PLANO, legadoDias: 0 });
     expect(`${zero.titulo} ${zero.corpo}`).toBe(
-      "Seu período de teste termina hoje e você ainda não fez a primeira venda. Assine para não perder o acesso.",
+      "Seu teste termina hoje. Se alguma coisa travou na primeira venda, a gente ajuda agora.",
     );
     expect(zero.urgente).toBe(true);
+  });
+
+  test("sem venda no fim: nunca 'você ainda não fez' nem 'não perder o acesso'", () => {
+    for (const d of [0, 1, 2]) {
+      const a = avisoDoTrial(bloco({ dias_restantes: d }), { plano: PLANO, legadoDias: d });
+      expect(a.titulo + " " + a.corpo).not.toMatch(/ainda não fez|não perder/);
+    }
   });
 
   test("sem venda: nunca mais diz que os 7 dias começam na primeira venda quando o fim está perto", () => {
@@ -108,6 +119,7 @@ describe("modo primeira_venda, ainda sem venda", () => {
     const a = avisoDoTrial(bloco({ dias_restantes: DIAS_URGENTE + 1 }), { plano: PLANO, legadoDias: 3 });
     expect(a.dias).toBeNull();
     expect(a.estado).toBe("sem_venda");
+    expect(a.ajuda).toBe(false);
   });
 });
 
@@ -136,6 +148,19 @@ describe("modo primeira_venda, depois da primeira venda", () => {
     const a = avisoDoTrial({ ...vendeu, dias_restantes: 1 }, { plano: PLANO, legadoDias: 1 });
     expect(a.urgente).toBe(true);
     expect(a.corpo).toBe(TEXTOS_TRIAL.urgente);
+    expect(a.ajuda).toBe(false);
+  });
+
+  // 25/10/2026 (item 8): "o Caixa continua com você" só no shell Negócio.
+  test("urgente: sem ameaça; o Caixa só entra com caixaVivo", () => {
+    const fora = avisoDoTrial({ ...vendeu, dias_restantes: 1 }, { plano: PLANO, legadoDias: 1 });
+    expect(fora.corpo).toBe("Seu teste está acabando. Se estiver gostando, é só escolher o plano.");
+    expect(fora.corpo).not.toMatch(/Caixa/);
+    const varejo = avisoDoTrial({ ...vendeu, dias_restantes: 1 }, { plano: PLANO, legadoDias: 1, caixaVivo: true });
+    expect(varejo.corpo).toBe(
+      "Seu teste está acabando. Se estiver gostando, é só escolher o plano. O Caixa continua com você de qualquer jeito.",
+    );
+    for (const t of [fora.corpo, varejo.corpo]) expect(t).not.toMatch(/não perder|para sempre/);
   });
 });
 
@@ -157,7 +182,7 @@ describe("modo fixo e backend sem o bloco", () => {
     expect(a.corpo).toBe("Você está no período de teste do plano Negócio.");
     const u = avisoDoTrial(undefined, { plano: PLANO, legadoDias: 2 });
     expect(u.urgente).toBe(true);
-    expect(u.corpo).toBe("Seu período de teste termina em breve. Assine para não perder acesso.");
+    expect(u.corpo).toBe("Seu teste está acabando. Se estiver gostando, é só escolher o plano.");
   });
 
   test("bloco sem dias_restantes usa o legado", () => {
