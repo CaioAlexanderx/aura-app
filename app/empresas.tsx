@@ -301,7 +301,9 @@ export default function MinhasEmpresasScreen() {
               </View>
               {billing.current.extra_cnpjs > 0 && (
                 <Text style={{ fontSize: 11, color: C.ink3, marginTop: 8, lineHeight: 16 }}>
-                  {formatBRL(billing.current.base_price)} (plano) + {billing.current.extra_cnpjs} × {formatBRL(billing.current.extra_unit_price)} = {formatBRL(billing.current.total_monthly)}
+                  {formatBRL(billing.current.base_price)} (plano)
+                  {(billing.current.seats_value || 0) > 0 ? " + " + formatBRL(billing.current.seats_value) + " (acessos extras)" : ""}
+                  {" + "}{billing.current.extra_cnpjs} × {formatBRL(billing.current.extra_unit_price)} = {formatBRL(billing.current.total_monthly)}
                 </Text>
               )}
             </View>
@@ -569,7 +571,20 @@ export default function MinhasEmpresasScreen() {
       </Pressable>
 
       {/* Hint sobre mensalidade ao adicionar */}
-      {billing && billing.can_add && billing.if_add_one.delta_monthly > 0 && (
+      {billing && billing.can_add && billing.if_add_one.ajuste_pela_equipe && (
+        <Text
+          style={{
+            fontSize: 11,
+            color: C.ink3,
+            textAlign: "center",
+            marginTop: 8,
+            lineHeight: 16,
+          }}
+        >
+          Sua assinatura tem uma condição especial: a equipe Aura confirma com você o valor de uma nova empresa.
+        </Text>
+      )}
+      {billing && billing.can_add && !billing.if_add_one.ajuste_pela_equipe && billing.if_add_one.delta_monthly > 0 && (
         <Text
           style={{
             fontSize: 11,
