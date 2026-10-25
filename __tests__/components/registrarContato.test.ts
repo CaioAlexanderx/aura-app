@@ -20,20 +20,26 @@ const preenchido = (extra: Partial<FormContato> = {}): FormContato => ({
 });
 
 describe("opções (mesmos enums do backend)", () => {
-  it("6 resultados, 4 canais, 9 motivos, 2 marcadores, 8 formas de chegar", () => {
+  it("6 resultados, 4 canais, 10 motivos, 2 marcadores, 8 formas de chegar", () => {
     expect(RESULTADOS.map((o) => o.id)).toEqual([
       "respondeu", "sem_resposta", "pediu_tempo", "combinou_ligacao", "quer_assinar", "nao_quer",
     ]);
     expect(CANAIS.map((o) => o.id)).toEqual(["whatsapp", "ligacao", "email", "presencial"]);
     expect(MOTIVOS.map((o) => o.id)).toEqual([
       "estoque_na_entrada", "preco_plano", "fiscal", "atrito_produto", "funcionalidade",
-      "frente_errada", "ritmo_do_cliente", "concorrente", "elogio",
+      "frente_errada", "ritmo_do_cliente", "concorrente", "elogio", "motivo_externo",
     ]);
     expect(MARCADORES.map((o) => o.id)).toEqual(["importacao_assistida_pedida", "importacao_assistida_entregue"]);
     expect(COMO_CHEGOU.map((o) => o.id)).toEqual([
       "indicacao", "botao_whatsapp_site", "cadastro_direto", "ia", "google", "instagram", "prospeccao_caio", "outro",
     ]);
     expect(ATALHOS_DE_DATA).toEqual([1, 3, 7]);
+  });
+
+  it("motivo externo tem rótulo próprio e vai no corpo do POST", () => {
+    expect(rotuloDoMotivo("motivo_externo")).toBe("Motivo externo (fechou, mudou de ramo, perdeu o ponto)");
+    expect(montarCorpo(preenchido({ resultado: "nao_quer", motivo: "motivo_externo" }), { company_id: CID }).motivo).toBe("motivo_externo");
+    expect(validar(preenchido({ resultado: "nao_quer", motivo: "motivo_externo" })).ok).toBe(true);
   });
 
   it("rótulos", () => {

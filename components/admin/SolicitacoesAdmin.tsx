@@ -6,10 +6,9 @@ import { HoverCard } from "@/components/HoverCard";
 import { Icon } from "@/components/Icon";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { useAuthStore } from "@/stores/auth";
+import { request } from "@/services/api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/Toast";
-
-var API = "https://aura-backend-production-f805.up.railway.app/api/v1";
 
 var CAT_LABELS: Record<string, { label: string; icon: string; color: string }> = {
   suporte: { label: "Suporte", icon: "help", color: Colors.violet3 },
@@ -29,50 +28,47 @@ var STATUS_COLORS: Record<string, { bg: string; color: string; label: string }> 
 
 var PRI_COLORS: Record<string, string> = { urgente: "#EF4444", alta: "#F59E0B", normal: "#6B7280", baixa: "#9CA3AF" };
 
-export function SolicitacoesAdmin() {
+// Chamados de suporte da Gestão Aura (rotas de src/routes/adminSupport.js:
+// GET /admin/tickets, GET /admin/tickets/:tid, POST /admin/tickets/:tid/messages
+// e PATCH /admin/tickets/:tid). `chamadoInicial` vem do link do aviso da equipe
+// (?chamado=<id>) e abre a conversa direto, mesmo que o chamado não esteja na
+// lista filtrada.
+export function SolicitacoesAdmin(props: { chamadoInicial?: string | null }) {
   var { token, isStaff } = useAuthStore();
   var qc = useQueryClient();
-  var [selected, setSelected] = useState<string | null>(null);
+  var [selected, setSelected] = useState<string | null>(props.chamadoInicial || null);
+  useEffect(function() { if (props.chamadoInicial) setSelected(props.chamadoInicial); }, [props.chamadoInicial]);
   var [reply, setReply] = useState("");
   var [filterStatus, setFilterStatus] = useState<string>("");
   var [filterCat, setFilterCat] = useState<string>("");
 
   // Fetch all tickets
-  var { data, isLoading, refetch } = useQuery({
+  var { data, isLoading, isError: listError } = useQuery({
     queryKey: ["admin-tickets", filterStatus, filterCat],
     queryFn: async function() {
       var params = new URLSearchParams();
       if (filterStatus) params.set("status", filterStatus);
       if (filterCat) params.set("category", filterCat);
-      var res = await fetch(API + "/admin/tickets?" + params.toString(), { headers: { Authorization: "Bearer " + token } });
-      if (!res.ok) throw new Error("Erro");
-      return res.json();
+      return request<any>("/admin/tickets?" + params.toString());
     },
     enabled: !!token && isStaff,
     staleTime: 15000,
   });
 
   // Fetch selected ticket conversation
-  var { data: convoData, isLoading: convoLoading } = useQuery({
+  var { data: convoData, isLoading: convoLoading, isError: convoError } = useQuery({
     queryKey: ["admin-ticket-detail", selected],
     queryFn: async function() {
-      var res = await fetch(API + "/admin/tickets/" + selected, { headers: { Authorization: "Bearer " + token } });
-      if (!res.ok) throw new Error("Erro");
-      return res.json();
+      return request<any>("/admin/tickets/" + encodeURIComponent(String(selected)));
     },
-    enabled: !!selected && !!token,
+    enabled: !!selected && !!token && isStaff,
     staleTime: 10000,
   });
 
   // Reply mutation
   var replyMut = useMutation({
     mutationFn: async function(vars: { tid: string; message: string }) {
-      var res = await fetch(API + "/admin/tickets/" + vars.tid + "/messages", {
-        method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-        body: JSON.stringify({ message: vars.message }),
-      });
-      if (!res.ok) throw new Error("Erro ao enviar");
-      return res.json();
+      return request<any>("/admin/tickets/" + vars.tid + "/messages", { method: "POST", body: { message: vars.message } });
     },
     onSuccess: function() { setReply(""); qc.invalidateQueries({ queryKey: ["admin-ticket-detail", selected] }); qc.invalidateQueries({ queryKey: ["admin-tickets"] }); toast.success("Resposta enviada"); },
     onError: function() { toast.error("Erro ao enviar resposta"); },
@@ -81,14 +77,10 @@ export function SolicitacoesAdmin() {
   // Status change mutation
   var statusMut = useMutation({
     mutationFn: async function(vars: { tid: string; status: string }) {
-      var res = await fetch(API + "/admin/tickets/" + vars.tid, {
-        method: "PATCH", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-        body: JSON.stringify({ status: vars.status }),
-      });
-      if (!res.ok) throw new Error("Erro");
-      return res.json();
+      return request<any>("/admin/tickets/" + vars.tid, { method: "PATCH", body: { status: vars.status } });
     },
     onSuccess: function() { qc.invalidateQueries({ queryKey: ["admin-tickets"] }); qc.invalidateQueries({ queryKey: ["admin-ticket-detail"] }); toast.success("Status atualizado"); },
+    onError: function() { toast.error("Não consegui atualizar o status"); },
   });
 
   if (isLoading) return <ListSkeleton rows={3} showCards />;
@@ -121,14 +113,15 @@ export function SolicitacoesAdmin() {
       <View style={{ flexDirection: IS_WIDE ? "row" : "column", gap: 12 }}>
         {/* Ticket list */}
         <View style={{ flex: 1, minWidth: IS_WIDE ? 350 : undefined }}>
-          {tickets.length === 0 && <HoverCard style={s.card}><Text style={{ color: Colors.ink3, textAlign: 'center', paddingVertical: 20 }}>Nenhuma solicitacao{filterStatus ? ' com status "' + filterStatus + '"' : ''}</Text></HoverCard>}
+          {listError && <HoverCard style={s.card}><Text testID="chamados-erro" style={{ color: Colors.ink3, textAlign: 'center', paddingVertical: 20 }}>Não consegui carregar os chamados agora. Tente de novo em instantes.</Text></HoverCard>}
+          {!listError && tickets.length === 0 && <HoverCard style={s.card}><Text style={{ color: Colors.ink3, textAlign: 'center', paddingVertical: 20 }}>Nenhum chamado{filterStatus ? ' com status "' + (STATUS_COLORS[filterStatus]?.label || filterStatus) + '"' : ''}</Text></HoverCard>}
           {tickets.map(function(t: any) {
             var st = STATUS_COLORS[t.status] || STATUS_COLORS.aberto;
             var cat = CAT_LABELS[t.category] || CAT_LABELS.outro;
             var isSelected = selected === t.id;
             var dateStr = new Date(t.updated_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
             return (
-              <Pressable key={t.id} onPress={function() { setSelected(isSelected ? null : t.id); }}>
+              <Pressable key={t.id} testID={"chamado-" + t.id} onPress={function() { setSelected(isSelected ? null : t.id); }}>
                 <View style={[s.ticket, isSelected && { borderColor: Colors.violet }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <View style={[s.catDot, { backgroundColor: cat.color }]} />
@@ -153,7 +146,9 @@ export function SolicitacoesAdmin() {
         {selected && (
           <View style={{ flex: IS_WIDE ? 1.2 : 1 }}>
             <HoverCard style={s.convoCard}>
-              {convoLoading ? <ActivityIndicator color={Colors.violet} /> : (
+              {convoLoading ? <ActivityIndicator color={Colors.violet} /> : convoError || !ticketDetail ? (
+                <Text testID="chamado-nao-encontrado" style={{ color: Colors.ink3, textAlign: 'center', paddingVertical: 20 }}>Não encontrei esse chamado. Ele pode ter sido apagado, ou o link está incompleto.</Text>
+              ) : (
                 <View>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <View>
@@ -185,8 +180,8 @@ export function SolicitacoesAdmin() {
                   {/* Reply box */}
                   {ticketDetail?.status !== 'fechado' && (
                     <View style={s.replyBox}>
-                      <TextInput value={reply} onChangeText={setReply} placeholder="Responder como Analista Aura..." placeholderTextColor={Colors.ink3} multiline style={s.replyInput} />
-                      <Pressable style={[s.replyBtn, !reply.trim() && { opacity: 0.5 }]} onPress={function() { if (reply.trim()) replyMut.mutate({ tid: selected, message: reply.trim() }); }} disabled={!reply.trim() || replyMut.isPending}>
+                      <TextInput testID="chamado-resposta" value={reply} onChangeText={setReply} placeholder="Responder como Analista Aura..." placeholderTextColor={Colors.ink3} multiline style={s.replyInput} />
+                      <Pressable testID="chamado-enviar" style={[s.replyBtn, !reply.trim() && { opacity: 0.5 }]} onPress={function() { if (reply.trim()) replyMut.mutate({ tid: selected, message: reply.trim() }); }} disabled={!reply.trim() || replyMut.isPending}>
                         <Text style={s.replyBtnText}>{replyMut.isPending ? 'Enviando...' : 'Enviar'}</Text>
                       </Pressable>
                     </View>

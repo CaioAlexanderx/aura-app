@@ -288,7 +288,7 @@ export type PainelApiContatoResultado =
   "respondeu" | "sem_resposta" | "pediu_tempo" | "combinou_ligacao" | "quer_assinar" | "nao_quer";
 export type PainelApiContatoMotivo =
   "estoque_na_entrada" | "preco_plano" | "fiscal" | "atrito_produto" | "funcionalidade"
-  | "frente_errada" | "ritmo_do_cliente" | "concorrente" | "elogio";
+  | "frente_errada" | "ritmo_do_cliente" | "concorrente" | "elogio" | "motivo_externo";
 export type PainelApiContatoMarcador = "importacao_assistida_pedida" | "importacao_assistida_entregue";
 export type PainelApiContatoCheckin = { como_chegou?: string; fiado?: string; quem_decide?: string };
 // Corpo do POST /admin/painel/contatos: company_id OU lead_id.
