@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { useQuery } from "@tanstack/react-query";
 import { request } from "@/services/api";
@@ -72,6 +72,14 @@ var SECTIONS: Section[] = [
     color: "#06b6d4",
   },
   {
+    key: "chamados",
+    icon: "headset",
+    title: "Chamados",
+    description: "Pedidos de ajuda que as lojas abriram no app — ler, responder e fechar.",
+    route: "/gestao-aura-chamados",
+    color: "#0ea5e9",
+  },
+  {
     key: "painel",
     icon: "dashboard",
     title: "Painel",
@@ -126,6 +134,14 @@ var SECTIONS: Section[] = [
 export default function GestaoAuraScreen() {
   var router = useRouter();
   var { isStaff, isDemo } = useAuthStore();
+  var params = useLocalSearchParams<{ chamado?: string }>();
+
+  // O aviso de chamado novo (e-mail e sino) aponta para /gestao-aura?chamado=<id>:
+  // leva direto para a tela de Chamados, com aquela conversa aberta.
+  var chamadoDoLink = Array.isArray(params.chamado) ? params.chamado[0] : params.chamado;
+  useEffect(function() {
+    if (isStaff && chamadoDoLink) router.replace(("/gestao-aura-chamados?chamado=" + encodeURIComponent(chamadoDoLink)) as any);
+  }, [isStaff, chamadoDoLink]);
 
   var { data: overview } = useQuery<Overview>({
     queryKey: ["admin-overview"],
@@ -246,6 +262,7 @@ export default function GestaoAuraScreen() {
           return (
             <Pressable
               key={sec.key}
+              testID={"secao-" + sec.key}
               onPress={function() { router.push(sec.route as any); }}
               style={[
                 s.card,

@@ -164,6 +164,21 @@ describe("Registrar contato", () => {
     tree.unmount();
   });
 
+  it("'Não quer' aceita 'Motivo externo' e manda no corpo", async () => {
+    const tree = await mount();
+    await press(tree, "alerta-0");
+    await press(tree, "ficha-registrar-contato");
+    await press(tree, "contato-resultado-nao_quer");
+    expect(text(tree)).toContain("Motivo externo (fechou, mudou de ramo, perdeu o ponto)");
+    await escrever(tree, "contato-frase", "A loja fechou");
+    await press(tree, "contato-motivo-motivo_externo");
+    await press(tree, "contato-salvar");
+    expect(registrar).toHaveBeenCalledWith(expect.objectContaining({
+      company_id: LOJA_AURORA, resultado: "nao_quer", motivo: "motivo_externo",
+    }));
+    tree.unmount();
+  });
+
   it("trocar para outro resultado descarta o motivo escolhido", async () => {
     const tree = await mount();
     await press(tree, "alerta-0");

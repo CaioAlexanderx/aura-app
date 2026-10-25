@@ -32,7 +32,10 @@ export var CANAIS: Opcao<PainelApiContatoCanal>[] = [
   { id: "presencial", rotulo: "Presencial" },
 ];
 
-// "O que pesou": as 9 classes do relatório de perdas (spec da Cassie, 13/10).
+// "O que pesou": as 9 classes do relatório de perdas (spec da Cassie, 13/10)
+// mais "motivo externo" (backend#900, migration 412): o negócio fechou, mudou
+// de ramo ou perdeu o ponto. Com "Não quer", a conta guardada recebe o e-mail
+// "Sua conta da Aura fica guardada" no fim do teste.
 export var MOTIVOS: Opcao<PainelApiContatoMotivo>[] = [
   { id: "estoque_na_entrada", rotulo: "Estoque na entrada" },
   { id: "preco_plano", rotulo: "Preço do plano" },
@@ -43,6 +46,7 @@ export var MOTIVOS: Opcao<PainelApiContatoMotivo>[] = [
   { id: "ritmo_do_cliente", rotulo: "Ritmo do cliente" },
   { id: "concorrente", rotulo: "Concorrente" },
   { id: "elogio", rotulo: "Elogio" },
+  { id: "motivo_externo", rotulo: "Motivo externo (fechou, mudou de ramo, perdeu o ponto)" },
 ];
 
 export var MARCADORES: Opcao<PainelApiContatoMarcador>[] = [
