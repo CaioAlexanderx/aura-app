@@ -266,7 +266,7 @@ describe("etapa 1 — dados e Termos", () => {
     await irParaEtapa2(t);
     await digitar(t, "cadastro-cnpj", CNPJ_OK);
     await tocar(t, "cadastro-continuar-2");
-    await digitar(t, "cadastro-telefone", "11987654321");
+    await digitar(t, "cadastro-whatsapp", "11987654321");
     await tocar(t, "cadastro-criar");
     expect(naEtapa(t, 1)).toBe(true);
     expect(tudo(t)).toContain("Esse e-mail já tem conta por aqui. ");
@@ -311,7 +311,7 @@ describe("lead parcial", () => {
     await esvaziar();
     expect(mockLead).toHaveBeenCalledTimes(2);
     expect(mockLead.mock.calls[1][0]).toEqual({ etapa: 2, lead_token: TOKEN, cnpj: CNPJ_OK, company_name: "MARIA DA SILVA MODAS LTDA" });
-    await digitar(t, "cadastro-telefone", "11987654321");
+    await digitar(t, "cadastro-whatsapp", "11987654321");
     await tocar(t, "cadastro-criar");
     const corpo = mockRegister.mock.calls[0][0];
     expect(corpo.lead_token).toBe(TOKEN);
@@ -329,7 +329,7 @@ describe("lead parcial", () => {
     await digitar(t, "cadastro-cnpj", CNPJ_OK);
     await tocar(t, "cadastro-continuar-2");
     expect(naEtapa(t, 3)).toBe(true);
-    await digitar(t, "cadastro-telefone", "11987654321");
+    await digitar(t, "cadastro-whatsapp", "11987654321");
     await tocar(t, "cadastro-criar");
     expect(mockRegister).toHaveBeenCalledTimes(1);
     expect(mockRegister.mock.calls[0][0]).not.toHaveProperty("lead_token");
@@ -368,7 +368,7 @@ describe("lead parcial", () => {
     await digitar(t, "cadastro-cnpj", CNPJ_OK);
     await tocar(t, "cadastro-continuar-2");
     await esvaziar();
-    await digitar(t, "cadastro-telefone", "11987654321");
+    await digitar(t, "cadastro-whatsapp", "11987654321");
     await tocar(t, "cadastro-criar");
     expect(mockRegister.mock.calls[0][0]).not.toHaveProperty("lead_token");
   });
@@ -440,7 +440,7 @@ describe("etapa 2 — negócio", () => {
     expect(porId(t, "cadastro-continuar-2").props.disabled).toBe(false);
     await tocar(t, "cadastro-continuar-2");
     expect(tudo(t)).toContain("Criar conta do dojo");
-    await digitar(t, "cadastro-telefone", "11987654321");
+    await digitar(t, "cadastro-whatsapp", "11987654321");
     await tocar(t, "cadastro-criar");
     const corpo = mockRegister.mock.calls[0][0];
     expect(corpo.vertical).toBe("karate_dojo");
@@ -460,7 +460,7 @@ describe("etapa 2 — negócio", () => {
     expect(tudo(t)).not.toContain("Federação *");
     await digitar(t, "cadastro-cnpj", CNPJ_OK);
     await tocar(t, "cadastro-continuar-2");
-    await digitar(t, "cadastro-telefone", "11987654321");
+    await digitar(t, "cadastro-whatsapp", "11987654321");
     await tocar(t, "cadastro-criar");
     expect(mockRegister.mock.calls[0][0]).not.toHaveProperty("vertical");
     expect(mockRegister.mock.calls[0][0]).not.toHaveProperty("federation_id");
@@ -479,7 +479,7 @@ describe("etapa 2 — negócio", () => {
     expect(tudo(t)).toContain("Se veio por link, já preenchemos sozinhos.");
     await digitar(t, "cadastro-cnpj", CNPJ_OK);
     await tocar(t, "cadastro-continuar-2");
-    await digitar(t, "cadastro-telefone", "11987654321");
+    await digitar(t, "cadastro-whatsapp", "11987654321");
     await tocar(t, "cadastro-criar");
     const corpo = mockRegister.mock.calls[0][0];
     expect(corpo.access_code).toBe("REF-ANA123");

@@ -88,6 +88,10 @@ export type RegisterBody = {
   lead_token?: string;
   /** Origem do cadastro (utm, referrer, ref do link). O backend sanitiza; inválida vira null e nunca bloqueia. */
   origem?: OrigemDoCadastro;
+  /** 26/10/2026 (tq-69): WhatsApp da pessoa (backend#886). Celular válido ganha o handshake AURA-XXXX. */
+  whatsapp?: string;
+  /** Telefone da loja que veio da Receita (companies.phone). Opcional. */
+  company_phone?: string;
 };
 export type CodeValidation = { valid: boolean; type?: string; plan?: string; discount_pct?: number; trial_days?: number; error?: string };
 export type VerificationResponse = { sent?: boolean; destination?: string; expires_in?: number; already_verified?: boolean; valid?: boolean; email_verified?: boolean; phone_verified?: boolean; error?: string; reason?: string; retry_after?: number; deduped?: boolean; otp_available?: boolean; attempts_left?: number; already_used?: boolean };

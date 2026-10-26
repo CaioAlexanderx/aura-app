@@ -155,7 +155,7 @@ describe("tela de cadastro — conta sem CNPJ", () => {
     expect(porId(tree, "cadastro-cpf", "onChangeText").props.value).toBe("529.982.247-25");
     await tocar(tree, "cadastro-continuar-2");
 
-    await digitar(tree, "cadastro-telefone", "12999990000");
+    await digitar(tree, "cadastro-whatsapp", "12999990000");
     await tocar(tree, "cadastro-criar");
     expect(mockRegister).toHaveBeenCalledTimes(1);
     const corpo = mockRegister.mock.calls[0][0];
@@ -175,7 +175,7 @@ describe("tela de cadastro — conta sem CNPJ", () => {
     expect(tudo(tree)).toContain("CPF inválido. Confira os números.");
     expect(porId(tree, "cadastro-continuar-2").props.disabled).toBe(true);
     await tocar(tree, "cadastro-continuar-2");
-    expect(porId(tree, "cadastro-telefone", "onChangeText")).toBeUndefined();
+    expect(porId(tree, "cadastro-whatsapp", "onChangeText")).toBeUndefined();
     expect(mockRegister).not.toHaveBeenCalled();
   });
 
@@ -188,7 +188,7 @@ describe("tela de cadastro — conta sem CNPJ", () => {
     await digitar(tree, "cadastro-cpf", "52998224725");
     await digitar(tree, "cadastro-negocio", "Loja da Maria");
     await tocar(tree, "cadastro-continuar-2");
-    await digitar(tree, "cadastro-telefone", "12999990000");
+    await digitar(tree, "cadastro-whatsapp", "12999990000");
     await tocar(tree, "cadastro-criar");
     expect(mockToastError).toHaveBeenCalledWith(expect.stringMatching(/conta Aura com este CPF/));
     expect(porId(tree, "cadastro-cpf", "onChangeText")).toBeDefined(); // de volta na etapa 2, CPF preservado
@@ -212,7 +212,7 @@ describe("tela de cadastro — conta sem CNPJ", () => {
     await digitar(tree, "cadastro-cnpj", CNPJ_OK);
     expect(global.fetch).toHaveBeenCalledWith(expect.stringMatching(/onboarding\/cnpj-lookup$/), expect.anything());
     await tocar(tree, "cadastro-continuar-2");
-    await digitar(tree, "cadastro-telefone", "12999990000");
+    await digitar(tree, "cadastro-whatsapp", "12999990000");
     await tocar(tree, "cadastro-criar");
     expect(mockRegister).toHaveBeenCalledTimes(1);
     const corpo = mockRegister.mock.calls[0][0];
