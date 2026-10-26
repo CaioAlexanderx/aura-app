@@ -63,7 +63,7 @@ jest.mock("@/hooks/useTemProduto", () => ({
   garantirTemProduto: () => Promise.resolve(mockTemProduto),
 }));
 
-import { CheckinEntrada } from "@/components/onboarding/CheckinEntrada";
+import { CheckinEntrada, TETO_DO_CARREGANDO_MS, TEXTOS_TETO } from "@/components/onboarding/CheckinEntrada";
 import { useCheckinGate, __zerarCheckinDaSessao } from "@/hooks/useCheckin";
 import { MOD_CHECKIN, PERGUNTAS_CHECKIN, MAX_RESPOSTA } from "@/constants/checkin";
 import { computeVisibleModules, MODULE_PLAN_MAP, PERM_TO_MODULES } from "@/hooks/useVisibleModules";
@@ -628,6 +628,60 @@ describe("recarga direto na rota", () => {
     expect(mockReplace).toHaveBeenCalledTimes(1);
     expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
     m.tree.unmount();
+  });
+
+  // tq-38 (26/10/2026): a espera ganhou teto. Recarga forçada em /checkin
+  // deixava a aba no carregando por 1 a 2 min.
+  describe("teto da espera", () => {
+    afterEach(() => { jest.useRealTimers(); });
+
+    async function montarComRelogio() {
+      jest.useFakeTimers();
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      let tree: any;
+      await act(async () => { tree = renderer.create(<QueryClientProvider client={client}><CheckinEntrada /></QueryClientProvider>); });
+      return tree;
+    }
+    const avancar = async (ms: number) => { await act(async () => { jest.advanceTimersByTime(ms); }); };
+
+    test("a consulta não volta: em 10 s aparece 'Ir para o Painel', que leva ao Painel", async () => {
+      sessaoRestaurada(LOJA);
+      mockGet.mockImplementation(() => new Promise(() => {}));
+      const tree = await montarComRelogio();
+      expect(achar(tree, "checkin-carregando").length).toBeGreaterThan(0);
+      await avancar(TETO_DO_CARREGANDO_MS - 100);
+      expect(achar(tree, "checkin-teto").length).toBe(0);
+      await avancar(200);
+      expect(achar(tree, "checkin-teto").length).toBeGreaterThan(0);
+      const s = JSON.stringify(tree.toJSON());
+      expect(s).toContain(TEXTOS_TETO.aviso);
+      expect(s).toContain("Ir para o Painel");
+      await act(async () => { achar(tree, "checkin-teto-painel")[0].props.onPress(); });
+      expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
+      tree.unmount();
+    });
+
+    test("sessão e navegador raiz não chegam: o teto aparece e o botão não chama o router", async () => {
+      antesDaSessao();
+      const tree = await montarComRelogio();
+      await avancar(TETO_DO_CARREGANDO_MS + 10);
+      expect(achar(tree, "checkin-teto").length).toBeGreaterThan(0);
+      // Sem navegador raiz, router.replace lançaria (INC-2026-10-19-02).
+      await act(async () => { achar(tree, "checkin-teto-painel")[0].props.onPress(); });
+      expect(mockReplace).not.toHaveBeenCalled();
+      tree.unmount();
+    });
+
+    test("a tela chega antes do teto: nada de aviso", async () => {
+      sessaoRestaurada(LOJA);
+      mockGet.mockResolvedValue(HABILITADO);
+      const tree = await montarComRelogio();
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+      await avancar(TETO_DO_CARREGANDO_MS + 10);
+      expect(achar(tree, "checkin-raiz").length).toBeGreaterThan(0);
+      expect(achar(tree, "checkin-teto").length).toBe(0);
+      tree.unmount();
+    });
   });
 });
 
