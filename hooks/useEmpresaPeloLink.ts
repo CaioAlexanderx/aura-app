@@ -13,13 +13,18 @@
 //   guarda o parâmetro depois do replaceState, e isso não pode virar laço.
 // - No web o switch recarrega a página na mesma URL (stores/auth,
 //   reloadAfterSwitch); no nativo o estado novo basta.
+// - 26/10/2026: ?empresa=todas (ou all) abre o consolidado
+//   (switchCompany("all")), só para quem tem mais de uma empresa. Com uma
+//   empresa só, o parâmetro é ignorado: tira da URL e segue na empresa.
 // ============================================================
 import { useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 import { useGlobalSearchParams } from "expo-router";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
-import { lerEmpresaDoLink, precisaTrocarEmpresa, urlSemEmpresa, avisoSemAcesso } from "@/utils/empresaPeloLink";
+import {
+  CONSOLIDADO, lerEmpresaDoLink, precisaTrocarEmpresa, podeAbrirConsolidado, urlSemEmpresa, avisoSemAcesso,
+} from "@/utils/empresaPeloLink";
 
 function limparEmpresaDaUrl(): void {
   if (Platform.OS !== "web" || typeof window === "undefined") return;
@@ -35,12 +40,15 @@ export function useEmpresaPeloLink(): boolean {
   const isHydrated = useAuthStore((s) => s.isHydrated);
   const companyId = useAuthStore((s) => (s.company as any)?.id ?? null);
   const consolidatedView = useAuthStore((s) => s.consolidatedView);
+  const companyCount = useAuthStore((s) => s.companyCount);
   const tratadas = useRef<Set<string>>(new Set());
   const [trocando, setTrocando] = useState(false);
 
   const id = lerEmpresaDoLink(params?.empresa);
+  // Consolidado só para quem tem mais de uma empresa; com uma, ignora.
+  const aceito = id !== CONSOLIDADO || podeAbrirConsolidado(companyCount);
   const pendente = !!(
-    id && token && isHydrated && !tratadas.current.has(id) &&
+    id && token && isHydrated && aceito && !tratadas.current.has(id) &&
     precisaTrocarEmpresa(id, { companyId, consolidatedView })
   );
 
@@ -50,6 +58,7 @@ export function useEmpresaPeloLink(): boolean {
     tratadas.current.add(id);
     limparEmpresaDaUrl();
     const st = useAuthStore.getState();
+    if (id === CONSOLIDADO && !podeAbrirConsolidado(st.companyCount)) return;
     if (!precisaTrocarEmpresa(id, { companyId: (st.company as any)?.id, consolidatedView: st.consolidatedView })) return;
 
     let vivo = true;

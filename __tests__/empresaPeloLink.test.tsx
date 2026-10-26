@@ -1,6 +1,8 @@
 // 24/10/2026 (tq-92) — link abre a empresa certa em conta multi-CNPJ
 // (?empresa=<company_id>): troca antes da tela, limpa a URL, e sem acesso
 // fica na empresa atual com um aviso discreto.
+// 26/10/2026 — ?empresa=todas (e all) abre o consolidado, só para quem tem
+// mais de uma empresa (relatório semanal de várias lojas).
 import React from "react";
 import renderer, { act } from "react-test-renderer";
 
@@ -18,14 +20,20 @@ jest.mock("@/stores/auth", () => {
   return { useAuthStore };
 });
 
-import { lerEmpresaDoLink, precisaTrocarEmpresa, urlSemEmpresa, avisoSemAcesso } from "@/utils/empresaPeloLink";
+import {
+  CONSOLIDADO, lerEmpresaDoLink, precisaTrocarEmpresa, podeAbrirConsolidado, urlSemEmpresa, avisoSemAcesso,
+} from "@/utils/empresaPeloLink";
 import { useEmpresaPeloLink } from "@/hooks/useEmpresaPeloLink";
 
 describe("funções puras", () => {
-  it("lerEmpresaDoLink aceita id e recusa 'all', vazio e lixo", () => {
+  it("lerEmpresaDoLink aceita id e 'todas'/'all' (consolidado); recusa vazio e lixo", () => {
     expect(lerEmpresaDoLink("3f2a9c1e-0000-4000-8000-000000000001")).toBe("3f2a9c1e-0000-4000-8000-000000000001");
     expect(lerEmpresaDoLink(["abc", "def"])).toBe("abc");
-    expect(lerEmpresaDoLink("all")).toBeNull();
+    expect(lerEmpresaDoLink("todas")).toBe(CONSOLIDADO);
+    expect(lerEmpresaDoLink(" Todas ")).toBe(CONSOLIDADO);
+    expect(lerEmpresaDoLink("all")).toBe(CONSOLIDADO);
+    expect(lerEmpresaDoLink("ALL")).toBe(CONSOLIDADO);
+    expect(CONSOLIDADO).toBe("all"); // o mesmo id do switchCompany("all")
     expect(lerEmpresaDoLink("")).toBeNull();
     expect(lerEmpresaDoLink("a/b")).toBeNull();
     expect(lerEmpresaDoLink("<script>")).toBeNull();
@@ -36,6 +44,18 @@ describe("funções puras", () => {
     expect(precisaTrocarEmpresa("a", { companyId: null, consolidatedView: true })).toBe(true);
     expect(precisaTrocarEmpresa("a", { companyId: "a", consolidatedView: false })).toBe(false);
     expect(precisaTrocarEmpresa("a", { companyId: "b", consolidatedView: false })).toBe(true);
+  });
+
+  it("precisaTrocarEmpresa com ?empresa=todas: no consolidado não troca; numa empresa troca", () => {
+    expect(precisaTrocarEmpresa(CONSOLIDADO, { companyId: null, consolidatedView: true })).toBe(false);
+    expect(precisaTrocarEmpresa(CONSOLIDADO, { companyId: "a", consolidatedView: false })).toBe(true);
+  });
+
+  it("consolidado só com mais de uma empresa", () => {
+    expect(podeAbrirConsolidado(2)).toBe(true);
+    expect(podeAbrirConsolidado(1)).toBe(false);
+    expect(podeAbrirConsolidado(0)).toBe(false);
+    expect(podeAbrirConsolidado(undefined)).toBe(false);
   });
 
   it("urlSemEmpresa tira só o parâmetro", () => {
@@ -60,7 +80,7 @@ describe("useEmpresaPeloLink", () => {
     mockToastInfo.mockReset();
     ultimo = null;
     mockState = {
-      token: "t", isHydrated: true, company: { id: "atual" }, consolidatedView: false,
+      token: "t", isHydrated: true, company: { id: "atual" }, consolidatedView: false, companyCount: 2,
       switchCompany: (id: string) => mockSwitch(id),
     };
   });
@@ -111,6 +131,32 @@ describe("useEmpresaPeloLink", () => {
     act(() => { r.update(<Sonda />); });
     expect(mockSwitch).toHaveBeenCalledTimes(1);
     expect(mockSwitch).toHaveBeenCalledWith("outra");
+  });
+
+  it("?empresa=todas com mais de uma empresa: segura a tela e abre o consolidado", () => {
+    mockParams = { empresa: "todas" };
+    mockSwitch.mockReturnValue(new Promise(() => {}));
+    montar();
+    expect(mockSwitch).toHaveBeenCalledWith("all");
+    expect(ultimo).toBe(true);
+  });
+
+  it("?empresa=todas já no consolidado: não troca nem segura a tela", () => {
+    mockParams = { empresa: "todas" };
+    mockState.consolidatedView = true;
+    mockState.company = null;
+    montar();
+    expect(mockSwitch).not.toHaveBeenCalled();
+    expect(ultimo).toBe(false);
+  });
+
+  it("?empresa=todas com uma empresa só: ignora (fica na empresa, sem aviso)", () => {
+    mockParams = { empresa: "todas" };
+    mockState.companyCount = 1;
+    montar();
+    expect(mockSwitch).not.toHaveBeenCalled();
+    expect(mockToastInfo).not.toHaveBeenCalled();
+    expect(ultimo).toBe(false);
   });
 
   it("o mesmo id não é tratado duas vezes (o router ainda guarda o parâmetro)", () => {
