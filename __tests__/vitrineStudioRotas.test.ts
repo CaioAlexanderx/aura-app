@@ -201,7 +201,7 @@ describe("as rotas da árvore real de app/", () => {
     for (const f of fs.readdirSync(dir)) {
       const p = path.join(dir, f);
       if (fs.statSync(p).isDirectory()) arquivos(p, acc);
-      else if (/\.(tsx?|jsx?)$/.test(f)) acc.push("./" + path.relative(path.join(RAIZ, "app"), p));
+      else if (/\.(tsx?|jsx?)$/.test(f)) acc.push("./" + path.relative(path.join(RAIZ, "app"), p).split(path.sep).join("/")); // "/" também no Windows
     }
     return acc;
   }

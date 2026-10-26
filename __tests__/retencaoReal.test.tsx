@@ -85,6 +85,20 @@ import { BirthdaysCard } from "@/components/screens/dashboard/BirthdaysCard";
 // ── Fixtures ──────────────────────────────────────────────────
 const AGORA = new Date(2026, 8, 16, 12, 0, 0).getTime(); // 16/09/2026, meio-dia
 
+// Só o relógio é falso (timers e promises seguem reais): o código lê a data
+// real com new Date()/Date.now(), e o teste é escrito para 16/09/2026.
+beforeAll(() => {
+  jest.useFakeTimers({
+    now: AGORA,
+    doNotFake: [
+      "setTimeout", "clearTimeout", "setInterval", "clearInterval", "setImmediate", "clearImmediate",
+      "nextTick", "queueMicrotask", "requestAnimationFrame", "cancelAnimationFrame",
+      "requestIdleCallback", "cancelIdleCallback", "performance", "hrtime",
+    ],
+  });
+});
+afterAll(() => { jest.useRealTimers(); });
+
 function dataHaDias(dias: number): string {
   return new Date(AGORA - dias * 864e5).toLocaleDateString("pt-BR");
 }

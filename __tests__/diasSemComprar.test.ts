@@ -27,6 +27,20 @@ import { getStatus } from "@/components/screens/clientes/types";
 // conforme a hora em que roda.
 const AGORA = new Date(2026, 8, 16, 12, 0, 0).getTime();
 
+// Só o relógio é falso (timers e promises seguem reais): o código lê a data
+// real com new Date()/Date.now(), e o teste é escrito para 16/09/2026.
+beforeAll(() => {
+  jest.useFakeTimers({
+    now: AGORA,
+    doNotFake: [
+      "setTimeout", "clearTimeout", "setInterval", "clearInterval", "setImmediate", "clearImmediate",
+      "nextTick", "queueMicrotask", "requestAnimationFrame", "cancelAnimationFrame",
+      "requestIdleCallback", "cancelIdleCallback", "performance", "hrtime",
+    ],
+  });
+});
+afterAll(() => { jest.useRealTimers(); });
+
 /** Data "dd/mm/aaaa" de N dias atrás, do jeito que o app guarda. */
 function haDias(n: number): string {
   const d = new Date(AGORA - n * 864e5);

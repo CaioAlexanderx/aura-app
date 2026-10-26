@@ -35,7 +35,8 @@ function semComentarios(fonte: string): string {
 }
 
 const CODIGO = arquivos().map((f) => ({
-  nome: path.relative(VITRINE, f),
+  // Barra "/" em qualquer sistema (no Windows o path.relative devolve contrabarra).
+  nome: path.relative(VITRINE, f).split(path.sep).join("/"),
   codigo: semComentarios(fs.readFileSync(f, "utf8")),
 }));
 

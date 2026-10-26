@@ -209,7 +209,7 @@ describe("CategoryTreePicker", () => {
   it("adiciona categoria como also_in sem trocar a primaria", () => {
     const value: CategorySelection = { primaryCategoryId: "cat-feminino", alsoInIds: [] };
     const { renderer, onChange } = renderPicker(value);
-    const also = renderer.root.findByProps({ accessibilityLabel: "Tambem em Masculino" });
+    const also = renderer.root.findByProps({ accessibilityLabel: "Também em Masculino" });
     act(() => { also.props.onPress(); });
     expect(onChange).toHaveBeenCalledWith({ primaryCategoryId: "cat-feminino", alsoInIds: ["cat-masculino"] });
   });
