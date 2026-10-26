@@ -51,6 +51,20 @@ jest.mock("@/hooks/useQuadroFinanceiro", () => ({
 
 import { QuadroFinanceiro } from "@/components/screens/financeiro/quadro/QuadroFinanceiro";
 
+// Só o relógio é falso (timers e promises seguem reais): o código lê a data
+// real com new Date()/Date.now(), e o teste é escrito para 28/09/2026, o "today" do quadro simulado.
+beforeAll(() => {
+  jest.useFakeTimers({
+    now: new Date(2026, 8, 28, 12, 0, 0),
+    doNotFake: [
+      "setTimeout", "clearTimeout", "setInterval", "clearInterval", "setImmediate", "clearImmediate",
+      "nextTick", "queueMicrotask", "requestAnimationFrame", "cancelAnimationFrame",
+      "requestIdleCallback", "cancelIdleCallback", "performance", "hrtime",
+    ],
+  });
+});
+afterAll(() => { jest.useRealTimers(); });
+
 function texto(node: any): string {
   if (node == null || node === false) return "";
   if (typeof node === "string" || typeof node === "number") return String(node);
