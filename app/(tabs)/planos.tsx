@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, ScrollView, Pressable, Platform, StyleSheet, Linking } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
@@ -7,6 +7,7 @@ import { toast } from "@/components/Toast";
 import { useQuery } from "@tanstack/react-query";
 import { billingApi } from "@/services/api";
 import { discountInEffectText } from "@/components/billing/couponText";
+import { FaixaDoTrial } from "@/components/billing/FaixaDoTrial";
 import { router } from "expo-router";
 import { waAura } from "@/constants/suporteAura";
 
@@ -168,7 +169,7 @@ const fmtR = (n: number) => "R$ " + n.toLocaleString("pt-BR", { minimumFractionD
 
 export default function PlanosScreen() {
   const [annual, setAnnual] = useState(false);
-  const { company, token, isDemo } = useAuthStore();
+  const { company, token, isDemo, refreshMe } = useAuthStore();
   const currentPlan = (company?.plan as string) || "essencial";
   const discount = 1 / 6;
 
@@ -178,6 +179,13 @@ export default function PlanosScreen() {
     enabled: !!company?.id && !!token && !isDemo,
     retry: 1, staleTime: 60000,
   });
+
+  // tq-43: a faixa do teste lê company.trial (primeira venda, dias que
+  // restam). O store vem do login e não revalida sozinho (CLAUDE.md, plano
+  // stale no JWT): revalida no mount.
+  useEffect(() => {
+    if (token && !isDemo) refreshMe().catch(() => {});
+  }, [token, isDemo]);
 
   function handleChoosePlan(planKey: string) {
     if (planKey === currentPlan) return;
@@ -197,7 +205,7 @@ export default function PlanosScreen() {
       <Text style={s.title}>Planos da Aura.</Text>
       <Text style={s.subtitle}>Escolha o plano ideal para o seu negócio</Text>
 
-      {trialActive && <View style={s.trialBanner}><Text style={s.trialText}>Período de teste - {trialDays} dias restantes</Text></View>}
+      {trialActive && <FaixaDoTrial diasRestantes={trialDays} />}
 
       {billingStatus && !trialActive && billingStatus.billing_status !== "inactive" && (
         <View style={s.statusBanner}><Text style={s.statusText}>Plano {billingStatus.plan} - {billingStatus.billing_status === "active" ? "Ativo" : billingStatus.billing_status}</Text></View>
@@ -288,8 +296,6 @@ export default function PlanosScreen() {
 const s = StyleSheet.create({
   title: { fontSize: 24, fontWeight: "800", color: Colors.ink, textAlign: "center", marginBottom: 4 },
   subtitle: { fontSize: 14, color: Colors.ink3, textAlign: "center", marginBottom: 24 },
-  trialBanner: { backgroundColor: Colors.amberD, borderRadius: 12, padding: 12, marginBottom: 16, alignItems: "center", borderWidth: 1, borderColor: Colors.amber + "44" },
-  trialText: { fontSize: 13, color: Colors.amber, fontWeight: "600" },
   statusBanner: { backgroundColor: Colors.greenD, borderRadius: 12, padding: 12, marginBottom: 16, alignItems: "center", borderWidth: 1, borderColor: Colors.green + "44" },
   statusText: { fontSize: 13, color: Colors.green, fontWeight: "600" },
   toggleWrap: { flexDirection: "row", justifyContent: "center", gap: 4, backgroundColor: Colors.bg3, borderRadius: 12, padding: 4, alignSelf: "center", marginBottom: 12 },

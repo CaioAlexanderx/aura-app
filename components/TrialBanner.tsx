@@ -3,15 +3,9 @@ import { useRouter } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@/components/Icon";
-import { avisoDoTrial, diasLegado, lerTrial } from "@/utils/trialAviso";
+import { avisoDoTrial, diasLegado, lerTrial, rotuloDoPlano } from "@/utils/trialAviso";
 import { temCaixaVivo } from "@/utils/muroDeAssinatura";
 import { linkPedidoDeAjuda } from "@/utils/mensagensDoApp";
-
-var PLAN_LABELS: Record<string, string> = {
-  essencial: "Essencial",
-  negocio:   "Negócio",
-  expansao:  "Expansão",
-};
 
 export function TrialBanner() {
   const { trialActive, trialEndsAt, isDemo, isStaff, company } = useAuthStore();
@@ -23,7 +17,7 @@ export function TrialBanner() {
 
   if (isDemo || !trialActive || !trialEndsAt) return null;
 
-  const planLabel = PLAN_LABELS[company?.plan ?? ""] ?? (company?.plan ?? "teste");
+  const planLabel = rotuloDoPlano(company?.plan);
 
   // 14/10/2026 (card t2-05): o texto vem do bloco company.trial do backend
   // (modo, primeira venda, dias restantes). Sem o bloco, conta a partir de

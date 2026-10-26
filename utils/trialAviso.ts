@@ -71,6 +71,17 @@ export type AvisoTrial = {
   ajuda: boolean;
 };
 
+const ROTULOS_DO_PLANO: Record<string, string> = {
+  essencial: "Essencial",
+  negocio: "Negócio",
+  expansao: "Expansão",
+};
+
+/** Nome do plano como aparece no aviso ("negocio" → "Negócio"). */
+export function rotuloDoPlano(plan: string | null | undefined): string {
+  return ROTULOS_DO_PLANO[plan ?? ""] ?? (plan || "teste");
+}
+
 /** Dias restantes a partir dos quais o aviso fica vermelho. */
 export const DIAS_URGENTE = 2;
 const DIAS_PADRAO_PRIMEIRA_VENDA = 7;
