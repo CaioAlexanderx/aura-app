@@ -96,6 +96,14 @@ export type RegisterBody = {
 export type CodeValidation = { valid: boolean; type?: string; plan?: string; discount_pct?: number; trial_days?: number; error?: string };
 export type VerificationResponse = { sent?: boolean; destination?: string; expires_in?: number; already_verified?: boolean; valid?: boolean; email_verified?: boolean; phone_verified?: boolean; error?: string; reason?: string; retry_after?: number; deduped?: boolean; otp_available?: boolean; attempts_left?: number; already_used?: boolean };
 
+// 26/10/2026: POST /auth/corrigir-email (Aura-backend). Usuario com o e-mail
+// novo (o JWT nao carrega e-mail; nao ha token novo) + o resultado do envio
+// do link novo, no mesmo formato do /auth/send-verification.
+export type CorrigirEmailResponse = VerificationResponse & {
+  ok?: boolean;
+  user?: { id: string; name: string; email: string; role?: string; is_staff?: boolean; email_verified?: boolean };
+};
+
 export type SidebarLayoutItem = {
   key: string;
   section: string;
@@ -219,6 +227,9 @@ export var authApi = {
   resetPassword: function(token: string, password: string) { return request<{ message: string }>("/auth/reset-password", { method: "POST", body: { token: token, password: password }, retry: 0 }); },
   sendEmailVerification: function() { return request<VerificationResponse>("/auth/send-verification", { method: "POST", retry: 0 }); },
   verifyEmail: function(code: string) { return request<VerificationResponse>("/auth/verify-email", { method: "POST", body: { code: code }, retry: 0 }); },
+  // 26/10/2026: quem ainda nao confirmou corrige o e-mail digitado errado.
+  // Sem nova tentativa automatica: o backend limita 5 por hora.
+  corrigirEmail: function(email: string) { return request<CorrigirEmailResponse>("/auth/corrigir-email", { method: "POST", body: { email: email }, retry: 0 }); },
   sendPhoneVerification: function() { return request<VerificationResponse>("/auth/send-phone-verification", { method: "POST", retry: 0 }); },
   verifyPhone: function(code: string) { return request<VerificationResponse>("/auth/verify-phone", { method: "POST", body: { code: code }, retry: 0 }); },
 };
