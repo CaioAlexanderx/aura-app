@@ -17,11 +17,21 @@
 //   funciona), erros de conexão visíveis discretamente,
 // + reenvio com cooldown sincronizado ao retry_after do servidor,
 // + StrictMode-safe (guard de duplo mount; backend também dedupe 60s).
+//
+// 26/10/2026: "Corrigir meu e-mail". Quem criou a conta com o e-mail
+// errado (erro de digitação) não tinha saída: o botão "Trocar de e-mail
+// ou sair" só saía, e recadastrar não resolve (com CNPJ a conta nova entra
+// como vendedor da loja que já existe; com CPF dá CPF já cadastrado).
+// Agora o link abre o campo com o e-mail atual e "Salvar e reenviar"
+// (POST /auth/corrigir-email); a tela passa a mostrar o e-mail novo e diz
+// que o link foi reenviado. O e-mail aparece inteiro (era mascarado): é da
+// própria pessoa, logada, e é vendo ele inteiro que se nota o erro.
+// O botão de sair passa a se chamar só "Sair".
 // ============================================================
 import { useState, useEffect, useRef } from "react";
 import {
   View, Text, Pressable, ActivityIndicator, TextInput,
-  StyleSheet, Platform, Animated,
+  StyleSheet, Platform, Animated, Linking,
 } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
@@ -31,6 +41,11 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { consumeVerifyLinkError, type VerifyLinkError } from "@/utils/verifyLinkStatus";
 import { AuthStage } from "@/components/auth/AuthStage";
+import { waAura } from "@/constants/suporteAura";
+import {
+  normalizarEmailDigitado, erroAoCorrigir, MSG_EMAIL_INCOMPLETO, MSG_EMAIL_IGUAL,
+  TEXTO_WHATSAPP_CORRIGIR_EMAIL, type ErroAoCorrigir,
+} from "@/utils/corrigirEmail";
 
 const isWeb = Platform.OS === "web";
 
@@ -59,6 +74,12 @@ export default function VerifyEmailScreen() {
   const [otp, setOtp] = useState<string[]>(Array(OTP_LEN).fill(""));
   const [otpError, setOtpError] = useState<string | null>(null);
   const [otpChecking, setOtpChecking] = useState(false);
+  // "Corrigir meu e-mail"
+  const [editing, setEditing] = useState(false);
+  const [emailDraft, setEmailDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [editErr, setEditErr] = useState<ErroAoCorrigir | null>(null);
+  const [corrigido, setCorrigido] = useState(false);
 
   const didInit = useRef(false);            // guard StrictMode/duplo mount
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -68,9 +89,8 @@ export default function VerifyEmailScreen() {
   const otpRefs = useRef<Array<TextInput | null>>([]);
   const checkScale = useRef(new Animated.Value(0)).current;
 
-  const maskedEmail = user?.email
-    ? user.email.replace(/(.{2})(.*)(@.*)/, "$1***$3")
-    : "";
+  // Inteiro, não mascarado: é vendo o e-mail todo que a pessoa nota o erro.
+  const emailAtual = user?.email || "";
 
 
   // ── Mount: consome verify_error do link (capturado pelo AuthGuard) e
@@ -254,18 +274,123 @@ export default function VerifyEmailScreen() {
     </View>
   );
 
-  const exitBtn = (
-    <Pressable onPress={logout} style={s.logoutBtn}>
-      <Text style={s.logoutText}>Trocar de e-mail ou sair</Text>
+  // ── Corrigir meu e-mail ──
+  function abrirCorrecao() {
+    setEmailDraft(emailAtual);
+    setEditErr(null);
+    setEditing(true);
+  }
+
+  function cancelarCorrecao() {
+    setEditing(false);
+    setEditErr(null);
+  }
+
+  async function salvarCorrecao() {
+    if (saving) return;
+    const novo = normalizarEmailDigitado(emailDraft);
+    if (!novo) { setEditErr({ texto: MSG_EMAIL_INCOMPLETO, falarComAGente: false }); return; }
+    if (novo === emailAtual.trim().toLowerCase()) { setEditErr({ texto: MSG_EMAIL_IGUAL, falarComAGente: false }); return; }
+    setSaving(true);
+    setEditErr(null);
+    try {
+      const res = await authApi.corrigirEmail(novo);
+      const emailNovo = res.user?.email || novo;
+      const cur = useAuthStore.getState().user;
+      if (cur) useAuthStore.setState({ user: { ...cur, email: emailNovo } as any });
+      setCorrigido(true);
+      setResent(true);
+      setOtp(Array(OTP_LEN).fill(""));
+      setOtpError(null);
+      setLinkError(null);
+      setEditing(false);
+      if (res.otp_available === false) setOtpAvailable(false);
+      if (res.sent === false) {
+        setSendReason(res.reason || "send_failed");
+        setStatus("sendfail");
+        return;
+      }
+      setStatus("waiting");
+      setCooldown(Math.max(15, res.retry_after ?? 60));
+    } catch (err: any) {
+      setEditErr(erroAoCorrigir(err));
+    } finally { setSaving(false); }
+  }
+
+  const corrigirLink = (
+    <Pressable onPress={abrirCorrecao} style={s.fixBtn} testID="corrigir-email-abrir" accessibilityRole="button">
+      <Text style={s.fixText}>Corrigir meu e-mail</Text>
     </Pressable>
+  );
+
+  const exitBtn = (
+    <>
+      {corrigirLink}
+      <Pressable onPress={() => { logout(); }} style={s.logoutBtn} testID="verify-sair" accessibilityRole="button">
+        <Text style={s.logoutText}>Sair</Text>
+      </Pressable>
+    </>
   );
 
   // ── Estados ──
   let body: React.ReactNode;
-  if (status === "sending") {
+  if (editing) {
     body = (
       <>
-        <Text style={s.desc}>Enviando link de confirmação para{"\n"}<Text style={s.emailHighlight}>{maskedEmail}</Text></Text>
+        <Text style={s.desc}>Digite o e-mail certo. A gente manda um link novo para ele.</Text>
+        <View style={s.field}>
+          <Text style={s.fieldLabel}>Seu e-mail</Text>
+          <TextInput
+            style={[s.emailInput, !!editErr && s.emailInputErr]}
+            value={emailDraft}
+            onChangeText={(v) => { setEmailDraft(v); if (editErr) setEditErr(null); }}
+            placeholder="seu@email.com"
+            placeholderTextColor={Colors.ink3}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            autoComplete="email"
+            returnKeyType="send"
+            onSubmitEditing={salvarCorrecao}
+            editable={!saving}
+            accessibilityLabel="Seu e-mail"
+            testID="corrigir-email-campo"
+            {...(isWeb ? { className: "v2-input" } as any : {})}
+          />
+          {!!editErr && (
+            <View testID="corrigir-email-erro">
+              <Text style={s.fieldErr}>{editErr.texto}</Text>
+              {editErr.falarComAGente && (
+                <Pressable
+                  onPress={() => { Linking.openURL(waAura(TEXTO_WHATSAPP_CORRIGIR_EMAIL)).catch(() => {}); }}
+                  testID="corrigir-email-whatsapp"
+                  accessibilityRole="link"
+                >
+                  <Text style={s.fieldHelp}>Falar com a gente no WhatsApp</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+        </View>
+        <Pressable
+          style={[s.btn, saving && { opacity: 0.7 }]}
+          {...(isWeb ? { className: "v2-btn" } as any : {})}
+          onPress={salvarCorrecao}
+          disabled={saving}
+          testID="corrigir-email-salvar"
+          accessibilityRole="button"
+        >
+          {saving ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Salvar e reenviar</Text>}
+        </Pressable>
+        <Pressable onPress={cancelarCorrecao} style={s.logoutBtn} disabled={saving} testID="corrigir-email-cancelar" accessibilityRole="button">
+          <Text style={s.logoutText}>Cancelar</Text>
+        </Pressable>
+      </>
+    );
+  } else if (status === "sending") {
+    body = (
+      <>
+        <Text style={s.desc}>Enviando link de confirmação para{"\n"}<Text style={s.emailHighlight}>{emailAtual}</Text></Text>
         <ActivityIndicator color={Colors.violet3} style={{ marginVertical: 20 }} />
       </>
     );
@@ -279,7 +404,7 @@ export default function VerifyEmailScreen() {
             <Text style={s.bannerTxt}>
               {sendReason === "network"
                 ? "Sem conexão com o servidor. Confira sua internet e tente de novo."
-                : `Nosso servidor de e-mails não respondeu. Nada foi enviado para ${maskedEmail} — pode tentar de novo agora.`}
+                : `Nosso servidor de e-mails não respondeu. Nada foi enviado para ${emailAtual} — pode tentar de novo agora.`}
             </Text>
           </View>
         </View>
@@ -330,8 +455,10 @@ export default function VerifyEmailScreen() {
         <View style={s.mailbox}>
           <View style={s.mailIcon}><Icon name="mail" size={18} color={Colors.violet3} /></View>
           <View style={{ flex: 1 }}>
-            <Text style={s.mailTo}>{maskedEmail}</Text>
-            <Text style={s.mailAt}>{resent ? "Reenviado agora há pouco" : "Enviado agora há pouco"}</Text>
+            <Text style={s.mailTo}>{emailAtual}</Text>
+            <Text style={s.mailAt} testID="verify-enviado">
+              {corrigido ? "E-mail corrigido. Reenviamos o link agora há pouco." : resent ? "Reenviado agora há pouco" : "Enviado agora há pouco"}
+            </Text>
           </View>
         </View>
 
@@ -383,7 +510,7 @@ export default function VerifyEmailScreen() {
       </View>
 
       <Text style={s.title}>
-        {status === "done" ? "Tudo certo" : status === "sendfail" ? "Ops — o e-mail não saiu" : status === "expired" ? "Link expirado" : "Confirme seu e-mail"}
+        {editing ? "Corrigir meu e-mail" : status === "done" ? "Tudo certo" : status === "sendfail" ? "Ops — o e-mail não saiu" : status === "expired" ? "Link expirado" : "Confirme seu e-mail"}
       </Text>
 
       {body}
@@ -447,7 +574,18 @@ const s = StyleSheet.create({
 
   resendBtn: { paddingVertical: 12, marginTop: 6, minHeight: 42, alignItems: "center", justifyContent: "center" },
   resendText: { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
+  fixBtn: { marginTop: 2, paddingVertical: 10, minHeight: 40, alignItems: "center", justifyContent: "center" },
+  fixText: { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
   logoutBtn: { marginTop: 4, paddingVertical: 10, minHeight: 40 },
+  field: { width: "100%", marginBottom: 14 },
+  fieldLabel: { fontSize: 12, color: Colors.ink3, fontWeight: "600", marginBottom: 6 },
+  emailInput: {
+    width: "100%", height: 48, paddingHorizontal: 14, fontSize: 15, color: Colors.ink,
+    backgroundColor: Colors.bg4, borderWidth: 1.5, borderColor: Colors.border, borderRadius: 12,
+  },
+  emailInputErr: { borderColor: Colors.red },
+  fieldErr: { fontSize: 12, color: Colors.red, marginTop: 8, lineHeight: 17 },
+  fieldHelp: { fontSize: 12, color: Colors.violet3, fontWeight: "600", marginTop: 6 },
   logoutText: { fontSize: 12, color: Colors.ink3 },
   footerTag: { fontSize: 11, color: Colors.ink3, textAlign: "center", opacity: 0.5, marginTop: 14 },
 });
