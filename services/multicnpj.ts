@@ -81,6 +81,11 @@ export type BillingPreview = {
   // M2-02: status do sync com Asaas
   asaas_synced?: boolean;
   asaas_reason?: string | null;
+  // 25/10/2026: acessos extras (R$ 19 cada) e assinatura com condição
+  // especial (valor combinado/fora da tabela: não mudou sozinha).
+  // Ausentes em backend anterior.
+  seats_price?: number;
+  ajuste_pela_equipe?: boolean;
 };
 
 export type CreateCompanyResponse = {
@@ -144,13 +149,24 @@ export type BillingPreviewResponse = {
     total_companies: number;
     extra_cnpjs: number;
     extras_value: number;
+    // O que a loja paga hoje (valor combinado ou o da Asaas; sem assinatura,
+    // o da tabela). 25/10/2026.
     total_monthly: number;
+    // Campos de 25/10/2026, ausentes em backend anterior.
+    cycle?: "monthly" | "annual";
+    seats_value?: number;
+    table_monthly?: number | null;
+    fonte?: "tabela" | "asaas" | "valor_combinado";
   };
   if_add_one: {
     total_companies: number;
     extra_cnpjs: number;
     new_total_monthly: number;
     delta_monthly: number;
+    // 25/10/2026: valor de cada empresa extra (Negócio: 50% do plano no ciclo)
+    // e se a próxima empresa depende de ajuste da equipe.
+    extra_unit_price?: number | null;
+    ajuste_pela_equipe?: boolean;
   };
   can_add: boolean;
   block_reason: string | null;

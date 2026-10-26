@@ -8,8 +8,12 @@
 // - loading: criando empresa
 // - success: mostra billing_preview + opção "Trocar agora"
 // - plan-locked: usuário no Essencial → CTA upgrade
+//
+// 25/10/2026: no Negócio o 2º CNPJ custa 50% do plano. O formulário busca
+// GET /me/companies/billing-preview ao abrir e mostra o valor com a empresa
+// nova antes de confirmar (textos em utils/valorNovaEmpresa).
 // ============================================================
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -27,9 +31,13 @@ import { cnpjApi, ApiError } from "@/services/api";
 import {
   maskCnpj,
   planLabel,
+  formatBRL,
+  userCompaniesApi,
+  type BillingPreviewResponse,
   type CreateCompanyResponse,
   type PlanLimitError,
 } from "@/services/multicnpj";
+import { avisoDoPlano, resumoDaNovaEmpresa } from "@/utils/valorNovaEmpresa";
 
 type Props = {
   visible: boolean;
@@ -53,6 +61,20 @@ export function AddCompanyModal({ visible, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [planError, setPlanError] = useState<PlanLimitError | null>(null);
   const [created, setCreated] = useState<CreateCompanyResponse | null>(null);
+  const [preview, setPreview] = useState<BillingPreviewResponse | null>(null);
+
+  // Valor com a empresa nova, antes de confirmar. O plano vem do preview
+  // (banco), não do JWT. Falha = sem bloco de valor; o cadastro segue.
+  useEffect(() => {
+    if (!visible) return;
+    let vivo = true;
+    userCompaniesApi
+      .billingPreview()
+      .then((r) => { if (vivo) setPreview(r || null); })
+      .catch(() => { if (vivo) setPreview(null); });
+    return () => { vivo = false; };
+  }, [visible]);
+  const resumoValor = resumoDaNovaEmpresa(preview);
 
   function reset() {
     setStep("form");
@@ -456,10 +478,19 @@ export function AddCompanyModal({ visible, onClose }: Props) {
                   }}
                 >
                   <Icon name="info" size={14} color="#7c3aed" />
-                  <Text style={{ fontSize: 11, color: C.ink, flex: 1, lineHeight: 16 }}>
-                    Sua assinatura cobre 2 CNPJs no Negócio/Expansão. CNPJs adicionais têm
-                    valor extra que vamos te mostrar antes de confirmar.
-                  </Text>
+                  <View style={{ flex: 1, gap: 6 }}>
+                    <Text testID="aviso-plano-multicnpj" style={{ fontSize: 11, color: C.ink, lineHeight: 16 }}>
+                      {avisoDoPlano(preview?.current?.plan)}
+                    </Text>
+                    {resumoValor && (
+                      <Text
+                        testID="valor-nova-empresa"
+                        style={{ fontSize: 12, color: C.ink, fontWeight: "600", lineHeight: 17 }}
+                      >
+                        {resumoValor}
+                      </Text>
+                    )}
+                  </View>
                 </View>
               </View>
             )}
@@ -531,8 +562,24 @@ export function AddCompanyModal({ visible, onClose }: Props) {
                       C={C}
                     />
                     <Row
-                      label={"CNPJs extras × R$ " + created.billing_preview.extra_unit_price}
-                      value={"R$ " + created.billing_preview.extras_price.toFixed(2)}
+                      label="Plano"
+                      value={formatBRL(created.billing_preview.plan_base_price)}
+                      C={C}
+                    />
+                    {(created.billing_preview.seats_price || 0) > 0 && (
+                      <Row
+                        label="Acessos extras"
+                        value={formatBRL(created.billing_preview.seats_price)}
+                        C={C}
+                      />
+                    )}
+                    <Row
+                      label={
+                        created.billing_preview.extra_cnpjs +
+                        " CNPJ" + (created.billing_preview.extra_cnpjs !== 1 ? "s" : "") +
+                        " extra × " + formatBRL(created.billing_preview.extra_unit_price)
+                      }
+                      value={formatBRL(created.billing_preview.extras_price)}
                       C={C}
                     />
                     <View style={{ height: 1, backgroundColor: C.border, marginVertical: 6 }} />
@@ -543,9 +590,11 @@ export function AddCompanyModal({ visible, onClose }: Props) {
                         alignItems: "center",
                       }}
                     >
-                      <Text style={{ fontSize: 13, fontWeight: "700", color: C.ink }}>Total/mês</Text>
-                      <Text style={{ fontSize: 18, fontWeight: "800", color: "#7c3aed" }}>
-                        R$ {created.billing_preview.new_total_monthly.toFixed(2)}
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: C.ink }}>
+                        {created.billing_preview.ajuste_pela_equipe ? "Total/mês pela tabela" : "Total/mês"}
+                      </Text>
+                      <Text testID="total-nova-mensalidade" style={{ fontSize: 18, fontWeight: "800", color: "#7c3aed" }}>
+                        {formatBRL(created.billing_preview.new_total_monthly)}
                       </Text>
                     </View>
                   </View>
@@ -655,7 +704,7 @@ export function AddCompanyModal({ visible, onClose }: Props) {
                   <Text
                     style={{ fontSize: 13, color: "#7c3aed", fontWeight: "700", marginTop: 2 }}
                   >
-                    R$ {planError.suggested_plan_price.toFixed(2)}/mês
+                    {formatBRL(planError.suggested_plan_price)}/mês
                   </Text>
                   <Text style={{ fontSize: 11, color: C.ink3, marginTop: 8, lineHeight: 16 }}>
                     {planError.upgrade_savings_note}
