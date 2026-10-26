@@ -77,6 +77,11 @@ function ensureRefresh(): Promise<RefreshResult> {
   return refreshPromise;
 }
 
+// tq-113 (26/10/2026): token novo sob demanda (mesmo singleton do 401).
+// Usado ao confirmar o e-mail: a empresa reaberta pelo backend só entra na
+// sessão com um JWT novo (utils/empresaAoConfirmar).
+export function renovarToken(): Promise<RefreshResult> { return ensureRefresh(); }
+
 export async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   var { method = "GET", body, retry = 2, timeout = 10000 } = opts;
   var explicitToken = opts.token !== undefined;
