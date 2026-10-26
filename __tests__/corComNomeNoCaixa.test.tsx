@@ -22,6 +22,8 @@ const VARIANTES = [
   { id: "vBrP", sku_suffix: "BRANCO-P", stock_qty: "2", barcode: null, is_active: true, attributes: [cor("#FFFFFF"), tam("P")] },
   { id: "vMil", sku_suffix: "MILITAR-M", stock_qty: "1", barcode: null, is_active: true, attributes: [cor("#4B5320"), tam("M")] },
   { id: "vHex", sku_suffix: "3B82F6-G", stock_qty: "1", barcode: null, is_active: true, attributes: [cor("#3B82F6"), tam("G")] },
+  // tq-55b: gravada depois da 414, com o nome inteiro (10+ letras).
+  { id: "vPet", sku_suffix: "AZUL PETRÓ-GG", color_name: "Azul petróleo", stock_qty: "1", barcode: null, is_active: true, attributes: [cor("#1F5F6B"), tam("GG")] },
 ];
 const mockVariants = jest.fn((..._a: any[]) => Promise.resolve({ variants: VARIANTES }));
 jest.mock("@/services/api", () => ({
@@ -87,8 +89,31 @@ describe("VariantPickerModal (Caixa)", () => {
     expect(linha("vBrP").textContent).toContain("Branco · P");
     expect(linha("vMil").textContent).toContain("Militar · M");
     expect(linha("vHex").textContent).toContain(hexToName("#3B82F6") + " · G");
+    expect(linha("vPet").textContent).toContain("Azul petróleo · GG");
 
     await act(() => { linha("vOffP").click(); });
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "vOffP", label: "Off · P" }));
+  });
+});
+
+// tq-55b (26/10/2026): o backend grava o nome da cor (migration 414) e o GET
+// /products/:pid/variants devolve color_name. Ordem: color_name → sufixo →
+// paleta.
+describe("nomeDaCorDaVariante com color_name (tq-55b)", () => {
+  it("color_name vem primeiro, com a grafia da lojista e sem o corte de 10", () => {
+    expect(nomeDaCorDaVariante({ sku_suffix: "AZUL PETRÓ-M", color_name: "Azul petróleo", attributes: [cor("#1F5F6B"), tam("M")] }, "#1F5F6B"))
+      .toBe("Azul petróleo");
+    expect(nomeDaCorDaVariante({ sku_suffix: "OFF-P", color_name: "  off white ", attributes: [cor("#F4F1EA"), tam("P")] }, "#F4F1EA"))
+      .toBe("off white");
+    // mesmo quando é igual ao nome da paleta: é o nome que a lojista deu
+    expect(nomeDaCorDaVariante({ sku_suffix: "BRANCO-P", color_name: "Branco", attributes: [cor("#FFFFFF"), tam("P")] }, "#FFFFFF"))
+      .toBe("Branco");
+  });
+
+  it("sem color_name (variante antiga), vazio ou hex: segue o sufixo e depois a paleta, como antes", () => {
+    expect(nomeDaCorDaVariante({ sku_suffix: "UVA-G", color_name: null, attributes: [cor("#5B2A4E"), tam("G")] }, "#5B2A4E")).toBe("Uva");
+    expect(nomeDaCorDaVariante({ sku_suffix: "UVA-G", color_name: "   ", attributes: [cor("#5B2A4E"), tam("G")] }, "#5B2A4E")).toBe("Uva");
+    expect(nomeDaCorDaVariante({ sku_suffix: "UVA-G", color_name: "#5B2A4E", attributes: [cor("#5B2A4E"), tam("G")] }, "#5B2A4E")).toBe("Uva");
+    expect(nomeDaCorDaVariante({ sku_suffix: "AZUL PETRÓ-M", attributes: [cor("#1F5F6B"), tam("M")] }, "#1F5F6B")).toBe(hexToName("#1F5F6B"));
   });
 });

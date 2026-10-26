@@ -22,10 +22,18 @@
 //
 // O nome inteiro, com a grafia da lojista e sem o corte de 10, depende de o
 // backend gravar o nome da cor (ver o PR do tq-55).
+//
+// tq-55b (26/10/2026): o backend grava (migration 414,
+// product_variants.color_name) e o GET /products/:pid/variants devolve.
+// Ordem do nome mostrado: color_name como a lojista digitou → o lido do
+// sku_suffix (regras acima) → a paleta (hexToName). Variante gravada antes
+// da 414 vem com color_name null e segue como antes.
 // ============================================================
 import { hexToName } from "@/utils/colorNames";
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
+/** color_name que é só o hex (com ou sem #) não é nome: cai no sufixo/paleta. */
+const HEX_SEM_CERQUILHA = /^#?[0-9a-fA-F]{6}$/;
 /** Maiúsculas (com acento), espaço, hífen e apóstrofo: o que o backend grava. */
 const NOME_EM_MAIUSCULAS = /^[A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ' -]*$/;
 
@@ -69,9 +77,15 @@ export function nomeProprioDaCor(
  * `attrs` é o attributes da variante ([{attribute, value}]).
  */
 export function nomeDaCorDaVariante(
-  v: { sku_suffix?: string | null; attributes?: Array<{ attribute?: string; name?: string; value?: string }> | null },
+  v: {
+    sku_suffix?: string | null;
+    color_name?: string | null;
+    attributes?: Array<{ attribute?: string; name?: string; value?: string }> | null;
+  },
   hex: string,
 ): string {
+  const gravado = typeof v.color_name === "string" ? v.color_name.trim() : "";
+  if (gravado && !HEX_SEM_CERQUILHA.test(gravado)) return gravado;
   let tamanho: string | null = null;
   for (const a of v.attributes || []) {
     const nome = String((a && (a.attribute || a.name)) || "").trim().toLowerCase();
