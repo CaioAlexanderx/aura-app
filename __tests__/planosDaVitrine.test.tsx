@@ -31,6 +31,8 @@ jest.mock("@/stores/auth", () => ({
         company: { id: "loja-1", name: "Loja Exemplo", plan: mockPlanoAtual },
         token: "t",
         isDemo: false,
+        // tq-43: a tela revalida /auth/me no mount.
+        refreshMe: () => Promise.resolve(),
       };
       return typeof selector === "function" ? selector(state) : state;
     },
