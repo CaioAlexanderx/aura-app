@@ -39,6 +39,14 @@
 // como os layouts de dental/food) e o navegador raiz
 // (useRootNavigationState().key, como app/(tabs)/financeiro.tsx) antes de
 // decidir ou navegar; até lá, o carregando de sempre.
+//
+// 26/10/2026 (card tq-38): a espera acima não tinha teto. No QA do #1110,
+// Ctrl+Shift+R em /checkin deixou a aba no carregando por 1 a 2 min antes
+// do Painel. Se a sessão, o navegador raiz ou a consulta do check-in não
+// chegarem em TETO_DO_CARREGANDO_MS, o carregando ganha "Ir para o Painel"
+// (nunca beco sem saída). Com o navegador raiz montado, router.replace; sem
+// ele (o caso do INC-2026-10-19-02), navegação inteira do navegador para a
+// raiz, que o AuthGuard leva ao Painel ou ao login.
 // ============================================================
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator, useWindowDimensions, Linking, Platform } from "react-native";
@@ -65,6 +73,13 @@ import { ROTA_PAINEL, destinoDoCheckin } from "@/utils/checkinDestino";
 
 /** Quanto o Continuar espera o /auth/me e a contagem de produtos. */
 export const LIMITE_DA_ESPERA_MS = 4000;
+
+/** tq-38: depois disto no carregando, aparece "Ir para o Painel". */
+export const TETO_DO_CARREGANDO_MS = 10000;
+export const TEXTOS_TETO = {
+  aviso: "Está demorando mais que o normal para abrir.",
+  botao: "Ir para o Painel",
+} as const;
 
 function comLimite<T>(p: Promise<T>, ms: number): Promise<T | undefined> {
   return Promise.race([p, new Promise<undefined>((r) => setTimeout(() => r(undefined), ms))]);
@@ -259,10 +274,40 @@ export function CheckinEntrada() {
   const duasColunas = width >= LARGURA_DUAS_COLUNAS;
   const mostrandoTela = pronta && !isLoading && !!data && data.habilitado && !data.respondido && !data.pulou;
 
+  // tq-38: teto da espera. Conta enquanto o carregando estiver na tela.
+  const [estourou, setEstourou] = useState(false);
+  useEffect(() => {
+    if (mostrandoTela) { setEstourou(false); return; }
+    const t = setTimeout(() => setEstourou(true), TETO_DO_CARREGANDO_MS);
+    return () => clearTimeout(t);
+  }, [mostrandoTela]);
+
+  function irParaOPainelAgora() {
+    if (navState?.key != null) { seguirParaOPainel(); return; }
+    // Navegador raiz não montou: router.replace lançaria. Recarrega na raiz.
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      saindo.current = true;
+      try { window.location.assign("/"); } catch {}
+    }
+  }
+
   if (!mostrandoTela) {
     return (
       <View style={[s.centro, { backgroundColor: C.bg }]} testID="checkin-carregando">
         <ActivityIndicator color={C.violet3} />
+        {estourou && (
+          <View style={s.teto} testID="checkin-teto">
+            <Text style={[s.nota, { color: C.ink3 }]}>{TEXTOS_TETO.aviso}</Text>
+            <Pressable
+              onPress={irParaOPainelAgora}
+              accessibilityRole="button"
+              style={[s.botao, { backgroundColor: C.violet }]}
+              testID="checkin-teto-painel"
+            >
+              <Text style={s.botaoTxt}>{TEXTOS_TETO.botao}</Text>
+            </Pressable>
+          </View>
+        )}
       </View>
     );
   }
@@ -397,7 +442,8 @@ export function CheckinEntrada() {
 }
 
 const s = StyleSheet.create({
-  centro: { flex: 1, alignItems: "center", justifyContent: "center" },
+  centro: { flex: 1, alignItems: "center", justifyContent: "center", padding: 16 },
+  teto: { marginTop: 18, gap: 10, alignItems: "stretch", width: "100%", maxWidth: 320 },
   conteudo: { flexGrow: 1, alignItems: "center", justifyContent: "center", padding: 16, paddingVertical: 28 },
   cartao: { width: "100%", maxWidth: 760, borderWidth: 1, borderRadius: 28, padding: 22, gap: 18 },
   marcaLinha: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
