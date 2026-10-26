@@ -27,6 +27,11 @@
 // que o link foi reenviado. O e-mail aparece inteiro (era mascarado): é da
 // própria pessoa, logada, e é vendo ele inteiro que se nota o erro.
 // O botão de sair passa a se chamar só "Sair".
+//
+// 26/10/2026 (tq-113): quem não confirmou em 7 dias teve a empresa
+// desativada pelo backend; a confirmação reabre. Como o login foi feito
+// sem empresa, ao confirmar a tela renova o token e relê o /me antes de
+// liberar a entrada (utils/empresaAoConfirmar). Conta comum: nada muda.
 // ============================================================
 import { useState, useEffect, useRef } from "react";
 import {
@@ -36,7 +41,8 @@ import {
 import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import { useAuthStore } from "@/stores/auth";
-import { authApi, ApiError } from "@/services/api";
+import { authApi, ApiError, renovarToken } from "@/services/api";
+import { recarregarEmpresaAoConfirmar } from "@/utils/empresaAoConfirmar";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { consumeVerifyLinkError, type VerifyLinkError } from "@/utils/verifyLinkStatus";
@@ -86,6 +92,7 @@ export default function VerifyEmailScreen() {
   const pollAttempt = useRef(0);
   const pollFails = useRef(0);
   const doneApplied = useRef(false);
+  const recargaDaEmpresa = useRef<Promise<boolean> | null>(null);
   const otpRefs = useRef<Array<TextInput | null>>([]);
   const checkScale = useRef(new Animated.Value(0)).current;
 
@@ -151,12 +158,15 @@ export default function VerifyEmailScreen() {
     doneApplied.current = true;
     if (pollTimer.current) { clearTimeout(pollTimer.current); pollTimer.current = null; }
     setStatus("done");
+    // tq-113: em paralelo com a celebração; applyVerified espera.
+    recargaDaEmpresa.current = recarregarEmpresaAoConfirmar({ getState: useAuthStore.getState, renovarToken });
     Animated.spring(checkScale, { toValue: 1, friction: 5, tension: 90, useNativeDriver: true }).start();
     // Deixa a celebração respirar antes do AuthGuard redirecionar.
     setTimeout(applyVerified, 1600);
   }
 
-  function applyVerified() {
+  async function applyVerified() {
+    if (recargaDaEmpresa.current) await recargaDaEmpresa.current;
     const cur = useAuthStore.getState().user;
     if (cur && !(cur as any).email_verified) {
       useAuthStore.setState({ user: { ...cur, email_verified: true } as any });
