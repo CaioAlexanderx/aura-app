@@ -36,6 +36,7 @@ import { ConsolidatedBreakdownCard } from "@/components/screens/dashboard/Consol
 import { CalendarioComercialCard } from "@/components/screens/dashboard/CalendarioComercialCard";
 import { PrimeirosPassosCard } from "@/components/onboarding/PrimeirosPassosCard";
 import { ConfigurarJuntosCard } from "@/components/onboarding/ConfigurarJuntosCard";
+import { WhatsappNaoConfirmadoFaixa } from "@/components/onboarding/WhatsappNaoConfirmadoFaixa";
 
 var FALLBACK_ROUTES: { mod: string; route: string }[] = [
   { mod: "pdv", route: "/pdv" },
@@ -277,6 +278,9 @@ export default function DashboardScreen() {
 
         {!consolidatedView && <ProfileBanner />}
         {!isDemo && !consolidatedView && <VerifyEmailBanner />}
+        {/* tq-115 (26/10/2026): WhatsApp do cadastro ainda não confirmado.
+            Uma leitura do /auth/me ao abrir; só o dono; some quando confirma. */}
+        {!isDemo && !consolidatedView && <WhatsappNaoConfirmadoFaixa />}
         {/* PWA (22/09/2026): convite para instalar a Aura no celular. Só em
             tela de celular, só na web, só enquanto não estiver instalada e
             não tiver sido dispensado; o componente decide sozinho. */}

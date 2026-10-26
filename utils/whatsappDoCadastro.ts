@@ -80,3 +80,28 @@ export type EstadoDoZap = "aguardando" | "a_confirmar";
 export function textoDoEstado(e: EstadoDoZap): string {
   return e === "aguardando" ? "aguardando sua mensagem" : "a confirmar";
 }
+
+// ── Faixa do Painel (tq-115, 26/10/2026) ─────────────────────
+// O /auth/me devolve `whatsapp_handshake` ao dono (backend tq-115, no
+// formato do register). O Painel lê uma vez ao abrir e mostra a faixa
+// discreta enquanto o número não está confirmado. No banco o estado é
+// 'aguardando' ou 'confirmado'; o "a confirmar" do verso do cadastro é o
+// mesmo 'aguardando' (a pessoa só não abriu o WhatsApp naquela hora).
+
+export type HandshakeDoMe = { codigo: string | null; estado: "aguardando" | "confirmado" };
+
+/** O handshake do /auth/me, ou null (membro, sem handshake, formato estranho). */
+export function handshakeDoMe(resposta: unknown): HandshakeDoMe | null {
+  const h = resposta && typeof resposta === "object" ? (resposta as any).whatsapp_handshake : null;
+  if (!h || typeof h !== "object") return null;
+  if (h.estado !== "aguardando" && h.estado !== "confirmado") return null;
+  return { codigo: codigoDoCadastro(resposta), estado: h.estado };
+}
+
+export const TEXTOS_ZAP_NO_PAINEL = {
+  titulo: "Seu WhatsApp ainda não foi confirmado",
+  sub: (codigo: string | null) => (codigo
+    ? "Mande o código " + codigo + " para a Aura e a gente confirma por lá."
+    : "Mande um oi para a Aura e a gente confirma por lá."),
+  botao: "Abrir WhatsApp",
+};
