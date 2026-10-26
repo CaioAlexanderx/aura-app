@@ -30,6 +30,9 @@
 // (`activeVariants`, is_active !== false). Sem variante ativa o seletor
 // segue como era: "Nenhuma variante ativa encontrada" e nada para escolher
 // (a linha do pai so existia dentro da lista de variantes).
+// 26/10/2026 (tq-55): a cor aparece com o nome que a lojista deu ("Passion",
+// "Off", "Militar"), lido do sku_suffix, quando ele existe e difere do nome
+// da paleta. Sem nome proprio, segue o hexToName. Ver utils/nomeDaCor.ts.
 // ============================================================
 import { useState, useEffect, useRef } from "react";
 import { View, Text, Modal, Pressable, ScrollView, StyleSheet, ActivityIndicator, Platform } from "react-native";
@@ -37,6 +40,7 @@ import { Colors } from "@/constants/colors";
 import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { hexToName } from "@/utils/colorNames";
+import { nomeDaCorDaVariante } from "@/utils/nomeDaCor";
 import { criarDetector, OCIOSO_MS, CONFIRMA_OCIOSO_MS } from "@/utils/leituraRapida";
 import { ordenarVariantes, type ChaveDeVariante } from "@/utils/ordemDeTamanhos";
 
@@ -73,7 +77,7 @@ function getLabel(v: any, parentColor?: string, parentSize?: string): string {
   var parts: string[] = [];
   for (var a of attrs) {
     if (!a.value) continue;
-    if (/^#[0-9a-fA-F]{6}$/.test(a.value)) parts.push(hexToName(a.value));
+    if (/^#[0-9a-fA-F]{6}$/.test(a.value)) parts.push(nomeDaCorDaVariante(v, a.value));
     else parts.push(a.value);
   }
   // Fallback: if variant has no attributes, show parent info + suffix
@@ -99,7 +103,7 @@ function chaveDaVariante(v: any): ChaveDeVariante {
     if (!val) continue;
     var nome = String((a && (a.attribute || a.name)) || "").trim().toLowerCase();
     var ehHex = /^#[0-9a-fA-F]{6}$/.test(val);
-    if (cor === null && (nome === "cor" || ehHex)) cor = ehHex ? hexToName(val) : val;
+    if (cor === null && (nome === "cor" || ehHex)) cor = ehHex ? nomeDaCorDaVariante(v, val) : val;
     else if (tamanho === null && nome === "tamanho") tamanho = val;
   }
   if (attrs.length === 0 && v.sku_suffix) tamanho = String(v.sku_suffix);
