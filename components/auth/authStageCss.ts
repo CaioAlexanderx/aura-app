@@ -26,7 +26,8 @@ export const AUTH_STAGE_CSS_ID = "aura-auth-stage-css";
 // tq-68: o brilho dos espaços vazios do crachá ([data-as-ph]) também é loop;
 // a entrada da etapa, do carimbo e da tinta do crachá são de uma vez só.
 const EM_LOOP = [".as-blob", ".as-card::before", ".as-orb", ".as-orb .as-arc", ".as-orb .as-core", "[data-as-ph]"];
-const TODOS = [...EM_LOOP, ".as-card", "[data-as-step]", "[data-as-stamp]", "[data-as-ink]"];
+// tq-69: o verso do cadastro ([data-as-verso]) entra virando, uma vez só.
+const TODOS = [...EM_LOOP, ".as-card", "[data-as-step]", "[data-as-stamp]", "[data-as-ink]", "[data-as-verso]"];
 const sob = (raiz: string, lista: string[]) => lista.map((s) => raiz + " " + s).join(", ");
 
 export const AUTH_STAGE_CSS = `
@@ -147,6 +148,14 @@ export const AUTH_STAGE_CSS = `
 [data-as-stamp][data-as-stamp] { background-image: linear-gradient(135deg, rgba(196,181,253,0.14), rgba(124,58,237,0.06)); animation: as-stampIn 520ms cubic-bezier(0.16, 1, 0.3, 1) both; }
 @keyframes as-stampIn { 0% { opacity: 0; transform: scale(1.18) rotate(-3deg); filter: blur(3px); } 60% { opacity: 1; transform: scale(0.985) rotate(0.5deg); filter: blur(0); } 100% { transform: none; } }
 [data-as-btn][aria-disabled="true"] { box-shadow: none; cursor: not-allowed; }
+
+/* etapa 3 e verso do cadastro (tq-69): a luz abre no "Pronto" e o verso
+   entra virando, como o cartão do mockup */
+.aura-stage[data-step="done"] .as-b1 { transform: translate(18%, 22%) scale(1.3); }
+.aura-stage[data-step="done"] .as-b2 { transform: translate(-28%, -34%) scale(1.3); }
+[data-as-verso][data-as-verso] { animation: as-verso 900ms cubic-bezier(0.16, 1, 0.3, 1) both; transform-origin: 50% 50%; backface-visibility: hidden; }
+@keyframes as-verso { from { opacity: 0; transform: perspective(1600px) rotateY(-90deg); } 40% { opacity: 1; } to { opacity: 1; transform: perspective(1600px) rotateY(0deg); } }
+[data-as-qr][data-as-qr] { box-shadow: inset 0 1px 0 rgba(255,255,255,0.06); }
 
 /* orçamento de desempenho */
 ${sob(".as-static", TODOS)} { animation: none !important; }

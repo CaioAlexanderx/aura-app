@@ -80,7 +80,8 @@ type AuthState = {
   switching: boolean;
   hydrate: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
-  register: (body: RegisterBody) => Promise<void>;
+  /** Devolve a resposta do cadastro (tq-69: whatsapp_handshake com o código AURA-XXXX). */
+  register: (body: RegisterBody) => Promise<any>;
   // 14/10/2026: o logout apaga a venda do Caixa guardada neste navegador
   // (tem cliente e CPF). Sessão que EXPIROU (401) mantém: a chave é por
   // usuário, e quem volta a entrar retoma o carrinho em vez de perdê-lo.
@@ -372,6 +373,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
         });
 
         backgroundLoadCompanies();
+        return res;
       } catch (err) {
         set({ isLoading: false });
         throw err;

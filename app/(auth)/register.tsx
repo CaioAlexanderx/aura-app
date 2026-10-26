@@ -4,9 +4,7 @@
 // Layout e textos do #scr-register do mockup aprovado "Porta de entrada v4":
 // crachá que se forma (nome, loja, contato), trilho "1 / 3", etapa 1 (dados
 // e Termos) e etapa 2 (negócio: CNPJ com carimbo da Receita, CPF, dojô e
-// código). A etapa 3 é PROVISÓRIA: o tq-69 redesenha (WhatsApp com
-// handshake). Aqui ela é o que o cadastro já fazia para o telefone de
-// contato e para criar a conta, com o mesmo envio e as mesmas validações.
+// código). A etapa 3 é a do tq-69 (abaixo).
 //
 // O que NÃO mudou (regras de antes, só vestidas no palco):
 //   - consulta do CNPJ (POST /onboarding/cnpj-lookup) com o regime da
@@ -19,7 +17,8 @@
 //     existe; varejo com CNPJ de empresa existente entra nela como sempre
 //     (o backend decide, o corpo é o mesmo);
 //   - convite (invite_token / invite_email): só a etapa 1, aceite depois;
-//   - destino depois do cadastro: /(tabs), o AuthGuard decide o resto.
+//   - destino depois do cadastro: o verso e a verify-email (tq-69); o
+//     AuthGuard decide o resto.
 //
 // Novo:
 //   - e-mail pela URL (?email=, como no login) e código pela URL (?ref= do
@@ -29,6 +28,26 @@
 //     sem aviso (utils/leadDoCadastro). O lead_token vai no register;
 //   - origem do cadastro (utm, referrer de fora, ref) lida da URL uma vez
 //     (utils/origemDoCadastro), no lead da etapa 1 e no register.
+//
+// tq-69 (26/10/2026), porta de entrada 4/6 — etapa 3 e verso:
+//   - um campo só, "Seu WhatsApp" (o telefone da empresa saiu da tela; o da
+//     Receita vai como company_phone quando a consulta trouxe);
+//   - "Confirmar no WhatsApp e criar conta" cria a conta e abre o wa.me da
+//     Aura (constants/suporteAura) com "Oi, Aura! Meu código é AURA-XXXX"
+//     (código do backend, whatsapp_handshake, backend#886). A aba abre no
+//     clique e recebe o link quando o código chega (depois do await o
+//     navegador bloquearia o pop-up);
+//   - SEM confirmação falsa e sem temporizador: o número fica "aguardando
+//     sua mensagem" até a equipe (ou o webhook) confirmar. "Sem WhatsApp
+//     agora", visível desde o início, cria a conta com o número "a confirmar";
+//   - o cartão vira para o verso: "Pronto, <nome>", crachá com o estado do
+//     número e o plano, "Confirmar meu e-mail" (a verificação continua
+//     obrigatória; utils/versoDoCadastro segura o AuthGuard até o clique) e,
+//     no computador (> 900 px), o QR com o mesmo link (components/QrCode,
+//     qrcode-svg, já no bundle);
+//   - dojô não tem código (o backend não cria handshake): botão "Criar conta
+//     do dojo", sem abrir o WhatsApp;
+//   - reduzir movimento: o verso entra sem virar (authStageCss).
 // ============================================================
 import { useState, useRef, useEffect, type ReactNode } from "react";
 import {
@@ -45,12 +64,17 @@ import { Fonts } from "@/constants/fonts";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { AuthStage, OrbSvg, type OrbMood } from "@/components/auth/AuthStage";
-import { maskCnpj, maskCpf, maskPhone } from "@/utils/masks";
+import { maskCnpj, maskCpf } from "@/utils/masks";
 import { cpfDoCadastroValido, documentoDoCadastro, conflitoDoCadastro } from "@/utils/documentoEmpresa";
 import { regGreeting } from "@/utils/saudacao";
 import { lerOrigemDoNavegador, codigoDoLink } from "@/utils/origemDoCadastro";
 import { gravarLeadSemTravar, linhaDoCarimbo } from "@/utils/leadDoCadastro";
-import { lerDestino } from "@/utils/destinoDepoisDoLogin";
+import { QrCode } from "@/components/QrCode";
+import {
+  soDigitos, mascaraDoZap, conferirZap, dicaDoZap, linkDoHandshake, codigoDoCadastro,
+  textoDoEstado, type EstadoDoZap,
+} from "@/utils/whatsappDoCadastro";
+import { segurarNoVerso, soltarVerso } from "@/utils/versoDoCadastro";
 import { MSG_CNPJ_INDISPONIVEL } from "@/utils/mensagensDoApp";
 
 const API_BASE = "https://aura-backend-production-f805.up.railway.app/api/v1";
@@ -166,6 +190,33 @@ function Trilho({ n }: { n: number }) {
   );
 }
 
+// Nome do plano no crachá do verso (o mesmo do aviso do teste).
+const ROTULO_DO_PLANO: Record<string, string> = { essencial: "Essencial", negocio: "Negócio", expansao: "Expansão" };
+
+type Conta = { codigo: string | null; link: string; estado: EstadoDoZap; plano: string; whatsAberto: boolean };
+
+/** Crachá do verso: a conta pronta, com o estado do número e o plano. */
+function CrachaPronto({ nome, loja, zap, estado, plano }: { nome: string; loja: string; zap: string; estado: EstadoDoZap; plano: string }) {
+  return (
+    <View style={[s.idcard, s.idcardBig]} {...ds({ asIdcard: "1" })} testID="cadastro-cracha-pronto">
+      <View style={s.idRowBig}>
+        <View style={[s.mono, s.monoBig]} {...ds({ asMono: "lit" })}>
+          {isWeb ? <OrbSvg /> : <View style={s.monoDot} />}
+        </View>
+        <View style={s.who}>
+          <Text style={[s.nm, s.nmBig, serif]}>{nome}</Text>
+          {!!loja && <Text style={[s.st, s.stBig]}>{loja}</Text>}
+          <Text style={[s.zp, s.zpBig, mono]} testID="cadastro-cracha-zap">{mascaraDoZap(zap) + " · " + textoDoEstado(estado)}</Text>
+        </View>
+      </View>
+      <View style={s.tag}>
+        <Text style={[s.tagText, mono]}>Conta Aura</Text>
+        <Text style={[s.tagText, mono]} testID="cadastro-cracha-plano">{plano}</Text>
+      </View>
+    </View>
+  );
+}
+
 export default function RegisterScreen() {
   const params = useLocalSearchParams<{ invite_token?: string; invite_email?: string; email?: string; ref?: string; codigo?: string }>();
   const invite_token = primeiro(params.invite_token);
@@ -173,6 +224,7 @@ export default function RegisterScreen() {
   const isInviteFlow = !!invite_token;
   const { width } = useWindowDimensions();
   const narrow = width <= 480;
+  const wide = width > 900;
 
   // Lidos UMA vez: o Expo Router pode limpar a query depois.
   const [codigoDaUrl] = useState(() => codigoDoLink(params.ref) || codigoDoLink(params.codigo));
@@ -189,7 +241,11 @@ export default function RegisterScreen() {
   const [emailBad, setEmailBad] = useState(false);
   const [showPass, setShowPass] = useState(false);
   const [cnpj, setCnpj] = useState("");
-  const [telefoneContato, setTelefoneContato] = useState("");
+  // tq-69: WhatsApp da pessoa (só dígitos) e o telefone da loja da Receita.
+  const [zap, setZap] = useState("");
+  const [zapErro, setZapErro] = useState<string | null>(null);
+  const [telefoneLoja, setTelefoneLoja] = useState("");
+  const [conta, setConta] = useState<Conta | null>(null);
   const [empresa, setEmpresa] = useState("");
   const [codigo, setCodigo] = useState(codigoDaUrl);
   const [codeOpen, setCodeOpen] = useState(!!codigoDaUrl);
@@ -223,6 +279,9 @@ export default function RegisterScreen() {
   const { register, isLoading } = useAuthStore();
 
   const isDojo = branch === "dojo";
+
+  // Saiu da tela com o verso aberto: o AuthGuard volta ao normal.
+  useEffect(() => () => soltarVerso(), []);
   const orb = (mood: OrbMood) => setOrbSignal((p) => ({ mood, n: (p?.n || 0) + 1 }));
 
   // ── lead parcial (nunca trava) ──────────────────────────────
@@ -350,6 +409,7 @@ export default function RegisterScreen() {
       setCnpjFound(companyName);
       setCarimbo(linhaDoCarimbo(data));
       saveCnpjData(data);
+      setTelefoneLoja(typeof data.phone === "string" ? soDigitos(data.phone) : "");
       const regime = data.is_mei || data.suggested_regime === "mei" ? "mei" : data.suggested_regime || "simples";
       saveDetectedRegime(regime);
       setRegimeDetectado(data.suggested_regime || (data.is_mei ? "mei" : null));
@@ -365,14 +425,14 @@ export default function RegisterScreen() {
     if (next === semCnpj) return;
     if (cnpjFound && empresa === cnpjFound) setEmpresa("");
     setCnpj(""); setCnpjFound(null); setCnpjError(null); setRegimeDetectado(null); setCnpjLoading(false); setCarimbo("");
-    setCpf("");
+    setCpf(""); setTelefoneLoja("");
     semCnpjRef.current = next;
     setSemCnpj(next);
   }
 
   function handleCnpjChange(v: string) {
     const masked = maskCnpj(v);
-    setCnpj(masked); setCnpjFound(null); setCnpjError(null); setRegimeDetectado(null); setCarimbo("");
+    setCnpj(masked); setCnpjFound(null); setCnpjError(null); setRegimeDetectado(null); setCarimbo(""); setTelefoneLoja("");
     if (masked.replace(/\D/g, "").length === 14) lookupCNPJ(masked);
   }
 
@@ -396,7 +456,8 @@ export default function RegisterScreen() {
   const cpfValid = cpfDoCadastroValido(cpf);
   const cpfCompleto = cpf.replace(/\D/g, "").length === 11;
   const documentoValid = semCnpj ? cpfValid : cnpjValid;
-  const contatoValid = telefoneContato.replace(/\D/g, "").length >= 10;
+  const zapConf = conferirZap(zap);
+  const contatoValid = zapConf.ok;
   // F11: dojo so fecha o cadastro com a federacao escolhida (o backend
   // devolve 400 FEDERATION_REQUIRED sem ela). Varejo: a regra de antes.
   const federationValid = !isDojo || !!federationId;
@@ -438,25 +499,42 @@ export default function RegisterScreen() {
     } catch (err) { toast.error(err instanceof ApiError ? err.message : "Erro ao criar conta"); }
   }
 
-  async function handleRegister() {
+  // tq-69: abrirWhats = "Confirmar no WhatsApp e criar conta" (varejo);
+  // false = "Sem WhatsApp agora" ou dojô (sem código, nada a mandar).
+  async function handleRegister(abrirWhats: boolean) {
     if (semCnpj) {
       if (!cpfValid) { toast.error("CPF inválido. Confira os números."); return; }
     } else if (!cnpjValid) { toast.error("CNPJ obrigatório. Insira um CNPJ válido."); return; }
-    if (!contatoValid) { toast.error("Informe seu telefone para contato."); return; }
+    if (!contatoValid) {
+      orb("hmm");
+      try { firstRef.current[2]?.focus(); } catch {}
+      return;
+    }
     if (semCnpj ? !empresa.trim() : !empresa) { toast.error(isDojo ? "Preencha o nome do dojo" : semCnpj ? "Preencha o nome da sua loja" : "Preencha o nome da empresa"); return; }
     if (isDojo && !federationId) { toast.error("Escolha a federação do seu dojo"); return; }
     const L = leadRef.current;
     const leadToken = L.token && L.email === emailNorm ? L.token : null;
-    // tq-91: lido ANTES do cadastro — o AuthGuard consome o destino assim
-    // que o token chega.
-    const destino = lerDestino();
+    const comWhats = abrirWhats && !isDojo;
+    // A aba do WhatsApp abre AGORA, no clique: depois do await o navegador
+    // trataria como pop-up e bloquearia. O link entra quando o código chega.
+    let janela: any = null;
+    if (comWhats && isWeb && typeof window !== "undefined" && typeof window.open === "function") {
+      try { janela = window.open("", "_blank"); if (janela) janela.opener = null; } catch { janela = null; }
+    }
+    // O register grava o token e o AuthGuard mandaria para a verificação de
+    // e-mail na hora: o verso precisa ficar (utils/versoDoCadastro).
+    segurarNoVerso();
     try {
-      await register({
+      const res = await register({
         name: nome.trim(),
         email: emailNorm,
         password: senha,
         company_name: empresa.trim(),
-        phone: telefoneContato.replace(/\D/g, ""),
+        // O WhatsApp é o contato da pessoa (users.phone); o phone segue
+        // junto para quem ainda lê o campo de sempre.
+        phone: zap,
+        whatsapp: zap,
+        ...(telefoneLoja ? { company_phone: telefoneLoja } : {}),
         // Com CNPJ: cnpj + regime da Receita, como sempre. Sem CNPJ: só o CPF.
         ...documentoDoCadastro({ semCnpj, cnpj, cpf, regimeDetectado }),
         access_code: codigo.trim() || undefined,
@@ -471,14 +549,34 @@ export default function RegisterScreen() {
         ...(leadToken ? { lead_token: leadToken } : {}),
         ...(origem ? { origem } : {}),
       });
-      toast.success(isDojo ? "Conta do dojo criada!" : "Conta criada com sucesso!");
-      // Self-service: todo cadastro nasce com trial (7d Negocio sem codigo, ou o plano do codigo).
-      // Vai pro Painel (como o convite acima): ele leva ao /checkin e o
-      // AuthGuard desvia verificacao de e-mail e verticais.
-      // tq-91: se veio de um link aberto sem sessão, volta para ele.
-      setTimeout(() => router.replace((destino || "/(tabs)/") as any), 300);
+      const cod = isDojo ? null : codigoDoCadastro(res);
+      const link = linkDoHandshake(cod);
+      let aberto = false;
+      if (comWhats) {
+        if (janela) {
+          try { janela.location.href = link; aberto = true; } catch { aberto = false; }
+        } else if (!isWeb) {
+          Linking.openURL(link).catch(() => {});
+          aberto = true;
+        }
+      }
+      // Plano do verso: o da conta criada; "7 dias grátis" só no teste de
+      // sempre (com código de acesso o teste é o do código).
+      const plan = res && res.company ? res.company.plan : null;
+      const plano = (ROTULO_DO_PLANO[plan || "negocio"] || "Negócio") + (codigo.trim() ? "" : " · 7 dias grátis");
+      setConta({ codigo: cod, link, estado: comWhats ? "aguardando" : "a_confirmar", plano, whatsAberto: aberto });
+      setStep(3);
+      orb("happy");
     } catch (err) {
+      soltarVerso();
+      if (janela) { try { janela.close(); } catch {} }
       orb("hmm");
+      // WhatsApp recusado pelo backend (DDD, fixo): fica na etapa 3 com o aviso.
+      if (err instanceof ApiError && err.status === 400 && (err.data as any)?.field === "whatsapp") {
+        setZapErro(err.message);
+        setStep(2);
+        return;
+      }
       // 409 tem dois significados; o `code` do backend desempata.
       if (err instanceof ApiError && err.status === 409) {
         // F11: CNPJ ja cadastrado — o dojo NUNCA entra numa empresa existente.
@@ -496,6 +594,30 @@ export default function RegisterScreen() {
       }
       toast.error(err instanceof ApiError ? err.message : "Erro ao criar conta");
     }
+  }
+
+  function semWhatsAgora() {
+    if (!contatoValid) { orb("hmm"); try { firstRef.current[2]?.focus(); } catch {} return; }
+    handleRegister(false);
+  }
+
+  // Verso: abre o wa.me de novo (pop-up bloqueado, ou "Sem WhatsApp agora"
+  // que mudou de ideia). Continua "aguardando": a confirmação é da equipe.
+  function abrirWhatsDoVerso() {
+    if (!conta) return;
+    if (isWeb && typeof window !== "undefined" && typeof window.open === "function") {
+      try { window.open(conta.link, "_blank", "noopener,noreferrer"); } catch {}
+    } else {
+      Linking.openURL(conta.link).catch(() => {});
+    }
+    setConta({ ...conta, estado: "aguardando", whatsAberto: true });
+  }
+
+  // A verificação de e-mail continua obrigatória: o botão solta o AuthGuard
+  // e leva à verify-email (quem já pode entrar, ele leva ao destino).
+  function confirmarEmail() {
+    soltarVerso();
+    router.replace("/(auth)/verify-email" as any);
   }
 
   const sayStyle = [s.say, narrow && s.sayNarrow, serif];
@@ -843,55 +965,125 @@ export default function RegisterScreen() {
     </View>
   );
 
-  // ── ETAPA 3 (provisória: o tq-69 redesenha com o handshake) ──
+  // ── ETAPA 3 (tq-69): WhatsApp único ────────────────────────
+  const dica = zapErro ? { kind: "err" as const, texto: zapErro } : dicaDoZap(zapConf);
   const etapa3 = (
     <View key="s3" {...ds({ asStep: "3" })} testID="cadastro-etapa-3">
-      <Text style={[...sayStyle, s.sayAlone]} role="heading" aria-level={1}>
+      <Text style={sayStyle} role="heading" aria-level={1}>
         <Text style={serif}>Por onde a gente </Text><Text style={[s.em, serif]}>te chama</Text><Text style={serif}>?</Text>
       </Text>
+      <Text style={s.sub}>Seu WhatsApp, o que toca no seu bolso. É por aqui que o Caio fala com você nos primeiros dias. Sem robô, sem spam.</Text>
       <View style={s.field}>
-        <Text style={s.label}>Seu telefone para contato *</Text>
-        <View style={[s.inp, contatoValid && s.inpOk]} {...ds(contatoValid ? { asInp: "1", asOkk: "1" } : { asInp: "1" })}>
-          <Icon name="whatsapp" size={16} color={Stage.ink3} />
+        <Text style={s.label}>Seu WhatsApp</Text>
+        <View
+          style={[s.inp, zapConf.ok && !zapErro && s.inpOk, dica.kind === "err" && s.inpErr]}
+          {...ds(zapConf.ok && !zapErro ? { asInp: "1", asOkk: "1" } : { asInp: "1" })}
+        >
+          <Text style={[s.pre, mono]}>+55</Text>
           <TextInput
             ref={(r) => { firstRef.current[2] = r; }}
-            style={[s.input, noOutline]} value={telefoneContato}
-            onChangeText={(v: string) => setTelefoneContato(maskPhone(v))}
-            placeholder="(12) 99999-0000" placeholderTextColor={PH_COLOR}
-            keyboardType="phone-pad" maxLength={15} autoComplete="tel" accessibilityLabel="Seu telefone para contato"
-            onSubmitEditing={() => { if (step2Valid && !isLoading) handleRegister(); }}
-            testID="cadastro-telefone"
+            style={[s.input, noOutline]} value={mascaraDoZap(zap)}
+            onChangeText={(v: string) => {
+              const d = soDigitos(v).slice(0, 11);
+              setZap(d); setZapErro(null);
+              if (d.length >= 10 && d !== zap) orb(conferirZap(d).ok ? "happy" : "hmm");
+            }}
+            placeholder="(11) 9 1234-5678" placeholderTextColor={PH_COLOR}
+            keyboardType="phone-pad" maxLength={16} autoComplete="tel-national" accessibilityLabel="Seu WhatsApp"
+            onSubmitEditing={() => { if (step2Valid && !isLoading) handleRegister(!isDojo); }}
+            testID="cadastro-whatsapp"
           />
         </View>
-        <Hint>WhatsApp ou celular para a Aura entrar em contato.</Hint>
+        <Hint kind={dica.kind} testID="cadastro-whatsapp-dica">{dica.texto}</Hint>
       </View>
       <Pressable
-        style={[s.btn, (isLoading || !step2Valid) && s.btnOff]} {...ds({ asBtn: "1" })}
-        onPress={handleRegister} disabled={isLoading || !step2Valid}
+        style={[s.btn, s.btnRow, (isLoading || !step2Valid) && s.btnOff]} {...ds({ asBtn: "1" })}
+        onPress={() => handleRegister(!isDojo)} disabled={isLoading || !step2Valid}
         accessibilityRole="button" testID="cadastro-criar"
       >
-        {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={[s.btnText, narrow && s.btnTextNarrow]}>{isDojo ? "Criar conta do dojo" : "Criar conta"}</Text>}
+        {isLoading ? <ActivityIndicator color="#fff" /> : (
+          <>
+            {!isDojo && <Icon name="whatsapp" size={18} color="#fff" />}
+            <Text style={[s.btnText, narrow && s.btnTextNarrow]}>{isDojo ? "Criar conta do dojo" : "Confirmar no WhatsApp e criar conta"}</Text>
+          </>
+        )}
       </Pressable>
       <View style={s.links}>
-        <Pressable onPress={() => setStep(1)} style={s.inlineBtn} accessibilityRole="button" {...ds({ asLink: "1" })} testID="cadastro-voltar-2">
-          <Text style={s.lnkText}>← Voltar</Text>
-        </Pressable>
+        <View style={s.linksLeft}>
+          <Pressable onPress={() => setStep(1)} style={s.inlineBtn} accessibilityRole="button" {...ds({ asLink: "1" })} testID="cadastro-voltar-2">
+            <Text style={s.lnkText}>← Voltar</Text>
+          </Pressable>
+          {!isDojo && (
+            <>
+              <Text style={s.dot}>·</Text>
+              <Pressable
+                onPress={semWhatsAgora} disabled={isLoading} style={s.inlineBtn}
+                accessibilityRole="button" {...ds({ asLink: "1" })} testID="cadastro-sem-whatsapp"
+              >
+                <Text style={s.lnkText}>Sem WhatsApp agora</Text>
+              </Pressable>
+            </>
+          )}
+        </View>
         <View />
       </View>
     </View>
   );
 
-  const etapaAtual = isInviteFlow ? etapa1 : step === 0 ? etapa1 : step === 1 ? etapa2 : etapa3;
-  const zap = contatoValid ? maskPhone(telefoneContato) : "";
+  // ── VERSO (tq-69): a conta criada ───────────────────────────
+  const primeiroNome = nome.trim().split(/\s+/)[0] || "";
+  const verso = conta && (
+    <View key="verso" {...ds({ asVerso: "1" })} testID="cadastro-verso">
+      <Text style={s.versoT}>Conta criada</Text>
+      <Text style={[s.big, narrow && s.bigNarrow, serif]} role="heading" aria-level={1} testID="cadastro-pronto">
+        <Text style={serif}>Pronto, </Text><Text style={[s.em, serif]}>{primeiroNome}</Text><Text style={serif}>.</Text>
+      </Text>
+      <CrachaPronto nome={nome.trim()} loja={empresa.trim()} zap={zap} estado={conta.estado} plano={conta.plano} />
+      <Pressable
+        style={s.btn} {...ds({ asBtn: "1" })}
+        onPress={confirmarEmail} accessibilityRole="button" testID="cadastro-confirmar-email"
+      >
+        <Text style={[s.btnText, narrow && s.btnTextNarrow]}>Confirmar meu e-mail</Text>
+      </Pressable>
+      <Text style={s.foot} testID="cadastro-verso-email">
+        <Text>Mandamos um link para </Text><Text style={s.footB}>{emailNorm}</Text><Text>. É ele que libera o Painel.</Text>
+      </Text>
+      {!!conta.codigo && wide && (
+        <View style={s.qrRow} {...ds({ asQr: "1" })} testID="cadastro-qr">
+          <View style={s.qrBox} accessibilityLabel="QR code com o link do WhatsApp">
+            <QrCode value={conta.link} size={62} color="#0b0620" />
+          </View>
+          <Text style={s.qrTxt}>
+            <Text style={s.qrB}>No computador? </Text>
+            <Text>Aponte a câmera do celular e a mensagem já vai pronta, com o código </Text>
+            <Text style={[s.code, mono]}>{conta.codigo}</Text><Text>.</Text>
+          </Text>
+        </View>
+      )}
+      {!!conta.codigo && (
+        <View style={[s.links, s.linksCenter]}>
+          <Pressable onPress={abrirWhatsDoVerso} style={s.inlineBtn} accessibilityRole="link" {...ds({ asLink: "1" })} testID="cadastro-abrir-whatsapp">
+            <Text style={s.lnkText}>{conta.whatsAberto ? "Abrir o WhatsApp de novo" : "Mandar o código " + conta.codigo + " no WhatsApp"}</Text>
+          </Pressable>
+        </View>
+      )}
+    </View>
+  );
+
+  const noVerso = !isInviteFlow && step === 3 && !!conta;
+  const etapaAtual = isInviteFlow ? etapa1 : step === 0 ? etapa1 : step === 1 ? etapa2 : step === 2 ? etapa3 : verso;
+  const zapNoCracha = contatoValid ? mascaraDoZap(zap) : "";
 
   return (
-    <AuthStage cardTone="stage" orbSignal={orbSignal} step={isInviteFlow ? undefined : String(step + 1)} testID="cadastro-stage">
-      <View style={s.top}>
-        <Text style={s.brand}>Aura<Text style={s.brandDot}>.</Text></Text>
-        {!isInviteFlow && <Trilho n={step + 1} />}
-      </View>
-      {/* Convite não monta loja nem pede WhatsApp: sem crachá. */}
-      {!isInviteFlow && <Cracha nome={nome.trim()} loja={empresa.trim()} zap={zap} narrow={narrow} />}
+    <AuthStage cardTone="stage" orbSignal={orbSignal} step={isInviteFlow ? undefined : noVerso ? "done" : String(step + 1)} testID="cadastro-stage">
+      {!noVerso && (
+        <View style={s.top}>
+          <Text style={s.brand}>Aura<Text style={s.brandDot}>.</Text></Text>
+          {!isInviteFlow && <Trilho n={step + 1} />}
+        </View>
+      )}
+      {/* Convite não monta loja nem pede WhatsApp: sem crachá. No verso, o crachá é o grande. */}
+      {!isInviteFlow && !noVerso && <Cracha nome={nome.trim()} loja={empresa.trim()} zap={zapNoCracha} narrow={narrow} />}
       {etapaAtual}
     </AuthStage>
   );
@@ -927,7 +1119,23 @@ const s = StyleSheet.create({
   // fala
   say: { fontSize: 32, lineHeight: 34, letterSpacing: -0.4, color: Stage.ink, textAlign: "center", marginBottom: 6, fontWeight: "400" },
   sayNarrow: { fontSize: 27, lineHeight: 29 },
-  sayAlone: { marginBottom: 16 },
+  // verso (tq-69)
+  versoT: { fontFamily: sans, fontSize: 11, letterSpacing: 1.3, textTransform: "uppercase", color: Stage.violet4, fontWeight: "700", textAlign: "center", marginBottom: 6 },
+  big: { fontSize: 38, lineHeight: 40, letterSpacing: -0.5, color: Stage.ink, textAlign: "center", marginBottom: 14, fontWeight: "400" },
+  bigNarrow: { fontSize: 32, lineHeight: 34 },
+  idcardBig: { paddingVertical: 14, paddingHorizontal: 16 },
+  idRowBig: { flexDirection: "row", alignItems: "flex-start", gap: 14 },
+  monoBig: { width: 60, height: 60, borderRadius: 16 },
+  nmBig: { fontSize: 26, lineHeight: 28 },
+  stBig: { fontSize: 13 },
+  zpBig: { textAlign: "left", marginTop: 2 },
+  foot: { fontFamily: sans, fontSize: 11.5, lineHeight: 17, color: Stage.ink3, textAlign: "center", marginTop: 14 },
+  footB: { fontWeight: "700", color: Stage.ink2 },
+  qrRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 12, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 14, backgroundColor: "rgba(7,4,22,0.35)", borderWidth: 1, borderColor: "rgba(230,226,244,0.10)" },
+  qrBox: { width: 72, height: 72, padding: 5, borderRadius: 9, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  qrTxt: { fontFamily: sans, fontSize: 12, lineHeight: 17, color: Stage.ink2, flex: 1 },
+  qrB: { fontWeight: "700", color: Stage.ink },
+  code: { fontSize: 12, letterSpacing: 1, color: Stage.ink },
   em: { fontStyle: "italic", color: Stage.violet4 },
   sub: { fontFamily: sans, fontSize: 13.5, lineHeight: 20, color: Stage.ink2, textAlign: "center", marginBottom: 16 },
   inviteBanner: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: "rgba(196,181,253,0.06)", borderRadius: 14, padding: 10, marginBottom: 12, borderWidth: 1, borderColor: "rgba(230,226,244,0.10)" },
@@ -965,6 +1173,10 @@ const s = StyleSheet.create({
   btnOff: { opacity: 0.4 },
   btnText: { fontFamily: sans, color: "#fff", fontSize: 15, fontWeight: "700" },
   btnTextNarrow: { fontSize: 14 },
+  btnRow: { flexDirection: "row", gap: 9 },
+  linksLeft: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  linksCenter: { justifyContent: "center" },
+  dot: { fontFamily: sans, fontSize: 12.5, color: Stage.ink3 },
   links: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 10, gap: 8 },
   muted: { fontFamily: sans, fontSize: 12.5, color: Stage.ink3 },
   lnk: { fontFamily: sans, fontSize: 12.5, fontWeight: "600", color: Stage.violet3, paddingVertical: 6, minHeight: 36, textDecorationLine: "none", ...(isWeb ? ({ display: "inline-flex", alignItems: "center" } as any) : {}) },

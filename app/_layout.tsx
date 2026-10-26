@@ -24,6 +24,7 @@ import { ehVitrinePublica } from "@/components/studio/storefront/rotasDaVitrine"
 import { mostrarCarregandoSessao } from "@/utils/carregandoSessao";
 import { semAssinatura, destinoSemAssinatura, caixaPausado, estadoDaLoja } from "@/utils/muroDeAssinatura";
 import { guardarDestino, consumirDestino, limparDestino } from "@/utils/destinoDepoisDoLogin";
+import { versoDoCadastroAberto } from "@/utils/versoDoCadastro";
 import { useEmpresaPeloLink } from "@/hooks/useEmpresaPeloLink";
 
 const queryClient = new QueryClient();
@@ -142,6 +143,10 @@ function AuthGuard() {
 
     const inAuth     = segments[0] === "(auth)";
     const onVerify   = segments[1] === "verify-email";
+    // tq-69 (26/10/2026): o cadastro acabou de criar a conta e mostra o verso
+    // do cartão (código do WhatsApp, QR, "Confirmar meu e-mail"). O botão do
+    // verso leva à verificação; até lá, nada de redirecionar.
+    if (token && inAuth && (segments as string[])[1] === "register" && versoDoCadastroAberto()) return;
     const inTabs     = segments[0] === "(tabs)";
     const onCheckout = segments[1] === "checkout";
     const emailVerified = !!(user as any)?.email_verified;
