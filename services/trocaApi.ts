@@ -19,6 +19,13 @@
 // pra inferFiscalStrategy não tentar cancel_reissue/devolucao_55 em
 // venda sem NFC-e original (causaria 409 no backend).
 //
+// 27/10/2026 (troca de pedido da loja online): as duas buscas também
+// devolvem pedidos elegíveis da loja online (origin_kind="digital_order",
+// order_number, digital_status, payment_status). createV2 aceita
+// original_digital_order_ids[] e itens devolvidos com
+// original_digital_order_id + original_digital_order_item_id.
+// Lógica do wizard em components/screens/pdv/troca/pedidoOnline.ts.
+//
 // Doc: Aura/AUDITORIA_TROCA_PDV_2026-05-17.docx
 // ============================================================
 import { request } from "./api";
@@ -63,10 +70,11 @@ export type TrocaResult = {
 };
 
 // ─── v2 types (multi-venda + splits) ────────────────────
-export type TrocaReturnedItemV2 = TrocaItem & {
-  original_sale_id: string;
-  original_sale_item_id: string;
-};
+export type TrocaReturnedItemV2 = TrocaItem & (
+  | { original_sale_id: string; original_sale_item_id: string }
+  // 27/10/2026: item de pedido da loja online (backend: migration 415).
+  | { original_digital_order_id: string; original_digital_order_item_id: string }
+);
 
 export type TrocaPaymentSplit = {
   method: "dinheiro" | "pix" | "cartao_credito" | "cartao_debito";
@@ -92,6 +100,8 @@ export type TrocaCustomerAddress = {
 
 export type TrocaBodyV2 = {
   original_sale_ids: string[];
+  // 27/10/2026: pedidos da loja online de origem (pode vir sem venda do Caixa).
+  original_digital_order_ids?: string[];
   returned_items: TrocaReturnedItemV2[];
   new_items: TrocaItem[];
   payment_splits?: TrocaPaymentSplit[];
@@ -142,6 +152,9 @@ export type SaleForTrocaItem = {
   unit_price: number;
   // 17/05/2026 (v2): backend agora devolve sale_items.id pra dupla-devolução check
   original_sale_item_id?: string;
+  // 27/10/2026: item de pedido da loja online (digital_order_items.id, texto).
+  original_digital_order_item_id?: string;
+  total_price?: number;
 };
 
 export type SaleForTroca = {
@@ -164,6 +177,13 @@ export type SaleForTroca = {
   has_nfce?: boolean;
   item_count: number;
   items: SaleForTrocaItem[];
+  // 27/10/2026: undefined/"sale" = venda do Caixa; "digital_order" = pedido
+  // da loja online (id = digital_orders.id). Os campos abaixo só vêm no pedido.
+  origin_kind?: "sale" | "digital_order";
+  order_number?: string;
+  digital_status?: string;
+  payment_status?: string;
+  customer_phone?: string | null;
 };
 
 export type SearchForTrocaParams = {

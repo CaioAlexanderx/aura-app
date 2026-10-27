@@ -25,6 +25,12 @@
 // 13/10/2026 — vale-troca: o QR do cupom (AURA-TROCA:<venda>) bipado neste
 //   campo não vira busca: vai para onVale, que carrega a venda direto e
 //   avança o wizard. O campo é limpo na hora (o bipe seguinte cai limpo).
+//
+// 27/10/2026 — pedido da loja online: a busca devolve também os pedidos
+//   elegíveis da loja (origin_kind="digital_order"). O card mostra
+//   "Loja online · pedido #00012" e o status do pedido/pagamento no lugar do
+//   "Pago", e avisa "Possível pedido repetido" quando a loja gerou cópias da
+//   mesma compra (pedidoOnline.ts) — a lojista escolhe pelo número.
 // ============================================================
 import { useState, useEffect, useMemo, useRef } from "react";
 import {
@@ -37,6 +43,7 @@ import { trocaApi, type SaleForTroca, type SearchForTrocaParams } from "@/servic
 import type { SelectedSaleRow } from "./types";
 import { fmtBRL } from "./types";
 import { lerCodigoDoVale } from "@/utils/valeTroca";
+import { isPedidoOnline, rotuloDoPedido, statusDoPedido, pedidosRepetidos } from "./pedidoOnline";
 
 type Props = {
   companyId: string;
@@ -166,6 +173,7 @@ export function Step1Search({ companyId, selectedSales, onChangeSelected, onVale
   }
 
   const isSelected = (id: string) => selectedSales.some((s) => s.id === id);
+  const repetidos = useMemo(() => pedidosRepetidos(results), [results]);
 
   function toggleSelect(row: SaleForTroca) {
     if (isSelected(row.id)) {
@@ -188,7 +196,7 @@ export function Step1Search({ companyId, selectedSales, onChangeSelected, onVale
       if (onlyDigits.length === 11) return "Detectei: CPF";
       if (onlyDigits.length === 14) return "Detectei: CNPJ";
     }
-    return "Buscando por: nome / vendedor / produto";
+    return "Buscando por: nome / telefone / vendedor / produto / nº do pedido";
   }, [query, detected]);
 
   const resultsTitle =
@@ -218,7 +226,7 @@ export function Step1Search({ companyId, selectedSales, onChangeSelected, onVale
           onChangeText={setQuery}
           onSubmitEditing={handleSubmit}
           returnKeyType="search"
-          placeholder="Bipe o código de barras ou digite CPF, nome ou nº da NFC-e…"
+          placeholder="Bipe o código de barras ou digite CPF, nome, telefone ou nº do pedido…"
           placeholderTextColor={Colors.ink3}
           style={s.searchInput}
           autoFocus
@@ -242,6 +250,7 @@ export function Step1Search({ companyId, selectedSales, onChangeSelected, onVale
           { label: "CPF" },
           { label: "Nome" },
           { label: "Nº NFC-e" },
+          { label: "Pedido da loja online" },
           { label: "QR do vale-troca" },
         ].map((h) => (
           <View key={h.label} style={s.hint}>
@@ -298,6 +307,8 @@ export function Step1Search({ companyId, selectedSales, onChangeSelected, onVale
       <View style={{ gap: 10 }}>
         {results.map((row) => {
           const sel = isSelected(row.id);
+          const online = isPedidoOnline(row);
+          const repetido = online && repetidos.has(row.id);
           return (
             <Pressable
               key={row.id}
@@ -310,7 +321,14 @@ export function Step1Search({ companyId, selectedSales, onChangeSelected, onVale
 
               <View style={{ flex: 1, gap: 6 }}>
                 <View style={s.metaRow}>
-                  <Text style={s.saleId}>#{row.id.slice(0, 8).toUpperCase()}</Text>
+                  {online ? (
+                    <View style={s.onlineBadge} testID={"pedido-online-" + row.order_number}>
+                      <Icon name="globe" size={10} color="#67e8f9" />
+                      <Text style={s.onlineTxt}>{rotuloDoPedido(row)}</Text>
+                    </View>
+                  ) : (
+                    <Text style={s.saleId}>#{row.id.slice(0, 8).toUpperCase()}</Text>
+                  )}
                   <View style={[s.filialBadge, row.is_cross_filial ? s.filialOther : s.filialCurrent]}>
                     <Icon name="store" size={10} color={row.is_cross_filial ? "#fb923c" : "#a78bfa"} />
                     <Text style={[s.filialTxt, { color: row.is_cross_filial ? "#fdba74" : "#c4b5fd" }]}>
@@ -318,13 +336,23 @@ export function Step1Search({ companyId, selectedSales, onChangeSelected, onVale
                     </Text>
                   </View>
                   <View style={s.paidBadge}>
-                    <Text style={s.paidTxt}>Pago</Text>
+                    <Text style={s.paidTxt}>{online ? statusDoPedido(row) : "Pago"}</Text>
                   </View>
                 </View>
+
+                {repetido && (
+                  <View style={s.repetidoBox} testID={"pedido-repetido-" + row.order_number}>
+                    <Icon name="alert-circle" size={12} color="#fbbf24" />
+                    <Text style={s.repetidoTxt}>
+                      Possível pedido repetido: a loja online registrou mais de um pedido igual no mesmo minuto. Confira o número com a cliente.
+                    </Text>
+                  </View>
+                )}
 
                 <Text style={s.custName}>
                   {row.customer_name || "Sem cadastro"}
                   {row.cpf_cnpj && <Text style={s.custDoc}>  ·  {row.cpf_cnpj}</Text>}
+                  {online && !row.cpf_cnpj && !!row.customer_phone && <Text style={s.custDoc}>  ·  {row.customer_phone}</Text>}
                 </Text>
 
                 <View style={s.itemsRow}>
@@ -470,6 +498,19 @@ const s = StyleSheet.create({
     paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5,
   },
   paidTxt: { color: "#6ee7b7", fontSize: 10.5, fontWeight: "700" },
+  onlineBadge: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: "rgba(6,182,212,0.14)",
+    paddingHorizontal: 7, paddingVertical: 3, borderRadius: 5,
+  },
+  onlineTxt: { color: "#67e8f9", fontSize: 11, fontWeight: "700" },
+  repetidoBox: {
+    flexDirection: "row", alignItems: "flex-start", gap: 6,
+    backgroundColor: "rgba(245,158,11,0.10)",
+    borderWidth: 1, borderColor: "rgba(245,158,11,0.3)",
+    borderRadius: 7, paddingHorizontal: 8, paddingVertical: 5,
+  },
+  repetidoTxt: { color: "#fcd34d", fontSize: 11.5, flex: 1 },
   custName: { color: Colors.ink, fontSize: 14.5, fontWeight: "600" },
   custDoc: { color: Colors.ink3, fontWeight: "400", fontSize: 12.5 },
   itemsRow: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
