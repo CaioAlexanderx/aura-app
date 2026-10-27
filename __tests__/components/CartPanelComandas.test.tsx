@@ -2,6 +2,10 @@
 // Caixa — carrinho (CartPanel): o botão "Comandas (N)" (17/10/2026, tc-02).
 // No lugar do "Fechar comanda": abre o painel das abertas e mostra quantas
 // estão abertas; sem nenhuma, sem contagem. Funciona com o carrinho vazio.
+// 27/10/2026: loja Matcon com a chave de Comandas ligada — o "Orçamento"
+// fica no rodapé (é a porta da esteira de Orçamentos) e o "Comandas (N)"
+// vira o atalho ao lado de "Adicionar à comanda". Sem Matcon, o rodapé de
+// sempre: "Comandas" no lugar do "Orçamento".
 // Mocks do padrão do repo (expo-font, FpktLogo); testID + deep:false.
 // ============================================================
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
@@ -11,8 +15,9 @@ jest.mock("@/components/karate/FpktLogo", () => ({ FpktLogo: () => null, default
 import React from "react";
 import renderer, { act } from "react-test-renderer";
 
+let mockPdvSettings: any = {};
 jest.mock("@/hooks/usePdvSettings", () => ({
-  usePdvSettings: () => ({ settings: {}, isLoading: false, error: null, invalidate: jest.fn() }),
+  usePdvSettings: () => ({ settings: mockPdvSettings, isLoading: false, error: null, invalidate: jest.fn() }),
 }));
 jest.mock("@/stores/auth", () => ({
   useAuthStore: () => ({ company: { id: "empresa-1" }, token: "t", isDemo: false }),
@@ -37,7 +42,7 @@ function porTestID(tree: renderer.ReactTestRenderer, id: string) {
 
 const METODOS = [{ key: "pix", label: "PIX", icon: "dollar" }];
 
-function montar(comanda: any) {
+function montar(comanda: any, extra: Record<string, any> = {}) {
   let tree!: renderer.ReactTestRenderer;
   act(() => {
     tree = renderer.create(
@@ -46,6 +51,7 @@ function montar(comanda: any) {
         payMethods={METODOS as any} activePay="pix"
         onPay={jest.fn()} onInc={jest.fn()} onDec={jest.fn()} onRemove={jest.fn()} onClear={jest.fn()} onFinalize={jest.fn()}
         comanda={comanda}
+        {...extra}
       />
     );
   });
@@ -75,6 +81,55 @@ describe("botão Comandas no rodapé", () => {
   test("loja sem comanda: o botão não aparece", () => {
     const tree = montar(null);
     expect(porTestID(tree, "cta-comandas")).toHaveLength(0);
+    expect(porTestID(tree, "cta-comandas-atalho")).toHaveLength(0);
+    tree.unmount();
+  });
+
+  test("sem Matcon: Comandas toma o lugar do Orçamento (rodapé de 09/10)", () => {
+    const tree = montar({ onAdd: jest.fn(), onList: jest.fn(), openCount: 2, charging: null }, { onSaveQuote: jest.fn(), showOrcamento: true, onGenerateQuote: jest.fn() });
+    expect(porTestID(tree, "cta-comandas")).toHaveLength(1);
+    expect(porTestID(tree, "cta-salvar-orcamento")).toHaveLength(0);
+    expect(porTestID(tree, "cta-comandas-atalho")).toHaveLength(0);
+    tree.unmount();
+  });
+});
+
+describe("loja Matcon com comanda ligada (27/10/2026)", () => {
+  beforeEach(() => { mockPdvSettings = { matcon_enabled: true }; });
+  afterEach(() => { mockPdvSettings = {}; });
+
+  test("o Orçamento fica no rodapé e Comandas (N) vira o atalho que abre o painel", () => {
+    const onList = jest.fn();
+    const onSaveQuote = jest.fn();
+    const tree = montar({ onAdd: jest.fn(), onList, openCount: 6, charging: null }, { onSaveQuote, showOrcamento: true, onGenerateQuote: jest.fn() });
+
+    // Rodapé: Orçamento (modo salvar do M1), nunca o botão das comandas.
+    expect(porTestID(tree, "cta-salvar-orcamento")).toHaveLength(1);
+    expect(porTestID(tree, "cta-comandas")).toHaveLength(0);
+
+    // Atalho ao lado de "Adicionar à comanda", com a contagem das abertas.
+    expect(porTestID(tree, "cta-adicionar-comanda")).toHaveLength(1);
+    const atalho = porTestID(tree, "cta-comandas-atalho")[0];
+    expect(flattenText(atalho.children)).toBe("Comandas (6)");
+    act(() => { atalho.props.onPress(); });
+    expect(onList).toHaveBeenCalledTimes(1);
+    tree.unmount();
+  });
+
+  test("sem nenhuma aberta o atalho não mostra contagem", () => {
+    const tree = montar({ onAdd: jest.fn(), onList: jest.fn(), openCount: 0, charging: null }, { onSaveQuote: jest.fn() });
+    expect(flattenText(porTestID(tree, "cta-comandas-atalho")[0].children)).toBe("Comandas");
+    tree.unmount();
+  });
+
+  test("cobrando uma comanda: 'Adicionar' some, o atalho das abertas fica", () => {
+    const tree = montar(
+      { onAdd: jest.fn(), onList: jest.fn(), openCount: 1, charging: { number: 12, name: "João", feePct: 10, onCancel: jest.fn() } },
+      { onSaveQuote: jest.fn() }
+    );
+    expect(porTestID(tree, "cta-adicionar-comanda")).toHaveLength(0);
+    expect(porTestID(tree, "cta-comandas-atalho")).toHaveLength(1);
+    expect(porTestID(tree, "cta-salvar-orcamento")).toHaveLength(1);
     tree.unmount();
   });
 });

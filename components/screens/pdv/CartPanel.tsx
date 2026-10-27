@@ -189,6 +189,9 @@ type Props = {
   /** 09/10/2026 (Comandas). Com ele: "Adicionar à comanda" ao lado de
    *  "Dividir pagamento" e "Comandas (N)" no lugar de "Orçamento" (17/10,
    *  tc-02: era "Fechar comanda"; agora abre o painel das abertas).
+   *  27/10/2026: numa loja com o Matcon ligado o "Orçamento" NÃO sai do
+   *  rodapé (é a porta da esteira de Orçamentos) — o "Comandas (N)" desce
+   *  para o atalho ao lado de "Adicionar à comanda". Ver comandasNoRodape.
    *  `charging` = este carrinho é o consumo de uma comanda sendo cobrada.
    *  null/ausente (chave desligada) = rodapé de sempre. */
   comanda?: {
@@ -270,6 +273,14 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
   // readMatconSettings) e daqui pra baixo nada do Matcon existe.
   const { settings: pdvSettings } = usePdvSettings();
   const matcon = useMemo(() => readMatconSettings(pdvSettings), [pdvSettings]);
+  // 27/10/2026 — Comandas × Matcon. Com as duas chaves ligadas, o botão
+  // "Comandas" tomava o lugar do "Orçamento" no rodapé e a esteira de
+  // Orçamentos (M1) ficava sem entrada no Caixa. Regra: com Matcon, o
+  // "Orçamento" fica no rodapé e o "Comandas (N)" vira o atalho da linha
+  // de "Adicionar à comanda" (abre o mesmo painel). Sem Matcon, o rodapé
+  // das comandas continua o de 09/10: "Comandas" no lugar do "Orçamento".
+  const comandasNoRodape = !!comanda && !matcon.matcon_enabled;
+  const comandasNoAtalho = !!comanda && matcon.matcon_enabled;
   const showCpfInput = onCpfNaNotaChange !== undefined;
   const splitAvailable = onToggleSplit !== undefined; // fica off quando o pai não wireou
   const splitOn = !!splitMode && splitAvailable;
@@ -509,7 +520,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           {/* 09/10/2026 (Comandas): "Adicionar à comanda" mora ao lado. Some
               enquanto o carrinho já é uma comanda sendo cobrada — lançar de
               novo dobraria o consumo. */}
-          {(splitAvailable || (comanda && !comanda.charging)) && (
+          {(splitAvailable || (comanda && !comanda.charging) || comandasNoAtalho) && (
             <View style={s.linksRow}>
               {splitAvailable && (
                 <Pressable onPress={onToggleSplit} style={s.splitToggle}>
@@ -528,6 +539,25 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
                 >
                   <Icon name="clipboard" size={13} color={Colors.violet3} />
                   <Text style={s.splitToggleTxt}>Adicionar à comanda</Text>
+                </Pressable>
+              )}
+              {/* 27/10/2026: loja Matcon — o "Comandas (N)" mora aqui, porque o
+                  rodapé é do "Orçamento". Fica mesmo cobrando uma comanda
+                  (o painel das abertas continua útil); só "Adicionar" some. */}
+              {comandasNoAtalho && comanda && (
+                <Pressable
+                  testID="cta-comandas-atalho"
+                  onPress={comanda.onList}
+                  disabled={!!isProcessing}
+                  style={[s.splitToggle, isProcessing && { opacity: 0.5 }]}
+                  accessibilityLabel={comanda.openCount ? "Comandas, " + comanda.openCount + " abertas" : "Comandas"}
+                >
+                  <Icon name="list" size={13} color={Colors.violet3} />
+                  <Text style={s.splitToggleTxt}>
+                    {comanda.openCount && comanda.openCount > 0
+                      ? "Comandas (" + (comanda.openCount > 99 ? "99+" : comanda.openCount) + ")"
+                      : "Comandas"}
+                  </Text>
                 </Pressable>
               )}
             </View>
@@ -788,7 +818,9 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           // ocupa o lugar do "Orçamento". Funciona com o carrinho vazio —
           // é por ele que o consumo chega. 17/10 (tc-02): "Comandas (N)"
           // abre o painel das abertas; sem nenhuma aberta, sem contagem.
-          const quoteBtn = comanda ? (
+          // 27/10: só SEM Matcon (comandasNoRodape) — com Matcon o
+          // "Orçamento" fica e as comandas vão para o atalho lá em cima.
+          const quoteBtn = comandasNoRodape && comanda ? (
             <Pressable
               testID="cta-comandas"
               onPress={comanda.onList}
