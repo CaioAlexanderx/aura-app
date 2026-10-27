@@ -27,6 +27,11 @@
 //   - lot_code/lot_id (quando a venda trouxer) aparecem como "no lote
 //     X" e viajam no ReturnEntry pro payload da troca.
 //   - Item não fracionado ou toggle off: idêntico a hoje (stepper).
+//
+// 27/10/2026 — pedido da loja online: o id do item é o
+// original_digital_order_item_id (digital_order_items.id) e o cabeçalho do
+// grupo diz "Pedido #00012 da loja online". O resto (quantidades, devolver
+// tudo) é o mesmo da venda.
 // ============================================================
 import { useState, useMemo } from "react";
 import { View, Text, Pressable, StyleSheet, TextInput } from "react-native";
@@ -38,6 +43,7 @@ import { isFractionalUnit, parseQtyInput, fmtQty } from "@/utils/matconUnits";
 import { restockDeDevolucao, creditoDaDevolucao, fraseCaixaFechada, fraseCaixaAberta } from "./devolucaoUtil";
 import type { SelectedSaleRow, ReturnEntry } from "./types";
 import { fmtBRL } from "./types";
+import { isPedidoOnline } from "./pedidoOnline";
 
 type Props = {
   selectedSales: SelectedSaleRow[];
@@ -64,6 +70,9 @@ function resolveItemId(
   item: SelectedSaleRow["items"][number],
   idx: number
 ): string {
+  // 27/10/2026: item de pedido da loja online — digital_order_items.id.
+  const doPedido = (item as any).original_digital_order_item_id;
+  if (isPedidoOnline(sale) && doPedido != null && String(doPedido).length > 0) return String(doPedido);
   const real = (item as any).original_sale_item_id as string | undefined;
   if (real && typeof real === "string" && real.length > 0) return real;
   return `synth-${sale.id}-${item.product_id || "null"}-${idx}`;
@@ -291,7 +300,9 @@ export function Step2Returns({
                       size={14} color={Colors.ink3}
                     />
                     <Text style={s.groupTitle}>
-                      Compra de {dateStr} · {timeStr}
+                      {isPedidoOnline(sale)
+                        ? `Pedido #${sale.order_number || "?"} da loja online · ${dateStr} · ${timeStr}`
+                        : `Compra de ${dateStr} · ${timeStr}`}
                     </Text>
                     {sale.is_cross_filial && (
                       <View style={s.badgeFilial}>

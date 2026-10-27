@@ -64,6 +64,14 @@
 //     avisa, não bloqueia. Venda inexistente/de fora do grupo: aviso claro e
 //     o Step 1 segue disponível para a busca de sempre.
 //   - O resto do fluxo (passos, payload, fiscal) não muda.
+//
+// 27/10/2026 (troca de pedido da loja online — troca/pedidoOnline.ts):
+//   - Pedido da loja online selecionado no Step 1 força o contrato v2: os
+//     pedidos vão em original_digital_order_ids[] e seus itens com
+//     original_digital_order_id + original_digital_order_item_id
+//     (montarOrigensDaTroca). Sem pedido online, payload idêntico ao de antes.
+//   - Fiscal: pedido online não tem NFC-e (has_nfce=false) → 'none', como
+//     venda sem nota. O backend repõe o estoque do item uma vez só.
 // ============================================================
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
@@ -83,6 +91,7 @@ import { Step4Confirm, inferFiscalStrategy, canConfirmStep4 } from "./troca/Step
 import { Step5Success } from "./troca/Step5Success";
 import { ValeTrocaBanner, type ValeNoWizard } from "./troca/ValeTrocaBanner";
 import { buscarVendaDoVale } from "./troca/valeTrocaBusca";
+import { isPedidoOnline, montarOrigensDaTroca } from "./troca/pedidoOnline";
 
 import type {
   Step, SelectedSaleRow, ReturnEntry, NewEntry,
@@ -316,7 +325,10 @@ export function TrocaModal({
     next();
   }, [next]);
 
+  const temPedidoOnline = selectedSales.some(isPedidoOnline);
   function shouldUseV2(): boolean {
+    // 27/10/2026: pedido da loja online só existe no contrato v2.
+    if (temPedidoOnline) return true;
     if (selectedSales.length > 1) return true;
     if (paymentSplits.length > 1) return true;
     if (refundSplits.length > 1) return true;
@@ -364,9 +376,17 @@ export function TrocaModal({
           setSubmitting(false);
           return;
         }
+        // 27/10/2026: com pedido da loja online, origens e itens devolvidos
+        // são divididos entre venda do Caixa e pedido (pedidoOnline.ts).
+        const origensComPedido = temPedidoOnline
+          ? montarOrigensDaTroca(selectedSales, returnEntries as any, (e: any) => effectiveUnitPrice(e.item))
+          : null;
         result = await trocaApi.createV2(companyId, {
-          original_sale_ids: selectedSales.map((s) => s.id),
-          returned_items: returnEntries.map((e) => ({
+          original_sale_ids: origensComPedido
+            ? origensComPedido.original_sale_ids
+            : selectedSales.map((s) => s.id),
+          original_digital_order_ids: origensComPedido ? origensComPedido.original_digital_order_ids : undefined,
+          returned_items: origensComPedido ? origensComPedido.returned_items : returnEntries.map((e) => ({
             original_sale_id: e.saleId,
             original_sale_item_id: e.item.id,
             product_id: e.item.product_id,
