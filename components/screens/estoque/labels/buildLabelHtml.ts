@@ -492,6 +492,10 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   const isEditorial = custom
     ? preset.design === "editorial" || (preset.design === "tagVertical" && !isTagVertical)
     : labelDesignEfetivo(options.labelSize, options.design) === "editorial";
+  // 28/10/2026: tag vertical com linha de dobra (customLabel.ts, tagDobraMm;
+  // opcao B do mockup). Sem dobra (0 => sem a chave no preset) a tag sai
+  // byte a byte como antes.
+  const tagDobraMm = isTagVertical && custom && custom.tagDobraMm ? custom.tagDobraMm : 0;
 
   const cells: string[] = [];
   let labelIdx = 0;
@@ -537,6 +541,25 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
         const sku = labelSkuText(item.sku);
         const cor = labelColorName(item.color);
         const tam = item.size ? String(item.size).trim() : "";
+        if (tagDobraMm > 0) {
+          // Com linha de dobra (28/10/2026): duas zonas. Em cima, o bloco de
+          // texto + codigo de barras encostado na linha; embaixo, o preco e
+          // a linha "Cartao". Mesmo .bc-box/SVG (LOCKED), so a posicao muda.
+          cells.push(
+            '<td class="cell"><div class="bc-inner tv dobra"><div class="tv-top"><div class="tv-blk">' +
+            (storeHeader ? '<div class="store">' + storeHeader + '</div>' : '') +
+            '<div class="name">' + esc(item.name) + '</div>' +
+            (sku ? '<div class="cod">Cód: ' + esc(sku) + '</div>' : '') +
+            (cor || tam ? '<div class="var">' + (cor ? '<span>C: ' + esc(cor) + '</span>' : '') + (tam ? '<span>T: ' + esc(tam) + '</span>' : '') + '</div>' : '') +
+            '<div class="bc-box"><svg id="bc-' + labelIdx + '" data-code="' + code + '"></svg></div>' +
+            '</div></div><div class="tv-bot">' +
+            '<div class="price"><span class="cur">R$</span>' + priceBr(item.price) + '</div>' +
+            (hasCard ? '<div class="card-line">Cartão <b>R$ ' + priceBr(item.cardPrice as number) + '</b></div>' : '') +
+            '</div></div></td>'
+          );
+          labelIdx++;
+          continue;
+        }
         cells.push(
           '<td class="cell"><div class="bc-inner tv">' +
           (storeHeader ? '<div class="store">' + storeHeader + '</div>' : '') +
@@ -763,6 +786,30 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
     html += '.bc-inner.tv .price{font-size:' + pt(16) + ';font-weight:900;line-height:1;letter-spacing:-0.3pt;white-space:nowrap;max-width:100%;overflow:hidden}';
     html += '.bc-inner.tv .price .cur{font-size:0.62em;font-weight:700;letter-spacing:0;margin-right:0.6mm}';
     html += '.bc-inner.tv .card-line{font-size:' + pt(6.5) + ';font-weight:700;line-height:1;white-space:nowrap;max-width:100%;overflow:hidden}';
+    // Linha de dobra (28/10/2026, opcao B): so emitido com dobra. Duas zonas
+    // com altura em mm (imprime igual no Chrome): em cima, dobra - topo, com
+    // o bloco encostado embaixo e o codigo de barras terminando 1,5 mm acima
+    // da linha (1,3 mm de folga + os 0,2 mm de padding do .bc-box, LOCKED);
+    // embaixo, altura - dobra, preco e "Cartao" centralizados. O bloco de
+    // cima e "display:block": o .bc-box deixa de ser item flex e fica na
+    // altura do SVG, sem regra nova para ele (tamanho, margem e area iguais).
+    if (tagDobraMm > 0) {
+      const topo = custom.tagTopoMm || 0;
+      html += '.bc-inner.tv.dobra{padding:' + topo + 'mm 1.5mm 0;gap:0}';
+      html += '.bc-inner.tv.dobra .tv-top{height:' + round2(tagDobraMm - topo) + 'mm;width:100%;display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:1.3mm;overflow:hidden}';
+      html += '.bc-inner.tv.dobra .tv-blk{display:block;width:100%}';
+      html += '.bc-inner.tv.dobra .tv-blk>.name,.bc-inner.tv.dobra .tv-blk>.cod,.bc-inner.tv.dobra .tv-blk>.var{margin-bottom:0.6mm}';
+      // Loja: a cabeca da ZD220 tem 104 mm e o rolo de 3 colunas 105 mm, entao
+      // a borda de fora das colunas 1 e 3 perde ~0,5 mm (o "D" de DOCE
+      // ENCANTO saiu cortado na loja, 28/10). Com dobra a loja cabe em
+      // largura - 3 mm com mais 1 mm de folga (0,5 mm de cada lado) e o
+      // ajuste desce ate 8pt (sem dobra: 9pt, como antes).
+      html += '.bc-inner.tv.dobra .tv-blk>.store{margin:0 0.5mm 1mm;width:auto}';
+      html += '.bc-inner.tv.dobra .tv-bot{height:' + round2(preset.cellHeightMm - tagDobraMm) + 'mm;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1mm;overflow:hidden}';
+      // Preco na largura toda da faixa (texto centralizado): o ajuste so
+      // encolhe quando o preco passa da largura da tag, nao por fracao de px.
+      html += '.bc-inner.tv.dobra .price{font-size:' + pt(20) + ';width:100%}';
+    }
   }
 
   // QR layout
@@ -957,11 +1004,12 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
     html += 'var q=function(s){return b.querySelector(s);};';
     // Loja: 10pt ate 9pt (sempre acima dos 8,5pt maximos do nome); se ainda
     // nao couber, tira o espacamento entre letras. Numa linha so.
-    html += 'if(q(".store")){q(".store").style.letterSpacing="";shrink(q(".store"),' + n2(10) + ',' + n2(9) + ',over);if(over(q(".store")))q(".store").style.letterSpacing="0";}';
+    html += 'if(q(".store")){q(".store").style.letterSpacing="";shrink(q(".store"),' + n2(10) + ',' + n2(tagDobraMm > 0 ? 8 : 9) + ',over);if(over(q(".store")))q(".store").style.letterSpacing="0";}';
     html += 'if(q(".name"))shrink(q(".name"),' + n2(8.5) + ',' + n2(6.5) + ',tall);';
     html += 'if(q(".cod"))shrink(q(".cod"),' + n2(7) + ',' + n2(5.5) + ',over);';
     html += 'if(q(".var"))shrink(q(".var"),' + n2(7) + ',' + n2(5.5) + ',over);';
-    html += 'if(q(".price"))shrink(q(".price"),' + n2(16) + ',' + n2(10) + ',over);';
+    // Com dobra o preco parte de 20pt (opcao B); sem dobra, os 16pt de sempre.
+    html += 'if(q(".price"))shrink(q(".price"),' + n2(tagDobraMm > 0 ? 20 : 16) + ',' + n2(10) + ',over);';
     html += '});}';
     html += 'if(document.fonts&&document.fonts.ready){document.fonts.ready.then(fit);}else{fit();}';
     html += 'window.addEventListener("load",fit);';
