@@ -7,15 +7,14 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { tourTarget } from "@/utils/tourTarget";
 import { ALVO_INDICACAO } from "@/utils/focoIndicacao";
-import { comoFuncionaIndicacao, mensagemIndicacao } from "@/utils/indicacaoCampanha";
+import { comoFuncionaIndicacao, descricaoIndicacao, mensagemIndicacao } from "@/utils/indicacaoCampanha";
 
 // 14/10/2026 (campanha de indicação, aprovada pelo Caio e pela Célia): o
 // indicador ganha 1 mês grátis quando o indicado paga a primeira mensalidade;
 // o indicado testa 7 dias e tem 20% no primeiro mês. Antes o texto prometia
 // 20% ao indicador, o que nenhum código cumpria.
-const DESCRICAO =
-  "Indique um lojista e ganhe 1 mês grátis quando ele pagar a primeira mensalidade. " +
-  "Quem você indicar testa 7 dias grátis e ganha 20% no primeiro mês.";
+// 28/10/2026: a frase mora em utils/indicacaoCampanha (DESCRICAO_INDICACAO) e
+// leva o texto da Black Friday até 30/11/2026 23:59:59 BRT.
 
 // 25/10/2026 (tom das mensagens, extra 2): "Como funciona" recolhível com as
 // regras que valem hoje (COMO_FUNCIONA_INDICACAO, utils/mensagensDoApp).
@@ -56,7 +55,9 @@ export function ReferralCard() {
   const [loading, setLoading] = useState(false);
 
   const emailVerified = !!(user as any)?.email_verified;
-  const regras = comoFuncionaIndicacao(new Date());
+  const agora = new Date();
+  const regras = comoFuncionaIndicacao(agora);
+  const descricao = descricaoIndicacao(agora);
 
   useEffect(() => {
     if (!token || isDemo) return;
@@ -110,7 +111,7 @@ export function ReferralCard() {
           <Icon name="star" size={20} color={Colors.violet3} />
           <Text style={s.title}>Indique e ganhe</Text>
         </View>
-        <Text style={s.desc}>{DESCRICAO}</Text>
+        <Text testID="indicacao-descricao" style={s.desc}>{descricao}</Text>
         <ComoFunciona regras={regras} />
         <View style={s.codeBox}>
           <Text style={s.codeLabel}>Seu código</Text>
@@ -127,7 +128,7 @@ export function ReferralCard() {
         <Icon name="star" size={20} color={Colors.violet3} />
         <Text style={s.title}>Indique e ganhe</Text>
       </View>
-      <Text style={s.desc}>{DESCRICAO}</Text>
+      <Text testID="indicacao-descricao" style={s.desc}>{descricao}</Text>
       <ComoFunciona regras={regras} />
 
       {code ? (

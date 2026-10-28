@@ -9,6 +9,7 @@ import {
   FIM_BLACK_FRIDAY_INDICACAO,
   emBlackFridayDaIndicacao,
   comoFuncionaIndicacao,
+  descricaoIndicacao,
   mensagemIndicacao,
 } from "@/utils/indicacaoCampanha";
 
@@ -17,6 +18,8 @@ const ANTES = new Date(FIM - 1);
 const NO_FIM = new Date(FIM);
 const DEPOIS = new Date(FIM + 1);
 
+const BF_DESCRICAO =
+  "Indique um lojista e ganhe 1 mensalidade grátis quando ele pagar a primeira. Quem você indicar testa 7 dias grátis e, até 30/11 ou enquanto houver cupons, ganha 50% na primeira mensalidade com o código BLACK50.";
 const BF_ITENS = [
   "Mande o seu link a um conhecido. Até 30/11, ele ganha 50% na primeira mensalidade com o código BLACK50, digitado no pagamento, enquanto houver cupons.",
   "Quando ele pagar a primeira mensalidade, a sua próxima mensalidade sai grátis. Se muitas indicações pagarem no mesmo mês, o mês grátis pode ficar para o mês seguinte. Se você ainda estiver no teste, o mês grátis vale na segunda mensalidade.",
@@ -26,6 +29,8 @@ const BF_WHATS =
   "Oi! Tô usando a Aura na minha loja e tá me ajudando bastante. Até 30/11, ou enquanto houver cupons, você ganha 50% na primeira mensalidade com o código BLACK50 (digite no pagamento) e ainda testa 7 dias antes de assinar. Esse é o meu link: https://getaura.com.br/r/REF-ABC123";
 
 // Textos de hoje (antes desta mudança), byte a byte.
+const HOJE_DESCRICAO =
+  "Indique um lojista e ganhe 1 mês grátis quando ele pagar a primeira mensalidade. Quem você indicar testa 7 dias grátis e ganha 20% no primeiro mês.";
 const HOJE_ITENS = [
   "O mês grátis vale quando o lojista que você indicou paga a primeira mensalidade.",
   "Se você já assina a Aura, a sua próxima mensalidade a vencer sai por conta da Aura.",
@@ -42,18 +47,21 @@ describe("indicação: janela da Black Friday", () => {
 
   test("um instante antes do fim: textos da Black Friday", () => {
     expect(emBlackFridayDaIndicacao(ANTES)).toBe(true);
+    expect(descricaoIndicacao(ANTES)).toBe(BF_DESCRICAO);
     expect([...comoFuncionaIndicacao(ANTES)]).toEqual(BF_ITENS);
     expect(mensagemIndicacao("REF-ABC123", ANTES)).toBe(BF_WHATS);
   });
 
   test("exatamente no fim: textos da Black Friday", () => {
     expect(emBlackFridayDaIndicacao(NO_FIM)).toBe(true);
+    expect(descricaoIndicacao(NO_FIM)).toBe(BF_DESCRICAO);
     expect([...comoFuncionaIndicacao(NO_FIM)]).toEqual(BF_ITENS);
     expect(mensagemIndicacao("REF-ABC123", NO_FIM)).toBe(BF_WHATS);
   });
 
   test("um instante depois do fim: textos de hoje, idênticos", () => {
     expect(emBlackFridayDaIndicacao(DEPOIS)).toBe(false);
+    expect(descricaoIndicacao(DEPOIS)).toBe(HOJE_DESCRICAO);
     expect([...comoFuncionaIndicacao(DEPOIS)]).toEqual(HOJE_ITENS);
     expect(mensagemIndicacao("REF-ABC123", DEPOIS)).toBe(HOJE_WHATS);
   });

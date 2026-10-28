@@ -2,7 +2,8 @@
 // Indique e ganhe: textos da Black Friday (28/10/2026)
 //
 // Aprovado pelo Caio e pelo Marketing: até o fim de 30/11/2026 no horário de
-// Brasília, o "Como funciona" e a mensagem de compartilhar no WhatsApp levam
+// Brasília, a frase de cima do cartão, o "Como funciona" e a mensagem de
+// compartilhar no WhatsApp levam
 // o texto da campanha BLACK50. Depois desse instante voltam sozinhos aos
 // textos de hoje, sem deploy novo. Não há data de início: vale desde o merge.
 //
@@ -15,6 +16,15 @@ import { COMO_FUNCIONA_INDICACAO } from "@/utils/mensagensDoApp";
 
 /** Fim inclusivo da campanha: 30/11/2026 23:59:59 em Brasília (UTC-3). */
 export const FIM_BLACK_FRIDAY_INDICACAO = new Date("2026-12-01T02:59:59Z");
+
+// Frase de cima do cartão. A de hoje (14/10/2026, Caio e Célia): 1 mês grátis
+// a quem indica; o indicado testa 7 dias e tem 20% no primeiro mês.
+export const DESCRICAO_INDICACAO =
+  "Indique um lojista e ganhe 1 mês grátis quando ele pagar a primeira mensalidade. " +
+  "Quem você indicar testa 7 dias grátis e ganha 20% no primeiro mês.";
+
+export const DESCRICAO_INDICACAO_BLACK_FRIDAY =
+  "Indique um lojista e ganhe 1 mensalidade grátis quando ele pagar a primeira. Quem você indicar testa 7 dias grátis e, até 30/11 ou enquanto houver cupons, ganha 50% na primeira mensalidade com o código BLACK50.";
 
 export const COMO_FUNCIONA_INDICACAO_BLACK_FRIDAY = [
   "Mande o seu link a um conhecido. Até 30/11, ele ganha 50% na primeira mensalidade com o código BLACK50, digitado no pagamento, enquanto houver cupons.",
@@ -29,6 +39,11 @@ export const MENSAGEM_INDICACAO_BLACK_FRIDAY =
 /** true até FIM_BLACK_FRIDAY_INDICACAO, inclusive. */
 export function emBlackFridayDaIndicacao(agora: Date): boolean {
   return agora.getTime() <= FIM_BLACK_FRIDAY_INDICACAO.getTime();
+}
+
+/** Frase de cima do cartão que vale no instante `agora`. */
+export function descricaoIndicacao(agora: Date): string {
+  return emBlackFridayDaIndicacao(agora) ? DESCRICAO_INDICACAO_BLACK_FRIDAY : DESCRICAO_INDICACAO;
 }
 
 /** Itens do "Como funciona" que valem no instante `agora`. */
