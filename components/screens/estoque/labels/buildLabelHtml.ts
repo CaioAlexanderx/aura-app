@@ -290,7 +290,9 @@ export type LabelPreset = {
   // .bc-box/SVG/BARCODE_OPTS). Ausente => layout Finesse (byte-identico).
   // 22/10/2026: "tagVertical" so existe na "Minha medida" em pe (altura >=
   // 1,5 x largura, customLabel.ts). Nenhum modelo fixo usa.
-  design?: "editorial" | "tagVertical";
+  // 28/10/2026: "boutique" so existe na "Minha medida" com o opt-in da loja
+  // (estilo: "boutique", customLabel.ts). Nenhum modelo fixo usa.
+  design?: "editorial" | "tagVertical" | "boutique";
   // Editorial "compacto" (14/10/2026, Toda Linda / 40x25): mais respiro em
   // volta do texto e fontes ~8% menores. NAO toca no .bc-box nem no SVG (o
   // barcode segue o BARCODE_OPTS, LOCKED). So emite CSS neste preset; o
@@ -489,8 +491,12 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   // desenho "tag vertical" so na etiqueta com codigo de barras. QR e o teste
   // de posicao da medida em pe seguem no editorial, byte a byte como antes.
   const isTagVertical = !!custom && preset.design === "tagVertical" && !isQR && !testFrame;
+  // 28/10/2026: estilo "boutique" (opt-in da loja, customLabel.ts). So na
+  // etiqueta com codigo de barras; QR e o teste de posicao caem no editorial
+  // (como a tag vertical faz), byte a byte como a medida sem o opt-in.
+  const isBoutique = !!custom && preset.design === "boutique" && !isQR && !testFrame;
   const isEditorial = custom
-    ? preset.design === "editorial" || (preset.design === "tagVertical" && !isTagVertical)
+    ? preset.design === "editorial" || (preset.design === "tagVertical" && !isTagVertical) || (preset.design === "boutique" && !isBoutique)
     : labelDesignEfetivo(options.labelSize, options.design) === "editorial";
   // 28/10/2026: tag vertical com linha de dobra (customLabel.ts, tagDobraMm;
   // opcao B do mockup). Sem dobra (0 => sem a chave no preset) a tag sai
@@ -570,6 +576,29 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
           '<div class="price"><span class="cur">R$</span>' + priceBr(item.price) + '</div>' +
           (hasCard ? '<div class="card-line">Cartão <b>R$ ' + priceBr(item.cardPrice as number) + '</b></div>' : '') +
           '</div></td>'
+        );
+        // =============================================================
+      } else if (isBoutique) {
+        // ===== Desenho "boutique" (28/10/2026, opt-in, customLabel.ts) =====
+        // Ordem: faixa preta (loja vazada) -> nome -> cor/tam -> bc-box ->
+        // preco (com filete). O .bc-box e o <svg id="bc-N" data-code="..."> sao
+        // a MESMA string do layout Finesse (LOCKED) — so a posicao na celula
+        // muda. A faixa so sai com nome da loja (sem loja, nenhuma faixa preta
+        // vazia). Cor/tam na linha "Cor • Tam X"; os dois vazios -> a linha
+        // some (produtos da Lulume tem cor/tam no nome e os campos vazios).
+        const corBq = labelColorName(item.color);
+        const tamBq = item.size ? String(item.size).trim() : "";
+        const varBq = [corBq ? corBq : "", tamBq ? "Tam " + tamBq : ""].filter(Boolean).join(" • ");
+        cells.push(
+          '<td class="cell"><div class="bc-inner bq">' +
+          (storeHeader ? '<div class="bq-band"><span class="bq-store">' + storeHeader + '</span></div>' : '') +
+          '<div class="bq-body">' +
+          '<div class="name">' + esc(item.name) + '</div>' +
+          (varBq ? '<div class="var">' + esc(varBq) + '</div>' : '') +
+          '<div class="bc-box"><svg id="bc-' + labelIdx + '" data-code="' + code + '"></svg></div>' +
+          '<div class="price"><span class="cur">R$</span>' + priceBr(item.price) + '</div>' +
+          (hasCard ? '<div class="card-line">Cartão <b>R$ ' + priceBr(item.cardPrice as number) + '</b></div>' : '') +
+          '</div></div></td>'
         );
         // =============================================================
       } else if (isEditorial) {
@@ -812,6 +841,36 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
     }
   }
 
+  // Desenho "boutique" (28/10/2026, opt-in, customLabel.ts). So emitido nele:
+  // nenhum outro desenho ganha um byte. Vem DEPOIS do CSS base e ganha por
+  // especificidade (.bc-inner.bq). Tudo preto solido sobre branco, sem cinza
+  // (a termica nao imprime meio-tom). Fonte condensada de sistema ("Arial
+  // Narrow", Arial) — sem fonte de rede, imprime offline. A faixa preta e o
+  // seu fundo pedem print-color-adjust:exact (o navegador nao imprime fundo
+  // por padrao). O .bc-box segue a zona LOCKED (flex-grow, max-width largura
+  // - 3mm, overflow, SVG centralizado): a boutique so acrescenta alinhamento
+  // e um respiro em cima — nao toca no tamanho do SVG nem no BARCODE_OPTS.
+  if (isBoutique && custom) {
+    const k = custom.escalaTexto || 1;
+    const pt = function (n: number) { return round2(n * k) + 'pt'; };
+    // Moldura fina (~1,5px = 0,4mm) ocupando a etiqueta; sem padding (a faixa
+    // preta encosta nas bordas), o respiro fica no .bq-body.
+    html += '.bc-inner.bq{padding:0;gap:0;border:0.4mm solid #000;justify-content:flex-start;font-family:"Arial Narrow",Arial,Helvetica,sans-serif;overflow:hidden}';
+    // Faixa preta no topo, largura toda, nome da loja vazado (branco).
+    html += '.bc-inner.bq .bq-band{width:100%;background:#000;text-align:center;padding:0.5mm 1mm;line-height:1;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact}';
+    html += '.bc-inner.bq .bq-store{display:inline-block;max-width:100%;color:#fff;font-weight:700;text-transform:uppercase;letter-spacing:0.4pt;white-space:nowrap;line-height:1;font-size:' + pt(9) + '}';
+    // Corpo: nome, cor/tam, codigo de barras e preco, centralizados, com respiro.
+    html += '.bc-inner.bq .bq-body{flex:1 1 auto;width:100%;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center;padding:0.9mm 1.2mm 1mm;gap:0.4mm}';
+    html += '.bc-inner.bq .name{font-size:' + pt(7) + ';font-weight:700;line-height:1.05;width:100%;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word;max-height:none;color:#000}';
+    html += '.bc-inner.bq .var{font-size:' + pt(5.5) + ';font-weight:700;line-height:1;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase;letter-spacing:0.3pt;color:#000}';
+    // So alinhamento/respiro: flex, max-width e overflow continuam os da zona LOCKED.
+    html += '.bc-inner.bq .bc-box{align-self:center;padding:0.3mm 0 0}';
+    // Preco grande com filete fino acima.
+    html += '.bc-inner.bq .price{font-size:' + pt(11) + ';font-weight:900;line-height:1;color:#000;width:100%;border-top:0.3mm solid #000;padding-top:0.6mm;margin-top:0.3mm;letter-spacing:-0.3pt}';
+    html += '.bc-inner.bq .price .cur{font-size:0.62em;font-weight:700;letter-spacing:0;margin-right:0.6mm}';
+    html += '.bc-inner.bq .card-line{font-size:' + pt(5.5) + ';font-weight:700;line-height:1;width:100%;text-align:center;white-space:nowrap;overflow:hidden}';
+  }
+
   // QR layout
   html += '.qr-inner{display:flex;flex-direction:row;align-items:center;padding:1mm 1.5mm;gap:1.5mm;height:' + preset.cellHeightMm + 'mm;width:' + preset.cellWidthMm + 'mm}';
   html += '.qr-inner .qr{width:' + qrSizeMm + 'mm;height:' + qrSizeMm + 'mm;flex-shrink:0;image-rendering:pixelated}';
@@ -1013,6 +1072,28 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
     html += '});}';
     html += 'if(document.fonts&&document.fonts.ready){document.fonts.ready.then(fit);}else{fit();}';
     html += 'window.addEventListener("load",fit);';
+    html += '})();</scr' + 'ipt>';
+  }
+  if (isBoutique && custom) {
+    // Ajuste automatico da boutique. So encolhe quando precisa: a faixa da
+    // loja numa linha so (nunca corta nem quebra), o nome em ate 2 linhas, a
+    // linha cor/tam numa linha so e o preco na largura da etiqueta. Fonte de
+    // sistema (sem fonte de rede): ajusta no load e ja na montagem. Nao toca
+    // no .bc-box nem no SVG (LOCKED).
+    const k = custom.escalaTexto || 1;
+    const n2 = function (n: number) { return String(round2(n * k)); };
+    html += '<script>(function(){';
+    html += 'function over(el){var r=document.createRange();r.selectNodeContents(el);return r.getBoundingClientRect().width>el.clientWidth+0.05;}';
+    html += 'function tall(el){return el.scrollHeight>el.clientHeight+1;}';
+    html += 'function shrink(el,pt,min,test){el.style.fontSize="";while(test(el)&&pt>min){pt=Math.max(min,pt-0.25);el.style.fontSize=pt+"pt";}}';
+    html += 'function fit(){document.querySelectorAll(".bc-inner.bq").forEach(function(b){';
+    html += 'var q=function(s){return b.querySelector(s);};';
+    html += 'if(q(".bq-store")){q(".bq-store").style.letterSpacing="";shrink(q(".bq-store"),' + n2(9) + ',' + n2(5) + ',over);if(over(q(".bq-store")))q(".bq-store").style.letterSpacing="0";}';
+    html += 'if(q(".name"))shrink(q(".name"),' + n2(7) + ',' + n2(5) + ',tall);';
+    html += 'if(q(".var"))shrink(q(".var"),' + n2(5.5) + ',' + n2(4) + ',over);';
+    html += 'if(q(".price"))shrink(q(".price"),' + n2(11) + ',' + n2(7) + ',over);';
+    html += '});}';
+    html += 'window.addEventListener("load",fit);fit();';
     html += '})();</scr' + 'ipt>';
   }
   html += '</body></html>';
