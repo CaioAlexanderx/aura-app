@@ -48,6 +48,24 @@
 //     (moldura) da medida em pé saem como antes.
 //   - Para desfazer: ehTagVertical devolver false (ou reverter o PR); a
 //     medida da loja continua gravada e volta ao editorial.
+//
+// LINHA DE DOBRA DA TAG (28/10/2026, opção B do mockup
+// https://claude.ai/artifact/7brLRCqJvVV5sLLUxmicAD, escolhida pelo Caio):
+//   a tag couchê 35x60 da Doce Encanto tem uma linha pontilhada de dobra a
+//   ~43 mm do topo. No desenho de 22/10 o código de barras caía em cima da
+//   linha (dígitos cortados) e o preço ficava sozinho no rodapé.
+//   - Campo novo OPCIONAL dobraMm na medida: mm do topo da etiqueta até a
+//     linha. Ausente, 0 ou inválido = sem dobra e a medida NÃO ganha a
+//     chave (o JSON gravado não muda). O backend (pdvSettings.js) guarda o
+//     campo desde o PR "medida aceita a linha de dobra da tag".
+//   - Só vale na tag vertical (ehTagVertical) e só com a dobra entre o
+//     respiro do topo e a altura (tagDobraMm). Fora disso, nada muda: sem
+//     dobra, TODA etiqueta sai byte a byte como antes.
+//   - Com dobra: duas zonas com altura em mm. Em cima (dobra - topo): loja,
+//     nome, Cód, C/T e o código de barras encostados embaixo, terminando
+//     1,5 mm acima da linha. Embaixo (altura - dobra): o preço maior
+//     (20pt x escala, era 16pt), centralizado, e a linha "Cartão" logo
+//     abaixo. O .bc-box, o SVG e o BARCODE_OPTS (LOCKED) não mudam.
 // ============================================================================
 import type { LabelPreset } from "@/components/screens/estoque/labels/buildLabelHtml";
 
@@ -69,6 +87,10 @@ export type CustomLabelSpec = {
    *  Serve para a loja com duas impressoras que erram diferente ter duas
    *  medidas do mesmo tamanho. Não entra na etiqueta impressa. */
   nome?: string;
+  /** 28/10/2026: linha de dobra/picote da tag, em mm do topo da etiqueta
+   *  (tag couchê 35x60 com dobra a ~43 mm). Ausente = sem dobra (a chave
+   *  não existe). Só muda o desenho da tag vertical (tagDobraMm). */
+  dobraMm?: number;
 };
 
 export const NOME_MEDIDA_MAX = 40;
@@ -131,6 +153,13 @@ export function sanitizarMedida(raw: any): CustomLabelSpec | null {
     ajusteXMm: naFaixa(raw.ajusteXMm, -L.ajusteMm, L.ajusteMm, 0),
     ajusteYMm: naFaixa(raw.ajusteYMm, -L.ajusteMm, L.ajusteMm, 0),
   };
+  // Linha de dobra: só número > 0 e menor que a altura; senão a chave não
+  // entra e o spec fica idêntico ao de antes.
+  var dobra = numero(raw.dobraMm);
+  if (Number.isFinite(dobra)) {
+    dobra = round1(dobra);
+    if (dobra > 0 && dobra < spec.alturaMm) spec.dobraMm = dobra;
+  }
   // Só com nome de verdade: sem nome o spec fica idêntico ao de antes.
   if (nome) spec.nome = nome;
   return spec;
@@ -197,6 +226,16 @@ export function tagEscala(spec: Pick<CustomLabelSpec, "larguraMm">): number {
   return Math.round(k * 20) / 20;
 }
 
+/** Linha de dobra que o desenho da tag vertical usa: a dobraMm da medida,
+ *  se ficar abaixo do respiro do topo e acima do pé da etiqueta. Senão
+ *  undefined (sem dobra, desenho de antes). */
+export function tagDobraMm(spec: Pick<CustomLabelSpec, "alturaMm" | "dobraMm">): number | undefined {
+  var d = Number(spec.dobraMm);
+  if (!Number.isFinite(d) || d <= 0) return undefined;
+  d = round1(d);
+  return d > tagTopoMm(spec) && d < spec.alturaMm ? d : undefined;
+}
+
 export type CustomLabelPreset = LabelPreset & {
   ajusteXMm: number;
   ajusteYMm: number;
@@ -204,6 +243,8 @@ export type CustomLabelPreset = LabelPreset & {
   /** Só na tag vertical (ehTagVertical). */
   tagTopoMm?: number;
   tagEscala?: number;
+  /** Só na tag vertical com linha de dobra (tagDobraMm). */
+  tagDobraMm?: number;
 };
 
 /** O spec vira um preset equivalente aos fixos: página = colunas × largura +
@@ -235,6 +276,9 @@ export function customLabelPreset(spec: CustomLabelSpec): CustomLabelPreset {
     preset.design = "tagVertical";
     preset.tagTopoMm = tagTopoMm(s);
     preset.tagEscala = tagEscala(s);
+    // Linha de dobra (28/10/2026): ausente => a chave não entra no preset.
+    var dobra = tagDobraMm(s);
+    if (dobra !== undefined) preset.tagDobraMm = dobra;
   }
   return preset;
 }
