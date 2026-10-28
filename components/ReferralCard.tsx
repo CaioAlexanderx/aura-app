@@ -7,7 +7,7 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { tourTarget } from "@/utils/tourTarget";
 import { ALVO_INDICACAO } from "@/utils/focoIndicacao";
-import { COMO_FUNCIONA_INDICACAO } from "@/utils/mensagensDoApp";
+import { comoFuncionaIndicacao, mensagemIndicacao } from "@/utils/indicacaoCampanha";
 
 // 14/10/2026 (campanha de indicação, aprovada pelo Caio e pela Célia): o
 // indicador ganha 1 mês grátis quando o indicado paga a primeira mensalidade;
@@ -19,7 +19,9 @@ const DESCRICAO =
 
 // 25/10/2026 (tom das mensagens, extra 2): "Como funciona" recolhível com as
 // regras que valem hoje (COMO_FUNCIONA_INDICACAO, utils/mensagensDoApp).
-function ComoFunciona() {
+// 28/10/2026: até 30/11/2026 23:59:59 BRT os itens são os da Black Friday
+// (utils/indicacaoCampanha); depois voltam sozinhos aos de hoje.
+function ComoFunciona({ regras }: { regras: readonly string[] }) {
   const [aberto, setAberto] = useState(false);
   return (
     <View style={s.comoWrap}>
@@ -35,7 +37,7 @@ function ComoFunciona() {
       </Pressable>
       {aberto && (
         <View testID="indicacao-regras" style={s.comoLista}>
-          {COMO_FUNCIONA_INDICACAO.map((regra) => (
+          {regras.map((regra) => (
             <View key={regra} style={s.comoItem}>
               <Text style={s.comoBullet}>•</Text>
               <Text style={s.comoTexto}>{regra}</Text>
@@ -47,14 +49,6 @@ function ComoFunciona() {
   );
 }
 
-export function mensagemIndicacao(codigo: string): string {
-  return (
-    "Oi! Uso a Aura na minha loja: caixa, estoque e fiado num lugar só. " +
-    "Com o meu código " + codigo + " você testa 7 dias grátis e ganha 20% de desconto na primeira mensalidade. " +
-    "Começa por aqui: https://getaura.com.br/r/" + codigo
-  );
-}
-
 export function ReferralCard() {
   const { user, isDemo, token } = useAuthStore();
   const [code, setCode] = useState<string | null>(null);
@@ -62,6 +56,7 @@ export function ReferralCard() {
   const [loading, setLoading] = useState(false);
 
   const emailVerified = !!(user as any)?.email_verified;
+  const regras = comoFuncionaIndicacao(new Date());
 
   useEffect(() => {
     if (!token || isDemo) return;
@@ -103,7 +98,7 @@ export function ReferralCard() {
 
   function shareWhatsApp() {
     if (!code) return;
-    const msg = encodeURIComponent(mensagemIndicacao(code));
+    const msg = encodeURIComponent(mensagemIndicacao(code, new Date()));
     const url = "https://wa.me/?text=" + msg;
     if (Platform.OS === "web") window.open(url, "_blank");
   }
@@ -116,7 +111,7 @@ export function ReferralCard() {
           <Text style={s.title}>Indique e ganhe</Text>
         </View>
         <Text style={s.desc}>{DESCRICAO}</Text>
-        <ComoFunciona />
+        <ComoFunciona regras={regras} />
         <View style={s.codeBox}>
           <Text style={s.codeLabel}>Seu código</Text>
           <Text style={s.codeValue}>REF-DEMO</Text>
@@ -133,7 +128,7 @@ export function ReferralCard() {
         <Text style={s.title}>Indique e ganhe</Text>
       </View>
       <Text style={s.desc}>{DESCRICAO}</Text>
-      <ComoFunciona />
+      <ComoFunciona regras={regras} />
 
       {code ? (
         <>

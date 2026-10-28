@@ -39,6 +39,7 @@ import { TrialBanner } from "@/components/TrialBanner";
 import { ReferralCard } from "@/components/ReferralCard";
 import VerticalTab from "@/app/(tabs)/vertical";
 import { COMO_FUNCIONA_INDICACAO, MSG_PEDIDO_DE_AJUDA } from "@/utils/mensagensDoApp";
+import { COMO_FUNCIONA_INDICACAO_BLACK_FRIDAY, FIM_BLACK_FRIDAY_INDICACAO } from "@/utils/indicacaoCampanha";
 import { waAura } from "@/constants/suporteAura";
 
 const trial = (extra: Record<string, unknown> = {}) => ({
@@ -109,8 +110,20 @@ describe("Módulo vertical sem vertical ativa", () => {
   });
 });
 
+// Relógio fixo só no Date (timers e promessas continuam reais).
+function relogioEm(ms: number) {
+  jest.useFakeTimers({
+    now: ms,
+    doNotFake: ["nextTick", "setImmediate", "clearImmediate", "setTimeout", "clearTimeout",
+      "setInterval", "clearInterval", "queueMicrotask", "requestAnimationFrame", "cancelAnimationFrame"],
+  });
+}
+
 describe("ReferralCard: Como funciona", () => {
-  it("fica recolhido e abre no toque com as regras", async () => {
+  afterEach(() => { jest.useRealTimers(); });
+
+  it("fica recolhido e abre no toque com as regras (fora da Black Friday)", async () => {
+    relogioEm(FIM_BLACK_FRIDAY_INDICACAO.getTime() + 1000);
     mockAuth = { user: { email_verified: true }, isDemo: false, token: "t" };
     let r!: renderer.ReactTestRenderer;
     await act(async () => { r = renderer.create(<ReferralCard />); });
@@ -121,8 +134,20 @@ describe("ReferralCard: Como funciona", () => {
     expect(r.root.findAllByProps({ testID: "indicacao-regras" }, { deep: false })).toHaveLength(1);
     const out = JSON.stringify(r.toJSON());
     for (const regra of COMO_FUNCIONA_INDICACAO) expect(out).toContain(regra);
+    for (const regra of COMO_FUNCIONA_INDICACAO_BLACK_FRIDAY) expect(out).not.toContain(regra);
     act(() => { r.root.findAllByProps({ testID: "indicacao-como-funciona" }, { deep: false })[0].props.onPress(); });
     expect(r.root.findAllByProps({ testID: "indicacao-regras" }, { deep: false })).toHaveLength(0);
+  });
+
+  it("até 30/11/2026 23:59:59 BRT mostra os 3 itens da Black Friday", async () => {
+    relogioEm(FIM_BLACK_FRIDAY_INDICACAO.getTime());
+    mockAuth = { user: { email_verified: true }, isDemo: false, token: "t" };
+    let r!: renderer.ReactTestRenderer;
+    await act(async () => { r = renderer.create(<ReferralCard />); });
+    act(() => { r.root.findAllByProps({ testID: "indicacao-como-funciona" }, { deep: false })[0].props.onPress(); });
+    const out = JSON.stringify(r.toJSON());
+    for (const regra of COMO_FUNCIONA_INDICACAO_BLACK_FRIDAY) expect(out).toContain(regra);
+    for (const regra of COMO_FUNCIONA_INDICACAO) expect(out).not.toContain(regra);
   });
 
   it("também na conta demo", () => {

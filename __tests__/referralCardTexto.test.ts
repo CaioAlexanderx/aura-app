@@ -11,6 +11,9 @@ import fs from "fs";
 import path from "path";
 
 const SRC = fs.readFileSync(path.join(__dirname, "..", "components", "ReferralCard.tsx"), "utf8");
+// 28/10/2026: a mensagem de compartilhar mora em utils/indicacaoCampanha
+// (texto da Black Friday até 30/11/2026, depois o de hoje).
+const SRC_MSG = fs.readFileSync(path.join(__dirname, "..", "utils", "indicacaoCampanha.ts"), "utf8");
 
 describe("ReferralCard: texto da campanha", () => {
   test("descrição promete 1 mês grátis ao indicador e 7 dias + 20% ao indicado", () => {
@@ -23,9 +26,9 @@ describe("ReferralCard: texto da campanha", () => {
   });
 
   test("mensagem de compartilhar leva o código e o link /r/{codigo}", () => {
-    expect(SRC).toContain('"Com o meu código " + codigo + " você testa 7 dias grátis e ganha 20% de desconto na primeira mensalidade. "');
-    expect(SRC).toContain('"Começa por aqui: https://getaura.com.br/r/" + codigo');
-    expect(SRC).toContain("encodeURIComponent(mensagemIndicacao(code))");
+    expect(SRC_MSG).toContain('"Com o meu código " + codigo + " você testa 7 dias grátis e ganha 20% de desconto na primeira mensalidade. "');
+    expect(SRC_MSG).toContain('"Começa por aqui: https://getaura.com.br/r/" + codigo');
+    expect(SRC).toContain("encodeURIComponent(mensagemIndicacao(code, new Date()))");
   });
 
   test("rótulos: Cadastros e Pendentes; 'Concluidas' e 'Descontos' saem", () => {
