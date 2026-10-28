@@ -788,15 +788,34 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
     html += '.bc-inner.tv .card-line{font-size:' + pt(6.5) + ';font-weight:700;line-height:1;white-space:nowrap;max-width:100%;overflow:hidden}';
     // Linha de dobra (28/10/2026, opcao B): so emitido com dobra. Duas zonas
     // com altura em mm (imprime igual no Chrome): em cima, dobra - topo, com
-    // o bloco encostado embaixo e o codigo de barras terminando 1,5 mm acima
-    // da linha (1,3 mm de folga + os 0,2 mm de padding do .bc-box, LOCKED);
-    // embaixo, altura - dobra, preco e "Cartao" centralizados. O bloco de
-    // cima e "display:block": o .bc-box deixa de ser item flex e fica na
-    // altura do SVG, sem regra nova para ele (tamanho, margem e area iguais).
+    // o bloco encostado embaixo; embaixo, altura - dobra, preco e "Cartao".
+    // O bloco de cima e "display:block": o .bc-box deixa de ser item flex e
+    // fica na altura do SVG, sem regra nova para ele (tamanho, margem e area
+    // iguais, LOCKED).
+    //
+    // 28/10/2026 (pedido do Caio pos-impressao na Doce Encanto): "subir o
+    // codigo de barras e o preco 2 cm". A face frontal (acima da dobra) tem so
+    // dobra - topo = 33 mm e ja fica ~96% ocupada pelo respiro do furo (7 mm) +
+    // o bloco de texto + o codigo de barras de 9 mm (LOCKED, nao encolhe), logo
+    // uma subida de 20 mm estoura o topo e cortaria a loja/nome. Medido no
+    // navegador (6 px/mm), o maior deslocamento que cabe LIMPO, sem cortar o
+    // texto nem encolher o codigo, e:
+    //   - codigo de barras: +SUBIDA_BC_MM (sobe junto com o bloco de texto, que
+    //     continua encostado embaixo da face frontal); 3 mm deixa ~1 mm de
+    //     folga ate o respiro no pior caso (loja + nome em 2 linhas + Cod + C/T);
+    //   - preco: sobe ate o TOPO da faixa de baixo (justify-content:flex-start
+    //     em vez de center), ~6,5 mm acima do centro de antes, sem sair da faixa
+    //     (opcao B escolhida pelo Caio mantem o preco abaixo da dobra).
+    // Para um preco bem mais alto (acima da dobra) seria preciso a opcao A do
+    // mockup (preco na face frontal, faixa de baixo em branco) ou uma tag maior
+    // — decisao de produto, fora deste ajuste fino.
     if (tagDobraMm > 0) {
       const topo = custom.tagTopoMm || 0;
+      // Subida do codigo de barras dentro da face frontal (mm). O maximo limpo
+      // medido e ~3,9 mm (knife-edge); 3 guarda ~1 mm de folga ate o respiro.
+      const SUBIDA_BC_MM = 3;
       html += '.bc-inner.tv.dobra{padding:' + topo + 'mm 1.5mm 0;gap:0}';
-      html += '.bc-inner.tv.dobra .tv-top{height:' + round2(tagDobraMm - topo) + 'mm;width:100%;display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:1.3mm;overflow:hidden}';
+      html += '.bc-inner.tv.dobra .tv-top{height:' + round2(tagDobraMm - topo) + 'mm;width:100%;display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:' + round2(1.3 + SUBIDA_BC_MM) + 'mm;overflow:hidden}';
       html += '.bc-inner.tv.dobra .tv-blk{display:block;width:100%}';
       html += '.bc-inner.tv.dobra .tv-blk>.name,.bc-inner.tv.dobra .tv-blk>.cod,.bc-inner.tv.dobra .tv-blk>.var{margin-bottom:0.6mm}';
       // Loja: a cabeca da ZD220 tem 104 mm e o rolo de 3 colunas 105 mm, entao
@@ -805,7 +824,9 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
       // largura - 3 mm com mais 1 mm de folga (0,5 mm de cada lado) e o
       // ajuste desce ate 8pt (sem dobra: 9pt, como antes).
       html += '.bc-inner.tv.dobra .tv-blk>.store{margin:0 0.5mm 1mm;width:auto}';
-      html += '.bc-inner.tv.dobra .tv-bot{height:' + round2(preset.cellHeightMm - tagDobraMm) + 'mm;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1mm;overflow:hidden}';
+      // Preco no TOPO da faixa de baixo (sobe ~6,5 mm vs o centro de antes),
+      // ainda abaixo da dobra (opcao B).
+      html += '.bc-inner.tv.dobra .tv-bot{height:' + round2(preset.cellHeightMm - tagDobraMm) + 'mm;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:1mm;overflow:hidden}';
       // Preco na largura toda da faixa (texto centralizado): o ajuste so
       // encolhe quando o preco passa da largura da tag, nao por fracao de px.
       html += '.bc-inner.tv.dobra .price{font-size:' + pt(20) + ';width:100%}';
