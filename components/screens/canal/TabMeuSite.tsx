@@ -15,7 +15,8 @@ import { SPECS, bannerParaPreview } from "./specsDeImagem";
 import { usePaymentGateways } from "@/hooks/usePaymentGateways";
 import {
   corpoDoMeuSite, formDoMeuSite, formatarPct, meuSiteAlterado, tecladoDaChavePix, dicaDoPublicado,
-  type FormDoMeuSite,
+  FORMAS_NA_ENTREGA, alternarFormaNaEntrega, lerFormasNaEntrega,
+  type FormDoMeuSite, type FormaNaEntrega,
 } from "./meuSite";
 
 /**
@@ -87,6 +88,10 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   const [pixHolderName, setPixHolderName] = useState(config.pix_holder_name || "");
   const [pixHolderCity, setPixHolderCity] = useState(config.pix_holder_city || "");
   const [payOnDelivery, setPayOnDelivery] = useState(config.pay_on_delivery_enabled === true);
+  // tq-44: formas de pagar na entrega (dinheiro, cartão na máquina, Pix na hora).
+  const [payOnDeliveryMethods, setPayOnDeliveryMethods] = useState<FormaNaEntrega[]>(
+    lerFormasNaEntrega(config.pay_on_delivery_methods)
+  );
   const [cardEnabled, setCardEnabled] = useState(config.card_enabled !== false);
   const [parcelas, setParcelas] = useState<number | null>(config.card_max_installments ?? null);
 
@@ -121,6 +126,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
     setPixHolderName(f.pixHolderName);
     setPixHolderCity(f.pixHolderCity);
     setPayOnDelivery(f.payOnDelivery);
+    setPayOnDeliveryMethods(f.payOnDeliveryMethods);
     setCardEnabled(f.cardEnabled);
     setParcelas(f.parcelas);
     setPolitica(f.politica);
@@ -169,7 +175,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   const formAtual: FormDoMeuSite = {
     siteName, tagline, description, phone, whatsapp, instagram, tiktok, facebook, address,
     color, published, pixKey, pixKeyType, pixHolderName, pixHolderCity,
-    payOnDelivery, cardEnabled, parcelas, politica, pixPct,
+    payOnDelivery, payOnDeliveryMethods, cardEnabled, parcelas, politica, pixPct,
   };
   const alterado = meuSiteAlterado(formAtual, salvo, politicaPadrao);
   useEffect(() => { onAlteracoes?.(alterado); }, [alterado, onAlteracoes]);
@@ -477,6 +483,39 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
           </View>
           <Switch value={payOnDelivery} onValueChange={setPayOnDelivery} trackColor={{ true: p.green, false: p.bg4 }} thumbColor="#fff" />
         </View>
+        {payOnDelivery ? (
+          <View testID="formas-na-entrega" style={{ marginTop: 10, gap: 8 }}>
+            <Text style={cs.fieldLabel}>Como você recebe na porta?</Text>
+            {FORMAS_NA_ENTREGA.map((f) => {
+              const marcada = payOnDeliveryMethods.includes(f.valor);
+              return (
+                <Pressable
+                  key={f.valor}
+                  testID={`forma-na-entrega-${f.valor}`}
+                  onPress={() => setPayOnDeliveryMethods((atuais) => alternarFormaNaEntrega(atuais, f.valor))}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: marcada }}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 4 }}
+                >
+                  <View style={{
+                    width: 20, height: 20, borderRadius: 5, borderWidth: 1.5,
+                    borderColor: marcada ? accent.primary : p.border,
+                    backgroundColor: marcada ? accent.primary : "transparent",
+                    alignItems: "center", justifyContent: "center",
+                  }}>
+                    {marcada ? <Text style={{ color: "#fff", fontSize: 13, fontWeight: "800", lineHeight: 15 }}>✓</Text> : null}
+                  </View>
+                  <Text style={{ fontSize: 13.5, color: p.ink, fontWeight: "600" }}>{f.rotulo}</Text>
+                </Pressable>
+              );
+            })}
+            <Text style={cs.hint}>
+              {payOnDeliveryMethods.length
+                ? "A cliente escolhe uma dessas formas no checkout (no dinheiro, diz para quanto é o troco). O pedido chega em Pedidos para você aceitar, com o tempo de preparo, ou recusar. O estoque só baixa quando você aceita, e o valor entra no Financeiro como a receber até você marcar entregue."
+                : "Marque as formas que você recebe para a cliente escolher no checkout e você aceitar cada pedido antes de preparar. Sem nenhuma marcada, o pedido entra já confirmado, como hoje."}
+            </Text>
+          </View>
+        ) : null}
         <View style={cs.divider} />
 
         {/* Form chave Pix manual */}

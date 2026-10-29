@@ -9,6 +9,31 @@ import { maskPhone } from "@/utils/masks";
 
 export type TipoDaChavePix = "CPF" | "CNPJ" | "EMAIL" | "PHONE" | "RANDOM";
 
+/**
+ * Formas de pagar na entrega (tq-44, 29/10/2026). Com pelo menos uma
+ * marcada, o pedido de pagar na entrega chega para a lojista aceitar (com
+ * o tempo de preparo) e só então baixa o estoque e entra no Financeiro
+ * como a receber. Sem nenhuma, fica como sempre foi.
+ */
+export type FormaNaEntrega = "cash" | "card" | "pix";
+export const FORMAS_NA_ENTREGA: { valor: FormaNaEntrega; rotulo: string }[] = [
+  { valor: "cash", rotulo: "Dinheiro, com troco" },
+  { valor: "card", rotulo: "Cartão na máquina" },
+  { valor: "pix", rotulo: "Pix na hora" },
+];
+
+/** A lista do servidor (ou qualquer coisa) como formas válidas, na ordem da tela. */
+export function lerFormasNaEntrega(bruto: unknown): FormaNaEntrega[] {
+  const lista = Array.isArray(bruto) ? bruto.map((x) => String(x)) : [];
+  return FORMAS_NA_ENTREGA.map((f) => f.valor).filter((v) => lista.includes(v));
+}
+
+/** Marca ou desmarca uma forma, mantendo a ordem da tela. */
+export function alternarFormaNaEntrega(atuais: FormaNaEntrega[], forma: FormaNaEntrega): FormaNaEntrega[] {
+  const tem = atuais.includes(forma);
+  return lerFormasNaEntrega(tem ? atuais.filter((f) => f !== forma) : [...atuais, forma]);
+}
+
 /** O que a lojista vê e edita na aba — texto como está no campo. */
 export type FormDoMeuSite = {
   siteName: string;
@@ -27,6 +52,7 @@ export type FormDoMeuSite = {
   pixHolderName: string;
   pixHolderCity: string;
   payOnDelivery: boolean;
+  payOnDeliveryMethods: FormaNaEntrega[];
   cardEnabled: boolean;
   parcelas: number | null;
   politica: string;
@@ -85,6 +111,7 @@ export function formDoMeuSite(config: any, nomeDaEmpresa?: string | null): FormD
     pixHolderName: c.pix_holder_name || "",
     pixHolderCity: c.pix_holder_city || "",
     payOnDelivery: c.pay_on_delivery_enabled === true,
+    payOnDeliveryMethods: lerFormasNaEntrega(c.pay_on_delivery_methods),
     cardEnabled: c.card_enabled !== false,
     parcelas: c.card_max_installments ?? null,
     politica: c.politica_troca || "",
@@ -116,6 +143,9 @@ export function corpoDoMeuSite(f: FormDoMeuSite, politicaPadrao = "") {
     pix_holder_name: t(f.pixHolderName),
     pix_holder_city: t(f.pixHolderCity),
     pay_on_delivery_enabled: f.payOnDelivery,
+    // Lista vazia: o servidor grava NULL e a loja fica no pagar na entrega
+    // de sempre, sem aceite.
+    pay_on_delivery_methods: lerFormasNaEntrega(f.payOnDeliveryMethods),
     card_enabled: f.cardEnabled,
     card_max_installments: f.parcelas,
     // Campo em branco volta ao padrao — e assim que ela desfaz uma edicao
