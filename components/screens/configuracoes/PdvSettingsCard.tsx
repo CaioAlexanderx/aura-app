@@ -21,6 +21,7 @@ import { CardPriceSection } from "@/components/screens/configuracoes/CardPriceSe
 import { FrenteDaLoja, nomeDaFrente } from "@/components/screens/configuracoes/FrenteDaLoja";
 import { MiniaturaDesenhoEtiqueta } from "@/components/screens/configuracoes/MiniaturaDesenhoEtiqueta";
 import { tourTarget } from "@/utils/tourTarget";
+import { parsePercent, formatPercent } from "@/utils/parsePercent";
 import { alvoDaSecao } from "@/utils/focoNaSecao";
 import {
   LABEL_DESIGN_SIZES, LABEL_SIZE_KEYS, DEFAULT_LABEL_SIZE, LABEL_SIZE_PRESETS, labelDesignPadrao,
@@ -87,7 +88,7 @@ export function PdvSettingsCard() {
   const { settings: serverSettings, isLoading, invalidate } = usePdvSettings();
   const [pendingSettings, setPendingSettings] = useState<PdvSettings | null>(null);
   const [saving, setSaving] = useState(false);
-  const [feeInput, setFeeInput] = useState<string>("");
+  const [feeInput, setFeeInput] = useState<string | null>(null);
 
   // Usa pendingSettings durante save (optimistic), senao usa o do server
   const display = pendingSettings || serverSettings;
@@ -572,11 +573,12 @@ export function PdvSettingsCard() {
               <Text style={s.rowDesc}>Sugestão de gorjeta calculada sobre o subtotal da comanda. 0 = desativada. Aparece como linha separada no fechamento (fora da NFC-e).</Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 }}>
                 <TextInput
-                  value={feeInput || String(display.food_service_fee_pct ?? "")}
+                  value={feeInput ?? formatPercent(display.food_service_fee_pct)}
                   onChangeText={setFeeInput}
                   onBlur={() => {
-                    const n = Math.max(0, Math.min(30, Number((feeInput || "").replace(/[^\d.]/g, "")) || 0));
-                    setFeeInput("");
+                    if (feeInput === null) return;
+                    const n = parsePercent(feeInput, 30);
+                    setFeeInput(null);
                     if (n !== Number(display.food_service_fee_pct || 0)) {
                       toggle("food_service_fee_pct" as keyof PdvSettings, n);
                     }

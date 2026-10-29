@@ -10,6 +10,7 @@ import { useVisibleModules } from "@/hooks/useVisibleModules";
 import { useQueryClient } from "@tanstack/react-query";
 import { type FoodTable, type FoodComanda } from "@/hooks/useFoodTables";
 import { printThermalUrl, buildCupomUrl } from "@/utils/printThermal";
+import { parseDecimalBR, formatDecimalBR } from "@/utils/parsePercent";
 
 // ============================================================
 // CloseTableModal — Fase 7 Aura Food.
@@ -568,9 +569,9 @@ function PaymentStep({
                 </Text>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
                   <Text style={{ fontSize: 11, color: FoodColors.ink3 }}>R$</Text>
-                  <TextInput
-                    value={String(p.amount)}
-                    onChangeText={(v) => onUpdate(idx, { amount: Number((v || "0").replace(/[^\d.]/g, "")) || 0 })}
+                  <MoneyInput
+                    value={p.amount}
+                    onValue={(n) => onUpdate(idx, { amount: n || 0 })}
                     keyboardType="decimal-pad"
                     style={{
                       backgroundColor: FoodColors.surface2, borderRadius: 6,
@@ -582,9 +583,9 @@ function PaymentStep({
                 {p.method === "dinheiro" && (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 }}>
                     <Text style={{ fontSize: 10, color: FoodColors.ink3 }}>Recebido R$</Text>
-                    <TextInput
-                      value={p.tendered ? String(p.tendered) : ""}
-                      onChangeText={(v) => onUpdate(idx, { tendered: Number((v || "0").replace(/[^\d.]/g, "")) || undefined })}
+                    <MoneyInput
+                      value={p.tendered}
+                      onValue={(n) => onUpdate(idx, { tendered: n || undefined })}
                       placeholder="opcional"
                       placeholderTextColor={FoodColors.ink4}
                       keyboardType="decimal-pad"
@@ -616,6 +617,29 @@ function PaymentStep({
 // ============================================================
 // PASSO 3 — NFC-e (opcional)
 // ============================================================
+// Campo de valor em reais: guarda o texto digitado (pra "10," não perder a
+// vírgula no meio da digitação) e entrega o número já lido no formato
+// brasileiro ("10,50" = 10.5). Se o valor muda por fora, o texto acompanha.
+function MoneyInput({ value, onValue, ...rest }: {
+  value?: number; onValue: (n: number | null) => void; [k: string]: any;
+}) {
+  const [txt, setTxt] = useState<string>(value ? formatDecimalBR(value) : "");
+  useEffect(() => {
+    if ((parseDecimalBR(txt) ?? 0) !== (value || 0)) setTxt(value ? formatDecimalBR(value) : "");
+  }, [value]);
+  return (
+    <TextInput
+      {...rest}
+      value={txt}
+      onChangeText={(v) => {
+        const limpo = v.replace(/[^\d.,]/g, "");
+        setTxt(limpo);
+        onValue(parseDecimalBR(limpo));
+      }}
+    />
+  );
+}
+
 function NfceStep({
   emitNfce, setEmitNfce, planAllowsNfce, settingsAllowsNfce,
   cpf, setCpf, name, setName, email, setEmail,
