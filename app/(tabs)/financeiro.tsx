@@ -32,7 +32,7 @@ import { creditApi } from "@/services/creditApi";
 import { ScreenHero, ScreenTabs } from "@/components/ScreenHero";
 import { pluralize } from "@/utils/plural";
 import { ResultadoImportacaoModal } from "@/components/screens/financeiro/ResultadoImportacaoModal";
-import { textoDaImportacao, TEXTO_ARQUIVO_VAZIO, type TextoDaImportacao } from "@/utils/importacaoLancamentos";
+import { textoDaImportacao, TEXTO_ARQUIVO_VAZIO, COLUNAS_DO_MODELO, LINHAS_DO_MODELO, type TextoDaImportacao } from "@/utils/importacaoLancamentos";
 import { MSG_SESSAO_TERMINOU, MSG_ERRO_SEM_EXPLICACAO } from "@/utils/mensagensDoApp";
 
 // 01/09/2026 (QA onda 2 — cabeçalho unificado): a tela abria com o kicker
@@ -359,6 +359,13 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
     downloadCSV(arrayToCSV(transactions, TRANSACTION_COLUMNS), "aura_lancamentos_" + new Date().toISOString().slice(0, 10) + ".csv");
   }
 
+  // Planilha de exemplo com as colunas que a importação entende.
+  function handleBaixarModelo() {
+    downloadCSV(arrayToCSV(LINHAS_DO_MODELO.map(function(l) {
+      var o: any = {}; COLUNAS_DO_MODELO.forEach(function(c, i) { o[c] = l[i]; }); return o;
+    }), COLUNAS_DO_MODELO.map(function(c) { return { key: c, label: c }; })), "aura_lancamentos_exemplo.csv");
+  }
+
   async function handleImport() {
     if (consolidatedView) {
       toast.error("Escolha uma empresa no seletor para importar lançamentos");
@@ -368,7 +375,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
     try {
       setImporting(true);
       var rows = await pickFileAndParse();
-      if (rows.length === 0) { setResultadoImport({ titulo: "Arquivo sem linhas", resumo: TEXTO_ARQUIVO_VAZIO, motivos: [], oferecerAjuda: true }); setImporting(false); return; }
+      if (rows.length === 0) { setResultadoImport({ titulo: "Arquivo sem linhas", resumo: TEXTO_ARQUIVO_VAZIO, motivos: [], oferecerAjuda: true, resumoDosMotivos: [], parecePlanilhaDeCrediario: false, oferecerModelo: false }); setImporting(false); return; }
       var res = await fetch(BASE_URL + "/companies/" + company.id + "/transactions/batch?partial=true", {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
         body: JSON.stringify({ transactions: rows }),
@@ -380,7 +387,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
       // deixando Health Score, comparativo, banner do mes e Painel com numeros
       // velhos depois de um import de centenas de lancamentos.
       invalidateFinanceiroQueries(qc, company.id);
-      var texto = textoDaImportacao(data);
+      var texto = textoDaImportacao(data, Object.keys(rows[0] || {}));
       if (texto.oferecerAjuda) setResultadoImport(texto); else toast.success(texto.resumo);
     } catch (err: any) {
       // "no file" = a pessoa fechou o seletor; "web only" e "too large" já avisaram por toast.
@@ -668,6 +675,10 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
           resumo={resultadoImport ? resultadoImport.resumo : ""}
           motivos={resultadoImport ? resultadoImport.motivos : []}
           oferecerAjuda={resultadoImport ? resultadoImport.oferecerAjuda : false}
+          resumoDosMotivos={resultadoImport ? resultadoImport.resumoDosMotivos : []}
+          parecePlanilhaDeCrediario={resultadoImport ? resultadoImport.parecePlanilhaDeCrediario : false}
+          oferecerModelo={resultadoImport ? resultadoImport.oferecerModelo : false}
+          onBaixarModelo={handleBaixarModelo}
           onPedirAjuda={function() { setResultadoImport(null); router.push("/suporte" as any); }}
           onFechar={function() { setResultadoImport(null); }}
         />

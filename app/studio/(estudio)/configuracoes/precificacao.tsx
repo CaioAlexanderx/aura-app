@@ -36,6 +36,7 @@ import { request } from "@/services/api";
 import { confirmAlert } from "@/utils/webAlert";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
+import { parseDecimalBR } from "@/utils/parsePercent";
 
 // ─── Tipos locais ──────────────────────────────────────────
 type Product = { id: string; name: string; price: number };
@@ -105,9 +106,9 @@ function tiersFromDraft(tiers: TierDraft[]): StudioPricingTier[] {
       };
       // Só manda o campo do modo selecionado — nunca os dois (achado #15).
       if (t.mode === "fixed") {
-        tier.unit_price = parseFloat(t.unit_price) || 0;
+        tier.unit_price = parseDecimalBR(t.unit_price) || 0;
       } else {
-        tier.unit_multiplier = t.unit_multiplier.trim() !== "" ? parseFloat(t.unit_multiplier) || 1 : 1;
+        tier.unit_multiplier = t.unit_multiplier.trim() !== "" ? (parseDecimalBR(t.unit_multiplier) || 1) : 1;
       }
       // Prazo só vai quando ela escreveu um número: vazio é "a loja
       // informa", e mandar 0 seria prometer entrega no mesmo dia.
@@ -437,10 +438,10 @@ export default function StudioPrecificacao() {
     setSavingGlobal(true);
     try {
       await studioApi.savePricingRule(cid, "global", {
-        setup_fee:          parseFloat(globalDraft.setup_fee)          || 0,
-        labor_cost:         parseFloat(globalDraft.labor_cost)         || 0,
-        default_margin_pct: globalDraft.default_margin_pct.trim() !== "" ? parseFloat(globalDraft.default_margin_pct) : null,
-        urgency_pct:        parseFloat(globalDraft.urgency_pct)        || 0,
+        setup_fee:          parseDecimalBR(globalDraft.setup_fee)          || 0,
+        labor_cost:         parseDecimalBR(globalDraft.labor_cost)         || 0,
+        default_margin_pct: globalDraft.default_margin_pct.trim() !== "" ? parseDecimalBR(globalDraft.default_margin_pct) : null,
+        urgency_pct:        parseDecimalBR(globalDraft.urgency_pct)        || 0,
         qty_tiers:          null, // global não usa faixas (DA-B)
       });
       toast.success("Regra global salva!");
@@ -473,10 +474,10 @@ export default function StudioPrecificacao() {
     try {
       const tiers = tiersFromDraft(draft.tiers);
       await studioApi.savePricingRule(cid, draft.product.id, {
-        setup_fee:          parseFloat(draft.setup_fee)          || 0,
-        labor_cost:         parseFloat(draft.labor_cost)         || 0,
-        default_margin_pct: draft.default_margin_pct.trim() !== "" ? parseFloat(draft.default_margin_pct) : null,
-        urgency_pct:        parseFloat(draft.urgency_pct)        || 0,
+        setup_fee:          parseDecimalBR(draft.setup_fee)          || 0,
+        labor_cost:         parseDecimalBR(draft.labor_cost)         || 0,
+        default_margin_pct: draft.default_margin_pct.trim() !== "" ? parseDecimalBR(draft.default_margin_pct) : null,
+        urgency_pct:        parseDecimalBR(draft.urgency_pct)        || 0,
         qty_tiers:          tiers.length > 0 ? tiers : null,
       });
       toast.success(`Regra de "${draft.product.name}" salva!`);

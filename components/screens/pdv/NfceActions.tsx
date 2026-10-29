@@ -8,6 +8,9 @@
 //
 // Não assume shape de venda — props genéricas que qualquer caller
 // (venda nova, troca, marketplace order etc.) pode preencher.
+//
+// 29/10/2026 (tq-39): item aceita `discount` (vDesc do item, em R$ no total
+// da linha). Só a Troca preenche; sem desconto o corpo do /emit sai igual.
 // ============================================================
 import { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform, ActivityIndicator } from "react-native";
@@ -27,6 +30,8 @@ export type NfceActionsItem = {
   product_name: string;
   quantity: number;
   unit_price: number;
+  /** 29/10/2026 (tq-39): desconto do item no total da linha (vDesc). */
+  discount?: number;
 };
 
 export type NfceActionsProps = {
@@ -127,6 +132,7 @@ export function NfceActions({
           product_name: i.product_name,
           quantity: i.quantity,
           unit_price: i.unit_price,
+          ...(i.discount && i.discount > 0 ? { discount: i.discount } : {}),
         })),
         sale_id: saleId,
         customer_cpf: customerCpf || undefined,

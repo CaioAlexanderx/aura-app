@@ -49,4 +49,30 @@ describe("ResultadoImportacaoModal", () => {
     act(() => { fechar.props.onPress(); });
     expect(base.onFechar).toHaveBeenCalled();
   });
+
+  it("mostra a contagem por motivo e oferece a planilha de exemplo", () => {
+    const onBaixarModelo = jest.fn();
+    const t = montar({ resumoDosMotivos: ["3.687 linhas sem entrada ou saída"], oferecerModelo: true, onBaixarModelo });
+    expect(textos(t)).toContain("3.687 linhas sem entrada ou saída");
+    expect(textos(t)).toContain("Baixar planilha de exemplo");
+    const [botao] = porTestId(t, "resultado-importacao-modelo");
+    act(() => { botao.props.onPress(); });
+    expect(onBaixarModelo).toHaveBeenCalled();
+  });
+
+  it("sem pedido do modelo, o botão não aparece", () => {
+    const t = montar();
+    expect(porTestId(t, "resultado-importacao-modelo")).toHaveLength(0);
+  });
+
+  it("planilha de crediário: aviso gentil, convite do Time Aura e sem o texto de escopo repetido", () => {
+    const t = montar({
+      titulo: "Parece uma planilha de crediário", resumo: "Esta planilha parece ser de crediário.", motivos: [],
+      parecePlanilhaDeCrediario: true,
+    });
+    const j = textos(t);
+    expect(j).toContain("Parece uma planilha de crediário");
+    expect(j).toContain("Pedir ao Time Aura");
+    expect(j).not.toContain("Esta tela importa receitas e despesas");
+  });
 });

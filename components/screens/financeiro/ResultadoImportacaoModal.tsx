@@ -1,6 +1,6 @@
 import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
-import { ROTULO_PEDIR_AJUDA_IMPORTACAO, TEXTO_ESCOPO_IMPORTACAO } from "@/utils/importacaoLancamentos";
+import { ROTULO_BAIXAR_MODELO, ROTULO_PEDIR_AJUDA_IMPORTACAO, TEXTO_ESCOPO_IMPORTACAO } from "@/utils/importacaoLancamentos";
 
 // Resultado da importação de lançamentos: o que entrou, as primeiras linhas
 // que ficaram de fora com o motivo que o backend devolveu e, quando o arquivo
@@ -13,11 +13,17 @@ type Props = {
   resumo: string;
   motivos: string[];
   oferecerAjuda: boolean;
+  /** Quantas linhas caíram em cada motivo (frases prontas). */
+  resumoDosMotivos?: string[];
+  /** Planilha parecida com crediário: o aviso já está no resumo, o texto de escopo fica de fora. */
+  parecePlanilhaDeCrediario?: boolean;
+  oferecerModelo?: boolean;
+  onBaixarModelo?: () => void;
   onPedirAjuda: () => void;
   onFechar: () => void;
 };
 
-export function ResultadoImportacaoModal({ visible, titulo, resumo, motivos, oferecerAjuda, onPedirAjuda, onFechar }: Props) {
+export function ResultadoImportacaoModal({ visible, titulo, resumo, motivos, oferecerAjuda, resumoDosMotivos = [], parecePlanilhaDeCrediario = false, oferecerModelo = false, onBaixarModelo, onPedirAjuda, onFechar }: Props) {
   if (!visible) return null;
   const isWeb = Platform.OS === "web";
   return (
@@ -26,12 +32,22 @@ export function ResultadoImportacaoModal({ visible, titulo, resumo, motivos, ofe
       <View style={s.dialog}>
         <Text style={s.title}>{titulo}</Text>
         <Text style={s.message}>{resumo}</Text>
+        {resumoDosMotivos.length > 0 ? (
+          <View style={s.motivos} testID="resultado-importacao-contagem">
+            {resumoDosMotivos.map(function(m, i) { return <Text key={i} style={s.contagem}>{m}</Text>; })}
+          </View>
+        ) : null}
         {motivos.length > 0 ? (
           <View style={s.motivos} testID="resultado-importacao-motivos">
             {motivos.map(function(m, i) { return <Text key={i} style={s.motivo}>{m}</Text>; })}
           </View>
         ) : null}
-        {oferecerAjuda ? <Text style={s.escopo}>{TEXTO_ESCOPO_IMPORTACAO}</Text> : null}
+        {oferecerAjuda && !parecePlanilhaDeCrediario ? <Text style={s.escopo}>{TEXTO_ESCOPO_IMPORTACAO}</Text> : null}
+        {oferecerModelo && onBaixarModelo ? (
+          <Pressable testID="resultado-importacao-modelo" onPress={onBaixarModelo} style={s.ajudaBtn}>
+            <Text style={s.ajudaText}>{ROTULO_BAIXAR_MODELO}</Text>
+          </Pressable>
+        ) : null}
         {oferecerAjuda ? (
           <Pressable testID="resultado-importacao-ajuda" onPress={onPedirAjuda} style={s.ajudaBtn}>
             <Text style={s.ajudaText}>{ROTULO_PEDIR_AJUDA_IMPORTACAO}</Text>
@@ -52,6 +68,7 @@ const s = StyleSheet.create({
   title: { fontSize: 18, fontWeight: "700", color: Colors.ink, marginBottom: 8 },
   message: { fontSize: 14, color: Colors.ink, lineHeight: 21, marginBottom: 12 },
   motivos: { backgroundColor: Colors.bg4, borderRadius: 12, padding: 12, gap: 6, marginBottom: 12 },
+  contagem: { fontSize: 13, color: Colors.ink, lineHeight: 19 },
   motivo: { fontSize: 12, color: Colors.ink3, lineHeight: 18 },
   escopo: { fontSize: 13, color: Colors.ink3, lineHeight: 20, marginBottom: 12 },
   ajudaBtn: { paddingVertical: 12, borderRadius: 12, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.violet2, alignItems: "center", marginBottom: 10 },

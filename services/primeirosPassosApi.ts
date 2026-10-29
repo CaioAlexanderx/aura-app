@@ -6,7 +6,7 @@ import { request } from "./api";
 // estáveis; os textos moram em constants/primeirosPassos.ts.
 // ============================================================
 
-export type Segmento = "varejo" | "matcon" | "otica" | "assistencia" | "studio" | "outro";
+export type Segmento = "varejo" | "matcon" | "otica" | "assistencia" | "studio" | "adega" | "outro";
 
 export type FirstStepsResponse = {
   segment: Segmento | null;

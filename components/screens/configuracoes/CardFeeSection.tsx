@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { View, Text, StyleSheet, Switch, TextInput } from "react-native";
 import type { PdvSettings } from "@/services/api";
+import { parsePercent, formatPercent } from "@/utils/parsePercent";
 
 // ============================================================
 // AURA. — Taxa da maquininha (seção compartilhada)
@@ -44,12 +45,15 @@ type Props = {
 export function CardFeeSection({ display, saving, onToggle, palette }: Props) {
   // Crédito e débito têm alíquotas próprias, então cada campo guarda
   // o texto em edição separadamente e só persiste no blur.
-  const [creditFeeInput, setCreditFeeInput] = useState<string>("");
-  const [debitFeeInput, setDebitFeeInput] = useState<string>("");
+  // null = campo intocado (mostra o valor salvo); "" = a lojista apagou.
+  const [creditFeeInput, setCreditFeeInput] = useState<string | null>(null);
+  const [debitFeeInput, setDebitFeeInput] = useState<string | null>(null);
   const s = useMemo(() => buildStyles(palette), [palette]);
 
-  function commitPct(raw: string, key: "card_fee_credit_pct" | "card_fee_debit_pct") {
-    const n = Math.max(0, Math.min(100, Number((raw || "").replace(/[^\d.]/g, "")) || 0));
+  function commitPct(raw: string | null, key: "card_fee_credit_pct" | "card_fee_debit_pct") {
+    if (raw === null) return; // não mexeu no campo: nada a gravar
+    // Vírgula e ponto valem como decimal ("11,52" = 11.52), até 2 casas.
+    const n = parsePercent(raw, 100);
     if (n !== Number(display[key] || 0)) {
       onToggle(key, n);
     }
@@ -79,11 +83,12 @@ export function CardFeeSection({ display, saving, onToggle, palette }: Props) {
               <Text style={s.cardFeeHint}>Quanto a adquirente retém no crédito</Text>
             </View>
             <TextInput
-              value={creditFeeInput || String(display.card_fee_credit_pct ?? "")}
+              testID="card-fee-credit"
+              value={creditFeeInput ??formatPercent(display.card_fee_credit_pct)}
               onChangeText={setCreditFeeInput}
               onBlur={() => {
                 commitPct(creditFeeInput, "card_fee_credit_pct");
-                setCreditFeeInput("");
+                setCreditFeeInput(null);
               }}
               keyboardType="decimal-pad"
               placeholder="0"
@@ -100,11 +105,12 @@ export function CardFeeSection({ display, saving, onToggle, palette }: Props) {
               <Text style={s.cardFeeHint}>Quanto a adquirente retém no débito</Text>
             </View>
             <TextInput
-              value={debitFeeInput || String(display.card_fee_debit_pct ?? "")}
+              testID="card-fee-debit"
+              value={debitFeeInput ??formatPercent(display.card_fee_debit_pct)}
               onChangeText={setDebitFeeInput}
               onBlur={() => {
                 commitPct(debitFeeInput, "card_fee_debit_pct");
-                setDebitFeeInput("");
+                setDebitFeeInput(null);
               }}
               keyboardType="decimal-pad"
               placeholder="0"

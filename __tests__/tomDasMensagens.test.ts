@@ -2,7 +2,7 @@
 // "servidor" nem manda a pessoa "verificar a internet" dela.
 import { request, ApiError } from "@/services/api";
 import * as M from "@/utils/mensagensDoApp";
-import { TEXTO_ESCOPO_IMPORTACAO, TEXTO_ARQUIVO_VAZIO, textoDaImportacao, motivosDasLinhas } from "@/utils/importacaoLancamentos";
+import { TEXTO_ESCOPO_IMPORTACAO, TEXTO_ARQUIVO_VAZIO, TEXTO_PARECE_CREDIARIO, ROTULO_BAIXAR_MODELO, textoDaImportacao, motivosDasLinhas } from "@/utils/importacaoLancamentos";
 import { TEXTOS_TRIAL } from "@/utils/trialAviso";
 import { TEXTOS_DO_MURO } from "@/utils/muroDeAssinatura";
 import { fetchWeeklyReport } from "@/services/weeklyReportApi";
@@ -20,12 +20,15 @@ const todos: string[] = [
   ...M.MENSAGENS_DO_APP,
   TEXTO_ESCOPO_IMPORTACAO,
   TEXTO_ARQUIVO_VAZIO,
+  TEXTO_PARECE_CREDIARIO,
+  ROTULO_BAIXAR_MODELO,
   ...[
     textoDaImportacao({ saved: 12, error_count: 3, errors: [{ index: 4, errors: ["Linha 5: valor invalido 'x'"] }] }),
     textoDaImportacao({ saved: 0, error_count: 2, errors: [] }),
     textoDaImportacao({ saved: 0 }),
     textoDaImportacao({ saved: 1 }),
-  ].flatMap((t) => [t.titulo, t.resumo]),
+    textoDaImportacao({ saved: 0, error_count: 9, reasons: { tipo_invalido: 9 } }, ["nome", "quanto"]),
+  ].flatMap((t) => [t.titulo, t.resumo, ...t.resumoDosMotivos]),
 ];
 
 // 25/10/2026 (itens 8 a 12 e extras): fim do teste, muro, estados vazios e
@@ -128,9 +131,9 @@ describe("resultado da importação de lançamentos", () => {
     });
     expect(t.resumo).toBe("Importei 12 lançamentos. 3 linhas ficaram de fora, e aqui estão as primeiras com o motivo.");
     expect(t.motivos).toEqual([
-      "Linha 2: tipo invalido 'x' (use 'income' ou 'expense')",
+      "Linha 2: falta dizer se é receita ou despesa (coluna Tipo)",
       "Linha 8: não conseguimos salvar esta linha",
-      "Linha 10: data invalida 'abc' (use YYYY-MM-DD ou DD/MM/YYYY)",
+      "Linha 10: a data não deu para entender (use dia/mês/ano, como 05/11/2026)",
     ]);
     expect(t.motivos.join(" ")).not.toMatch(/duplicate key/);
     expect(t.oferecerAjuda).toBe(true);

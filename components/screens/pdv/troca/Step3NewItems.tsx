@@ -45,6 +45,13 @@
 // código ou SKU do pai, fora da lista local, entrava sem variant_id (baixava
 // o pai e nenhum tamanho). Com variante ativa, abre o seletor; sem, segue
 // direto (utils/varianteAtivaNoBipe).
+//
+// 29/10/2026 (incidente Davi Calçados — "não consegue dar descontos/alterar
+// preço na troca"): o preço do item novo no carrinho da troca é editável,
+// como o lápis do Caixa. Abaixo do preço de tabela (list_price), aparece o
+// preço cheio riscado e o % — e no envio a diferença vira item_discount
+// (descontoDaTroca.ts). O desconto R$/% da troca fica no passo Finalizar;
+// aqui o saldo mostra a linha "− Desconto" quando houver.
 // ============================================================
 import { useState, useMemo, useEffect, useRef } from "react";
 import {
@@ -82,14 +89,27 @@ type Props = {
    *  — só aparece com matcon_enabled. TrocaModal.tsx limpa o carrinho,
    *  marca devolverValor e avança. */
   onDevolverValor?: () => void;
+  /** 29/10/2026: desconto R$/% da troca (escolhido no passo Finalizar). */
+  discountAmount?: number;
 };
+
+// Mesmo parser do lápis do Caixa (CartPanel.parseCurrencyInput).
+function lerPrecoDigitado(raw: string): number | null {
+  const sanitized = raw.replace(/[^\d,.]/g, "");
+  const normalized = sanitized.includes(",")
+    ? sanitized.replace(/\./g, "").replace(",", ".")
+    : sanitized;
+  if (!normalized) return null;
+  const n = parseFloat(normalized);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null;
+}
 
 type Dest = "outro" | "credito" | "dinheiro";
 
 export function Step3NewItems({
   products, newEntries, onChangeEntries,
   returnedValue, newValue, netAmount,
-  onSkip, onDevolverValor,
+  onSkip, onDevolverValor, discountAmount = 0,
 }: Props) {
   const { company } = useAuthStore();
   // 22/09/2026 (M4): mesma leitura de pdv_settings que Step2Returns já
@@ -100,6 +120,8 @@ export function Step3NewItems({
   const [query, setQuery] = useState("");
   const [scanBuffer, setScanBuffer] = useState("");
   const [pendingProduct, setPendingProduct] = useState<any | null>(null);
+  // 29/10/2026: linha cujo preço está sendo editado (lápis) e o texto digitado.
+  const [editandoPreco, setEditandoPreco] = useState<{ idx: number; texto: string } | null>(null);
   const scanRef = useRef<TextInput | null>(null);
   const { width } = useWindowDimensions();
   const isWide = width > 880;
@@ -148,6 +170,7 @@ export function Step3NewItems({
           variant_id: vid,
           quantity: 1,
           unit_price: Number(args.unit_price || 0),
+          list_price: Number(args.unit_price || 0),
           product_name_snapshot: args.name,
           addedVia: args.via || "search",
         },
@@ -192,6 +215,16 @@ export function Step3NewItems({
     }
     const next = [...newEntries];
     next[idx] = { ...next[idx], quantity: qty };
+    onChangeEntries(next);
+  }
+
+  // 29/10/2026: lápis do preço. Atualiza enquanto digita (como o Caixa), pra
+  // o saldo e o "Continuar" já usarem o valor novo.
+  function setUnitPrice(idx: number, texto: string) {
+    const price = lerPrecoDigitado(texto);
+    if (price === null || !newEntries[idx] || price === newEntries[idx].unit_price) return;
+    const next = [...newEntries];
+    next[idx] = { ...next[idx], unit_price: price };
     onChangeEntries(next);
   }
 
@@ -454,9 +487,45 @@ export function Step3NewItems({
                         <Text style={s.bipedBadge}>  ✓ Bipado</Text>
                       )}
                     </Text>
-                    <Text style={s.cartPrice}>
-                      {fmtBRL(e.unit_price)} × {e.quantity} = {fmtBRL(e.unit_price * e.quantity)}
-                    </Text>
+                    {editandoPreco?.idx === idx ? (
+                      <View style={s.priceEditRow}>
+                        <Text style={s.cartPrice}>R$</Text>
+                        <TextInput
+                          testID={`troca-preco-input-${idx}`}
+                          value={editandoPreco.texto}
+                          onChangeText={(v) => {
+                            const texto = v.replace(/[^\d,.]/g, "");
+                            setEditandoPreco({ idx, texto });
+                            setUnitPrice(idx, texto);
+                          }}
+                          onBlur={() => setEditandoPreco(null)}
+                          onSubmitEditing={() => setEditandoPreco(null)}
+                          keyboardType="decimal-pad"
+                          autoFocus
+                          selectTextOnFocus
+                          style={s.priceInput}
+                        />
+                        <Text style={s.cartPrice}>× {e.quantity} = {fmtBRL(e.unit_price * e.quantity)}</Text>
+                      </View>
+                    ) : (
+                      <Pressable
+                        testID={`troca-preco-${idx}`}
+                        onPress={() => setEditandoPreco({ idx, texto: e.unit_price.toFixed(2).replace(".", ",") })}
+                        style={s.priceTouch}
+                        accessibilityLabel="Mudar o preço deste item"
+                      >
+                        {e.list_price != null && e.list_price > e.unit_price + 0.001 && (
+                          <Text style={s.listPriceStruck}>{fmtBRL(e.list_price)}</Text>
+                        )}
+                        <Text style={s.cartPrice}>
+                          {fmtBRL(e.unit_price)} × {e.quantity} = {fmtBRL(e.unit_price * e.quantity)}
+                        </Text>
+                        {e.list_price != null && e.list_price > e.unit_price + 0.001 && (
+                          <Text style={s.discPill}>−{Math.round((1 - e.unit_price / e.list_price) * 100)}%</Text>
+                        )}
+                        <Icon name="edit" size={11} color="#a78bfa" />
+                      </Pressable>
+                    )}
                   </View>
                   <View style={s.qty}>
                     <Pressable onPress={() => setQty(idx, e.quantity - 1)} style={s.qtyBtn}>
@@ -513,6 +582,12 @@ export function Step3NewItems({
             <Text style={s.creditRowLabel}>Carrinho</Text>
             <Text style={s.creditRowValue}>{fmtBRL(newValue)}</Text>
           </View>
+          {discountAmount > 0 && (
+            <View style={s.creditRow}>
+              <Text style={s.creditRowLabel}>− Desconto</Text>
+              <Text style={s.creditRowValue}>− {fmtBRL(discountAmount)}</Text>
+            </View>
+          )}
           <View style={s.creditRow}>
             <Text style={s.creditRowLabel}>− Crédito</Text>
             <Text style={s.creditRowValue}>− {fmtBRL(returnedValue)}</Text>
@@ -695,6 +770,16 @@ const s = StyleSheet.create({
   cartName: { color: Colors.ink, fontSize: 13.5, fontWeight: "600" },
   bipedBadge: { color: "#10b981", fontSize: 11, fontWeight: "700" },
   cartPrice: { color: Colors.ink3, fontSize: 11.5, marginTop: 2 },
+  // 29/10/2026: lápis do preço do item novo.
+  priceTouch: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", flexWrap: "wrap" },
+  priceEditRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
+  priceInput: {
+    width: 84, color: Colors.ink, fontSize: 13, fontWeight: "700",
+    borderWidth: 1, borderColor: Colors.violet, borderRadius: 6,
+    paddingHorizontal: 6, paddingVertical: 3,
+  },
+  listPriceStruck: { color: Colors.ink3, fontSize: 11, marginTop: 2, textDecorationLine: "line-through" },
+  discPill: { color: "#10b981", fontSize: 11, fontWeight: "700", marginTop: 2 },
   qty: {
     flexDirection: "row", alignItems: "center",
     borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",

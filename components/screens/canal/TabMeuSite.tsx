@@ -8,6 +8,7 @@ import { BASE_URL } from "@/services/api";
 import { Field, SectionTitle, StatusBadge, useChannelStyles, IS_WIDE } from "./shared";
 import { maskPhone, maskCpfCnpj, maskDateBr, brDateToIso } from "@/utils/masks";
 import { MpGatewayCard } from "./MpGatewayCard";
+import { mpRecebendo } from "@/utils/mpConexao";
 import { useAccent } from "@/contexts/AccentTheme";
 import type { AccentTokens } from "@/contexts/AccentTheme";
 
@@ -108,8 +109,9 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
   // O parcelamento so aparece na loja com cartao FUNCIONANDO. Sem isso a
   // lojista escolheria "até 6x", salvaria, e nada apareceria — sem
   // explicacao nenhuma. Encontrado no QA: nenhuma loja tem MP hoje.
+  // tq-96: conexão que caiu não conta — o checkout já tirou o cartão.
   const { mpGateway } = usePaymentGateways();
-  const mpConfigurado = !!mpGateway;
+  const mpConfigurado = mpRecebendo(mpGateway);
 
   // O que está salvo no servidor — a régua de "tem alteração?".
   const [salvo, setSalvo] = useState<FormDoMeuSite>(() => formDoMeuSite(config, company?.name));
@@ -206,6 +208,15 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
     // O erro já era avisado (toast do hook); faltava o sucesso.
     toast.success("Configurações salvas.");
     return true;
+  }
+
+  // tq-96: logo depois de conectar o Mercado Pago, o cartão pergunta se liga
+  // o pagamento por cartão. Grava só esse campo e marca como salvo, para não
+  // virar "alteração não salva" no resto do formulário.
+  async function ligarCartaoDepoisDeConectar(): Promise<void> {
+    await saveConfig({ card_enabled: true });
+    setCardEnabled(true);
+    setSalvo((anterior) => ({ ...anterior, cardEnabled: true }));
   }
 
   // Sem lista de dependências de propósito: a ref sempre aponta para o
@@ -427,7 +438,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
         <View style={cs.switchRow}>
           <View style={{ flex: 1 }}>
             <Text style={cs.switchLabel}>Aceitar cartão de crédito</Text>
-            <Text style={cs.switchHint}>{cardEnabled ? "Cliente vê opção de cartão no checkout (requer Mercado Pago configurado abaixo)" : "Cartão desativado — cliente só vê Pix e/ou pagamento na entrega"}</Text>
+            <Text style={cs.switchHint}>{cardEnabled ? (mpConfigurado ? "O cliente vê a opção de cartão no checkout." : "Conecte o Mercado Pago logo abaixo para o cartão aparecer na loja.") : "Cartão desativado — cliente só vê Pix e/ou pagamento na entrega"}</Text>
           </View>
           <Switch value={cardEnabled} onValueChange={setCardEnabled} trackColor={{ true: p.green, false: p.bg4 }} thumbColor="#fff" />
         </View>
@@ -607,7 +618,7 @@ export function TabMeuSite({ config, saveConfig, isSaving, requestDomain, isRequ
 
       {/* MP Fase 0 (20/05/2026): cartao de credito via Mercado Pago.
           Card autonomo — gerencia proprio estado via usePaymentGateways hook. */}
-      <MpGatewayCard />
+      <MpGatewayCard cartaoLigado={cardEnabled} onLigarCartao={ligarCartaoDepoisDeConectar} />
 
       {/* Trocas e devolucoes (24/08/2026).
           O rodape da loja publica esse texto. Nenhuma das lojas escreveria
