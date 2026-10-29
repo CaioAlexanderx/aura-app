@@ -7,6 +7,7 @@ import { TEXTOS_TRIAL } from "@/utils/trialAviso";
 import { TEXTOS_DO_MURO } from "@/utils/muroDeAssinatura";
 import { fetchWeeklyReport } from "@/services/weeklyReportApi";
 import { waAura } from "@/constants/suporteAura";
+import { COMO_FUNCIONA_INDICACAO_BLACK_FRIDAY, MENSAGEM_INDICACAO_BLACK_FRIDAY, DESCRICAO_INDICACAO_BLACK_FRIDAY } from "@/utils/indicacaoCampanha";
 
 const originalFetch = global.fetch;
 afterEach(() => { global.fetch = originalFetch; jest.restoreAllMocks(); });
@@ -49,6 +50,9 @@ const novos: string[] = [
   ...Object.values(TEXTOS_DO_MURO),
   ...VAZIOS.flatMap((v) => [v.titulo, v.texto, v.botao]),
   ...M.COMO_FUNCIONA_INDICACAO,
+  ...COMO_FUNCIONA_INDICACAO_BLACK_FRIDAY,
+  MENSAGEM_INDICACAO_BLACK_FRIDAY,
+  DESCRICAO_INDICACAO_BLACK_FRIDAY,
 ];
 todos.push(...novos);
 
