@@ -40,6 +40,29 @@ const ordersApi = {
       `/companies/${cid}/digital-channel/orders/${oid}/reject-payment`,
       { method: "POST", body: { reason: reason || undefined } }
     ),
+  // tq-44/tq-47 (29/10/2026): fila do pedido com aceite. As respostas trazem
+  // `aviso_whatsapp` ({ passo, texto, link }) para a lojista avisar a cliente.
+  accept: (cid: string, oid: string, prepMinutes: number) =>
+    request<any>(`/companies/${cid}/digital-channel/orders/${oid}/accept`, {
+      method: "POST", body: { prep_minutes: prepMinutes },
+    }),
+  refuse: (cid: string, oid: string, reason: string) =>
+    request<any>(`/companies/${cid}/digital-channel/orders/${oid}/refuse`, {
+      method: "POST", body: { reason },
+    }),
+  outForDelivery: (cid: string, oid: string) =>
+    request<any>(`/companies/${cid}/digital-channel/orders/${oid}/out-for-delivery`, {
+      method: "POST", body: {},
+    }),
+  refundMarked: (cid: string, oid: string) =>
+    request<any>(`/companies/${cid}/digital-channel/orders/${oid}/refund-marked`, {
+      method: "POST", body: {},
+    }),
+  // Entregue pelo PATCH, devolvendo a resposta inteira (com o aviso).
+  deliver: (cid: string, oid: string) =>
+    request<any>(`/companies/${cid}/digital-channel/orders/${oid}/status`, {
+      method: "PATCH", body: { status: "delivered" },
+    }),
 };
 
 // 26/09/2026 (A1 do QA da lojista): o detalhe do pedido Studio confirma e
@@ -143,6 +166,37 @@ export function useDigitalOrders(statusFilter = "all", companyIdOverride?: strin
     [assertCid, invalidar]
   );
 
+  // tq-44/tq-47: ações da fila com aceite. Devolvem a resposta (com o aviso
+  // pronto para a cliente); quem chama mostra o erro.
+  const acaoDaFila = useCallback(
+    (fn: (cid: string) => Promise<any>) => async () => {
+      const res = await fn(assertCid());
+      invalidar();
+      return res;
+    },
+    [assertCid, invalidar]
+  );
+  const acceptOrder = useCallback(
+    (oid: string, prepMinutes: number) => acaoDaFila((c) => ordersApi.accept(c, oid, prepMinutes))(),
+    [acaoDaFila]
+  );
+  const refuseOrder = useCallback(
+    (oid: string, reason: string) => acaoDaFila((c) => ordersApi.refuse(c, oid, reason))(),
+    [acaoDaFila]
+  );
+  const markOutForDelivery = useCallback(
+    (oid: string) => acaoDaFila((c) => ordersApi.outForDelivery(c, oid))(),
+    [acaoDaFila]
+  );
+  const markRefunded = useCallback(
+    (oid: string) => acaoDaFila((c) => ordersApi.refundMarked(c, oid))(),
+    [acaoDaFila]
+  );
+  const markDelivered = useCallback(
+    (oid: string) => acaoDaFila((c) => ordersApi.deliver(c, oid))(),
+    [acaoDaFila]
+  );
+
   // Contagem por status: prefere o `counts` do backend (conta o banco inteiro);
   // se a chave não vier, cai na contagem client-side da página carregada.
   // `??` e não `||` pra respeitar um 0 legítimo do backend.
@@ -162,7 +216,7 @@ export function useDigitalOrders(statusFilter = "all", companyIdOverride?: strin
           d.getDate() === today.getDate() &&
           d.getMonth() === today.getMonth() &&
           d.getFullYear() === today.getFullYear() &&
-          ["confirmed", "preparing", "ready", "delivered"].includes(o.status)
+          ["confirmed", "preparing", "ready", "out_for_delivery", "delivered"].includes(o.status)
         );
       })
       .reduce((s: number, o: any) => s + parseFloat(o.total || 0), 0),
@@ -184,6 +238,13 @@ export function useDigitalOrders(statusFilter = "all", companyIdOverride?: strin
     isDeleting: deleteMutation.isPending,
     approvePayment,
     rejectPayment,
+    // tq-47: a loja usa a fila com aceite (formas de pagar na entrega marcadas)?
+    filaComAceite: data?.fila_com_aceite === true,
+    acceptOrder,
+    refuseOrder,
+    markOutForDelivery,
+    markRefunded,
+    markDelivered,
   };
 }
 

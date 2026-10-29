@@ -35,6 +35,18 @@ export interface PedidoDaFila {
   first_item_name?: string | null;
   first_item_image?: string | null;
   payment_proof_url?: string | null;
+  // tq-44/tq-47 (29/10/2026): pagar na entrega com aceite e fila do pedido.
+  pay_on_delivery_method?: "cash" | "card" | "pix" | string | null;
+  change_for?: number | string | null;
+  accepted_at?: string | null;
+  prep_minutes?: number | null;
+  out_for_delivery_at?: string | null;
+  refund_marked_at?: string | null;
+  cancel_kind?: string | null;
+  cancel_reason?: string | null;
+  /** Frase pronta do backend: "Dinheiro. Paga com R$ 100,00: levar R$ 22,00 de troco." */
+  pagamento_na_entrega?: string | null;
+  troco_a_levar?: number | null;
 }
 
 export type ChipKey = "all" | "precisa-agir" | "em-curso" | "concluidos" | "cancelados";
@@ -48,8 +60,8 @@ export const CHIPS: { key: ChipKey; label: string }[] = [
 ];
 
 const STATUS_DO_GRUPO: Record<Exclude<ChipKey, "all">, string[]> = {
-  "precisa-agir": ["pending_payment", "awaiting_approval"],
-  "em-curso":     ["confirmed", "preparing", "ready"],
+  "precisa-agir": ["pending_payment", "awaiting_approval", "aguardando_aceite"],
+  "em-curso":     ["confirmed", "preparing", "ready", "out_for_delivery"],
   "concluidos":   ["delivered"],
   "cancelados":   ["cancelled"],
 };
@@ -58,6 +70,7 @@ export const PROXIMO_STATUS: Record<string, string> = {
   confirmed: "preparing",
   preparing: "ready",
   ready:     "delivered",
+  out_for_delivery: "delivered",
 };
 
 export function ehExpirado(o: Pick<PedidoDaFila, "status" | "payment_status">): boolean {
@@ -72,6 +85,11 @@ export function situacaoDoPedido(o: PedidoDaFila): { rotulo: string; tom: Tom; p
       return { rotulo: "Aguardando Pix", tom: "ambar", precisaAgir: true };
     case "awaiting_approval":
       return { rotulo: "Comprovante enviado", tom: "vermelho", precisaAgir: true };
+    // tq-44: pagar na entrega espera a lojista aceitar ou recusar.
+    case "aguardando_aceite":
+      return { rotulo: "Aguardando aceite", tom: "ambar", precisaAgir: true };
+    case "out_for_delivery":
+      return { rotulo: "Saiu para entrega", tom: "verde", precisaAgir: false };
     case "confirmed":
       return { rotulo: "Confirmado", tom: "violeta", precisaAgir: false };
     case "preparing":
@@ -81,7 +99,10 @@ export function situacaoDoPedido(o: PedidoDaFila): { rotulo: string; tom: Tom; p
     case "delivered":
       return { rotulo: "Entregue", tom: "neutro", precisaAgir: false };
     case "cancelled":
-      return { rotulo: ehExpirado(o) ? "Expirado" : "Cancelado", tom: "neutro", precisaAgir: false };
+      return {
+        rotulo: ehExpirado(o) ? "Expirado" : (o.cancel_kind === "recusado_pela_loja" ? "Recusado" : "Cancelado"),
+        tom: "neutro", precisaAgir: false,
+      };
     default:
       return { rotulo: o.status || "—", tom: "neutro", precisaAgir: false };
   }
@@ -128,8 +149,8 @@ export function contagemDosGrupos(counts: Record<string, number | undefined> | n
   const c = counts || {};
   const n = (k: string) => Number(c[k] || 0);
   return {
-    precisaAgir: n("pending_payment") + n("awaiting_approval"),
-    emCurso: n("confirmed") + n("preparing") + n("ready"),
+    precisaAgir: n("pending_payment") + n("awaiting_approval") + n("aguardando_aceite"),
+    emCurso: n("confirmed") + n("preparing") + n("ready") + n("out_for_delivery"),
     expirados: n("expired"),
   };
 }
@@ -142,9 +163,14 @@ export function resumoDosItens(o: PedidoDaFila): string {
   return total > 1 ? `${nome} +${total - 1}` : nome;
 }
 
-export function rotuloDoPagamento(metodo?: string | null): string {
+const FORMA_NA_ENTREGA: Record<string, string> = { cash: "dinheiro", card: "cartão", pix: "Pix na hora" };
+
+export function rotuloDoPagamento(metodo?: string | null, formaNaEntrega?: string | null): string {
   if (metodo === "card") return "Cartão";
-  if (metodo === "on_delivery") return "Na entrega";
+  if (metodo === "on_delivery") {
+    const f = formaNaEntrega ? FORMA_NA_ENTREGA[formaNaEntrega] : null;
+    return f ? `Na entrega, ${f}` : "Na entrega";
+  }
   return "Pix";
 }
 
