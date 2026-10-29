@@ -96,6 +96,14 @@ export type CustomLabelSpec = {
    *  (tag couchê 35x60 com dobra a ~43 mm). Ausente = sem dobra (a chave
    *  não existe). Só muda o desenho da tag vertical (tagDobraMm). */
   dobraMm?: number;
+  /** 28/10/2026: estilo OPT-IN da etiqueta (Lulume Baby & Kids, aprovado pelo
+   *  Caio). "boutique" = desenho novo com faixa preta no topo (nome da loja
+   *  vazado), peça, cor/tamanho, código de barras e preço com filete. Ausente
+   *  ou qualquer outro valor = desenho de sempre (editorial/tag vertical pela
+   *  proporção), byte a byte igual ao de antes. A chave só entra no spec quando
+   *  vale exatamente "boutique". Ligado pela conta (label_custom_specs) — não
+   *  há toggle no código. */
+  estilo?: "boutique";
 };
 
 export const NOME_MEDIDA_MAX = 40;
@@ -167,6 +175,9 @@ export function sanitizarMedida(raw: any): CustomLabelSpec | null {
   }
   // Só com nome de verdade: sem nome o spec fica idêntico ao de antes.
   if (nome) spec.nome = nome;
+  // Estilo opt-in: só "boutique" entra; qualquer outro valor (ou ausente)
+  // deixa o spec idêntico ao de antes (a chave não existe).
+  if (raw.estilo === "boutique") spec.estilo = "boutique";
   return spec;
 }
 
@@ -275,6 +286,14 @@ export function customLabelPreset(spec: CustomLabelSpec): CustomLabelPreset {
   if (gapX > 0) preset.colGapMm = gapX;
   if (s.espacoLinhaMm > 0) preset.rowGapMm = s.espacoLinhaMm;
   if (w >= 35 && h >= 25) preset.edCompact = true;
+  // Estilo "boutique" (28/10/2026, opt-in): quando a loja liga, vence a regra
+  // de proporção — a medida sai no desenho novo em vez do editorial/tag
+  // vertical. escalaTexto segue valendo (o texto da boutique acompanha a
+  // largura). Sem o opt-in nada muda: cai no editorial/tag vertical de antes.
+  if (s.estilo === "boutique") {
+    preset.design = "boutique";
+    return preset;
+  }
   // Tag vertical (regra no topo do arquivo). edCompact e escalaTexto ficam
   // como estão: QR e o teste de posição da medida em pé seguem o editorial.
   if (ehTagVertical(s)) {
