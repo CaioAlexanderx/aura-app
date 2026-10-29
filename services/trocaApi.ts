@@ -26,6 +26,10 @@
 // original_digital_order_id + original_digital_order_item_id.
 // Lógica do wizard em components/screens/pdv/troca/pedidoOnline.ts.
 //
+// 29/10/2026 (desconto na troca): item novo aceita item_discount (lápis) e o
+// corpo aceita discount_type/discount_value, mesmo contrato do POST
+// /pdv/sale. A resposta traz new_subtotal e discount_amount.
+//
 // Doc: Aura/AUDITORIA_TROCA_PDV_2026-05-17.docx
 // ============================================================
 import { request } from "./api";
@@ -36,10 +40,18 @@ export type TrocaItem = {
   variant_id?: string | null;
   quantity: number;
   unit_price: number;
+  /** 29/10/2026: desconto do item no total da linha (lápis), como no Caixa. */
+  item_discount?: number;
   product_name_snapshot?: string;
 };
 
-export type TrocaBody = {
+/** 29/10/2026: desconto R$/% da troca — contrato do POST /pdv/sale. */
+export type TrocaDesconto = {
+  discount_type?: "percent" | "fixed";
+  discount_value?: number;
+};
+
+export type TrocaBody = TrocaDesconto & {
   original_sale_id: string;
   returned_items: TrocaItem[];
   new_items: TrocaItem[];
@@ -57,6 +69,8 @@ export type TrocaResult = {
   net_amount: number;
   returned_value: number;
   new_value: number;
+  new_subtotal?: number;
+  discount_amount?: number;
   cross_filial?: boolean;
   origin_company_id?: string;
   physical_company_id?: string;
@@ -98,7 +112,7 @@ export type TrocaCustomerAddress = {
   ibge: string;
 };
 
-export type TrocaBodyV2 = {
+export type TrocaBodyV2 = TrocaDesconto & {
   original_sale_ids: string[];
   // 27/10/2026: pedidos da loja online de origem (pode vir sem venda do Caixa).
   original_digital_order_ids?: string[];
@@ -122,6 +136,8 @@ export type TrocaResultV2 = {
   net_amount: number;
   returned_value: number;
   new_value: number;
+  new_subtotal?: number;
+  discount_amount?: number;
   cross_filial: boolean;
   origin_company_ids: string[];
   physical_company_id: string;

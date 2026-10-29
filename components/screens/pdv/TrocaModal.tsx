@@ -72,6 +72,15 @@
 //     (montarOrigensDaTroca). Sem pedido online, payload idêntico ao de antes.
 //   - Fiscal: pedido online não tem NFC-e (has_nfce=false) → 'none', como
 //     venda sem nota. O backend repõe o estoque do item uma vez só.
+//
+// 29/10/2026 (incidente Davi Calçados — "não consegue dar descontos/alterar
+// preço na troca"): não havia campo nenhum. Agora (troca/descontoDaTroca.ts):
+//   - lápis no preço do item novo (Step3) e desconto R$/% da troca (Step4),
+//     mesmas regras e teto do Caixa;
+//   - newValue = subtotal dos novos − desconto; netAmount sai líquido, e o
+//     split simples acompanha quando o valor muda (acertarSplits);
+//   - payload v1 e v2: new_items com item_discount e discount_type/
+//     discount_value (contrato do POST /pdv/sale). Sem desconto, payload igual.
 // ============================================================
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
@@ -92,6 +101,10 @@ import { Step5Success } from "./troca/Step5Success";
 import { ValeTrocaBanner, type ValeNoWizard } from "./troca/ValeTrocaBanner";
 import { buscarVendaDoVale } from "./troca/valeTrocaBusca";
 import { isPedidoOnline, montarOrigensDaTroca } from "./troca/pedidoOnline";
+import {
+  subtotalDosNovos, descontoManualDaTroca, camposDoDesconto, itemNovoDoPayload,
+  acertarSplits, type TipoDesconto,
+} from "./troca/descontoDaTroca";
 
 import type {
   Step, SelectedSaleRow, ReturnEntry, NewEntry,
@@ -184,6 +197,9 @@ export function TrocaModal({
   // pré-selecionar "Crédito na loja" no mount. Estado explícito do wizard
   // (era sinal de módulo em troca/types.ts).
   const [devolverValor, setDevolverValor] = useState(false);
+  // 29/10/2026: desconto R$/% da troca (mesmo seletor do Caixa).
+  const [discountType, setDiscountType] = useState<TipoDesconto>("%");
+  const [discountValue, setDiscountValue] = useState("");
 
   const [successResult, setSuccessResult] = useState<any | null>(null);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -202,9 +218,16 @@ export function TrocaModal({
     () => returnEntries.reduce((s, e) => s + e.returnQty * effectiveUnitPrice(e.item), 0),
     [returnEntries]
   );
+  // 29/10/2026: subtotal dos novos (preço da tela, já com o lápis) menos o
+  // desconto da troca. newValue é o que a troca cobra pelos itens novos.
+  const newSubtotal = useMemo(() => subtotalDosNovos(newEntries), [newEntries]);
+  const discountAmount = useMemo(
+    () => descontoManualDaTroca(newSubtotal, discountType, discountValue),
+    [newSubtotal, discountType, discountValue]
+  );
   const newValue = useMemo(
-    () => newEntries.reduce((s, e) => s + e.quantity * e.unit_price, 0),
-    [newEntries]
+    () => parseFloat((newSubtotal - discountAmount).toFixed(2)),
+    [newSubtotal, discountAmount]
   );
   const netAmount = useMemo(
     () => parseFloat((newValue - returnedValue).toFixed(2)),
@@ -225,6 +248,8 @@ export function TrocaModal({
       setShowExitConfirm(false);
       setIdempotencyKey("");
       setDevolverValor(false);
+      setDiscountType("%");
+      setDiscountValue("");
       valeReq.current++;
       setValeLido(null);
       setValeAviso(null);
@@ -287,6 +312,16 @@ export function TrocaModal({
   useEffect(() => {
     if (newEntries.length > 0 && devolverValor) setDevolverValor(false);
   }, [newEntries.length, devolverValor]);
+
+  // 29/10/2026: o valor a pagar/devolver mudou (desconto, preço, item) — o
+  // split simples acompanha; dividido em várias formas, a vendedora escolhe
+  // de novo. Sem isso o Confirmar travava em "Soma dos pagamentos não bate".
+  useEffect(() => {
+    const r = acertarSplits(netAmount, paymentSplits, refundSplits);
+    if (r.paymentSplits !== paymentSplits) setPaymentSplits(r.paymentSplits);
+    if (r.refundSplits !== refundSplits) setRefundSplits(r.refundSplits);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [netAmount]);
 
   const canAdvance = useCallback((): boolean => {
     if (step === 1) return selectedSales.length > 0;
@@ -367,6 +402,8 @@ export function TrocaModal({
     const iKey = idempotencyKey || genIdempotencyKey();
 
     const v2 = shouldUseV2();
+    // 29/10/2026: desconto da troca (vazio sem desconto — payload de sempre).
+    const desconto = camposDoDesconto(discountType, discountValue, discountAmount);
     setSubmitting(true);
     try {
       let result: any;
@@ -403,13 +440,9 @@ export function TrocaModal({
             // ReturnableSaleItemExtra). Omitido (não null) quando ausente.
             lot_id: (e.item as any).lot_id || undefined,
           })),
-          new_items: newEntries.map((n) => ({
-            product_id: n.product_id,
-            variant_id: n.variant_id || null,
-            quantity: n.quantity,
-            unit_price: n.unit_price,
-            product_name_snapshot: n.product_name_snapshot,
-          })),
+          // 29/10/2026: lápis vira item_discount (descontoDaTroca.ts).
+          new_items: newEntries.map(itemNovoDoPayload),
+          ...desconto,
           payment_splits: netAmount > 0 ? paymentSplits : undefined,
           refund_splits: netAmount < 0 ? refundSplits : undefined,
           customer_id: selectedSales[0]?.customer_id || undefined,
@@ -442,13 +475,8 @@ export function TrocaModal({
             // 22/09/2026 (M4): ver comentário na v2 acima.
             lot_id: (e.item as any).lot_id || undefined,
           })),
-          new_items: newEntries.map((n) => ({
-            product_id: n.product_id,
-            variant_id: n.variant_id,
-            quantity: n.quantity,
-            unit_price: n.unit_price,
-            product_name_snapshot: n.product_name_snapshot,
-          })),
+          new_items: newEntries.map(itemNovoDoPayload),
+          ...desconto,
           payment_method: netAmount !== 0 ? paymentMethod : undefined,
           customer_id: sale.customer_id || undefined,
           nfce_strategy: (fiscal.strategy === "cancel_reissue" || fiscal.strategy === "devolucao_55")
@@ -604,7 +632,8 @@ export function TrocaModal({
               newEntries={newEntries}
               onChangeEntries={setNewEntries}
               returnedValue={returnedValue}
-              newValue={newValue}
+              newValue={newSubtotal}
+              discountAmount={discountAmount}
               netAmount={netAmount}
               onSkip={next}
               // 22/09/2026 (M4): botão âmbar "Não vai levar nada".
@@ -627,6 +656,13 @@ export function TrocaModal({
               onChangeAddress={setCustomerAddress}
               // 22/09/2026 (M4): pré-seleciona "Crédito na loja" no mount.
               devolverValor={devolverValor}
+              // 29/10/2026: desconto R$/% da troca.
+              newSubtotal={newSubtotal}
+              discountAmount={discountAmount}
+              discountType={discountType}
+              discountValue={discountValue}
+              onChangeDiscountType={setDiscountType}
+              onChangeDiscountValue={setDiscountValue}
             />
           )}
           {step === 5 && successResult && (
@@ -648,6 +684,8 @@ export function TrocaModal({
                 setRefundSplits([]);
                 setCustomerAddress(EMPTY_ADDRESS);
                 setSuccessResult(null);
+                setDiscountType("%");
+                setDiscountValue("");
                 setValeLido(null);
                 setValeAviso(null);
               }}

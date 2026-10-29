@@ -59,7 +59,11 @@ export type NewEntry = {
   product_id: string | null;
   variant_id?: string | null;
   quantity: number;
+  /** Preço que vale na troca (a vendedora pode mudar no lápis). */
   unit_price: number;
+  /** 29/10/2026: preço de tabela quando o item entrou. Abaixo dele, a
+   *  diferença vai como item_discount (descontoDaTroca.ts). */
+  list_price?: number;
   product_name_snapshot: string;
   addedVia?: "search" | "barcode" | "qr";
 };
