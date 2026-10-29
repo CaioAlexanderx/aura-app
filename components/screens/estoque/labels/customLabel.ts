@@ -62,10 +62,15 @@
 //     respiro do topo e a altura (tagDobraMm). Fora disso, nada muda: sem
 //     dobra, TODA etiqueta sai byte a byte como antes.
 //   - Com dobra: duas zonas com altura em mm. Em cima (dobra - topo): loja,
-//     nome, Cód, C/T e o código de barras encostados embaixo, terminando
-//     1,5 mm acima da linha. Embaixo (altura - dobra): o preço maior
-//     (20pt x escala, era 16pt), centralizado, e a linha "Cartão" logo
-//     abaixo. O .bc-box, o SVG e o BARCODE_OPTS (LOCKED) não mudam.
+//     nome, Cód, C/T e o código de barras, encostados embaixo. Embaixo
+//     (altura - dobra): o preço maior (20pt x escala, era 16pt) e a linha
+//     "Cartão". O .bc-box, o SVG e o BARCODE_OPTS (LOCKED) não mudam.
+//   - 28/10/2026 (pedido do Caio pós-impressão): subir o código de barras e o
+//     preço. A face frontal (33 mm acima da dobra) já fica ~96% cheia (respiro
+//     de 7 mm + texto + código de 9 mm LOCKED), então 20 mm estouraria o topo;
+//     aplicado o maior deslocamento limpo (código +3 mm dentro da face; preço
+//     ao topo da faixa de baixo, ~6,5 mm acima, ainda abaixo da dobra). Ver
+//     buildLabelHtml.ts (ramo tagDobraMm > 0).
 // ============================================================================
 import type { LabelPreset } from "@/components/screens/estoque/labels/buildLabelHtml";
 

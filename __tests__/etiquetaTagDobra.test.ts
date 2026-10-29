@@ -4,11 +4,16 @@
 // Opção B do mockup (https://claude.ai/artifact/7brLRCqJvVV5sLLUxmicAD),
 // escolhida pelo Caio para a tag couchê 35x60 da Doce Encanto (dobra a
 // ~40 mm do topo pela foto; a loja confere com régua): em cima da linha,
-// furo, loja, nome, Cód, C/T e o código de barras terminando 1,5 mm acima da
-// linha; embaixo, o preço maior (20pt), centralizado na faixa, com a linha
-// "Cartão" logo abaixo. Com dobra, a loja cabe em largura - 3 mm com mais
-// 1 mm de folga e o ajuste a desce até 8pt (a ZD220 perde ~0,5 mm na borda
-// de fora das colunas 1 e 3 do rolo de 105 mm).
+// furo, loja, nome, Cód, C/T e o código de barras; embaixo, o preço maior
+// (20pt) e a linha "Cartão". Com dobra, a loja cabe em largura - 3 mm com
+// mais 1 mm de folga e o ajuste a desce até 8pt (a ZD220 perde ~0,5 mm na
+// borda de fora das colunas 1 e 3 do rolo de 105 mm).
+//
+// 28/10/2026 — pedido do Caio após imprimir: subir o código de barras e o
+// preço. A face frontal (33 mm acima da dobra) já fica ~96% cheia (respiro de
+// 7 mm + texto + código de 9 mm LOCKED), então 20 mm estouraria o topo; o
+// maior deslocamento limpo é código +3 mm (padding-bottom 4,3 mm) e preço no
+// topo da faixa de baixo (justify-content:flex-start, ~6,5 mm acima).
 //
 // Só liga com dobraMm > 0 numa medida em pé (ehTagVertical). Sem dobra, TODA
 // etiqueta sai byte a byte como antes: fixtures douradas de
@@ -133,10 +138,12 @@ describe("desenho com dobra (opção B)", () => {
     expect(c[2]).toContain('<div class="tv-bot"><div class="price"><span class="cur">R$</span>159,99</div><div class="card-line">Cartão <b>R$ 169,90</b></div></div>');
   });
 
-  test("duas zonas com altura em mm: dobra - topo (33) e altura - dobra (20); código termina 1,5 mm acima da linha", () => {
+  test("duas zonas com altura em mm: dobra - topo (33) e altura - dobra (20); código e preço subidos (28/10)", () => {
     expect(html).toContain(".bc-inner.tv.dobra{padding:7mm 1.5mm 0;gap:0}");
-    expect(html).toContain(".bc-inner.tv.dobra .tv-top{height:33mm;width:100%;display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:1.3mm;overflow:hidden}");
-    expect(html).toContain(".bc-inner.tv.dobra .tv-bot{height:20mm;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;");
+    // 28/10: código de barras sobe +3 mm (padding-bottom 1,3 + 3 = 4,3 mm) e o
+    // preço vai ao topo da faixa de baixo (justify-content:flex-start).
+    expect(html).toContain(".bc-inner.tv.dobra .tv-top{height:33mm;width:100%;display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:4.3mm;overflow:hidden}");
+    expect(html).toContain(".bc-inner.tv.dobra .tv-bot{height:20mm;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;");
     const h43 = buildLabelHtml(ITENS_DOBRA, { ...BASE, customSpec: { ...MEDIDA_SEM_DOBRA, dobraMm: 43 } });
     expect(h43).toContain(".tv-top{height:36mm;");
     expect(h43).toContain(".tv-bot{height:17mm;");
