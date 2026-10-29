@@ -32,6 +32,14 @@
 //     {"error":"Token não fornecido"}. Agora busca o HTML via fetch com
 //     Authorization (rota /preview, autoprint) e escreve numa nova janela,
 //     mesmo padrao do SaleComplete (venda normal).
+// 29/10/2026 (tq-39 — NFC-e da troca com valor a pagar recusada com 400):
+//   - itens somavam o valor cheio e pagamentos so o liquido; o backend
+//     (validatePayments) recusava. Agora (troca/notaDaTroca.ts): itens com o
+//     desconto real no vDesc (lapis + desconto da troca rateado) e o credito
+//     da devolucao entra como forma de pagamento "credito_troca" (tPag 05),
+//     fechando a soma. total da nota = soma dos itens.
+//   - fiscalCompanyId: `(Array.isArray(x) && x[0]) ?? companyId` devolvia
+//     false sem origin_company_ids e nao caia em companyId. Corrigido.
 // ============================================================
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -44,7 +52,8 @@ import { NfceActions, type NfceActionsItem } from "../NfceActions";
 import type { SelectedSaleRow, PaymentSplit } from "./types";
 import { fmtBRL } from "./types";
 import { resumoSucesso } from "./devolucaoUtil";
-import { nfceApi, type NfcePaymentEntry } from "@/services/nfceApi";
+import { nfceApi } from "@/services/nfceApi";
+import { itensDaNotaDaTroca, pagamentosDaNotaDaTroca, totalDaNota } from "./notaDaTroca";
 
 type Props = {
   companyId: string;
@@ -105,21 +114,17 @@ export function Step5Success({
   const [reemitindo, setReemitindo] = useState(false);
 
   // 26/05/2026 (B3): companyId fiscal = origem da sale.
-  const fiscalCompanyId =
-    result?.fiscal_company_id ??
-    result?.origin_company_id ??
-    (Array.isArray(result?.origin_company_ids) && result.origin_company_ids[0]) ??
+  // 29/10/2026 (tq-39): `false ?? companyId` e false — o fallback nunca caia.
+  const fiscalCompanyId: string =
+    result?.fiscal_company_id ||
+    result?.origin_company_id ||
+    (Array.isArray(result?.origin_company_ids) ? result.origin_company_ids[0] : null) ||
     companyId;
 
+  // 29/10/2026 (tq-39): itens com o desconto real da troca (vDesc).
   const newItemsRaw: any[] = Array.isArray(result?.new_items) ? result.new_items : [];
-  const nfceItems: NfceActionsItem[] = newItemsRaw
-    .filter((it) => it && it.product_id)
-    .map((it) => ({
-      product_id: String(it.product_id),
-      product_name: it.product_name || it.product_name_snapshot || "Item",
-      quantity: Number(it.quantity) || 1,
-      unit_price: Number(it.unit_price) || 0,
-    }));
+  const descontoDaTroca = Number(result?.discount_amount ?? result?.sale?.discount_amount ?? 0) || 0;
+  const nfceItems: NfceActionsItem[] = itensDaNotaDaTroca(newItemsRaw, descontoDaTroca);
 
   // 22/09/2026 (M4 — docs/CONTRACT_MATCON.md §"Devolução de sobra de obra",
   // docs/mockups/matcon-m4-profundidade.html §"Confirmação e sucesso"):
@@ -141,14 +146,17 @@ export function Step5Success({
   const customerName = result?.sale?.customer_name || null;
   const customerPhone = result?.sale?.customer_phone || null;
 
-  const hasMultipleSplits = !!(paymentSplits && paymentSplits.length >= 1 && netAmount > 0);
-  const nfcePayments: NfcePaymentEntry[] | undefined = hasMultipleSplits
-    ? paymentSplits!.map((p) => ({ method: p.method, value: p.amount }))
-    : undefined;
-
   const paymentMethodFallback = (result?.sale?.payment_method || "dinheiro").toLowerCase()
     .replace("cartao_credito", "cartao")
     .replace("cartao_debito", "debito");
+
+  // 29/10/2026 (tq-39): o que o cliente pagou (splits, ou a forma da venda de
+  // troca) + o credito da devolucao (credito_troca) = valor da nota.
+  const pagos = paymentSplits && paymentSplits.length > 0
+    ? paymentSplits.map((p) => ({ method: p.method, value: p.amount }))
+    : [{ method: paymentMethodFallback, value: netAmount }];
+  const nfcePayments = pagamentosDaNotaDaTroca(nfceItems, pagos);
+  const totalNota = totalDaNota(nfceItems);
 
   const showNfce = netAmount > 0 && nfceItems.length > 0 && !!trocaSaleId && !!fiscalCompanyId;
 
@@ -350,11 +358,10 @@ export function Step5Success({
             companyId={fiscalCompanyId}
             saleId={trocaSaleId}
             items={nfceItems}
-            total={newValue}
+            total={totalNota}
             customerName={customerName}
             customerPhone={customerPhone}
             payments={nfcePayments}
-            paymentMethod={nfcePayments ? undefined : paymentMethodFallback}
             autoEmit={autoEmit}
           />
         </View>
