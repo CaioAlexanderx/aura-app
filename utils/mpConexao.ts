@@ -87,7 +87,9 @@ export function caminhoDeVolta(href: string | null | undefined, padrao = "/canal
 
 export function textoDosPedidosEmAndamento(n: number): string | null {
   if (!n || n < 1) return null;
+  // Medido em 29/10: pedido com cartão não tem "confirmar à mão" no painel
+  // (filaDePedidos.podeConfirmarPagamento); prometer isso seria falso.
   return n === 1
-    ? "Você tem 1 pedido com pagamento em andamento. Se desconectar agora, vai precisar confirmar esse pedido à mão."
-    : `Você tem ${n} pedidos com pagamento em andamento. Se desconectar agora, vai precisar confirmar esses pedidos à mão.`;
+    ? "Você tem 1 pedido com pagamento em andamento. Se desconectar agora, a confirmação dele deixa de chegar sozinha na Aura. Confira no seu Mercado Pago antes de preparar."
+    : `Você tem ${n} pedidos com pagamento em andamento. Se desconectar agora, a confirmação deles deixa de chegar sozinha na Aura. Confira no seu Mercado Pago antes de preparar.`;
 }
