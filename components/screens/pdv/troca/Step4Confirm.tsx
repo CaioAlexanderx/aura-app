@@ -27,6 +27,12 @@
 //     crediario_credito ("Crédito na loja") caso ainda não haja
 //     refundSplits — só quando netAmount < 0 (há algo a devolver). Vem
 //     do botão âmbar "Não vai levar nada — devolver o valor" do Step3.
+//
+// 29/10/2026 (incidente Davi Calçados — desconto na troca):
+//   - Com itens novos, o mesmo DiscountSection do Caixa (R$ ou %, teto de
+//     50%) aparece antes da forma de pagamento. O TrocaModal guarda o estado
+//     e recalcula o valor a pagar/devolver; o resumo mostra subtotal do
+//     carrinho, "− Desconto" e "− Crédito devolução".
 // ============================================================
 import { useState, useMemo, useEffect } from "react";
 import {
@@ -35,6 +41,8 @@ import {
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { PaymentSplitForm, RefundSplitForm } from "./SplitForm";
+import { DiscountSection } from "../DiscountSection";
+import type { TipoDesconto } from "./descontoDaTroca";
 import type {
   SelectedSaleRow, ReturnEntry, NewEntry,
   PaymentSplit, RefundSplit, CustomerAddress, FiscalStrategy,
@@ -58,6 +66,14 @@ type Props = {
   /** 22/09/2026 (M4): true quando o cliente veio pelo botão âmbar "Não
    *  vai levar nada — devolver o valor" do Step3. */
   devolverValor?: boolean;
+  /** 29/10/2026: subtotal dos itens novos (antes do desconto da troca). */
+  newSubtotal?: number;
+  /** 29/10/2026: desconto R$/% da troca já calculado (teto de 50%). */
+  discountAmount?: number;
+  discountType?: TipoDesconto;
+  discountValue?: string;
+  onChangeDiscountType?: (t: TipoDesconto) => void;
+  onChangeDiscountValue?: (v: string) => void;
 };
 
 // ─── Fiscal strategy inference (mantém contrato com shell) ─────
@@ -187,7 +203,11 @@ export function Step4Confirm({
   paymentSplits, refundSplits,
   onChangePaymentSplits, onChangeRefundSplits,
   devolverValor,
+  newSubtotal, discountAmount = 0,
+  discountType = "%", discountValue = "",
+  onChangeDiscountType, onChangeDiscountValue,
 }: Props) {
+  const subtotalCarrinho = newSubtotal ?? newValue;
   const { width } = useWindowDimensions();
   const isWide = width > 880;
 
@@ -256,6 +276,19 @@ export function Step4Confirm({
   return (
     <View style={isWide ? s.grid : undefined}>
       <View style={isWide ? { flex: 1, minWidth: 0 } : undefined}>
+        {newEntries.length > 0 && onChangeDiscountType && onChangeDiscountValue && (
+          <View style={s.discountWrap} testID="troca-desconto">
+            <DiscountSection
+              total={subtotalCarrinho}
+              discountType={discountType}
+              setDiscountType={onChangeDiscountType}
+              discountValue={discountValue}
+              setDiscountValue={onChangeDiscountValue}
+              manualDiscountAmount={discountAmount}
+              clearDiscount={() => onChangeDiscountValue("")}
+            />
+          </View>
+        )}
         {netAmount > 0 && (
           <View style={s.bigAmountCard}>
             <Text style={s.bigAmountLabel}>Cliente paga</Text>
@@ -462,8 +495,14 @@ export function Step4Confirm({
 
           <View style={s.summaryRow}>
             <Text style={s.summaryRowLabel}>Subtotal carrinho</Text>
-            <Text style={s.summaryRowValue}>{fmtBRL(newValue)}</Text>
+            <Text style={s.summaryRowValue}>{fmtBRL(subtotalCarrinho)}</Text>
           </View>
+          {discountAmount > 0 && (
+            <View style={s.summaryRow} testID="troca-resumo-desconto">
+              <Text style={s.summaryRowLabel}>- Desconto</Text>
+              <Text style={[s.summaryRowValue, { color: "#10b981" }]}>- {fmtBRL(discountAmount)}</Text>
+            </View>
+          )}
           <View style={s.summaryRow}>
             <Text style={s.summaryRowLabel}>- Crédito devolução</Text>
             <Text style={[s.summaryRowValue, { color: "#60a5fa" }]}>- {fmtBRL(returnedValue)}</Text>
@@ -509,6 +548,12 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 const s = StyleSheet.create({
   grid: { flexDirection: "row", gap: 18, alignItems: "flex-start" },
   sideRail: { width: 300, flexShrink: 0 },
+  discountWrap: {
+    backgroundColor: "rgba(255,255,255,0.03)",
+    borderWidth: 1, borderColor: "rgba(124,58,237,0.2)",
+    borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12,
+    marginBottom: 12,
+  },
   bigAmountCard: {
     backgroundColor: "rgba(255,255,255,0.03)",
     borderWidth: 1, borderColor: "rgba(124,58,237,0.2)",
