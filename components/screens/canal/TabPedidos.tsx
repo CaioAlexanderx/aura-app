@@ -24,7 +24,7 @@
 // Regras (quem pode confirmar, cancelar, excluir; rótulos) vivem em
 // utils/filaDePedidos.ts, testadas sem montar componente.
 // ============================================================
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, Pressable, ScrollView,
   Modal, ActivityIndicator, Linking, Image, TextInput,
@@ -42,6 +42,14 @@ import {
   filtrarPorGrupo, contagemDosGrupos, resumoDosItens, rotuloDoPagamento,
   rotuloDaEntrega, tempoDesde, formatarReais,
 } from "@/utils/filaDePedidos";
+// tq-47 (29/10/2026): fila do pedido com aceite — aceitar com o tempo,
+// recusar com o motivo, saiu para entrega, aviso pelo WhatsApp da lojista.
+import {
+  TEMPOS_DE_PREPARO, PREPARO_PADRAO, MOTIVOS_RAPIDOS, AVISO_DO_PIX_PAGO,
+  podeAceitar, textoDoPedidoParado, pedidosParaRepetirAviso, horaPrevista, proximoPasso,
+  lembreteNaEntrega, tituloDoAviso, type AvisoWhatsapp,
+} from "@/utils/filaComAceite";
+import { tocarAvisoDePedido } from "@/utils/somDePedido";
 
 function coresDoTom(tom: Tom): { cor: string; fundo: string } {
   switch (tom) {
@@ -91,9 +99,16 @@ export function TabPedidos({ companyId, orderIdInicial }: { companyId?: string; 
   const [confirmacao, setConfirmacao] = useState<Confirmacao>(null);
   const [proofZoom, setProofZoom] = useState<string | null>(null);
   const [motivo, setMotivo] = useState("");
-  const [modoNoDetalhe, setModoNoDetalhe] = useState<"normal" | "cancelar" | "excluir">("normal");
+  const [modoNoDetalhe, setModoNoDetalhe] = useState<"normal" | "cancelar" | "excluir" | "recusar">("normal");
   const [working, setWorking] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
+  // tq-47: tempo escolhido por pedido, ação em andamento, a faixa "avise a
+  // cliente" depois de cada passo e o relógio do destaque de pedido parado.
+  const [tempoPorPedido, setTempoPorPedido] = useState<Record<string, number>>({});
+  const [agindoId, setAgindoId] = useState<string | null>(null);
+  const [ultimoAviso, setUltimoAviso] = useState<{ titulo: string; aviso: AvisoWhatsapp } | null>(null);
+  const [agora, setAgora] = useState(() => Date.now());
+  const avisosRepetidos = useRef<Set<string>>(new Set());
 
   // Busca vai ao servidor 300 ms depois da última tecla.
   useEffect(() => {
@@ -110,7 +125,102 @@ export function TabPedidos({ companyId, orderIdInicial }: { companyId?: string; 
     orders, counts, kpi, isLoading, isFetching, refetch,
     updateStatus, isUpdating, cancelOrder, isCancelling, deleteOrder, isDeleting,
     approvePayment: approvePaymentApi, rejectPayment: rejectPaymentApi,
+    filaComAceite, acceptOrder, refuseOrder, markOutForDelivery, markRefunded, markDelivered,
   } = useDigitalOrders("all", companyId, buscaAplicada);
+
+  // Relógio do "há 12 min sem resposta" (a lista em si já atualiza a cada 30 s).
+  useEffect(() => {
+    const t = setInterval(() => setAgora(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Acréscimo da Nina (19/10): pedido parado há 10 min repete o aviso de
+  // pedido novo UMA vez. Nada cancela sozinho.
+  useEffect(() => {
+    const parados = pedidosParaRepetirAviso(orders as PedidoDaFila[], avisosRepetidos.current, agora);
+    if (!parados.length) return;
+    parados.forEach((o) => avisosRepetidos.current.add(o.id));
+    tocarAvisoDePedido();
+    const o = parados[0];
+    toast.info(parados.length === 1
+      ? `O pedido #${o.order_number} está esperando o seu aceite.`
+      : `${parados.length} pedidos estão esperando o seu aceite.`);
+  }, [orders, agora]);
+
+  function tempoDoPedido(id: string): number {
+    return tempoPorPedido[id] || PREPARO_PADRAO;
+  }
+
+  function mostrarAviso(numero: string | number, res: any) {
+    const aviso: AvisoWhatsapp | null = res?.aviso_whatsapp || null;
+    if (aviso && aviso.texto) setUltimoAviso({ titulo: tituloDoAviso(aviso.passo, numero), aviso });
+  }
+
+  function abrirWhatsapp(aviso: AvisoWhatsapp | null | undefined) {
+    if (aviso?.link) Linking.openURL(aviso.link);
+  }
+
+  async function aceitar(o: any) {
+    setAgindoId(o.id);
+    try {
+      const res = await acceptOrder(o.id, tempoDoPedido(o.id));
+      toast.success(`Pedido #${o.order_number} aceito`);
+      mostrarAviso(o.order_number, res);
+      if (abertoId === o.id) fecharDetalhe();
+    } catch (err: any) {
+      toast.error(err?.message || "Não deu para aceitar o pedido. Tente de novo.");
+    } finally {
+      setAgindoId(null);
+    }
+  }
+
+  async function recusarDoDetalhe() {
+    if (!pedidoAberto) return;
+    const texto = motivo.trim();
+    if (!texto) { toast.error("Escreva o motivo: é o que a cliente vai ler."); return; }
+    setWorking(true);
+    try {
+      const res = await refuseOrder(pedidoAberto.id, texto);
+      toast.success(`Pedido #${pedidoAberto.order_number} recusado`);
+      mostrarAviso(pedidoAberto.order_number, res);
+      fecharDetalhe();
+    } catch (err: any) {
+      toast.error(err?.message || "Não deu para recusar o pedido. Tente de novo.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function seguirPasso(o: any) {
+    const passo = proximoPasso(o);
+    if (!passo) return;
+    setAgindoId(o.id);
+    try {
+      const res = passo.acao === "saiu"
+        ? await markOutForDelivery(o.id)
+        : passo.status === "delivered"
+          ? await markDelivered(o.id)
+          : await updateStatus({ oid: o.id, status: passo.status });
+      mostrarAviso(o.order_number, res);
+      if (abertoId === o.id) fecharDetalhe();
+    } catch (err: any) {
+      toast.error(err?.message || "Não deu para atualizar o pedido. Tente de novo.");
+    } finally {
+      setAgindoId(null);
+    }
+  }
+
+  async function marcarDevolvido(o: any) {
+    setWorking(true);
+    try {
+      await markRefunded(o.id);
+      toast.success("Marcado como devolvido");
+    } catch (err: any) {
+      toast.error(err?.message || "Não deu para marcar. Tente de novo.");
+    } finally {
+      setWorking(false);
+    }
+  }
 
   const detalhe = useDigitalOrderDetail(abertoId, companyId);
   // Enquanto o detalhe carrega, o card da lista já desenha o cabeçalho.
@@ -256,6 +366,24 @@ export function TabPedidos({ companyId, orderIdInicial }: { companyId?: string; 
         </Pressable>
       </View>
 
+      {/* tq-47: depois de aceitar, recusar, saiu ou entregue — avisar a cliente. */}
+      {ultimoAviso && (
+        <View style={s.avisoFaixa} testID="fila-aviso-cliente">
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={s.avisoTitulo}>{ultimoAviso.titulo} Avise a cliente:</Text>
+            <Text style={s.avisoTexto} numberOfLines={2}>{ultimoAviso.aviso.texto}</Text>
+          </View>
+          {!!ultimoAviso.aviso.link && (
+            <Pressable onPress={() => abrirWhatsapp(ultimoAviso.aviso)} style={s.btnWhats} testID="fila-aviso-whatsapp">
+              <Text style={s.btnWhatsTexto}>Avisar no WhatsApp</Text>
+            </Pressable>
+          )}
+          <Pressable onPress={() => setUltimoAviso(null)} style={s.buscaLimpar} accessibilityLabel="Fechar aviso">
+            <Icon name="x" size={13} color={Colors.ink3} />
+          </Pressable>
+        </View>
+      )}
+
       {isLoading ? (
         <ActivityIndicator size="small" color={accent.primary} style={{ marginTop: 32 }} />
       ) : pedidosFiltrados.length === 0 ? (
@@ -273,8 +401,15 @@ export function TabPedidos({ companyId, orderIdInicial }: { companyId?: string; 
           const sit = situacaoDoPedido(o);
           const cores = coresDoTom(sit.tom);
           const confirmar = podeConfirmarPagamento(o);
-          const cancelar = podeCancelar(o);
+          // tq-47: quem espera aceite mostra Aceitar/Recusar no lugar de Cancelar.
+          const aceitavel = podeAceitar(o, filaComAceite);
+          const cancelar = podeCancelar(o) && !aceitavel;
           const excluir = podeExcluir(o);
+          const parado = textoDoPedidoParado(o, filaComAceite, agora);
+          const passo = !aceitavel && o.accepted_at ? proximoPasso(o) : null;
+          const prevista = horaPrevista(o);
+          const lembrete = lembreteNaEntrega(o);
+          const agindo = agindoId === o.id;
           const confirmandoCancelar = !!confirmacao && confirmacao.id === o.id && confirmacao.tipo === "cancelar";
           const confirmandoExcluir = !!confirmacao && confirmacao.id === o.id && confirmacao.tipo === "excluir";
           const itens = resumoDosItens(o);
@@ -300,9 +435,82 @@ export function TabPedidos({ companyId, orderIdInicial }: { companyId?: string; 
                 <View style={s.cardRodape}>
                   <Text style={s.cardTotal}>{formatarReais(o.total)}</Text>
                   <Text style={s.cardMeta} numberOfLines={1}>
-                    {rotuloDoPagamento(o.payment_method)} · {rotuloDaEntrega(o.delivery_type)} · {tempoDesde(o.created_at)}
+                    {rotuloDoPagamento(o.payment_method, o.pay_on_delivery_method)} · {rotuloDaEntrega(o.delivery_type)} · {tempoDesde(o.created_at)}
                   </Text>
                 </View>
+
+                {!!parado && (
+                  <View style={s.parado} testID={`fila-parado-${o.order_number}`}>
+                    <Icon name="clock" size={11} color={Colors.red} />
+                    <Text style={s.paradoTexto}>{parado}</Text>
+                  </View>
+                )}
+                {(aceitavel || lembrete) && !!o.pagamento_na_entrega && (
+                  <Text style={s.pagamentoNaEntrega}>{o.pagamento_na_entrega}</Text>
+                )}
+                {!!lembrete && <Text style={s.cardItens}>{lembrete}</Text>}
+                {!aceitavel && !!prevista && ["preparing", "ready"].includes(o.status) && (
+                  <Text style={s.cardItens}>Previsto até {prevista}</Text>
+                )}
+
+                {aceitavel && !confirmandoCancelar && !confirmandoExcluir && (
+                  <View style={s.aceiteCaixa}>
+                    <Text style={s.aceitePergunta}>Quanto tempo leva?</Text>
+                    <View style={s.tempos}>
+                      {TEMPOS_DE_PREPARO.map((t) => {
+                        const sel = tempoDoPedido(o.id) === t;
+                        return (
+                          <Pressable
+                            key={t}
+                            onPress={() => setTempoPorPedido((atual) => ({ ...atual, [o.id]: t }))}
+                            style={[s.tempoChip, sel && { backgroundColor: accent.primary, borderColor: accent.primary }]}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: sel }}
+                          >
+                            <Text style={[s.tempoTexto, sel && { color: "#fff" }]}>{t} min</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                    <View style={s.acoes}>
+                      <Pressable
+                        onPress={() => aceitar(o)}
+                        disabled={agindo}
+                        style={[s.btnPrimario, agindo && { opacity: 0.6 }]}
+                        testID={`fila-aceitar-${o.order_number}`}
+                      >
+                        {agindo ? <ActivityIndicator size="small" color="#fff" /> : (
+                          <>
+                            <Icon name="check" size={12} color="#fff" />
+                            <Text style={s.btnPrimarioTexto}>Aceitar</Text>
+                          </>
+                        )}
+                      </Pressable>
+                      <Pressable
+                        onPress={() => { setAbertoId(o.id); setModoNoDetalhe("recusar"); }}
+                        style={s.btnRecusar}
+                        testID={`fila-recusar-${o.order_number}`}
+                      >
+                        <Text style={s.btnRecusarTexto}>Recusar</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                )}
+
+                {passo && (passo.acao === "saiu" || o.status === "out_for_delivery") ? (
+                  <View style={s.acoes}>
+                    <Pressable
+                      onPress={() => seguirPasso(o)}
+                      disabled={agindo}
+                      style={[s.btnPrimario, agindo && { opacity: 0.6 }]}
+                      testID={`fila-passo-${o.order_number}`}
+                    >
+                      {agindo ? <ActivityIndicator size="small" color="#fff" /> : (
+                        <Text style={s.btnPrimarioTexto}>{passo.rotulo}</Text>
+                      )}
+                    </Pressable>
+                  </View>
+                ) : null}
 
                 {o.status === "awaiting_approval" && !!o.payment_proof_url && (
                   <View style={s.comprovante}>
@@ -381,11 +589,16 @@ export function TabPedidos({ companyId, orderIdInicial }: { companyId?: string; 
               const o = pedidoAberto;
               const sit = situacaoDoPedido(o);
               const cores = coresDoTom(sit.tom);
-              const proximo = PROXIMO_STATUS[o.status];
+              const aceitavel = podeAceitar(o, filaComAceite);
+              // tq-47: pedido aceito pela fila segue "saiu para entrega"; o resto, como antes.
+              const passo = aceitavel ? null : (o.accepted_at || o.status === "out_for_delivery" ? proximoPasso(o) : null);
+              const proximo = passo ? null : PROXIMO_STATUS[o.status];
               const confirmar = podeConfirmarPagamento(o);
-              const cancelar = podeCancelar(o);
+              const cancelar = podeCancelar(o) && !aceitavel;
               const excluir = podeExcluir(o);
               const cartao = o.payment_method === "card";
+              const prevista = horaPrevista(o);
+              const pagoOnline = (o.payment_method === "pix" || cartao) && ["confirmed", "paid", "received"].includes(String(o.payment_status || ""));
               const itens: any[] = Array.isArray(o.items) ? o.items : [];
               return (
                 <>
@@ -402,13 +615,58 @@ export function TabPedidos({ companyId, orderIdInicial }: { companyId?: string; 
                   <ScrollView style={{ padding: 20 }}>
                     <View style={[s.statusBanner, { backgroundColor: cores.fundo, borderColor: cores.cor }]}>
                       <Text style={[s.statusBannerText, { color: cores.cor }]}>{sit.rotulo}</Text>
+                      {!!prevista && ["preparing", "ready"].includes(o.status) && (
+                        <Text style={[s.dSub, { color: cores.cor }]}>Previsto até {prevista}</Text>
+                      )}
+                      {o.status === "cancelled" && !!o.cancel_reason && (
+                        <Text style={[s.dSub, { color: cores.cor }]}>Motivo: {o.cancel_reason}</Text>
+                      )}
                     </View>
+
+                    {aceitavel && modoNoDetalhe === "normal" && (
+                      <View style={{ marginBottom: 8 }}>
+                        <Text style={s.aceitePergunta}>Quanto tempo leva?</Text>
+                        <View style={s.tempos}>
+                          {TEMPOS_DE_PREPARO.map((t) => {
+                            const sel = tempoDoPedido(o.id) === t;
+                            return (
+                              <Pressable
+                                key={t}
+                                onPress={() => setTempoPorPedido((atual) => ({ ...atual, [o.id]: t }))}
+                                style={[s.tempoChip, sel && { backgroundColor: accent.primary, borderColor: accent.primary }]}
+                              >
+                                <Text style={[s.tempoTexto, sel && { color: "#fff" }]}>{t} min</Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    )}
+
+                    {!!o.aviso_whatsapp?.link && (
+                      <Pressable onPress={() => abrirWhatsapp(o.aviso_whatsapp)} style={s.btnWhatsLargo} testID="detalhe-avisar-whatsapp">
+                        <Icon name="whatsapp" size={14} color="#fff" />
+                        <Text style={s.btnWhatsTexto}>Avisar a cliente no WhatsApp</Text>
+                      </Pressable>
+                    )}
+
+                    {!!o.devolver_por_fora && (
+                      <View style={[cs.card, s.caixaAtencao]}>
+                        <Text style={s.dLine}>A cliente pagou {cartao ? "no cartão" : "o Pix"} e o pedido foi recusado.</Text>
+                        <Text style={s.dSub}>Devolva o valor por fora e marque aqui quando tiver devolvido.</Text>
+                        <Pressable onPress={() => marcarDevolvido(o)} disabled={working} style={[s.btnSecundario, { marginTop: 10, alignSelf: "flex-start" }, working && { opacity: 0.6 }]}>
+                          <Text style={s.btnSecundarioTexto}>Marcar como devolvido</Text>
+                        </Pressable>
+                      </View>
+                    )}
 
                     <Text style={s.sec}>Pagamento</Text>
                     <View style={cs.card}>
-                      <Text style={s.dLine}>{rotuloDoPagamento(o.payment_method)}</Text>
+                      <Text style={s.dLine}>{rotuloDoPagamento(o.payment_method, o.pay_on_delivery_method)}</Text>
                       <Text style={s.dSub}>
-                        {o.payment_status === "confirmed"
+                        {o.pagamento_na_entrega
+                          ? o.pagamento_na_entrega
+                          : o.payment_status === "confirmed"
                           ? (cartao ? "Pagamento confirmado pelo Mercado Pago" : "Pagamento confirmado")
                           : o.payment_status === "expired"
                             ? "O Pix não foi pago em 48 h e o pedido foi cancelado automaticamente."
@@ -485,6 +743,30 @@ export function TabPedidos({ companyId, orderIdInicial }: { companyId?: string; 
                       </>
                     )}
 
+                    {modoNoDetalhe === "recusar" && (
+                      <View style={[cs.card, s.caixaPerigo]} testID="detalhe-recusar">
+                        <Text style={[cs.fieldLabel, { color: Colors.red }]}>Por que você vai recusar?</Text>
+                        <Text style={s.dSub}>A cliente lê esse motivo no aviso do WhatsApp.</Text>
+                        <View style={[s.tempos, { marginTop: 8 }]}>
+                          {MOTIVOS_RAPIDOS.map((m) => (
+                            <Pressable key={m} onPress={() => setMotivo(m)} style={[s.tempoChip, motivo === m && { backgroundColor: Colors.red, borderColor: Colors.red }]}>
+                              <Text style={[s.tempoTexto, motivo === m && { color: "#fff" }]}>{m}</Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                        <TextInput
+                          style={[cs.input, { marginTop: 8 }]}
+                          value={motivo}
+                          onChangeText={setMotivo}
+                          placeholder="Ou escreva com as suas palavras"
+                          placeholderTextColor={Colors.ink3}
+                          multiline
+                          testID="detalhe-motivo-recusa"
+                        />
+                        {pagoOnline && <Text style={[s.dSub, { marginTop: 8 }]}>{AVISO_DO_PIX_PAGO}</Text>}
+                      </View>
+                    )}
+
                     {modoNoDetalhe === "cancelar" && (
                       <View style={[cs.card, s.caixaPerigo]}>
                         <Text style={[cs.fieldLabel, { color: Colors.red }]}>
@@ -531,6 +813,24 @@ export function TabPedidos({ companyId, orderIdInicial }: { companyId?: string; 
                           <Text style={s.footPrimarioTexto}>{isDeleting ? "Excluindo..." : "Excluir de vez"}</Text>
                         </Pressable>
                       </>
+                    ) : modoNoDetalhe === "recusar" ? (
+                      <>
+                        <Pressable onPress={() => { setModoNoDetalhe("normal"); setMotivo(""); }} disabled={working} style={s.footSecundario}>
+                          <Text style={s.footSecundarioTexto}>Voltar</Text>
+                        </Pressable>
+                        <Pressable onPress={recusarDoDetalhe} disabled={working} style={[s.footPrimario, { backgroundColor: Colors.red }, working && { opacity: 0.6 }]} testID="detalhe-confirmar-recusa">
+                          <Text style={s.footPrimarioTexto}>{working ? "Recusando..." : "Recusar pedido"}</Text>
+                        </Pressable>
+                      </>
+                    ) : aceitavel ? (
+                      <>
+                        <Pressable onPress={() => setModoNoDetalhe("recusar")} disabled={agindoId === o.id} style={s.footSecundario}>
+                          <Text style={s.footSecundarioTexto}>Recusar</Text>
+                        </Pressable>
+                        <Pressable onPress={() => aceitar(o)} disabled={agindoId === o.id} style={[s.footPrimario, { backgroundColor: Colors.green }, agindoId === o.id && { opacity: 0.6 }]}>
+                          <Text style={s.footPrimarioTexto}>{agindoId === o.id ? "..." : `Aceitar · ${tempoDoPedido(o.id)} min`}</Text>
+                        </Pressable>
+                      </>
                     ) : modoNoDetalhe === "cancelar" ? (
                       <>
                         <Pressable onPress={() => { setModoNoDetalhe("normal"); setMotivo(""); }} disabled={working} style={s.footSecundario}>
@@ -552,6 +852,10 @@ export function TabPedidos({ companyId, orderIdInicial }: { companyId?: string; 
                             <Text style={s.footPrimarioTexto}>
                               {working ? "..." : (o.status === "pending_payment" ? "Confirmar pagamento recebido" : "Aprovar pagamento")}
                             </Text>
+                          </Pressable>
+                        ) : passo ? (
+                          <Pressable onPress={() => seguirPasso(o)} disabled={agindoId === o.id} style={[s.footPrimario, agindoId === o.id && { opacity: 0.6 }]}>
+                            <Text style={s.footPrimarioTexto}>{agindoId === o.id ? "..." : passo.rotulo}</Text>
                           </Pressable>
                         ) : !!proximo && (
                           <Pressable onPress={avancar} disabled={isUpdating} style={[s.footPrimario, isUpdating && { opacity: 0.6 }]}>
@@ -668,6 +972,24 @@ function buildStyles(accent: AccentTokens) {
     sumVal: { fontSize: 13, color: Colors.ink3 },
     sumForte: { fontWeight: "800", color: Colors.ink },
     caixaPerigo: { borderColor: Colors.red, backgroundColor: Colors.redD, marginTop: 10 },
+    // tq-47: fila com aceite
+    caixaAtencao: { borderColor: Colors.amber, backgroundColor: Colors.amberD, marginTop: 4, marginBottom: 4 },
+    avisoFaixa: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.greenD, borderWidth: 1, borderColor: Colors.green, borderRadius: 12, padding: 12, marginBottom: 10 },
+    avisoTitulo: { fontSize: 12.5, fontWeight: "800", color: Colors.ink },
+    avisoTexto: { fontSize: 12, color: Colors.ink2, marginTop: 2, lineHeight: 17 },
+    btnWhats: { backgroundColor: "#1f9d55", borderRadius: 9, paddingVertical: 9, paddingHorizontal: 12 },
+    btnWhatsLargo: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#1f9d55", borderRadius: 10, paddingVertical: 11, marginBottom: 8 },
+    btnWhatsTexto: { color: "#fff", fontSize: 12.5, fontWeight: "700" },
+    parado: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start", backgroundColor: Colors.redD, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
+    paradoTexto: { fontSize: 11, fontWeight: "700", color: Colors.red },
+    pagamentoNaEntrega: { fontSize: 12.5, fontWeight: "700", color: Colors.ink, backgroundColor: Colors.bg4, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7 },
+    aceiteCaixa: { gap: 8 },
+    aceitePergunta: { fontSize: 12, fontWeight: "700", color: Colors.ink2 },
+    tempos: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+    tempoChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: Colors.border, backgroundColor: "transparent" },
+    tempoTexto: { fontSize: 12.5, fontWeight: "700", color: Colors.ink2 },
+    btnRecusar: { flexDirection: "row", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.red, borderRadius: 9, paddingVertical: 9, paddingHorizontal: 14 },
+    btnRecusarTexto: { color: Colors.red, fontSize: 12, fontWeight: "700" },
     linkExcluir: { alignSelf: "center", marginTop: 16, padding: 8 },
     linkExcluirTexto: { fontSize: 12, color: Colors.red, fontWeight: "600", textDecorationLine: "underline" },
     sheetFoot: { flexDirection: "row", gap: 10, padding: 20, borderTopWidth: 1, borderTopColor: Colors.border },
