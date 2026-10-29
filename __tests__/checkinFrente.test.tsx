@@ -113,7 +113,7 @@ describe("regra pura", () => {
 
   test("mesmas frentes do cartão 'Sua frente'; Personalizados só com plano que tem Studio", () => {
     expect(opcoesDeFrente("negocio")).toEqual(SEGMENTOS);
-    expect(opcoesDeFrente("essencial")).toEqual(["varejo", "matcon", "otica", "assistencia", "outro"]);
+    expect(opcoesDeFrente("essencial")).toEqual(["varejo", "matcon", "otica", "assistencia", "adega", "outro"]);
     expect(opcoesDeFrente(undefined)).not.toContain("studio");
   });
 });
@@ -123,7 +123,7 @@ describe("a tela", () => {
     resetar();
     const tree = await montar();
     expect(achar(tree, "checkin-pergunta-frente").length).toBeGreaterThan(0);
-    ["varejo", "matcon", "otica", "assistencia", "outro"].forEach((s) =>
+    ["varejo", "matcon", "otica", "assistencia", "adega", "outro"].forEach((s) =>
       expect(achar(tree, `checkin-chip-frente-${s}`).length).toBeGreaterThan(0));
     // Essencial: Personalizados some (nada desabilitado).
     expect(achar(tree, "checkin-chip-frente-studio").length).toBe(0);

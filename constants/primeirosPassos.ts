@@ -195,6 +195,14 @@ export const FRENTES: Record<Segmento, FrenteConfig> = {
     prontoMods: [],
     passos: VAREJO_PASSOS,
   },
+  // Adega e bar (29/10/2026, tq-50): mesmos passos do varejo por ora, sem
+  // módulo, plano ou menu novo.
+  adega: {
+    nome: "adega e bar",
+    pronto: null,
+    prontoMods: [],
+    passos: VAREJO_PASSOS,
+  },
   outro: {
     nome: null,
     pronto: null,
@@ -221,13 +229,14 @@ export const SEGMENT_LABEL: Record<Segmento, string> = {
   otica: "Ótica",
   assistencia: "Assistência técnica",
   studio: "Personalizados (Aura Studio)",
+  adega: "Adega e bar",
   outro: "Outro",
 };
 
 /** 409 STUDIO_PLAN_REQUIRED (Gestão Aura e Configurações). */
 export const STUDIO_PLAN_MSG = "Studio exige plano Negócio ou superior";
 
-export const SEGMENTOS: Segmento[] = ["varejo", "matcon", "otica", "assistencia", "studio", "outro"];
+export const SEGMENTOS: Segmento[] = ["varejo", "matcon", "otica", "assistencia", "studio", "adega", "outro"];
 
 /** Planos que podem ter a frente Personalizados (Studio); espelha o
  *  STUDIO_PLANS do backend (services/segment.js). No Essencial ela some. */

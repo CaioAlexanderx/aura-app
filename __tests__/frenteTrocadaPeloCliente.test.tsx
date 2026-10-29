@@ -112,7 +112,7 @@ describe("Sua frente — dono da conta", () => {
     expect(txt).not.toContain("fale com a gente");
 
     await press(tree, "pdv-settings-frente-trocar");
-    for (const k of ["varejo", "matcon", "otica", "assistencia", "studio", "outro"]) {
+    for (const k of ["varejo", "matcon", "otica", "assistencia", "studio", "adega", "outro"]) {
       expect(byId(tree, "pdv-settings-frente-opcao-" + k)).toHaveLength(1);
     }
     expect(byId(tree, "pdv-settings-frente-extra-os")).toHaveLength(1);
