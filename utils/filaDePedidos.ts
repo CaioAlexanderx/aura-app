@@ -44,6 +44,8 @@ export interface PedidoDaFila {
   refund_marked_at?: string | null;
   cancel_kind?: string | null;
   cancel_reason?: string | null;
+  /** Pix/cartão pago que nasceu numa loja com a fila de aceite (tq-47). */
+  aceite_na_fila?: boolean | null;
   /** Frase pronta do backend: "Dinheiro. Paga com R$ 100,00: levar R$ 22,00 de troco." */
   pagamento_na_entrega?: string | null;
   troco_a_levar?: number | null;

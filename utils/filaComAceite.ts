@@ -41,7 +41,11 @@ export const AVISO_DO_PIX_PAGO =
 export function podeAceitar(o: PedidoDaFila | null | undefined, filaComAceite = false): boolean {
   if (!o) return false;
   if (o.status === "aguardando_aceite") return true;
-  return filaComAceite && o.status === "confirmed" && !o.accepted_at;
+  // Revisão do #930: `accepted_at` é nulo em todo o histórico. Só o pedido
+  // pago que NASCEU na fila (`aceite_na_fila`, gravado no checkout) e com a
+  // loja ainda na fila. Pago antes de a loja ligar as formas, ou em loja
+  // sem formas, fica exatamente como hoje.
+  return filaComAceite && o.status === "confirmed" && !o.accepted_at && o.aceite_na_fila === true;
 }
 
 /** Minutos desde que o pedido chegou. */

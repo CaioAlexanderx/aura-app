@@ -59,10 +59,14 @@ describe("regras da fila", () => {
 
   test("quem pode aceitar: pagar na entrega sempre; Pix pago só na loja com a fila", () => {
     expect(podeAceitar(p({}))).toBe(true);
-    const pago = p({ status: "confirmed", payment_method: "pix" });
+    const pago = p({ status: "confirmed", payment_method: "pix", aceite_na_fila: true });
+    // (1) loja sem formas: nem o pedido marcado entra na fila.
     expect(podeAceitar(pago)).toBe(false);
     expect(podeAceitar(pago, true)).toBe(true);
     expect(podeAceitar({ ...pago, accepted_at: "x" }, true)).toBe(false);
+    // (2) pago antes de a loja ligar as formas (sem a marca do checkout): como hoje.
+    expect(podeAceitar({ ...pago, aceite_na_fila: null }, true)).toBe(false);
+    expect(podeAceitar({ ...pago, aceite_na_fila: undefined }, true)).toBe(false);
   });
 
   test("pedido parado: destaque a partir de 10 min", () => {
@@ -170,5 +174,37 @@ describe("TabPedidos com aceite", () => {
     expect(screen.getByText(/Previsto até \d\d:\d\d/)).toBeTruthy();
     await act(async () => { fireEvent.press(screen.getByText("Saiu para entrega")); });
     expect(mockFila.markOutForDelivery).toHaveBeenCalledWith("o3");
+  });
+
+  // Revisão do #930: o histórico de pedidos pagos não vira "aguardando aceite".
+  const PAGO = {
+    id: "o5", order_number: "0300", status: "confirmed", payment_method: "pix", payment_status: "confirmed",
+    delivery_type: "pickup", total: 50, created_at: new Date(Date.now() - 20 * 60000).toISOString(),
+  };
+
+  test("(1) loja sem formas: Pix pago aparece como hoje, mesmo marcado", () => {
+    preparar([{ ...PAGO, aceite_na_fila: true }], { filaComAceite: false });
+    render(<TabPedidos />);
+    expect(screen.queryByText("Aceitar")).toBeNull();
+    expect(screen.queryByText("Recusar")).toBeNull();
+    expect(screen.queryByText(/sem resposta/)).toBeNull();
+    expect(screen.getByText("Confirmado")).toBeTruthy();
+    expect(screen.getByText("Cancelar")).toBeTruthy();
+  });
+
+  test("(2) loja com formas: Pix pago antes de ligar as formas aparece como hoje", () => {
+    preparar([{ ...PAGO, aceite_na_fila: null }], { filaComAceite: true });
+    render(<TabPedidos />);
+    expect(screen.queryByText("Aceitar")).toBeNull();
+    expect(screen.queryByText(/sem resposta/)).toBeNull();
+    expect(screen.getByText("Cancelar")).toBeTruthy();
+  });
+
+  test("loja com formas: Pix pago nascido na fila ganha Aceitar e Recusar", () => {
+    preparar([{ ...PAGO, aceite_na_fila: true }], { filaComAceite: true });
+    render(<TabPedidos />);
+    expect(screen.getByText("Aceitar")).toBeTruthy();
+    expect(screen.getByText("Recusar")).toBeTruthy();
+    expect(screen.queryByText("Cancelar")).toBeNull();
   });
 });
