@@ -13,6 +13,7 @@ import { useMemberAudit, AUDIT_LABELS, type AuditAction, type AuditEntry } from 
 import { useMemberTemplates, type RoleTemplate } from "@/hooks/useMemberTemplates";
 import { useAuthStore } from "@/stores/auth";
 import type { Member, SiblingCompany } from "@/hooks/useMembers";
+import { alternarPermissao } from "@/utils/estoqueConsulta";
 
 // ============================================================
 // CONSTANTS
@@ -25,6 +26,9 @@ const MODULE_GROUPS = [
       { key: "painel",   label: "Painel",         hint: "Visão geral do negócio (dashboard)" },
       { key: "pdv",      label: "Caixa (PDV)",    hint: "Vender, abrir e fechar caixa" },
       { key: "estoque",  label: "Estoque",        hint: "Cadastrar e ajustar produtos" },
+      // 30/10/2026 — variação da tela Estoque (utils/estoqueConsulta.ts). As
+      // duas chaves se excluem no seletor.
+      { key: "estoque_consulta", label: "Estoque só consulta", hint: "Vê produtos e quantidades, sem preços, custos nem valores" },
       { key: "clientes", label: "Clientes",       hint: "Cadastrar e ver histórico de clientes" },
       // 15/09/2026 — umbrella da semi-vertical Ótica (useVisibleModules:
       // otica.access -> laboratório, receitas, config). Só aparece com o
@@ -60,6 +64,9 @@ const BUILT_IN_TEMPLATES = [
   { key: "caixa",    label: "Caixa",        description: "Painel + Caixa + Clientes",       icon: "🛒", role_label: "Caixa",       permissions: { painel: true, pdv: true, clientes: true } as Record<string, boolean> },
   { key: "gerente",  label: "Gerente",      description: "Acesso amplo, exceto Configs",    icon: "👔", role_label: "Gerente",     permissions: { painel: true, pdv: true, estoque: true, clientes: true, financeiro: true, relatorios: true, folha: true } as Record<string, boolean> },
   { key: "analista", label: "Analista",     description: "Painel + Financeiro + Relatórios", icon: "📊", role_label: "Analista",    permissions: { painel: true, financeiro: true, relatorios: true } as Record<string, boolean> },
+  // 30/10/2026 — painel: false porque, ausente, o Painel fica liberado
+  // (useVisibleModules) e ele mostra faturamento.
+  { key: "estoque_consulta", label: "Estoque (consulta)", description: "Só produtos e quantidades, sem valores", icon: "📦", role_label: "Estoque", permissions: { painel: false, estoque_consulta: true } as Record<string, boolean> },
   { key: "custom",   label: "Personalizado", description: "Eu escolho cada módulo",          icon: "⚙️", role_label: "Colaborador", permissions: null as Record<string, boolean> | null },
 ];
 
@@ -229,7 +236,7 @@ function ModuleGroupSelector({ value, onChange }: {
                 label={m.label}
                 hint={m.hint}
                 value={!!value[m.key]}
-                onToggle={() => onChange({ ...value, [m.key]: !value[m.key] })}
+                onToggle={() => onChange(alternarPermissao(value, m.key))}
               />
             ))}
           </View>

@@ -63,6 +63,10 @@ import { ProductGridWeb } from "@/components/screens/estoque/ProductGridWeb";
 import { readMatconSettings } from "@/constants/matcon";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { useVisibleModules } from "@/hooks/useVisibleModules";
+// 30/10/2026: Estoque só consulta (utils/estoqueConsulta.ts). O que a pessoa
+// não pode simplesmente some: nada de aviso de bloqueio ou de upgrade.
+import { useEstoqueConsulta } from "@/hooks/useEstoqueConsulta";
+import { ordemSemPreco, ordensSemPreco } from "@/utils/estoqueConsulta";
 import { nfceApi } from "@/services/nfceApi";
 // 23/09/2026 (QA producao, item 5): estoque consolidado (AggregatedView)
 // usava "un" fixo e Math.round — errado pra produto fracionado (m², kg).
@@ -70,7 +74,7 @@ import { nfceApi } from "@/services/nfceApi";
 import { fmtQty, qtdComUnidade, unidadeParaQuantidade } from "@/utils/matconUnits";
 // 23/09/2026 (QA producao, item 10): "Ultimos adicionados" ordenava alfabetico.
 // 23/09/2026: + A–Z / Z–A e a escolha lembrada no navegador (lerOrdemSalva).
-import { ordenarProdutos, lerOrdemSalva, salvarOrdem, type OrdemEstoque } from "@/utils/productSort";
+import { ordenarProdutos, lerOrdemSalva, salvarOrdem, ORDENS_ESTOQUE, type OrdemEstoque } from "@/utils/productSort";
 import { OrdenarBarra } from "@/components/screens/estoque/OrdenarBarra";
 // import { EstoqueRightRail } from "@/components/screens/estoque/EstoqueRightRail"; // Phase 2 — right rail
 
@@ -131,9 +135,11 @@ function SummaryCard({ label, value, color, sub, onPress }: { label: string; val
 function AggregatedView() {
   const [search, setSearch] = useState("");
   const { m } = useValoresOcultos();
+  const { consulta } = useEstoqueConsulta();
   const [refreshKey, setRefreshKey] = useState(0);
   const [ordem, setOrdem] = useState<OrdemEstoque>(ordemInicialConsolidado);
   const trocarOrdem = (o: OrdemEstoque) => { setOrdem(o); salvarOrdem(o); };
+  const ordemVista = consulta ? ordemSemPreco(ordem, "name_asc") : ordem;
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["productsAggregated", refreshKey],
@@ -161,13 +167,13 @@ function AggregatedView() {
   }, [groups, search]);
 
   const ordenados = useMemo(
-    () => ordenarProdutos(filtered, ordem, (g: AggregatedProduct) => ({
+    () => ordenarProdutos(filtered, ordemVista, (g: AggregatedProduct) => ({
       id: g.group_key,
       name: g.name,
       price: g.avg_price,
       stock: g.total_stock,
     })),
-    [filtered, ordem],
+    [filtered, ordemVista],
   );
 
   const linkedCount = groups.filter((g: AggregatedProduct) => g.is_linked).length;
@@ -213,7 +219,7 @@ function AggregatedView() {
       />
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 10 }} contentContainerStyle={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
-        <OrdenarBarra value={ordem} onChange={trocarOrdem} opcoes={ORDENS_CONSOLIDADO} />
+        <OrdenarBarra value={ordemVista} onChange={trocarOrdem} opcoes={consulta ? ordensSemPreco(ORDENS_CONSOLIDADO) : ORDENS_CONSOLIDADO} />
       </ScrollView>
 
       {filtered.length === 0 && (
@@ -262,7 +268,7 @@ function AggregatedView() {
                   inteiro truncado. */}
               <Text style={agg.totalStock}>{fmtQty(g.total_stock)}</Text>
               <Text style={agg.totalStockLabel}>{unidadeParaQuantidade(g.total_stock, g.unit || "un")}</Text>
-              <Text style={agg.price}>{m(fmt(g.avg_price))}</Text>
+              {!consulta && <Text style={agg.price}>{m(fmt(g.avg_price))}</Text>}
             </View>
           </View>
         ))}
@@ -319,6 +325,7 @@ export default function EstoqueScreen() {
   const { company, availableCompanies, consolidatedView } = useAuthStore();
   // 18/10/2026 (card p-36): "mudar" o desenho da etiqueta leva a Configurações.
   const podeMudarDesenho = useVisibleModules().has("configuracoes");
+  const { consulta, carregando: consultaCarregando } = useEstoqueConsulta();
   // 22/09/2026 (Matcon M2): aviso fiscal (CEST) da aba Alertas. Loja sem o
   // módulo nunca lê nfce_config aqui — o aviso nem calcula (AlertsList).
   const { settings: pdvSettings } = usePdvSettings();
@@ -326,14 +333,14 @@ export default function EstoqueScreen() {
   const { data: nfceCfgEstoque } = useQuery({
     queryKey: ["nfce-config", company?.id],
     queryFn: () => nfceApi.getConfig(company!.id),
-    enabled: !!company?.id && matcon.matcon_enabled,
+    enabled: !!company?.id && matcon.matcon_enabled && !consulta,
     staleTime: 300_000,
     retry: 1,
   });
   const emiteNotaEstoque = !!(nfceCfgEstoque as any)?.config?.is_active;
   // Multi-CNPJ: no consolidado (sem empresa selecionada) o aviso some —
   // código fiscal se resolve no cadastro de cada CNPJ.
-  const matconFiscalOn = matcon.matcon_enabled && !consolidatedView && !!company?.id;
+  const matconFiscalOn = matcon.matcon_enabled && !consolidatedView && !!company?.id && !consulta;
   const qc = useQueryClient();
   const scrollRef = useRef<any>(null);
   const C = useColors();
@@ -419,12 +426,12 @@ export default function EstoqueScreen() {
   const [sortOrder, setSortOrderState] = useState<OrdemEstoque>(lerOrdemSalva);
   const setSortOrder = (o: OrdemEstoque) => { setSortOrderState(o); salvarOrdem(o); };
   const hasMultipleCnpjs = (availableCompanies?.length || 0) >= 2;
-  const canLinkProducts = hasMultipleCnpjs && !consolidatedView && !!company?.id;
+  const canLinkProducts = hasMultipleCnpjs && !consolidatedView && !!company?.id && !consulta;
 
   const { data: dupGroupsData, refetch: refetchDupGroups } = useQuery({
     queryKey: ["duplicateGroups", company?.id],
     queryFn: () => companiesApi.duplicateGroups(company!.id),
-    enabled: !!company?.id && !isDemo && !consolidatedView,
+    enabled: !!company?.id && !isDemo && !consolidatedView && !consulta && !consultaCarregando,
     staleTime: 60000,
   });
   const dupGroupsCount = ((dupGroupsData as any)?.groups?.length || 0);
@@ -464,7 +471,8 @@ export default function EstoqueScreen() {
     });
   }, [products, search, effectiveCats]);
 
-  const sorted = useMemo(() => ordenarProdutos(filtered, sortOrder), [filtered, sortOrder]);
+  const ordemVista = consulta ? ordemSemPreco(sortOrder, "recent") : sortOrder;
+  const sorted = useMemo(() => ordenarProdutos(filtered, ordemVista), [filtered, ordemVista]);
 
   // Pagination key inclui catsMulti pra resetar página quando user
   // troca categorias no wide layout (multi-select dropdown).
@@ -488,15 +496,16 @@ export default function EstoqueScreen() {
   const salvouRef = useRef(false);
   const veioPeloParamRef = useRef(false);
   useEffect(() => {
-    if (!querNovoProduto(params.novo) || consolidatedView) return;
+    if (!querNovoProduto(params.novo) || consolidatedView || consulta || consultaCarregando) return;
     veioPeloParamRef.current = true;
     caixaDepoisRef.current = depoisVaiAoCaixa(params.depois);
     salvouRef.current = false;
     abrirCadastro("product");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.novo]);
+  }, [params.novo, consultaCarregando]);
 
   function abrirCadastro(tipo: "product" | "service", prod?: Product | null) {
+    if (consulta) return;
     setEditProduct(prod || null);
     setFormType(prod ? (prod.unit === "srv" ? "service" : "product") : tipo);
     setFormOpen(true);
@@ -579,6 +588,14 @@ export default function EstoqueScreen() {
     await bulkDeleteProducts(Array.from(bulkSelected));
     exitBulkMode();
     refetchDupGroups();
+  }
+
+  if (consultaCarregando) {
+    return (
+      <ScrollView style={s.screen} contentContainerStyle={s.content}>
+        <ListSkeleton rows={4} showCards />
+      </ScrollView>
+    );
   }
 
   if (consolidatedView) {
@@ -696,20 +713,24 @@ export default function EstoqueScreen() {
                 </>
               }
             />
-            <View style={[s.headerRow, { marginBottom: 18, marginTop: 4 }]}>
-              <View style={s.headerActions}>
-                {ActionButtons()}
+            {!consulta && (
+              <View style={[s.headerRow, { marginBottom: 18, marginTop: 4 }]}>
+                <View style={s.headerActions}>
+                  {ActionButtons()}
+                </View>
               </View>
-            </View>
+            )}
           </>
         ) : (
           <View style={s.headerRow}>
             <View style={{ flex: 1 }}>
               <Text style={s.pageTitle}>Estoque</Text>
             </View>
-            <View style={s.headerActions}>
-              {ActionButtons()}
-            </View>
+            {!consulta && (
+              <View style={s.headerActions}>
+                {ActionButtons()}
+              </View>
+            )}
           </View>
         )}
 
@@ -717,7 +738,7 @@ export default function EstoqueScreen() {
             com ?importar=planilha (components/screens/estoque/ConvitePlanilha). */}
         <ConvitePlanilha
           importar={params.importar}
-          escondido={consolidatedView || importPlanilha.aberto}
+          escondido={consolidatedView || importPlanilha.aberto || consulta}
           ocupado={importPlanilha.ocupado}
           onEscolher={importPlanilha.escolherArquivo}
         />
@@ -741,17 +762,18 @@ export default function EstoqueScreen() {
               totalUnits={totalItems}
               lowCount={lowStock.length}
               onLowClick={lowStock.length > 0 ? () => setActiveTab(1) : undefined}
+              semValores={consulta}
             />
           ) : (
             <View style={s.summaryRow}>
               <SummaryCard label="TOTAL PRODUTOS" value={String(products.length)} sub={`${totalItems} unidades` + (serviceCount > 0 ? ` + ${serviceCount} servico${serviceCount > 1 ? "s" : ""}` : "")} />
-              <SummaryCard label="VALOR EM ESTOQUE" value={m(fmt(valorEstoque.custo))} sub={legendaValorEstoque(valorEstoque, n => m(fmt(n)))} />
+              {!consulta && <SummaryCard label="VALOR EM ESTOQUE" value={m(fmt(valorEstoque.custo))} sub={legendaValorEstoque(valorEstoque, n => m(fmt(n)))} />}
               <SummaryCard label="ESTOQUE BAIXO" value={String(lowStock.length)} color={lowStock.length > 0 ? Colors.red : Colors.green} sub={lowStock.length > 0 ? "Ver alertas" : "Tudo OK"} onPress={lowStock.length > 0 ? () => setActiveTab(1) : undefined} />
             </View>
           )
         )}
 
-        {dupGroupsCount > 0 && !isDemo && (
+        {dupGroupsCount > 0 && !isDemo && !consulta && (
           <Pressable onPress={() => setShowMergeModal(true)} style={s.dupBanner}>
             <View style={s.dupBannerIcon}><Text style={s.dupBannerIconText}>!</Text></View>
             <View style={{ flex: 1 }}>
@@ -771,7 +793,11 @@ export default function EstoqueScreen() {
 
         {isLoading && <ListSkeleton rows={4} showCards />}
 
-        {!isLoading && products.length === 0 && !isDemo && (
+        {!isLoading && products.length === 0 && !isDemo && consulta && (
+          <EmptyState icon="package" iconColor={Colors.amber} title="Nenhum produto cadastrado" subtitle="Quando a loja cadastrar produtos, eles aparecem aqui." />
+        )}
+
+        {!isLoading && products.length === 0 && !isDemo && !consulta && (
           <View>
             <EmptyState icon="package" iconColor={Colors.amber} title="Nenhum produto cadastrado" subtitle="Cadastre seu primeiro produto ou serviço, ou importe de uma planilha." actionLabel="+ Adicionar produto" onAction={() => abrirCadastro("product")} />
             <View style={s.emptyImport}>
@@ -801,7 +827,7 @@ export default function EstoqueScreen() {
         {/* 01/09/2026: TabBar local (cópia byte a byte do ScreenTabs) saiu. */}
         {products.length > 0 && (
           <ScreenTabs
-            tabs={TABS.map((t) => ({ key: t, label: t }))}
+            tabs={TABS.filter((t) => !(consulta && t === "Etiquetas")).map((t) => ({ key: t, label: t }))}
             active={TABS[activeTab]}
             onSelect={(k) => handleTabSelect(TABS.indexOf(k))}
           />
@@ -853,8 +879,8 @@ export default function EstoqueScreen() {
             </View>
             {/* Sort + view toggle */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 10 }} contentContainerStyle={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
-              <OrdenarBarra value={sortOrder} onChange={setSortOrder} />
-              {isWebWide && Platform.OS === "web" ? (
+              <OrdenarBarra value={ordemVista} onChange={setSortOrder} opcoes={consulta ? ordensSemPreco(ORDENS_ESTOQUE) : undefined} />
+              {isWebWide && Platform.OS === "web" && !consulta ? (
                 <>
                   <View style={{ width: 12 } as any} />
                   <View style={s.viewToggleWrap}>
@@ -873,7 +899,7 @@ export default function EstoqueScreen() {
             {isWebWide ? (
               <View style={{ marginBottom: 14, flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" } as any}>
                 <CategoryDropdownWeb categories={allCategories} selected={catsMulti} onChange={setCatsMulti} />
-                {!isDemo && (
+                {!isDemo && !consulta && (
                   <Pressable
                     onPress={() => router.push("/catalogo/organizar")}
                     style={s.catBtn}
@@ -888,7 +914,7 @@ export default function EstoqueScreen() {
             ) : (
               <>
                 <ScrollableChips items={filterCategories} active={catFilter} onSelect={setCatFilter} />
-                {!isDemo && (
+                {!isDemo && !consulta && (
                   <Pressable
                     onPress={() => router.push("/catalogo/organizar")}
                     style={[s.catBtn, { alignSelf: "flex-start", marginBottom: 12 }]}
@@ -908,11 +934,12 @@ export default function EstoqueScreen() {
             {/* List view: ProductTableWeb / ProductGridWeb (wide) ou ProductRow (narrow) */}
             {isWebWide ? (
               <View style={{ marginBottom: 12 } as any}>
-                {view === "table" ? (
+                {view === "table" || consulta ? (
                   <ProductTableWeb
                     items={paginated}
-                    onEdit={!isDemo ? handleEdit : undefined}
-                    onDelete={!isDemo ? (id) => setDeleteTarget(id) : undefined}
+                    consulta={consulta}
+                    onEdit={!isDemo && !consulta ? handleEdit : undefined}
+                    onDelete={!isDemo && !consulta ? (id) => setDeleteTarget(id) : undefined}
                     onLink={canLinkProducts ? (p) => setLinkTarget(p) : undefined}
                     bulkMode={bulkMode}
                     bulkSelected={bulkSelected}
@@ -938,8 +965,9 @@ export default function EstoqueScreen() {
                   <ProductRow
                     key={p.id}
                     product={p}
-                    onDelete={!isDemo && !bulkMode ? (id) => setDeleteTarget(id) : undefined}
-                    onEdit={!isDemo && !bulkMode ? handleEdit : undefined}
+                    consulta={consulta}
+                    onDelete={!isDemo && !bulkMode && !consulta ? (id) => setDeleteTarget(id) : undefined}
+                    onEdit={!isDemo && !bulkMode && !consulta ? handleEdit : undefined}
                     onLink={canLinkProducts && !bulkMode ? (prod) => setLinkTarget(prod) : undefined}
                     isSelected={bulkSelected.has(p.id)}
                     onSelect={bulkMode ? toggleBulkSelect : undefined}
@@ -959,10 +987,11 @@ export default function EstoqueScreen() {
             matconOn={matconFiscalOn}
             emiteNota={emiteNotaEstoque}
             onUpdateCest={(product, cest) => updateProduct({ ...product, cest })}
+            consulta={consulta}
           />
         )}
         {/* Aba 2: Etiquetas (era 3 antes da Curva ABC migrar) */}
-        {activeTab === 2 && <PrintLabels products={products} selectedIds={labelSelection} onSelectionChange={setLabelSelection} podeMudarDesenho={podeMudarDesenho} />}
+        {activeTab === 2 && !consulta && <PrintLabels products={products} selectedIds={labelSelection} onSelectionChange={setLabelSelection} podeMudarDesenho={podeMudarDesenho} />}
 
       </ScrollView>
 

@@ -98,7 +98,7 @@ describe("a seção Matcon existe no menu", () => {
     const r = vendas.map((i) => i.r);
     expect(r.indexOf("/fornecedores")).toBe(r.indexOf("/estoque") + 1);
     const forn = vendas[r.indexOf("/fornecedores")];
-    expect(forn).toMatchObject({ l: "Fornecedores", ic: "truck", mod: "estoque", matconToggle: false });
+    expect(forn).toMatchObject({ l: "Fornecedores", ic: "truck", mod: "fornecedores", matconToggle: false });
   });
 });
 

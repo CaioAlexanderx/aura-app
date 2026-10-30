@@ -3,11 +3,18 @@ import { useQuery } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { permissionsQueryKey } from "@/utils/permissionsQueryKey";
+import { estaEmConsulta } from "@/utils/estoqueConsulta";
 
 var MODULE_PLAN_MAP: Record<string, string> = {
   painel: 'essencial', financeiro: 'essencial', nfe: 'essencial',
   contabilidade: 'essencial', suporte: 'essencial', pdv: 'essencial',
   estoque: 'essencial', configuracoes: 'essencial',
+  // 30/10/2026 -- Fornecedores ganha modulo proprio. O item /fornecedores do
+  // NAV usava mod "estoque" emprestado (regra 3), e quem so consulta o estoque
+  // herdaria uma tela com custo e escrita. Mesmo plano e mesma permissao do
+  // estoque: ninguem ganha nem perde acesso. O backend (services/modules.js)
+  // ainda NAO conhece a chave (mesmo caso de "os" e "cupons").
+  fornecedores: 'essencial',
   // 13/10/2026 -- pagina "Black Friday" (/black-friday): funcoes da temporada
   // de fim de ano reunidas (o que vai faltar, assento de temporada, vale-troca
   // no cupom, placar do dia). Chave PROPRIA (regra 3), mesmo plano do Estoque
@@ -177,7 +184,11 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   // (estoque) e quem monta a loja (configuracoes: assento e vale-troca).
   // Nao existe permissao propria no backend; cada secao da pagina checa o
   // modulo da propria funcao, entao quem tem so uma das duas ve so o que e seu.
-  estoque:       ['estoque', 'black_friday'],
+  estoque:       ['estoque', 'black_friday', 'fornecedores'],
+  // 30/10/2026 -- Estoque so consulta: mesma tela, mesmo modulo, sem mod novo
+  // porque e variacao da tela (utils/estoqueConsulta.ts). So o modulo estoque:
+  // Black Friday e Fornecedores mostram valores e nao entram.
+  estoque_consulta: ['estoque'],
   // 16/09/2026 -- o grupo "Clientes e WhatsApp" do menu passa a ser a casa das
   // quatro telas de relacionamento. "whatsapp" ja tinha plano em
   // MODULE_PLAN_MAP mas NAO tinha permissao aqui: na pratica, membro nao-dono
@@ -241,6 +252,8 @@ var PERM_TO_MODULES: Record<string, string[]> = {
 var OVERRIDE_HIDE_FALLBACK: Record<string, string> = {
   os: 'pdv',
   cupons: 'pdv',
+  // 30/10/2026 -- mesmo racional: /fornecedores saiu de dentro do estoque.
+  fornecedores: 'estoque',
 };
 
 export function computeVisibleModules(
@@ -275,6 +288,8 @@ export function computeVisibleModules(
 
     for (var permKey of Object.keys(PERM_TO_MODULES)) {
       if (permKey === 'painel') continue; // already handled above
+      // Com estoque e estoque_consulta ligados, vale o mais restritivo.
+      if (permKey === 'estoque' && estaEmConsulta(permData)) continue;
       if (permData.permissions[permKey]) {
         var modules = PERM_TO_MODULES[permKey];
         modules.forEach(function(m) { allowed.add(m); });

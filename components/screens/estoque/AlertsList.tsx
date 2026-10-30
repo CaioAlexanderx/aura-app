@@ -14,7 +14,7 @@ import { qtdComUnidade } from "@/utils/matconUnits";
 import { calcularFiscalGaps } from "@/utils/cest";
 import { FiscalGapsModal } from "./FiscalGapsModal";
 
-function AlertRow({ product }: { product: Product }) {
+function AlertRow({ product, consulta }: { product: Product; consulta?: boolean }) {
   const [hovered, setHovered] = useState(false);
   const { m } = useValoresOcultos();
   const isWeb = Platform.OS === "web";
@@ -24,7 +24,7 @@ function AlertRow({ product }: { product: Product }) {
       style={[s.row, hovered && { backgroundColor: Colors.bg4 }, isWeb && { transition: "background-color 0.15s ease" } as any]}>
       <View style={s.icon}><Text style={s.iconText}>!</Text></View>
       <View style={{ flex: 1 }}><Text style={s.name}>{product.name}</Text><Text style={s.detail}>Atual: {qtdComUnidade(product.stock, product.unit)} · Mínimo: {qtdComUnidade(product.minStock, product.unit)}</Text></View>
-      <View style={{ alignItems: "flex-end", gap: 4 }}><View style={s.badge}><Text style={s.badgeText}>Repor {qtdComUnidade(deficit, product.unit)}</Text></View><Text style={s.cost}>~{m(fmt(deficit * product.cost))}</Text></View>
+      <View style={{ alignItems: "flex-end", gap: 4 }}><View style={s.badge}><Text style={s.badgeText}>Repor {qtdComUnidade(deficit, product.unit)}</Text></View>{!consulta && <Text style={s.cost}>~{m(fmt(deficit * product.cost))}</Text>}</View>
     </Pressable>
   );
 }
@@ -37,9 +37,11 @@ type Props = {
   matconOn?: boolean;
   emiteNota?: boolean;
   onUpdateCest?: (product: Product, cest: string) => Promise<boolean | void> | void;
+  // 30/10/2026 — Estoque só consulta: sem custo de reposição.
+  consulta?: boolean;
 };
 
-export function AlertsList({ products, matconOn, emiteNota, onUpdateCest }: Props) {
+export function AlertsList({ products, matconOn, emiteNota, onUpdateCest, consulta }: Props) {
   const { m } = useValoresOcultos();
   const [gapsOpen, setGapsOpen] = useState(false);
   const lowStock = products.filter(p => p.stock <= p.minStock).sort((a, b) => (a.stock / (a.minStock || 1)) - (b.stock / (b.minStock || 1)));
@@ -87,8 +89,8 @@ export function AlertsList({ products, matconOn, emiteNota, onUpdateCest }: Prop
   return (
     <View>
       <View style={s.alertHeader}><Text style={s.alertHeaderText}>{lowStock.length} produto{lowStock.length > 1 ? "s" : ""} abaixo do estoque minimo</Text></View>
-      <View style={s.listCard}>{lowStock.map(p => <AlertRow key={p.id} product={p} />)}</View>
-      <View style={s.reorderCard}><Text style={s.reorderTitle}>Custo estimado de reposição</Text><Text style={s.reorderValue}>{m(fmt(lowStock.reduce((s, p) => s + (p.minStock - p.stock) * p.cost, 0)))}</Text><Text style={s.reorderHint}>Para repor todos ao estoque mínimo</Text></View>
+      <View style={s.listCard}>{lowStock.map(p => <AlertRow key={p.id} product={p} consulta={consulta} />)}</View>
+      {!consulta && <View style={s.reorderCard}><Text style={s.reorderTitle}>Custo estimado de reposição</Text><Text style={s.reorderValue}>{m(fmt(lowStock.reduce((s, p) => s + (p.minStock - p.stock) * p.cost, 0)))}</Text><Text style={s.reorderHint}>Para repor todos ao estoque mínimo</Text></View>}
       {avisoFiscal}
     </View>
   );
