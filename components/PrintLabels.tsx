@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, Pressable, Platform, ScrollView, TextInput } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform, ScrollView, TextInput, useWindowDimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
@@ -27,6 +27,8 @@ import {
 import { LabelPrinterCalibration, mmBr } from "@/components/screens/estoque/labels/LabelPrinterCalibration";
 import { LabelPreviewModal } from "@/components/screens/estoque/labels/LabelPreviewModal";
 import { defaultLabelQty, unitLabelForList } from "@/components/screens/estoque/labels/labelDefaults";
+// 30/10/2026 (card p-72): variantes de varios produtos numa chamada (p-73).
+import { buscarVariantesEmLote, emPedacos, comLimite, MAX_IDS_POR_LOTE, CONCORRENCIA_POR_PRODUTO } from "@/components/screens/estoque/labels/variantesEmLote";
 // 15/10/2026: "Minha medida" (medida livre em mm, por computador).
 import { customLabelPreset, rotuloDaMedida, mmTxt, type CustomLabelSpec } from "@/components/screens/estoque/labels/customLabel";
 import { nomeDaLojaDaEmpresa, mostrarNomeDaLoja } from "@/components/screens/estoque/labels/nomeDaLoja";
@@ -35,7 +37,7 @@ import { MinhaMedidaWizard } from "@/components/screens/estoque/labels/MinhaMedi
 import { DesenhoDaEtiquetaLinha } from "@/components/screens/estoque/DesenhoDaEtiquetaLinha";
 import {
   filtrarEtiquetas, categoriasDe, filtrosAtivos, lerOrdemEtiquetas, salvarOrdemEtiquetas,
-  lerSoComEstoque, salvarSoComEstoque, variantesParaMarcar, FILTRO_PADRAO,
+  lerSoComEstoque, salvarSoComEstoque, variantesParaMarcar, estoqueDaVariante, FILTRO_PADRAO,
   ORDENS_ETIQUETAS, PERIODOS, diaParaBr, hojeEmSaoPaulo, diasComCadastro, marcasDoCalendario, type PeriodoCadastro,
 } from "@/utils/etiquetasFiltro";
 import { CalendarioDoDia } from "@/components/CalendarioDoDia";
@@ -94,6 +96,11 @@ var COLOR_NAME_TO_HEX: Record<string, string> = {
 // os outros desenhos ignoram o campo e saem byte a byte como antes.
 function skuDoProduto(p: Product): string {
   return String((p as any).sku || p.code || "").trim();
+}
+
+// 30/10/2026: estoque na lista ("12,5 em estoque").
+function numBr(n: number): string {
+  return String(Math.round(Number(n) * 1000) / 1000).replace(".", ",");
 }
 
 function colorNameToHex(name: string): string | null {
@@ -410,76 +417,193 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
   function getQty(key: string) { return quantities[key] || 1; }
   function setQty(key: string, n: number) { setQuantities(function(prev) { return { ...prev, [key]: Math.max(1, Math.min(999, n)) }; }); }
 
-  function fetchVariantsIfNeeded(productId: string) {
-    if (variantCache[productId] || !company?.id) return;
-    var p = products.find(function(pr) { return pr.id === productId; });
-    if (!p || !p.has_variants) return;
-    var productUnit = p.unit;
-    var comEstoque = soComEstoque;
-    companiesApi.variants(company.id, productId).then(function(res) {
-      var active = (res.variants || []).filter(function(v: any) { return v.is_active !== false; });
-      setVariantCache(function(prev) { return { ...prev, [productId]: active }; });
-      if (active.length > 0) {
-        // 30/10/2026 (p-71): com "Só com estoque" ligado, variante sem
-        // estoque nunca vem marcada. A quantidade das outras e a de sempre.
-        marcarVariantesPadrao(productId, active, comEstoque);
-        var newQtys: Record<string, number> = {};
-        active.forEach(function(v: any) { var stock = parseInt(v.stock_qty) || 1; newQtys[productId + "__" + v.id] = defaultLabelQty(productUnit, stock, matconEnabled); });
-        setQuantities(function(prev) { return { ...prev, ...newQtys }; });
-      }
-    }).catch(function() { setVariantCache(function(prev) { return { ...prev, [productId]: [] }; }); });
+  // 30/10/2026 (card p-72): variantes carregadas ao abrir ("Ver variantes"),
+  // ao marcar e, com o backend novo (p-73), em lote para a lista visivel.
+  // Carregar NAO marca: so marca quem foi marcado (marcarAoCarregar).
+  // Backend antigo: uma chamada por produto, no maximo 4 ao mesmo tempo.
+  var loteRef = useRef<"desconhecido" | "sim" | "nao">("desconhecido");
+  var carregandoRef = useRef<Set<string>>(new Set());
+  var marcarAoCarregarRef = useRef<Set<string>>(new Set());
+  var soComEstoqueRef = useRef(soComEstoque);
+  soComEstoqueRef.current = soComEstoque;
+  // Empresa ativa (multi-CNPJ): trocou de empresa, nada carregado vale.
+  var cidDoCacheRef = useRef<string | null>(company?.id || null);
+  if (cidDoCacheRef.current !== (company?.id || null)) {
+    cidDoCacheRef.current = company?.id || null;
+    loteRef.current = "desconhecido";
+    carregandoRef.current = new Set();
+    marcarAoCarregarRef.current = new Set();
   }
+
+  function aplicarVariantes(cid: string, mapa: Record<string, any[]>) {
+    if (cid !== cidDoCacheRef.current) return; // resposta de outra empresa
+    var ativos: Record<string, any[]> = {};
+    var newQtys: Record<string, number> = {};
+    Object.keys(mapa).forEach(function(pid) {
+      carregandoRef.current.delete(pid);
+      var active = (mapa[pid] || []).filter(function(v: any) { return v.is_active !== false; });
+      ativos[pid] = active;
+      var prod = products.find(function(pr) { return pr.id === pid; });
+      var productUnit = prod ? prod.unit : undefined;
+      // Quantidade de hoje: o estoque da variante (sem estoque = 1), com a
+      // excecao de unidade fracionada/milheiro do Matcon.
+      active.forEach(function(v: any) { var stock = parseInt(v.stock_qty) || 1; newQtys[pid + "__" + v.id] = defaultLabelQty(productUnit, stock, matconEnabled); });
+    });
+    setVariantCache(function(prev) { return { ...prev, ...ativos }; });
+    setQuantities(function(prev) {
+      var n = { ...prev };
+      Object.keys(newQtys).forEach(function(k) { if (n[k] == null) n[k] = newQtys[k]; });
+      return n;
+    });
+    Object.keys(ativos).forEach(function(pid) {
+      if (!marcarAoCarregarRef.current.has(pid)) return;
+      marcarAoCarregarRef.current.delete(pid);
+      if (ativos[pid].length > 0) marcarVariantesPadrao(pid, ativos[pid], soComEstoqueRef.current);
+    });
+  }
+
+  function carregarVariantes(ids: string[], soEmLote?: boolean) {
+    var cid = company?.id;
+    if (!cid) return;
+    var faltam = ids.filter(function(id) {
+      if (variantCache[id] || carregandoRef.current.has(id)) return false;
+      var pr = products.find(function(x) { return x.id === id; });
+      return !!(pr && pr.has_variants);
+    });
+    if (faltam.length === 0) return;
+    if (loteRef.current === "nao") {
+      if (soEmLote) return;
+      porProduto(cid, faltam);
+      return;
+    }
+    faltam.forEach(function(id) { carregandoRef.current.add(id); });
+    emPedacos(faltam, MAX_IDS_POR_LOTE).forEach(function(pedaco) {
+      buscarVariantesEmLote(cid as string, pedaco).then(function(mapa) {
+        loteRef.current = "sim";
+        aplicarVariantes(cid as string, mapa);
+      }).catch(function() {
+        // Rota ausente (backend antigo) ou falha: caminho por produto.
+        loteRef.current = "nao";
+        pedaco.forEach(function(id) { carregandoRef.current.delete(id); });
+        if (cid !== cidDoCacheRef.current) return;
+        var pedidos = soEmLote ? pedaco.filter(function(id) { return marcarAoCarregarRef.current.has(id) || abertosRef.current[id]; }) : pedaco;
+        if (pedidos.length > 0) porProduto(cid as string, pedidos);
+      });
+    });
+  }
+
+  function porProduto(cid: string, ids: string[]) {
+    ids.forEach(function(id) { carregandoRef.current.add(id); });
+    comLimite(ids.map(function(id) {
+      return function() {
+        return companiesApi.variants(cid, id).then(function(res: any) {
+          aplicarVariantes(cid, { [id]: (res && res.variants) || [] });
+        }).catch(function() { aplicarVariantes(cid, { [id]: [] }); });
+      };
+    }), CONCORRENCIA_POR_PRODUTO);
+  }
+
+  function fetchVariantsIfNeeded(productId: string) { carregarVariantes([productId]); }
 
   function marcarVariantesPadrao(productId: string, active: any[], comEstoque: boolean) {
     var varIds = new Set(variantesParaMarcar(active, comEstoque));
     setSelectedVariants(function(prev) { return { ...prev, [productId]: varIds }; });
   }
 
+  // "Ver variantes": abre o produto sem marcar.
+  var [abertos, setAbertos] = useState<Record<string, boolean>>({});
+  var abertosRef = useRef(abertos);
+  abertosRef.current = abertos;
+  function alternarAberto(id: string) {
+    var abrir = !abertos[id];
+    setAbertos(function(prev) { return { ...prev, [id]: abrir }; });
+    if (abrir) fetchVariantsIfNeeded(id);
+  }
+
+  // Lista visivel: com o lote disponivel, as variantes chegam antes do toque
+  // (o estoque de cada uma ja aparece ao abrir). Sem lote, so sob demanda.
+  var idsComVariantesVisiveis = filtered.filter(function(p) { return p.has_variants; }).map(function(p) { return p.id; }).join(",");
+  useEffect(function() {
+    if (!idsComVariantesVisiveis) return;
+    carregarVariantes(idsComVariantesVisiveis.split(","), true);
+  }, [idsComVariantesVisiveis, company?.id]);
+
+  function desmarcarProduto(id: string) {
+    marcarAoCarregarRef.current.delete(id);
+    setSelectedVariants(function(prev) { var n = { ...prev }; delete n[id]; return n; });
+    setIncludeParentInPrint(function(prev) { var n = { ...prev }; delete n[id]; return n; });
+  }
+
+  function marcarProduto(id: string) {
+    var p = products.find(function(pr) { return pr.id === id; });
+    if (p && p.has_variants) {
+      // Variantes ja carregadas: marca o padrao ja; senao, ao chegar.
+      if (variantCache[id]) { if (variantCache[id].length > 0) marcarVariantesPadrao(id, variantCache[id], soComEstoque); }
+      else { marcarAoCarregarRef.current.add(id); fetchVariantsIfNeeded(id); }
+    }
+    if (!quantities[id] && p) setQty(id, defaultLabelQty(p.unit, p.stock, matconEnabled));
+  }
+
   function toggleSelect(id: string) {
     if (selectedIds.includes(id)) {
       onSelectionChange(selectedIds.filter(function(i) { return i !== id; }));
-      setSelectedVariants(function(prev) { var n = { ...prev }; delete n[id]; return n; });
-      setIncludeParentInPrint(function(prev) { var n = { ...prev }; delete n[id]; return n; });
+      desmarcarProduto(id);
     } else {
       onSelectionChange([...selectedIds, id]);
-      // Variantes ja carregadas (desmarcou e marcou de novo): volta ao padrao.
-      if (variantCache[id] && variantCache[id].length > 0) marcarVariantesPadrao(id, variantCache[id], soComEstoque);
-      fetchVariantsIfNeeded(id);
-      if (!quantities[id]) { var p = products.find(function(pr) { return pr.id === id; }); if (p) setQty(id, defaultLabelQty(p.unit, p.stock, matconEnabled)); }
+      marcarProduto(id);
+      var p = products.find(function(pr) { return pr.id === id; });
+      if (p && p.has_variants) setAbertos(function(prev) { return { ...prev, [id]: true }; });
     }
   }
 
+  // Marca/desmarca o produto pela etiqueta do pai; nao mexe nas variantes.
   function toggleIncludeParent(productId: string) {
-    setIncludeParentInPrint(function(prev) { return { ...prev, [productId]: !prev[productId] }; });
+    var liga = !includeParentInPrint[productId];
+    setIncludeParentInPrint(function(prev) { return { ...prev, [productId]: liga }; });
+    var vars = selectedVariants[productId];
+    if (liga && !selectedIds.includes(productId)) {
+      setSelectedVariants(function(prev) { return { ...prev, [productId]: prev[productId] || new Set() }; });
+      onSelectionChange([...selectedIds, productId]);
+    } else if (!liga && selectedIds.includes(productId) && (!vars || vars.size === 0)) {
+      onSelectionChange(selectedIds.filter(function(i) { return i !== productId; }));
+    }
   }
 
+  // Marcar uma variante na mao marca o produto; desmarcar a ultima (sem a
+  // etiqueta do pai) desmarca o produto.
   function toggleVariant(productId: string, variantId: string) {
-    setSelectedVariants(function(prev) {
-      var current = new Set(prev[productId] || []);
-      if (current.has(variantId)) current.delete(variantId); else current.add(variantId);
-      return { ...prev, [productId]: current };
-    });
+    var current = new Set(selectedIds.includes(productId) ? (selectedVariants[productId] || []) : []);
+    if (current.has(variantId)) current.delete(variantId); else current.add(variantId);
+    setSelectedVariants(function(prev) { return { ...prev, [productId]: current }; });
+    if (current.size > 0 && !selectedIds.includes(productId)) {
+      marcarAoCarregarRef.current.delete(productId);
+      onSelectionChange([...selectedIds, productId]);
+    } else if (current.size === 0 && selectedIds.includes(productId) && !includeParentInPrint[productId]) {
+      onSelectionChange(selectedIds.filter(function(i) { return i !== productId; }));
+    }
   }
 
-  function toggleAllVariants(productId: string) {
-    var variants = variantCache[productId] || [];
-    var current = selectedVariants[productId] || new Set();
-    var allSelected = variants.every(function(v: any) { return current.has(v.id); });
-    if (allSelected) { setSelectedVariants(function(prev) { return { ...prev, [productId]: new Set() }; }); }
-    else { var all = new Set(variants.map(function(v: any) { return v.id; })); setSelectedVariants(function(prev) { return { ...prev, [productId]: all }; }); }
-  }
-
+  // "Marcar todos" vale so para o que esta na lista (com o interruptor
+  // ligado, as variantes com estoque).
   function toggleAll() {
     var ids = filtered.map(function(p) { return p.id; });
-    if (ids.every(function(id) { return selectedIds.includes(id); })) { onSelectionChange(selectedIds.filter(function(id) { return !ids.includes(id); })); }
-    else {
-      var newIds = Array.from(new Set([...selectedIds, ...ids])); onSelectionChange(newIds);
-      filtered.forEach(function(p) {
-        var novo = !selectedIds.includes(p.id);
-        if (novo && variantCache[p.id] && variantCache[p.id].length > 0) marcarVariantesPadrao(p.id, variantCache[p.id], soComEstoque);
-        fetchVariantsIfNeeded(p.id);
-        if (!quantities[p.id]) setQty(p.id, defaultLabelQty(p.unit, p.stock, matconEnabled));
+    if (ids.every(function(id) { return selectedIds.includes(id); })) {
+      onSelectionChange(selectedIds.filter(function(id) { return !ids.includes(id); }));
+      ids.forEach(desmarcarProduto);
+    } else {
+      var novos = ids.filter(function(id) { return !selectedIds.includes(id); });
+      onSelectionChange(selectedIds.concat(novos));
+      var semCache = novos.filter(function(id) {
+        var p = products.find(function(pr) { return pr.id === id; });
+        return !!(p && p.has_variants && !variantCache[id]);
       });
+      semCache.forEach(function(id) { marcarAoCarregarRef.current.add(id); });
+      novos.forEach(function(id) {
+        var p = products.find(function(pr) { return pr.id === id; });
+        if (p && p.has_variants && variantCache[id] && variantCache[id].length > 0) marcarVariantesPadrao(id, variantCache[id], soComEstoque);
+        if (!quantities[id] && p) setQty(id, defaultLabelQty(p.unit, p.stock, matconEnabled));
+      });
+      carregarVariantes(semCache);
     }
   }
 
@@ -497,6 +621,14 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
     });
     return total;
   }, [selectedIds, quantities, selectedVariants, variantCache, includeParentInPrint]);
+
+  // Barra fixa (p-72): quantos produtos entram no total e quantos marcados
+  // estao fora da lista por causa do filtro (continuam no total).
+  var idsNaLista = useMemo(function() { return new Set(filtered.map(function(p) { return p.id; })); }, [filtered]);
+  var produtosNoTotal = selectedIds.filter(function(id) { return products.some(function(pr) { return pr.id === id; }); }).length;
+  var foraDaLista = selectedIds.filter(function(id) { return !idsNaLista.has(id) && products.some(function(pr) { return pr.id === id; }); }).length;
+  var larguraTela = useWindowDimensions().width;
+  var estreita = larguraTela < 520;
 
   // 22/09/2026 (preco no cartao): com a opcao da loja ligada, toda etiqueta
   // sai com os dois precos (sem opcao de esconder). `comCartao` devolve {}
@@ -977,14 +1109,9 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
         )}
         {filtered.map(function(p) {
           var sel = selectedIds.includes(p.id);
-          var variants = variantCache[p.id] || [];
-          var hasVariants = sel && variants.length > 0;
-          var selVars = selectedVariants[p.id] || new Set();
-          var allVarsSelected = hasVariants && variants.every(function(v: any) { return selVars.has(v.id); });
-          var parentChecked = !!includeParentInPrint[p.id];
           var productCode = p.barcode || p.code;
 
-          if (!hasVariants) {
+          if (!p.has_variants || (variantCache[p.id] && variantCache[p.id].length === 0)) {
             var qty = getQty(p.id);
             var labelPreview = buildLabelName(p.name, p.size || "", p.color || "");
             var cardPriceDisplay = cartaoCfg.enabled ? cardPriceFor(p.price, p) : null;
@@ -1021,101 +1148,140 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
             );
           }
 
+          // 30/10/2026 (card p-72): produto com variantes. A linha abre sem
+          // marcar ("Ver variantes"); o quadradinho marca as variantes
+          // visiveis (com o interruptor ligado, so as com estoque).
+          var carregado = !!variantCache[p.id];
+          var variants = variantCache[p.id] || [];
+          var selVars: Set<string> = sel ? (selectedVariants[p.id] || new Set()) : new Set();
+          var parentChecked = sel && !!includeParentInPrint[p.id];
+          var visiveis = variants.filter(function(v: any) { return !soComEstoque || estoqueDaVariante(v) > 0 || selVars.has(v.id); });
+          var escondidas = variants.length - visiveis.length;
+          var nMarcadas = visiveis.filter(function(v: any) { return selVars.has(v.id); }).length;
+          var estado: "none" | "some" | "all" = !sel ? "none" : !carregado ? "all" : nMarcadas === 0 ? (parentChecked ? "some" : "none") : nMarcadas >= visiveis.length ? "all" : "some";
+          var aberto = !!abertos[p.id];
           var parentLabelPreview = buildLabelName(p.name, p.size || "", p.color || "");
           var parentQty = getQty(p.id);
           var parentCardPriceDisplay = cartaoCfg.enabled ? cardPriceFor(p.price, p) : null;
           return (
-            <View key={p.id} style={[s.item, s.itemSelected]}>
+            <View key={p.id} style={[s.item, sel && s.itemSelected]} testID={"etiquetas-produto-" + p.id}>
               <View style={s.parentRow}>
-                <Pressable onPress={function() { toggleSelect(p.id); }} style={{ marginRight: 8 }}>
-                  <View style={[s.checkbox, s.checkboxSelected]}><Icon name="check" size={10} color="#fff" /></View>
+                <Pressable
+                  onPress={function() { toggleSelect(p.id); }}
+                  style={s.checkHit}
+                  testID={"etiquetas-marcar-" + p.id}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: estado === "all" ? true : estado === "some" ? "mixed" : false }}
+                  accessibilityLabel={"Marcar " + p.name}
+                >
+                  <View style={[s.checkbox, estado === "all" && s.checkboxSelected, estado === "some" && s.checkboxMeio]}>
+                    {estado === "all" ? <Icon name="check" size={10} color="#fff" /> : estado === "some" ? <Text style={s.checkboxMeioTxt}>–</Text> : null}
+                  </View>
                 </Pressable>
-                <View style={{ flex: 1, minWidth: 0 }}>
+                <Pressable onPress={function() { alternarAberto(p.id); }} style={{ flex: 1, minWidth: 0 }} accessibilityRole="button" accessibilityLabel={(aberto ? "Fechar as variantes de " : "Ver as variantes de ") + p.name}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     {renderColorIndicator(p.color)}
                     <Text style={s.itemName} numberOfLines={1}>{parentLabelPreview}</Text>
                     <Text style={s.varBadge}>V</Text>
                     {p.size ? <Text style={s.sizeBadge}>{p.size}</Text> : null}
                   </View>
-                  <Text style={s.variantHint}>{variants.length} variante{variants.length > 1 ? "s" : ""} | {selVars.size} selecionada{selVars.size !== 1 ? "s" : ""}{parentChecked ? " + etiqueta do pai" : ""}</Text>
+                  <Text style={s.variantHint} numberOfLines={1}>
+                    {productCode}{carregado ? " · " + visiveis.length + (visiveis.length === 1 ? " variante" : " variantes") : ""}{sel && carregado ? " · " + nMarcadas + (nMarcadas === 1 ? " marcada" : " marcadas") + (parentChecked ? " + etiqueta do pai" : "") : ""}
+                  </Text>
+                </Pressable>
+                <View style={s.colDireita}>
+                  <Text style={[s.estoquePill, p.stock > 0 ? s.estoqueOk : s.estoqueZero]}>{p.stock > 0 ? numBr(p.stock) + " em estoque" : "sem estoque"}</Text>
+                  <Text style={s.itemPrice}>R$ {p.price.toFixed(2).replace(".", ",")}</Text>
                 </View>
-                <Pressable onPress={function() { toggleAllVariants(p.id); }} style={s.toggleAllVarsBtn}>
-                  <Text style={s.toggleAllVarsText}>{allVarsSelected ? "Nenhuma" : "Todas"}</Text>
+                <Pressable onPress={function() { alternarAberto(p.id); }} style={s.verVariantes} testID={"etiquetas-ver-variantes-" + p.id} accessibilityRole="button" accessibilityState={{ expanded: aberto }}>
+                  <Text style={s.verVariantesTxt}>{aberto ? "Fechar" : "Ver variantes"}</Text>
                 </Pressable>
               </View>
 
-              <View style={[s.variantRow, parentChecked && s.variantRowSelected, s.parentSelfRow]}>
-                <Pressable onPress={function() { toggleIncludeParent(p.id); }} style={s.variantLeft}>
-                  <View style={[s.checkboxSmall, parentChecked && s.checkboxSmallSelected]}>{parentChecked && <Icon name="check" size={8} color="#fff" />}</View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                      {renderColorIndicator(p.color)}
-                      <Text style={s.variantName} numberOfLines={1}>{parentLabelPreview}</Text>
-                      <Text style={s.parentSelfBadge}>PAI</Text>
-                      {p.size ? <Text style={s.sizeBadge}>{p.size}</Text> : null}
-                    </View>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
-                      <Text style={s.variantMeta}>{productCode} | {p.stock} {unitLabelForList(p.unit)}</Text>
-                      {renderEan13Badge(productCode)}
-                    </View>
-                  </View>
-                  <View style={{ alignItems: "flex-end" }}>
-                    <Text style={s.variantPrice}>R$ {p.price.toFixed(2).replace(".", ",")}</Text>
-                    {parentCardPriceDisplay != null && <Text style={s.variantCardPriceHint}>cartão R$ {parentCardPriceDisplay.toFixed(2).replace(".", ",")}</Text>}
-                  </View>
-                </Pressable>
-                {parentChecked && (
-                  <View style={s.qtyRowVariant}>
-                    <Pressable onPress={function() { setQty(p.id, parentQty - 1); }} style={s.qtyBtnSmall}><Text style={s.qtyBtnText}>{"<"}</Text></Pressable>
-                    <TextInput style={s.qtyInputSmall} value={String(parentQty)} onChangeText={function(val) { var n = parseInt(val); if (!isNaN(n)) setQty(p.id, n); }} keyboardType="number-pad" maxLength={3} selectTextOnFocus />
-                    <Pressable onPress={function() { setQty(p.id, parentQty + 1); }} style={s.qtyBtnSmall}><Text style={s.qtyBtnText}>{"›"}</Text></Pressable>
-                    <Text style={s.qtyLabel}>etiq.</Text>
-                  </View>
-                )}
-              </View>
+              {aberto && (
+                <View style={s.varsPainel} testID={"etiquetas-variantes-" + p.id}>
+                  {!carregado && <Text style={s.varsAviso}>Carregando as variantes…</Text>}
 
-              {variants.map(function(v: any) {
-                var vsel = selVars.has(v.id);
-                var vkey = p.id + "__" + v.id;
-                var vqty = getQty(vkey);
-                var sc = variantSizeColor(v);
-                var vlabel = buildLabelName(p.name, sc.size, sc.color);
-                var effectivePrice = v.price_override ? parseFloat(v.price_override) : p.price;
-                var vBarcode = v.barcode || p.barcode || p.code;
-                var vStock = parseInt(v.stock_qty) || 0;
-                var vCardPriceDisplay = cartaoCfg.enabled ? cardPriceFor(effectivePrice, p as Product) : null;
+                  {carregado && (
+                    <View style={[s.variantRow, parentChecked && s.variantRowSelected, s.parentSelfRow]}>
+                      <Pressable onPress={function() { toggleIncludeParent(p.id); }} style={s.variantLeft} testID={"etiquetas-pai-" + p.id} accessibilityRole="checkbox" accessibilityState={{ checked: parentChecked }}>
+                        <View style={[s.checkboxSmall, parentChecked && s.checkboxSmallSelected]}>{parentChecked && <Icon name="check" size={8} color="#fff" />}</View>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            {renderColorIndicator(p.color)}
+                            <Text style={s.variantName} numberOfLines={1}>{parentLabelPreview}</Text>
+                            <Text style={s.parentSelfBadge}>PAI</Text>
+                            {p.size ? <Text style={s.sizeBadge}>{p.size}</Text> : null}
+                          </View>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
+                            <Text style={s.variantMeta}>{productCode} | {p.stock} {unitLabelForList(p.unit)}</Text>
+                            {renderEan13Badge(productCode)}
+                          </View>
+                        </View>
+                        <View style={{ alignItems: "flex-end" }}>
+                          <Text style={s.variantPrice}>R$ {p.price.toFixed(2).replace(".", ",")}</Text>
+                          {parentCardPriceDisplay != null && <Text style={s.variantCardPriceHint}>cartão R$ {parentCardPriceDisplay.toFixed(2).replace(".", ",")}</Text>}
+                        </View>
+                      </Pressable>
+                      {parentChecked && (
+                        <View style={s.qtyRowVariant}>
+                          <Pressable onPress={function() { setQty(p.id, parentQty - 1); }} style={s.qtyBtnSmall}><Text style={s.qtyBtnText}>{"<"}</Text></Pressable>
+                          <TextInput style={s.qtyInputSmall} value={String(parentQty)} onChangeText={function(val) { var n = parseInt(val); if (!isNaN(n)) setQty(p.id, n); }} keyboardType="number-pad" maxLength={3} selectTextOnFocus />
+                          <Pressable onPress={function() { setQty(p.id, parentQty + 1); }} style={s.qtyBtnSmall}><Text style={s.qtyBtnText}>{"›"}</Text></Pressable>
+                          <Text style={s.qtyLabel}>etiq.</Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
 
-                return (
-                  <View key={v.id} style={[s.variantRow, vsel && s.variantRowSelected]}>
-                    <Pressable onPress={function() { toggleVariant(p.id, v.id); }} style={s.variantLeft} testID={"etiquetas-variante-" + v.id}>
-                      <View style={[s.checkboxSmall, vsel && s.checkboxSmallSelected]}>{vsel && <Icon name="check" size={8} color="#fff" />}</View>
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                          {renderColorIndicator(sc.color)}
-                          <Text style={s.variantName} numberOfLines={1}>{vlabel}</Text>
-                          {sc.size ? <Text style={s.sizeBadge}>{sc.size}</Text> : null}
-                        </View>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
-                          <Text style={s.variantMeta}>{vBarcode} | {vStock} {unitLabelForList(p.unit)}</Text>
-                          {renderEan13Badge(vBarcode)}
-                        </View>
+                  {visiveis.map(function(v: any) {
+                    var vsel = selVars.has(v.id);
+                    var vkey = p.id + "__" + v.id;
+                    var vqty = getQty(vkey);
+                    var sc = variantSizeColor(v);
+                    var vlabel = buildLabelName(p.name, sc.size, sc.color);
+                    var effectivePrice = v.price_override ? parseFloat(v.price_override) : p.price;
+                    var vBarcode = v.barcode || p.barcode || p.code;
+                    var vEstoque = estoqueDaVariante(v);
+                    var vCardPriceDisplay = cartaoCfg.enabled ? cardPriceFor(effectivePrice, p as Product) : null;
+                    return (
+                      <View key={v.id} style={[s.variantRow, vsel && s.variantRowSelected, vEstoque <= 0 && !vsel && s.variantZero]}>
+                        <Pressable onPress={function() { toggleVariant(p.id, v.id); }} style={s.variantLeft} testID={"etiquetas-variante-" + v.id} accessibilityRole="checkbox" accessibilityState={{ checked: vsel }}>
+                          <View style={[s.checkboxSmall, vsel && s.checkboxSmallSelected]}>{vsel && <Icon name="check" size={8} color="#fff" />}</View>
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                              {renderColorIndicator(sc.color)}
+                              <Text style={s.variantName} numberOfLines={1}>{vlabel}</Text>
+                              {sc.size ? <Text style={s.sizeBadge}>{sc.size}</Text> : null}
+                            </View>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
+                              <Text style={s.variantMeta}>{vBarcode}</Text>
+                              {renderEan13Badge(vBarcode)}
+                            </View>
+                          </View>
+                          <View style={{ alignItems: "flex-end", gap: 2 }}>
+                            <Text style={[s.estoquePill, vEstoque > 0 ? s.estoqueOk : s.estoqueZero]} testID={"etiquetas-estoque-variante-" + v.id}>{vEstoque > 0 ? numBr(vEstoque) + " em estoque" : "sem estoque"}</Text>
+                            <Text style={s.variantPrice}>R$ {effectivePrice.toFixed(2).replace(".", ",")}</Text>
+                            {vCardPriceDisplay != null && <Text style={s.variantCardPriceHint}>cartão R$ {vCardPriceDisplay.toFixed(2).replace(".", ",")}</Text>}
+                          </View>
+                        </Pressable>
+                        {vsel && (
+                          <View style={s.qtyRowVariant}>
+                            <Pressable onPress={function() { setQty(vkey, vqty - 1); }} style={s.qtyBtnSmall}><Text style={s.qtyBtnText}>{"<"}</Text></Pressable>
+                            <TextInput style={s.qtyInputSmall} value={String(vqty)} onChangeText={function(val) { var n = parseInt(val); if (!isNaN(n)) setQty(vkey, n); }} keyboardType="number-pad" maxLength={3} selectTextOnFocus />
+                            <Pressable onPress={function() { setQty(vkey, vqty + 1); }} style={s.qtyBtnSmall}><Text style={s.qtyBtnText}>{"›"}</Text></Pressable>
+                            <Text style={s.qtyLabel}>etiq.</Text>
+                          </View>
+                        )}
                       </View>
-                      <View style={{ alignItems: "flex-end" }}>
-                        <Text style={s.variantPrice}>R$ {effectivePrice.toFixed(2).replace(".", ",")}</Text>
-                        {vCardPriceDisplay != null && <Text style={s.variantCardPriceHint}>cartão R$ {vCardPriceDisplay.toFixed(2).replace(".", ",")}</Text>}
-                      </View>
-                    </Pressable>
-                    {vsel && (
-                      <View style={s.qtyRowVariant}>
-                        <Pressable onPress={function() { setQty(vkey, vqty - 1); }} style={s.qtyBtnSmall}><Text style={s.qtyBtnText}>{"<"}</Text></Pressable>
-                        <TextInput style={s.qtyInputSmall} value={String(vqty)} onChangeText={function(val) { var n = parseInt(val); if (!isNaN(n)) setQty(vkey, n); }} keyboardType="number-pad" maxLength={3} selectTextOnFocus />
-                        <Pressable onPress={function() { setQty(vkey, vqty + 1); }} style={s.qtyBtnSmall}><Text style={s.qtyBtnText}>{"›"}</Text></Pressable>
-                        <Text style={s.qtyLabel}>etiq.</Text>
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
+                    );
+                  })}
+
+                  {carregado && escondidas > 0 && (
+                    <Text style={s.varsAviso}>{escondidas === 1 ? "1 variante sem estoque não aparece" : escondidas + " variantes sem estoque não aparecem"}. Para ver, desligue “Só com estoque”.</Text>
+                  )}
+                </View>
+              )}
             </View>
           );
         })}
@@ -1189,18 +1355,6 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
         </View>
       )}
 
-      <View style={s.printRow}>
-        {isWeb && (
-          <Pressable onPress={handlePreview} style={[s.previewBtn, totalLabels === 0 && { opacity: 0.5 }]} disabled={totalLabels === 0} testID="etiquetas-ver-tamanho-real">
-            <Icon name="search" size={14} color={Colors.violet3} />
-            <Text style={s.previewBtnText}>Ver em tamanho real</Text>
-          </Pressable>
-        )}
-        <Pressable onPress={function() { handlePrint(); }} style={[s.printBtn, { flex: 1 }, totalLabels === 0 && { opacity: 0.5 }]} disabled={totalLabels === 0}>
-          <Icon name="file_text" size={16} color="#fff" />
-          <Text style={s.printBtnText}>Imprimir {totalLabels} etiqueta(s)</Text>
-        </Pressable>
-      </View>
       {preview && (
         <LabelPreviewModal
           html={preview.html}
@@ -1232,6 +1386,27 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
       <View style={s.setupHint}>
         <Icon name="alert" size={12} color={Colors.amber} />
         <Text style={s.setupText}>Chrome: Ctrl+P, papel {medidaAtiva ? mmTxt(customLabelPreset(medidaAtiva).pageWidthMm) + "x" + mmTxt(customLabelPreset(medidaAtiva).pageHeightMm) + "mm" : printerOpts.continuous ? labelPreset.pageWidthMm + "mm de largura e a altura do trabalho inteiro (passo de " + mmBr(printerPrefs.rowPitchMm) + " × número de linhas; a página de impressão mostra a medida)" : labelPreset.pageWidthMm + "x" + (printerOpts.rowPitchMm != null ? printerOpts.rowPitchMm : labelPreset.pageHeightMm) + "mm"}, Margens: Nenhuma, Escala: 100%. A quantidade padrão é baseada no estoque de cada variante{matconEnabled ? ", exceto em unidades fracionadas (m, m², m³, kg, L, ton) e milheiro, que começam em 1" : ""}.</Text>
+      </View>
+
+      {/* 30/10/2026 (card p-72): total e Imprimir sempre à vista, presos
+          embaixo enquanto a lista rola. Em tela estreita, largura total. */}
+      <View style={[s.barra, isWeb && s.barraFixa, estreita && s.barraEstreita]} testID="etiquetas-barra">
+        <View style={s.barraTot}>
+          <Text style={s.barraTotTxt} testID="etiquetas-total">{totalLabels} {totalLabels === 1 ? "etiqueta" : "etiquetas"}</Text>
+          <Text style={s.barraSub} numberOfLines={2}>{produtosNoTotal > 0 ? produtosNoTotal + (produtosNoTotal === 1 ? " produto" : " produtos") + (foraDaLista > 0 ? " · " + foraDaLista + " fora da lista" : "") : "Marque os produtos que quer imprimir"}</Text>
+        </View>
+        <View style={[s.barraBotoes, estreita && s.barraBotoesEstreita]}>
+          {isWeb && (
+            <Pressable onPress={handlePreview} style={[s.previewBtn, estreita && { flex: 1 }, totalLabels === 0 && { opacity: 0.5 }]} disabled={totalLabels === 0} testID="etiquetas-ver-tamanho-real" accessibilityRole="button">
+              <Icon name="search" size={14} color={Colors.violet3} />
+              <Text style={s.previewBtnText}>Ver no tamanho real</Text>
+            </Pressable>
+          )}
+          <Pressable onPress={function() { handlePrint(); }} style={[s.printBtn, estreita && { flex: 1 }, totalLabels === 0 && { opacity: 0.5 }]} disabled={totalLabels === 0} testID="etiquetas-imprimir" accessibilityRole="button">
+            <Icon name="file_text" size={16} color="#fff" />
+            <Text style={s.printBtnText}>{totalLabels > 0 ? "Imprimir " + totalLabels + (totalLabels === 1 ? " etiqueta" : " etiquetas") : "Imprimir"}</Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -1358,10 +1533,31 @@ var s = StyleSheet.create({
   qtyInput: { width: 48, height: 28, borderRadius: 7, backgroundColor: Colors.bg, borderWidth: 1, borderColor: Colors.border2, textAlign: "center", fontSize: 13, fontWeight: "700", color: Colors.ink, paddingVertical: 0 } as any,
   qtyInputSmall: { width: 40, height: 24, borderRadius: 6, backgroundColor: Colors.bg, borderWidth: 1, borderColor: Colors.border2, textAlign: "center", fontSize: 12, fontWeight: "700", color: Colors.ink, paddingVertical: 0 } as any,
   qtyLabel: { fontSize: 10, color: Colors.ink3, marginLeft: 2 },
-  printBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 14 },
+  printBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 18, minHeight: 44 },
   printBtnText: { fontSize: 14, color: "#fff", fontWeight: "700" },
-  printRow: { flexDirection: "row", alignItems: "stretch", gap: 8, flexWrap: "wrap" },
-  previewBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, borderWidth: 1, borderColor: Colors.border2 },
+  // Barra fixa (30/10/2026, p-72).
+  barra: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg3, borderRadius: 14, borderWidth: 1, borderColor: Colors.border2, paddingVertical: 10, paddingHorizontal: 12, zIndex: 4 },
+  barraFixa: { position: "sticky" as any, bottom: 0 },
+  barraEstreita: { flexDirection: "column", alignItems: "stretch", borderRadius: 0, marginHorizontal: -16, paddingHorizontal: 16 },
+  barraTot: { flex: 1, minWidth: 0 },
+  barraTotTxt: { fontSize: 15, color: Colors.ink, fontWeight: "700" },
+  barraSub: { fontSize: 12, color: Colors.ink3, marginTop: 1 },
+  barraBotoes: { flexDirection: "row", gap: 8, alignItems: "stretch" },
+  barraBotoesEstreita: { width: "100%" },
+  // Linha do produto com variantes (p-72).
+  checkHit: { width: 36, minHeight: 40, alignItems: "flex-start", justifyContent: "center" },
+  checkboxMeio: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
+  checkboxMeioTxt: { fontSize: 13, lineHeight: 14, color: Colors.violet3, fontWeight: "800" },
+  colDireita: { alignItems: "flex-end", gap: 2, marginLeft: 8 },
+  estoquePill: { fontSize: 10.5, fontWeight: "600", paddingHorizontal: 7, paddingVertical: 1, borderRadius: 99, overflow: "hidden" },
+  estoqueOk: { color: Colors.green, backgroundColor: "rgba(34,197,94,0.12)" },
+  estoqueZero: { color: Colors.amber, backgroundColor: "rgba(245,158,11,0.15)" },
+  verVariantes: { minHeight: 40, justifyContent: "center", paddingHorizontal: 8, marginLeft: 4 },
+  verVariantesTxt: { fontSize: 12.5, color: Colors.violet3, fontWeight: "700" },
+  varsPainel: { borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 6, paddingBottom: 4 },
+  varsAviso: { fontSize: 11.5, color: Colors.ink3, paddingHorizontal: 12, paddingVertical: 6 },
+  variantZero: { opacity: 0.7 },
+  previewBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, minHeight: 44, borderWidth: 1, borderColor: Colors.border2 },
   previewBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
   setupHint: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: Colors.amberD, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.amber + "33" },
   setupText: { fontSize: 10, color: Colors.amber, flex: 1, lineHeight: 16 },
