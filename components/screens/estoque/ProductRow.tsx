@@ -17,6 +17,7 @@ import { qtdComUnidade } from "@/utils/matconUnits";
 import { resumoDeLotes } from "@/utils/matconLots";
 // 23/09/2026 (QA producao, item 9): margem 100% em produto sem custo.
 import { computeMargin, DICA_MARGEM_SEM_CUSTO } from "@/utils/productMargin";
+import { VariantesConsulta } from "./VariantesConsulta";
 
 var COLOR_NAMES: Record<string, string> = {
   '#000000':'Preto','#ffffff':'Branco','#ff0000':'Vermelho','#c0c0c0':'Prata',
@@ -39,7 +40,7 @@ function isServiceProduct(p: Product) {
 
 export function ProductRow({
   product, onDelete, onEdit, onLink,
-  isSelected, onSelect,
+  isSelected, onSelect, consulta,
 }: {
   product: Product;
   onDelete?: (id: string) => void;
@@ -49,6 +50,8 @@ export function ProductRow({
   onLink?: (product: Product) => void;
   isSelected?: boolean;
   onSelect?: (id: string) => void;
+  // 30/10/2026 — Estoque só consulta: sem preço, custo, margem e foto editável.
+  consulta?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -136,7 +139,7 @@ export function ProductRow({
               ) : null}
             </View>
           )}
-          <Text style={s.price}>{m(fmt(product.price))}</Text>
+          {!consulta && <Text style={s.price}>{m(fmt(product.price))}</Text>}
         </View>
       </Pressable>
       {/* Matcon M4 (mockup #lotes): "148,48 m² em 2 lotes" abre a pilha —
@@ -155,7 +158,11 @@ export function ProductRow({
       {expanded && !onSelect && (
         <View style={s.detail}>
           {/* Photo upload in detail (produtos apenas) */}
-          {!isService ? (
+          {consulta && !isService ? (
+            <View style={s.detailGrid}>
+              <View style={s.detailItem}><Text style={s.detailLabel}>Estoque mínimo</Text><Text style={s.detailValue}>{qtdComUnidade(product.minStock, product.unit)}</Text></View>
+            </View>
+          ) : !isService ? (
             <View style={s.detailPhotoRow}>
               <ProductImageUpload productId={product.id} imageUrl={product.image_url} compact />
               <View style={s.detailGrid}>
@@ -173,7 +180,7 @@ export function ProductRow({
                   45 min") e aparecia aqui embaixo, em itálico, junto das
                   observações. Virou coluna na migration 323 — e passa a ter
                   um lugar próprio, ao lado do preço. */}
-              {([["Preço", m(fmt(product.price))], ["Custo", m(fmt(product.cost))], ["Margem", margin]] as Array<[string, string]>)
+              {((consulta ? [] : [["Preço", m(fmt(product.price))], ["Custo", m(fmt(product.cost))], ["Margem", margin]]) as Array<[string, string]>)
                 .concat(duracao ? [["Duração", duracao]] : [])
                 .map(([l, v]) =>
                   <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text
@@ -183,6 +190,7 @@ export function ProductRow({
                 )}
             </View>
           )}
+          {consulta && product.has_variants ? <VariantesConsulta productId={product.id} unit={product.unit} /> : null}
           {!isService && hasVariant && (
             <View style={s.variantRow}>
               {product.color ? (

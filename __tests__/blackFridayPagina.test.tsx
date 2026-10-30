@@ -500,6 +500,6 @@ describe("Estoque", () => {
     expect(fs.existsSync(path.join(RAIZ, "app/(tabs)/estoque"))).toBe(false);
     expect(MODULE_PLAN_MAP["estoque.ruptura"]).toBeUndefined();
     expect(LAYOUT).not.toContain("estoque/ruptura");
-    expect(PERM_TO_MODULES["estoque"]).toEqual(["estoque", BLACK_FRIDAY_MOD]);
+    expect(PERM_TO_MODULES["estoque"]).toEqual(["estoque", BLACK_FRIDAY_MOD, "fornecedores"]);
   });
 });

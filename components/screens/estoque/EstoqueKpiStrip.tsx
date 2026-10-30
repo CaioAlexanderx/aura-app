@@ -49,9 +49,11 @@ type Props = {
   totalUnits: number;
   lowCount: number;
   onLowClick?: () => void;
+  /** Estoque só consulta: o cartão de valor some. */
+  semValores?: boolean;
 };
 
-export function EstoqueKpiStrip({ totalValue, saleValue, withoutCost = 0, totalProducts, totalUnits, lowCount, onLowClick }: Props) {
+export function EstoqueKpiStrip({ totalValue, saleValue, withoutCost = 0, totalProducts, totalUnits, lowCount, onLowClick, semValores }: Props) {
   const C = useColors();
   const { isDark } = useThemeStore();
   const { ocultos } = useValoresOcultos();
@@ -112,10 +114,10 @@ export function EstoqueKpiStrip({ totalValue, saleValue, withoutCost = 0, totalP
 
   return (
     <div className="aura-est-rise" style={{
-      display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 14,
+      display: "grid", gridTemplateColumns: semValores ? "1fr 1fr 1fr" : "2fr 1fr 1fr 1fr", gap: 14,
       margin: "8px 4px 22px",
     } as any}>
-      <Card
+      {!semValores && <Card
         label="Valor em estoque"
         primary big sparkline
         valueNode={ocultos ? (
@@ -138,7 +140,7 @@ export function EstoqueKpiStrip({ totalValue, saleValue, withoutCost = 0, totalP
             )}
           </span>
         }
-      />
+      />}
       <Card
         label="Produtos"
         valueNode={<>{fmtInt(totalProducts)}<span style={{ fontSize: 16, color: C.ink3, marginLeft: 4 } as any}>itens</span></>}
