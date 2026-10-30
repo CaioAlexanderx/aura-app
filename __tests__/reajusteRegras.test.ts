@@ -7,6 +7,7 @@ import {
   lerNumero, erroDoValor, montarPedido, contarSemCusto, brl, margemTxt, variacaoTxt, exemploTerminacao,
   itensDoFiltro, produtosQueMudam, produtosDeFora, produtosAbaixoDoCusto, margemMediaTxt, nomeDoItem, motivoDeFora,
   usaDirecao, usaCusto, plural,
+  textoAplicar, resumoDoResultado, mensagemErroAplicar, mensagemErroDesfazer, resumoDoDesfazer, explicaMudaramDepois, produtosParaEtiqueta,
 } from "@/components/screens/estoque/reajuste/reajusteRegras";
 import type { ItemReajuste, RespostaReajuste } from "@/services/priceAdjustmentsApi";
 
@@ -113,5 +114,41 @@ describe("prévia", () => {
     var r = { summary: { margin_avg_before: 0.4812, margin_avg_after: 0.5291 } } as RespostaReajuste;
     expect(margemMediaTxt(r)).toBe("48% → 53%");
     expect(margemMediaTxt({ summary: { margin_avg_before: null, margin_avg_after: null } } as RespostaReajuste)).toBeNull();
+  });
+});
+
+describe("aplicar e desfazer (p-53)", () => {
+  var ok = { summary: { not_found: 0 }, items: [item({ product_id: "p1" }), item({ product_id: "p1", variant_id: "v1" }), item({ product_id: "p2", status: "skipped", skip_reason: "no_cost" })] } as RespostaReajuste;
+  var abaixo = { summary: { not_found: 1 }, items: [item({ product_id: "p1", below_cost: true })] } as RespostaReajuste;
+
+  it("botão e resumo contam produtos", () => {
+    expect(textoAplicar(ok)).toBe("Aplicar em 1 produto");
+    expect(textoAplicar(abaixo)).toBe("Aplicar mesmo assim");
+    expect(resumoDoResultado(ok)).toBe("1 produto mudou · 1 ficou de fora.");
+    expect(resumoDoResultado(abaixo)).toBe("1 produto mudou · 1 ficou de fora.");
+  });
+
+  it("erros em texto gentil", () => {
+    expect(mensagemErroAplicar("MIGRATION_PENDING")).toMatch(/sendo ligada/);
+    expect(mensagemErroAplicar("timeout")).toMatch(/confira os preços/);
+    expect(mensagemErroAplicar(null, "Sem conexão")).toBe("Sem conexão");
+    expect(mensagemErroAplicar(null)).toMatch(/Nenhum preço mudou/);
+    expect(mensagemErroDesfazer("ALREADY_UNDONE")).toMatch(/já foi desfeito/);
+    expect(mensagemErroDesfazer("EXPIRED")).toMatch(/7 dias/);
+    expect(mensagemErroDesfazer(null, 404)).toMatch(/ainda não está disponível/);
+  });
+
+  it("desfazer: quem voltou, quem mudou depois e etiquetas", () => {
+    var d = {
+      restored_count: 2, changed_after_count: 1,
+      restored: [{ product_id: "p1" }, { product_id: "p1" }],
+      changed_after: [{ product_id: "p3", reason: "changed" as const }],
+    };
+    expect(resumoDoDesfazer(d)).toBe("Preços de volta ao que eram em 1 produto.");
+    expect(explicaMudaramDepois(d)).toMatch(/^1 produto ficou como está agora/);
+    expect(explicaMudaramDepois({ ...d, changed_after: [] })).toBeNull();
+    expect(resumoDoDesfazer({ ...d, restored: [] })).toMatch(/Nenhum preço voltou/);
+    expect(produtosParaEtiqueta(ok, null)).toEqual(["p1"]);
+    expect(produtosParaEtiqueta(ok, d)).toEqual(["p1"]);
   });
 });
