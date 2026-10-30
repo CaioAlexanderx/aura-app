@@ -32,7 +32,9 @@ function flatten(node: any): string {
   return flatten(node.children);
 }
 
-test("menu de modelo aberto fica acima da busca e do 'Selecionar todos'", () => {
+beforeEach(() => window.localStorage.clear());
+
+test("menu de modelo aberto fica acima da busca e do 'Marcar todos'", () => {
   let t!: renderer.ReactTestRenderer;
   act(() => { t = renderer.create(<PrintLabels products={[]} selectedIds={[]} onSelectionChange={() => {}} />); });
 
@@ -72,22 +74,57 @@ function nomesNaLista(t: renderer.ReactTestRenderer): string[] {
 const aperta = (t: renderer.ReactTestRenderer, id: string) =>
   act(() => { t.root.findAll((n) => n.props && n.props.testID === id, { deep: false })[0].props.onPress(); });
 
-test("'Cadastrados: Hoje' deixa só o que entrou hoje e 'Selecionar todos' marca só esses", () => {
+const acha = (t: renderer.ReactTestRenderer, id: string) => t.root.findAll((n) => n.props && n.props.testID === id, { deep: false });
+
+test("'Cadastrados: Hoje' deixa só o que entrou hoje e 'Marcar todos' marca só esses", () => {
   const onSel = jest.fn();
   let t!: renderer.ReactTestRenderer;
   act(() => { t = renderer.create(<PrintLabels products={PRODUTOS} selectedIds={[]} onSelectionChange={onSel} />); });
+  // 30/10/2026 (p-71): abre só com o que tem estoque.
+  expect(nomesNaLista(t)).toEqual(["Blusa nova", "Blusa antiga"]);
+  expect(flatten(t.toJSON())).toContain("2 de 3 produtos");
+  aperta(t, "etiquetas-com-estoque");
   expect(nomesNaLista(t)).toEqual(["Blusa nova", "Calça antiga", "Blusa antiga"]);
 
+  // Os filtros ficam dentro do botão Filtros.
+  expect(acha(t, "etiquetas-periodo-hoje")).toHaveLength(0);
+  aperta(t, "etiquetas-filtros-botao");
   aperta(t, "etiquetas-periodo-hoje");
   expect(nomesNaLista(t)).toEqual(["Blusa nova"]);
   expect(flatten(t.toJSON())).toContain("1 de 3 produtos");
-  expect(flatten(t.toJSON())).toContain("Selecionar todos (1)");
+  // O número no botão diz que um filtro foge do padrão.
+  expect(flatten(acha(t, "etiquetas-filtros-contador")[0])).toBe("1");
 
-  const selTodos = t.root.findAll((n) => n.props && n.props.onPress && flatten(n.children).startsWith("Selecionar todos"), { deep: false })[0];
-  act(() => { selTodos.props.onPress(); });
+  aperta(t, "etiquetas-marcar-todos");
   expect(onSel).toHaveBeenLastCalledWith(["p1"]);
 
   aperta(t, "etiquetas-limpar-filtros");
+  expect(nomesNaLista(t)).toHaveLength(3);
+  expect(acha(t, "etiquetas-filtros-contador")).toHaveLength(0);
+  t.unmount();
+});
+
+test("'Só com estoque' fica lembrado neste computador", () => {
+  let t!: renderer.ReactTestRenderer;
+  act(() => { t = renderer.create(<PrintLabels products={PRODUTOS} selectedIds={[]} onSelectionChange={() => {}} />); });
+  const sw = acha(t, "etiquetas-com-estoque")[0];
+  expect(sw.props.accessibilityRole).toBe("switch");
+  expect(sw.props.accessibilityState).toEqual({ checked: true });
+  aperta(t, "etiquetas-com-estoque");
+  t.unmount();
+
+  act(() => { t = renderer.create(<PrintLabels products={PRODUTOS} selectedIds={[]} onSelectionChange={() => {}} />); });
+  expect(acha(t, "etiquetas-com-estoque")[0].props.accessibilityState).toEqual({ checked: false });
+  expect(nomesNaLista(t)).toHaveLength(3);
+  t.unmount();
+});
+
+test("sem nada em estoque: a lista explica e oferece mostrar os sem estoque", () => {
+  let t!: renderer.ReactTestRenderer;
+  const zerados = PRODUTOS.map((p) => ({ ...p, stock: 0 }));
+  act(() => { t = renderer.create(<PrintLabels products={zerados} selectedIds={[]} onSelectionChange={() => {}} />); });
+  expect(flatten(t.toJSON())).toContain("Nenhum produto com estoque.");
+  aperta(t, "etiquetas-mostrar-sem-estoque");
   expect(nomesNaLista(t)).toHaveLength(3);
   t.unmount();
 });
@@ -96,9 +133,9 @@ test("categoria e 'Só com estoque' filtram; o menu de categoria fica acima da l
   let t!: renderer.ReactTestRenderer;
   act(() => { t = renderer.create(<PrintLabels products={PRODUTOS} selectedIds={[]} onSelectionChange={() => {}} />); });
 
-  aperta(t, "etiquetas-com-estoque");
   expect(nomesNaLista(t)).toEqual(["Blusa nova", "Blusa antiga"]);
 
+  aperta(t, "etiquetas-filtros-botao");
   aperta(t, "etiquetas-categoria");
   const filtros = t.root.findAll((n) => n.props && n.props.testID === "etiquetas-filtros", { deep: false })[0];
   const zFiltros = Number(StyleSheet.flatten(filtros.props.style).zIndex) || 0;
@@ -109,12 +146,17 @@ test("categoria e 'Só com estoque' filtram; o menu de categoria fica acima da l
 
   aperta(t, "etiquetas-categoria-Calças");
   expect(nomesNaLista(t)).toEqual([]);
+  // Calça está sem estoque: desligar o interruptor mostra.
+  aperta(t, "etiquetas-com-estoque");
+  expect(nomesNaLista(t)).toEqual(["Calça antiga"]);
   t.unmount();
 });
 
 test("calendário: escolher um dia mostra só o que foi cadastrado nele; 'Todos' desfaz", () => {
   let t!: renderer.ReactTestRenderer;
   act(() => { t = renderer.create(<PrintLabels products={PRODUTOS} selectedIds={[]} onSelectionChange={() => {}} />); });
+  aperta(t, "etiquetas-com-estoque"); // mostra também os sem estoque
+  aperta(t, "etiquetas-filtros-botao");
 
   // O botão de calendário fica entre "Cadastrados:" e "Todos".
   const texto0 = flatten(t.toJSON());

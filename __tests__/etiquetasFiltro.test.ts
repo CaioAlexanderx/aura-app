@@ -16,7 +16,8 @@ const P = [
   { id: "d", name: "Bermuda", code: "004", category: "", price: 80, stock: 1, created_at: null },
 ];
 
-const f = (over: any) => filtrarEtiquetas(P, { ...FILTRO_PADRAO, ...over }, AGORA).map((p) => p.id);
+// Os testes de período/ordem/busca olham a lista inteira (interruptor desligado).
+const f = (over: any) => filtrarEtiquetas(P, { ...FILTRO_PADRAO, soComEstoque: false, ...over }, AGORA).map((p) => p.id);
 
 describe("dentroDoPeriodo", () => {
   test("'hoje' é o dia civil de São Paulo, não 24h corridas", () => {
@@ -69,9 +70,12 @@ test("categoriasDe ignora vazias e ordena", () => {
   expect(categoriasDe(P)).toEqual(["Blusas", "Calças"]);
 });
 
-test("filtrosAtivos não conta busca nem ordem", () => {
-  expect(filtrosAtivos({ ...FILTRO_PADRAO, busca: "x", ordem: "name_asc" })).toBe(0);
-  expect(filtrosAtivos({ ...FILTRO_PADRAO, periodo: "hoje", categoria: "Blusas", soComEstoque: true })).toBe(3);
+test("filtrosAtivos: o número do botão Filtros (cadastrados, categoria, ordem fora do padrão)", () => {
+  // Busca e "Só com estoque" ficam fora do botão, à vista: não contam.
+  expect(filtrosAtivos({ ...FILTRO_PADRAO, busca: "x" })).toBe(0);
+  expect(filtrosAtivos({ ...FILTRO_PADRAO, soComEstoque: false })).toBe(0);
+  expect(filtrosAtivos({ ...FILTRO_PADRAO, ordem: "name_asc" })).toBe(1);
+  expect(filtrosAtivos({ ...FILTRO_PADRAO, periodo: "hoje", categoria: "Blusas", ordem: "price_asc" })).toBe(3);
 });
 
 describe("um dia escolhido no calendário (periodo 'dia')", () => {
@@ -103,4 +107,65 @@ test("diaParaBr e hojeEmSaoPaulo", () => {
   expect(diaParaBr(null)).toBe("");
   // 25/09 01:00 UTC ainda é 24/09 em SP.
   expect(hojeEmSaoPaulo(Date.parse("2026-09-25T01:00:00Z"))).toBe("2026-09-24");
+});
+
+// ── 30/10/2026 (card p-71): padrão "Só com estoque" e variantes ──
+describe("Só com estoque (p-71)", () => {
+  const { temEstoque, estoqueDaVariante, variantesParaMarcar, lerSoComEstoque, salvarSoComEstoque, CHAVE_SO_COM_ESTOQUE } = require("@/utils/etiquetasFiltro");
+
+  beforeEach(() => window.localStorage.clear());
+
+  test("o padrão da tela é só com estoque", () => {
+    expect(FILTRO_PADRAO.soComEstoque).toBe(true);
+    expect(filtrarEtiquetas(P, FILTRO_PADRAO, AGORA).map((p) => p.id)).toEqual(["a", "c", "d"]);
+  });
+
+  test("produto com variantes: vale o estoque somado das variantes (o pai zerado não esconde)", () => {
+    // O Product já chega com stock = has_variants ? variants_stock_total : stock_qty.
+    expect(temEstoque({ stock: 3 })).toBe(true);
+    expect(temEstoque({ stock: 0 })).toBe(false);
+    expect(temEstoque({ stock: -2 })).toBe(false);
+    expect(temEstoque({ stock: 0.5 })).toBe(true);
+    expect(temEstoque({ stock: null })).toBe(false);
+  });
+
+  test("estoqueDaVariante lê stock_qty em texto ou número", () => {
+    expect(estoqueDaVariante({ stock_qty: "4" })).toBe(4);
+    expect(estoqueDaVariante({ stock_qty: "12.5" })).toBe(12.5);
+    expect(estoqueDaVariante({ stock_qty: null })).toBe(0);
+    expect(estoqueDaVariante(null)).toBe(0);
+  });
+
+  test("variante sem estoque não vem marcada com o interruptor ligado", () => {
+    const vs = [{ id: "v1", stock_qty: "3" }, { id: "v2", stock_qty: "0" }, { id: "v3", stock_qty: null }, { id: "v4", stock_qty: "-1" }];
+    expect(variantesParaMarcar(vs, true)).toEqual(["v1"]);
+    // Desligado (a lojista quer ver os sem estoque também): marca todas.
+    expect(variantesParaMarcar(vs, false)).toEqual(["v1", "v2", "v3", "v4"]);
+  });
+
+  test("a escolha fica lembrada neste computador; sem nada guardado, ligado", () => {
+    expect(lerSoComEstoque()).toBe(true);
+    salvarSoComEstoque(false);
+    expect(window.localStorage.getItem(CHAVE_SO_COM_ESTOQUE)).toBe("0");
+    expect(lerSoComEstoque()).toBe(false);
+    salvarSoComEstoque(true);
+    expect(lerSoComEstoque()).toBe(true);
+    window.localStorage.setItem(CHAVE_SO_COM_ESTOQUE, "lixo");
+    expect(lerSoComEstoque()).toBe(true);
+  });
+});
+
+describe("Sem código (p-75)", () => {
+  const { produtoSemCodigo, varianteSemCodigo } = require("@/utils/etiquetasFiltro");
+  test("sem código de barras e sem SKU (o '---' do useProducts) é sem código", () => {
+    expect(produtoSemCodigo({ barcode: "", code: "---" })).toBe(true);
+    expect(produtoSemCodigo({ barcode: null, code: "" })).toBe(true);
+    expect(produtoSemCodigo({ barcode: "", code: "221" })).toBe(false);
+    expect(produtoSemCodigo({ barcode: "7891033948208", code: "---" })).toBe(false);
+  });
+  test("variante: o próprio código ou o do produto", () => {
+    expect(varianteSemCodigo({ barcode: "" }, { barcode: "", code: "---" })).toBe(true);
+    expect(varianteSemCodigo({ barcode: "2100000000017" }, { barcode: "", code: "---" })).toBe(false);
+    expect(varianteSemCodigo({ barcode: "" }, { barcode: "", code: "221" })).toBe(false);
+  });
 });
