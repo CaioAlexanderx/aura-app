@@ -12,6 +12,11 @@
 //     (periodo "dia" + dia AAAA-MM-DD, também no dia civil de SP);
 //   · categoria;
 //   · só com estoque.
+//
+// 30/10/2026 (card p-71, mockup v4 aprovado pelo Caio): "Só com estoque"
+// vira um interruptor LIGADO por padrão e lembrado neste computador (como a
+// ordem). Categoria, Cadastrados e Ordenar passam para um único botão
+// Filtros, com número quando algo foge do padrão (filtrosAtivos).
 // Função pura: o Icon quebra o Jest, e a regra fica testável aqui.
 // ============================================================
 import { ordenarProdutos, type OrdemEstoque } from "@/utils/productSort";
@@ -30,7 +35,7 @@ export type FiltroEtiquetas = {
 };
 
 export const FILTRO_PADRAO: FiltroEtiquetas = {
-  busca: "", ordem: "recent", periodo: "todos", dia: null, categoria: null, soComEstoque: false,
+  busca: "", ordem: "recent", periodo: "todos", dia: null, categoria: null, soComEstoque: true,
 };
 
 export const ORDENS_ETIQUETAS: { key: OrdemEstoque; label: string }[] = [
@@ -60,6 +65,31 @@ export type ProdutoEtiqueta = {
   created_at?: string | null;
 };
 
+/**
+ * Tem estoque para etiqueta? O `stock` do Product já vem resolvido pelo
+ * useProducts (mapApiProduct): produto com variantes = variants_stock_total
+ * (soma das variantes ativas), sem variantes = stock_qty. Então o produto
+ * com alguma variante em estoque aparece mesmo com o pai zerado.
+ */
+export function temEstoque(p: { stock?: number | null }): boolean {
+  return (Number(p.stock) || 0) > 0;
+}
+
+/** Estoque de UMA variante (o mesmo campo que a lista mostra). */
+export function estoqueDaVariante(v: { stock_qty?: unknown } | null | undefined): number {
+  return parseFloat(String(v && v.stock_qty != null ? v.stock_qty : "")) || 0;
+}
+
+/**
+ * Variantes que vêm marcadas quando o produto é marcado. Com "Só com
+ * estoque" ligado, variante sem estoque nunca vem marcada (quem quiser
+ * marca na mão e começa com 1 etiqueta). Desligado, a lojista pediu para
+ * ver também os sem estoque: marca todas (como no mockup aprovado).
+ */
+export function variantesParaMarcar<V extends { id: string; stock_qty?: unknown }>(variantes: readonly V[], soComEstoque: boolean): string[] {
+  return variantes.filter((v) => !soComEstoque || estoqueDaVariante(v) > 0).map((v) => v.id);
+}
+
 const DIA = 86400000;
 
 /** "AAAA-MM-DD" do instante no fuso de São Paulo. */
@@ -86,7 +116,7 @@ export function filtrarEtiquetas<T extends ProdutoEtiqueta>(produtos: readonly T
   const lista = produtos.filter((p) =>
     (!q || p.name.toLowerCase().includes(q) || (p.barcode || p.code || "").toLowerCase().includes(q))
     && (!f.categoria || (p.category || "") === f.categoria)
-    && (!f.soComEstoque || (Number(p.stock) || 0) > 0)
+    && (!f.soComEstoque || temEstoque(p))
     && dentroDoPeriodo(p.created_at, f.periodo, agora, f.dia));
   return ordenarProdutos(lista, f.ordem);
 }
@@ -136,9 +166,13 @@ export function categoriasDe(produtos: readonly ProdutoEtiqueta[]): string[] {
   return [...set].sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
 }
 
-/** Quantos filtros (além da busca e da ordem) estão ativos — para o "Limpar filtros". */
+/**
+ * O número no botão Filtros: o que dentro dele foge do padrão (cadastrados,
+ * categoria, ordem). A busca e o interruptor "Só com estoque" ficam fora do
+ * botão, à vista, e não contam.
+ */
 export function filtrosAtivos(f: FiltroEtiquetas): number {
-  return (f.periodo !== "todos" ? 1 : 0) + (f.categoria ? 1 : 0) + (f.soComEstoque ? 1 : 0);
+  return (f.periodo !== "todos" ? 1 : 0) + (f.categoria ? 1 : 0) + (f.ordem !== FILTRO_PADRAO.ordem ? 1 : 0);
 }
 
 // ── Ordem lembrada no navegador (só desta tela) ─────────────
@@ -158,6 +192,29 @@ export function salvarOrdemEtiquetas(ordem: OrdemEstoque): void {
   try {
     if (typeof window === "undefined" || !window.localStorage) return;
     window.localStorage.setItem(CHAVE_ORDEM_ETIQUETAS, ordem);
+  } catch {
+    // sem armazenamento: vale até fechar a tela
+  }
+}
+
+// ── "Só com estoque" lembrado no navegador (30/10/2026, card p-71) ──
+export const CHAVE_SO_COM_ESTOQUE = "aura:etiquetas:so-com-estoque";
+
+/** Ligado por padrão; só "0" guardado (a lojista desligou) desliga. */
+export function lerSoComEstoque(): boolean {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) return FILTRO_PADRAO.soComEstoque;
+    var v = window.localStorage.getItem(CHAVE_SO_COM_ESTOQUE);
+    return v === "0" ? false : v === "1" ? true : FILTRO_PADRAO.soComEstoque;
+  } catch {
+    return FILTRO_PADRAO.soComEstoque;
+  }
+}
+
+export function salvarSoComEstoque(ligado: boolean): void {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) return;
+    window.localStorage.setItem(CHAVE_SO_COM_ESTOQUE, ligado ? "1" : "0");
   } catch {
     // sem armazenamento: vale até fechar a tela
   }

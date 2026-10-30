@@ -35,6 +35,7 @@ import { MinhaMedidaWizard } from "@/components/screens/estoque/labels/MinhaMedi
 import { DesenhoDaEtiquetaLinha } from "@/components/screens/estoque/DesenhoDaEtiquetaLinha";
 import {
   filtrarEtiquetas, categoriasDe, filtrosAtivos, lerOrdemEtiquetas, salvarOrdemEtiquetas,
+  lerSoComEstoque, salvarSoComEstoque, variantesParaMarcar, FILTRO_PADRAO,
   ORDENS_ETIQUETAS, PERIODOS, diaParaBr, hojeEmSaoPaulo, diasComCadastro, marcasDoCalendario, type PeriodoCadastro,
 } from "@/utils/etiquetasFiltro";
 import { CalendarioDoDia } from "@/components/CalendarioDoDia";
@@ -168,7 +169,12 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
     setMenuFiltro(null);
   }
   var [categoria, setCategoria] = useState<string | null>(null);
-  var [soComEstoque, setSoComEstoque] = useState(false);
+  // 30/10/2026 (card p-71): "Só com estoque" ligado por padrão e lembrado
+  // neste computador. Desligado mostra também os sem estoque.
+  var [soComEstoque, setSoComEstoqueState] = useState<boolean>(lerSoComEstoque);
+  function setSoComEstoque(v: boolean) { setSoComEstoqueState(v); salvarSoComEstoque(v); }
+  // Categoria, Cadastrados e Ordenar ficam num único botão Filtros.
+  var [filtrosAbertos, setFiltrosAbertos] = useState(false);
   var [menuFiltro, setMenuFiltro] = useState<"ordem" | "categoria" | "calendario" | null>(null);
   function setOrdem(o: OrdemEstoque) { setOrdemState(o); salvarOrdemEtiquetas(o); setMenuFiltro(null); }
   var [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -396,7 +402,10 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
   var categorias = useMemo(function() { return categoriasDe(productsWithCode); }, [productsWithCode]);
   var diasCadastro = useMemo(function() { return diasComCadastro(productsWithCode); }, [productsWithCode]);
   var nFiltros = filtrosAtivos(filtroAtual);
-  function limparFiltros() { setPeriodo("todos"); setCategoria(null); setSoComEstoque(false); setMenuFiltro(null); }
+  function limparFiltros() {
+    setPeriodo("todos"); setCategoria(null); setMenuFiltro(null);
+    if (ordem !== FILTRO_PADRAO.ordem) { setOrdemState(FILTRO_PADRAO.ordem); salvarOrdemEtiquetas(FILTRO_PADRAO.ordem); }
+  }
 
   function getQty(key: string) { return quantities[key] || 1; }
   function setQty(key: string, n: number) { setQuantities(function(prev) { return { ...prev, [key]: Math.max(1, Math.min(999, n)) }; }); }
@@ -406,17 +415,24 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
     var p = products.find(function(pr) { return pr.id === productId; });
     if (!p || !p.has_variants) return;
     var productUnit = p.unit;
+    var comEstoque = soComEstoque;
     companiesApi.variants(company.id, productId).then(function(res) {
       var active = (res.variants || []).filter(function(v: any) { return v.is_active !== false; });
       setVariantCache(function(prev) { return { ...prev, [productId]: active }; });
       if (active.length > 0) {
-        var varIds = new Set(active.map(function(v: any) { return v.id; }));
-        setSelectedVariants(function(prev) { return { ...prev, [productId]: varIds }; });
+        // 30/10/2026 (p-71): com "Só com estoque" ligado, variante sem
+        // estoque nunca vem marcada. A quantidade das outras e a de sempre.
+        marcarVariantesPadrao(productId, active, comEstoque);
         var newQtys: Record<string, number> = {};
         active.forEach(function(v: any) { var stock = parseInt(v.stock_qty) || 1; newQtys[productId + "__" + v.id] = defaultLabelQty(productUnit, stock, matconEnabled); });
         setQuantities(function(prev) { return { ...prev, ...newQtys }; });
       }
     }).catch(function() { setVariantCache(function(prev) { return { ...prev, [productId]: [] }; }); });
+  }
+
+  function marcarVariantesPadrao(productId: string, active: any[], comEstoque: boolean) {
+    var varIds = new Set(variantesParaMarcar(active, comEstoque));
+    setSelectedVariants(function(prev) { return { ...prev, [productId]: varIds }; });
   }
 
   function toggleSelect(id: string) {
@@ -426,6 +442,8 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
       setIncludeParentInPrint(function(prev) { var n = { ...prev }; delete n[id]; return n; });
     } else {
       onSelectionChange([...selectedIds, id]);
+      // Variantes ja carregadas (desmarcou e marcou de novo): volta ao padrao.
+      if (variantCache[id] && variantCache[id].length > 0) marcarVariantesPadrao(id, variantCache[id], soComEstoque);
       fetchVariantsIfNeeded(id);
       if (!quantities[id]) { var p = products.find(function(pr) { return pr.id === id; }); if (p) setQty(id, defaultLabelQty(p.unit, p.stock, matconEnabled)); }
     }
@@ -454,7 +472,15 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
   function toggleAll() {
     var ids = filtered.map(function(p) { return p.id; });
     if (ids.every(function(id) { return selectedIds.includes(id); })) { onSelectionChange(selectedIds.filter(function(id) { return !ids.includes(id); })); }
-    else { var newIds = Array.from(new Set([...selectedIds, ...ids])); onSelectionChange(newIds); filtered.forEach(function(p) { fetchVariantsIfNeeded(p.id); if (!quantities[p.id]) setQty(p.id, defaultLabelQty(p.unit, p.stock, matconEnabled)); }); }
+    else {
+      var newIds = Array.from(new Set([...selectedIds, ...ids])); onSelectionChange(newIds);
+      filtered.forEach(function(p) {
+        var novo = !selectedIds.includes(p.id);
+        if (novo && variantCache[p.id] && variantCache[p.id].length > 0) marcarVariantesPadrao(p.id, variantCache[p.id], soComEstoque);
+        fetchVariantsIfNeeded(p.id);
+        if (!quantities[p.id]) setQty(p.id, defaultLabelQty(p.unit, p.stock, matconEnabled));
+      });
+    }
   }
 
   var totalLabels = useMemo(function() {
@@ -803,16 +829,26 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
       <View style={s.toolbar}>
         <View style={s.searchBox}>
           <Icon name="search" size={14} color={Colors.ink3} />
-          <TextInput style={s.searchInput} placeholder="Buscar produto..." placeholderTextColor={Colors.ink3} value={search} onChangeText={setSearch} />
-          {search.length > 0 && <Pressable onPress={function() { setSearch(""); }}><Icon name="x" size={12} color={Colors.ink3} /></Pressable>}
+          <TextInput style={s.searchInput} placeholder="Buscar por nome ou código" placeholderTextColor={Colors.ink3} value={search} onChangeText={setSearch} />
+          {search.length > 0 && <Pressable onPress={function() { setSearch(""); }} accessibilityLabel="Limpar a busca"><Icon name="x" size={12} color={Colors.ink3} /></Pressable>}
         </View>
-        <Pressable onPress={toggleAll} style={s.selectAllBtn}><Text style={s.selectAllText}>{allSelected ? "Desmarcar" : "Selecionar"} todos ({filtered.length})</Text></Pressable>
+        {/* 30/10/2026 (card p-71): Categoria, Cadastrados e Ordenar num único
+            botão. O número diz quantos fogem do padrão. */}
+        <Pressable
+          onPress={function() { setFiltrosAbertos(!filtrosAbertos); setMenuFiltro(null); }}
+          style={[s.filtrosBtn, (filtrosAbertos || nFiltros > 0) && s.filtroBtnOn]}
+          testID="etiquetas-filtros-botao"
+          accessibilityRole="button"
+          accessibilityState={{ expanded: filtrosAbertos }}
+          accessibilityLabel={nFiltros > 0 ? "Filtros, " + nFiltros + " em uso" : "Filtros"}
+        >
+          <Text style={s.filtrosBtnTxt}>Filtros</Text>
+          {nFiltros > 0 && <View style={s.filtrosBadge} testID="etiquetas-filtros-contador"><Text style={s.filtrosBadgeTxt}>{nFiltros}</Text></View>}
+        </Pressable>
       </View>
 
-      {/* 25/09/2026: filtros. "Selecionar todos" vale para o que esta filtrado. */}
-      <View style={s.filtros} testID="etiquetas-filtros">
-        {/* zIndex no grupo: em tela estreita o grupo de Ordenar/Categoria
-            quebra para baixo e seria pintado por cima do calendario aberto. */}
+      {filtrosAbertos && (
+        <View style={s.filtros} testID="etiquetas-filtros">
         <View style={[s.filtroGrupo, { zIndex: 2 }]} testID="etiquetas-grupo-cadastrados">
           <Text style={s.filtroRotulo}>Cadastrados:</Text>
           <View style={s.calWrap}>
@@ -896,23 +932,49 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
             </View>
           )}
 
-          <Pressable onPress={function() { setSoComEstoque(!soComEstoque); }} style={[s.chip, soComEstoque && s.chipOn]} testID="etiquetas-com-estoque" accessibilityState={{ selected: soComEstoque }}>
-            <Text style={[s.chipTxt, soComEstoque && s.chipTxtOn]}>Só com estoque</Text>
-          </Pressable>
-
           {nFiltros > 0 && (
             <Pressable onPress={limparFiltros} style={s.limpar} testID="etiquetas-limpar-filtros">
               <Text style={s.limparTxt}>Limpar filtros</Text>
             </Pressable>
           )}
         </View>
-      </View>
-      {nFiltros > 0 && (
-        <Text style={s.filtroResumo} testID="etiquetas-resumo-filtro">{filtered.length} de {productsWithCode.length} produtos</Text>
+        </View>
       )}
 
+      {/* Interruptor à vista + quantos aparecem + Marcar todos (o que está na lista). */}
+      <View style={s.linhaEstoque}>
+        <Pressable
+          onPress={function() { setSoComEstoque(!soComEstoque); }}
+          style={s.interruptor}
+          testID="etiquetas-com-estoque"
+          accessibilityRole="switch"
+          accessibilityState={{ checked: soComEstoque }}
+          accessibilityLabel="Só com estoque"
+        >
+          <View style={[s.trilho, soComEstoque && s.trilhoOn]}><View style={[s.bolinha, soComEstoque && s.bolinhaOn]} /></View>
+          <Text style={s.interruptorTxt}>Só com estoque</Text>
+        </Pressable>
+        <Text style={s.filtroResumo} testID="etiquetas-resumo-filtro">
+          {filtered.length < productsWithCode.length ? filtered.length + " de " + productsWithCode.length + " produtos" : filtered.length + (filtered.length === 1 ? " produto" : " produtos")}
+        </Text>
+        {filtered.length > 0 && (
+          <Pressable onPress={toggleAll} style={s.marcarTodos} testID="etiquetas-marcar-todos" accessibilityRole="button">
+            <Text style={s.marcarTodosTxt}>{allSelected ? "Desmarcar todos" : "Marcar todos"}</Text>
+          </Pressable>
+        )}
+      </View>
+
       <ScrollView style={s.list} nestedScrollEnabled>
-        {filtered.length === 0 && (<Text style={s.emptyText}>{productsWithCode.length === 0 ? "Nenhum produto com código cadastrado" : "Nenhum produto encontrado"}</Text>)}
+        {filtered.length === 0 && (
+          <View style={s.empty} testID="etiquetas-lista-vazia">
+            <Text style={s.emptyText}>{productsWithCode.length === 0 ? "Nenhum produto com código cadastrado" : soComEstoque && !search && nFiltros === 0 ? "Nenhum produto com estoque." : "Nenhum produto encontrado."}</Text>
+            {productsWithCode.length > 0 && soComEstoque && (
+              <Pressable onPress={function() { setSoComEstoque(false); }} style={s.emptyBtn} testID="etiquetas-mostrar-sem-estoque">
+                <Text style={s.emptyBtnTxt}>Mostrar também os sem estoque</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
         {filtered.map(function(p) {
           var sel = selectedIds.includes(p.id);
           var variants = variantCache[p.id] || [];
@@ -1025,7 +1087,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
 
                 return (
                   <View key={v.id} style={[s.variantRow, vsel && s.variantRowSelected]}>
-                    <Pressable onPress={function() { toggleVariant(p.id, v.id); }} style={s.variantLeft}>
+                    <Pressable onPress={function() { toggleVariant(p.id, v.id); }} style={s.variantLeft} testID={"etiquetas-variante-" + v.id}>
                       <View style={[s.checkboxSmall, vsel && s.checkboxSmallSelected]}>{vsel && <Icon name="check" size={8} color="#fff" />}</View>
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -1219,7 +1281,21 @@ var s = StyleSheet.create({
   // Filtros (25/09/2026). zIndex abaixo do cabecalho (10) e acima da lista:
   // os menus de Ordenar/Categoria abrem por cima dos produtos (mesma
   // armadilha do menu de modelo: o RNW da z-index 0 a cada View).
-  filtros: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8, position: "relative", zIndex: 5 },
+  filtros: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8, position: "relative", zIndex: 5, backgroundColor: Colors.bg3, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, padding: 10 },
+  // Botão Filtros (30/10/2026, p-71): alvo de 40 px, número em bolinha.
+  filtrosBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.bg3, borderRadius: 10, paddingHorizontal: 14, minHeight: 40, borderWidth: 1, borderColor: Colors.border },
+  filtrosBtnTxt: { fontSize: 12.5, color: Colors.ink, fontWeight: "600" },
+  filtrosBadge: { minWidth: 18, height: 18, borderRadius: 9, backgroundColor: Colors.violet, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 },
+  filtrosBadgeTxt: { fontSize: 11, color: "#fff", fontWeight: "700" },
+  linhaEstoque: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 10 },
+  interruptor: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 36 },
+  interruptorTxt: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
+  trilho: { width: 36, height: 20, borderRadius: 10, backgroundColor: Colors.border2, justifyContent: "center", paddingHorizontal: 2 },
+  trilhoOn: { backgroundColor: Colors.violet },
+  bolinha: { width: 16, height: 16, borderRadius: 8, backgroundColor: "#fff" },
+  bolinhaOn: { alignSelf: "flex-end" },
+  marcarTodos: { marginLeft: "auto", minHeight: 36, justifyContent: "center", paddingHorizontal: 6 },
+  marcarTodosTxt: { fontSize: 12.5, color: Colors.violet3, fontWeight: "700" },
   filtroGrupo: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 },
   filtroRotulo: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
   filtroValor: { fontSize: 11.5, color: Colors.ink, fontWeight: "600", maxWidth: 160 },
@@ -1236,11 +1312,9 @@ var s = StyleSheet.create({
   calPainel: { position: "absolute", top: "100%", left: 0, marginTop: 4, zIndex: 30 },
   limpar: { paddingHorizontal: 8, paddingVertical: 6 },
   limparTxt: { fontSize: 11.5, color: Colors.violet3, fontWeight: "700" },
-  filtroResumo: { fontSize: 11, color: Colors.ink3, marginTop: -4 },
+  filtroResumo: { fontSize: 12, color: Colors.ink3 },
   searchBox: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.bg3, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border },
   searchInput: { flex: 1, fontSize: 13, color: Colors.ink } as any,
-  selectAllBtn: { backgroundColor: Colors.violetD, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: Colors.border2 },
-  selectAllText: { fontSize: 11, color: Colors.violet3, fontWeight: "600" },
   list: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, maxHeight: 520 },
   item: { borderRadius: 10, backgroundColor: Colors.bg, overflow: "hidden", marginBottom: 3 },
   itemSelected: { backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
@@ -1257,6 +1331,9 @@ var s = StyleSheet.create({
   // so aparece com a opcao ligada, embaixo do preco em dinheiro.
   itemCardPriceHint: { fontSize: 10, color: Colors.ink3, fontWeight: "600", marginTop: 1 },
   emptyText: { fontSize: 12, color: Colors.ink3, textAlign: "center", paddingVertical: 16 },
+  empty: { alignItems: "center", paddingBottom: 12 },
+  emptyBtn: { borderRadius: 10, borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg, paddingHorizontal: 14, minHeight: 40, justifyContent: "center" },
+  emptyBtnTxt: { fontSize: 12.5, color: Colors.violet3, fontWeight: "700" },
   colorDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1, borderColor: "rgba(0,0,0,0.15)" },
   colorBadge: { fontSize: 9, fontWeight: "600", color: Colors.ink2, backgroundColor: Colors.bg4, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: "hidden" },
   sizeBadge: { fontSize: 9, fontWeight: "700", color: Colors.violet3, backgroundColor: Colors.violetD, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: "hidden" },
