@@ -48,10 +48,8 @@ function Tela({ products }: { products: any[] }) {
 }
 
 const acha = (t: renderer.ReactTestRenderer, id: string) => t.root.findAll((n) => n.props && n.props.testID === id, { deep: false });
-const totalImpresso = (t: renderer.ReactTestRenderer) => {
-  const m = flatten(t.toJSON()).match(/Imprimir (\d+) etiqueta/);
-  return m ? Number(m[1]) : NaN;
-};
+// Total da barra fixa ("8 etiquetas").
+const totalImpresso = (t: renderer.ReactTestRenderer) => parseInt(flatten(acha(t, "etiquetas-total")[0]), 10);
 async function flush() { await act(async () => { await Promise.resolve(); await Promise.resolve(); }); }
 
 beforeEach(() => {
@@ -64,16 +62,19 @@ beforeEach(() => {
 test("marcar o produto não marca a variante sem estoque; as outras ficam com o estoque", async () => {
   let t!: renderer.ReactTestRenderer;
   act(() => { t = renderer.create(<Tela products={[VESTIDO]} />); });
-  // Linha do produto: o primeiro Pressable com onPress dentro do item.
-  const linha = t.root.findAll((n) => n.props && typeof n.props.onPress === "function" && flatten(n.children).includes("Vestido midi"), { deep: false })[0];
-  act(() => { linha.props.onPress(); });
+  act(() => { acha(t, "etiquetas-marcar-p1")[0].props.onPress(); });
   await flush();
   expect(mockVariants).toHaveBeenCalledWith("empresa-1", "p1");
   // P (3) + M (5); G sem estoque fica de fora.
   expect(totalImpresso(t)).toBe(8);
-  expect(flatten(t.toJSON())).toContain("2 selecionadas");
+  expect(flatten(t.toJSON())).toContain("2 marcadas");
 
-  // Marcar a G na mão começa com 1.
+  // p-72: com o interruptor ligado a G (sem estoque) nem aparece; a lista avisa.
+  expect(acha(t, "etiquetas-variante-v2")).toHaveLength(0);
+  expect(flatten(t.toJSON())).toContain("1 variante sem estoque não aparece");
+  // Desligado, ela aparece desmarcada; marcar na mão começa com 1.
+  act(() => { acha(t, "etiquetas-com-estoque")[0].props.onPress(); });
+  expect(totalImpresso(t)).toBe(8);
   const g = acha(t, "etiquetas-variante-v2")[0];
   act(() => { g.props.onPress(); });
   expect(totalImpresso(t)).toBe(9);

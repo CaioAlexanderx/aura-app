@@ -154,3 +154,18 @@ describe("Só com estoque (p-71)", () => {
     expect(lerSoComEstoque()).toBe(true);
   });
 });
+
+describe("Sem código (p-75)", () => {
+  const { produtoSemCodigo, varianteSemCodigo } = require("@/utils/etiquetasFiltro");
+  test("sem código de barras e sem SKU (o '---' do useProducts) é sem código", () => {
+    expect(produtoSemCodigo({ barcode: "", code: "---" })).toBe(true);
+    expect(produtoSemCodigo({ barcode: null, code: "" })).toBe(true);
+    expect(produtoSemCodigo({ barcode: "", code: "221" })).toBe(false);
+    expect(produtoSemCodigo({ barcode: "7891033948208", code: "---" })).toBe(false);
+  });
+  test("variante: o próprio código ou o do produto", () => {
+    expect(varianteSemCodigo({ barcode: "" }, { barcode: "", code: "---" })).toBe(true);
+    expect(varianteSemCodigo({ barcode: "2100000000017" }, { barcode: "", code: "---" })).toBe(false);
+    expect(varianteSemCodigo({ barcode: "" }, { barcode: "", code: "221" })).toBe(false);
+  });
+});
