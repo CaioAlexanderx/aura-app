@@ -47,6 +47,7 @@ import type { NfcePaymentEntry } from "@/services/nfceApi";
 import { router } from "expo-router";
 import { frasesMatconDaVenda } from "./matconDaVenda";
 import { cupomComVale } from "@/utils/valeTrocaCupom";
+import { NOME_DO_FRETE } from "@/utils/frete";
 import type { ConfigDoVale } from "@/utils/valeTroca";
 
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
@@ -113,6 +114,10 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
     : sale.items.reduce((s, i) => s + i.price * i.qty, 0);
   const hasCoupon = !!(sale.couponCode && cupom > 0);
   const hasDiscount = desconto > 0.004;
+  // 30/10/2026 (Frete no Caixa): o frete está dentro do subtotal gravado;
+  // a tela mostra os produtos, o frete e o total, cada um na sua linha.
+  const frete = sale.frete && sale.frete > 0 ? sale.frete : 0;
+  const subtotalProdutos = Math.round((subtotal - frete) * 100) / 100;
 
   const hasSplit = !!(sale.payments && sale.payments.length > 0);
   const payments: NfcePaymentEntry[] | undefined = hasSplit
@@ -125,6 +130,9 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
     quantity: i.qty,
     unit_price: i.price,
   }));
+  // O frete foi uma linha da venda: vai na nota também, senão a soma dos
+  // pagamentos não fecha com os itens.
+  if (frete > 0) nfceItems.push({ product_id: "frete", product_name: NOME_DO_FRETE, quantity: 1, unit_price: frete });
 
   // QA 23/09/2026: conta PRODUTOS (linhas) — somar quantidades misturava
   // unidades (10 m² + 500 tijolos = "510 produtos").
@@ -170,16 +178,22 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
           </View>
         )}
 
-        {hasDiscount && (
+        {(hasDiscount || frete > 0) && (
           <View style={s.row}>
             <Text style={s.label}>Subtotal</Text>
-            <Text testID="venda-subtotal" style={s.metaStrike}>{fmt(subtotal)}</Text>
+            <Text testID="venda-subtotal" style={hasDiscount ? s.metaStrike : s.meta}>{fmt(subtotalProdutos)}</Text>
           </View>
         )}
         {manual > 0 && (
           <View style={s.row}>
             <Text style={s.label}>Desconto</Text>
             <Text testID="venda-desconto" style={s.meta}>-{fmt(manual)}</Text>
+          </View>
+        )}
+        {frete > 0 && (
+          <View style={s.row}>
+            <Text style={s.label}>Frete</Text>
+            <Text testID="venda-frete" style={s.meta}>{fmt(frete)}</Text>
           </View>
         )}
         <View style={s.row}>
