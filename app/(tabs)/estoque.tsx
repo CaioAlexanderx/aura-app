@@ -76,6 +76,10 @@ import { fmtQty, qtdComUnidade, unidadeParaQuantidade } from "@/utils/matconUnit
 // 23/09/2026: + A–Z / Z–A e a escolha lembrada no navegador (lerOrdemSalva).
 import { ordenarProdutos, lerOrdemSalva, salvarOrdem, ORDENS_ESTOQUE, type OrdemEstoque } from "@/utils/productSort";
 import { OrdenarBarra } from "@/components/screens/estoque/OrdenarBarra";
+// 30/10/2026 (p-52): reajuste de preço em lote pela barra de seleção. O
+// botão só aparece com o backend do reajuste no ar (Aura-backend#939).
+import { AjustarPrecoModal } from "@/components/screens/estoque/reajuste/AjustarPrecoModal";
+import { useReajusteDisponivel } from "@/hooks/useReajusteDisponivel";
 // import { EstoqueRightRail } from "@/components/screens/estoque/EstoqueRightRail"; // Phase 2 — right rail
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
@@ -372,6 +376,10 @@ export default function EstoqueScreen() {
   const [bulkMode, setBulkMode] = useState(false);
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+  // p-52: quem já pode mexer no produto (mesmo gate do Selecionar/editar:
+  // fora do demo, com a permissão do Estoque que abre esta tela).
+  const reajusteNoAr = useReajusteDisponivel(company?.id, !isDemo && !consolidatedView);
+  const [reajusteAberto, setReajusteAberto] = useState(false);
 
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [showBatchModal, setShowBatchModal] = useState(false);
@@ -674,6 +682,18 @@ export default function EstoqueScreen() {
             {allSelected ? "Limpar seleção" : "Selecionar todos"}
           </Text>
         </Pressable>
+        {reajusteNoAr && (
+          <Pressable
+            onPress={() => { if (bulkSelected.size > 0) setReajusteAberto(true); }}
+            disabled={bulkSelected.size === 0}
+            style={[s.bulkAction, s.bulkPriceAction, bulkSelected.size === 0 && { opacity: 0.4 }]}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: bulkSelected.size === 0 }}
+            testID="estoque-ajustar-preco"
+          >
+            <Text style={[s.bulkActionText, { color: "#fff" }]}>Ajustar preço</Text>
+          </Pressable>
+        )}
         <Pressable
           onPress={() => { if (bulkSelected.size > 0) setShowBulkConfirm(true); }}
           disabled={bulkSelected.size === 0}
@@ -1008,6 +1028,13 @@ export default function EstoqueScreen() {
           onSuccess={() => handleImportComplete()}
         />
       )}
+      <WebPortal active={reajusteAberto && !!company?.id}>
+        <AjustarPrecoModal
+          companyId={company?.id || ""}
+          produtos={products.filter(p => bulkSelected.has(p.id))}
+          onFechar={() => setReajusteAberto(false)}
+        />
+      </WebPortal>
       <WebPortal active={importPlanilha.aberto}>
         <ImportPlanilhaModal
           fase={importPlanilha.fase}
@@ -1084,6 +1111,7 @@ const s = StyleSheet.create({
   bulkBar: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.violetD, borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: Colors.border2, flexWrap: "wrap" },
   bulkCount: { fontSize: 13, color: Colors.violet3, fontWeight: "700", flex: 1 },
   bulkAction: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
+  bulkPriceAction: { backgroundColor: Colors.violet, borderColor: Colors.violet },
   bulkDeleteAction: { backgroundColor: Colors.redD, borderColor: Colors.red + "33" },
   bulkActionText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
   searchRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12, position: "relative", zIndex: 50 },
