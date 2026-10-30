@@ -12,6 +12,12 @@
 //   2 Conferir    — prévia do servidor (nada gravado).
 //   3 Pronto      — aplicar, desfazer, reimprimir etiquetas (p-53).
 //
+// p-53: "Aplicar" grava com allow_below_cost=false. Se a prévia já mostra
+// item abaixo do custo, ou o backend devolve 409 BELOW_COST (alguém mudou o
+// custo no meio), a pessoa confirma num aviso e o app reenvia com true.
+// O que vale é a resposta do aplicar (refeita no servidor com as linhas
+// travadas), não a prévia.
+//
 // Multi-CNPJ: `companyId` é a empresa ativa (a mesma do resto do Estoque);
 // produto de grupo é uma linha só, e o modal avisa que o preço vale para
 // todas as lojas do grupo. Renderizado pelo Estoque dentro de WebPortal
@@ -23,13 +29,17 @@ import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator, Platf
 import { Colors, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import {
-  priceAdjustmentsApi, type DirecaoReajuste, type ModoReajuste, type RespostaReajuste, type Terminacao,
+  priceAdjustmentsApi, codigoDoErro,
+  type DirecaoReajuste, type ModoReajuste, type PedidoReajuste, type RespostaDesfazer, type RespostaReajuste, type Terminacao,
 } from "@/services/priceAdjustmentsApi";
 import {
   MAX_PRODUTOS_REAJUSTE, VALOR_INICIAL, contarSemCusto, erroDoValor, montarPedido, plural, produtosQueMudam,
+  produtosAbaixoDoCusto, textoAplicar, mensagemErroAplicar, mensagemErroDesfazer,
 } from "./reajusteRegras";
 import { Passo1Modo } from "./Passo1Modo";
 import { Passo2Previa } from "./Passo2Previa";
+import { Passo3Resultado } from "./Passo3Resultado";
+import { Aviso } from "./Aviso";
 
 var IS_WEB = Platform.OS === "web";
 
@@ -39,12 +49,16 @@ type Props = {
   companyId: string;
   produtos: ProdutoParaReajuste[];
   onFechar: () => void;
+  /** Preços gravados ou desfeitos: o Estoque recarrega a lista. */
+  onPrecosMudaram?: () => void;
+  /** "Reimprimir etiquetas": abre a aba Etiquetas com estes produtos marcados. */
+  onReimprimir?: (productIds: string[]) => void;
 };
 
 type Passo = 1 | 2 | 3;
 var PASSOS: Array<[Passo, string]> = [[1, "O que mudar"], [2, "Conferir"], [3, "Pronto"]];
 
-export function AjustarPrecoModal({ companyId, produtos, onFechar }: Props) {
+export function AjustarPrecoModal({ companyId, produtos, onFechar, onPrecosMudaram, onReimprimir }: Props) {
   var largura = useWindowDimensions().width;
   var estreito = largura < 640;
   var ids = useMemo(function () { return produtos.map(function (p) { return p.id; }); }, [produtos]);
@@ -60,6 +74,15 @@ export function AjustarPrecoModal({ companyId, produtos, onFechar }: Props) {
   var [carregando, setCarregando] = useState(false);
   var [erro, setErro] = useState<string | null>(null);
   var [previa, setPrevia] = useState<RespostaReajuste | null>(null);
+  // p-53: o pedido exato da prévia é o que vai para o aplicar.
+  var [pedido, setPedido] = useState<PedidoReajuste | null>(null);
+  var [aplicando, setAplicando] = useState(false);
+  var [erroAplicar, setErroAplicar] = useState<string | null>(null);
+  var [confirmarAbaixo, setConfirmarAbaixo] = useState(false);
+  var [resultado, setResultado] = useState<RespostaReajuste | null>(null);
+  var [desfazendo, setDesfazendo] = useState(false);
+  var [desfeito, setDesfeito] = useState<RespostaDesfazer | null>(null);
+  var [erroDesfazer, setErroDesfazer] = useState<string | null>(null);
   // Quantos dos marcados são de grupo: vem da primeira prévia (não depende
   // do modo nem do valor), pedida em silêncio ao abrir.
   var [produtosDeGrupo, setProdutosDeGrupo] = useState<number | null>(null);
@@ -90,10 +113,13 @@ export function AjustarPrecoModal({ companyId, produtos, onFechar }: Props) {
     if (!podeVer) return;
     setCarregando(true);
     setErro(null);
-    priceAdjustmentsApi.previa(companyId, montarPedido(ids, modo, direcao, valorTxt, terminacao))
+    var novo = montarPedido(ids, modo, direcao, valorTxt, terminacao);
+    priceAdjustmentsApi.previa(companyId, novo)
       .then(function (r) {
         if (!vivo.current) return;
         setPrevia(r);
+        setPedido(novo);
+        setErroAplicar(null);
         setProdutosDeGrupo(r.summary.group_shared || 0);
         setPasso(2);
       })
@@ -103,6 +129,66 @@ export function AjustarPrecoModal({ companyId, produtos, onFechar }: Props) {
       })
       .finally(function () { if (vivo.current) setCarregando(false); });
   }
+
+  function aplicar(permitirAbaixoDoCusto: boolean) {
+    if (!pedido || aplicando) return;
+    setConfirmarAbaixo(false);
+    setAplicando(true);
+    setErroAplicar(null);
+    priceAdjustmentsApi.aplicar(companyId, pedido, permitirAbaixoDoCusto)
+      .then(function (r) {
+        if (!vivo.current) return;
+        if (!r.adjustment_id) {
+          // Nada mudou (alguém já tinha mudado os preços no meio): nada gravado.
+          setPrevia(r);
+          setErroAplicar("Nenhum preço precisou mudar: eles já estavam assim. Nada foi gravado.");
+          return;
+        }
+        setResultado(r);
+        setPasso(3);
+        if (onPrecosMudaram) onPrecosMudaram();
+      })
+      .catch(function (e: any) {
+        if (!vivo.current) return;
+        var codigo = codigoDoErro(e);
+        if (codigo === "BELOW_COST" && e && e.data && Array.isArray(e.data.items)) {
+          // A prévia nova veio no corpo do 409: mostra e pede a confirmação.
+          setPrevia(e.data as RespostaReajuste);
+          setConfirmarAbaixo(true);
+          return;
+        }
+        setErroAplicar(mensagemErroAplicar(codigo, e && !e.isNetworkError ? e.message : null));
+      })
+      .finally(function () { if (vivo.current) setAplicando(false); });
+  }
+
+  function tocarAplicar() {
+    if (!previa) return;
+    if (produtosAbaixoDoCusto(previa.items).length > 0) setConfirmarAbaixo(true);
+    else aplicar(false);
+  }
+
+  function desfazer() {
+    if (!resultado || !resultado.adjustment_id || desfazendo) return;
+    setDesfazendo(true);
+    setErroDesfazer(null);
+    priceAdjustmentsApi.desfazer(companyId, resultado.adjustment_id)
+      .then(function (d) {
+        if (!vivo.current) return;
+        setDesfeito(d);
+        if (onPrecosMudaram) onPrecosMudaram();
+      })
+      .catch(function (e: any) {
+        if (!vivo.current) return;
+        setErroDesfazer(mensagemErroDesfazer(codigoDoErro(e), e && e.status));
+      })
+      .finally(function () { if (vivo.current) setDesfazendo(false); });
+  }
+
+  var ocupado = carregando || aplicando || desfazendo;
+  var fechar = ocupado ? undefined : onFechar;
+  var mudam = previa ? produtosQueMudam(previa.items).length : 0;
+  var abaixoNaPrevia = previa ? produtosAbaixoDoCusto(previa.items).length : 0;
 
   var panelWeb = IS_WEB ? {
     background: IS_DARK_MODE ? "rgba(18,10,35,0.98)" : "rgba(255,255,255,0.98)",
@@ -114,15 +200,19 @@ export function AjustarPrecoModal({ companyId, produtos, onFechar }: Props) {
 
   var sub = passo === 1
     ? "Escolha como mudar o preço. Você confere tudo antes de aplicar."
-    : "Confira como fica. Nada foi gravado ainda.";
+    : passo === 2
+      ? "Confira como fica. Nada foi gravado ainda."
+      : desfeito ? "Os preços voltaram ao que eram." : "Pronto. Os preços novos já valem no Caixa.";
 
   var rodape = passo === 1
     ? plural(ids.length, "produto selecionado", "produtos selecionados")
-    : previa ? plural(produtosQueMudam(previa.items).length, "produto vai mudar", "produtos vão mudar") : "";
+    : passo === 2
+      ? (aplicando ? "Aplicando os preços novos…" : plural(mudam, "produto vai mudar", "produtos vão mudar"))
+      : "";
 
   return (
     <View style={[s.overlay, estreito && { padding: 10 }]} testID="reajuste-modal">
-      <Pressable style={s.backdrop} onPress={carregando ? undefined : onFechar} accessibilityLabel="Fechar" />
+      <Pressable style={s.backdrop} onPress={fechar} accessibilityLabel="Fechar" />
       <View style={[s.panel, panelWeb ? (panelWeb as any) : { backgroundColor: Colors.bg3 }]} accessibilityViewIsModal accessibilityLabel="Ajustar preço">
 
         <View style={s.header}>
@@ -133,7 +223,7 @@ export function AjustarPrecoModal({ companyId, produtos, onFechar }: Props) {
               <Text style={s.headerSub}>{sub}</Text>
             </View>
           </View>
-          <Pressable onPress={carregando ? undefined : onFechar} style={s.closeBtn} testID="reajuste-x" accessibilityRole="button" accessibilityLabel="Fechar">
+          <Pressable onPress={fechar} style={s.closeBtn} testID="reajuste-x" accessibilityRole="button" accessibilityLabel="Fechar">
             <Icon name="x" size={16} color={Colors.ink3} />
           </Pressable>
         </View>
@@ -178,7 +268,20 @@ export function AjustarPrecoModal({ companyId, produtos, onFechar }: Props) {
               onEnviar={verComoFica}
             />
           )}
+          {passo === 2 && !!erroAplicar && (
+            <View style={{ marginBottom: 12 }}><Aviso tipo="erro" testID="reajuste-erro-aplicar">{erroAplicar}</Aviso></View>
+          )}
           {passo === 2 && previa && <Passo2Previa previa={previa} estreito={estreito} />}
+          {passo === 3 && resultado && (
+            <Passo3Resultado
+              resultado={resultado}
+              desfeito={desfeito}
+              desfazendo={desfazendo}
+              erroDesfazer={erroDesfazer}
+              onDesfazer={desfazer}
+              onReimprimir={function (idsEtiqueta) { if (onReimprimir) onReimprimir(idsEtiqueta); }}
+            />
+          )}
         </ScrollView>
 
         <View style={s.footer}>
@@ -203,18 +306,62 @@ export function AjustarPrecoModal({ companyId, produtos, onFechar }: Props) {
             )}
             {passo === 2 && (
               <>
-                <Pressable style={s.btnSec} onPress={function () { setPasso(1); }} testID="reajuste-voltar" accessibilityRole="button">
+                <Pressable
+                  style={[s.btnSec, aplicando && { opacity: 0.45 }]}
+                  onPress={aplicando ? undefined : function () { setPasso(1); setErroAplicar(null); }}
+                  disabled={aplicando}
+                  testID="reajuste-voltar"
+                  accessibilityRole="button"
+                >
                   <Icon name="arrow_left" size={14} color={Colors.ink} />
                   <Text style={s.btnSecTxt}>Voltar</Text>
                 </Pressable>
-                <Pressable style={s.btnPri} onPress={onFechar} testID="reajuste-fechar" accessibilityRole="button">
-                  <Text style={s.btnPriTxt}>Fechar</Text>
+                <Pressable
+                  style={[abaixoNaPrevia > 0 ? s.btnPerigo : s.btnConfirm, (mudam === 0 || aplicando) && { opacity: 0.45 }]}
+                  onPress={mudam === 0 || aplicando ? undefined : tocarAplicar}
+                  disabled={mudam === 0 || aplicando}
+                  testID="reajuste-aplicar"
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: mudam === 0 || aplicando, busy: aplicando }}
+                >
+                  {aplicando
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : (
+                      <>
+                        <Icon name="check" size={14} color="#fff" />
+                        <Text style={s.btnPriTxt}>{previa ? textoAplicar(previa) : "Aplicar"}</Text>
+                      </>
+                    )}
                 </Pressable>
               </>
+            )}
+            {passo === 3 && (
+              <Pressable style={[s.btnPri, desfazendo && { opacity: 0.45 }]} onPress={fechar} disabled={desfazendo} testID="reajuste-fechar" accessibilityRole="button">
+                <Text style={s.btnPriTxt}>Fechar</Text>
+              </Pressable>
             )}
           </View>
         </View>
       </View>
+
+      {confirmarAbaixo && previa && (
+        <View style={s.confOverlay} testID="reajuste-confirmar-abaixo">
+          <View style={s.confCard} accessibilityViewIsModal>
+            <Text style={s.confTitulo}>Aplicar abaixo do custo?</Text>
+            <Text style={s.confTexto} testID="reajuste-confirmar-texto">
+              {plural(abaixoNaPrevia, "produto vai ficar", "produtos vão ficar")} com o preço menor que o custo: a loja vende por menos do que pagou. Se é uma promoção ou queima de estoque, pode seguir.
+            </Text>
+            <View style={s.confAcoes}>
+              <Pressable style={s.btnSec} onPress={function () { setConfirmarAbaixo(false); }} testID="reajuste-confirmar-nao" accessibilityRole="button">
+                <Text style={s.btnSecTxt}>Voltar e conferir</Text>
+              </Pressable>
+              <Pressable style={s.btnPerigo} onPress={function () { aplicar(true); }} testID="reajuste-confirmar-sim" accessibilityRole="button">
+                <Text style={s.btnPriTxt}>Aplicar mesmo assim</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -271,6 +418,22 @@ var s = StyleSheet.create({
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
   },
   btnPriTxt: { color: "#fff", fontSize: 13.5, fontWeight: "700" },
+  btnConfirm: {
+    backgroundColor: "#10b981", minHeight: 44, paddingHorizontal: 18, borderRadius: 10,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+  },
+  btnPerigo: {
+    backgroundColor: "#dc2626", minHeight: 44, paddingHorizontal: 18, borderRadius: 10,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+  },
+  confOverlay: {
+    position: "absolute" as any, top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 20,
+  },
+  confCard: { width: "100%", maxWidth: 400, borderRadius: 16, padding: 20, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: "rgba(220,38,38,0.35)" },
+  confTitulo: { fontSize: 16, fontWeight: "700", color: Colors.ink, marginBottom: 8 },
+  confTexto: { fontSize: 13.5, color: Colors.ink2, lineHeight: 19, marginBottom: 16 },
+  confAcoes: { flexDirection: "row", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" },
   btnSec: {
     backgroundColor: "rgba(255,255,255,0.06)", borderWidth: 1, borderColor: Colors.border2,
     minHeight: 44, paddingHorizontal: 16, borderRadius: 10,

@@ -77,6 +77,23 @@ export type RespostaReajuste = {
   not_found_ids: string[];
 };
 
+export type RespostaDesfazer = {
+  adjustment_id: string;
+  undone_at: string;
+  restored_count: number;
+  changed_after_count: number;
+  restored: Array<{ product_id: string; variant_id: string | null }>;
+  changed_after: Array<{
+    product_id: string;
+    variant_id: string | null;
+    name: string;
+    variant_label: string | null;
+    price_after: number | null;
+    price_now: number | null;
+    reason: "changed" | "not_found";
+  }>;
+};
+
 function base(companyId: string) {
   return "/companies/" + companyId + "/products/price-adjustments";
 }
@@ -95,6 +112,28 @@ export var priceAdjustmentsApi = {
       body: { ...pedido, dry_run: true, allow_below_cost: false },
       retry: 0,
       timeout: 30000,
+    });
+  },
+
+  /**
+   * Aplicar (p-53). retry 0: uma falha de rede não pode reenviar e gravar
+   * duas vezes. 409 BELOW_COST traz a prévia inteira no corpo (err.data).
+   */
+  aplicar: function (companyId: string, pedido: PedidoReajuste, permitirAbaixoDoCusto: boolean) {
+    return request<RespostaReajuste>(base(companyId), {
+      method: "POST",
+      body: { ...pedido, dry_run: false, allow_below_cost: permitirAbaixoDoCusto },
+      retry: 0,
+      timeout: 60000,
+    });
+  },
+
+  /** Desfazer um reajuste da empresa ativa, em até 7 dias (Aura-backend#940). */
+  desfazer: function (companyId: string, adjustmentId: string) {
+    return request<RespostaDesfazer>(base(companyId) + "/" + adjustmentId + "/undo", {
+      method: "POST",
+      retry: 0,
+      timeout: 60000,
     });
   },
 
