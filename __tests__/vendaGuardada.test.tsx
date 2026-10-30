@@ -218,9 +218,11 @@ describe("Caixa: guardar a cada mudança", () => {
     const campos = Object.keys(guardado().dados).sort();
     // idempotencyKey (17/10/2026, tq-15): uuid aleatório da venda, não é
     // credencial — viaja para a outra aba mandar a mesma chave.
+    // frete (30/10/2026): o texto do campo "Frete / entrega" — um valor, não
+    // credencial — para a entrega não sumir ao trocar de página.
     expect(campos).toEqual([
       "cart", "comanda", "couponApplied", "couponCode", "couponRule", "cpfNaNota", "discountType", "discountValue",
-      "idempotencyKey", "lotAllocations", "payment", "quoteId", "selectedCustomerId", "selectedCustomerName", "selectedCustomerPhone",
+      "frete", "idempotencyKey", "lotAllocations", "payment", "quoteId", "selectedCustomerId", "selectedCustomerName", "selectedCustomerPhone",
       "selectedEmployeeId", "selectedEmployeeName", "sellerName", "splitMode", "splitPayments",
     ].sort());
     act(() => { t.unmount(); });
