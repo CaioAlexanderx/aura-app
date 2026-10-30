@@ -219,3 +219,22 @@ export function salvarSoComEstoque(ligado: boolean): void {
     // sem armazenamento: vale até fechar a tela
   }
 }
+
+// ── Produto sem código (30/10/2026, card p-75) ──────────────
+// O useProducts devolve code "---" quando o produto não tem SKU. Sem código
+// de barras e sem SKU, a etiqueta não tem o que imprimir: a lista mostra
+// "Sem código", o produto não entra no "Marcar todos" e ganha o botão
+// Gerar código (quando o backend tem a rota).
+function vazioOuTraco(c: unknown): boolean {
+  var t = String(c == null ? "" : c).trim();
+  return t === "" || t === "---";
+}
+
+export function produtoSemCodigo(p: { barcode?: string | null; code?: string | null }): boolean {
+  return vazioOuTraco(p.barcode) && vazioOuTraco(p.code);
+}
+
+/** Variante sem código próprio cai no código do produto; sem os dois, sem código. */
+export function varianteSemCodigo(v: { barcode?: string | null } | null | undefined, p: { barcode?: string | null; code?: string | null }): boolean {
+  return vazioOuTraco(v && v.barcode) && produtoSemCodigo(p);
+}

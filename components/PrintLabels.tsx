@@ -26,9 +26,12 @@ import {
 } from "@/components/screens/estoque/labels/labelAccountSync";
 import { LabelPrinterCalibration, mmBr } from "@/components/screens/estoque/labels/LabelPrinterCalibration";
 import { LabelPreviewModal } from "@/components/screens/estoque/labels/LabelPreviewModal";
+import { WebPortal } from "@/components/WebPortal";
 import { defaultLabelQty, unitLabelForList } from "@/components/screens/estoque/labels/labelDefaults";
 // 30/10/2026 (card p-72): variantes de varios produtos numa chamada (p-73).
 import { buscarVariantesEmLote, emPedacos, comLimite, MAX_IDS_POR_LOTE, CONCORRENCIA_POR_PRODUTO } from "@/components/screens/estoque/labels/variantesEmLote";
+// 30/10/2026 (card p-75): gerar código para quem está sem código (p-74).
+import { sondarGerarCodigos, gerarCodigos, alvosSemCodigo, chaveDoAlvo, type AlvoCodigo, type ResultadoGerar } from "@/components/screens/estoque/labels/gerarCodigos";
 // 15/10/2026: "Minha medida" (medida livre em mm, por computador).
 import { customLabelPreset, rotuloDaMedida, mmTxt, type CustomLabelSpec } from "@/components/screens/estoque/labels/customLabel";
 import { nomeDaLojaDaEmpresa, mostrarNomeDaLoja } from "@/components/screens/estoque/labels/nomeDaLoja";
@@ -38,6 +41,7 @@ import { DesenhoDaEtiquetaLinha } from "@/components/screens/estoque/DesenhoDaEt
 import {
   filtrarEtiquetas, categoriasDe, filtrosAtivos, lerOrdemEtiquetas, salvarOrdemEtiquetas,
   lerSoComEstoque, salvarSoComEstoque, variantesParaMarcar, estoqueDaVariante, FILTRO_PADRAO,
+  produtoSemCodigo, varianteSemCodigo,
   ORDENS_ETIQUETAS, PERIODOS, diaParaBr, hojeEmSaoPaulo, diasComCadastro, marcasDoCalendario, type PeriodoCadastro,
 } from "@/utils/etiquetasFiltro";
 import { CalendarioDoDia } from "@/components/CalendarioDoDia";
@@ -124,8 +128,15 @@ function loadStoredLabelSize(): LabelSizeKey {
   return DEFAULT_LABEL_SIZE;
 }
 
-export function PrintLabels({ products, selectedIds, onSelectionChange, podeMudarDesenho }: Props) {
+export function PrintLabels({ products: produtosDoEstoque, selectedIds, onSelectionChange, podeMudarDesenho }: Props) {
   var { company, token } = useAuthStore();
+  // 30/10/2026 (card p-75): codigo gerado aqui entra na hora (produto ->
+  // barcode); a lista do Estoque pega o mesmo valor do cadastro ao recarregar.
+  var [codigosGerados, setCodigosGerados] = useState<Record<string, string>>({});
+  var products = useMemo(function() {
+    if (Object.keys(codigosGerados).length === 0) return produtosDoEstoque;
+    return produtosDoEstoque.map(function(p) { return codigosGerados[p.id] && !p.barcode ? { ...p, barcode: codigosGerados[p.id] } : p; });
+  }, [produtosDoEstoque, codigosGerados]);
   // 22/09/2026 (preco no cartao): so a opcao da loja — desligada, nada muda.
   var { settings: pdvSettings } = usePdvSettings();
   var cartaoCfg = lerConfigDoCartao(pdvSettings);
@@ -506,7 +517,10 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
   function fetchVariantsIfNeeded(productId: string) { carregarVariantes([productId]); }
 
   function marcarVariantesPadrao(productId: string, active: any[], comEstoque: boolean) {
-    var varIds = new Set(variantesParaMarcar(active, comEstoque));
+    // p-75: variante sem codigo (nem o produto tem) nao vem marcada.
+    var dono = products.find(function(pr) { return pr.id === productId; });
+    var comCodigo = dono ? active.filter(function(v: any) { return !varianteSemCodigo(v, dono as Product); }) : active;
+    var varIds = new Set(variantesParaMarcar(comCodigo, comEstoque));
     setSelectedVariants(function(prev) { return { ...prev, [productId]: varIds }; });
   }
 
@@ -586,7 +600,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
   // "Marcar todos" vale so para o que esta na lista (com o interruptor
   // ligado, as variantes com estoque).
   function toggleAll() {
-    var ids = filtered.map(function(p) { return p.id; });
+    var ids = marcaveis.map(function(p) { return p.id; });
     if (ids.every(function(id) { return selectedIds.includes(id); })) {
       onSelectionChange(selectedIds.filter(function(id) { return !ids.includes(id); }));
       ids.forEach(desmarcarProduto);
@@ -621,6 +635,114 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
     });
     return total;
   }, [selectedIds, quantities, selectedVariants, variantCache, includeParentInPrint]);
+
+  // ── Sem codigo (30/10/2026, card p-75) ─────────────────────
+  // Produto sem codigo de barras e sem SKU nao sai na etiqueta: aparece como
+  // "Sem codigo", fica fora do Marcar todos e ganha "Gerar codigo".
+  function ehSimples(p: Product) { return !p.has_variants || (!!variantCache[p.id] && variantCache[p.id].length === 0); }
+  function marcavel(p: Product) { return !(ehSimples(p) && produtoSemCodigo(p)); }
+  var marcaveis = filtered.filter(marcavel);
+  function nomeDaVariante(p: any, v: any) { var sc = variantSizeColor(v); return buildLabelName(p.name, sc.size, sc.color); }
+
+  // A rota existe (backend p-74) e a pessoa pode editar produto? Sem isso o
+  // botao nao aparece. So pergunta quando ha alguem sem codigo.
+  var [podeGerar, setPodeGerar] = useState(false);
+  var temSemCodigo = useMemo(function() { return products.some(produtoSemCodigo); }, [products]);
+  useEffect(function() {
+    setPodeGerar(false);
+    if (!company?.id || !temSemCodigo) return;
+    var cid = company.id; var vivo = true;
+    sondarGerarCodigos(cid).then(function(ok) { if (vivo && cid === cidDoCacheRef.current) setPodeGerar(ok); });
+    return function() { vivo = false; };
+  }, [company?.id, temSemCodigo]);
+
+  // Escopo do "Gerar codigo de todos": o que a busca, a categoria e o periodo
+  // mostram, com ou sem estoque (a escolha fica no modal).
+  var listaSemFiltroDeEstoque = useMemo(function() {
+    return soComEstoque ? filtrarEtiquetas(productsWithCode, { ...filtroAtual, soComEstoque: false }) : filtered;
+  }, [productsWithCode, search, ordem, periodo, dia, categoria, soComEstoque, filtered]);
+  var alvosDoEscopo = useMemo(function() { return alvosSemCodigo(listaSemFiltroDeEstoque, variantCache, nomeDaVariante); }, [listaSemFiltroDeEstoque, variantCache]);
+  var produtosSemCodigoNaLista = useMemo(function() {
+    var ids = new Set(alvosSemCodigo(filtered, variantCache, nomeDaVariante).map(function(a) { return a.product_id; }));
+    return ids.size;
+  }, [filtered, variantCache]);
+
+  type ModalCodigo = { unico: AlvoCodigo | null; opcao: "com" | "todos"; previa: ResultadoGerar | null; carregando: boolean; gravando: boolean; erro: string | null };
+  var [modalCodigo, setModalCodigo] = useState<ModalCodigo | null>(null);
+  var previaPedida = useRef(0);
+  function alvosDoModal(m: ModalCodigo): AlvoCodigo[] {
+    if (m.unico) return [m.unico];
+    return m.opcao === "com" ? alvosDoEscopo.filter(function(a) { return a.comEstoque; }) : alvosDoEscopo;
+  }
+  function pedirPrevia(m: ModalCodigo) {
+    var cid = company?.id; if (!cid) return;
+    var alvos = alvosDoModal(m);
+    var n = ++previaPedida.current;
+    setModalCodigo({ ...m, previa: null, carregando: alvos.length > 0, erro: null });
+    if (alvos.length === 0) return;
+    // A previa mostra os primeiros; os outros saem na mesma sequencia.
+    gerarCodigos(cid, alvos.slice(0, 500), true).then(function(r) {
+      if (n !== previaPedida.current) return;
+      setModalCodigo(function(prev) { return prev ? { ...prev, previa: r, carregando: false } : prev; });
+    }).catch(function(e: any) {
+      if (n !== previaPedida.current) return;
+      if (e && e.status === 403) setPodeGerar(false);
+      setModalCodigo(function(prev) { return prev ? { ...prev, carregando: false, erro: e && e.status === 403 ? "Só quem pode editar produtos consegue gerar códigos. Peça para o responsável pela loja." : "Não consegui preparar os códigos agora. Tente de novo em instantes." } : prev; });
+    });
+  }
+  function abrirGerarUm(a: AlvoCodigo) { pedirPrevia({ unico: a, opcao: "todos", previa: null, carregando: true, gravando: false, erro: null }); }
+  function abrirGerarTodos() {
+    var temCom = alvosDoEscopo.some(function(a) { return a.comEstoque; });
+    pedirPrevia({ unico: null, opcao: temCom ? "com" : "todos", previa: null, carregando: true, gravando: false, erro: null });
+  }
+  function aplicarCodigos(itens: Array<{ product_id: string; variant_id: string | null; barcode: string }>) {
+    var deProduto: Record<string, string> = {};
+    var deVariante: Record<string, Record<string, string>> = {};
+    itens.forEach(function(it) {
+      if (!it || !it.barcode) return;
+      if (it.variant_id) { (deVariante[it.product_id] = deVariante[it.product_id] || {})[it.variant_id] = it.barcode; }
+      else deProduto[it.product_id] = it.barcode;
+    });
+    if (Object.keys(deProduto).length) setCodigosGerados(function(prev) { return { ...prev, ...deProduto }; });
+    if (Object.keys(deVariante).length) {
+      setVariantCache(function(prev) {
+        var n = { ...prev };
+        Object.keys(deVariante).forEach(function(pid) {
+          if (!n[pid]) return;
+          n[pid] = n[pid].map(function(v: any) { var b = deVariante[pid][v.id]; return b && !v.barcode ? { ...v, barcode: b } : v; });
+        });
+        return n;
+      });
+    }
+  }
+  function gravarCodigos() {
+    var cid = company?.id; if (!cid || !modalCodigo) return;
+    var m = modalCodigo;
+    var alvos = alvosDoModal(m);
+    if (alvos.length === 0) return;
+    setModalCodigo({ ...m, gravando: true, erro: null });
+    gerarCodigos(cid, alvos, false).then(function(r) {
+      aplicarCodigos(r.items);
+      setModalCodigo(null);
+      var n = r.items.length;
+      if (n === 1 && m.unico) toast.success("Código " + r.items[0].barcode + " guardado no cadastro de " + m.unico.nome + ".");
+      else if (n > 0) toast.success(n + (n === 1 ? " código gerado e guardado" : " códigos gerados e guardados") + " no cadastro.");
+      else toast.info("Esses produtos já tinham código. Nada mudou.");
+    }).catch(function(e: any) {
+      if (e && e.status === 403) setPodeGerar(false);
+      setModalCodigo(function(prev) { return prev ? { ...prev, gravando: false, erro: e && e.status === 403 ? "Só quem pode editar produtos consegue gerar códigos. Peça para o responsável pela loja." : "Não consegui guardar os códigos. Nada foi perdido; tente de novo." } : prev; });
+    });
+  }
+
+  // "Mostrar" do aviso de marcados fora da lista: tira busca e filtros (sem
+  // mexer na escolha lembrada do interruptor).
+  function mostrarTudo() {
+    setSearch(""); setPeriodo("todos"); setCategoria(null); setMenuFiltro(null);
+    setSoComEstoqueState(false);
+  }
+
+  // Modal aberto (para o JSX nao perder o tipo dentro das funcoes).
+  var mc = modalCodigo as ModalCodigo; // so usado com modalCodigo != null
 
   // Barra fixa (p-72): quantos produtos entram no total e quantos marcados
   // estao fora da lista por causa do filtro (continuam no total).
@@ -857,7 +979,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
     );
   }
 
-  var allSelected = filtered.length > 0 && filtered.every(function(p) { return selectedIds.includes(p.id); });
+  var allSelected = marcaveis.length > 0 && marcaveis.every(function(p) { return selectedIds.includes(p.id); });
 
   return (
     <View style={s.container}>
@@ -1089,12 +1211,31 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
         <Text style={s.filtroResumo} testID="etiquetas-resumo-filtro">
           {filtered.length < productsWithCode.length ? filtered.length + " de " + productsWithCode.length + " produtos" : filtered.length + (filtered.length === 1 ? " produto" : " produtos")}
         </Text>
-        {filtered.length > 0 && (
+        {marcaveis.length > 0 && (
           <Pressable onPress={toggleAll} style={s.marcarTodos} testID="etiquetas-marcar-todos" accessibilityRole="button">
             <Text style={s.marcarTodosTxt}>{allSelected ? "Desmarcar todos" : "Marcar todos"}</Text>
           </Pressable>
         )}
       </View>
+
+      {produtosSemCodigoNaLista > 0 && (
+        <View style={[s.aviso, s.avisoAmbar]} testID="etiquetas-aviso-sem-codigo">
+          <Text style={s.avisoTxt}>{produtosSemCodigoNaLista === 1 ? "1 produto está sem código e não sai na etiqueta." : produtosSemCodigoNaLista + " produtos estão sem código e não saem na etiqueta."}</Text>
+          {podeGerar && (
+            <Pressable onPress={abrirGerarTodos} style={s.avisoBtn} testID="etiquetas-gerar-todos" accessibilityRole="button">
+              <Text style={s.avisoBtnTxt}>{alvosDoEscopo.length === 1 ? "Gerar código" : "Gerar código de todos"}</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+      {foraDaLista > 0 && (
+        <View style={[s.aviso, s.avisoVioleta]} testID="etiquetas-aviso-fora-da-lista">
+          <Text style={s.avisoTxt}>{foraDaLista === 1 ? "1 produto marcado está fora da lista" : foraDaLista + " produtos marcados estão fora da lista"} por causa do filtro. Eles entram no total.</Text>
+          <Pressable onPress={mostrarTudo} style={s.avisoBtn} testID="etiquetas-mostrar-fora" accessibilityRole="button">
+            <Text style={s.avisoBtnTxt}>Mostrar</Text>
+          </Pressable>
+        </View>
+      )}
 
       <ScrollView style={s.list} nestedScrollEnabled>
         {filtered.length === 0 && (
@@ -1115,20 +1256,24 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
             var qty = getQty(p.id);
             var labelPreview = buildLabelName(p.name, p.size || "", p.color || "");
             var cardPriceDisplay = cartaoCfg.enabled ? cardPriceFor(p.price, p) : null;
+            var semCod = produtoSemCodigo(p);
             return (
               <View key={p.id} style={[s.item, sel && s.itemSelected]}>
-                <Pressable onPress={function() { toggleSelect(p.id); }} style={s.itemLeft}>
-                  <View style={[s.checkbox, sel && s.checkboxSelected]}>{sel && <Icon name="check" size={10} color="#fff" />}</View>
+                <Pressable onPress={function() { if (!semCod || sel) toggleSelect(p.id); }} style={s.itemLeft} testID={"etiquetas-marcar-" + p.id} accessibilityRole="checkbox" accessibilityState={{ checked: sel, disabled: semCod && !sel }}>
+                  <View style={[s.checkbox, sel && s.checkboxSelected, semCod && !sel && s.checkboxDesligado]}>{sel && <Icon name="check" size={10} color="#fff" />}</View>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                       <Text style={s.itemName} numberOfLines={1}>{labelPreview}</Text>
                       {p.has_variants && <Text style={s.varBadge}>V</Text>}
                     </View>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
-                      <Text style={s.itemCode} numberOfLines={1}>{productCode} | {p.stock} {unitLabelForList(p.unit)}</Text>
+                      {semCod
+                        ? <Text style={s.semCodigoPill} testID={"etiquetas-sem-codigo-" + p.id}>Sem código</Text>
+                        : null}
+                      <Text style={s.itemCode} numberOfLines={1}>{semCod ? "" : productCode + " | "}{p.stock} {unitLabelForList(p.unit)}</Text>
                       {renderColorIndicator(p.color)}
                       {p.size ? <Text style={s.sizeBadge}>{p.size}</Text> : null}
-                      {renderEan13Badge(productCode)}
+                      {!semCod && renderEan13Badge(productCode)}
                     </View>
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
@@ -1136,6 +1281,13 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
                     {cardPriceDisplay != null && <Text style={s.itemCardPriceHint}>cartão R$ {cardPriceDisplay.toFixed(2).replace(".", ",")}</Text>}
                   </View>
                 </Pressable>
+                {semCod && podeGerar && (
+                  <View style={s.gerarLinha}>
+                    <Pressable onPress={function() { abrirGerarUm({ product_id: p.id, variant_id: null, nome: p.name, comEstoque: p.stock > 0 }); }} style={s.gerarBtn} testID={"etiquetas-gerar-" + p.id} accessibilityRole="button" accessibilityLabel={"Gerar código para " + p.name}>
+                      <Text style={s.gerarBtnTxt}>Gerar código</Text>
+                    </Pressable>
+                  </View>
+                )}
                 {sel && (
                   <View style={s.qtyRow}>
                     <Pressable onPress={function() { setQty(p.id, qty - 1); }} style={s.qtyBtn}><Text style={s.qtyBtnText}>{"<"}</Text></Pressable>
@@ -1186,7 +1338,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
                     {p.size ? <Text style={s.sizeBadge}>{p.size}</Text> : null}
                   </View>
                   <Text style={s.variantHint} numberOfLines={1}>
-                    {productCode}{carregado ? " · " + visiveis.length + (visiveis.length === 1 ? " variante" : " variantes") : ""}{sel && carregado ? " · " + nMarcadas + (nMarcadas === 1 ? " marcada" : " marcadas") + (parentChecked ? " + etiqueta do pai" : "") : ""}
+                    {produtoSemCodigo(p) ? "Sem código" : productCode}{carregado ? " · " + visiveis.length + (visiveis.length === 1 ? " variante" : " variantes") : ""}{sel && carregado ? " · " + nMarcadas + (nMarcadas === 1 ? " marcada" : " marcadas") + (parentChecked ? " + etiqueta do pai" : "") : ""}
                   </Text>
                 </Pressable>
                 <View style={s.colDireita}>
@@ -1204,7 +1356,7 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
 
                   {carregado && (
                     <View style={[s.variantRow, parentChecked && s.variantRowSelected, s.parentSelfRow]}>
-                      <Pressable onPress={function() { toggleIncludeParent(p.id); }} style={s.variantLeft} testID={"etiquetas-pai-" + p.id} accessibilityRole="checkbox" accessibilityState={{ checked: parentChecked }}>
+                      <Pressable onPress={function() { if (!produtoSemCodigo(p) || parentChecked) toggleIncludeParent(p.id); }} style={s.variantLeft} testID={"etiquetas-pai-" + p.id} accessibilityRole="checkbox" accessibilityState={{ checked: parentChecked, disabled: produtoSemCodigo(p) && !parentChecked }}>
                         <View style={[s.checkboxSmall, parentChecked && s.checkboxSmallSelected]}>{parentChecked && <Icon name="check" size={8} color="#fff" />}</View>
                         <View style={{ flex: 1, minWidth: 0 }}>
                           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -1214,8 +1366,8 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
                             {p.size ? <Text style={s.sizeBadge}>{p.size}</Text> : null}
                           </View>
                           <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
-                            <Text style={s.variantMeta}>{productCode} | {p.stock} {unitLabelForList(p.unit)}</Text>
-                            {renderEan13Badge(productCode)}
+                            <Text style={s.variantMeta}>{produtoSemCodigo(p) ? "Sem código" : productCode} | {p.stock} {unitLabelForList(p.unit)}</Text>
+                            {!produtoSemCodigo(p) && renderEan13Badge(productCode)}
                           </View>
                         </View>
                         <View style={{ alignItems: "flex-end" }}>
@@ -1243,11 +1395,12 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
                     var effectivePrice = v.price_override ? parseFloat(v.price_override) : p.price;
                     var vBarcode = v.barcode || p.barcode || p.code;
                     var vEstoque = estoqueDaVariante(v);
+                    var vSemCod = varianteSemCodigo(v, p);
                     var vCardPriceDisplay = cartaoCfg.enabled ? cardPriceFor(effectivePrice, p as Product) : null;
                     return (
                       <View key={v.id} style={[s.variantRow, vsel && s.variantRowSelected, vEstoque <= 0 && !vsel && s.variantZero]}>
-                        <Pressable onPress={function() { toggleVariant(p.id, v.id); }} style={s.variantLeft} testID={"etiquetas-variante-" + v.id} accessibilityRole="checkbox" accessibilityState={{ checked: vsel }}>
-                          <View style={[s.checkboxSmall, vsel && s.checkboxSmallSelected]}>{vsel && <Icon name="check" size={8} color="#fff" />}</View>
+                        <Pressable onPress={function() { if (!vSemCod || vsel) toggleVariant(p.id, v.id); }} style={s.variantLeft} testID={"etiquetas-variante-" + v.id} accessibilityRole="checkbox" accessibilityState={{ checked: vsel, disabled: vSemCod && !vsel }}>
+                          <View style={[s.checkboxSmall, vsel && s.checkboxSmallSelected, vSemCod && !vsel && s.checkboxDesligado]}>{vsel && <Icon name="check" size={8} color="#fff" />}</View>
                           <View style={{ flex: 1, minWidth: 0 }}>
                             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                               {renderColorIndicator(sc.color)}
@@ -1255,8 +1408,8 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
                               {sc.size ? <Text style={s.sizeBadge}>{sc.size}</Text> : null}
                             </View>
                             <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 }}>
-                              <Text style={s.variantMeta}>{vBarcode}</Text>
-                              {renderEan13Badge(vBarcode)}
+                              {vSemCod ? <Text style={s.semCodigoPill} testID={"etiquetas-sem-codigo-" + v.id}>Sem código</Text> : <Text style={s.variantMeta}>{vBarcode}</Text>}
+                              {!vSemCod && renderEan13Badge(vBarcode)}
                             </View>
                           </View>
                           <View style={{ alignItems: "flex-end", gap: 2 }}>
@@ -1265,6 +1418,13 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
                             {vCardPriceDisplay != null && <Text style={s.variantCardPriceHint}>cartão R$ {vCardPriceDisplay.toFixed(2).replace(".", ",")}</Text>}
                           </View>
                         </Pressable>
+                        {vSemCod && podeGerar && (
+                          <View style={s.gerarLinha}>
+                            <Pressable onPress={function() { abrirGerarUm({ product_id: p.id, variant_id: v.id, nome: vlabel, comEstoque: vEstoque > 0 }); }} style={s.gerarBtn} testID={"etiquetas-gerar-" + v.id} accessibilityRole="button" accessibilityLabel={"Gerar código para " + vlabel}>
+                              <Text style={s.gerarBtnTxt}>Gerar código</Text>
+                            </Pressable>
+                          </View>
+                        )}
                         {vsel && (
                           <View style={s.qtyRowVariant}>
                             <Pressable onPress={function() { setQty(vkey, vqty - 1); }} style={s.qtyBtnSmall}><Text style={s.qtyBtnText}>{"<"}</Text></Pressable>
@@ -1355,6 +1515,70 @@ export function PrintLabels({ products, selectedIds, onSelectionChange, podeMuda
         </View>
       )}
 
+      {modalCodigo && mc && (
+        // WebPortal: a aba vive dentro do shell (z-index 0 do RNW prenderia o
+        // modal embaixo da pagina); mesmo padrao da previa em tamanho real.
+        <WebPortal active>
+          <View style={s.modalFundo}>
+            <View style={s.modalCaixa} testID="etiquetas-modal-codigo">
+              <Text style={s.modalTitulo}>{mc.unico ? "Gerar código de barras" : "Gerar código de barras"}</Text>
+              <Text style={s.modalTexto}>A Aura cria um código para {mc.unico ? "este produto" : "cada produto"} e guarda no cadastro. Depois é só bipar no Caixa. Os produtos que já têm código não mudam.</Text>
+              {!mc.unico && (function() {
+                var nCom = alvosDoEscopo.filter(function(a) { return a.comEstoque; }).length;
+                var nTodos = alvosDoEscopo.length;
+                var opcoes: Array<{ k: "com" | "todos"; t: string; d: string }> = [];
+                if (nCom > 0) opcoes.push({ k: "com", t: nCom === 1 ? "Só o que tem estoque (1)" : "Só os " + nCom + " com estoque", d: "O que está em estoque e vai para a etiqueta. Recomendado." });
+                opcoes.push({ k: "todos", t: nTodos === 1 ? "O produto sem código" : "Todos os " + nTodos + " sem código", d: "Inclui os sem estoque, para deixar o cadastro completo." });
+                return opcoes.map(function(o) {
+                  var on = mc.opcao === o.k;
+                  return (
+                    <Pressable key={o.k} onPress={function() { if (!on && !mc.gravando) pedirPrevia({ ...mc, opcao: o.k }); }} style={[s.opcao, on && s.opcaoOn]} testID={"etiquetas-gerar-opcao-" + o.k} accessibilityRole="radio" accessibilityState={{ checked: on }}>
+                      <View style={[s.radio, on && s.radioOn]}>{on && <View style={s.radioMiolo} />}</View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={s.opcaoTitulo}>{o.t}</Text>
+                        <Text style={s.opcaoTexto}>{o.d}</Text>
+                      </View>
+                    </Pressable>
+                  );
+                });
+              })()}
+              <View style={s.previa} testID="etiquetas-previa-codigos">
+                {mc.carregando ? (
+                  <Text style={s.opcaoTexto}>Preparando os códigos…</Text>
+                ) : mc.previa ? (
+                  <View style={{ gap: 3 }}>
+                    <Text style={s.opcaoTexto}>{mc.previa.items.length > 0 ? "Antes de guardar, veja os códigos:" : "Esses produtos já têm código. Nada a gerar."}</Text>
+                    {mc.previa.items.slice(0, 4).map(function(it) {
+                      var alvo = alvosDoModal(mc).find(function(a) { return chaveDoAlvo(a) === chaveDoAlvo(it); });
+                      return (
+                        <View key={chaveDoAlvo(it)} style={s.previaLinha}>
+                          <Text style={s.previaNome} numberOfLines={1}>{alvo ? alvo.nome : "Produto"}</Text>
+                          <Text style={s.previaCodigo}>{it.barcode}</Text>
+                        </View>
+                      );
+                    })}
+                    {alvosDoModal(mc).length > 4 && mc.previa.items.length > 0 && (
+                      <Text style={s.opcaoTexto}>e mais {alvosDoModal(mc).length - Math.min(4, mc.previa.items.length)} produtos</Text>
+                    )}
+                  </View>
+                ) : null}
+                {mc.erro && <Text style={s.modalErro}>{mc.erro}</Text>}
+              </View>
+              <View style={s.modalAcoes}>
+                <Pressable onPress={function() { setModalCodigo(null); }} disabled={mc.gravando} style={s.modalBtn} testID="etiquetas-gerar-agora-nao"><Text style={s.modalBtnTxt}>Agora não</Text></Pressable>
+                <Pressable
+                  onPress={gravarCodigos}
+                  disabled={mc.carregando || mc.gravando || !mc.previa || mc.previa.items.length === 0}
+                  style={[s.modalBtn, s.modalBtnP, (mc.carregando || mc.gravando || !mc.previa || mc.previa.items.length === 0) && { opacity: 0.5 }]}
+                  testID="etiquetas-gerar-guardar"
+                >
+                  <Text style={[s.modalBtnTxt, { color: "#fff" }]}>{mc.gravando ? "Guardando…" : "Gerar e guardar"}</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </WebPortal>
+      )}
       {preview && (
         <LabelPreviewModal
           html={preview.html}
@@ -1557,6 +1781,38 @@ var s = StyleSheet.create({
   varsPainel: { borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 6, paddingBottom: 4 },
   varsAviso: { fontSize: 11.5, color: Colors.ink3, paddingHorizontal: 12, paddingVertical: 6 },
   variantZero: { opacity: 0.7 },
+  // Sem codigo e Gerar codigo (30/10/2026, p-75).
+  semCodigoPill: { fontSize: 10, fontWeight: "700", color: Colors.amber, backgroundColor: "rgba(245,158,11,0.15)", paddingHorizontal: 7, paddingVertical: 1, borderRadius: 99, overflow: "hidden" },
+  checkboxDesligado: { opacity: 0.35 },
+  gerarLinha: { flexDirection: "row", paddingLeft: 40, paddingRight: 10, paddingBottom: 8 },
+  gerarBtn: { borderWidth: 1, borderColor: Colors.violet, borderRadius: 8, paddingHorizontal: 12, minHeight: 36, justifyContent: "center" },
+  gerarBtnTxt: { fontSize: 12.5, color: Colors.violet3, fontWeight: "700" },
+  aviso: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12 },
+  avisoAmbar: { backgroundColor: Colors.amberD },
+  avisoVioleta: { backgroundColor: Colors.violetD },
+  avisoTxt: { flex: 1, minWidth: 180, fontSize: 12.5, color: Colors.ink },
+  avisoBtn: { minHeight: 36, justifyContent: "center", paddingHorizontal: 6 },
+  avisoBtnTxt: { fontSize: 12.5, color: Colors.violet3, fontWeight: "700" },
+  modalFundo: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(6,8,22,0.55)", alignItems: "center", justifyContent: "center", padding: 16 },
+  modalCaixa: { width: "100%", maxWidth: 440, backgroundColor: Colors.bg3, borderRadius: 16, borderWidth: 1, borderColor: Colors.border2, padding: 18, gap: 12 },
+  modalTitulo: { fontSize: 17, fontWeight: "700", color: Colors.ink },
+  modalTexto: { fontSize: 13, color: Colors.ink2, lineHeight: 19 },
+  opcao: { flexDirection: "row", alignItems: "flex-start", gap: 10, borderWidth: 1, borderColor: Colors.border, borderRadius: 12, padding: 12, backgroundColor: Colors.bg },
+  opcaoOn: { borderColor: Colors.violet, backgroundColor: Colors.violetD },
+  opcaoTitulo: { fontSize: 13.5, fontWeight: "700", color: Colors.ink },
+  opcaoTexto: { fontSize: 12, color: Colors.ink3, marginTop: 1 },
+  radio: { width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: Colors.ink3, alignItems: "center", justifyContent: "center", marginTop: 2 },
+  radioOn: { borderColor: Colors.violet },
+  radioMiolo: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.violet },
+  previa: { borderWidth: 1, borderColor: Colors.border, borderRadius: 10, padding: 10, backgroundColor: Colors.bg, minHeight: 44 },
+  previaLinha: { flexDirection: "row", justifyContent: "space-between", gap: 10 },
+  previaNome: { flex: 1, minWidth: 0, fontSize: 12.5, color: Colors.ink, fontWeight: "600" },
+  previaCodigo: { fontSize: 12, color: Colors.ink2, fontFamily: "monospace" as any },
+  modalErro: { fontSize: 12.5, color: Colors.red, marginTop: 6 },
+  modalAcoes: { flexDirection: "row", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" },
+  modalBtn: { minHeight: 44, paddingHorizontal: 16, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, justifyContent: "center", backgroundColor: Colors.bg },
+  modalBtnP: { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  modalBtnTxt: { fontSize: 13, fontWeight: "700", color: Colors.ink2 },
   previewBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, minHeight: 44, borderWidth: 1, borderColor: Colors.border2 },
   previewBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
   setupHint: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: Colors.amberD, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.amber + "33" },
