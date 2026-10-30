@@ -128,6 +128,34 @@ function loadStoredLabelSize(): LabelSizeKey {
   return DEFAULT_LABEL_SIZE;
 }
 
+// 30/10/2026 (QA a 375 px): no celular a barra de impressao vira um bloco do
+// proprio shell, entre a area que rola e a barra de navegacao de baixo
+// (app/(tabs)/_layout.tsx, ramo "Web narrow": topbar, div que rola com a
+// <PageTransition>, <MBar/>). Por que nao position:fixed/sticky aqui dentro:
+// · a div da PageTransition fica com transform (animacao com `forwards`), que
+//   vira o bloco de referencia do fixed — ele andaria junto com a pagina;
+// · a ScrollView do Estoque tem overflow proprio e cresce com o conteudo, entao
+//   o sticky gruda nela e nunca na tela;
+// · um portal no document.body ficaria por cima de tudo do app (cada View do
+//   RNW nasce com z-index 0), inclusive do menu "Mais" da barra de baixo.
+// Como irma da area que rola, a barra fica sempre logo acima da barra de
+// navegacao (sem precisar saber a altura dela), a area que rola encolhe e o
+// ultimo item da lista nunca fica escondido atras da barra. Fora desse shell
+// (nativo, testes), devolve null e a barra fica no fim da tela, como antes.
+export function acharVagaDaBarraNoCelular(el: any): { pai: HTMLElement; antes: Node | null } | null {
+  if (!el || typeof el.closest !== "function" || typeof window === "undefined" || typeof window.getComputedStyle !== "function") return null;
+  var transicao = el.closest(".aura-page-enter") as HTMLElement | null;
+  var rolagem = transicao ? transicao.parentElement : null;
+  var shell = rolagem ? rolagem.parentElement : null;
+  if (!rolagem || !shell) return null;
+  var estiloRolagem = window.getComputedStyle(rolagem);
+  var rola = [estiloRolagem.overflowY, estiloRolagem.overflow].some(function(v) { return v === "auto" || v === "scroll"; });
+  if (!rola) return null;
+  var estiloShell = window.getComputedStyle(shell);
+  if (estiloShell.display !== "flex" || estiloShell.flexDirection !== "column") return null;
+  return { pai: shell, antes: rolagem.nextSibling };
+}
+
 export function PrintLabels({ products: produtosDoEstoque, selectedIds, onSelectionChange, podeMudarDesenho }: Props) {
   var { company, token } = useAuthStore();
   // 30/10/2026 (card p-75): codigo gerado aqui entra na hora (produto ->
@@ -752,6 +780,27 @@ export function PrintLabels({ products: produtosDoEstoque, selectedIds, onSelect
   var larguraTela = useWindowDimensions().width;
   var estreita = larguraTela < 520;
 
+  // 30/10/2026 (QA a 375 px): no celular a barra vai para a vaga do shell
+  // (ver acharVagaDaBarraNoCelular). No desktop nada muda: sticky no fim.
+  var raizRef = useRef<any>(null);
+  var [vagaDaBarra, setVagaDaBarra] = useState<HTMLElement | null>(null);
+  useEffect(function() {
+    if (!isWeb || !estreita || typeof document === "undefined") { setVagaDaBarra(null); return; }
+    var vaga = acharVagaDaBarraNoCelular(raizRef.current);
+    if (!vaga) { setVagaDaBarra(null); return; }
+    var div = document.createElement("div");
+    div.className = "aura-etiquetas-barra";
+    div.style.flexShrink = "0";
+    div.style.display = "flex";
+    div.style.flexDirection = "column";
+    vaga.pai.insertBefore(div, vaga.antes);
+    setVagaDaBarra(div);
+    return function() {
+      setVagaDaBarra(null);
+      try { if (div.parentNode) div.parentNode.removeChild(div); } catch {}
+    };
+  }, [isWeb, estreita]);
+
   // 22/09/2026 (preco no cartao): com a opcao da loja ligada, toda etiqueta
   // sai com os dois precos (sem opcao de esconder). `comCartao` devolve {}
   // com ela desligada — o LabelItem e o de sempre.
@@ -981,8 +1030,32 @@ export function PrintLabels({ products: produtosDoEstoque, selectedIds, onSelect
 
   var allSelected = marcaveis.length > 0 && marcaveis.every(function(p) { return selectedIds.includes(p.id); });
 
+  // Barra de impressao (p-72). Na vaga do shell (celular) perde o sticky, as
+  // margens negativas e os cantos: e uma faixa de largura total.
+  var barraNoShell = !!vagaDaBarra;
+  var barraDeImpressao = (
+      <View style={[s.barra, isWeb && !barraNoShell && s.barraFixa, estreita && s.barraEstreita, barraNoShell && s.barraNoShell]} testID="etiquetas-barra">
+        <View style={s.barraTot}>
+          <Text style={s.barraTotTxt} testID="etiquetas-total">{totalLabels} {totalLabels === 1 ? "etiqueta" : "etiquetas"}</Text>
+          <Text style={s.barraSub} numberOfLines={2}>{produtosNoTotal > 0 ? produtosNoTotal + (produtosNoTotal === 1 ? " produto" : " produtos") + (foraDaLista > 0 ? " · " + foraDaLista + " fora da lista" : "") : "Marque os produtos que quer imprimir"}</Text>
+        </View>
+        <View style={[s.barraBotoes, estreita && s.barraBotoesEstreita]}>
+          {isWeb && (
+            <Pressable onPress={handlePreview} style={[s.previewBtn, estreita && { flex: 1 }, totalLabels === 0 && { opacity: 0.5 }]} disabled={totalLabels === 0} testID="etiquetas-ver-tamanho-real" accessibilityRole="button">
+              <Icon name="search" size={14} color={Colors.violet3} />
+              <Text style={s.previewBtnText}>Ver no tamanho real</Text>
+            </Pressable>
+          )}
+          <Pressable onPress={function() { handlePrint(); }} style={[s.printBtn, estreita && { flex: 1 }, totalLabels === 0 && { opacity: 0.5 }]} disabled={totalLabels === 0} testID="etiquetas-imprimir" accessibilityRole="button">
+            <Icon name="file_text" size={16} color="#fff" />
+            <Text style={s.printBtnText}>{totalLabels > 0 ? "Imprimir " + totalLabels + (totalLabels === 1 ? " etiqueta" : " etiquetas") : "Imprimir"}</Text>
+          </Pressable>
+        </View>
+      </View>
+  );
+
   return (
-    <View style={s.container}>
+    <View style={s.container} ref={raizRef}>
       <View style={s.header} testID="etiquetas-cabecalho">
         <View style={{ flex: 1, minWidth: 200 }}>
           <Text style={s.title}>Etiquetas {nomeDoModelo} — Padrão EAN-13</Text>
@@ -1315,6 +1388,17 @@ export function PrintLabels({ products: produtosDoEstoque, selectedIds, onSelect
           var parentLabelPreview = buildLabelName(p.name, p.size || "", p.color || "");
           var parentQty = getQty(p.id);
           var parentCardPriceDisplay = cartaoCfg.enabled ? cardPriceFor(p.price, p) : null;
+          var acoesDoPai = (
+            <>
+              <View style={[s.colDireita, estreita && s.colDireitaEstreita]}>
+                <Text style={[s.estoquePill, p.stock > 0 ? s.estoqueOk : s.estoqueZero]}>{p.stock > 0 ? numBr(p.stock) + " em estoque" : "sem estoque"}</Text>
+                <Text style={s.itemPrice}>R$ {p.price.toFixed(2).replace(".", ",")}</Text>
+              </View>
+              <Pressable onPress={function() { alternarAberto(p.id); }} style={[s.verVariantes, estreita && s.verVariantesEstreita]} testID={"etiquetas-ver-variantes-" + p.id} accessibilityRole="button" accessibilityState={{ expanded: aberto }}>
+                <Text style={s.verVariantesTxt}>{aberto ? "Fechar" : "Ver variantes"}</Text>
+              </Pressable>
+            </>
+          );
           return (
             <View key={p.id} style={[s.item, sel && s.itemSelected]} testID={"etiquetas-produto-" + p.id}>
               <View style={s.parentRow}>
@@ -1330,10 +1414,10 @@ export function PrintLabels({ products: produtosDoEstoque, selectedIds, onSelect
                     {estado === "all" ? <Icon name="check" size={10} color="#fff" /> : estado === "some" ? <Text style={s.checkboxMeioTxt}>–</Text> : null}
                   </View>
                 </Pressable>
-                <Pressable onPress={function() { alternarAberto(p.id); }} style={{ flex: 1, minWidth: 0 }} accessibilityRole="button" accessibilityLabel={(aberto ? "Fechar as variantes de " : "Ver as variantes de ") + p.name}>
+                <Pressable onPress={function() { alternarAberto(p.id); }} style={{ flex: 1, minWidth: 0 }} testID={"etiquetas-nome-" + p.id} accessibilityRole="button" accessibilityLabel={(aberto ? "Fechar as variantes de " : "Ver as variantes de ") + p.name}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     {renderColorIndicator(p.color)}
-                    <Text style={s.itemName} numberOfLines={1}>{parentLabelPreview}</Text>
+                    <Text style={[s.itemName, estreita && s.nomeQueEncolhe]} numberOfLines={1}>{parentLabelPreview}</Text>
                     <Text style={s.varBadge}>V</Text>
                     {p.size ? <Text style={s.sizeBadge}>{p.size}</Text> : null}
                   </View>
@@ -1341,14 +1425,12 @@ export function PrintLabels({ products: produtosDoEstoque, selectedIds, onSelect
                     {produtoSemCodigo(p) ? "Sem código" : productCode}{carregado ? " · " + visiveis.length + (visiveis.length === 1 ? " variante" : " variantes") : ""}{sel && carregado ? " · " + nMarcadas + (nMarcadas === 1 ? " marcada" : " marcadas") + (parentChecked ? " + etiqueta do pai" : "") : ""}
                   </Text>
                 </Pressable>
-                <View style={s.colDireita}>
-                  <Text style={[s.estoquePill, p.stock > 0 ? s.estoqueOk : s.estoqueZero]}>{p.stock > 0 ? numBr(p.stock) + " em estoque" : "sem estoque"}</Text>
-                  <Text style={s.itemPrice}>R$ {p.price.toFixed(2).replace(".", ",")}</Text>
-                </View>
-                <Pressable onPress={function() { alternarAberto(p.id); }} style={s.verVariantes} testID={"etiquetas-ver-variantes-" + p.id} accessibilityRole="button" accessibilityState={{ expanded: aberto }}>
-                  <Text style={s.verVariantesTxt}>{aberto ? "Fechar" : "Ver variantes"}</Text>
-                </Pressable>
+                {!estreita && acoesDoPai}
               </View>
+              {/* 30/10/2026 (QA 375 px): no celular selo, preço e "Ver
+                  variantes" descem para uma segunda linha, e o nome fica com
+                  a largura toda (antes virava "V…"). */}
+              {estreita && <View style={s.acoesDoPaiEstreita} testID={"etiquetas-acoes-" + p.id}>{acoesDoPai}</View>}
 
               {aberto && (
                 <View style={s.varsPainel} testID={"etiquetas-variantes-" + p.id}>
@@ -1613,25 +1695,10 @@ export function PrintLabels({ products: produtosDoEstoque, selectedIds, onSelect
       </View>
 
       {/* 30/10/2026 (card p-72): total e Imprimir sempre à vista, presos
-          embaixo enquanto a lista rola. Em tela estreita, largura total. */}
-      <View style={[s.barra, isWeb && s.barraFixa, estreita && s.barraEstreita]} testID="etiquetas-barra">
-        <View style={s.barraTot}>
-          <Text style={s.barraTotTxt} testID="etiquetas-total">{totalLabels} {totalLabels === 1 ? "etiqueta" : "etiquetas"}</Text>
-          <Text style={s.barraSub} numberOfLines={2}>{produtosNoTotal > 0 ? produtosNoTotal + (produtosNoTotal === 1 ? " produto" : " produtos") + (foraDaLista > 0 ? " · " + foraDaLista + " fora da lista" : "") : "Marque os produtos que quer imprimir"}</Text>
-        </View>
-        <View style={[s.barraBotoes, estreita && s.barraBotoesEstreita]}>
-          {isWeb && (
-            <Pressable onPress={handlePreview} style={[s.previewBtn, estreita && { flex: 1 }, totalLabels === 0 && { opacity: 0.5 }]} disabled={totalLabels === 0} testID="etiquetas-ver-tamanho-real" accessibilityRole="button">
-              <Icon name="search" size={14} color={Colors.violet3} />
-              <Text style={s.previewBtnText}>Ver no tamanho real</Text>
-            </Pressable>
-          )}
-          <Pressable onPress={function() { handlePrint(); }} style={[s.printBtn, estreita && { flex: 1 }, totalLabels === 0 && { opacity: 0.5 }]} disabled={totalLabels === 0} testID="etiquetas-imprimir" accessibilityRole="button">
-            <Icon name="file_text" size={16} color="#fff" />
-            <Text style={s.printBtnText}>{totalLabels > 0 ? "Imprimir " + totalLabels + (totalLabels === 1 ? " etiqueta" : " etiquetas") : "Imprimir"}</Text>
-          </Pressable>
-        </View>
-      </View>
+          embaixo enquanto a lista rola. Em tela estreita, largura total; no
+          celular (QA 375 px), a barra mora na vaga do shell, logo acima da
+          barra de navegação de baixo (ver acharVagaDaBarraNoCelular). */}
+      {vagaDaBarra ? require("react-dom").createPortal(barraDeImpressao, vagaDaBarra) : barraDeImpressao}
     </View>
   );
 }
@@ -1763,6 +1830,9 @@ var s = StyleSheet.create({
   barra: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.bg3, borderRadius: 14, borderWidth: 1, borderColor: Colors.border2, paddingVertical: 10, paddingHorizontal: 12, zIndex: 4 },
   barraFixa: { position: "sticky" as any, bottom: 0 },
   barraEstreita: { flexDirection: "column", alignItems: "stretch", borderRadius: 0, marginHorizontal: -16, paddingHorizontal: 16 },
+  // Na vaga do shell (celular, QA 375 px): faixa de largura total colada na
+  // barra de navegacao de baixo, so com a linha de cima.
+  barraNoShell: { marginHorizontal: 0, borderWidth: 0, borderTopWidth: 1, borderRadius: 0, paddingVertical: 10, paddingHorizontal: 16 },
   barraTot: { flex: 1, minWidth: 0 },
   barraTotTxt: { fontSize: 15, color: Colors.ink, fontWeight: "700" },
   barraSub: { fontSize: 12, color: Colors.ink3, marginTop: 1 },
@@ -1778,6 +1848,12 @@ var s = StyleSheet.create({
   estoqueZero: { color: Colors.amber, backgroundColor: "rgba(245,158,11,0.15)" },
   verVariantes: { minHeight: 40, justifyContent: "center", paddingHorizontal: 8, marginLeft: 4 },
   verVariantesTxt: { fontSize: 12.5, color: Colors.violet3, fontWeight: "700" },
+  // Celular (QA 375 px): segunda linha alinhada com o nome (10 de respiro +
+  // 36 do quadradinho), selo e preco lado a lado, "Ver variantes" na direita.
+  nomeQueEncolhe: { flexShrink: 1, minWidth: 0 },
+  acoesDoPaiEstreita: { flexDirection: "row", alignItems: "center", paddingLeft: 46, paddingRight: 10, paddingBottom: 6, marginTop: -4 },
+  colDireitaEstreita: { flexDirection: "row", alignItems: "center", gap: 8, marginLeft: 0 },
+  verVariantesEstreita: { marginLeft: "auto" as any, paddingRight: 0 },
   varsPainel: { borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 6, paddingBottom: 4 },
   varsAviso: { fontSize: 11.5, color: Colors.ink3, paddingHorizontal: 12, paddingVertical: 6 },
   variantZero: { opacity: 0.7 },
