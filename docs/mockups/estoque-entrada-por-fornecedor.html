@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Estoque — Entrada por fornecedor</title>
+<!--
+  ============================================================
+  Mockup standalone — Estoque: entrada de mercadoria por fornecedor, 03/11/2026.
+  Regra 4 do CLAUDE.md: mockup antes do código.
+
+  O PEDIDO: "o cliente cadastrar uma variante no estoque de acordo com o
+  fornecedor que realizou a venda" (a mesma capa comprada de dois
+  fornecedores, com custos diferentes).
+
+  DECISÃO DO PO (03/11): NÃO é variante. Variante abre o VariantPickerModal
+  em TODA venda no caixa (components/screens/pdv/PdvModals.tsx) — a
+  balconista teria que escolher "de qual fornecedor?" a cada capinha. O
+  cliente final não vê diferença entre as duas; o que muda é o CUSTO.
+  Então: o produto continua UM; cada ENTRADA de mercadoria guarda
+  fornecedor + quantidade + custo, e a Aura calcula custo médio e mostra
+  quem vende mais barato. Caixa: zero mudança.
+
+  O QUE JÁ EXISTE NO BANCO (e ninguém usa):
+    - stock_movements.supplier_id e stock_movements.unit_cost (só o import
+      de NF-e antigo escreveria; hoje 0 linhas com fornecedor).
+    - products.weighted_avg_cost (0 produtos com valor).
+    - suppliers (cadastro de fornecedores, migration 342) e a tela
+      app/(tabs)/fornecedores.tsx, que já lê recent_stock_movements.
+    - products.last_supplier_* / last_purchase_unit_cost (Matcon M4).
+
+  O QUE FALTA (backend antes do front, convenção do repo):
+    - migration: stock_movements.variant_id (produto com cor/tamanho tem o
+      estoque na variante) — nullable, sem backfill.
+    - POST /companies/:id/products/:pid/stock-entries
+        { supplier_id | new_supplier:{name, phone?}, quantity | items:[{variant_id, quantity}],
+          unit_cost, invoice_number?, update_cost?: true }
+      Numa transação, com o produto em FOR UPDATE:
+        1. soma o estoque (produto ou variantes);
+        2. custo médio ponderado sobre o estoque POSITIVO de antes
+           (estoque negativo não entra na média):
+             novo = (max(est,0) × custo_atual + qtd × custo) / (max(est,0) + qtd)
+           custo_atual = weighted_avg_cost ?? cost_price ?? custo da entrada;
+        3. grava weighted_avg_cost e, se update_cost, cost_price = novo médio;
+        4. grava last_supplier_* / last_purchase_unit_cost / last_purchase_at;
+        5. INSERT stock_movements (type 'in', supplier_id, unit_cost,
+           variant_id, reference_type 'entrada', notes = nº da nota).
+    - GET  /companies/:id/products/:pid/stock-entries
+        → { por_fornecedor:[{supplier, qtd_total, ultimo_custo, custo_medio, ultima_em}],
+            entradas:[...] (20 mais recentes) }
+
+  MULTI-CNPJ (armadilha 2): entrada é sempre da empresa selecionada
+  (company.id). No consolidado o botão "Entrada" some (mesma regra do
+  "Importar planilha"); o card "Compras deste produto" mostra a coluna Loja
+  e soma por fornecedor no grupo (fornecedor já é visível no grupo, 342 b).
+
+  NÃO É TELA NOVA: é modal do Estoque + card no cadastro do item. Sem `mod`
+  novo no NAV (armadilha 3 vale para tela). Mesmo gate do Estoque.
+  Fluxo de um passo só (não é wizard → não usa TrocaModal).
+
+  TELAS:
+    1. Lista do Estoque: botão "Entrada" sempre visível (sem hover-reveal)
+    2. Modal "Entrada de mercadoria" — produto simples
+    3. Mesmo modal — fornecedor novo cadastrado ali mesmo
+    4. Mesmo modal — produto com cor/tamanho (quantidade por variante)
+    5. Cadastro do item: card "Compras deste produto"
+    6. Celular (390 px)
+    7. Consolidado multi-CNPJ
+
+  PONTOS PARA O PO DECIDIR estão marcados com ◆ no rodapé de cada tela.
+  ============================================================
+-->
+<style>
+  :root{
+    --bg:#e6e4f0; --bg2:#fafbff; --bg3:#ffffff; --bg4:#f1eef9;
+    --ink:#18172b; --ink2:#3b3461; --ink3:#6a608e;
+    --line:rgba(109,40,217,.16); --line2:rgba(109,40,217,.28);
+    --violet:#7c3aed; --violet3:#6d28d9; --violetD:rgba(124,58,237,.08);
+    --green:#059669; --greenD:rgba(5,150,105,.09);
+    --amber:#b45309; --amberD:rgba(217,119,6,.09);
+    --red:#dc2626;
+    --r:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  header.doc{padding:28px 20px 8px;max-width:1180px;margin:0 auto}
+  header.doc h1{margin:0 0 6px;font-size:22px}
+  header.doc p{margin:0;color:var(--ink3);max-width:820px}
+  nav.toc{max-width:1180px;margin:14px auto 0;padding:0 20px;display:flex;flex-wrap:wrap;gap:8px}
+  nav.toc a{font-size:12px;text-decoration:none;color:var(--violet3);background:var(--violetD);padding:5px 10px;border-radius:999px}
+  section.tela{max-width:1180px;margin:26px auto;padding:0 20px}
+  .tela>h2{font-size:15px;margin:0 0 4px}
+  .tela>.meta{font-size:12.5px;color:var(--ink3);margin:0 0 12px;max-width:860px}
+  .stage{background:linear-gradient(180deg,#dcd8ec,#e9e6f3);border-radius:18px;padding:22px;display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start;justify-content:center}
+  .po{margin-top:10px;font-size:12.5px;background:var(--amberD);color:#7a3f06;border-radius:10px;padding:9px 12px}
+  .po b{color:#5b2c03}
+
+  /* app chrome */
+  .app{background:var(--bg2);border-radius:16px;box-shadow:0 10px 30px rgba(40,20,90,.12);width:100%;max-width:900px;overflow:hidden}
+  .app .top{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)}
+  .app .top h3{margin:0;font-size:17px;flex:1}
+  .btn{border:0;border-radius:10px;padding:9px 14px;font:600 13px/1 inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  .btn.pri{background:var(--violet);color:#fff}
+  .btn.sec{background:var(--bg3);color:var(--ink2);border:1px solid var(--line2)}
+  .btn.ghost{background:transparent;color:var(--violet3);padding:6px 8px}
+  .btn.sm{padding:6px 10px;font-size:12px;border-radius:8px}
+  .btn[disabled]{opacity:.45;cursor:not-allowed}
+  table.lista{width:100%;border-collapse:collapse}
+  .lista th{font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);text-align:left;padding:10px 18px;font-weight:600}
+  .lista td{padding:11px 18px;border-top:1px solid var(--line);vertical-align:middle}
+  .lista td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .lista .nome{font-weight:600}
+  .lista .sub{font-size:12px;color:var(--ink3)}
+  .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;background:var(--bg4);color:var(--ink2)}
+  .pill.warn{background:var(--amberD);color:var(--amber)}
+  .hl{outline:2px dashed var(--violet);outline-offset:3px;border-radius:9px}
+
+  /* modal */
+  .scrim{background:rgba(24,23,43,.35);border-radius:16px;padding:28px;width:100%;max-width:900px;display:flex;justify-content:center}
+  .modal{background:var(--bg3);border-radius:18px;width:100%;max-width:520px;box-shadow:0 20px 50px rgba(30,10,80,.25);overflow:hidden}
+  .modal .mh{display:flex;align-items:flex-start;gap:12px;padding:18px 20px 12px}
+  .modal .mh .ic{width:38px;height:38px;border-radius:11px;background:var(--violetD);display:grid;place-items:center;color:var(--violet);flex:none}
+  .modal .mh h4{margin:0;font-size:16px}
+  .modal .mh p{margin:2px 0 0;font-size:12.5px;color:var(--ink3)}
+  .modal .x{margin-left:auto;color:var(--ink3);font-size:18px;line-height:1}
+  .modal .mb{padding:4px 20px 6px}
+  .modal .mf{display:flex;gap:10px;justify-content:flex-end;padding:14px 20px;border-top:1px solid var(--line);background:var(--bg2)}
+  label.f{display:block;font-size:12px;font-weight:600;color:var(--ink2);margin:12px 0 5px}
+  .inp{width:100%;border:1px solid var(--line2);border-radius:10px;padding:10px 12px;font:14px inherit;color:var(--ink);background:#fff;display:flex;align-items:center;gap:8px;min-height:40px}
+  .inp.focus{border-color:var(--violet);box-shadow:0 0 0 3px var(--violetD)}
+  .inp .ph{color:#a39cc2}
+  .inp .pre{color:var(--ink3)}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .drop{border:1px solid var(--line2);border-radius:12px;margin-top:6px;overflow:hidden;box-shadow:0 8px 20px rgba(40,20,90,.08)}
+  .drop div{padding:9px 12px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:8px;font-size:13px}
+  .drop div:first-child{border-top:0}
+  .drop .sel{background:var(--violetD)}
+  .drop .add{color:var(--violet3);font-weight:600}
+  .drop small{color:var(--ink3)}
+  .resumo{margin:16px 0 8px;background:var(--bg4);border-radius:12px;padding:12px 14px;display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-size:13px}
+  .resumo .k{color:var(--ink3)}
+  .resumo .v{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+  .resumo .v .de{color:var(--ink3);font-weight:400}
+  .resumo .tot{border-top:1px solid var(--line2);padding-top:8px;margin-top:2px}
+  .check{display:flex;gap:9px;align-items:flex-start;font-size:13px;margin:10px 0 4px;color:var(--ink2)}
+  .box{width:18px;height:18px;border-radius:5px;background:var(--violet);color:#fff;display:grid;place-items:center;font-size:12px;flex:none;margin-top:1px}
+  .hint{font-size:12px;color:var(--ink3);margin-top:4px}
+  .novo{border:1px dashed var(--violet);border-radius:12px;padding:4px 12px 12px;background:var(--violetD);margin-top:8px}
+  .grade{width:100%;border-collapse:collapse;margin-top:6px;font-size:13px}
+  .grade th{font-size:11.5px;color:var(--ink3);font-weight:600;padding:6px 4px;text-align:center}
+  .grade th:first-child{text-align:left}
+  .grade td{padding:4px;text-align:center}
+  .grade td:first-child{text-align:left;font-weight:600}
+  .cell{border:1px solid var(--line2);border-radius:8px;padding:6px 0;min-width:46px;display:block}
+  .cell.on{border-color:var(--violet);background:var(--violetD);font-weight:700;color:var(--violet3)}
+  .dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:6px;vertical-align:-1px;border:1px solid rgba(0,0,0,.12)}
+
+  /* card compras */
+  .card{background:var(--bg3);border-radius:16px;border:1px solid var(--line);width:100%;max-width:640px;overflow:hidden;box-shadow:0 10px 30px rgba(40,20,90,.08)}
+  .card .ch{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)}
+  .card .ch h4{margin:0;font-size:15px;flex:1}
+  .destaque{margin:14px 18px 6px;background:var(--greenD);color:#065f46;border-radius:12px;padding:10px 12px;font-size:13px}
+  table.forn{width:100%;border-collapse:collapse;font-size:13px}
+  .forn th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);text-align:right;padding:10px 18px 6px;font-weight:600}
+  .forn th:first-child{text-align:left}
+  .forn td{padding:9px 18px;border-top:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
+  .forn td:first-child{text-align:left;font-weight:600}
+  .forn .best{color:var(--green)}
+  .tl{padding:6px 18px 14px}
+  .tl h5{margin:12px 0 6px;font-size:12px;color:var(--ink3);text-transform:uppercase;letter-spacing:.04em}
+  .tl .it{display:flex;gap:10px;padding:7px 0;border-top:1px solid var(--line);font-size:13px}
+  .tl .it:first-of-type{border-top:0}
+  .tl .d{color:var(--ink3);width:46px;flex:none}
+  .tl .w{flex:1}
+  .tl .q{font-variant-numeric:tabular-nums;color:var(--ink2)}
+  .campo-custo{display:flex;gap:12px;padding:12px 18px;border-top:1px solid var(--line);background:var(--bg2);font-size:13px;flex-wrap:wrap}
+  .campo-custo div{flex:1;min-width:140px}
+  .campo-custo .k{font-size:11.5px;color:var(--ink3)}
+  .campo-custo .v{font-weight:700;font-size:15px}
+
+  /* phone */
+  .phone{width:390px;max-width:100%;background:#111;border-radius:42px;padding:12px;box-shadow:0 20px 50px rgba(30,10,80,.3)}
+  .phone .scr{background:var(--bg2);border-radius:32px;overflow:hidden;height:780px;position:relative}
+  .phone .sheet{position:absolute;left:0;right:0;bottom:0;background:var(--bg3);border-radius:22px 22px 0 0;box-shadow:0 -10px 30px rgba(30,10,80,.2)}
+  .phone .grab{width:40px;height:5px;border-radius:3px;background:#d6d1e8;margin:8px auto 2px}
+  .phone .dim{position:absolute;inset:0;background:rgba(24,23,43,.35)}
+  .phone .bar{padding:16px 16px 10px;font-weight:700;font-size:17px}
+  .prow{display:flex;align-items:center;gap:10px;padding:12px 16px;border-top:1px solid var(--line)}
+  .prow .w{flex:1}
+  .prow .n{font-weight:600;font-size:14px}
+  .prow .s{font-size:12px;color:var(--ink3)}
+
+  @media (max-width:640px){
+    .stage{padding:12px}
+    .scrim{padding:10px}
+    .row2{grid-template-columns:1fr}
+    .lista th:nth-child(3),.lista td:nth-child(3){display:none}
+  }
+</style>
+</head>
+<body>
+
+<header class="doc">
+  <h1>Estoque: entrada de mercadoria por fornecedor</h1>
+  <p>O mesmo produto pode ser comprado de vários fornecedores. Cada entrada guarda quem vendeu, quantas unidades e por quanto. A Aura calcula o custo médio e mostra quem vende mais barato. No caixa nada muda: o produto continua sendo um só.</p>
+</header>
+<nav class="toc">
+  <a href="#t1">1 · Lista</a><a href="#t2">2 · Entrada</a><a href="#t3">3 · Fornecedor novo</a>
+  <a href="#t4">4 · Cor e tamanho</a><a href="#t5">5 · Compras do produto</a><a href="#t6">6 · Celular</a><a href="#t7">7 · Consolidado</a>
+</nav>
+
+<!-- ─────────────────────────────── 1 -->
+<section class="tela" id="t1">
+  <h2>1 · Lista do Estoque: botão "Entrada" em cada linha</h2>
+  <p class="meta">O botão fica sempre visível, sem aparecer só no hover (armadilha 7: hover não existe no toque). Ele fica ao lado do lápis de editar. Também entra no topo, junto de "Importar", para quem prefere buscar o produto dentro do modal.</p>
+  <div class="stage">
+    <div class="app">
+      <div class="top">
+        <h3>Estoque</h3>
+        <button class="btn sec">Importar ▾</button>
+        <button class="btn sec hl">＋ Entrada de mercadoria</button>
+        <button class="btn pri">＋ Novo item</button>
+      </div>
+      <table class="lista">
+        <thead><tr><th>Produto</th><th style="text-align:right">Estoque</th><th style="text-align:right">Custo médio</th><th style="text-align:right">Preço</th><th></th></tr></thead>
+        <tbody>
+          <tr><td><div class="nome">Capa iPhone 15 - Space</div><div class="sub">Capas · últ. compra: Distribuidora Alfa</div></td><td class="num">4</td><td class="num">R$ 5,50</td><td class="num">R$ 35,00</td><td style="text-align:right;white-space:nowrap"><button class="btn sec sm hl">↓ Entrada</button> <button class="btn ghost">✎</button></td></tr>
+          <tr><td><div class="nome">Película de Cerâmica iPhone 16 Pro</div><div class="sub">Películas</div></td><td class="num">8</td><td class="num">R$ 1,00</td><td class="num">R$ 25,00</td><td style="text-align:right;white-space:nowrap"><button class="btn sec sm">↓ Entrada</button> <button class="btn ghost">✎</button></td></tr>
+          <tr><td><div class="nome">Cabo Tipo-C/iOS 1m</div><div class="sub">Carregadores</div></td><td class="num"><span class="pill warn">0</span></td><td class="num"><span class="sub">—</span></td><td class="num">R$ 49,90</td><td style="text-align:right;white-space:nowrap"><button class="btn sec sm">↓ Entrada</button> <button class="btn ghost">✎</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="po">◆ <b>PO:</b> a coluna "Custo" passa a se chamar <b>"Custo médio"</b> nos produtos que já tiveram alguma entrada? Sugestão: sim, e "—" quando o custo nunca foi informado (hoje aparece R$ 0,00 e engana a margem).</div>
+</section>
+
+<!-- ─────────────────────────────── 2 -->
+<section class="tela" id="t2">
+  <h2>2 · Modal "Entrada de mercadoria", produto simples</h2>
+  <p class="meta">É um passo só. O fornecedor é escolhido numa lista com busca, e a lista mostra o último custo de cada um para este produto. O resumo mostra o antes e o depois de estoque e custo médio <i>antes</i> de confirmar. O nº da nota é opcional.</p>
+  <div class="stage">
+    <div class="scrim">
+      <div class="modal">
+        <div class="mh"><div class="ic">↓</div><div><h4>Entrada de mercadoria</h4><p>Capa iPhone 15 - Space · estoque atual 4 un</p></div><span class="x">×</span></div>
+        <div class="mb">
+          <label class="f">De qual fornecedor você comprou?</label>
+          <div class="inp focus"><span>Distrib</span><span class="ph">|</span></div>
+          <div class="drop">
+            <div class="sel"><span>Distribuidora Alfa</span><small>últ. custo R$ 5,50 · 15/10</small></div>
+            <div><span>Distribuidora Brás Capas</span><small>últ. custo R$ 5,21 · 02/11</small></div>
+            <div class="add"><span>＋ Cadastrar "Distrib…" como novo fornecedor</span></div>
+          </div>
+          <div class="row2">
+            <div><label class="f">Quantidade que chegou</label><div class="inp"><span>20</span><span class="pre" style="margin-left:auto">un</span></div></div>
+            <div><label class="f">Custo de cada unidade</label><div class="inp"><span class="pre">R$</span><span>5,90</span></div><div class="hint">Total da compra: R$ 118,00</div></div>
+          </div>
+          <label class="f">Nº da nota <span style="font-weight:400;color:var(--ink3)">(opcional)</span></label>
+          <div class="inp"><span class="ph">Ex.: 004512</span></div>
+
+          <div class="resumo">
+            <span class="k">Estoque</span><span class="v"><span class="de">4 →</span> 24 un</span>
+            <span class="k">Custo médio</span><span class="v"><span class="de">R$ 5,50 →</span> R$ 5,83</span>
+            <span class="k tot">Margem no preço de R$ 35,00</span><span class="v tot"><span class="de">84% →</span> 83%</span>
+          </div>
+          <div class="check"><span class="box">✓</span><span>Usar o custo médio como custo do produto<br><span class="hint">É o custo que entra na margem e nos relatórios.</span></span></div>
+        </div>
+        <div class="mf"><button class="btn sec">Cancelar</button><button class="btn pri">Dar entrada em 20 un</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="po">◆ <b>PO:</b> o custo do produto vira o custo médio automaticamente (o check acima vem ligado)? A alternativa seria guardar só o "último custo". O custo médio é o certo para margem e CMV: quem comprou 20 a R$ 5,50 e depois 20 a R$ 5,90 não tem custo de R$ 5,90 em todas as peças.<br>
+  ◆ <b>PO:</b> se a entrada vier com custo <b>50% acima</b> do custo médio, mostramos um aviso "Confere? Está bem acima do que você costuma pagar"? Isso pega erro de digitação tipo 59,0 no lugar de 5,90, o mesmo problema da vírgula perdida que já apareceu em planilha de cliente importada.</div>
+</section>
+
+<!-- ─────────────────────────────── 3 -->
+<section class="tela" id="t3">
+  <h2>3 · Fornecedor novo cadastrado ali mesmo</h2>
+  <p class="meta">Ninguém sai do modal para cadastrar o fornecedor. Só o nome é obrigatório. Telefone e CNPJ são opcionais, e o resto se completa depois na tela Fornecedores. Se o nome já existir, a busca da tela 2 mostra o fornecedor antes de oferecer cadastrar outro.</p>
+  <div class="stage">
+    <div class="scrim">
+      <div class="modal">
+        <div class="mh"><div class="ic">↓</div><div><h4>Entrada de mercadoria</h4><p>Capa iPhone 15 - Space · estoque atual 4 un</p></div><span class="x">×</span></div>
+        <div class="mb">
+          <label class="f">De qual fornecedor você comprou?</label>
+          <div class="novo">
+            <label class="f">Nome do fornecedor</label>
+            <div class="inp focus"><span>Distribuidora Centro</span></div>
+            <div class="row2">
+              <div><label class="f">WhatsApp <span style="font-weight:400;color:var(--ink3)">(opcional)</span></label><div class="inp"><span class="ph">(11) 9…</span></div></div>
+              <div><label class="f">CNPJ <span style="font-weight:400;color:var(--ink3)">(opcional)</span></label><div class="inp"><span class="ph">00.000.000/0000-00</span></div></div>
+            </div>
+            <div class="hint" style="margin-top:8px">O fornecedor é salvo junto com a entrada. <a href="#" style="color:var(--violet3)">Voltar para a lista</a></div>
+          </div>
+          <div class="row2">
+            <div><label class="f">Quantidade que chegou</label><div class="inp"><span>10</span><span class="pre" style="margin-left:auto">un</span></div></div>
+            <div><label class="f">Custo de cada unidade</label><div class="inp"><span class="pre">R$</span><span>4,80</span></div></div>
+          </div>
+          <div class="resumo">
+            <span class="k">Estoque</span><span class="v"><span class="de">4 →</span> 14 un</span>
+            <span class="k">Custo médio</span><span class="v"><span class="de">R$ 5,50 →</span> R$ 5,00</span>
+          </div>
+        </div>
+        <div class="mf"><button class="btn sec">Cancelar</button><button class="btn pri">Dar entrada em 10 un</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────── 4 -->
+<section class="tela" id="t4">
+  <h2>4 · Produto com cor e tamanho</h2>
+  <p class="meta">Quando o produto tem variantes (cor e tamanho), o estoque fica em cada variante. Por isso o modal troca o campo "Quantidade" pela grade que o cadastro já usa: cada célula diz quantas chegaram daquela variante. O custo é um só para a compra. Fica gravado <code>stock_movements.variant_id</code>, uma coluna nova.</p>
+  <div class="stage">
+    <div class="scrim">
+      <div class="modal">
+        <div class="mh"><div class="ic">↓</div><div><h4>Entrada de mercadoria</h4><p>Camiseta básica algodão · 3 cores × 4 tamanhos</p></div><span class="x">×</span></div>
+        <div class="mb">
+          <label class="f">De qual fornecedor você comprou?</label>
+          <div class="inp"><span>Malharia Exemplo</span><span class="pre" style="margin-left:auto">▾</span></div>
+          <label class="f">Quantas chegaram de cada?</label>
+          <table class="grade">
+            <tr><th></th><th>P</th><th>M</th><th>G</th><th>GG</th></tr>
+            <tr><td><span class="dot" style="background:#111"></span>Preto</td><td><span class="cell on">4</span></td><td><span class="cell on">6</span></td><td><span class="cell on">6</span></td><td><span class="cell">0</span></td></tr>
+            <tr><td><span class="dot" style="background:#fff"></span>Branco</td><td><span class="cell on">2</span></td><td><span class="cell on">4</span></td><td><span class="cell on">4</span></td><td><span class="cell on">2</span></td></tr>
+            <tr><td><span class="dot" style="background:#3b82f6"></span>Azul</td><td><span class="cell">0</span></td><td><span class="cell on">3</span></td><td><span class="cell on">3</span></td><td><span class="cell">0</span></td></tr>
+          </table>
+          <div class="row2">
+            <div><label class="f">Custo de cada peça</label><div class="inp"><span class="pre">R$</span><span>24,00</span></div></div>
+            <div><label class="f">Total</label><div class="inp" style="background:var(--bg4);border-color:transparent"><b>34 peças · R$ 816,00</b></div></div>
+          </div>
+        </div>
+        <div class="mf"><button class="btn sec">Cancelar</button><button class="btn pri">Dar entrada em 34 peças</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="po">◆ <b>PO:</b> custo diferente por variante (ex.: GG mais caro)? A sugestão é <b>não</b> nesta versão. O custo médio continua no produto, como já é hoje: as variantes não têm custo próprio no banco. Se um dia precisar, a grade ganha uma segunda linha de custo.</div>
+</section>
+
+<!-- ─────────────────────────────── 5 -->
+<section class="tela" id="t5">
+  <h2>5 · No cadastro do item: card "Compras deste produto"</h2>
+  <p class="meta">O card fica abaixo da seção Preço e só aparece em produto com pelo menos uma entrada. Ele responde às duas perguntas da lojista: <i>de quem eu compro mais barato?</i> e <i>quanto paguei da última vez?</i></p>
+  <div class="stage">
+    <div class="card">
+      <div class="ch"><h4>Compras deste produto</h4><button class="btn sec sm">↓ Nova entrada</button></div>
+      <div class="destaque">💡 <b>Distribuidora Brás Capas</b> vende mais barato: R$ 5,21, contra R$ 5,90 da Distribuidora Alfa na última compra (<b>R$ 0,69 a menos por peça</b>).</div>
+      <table class="forn">
+        <thead><tr><th>Fornecedor</th><th>Comprado</th><th>Último custo</th><th>Custo médio</th><th>Última compra</th></tr></thead>
+        <tbody>
+          <tr><td>Distribuidora Brás Capas</td><td>30 un</td><td class="best">R$ 5,21</td><td>R$ 5,21</td><td>02/11</td></tr>
+          <tr><td>Distribuidora Alfa</td><td>40 un</td><td>R$ 5,90</td><td>R$ 5,70</td><td>15/10</td></tr>
+        </tbody>
+      </table>
+      <div class="tl">
+        <h5>Últimas entradas</h5>
+        <div class="it"><span class="d">02/11</span><span class="w">Distribuidora Brás Capas <span class="sub">· nota 004512</span></span><span class="q">+30 un × R$ 5,21</span></div>
+        <div class="it"><span class="d">15/10</span><span class="w">Distribuidora Alfa</span><span class="q">+20 un × R$ 5,90</span></div>
+        <div class="it"><span class="d">01/10</span><span class="w">Distribuidora Alfa</span><span class="q">+20 un × R$ 5,50</span></div>
+      </div>
+      <div class="campo-custo">
+        <div><div class="k">Custo médio (usado na margem)</div><div class="v">R$ 5,28</div></div>
+        <div><div class="k">Margem no preço de R$ 35,00</div><div class="v" style="color:var(--green)">85%</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="po">◆ <b>PO:</b> a tela <b>Fornecedores</b>, que já existe, passa a mostrar "o que comprei deste fornecedor" usando essas mesmas entradas, sem tela nova. A rota <code>GET /suppliers/:id</code> já devolve <code>recent_stock_movements</code>, que hoje vem sempre vazio.</div>
+</section>
+
+<!-- ─────────────────────────────── 6 -->
+<section class="tela" id="t6">
+  <h2>6 · Celular (390 px)</h2>
+  <p class="meta">No celular, o modal vira uma gaveta que sobe de baixo, e o botão de confirmar fica fixo embaixo, perto do polegar. Na lista, a entrada vira um ícone ↓ ao lado do produto (toque, sem hover).</p>
+  <div class="stage">
+    <div class="phone"><div class="scr">
+      <div class="bar">Estoque</div>
+      <div class="prow"><div class="w"><div class="n">Capa iPhone 15 - Space</div><div class="s">4 un · custo médio R$ 5,50</div></div><button class="btn sec sm hl">↓</button></div>
+      <div class="prow"><div class="w"><div class="n">Película Cerâmica iPhone 16 Pro</div><div class="s">8 un · R$ 1,00</div></div><button class="btn sec sm">↓</button></div>
+      <div class="prow"><div class="w"><div class="n">Cabo Tipo-C/iOS 1m</div><div class="s">0 un · custo —</div></div><button class="btn sec sm">↓</button></div>
+    </div></div>
+    <div class="phone"><div class="scr">
+      <div class="bar">Estoque</div>
+      <div class="dim"></div>
+      <div class="sheet">
+        <div class="grab"></div>
+        <div style="padding:8px 18px 0"><b style="font-size:16px">Entrada de mercadoria</b><div class="sub">Capa iPhone 15 - Space · 4 un</div></div>
+        <div style="padding:0 18px">
+          <label class="f">Fornecedor</label><div class="inp"><span>Distribuidora Alfa</span><span class="pre" style="margin-left:auto">▾</span></div>
+          <div class="row2" style="grid-template-columns:1fr 1fr">
+            <div><label class="f">Quantidade</label><div class="inp"><span>20</span></div></div>
+            <div><label class="f">Custo un.</label><div class="inp"><span class="pre">R$</span>5,90</div></div>
+          </div>
+          <div class="resumo"><span class="k">Estoque</span><span class="v"><span class="de">4 →</span> 24</span><span class="k">Custo médio</span><span class="v"><span class="de">5,50 →</span> 5,83</span></div>
+        </div>
+        <div style="padding:10px 18px 22px"><button class="btn pri" style="width:100%;justify-content:center;padding:14px">Dar entrada em 20 un</button></div>
+      </div>
+    </div></div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────── 7 -->
+<section class="tela" id="t7">
+  <h2>7 · Consolidado (multi-CNPJ)</h2>
+  <p class="meta">Sem empresa selecionada, o botão "Entrada" some, porque toda entrada pertence a uma loja. O card de compras soma o grupo e ganha a coluna Loja, já que o fornecedor é compartilhado no grupo (migration 342, decisão b).</p>
+  <div class="stage">
+    <div class="card">
+      <div class="ch"><h4>Compras deste produto · todas as lojas</h4><span class="pill">Selecione uma loja para dar entrada</span></div>
+      <table class="forn">
+        <thead><tr><th>Fornecedor</th><th>Loja</th><th>Comprado</th><th>Último custo</th></tr></thead>
+        <tbody>
+          <tr><td>Distribuidora Brás Capas</td><td>Matriz</td><td>30 un</td><td class="best">R$ 5,21</td></tr>
+          <tr><td>Distribuidora Brás Capas</td><td>Filial Centro</td><td>12 un</td><td>R$ 5,40</td></tr>
+          <tr><td>Distribuidora Alfa</td><td>Matriz</td><td>40 un</td><td>R$ 5,90</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="tela">
+  <h2>Fora desta entrega (próximos passos sugeridos)</h2>
+  <p class="meta">
+    • <b>Importar NF-e</b> (DanfeImportModal) passa a gravar a entrada com fornecedor e custo pela mesma rota. Hoje ele soma o estoque por PATCH e não deixa rastro.<br>
+    • <b>Pedido de compra</b> para o fornecedor mais barato (o Matcon M4 já tem isso; levar para o varejo).<br>
+    • O campo "Estoque" do cadastro continua aceitando ajuste direto (inventário/correção). Ele não é entrada e não mexe no custo médio.
+  </p>
+</section>
+
+</body>
+</html>
