@@ -66,8 +66,14 @@ type Props = {
 export function VendasPorNumeracaoScreen({ rotaFinanceiro, hrefFinanceiro }: Props) {
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ period?: string; de?: string }>();
-  const { company, consolidatedView } = useAuthStore();
+  const { company, consolidatedView, availableCompanies } = useAuthStore();
   const { m } = useValoresOcultos();
+  // Consolidado ("Todas as empresas"): o store fica com company = null. A
+  // rota é por empresa, então vai a primária do grupo com escopo=grupo — o
+  // backend soma as lojas que o usuário alcança (mesma regra do
+  // /estoque/ruptura).
+  const cid = company?.id
+    || (consolidatedView ? ((availableCompanies || []).find((c) => c.is_primary) || (availableCompanies || [])[0])?.id : undefined);
   const { width } = useWindowDimensions();
   const celular = width < 640;
 
@@ -95,11 +101,12 @@ export function VendasPorNumeracaoScreen({ rotaFinanceiro, hrefFinanceiro }: Pro
     period: periodo,
     start_date: datas?.start, end_date: datas?.end,
     category: tipo, q: buscaAplicada, por_cor: porCor,
+    escopo: consolidatedView ? ("grupo" as const) : undefined,
   };
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: ["vendas-por-numeracao", company?.id, !!consolidatedView, filtros],
-    queryFn: () => relatoriosApi.vendasPorNumeracao(company!.id, filtros),
-    enabled: !!company?.id && pronto,
+    queryKey: ["vendas-por-numeracao", cid, !!consolidatedView, filtros],
+    queryFn: () => relatoriosApi.vendasPorNumeracao(cid!, filtros),
+    enabled: !!cid && pronto,
     staleTime: 60_000,
     retry: 1,
   });

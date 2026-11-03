@@ -62,6 +62,8 @@ export type FiltrosDoRelatorio = {
   category?: string | null;
   q?: string;
   por_cor?: boolean;
+  /** Consolidado: soma as lojas do grupo (o backend também lê o token). */
+  escopo?: "grupo";
 };
 
 export function queryDoRelatorio(f: FiltrosDoRelatorio): string {
@@ -74,6 +76,7 @@ export function queryDoRelatorio(f: FiltrosDoRelatorio): string {
   if (f.category) p.set("category", f.category);
   if (f.q && f.q.trim()) p.set("q", f.q.trim());
   if (f.por_cor) p.set("por_cor", "1");
+  if (f.escopo === "grupo") p.set("escopo", "grupo");
   return p.toString();
 }
 

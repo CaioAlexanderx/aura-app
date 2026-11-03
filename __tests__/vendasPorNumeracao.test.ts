@@ -36,6 +36,8 @@ test("query: datas só no custom; filtros opcionais", () => {
     .toBe("period=month&category=T%C3%AAnis&q=runner&por_cor=1");
   expect(queryDoRelatorio({ period: "custom", start_date: "2026-10-01", end_date: "2026-10-31" }))
     .toBe("period=custom&start_date=2026-10-01&end_date=2026-10-31");
+  // Consolidado: pede a soma do grupo.
+  expect(queryDoRelatorio({ period: "week", escopo: "grupo" })).toBe("period=week&escopo=grupo");
 });
 
 test("calor da grade em 5 níveis pela fração do máximo", () => {

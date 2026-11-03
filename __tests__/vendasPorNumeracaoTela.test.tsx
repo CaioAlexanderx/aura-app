@@ -12,7 +12,10 @@ jest.mock("expo-router", () => ({
   useNavigation: () => ({ getState: () => ({ index: 0, routes: [] }) }),
 }));
 jest.mock("@tanstack/react-query", () => ({ useQuery: jest.fn((o: any) => { mockQuery.ultimaChave = o.queryKey; return mockQuery.resposta; }) }));
-jest.mock("@/stores/auth", () => ({ useAuthStore: () => ({ company: { id: "c1" }, consolidatedView: mockQuery.consolidado || false }) }));
+// Consolidado de verdade: o store fica com company = null e a lista de lojas.
+jest.mock("@/stores/auth", () => ({ useAuthStore: () => (mockQuery.consolidado
+  ? { company: null, consolidatedView: true, availableCompanies: [{ id: "filial", is_primary: false }, { id: "matriz", is_primary: true }] }
+  : { company: { id: "c1" }, consolidatedView: false, availableCompanies: [] }) }));
 jest.mock("@/stores/valoresOcultos", () => ({ useValoresOcultos: () => ({ m: (t: string) => t, ocultos: false }) }));
 jest.mock("@/components/OlhoValores", () => ({ OlhoValores: () => null }));
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
@@ -113,8 +116,12 @@ test("sem permissão: frase de balcão, sem tentar de novo", () => {
   expect(t).not.toMatch(/Tentar de novo/);
 });
 
-test("consolidado: subtítulo diz todas as lojas", () => {
+test("consolidado: subtítulo diz todas as lojas; pede o grupo pela primária", () => {
   mockQuery.consolidado = true;
   const tree = montar();
   expect(textos(tree.root)).toMatch(/todas as lojas/);
+  // company = null no consolidado: a chave usa a primária e escopo=grupo.
+  expect(mockQuery.ultimaChave[1]).toBe("matriz");
+  expect(mockQuery.ultimaChave[3]).toMatchObject({ escopo: "grupo" });
+  mockQuery.consolidado = false;
 });

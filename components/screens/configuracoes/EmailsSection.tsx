@@ -606,6 +606,20 @@ export function EmailsSection({ companyId }: { companyId: string }) {
           ) : null}
         </Card>
 
+        {/* ── Fechamento do mês (03/11/2026, Aura-backend#952) ──
+            Ligado por padrão (decisão do PO). Só aparece com o backend que
+            devolve a preferência: antes do deploy, o cartão nem existe. */}
+        {d.preferencias.fechamento_mes ? (
+          <Card style={s.cartao}>
+            <CabecaDoCartao
+              titulo="Fechamento do mês"
+              desc="No dia 1º: os modelos que mais venderam, as numerações que mais saíram e a planilha do mês anexa (abre no Excel)."
+            >
+              <Interruptor id="emails-fechamento" rotulo="Fechamento do mês" valor={d.preferencias.fechamento_mes.ligado} onChange={(v) => salvar({ fechamento_mes: { ligado: v } })} />
+            </CabecaDoCartao>
+          </Card>
+        ) : null}
+
         {/* ── Cobrança e conta ── */}
         <Card style={s.cartao}>
           <CabecaDoCartao titulo="Cobrança e conta" desc="Estes sempre chegam, porque tratam da sua assinatura e da sua segurança." />
