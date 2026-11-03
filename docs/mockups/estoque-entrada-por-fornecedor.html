@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Estoque — Entrada por fornecedor</title>
+<title>Fornecedor, custo e vendedora</title>
 <!--
   ============================================================
   Mockup standalone — Estoque: entrada de mercadoria por fornecedor, 03/11/2026.
@@ -66,6 +66,25 @@
     5. Cadastro do item: card "Compras deste produto"
     6. Celular (390 px)
     7. Consolidado multi-CNPJ
+    8. Cadastro do item: fornecedores e custo por fornecedor (product_suppliers)
+    9. Vincular fornecedor a vários produtos de uma vez
+   10. Caixa: cadastrar vendedora sem sair da venda
+   11. Caixa: limite de equipe do plano
+
+  ADENDO 03/11 (PO): "o mesmo produto pode ter custos diferentes de acordo
+  com o fornecedor" + "facilitar o vínculo fornecedor ↔ produto" + "cadastrar
+  vendedor direto no caixa" (hoje só pela Folha/Equipe).
+    - Custo por fornecedor: tabela nova product_suppliers
+        (company_id, product_id, supplier_id, cost, supplier_code, is_main,
+         last_purchase_at; UNIQUE (product_id, supplier_id)).
+      products.supplier_id passa a espelhar o principal (compatibilidade).
+      A entrada (POST stock-entries) faz upsert do custo daquele fornecedor.
+      Rotas: GET/PUT /products/:pid/suppliers (lista inteira, como /variations)
+             POST /products/bulk-supplier { product_ids[], supplier_id, is_main, cost? }
+    - Vendedora no caixa: SÓ FRONT. POST /employees já aceita só o nome em
+      todos os planos (PLAN-02) e já devolve 403 {limit,current} no limite.
+      ActPerson (ActionToolbar.tsx) já tem addable/onAddNew — o seletor de
+      cliente usa; o de vendedora (app/(tabs)/pdv.tsx) passa a usar.
 
   PONTOS PARA O PO DECIDIR estão marcados com ◆ no rodapé de cada tela.
   ============================================================
@@ -201,12 +220,12 @@
 <body>
 
 <header class="doc">
-  <h1>Estoque: entrada de mercadoria por fornecedor</h1>
+  <h1>Fornecedor, custo por fornecedor e vendedora no caixa</h1>
   <p>O mesmo produto pode ser comprado de vários fornecedores. Cada entrada guarda quem vendeu, quantas unidades e por quanto. A Aura calcula o custo médio e mostra quem vende mais barato. No caixa nada muda: o produto continua sendo um só.</p>
 </header>
 <nav class="toc">
   <a href="#t1">1 · Lista</a><a href="#t2">2 · Entrada</a><a href="#t3">3 · Fornecedor novo</a>
-  <a href="#t4">4 · Cor e tamanho</a><a href="#t5">5 · Compras do produto</a><a href="#t6">6 · Celular</a><a href="#t7">7 · Consolidado</a>
+  <a href="#t4">4 · Cor e tamanho</a><a href="#t5">5 · Compras do produto</a><a href="#t6">6 · Celular</a><a href="#t7">7 · Consolidado</a><a href="#t8">8 · Custo por fornecedor</a><a href="#t9">9 · Vincular em lote</a><a href="#t10">10 · Vendedora no caixa</a><a href="#t11">11 · Limite do plano</a>
 </nav>
 
 <!-- ─────────────────────────────── 1 -->
@@ -412,6 +431,106 @@
           <tr><td>Distribuidora Alfa</td><td>Matriz</td><td>40 un</td><td>R$ 5,90</td></tr>
         </tbody>
       </table>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────── 8 -->
+<section class="tela" id="t8">
+  <h2>8 · Cadastro do item: "Fornecedores e custo"</h2>
+  <p class="meta">Hoje o cadastro do item <b>não tem campo de fornecedor</b>. O backend aceita <code>supplier_id</code> (um só), mas nenhuma tela manda. Agora o campo "Custo" vira um bloco com um ou mais fornecedores, <b>cada um com o seu custo</b>. A estrela marca o fornecedor principal, o de recompra. O custo usado na margem é o custo médio quando já houve entrada; sem entrada, é o custo do fornecedor principal.<br>
+  Modelo novo: tabela <code>product_suppliers</code> (produto, fornecedor, custo, código do produto no fornecedor, principal). A entrada da tela 2 atualiza o custo daquele fornecedor sozinha, e <code>products.supplier_id</code> espelha o principal, para nada que já lê essa coluna quebrar.</p>
+  <div class="stage">
+    <div class="card" style="max-width:600px">
+      <div class="ch"><h4>Preço e custo</h4></div>
+      <div style="padding:6px 18px 4px">
+        <div class="row2">
+          <div><label class="f">Preço de venda</label><div class="inp"><span class="pre">R$</span>35,00</div></div>
+          <div><label class="f">Custo médio <span style="font-weight:400;color:var(--ink3)">(calculado)</span></label><div class="inp" style="background:var(--bg4);border-color:transparent"><b>R$ 5,28</b><span class="pill" style="margin-left:auto;background:var(--greenD);color:var(--green)">margem 85%</span></div><div class="hint">Varia de R$ 4,80 a R$ 5,90 conforme o fornecedor</div></div>
+        </div>
+        <label class="f" style="margin-top:16px">Fornecedores deste produto</label>
+        <table class="forn" style="margin:0 -18px;width:calc(100% + 36px)">
+          <thead><tr><th>Fornecedor</th><th>Custo</th><th>Cód. no fornecedor</th><th></th></tr></thead>
+          <tbody>
+            <tr><td>★ Distribuidora Brás Capas <span class="pill">principal</span></td><td><span class="inp" style="display:inline-flex;width:92px;min-height:32px;padding:5px 8px">R$ 5,21</span></td><td><span class="inp" style="display:inline-flex;width:100px;min-height:32px;padding:5px 8px">BC-1550</span></td><td style="color:var(--ink3)">×</td></tr>
+            <tr><td><span style="color:var(--ink3)">☆</span> Distribuidora Alfa</td><td><span class="inp" style="display:inline-flex;width:92px;min-height:32px;padding:5px 8px">R$ 5,90</span></td><td><span class="inp" style="display:inline-flex;width:100px;min-height:32px;padding:5px 8px"><span class="ph">—</span></span></td><td style="color:var(--ink3)">×</td></tr>
+            <tr><td><span style="color:var(--ink3)">☆</span> Distribuidora Centro</td><td><span class="inp" style="display:inline-flex;width:92px;min-height:32px;padding:5px 8px">R$ 4,80</span></td><td><span class="inp" style="display:inline-flex;width:100px;min-height:32px;padding:5px 8px"><span class="ph">—</span></span></td><td style="color:var(--ink3)">×</td></tr>
+          </tbody>
+        </table>
+        <div style="padding:10px 0 14px"><button class="btn ghost hl">＋ Adicionar fornecedor</button> <span class="hint">busca na lista ou cadastra na hora (mesmo campo da tela 3)</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="po">◆ <b>PO:</b> o custo digitado aqui é o <b>"custo de tabela"</b> do fornecedor, o que ele cobra hoje. A entrada de mercadoria (tela 2) atualiza esse número sozinha, sem ninguém precisar redigitar. Sem nenhuma entrada, a margem usa o custo do principal. Fechado assim?</div>
+</section>
+
+<!-- ─────────────────────────────── 9 -->
+<section class="tela" id="t9">
+  <h2>9 · Vincular fornecedor a vários produtos de uma vez</h2>
+  <p class="meta">Quem tem 600 capas não vai abrir uma por uma. Na lista do Estoque: marca os produtos (ou filtra "Capas" e marca todos) → <b>"Definir fornecedor"</b>. O mesmo atalho aparece na tela Fornecedores ("Vincular produtos"), onde a lista já avisa "Produtos sem fornecedor ligado". O custo é opcional: em lote, normalmente só se liga o fornecedor.</p>
+  <div class="stage">
+    <div class="app">
+      <div class="top" style="background:var(--violetD)">
+        <h3 style="font-size:14px">248 produtos selecionados <span class="sub">(filtro: Capas · sem fornecedor)</span></h3>
+        <button class="btn sec sm">Mudar categoria</button>
+        <button class="btn pri sm hl">Definir fornecedor</button>
+      </div>
+      <div class="scrim" style="border-radius:0;max-width:none">
+        <div class="modal" style="max-width:440px">
+          <div class="mh"><div class="ic">⇄</div><div><h4>Definir fornecedor</h4><p>248 produtos</p></div><span class="x">×</span></div>
+          <div class="mb">
+            <label class="f">Fornecedor</label>
+            <div class="inp"><span>Distribuidora Brás Capas</span><span class="pre" style="margin-left:auto">▾</span></div>
+            <div class="check"><span class="box">✓</span><span>Tornar o fornecedor principal destes produtos</span></div>
+            <div class="check"><span class="box" style="background:#fff;border:1px solid var(--line2)"></span><span>Aplicar o mesmo custo em todos<br><span class="hint">Deixe desmarcado se os custos variam. Cada um se ajusta na próxima entrada.</span></span></div>
+          </div>
+          <div class="mf"><button class="btn sec">Cancelar</button><button class="btn pri">Vincular a 248 produtos</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────── 10 -->
+<section class="tela" id="t10">
+  <h2>10 · Caixa: cadastrar vendedora sem sair da venda</h2>
+  <p class="meta">Hoje o seletor "Vendedora (F2)" do caixa só lista quem foi cadastrado na <b>Folha</b>. Se a pessoa digita um nome novo, ele vale <b>só naquela venda</b> (vira texto solto em <code>seller_name</code>), sem entrar no ranking nem na comissão. O seletor de <b>Cliente</b> já tem o "＋ Novo" (<code>addable</code>/<code>onAddNew</code> do <code>ActPerson</code>), e a vendedora ganha o mesmo. O backend já aceita cadastro só com nome (<code>POST /employees</code>, PLAN-02), então <b>não precisa de rota nova</b>.</p>
+  <div class="stage">
+    <div class="app" style="max-width:560px">
+      <div class="top"><h3 style="font-size:14px">Caixa</h3><span class="pill">Cliente ▾</span><span class="pill hl" style="background:var(--violetD);color:var(--violet3)">Vendedora (F2) ▾</span></div>
+      <div style="padding:14px 18px 18px">
+        <div class="inp focus"><span>Bianca</span><span class="ph">|</span></div>
+        <div class="drop">
+          <div><span>Ana Paula</span><small>12 vendas hoje</small></div>
+          <div><span>Carla</span><small>8 vendas hoje</small></div>
+          <div class="add sel"><span>＋ Cadastrar "Bianca" como vendedora</span><small>fica salva para as próximas vendas</small></div>
+          <div><span style="color:var(--ink2)">Usar "Bianca" só nesta venda</span><small>não entra no ranking</small></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal" style="max-width:380px">
+      <div class="mh"><div class="ic">👤</div><div><h4>Nova vendedora</h4><p>Já fica selecionada nesta venda</p></div><span class="x">×</span></div>
+      <div class="mb">
+        <label class="f">Nome</label><div class="inp focus"><span>Bianca</span></div>
+        <label class="f">WhatsApp <span style="font-weight:400;color:var(--ink3)">(opcional)</span></label><div class="inp"><span class="ph">(11) 9…</span></div>
+        <div class="hint" style="margin:10px 0 4px">Salário, CPF e comissão se completam depois em <b>Equipe</b>.</div>
+      </div>
+      <div class="mf"><button class="btn sec">Cancelar</button><button class="btn pri">Cadastrar e usar</button></div>
+    </div>
+  </div>
+  <div class="po">◆ <b>PO:</b> <b>quem pode cadastrar vendedora pelo caixa?</b> Sugestão: dono(a) e gerente, sim. Operador(a) de caixa, <b>não</b>: vê só o "usar só nesta venda". Vendedora cadastrada entra em comissão e ranking, e liberar isso para qualquer operador abre espaço para "vendedora fantasma" levando comissão. Ligado à permissão de Equipe que já existe.<br>
+  ◆ <b>PO:</b> no menu, "Folha" no plano Essencial já se chama <b>"Equipe"</b> (cadastro de vendedores). Vale também um atalho "Equipe" em Configurações, para quem procura ali?</div>
+</section>
+
+<!-- ─────────────────────────────── 11 -->
+<section class="tela" id="t11">
+  <h2>11 · Caixa: limite do plano atingido</h2>
+  <p class="meta">O Essencial permite <b>3 pessoas ativas</b> na equipe (<code>getPlanLimit</code>; o 403 já devolve <code>limit</code> e <code>current</code>). A venda nunca trava por isso: a opção "só nesta venda" continua lá.</p>
+  <div class="stage">
+    <div class="modal" style="max-width:400px">
+      <div class="mh"><div class="ic" style="background:var(--amberD);color:var(--amber)">!</div><div><h4>Sua equipe está completa</h4><p>O plano Essencial tem até 3 vendedoras ativas (você tem 3).</p></div></div>
+      <div class="mb"><div class="hint" style="font-size:13px;color:var(--ink2)">Dá para seguir esta venda com "Bianca" só nesta venda, suspender alguém que saiu (em Equipe) ou passar para o Negócio (até 50).</div></div>
+      <div class="mf"><button class="btn sec">Ver planos</button><button class="btn pri">Usar só nesta venda</button></div>
     </div>
   </div>
 </section>
