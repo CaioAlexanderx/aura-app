@@ -64,3 +64,62 @@ export const suppliersApi = {
       method: "POST", body: { product_ids: productIds, unlink }, retry: 0, timeout: 20000,
     }),
 };
+
+// ============================================================
+// 03/11/2026 — Fornecedores do produto e entrada de mercadoria
+// (Aura-backend#950, migration 424; utils/entradaDeMercadoria.ts).
+// ============================================================
+
+export type FornecedorDoProduto = {
+  supplier_id: string;
+  name: string;
+  cnpj: string | null;
+  phone: string | null;
+  /** Some para quem não vê custo (o backend corta). */
+  cost?: number | null;
+  supplier_code: string | null;
+  is_main: boolean;
+  last_purchase_at: string | null;
+};
+
+export type ComprasDoProduto = {
+  por_fornecedor: Array<{
+    supplier_id: string; supplier_name: string; quantity: number | null;
+    unit_cost?: number | null; avg_cost?: number | null; last_purchase_at: string | null;
+  }>;
+  entradas: Array<{
+    id: string; created_at: string; quantity: number | null; unit_cost?: number | null; notes: string | null;
+    variant_id: string | null; supplier_id: string | null; supplier_name: string | null;
+    company_id: string; company_name: string | null;
+  }>;
+  product: { id: string; stock_qty: number | null; cost_price?: number | null; avg_cost?: number | null } | null;
+  indisponivel?: boolean;
+};
+
+export type ResultadoDaEntrada = {
+  supplier: { id: string; name: string; created: boolean } | null;
+  quantity: number;
+  unit_cost?: number | null;
+  before: { stock_qty: number; avg_cost?: number | null };
+  after: { stock_qty: number; avg_cost?: number | null };
+};
+
+const doProduto = (cid: string, pid: string) => "/companies/" + cid + "/products/" + pid;
+
+export const fornecedoresDoProdutoApi = {
+  list: (cid: string, pid: string) =>
+    request<{ suppliers: FornecedorDoProduto[]; indisponivel?: boolean }>(doProduto(cid, pid) + "/suppliers", { retry: 1 }),
+  save: (cid: string, pid: string, body: { suppliers: Array<Record<string, unknown>> }) =>
+    request<{ suppliers: FornecedorDoProduto[] }>(doProduto(cid, pid) + "/suppliers", { method: "PUT", body, retry: 0 }),
+  compras: (cid: string, pid: string) =>
+    request<ComprasDoProduto>(doProduto(cid, pid) + "/stock-entries", { retry: 1 }),
+  darEntrada: (cid: string, pid: string, body: Record<string, unknown>) =>
+    request<ResultadoDaEntrada>(doProduto(cid, pid) + "/stock-entries", { method: "POST", body, retry: 0 }),
+  /** Vínculo em lote (tela 9). is_main padrão true (o de sempre). */
+  vincularEmLote: (cid: string, sid: string, productIds: string[], opts: { is_main?: boolean; cost?: number | null } = {}) =>
+    request<{ updated: number }>("/companies/" + cid + "/suppliers/" + sid + "/products", {
+      method: "POST",
+      body: { product_ids: productIds, ...(opts.is_main === false ? { is_main: false } : {}), ...(opts.cost ? { cost: opts.cost } : {}) },
+      retry: 0, timeout: 20000,
+    }),
+};

@@ -40,7 +40,7 @@ function isServiceProduct(p: Product) {
 
 export function ProductRow({
   product, onDelete, onEdit, onLink,
-  isSelected, onSelect, consulta, semCusto,
+  isSelected, onSelect, consulta, semCusto, onEntrada,
 }: {
   product: Product;
   onDelete?: (id: string) => void;
@@ -54,6 +54,8 @@ export function ProductRow({
   consulta?: boolean;
   // 03/11/2026 — custo oculto (podeVerCusto): sem Custo e Margem; preço fica.
   semCusto?: boolean;
+  // 03/11/2026 — entrada de mercadoria (botão ↓ ao lado do preço; toque).
+  onEntrada?: (product: Product) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -143,6 +145,12 @@ export function ProductRow({
           )}
           {!consulta && <Text style={s.price}>{m(fmt(product.price))}</Text>}
         </View>
+        {onEntrada && !isService && !onSelect ? (
+          <Pressable onPress={() => onEntrada(product)} style={s.entradaBtn} hitSlop={6}
+            accessibilityLabel={"Entrada de mercadoria: " + product.name} testID={"estoque-entrada-" + product.id}>
+            <Text style={s.entradaTxt}>↓</Text>
+          </Pressable>
+        ) : null}
       </Pressable>
       {/* Matcon M4 (mockup #lotes): "148,48 m² em 2 lotes" abre a pilha —
           lote, saldo e nada de jargão. Toque, nunca hover. */}
@@ -257,6 +265,8 @@ const s = StyleSheet.create({
   stock: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
   alertDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.red },
   price: { fontSize: 11, color: Colors.ink3 },
+  entradaBtn: { width: 32, height: 32, borderRadius: 9, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center", marginLeft: 8, alignSelf: "center" },
+  entradaTxt: { color: Colors.violet3, fontSize: 15, fontWeight: "800" },
   // Matcon M4 — chip "em 2 lotes" e a pilha que ele abre.
   lotesChip: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2, paddingVertical: 2, paddingHorizontal: 6, borderRadius: 6, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
   lotesChipTxt: { fontSize: 10, color: Colors.violet3, fontWeight: "700" },

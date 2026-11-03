@@ -66,6 +66,10 @@ import { useVisibleModules } from "@/hooks/useVisibleModules";
 // 30/10/2026: Estoque só consulta (utils/estoqueConsulta.ts). O que a pessoa
 // não pode simplesmente some: nada de aviso de bloqueio ou de upgrade.
 import { useEstoqueConsulta } from "@/hooks/useEstoqueConsulta";
+// 03/11/2026 — entrada de mercadoria por fornecedor e vínculo em lote
+// (docs/mockups/estoque-entrada-por-fornecedor.html, telas 1, 2, 6 e 9).
+import { EntradaMercadoriaModal, type ProdutoDaEntrada } from "@/components/screens/estoque/EntradaMercadoriaModal";
+import { DefinirFornecedorModal } from "@/components/screens/estoque/DefinirFornecedorModal";
 import { ordemSemPreco, ordensSemPreco } from "@/utils/estoqueConsulta";
 import { nfceApi } from "@/services/nfceApi";
 // 23/09/2026 (QA producao, item 5): estoque consolidado (AggregatedView)
@@ -376,6 +380,9 @@ export default function EstoqueScreen() {
   const [labelSelection, setLabelSelection] = useState<string[]>([]);
 
   const [bulkMode, setBulkMode] = useState(false);
+  // Entrada de mercadoria: produto da linha, ou "escolher" (botão do topo).
+  const [entrada, setEntrada] = useState<{ produto: ProdutoDaEntrada | null } | null>(null);
+  const [definirFornecedor, setDefinirFornecedor] = useState(false);
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
   // p-52: quem já pode mexer no produto (mesmo gate do Selecionar/editar:
@@ -596,6 +603,11 @@ export default function EstoqueScreen() {
 
   function exitBulkMode() { setBulkMode(false); setBulkSelected(new Set()); }
 
+  function paraEntrada(p: Product): ProdutoDaEntrada {
+    return { id: p.id, name: p.name, stock: p.stock, cost: p.cost ?? null, price: p.price, unit: p.unit, has_variants: !!(p as any).has_variants };
+  }
+  function abrirEntrada(p: Product) { setEntrada({ produto: paraEntrada(p) }); }
+
   async function handleBulkDelete() {
     await bulkDeleteProducts(Array.from(bulkSelected));
     exitBulkMode();
@@ -663,6 +675,14 @@ export default function EstoqueScreen() {
           </Text>}
         </Pressable>
       )}
+      {/* Entrada é sempre de UMA loja: some no consolidado e no demo. */}
+      {!isDemo && !consolidatedView && products.length > 0 && (
+        <Pressable onPress={() => setEntrada({ produto: null })} style={[s.batchBtn, isMobileNarrow && s.btnIconOnly]}
+          accessibilityLabel="Entrada de mercadoria" testID="estoque-entrada-topo">
+          <Text style={{ color: Colors.violet3, fontWeight: "800" }}>↓</Text>
+          {!isMobileNarrow && <Text style={s.batchBtnText}>Entrada de mercadoria</Text>}
+        </Pressable>
+      )}
       <Pressable onPress={() => abrirCadastro("product")} style={s.addBtn} {...tourTarget("estoque.novo_produto")}>
         <Icon name="package" size={14} color="#fff" />
         <Text style={s.addBtnText}>+ Produto</Text>
@@ -696,6 +716,17 @@ export default function EstoqueScreen() {
             testID="estoque-ajustar-preco"
           >
             <Text style={[s.bulkActionText, { color: "#fff" }]}>Ajustar preço</Text>
+          </Pressable>
+        )}
+        {!consulta && !consolidatedView && (
+          <Pressable
+            onPress={() => { if (bulkSelected.size > 0) setDefinirFornecedor(true); }}
+            disabled={bulkSelected.size === 0}
+            style={[s.bulkAction, bulkSelected.size === 0 && { opacity: 0.4 }]}
+            accessibilityRole="button"
+            testID="estoque-definir-fornecedor"
+          >
+            <Text style={s.bulkActionText}>Definir fornecedor</Text>
           </Pressable>
         )}
         <Pressable
@@ -963,6 +994,7 @@ export default function EstoqueScreen() {
                     items={paginated}
                     consulta={consulta}
                     semCusto={semCusto}
+                    onEntrada={!isDemo && !consulta && !consolidatedView ? abrirEntrada : undefined}
                     onEdit={!isDemo && !consulta ? handleEdit : undefined}
                     onDelete={!isDemo && !consulta ? (id) => setDeleteTarget(id) : undefined}
                     onLink={canLinkProducts ? (p) => setLinkTarget(p) : undefined}
@@ -992,6 +1024,7 @@ export default function EstoqueScreen() {
                     product={p}
                     consulta={consulta}
                     semCusto={semCusto}
+                    onEntrada={!isDemo && !bulkMode && !consulta && !consolidatedView ? abrirEntrada : undefined}
                     onDelete={!isDemo && !bulkMode && !consulta ? (id) => setDeleteTarget(id) : undefined}
                     onEdit={!isDemo && !bulkMode && !consulta ? handleEdit : undefined}
                     onLink={canLinkProducts && !bulkMode ? (prod) => setLinkTarget(prod) : undefined}
@@ -1076,6 +1109,20 @@ export default function EstoqueScreen() {
 
       {isDemo && <View style={s.demoBanner}><Text style={s.demoText}>Modo demonstrativo</Text></View>}
 
+      <EntradaMercadoriaModal
+        visible={!!entrada}
+        produto={entrada?.produto || null}
+        produtos={entrada && !entrada.produto ? products.filter((p) => p.unit !== "srv").map(paraEntrada) : undefined}
+        semCusto={semCusto}
+        onClose={() => setEntrada(null)}
+      />
+      <DefinirFornecedorModal
+        visible={definirFornecedor}
+        productIds={Array.from(bulkSelected)}
+        semCusto={semCusto}
+        onClose={() => setDefinirFornecedor(false)}
+        onFeito={exitBulkMode}
+      />
       <ItemFormModal
         visible={formOpen}
         onClose={fecharCadastro}
