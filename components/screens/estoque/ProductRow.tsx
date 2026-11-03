@@ -168,7 +168,9 @@ export function ProductRow({
             <View style={s.detailPhotoRow}>
               <ProductImageUpload productId={product.id} imageUrl={product.image_url} compact />
               <View style={s.detailGrid}>
-                {[["Custo", m(fmt(product.cost))], ["Margem", margin], ["Valor estoque", m(fmt(product.stock * product.cost))], ["Estoque mínimo", qtdComUnidade(product.minStock, product.unit)]].map(([l, v]) =>
+                {/* 03/11/2026 — custo oculto: sem Custo, Margem e Valor estoque. */}
+                {((semCusto ? [] : [["Custo", m(fmt(product.cost))], ["Margem", margin], ["Valor estoque", m(fmt(product.stock * product.cost))]]) as Array<[string, string]>)
+                  .concat([["Estoque mínimo", qtdComUnidade(product.minStock, product.unit)]]).map(([l, v]) =>
                   <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text
                     style={[s.detailValue, l === "Margem" && { color: marginValue === null ? Colors.ink3 : Colors.green }]}
                     accessibilityLabel={l === "Margem" && marginValue === null ? DICA_MARGEM_SEM_CUSTO : undefined}
