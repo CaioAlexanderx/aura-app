@@ -197,7 +197,7 @@ describe("parâmetros nas telas de destino", () => {
 
   test("montagem dupla: nenhum parâmetro é limpo no mount; sai da URL só quando a pessoa fecha", () => {
     const estoque = raiz("app/(tabs)/estoque.tsx");
-    const efeito = estoque.slice(estoque.indexOf("if (!querNovoProduto(params.novo)"), estoque.indexOf("}, [params.novo]);"));
+    const efeito = estoque.slice(estoque.indexOf("if (!querNovoProduto(params.novo)"), estoque.indexOf("}, [params.novo, consultaCarregando]);"));
     expect(efeito).not.toContain("setParams");
     expect(estoque).toMatch(/if \(veioPeloParamRef\.current\) \{\s*veioPeloParamRef\.current = false;\s*try \{ router\.setParams\(\{ novo: undefined, depois: undefined \}/);
     const cred = raiz("app/(tabs)/crediario.tsx");

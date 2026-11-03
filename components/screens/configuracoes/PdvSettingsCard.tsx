@@ -11,6 +11,7 @@ import { pdvSettingsApi, companiesApi, type PdvSettings } from "@/services/api";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { lerVendaSemEstoque } from "@/utils/vendaSemEstoque";
 import { lerComandaEnabled } from "@/utils/comanda";
+import { lerFreteEnabled } from "@/utils/frete";
 import {
   lerValeTrocaLigado, marcarValeTrocaMigrado, formatarDiaBR,
   VALE_TROCA_VENDAS_DE, VALE_TROCA_VENDAS_ATE, VALE_TROCA_PRAZO_ATE,
@@ -298,6 +299,24 @@ export function PdvSettingsCard() {
           onValueChange={function(v) { toggle("comanda_enabled", v); }}
           trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
           thumbColor={lerComandaEnabled(display) ? Colors.violet : Colors.ink3}
+          disabled={saving}
+        />
+      </View>
+
+      <View style={s.divider} />
+
+      {/* 30/10/2026: Frete / entrega (mockup docs/mockups/frete-no-caixa.html) */}
+      <View style={s.row}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.rowLabel}>Frete / entrega</Text>
+          <Text style={s.rowDesc}>Cobra a entrega na própria venda. No Caixa aparece o atalho "Frete": o operador digita o valor e pode vincular a venda a um cliente. O desconto vale só sobre os produtos</Text>
+        </View>
+        <Switch
+          testID="toggle-frete"
+          value={lerFreteEnabled(display)}
+          onValueChange={function(v) { toggle("frete_enabled", v); }}
+          trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
+          thumbColor={lerFreteEnabled(display) ? Colors.violet : Colors.ink3}
           disabled={saving}
         />
       </View>

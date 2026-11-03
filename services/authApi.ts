@@ -133,6 +133,9 @@ export type PdvSettings = {
   // 09/10/2026 (Comandas do Caixa, migration 368): liga "Adicionar à comanda"
   // e "Fechar comanda" no Caixa. Leitura só por utils/comanda.lerComandaEnabled.
   comanda_enabled?: boolean;
+  // 30/10/2026 (Frete no Caixa): liga o atalho "Frete" no carrinho — a loja
+  // cobra a entrega na própria venda. Leitura só por utils/frete.lerFreteEnabled.
+  frete_enabled?: boolean;
   // 13/10/2026 (Aura-backend#813): vale-troca (QR) no cupom das vendas de
   // nov/dez. Default true. Leitura só por utils/valeTroca.lerValeTrocaLigado.
   vale_troca_enabled?: boolean;

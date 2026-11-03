@@ -10,6 +10,7 @@
 // ============================================================
 
 import { request } from "@/services/api";
+import type { MovimentoDoCaixa, TipoDeMovimento } from "@/utils/caixaMovimentos";
 
 // ── Tipos ────────────────────────────────────────────────────────
 
@@ -32,6 +33,11 @@ export type CaixaSessaoAtiva = {
     name: string;
   };
   totais_ao_vivo: CaixaTotais;
+  /** 30/10/2026 (Aura-backend#944, migration 422): retiradas e reforços da
+   *  sessão e o que deve estar na gaveta agora. Ausentes = backend antigo. */
+  sangrias?: number;
+  suprimentos?: number;
+  dinheiro_em_caixa?: number;
 };
 
 export type CaixaStatus = {
@@ -77,6 +83,19 @@ export type CaixaFechamentoFull = {
   total_vendas?:        number;
   /** Reembolsos de troca pagos ao cliente que saíram do caixa na sessão. */
   total_devolucoes?:    number;
+  /** 30/10/2026 (422): retiradas e reforços da sessão. dinheiro_esperado já
+   *  os considera. Ausentes = backend antigo. */
+  total_sangrias?:      number;
+  total_suprimentos?:   number;
+};
+
+/** GET /caixa/movimentos — sem caixa aberto, sessao_id vem null. */
+export type CaixaMovimentosResponse = {
+  sessao_id: string | null;
+  movimentos: MovimentoDoCaixa[];
+  sangrias: number;
+  suprimentos: number;
+  dinheiro_em_caixa: number;
 };
 
 export type CaixaSessaoHistorico = {
@@ -180,5 +199,26 @@ export var caixaApi = {
       "/companies/" + companyId + "/caixa/sessao/" + sessaoId,
       { retry: 1 }
     );
+  },
+
+  // 30/10/2026 — retirada (sangria) e reforço (suprimento) com o caixa
+  // aberto (Aura-backend#944). 404 sem caixa aberto; 422 retirada maior que
+  // o dinheiro em caixa (a mensagem já vem pronta para o toast).
+  movimentos: {
+    list: function(companyId: string) {
+      return request<CaixaMovimentosResponse>("/companies/" + companyId + "/caixa/movimentos", { retry: 1 });
+    },
+    registrar: function(companyId: string, body: { tipo: TipoDeMovimento; valor: number; motivo?: string | null }) {
+      return request<{ movimento: MovimentoDoCaixa; sangrias: number; suprimentos: number; dinheiro_em_caixa: number }>(
+        "/companies/" + companyId + "/caixa/movimentos",
+        { method: "POST", body: { tipo: body.tipo, valor: body.valor, motivo: body.motivo || null }, retry: 0 }
+      );
+    },
+    remover: function(companyId: string, movimentoId: string) {
+      return request<CaixaMovimentosResponse>(
+        "/companies/" + companyId + "/caixa/movimentos/" + movimentoId,
+        { method: "DELETE", retry: 0 }
+      );
+    },
   },
 };

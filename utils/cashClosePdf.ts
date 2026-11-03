@@ -63,6 +63,10 @@ export type CashCloseData = {
   // Conferência de caixa
   trocoInicial: number;
   vendasEmDinheiro: number;
+  /** 30/10/2026 (sangria/suprimento): reforços e retiradas da sessão. Só
+   *  viram linha quando > 0; dinheiroEsperado já os considera. */
+  suprimentos?: number;
+  sangrias?: number;
   dinheiroEsperado: number;
   dinheiroContado: number;
   /** = contado - esperado (negativo = falta, positivo = sobra, zero = exato) */
@@ -218,6 +222,12 @@ export function buildCashClosePdfHtml(data: CashCloseData): string {
     '<div class="row"><span class="lab">Clientes novos</span><span class="val">' + data.newCustomersCount + "</span></div>" +
     '<div class="row"><span class="lab">Troco de abertura</span><span class="val">' + fmt(data.trocoInicial) + "</span></div>" +
     '<div class="row"><span class="lab">Dinheiro (liquido na sessao)</span><span class="val">' + fmt(data.vendasEmDinheiro) + "</span></div>" +
+    (data.suprimentos && data.suprimentos > 0
+      ? '<div class="row"><span class="lab">Reforcos de troco</span><span class="val">+ ' + fmt(data.suprimentos) + "</span></div>"
+      : "") +
+    (data.sangrias && data.sangrias > 0
+      ? '<div class="row"><span class="lab">Retiradas (sangrias)</span><span class="val">- ' + fmt(data.sangrias) + "</span></div>"
+      : "") +
     '<div class="row"><span class="lab">Esperado em caixa</span><span class="val">' + fmt(data.dinheiroEsperado) + "</span></div>" +
     '<div class="row"><span class="lab">Contado em caixa</span><span class="val">' + fmt(data.dinheiroContado) + "</span></div>" +
     '<div class="row"><span class="lab">Diferenca</span><span class="val diff" style="color:' + diffColor + ';">' + diffLabel + "</span></div>" +

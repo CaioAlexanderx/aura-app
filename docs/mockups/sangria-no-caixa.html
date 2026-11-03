@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Retirada e reforço no caixa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" />
+<style>
+  /* ============================================================
+     Mockup standalone — Sangria e suprimento no caixa (30/10/2026).
+
+     Pedido do Caio: "habilitar a retirada de valores no caixa, quando
+     estiver aberto". A loja tira dinheiro da gaveta (depósito, motoboy)
+     ou reforça o troco no meio do dia. Não é venda: só mexe no dinheiro
+     esperado do fechamento (Aura-backend#944, migration 422).
+
+     Proposta: nada de modal novo. O chip "Caixa aberto" já abre o modal
+     "Fechar caixa"; o passo 1 (Contagem) ganha o bloco "Dinheiro na
+     gaveta" com os dois botões, "Retirar dinheiro" e "Reforçar troco",
+     e a lista do que já saiu/entrou (com "desfazer"). Tocar num botão
+     troca o corpo do modal pelo formulário (valor + motivo), com
+     Cancelar/Confirmar no rodapé; ao confirmar, volta ao passo 1 com o
+     esperado já atualizado. O fechamento mostra as linhas e o PDF também.
+
+     Tokens: constants/colors.ts (Dark). Só HTML/CSS. Nada aqui é código.
+     ============================================================ */
+  :root {
+    --bg: #060816; --bg2: #090c1a; --bg3: #0e1228; --bg4: #141830;
+    --ink: #f0edff; --ink2: rgba(220,215,255,0.75); --ink3: rgba(170,160,235,0.65);
+    --line: rgba(255,255,255,0.07); --line2: rgba(120,100,240,0.22);
+    --violet: #7c3aed; --violet3: #a78bfa; --violetD: rgba(109,40,217,0.14);
+    --green: #34d399; --red: #f87171; --amber: #fbbf24;
+    --serif: 'Instrument Serif', Georgia, serif;
+    --sans: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mono: 'DM Mono', 'SF Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; font-variant-numeric: tabular-nums; }
+  body { margin: 0; padding: 32px 16px 90px; background: var(--bg); color: var(--ink); font-family: var(--sans); min-height: 100vh; }
+  .wrap { max-width: 1480px; margin: 0 auto; }
+  h1.doc { font-family: var(--serif); font-weight: 400; font-size: 42px; line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 10px; }
+  h1.doc span { color: var(--violet); }
+  .doc-sub { color: var(--ink3); font-size: 13.5px; line-height: 1.6; max-width: 860px; margin: 0 0 20px; }
+  .nota { padding: 13px 15px; border: 1px dashed var(--line2); border-radius: 12px; font-size: 12.5px; color: var(--ink3); line-height: 1.6; margin: 0 0 20px; max-width: 1100px; }
+  .nota b { color: var(--violet3); }
+  .secao { margin: 40px 0 12px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--violet3); }
+  .legenda { font-size: 12.5px; color: var(--ink3); line-height: 1.65; max-width: 420px; margin: 10px 0 0; }
+  .legenda b { color: var(--violet3); }
+  .telas { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+  .rotulo { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--green); margin-bottom: 8px; }
+
+  /* ── Modal (OpenCloseCashModal, 580px) ─────────────────────── */
+  .modal { width: 480px; border-radius: 16px; border: 1px solid rgba(124,58,237,0.30); background: rgba(18,10,35,0.97); overflow: hidden; }
+  .mh { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid rgba(124,58,237,0.15); font-size: 14px; font-weight: 700; }
+  .mh i { width: 28px; height: 28px; border-radius: 8px; background: rgba(251,191,36,0.15); display: inline-block; }
+  .mh i.v { background: var(--violetD); }
+  .steps { display: flex; justify-content: center; gap: 14px; padding: 10px 16px; border-bottom: 1px solid rgba(124,58,237,0.10); font-size: 10px; font-weight: 600; letter-spacing: 0.3px; color: var(--ink3); }
+  .steps b { display: inline-flex; width: 20px; height: 20px; border-radius: 10px; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); margin-right: 6px; font-size: 10px; }
+  .steps .on { color: var(--violet3); } .steps .on b { background: var(--violet); color: #fff; }
+  .mb { padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+  .strip { padding: 10px 12px; border-radius: 10px; background: var(--violetD); border: 1px solid var(--line2); }
+  .strip .t { font-size: 13px; font-weight: 700; } .strip .s { font-size: 11px; color: var(--ink3); margin-top: 2px; }
+  .st { font-size: 11px; font-weight: 700; color: var(--ink3); text-transform: uppercase; letter-spacing: 1.1px; margin-top: 8px; }
+  .box { border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,0.03); padding: 4px 12px; }
+  .row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 12px; border-bottom: 1px solid var(--line); }
+  .row:last-child { border-bottom: 0; }
+  .row .l { color: var(--ink3); } .row .v { font-weight: 600; font-family: var(--mono); }
+  .row.tot .v { color: var(--violet3); font-weight: 700; font-size: 13px; }
+  .g { color: var(--green) !important; } .r { color: var(--red) !important; }
+  .acoes { display: flex; gap: 8px; }
+  .acao { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; height: 36px; border-radius: 10px; border: 1px solid var(--line2); background: rgba(255,255,255,0.03); font-size: 12px; font-weight: 600; color: var(--ink); position: relative; }
+  .acao.novo { box-shadow: 0 0 0 2px var(--violet); }
+  .tag-novo { position: absolute; top: -9px; right: 8px; font-family: var(--mono); font-size: 9px; padding: 2px 6px; border-radius: 5px; background: var(--green); color: #052e22; font-weight: 700; }
+  .lista { display: flex; flex-direction: column; gap: 4px; }
+  .mov { display: flex; align-items: center; gap: 8px; font-size: 11.5px; padding: 6px 10px; border-radius: 8px; background: rgba(255,255,255,0.03); }
+  .mov .n { flex: 1; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mov .v { font-family: var(--mono); font-weight: 600; }
+  .mov .d { font-size: 10px; color: var(--ink3); text-transform: uppercase; letter-spacing: 0.4px; }
+  .money { display: flex; align-items: center; gap: 10px; background: rgba(5,6,15,0.6); border: 1px solid rgba(124,58,237,0.20); border-radius: 12px; padding: 10px 16px; }
+  .money .p { font-size: 16px; color: var(--ink3); } .money .f { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+  .money .f.ph { color: var(--ink3); font-weight: 500; }
+  .aviso { font-size: 11px; color: var(--red); }
+  .ta { background: rgba(5,6,15,0.6); border: 1px solid rgba(255,255,255,0.10); border-radius: 9px; padding: 10px 12px; font-size: 13px; color: var(--ink3); }
+  .mf { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-top: 1px solid rgba(124,58,237,0.12); background: rgba(124,58,237,0.04); }
+  .mf .txt { font-size: 11px; font-weight: 600; color: var(--ink3); }
+  .bsec { padding: 9px 14px; border-radius: 9px; border: 1px solid var(--line2); font-size: 12px; font-weight: 600; }
+  .bpri { padding: 9px 16px; border-radius: 9px; background: var(--violet); color: #fff; font-size: 12px; font-weight: 700; }
+  .bpri.off { opacity: 0.45; }
+  .in { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+  .cupom { width: 300px; background: #fff; color: #000; font-family: Consolas, 'Lucida Console', monospace; font-size: 11px; padding: 12px; border-radius: 6px; }
+  .cupom .c { text-align: center; font-weight: 700; } .cupom .l { border-top: 1px solid #000; margin: 6px 0; }
+  .cupom .r { display: flex; justify-content: space-between; } .cupom .r.n { background: #efe9ff; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 class="doc">Retirada e reforço <span>no caixa aberto</span></h1>
+  <p class="doc-sub">A lojista tira dinheiro da gaveta (depósito no banco, pagar o motoboy, troco para outro caixa) ou reforça o troco no meio do dia, sem fechar o caixa. O fechamento já desconta o que saiu e soma o que entrou.</p>
+  <div class="nota"><b>Decisões de desenho.</b> Nada de modal novo: o chip "Caixa aberto" já abre o modal do caixa, e o passo 1 (Contagem) ganha o bloco "Dinheiro na gaveta" com os dois botões e a lista do dia. Tocar num botão troca o corpo do modal pelo formulário (valor + motivo) e o rodapé vira Cancelar/Confirmar; ao confirmar, volta ao passo 1 com o esperado já atualizado. A retirada nunca passa do dinheiro que o sistema diz estar na gaveta (acima disso é dedo errado ou venda não lançada). "Desfazer" vale só com o caixa aberto: o fechamento congela tudo.</div>
+
+  <div class="secao">1 · Passo "Contagem" do modal do caixa</div>
+  <div class="telas">
+    <div>
+      <div class="rotulo">A · Caixa aberto, com uma retirada e um reforço no dia</div>
+      <div class="modal">
+        <div class="mh"><i></i>Fechar caixa</div>
+        <div class="steps"><span class="on"><b>1</b>CONTAGEM</span><span><b>2</b>OBSERVAÇÃO</span><span><b>3</b>REVISAR</span></div>
+        <div class="mb">
+          <div class="strip"><div class="t">Caixa aberto em 08:02</div><div class="s">Dona Lúcia · troco R$ 100,00</div></div>
+          <div class="st">Dinheiro na gaveta</div>
+          <div class="box">
+            <div class="row"><span class="l">Troco de abertura</span><span class="v">R$ 100,00</span></div>
+            <div class="row"><span class="l">Vendas em dinheiro</span><span class="v">R$ 250,00</span></div>
+            <div class="row"><span class="l">Reforços de troco</span><span class="v g">+ R$ 50,00</span></div>
+            <div class="row"><span class="l">Retiradas</span><span class="v r">− R$ 200,00</span></div>
+            <div class="row tot"><span class="l">Esperado em caixa</span><span class="v">R$ 200,00</span></div>
+          </div>
+          <div class="acoes">
+            <span class="acao novo">↑ Retirar dinheiro<span class="tag-novo">novo</span></span>
+            <span class="acao novo">↓ Reforçar troco</span>
+          </div>
+          <div class="lista">
+            <div class="mov"><span class="n">14:10 · Retirada · depósito no banco</span><span class="v r">− R$ 200,00</span><span class="d">desfazer</span></div>
+            <div class="mov"><span class="n">10:35 · Reforço · troco a mais</span><span class="v g">+ R$ 50,00</span><span class="d">desfazer</span></div>
+          </div>
+          <div class="st">Quanto contou no caixa físico?</div>
+          <div class="money"><span class="p">R$</span><span class="f ph">0,00</span></div>
+        </div>
+        <div class="mf"><span class="txt">PASSO 1 DE 3</span><span><span class="bsec">Cancelar</span> &nbsp;<span class="bpri off">Avançar -></span></span></div>
+      </div>
+      <p class="legenda">As duas linhas novas só aparecem quando há valor. O <b>esperado</b> é o mesmo número que vai para o fechamento e para o PDF.</p>
+    </div>
+
+    <div>
+      <div class="rotulo">B · Tocou em "Retirar dinheiro"</div>
+      <div class="modal">
+        <div class="mh"><i></i>Retirar dinheiro</div>
+        <div class="mb">
+          <div class="strip"><div class="t">R$ 400,00 em dinheiro na gaveta agora</div><div class="s">Retirada para depósito, pagamento ou troco de outro caixa. Sai do esperado do fechamento.</div></div>
+          <div class="st">Quanto sai?</div>
+          <div class="money"><span class="p">R$</span><span class="f">200,00</span></div>
+          <div class="st">Motivo (opcional)</div>
+          <div class="ta">depósito no banco</div>
+        </div>
+        <div class="mf"><span class="bsec">Cancelar</span><span class="bpri">Confirmar retirada</span></div>
+      </div>
+      <p class="legenda">Sem o stepper: é uma ação dentro do caixa, não um passo do fechamento. Valor acima do que há na gaveta mostra <b>"O caixa só tem R$ 400,00 em dinheiro"</b> e o botão fica inativo. "Reforçar troco" é o mesmo formulário, sem teto.</p>
+    </div>
+
+    <div>
+      <div class="rotulo">C · Revisar e PDF do fechamento</div>
+      <div class="modal">
+        <div class="mh"><i></i>Fechar caixa</div>
+        <div class="steps"><span class="on"><b>✓</b>CONTAGEM</span><span class="on"><b>✓</b>OBSERVAÇÃO</span><span class="on"><b>3</b>REVISAR</span></div>
+        <div class="mb">
+          <div class="st">Conferência de caixa</div>
+          <div class="box">
+            <div class="row"><span class="l">Reforços de troco</span><span class="v g">+ R$ 50,00</span></div>
+            <div class="row"><span class="l">Retiradas</span><span class="v r">− R$ 200,00</span></div>
+            <div class="row"><span class="l">Esperado em caixa</span><span class="v">R$ 200,00</span></div>
+            <div class="row"><span class="l">Contado em caixa</span><span class="v">R$ 200,00</span></div>
+          </div>
+        </div>
+        <div class="mf"><span class="bsec"><- Voltar e recontar</span><span class="bpri">Fechar caixa</span></div>
+      </div>
+      <div class="cupom" style="margin-top:14px">
+        <div class="c">CONFERÊNCIA DE CAIXA</div><div class="l"></div>
+        <div class="r"><span>Troco de abertura</span><span>100,00</span></div>
+        <div class="r"><span>Dinheiro (líquido na sessão)</span><span>250,00</span></div>
+        <div class="r n"><span>Reforços de troco</span><span>+ 50,00</span></div>
+        <div class="r n"><span>Retiradas (sangrias)</span><span>− 200,00</span></div>
+        <div class="r"><b>Esperado em caixa</b><b>200,00</b></div>
+        <div class="r"><span>Contado</span><span>200,00</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

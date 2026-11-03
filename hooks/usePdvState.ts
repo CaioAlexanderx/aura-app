@@ -85,6 +85,7 @@ import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 import { useComandaNoCaixa } from "@/hooks/useComandaNoCaixa";
 import { useComandasAbertas } from "@/components/screens/pdv/ComandasAbertasPanel";
 import { lerComandaEnabled } from "@/utils/comanda";
+import { lerFreteEnabled } from "@/utils/frete";
 import { algumPrecoMudou } from "@/utils/vendaRecuperada";
 
 import { toast } from "@/components/Toast";
@@ -243,6 +244,7 @@ export function usePdvState() {
     addToCart, setQty, updateQty, setUnitPrice, removeItem, finalizeSale, newSale: rawNewSale,
     setQuoteId,
     comanda: comandaNoCarrinho, setComanda,
+    freteValor, setFreteValor, frete,
     referredProfessionalId, setReferredProfessionalId,
     setLotAllocations,
     selectedCustomerId, selectedCustomerName, selectedCustomerPhone, selectCustomer,
@@ -386,6 +388,15 @@ export function usePdvState() {
   // rodapé. Mesma chave do painel e dos modais.
   const comandasAbertas = useComandasAbertas(company?.id, comandaEnabled && !isDemo);
   const comandasAbertasCount = comandasAbertas.data?.comandas?.length ?? 0;
+
+  // ── Frete no Caixa (30/10/2026, utils/frete) ────────────────────────────
+  // Só com pdv_settings.frete_enabled. A seção abre pelo atalho "Frete" (ou
+  // sozinha quando a venda guardada volta com frete) e fecha ao tirar o
+  // valor ou ao esvaziar o carrinho. O cliente da entrega é o da venda.
+  const freteEnabled = lerFreteEnabled(pdvSettings);
+  const [freteAberto, setFreteAberto] = useState(false);
+  useEffect(function() { if (cart.length === 0) setFreteAberto(false); }, [cart.length]);
+  const freteOpen = freteEnabled && (freteAberto || frete > 0 || freteValor.length > 0);
 
   // ── Matcon M1 — Caixa abre orçamento convertido (`?quote={id}`) ─────────
   // A esteira de Orçamentos manda pra cá com `?quote=<id>` depois de
@@ -1093,6 +1104,19 @@ export function usePdvState() {
     savingQuote:       matconQuote.saving,
     savedQuote:        matconQuote.savedQuote,
     editingQuote:      editingQuote ? { number: editingQuote.number, onCancel: newSale } : null,
+    // Frete: null com a chave desligada = carrinho de sempre.
+    frete: freteEnabled
+      ? {
+          value: freteValor,
+          onChange: setFreteValor,
+          amount: frete,
+          open: freteOpen,
+          onToggle: () => setFreteAberto(true),
+          onClear: () => { setFreteValor(""); setFreteAberto(false); },
+          customerName: selectedCustomerName,
+          onPickCustomer: clientesEnabled ? () => customerPickerRef.current?.open() : undefined,
+        }
+      : null,
     // Comandas: null com a chave desligada = rodapé de sempre.
     comanda: comandaEnabled
       ? {
@@ -1121,10 +1145,12 @@ export function usePdvState() {
     onCpfNaNotaChange: setCpfNaNota,
     // Preço no cartão (tela 3/5 do mockup): o par "dinheiro e PIX · cartão"
     // sempre à vista no topo. null com a opção desligada = topo de sempre.
+    // 30/10/2026: o par mostra o total da venda, frete incluído (o mesmo nos
+    // dois lados — o frete não muda com a forma de pagamento).
     pricePair: precoNoCartao
       ? {
-          cash: precoNoCartao.totalDinheiro,
-          card: precoNoCartao.totalCartao,
+          cash: Math.round((precoNoCartao.totalDinheiro + frete) * 100) / 100,
+          card: Math.round((precoNoCartao.totalCartao + frete) * 100) / 100,
           active: (splitMode ? "split" : precoNoCartao.noCartao ? "card" : "cash") as "split" | "card" | "cash",
         }
       : null,

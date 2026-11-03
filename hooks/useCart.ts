@@ -9,6 +9,7 @@ import { toast } from "@/components/Toast";
 import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
 import { aoRecarregar, apagarVendaGuardada, guardarVenda, recuperarVenda } from "@/utils/vendaGuardada";
 import { ehIdDeCatalogo } from "@/utils/comanda";
+import { linhaDoFrete, valorDoFrete } from "@/utils/frete";
 import { mensagemErroCarneDaVenda } from "@/utils/crediarioCarne";
 import { novaChaveDaVenda } from "@/utils/chaveDaVenda";
 import {
@@ -79,6 +80,8 @@ type VendaGuardada = {
   quoteId: string | null;
   comanda?: ComandaNoCarrinho | null;
   lotAllocations: Record<string, LotAllocation[]>;
+  /** 30/10/2026: o frete digitado (texto do campo). Ausente = sem frete. */
+  frete?: string;
   /** 17/10/2026 (tq-15): a chave de idempotência da venda viaja junto —
    *  duas abas com o mesmo carrinho restaurado mandam a MESMA chave.
    *  Ausente em venda guardada antes disso (a aba fica com a sua). */
@@ -132,6 +135,9 @@ export type SaleResult = {
   // cai na soma dos itens.
   subtotal?: number;
   discount?: number;
+  /** 30/10/2026 (Frete no Caixa): o frete cobrado nesta venda. Ausente ou
+   *  0 = venda sem frete. Está dentro de `subtotal` e `total`. */
+  frete?: number;
   cpfNaNota?: string;       // CPF do consumidor (opcional, pra NFC-e)
   // QA 23/09/2026 (Matcon): o `matcon` da resposta do POST /pdv/sale —
   // entrega criada pela venda de orçamento e pontos da indicação. Ausente
@@ -198,6 +204,12 @@ export function useCart(
   // e também quando o operador esvazia o carrinho na mão (efeito abaixo):
   // carrinho vazio não está cobrando comanda nenhuma.
   var [comanda, setComanda] = useState<ComandaNoCarrinho | null>(null);
+
+  // 30/10/2026 (Frete no Caixa, utils/frete): o valor digitado no campo
+  // "Frete / entrega". Vira a linha "Frete" do POST da venda e soma no
+  // total DEPOIS do desconto — desconto é sobre os produtos, nunca sobre o
+  // frete. Zera junto com o carrinho.
+  var [freteValor, setFreteValor] = useState("");
 
   // 22/09/2026 (Matcon M3): id do profissional "indicado por" desta venda
   // (chip do Caixa — IndicadoPorChip via useMatconReferral). Vai como
@@ -303,6 +315,7 @@ export function useCart(
     discountType, discountValue, cpfNaNota,
     splitMode, splitPayments,
     quoteId, comanda, lotAllocations,
+    frete: freteValor,
     idempotencyKey: chaveDaVenda,
   };
   const vendaRef = useRef<VendaGuardada | null>(vendaAtual);
@@ -415,6 +428,7 @@ export function useCart(
     setQuoteId(v.quoteId ?? null);
     setComanda(v.comanda && v.comanda.id ? v.comanda : null);
     setLotAllocationsMap(v.lotAllocations && typeof v.lotAllocations === "object" ? v.lotAllocations : {});
+    setFreteValor(typeof v.frete === "string" ? v.frete : "");
     // tq-15: a venda restaurada continua com a chave dela (outra aba pode
     // estar com o mesmo carrinho). Guardada antes disso: fica a desta aba.
     if (typeof v.idempotencyKey === "string" && v.idempotencyKey) setChaveDaVenda(v.idempotencyKey);
@@ -482,6 +496,9 @@ export function useCart(
 
   let couponDiscount = couponApplied?.discount || 0;
   let totalAfterCoupon = Math.max(0, total - manualDiscountAmount - couponDiscount);
+  // Frete: fora de toda a conta dos produtos (subtotal, cupom, desconto,
+  // preço no cartão). Entra só no total da venda e no que o dividido reparte.
+  const frete = valorDoFrete(freteValor);
 
   // Com a opção ligada, os dois totais (dinheiro e cartão) saem do MESMO
   // cálculo do POST /pdv/sale (totalComoNoServidor): o que a tela mostra é
@@ -538,10 +555,10 @@ export function useCart(
     () => round2(splitPayments.reduce((s, p) => s + (Number(p.value) || 0), 0)),
     [splitPayments],
   );
-  // Restante = totalAfterCoupon − soma dos splits. Pode ser negativo (overpay).
+  // Restante = totalAfterCoupon + frete − soma dos splits. Pode ser negativo (overpay).
   const splitRemainingLegado = useMemo(
-    () => round2(totalAfterCoupon - splitTotalLegado),
-    [totalAfterCoupon, splitTotalLegado],
+    () => round2(totalAfterCoupon + frete - splitTotalLegado),
+    [totalAfterCoupon, frete, splitTotalLegado],
   );
 
   // ── Preço no cartão: a regra do dividido (tela 4 do mockup) ──────
@@ -550,8 +567,10 @@ export function useCart(
   // abate valor ÷ fator, e a linha "auto" é o que falta. Recalcula sozinho
   // quando o carrinho muda (as linhas digitadas ficam, a "auto" acompanha).
   // Desligada: null, e o dividido é o de sempre (valores digitados).
+  // O frete entra nos dois totais que o dividido reparte (vale o mesmo no
+  // dinheiro e no cartão); `precoNoCartao` continua só dos produtos.
   const dividido = cartaoOn && precoNoCartao
-    ? resolverDividido(splitPayments, precoNoCartao.totalDinheiro, precoNoCartao.totalCartao)
+    ? resolverDividido(splitPayments, r2(precoNoCartao.totalDinheiro + frete), r2(precoNoCartao.totalCartao + frete))
     : null;
   const splitTotal = dividido ? dividido.total : splitTotalLegado;
   const splitRemaining = dividido ? dividido.falta : splitRemainingLegado;
@@ -560,7 +579,7 @@ export function useCart(
   const splitPaymentsVista: PaymentEntry[] = dividido ? dividido.entradas : splitPayments;
   // O que a venda cobra: no dividido com preço no cartão, a soma dos
   // pagamentos (+ o que falta, no dinheiro, enquanto não fecha).
-  const totalDaVenda = dividido && splitMode ? r2(dividido.total + Math.max(0, dividido.falta)) : totalAfterCoupon;
+  const totalDaVenda = dividido && splitMode ? r2(dividido.total + Math.max(0, dividido.falta)) : r2(totalAfterCoupon + frete);
   // QA 23/09/2026: uma frase só. A explicação do valor no cartão ("os
   // R$ 742,40 que faltavam ficam R$ 824,13") vai DENTRO do "Pronto · a
   // conta fecha" — antes era uma segunda frase começando com "Faltam",
@@ -579,7 +598,8 @@ export function useCart(
   if (dividido && splitMode && precoNoCartao && cart.length > 0) {
     const C = precoNoCartao.totalDinheiro;
     const K = precoNoCartao.totalCartao;
-    const alvoVista = Math.min(Math.max(totalDaVenda, Math.min(C, K)), Math.max(C, K));
+    // As linhas rateadas são só dos produtos: o frete sai do alvo.
+    const alvoVista = Math.min(Math.max(r2(totalDaVenda - frete), Math.min(C, K)), Math.max(C, K));
     linhasDaVista = linhasRateadas(precosDasLinhas, alvoVista, descontosDaVenda);
     const simDaVista = totalComoNoServidor(linhasDaVista, descontosDaVenda);
     couponDiscount = simDaVista.cupom;
@@ -597,8 +617,8 @@ export function useCart(
     if (cartaoOn && precoNoCartao) {
       // As linhas que já estão lá viram valor fixo (o que mostravam) e a
       // nova é "o que falta" — a regra se preenche sozinha.
-      const C = precoNoCartao.totalDinheiro;
-      const K = precoNoCartao.totalCartao;
+      const C = r2(precoNoCartao.totalDinheiro + frete);
+      const K = r2(precoNoCartao.totalCartao + frete);
       setSplitPayments(prev => {
         const fixas = resolverDividido(prev, C, K).entradas.map(p => ({ method: p.method, value: round2(p.value), change: p.change }));
         const method = entry?.method || (prev.length === 0 ? payment : "cartao");
@@ -614,7 +634,7 @@ export function useCart(
         // Se nada informado, sugere o restante (até 0).
         value: entry?.value !== undefined
           ? round2(entry.value)
-          : round2(Math.max(0, totalAfterCoupon - prev.reduce((s, p) => s + p.value, 0))),
+          : round2(Math.max(0, totalAfterCoupon + frete - prev.reduce((s, p) => s + p.value, 0))),
         change: entry?.change,
       },
     ]);
@@ -654,7 +674,7 @@ export function useCart(
         // cartão ela é "o que falta" (se preenche pelo método escolhido).
         setSplitPayments(cartaoOn
           ? [{ method: payment, value: 0, auto: true }]
-          : [{ method: payment, value: round2(totalAfterCoupon) }]);
+          : [{ method: payment, value: round2(totalAfterCoupon + frete) }]);
       } else {
         setSplitPayments([]);
       }
@@ -849,7 +869,8 @@ export function useCart(
     // devolve. Venda toda num método = exatamente o preço daquele método.
     var linhasDoPayload: LinhaDoPayload[] | null = null;
     if (dividido && paymentsSnapshot) {
-      var alvo = round2(paymentsSnapshot.reduce(function(s, p) { return s + p.value; }, 0));
+      // O frete está nos pagamentos, mas não nas linhas dos produtos.
+      var alvo = round2(paymentsSnapshot.reduce(function(s, p) { return s + p.value; }, 0) - frete);
       linhasDoPayload = linhasRateadas(precosDasLinhas, alvo, descontosDaVenda);
       var rateadas = linhasDoPayload;
       cartSnapshot = cartSnapshot.map(function(i, idx) {
@@ -911,6 +932,11 @@ export function useCart(
       referred_by_professional_id: referredProfessionalId || undefined,
     };
 
+    // Frete: uma linha sem produto de cadastro (utils/frete). O servidor
+    // fecha a conta pelas linhas, então é assim que o frete entra no total,
+    // no cupom e no histórico.
+    if (frete > 0) saleData.items.push(linhaDoFrete(frete));
+
     if (paymentsSnapshot) saleData.payments = paymentsSnapshot;
     if (saleDate) saleData.sale_date = saleDate;
     if (couponApplied?.code) saleData.coupon_code = couponApplied.code;
@@ -953,6 +979,22 @@ export function useCart(
       saleData.credit_account_id = crediario.credit_account_id;
     }
 
+    // Com frete, o desconto manual vai em R$ (o valor já calculado sobre os
+    // produtos): em %, o servidor aplicaria o percentual também sobre a
+    // linha do frete e a conta não fecharia com a da tela.
+    if (frete > 0 && saleData.discount_type === "percent") {
+      var manualSobreOsProdutos = linhasDoPayload
+        ? totalComoNoServidor(linhasDoPayload, descontosDaVenda).manual
+        : (simDoMetodo ? simDoMetodo.manual : manualDiscountAmount);
+      if (manualSobreOsProdutos > 0) {
+        saleData.discount_type = "fixed";
+        saleData.discount_value = round2(manualSobreOsProdutos);
+      } else {
+        delete saleData.discount_type;
+        delete saleData.discount_value;
+      }
+    }
+
     // A conta da tela final. Dividido: a das linhas rateadas que vão no
     // POST (o cupom em % recalculado sobre elas, como o servidor faz);
     // opção ligada num método só: a do método; desligada: a de sempre.
@@ -971,6 +1013,11 @@ export function useCart(
         desconto: descontoDeSempre,
         total: totalAfterCoupon,
       };
+    }
+    // O frete entra no subtotal e no total da tela final (subtotal − desconto
+    // = total continua valendo), como o servidor grava.
+    if (frete > 0) {
+      contaLocal = { ...contaLocal, subtotal: r2(contaLocal.subtotal + frete), total: r2(contaLocal.total + frete) };
     }
 
     function buildLastSale(saleId: string, saleNumber?: number | null, venda?: any, matcon?: any): SaleResult {
@@ -994,6 +1041,7 @@ export function useCart(
         manualDiscount: conta.manual > 0 ? conta.manual : undefined,
         subtotal: conta.subtotal,
         discount: conta.desconto,
+        frete: frete > 0 ? frete : undefined,
         cpfNaNota: cleanCpf || undefined,
         matcon: matcon && typeof matcon === "object" ? (matcon as MatconDaVenda) : null,
       };
@@ -1013,6 +1061,7 @@ export function useCart(
           finalizandoRef.current = false;
           apagarGuarda();
           setCart([]); setQuoteId(null); setComanda(null); setReferredProfessionalId(null); clearLotAllocations(); toast.success("Venda registrada!"); setIsProcessing(false); clearCoupon(); clearDiscount();
+          setFreteValor("");
           setSellerName("");
           setCpfNaNota("");
           // QA 23/09/2026 (decisão do Caio): a próxima venda começa limpa —
@@ -1048,6 +1097,7 @@ export function useCart(
       apagarGuarda();
       setLastSale(buildLastSale(Date.now().toString(36).toUpperCase().slice(-6)));
       setCart([]); setQuoteId(null); setComanda(null); setReferredProfessionalId(null); clearLotAllocations(); setIsProcessing(false);
+      setFreteValor("");
       voltarAoPagamentoInicial();
     }
   }
@@ -1065,6 +1115,7 @@ export function useCart(
     apagarGuarda();
     setRecuperada(null);
     setLastSale(null); setCart([]); setQuoteId(null); setComanda(null); setReferredProfessionalId(null); clearLotAllocations(); setIsProcessing(false);
+    setFreteValor("");
     setSelectedCustomerId(null); setSelectedCustomerName(null); setSelectedCustomerPhone(null);
     setSelectedEmployeeId(null); setSelectedEmployeeName(null);
     setSellerName("");
@@ -1078,6 +1129,8 @@ export function useCart(
   return {
     quoteId, setQuoteId,
     comanda, setComanda,
+    // 30/10/2026 (Frete no Caixa): o texto do campo e o valor que vale.
+    freteValor, setFreteValor, frete,
     referredProfessionalId, setReferredProfessionalId,
     // Matcon M4 — o pai (usePdvState/cartProps) liga `setLotAllocations` no
     // `onLotAllocations` do CartPanel; sem isso a linha do lote continua

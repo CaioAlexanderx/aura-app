@@ -23,6 +23,7 @@ import { fmtQty, unidadeParaQuantidade, qtdComUnidade, nomeDaUnidade } from "@/u
 import { resumoDeLotes } from "@/utils/matconLots";
 // 23/09/2026 (QA producao, item 9): margem 100% em produto sem custo.
 import { computeMargin, DICA_MARGEM_SEM_CUSTO } from "@/utils/productMargin";
+import { VariantesConsulta } from "./VariantesConsulta";
 
 const fmtBRL = (n: number) =>
   "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -36,16 +37,20 @@ type Props = {
   bulkSelected: Set<string>;
   onSelect: (id: string) => void;
   canLink: boolean;
+  // 30/10/2026 — Estoque só consulta: sem Preço, Margem e ações; tocar no
+  // produto com variantes abre quanto tem de cada tamanho e cor.
+  consulta?: boolean;
 };
 
-export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bulkSelected, onSelect, canLink }: Props) {
+export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bulkSelected, onSelect, canLink, consulta }: Props) {
   const C = useColors();
   const { isDark } = useThemeStore();
   const { m } = useValoresOcultos();
   const [lotesAbertos, setLotesAbertos] = useState<Record<string, boolean>>({});
+  const [variantesAbertas, setVariantesAbertas] = useState<Record<string, boolean>>({});
   if (Platform.OS !== "web") return null;
 
-  const colSpan = bulkMode ? 8 : 7;
+  const colSpan = consulta ? 4 : bulkMode ? 8 : 7;
 
   const accent = C.violet;
   const surface = isDark ? "rgba(20,14,38,0.55)" : "rgba(255,255,255,0.70)";
@@ -87,9 +92,9 @@ export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bul
             <Th w={150}>Código / variante</Th>
             <Th w={160}>Categoria</Th>
             <Th w={130} align="right">Estoque</Th>
-            <Th w={120} align="right">Preço</Th>
-            <Th w={100} align="right">Margem</Th>
-            <Th w={120} align="right">{" "}</Th>
+            {!consulta && <Th w={120} align="right">Preço</Th>}
+            {!consulta && <Th w={100} align="right">Margem</Th>}
+            {!consulta && <Th w={120} align="right">{" "}</Th>}
           </tr>
         </thead>
         <tbody>
@@ -114,8 +119,11 @@ export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bul
                       style={{ accentColor: accent, cursor: "pointer" } as any} />
                   </td>
                 )}
-                <td style={{ padding: "14px 14px", cursor: onEdit ? "pointer" : "default" } as any}
-                  onClick={() => { if (!bulkMode && onEdit) onEdit(p); }}>
+                <td style={{ padding: "14px 14px", cursor: onEdit || (consulta && p.has_variants) ? "pointer" : "default" } as any}
+                  onClick={() => {
+                    if (consulta) { if (p.has_variants) setVariantesAbertas(prev => ({ ...prev, [p.id]: !prev[p.id] })); return; }
+                    if (!bulkMode && onEdit) onEdit(p);
+                  }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12 } as any}>
                     <div style={{
                       width: 44, height: 44, borderRadius: 11, flexShrink: 0,
@@ -203,12 +211,12 @@ export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bul
                     </div>
                   )}
                 </td>
-                <td style={{
+                {!consulta && <td style={{
                   padding: "14px 14px", textAlign: "right",
                   fontFamily: Fonts.mono, fontSize: 13, fontWeight: 500, color: C.ink,
                   fontVariantNumeric: "tabular-nums",
-                } as any}>{m(fmtBRL(price))}</td>
-                <td style={{
+                } as any}>{m(fmtBRL(price))}</td>}
+                {!consulta && <td style={{
                   padding: "14px 14px", textAlign: "right",
                   fontFamily: Fonts.mono, fontSize: 12,
                   color: margin === null ? C.ink3 : margin >= 30 ? (isDark ? "#34d399" : "#059669") : margin >= 10 ? "#fbbf24" : (isDark ? "#f87171" : "#dc2626"),
@@ -226,8 +234,8 @@ export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bul
                       style={{ cursor: "help", textDecoration: "underline", textDecorationStyle: "dotted", textDecorationColor: C.ink3 } as any}
                     >—</span>
                   ) : margin.toFixed(0) + "%"}
-                </td>
-                <td style={{ padding: "14px 14px", textAlign: "right" } as any}>
+                </td>}
+                {!consulta && <td style={{ padding: "14px 14px", textAlign: "right" } as any}>
                   <div className="aura-est-row-actions" style={{
                     display: "flex", justifyContent: "flex-end", gap: 4, opacity: 0,
                     transition: "opacity 0.2s",
@@ -252,8 +260,15 @@ export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bul
                       } as any} title="Excluir"><Icon name="trash" size={13} color={isDark ? "#f87171" : "#dc2626"} /></button>
                     )}
                   </div>
-                </td>
+                </td>}
               </tr>
+              {consulta && p.has_variants && variantesAbertas[p.id] && (
+                <tr style={{ borderBottom: "1px solid " + border } as any}>
+                  <td colSpan={colSpan} style={{ padding: "0 14px 14px" } as any}>
+                    <VariantesConsulta productId={p.id} unit={p.unit} />
+                  </td>
+                </tr>
+              )}
               {lotes && lotesAbertos[p.id] && (
                 <tr style={{ borderBottom: "1px solid " + border } as any}>
                   <td colSpan={colSpan} style={{ padding: "0 14px 14px" } as any}>

@@ -98,6 +98,7 @@ import {
 } from "./matconQty";
 import { rotuloDoLadoDinheiro, rotuloDoPagamento } from "./rotulosDoCaixa";
 import { DiscountSection } from "./DiscountSection";
+import { FreteSection, type FreteProps } from "./FreteSection";
 import { CalculadoraAmbiente } from "@/components/matcon/CalculadoraAmbiente";
 import { LoteDoItem } from "@/components/matcon/LotePicker";
 import type { LotAllocation } from "@/services/matconApi";
@@ -202,6 +203,11 @@ type Props = {
     openCount?: number;
     charging: { number: number; name?: string | null; feePct: number; onCancel: () => void } | null;
   } | null;
+  /** 30/10/2026 (Frete no Caixa, mockup docs/mockups/frete-no-caixa.html).
+   *  Com ele: atalho "Frete" na linha de atalhos; aberto, a seção "Frete /
+   *  entrega" no resumo e, com valor, a linha "Frete" entre Desconto e
+   *  Total. null/ausente (chave desligada) = carrinho de sempre. */
+  frete?: (FreteProps & { open: boolean; onToggle: () => void }) | null;
   discountLabel?: string | null;
   /** Desconto manual editável. Opcional para preservar os usos legados do painel. */
   discountType?: "%" | "R$";
@@ -256,7 +262,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     payMethods, activePay, onPay, warrantySlot,
     onInc, onDec, onSetQty, onPriceChange, onRemove, onClear, onFinalize, onGenerateQuote,
     onLotAllocations,
-    showOrcamento, onSaveQuote, savingQuote, savedQuote, editingQuote, comanda,
+    showOrcamento, onSaveQuote, savingQuote, savedQuote, editingQuote, comanda, frete,
     discountLabel, isProcessing, finalizeDisabled, requiredHints,
     discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
     emptyCta, headerSubtitle, compact, fill,
@@ -520,7 +526,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           {/* 09/10/2026 (Comandas): "Adicionar à comanda" mora ao lado. Some
               enquanto o carrinho já é uma comanda sendo cobrada — lançar de
               novo dobraria o consumo. */}
-          {(splitAvailable || (comanda && !comanda.charging) || comandasNoAtalho) && (
+          {(splitAvailable || (comanda && !comanda.charging) || comandasNoAtalho || !!frete) && (
             <View style={s.linksRow}>
               {splitAvailable && (
                 <Pressable onPress={onToggleSplit} style={s.splitToggle}>
@@ -544,6 +550,20 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
               {/* 27/10/2026: loja Matcon — o "Comandas (N)" mora aqui, porque o
                   rodapé é do "Orçamento". Fica mesmo cobrando uma comanda
                   (o painel das abertas continua útil); só "Adicionar" some. */}
+              {/* 30/10/2026 (Frete): o atalho abre a seção; aberto, vira
+                  "Sem frete" e tocar tira o valor e fecha. */}
+              {frete && (
+                <Pressable
+                  testID="cta-frete"
+                  onPress={frete.open ? frete.onClear : frete.onToggle}
+                  disabled={!!isProcessing}
+                  style={[s.splitToggle, isProcessing && { opacity: 0.5 }]}
+                  accessibilityLabel={frete.open ? "Tirar o frete" : "Cobrar frete na venda"}
+                >
+                  <Icon name={frete.open ? "x" : "truck"} size={13} color={Colors.violet3} />
+                  <Text style={s.splitToggleTxt}>{frete.open ? "Sem frete" : "Frete"}</Text>
+                </Pressable>
+              )}
               {comandasNoAtalho && comanda && (
                 <Pressable
                   testID="cta-comandas-atalho"
@@ -625,6 +645,16 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
               clearDiscount={clearDiscount}
             />
           ) : null}
+          {frete && frete.open ? (
+            <FreteSection
+              value={frete.value}
+              onChange={frete.onChange}
+              amount={frete.amount}
+              onClear={frete.onClear}
+              customerName={frete.customerName}
+              onPickCustomer={frete.onPickCustomer}
+            />
+          ) : null}
           <View style={s.sumRow}>
             <Text style={s.sumK}>{subtotalLabel || "Subtotal"}</Text>
             <Text style={s.sumV}>{fmtCurrency(subtotal)}</Text>
@@ -637,6 +667,12 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
               {discountAmount > 0 ? "− " + fmtCurrency(discountAmount) : "R$ 0,00"}
             </Text>
           </View>
+          {frete && frete.amount > 0 && (
+            <View style={s.sumRow} testID="resumo-frete">
+              <Text style={s.sumK}>Frete</Text>
+              <Text style={s.sumV}>{fmtCurrency(frete.amount)}</Text>
+            </View>
+          )}
           <View style={[s.sumRow, s.sumRowTotal]}>
             <Text style={{ fontSize: 13, color: Colors.ink2, fontWeight: "700" }}>Total</Text>
             <Text style={[s.sumV, { color: Colors.violet3, fontSize: 15 }]}>{fmtCurrency(total)}</Text>

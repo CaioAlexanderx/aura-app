@@ -13,6 +13,15 @@
 // até ele de forma intuitiva. Agora: cada step retorna { body, footer } e
 // renderizamos body dentro da ScrollView e footer fora (sticky). Paddings
 // também foram tighten: header 18→14, body 20→16, gap 10→8.
+//
+// 30/10/2026 (sangria e suprimento, Aura-backend#944, mockup
+// docs/mockups/sangria-no-caixa.html): o passo 1 do fechamento ganha o
+// bloco "Dinheiro na gaveta" com "Retirar dinheiro" / "Reforçar troco" e a
+// lista do dia (com "desfazer"). Tocar num botão troca o corpo do modal
+// pelo formulário (valor + motivo), sem stepper; ao confirmar, volta ao
+// passo 1 com o esperado já atualizado. A retirada não passa do que o
+// sistema diz estar na gaveta. Backend antigo (sem a rota): as linhas
+// novas não aparecem e o esperado é o de sempre.
 // ============================================================
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
@@ -24,10 +33,11 @@ import { Icon } from "@/components/Icon";
 import { caixaApi, type CaixaSessaoAtiva, type CaixaFechamentoFull } from "@/services/caixaApi";
 import { employeesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/Toast";
 import { IS_WEB, webOnly } from "./types";
 import { openCashClosePdf, type CashClosePaymentRow } from "@/utils/cashClosePdf";
+import { esperadoNaGaveta, podeRetirar, rotuloDoMovimento, type TipoDeMovimento } from "@/utils/caixaMovimentos";
 
 function toNum(v: unknown): number {
   if (v == null) return 0;
@@ -95,12 +105,21 @@ export function OpenCloseCashModal({
   const [closeResult, setCloseResult] = useState<CaixaFechamentoFull | null>(null);
   const [sessaoSnapshot, setSessaoSnapshot] = useState<CaixaSessaoAtiva | null>(null);
 
+  // 30/10/2026 — retirada/reforço: qual formulário está aberto (null = nenhum).
+  const [movimento, setMovimento] = useState<TipoDeMovimento | null>(null);
+  const [movValorInput, setMovValorInput] = useState("");
+  const [movMotivoInput, setMovMotivoInput] = useState("");
+  const [submittingMov, setSubmittingMov] = useState(false);
+  const [removendoMov, setRemovendoMov] = useState<string | null>(null);
+  const qc = useQueryClient();
+
   useEffect(() => {
     if (!visible) {
       setOpenStep(1); setSelectedEmployee(null); setTrocoInput("0,00");
       setSubmittingOpen(false);
       setCloseStep(1); setDinheiroInput(""); setObsInput("");
       setSubmittingClose(false); setCloseResult(null); setSessaoSnapshot(null);
+      setMovimento(null); setMovValorInput(""); setMovMotivoInput(""); setSubmittingMov(false); setRemovendoMov(null);
     }
   }, [visible]);
 
@@ -137,9 +156,26 @@ export function OpenCloseCashModal({
     }));
   }, [empData]);
 
+  // 30/10/2026 — as movimentações da sessão aberta. Backend antigo (rota
+  // inexistente): a consulta falha, fica undefined e tudo abaixo cai nos
+  // campos do status (também ausentes) = zeros, o esperado de sempre.
+  const { data: movData } = useQuery({
+    queryKey: ["caixa-movimentos", companyId],
+    queryFn: () => caixaApi.movimentos.list(companyId),
+    enabled: !!companyId && visible && mode === "fechar" && isAberto,
+    staleTime: 15_000,
+    retry: 0,
+  });
+  const movimentosDaSessao = movData?.movimentos || [];
+  const sangrias = toNum(movData?.sangrias ?? sessaoEff?.sangrias);
+  const suprimentos = toNum(movData?.suprimentos ?? sessaoEff?.suprimentos);
+
   const trocoInicial = toNum(sessaoEff?.troco_inicial);
   const vendasEmDinheiro = toNum(sessaoEff?.totais_ao_vivo?.dinheiro);
-  const dinheiroEsperado = Math.round((trocoInicial + vendasEmDinheiro) * 100) / 100;
+  const dinheiroEsperado = esperadoNaGaveta({ troco: trocoInicial, dinheiro: vendasEmDinheiro, suprimentos, sangrias });
+  const movValor = parseMoeda(movValorInput);
+  const movForaDoCaixa = movimento === "sangria" && movValor > 0 && !podeRetirar(movValor, dinheiroEsperado);
+  const podeConfirmarMov = movValor > 0 && !movForaDoCaixa;
   const dinheiroContado = parseMoeda(dinheiroInput);
   const diferenca = dinheiroInput ? Math.round((dinheiroContado - dinheiroEsperado) * 100) / 100 : 0;
   const hasDigitedClose = dinheiroInput.length > 0;
@@ -177,6 +213,39 @@ export function OpenCloseCashModal({
     } finally { setSubmittingClose(false); }
   }
 
+  function abrirMovimento(tipo: TipoDeMovimento) {
+    setMovimento(tipo); setMovValorInput(""); setMovMotivoInput("");
+  }
+
+  async function handleRegistrarMovimento() {
+    if (!movimento || submittingMov) return;
+    if (!(movValor > 0)) { toast.error("Digite o valor"); return; }
+    if (movForaDoCaixa) { toast.error("O caixa só tem " + fmt(dinheiroEsperado) + " em dinheiro"); return; }
+    setSubmittingMov(true);
+    try {
+      await caixaApi.movimentos.registrar(companyId, { tipo: movimento, valor: movValor, motivo: movMotivoInput.trim() || null });
+      toast.success(movimento === "sangria" ? "Retirada registrada" : "Reforço registrado");
+      setMovimento(null); setMovValorInput(""); setMovMotivoInput("");
+      qc.invalidateQueries({ queryKey: ["caixa-movimentos", companyId] });
+      onSuccess?.(); // o status do caixa (dinheiro_em_caixa) muda junto
+    } catch (err: any) {
+      toast.error(err?.data?.error || err?.message || "Não deu para registrar");
+    } finally { setSubmittingMov(false); }
+  }
+
+  async function handleDesfazerMovimento(id: string) {
+    if (removendoMov) return;
+    setRemovendoMov(id);
+    try {
+      await caixaApi.movimentos.remover(companyId, id);
+      toast.success("Desfeito");
+      qc.invalidateQueries({ queryKey: ["caixa-movimentos", companyId] });
+      onSuccess?.();
+    } catch (err: any) {
+      toast.error(err?.data?.error || err?.message || "Não deu para desfazer");
+    } finally { setRemovendoMov(null); }
+  }
+
   function handleDownloadPdf() {
     if (!closeResult) return;
     const operatorName = sessaoEff?.opened_by?.name || "Operador";
@@ -204,6 +273,8 @@ export function OpenCloseCashModal({
       entradasTotal: toNum(closeResult.total_geral),
       devolucoes: toNum(closeResult.total_devolucoes),
       trocoInicial, vendasEmDinheiro,
+      suprimentos: closeResult.total_suprimentos != null ? toNum(closeResult.total_suprimentos) : suprimentos,
+      sangrias: closeResult.total_sangrias != null ? toNum(closeResult.total_sangrias) : sangrias,
       dinheiroEsperado: closeResult.dinheiro_esperado != null ? toNum(closeResult.dinheiro_esperado) : dinheiroEsperado,
       dinheiroContado: closeResult.dinheiro_contado != null ? toNum(closeResult.dinheiro_contado) : dinheiroContado,
       diferenca: closeResult.diferenca != null ? toNum(closeResult.diferenca) : diferenca,
@@ -224,10 +295,10 @@ export function OpenCloseCashModal({
       : "0 24px 60px -10px rgba(124,58,237,0.22)",
   });
 
-  const headerIcon = mode === "abrir" ? "unlock" : "lock";
-  const headerColor = mode === "abrir" ? "#a78bfa" : "#fbbf24";
-  const headerBg = mode === "abrir" ? "rgba(124,58,237,0.15)" : "rgba(251,191,36,0.15)";
-  const headerTitle = mode === "abrir" ? "Abrir caixa" : "Fechar caixa";
+  const headerIcon = mode === "abrir" ? "unlock" : movimento ? (movimento === "sangria" ? "arrow_up" : "arrow_down") : "lock";
+  const headerColor = mode === "abrir" ? "#a78bfa" : movimento === "suprimento" ? Colors.green : "#fbbf24";
+  const headerBg = mode === "abrir" ? "rgba(124,58,237,0.15)" : movimento === "suprimento" ? "rgba(52,211,153,0.15)" : "rgba(251,191,36,0.15)";
+  const headerTitle = mode === "abrir" ? "Abrir caixa" : movimento ? (movimento === "sangria" ? "Retirar dinheiro" : "Reforçar troco") : "Fechar caixa";
 
   const openLabels = ["FUNCIONARIO", "TROCO", "CONFIRMAR"];
   const closeLabels = ["CONTAGEM", "OBSERVAÇÃO", "REVISAR"];
@@ -390,12 +461,44 @@ export function OpenCloseCashModal({
           </Text>
           <Text style={s.infoStripSub}>{sessaoEff.opened_by.name} · troco {fmt(trocoInicial)}</Text>
         </View>
-        <Text style={[s.sectionTitle, { marginTop: 12 }]}>O que e esperado em caixa</Text>
+        <Text style={[s.sectionTitle, { marginTop: 12 }]}>Dinheiro na gaveta</Text>
         <View style={s.summaryBox}>
           <View style={s.summaryRow}><Text style={s.summaryLab}>Troco de abertura</Text><Text style={s.summaryVal}>{fmt(trocoInicial)}</Text></View>
           <View style={s.summaryRow}><Text style={s.summaryLab}>Vendas em dinheiro</Text><Text style={s.summaryVal}>{fmt(vendasEmDinheiro)}</Text></View>
-          <View style={s.summaryRow}><Text style={s.summaryLab}>Esperado em caixa</Text><Text style={[s.summaryVal, s.summaryValBold]}>{fmt(dinheiroEsperado)}</Text></View>
+          {suprimentos > 0 && (
+            <View style={s.summaryRow} testID="caixa-reforcos"><Text style={s.summaryLab}>Reforços de troco</Text><Text style={[s.summaryVal, { color: Colors.green }]}>+ {fmt(suprimentos)}</Text></View>
+          )}
+          {sangrias > 0 && (
+            <View style={s.summaryRow} testID="caixa-retiradas"><Text style={s.summaryLab}>Retiradas</Text><Text style={[s.summaryVal, { color: Colors.red }]}>− {fmt(sangrias)}</Text></View>
+          )}
+          <View style={s.summaryRow}><Text style={s.summaryLab}>Esperado em caixa</Text><Text style={[s.summaryVal, s.summaryValBold]} testID="caixa-esperado">{fmt(dinheiroEsperado)}</Text></View>
         </View>
+        {/* 30/10/2026: retirada e reforço com o caixa aberto. */}
+        <View style={s.movAcoes}>
+          <Pressable testID="caixa-retirar" style={s.movBtn} onPress={() => abrirMovimento("sangria")} accessibilityRole="button">
+            <Icon name="arrow_up" size={12} color="#fbbf24" />
+            <Text style={s.movBtnTxt}>Retirar dinheiro</Text>
+          </Pressable>
+          <Pressable testID="caixa-reforcar" style={s.movBtn} onPress={() => abrirMovimento("suprimento")} accessibilityRole="button">
+            <Icon name="arrow_down" size={12} color={Colors.green} />
+            <Text style={s.movBtnTxt}>Reforçar troco</Text>
+          </Pressable>
+        </View>
+        {movimentosDaSessao.length > 0 && (
+          <View style={s.movLista} testID="caixa-movimentos">
+            {movimentosDaSessao.map((m) => (
+              <View key={m.id} style={s.movItem}>
+                <Text style={s.movItemTxt} numberOfLines={1}>{rotuloDoMovimento(m)}</Text>
+                <Text style={[s.movItemVal, { color: m.tipo === "sangria" ? Colors.red : Colors.green }]}>
+                  {(m.tipo === "sangria" ? "− " : "+ ") + fmt(m.valor)}
+                </Text>
+                <Pressable onPress={() => handleDesfazerMovimento(m.id)} hitSlop={8} disabled={removendoMov === m.id} testID={"caixa-mov-desfazer-" + m.id}>
+                  <Text style={[s.movDesfazer, removendoMov === m.id && { opacity: 0.5 }]}>desfazer</Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        )}
         <Text style={[s.sectionTitle, { marginTop: 12 }]}>Quanto contou no caixa físico?</Text>
         <View style={s.moneyInput}>
           <Text style={s.moneyPrefix}>R$</Text>
@@ -470,6 +573,12 @@ export function OpenCloseCashModal({
       <>
         <Text style={s.sectionTitle}>Conferência de caixa</Text>
         <View style={s.summaryBox}>
+          {suprimentos > 0 && (
+            <View style={s.summaryRow}><Text style={s.summaryLab}>Reforços de troco</Text><Text style={[s.summaryVal, { color: Colors.green }]}>+ {fmt(suprimentos)}</Text></View>
+          )}
+          {sangrias > 0 && (
+            <View style={s.summaryRow}><Text style={s.summaryLab}>Retiradas</Text><Text style={[s.summaryVal, { color: Colors.red }]}>− {fmt(sangrias)}</Text></View>
+          )}
           <View style={s.summaryRow}><Text style={s.summaryLab}>Esperado em caixa</Text><Text style={s.summaryVal}>{fmt(dinheiroEsperado)}</Text></View>
           <View style={s.summaryRow}><Text style={s.summaryLab}>Contado em caixa</Text><Text style={s.summaryVal}>{fmt(dinheiroContado)}</Text></View>
           {obsInput.trim() ? (
@@ -539,6 +648,48 @@ export function OpenCloseCashModal({
     );
   }
 
+  // 30/10/2026: o formulário de retirada/reforço toma o lugar do passo,
+  // com o próprio rodapé. Vale só com o caixa aberto (mode fechar).
+  if (mode === "fechar" && movimento && sessaoEff && !closeResult) {
+    const ehSangria = movimento === "sangria";
+    bodyNode = (
+      <>
+        <View style={s.infoStrip}>
+          <Text style={s.infoStripTitle} testID="caixa-mov-em-caixa">{fmt(dinheiroEsperado)} em dinheiro na gaveta agora</Text>
+          <Text style={s.infoStripSub}>
+            {ehSangria
+              ? "Retirada para depósito, pagamento ou troco de outro caixa. Sai do esperado do fechamento."
+              : "Dinheiro que entra sem venda, como troco a mais. Soma no esperado do fechamento."}
+          </Text>
+        </View>
+        <Text style={[s.sectionTitle, { marginTop: 12 }]}>{ehSangria ? "Quanto sai?" : "Quanto entra?"}</Text>
+        <View style={s.moneyInput}>
+          <Text style={s.moneyPrefix}>R$</Text>
+          <TextInput testID="caixa-mov-valor" style={s.moneyField as any} value={movValorInput} onChangeText={setMovValorInput}
+            keyboardType="decimal-pad" placeholder="0,00" placeholderTextColor={Colors.ink3}
+            autoFocus selectTextOnFocus />
+        </View>
+        {movForaDoCaixa && (
+          <Text style={s.movAviso} testID="caixa-mov-aviso">O caixa só tem {fmt(dinheiroEsperado)} em dinheiro.</Text>
+        )}
+        <Text style={[s.sectionTitle, { marginTop: 12 }]}>Motivo (opcional)</Text>
+        <TextInput testID="caixa-mov-motivo" style={s.textArea as any} value={movMotivoInput} onChangeText={setMovMotivoInput}
+          placeholder={ehSangria ? "ex: depósito no banco" : "ex: troco a mais"} placeholderTextColor={Colors.ink3} maxLength={200} />
+      </>
+    );
+    footerNode = (
+      <>
+        <Pressable style={s.btnSec} onPress={() => setMovimento(null)} testID="caixa-mov-cancelar">
+          <Text style={s.btnSecTxt}>Cancelar</Text>
+        </Pressable>
+        <Pressable testID="caixa-mov-confirmar" style={[s.btnPri, (!podeConfirmarMov || submittingMov) && { opacity: 0.45 }, { minWidth: 160 }]}
+          onPress={handleRegistrarMovimento} disabled={!podeConfirmarMov || submittingMov}>
+          {submittingMov ? <ActivityIndicator size="small" color="#fff" /> : <Text style={s.btnPriTxt}>{ehSangria ? "Confirmar retirada" : "Confirmar reforço"}</Text>}
+        </Pressable>
+      </>
+    );
+  }
+
   return (
     <View style={s.overlay}>
       <Pressable style={s.backdrop} onPress={handleCloseModal} />
@@ -556,8 +707,8 @@ export function OpenCloseCashModal({
           </Pressable>
         </View>
 
-        {/* Stepper */}
-        {!(mode === "fechar" && closeStep === 4) && (
+        {/* Stepper — some no formulário de retirada/reforço: é ação, não passo. */}
+        {!(mode === "fechar" && closeStep === 4) && !(mode === "fechar" && movimento) && (
           <View style={s.stepBar}>
             {(mode === "abrir" ? openLabels : closeLabels).map((label, idx) => {
               const n = idx + 1;
@@ -718,6 +869,24 @@ const s = StyleSheet.create({
   summaryLab: { fontSize: 12, color: Colors.ink3 },
   summaryVal: { fontSize: 12, color: Colors.ink, fontWeight: "600" },
   summaryValBold: { fontWeight: "700", color: "#a78bfa", fontSize: 13 },
+  // 30/10/2026 — retirada/reforço (mockup docs/mockups/sangria-no-caixa.html)
+  movAcoes: { flexDirection: "row", gap: 8, marginTop: 8 },
+  movBtn: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+    height: 36, borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.03)", borderWidth: 1, borderColor: "rgba(124,58,237,0.22)",
+  },
+  movBtnTxt: { fontSize: 12, fontWeight: "600", color: Colors.ink },
+  movLista: { gap: 4, marginTop: 6 },
+  movItem: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.03)",
+  },
+  movItemTxt: { flex: 1, fontSize: 11.5, color: Colors.ink2 },
+  movItemVal: { fontSize: 11.5, fontWeight: "600" },
+  movDesfazer: { fontSize: 10, color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.4, fontWeight: "700" },
+  movAviso: { fontSize: 11, color: Colors.red, marginTop: 6 },
   netBox: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     padding: 12, borderRadius: 10,

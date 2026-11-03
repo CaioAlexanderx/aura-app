@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Frete no Caixa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" />
+<style>
+  /* ============================================================
+     Mockup standalone — Frete no Caixa (30/10/2026).
+
+     Pedido do Caio: a loja cobra o frete/entrega na venda. Ativável em
+     Configurações › Caixa; o operador digita o valor e, se quiser, vincula
+     a um cliente. Tem que caber no carrinho de hoje sem virar outra tela.
+
+     Proposta (mesmo DNA do "Dividir pagamento" e do "Desconto manual"):
+       · chave "Frete / entrega" em Configurações, ao lado de Comandas;
+       · ligada, aparece o atalho "Frete" na linha de atalhos do carrinho
+         (onde moram "Dividir pagamento" e "Adicionar à comanda");
+       · tocar abre a seção "Frete / entrega" no resumo, logo abaixo do
+         desconto: campo de valor + "Entrega para <cliente da venda>".
+         O cliente é O MESMO da venda (um cadastro só, sem segundo
+         seletor); sem cliente, o link "Vincular cliente" abre o seletor
+         do topo do Caixa;
+       · com valor, o resumo ganha a linha "Frete" entre Desconto e Total.
+         O desconto (% ou R$) vale só sobre os produtos — nunca sobre o
+         frete;
+       · tela final: Subtotal · Frete · Desconto · Total, e o cupom leva
+         a linha "Frete".
+
+     Tokens: constants/colors.ts (Dark e Light). Só HTML/CSS e um pouco
+     de JS para trocar estados. Nada aqui é código do app.
+     ============================================================ */
+  :root {
+    --bg: #060816; --bg2: #090c1a; --bg3: #0e1228; --bg4: #141830;
+    --ink: #f0edff; --ink2: rgba(220,215,255,0.75); --ink3: rgba(170,160,235,0.65);
+    --line: rgba(255,255,255,0.07); --line2: rgba(120,100,240,0.22);
+    --violet: #7c3aed; --violet2: #8b5cf6; --violet3: #a78bfa; --violet4: #c4b5fd;
+    --violetD: rgba(109,40,217,0.14);
+    --green: #34d399; --greenD: rgba(52,211,153,0.10);
+    --red: #f87171; --redD: rgba(248,113,113,0.10);
+    --amber: #fbbf24; --amberD: rgba(251,191,36,0.10);
+    --glass: rgba(255,255,255,0.035);
+    --serif: 'Instrument Serif', Georgia, serif;
+    --sans: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mono: 'DM Mono', 'SF Mono', Menlo, monospace;
+  }
+  :root[data-theme="light"] {
+    --bg: #e6e4f0; --bg2: #fafbff; --bg3: #ffffff; --bg4: #e3dff0;
+    --ink: #18172b; --ink2: #3b3461; --ink3: #6a608e;
+    --line: rgba(109,40,217,0.22); --line2: rgba(120,100,240,0.30);
+    --violet3: #6d28d9; --violet4: #5b21b6; --violetD: rgba(109,40,217,0.06);
+    --green: #059669; --greenD: rgba(5,150,105,0.08);
+    --red: #dc2626; --redD: rgba(220,38,38,0.06);
+    --amber: #b45309; --amberD: rgba(217,119,6,0.10);
+    --glass: rgba(255,255,255,0.7);
+  }
+  * { box-sizing: border-box; font-variant-numeric: tabular-nums; }
+  body { margin: 0; padding: 32px 16px 90px; background: var(--bg); color: var(--ink); font-family: var(--sans); min-height: 100vh; }
+  button, input { font-family: inherit; }
+  code { font-family: var(--mono); font-size: 11.5px; color: var(--violet3); }
+  .wrap { max-width: 1480px; margin: 0 auto; }
+  h1.doc { font-family: var(--serif); font-weight: 400; font-size: 42px; line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 10px; }
+  h1.doc span { color: var(--violet); }
+  .doc-sub { color: var(--ink3); font-size: 13.5px; line-height: 1.6; max-width: 860px; margin: 0 0 20px; }
+  .nota { padding: 13px 15px; border: 1px dashed var(--line2); border-radius: 12px; font-size: 12.5px; color: var(--ink3); line-height: 1.6; margin: 0 0 20px; max-width: 1100px; }
+  .nota b { color: var(--violet3); }
+  .secao { margin: 40px 0 12px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--violet3); }
+  .legenda { font-size: 12.5px; color: var(--ink3); line-height: 1.65; max-width: 1100px; margin: 10px 0 0; }
+  .legenda b { color: var(--violet3); }
+  .telas { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+  .rotulo { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--green); margin-bottom: 8px; }
+  .ctl { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; padding: 10px 12px; border: 1px solid var(--line2); border-radius: 12px; background: var(--bg2); margin: 0 0 16px; position: sticky; top: 8px; z-index: 60; }
+  .ctl-g { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .ctl-g > span { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink3); margin-right: 2px; }
+  .ctl button { padding: 5px 10px; border-radius: 8px; border: 1px dashed var(--line2); background: transparent; color: var(--ink2); font-size: 11.5px; cursor: pointer; }
+  .ctl button.on { background: var(--violet); color: #fff; border-style: solid; border-color: var(--violet); }
+
+  /* ── Carrinho (CartPanel, 380px, como no desktop) ─────────── */
+  .cart { width: 380px; border-radius: 18px; border: 1px solid var(--line2); background: var(--bg2); overflow: hidden; display: flex; flex-direction: column; }
+  .carthead { padding: 16px 18px; background: linear-gradient(135deg, rgba(124,58,237,0.92), rgba(109,40,217,0.85)); color: #fff; }
+  .carthead .k { font-size: 9px; letter-spacing: 1.2px; text-transform: uppercase; color: rgba(255,255,255,0.7); font-weight: 700; }
+  .carthead .tot { font-size: 30px; font-weight: 800; letter-spacing: -1px; margin-top: 2px; }
+  .meta { display: flex; gap: 22px; margin-top: 10px; }
+  .meta .k { font-size: 9px; }
+  .meta .v { font-size: 12.5px; font-weight: 700; margin-top: 2px; }
+  .cartbody { padding: 12px 16px; display: flex; flex-direction: column; gap: 0; }
+  .item { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .item small { display: block; color: var(--ink3); font-size: 11px; margin-top: 2px; }
+  .item .p { font-family: var(--mono); font-weight: 700; color: var(--violet3); }
+  .chips { display: flex; gap: 4px; margin: 12px 0 10px; }
+  .chip { flex: 1; text-align: center; padding: 9px 4px; border-radius: 9px; font-size: 9.5px; font-weight: 600; color: var(--ink2); }
+  .chip.on { background: var(--violetD); border: 1px solid var(--line2); color: var(--ink); }
+  .links { display: flex; justify-content: center; gap: 18px; flex-wrap: wrap; margin-bottom: 8px; }
+  .link { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--violet3); padding: 6px 0; position: relative; }
+  .link.novo { box-shadow: 0 2px 0 var(--violet); }
+  .tag-novo { position: absolute; top: -11px; right: -22px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.06em; padding: 2px 6px; border-radius: 5px; background: var(--green); color: #052e22; font-weight: 700; }
+  .sec { margin: 2px 0 6px; }
+  .sec .h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .sec .lbl { font-size: 11px; color: var(--ink3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; }
+  .sec .x { width: 22px; height: 22px; border-radius: 6px; background: var(--redD); color: var(--red); display: flex; align-items: center; justify-content: center; font-size: 11px; }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .tg { display: flex; background: var(--bg); border-radius: 8px; padding: 2px; }
+  .tg span { padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; color: var(--ink3); }
+  .tg span.on { background: var(--violet); color: #fff; }
+  .inp { flex: 1; background: var(--bg4); border-radius: 8px; border: 1px solid var(--line); padding: 8px 12px; font-size: 14px; font-weight: 600; text-align: center; color: var(--ink); }
+  .inp.ph { color: var(--ink3); font-weight: 500; }
+  .pref { font-size: 12px; font-weight: 700; color: var(--ink3); padding-left: 2px; }
+  .hint { font-size: 10px; color: var(--ink3); margin-top: 4px; font-style: italic; }
+  .para { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: var(--violetD); border: 1px solid var(--line2); font-size: 12px; }
+  .para b { color: var(--ink); font-weight: 600; }
+  .para .troca { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--violet3); text-transform: uppercase; letter-spacing: 0.4px; }
+  .para.vazio { background: transparent; border-style: dashed; color: var(--ink3); }
+  .sum { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; }
+  .sum .k { color: var(--ink3); }
+  .sum .v { font-family: var(--mono); font-weight: 600; }
+  .sum.gr .k, .sum.gr .v { color: var(--green); }
+  .sum.tot { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 10px; }
+  .sum.tot .k { color: var(--ink2); font-weight: 700; }
+  .sum.tot .v { color: var(--violet3); font-size: 15px; font-weight: 700; }
+  .cartfoot { padding: 0 16px 16px; }
+  .ctas { display: flex; gap: 8px; margin-top: 10px; }
+  .ctaSec { flex: 1; height: 46px; border-radius: 12px; background: var(--glass); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: var(--ink2); }
+  .ctaAlt { flex: 1.3; height: 46px; border-radius: 12px; background: var(--glass); border: 1px solid rgba(124,58,237,0.3); display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--violet3); }
+  .ctaPri { flex: 1.7; height: 46px; border-radius: 12px; background: linear-gradient(135deg, #8b5cf6, #6d28d9); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+  svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+
+  /* ── Configurações ─────────────────────────────────────────── */
+  .cfg { width: 520px; border-radius: 16px; border: 1px solid var(--line); background: var(--bg3); padding: 16px 18px; }
+  .cfg .t { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+  .crow { display: flex; gap: 14px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
+  .crow .l { font-size: 13px; font-weight: 600; }
+  .crow .d { font-size: 11.5px; color: var(--ink3); line-height: 1.5; margin-top: 2px; }
+  .sw { width: 42px; height: 24px; border-radius: 12px; background: var(--bg4); position: relative; flex-shrink: 0; }
+  .sw i { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 9px; background: var(--ink3); }
+  .sw.on { background: rgba(124,58,237,0.4); }
+  .sw.on i { left: 21px; background: var(--violet); }
+  .crow.novo { outline: 2px solid var(--violet); outline-offset: 6px; border-radius: 8px; }
+
+  /* ── Tela final ────────────────────────────────────────────── */
+  .fim { width: 380px; border-radius: 18px; border: 1px solid var(--line2); background: var(--bg2); padding: 22px 20px; text-align: center; }
+  .fim .ok { width: 56px; height: 56px; border-radius: 28px; background: var(--greenD); color: var(--green); display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; font-size: 24px; }
+  .fim h3 { margin: 0 0 14px; font-size: 18px; }
+  .fim .r { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--line); }
+  .fim .r .k { color: var(--ink3); }
+  .fim .r .v { font-family: var(--mono); font-weight: 600; }
+  .fim .r.big .v { color: var(--violet3); font-size: 16px; font-weight: 700; }
+  .fim .r.novo { background: var(--violetD); margin: 0 -8px; padding: 6px 8px; border-radius: 8px; }
+  .cupom { width: 260px; background: #fff; color: #000; font-family: Consolas, 'Lucida Console', monospace; font-size: 11px; padding: 12px; border-radius: 6px; }
+  .cupom .c { text-align: center; }
+  .cupom .l { border-top: 1px solid #000; margin: 6px 0; }
+  .cupom .r { display: flex; justify-content: space-between; }
+  .cupom .r.n { background: #efe9ff; }
+</style>
+</head>
+<body data-theme="dark">
+<div class="wrap">
+  <h1 class="doc">Frete <span>no Caixa</span></h1>
+  <p class="doc-sub">A loja cobra a entrega na própria venda. A chave fica em Configurações › Caixa; ligada, o carrinho ganha o atalho "Frete". O operador digita o valor e, se quiser, vincula a venda a um cliente (o mesmo cadastro de sempre). O desconto nunca encosta no frete.</p>
+  <div class="nota"><b>Decisões de desenho.</b> Nada de botão novo no rodapé (ele já briga por espaço: Limpar · Orçamento · Finalizar). O frete entra como os atalhos de "Dividir pagamento" e "Adicionar à comanda": um link na linha de atalhos que abre uma seção no resumo, com o mesmo visual do "Desconto manual". O cliente do frete é o cliente da venda: um campo só, sem duplicar seletor. Sem valor, nada muda no carrinho.</div>
+
+  <div class="ctl">
+    <div class="ctl-g"><span>tema</span><button class="on" onclick="tema('dark',this)">Escuro</button><button onclick="tema('light',this)">Claro</button></div>
+  </div>
+
+  <div class="secao">1 · Carrinho — três momentos</div>
+  <div class="telas">
+
+    <div>
+      <div class="rotulo">A · Chave ligada, frete ainda não lançado</div>
+      <div class="cart">
+        <div class="carthead"><div class="k">Total da venda</div><div class="tot">R$ 248,00</div>
+          <div class="meta"><div><div class="k">Produtos</div><div class="v">2</div></div><div><div class="k">Desconto</div><div class="v">R$ 0,00</div></div><div><div class="k">Pagamento</div><div class="v">PIX</div></div></div></div>
+        <div class="cartbody">
+          <div class="item"><div>Cimento CP-II 50 kg<small>4 × R$ 32,00</small></div><div class="p">R$ 128,00</div></div>
+          <div class="item"><div>Argamassa AC-II 20 kg<small>5 × R$ 24,00</small></div><div class="p">R$ 120,00</div></div>
+          <div class="chips"><span class="chip on">PIX</span><span class="chip">Dinheiro</span><span class="chip">Débito</span><span class="chip">Crédito</span><span class="chip">Crediário</span></div>
+          <div class="links">
+            <span class="link"><svg viewBox="0 0 24 24"><path d="M3 7h18v12H3z M3 11h18"/></svg>Dividir pagamento</span>
+            <span class="link novo"><svg viewBox="0 0 24 24"><path d="M1 3h15v13H1z M16 8h4l3 3v5h-7V8z M5.5 18.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z M18.5 18.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/></svg>Frete<span class="tag-novo">novo</span></span>
+          </div>
+          <div class="sec"><div class="h"><span class="lbl">Desconto manual</span></div><div class="row"><div class="tg"><span class="on">%</span><span>R$</span></div><div class="inp ph">0</div></div></div>
+          <div class="sum"><span class="k">Subtotal</span><span class="v">R$ 248,00</span></div>
+          <div class="sum"><span class="k">Desconto</span><span class="v">R$ 0,00</span></div>
+          <div class="sum tot"><span class="k">Total</span><span class="v">R$ 248,00</span></div>
+        </div>
+        <div class="cartfoot"><div class="ctas"><span class="ctaSec">Limpar</span><span class="ctaAlt">Orçamento</span><span class="ctaPri">Finalizar venda</span></div></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="rotulo">B · Tocou em "Frete": seção aberta, sem cliente</div>
+      <div class="cart">
+        <div class="carthead"><div class="k">Total da venda</div><div class="tot">R$ 273,00</div>
+          <div class="meta"><div><div class="k">Produtos</div><div class="v">2</div></div><div><div class="k">Desconto</div><div class="v">R$ 0,00</div></div><div><div class="k">Pagamento</div><div class="v">PIX</div></div></div></div>
+        <div class="cartbody">
+          <div class="item"><div>Cimento CP-II 50 kg<small>4 × R$ 32,00</small></div><div class="p">R$ 128,00</div></div>
+          <div class="item"><div>Argamassa AC-II 20 kg<small>5 × R$ 24,00</small></div><div class="p">R$ 120,00</div></div>
+          <div class="chips"><span class="chip on">PIX</span><span class="chip">Dinheiro</span><span class="chip">Débito</span><span class="chip">Crédito</span><span class="chip">Crediário</span></div>
+          <div class="links">
+            <span class="link"><svg viewBox="0 0 24 24"><path d="M3 7h18v12H3z M3 11h18"/></svg>Dividir pagamento</span>
+            <span class="link"><svg viewBox="0 0 24 24"><path d="M18 6L6 18 M6 6l12 12"/></svg>Sem frete</span>
+          </div>
+          <div class="sec"><div class="h"><span class="lbl">Desconto manual</span></div><div class="row"><div class="tg"><span class="on">%</span><span>R$</span></div><div class="inp ph">0</div></div></div>
+          <div class="sec" style="outline:2px solid var(--violet);outline-offset:6px;border-radius:8px">
+            <div class="h"><span class="lbl">Frete / entrega</span><span class="x">✕</span></div>
+            <div class="row"><span class="pref">R$</span><div class="inp">25,00</div></div>
+            <div class="para vazio"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2 M12 11a4 4 0 100-8 4 4 0 000 8z"/></svg>Entrega sem cliente vinculado<span class="troca">Vincular cliente</span></div>
+          </div>
+          <div class="sum"><span class="k">Subtotal</span><span class="v">R$ 248,00</span></div>
+          <div class="sum"><span class="k">Desconto</span><span class="v">R$ 0,00</span></div>
+          <div class="sum"><span class="k">Frete</span><span class="v">R$ 25,00</span></div>
+          <div class="sum tot"><span class="k">Total</span><span class="v">R$ 273,00</span></div>
+        </div>
+        <div class="cartfoot"><div class="ctas"><span class="ctaSec">Limpar</span><span class="ctaAlt">Orçamento</span><span class="ctaPri">Finalizar venda</span></div></div>
+      </div>
+      <p class="legenda" style="max-width:380px"><b>"Vincular cliente"</b> abre o seletor de cliente do topo do Caixa (o mesmo do chip "Cliente"). Não existe segundo cadastro: o cliente do frete é o cliente da venda. O atalho vira <b>"Sem frete"</b> enquanto a seção está aberta — tocar fecha e zera.</p>
+    </div>
+
+    <div>
+      <div class="rotulo">C · Frete com cliente e desconto de 10% (só nos produtos)</div>
+      <div class="cart">
+        <div class="carthead"><div class="k">Total da venda</div><div class="tot">R$ 248,20</div>
+          <div class="meta"><div><div class="k">Produtos</div><div class="v">2</div></div><div><div class="k">Desconto</div><div class="v" style="color:#b9f6ca">− R$ 24,80</div></div><div><div class="k">Pagamento</div><div class="v">PIX</div></div></div></div>
+        <div class="cartbody">
+          <div class="item"><div>Cimento CP-II 50 kg<small>4 × R$ 32,00</small></div><div class="p">R$ 128,00</div></div>
+          <div class="item"><div>Argamassa AC-II 20 kg<small>5 × R$ 24,00</small></div><div class="p">R$ 120,00</div></div>
+          <div class="chips"><span class="chip on">PIX</span><span class="chip">Dinheiro</span><span class="chip">Débito</span><span class="chip">Crédito</span><span class="chip">Crediário</span></div>
+          <div class="links">
+            <span class="link"><svg viewBox="0 0 24 24"><path d="M3 7h18v12H3z M3 11h18"/></svg>Dividir pagamento</span>
+            <span class="link"><svg viewBox="0 0 24 24"><path d="M18 6L6 18 M6 6l12 12"/></svg>Sem frete</span>
+          </div>
+          <div class="sec"><div class="h"><span class="lbl">Desconto manual</span><span class="x">✕</span></div><div class="row"><div class="tg"><span class="on">%</span><span>R$</span></div><div class="inp">10</div><span style="color:var(--red);font-weight:700;font-size:14px">-R$ 24,80</span></div><div class="hint">10% de R$ 248,00 = -R$ 24,80 · o frete fica de fora</div></div>
+          <div class="sec">
+            <div class="h"><span class="lbl">Frete / entrega</span><span class="x">✕</span></div>
+            <div class="row"><span class="pref">R$</span><div class="inp">25,00</div></div>
+            <div class="para"><svg viewBox="0 0 24 24"><path d="M1 3h15v13H1z M16 8h4l3 3v5h-7V8z M5.5 18.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z M18.5 18.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/></svg>Entrega para <b>&nbsp;Dona Lúcia</b><span class="troca">Trocar</span></div>
+          </div>
+          <div class="sum"><span class="k">Subtotal</span><span class="v">R$ 248,00</span></div>
+          <div class="sum gr"><span class="k">Desconto</span><span class="v">− R$ 24,80</span></div>
+          <div class="sum"><span class="k">Frete</span><span class="v">R$ 25,00</span></div>
+          <div class="sum tot"><span class="k">Total</span><span class="v">R$ 248,20</span></div>
+        </div>
+        <div class="cartfoot"><div class="ctas"><span class="ctaSec">Limpar</span><span class="ctaAlt">Orçamento</span><span class="ctaPri">Finalizar venda</span></div></div>
+      </div>
+      <p class="legenda" style="max-width:380px">248,00 − 10% = 223,20; + 25,00 de frete = <b>248,20</b>. O "Dividir pagamento" e o crediário já partem do total com o frete.</p>
+    </div>
+  </div>
+
+  <div class="secao">2 · Configurações › Caixa e tela final</div>
+  <div class="telas">
+    <div>
+      <div class="rotulo">Chave, ao lado das outras do Caixa</div>
+      <div class="cfg">
+        <div class="t">Políticas do Caixa</div>
+        <div class="crow"><div style="flex:1"><div class="l">Comandas</div><div class="d">Lança o consumo no número da comanda e cobra tudo no fim.</div></div><div class="sw"><i></i></div></div>
+        <div class="crow novo"><div style="flex:1"><div class="l">Frete / entrega</div><div class="d">Cobra a entrega na própria venda. No Caixa aparece o atalho "Frete": o operador digita o valor e pode vincular a venda a um cliente. O desconto vale só sobre os produtos.</div></div><div class="sw on"><i></i></div></div>
+        <div class="crow"><div style="flex:1"><div class="l">Crediário (fiado)</div><div class="d">Permite vender no fiado e registrar pagamento posterior.</div></div><div class="sw on"><i></i></div></div>
+      </div>
+    </div>
+    <div>
+      <div class="rotulo">Venda registrada</div>
+      <div class="fim">
+        <div class="ok">✓</div><h3>Venda registrada!</h3>
+        <div class="r"><span class="k">Número da venda</span><span class="v">Nº 1.204</span></div>
+        <div class="r"><span class="k">Subtotal</span><span class="v">R$ 248,00</span></div>
+        <div class="r"><span class="k">Desconto</span><span class="v">-R$ 24,80</span></div>
+        <div class="r novo"><span class="k">Frete</span><span class="v">R$ 25,00</span></div>
+        <div class="r big"><span class="k">Total</span><span class="v">R$ 248,20</span></div>
+        <div class="r"><span class="k">Pagamento</span><span class="v">PIX</span></div>
+        <div class="r"><span class="k">Itens</span><span class="v">2 produtos</span></div>
+        <div class="r"><span class="k">Cliente</span><span class="v">Dona Lúcia</span></div>
+      </div>
+    </div>
+    <div>
+      <div class="rotulo">Cupom (80 mm) — a linha "Frete" vai como item da venda</div>
+      <div class="cupom">
+        <div class="c"><b>DEPÓSITO DO ZÉ</b></div><div class="c">Venda Nº 1204 · 30/10/2026 14:12</div>
+        <div class="l"></div>
+        <div class="r"><span>4x Cimento CP-II 50 kg</span><span>128,00</span></div>
+        <div class="r"><span>5x Argamassa AC-II 20 kg</span><span>120,00</span></div>
+        <div class="r n"><span>1x Frete</span><span>25,00</span></div>
+        <div class="l"></div>
+        <div class="r"><span>Subtotal</span><span>273,00</span></div>
+        <div class="r"><span>Desconto</span><span>-24,80</span></div>
+        <div class="r"><b>TOTAL</b><b>248,20</b></div>
+        <div class="c" style="margin-top:8px">Cliente: Dona Lúcia · PIX</div>
+      </div>
+      <p class="legenda" style="max-width:300px">Como o backend fecha a conta pelas linhas, o frete viaja no POST da venda como uma linha sem produto de cadastro (mesmo caminho da taxa de serviço da comanda). Reaproveita cupom, histórico e relatórios sem mexer no servidor.</p>
+    </div>
+  </div>
+</div>
+<script>
+  function tema(t, btn) {
+    document.documentElement.setAttribute('data-theme', t);
+    document.querySelectorAll('.ctl-g button').forEach(function (b) { b.classList.remove('on'); });
+    btn.classList.add('on');
+  }
+</script>
+</body>
+</html>
