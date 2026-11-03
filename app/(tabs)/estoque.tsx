@@ -684,7 +684,7 @@ export default function EstoqueScreen() {
             {allSelected ? "Limpar seleção" : "Selecionar todos"}
           </Text>
         </Pressable>
-        {reajusteNoAr && (
+        {reajusteNoAr && !consulta && (
           <Pressable
             onPress={() => { if (bulkSelected.size > 0) setReajusteAberto(true); }}
             disabled={bulkSelected.size === 0}
