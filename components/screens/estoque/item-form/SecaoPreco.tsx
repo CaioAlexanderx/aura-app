@@ -56,6 +56,9 @@ type Props = {
   // 22/09/2026 (preço no cartão). null/undefined = opção da loja
   // desligada, e a seção é a de hoje, byte a byte.
   cartao?: PrecoNoCartaoDoForm | null;
+  // 03/11/2026 — custo oculto (utils/estoqueConsulta.ts, podeVerCusto):
+  // funcionário sem retaguarda não vê nem digita custo, e a margem some.
+  semCusto?: boolean;
 };
 
 export type PrecoNoCartaoDoForm = {
@@ -233,7 +236,7 @@ function DicaDoCartao({ preco, c }: { preco: string; c: PrecoNoCartaoDoForm }) {
   );
 }
 
-function PrecoDeHoje({ type, narrow, preco, onPreco, custo, onCusto, duracao, onDuracao, onSubmit, cartao }: Props) {
+function PrecoDeHoje({ type, narrow, preco, onPreco, custo, onCusto, duracao, onDuracao, onSubmit, cartao, semCusto }: Props) {
   const isProduto = type === "product";
   const [mostrarOutra, setMostrarOutra] = useState(false);
 
@@ -246,7 +249,7 @@ function PrecoDeHoje({ type, narrow, preco, onPreco, custo, onCusto, duracao, on
   const outraAtiva = mostrarOutra || (!!duracao.trim() && !ehPreset);
   const naoEntendi = !!duracao.trim() && minutos == null;
 
-  const campoCusto = (
+  const campoCusto = semCusto ? null : (
     <Campo label="Custo" optional="opcional" style={{ flex: 1 }}>
       <View style={st.prefixo}>
         <Text style={st.prefixoTxt}>R$</Text>
@@ -283,17 +286,19 @@ function PrecoDeHoje({ type, narrow, preco, onPreco, custo, onCusto, duracao, on
 
       {/* Preço no cartão ligado: a dica do cartão e o custo numa linha própria. */}
       {cartao ? <DicaDoCartao preco={preco} c={cartao} /> : null}
-      {cartao ? (
+      {cartao && campoCusto ? (
         <View style={[s.linha2, narrow && { flexDirection: "column", gap: 0 }]}>
           {campoCusto}
           {narrow ? null : <View style={{ flex: 1 }} />}
         </View>
       ) : null}
 
-      <CaixaDeMargem
-        preco={valorDaMascara(preco)} custo={valorDaMascara(custo)} isProduto={isProduto}
-        cartao={cartao ? { preco: valorDoCartaoNoForm(preco, cartao), taxaPct: cartao.taxaPct } : null}
-      />
+      {semCusto ? null : (
+        <CaixaDeMargem
+          preco={valorDaMascara(preco)} custo={valorDaMascara(custo)} isProduto={isProduto}
+          cartao={cartao ? { preco: valorDoCartaoNoForm(preco, cartao), taxaPct: cartao.taxaPct } : null}
+        />
+      )}
 
       {!isProduto && (
         <Campo label="Duração estimada" optional="opcional" style={{ marginTop: 10, marginBottom: 0 }}>
@@ -421,22 +426,26 @@ function ComoVoceVende(p: Props) {
             <CampoDoCartao preco={p.preco} c={p.cartao} sufixo={unidade} onSubmit={p.onSubmit} />
           </View>
           <DicaDoCartao preco={p.preco} c={p.cartao} />
-          <View style={[s.linha2, p.narrow && { flexDirection: "column", gap: 0 }]}>
-            {campoDeValor("Custo", p.custo, p.onCusto, false)}
-            {p.narrow ? null : <View style={{ flex: 1 }} />}
-          </View>
+          {p.semCusto ? null : (
+            <View style={[s.linha2, p.narrow && { flexDirection: "column", gap: 0 }]}>
+              {campoDeValor("Custo", p.custo, p.onCusto, false)}
+              {p.narrow ? null : <View style={{ flex: 1 }} />}
+            </View>
+          )}
         </>
       ) : (
         <View style={[s.linha2, p.narrow && { flexDirection: "column", gap: 0 }]}>
           {campoDeValor("Preço de venda", p.preco, p.onPreco, true)}
-          {campoDeValor("Custo", p.custo, p.onCusto, false)}
+          {p.semCusto ? null : campoDeValor("Custo", p.custo, p.onCusto, false)}
         </View>
       )}
 
-      <CaixaDeMargem
-        preco={precoNum} custo={custoNum} isProduto porUnidade={unidade}
-        cartao={p.cartao ? { preco: valorDoCartaoNoForm(p.preco, p.cartao), taxaPct: p.cartao.taxaPct } : null}
-      />
+      {p.semCusto ? null : (
+        <CaixaDeMargem
+          preco={precoNum} custo={custoNum} isProduto porUnidade={unidade}
+          cartao={p.cartao ? { preco: valorDoCartaoNoForm(p.preco, p.cartao), taxaPct: p.cartao.taxaPct } : null}
+        />
+      )}
 
       <Campo label="Como chega do fornecedor" style={{ marginTop: 14, marginBottom: 0 }}>
         <View style={[fr.radios, p.narrow && { flexDirection: "column" }]}>

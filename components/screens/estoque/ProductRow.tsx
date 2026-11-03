@@ -40,7 +40,7 @@ function isServiceProduct(p: Product) {
 
 export function ProductRow({
   product, onDelete, onEdit, onLink,
-  isSelected, onSelect, consulta,
+  isSelected, onSelect, consulta, semCusto,
 }: {
   product: Product;
   onDelete?: (id: string) => void;
@@ -52,6 +52,8 @@ export function ProductRow({
   onSelect?: (id: string) => void;
   // 30/10/2026 — Estoque só consulta: sem preço, custo, margem e foto editável.
   consulta?: boolean;
+  // 03/11/2026 — custo oculto (podeVerCusto): sem Custo e Margem; preço fica.
+  semCusto?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -180,7 +182,7 @@ export function ProductRow({
                   45 min") e aparecia aqui embaixo, em itálico, junto das
                   observações. Virou coluna na migration 323 — e passa a ter
                   um lugar próprio, ao lado do preço. */}
-              {((consulta ? [] : [["Preço", m(fmt(product.price))], ["Custo", m(fmt(product.cost))], ["Margem", margin]]) as Array<[string, string]>)
+              {((consulta ? [] : semCusto ? [["Preço", m(fmt(product.price))]] : [["Preço", m(fmt(product.price))], ["Custo", m(fmt(product.cost))], ["Margem", margin]]) as Array<[string, string]>)
                 .concat(duracao ? [["Duração", duracao]] : [])
                 .map(([l, v]) =>
                   <View key={l} style={s.detailItem}><Text style={s.detailLabel}>{l}</Text><Text

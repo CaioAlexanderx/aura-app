@@ -13,7 +13,7 @@ import { useMemberAudit, AUDIT_LABELS, type AuditAction, type AuditEntry } from 
 import { useMemberTemplates, type RoleTemplate } from "@/hooks/useMemberTemplates";
 import { useAuthStore } from "@/stores/auth";
 import type { Member, SiblingCompany } from "@/hooks/useMembers";
-import { alternarPermissao } from "@/utils/estoqueConsulta";
+import { alternarPermissao, custosPorPadrao } from "@/utils/estoqueConsulta";
 
 // ============================================================
 // CONSTANTS
@@ -47,6 +47,11 @@ const MODULE_GROUPS = [
       { key: "financeiro", label: "Financeiro",    hint: "Receitas, despesas, fluxo de caixa, NF-e" },
       { key: "relatorios", label: "Relatórios",    hint: "Gráficos e análises detalhadas" },
       { key: "folha",      label: "Folha",         hint: "Funcionários, salários, holerites" },
+      // 03/11/2026 — custo oculto (utils/estoqueConsulta.ts, podeVerCusto).
+      // Não é módulo de menu: é o que a pessoa enxerga no Estoque e no Caixa.
+      // Sem marcar, segue a regra (Financeiro, Relatórios, Configurações ou
+      // Painel ligados = vê); marcar grava permissions.custos e decide.
+      { key: "custos",     label: "Ver custos e valor do estoque", hint: "Custo, margem e valor do estoque. Desligado, vê só o preço de venda", derived: true },
     ],
   },
   {
@@ -211,6 +216,12 @@ function ModuleToggleRow({ moduleKey, label, hint, value, onToggle }: {
   );
 }
 
+// Chave derivada (custos): sem valor gravado, mostra o que a regra decide.
+function efetivo(value: Record<string, boolean>, key: string): boolean {
+  if (typeof value[key] === "boolean") return value[key];
+  return key === "custos" ? custosPorPadrao(value) : false;
+}
+
 function ModuleGroupSelector({ value, onChange }: {
   value: Record<string, boolean>;
   onChange: (next: Record<string, boolean>) => void;
@@ -235,8 +246,10 @@ function ModuleGroupSelector({ value, onChange }: {
                 moduleKey={m.key}
                 label={m.label}
                 hint={m.hint}
-                value={!!value[m.key]}
-                onToggle={() => onChange(alternarPermissao(value, m.key))}
+                value={(m as any).derived ? efetivo(value, m.key) : !!value[m.key]}
+                onToggle={() => onChange((m as any).derived
+                  ? { ...value, [m.key]: !efetivo(value, m.key) }
+                  : alternarPermissao(value, m.key))}
               />
             ))}
           </View>
