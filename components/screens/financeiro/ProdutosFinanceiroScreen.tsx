@@ -101,6 +101,23 @@ export function ProdutosFinanceiroScreen({ rotaFinanceiro, hrefFinanceiro }: Pro
         podem faltar no estoque.
       </Text>
 
+      {/* 03/11/2026: a mesma venda em quantidade, por modelo e numeração
+          (docs/mockups/relatorio-vendas-por-numeracao.html). Só no app
+          principal: o Studio não tem a rota. */}
+      {rotaFinanceiro === "financeiro" ? (
+        <Pressable
+          onPress={() => router.push("/financeiro/vendas-por-numeracao" as any)}
+          style={s.linkNumeracao}
+          accessibilityRole="button"
+          accessibilityLabel="Ver as vendas por modelo e numeração"
+          testID="produtos-financeiro-ver-numeracao"
+          hitSlop={6}
+        >
+          <Text style={s.linkNumeracaoTxt}>Ver por numeração →</Text>
+          <Text style={s.linkNumeracaoSub}>quantos pares de cada modelo e numeração, com estoque e o que comprar</Text>
+        </Pressable>
+      ) : null}
+
       <AbcCurveCard />
     </ScrollView>
   );
@@ -113,5 +130,8 @@ const s = StyleSheet.create({
   backBtn: { flexDirection: "row", alignItems: "center", gap: 4 },
   backText: { fontSize: 13, color: Colors.violet3, fontWeight: "600" },
   pageTitle: { fontSize: 22, fontWeight: "800", color: Colors.ink, marginBottom: 6, letterSpacing: -0.4 },
-  pageSubtitle: { fontSize: 12.5, color: Colors.ink3, lineHeight: 18, marginBottom: 22, maxWidth: 620 },
+  pageSubtitle: { fontSize: 12.5, color: Colors.ink3, lineHeight: 18, marginBottom: 14, maxWidth: 620 },
+  linkNumeracao: { alignSelf: "flex-start", marginBottom: 18 },
+  linkNumeracaoTxt: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
+  linkNumeracaoSub: { fontSize: 11.5, color: Colors.ink3, marginTop: 2 },
 });
