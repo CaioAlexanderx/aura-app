@@ -141,6 +141,9 @@ describe("aplicar", () => {
     await tocar(tree, "reajuste-aplicar");
     expect(mockAplicar).toHaveBeenCalledWith("c1", PEDIDO, false);
     expect(textoDe(tree, "reajuste-resultado-titulo")).toBe("Preços atualizados");
+    // Depois de fechar, o desfazer continua em "Últimos reajustes" por 7 dias.
+    expect(textoDe(tree, "reajuste-dica-desfazer")).toContain("em Últimos reajustes, no Estoque, por 7 dias");
+    expect(textoDe(tree, "reajuste-dica-desfazer")).not.toContain("antes de fechar");
     expect(textoDe(tree, "reajuste-resultado-resumo")).toBe("2 produtos mudaram · 1 ficou de fora.");
     expect(textoDe(tree, "reajuste-resultado-grupo")).toContain("as outras lojas já veem o preço novo");
     expect(textoDe(tree, "reajuste-reimprimir")).toBe("Reimprimir etiquetas (2)");

@@ -80,6 +80,12 @@ import { OrdenarBarra } from "@/components/screens/estoque/OrdenarBarra";
 // botão só aparece com o backend do reajuste no ar (Aura-backend#939).
 import { AjustarPrecoModal } from "@/components/screens/estoque/reajuste/AjustarPrecoModal";
 import { useReajusteDisponivel } from "@/hooks/useReajusteDisponivel";
+// 03/11/2026: "Últimos reajustes" — lista dos reajustes da empresa ativa, com
+// detalhe e desfazer por 7 dias (Aura-backend#940). Entrada discreta (link
+// de texto abaixo das ações); some no Estoque só consulta, no demo, no
+// consolidado, sem reajuste e com backend antigo (404).
+import { UltimosReajustesModal } from "@/components/screens/estoque/reajuste/UltimosReajustesModal";
+import { useUltimosReajustes, ultimosReajustesQueryKey } from "@/hooks/useUltimosReajustes";
 // import { EstoqueRightRail } from "@/components/screens/estoque/EstoqueRightRail"; // Phase 2 — right rail
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
@@ -380,6 +386,8 @@ export default function EstoqueScreen() {
   // fora do demo, com a permissão do Estoque que abre esta tela).
   const reajusteNoAr = useReajusteDisponivel(company?.id, !isDemo && !consolidatedView);
   const [reajusteAberto, setReajusteAberto] = useState(false);
+  const temUltimosReajustes = useUltimosReajustes(company?.id, !isDemo && !consolidatedView && !consulta && !consultaCarregando);
+  const [ultimosAberto, setUltimosAberto] = useState(false);
   // p-53: "Reimprimir etiquetas" abre a aba Etiquetas com os reajustados marcados.
   const [etiquetasDoReajuste, setEtiquetasDoReajuste] = useState<string[] | undefined>(undefined);
 
@@ -756,6 +764,18 @@ export default function EstoqueScreen() {
           </View>
         )}
 
+        {temUltimosReajustes && (
+          <Pressable
+            onPress={() => setUltimosAberto(true)}
+            style={s.ultimosLink}
+            testID="estoque-ultimos-reajustes"
+            accessibilityRole="button"
+          >
+            <Icon name="rotate_ccw" size={13} color={Colors.violet3} />
+            <Text style={s.ultimosLinkText}>Últimos reajustes</Text>
+          </Pressable>
+        )}
+
         {/* 19/10/2026 (tq-31): quem respondeu "planilha" no check-in chega
             com ?importar=planilha (components/screens/estoque/ConvitePlanilha). */}
         <ConvitePlanilha
@@ -1035,13 +1055,26 @@ export default function EstoqueScreen() {
           companyId={company?.id || ""}
           produtos={products.filter(p => bulkSelected.has(p.id))}
           onFechar={() => setReajusteAberto(false)}
-          onPrecosMudaram={() => qc.invalidateQueries({ queryKey: ["products", company?.id] })}
+          onPrecosMudaram={() => {
+            qc.invalidateQueries({ queryKey: ["products", company?.id] });
+            qc.invalidateQueries({ queryKey: ultimosReajustesQueryKey(company?.id) });
+          }}
           onReimprimir={(ids) => {
             setReajusteAberto(false);
             exitBulkMode();
             setLabelSelection(ids);
             setEtiquetasDoReajuste(ids);
             handleTabSelect(TABS.indexOf("Etiquetas"));
+          }}
+        />
+      </WebPortal>
+      <WebPortal active={ultimosAberto && temUltimosReajustes && !!company?.id}>
+        <UltimosReajustesModal
+          companyId={company?.id || ""}
+          onFechar={() => setUltimosAberto(false)}
+          onPrecosMudaram={() => {
+            qc.invalidateQueries({ queryKey: ["products", company?.id] });
+            qc.invalidateQueries({ queryKey: ultimosReajustesQueryKey(company?.id) });
           }}
         />
       </WebPortal>
@@ -1092,6 +1125,9 @@ const s = StyleSheet.create({
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20, gap: 8, flexWrap: "wrap" },
   pageTitle: { fontSize: 22, color: Colors.ink, fontWeight: "700" },
   headerActions: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  // Link de texto (ação secundária): sem cara de botão, alvo de 44 px.
+  ultimosLink: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-end", minHeight: 44, paddingHorizontal: 4, marginTop: -8, marginBottom: 4 },
+  ultimosLinkText: { fontSize: 12.5, color: Colors.violet3, fontWeight: "600", textDecorationLine: "underline" },
   serviceBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: Colors.border2 },
   serviceBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
   batchBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: Colors.border2 },

@@ -94,6 +94,48 @@ export type RespostaDesfazer = {
   }>;
 };
 
+/** Um reajuste gravado (lista e detalhe de "Últimos reajustes", Aura-backend#940). */
+export type LoteReajuste = {
+  id: string;
+  created_at: string;
+  user: { id: string; name: string | null } | null;
+  mode: ModoReajuste;
+  direction: DirecaoReajuste | null;
+  value: number;
+  rounding: Terminacao;
+  allow_below_cost: boolean;
+  items_count: number;
+  products_count: number;
+  skipped_count: number;
+  below_cost_count: number;
+  group_shared_count: number;
+  undo_deadline: string;
+  can_undo: boolean;
+  undone_at: string | null;
+  undone_by: string | null;
+  undo_restored_count: number | null;
+  undo_changed_count: number | null;
+};
+
+export type ListaDeReajustes = { adjustments: LoteReajuste[]; total: number };
+
+export type ItemDoLote = {
+  product_id: string;
+  variant_id: string | null;
+  name: string;
+  variant_label: string | null;
+  cost_price: number | null;
+  price_before: number;
+  price_after: number;
+  card_price_before: number | null;
+  card_price_after: number | null;
+  below_cost: boolean;
+  group_shared: boolean;
+  undo_status: null | "restored" | "changed_after";
+};
+
+export type DetalheDoReajuste = LoteReajuste & { items: ItemDoLote[] };
+
 function base(companyId: string) {
   return "/companies/" + companyId + "/products/price-adjustments";
 }
@@ -135,6 +177,20 @@ export var priceAdjustmentsApi = {
       retry: 0,
       timeout: 60000,
     });
+  },
+
+  /**
+   * Últimos reajustes da empresa ativa, mais novo primeiro. 404 = backend
+   * antigo (sem a lista): quem chama esconde a entrada.
+   */
+  lista: function (companyId: string, limit?: number, offset?: number) {
+    var qs = "?limit=" + (limit || 20) + "&offset=" + (offset || 0);
+    return request<ListaDeReajustes>(base(companyId) + qs, { retry: 1 });
+  },
+
+  /** Um reajuste com os itens (preço antes e depois, e o que aconteceu no desfazer). */
+  detalhe: function (companyId: string, adjustmentId: string) {
+    return request<DetalheDoReajuste>(base(companyId) + "/" + adjustmentId, { retry: 1 });
   },
 
   /**

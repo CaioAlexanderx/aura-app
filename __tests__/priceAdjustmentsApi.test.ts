@@ -48,3 +48,14 @@ describe("backend do reajuste no ar?", () => {
     expect(codigoDoErro(new Error("x"))).toBeNull();
   });
 });
+
+describe("últimos reajustes (Aura-backend#940)", () => {
+  it("lista e detalhe da empresa ativa", async () => {
+    mockRequest.mockResolvedValue({});
+    await priceAdjustmentsApi.lista("c1", 20, 40);
+    expect(mockRequest.mock.calls[0][0]).toBe("/companies/c1/products/price-adjustments?limit=20&offset=40");
+    expect(mockRequest.mock.calls[0][1].method).toBeUndefined();
+    await priceAdjustmentsApi.detalhe("c1", "a1");
+    expect(mockRequest.mock.calls[1][0]).toBe("/companies/c1/products/price-adjustments/a1");
+  });
+});

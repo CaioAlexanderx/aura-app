@@ -7,7 +7,7 @@
 // erro aparecer no campo antes de ir ao servidor.
 // ============================================================================
 import type {
-  DirecaoReajuste, ItemReajuste, ModoReajuste, PedidoReajuste, RespostaReajuste, Terminacao,
+  DirecaoReajuste, ItemReajuste, LoteReajuste, ModoReajuste, PedidoReajuste, RespostaReajuste, Terminacao,
 } from "@/services/priceAdjustmentsApi";
 
 /** Máximo de produtos num reajuste (backend: TOO_MANY_PRODUCTS acima disso). */
@@ -239,4 +239,77 @@ export function explicaMudaramDepois(d: Desfeito): string | null {
 export function produtosParaEtiqueta(r: RespostaReajuste, d: Desfeito | null): string[] {
   if (d) return produtosOnde(d.restored, function () { return true; });
   return produtosQueMudam(r.items);
+}
+
+// ---------------------------------------------------------------- últimos reajustes
+
+/** Quantos dias o backend guarda o reajuste para desfazer (Aura-backend#940). */
+export var DIAS_PARA_DESFAZER = 7;
+
+function numeroTxt(n: number): string {
+  var v = Math.round(Number(n) * 100) / 100;
+  return String(v).replace(".", ",");
+}
+
+function doisDigitos(n: number): string {
+  return n < 10 ? "0" + n : String(n);
+}
+
+/** "30/10" no fuso do aparelho. Data inválida -> "". */
+export function diaTxt(iso: string | null | undefined): string {
+  if (!iso) return "";
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return doisDigitos(d.getDate()) + "/" + doisDigitos(d.getMonth() + 1);
+}
+
+/** "30/10 às 14:05" no fuso do aparelho. */
+export function quandoTxt(iso: string | null | undefined): string {
+  var dia = diaTxt(iso);
+  if (!dia) return "";
+  var d = new Date(iso as string);
+  return dia + " às " + doisDigitos(d.getHours()) + ":" + doisDigitos(d.getMinutes());
+}
+
+/** "Aumento de 10%", "Redução de R$ 5,00", "Markup de 60% sobre o custo", "Margem de 50%" (+ terminação). */
+export function textoDoLote(l: Pick<LoteReajuste, "mode" | "direction" | "value" | "rounding">): string {
+  var txt: string;
+  var baixa = l.direction === "down";
+  if (l.mode === "percent") txt = (baixa ? "Redução" : "Aumento") + " de " + numeroTxt(l.value) + "%";
+  else if (l.mode === "fixed") txt = (baixa ? "Redução" : "Aumento") + " de " + brl(l.value);
+  else if (l.mode === "markup") txt = "Markup de " + numeroTxt(l.value) + "% sobre o custo";
+  else txt = "Margem de " + numeroTxt(l.value) + "%";
+  if (l.rounding && l.rounding !== "none") txt += ", final ," + l.rounding;
+  return txt;
+}
+
+/** "Caio · 7 produtos" e quem ficou de fora. */
+export function quemEQuantos(l: LoteReajuste): string {
+  var partes: string[] = [];
+  if (l.user && l.user.name) partes.push(l.user.name);
+  partes.push(plural(l.products_count || 0, "produto", "produtos"));
+  if (l.skipped_count > 0) partes.push(plural(l.skipped_count, "ficou", "ficaram") + " de fora");
+  return partes.join(" · ");
+}
+
+export type SituacaoDoLote = "pode" | "desfeito" | "vencido";
+
+export function situacaoDoLote(l: LoteReajuste): SituacaoDoLote {
+  if (l.undone_at) return "desfeito";
+  return l.can_undo ? "pode" : "vencido";
+}
+
+/** Frase do prazo: até quando dá para desfazer, quando foi desfeito ou que o prazo passou. */
+export function prazoTxt(l: LoteReajuste): string {
+  var sit = situacaoDoLote(l);
+  if (sit === "desfeito") return "Desfeito em " + diaTxt(l.undone_at);
+  if (sit === "vencido") return "Passou o prazo de " + DIAS_PARA_DESFAZER + " dias para desfazer";
+  var dia = diaTxt(l.undo_deadline);
+  return dia ? "Dá para desfazer até " + quandoTxt(l.undo_deadline) : "Dá para desfazer";
+}
+
+/** Texto da confirmação do desfazer, dentro da própria tela. */
+export function textoConfirmarDesfazer(l: LoteReajuste): string {
+  return "Os preços voltam ao que eram antes deste reajuste em " + plural(l.products_count || 0, "produto", "produtos") +
+    ". Se alguém mudou o preço de um deles depois, esse fica como está, para não apagar a mudança.";
 }
