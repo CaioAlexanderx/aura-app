@@ -134,7 +134,7 @@ export function itensDoFiltro(items: ItemReajuste[], filtro: FiltroPrevia): Item
   return items;
 }
 
-function produtosOnde(items: ItemReajuste[], cond: (i: ItemReajuste) => boolean): string[] {
+function produtosOnde<T extends { product_id: string }>(items: T[], cond: (i: T) => boolean): string[] {
   var vistos: Record<string, true> = {};
   var ids: string[] = [];
   items.forEach(function (i) {
@@ -176,4 +176,67 @@ export function motivoDeFora(i: ItemReajuste): string | null {
   if (i.skip_reason === "no_cost") return "fora: sem custo";
   if (i.skip_reason === "not_positive") return "fora: ficaria sem preço";
   return "fora";
+}
+
+// ---------------------------------------------------------------- aplicar (p-53)
+
+/** Texto do botão do passo 2. Com item abaixo do custo, pede confirmação. */
+export function textoAplicar(r: RespostaReajuste): string {
+  if (produtosAbaixoDoCusto(r.items).length > 0) return "Aplicar mesmo assim";
+  return "Aplicar em " + plural(produtosQueMudam(r.items).length, "produto", "produtos");
+}
+
+/** "7 produtos mudaram · 1 ficou de fora." */
+export function resumoDoResultado(r: RespostaReajuste): string {
+  var mudaram = produtosQueMudam(r.items).length;
+  var fora = produtosDeFora(r.items).length + (r.summary.not_found || 0);
+  var txt = plural(mudaram, "produto mudou", "produtos mudaram");
+  if (fora > 0) txt += " · " + plural(fora, "ficou", "ficaram") + " de fora";
+  return txt + ".";
+}
+
+/** Erro do aplicar em texto gentil (o 409 BELOW_COST é tratado à parte). */
+export function mensagemErroAplicar(codigo: string | null, mensagem?: string | null): string {
+  if (codigo === "MIGRATION_PENDING") return "Esta função ainda está sendo ligada na sua conta. Tente de novo daqui a pouco.";
+  if (codigo === "timeout") return "Demorou demais para responder. Antes de tentar de novo, confira os preços na lista do Estoque: eles podem já ter mudado.";
+  if (codigo === "TOO_MANY_PRODUCTS") return "Dá para ajustar até " + MAX_PRODUTOS_REAJUSTE.toLocaleString("pt-BR") + " produtos de uma vez.";
+  return mensagem || "Não conseguimos aplicar agora. Nenhum preço mudou. Tente de novo em instantes.";
+}
+
+/** Erro do desfazer em texto gentil. 404 sem código = backend do desfazer ainda não chegou. */
+export function mensagemErroDesfazer(codigo: string | null, status?: number): string {
+  if (codigo === "ALREADY_UNDONE") return "Este reajuste já foi desfeito.";
+  if (codigo === "EXPIRED") return "Passou o prazo de 7 dias para desfazer este reajuste.";
+  if (codigo === "NOT_FOUND") return "Não encontramos este reajuste nesta empresa.";
+  if (codigo === "MIGRATION_PENDING" || (status === 404 && !codigo)) return "O Desfazer ainda não está disponível na sua conta. Se precisar, ajuste o preço pelo cadastro do produto.";
+  if (codigo === "timeout") return "Demorou demais para responder. Confira os preços na lista do Estoque antes de tentar de novo.";
+  return "Não conseguimos desfazer agora. Tente de novo em instantes.";
+}
+
+type Desfeito = {
+  restored_count: number;
+  changed_after_count: number;
+  restored: Array<{ product_id: string }>;
+  changed_after: Array<{ product_id: string; reason: "changed" | "not_found" }>;
+};
+
+export function resumoDoDesfazer(d: Desfeito): string {
+  var voltaram = produtosOnde(d.restored, function () { return true; }).length;
+  if (voltaram === 0) return "Nenhum preço voltou: todos foram alterados depois do reajuste.";
+  return "Preços de volta ao que eram em " + plural(voltaram, "produto", "produtos") + ".";
+}
+
+export function explicaMudaramDepois(d: Desfeito): string | null {
+  var n = produtosOnde(d.changed_after, function () { return true; }).length;
+  if (n === 0) return null;
+  return plural(n, "produto ficou", "produtos ficaram") + " como está agora, porque o preço mudou depois do reajuste (alguém alterou no cadastro, por exemplo). Para não apagar essa mudança, a Aura não mexeu neles:";
+}
+
+/**
+ * Produtos para "Reimprimir etiquetas": os que mudaram; depois de desfazer,
+ * os que voltaram ao preço antigo (a etiqueta precisa do preço de novo).
+ */
+export function produtosParaEtiqueta(r: RespostaReajuste, d: Desfeito | null): string[] {
+  if (d) return produtosOnde(d.restored, function () { return true; });
+  return produtosQueMudam(r.items);
 }

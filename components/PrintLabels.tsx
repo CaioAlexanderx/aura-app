@@ -56,6 +56,11 @@ type Props = {
   // 18/10/2026 (card p-36): quem abre Configurações vê o "mudar" na linha do
   // desenho. Vem do Estoque (useVisibleModules), que já tem o QueryClient.
   podeMudarDesenho?: boolean;
+  // 30/10/2026 (card p-53): "Reimprimir etiquetas" do reajuste de preço em
+  // lote chega com os produtos reajustados em selectedIds; estes ids são
+  // marcados como um toque faria (variantes padrão e quantidade). Ausente =
+  // nada muda.
+  marcarAoAbrir?: string[];
 };
 
 type EAN13Entry = { name: string; originalCode: string; generated: string; productId?: string; variantId?: string };
@@ -128,7 +133,7 @@ function loadStoredLabelSize(): LabelSizeKey {
   return DEFAULT_LABEL_SIZE;
 }
 
-export function PrintLabels({ products: produtosDoEstoque, selectedIds, onSelectionChange, podeMudarDesenho }: Props) {
+export function PrintLabels({ products: produtosDoEstoque, selectedIds, onSelectionChange, podeMudarDesenho, marcarAoAbrir }: Props) {
   var { company, token } = useAuthStore();
   // 30/10/2026 (card p-75): codigo gerado aqui entra na hora (produto ->
   // barcode); a lista do Estoque pega o mesmo valor do cadastro ao recarregar.
@@ -557,6 +562,13 @@ export function PrintLabels({ products: produtosDoEstoque, selectedIds, onSelect
     }
     if (!quantities[id] && p) setQty(id, defaultLabelQty(p.unit, p.stock, matconEnabled));
   }
+
+  // p-53: marca (como um toque) os produtos que chegaram do reajuste.
+  useEffect(function() {
+    if (!marcarAoAbrir || marcarAoAbrir.length === 0) return;
+    marcarAoAbrir.forEach(function(id) { if (selectedIds.includes(id)) marcarProduto(id); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marcarAoAbrir]);
 
   function toggleSelect(id: string) {
     if (selectedIds.includes(id)) {

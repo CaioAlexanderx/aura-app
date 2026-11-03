@@ -373,6 +373,8 @@ export default function EstoqueScreen() {
   // fora do demo, com a permissão do Estoque que abre esta tela).
   const reajusteNoAr = useReajusteDisponivel(company?.id, !isDemo && !consolidatedView);
   const [reajusteAberto, setReajusteAberto] = useState(false);
+  // p-53: "Reimprimir etiquetas" abre a aba Etiquetas com os reajustados marcados.
+  const [etiquetasDoReajuste, setEtiquetasDoReajuste] = useState<string[] | undefined>(undefined);
 
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [showBatchModal, setShowBatchModal] = useState(false);
@@ -982,7 +984,7 @@ export default function EstoqueScreen() {
           />
         )}
         {/* Aba 2: Etiquetas (era 3 antes da Curva ABC migrar) */}
-        {activeTab === 2 && <PrintLabels products={products} selectedIds={labelSelection} onSelectionChange={setLabelSelection} podeMudarDesenho={podeMudarDesenho} />}
+        {activeTab === 2 && <PrintLabels products={products} selectedIds={labelSelection} onSelectionChange={setLabelSelection} podeMudarDesenho={podeMudarDesenho} marcarAoAbrir={etiquetasDoReajuste} />}
 
       </ScrollView>
 
@@ -1004,6 +1006,14 @@ export default function EstoqueScreen() {
           companyId={company?.id || ""}
           produtos={products.filter(p => bulkSelected.has(p.id))}
           onFechar={() => setReajusteAberto(false)}
+          onPrecosMudaram={() => qc.invalidateQueries({ queryKey: ["products", company?.id] })}
+          onReimprimir={(ids) => {
+            setReajusteAberto(false);
+            exitBulkMode();
+            setLabelSelection(ids);
+            setEtiquetasDoReajuste(ids);
+            handleTabSelect(TABS.indexOf("Etiquetas"));
+          }}
         />
       </WebPortal>
       <WebPortal active={importPlanilha.aberto}>
