@@ -78,6 +78,12 @@ import { PERFIL_PADRAO, perfilDoCadastro } from "./item-form/perfis";
 import { usaLote } from "@/utils/matconLots";
 // 03/11/2026 — custo oculto (utils/estoqueConsulta.ts, podeVerCusto).
 import { useEstoqueConsulta } from "@/hooks/useEstoqueConsulta";
+// 03/11/2026 — fornecedores do produto, cada um com o seu custo (mockup
+// estoque-entrada-por-fornecedor.html, telas 5 e 8; Aura-backend#950).
+import { SecaoFornecedores } from "./item-form/SecaoFornecedores";
+import { ComprasDoProduto } from "./ComprasDoProduto";
+import { fornecedoresDoProdutoApi } from "@/services/suppliersApi";
+import { corpoDosFornecedores, type LinhaDeFornecedor } from "@/utils/entradaDeMercadoria";
 import { matconApi } from "@/services/matconApi";
 import {
   capaDa, chaveDaCor, duracaoParaMinutos, gerarCodigoServico,
@@ -143,7 +149,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   const narrow = !duasColunas;
 
   const qc = useQueryClient();
-  const { company } = useAuthStore();
+  const { company, consolidatedView } = useAuthStore();
   const { products, addProduct, updateProduct } = useProducts();
   const { byId: categoriaPorId, assignProductCategories } = useCategories();
   const breadcrumbLabel = useBreadcrumbLabel();
@@ -235,6 +241,41 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   const [dupPendente, setDupPendente] = useState<DuplicataRow | null>(null);
 
   const modoEdicao = !!alvo;
+
+  // Fornecedores do produto: estado local, gravado no Salvar (como a grade).
+  const [fornLinhas, setFornLinhas] = useState<LinhaDeFornecedor[]>([]);
+  const [fornSujos, setFornSujos] = useState(false);
+  const { data: fornDoServidor, isLoading: fornCarregando } = useQuery({
+    queryKey: ["product-suppliers", company?.id, alvo?.id],
+    queryFn: () => fornecedoresDoProdutoApi.list(company!.id, alvo!.id),
+    enabled: visible && !!company?.id && !!alvo?.id && !consolidatedView,
+    staleTime: 30_000,
+    retry: 1,
+  });
+  useEffect(() => {
+    if (fornSujos) return;
+    setFornLinhas((fornDoServidor?.suppliers || []).map((f) => ({
+      supplier_id: f.supplier_id, name: f.name,
+      custo: f.cost ? mascaraDeValor(Number(f.cost)) : "",
+      codigo: f.supplier_code || "", principal: f.is_main,
+    })));
+  }, [fornDoServidor, fornSujos]);
+
+  // Falha aqui não desfaz o produto (já gravado): avisa e deixa o modal
+  // aberto para tentar de novo.
+  async function salvarFornecedores(id: string): Promise<boolean> {
+    if (!fornSujos || !company?.id) return true;
+    try {
+      await fornecedoresDoProdutoApi.save(company.id, id, corpoDosFornecedores(fornLinhas, semCusto));
+      qc.invalidateQueries({ queryKey: ["product-suppliers", company.id, id] });
+      qc.invalidateQueries({ queryKey: ["products"] });
+      setFornSujos(false);
+      return true;
+    } catch (err: any) {
+      toast.error(err?.message || "O produto foi salvo, mas os fornecedores não. Salve de novo.");
+      return false;
+    }
+  }
   const productId = alvo?.id || null;
   const isProduto = type === "product";
   // O perfil é de produto: serviço usa sempre o padrão.
@@ -335,6 +376,8 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     const t: ItemType = prod ? (prod.unit === "srv" ? "service" : "product") : tipo;
     setAlvo(prod);
     setType(t);
+    setFornLinhas([]);
+    setFornSujos(false);
     setNome(prod?.name || "");
     setPreco(prod ? mascaraDeValor(prod.price) : "");
     const cardPrice = prod && prod.cardPrice != null && prod.cardPrice > 0 ? prod.cardPrice : null;
@@ -644,6 +687,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
           const okVar = await salvarVariacoes(alvo!.id);
           if (!okVar) return;
         }
+        if (!(await salvarFornecedores(alvo!.id))) return;
         // Fotos de cores que só passaram a existir neste Salvar esperaram na
         // fila: sobem agora que a grade foi gravada. Quem sai sem salvar não
         // deixa foto gravada para uma cor que não existe (suporte 10/09).
@@ -672,6 +716,8 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
 
       // Vínculo da árvore: só existe depois que a linha existe.
       vincularCategoria(criado.id);
+      // Fornecedores: idem. Falhar não desfaz o produto (já avisa).
+      if (fornLinhas.length) void salvarFornecedores(String(criado.id));
 
       // Foto de uma cor que saiu da grade antes do Salvar não sobe órfã.
       const coresVivas = isProduto && stockMode === "variants" ? cores.map((c) => chaveDaCor(c.hex)) : [];
@@ -933,6 +979,21 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     />
   );
 
+  // 03/11/2026 — fornecedores + compras (o card só aparece com entrada).
+  // Sem botão de entrada aqui dentro: o campo Estoque deste formulário,
+  // salvo depois, sobrescreveria a entrada.
+  const secFornecedores = isProduto && !consolidatedView ? (
+    <View>
+      <SecaoFornecedores
+        linhas={fornLinhas}
+        onLinhas={(l) => { setFornLinhas(l); setFornSujos(true); setSujo(true); }}
+        semCusto={semCusto}
+        carregando={!!alvo && fornCarregando}
+      />
+      {alvo ? <ComprasDoProduto productId={alvo.id} unit={alvo.unit} price={alvo.price} semCusto={semCusto} /> : null}
+    </View>
+  ) : null;
+
   const secEstoque = isProduto ? (
     <SecaoEstoque
       narrow={narrow}
@@ -1111,6 +1172,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
                 <View style={s.colEsq}>
                   {secItem}
                   {secPreco}
+                  {secFornecedores}
                   {secEstoque}
                   {secEntrega}
                   {secDescricao}
@@ -1125,6 +1187,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
               <View style={{ gap: 12 }}>
                 {secItem}
                 {secPreco}
+                {secFornecedores}
                 {secEstoque}
                 {secEntrega}
                 {secNotaFiscal}
@@ -1138,6 +1201,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
               <View style={s.colEsq}>
                 {secItem}
                 {secPreco}
+                {secFornecedores}
                 {secEstoque}
                 {secDescricao}
               </View>
@@ -1150,6 +1214,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
             <View style={{ gap: 12 }}>
               {secItem}
               {secPreco}
+              {secFornecedores}
               {secEstoque}
               {secFotos}
               {secDescricao}

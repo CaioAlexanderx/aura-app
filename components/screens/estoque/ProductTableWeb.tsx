@@ -42,9 +42,11 @@ type Props = {
   consulta?: boolean;
   // 03/11/2026 — custo oculto (podeVerCusto): a coluna Margem some.
   semCusto?: boolean;
+  // 03/11/2026 — "↓ Entrada" sempre visível (sem hover-reveal: armadilha 7).
+  onEntrada?: (product: any) => void;
 };
 
-export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bulkSelected, onSelect, canLink, consulta, semCusto }: Props) {
+export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bulkSelected, onSelect, canLink, consulta, semCusto, onEntrada }: Props) {
   const C = useColors();
   const { isDark } = useThemeStore();
   const { m } = useValoresOcultos();
@@ -237,9 +239,18 @@ export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bul
                     >—</span>
                   ) : margin.toFixed(0) + "%"}
                 </td>}
-                {!consulta && <td style={{ padding: "14px 14px", textAlign: "right" } as any}>
+                {!consulta && <td style={{ padding: "14px 14px", textAlign: "right", whiteSpace: "nowrap" } as any}>
+                  {!bulkMode && onEntrada && p.unit !== "srv" && (
+                    <button onClick={(e: any) => { e.stopPropagation(); onEntrada(p); }} className="aura-est-pressable"
+                      data-testid={"estoque-entrada-" + p.id}
+                      style={{
+                        height: 30, padding: "0 10px", borderRadius: 8, border: "1px solid " + border, marginRight: 4,
+                        background: surfaceSolid, color: C.ink2, cursor: "pointer", fontSize: 12, fontWeight: 600,
+                        verticalAlign: "middle",
+                      } as any} title="Entrada de mercadoria">↓ Entrada</button>
+                  )}
                   <div className="aura-est-row-actions" style={{
-                    display: "flex", justifyContent: "flex-end", gap: 4, opacity: 0,
+                    display: "inline-flex", justifyContent: "flex-end", gap: 4, opacity: 0, verticalAlign: "middle",
                     transition: "opacity 0.2s",
                   } as any}>
                     {!bulkMode && onEdit && (
