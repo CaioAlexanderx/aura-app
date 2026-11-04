@@ -118,8 +118,8 @@ function PrefLineNative({ row, on, onToggle, C }: { row: PrefRow; on: boolean; o
 // ficam fora das preferências da empresa acima e não passam pelo servidor
 // de preferências.
 const TEXTO_DO_AVISO: Record<EstadoDoAviso, string> = {
-  ativo: 'Ativo. Pedido novo, comprovante e pagamento aparecem aqui mesmo com o painel fechado.',
-  inativo: 'Receba o aviso de pedido no computador, mesmo com o painel fechado.',
+  ativo: 'Ativo. Venda, crediário, orçamento e pedido online chegam aqui mesmo com a Aura fechada.',
+  inativo: 'Receba venda, crediário, orçamento e pedido online neste aparelho, mesmo com a Aura fechada.',
   bloqueado: 'Bloqueado neste navegador. Libere as notificações deste site nas configurações do navegador.',
   indisponivel: 'Este navegador não recebe o aviso. No iPhone, adicione o painel à Tela de Início e abra por lá.',
 };
@@ -195,7 +195,7 @@ function AvisosDoNavegadorWeb({ C, companyId }: { C: any; companyId?: string }) 
         padding: '11px 12px', marginBottom: 6, border: `1px solid ${C.border}`,
         borderRadius: 11, background: C.bg3,
       } as any}>
-        <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: C.ink } as any}>Aviso no computador</span>
+        <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: C.ink } as any}>Avisos neste aparelho</span>
         <span style={{ display: 'block', fontSize: 11, color: C.ink3, marginTop: 2, lineHeight: 1.35 } as any}>
           {estado ? TEXTO_DO_AVISO[estado] : 'Verificando…'}
         </span>

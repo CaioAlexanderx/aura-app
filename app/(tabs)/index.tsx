@@ -15,6 +15,7 @@ import { ProfileBanner } from "@/components/ProfileBanner";
 import { BrandBanner } from "@/components/BrandBanner";
 import { VerifyEmailBanner } from "@/components/VerifyEmailBanner";
 import { InstallBanner } from "@/components/InstallBanner";
+import { ConviteDeAvisos } from "@/components/ConviteDeAvisos";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 import { useVisibleModules } from "@/hooks/useVisibleModules";
 import { useCheckinGate } from "@/hooks/useCheckin";
@@ -285,6 +286,11 @@ export default function DashboardScreen() {
             tela de celular, só na web, só enquanto não estiver instalada e
             não tiver sido dispensado; o componente decide sozinho. */}
         {!isDemo && <InstallBanner />}
+        {/* 04/11/2026: convite para ligar os avisos no celular (venda,
+            crediário, orçamento, pedido online). Uma vez por aparelho, só
+            para quem decide (dona, admin, acesso total); o componente
+            decide sozinho. */}
+        {!isDemo && <ConviteDeAvisos />}
 
         {/* 05/10/2026: primeiros passos da frente — cartão no fluxo da página
             (não é modal nem banner flutuante). Some sozinho na visão
