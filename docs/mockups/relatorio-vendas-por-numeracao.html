@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vendas por numeração</title>
+<!--
+  ============================================================
+  Mockup standalone — Financeiro: "Vendas por produto e numeração" e o
+  bloco do e-mail, 03/11/2026. Regra 4 do CLAUDE.md: mockup antes do código.
+
+  O PEDIDO (PO, 03/11): relatórios mais detalhados no Financeiro e no
+  e-mail. "Quantidade exata de produtos vendidos no período, separados por
+  modelo, tipo e numeração, em TABELA — não só porcentagem ou gráfico.
+  Quantos pares de cada modelo no mês, quais numerações saíram mais, quais
+  produtos giraram mais — para controlar estoque e planejar compras."
+
+  O QUE JÁ EXISTE (e o que falta):
+    - /financeiro/produtos ("Produtos que mais dão dinheiro", curva ABC):
+      tabela por PRODUTO com quantidade e receita, período e CSV. Não abre
+      por numeração/cor, não mostra estoque nem giro, não agrupa por tipo.
+    - E-mail semanal, bloco "Mais vendidos" (relatorioBlocos.js): top por
+      produto, sem numeração.
+
+  DE ONDE VEM A NUMERAÇÃO (produção, 03/11/2026):
+    - variante com atributo "Tamanho" (product_variant_values): 23 lojas,
+      13 mil variantes. A venda guarda a variante (sale_items.variant_id),
+      então a contagem por numeração é exata, inclusive no passado.
+    - products.size (cada numeração cadastrada como produto separado ou
+      tamanho único): 9 lojas, 901 produtos. Também entra.
+    - nenhum dos dois: coluna "Sem numeração".
+    Modelo = produto. Tipo = categoria. Cor = atributo "Cor" (opcional,
+    botão "Separar por cor").
+
+  REGRAS DE CONTA (as mesmas da curva ABC, services/productsRanking.js):
+    venda cancelada fora; troca fora (type = 'sale'); fuso America/Sao_Paulo;
+    produto apagado aparece pelo product_name_snapshot.
+    Giro (para o lojista): "vendeu X% do que teve" =
+      vendidos ÷ (vendidos + estoque de hoje).
+    Cobertura: "estoque dura ~N dias" = estoque ÷ (vendidos ÷ dias do período).
+    Sugestão de compra (para repor o mesmo período):
+      max(0, vendidos no período − estoque de hoje), por numeração.
+
+  MULTI-CNPJ: loja selecionada = só ela. Consolidado = soma do grupo
+  (produto compartilhado soma uma linha; estoque somado), botão "por loja"
+  no detalhe. Mesma regra do "Mais vendidos" consolidado do e-mail.
+
+  PERMISSÃO: subtela do Financeiro (mesmo gate). Receita aparece; custo
+  não aparece neste relatório (nada a esconder do custo oculto).
+
+  NÃO É TELA NOVA: subtela do Financeiro, como /financeiro/produtos — sem
+  item de menu nem `mod` próprio (a barra lateral marca Financeiro pelo
+  prefixo da rota).
+
+  TELAS:
+    1. Por modelo (tabela) — com a grade de numeração aberta na linha
+    2. Grade modelo × numeração (o "mapa" de compra)
+    3. Por numeração (quais numerações saíram mais)
+    4. Celular
+    5. E-mail semanal: bloco "Mais vendidos" com numeração
+    6. E-mail do fechamento do mês com a planilha anexa
+  ============================================================
+-->
+<style>
+  :root{
+    --bg:#e6e4f0; --bg2:#fafbff; --bg3:#ffffff; --bg4:#f1eef9;
+    --ink:#18172b; --ink2:#3b3461; --ink3:#6a608e;
+    --line:rgba(109,40,217,.14); --line2:rgba(109,40,217,.26);
+    --violet:#7c3aed; --violet3:#6d28d9; --violetD:rgba(124,58,237,.08);
+    --green:#059669; --greenD:rgba(5,150,105,.09);
+    --amber:#b45309; --amberD:rgba(217,119,6,.10);
+    --red:#dc2626;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  header.doc{padding:28px 20px 8px;max-width:1240px;margin:0 auto}
+  header.doc h1{margin:0 0 6px;font-size:22px}
+  header.doc p{margin:0;color:var(--ink3);max-width:860px}
+  nav.toc{max-width:1240px;margin:14px auto 0;padding:0 20px;display:flex;flex-wrap:wrap;gap:8px}
+  nav.toc a{font-size:12px;text-decoration:none;color:var(--violet3);background:var(--violetD);padding:5px 10px;border-radius:999px}
+  section.tela{max-width:1240px;margin:26px auto;padding:0 20px}
+  .tela>h2{font-size:15px;margin:0 0 4px}
+  .tela>.meta{font-size:12.5px;color:var(--ink3);margin:0 0 12px;max-width:900px}
+  .stage{background:linear-gradient(180deg,#dcd8ec,#e9e6f3);border-radius:18px;padding:22px;display:flex;gap:22px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+  .po{margin-top:10px;font-size:12.5px;background:var(--amberD);color:#7a3f06;border-radius:10px;padding:9px 12px}
+  .po b{color:#5b2c03}
+
+  .app{background:var(--bg2);border-radius:16px;box-shadow:0 10px 30px rgba(40,20,90,.12);width:100%;max-width:1120px;overflow:hidden}
+  .top{padding:16px 20px 10px;border-bottom:1px solid var(--line)}
+  .voltar{font-size:12px;color:var(--violet3)}
+  .top h3{margin:6px 0 2px;font-size:19px}
+  .top .sub{font-size:12.5px;color:var(--ink3)}
+  .barra{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+  .seg{display:inline-flex;background:var(--bg4);border-radius:10px;padding:3px}
+  .seg span{padding:6px 11px;border-radius:8px;font-size:12.5px;color:var(--ink2);cursor:default}
+  .seg span.on{background:#fff;color:var(--violet3);font-weight:700;box-shadow:0 1px 3px rgba(40,20,90,.12)}
+  .chip{font-size:12px;border:1px solid var(--line2);border-radius:999px;padding:5px 10px;color:var(--ink2);background:#fff}
+  .chip.on{background:var(--violet);border-color:var(--violet);color:#fff}
+  .busca{flex:1;min-width:160px;border:1px solid var(--line2);border-radius:10px;padding:7px 10px;color:#a39cc2;background:#fff;font-size:13px}
+  .btn{border:0;border-radius:10px;padding:8px 12px;font:600 12.5px/1 inherit;display:inline-flex;gap:6px;align-items:center}
+  .btn.sec{background:#fff;border:1px solid var(--line2);color:var(--ink2)}
+  .btn.pri{background:var(--violet);color:#fff}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px 20px}
+  .kpi{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+  .kpi .k{font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.04em}
+  .kpi .v{font-size:20px;font-weight:800;margin-top:2px}
+  .kpi .s{font-size:11.5px;color:var(--ink3)}
+  .wrap{overflow-x:auto;padding:0 20px 18px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);font-weight:600;text-align:right;padding:9px 10px;white-space:nowrap;border-bottom:1px solid var(--line2)}
+  th.l,td.l{text-align:left}
+  td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  td.nome{font-weight:600;text-align:left}
+  td .sub{display:block;font-weight:400;font-size:11.5px;color:var(--ink3)}
+  tr.aberta td{background:var(--violetD)}
+  tr.grade td{background:#fbfaff;padding:10px 10px 14px}
+  .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;background:var(--bg4);color:var(--ink2)}
+  .pill.ok{background:var(--greenD);color:var(--green)}
+  .pill.alerta{background:var(--amberD);color:var(--amber)}
+  .barrinha{display:inline-block;height:6px;border-radius:3px;background:var(--violet);vertical-align:middle;margin-right:6px;opacity:.75}
+  .numeros{display:flex;flex-wrap:wrap;gap:6px}
+  .num{border:1px solid var(--line2);border-radius:10px;padding:6px 8px;min-width:64px;text-align:center;background:#fff}
+  .num b{display:block;font-size:13px}
+  .num .q{display:block;font-size:15px;font-weight:800;color:var(--ink)}
+  .num .e{display:block;font-size:10.5px;color:var(--ink3)}
+  .num.top{border-color:var(--violet);background:var(--violetD)}
+  .num.falta .e{color:var(--red);font-weight:700}
+  .total td{font-weight:800;background:var(--bg4)}
+  .heat td.c{min-width:44px;text-align:center}
+  .h0{color:#c9c3de}
+  .h1{background:rgba(124,58,237,.07)}
+  .h2{background:rgba(124,58,237,.16)}
+  .h3{background:rgba(124,58,237,.28);font-weight:700}
+  .h4{background:rgba(124,58,237,.45);color:#fff;font-weight:800}
+  .legenda{font-size:11.5px;color:var(--ink3);padding:0 20px 14px}
+
+  .phone{width:390px;max-width:100%;background:#111;border-radius:42px;padding:12px;box-shadow:0 20px 50px rgba(30,10,80,.3)}
+  .phone .scr{background:var(--bg2);border-radius:32px;overflow:hidden;height:800px;overflow-y:auto}
+  .pcard{margin:10px 12px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px}
+  .pcard .t{display:flex;justify-content:space-between;gap:8px}
+  .pcard .t b{font-size:14px}
+  .rolar{display:flex;gap:6px;overflow-x:auto;margin-top:10px;padding-bottom:4px}
+
+  .mail{width:600px;max-width:100%;background:#fff;border-radius:12px;box-shadow:0 10px 30px rgba(40,20,90,.12);overflow:hidden;font-family:Arial,Helvetica,sans-serif}
+  .mail .mh{background:var(--violet);color:#fff;padding:16px 20px}
+  .mail .mh b{font-size:16px}
+  .mail .mb{padding:16px 20px}
+  .mail h4{margin:0 0 8px;font-size:15px}
+  .mail table{font-size:12.5px}
+  .mail td,.mail th{padding:7px 8px}
+  .mail .link{display:inline-block;margin-top:12px;background:var(--violet);color:#fff;padding:9px 14px;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none}
+  .anexo{display:flex;align-items:center;gap:10px;border:1px solid var(--line2);border-radius:10px;padding:10px 12px;margin-top:12px}
+  .anexo .ic{width:34px;height:34px;border-radius:8px;background:#e8f5ee;color:#1d6f42;display:grid;place-items:center;font-weight:800;font-size:12px}
+
+  @media (max-width:760px){
+    .kpis{grid-template-columns:repeat(2,1fr)}
+    .stage{padding:12px}
+  }
+</style>
+</head>
+<body>
+
+<header class="doc">
+  <h1>Financeiro: vendas por produto e numeração</h1>
+  <p>A quantidade exata vendida no período, em tabela, separada por modelo, tipo e numeração, com estoque de hoje, giro e sugestão de compra. Também vai no e-mail.</p>
+</header>
+<nav class="toc">
+  <a href="#t1">1 · Por modelo</a><a href="#t2">2 · Grade de numeração</a><a href="#t3">3 · Por numeração</a>
+  <a href="#t4">4 · Celular</a><a href="#t5">5 · E-mail semanal</a><a href="#t6">6 · Fechamento do mês</a>
+</nav>
+
+<!-- ─────────────────────────── 1 -->
+<section class="tela" id="t1">
+  <h2>1 · Por modelo, com as numerações abertas na linha</h2>
+  <p class="meta">A entrada vem de um link na Visão geral do Financeiro e na tela da curva ABC ("Ver por numeração"). O período padrão é o mês atual. Um toque na linha abre as numerações daquele modelo, cada uma com quantos saíram e quantos ainda tem.</p>
+  <div class="stage">
+    <div class="app">
+      <div class="top">
+        <span class="voltar">‹ Financeiro</span>
+        <h3>Vendas por produto e numeração</h3>
+        <div class="sub">Outubro de 2026 · vendas concluídas, sem trocas e canceladas</div>
+        <div class="barra">
+          <div class="seg"><span>7 dias</span><span class="on">Este mês</span><span>Mês passado</span><span>90 dias</span><span>Escolher datas</span></div>
+          <div class="seg"><span class="on">Por modelo</span><span>Grade de numeração</span><span>Por numeração</span></div>
+          <button class="btn sec">⇩ Baixar planilha</button>
+        </div>
+        <div class="barra">
+          <span class="chip on">Todos os tipos</span><span class="chip">Tênis</span><span class="chip">Sandália</span><span class="chip">Bota</span><span class="chip">Chinelo</span>
+          <span class="busca">Buscar modelo…</span>
+          <span class="chip">Separar por cor</span>
+        </div>
+      </div>
+      <div class="kpis">
+        <div class="kpi"><div class="k">Pares vendidos</div><div class="v">412</div><div class="s">+18% que setembro</div></div>
+        <div class="kpi"><div class="k">Modelos que venderam</div><div class="v">57</div><div class="s">de 212 no estoque</div></div>
+        <div class="kpi"><div class="k">Numeração campeã</div><div class="v">37</div><div class="s">96 pares · 23%</div></div>
+        <div class="kpi"><div class="k">Receita</div><div class="v">R$ 48.930</div><div class="s">ticket por par R$ 118,76</div></div>
+      </div>
+      <div class="wrap">
+        <table>
+          <thead><tr><th class="l">Modelo</th><th class="l">Tipo</th><th>Vendidos</th><th>Receita</th><th>Estoque hoje</th><th>Giro</th><th>Estoque dura</th><th>Comprar p/ repor</th></tr></thead>
+          <tbody>
+            <tr class="aberta"><td class="nome">▾ Tênis Runner Branco<span class="sub">ref. TR-100</span></td><td class="l">Tênis</td><td><span class="barrinha" style="width:60px"></span><b>48</b></td><td>R$ 9.595</td><td>11</td><td><span class="pill ok">81%</span></td><td><span class="pill alerta">~7 dias</span></td><td><b>37</b></td></tr>
+            <tr class="grade"><td colspan="8" class="l">
+              <div class="numeros">
+                <div class="num"><b>34</b><span class="q">3</span><span class="e">tem 2</span></div>
+                <div class="num"><b>35</b><span class="q">5</span><span class="e">tem 1</span></div>
+                <div class="num"><b>36</b><span class="q">9</span><span class="e">tem 2</span></div>
+                <div class="num top"><b>37</b><span class="q">12</span><span class="e">tem 3</span></div>
+                <div class="num top"><b>38</b><span class="q">10</span><span class="e">tem 1</span></div>
+                <div class="num falta"><b>39</b><span class="q">6</span><span class="e">acabou</span></div>
+                <div class="num"><b>40</b><span class="q">3</span><span class="e">tem 2</span></div>
+              </div>
+            </td></tr>
+            <tr><td class="nome">▸ Sandália Flat Nude<span class="sub">ref. SF-22</span></td><td class="l">Sandália</td><td><span class="barrinha" style="width:44px"></span><b>35</b></td><td>R$ 3.465</td><td>40</td><td><span class="pill">47%</span></td><td>~35 dias</td><td>0</td></tr>
+            <tr><td class="nome">▸ Bota Cano Curto Preta<span class="sub">ref. BC-07</span></td><td class="l">Bota</td><td><span class="barrinha" style="width:30px"></span><b>24</b></td><td>R$ 5.736</td><td>5</td><td><span class="pill ok">83%</span></td><td><span class="pill alerta">~6 dias</span></td><td><b>19</b></td></tr>
+            <tr><td class="nome">▸ Chinelo Slide Preto<span class="sub">ref. CS-01</span></td><td class="l">Chinelo</td><td><span class="barrinha" style="width:26px"></span><b>21</b></td><td>R$ 1.029</td><td>62</td><td><span class="pill">25%</span></td><td>~91 dias</td><td>0</td></tr>
+            <tr><td class="nome">▸ Tênis Casual Off White<span class="sub">ref. TC-30</span></td><td class="l">Tênis</td><td><span class="barrinha" style="width:20px"></span><b>16</b></td><td>R$ 2.384</td><td>9</td><td><span class="pill ok">64%</span></td><td>~17 dias</td><td>7</td></tr>
+            <tr class="total"><td class="l">Total (57 modelos)</td><td></td><td>412</td><td>R$ 48.930</td><td>1.284</td><td>24%</td><td>~96 dias</td><td>188</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="legenda">Giro: quanto do que você teve foi vendido (vendidos ÷ vendidos + estoque de hoje). "Estoque dura": no ritmo deste período. "Comprar p/ repor": o que falta para vender o mesmo de novo (vendidos − estoque de hoje).</div>
+    </div>
+  </div>
+  <div class="po">◆ <b>PO:</b> as três medidas (giro, quanto o estoque dura e quanto comprar para repor) estão em linguagem de balcão. Fecha assim, ou prefere só "Vendidos" e "Estoque hoje" e deixar a conta com a lojista?<br>
+  ◆ <b>PO:</b> o "Comprar p/ repor" ganha um botão <b>"Montar pedido"</b> que já leva as quantidades por numeração para o pedido ao fornecedor? Isso usa o fornecedor principal do PR de fornecedores.</div>
+</section>
+
+<!-- ─────────────────────────── 2 -->
+<section class="tela" id="t2">
+  <h2>2 · Grade modelo × numeração (o "mapa" da compra)</h2>
+  <p class="meta">Os modelos ficam nas linhas e as numerações nas colunas, cada célula com os pares vendidos. Quanto mais escuro, mais saiu. A linha de baixo soma as numerações e responde direto "quais numerações tiveram maior saída". O botão "Mostrar estoque" põe o estoque de hoje embaixo de cada número.</p>
+  <div class="stage">
+    <div class="app">
+      <div class="top">
+        <h3>Vendas por produto e numeração</h3>
+        <div class="barra">
+          <div class="seg"><span>Por modelo</span><span class="on">Grade de numeração</span><span>Por numeração</span></div>
+          <span class="chip on">Tênis</span>
+          <span class="chip">Mostrar estoque</span>
+          <button class="btn sec">⇩ Baixar planilha</button>
+        </div>
+      </div>
+      <div class="wrap heat" style="padding-top:14px">
+        <table>
+          <thead><tr><th class="l">Modelo</th><th>33</th><th>34</th><th>35</th><th>36</th><th>37</th><th>38</th><th>39</th><th>40</th><th>41</th><th>Total</th></tr></thead>
+          <tbody>
+            <tr><td class="nome">Tênis Runner Branco</td><td class="c h0">0</td><td class="c h1">3</td><td class="c h2">5</td><td class="c h3">9</td><td class="c h4">12</td><td class="c h4">10</td><td class="c h2">6</td><td class="c h1">3</td><td class="c h0">0</td><td><b>48</b></td></tr>
+            <tr><td class="nome">Tênis Casual Off White</td><td class="c h0">0</td><td class="c h1">1</td><td class="c h1">2</td><td class="c h2">4</td><td class="c h2">4</td><td class="c h1">3</td><td class="c h1">2</td><td class="c h0">0</td><td class="c h0">0</td><td><b>16</b></td></tr>
+            <tr><td class="nome">Tênis Plataforma Preto</td><td class="c h0">0</td><td class="c h0">0</td><td class="c h1">2</td><td class="c h2">3</td><td class="c h2">5</td><td class="c h1">2</td><td class="c h1">1</td><td class="c h0">0</td><td class="c h0">0</td><td><b>13</b></td></tr>
+            <tr><td class="nome">Tênis Knit Rosa</td><td class="c h1">1</td><td class="c h1">2</td><td class="c h1">2</td><td class="c h1">2</td><td class="c h2">3</td><td class="c h1">1</td><td class="c h0">0</td><td class="c h0">0</td><td class="c h0">0</td><td><b>11</b></td></tr>
+            <tr class="total"><td class="l">Total por numeração</td><td>1</td><td>6</td><td>11</td><td>18</td><td>24</td><td>16</td><td>9</td><td>3</td><td>0</td><td>88</td></tr>
+            <tr class="total"><td class="l" style="font-weight:600">% dos pares</td><td>1%</td><td>7%</td><td>13%</td><td>20%</td><td><b>27%</b></td><td>18%</td><td>10%</td><td>3%</td><td>0%</td><td>100%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="legenda">As colunas vêm das numerações que existem nos produtos filtrados, na ordem certa: 33, 34… e depois P, M, G, GG para roupa. Produto sem numeração cai na coluna "Sem numeração".</div>
+    </div>
+  </div>
+  <div class="po">◆ <b>PO:</b> a grade mistura "pares" e "peças"? Sugestão: o rótulo segue a unidade do produto ("pares" quando o tipo é calçado ou a unidade é "par"; "peças" no resto). Em loja que vende os dois, o total diz "itens".</div>
+</section>
+
+<!-- ─────────────────────────── 3 -->
+<section class="tela" id="t3">
+  <h2>3 · Por numeração</h2>
+  <p class="meta">É a resposta curta para "quais numerações saíram mais". Mostra também o estoque de cada numeração, somando todos os modelos, e quanto comprar para repor.</p>
+  <div class="stage">
+    <div class="app" style="max-width:720px">
+      <div class="top"><div class="barra"><div class="seg"><span>Por modelo</span><span>Grade de numeração</span><span class="on">Por numeração</span></div><span class="chip on">Todos os tipos</span></div></div>
+      <div class="wrap" style="padding-top:12px">
+        <table>
+          <thead><tr><th class="l">Numeração</th><th>Pares vendidos</th><th>% dos pares</th><th>Estoque hoje</th><th>Comprar p/ repor</th></tr></thead>
+          <tbody>
+            <tr><td class="nome">37</td><td><span class="barrinha" style="width:96px"></span><b>96</b></td><td>23%</td><td>140</td><td>0</td></tr>
+            <tr><td class="nome">36</td><td><span class="barrinha" style="width:82px"></span><b>82</b></td><td>20%</td><td>61</td><td><b>21</b></td></tr>
+            <tr><td class="nome">38</td><td><span class="barrinha" style="width:71px"></span><b>71</b></td><td>17%</td><td>58</td><td><b>13</b></td></tr>
+            <tr><td class="nome">35</td><td><span class="barrinha" style="width:55px"></span><b>55</b></td><td>13%</td><td>101</td><td>0</td></tr>
+            <tr><td class="nome">39</td><td><span class="barrinha" style="width:44px"></span><b>44</b></td><td>11%</td><td>29</td><td><b>15</b></td></tr>
+            <tr><td class="nome">34</td><td><span class="barrinha" style="width:30px"></span><b>30</b></td><td>7%</td><td>88</td><td>0</td></tr>
+            <tr><td class="nome">Sem numeração</td><td>34</td><td>8%</td><td>807</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────── 4 -->
+<section class="tela" id="t4">
+  <h2>4 · Celular</h2>
+  <p class="meta">No celular, cada modelo vira um cartão, e as numerações correm para o lado com o dedo. A grade da tela 2 rola para o lado com a coluna do modelo fixa.</p>
+  <div class="stage">
+    <div class="phone"><div class="scr">
+      <div style="padding:16px 16px 6px"><span class="voltar">‹ Financeiro</span><div style="font-weight:800;font-size:17px;margin-top:4px">Vendas por numeração</div><div class="sub" style="font-size:12px;color:var(--ink3)">Este mês · 412 pares</div></div>
+      <div style="padding:0 12px;display:flex;gap:6px;overflow-x:auto"><span class="chip on">Por modelo</span><span class="chip">Grade</span><span class="chip">Numeração</span><span class="chip">⇩</span></div>
+      <div class="pcard">
+        <div class="t"><b>Tênis Runner Branco</b><span><b>48</b> pares</span></div>
+        <div style="font-size:12px;color:var(--ink3);margin-top:2px">Tênis · tem 11 · giro 81% · <span style="color:var(--amber)">dura ~7 dias</span></div>
+        <div class="rolar">
+          <div class="num"><b>36</b><span class="q">9</span><span class="e">tem 2</span></div>
+          <div class="num top"><b>37</b><span class="q">12</span><span class="e">tem 3</span></div>
+          <div class="num top"><b>38</b><span class="q">10</span><span class="e">tem 1</span></div>
+          <div class="num falta"><b>39</b><span class="q">6</span><span class="e">acabou</span></div>
+          <div class="num"><b>40</b><span class="q">3</span><span class="e">tem 2</span></div>
+        </div>
+        <div style="font-size:12px;margin-top:8px">Comprar p/ repor: <b>37 pares</b></div>
+      </div>
+      <div class="pcard">
+        <div class="t"><b>Sandália Flat Nude</b><span><b>35</b> pares</span></div>
+        <div style="font-size:12px;color:var(--ink3);margin-top:2px">Sandália · tem 40 · giro 47% · dura ~35 dias</div>
+      </div>
+      <div class="pcard">
+        <div class="t"><b>Bota Cano Curto Preta</b><span><b>24</b> pares</span></div>
+        <div style="font-size:12px;color:var(--ink3);margin-top:2px">Bota · tem 5 · giro 83% · <span style="color:var(--amber)">dura ~6 dias</span></div>
+      </div>
+    </div></div>
+  </div>
+</section>
+
+<!-- ─────────────────────────── 5 -->
+<section class="tela" id="t5">
+  <h2>5 · E-mail semanal: "Mais vendidos" com numeração</h2>
+  <p class="meta">O bloco que já existe vira tabela: modelo, pares e as 3 numerações que mais saíram. Também ganha o alerta "acabando": modelo que vendeu bem e tem pouco estoque. O link abre a tela 1 já no período da semana.</p>
+  <div class="stage">
+    <div class="mail">
+      <div class="mh"><b>Sua semana na Aura</b><br><span style="font-size:12px;opacity:.9">27/10 a 02/11</span></div>
+      <div class="mb">
+        <h4>Mais vendidos da semana</h4>
+        <table>
+          <thead><tr><th class="l">Modelo</th><th>Pares</th><th class="l">Numerações que mais saíram</th><th>Tem</th></tr></thead>
+          <tbody>
+            <tr><td class="l"><b>Tênis Runner Branco</b></td><td>14</td><td class="l">37 (4) · 38 (3) · 36 (3)</td><td>11</td></tr>
+            <tr><td class="l"><b>Sandália Flat Nude</b></td><td>9</td><td class="l">35 (3) · 36 (2) · 37 (2)</td><td>40</td></tr>
+            <tr><td class="l"><b>Bota Cano Curto Preta</b></td><td>7</td><td class="l">37 (3) · 38 (2) · 36 (1)</td><td>5</td></tr>
+          </tbody>
+        </table>
+        <div style="margin-top:12px;background:var(--amberD);color:#7a3f06;border-radius:8px;padding:9px 11px;font-size:12.5px">
+          <b>Acabando:</b> Tênis Runner Branco 39 (acabou), Bota Cano Curto Preta 38 (1 par). No ritmo da semana, acaba em menos de 7 dias.
+        </div>
+        <a class="link">Ver a tabela completa</a>
+      </div>
+    </div>
+  </div>
+  <div class="po">◆ <b>PO:</b> quantos modelos entram no e-mail? Sugestão: os <b>10</b> que mais venderam (o resto fica na tabela completa). O e-mail fica legível no celular, e a lista não vira um extrato.</div>
+</section>
+
+<!-- ─────────────────────────── 6 -->
+<section class="tela" id="t6">
+  <h2>6 · Fechamento do mês com a planilha anexa</h2>
+  <p class="meta">No dia 1º sai um e-mail com o mês fechado e a planilha da tela 1 anexa. A planilha abre no Excel e no Google Planilhas, com uma linha por modelo e numeração. Serve para levar à reunião com o fornecedor ou ao contador. Cada tipo de e-mail pode ser desligado em Configurações › E-mails.</p>
+  <div class="stage">
+    <div class="mail">
+      <div class="mh"><b>Fechamento de outubro</b><br><span style="font-size:12px;opacity:.9">412 pares · R$ 48.930</span></div>
+      <div class="mb">
+        <h4>Os 5 modelos que mais venderam</h4>
+        <table>
+          <thead><tr><th class="l">Modelo</th><th class="l">Tipo</th><th>Pares</th><th>Giro</th></tr></thead>
+          <tbody>
+            <tr><td class="l"><b>Tênis Runner Branco</b></td><td class="l">Tênis</td><td>48</td><td>81%</td></tr>
+            <tr><td class="l"><b>Sandália Flat Nude</b></td><td class="l">Sandália</td><td>35</td><td>47%</td></tr>
+            <tr><td class="l"><b>Bota Cano Curto Preta</b></td><td class="l">Bota</td><td>24</td><td>83%</td></tr>
+          </tbody>
+        </table>
+        <p style="font-size:12.5px;color:var(--ink2);margin:12px 0 0">Numeração campeã: <b>37</b> (96 pares, 23%). Para repor o mês: <b>188 pares</b> em 31 modelos.</p>
+        <div class="anexo"><span class="ic">XLS</span><div><b style="font-size:13px">vendas-por-numeracao-2026-10.xlsx</b><div style="font-size:11.5px;color:var(--ink3)">modelo · tipo · cor · numeração · vendidos · receita · estoque · giro · comprar p/ repor</div></div></div>
+        <a class="link">Abrir no app</a>
+      </div>
+    </div>
+  </div>
+  <div class="po">◆ <b>PO:</b> o fechamento do mês é um <b>e-mail novo</b>, separado do semanal. Liga para todo mundo por padrão (com opção de desligar) ou fica desligado e quem quiser liga?<br>
+  ◆ <b>PO:</b> planilha <b>.xlsx</b> (abre bonito no Excel, com colunas formatadas) ou <b>.csv</b> (mais simples, mas o Excel às vezes bagunça os acentos e a vírgula)? Sugestão: .xlsx.</div>
+</section>
+
+</body>
+</html>

@@ -245,6 +245,28 @@ describe("o que o plano não tem some", () => {
   });
 });
 
+describe("fechamento do mês (03/11/2026, Aura-backend#952)", () => {
+  it("backend antigo (sem a preferência): o cartão não existe", async () => {
+    api.get.mockResolvedValue(ESTADO());
+    const tree = await mount();
+    expect(existe(tree, "emails-fechamento")).toBe(false);
+    expect(text(tree)).not.toContain("Fechamento do mês");
+    tree.unmount();
+  });
+
+  it("com a preferência: cartão ligado, e desligar salva só o tipo", async () => {
+    const base = ESTADO();
+    api.get.mockResolvedValue({ ...base, preferencias: { ...base.preferencias, fechamento_mes: { ligado: true, explicito: false } } });
+    const tree = await mount();
+    expect(text(tree)).toContain("Fechamento do mês");
+    const sw = byTestId(tree, "emails-fechamento")[0];
+    expect(sw.props.value).toBe(true);
+    await renderer.act(async () => { sw.props.onValueChange(false); });
+    expect(api.salvar).toHaveBeenCalledWith(CID, { fechamento_mes: { ligado: false } });
+    tree.unmount();
+  });
+});
+
 describe("últimos e-mails", () => {
   it("'Entregue' só quando vem da API", async () => {
     api.ultimos.mockResolvedValue(ULTIMOS([

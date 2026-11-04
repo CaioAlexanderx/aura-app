@@ -67,6 +67,8 @@ export type EstadoEmails = {
     acompanhamento: PrefSimples;
     novidades: PrefSimples;
     pedido_loja: PrefPedidoLoja;
+    /** 03/11/2026 (Aura-backend#952). Ausente no backend antigo. */
+    fechamento_mes?: PrefSimples;
   };
   limites: { enderecos_extras: number; relatorio_agora_por_dia: number };
 };
@@ -77,6 +79,7 @@ export type MudancasEmails = {
   acompanhamento?: { ligado: boolean };
   novidades?: { ligado: boolean };
   pedido_loja?: Partial<{ ligado: boolean; pedido_destino: "equipe" | "enderecos"; destinatarios: string[] | null }>;
+  fechamento_mes?: { ligado: boolean };
 };
 
 /** A situação vem pronta do backend; "entregue" só existe com o webhook do Resend ligado. */

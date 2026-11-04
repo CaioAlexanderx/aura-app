@@ -330,6 +330,32 @@ export function TabReceitas({ transactions, summary, previousSummary, period, co
         </View>
         <Icon name="chevron_right" size={14} color={Colors.violet3} />
       </Pressable>
+
+      {/* 03/11/2026: irmão da curva ABC — a venda em QUANTIDADE, por modelo,
+          tipo e numeração (docs/mockups/relatorio-vendas-por-numeracao.html).
+          Só no app principal: o Studio (abcHref com /studio) não tem a rota. */}
+      {!abcHref || abcHref.indexOf("/studio") !== 0 ? (
+        <Pressable
+          onPress={function() { router.push("/financeiro/vendas-por-numeracao?de=receitas" as any); }}
+          accessibilityRole="button"
+          accessibilityLabel="Abrir vendas por produto e numeração"
+          testID="financeiro-link-vendas-numeracao"
+          style={({ hovered }: any) => [
+            s.linkCard,
+            { backgroundColor: Colors.bg3, borderColor: Colors.border2, marginTop: 10 },
+            isWeb && hovered ? { borderColor: Colors.violet3 } : null,
+            isWeb ? ({ transition: "all 0.18s ease", cursor: "pointer" } as any) : null,
+          ]}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={[s.linkTitle, { color: Colors.ink }]}>Vendas por numeração</Text>
+            <Text style={[s.linkSub, { color: Colors.ink3 }]}>
+              Quantos pares de cada modelo e numeração saíram, o estoque de hoje e o que comprar
+            </Text>
+          </View>
+          <Icon name="chevron_right" size={14} color={Colors.violet3} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
