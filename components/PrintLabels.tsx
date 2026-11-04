@@ -33,7 +33,7 @@ import { buscarVariantesEmLote, emPedacos, comLimite, MAX_IDS_POR_LOTE, CONCORRE
 // 30/10/2026 (card p-75): gerar código para quem está sem código (p-74).
 import { sondarGerarCodigos, gerarCodigos, alvosSemCodigo, chaveDoAlvo, type AlvoCodigo, type ResultadoGerar } from "@/components/screens/estoque/labels/gerarCodigos";
 // 15/10/2026: "Minha medida" (medida livre em mm, por computador).
-import { customLabelPreset, rotuloDaMedida, mmTxt, type CustomLabelSpec } from "@/components/screens/estoque/labels/customLabel";
+import { customLabelPreset, alturaDaPaginaMm, rotuloDaMedida, mmTxt, type CustomLabelSpec } from "@/components/screens/estoque/labels/customLabel";
 import { nomeDaLojaDaEmpresa, mostrarNomeDaLoja } from "@/components/screens/estoque/labels/nomeDaLoja";
 import { lerMinhasMedidas, salvarMedida, apagarMedida, escolherMedida, substituirMedidas } from "@/components/screens/estoque/labels/customLabelStorage";
 import { MinhaMedidaWizard } from "@/components/screens/estoque/labels/MinhaMedidaWizard";
@@ -1703,7 +1703,7 @@ export function PrintLabels({ products: produtosDoEstoque, selectedIds, onSelect
       )}
       <View style={s.setupHint}>
         <Icon name="alert" size={12} color={Colors.amber} />
-        <Text style={s.setupText}>Chrome: Ctrl+P, papel {medidaAtiva ? mmTxt(customLabelPreset(medidaAtiva).pageWidthMm) + "x" + mmTxt(customLabelPreset(medidaAtiva).pageHeightMm) + "mm" : printerOpts.continuous ? labelPreset.pageWidthMm + "mm de largura e a altura do trabalho inteiro (passo de " + mmBr(printerPrefs.rowPitchMm) + " × número de linhas; a página de impressão mostra a medida)" : labelPreset.pageWidthMm + "x" + (printerOpts.rowPitchMm != null ? printerOpts.rowPitchMm : labelPreset.pageHeightMm) + "mm"}, Margens: Nenhuma, Escala: 100%. A quantidade padrão é baseada no estoque de cada variante{matconEnabled ? ", exceto em unidades fracionadas (m, m², m³, kg, L, ton) e milheiro, que começam em 1" : ""}.</Text>
+        <Text style={s.setupText}>Chrome: Ctrl+P, papel {medidaAtiva ? mmTxt(customLabelPreset(medidaAtiva).pageWidthMm) + "x" + mmTxt(alturaDaPaginaMm(customLabelPreset(medidaAtiva))) + "mm" : printerOpts.continuous ? labelPreset.pageWidthMm + "mm de largura e a altura do trabalho inteiro (passo de " + mmBr(printerPrefs.rowPitchMm) + " × número de linhas; a página de impressão mostra a medida)" : labelPreset.pageWidthMm + "x" + (printerOpts.rowPitchMm != null ? printerOpts.rowPitchMm : labelPreset.pageHeightMm) + "mm"}, Margens: Nenhuma, Escala: 100%. A quantidade padrão é baseada no estoque de cada variante{matconEnabled ? ", exceto em unidades fracionadas (m, m², m³, kg, L, ton) e milheiro, que começam em 1" : ""}.</Text>
       </View>
 
       {/* 30/10/2026 (card p-72): total e Imprimir sempre à vista, presos

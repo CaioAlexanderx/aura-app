@@ -29,6 +29,7 @@ import { Icon } from "@/components/Icon";
 import { WebPortal } from "@/components/WebPortal";
 import {
   MEDIDA_PADRAO, NOME_MEDIDA_MAX, etiquetaPequenaDemais, rotuloDaMedida, mmTxt, novoIdMedida, type CustomLabelSpec,
+  customLabelPreset, alturaDaPaginaMm, comPaginaEmPe,
 } from "@/components/screens/estoque/labels/customLabel";
 import {
   ATALHOS_MEDIDA, ROTULO_DIRECAO, corrigirDirecao, ajusteFino, mensagemMovimento, sinalMm, textoAjuste,
@@ -81,6 +82,9 @@ export function MinhaMedidaWizard({ inicial, exemplo, onImprimirTeste, onSalvar,
   var [passo, setPasso] = useState<Passo>(1);
   var [txt, setTxt] = useState<TextosMedida>(function () { return textosDaMedida(base); });
   var [colunas, setColunas] = useState<number>(base.colunas);
+  // 04/11/2026: "a etiqueta sai de lado" (driver que imprime a página
+  // deitada) — página em pé, várias linhas por página (customLabel.ts).
+  var [emPe, setEmPe] = useState<boolean>(base.paginaEmPe === true);
   var [ajuste, setAjuste] = useState<Ajuste>({ x: base.ajusteXMm, y: base.ajusteYMm });
   var [testeEnviado, setTesteEnviado] = useState(false);
   var [testeDeNovo, setTesteDeNovo] = useState(false);
@@ -93,7 +97,7 @@ export function MinhaMedidaWizard({ inicial, exemplo, onImprimirTeste, onSalvar,
   // Último nome salvo: o campo do passo 4 grava ao sair dele, ao fechar ou ao imprimir.
   var nomeSalvo = useRef<string>(base.nome || "");
 
-  var lido = useMemo(function () { return medidaDosCampos(base, txt, colunas); }, [base, txt, colunas]);
+  var lido = useMemo(function () { return medidaDosCampos(comPaginaEmPe(base, emPe), txt, colunas); }, [base, txt, colunas, emPe]);
   // Enquanto o lojista digita um valor inválido, a ilustração fica na última medida válida.
   var ultima = useRef<CustomLabelSpec>(base);
   if (lido.spec) ultima.current = lido.spec;
@@ -221,6 +225,16 @@ export function MinhaMedidaWizard({ inicial, exemplo, onImprimirTeste, onSalvar,
           {noPadrao && <Icon name="check" size={16} color={Colors.green} />}
           <Text style={[s.linkBtnTxt, noPadrao && { color: Colors.green }]}>{noPadrao ? "Usando o padrão" : "Não sei, usar o padrão"}</Text>
         </Pressable>
+      </View>
+      <View style={s.grp}>
+        <Text style={s.lbl}>A etiqueta sai de lado?</Text>
+        <Pressable onPress={function () { setEmPe(!emPe); }} style={s.toggle} accessibilityRole="checkbox" accessibilityState={{ checked: emPe }} testID="medida-pagina-em-pe">
+          <View style={[s.checkbox, emPe && s.checkboxOn]}>{emPe && <Icon name="check" size={10} color="#fff" />}</View>
+          <Text style={s.toggleTxt}>Minha impressora imprime a página deitada</Text>
+        </Pressable>
+        <Text style={[s.hint, { marginTop: 6 }]}>{emPe
+          ? "A Aura manda " + (customLabelPreset(medida).rowsPerPage || 1) + " linhas por página (" + mmTxt(customLabelPreset(medida).pageWidthMm) + " x " + mmTxt(alturaDaPaginaMm(customLabelPreset(medida))) + " mm), mais alta que larga, e o driver para de girar. No Chrome, escolha esse papel."
+          : "Marque se a impressão sai girada (texto de lado, código de barras borrado) e o Chrome não deixa escolher a orientação."}</Text>
       </View>
     </View>
   );
@@ -370,6 +384,7 @@ export function MinhaMedidaWizard({ inicial, exemplo, onImprimirTeste, onSalvar,
           <View style={s.sum}>
             {linhaResumo("Tamanho", mmTxt(medida.larguraMm) + " x " + mmTxt(medida.alturaMm) + " mm", 1, "tamanho")}
             {linhaResumo("No rolo", textoColunas(medida.colunas), 1, "rolo")}
+            {medida.paginaEmPe && linhaResumo("Página", (customLabelPreset(medida).rowsPerPage || 1) + " linhas por página, em pé (" + mmTxt(customLabelPreset(medida).pageWidthMm) + " x " + mmTxt(alturaDaPaginaMm(customLabelPreset(medida))) + " mm)", 1, "pagina")}
             {linhaResumo("Espaço entre etiquetas", textoEspacos(medida), 1, "espaco")}
             {linhaResumo("Ajuste da impressão", textoAjuste(ajuste), 3, "ajuste")}
           </View>
@@ -498,6 +513,10 @@ export function MinhaMedidaWizard({ inicial, exemplo, onImprimirTeste, onSalvar,
 }
 
 var s = StyleSheet.create({
+  toggle: { flexDirection: "row", alignItems: "center", gap: 10 },
+  toggleTxt: { fontSize: 13, color: Colors.ink, fontWeight: "600", flex: 1 },
+  checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: Colors.border, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  checkboxOn: { backgroundColor: Colors.violet, borderColor: Colors.violet },
   painel: { backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border2, overflow: "hidden", flexDirection: "column" },
   painelPc: { width: "94%", maxWidth: 820, height: "92%", maxHeight: 720, borderRadius: 16 },
   painelCel: { width: "100%", height: "95%", borderTopLeftRadius: 20, borderTopRightRadius: 20 },
