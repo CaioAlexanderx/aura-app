@@ -209,8 +209,13 @@ export function getPreviousPeriodRange(key: PeriodKey, customStart?: string, cus
       return { start: new Date(py, pm, 1), end: new Date(py, pm + 1, 0, 23, 59, 59) };
     }
     case "year": {
+      // 04/11/2026: "ano" e 1/jan ate hoje, entao o anterior e o MESMO trecho
+      // do ano passado (1/jan ate o mesmo dia), nao o ano inteiro — senao em
+      // novembro a tela compara 10 meses com 12 e inventa uma queda. Mesma
+      // regra do backend (financeiroInsights.previousRange). 29/fev cai em 28.
       var prevY = now.getFullYear() - 1;
-      return { start: new Date(prevY, 0, 1), end: new Date(prevY, 11, 31, 23, 59, 59) };
+      var ultimoDia = new Date(prevY, now.getMonth() + 1, 0).getDate();
+      return { start: new Date(prevY, 0, 1), end: new Date(prevY, now.getMonth(), Math.min(now.getDate(), ultimoDia), 23, 59, 59) };
     }
     case "prev_year": return null;
     case "custom": {

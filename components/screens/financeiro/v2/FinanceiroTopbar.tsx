@@ -39,19 +39,23 @@ type Props = {
 };
 
 // Subset reduzido pra o Topbar (a Topbar nao mostra todos os 7 — UI muito carregada).
-// Periodos avancados (year/prev_year/all) ficam acessiveis no botao "Período".
+// 04/11/2026: "Ano" entra na barra (pedido do PO). Antes ficava so no tipo e
+// no backend, sem botao nenhum que o acionasse — o "Período" ia direto para
+// as datas livres. Ano = 1/jan ate hoje; o comparativo e o mesmo trecho do
+// ano passado (getPreviousPeriodRange). prev_year/all seguem sem botao.
 var TOPBAR_PERIODS: { key: PeriodKey; label: string }[] = [
   { key: "today", label: "Hoje" },
   { key: "week", label: "Semana" },
   // `key` e valor (vai pra query da API) e nao muda; `label` e o que a lojista le.
   { key: "month", label: "Mês" },
+  { key: "year", label: "Ano" },
 ];
 
 export function FinanceiroTopbar({ companyName, consolidated, companyCount, period, onPeriodChange, onExport, onNew, embedded }: Props) {
   // Periodo "custom" botao traz o periodo customizado (ex.: data inicio/fim).
   // Por enquanto custom abre seletor inline na tela — Topbar so registra clique.
-  var isCustomActive = period === "custom" || period === "year" || period === "prev_year" || period === "all";
-  var customLabel = period === "year" ? "Ano" : period === "prev_year" ? "Ano passado" : period === "all" ? "Todos" : "Período";
+  var isCustomActive = period === "custom" || period === "prev_year" || period === "all";
+  var customLabel = period === "prev_year" ? "Ano passado" : period === "all" ? "Todos" : "Período";
 
   return (
     <View style={[s.bar, { borderBottomColor: Colors.border }]}>
