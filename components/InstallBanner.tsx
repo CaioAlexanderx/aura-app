@@ -59,8 +59,8 @@ export function InstallBanner() {
 
   const titulo = ehIphone ? "Instalar a Aura no iPhone" : "Instalar a Aura no celular";
   const descricao = ehIphone
-    ? "Ícone na tela inicial, tela cheia e aviso de pedido novo, que no iPhone só funciona assim."
-    : "Abre em tela cheia, como app, e avisa quando entra pedido. Leva dois toques.";
+    ? "Ícone na tela inicial, tela cheia e avisos no celular, que no iPhone só funcionam assim."
+    : "Abre em tela cheia, como app, e avisa de cada venda. Leva dois toques.";
   const rotuloBotao = ehIphone ? "Ver como instalar" : instalando ? "Abrindo..." : "Instalar";
 
   return (

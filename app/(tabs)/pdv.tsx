@@ -79,6 +79,8 @@ import { useAuthStore } from "@/stores/auth";
 import { AvisoAssine } from "@/components/screens/pdv/AvisoAssine";
 import { NovaVendedoraModal } from "@/components/screens/pdv/NovaVendedoraModal";
 import { AvisoVendaRecuperada } from "@/components/screens/pdv/AvisoVendaRecuperada";
+// 04/11/2026: convite para ligar os avisos no celular (uma vez por aparelho).
+import { ConviteDeAvisos } from "@/components/ConviteDeAvisos";
 import { semAssinatura, avisoDeAtraso, estadoDaLoja, temCaixaVivo } from "@/utils/muroDeAssinatura";
 
 const PAGE_SIZE = 12;
@@ -296,6 +298,7 @@ function CaixaScreenInner() {
                   onDispensar={st.dispensarVendaRecuperada}
                 />
               )}
+              {!auth.isDemo && <ConviteDeAvisos />}
 
               {/* Cabeçalho: a logo do lojista abre a tela, em 48px. Sem logo
                   (ou plano sem direito a ela) entra o tile violeta com a

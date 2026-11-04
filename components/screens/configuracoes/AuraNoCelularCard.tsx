@@ -91,7 +91,7 @@ export function AuraNoCelularCard() {
           <Text style={s.titulo}>{ehIphone ? "Instalar a Aura no iPhone" : "Instalar a Aura neste aparelho"}</Text>
           <Text style={s.descricao}>
             {ehIphone
-              ? "Ícone na tela inicial, tela cheia e aviso de pedido novo, que no iPhone só funciona assim."
+              ? "Ícone na tela inicial, tela cheia e avisos no celular, que no iPhone só funcionam assim."
               : "Abre em tela cheia, como app, e avisa quando entra pedido."}
           </Text>
         </View>
@@ -115,7 +115,7 @@ export function AuraNoCelularCard() {
         <Text style={s.titulo}>Instale a Aura como aplicativo</Text>
         <Text style={s.descricao}>
           Abra <Text style={s.endereco}>{enderecoDoPainel}</Text> no Chrome ou no Edge, no celular ou no computador, e toque em Instalar.
-          Ícone na tela inicial, tela cheia e aviso de pedido novo.
+          Ícone na tela inicial, tela cheia e avisos no celular.
         </Text>
       </View>
     </View>
@@ -164,8 +164,10 @@ function LinhaDeAtualizacao() {
 }
 
 // ------------------------------------------------------------
-// Aviso de pedido novo: liga/desliga o Web Push desta empresa neste
-// aparelho. Só aparece quando o navegador suporta.
+// Avisos no celular: liga/desliga o Web Push desta empresa neste aparelho.
+// Só aparece quando o navegador suporta. 04/11/2026: era "Aviso de pedido
+// novo" (pedido da loja online); com venda, crediário e orçamento
+// (Aura-backend #953) o nome diz o que chega.
 // ------------------------------------------------------------
 function LinhaDoAviso({ companyId }: { companyId?: string }) {
   const [estado, setEstado] = useState<EstadoDoAviso | "carregando">("carregando");
@@ -185,7 +187,7 @@ function LinhaDoAviso({ companyId }: { companyId?: string }) {
     try {
       const novo = estado === "ativo" ? await desativarAviso(companyId) : await ativarAviso(companyId);
       setEstado(novo);
-      if (novo === "ativo") toast.success("Aviso de pedido novo ligado neste aparelho.");
+      if (novo === "ativo") toast.success("Avisos ligados neste aparelho.");
       else if (novo === "bloqueado") toast.error("O navegador bloqueou as notificações. Libere nas configurações do site.");
     } catch (err: any) {
       toast.error(err?.message || "Não foi possível alterar o aviso agora.");
@@ -198,11 +200,11 @@ function LinhaDoAviso({ companyId }: { companyId?: string }) {
   return (
     <View style={s.rowInfo}>
       <View style={{ flex: 1 }}>
-        <Text style={s.rowTitulo}>Aviso de pedido novo</Text>
+        <Text style={s.rowTitulo}>Avisos no celular</Text>
         <Text style={s.rowDetalhe}>
           {estado === "bloqueado"
             ? "Bloqueado pelo navegador. Libere as notificações do site para ligar."
-            : "Toca e mostra na tela, mesmo com o app fechado."}
+            : "Venda, crediário, orçamento e pedido online. Chega mesmo com a Aura fechada."}
         </Text>
       </View>
       {estado === "bloqueado" ? (

@@ -129,6 +129,25 @@ const CATALOG: Record<string, CatalogEntry> = {
     accent: 'ink3', icon: 'x', glyph: '✖️',
     ctaLabel: 'Ver pedido', fallbackRoute: '/canal',
   },
+  // 04/11/2026 (Aura-backend #953): avisos do Caixa no celular. Crediário e
+  // orçamento também entram no sino; venda realizada é SÓ push (o backend
+  // não cria a linha), o catálogo tem a entrada só para um card antigo ou
+  // um ajuste futuro não cair no genérico.
+  loja_crediario_recebido: {
+    label: 'Recebido no crediário', severity: 'info', requiresAction: false,
+    accent: 'green', icon: 'dinheiro', glyph: '💳',
+    ctaLabel: 'Ver carnê', fallbackRoute: '/crediario',
+  },
+  loja_orcamento_aprovado: {
+    label: 'Orçamento aprovado', severity: 'info', requiresAction: false,
+    accent: 'violet', icon: 'check', glyph: '📋',
+    ctaLabel: 'Ver orçamento', fallbackRoute: '/matcon/orcamentos',
+  },
+  loja_venda_realizada: {
+    label: 'Venda realizada', severity: 'info', requiresAction: false,
+    accent: 'violet', icon: 'sacola', glyph: '🛒',
+    ctaLabel: 'Ver venda', fallbackRoute: '/vendas',
+  },
 };
 
 const FALLBACK: CatalogEntry = {
@@ -422,6 +441,18 @@ export const PREF_SECTIONS: PrefSection[] = [
     linhas: [
       { type: 'loja_sem_pagamento_configurado', nome: 'Loja sem meio de pagamento', desc: 'A vitrine no ar sem ninguém conseguir pagar.', fixo: true, padrao: true },
       { type: 'loja_comprovante_enviado',       nome: 'Comprovante para conferir',  desc: 'O pedido trava até você olhar o comprovante.', fixo: true, padrao: true },
+    ],
+  },
+  // 04/11/2026: os avisos do Caixa no celular (Aura-backend #953). A
+  // preferência é da empresa, como as outras: desligar aqui desliga para
+  // todo mundo, no celular e no sino. Quem recebe cada um é regra do
+  // backend (dona, acesso total, Financeiro; nunca quem causou o evento).
+  {
+    titulo: 'Caixa e crediário',
+    linhas: [
+      { type: 'loja_venda_realizada',    nome: 'Venda realizada',        desc: 'Cada venda fechada no Caixa. Só no celular, não entra no sino. Quem vendeu não recebe.', padrao: true },
+      { type: 'loja_crediario_recebido', nome: 'Recebido no crediário',  desc: 'Cliente pagou parcela ou abateu o carnê.', padrao: true },
+      { type: 'loja_orcamento_aprovado', nome: 'Orçamento aprovado',     desc: 'O cliente aceitou pelo link ou o orçamento virou venda.', padrao: true },
     ],
   },
   {
