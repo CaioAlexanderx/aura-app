@@ -29,7 +29,7 @@ import { Icon } from "@/components/Icon";
 import { WebPortal } from "@/components/WebPortal";
 import {
   MEDIDA_PADRAO, NOME_MEDIDA_MAX, etiquetaPequenaDemais, rotuloDaMedida, mmTxt, novoIdMedida, type CustomLabelSpec,
-  customLabelPreset, alturaDaPaginaMm, comPaginaEmPe,
+  customLabelPreset, alturaDaPaginaMm, comPaginaEmPe, comBarrasTermicas,
 } from "@/components/screens/estoque/labels/customLabel";
 import {
   ATALHOS_MEDIDA, ROTULO_DIRECAO, corrigirDirecao, ajusteFino, mensagemMovimento, sinalMm, textoAjuste,
@@ -85,6 +85,9 @@ export function MinhaMedidaWizard({ inicial, exemplo, onImprimirTeste, onSalvar,
   // 04/11/2026: "a etiqueta sai de lado" (driver que imprime a página
   // deitada) — página em pé, várias linhas por página (customLabel.ts).
   var [emPe, setEmPe] = useState<boolean>(base.paginaEmPe === true);
+  // 04/11/2026: "o código de barras sai borrado" (térmica de 203 dpi) —
+  // código próprio da térmica, barra fina em pontos exatos (customLabel.ts).
+  var [termica, setTermica] = useState<boolean>(base.barrasTermicas === true);
   var [ajuste, setAjuste] = useState<Ajuste>({ x: base.ajusteXMm, y: base.ajusteYMm });
   var [testeEnviado, setTesteEnviado] = useState(false);
   var [testeDeNovo, setTesteDeNovo] = useState(false);
@@ -97,7 +100,7 @@ export function MinhaMedidaWizard({ inicial, exemplo, onImprimirTeste, onSalvar,
   // Último nome salvo: o campo do passo 4 grava ao sair dele, ao fechar ou ao imprimir.
   var nomeSalvo = useRef<string>(base.nome || "");
 
-  var lido = useMemo(function () { return medidaDosCampos(comPaginaEmPe(base, emPe), txt, colunas); }, [base, txt, colunas, emPe]);
+  var lido = useMemo(function () { return medidaDosCampos(comBarrasTermicas(comPaginaEmPe(base, emPe), termica), txt, colunas); }, [base, txt, colunas, emPe, termica]);
   // Enquanto o lojista digita um valor inválido, a ilustração fica na última medida válida.
   var ultima = useRef<CustomLabelSpec>(base);
   if (lido.spec) ultima.current = lido.spec;
@@ -235,6 +238,16 @@ export function MinhaMedidaWizard({ inicial, exemplo, onImprimirTeste, onSalvar,
         <Text style={[s.hint, { marginTop: 6 }]}>{emPe
           ? "A Aura manda " + (customLabelPreset(medida).rowsPerPage || 1) + " linhas por página (" + mmTxt(customLabelPreset(medida).pageWidthMm) + " x " + mmTxt(alturaDaPaginaMm(customLabelPreset(medida))) + " mm), mais alta que larga, e o driver para de girar. No Chrome, escolha esse papel."
           : "Marque se a impressão sai girada (texto de lado, código de barras borrado) e o Chrome não deixa escolher a orientação."}</Text>
+      </View>
+      <View style={s.grp}>
+        <Text style={s.lbl}>O código de barras sai borrado ou a pistola não lê?</Text>
+        <Pressable onPress={function () { setTermica(!termica); }} style={s.toggle} accessibilityRole="checkbox" accessibilityState={{ checked: termica }} testID="medida-barras-termicas">
+          <View style={[s.checkbox, termica && s.checkboxOn]}>{termica && <Icon name="check" size={10} color="#fff" />}</View>
+          <Text style={s.toggleTxt}>Minha impressora é térmica de 203 dpi</Text>
+        </Pressable>
+        <Text style={[s.hint, { marginTop: 6 }]}>{termica
+          ? "O código sai com barras de " + (customLabelPreset(medida).bcModuleMm === 0.375 ? "3" : "2") + " pontos exatos da impressora, sem arredondar. Imprima uma etiqueta e passe a pistola antes do lote."
+          : "Marque se as barras saem grossas e grudadas (a impressora arredonda cada barra fina para 2 ou 3 pontos). É o caso da maioria das impressoras de etiqueta de 203 dpi."}</Text>
       </View>
     </View>
   );
@@ -384,6 +397,7 @@ export function MinhaMedidaWizard({ inicial, exemplo, onImprimirTeste, onSalvar,
           <View style={s.sum}>
             {linhaResumo("Tamanho", mmTxt(medida.larguraMm) + " x " + mmTxt(medida.alturaMm) + " mm", 1, "tamanho")}
             {linhaResumo("No rolo", textoColunas(medida.colunas), 1, "rolo")}
+            {medida.barrasTermicas && linhaResumo("Código de barras", "térmica 203 dpi (barra de " + mmTxt(customLabelPreset(medida).bcModuleMm || 0) + " mm)", 1, "barras")}
             {medida.paginaEmPe && linhaResumo("Página", (customLabelPreset(medida).rowsPerPage || 1) + " linhas por página, em pé (" + mmTxt(customLabelPreset(medida).pageWidthMm) + " x " + mmTxt(alturaDaPaginaMm(customLabelPreset(medida))) + " mm)", 1, "pagina")}
             {linhaResumo("Espaço entre etiquetas", textoEspacos(medida), 1, "espaco")}
             {linhaResumo("Ajuste da impressão", textoAjuste(ajuste), 3, "ajuste")}
