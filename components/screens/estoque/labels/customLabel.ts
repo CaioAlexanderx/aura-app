@@ -208,12 +208,24 @@ export function sanitizarMedida(raw: any): CustomLabelSpec | null {
  *  com as zonas de silêncio do script ocupa 105 módulos; a célula reserva
  *  2 mm (buildLabelHtml). 0,375 mm = 3 pontos (a partir de ~42 mm de célula);
  *  senão 0,25 mm = 2 pontos. */
-export const BARRAS_TERMICAS_MODULOS_EAN13 = 105;
-export function moduloDasBarrasTermicas(cellWidthMm: number): { bcModuleMm: number; bcBarHeightMm: number } {
+// 04/11/2026 (2a rodada, Lulume): com 0,25 mm (2 pontos) o código fica em
+// 76% do tamanho padrão e a pistola dela não leu. O que leu na bobina 58mm
+// foi 0,375 mm (3 pontos). Para caber na célula de 40 mm, o SVG reserva
+// menos branco (2 módulos à esquerda, 3 à direita; eram 2 e 8): 100 módulos
+// x 0,375 = 37,5 mm <= 40 - 2. O branco da etiqueta e do vão entre elas
+// completa a zona de silêncio. A barra é mais baixa na etiqueta baixa
+// (7 mm até 29 mm de altura; 9 mm a partir de 30).
+export const BARRAS_TERMICAS_MARGENS = { esquerda: 2, direita: 3 };
+export const BARRAS_TERMICAS_MODULOS_EAN13 = 95 + BARRAS_TERMICAS_MARGENS.esquerda + BARRAS_TERMICAS_MARGENS.direita;
+export type BarrasTermicas = { bcModuleMm: number; bcBarHeightMm: number; bcMarginLeftMods: number; bcMarginRightMods: number };
+export function moduloDasBarrasTermicas(cellWidthMm: number, cellHeightMm: number): BarrasTermicas {
   var cabe375 = BARRAS_TERMICAS_MODULOS_EAN13 * 0.375 <= cellWidthMm - 2;
-  // Barra mais baixa no módulo menor: a célula pequena (ex.: 40x25 com faixa,
-  // nome em 2 linhas e preço) não tem altura para 9 mm de barras.
-  return cabe375 ? { bcModuleMm: 0.375, bcBarHeightMm: 9 } : { bcModuleMm: 0.25, bcBarHeightMm: 6 };
+  return {
+    bcModuleMm: cabe375 ? 0.375 : 0.25,
+    bcBarHeightMm: cellHeightMm >= 30 ? 9 : 7,
+    bcMarginLeftMods: BARRAS_TERMICAS_MARGENS.esquerda,
+    bcMarginRightMods: BARRAS_TERMICAS_MARGENS.direita,
+  };
 }
 
 /** Liga/desliga as barras da térmica num spec, sem deixar a chave quando desligado. */
@@ -357,9 +369,11 @@ export function customLabelPreset(spec: CustomLabelSpec): CustomLabelPreset {
   }
   // Código de barras da térmica (opt-in, ver o campo): só o código muda.
   if (s.barrasTermicas) {
-    var barras = moduloDasBarrasTermicas(w);
+    var barras = moduloDasBarrasTermicas(w, h);
     preset.bcModuleMm = barras.bcModuleMm;
     preset.bcBarHeightMm = barras.bcBarHeightMm;
+    preset.bcMarginLeftMods = barras.bcMarginLeftMods;
+    preset.bcMarginRightMods = barras.bcMarginRightMods;
   }
   // Estilo "boutique" (28/10/2026, opt-in): quando a loja liga, vence a regra
   // de proporção — a medida sai no desenho novo em vez do editorial/tag

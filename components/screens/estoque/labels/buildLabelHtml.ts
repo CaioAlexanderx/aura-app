@@ -274,6 +274,13 @@ export type LabelPreset = {
   // alinhado aos pontos da cabeca termica. Ausente => BARCODE_OPTS (LOCKED).
   bcModuleMm?: number;
   bcBarHeightMm?: number;
+  // 04/11/2026: zonas de silencio DENTRO do SVG, em modulos (so no preset
+  // termico). Ausente => 2 a esquerda e 8 a direita, os numeros da bobina
+  // 58mm (byte-identico). A medida livre com barras da termica usa menos
+  // (2 e 3): o branco da propria etiqueta e do vao completa a zona, e o
+  // EAN-13 em 0,375mm passa a caber na celula de 40mm.
+  bcMarginLeftMods?: number;
+  bcMarginRightMods?: number;
   // Linhas por pagina de impressao. Pagina "deitada" (largura > altura, ex.
   // 58x28) faz o Chrome/driver imprimir em PAISAGEM e girar tudo 90 graus
   // na bobina — foi o 2o teste da Essencial (24/09): o scanner leu, mas as
@@ -1027,7 +1034,9 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
       // no EAN-13 o digito inicial ja reserva ~12 modulos em branco a esquerda
       // (+2) e a direita leva 8 (norma pede 7). Se um CODE128 longo nao couber na celula,
       // cai pra 0,25mm (2 pontos) e, em ultimo caso, encaixa na largura.
-      html += 'opts={width:1,height:' + Math.round((preset.bcBarHeightMm || 10) / preset.bcModuleMm) + ',margin:0,marginLeft:2,marginRight:8,marginTop:1,marginBottom:0,displayValue:true,fontSize:8,textMargin:1,font:"Arial",fontOptions:"bold",background:"#ffffff",lineColor:"#000000"};';
+      const mL = preset.bcMarginLeftMods != null ? preset.bcMarginLeftMods : 2;
+      const mR = preset.bcMarginRightMods != null ? preset.bcMarginRightMods : 8;
+      html += 'opts={width:1,height:' + Math.round((preset.bcBarHeightMm || 10) / preset.bcModuleMm) + ',margin:0,marginLeft:' + mL + ',marginRight:' + mR + ',marginTop:1,marginBottom:0,displayValue:true,fontSize:8,textMargin:1,font:"Arial",fontOptions:"bold",background:"#ffffff",lineColor:"#000000"};';
     }
     html += 'try{JsBarcode(el,code,Object.assign({},opts,{format:"EAN13"}));}';
     html += 'catch(e){try{JsBarcode(el,code,Object.assign({},opts,{format:"CODE128"}));}catch(e2){console.error(e2);}}';
