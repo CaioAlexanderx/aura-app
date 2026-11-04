@@ -886,8 +886,11 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
     html += '.bc-inner.bq .var{font-size:' + pt(5.5) + ';font-weight:700;line-height:1;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase;letter-spacing:0.3pt;color:#000}';
     // So alinhamento/respiro: flex, max-width e overflow continuam os da zona LOCKED.
     html += '.bc-inner.bq .bc-box{align-self:center;padding:0.3mm 0 0}';
-    // Preco grande com filete fino acima.
-    html += '.bc-inner.bq .price{font-size:' + pt(11) + ';font-weight:900;line-height:1;color:#000;width:100%;border-top:0.3mm solid #000;padding-top:0.6mm;margin-top:0.3mm;letter-spacing:-0.3pt}';
+    // Preco grande com filete fino acima. 04/11/2026 (Lulume, LABEL-9X20):
+    // em peso 900 a termica de 203 dpi engrossava os algarismos ate os
+    // digitos se encostarem ("229,90" virava um borrao). 700 e o mesmo
+    // negrito do nome e do rotulo "R$", e o preco continua o maior texto.
+    html += '.bc-inner.bq .price{font-size:' + pt(11) + ';font-weight:700;line-height:1;color:#000;width:100%;border-top:0.3mm solid #000;padding-top:0.6mm;margin-top:0.3mm;letter-spacing:-0.3pt}';
     html += '.bc-inner.bq .price .cur{font-size:0.62em;font-weight:700;letter-spacing:0;margin-right:0.6mm}';
     html += '.bc-inner.bq .card-line{font-size:' + pt(5.5) + ';font-weight:700;line-height:1;width:100%;text-align:center;white-space:nowrap;overflow:hidden}';
   }
