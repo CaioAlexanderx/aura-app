@@ -114,6 +114,15 @@ export type CustomLabelSpec = {
    *  usa (rowsPerPage). Opt-in: ausente = uma linha por página, byte a byte
    *  como antes. A chave só entra no spec quando vale exatamente true. */
   paginaEmPe?: boolean;
+  /** 04/11/2026 (Lulume, LABEL-9X20 de 203 dpi): com o código de barras da
+   *  Finesse (BARCODE_OPTS, barra fina de 0,265 mm = 2,1 pontos) a térmica de
+   *  203 dpi arredonda cada barra ora para 2, ora para 3 pontos; as barras
+   *  saem engordadas e irregulares e a pistola não lê. Com `barrasTermicas`
+   *  a medida usa o código próprio da térmica (bcModuleMm, o da bobina 58mm):
+   *  cada barra fina = um número exato de pontos (0,375 mm = 3 pontos; se o
+   *  EAN-13 não couber na célula, 0,25 mm = 2 pontos). Só muda o código de
+   *  barras. Opt-in: ausente = BARCODE_OPTS, byte a byte como antes. */
+  barrasTermicas?: boolean;
 };
 
 export const NOME_MEDIDA_MAX = 40;
@@ -190,7 +199,28 @@ export function sanitizarMedida(raw: any): CustomLabelSpec | null {
   if (raw.estilo === "boutique") spec.estilo = "boutique";
   // Página em pé: só `true` entra; ausente/false deixa o spec idêntico.
   if (raw.paginaEmPe === true) spec.paginaEmPe = true;
+  if (raw.barrasTermicas === true) spec.barrasTermicas = true;
   return spec;
+}
+
+/** Módulo (barra fina, em mm) do código de barras da térmica para uma célula:
+ *  o maior número exato de pontos de 203 dpi em que o EAN-13 cabe. O EAN-13
+ *  com as zonas de silêncio do script ocupa 105 módulos; a célula reserva
+ *  2 mm (buildLabelHtml). 0,375 mm = 3 pontos (a partir de ~42 mm de célula);
+ *  senão 0,25 mm = 2 pontos. */
+export const BARRAS_TERMICAS_MODULOS_EAN13 = 105;
+export function moduloDasBarrasTermicas(cellWidthMm: number): { bcModuleMm: number; bcBarHeightMm: number } {
+  var cabe375 = BARRAS_TERMICAS_MODULOS_EAN13 * 0.375 <= cellWidthMm - 2;
+  // Barra mais baixa no módulo menor: a célula pequena (ex.: 40x25 com faixa,
+  // nome em 2 linhas e preço) não tem altura para 9 mm de barras.
+  return cabe375 ? { bcModuleMm: 0.375, bcBarHeightMm: 9 } : { bcModuleMm: 0.25, bcBarHeightMm: 6 };
+}
+
+/** Liga/desliga as barras da térmica num spec, sem deixar a chave quando desligado. */
+export function comBarrasTermicas(spec: CustomLabelSpec, ligado: boolean): CustomLabelSpec {
+  var out: CustomLabelSpec = { ...spec };
+  if (ligado) out.barrasTermicas = true; else delete out.barrasTermicas;
+  return out;
 }
 
 /** Linhas por página da medida com `paginaEmPe`: a menor quantidade que
@@ -324,6 +354,12 @@ export function customLabelPreset(spec: CustomLabelSpec): CustomLabelPreset {
   if (s.paginaEmPe) {
     var linhas = linhasDaPaginaEmPe(preset.pageWidthMm, preset.pageHeightMm);
     if (linhas > 1) preset.rowsPerPage = linhas;
+  }
+  // Código de barras da térmica (opt-in, ver o campo): só o código muda.
+  if (s.barrasTermicas) {
+    var barras = moduloDasBarrasTermicas(w);
+    preset.bcModuleMm = barras.bcModuleMm;
+    preset.bcBarHeightMm = barras.bcBarHeightMm;
   }
   // Estilo "boutique" (28/10/2026, opt-in): quando a loja liga, vence a regra
   // de proporção — a medida sai no desenho novo em vez do editorial/tag

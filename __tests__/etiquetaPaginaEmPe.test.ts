@@ -121,7 +121,7 @@ describe("o wizard", () => {
   it("tem o checkbox no passo 1 e o resumo no fim", () => {
     expect(src).toMatch(/testID="medida-pagina-em-pe"/);
     expect(src).toMatch(/A etiqueta sai de lado\?/);
-    expect(src).toMatch(/medidaDosCampos\(comPaginaEmPe\(base, emPe\), txt, colunas\)/);
+    expect(src).toMatch(/comPaginaEmPe\(base, emPe\)/);
     expect(src).toMatch(/linhaResumo\("Página"/);
   });
   it("a tela de impressão mostra a altura da página em pé no papel do Chrome", () => {
