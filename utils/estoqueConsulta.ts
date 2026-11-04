@@ -22,6 +22,35 @@ export function estaEmConsulta(permData: any): boolean {
   return !!permData.permissions && permData.permissions.estoque_consulta === true;
 }
 
+// 03/11/2026 — CUSTO OCULTO. Funcionário com Caixa e Estoque, mas sem
+// Financeiro, Painel e o resto da retaguarda, não vê custo, margem nem valor
+// do estoque (continua vendo preço e gravando produto). Mesma regra do
+// backend (podeVerCusto em src/middleware/estoqueSoConsulta.js, que corta o
+// dado de verdade):
+//   - dono, admin e permissions null: vê;
+//   - estoque_consulta: nunca vê;
+//   - permissions.custos (boolean), marcado pelo dono na equipe, decide;
+//   - sem a chave: vê quem tem financeiro, relatorios, configuracoes ou
+//     painel — painel AUSENTE conta como ligado (useVisibleModules).
+export const CHAVES_QUE_VEEM_CUSTO = ["financeiro", "relatorios", "configuracoes", "painel"] as const;
+
+export function podeVerCusto(permData: any): boolean {
+  if (!permData || permData.is_owner) return true;
+  if (permData.role === "owner" || permData.role === "admin") return true;
+  const p = permData.permissions;
+  if (!p) return true;
+  if (p.estoque_consulta === true) return false;
+  if (typeof p.custos === "boolean") return p.custos;
+  if (p.painel === undefined) return true;
+  return CHAVES_QUE_VEEM_CUSTO.some((k) => p[k] === true);
+}
+
+// O que o seletor "Ver custos" da equipe mostra quando o dono ainda não
+// marcou nada: o mesmo que a regra decidiria pelas outras chaves.
+export function custosPorPadrao(perms: Record<string, boolean> | null | undefined): boolean {
+  return podeVerCusto({ is_owner: false, role: "member", permissions: { ...(perms || {}), custos: undefined } });
+}
+
 // As duas chaves se excluem no seletor de permissões: ligar uma desliga a outra.
 export function alternarPermissao(perms: Record<string, boolean>, chave: string): Record<string, boolean> {
   const next = { ...perms, [chave]: !perms[chave] };

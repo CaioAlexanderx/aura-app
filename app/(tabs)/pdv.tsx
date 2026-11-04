@@ -77,6 +77,7 @@ import { productMinCardFor } from "@/hooks/useViewport";
 import type { Product } from "@/components/screens/estoque/types";
 import { useAuthStore } from "@/stores/auth";
 import { AvisoAssine } from "@/components/screens/pdv/AvisoAssine";
+import { NovaVendedoraModal } from "@/components/screens/pdv/NovaVendedoraModal";
 import { AvisoVendaRecuperada } from "@/components/screens/pdv/AvisoVendaRecuperada";
 import { semAssinatura, avisoDeAtraso, estadoDaLoja, temCaixaVivo } from "@/utils/muroDeAssinatura";
 
@@ -155,6 +156,16 @@ function CaixaScreenInner() {
     : cartProps.payMethods.filter((m: any) => m.key !== "crediario");
 
   const modals = (
+    <>
+    {/* 03/11/2026 — Nova vendedora pelo seletor F2 (utils/vendedoraNoCaixa.ts). */}
+    <NovaVendedoraModal
+      visible={st.novaVendedora !== null}
+      nomeInicial={st.novaVendedora || ""}
+      equipe={employees}
+      onClose={st.closeNewSeller}
+      onCriada={(p) => { selectEmployee(p.id, p.name); setSellerName(p.name); st.closeNewSeller(); }}
+      onUsarSoNestaVenda={(nome) => { selectEmployee(null, null); setSellerName(nome); st.closeNewSeller(); }}
+    />
     <PdvModals
       showNewCustomer={st.showNewCustomer}
       onCloseNewCustomer={st.closeNewCustomer}
@@ -190,6 +201,7 @@ function CaixaScreenInner() {
       cartItemCount={cartProps.items.length}
       cartTotal={cartProps.subtotal}
     />
+    </>
   );
 
   if (st.lastSale) {
@@ -359,6 +371,8 @@ function CaixaScreenInner() {
                   options={employees}
                   required={precisaVendedora}
                   searchable={employees.length > 5}
+                  addable={st.podeCadastrarVendedora}
+                  onAddNew={st.openNewSeller}
                 />
                 <IndicadoPorChip referral={referral} saleTotal={totalFinal} matconOn={referral.active} />
                 <ActCoupon
@@ -480,6 +494,8 @@ function CaixaScreenInner() {
             options={employees}
             required={precisaVendedora}
             searchable={employees.length > 5}
+            addable={st.podeCadastrarVendedora}
+            onAddNew={st.openNewSeller}
           />
           <IndicadoPorChip referral={referral} saleTotal={totalFinal} matconOn={referral.active} />
           <View style={{ flex: 1, minWidth: 4 }} />

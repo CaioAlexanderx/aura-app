@@ -38,6 +38,7 @@ type Props = {
   emiteNota?: boolean;
   onUpdateCest?: (product: Product, cest: string) => Promise<boolean | void> | void;
   // 30/10/2026 — Estoque só consulta: sem custo de reposição.
+  // 03/11/2026 — o Estoque passa `consulta || semCusto` (custo oculto).
   consulta?: boolean;
 };
 

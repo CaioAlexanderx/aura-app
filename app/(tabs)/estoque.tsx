@@ -329,7 +329,9 @@ export default function EstoqueScreen() {
   const { company, availableCompanies, consolidatedView } = useAuthStore();
   // 18/10/2026 (card p-36): "mudar" o desenho da etiqueta leva a Configurações.
   const podeMudarDesenho = useVisibleModules().has("configuracoes");
-  const { consulta, carregando: consultaCarregando } = useEstoqueConsulta();
+  // 03/11/2026: semCusto = consulta OU funcionário sem retaguarda (custo,
+  // margem e valor do estoque somem; preço e edição ficam).
+  const { consulta, carregando: consultaCarregando, semCusto } = useEstoqueConsulta();
   // 22/09/2026 (Matcon M2): aviso fiscal (CEST) da aba Alertas. Loja sem o
   // módulo nunca lê nfce_config aqui — o aviso nem calcula (AlertsList).
   const { settings: pdvSettings } = usePdvSettings();
@@ -784,12 +786,12 @@ export default function EstoqueScreen() {
               totalUnits={totalItems}
               lowCount={lowStock.length}
               onLowClick={lowStock.length > 0 ? () => setActiveTab(1) : undefined}
-              semValores={consulta}
+              semValores={consulta || semCusto}
             />
           ) : (
             <View style={s.summaryRow}>
               <SummaryCard label="TOTAL PRODUTOS" value={String(products.length)} sub={`${totalItems} unidades` + (serviceCount > 0 ? ` + ${serviceCount} servico${serviceCount > 1 ? "s" : ""}` : "")} />
-              {!consulta && <SummaryCard label="VALOR EM ESTOQUE" value={m(fmt(valorEstoque.custo))} sub={legendaValorEstoque(valorEstoque, n => m(fmt(n)))} />}
+              {!consulta && !semCusto && <SummaryCard label="VALOR EM ESTOQUE" value={m(fmt(valorEstoque.custo))} sub={legendaValorEstoque(valorEstoque, n => m(fmt(n)))} />}
               <SummaryCard label="ESTOQUE BAIXO" value={String(lowStock.length)} color={lowStock.length > 0 ? Colors.red : Colors.green} sub={lowStock.length > 0 ? "Ver alertas" : "Tudo OK"} onPress={lowStock.length > 0 ? () => setActiveTab(1) : undefined} />
             </View>
           )
@@ -960,6 +962,7 @@ export default function EstoqueScreen() {
                   <ProductTableWeb
                     items={paginated}
                     consulta={consulta}
+                    semCusto={semCusto}
                     onEdit={!isDemo && !consulta ? handleEdit : undefined}
                     onDelete={!isDemo && !consulta ? (id) => setDeleteTarget(id) : undefined}
                     onLink={canLinkProducts ? (p) => setLinkTarget(p) : undefined}
@@ -988,6 +991,7 @@ export default function EstoqueScreen() {
                     key={p.id}
                     product={p}
                     consulta={consulta}
+                    semCusto={semCusto}
                     onDelete={!isDemo && !bulkMode && !consulta ? (id) => setDeleteTarget(id) : undefined}
                     onEdit={!isDemo && !bulkMode && !consulta ? handleEdit : undefined}
                     onLink={canLinkProducts && !bulkMode ? (prod) => setLinkTarget(prod) : undefined}
@@ -1009,7 +1013,7 @@ export default function EstoqueScreen() {
             matconOn={matconFiscalOn}
             emiteNota={emiteNotaEstoque}
             onUpdateCest={(product, cest) => updateProduct({ ...product, cest })}
-            consulta={consulta}
+            consulta={consulta || semCusto}
           />
         )}
         {/* Aba 2: Etiquetas (era 3 antes da Curva ABC migrar) */}

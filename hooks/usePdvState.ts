@@ -74,7 +74,7 @@ import { useViewport, productColumnsFor, cartWidthFor } from "@/hooks/useViewpor
 import { useCaixa } from "@/hooks/useCaixa";
 import { clientesNoCaixaHabilitado } from "@/utils/clientesNoCaixa";
 
-import { couponsApi, employeesApi, pdvApi } from "@/services/api";
+import { couponsApi, employeesApi, pdvApi, request } from "@/services/api";
 import { nfceApi } from "@/services/nfceApi";
 import { creditApi } from "@/services/creditApi";
 import { readMatconSettings } from "@/constants/matcon";
@@ -93,6 +93,9 @@ import { flyToCart } from "@/components/screens/pdv/flyToCart";
 import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
 import { fraseDoCupomAplicado } from "@/components/screens/pdv/rotulosDoCaixa";
 import { IS_WEB } from "@/components/screens/pdv/types";
+// 03/11/2026 — cadastrar vendedora pelo Caixa (utils/vendedoraNoCaixa.ts).
+import { podeCadastrarVendedora } from "@/utils/vendedoraNoCaixa";
+import { permissionsQueryKey } from "@/utils/permissionsQueryKey";
 import type { CartDisplayItem, PayChip, RequiredHint } from "@/components/screens/pdv/CartPanel";
 import type { PersonPickerHandle } from "@/components/screens/pdv/ActionToolbar";
 import type { Product } from "@/components/screens/estoque/types";
@@ -140,7 +143,7 @@ export const PAY_METHODS: PayChip[] = PAYMENTS.map(p => ({
 }));
 
 export function usePdvState() {
-  const { company, isDemo } = useAuthStore();
+  const { company, isDemo, token, consolidatedView } = useAuthStore();
   const qc = useQueryClient();
   const companyLogo = useAuthStore(s => s.companyLogo);
   const perfilDaEmpresa = useCompanyProfile();
@@ -212,8 +215,20 @@ export function usePdvState() {
   const { data: empData } = useQuery({
     queryKey:  ["employees", company?.id],
     queryFn:   () => employeesApi.list(company!.id),
-    enabled:   !!company?.id && hasTeamCapacity,
+    // 03/11/2026: carrega em TODOS os planos. O Essencial cadastra até 3
+    // pessoas em Equipe (PLAN-02, POST /employees) e elas nunca apareciam no
+    // seletor F2 sem acesso extra — a vendedora cadastrada "sumia" no Caixa.
+    // hasTeamCapacity continua valendo para os ACESSOS (login de membro).
+    enabled:   !!company?.id,
     staleTime: 60_000,
+  });
+  // Mesma query/chave de useVisibleModules: não custa chamada nova.
+  const { data: permData } = useQuery({
+    queryKey: permissionsQueryKey(company?.id, !!consolidatedView),
+    queryFn:  () => request<any>("/auth/my-permissions"),
+    enabled:  !!token,
+    staleTime: 5 * 60_000,
+    retry: 1,
   });
   const employees = useMemo(
     () => ((empData?.employees || []) as any[]).map(e => ({
@@ -471,6 +486,9 @@ export function usePdvState() {
 
   // ── Estados de modais ────────────────────────────────────────────────────────
   const [showNewCustomer, setShowNewCustomer] = useState(false);
+  // 03/11/2026 — Nova vendedora pelo seletor F2 (null = fechado; string =
+  // aberto, com o nome já digitado).
+  const [novaVendedora, setNovaVendedora] = useState<string | null>(null);
   const [pendingProduct,  setPendingProduct]  = useState<Product | null>(null);
   // 11/10/2026: o bipe não lança mais a variante direto — abre o seletor com
   // o tamanho bipado já marcado, para o lojista conferir e confirmar no Enter.
@@ -1218,6 +1236,10 @@ export function usePdvState() {
     showNewCustomer,
     openNewCustomer:  () => setShowNewCustomer(true),
     closeNewCustomer: () => setShowNewCustomer(false),
+    novaVendedora,
+    podeCadastrarVendedora: podeCadastrarVendedora(permData),
+    openNewSeller:  (nome?: string) => setNovaVendedora(nome || ""),
+    closeNewSeller: () => setNovaVendedora(null),
     customers, customerOptions, customerRecentCount,
     sellerPickerRef, customerPickerRef,
     showTroca,

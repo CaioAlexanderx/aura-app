@@ -76,6 +76,8 @@ import { CategoriaSheet, useBreadcrumbLabel } from "./item-form/CategorySelector
 import { useGaleriaDoProduto } from "./item-form/GaleriaDeFotos";
 import { PERFIL_PADRAO, perfilDoCadastro } from "./item-form/perfis";
 import { usaLote } from "@/utils/matconLots";
+// 03/11/2026 — custo oculto (utils/estoqueConsulta.ts, podeVerCusto).
+import { useEstoqueConsulta } from "@/hooks/useEstoqueConsulta";
 import { matconApi } from "@/services/matconApi";
 import {
   capaDa, chaveDaCor, duracaoParaMinutos, gerarCodigoServico,
@@ -145,6 +147,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   const { products, addProduct, updateProduct } = useProducts();
   const { byId: categoriaPorId, assignProductCategories } = useCategories();
   const breadcrumbLabel = useBreadcrumbLabel();
+  const { semCusto } = useEstoqueConsulta();
   // 22/09/2026 (Matcon M0): única leitura das configs do módulo neste
   // modal. Loja sem o toggle recebe o perfil padrão e as seções
   // renderizam exatamente como antes do Matcon.
@@ -487,7 +490,9 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       // Preço no cartão: undefined com a opção desligada (não toca na
       // coluna), null no automático, o valor quando ajustado à mão.
       cardPrice: gravacaoDoPrecoNoCartao(cartaoCfg.enabled, cartaoManual, valorDaMascara(cartaoTxt)),
-      cost: valorDaMascara(custo),
+      // 03/11/2026 — custo oculto: quem não vê o custo não manda o campo
+      // (undefined some do JSON e o PATCH não toca no custo gravado).
+      cost: semCusto ? (undefined as any) : valorDaMascara(custo),
       // Produto com variantes guarda o estoque NAS variantes (migration
       // que zerou products.stock_qty do pai). Reescrever o total aqui
       // ressuscitaria o estoque fantasma no pai.
@@ -909,6 +914,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       narrow={narrow}
       preco={preco} onPreco={(v) => { setPreco(v); setSujo(true); }}
       custo={custo} onCusto={(v) => { setCusto(v); setSujo(true); }}
+      semCusto={semCusto}
       duracao={duracao} onDuracao={(v) => { setDuracao(v); setSujo(true); }}
       onSubmit={() => { if (!modoEdicao) salvar(false); }}
       perfil={perfil}

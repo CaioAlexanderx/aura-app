@@ -40,9 +40,11 @@ type Props = {
   // 30/10/2026 — Estoque só consulta: sem Preço, Margem e ações; tocar no
   // produto com variantes abre quanto tem de cada tamanho e cor.
   consulta?: boolean;
+  // 03/11/2026 — custo oculto (podeVerCusto): a coluna Margem some.
+  semCusto?: boolean;
 };
 
-export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bulkSelected, onSelect, canLink, consulta }: Props) {
+export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bulkSelected, onSelect, canLink, consulta, semCusto }: Props) {
   const C = useColors();
   const { isDark } = useThemeStore();
   const { m } = useValoresOcultos();
@@ -50,7 +52,7 @@ export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bul
   const [variantesAbertas, setVariantesAbertas] = useState<Record<string, boolean>>({});
   if (Platform.OS !== "web") return null;
 
-  const colSpan = consulta ? 4 : bulkMode ? 8 : 7;
+  const colSpan = consulta ? 4 : (bulkMode ? 8 : 7) - (semCusto ? 1 : 0);
 
   const accent = C.violet;
   const surface = isDark ? "rgba(20,14,38,0.55)" : "rgba(255,255,255,0.70)";
@@ -93,7 +95,7 @@ export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bul
             <Th w={160}>Categoria</Th>
             <Th w={130} align="right">Estoque</Th>
             {!consulta && <Th w={120} align="right">Preço</Th>}
-            {!consulta && <Th w={100} align="right">Margem</Th>}
+            {!consulta && !semCusto && <Th w={100} align="right">Margem</Th>}
             {!consulta && <Th w={120} align="right">{" "}</Th>}
           </tr>
         </thead>
@@ -216,7 +218,7 @@ export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bul
                   fontFamily: Fonts.mono, fontSize: 13, fontWeight: 500, color: C.ink,
                   fontVariantNumeric: "tabular-nums",
                 } as any}>{m(fmtBRL(price))}</td>}
-                {!consulta && <td style={{
+                {!consulta && !semCusto && <td style={{
                   padding: "14px 14px", textAlign: "right",
                   fontFamily: Fonts.mono, fontSize: 12,
                   color: margin === null ? C.ink3 : margin >= 30 ? (isDark ? "#34d399" : "#059669") : margin >= 10 ? "#fbbf24" : (isDark ? "#f87171" : "#dc2626"),

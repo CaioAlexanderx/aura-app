@@ -247,7 +247,8 @@ type ActPersonProps = {
   value: { id: string; name: string; subtitle?: string } | null;
   onChange: (v: { id: string; name: string; subtitle?: string } | null) => void;
   options: { id: string; name: string; subtitle?: string }[];
-  onAddNew?: () => void;
+  /** Vendedora (03/11/2026): recebe o nome já digitado na busca/nome livre. */
+  onAddNew?: (nomeSugerido?: string) => void;
   fallbackText?: string;
   searchable?: boolean;
   addable?: boolean;
@@ -384,7 +385,9 @@ export const ActPerson = forwardRef<PersonPickerHandle, ActPersonProps>(function
 
           {kind === "vendedora" && (
             <View style={{ borderTopWidth: 1, borderTopColor: "rgba(124,58,237,0.2)", paddingTop: 10, marginTop: 6 }}>
-              <Text style={{ fontSize: 10, color: Colors.ink3, marginBottom: 4 }}>ou digite um nome livre:</Text>
+              <Text style={{ fontSize: 10, color: Colors.ink3, marginBottom: 4 }}>
+                {addable && onAddNew ? "nome que não está na lista:" : "ou digite um nome livre:"}
+              </Text>
               <View style={{ flexDirection: "row", gap: 6 }}>
                 <TextInput value={freeText} onChangeText={setFreeText}
                   placeholder="Nome da vendedora…" placeholderTextColor={Colors.ink3}
@@ -400,19 +403,34 @@ export const ActPerson = forwardRef<PersonPickerHandle, ActPersonProps>(function
                     onChange({ id: "__free__" + freeText.trim(), name: freeText.trim() });
                     setFreeText(""); setOpen(false);
                   }}
-                  style={popS.applyBtn}>
+                  style={popS.applyBtn}
+                  accessibilityLabel="Usar só nesta venda">
                   <Icon name="check" size={14} color="#fff" />
                 </Pressable>
               </View>
+              {/* 03/11/2026: o ✓ vale só nesta venda (não entra em ranking
+                  nem comissão). Quem pode cadastrar equipe ganha a opção de
+                  salvar o nome como vendedora (utils/vendedoraNoCaixa.ts). */}
+              <Text style={{ fontSize: 10, color: Colors.ink3, marginTop: 4 }}>✓ usa só nesta venda, sem entrar no ranking</Text>
             </View>
           )}
 
           {addable && onAddNew && (
-            <Pressable onPress={() => { onAddNew(); setOpen(false); }} style={popS.addNew}>
+            <Pressable
+              onPress={() => {
+                const nome = kind === "vendedora" ? (freeText.trim() || query.trim()) : undefined;
+                onAddNew(nome); setOpen(false); setFreeText(""); setQuery("");
+              }}
+              style={popS.addNew}
+              testID={kind === "vendedora" ? "pdv-cadastrar-vendedora" : undefined}>
               <View style={popS.addIco}>
                 <Icon name="plus" size={14} color={Colors.violet3} />
               </View>
-              <Text style={popS.addTxt}>Cadastrar novo cliente</Text>
+              <Text style={popS.addTxt}>
+                {kind === "vendedora"
+                  ? ((freeText.trim() || query.trim()) ? `Cadastrar "${(freeText.trim() || query.trim())}" como vendedora` : "Cadastrar nova vendedora")
+                  : "Cadastrar novo cliente"}
+              </Text>
             </Pressable>
           )}
 
