@@ -657,7 +657,9 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
   const totalRows = cells.length / COLS;
   // Altura da PAGINA de impressao = passo da linha x linhas por pagina; no
   // modo continuo, passo x TODAS as linhas do trabalho (pagina unica).
-  const pageSheetHeightMm = custom ? pitchMm : labelSheetHeightMm(options.labelSize, totalRows, { continuous: continuous, rowPitchMm: pitchMm, offsetYMm: offsetYMm });
+  // Medida livre: 1 linha por pagina; com paginaEmPe (customLabel.ts), as
+  // linhas que deixam a pagina mais alta que larga (rowsPerPage).
+  const pageSheetHeightMm = custom ? round2(pitchMm * (custom.rowsPerPage || 1)) : labelSheetHeightMm(options.labelSize, totalRows, { continuous: continuous, rowPitchMm: pitchMm, offsetYMm: offsetYMm });
 
   let html = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">';
   html += testFrame ? '<title>Teste de posição da etiqueta</title>' : '<title>Etiquetas Aura - ' + totalLabels + ' etiquetas</title>';
@@ -1214,7 +1216,7 @@ export function labelPreviewGeometry(items: LabelItem[], options: BuildOptions):
     labels: Math.min(total, rows * preset.cols),
     widthMm: preset.pageWidthMm,
     // Medida livre: 1 linha por pagina, altura = passo (etiqueta + espaco).
-    heightMm: custom ? custom.pageHeightMm : labelSheetHeightMm(options.labelSize, rows, { continuous: continuous, rowPitchMm: options.rowPitchMm, offsetYMm: options.offsetYMm }),
+    heightMm: custom ? round2(custom.pageHeightMm * (custom.rowsPerPage || 1)) : labelSheetHeightMm(options.labelSize, rows, { continuous: continuous, rowPitchMm: options.rowPitchMm, offsetYMm: options.offsetYMm }),
   };
 }
 

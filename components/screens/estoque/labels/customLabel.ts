@@ -104,6 +104,16 @@ export type CustomLabelSpec = {
    *  vale exatamente "boutique". Ligado pela conta (label_custom_specs) — não
    *  há toggle no código. */
   estilo?: "boutique";
+  /** 04/11/2026 (Lulume Baby & Kids, LABEL-9X20 no Mac): a página da medida
+   *  livre é UMA linha (ex.: 82 x 27,5 mm), mais larga que alta, e alguns
+   *  drivers de etiqueta imprimem isso deitado — a etiqueta sai de lado e o
+   *  código de barras, reamostrado, sai borrado. O Chrome não deixa girar
+   *  quando a página tem tamanho fixo. Com `paginaEmPe` a Aura manda várias
+   *  linhas por página (a menor quantidade que deixa a página mais alta que
+   *  larga: 82 x 82,5 mm = 3 linhas), o truque que o modelo fixo 40x25 já
+   *  usa (rowsPerPage). Opt-in: ausente = uma linha por página, byte a byte
+   *  como antes. A chave só entra no spec quando vale exatamente true. */
+  paginaEmPe?: boolean;
 };
 
 export const NOME_MEDIDA_MAX = 40;
@@ -178,7 +188,30 @@ export function sanitizarMedida(raw: any): CustomLabelSpec | null {
   // Estilo opt-in: só "boutique" entra; qualquer outro valor (ou ausente)
   // deixa o spec idêntico ao de antes (a chave não existe).
   if (raw.estilo === "boutique") spec.estilo = "boutique";
+  // Página em pé: só `true` entra; ausente/false deixa o spec idêntico.
+  if (raw.paginaEmPe === true) spec.paginaEmPe = true;
   return spec;
+}
+
+/** Linhas por página da medida com `paginaEmPe`: a menor quantidade que
+ *  deixa a página mais alta que larga (82 x 27,5 -> 3 linhas = 82,5 mm). Página
+ *  que já é mais alta que larga fica com 1. */
+export function linhasDaPaginaEmPe(pageWidthMm: number, pitchMm: number): number {
+  if (!(pitchMm > 0) || pageWidthMm < pitchMm) return 1;
+  return Math.floor(pageWidthMm / pitchMm) + 1;
+}
+
+/** Liga/desliga a página em pé num spec: ligado grava `true`; desligado tira
+ *  a chave (o spec fica idêntico ao de antes). */
+export function comPaginaEmPe(spec: CustomLabelSpec, ligado: boolean): CustomLabelSpec {
+  var out: CustomLabelSpec = { ...spec };
+  if (ligado) out.paginaEmPe = true; else delete out.paginaEmPe;
+  return out;
+}
+
+/** Altura da página de impressão da medida: passo x linhas por página. */
+export function alturaDaPaginaMm(preset: Pick<LabelPreset, "pageHeightMm" | "rowsPerPage">): number {
+  return round2(preset.pageHeightMm * (preset.rowsPerPage || 1));
 }
 
 /** Id novo para uma medida (só precisa ser único neste navegador). */
@@ -286,6 +319,12 @@ export function customLabelPreset(spec: CustomLabelSpec): CustomLabelPreset {
   if (gapX > 0) preset.colGapMm = gapX;
   if (s.espacoLinhaMm > 0) preset.rowGapMm = s.espacoLinhaMm;
   if (w >= 35 && h >= 25) preset.edCompact = true;
+  // Página em pé (opt-in, ver o campo): várias linhas por página. Vale para
+  // qualquer desenho (editorial, boutique, tag vertical): só muda a página.
+  if (s.paginaEmPe) {
+    var linhas = linhasDaPaginaEmPe(preset.pageWidthMm, preset.pageHeightMm);
+    if (linhas > 1) preset.rowsPerPage = linhas;
+  }
   // Estilo "boutique" (28/10/2026, opt-in): quando a loja liga, vence a regra
   // de proporção — a medida sai no desenho novo em vez do editorial/tag
   // vertical. escalaTexto segue valendo (o texto da boutique acompanha a
