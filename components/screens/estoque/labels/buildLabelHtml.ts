@@ -281,6 +281,12 @@ export type LabelPreset = {
   // EAN-13 em 0,375mm passa a caber na celula de 40mm.
   bcMarginLeftMods?: number;
   bcMarginRightMods?: number;
+  // Medida livre (05/11/2026): JsBarcode "flat" (13 digitos centrados embaixo,
+  // sem o 1o fora das barras = 100 modulos, nao 112) e digitos em bcTextMods
+  // modulos. A caixa nao encolhe o SVG nem 1% (width:auto + flex none): a
+  // termica so acerta a barra fina quando ela e um numero inteiro de pontos.
+  bcFlat?: boolean;
+  bcTextMods?: number;
   // Linhas por pagina de impressao. Pagina "deitada" (largura > altura, ex.
   // 58x28) faz o Chrome/driver imprimir em PAISAGEM e girar tudo 90 graus
   // na bobina — foi o 2o teste da Essencial (24/09): o scanner leu, mas as
@@ -738,6 +744,11 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
     html += '.bc-inner .bc-box{flex:0 0 auto;max-width:none;overflow:visible}';
     html += '.bc-inner .bc-box svg{max-width:none;max-height:none}';
     html += '.bc-inner .store{font-size:6pt}.bc-inner .name{font-size:7pt;max-height:3.2mm}.bc-inner .price{font-size:12pt}';
+    if (preset.bcFlat) {
+      // width:100% da regra base + flex do .bc-box encolhiam o SVG de 37,5
+      // para 37,07 mm (1,2%): modulo de 0,371 mm, de novo entre 2 e 3 pontos.
+      html += '.bc-inner .bc-box{width:auto}.bc-inner .bc-box svg{flex:0 0 auto}';
+    }
   }
 
   // Desenho "editorial" (25/09/2026, preset "105x21"): regras .dC do mockup
@@ -1036,7 +1047,11 @@ export function buildLabelHtml(items: LabelItem[], options: BuildOptions): strin
       // cai pra 0,25mm (2 pontos) e, em ultimo caso, encaixa na largura.
       const mL = preset.bcMarginLeftMods != null ? preset.bcMarginLeftMods : 2;
       const mR = preset.bcMarginRightMods != null ? preset.bcMarginRightMods : 8;
-      html += 'opts={width:1,height:' + Math.round((preset.bcBarHeightMm || 10) / preset.bcModuleMm) + ',margin:0,marginLeft:' + mL + ',marginRight:' + mR + ',marginTop:1,marginBottom:0,displayValue:true,fontSize:8,textMargin:1,font:"Arial",fontOptions:"bold",background:"#ffffff",lineColor:"#000000"};';
+      if (preset.bcFlat) {
+        html += 'opts={width:1,height:' + Math.round((preset.bcBarHeightMm || 10) / preset.bcModuleMm) + ',margin:0,marginLeft:' + mL + ',marginRight:' + mR + ',marginTop:0,marginBottom:0,displayValue:true,fontSize:' + (preset.bcTextMods || 6) + ',textMargin:0,flat:true,font:"Arial",fontOptions:"bold",background:"#ffffff",lineColor:"#000000"};';
+      } else {
+        html += 'opts={width:1,height:' + Math.round((preset.bcBarHeightMm || 10) / preset.bcModuleMm) + ',margin:0,marginLeft:' + mL + ',marginRight:' + mR + ',marginTop:1,marginBottom:0,displayValue:true,fontSize:8,textMargin:1,font:"Arial",fontOptions:"bold",background:"#ffffff",lineColor:"#000000"};';
+      }
     }
     html += 'try{JsBarcode(el,code,Object.assign({},opts,{format:"EAN13"}));}';
     html += 'catch(e){try{JsBarcode(el,code,Object.assign({},opts,{format:"CODE128"}));}catch(e2){console.error(e2);}}';

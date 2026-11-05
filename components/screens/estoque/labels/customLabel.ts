@@ -216,15 +216,32 @@ export function sanitizarMedida(raw: any): CustomLabelSpec | null {
 // completa a zona de silêncio. A barra é mais baixa na etiqueta baixa
 // (7 mm até 29 mm de altura; 9 mm a partir de 30).
 export const BARRAS_TERMICAS_MARGENS = { esquerda: 2, direita: 3 };
+// 100 módulos SÓ no desenho "flat" do JsBarcode (bcFlat): o EAN-13 clássico,
+// com o dígito inicial fora das barras, reserva ~12 módulos a mais (112 no
+// total), e aí 112 × 0,375 = 42 mm não cabe nos 40 mm da Lulume: o script da
+// térmica caía para 0,25 mm sem ninguém ver (05/11/2026, medido no Chromium).
 export const BARRAS_TERMICAS_MODULOS_EAN13 = 95 + BARRAS_TERMICAS_MARGENS.esquerda + BARRAS_TERMICAS_MARGENS.direita;
-export type BarrasTermicas = { bcModuleMm: number; bcBarHeightMm: number; bcMarginLeftMods: number; bcMarginRightMods: number };
+/** Dígitos abaixo das barras, em módulos (6 × 0,375 = 2,25 mm). Com 8, a
+ *  caixa do código passava de 11 mm e empurrava o nome por cima do tamanho
+ *  na boutique de 25 mm. */
+export const BARRAS_TERMICAS_DIGITOS_MODS = 6;
+export type BarrasTermicas = {
+  bcModuleMm: number; bcBarHeightMm: number; bcMarginLeftMods: number; bcMarginRightMods: number;
+  /** JsBarcode flat: os 13 dígitos centrados embaixo, sem o 1º fora das barras. */
+  bcFlat: true;
+  bcTextMods: number;
+};
 export function moduloDasBarrasTermicas(cellWidthMm: number, cellHeightMm: number): BarrasTermicas {
   var cabe375 = BARRAS_TERMICAS_MODULOS_EAN13 * 0.375 <= cellWidthMm - 2;
   return {
     bcModuleMm: cabe375 ? 0.375 : 0.25,
-    bcBarHeightMm: cellHeightMm >= 30 ? 9 : 7,
+    // 6 mm na etiqueta baixa: com 7 (+ dígitos) a boutique de 25 mm não
+    // fechava a conta (nome 2 linhas + tamanho + código + preço).
+    bcBarHeightMm: cellHeightMm >= 30 ? 9 : 6,
     bcMarginLeftMods: BARRAS_TERMICAS_MARGENS.esquerda,
     bcMarginRightMods: BARRAS_TERMICAS_MARGENS.direita,
+    bcFlat: true,
+    bcTextMods: BARRAS_TERMICAS_DIGITOS_MODS,
   };
 }
 
@@ -374,6 +391,8 @@ export function customLabelPreset(spec: CustomLabelSpec): CustomLabelPreset {
     preset.bcBarHeightMm = barras.bcBarHeightMm;
     preset.bcMarginLeftMods = barras.bcMarginLeftMods;
     preset.bcMarginRightMods = barras.bcMarginRightMods;
+    preset.bcFlat = barras.bcFlat;
+    preset.bcTextMods = barras.bcTextMods;
   }
   // Estilo "boutique" (28/10/2026, opt-in): quando a loja liga, vence a regra
   // de proporção — a medida sai no desenho novo em vez do editorial/tag
