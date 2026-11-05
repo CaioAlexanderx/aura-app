@@ -14,8 +14,8 @@
 //   3. o reload acontece mesmo quando o service worker dá erro OU trava:
 //      rede ruim não pode segurar o que o usuário pediu;
 //   4. a leitura de versão é UMA só — o UpdateBanner (o aviso automático,
-//      desligado em 11/07/2026) usa este mesmo serviço, e continua
-//      desligado: um botão em Configurações não faz ruído nenhum.
+//      desligado de 11/07 a 05/11/2026 e religado com freios) usa este
+//      mesmo serviço, e o botão em Configurações continua existindo.
 // ============================================================
 import fs from "fs";
 import path from "path";
@@ -263,21 +263,26 @@ describe("atualizarAgora: recarrega, doa a quem doer", () => {
   });
 });
 
-describe("uma leitura de versão só, e o aviso automático segue desligado", () => {
+describe("uma leitura de versão só, e o aviso automático voltou com freios (05/11/2026)", () => {
   const RAIZ = path.join(__dirname, "..");
   const ler = (...p: string[]) => fs.readFileSync(path.join(RAIZ, ...p), "utf8");
   const BANNER = ler("components", "UpdateBanner.tsx");
 
   test("UpdateBanner consome o serviço e não tem uma segunda cópia da leitura", () => {
-    expect(BANNER).toMatch(/import \{ atualizacaoLiberada, hashCarregado, hashServido \} from "@\/services\/atualizarApp";/);
+    expect(BANNER).toMatch(/import \{ atualizacaoLiberada, atualizarAgora, builtAtServido, hashCarregado, hashServido \} from "@\/services\/atualizarApp";/);
     expect(BANNER).not.toMatch(/function (loadedEntryHash|servedEntryHash)/);
     expect(BANNER).not.toMatch(/_expo\/static/);
   });
 
-  test("o aviso automático continua DESLIGADO (decisão de 11/07/2026: bundle único)", () => {
-    // Um deploy do Karatê muda o hash do lojista de varejo também; reativar
-    // isto traz de volta o toast o dia inteiro. O botão não tem esse custo.
-    expect(BANNER).toMatch(/const ENABLED = false;/);
+  test("o aviso automático está LIGADO, com os freios de utils/avisoDeAtualizacao (05/11/2026)", () => {
+    // Ficou desligado de 11/07 a 05/11/2026 (bundle único: toast o dia
+    // inteiro). Voltou porque a Lulume imprimiu horas com o app velho sem
+    // ninguém perceber. Os freios (30 min de vida, "Agora não" por 24 h)
+    // estão em __tests__/avisoDeAtualizacao.test.ts.
+    expect(BANNER).toMatch(/const ENABLED = true;/);
+    expect(BANNER).toMatch(/deveAvisar\(\{ carregado: baseline\.current, servido: served, builtAt, silenciadoAte: silenciadoAte\(\), agora \}\)/);
+    expect(BANNER).toMatch(/onPress=\{\(\) => \{ atualizarAgora\(\); \}\}/);
+    expect(BANNER).not.toMatch(/window\.location\.reload/);
   });
 
   test("as duas Configurações montam a linha, com o mesmo hook e o mesmo texto", () => {

@@ -112,6 +112,13 @@ export async function hotfixServido(
   hashDoBundleServido: string,
   deps?: DependenciasDaAtualizacao,
 ): Promise<boolean> {
+  const v = await versaoServida(deps);
+  return v?.hotfix === true && v?.hash === hashDoBundleServido;
+}
+
+/** O dist/version.json que o servidor serve agora ({ hash, hotfix, sha,
+ *  builtAt }), ou null quando não existe, não é JSON ou não deu para ler. */
+async function versaoServida(deps?: DependenciasDaAtualizacao): Promise<any | null> {
   const w = janela(deps);
   const buscar =
     deps && "buscar" in deps
@@ -119,15 +126,31 @@ export async function hotfixServido(
       : typeof w?.fetch === "function"
         ? w.fetch.bind(w)
         : null;
-  if (!buscar) return false;
+  if (!buscar) return null;
   try {
     const res = await buscar(VERSION_URL, { cache: "no-store" });
-    if (!res || !res.ok) return false;
-    const v = JSON.parse(await res.text());
-    return v?.hotfix === true && v?.hash === hashDoBundleServido;
+    if (!res || !res.ok) return null;
+    return JSON.parse(await res.text());
   } catch {
-    return false;
+    return null;
   }
+}
+
+/**
+ * Quando o bundle servido foi construído (ms desde a época), pelo builtAt do
+ * version.json — e só se o hash de lá for o do bundle servido (um
+ * version.json de cache de borda ou de deploy no meio não vale). `null`
+ * quando não dá para saber. 05/11/2026: o aviso automático usa isto para
+ * só avisar de versão com meia hora de vida (utils/avisoDeAtualizacao).
+ */
+export async function builtAtServido(
+  hashDoBundleServido: string,
+  deps?: DependenciasDaAtualizacao,
+): Promise<number | null> {
+  const v = await versaoServida(deps);
+  if (!v || v.hash !== hashDoBundleServido) return null;
+  const t = Date.parse(String(v.builtAt || ""));
+  return Number.isFinite(t) ? t : null;
 }
 
 /**

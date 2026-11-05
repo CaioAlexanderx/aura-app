@@ -187,8 +187,13 @@ describe("Fase 2: nova versão, iPhone instalado e medição", () => {
     expect(abas).not.toMatch(/GlobalOverlays/);
   });
 
-  test("UpdateBanner segue desligado: a decisao de 11/07 nao foi revertida por tabela", () => {
-    expect(ler("components", "UpdateBanner.tsx")).toMatch(/^const ENABLED = false;/m);
+  test("UpdateBanner ligado de proposito (05/11/2026), nao por tabela: com os freios de avisoDeAtualizacao", () => {
+    // Desligado de 11/07 a 05/11/2026. Voltou depois da Lulume imprimir horas
+    // com o app velho; os freios (30 min de vida, "Agora nao" por 24 h) estao
+    // em __tests__/avisoDeAtualizacao.test.ts.
+    const banner = ler("components", "UpdateBanner.tsx");
+    expect(banner).toMatch(/^const ENABLED = true;/m);
+    expect(banner).toMatch(/from "@\/utils\/avisoDeAtualizacao"/);
   });
 
   test("openPrintWindow desvia para o aviso no iPhone instalado, antes de abrir janela", () => {
