@@ -17,6 +17,7 @@ import { RecurrenceSelector } from "./RecurrenceSelector";
 import { SaleDetailsSection } from "./SaleDetailsSection";
 import { isSaleLinkedTransaction, isCreditReceivableKey } from "@/utils/saleLink";
 import { valorDoPatch } from "@/utils/editarLancamento";
+import { dataInicialDoLancamento, vencimentoDoPatch } from "@/utils/dataDoLancamento";
 import { camposDaSituacao, diferencaPaga, textoDaDiferenca, rotulosDaSituacao, type Situacao } from "@/utils/lancamentoPago";
 import { abrirComprovante, anexarComprovante, escolherComprovante, nomeCurto, removerComprovante } from "@/utils/comprovante";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
@@ -133,6 +134,8 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
   var [desc, setDesc] = useState("");
   var [category, setCategory] = useState("");
   var [dateStr, setDateStr] = useState(todayBR());
+  // A data com que o modal abriu (edição): o due_date só vai no PATCH se mudar.
+  var [dataQueAbriu, setDataQueAbriu] = useState("");
   var [batchText, setBatchText] = useState("");
   var [saving, setSaving] = useState(false);
   var isIncome = txType === "income";
@@ -211,8 +214,12 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
       setBaseAmount(Number(editTransaction.amount));
       setDesc(editTransaction.desc || "");
       setCategory(editTransaction.category || "");
-      var raw = (editTransaction as any).due_date || (editTransaction as any).created_at;
-      if (raw) setDateStr(isoToBR(raw));
+      // 06/11/2026 (Esquina da Make, venda 527): o vencimento chega como
+      // meia-noite UTC; converter no fuso de Brasília abria o dia ANTERIOR e o
+      // Salvar levava a venda junto. utils/dataDoLancamento.
+      var abriu = dataInicialDoLancamento(editTransaction as any);
+      if (abriu) setDateStr(abriu);
+      setDataQueAbriu(abriu || "");
       setMode("unit");
       // Sessao 23/04: pre-popula payment_method e employee_id se vier da tx
       setUnitPayment((editTransaction as any).payment_method || "");
@@ -252,7 +259,7 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
         // PATCH inclui payment_method e employee_id (campos opcionais, so envia se mudou ou esta presente)
         var patchBody: any = {
           type: txType, description: desc.trim(),
-          category: category || cats[0], due_date: dueDate,
+          category: category || cats[0], due_date: vencimentoDoPatch(dateStr, dataQueAbriu, dueDate),
         };
         var patchAmount = valorDoPatch({ digitado: val, base: baseAmount, isCreditReceivable: isCreditReceivable });
         if (patchAmount !== undefined) patchBody.amount = patchAmount;
@@ -261,7 +268,10 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
         // Backend interpreta string vazia como NULL via ELSE no UPDATE? Nao — mando explicito.
         var prevPay = (editTransaction as any).payment_method;
         var prevEmp = (editTransaction as any).employee_id;
-        if (unitPayment !== prevPay) patchBody.payment_method = unitPayment || null;
+        // 06/11/2026: lançamento da venda do caixa nasce sem forma (null) e o
+        // campo abre vazio (""). "" !== null mandava payment_method: null em todo
+        // Salvar e apagava a forma da venda. Vazio e null são a mesma coisa.
+        if ((unitPayment || null) !== (prevPay || null)) patchBody.payment_method = unitPayment || null;
         if (unitEmpId !== prevEmp) {
           patchBody.employee_id = unitEmpId; // null limpa
           // employee_name vai junto, backend resolve do banco se id != null
