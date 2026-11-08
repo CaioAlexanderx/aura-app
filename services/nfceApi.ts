@@ -101,6 +101,9 @@ export type NfceConfig = {
 
 export type NfceConfigResponse = {
   config: NfceConfig | null;
+  // 08/11/2026: o regime mora em companies.tax_regime e vem também no topo
+  // (empresa sem nfce_config ainda tem regime). Mesmo valor de config.regime.
+  regime?: "simples" | "presumido" | "real";
   instrucoes: { nfce: string; nfe: string; dica: string };
 };
 

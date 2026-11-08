@@ -35,7 +35,10 @@ export function RegimeFiscal({ companyId }: { companyId: string }) {
     enabled: !!companyId,
     staleTime: 60_000,
   });
-  const regimeAtual = data?.config?.regime || "simples";
+  // 08/11/2026: o backend lê e grava o regime em companies.tax_regime (o
+  // mesmo que decide o CRT na emissão) e devolve no topo da resposta — antes
+  // nada era gravado e config.regime nunca vinha.
+  const regimeAtual = data?.regime || data?.config?.regime || "simples";
   const [aberto, setAberto] = useState(false);
 
   const salvarMut = useMutation({

@@ -257,6 +257,9 @@ export function TabCertificado({ companyId, onEmitir }: Props) {
   const estado: EstadoCertificado = estadoDoCertificado(cert);
 
   // ── logo depois de enviar ──
+  // 08/11/2026: o certificado sozinho não libera a emissão — sem a
+  // configuração fiscal (CSC, inscrição estadual) a nota não sai. O texto
+  // não promete o que ainda depende da equipe da Aura.
   if (sucesso) {
     return (
       <View testID="cert-a1-tab">
@@ -264,7 +267,7 @@ export function TabCertificado({ companyId, onEmitir }: Props) {
         <Faixa
           tom="green" icone="check_circle" testID="cert-a1-sucesso"
           titulo="Certificado cadastrado com sucesso"
-          texto="Pronto! Sua empresa já pode emitir notas fiscais. A senha não ficou salva."
+          texto="Certificado salvo. Para emitir notas, ainda falta a equipe da Aura terminar a configuração fiscal da sua empresa (código CSC e inscrição estadual). A senha não ficou salva."
         />
         <CartaoCertificado tom="novo" cert={sucesso} empresa={empresa} />
         <View style={c.rowA}>
