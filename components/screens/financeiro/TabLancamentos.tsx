@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { View, Text, Pressable, StyleSheet, Platform, ActivityIndicator, TextInput } from "react-native";
 import { Colors } from "@/constants/colors";
 import { EmptyState } from "@/components/EmptyState";
@@ -30,6 +30,10 @@ type Props = {
   onImport?: () => void;
   onDelete?: (id: string) => void;
   onEdit?: (tx: Transaction) => void;
+  // 08/11/2026 (p-82): "Ver lançamentos" das compras de mercadoria abre a
+  // lista já filtrada (saídas de Fornecedores). `n` muda a cada clique, para
+  // reaplicar o filtro mesmo se a pessoa o tirou.
+  filtroInicial?: { categoria: string; tipo: "income" | "expense"; n: number } | null;
 };
 
 function groupByDay(txs: Transaction[]): { date: string; label: string; items: Transaction[]; income: number; expense: number }[] {
@@ -58,10 +62,18 @@ function groupByDay(txs: Transaction[]): { date: string; label: string; items: T
   });
 }
 
-export function TabLancamentos({ transactions, isLoading, importing, onNewTransaction, onExport, onImport, onDelete, onEdit }: Props) {
-  var [typeFilter, setTypeFilter] = useState<"all" | "income" | "expense">("all");
+export function TabLancamentos({ transactions, isLoading, importing, onNewTransaction, onExport, onImport, onDelete, onEdit, filtroInicial }: Props) {
+  var [typeFilter, setTypeFilter] = useState<"all" | "income" | "expense">(filtroInicial ? filtroInicial.tipo : "all");
   var [search, setSearch] = useState("");
-  var [catFilter, setCatFilter] = useState<string | null>(null);
+  var [catFilter, setCatFilter] = useState<string | null>(filtroInicial ? filtroInicial.categoria : null);
+  var nDoFiltro = filtroInicial ? filtroInicial.n : 0;
+  useEffect(function() {
+    if (!filtroInicial) return;
+    setTypeFilter(filtroInicial.tipo);
+    setCatFilter(filtroInicial.categoria);
+    setSearch("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nDoFiltro]);
   var [showAllCats, setShowAllCats] = useState(false);
   var [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 

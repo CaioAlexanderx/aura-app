@@ -3,6 +3,7 @@ import { View, Text, ScrollView, StyleSheet, Pressable, useWindowDimensions, Tex
 import { useLocalSearchParams, router, useRootNavigationState } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { useTransactionsApi, invalidateFinanceiroQueries } from "@/hooks/useTransactions";
+import { useResultadoDoPeriodo } from "@/hooks/useResultadoDoPeriodo";
 import { maskDateBR, brDateToISO } from "@/utils/mask";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { EmptyState } from "@/components/EmptyState";
@@ -244,6 +245,14 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
   } = useTransactionsApi(period, customStart, customEnd);
   var { company, token, companyCount } = useAuthStore();
   var qc = useQueryClient();
+  // 08/11/2026 (p-82): Faturamento, Custos, Lucro bruto e Despesas da aba
+  // Receitas. null = backend antigo ou sem custo visível: a aba fica como era.
+  var resultado = useResultadoDoPeriodo(period, customStart, customEnd);
+  var [filtroLancamentos, setFiltroLancamentos] = useState<{ categoria: string; tipo: "income" | "expense"; n: number } | null>(null);
+  // O filtro vale só para a ida pelo atalho: saiu de Lançamentos, some.
+  useEffect(function() {
+    if (activeTab !== TAB_INDEX.lancamentos) setFiltroLancamentos(null);
+  }, [activeTab]);
 
   // FIX 24/08/2026 (QA no app rodando): os redirects abaixo chamavam
   // router.replace direto no efeito. Em navegacao dentro do app isso funciona
@@ -638,6 +647,12 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
             onVerAtrasados={podeQuadroAtrasos ? irParaAtrasados : undefined}
             onVerCrediarioAtrasado={podeQuadroAtrasos ? irParaCrediarioAtrasado : undefined}
             abcHref={embedded ? "/studio/gestao/financeiro/produtos" : "/financeiro/produtos"}
+            resultado={resultado}
+            onVerCompras={function() {
+              setFiltroLancamentos({ categoria: "Fornecedores", tipo: "expense", n: Date.now() });
+              handleTabSelect(TAB_INDEX.lancamentos);
+            }}
+            onCadastrarCustos={embedded ? undefined : function() { router.push("/(tabs)/estoque" as any); }}
           />
         )}
         {activeTab === TAB_INDEX.despesas && !isLoading && !isError && (
@@ -665,6 +680,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
             onImport={consolidatedView ? undefined : handleImport}
             onDelete={!isDemo && !consolidatedView ? function(id) { setDeleteTarget(id); } : undefined}
             onEdit={!isDemo && !consolidatedView ? handleEdit : undefined}
+            filtroInicial={filtroLancamentos}
           />
           </ListaOuQuadro>
         )}
