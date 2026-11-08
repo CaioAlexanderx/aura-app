@@ -10,6 +10,16 @@
 // Só texto: nenhuma regra de desconto, cupom ou crédito muda aqui.
 //
 // Funções puras (recebem `agora`), sem React, para testar sem montar tela.
+//
+// 08/11/2026 (card b-mk-30): o texto tem três fases, a mesma regra do banner
+// do sininho no backend (services/bannerIndicacaoTrial, faseDoTexto):
+//   "black"        até 30/11 23:59:59 BRT, com o BLACK50 ainda disponível;
+//   "sem_black50"  ainda na Black Friday, mas o BLACK50 chegou a 10 usos:
+//                  volta o texto de sempre, sem BLACK50;
+//   "fixo"         de 01/12 em diante.
+// Quem sabe se o cupom esgotou é o backend (GET /referrals/mine, campo
+// campanha.fase). Sem esse campo (backend antigo, falha), vale só a data.
+// Depois de 30/11 é sempre "fixo", diga o backend o que disser.
 // ============================================================
 
 import { COMO_FUNCIONA_INDICACAO } from "@/utils/mensagensDoApp";
@@ -41,14 +51,32 @@ export function emBlackFridayDaIndicacao(agora: Date): boolean {
   return agora.getTime() <= FIM_BLACK_FRIDAY_INDICACAO.getTime();
 }
 
+export type FaseIndicacao = "black" | "sem_black50" | "fixo";
+
+const FASES: readonly FaseIndicacao[] = ["black", "sem_black50", "fixo"];
+
+/**
+ * Fase do texto no instante `agora`. `doBackend` é campanha.fase do
+ * GET /referrals/mine; valor ausente ou estranho cai na regra só por data.
+ */
+export function faseIndicacao(agora: Date, doBackend?: unknown): FaseIndicacao {
+  if (!emBlackFridayDaIndicacao(agora)) return "fixo";
+  if (typeof doBackend === "string" && (FASES as readonly string[]).includes(doBackend)) {
+    return doBackend as FaseIndicacao;
+  }
+  return "black";
+}
+
+const comBlack = (agora: Date, fase?: unknown) => faseIndicacao(agora, fase) === "black";
+
 /** Frase de cima do cartão que vale no instante `agora`. */
-export function descricaoIndicacao(agora: Date): string {
-  return emBlackFridayDaIndicacao(agora) ? DESCRICAO_INDICACAO_BLACK_FRIDAY : DESCRICAO_INDICACAO;
+export function descricaoIndicacao(agora: Date, fase?: unknown): string {
+  return comBlack(agora, fase) ? DESCRICAO_INDICACAO_BLACK_FRIDAY : DESCRICAO_INDICACAO;
 }
 
 /** Itens do "Como funciona" que valem no instante `agora`. */
-export function comoFuncionaIndicacao(agora: Date): readonly string[] {
-  return emBlackFridayDaIndicacao(agora) ? COMO_FUNCIONA_INDICACAO_BLACK_FRIDAY : COMO_FUNCIONA_INDICACAO;
+export function comoFuncionaIndicacao(agora: Date, fase?: unknown): readonly string[] {
+  return comBlack(agora, fase) ? COMO_FUNCIONA_INDICACAO_BLACK_FRIDAY : COMO_FUNCIONA_INDICACAO;
 }
 
 export function linkDeIndicacao(codigo: string): string {
@@ -56,8 +84,8 @@ export function linkDeIndicacao(codigo: string): string {
 }
 
 /** Mensagem de compartilhar no WhatsApp que vale no instante `agora`. */
-export function mensagemIndicacao(codigo: string, agora: Date): string {
-  if (emBlackFridayDaIndicacao(agora)) {
+export function mensagemIndicacao(codigo: string, agora: Date, fase?: unknown): string {
+  if (comBlack(agora, fase)) {
     return MENSAGEM_INDICACAO_BLACK_FRIDAY.replace("{link}", linkDeIndicacao(codigo));
   }
   return (

@@ -11,6 +11,7 @@ import {
   comoFuncionaIndicacao,
   descricaoIndicacao,
   mensagemIndicacao,
+  faseIndicacao,
 } from "@/utils/indicacaoCampanha";
 
 const FIM = FIM_BLACK_FRIDAY_INDICACAO.getTime();
@@ -74,5 +75,35 @@ describe("indicação: janela da Black Friday", () => {
     const m = mensagemIndicacao("X", ANTES);
     expect(m).not.toContain("{link}");
     expect(m.endsWith("Esse é o meu link: https://getaura.com.br/r/X")).toBe(true);
+  });
+});
+
+// 08/11/2026 (b-mk-30): a fase vem do backend (GET /referrals/mine,
+// campanha.fase). BLACK50 esgotado volta o texto de sempre; depois de 30/11 é
+// sempre o texto de sempre.
+describe("indicação: fase do texto", () => {
+  test("sem fase do backend vale a data", () => {
+    expect(faseIndicacao(ANTES)).toBe("black");
+    expect(faseIndicacao(DEPOIS)).toBe("fixo");
+    expect(faseIndicacao(ANTES, "qualquer")).toBe("black");
+  });
+
+  test("BLACK50 esgotado: textos de hoje ainda na Black Friday", () => {
+    expect(faseIndicacao(ANTES, "sem_black50")).toBe("sem_black50");
+    expect(descricaoIndicacao(ANTES, "sem_black50")).toBe(HOJE_DESCRICAO);
+    expect([...comoFuncionaIndicacao(ANTES, "sem_black50")]).toEqual(HOJE_ITENS);
+    expect(mensagemIndicacao("REF-ABC123", ANTES, "sem_black50")).toBe(HOJE_WHATS);
+    expect(mensagemIndicacao("REF-ABC123", ANTES, "sem_black50")).not.toContain("BLACK50");
+  });
+
+  test("backend diz black: textos da Black Friday", () => {
+    expect(descricaoIndicacao(ANTES, "black")).toBe(BF_DESCRICAO);
+    expect(mensagemIndicacao("REF-ABC123", ANTES, "black")).toBe(BF_WHATS);
+  });
+
+  test("depois de 30/11 é sempre o texto de sempre, mesmo que o backend diga black", () => {
+    expect(faseIndicacao(DEPOIS, "black")).toBe("fixo");
+    expect(descricaoIndicacao(DEPOIS, "black")).toBe(HOJE_DESCRICAO);
+    expect(mensagemIndicacao("REF-ABC123", DEPOIS, "black")).toBe(HOJE_WHATS);
   });
 });

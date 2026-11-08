@@ -15,6 +15,8 @@ import { comoFuncionaIndicacao, descricaoIndicacao, mensagemIndicacao } from "@/
 // 20% ao indicador, o que nenhum código cumpria.
 // 28/10/2026: a frase mora em utils/indicacaoCampanha (DESCRICAO_INDICACAO) e
 // leva o texto da Black Friday até 30/11/2026 23:59:59 BRT.
+// 08/11/2026 (b-mk-30): e só enquanto houver BLACK50 — o backend diz a fase
+// em GET /referrals/mine (campanha.fase); esgotado, volta o texto de sempre.
 
 // 25/10/2026 (tom das mensagens, extra 2): "Como funciona" recolhível com as
 // regras que valem hoje (COMO_FUNCIONA_INDICACAO, utils/mensagensDoApp).
@@ -53,11 +55,12 @@ export function ReferralCard() {
   const [code, setCode] = useState<string | null>(null);
   const [stats, setStats] = useState({ total: 0, completed: 0, pending: 0 });
   const [loading, setLoading] = useState(false);
+  const [fase, setFase] = useState<string | undefined>(undefined);
 
   const emailVerified = !!(user as any)?.email_verified;
   const agora = new Date();
-  const regras = comoFuncionaIndicacao(agora);
-  const descricao = descricaoIndicacao(agora);
+  const regras = comoFuncionaIndicacao(agora, fase);
+  const descricao = descricaoIndicacao(agora, fase);
 
   useEffect(() => {
     if (!token || isDemo) return;
@@ -69,6 +72,7 @@ export function ReferralCard() {
       const data = await referralsApi.mine();
       setCode(data.code?.code || null);
       setStats(data.stats || { total: 0, completed: 0, pending: 0 });
+      setFase(data.campanha?.fase || undefined);
     } catch {}
   }
 
@@ -99,7 +103,7 @@ export function ReferralCard() {
 
   function shareWhatsApp() {
     if (!code) return;
-    const msg = encodeURIComponent(mensagemIndicacao(code, new Date()));
+    const msg = encodeURIComponent(mensagemIndicacao(code, new Date(), fase));
     const url = "https://wa.me/?text=" + msg;
     if (Platform.OS === "web") window.open(url, "_blank");
   }
