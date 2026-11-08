@@ -165,6 +165,8 @@ describe("regras do prazo", () => {
     expect(textoDeFora([{ product_id: "p", variant_id: null, motivo: "abaixo_do_custo" }, { product_id: "q", variant_id: null, motivo: "abaixo_do_custo" }]))
       .toBe("2 ficam de fora porque o preço com desconto ficaria abaixo do custo.");
     expect(textoDeFora([])).toBeNull();
+    expect(textoDeFora([{ product_id: "p", variant_id: null, motivo: "sem_desconto" }]))
+      .toBe("1 fica de fora porque o preço da promoção não ficaria menor que o normal.");
     const r = resumoDaLista([
       { product_id: "a", variant_id: null, nome: "A", preco_de: 100, preco_por: 80, starts_at: "2026-11-27T03:00:00Z", ends_at: "2026-12-01T02:59:59Z" },
     ]);
@@ -336,7 +338,7 @@ describe("CriarPromocaoModal", () => {
       dry_run: true,
       items: [
         { product_id: "p1", variant_id: null, nome: "Vestido midi", preco_de: 189.9, preco_por: 132.9, ja_em_promocao: false, abaixo_do_custo: false },
-        { product_id: "p2", variant_id: "v9", nome: "Camiseta · M", preco_de: 59.9, preco_por: 41.9, ja_em_promocao: true, abaixo_do_custo: false },
+        { product_id: "p2", variant_id: "v9", nome: "Camiseta", variant_label: "M", preco_de: 59.9, preco_por: 41.9, ja_em_promocao: true, abaixo_do_custo: false },
       ],
       fora: [{ product_id: "p2", variant_id: "v8", motivo: "abaixo_do_custo" }],
     });
@@ -352,6 +354,7 @@ describe("CriarPromocaoModal", () => {
     expect(textoDe(porId(r, "promo-fora"))).toContain("abaixo do custo");
     expect(textoDe(porId(r, "promo-aplicar"))).toContain("Agendar a promoção");
 
+    expect(textoDe(porId(r, "promo-item-p2:v9"))).toContain("Camiseta · M");
     await tocar(r, "promo-tirar-p1:");
     expect(textoDe(porId(r, "promo-entram"))).toBe("1");
 
@@ -359,7 +362,8 @@ describe("CriarPromocaoModal", () => {
     await tocar(r, "promo-aplicar");
     const final = mockRequest.mock.calls[1][1].body;
     expect(final.dry_run).toBe(false);
-    expect(final.targets).toEqual([{ product_id: "p2", variant_id: "v9" }]);
+    // Tirar é por produto; o alvo vai como na prévia ({product_id} leva as variantes com preço próprio).
+    expect(final.targets).toEqual([{ product_id: "p2" }]);
     expect(tem(r, "promo-pronto")).toBe(true);
     expect(onAplicada).toHaveBeenCalled();
   });
@@ -380,6 +384,9 @@ describe("CriarPromocaoModal", () => {
     mockRequest.mockRejectedValueOnce(new (ApiError as any)("Proibido", 403));
     await tocar(r, "promo-ver");
     expect(textoDe(porId(r, "promo-erro"))).toContain("só de consulta");
+    mockRequest.mockRejectedValueOnce(new (ApiError as any)("x", 503, { code: "MIGRATION_PENDING" }));
+    await tocar(r, "promo-ver");
+    expect(textoDe(porId(r, "promo-erro"))).toContain("sendo ligada");
     expect(tem(r, "promo-entram")).toBe(false);
   });
 });

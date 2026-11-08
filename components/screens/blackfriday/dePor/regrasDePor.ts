@@ -181,19 +181,41 @@ export function pctTxt(f: number | null | undefined): string {
   return Math.round(Number(f) * 100) + "%";
 }
 
-export function contarFora(fora: ItemDeFora[]): { abaixo: number; semPreco: number; naoEncontrado: number } {
-  var r = { abaixo: 0, semPreco: 0, naoEncontrado: 0 };
+export function contarFora(fora: ItemDeFora[]): { abaixo: number; semPreco: number; semDesconto: number; naoEncontrado: number } {
+  var r = { abaixo: 0, semPreco: 0, semDesconto: 0, naoEncontrado: 0 };
   fora.forEach(function (f) {
     if (f.motivo === "abaixo_do_custo") r.abaixo++;
-    else if (f.motivo === "sem_preco") r.semPreco++;
+    else if (f.motivo === "sem_preco" || f.motivo === "preco_invalido") r.semPreco++;
+    else if (f.motivo === "sem_desconto") r.semDesconto++;
     else r.naoEncontrado++;
   });
   return r;
 }
 
-/** Itens que entram (os da prévia menos os que a pessoa tirou). */
+/**
+ * Itens que entram (os da prévia menos os produtos que a pessoa tirou).
+ * Tirar é por PRODUTO: o alvo `{product_id}` do backend leva o produto e as
+ * variantes com preço próprio juntos, e não há como mandar só o produto.
+ */
 export function itensQueEntram(r: RespostaPromocao, tirados: Record<string, true>): ItemDaPrevia[] {
-  return r.items.filter(function (i) { return !tirados[chaveDoItem(i)] && !i.abaixo_do_custo; });
+  return r.items.filter(function (i) { return !tirados[i.product_id] && !i.abaixo_do_custo; });
+}
+
+/** Alvos do aplicar: um `{product_id}` por produto que ficou (mesma forma da prévia). */
+export function alvosQueEntram(entram: ItemDaPrevia[]): AlvoPromocao[] {
+  var vistos: Record<string, true> = {};
+  var out: AlvoPromocao[] = [];
+  entram.forEach(function (i) {
+    if (vistos[i.product_id]) return;
+    vistos[i.product_id] = true;
+    out.push({ product_id: i.product_id });
+  });
+  return out;
+}
+
+/** Nome do item: produto, e a variante depois quando houver. */
+export function nomeDoItemPromo(i: { nome: string; variant_label?: string | null }): string {
+  return i.variant_label ? i.nome + " · " + i.variant_label : i.nome;
 }
 
 /** Frase do "fica de fora", ou null quando ninguém fica. */
@@ -201,7 +223,8 @@ export function textoDeFora(fora: ItemDeFora[]): string | null {
   var c = contarFora(fora);
   var partes: string[] = [];
   if (c.abaixo) partes.push(plural(c.abaixo, "fica", "ficam") + " de fora porque o preço com desconto ficaria abaixo do custo");
-  if (c.semPreco) partes.push(plural(c.semPreco, "fica", "ficam") + " de fora porque não tem preço de venda");
+  if (c.semPreco) partes.push(plural(c.semPreco, "fica", "ficam") + " de fora porque o preço ficaria zerado ou não tem preço de venda");
+  if (c.semDesconto) partes.push(plural(c.semDesconto, "fica", "ficam") + " de fora porque o preço da promoção não ficaria menor que o normal");
   if (c.naoEncontrado) partes.push(plural(c.naoEncontrado, "não foi encontrado", "não foram encontrados"));
   if (!partes.length) return null;
   return partes.join("; ") + ".";

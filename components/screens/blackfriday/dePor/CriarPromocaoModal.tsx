@@ -31,7 +31,7 @@ import {
   promocoesApi, type ModoPromocao, type RespostaPromocao, type TerminacaoPromocao, type PedidoPromocao,
 } from "@/services/promocoesApi";
 import {
-  ATALHOS_PCT, MODOS_PROMOCAO, TERMINACOES_PROMOCAO, VALOR_INICIAL_PROMO, alvoDoItem, brl, chaveDoItem,
+  ATALHOS_PCT, MODOS_PROMOCAO, TERMINACOES_PROMOCAO, VALOR_INICIAL_PROMO, alvosQueEntram, brl, chaveDoItem, nomeDoItemPromo,
   descontoMedio, erroDasDatas, erroDoValorPromo, instantesDoPrazo, itensQueEntram, montarPedidoPromo, pctTxt,
   plural, prazosDisponiveis, promocaoVigenteOuAgendada, rotuloDoValorPromo, textoDeFora, textoDoPrazo,
   type ChavePrazo,
@@ -55,6 +55,10 @@ type Props = {
 
 export function mensagemErroPromo(e: any): string {
   if (e instanceof ApiError && e.status === 403) return "Seu acesso é só de consulta. Peça a quem cuida da loja para ligar a promoção.";
+  var codigo = e && e.data && e.data.code;
+  if (codigo === "MIGRATION_PENDING" || (e instanceof ApiError && e.status === 503)) return "Esta função ainda está sendo ligada na sua conta. Tente de novo daqui a pouco.";
+  if (codigo === "INVALID_DATES") return "Confira as datas: o fim precisa ser depois do começo e ainda não ter passado.";
+  if (codigo === "TOO_MANY_TARGETS") return "São produtos demais de uma vez. Tente com menos produtos.";
   if (e && e.isNetworkError) return "Sem conexão agora. Confira a internet e tente de novo.";
   return (e && e.message) || "Não conseguimos fazer isso agora. Tente de novo em instantes.";
 }
@@ -168,7 +172,7 @@ export function CriarPromocaoModal({ companyId, onFechar, onAplicada, preSelecio
     // O que vai é exatamente o que a pessoa conferiu (item a item, variante
     // inclusa), com o instante de agora recalculado se começa hoje.
     var instantes = instantesDoPrazo(ini, fim, hoje);
-    var final: PedidoPromocao = { ...pedido, starts_at: instantes.starts_at, ends_at: instantes.ends_at, targets: entram.map(alvoDoItem) };
+    var final: PedidoPromocao = { ...pedido, starts_at: instantes.starts_at, ends_at: instantes.ends_at, targets: alvosQueEntram(entram) };
     promocoesApi.aplicar(companyId, final)
       .then(function (r) {
         if (!vivo.current) return;
@@ -429,18 +433,18 @@ export function CriarPromocaoModal({ companyId, onFechar, onAplicada, preSelecio
                 </View>
                 {mostrados.map(function (i) {
                   var k = chaveDoItem(i);
-                  var fora = !!tirados[k];
+                  var fora = !!tirados[i.product_id];
                   return (
                     <View key={k} style={[s.linhaPrevia, estreito && s.linhaPreviaCel, fora && { opacity: 0.5 }]} testID={"promo-item-" + k}>
                       <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={s.linhaNome} numberOfLines={2}>{i.nome}</Text>
+                        <Text style={s.linhaNome} numberOfLines={2}>{nomeDoItemPromo(i)}</Text>
                         {i.ja_em_promocao && <Text style={s.tag}>já em promoção</Text>}
                       </View>
                       <View style={s.precos}>
                         <Text style={s.de}>{brl(i.preco_de)}</Text>
                         <Text style={s.por}>{fora ? "fica de fora" : brl(i.preco_por)}</Text>
                         <Pressable
-                          onPress={function () { var n = { ...tirados }; if (fora) delete n[k]; else n[k] = true; setTirados(n); }}
+                          onPress={function () { var n = { ...tirados }; if (fora) delete n[i.product_id]; else n[i.product_id] = true; setTirados(n); }}
                           style={s.tirar} accessibilityRole="button" accessibilityLabel={fora ? "Voltar para a promoção" : "Tirar da promoção"}
                           testID={"promo-tirar-" + k}>
                           {fora ? <Text style={s.tirarTxt}>Incluir</Text> : <Icon name="x" size={14} color={Colors.ink3} />}

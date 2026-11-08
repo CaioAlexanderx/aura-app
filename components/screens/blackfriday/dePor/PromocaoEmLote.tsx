@@ -18,7 +18,7 @@ import { Aviso } from "@/components/screens/estoque/reajuste/Aviso";
 import { promocoesApi, type ItemDaLista, type StatusPromocao } from "@/services/promocoesApi";
 import type { PromocoesDePor } from "@/hooks/usePromocoesDePor";
 import { CriarPromocaoModal, mensagemErroPromo } from "./CriarPromocaoModal";
-import { alvoDoItem, brl, chaveDoItem, diaMes, diaMesDe, pctTxt, plural, resumoDaLista, somarDias } from "./regrasDePor";
+import { alvoDoItem, nomeDoItemPromo, brl, chaveDoItem, diaMes, diaMesDe, pctTxt, plural, resumoDaLista, somarDias } from "./regrasDePor";
 
 type Props = {
   companyId: string | undefined;
@@ -97,7 +97,7 @@ function Bloco({ status, lista, companyId, onMudou, onAdicionar }: {
             return (
               <View key={k} style={s.linha} testID={"promo-linha-" + k}>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={s.nome} numberOfLines={2}>{i.nome}</Text>
+                  <Text style={s.nome} numberOfLines={2}>{nomeDoItemPromo(i)}</Text>
                   <Text style={s.t}>até {diaMesDe(i.ends_at)}</Text>
                 </View>
                 <View style={s.precos}>
@@ -106,10 +106,15 @@ function Bloco({ status, lista, companyId, onMudou, onAdicionar }: {
                 </View>
                 {confirmaItem === k ? (
                   <Pressable style={s.btnMini} onPress={function () { encerrar([i], k); }} disabled={!!encerrando} testID={"promo-encerrar-item-sim-" + k} accessibilityRole="button">
-                    {encerrando === k ? <ActivityIndicator size="small" color={Colors.red} /> : <Text style={[s.miniTxt, { color: Colors.red }]}>Confirmar</Text>}
+                    {encerrando === k ? <ActivityIndicator size="small" color={Colors.red} /> : (
+                      <Text style={[s.miniTxt, { color: Colors.red }]}>
+                        {/* Alvo só com o produto encerra também as variantes dele (backend). */}
+                        {!i.variant_id && lista.some(function (o) { return o.product_id === i.product_id && !!o.variant_id; }) ? "Confirmar (com as variantes)" : "Confirmar"}
+                      </Text>
+                    )}
                   </Pressable>
                 ) : (
-                  <Pressable style={s.btnMini} onPress={function () { setConfirmaItem(k); }} testID={"promo-encerrar-item-" + k} accessibilityRole="button" accessibilityLabel={"Encerrar a promoção de " + i.nome}>
+                  <Pressable style={s.btnMini} onPress={function () { setConfirmaItem(k); }} testID={"promo-encerrar-item-" + k} accessibilityRole="button" accessibilityLabel={"Encerrar a promoção de " + nomeDoItemPromo(i)}>
                     <Text style={s.miniTxt}>Encerrar</Text>
                   </Pressable>
                 )}

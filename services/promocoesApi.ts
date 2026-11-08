@@ -34,13 +34,14 @@ export type ItemDaPrevia = {
   product_id: string;
   variant_id: string | null;
   nome: string;
+  variant_label?: string | null;
   preco_de: number;
   preco_por: number;
   ja_em_promocao: boolean;
   abaixo_do_custo: boolean;
 };
 
-export type MotivoDeFora = "abaixo_do_custo" | "nao_encontrado" | "sem_preco";
+export type MotivoDeFora = "abaixo_do_custo" | "nao_encontrado" | "sem_preco" | "sem_desconto" | "preco_invalido" | "sem_promocao";
 export type ItemDeFora = { product_id: string; variant_id: string | null; motivo: MotivoDeFora; nome?: string };
 
 export type RespostaPromocao = { dry_run: boolean; items: ItemDaPrevia[]; fora: ItemDeFora[] };
@@ -50,6 +51,7 @@ export type ItemDaLista = {
   product_id: string;
   variant_id: string | null;
   nome: string;
+  variant_label?: string | null;
   preco_de: number;
   preco_por: number;
   starts_at: string | null;
@@ -81,6 +83,7 @@ function lerItemDaPrevia(i: any): ItemDaPrevia {
     product_id: String(i.product_id),
     variant_id: i.variant_id == null ? null : String(i.variant_id),
     nome: String(i.nome || i.name || "Produto"),
+    variant_label: i.variant_label || null,
     preco_de: num(i.preco_de),
     preco_por: num(i.preco_por),
     ja_em_promocao: !!i.ja_em_promocao,
@@ -109,6 +112,7 @@ export function lerItemDaLista(i: any): ItemDaLista {
     product_id: String(i.product_id || i.id),
     variant_id: i.variant_id == null ? null : String(i.variant_id),
     nome: String(i.nome || i.name || "Produto"),
+    variant_label: i.variant_label || null,
     preco_de: num(i.preco_de != null ? i.preco_de : i.price),
     preco_por: num(i.preco_por != null ? i.preco_por : i.promo_price),
     starts_at: i.starts_at || i.promo_starts_at || null,
