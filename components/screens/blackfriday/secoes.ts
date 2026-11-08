@@ -5,6 +5,12 @@
 // SOME — nada de cartão desabilitado, cadeado ou convite a assinar. Cada
 // seção tem o seu gate, todos aqui, numa função pura:
 //
+//   de_por      "Promoção em lote"        módulo `estoque`, e só quando o
+//                                         backend tem a rota de promoções
+//                                         (`dePorDisponivel`: 404, 403 do
+//                                         perfil consulta ou falha = some).
+//                                         Primeira porque é a mais urgente
+//                                         em novembro (p-86, 08/11/2026).
 //   ruptura     "O que vai faltar"        módulo `estoque`
 //   assento     "Assento de temporada"    módulo `configuracoes`, por
 //                                         empresa (não existe no
@@ -22,7 +28,7 @@
 import { assentoTemporadaVisivel, hojeBrt } from "@/components/screens/configuracoes/assentoTemporada";
 import { VALE_TROCA_PRAZO_ATE } from "@/utils/valeTroca";
 
-export type ChaveDaSecao = "ruptura" | "assento" | "vale_troca" | "placar";
+export type ChaveDaSecao = "de_por" | "ruptura" | "assento" | "vale_troca" | "placar";
 
 export type SecaoDaPagina = {
   chave: ChaveDaSecao;
@@ -32,6 +38,12 @@ export type SecaoDaPagina = {
 };
 
 export const TEXTOS_DAS_SECOES: Record<ChaveDaSecao, SecaoDaPagina> = {
+  de_por: {
+    chave: "de_por",
+    titulo: "Promoção em lote",
+    porQueAgora:
+      "Na Black Friday o cliente procura o preço riscado: coloque vários produtos em promoção de uma vez, com começo e fim. No fim do prazo, os preços voltam sozinhos.",
+  },
   ruptura: {
     chave: "ruptura",
     titulo: "O que vai faltar",
@@ -65,10 +77,13 @@ export type EntradaDasSecoes = {
   consolidatedView: boolean;
   /** "AAAA-MM-DD" de hoje em Brasília; injetável para teste. */
   hoje?: string;
+  /** O backend tem as promoções e a pessoa pode criar (não é perfil consulta). */
+  dePorDisponivel?: boolean;
 };
 
 export function secoesDaPagina(e: EntradaDasSecoes): SecaoDaPagina[] {
   const out: SecaoDaPagina[] = [];
+  if (e.dePorDisponivel && e.visible.has("estoque")) out.push(TEXTOS_DAS_SECOES.de_por);
   if (e.visible.has("estoque")) out.push(TEXTOS_DAS_SECOES.ruptura);
 
   if (!e.consolidatedView && e.visible.has("configuracoes")) {

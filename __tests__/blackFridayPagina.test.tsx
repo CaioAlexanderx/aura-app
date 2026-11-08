@@ -47,6 +47,13 @@ jest.mock("@/hooks/useVisibleModules", () => {
   return { ...actual, useVisibleModules: () => mockVisible };
 });
 
+// De/Por (p-86): sem o backend novo a seção não existe; os testes dela
+// estão em promocaoDePor.test.tsx.
+jest.mock("@/hooks/useEstoqueConsulta", () => ({ useEstoqueConsulta: () => ({ consulta: false, carregando: false, semCusto: false }) }));
+jest.mock("@/hooks/usePromocoesDePor", () => ({
+  usePromocoesDePor: () => ({ disponivel: false, carregando: false, ativa: [], agendada: [], encerrada: [], recarregar: () => {} }),
+}));
+
 // Os filhos pesados viram casca: o que importa aqui é a MONTAGEM da página.
 jest.mock("@/components/screens/blackfriday/OQueVaiFaltar", () => {
   const { View } = jest.requireActual("react-native");

@@ -7,6 +7,8 @@
 // a 02/02/2027 (constants/blackFriday.ts).
 //
 // Seções, nesta ordem (quais aparecem: secoes.ts):
+//   0. Promoção em lote      (PromocaoEmLote, De/Por, p-86 de 08/11/2026):
+//      só com o backend novo (rota de promoções) e fora do perfil consulta
 //   1. O que vai faltar      (OQueVaiFaltar)
 //   2. Assento de temporada  (AssentoTemporadaCard, o mesmo de Configurações)
 //   3. Vale-troca no cupom   (espelho do toggle de Políticas do Caixa)
@@ -29,12 +31,18 @@ import { SecaoCard } from "./SecaoCard";
 import { ValeTrocaEspelho } from "./ValeTrocaEspelho";
 import { secoesDaPagina } from "./secoes";
 import { PlacarDoDiaCard } from "./PlacarDoDiaCard";
+import { PromocaoEmLote } from "./dePor/PromocaoEmLote";
+import { useEstoqueConsulta } from "@/hooks/useEstoqueConsulta";
+import { usePromocoesDePor } from "@/hooks/usePromocoesDePor";
 
 export function PaginaBlackFriday() {
   const visible = useVisibleModules();
   const { company, consolidatedView, availableCompanies, isStaff } = useAuthStore() as any;
 
-  const secoes = secoesDaPagina({ visible, consolidatedView: !!consolidatedView });
+  // De/Por: perfil Estoque só consulta não vê; backend sem a rota (404) = some.
+  const { consulta, carregando: consultaCarregando } = useEstoqueConsulta();
+  const promocoes = usePromocoesDePor(company?.id, visible.has("estoque") && !consulta && !consultaCarregando);
+  const secoes = secoesDaPagina({ visible, consolidatedView: !!consolidatedView, dePorDisponivel: promocoes.disponivel });
   const tem = (chave: string) => secoes.some((x) => x.chave === chave);
   const numero = (chave: string) => secoes.findIndex((x) => x.chave === chave) + 1;
   const textos = (chave: string) => secoes.find((x) => x.chave === chave)!;
@@ -57,6 +65,12 @@ export function PaginaBlackFriday() {
         <View style={s.vazio} testID="black-friday-sem-secoes">
           <Text style={s.vazioTxt}>Nada da temporada para a sua conta por enquanto.</Text>
         </View>
+      )}
+
+      {tem("de_por") && (
+        <SecaoCard testID="bf-secao-de-por" numero={numero("de_por")} titulo={textos("de_por").titulo} porQueAgora={textos("de_por").porQueAgora}>
+          <PromocaoEmLote companyId={company?.id} consolidado={!!consolidatedView} dados={promocoes} />
+        </SecaoCard>
       )}
 
       {tem("ruptura") && (
