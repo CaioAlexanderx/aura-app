@@ -92,6 +92,12 @@ function mapApiProduct(p: any): Product {
     // 23/09/2026 (QA producao): faltava mapear created_at — o sort "recent"
     // do Estoque (estoque.tsx) dependia dele e sempre recebia undefined.
     created_at: p.created_at || null,
+    // 08/11/2026 (De/Por, p-86): ausente no backend antigo -> null/false.
+    promoPrice: p.promo_price === null || p.promo_price === undefined ? null : (parseFloat(p.promo_price) || null),
+    promoStartsAt: p.promo_starts_at || null,
+    promoEndsAt: p.promo_ends_at || null,
+    emPromocao: p.em_promocao === true,
+    precoEfetivo: p.preco_efetivo === null || p.preco_efetivo === undefined ? null : (parseFloat(p.preco_efetivo) || null),
   };
 }
 

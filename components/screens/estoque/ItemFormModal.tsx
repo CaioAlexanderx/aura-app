@@ -85,6 +85,8 @@ import { ComprasDoProduto } from "./ComprasDoProduto";
 import { fornecedoresDoProdutoApi } from "@/services/suppliersApi";
 import { corpoDosFornecedores, type LinhaDeFornecedor } from "@/utils/entradaDeMercadoria";
 import { matconApi } from "@/services/matconApi";
+import { Aviso } from "./reajuste/Aviso";
+import { avisoDePromocaoNoCadastro } from "@/components/screens/blackfriday/dePor/regrasDePor";
 import {
   capaDa, chaveDaCor, duracaoParaMinutos, gerarCodigoServico,
   lerDuracaoDoServico, mascaraDeValor, matrizDaGrade, gravacaoDaDuracao, mesclarPaiNaGrade, motivosQueBloqueiam, normalizarMapaDaGrade, temProgressoAlemDoNome, totalDaMatriz,
@@ -978,6 +980,17 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       } : null}
     />
   );
+  // 08/11/2026 (De/Por, p-86): produto em promoção avisa que o preço daqui
+  // é o normal; a promoção segue até o fim. Backend antigo: nada aparece.
+  const avisoPromo = alvo ? avisoDePromocaoNoCadastro(alvo) : null;
+  const secPrecoComAviso = avisoPromo ? (
+    <View>
+      {secPreco}
+      <View style={{ marginTop: 10 }}>
+        <Aviso tipo={valorDaMascara(preco) !== Number(alvo!.price) ? "aviso" : "info"} testID="item-aviso-promocao">{avisoPromo}</Aviso>
+      </View>
+    </View>
+  ) : secPreco;
 
   // 03/11/2026 — fornecedores + compras (o card só aparece com entrada).
   // Sem botão de entrada aqui dentro: o campo Estoque deste formulário,
@@ -1171,7 +1184,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
               <View style={s.cols}>
                 <View style={s.colEsq}>
                   {secItem}
-                  {secPreco}
+                  {secPrecoComAviso}
                   {secFornecedores}
                   {secEstoque}
                   {secEntrega}
@@ -1186,7 +1199,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
             ) : (
               <View style={{ gap: 12 }}>
                 {secItem}
-                {secPreco}
+                {secPrecoComAviso}
                 {secFornecedores}
                 {secEstoque}
                 {secEntrega}
@@ -1200,7 +1213,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
             <View style={s.cols}>
               <View style={s.colEsq}>
                 {secItem}
-                {secPreco}
+                {secPrecoComAviso}
                 {secFornecedores}
                 {secEstoque}
                 {secDescricao}
@@ -1213,7 +1226,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
           ) : (
             <View style={{ gap: 12 }}>
               {secItem}
-              {secPreco}
+              {secPrecoComAviso}
               {secFornecedores}
               {secEstoque}
               {secFotos}
