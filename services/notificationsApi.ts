@@ -28,6 +28,10 @@ export interface AppBanner {
   cta_url?: string;
   cta_route?: string;
   created_at: string;
+  // 08/11/2026 (b-mk-30): banner de indicação do backend. O texto já vem na
+  // fase certa; o app só registra vista e clique.
+  campanha?: 'indicacao';
+  fase?: 'black' | 'sem_black50' | 'fixo';
 }
 
 export interface OrderNotification {
@@ -85,6 +89,13 @@ export const notificationsApi = {
     request<{ ok: boolean }>(
       `/companies/${companyId}/notifications/read-all-banners`,
       { method: 'POST' }
+    ),
+
+  // Banner de indicação (08/11/2026): vista ou clique em "Gerar meu código".
+  registrarIndicacao: (companyId: string, bannerId: string, evento: 'vista' | 'clique') =>
+    request<{ registrado: boolean }>(
+      `/companies/${companyId}/notifications/${bannerId}/indicacao`,
+      { method: 'POST', body: { evento } }
     ),
 
   // ── Eventos da loja (01/09/2026) ────────────────────────────────────────

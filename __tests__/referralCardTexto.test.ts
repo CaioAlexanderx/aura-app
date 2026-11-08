@@ -18,8 +18,9 @@ const SRC_MSG = fs.readFileSync(path.join(__dirname, "..", "utils", "indicacaoCa
 describe("ReferralCard: texto da campanha", () => {
   test("descrição promete 1 mês grátis ao indicador e 7 dias + 20% ao indicado", () => {
     expect(SRC_MSG).toContain("Indique um lojista e ganhe 1 mês grátis quando ele pagar a primeira mensalidade.");
-    expect(SRC_MSG).toContain("Quem você indicar testa 7 dias grátis e ganha 20% no primeiro mês.");
-    expect(SRC).toContain("descricaoIndicacao(agora)");
+    expect(SRC_MSG).toContain("Quem você indicar testa grátis e ganha 20% no primeiro mês.");
+    // 08/11/2026 (b-mk-30): a fase do backend entra junto (BLACK50 esgotado).
+    expect(SRC).toContain("descricaoIndicacao(agora, fase)");
   });
 
   test("não promete mais 20% de desconto ao indicador", () => {
@@ -29,7 +30,8 @@ describe("ReferralCard: texto da campanha", () => {
   test("mensagem de compartilhar leva o código e o link /r/{codigo}", () => {
     expect(SRC_MSG).toContain('"Com o meu código " + codigo + " você testa 7 dias grátis e ganha 20% de desconto na primeira mensalidade. "');
     expect(SRC_MSG).toContain('"Começa por aqui: https://getaura.com.br/r/" + codigo');
-    expect(SRC).toContain("encodeURIComponent(mensagemIndicacao(code, new Date()))");
+    expect(SRC).toContain("encodeURIComponent(mensagemIndicacao(code, new Date(), fase))");
+    expect(SRC).toContain("setFase(data.campanha?.fase || undefined)");
   });
 
   test("rótulos: Cadastros e Pendentes; 'Concluidas' e 'Descontos' saem", () => {

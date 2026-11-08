@@ -53,6 +53,7 @@ import { NotificationPrefs } from '@/components/NotificationPrefs';
 import { WebPortal } from '@/components/WebPortal';
 import { useRouter } from 'expo-router';
 import { rotaDoCtaDoBanner } from '@/utils/focoIndicacao';
+import { registrarEventoDoBanner } from '@/utils/contadorIndicacao';
 
 type DrawerView = 'feed' | 'prefs';
 
@@ -438,8 +439,13 @@ function BannerFrame({ html, title }: { html: string; title: string }) {
 }
 
 // ---------- Card de banner ----------
-function BannerCard({ b, onDismiss, C, router }: { b: AppBanner; onDismiss: () => void; C: any; router: any }) {
+function BannerCard({ b, onDismiss, C, router, companyId }: {
+  b: AppBanner; onDismiss: () => void; C: any; router: any; companyId?: string;
+}) {
+  // 08/11/2026 (b-mk-30): banner de indicação conta vista e clique.
+  useEffect(() => { registrarEventoDoBanner(companyId, b, 'vista'); }, [companyId, b.id, b.campanha]);
   const handleCta = useCallback(() => {
+    registrarEventoDoBanner(companyId, b, 'clique');
     if (b.cta_route) {
       // 14/10/2026 (tq-11): banner de indicação abre Configurações já focado no cartão.
       router?.push((rotaDoCtaDoBanner(b) || b.cta_route) as any);
@@ -447,7 +453,7 @@ function BannerCard({ b, onDismiss, C, router }: { b: AppBanner; onDismiss: () =
     } else if (b.cta_url) {
       Linking.openURL(b.cta_url).catch(() => {});
     }
-  }, [b, router, onDismiss]);
+  }, [b, router, onDismiss, companyId]);
 
   if (Platform.OS !== 'web') {
     return (
@@ -675,6 +681,7 @@ function FeedBody(props: InnerProps) {
               b={b}
               C={C}
               router={router}
+              companyId={props.companyId}
               onDismiss={() => props.markBannerRead(b.id)}
             />
           ))}
