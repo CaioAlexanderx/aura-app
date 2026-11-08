@@ -100,7 +100,7 @@ export function textoDoPrazoNoCupom(prazoAte: string = VALE_TROCA_PRAZO_ATE): st
 
 /**
  * O cupom desta venda leva o bloco "Vale-troca"?
- * Só se a loja não desligou, a venda é da campanha e o prazo ainda não passou
+ * Só se a loja ligou, a venda é da campanha e o prazo ainda não passou
  * (2ª via de dezembro tirada em fevereiro não promete troca que já venceu).
  */
 export function deveImprimirVale(p: {
@@ -108,7 +108,7 @@ export function deveImprimirVale(p: {
   hoje?: Date | string | number;
   ligado?: boolean;
 }): boolean {
-  if (p.ligado === false) return false;
+  if (p.ligado !== true) return false;
   const prazo = prazoDoVale(p.vendaEm);
   if (!prazo) return false;
   return !valeVencido(prazo, p.hoje ?? new Date());
@@ -116,82 +116,16 @@ export function deveImprimirVale(p: {
 
 // ─── Preferência da loja ─────────────────────────────────────
 //
-// Padrão: LIGADO (o bloco só sai no período de qualquer forma). Desde o
-// Aura-backend#813 a preferência mora em companies.pdv_settings
-// (vale_troca_enabled), a mesma do resto das Políticas do Caixa — vale para
-// todos os computadores e para quem imprime a 2ª via em outra máquina.
-//
-// Antes (app#1056) ela era guardada só neste navegador. Quem desligou lá não
-// pode ver o vale voltar sozinho, então o valor antigo é lido UMA vez:
-//   · enquanto não migrou, "0" no navegador vale como desligado;
-//   · usePdvSettings grava vale_troca_enabled:false no servidor e marca a loja
-//     como migrada (marcarValeTrocaMigrado); dali em diante o navegador é
-//     ignorado — manda o servidor.
-// Nunca quebra a tela se não houver storage (mesma abordagem do som de
-// pedido, utils/somDePedido.ts).
-
-const CHAVE_PREFERENCIA = "aura:vale-troca-no-cupom:";
-const CHAVE_MIGRADO = "aura:vale-troca-migrado:";
+// Padrão: DESLIGADO (decisão de 08/11/2026: o vale-troca deixou de sair
+// sozinho no cupom). Só imprime quando a lojista liga em Configurações, o que
+// grava vale_troca_enabled:true em companies.pdv_settings (Aura-backend#813).
+// Ausente, null, configurações ainda carregando ou backend antigo = desligado.
+// O valor antigo guardado no navegador (app#1056) não é mais lido.
 
 /** O que a preferência lê de pdv_settings (ausente = backend sem o campo). */
 export type ConfigDoVale = { vale_troca_enabled?: boolean | null } | null | undefined;
 
-function storage(): Storage | null {
-  try {
-    if (typeof window === "undefined" || !window.localStorage) return null;
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
-
-function lerDoNavegador(chave: string, companyId: string | null | undefined): string | null {
-  const st = storage();
-  if (!st || !companyId) return null;
-  try {
-    return st.getItem(chave + companyId);
-  } catch {
-    return null;
-  }
-}
-
-/** A loja já passou o valor do navegador para o servidor? */
-function jaMigrou(companyId: string | null | undefined): boolean {
-  return lerDoNavegador(CHAVE_MIGRADO, companyId) === "1";
-}
-
-/**
- * O vale sai no cupom desta loja? `config` é o pdv_settings carregado.
- * Servidor com false → desligado. Sem migrar ainda, "0" guardado no navegador
- * (app#1056) também vale como desligado. Fora isso, ligado.
- */
-export function lerValeTrocaLigado(companyId: string | null | undefined, config?: ConfigDoVale): boolean {
-  if (config && config.vale_troca_enabled === false) return false;
-  if (config && config.vale_troca_enabled === true) return true;
-  // Servidor sem resposta (backend antigo ou ainda carregando): o valor do
-  // navegador só conta enquanto a loja não migrou.
-  if (jaMigrou(companyId)) return true;
-  return lerDoNavegador(CHAVE_PREFERENCIA, companyId) !== "0";
-}
-
-/**
- * Há um "desligado" só no navegador que o servidor ainda não conhece?
- * É a hora de gravar vale_troca_enabled:false em pdv_settings.
- */
-export function valeTrocaPrecisaMigrar(companyId: string | null | undefined, config: ConfigDoVale): boolean {
-  if (!companyId || !config || config.vale_troca_enabled === false) return false;
-  if (jaMigrou(companyId)) return false;
-  return lerDoNavegador(CHAVE_PREFERENCIA, companyId) === "0";
-}
-
-/** Marca a loja como migrada: o valor do navegador não é mais lido. */
-export function marcarValeTrocaMigrado(companyId: string | null | undefined): void {
-  const st = storage();
-  if (!st || !companyId) return;
-  try {
-    st.setItem(CHAVE_MIGRADO + companyId, "1");
-    st.removeItem(CHAVE_PREFERENCIA + companyId);
-  } catch {
-    /* sem storage: migra de novo na próxima sessão, sem efeito colateral */
-  }
+/** O vale sai no cupom desta loja? `config` é o pdv_settings carregado. */
+export function lerValeTrocaLigado(_companyId: string | null | undefined, config?: ConfigDoVale): boolean {
+  return !!config && config.vale_troca_enabled === true;
 }

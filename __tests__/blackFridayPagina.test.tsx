@@ -324,33 +324,32 @@ describe("vale-troca: espelho do mesmo estado (pdv_settings)", () => {
   }
   const esperar = () => act(async () => { await Promise.resolve(); });
 
-  it("lê o mesmo estado do PdvSettingsCard: ligado por padrão, desligado se pdv_settings diz false", () => {
-    expect(chave(montar(<PaginaBlackFriday />)).props.value).toBe(true);
-    mockPdv = { vale_troca_enabled: false };
+  it("lê o mesmo estado do PdvSettingsCard: desligado por padrão, ligado só se pdv_settings diz true", () => {
     expect(chave(montar(<PaginaBlackFriday />)).props.value).toBe(false);
+    mockPdv = { vale_troca_enabled: true };
+    expect(chave(montar(<PaginaBlackFriday />)).props.value).toBe(true);
   });
 
-  it("desligar aqui grava pdv_settings.vale_troca_enabled com o objeto inteiro e marca a migração", async () => {
+  it("desligar aqui grava pdv_settings.vale_troca_enabled com o objeto inteiro", async () => {
     mockPdv = { cash_tender_modal_enabled: true, vale_troca_enabled: true };
     const r = montar(<PaginaBlackFriday />);
     await act(async () => { await chave(r).props.onValueChange(false); });
     expect(mockSalvar).toHaveBeenCalledWith(CID, { cash_tender_modal_enabled: true, vale_troca_enabled: false });
     expect(mockInvalidate).toHaveBeenCalled();
-    expect(localStorage.getItem("aura:vale-troca-migrado:" + CID)).toBe("1");
   });
 
   it("falha ao salvar: avisa e volta ao valor do servidor", async () => {
+    mockPdv = { vale_troca_enabled: true };
     mockSalvar.mockRejectedValueOnce({ data: { error: "Sem permissão" } });
     const r = montar(<PaginaBlackFriday />);
     await act(async () => { await chave(r).props.onValueChange(false); });
     await esperar();
     expect(mockToastErro).toHaveBeenCalledWith("Sem permissão");
     expect(chave(r).props.value).toBe(true);
-    expect(localStorage.getItem("aura:vale-troca-migrado:" + CID)).toBeNull();
   });
 
-  it("a preferência antiga do navegador ainda vale até a migração (mesma regra do card)", () => {
-    localStorage.setItem("aura:vale-troca-no-cupom:" + CID, "0");
+  it("a preferência antiga do navegador não conta mais (mesma regra do card)", () => {
+    localStorage.setItem("aura:vale-troca-no-cupom:" + CID, "1");
     expect(lerValeTrocaLigado(CID, mockPdv)).toBe(false);
     expect(chave(montar(<PaginaBlackFriday />)).props.value).toBe(false);
   });
@@ -369,7 +368,6 @@ describe("vale-troca: espelho do mesmo estado (pdv_settings)", () => {
     [card, espelho].forEach((f) => {
       expect(f).toContain("usePdvSettings");
       expect(f).toContain("pdvSettingsApi.save(");
-      expect(f).toContain("marcarValeTrocaMigrado");
       expect(f).toContain("lerValeTrocaLigado(");
     });
   });

@@ -13,7 +13,7 @@ import { lerVendaSemEstoque } from "@/utils/vendaSemEstoque";
 import { lerComandaEnabled } from "@/utils/comanda";
 import { lerFreteEnabled } from "@/utils/frete";
 import {
-  lerValeTrocaLigado, marcarValeTrocaMigrado, formatarDiaBR,
+  lerValeTrocaLigado, formatarDiaBR,
   VALE_TROCA_VENDAS_DE, VALE_TROCA_VENDAS_ATE, VALE_TROCA_PRAZO_ATE,
 } from "@/utils/valeTroca";
 import { Card } from "@/components/screens/configuracoes/shared";
@@ -134,8 +134,6 @@ export function PdvSettingsCard() {
     setSaving(true);
     try {
       await pdvSettingsApi.save(company.id, next);
-      // O servidor passou a ser a fonte: o valor antigo do navegador não conta mais.
-      if (key === "vale_troca_enabled") marcarValeTrocaMigrado(company.id);
       invalidate();
       setPendingSettings(null);
     } catch (err: any) {

@@ -1,12 +1,11 @@
 // ============================================================
 // Vale-troca no cupom: a preferência mora em pdv_settings (13/10/2026)
 //
-// Aura-backend#813: pdv_settings.vale_troca_enabled (boolean, default true).
-// Antes (app#1056) ela era guardada só no navegador (utils/valeTroca.ts).
+// Aura-backend#813: pdv_settings.vale_troca_enabled (boolean, default false desde 08/11/2026).
+// Antes (app#1056) ela era guardada só no navegador; esse valor não é mais lido.
 //   · o interruptor das Políticas do Caixa lê e grava vale_troca_enabled pelo
 //     mesmo caminho dos outros toggles (pdvSettingsApi.save com o merge);
-//   · o "desligado" que a loja deixou no navegador sobe uma vez para o
-//     servidor (usePdvSettings) e depois é ignorado.
+//   · só liga com true; chave ausente = desligado.
 // Mocks do padrão do repo (expo-font, Icon); testID + deep:false.
 // ============================================================
 import fs from "fs";
@@ -37,12 +36,9 @@ jest.mock("@/components/screens/configuracoes/CardPriceSection", () => ({ CardPr
 jest.mock("@/components/screens/configuracoes/FrenteDaLoja", () => ({ FrenteDaLoja: () => null, nomeDaFrente: () => "" }));
 
 import { PdvSettingsCard } from "@/components/screens/configuracoes/PdvSettingsCard";
-import { usePdvSettings, _resetMigracaoDoVale } from "@/hooks/usePdvSettings";
 import { pdvSettingsApi } from "@/services/api";
 
 const api = pdvSettingsApi as unknown as Record<string, jest.Mock>;
-const LEGADA = "aura:vale-troca-no-cupom:loja-1";
-const MIGRADO = "aura:vale-troca-migrado:loja-1";
 
 jest.setTimeout(30000);
 
@@ -67,23 +63,22 @@ const porId = (t: renderer.ReactTestRenderer, id: string) => t.root.findAllByPro
 
 beforeEach(() => {
   jest.clearAllMocks();
-  _resetMigracaoDoVale();
   window.localStorage.clear();
   api.save.mockImplementation(async (_id: string, s: any) => ({ settings: s }));
 });
 
 describe("Configurações › Políticas do Caixa › Vale-troca", () => {
-  it("lê o valor de pdv_settings: ligado por padrão, desligado quando o servidor diz false", async () => {
+  it("lê o valor de pdv_settings: desligado por padrão, ligado só quando o servidor diz true", async () => {
     let tree = await montarCartao({ crediario_enabled: true, caixa_enabled: true });
-    expect(porId(tree, "toggle-vale-troca")[0].props.value).toBe(true);
+    expect(porId(tree, "toggle-vale-troca")[0].props.value).toBe(false);
     tree.unmount();
 
-    tree = await montarCartao({ crediario_enabled: true, caixa_enabled: true, vale_troca_enabled: false });
-    expect(porId(tree, "toggle-vale-troca")[0].props.value).toBe(false);
+    tree = await montarCartao({ crediario_enabled: true, caixa_enabled: true, vale_troca_enabled: true });
+    expect(porId(tree, "toggle-vale-troca")[0].props.value).toBe(true);
     tree.unmount();
   });
 
-  it("desligar grava vale_troca_enabled:false em pdv_settings (merge com o resto) e marca a loja como migrada", async () => {
+  it("desligar grava vale_troca_enabled:false em pdv_settings (merge com o resto)", async () => {
     const tree = await montarCartao({ crediario_enabled: true, caixa_enabled: true, vale_troca_enabled: true });
     await act(async () => { porId(tree, "toggle-vale-troca")[0].props.onValueChange(false); });
     await flush();
@@ -92,7 +87,6 @@ describe("Configurações › Políticas do Caixa › Vale-troca", () => {
     const [empresa, corpo] = api.save.mock.calls[0];
     expect(empresa).toBe("loja-1");
     expect(corpo).toMatchObject({ crediario_enabled: true, caixa_enabled: true, vale_troca_enabled: false });
-    expect(window.localStorage.getItem(MIGRADO)).toBe("1");
     tree.unmount();
   });
 
@@ -109,49 +103,6 @@ describe("Configurações › Políticas do Caixa › Vale-troca", () => {
     const json = JSON.stringify(tree.toJSON());
     expect(json).toContain("Vale-troca no cupom");
     expect(json).not.toContain("Vale para este computador");
-    tree.unmount();
-  });
-});
-
-describe("usePdvSettings: migração do 'desligado' guardado no navegador", () => {
-  function Sonda() {
-    usePdvSettings();
-    return null;
-  }
-  async function montarSonda() {
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    let tree!: renderer.ReactTestRenderer;
-    await act(async () => { tree = renderer.create(comProvider(<Sonda />, qc)); });
-    await flush();
-    return tree;
-  }
-
-  it("servidor ainda 'ligado' e navegador 'desligado': sobe false uma vez e depois ignora o navegador", async () => {
-    window.localStorage.setItem(LEGADA, "0");
-    api.get.mockResolvedValue({ settings: { vale_troca_enabled: true } });
-    const tree = await montarSonda();
-
-    expect(api.save).toHaveBeenCalledTimes(1);
-    expect(api.save).toHaveBeenCalledWith("loja-1", { vale_troca_enabled: false });
-    expect(window.localStorage.getItem(MIGRADO)).toBe("1");
-    expect(window.localStorage.getItem(LEGADA)).toBeNull();
-    tree.unmount();
-  });
-
-  it("sem valor antigo no navegador não escreve nada no servidor", async () => {
-    api.get.mockResolvedValue({ settings: { vale_troca_enabled: true } });
-    const tree = await montarSonda();
-    expect(api.save).not.toHaveBeenCalled();
-    tree.unmount();
-  });
-
-  it("se o PUT falha, o 'desligado' do navegador continua valendo e nada é marcado", async () => {
-    window.localStorage.setItem(LEGADA, "0");
-    api.get.mockResolvedValue({ settings: { vale_troca_enabled: true } });
-    api.save.mockRejectedValue({ status: 403 });
-    const tree = await montarSonda();
-    expect(window.localStorage.getItem(MIGRADO)).toBeNull();
-    expect(window.localStorage.getItem(LEGADA)).toBe("0");
     tree.unmount();
   });
 });
