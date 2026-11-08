@@ -137,7 +137,7 @@ export type PdvSettings = {
   // cobra a entrega na própria venda. Leitura só por utils/frete.lerFreteEnabled.
   frete_enabled?: boolean;
   // 13/10/2026 (Aura-backend#813): vale-troca (QR) no cupom das vendas de
-  // nov/dez. Default true. Leitura só por utils/valeTroca.lerValeTrocaLigado.
+  // nov/dez. Default false (08/11/2026). Leitura só por utils/valeTroca.lerValeTrocaLigado.
   vale_troca_enabled?: boolean;
   // 18/05/2026 (Fase 0 Aura Food, migration 118)
   food_mode_enabled?: boolean;

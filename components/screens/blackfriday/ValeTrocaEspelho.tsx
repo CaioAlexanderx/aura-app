@@ -20,7 +20,7 @@ import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { pdvSettingsApi, type PdvSettings } from "@/services/api";
 import {
   VALE_TROCA_PRAZO_ATE, VALE_TROCA_VENDAS_ATE, VALE_TROCA_VENDAS_DE,
-  formatarDiaBR, lerValeTrocaLigado, marcarValeTrocaMigrado,
+  formatarDiaBR, lerValeTrocaLigado,
 } from "@/utils/valeTroca";
 
 export function ValeTrocaEspelho({ companyId }: { companyId: string | null | undefined }) {
@@ -39,8 +39,6 @@ export function ValeTrocaEspelho({ companyId }: { companyId: string | null | und
     setSalvando(true);
     try {
       await pdvSettingsApi.save(companyId, proximo);
-      // O servidor passou a ser a fonte: o valor antigo do navegador não conta mais.
-      marcarValeTrocaMigrado(companyId);
       invalidate();
       setPendente(null);
     } catch (err: any) {

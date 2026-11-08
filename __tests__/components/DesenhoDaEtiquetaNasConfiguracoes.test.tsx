@@ -33,7 +33,6 @@ jest.mock("@/components/screens/configuracoes/CardPriceSection", () => ({ CardPr
 jest.mock("@/components/screens/configuracoes/FrenteDaLoja", () => ({ FrenteDaLoja: () => null, nomeDaFrente: () => "" }));
 
 import { PdvSettingsCard } from "@/components/screens/configuracoes/PdvSettingsCard";
-import { _resetMigracaoDoVale } from "@/hooks/usePdvSettings";
 import { pdvSettingsApi } from "@/services/api";
 
 const api = pdvSettingsApi as unknown as Record<string, jest.Mock>;
@@ -59,7 +58,6 @@ const marcado = (t: renderer.ReactTestRenderer) =>
 
 beforeEach(() => {
   jest.clearAllMocks();
-  _resetMigracaoDoVale();
   window.localStorage.clear();
   api.save.mockImplementation(async (_id: string, s: any) => ({ settings: s }));
 });

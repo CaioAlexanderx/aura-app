@@ -20,12 +20,13 @@ jest.mock("qrcode-svg", () => {
 import {
   VALE_TROCA_PRAZO_ATE, VALE_TROCA_VENDAS_ATE, VALE_TROCA_VENDAS_DE,
   deveImprimirVale, diaEmBrasilia, formatarDiaBR, lerCodigoDoVale,
-  lerValeTrocaLigado, marcarValeTrocaMigrado, montarCodigoDoVale, prazoDoVale,
-  textoDoPrazoNoCupom, vendaCaiNoPeriodoDoVale, valeTrocaPrecisaMigrar, valeVencido,
+  lerValeTrocaLigado, montarCodigoDoVale, prazoDoVale,
+  textoDoPrazoNoCupom, vendaCaiNoPeriodoDoVale, valeVencido,
 } from "@/utils/valeTroca";
 import { blocoDoVale, cupomComVale, injetarValeNoCupom, MARCA_DO_VALE } from "@/utils/valeTrocaCupom";
 
 const VENDA = "3f2a9c1e-7b44-4d0a-9e5f-0a1b2c3d4e5f";
+const ON = { vale_troca_enabled: true };
 const CUPOM = fs.readFileSync(path.join(__dirname, "__fixtures__", "cupomVenda.html"), "utf8");
 
 describe("código do vale", () => {
@@ -105,84 +106,43 @@ describe("prazo do vale — bordas (dia civil de Brasília, UTC-3)", () => {
 
 describe("deveImprimirVale", () => {
   const dentro = "2026-12-12T18:42:10Z";
-  it("venda da campanha, loja com o padrão (ligado), prazo em dia: imprime", () => {
-    expect(deveImprimirVale({ vendaEm: dentro, hoje: "2026-12-12T18:45:00Z" })).toBe(true);
+  it("venda da campanha, loja que ligou, prazo em dia: imprime", () => {
+    expect(deveImprimirVale({ vendaEm: dentro, hoje: "2026-12-12T18:45:00Z", ligado: true })).toBe(true);
+  });
+  it("loja sem a opção ligada (padrão): não imprime", () => {
+    expect(deveImprimirVale({ vendaEm: dentro, hoje: "2026-12-12T18:45:00Z" })).toBe(false);
   });
   it("loja desligou: não imprime", () => {
     expect(deveImprimirVale({ vendaEm: dentro, hoje: "2026-12-12T18:45:00Z", ligado: false })).toBe(false);
   });
   it("venda fora da campanha: não imprime", () => {
-    expect(deveImprimirVale({ vendaEm: "2026-10-20T15:00:00Z", hoje: "2026-10-20T15:05:00Z" })).toBe(false);
+    expect(deveImprimirVale({ vendaEm: "2026-10-20T15:00:00Z", hoje: "2026-10-20T15:05:00Z", ligado: true })).toBe(false);
   });
   it("2ª via depois do prazo: não promete troca vencida", () => {
-    expect(deveImprimirVale({ vendaEm: dentro, hoje: "2027-02-03T15:00:00Z" })).toBe(false);
-    expect(deveImprimirVale({ vendaEm: dentro, hoje: "2027-01-31T15:00:00Z" })).toBe(true);
+    expect(deveImprimirVale({ vendaEm: dentro, hoje: "2027-02-03T15:00:00Z", ligado: true })).toBe(false);
+    expect(deveImprimirVale({ vendaEm: dentro, hoje: "2027-01-31T15:00:00Z", ligado: true })).toBe(true);
   });
 });
 
-// O valor que a loja guardou só no navegador (app#1056), antes de a
-// preferência ir para pdv_settings.vale_troca_enabled (Aura-backend#813).
-const CHAVE_LEGADA = (loja: string) => "aura:vale-troca-no-cupom:" + loja;
-
 describe("preferência da loja (pdv_settings.vale_troca_enabled)", () => {
-  beforeEach(() => window.localStorage.clear());
-
-  it("padrão é ligado, com ou sem as configurações carregadas", () => {
-    expect(lerValeTrocaLigado("loja-a")).toBe(true);
-    expect(lerValeTrocaLigado("loja-a", {})).toBe(true);
-    expect(lerValeTrocaLigado("loja-a", null)).toBe(true);
-  });
-
-  it("o servidor manda: vale_troca_enabled false desliga, true liga", () => {
-    expect(lerValeTrocaLigado("loja-a", { vale_troca_enabled: false })).toBe(false);
-    expect(lerValeTrocaLigado("loja-a", { vale_troca_enabled: true })).toBe(true);
-    // é por loja: a configuração de uma não vaza para outra
-    expect(lerValeTrocaLigado("loja-b", {})).toBe(true);
-  });
-
-  it("antes de migrar, o 'desligado' do navegador ainda vale (backend sem o campo)", () => {
-    window.localStorage.setItem(CHAVE_LEGADA("loja-a"), "0");
+  it("padrão é DESLIGADO: ausente, null, vazio ou sem as configurações carregadas", () => {
     expect(lerValeTrocaLigado("loja-a")).toBe(false);
     expect(lerValeTrocaLigado("loja-a", {})).toBe(false);
-    expect(lerValeTrocaLigado("loja-b", {})).toBe(true);
+    expect(lerValeTrocaLigado("loja-a", null)).toBe(false);
+    expect(lerValeTrocaLigado("loja-a", { vale_troca_enabled: null })).toBe(false);
   });
 
-  it("servidor com valor explícito vence o navegador, nos dois sentidos", () => {
-    window.localStorage.setItem(CHAVE_LEGADA("loja-a"), "0");
+  it("só liga com true no servidor", () => {
     expect(lerValeTrocaLigado("loja-a", { vale_troca_enabled: true })).toBe(true);
-    window.localStorage.setItem(CHAVE_LEGADA("loja-b"), "1");
-    expect(lerValeTrocaLigado("loja-b", { vale_troca_enabled: false })).toBe(false);
+    expect(lerValeTrocaLigado("loja-a", { vale_troca_enabled: false })).toBe(false);
   });
 
-  it("migra uma vez: 'desligado' só no navegador pede o PUT e depois é ignorado", () => {
-    window.localStorage.setItem(CHAVE_LEGADA("loja-a"), "0");
-    // o servidor ainda diz "ligado" (default): precisa migrar
-    expect(valeTrocaPrecisaMigrar("loja-a", { vale_troca_enabled: true })).toBe(true);
-    expect(valeTrocaPrecisaMigrar("loja-a", {})).toBe(true);
-
-    marcarValeTrocaMigrado("loja-a");
-    expect(valeTrocaPrecisaMigrar("loja-a", { vale_troca_enabled: true })).toBe(false);
-    // o navegador não é mais lido: sem resposta do servidor, vale o padrão
-    expect(window.localStorage.getItem(CHAVE_LEGADA("loja-a"))).toBeNull();
-    expect(lerValeTrocaLigado("loja-a")).toBe(true);
-    // e mesmo que alguém grave de novo a chave antiga, depois de migrar ela é ignorada
-    window.localStorage.setItem(CHAVE_LEGADA("loja-a"), "0");
-    expect(lerValeTrocaLigado("loja-a")).toBe(true);
-  });
-
-  it("não migra quando não há o que migrar", () => {
-    expect(valeTrocaPrecisaMigrar("loja-a", { vale_troca_enabled: true })).toBe(false);           // sem valor antigo
-    window.localStorage.setItem(CHAVE_LEGADA("loja-b"), "1");
-    expect(valeTrocaPrecisaMigrar("loja-b", { vale_troca_enabled: true })).toBe(false);           // ligado no navegador
-    window.localStorage.setItem(CHAVE_LEGADA("loja-c"), "0");
-    expect(valeTrocaPrecisaMigrar("loja-c", { vale_troca_enabled: false })).toBe(false);          // servidor já desligado
-    expect(valeTrocaPrecisaMigrar("loja-c", null)).toBe(false);                                  // configurações ainda não carregaram
-  });
-
-  it("sem loja não quebra", () => {
-    expect(lerValeTrocaLigado(null)).toBe(true);
-    expect(valeTrocaPrecisaMigrar(null, {})).toBe(false);
-    expect(() => marcarValeTrocaMigrado(undefined)).not.toThrow();
+  it("o valor antigo do navegador (app#1056) não religa nem desliga nada", () => {
+    window.localStorage.setItem("aura:vale-troca-no-cupom:loja-a", "1");
+    expect(lerValeTrocaLigado("loja-a", {})).toBe(false);
+    expect(lerValeTrocaLigado("loja-a", { vale_troca_enabled: true })).toBe(true);
+    window.localStorage.setItem("aura:vale-troca-no-cupom:loja-a", "0");
+    expect(lerValeTrocaLigado("loja-a", { vale_troca_enabled: true })).toBe(true);
   });
 });
 
@@ -195,7 +155,7 @@ describe("cupom impresso", () => {
   const agora = new Date("2026-12-12T18:45:00Z");
 
   it("com a campanha: bloco com QR, texto do prazo e ordem certa (antes do rodapé)", () => {
-    const html = cupomComVale(CUPOM, { companyId: "loja-a", saleId: VENDA, vendaEm: dez, hoje: agora });
+    const html = cupomComVale(CUPOM, { companyId: "loja-a", saleId: VENDA, vendaEm: dez, hoje: agora, config: ON });
     expect(html).not.toBe(CUPOM);
     expect(html).toContain(MARCA_DO_VALE);
     expect(html).toContain("VALE-TROCA");
@@ -215,12 +175,12 @@ describe("cupom impresso", () => {
   });
 
   it("sem imagem remota: o QR é SVG inline", () => {
-    const html = cupomComVale(CUPOM, { companyId: "loja-a", saleId: VENDA, vendaEm: dez, hoje: agora });
+    const html = cupomComVale(CUPOM, { companyId: "loja-a", saleId: VENDA, vendaEm: dez, hoje: agora, config: ON });
     expect(html).not.toMatch(/qrserver|<img/i);
   });
 
   it("venda fora da campanha: o HTML do backend sai idêntico", () => {
-    const html = cupomComVale(CUPOM, { companyId: "loja-a", saleId: VENDA, vendaEm: "2026-10-31T17:00:00Z", hoje: agora });
+    const html = cupomComVale(CUPOM, { companyId: "loja-a", saleId: VENDA, vendaEm: "2026-10-31T17:00:00Z", hoje: agora, config: ON });
     expect(html).toBe(CUPOM);
   });
 
@@ -232,22 +192,21 @@ describe("cupom impresso", () => {
   });
 
   it("loja com o vale ligado em pdv_settings imprime, mesmo com 'desligado' esquecido no navegador", () => {
-    window.localStorage.setItem(CHAVE_LEGADA("loja-a"), "0");
+    window.localStorage.setItem("aura:vale-troca-no-cupom:loja-a", "0");
     const html = cupomComVale(CUPOM, {
       companyId: "loja-a", saleId: VENDA, vendaEm: dez, hoje: agora, config: { vale_troca_enabled: true },
     });
     expect(html).toContain(MARCA_DO_VALE);
   });
 
-  it("sem pdv_settings carregado, o 'desligado' do navegador (ainda sem migrar) vale", () => {
-    window.localStorage.setItem(CHAVE_LEGADA("loja-a"), "0");
+  it("sem pdv_settings carregado (ou chave ausente): idêntico, não imprime", () => {
     const html = cupomComVale(CUPOM, { companyId: "loja-a", saleId: VENDA, vendaEm: dez, hoje: agora });
     expect(html).toBe(CUPOM);
   });
 
   it("prazo vencido (2ª via em fevereiro): idêntico", () => {
     const html = cupomComVale(CUPOM, {
-      companyId: "loja-a", saleId: VENDA, vendaEm: dez, hoje: new Date("2027-02-10T12:00:00Z"),
+      companyId: "loja-a", saleId: VENDA, vendaEm: dez, hoje: new Date("2027-02-10T12:00:00Z"), config: ON,
     });
     expect(html).toBe(CUPOM);
   });
