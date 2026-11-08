@@ -87,6 +87,7 @@ import { useComandasAbertas } from "@/components/screens/pdv/ComandasAbertasPane
 import { lerComandaEnabled } from "@/utils/comanda";
 import { lerFreteEnabled } from "@/utils/frete";
 import { algumPrecoMudou } from "@/utils/vendaRecuperada";
+import { promoDoItem } from "@/utils/precoEfetivo";
 
 import { toast } from "@/components/Toast";
 import { flyToCart } from "@/components/screens/pdv/flyToCart";
@@ -629,7 +630,12 @@ export function usePdvState() {
         // Preço no cartão: o scan devolve o card_price do PAI mesmo quando a
         // variante tem preço próprio — o addToCart leva na proporção.
         const parentCard   = parentLocal ? parentLocal.cardPrice : parseCardPrice((result.product as any).card_price);
-        const parent: any  = parentLocal || { id: result.product.id, name: parentName, price: parentPrice, cardPrice: parentCard };
+        // De/Por: variante sem preço próprio segue a promoção do pai.
+        const promoPai     = parentLocal ? null : promoDoItem(result.product);
+        const parent: any  = parentLocal || {
+          id: result.product.id, name: parentName, price: parentPrice, cardPrice: parentCard,
+          ...(promoPai ? { emPromocao: true, precoEfetivo: promoPai.por } : {}),
+        };
         // Não lança direto: o seletor abre com este tamanho marcado.
         setPendingBipe({ code: cleaned, variantId: result.variant_id });
         setPendingProduct(parent);
@@ -638,12 +644,18 @@ export function usePdvState() {
       if (result.match === "exact" && result.product) {
         const full = products.find(p => p.id === result.product.id);
         if (full) { handleAddProduct(full); return true; }
+        // De/Por (p-87): com `preco_efetivo` no bipe, o preço normal fica em
+        // `price` e o addToCart usa o da promoção (e mostra "de/por").
+        // Backend antigo: o bp é o de sempre.
+        const cru: any = result.product;
+        const promoBipe = promoDoItem(cru);
         const bp: any = {
           id:    result.product.id,
-          name:  (result.product as any).name || "Produto",
-          price: result.effective_price || (result.product as any).price || 0,
-          cardPrice: parseCardPrice((result.product as any).card_price),
-          refPrice: parseFloat((result.product as any).price) || undefined,
+          name:  cru.name || "Produto",
+          price: promoBipe ? promoBipe.de : (result.effective_price || cru.price || 0),
+          cardPrice: parseCardPrice(cru.card_price),
+          refPrice: parseFloat(cru.price) || undefined,
+          ...(promoBipe ? { emPromocao: true, precoEfetivo: promoBipe.por } : {}),
         };
         // 19/10/2026 (tq-30): pai com tamanho ativo não entra sem tamanho.
         // Abre o seletor como no bipe local: o código vai como preselect
@@ -976,14 +988,14 @@ export function usePdvState() {
       const outroNoCartao = !precoNoCartao.noCartao;
       return {
         productId: it.productId, productBaseId: base, name: it.name, price: it.price, qty: it.qty, listPrice: it.listPrice,
-        unit: it.unit, purchaseUnit: it.purchaseUnit, purchaseFactor: it.purchaseFactor,
+        unit: it.unit, purchaseUnit: it.purchaseUnit, purchaseFactor: it.purchaseFactor, promoDe: it.promoDe,
         otherPrice: outroNoCartao ? (it.cardPrice ?? it.price) : (it.cashPrice ?? it.price),
         otherLabel: outroNoCartao ? "cartão" : "dinheiro",
       };
     }
     return {
       productId: it.productId, productBaseId: base, name: it.name, price: it.price, qty: it.qty, listPrice: it.listPrice,
-      unit: it.unit, purchaseUnit: it.purchaseUnit, purchaseFactor: it.purchaseFactor,
+      unit: it.unit, purchaseUnit: it.purchaseUnit, purchaseFactor: it.purchaseFactor, promoDe: it.promoDe,
     };
   });
 

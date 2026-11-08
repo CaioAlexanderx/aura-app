@@ -23,6 +23,7 @@ import { abrirComprovante, anexarComprovante, escolherComprovante, nomeCurto, re
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { useChaveDaVenda } from "@/hooks/useChaveDaVenda";
 import { apareceParaVender, lerVendaSemEstoque, produtoTemEstoque } from "@/utils/vendaSemEstoque";
+import { promoDoItem, precoDaVariante } from "@/utils/precoEfetivo";
 
 var isWeb = Platform.OS === "web";
 
@@ -392,13 +393,17 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
     if (product.has_variants) {
       setVariantPending(product); setVariantLoading(true);
       companiesApi.variants(company!.id, product.id).then(function(res) { setVariantOptions((res.variants || []).filter(function(v: any) { return v.is_active !== false; })); }).catch(function() { setVariantOptions([]); }).finally(function() { setVariantLoading(false); });
-    } else { addSaleItem(product.id, null, product.name, product.price); setSaleSearch(""); }
+    } else {
+      // De/Por (p-87): em promoção, o item entra pelo preço da promoção.
+      var promo = promoDoItem(product);
+      addSaleItem(product.id, null, product.name, promo ? promo.por : product.price); setSaleSearch("");
+    }
   }
   function handleSelectVariant(v: any) {
     if (!variantPending) return;
     var attrs = v.attributes || [];
     var label = attrs.map(function(a: any) { if (/^#[0-9a-fA-F]{6}$/.test(a.value)) return hexToName(a.value); return a.value; }).filter(Boolean).join(" · ") || v.sku_suffix || "Variante";
-    var price = v.price_override ? parseFloat(v.price_override) : variantPending.price;
+    var price = precoDaVariante(v, variantPending).price;
     addSaleItem(variantPending.id, v.id, variantPending.name + " (" + label + ")", price);
     setVariantPending(null); setVariantOptions([]); setSaleSearch("");
   }

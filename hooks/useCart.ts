@@ -12,6 +12,7 @@ import { ehIdDeCatalogo } from "@/utils/comanda";
 import { linhaDoFrete, valorDoFrete } from "@/utils/frete";
 import { mensagemErroCarneDaVenda } from "@/utils/crediarioCarne";
 import { novaChaveDaVenda } from "@/utils/chaveDaVenda";
+import { promoDoItem } from "@/utils/precoEfetivo";
 import {
   CARTAO_DESLIGADO, contaComOServidor, ehCartao, editarPrecoNoDividido, editarPrecoProporcional, linhasNoMetodo, linhasRateadas,
   precoNoCartaoDoItem, r2, resolverDividido, statusDoDividido, totalComoNoServidor,
@@ -43,6 +44,12 @@ export type CartItem = {
   cardListPrice?: number;
   cashPrice?: number;
   cashListPrice?: number;
+  // 08/11/2026 (De/Por, p-87): preço normal ("De") de item em promoção, só
+  // para mostrar "de R$ X por R$ Y". Nunca vai no POST: o unit_price é o
+  // preço da promoção (`price`/`listPrice`), como o contrato pede. O do
+  // cartão vai em `promoDeCard` (opção da loja ligada).
+  promoDe?: number;
+  promoDeCard?: number;
 };
 
 // Multi-pagamento: cada entrada vira uma `detPag` no SEFAZ NFC-e (tPag = method, vPag = value).
@@ -475,6 +482,7 @@ export function useCart(
         cardPrice: card, cardListPrice: cardList,
         price: noCartao ? card : i.price,
         listPrice: noCartao ? cardList : i.listPrice,
+        promoDe: noCartao ? i.promoDeCard : i.promoDe,
       };
     });
   }, [cart, cartaoOn, noCartao]);
@@ -709,16 +717,27 @@ export function useCart(
     product: {
       id: string; name: string; price: number; unit?: string; purchaseUnit?: string | null; purchaseFactor?: number | null;
       cardPrice?: number | null; refPrice?: number;
+      // 08/11/2026 (De/Por, p-87): campos do catálogo (useProducts) ou do
+      // bipe. Sem eles (backend antigo) o preço é o de sempre.
+      emPromocao?: boolean; precoEfetivo?: number | null;
     },
-    variant?: { id: string; label: string; price?: number },
+    variant?: { id: string; label: string; price?: number; promoDe?: number | null },
   ) {
     setLastSale(null);
     var cartKey = variant ? product.id + "__" + variant.id : product.id;
     var displayName = variant ? product.name + " (" + variant.label + ")" : product.name;
-    var effectivePrice = (variant?.price != null && variant.price > 0) ? variant.price : product.price;
+    // De/Por: produto sem variante em promoção entra pelo preço da promoção;
+    // a variante já chega com o preço dela resolvido (VariantPickerModal).
+    var promo = variant ? null : promoDoItem(product);
+    var effectivePrice = (variant?.price != null && variant.price > 0) ? variant.price : (promo ? promo.por : product.price);
+    var promoDe = variant
+      ? (variant.promoDe != null && variant.promoDe > effectivePrice + 0.001 ? variant.promoDe : null)
+      : (promo ? promo.de : null);
+    var refCartao = { price: product.refPrice ?? product.price, cardPrice: product.cardPrice };
     var cardPrice = cartaoOn
-      ? precoNoCartaoDoItem(effectivePrice, { price: product.refPrice ?? product.price, cardPrice: product.cardPrice }, cardCfg)
+      ? precoNoCartaoDoItem(effectivePrice, refCartao, cardCfg)
       : null;
+    var promoDeCard = cartaoOn && promoDe != null ? precoNoCartaoDoItem(promoDe, refCartao, cardCfg) : null;
 
     setCart(function(prev) {
       var existing = prev.find(function(i) { return i.productId === cartKey; });
@@ -729,6 +748,8 @@ export function useCart(
         purchaseUnit: product.purchaseUnit ?? undefined,
         purchaseFactor: product.purchaseFactor ?? undefined,
         ...(cardPrice != null ? { cardPrice: cardPrice, cardListPrice: cardPrice } : {}),
+        ...(promoDe != null ? { promoDe: promoDe } : {}),
+        ...(promoDeCard != null ? { promoDeCard: promoDeCard } : {}),
       }];
     });
     if (couponApplied) setCouponApplied(null);

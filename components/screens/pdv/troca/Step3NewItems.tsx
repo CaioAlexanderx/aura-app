@@ -69,6 +69,7 @@ import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { readMatconSettings } from "@/constants/matcon";
 import type { NewEntry } from "./types";
 import { fmtBRL } from "./types";
+import { promoDoItem } from "@/utils/precoEfetivo";
 
 // Le o estoque disponivel do produto de forma tolerante a shape.
 // Definido no escopo do modulo (nunca injetar funcao dentro de .map()).
@@ -185,9 +186,11 @@ export function Step3NewItems({
       setPendingProduct(p);
       return;
     }
+    // De/Por (p-87): produto em promoção entra pelo preço da promoção.
+    const promo = promoDoItem(p);
     pushEntry({
       product_id: p.id,
-      unit_price: Number(p.price ?? p.unit_price ?? 0),
+      unit_price: promo ? promo.por : Number(p.price ?? p.unit_price ?? 0),
       name: p.name || p.title || "Produto",
       via,
     });
@@ -262,7 +265,9 @@ export function Step3NewItems({
           const parent = list.find((p) => p.id === res.product.id);
           const suffix = (res.product as any).sku_suffix || "Variante";
           const pname = parent?.name || (res.product as any).name || "Produto";
-          const price = res.effective_price || parent?.price || (res.product as any).price || 0;
+          // De/Por: `preco_efetivo` do bipe quando vier; senão o de sempre.
+          const doBipe = Number(res.preco_efetivo) || 0;
+          const price = doBipe > 0 ? doBipe : (res.effective_price || parent?.price || (res.product as any).price || 0);
           pushEntry({
             product_id: res.product.id,
             variant_id: res.variant_id,
@@ -285,19 +290,22 @@ export function Step3NewItems({
           // 19/10/2026 (tq-30): fora da lista local, pai com tamanho ativo
           // abre o seletor (nada marcado) em vez de entrar sem variant_id.
           if (await temVarianteAtiva(company.id, res.product)) {
+            const promoPai = promoDoItem(res.product);
             setPendingProduct({
               id: res.product.id,
               name: (res.product as any).name || "Produto",
-              price: Number(res.effective_price || (res.product as any).price || 0),
+              price: promoPai ? promoPai.de : Number(res.effective_price || (res.product as any).price || 0),
               stock_qty: (res.product as any).stock_qty,
               has_variants: true,
+              ...(promoPai ? { emPromocao: true, precoEfetivo: promoPai.por } : {}),
             });
             setScanBuffer("");
             return;
           }
+          const promoBipe = promoDoItem(res.product);
           pushEntry({
             product_id: res.product.id,
-            unit_price: Number(res.effective_price || (res.product as any).price || 0),
+            unit_price: promoBipe ? promoBipe.por : Number(res.effective_price || (res.product as any).price || 0),
             name: (res.product as any).name || "Produto",
             via: "barcode",
           });

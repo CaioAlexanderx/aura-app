@@ -120,6 +120,9 @@ export type CartDisplayItem = {
   // dele ("cartão" / "dinheiro"). Ausente = linha de sempre.
   otherPrice?: number | null;
   otherLabel?: string;
+  // 08/11/2026 (De/Por, p-87): preço normal de item em promoção. A linha
+  // mostra "de R$ X por R$ Y". Ausente = linha de sempre.
+  promoDe?: number;
 };
 
 /** Preço no cartão: totais nos dois métodos e qual está valendo. */
@@ -1214,6 +1217,8 @@ function CartItem({
   // (listPrice), mostra o preço cheio riscado + o % de desconto.
   const hasDiscount = item.listPrice != null && item.listPrice > item.price + 0.001;
   const discPct = hasDiscount ? Math.round((1 - item.price / (item.listPrice as number)) * 100) : 0;
+  // De/Por: o "De" da promoção, quando o lápis não deu outro desconto.
+  const promoDe = !hasDiscount && item.promoDe != null && item.promoDe > item.price + 0.001 ? item.promoDe : null;
   const imgBg = webOnly({
     background:
       "radial-gradient(circle at 30% 30%, " +
@@ -1273,14 +1278,24 @@ function CartItem({
                 {fmtCurrency(item.listPrice as number)}
               </Text>
             )}
-            <Text style={[s.itemMeta, hasDiscount && s.itemMetaDiscounted]} numberOfLines={1}>
-              {fmtCurrency(item.price)}
+            {promoDe != null && (
+              <Text testID={"carrinho-de-" + item.productId} style={s.itemMetaStrike} numberOfLines={1}>
+                de {fmtCurrency(promoDe)}
+              </Text>
+            )}
+            <Text testID={"carrinho-preco-" + item.productId} style={[s.itemMeta, (hasDiscount || promoDe != null) && s.itemMetaDiscounted]} numberOfLines={1}>
+              {promoDe != null ? "por " : ""}{fmtCurrency(item.price)}
             </Text>
             {hasDiscount && (
               <Text style={s.itemDiscBadge} numberOfLines={1}>−{discPct}%</Text>
             )}
             <Icon name="edit" size={9} color={Colors.violet3} />
           </Pressable>
+        ) : promoDe != null ? (
+          <View style={s.priceEditableTouch}>
+            <Text testID={"carrinho-de-" + item.productId} style={s.itemMetaStrike} numberOfLines={1}>de {fmtCurrency(promoDe)}</Text>
+            <Text testID={"carrinho-preco-" + item.productId} style={[s.itemMeta, s.itemMetaDiscounted]} numberOfLines={1}>por {fmtCurrency(item.price)}</Text>
+          </View>
         ) : (
           <Text style={s.itemMeta} numberOfLines={1}>
             {fmtCurrency(item.price)}

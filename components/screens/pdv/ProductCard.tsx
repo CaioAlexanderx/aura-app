@@ -2,6 +2,7 @@ import { useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform, Image } from "react-native";
 import { Colors } from "@/constants/colors";
 import { stockLabel } from "./ProductGrid";
+import { promoDoItem } from "@/utils/precoEfetivo";
 
 var fmt = function(n: number) { return "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2 }); };
 var isWeb = Platform.OS === "web";
@@ -37,7 +38,7 @@ function hexToName(hex: string | undefined): string {
 }
 
 export function ProductCard({ product, onAdd, isWide, variantBadge }: {
-  product: { id: string; name: string; price: number; category: string; stock: number; barcode: string; color?: string; size?: string; has_variants?: boolean; image_url?: string };
+  product: { id: string; name: string; price: number; category: string; stock: number; barcode: string; color?: string; size?: string; has_variants?: boolean; image_url?: string; emPromocao?: boolean; precoEfetivo?: number | null };
   onAdd: () => void; isWide: boolean; variantBadge?: string;
 }) {
   var [h, sH] = useState(false);
@@ -46,6 +47,8 @@ export function ProductCard({ product, onAdd, isWide, variantBadge }: {
   var colorName = hasColor ? hexToName(product.color) : "";
   var barcodeTail = product.barcode ? product.barcode.slice(-4) : "";
   var hasImage = !!product.image_url;
+  // De/Por (p-87): em promocao, o cartao mostra o preco normal riscado.
+  var promo = promoDoItem(product);
 
   return (
     <Pressable onPress={onAdd} onHoverIn={isWeb ? function() { sH(true); } : undefined} onHoverOut={isWeb ? function() { sH(false); } : undefined}
@@ -91,7 +94,14 @@ export function ProductCard({ product, onAdd, isWide, variantBadge }: {
         </View>
       ) : null}
 
-      <Text style={s.price}>{fmt(product.price)}</Text>
+      {promo ? (
+        <View style={s.promoBox}>
+          <Text testID={"produto-de-" + product.id} style={s.promoDe}>de {fmt(promo.de)}</Text>
+          <Text testID={"produto-por-" + product.id} style={[s.price, { marginTop: 0 }]}>por {fmt(promo.por)}</Text>
+        </View>
+      ) : (
+        <Text style={s.price}>{fmt(product.price)}</Text>
+      )}
 
       <View style={s.bottomRow}>
         {product.stock != null && (
@@ -123,6 +133,8 @@ var s = StyleSheet.create({
   sizeBadge: { backgroundColor: Colors.violetD, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, borderWidth: 1, borderColor: Colors.border2 },
   sizeBadgeText: { fontSize: 10, color: Colors.violet3, fontWeight: "700", letterSpacing: 0.3 },
   price: { fontSize: 16, color: Colors.green, fontWeight: "800", marginTop: "auto" as any },
+  promoBox: { marginTop: "auto" as any },
+  promoDe: { fontSize: 11, color: Colors.ink3, textDecorationLine: "line-through" },
   bottomRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   stock: { fontSize: 10, color: Colors.ink3, fontWeight: "500" },
   variantBadge: { backgroundColor: Colors.amberD, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: "rgba(245,158,11,0.25)" },

@@ -9,6 +9,7 @@ import { companiesApi } from "@/services/api";
 import { hexToName } from "@/utils/colorNames";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { faltaEstoqueParaVender, lerVendaSemEstoque } from "@/utils/vendaSemEstoque";
+import { promoDoItem, precoDaVariante } from "@/utils/precoEfetivo";
 
 // ============================================================
 // AURA. — Picker pra adicionar produto numa venda existente (EXTRA C)
@@ -104,9 +105,12 @@ export function AddItemPicker({
       .filter(Boolean).join(" \u00b7 ") || variant?.sku_suffix || "";
 
     const displayName = variant ? product.name + " (" + variantLabel + ")" : product.name;
-    const effectivePrice = variant?.price_override
-      ? parseFloat(variant.price_override)
-      : product.price;
+    // De/Por (p-87): em promoção vale o preço da promoção (backend antigo:
+    // o de sempre — price_override da variante ou o preço do produto).
+    const promo = variant ? null : promoDoItem(product);
+    const effectivePrice = variant
+      ? precoDaVariante(variant, product).price
+      : (promo ? promo.por : product.price);
 
     try {
       const result = await onAdd({
