@@ -43,6 +43,7 @@ import { hexToName } from "@/utils/colorNames";
 import { nomeDaCorDaVariante } from "@/utils/nomeDaCor";
 import { criarDetector, OCIOSO_MS, CONFIRMA_OCIOSO_MS } from "@/utils/leituraRapida";
 import { ordenarVariantes, type ChaveDeVariante } from "@/utils/ordemDeTamanhos";
+import { precoDaVariante } from "@/utils/precoEfetivo";
 
 /** Tempo em que o Enter e ignorado logo depois de o seletor marcar o tamanho
  *  bipado: leitor que manda Enter duas vezes (CR+LF) nao confirma sozinho. */
@@ -54,6 +55,8 @@ export type VariantChoice = {
   price: number;
   stock: number;
   barcode?: string;
+  /** De/Por (p-87): preço normal quando a variante está em promoção. */
+  promoDe?: number | null;
 };
 
 var isWeb = Platform.OS === "web";
@@ -126,7 +129,7 @@ export function VariantPickerModal({
   keyboard = false, preselectVariantId = null, preselectBarcode = null, onScanAgain,
 }: {
   visible: boolean;
-  product: { id: string; name: string; price: number; color?: string; size?: string; stock?: number } | null;
+  product: { id: string; name: string; price: number; color?: string; size?: string; stock?: number; emPromocao?: boolean; precoEfetivo?: number | null } | null;
   onSelect: (variant: VariantChoice) => void;
   onClose: () => void;
   blockOutOfStock?: boolean;
@@ -167,8 +170,10 @@ export function VariantPickerModal({
   var parentSize = (product && product.size) || "";
 
   function escolhaDe(v: any): VariantChoice {
-    var preco = v.price_override ? parseFloat(v.price_override) : (product ? product.price : 0);
-    return { id: v.id, label: getLabel(v, parentColor, parentSize), price: preco, stock: parseInt(v.stock_qty) || 0, barcode: v.barcode };
+    // De/Por (p-87): preço da promoção quando vier (a da variante, ou a do
+    // produto para variante sem preço próprio). Backend antigo = de sempre.
+    var pv = precoDaVariante(v, product || { price: 0 });
+    return { id: v.id, label: getLabel(v, parentColor, parentSize), price: pv.price, stock: parseInt(v.stock_qty) || 0, barcode: v.barcode, ...(pv.promoDe != null ? { promoDe: pv.promoDe } : {}) };
   }
   function bloqueada(v: any): boolean {
     return blockOutOfStock && (parseInt(v.stock_qty) || 0) <= 0;
@@ -285,7 +290,8 @@ export function VariantPickerModal({
             <ScrollView ref={scrollRef} style={{ maxHeight: 340 }} contentContainerStyle={{ gap: 8, padding: 16 }}>
               {activeVariants.map(function(v: any) {
                 var label = getLabel(v, parentColor, parentSize);
-                var effectivePrice = v.price_override ? parseFloat(v.price_override) : product.price;
+                var pv = precoDaVariante(v, product);
+                var effectivePrice = pv.price;
                 var stock = parseInt(v.stock_qty) || 0;
                 var hex = getColor(v, parentColor);
                 var disabled = blockOutOfStock && stock <= 0;
@@ -297,7 +303,7 @@ export function VariantPickerModal({
                     aria-selected={marcadaAqui}
                     onLayout={function(e: any) { posicoes.current[v.id] = e.nativeEvent.layout.y; }}
                     disabled={disabled}
-                    onPress={disabled ? undefined : function() { onSelect({ id: v.id, label: label, price: effectivePrice, stock: stock, barcode: v.barcode }); }}
+                    onPress={disabled ? undefined : function() { onSelect({ id: v.id, label: label, price: effectivePrice, stock: stock, barcode: v.barcode, ...(pv.promoDe != null ? { promoDe: pv.promoDe } : {}) }); }}
                     style={[
                       s.variantRow,
                       disabled && s.variantRowDisabled,
@@ -311,7 +317,7 @@ export function VariantPickerModal({
                         {bipadoId === v.id && <Text style={s.bipadoBadge}>Bipado</Text>}
                       </View>
                       <Text style={s.variantMeta}>
-                        R$ {effectivePrice.toFixed(2).replace(".", ",")}
+                        {pv.promoDe != null ? "de R$ " + pv.promoDe.toFixed(2).replace(".", ",") + " por " : ""}R$ {effectivePrice.toFixed(2).replace(".", ",")}
                         {disabled ? "" : " · " + stock + " un"}
                         {v.barcode ? " · ..." + String(v.barcode).slice(-4) : ""}
                       </Text>

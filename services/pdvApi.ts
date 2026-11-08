@@ -6,6 +6,10 @@ export type PdvScanResult = {
   product?: any;
   variant_id?: string;
   effective_price?: number;
+  // 08/11/2026 (De/Por, p-87): preço que vale agora (promoção no ar ou o
+  // normal). Backend antigo não manda.
+  preco_efetivo?: number;
+  em_promocao?: boolean;
   suggestions?: any[];
   message?: string;
   error?: string;

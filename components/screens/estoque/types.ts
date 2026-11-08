@@ -60,6 +60,14 @@ export type Product = {
   // nunca mapeava pro Product — o sort "recent" em estoque.tsx sempre via
   // undefined dos dois lados e caia na ordem do backend (ORDER BY name).
   created_at?: string | null;
+  // 08/11/2026 (De/Por, p-86): promoção com data. Backend antigo não manda
+  // nada -> null. `price` continua sendo o preço normal (o "De").
+  promoPrice?: number | null;
+  promoStartsAt?: string | null;
+  promoEndsAt?: string | null;
+  emPromocao?: boolean;
+  /** Preço que vale agora (promoção no ar = promoPrice; senão = price). */
+  precoEfetivo?: number | null;
 };
 
 export const UNITS = ["un", "pct", "cx", "kg", "g", "ml", "L", "par", "kit"];

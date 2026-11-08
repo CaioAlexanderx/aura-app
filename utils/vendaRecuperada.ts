@@ -7,8 +7,10 @@
 // a tela: o texto e a conferência de preço.
 // ============================================================
 
+import { promoDoItem } from "@/utils/precoEfetivo";
+
 type ItemGuardado = { productId: string; price: number; listPrice?: number };
-type ProdutoDoCatalogo = { id: string; price: number };
+type ProdutoDoCatalogo = { id: string; price: number; emPromocao?: boolean; precoEfetivo?: number | null };
 
 /** "Venda recuperada (1 item)" / "Venda recuperada (3 itens)". */
 export function tituloDaVendaRecuperada(itens: number): string {
@@ -32,7 +34,13 @@ export const TEXTO_CONFIRA_VALORES = "Confira os valores: algum preço mudou des
 export function algumPrecoMudou(itens: ItemGuardado[], produtos: ProdutoDoCatalogo[]): boolean {
   if (!Array.isArray(itens) || !Array.isArray(produtos) || produtos.length === 0) return false;
   const porId = new Map<string, number>();
-  produtos.forEach((p) => { if (p && p.id != null) porId.set(String(p.id), Number(p.price)); });
+  // De/Por (p-87): produto em promoção entra no carrinho pelo preço da
+  // promoção; é com ele que se compara (senão todo item em promoção avisaria).
+  produtos.forEach((p) => {
+    if (!p || p.id == null) return;
+    const promo = promoDoItem(p);
+    porId.set(String(p.id), promo ? promo.por : Number(p.price));
+  });
   return itens.some((i) => {
     if (!i || typeof i.productId !== "string" || i.productId.indexOf("__") >= 0) return false;
     const atual = porId.get(i.productId);
