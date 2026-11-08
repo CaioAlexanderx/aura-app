@@ -11,7 +11,7 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import type { RespostaDesfazer, RespostaReajuste } from "@/services/priceAdjustmentsApi";
 import {
-  brl, nomeDoItem, plural, produtosAbaixoDoCusto, produtosParaEtiqueta, resumoDoDesfazer, resumoDoResultado, explicaMudaramDepois,
+  DIAS_PARA_DESFAZER, brl, nomeDoItem, plural, produtosAbaixoDoCusto, produtosParaEtiqueta, resumoDoDesfazer, resumoDoResultado, explicaMudaramDepois,
 } from "./reajusteRegras";
 import { Aviso } from "./Aviso";
 
@@ -88,7 +88,7 @@ export function Passo3Resultado({ resultado, desfeito, desfazendo, erroDesfazer,
       </View>
       {!desfeito && (
         <Text style={s.dica} testID="reajuste-dica-desfazer">
-          Mudou de ideia? Toque em Desfazer antes de fechar esta janela. Só volta o preço dos produtos que ninguém alterou depois do reajuste.
+          Mudou de ideia? Dá para desfazer agora ou depois, em Últimos reajustes, no Estoque, por {DIAS_PARA_DESFAZER} dias. Só volta o preço dos produtos que ninguém alterou depois do reajuste.
         </Text>
       )}
       {paraEtiqueta.length > 0 && (
