@@ -29,12 +29,15 @@ export const FIM_BLACK_FRIDAY_INDICACAO = new Date("2026-12-01T02:59:59Z");
 
 // Frase de cima do cartão. A de hoje (14/10/2026, Caio e Célia): 1 mês grátis
 // a quem indica; o indicado testa 7 dias e tem 20% no primeiro mês.
+// 08/11/2026 (Marketing, pendente de OK do Caio): sai o "7 dias" do texto do
+// cartão e do WhatsApp da Black Friday. O teste real são 7 dias contados da
+// primeira venda, com teto de 15 dias desde o cadastro.
 export const DESCRICAO_INDICACAO =
   "Indique um lojista e ganhe 1 mês grátis quando ele pagar a primeira mensalidade. " +
-  "Quem você indicar testa 7 dias grátis e ganha 20% no primeiro mês.";
+  "Quem você indicar testa grátis e ganha 20% no primeiro mês.";
 
 export const DESCRICAO_INDICACAO_BLACK_FRIDAY =
-  "Indique um lojista e ganhe 1 mensalidade grátis quando ele pagar a primeira. Quem você indicar testa 7 dias grátis e, até 30/11 ou enquanto houver cupons, ganha 50% na primeira mensalidade com o código BLACK50.";
+  "Indique um lojista e ganhe 1 mensalidade grátis quando ele pagar a primeira. Quem você indicar testa grátis e, até 30/11 ou enquanto houver cupons, ganha 50% na primeira mensalidade com o código BLACK50.";
 
 export const COMO_FUNCIONA_INDICACAO_BLACK_FRIDAY = [
   "Mande o seu link a um conhecido. Até 30/11, ele ganha 50% na primeira mensalidade com o código BLACK50, digitado no pagamento, enquanto houver cupons.",
@@ -44,7 +47,7 @@ export const COMO_FUNCIONA_INDICACAO_BLACK_FRIDAY = [
 
 // `{link}` é trocado pelo link de indicação do lojista.
 export const MENSAGEM_INDICACAO_BLACK_FRIDAY =
-  "Oi! Tô usando a Aura na minha loja e tá me ajudando bastante. Até 30/11, ou enquanto houver cupons, você ganha 50% na primeira mensalidade com o código BLACK50 (digite no pagamento) e ainda testa 7 dias antes de assinar. Esse é o meu link: {link}";
+  "Oi! Tô usando a Aura na minha loja e tá me ajudando bastante. Até 30/11, ou enquanto houver cupons, você ganha 50% na primeira mensalidade com o código BLACK50 (digite no pagamento) e ainda testa antes de assinar. Esse é o meu link: {link}";
 
 /** true até FIM_BLACK_FRIDAY_INDICACAO, inclusive. */
 export function emBlackFridayDaIndicacao(agora: Date): boolean {

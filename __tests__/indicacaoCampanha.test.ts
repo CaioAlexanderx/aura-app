@@ -20,18 +20,18 @@ const NO_FIM = new Date(FIM);
 const DEPOIS = new Date(FIM + 1);
 
 const BF_DESCRICAO =
-  "Indique um lojista e ganhe 1 mensalidade grátis quando ele pagar a primeira. Quem você indicar testa 7 dias grátis e, até 30/11 ou enquanto houver cupons, ganha 50% na primeira mensalidade com o código BLACK50.";
+  "Indique um lojista e ganhe 1 mensalidade grátis quando ele pagar a primeira. Quem você indicar testa grátis e, até 30/11 ou enquanto houver cupons, ganha 50% na primeira mensalidade com o código BLACK50.";
 const BF_ITENS = [
   "Mande o seu link a um conhecido. Até 30/11, ele ganha 50% na primeira mensalidade com o código BLACK50, digitado no pagamento, enquanto houver cupons.",
   "Quando ele pagar a primeira mensalidade, a sua próxima mensalidade sai grátis. Se muitas indicações pagarem no mesmo mês, o mês grátis pode ficar para o mês seguinte. Se você ainda estiver no teste, o mês grátis vale na segunda mensalidade.",
   "Valem até 3 indicações por ano, para contas em dia.",
 ];
 const BF_WHATS =
-  "Oi! Tô usando a Aura na minha loja e tá me ajudando bastante. Até 30/11, ou enquanto houver cupons, você ganha 50% na primeira mensalidade com o código BLACK50 (digite no pagamento) e ainda testa 7 dias antes de assinar. Esse é o meu link: https://getaura.com.br/r/REF-ABC123";
+  "Oi! Tô usando a Aura na minha loja e tá me ajudando bastante. Até 30/11, ou enquanto houver cupons, você ganha 50% na primeira mensalidade com o código BLACK50 (digite no pagamento) e ainda testa antes de assinar. Esse é o meu link: https://getaura.com.br/r/REF-ABC123";
 
 // Textos de hoje (antes desta mudança), byte a byte.
 const HOJE_DESCRICAO =
-  "Indique um lojista e ganhe 1 mês grátis quando ele pagar a primeira mensalidade. Quem você indicar testa 7 dias grátis e ganha 20% no primeiro mês.";
+  "Indique um lojista e ganhe 1 mês grátis quando ele pagar a primeira mensalidade. Quem você indicar testa grátis e ganha 20% no primeiro mês.";
 const HOJE_ITENS = [
   "O mês grátis vale quando o lojista que você indicou paga a primeira mensalidade.",
   "Se você já assina a Aura, a sua próxima mensalidade a vencer sai por conta da Aura.",

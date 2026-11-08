@@ -18,7 +18,7 @@ const SRC_MSG = fs.readFileSync(path.join(__dirname, "..", "utils", "indicacaoCa
 describe("ReferralCard: texto da campanha", () => {
   test("descrição promete 1 mês grátis ao indicador e 7 dias + 20% ao indicado", () => {
     expect(SRC_MSG).toContain("Indique um lojista e ganhe 1 mês grátis quando ele pagar a primeira mensalidade.");
-    expect(SRC_MSG).toContain("Quem você indicar testa 7 dias grátis e ganha 20% no primeiro mês.");
+    expect(SRC_MSG).toContain("Quem você indicar testa grátis e ganha 20% no primeiro mês.");
     // 08/11/2026 (b-mk-30): a fase do backend entra junto (BLACK50 esgotado).
     expect(SRC).toContain("descricaoIndicacao(agora, fase)");
   });
