@@ -36,15 +36,22 @@ const mockToastErro = jest.fn();
 jest.mock("@/components/Toast", () => ({ toast: { success: jest.fn(), error: (...a: any[]) => mockToastErro(...a), info: jest.fn() } }));
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
-jest.mock("expo-router", () => ({ router: { push: (...a: any[]) => mockPush(...a), replace: (...a: any[]) => mockReplace(...a) } }));
+// A porta da rota manda embora com <Redirect> (seguro antes do layout raiz
+// montar); aqui ele só anota o destino.
+const mockRedirect = jest.fn();
+jest.mock("expo-router", () => ({
+  router: { push: (...a: any[]) => mockPush(...a), replace: (...a: any[]) => mockReplace(...a) },
+  Redirect: (p: any) => { mockRedirect(p.href); return null; },
+}));
 
 let mockAuth: any;
 jest.mock("@/stores/auth", () => ({ useAuthStore: () => mockAuth }));
 
 let mockVisible: Set<string>;
+let mockProntos: boolean;
 jest.mock("@/hooks/useVisibleModules", () => {
   const actual = jest.requireActual("@/hooks/useVisibleModules");
-  return { ...actual, useVisibleModules: () => mockVisible };
+  return { ...actual, useVisibleModules: () => mockVisible, useVisibleModulesProntos: () => mockProntos };
 });
 
 // De/Por (p-86): sem o backend novo a seção não existe; os testes dela
@@ -111,6 +118,7 @@ beforeEach(() => {
   fixarHoje("2026-10-13");
   mockAuth = { company: { id: CID, plan: "negocio", member_role: "owner" }, consolidatedView: false, availableCompanies: [{ id: CID }], isStaff: false, isDemo: false, user: { is_staff: false } };
   mockVisible = new Set(["estoque", "configuracoes", "whatsapp", BLACK_FRIDAY_MOD]);
+  mockProntos = true;
   mockPdv = { cash_tender_modal_enabled: true };
   mockSalvar.mockResolvedValue({});
   try { localStorage.clear(); } catch {}
@@ -419,13 +427,50 @@ describe("quem vê a página (oculta por enquanto)", () => {
   it("acesso direto pela URL: lojista comum cai no Painel e não renderiza a página", () => {
     const r = montar(<BlackFridayRota />);
     expect(r.toJSON()).toBeNull();
-    expect(mockReplace).toHaveBeenCalledWith("/");
+    expect(mockRedirect).toHaveBeenCalledWith("/");
+    // Nunca o router.replace no efeito: na recarga ele rodava antes do
+    // layout raiz montar e derrubava o app (QA 08/11/2026).
+    expect(mockReplace).not.toHaveBeenCalled();
   });
 
   it("acesso direto pela URL: staff vê a página e nada redireciona", () => {
     mockAuth = { ...mockAuth, isStaff: true };
     const r = montar(<BlackFridayRota />);
     expect(r.root.findAllByProps({ testID: "pagina-black-friday" }, { deep: false })).toHaveLength(1);
+    expect(mockRedirect).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it("recarga: antes da sessão e das permissões carregarem não decide nada (nem página, nem redirect)", () => {
+    // Primeiro render de uma recarga: sem usuário nem empresa ainda.
+    mockProntos = false;
+    mockAuth = { company: null, consolidatedView: false, isStaff: false, isDemo: false, user: null, token: null, isHydrated: false };
+    mockVisible = new Set(["painel"]);
+    const r = montar(<BlackFridayRota />);
+    expect(r.toJSON()).toBeNull();
+    expect(mockRedirect).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it("recarga de quem tem acesso: quando a sessão chega, fica na página", () => {
+    mockProntos = false;
+    mockAuth = { ...mockAuth, isStaff: true };
+    const r = montar(<BlackFridayRota />);
+    expect(r.toJSON()).toBeNull();
+    mockProntos = true;
+    act(() => { r.update(<BlackFridayRota />); });
+    expect(r.root.findAllByProps({ testID: "pagina-black-friday" }, { deep: false })).toHaveLength(1);
+    expect(mockRedirect).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it("recarga sem sessão (deslogado): a tela fica vazia e o login fica com o AuthGuard", () => {
+    // useVisibleModulesProntos é false sem token: a rota não disputa a navegação.
+    mockProntos = false;
+    mockAuth = { company: null, consolidatedView: false, isStaff: false, isDemo: false, user: null, token: null, isHydrated: true };
+    const r = montar(<BlackFridayRota />);
+    expect(r.toJSON()).toBeNull();
+    expect(mockRedirect).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
@@ -440,7 +485,7 @@ describe("quem vê a página (oculta por enquanto)", () => {
     mockVisible = new Set(["estoque"]);
     const r = montar(<BlackFridayRota />);
     expect(r.toJSON()).toBeNull();
-    expect(mockReplace).toHaveBeenCalledWith("/");
+    expect(mockRedirect).toHaveBeenCalledWith("/");
   });
 
   it("fora do período nem staff entra", () => {
@@ -449,7 +494,7 @@ describe("quem vê a página (oculta por enquanto)", () => {
     mockAuth = { ...mockAuth, isStaff: true };
     const r = montar(<BlackFridayRota />);
     expect(r.toJSON()).toBeNull();
-    expect(mockReplace).toHaveBeenCalledWith("/");
+    expect(mockRedirect).toHaveBeenCalledWith("/");
   });
 });
 

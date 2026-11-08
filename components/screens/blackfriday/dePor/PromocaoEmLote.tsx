@@ -60,7 +60,7 @@ function Bloco({ status, lista, companyId, onMudou, onAdicionar }: {
       <View style={s.kp}>
         <View style={s.kpBox}><Text style={s.kpN} testID={"promo-n-" + status}>{r.itens.toLocaleString("pt-BR")}</Text><Text style={s.t}>{r.itens === 1 ? "item em promoção" : "itens em promoção"}</Text></View>
         <View style={s.kpBox}><Text style={s.kpN}>{pctTxt(r.desconto)}</Text><Text style={s.t}>desconto médio</Text></View>
-        {!ativa && r.ini && <View style={s.kpBox}><Text style={s.kpN}>{diaMes(r.ini)}</Text><Text style={s.t}>começa às 00h</Text></View>}
+        {!ativa && r.ini && <View style={s.kpBox}><Text style={s.kpN}>{diaMes(r.ini)}</Text><Text style={s.t} testID="promo-comeca">{r.iniHora ? "começa às " + r.iniHora : "começa neste dia"}</Text></View>}
         {r.fim && <View style={s.kpBox}><Text style={s.kpN}>{diaMes(r.fim)}</Text><Text style={s.t}>{r.fimVaria ? "a última termina às 23h59" : "termina às 23h59"}</Text></View>}
         {r.fim && <View style={s.kpBox}><Text style={s.kpN}>{diaMes(somarDias(r.fim, 1))}</Text><Text style={s.t}>os preços voltam sozinhos</Text></View>}
       </View>

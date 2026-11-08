@@ -26,7 +26,8 @@ export type PedidoPromocao = {
   modo: ModoPromocao;
   valor: number;
   terminacao?: TerminacaoPromocao;
-  starts_at: string;
+  /** null = agora, pelo relógio do servidor (começar hoje; ver instantesDoPrazo). */
+  starts_at: string | null;
   ends_at: string;
 };
 

@@ -46,7 +46,8 @@ import { promoDoItem, precoDaVariante } from "@/utils/precoEfetivo";
 import { algumPrecoMudou } from "@/utils/vendaRecuperada";
 import { VariantPickerModal } from "@/components/VariantPickerModal";
 import { ProductCard } from "@/components/screens/pdv/ProductCard";
-import type { ConfigDoCartao } from "@/utils/precoNoCartao";
+import { ProductGrid, type GridProduct } from "@/components/screens/pdv/ProductGrid";
+import { precoNoCartaoDoProduto, precoNoCartaoNaGrade, type ConfigDoCartao } from "@/utils/precoNoCartao";
 
 const PID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
@@ -192,6 +193,51 @@ describe("cartão do produto no Caixa", () => {
     let r!: renderer.ReactTestRenderer;
     act(() => { r = renderer.create(<ProductCard product={base} onAdd={jest.fn()} isWide={false} />); });
     expect(porId(r, "produto-de-p1")).toBeUndefined();
+  });
+});
+
+// QA 08/11/2026: a grade do Caixa (/pdv) é a do ProductGrid, não o
+// ProductCard acima — em promoção o card seguia com o preço cheio enquanto o
+// carrinho já vendia pelo "por".
+describe("grade do Caixa (ProductGrid)", () => {
+  const base: GridProduct = { id: "p1", name: "Água com gás", price: 8, stock: 12, unit: "un" };
+  function grade(products: GridProduct[], cardPriceFor?: (p: GridProduct) => number | null) {
+    let r!: renderer.ReactTestRenderer;
+    act(() => { r = renderer.create(<ProductGrid products={products} qtyById={{}} onAdd={jest.fn()} cardPriceFor={cardPriceFor} />); });
+    return r;
+  }
+
+  test("em promoção: o card mostra 'por' (o que entra no carrinho) e o 'de' riscado", () => {
+    const r = grade([{ ...base, emPromocao: true, precoEfetivo: 6.9 }]);
+    expect(textoDe(porId(r, "grid-de-p1"))).toBe("de R$ 8,00");
+    expect(textoDe(porId(r, "grid-por-p1"))).toBe("por R$ 6,90");
+    const estiloDe = [].concat(porId(r, "grid-de-p1").props.style).reduce((a: any, b: any) => ({ ...a, ...b }), {});
+    expect(estiloDe.textDecorationLine).toBe("line-through");
+  });
+
+  test("sem promoção, com em_promocao false ou backend antigo: o card de sempre, idêntico", () => {
+    const antigo = JSON.stringify(grade([base]).toJSON());
+    const semPromo = JSON.stringify(grade([{ ...base, emPromocao: false, precoEfetivo: null }]).toJSON());
+    // Promoção "estranha" (por >= de) não vale: preço normal (utils/precoEfetivo).
+    const estranha = JSON.stringify(grade([{ ...base, emPromocao: true, precoEfetivo: 9 }]).toJSON());
+    expect(semPromo).toBe(antigo);
+    expect(estranha).toBe(antigo);
+    expect(antigo).not.toContain("grid-de-");
+    expect(antigo).toContain("R$ 8,00");
+  });
+
+  test("com preço no cartão: 'cartão' do preço da promoção, a mesma conta do carrinho", () => {
+    const cfg = { enabled: true, pct: 10 };
+    const p = { ...base, price: 100, cardPrice: null, emPromocao: true, precoEfetivo: 80 };
+    expect(precoNoCartaoNaGrade(p, cfg)).toBe(88);
+    // Manual: card_price × por / de (como no carrinho: 115 × 80 / 100 = 92).
+    expect(precoNoCartaoNaGrade({ ...p, cardPrice: 115 }, cfg)).toBe(92);
+    // Sem promoção: exatamente o de antes.
+    expect(precoNoCartaoNaGrade({ price: 100, cardPrice: 115 }, cfg)).toBe(precoNoCartaoDoProduto({ price: 100, cardPrice: 115 }, cfg));
+    expect(precoNoCartaoNaGrade({ price: 100, cardPrice: null }, cfg)).toBe(precoNoCartaoDoProduto({ price: 100, cardPrice: null }, cfg));
+    const r = grade([p], (x) => precoNoCartaoNaGrade(x as any, cfg));
+    expect(textoDe(porId(r, "grid-por-p1"))).toBe("por R$ 80,00");
+    expect(textoDe(porId(r, "grid-cartao-p1"))).toBe("cartão R$ 88,00");
   });
 });
 

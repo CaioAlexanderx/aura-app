@@ -33,7 +33,7 @@ import {
 import {
   ATALHOS_PCT, MODOS_PROMOCAO, TERMINACOES_PROMOCAO, VALOR_INICIAL_PROMO, alvosQueEntram, brl, chaveDoItem, nomeDoItemPromo,
   descontoMedio, erroDasDatas, erroDoValorPromo, instantesDoPrazo, itensQueEntram, montarPedidoPromo, pctTxt,
-  plural, prazosDisponiveis, promocaoVigenteOuAgendada, rotuloDoValorPromo, textoDeFora, textoDoPrazo,
+  plural, prazosDisponiveis, promocaoVigenteOuAgendada, rotuloDoValorPromo, textoDeFora, textoDoPrazo, textoDoPronto,
   type ChavePrazo,
 } from "./regrasDePor";
 
@@ -467,7 +467,7 @@ export function CriarPromocaoModal({ companyId, onFechar, onAplicada, preSelecio
               <View style={s.ok}><Icon name="check" size={22} color={Colors.green} /></View>
               <Text style={s.fimTit}>{agendada ? "Promoção agendada" : "Promoção no ar"}</Text>
               <Text style={[s.t, { textAlign: "center" }]}>
-                {plural(resultado.items.length, "item", "itens")} {agendada ? "entram em promoção" : "já estão em promoção"}. {textoDoPrazo(ini!, fim!, hoje)}
+                {textoDoPronto(resultado.items.length, agendada)} {textoDoPrazo(ini!, fim!, hoje)}
               </Text>
               {!!textoDeFora(resultado.fora) && <Aviso tipo="aviso">{textoDeFora(resultado.fora)}</Aviso>}
             </View>

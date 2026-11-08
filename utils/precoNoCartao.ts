@@ -33,6 +33,7 @@
 // desligado mesmo com card_price_enabled salvo. (Hoje só a Aura interna e
 // a GF Amorim, ambas Matcon, usam.)
 // ============================================================
+import { promoDoItem } from "@/utils/precoEfetivo";
 
 /** Chaves do Caixa que pagam o preço no cartão. */
 export const METODOS_NO_CARTAO = ["cartao", "debito"];
@@ -108,6 +109,20 @@ export function precoNoCartaoDoItem(
     return paraCimaNos10Centavos((d * (ref!.cardPrice as number)) / ref!.price);
   }
   return precoNoCartaoAutomatico(d, cfg.pct);
+}
+
+export type RefDoProdutoNaGrade = RefDoProduto & { emPromocao?: boolean; precoEfetivo?: number | null };
+
+/**
+ * Preço no cartão do card da grade do Caixa (QA De/Por, 08/11/2026). Em
+ * promoção, o do preço "por" — a mesma conta do carrinho (useCart.addToCart:
+ * precoNoCartaoDoItem do preço que vale, com o produto de referência). Sem
+ * promoção, exatamente precoNoCartaoDoProduto, como sempre foi.
+ */
+export function precoNoCartaoNaGrade(p: RefDoProdutoNaGrade, cfg: ConfigDoCartao): number | null {
+  const promo = promoDoItem(p);
+  if (!promo) return precoNoCartaoDoProduto(p, cfg);
+  return precoNoCartaoDoItem(promo.por, { price: p.price, cardPrice: p.cardPrice }, cfg);
 }
 
 /** % a mais que o cartão cobra sobre o dinheiro, com 1 casa (15,5). */
