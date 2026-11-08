@@ -20,7 +20,7 @@ const registrar = notificationsApi.registrarIndicacao as jest.Mock;
 const espera = () => new Promise((r) => setTimeout(r, 0));
 
 const indicacao = { id: "b1", campanha: "indicacao" as const };
-const comum = { id: "b2" };
+const comum: { id: string; campanha?: "indicacao" } = { id: "b2" };
 
 beforeEach(() => {
   _limparContadorIndicacao();
