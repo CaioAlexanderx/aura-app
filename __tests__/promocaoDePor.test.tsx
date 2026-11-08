@@ -51,7 +51,7 @@ import { ApiError } from "@/services/api";
 import { promocoesApi, emLotes, lerLista } from "@/services/promocoesApi";
 import {
   blackFridayDoAno, prazosDisponiveis, instantesDoPrazo, erroDasDatas, erroDoValorPromo, textoDoPrazo,
-  avisoDePromocaoNoCadastro, descontoMedio, textoDeFora, resumoDaLista,
+  avisoDePromocaoNoCadastro, descontoMedio, textoDeFora, resumoDaLista, textoDoPronto, horaBrtDe,
 } from "@/components/screens/blackfriday/dePor/regrasDePor";
 import { secoesDaPagina } from "@/components/screens/blackfriday/secoes";
 import { PromocaoEmLote } from "@/components/screens/blackfriday/dePor/PromocaoEmLote";
@@ -135,10 +135,33 @@ describe("regras do prazo", () => {
     expect(instantesDoPrazo("2026-11-27", "2026-11-30", "2026-11-08")).toEqual({
       starts_at: "2026-11-27T00:00:00-03:00", ends_at: "2026-11-30T23:59:59-03:00", agendada: true,
     });
-    const agora = new Date("2026-11-08T15:00:00Z");
-    expect(instantesDoPrazo("2026-11-08", "2026-11-30", "2026-11-08", agora)).toEqual({
-      starts_at: agora.toISOString(), ends_at: "2026-11-30T23:59:59-03:00", agendada: false,
+    // QA 08/11/2026: "agora" é o do SERVIDOR (starts_at null). Com o relógio
+    // do navegador adiantado, a promoção recém-ligada aparecia "agendada".
+    expect(instantesDoPrazo("2026-11-08", "2026-11-30", "2026-11-08")).toEqual({
+      starts_at: null, ends_at: "2026-11-30T23:59:59-03:00", agendada: false,
     });
+    expect(JSON.stringify(instantesDoPrazo("2026-11-08", "2026-11-30", "2026-11-08"))).not.toContain("2026-11-08T");
+  });
+
+  it("tela final com a concordância certa (1 item está / 2 itens estão; entra / entram)", () => {
+    expect(textoDoPronto(1, false)).toBe("1 item já está em promoção.");
+    expect(textoDoPronto(3, false)).toBe("3 itens já estão em promoção.");
+    expect(textoDoPronto(1, true)).toBe("1 item entra em promoção.");
+    expect(textoDoPronto(1200, true)).toBe("1.200 itens entram em promoção.");
+  });
+
+  it("hora do começo em Brasília: 00h na virada do dia, a hora certa no resto", () => {
+    expect(horaBrtDe("2026-11-27T03:00:00Z")).toBe("00h");
+    expect(horaBrtDe("2026-11-27T00:00:00-03:00")).toBe("00h");
+    expect(horaBrtDe("2026-11-08T15:00:00Z")).toBe("12h");
+    expect(horaBrtDe("2026-11-08T17:05:09Z")).toBe("14h05");
+    expect(horaBrtDe(null)).toBeNull();
+    expect(horaBrtDe("lixo")).toBeNull();
+    const r = resumoDaLista([
+      { product_id: "a", variant_id: null, nome: "A", preco_de: 100, preco_por: 80, starts_at: "2026-11-09T03:00:00Z", ends_at: "2026-12-01T02:59:59Z" },
+      { product_id: "b", variant_id: null, nome: "B", preco_de: 100, preco_por: 80, starts_at: "2026-11-08T17:05:00Z", ends_at: "2026-12-01T02:59:59Z" },
+    ]);
+    expect(r).toMatchObject({ ini: "2026-11-08", iniHora: "14h05" });
   });
 
   it("texto do prazo diz quando os preços voltam", () => {
@@ -170,7 +193,7 @@ describe("regras do prazo", () => {
     const r = resumoDaLista([
       { product_id: "a", variant_id: null, nome: "A", preco_de: 100, preco_por: 80, starts_at: "2026-11-27T03:00:00Z", ends_at: "2026-12-01T02:59:59Z" },
     ]);
-    expect(r).toMatchObject({ itens: 1, ini: "2026-11-27", fim: "2026-11-30", fimVaria: false });
+    expect(r).toMatchObject({ itens: 1, ini: "2026-11-27", iniHora: "00h", fim: "2026-11-30", fimVaria: false });
   });
 });
 
@@ -297,6 +320,17 @@ describe("PromocaoEmLote", () => {
     expect(d.recarregar).toHaveBeenCalled();
   });
 
+  it("agendada: o cartão diz a hora real do começo, não '00h' fixo", async () => {
+    const meiaNoite = { ...ITEM, starts_at: "2026-11-27T03:00:00Z" };
+    let r = await montar(comQuery(<PromocaoEmLote companyId={CID} consolidado={false} dados={dados({ agendada: [meiaNoite] })} />));
+    expect(tem(r, "promo-bloco-agendada")).toBe(true);
+    expect(textoDe(porId(r, "promo-comeca"))).toBe("começa às 00h");
+    // Agendada com começo fora da meia-noite (ex.: o "agora" de um navegador adiantado).
+    const tarde = { ...ITEM, starts_at: "2026-11-08T15:00:30Z" };
+    r = await montar(comQuery(<PromocaoEmLote companyId={CID} consolidado={false} dados={dados({ agendada: [tarde] })} />));
+    expect(textoDe(porId(r, "promo-comeca"))).toBe("começa às 12h");
+  });
+
   it("encerrada: 'Repetir promoção' abre o assistente com os produtos marcados", async () => {
     mockProdutos = [{ id: "p1", name: "Vestido midi", price: 189.9, stock: 3, category: "Vestidos", code: "", barcode: "" }];
     const r = await montar(comQuery(<PromocaoEmLote companyId={CID} consolidado={false} dados={dados({ encerrada: [ITEM] })} />));
@@ -366,6 +400,27 @@ describe("CriarPromocaoModal", () => {
     expect(final.targets).toEqual([{ product_id: "p2" }]);
     expect(tem(r, "promo-pronto")).toBe(true);
     expect(onAplicada).toHaveBeenCalled();
+  });
+
+  it("começar agora: vai sem starts_at (o servidor usa o relógio dele) e a tela final concorda no singular", async () => {
+    const r = await montar(comQuery(<CriarPromocaoModal companyId={CID} onFechar={jest.fn()} />));
+    await tocar(r, "promo-continuar");
+    await tocar(r, "promo-prazo-agora");
+    mockRequest.mockResolvedValueOnce({
+      dry_run: true,
+      items: [{ product_id: "p1", variant_id: null, nome: "Vestido midi", preco_de: 189.9, preco_por: 151.9, ja_em_promocao: false, abaixo_do_custo: false }],
+      fora: [],
+    });
+    await tocar(r, "promo-ver");
+    expect(mockRequest.mock.calls[0][1].body.starts_at).toBeNull();
+    expect(textoDe(porId(r, "promo-aplicar"))).toContain("Ligar a promoção");
+    mockRequest.mockResolvedValueOnce({ dry_run: false, items: [{ product_id: "p1", variant_id: null, nome: "Vestido midi", preco_de: 189.9, preco_por: 151.9 }], fora: [] });
+    await tocar(r, "promo-aplicar");
+    expect(mockRequest.mock.calls[1][1].body.starts_at).toBeNull();
+    const pronto = textoDe(porId(r, "promo-pronto"));
+    expect(pronto).toContain("Promoção no ar");
+    expect(pronto).toContain("1 item já está em promoção.");
+    expect(pronto).not.toContain("estão");
   });
 
   it("por categoria conta só a categoria marcada; desmarcar 'deixar de fora' traz quem já está em promoção", async () => {

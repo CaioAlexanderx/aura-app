@@ -103,7 +103,7 @@ import type { Product } from "@/components/screens/estoque/types";
 import type { CrediarioConfirmPayload } from "@/components/screens/pdv/PdvModals";
 
 import { openQuotePdf, type QuoteItem } from "@/utils/quotePdf";
-import { descontoDoCupom, lerConfigDoCartao, precoNoCartaoDoProduto } from "@/utils/precoNoCartao";
+import { descontoDoCupom, lerConfigDoCartao, precoNoCartaoNaGrade, type RefDoProdutoNaGrade } from "@/utils/precoNoCartao";
 import { normalizeText, buildProductHaystack, matchesQuery } from "@/utils/productSearch";
 import { apareceParaVender, lerVendaSemEstoque, produtoTemEstoque } from "@/utils/vendaSemEstoque";
 import { warrantiesApi } from "@/services/warrantiesApi";
@@ -1275,6 +1275,7 @@ export function usePdvState() {
     referralName: matconReferral.referred?.customer_name || ultimoIndicadoRef.current,
     // Preço no cartão: o grid mostra "cartão R$ X" embaixo do preço.
     cardPriceOn,
-    gridCardPrice: (p: { price: number; cardPrice?: number | null }) => precoNoCartaoDoProduto(p, cardCfg),
+    // De/Por (QA 08/11/2026): em promoção, o cartão do preço "por".
+    gridCardPrice: (p: RefDoProdutoNaGrade) => precoNoCartaoNaGrade(p, cardCfg),
   };
 }

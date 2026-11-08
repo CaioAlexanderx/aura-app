@@ -128,11 +128,21 @@ export function erroDasDatas(ini: string | null, fim: string | null, hoje: strin
 /**
  * starts_at / ends_at do pedido. Começar hoje = agora (a promoção liga na
  * hora); outro dia = 00h00 daquele dia em Brasília.
+ *
+ * QA 08/11/2026: "agora" ia com o relógio do NAVEGADOR. Com o computador da
+ * loja uns segundos adiantado, o starts_at ficava no futuro para o servidor,
+ * que classifica ativa/agendada com o now() dele: a promoção recém-ligada
+ * aparecia como "agendada" na seção até o relógio do servidor alcançar.
+ * Agora, para começar hoje, o pedido vai com starts_at = null: o servidor
+ * usa o instante dele (lerPedido em services/promocaoEmLote.js do backend:
+ * starts_at ausente ou null = agora). Nenhum desvio de relógio, para a
+ * frente ou para trás, consegue mais agendar o "começar agora". O dia
+ * futuro continua 00h00 de Brasília, que não depende de relógio nenhum.
  */
-export function instantesDoPrazo(ini: string, fim: string, hoje: string, agora?: Date): { starts_at: string; ends_at: string; agendada: boolean } {
+export function instantesDoPrazo(ini: string, fim: string, hoje: string): { starts_at: string | null; ends_at: string; agendada: boolean } {
   var comecaHoje = ini <= hoje;
   return {
-    starts_at: comecaHoje ? (agora || new Date(Date.now())).toISOString() : inicioDoDiaBrt(ini),
+    starts_at: comecaHoje ? null : inicioDoDiaBrt(ini),
     ends_at: fimDoDiaBrt(fim),
     agendada: !comecaHoje,
   };
@@ -144,9 +154,16 @@ export function textoDoPrazo(ini: string, fim: string, hoje: string): string {
   return "Vale de " + comeco + " a " + diaMes(fim) + " às 23h59. Os preços voltam sozinhos em " + diaMes(somarDias(fim, 1)) + " às 00h.";
 }
 
+/** Frase da tela final, com a concordância certa: "1 item já está em promoção." / "3 itens entram em promoção." */
+export function textoDoPronto(n: number, agendada: boolean): string {
+  return agendada
+    ? plural(n, "item entra", "itens entram") + " em promoção."
+    : plural(n, "item já está", "itens já estão") + " em promoção.";
+}
+
 export function montarPedidoPromo(
   targets: AlvoPromocao[], modo: ModoPromocao, valorTxt: string, terminacao: TerminacaoPromocao,
-  instantes: { starts_at: string; ends_at: string },
+  instantes: { starts_at: string | null; ends_at: string },
 ): PedidoPromocao {
   return {
     targets: targets,
@@ -232,16 +249,36 @@ export function textoDeFora(fora: ItemDeFora[]): string | null {
 
 // ---------------------------------------------------------------- seção
 
-export type ResumoDaLista = { itens: number; desconto: number | null; ini: string | null; fim: string | null; fimVaria: boolean };
+/** Instante -> hora em Brasília: "00h" na virada do dia, "14h05" no resto. null sem data. */
+export function horaBrtDe(instante: string | null | undefined): string | null {
+  if (!instante) return null;
+  var t = new Date(instante).getTime();
+  if (isNaN(t)) return null;
+  var d = new Date(t - 3 * 3600 * 1000); // -03:00 fixo (ver o topo do arquivo)
+  var h = String(d.getUTCHours()).padStart(2, "0");
+  var m = d.getUTCMinutes();
+  return m === 0 ? h + "h" : h + "h" + String(m).padStart(2, "0");
+}
+
+export type ResumoDaLista = { itens: number; desconto: number | null; ini: string | null; iniHora: string | null; fim: string | null; fimVaria: boolean };
 
 export function resumoDaLista(lista: ItemDaLista[]): ResumoDaLista {
   var inis = lista.map(function (i) { return diaBrtDe(i.starts_at); }).filter(Boolean) as string[];
   var fins = lista.map(function (i) { return diaBrtDe(i.ends_at); }).filter(Boolean) as string[];
   inis.sort(); fins.sort();
+  // A hora do PRIMEIRO começo (QA 08/11/2026): o cartão da agendada dizia
+  // "começa às 00h" sempre, mesmo quando o começo não era à meia-noite.
+  var primeiro: string | null = null;
+  var primeiroT = Infinity;
+  lista.forEach(function (i) {
+    var t = i.starts_at ? new Date(i.starts_at).getTime() : NaN;
+    if (!isNaN(t) && t < primeiroT) { primeiroT = t; primeiro = i.starts_at; }
+  });
   return {
     itens: lista.length,
     desconto: descontoMedio(lista),
     ini: inis.length ? inis[0] : null,
+    iniHora: horaBrtDe(primeiro),
     fim: fins.length ? fins[fins.length - 1] : null,
     fimVaria: fins.length > 1 && fins[0] !== fins[fins.length - 1],
   };

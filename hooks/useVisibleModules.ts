@@ -305,10 +305,10 @@ export function computeVisibleModules(
   return visible;
 }
 
-export function useVisibleModules(): Set<string> {
+function useMinhasPermissoes() {
   var { company, token, consolidatedView } = useAuthStore();
 
-  var { data: permData } = useQuery({
+  return useQuery({
     // Chave por empresa/modo: trocar de empresa busca de novo em vez de
     // reaproveitar o cache da anterior (ver utils/permissionsQueryKey.ts).
     queryKey: permissionsQueryKey(company?.id, consolidatedView),
@@ -317,10 +317,29 @@ export function useVisibleModules(): Set<string> {
     staleTime: 5 * 60000,
     retry: 1,
   });
+}
+
+export function useVisibleModules(): Set<string> {
+  var { company } = useAuthStore();
+  var { data: permData } = useMinhasPermissoes();
 
   return useMemo(function() {
     return computeVisibleModules(company?.plan, (company as any)?.module_overrides, permData);
   }, [company?.plan, (company as any)?.module_overrides, permData]);
+}
+
+/**
+ * 08/11/2026 (QA De/Por): o conjunto de useVisibleModules já pode ser lido
+ * para DECIDIR (deixar ficar na tela ou mandar embora)? Só depois de a sessão
+ * hidratar (/auth/me) e de /auth/my-permissions responder (ou falhar). Antes
+ * disso o conjunto é um palpite: sem empresa, ou só pelo plano, sem a
+ * permissão do membro. Sem sessão devolve false: quem leva ao login é o
+ * AuthGuard (app/_layout), não a tela.
+ */
+export function useVisibleModulesProntos(): boolean {
+  var { isHydrated, token } = useAuthStore();
+  var { isPending } = useMinhasPermissoes();
+  return !!isHydrated && !!token && !isPending;
 }
 
 export { MODULE_PLAN_MAP, PLAN_LEVEL, PERM_TO_MODULES };

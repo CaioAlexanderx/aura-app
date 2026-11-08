@@ -30,6 +30,7 @@ import { Icon } from "@/components/Icon";
 import { IS_WEB, webOnly, accentForProduct, productLetter, fmtCurrency } from "./types";
 import { usaPecasNoMilheiro, milheiroParaUnidades } from "./matconQty";
 import { fmtQty, qtdComUnidade } from "@/utils/matconUnits";
+import { promoDoItem } from "@/utils/precoEfetivo";
 
 // "EST. 11 UN" era abreviação de sistema: o `Est.` vinha do código e o
 // uppercase do estilo. Vira frase — "11 em estoque" — e a unidade só aparece
@@ -69,6 +70,9 @@ export type GridProduct = {
   cardPrice?: number | null;
   /** Marca (GET /products). Vazia/ausente = card sem a linha. */
   brand?: string | null;
+  /** De/Por (hooks/useProducts): `price` segue o normal; o servidor diz se está em promoção. */
+  emPromocao?: boolean;
+  precoEfetivo?: number | null;
 };
 
 type Props = {
@@ -127,6 +131,10 @@ function ProdCard({ product, qty, index, onAdd, compact = false, dense = false, 
   const inCart = qty > 0;
   const addRef = useRef<any>(null);
   const marca = String(product.brand || "").trim();
+  // De/Por (QA 08/11/2026): em promoção o card mostra o preço que vale
+  // ("por", o mesmo que entra no carrinho) com o normal riscado em cima,
+  // como a linha do carrinho. Sem promoção, o card de sempre.
+  const promo = promoDoItem(product);
 
   // ── Métricas responsivas ──────────────────────────
   const pad      = dense ? 10 : compact ? 10 : 14;
@@ -248,7 +256,17 @@ function ProdCard({ product, qty, index, onAdd, compact = false, dense = false, 
       )}
 
       <View style={s.foot}>
-        {cardPrice != null ? (
+        {promo ? (
+          <View style={{ flexShrink: 1, minWidth: 0 }}>
+            <Text testID={"grid-de-" + product.id} style={s.priceDe} numberOfLines={1}>de {fmtCurrency(promo.de)}</Text>
+            <Text testID={"grid-por-" + product.id} style={[s.price, s.pricePor]} numberOfLines={1}>por {fmtCurrency(promo.por)}</Text>
+            {cardPrice != null && (
+              <Text testID={"grid-cartao-" + product.id} style={s.priceCard} numberOfLines={1}>
+                cartão <Text style={s.priceCardV}>{fmtCurrency(cardPrice)}</Text>
+              </Text>
+            )}
+          </View>
+        ) : cardPrice != null ? (
           <View style={{ flexShrink: 1, minWidth: 0 }}>
             <Text style={s.price} numberOfLines={1}>{fmtCurrency(product.price)}</Text>
             <Text testID={"grid-cartao-" + product.id} style={s.priceCard} numberOfLines={1}>
@@ -351,6 +369,16 @@ const s = StyleSheet.create({
     fontWeight: "700",
     color: Colors.violet3,
   },
+  // De/Por: o "de" pequeno e riscado, o "por" em verde (mesma linguagem da
+  // linha do carrinho, CartPanel itemMetaStrike / itemMetaDiscounted).
+  priceDe: {
+    fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace",
+    fontSize: 10,
+    color: Colors.ink3,
+    textDecorationLine: "line-through",
+    opacity: 0.7,
+  },
+  pricePor: { color: Colors.green },
   // Preço no cartão: linha de 11px debaixo do preço (mockup .pc2).
   priceCard: { fontSize: 11, color: Colors.ink3, marginTop: 1 },
   priceCardV: { color: Colors.ink2, fontWeight: "700" },
