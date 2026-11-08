@@ -35,6 +35,9 @@ import { Top5List, HBarList, Timeline, DowBars } from "./SharedCards";
 import { ProfessionalsRanking } from "./Onda3Cards";
 // F5 (24/08/2026): cards secundarios agora abrem sob demanda.
 import { CollapsibleSection } from "../CollapsibleSection";
+// 08/11/2026 (p-82): Faturamento, Custos, Lucro bruto e Despesas no topo.
+import { ResultadoCards } from "./ResultadoCards";
+import type { ResultadoDoPeriodo } from "@/utils/resultadoDoPeriodo";
 
 var isWeb = Platform.OS === "web";
 
@@ -64,6 +67,11 @@ type Props = {
   // Financeiro embutido no Studio passa a rota do shell do Studio, senão o
   // AuthGuard tiraria o usuário do Studio da tela (24/10/2026).
   abcHref?: string;
+  // 08/11/2026 (p-82): os quatro cartões. null/ausente (backend antigo, sem
+  // custo visível, demonstração) = a aba fica exatamente como era.
+  resultado?: ResultadoDoPeriodo | null;
+  onVerCompras?: () => void;
+  onCadastrarCustos?: () => void;
 };
 
 // 24/08/2026: o backend grava o crediario em categorias proprias, com nome de
@@ -115,7 +123,7 @@ function dailyIncomeSeries(txs: Transaction[]): { day: number; value: number }[]
   });
 }
 
-export function TabReceitas({ transactions, summary, previousSummary, period, consolidated, onSeeItems, onVerAtrasados, onVerCrediarioAtrasado, abcHref }: Props) {
+export function TabReceitas({ transactions, summary, previousSummary, period, consolidated, onSeeItems, onVerAtrasados, onVerCrediarioAtrasado, abcHref, resultado, onVerCompras, onCadastrarCustos }: Props) {
   var { width: vw } = useWindowDimensions();
   var NARROW = vw < 480;
   var IS_WIDE = vw > 768;
@@ -173,6 +181,9 @@ export function TabReceitas({ transactions, summary, previousSummary, period, co
   return (
     <View>
       {/* === PRIMEIRA DOBRA === */}
+      {resultado ? (
+        <ResultadoCards resultado={resultado} period={period} onVerCompras={onVerCompras} onCadastrarCustos={onCadastrarCustos} />
+      ) : null}
       <View style={[s.kpiStrip, NARROW ? s.kpiStripNarrow : null]}>
         <KpiCard narrow={NARROW} label="Recebido no período" value={fmtK(collected)} delta={incomeDelta} color={Colors.green} />
         <KpiCard narrow={NARROW} label="A receber" value={fmtK(receivable)} delta={null} color={Colors.amber} />
