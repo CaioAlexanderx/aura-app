@@ -136,6 +136,15 @@ describe("carrinho do Caixa", () => {
     expect(api.cart[0]).toMatchObject({ price: 88, promoDe: 110 });
     tree.unmount();
   });
+
+  test("preço no cartão manual: card_price × preço da promoção / preço normal (contrato)", () => {
+    const tree = montar({ enabled: true, pct: 10 });
+    act(() => { api.addToCart({ id: PID, name: "Vestido", price: 100, cardPrice: 115, emPromocao: true, precoEfetivo: 80 } as any); });
+    expect(api.cart[0]).toMatchObject({ cashPrice: 80, cardPrice: 92, promoDe: 100 });
+    act(() => { api.finalizeSale(); });
+    expect(mockBodies[0].items[0].unit_price).toBe(80);
+    tree.unmount();
+  });
 });
 
 // ── 4. Seletor de variante ───────────────────────────────────
