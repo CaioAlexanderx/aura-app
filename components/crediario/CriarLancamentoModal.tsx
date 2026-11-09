@@ -26,6 +26,11 @@
 // descarte. O formulário mora em lancamento/useLancamentoForm.ts (um
 // useReducer), e as telas em lancamento/PassoCliente, PassoValores e
 // TelaPronto. Os testIDs lancamento-* foram mantidos.
+//
+// 09/11/2026 (p-91): `companyId` e `primeiraParcela`, opcionais. A seção
+// "Crediário para janeiro" da página Black Friday abre este mesmo modal com
+// a 1ª parcela já no dia de janeiro escolhido e, no consolidado, com a
+// empresa que a lojista escolheu. Sem as props, nada muda.
 // ============================================================
 import { useCallback, useRef, useEffect } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
@@ -45,11 +50,16 @@ interface Props {
   /** Clientes da carteira para "Recentes" no passo 1 (até 5; ver
    *  calculos.escolherRecentes). Sem a prop, o passo 1 é só a busca. */
   recentes?: RecenteDoLancamento[];
+  /** Empresa do lançamento quando não é a ativa (página Black Friday no
+   *  consolidado: a lojista escolhe a empresa antes de abrir). */
+  companyId?: string | null;
+  /** 1º vencimento já escolhido, dd/mm/aaaa (atalho "Crediário para janeiro"). */
+  primeiraParcela?: string;
 }
 
-export function CriarLancamentoModal({ visible, onClose, recentes }: Props) {
+export function CriarLancamentoModal({ visible, onClose, recentes, companyId, primeiraParcela }: Props) {
   const { company } = useAuthStore();
-  const form = useLancamentoForm();
+  const form = useLancamentoForm({ companyId, primeiraParcela });
   const { st, set, reset, preenchido, trocarCliente } = form;
   const continuarRef = useRef<any>(null);
 
@@ -118,7 +128,7 @@ export function CriarLancamentoModal({ visible, onClose, recentes }: Props) {
         {st.step === "details" && <PassoValores form={form} />}
         {st.step === "pronto" && st.resultado && (
           <TelaPronto
-            companyId={company?.id}
+            companyId={companyId || company?.id}
             resumo={st.resultado}
             onLancarOutro={reset}
             onFechar={handleClose}

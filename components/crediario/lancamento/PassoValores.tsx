@@ -55,8 +55,9 @@ export function PassoValores({ form }: { form: LancamentoForm }) {
   const hojeIso = hojeIsoSp();
   const comAtalhoJaneiro = mostrarAtalhoJaneiro(hojeIso);
   // "Janeiro" é o dia 10; se a lojista já escolheu outro dia para o 1º
-  // vencimento (diferente do que o formulário trouxe), mantém o dia dela.
-  const diaEscolhido = st.firstDueDate !== st.padroes.vencimento
+  // vencimento (diferente do que o formulário trouxe, ou o dia que ela
+  // escolheu no atalho da página Black Friday), mantém o dia dela.
+  const diaEscolhido = st.firstDueDate !== st.padroes.vencimento || st.vencimentoDoAtalho
     ? parseInt((parseBrDate(st.firstDueDate) || "").slice(8, 10), 10)
     : NaN;
   const aviso = avisoDaPrimeiraParcela(st.firstDueDate, {

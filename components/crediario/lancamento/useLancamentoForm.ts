@@ -93,6 +93,9 @@ export type EstadoDoForm = {
   parcelasLivre: boolean;
   interestRate: string;
   firstDueDate: string;
+  /** O 1º vencimento veio de fora (atalho "Crediário para janeiro" da página
+   *  Black Friday): o dia dele é o dia escolhido, também para o "Janeiro". */
+  vencimentoDoAtalho: boolean;
   /** Erro da API sobre a 1ª parcela, mostrado junto do campo até a data mudar. */
   erroPrimeiraParcela: string | null;
   entryDate: string;
@@ -142,6 +145,7 @@ export function estadoInicial(): EstadoDoForm {
     parcelasLivre: false,
     interestRate: "",
     firstDueDate: padroes.vencimento,
+    vencimentoDoAtalho: false,
     erroPrimeiraParcela: null,
     entryDate: padroes.hoje,
     periodKind: "mensal",
@@ -166,9 +170,25 @@ export function estadoInicial(): EstadoDoForm {
   };
 }
 
+/**
+ * O formulário aberto por um atalho com o 1º vencimento já escolhido
+ * (dd/mm/aaaa). A data vira o PADRÃO (padroes.vencimento): fechar sem digitar
+ * nada não pergunta "Descartar?", porque a lojista não preencheu nada.
+ */
+export function comPrimeiraParcela(st: EstadoDoForm, primeiraParcela: string): EstadoDoForm {
+  return {
+    ...st,
+    padroes: { ...st.padroes, vencimento: primeiraParcela },
+    firstDueDate: primeiraParcela,
+    unifyFirstDue: primeiraParcela,
+    vencimentoDoAtalho: true,
+  };
+}
+
 type Acao =
   | { type: "set"; patch: Partial<EstadoDoForm> }
   | { type: "reset" }
+  | { type: "resetNoAtalho"; primeiraParcela: string }
   | { type: "escolherCliente"; cliente: CustomerOption | null };
 
 /** Regras que amarram um campo a outro (antes eram useEffects). */
@@ -191,6 +211,7 @@ function normalizar(prev: EstadoDoForm, next: EstadoDoForm): EstadoDoForm {
 
 function reducer(st: EstadoDoForm, a: Acao): EstadoDoForm {
   if (a.type === "reset") return estadoInicial();
+  if (a.type === "resetNoAtalho") return comPrimeiraParcela(estadoInicial(), a.primeiraParcela);
   if (a.type === "escolherCliente") {
     const mesmo = (st.selectedCustomer?.id ?? null) === (a.cliente?.id ?? null);
     // Outro cliente: os carnês e a escolha de carnê eram do anterior.
@@ -228,10 +249,30 @@ export function calcularValores(st: Pick<EstadoDoForm,
   return { amountNum, nParcelas, rateNum: isNaN(rateNum) ? 0 : rateNum, totalComJuros, valorParcela, period, firstDueIso, datas };
 }
 
-export function useLancamentoForm() {
-  const { company } = useAuthStore();
+export type OpcoesDoLancamento = {
+  /** Empresa do lançamento quando não é a ativa (consolidado: a página Black
+   *  Friday pergunta para qual empresa lançar). Sem ela, a empresa ativa. */
+  companyId?: string | null;
+  /** 1º vencimento já escolhido, dd/mm/aaaa (atalho "Crediário para janeiro"). */
+  primeiraParcela?: string;
+};
+
+export function useLancamentoForm(opcoes: OpcoesDoLancamento = {}) {
+  const { company: daSessao } = useAuthStore();
+  const companyIdDeFora = opcoes.companyId || null;
+  // Só o id é usado aqui; memoizado para os callbacks não mudarem a cada render.
+  const company = useMemo(
+    () => (companyIdDeFora ? { id: companyIdDeFora } : daSessao),
+    [companyIdDeFora, daSessao],
+  );
   const qc = useQueryClient();
-  const [st, dispatch] = useReducer(reducer, undefined, estadoInicial);
+  const primeiraRef = useRef(opcoes.primeiraParcela);
+  primeiraRef.current = opcoes.primeiraParcela;
+  const [st, dispatch] = useReducer(
+    reducer,
+    undefined,
+    () => (opcoes.primeiraParcela ? comPrimeiraParcela(estadoInicial(), opcoes.primeiraParcela) : estadoInicial()),
+  );
 
   // Os callbacks assíncronos leem o estado de agora, não o do render em que
   // foram criados (a resposta da busca de carnês pode chegar depois de trocar
@@ -253,7 +294,9 @@ export function useLancamentoForm() {
   const reset = useCallback(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
     idempKeyRef.current = null;
-    dispatch({ type: "reset" });
+    // "Lançar outro" a partir do atalho continua com o mesmo 1º vencimento.
+    if (primeiraRef.current) dispatch({ type: "resetNoAtalho", primeiraParcela: primeiraRef.current });
+    else dispatch({ type: "reset" });
   }, []);
 
   // first_due_date_max_days (plan-config; só aviso, ver avisoDaPrimeiraParcela).
