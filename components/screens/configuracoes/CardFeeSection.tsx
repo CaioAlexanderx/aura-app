@@ -19,6 +19,11 @@ import { parsePercent, formatPercent } from "@/utils/parsePercent";
 // PUT /pdv-settings substitui o jsonb inteiro, então dois saves
 // concorrentes partindo do mesmo cache perderiam a mudança um
 // do outro.
+//
+// 09/11/2026: "Pix pela maquininha %" (card_fee_pix_pct), logo abaixo do
+// Débito. A venda não sabe se o Pix passou pela maquininha, então com o
+// campo > 0 toda venda Pix paga a taxa (backend). 0 ou vazio = Pix sem
+// taxa, igual a antes.
 // ============================================================
 
 export type CardFeePalette = {
@@ -48,9 +53,10 @@ export function CardFeeSection({ display, saving, onToggle, palette }: Props) {
   // null = campo intocado (mostra o valor salvo); "" = a lojista apagou.
   const [creditFeeInput, setCreditFeeInput] = useState<string | null>(null);
   const [debitFeeInput, setDebitFeeInput] = useState<string | null>(null);
+  const [pixFeeInput, setPixFeeInput] = useState<string | null>(null);
   const s = useMemo(() => buildStyles(palette), [palette]);
 
-  function commitPct(raw: string | null, key: "card_fee_credit_pct" | "card_fee_debit_pct") {
+  function commitPct(raw: string | null, key: "card_fee_credit_pct" | "card_fee_debit_pct" | "card_fee_pix_pct") {
     if (raw === null) return; // não mexeu no campo: nada a gravar
     // Vírgula e ponto valem como decimal ("11,52" = 11.52), até 2 casas.
     const n = parsePercent(raw, 100);
@@ -111,6 +117,28 @@ export function CardFeeSection({ display, saving, onToggle, palette }: Props) {
               onBlur={() => {
                 commitPct(debitFeeInput, "card_fee_debit_pct");
                 setDebitFeeInput(null);
+              }}
+              keyboardType="decimal-pad"
+              placeholder="0"
+              placeholderTextColor={palette.hint}
+              style={s.feeInput}
+              editable={!saving}
+            />
+            <Text style={s.pctSign}>%</Text>
+          </View>
+
+          <View style={s.cardFeeRow} testID="card-fee-pix-row">
+            <View style={{ flex: 1 }}>
+              <Text style={s.cardFeeLabel}>Pix pela maquininha</Text>
+              <Text style={s.cardFeeHint}>Se o Pix cai direto na chave da loja, deixe 0.</Text>
+            </View>
+            <TextInput
+              testID="card-fee-pix"
+              value={pixFeeInput ?? formatPercent(display.card_fee_pix_pct)}
+              onChangeText={setPixFeeInput}
+              onBlur={() => {
+                commitPct(pixFeeInput, "card_fee_pix_pct");
+                setPixFeeInput(null);
               }}
               keyboardType="decimal-pad"
               placeholder="0"

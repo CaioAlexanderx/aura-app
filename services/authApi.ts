@@ -158,6 +158,9 @@ export type PdvSettings = {
   card_fee_enabled?: boolean;
   card_fee_credit_pct?: number;
   card_fee_debit_pct?: number;
+  // 09/11/2026: Pix pela maquininha. 0/ausente = Pix sem taxa (o de sempre);
+  // > 0 = toda venda Pix paga a taxa, so sobre a parte no Pix.
+  card_fee_pix_pct?: number;
   // 22/09/2026 (preco no cartao, backend #738 / migration 351): a loja
   // cobra mais no debito/credito. Todos os planos, desligado por padrao —
   // desligado, nenhuma tela mostra nada novo. card_price_pct e o % padrao
