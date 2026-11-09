@@ -397,17 +397,18 @@ describe("vale-troca: espelho do mesmo estado (pdv_settings)", () => {
 
 // ── 4. Configurações: só o atalho ────────────────────────────
 
-describe("quem vê a página (oculta por enquanto)", () => {
+describe("quem vê a página (aberta para todos desde 09/11)", () => {
   const lojista = { isStaff: false, isDemo: false, user: { is_staff: false }, company: { is_sandbox: false } };
   const noPeriodo = "2026-11-30";
 
-  it("a constante de liberação geral nasce desligada", () => {
-    expect(BLACK_FRIDAY_LIBERADA_PARA_TODOS).toBe(false);
+  it("abertura (09/11/2026): a constante de liberação geral está ligada", () => {
+    expect(BLACK_FRIDAY_LIBERADA_PARA_TODOS).toBe(true);
+    expect(blackFridayLiberada(lojista, noPeriodo)).toBe(true);
   });
 
-  it("lojista comum NÃO vê, mesmo dentro do período", () => {
+  it("com a constante desligada, lojista comum NÃO vê, mesmo dentro do período", () => {
     expect(blackFridayAtivo(noPeriodo)).toBe(true);
-    expect(blackFridayLiberada(lojista, noPeriodo)).toBe(false);
+    expect(blackFridayLiberada(lojista, noPeriodo, false)).toBe(false);
   });
 
   it("staff vê (isStaff do store ou is_staff do usuário)", () => {
@@ -431,7 +432,8 @@ describe("quem vê a página (oculta por enquanto)", () => {
     expect(blackFridayLiberada({ ...lojista, isStaff: true }, "2026-10-12")).toBe(false);
   });
 
-  it("acesso direto pela URL: lojista comum cai no Painel e não renderiza a página", () => {
+  it("acesso direto pela URL: sem o módulo da Black Friday cai no Painel e não renderiza a página", () => {
+    mockVisible = new Set(["painel"]);
     const r = montar(<BlackFridayRota />);
     expect(r.toJSON()).toBeNull();
     expect(mockRedirect).toHaveBeenCalledWith("/");
@@ -516,9 +518,12 @@ describe("atalho em Configurações › Plano", () => {
     expect(mockPush).toHaveBeenCalledWith("/black-friday");
   });
 
-  it("some junto com a página: lojista comum, sem o módulo, fora do período ou depois da janela do assento", () => {
+  it("some junto com a página: sem o módulo, fora do período ou depois da janela do assento", () => {
+    // Desde a abertura (09/11/2026) o lojista comum vê a página; sem o
+    // módulo da Black Friday o atalho some.
     mockAuth = { ...mockAuth, isStaff: false };
-    expect(montar(<AtalhoAssento />).toJSON()).toBeNull(); // oculta por enquanto
+    mockVisible = new Set(["estoque", "configuracoes"]);
+    expect(montar(<AtalhoAssento />).toJSON()).toBeNull();
 
     mockAuth = { ...mockAuth, isStaff: true };
     mockVisible = new Set(["estoque", "configuracoes"]);

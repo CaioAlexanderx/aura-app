@@ -38,7 +38,9 @@ export function blackFridayAtivo(hoje?: string): boolean {
 // GET /auth/me ainda NÃO a devolve no objeto `company`. Enquanto isso, a
 // leitura abaixo só acende para staff; ela passa a valer para conta de
 // teste sozinha assim que o payload trouxer o campo (sem mudar o app).
-export const BLACK_FRIDAY_LIBERADA_PARA_TODOS = false;
+// 09/11/2026: ABERTA para todos (pedido do Caio: "vamos concluir tudo
+// relacionado hoje e levar ao ar"), depois do QA do De/Por e da página.
+export const BLACK_FRIDAY_LIBERADA_PARA_TODOS = true;
 
 export type ContaParaBlackFriday = {
   /** isStaff do auth store (is_staff ou @getaura.com.br). */
