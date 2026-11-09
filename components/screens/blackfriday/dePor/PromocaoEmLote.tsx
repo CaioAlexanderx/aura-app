@@ -3,8 +3,8 @@
 //
 // Mockup aprovado pelo Caio (08/11/2026): https://claude.ai/artifact/UHRfmosodr9VCqHUt11Yhf
 // Estados: sem promoção (convite), agendada, no ar e encerrada (com
-// "Repetir"). "Encerrar agora" pede confirmação. O cartão "vendidos na
-// promoção" NÃO entra nesta entrega (decisão do Caio, 08/11).
+// "Repetir"). "Encerrar agora" pede confirmação. Os cartões "vendidos na
+// promoção" (p-93) entram no bloco "no ar" e na encerrada: VendidosNaPromocao.
 // Quem decide se a seção aparece é a página (secoes.ts + usePromocoesDePor):
 // backend sem a rota ou perfil Estoque só consulta = some.
 // Multi-CNPJ: a promoção é por empresa; no consolidado a seção explica e
@@ -18,6 +18,7 @@ import { Aviso } from "@/components/screens/estoque/reajuste/Aviso";
 import { promocoesApi, type ItemDaLista, type StatusPromocao } from "@/services/promocoesApi";
 import type { PromocoesDePor } from "@/hooks/usePromocoesDePor";
 import { CriarPromocaoModal, mensagemErroPromo } from "./CriarPromocaoModal";
+import { VendidosNaPromocao } from "./VendidosNaPromocao";
 import { alvoDoItem, nomeDoItemPromo, brl, chaveDoItem, diaMes, diaMesDe, pctTxt, plural, resumoDaLista, somarDias } from "./regrasDePor";
 
 type Props = {
@@ -64,6 +65,8 @@ function Bloco({ status, lista, companyId, onMudou, onAdicionar }: {
         {r.fim && <View style={s.kpBox}><Text style={s.kpN}>{diaMes(r.fim)}</Text><Text style={s.t}>{r.fimVaria ? "a última termina às 23h59" : "termina às 23h59"}</Text></View>}
         {r.fim && <View style={s.kpBox}><Text style={s.kpN}>{diaMes(somarDias(r.fim, 1))}</Text><Text style={s.t}>os preços voltam sozinhos</Text></View>}
       </View>
+
+      {ativa && <VendidosNaPromocao companyId={companyId} lista={lista} status="ativa" />}
 
       {!!erro && <Aviso tipo="erro" testID={"promo-erro-encerrar-" + status}>{erro}</Aviso>}
 
@@ -176,6 +179,7 @@ export function PromocaoEmLote({ companyId, consolidado, dados }: Props) {
             abrir(ids);
           }} testID="promo-repetir" accessibilityRole="button"><Text style={s.btnTxt}>Repetir promoção</Text></Pressable>
           <Pressable style={s.btnP} onPress={function () { abrir(); }} testID="promo-criar" accessibilityRole="button"><Text style={s.btnPTxt}>Criar promoção</Text></Pressable>
+          <VendidosNaPromocao companyId={companyId} lista={dados.encerrada} status="encerrada" />
         </View>
       )}
 
