@@ -7,6 +7,7 @@
 // (cabecalho X-Aura-App). Sem react-native em instalarApp.ts, este import
 // e seguro aqui, que e carregado antes de tudo.
 import { estaInstalado } from "@/services/instalarApp";
+import { empresaParaORefresh, contextoMudou, type EmpresaDoRefresh } from "@/utils/empresaDoRefresh";
 import {
   MSG_SEM_CONEXAO, MSG_SEM_CONEXAO_NA_SESSAO, MSG_SESSAO_TERMINOU, MSG_ERRO_NOSSO, MSG_DEMOROU_DEMAIS, MSG_ERRO_SEM_EXPLICACAO,
 } from "@/utils/mensagensDoApp";
@@ -56,17 +57,26 @@ function gravarLocal(chave: string, valor: string): void {
   try { if (typeof localStorage !== "undefined") localStorage.setItem(chave, valor); } catch { /* sem storage */ }
 }
 
-async function pedirRefresh(refreshToken: string): Promise<Response> {
+async function pedirRefresh(refreshToken: string, empresa: EmpresaDoRefresh): Promise<Response> {
   var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
   var timer = controller ? setTimeout(function() { controller!.abort(); }, 8000) : null;
   var headers: Record<string, string> = { "Content-Type": "application/json" };
   // O backend usa o X-Aura-App para dar ao app instalado o prazo deslizante.
   if (estaInstalado()) headers["X-Aura-App"] = "standalone";
   try {
-    return await fetch(BASE_URL + "/auth/refresh", { method: "POST", headers: headers, body: JSON.stringify({ refresh_token: refreshToken }), signal: controller?.signal });
+    return await fetch(BASE_URL + "/auth/refresh", { method: "POST", headers: headers, body: JSON.stringify(corpoDoRefresh(refreshToken, empresa)), signal: controller?.signal });
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+
+// 09/11/2026: a empresa em que a pessoa esta vai junto (id ou "all"), para
+// o token novo nao voltar para a empresa padrao depois de 1 h. O backend
+// confere o acesso; sem acesso, assina o padrao. Ver utils/empresaDoRefresh.
+function corpoDoRefresh(refreshToken: string, empresa: EmpresaDoRefresh): Record<string, string> {
+  var corpo: Record<string, string> = { refresh_token: refreshToken };
+  if (empresa) corpo.company_id = empresa;
+  return corpo;
 }
 
 // 09/11/2026: so 401 do /auth/refresh e "sessao terminou" (token invalido,
@@ -80,14 +90,16 @@ async function refreshAccessToken(): Promise<RefreshResult> {
     // ainda. O storage e a fonte de verdade.
     var refreshToken = useAuthStore.getState().refreshToken || lerLocal("aura_refresh_token");
     if (!refreshToken) return { status: "invalid" };
-    var resp = await pedirRefresh(refreshToken);
+    var estadoAntes = useAuthStore.getState();
+    var empresa = empresaParaORefresh(estadoAntes, estadoAntes.token || lerLocal("aura_token"));
+    var resp = await pedirRefresh(refreshToken, empresa);
     if (resp.status === 401) {
       // Outra aba (ou o app e o navegador no mesmo aparelho) pode ter
       // gravado um refresh token mais novo: tenta com ele uma vez.
       var maisNovo = lerLocal("aura_refresh_token");
       if (!maisNovo || maisNovo === refreshToken) return { status: "invalid" };
       refreshToken = maisNovo;
-      resp = await pedirRefresh(refreshToken);
+      resp = await pedirRefresh(refreshToken, empresa);
       if (resp.status === 401) return { status: "invalid" };
     }
     if (!resp.ok) return { status: "network_error" };
@@ -105,6 +117,16 @@ async function refreshAccessToken(): Promise<RefreshResult> {
       patch.refreshToken = refreshToken;
     }
     useAuthStore.setState(patch);
+    // O servidor nao manteve a empresa pedida (a pessoa perdeu o acesso a
+    // ela): o estado ainda mostra a antiga. Rele o /me, que segue o token.
+    if (contextoMudou(empresa, data)) {
+      setTimeout(function() {
+        try {
+          var reler = useAuthStore.getState().refreshMe;
+          if (typeof reler === "function") Promise.resolve(reler()).catch(function() {});
+        } catch { /* melhor esforco */ }
+      }, 0);
+    }
     return { status: "ok", token: data.token };
   } catch { return { status: "network_error" }; }
 }
