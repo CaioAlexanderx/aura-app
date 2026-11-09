@@ -314,7 +314,8 @@ describe("PromocaoEmLote", () => {
     expect(textoDe(porId(r, "promo-n-ativa"))).toBe("1");
     expect(tem(r, "promo-vazio")).toBe(false);
     await tocar(r, "promo-encerrar-ativa");
-    expect(mockRequest).not.toHaveBeenCalled();
+    // O bloco no ar pede os vendidos (p-93); o que não pode sair é o encerrar.
+    expect(mockRequest).not.toHaveBeenCalledWith(expect.stringContaining("/encerrar"), expect.anything());
     expect(tem(r, "promo-confirmar-ativa")).toBe(true);
     await tocar(r, "promo-encerrar-sim-ativa");
     expect(mockRequest).toHaveBeenCalledWith("/companies/" + CID + "/products/promotions/encerrar", expect.objectContaining({

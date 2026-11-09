@@ -179,7 +179,43 @@ export var promocoesApi = {
   lista: function (companyId: string, status: StatusPromocao) {
     return request<any>(base(companyId) + "?status=" + status, { retry: 1 }).then(lerLista);
   },
+
+  /**
+   * Vendidos na promoção numa janela (p-93). Sempre da empresa ativa: sem
+   * `escopo=grupo` (a seção é por empresa). 403 (perfil consulta ou membro
+   * sem relatórios) e 404 = quem chama esconde os cartões.
+   */
+  vendidos: function (companyId: string, janela: { desde: string; ate: string }) {
+    return request<any>(
+      base(companyId) + "/vendidos?desde=" + encodeURIComponent(janela.desde) + "&ate=" + encodeURIComponent(janela.ate),
+      { retry: 1 },
+    ).then(lerVendidos);
+  },
 };
+
+// ------------------------------------------------ vendidos na promoção (p-93)
+//
+// GET /companies/:cid/products/promotions/vendidos?desde=&ate= (Aura-backend#968)
+// Só conta item gravado com em_promocao = true; cancelada e devolução fora.
+// A marcação começou no deploy de 09/11/2026: venda de antes não aparece.
+
+export type ResumoDosVendidos = { itens_vendidos: number; faturamento: number; desconto_dado: number; vendas: number };
+export type VendidosNaPromocao = { desde: string | null; ate: string | null; resumo: ResumoDosVendidos };
+
+/** Resposta do GET /vendidos, tolerante a número em texto e a campo ausente. */
+export function lerVendidos(r: any): VendidosNaPromocao {
+  var x = (r && r.resumo) || {};
+  return {
+    desde: (r && r.desde) || null,
+    ate: (r && r.ate) || null,
+    resumo: {
+      itens_vendidos: num(x.itens_vendidos),
+      faturamento: num(x.faturamento),
+      desconto_dado: num(x.desconto_dado),
+      vendas: num(x.vendas),
+    },
+  };
+}
 
 /** O erro é "a rota não existe" (backend antigo)? */
 export function ehRotaAusente(err: unknown): boolean {
