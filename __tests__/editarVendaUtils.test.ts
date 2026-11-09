@@ -113,6 +113,8 @@ test("aviso da NFC-e: atalho de cancelar só dentro dos 30 min", () => {
   const fora = avisoDaNota({ id: "n", numero: 2318, authorized_at: "2026-11-07T13:00:00Z", cancel_until: "2026-11-07T13:30:00Z", can_cancel: false }, agora);
   expect(fora && fora.podeCancelar).toBe(false);
   expect(avisoDaNota(null)).toBeNull();
+  const nfe = avisoDaNota({ id: "n", tipo: "nfe", numero: 77, authorized_at: "2026-11-07T14:02:00Z", cancel_until: "2026-11-07T14:32:00Z", can_cancel: true }, agora);
+  expect(nfe && nfe.texto).toContain("A NF-e 77");
 });
 
 test("busca por nome ou telefone", () => {

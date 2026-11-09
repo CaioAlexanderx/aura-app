@@ -33,7 +33,7 @@ import { useCustomers } from "@/hooks/useCustomers";
 import {
   METODOS, type Metodo, type LinhaDeForma, brl, ddmm, ddmmaaaa, lerDia, somarMes, fmtDataHora, rotuloDaForma,
   linhasIniciais, conferirSoma, montarCorpo, rotuloDasMudancas, efeitosDoCampo, resumoDasFormas, avisoDaNota,
-  filtrarPorBusca, valorParaCampo, normalizarMetodo, lerValor,
+  filtrarPorBusca, valorParaCampo, normalizarMetodo, lerValor, diaEmSaoPaulo,
 } from "./editarVendaUtils";
 
 type Passo = "alterar" | "conferir" | "pronto";
@@ -199,7 +199,10 @@ export function EditarVendaModal({
     setDividido(ls.length > 1);
     const cred = ctx.current.credit;
     setParcelas(cred ? cred.installments || 1 : 1);
-    const p1 = cred && cred.first_due_date ? cred.first_due_date : (ctx.sale.dia ? somarMes(ctx.sale.dia, 1) : null);
+    // Venda antiga editada hoje: a 1ª parcela nunca nasce no passado.
+    const hoje = diaEmSaoPaulo(new Date().toISOString());
+    const base = ctx.sale.dia && ctx.sale.dia > hoje ? ctx.sale.dia : hoje;
+    const p1 = cred && cred.first_due_date ? cred.first_due_date : (base ? somarMes(base, 1) : null);
     setPrimeira(p1);
     setPrimeiraTxt(ddmmaaaa(p1));
     setSellerId(undefined); setCliente(undefined);
@@ -285,6 +288,11 @@ export function EditarVendaModal({
       const r: any = await previewEdit({ saleId: saleId, body: body });
       setPlano(r.plan || null);
       setErroPlano(null);
+      // O servidor não viu mudança (os dados já são os da venda): nada a conferir.
+      if (!r.plan || !r.plan.changes || !r.plan.changes.length) {
+        toast.info("Nada mudou: a venda já está assim.");
+        return;
+      }
       setPasso("conferir");
     } catch (e: any) {
       setErroPlano(lerErro(e, "Não deu para conferir a mudança agora."));
@@ -301,6 +309,13 @@ export function EditarVendaModal({
     } catch (e: any) {
       setConfirmando(false);
       const er = lerErro(e, "Não deu para salvar agora. Tente de novo.");
+      // "Salvar sem mudar nada" não é erro: a venda já está como pedido.
+      if (er && er.code === "NO_CHANGES") {
+        toast.info("Nada mudou: a venda já está assim.");
+        refetch();
+        setPasso("alterar");
+        return;
+      }
       toast.error((er && er.message) || "Não deu para salvar agora.");
       // A venda pode ter mudado (pagamento de parcela, nota): relê as travas.
       refetch();
@@ -648,7 +663,7 @@ export function EditarVendaModal({
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <Text style={s.headerTitulo} numberOfLines={1}>{passo === "pronto" ? "Pronto" : "Editar venda" + numero}</Text>
             {ctx && ctx.nfce && passo !== "pronto" ? (
-              <View style={s.selo}><Text style={s.seloTxt}>NFC-e {ctx.nfce.numero || ""}</Text></View>
+              <View style={s.selo}><Text style={s.seloTxt}>{ctx.nfce.tipo === "nfe" ? "NF-e" : "NFC-e"} {ctx.nfce.numero || ""}</Text></View>
             ) : null}
           </View>
           <Text style={s.headerSub} numberOfLines={1}>{passo === "conferir" ? "Confira antes de salvar" : subtitulo}</Text>

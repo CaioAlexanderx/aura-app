@@ -284,8 +284,9 @@ export function avisoDaNota(nfce: SaleEditContext["nfce"], agora = Date.now()): 
   const ate = nfce.cancel_until ? fmtHora(nfce.cancel_until) : null;
   const podeCancelar = !!(nfce.cancel_until && agora < new Date(nfce.cancel_until).getTime());
   const n = nfce.numero ? " " + nfce.numero : "";
+  const rotulo = nfce.tipo === "nfe" ? "NF-e" : "NFC-e";
   return {
-    texto: "A NFC-e" + n + " já foi autorizada e não muda depois disso. O que você mudar aqui vale para o Financeiro, o caixa e a comissão.",
+    texto: "A " + rotulo + n + " já foi autorizada e não muda depois disso. O que você mudar aqui vale para o Financeiro, o caixa e a comissão.",
     podeCancelar,
     ate,
   };

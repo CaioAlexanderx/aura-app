@@ -315,6 +315,9 @@ export type SaleEditCredit = {
 
 export type SaleEditNfce = {
   id: string;
+  /** 'nfce' (modelo 65) ou 'nfe' (modelo 55): a mesma trava para as duas. */
+  tipo?: "nfce" | "nfe";
+  rotulo?: string;
   numero: number | null;
   authorized_at: string | null;
   cancel_until: string | null;

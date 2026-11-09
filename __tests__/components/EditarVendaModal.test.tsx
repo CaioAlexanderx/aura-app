@@ -170,9 +170,12 @@ test("5. entrar no crediário pede confirmação antes de gravar", async () => {
   act(() => { tree.root.findAll((n: any) => n.props && n.props.accessibilityLabel === "Mais uma parcela")[0].props.onPress(); });
   act(() => { tree.root.findAll((n: any) => n.props && n.props.accessibilityLabel === "Mais uma parcela")[0].props.onPress(); });
   await act(async () => { jest.advanceTimersByTime(450); await Promise.resolve(); });
-  expect(mockPreview.mock.calls[mockPreview.mock.calls.length - 1][0].body).toEqual({
-    payments: [{ method: "crediario", amount: 189.7 }], installments: 3, first_due_date: "2026-12-07",
+  const corpo5 = mockPreview.mock.calls[mockPreview.mock.calls.length - 1][0].body;
+  expect(corpo5).toEqual({
+    payments: [{ method: "crediario", amount: 189.7 }], installments: 3, first_due_date: expect.any(String),
   });
+  // 1ª parcela sugerida: um mês depois de hoje (a venda é de antes de hoje).
+  expect(corpo5.first_due_date > new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" })).toBe(true);
   expect(texto(porId(tree, "campo-forma")[0])).toContain("63,24");
 
   await act(async () => { await continuar(tree).props.onPress(); });
@@ -181,5 +184,56 @@ test("5. entrar no crediário pede confirmação antes de gravar", async () => {
   expect(texto(porId(tree, "confirmar-crediario")[0])).toContain("Lançar no crediário?");
   await act(async () => { await botao(tree, "Sim, lançar").props.onPress(); });
   expect(mockApply).toHaveBeenCalledTimes(1);
+  tree.unmount();
+});
+
+// ── Revisão de 09/11/2026 ───────────────────────────────────────────────────
+import { toast as mockToast } from "@/components/Toast";
+
+test("6. servidor sem mudança (plan.changes vazio): não avança e avisa sem erro", async () => {
+  mockPreview.mockResolvedValue({ dry_run: true, plan: { ...PLANO, changes: [], effects: [], warnings: [] } });
+  const tree = montar();
+  act(() => { porId(tree, "forma-pix")[0].props.onPress(); });
+  await act(async () => { jest.advanceTimersByTime(450); await Promise.resolve(); });
+  await act(async () => { await continuar(tree).props.onPress(); });
+  expect(porId(tree, "passo-conferir").length).toBe(0);
+  expect(mockToast.info).toHaveBeenCalledWith("Nada mudou: a venda já está assim.");
+  expect(mockToast.error).not.toHaveBeenCalled();
+  tree.unmount();
+});
+
+test("7. salvar responde 400 NO_CHANGES: neutro, nunca erro", async () => {
+  mockApply.mockRejectedValue(Object.assign(new Error("Nada mudou"), { status: 400, data: { code: "NO_CHANGES", error: "Nada mudou" } }));
+  const tree = montar();
+  act(() => { porId(tree, "forma-pix")[0].props.onPress(); });
+  await act(async () => { jest.advanceTimersByTime(450); await Promise.resolve(); });
+  await act(async () => { await continuar(tree).props.onPress(); });
+  await act(async () => { await botao(tree, "Salvar alterações").props.onPress(); });
+  expect(mockToast.error).not.toHaveBeenCalled();
+  expect(mockToast.info).toHaveBeenCalledWith("Nada mudou: a venda já está assim.");
+  expect(porId(tree, "passo-pronto").length).toBe(0);
+  tree.unmount();
+});
+
+test("8. NF-e 55 autorizada: mesmo aviso, com o nome da nota", () => {
+  const ate = new Date(Date.now() + 20 * 60000).toISOString();
+  mockCtx = contexto({ nfce: { id: "n1", tipo: "nfe", numero: 77, authorized_at: new Date().toISOString(), cancel_until: ate, can_cancel: true } });
+  const tree = montar();
+  expect(texto(porId(tree, "aviso-nfce")[0])).toContain("NF-e 77");
+  expect(porId(tree, "forma-crediario")[0].props.desligado).toBe(true);
+  tree.unmount();
+});
+
+test("9. venda antiga sem crediário: a 1ª parcela sugerida nunca fica no passado", async () => {
+  mockCtx = contexto({
+    sale: { ...contexto().sale, created_at: "2026-01-10T15:00:00Z", dia: "2026-01-10" },
+    current: { payments: [{ method: "pix", amount: 189.7 }], credit: null, seller: { id: "ana", name: "Ana" }, customer: { id: "cli", name: "Cliente Exemplo" } },
+  });
+  const tree = montar();
+  act(() => { porId(tree, "forma-crediario")[0].props.onPress(); });
+  await act(async () => { jest.advanceTimersByTime(450); await Promise.resolve(); });
+  const body = mockPreview.mock.calls[mockPreview.mock.calls.length - 1][0].body;
+  const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+  expect(body.first_due_date > hoje).toBe(true);
   tree.unmount();
 });
