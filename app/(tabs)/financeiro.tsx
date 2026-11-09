@@ -324,6 +324,10 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
   // Quantas contas ainda nao viraram dinheiro (entrada ou saida). E o quarto
   // numero do cabecalho: "entrou/saiu/sobrou" conta o passado, este conta o
   // que ainda esta no ar.
+  // 09/11/2026: Categorias do Financeiro. No Studio a rota de (tabs) devolveria
+  // o usuário para a home do estúdio (mesmo caso do abcHref).
+  var hrefDasCategorias = embedded ? "/studio/gestao/financeiro/categorias" : "/financeiro/categorias";
+
   var pendingCount = transactions.filter(function(t: any) { return t.status === "pending"; }).length;
 
   var showMonthBanner = period !== "month" && period !== "all" && currentMonthExpenses && currentMonthExpenses.count > 0;
@@ -584,6 +588,22 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
             acima e empurrava o resumo pra baixo. "Categorizar com IA" pertence a
             Lancamentos, que e onde o usuario ve as categorias erradas. */}
         {!isDemo && transactions.length > 0 && activeTab === TAB_INDEX.lancamentos && !consolidatedView && <FinanceiroToolbar uncategorizedDescriptions={uncategorized} />}
+        {/* 09/11/2026: Categorias e subcategorias (mockup, seção A). Por loja:
+            no consolidado não aparece. */}
+        {!isDemo && activeTab === TAB_INDEX.lancamentos && !consolidatedView && (
+          <View style={s.categoriasRow}>
+            <Pressable
+              testID="financeiro-categorias"
+              onPress={function() { router.push(hrefDasCategorias as any); }}
+              style={s.categoriasBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Organizar as categorias"
+            >
+              <Icon name="list" size={13} color={Colors.violet3} />
+              <Text style={s.categoriasText}>Categorias</Text>
+            </Pressable>
+          </View>
+        )}
         {/* B9: skeleton nao pode coexistir com a aba montada — antes os dois
             renderizavam no primeiro load (heroes zerados sob o skeleton).
             FIX (QA pos-F7): o guard valia so pra Visao Geral; nas outras tres
@@ -716,6 +736,9 @@ var s = StyleSheet.create({
   demoBanner: { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },
   demoText: { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
 
+  categoriasRow: { flexDirection: "row", justifyContent: "flex-end", marginBottom: 10 },
+  categoriasBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg3, minHeight: 36 },
+  categoriasText: { fontSize: 12.5, fontWeight: "700", color: Colors.violet3 },
   consolidatedBanner: {
     flexDirection: "row",
     gap: 10,
