@@ -39,6 +39,7 @@ interface ButtonProps {
   full?:      boolean;
   style?:     StyleProp<ViewStyle>;
   accessibilityLabel?: string;
+  testID?: string;
 }
 
 const VARIANTS: Record<ButtonVariant, { bg: string; border: string; text: string; glow: string; spinner: string }> = {
@@ -57,7 +58,7 @@ const SIZES: Record<ButtonSize, { pv: number; ph: number; fs: number; icon: numb
 
 export function Button({
   title, onPress, variant = "secondary", size = "md", icon,
-  loading, disabled, full, style, accessibilityLabel,
+  loading, disabled, full, style, accessibilityLabel, testID,
 }: ButtonProps) {
   const v = VARIANTS[variant];
   const sz = SIZES[size];
@@ -74,6 +75,7 @@ export function Button({
       disabled={blocked}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel || title}
+      testID={testID}
       onPressIn={() => to(0.98, 90)}
       onPressOut={() => to(1, Motion.fast)}
       onHoverIn={IS_WEB ? () => setHovered(true) : undefined}

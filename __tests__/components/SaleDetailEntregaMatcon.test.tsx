@@ -15,6 +15,12 @@ import React from "react";
 import renderer, { act } from "react-test-renderer";
 
 jest.mock("@/components/Icon", () => ({ Icon: () => null }));
+// 09/11/2026: o detalhe virou ResponsiveSheet (Modal do RN = portal no web).
+jest.mock("@/components/ResponsiveSheet", () => ({
+  ResponsiveSheet: ({ visible, children }: any) => (visible ? children : null),
+  SHEET_NARROW_BP: 500,
+}));
+jest.mock("@/components/screens/vendas/EditarVendaModal", () => ({ EditarVendaModal: () => null }));
 jest.mock("@/components/Toast", () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() } }));
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }));
 jest.mock("@/services/api", () => ({ request: jest.fn(), employeesApi: { list: jest.fn() }, BASE_URL: "http://x" }));
@@ -32,7 +38,6 @@ let mockDetail: any = null;
 jest.mock("@/hooks/useSales", () => ({
   useSaleDetail: () => ({ detail: mockDetail, isLoading: false, error: null }),
   useCancelSale: () => ({ cancelSale: jest.fn(), isCancelling: false }),
-  useUpdateSaleSeller: () => ({ updateSeller: jest.fn(), isUpdating: false }),
   useEmitNfce: () => ({ emitNfce: jest.fn(), isEmitting: false }),
   useReemitTrocaFiscal: () => ({ reemitTrocaFiscal: jest.fn(), isReemitting: false }),
 }));

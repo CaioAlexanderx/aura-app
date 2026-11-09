@@ -6,11 +6,16 @@
 // o cliente da venda (não existe um segundo cadastro — "Vincular cliente"
 // abre o seletor do topo do Caixa, o mesmo do chip "Cliente").
 // Mockup: docs/mockups/frete-no-caixa.html, tela B e C.
+//
+// 09/11/2026 (entrega, parte 2 — mockup "Entrega no Caixa", C): a linha do
+// cliente diz para onde vai ("Av. Paulista, 1000 · Bela Vista · São Paulo")
+// ou avisa "falta o endereço, vamos pedir ao concluir".
 // ============================================================
 import { View, Text, StyleSheet, Pressable, TextInput } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { textoDoFrete } from "@/utils/frete";
+import { resumoDoEndereco, type Endereco } from "@/components/endereco/endereco";
 
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
@@ -27,9 +32,16 @@ export type FreteProps = {
   /** Abre o seletor de cliente do Caixa. Ausente = loja sem Clientes no
    *  Caixa: a linha do cliente nem aparece. */
   onPickCustomer?: () => void;
+  /** 09/11/2026: para onde vai a entrega (endereço da trava ou do cadastro). */
+  entregaResumo?: Endereco | null;
+  /** 09/11/2026: o cliente da venda não tem endereço — a trava pede ao concluir. */
+  faltaEndereco?: boolean;
 };
 
-export function FreteSection({ value, onChange, amount, onClear, customerName, onPickCustomer }: FreteProps) {
+export function FreteSection({ value, onChange, amount, onClear, customerName, onPickCustomer, entregaResumo, faltaEndereco }: FreteProps) {
+  const paraOnde = customerName && entregaResumo
+    ? [resumoDoEndereco(entregaResumo), String(entregaResumo.city || "").trim()].filter(Boolean).join(" · ")
+    : "";
   return (
     <View style={s.container} testID="frete-secao">
       <View style={s.header}>
@@ -73,6 +85,12 @@ export function FreteSection({ value, onChange, amount, onClear, customerName, o
           <Text style={s.paraAcao} numberOfLines={1}>{customerName ? "Trocar" : "Vincular cliente"}</Text>
         </Pressable>
       )}
+      {!!paraOnde && (
+        <Text style={s.endereco} numberOfLines={2} testID="frete-endereco">{paraOnde}</Text>
+      )}
+      {!!customerName && faltaEndereco && (
+        <Text style={s.falta} testID="frete-falta-endereco">Falta o endereço, vamos pedir ao concluir</Text>
+      )}
     </View>
   );
 }
@@ -92,6 +110,8 @@ const s = StyleSheet.create({
   paraTxtVazio: { color: Colors.ink3 },
   paraNome: { color: Colors.ink, fontWeight: "600" },
   paraAcao: { fontSize: 11, color: Colors.violet3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4 },
+  endereco: { fontSize: 12, color: Colors.ink2, marginTop: 6, paddingHorizontal: 2 },
+  falta: { fontSize: 12, color: Colors.amber, fontWeight: "700", marginTop: 6, paddingHorizontal: 2 },
 });
 
 export default FreteSection;
