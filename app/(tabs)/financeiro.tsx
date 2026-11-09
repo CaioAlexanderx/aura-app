@@ -248,7 +248,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
   // 08/11/2026 (p-82): Faturamento, Custos, Lucro bruto e Despesas da aba
   // Receitas. null = backend antigo ou sem custo visível: a aba fica como era.
   var resultado = useResultadoDoPeriodo(period, customStart, customEnd);
-  var [filtroLancamentos, setFiltroLancamentos] = useState<{ categoria: string; tipo: "income" | "expense"; n: number } | null>(null);
+  var [filtroLancamentos, setFiltroLancamentos] = useState<{ categoria: string; subcategoria?: string | null; tipo: "income" | "expense"; n: number } | null>(null);
   // O filtro vale só para a ida pelo atalho: saiu de Lançamentos, some.
   useEffect(function() {
     if (activeTab !== TAB_INDEX.lancamentos) setFiltroLancamentos(null);
@@ -467,6 +467,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
           onSave={createTransaction}
           onSaleCreated={handleSaleCreated}
           editTransaction={editTx}
+          onOrganizarCategorias={function() { setShowModal(false); setEditTx(null); router.push(hrefDasCategorias as any); }}
         />
       </WebPortal>
       <WebPortal active={showExport}>
@@ -685,6 +686,10 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
             onSeeItems={function() { handleTabSelect(TAB_INDEX.lancamentos); }}
             onVerAtrasados={podeQuadroAtrasos ? irParaAtrasados : undefined}
             onVerCrediarioAtrasado={podeQuadroAtrasos ? irParaCrediarioAtrasado : undefined}
+            onVerCategoria={function(categoria, subcategoria) {
+              setFiltroLancamentos({ categoria: categoria, subcategoria: subcategoria, tipo: "expense", n: Date.now() });
+              handleTabSelect(TAB_INDEX.lancamentos);
+            }}
           />
         )}
 

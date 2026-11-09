@@ -93,7 +93,7 @@ export function TransactionRow({ item, onDelete, onEdit }: { item: Transaction; 
           <Text style={s.desc} numberOfLines={1}>{item.desc}</Text>
           <View style={s.metaRow}>
             <Text style={s.meta}>
-              {dateStr} / {item.category}{sourceLabel ? " / " + sourceLabel : ""}{isPending ? " / Pendente" : ""}
+              {dateStr} / {(item.category_name || item.category) + (item.subcategory ? " › " + item.subcategory : "")}{sourceLabel ? " / " + sourceLabel : ""}{isPending ? " / Pendente" : ""}
             </Text>
             {/* MULTICNPJ Onda 2.2: badge da loja origem (so em modo consolidado) */}
             {companyName && (

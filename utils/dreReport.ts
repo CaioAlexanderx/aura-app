@@ -16,6 +16,7 @@
 import { Platform } from "react-native";
 import type { Transaction } from "@/components/screens/financeiro/types";
 import { CSS_ESCONDE_NA_IMPRESSAO, ONCLICK_IMPRIMIR, SCRIPT_IMPRIMIR_SEM_BARRA } from "@/utils/printBar";
+import { agruparPorCategoria } from "@/utils/categoriasFinanceiro";
 
 function round2(n: number): number { return Math.round((n + Number.EPSILON) * 100) / 100; }
 
@@ -43,7 +44,8 @@ function fmtDateBR(raw: string): string {
   return isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR");
 }
 
-export type CatRow = { category: string; amount: number; pct: number };
+// 09/11/2026: `subs` = subcategorias da categoria (linha recuada no PDF).
+export type CatRow = { category: string; amount: number; pct: number; subs?: CatRow[] };
 export type DreModel = {
   totalIncome: number;
   totalExpenses: number;
@@ -57,15 +59,20 @@ export type DreModel = {
 export function buildDreModel(txs: Transaction[]): DreModel {
   var conf = txs.filter(function (t) { return t.status === "confirmed"; });
 
+  // 09/11/2026: agrupa pelo nome normalizado da categoria-mãe ("Servicos" e
+  // "Serviços" numa linha só; no consolidado, nomes iguais somam juntos) e abre
+  // as subcategorias. Regras em utils/categoriasFinanceiro.
   function group(kind: "income" | "expense"): { rows: CatRow[]; total: number } {
-    var map: Record<string, number> = {};
-    conf.filter(function (t) { return t.type === kind; })
-      .forEach(function (t) { var c = t.category || "Outros"; map[c] = (map[c] || 0) + (t.amount || 0); });
-    var total = Object.keys(map).reduce(function (s, k) { return s + map[k]; }, 0);
-    var rows = Object.keys(map).map(function (k) {
-      return { category: k, amount: map[k], pct: total > 0 ? (map[k] / total) * 100 : 0 };
+    var linhas = agruparPorCategoria(conf as any, kind);
+    var total = linhas.reduce(function (s, l) { return s + l.value; }, 0);
+    var rows = linhas.map(function (l) {
+      var row: CatRow = { category: l.label, amount: l.value, pct: l.pct };
+      if (l.subs.length) {
+        row.subs = l.subs.map(function (x) { return { category: x.label, amount: x.value, pct: x.pct }; });
+        if (l.semSub > 0) row.subs.push({ category: "Sem subcategoria", amount: l.semSub, pct: total > 0 ? (l.semSub / total) * 100 : 0 });
+      }
+      return row;
     });
-    rows.sort(function (a, b) { return b.amount - a.amount; });
     return { rows: rows, total: total };
   }
 
@@ -85,9 +92,12 @@ export function buildDreModel(txs: Transaction[]): DreModel {
 function dreTableHtml(m: DreModel): string {
   function catRows(rows: CatRow[], sign: string, cls: string): string {
     if (rows.length === 0) return '<tr><td class="cat">—</td><td class="num">' + sign + brl(0) + "</td><td class=\"pct\">—</td></tr>";
-    return rows.map(function (r) {
-      return '<tr><td class="cat">' + esc(r.category) + '</td><td class="num ' + cls + '">' + sign + brl(r.amount) +
+    function linha(r: CatRow, sub: boolean): string {
+      return '<tr' + (sub ? ' class="subcat"' : "") + '><td class="cat' + (sub ? " sub" : "") + '">' + esc(r.category) + '</td><td class="num ' + cls + '">' + sign + brl(r.amount) +
         '</td><td class="pct">' + r.pct.toFixed(1).replace(".", ",") + "%</td></tr>";
+    }
+    return rows.map(function (r) {
+      return linha(r, false) + (r.subs || []).map(function (x) { return linha(x, true); }).join("");
     }).join("");
   }
   var netCls = m.net >= 0 ? "pos" : "neg";
@@ -117,7 +127,7 @@ function annexHtml(txs: Transaction[], showCompany: boolean): string {
       '<td>' + fmtDateBR(txDateRaw(t)) + "</td>" +
       (showCompany ? '<td>' + esc((t as any).company_name || "—") + "</td>" : "") +
       '<td>' + esc(t.desc) + "</td>" +
-      '<td>' + esc(t.category || "Outros") + "</td>" +
+      '<td>' + esc(((t as any).category_name || t.category || "Outros") + ((t as any).subcategory ? " › " + (t as any).subcategory : "")) + "</td>" +
       '<td>' + (isInc ? "Receita" : "Despesa") + "</td>" +
       '<td>' + (t.status === "confirmed" ? "Confirmado" : "Pendente") + "</td>" +
       '<td class="num ' + (isInc ? "pos" : "neg") + '">' + val + "</td>" +
@@ -187,6 +197,7 @@ export function exportDreReport(opts: DreReportOpts): boolean {
     ".num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }" +
     ".pct { text-align: right; color: #6b7280; width: 64px; }" +
     ".cat { padding-left: 22px; color: #374151; }" +
+    ".cat.sub { padding-left: 40px; color: #6b7280; font-size: 0.94em; }" +
     ".grp td { background: #f5f3ff; font-weight: 800; font-size: 10px; letter-spacing: 1px; color: #6d28d9; text-transform: uppercase; padding: 6px 10px; }" +
     ".subtotal td { font-weight: 700; border-top: 1px solid #d1d5db; }" +
     ".result td { font-weight: 800; font-size: 13px; border-top: 2px solid #7c3aed; background: #faf8ff; }" +

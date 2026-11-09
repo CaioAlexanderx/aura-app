@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { casaComFiltro, normalizarCategoria } from "@/utils/categoriasFinanceiro";
 import { View, Text, Pressable, StyleSheet, Platform, ActivityIndicator, TextInput } from "react-native";
 import { Colors } from "@/constants/colors";
 import { EmptyState } from "@/components/EmptyState";
@@ -33,7 +34,9 @@ type Props = {
   // 08/11/2026 (p-82): "Ver lançamentos" das compras de mercadoria abre a
   // lista já filtrada (saídas de Fornecedores). `n` muda a cada clique, para
   // reaplicar o filtro mesmo se a pessoa o tirou.
-  filtroInicial?: { categoria: string; tipo: "income" | "expense"; n: number } | null;
+  // 09/11/2026: subcategoria opcional ("" = sem subcategoria) — vem do bloco
+  // de categorias da aba Despesas (mockup, seção D).
+  filtroInicial?: { categoria: string; subcategoria?: string | null; tipo: "income" | "expense"; n: number } | null;
 };
 
 function groupByDay(txs: Transaction[]): { date: string; label: string; items: Transaction[]; income: number; expense: number }[] {
@@ -65,12 +68,15 @@ function groupByDay(txs: Transaction[]): { date: string; label: string; items: T
 export function TabLancamentos({ transactions, isLoading, importing, onNewTransaction, onExport, onImport, onDelete, onEdit, filtroInicial }: Props) {
   var [typeFilter, setTypeFilter] = useState<"all" | "income" | "expense">(filtroInicial ? filtroInicial.tipo : "all");
   var [search, setSearch] = useState("");
-  var [catFilter, setCatFilter] = useState<string | null>(filtroInicial ? filtroInicial.categoria : null);
+  var [catFilter, setCatFilterRaw] = useState<string | null>(filtroInicial ? filtroInicial.categoria : null);
+  var [subFilter, setSubFilter] = useState<string | null>(filtroInicial && filtroInicial.subcategoria != null ? filtroInicial.subcategoria : null);
+  function setCatFilter(c: string | null) { setCatFilterRaw(c); setSubFilter(null); }
   var nDoFiltro = filtroInicial ? filtroInicial.n : 0;
   useEffect(function() {
     if (!filtroInicial) return;
     setTypeFilter(filtroInicial.tipo);
-    setCatFilter(filtroInicial.categoria);
+    setCatFilterRaw(filtroInicial.categoria);
+    setSubFilter(filtroInicial.subcategoria != null ? filtroInicial.subcategoria : null);
     setSearch("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nDoFiltro]);
@@ -86,9 +92,18 @@ export function TabLancamentos({ transactions, isLoading, importing, onNewTransa
   //
   // Agora a lista sai dos DADOS: as conhecidas primeiro, na ordem de sempre, e
   // as demais em seguida em ordem alfabetica. Nada some por nao estar na lista.
+  // 09/11/2026: o rótulo é o nome atual da categoria (category_name) quando o
+  // lançamento está ligado, e "Servicos"/"Serviços" viram um chip só.
   var presentCats = useMemo(function() {
     var set = new Set<string>();
-    transactions.forEach(function(t) { if (t.category) set.add(t.category); });
+    var vistos: Record<string, boolean> = {};
+    transactions.forEach(function(t) {
+      var nome = t.category_name || t.category;
+      if (!nome) return;
+      var k = normalizarCategoria(nome);
+      if (vistos[k]) return;
+      vistos[k] = true; set.add(nome);
+    });
     var conhecidas = CAT_ORDER.filter(function(c) { return set.has(c); });
     var resto = Array.from(set)
       .filter(function(c) { return CAT_ORDER.indexOf(c) === -1; })
@@ -99,7 +114,7 @@ export function TabLancamentos({ transactions, isLoading, importing, onNewTransa
   var displayTransactions = useMemo(function() {
     var result = transactions;
     if (typeFilter !== "all") result = result.filter(function(t) { return t.type === typeFilter; });
-    if (catFilter) result = result.filter(function(t) { return t.category === catFilter; });
+    if (catFilter) result = result.filter(function(t) { return casaComFiltro(t, catFilter, subFilter); });
     if (search.length >= 2) {
       var q = search.toLowerCase();
       result = result.filter(function(t) {
@@ -107,10 +122,26 @@ export function TabLancamentos({ transactions, isLoading, importing, onNewTransa
       });
     }
     return result;
-  }, [transactions, typeFilter, catFilter, search]);
+  }, [transactions, typeFilter, catFilter, subFilter, search]);
+
+  // Subcategorias presentes na categoria filtrada (segunda linha de chips).
+  var presentSubs = useMemo(function() {
+    if (!catFilter) return { subs: [] as string[], semSub: false };
+    var vistos: Record<string, boolean> = {};
+    var subs: string[] = [];
+    var semSub = false;
+    transactions.forEach(function(t) {
+      if (!casaComFiltro(t, catFilter)) return;
+      if (!t.subcategory) { semSub = true; return; }
+      var k = normalizarCategoria(t.subcategory);
+      if (!vistos[k]) { vistos[k] = true; subs.push(t.subcategory); }
+    });
+    subs.sort(function(a, b) { return a.localeCompare(b, "pt-BR"); });
+    return { subs: subs, semSub: semSub };
+  }, [transactions, catFilter]);
 
   // Reset pagination when filters change
-  useMemo(function() { setVisibleCount(PAGE_SIZE); }, [typeFilter, catFilter, search]);
+  useMemo(function() { setVisibleCount(PAGE_SIZE); }, [typeFilter, catFilter, subFilter, search]);
 
   var filteredIncome = useMemo(function() { return displayTransactions.filter(function(t) { return t.type === "income"; }).reduce(function(s, t) { return s + t.amount; }, 0); }, [displayTransactions]);
   var filteredExpense = useMemo(function() { return displayTransactions.filter(function(t) { return t.type === "expense"; }).reduce(function(s, t) { return s + t.amount; }, 0); }, [displayTransactions]);
@@ -167,6 +198,16 @@ export function TabLancamentos({ transactions, isLoading, importing, onNewTransa
             })}
             {presentCats.length > 5 && (<Pressable onPress={function() { setShowAllCats(!showAllCats); }} style={s.catChip}><Text style={s.catChipText}>{showAllCats ? "Menos" : "+" + (presentCats.length - 5)}</Text></Pressable>)}
           </View>
+          {catFilter && presentSubs.subs.length > 0 && (
+            <View style={[s.catRow, { marginTop: 6 }]} testID="lancamentos-subcategorias">
+              <Pressable onPress={function() { setSubFilter(null); }} style={[s.catChip, subFilter === null && s.catChipActive]}><Text style={[s.catChipText, subFilter === null && s.catChipTextActive]}>Todas de {catFilter}</Text></Pressable>
+              {presentSubs.subs.map(function(sub) {
+                var active = subFilter !== null && normalizarCategoria(subFilter) === normalizarCategoria(sub);
+                return (<Pressable key={sub} onPress={function() { setSubFilter(active ? null : sub); }} style={[s.catChip, active && s.catChipActive]}><Text style={[s.catChipText, active && s.catChipTextActive]}>{sub}</Text></Pressable>);
+              })}
+              {presentSubs.semSub && (<Pressable onPress={function() { setSubFilter(subFilter === "" ? null : ""); }} style={[s.catChip, subFilter === "" && s.catChipActive]}><Text style={[s.catChipText, subFilter === "" && s.catChipTextActive]}>Sem subcategoria</Text></Pressable>)}
+            </View>
+          )}
         </View>
       )}
 

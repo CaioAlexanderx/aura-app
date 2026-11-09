@@ -24,6 +24,9 @@ import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { useChaveDaVenda } from "@/hooks/useChaveDaVenda";
 import { apareceParaVender, lerVendaSemEstoque, produtoTemEstoque } from "@/utils/vendaSemEstoque";
 import { promoDoItem, precoDaVariante } from "@/utils/precoEfetivo";
+// 09/11/2026: categorias e subcategorias da loja (Aura-backend, migration 434).
+import { useFinanceCategories } from "@/hooks/useFinanceCategories";
+import { categoriasDaEscolha, acharPorTexto, selecaoInicial, camposDaCategoria } from "@/utils/categoriasFinanceiro";
 
 var isWeb = Platform.OS === "web";
 
@@ -112,11 +115,13 @@ var productHasStock = produtoTemEstoque;
 
 type SaleItem = { cartKey: string; productId: string; variantId?: string; name: string; price: number; qty: number };
 
-export function TransactionModal({ visible, onClose, onSave, onSaleCreated, editTransaction }: {
+export function TransactionModal({ visible, onClose, onSave, onSaleCreated, editTransaction, onOrganizarCategorias }: {
   visible: boolean; onClose: () => void;
   onSave: (body: any) => void;
   onSaleCreated?: () => void;
   editTransaction?: Transaction | null;
+  /** "Organizar categorias" embaixo da escolha (mockup, seção C). */
+  onOrganizarCategorias?: () => void;
 }) {
   var isEditing = !!editTransaction;
   var isLinkedToSale = isEditing && isPdvSaleTransaction(editTransaction);
@@ -142,6 +147,27 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
   var isIncome = txType === "income";
   var isSale = txType === "sale";
   var cats = isIncome ? INCOME_CATS : EXPENSE_CATS;
+
+  // 09/11/2026 (mockup, seção C): a grade de botões passa a ser a das
+  // categorias da loja; tocar numa categoria abre a linha de subcategorias.
+  // Sem a migration 434 no backend, `lista` vem null e a grade é a lista fixa
+  // de antes (sem subcategoria e sem "+ nova").
+  // O texto (category) continua sendo o nome da categoria-MÃE; a subcategoria
+  // vai só no category_id.
+  var categorias = useFinanceCategories({ enabled: visible && !isSale });
+  var kindDaEscolha: "income" | "expense" = isIncome ? "income" : "expense";
+  var opcoes = useMemo(function() {
+    return categoriasDaEscolha(categorias.lista, kindDaEscolha, editTransaction?.category_id || null, isEditing ? editTransaction?.category : null);
+  }, [categorias.lista, kindDaEscolha, editTransaction, isEditing]);
+  var catSelecionada = acharPorTexto(opcoes, category);
+  var [subId, setSubId] = useState<string | null>(null);
+  var [selecaoAplicada, setSelecaoAplicada] = useState<string | null>(null);
+  var [novaCatAberta, setNovaCatAberta] = useState(false);
+  var [novaCatNome, setNovaCatNome] = useState("");
+  var [novaSubAberta, setNovaSubAberta] = useState(false);
+  var [novaSubNome, setNovaSubNome] = useState("");
+  var [criandoCategoria, setCriandoCategoria] = useState(false);
+  var podeCriarCategoria = !!categorias.lista && !!categorias.companyId;
 
   // Campos novos editaveis no modo unit/edit (Sessao 23/04)
   // Vendedor disponivel sempre, payment_method tambem. Sao opcionais.
@@ -231,11 +257,62 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
       setPagoEmStr(pagoEm); setPagoEmInicial(pagoEm);
       setComprovanteNome((editTransaction as any).receipt_filename || null);
       setUnitEmpOpen(false);
+      setSubId(null); setSelecaoAplicada(null);
     }
   }, [editTransaction]);
 
+  // Edição: marca a categoria e a subcategoria do lançamento quando as
+  // categorias da loja chegam (uma vez por lançamento, para não desfazer a
+  // escolha da pessoa num refetch). Texto antigo sem acento ("Servicos")
+  // marca a categoria de mesmo nome.
+  useEffect(function() {
+    if (!editTransaction || !categorias.lista || selecaoAplicada === editTransaction.id) return;
+    // Espera o tipo do lançamento entrar no estado (o 1º render abre em Receita).
+    if (kindDaEscolha !== (editTransaction.type === "expense" ? "expense" : "income")) return;
+    var sel = selecaoInicial(opcoes, editTransaction);
+    if (sel.categoria) setCategory(sel.categoria.name);
+    setSubId(sel.subId);
+    setSelecaoAplicada(editTransaction.id);
+  }, [editTransaction, categorias.lista, opcoes, selecaoAplicada, kindDaEscolha]);
+
+  // Corpo da categoria: nome da mãe + category_id (sub, se escolhida). Texto
+  // que não casa com nenhuma categoria (ex. "Crediario - A Receber") vai como
+  // está, sem id.
+  function camposDoLancamento(): { category: string; category_id?: string | null } {
+    if (!category) return camposDaCategoria(opcoes[0] || null, null, cats[0]);
+    if (!catSelecionada) return { category: category };
+    return camposDaCategoria(catSelecionada, subId, category);
+  }
+
+  async function criarCategoriaAqui() {
+    var nome = novaCatNome.trim();
+    if (!nome) { setNovaCatAberta(false); return; }
+    setCriandoCategoria(true);
+    try {
+      var r = await categorias.criar({ kind: kindDaEscolha, name: nome });
+      setCategory((r.category && r.category.name) || nome); setSubId(null);
+      setNovaCatAberta(false); setNovaCatNome(""); setNovaSubAberta(false);
+      toast.success("Categoria criada.");
+    } catch (e: any) { toast.error(e?.message || "Não deu para criar a categoria."); }
+    finally { setCriandoCategoria(false); }
+  }
+
+  async function criarSubAqui() {
+    var nome = novaSubNome.trim();
+    if (!nome || !catSelecionada || !catSelecionada.id) { setNovaSubAberta(false); return; }
+    setCriandoCategoria(true);
+    try {
+      var r = await categorias.criar({ parent_id: catSelecionada.id, name: nome });
+      if (r.category && r.category.id) setSubId(r.category.id);
+      setNovaSubAberta(false); setNovaSubNome("");
+      toast.success("Subcategoria criada.");
+    } catch (e: any) { toast.error(e?.message || "Não deu para criar a subcategoria."); }
+    finally { setCriandoCategoria(false); }
+  }
+
   function reset() {
     setAmount(""); setBaseAmount(null); setDesc(""); setCategory(""); setDateStr(todayBR()); setBatchText(""); setMode("unit"); setSaving(false);
+    setSubId(null); setSelecaoAplicada(null); setNovaCatAberta(false); setNovaCatNome(""); setNovaSubAberta(false); setNovaSubNome("");
     setSaleSearch(""); setSaleItems([]); setSalePayment("pix"); setVariantPending(null); setVariantOptions([]);
     setCustSearch(""); setCustId(null); setCustName(null); setCustOpen(false);
     setEmpSearch(""); setEmpId(null); setEmpName(null); setEmpOpen(false);
@@ -260,7 +337,7 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
         // PATCH inclui payment_method e employee_id (campos opcionais, so envia se mudou ou esta presente)
         var patchBody: any = {
           type: txType, description: desc.trim(),
-          category: category || cats[0], due_date: vencimentoDoPatch(dateStr, dataQueAbriu, dueDate),
+          ...camposDoLancamento(), due_date: vencimentoDoPatch(dateStr, dataQueAbriu, dueDate),
         };
         var patchAmount = valorDoPatch({ digitado: val, base: baseAmount, isCreditReceivable: isCreditReceivable });
         if (patchAmount !== undefined) patchBody.amount = patchAmount;
@@ -307,7 +384,7 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
       // Novo lancamento — passa campos opcionais (payment_method e employee_id)
       var newBody: any = {
         type: txType, amount: val, description: desc.trim(),
-        category: category || cats[0], due_date: dueDate,
+        ...camposDoLancamento(), due_date: dueDate,
         recurrence_type: recurrence || undefined,
       };
       if (!isSale) {
@@ -537,7 +614,75 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
       <Text style={s.label}>Descrição</Text>
       <TextInput style={s.input} value={desc} onChangeText={setDesc} placeholder="Ex: Venda cliente Maria" placeholderTextColor={Colors.ink3} />
       <Text style={s.label}>Categoria</Text>
-      <View style={s.catGrid}>{cats.map(function(cat) { return <Pressable key={cat} onPress={function() { setCategory(cat); }} style={[s.catBtn, category === cat && s.catBtnActive]}><Text style={[s.catText, category === cat && s.catTextActive]}>{cat}</Text></Pressable>; })}</View>
+      <View style={s.catGrid} testID="tx-categorias">
+        {opcoes.map(function(o) {
+          var on = catSelecionada === o;
+          return (
+            <Pressable key={o.id || o.name} testID={"tx-cat-" + o.name}
+              onPress={function() { setCategory(o.name); setSubId(null); setNovaSubAberta(false); }}
+              style={[s.catBtn, on && s.catBtnActive]} accessibilityState={{ selected: on }}>
+              <Text style={[s.catText, on && s.catTextActive]}>{o.name}</Text>
+            </Pressable>
+          );
+        })}
+        {podeCriarCategoria && !novaCatAberta && (
+          <Pressable testID="tx-nova-categoria" onPress={function() { setNovaCatAberta(true); setNovaCatNome(""); }} style={[s.catBtn, s.catBtnAdd]}>
+            <Text style={[s.catText, s.catAddText]}>+ nova categoria</Text>
+          </Pressable>
+        )}
+      </View>
+      {novaCatAberta && (
+        <View>
+          <View style={s.inlineNew}>
+            <TextInput testID="tx-nova-categoria-input" style={[s.input, { flex: 1, paddingVertical: 8 }]} value={novaCatNome} onChangeText={setNovaCatNome}
+              onSubmitEditing={criarCategoriaAqui} placeholder={isIncome ? "Ex.: Aluguel de espaço" : "Ex.: Veículo"} placeholderTextColor={Colors.ink3} maxLength={60} autoFocus />
+            <Pressable testID="tx-nova-categoria-criar" onPress={criarCategoriaAqui} disabled={criandoCategoria} style={[s.inlineBtn, criandoCategoria && { opacity: 0.6 }]}><Text style={s.inlineBtnText}>Criar</Text></Pressable>
+            <Pressable onPress={function() { setNovaCatAberta(false); }} style={s.inlineBtnGhost}><Text style={s.catText}>✕</Text></Pressable>
+          </View>
+          <Text style={s.inlineHint}>A categoria nova fica guardada para os próximos lançamentos.</Text>
+        </View>
+      )}
+
+      {catSelecionada && catSelecionada.id && (
+        <>
+          <Text style={s.label}>
+            {catSelecionada.subcategories.length > 0 ? "Subcategoria de " + catSelecionada.name : "Subcategoria"}{" "}
+            <Text style={s.labelOpcional}>(opcional)</Text>
+          </Text>
+          <View style={s.catGrid} testID="tx-subcategorias">
+            {catSelecionada.subcategories.map(function(sub) {
+              var on = subId === sub.id;
+              return (
+                <Pressable key={sub.id} testID={"tx-sub-" + sub.name} onPress={function() { setSubId(on ? null : sub.id); }}
+                  style={[s.catBtn, on && s.catBtnActive]} accessibilityState={{ selected: on }}>
+                  <Text style={[s.catText, on && s.catTextActive]}>{sub.name}</Text>
+                </Pressable>
+              );
+            })}
+            {podeCriarCategoria && !novaSubAberta && (
+              <Pressable testID="tx-nova-sub" onPress={function() { setNovaSubAberta(true); setNovaSubNome(""); }} style={[s.catBtn, s.catBtnAdd]}>
+                <Text style={[s.catText, s.catAddText]}>+ nova</Text>
+              </Pressable>
+            )}
+          </View>
+          {novaSubAberta && (
+            <View>
+              <View style={s.inlineNew}>
+                <TextInput testID="tx-nova-sub-input" style={[s.input, { flex: 1, paddingVertical: 8 }]} value={novaSubNome} onChangeText={setNovaSubNome}
+                  onSubmitEditing={criarSubAqui} placeholder="Ex.: Material de limpeza" placeholderTextColor={Colors.ink3} maxLength={60} autoFocus />
+                <Pressable testID="tx-nova-sub-criar" onPress={criarSubAqui} disabled={criandoCategoria} style={[s.inlineBtn, criandoCategoria && { opacity: 0.6 }]}><Text style={s.inlineBtnText}>Criar</Text></Pressable>
+                <Pressable onPress={function() { setNovaSubAberta(false); }} style={s.inlineBtnGhost}><Text style={s.catText}>✕</Text></Pressable>
+              </View>
+              <Text style={s.inlineHint}>A subcategoria nova fica guardada para os próximos lançamentos.</Text>
+            </View>
+          )}
+        </>
+      )}
+      {onOrganizarCategorias && categorias.lista && (
+        <Pressable testID="tx-organizar-categorias" onPress={onOrganizarCategorias} style={{ alignSelf: "flex-start" }} accessibilityRole="link">
+          <Text style={s.linkOrganizar}>Organizar categorias</Text>
+        </Pressable>
+      )}
 
       {/* Forma de pagamento (Sessao 23/04) — disponivel em todos os modos exceto 'sale'.
           Em editar de venda do PDV (isLinkedToSale): backend sincroniza com sales.payment_method automaticamente. */}
@@ -749,6 +894,15 @@ var s = StyleSheet.create({
   catBtnActive: { backgroundColor: Colors.violetD, borderColor: Colors.violet },
   catText: { fontSize: 11, color: Colors.ink3, fontWeight: "500" },
   catTextActive: { color: Colors.violet3, fontWeight: "600" },
+  catBtnAdd: { borderStyle: "dashed", borderColor: Colors.violet, backgroundColor: "transparent" },
+  catAddText: { color: Colors.violet3, fontWeight: "700" },
+  labelOpcional: { textTransform: "none", fontWeight: "500", letterSpacing: 0 },
+  inlineNew: { flexDirection: "row", gap: 6, alignItems: "center" },
+  inlineBtn: { paddingHorizontal: 12, paddingVertical: 9, borderRadius: 8, backgroundColor: Colors.violet, minHeight: 36, justifyContent: "center" },
+  inlineBtnText: { color: "#fff", fontSize: 12, fontWeight: "700" },
+  inlineBtnGhost: { paddingHorizontal: 10, paddingVertical: 9, borderRadius: 8, backgroundColor: Colors.bg4, minHeight: 36, justifyContent: "center" },
+  inlineHint: { fontSize: 11, color: Colors.ink3, marginTop: 6 },
+  linkOrganizar: { fontSize: 12.5, color: Colors.violet3, fontWeight: "700" },
   dateHint: { flexDirection: "row", alignItems: "center", gap: 6, paddingTop: 2 },
   dateHintText: { fontSize: 10, color: Colors.ink3 },
   saveBtn: { borderRadius: 12, paddingVertical: 14, alignItems: "center", marginTop: 4 },
