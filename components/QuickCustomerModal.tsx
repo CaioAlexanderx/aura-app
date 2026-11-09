@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, Pressable, TextInput, Platform, Switch } from "react-native";
+import { View, Text, StyleSheet, Pressable, TextInput, Platform, Switch, ScrollView, Dimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
@@ -8,6 +8,11 @@ import { useAuthStore } from "@/stores/auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { maskPhone } from "@/utils/masks";
 import { validarCadastroRapido, nomeValido } from "@/utils/cadastroRapidoCliente";
+// 09/11/2026 — endereço opcional, recolhido (mockup "Entrega no Caixa").
+import { SecaoEndereco } from "@/components/endereco/SecaoEndereco";
+import {
+  ENDERECO_VAZIO, enderecoComecado, enderecoParaApi, erroDoEndereco, type Endereco,
+} from "@/components/endereco/endereco";
 
 type Props = {
   visible: boolean;
@@ -35,6 +40,7 @@ export function QuickCustomerModal({ visible, onClose, onCustomerCreated }: Prop
   const [phone, setPhone] = useState('');
   const [instagram, setInstagram] = useState('');
   const [followsUs, setFollowsUs] = useState(false);
+  const [endereco, setEndereco] = useState<Endereco>(ENDERECO_VAZIO);
   const [saving, setSaving] = useState(false);
 
   // Estado de duplicata detectada
@@ -84,6 +90,8 @@ export function QuickCustomerModal({ visible, onClose, onCustomerCreated }: Prop
     if (!company?.id) return;
     const v = validarCadastroRapido({ name, birthDate, phone });
     if (!v.ok) { toast.error(v.erro); return; }
+    const erroEndereco = erroDoEndereco(endereco);
+    if (erroEndereco) { toast.error(erroEndereco); return; }
     setSaving(true);
     try {
       const res = await companiesApi.createCustomer(company.id, {
@@ -91,12 +99,15 @@ export function QuickCustomerModal({ visible, onClose, onCustomerCreated }: Prop
         instagram: instagram.trim() ? instagram.trim().replace('@', '') : null,
         follows_instagram: followsUs,
         source: 'pdv',
+        // Só manda endereço se o operador começou um.
+        ...(enderecoComecado(endereco) ? enderecoParaApi(endereco) : {}),
       });
       toast.success(`${name.trim()} cadastrado!`);
       qc.invalidateQueries({ queryKey: ['customers', company.id] });
       onCustomerCreated({ id: res.id, name: res.name || v.body.name, phone: res.phone || phone });
       // Reset form
       setName(''); setBirthDate(''); setPhone(''); setInstagram(''); setFollowsUs(false);
+      setEndereco(ENDERECO_VAZIO);
       setDupWarning(null);
       onClose();
     } catch (err: any) {
@@ -108,6 +119,8 @@ export function QuickCustomerModal({ visible, onClose, onCustomerCreated }: Prop
     if (!company?.id) return;
     const v = validarCadastroRapido({ name, birthDate, phone });
     if (!v.ok) { toast.error(v.erro); return; }
+    const erroEndereco = erroDoEndereco(endereco);
+    if (erroEndereco) { toast.error(erroEndereco); return; }
 
     // Limpa aviso anterior antes de nova checagem
     setDupWarning(null);
@@ -129,6 +142,9 @@ export function QuickCustomerModal({ visible, onClose, onCustomerCreated }: Prop
           <Text style={s.title}>Cadastro rápido de cliente</Text>
           <Pressable onPress={onClose} style={s.closeBtn}><Icon name="x" size={16} color={Colors.ink3} /></Pressable>
         </View>
+        {/* 09/11/2026: com o endereço aberto o formulário passa da altura
+            de um celular — rola por dentro, o rodapé fica fixo. */}
+        <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
 
         <View style={s.field}>
           <Text style={s.label}>Nome completo *</Text>
@@ -163,6 +179,8 @@ export function QuickCustomerModal({ visible, onClose, onCustomerCreated }: Prop
             trackColor={{ true: Colors.green, false: Colors.bg4 }} thumbColor="#fff" />
         </View>
 
+        <SecaoEndereco value={endereco} onChange={setEndereco} testID="cadastro-rapido-endereco" />
+
         {/* Banner de duplicata */}
         {dupWarning && (
           <View style={s.dupBanner}>
@@ -179,6 +197,7 @@ export function QuickCustomerModal({ visible, onClose, onCustomerCreated }: Prop
                   onCustomerCreated({ id: dupWarning.id, name: dupWarning.name, phone: dupWarning.phone });
                   setDupWarning(null);
                   setName(''); setBirthDate(''); setPhone(''); setInstagram(''); setFollowsUs(false);
+                  setEndereco(ENDERECO_VAZIO);
                   onClose();
                 }}
                 style={s.dupUseBtn}
@@ -195,6 +214,8 @@ export function QuickCustomerModal({ visible, onClose, onCustomerCreated }: Prop
             </View>
           </View>
         )}
+
+        </ScrollView>
 
         <View style={s.actions}>
           <Pressable onPress={onClose} style={s.cancelBtn}><Text style={s.cancelText}>Cancelar</Text></Pressable>
@@ -229,7 +250,12 @@ export function QuickCustomerModal({ visible, onClose, onCustomerCreated }: Prop
 const s = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
-  modal: { backgroundColor: Colors.bg3, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: Colors.border2, width: '100%', maxWidth: 440, zIndex: 10 },
+  modal: {
+    backgroundColor: Colors.bg3, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: Colors.border2,
+    width: '100%', maxWidth: 440, zIndex: 10,
+    // 09/11/2026: cabe na tela do celular mesmo com o endereço aberto.
+    maxHeight: Math.round(Dimensions.get('window').height * 0.92),
+  },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   title: { fontSize: 18, fontWeight: '700', color: Colors.ink },
   closeBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.bg4, alignItems: 'center', justifyContent: 'center' },

@@ -1,4 +1,5 @@
 import { classificarCliente, rotuloDoSegmento, type ClienteSegmentavel, type ContextoDaBase } from "./segmentos";
+import type { Endereco } from "@/components/endereco/endereco";
 
 export type Customer = {
   id: string;
@@ -25,6 +26,12 @@ export type Customer = {
   // matcon_club_enabled ligado — a ficha usa isso pra mostrar "Parceiro ·
   // pedreiro · 1.240 pontos" sem uma segunda chamada. `null`/ausente = cliente comum.
   professional?: { id: string; trade: string; points_balance: number; referrals_count?: number } | null;
+  // 09/11/2026 — endereço para entrega (components/endereco/endereco.ts).
+  // Ausente = o formulário não mexeu (o PATCH não manda os campos).
+  endereco?: Endereco;
+  // has_address do backend: rua ou CEP + número + cidade. É o que acende
+  // o selo "sem endereço" no seletor do Caixa.
+  hasAddress?: boolean;
 };
 
 export const TABS = ["Clientes", "Ranking", "Retenção", "Avaliações"];

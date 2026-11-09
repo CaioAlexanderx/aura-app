@@ -5,6 +5,9 @@ import { toast } from "@/components/Toast";
 import type { Customer } from "./types";
 import { maskPhone } from "@/utils/masks";
 import { DateInput } from "@/components/inputs/DateInput";
+// 09/11/2026 — "Endereço para entrega", recolhido (mockup aprovado, seção A).
+import { SecaoEndereco } from "@/components/endereco/SecaoEndereco";
+import { ENDERECO_VAZIO, erroDoEndereco, type Endereco } from "@/components/endereco/endereco";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
@@ -28,9 +31,12 @@ export function AddCustomerForm({ onSave, onCancel, initialData }: Props) {
   const [instagram, setInstagram] = useState(initialData?.instagram || "");
   const [birthday, setBirthday] = useState(initialData?.birthday || "");
   const [notes, setNotes] = useState(initialData?.notes || "");
+  const [endereco, setEndereco] = useState<Endereco>(initialData?.endereco || ENDERECO_VAZIO);
 
   function handleSave() {
     if (!name.trim()) { toast.error("Preencha o nome"); return; }
+    const erroEndereco = erroDoEndereco(endereco);
+    if (erroEndereco) { toast.error(erroEndereco); return; }
     onSave({
       id: initialData?.id || Date.now().toString(),
       name: name.trim(),
@@ -44,6 +50,8 @@ export function AddCustomerForm({ onSave, onCancel, initialData }: Props) {
       firstVisit: initialData?.firstVisit || new Date().toLocaleDateString("pt-BR"),
       notes: notes.trim(),
       rating: initialData?.rating || null,
+      creditBalance: initialData?.creditBalance || 0,
+      endereco,
     });
   }
 
@@ -84,6 +92,8 @@ export function AddCustomerForm({ onSave, onCancel, initialData }: Props) {
           <View style={{ height: 16 }} />
         </View>
       </View>
+
+      <SecaoEndereco value={endereco} onChange={setEndereco} testID="cliente-form-endereco" />
 
       <Text style={s.label}>Observações</Text>
       <TextInput style={[s.input, { minHeight: 70, textAlignVertical: "top" }]} value={notes} onChangeText={setNotes} placeholder="Preferências, alergias..." placeholderTextColor={Colors.ink3} multiline numberOfLines={3} />

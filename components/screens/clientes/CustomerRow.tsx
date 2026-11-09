@@ -21,6 +21,8 @@ import { HistoricoComprasModal } from "./HistoricoComprasModal";
 import { readMatconSettings } from "@/constants/matcon";
 import { MarcarProfissionalModal } from "@/components/matcon/MarcarProfissionalModal";
 import { TRADE_LABELS, type Professional, type ProfessionalTrade } from "@/services/matconApi";
+// 09/11/2026 — "Endereço para entrega" na ficha (mockup aprovado, seção A).
+import { EnderecoNaFicha } from "@/components/endereco/EnderecoNaFicha";
 
 // Resolve o TokenCor (indireção de ./segmentos.ts — módulo puro, sem
 // import de react-native) pra cor real. O laranja de "Devendo" nunca
@@ -215,6 +217,9 @@ export function CustomerRow({
               </Text>
             </View>
           )}
+          {/* O endereço é do cliente: o PATCH vai para a loja onde ele foi
+              cadastrado e vale em todas as lojas do mesmo dono. */}
+          <EnderecoNaFicha customerId={c.id} companyId={targetCompanyId} endereco={c.endereco} />
           {c.notes ? <Text style={s.notes}>{c.notes}</Text> : null}
           <View style={s.detailTags}><Text style={s.detailTagsLabel}>Status</Text><View style={{ flexDirection: "row", gap: 6 }}><Tag tag={tagInfo.rotulo} cor={tagInfo.cor} motivo={motivo} /></View></View>
           <View style={s.actions}>

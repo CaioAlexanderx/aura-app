@@ -6,6 +6,7 @@ import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import { pluralize } from "@/utils/plural";
 import type { Customer } from "@/components/screens/clientes/types";
+import { enderecoDoCliente, enderecoParaApi, temEnderecoDeEntrega } from "@/components/endereco/endereco";
 
 // MULTICNPJ Sessao 2 Onda 2.3 (03/05/2026):
 // Hook ramifica entre /me/customers (consolidated) e /companies/:id/customers
@@ -111,6 +112,10 @@ function mapApiCustomer(c: any): Customer {
           referrals_count: c.professional.referrals_count != null ? parseInt(c.professional.referrals_count) : undefined,
         }
       : null,
+    // 09/11/2026 — endereço para entrega. has_address vem do backend; se
+    // um backend antigo não mandar, calcula com o mesmo critério.
+    endereco: enderecoDoCliente(c),
+    hasAddress: typeof c.has_address === "boolean" ? c.has_address : temEnderecoDeEntrega(enderecoDoCliente(c)),
   };
 }
 
@@ -268,6 +273,8 @@ export function useCustomers(options?: UseCustomersOptions) {
       instagram_handle: c.instagram || undefined,
       birth_date: parseBirthday(c.birthday),
       notes: c.notes || undefined,
+      // 09/11/2026: endereço opcional; vazio vai null e o backend ignora.
+      ...(c.endereco ? enderecoParaApi(c.endereco) : {}),
     });
   }
 
@@ -291,6 +298,9 @@ export function useCustomers(options?: UseCustomersOptions) {
         instagram_handle: c.instagram || null,
         birth_date: c.birthday ? parseBirthday(c.birthday) : null,
         notes: c.notes || null,
+        // 09/11/2026: o formulário sempre manda o endereço inteiro (vazio
+        // apaga). Sem `endereco`, os campos nem vão e nada muda.
+        ...(c.endereco ? enderecoParaApi(c.endereco) : {}),
       },
     });
   }
