@@ -78,6 +78,7 @@ import type { Product } from "@/components/screens/estoque/types";
 import { useAuthStore } from "@/stores/auth";
 import { AvisoAssine } from "@/components/screens/pdv/AvisoAssine";
 import { NovaVendedoraModal } from "@/components/screens/pdv/NovaVendedoraModal";
+import { EntregaModal } from "@/components/screens/pdv/EntregaModal";
 import { AvisoVendaRecuperada } from "@/components/screens/pdv/AvisoVendaRecuperada";
 // 04/11/2026: convite para ligar os avisos no celular (uma vez por aparelho).
 import { ConviteDeAvisos } from "@/components/ConviteDeAvisos";
@@ -157,8 +158,28 @@ function CaixaScreenInner() {
     ? cartProps.payMethods
     : cartProps.payMethods.filter((m: any) => m.key !== "crediario");
 
+  // 09/11/2026 (entrega, parte 2): a tela final usa o endereço do cadastro
+  // quando a venda não trouxe um (venda sem frete de cliente com endereço).
+  const clienteDaUltimaVenda = st.lastSale?.customerId
+    ? st.customers.find((c: any) => c.id === st.lastSale!.customerId)
+    : null;
+  const enderecoDoClienteDaVenda = clienteDaUltimaVenda?.hasAddress ? clienteDaUltimaVenda.endereco : null;
+
   const modals = (
     <>
+    {/* 09/11/2026 — venda com frete sem endereço (utils/entregaDaVenda.ts). */}
+    <EntregaModal
+      pedido={st.pedidoDeEntrega}
+      cliente={st.selectedCustomerId ? {
+        id: st.selectedCustomerId,
+        name: st.selectedCustomerName || "O cliente",
+        phone: st.customers.find((c: any) => c.id === st.selectedCustomerId)?.phone || null,
+      } : null}
+      clientes={st.clientesEnabled ? st.customers : []}
+      rascunho={st.rascunhoDaEntrega}
+      onVoltar={st.voltarDaEntrega}
+      onConfirmar={st.confirmarEntrega}
+    />
     {/* 03/11/2026 — Nova vendedora pelo seletor F2 (utils/vendedoraNoCaixa.ts). */}
     <NovaVendedoraModal
       visible={st.novaVendedora !== null}
@@ -212,11 +233,11 @@ function CaixaScreenInner() {
         <View style={s.root}>
           <CaixaDesignStyle />
           <CaixaBackdrop />
-          <SaleComplete sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} matconEnabled={st.matconEnabled} matconDeliveryDays={st.matconDeliveryDays} referralName={st.referralName} pdvSettings={pdvSettingsGarantia} />
+          <SaleComplete sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} matconEnabled={st.matconEnabled} matconDeliveryDays={st.matconDeliveryDays} referralName={st.referralName} pdvSettings={pdvSettingsGarantia} enderecoDoCliente={enderecoDoClienteDaVenda} />
         </View>
       );
     }
-    return <SaleComplete sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} matconEnabled={st.matconEnabled} matconDeliveryDays={st.matconDeliveryDays} referralName={st.referralName} pdvSettings={pdvSettingsGarantia} />;
+    return <SaleComplete sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} matconEnabled={st.matconEnabled} matconDeliveryDays={st.matconDeliveryDays} referralName={st.referralName} pdvSettings={pdvSettingsGarantia} enderecoDoCliente={enderecoDoClienteDaVenda} />;
   }
 
   function StockToggle() {

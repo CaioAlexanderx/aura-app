@@ -10,6 +10,8 @@ import { textoDoErro } from "@/components/screens/pdv/erroNoCaixa";
 import { aoRecarregar, apagarVendaGuardada, guardarVenda, recuperarVenda } from "@/utils/vendaGuardada";
 import { ehIdDeCatalogo } from "@/utils/comanda";
 import { linhaDoFrete, valorDoFrete } from "@/utils/frete";
+import { camposDaEntregaNaVenda, entregaValeParaACliente, type EntregaDaVenda } from "@/utils/entregaDaVenda";
+import { enderecoDoCliente, type Endereco } from "@/components/endereco/endereco";
 import { mensagemErroCarneDaVenda } from "@/utils/crediarioCarne";
 import { novaChaveDaVenda } from "@/utils/chaveDaVenda";
 import { promoDoItem } from "@/utils/precoEfetivo";
@@ -145,6 +147,11 @@ export type SaleResult = {
   /** 30/10/2026 (Frete no Caixa): o frete cobrado nesta venda. Ausente ou
    *  0 = venda sem frete. Está dentro de `subtotal` e `total`. */
   frete?: number;
+  /** 09/11/2026 (entrega, parte 2): para onde vai a entrega desta venda —
+   *  o retrato que o servidor gravou (sales.delivery_address) ou o que a
+   *  trava do frete juntou. Ausente = a tela final usa o cadastro do
+   *  cliente (venda sem frete). */
+  entrega?: Endereco | null;
   cpfNaNota?: string;       // CPF do consumidor (opcional, pra NFC-e)
   // QA 23/09/2026 (Matcon): o `matcon` da resposta do POST /pdv/sale —
   // entrega criada pela venda de orçamento e pontos da indicação. Ausente
@@ -195,7 +202,12 @@ export function useCart(
   cardCfg: ConfigDoCartao = CARTAO_DESLIGADO,
   // 14/10/2026: `recuperar: false` = não restaura a venda guardada (Caixa
   // aberto com ?quote=: o carrinho é o do orçamento). Vale só na montagem.
-  opcoes: { recuperar?: boolean } = {},
+  opcoes: {
+    recuperar?: boolean;
+    /** 09/11/2026: o servidor recusou a venda com frete por falta de
+     *  endereço (422 DELIVERY_ADDRESS_REQUIRED). Recebe o cliente da venda. */
+    aoFaltarEntrega?: (customerId: string | null) => void;
+  } = {},
 ) {
   const cartaoOn = cardCfg.enabled === true;
   // 22/09/2026 (Matcon M1): id do orçamento que montou este carrinho
@@ -217,6 +229,12 @@ export function useCart(
   // total DEPOIS do desconto — desconto é sobre os produtos, nunca sobre o
   // frete. Zera junto com o carrinho.
   var [freteValor, setFreteValor] = useState("");
+
+  // 09/11/2026 (entrega, parte 2 — utils/entregaDaVenda): o que a trava da
+  // venda com frete juntou ("Para onde vai a entrega?" / "Quem recebe a
+  // entrega?"). Vale só para o cliente para quem foi preenchida. Zera
+  // junto com o carrinho.
+  var [entrega, setEntrega] = useState<EntregaDaVenda | null>(null);
 
   // 22/09/2026 (Matcon M3): id do profissional "indicado por" desta venda
   // (chip do Caixa — IndicadoPorChip via useMatconReferral). Vai como
@@ -957,6 +975,10 @@ export function useCart(
     // fecha a conta pelas linhas, então é assim que o frete entra no total,
     // no cupom e no histórico.
     if (frete > 0) saleData.items.push(linhaDoFrete(frete));
+    // 09/11/2026: venda com frete leva delivery_check (o servidor confere o
+    // endereço) e o que a trava juntou. Sem frete e sem entrega: nada.
+    Object.assign(saleData, camposDaEntregaNaVenda(entrega, { frete: frete, customerId: selectedCustomerId }));
+    var entregaDaVenda = entregaValeParaACliente(entrega, selectedCustomerId) ? entrega : null;
 
     if (paymentsSnapshot) saleData.payments = paymentsSnapshot;
     if (saleDate) saleData.sale_date = saleDate;
@@ -1052,9 +1074,11 @@ export function useCart(
         payments: paymentsSnapshot,
         items: cartSnapshot,
         date: new Date().toLocaleString("pt-BR"),
-        customerId: selectedCustomerId || undefined,
-        customerName: selectedCustomerName || undefined,
-        customerPhone: selectedCustomerPhone || undefined,
+        // Cliente cadastrado na própria venda (frete sem cliente): o id vem
+        // do servidor e o nome é o de quem recebe.
+        customerId: selectedCustomerId || (venda && venda.customer_id ? String(venda.customer_id) : undefined),
+        customerName: selectedCustomerName || (entregaDaVenda && entregaDaVenda.novoCliente ? entregaDaVenda.nome : undefined) || undefined,
+        customerPhone: selectedCustomerPhone || (entregaDaVenda && entregaDaVenda.novoCliente ? entregaDaVenda.telefone : undefined) || undefined,
         employeeName: selectedEmployeeName || undefined,
         sellerName: effectiveSellerName || undefined,
         couponCode: couponApplied?.code,
@@ -1063,6 +1087,9 @@ export function useCart(
         subtotal: conta.subtotal,
         discount: conta.desconto,
         frete: frete > 0 ? frete : undefined,
+        entrega: venda && venda.delivery_address
+          ? enderecoDoCliente(venda.delivery_address)
+          : (entregaDaVenda ? entregaDaVenda.endereco : undefined),
         cpfNaNota: cleanCpf || undefined,
         matcon: matcon && typeof matcon === "object" ? (matcon as MatconDaVenda) : null,
       };
@@ -1083,6 +1110,7 @@ export function useCart(
           apagarGuarda();
           setCart([]); setQuoteId(null); setComanda(null); setReferredProfessionalId(null); clearLotAllocations(); toast.success("Venda registrada!"); setIsProcessing(false); clearCoupon(); clearDiscount();
           setFreteValor("");
+          setEntrega(null);
           setSellerName("");
           setCpfNaNota("");
           // QA 23/09/2026 (decisão do Caio): a próxima venda começa limpa —
@@ -1102,6 +1130,13 @@ export function useCart(
           if (errCode === "IDEMPOTENCY_KEY_REUSED") setChaveDaVenda(novaChaveDaVenda());
           if (errCode === "CREDIARIO_REQUIRES_CUSTOMER") {
             toast.error("Selecione um cliente antes de finalizar no crediário.");
+          } else if (errCode === "DELIVERY_ADDRESS_REQUIRED") {
+            // 09/11/2026: o servidor conferiu e falta o endereço (o cadastro
+            // não tinha o que a lista mostrava). O próximo "Finalizar venda"
+            // pergunta de novo.
+            setEntrega(null);
+            if (opcoes.aoFaltarEntrega) opcoes.aoFaltarEntrega(selectedCustomerId || null);
+            toast.error("Falta o endereço da entrega. Toque em Finalizar venda e preencha para onde vai.");
           } else if (erroDoCarne) {
             toast.error(erroDoCarne);
           } else {
@@ -1119,6 +1154,7 @@ export function useCart(
       setLastSale(buildLastSale(Date.now().toString(36).toUpperCase().slice(-6)));
       setCart([]); setQuoteId(null); setComanda(null); setReferredProfessionalId(null); clearLotAllocations(); setIsProcessing(false);
       setFreteValor("");
+      setEntrega(null);
       voltarAoPagamentoInicial();
     }
   }
@@ -1137,6 +1173,7 @@ export function useCart(
     setRecuperada(null);
     setLastSale(null); setCart([]); setQuoteId(null); setComanda(null); setReferredProfessionalId(null); clearLotAllocations(); setIsProcessing(false);
     setFreteValor("");
+    setEntrega(null);
     setSelectedCustomerId(null); setSelectedCustomerName(null); setSelectedCustomerPhone(null);
     setSelectedEmployeeId(null); setSelectedEmployeeName(null);
     setSellerName("");
@@ -1152,6 +1189,8 @@ export function useCart(
     comanda, setComanda,
     // 30/10/2026 (Frete no Caixa): o texto do campo e o valor que vale.
     freteValor, setFreteValor, frete,
+    // 09/11/2026 (entrega, parte 2): o que a trava do frete juntou.
+    entrega, setEntrega,
     referredProfessionalId, setReferredProfessionalId,
     // Matcon M4 — o pai (usePdvState/cartProps) liga `setLotAllocations` no
     // `onLotAllocations` do CartPanel; sem isso a linha do lote continua
