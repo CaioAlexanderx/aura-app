@@ -3,14 +3,16 @@
 //
 // 20/07/2026 — tela "Vendas" do Studio (paridade Negócio, tema Studio):
 //   - Visualiza a venda (salesApi.get): itens, cliente, pagamento, fiscal.
-//   - EDIÇÃO COMPLETA: qtd / preço unitário / desconto por item, remover
-//     item e desconto da venda → salesApi.updateSale (PATCH /sales/:id).
-//     ⚠️ Requer suporte no backend (ver PR); hoje o PATCH só troca vendedor.
+//   - 09/11/2026: a "edição completa" (qtd / preço / desconto por item) saiu.
+//     O backend nunca editou itens: ignorava o corpo, gravava o vendedor como
+//     NULO e respondia ok, e a tela dizia "Venda atualizada". O PATCH agora
+//     recusa campo desconhecido (400) e a tela não promete o que não existe:
+//     para mudar produtos ou valores, cancela-se a venda e lança-se de novo.
 //   - CANCELAMENTO (= "deleção" reversível): salesApi.cancel — estorna
 //     estoque, receita e fiscal.
 //   - NFC-e + comprovante não-fiscal reaproveitados do PDV.
 // ============================================================
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Modal, View, Text, Pressable, TextInput, Platform, ScrollView, ActivityIndicator } from "react-native";
 import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import type { StudioPalette } from "@/contexts/StudioThemeMode";
@@ -32,20 +34,6 @@ const PAYMENT_LABELS: Record<string, string> = {
   dinheiro: "Dinheiro", pix: "PIX", cartao: "Cartão", credito: "Crédito", debito: "Débito", crediario: "Crediário",
 };
 const payLabel = (k?: string | null) => (k ? PAYMENT_LABELS[k] || k : "—");
-
-type EditItem = {
-  id: string | null;
-  product_id: string | null;
-  product_name: string;
-  quantity: string;
-  unit_price: string;
-  discount: string;
-};
-
-function toNum(s: string): number {
-  const v = parseFloat((s || "").replace(",", "."));
-  return isNaN(v) ? 0 : v;
-}
 
 function fmtDateTime(iso?: string) {
   if (!iso) return "";
@@ -83,11 +71,6 @@ export function StudioSaleDetailModal({
   const [loading, setLoading] = useState(false);
   const [fiscalActive, setFiscalActive] = useState(false);
 
-  const [editing, setEditing] = useState(false);
-  const [items, setItems] = useState<EditItem[]>([]);
-  const [saleDiscount, setSaleDiscount] = useState("0");
-  const [saving, setSaving] = useState(false);
-
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
@@ -95,7 +78,6 @@ export function StudioSaleDetailModal({
   const load = useCallback(async () => {
     if (!companyId || !saleId) return;
     setLoading(true);
-    setEditing(false);
     setConfirmCancel(false);
     try {
       const d = await salesApi.get(companyId, saleId);
@@ -109,7 +91,7 @@ export function StudioSaleDetailModal({
 
   useEffect(() => {
     if (visible && saleId) load();
-    else if (!visible) { setDetail(null); setEditing(false); setConfirmCancel(false); setCancelReason(""); }
+    else if (!visible) { setDetail(null); setConfirmCancel(false); setCancelReason(""); }
   }, [visible, saleId, load]);
 
   useEffect(() => {
@@ -123,61 +105,6 @@ export function StudioSaleDetailModal({
 
   const isCancelled = detail?.sale?.status === "cancelled";
   const isTroca = detail?.sale?.type === "troca";
-  const canEdit = !!detail && !isCancelled && !isTroca;
-
-  function startEdit() {
-    if (!detail) return;
-    setItems(detail.items.map((i) => ({
-      id: i.id,
-      product_id: i.product_id,
-      product_name: i.product_name,
-      quantity: String(i.quantity),
-      unit_price: (i.unit_price || 0).toFixed(2),
-      discount: (i.discount || 0).toFixed(2),
-    })));
-    setSaleDiscount((detail.sale.discount_amount || 0).toFixed(2));
-    setEditing(true);
-  }
-
-  function updateItem(idx: number, patch: Partial<EditItem>) {
-    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
-  }
-  function removeItem(idx: number) {
-    setItems((prev) => prev.filter((_, i) => i !== idx));
-  }
-
-  const editedTotal = useMemo(() => {
-    const sum = items.reduce((s, it) => s + Math.max(0, toNum(it.quantity) * toNum(it.unit_price) - toNum(it.discount)), 0);
-    return Math.max(0, sum - toNum(saleDiscount));
-  }, [items, saleDiscount]);
-
-  async function saveEdit() {
-    if (!companyId || !saleId) return;
-    if (items.length === 0) { toast.error("A venda precisa de ao menos 1 item"); return; }
-    setSaving(true);
-    try {
-      await salesApi.updateSale(companyId, saleId, {
-        items: items.map((it) => ({
-          id: it.id,
-          product_id: it.product_id,
-          product_name: it.product_name,
-          quantity: toNum(it.quantity),
-          unit_price: toNum(it.unit_price),
-          discount: toNum(it.discount),
-        })),
-        discount_amount: toNum(saleDiscount),
-      });
-      toast.success("Venda atualizada");
-      setEditing(false);
-      await load();
-      onChanged?.();
-    } catch (e: any) {
-      toast.error(e?.message || "Erro ao salvar (endpoint de edição pendente no backend)");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function doCancel() {
     if (!companyId || !saleId) return;
     setCancelling(true);
@@ -202,7 +129,6 @@ export function StudioSaleDetailModal({
   }));
 
   const cardBase = { backgroundColor: t.paperCard, borderRadius: 12, borderWidth: 1, borderColor: t.ink5, padding: 14, marginBottom: 12 } as const;
-  const smallInput = { height: 34, borderWidth: 1, borderColor: t.ink5, borderRadius: 8, backgroundColor: t.paperCardElev, color: t.ink, textAlign: "center" as const, fontSize: 13, fontWeight: "700" as const, paddingHorizontal: 6, ...webNoOutline() };
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -246,9 +172,8 @@ export function StudioSaleDetailModal({
               <View style={{ ...cardBase, alignItems: "center" }}>
                 <Text style={{ fontSize: 11, color: t.ink3, textTransform: "uppercase", letterSpacing: 0.5 }}>Total</Text>
                 <Text style={{ fontSize: 26, color: isCancelled ? t.ink3 : t.primary, fontWeight: "800", textDecorationLine: isCancelled ? "line-through" : "none" }}>
-                  R$ {money(editing ? editedTotal : detail.sale.total_amount)}
+                  R$ {money(detail.sale.total_amount)}
                 </Text>
-                {editing && <Text style={{ fontSize: 11, color: t.ink3, marginTop: 2 }}>total recalculado</Text>}
               </View>
 
               {/* Meta */}
@@ -263,36 +188,10 @@ export function StudioSaleDetailModal({
               {/* Itens */}
               <View style={cardBase}>
                 <Text style={{ fontSize: 13, color: t.ink, fontWeight: "800", marginBottom: 10 }}>
-                  {editing ? "Editar itens" : "Itens"}
+                  Itens
                 </Text>
 
-                {editing ? (
-                  <>
-                    <View style={{ flexDirection: "row", gap: 6, marginBottom: 4, paddingHorizontal: 2 }}>
-                      <Text style={{ flex: 1, fontSize: 10, color: t.ink3, fontWeight: "700" }}>Item</Text>
-                      <Text style={{ width: 44, fontSize: 10, color: t.ink3, fontWeight: "700", textAlign: "center" }}>Qtd</Text>
-                      <Text style={{ width: 66, fontSize: 10, color: t.ink3, fontWeight: "700", textAlign: "center" }}>Preço</Text>
-                      <Text style={{ width: 60, fontSize: 10, color: t.ink3, fontWeight: "700", textAlign: "center" }}>Desc.</Text>
-                      <View style={{ width: 30 }} />
-                    </View>
-                    {items.map((it, idx) => (
-                      <View key={it.id || idx} style={{ flexDirection: "row", gap: 6, alignItems: "center", paddingVertical: 6, borderTopWidth: idx === 0 ? 0 : 1, borderTopColor: t.ink5 }}>
-                        <Text style={{ flex: 1, fontSize: 12.5, color: t.ink, fontWeight: "600" }} numberOfLines={2}>{it.product_name}</Text>
-                        <TextInput value={it.quantity} onChangeText={(v) => updateItem(idx, { quantity: v })} keyboardType="number-pad" style={{ ...smallInput, width: 44 }} />
-                        <TextInput value={it.unit_price} onChangeText={(v) => updateItem(idx, { unit_price: v })} keyboardType="decimal-pad" style={{ ...smallInput, width: 66 }} />
-                        <TextInput value={it.discount} onChangeText={(v) => updateItem(idx, { discount: v })} keyboardType="decimal-pad" style={{ ...smallInput, width: 60 }} />
-                        <Pressable onPress={() => removeItem(idx)} disabled={items.length <= 1} style={{ width: 30, height: 30, alignItems: "center", justifyContent: "center", opacity: items.length <= 1 ? 0.3 : 1, ...webPointer() }}>
-                          <Ic name="trash" size={16} color={t.danger} />
-                        </Pressable>
-                      </View>
-                    ))}
-                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: t.ink5 }}>
-                      <Text style={{ fontSize: 12.5, color: t.ink2, fontWeight: "700" }}>Desconto da venda (R$)</Text>
-                      <TextInput value={saleDiscount} onChangeText={setSaleDiscount} keyboardType="decimal-pad" style={{ ...smallInput, width: 90 }} />
-                    </View>
-                  </>
-                ) : (
-                  detail.items.map((i, idx) => (
+                {detail.items.map((i, idx) => (
                     <View key={i.id || idx} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 7, borderTopWidth: idx === 0 ? 0 : 1, borderTopColor: t.ink5 }}>
                       <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                         <Text style={{ fontSize: 13, color: t.ink, fontWeight: "600" }} numberOfLines={2}>{i.product_name}</Text>
@@ -303,11 +202,16 @@ export function StudioSaleDetailModal({
                       <Text style={{ fontSize: 13, color: t.ink, fontWeight: "800" }}>R$ {money(i.total_price)}</Text>
                     </View>
                   ))
+                }
+                {!isCancelled && !isTroca && (
+                  <Text style={{ fontSize: 11.5, color: t.ink3, marginTop: 10, lineHeight: 16 }} testID="studio-venda-sem-edicao-de-itens">
+                    Produtos e valores de uma venda feita não mudam por aqui. Para corrigir, cancele a venda e lance de novo.
+                  </Text>
                 )}
               </View>
 
               {/* Fiscal (só quando fiscal ativo e não cancelada / não editando) */}
-              {fiscalActive && !isCancelled && !editing && companyId && (
+              {fiscalActive && !isCancelled && companyId && (
                 <View style={{ ...cardBase, gap: 12 }}>
                   <Text style={{ fontSize: 13, color: t.ink, fontWeight: "800" }}>Fiscal</Text>
                   {Platform.OS === "web" && (
@@ -350,27 +254,12 @@ export function StudioSaleDetailModal({
           {/* Footer de ações */}
           {!!detail && !loading && !confirmCancel && (
             <View style={[{ flexDirection: "row", gap: 10, padding: 16, borderTopWidth: 1, borderTopColor: t.ink5 }, celular && { paddingHorizontal: 14, paddingTop: 10, ...respiroInferior(10) }]} testID="detalhe-da-venda-rodape">
-              {editing ? (
-                <>
-                  <Pressable onPress={() => setEditing(false)} disabled={saving} style={{ flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: t.paperCardElev, borderWidth: 1, borderColor: t.ink5, alignItems: "center", ...webPointer() }}>
-                    <Text style={{ fontSize: 13.5, color: t.ink, fontWeight: "800" }}>Descartar</Text>
-                  </Pressable>
-                  <Pressable onPress={saveEdit} disabled={saving} style={{ flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: t.primary, alignItems: "center", opacity: saving ? 0.6 : 1, ...webPointer() }}>
-                    <Text style={{ fontSize: 13.5, color: "#fff", fontWeight: "800" }}>{saving ? "Salvando…" : "Salvar alterações"}</Text>
-                  </Pressable>
-                </>
-              ) : isCancelled ? (
+              {isCancelled ? (
                 <Pressable onPress={onClose} style={{ flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: t.paperCardElev, borderWidth: 1, borderColor: t.ink5, alignItems: "center", ...webPointer() }}>
                   <Text style={{ fontSize: 13.5, color: t.ink, fontWeight: "800" }}>Fechar</Text>
                 </Pressable>
               ) : (
                 <>
-                  {canEdit && (
-                    <Pressable onPress={startEdit} style={{ flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: t.paperCardElev, borderWidth: 1, borderColor: t.ink5, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 7, ...webPointer() }}>
-                    <Ic name="edit" size={15} color={t.ink} />
-                    <Text style={{ fontSize: 13.5, color: t.ink, fontWeight: "800" }}>Editar</Text>
-                    </Pressable>
-                  )}
                   <Pressable onPress={() => setConfirmCancel(true)} style={{ flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: t.dangerSoft, borderWidth: 1, borderColor: t.danger, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 7, ...webPointer() }}>
                     <Ic name="trash" size={15} color={t.danger} />
                     <Text style={{ fontSize: 13.5, color: t.dangerInk, fontWeight: "800" }}>Cancelar venda</Text>

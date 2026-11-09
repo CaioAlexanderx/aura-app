@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { salesApi, type SalesListResponse, type SaleDetailFull } from "@/services/api";
-import type { EmitNfceBody } from "@/services/salesApi";
+import { salesApi as salesApiDireto, type EmitNfceBody, type SaleEditBody, type SaleEditContext } from "@/services/salesApi";
 import { meAggregatesApi, type SalesFilters, type SalesConsolidatedResponse } from "@/services/meAggregates";
 import { useAuthStore } from "@/stores/auth";
 
@@ -36,9 +36,9 @@ import { useAuthStore } from "@/stores/auth";
 //   - invalida lista (per-company E consolidated) + detalhes + transactions
 //     + dashboard + dre + products.
 //
-// useUpdateSaleSeller(companyId?): mutation pra alterar/remover vendedor
-//   - companyId opcional: mesmo padrao do useCancelSale.
-//   - invalida lista + detalhes ao concluir.
+// 09/11/2026 — useSaleEditContext / useEditSale (Editar venda): contexto da
+//   edicao e o PATCH com dry_run (previa) ou de verdade. Substituem o
+//   useUpdateSaleSeller (so vendedor).
 //
 // 02/06/2026 (b) — useEmitNfce / useReemitTrocaFiscal: emite NFC-e (venda)
 //   ou reprocessa NF-e 55 de devolucao (troca) a partir do detalhe. Ambas
@@ -147,31 +147,63 @@ export function useCancelSale(companyId?: string) {
   };
 }
 
-export function useUpdateSaleSeller(companyId?: string) {
+// 09/11/2026 — Editar venda (Aura-backend#972). O contexto (formas atuais,
+// travas, NFC-e, caixa, permissões) é lido no mount da edição, sempre fresco
+// (staleTime 0): a trava de crediário pago e o prazo da NFC-e mudam sozinhos.
+// No consolidado multi-CNPJ o companyId é o da empresa dona da venda.
+export function useSaleEditContext(saleId: string | null | undefined, companyId?: string, enabled = true) {
   const { company } = useAuthStore();
-  // MULTICNPJ Onda 2.4: em consolidated, caller passa companyId do sale.
+  const targetCompanyId = companyId || company?.id;
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ["sale-edit-context", targetCompanyId, saleId],
+    queryFn: function() {
+      if (!targetCompanyId || !saleId) throw new Error("missing");
+      return salesApiDireto.editContext(targetCompanyId, saleId);
+    },
+    enabled: enabled && !!targetCompanyId && !!saleId,
+    staleTime: 0,
+    retry: 1,
+  });
+  return { context: data as SaleEditContext | undefined, isLoading, error: error as any, refetch };
+}
+
+export function useEditSale(companyId?: string) {
+  const { company } = useAuthStore();
   const targetCompanyId = companyId || company?.id;
   const qc = useQueryClient();
 
-  const mutation = useMutation({
-    mutationFn: function(args: { saleId: string; seller_id: string | null }) {
+  function invalidateAll() {
+    // Forma, cliente e vendedor(a) aparecem em Vendas, Financeiro, caixa,
+    // crediário, clientes e comissão.
+    ["sales-list", "sale-detail", "sale-edit-context", "transactions", "transaction-sale-details",
+     "dashboard", "me-dashboard", "dre", "customers", "credit", "crediario", "caixa", "employees", "commission"]
+      .forEach(function(k) { qc.invalidateQueries({ queryKey: [k] }); });
+  }
+
+  const preview = useMutation({
+    mutationFn: function(args: { saleId: string; body: SaleEditBody }) {
       if (!targetCompanyId) throw new Error("no company");
-      return salesApi.updateSeller(targetCompanyId, args.saleId, args.seller_id);
+      return salesApiDireto.editSale(targetCompanyId, args.saleId, Object.assign({}, args.body, { dry_run: true }));
     },
-    onSuccess: function() {
-      qc.invalidateQueries({ queryKey: ["sales-list"] });
-      qc.invalidateQueries({ queryKey: ["sale-detail"] });
+  });
+  const apply = useMutation({
+    mutationFn: function(args: { saleId: string; body: SaleEditBody }) {
+      if (!targetCompanyId) throw new Error("no company");
+      const body = Object.assign({}, args.body);
+      delete (body as any).dry_run;
+      return salesApiDireto.editSale(targetCompanyId, args.saleId, body);
     },
+    onSuccess: invalidateAll,
   });
 
   return {
-    updateSeller: function(args: { saleId: string; seller_id: string | null }) { return mutation.mutateAsync(args); },
-    isUpdating: mutation.isPending,
-    error: mutation.error as Error | null,
+    previewEdit: function(args: { saleId: string; body: SaleEditBody }) { return preview.mutateAsync(args); },
+    applyEdit: function(args: { saleId: string; body: SaleEditBody }) { return apply.mutateAsync(args); },
+    isPreviewing: preview.isPending,
+    isSaving: apply.isPending,
   };
 }
 
-// 02/06/2026 (b): emite NFC-e (modelo 65) por venda a partir do detalhe.
 export function useEmitNfce(companyId?: string) {
   const { company } = useAuthStore();
   const targetCompanyId = companyId || company?.id;

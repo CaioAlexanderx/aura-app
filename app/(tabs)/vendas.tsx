@@ -8,10 +8,7 @@ import { SaleDetailModal } from "@/components/screens/vendas/SaleDetailModal";
 import { FechamentosTab } from "@/components/screens/vendas/FechamentosTab";
 import { SalesRanking } from "@/components/screens/vendas/SalesRanking";
 import { VendasFiltros, type StatusKey } from "@/components/screens/vendas/VendasFiltros";
-import { TransactionModal } from "@/components/screens/financeiro/TransactionModal";
 import { useAuthStore } from "@/stores/auth";
-import { companiesApi } from "@/services/api";
-import { useQuery } from "@tanstack/react-query";
 import type { SalesListItem, SalesFilters } from "@/services/api";
 import { useLocalSearchParams, router } from "expo-router";
 import { vazioDeVendas } from "@/utils/mensagensDoApp";
@@ -39,10 +36,11 @@ import { pluralize } from "@/utils/plural";
 // companyId+companyName pro SaleDetailModal — assim cancel/detail vai
 // pra empresa correta.
 //
-// "Editar lancamento" em consolidated: oculto por ora. TransactionModal
-// usa company.id internamente e ainda nao suporta company override
-// (Onda 2.6 vai adaptar). User troca pra empresa especifica antes de
-// editar lancamentos do PDV.
+// 09/11/2026: o "Editar lancamento" a partir da venda saiu. A venda tem
+// "Editar venda" proprio (forma de pagamento, vendedor(a) e cliente,
+// Aura-backend#972), que funciona tambem no consolidado: vai para a empresa
+// dona da venda (selectedSale.company_id). O "Editar lancamento" do
+// Financeiro continua para os lancamentos que nao sao de venda.
 //
 // 13/05/2026: fix periodToRange — substituido new Date(y,m,d) por
 // Date.UTC(y,m,d,3,0,0) para calcular meia-noite SP corretamente
@@ -125,7 +123,6 @@ export default function VendasScreen() {
   const [status, setStatus] = useState<StatusKey>("all");
   const [search, setSearch] = useState("");
   const [selectedSale, setSelectedSale] = useState<SaleListRow | null>(null);
-  const [editingTxId, setEditingTxId] = useState<string | null>(null);
   // Mes que o seletor esta mostrando (so vale quando period === "month").
   const [monthAnchor, setMonthAnchor] = useState<MonthAnchor>(spCurrentMonth);
   // Pagina atual (0-based). 30 vendas por pagina.
@@ -178,26 +175,8 @@ export default function VendasScreen() {
   // MULTICNPJ Onda 2.4: badge da loja so quando o user tem 2+ empresas
   const showCompanyBadge = (companyCount || 1) > 1;
 
-  // Pra abrir TransactionModal precisa carregar a tx — usa companies.transactions
-  // SO funciona em modo per-company. Em consolidated, "Editar lancamento" e ocultado.
-  const { data: editTx } = useQuery({
-    queryKey: ["transaction-by-id", company?.id, editingTxId],
-    queryFn: async function() {
-      if (!company?.id || !editingTxId) return null;
-      const res = await companiesApi.transactions(company.id);
-      const tx = (res?.transactions || []).find(function(t: any) { return t.id === editingTxId; });
-      return tx || null;
-    },
-    enabled: !!company?.id && !!editingTxId && !consolidatedView,
-    staleTime: 5_000,
-  });
-
   function handleSaleClick(sale: SaleListRow) {
     setSelectedSale(sale);
-  }
-
-  function handleEditTransaction(txId: string) {
-    setEditingTxId(txId);
   }
 
   // Lista vazia (item 12): o texto e o botão dependem do que está filtrando.
@@ -553,20 +532,7 @@ export default function VendasScreen() {
         companyId={selectedSale?.company_id}
         companyName={showCompanyBadge ? selectedSale?.company_name : undefined}
         onClose={function() { setSelectedSale(null); }}
-        // MULTICNPJ Onda 2.4: "Editar lancamento" so funciona em per-company.
-        // TransactionModal usa company.id; sera adaptado na Onda 2.6.
-        onEditTransaction={consolidatedView ? undefined : handleEditTransaction}
       />
-
-      {/* TRANSACTION MODAL — so abre em modo per-company */}
-      {!consolidatedView && editTx && (
-        <TransactionModal
-          visible={!!editTx}
-          editTransaction={editTx}
-          onClose={function() { setEditingTxId(null); refetch(); }}
-          onSave={function() { /* edicoes via PATCH companiesApi.updateTransaction acontecem dentro */ }}
-        />
-      )}
     </ScrollView>
   );
 }
