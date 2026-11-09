@@ -108,6 +108,7 @@ import { normalizeText, buildProductHaystack, matchesQuery } from "@/utils/produ
 import { apareceParaVender, lerVendaSemEstoque, produtoTemEstoque } from "@/utils/vendaSemEstoque";
 import { warrantiesApi } from "@/services/warrantiesApi";
 import { useWarrantyDraft, diasValidos } from "@/stores/warrantyDraft";
+import { resumoDoEndereco } from "@/components/endereco/endereco";
 
 const PAGE_SIZE = 12;
 
@@ -1092,8 +1093,12 @@ export function usePdvState() {
     ) recentCount++;
 
     return {
+      // 09/11/2026: o bairro (e a rua) entram na linha e o selo diz se o
+      // cliente tem endereço para entrega (mockup "Entrega no Caixa", B).
       customerOptions: customers.map(c => ({
-        id: c.id, name: c.name, subtitle: c.phone || c.email,
+        id: c.id, name: c.name,
+        subtitle: [c.phone || c.email, resumoDoEndereco(c.endereco)].filter(Boolean).join(" · ") || undefined,
+        semEndereco: !c.hasAddress,
       })),
       customerRecentCount: recentCount,
     };

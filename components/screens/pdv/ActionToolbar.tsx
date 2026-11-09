@@ -246,7 +246,9 @@ type ActPersonProps = {
   shortcut: string;
   value: { id: string; name: string; subtitle?: string } | null;
   onChange: (v: { id: string; name: string; subtitle?: string } | null) => void;
-  options: { id: string; name: string; subtitle?: string }[];
+  /** semEndereco (09/11/2026, só cliente): true = selo "sem endereço",
+   *  false = selo "entrega", ausente = sem selo (vendedora). */
+  options: { id: string; name: string; subtitle?: string; semEndereco?: boolean }[];
   /** Vendedora (03/11/2026): recebe o nome já digitado na busca/nome livre. */
   onAddNew?: (nomeSugerido?: string) => void;
   fallbackText?: string;
@@ -377,6 +379,12 @@ export const ActPerson = forwardRef<PersonPickerHandle, ActPersonProps>(function
                       <Text style={popS.itemName} numberOfLines={1}>{opt.name}</Text>
                       {opt.subtitle ? <Text style={popS.itemSub} numberOfLines={1}>{opt.subtitle}</Text> : null}
                     </View>
+                    {opt.semEndereco === true && (
+                      <Text style={[popS.pill, popS.pillSem]} testID={`cliente-sem-endereco-${opt.id}`}>sem endereço</Text>
+                    )}
+                    {opt.semEndereco === false && (
+                      <Text style={[popS.pill, popS.pillOk]} testID={`cliente-com-endereco-${opt.id}`}>entrega</Text>
+                    )}
                   </Pressable>
                 </Fragment>
               );
@@ -707,6 +715,10 @@ const popS = StyleSheet.create({
   avatar:     { width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.violet, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   avatarTxt:  { fontSize: 11, color: "#fff", fontWeight: "700" },
   itemName:   { fontSize: 13, color: Colors.ink, fontWeight: "600" },
+  // 09/11/2026: selo do endereço (mockup "Entrega no Caixa", seção B).
+  pill:       { fontSize: 10, fontWeight: "700", borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2, overflow: "hidden", flexShrink: 0 },
+  pillSem:    { color: Colors.amber, backgroundColor: Colors.amberD },
+  pillOk:     { color: Colors.green, backgroundColor: Colors.greenD },
   itemSub:    { fontSize: 10, color: Colors.ink3, marginTop: 1, fontFamily: Platform.OS === "web" ? ("ui-monospace, monospace" as any) : "monospace" },
   applyBtn:   { width: 38, height: 38, borderRadius: 8, backgroundColor: Colors.violet, alignItems: "center", justifyContent: "center" },
   applyWide:  { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8, backgroundColor: Colors.violet, justifyContent: "center", alignItems: "center", minWidth: 84 },
