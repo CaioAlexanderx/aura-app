@@ -27,8 +27,16 @@
 // /matcon/entregas) e a venda indicada diz "Abbey ganhou 10 pontos com
 // esta venda". As frases vêm de ./matconDaVenda.ts a partir de
 // `sale.matcon` (resposta do POST); sem `matcon`, nada muda na tela.
+//
+// 09/11/2026 (entrega, parte 2 — mockup "Entrega no Caixa", F) — a venda
+// com endereço ganha a linha "Entrega" e a caixinha "Imprimir papel de
+// entrega": marcada quando há frete, desmarcada sem frete (aparece só se o
+// cliente já tem endereço). Bobina ou A4, lembrado no computador. Marcada,
+// o botão vira "Imprimir cupom e entrega" e tudo sai numa janela só
+// (utils/entregaDaVenda.ts). Desmarcada, o cupom é pedido exatamente como
+// antes, na mesma rota.
 // ============================================================
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
@@ -49,6 +57,11 @@ import { frasesMatconDaVenda } from "./matconDaVenda";
 import { cupomComVale } from "@/utils/valeTrocaCupom";
 import { NOME_DO_FRETE } from "@/utils/frete";
 import type { ConfigDoVale } from "@/utils/valeTroca";
+import { resumoDoEndereco, type Endereco } from "@/components/endereco/endereco";
+import {
+  caixinhaDaEntrega, encadearPapelA4, gravarFormatoDoPapel, lerFormatoDoPapel, rotaDoCupom, rotaDoPapelA4,
+  type FormatoDoPapel,
+} from "@/utils/entregaDaVenda";
 
 const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
@@ -56,7 +69,12 @@ function paymentLabel(key: string): string {
   return PAYMENTS.find(p => p.key === key)?.label || key;
 }
 
-function openPrintReceipt(companyId: string, saleId: string, token: string | null, vendaEm: Date, config?: ConfigDoVale) {
+/**
+ * `papel`: null = só o cupom (a rota de sempre). "bobina" = o papel depois
+ * do cupom, no mesmo documento. "a4" = o cupom e, quando a impressão dele
+ * fecha, o papel em A4 na MESMA janela. Um pop-up só nos três casos.
+ */
+function openPrintReceipt(companyId: string, saleId: string, token: string | null, vendaEm: Date, config?: ConfigDoVale, papel: FormatoDoPapel | null = null) {
   if (!token || !companyId) { toast.error("Sessão expirada"); return; }
   if (Platform.OS !== "web" || typeof window === "undefined") {
     toast.info("Impressão disponível apenas na versão web");
@@ -66,14 +84,30 @@ function openPrintReceipt(companyId: string, saleId: string, token: string | nul
   // window.open depois do await perdia a user activation e o Chrome
   // bloqueava o pop-up de forma intermitente ("nem sempre imprime").
   openPrintWindow(async () => {
-    const res = await fetch(`${BASE_URL}/companies/${companyId}/print/receipt/${saleId}/preview`, {
+    const res = await fetch(rotaDoCupom(BASE_URL, companyId, saleId, papel === "bobina"), {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return { ok: false as const, error: "Erro ao gerar cupom" };
     // 13/10/2026: vendas de nov/dez saem com o bloco "Vale-troca" (QR) — ver
     // utils/valeTroca.ts. Fora do período, ou com a loja desligando, o HTML do
     // backend segue intacto.
-    const html = cupomComVale(await res.text(), { companyId, saleId, vendaEm, config });
+    let html = cupomComVale(await res.text(), { companyId, saleId, vendaEm, config });
+    if (papel === "a4") {
+      // O papel em A4 é buscado já, e a própria janela do cupom navega para
+      // ele depois de imprimir (o Chrome bloquearia um segundo pop-up).
+      try {
+        const r2 = await fetch(rotaDoPapelA4(BASE_URL, companyId, saleId), { headers: { Authorization: `Bearer ${token}` } });
+        if (r2.ok) {
+          const url = URL.createObjectURL(new Blob([await r2.text()], { type: "text/html" }));
+          setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 10 * 60_000);
+          html = encadearPapelA4(html, url);
+        } else {
+          toast.error("O cupom vai sair, mas não deu para gerar o papel de entrega.");
+        }
+      } catch {
+        toast.error("O cupom vai sair, mas não deu para gerar o papel de entrega.");
+      }
+    }
     return { ok: true as const, html };
   }).then((r) => {
     if (r === "blocked") toast.error("Pop-up bloqueado. Permita pop-ups para imprimir.");
@@ -95,9 +129,12 @@ type Props = {
   referralName?: string | null;
   /** pdv_settings da loja: o vale-troca do cupom lê vale_troca_enabled daqui. */
   pdvSettings?: ConfigDoVale;
+  /** 09/11/2026: endereço do cadastro do cliente da venda (venda sem
+   *  retrato, ex.: sem frete). null = cliente sem endereço ou sem cliente. */
+  enderecoDoCliente?: Endereco | null;
 };
 
-export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, referralName, pdvSettings }: Props) {
+export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, referralName, pdvSettings, enderecoDoCliente }: Props) {
   const { company, token } = useAuthStore();
   // Instante em que a tela final abriu = o da venda (o vale-troca do cupom
   // vale pelo dia da venda, não pelo da impressão).
@@ -118,6 +155,19 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
   // a tela mostra os produtos, o frete e o total, cada um na sua linha.
   const frete = sale.frete && sale.frete > 0 ? sale.frete : 0;
   const subtotalProdutos = Math.round((subtotal - frete) * 100) / 100;
+
+  // 09/11/2026: papel de entrega. O endereço da venda vale primeiro; sem
+  // ele, o do cadastro do cliente.
+  const enderecoDaEntrega = sale.entrega || enderecoDoCliente || null;
+  const caixinha = caixinhaDaEntrega({ frete, endereco: enderecoDaEntrega });
+  const [comPapel, setComPapel] = useState(caixinha.marcada);
+  const [formatoDoPapel, setFormatoDoPapel] = useState<FormatoDoPapel>(() => lerFormatoDoPapel());
+  const [estreito, setEstreito] = useState(false);
+  const imprimirPapel = caixinha.mostra && comPapel;
+  function escolherFormato(f: FormatoDoPapel) {
+    setFormatoDoPapel(f);
+    gravarFormatoDoPapel(f);
+  }
 
   const hasSplit = !!(sale.payments && sale.payments.length > 0);
   const payments: NfcePaymentEntry[] | undefined = hasSplit
@@ -156,12 +206,12 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
 
   function handlePrint() {
     if (!company?.id) return;
-    openPrintReceipt(company.id, sale.id, token, vendaEm, pdvSettings);
+    openPrintReceipt(company.id, sale.id, token, vendaEm, pdvSettings, imprimirPapel ? formatoDoPapel : null);
   }
 
   return (
     <View style={s.container}>
-      <View style={s.card}>
+      <View style={s.card} onLayout={(e) => setEstreito(e.nativeEvent.layout.width < 400)}>
         <View style={s.checkCircle}><Icon name="check" size={32} color={Colors.green} /></View>
         <Text style={s.title}>Venda registrada!</Text>
         <Pressable onPress={handleCopyId} style={s.saleIdBox}>
@@ -224,6 +274,12 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
           <View style={s.row}>
             <Text style={s.label}>Cliente</Text>
             <Text style={s.meta}>{sale.customerName}</Text>
+          </View>
+        )}
+        {caixinha.mostra && (
+          <View style={s.row}>
+            <Text style={s.label}>Entrega</Text>
+            <Text testID="venda-entrega" style={[s.meta, s.metaDireita]} numberOfLines={2}>{resumoDoEndereco(enderecoDaEntrega)}</Text>
           </View>
         )}
         {sale.cpfNaNota && (
@@ -291,11 +347,46 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
           <WarrantySaleActions companyId={company.id} saleId={sale.id} saleKeys={(sale.items || []).map((i: any) => i.productId)} />
         )}
 
-        <View style={[s.actions, { marginTop: 14 }]}>
-          <Pressable onPress={handlePrint} style={s.secondaryBtn}>
-            <Text style={s.secondaryText}>Imprimir cupom</Text>
+        {caixinha.mostra && (
+          <View style={s.papel} testID="venda-papel-entrega">
+            <Pressable
+              onPress={() => setComPapel((v) => !v)}
+              style={s.papelLinha}
+              testID="venda-papel-caixinha"
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: comPapel }}
+              accessibilityLabel="Imprimir papel de entrega"
+            >
+              <View style={[s.caixa, comPapel && s.caixaOn]}>
+                {comPapel && <Icon name="check" size={13} color="#fff" />}
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={s.papelTitulo}>Imprimir papel de entrega</Text>
+                {!estreito && <Text style={s.papelSub}>Nome, telefone, endereço e itens, para colar no pacote.</Text>}
+              </View>
+            </Pressable>
+            <View style={s.seg}>
+              {(["bobina", "a4"] as const).map((f) => (
+                <Pressable
+                  key={f}
+                  onPress={() => escolherFormato(f)}
+                  style={[s.segItem, formatoDoPapel === f && s.segOn]}
+                  testID={`venda-papel-${f}`}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: formatoDoPapel === f }}
+                >
+                  <Text style={[s.segTxt, formatoDoPapel === f && s.segTxtOn]}>{f === "a4" ? "A4" : "Bobina"}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
+
+        <View style={[s.actions, { marginTop: 14 }, imprimirPapel && estreito && s.actionsCol]}>
+          <Pressable onPress={handlePrint} style={[s.secondaryBtn, imprimirPapel && estreito && s.btnCheio]} testID="venda-imprimir">
+            <Text style={s.secondaryText}>{imprimirPapel ? "Imprimir cupom e entrega" : "Imprimir cupom"}</Text>
           </Pressable>
-          <Pressable onPress={onNewSale} style={s.primaryBtn}>
+          <Pressable onPress={onNewSale} style={[s.primaryBtn, imprimirPapel && estreito && s.btnCheio]}>
             <Text style={s.primaryText}>Nova venda</Text>
           </Pressable>
         </View>
@@ -335,6 +426,21 @@ const s = StyleSheet.create({
   splitLine: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 2 },
   splitMethod: { fontSize: 12, color: Colors.ink2, fontWeight: "600" },
   splitValue: { fontSize: 12, color: Colors.ink, fontWeight: "700" },
+  // 09/11/2026: papel de entrega (mockup "Entrega no Caixa", F).
+  metaDireita: { flex: 1, textAlign: "right", marginLeft: 12 },
+  papel: { width: "100%", marginTop: 14, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg2, gap: 10 },
+  papelLinha: { flexDirection: "row", alignItems: "flex-start", gap: 10, minHeight: 32, width: "100%" },
+  caixa: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: Colors.violet, alignItems: "center", justifyContent: "center", marginTop: 1 },
+  caixaOn: { backgroundColor: Colors.violet },
+  papelTitulo: { fontSize: 14, color: Colors.ink, fontWeight: "700" },
+  papelSub: { fontSize: 12, color: Colors.ink3, marginTop: 2 },
+  seg: { flexDirection: "row", alignSelf: "flex-start", borderWidth: 1, borderColor: Colors.border2, borderRadius: 9, overflow: "hidden", marginLeft: 32 },
+  segItem: { paddingHorizontal: 14, paddingVertical: 8, minHeight: 36, justifyContent: "center" },
+  segOn: { backgroundColor: Colors.violet },
+  segTxt: { fontSize: 12, color: Colors.ink2, fontWeight: "700" },
+  segTxtOn: { color: "#fff" },
+  actionsCol: { flexDirection: "column" },
+  btnCheio: { flex: 0, width: "100%" },
 });
 
 export default SaleComplete;

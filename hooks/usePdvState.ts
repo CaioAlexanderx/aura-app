@@ -86,6 +86,10 @@ import { useComandaNoCaixa } from "@/hooks/useComandaNoCaixa";
 import { useComandasAbertas } from "@/components/screens/pdv/ComandasAbertasPanel";
 import { lerComandaEnabled } from "@/utils/comanda";
 import { lerFreteEnabled } from "@/utils/frete";
+import {
+  precisaPedirEntrega, entregaValeParaACliente,
+  type EntregaDaVenda, type PedidoDeEntrega,
+} from "@/utils/entregaDaVenda";
 import { algumPrecoMudou } from "@/utils/vendaRecuperada";
 import { promoDoItem } from "@/utils/precoEfetivo";
 
@@ -262,6 +266,7 @@ export function usePdvState() {
     setQuoteId,
     comanda: comandaNoCarrinho, setComanda,
     freteValor, setFreteValor, frete,
+    entrega, setEntrega,
     referredProfessionalId, setReferredProfessionalId,
     setLotAllocations,
     selectedCustomerId, selectedCustomerName, selectedCustomerPhone, selectCustomer,
@@ -276,7 +281,12 @@ export function usePdvState() {
     precoNoCartao, couponDiscount: cartCouponDiscount, setCouponRule,
     splitStatus,
     vendaRecuperada, dispensarVendaRecuperada,
-  } = useCart(cardCfg, { recuperar: !quoteRouteParams.quote });
+  } = useCart(cardCfg, {
+    recuperar: !quoteRouteParams.quote,
+    // 09/11/2026: 422 DELIVERY_ADDRESS_REQUIRED — o cadastro não tinha o
+    // endereço que a lista mostrava. A próxima tentativa pergunta.
+    aoFaltarEntrega: (id) => { if (id) setCadastroSemEndereco(id); },
+  });
 
   // ── Matcon M1 — editar orçamento (07/10/2026) ───────────────────────────
   // "Editar" em /matcon/orcamentos abre o Caixa com ?quote=<id>&edit=1. O
@@ -414,6 +424,38 @@ export function usePdvState() {
   const [freteAberto, setFreteAberto] = useState(false);
   useEffect(function() { if (cart.length === 0) setFreteAberto(false); }, [cart.length]);
   const freteOpen = freteEnabled && (freteAberto || frete > 0 || freteValor.length > 0);
+
+  // ── Entrega da venda com frete (09/11/2026, utils/entregaDaVenda) ──────
+  // "Finalizar venda" com frete e sem endereço abre, ANTES do pagamento,
+  // "Para onde vai a entrega?" (cliente sem endereço) ou "Quem recebe a
+  // entrega?" (sem cliente). "Voltar" fecha e o carrinho fica como estava;
+  // o que foi digitado fica no rascunho. "Salvar e continuar" guarda a
+  // entrega e retoma o Finalizar (num efeito, para ler o cliente novo).
+  const [pedidoDeEntrega, setPedidoDeEntrega] = useState<PedidoDeEntrega | null>(null);
+  const [rascunhoDaEntrega, setRascunhoDaEntrega] = useState<EntregaDaVenda | null>(null);
+  const [cadastroSemEndereco, setCadastroSemEndereco] = useState<string | null>(null);
+  const [retomarFinalizar, setRetomarFinalizar] = useState(0);
+  const clienteDaVenda = selectedCustomerId ? customers.find(c => c.id === selectedCustomerId) || null : null;
+  const clienteTemEndereco = !!clienteDaVenda?.hasAddress && cadastroSemEndereco !== selectedCustomerId;
+  useEffect(function() { if (!(frete > 0)) setEntrega(null); }, [frete]);
+  useEffect(function() { if (cart.length === 0) setRascunhoDaEntrega(null); }, [cart.length]);
+  // Venda com entrega pode ter criado cliente ou endereço: a lista recarrega.
+  useEffect(function() {
+    if (lastSale && lastSale.entrega) qc.invalidateQueries({ queryKey: ["customers"] });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastSale]);
+  function confirmarEntrega(e: EntregaDaVenda, cliente?: { id: string; name: string; phone?: string | null } | null) {
+    if (cliente) selectCustomer(cliente.id, cliente.name, cliente.phone || null);
+    if (cliente && cadastroSemEndereco === cliente.id) setCadastroSemEndereco(null);
+    setEntrega(e);
+    setRascunhoDaEntrega(null);
+    setPedidoDeEntrega(null);
+    setRetomarFinalizar(n => n + 1);
+  }
+  function voltarDaEntrega(rascunho: EntregaDaVenda | null) {
+    setRascunhoDaEntrega(rascunho);
+    setPedidoDeEntrega(null);
+  }
 
   // ── Matcon M1 — Caixa abre orçamento convertido (`?quote={id}`) ─────────
   // A esteira de Orçamentos manda pra cá com `?quote=<id>` depois de
@@ -733,6 +775,13 @@ export function usePdvState() {
       return;
     }
 
+    // 09/11/2026: venda com frete precisa de para onde vai, antes de cobrar.
+    const pedido = precisaPedirEntrega({ frete, customerId: selectedCustomerId, clienteTemEndereco, entrega });
+    if (pedido) {
+      setPedidoDeEntrega(pedido);
+      return;
+    }
+
     // Crediário Parcelado — intercepta antes do modal de troco.
     if (payment === "crediario" && !splitMode) {
       if (!selectedCustomerId) {
@@ -775,6 +824,13 @@ export function usePdvState() {
     }
     finalizeSale();
   }
+
+  // Depois de "Salvar e continuar": segue o Finalizar com a entrega (e o
+  // cliente escolhido) já no estado.
+  useEffect(function() {
+    if (retomarFinalizar > 0) handleFinalize();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [retomarFinalizar]);
 
   function handleConfirmCashChange() {
     setShowChangeModal(false);
@@ -1150,6 +1206,11 @@ export function usePdvState() {
           onClear: () => { setFreteValor(""); setFreteAberto(false); },
           customerName: selectedCustomerName,
           onPickCustomer: clientesEnabled ? () => customerPickerRef.current?.open() : undefined,
+          // 09/11/2026: para onde vai (mockup "Entrega no Caixa", C).
+          entregaResumo: entregaValeParaACliente(entrega, selectedCustomerId)
+            ? entrega!.endereco
+            : (clienteTemEndereco ? clienteDaVenda!.endereco : null),
+          faltaEndereco: !!selectedCustomerId && !clienteTemEndereco && !entregaValeParaACliente(entrega, selectedCustomerId),
         }
       : null,
     // Comandas: null com a chave desligada = rodapé de sempre.
@@ -1259,6 +1320,8 @@ export function usePdvState() {
     closeNewSeller: () => setNovaVendedora(null),
     customers, customerOptions, customerRecentCount,
     sellerPickerRef, customerPickerRef,
+    // 09/11/2026: a trava da venda com frete (EntregaModal).
+    pedidoDeEntrega, rascunhoDaEntrega, confirmarEntrega, voltarDaEntrega,
     showTroca,
     valeTroca,
     openTroca:  () => { setValeTroca(null); setShowTroca(true); },

@@ -91,6 +91,7 @@ describe("encaixe no Caixa", () => {
 
   test("Caixa aberto com ?quote= não restaura a venda guardada", () => {
     const st = fonte("hooks/usePdvState.ts");
-    expect(st).toMatch(/useCart\(cardCfg, \{ recuperar: !quoteRouteParams\.quote \}\)/);
+    // 09/11/2026: o objeto de opções ganhou aoFaltarEntrega (trava do frete).
+    expect(st).toMatch(/useCart\(cardCfg, \{\s*recuperar: !quoteRouteParams\.quote,/);
   });
 });

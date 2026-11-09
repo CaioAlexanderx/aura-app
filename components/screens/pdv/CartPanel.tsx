@@ -656,6 +656,8 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
               onClear={frete.onClear}
               customerName={frete.customerName}
               onPickCustomer={frete.onPickCustomer}
+              entregaResumo={frete.entregaResumo}
+              faltaEndereco={frete.faltaEndereco}
             />
           ) : null}
           <View style={s.sumRow}>
