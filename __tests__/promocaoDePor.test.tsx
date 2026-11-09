@@ -35,6 +35,9 @@ jest.mock("@/services/api", () => {
 
 let mockProdutos: any[] = [];
 jest.mock("@/hooks/useProducts", () => ({ useProducts: () => ({ products: mockProdutos, isLoading: false }) }));
+// "Parados há 60 dias ou mais" tem testes próprios (promocaoDePorParados.test.tsx);
+// aqui as vendas recentes não chamam a API, para mockRequest ver só as promoções.
+jest.mock("@/hooks/useVendidosRecentes", () => ({ useVendidosRecentes: () => ({ vendidos: {}, carregando: false, erro: false, refetch: jest.fn() }) }));
 
 let mockAuth: any;
 jest.mock("@/stores/auth", () => ({ useAuthStore: () => mockAuth }));
