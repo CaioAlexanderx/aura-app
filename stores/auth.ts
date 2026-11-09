@@ -5,6 +5,9 @@ import {
   authApi,
   setTokenGetter,
   setOnUnauthorized,
+  setSessaoDoRefresh,
+  renovarToken,
+  encerrarSessaoNoServidor,
   type LoginResponse,
   type RegisterBody,
 } from "@/services/api";
@@ -180,6 +183,138 @@ function mudancasDoMe(atual: Record<string, any>, proximo: Record<string, any>):
   return patch;
 }
 
+// ── Abertura do app sem derrubar a sessão (incidente 09/11/2026) ──
+// O app instalado (PWA) é fechado pelo sistema o tempo todo; cada volta é
+// uma abertura a frio, que passa pelo hydrate(). Antes, o hydrate chamava
+// /auth/me com o access token guardado (1 h de vida) e, em QUALQUER erro,
+// apagava token E refresh token: abrir o app mais de 1 h depois do último
+// uso (401 do access vencido, sem tentar o refresh) ou sem rede/servidor
+// lento deslogava a pessoa, com o refresh token ainda válido por dias.
+// Agora: 401 → renova pelo refresh e tenta de novo; só "refresh inválido"
+// (401 do /auth/refresh) ou 404 do /me apagam a sessão. Rede, 5xx e
+// timeout mantêm a sessão e abrem com o último /me guardado.
+type ResultadoDaAbertura =
+  | { tipo: "ok"; token: string; me: any }
+  | { tipo: "expirou" }
+  | { tipo: "sem_resposta"; token: string | null };
+
+const esperar = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+// Renovação que nunca lança: qualquer exceção vira "sem resposta" (a
+// sessão fica), nunca "expirou".
+async function renovarSemLancar(): Promise<{ status: "ok"; token: string } | { status: "invalid" } | { status: "network_error" }> {
+  try {
+    const r = await renovarToken();
+    return r && (r as any).status ? r : { status: "network_error" };
+  } catch {
+    return { status: "network_error" };
+  }
+}
+export const ESPERA_ANTES_DE_REPETIR_O_ME_MS = 1500;
+
+async function meComRenovacao(tokenInicial: string | null): Promise<ResultadoDaAbertura> {
+  let tk = tokenInicial;
+  let renovou = false;
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    if (!tk) {
+      if (renovou) return { tipo: "sem_resposta", token: tokenInicial };
+      renovou = true;
+      const r = await renovarSemLancar();
+      if (r.status === "ok") tk = r.token;
+      else if (r.status === "invalid") return { tipo: "expirou" };
+      else return { tipo: "sem_resposta", token: tokenInicial };
+    }
+    try {
+      const me = await buscarMe(tk);
+      return { tipo: "ok", token: tk, me };
+    } catch (err: any) {
+      const status = err && typeof err.status === "number" ? err.status : 0;
+      if (status === 401) { tk = null; continue; } // access vencido: renova
+      if (status === 404) return { tipo: "expirou" }; // usuário não existe mais
+      // Rede, timeout, 5xx: uma segunda tentativa curta e, depois, segue
+      // com a sessão guardada.
+      if (tentativa === 0) { await esperar(ESPERA_ANTES_DE_REPETIR_O_ME_MS); continue; }
+      return { tipo: "sem_resposta", token: tk };
+    }
+  }
+  return { tipo: "sem_resposta", token: tk };
+}
+
+async function meSemRenovacao(token: string | null): Promise<ResultadoDaAbertura> {
+  if (!token) return { tipo: "expirou" };
+  try {
+    return { tipo: "ok", token, me: await buscarMe(token) };
+  } catch (err: any) {
+    const status = err && typeof err.status === "number" ? err.status : 0;
+    if (status === 401 || status === 404) return { tipo: "expirou" };
+    return { tipo: "sem_resposta", token };
+  }
+}
+
+// Último /auth/me deste aparelho, para abrir sem rede. Só no web, só os
+// campos que o estado usa, apagado no logout e trocado a cada login.
+const CHAVE_DO_ULTIMO_ME = "aura_ultimo_me";
+type UltimoMe = { user: any; company: any; consolidated_view: boolean; company_count: number };
+
+function guardarUltimoMe(me: any): void {
+  if (Platform.OS !== "web" || !me || !me.user) return;
+  try {
+    const v: UltimoMe = {
+      user: me.user,
+      company: me.company ?? null,
+      consolidated_view: !!me.consolidated_view,
+      company_count: me.company_count || 0,
+    };
+    localStorage.setItem(CHAVE_DO_ULTIMO_ME, JSON.stringify(v));
+  } catch { /* sem storage */ }
+}
+
+function idDoToken(token: string | null): string | null {
+  if (!token) return null;
+  try {
+    const parte = token.split(".")[1];
+    if (!parte || typeof atob !== "function") return null;
+    const json = atob(parte.replace(/-/g, "+").replace(/_/g, "/"));
+    const id = JSON.parse(json)?.id;
+    return typeof id === "string" ? id : null;
+  } catch { return null; }
+}
+
+function lerUltimoMe(token: string | null): UltimoMe | null {
+  if (Platform.OS !== "web") return null;
+  try {
+    const raw = localStorage.getItem(CHAVE_DO_ULTIMO_ME);
+    if (!raw) return null;
+    const v = JSON.parse(raw) as UltimoMe;
+    if (!v || !v.user) return null;
+    // Nunca abre com os dados de outra pessoa (troca de conta no aparelho).
+    const id = idDoToken(token);
+    if (id && v.user.id && v.user.id !== id) return null;
+    return v;
+  } catch { return null; }
+}
+
+function apagarUltimoMe(): void {
+  if (Platform.OS !== "web") return;
+  try { localStorage.removeItem(CHAVE_DO_ULTIMO_ME); } catch { /* sem storage */ }
+}
+
+// Estado que o /auth/me preenche (hydrate, refreshMe e a abertura sem rede).
+function estadoDoMe(meRes: any, companyCountAtual = 0) {
+  const { user, company } = meRes;
+  const consolidatedFromApi = !!meRes.consolidated_view;
+  const trialEnd = (company as any)?.trial_ends_at;
+  return {
+    user,
+    company: consolidatedFromApi ? null : (company ?? null),
+    isStaff: !!(user?.is_staff || (user?.email || "").endsWith("@getaura.com.br")),
+    trialActive: !!(trialEnd && new Date(trialEnd) > new Date()),
+    trialEndsAt: trialEnd || null,
+    consolidatedView: consolidatedFromApi,
+    companyCount: meRes.company_count || companyCountAtual || 0,
+  };
+}
+
 /** Só para testes: zera o controle do /auth/me entre casos. */
 export function __zerarControleDoMe(): void {
   _meEmVoo = null;
@@ -188,6 +323,8 @@ export function __zerarControleDoMe(): void {
 
 export const useAuthStore = create<AuthState>((set, get) => {
   setTokenGetter(() => get().token);
+  // Mocks antigos de @/services/api não têm esta função: só registra se houver.
+  if (typeof setSessaoDoRefresh === "function") setSessaoDoRefresh({ getState: get, setState: set });
 
   setOnUnauthorized(() => {
     // Idempotente: só dispara logout uma vez por "rajada" de 401s paralelos.
@@ -257,43 +394,60 @@ export const useAuthStore = create<AuthState>((set, get) => {
       const token = await storage.get();
       const savedRefresh = await refreshStorage.get();
 
-      if (!token) {
+      if (!token && !savedRefresh) {
         set({ isHydrated: true });
         return;
       }
 
-      try {
-        const meRes: any = await buscarMe(token);
-        const { user, company } = meRes;
-        // MULTICNPJ Sessao 1: API agora devolve consolidated_view e company_count direto.
-        // Quando consolidated_view=true, company vem como null e nao devemos tentar
-        // popular nada relacionado a uma empresa especifica.
-        const consolidatedFromApi = !!meRes.consolidated_view;
-        const companyCount = meRes.company_count || 0;
-        const trialEnd = (company as any)?.trial_ends_at;
-        const trialActive = !!(trialEnd && new Date(trialEnd) > new Date());
-        const staff = !!(user?.is_staff || (user?.email || "").endsWith("@getaura.com.br"));
+      // O refresh vai para o estado ANTES de qualquer chamada: um 401 de
+      // outra requisição que saia durante a abertura já acha com o que
+      // renovar (antes ele só entrava no estado depois do /me).
+      set({ refreshToken: savedRefresh });
 
-        set({
-          token,
-          refreshToken: savedRefresh,
-          user,
-          company: consolidatedFromApi ? null : (company ?? null),
-          isStaff: staff,
-          isHydrated: true,
-          isDemo: false,
-          trialActive,
-          trialEndsAt: trialEnd || null,
-          consolidatedView: consolidatedFromApi,
-          companyCount,
-        });
+      // Sem refresh guardado (sessão antiga) não há como renovar: o
+      // comportamento é o de antes, com o access que houver.
+      const r = savedRefresh
+        ? await meComRenovacao(token)
+        : await meSemRenovacao(token);
 
-        backgroundLoadCompanies();
-      } catch {
+      if (r.tipo === "expirou") {
+        // Sessão terminou de verdade (refresh inválido/expirado/revogado).
         await storage.del();
         await refreshStorage.del();
-        set({ isHydrated: true });
+        apagarUltimoMe();
+        set({ token: null, refreshToken: null, isHydrated: true });
+        return;
       }
+
+      if (r.tipo === "ok") {
+        // MULTICNPJ Sessao 1: API devolve consolidated_view e company_count;
+        // com consolidated_view=true, company vem null.
+        if (r.token !== token) await storage.set(r.token);
+        guardarUltimoMe(r.me);
+        set({
+          token: r.token,
+          refreshToken: get().refreshToken || savedRefresh,
+          ...estadoDoMe(r.me),
+          isHydrated: true,
+          isDemo: false,
+        });
+        backgroundLoadCompanies();
+        return;
+      }
+
+      // Sem resposta do servidor (rede, timeout, 5xx): a sessão FICA. Abre
+      // com o último /me deste aparelho e revalida assim que der. Se o
+      // access estiver vencido, o 401 da próxima requisição renova.
+      const tokenDaSessao = r.token || token;
+      const ultimo = lerUltimoMe(tokenDaSessao);
+      set({
+        token: tokenDaSessao,
+        refreshToken: get().refreshToken || savedRefresh,
+        ...(ultimo ? estadoDoMe(ultimo) : {}),
+        isHydrated: true,
+        isDemo: false,
+      });
+      setTimeout(() => { get().refreshMe().catch(() => {}); }, 4000);
     },
 
     login: async (email, password) => {
@@ -308,6 +462,8 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
         await storage.set(token);
         if (refreshToken) await refreshStorage.set(refreshToken);
+        // 09/11/2026: o último /me guardado passa a ser o desta conta.
+        guardarUltimoMe(res);
         // 17/10/2026 (t2-14): a 1ª tela depois do login é abertura de login,
         // não retorno (services/registroDeTelas separa as duas).
         marcarLogin();
@@ -352,6 +508,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
         await storage.set(token);
         if (refreshToken) await refreshStorage.set(refreshToken);
+        guardarUltimoMe(res);
         // 17/10/2026 (t2-14): a 1ª tela depois do cadastro é abertura de login.
         marcarLogin();
 
@@ -399,7 +556,18 @@ export const useAuthStore = create<AuthState>((set, get) => {
       // o estado já está fresco. Se houver um em voo, espera o mesmo.
       if (!_meEmVoo && meAcabouDeVoltar(tk)) return;
       try {
-        const meRes: any = await buscarMe(tk);
+        let meRes: any;
+        try {
+          meRes = await buscarMe(tk);
+        } catch (err: any) {
+          // 09/11/2026: access vencido (app voltou do segundo plano) renova e
+          // tenta de novo, em vez de ficar com o estado velho até o próximo 401.
+          if (!(err && err.status === 401)) throw err;
+          const r = await renovarSemLancar();
+          if (r.status !== "ok") throw err;
+          meRes = await buscarMe(r.token);
+        }
+        guardarUltimoMe(meRes);
         const { user, company } = meRes;
         const consolidatedFromApi = !!meRes.consolidated_view;
         const companyCount = meRes.company_count || get().companyCount || 0;
@@ -443,10 +611,16 @@ export const useAuthStore = create<AuthState>((set, get) => {
         // volta para onde estava.
         marcarSaidaVoluntaria();
       }
+      // 09/11/2026: o refresh token deste aparelho morre no servidor também
+      // (antes o "Sair" só apagava daqui). Melhor esforço, sem esperar.
+      let refreshDaSessao: string | null = get().refreshToken;
+      if (!refreshDaSessao) { try { refreshDaSessao = await refreshStorage.get(); } catch { refreshDaSessao = null; } }
+      try { encerrarSessaoNoServidor(refreshDaSessao); } catch { /* melhor esforço */ }
       // Limpa storage ANTES de resetar state, garantindo que mesmo se o
       // redirect falhar, o próximo boot não rehidrata sessão expirada.
       await storage.del();
       await refreshStorage.del();
+      apagarUltimoMe();
       set({
         token: null,
         refreshToken: null,
