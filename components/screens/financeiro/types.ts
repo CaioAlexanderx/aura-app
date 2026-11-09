@@ -3,7 +3,14 @@ export type Transaction = {
   date: string;
   desc: string;
   type: "income" | "expense";
+  /** Texto gravado: o nome da categoria-MÃE (pode ser antigo, ex. "Servicos"). */
   category: string;
+  /** 09/11/2026 (migration 434): categoria ou subcategoria escolhida. */
+  category_id?: string | null;
+  /** Nome da subcategoria, quando category_id aponta para uma. */
+  subcategory?: string | null;
+  /** Nome atual da categoria-mãe, quando o lançamento está ligado. */
+  category_name?: string | null;
   amount: number;
   status: "confirmed" | "pending";
   source: string;

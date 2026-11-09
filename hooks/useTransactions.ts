@@ -14,6 +14,10 @@ function mapApiTransaction(t: any): Transaction {
     desc: t.description || t.desc || "Lancamento",
     type: t.type === "expense" ? "expense" : "income",
     category: t.category || "Outros",
+    // 09/11/2026: categoria/subcategoria ligada (Aura-backend, migration 434).
+    category_id: t.category_id || null,
+    subcategory: t.subcategory || null,
+    category_name: t.category_name || null,
     amount: parseFloat(t.amount) || 0,
     status: t.status === "pending" ? "pending" : "confirmed",
     source: t.source || "manual",

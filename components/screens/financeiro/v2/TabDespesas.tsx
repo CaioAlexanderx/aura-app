@@ -11,13 +11,15 @@
 // 06/05/2026: parseDateLocal corrige timezone em dailyExpenseSeries (date-only
 // shiftando 1 dia em BRT) + tooltips no hover das barras e categorias.
 
-import { View, Text, StyleSheet, Platform, useWindowDimensions } from "react-native";
+import { View, Text, StyleSheet, Platform, Pressable, useWindowDimensions } from "react-native";
 import type { DimensionValue } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import type { Transaction } from "../types";
 import { fmt, fmtK, parseDateLocal } from "../types";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+// 09/11/2026 (mockup, seção D): categorias abrem nas subcategorias.
+import { agruparPorCategoria, type LinhaDeCategoria } from "@/utils/categoriasFinanceiro";
 import { useFinancialInsights } from "@/hooks/useFinancialInsights";
 import { Top5List, HBarList, Timeline } from "./SharedCards";
 // Onda 3: evolução mensal 12m
@@ -49,16 +51,16 @@ type Props = {
   onSeeItems?: () => void;
   onVerAtrasados?: (tipo: "income" | "expense") => void;
   onVerCrediarioAtrasado?: () => void;
+  // Tocar numa subcategoria abre os Lançamentos já filtrados por ela
+  // (subcategoria "" = sem subcategoria).
+  onVerCategoria?: (categoria: string, subcategoria: string | null) => void;
 };
 
-function groupExpenseByCategory(txs: Transaction[]): { label: string; value: number; pct: number }[] {
-  var groups: Record<string, number> = {};
-  txs.filter(function(t) { return t.type === "expense" && t.status === "confirmed"; })
-    .forEach(function(t) { groups[t.category || "Outros"] = (groups[t.category || "Outros"] || 0) + t.amount; });
-  var total = Object.values(groups).reduce(function(s, v) { return s + v; }, 0);
-  var rows = Object.keys(groups).map(function(k) { return { label: k, value: groups[k], pct: total > 0 ? (groups[k] / total) * 100 : 0 }; });
-  rows.sort(function(a, b) { return b.value - a.value; });
-  return rows.slice(0, 6);
+// 09/11/2026: agrupa pelo nome normalizado da categoria-mãe (o texto antigo
+// "Servicos" soma com "Serviços"; no consolidado, nomes iguais somam juntos) e
+// guarda as subcategorias de cada uma. Regras em utils/categoriasFinanceiro.
+function groupExpenseByCategory(txs: Transaction[]): LinhaDeCategoria[] {
+  return agruparPorCategoria(txs, "expense").slice(0, 6);
 }
 
 function dailyExpenseSeries(txs: Transaction[]): { day: number; value: number }[] {
@@ -78,7 +80,7 @@ function dailyExpenseSeries(txs: Transaction[]): { day: number; value: number }[
   });
 }
 
-export function TabDespesas({ transactions, summary, previousSummary, period, consolidated, onSeeItems, onVerAtrasados, onVerCrediarioAtrasado }: Props) {
+export function TabDespesas({ transactions, summary, previousSummary, period, consolidated, onSeeItems, onVerAtrasados, onVerCrediarioAtrasado, onVerCategoria }: Props) {
   var { width: vw } = useWindowDimensions();
   var NARROW = vw < 480;
   var IS_WIDE = vw > 768;
@@ -111,6 +113,12 @@ export function TabDespesas({ transactions, summary, previousSummary, period, co
 
   var categories = useMemo(function() { return groupExpenseByCategory(transactions); }, [transactions]);
   var catColors = ["#f87171", "#fbbf24", "#a78bfa", "#5b8cff", "#7c3aed", "#34d399"];
+  // A maior categoria com subcategorias já abre; as outras abrem no toque.
+  var [abertas, setAbertas] = useState<Record<string, boolean>>({});
+  function estaAberta(c: LinhaDeCategoria, i: number): boolean {
+    if (abertas[c.key] !== undefined) return abertas[c.key];
+    return i === 0 && c.subs.length > 0;
+  }
 
   var daily = useMemo(function() { return dailyExpenseSeries(transactions); }, [transactions]);
   var maxDaily = Math.max(1, ...daily.map(function(d) { return d.value; }));
@@ -226,15 +234,52 @@ export function TabDespesas({ transactions, summary, previousSummary, period, co
             categories.map(function(c, i) {
               var color = catColors[i % catColors.length];
               var tipText = c.label + ": " + fmt(c.value) + " (" + c.pct.toFixed(1) + "%)";
+              var temSubs = c.subs.length > 0;
+              var aberta = temSubs && estaAberta(c, i);
               return (
-                <View key={c.label} {...tip(tipText)} style={s.catRow}>
-                  <View style={[s.catDot, { backgroundColor: color }]} />
-                  <Text style={[s.catLabel, { color: Colors.ink }]} numberOfLines={1}>{c.label}</Text>
-                  <View style={[s.catBarTrack, { backgroundColor: Colors.bg4 }]}>
-                    <View style={[s.catBarFill, { width: (c.pct + "%") as DimensionValue, backgroundColor: color }]} />
-                  </View>
-                  <Text style={[s.catValue, { color: Colors.ink2 }]}>{fmtK(c.value)}</Text>
-                  <Text style={[s.catPct, { color: Colors.ink3 }]}>{c.pct.toFixed(0)}%</Text>
+                <View key={c.key}>
+                  <Pressable
+                    {...tip(tipText)}
+                    testID={"despesas-cat-" + c.label}
+                    onPress={temSubs
+                      ? function() { setAbertas(function(a) { var n = { ...a }; n[c.key] = !aberta; return n; }); }
+                      : (onVerCategoria ? function() { onVerCategoria(c.label, null); } : undefined)}
+                    style={s.catRow}
+                    accessibilityRole="button"
+                    accessibilityState={temSubs ? { expanded: aberta } : undefined}
+                  >
+                    <Text style={[s.catCaret, { color: Colors.ink3 }]}>{temSubs ? (aberta ? "▾" : "▸") : ""}</Text>
+                    <View style={[s.catDot, { backgroundColor: color }]} />
+                    <Text style={[s.catLabel, { color: Colors.ink }]} numberOfLines={1}>{c.label}</Text>
+                    <View style={[s.catBarTrack, { backgroundColor: Colors.bg4 }]}>
+                      <View style={[s.catBarFill, { width: (c.pct + "%") as DimensionValue, backgroundColor: color }]} />
+                    </View>
+                    <Text style={[s.catValue, { color: Colors.ink2 }]}>{fmtK(c.value)}</Text>
+                    {!NARROW && <Text style={[s.catPct, { color: Colors.ink3 }]}>{c.pct.toFixed(0)}%</Text>}
+                  </Pressable>
+                  {aberta && c.subs.concat(c.semSub > 0 ? [{ key: c.key + "|", label: "Sem subcategoria", value: c.semSub, pct: 0 }] : []).map(function(sub) {
+                    var semSub = sub.key === c.key + "|";
+                    var pct = c.value > 0 ? (sub.value / c.value) * c.pct : 0;
+                    return (
+                      <Pressable
+                        key={sub.key}
+                        testID={"despesas-sub-" + c.label + "-" + sub.label}
+                        onPress={onVerCategoria ? function() { onVerCategoria(c.label, semSub ? "" : sub.label); } : undefined}
+                        style={s.catRow}
+                        accessibilityRole="button"
+                        {...tip(sub.label + ": " + fmt(sub.value))}
+                      >
+                        <Text style={s.catCaret}>{""}</Text>
+                        <View style={[s.catDot, { backgroundColor: "transparent" }]} />
+                        <Text style={[s.catLabel, s.catLabelSub, { color: semSub ? Colors.ink3 : Colors.ink2 }]} numberOfLines={1}>{sub.label}</Text>
+                        <View style={[s.catBarTrack, { backgroundColor: Colors.bg4 }]}>
+                          <View style={[s.catBarFill, { width: (pct + "%") as DimensionValue, backgroundColor: color, opacity: 0.45 }]} />
+                        </View>
+                        <Text style={[s.catValue, { color: Colors.ink2 }]}>{fmtK(sub.value)}</Text>
+                        {!NARROW && <Text style={[s.catPct, { color: Colors.ink3 }]}>{pct.toFixed(0)}%</Text>}
+                      </Pressable>
+                    );
+                  })}
                 </View>
               );
             })
@@ -385,6 +430,8 @@ var s = StyleSheet.create({
   barFooter: { fontSize: 11, marginTop: 10 },
   catRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border },
   catDot: { width: 8, height: 8, borderRadius: 4 },
+  catCaret: { width: 12, fontSize: 11, textAlign: "center" },
+  catLabelSub: { fontWeight: "500", paddingLeft: 10 },
   catLabel: { fontSize: 13, fontWeight: "600", flex: 1, minWidth: 0 },
   catBarTrack: { flex: 1.4, height: 6, borderRadius: 3, overflow: "hidden" },
   catBarFill: { height: 6, borderRadius: 3 },

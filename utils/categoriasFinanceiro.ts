@@ -52,10 +52,16 @@ function ativa(c: { archived_at: string | null }): boolean { return !c.archived_
  * (troca, taxa da maquininha) ficam de fora — salvo se forem a do lançamento
  * em edição, para ele não abrir sem categoria marcada.
  */
-export function categoriasDaEscolha(lista: ListaDeCategorias | null | undefined, kind: KindDaCategoria, idAtual?: string | null): OpcaoDeCategoria[] {
+export function categoriasDaEscolha(lista: ListaDeCategorias | null | undefined, kind: KindDaCategoria, idAtual?: string | null, textoAtual?: string | null): OpcaoDeCategoria[] {
   if (!lista) return listaFixa(kind);
+  var nAtual = normalizarCategoria(textoAtual);
   return lista.categories
-    .filter(function(c) { return c.kind === kind && ativa(c) && (c.manual || c.id === idAtual); })
+    .filter(function(c) {
+      if (c.kind !== kind || !ativa(c)) return false;
+      if (c.manual || c.id === idAtual) return true;
+      if (idAtual && c.subcategories.some(function(s) { return s.id === idAtual; })) return true;
+      return !!nAtual && normalizarCategoria(c.name) === nAtual;
+    })
     .map(function(c) {
       return { id: c.id, name: c.name, color: c.color, is_system: c.is_system, subcategories: c.subcategories.filter(ativa) };
     });
