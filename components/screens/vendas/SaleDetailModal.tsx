@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, TextInput, Image, Linking } from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, TextInput, Image, Linking, useWindowDimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
+import { Button } from "@/components/Button";
+import { ResponsiveSheet, SHEET_NARROW_BP } from "@/components/ResponsiveSheet";
 import { toast } from "@/components/Toast";
-import { useSaleDetail, useCancelSale, useUpdateSaleSeller, useEmitNfce, useReemitTrocaFiscal } from "@/hooks/useSales";
-import { employeesApi, request, BASE_URL } from "@/services/api";
+import { useSaleDetail, useCancelSale, useEmitNfce, useReemitTrocaFiscal } from "@/hooks/useSales";
+import { request, BASE_URL } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { openPrintWindow } from "@/services/printWindow";
 import { cupomComVale } from "@/utils/valeTrocaCupom";
@@ -16,72 +18,40 @@ import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { readMatconSettings } from "@/constants/matcon";
 import { matconApi } from "@/services/matconApi";
 import { textoDoErro } from "@/components/matcon/erroMatcon";
+import { EditarVendaModal } from "./EditarVendaModal";
+import {
+  brl, fmtDataHora, rotuloDaForma, normalizarMetodo, rotuloDaEdicao, mascararTelefone, mesDaVenda, diaEmSaoPaulo,
+} from "./editarVendaUtils";
 
 // ============================================================
 // AURA. — Modal de detalhes da venda (Item 3 Eryca)
 //
-// MULTICNPJ Onda 2.4 (03/05/2026): aceita prop `companyId` opcional.
+// MULTICNPJ Onda 2.4 (03/05/2026): aceita prop `companyId` opcional (a
+// empresa dona da venda no consolidado). Tudo daqui — detalhe, cancelar,
+// editar, nota — vai para essa empresa.
 //
-// 02/06/2026 — Troca segmentada: quando sale.type='troca', o card de total
-// vira um card de troca (Levou / Devolveu / Diferença / Pagamentos /
-// Conciliação no Financeiro) e o "Cancelar venda" vira "Cancelar troca"
-// (reverte estoque dos dois lados + transações + NF-e). Dados no bloco
-// detail.troca (backend Aura-backend#138).
+// 02/06/2026 — Troca segmentada (Levou / Devolveu / Diferença / Pagamentos /
+// Conciliação no Financeiro); "Cancelar troca" reverte tudo (Aura-backend#138).
+// 02/06/2026 (b/c) — Seção "Nota fiscal" (detail.fiscal + /nfce/config).
+// DESIGN-38 B5/B4 (11/06/2026) — Recibo (cupom /print/receipt/:saleId) e
+// Devolver (DevolucaoModal) na venda no crediário.
+// 13/06/2026 — 2ª via térmica da NFC-e autorizada (fetch com Bearer).
+// 22-23/09/2026 (Matcon M1) — selo "saldo a entregar" e "Criar entrega".
 //
-// 02/06/2026 (b) — Secao "Nota fiscal": mostra o status da emissao da venda
-// (detail.fiscal) e um botao pra Emitir NFC-e (venda) ou Reprocessar a NF-e
-// 55 de devolucao (troca). Links DANFE/consulta quando autorizada; motivo
-// quando rejeitada.
-//
-// 02/06/2026 (c) — Polish: busca /nfce/config (lazy) pra (1) esconder o botao
-// Emitir quando a empresa nao tem NFC-e ativa, mostrando uma nota de config;
-// (2) marcar com badge "teste/homologação" quando ambiente=homologacao (a
-// nota sai como 'autorizada' fake, sem valor fiscal real).
-//
-// DESIGN-38 B5 (11/06/2026) — Botao "Recibo" em actionsRow (venda crediário):
-// AUDITORIA C2-FE (11/06): imprime o CUPOM da compra via /print/receipt/:saleId
-// (comprovante da venda). Antes apontava pro recibo de PAGAMENTO (B5) com o
-// transaction_id do Financeiro → 404. O recibo de pagamento (B5) vive no fluxo
-// de recebimento na ficha do cliente, com o id do customer_credit_transactions.
-//
-// DESIGN-38 B4 (11/06/2026) — Botao "Devolver" em actionsRow:
-// Aparece para venda crediário não-troca, não cancelada, com itens. Abre a
-// DevolucaoModal (wizard 3 passos) passando sale.id + itens.
-// AUDITORIA C1-FE (11/06): onDone NÃO fecha mais o modal — assim o passo 3
-// (resultado da devolução) fica visível. O fechamento é só pelo botão "Fechar"
-// do wizard (onClose).
-//
-// 13/06/2026 — Visualizar = 2ª via térmica (DANFE 80mm) da NFC-e autorizada:
-// botão "2ª via" busca /nfce/:id/danfe-termica com Bearer + document.write
-// (window.open(url) direto daria "Token não fornecido"). Troca (NF-e 55 de
-// devolução) mantém o link oficial (pdf_url/consulta).
+// 09/11/2026 — redesenho com "Editar venda" (mockup aprovado pelo Caio):
+//   - ResponsiveSheet (bottom sheet abaixo de 500 px) com cabeçalho fixo,
+//     conteúdo que rola e rodapé fixo com Button;
+//   - "Editar venda" é a ação principal (EditarVendaModal: forma de
+//     pagamento, vendedor(a) e cliente, Aura-backend#972). O caminho
+//     "Editar lançamento" a partir da venda saiu: ele editava o lançamento
+//     do Financeiro e deixava o caixa com a forma antiga;
+//   - "Cancelar venda" vira texto vermelho à esquerda, longe da principal;
+//   - formas da venda em pílulas (dividida, entrada + crediário);
+//   - "Editada em dd/mm por Fulano" (detail.last_edit);
+//   - sem cor fixa: o laranja #fb923c e o #fbbf24 viraram Colors.amber;
+//   - ícones de verdade: fechar é Icon x; recibo, nota e 2ª via têm ícone
+//     próprio (antes tudo era "info").
 // ============================================================
-
-var fmt = function(n: number) { return "R$ " + Number(n != null ? n : 0).toFixed(2).replace(".", ","); };
-var fmtDateTime = function(iso: string) {
-  try {
-    return new Date(iso).toLocaleString("pt-BR", {
-      timeZone: "America/Sao_Paulo",
-      day: "2-digit", month: "2-digit", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
-    });
-  } catch { return iso; }
-};
-
-const PAYMENT_LABELS: Record<string, string> = {
-  pix: "PIX",
-  cash: "Dinheiro",
-  dinheiro: "Dinheiro",
-  credit: "Cartão Crédito",
-  credito: "Cartão Crédito",
-  cartao: "Cartão Crédito",
-  debit: "Cartão Débito",
-  debito: "Cartão Débito",
-  crediario: "Crediario",
-  crediario_credito: "Crédito da troca",
-  voucher: "Voucher",
-  vale: "Vale",
-};
 
 const FISCAL_STATUS_LABELS: Record<string, string> = {
   autorizada: "Autorizada",
@@ -93,26 +63,26 @@ const FISCAL_STATUS_LABELS: Record<string, string> = {
   erro: "Erro",
 };
 
-const TROCA_ORANGE = "#fb923c";
-
 function fiscalStatusLabel(st: string) {
   return FISCAL_STATUS_LABELS[(st || "").toLowerCase()] || st || "—";
 }
 
+type Pilula = { method: string; amount: number; installments?: number };
+
 export function SaleDetailModal({
-  visible, saleId, onClose, onEditTransaction,
+  visible, saleId, onClose,
   companyId, companyName,
 }: {
   visible: boolean;
   saleId: string | null;
   onClose: () => void;
-  onEditTransaction?: (transactionId: string) => void;
   companyId?: string;
   companyName?: string;
 }) {
+  const { width } = useWindowDimensions();
+  const estreito = width < SHEET_NARROW_BP;
   const { detail, isLoading, error } = useSaleDetail(visible ? saleId : null, companyId);
   const { cancelSale, isCancelling } = useCancelSale(companyId);
-  const { updateSeller, isUpdating } = useUpdateSaleSeller(companyId);
   const { emitNfce, isEmitting } = useEmitNfce(companyId);
   const { reemitTrocaFiscal, isReemitting } = useReemitTrocaFiscal(companyId);
   const { company } = useAuthStore();
@@ -120,38 +90,17 @@ export function SaleDetailModal({
   // 22/09/2026 (Matcon M1): selo "saldo a entregar" — só com o toggle ligado.
   const { settings: pdvSettings } = usePdvSettings();
   const matcon = readMatconSettings(pdvSettings);
-  // QA final 23/09/2026 (Matcon M1): "Criar entrega" — a venda feita no
-  // balcão, sem orçamento, ganha a 1ª entrega por aqui (POST
-  // .../matcon/deliveries {sale_id}, docs/CONTRACT_MATCON.md). A venda que
-  // sai de um orçamento já nasce com a entrega (o backend cria).
   const [criandoEntrega, setCriandoEntrega] = useState(false);
   const [entregaCriadaDe, setEntregaCriadaDe] = useState<string | null>(null);
 
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
-  const [editingSeller, setEditingSeller] = useState(false);
-  const [selectedSellerId, setSelectedSellerId] = useState<string | null>(null);
-  // DESIGN-38 B5: estado de loading do botão Recibo
+  const [editando, setEditando] = useState(false);
   const [printingReceipt, setPrintingReceipt] = useState(false);
-  // DESIGN-38 B4: controla o wizard de devolução
   const [showDevolucao, setShowDevolucao] = useState(false);
-  // 2ª via (DANFE térmica) da NFC-e autorizada desta venda
   const [print2via, setPrint2via] = useState(false);
 
-  const { data: empData, isLoading: isLoadingEmps } = useQuery({
-    queryKey: ["employees", effectiveCompanyId],
-    queryFn: function() {
-      if (!effectiveCompanyId) throw new Error("no company");
-      return employeesApi.list(effectiveCompanyId);
-    },
-    enabled: editingSeller && !!effectiveCompanyId,
-    staleTime: 60_000,
-    retry: 1,
-  });
-  const employees: any[] = (empData as any)?.employees || [];
-
   // 02/06/2026 (c): config fiscal (lazy) — so quando o detalhe abriu.
-  // Cache longo: config raramente muda.
   const { data: nfceCfg } = useQuery({
     queryKey: ["nfce-config", effectiveCompanyId],
     queryFn: function() {
@@ -169,8 +118,7 @@ export function SaleDetailModal({
     if (!saleId) return;
     try {
       const result = await cancelSale({ saleId: saleId, reason: cancelReason.trim() });
-      // 16/09/2026: devolução cancelada agora é desfeita no backend (#718);
-      // o texto diz o que voltou, em vez de "0 item(s) devolvido(s)".
+      // 16/09/2026: devolução cancelada é desfeita no backend (#718).
       toast.success(mensagemCancelamento(result as any));
       const warns = (result as any)?.fiscal_warnings;
       if ((result as any)?.type === "troca" && Array.isArray(warns) && warns.length) {
@@ -181,34 +129,6 @@ export function SaleDetailModal({
       onClose();
     } catch (err: any) {
       toast.error(err?.data?.error || err?.message || "Erro ao cancelar venda");
-    }
-  }
-
-  function handleEditClick() {
-    const txId = detail?.sale.transaction_id;
-    if (!txId) {
-      toast.error("Esta venda não tem lancamento financeiro vinculado");
-      return;
-    }
-    if (onEditTransaction) {
-      onClose();
-      onEditTransaction(txId);
-    }
-  }
-
-  function handleOpenSellerEdit() {
-    setSelectedSellerId((seller as any)?.id || null);
-    setEditingSeller(true);
-  }
-
-  async function handleSaveSeller() {
-    if (!saleId) return;
-    try {
-      await updateSeller({ saleId: saleId, seller_id: selectedSellerId });
-      toast.success(selectedSellerId ? "Vendedor atualizado." : "Vendedor removido.");
-      setEditingSeller(false);
-    } catch (err: any) {
-      toast.error(err?.data?.error || err?.message || "Erro ao salvar vendedor");
     }
   }
 
@@ -226,7 +146,7 @@ export function SaleDetailModal({
         const okAny = po.some(function(p: any) { return (p.status || "").toLowerCase().indexOf("autoriz") >= 0; });
         const errAny = po.find(function(p: any) { return p.error || (p.status || "").toLowerCase().indexOf("rejeit") >= 0; });
         if (okAny) toast.success("NF-e de devolução reprocessada com sucesso.");
-        else if (errAny) toast.error("Reprocessada com pendência: " + (errAny.error || fiscalStatusLabel(errAny.status)));
+        else if (errAny) toast.error("Reprocessada com pendência: " + (errAny.error || fiscalStatusLabel(errAny.status || "")));
         else toast.success((r && r.message) || "Reprocessamento disparado.");
       } else {
         const body = {
@@ -246,7 +166,7 @@ export function SaleDetailModal({
         const r = await emitNfce({ body: body });
         const st = (r && r.nfce && r.nfce.status) || "";
         if (st === "rejeitada") toast.error("NFC-e rejeitada: " + ((r && r.motivo) || "ver detalhe"));
-        else if (r && r.idempotent) toast.success("Esta venda ja tinha NFC-e emitida.");
+        else if (r && r.idempotent) toast.success("Esta venda já tinha NFC-e emitida.");
         else toast.success("NFC-e emitida com sucesso.");
       }
     } catch (err: any) {
@@ -254,18 +174,13 @@ export function SaleDetailModal({
     }
   }
 
-  // DESIGN-38 B5 / AUDITORIA C2-FE: imprime o CUPOM da venda crediário
-  // (comprovante da compra) via /print/receipt/:saleId/preview — fetch com
-  // Bearer + document.write (mesmo padrão auth das outras rotas /print/*).
+  // Cupom da venda via /print/receipt/:saleId/preview (fetch com Bearer).
   async function handlePrintReceipt() {
     if (!saleId || !effectiveCompanyId) {
       toast.error("Recibo indisponível para esta venda");
       return;
     }
     if (typeof window === "undefined") return;
-    // 18/07: via openPrintWindow (navega pra blob URL). O padrão antigo
-    // (window.open("") + document.write) fazia o auto-print morrer na
-    // criação do preview → "Falha na impressão" na aba do app (Davi).
     setPrintingReceipt(true);
     const token = useAuthStore.getState().token;
     const url = BASE_URL + "/companies/" + effectiveCompanyId + "/print/receipt/" + saleId + "/preview";
@@ -273,8 +188,7 @@ export function SaleDetailModal({
       const outcome = await openPrintWindow(async () => {
         const resp = await fetch(url, { headers: token ? { Authorization: "Bearer " + token } : {} });
         if (!resp.ok) return { ok: false as const, error: "Erro ao carregar recibo (" + resp.status + ")." };
-        // 13/10/2026: 2ª via de venda de nov/dez leva o vale-troca enquanto o
-        // prazo vale (utils/valeTroca.ts).
+        // 13/10/2026: 2ª via de venda de nov/dez leva o vale-troca enquanto o prazo vale.
         const html = cupomComVale(await resp.text(), {
           companyId: effectiveCompanyId, saleId, vendaEm: (sale as any)?.created_at, config: pdvSettings,
         });
@@ -286,13 +200,9 @@ export function SaleDetailModal({
     }
   }
 
-  // Visualizar = 2ª via térmica (DANFE 80mm) da NFC-e autorizada. Mesma rota
-  // auth dos /print/*: fetch com Bearer + document.write (window.open(url)
-  // direto daria "Token não fornecido").
   async function handlePrint2Via(nfceId: string) {
     if (!effectiveCompanyId || !nfceId) { toast.error("Nota indisponível"); return; }
     if (typeof window === "undefined") return;
-    // 18/07: via openPrintWindow (blob URL) — ver handlePrintReceipt.
     setPrint2via(true);
     const token = useAuthStore.getState().token;
     const url = BASE_URL + "/companies/" + effectiveCompanyId + "/nfce/" + nfceId + "/danfe-termica";
@@ -319,8 +229,6 @@ export function SaleDetailModal({
       setEntregaCriadaDe(sale.id);
       toast.success("Entrega criada. Ela aparece em Entregas, em Separando.");
     } catch (e: any) {
-      // A frase do backend ("esta venda já tem entrega") passa como veio;
-      // texto de sistema (rota, rede) vira a frase simples.
       toast.error(textoDoErro(e, "Não consegui criar a entrega agora. Tente de novo daqui a pouco."));
     } finally {
       setCriandoEntrega(false);
@@ -329,24 +237,31 @@ export function SaleDetailModal({
   const items = detail?.items || [];
   const customer = detail?.customer;
   const seller = detail?.seller;
-  const paymentLabel = sale?.payment_method ? (PAYMENT_LABELS[sale.payment_method.toLowerCase()] || sale.payment_method) : "-";
 
-  // 02/06/2026: troca segmentada
   const isTroca = (sale?.type as string) === "troca";
   const troca = detail?.troca || null;
-  // 16/09/2026 (caso MHT / Karina Quadros): devolução do crediário tem
-  // tela própria, e a venda de origem mostra o que já voltou.
   const isDevolucao = (sale?.type as string) === "devolucao";
   const devolucao = detail?.devolucao || null;
   const avisoRetornos = !isCancelled ? avisoRetornosAtivos(detail?.returns) : null;
 
-  // DESIGN-38 B5: botão Recibo — venda crediário não cancelada (cupom usa saleId)
-  const isCrediario = (sale?.payment_method || "").toLowerCase() === "crediario";
-  const showReceiptBtn = !isCancelled && isCrediario && !!saleId;
-  // DESIGN-38 B4: botão Devolver — venda crediário, não-troca, não cancelada, com itens
-  const showRefundBtn = !isCancelled && isCrediario && !isTroca && items.length > 0;
+  // Formas em pílulas. Backend antigo (sem detail.payments): a forma única.
+  const pilulas: Pilula[] = (detail?.payments && detail.payments.length)
+    ? detail.payments
+    : (sale ? [{ method: sale.payment_method || "", amount: sale.total_amount }] : []);
+  const temCrediario = pilulas.some(function(p) { return normalizarMetodo(p.method) === "crediario"; }) ||
+    (sale?.payment_method || "").toLowerCase() === "crediario";
+  const comEntrada = temCrediario && pilulas.length > 1;
+  function textoDaPilula(p: Pilula) {
+    const cred = normalizarMetodo(p.method) === "crediario";
+    const nome = cred ? "Crediário" + (p.installments && p.installments > 1 ? " " + p.installments + "x" : "") : rotuloDaForma(p.method);
+    return (comEntrada && !cred ? "Entrada " : "") + nome + " · " + brl(p.amount);
+  }
 
-  // 02/06/2026 (b): estado fiscal — emissao relevante por tipo de venda.
+  const showReceiptBtn = !isCancelled && temCrediario && !!saleId;
+  const showRefundBtn = !isCancelled && temCrediario && !isTroca && items.length > 0;
+  const podeEditar = !!sale && !isCancelled && !isTroca && !isDevolucao;
+
+  // 02/06/2026 (b): estado fiscal — emissão relevante por tipo de venda.
   const fiscalList = detail?.fiscal || [];
   const relTipos = isTroca ? ["nfe", "nfe_devolucao"] : ["nfce"];
   const relevantFiscal = fiscalList.filter(function(f) { return relTipos.indexOf(f.tipo) >= 0; });
@@ -354,61 +269,71 @@ export function SaleDetailModal({
   const latestFiscal = relevantFiscal.length ? relevantFiscal[0] : null;
   const fiscalDocLabel = isTroca ? "NF-e de devolução" : "NFC-e";
   const fiscalBusy = isEmitting || isReemitting;
-
-  // 02/06/2026 (c): config fiscal — habilita o botao + sinaliza homologacao.
   const fiscalEnabled = !!((nfceCfg as any)?.config?.is_active);
   const fiscalAmbiente = (nfceCfg as any)?.config?.ambiente || null;
   const fiscalHomolog = fiscalEnabled && fiscalAmbiente === "homologacao";
 
-  return (
-    <View style={s.overlay}>
-      <View style={s.modal}>
-        {/* Header */}
-        <View style={s.header}>
-          <View style={{ flex: 1 }}>
-            <View style={s.headerTitleRow}>
-              <Text style={s.headerTitle}>{isTroca ? "Detalhes da troca" : isDevolucao ? "Detalhes da devolução" : "Detalhes da venda"}</Text>
-              {isTroca && !isCancelled && (
-                <View style={s.trocaBadge}>
-                  <Icon name="repeat" size={9} color={TROCA_ORANGE} />
-                  <Text style={s.trocaBadgeText}>Troca</Text>
-                </View>
-              )}
-              {isCancelled && (
-                <View style={s.cancelledBadge}>
-                  <Text style={s.cancelledText}>Cancelada</Text>
-                </View>
-              )}
-              {companyName && (
-                <View style={s.companyBadge}>
-                  <Text style={s.companyBadgeText} numberOfLines={1}>{companyName}</Text>
-                </View>
-              )}
-              {/* 22/09/2026 (Matcon M1, docs/CONTRACT_MATCON.md §M1): selo
-                  "saldo a entregar" — só com o toggle ligado e a venda
-                  trazendo has_pending_delivery=true (campo novo e opcional
-                  em SaleDetailFull; ausente = nada aparece). */}
-              {matcon.matcon_enabled && sale?.has_pending_delivery === true && (
-                <Pressable
-                  // Abre Entregas já em "A entregar".
-                  onPress={() => { onClose(); router.push("/matcon/entregas?dia=pending" as any); }}
-                  style={s.pendingDeliveryBadge}
-                  testID="venda-saldo-a-entregar"
-                >
-                  <Icon name="truck" size={10} color={Colors.amber} />
-                  <Text style={s.pendingDeliveryText}>saldo a entregar</Text>
-                  <Text style={s.pendingDeliveryLink}>· Ver entregas</Text>
-                </Pressable>
-              )}
-            </View>
-            {sale && <Text style={s.headerDate}>{fmtDateTime(sale.created_at)}</Text>}
-          </View>
-          <Pressable onPress={onClose} style={s.closeBtn}>
-            <Text style={s.closeText}>x</Text>
-          </Pressable>
-        </View>
+  const titulo = isTroca ? "Detalhes da troca" : isDevolucao ? "Detalhes da devolução"
+    : (sale?.sale_number ? "Venda #" + sale.sale_number : "Detalhes da venda");
+  const subtitulo = sale ? fmtDataHora(sale.created_at) + (companyName ? " · " + companyName : "") : "";
+  const editada = rotuloDaEdicao(detail?.last_edit || null);
+  const telefone = mascararTelefone(customer?.phone || null);
+  const cancelLabel = isTroca ? "Cancelar troca" : isDevolucao ? "Desfazer devolução" : "Cancelar venda";
 
-        {/* Loading / Error */}
+  const secundarios: React.ReactNode[] = [];
+  if (showReceiptBtn) secundarios.push(<Button key="recibo" title="Recibo" icon="receipt" size="sm" variant="secondary" loading={printingReceipt} onPress={handlePrintReceipt} />);
+  if (showRefundBtn) secundarios.push(<Button key="devolver" title="Devolver" icon="rotate_ccw" size="sm" variant="secondary" onPress={function() { setShowDevolucao(true); }} />);
+  if (showRefundBtn) secundarios.push(
+    <Button key="trocar" testID="venda-trocar" title="Trocar" icon="repeat" size="sm" variant="secondary" onPress={function() { onClose(); router.push(ROTA_TROCA_PDV as any); }} />
+  );
+  if (matcon.matcon_enabled && sale && !isCancelled && !isTroca && !isDevolucao && sale.has_pending_delivery !== true) {
+    secundarios.push(entregaCriadaDe === sale.id ? (
+      <Button key="ver-entregas" testID="venda-ver-entregas" title="Ver entregas" icon="truck" size="sm" variant="secondary" onPress={function() { onClose(); router.push("/matcon/entregas" as any); }} />
+    ) : (
+      <Button key="criar-entrega" testID="venda-criar-entrega" title="Criar entrega" icon="truck" size="sm" variant="secondary" loading={criandoEntrega} onPress={handleCriarEntrega} />
+    ));
+  }
+
+  return (
+    <ResponsiveSheet visible={visible} onClose={onClose} maxWidth={580}>
+      {/* Cabeçalho fixo */}
+      <View style={s.header}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <View style={s.headerTitleRow}>
+            <Text style={s.headerTitle} numberOfLines={1}>{titulo}</Text>
+            {temCrediario && !isTroca && !isDevolucao && !isCancelled && (
+              <View style={s.badge}><Text style={s.badgeText}>Crediário</Text></View>
+            )}
+            {isTroca && !isCancelled && (
+              <View style={[s.badge, s.badgeAmber]}>
+                <Icon name="repeat" size={9} color={Colors.amber} />
+                <Text style={[s.badgeText, { color: Colors.amber }]}>Troca</Text>
+              </View>
+            )}
+            {isCancelled && (
+              <View style={[s.badge, s.badgeRed]}><Text style={[s.badgeText, { color: Colors.red }]}>Cancelada</Text></View>
+            )}
+            {matcon.matcon_enabled && sale?.has_pending_delivery === true && (
+              <Pressable
+                onPress={() => { onClose(); router.push("/matcon/entregas?dia=pending" as any); }}
+                style={[s.badge, s.badgeAmber]}
+                testID="venda-saldo-a-entregar"
+              >
+                <Icon name="truck" size={10} color={Colors.amber} />
+                <Text style={[s.badgeText, { color: Colors.amber }]}>saldo a entregar</Text>
+                <Text style={s.pendingDeliveryLink}>· Ver entregas</Text>
+              </Pressable>
+            )}
+          </View>
+          {!!subtitulo && <Text style={s.headerDate} numberOfLines={1}>{subtitulo}</Text>}
+        </View>
+        <Pressable onPress={onClose} style={s.closeBtn} accessibilityRole="button" accessibilityLabel="Fechar" testID="venda-fechar">
+          <Icon name="x" size={16} color={Colors.ink3} />
+        </Pressable>
+      </View>
+
+      {/* Conteúdo que rola */}
+      <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={s.body}>
         {isLoading && (
           <View style={s.loadingBox}>
             <ActivityIndicator color={Colors.violet3} />
@@ -417,506 +342,292 @@ export function SaleDetailModal({
         )}
         {error && !isLoading && (
           <View style={s.errorBox}>
-            <Icon name="alert" size={16} color={Colors.red} />
+            <Icon name="alert_circle" size={16} color={Colors.red} />
             <Text style={s.errorText}>{(error as any)?.data?.error || error.message || "Erro ao carregar"}</Text>
           </View>
         )}
 
-        {/* Conteudo */}
-        {detail && sale && (
-          <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={{ padding: 4 }}>
-            {/* Venda normal: card de total */}
-            {isDevolucao && devolucao && (
-              <View style={[s.totalCard, isCancelled && s.totalCardCancelled]}>
-                <Text style={s.totalLabel}>Devolução no crediário</Text>
-                <Text style={[s.totalValue, isCancelled && s.totalValueStrike]}>{fmt(devolucao.refund_value)}</Text>
-                <Text style={s.totalHint}>
-                  {devolucao.original_sale_number ? "Da venda #" + devolucao.original_sale_number + ". " : ""}
-                  Valor abatido da dívida do cliente.
-                </Text>
-                {devolucao.items.map(function(ri, idx) {
+        {detail && sale && (<>
+          {isDevolucao && devolucao && (
+            <View style={[s.totalCard, isCancelled && s.totalCardCancelled]}>
+              <Text style={s.totalLabel}>Devolução no crediário</Text>
+              <Text style={[s.totalValue, isCancelled && s.totalValueStrike]}>{brl(devolucao.refund_value)}</Text>
+              <Text style={s.totalHint}>
+                {devolucao.original_sale_number ? "Da venda #" + devolucao.original_sale_number + ". " : ""}
+                Valor abatido da dívida do cliente.
+              </Text>
+              {devolucao.items.map(function(ri, idx) {
+                return <Text key={idx} style={s.itemMeta}>{ri.quantity}x {ri.product_name} voltou ao estoque</Text>;
+              })}
+            </View>
+          )}
+
+          {avisoRetornos && (
+            <View style={s.returnsHint}>
+              <Icon name="repeat" size={12} color={Colors.amber} />
+              <Text style={s.returnsHintText}>{avisoRetornos}</Text>
+            </View>
+          )}
+
+          {!isTroca && !isDevolucao && (
+            <View style={[s.totalCard, isCancelled && s.totalCardCancelled]}>
+              <Text style={s.totalLabel}>Valor da venda</Text>
+              <Text style={[s.totalValue, isCancelled && s.totalValueStrike]}>{brl(sale.total_amount)}</Text>
+              {sale.discount_amount > 0 && <Text style={s.totalHint}>Desconto: {brl(sale.discount_amount)}</Text>}
+              <View style={s.pillsRow} testID="venda-formas">
+                {pilulas.map(function(p, idx) {
                   return (
-                    <Text key={idx} style={s.itemMeta}>
-                      {ri.quantity}x {ri.product_name} voltou ao estoque
-                    </Text>
-                  );
-                })}
-              </View>
-            )}
-
-            {avisoRetornos && (
-              <View style={s.returnsHint}>
-                <Icon name="repeat" size={12} color={TROCA_ORANGE} />
-                <Text style={s.returnsHintText}>{avisoRetornos}</Text>
-              </View>
-            )}
-
-            {!isTroca && !isDevolucao && (
-              <View style={[s.totalCard, isCancelled && s.totalCardCancelled]}>
-                <Text style={s.totalLabel}>Valor da venda</Text>
-                <Text style={[s.totalValue, isCancelled && s.totalValueStrike]}>{fmt(sale.total_amount)}</Text>
-                {sale.discount_amount > 0 && (
-                  <Text style={s.totalHint}>Desconto: {fmt(sale.discount_amount)}</Text>
-                )}
-                <View style={s.totalMetaRow}>
-                  <View style={s.totalMetaItem}>
-                    <Text style={s.totalMetaLabel}>Pagamento</Text>
-                    <Text style={s.totalMetaValue}>{paymentLabel}</Text>
-                  </View>
-                  <View style={s.totalMetaItem}>
-                    <Text style={s.totalMetaLabel}>Itens</Text>
-                    <Text style={s.totalMetaValue}>{items.length}</Text>
-                  </View>
-                  {sale.coupon_code && (
-                    <View style={s.totalMetaItem}>
-                      <Text style={s.totalMetaLabel}>Cupom</Text>
-                      <Text style={s.totalMetaValue}>{sale.coupon_code}</Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-            )}
-
-            {/* Troca: card segmentado */}
-            {isTroca && troca && (
-              <View style={[s.trocaCard, isCancelled && s.totalCardCancelled]}>
-                {/* Levou */}
-                <View style={s.trocaSegHead}>
-                  <Text style={[s.trocaSegTitle, { color: Colors.green }]}>Levou (produtos novos)</Text>
-                  <Text style={[s.trocaSegVal, { color: Colors.green }]}>{fmt(troca.new_value)}</Text>
-                </View>
-                {/* Devolveu */}
-                <View style={s.trocaDivider} />
-                <View style={s.trocaSegHead}>
-                  <Text style={[s.trocaSegTitle, { color: TROCA_ORANGE }]}>Devolveu (produtos retirados)</Text>
-                  <Text style={[s.trocaSegVal, { color: TROCA_ORANGE }]}>- {fmt(troca.returned_value)}</Text>
-                </View>
-                {troca.returned_items.map(function(ri, idx) {
-                  return (
-                    <View key={idx} style={s.trocaItemRow}>
-                      <View style={s.trocaItemThumb}>
-                        {ri.image_url ? (
-                          <Image source={{ uri: ri.image_url }} style={s.itemImageInner} />
-                        ) : (
-                          <Icon name="package" size={12} color={Colors.ink3} />
-                        )}
-                      </View>
-                      <Text style={s.trocaItemName} numberOfLines={1}>{ri.product_name}</Text>
-                      <Text style={s.trocaItemMeta}>{ri.quantity}x</Text>
-                      <Text style={s.trocaItemPrice}>{fmt(ri.unit_price)}</Text>
+                    <View key={idx} style={s.pill}>
+                      <Text style={s.pillTxt}>{textoDaPilula(p)}</Text>
                     </View>
                   );
                 })}
-                {/* Diferenca */}
-                <View style={s.trocaDiff}>
-                  <Text style={s.trocaDiffLabel}>
-                    {troca.net_amount >= 0 ? "Diferenca — cliente pagou" : "Diferenca — loja devolveu"}
-                  </Text>
-                  <Text style={s.trocaDiffVal}>{fmt(Math.abs(troca.net_amount))}</Text>
-                </View>
-                {/* Pagamentos */}
-                {troca.payments && troca.payments.length > 0 && (
-                  <View style={s.trocaSub}>
-                    <Text style={s.trocaSubLabel}>Formas de pagamento</Text>
-                    <View style={s.trocaPayWrap}>
-                      {troca.payments.map(function(p, idx) {
-                        var lbl = PAYMENT_LABELS[(p.method || "").toLowerCase()] || p.method;
-                        return (
-                          <View key={idx} style={s.trocaPill}>
-                            <Text style={s.trocaPillTxt}>{lbl} · {fmt(p.amount)}</Text>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </View>
-                )}
-                {/* Conciliacao financeiro */}
-                <View style={s.trocaSub}>
-                  <Text style={s.trocaSubLabel}>Conciliação no Financeiro</Text>
-                  <View style={s.trocaFinRow}>
-                    <Text style={s.trocaFinLab}>Troca - Venda</Text>
-                    <Text style={[s.trocaFinVal, { color: Colors.green }]}>+ {fmt(troca.new_value)}</Text>
-                  </View>
-                  <View style={s.trocaFinRow}>
-                    <Text style={s.trocaFinLab}>Troca - Devolução</Text>
-                    <Text style={[s.trocaFinVal, { color: Colors.red }]}>- {fmt(troca.returned_value)}</Text>
-                  </View>
-                  <View style={[s.trocaFinRow, s.trocaFinNet]}>
-                    <Text style={[s.trocaFinLab, { fontWeight: "800", color: Colors.ink }]}>Líquido</Text>
-                    <Text style={[s.trocaFinVal, { color: TROCA_ORANGE, fontWeight: "800" }]}>+ {fmt(troca.net_amount)}</Text>
-                  </View>
-                </View>
-              </View>
-            )}
-
-            <View style={s.peopleRow}>
-              <View style={s.personCard}>
-                <Icon name="users" size={12} color={Colors.ink3} />
-                <Text style={s.personLabel}>Cliente</Text>
-                <Text style={s.personValue} numberOfLines={1}>
-                  {customer?.name || "Não identificado"}
-                </Text>
-                {customer?.phone && <Text style={s.personHint}>{customer.phone}</Text>}
-              </View>
-              <View style={s.personCard}>
-                <View style={s.personCardHeader}>
-                  <Icon name="user_plus" size={12} color={Colors.ink3} />
-                  {!isCancelled && (
-                    <Pressable onPress={handleOpenSellerEdit} style={s.editSellerBtn}>
-                      <Icon name="edit" size={11} color={Colors.violet3} />
-                    </Pressable>
-                  )}
-                </View>
-                <Text style={s.personLabel}>Vendedora</Text>
-                <Text style={s.personValue} numberOfLines={1}>
-                  {seller?.name || "Não informada"}
-                </Text>
+                {sale.coupon_code ? (
+                  <View style={s.pill}><Text style={s.pillTxt}>Cupom {sale.coupon_code}</Text></View>
+                ) : null}
               </View>
             </View>
+          )}
 
-            {!isDevolucao && (<>
-            <Text style={s.sectionTitle}>{isTroca ? "Produtos levados" : "Mercadorias"}</Text>
-            <View style={s.itemsBox}>
-              {items.length === 0 && (
-                <Text style={s.noItems}>Esta venda não possui itens.</Text>
+          {/* Troca: card segmentado */}
+          {isTroca && troca && (
+            <View style={[s.trocaCard, isCancelled && s.totalCardCancelled]}>
+              <View style={s.trocaSegHead}>
+                <Text style={[s.trocaSegTitle, { color: Colors.green }]}>Levou (produtos novos)</Text>
+                <Text style={[s.trocaSegVal, { color: Colors.green }]}>{brl(troca.new_value)}</Text>
+              </View>
+              <View style={s.trocaDivider} />
+              <View style={s.trocaSegHead}>
+                <Text style={[s.trocaSegTitle, { color: Colors.amber }]}>Devolveu (produtos retirados)</Text>
+                <Text style={[s.trocaSegVal, { color: Colors.amber }]}>- {brl(troca.returned_value)}</Text>
+              </View>
+              {troca.returned_items.map(function(ri, idx) {
+                return (
+                  <View key={idx} style={s.trocaItemRow}>
+                    <View style={s.trocaItemThumb}>
+                      {ri.image_url ? <Image source={{ uri: ri.image_url }} style={s.itemImageInner} /> : <Icon name="package" size={12} color={Colors.ink3} />}
+                    </View>
+                    <Text style={s.trocaItemName} numberOfLines={1}>{ri.product_name}</Text>
+                    <Text style={s.trocaItemMeta}>{ri.quantity}x</Text>
+                    <Text style={s.trocaItemPrice}>{brl(ri.unit_price)}</Text>
+                  </View>
+                );
+              })}
+              <View style={s.trocaDiff}>
+                <Text style={s.trocaDiffLabel}>{troca.net_amount >= 0 ? "Diferença, cliente pagou" : "Diferença, loja devolveu"}</Text>
+                <Text style={s.trocaDiffVal}>{brl(Math.abs(troca.net_amount))}</Text>
+              </View>
+              {troca.payments && troca.payments.length > 0 && (
+                <View style={s.trocaSub}>
+                  <Text style={s.trocaSubLabel}>Formas de pagamento</Text>
+                  <View style={s.pillsRow}>
+                    {troca.payments.map(function(p, idx) {
+                      return <View key={idx} style={s.pill}><Text style={s.pillTxt}>{rotuloDaForma(p.method)} · {brl(p.amount)}</Text></View>;
+                    })}
+                  </View>
+                </View>
               )}
+              <View style={s.trocaSub}>
+                <Text style={s.trocaSubLabel}>Conciliação no Financeiro</Text>
+                <View style={s.trocaFinRow}>
+                  <Text style={s.trocaFinLab}>Troca - Venda</Text>
+                  <Text style={[s.trocaFinVal, { color: Colors.green }]}>+ {brl(troca.new_value)}</Text>
+                </View>
+                <View style={s.trocaFinRow}>
+                  <Text style={s.trocaFinLab}>Troca - Devolução</Text>
+                  <Text style={[s.trocaFinVal, { color: Colors.red }]}>- {brl(troca.returned_value)}</Text>
+                </View>
+                <View style={[s.trocaFinRow, s.trocaFinNet]}>
+                  <Text style={[s.trocaFinLab, { fontWeight: "800", color: Colors.ink }]}>Líquido</Text>
+                  <Text style={[s.trocaFinVal, { color: Colors.ink, fontWeight: "800" }]}>+ {brl(troca.net_amount)}</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          <View style={[s.peopleRow, estreito && { flexDirection: "column" }]}>
+            <View style={s.personCard}>
+              <View style={s.personHead}><Icon name="user" size={12} color={Colors.ink3} /><Text style={s.personLabel}>Cliente</Text></View>
+              <Text style={s.personValue} numberOfLines={1}>{customer?.name || "Sem cliente"}</Text>
+              <Text style={s.personHint}>{customer ? (telefone || " ") : "Venda no balcão"}</Text>
+            </View>
+            <View style={s.personCard}>
+              <View style={s.personHead}><Icon name="users" size={12} color={Colors.ink3} /><Text style={s.personLabel}>Vendedor(a)</Text></View>
+              <Text style={s.personValue} numberOfLines={1}>{seller?.name || "Sem vendedor(a)"}</Text>
+              <Text style={s.personHint}>{seller?.name ? "Comissão de " + mesDaVenda(diaEmSaoPaulo(sale.created_at)) : " "}</Text>
+            </View>
+          </View>
+
+          {editada && (
+            <View style={s.editadaRow} testID="venda-editada">
+              <Icon name="edit" size={12} color={Colors.ink3} />
+              <Text style={s.editadaTxt}>{editada}</Text>
+            </View>
+          )}
+
+          {!isDevolucao && (<>
+            <Text style={s.sectionTitle}>{isTroca ? "Produtos levados" : "Produtos"}</Text>
+            <View style={s.itemsBox}>
+              {items.length === 0 && <Text style={s.noItems}>Esta venda não tem produtos.</Text>}
               {items.map(function(item) {
                 const devolvido = rotuloDevolvido(item.quantity, (item as any).returned_quantity);
                 return (
                   <View key={item.id} style={[s.itemRow, devolvido === "Devolvido" && { opacity: 0.55 }]}>
                     <View style={s.itemImage}>
-                      {item.image_url ? (
-                        <Image source={{ uri: item.image_url }} style={s.itemImageInner} />
-                      ) : (
-                        <Icon name="package" size={14} color={Colors.ink3} />
-                      )}
+                      {item.image_url ? <Image source={{ uri: item.image_url }} style={s.itemImageInner} /> : <Icon name="package" size={14} color={Colors.ink3} />}
                     </View>
-                    <View style={{ flex: 1 }}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={s.itemName} numberOfLines={2}>{item.product_name}</Text>
                       <Text style={s.itemMeta}>
-                        {item.quantity}x {fmt(item.unit_price)}
-                        {item.discount > 0 ? "  - " + fmt(item.discount) : ""}
+                        {item.quantity} × {brl(item.unit_price)}
+                        {item.discount > 0 ? "  - " + brl(item.discount) : ""}
                       </Text>
                       {devolvido && <Text style={s.itemReturned}>{devolvido}</Text>}
                     </View>
-                    <Text style={s.itemTotal}>{fmt(item.total_price)}</Text>
+                    <Text style={s.itemTotal}>{brl(item.total_price)}</Text>
                   </View>
                 );
               })}
             </View>
-            </>)}
+          </>)}
 
-            {sale.notes && (
-              <View style={s.notesBox}>
-                <Text style={s.notesLabel}>Observações</Text>
-                <Text style={s.notesText}>{sale.notes}</Text>
+          {sale.notes && (
+            <View style={s.notesBox}>
+              <Text style={s.notesLabel}>Observações</Text>
+              <Text style={s.notesText}>{sale.notes}</Text>
+            </View>
+          )}
+
+          {/* Nota fiscal */}
+          {!isCancelled && !isDevolucao && (
+            <View style={s.fiscalBox}>
+              <View style={s.fiscalHeadRow}>
+                <Text style={s.fiscalTitle}>Nota fiscal</Text>
+                {fiscalHomolog && (
+                  <View style={[s.badge, s.badgeAmber]}><Text style={[s.badgeText, { color: Colors.amber }]}>Teste · homologação</Text></View>
+                )}
               </View>
-            )}
-
-            {/* 02/06/2026 (b/c): Nota fiscal */}
-            {!isCancelled && !isDevolucao && (
-              <View style={s.fiscalBox}>
-                <View style={s.fiscalHeadRow}>
-                  <Text style={s.fiscalTitle}>Nota fiscal</Text>
-                  {fiscalHomolog && (
-                    <View style={s.fiscalHomologPill}>
-                      <Text style={s.fiscalHomologText}>Teste · homologação</Text>
-                    </View>
+              {authorizedEmission ? (
+                <View style={s.fiscalRow}>
+                  <View style={s.fiscalOkPill}>
+                    <Icon name="check_circle" size={12} color={Colors.green} />
+                    <Text style={s.fiscalOkText}>
+                      {fiscalDocLabel}{authorizedEmission.numero ? (" nº " + authorizedEmission.numero) : ""} autorizada
+                    </Text>
+                  </View>
+                  {isTroca ? (
+                    (authorizedEmission.pdf_url || authorizedEmission.url_consulta) ? (
+                      <Button title={authorizedEmission.pdf_url ? "Ver DANFE" : "Consultar SEFAZ"} icon="external_link" size="sm" variant="secondary"
+                        onPress={function() { openFiscalLink(authorizedEmission); }} />
+                    ) : null
+                  ) : (
+                    <Button title="2ª via" icon="print" size="sm" variant="secondary" loading={print2via}
+                      onPress={function() { handlePrint2Via(authorizedEmission.id); }} />
                   )}
                 </View>
-                {authorizedEmission ? (
-                  <View style={s.fiscalRow}>
-                    <View style={s.fiscalOkPill}>
-                      <Icon name="info" size={11} color={Colors.green} />
-                      <Text style={s.fiscalOkText}>
-                        {fiscalDocLabel}{authorizedEmission.numero ? (" no " + authorizedEmission.numero) : ""} autorizada
+              ) : (
+                <>
+                  {latestFiscal && latestFiscal.status !== "autorizada" ? (
+                    <View style={s.fiscalErr}>
+                      <Icon name="alert_circle" size={12} color={Colors.red} />
+                      <Text style={s.fiscalErrText}>
+                        {fiscalStatusLabel(latestFiscal.status)}
+                        {latestFiscal.error_message ? (" — " + latestFiscal.error_message) : ""}
                       </Text>
                     </View>
-                    {isTroca ? (
-                      (authorizedEmission.pdf_url || authorizedEmission.url_consulta) ? (
-                        <Pressable onPress={function() { openFiscalLink(authorizedEmission); }} style={s.fiscalLinkBtn}>
-                          <Icon name="info" size={12} color={Colors.violet3} />
-                          <Text style={s.fiscalLinkText}>{authorizedEmission.pdf_url ? "Ver DANFE" : "Consultar SEFAZ"}</Text>
-                        </Pressable>
-                      ) : null
-                    ) : (
-                      <Pressable onPress={function() { handlePrint2Via(authorizedEmission.id); }} disabled={print2via} style={[s.fiscalLinkBtn, print2via && { opacity: 0.6 }]}>
-                        {print2via ? (
-                          <ActivityIndicator color={Colors.violet3} size="small" />
-                        ) : (
-                          <>
-                            <Icon name="info" size={12} color={Colors.violet3} />
-                            <Text style={s.fiscalLinkText}>2ª via</Text>
-                          </>
-                        )}
-                      </Pressable>
-                    )}
-                  </View>
-                ) : (
-                  <>
-                    {latestFiscal && latestFiscal.status !== "autorizada" ? (
-                      <View style={s.fiscalErr}>
-                        <Icon name="alert" size={12} color={Colors.red} />
-                        <Text style={s.fiscalErrText}>
-                          {fiscalStatusLabel(latestFiscal.status)}
-                          {latestFiscal.error_message ? (" — " + latestFiscal.error_message) : ""}
-                        </Text>
-                      </View>
-                    ) : (
-                      <Text style={s.fiscalNone}>
-                        {isTroca ? "A NF-e de devolução desta troca ainda não foi emitida." : "Esta venda ainda não tem NFC-e emitida."}
-                      </Text>
-                    )}
-                    {fiscalEnabled ? (
-                      <Pressable
-                        onPress={handleEmitFiscal}
-                        disabled={fiscalBusy}
-                        style={[s.actionBtn, s.fiscalEmitBtn]}
-                      >
-                        {fiscalBusy ? (
-                          <ActivityIndicator color={Colors.violet3} size="small" />
-                        ) : (
-                          <>
-                            <Icon name="info" size={13} color={Colors.violet3} />
-                            <Text style={s.fiscalEmitText}>
-                              {isTroca ? "Reprocessar NF-e de devolução" : "Emitir NFC-e"}
-                            </Text>
-                          </>
-                        )}
-                      </Pressable>
-                    ) : (
-                      <Text style={s.fiscalConfigNote}>
-                        Emissão de nota fiscal não configurada. Ative em Configurações › Nota Fiscal.
-                      </Text>
-                    )}
-                  </>
-                )}
-              </View>
-            )}
-
-            {isCancelled && sale.cancelled_at && (
-              <View style={s.cancelledHint}>
-                <Icon name="info" size={12} color={Colors.red} />
-                <Text style={s.cancelledHintText}>
-                  {isTroca
-                    ? "Esta troca foi cancelada em " + fmtDateTime(sale.cancelled_at) + ". Estoque dos dois lados revertido e financeiro ajustado."
-                    : isDevolucao
-                    ? "Esta devolução foi desfeita em " + fmtDateTime(sale.cancelled_at) + ". A peça saiu de novo do estoque e o valor voltou para a dívida."
-                    : "Esta venda foi cancelada em " + fmtDateTime(sale.cancelled_at) + ". O estoque foi devolvido e o valor saiu da receita."}
-                </Text>
-              </View>
-            )}
-
-            <View style={s.actionsRow}>
-              {sale.transaction_id && onEditTransaction && !isTroca && !isDevolucao && (
-                <Pressable
-                  onPress={handleEditClick}
-                  style={[s.actionBtn, s.actionEdit]}
-                >
-                  <Icon name="edit" size={13} color={Colors.violet3} />
-                  <Text style={s.actionEditText}>Editar lancamento</Text>
-                </Pressable>
-              )}
-              {/* DESIGN-38 B5: botão Recibo para vendas crediário */}
-              {showReceiptBtn && (
-                <Pressable
-                  onPress={handlePrintReceipt}
-                  disabled={printingReceipt}
-                  style={[s.actionBtn, s.actionReceipt, printingReceipt && { opacity: 0.6 }]}
-                >
-                  {printingReceipt ? (
-                    <ActivityIndicator color={Colors.violet3} size="small" />
                   ) : (
-                    <>
-                      <Icon name="info" size={13} color={Colors.violet3} />
-                      <Text style={s.actionReceiptText}>Recibo</Text>
-                    </>
+                    <Text style={s.fiscalNone}>
+                      {isTroca ? "A NF-e de devolução desta troca ainda não foi emitida." : "Esta venda ainda não tem NFC-e."}
+                    </Text>
                   )}
-                </Pressable>
-              )}
-              {/* DESIGN-38 B4: botão Devolver para vendas crediário */}
-              {showRefundBtn && (
-                <Pressable
-                  onPress={function() { setShowDevolucao(true); }}
-                  style={[s.actionBtn, s.actionRefund]}
-                >
-                  <Icon name="repeat" size={13} color={TROCA_ORANGE} />
-                  <Text style={s.actionRefundText}>Devolver</Text>
-                </Pressable>
-              )}
-              {/* 16/09/2026: trocar tamanho/produto é a Troca do PDV, não devolução. */}
-              {showRefundBtn && (
-                <Pressable
-                  testID="venda-trocar"
-                  onPress={function() { onClose(); router.push(ROTA_TROCA_PDV as any); }}
-                  style={[s.actionBtn, s.actionEdit]}
-                >
-                  <Icon name="repeat" size={13} color={Colors.violet3} />
-                  <Text style={s.actionEditText}>Trocar</Text>
-                </Pressable>
-              )}
-              {/* QA final 23/09 (Matcon M1): "Criar entrega" — só com o
-                  módulo ligado, em venda (não troca/devolução) ativa e que
-                  ainda não mostra saldo a entregar. Depois de criar, vira
-                  "Ver entregas". Sempre visível (regra 7). */}
-              {matcon.matcon_enabled && !isCancelled && !isTroca && !isDevolucao && sale.has_pending_delivery !== true && (
-                entregaCriadaDe === sale.id ? (
-                  <Pressable
-                    testID="venda-ver-entregas"
-                    onPress={function() { onClose(); router.push("/matcon/entregas" as any); }}
-                    style={[s.actionBtn, s.actionEdit]}
-                  >
-                    <Icon name="truck" size={13} color={Colors.violet3} />
-                    <Text style={s.actionEditText}>Ver entregas</Text>
-                  </Pressable>
-                ) : (
-                  <Pressable
-                    testID="venda-criar-entrega"
-                    onPress={handleCriarEntrega}
-                    disabled={criandoEntrega}
-                    style={[s.actionBtn, s.actionEdit, criandoEntrega && { opacity: 0.6 }]}
-                  >
-                    {criandoEntrega ? (
-                      <ActivityIndicator color={Colors.violet3} size="small" />
-                    ) : (
-                      <>
-                        <Icon name="truck" size={13} color={Colors.violet3} />
-                        <Text style={s.actionEditText}>Criar entrega</Text>
-                      </>
-                    )}
-                  </Pressable>
-                )
-              )}
-              {!isCancelled && (
-                <Pressable
-                  onPress={function() { setConfirmCancel(true); }}
-                  disabled={isCancelling}
-                  style={[s.actionBtn, s.actionCancel]}
-                >
-                  {isCancelling ? (
-                    <ActivityIndicator color={Colors.red} size="small" />
+                  {fiscalEnabled ? (
+                    <Button title={isTroca ? "Reprocessar NF-e de devolução" : "Emitir NFC-e"} icon="file_text" size="sm" variant="secondary"
+                      loading={fiscalBusy} onPress={handleEmitFiscal} style={{ alignSelf: "flex-start" }} />
                   ) : (
-                    <>
-                      <Icon name="x" size={13} color={Colors.red} />
-                      <Text style={s.actionCancelText}>{isTroca ? "Cancelar troca" : isDevolucao ? "Desfazer devolução" : "Cancelar venda"}</Text>
-                    </>
+                    <Text style={s.fiscalConfigNote}>Emissão de nota fiscal não configurada. Ative em Configurações › Nota Fiscal.</Text>
                   )}
-                </Pressable>
+                </>
               )}
             </View>
-          </ScrollView>
-        )}
-      </View>
+          )}
+
+          {isCancelled && sale.cancelled_at && (
+            <View style={s.cancelledHint}>
+              <Icon name="alert_circle" size={12} color={Colors.red} />
+              <Text style={s.cancelledHintText}>
+                {isTroca
+                  ? "Esta troca foi cancelada em " + fmtDataHora(sale.cancelled_at) + ". Estoque dos dois lados revertido e financeiro ajustado."
+                  : isDevolucao
+                  ? "Esta devolução foi desfeita em " + fmtDataHora(sale.cancelled_at) + ". A peça saiu de novo do estoque e o valor voltou para a dívida."
+                  : "Esta venda foi cancelada em " + fmtDataHora(sale.cancelled_at) + ". O estoque voltou e o valor saiu da receita. Venda cancelada não é editada."}
+              </Text>
+            </View>
+          )}
+          {isTroca && !isCancelled && (
+            <Text style={s.hint}>A troca não tem “Editar venda”. Para corrigir, use “Cancelar troca” e faça de novo.</Text>
+          )}
+        </>)}
+      </ScrollView>
+
+      {/* Rodapé fixo */}
+      {detail && sale && (
+        <View style={s.footer}>
+          {secundarios.length > 0 && (
+            <View style={s.footerSec}>{secundarios}</View>
+          )}
+          <View style={s.footerMain}>
+            {!isCancelled ? (
+              <Pressable onPress={function() { setConfirmCancel(true); }} disabled={isCancelling} style={s.cancelLink} testID="venda-cancelar" accessibilityRole="button">
+                <Text style={s.cancelLinkTxt}>{cancelLabel}</Text>
+              </Pressable>
+            ) : <View />}
+            {podeEditar ? (
+              <Button testID="venda-editar" title="Editar venda" icon="edit" variant="primary" onPress={function() { setEditando(true); }} />
+            ) : (
+              <Button title="Fechar" variant="ghost" onPress={onClose} />
+            )}
+          </View>
+        </View>
+      )}
 
       {/* Confirmar cancelamento */}
-      {confirmCancel && (
-        <View style={s.confirmOverlay}>
-          <View style={s.confirmModal}>
-            <Text style={s.confirmTitle}>{isTroca ? "Cancelar troca?" : isDevolucao ? "Desfazer devolução?" : "Cancelar venda?"}</Text>
-            <Text style={s.confirmMsg}>
-              {isTroca
-                ? "Os produtos novos voltam ao estoque, o produto devolvido sai do estoque, as transações da troca somem do financeiro e a NF-e de devolução não autorizada e removida. Ação irreversivel."
-                : isDevolucao
-                ? "A peça devolvida sai de novo do estoque e o valor volta a ser dívida do cliente, nas mesmas parcelas de antes."
-                : "Os " + items.length + " item(s) voltam para o estoque e o valor sai da receita. Esta ação não pode ser desfeita."}
-            </Text>
-            <Text style={s.confirmFieldLabel}>Motivo (opcional)</Text>
-            <TextInput
-              style={s.confirmInput}
-              value={cancelReason}
-              onChangeText={setCancelReason}
-              placeholder="Ex: cliente desistiu, produto trocado..."
-              placeholderTextColor={Colors.ink3}
-              multiline
-              maxLength={200}
-            />
-            <View style={s.confirmActions}>
-              <Pressable
-                onPress={function() { setConfirmCancel(false); setCancelReason(""); }}
-                style={s.confirmBtnCancel}
-                disabled={isCancelling}
-              >
-                <Text style={s.confirmBtnCancelText}>Voltar</Text>
-              </Pressable>
-              <Pressable
-                onPress={handleConfirmCancel}
-                style={s.confirmBtnConfirm}
-                disabled={isCancelling}
-              >
-                {isCancelling ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={s.confirmBtnConfirmText}>{isTroca ? "Sim, cancelar troca" : "Sim, cancelar venda"}</Text>
-                )}
-              </Pressable>
-            </View>
+      <ResponsiveSheet visible={confirmCancel} onClose={function() { setConfirmCancel(false); }} maxWidth={420}>
+        <View style={s.confirmBody}>
+          <Text style={s.confirmTitle}>{isTroca ? "Cancelar troca?" : isDevolucao ? "Desfazer devolução?" : "Cancelar venda?"}</Text>
+          <Text style={s.confirmMsg}>
+            {isTroca
+              ? "Os produtos novos voltam ao estoque, o produto devolvido sai do estoque, as transações da troca saem do Financeiro e a NF-e de devolução não autorizada é removida. Não dá para desfazer."
+              : isDevolucao
+              ? "A peça devolvida sai de novo do estoque e o valor volta a ser dívida do cliente, nas mesmas parcelas de antes."
+              : "Os " + items.length + " produto(s) voltam para o estoque e o valor sai da receita. Não dá para desfazer."}
+          </Text>
+          <Text style={s.confirmFieldLabel}>Motivo (opcional)</Text>
+          <TextInput
+            style={s.confirmInput}
+            value={cancelReason}
+            onChangeText={setCancelReason}
+            placeholder="Ex.: cliente desistiu"
+            placeholderTextColor={Colors.ink3}
+            multiline
+            maxLength={200}
+          />
+          <View style={s.confirmActions}>
+            <Button title="Voltar" variant="ghost" full disabled={isCancelling} onPress={function() { setConfirmCancel(false); setCancelReason(""); }} />
+            <Button title={isTroca ? "Sim, cancelar troca" : isDevolucao ? "Sim, desfazer" : "Sim, cancelar venda"} variant="danger" full loading={isCancelling} onPress={handleConfirmCancel} />
           </View>
         </View>
+      </ResponsiveSheet>
+
+      {editando && saleId && (
+        <EditarVendaModal
+          visible={editando}
+          saleId={saleId}
+          companyId={effectiveCompanyId}
+          onClose={function() { setEditando(false); }}
+          onPrintReceipt={handlePrintReceipt}
+        />
       )}
 
-      {/* Picker de vendedor */}
-      {editingSeller && (
-        <View style={s.confirmOverlay}>
-          <View style={s.sellerPickerModal}>
-            <Text style={s.confirmTitle}>Alterar vendedora</Text>
-            {isLoadingEmps ? (
-              <View style={s.loadingBox}>
-                <ActivityIndicator color={Colors.violet3} />
-              </View>
-            ) : (
-              <ScrollView style={s.sellerList} contentContainerStyle={{ gap: 4 }} showsVerticalScrollIndicator={false}>
-                <Pressable
-                  onPress={function() { setSelectedSellerId(null); }}
-                  style={[s.sellerItem, selectedSellerId === null && s.sellerItemSelected]}
-                >
-                  <Text style={[s.sellerItemText, selectedSellerId === null && s.sellerItemTextSelected]}>
-                    Sem vendedor
-                  </Text>
-                </Pressable>
-                {employees.map(function(emp: any) {
-                  const isSelected = selectedSellerId === emp.id;
-                  return (
-                    <Pressable
-                      key={emp.id}
-                      onPress={function() { setSelectedSellerId(emp.id); }}
-                      style={[s.sellerItem, isSelected && s.sellerItemSelected]}
-                    >
-                      <Text style={[s.sellerItemText, isSelected && s.sellerItemTextSelected]}>
-                        {emp.name}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-                {employees.length === 0 && (
-                  <Text style={s.noItems}>Nenhum funcionario cadastrado.</Text>
-                )}
-              </ScrollView>
-            )}
-            <View style={s.confirmActions}>
-              <Pressable
-                onPress={function() { setEditingSeller(false); }}
-                style={s.confirmBtnCancel}
-                disabled={isUpdating}
-              >
-                <Text style={s.confirmBtnCancelText}>Cancelar</Text>
-              </Pressable>
-              <Pressable
-                onPress={handleSaveSeller}
-                style={s.confirmBtnConfirm}
-                disabled={isUpdating}
-              >
-                {isUpdating ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={s.confirmBtnConfirmText}>Salvar</Text>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* DESIGN-38 B4: wizard de devolução de venda crediário */}
       {showDevolucao && saleId && (
         <DevolucaoModal
           visible={showDevolucao}
@@ -924,74 +635,46 @@ export function SaleDetailModal({
           sale={{
             id: saleId,
             items: items.map(function(it) {
-              return {
-                id: it.id,
-                product_name: it.product_name,
-                quantity: it.quantity,
-                unit_price: it.unit_price,
-                total_price: it.total_price,
-              };
+              return { id: it.id, product_name: it.product_name, quantity: it.quantity, unit_price: it.unit_price, total_price: it.total_price };
             }),
           }}
           onClose={function() { setShowDevolucao(false); }}
-          onDone={function() { /* C1-FE: NÃO fechar aqui — deixa o passo de resultado visível. As queries do crediário já são invalidadas dentro da modal. */ }}
+          onDone={function() { /* C1-FE: não fechar aqui — o passo de resultado fica visível. */ }}
         />
       )}
-    </View>
+    </ResponsiveSheet>
   );
 }
 
 const s = StyleSheet.create({
-  overlay: {
-    position: "fixed" as any, top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center",
-    zIndex: 100,
-  },
-  modal: {
-    backgroundColor: Colors.bg3, borderRadius: 20, padding: 24,
-    maxWidth: 580, width: "92%", borderWidth: 1, borderColor: Colors.border2,
-    maxHeight: "92%",
-  },
-  header: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 16 },
+  header: { flexDirection: "row", alignItems: "flex-start", gap: 12, paddingHorizontal: 18, paddingTop: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: Colors.border },
   headerTitleRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   headerTitle: { fontSize: 18, color: Colors.ink, fontWeight: "700" },
-  headerDate: { fontSize: 11, color: Colors.ink3, marginTop: 4 },
-  cancelledBadge: { backgroundColor: Colors.redD, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: Colors.red + "55" },
-  cancelledText: { fontSize: 9, color: Colors.red, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase" },
-  trocaBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(251,146,60,0.15)", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: "rgba(251,146,60,0.4)" },
-  trocaBadgeText: { fontSize: 9, color: TROCA_ORANGE, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase" },
-  companyBadge: { backgroundColor: Colors.violetD, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: "rgba(124,58,237,0.28)", maxWidth: 200 },
-  companyBadgeText: { fontSize: 9, color: Colors.violet3, fontWeight: "700", letterSpacing: 0.4 },
-  // 22/09/2026 (Matcon M1): selo "saldo a entregar", âmbar, com link.
-  pendingDeliveryBadge: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    backgroundColor: Colors.amberD, borderRadius: 6,
-    paddingHorizontal: 8, paddingVertical: 3,
-    borderWidth: 1, borderColor: "rgba(251,191,36,0.4)",
-  },
-  pendingDeliveryText: { fontSize: 9, color: Colors.amber, fontWeight: "700", letterSpacing: 0.4, textTransform: "uppercase" },
-  pendingDeliveryLink: { fontSize: 9, color: Colors.amber, fontWeight: "700", textDecorationLine: "underline" },
-  closeBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" },
-  closeText: { fontSize: 16, color: Colors.ink3, fontWeight: "600" },
+  headerDate: { fontSize: 12, color: Colors.ink3, marginTop: 3 },
+  badge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: Colors.violetD, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: Colors.border2 },
+  badgeAmber: { backgroundColor: Colors.amberD, borderColor: Colors.amber },
+  badgeRed: { backgroundColor: Colors.redD, borderColor: Colors.red },
+  badgeText: { fontSize: 9.5, color: Colors.violet3, fontWeight: "700", letterSpacing: 0.4, textTransform: "uppercase" },
+  pendingDeliveryLink: { fontSize: 9.5, color: Colors.amber, fontWeight: "700", textDecorationLine: "underline" },
+  closeBtn: { width: 40, height: 40, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, alignItems: "center", justifyContent: "center" },
 
+  body: { padding: 16, gap: 12 },
   loadingBox: { paddingVertical: 50, alignItems: "center", gap: 12 },
   loadingText: { fontSize: 12, color: Colors.ink3 },
-  errorBox: { flexDirection: "row", alignItems: "center", gap: 10, padding: 16, backgroundColor: Colors.redD, borderRadius: 10, borderWidth: 1, borderColor: Colors.red + "33" },
+  errorBox: { flexDirection: "row", alignItems: "center", gap: 10, padding: 16, backgroundColor: Colors.redD, borderRadius: 10, borderWidth: 1, borderColor: Colors.red },
   errorText: { flex: 1, fontSize: 12, color: Colors.red },
 
-  totalCard: { backgroundColor: Colors.bg4, borderRadius: 14, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: Colors.border, alignItems: "center" },
-  totalCardCancelled: { backgroundColor: Colors.redD, borderColor: Colors.red + "33" },
-  totalLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase" },
-  totalValue: { fontSize: 28, color: Colors.green, fontWeight: "800", marginTop: 4 },
+  totalCard: { width: "100%", backgroundColor: Colors.bg4, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, alignItems: "center" },
+  totalCardCancelled: { backgroundColor: Colors.redD, borderColor: Colors.red },
+  totalLabel: { fontSize: 10.5, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase" },
+  totalValue: { fontSize: 28, color: Colors.ink, fontWeight: "800", marginTop: 4 },
   totalValueStrike: { color: Colors.red, textDecorationLine: "line-through" as any },
-  totalHint: { fontSize: 11, color: Colors.ink3, marginTop: 4 },
-  totalMetaRow: { flexDirection: "row", gap: 16, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border, width: "100%", justifyContent: "center" },
-  totalMetaItem: { alignItems: "center" },
-  totalMetaLabel: { fontSize: 9, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase" },
-  totalMetaValue: { fontSize: 12, color: Colors.ink, fontWeight: "600", marginTop: 3 },
+  totalHint: { fontSize: 12, color: Colors.ink3, marginTop: 4 },
+  pillsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10, justifyContent: "center" },
+  pill: { backgroundColor: Colors.bg3, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 5, borderWidth: 1, borderColor: Colors.border2 },
+  pillTxt: { fontSize: 12, color: Colors.ink, fontWeight: "600" },
 
-  // Troca card
-  trocaCard: { backgroundColor: Colors.bg4, borderRadius: 14, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: "rgba(251,146,60,0.25)" },
+  trocaCard: { width: "100%", backgroundColor: Colors.bg4, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border },
   trocaDivider: { height: 1, backgroundColor: Colors.border, marginVertical: 10 },
   trocaSegHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   trocaSegTitle: { fontSize: 11, fontWeight: "800", letterSpacing: 0.3, textTransform: "uppercase" },
@@ -1003,98 +686,67 @@ const s = StyleSheet.create({
   trocaItemPrice: { fontSize: 12, color: Colors.ink, fontWeight: "600" },
   trocaDiff: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border },
   trocaDiffLabel: { fontSize: 12, color: Colors.ink2, fontWeight: "700" },
-  trocaDiffVal: { fontSize: 20, color: TROCA_ORANGE, fontWeight: "900", letterSpacing: -0.3 },
+  trocaDiffVal: { fontSize: 20, color: Colors.ink, fontWeight: "900" },
   trocaSub: { marginTop: 12 },
-  trocaSubLabel: { fontSize: 9, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 7 },
-  trocaPayWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  trocaPill: { backgroundColor: Colors.bg3, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: Colors.border },
-  trocaPillTxt: { fontSize: 11, color: Colors.ink, fontWeight: "600" },
+  trocaSubLabel: { fontSize: 9.5, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 2 },
   trocaFinRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 },
   trocaFinLab: { fontSize: 12, color: Colors.ink2 },
   trocaFinVal: { fontSize: 12.5, fontWeight: "700" },
   trocaFinNet: { borderTopWidth: 1, borderTopColor: Colors.border2, marginTop: 5, paddingTop: 8 },
 
-  peopleRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
-  personCard: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border, gap: 4 },
-  personCardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  editSellerBtn: { padding: 4, borderRadius: 6, backgroundColor: Colors.violetD },
-  personLabel: { fontSize: 9, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase", marginTop: 2 },
-  personValue: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
-  personHint: { fontSize: 10, color: Colors.ink3 },
+  peopleRow: { flexDirection: "row", gap: 8, width: "100%" },
+  personCard: { flex: 1, minWidth: 0, backgroundColor: Colors.bg4, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border, gap: 3 },
+  personHead: { flexDirection: "row", alignItems: "center", gap: 6 },
+  personLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase" },
+  personValue: { fontSize: 14, color: Colors.ink, fontWeight: "600", marginTop: 2 },
+  personHint: { fontSize: 11, color: Colors.ink3 },
+  editadaRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  editadaTxt: { fontSize: 12, color: Colors.ink3 },
 
-  sectionTitle: { fontSize: 11, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 8, marginTop: 4 },
-  itemsBox: { backgroundColor: Colors.bg4, borderRadius: 12, padding: 4, borderWidth: 1, borderColor: Colors.border, marginBottom: 12 },
+  sectionTitle: { fontSize: 11, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase" },
+  itemsBox: { width: "100%", backgroundColor: Colors.bg4, borderRadius: 12, padding: 4, borderWidth: 1, borderColor: Colors.border },
   noItems: { fontSize: 12, color: Colors.ink3, fontStyle: "italic", textAlign: "center", paddingVertical: 16 },
   itemRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 10, borderRadius: 8 },
   itemImage: { width: 36, height: 36, borderRadius: 8, backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center", overflow: "hidden", borderWidth: 1, borderColor: Colors.border },
   itemImageInner: { width: 36, height: 36 },
-  itemName: { fontSize: 12, color: Colors.ink, fontWeight: "600" },
-  itemMeta: { fontSize: 10.5, color: Colors.ink3, marginTop: 2 },
-  itemTotal: { fontSize: 13, color: Colors.green, fontWeight: "700" },
+  itemName: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
+  itemMeta: { fontSize: 11.5, color: Colors.ink3, marginTop: 2 },
+  itemReturned: { fontSize: 10.5, color: Colors.amber, fontWeight: "700", marginTop: 3 },
+  itemTotal: { fontSize: 13, color: Colors.ink, fontWeight: "700" },
 
-  notesBox: { backgroundColor: Colors.bg4, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: Colors.border, marginBottom: 12 },
-  notesLabel: { fontSize: 9, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase" },
-  notesText: { fontSize: 12, color: Colors.ink, marginTop: 4, lineHeight: 17 },
+  notesBox: { width: "100%", backgroundColor: Colors.bg4, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: Colors.border },
+  notesLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase" },
+  notesText: { fontSize: 12.5, color: Colors.ink, marginTop: 4, lineHeight: 18 },
 
-  // 02/06/2026 (b/c): Nota fiscal
-  fiscalBox: { backgroundColor: Colors.bg4, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border, marginBottom: 12, gap: 8 },
+  fiscalBox: { width: "100%", backgroundColor: Colors.bg4, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border, gap: 8 },
   fiscalHeadRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  fiscalTitle: { fontSize: 9, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase" },
-  fiscalHomologPill: { backgroundColor: "rgba(251,191,36,0.15)", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: "rgba(251,191,36,0.4)" },
-  fiscalHomologText: { fontSize: 9, color: "#fbbf24", fontWeight: "700", letterSpacing: 0.4, textTransform: "uppercase" },
+  fiscalTitle: { fontSize: 10, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase" },
   fiscalRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" },
-  fiscalOkPill: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.greenD, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: Colors.green + "33" },
-  fiscalOkText: { fontSize: 11.5, color: Colors.green, fontWeight: "700" },
-  fiscalLinkBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2 },
-  fiscalLinkText: { fontSize: 11.5, color: Colors.violet3, fontWeight: "700" },
-  fiscalErr: { flexDirection: "row", alignItems: "flex-start", gap: 8, padding: 10, backgroundColor: Colors.redD, borderRadius: 8, borderWidth: 1, borderColor: Colors.red + "33" },
-  fiscalErrText: { flex: 1, fontSize: 11, color: Colors.red, lineHeight: 15 },
-  fiscalNone: { fontSize: 11.5, color: Colors.ink3, lineHeight: 16 },
-  fiscalEmitBtn: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
-  fiscalEmitText: { fontSize: 12, color: Colors.violet3, fontWeight: "700" },
-  fiscalConfigNote: { fontSize: 11.5, color: Colors.ink3, lineHeight: 16, fontStyle: "italic" },
+  fiscalOkPill: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.greenD, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: Colors.green },
+  fiscalOkText: { fontSize: 12, color: Colors.green, fontWeight: "700" },
+  fiscalErr: { flexDirection: "row", alignItems: "flex-start", gap: 8, padding: 10, backgroundColor: Colors.redD, borderRadius: 8, borderWidth: 1, borderColor: Colors.red },
+  fiscalErrText: { flex: 1, fontSize: 11.5, color: Colors.red, lineHeight: 16 },
+  fiscalNone: { fontSize: 12, color: Colors.ink3, lineHeight: 17 },
+  fiscalConfigNote: { fontSize: 12, color: Colors.ink3, lineHeight: 17, fontStyle: "italic" },
 
-  cancelledHint: { flexDirection: "row", gap: 8, padding: 10, backgroundColor: Colors.redD, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: Colors.red + "33" },
-  cancelledHintText: { flex: 1, fontSize: 11, color: Colors.red, lineHeight: 15 },
+  returnsHint: { width: "100%", flexDirection: "row", alignItems: "center", gap: 8, padding: 10, borderRadius: 8, backgroundColor: Colors.amberD, borderWidth: 1, borderColor: Colors.amber },
+  returnsHintText: { flex: 1, fontSize: 12.5, color: Colors.ink, lineHeight: 17 },
+  cancelledHint: { width: "100%", flexDirection: "row", gap: 8, padding: 10, backgroundColor: Colors.redD, borderRadius: 8, borderWidth: 1, borderColor: Colors.red },
+  cancelledHintText: { flex: 1, fontSize: 12, color: Colors.ink, lineHeight: 17 },
+  hint: { fontSize: 12, color: Colors.ink3, lineHeight: 17 },
 
-  actionsRow: { flexDirection: "row", gap: 8, marginTop: 8, flexWrap: "wrap" },
-  actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderRadius: 10, borderWidth: 1, minWidth: 100 },
-  actionEdit: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
-  actionEditText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
-  // DESIGN-38 B5: botão Recibo
-  actionReceipt: { backgroundColor: Colors.violetD, borderColor: Colors.border2 },
-  actionReceiptText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
-  // DESIGN-38 B4: botão Devolver
-  returnsHint: { flexDirection: "row", alignItems: "center", gap: 8, padding: 10, marginBottom: 10, borderRadius: 8, backgroundColor: "rgba(251,146,60,0.10)", borderWidth: 1, borderColor: "rgba(251,146,60,0.35)" },
-  returnsHintText: { flex: 1, fontSize: 12, color: TROCA_ORANGE, lineHeight: 16 },
-  itemReturned: { fontSize: 10, color: TROCA_ORANGE, fontWeight: "700", marginTop: 3 },
-  actionRefund: { backgroundColor: "rgba(251,146,60,0.12)", borderColor: "rgba(251,146,60,0.4)" },
-  actionRefundText: { fontSize: 12, color: TROCA_ORANGE, fontWeight: "600" },
-  actionCancel: { backgroundColor: Colors.redD, borderColor: Colors.red + "33" },
-  actionCancelText: { fontSize: 12, color: Colors.red, fontWeight: "600" },
+  footer: { width: "100%", gap: 10, paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: Colors.border, backgroundColor: Colors.bg2 },
+  footerSec: { flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "flex-end" },
+  footerMain: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  cancelLink: { minHeight: 40, justifyContent: "center", paddingHorizontal: 4 },
+  cancelLinkTxt: { fontSize: 13, color: Colors.red, fontWeight: "700" },
 
-  confirmOverlay: {
-    position: "fixed" as any, top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center",
-    zIndex: 200,
-  },
-  confirmModal: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, maxWidth: 420, width: "90%", borderWidth: 1, borderColor: Colors.border2 },
+  confirmBody: { padding: 20 },
   confirmTitle: { fontSize: 16, color: Colors.ink, fontWeight: "700", marginBottom: 8 },
-  confirmMsg: { fontSize: 12, color: Colors.ink3, lineHeight: 17, marginBottom: 14 },
+  confirmMsg: { fontSize: 13, color: Colors.ink2, lineHeight: 19, marginBottom: 14 },
   confirmFieldLabel: { fontSize: 10, color: Colors.ink3, fontWeight: "700", letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 4 },
-  confirmInput: { backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 10, fontSize: 12, color: Colors.ink, minHeight: 60, textAlignVertical: "top", marginBottom: 14 },
+  confirmInput: { width: "100%", backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: Colors.ink, minHeight: 60, textAlignVertical: "top", marginBottom: 14 },
   confirmActions: { flexDirection: "row", gap: 8 },
-  confirmBtnCancel: { flex: 1, paddingVertical: 11, borderRadius: 8, backgroundColor: Colors.bg4, alignItems: "center", borderWidth: 1, borderColor: Colors.border },
-  confirmBtnCancelText: { fontSize: 12, color: Colors.ink, fontWeight: "600" },
-  confirmBtnConfirm: { flex: 1, paddingVertical: 11, borderRadius: 8, backgroundColor: Colors.red, alignItems: "center" },
-  confirmBtnConfirmText: { fontSize: 12, color: "#fff", fontWeight: "700" },
-
-  sellerPickerModal: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 20, maxWidth: 380, width: "88%", borderWidth: 1, borderColor: Colors.border2, maxHeight: "60%" },
-  sellerList: { maxHeight: 280, marginBottom: 14 },
-  sellerItem: { paddingVertical: 11, paddingHorizontal: 12, borderRadius: 8, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border, marginBottom: 4 },
-  sellerItemSelected: { backgroundColor: Colors.violetD, borderColor: Colors.violet3 },
-  sellerItemText: { fontSize: 13, color: Colors.ink, fontWeight: "500" },
-  sellerItemTextSelected: { color: Colors.violet3, fontWeight: "700" },
 });
 
 export default SaleDetailModal;

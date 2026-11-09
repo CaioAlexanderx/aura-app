@@ -187,7 +187,11 @@ export type SaleDetailFull = {
     has_pending_delivery?: boolean;
   };
   customer: { id: string; name: string; phone: string | null; email: string | null } | null;
-  seller: { id: string | null; name: string | null };
+  seller: { id: string | null; name: string | null; employee_id?: string | null };
+  // 09/11/2026: formas da venda (a dividida e a entrada + crediário) e a
+  // última edição ("Editada em dd/mm por Fulano"). Opcionais: backend antigo.
+  payments?: SalePaymentPill[];
+  last_edit?: { id: string; by_name: string | null; at: string; changes?: string[]; reason?: string | null } | null;
   items: SaleDetailsItem[];
   // 02/06/2026: null em venda normal; preenchido em troca.
   troca?: SaleTrocaBlock | null;
@@ -281,35 +285,95 @@ export type SalesFilters = {
   offset?: number;
 };
 
-// 20/07/2026 (Studio "Vendas"): edição completa de uma venda concluída.
-// ⚠️ Estende o PATCH /companies/:id/sales/:saleId, que HOJE só aceita
-// seller_id. Para itens/desconto funcionarem o backend precisa aceitar
-// items[] + discount_amount neste mesmo endpoint (contrato no PR).
-//   - items[]: substitui as linhas da venda. id presente = item existente
-//     (atualiza qtd/preço/desconto); id ausente = item novo; itens omitidos
-//     do array são removidos. O backend deve reprocessar estoque + totais.
-export type UpdateSaleItem = {
-  id?: string | null;
-  product_id?: string | null;
-  variant_id?: string | null;
-  quantity: number;
-  unit_price: number;
-  discount?: number;
-  product_name?: string;
-};
+// 09/11/2026 — Editar venda (Aura-backend#972). O PATCH /sales/:id muda só
+// forma de pagamento, vendedor(a) e cliente. Campo ausente não mexe; campo
+// desconhecido é 400 (o Studio mandava items/discount_amount, o backend
+// ignorava, gravava vendedor nulo e respondia ok).
+export type SalePaymentPill = { method: string; amount: number; installments?: number };
 
-export type UpdateSaleBody = {
-  items?: UpdateSaleItem[];
-  discount_amount?: number;
+export type SaleEditBody = {
   seller_id?: string | null;
-  notes?: string | null;
+  customer_id?: string | null;
+  payments?: { method: string; amount: number }[];
+  installments?: number;
+  first_due_date?: string | null;
+  reason?: string | null;
+  dry_run?: boolean;
 };
 
-export type UpdateSaleResult = {
+export type SaleEditLock = { code: string; message: string } | null;
+
+export type SaleEditCredit = {
+  amount: number;
+  installments: number;
+  first_due_date: string | null;
+  account_id?: string | null;
+  account_name?: string | null;
+  paid?: boolean;
+  paid_amount?: number;
+};
+
+export type SaleEditNfce = {
+  id: string;
+  numero: number | null;
+  authorized_at: string | null;
+  cancel_until: string | null;
+  can_cancel: boolean;
+} | null;
+
+export type SaleEditContext = {
+  sale: {
+    id: string; sale_number: number | null; total_amount: number; created_at: string; dia: string;
+    type: string; status: string; payment_method: string | null; company_id: string;
+  };
+  editable: boolean;
+  locked: SaleEditLock;
+  current: {
+    payments: SalePaymentPill[];
+    credit: SaleEditCredit | null;
+    seller: { id: string | null; name: string | null } | null;
+    customer: { id: string; name: string } | null;
+  };
+  locks: { money: SaleEditLock; seller: SaleEditLock };
+  permissions: { seller: boolean; money: boolean };
+  nfce: SaleEditNfce;
+  caixa: { sessao_id: string; status: "aberta" | "fechada"; dinheiro_contado: number | null } | null;
+};
+
+export type SaleEditEffect = { code: string; text: string };
+
+export type SaleEditPlan = {
+  sale_id: string;
+  sale_number: number | null;
+  changes: ("seller" | "customer" | "payments")[];
+  before: { payments: SalePaymentPill[]; seller: { id: string | null; name: string | null } | null; customer: { id: string; name: string } | null };
+  after: { payments: SalePaymentPill[]; seller: { id: string | null; name: string | null } | null; customer: { id: string; name: string } | null };
+  effects: SaleEditEffect[];
+  warnings: SaleEditEffect[];
+  credit: null | {
+    action: "enter" | "leave" | "move" | "recreate";
+    to: null | {
+      amount: number; installments: number; first_due_date: string | null; account_name: string | null;
+      customer: { id: string; name: string } | null;
+      schedule: { installment_number: number; amount_due: number; due_date: string | null }[];
+    };
+  };
+  requires_confirmation: boolean;
+  confirmation: null | { title: string; text: string; confirm_label: string };
+  nfce: SaleEditNfce;
+  caixa: SaleEditContext["caixa"];
+};
+
+export type SaleEditResult = {
   ok: boolean;
   sale_id: string;
-  total_amount?: number;
-  discount_amount?: number;
+  seller_id: string | null;
+  seller_name: string | null;
+  plan: SaleEditPlan;
+  result: {
+    credit: null | { account_id: string | null; account_name: string | null; amount: number; installments: { installment_number: number; amount_due: number; due_date: string }[] };
+    edit: { id: string; created_at: string; edited_by_name: string | null };
+  };
 };
 
 // 01/09/2026: resposta do POST /companies/:id/pdv/sale (e /pdv/sale-com-sinal).
@@ -357,19 +421,27 @@ export var salesApi = {
       { method: "POST", body: { reason: reason || "" }, retry: 0, timeout: 15000 }
     );
   },
-  updateSeller: function(companyId: string, saleId: string, seller_id: string | null) {
-    return request<{ ok: boolean; sale_id: string; seller_id: string | null; seller_name: string | null }>(
-      "/companies/" + companyId + "/sales/" + saleId,
-      { method: "PATCH", body: { seller_id: seller_id }, retry: 0 }
+  // 09/11/2026 — Editar venda: o que a tela precisa antes de mexer (formas
+  // atuais, travas, NFC-e, caixa, permissões).
+  editContext: function(companyId: string, saleId: string) {
+    return request<SaleEditContext>(
+      "/companies/" + companyId + "/sales/" + saleId + "/edit-context",
+      { retry: 1 }
     );
   },
-  // 20/07/2026 (Studio "Vendas"): edição completa (itens/qtd/preços/desconto)
-  // de uma venda concluída. Estende o PATCH /sales/:id — requer suporte no
-  // backend (ver contrato no PR). Sem o backend, retorna erro tratado na UI.
-  updateSale: function(companyId: string, saleId: string, body: UpdateSaleBody) {
-    return request<UpdateSaleResult>(
+  // dry_run: true devolve o plano sem gravar nada.
+  editSale: function(companyId: string, saleId: string, body: SaleEditBody) {
+    return request<SaleEditResult & { dry_run?: boolean }>(
       "/companies/" + companyId + "/sales/" + saleId,
-      { method: "PATCH", body: body, retry: 0, timeout: 20000 }
+      { method: "PATCH", body: body, retry: 0, timeout: 30000 }
+    );
+  },
+  // Cancelamento da NFC-e que já existe (routes/nfce.js). A SEFAZ pede ao
+  // menos 15 caracteres de motivo e só aceita até 30 min da autorização.
+  cancelNfce: function(companyId: string, nfceId: string, reason: string) {
+    return request<{ nfce: any }>(
+      "/companies/" + companyId + "/nfce/" + nfceId + "/cancel",
+      { method: "POST", body: { reason: reason }, retry: 0, timeout: 30000 }
     );
   },
   // 02/06/2026 (b): emite NFC-e (ou NF-e) por venda. Idempotente no backend
