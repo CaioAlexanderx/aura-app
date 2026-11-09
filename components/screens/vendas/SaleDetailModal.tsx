@@ -469,10 +469,10 @@ export function SaleDetailModal({
             <Text style={s.sectionTitle}>{isTroca ? "Produtos levados" : "Produtos"}</Text>
             <View style={s.itemsBox}>
               {items.length === 0 && <Text style={s.noItems}>Esta venda não tem produtos.</Text>}
-              {items.map(function(item) {
+              {items.map(function(item, idx) {
                 const devolvido = rotuloDevolvido(item.quantity, (item as any).returned_quantity);
                 return (
-                  <View key={item.id} style={[s.itemRow, devolvido === "Devolvido" && { opacity: 0.55 }]}>
+                  <View key={item.id || String(idx)} style={[s.itemRow, devolvido === "Devolvido" && { opacity: 0.55 }]}>
                     <View style={s.itemImage}>
                       {item.image_url ? <Image source={{ uri: item.image_url }} style={s.itemImageInner} /> : <Icon name="package" size={14} color={Colors.ink3} />}
                     </View>
