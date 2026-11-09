@@ -24,7 +24,7 @@ import { ConfirmGate } from "@/components/ConfirmGate";
 import { fmt, fmtDate } from "./fichaHelpers";
 import { eventNote } from "./eventNote";
 import { m } from "./fichaStyles";
-import { pdvApi } from "@/services/pdvApi";
+import { carregarVendaParaDevolucao } from "./vendaParaDevolucao";
 import { DevolucaoModal, type DevolucaoSale } from "@/components/crediario/DevolucaoModal";
 import { gruposPorCarne, diaSP } from "@/utils/crediarioPagamento";
 import { EditarPagamentoModal, type PagamentoEmEdicao } from "./EditarPagamentoModal";
@@ -103,26 +103,13 @@ export function TabHistorico({
     if (!ev.sale_id) return;
     setLoadingRefundId(ev.id);
     try {
-      const sale = await pdvApi.getSale(companyId, ev.sale_id);
-      // Mapeia itens: id real do sale_item; clamp quantity = vendida − já devolvida;
-      // pula itens sem quantidade disponível para devolver.
-      const items = (sale.items || []).flatMap((it) => {
-        const refunded = it.refunded_quantity ?? 0;
-        const available = it.quantity - refunded;
-        if (available <= 0) return [];
-        return [{
-          id: it.id,
-          product_name: it.product_name,
-          quantity: available,
-          unit_price: it.unit_price,
-          total_price: it.unit_price * available,
-        }];
-      });
-      if (items.length === 0) {
+      // Mesma montagem do "Excluir carnê" de carnê de venda (vendaParaDevolucao).
+      const sale = await carregarVendaParaDevolucao(companyId, ev.sale_id);
+      if (!sale) {
         toast.error("Todos os itens desta venda já foram devolvidos.");
         return;
       }
-      setRefundSale({ id: sale.id, items });
+      setRefundSale(sale);
     } catch (err) {
       console.error("[crediário] openRefund error:", err);
       toast.error("Não foi possível carregar a venda. Tente novamente.");

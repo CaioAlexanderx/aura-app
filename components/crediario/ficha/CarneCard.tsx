@@ -18,6 +18,10 @@
 //
 // Backend antigo (sem os campos do #803): sem itens, sem barra, sem parcelas
 // pagas — sobra nome, saldo, parcelas e ações, que é o que a ficha já tinha.
+//
+// 09/11/2026: "Excluir carnê" no fim da linha de ações, destrutivo discreto
+// (vermelho só no texto). Também aparece no carnê vazio, que não tem as
+// outras ações. A confirmação e os recusados (recebimento, venda) são do shell.
 // ============================================================
 import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
@@ -41,11 +45,13 @@ export type CarneCardProps<P extends ParcelaAbertaDoCarne> = {
   renegociarLabel?: string;
   /** Ausente = cliente sem telefone. */
   onCobrar?: () => void;
+  /** Ausente = sem o botão (grupo sem carnê, carnê cancelado ou juntado). */
+  onExcluir?: () => void;
 };
 
 export function CarneCard<P extends ParcelaAbertaDoCarne>({
   carne, expanded, onToggle, renderParcela,
-  onReceber, onImprimir, onRenegociar, renegociarLabel = "Renegociar", onCobrar,
+  onReceber, onImprimir, onRenegociar, renegociarLabel = "Renegociar", onCobrar, onExcluir,
 }: CarneCardProps<P>) {
   const c = carne;
   const corValor = c.atrasado ? Colors.red : c.falta > 0 ? Colors.ink : Colors.ink3;
@@ -171,7 +177,15 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
                 <Acao rotulo="Imprimir" onPress={onImprimir} />
                 {!!onRenegociar && <Acao rotulo={renegociarLabel} onPress={onRenegociar} />}
                 {!!onCobrar && <Acao rotulo="Cobrar" onPress={onCobrar} />}
+                {!!onExcluir && (
+                  <Acao rotulo="Excluir carnê" onPress={onExcluir} destrutiva testID={`carne-${c.key}-excluir`} />
+                )}
               </View>
+            </View>
+          )}
+          {c.vazio && !!onExcluir && (
+            <View style={[s.acts, { marginTop: 12 }]}>
+              <Acao rotulo="Excluir carnê" onPress={onExcluir} destrutiva testID={`carne-${c.key}-excluir`} />
             </View>
           )}
         </View>
@@ -182,15 +196,21 @@ export function CarneCard<P extends ParcelaAbertaDoCarne>({
 
 /** Botão secundário do carnê. Próprio (e não o <Button>) porque o Button
  *  corta o texto em 1 linha: aqui o rótulo nunca trunca e a linha quebra. */
-function Acao({ rotulo, onPress }: { rotulo: string; onPress: () => void }) {
+function Acao({ rotulo, onPress, destrutiva = false, testID }: {
+  rotulo: string; onPress: () => void;
+  /** Vermelho só no texto: discreto, sem competir com Receber. */
+  destrutiva?: boolean;
+  testID?: string;
+}) {
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={rotulo}
-      style={({ pressed }: any) => [s.act, pressed && { backgroundColor: Colors.violetD }]}
+      testID={testID}
+      style={({ pressed }: any) => [s.act, pressed && { backgroundColor: destrutiva ? Colors.redD : Colors.violetD }]}
     >
-      <Text style={s.actT}>{rotulo}</Text>
+      <Text style={[s.actT, destrutiva && { color: Colors.red }]}>{rotulo}</Text>
     </Pressable>
   );
 }

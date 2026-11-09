@@ -56,6 +56,12 @@ import { TabConta } from "./ficha/TabConta";
 import { GrupoEmAberto } from "./ficha/GrupoEmAberto";
 import { ImprimirCarnePanel } from "./ficha/ImprimirCarnePanel";
 import { JuntarCarnesPanel } from "./ficha/JuntarCarnesPanel";
+import { carregarVendaParaDevolucao } from "./ficha/vendaParaDevolucao";
+import { DevolucaoModal, type DevolucaoSale } from "./DevolucaoModal";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import {
+  textoConfirmarExclusao, lerErroDaExclusao, mensagemDosRecebimentos, MENSAGEM_CARNE_DE_VENDA,
+} from "@/utils/crediarioExcluirCarne";
 import {
   organizarCarnes, carnesParaJuntar, CHAVE_SEM_CARNE, type ContaDoCarne, type EscopoCarne,
 } from "@/utils/crediarioCarne";
@@ -139,6 +145,18 @@ export function ClienteCrediarioModal({
   // ── 10/10/2026: juntar carnês. null = fechado; array = chaves já marcadas
   // ao abrir (vazio pelo link do cabeçalho; o carnê de origem pelo Renegociar).
   const [juntarPre, setJuntarPre] = useState<string[] | null>(null);
+
+  // ── 09/11/2026: excluir carnê. alvo = diálogo de confirmação aberto;
+  // recusa = o backend disse não (recebimento ou venda) e a tela explica.
+  const [excluirAlvo, setExcluirAlvo] = useState<{ id: string; nome: string; falta: number } | null>(null);
+  const [excluindo, setExcluindo] = useState(false);
+  const [recusaExclusao, setRecusaExclusao] = useState<
+    | { tipo: "recebimentos"; mensagem: string }
+    | { tipo: "venda"; saleId: string }
+    | null
+  >(null);
+  const [abrindoDevolucao, setAbrindoDevolucao] = useState(false);
+  const [devolucaoVenda, setDevolucaoVenda] = useState<DevolucaoSale | null>(null);
 
   const [histEvents, setHistEvents] = useState<CreditHistoryEvent[]>([]);
   const [histCursor, setHistCursor] = useState<string | null>(null);
@@ -704,6 +722,60 @@ export function ClienteCrediarioModal({
     handleHistoricRefresh();
   }
 
+  // ── 09/11/2026: excluir carnê ─────────────────────────────────────────
+  // Sem recebimento: exclui e recarrega a ficha. Com recebimento ou de venda
+  // do Caixa o backend recusa (409) e o diálogo diz o caminho.
+  async function confirmarExclusaoDoCarne() {
+    const alvo = excluirAlvo;
+    if (!alvo || excluindo || !customerId) return;
+    setExcluindo(true);
+    try {
+      await creditApi.deleteCarne(companyId, customerId, alvo.id);
+      setExcluirAlvo(null);
+      if (expandedAccountId === alvo.id) setExpandedAccountId(undefined);
+      toast.success("Carnê excluído.");
+      setHistLoaded(false);
+      handleHistoricRefresh();
+    } catch (err: any) {
+      setExcluirAlvo(null);
+      const r = lerErroDaExclusao(err);
+      if (r.tipo === "recebimentos") {
+        setRecusaExclusao({ tipo: "recebimentos", mensagem: mensagemDosRecebimentos(r.recebimentos, fmt) });
+      } else if (r.tipo === "venda") {
+        setRecusaExclusao({ tipo: "venda", saleId: r.saleId });
+      } else if (r.tipo === "sumiu") {
+        toast.error(r.mensagem);
+        handleHistoricRefresh();
+      } else {
+        console.error("[crediário] deleteCarne error:", err);
+        toast.error(r.mensagem);
+      }
+    } finally {
+      setExcluindo(false);
+    }
+  }
+
+  // Carnê de venda: a mesma devolução da Linha do tempo (tira a dívida e
+  // devolve o estoque).
+  async function abrirDevolucaoDoCarne(saleId: string) {
+    if (abrindoDevolucao) return;
+    setAbrindoDevolucao(true);
+    try {
+      const venda = await carregarVendaParaDevolucao(companyId, saleId);
+      setRecusaExclusao(null);
+      if (!venda) {
+        toast.error("Todos os itens desta venda já foram devolvidos.");
+        return;
+      }
+      setDevolucaoVenda(venda);
+    } catch (err) {
+      console.error("[crediário] abrir devolução do carnê:", err);
+      toast.error("Não foi possível carregar a venda. Tente novamente.");
+    } finally {
+      setAbrindoDevolucao(false);
+    }
+  }
+
   // ── Callback de refresh compartilhado com a TabHistorico (pós-devolução) ──
   function handleHistoricRefresh() {
     qc.invalidateQueries({ queryKey: ["credit-customer", companyId, customerId] });
@@ -739,7 +811,8 @@ export function ClienteCrediarioModal({
   const renegDelta = +(renegTotalVal - (renegScope?.openRemaining || 0)).toFixed(2);
 
   const freeAmtValue = parseAmount(freeAmt);
-  const anyOverlayOpen = !!pixInstId || !!renegScope || !!editingDueDateInst || receberOpen || !!printScope || !!juntarPre;
+  const anyOverlayOpen = !!pixInstId || !!renegScope || !!editingDueDateInst || receberOpen || !!printScope || !!juntarPre
+    || !!excluirAlvo || !!recusaExclusao;
   const methodLabelOf = (key: string | null) => PAYMENT_METHODS.find(p => p.key === key)?.label || key || "";
   const methodLabel = methodLabelOf(freeMethod);
   // Recebimento igual há pouco (razão + último desta ficha): o gate avisa,
@@ -889,6 +962,7 @@ export function ClienteCrediarioModal({
                     handleEditDueDateOpen={handleEditDueDateOpen} onRenegociar={openRenegociar}
                     onImprimir={(accountId, label, parcelas) => setPrintScope({ accountId, label, parcelas })}
                     onJuntar={podeJuntar ? () => setJuntarPre([]) : undefined}
+                    onExcluirCarne={(carne) => setExcluirAlvo(carne)}
                     openInstallmentPix={openInstallmentPix}
                     prefill={receberDaAba}
                     openBalance={totalBalance}
@@ -1449,6 +1523,52 @@ export function ClienteCrediarioModal({
               </View>
              </ModalPop>
             </View>
+          )}
+
+          {/* 09/11/2026: excluir carnê — confirmação e recusas (sem window.confirm:
+              o viewer não tem). Por último, por cima da ficha. */}
+          <ConfirmDialog
+            visible={!!excluirAlvo}
+            title={excluindo ? "Excluindo…" : "Excluir carnê"}
+            message={excluirAlvo ? textoConfirmarExclusao(excluirAlvo.falta, fmt) : ""}
+            confirmLabel={excluindo ? "Excluindo…" : "Sim, excluir"}
+            cancelLabel="Cancelar"
+            destructive
+            onConfirm={confirmarExclusaoDoCarne}
+            onCancel={() => { if (!excluindo) setExcluirAlvo(null); }}
+          />
+          <ConfirmDialog
+            visible={recusaExclusao?.tipo === "recebimentos"}
+            title="Este carnê já tem recebimentos"
+            message={recusaExclusao?.tipo === "recebimentos" ? recusaExclusao.mensagem : ""}
+            confirmLabel="Abrir a Linha do tempo"
+            cancelLabel="Agora não"
+            destructive={false}
+            onConfirm={() => { setRecusaExclusao(null); setTab("historico"); }}
+            onCancel={() => setRecusaExclusao(null)}
+          />
+          <ConfirmDialog
+            visible={recusaExclusao?.tipo === "venda"}
+            title="Este carnê veio de uma venda"
+            message={MENSAGEM_CARNE_DE_VENDA}
+            confirmLabel={abrindoDevolucao ? "Abrindo…" : "Abrir a devolução"}
+            cancelLabel="Agora não"
+            destructive={false}
+            onConfirm={() => { if (recusaExclusao?.tipo === "venda") abrirDevolucaoDoCarne(recusaExclusao.saleId); }}
+            onCancel={() => { if (!abrindoDevolucao) setRecusaExclusao(null); }}
+          />
+          {devolucaoVenda && (
+            <DevolucaoModal
+              visible={!!devolucaoVenda}
+              companyId={companyId}
+              sale={devolucaoVenda}
+              onClose={() => setDevolucaoVenda(null)}
+              onDone={() => {
+                setDevolucaoVenda(null);
+                setHistLoaded(false);
+                handleHistoricRefresh();
+              }}
+            />
           )}
 
     </ResponsiveSheet>
