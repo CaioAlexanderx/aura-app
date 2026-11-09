@@ -322,3 +322,81 @@ describe("funções puras", () => {
     expect(mensagemDoErroDePrimeiraParcela(null)).toBeNull();
   });
 });
+
+// p-91 (09/11/2026): a seção "Crediário para janeiro" da página Black Friday
+// abre este mesmo modal com a 1ª parcela no dia escolhido e, no consolidado,
+// com a empresa escolhida.
+describe("aberto pelo atalho 'Crediário para janeiro'", () => {
+  function abrirPeloAtalho(onClose = jest.fn(), companyId?: string) {
+    let t!: T;
+    act(() => {
+      t = renderer.create(
+        <CriarLancamentoModal visible onClose={onClose} recentes={CLIENTES as any} primeiraParcela="25/01/2027" companyId={companyId} />,
+      );
+    });
+    return t;
+  }
+
+  it("a 1ª parcela já vem no dia escolhido e vai no payload, na empresa escolhida", async () => {
+    hoje("2026-11-20T15:00:00Z");
+    const t = abrirPeloAtalho(jest.fn(), "emp-2");
+    apertar(t, "lancamento-recente-c1");
+    await flush();
+    expect(valorDe(t, "lancamento-vencimento")).toBe("25/01/2027");
+    digitar(t, "lancamento-valor", "30000");
+    apertar(t, "lancamento-parcelas-3");
+    apertar(t, "lancamento-criar");
+    await flush();
+    expect(mockCreate.mock.calls[0][0]).toBe("emp-2");
+    expect(mockCreate.mock.calls[0][1]).toMatchObject({ amount: 300, installments: 3, first_due_date: "2027-01-25" });
+    expect(mockPlanConfig).toHaveBeenCalledWith("emp-2");
+    t.unmount();
+  });
+
+  it("sem empresa escolhida, a empresa ativa", async () => {
+    hoje("2026-11-20T15:00:00Z");
+    const t = abrirPeloAtalho();
+    apertar(t, "lancamento-recente-c1");
+    await flush();
+    digitar(t, "lancamento-valor", "10000");
+    apertar(t, "lancamento-criar");
+    await flush();
+    expect(mockCreate.mock.calls[0][0]).toBe("emp-1");
+    t.unmount();
+  });
+
+  it("a data do atalho não conta como 'preenchido': fechar sem digitar não pergunta", () => {
+    hoje("2026-11-20T15:00:00Z");
+    const onClose = jest.fn();
+    const t = abrirPeloAtalho(onClose);
+    apertar(t, "lancamento-fechar");
+    expect(existe(t, "lancamento-confirmar-descarte")).toBe(false);
+    expect(onClose).toHaveBeenCalled();
+    t.unmount();
+  });
+
+  it("o 'Janeiro' do campo mantém o dia escolhido no atalho", async () => {
+    hoje("2026-11-20T15:00:00Z");
+    const t = abrirPeloAtalho();
+    apertar(t, "lancamento-recente-c1");
+    await flush();
+    apertar(t, "lancamento-venc-janeiro");
+    expect(valorDe(t, "lancamento-vencimento")).toBe("25/01/2027");
+    t.unmount();
+  });
+
+  it("'Lançar outro' continua com a 1ª parcela do atalho", async () => {
+    hoje("2026-11-20T15:00:00Z");
+    const t = abrirPeloAtalho();
+    apertar(t, "lancamento-recente-c1");
+    await flush();
+    digitar(t, "lancamento-valor", "10000");
+    apertar(t, "lancamento-criar");
+    await flush();
+    apertar(t, "lancamento-outro");
+    apertar(t, "lancamento-recente-c1");
+    await flush();
+    expect(valorDe(t, "lancamento-vencimento")).toBe("25/01/2027");
+    t.unmount();
+  });
+});

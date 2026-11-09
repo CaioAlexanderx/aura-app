@@ -40,6 +40,8 @@ export type ItemDaPrevia = {
   preco_por: number;
   ja_em_promocao: boolean;
   abaixo_do_custo: boolean;
+  /** Custo do produto; null sem custo cadastrado ou para quem não vê custo (o backend tira). */
+  cost_price?: number | null;
 };
 
 export type MotivoDeFora = "abaixo_do_custo" | "nao_encontrado" | "sem_preco" | "sem_desconto" | "preco_invalido" | "sem_promocao";
@@ -89,6 +91,7 @@ function lerItemDaPrevia(i: any): ItemDaPrevia {
     preco_por: num(i.preco_por),
     ja_em_promocao: !!i.ja_em_promocao,
     abaixo_do_custo: !!i.abaixo_do_custo,
+    cost_price: i.cost_price == null ? null : num(i.cost_price) || null,
   };
 }
 

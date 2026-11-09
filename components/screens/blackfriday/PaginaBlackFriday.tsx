@@ -6,17 +6,23 @@
 // página, que fica no menu logo abaixo de Painel e existe só de 13/10/2026
 // a 02/02/2027 (constants/blackFriday.ts).
 //
-// Seções, nesta ordem (quais aparecem: secoes.ts):
-//   0. Promoção em lote      (PromocaoEmLote, De/Por, p-86 de 08/11/2026):
-//      só com o backend novo (rota de promoções) e fora do perfil consulta
-//   1. O que vai faltar      (OQueVaiFaltar)
-//   2. Assento de temporada  (AssentoTemporadaCard, o mesmo de Configurações)
-//   3. Vale-troca no cupom   (espelho do toggle de Políticas do Caixa)
-//   4. Placar do dia         (PlacarDoDiaCard, app#1060)
+// Seções, nesta ordem (quais aparecem: secoes.ts; o número no cartão é a
+// posição entre as que aparecem):
+//   Promoção em lote        (PromocaoEmLote, De/Por, p-86 de 08/11/2026):
+//      só com o backend novo (rota de promoções) e fora do perfil consulta;
+//      no consolidado, o cartão "escolha a empresa" (EscolherEmpresaParaPromocao)
+//   Crediário para janeiro  (CrediarioParaJaneiro, p-91 de 09/11/2026):
+//      só com o crediário (módulo + Políticas do Caixa) e o backend do resumo
+//   O que vai faltar        (OQueVaiFaltar)
+//   Assento de temporada    (AssentoTemporadaCard, o mesmo de Configurações)
+//   Vale-troca no cupom     (espelho do toggle de Políticas do Caixa)
+//   Placar do dia           (PlacarDoDiaCard, app#1060)
 //
 // Seção que a loja não tem some; nada de cartão bloqueado ou isca.
+// O plano decide seções: a página relê /auth/me ao abrir (plano velho no JWT).
 // Mockup: docs/mockups/black-friday.html.
 // ============================================================
+import { useEffect } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import { ScreenHero } from "@/components/ScreenHero";
@@ -34,15 +40,46 @@ import { PlacarDoDiaCard } from "./PlacarDoDiaCard";
 import { PromocaoEmLote } from "./dePor/PromocaoEmLote";
 import { useEstoqueConsulta } from "@/hooks/useEstoqueConsulta";
 import { usePromocoesDePor } from "@/hooks/usePromocoesDePor";
+import { useResumoVencimento } from "@/hooks/useResumoVencimento";
+import { hojeBrt } from "@/components/screens/configuracoes/assentoTemporada";
+import { EscolherEmpresaParaPromocao } from "./EscolherEmpresaParaPromocao";
+import { CrediarioParaJaneiro } from "./crediarioJaneiro/CrediarioParaJaneiro";
+import { faseCrediarioJaneiro, periodoDoJaneiro } from "./crediarioJaneiro/regrasCrediarioJaneiro";
 
 export function PaginaBlackFriday() {
   const visible = useVisibleModules();
-  const { company, consolidatedView, availableCompanies, isStaff } = useAuthStore() as any;
+  const { company, consolidatedView, availableCompanies, isStaff, refreshMe } = useAuthStore() as any;
+  const consolidado = !!consolidatedView;
+  const hoje = hojeBrt();
+
+  // Plano velho no JWT (armadilha 1 do CLAUDE.md): relê /auth/me ao abrir.
+  useEffect(() => {
+    if (typeof refreshMe === "function") Promise.resolve(refreshMe()).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // De/Por: perfil Estoque só consulta não vê; backend sem a rota (404) = some.
+  // No consolidado não chama as promoções (a seção pede a empresa).
   const { consulta, carregando: consultaCarregando } = useEstoqueConsulta();
-  const promocoes = usePromocoesDePor(company?.id, visible.has("estoque") && !consulta && !consultaCarregando);
-  const secoes = secoesDaPagina({ visible, consolidatedView: !!consolidatedView, dePorDisponivel: promocoes.disponivel });
+  const promocoes = usePromocoesDePor(company?.id, !consolidado && visible.has("estoque") && !consulta && !consultaCarregando);
+
+  // Crediário para janeiro: só nov–jan, com o módulo; 403/404 do resumo = some.
+  const faseCrediario = faseCrediarioJaneiro(hoje);
+  const resumoJaneiro = useResumoVencimento({
+    companyId: company?.id,
+    consolidado,
+    ligado: visible.has("crediario") && faseCrediario !== "fora",
+    periodo: periodoDoJaneiro(hoje),
+  });
+
+  const secoes = secoesDaPagina({
+    visible,
+    consolidatedView: consolidado,
+    hoje,
+    dePorDisponivel: promocoes.disponivel,
+    estoqueSoConsulta: consulta || consultaCarregando,
+    crediarioDisponivel: resumoJaneiro.disponivel,
+  });
   const tem = (chave: string) => secoes.some((x) => x.chave === chave);
   const numero = (chave: string) => secoes.findIndex((x) => x.chave === chave) + 1;
   const textos = (chave: string) => secoes.find((x) => x.chave === chave)!;
@@ -69,7 +106,26 @@ export function PaginaBlackFriday() {
 
       {tem("de_por") && (
         <SecaoCard testID="bf-secao-de-por" numero={numero("de_por")} titulo={textos("de_por").titulo} porQueAgora={textos("de_por").porQueAgora}>
-          <PromocaoEmLote companyId={company?.id} consolidado={!!consolidatedView} dados={promocoes} />
+          {textos("de_por").variante === "escolher_empresa"
+            ? <EscolherEmpresaParaPromocao />
+            : <PromocaoEmLote companyId={company?.id} consolidado={consolidado} dados={promocoes} />}
+        </SecaoCard>
+      )}
+
+      {tem("crediario_janeiro") && (
+        <SecaoCard
+          testID="bf-secao-crediario-janeiro"
+          numero={numero("crediario_janeiro")}
+          titulo={textos("crediario_janeiro").titulo}
+          porQueAgora={textos("crediario_janeiro").porQueAgora}
+        >
+          <CrediarioParaJaneiro
+            companyId={company?.id}
+            consolidado={consolidado}
+            fase={faseCrediario}
+            hojeIso={hoje}
+            resumo={resumoJaneiro}
+          />
         </SecaoCard>
       )}
 

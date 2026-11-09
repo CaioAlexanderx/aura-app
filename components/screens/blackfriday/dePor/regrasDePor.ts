@@ -311,3 +311,96 @@ export function avisoDePromocaoNoCadastro(
   }
   return "Este produto está em promoção por " + por + ". O preço que você mudar aqui é o preço normal: o preço da promoção continua valendo até " + ate + ".";
 }
+
+// ---------------------------------------------------------------- parados (QA 08/11/2026)
+
+/**
+ * "Parados há 60 dias ou mais" (passo 1 do mockup aprovado): produto com
+ * estoque que não vendeu nos últimos 60 dias, contando hoje como um deles.
+ * Janela de venda = de hoje − 59 até hoje, em Brasília. Quem vendeu pela
+ * última vez há exatamente 60 dias (hoje − 60) está parado há 60 dias e
+ * ENTRA; quem vendeu há 59 dias não entra.
+ */
+export var DIAS_PARADO = 60;
+
+/** Primeiro dia ("AAAA-MM-DD", Brasília) da janela em que uma venda tira o produto dos parados. */
+export function inicioDaJanelaParados(hoje: string): string {
+  return somarDias(hoje, -(DIAS_PARADO - 1));
+}
+
+/**
+ * Produtos que venderam desde `inicio`, juntando duas rotas que o backend
+ * já tem (nenhuma rota nova; ver services/vendasRecentesApi.ts):
+ *  - ranking (`/products/ranking`, período `inicio`..hoje): uma linha por
+ *    produto vendido NESTA loja, com as variantes somadas, hoje incluído;
+ *  - "O que vai faltar" (`/estoque/ruptura`, janela de 60 dias): conta a
+ *    venda do produto compartilhado do grupo em qualquer loja e a troca,
+ *    mas para em ontem. Dela vale só a linha cuja última venda caiu dentro
+ *    da janela (a janela dela começa um dia antes).
+ * Venda em qualquer uma das duas tira o produto dos parados: na dúvida o
+ * produto fica de fora da promoção, nunca entra por engano.
+ */
+export function vendidosDesde(
+  ranking: Array<{ id?: string | null }>,
+  ruptura: Array<{ product_id: string; ultima_venda?: string | null }>,
+  inicio: string,
+): Record<string, true> {
+  var out: Record<string, true> = {};
+  (ranking || []).forEach(function (r) { if (r && r.id) out[String(r.id)] = true; });
+  (ruptura || []).forEach(function (i) {
+    if (!i || !i.product_id) return;
+    var dia = diaBrtDe(i.ultima_venda);
+    // Sem data: na dúvida conta como vendido (não entra nos parados).
+    if (!dia || dia >= inicio) out[String(i.product_id)] = true;
+  });
+  return out;
+}
+
+/** O produto entra em "Parados há 60 dias ou mais"? Precisa ter estoque e não ter vendido na janela. */
+export function estaParado(p: { id: string; stock?: number | string | null }, vendidos: Record<string, true>): boolean {
+  return Number(p.stock) > 0 && !vendidos[p.id];
+}
+
+// ---------------------------------------------------------------- margem da prévia (QA 08/11/2026)
+
+export type MargemDaPrevia = { antes: number | null; depois: number | null; comCusto: number; semCusto: number };
+
+/**
+ * Margem média antes e depois da promoção, só dos itens com custo
+ * cadastrado (cost_price > 0). Margem = (preço − custo) ÷ preço; "antes"
+ * usa o preço normal (De) e "depois" o preço da promoção (Por).
+ *
+ * Ponderada pelo preço (uma unidade de cada item): Σ(preço − custo) ÷
+ * Σ preço. É a margem da cesta, "quanto sobra de cada real vendido". A
+ * média simples das margens deixaria um item de R$ 5 com margem fora do
+ * comum pesar tanto quanto um de R$ 500.
+ */
+export function margemDaPrevia(items: Array<{ preco_de: number; preco_por: number; cost_price?: number | null }>): MargemDaPrevia {
+  var somaDe = 0, somaPor = 0, sobraDe = 0, sobraPor = 0, comCusto = 0, semCusto = 0;
+  items.forEach(function (i) {
+    var c = Number(i.cost_price);
+    if (!(c > 0)) { semCusto++; return; }
+    if (!(i.preco_de > 0) || !(i.preco_por > 0)) return;
+    comCusto++;
+    somaDe += i.preco_de; sobraDe += i.preco_de - c;
+    somaPor += i.preco_por; sobraPor += i.preco_por - c;
+  });
+  return {
+    antes: comCusto ? sobraDe / somaDe : null,
+    depois: comCusto ? sobraPor / somaPor : null,
+    comCusto: comCusto,
+    semCusto: semCusto,
+  };
+}
+
+/** "62% → 57%", ou "—" sem nenhum item com custo. */
+export function textoDaMargem(m: MargemDaPrevia): string {
+  if (m.antes == null || m.depois == null) return "—";
+  return pctTxt(m.antes) + " → " + pctTxt(m.depois);
+}
+
+/** "12 itens sem custo cadastrado não entram nessa conta." ou null quando todos têm custo. */
+export function textoSemCusto(m: MargemDaPrevia): string | null {
+  if (!m.semCusto) return null;
+  return plural(m.semCusto, "item sem custo cadastrado não entra", "itens sem custo cadastrado não entram") + " nessa conta.";
+}

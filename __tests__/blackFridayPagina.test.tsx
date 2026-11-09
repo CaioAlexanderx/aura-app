@@ -60,6 +60,11 @@ jest.mock("@/hooks/useEstoqueConsulta", () => ({ useEstoqueConsulta: () => ({ co
 jest.mock("@/hooks/usePromocoesDePor", () => ({
   usePromocoesDePor: () => ({ disponivel: false, carregando: false, ativa: [], agendada: [], encerrada: [], recarregar: () => {} }),
 }));
+// Crediário para janeiro (p-91): testes em blackFridayCrediarioJaneiro.test.tsx.
+jest.mock("@/hooks/useResumoVencimento", () => ({
+  useResumoVencimento: () => ({ disponivel: false, carregando: false, dados: undefined, recarregar: () => {} }),
+}));
+jest.mock("@/components/CompanyPickerModal", () => ({ CompanyPickerModal: () => null }));
 
 // Os filhos pesados viram casca: o que importa aqui é a MONTAGEM da página.
 jest.mock("@/components/screens/blackfriday/OQueVaiFaltar", () => {
@@ -232,9 +237,10 @@ describe("secoesDaPagina", () => {
       .toEqual(["ruptura", "assento", "vale_troca"]);
   });
 
-  it("consolidado: assento e vale-troca são por empresa e somem", () => {
-    expect(secoesDaPagina({ visible: todos, consolidatedView: true, hoje: "2026-10-13" }).map((s) => s.chave))
-      .toEqual(["ruptura"]);
+  it("consolidado: assento e vale-troca são por empresa e somem; a promoção pede a empresa", () => {
+    const s = secoesDaPagina({ visible: todos, consolidatedView: true, hoje: "2026-10-13" });
+    expect(s.map((x) => x.chave)).toEqual(["de_por", "ruptura"]);
+    expect(s[0].variante).toBe("escolher_empresa");
   });
 
   it("sem o módulo da função a seção some", () => {
@@ -299,10 +305,11 @@ describe("PaginaBlackFriday", () => {
     expect(mockAssentoProps).toHaveBeenLastCalledWith(expect.objectContaining({ isOwner: true }));
   });
 
-  it("consolidado: só a ruptura, e nenhum cartão bloqueado no lugar das outras", () => {
+  it("consolidado: a promoção pede a empresa, a ruptura soma, e nenhum cartão bloqueado no lugar das outras", () => {
     mockAuth = { ...mockAuth, company: null, consolidatedView: true, availableCompanies: [{ id: CID }, { id: "x" }] };
     const r = montar(<PaginaBlackFriday />);
-    expect(ids(r, "bf-secao-").filter((i) => !i.endsWith("-por-que"))).toEqual(["bf-secao-ruptura"]);
+    expect(ids(r, "bf-secao-").filter((i) => !i.endsWith("-por-que"))).toEqual(["bf-secao-de-por", "bf-secao-ruptura"]);
+    expect(r.root.findAllByProps({ testID: "promo-escolher-empresa" }, { deep: false })).toHaveLength(1);
     expect(textoDe(r.root)).toContain("Consolidado · 2 empresas");
     expect(textoDe(r.root)).not.toMatch(/bloquead|assine|upgrade/i);
   });
