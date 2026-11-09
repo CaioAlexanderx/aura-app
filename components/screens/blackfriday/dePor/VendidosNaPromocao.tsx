@@ -55,13 +55,13 @@ export function VendidosNaPromocao({ companyId, lista, status }: Props) {
 }
 
 var s = StyleSheet.create({
-  wrap: { gap: 6, flexBasis: "100%" as any },
+  wrap: { gap: 6, width: "100%" },
   lab: { fontSize: 12, fontWeight: "600", color: Colors.ink3 },
   kp: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   kpBox: { flexGrow: 1, flexBasis: 140, borderWidth: 1, borderColor: Colors.border, borderRadius: 12, paddingVertical: 9, paddingHorizontal: 12, backgroundColor: Colors.bg2 },
   kpN: { fontSize: 19, fontWeight: "700", color: Colors.ink },
   t: { fontSize: 12.5, color: Colors.ink3 },
-  zero: { gap: 2, flexBasis: "100%" as any },
+  zero: { gap: 2, width: "100%" },
   zeroTxt: { fontSize: 13, color: Colors.ink },
   mini: { fontSize: 11.5, color: Colors.ink3 },
 });
