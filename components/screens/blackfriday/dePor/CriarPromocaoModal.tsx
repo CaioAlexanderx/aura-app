@@ -5,11 +5,15 @@
 // DNA do TrocaModal (CLAUDE.md, armadilha 5), no formato do AjustarPrecoModal:
 // painel, cabeçalho, barra de passos, corpo com rolagem, rodapé com a frase
 // de situação à esquerda e as ações à direita.
-//   1 Quais produtos   — tudo com estoque, por categoria ou um a um.
+//   1 Quais produtos   — tudo com estoque, parados há 60 dias ou mais (QA
+//                        08/11: estava no mockup e faltava), por categoria
+//                        ou um a um.
 //   2 Quanto e quando  — % / R$ / preço único, terminação, prazo (agendar).
-//   3 Conferir         — prévia do servidor (nada gravado): De → Por, quem
-//                        já está em promoção (a nova substitui), quem fica de
-//                        fora por estar abaixo do custo (sai sozinho).
+//   3 Conferir         — prévia do servidor (nada gravado): De → Por, margem
+//                        média antes → depois (só quem tem custo e só para
+//                        quem pode ver custo), quem já está em promoção (a
+//                        nova substitui), quem fica de fora por estar abaixo
+//                        do custo (sai sozinho).
 //   4 Pronto.
 // Acima de 2.000 itens o serviço divide em lotes (promocoesApi.emLotes).
 // Sem hover: tudo visível, alvos de 44 px; a 375 px a lista vira linhas
@@ -26,20 +30,22 @@ import { Aviso } from "@/components/screens/estoque/reajuste/Aviso";
 import { exemploTerminacao } from "@/components/screens/estoque/reajuste/reajusteRegras";
 import { hojeBrt } from "@/components/screens/configuracoes/assentoTemporada";
 import { useProducts } from "@/hooks/useProducts";
+import { useVendidosRecentes } from "@/hooks/useVendidosRecentes";
+import { useEstoqueConsulta } from "@/hooks/useEstoqueConsulta";
 import { ApiError } from "@/services/api";
 import {
   promocoesApi, type ModoPromocao, type RespostaPromocao, type TerminacaoPromocao, type PedidoPromocao,
 } from "@/services/promocoesApi";
 import {
   ATALHOS_PCT, MODOS_PROMOCAO, TERMINACOES_PROMOCAO, VALOR_INICIAL_PROMO, alvosQueEntram, brl, chaveDoItem, nomeDoItemPromo,
-  descontoMedio, erroDasDatas, erroDoValorPromo, instantesDoPrazo, itensQueEntram, montarPedidoPromo, pctTxt,
-  plural, prazosDisponiveis, promocaoVigenteOuAgendada, rotuloDoValorPromo, textoDeFora, textoDoPrazo, textoDoPronto,
-  type ChavePrazo,
+  descontoMedio, erroDasDatas, erroDoValorPromo, estaParado, instantesDoPrazo, itensQueEntram, margemDaPrevia, montarPedidoPromo, pctTxt,
+  plural, prazosDisponiveis, promocaoVigenteOuAgendada, rotuloDoValorPromo, textoDaMargem, textoDeFora, textoDoPrazo, textoDoPronto,
+  textoSemCusto, type ChavePrazo,
 } from "./regrasDePor";
 
 var IS_WEB = Platform.OS === "web";
 
-type Base = "estoque" | "categoria" | "um";
+type Base = "estoque" | "parados" | "categoria" | "um";
 type Passo = 1 | 2 | 3 | 4;
 var PASSOS: Array<[number, string]> = [[1, "Quais produtos"], [2, "Quanto e até quando"], [3, "Conferir"]];
 var LIMITE_LISTA = 60;
@@ -69,6 +75,9 @@ export function CriarPromocaoModal({ companyId, onFechar, onAplicada, preSelecio
   var hoje = hojeBrt();
   var { products, isLoading } = useProducts() as any;
   var produtos: any[] = products || [];
+  var recentes = useVendidosRecentes(companyId, hoje);
+  // Funcionário sem retaguarda (ou consulta) não vê custo nem margem.
+  var { semCusto } = useEstoqueConsulta();
 
   var [passo, setPasso] = useState<Passo>(1);
   var [baseSel, setBaseSel] = useState<Base>(preSelecionados && preSelecionados.length ? "um" : "estoque");
@@ -105,6 +114,12 @@ export function CriarPromocaoModal({ companyId, onFechar, onAplicada, preSelecio
     return produtos.filter(function (p) { return !(deixarDeFora && promocaoVigenteOuAgendada(p)); });
   }, [produtos, deixarDeFora]);
   var comEstoque = useMemo(function () { return elegiveis.filter(function (p) { return Number(p.stock) > 0; }); }, [elegiveis]);
+  // null enquanto as vendas carregam (ou se falharam): sem chute de quem está parado.
+  var vendidos = recentes.vendidos;
+  var parados = useMemo(function () {
+    if (!vendidos) return null;
+    return comEstoque.filter(function (p) { return estaParado(p, vendidos as Record<string, true>); });
+  }, [comEstoque, vendidos]);
   var categorias = useMemo(function () {
     var c: Record<string, number> = {};
     comEstoque.forEach(function (p) { var k = p.category || "Produtos"; c[k] = (c[k] || 0) + 1; });
@@ -113,9 +128,10 @@ export function CriarPromocaoModal({ companyId, onFechar, onAplicada, preSelecio
 
   var selecionados: string[] = useMemo(function () {
     if (baseSel === "estoque") return comEstoque.map(function (p) { return p.id; });
+    if (baseSel === "parados") return (parados || []).map(function (p) { return p.id; });
     if (baseSel === "categoria") return comEstoque.filter(function (p) { return cats[p.category || "Produtos"]; }).map(function (p) { return p.id; });
     return elegiveis.filter(function (p) { return marcados[p.id]; }).map(function (p) { return p.id; });
-  }, [baseSel, comEstoque, elegiveis, cats, marcados]);
+  }, [baseSel, comEstoque, parados, elegiveis, cats, marcados]);
 
   var encontrados = useMemo(function () {
     var q = busca.trim().toLowerCase();
@@ -163,6 +179,8 @@ export function CriarPromocaoModal({ companyId, onFechar, onAplicada, preSelecio
   // ── passo 3 ────────────────────────────────────────────────
   var entram = previa ? itensQueEntram(previa, tirados) : [];
   var jaEmPromo = entram.filter(function (i) { return i.ja_em_promocao; }).length;
+  // Margem só para quem pode ver custo (o backend também tira o cost_price).
+  var margem = !semCusto && previa ? margemDaPrevia(entram) : null;
   var agendada = !!ini && ini > hoje;
 
   function aplicar() {
@@ -256,16 +274,23 @@ export function CriarPromocaoModal({ companyId, onFechar, onAplicada, preSelecio
                 <View style={[s.opts, estreito && s.optsCel]} accessibilityRole="radiogroup">
                   {([
                     ["estoque", "Tudo que tem estoque", plural(comEstoque.length, "produto", "produtos"), "Produto sem estoque fica de fora."],
+                    ["parados", "Parados há 60 dias ou mais",
+                      parados ? plural(parados.length, "produto", "produtos") : recentes.erro ? "—" : "contando…",
+                      parados ? "O que não vendeu e está ocupando prateleira."
+                        : recentes.erro ? "Não conseguimos ver as vendas agora. Toque para tentar de novo." : "Conferindo as vendas dos últimos 60 dias."],
                     ["categoria", "Por categoria", plural(baseSel === "categoria" ? selecionados.length : 0, "produto", "produtos"), "Marque as categorias."],
                     ["um", "Escolher um a um", plural(elegiveis.filter(function (p) { return marcados[p.id]; }).length, "marcado", "marcados"), "Busque e marque."],
                   ] as Array<[Base, string, string, string]>).map(function (o) {
                     var on = baseSel === o[0];
                     return (
-                      <Pressable key={o[0]} onPress={function () { setBaseSel(o[0]); }} style={[s.opt, estreito && s.optCel, on && s.optOn]}
+                      <Pressable key={o[0]} onPress={function () {
+                        setBaseSel(o[0]);
+                        if (o[0] === "parados" && recentes.erro) recentes.refetch();
+                      }} style={[s.opt, estreito && s.optCel, on && s.optOn]}
                         accessibilityRole="radio" accessibilityState={{ checked: on }} testID={"promo-base-" + o[0]}>
                         <View style={s.optTopo}>
                           <Text style={[s.optTit, on && { color: Colors.violet3 }]}>{o[1]}</Text>
-                          <Text style={s.optConta}>{o[2]}</Text>
+                          <Text style={s.optConta} testID={"promo-conta-" + o[0]}>{o[2]}</Text>
                         </View>
                         <Text style={s.optTxt}>{o[3]}</Text>
                       </Pressable>
@@ -415,8 +440,17 @@ export function CriarPromocaoModal({ companyId, onFechar, onAplicada, preSelecio
               <View style={s.res}>
                 <View style={s.resBox}><Text style={s.resN} testID="promo-entram">{entram.length.toLocaleString("pt-BR")}</Text><Text style={s.t}>{entram.length === 1 ? "item entra" : "itens entram"}</Text></View>
                 <View style={s.resBox}><Text style={s.resN}>{pctTxt(descontoMedio(entram))}</Text><Text style={s.t}>desconto médio</Text></View>
+                {!!margem && (
+                  <View style={s.resBox} testID="promo-margem">
+                    <Text style={s.resN} testID="promo-margem-valor">{textoDaMargem(margem)}</Text>
+                    <Text style={s.t}>margem média (quem tem custo)</Text>
+                  </View>
+                )}
                 <View style={s.resBox}><Text style={s.resN} testID="promo-fora-n">{previa.fora.length.toLocaleString("pt-BR")}</Text><Text style={s.t}>ficam de fora</Text></View>
               </View>
+              {!!margem && !!textoSemCusto(margem) && (
+                <Text style={s.t} testID="promo-sem-custo">{textoSemCusto(margem)}</Text>
+              )}
               <Aviso tipo="ok" testID="promo-prazo-conferir">{textoDoPrazo(ini!, fim!, hoje)}</Aviso>
               {jaEmPromo > 0 && (
                 <Aviso tipo="aviso" testID="promo-ja-em-promocao">
