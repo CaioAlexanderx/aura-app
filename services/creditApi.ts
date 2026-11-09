@@ -603,6 +603,19 @@ export const creditApi = {
       `${base(companyId)}/transaction/${transactionId}`, { method: "DELETE" }
     );
   },
+  // 09/11/2026: exclui um carnê inteiro (Aura-backend#971). Recusa com 409:
+  // CARNE_TEM_RECEBIMENTO (+ receipts), CARNE_DE_VENDA (+ sale_id),
+  // CARNE_DIVERGENTE, CARNE_JA_EXCLUIDO, CARNE_JUNTADO. A leitura do erro
+  // fica em utils/crediarioExcluirCarne.
+  deleteCarne(companyId: string, customerId: string, accountId: string) {
+    return request<{
+      deleted: boolean; account_id: string; customer_id: string;
+      removed_amount: number; cancelled_installments: number;
+      removed_transactions: number; reallocated_amount: number; new_balance: number;
+    }>(
+      `${base(companyId)}/customers/${customerId}/accounts/${accountId}`, { method: "DELETE" }
+    );
+  },
 
   // ── Perfil parcelado ────────────────────────────────────────────────────────────────
   getCustomerProfile(companyId: string, customerId: string) {

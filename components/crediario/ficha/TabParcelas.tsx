@@ -74,6 +74,8 @@ export type TabParcelasProps = {
   onImprimir: (accountId: EscopoCarne, label: string, parcelas: number) => void;
   /** 10/10/2026: abre o "Juntar carnês". Ausente = menos de 2 carnês com saldo. */
   onJuntar?: () => void;
+  /** 09/11/2026: pede a exclusão do carnê (confirmação no shell). Ausente = sem o botão. */
+  onExcluirCarne?: (carne: { id: string; nome: string; falta: number }) => void;
   /** Abre o sheet "Receber pagamento" do shell com valor pré-preenchido.
    *  accountId (10/10/2026): o recebimento mira aquele carnê; sem ele, todos. */
   prefill: (v: number, accountId?: string) => void;
@@ -91,7 +93,7 @@ export function TabParcelas({
   accounts, openInst, useCarneLayout,
   handleCreateAccount, showNewAccount, setShowNewAccount, newAccountName, setNewAccountName, creatingAccount,
   expandedAccountId, setExpandedAccountId,
-  handleEditDueDateOpen, onRenegociar, openInstallmentPix, onImprimir, onJuntar, prefill, openBalance,
+  handleEditDueDateOpen, onRenegociar, openInstallmentPix, onImprimir, onJuntar, onExcluirCarne, prefill, openBalance,
   customerId, phone, onCobrar, name,
 }: TabParcelasProps) {
   // Parcela expandida (uma por vez — progressive disclosure)
@@ -107,6 +109,13 @@ export function TabParcelas({
   const { abertos, quitados } = useMemo(
     () => organizarCarnes<CreditInstallment>(accounts as ContaDoCarne[], openInst, isInstallmentOverdue),
     [accounts, openInst],
+  );
+
+  // Só carnê de verdade e aberto tem "Excluir carnê": o grupo sem carnê não
+  // tem id, e cancelado/juntado não tem o que excluir (o backend nem manda).
+  const excluiveis = useMemo(
+    () => new Set(accounts.filter(a => a.id && (!a.status || a.status === "open")).map(a => a.id as string)),
+    [accounts],
   );
 
   const renderParcela = (ins: CreditInstallment) => {
@@ -229,6 +238,9 @@ export function TabParcelas({
             }
             renegociarLabel={podeParcelar ? "Parcelar saldo" : "Renegociar"}
             onCobrar={phone && onCobrar ? () => onCobrar(customerId!, name, phone) : undefined}
+            onExcluir={onExcluirCarne && carne.id && !carne.semCarne && excluiveis.has(carne.id)
+              ? () => onExcluirCarne({ id: carne.id!, nome: carne.nome, falta: carne.falta })
+              : undefined}
           />
         );
       })}
