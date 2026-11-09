@@ -26,6 +26,11 @@ var _getToken: (() => string | null) | null = null;
 export function setTokenGetter(fn: () => string | null) { _getToken = fn; }
 var _onUnauthorized: (() => void) | null = null;
 export function setOnUnauthorized(fn: () => void) { _onUnauthorized = fn; }
+// 09/11/2026: o store de auth se registra aqui (como o setTokenGetter). Sem
+// registro, o refresh cai no import dinâmico de antes.
+type SessaoDoRefresh = { getState: () => any; setState: (p: any) => void };
+var _sessao: SessaoDoRefresh | null = null;
+export function setSessaoDoRefresh(s: SessaoDoRefresh) { _sessao = s; }
 
 type RefreshResult = { status: "ok"; token: string } | { status: "invalid" } | { status: "network_error" };
 // A3-FE: headers?: Record<string, string> added so callers can pass Idempotency-Key
@@ -41,19 +46,65 @@ export type RequestOpts = { method?: string; body?: unknown; token?: string | nu
 var isRefreshing = false;
 var refreshPromise: Promise<RefreshResult> | null = null;
 
+// 09/11/2026 (incidente: o app instalado deslogava): localStorage com
+// try/catch -- no app nativo ele nao existe, e um throw aqui virava
+// "network_error" sem motivo.
+function lerLocal(chave: string): string | null {
+  try { return typeof localStorage !== "undefined" ? localStorage.getItem(chave) : null; } catch { return null; }
+}
+function gravarLocal(chave: string, valor: string): void {
+  try { if (typeof localStorage !== "undefined") localStorage.setItem(chave, valor); } catch { /* sem storage */ }
+}
+
+async function pedirRefresh(refreshToken: string): Promise<Response> {
+  var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  var timer = controller ? setTimeout(function() { controller!.abort(); }, 8000) : null;
+  var headers: Record<string, string> = { "Content-Type": "application/json" };
+  // O backend usa o X-Aura-App para dar ao app instalado o prazo deslizante.
+  if (estaInstalado()) headers["X-Aura-App"] = "standalone";
+  try {
+    return await fetch(BASE_URL + "/auth/refresh", { method: "POST", headers: headers, body: JSON.stringify({ refresh_token: refreshToken }), signal: controller?.signal });
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+// 09/11/2026: so 401 do /auth/refresh e "sessao terminou" (token invalido,
+// expirado, revogado ou usuario desativado -- o backend garante isso desde
+// o fix/pwa-sessao). 5xx, 403 de borda, timeout e rede = "network_error":
+// a sessao fica, e a proxima requisicao tenta de novo.
 async function refreshAccessToken(): Promise<RefreshResult> {
   try {
-    var { useAuthStore } = await import("@/stores/auth");
-    var refreshToken = useAuthStore.getState().refreshToken;
+    var useAuthStore: SessaoDoRefresh = _sessao || (await import("@/stores/auth")).useAuthStore;
+    // Abertura a frio: o hydrate pode nao ter posto o refresh no estado
+    // ainda. O storage e a fonte de verdade.
+    var refreshToken = useAuthStore.getState().refreshToken || lerLocal("aura_refresh_token");
     if (!refreshToken) return { status: "invalid" };
-    var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-    var timer = controller ? setTimeout(function() { controller!.abort(); }, 8000) : null;
-    var resp = await fetch(BASE_URL + "/auth/refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refresh_token: refreshToken }), signal: controller?.signal });
-    if (timer) clearTimeout(timer);
-    if (!resp.ok) { return resp.status === 401 || resp.status === 403 ? { status: "invalid" } : { status: "network_error" }; }
+    var resp = await pedirRefresh(refreshToken);
+    if (resp.status === 401) {
+      // Outra aba (ou o app e o navegador no mesmo aparelho) pode ter
+      // gravado um refresh token mais novo: tenta com ele uma vez.
+      var maisNovo = lerLocal("aura_refresh_token");
+      if (!maisNovo || maisNovo === refreshToken) return { status: "invalid" };
+      refreshToken = maisNovo;
+      resp = await pedirRefresh(refreshToken);
+      if (resp.status === 401) return { status: "invalid" };
+    }
+    if (!resp.ok) return { status: "network_error" };
     var data = await resp.json();
-    useAuthStore.setState({ token: data.token });
-    if (typeof window !== "undefined") localStorage.setItem("aura_token", data.token);
+    if (!data || typeof data.token !== "string") return { status: "network_error" };
+    var patch: Record<string, any> = { token: data.token };
+    gravarLocal("aura_token", data.token);
+    // App instalado: o backend pode mandar um refresh token novo (prazo
+    // deslizante). O antigo continua valendo ate o exp dele, entao perder
+    // esta resposta nao desloga.
+    if (typeof data.refresh_token === "string" && data.refresh_token) {
+      patch.refreshToken = data.refresh_token;
+      gravarLocal("aura_refresh_token", data.refresh_token);
+    } else if (!useAuthStore.getState().refreshToken) {
+      patch.refreshToken = refreshToken;
+    }
+    useAuthStore.setState(patch);
     return { status: "ok", token: data.token };
   } catch { return { status: "network_error" }; }
 }
@@ -82,11 +133,29 @@ function ensureRefresh(): Promise<RefreshResult> {
 // sessão com um JWT novo (utils/empresaAoConfirmar).
 export function renovarToken(): Promise<RefreshResult> { return ensureRefresh(); }
 
+// 09/11/2026: o "Sair" nunca avisava o servidor -- audit_log tinha 0
+// 'logout' em 14 dias e nenhum refresh token era revogado. Com o prazo
+// deslizante do app instalado (30 dias sem uso), o token que sai deste
+// aparelho precisa morrer no servidor também. Melhor esforço: sem rede, o
+// logout local segue igual.
+export function encerrarSessaoNoServidor(refreshToken: string | null | undefined): void {
+  if (!refreshToken || typeof fetch === "undefined") return;
+  try {
+    fetch(BASE_URL + "/auth/logout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+      keepalive: true,
+    } as RequestInit).catch(function() { /* melhor esforço */ });
+  } catch { /* melhor esforço */ }
+}
+
 export async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   var { method = "GET", body, retry = 2, timeout = 10000 } = opts;
   var explicitToken = opts.token !== undefined;
   var token = explicitToken ? opts.token : _getToken?.() || null;
   var lastError: Error | null = null;
+  var jaRenovou = false;
 
   for (var attempt = 0; attempt <= retry; attempt++) {
     // Re-lê token do store a cada tentativa: após refresh, _getToken() já
@@ -112,11 +181,15 @@ export async function request<T>(path: string, opts: RequestOpts = {}): Promise<
       var data = await res.json().catch(function() { return {}; });
 
       if (res.status === 401 && !explicitToken) {
-        // Só tenta refresh na PRIMEIRA tentativa (attempt === 0). Após isso,
-        // se ainda voltar 401, é sessão terminalmente inválida.
-        if (attempt === 0) {
+        // Um refresh por chamada (antes: só na tentativa 0 -- um 401 depois
+        // de uma falha de rede nem tentava renovar). A volta com o token
+        // novo não gasta tentativa: com retry 0, o `continue` saía do laço e
+        // a tela recebia "sem conexão" com a sessão já renovada.
+        if (!jaRenovou) {
+          jaRenovou = true;
           var result = await ensureRefresh();
           if (result.status === "ok") {
+            attempt--;
             // Token foi atualizado no store por refreshAccessToken; próxima
             // iteração do loop lê via _getToken() e refaz com Authorization fresco.
             continue;
@@ -131,9 +204,12 @@ export async function request<T>(path: string, opts: RequestOpts = {}): Promise<
           // intermitente). Lança ApiError de rede pro caller saber.
           throw new ApiError(MSG_SEM_CONEXAO_NA_SESSAO, 0, null, true, "network");
         }
-        // 401 após retry: sessão realmente inválida.
-        if (_onUnauthorized) _onUnauthorized();
-        throw new ApiError((data as any).error || MSG_SESSAO_TERMINOU, 401, data, false, "session_expired");
+        // 09/11/2026: 401 DEPOIS de um refresh que deu certo não é sessão
+        // vencida -- o token acabou de ser renovado. É um 401 da rota
+        // (permissão, empresa trocada, rota que recusa o token novo). Antes
+        // isto deslogava a pessoa; agora a sessão fica e o erro vai para a
+        // tela. Sessão vencida de verdade sai pelo "invalid" acima.
+        throw new ApiError((data as any).error || "Não autorizado", 401, data, false, "unauthorized");
       }
       if (res.status === 401) throw new ApiError((data as any).error || "Não autorizado", 401, data, false, "unauthorized");
       if (res.status === 429 && attempt < retry) { await new Promise(function(r) { setTimeout(r, 1000 * (attempt + 1)); }); continue; }
