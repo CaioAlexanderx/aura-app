@@ -6,11 +6,17 @@
 // recebido (crediário). O app só LÊ a situação e oferece as ações:
 //
 //   GET  /config                         ligada no servidor + opt-in da empresa
+//                                        + emite (a loja emite pelo botão)
 //   GET  /origem/:tipo/:id               situação das notas da venda/OS
 //   POST /origem/:tipo/:id/emitir        "Emitir NFS-e" (idempotente)
 //   POST /origem/:tipo/:id/completar     { tomador } e emite
 //   POST /origem/:tipo/:id/tentar-de-novo  erro, rejeitada ou cancelada
 //   GET  /origem/:tipo/:id/segunda-via   notas emitidas (+ ?formato=pdf)
+//
+// 10/11/2026 (Aura-backend#989): o "Emitir NFS-e" é MANUAL e independe da
+// automática — vale sempre que a loja emite NFS-e (config.emite). A
+// automática (config.ativa) só decide se a nota sai sozinha e se o Caixa
+// EXIGE o tomador. A situação da origem diz se o botão cabe (pode_emitir).
 //
 // :tipo = 'venda' | 'os'. O recebimento do crediário não é origem: a nota
 // dele é a da venda (o app consulta a venda da compra).
@@ -64,6 +70,12 @@ export type SituacaoNfse = {
   /** Só nas escritas: frase do resultado (ex.: "Esta venda não tem serviço"). */
   aviso?: string;
   aviso_codigo?: string;
+  /** Aura-backend#989 (opcionais: backend anterior não manda). */
+  emite?: boolean;
+  tem_servico?: boolean;
+  /** A loja emite + a origem tem serviço + venda válida / OS entregue:
+   *  sem nota ainda, o "Emitir NFS-e" cabe aqui. */
+  pode_emitir?: boolean;
 };
 
 export type ConfigNfseAutomatica = {
@@ -74,6 +86,9 @@ export type ConfigNfseAutomatica = {
   emissao_automatica_desde: string | null;
   /** Servidor ligado E opt-in da empresa: o Caixa passa a exigir o tomador. */
   ativa: boolean;
+  /** A loja emite NFS-e pelo botão (is_active + Emissor Nacional ligado),
+   *  com ou sem a automática. Ausente = backend anterior (false). */
+  emite?: boolean;
 };
 
 export type TomadorNfse = { doc: string; nome?: string | null; email?: string | null; fone?: string | null };
