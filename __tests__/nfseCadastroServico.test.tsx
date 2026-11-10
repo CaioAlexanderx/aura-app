@@ -268,11 +268,22 @@ describe("ItemFormModal — seção Nota de serviço (NFS-e)", () => {
     tree.unmount();
   });
 
-  test("não aparece no produto, e o produto nem pergunta pela config de NFS-e", async () => {
+  // 10/11/2026 (migration 442, "Sai em"): o produto agora pergunta pela
+  // config — quem emite NFS-e vê o seletor. A seção continua fora enquanto
+  // o produto sai no cupom fiscal (o padrão do tipo).
+  test("não aparece no produto que sai no cupom fiscal (o padrão)", async () => {
     const tree = await montar(<ItemFormModal visible onClose={jest.fn()} initialType="product" />);
     expect(tem(tree, "secao-nfse")).toBe(false);
+    expect(tem(tree, "secao-sai-em")).toBe(true);
+    tree.unmount();
+  });
+
+  test("loja que não emite NFS-e: produto sem seletor e sem nada de NFS-e", async () => {
+    mockEmiteNfse = false;
+    const tree = await montar(<ItemFormModal visible onClose={jest.fn()} initialType="product" />);
+    expect(tem(tree, "secao-nfse")).toBe(false);
+    expect(tem(tree, "secao-sai-em")).toBe(false);
     expect(texto(tree)).not.toContain("NFS-e");
-    expect(mockChavesConsultadas.filter((c) => c.key[0] === "nfse-config" && c.enabled)).toHaveLength(0);
     tree.unmount();
   });
 

@@ -1,3 +1,5 @@
+import type { NotaFiscal } from "@/utils/notaDoItem";
+
 export type Product = {
   id: string;
   name: string;
@@ -80,6 +82,11 @@ export type Product = {
   ibscbsCst?: string | null;
   ibscbsCclasstrib?: string | null;
   ibscbsCindop?: string | null;
+  // 10/11/2026 (migration 442): "Sai em" — em que nota o item sai. null =
+  // segue o tipo (produto na NFC-e, serviço na NFS-e); backend sem a 442
+  // não manda nada -> null. undefined no Product do formulário = não mexe
+  // (não vai no POST/PATCH). Regra em utils/notaDoItem.
+  notaFiscal?: NotaFiscal | null;
   // Multi-CNPJ: item do dono do grupo visível nas outras lojas.
   isGroupShared?: boolean;
 };

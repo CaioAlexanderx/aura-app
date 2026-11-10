@@ -525,6 +525,7 @@ export function usePdvState() {
           id: key, name: it.name, price: it.unit_price, unit: it.unit || undefined,
           cardPrice: doCatalogo?.cardPrice ?? null,
           refPrice: doCatalogo ? doCatalogo.price : undefined,
+          notaFiscal: doCatalogo?.notaFiscal ?? null, // "Sai em" (migration 442)
         });
         setQty(key, it.quantity);
       });

@@ -6,13 +6,17 @@
 // e um filtro rápido junta todos eles — só quando a loja emite NFS-e
 // (nfse_config.is_active). Loja que não emite: nada muda na lista.
 // O filtro vale igual na visão de uma loja e na consolidada.
+// 10/11/2026 (migration 442): vale para todo item que sai na NFS-e
+// (utils/notaDoItem.vaiNaNfse) — também o produto com "Sai em: Nota de
+// serviço".
 // ============================================================
 import { faltaCodigoNfse } from "@/utils/nfseServico";
+import type { NotaFiscal } from "@/utils/notaDoItem";
 
 export const SELO_FALTA_NFSE = "Falta código da NFS-e";
 export const DICA_FALTA_NFSE = "Sem este código a NFS-e não sai sozinha na venda";
 
-export function servicosSemCodigoNfse<T extends { unit?: string | null; nfseCtribnac?: string | null }>(
+export function servicosSemCodigoNfse<T extends { unit?: string | null; notaFiscal?: NotaFiscal | null; nfseCtribnac?: string | null }>(
   itens: T[], emiteNfse: boolean
 ): T[] {
   if (!emiteNfse) return [];

@@ -75,6 +75,9 @@ import { SecaoEntrega } from "./item-form/SecaoEntrega";
 // 10/11/2026 — NFS-e no cadastro do serviço (docs/mockups/nfse-cadastro-servico.html).
 import { SecaoNfse, MOSTRAR_ALIQUOTA_ISS } from "./item-form/SecaoNfse";
 import { useEmiteNfse } from "@/hooks/useEmiteNfse";
+// 10/11/2026 — "Sai em" (migration 442): o item escolhe a nota.
+import { SecaoSaiEm } from "./item-form/SecaoSaiEm";
+import { gravacaoDaNota, lerNotaFiscal, notaPadraoDoTipo, type NotaFiscal } from "@/utils/notaDoItem";
 import {
   NFSE_VAZIO, bloqueiosDaNfse, gravacaoDaNfse, nfseDoProduto, temAlgoNaNfse,
   type CamposNfseDoForm,
@@ -218,6 +221,9 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   // 10/11/2026 (NFS-e do serviço, migration 437): só o serviço mostra e
   // grava. Produto nunca manda nenhum destes campos (undefined some do JSON).
   const [nfse, setNfse] = useState<CamposNfseDoForm>(NFSE_VAZIO);
+  // 10/11/2026 (migration 442): "Sai em". null = segue o tipo (produto na
+  // NFC-e, serviço na NFS-e); só a escolha diferente do tipo é gravada.
+  const [notaEscolha, setNotaEscolha] = useState<NotaFiscal | null>(null);
   // 22/09/2026 (perfil Matcon): marca da ficha, peso por unidade (Entrega,
   // weight_kg) e as pilhas que já estão na prateleira (lotes do M4).
   const [marca, setMarca] = useState("");
@@ -313,12 +319,16 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     retry: 1,
   });
   const emiteNota = !!(nfceCfg as any)?.config?.is_active;
-  // ── e NFS-e? Só pergunta quando o item é um serviço ──────
+  // ── e NFS-e? ─────────────────────────────────────────────
   // Decisão do dono (10/11/2026): a seção só existe para quem emite NFS-e
   // (nfse_config ativa; no consolidado, ao menos uma loja). Para as outras
   // some, e o Salvar não manda nem trava nada dela.
-  const emiteNfse = useEmiteNfse(visible && type === "service");
-  const comNfse = type === "service" && emiteNfse;
+  // Migration 442: o produto também pergunta — quem emite NFS-e vê o "Sai
+  // em", e o produto que sai na NFS-e ganha a seção (o estoque não muda).
+  const emiteNfse = useEmiteNfse(visible);
+  const unitDoItem = isProduto ? unidade : "srv";
+  const notaDoItem: NotaFiscal = notaEscolha ?? notaPadraoDoTipo(unitDoItem);
+  const comNfse = emiteNfse && notaDoItem === "nfse";
 
   // ── variações do item em edição ──────────────────────────
   const { data: variacoes } = useQuery({
@@ -437,7 +447,8 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     setCest(manter ? manter.cest : ((prod as any)?.cest || ""));
     setIcmsStPaid(manter ? manter.icmsStPaid : ((prod as any)?.icmsStPaid ?? null));
     setOrigem(manter ? manter.origem : ((prod as any)?.origem ?? null));
-    setNfse(t === "service" ? nfseDoProduto(prod) : { ...NFSE_VAZIO });
+    setNfse(nfseDoProduto(prod));
+    setNotaEscolha(lerNotaFiscal(prod?.notaFiscal));
     setCores([]);
     setTamanhos([]);
     setCelulas({});
@@ -604,7 +615,18 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       // tela): nada — as chaves nem existem no objeto e o que estiver
       // gravado fica como está.
       ...(comNfse ? gravacaoDaNfse(nfse, MOSTRAR_ALIQUOTA_ISS) : {}),
+      // "Sai em" (migration 442): só quem emite NFS-e e só quando muda o que
+      // está gravado (no cadastro novo, só a escolha diferente do tipo).
+      // undefined = não vai no corpo; null = volta a seguir o tipo.
+      notaFiscal: notaDoCorpo(),
     } as Product;
+  }
+
+  function notaDoCorpo(): NotaFiscal | null | undefined {
+    if (!emiteNfse) return undefined;
+    const gravada = gravacaoDaNota(notaDoItem, unitDoItem);
+    const antes = alvo ? lerNotaFiscal(alvo.notaFiscal) : null;
+    return gravada === antes ? undefined : gravada;
   }
 
   // ── gravações ────────────────────────────────────────────
@@ -1140,6 +1162,14 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   // 10/11/2026 — Nota de serviço (NFS-e): só serviço, só para quem emite.
   // No grupo (item compartilhado), a nota avisa que os códigos valem para
   // todas as lojas.
+  // 10/11/2026 — "Sai em" (migration 442): só para quem emite NFS-e.
+  const secSaiEm = emiteNfse ? (
+    <SecaoSaiEm
+      nota={notaDoItem}
+      onNota={(n) => { setNotaEscolha(n); setSujo(true); }}
+    />
+  ) : null;
+
   const secNfse = comNfse ? (
     <SecaoNfse
       // Remonta a cada abertura/semente: a busca em andamento e a sanfona
@@ -1232,6 +1262,8 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
                   {secDescricao}
                 </View>
                 <View style={s.colDir}>
+                  {secSaiEm}
+                  {secNfse}
                   {secNotaFiscal}
                   {secCodigos}
                   {secFotos}
@@ -1244,6 +1276,8 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
                 {secFornecedores}
                 {secEstoque}
                 {secEntrega}
+                {secSaiEm}
+                {secNfse}
                 {secNotaFiscal}
                 {secCodigos}
                 {secFotos}
@@ -1260,6 +1294,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
                 {secDescricao}
               </View>
               <View style={s.colDir}>
+                {secSaiEm}
                 {secNfse}
                 {secFotos}
                 {secCodigos}
@@ -1273,6 +1308,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
               {secEstoque}
               {secFotos}
               {secDescricao}
+              {secSaiEm}
               {secNfse}
               {secCodigos}
             </View>

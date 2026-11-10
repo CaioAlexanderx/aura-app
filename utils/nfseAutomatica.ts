@@ -12,10 +12,12 @@
 //   4. Serviço sem código: a venda fecha e a NFS-e fica "com problema", com
 //      atalho para o cadastro do serviço.
 //
-// Serviço = item com unit 'srv' (a mesma regra do backend: products.unit).
+// "Serviço" aqui = item que sai na NFS-e: utils/notaDoItem.vaiNaNfse (o "Sai
+// em" do cadastro; sem escolha, unit 'srv') — a mesma regra do backend.
 // ============================================================
 
 import { onlyDigits, validateCpf, validateCnpj, maskCpf, maskCnpj } from "@/lib/validators";
+import { vaiNaNfse, type ItemComNota } from "@/utils/notaDoItem";
 import type {
   AcaoDaOrigemNfse, EstadoDaOrigemNfse, NotaDaOrigemNfse, SituacaoNfse,
 } from "@/services/nfseAutomaticaApi";
@@ -27,11 +29,12 @@ export const TEXTO_AJUDA_FISCAL = "Em caso de dúvidas, acione seu contador ou o
 
 // ── composição da venda ──────────────────────────────────────
 
-export function ehServico(item: { unit?: string | null } | null | undefined): boolean {
-  return String((item && item.unit) || "").trim().toLowerCase() === "srv";
+/** O item vai na NFS-e (o nome ficou: os chamadores leem "é serviço da nota"). */
+export function ehServico(item: ItemComNota): boolean {
+  return vaiNaNfse(item);
 }
 
-export function composicaoDaVenda(items: Array<{ unit?: string | null }> | null | undefined) {
+export function composicaoDaVenda(items: Array<NonNullable<ItemComNota>> | null | undefined) {
   const lista = items || [];
   const temServico = lista.some(ehServico);
   const temProduto = lista.some((i) => !ehServico(i));
