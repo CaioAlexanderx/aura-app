@@ -166,3 +166,23 @@ describe("produto com 'Sai em: Nota de serviço' no Caixa", () => {
     expect(corpo()).not.toHaveProperty("nfse_tomador");
   });
 });
+
+// Botão "Emitir NFS-e" (aura-app#1214): loja que emite só pelo botão.
+const SO_EMITE = { ligada_no_servidor: false, tem_config: true, provider: "nacional", emissao_automatica: false, emissao_automatica_desde: null, ativa: false, emite: true };
+
+describe("carimbo numa loja que emite NFS-e só pelo botão", () => {
+  test("o campo do tomador aparece opcional e a venda fecha sem documento", () => {
+    montar(SO_EMITE);
+    carrinho(CARIMBO);
+    expect(st.cartProps.tomador).toMatchObject({ exigido: false, temProduto: false });
+    expect(labels()).toEqual([]);
+    act(() => { st.handleFinalize(); });
+    expect(mockBodies).toHaveLength(1);
+  });
+
+  test("serviço com 'Sai em: Cupom fiscal' nem mostra o campo", () => {
+    montar(SO_EMITE);
+    carrinho(SERVICO_NFCE);
+    expect(st.cartProps.tomador).toBeNull();
+  });
+});
