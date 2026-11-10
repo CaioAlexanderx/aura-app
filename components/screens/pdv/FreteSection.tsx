@@ -9,7 +9,7 @@
 //
 // 09/11/2026 (entrega, parte 2 — mockup "Entrega no Caixa", C): a linha do
 // cliente diz para onde vai ("Av. Paulista, 1000 · Bela Vista · São Paulo")
-// ou avisa "falta o endereço, vamos pedir ao concluir".
+// ou avisa que ainda não tem endereço (10/11/2026: preencher é opcional).
 // ============================================================
 import { View, Text, StyleSheet, Pressable, TextInput } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -89,7 +89,7 @@ export function FreteSection({ value, onChange, amount, onClear, customerName, o
         <Text style={s.endereco} numberOfLines={2} testID="frete-endereco">{paraOnde}</Text>
       )}
       {!!customerName && faltaEndereco && (
-        <Text style={s.falta} testID="frete-falta-endereco">Falta o endereço, vamos pedir ao concluir</Text>
+        <Text style={s.falta} testID="frete-falta-endereco">Sem endereço ainda: dá para preencher ao concluir</Text>
       )}
     </View>
   );

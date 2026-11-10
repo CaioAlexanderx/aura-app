@@ -179,6 +179,7 @@ function CaixaScreenInner() {
       rascunho={st.rascunhoDaEntrega}
       onVoltar={st.voltarDaEntrega}
       onConfirmar={st.confirmarEntrega}
+      onSeguirSem={st.dispensarEntrega}
     />
     {/* 03/11/2026 — Nova vendedora pelo seletor F2 (utils/vendedoraNoCaixa.ts). */}
     <NovaVendedoraModal

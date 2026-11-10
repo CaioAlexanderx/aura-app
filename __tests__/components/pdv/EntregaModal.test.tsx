@@ -6,7 +6,9 @@
 //   - "Quem recebe a entrega?" (sem cliente): acha cliente pela busca; quem
 //     tem endereço segue direto, quem não tem cai no endereço; cadastro
 //     novo exige o nome;
-//   - "Voltar" devolve o que foi digitado (rascunho) e o rascunho volta.
+//   - "Voltar" devolve o que foi digitado (rascunho) e o rascunho volta;
+//   - 10/11/2026 (incidente): identificar é opcional. "Seguir sem
+//     identificar" / "Seguir sem endereço" seguem sem confirmar nada.
 // Mocks do padrão do repo (expo-font, FpktLogo); testID + deep:false.
 // ============================================================
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
@@ -57,6 +59,7 @@ const semCep = jest.fn(() => Promise.resolve(null));
 function montar(props: Partial<React.ComponentProps<typeof EntregaModal>> = {}) {
   const onVoltar = jest.fn();
   const onConfirmar = jest.fn();
+  const onSeguirSem = jest.fn();
   let tree!: renderer.ReactTestRenderer;
   act(() => {
     tree = renderer.create(
@@ -67,12 +70,13 @@ function montar(props: Partial<React.ComponentProps<typeof EntregaModal>> = {}) 
         rascunho={null}
         onVoltar={onVoltar}
         onConfirmar={onConfirmar}
+        onSeguirSem={onSeguirSem}
         buscarCep={semCep}
         {...props}
       />,
     );
   });
-  return { tree, onVoltar, onConfirmar };
+  return { tree, onVoltar, onConfirmar, onSeguirSem };
 }
 
 function preencherEndereco(tree: renderer.ReactTestRenderer) {
@@ -86,7 +90,7 @@ describe("Para onde vai a entrega? (cliente sem endereço)", () => {
   test("título e texto do mockup", () => {
     const { tree } = montar();
     expect(texto(tree, "entrega-titulo")).toBe("Para onde vai a entrega?");
-    expect(flattenText(tree.toJSON())).toContain("Pessoa Sem Endereço ainda não tem endereço. Ele fica guardado no cadastro para as próximas entregas.");
+    expect(flattenText(tree.toJSON())).toContain("Pessoa Sem Endereço ainda não tem endereço. Se preencher, ele fica guardado no cadastro para as próximas entregas. Não é obrigatório: dá para seguir sem endereço.");
     expect(texto(tree, "entrega-confirmar")).toBe("Salvar e continuar");
     expect(porId(tree, "entrega-busca")).toHaveLength(0);
     tree.unmount();
@@ -194,6 +198,47 @@ describe("Quem recebe a entrega? (sem cliente)", () => {
   test("fechado (pedido null): não desenha nada", () => {
     const { tree } = montar({ pedido: null });
     expect(tree.toJSON()).toBeNull();
+    tree.unmount();
+  });
+});
+
+describe("seguir sem identificar (10/11/2026, incidente)", () => {
+  test("'Quem recebe': texto gentil e 'Seguir sem identificar' segue sem confirmar", () => {
+    const { tree, onConfirmar, onSeguirSem } = montar({ pedido: "quem", cliente: null });
+    const tudo = flattenText(tree.toJSON());
+    expect(tudo).not.toContain("precisa de");
+    expect(tudo).toContain("Não é obrigatório: dá para seguir sem identificar.");
+    expect(texto(tree, "entrega-seguir-sem")).toBe("Seguir sem identificar");
+    tocar(tree, "entrega-seguir-sem");
+    expect(onSeguirSem).toHaveBeenCalledTimes(1);
+    expect(onSeguirSem.mock.calls[0][0]).toBeNull();
+    expect(onConfirmar).not.toHaveBeenCalled();
+    tree.unmount();
+  });
+
+  test("'Para onde vai': 'Seguir sem endereço' segue sem pedir o mínimo", () => {
+    const { tree, onConfirmar, onSeguirSem } = montar();
+    expect(texto(tree, "entrega-seguir-sem")).toBe("Seguir sem endereço");
+    tocar(tree, "entrega-seguir-sem");
+    expect(onSeguirSem).toHaveBeenCalledTimes(1);
+    expect(onConfirmar).not.toHaveBeenCalled();
+    expect(porId(tree, "entrega-falta")).toHaveLength(0);
+    tree.unmount();
+  });
+
+  test("cliente achado na busca, sem endereço: segue com ele, sem endereço", () => {
+    const { tree, onSeguirSem } = montar({ pedido: "quem", cliente: null });
+    digitar(tree, "entrega-busca", "sem end");
+    tocar(tree, "entrega-cliente-c-sem");
+    expect(texto(tree, "entrega-seguir-sem")).toBe("Seguir sem endereço");
+    tocar(tree, "entrega-seguir-sem");
+    expect(onSeguirSem.mock.calls[0][0].id).toBe("c-sem");
+    tree.unmount();
+  });
+
+  test("sem onSeguirSem (quem não liga a saída): sem o botão", () => {
+    const { tree } = montar({ onSeguirSem: undefined });
+    expect(porId(tree, "entrega-seguir-sem")).toHaveLength(0);
     tree.unmount();
   });
 });

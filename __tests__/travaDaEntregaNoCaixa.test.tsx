@@ -7,7 +7,10 @@
 //   - frete com cliente sem endereço: abre "Para onde vai" e, confirmado,
 //     a venda leva o endereço do cliente;
 //   - frete com cliente com endereço: sem trava, só o delivery_check;
-//   - sem frete: corpo de sempre (sem nenhum campo de entrega).
+//   - sem frete: corpo de sempre (sem nenhum campo de entrega);
+//   - 10/11/2026 (incidente): "Seguir sem identificar" fecha a venda com o
+//     frete e SEM delivery_check/endereço; o modal não reabre na mesma
+//     venda e volta na seguinte.
 // ============================================================
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
 jest.mock("expo-font", () => ({ useFonts: () => [true, null], loadAsync: jest.fn(), isLoaded: () => true }));
@@ -23,12 +26,15 @@ jest.mock("@/stores/auth", () => {
 });
 jest.mock("@/components/Toast", () => ({ toast: { error: jest.fn(), success: jest.fn(), info: jest.fn(), warning: jest.fn() } }));
 const mockBodies: any[] = [];
+// Erro da próxima venda (a venda não sai e o carrinho fica).
+let mockFalha: any = null;
 jest.mock("@tanstack/react-query", () => ({
   useQuery: () => ({ data: undefined, isLoading: false }),
   useQueryClient: () => ({ invalidateQueries: jest.fn(), setQueryData: jest.fn() }),
   useMutation: () => ({
     mutate: (body: any, cb: any) => {
       mockBodies.push(body);
+      if (mockFalha) { const e = mockFalha; mockFalha = null; cb?.onError?.(e); return; }
       cb?.onSuccess?.({ sale: { id: "venda-1", sale_number: 7, customer_id: body.customer_id || "cli-novo" } });
     },
     mutateAsync: jest.fn(),
@@ -90,6 +96,7 @@ const ENDERECO = { zip: "04538132", street: "Rua Jerônimo da Veiga", number: "4
 let tree: renderer.ReactTestRenderer;
 beforeEach(() => {
   mockBodies.length = 0;
+  mockFalha = null;
   try { localStorage.clear(); sessionStorage.clear(); } catch {}
   act(() => { tree = renderer.create(<Harness />); });
 });
@@ -190,5 +197,85 @@ describe("sem trava", () => {
     expect("delivery_check" in b).toBe(false);
     expect("delivery_address" in b).toBe(false);
     expect("customer" in b).toBe(false);
+  });
+});
+
+describe("seguir sem identificar (10/11/2026, incidente)", () => {
+  test("sem cliente: fecha a venda com o frete, sem trava nem entrega", () => {
+    carrinho("15");
+    act(() => { st.handleFinalize(); });
+    expect(st.pedidoDeEntrega).toBe("quem");
+    expect(mockBodies).toHaveLength(0);
+    act(() => { st.dispensarEntrega(null); });
+    expect(st.pedidoDeEntrega).toBeNull();
+    expect(mockBodies).toHaveLength(1);
+    const b = corpo();
+    expect(b.items.find((i: any) => i.product_name_snapshot === "Frete").unit_price).toBe(15);
+    expect("delivery_check" in b).toBe(false);
+    expect("delivery_address" in b).toBe(false);
+    expect("customer" in b).toBe(false);
+    expect(b.customer_id).toBeUndefined();
+    // Tela final sem cliente e sem endereço: sem papel de entrega.
+    expect(st.lastSale).not.toBeNull();
+    expect(st.lastSale!.entrega).toBeFalsy();
+    expect(st.lastSale!.frete).toBe(15);
+  });
+
+  test("cliente sem endereço: 'Seguir sem endereço' vende com o cliente, sem trava", () => {
+    carrinho("12");
+    act(() => { st.selectCustomer("c-sem", "Pessoa Sem Endereço", "11933334444"); });
+    act(() => { st.handleFinalize(); });
+    expect(st.pedidoDeEntrega).toBe("endereco");
+    act(() => { st.dispensarEntrega(null); });
+    const b = corpo();
+    expect(b.customer_id).toBe("c-sem");
+    expect("delivery_check" in b).toBe(false);
+    expect("delivery_address" in b).toBe(false);
+  });
+
+  test("cliente escolhido na busca e seguiu sem endereço: o cliente fica na venda", () => {
+    carrinho("12");
+    act(() => { st.handleFinalize(); });
+    act(() => { st.dispensarEntrega({ id: "c-sem", name: "Pessoa Sem Endereço", phone: "11933334444" }); });
+    expect(corpo().customer_id).toBe("c-sem");
+    expect("delivery_check" in corpo()).toBe(false);
+  });
+
+  test("não reabre a cada Finalizar da mesma venda; volta na venda seguinte", () => {
+    carrinho("15");
+    act(() => { st.handleFinalize(); });
+    expect(st.pedidoDeEntrega).toBe("quem");
+    // A venda não sai (erro de rede): o carrinho fica.
+    mockFalha = { code: "NETWORK" };
+    act(() => { st.dispensarEntrega(null); });
+    expect(mockBodies).toHaveLength(1);
+    expect(st.lastSale).toBeNull();
+    expect(st.cartProps.items).toHaveLength(1);
+    // Finalizar de novo: direto para a venda, sem o modal.
+    act(() => { st.handleFinalize(); });
+    expect(st.pedidoDeEntrega).toBeNull();
+    expect(mockBodies).toHaveLength(2);
+    expect("delivery_check" in corpo()).toBe(false);
+    expect(st.lastSale).not.toBeNull();
+
+    // Venda seguinte, com frete: o modal volta a ajudar.
+    act(() => { st.newSale(); });
+    carrinho("10");
+    act(() => { st.handleFinalize(); });
+    expect(st.pedidoDeEntrega).toBe("quem");
+    expect(mockBodies).toHaveLength(2);
+  });
+
+  test("caminho antigo intacto: preencher depois de ter dispensado volta a mandar a entrega", () => {
+    carrinho("15");
+    act(() => { st.handleFinalize(); });
+    mockFalha = { code: "NETWORK" };
+    act(() => { st.dispensarEntrega(null); });
+    act(() => {
+      st.confirmarEntrega({ customerId: null, nome: "Pessoa Nova", telefone: "", endereco: ENDERECO, recado: "", novoCliente: true });
+    });
+    const b = corpo();
+    expect(b.delivery_check).toBe(true);
+    expect(b.delivery_address).toMatchObject({ name: "Pessoa Nova", street: "Rua Jerônimo da Veiga" });
   });
 });

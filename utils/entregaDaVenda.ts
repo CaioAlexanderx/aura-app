@@ -10,6 +10,13 @@
 //   - obrigatórios: nome, CEP ou rua, número e cidade;
 //   - venda sem frete: nada muda (a trava é só do frete).
 //
+// 10/11/2026 (incidente, decisão do Caio): venda com frete PODE fechar sem
+// identificar o cliente. O modal continua aparecendo para ajudar, mas tem
+// "Seguir sem identificar" ("quem") e "Seguir sem endereço" ("endereco").
+// Escolhida a saída, a venda vai para o pagamento com o frete cobrado, SEM
+// delivery_check (o servidor não trava) e sem endereço; o modal não abre de
+// novo nesta venda e volta na seguinte (o estado zera com o carrinho).
+//
 // Na tela de venda concluída, a caixinha "Imprimir papel de entrega"
 // aparece quando a venda tem endereço; vem marcada com frete e desmarcada
 // sem frete. Marcada, o cupom e o papel saem numa janela só — o Chrome
@@ -65,8 +72,11 @@ export function precisaPedirEntrega(p: {
   customerId: string | null | undefined;
   clienteTemEndereco: boolean;
   entrega: EntregaDaVenda | null | undefined;
+  /** 10/11/2026: a pessoa escolheu seguir sem identificar nesta venda. */
+  dispensada?: boolean;
 }): PedidoDeEntrega | null {
   if (!(p.frete > 0)) return null;
+  if (p.dispensada) return null;
   if (entregaValeParaACliente(p.entrega, p.customerId)) return null;
   if (p.customerId) return p.clienteTemEndereco ? null : "endereco";
   return "quem";
@@ -89,10 +99,12 @@ export function textoDoQueFalta(falta: string[]): string {
  */
 export function camposDaEntregaNaVenda(
   entrega: EntregaDaVenda | null | undefined,
-  p: { frete: number; customerId: string | null | undefined },
+  p: { frete: number; customerId: string | null | undefined; dispensada?: boolean },
 ): Record<string, any> {
   const out: Record<string, any> = {};
-  if (p.frete > 0) out.delivery_check = true;
+  // 10/11/2026: seguiu sem identificar = o servidor não confere o endereço
+  // (sem delivery_check não há 422). O frete continua na linha "Frete".
+  if (p.frete > 0 && !p.dispensada) out.delivery_check = true;
   if (!entregaValeParaACliente(entrega, p.customerId)) return out;
   const e = entrega as EntregaDaVenda;
   const endereco = enderecoParaApi(e.endereco);

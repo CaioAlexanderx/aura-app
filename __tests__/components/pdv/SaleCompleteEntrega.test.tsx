@@ -181,3 +181,17 @@ describe("imprimir: um pop-up só", () => {
     tree.unmount();
   });
 });
+
+describe("venda com frete sem cliente e sem endereço (10/11/2026, incidente)", () => {
+  test("a tela final abre, sem caixinha nem linha de entrega, e imprime o cupom de sempre", async () => {
+    const SEM_CLIENTE: SaleResult = { ...VENDA, customerId: undefined, customerName: undefined, frete: 15, entrega: undefined };
+    const tree = montar(SEM_CLIENTE, { enderecoDoCliente: null });
+    expect(porId(tree, "venda-papel-caixinha")).toHaveLength(0);
+    expect(porId(tree, "venda-entrega")).toHaveLength(0);
+    expect(texto(tree, "venda-imprimir")).toBe("Imprimir cupom");
+    await imprimir(tree);
+    expect(urls.some((u) => u.includes("/print/receipt/") && !u.includes("entrega=1"))).toBe(true);
+    expect(urls.some((u) => u.includes("/print/delivery/"))).toBe(false);
+    tree.unmount();
+  });
+});

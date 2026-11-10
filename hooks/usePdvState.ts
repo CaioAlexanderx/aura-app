@@ -267,6 +267,7 @@ export function usePdvState() {
     comanda: comandaNoCarrinho, setComanda,
     freteValor, setFreteValor, frete,
     entrega, setEntrega,
+    entregaDispensada, setEntregaDispensada,
     referredProfessionalId, setReferredProfessionalId,
     setLotAllocations,
     selectedCustomerId, selectedCustomerName, selectedCustomerPhone, selectCustomer,
@@ -431,6 +432,8 @@ export function usePdvState() {
   // entrega?" (sem cliente). "Voltar" fecha e o carrinho fica como estava;
   // o que foi digitado fica no rascunho. "Salvar e continuar" guarda a
   // entrega e retoma o Finalizar (num efeito, para ler o cliente novo).
+  // 10/11/2026 (incidente): perguntar não é exigir. "Seguir sem
+  // identificar" (dispensarEntrega) retoma o Finalizar sem entrega.
   const [pedidoDeEntrega, setPedidoDeEntrega] = useState<PedidoDeEntrega | null>(null);
   const [rascunhoDaEntrega, setRascunhoDaEntrega] = useState<EntregaDaVenda | null>(null);
   const [cadastroSemEndereco, setCadastroSemEndereco] = useState<string | null>(null);
@@ -448,6 +451,20 @@ export function usePdvState() {
     if (cliente) selectCustomer(cliente.id, cliente.name, cliente.phone || null);
     if (cliente && cadastroSemEndereco === cliente.id) setCadastroSemEndereco(null);
     setEntrega(e);
+    setEntregaDispensada(false);
+    setRascunhoDaEntrega(null);
+    setPedidoDeEntrega(null);
+    setRetomarFinalizar(n => n + 1);
+  }
+  // 10/11/2026 (incidente, decisão do Caio): identificar é opcional.
+  // "Seguir sem identificar" / "Seguir sem endereço" vai para o pagamento
+  // com o frete cobrado, sem entrega vinculada e sem delivery_check. O
+  // modal não abre de novo nesta venda (zera com o carrinho). Se a pessoa
+  // já tinha escolhido um cliente na busca, ele fica na venda.
+  function dispensarEntrega(cliente?: { id: string; name: string; phone?: string | null } | null) {
+    if (cliente) selectCustomer(cliente.id, cliente.name, cliente.phone || null);
+    setEntrega(null);
+    setEntregaDispensada(true);
     setRascunhoDaEntrega(null);
     setPedidoDeEntrega(null);
     setRetomarFinalizar(n => n + 1);
@@ -775,8 +792,9 @@ export function usePdvState() {
       return;
     }
 
-    // 09/11/2026: venda com frete precisa de para onde vai, antes de cobrar.
-    const pedido = precisaPedirEntrega({ frete, customerId: selectedCustomerId, clienteTemEndereco, entrega });
+    // 09/11/2026: venda com frete pergunta para onde vai, antes de cobrar.
+    // 10/11/2026: só pergunta; "Seguir sem identificar" passa direto.
+    const pedido = precisaPedirEntrega({ frete, customerId: selectedCustomerId, clienteTemEndereco, entrega, dispensada: entregaDispensada });
     if (pedido) {
       setPedidoDeEntrega(pedido);
       return;
@@ -1321,7 +1339,7 @@ export function usePdvState() {
     customers, customerOptions, customerRecentCount,
     sellerPickerRef, customerPickerRef,
     // 09/11/2026: a trava da venda com frete (EntregaModal).
-    pedidoDeEntrega, rascunhoDaEntrega, confirmarEntrega, voltarDaEntrega,
+    pedidoDeEntrega, rascunhoDaEntrega, confirmarEntrega, voltarDaEntrega, dispensarEntrega,
     showTroca,
     valeTroca,
     openTroca:  () => { setValeTroca(null); setShowTroca(true); },
