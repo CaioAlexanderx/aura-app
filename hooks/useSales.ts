@@ -147,6 +147,30 @@ export function useCancelSale(companyId?: string) {
   };
 }
 
+// 10/11/2026 — useHideSale: "Excluir" a venda CANCELADA da lista
+// (Aura-backend#985). Exclusão lógica: só some da lista; o registro e os
+// totais ficam. companyId por chamada, mesmo papel do useCancelSale — no
+// consolidado o caller passa o company_id da própria venda. Só invalida a
+// lista: nada de financeiro, estoque ou painel muda.
+export function useHideSale() {
+  const { company } = useAuthStore();
+  const qc = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: function(args: { saleId: string; companyId?: string }) {
+      const target = args.companyId || company?.id;
+      if (!target) throw new Error("no company");
+      return salesApi.hide(target, args.saleId);
+    },
+    onSuccess: function() {
+      qc.invalidateQueries({ queryKey: ["sales-list"] });
+    },
+  });
+  return {
+    hideSale: function(args: { saleId: string; companyId?: string }) { return mutation.mutateAsync(args); },
+    isHiding: mutation.isPending,
+  };
+}
+
 // 09/11/2026 — Editar venda (Aura-backend#972). O contexto (formas atuais,
 // travas, NFC-e, caixa, permissões) é lido no mount da edição, sempre fresco
 // (staleTime 0): a trava de crediário pago e o prazo da NFC-e mudam sozinhos.

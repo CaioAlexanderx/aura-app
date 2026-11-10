@@ -424,6 +424,16 @@ export var salesApi = {
       { method: "POST", body: { reason: reason || "" }, retry: 0, timeout: 15000 }
     );
   },
+  // 10/11/2026 — Excluir da lista a venda CANCELADA (Aura-backend#985,
+  // migration 439). Exclusão lógica: o backend grava hidden_at/hidden_by e
+  // a venda some só da lista; o registro fica para a contabilidade e os
+  // totais não mudam. Venda que vale volta 409 SALE_NOT_CANCELLED.
+  hide: function(companyId: string, saleId: string) {
+    return request<{ ok: boolean; sale_id: string; hidden_at: string; already_hidden?: boolean }>(
+      "/companies/" + companyId + "/sales/" + saleId + "/hide",
+      { method: "POST", body: {}, retry: 0, timeout: 15000 }
+    );
+  },
   // 09/11/2026 — Editar venda: o que a tela precisa antes de mexer (formas
   // atuais, travas, NFC-e, caixa, permissões).
   editContext: function(companyId: string, saleId: string) {

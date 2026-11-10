@@ -18,6 +18,9 @@ import { resumoDeLotes } from "@/utils/matconLots";
 // 23/09/2026 (QA producao, item 9): margem 100% em produto sem custo.
 import { computeMargin, DICA_MARGEM_SEM_CUSTO } from "@/utils/productMargin";
 import { VariantesConsulta } from "./VariantesConsulta";
+// 10/11/2026 (NFS-e do serviço): selo "Falta código da NFS-e".
+import { faltaCodigoNfse } from "@/utils/nfseServico";
+import { SELO_FALTA_NFSE } from "./nfseNaLista";
 
 var COLOR_NAMES: Record<string, string> = {
   '#000000':'Preto','#ffffff':'Branco','#ff0000':'Vermelho','#c0c0c0':'Prata',
@@ -40,7 +43,7 @@ function isServiceProduct(p: Product) {
 
 export function ProductRow({
   product, onDelete, onEdit, onLink,
-  isSelected, onSelect, consulta, semCusto, onEntrada,
+  isSelected, onSelect, consulta, semCusto, onEntrada, emiteNfse,
 }: {
   product: Product;
   onDelete?: (id: string) => void;
@@ -56,6 +59,8 @@ export function ProductRow({
   semCusto?: boolean;
   // 03/11/2026 — entrada de mercadoria (botão ↓ ao lado do preço; toque).
   onEntrada?: (product: Product) => void;
+  // 10/11/2026 — a loja emite NFS-e: serviço sem código ganha o selo.
+  emiteNfse?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -115,6 +120,11 @@ export function ProductRow({
               {!isService && product.size ? <View style={s.sizeBadge}><Text style={s.sizeBadgeText}>{product.size}</Text></View> : null}
             </View>
             <Text style={s.meta}>{product.code} / {product.category}</Text>
+            {faltaCodigoNfse(product, !!emiteNfse) ? (
+              <View style={s.seloNfse} testID="selo-falta-nfse">
+                <Text style={s.seloNfseTxt}>{SELO_FALTA_NFSE}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
         <View style={s.right}>
@@ -258,6 +268,8 @@ const s = StyleSheet.create({
   // Service visuals
   serviceBadge: { width: 36, height: 36, borderRadius: 8, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
   serviceBadgeIcon: { fontSize: 16, color: Colors.violet3 },
+  seloNfse: { alignSelf: "flex-start", marginTop: 4, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5, backgroundColor: Colors.amberD, borderWidth: 1, borderColor: "rgba(251,191,36,0.35)" },
+  seloNfseTxt: { fontSize: 10, fontWeight: "700", color: Colors.amber },
   serviceTag: { backgroundColor: Colors.violetD, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: Colors.border2 },
   serviceTagText: { fontSize: 10, color: Colors.violet3, fontWeight: "700", letterSpacing: 0.3 },
   right: { alignItems: "flex-end", gap: 2 },

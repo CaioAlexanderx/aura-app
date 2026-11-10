@@ -68,6 +68,20 @@ export type Product = {
   emPromocao?: boolean;
   /** Preço que vale agora (promoção no ar = promoPrice; senão = price). */
   precoEfetivo?: number | null;
+  // 10/11/2026 (NFS-e do serviço, migration 437 do backend): null = segue
+  // o padrão da empresa (nfse_config). Só dígitos. Backend sem a 437 não
+  // manda nada -> null. Só o cadastro de SERVIÇO escreve aqui; em produto
+  // as chaves ficam undefined e não vão no POST/PATCH.
+  nfseCtribnac?: string | null;
+  nfseCnbs?: string | null;
+  nfseCtribmun?: string | null;
+  nfseAliquotaIss?: number | null;
+  nfseDescricao?: string | null;
+  ibscbsCst?: string | null;
+  ibscbsCclasstrib?: string | null;
+  ibscbsCindop?: string | null;
+  // Multi-CNPJ: item do dono do grupo visível nas outras lojas.
+  isGroupShared?: boolean;
 };
 
 export const UNITS = ["un", "pct", "cx", "kg", "g", "ml", "L", "par", "kit"];
