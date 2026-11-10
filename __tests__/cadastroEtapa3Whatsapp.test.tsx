@@ -126,7 +126,9 @@ describe("WhatsApp do cadastro (regras)", () => {
     expect(mascaraDoZap("119")).toBe("(11) 9");
     expect(mascaraDoZap("1191234")).toBe("(11) 9 1234");
     expect(mascaraDoZap("11912345678")).toBe("(11) 9 1234-5678");
-    expect(mascaraDoZap("+55 (11) 91234-5678 99")).toBe("(55) 1 1912-3456"); // corta em 11 dígitos
+    // 10/11/2026: o +55 sai antes; dígito a mais não é cortado (fica cru e a dica avisa).
+    expect(mascaraDoZap("+55 (11) 91234-5678")).toBe("(11) 9 1234-5678");
+    expect(mascaraDoZap("+55 (11) 91234-5678 99")).toBe("551191234567899");
   });
 
   test("conferência e dicas: fixo, sem o 9, curto e ok", () => {
@@ -178,6 +180,30 @@ describe("etapa 3: WhatsApp único", () => {
     expect(textoDe(noId(t, "cadastro-whatsapp-dica"))).toBe("Boa. É esse que vai tocar.");
     expect(textoDe(noId(t, "cadastro-cracha"))).toContain("(11) 9 8765-4321");
     expect(porId(t, "cadastro-criar").props.disabled).toBe(false);
+  });
+
+  // 10/11/2026: dois cadastros saíram com "55669923845" e "55389994850" — o
+  // +55 digitado ocupava 2 dos 11 dígitos e o fim do número sumia.
+  test("+55 colado ou digitado: o celular chega inteiro, sem o 55", async () => {
+    const t = await naEtapa3();
+    expect(porId(t, "cadastro-whatsapp", "onChangeText").props.maxLength).toBeGreaterThanOrEqual("+55 (66) 99238-4539".length);
+    await digitar(t, "cadastro-whatsapp", "+55 (66) 99238-4539");
+    expect(porId(t, "cadastro-whatsapp", "onChangeText").props.value).toBe("(66) 9 9238-4539");
+    expect(textoDe(noId(t, "cadastro-whatsapp-dica"))).toBe("Boa. É esse que vai tocar.");
+    await digitar(t, "cadastro-whatsapp", "5538999485059");
+    expect(porId(t, "cadastro-whatsapp", "onChangeText").props.value).toBe("(38) 9 9948-5059");
+    await act(async () => { porId(t, "cadastro-criar").props.onPress(); });
+    const corpo = mockRegister.mock.calls[0][0];
+    expect(corpo.whatsapp).toBe("38999485059");
+    expect(corpo.phone).toBe("38999485059");
+  });
+
+  test("dígito a mais: erro gentil, nada cortado e a conta não sai", async () => {
+    const t = await naEtapa3();
+    await digitar(t, "cadastro-whatsapp", "669923845391");
+    expect(porId(t, "cadastro-whatsapp", "onChangeText").props.value).toBe("669923845391");
+    expect(textoDe(noId(t, "cadastro-whatsapp-dica"))).toContain("dígitos a mais");
+    expect(porId(t, "cadastro-criar").props.disabled).toBe(true);
   });
 });
 

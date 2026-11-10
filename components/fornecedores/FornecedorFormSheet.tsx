@@ -16,6 +16,7 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { ResponsiveSheet } from "@/components/ResponsiveSheet";
 import { maskCnpj, maskPhone } from "@/utils/masks";
+import { TELEFONE_MAX_CARACTERES } from "@/utils/telefone";
 import { suppliersApi, type Supplier } from "@/services/suppliersApi";
 import {
   FORM_VAZIO, cnpjValido, validarFornecedor, type FormFornecedor,
@@ -178,7 +179,7 @@ export function FornecedorFormSheet({ visible, companyId, supplier, inicial, onC
             <View style={{ flex: 1 }}>
               <Text style={st.label}>WhatsApp</Text>
               <TextInput style={[st.input, erro?.campo === "phone" && st.inputErro]} value={form.phone} onChangeText={(v) => set("phone", maskPhone(v))}
-                placeholder="(11) 99999-0000" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} testID="fornecedor-form-whatsapp" />
+                placeholder="(11) 99999-0000" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={TELEFONE_MAX_CARACTERES} testID="fornecedor-form-whatsapp" />
               {erroDe("phone")}
             </View>
             <View style={{ flex: 1 }}>

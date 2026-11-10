@@ -10,6 +10,8 @@
 // começados e não terminados viram erro, em vez de sumirem em silêncio.
 // ============================================================
 
+import { normalizarTelefone } from "@/utils/telefone";
+
 export type CadastroRapidoInput = { name: string; birthDate: string; phone: string };
 
 export type CadastroRapidoResultado =
@@ -36,7 +38,10 @@ export function validarCadastroRapido(input: CadastroRapidoInput): CadastroRapid
   const name = (input.name || "").trim();
   if (!nomeValido(name)) return { ok: false, erro: "Informe o nome do cliente" };
 
-  const tel = soDigitos(input.phone);
+  // 10/11/2026: +55 sai antes de medir; dígito a mais é erro, nunca corte.
+  const n = normalizarTelefone(input.phone);
+  if (n.erro) return { ok: false, erro: n.erro };
+  const tel = n.digitos;
   if (tel.length > 0 && tel.length < 10) {
     return { ok: false, erro: "Telefone incompleto. Complete com o DDD ou apague o campo." };
   }

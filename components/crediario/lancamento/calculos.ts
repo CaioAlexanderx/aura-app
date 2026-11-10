@@ -18,6 +18,7 @@
 // ============================================================
 import { formatIsoToBr, parseBrDate } from "@/components/inputs/DateInput";
 import { fmtDate } from "@/components/crediario/ficha/fichaHelpers";
+import { formatarTelefone } from "@/utils/telefone";
 import { daysLate, statusDaCarteira } from "@/utils/creditOverdue";
 import type { CreditBalanceItem, PeriodUnit } from "@/services/creditApi";
 
@@ -45,11 +46,10 @@ export function parseCurrencyInput(raw: string): number {
   return parseFloat(raw.replace(/\./g, "").replace(",", ".")) || 0;
 }
 
+// 10/11/2026: normalizador único (utils/telefone). Antes cortava em 11
+// dígitos antes de olhar o +55.
 export function fmtPhone(v: string): string {
-  const d = v.replace(/\D/g, "").slice(0, 11);
-  if (d.length <= 10)
-    return d.replace(/(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3").replace(/-$/, "");
-  return d.replace(/(\d{2})(\d{5})(\d{0,4})/, "($1) $2-$3").replace(/-$/, "");
+  return formatarTelefone(v);
 }
 
 export function fmtCur(n: number) {

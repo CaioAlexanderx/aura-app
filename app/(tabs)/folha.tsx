@@ -19,6 +19,7 @@ import type { Employee } from "@/components/screens/folha/types";
 import { RequireCompanyScope } from "@/components/RequireCompanyScope";
 import { ScreenHero, ScreenTabs } from "@/components/ScreenHero";
 import { pluralize } from "@/utils/plural";
+import { formatarTelefone, erroDoTelefone, TELEFONE_MAX_CARACTERES } from "@/utils/telefone";
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
 
@@ -53,12 +54,9 @@ function maskDate(v: string): string {
   return `${d.slice(0,2)}/${d.slice(2,4)}/${d.slice(4)}`;
 }
 
-function maskPhone(v: string): string {
-  const d = v.replace(/\D/g, "").slice(0, 11);
-  if (d.length <= 2) return d.length ? `(${d}` : "";
-  if (d.length <= 7) return `(${d.slice(0,2)}) ${d.slice(2)}`;
-  return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
-}
+// 10/11/2026: normalizador único (utils/telefone). Antes cortava em 11
+// dígitos antes de olhar o +55 e não tinha o formato do fixo.
+const maskPhone = formatarTelefone;
 
 function maskCurrency(v: string): string {
   const clean = v.replace(/[^0-9,\.]/g, "");
@@ -213,6 +211,10 @@ function FolhaScreenInner() {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(dateNorm)) e.admDate = "Use formato dd/mm/aaaa";
       }
     }
+
+    // 10/11/2026: telefone com dígito a mais não salva (nunca é cortado).
+    const erroTel = erroDoTelefone(form.phone);
+    if (erroTel) e.phone = erroTel;
 
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -384,8 +386,8 @@ function FolhaScreenInner() {
                 </FormField>
               </View>
               <View style={s.formRow}>
-                <FormField label="Telefone" hint="Opcional">
-                  <TextInput style={s.formInput} value={form.phone} onChangeText={v => setForm(f => ({ ...f, phone: maskPhone(v) }))} placeholder="(12) 99999-9999" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} />
+                <FormField label="Telefone" hint="Opcional" error={errors.phone || erroDoTelefone(form.phone) || undefined}>
+                  <TextInput style={[s.formInput, (errors.phone || erroDoTelefone(form.phone)) && s.formInputError]} value={form.phone} onChangeText={v => setForm(f => ({ ...f, phone: maskPhone(v) }))} placeholder="(12) 99999-9999" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={TELEFONE_MAX_CARACTERES} />
                 </FormField>
                 <FormField label="E-mail" hint="Opcional">
                   <TextInput style={s.formInput} value={form.email} onChangeText={v => setForm(f => ({ ...f, email: v }))} placeholder="email@exemplo.com" placeholderTextColor={Colors.ink3} autoCapitalize="none" keyboardType="email-address" />
@@ -420,8 +422,8 @@ function FolhaScreenInner() {
                 <FormField label="CPF" required error={errors.cpf}>
                   <TextInput style={[s.formInput, errors.cpf && s.formInputError]} value={form.cpf} onChangeText={v => setForm(f => ({ ...f, cpf: maskCPF(v) }))} placeholder="000.000.000-00" placeholderTextColor={Colors.ink3} keyboardType="number-pad" maxLength={14} />
                 </FormField>
-                <FormField label="Telefone" hint="Opcional">
-                  <TextInput style={s.formInput} value={form.phone} onChangeText={v => setForm(f => ({ ...f, phone: maskPhone(v) }))} placeholder="(12) 99999-9999" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} />
+                <FormField label="Telefone" hint="Opcional" error={errors.phone || erroDoTelefone(form.phone) || undefined}>
+                  <TextInput style={[s.formInput, (errors.phone || erroDoTelefone(form.phone)) && s.formInputError]} value={form.phone} onChangeText={v => setForm(f => ({ ...f, phone: maskPhone(v) }))} placeholder="(12) 99999-9999" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={TELEFONE_MAX_CARACTERES} />
                 </FormField>
               </View>
               <View style={s.formRow}>

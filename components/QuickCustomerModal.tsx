@@ -7,6 +7,7 @@ import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { maskPhone } from "@/utils/masks";
+import { erroDoTelefone, TELEFONE_MAX_CARACTERES } from "@/utils/telefone";
 import { validarCadastroRapido, nomeValido } from "@/utils/cadastroRapidoCliente";
 // 09/11/2026 — endereço opcional, recolhido (mockup "Entrega no Caixa").
 import { SecaoEndereco } from "@/components/endereco/SecaoEndereco";
@@ -56,7 +57,7 @@ export function QuickCustomerModal({ visible, onClose, onCustomerCreated }: Prop
   }
 
   const nameValid = nomeValido(name);
-  const phoneValid = phone.replace(/\D/g, '').length >= 10;
+  const phoneValid = phone.replace(/\D/g, '').length >= 10 && !erroDoTelefone(phone);
   const dateValid = birthDate.replace(/\D/g, '').length === 8;
   const canSave = nameValid;
 
@@ -163,7 +164,10 @@ export function QuickCustomerModal({ visible, onClose, onCustomerCreated }: Prop
             <Text style={s.label}>Telefone</Text>
             <TextInput style={[s.input, phoneValid && s.inputValid]} value={phone}
               onChangeText={(v) => { setPhone(maskPhone(v)); setDupWarning(null); }}
-              placeholder="(12) 99999-0000" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} />
+              placeholder="(12) 99999-0000" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={TELEFONE_MAX_CARACTERES} />
+            {erroDoTelefone(phone) && (
+              <Text style={{ color: Colors.red, fontSize: 11, marginTop: 4 }} testID="cliente-rapido-telefone-erro">{erroDoTelefone(phone)}</Text>
+            )}
           </View>
         </View>
 

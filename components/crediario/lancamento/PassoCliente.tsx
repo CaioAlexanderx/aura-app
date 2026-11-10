@@ -12,6 +12,7 @@ import { View, Text, StyleSheet, Pressable, TextInput, ScrollView, ActivityIndic
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { e } from "./estilos";
+import { erroDoTelefone, TELEFONE_MAX_CARACTERES } from "@/utils/telefone";
 import {
   fmtCur, fmtPhone, chipDoRecente, iniciais,
   type CustomerOption, type RecenteDoLancamento, type ChipDoRecente,
@@ -92,7 +93,11 @@ export function PassoCliente({ form, recentes }: Props) {
             onChangeText={(v) => set({ newPhone: fmtPhone(v) })}
             testID="lancamento-novo-telefone"
             keyboardType="phone-pad"
+            maxLength={TELEFONE_MAX_CARACTERES}
           />
+          {erroDoTelefone(st.newPhone) && (
+            <Text style={{ color: Colors.red, fontSize: 12, marginTop: 4 }} testID="lancamento-novo-telefone-erro">{erroDoTelefone(st.newPhone)}</Text>
+          )}
         </View>
 
         <Pressable
