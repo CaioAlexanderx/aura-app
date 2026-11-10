@@ -3,7 +3,10 @@ import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, Dimen
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { EmptyState } from "@/components/EmptyState";
-import { useSalesList } from "@/hooks/useSales";
+import { useSalesList, useHideSale } from "@/hooks/useSales";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { WebPortal } from "@/components/WebPortal";
+import { toast } from "@/components/Toast";
 import { SaleDetailModal } from "@/components/screens/vendas/SaleDetailModal";
 import { FechamentosTab } from "@/components/screens/vendas/FechamentosTab";
 import { SalesRanking } from "@/components/screens/vendas/SalesRanking";
@@ -41,6 +44,14 @@ import { pluralize } from "@/utils/plural";
 // Aura-backend#972), que funciona tambem no consolidado: vai para a empresa
 // dona da venda (selectedSale.company_id). O "Editar lancamento" do
 // Financeiro continua para os lancamentos que nao sao de venda.
+//
+// 10/11/2026: venda CANCELADA ganha "Excluir" na propria linha
+// (Aura-backend#985). Exclusao logica: a linha sai da lista, o registro fica
+// no banco (hidden_at/hidden_by) e os totais nao mudam — os KPIs continuam
+// contando a venda. Botao sempre visivel (nada de hover-reveal: funciona no
+// toque igual). Confirmacao no ConfirmDialog do app, via WebPortal para nao
+// ficar preso no z-index do ScrollView. No consolidado vai para a empresa
+// dona da venda (sale.company_id), igual ao cancelar.
 //
 // 13/05/2026: fix periodToRange — substituido new Date(y,m,d) por
 // Date.UTC(y,m,d,3,0,0) para calcular meia-noite SP corretamente
@@ -123,6 +134,9 @@ export default function VendasScreen() {
   const [status, setStatus] = useState<StatusKey>("all");
   const [search, setSearch] = useState("");
   const [selectedSale, setSelectedSale] = useState<SaleListRow | null>(null);
+  // Venda cancelada que a pessoa pediu para excluir da lista (confirmacao aberta).
+  const [hideTarget, setHideTarget] = useState<SaleListRow | null>(null);
+  const { hideSale, isHiding } = useHideSale();
   // Mes que o seletor esta mostrando (so vale quando period === "month").
   const [monthAnchor, setMonthAnchor] = useState<MonthAnchor>(spCurrentMonth);
   // Pagina atual (0-based). 30 vendas por pagina.
@@ -177,6 +191,19 @@ export default function VendasScreen() {
 
   function handleSaleClick(sale: SaleListRow) {
     setSelectedSale(sale);
+  }
+
+  async function confirmHide() {
+    const alvo = hideTarget;
+    if (!alvo || isHiding) return;
+    try {
+      await hideSale({ saleId: alvo.id, companyId: alvo.company_id });
+      toast.success("Venda cancelada excluída da lista.");
+      setHideTarget(null);
+    } catch (err: any) {
+      toast.error(err?.data?.error || err?.message || "Não deu para excluir a venda agora. Tente de novo.");
+      setHideTarget(null);
+    }
   }
 
   // Lista vazia (item 12): o texto e o botão dependem do que está filtrando.
@@ -488,6 +515,22 @@ export default function VendasScreen() {
                       <Text style={s.rowCancelText}>Cancelada</Text>
                     </View>
                   )}
+                  {isCancelled && (
+                    <Pressable
+                      testID={"excluir-venda-" + sale.id}
+                      accessibilityRole="button"
+                      accessibilityLabel="Excluir venda cancelada da lista"
+                      hitSlop={8}
+                      onPress={function(e: any) {
+                        if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+                        setHideTarget(sale);
+                      }}
+                      style={s.rowHideBtn}
+                    >
+                      <Icon name="trash" size={11} color={Colors.red} />
+                      <Text style={s.rowHideText}>Excluir</Text>
+                    </Pressable>
+                  )}
                   <Icon name="chevron_right" size={14} color={Colors.ink3} />
                 </View>
               </Pressable>
@@ -533,6 +576,20 @@ export default function VendasScreen() {
         companyName={showCompanyBadge ? selectedSale?.company_name : undefined}
         onClose={function() { setSelectedSale(null); }}
       />
+
+      {/* 10/11/2026: confirmacao de excluir da lista a venda cancelada. */}
+      <WebPortal active={!!hideTarget}>
+        <ConfirmDialog
+          visible={!!hideTarget}
+          title="Excluir venda cancelada?"
+          message="A venda cancelada sai da lista. O registro continua guardado para a contabilidade."
+          confirmLabel={isHiding ? "Excluindo..." : "Excluir"}
+          cancelLabel="Voltar"
+          destructive
+          onConfirm={confirmHide}
+          onCancel={function() { if (!isHiding) setHideTarget(null); }}
+        />
+      </WebPortal>
     </ScrollView>
   );
 }
@@ -621,6 +678,9 @@ const s = StyleSheet.create({
   rowAmountStrike: { color: Colors.red, textDecorationLine: "line-through" as any },
   rowCancelBadge: { backgroundColor: Colors.redD, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: Colors.red + "55" },
   rowCancelText: { fontSize: 8, color: Colors.red, fontWeight: "700", letterSpacing: 0.4, textTransform: "uppercase" },
+  // 10/11/2026: "Excluir" da venda cancelada — sempre visivel (toque e mouse).
+  rowHideBtn: { flexDirection: "row", alignItems: "center", gap: 3, minHeight: 24, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: Colors.red + "55" },
+  rowHideText: { fontSize: 10, color: Colors.red, fontWeight: "700" },
 
   moreHint: { padding: 14, alignItems: "center", borderTopWidth: 1, borderTopColor: Colors.border, marginTop: 4 },
   moreHintText: { fontSize: 11, color: Colors.ink3, fontStyle: "italic", textAlign: "center" },
