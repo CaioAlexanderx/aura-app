@@ -235,6 +235,10 @@ export function useCart(
   // entrega?"). Vale só para o cliente para quem foi preenchida. Zera
   // junto com o carrinho.
   var [entrega, setEntrega] = useState<EntregaDaVenda | null>(null);
+  // 10/11/2026 (incidente): "Seguir sem identificar" / "Seguir sem
+  // endereço" no modal da entrega. Vale para esta venda (o modal não abre
+  // de novo) e zera junto com o carrinho: a venda seguinte pergunta.
+  var [entregaDispensada, setEntregaDispensada] = useState(false);
 
   // 22/09/2026 (Matcon M3): id do profissional "indicado por" desta venda
   // (chip do Caixa — IndicadoPorChip via useMatconReferral). Vai como
@@ -285,6 +289,8 @@ export function useCart(
   const companyId = company?.id;
 
   const [cart, setCart] = useState<CartItem[]>([]);
+  // 10/11/2026: a saída "seguir sem identificar" vale só para esta venda.
+  useEffect(function() { if (cart.length === 0) setEntregaDispensada(false); }, [cart.length]);
   const [payment, setPayment] = useState("pix");
   const [lastSale, setLastSale] = useState<SaleResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -977,7 +983,8 @@ export function useCart(
     if (frete > 0) saleData.items.push(linhaDoFrete(frete));
     // 09/11/2026: venda com frete leva delivery_check (o servidor confere o
     // endereço) e o que a trava juntou. Sem frete e sem entrega: nada.
-    Object.assign(saleData, camposDaEntregaNaVenda(entrega, { frete: frete, customerId: selectedCustomerId }));
+    // 10/11/2026: "Seguir sem identificar" = sem delivery_check (sem trava).
+    Object.assign(saleData, camposDaEntregaNaVenda(entrega, { frete: frete, customerId: selectedCustomerId, dispensada: entregaDispensada }));
     var entregaDaVenda = entregaValeParaACliente(entrega, selectedCustomerId) ? entrega : null;
 
     if (paymentsSnapshot) saleData.payments = paymentsSnapshot;
@@ -1136,7 +1143,7 @@ export function useCart(
             // pergunta de novo.
             setEntrega(null);
             if (opcoes.aoFaltarEntrega) opcoes.aoFaltarEntrega(selectedCustomerId || null);
-            toast.error("Falta o endereço da entrega. Toque em Finalizar venda e preencha para onde vai.");
+            toast.error("Falta o endereço da entrega. Toque em Finalizar venda para preencher ou seguir sem endereço.");
           } else if (erroDoCarne) {
             toast.error(erroDoCarne);
           } else {
@@ -1191,6 +1198,8 @@ export function useCart(
     freteValor, setFreteValor, frete,
     // 09/11/2026 (entrega, parte 2): o que a trava do frete juntou.
     entrega, setEntrega,
+    // 10/11/2026: seguiu sem identificar nesta venda (zera com o carrinho).
+    entregaDispensada, setEntregaDispensada,
     referredProfessionalId, setReferredProfessionalId,
     // Matcon M4 — o pai (usePdvState/cartProps) liga `setLotAllocations` no
     // `onLotAllocations` do CartPanel; sem isso a linha do lote continua

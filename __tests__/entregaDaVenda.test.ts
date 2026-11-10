@@ -138,3 +138,19 @@ describe("rotas e a janela única", () => {
     expect(out).not.toContain("window.open");
   });
 });
+
+describe("seguir sem identificar (10/11/2026, incidente)", () => {
+  test("dispensada: não pergunta, com ou sem cliente", () => {
+    expect(precisaPedirEntrega({ frete: 15, customerId: null, clienteTemEndereco: false, entrega: null, dispensada: true })).toBeNull();
+    expect(precisaPedirEntrega({ frete: 15, customerId: "c1", clienteTemEndereco: false, entrega: null, dispensada: true })).toBeNull();
+  });
+  test("dispensada: sem delivery_check (o servidor não trava); sem frete segue igual", () => {
+    expect(camposDaEntregaNaVenda(null, { frete: 15, customerId: null, dispensada: true })).toEqual({});
+    expect(camposDaEntregaNaVenda(null, { frete: 15, customerId: "c1", dispensada: true })).toEqual({});
+    expect(camposDaEntregaNaVenda(null, { frete: 0, customerId: null, dispensada: true })).toEqual({});
+    expect(camposDaEntregaNaVenda(null, { frete: 15, customerId: null, dispensada: false })).toEqual({ delivery_check: true });
+  });
+  test("caixinha sem endereço: não aparece (venda sem cliente com frete)", () => {
+    expect(caixinhaDaEntrega({ frete: 15, endereco: null })).toEqual({ mostra: false, marcada: false });
+  });
+});

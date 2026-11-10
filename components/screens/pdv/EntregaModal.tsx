@@ -9,8 +9,13 @@
 //   - pedido "quem": venda sem cliente. "Quem recebe a entrega?" — primeiro
 //     a busca (a pessoa pode já ser cliente); se não for, nome, telefone e
 //     endereço viram um cadastro novo, já vinculado à venda.
-// Obrigatórios: nome, CEP ou rua, número e cidade. "Voltar" fecha e o
+// Para cadastrar: nome, CEP ou rua, número e cidade. "Voltar" fecha e o
 // carrinho fica como estava (o que foi digitado volta no rascunho).
+//
+// 10/11/2026 (incidente, decisão do Caio): identificar é OPCIONAL. Embaixo
+// dos botões, "Seguir sem identificar" (pedido "quem") ou "Seguir sem
+// endereço" (pedido "endereco") leva ao pagamento com o frete cobrado e
+// sem entrega vinculada (usePdvState.dispensarEntrega).
 //
 // RN Web: filho de coluna usa width: "100%". Em menos de 420 px os botões
 // empilham como no celular do mockup.
@@ -48,13 +53,16 @@ type Props = {
   onVoltar: (rascunho: EntregaDaVenda | null) => void;
   /** `cliente` vem quando a pessoa foi escolhida na busca. */
   onConfirmar: (entrega: EntregaDaVenda, cliente?: ClienteDaEntrega | null) => void;
+  /** 10/11/2026: seguir para o pagamento sem identificar / sem endereço.
+   *  `cliente` vem quando a pessoa foi escolhida na busca (fica na venda). */
+  onSeguirSem?: (cliente?: ClienteDaEntrega | null) => void;
   /** Injetável para teste (padrão: ViaCEP). */
   buscarCep?: (cep8: string) => Promise<EnderecoDoCepComIbge | null>;
 };
 
 const sem = (s: string) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 
-export function EntregaModal({ pedido, cliente, clientes, rascunho, onVoltar, onConfirmar, buscarCep }: Props) {
+export function EntregaModal({ pedido, cliente, clientes, rascunho, onVoltar, onConfirmar, onSeguirSem, buscarCep }: Props) {
   const [escolhido, setEscolhido] = useState<ClienteDaEntrega | null>(null);
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
@@ -130,9 +138,10 @@ export function EntregaModal({ pedido, cliente, clientes, rascunho, onVoltar, on
 
   const titulo = modo === "endereco" ? "Para onde vai a entrega?" : "Quem recebe a entrega?";
   const sub = modo === "endereco"
-    ? `${alvo!.name} ainda não tem endereço. Ele fica guardado no cadastro para as próximas entregas.`
-    : "Venda com frete precisa de um nome e um endereço. Se a pessoa já for cliente, é só procurar.";
+    ? `${alvo!.name} ainda não tem endereço. Se preencher, ele fica guardado no cadastro para as próximas entregas. Não é obrigatório: dá para seguir sem endereço.`
+    : "Identificar quem recebe ajuda na entrega e já deixa o cadastro pronto. Se a pessoa já for cliente, é só procurar. Não é obrigatório: dá para seguir sem identificar.";
   const rotuloPri = modo === "endereco" ? "Salvar e continuar" : "Cadastrar e continuar";
+  const rotuloSem = modo === "endereco" ? "Seguir sem endereço" : "Seguir sem identificar";
 
   const botaoVoltar = (
     <Pressable
@@ -268,6 +277,17 @@ export function EntregaModal({ pedido, cliente, clientes, rascunho, onVoltar, on
             ) : (
               <View style={s.foot}>{botaoVoltar}{botaoPri}</View>
             )}
+
+            {onSeguirSem && (
+              <Pressable
+                onPress={() => onSeguirSem(escolhido)}
+                style={s.seguirSem}
+                testID="entrega-seguir-sem"
+                accessibilityRole="button"
+              >
+                <Text style={s.seguirSemTxt}>{rotuloSem}</Text>
+              </Pressable>
+            )}
           </ScrollView>
         </View>
       </View>
@@ -310,6 +330,8 @@ const s = StyleSheet.create({
   btnPri: { minHeight: 44, paddingHorizontal: 16, justifyContent: "center", borderRadius: 10, backgroundColor: Colors.violet, minWidth: 160, alignItems: "center" },
   btnFull: { width: "100%" },
   btnPriTxt: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  seguirSem: { width: "100%", minHeight: 44, marginTop: 6, alignItems: "center", justifyContent: "center" },
+  seguirSemTxt: { fontSize: 13, color: Colors.ink3, fontWeight: "700", textDecorationLine: "underline" },
 });
 
 export default EntregaModal;
