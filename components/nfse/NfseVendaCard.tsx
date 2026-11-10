@@ -40,7 +40,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useSituacaoNfse } from "@/hooks/useNfseAutomatica";
 import type { TomadorNfse } from "@/services/nfseAutomaticaApi";
 import {
-  docValido, faltaSoONome, faltaTomador, mensagemWhatsAppDaNfse, motivoDaSituacao, notasEmitidas, numerosDasNotas, semCodigo,
+  docValido, faltaSoONome, faltaTomador, mensagemWhatsAppDaNfse, motivoDaSituacao, notasEmitidas, numerosDasNotas, numeroJaUsado, semCodigo,
 } from "@/utils/nfseAutomatica";
 import { onlyDigits } from "@/lib/validators";
 import { entregarTomadorDaVenda } from "@/utils/entregarTomador";
@@ -189,7 +189,9 @@ export function NfseVendaCard({ companyId, saleId, servicos, totalServicos, toma
       ? "A nota de serviço não saiu sozinha. Pode emitir aqui — ela não sai duas vezes."
       : estado === "cancelada"
         ? "A nota de serviço desta venda foi cancelada."
-        : (motivo || "A prefeitura não aceitou a nota agora.") + (pendente ? "" : " Quando estiver certo, é só tentar de novo — a nota não sai duas vezes.");
+        : numeroJaUsado(situacao) && motivo
+          ? motivo // série/número já usados por outro emissor: a mensagem do backend já diz o que fazer
+          : (motivo || "A prefeitura não aceitou a nota agora.") + (pendente ? "" : " Quando estiver certo, é só tentar de novo — a nota não sai duas vezes.");
     return (
       <View style={[s.card, s.cardErr]} testID={pendente ? "nfse-venda-pendente" : "nfse-venda-problema"}>
         {cab(<View style={[s.selo, s.seloErr]}><Icon name="alert" size={11} color={Colors.red} /><Text style={[s.seloTxt, { color: Colors.red }]}>Com problema</Text></View>)}

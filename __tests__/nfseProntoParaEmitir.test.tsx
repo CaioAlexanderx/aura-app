@@ -5,14 +5,19 @@
 //
 // O que estes testes seguram:
 //   1. regras: 7 passos do backend → 4 cartões; prefeitura só com aviso do
-//      gov.br; resumo por loja; Série/Número da DPS de quem já emite;
+//      gov.br; resumo por loja; "Já emite NFS-e por outro emissor?" (Série e
+//      Último Número da DPS de lá, Aura-backend#992);
 //   2. a tela: abre o próximo passo; E0084 mostra a prefeitura com o código;
 //      loja pronta e produção travada mostra o aviso da Aura e trava a chave;
 //      salvar os dados manda os nomes do leiaute; nota de teste chama a rota
 //      com chave própria; a Alíquota do ISSQN retido nunca vem preenchida;
 //   3. a aba: emissão avulsa travada até emitir; "Todas as lojas" no grupo;
 //   4. pronto com aviso: teste só com E0312 (ambiente de testes do gov.br)
-//      mostra o aviso do backend e destrava o "Ligar".
+//      mostra o aviso do backend e destrava o "Ligar";
+//   5. outro emissor (incidente de 10/11/2026): Sim/Não mandam outro_emissor,
+//      outro_emissor_serie e outro_emissor_ultimo_numero; "Sim" sem número
+//      não salva; conflito DPS_NUMERO_JA_USADO abre "Dados da nota" com o
+//      aviso; nenhum texto promete que as séries "nunca se encontram".
 // ============================================================
 import React from "react";
 import renderer, { act } from "react-test-renderer";
@@ -50,8 +55,8 @@ jest.mock("@/hooks/useListaServicosNfse", () => {
 import { ProntoParaEmitirNfse } from "@/components/nfse/ProntoParaEmitirNfse";
 import { AbaEmitirNfse } from "@/components/screens/nfe/AbaEmitirNfse";
 import {
-  avisoDoTeste, estadosDosCartoes, lerPercentual, prefeituraVisivel, problemaDaSerie, proximoCartao, resumoDaLoja,
-  serieENumero, situacaoDe, type SituacaoNfse,
+  avisoDoTeste, camposDoOutroEmissor, conflitoDeNumeracao, estadosDosCartoes, lerPercentual, prefeituraVisivel, problemaDaSerie,
+  proximoCartao, resumoDaLoja, situacaoDe, textoDoConflito, type SituacaoNfse,
 } from "@/utils/nfseProntoParaEmitir";
 
 // ── fábrica de situações (forma do backend) ──────────────────
@@ -125,16 +130,16 @@ describe("regras do passo a passo", () => {
     expect(situacaoDe({ config: null, has_config: false, nacional: s })).toBe(s);
   });
 
-  test("Série/Número da DPS de quem já emite pelo Emissor Nacional (faixas do Anexo I)", () => {
-    const base = { serie: "", ultimo: "", continuaNoOutro: false, serieDaAura: "" };
-    expect(serieENumero("", base)).toHaveProperty("erro");
-    expect(serieENumero("nao", base)).toEqual({ serie: "1" });
-    expect(serieENumero("gov", base)).toEqual({ serie: "1" }); // site/app do gov.br: outra faixa
-    expect(serieENumero("outro", { ...base, serie: "1", ultimo: "212" })).toEqual({ serie: "1", next_dps_number: 213 });
-    expect(serieENumero("outro", { ...base, serie: "1", ultimo: "" })).toHaveProperty("erro");
-    expect(serieENumero("outro", { ...base, serie: "1", continuaNoOutro: true, serieDaAura: "1" })).toHaveProperty("erro");
-    expect(serieENumero("outro", { ...base, serie: "1", continuaNoOutro: true, serieDaAura: "2" })).toEqual({ serie: "2" });
+  test("\"Já emite NFS-e por outro emissor?\": campos do PUT (migration 443)", () => {
+    const base = { serie: "", ultimo: "" };
+    expect(camposDoOutroEmissor("", base)).toHaveProperty("erro");
+    expect(camposDoOutroEmissor("nao", { serie: "3", ultimo: "9" })).toEqual({ outro_emissor: false, outro_emissor_serie: null, outro_emissor_ultimo_numero: null });
+    expect(camposDoOutroEmissor("sim", { serie: "00001", ultimo: "212" })).toEqual({ outro_emissor: true, outro_emissor_serie: "1", outro_emissor_ultimo_numero: 212 });
+    expect(camposDoOutroEmissor("sim", { serie: "70001", ultimo: "5" })).toEqual({ outro_emissor: true, outro_emissor_serie: "70001", outro_emissor_ultimo_numero: 5 }); // série do gov.br vale
+    expect(camposDoOutroEmissor("sim", { serie: "1", ultimo: "" })).toHaveProperty("erro");
+    expect(camposDoOutroEmissor("sim", { serie: "", ultimo: "212" })).toHaveProperty("erro");
     expect(problemaDaSerie("70001")).toMatch(/site ou do app do gov\.br/);
+    expect(problemaDaSerie("70001")).not.toMatch(/nunca se encontr|colid/i);
     expect(problemaDaSerie("49999")).toMatch(/reservada/);
     expect(problemaDaSerie("900")).toBeNull();
   });
@@ -157,7 +162,7 @@ describe("ProntoParaEmitirNfse", () => {
     expect(tem(tree, "nfse-pronto-salvar-dados")).toBe(true); // "Dados da nota" aberto
     expect(tem(tree, "nfse-pronto-prefeitura")).toBe(false);
     const t = texto(tree);
-    for (const rot of ["Situação perante o Simples Nacional", "Código de Tributação Nacional", "Já emite NFS-e pelo Emissor Nacional?", "Optante - ME/EPP", "pela Receita"]) {
+    for (const rot of ["Situação perante o Simples Nacional", "Código de Tributação Nacional", "Já emite NFS-e por outro emissor (site ou aplicativo do gov.br, outro sistema)?", "Optante - ME/EPP", "pela Receita"]) {
       expect(t).toContain(rot);
     }
     expect(t).toContain("Em caso de dúvidas, acione seu contador ou o suporte Aura");
@@ -170,8 +175,8 @@ describe("ProntoParaEmitirNfse", () => {
     mockRequest.mockResolvedValue({ ok: true });
     const tree = await montarPronto();
     act(() => { porId(tree, "nfse-padrao-codigo").props.onChangeText("06.02.01"); });
-    act(() => { porId(tree, "nfse-pronto-ja-gov").props.onPress(); });
-    expect(tem(tree, "nfse-pronto-serie-gov")).toBe(true);
+    act(() => { porId(tree, "nfse-pronto-ja-nao").props.onPress(); });
+    expect(tem(tree, "nfse-pronto-serie-padrao")).toBe(true);
     act(() => { porId(tree, "nfse-pronto-conferi").props.onPress(); });
     await act(async () => { porId(tree, "nfse-pronto-salvar-dados").props.onPress(); });
     const [url, opts] = mockRequest.mock.calls[0];
@@ -180,8 +185,9 @@ describe("ProntoParaEmitirNfse", () => {
     expect(opts.body).toMatchObject({
       provider: "nacional", municipio_ibge: "3524402", op_simp_nac: 3, reg_ap_trib_sn: 1,
       ctribnac_padrao: "060201", cnbs_padrao: null, serie: "1", serie_confirmada: true,
+      outro_emissor: false, outro_emissor_serie: null, outro_emissor_ultimo_numero: null,
     });
-    expect(opts.body.next_dps_number).toBeUndefined();
+    expect(opts.body.next_dps_number).toBeUndefined(); // o backend calcula
   });
 
   test("sem conferir e sem código: não salva e mostra o que falta", async () => {
@@ -392,5 +398,93 @@ describe("nota de teste pronta com aviso", () => {
     await act(async () => { tree.update(<ProntoParaEmitirNfse companyId="c1" nomeLoja="Lume Estética" ehLojaAtual onIrParaCertificado={jest.fn()} />); });
     expect(tem(tree, "nfse-pronto-chave-ativo")).toBe(true); // o cartão "Ligar" abriu
     expect(porId(tree, "nfse-pronto-chave-ativo").props.disabled).toBe(false);
+  });
+});
+
+// ── 5. outro emissor (incidente de 10/11/2026, Aura-backend#992) ──
+const CFG_DADOS = { provider: "nacional", municipio_ibge: "3524402", op_simp_nac: 3, ctribnac_padrao: "060201", serie: "1", next_dps_number: 2 };
+const TEXTO_CONFLITO = "A série 1 e o número 1 já tinham sido usados por outro emissor. Confira a série e o último número e salve de novo.";
+
+describe("Já emite NFS-e por outro emissor?", () => {
+  async function abrirDados(config: any, serie: any = P("falta", "Conte se você já emite NFS-e por outro emissor.")) {
+    mockRespostas["nfse-config:c1"] = { config, has_config: !!config, nacional: situacao({ dados_fiscais: P("ok"), codigo_padrao: P("ok"), serie }) };
+    mockRequest.mockResolvedValue({ ok: true });
+    return montarPronto();
+  }
+
+  test("Sim: pede Série e Último Número da DPS e manda os campos novos", async () => {
+    const tree = await abrirDados(CFG_DADOS);
+    expect(tem(tree, "nfse-pronto-serie")).toBe(false); // sem resposta, nada aberto
+    act(() => { porId(tree, "nfse-pronto-ja-sim").props.onPress(); });
+    expect(texto(tree)).toContain("Último Número da DPS");
+    expect(textoDe(porId(tree, "nfse-pronto-ajuda-outro-emissor"))).toContain("A Aura usa uma série diferente ou continua do número seguinte, para nunca repetir uma nota.");
+    act(() => { porId(tree, "nfse-pronto-serie").props.onChangeText("1"); });
+    act(() => { porId(tree, "nfse-pronto-ultimo").props.onChangeText("212"); });
+    act(() => { porId(tree, "nfse-pronto-conferi").props.onPress(); });
+    await act(async () => { porId(tree, "nfse-pronto-salvar-dados").props.onPress(); });
+    const [url, opts] = mockRequest.mock.calls[0];
+    expect(url).toBe("/companies/c1/nfse/config");
+    expect(opts.body).toMatchObject({ provider: "nacional", serie: "1", serie_confirmada: true, outro_emissor: true, outro_emissor_serie: "1", outro_emissor_ultimo_numero: 212 });
+    expect(opts.body.next_dps_number).toBeUndefined();
+  });
+
+  test("Não: segue com a série padrão e limpa os campos do outro emissor", async () => {
+    const tree = await abrirDados(CFG_DADOS);
+    act(() => { porId(tree, "nfse-pronto-ja-nao").props.onPress(); });
+    expect(tem(tree, "nfse-pronto-serie")).toBe(false);
+    act(() => { porId(tree, "nfse-pronto-conferi").props.onPress(); });
+    await act(async () => { porId(tree, "nfse-pronto-salvar-dados").props.onPress(); });
+    expect(mockRequest.mock.calls[0][1].body).toMatchObject({ serie: "1", outro_emissor: false, outro_emissor_serie: null, outro_emissor_ultimo_numero: null });
+  });
+
+  test("\"Sim\" sem o último número: não salva e mostra o erro", async () => {
+    const tree = await abrirDados(CFG_DADOS);
+    act(() => { porId(tree, "nfse-pronto-ja-sim").props.onPress(); });
+    act(() => { porId(tree, "nfse-pronto-serie").props.onChangeText("1"); });
+    act(() => { porId(tree, "nfse-pronto-conferi").props.onPress(); });
+    await act(async () => { porId(tree, "nfse-pronto-salvar-dados").props.onPress(); });
+    expect(mockRequest).not.toHaveBeenCalled();
+    expect(textoDe(porId(tree, "nfse-pronto-erro-serie"))).toMatch(/Último Número da DPS/);
+  });
+
+  test("resposta gravada volta preenchida", async () => {
+    const tree = await abrirDados(
+      { ...CFG_DADOS, outro_emissor: true, outro_emissor_serie: "1", outro_emissor_ultimo_numero: 212 },
+      P("ok", "Série da DPS 1, próximo Número da DPS 213.", { serie: "1", proximo_numero: "213" })
+    );
+    act(() => { porId(tree, "nfse-pronto-abrir-dados").props.onPress(); });
+    expect(porId(tree, "nfse-pronto-ja-sim").props.ativo).toBe(true);
+    expect(porId(tree, "nfse-pronto-serie").props.value).toBe("1");
+    expect(porId(tree, "nfse-pronto-ultimo").props.value).toBe("212");
+  });
+
+  test("conflito DPS_NUMERO_JA_USADO: abre \"Dados da nota\" com o aviso gentil", async () => {
+    const motivo = "A série 1 e o número 1 da DPS já foram usados por outro emissor desta empresa. Confira na configuração da NFS-e a Série da DPS e o último Número usado e tente de novo.";
+    const passo = P("problema", motivo, { codigo: "DPS_NUMERO_JA_USADO", serie_usada: "1", numero_usado: "1" });
+    expect(conflitoDeNumeracao(situacao({ serie: passo }))).toEqual({ serie: "1", numero: "1" });
+    expect(conflitoDeNumeracao(situacao({ serie: P("problema", "outra coisa") }))).toBeNull();
+    expect(resumoDaLoja(situacao({ serie: passo })).tom).toBe("erro");
+    expect(textoDoConflito({ serie: "1", numero: "1" })).toBe(TEXTO_CONFLITO);
+
+    const tree = await abrirDados({ ...CFG_DADOS, outro_emissor: false, dps_conflito_em: "2026-11-10T12:00:00Z", dps_conflito_serie: "1", dps_conflito_numero: "1" }, passo);
+    expect(tem(tree, "nfse-pronto-salvar-dados")).toBe(true); // o cartão abriu
+    expect(textoDe(porId(tree, "nfse-pronto-conflito-serie"))).toContain(TEXTO_CONFLITO);
+    expect(porId(tree, "nfse-pronto-ja-sim").props.ativo).toBe(true);
+    expect(porId(tree, "nfse-pronto-serie").props.value).toBe("1");
+    act(() => { porId(tree, "nfse-pronto-ultimo").props.onChangeText("40"); });
+    act(() => { porId(tree, "nfse-pronto-conferi").props.onPress(); });
+    await act(async () => { porId(tree, "nfse-pronto-salvar-dados").props.onPress(); });
+    expect(mockRequest.mock.calls[0][1].body).toMatchObject({ serie_confirmada: true, outro_emissor: true, outro_emissor_serie: "1", outro_emissor_ultimo_numero: 40 });
+  });
+
+  test("nenhum texto promete que as séries \"nunca se encontram\" ou \"não colidem\"", async () => {
+    const proibido = /nunca se encontr|se encontrarem|colid|séries próprias/i;
+    const tree = await abrirDados(CFG_DADOS);
+    expect(texto(tree)).not.toMatch(proibido);
+    act(() => { porId(tree, "nfse-pronto-ja-sim").props.onPress(); });
+    expect(texto(tree)).not.toMatch(proibido);
+    act(() => { porId(tree, "nfse-pronto-ja-nao").props.onPress(); });
+    expect(texto(tree)).not.toMatch(proibido);
+    for (const sr of ["1", "50000", "70001", "80000", "49999", "99999", ""]) expect(String(problemaDaSerie(sr))).not.toMatch(proibido);
   });
 });
