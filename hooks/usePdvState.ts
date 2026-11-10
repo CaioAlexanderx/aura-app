@@ -115,7 +115,7 @@ import { useWarrantyDraft, diasValidos } from "@/stores/warrantyDraft";
 import { resumoDoEndereco } from "@/components/endereco/endereco";
 // 10/11/2026 (NFS-e automática, mockup nfse-cadastro-servico.html, tela 3).
 import { useNfseAutomaticaConfig } from "@/hooks/useNfseAutomatica";
-import { avisoDasNotas, composicaoDaVenda, exigeTomador, pedeTomador, pendenciaDoDoc } from "@/utils/nfseAutomatica";
+import { avisoDasNotas, composicaoDaVenda, pedeTomador } from "@/utils/nfseAutomatica";
 import type { TextInput } from "react-native";
 
 const PAGE_SIZE = 12;
@@ -301,20 +301,16 @@ export function usePdvState() {
     aoFaltarEntrega: (id) => { if (id) setCadastroSemEndereco(id); },
   });
 
-  // Venda com serviço numa loja que emite NFS-e sozinha EXIGE o CPF ou CNPJ
-  // de quem contratou (dígito verificador). Venda só de produto, ou loja sem
-  // o opt-in: o "CPF na nota (opcional)" de sempre.
+  // Venda com serviço numa loja que emite NFS-e (automática ou só pelo
+  // botão): o "CPF ou CNPJ de quem contratou (opcional)". Sempre opcional
+  // (decisão do dono em 10/11/2026, como o "CPF na nota" da NFC-e): nunca
+  // bloqueia o Finalizar. Preenchido e válido, vai como nfse_tomador
+  // (useCart); inválido o campo mostra o erro e o documento não vai; vazio,
+  // a NFS-e sai sem identificar o cliente. Venda só de produto: o "CPF na
+  // nota (opcional)" de sempre.
   const composicao = composicaoDaVenda(cart);
-  const docExigido = exigeTomador({ temServico: composicao.temServico, nfseAtiva });
-  // Loja que emite só pelo botão: o mesmo campo, OPCIONAL (se faltar, o
-  // "Emitir NFS-e" da tela final pede na hora). Preenchido e válido, vai
-  // como nfse_tomador (useCart) — a mesma regra de sempre.
   const docPedido = pedeTomador({ temServico: composicao.temServico, nfseAtiva, nfseEmite });
-  const docPendente = docExigido ? pendenciaDoDoc(cpfNaNota) : null;
   const docTomadorRef = useRef<TextInput | null>(null);
-  function focarDocTomador() {
-    try { docTomadorRef.current?.focus(); } catch {}
-  }
 
   // ── Matcon M1 — editar orçamento (07/10/2026) ───────────────────────────
   // "Editar" em /matcon/orcamentos abre o Caixa com ?quote=<id>&edit=1. O
@@ -810,15 +806,6 @@ export function usePdvState() {
       setShowCaixaModal(true);
       return;
     }
-    // 10/11/2026 (NFS-e automática): sem o documento de quem contratou a
-    // prefeitura não aceita a nota de serviço.
-    if (docPendente) {
-      toast.error(docPendente === "Confira o CPF ou CNPJ do cliente"
-        ? "Esse CPF ou CNPJ não confere. Confira com o cliente antes de finalizar."
-        : "Informe o CPF ou CNPJ de quem contratou o serviço antes de finalizar.");
-      focarDocTomador();
-      return;
-    }
     const v = validateSaleAgainstSettings(pdvSettings, {
       customerId: selectedCustomerId,
       sellerId:   selectedEmployeeId,
@@ -1173,9 +1160,6 @@ export function usePdvState() {
   if (caixaEnabled && !isAberto) {
     requiredHints.push({ label: "Caixa fechado", onPress: () => setShowCaixaModal(true) });
   }
-  if (docPendente) {
-    requiredHints.push({ label: docPendente, onPress: focarDocTomador });
-  }
 
   const activeSellerValue = selectedEmployeeId
     ? { id: selectedEmployeeId, name: selectedEmployeeName || "Vendedora" }
@@ -1300,7 +1284,6 @@ export function usePdvState() {
     // 10/11/2026 (NFS-e automática): null = campo de sempre.
     tomador: docPedido
       ? {
-          exigido: docExigido,
           temProduto: composicao.temProduto,
           mostrarNome: !selectedCustomerId,
           nome: nomeNaNota,

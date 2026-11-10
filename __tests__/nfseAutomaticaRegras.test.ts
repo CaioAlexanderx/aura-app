@@ -8,9 +8,9 @@
 //   - NFC-e "skipped" (Aura-backend#983) sem sucesso falso.
 // ============================================================
 import {
-  avisoDasNotas, botaoDaNfse, composicaoDaVenda, docValido, ehEstadoFinal, estadoDoDoc, exigeTomador,
+  avisoDasNotas, botaoDaNfse, composicaoDaVenda, docValido, ehEstadoFinal, estadoDoDoc, pedeTomador,
   faltaSoONome, faltaTomador, intervaloDoPolling, mascararDoc, mensagemDoDoc, nfcePulada, numerosDasNotas,
-  pendenciaDoDoc, rotaDoEmitir, rotuloDoDoc, semCodigo, textoServicosForaDaNfce, TEXTO_NFCE_SO_SERVICO,
+  rotaDoEmitir, rotuloDoDoc, semCodigo, textoServicosForaDaNfce, TEXTO_NFCE_SO_SERVICO,
 } from "@/utils/nfseAutomatica";
 import type { SituacaoNfse, NotaDaOrigemNfse } from "@/services/nfseAutomaticaApi";
 
@@ -61,23 +61,20 @@ describe("documento de quem contratou", () => {
     expect(mensagemDoDoc("", { temProduto: false }).texto).toBe("CPF tem 11 números; CNPJ, 14. Pode digitar só os números.");
   });
 
-  test("aviso do rodapé e rótulo da tela final", () => {
-    expect(pendenciaDoDoc("")).toBe("Falta o CPF ou CNPJ do cliente");
-    expect(pendenciaDoDoc("5299")).toBe("Falta o CPF ou CNPJ do cliente");
-    expect(pendenciaDoDoc("52998224726")).toBe("Confira o CPF ou CNPJ do cliente");
-    expect(pendenciaDoDoc(CPF_OK)).toBeNull();
+  test("rótulo da tela final", () => {
     expect(rotuloDoDoc("11222333000181")).toBe("CNPJ na nota");
     expect(rotuloDoDoc("52998224725")).toBe("CPF na nota");
   });
 });
 
-describe("quando o Caixa exige o documento", () => {
+describe("quando o Caixa pede o documento (sempre opcional)", () => {
   const produto = { unit: "un" };
   const servico = { unit: "srv" };
-  test("só com serviço E a emissão automática ligada", () => {
-    expect(exigeTomador({ temServico: true, nfseAtiva: true })).toBe(true);
-    expect(exigeTomador({ temServico: true, nfseAtiva: false })).toBe(false);
-    expect(exigeTomador({ temServico: false, nfseAtiva: true })).toBe(false);
+  test("só com serviço E a loja emitindo NFS-e (automática ou botão)", () => {
+    expect(pedeTomador({ temServico: true, nfseAtiva: true, nfseEmite: false })).toBe(true);
+    expect(pedeTomador({ temServico: true, nfseAtiva: false, nfseEmite: true })).toBe(true);
+    expect(pedeTomador({ temServico: true, nfseAtiva: false, nfseEmite: false })).toBe(false);
+    expect(pedeTomador({ temServico: false, nfseAtiva: true, nfseEmite: true })).toBe(false);
   });
   test("composição da venda pela unidade 'srv'", () => {
     expect(composicaoDaVenda([produto])).toEqual({ temServico: false, temProduto: true, mista: false });
@@ -105,7 +102,7 @@ describe("2ª via contra Emitir NFS-e", () => {
     const erro = sit({ estado: "erro", acao: "tentar_de_novo", notas: [nota({ estado: "erro", nfse_id: null, motivo: "Fora do ar" })] });
     expect(botaoDaNfse(erro)).toBe("emitir");
     expect(rotaDoEmitir(erro)).toBe("tentar_de_novo");
-    const pend = sit({ estado: "pendente_dados", acao: "completar_dados", notas: [nota({ estado: "pendente_dados", nfse_id: null, motivo_codigo: "SEM_TOMADOR" })] });
+    const pend = sit({ estado: "pendente_dados", acao: "completar_dados", notas: [nota({ estado: "pendente_dados", nfse_id: null, motivo_codigo: "TOMADOR_INVALIDO" })] });
     expect(botaoDaNfse(pend)).toBe("completar_e_emitir");
     expect(rotaDoEmitir(pend)).toBe("emitir");
     expect(faltaTomador(pend)).toBe(true);
@@ -123,6 +120,15 @@ describe("2ª via contra Emitir NFS-e", () => {
     expect(botaoDaNfse(sit({ estado: "emitindo", acao: "aguardar" }))).toBe("aguardar");
     expect(botaoDaNfse(sit({ estado: "nenhuma", acao: "emitir" }))).toBe("nada");
     expect(botaoDaNfse(null)).toBe("nada");
+  });
+  test("o completar só vale para dígito errado ou falta de nome (e ISS retido)", () => {
+    const pend = (motivo_codigo: any) => sit({ estado: "pendente_dados", acao: "completar_dados", notas: [nota({ estado: "pendente_dados", nfse_id: null, motivo_codigo })] });
+    expect(faltaTomador(pend("SEM_NOME"))).toBe(true);
+    expect(faltaTomador(pend("TOMADOR_INVALIDO"))).toBe(true);
+    expect(faltaTomador(pend("SEM_TOMADOR"))).toBe(true); // só com ISSQN retido
+    expect(faltaTomador(pend(null))).toBe(false);
+    expect(faltaTomador(pend("SEM_CODIGO"))).toBe(false);
+    expect(faltaTomador(sit({ estado: "emitida", acao: "imprimir_2a_via", tem_nota: true, notas: [nota({})] }))).toBe(false);
   });
   test("só o nome falta", () => {
     const s = sit({ estado: "pendente_dados", acao: "completar_dados", notas: [nota({ estado: "pendente_dados", motivo_codigo: "SEM_NOME", nfse_id: null })] });

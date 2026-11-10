@@ -31,7 +31,7 @@ jest.mock("@/services/api", () => ({ companiesApi: {} }));
 import {
   vaiNaNfse, vaiNaNfce, gravacaoDaNota, notaPadraoDoTipo, lerNotaFiscal, notaEscolhida,
 } from "@/utils/notaDoItem";
-import { composicaoDaVenda, ehServico, exigeTomador } from "@/utils/nfseAutomatica";
+import { composicaoDaVenda, ehServico, pedeTomador } from "@/utils/nfseAutomatica";
 import { faltaCodigoNfse } from "@/utils/nfseServico";
 import { servicosSemCodigoNfse } from "@/components/screens/estoque/nfseNaLista";
 import { calcularFiscalGaps } from "@/utils/cest";
@@ -77,13 +77,13 @@ describe("quem decide a nota usa o predicado", () => {
   const impressao = { unit: "srv", notaFiscal: "nfce" as const, nfseCtribnac: null };
   const caneta = { unit: "un", notaFiscal: null, nfseCtribnac: null };
 
-  test("composição da venda: produto NFS-e conta como da nota de serviço; o Caixa exige o tomador", () => {
+  test("composição da venda: produto NFS-e conta como da nota de serviço; o Caixa pede o tomador", () => {
     expect(ehServico(carimbo)).toBe(true);
     expect(composicaoDaVenda([carimbo])).toEqual({ temServico: true, temProduto: false, mista: false });
     expect(composicaoDaVenda([carimbo, caneta])).toEqual({ temServico: true, temProduto: true, mista: true });
     expect(composicaoDaVenda([impressao])).toEqual({ temServico: false, temProduto: true, mista: false });
-    expect(exigeTomador({ temServico: composicaoDaVenda([carimbo]).temServico, nfseAtiva: true })).toBe(true);
-    expect(exigeTomador({ temServico: composicaoDaVenda([impressao]).temServico, nfseAtiva: true })).toBe(false);
+    expect(pedeTomador({ temServico: composicaoDaVenda([carimbo]).temServico, nfseAtiva: true, nfseEmite: true })).toBe(true);
+    expect(pedeTomador({ temServico: composicaoDaVenda([impressao]).temServico, nfseAtiva: true, nfseEmite: true })).toBe(false);
   });
 
   test("selo e filtro do Estoque: produto NFS-e sem código entra; serviço NFC-e sai", () => {

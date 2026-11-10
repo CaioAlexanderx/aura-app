@@ -20,12 +20,12 @@
 // 10/11/2026 — botão "Emitir NFS-e" (automatica=false: a loja emite NFS-e,
 // mas sem a emissão automática; Aura-backend#989). Sem nota ainda, o cartão
 // mostra o botão no mesmo padrão do "Emitir NFC-e" (largo, violeta, no topo
-// do cartão). Ao tocar:
+// do cartão). Ao tocar (tomador opcional, 10/11/2026):
 //   - com o CPF/CNPJ do Caixa (válido) → POST /emitir com ele;
-//   - sem documento e sem cliente na venda → abre o "Completar o cliente"
-//     aqui mesmo (CPF/CNPJ + nome) e emite em seguida (/completar);
-//   - sem documento mas com cliente → /emitir (o backend usa o cadastro);
-//     se voltar pendente por falta de quem contratou, o completar abre.
+//   - sem documento → POST /emitir direto: o backend usa o cadastro do
+//     cliente, se houver, ou emite sem tomador (consumidor não identificado);
+//   - o "Completar o cliente" só abre se o backend devolver pendente_dados
+//     por SEM_NOME ou TOMADOR_INVALIDO (faltaTomador).
 // Depois segue igual: emitindo → emitida (Imprimir/WhatsApp) ou problema.
 // 'nenhuma' para o polling (nada vai sair sozinho) e a rede de segurança
 // do entregarTomador não roda (o documento vai no próprio toque).
@@ -63,17 +63,13 @@ type Props = {
   nomeDaLoja?: string | null;
   /** true (padrão) = a nota sai sozinha; false = a loja emite pelo botão. */
   automatica?: boolean;
-  /** Cliente da venda: com ele o backend pode achar o CPF/CNPJ no cadastro. */
-  customerId?: string | null;
 };
 
-export function NfseVendaCard({ companyId, saleId, servicos, totalServicos, tomador, customerPhone, nomeDaLoja, automatica = true, customerId }: Props) {
+export function NfseVendaCard({ companyId, saleId, servicos, totalServicos, tomador, customerPhone, nomeDaLoja, automatica = true }: Props) {
   const { token } = useAuthStore();
   const { situacao, esgotou, atualizar, aplicar } = useSituacaoNfse({ companyId, tipo: "venda", id: saleId, nenhumaEhFinal: !automatica });
   const { emitir, emitindo } = useEmitirNfse(companyId, "venda", saleId, aplicar);
   const [completando, setCompletando] = useState(false);
-  // botão manual sem documento: o completar antes de existir registro
-  const [pedindoTomador, setPedindoTomador] = useState(false);
 
   // Leva o documento do Caixa à nota quando o cadastro do cliente não tem.
   useEffect(() => {
@@ -114,7 +110,6 @@ export function NfseVendaCard({ companyId, saleId, servicos, totalServicos, toma
   async function emitirAgora() {
     const doc = tomador && tomador.doc ? onlyDigits(tomador.doc) : "";
     const comDoc = docValido(doc);
-    if (!comDoc && !customerId) { setPedindoTomador(true); return; }
     const r = await emitir(situacao, comDoc ? { doc, nome: (tomador && tomador.nome) || null } : null);
     if (faltaTomador(r)) setCompletando(true);
   }
@@ -123,31 +118,16 @@ export function NfseVendaCard({ companyId, saleId, servicos, totalServicos, toma
     return (
       <View style={s.card} testID="nfse-venda-manual">
         {cab(<View style={[s.selo, s.seloVai]}><Text style={[s.seloTxt, { color: Colors.ink3 }]}>Ainda não emitida</Text></View>)}
-        {pedindoTomador ? (
-          <>
-            <Text style={s.msg}>A prefeitura pede o CPF ou CNPJ e o nome de quem contratou o serviço. Pergunte ao cliente e emita.</Text>
-            <CompletarTomador
-              companyId={companyId}
-              tipo="venda"
-              id={saleId}
-              docInicial={tomador ? tomador.doc : null}
-              nomeInicial={tomador ? tomador.nome : null}
-              onFeito={(r) => { setPedindoTomador(false); aplicar(r); if (faltaTomador(r)) setCompletando(true); }}
-              onCancelar={() => setPedindoTomador(false)}
-            />
-          </>
-        ) : (
-          <Pressable
-            onPress={emitirAgora}
-            disabled={emitindo}
-            style={[s.btnEmitir, emitindo && { opacity: 0.6 }]}
-            accessibilityRole="button"
-            testID="nfse-venda-emitir"
-          >
-            {emitindo ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="file_text" size={16} color="#fff" />}
-            <Text style={s.btnEmitirTxt}>Emitir NFS-e</Text>
-          </Pressable>
-        )}
+        <Pressable
+          onPress={emitirAgora}
+          disabled={emitindo}
+          style={[s.btnEmitir, emitindo && { opacity: 0.6 }]}
+          accessibilityRole="button"
+          testID="nfse-venda-emitir"
+        >
+          {emitindo ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="file_text" size={16} color="#fff" />}
+          <Text style={s.btnEmitirTxt}>Emitir NFS-e</Text>
+        </Pressable>
       </View>
     );
   }

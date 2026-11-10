@@ -268,31 +268,64 @@ export function problemaDaSerie(serie: string): string | null {
 /** Resposta a "Já emite NFS-e por outro emissor?" ("" = ainda sem resposta). */
 export type JaEmite = "" | "sim" | "nao";
 
+/** "Vai continuar emitindo por lá também?" ("" = ainda sem resposta). */
+export type ContinuaLa = "" | "sim" | "nao";
+
 export type CamposDoOutroEmissor = {
+  /** a Série da DPS da Aura */
+  serie: string;
   outro_emissor: boolean;
   outro_emissor_serie: string | null;
   outro_emissor_ultimo_numero: number | null;
 };
 
+const serieNum = (v: string | null | undefined): number => parseInt(String(v || "").replace(/\D/g, ""), 10) || 0;
+
+/**
+ * Série própria sugerida para a Aura quando a loja segue emitindo pelo outro
+ * emissor: a do outro + 1, dentro da faixa de aplicativo próprio (1 a 49998;
+ * a 49999 é da nota de teste). Fora da faixa, a 1 (ou a 2, se o outro usa a 1).
+ */
+export function sugerirSerieDaAura(serieDoOutro: string | null | undefined): string {
+  const o = serieNum(serieDoOutro);
+  const c = o >= 1 && o + 1 <= 49998 ? o + 1 : 1;
+  return String(c === o ? 2 : c);
+}
+
 /**
  * Campos do PUT /nfse/config a partir de "Já emite NFS-e por outro emissor
  * (site ou aplicativo do gov.br, outro sistema)?" (Aura-backend#992,
  * migration 443). Sim exige a Série da DPS e o Último Número da DPS usados
- * lá; na mesma série da Aura, o backend continua do número seguinte. Não
- * limpa os dois campos.
+ * lá e a resposta a "Vai continuar emitindo por lá também?":
+ *   - sim → a Aura usa uma Série da DPS própria, diferente da do outro (o
+ *     backend não continua a numeração da outra série);
+ *   - não → a Aura fica na série do outro (se ela for da faixa da Aura) e o
+ *     backend continua do número seguinte.
+ * Não (não emite por outro) limpa os campos e mantém a série atual.
  */
 export function camposDoOutroEmissor(
   jaEmite: JaEmite,
-  campos: { serie: string; ultimo: string }
+  campos: { serie: string; ultimo: string; continua?: ContinuaLa; serieDaAura?: string; serieAtual?: string | null }
 ): CamposDoOutroEmissor | { erro: string } {
+  const atual = String(serieNum(campos.serieAtual) || 1);
   if (!jaEmite) return { erro: "Conte se você já emite NFS-e por outro emissor." };
-  if (jaEmite === "nao") return { outro_emissor: false, outro_emissor_serie: null, outro_emissor_ultimo_numero: null };
+  if (jaEmite === "nao") return { serie: atual, outro_emissor: false, outro_emissor_serie: null, outro_emissor_ultimo_numero: null };
   const sd = String(campos.serie || "").replace(/\D/g, "");
   const s = parseInt(sd, 10);
   if (!sd || !s || s > 99999) return { erro: "Informe a Série da DPS usada no outro emissor (de 1 a 99999)." };
   const ult = parseInt(String(campos.ultimo || "").replace(/\D/g, ""), 10);
   if (!ult) return { erro: "Informe o Último Número da DPS usado no outro emissor, para a Aura não repetir uma nota." };
-  return { outro_emissor: true, outro_emissor_serie: String(s), outro_emissor_ultimo_numero: ult };
+  const outro = { outro_emissor: true, outro_emissor_serie: String(s), outro_emissor_ultimo_numero: ult };
+  if (!campos.continua) return { erro: "Conte se vai continuar emitindo pelo outro emissor também." };
+  if (campos.continua === "sim") {
+    const p = problemaDaSerie(campos.serieDaAura || "");
+    if (p) return { erro: p };
+    const sa = serieNum(campos.serieDaAura);
+    if (sa === s) return { erro: "Use na Aura uma Série da DPS diferente da do outro emissor." };
+    return { serie: String(sa), ...outro };
+  }
+  // não continua lá: a Aura segue na mesma série, do número seguinte
+  return { serie: problemaDaSerie(String(s)) ? atual : String(s), ...outro };
 }
 
 /**

@@ -3,7 +3,7 @@
 // O "Sai em: Nota de serviço" do cadastro vale no Caixa: o produto (com
 // estoque) conta como item da nota de serviço — usePdvState + useCart de
 // verdade, rede mockada (mesmos mocks de caixaNfseTomador.test.tsx).
-//   - loja com a NFS-e automática: carimbo exige CPF ou CNPJ de quem contratou;
+//   - loja com a NFS-e automática: carimbo pede o CPF ou CNPJ de quem contratou (opcional);
 //     com o documento, vai no POST como nfse_tomador;
 //   - carimbo + produto comum: aviso das duas notas;
 //   - serviço com "Sai em: Cupom fiscal": não pede tomador;
@@ -118,13 +118,14 @@ const CARIMBO = { id: "p-car", name: "Carimbo automático", price: 45, stock_qty
 const SERVICO_NFCE = { id: "s-imp", name: "Impressão", price: 25, unit: "srv", notaFiscal: "nfce" };
 
 describe("produto com 'Sai em: Nota de serviço' no Caixa", () => {
-  test("exige o documento de quem contratou; sem ele não fecha", () => {
+  test("pede o documento de quem contratou, opcional: sem ele fecha (10/11/2026)", () => {
     montar(ATIVA);
     carrinho(CARIMBO);
-    expect(st.cartProps.tomador).toMatchObject({ exigido: true, temProduto: false });
-    expect(labels()).toContain("Falta o CPF ou CNPJ do cliente");
+    expect(st.cartProps.tomador).toMatchObject({ temProduto: false });
+    expect(labels()).toEqual([]);
     act(() => { st.handleFinalize(); });
-    expect(mockBodies).toHaveLength(0);
+    expect(mockBodies).toHaveLength(1);
+    expect(corpo()).not.toHaveProperty("nfse_tomador");
   });
 
   test("com CPF válido fecha e o tomador vai junto (nfse_tomador)", () => {
@@ -174,7 +175,7 @@ describe("carimbo numa loja que emite NFS-e só pelo botão", () => {
   test("o campo do tomador aparece opcional e a venda fecha sem documento", () => {
     montar(SO_EMITE);
     carrinho(CARIMBO);
-    expect(st.cartProps.tomador).toMatchObject({ exigido: false, temProduto: false });
+    expect(st.cartProps.tomador).toMatchObject({ temProduto: false });
     expect(labels()).toEqual([]);
     act(() => { st.handleFinalize(); });
     expect(mockBodies).toHaveLength(1);
