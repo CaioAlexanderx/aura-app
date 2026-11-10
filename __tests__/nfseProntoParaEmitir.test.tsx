@@ -10,7 +10,9 @@
 //      loja pronta e produção travada mostra o aviso da Aura e trava a chave;
 //      salvar os dados manda os nomes do leiaute; nota de teste chama a rota
 //      com chave própria; a Alíquota do ISSQN retido nunca vem preenchida;
-//   3. a aba: emissão avulsa travada até emitir; "Todas as lojas" no grupo.
+//   3. a aba: emissão avulsa travada até emitir; "Todas as lojas" no grupo;
+//   4. pronto com aviso: teste só com E0312 (ambiente de testes do gov.br)
+//      mostra o aviso do backend e destrava o "Ligar".
 // ============================================================
 import React from "react";
 import renderer, { act } from "react-test-renderer";
@@ -48,7 +50,7 @@ jest.mock("@/hooks/useListaServicosNfse", () => {
 import { ProntoParaEmitirNfse } from "@/components/nfse/ProntoParaEmitirNfse";
 import { AbaEmitirNfse } from "@/components/screens/nfe/AbaEmitirNfse";
 import {
-  estadosDosCartoes, lerPercentual, prefeituraVisivel, problemaDaSerie, proximoCartao, resumoDaLoja,
+  avisoDoTeste, estadosDosCartoes, lerPercentual, prefeituraVisivel, problemaDaSerie, proximoCartao, resumoDaLoja,
   serieENumero, situacaoDe, type SituacaoNfse,
 } from "@/utils/nfseProntoParaEmitir";
 
@@ -322,5 +324,73 @@ describe("AbaEmitirNfse", () => {
     act(() => { porId(tree, "nfse-grupo-abrir-c2").props.onPress(); });
     expect(tem(tree, "nfse-pronto")).toBe(true);
     expect(tem(tree, "nfse-avulsa-travada")).toBe(false); // avulsa só na loja do login
+  });
+});
+
+// ── 4. pronto com aviso (E0312 só no ambiente de testes) ─────
+const AVISO_E0312 = "O gov.br aceitou o certificado, os dados e o cadastro da sua empresa. Só o código do serviço ainda não está habilitado pela prefeitura no ambiente de testes do governo. Pode ligar: a primeira nota de verdade confirma tudo.";
+const TESTE_COM_AVISO = P("ok", AVISO_E0312, { aviso: AVISO_E0312, codigo: "E0312", codigos: ["E0312"], em: "2026-11-10T13:00:00Z" });
+
+describe("nota de teste pronta com aviso", () => {
+  test("regra: o aviso só vale com o passo teste ok", () => {
+    expect(avisoDoTeste(situacao({ ...BASE_OK, teste: TESTE_COM_AVISO }))).toBe(AVISO_E0312);
+    expect(avisoDoTeste(situacao({ ...BASE_OK, teste: P("ok") }))).toBeNull();
+    expect(avisoDoTeste(situacao({ ...BASE_OK, teste: P("problema", "x", { aviso: "y" }) }))).toBeNull();
+    expect(estadosDosCartoes(situacao({ ...BASE_OK, teste: TESTE_COM_AVISO })).teste).toBe("ok");
+  });
+
+  test("cartão \"Nota de teste\" mostra o aviso do backend e o código; \"Ligar\" destravado", async () => {
+    mockRespostas["nfse-config:c1"] = {
+      config: { provider: "nacional", op_simp_nac: 2, ultimo_teste_status: "rejeitado", ultimo_teste_codigo: "E0312" },
+      has_config: true,
+      nacional: situacao({ ...BASE_OK, prefeitura: P("ok"), teste: TESTE_COM_AVISO, ligar: P("falta", "Falta só ligar a NFS-e.") }, { pronta_para_ligar: true, producao_liberada: true }),
+    };
+    mockRequest.mockResolvedValue({ ok: true });
+    const tree = await montarPronto();
+    expect(porId(tree, "nfse-pronto-chave-ativo").props.disabled).toBe(false); // abriu no "Ligar", destravado
+    expect(textoDe(porId(tree, "nfse-pronto-cartao-teste"))).toContain("Pode ligar · com um aviso do ambiente de testes do gov.br");
+    act(() => { porId(tree, "nfse-pronto-abrir-teste").props.onPress(); });
+    expect(tem(tree, "nfse-pronto-teste-ok-aviso")).toBe(true);
+    expect(tem(tree, "nfse-pronto-teste-ok")).toBe(false);
+    expect(tem(tree, "nfse-pronto-prefeitura")).toBe(false);
+    expect(textoDe(porId(tree, "nfse-pronto-teste-ok-aviso"))).toContain(AVISO_E0312);
+    expect(textoDe(porId(tree, "nfse-pronto-codigo-aviso"))).toMatch(/E0312/);
+    act(() => { porId(tree, "nfse-pronto-abrir-ligar").props.onPress(); });
+    await act(async () => { porId(tree, "nfse-pronto-chave-ativo").props.onPress(); });
+    expect(mockRequest.mock.calls[0][1].body).toMatchObject({ provider: "nacional", is_active: true, ambiente: "producao" });
+  });
+
+  test("teste aceito sem aviso continua com \"Deu certo!\"", async () => {
+    mockRespostas["nfse-config:c1"] = {
+      config: { provider: "nacional", op_simp_nac: 2, ultimo_teste_status: "ok" },
+      has_config: true,
+      nacional: situacao({ ...BASE_OK, prefeitura: P("ok"), teste: P("ok", "O gov.br aceitou a nota de teste.", { em: "2026-11-10T13:00:00Z" }), ligar: P("falta", "Falta só ligar a NFS-e.") }, { pronta_para_ligar: true, producao_liberada: true }),
+    };
+    const tree = await montarPronto();
+    act(() => { porId(tree, "nfse-pronto-abrir-teste").props.onPress(); });
+    expect(tem(tree, "nfse-pronto-teste-ok")).toBe(true);
+    expect(tem(tree, "nfse-pronto-teste-ok-aviso")).toBe(false);
+    expect(tem(tree, "nfse-pronto-codigo-aviso")).toBe(false);
+  });
+
+  test("POST /nfse/teste com status \"aviso\": vai para o \"Ligar\"", async () => {
+    mockRespostas["nfse-config:c1"] = { config: { provider: "nacional", op_simp_nac: 2 }, has_config: true, nacional: situacao({ ...BASE_OK, teste: P("falta") }, { producao_liberada: true }) };
+    mockRequest.mockImplementation(async (url: string) => {
+      if (url === "/companies/c1/nfse/teste") {
+        // o backend grava e a próxima leitura já vem com o teste pronto com aviso
+        mockRespostas["nfse-config:c1"] = {
+          config: { provider: "nacional", op_simp_nac: 2, ultimo_teste_status: "rejeitado", ultimo_teste_codigo: "E0312" },
+          has_config: true,
+          nacional: situacao({ ...BASE_OK, prefeitura: P("ok"), teste: TESTE_COM_AVISO, ligar: P("falta", "Falta só ligar a NFS-e.") }, { pronta_para_ligar: true, producao_liberada: true }),
+        };
+        return { resultado: { status: "aviso", passo: "teste", codigo: "E0312", titulo: "Pode ligar a NFS-e.", mensagem: AVISO_E0312, aviso: AVISO_E0312, caminho: [] }, nota: null };
+      }
+      return { ok: true };
+    });
+    const tree = await montarPronto();
+    await act(async () => { porId(tree, "nfse-pronto-emitir-teste").props.onPress(); });
+    await act(async () => { tree.update(<ProntoParaEmitirNfse companyId="c1" nomeLoja="Lume Estética" ehLojaAtual onIrParaCertificado={jest.fn()} />); });
+    expect(tem(tree, "nfse-pronto-chave-ativo")).toBe(true); // o cartão "Ligar" abriu
+    expect(porId(tree, "nfse-pronto-chave-ativo").props.disabled).toBe(false);
   });
 });

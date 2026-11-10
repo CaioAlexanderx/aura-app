@@ -14,6 +14,11 @@
 //                     Municipal) só aparece quando o teste volta com
 //                     E0084/E0116/E0120 (passo prefeitura em "problema")
 //   4. ligar        ← ligar (Simples, Retenção do ISSQN e as duas chaves)
+//
+// "Pronto com aviso" (backend "E0312 só no ambiente de testes"): a nota de
+// teste voltou só com um código que é do ambiente de testes do gov.br. O
+// passo teste vem "ok" com o campo `aviso` (texto do backend) e o Ligar
+// destrava pelo próprio backend (pronta_para_ligar).
 // ============================================================
 
 export type EstadoPasso = "ok" | "falta" | "problema" | "travado";
@@ -31,6 +36,9 @@ export type PassoNfse = {
   nfse_id?: string | null;
   faltas?: string[];
   aguardando_aura?: boolean;
+  /** passo "ok" com aviso (teste rejeitado só pelo ambiente de testes do gov.br) */
+  aviso?: string;
+  codigos?: string[];
 };
 
 export type SugestaoDaEmpresa = {
@@ -95,13 +103,15 @@ export type RespostaConfigNfse = {
 
 /** Resultado traduzido do POST /nfse/teste. */
 export type ResultadoTeste = {
-  status: "ok" | "rejeitado" | "erro";
+  /** "aviso" = pode seguir com aviso (ex.: E0312 só no ambiente de testes) */
+  status: "ok" | "aviso" | "rejeitado" | "erro";
   passo: ChavePasso;
   codigo: string | null;
   titulo: string;
   mensagem: string;
   caminho: string[];
   aguardando?: boolean;
+  aviso?: string;
 };
 
 /** A situação vem em config.nacional (loja com config) ou na raiz (sem config). */
@@ -154,6 +164,12 @@ export function proximoCartao(est: Record<Cartao, EstadoPasso>): Cartao | null {
 
 export function contarProntos(est: Record<Cartao, EstadoPasso>): number {
   return CARTOES.filter((c) => est[c] === "ok").length;
+}
+
+/** Texto do aviso quando o teste conta como pronto com aviso; senão null. */
+export function avisoDoTeste(sit: SituacaoNfse | null): string | null {
+  const t = sit && sit.passos && sit.passos.teste;
+  return t && t.estado === "ok" && t.aviso ? t.aviso : null;
 }
 
 export function aguardandoAura(sit: SituacaoNfse | null): boolean {
