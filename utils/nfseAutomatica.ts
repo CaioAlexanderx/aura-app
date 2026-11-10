@@ -5,16 +5,19 @@
 // Decisões do dono:
 //   1. A NFS-e sai sozinha (backend). Com nota emitida o app só mostra
 //      "Imprimir 2ª via"; "Emitir NFS-e" só aparece em falha ou pendência.
-//   2. Venda com serviço numa loja com a emissão automática ligada EXIGE o
-//      CPF ou CNPJ de quem contratou, com dígito verificador. Venda só de
-//      produto: o "CPF na nota (opcional)" de sempre.
+//   2. (revista em 10/11/2026: tomador OPCIONAL, como o Emissor Nacional
+//      permite) Venda com serviço numa loja que emite NFS-e pede o "CPF ou
+//      CNPJ de quem contratou (opcional)", com dígito verificador — nunca
+//      bloqueia o Finalizar, nem com a automática. Válido, vai na nota; sem
+//      ele, a nota sai sem identificar o cliente; inválido mostra o erro e
+//      não vai. Venda só de produto: o "CPF na nota (opcional)" de sempre.
 //   3. Venda mista: NFC-e só dos produtos e NFS-e dos serviços.
 //   4. Serviço sem código: a venda fecha e a NFS-e fica "com problema", com
 //      atalho para o cadastro do serviço.
 //   5. (10/11/2026, botão "Emitir NFS-e") Loja que emite NFS-e SEM a
 //      automática: a venda com serviço mostra o botão, como o "Emitir
-//      NFC-e"; o CPF/CNPJ de quem contratou aparece no Caixa, OPCIONAL — se
-//      faltar, o botão pede na hora.
+//      NFC-e". Sem documento o botão emite direto; o "Completar o cliente"
+//      só abre quando o backend devolve pendente_dados (faltaTomador).
 //
 // "Serviço" aqui = item que sai na NFS-e: utils/notaDoItem.vaiNaNfse (o "Sai
 // em" do cadastro; sem escolha, unit 'srv') — a mesma regra do backend.
@@ -45,15 +48,10 @@ export function composicaoDaVenda(items: Array<NonNullable<ItemComNota>> | null 
   return { temServico, temProduto, mista: temServico && temProduto };
 }
 
-/** O Caixa só exige o tomador com serviço no carrinho E a emissão ligada. */
-export function exigeTomador(p: { temServico: boolean; nfseAtiva: boolean }): boolean {
-  return !!p.temServico && !!p.nfseAtiva;
-}
-
 /**
- * O Caixa mostra o "CPF ou CNPJ de quem contratou": serviço no carrinho e a
- * loja emitindo NFS-e (automática ou só pelo botão). Obrigatório só com a
- * automática (exigeTomador); pelo botão é opcional.
+ * O Caixa mostra o "CPF ou CNPJ de quem contratou (opcional)": serviço no
+ * carrinho e a loja emitindo NFS-e (automática ou só pelo botão). Nunca é
+ * obrigatório (10/11/2026): sem ele a NFS-e sai sem tomador.
  */
 export function pedeTomador(p: { temServico: boolean; nfseAtiva: boolean; nfseEmite: boolean }): boolean {
   return !!p.temServico && (!!p.nfseAtiva || !!p.nfseEmite);
@@ -124,13 +122,6 @@ export function mensagemDoDoc(v: string | null | undefined, opts: { temProduto: 
   return { tom: "neutro", texto: "CPF tem 11 números; CNPJ, 14. Pode digitar só os números." };
 }
 
-/** Rótulo do aviso do rodapé quando falta o documento (null = não falta). */
-export function pendenciaDoDoc(v: string | null | undefined): string | null {
-  const e = estadoDoDoc(v);
-  if (e === "cpf" || e === "cnpj") return null;
-  return e === "invalido" ? "Confira o CPF ou CNPJ do cliente" : "Falta o CPF ou CNPJ do cliente";
-}
-
 /** Rótulo da linha "CPF na nota" da tela final. */
 export function rotuloDoDoc(doc: string): string {
   return onlyDigits(doc).length === 14 ? "CNPJ na nota" : "CPF na nota";
@@ -153,11 +144,17 @@ export function intervaloDoPolling(tentativa: number): number {
 /** ~2 minutos de polling; depois a tela oferece "Atualizar". */
 export const MAX_TENTATIVAS_POLLING = 14;
 
-/** Motivos que um CPF/CNPJ (e o nome) resolvem. */
+/**
+ * Pendências que o "Completar o cliente" resolve (10/11/2026, tomador
+ * opcional): documento com dígito errado (TOMADOR_INVALIDO) ou documento
+ * sem nome (SEM_NOME). SEM_TOMADOR só volta com ISSQN retido, que exige o
+ * tomador — aí o completar também é a saída. Falta de documento, sozinha,
+ * não é mais pendência: a nota sai sem tomador.
+ */
+const MOTIVOS_DO_COMPLETAR = ["TOMADOR_INVALIDO", "SEM_NOME", "SEM_TOMADOR"];
 export function faltaTomador(s: SituacaoNfse | null | undefined): boolean {
   if (!s || s.estado !== "pendente_dados") return false;
-  return s.notas.some((n) => n.estado === "pendente_dados"
-    && (n.motivo_codigo === "SEM_TOMADOR" || n.motivo_codigo === "TOMADOR_INVALIDO" || n.motivo_codigo === "SEM_NOME" || !n.motivo_codigo));
+  return s.notas.some((n) => n.estado === "pendente_dados" && MOTIVOS_DO_COMPLETAR.indexOf(String(n.motivo_codigo || "")) >= 0);
 }
 
 export function faltaSoONome(s: SituacaoNfse | null | undefined): boolean {

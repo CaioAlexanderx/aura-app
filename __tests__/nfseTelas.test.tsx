@@ -118,8 +118,8 @@ describe("NfseVendaCard — cada estado", () => {
     expect(tem("nfse-venda-tentar")).toBe(false);
   });
 
-  test("pendente sem tomador: Completar o cliente; o documento do Caixa é levado", async () => {
-    mockSituacao.mockResolvedValue(sit("pendente_dados", "completar_dados", [nota({ estado: "pendente_dados", nfse_id: null, motivo_codigo: "SEM_TOMADOR", motivo: "Falta o CPF/CNPJ de quem contratou o serviço." })]));
+  test("pendente por documento inválido: Completar o cliente; o documento do Caixa é levado", async () => {
+    mockSituacao.mockResolvedValue(sit("pendente_dados", "completar_dados", [nota({ estado: "pendente_dados", nfse_id: null, motivo_codigo: "TOMADOR_INVALIDO", motivo: "O CPF/CNPJ de quem contratou o serviço parece incorreto." })]));
     await render(<NfseVendaCard {...CARD} tomador={{ doc: "52998224725", nome: null }} />);
     expect(entregarTomadorDaVenda).toHaveBeenCalledWith({ companyId: "loja-1", saleId: "v1", tomador: { doc: "52998224725", nome: null } });
     expect(tem("nfse-venda-pendente")).toBe(true);
@@ -171,7 +171,7 @@ describe("NfseDaOrigem — 2ª via contra Emitir", () => {
   });
 
   test("pendência do cliente: Completar o cliente + Emitir NFS-e", async () => {
-    mockSituacao.mockResolvedValue(sit("pendente_dados", "completar_dados", [nota({ estado: "pendente_dados", nfse_id: null, motivo_codigo: "SEM_TOMADOR" })]));
+    mockSituacao.mockResolvedValue(sit("pendente_dados", "completar_dados", [nota({ estado: "pendente_dados", nfse_id: null, motivo_codigo: "SEM_NOME" })]));
     await render(<NfseDaOrigem companyId="loja-1" tipo="venda" id="v1" origem="cobranca" />);
     expect(tem("nfse-origem-completar")).toBe(true);
     expect(tem("nfse-origem-emitir")).toBe(true);
