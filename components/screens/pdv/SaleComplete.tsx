@@ -404,7 +404,6 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
               customerPhone={sale.customerPhone}
               nomeDaLoja={nomeDaLoja}
               automatica={modoNfse === "automatica"}
-              customerId={sale.customerId || null}
             />
             <AjudaFiscal />
           </View>

@@ -1,9 +1,10 @@
 // ============================================================
 // Caixa com NFS-e automática (10/11/2026, mockup nfse-cadastro-servico.html,
 // tela 3) — usePdvState + useCart de verdade, rede mockada.
-//   - serviço + opt-in: "Finalizar venda" exige CPF ou CNPJ válido (dígito
-//     verificador); o aviso do rodapé leva ao campo; com o documento a
-//     venda sai e a tela final leva o tomador;
+//   - serviço + opt-in (tomador OPCIONAL desde 10/11/2026): o campo "CPF ou
+//     CNPJ de quem contratou (opcional)" nunca bloqueia o "Finalizar venda";
+//     válido, vai como nfse_tomador e a tela final leva o tomador;
+//     inválido, o campo mostra o erro e o documento não vai;
 //   - venda mista: aviso "Esta venda sai em duas notas";
 //   - venda só de produto: corpo do POST e tela final idênticos aos de uma
 //     loja sem a emissão automática (o "CPF na nota" opcional de sempre);
@@ -118,25 +119,31 @@ const labels = () => st.requiredHints.map((h) => h.label);
 const corpo = () => mockBodies[mockBodies.length - 1];
 
 describe("serviço numa loja com a NFS-e automática", () => {
-  test("sem documento: não fecha, avisa e mostra o campo obrigatório", () => {
+  test("sem documento: o campo é opcional e o Finalizar não bloqueia", () => {
     montar(ATIVA);
     carrinho(SERVICO);
-    expect(st.cartProps.tomador).toMatchObject({ exigido: true, temProduto: false, mostrarNome: true });
-    expect(labels()).toContain("Falta o CPF ou CNPJ do cliente");
-    expect(st.cartProps.finalizeDisabled).toBe(true);
-    act(() => { st.handleFinalize(); });
-    expect(mockBodies).toHaveLength(0);
-    expect(toast.error).toHaveBeenCalledWith("Informe o CPF ou CNPJ de quem contratou o serviço antes de finalizar.");
+    expect(st.cartProps.tomador).toMatchObject({ temProduto: false, mostrarNome: true });
+    expect(st.cartProps.tomador).not.toHaveProperty("exigido");
+    expect(labels()).toEqual([]);
+    expect(st.cartProps.finalizeDisabled).toBe(false);
     expect(st.cartProps.avisoNotas).toBe("Ao finalizar, a nota de serviço (NFS-e) sai sozinha.");
+    act(() => { st.handleFinalize(); });
+    expect(mockBodies).toHaveLength(1);
+    expect(corpo()).not.toHaveProperty("nfse_tomador");
+    expect(st.lastSale!.tomador).toBeUndefined();
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
-  test("dígito errado: não fecha e pede para conferir", () => {
+  test("dígito errado: não bloqueia e o documento não vai na nota", () => {
     montar(ATIVA);
     carrinho(SERVICO);
     act(() => { st.cartProps.onCpfNaNotaChange!("529.982.247-26"); });
-    expect(labels()).toContain("Confira o CPF ou CNPJ do cliente");
+    expect(labels()).toEqual([]);
+    expect(st.cartProps.finalizeDisabled).toBe(false);
     act(() => { st.handleFinalize(); });
-    expect(mockBodies).toHaveLength(0);
+    expect(mockBodies).toHaveLength(1);
+    expect(corpo()).not.toHaveProperty("nfse_tomador");
+    expect(st.lastSale!.tomador).toBeUndefined();
   });
 
   test("CNPJ válido: fecha; o documento vai no POST como nfse_tomador e para a tela final, não para a NFC-e", () => {
@@ -231,7 +238,7 @@ describe("loja que emite NFS-e só pelo botão", () => {
   test("serviço: o campo aparece opcional e a venda fecha sem documento", () => {
     montar(SO_EMITE);
     carrinho(SERVICO);
-    expect(st.cartProps.tomador).toMatchObject({ exigido: false, temProduto: false, mostrarNome: true });
+    expect(st.cartProps.tomador).toMatchObject({ temProduto: false, mostrarNome: true });
     expect(labels()).toEqual([]);
     expect(st.cartProps.finalizeDisabled).toBe(false);
     expect(st.cartProps.avisoNotas).toBeNull();
@@ -263,12 +270,14 @@ describe("loja que emite NFS-e só pelo botão", () => {
     expect(corpo()).not.toHaveProperty("nfse_tomador");
   });
 
-  test("com a automática ligada continua OBRIGATÓRIO", () => {
+  test("com a automática ligada também é opcional (10/11/2026)", () => {
     montar({ ...SO_EMITE, ativa: true, emissao_automatica: true, ligada_no_servidor: true });
     carrinho(SERVICO);
-    expect(st.cartProps.tomador).toMatchObject({ exigido: true });
+    expect(st.cartProps.tomador).not.toBeNull();
+    expect(st.cartProps.finalizeDisabled).toBe(false);
     act(() => { st.handleFinalize(); });
-    expect(mockBodies).toHaveLength(0);
+    expect(mockBodies).toHaveLength(1);
+    expect(corpo()).not.toHaveProperty("nfse_tomador");
   });
 
   test("venda só de produto: corpo do POST idêntico ao da loja sem NFS-e", () => {

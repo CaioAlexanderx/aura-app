@@ -12,9 +12,10 @@
 //     opt-in) → não renderiza nada: a tela fica como era;
 //   - 'nenhuma' com pode_emitir (10/11/2026, Aura-backend#989: serviço e a
 //     loja emite, com ou sem a automática) → "Esta venda ainda não tem
-//     NFS-e" + "Emitir NFS-e", como o "Emitir NFC-e" ao lado. Se a nota
-//     voltar pendente por falta de quem contratou, o "Completar o cliente"
-//     abre sozinho.
+//     NFS-e" + "Emitir NFS-e", como o "Emitir NFC-e" ao lado. O toque
+//     emite direto, mesmo sem CPF/CNPJ (tomador opcional, 10/11/2026: a
+//     nota sai sem identificar o cliente). O "Completar o cliente" só abre
+//     se o backend devolver pendente_dados por SEM_NOME ou TOMADOR_INVALIDO.
 //
 // Multi-CNPJ: companyId é o da VENDA/OS (a empresa que vendeu ou prestou).
 // ============================================================
@@ -162,7 +163,7 @@ export function NfseDaOrigem({ companyId, tipo, id, origem = tipo === "os" ? "os
     const cancelada = situacao.estado === "cancelada";
     const titulo = cancelada ? "A nota de serviço desta " + (origem === "os" ? "OS" : origem === "cobranca" ? "cobrança" : "venda") + " foi cancelada." : "A nota de serviço não saiu sozinha.";
     const detalhe = pendente
-      ? (motivo || "A prefeitura pede o CPF ou CNPJ de quem contratou, e " + quem + " ainda não tem.") + " Complete o cliente e emita aqui."
+      ? (motivo || "Faltam dados de quem contratou: confira o CPF ou CNPJ e o nome de " + quem + ".") + " Complete o cliente e emita aqui."
       : (motivo ? motivo + " " : "") + (cancelada ? "Se precisar, emita uma nova." : "A " + (origem === "os" ? "OS" : origem === "cobranca" ? "cobrança" : "venda") + " está certinha; falta só a nota. Ela não sai duas vezes, pode emitir com tranquilidade.");
     corpo = (
       <>

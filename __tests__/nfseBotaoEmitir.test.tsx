@@ -4,9 +4,10 @@
 //   - SaleComplete: o botão aparece só com serviço + emite; com a
 //     automática ligada fica como antes (sem botão manual extra); venda só
 //     de produto intacta;
-//   - NfseVendaCard (manual): toque sem tomador abre o completar; toque com
-//     tomador chama /emitir com ele; com cliente sem documento, /emitir e,
-//     se voltar pendente, o completar abre; estados depois de emitir;
+//   - NfseVendaCard (manual, tomador opcional desde 10/11/2026): toque sem
+//     tomador chama /emitir direto (sem abrir o completar); toque com
+//     tomador chama /emitir com ele; o completar só abre se voltar
+//     pendente por SEM_NOME ou TOMADOR_INVALIDO; estados depois de emitir;
 //   - NfseDaOrigem (detalhe da venda): 'nenhuma' + pode_emitir = "Emitir
 //     NFS-e"; depois de emitida, "Imprimir 2ª via".
 // ============================================================
@@ -167,29 +168,27 @@ describe("SaleComplete — o botão aparece só com serviço + emite", () => {
 const CARD = { companyId: "loja-1", saleId: "v1", servicos: "Corte feminino", totalServicos: 80, automatica: false };
 
 describe("NfseVendaCard manual — o toque", () => {
-  test("sem tomador e sem cliente: abre o completar, sem chamar o emitir; completar emite", async () => {
+  test("sem tomador: emite direto, sem abrir o completar (consumidor não identificado)", async () => {
     mockSituacao.mockResolvedValue(sit("nenhuma", "emitir"));
-    mockCompletar.mockResolvedValue(sit("emitida", "imprimir_2a_via", [nota()]));
+    mockEmitir.mockResolvedValue(sit("emitida", "imprimir_2a_via", [nota()]));
     await render(<NfseVendaCard {...CARD} />);
     await tocar("nfse-venda-emitir");
-    expect(mockEmitir).not.toHaveBeenCalled();
-    expect(tem("nfse-completar")).toBe(true);
-    expect(achar("nfse-completar-enviar").props.disabled).toBe(true);
-    await digitar("nfse-completar-doc", "52998224725");
-    await digitar("nfse-completar-nome", "Maria Souza");
-    await tocar("nfse-completar-enviar");
-    expect(mockCompletar).toHaveBeenCalledWith("loja-1", "venda", "v1", { doc: "52998224725", nome: "Maria Souza" });
+    expect(mockEmitir).toHaveBeenCalledTimes(1);
+    expect(mockEmitir).toHaveBeenCalledWith("loja-1", "venda", "v1", null);
+    expect(mockCompletar).not.toHaveBeenCalled();
+    expect(tem("nfse-completar")).toBe(false);
     expect(tem("nfse-venda-emitida")).toBe(true);
     expect(tem("nfse-venda-imprimir")).toBe(true);
   });
 
-  test("Voltar do completar mostra o botão de novo", async () => {
+  test("tomador do Caixa inválido não vai: emite direto sem ele", async () => {
     mockSituacao.mockResolvedValue(sit("nenhuma", "emitir"));
-    await render(<NfseVendaCard {...CARD} />);
+    mockEmitir.mockResolvedValue(sit("emitindo", "aguardar", [nota({ estado: "emitindo", nfse_id: null })]));
+    await render(<NfseVendaCard {...CARD} tomador={{ doc: "52998224726", nome: "Maria" }} />);
     await tocar("nfse-venda-emitir");
-    await tocar("nfse-completar-cancelar");
+    expect(mockEmitir).toHaveBeenCalledWith("loja-1", "venda", "v1", null);
     expect(tem("nfse-completar")).toBe(false);
-    expect(tem("nfse-venda-emitir")).toBe(true);
+    expect(tem("nfse-venda-emitindo")).toBe(true);
   });
 
   test("com o tomador do Caixa: chama o emitir com ele e acompanha até emitida", async () => {
@@ -210,14 +209,30 @@ describe("NfseVendaCard manual — o toque", () => {
     expect(tem("nfse-venda-emitir")).toBe(false);
   });
 
-  test("cliente na venda sem documento digitado: emitir sem tomador; pendente abre o completar", async () => {
+  test.each(["SEM_NOME", "TOMADOR_INVALIDO"])("volta pendente por %s: o completar abre; completar emite", async (codigo) => {
     mockSituacao.mockResolvedValue(sit("nenhuma", "emitir"));
-    mockEmitir.mockResolvedValue(sit("pendente_dados", "completar_dados", [nota({ estado: "pendente_dados", nfse_id: null, motivo_codigo: "SEM_TOMADOR", motivo: "Falta o CPF/CNPJ de quem contratou o serviço." })]));
-    await render(<NfseVendaCard {...CARD} customerId="cli-1" />);
+    mockEmitir.mockResolvedValue(sit("pendente_dados", "completar_dados", [nota({ estado: "pendente_dados", nfse_id: null, motivo_codigo: codigo, motivo: "Falta o nome de quem contratou o serviço." })]));
+    mockCompletar.mockResolvedValue(sit("emitida", "imprimir_2a_via", [nota()]));
+    await render(<NfseVendaCard {...CARD} />);
     await tocar("nfse-venda-emitir");
     expect(mockEmitir).toHaveBeenCalledWith("loja-1", "venda", "v1", null);
     expect(tem("nfse-venda-pendente")).toBe(true);
     expect(tem("nfse-completar")).toBe(true);
+    await digitar("nfse-completar-doc", "52998224725");
+    await digitar("nfse-completar-nome", "Maria Souza");
+    await tocar("nfse-completar-enviar");
+    expect(mockCompletar).toHaveBeenCalledWith("loja-1", "venda", "v1", { doc: "52998224725", nome: "Maria Souza" });
+    expect(tem("nfse-venda-emitida")).toBe(true);
+  });
+
+  test("Voltar do completar mostra o Completar o cliente de novo", async () => {
+    mockSituacao.mockResolvedValue(sit("nenhuma", "emitir"));
+    mockEmitir.mockResolvedValue(sit("pendente_dados", "completar_dados", [nota({ estado: "pendente_dados", nfse_id: null, motivo_codigo: "SEM_NOME" })]));
+    await render(<NfseVendaCard {...CARD} />);
+    await tocar("nfse-venda-emitir");
+    await tocar("nfse-completar-cancelar");
+    expect(tem("nfse-completar")).toBe(false);
+    expect(tem("nfse-venda-completar")).toBe(true);
   });
 
   test("emitir com problema: mostra o motivo e Tentar de novo (nova tentativa)", async () => {
@@ -255,12 +270,22 @@ describe("NfseDaOrigem (detalhe da venda) — o mesmo botão", () => {
     expect(tem("venda-nfse-emitir")).toBe(false);
   });
 
-  test("toque que volta pendente por falta de quem contratou abre o completar", async () => {
+  test.each(["SEM_NOME", "TOMADOR_INVALIDO"])("toque que volta pendente por %s abre o completar", async (codigo) => {
     mockSituacao.mockResolvedValue(NENHUMA_PODE());
-    mockEmitir.mockResolvedValue(sit("pendente_dados", "completar_dados", [nota({ estado: "pendente_dados", nfse_id: null, motivo_codigo: "SEM_TOMADOR" })]));
+    mockEmitir.mockResolvedValue(sit("pendente_dados", "completar_dados", [nota({ estado: "pendente_dados", nfse_id: null, motivo_codigo: codigo })]));
     await render(<NfseDaOrigem companyId="loja-1" tipo="venda" id="v1" testID="venda-nfse" />);
     await tocar("venda-nfse-emitir");
+    expect(mockEmitir).toHaveBeenCalledWith("loja-1", "venda", "v1", null);
     expect(tem("nfse-completar")).toBe(true);
+  });
+
+  test("toque sem tomador que emite ou dá erro não abre o completar", async () => {
+    mockSituacao.mockResolvedValue(NENHUMA_PODE());
+    mockEmitir.mockResolvedValue(sit("erro", "tentar_de_novo", [nota({ estado: "erro", nfse_id: null, motivo: "Fora do ar" })]));
+    await render(<NfseDaOrigem companyId="loja-1" tipo="venda" id="v1" testID="venda-nfse" />);
+    await tocar("venda-nfse-emitir");
+    expect(tem("nfse-completar")).toBe(false);
+    expect(tem("venda-nfse-problema")).toBe(true);
   });
 
   test("'nenhuma' sem pode_emitir (só produto, loja que não emite, backend anterior): nada", async () => {
