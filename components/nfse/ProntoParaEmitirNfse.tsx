@@ -32,8 +32,8 @@ import { fmtNbs, soDigitos, statusDoCodigo } from "@/utils/nfseServico";
 import {
   CARTOES, TITULO_DO_CARTAO, aguardandoAura, avisoDoTeste, contarProntos, emitindo as estaEmitindo, estadosDosCartoes,
   fmtCnpj, fmtDiaMes, fmtPercentual, lerPercentual, prefeituraVisivel, proximoCartao,
-  situacaoDe, textoParaPrefeitura, camposDoOutroEmissor, conflitoDeNumeracao, textoDoConflito,
-  type Cartao, type ConfigNfse, type EstadoPasso, type JaEmite, type ResultadoTeste, type SituacaoNfse,
+  situacaoDe, textoParaPrefeitura, camposDoOutroEmissor, conflitoDeNumeracao, sugerirSerieDaAura, textoDoConflito,
+  type Cartao, type ConfigNfse, type ContinuaLa, type EstadoPasso, type JaEmite, type ResultadoTeste, type SituacaoNfse,
 } from "@/utils/nfseProntoParaEmitir";
 
 type Props = {
@@ -246,6 +246,10 @@ export function ProntoParaEmitirNfse(p: Props) {
   const [jaEmite, setJaEmite] = useState<JaEmite>("");
   const [serie, setSerie] = useState("");
   const [ultimo, setUltimo] = useState("");
+  // "Vai continuar emitindo por lá também?" + a Série da DPS própria da Aura
+  // (null = a sugerida: a do outro + 1, editável)
+  const [continua, setContinua] = useState<ContinuaLa>("");
+  const [serieAura, setSerieAura] = useState<string | null>(null);
   const [conferi, setConferi] = useState(false);
   const [maisCampos, setMaisCampos] = useState(false);
   const [erros, setErros] = useState<Record<string, string>>({});
@@ -274,6 +278,12 @@ export function ProntoParaEmitirNfse(p: Props) {
       setJaEmite("sim");
       setSerie(c.outro_emissor_serie != null ? String(c.outro_emissor_serie) : "");
       setUltimo(c.outro_emissor_ultimo_numero != null ? String(c.outro_emissor_ultimo_numero) : "");
+      // série da Aura diferente da do outro = a loja segue emitindo por lá
+      if (c.outro_emissor_serie != null) {
+        const propria = Number(c.serie || 1) !== Number(c.outro_emissor_serie);
+        setContinua(propria ? "sim" : "nao");
+        if (propria) setSerieAura(String(Number(c.serie || 1)));
+      }
     } else if (c.outro_emissor === false) setJaEmite("nao");
     setPtot(fmtPercentual(c.p_tot_trib_sn));
     setRetem(c.cliente_retem_iss === true ? "sim" : c.cliente_retem_iss === false ? "nao" : "");
@@ -325,7 +335,9 @@ export function ProntoParaEmitirNfse(p: Props) {
     if (statusDoCodigo(codigo) !== "ok") e.codigo = "Escolha um Código de Tributação Nacional de 6 números da lista.";
     if (nbs && nbs.length !== 9) e.nbs = "O Código NBS tem 9 números. Complete ou deixe em branco.";
     if (im.trim().length > 15) e.im = "A Inscrição Municipal tem até 15 caracteres.";
-    const oe = camposDoOutroEmissor(jaEmite, { serie, ultimo });
+    const oe = camposDoOutroEmissor(jaEmite, {
+      serie, ultimo, continua, serieDaAura: serieAura ?? sugerirSerieDaAura(serie), serieAtual: cfg.serie == null ? null : String(cfg.serie),
+    });
     if ("erro" in oe) e.serie = oe.erro;
     if (!conferi) e.conferi = "Marque a confirmação para seguir.";
     setErros(e);
@@ -340,10 +352,9 @@ export function ProntoParaEmitirNfse(p: Props) {
       ctribnac_padrao: codigo,
       cnbs_padrao: nbs || null,
       inscricao_municipal: im.trim() || null,
-      // a série da Aura fica a de hoje (padrão 1); na mesma série do outro
-      // emissor, o backend continua do número seguinte
-      serie: String(cfg.serie || "1"),
       serie_confirmada: true,
+      // serie (a da Aura) + outro_emissor*: série própria quando a loja segue
+      // emitindo lá; senão a mesma série, e o backend continua do número seguinte
       ...(oe as Record<string, unknown>),
     };
     const prox = est.certificado === "ok" ? "teste" : "certificado";
@@ -586,6 +597,18 @@ export function ProntoParaEmitirNfse(p: Props) {
               </Campo>
             </View>
             <Text style={[st.hint, { marginTop: -6, marginBottom: 12 }]} testID="nfse-pronto-ajuda-outro-emissor">A Aura usa uma série diferente ou continua do número seguinte, para nunca repetir uma nota. Os dois estão no PDF ou no XML da última nota de lá, nos campos "Série da DPS" e "Número da DPS"; o seu contador também ajuda.</Text>
+            <Campo label="Vai continuar emitindo por lá também?">
+              <View style={st.opcoes}>
+                <Opcao titulo="Sim" sub="A Aura usa uma Série da DPS própria" ativo={continua === "sim"} onPress={() => { setContinua("sim"); setErros((x) => ({ ...x, serie: "" })); }} testID="nfse-pronto-continua-sim" />
+                <Opcao titulo="Não" sub="A Aura continua do número seguinte, na mesma série" ativo={continua === "nao"} onPress={() => { setContinua("nao"); setErros((x) => ({ ...x, serie: "" })); }} testID="nfse-pronto-continua-nao" />
+              </View>
+            </Campo>
+            {continua === "sim" ? (
+              <Campo label="Série da DPS da Aura">
+                <Entrada value={serieAura ?? sugerirSerieDaAura(serie)} onChangeText={(v: string) => setSerieAura(soDigitos(v, 5))} placeholder="Ex.: 2" keyboardType="number-pad" accessibilityLabel="Série da DPS da Aura" testID="nfse-pronto-serie-aura" style={{ maxWidth: 160 }} />
+                <Text style={st.hint} testID="nfse-pronto-ajuda-serie-aura">Assim as duas numerações nunca se cruzam.</Text>
+              </Campo>
+            ) : null}
           </View>
         ) : null}
         {erros.serie ? <Text style={st.hintErro} testID="nfse-pronto-erro-serie">{erros.serie}</Text> : null}
