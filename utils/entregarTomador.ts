@@ -1,13 +1,16 @@
 // ============================================================
-// AURA. — Leva o CPF/CNPJ que o Caixa pediu até a NFS-e da venda
+// AURA. — Rede de segurança: leva o CPF/CNPJ do Caixa até a NFS-e da venda
 //
-// O backend (Aura-backend#984, processarVenda → resolverTomador) NÃO lê um
-// campo de documento da venda: o tomador vem do CADASTRO do cliente da venda
-// (sales.customer_id → customers.cpf_cnpj e nome) ou do que o app manda em
-// POST /origem/venda/:id/completar. Por isso o documento digitado no Caixa
-// não vai no POST /pdv/sale (o corpo da venda fica igual): depois da venda,
-// se a nota ficou 'pendente_dados' por falta de tomador, este helper manda o
-// documento (e o nome, quando há) no /completar.
+// Desde 10/11/2026 o documento vai JUNTO com a venda (POST /pdv/sale
+// nfse_tomador; o backend grava em sales.nfse_tomador e ele vence o cadastro
+// do cliente). Com esse backend no ar a nota não fica pendente por falta de
+// tomador e este helper só lê a situação e sai sem fazer nada.
+//
+// Fica para o caso em que o app está à frente do backend (deploy em ordem
+// trocada, build pulado, PR revertido): um backend que ignora nfse_tomador
+// ainda lê o tomador só do CADASTRO do cliente ou do POST
+// /origem/venda/:id/completar. Se a nota ficou 'pendente_dados' por falta de
+// tomador, este helper manda o documento (e o nome, quando há) no /completar.
 //
 // Roda fora do ciclo da tela (a lojista pode apertar "Nova venda" na hora):
 // algumas leituras com espera crescente até o gatilho automático decidir

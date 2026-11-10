@@ -12,8 +12,10 @@
 //   erro      → motivo + "Tentar de novo"; sem código → "Ver o cadastro do
 //               serviço"
 //
-// O CPF/CNPJ que o Caixa pediu vai para a nota por utils/entregarTomador (o
-// backend lê o tomador do cadastro do cliente ou do /completar).
+// O CPF/CNPJ que o Caixa pediu vai junto com a venda (nfse_tomador no POST
+// /pdv/sale). utils/entregarTomador fica como rede de segurança para um
+// backend que ainda não lê esse campo (só age se a nota ficou pendente por
+// falta de tomador).
 // ============================================================
 import { useEffect, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, Platform } from "react-native";

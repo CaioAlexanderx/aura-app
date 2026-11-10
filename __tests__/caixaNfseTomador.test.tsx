@@ -8,8 +8,9 @@
 //   - venda só de produto: corpo do POST e tela final idênticos aos de uma
 //     loja sem a emissão automática (o "CPF na nota" opcional de sempre);
 //   - loja sem o opt-in: serviço fecha sem documento, nada muda;
-//   - o documento NÃO vai no POST /pdv/sale (o backend lê o tomador do
-//     cadastro do cliente ou do /completar — utils/entregarTomador).
+//   - o documento vai no POST /pdv/sale como nfse_tomador { doc, nome }
+//     (vence o cadastro do cliente no backend); fora do campo
+//     nfse_tomador o corpo não leva o documento.
 // ============================================================
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
 jest.mock("expo-font", () => ({ useFonts: () => [true, null], loadAsync: jest.fn(), isLoaded: () => true }));
@@ -138,7 +139,7 @@ describe("serviço numa loja com a NFS-e automática", () => {
     expect(mockBodies).toHaveLength(0);
   });
 
-  test("CNPJ válido: fecha; o documento vai para a tela final, não para o POST nem para a NFC-e", () => {
+  test("CNPJ válido: fecha; o documento vai no POST como nfse_tomador e para a tela final, não para a NFC-e", () => {
     montar(ATIVA);
     carrinho(SERVICO);
     act(() => { st.cartProps.onCpfNaNotaChange!("11.222.333/0001-81"); });
@@ -147,7 +148,10 @@ describe("serviço numa loja com a NFS-e automática", () => {
     act(() => { st.handleFinalize(); });
     expect(mockBodies).toHaveLength(1);
     const b = corpo();
-    expect(JSON.stringify(b)).not.toMatch(/11222333000181|cpf|tomador|document/i);
+    expect(b.nfse_tomador).toEqual({ doc: "11222333000181", nome: "Studio Bela Ltda" });
+    // fora do nfse_tomador, o corpo não leva o documento
+    const { nfse_tomador: _t, ...resto } = b;
+    expect(JSON.stringify(resto)).not.toMatch(/11222333000181|cpf|tomador|document/i);
     expect(st.lastSale!.tomador).toEqual({ doc: "11222333000181", nome: "Studio Bela Ltda" });
     expect(st.lastSale!.cpfNaNota).toBeUndefined();
   });
@@ -158,6 +162,7 @@ describe("serviço numa loja com a NFS-e automática", () => {
     act(() => { st.cartProps.onCpfNaNotaChange!("52998224725"); });
     act(() => { st.handleFinalize(); });
     expect(mockBodies).toHaveLength(1);
+    expect(corpo().nfse_tomador).toEqual({ doc: "52998224725", nome: null });
     expect(st.lastSale!.cpfNaNota).toBe("52998224725");
     expect(st.lastSale!.tomador).toEqual({ doc: "52998224725", nome: null });
   });
@@ -190,6 +195,7 @@ describe("venda só de produto fica idêntica", () => {
     mockBodies.length = 0;
     const com = vender(ATIVA, "529.982.247-25");
     expect(com.b).toEqual(sem.b);
+    expect(com.b).not.toHaveProperty("nfse_tomador");
     expect(com.ls.cpfNaNota).toBe("52998224725");
     expect(com.ls.tomador).toBeUndefined();
     expect(sem.ls.tomador).toBeUndefined();
@@ -212,6 +218,7 @@ describe("loja sem a emissão automática", () => {
     expect(st.cartProps.avisoNotas).toBeNull();
     act(() => { st.handleFinalize(); });
     expect(mockBodies).toHaveLength(1);
+    expect(corpo()).not.toHaveProperty("nfse_tomador");
     expect(st.lastSale!.tomador).toBeUndefined();
   });
 });
