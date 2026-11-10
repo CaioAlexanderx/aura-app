@@ -29,7 +29,7 @@ import { Campo, Entrada } from "@/components/screens/estoque/item-form/ui";
 import { nfseConfigApi, useNfseConfig, type RespostaTeste } from "@/hooks/useNfseConfig";
 import { fmtNbs, soDigitos, statusDoCodigo } from "@/utils/nfseServico";
 import {
-  CARTOES, TITULO_DO_CARTAO, aguardandoAura, contarProntos, emitindo as estaEmitindo, estadosDosCartoes,
+  CARTOES, TITULO_DO_CARTAO, aguardandoAura, avisoDoTeste, contarProntos, emitindo as estaEmitindo, estadosDosCartoes,
   fmtCnpj, fmtDiaMes, fmtPercentual, lerPercentual, prefeituraVisivel, proximoCartao, serieENumero,
   situacaoDe, textoParaPrefeitura,
   type Cartao, type ConfigNfse, type EstadoPasso, type JaEmite, type ResultadoTeste, type SituacaoNfse,
@@ -347,7 +347,7 @@ export function ProntoParaEmitirNfse(p: Props) {
       if (!(r.resultado && r.resultado.aguardando)) chaveTeste.current = null;
       recarregar();
       await q.refetch();
-      if (r.resultado && r.resultado.status === "ok") setAberto("ligar");
+      if (r.resultado && (r.resultado.status === "ok" || r.resultado.status === "aviso")) setAberto("ligar");
     } catch (e: any) {
       toast.error(erroDaApi(e, "Não conseguimos emitir a nota de teste agora. Tente de novo em instantes."));
     } finally {
@@ -443,6 +443,7 @@ export function ProntoParaEmitirNfse(p: Props) {
   const prefeitura = prefeituraVisivel(sit);
   const res: ResultadoTeste | null = resultado;
   const codigoAviso = (res && res.codigo) || (ps.teste && ps.teste.codigo) || (ps.prefeitura && ps.prefeitura.codigo) || null;
+  const avisoTeste = avisoDoTeste(sit);
 
   function resumo(c: Cartao): string {
     if (c === "certificado") {
@@ -457,6 +458,7 @@ export function ProntoParaEmitirNfse(p: Props) {
       return pend ? ps[pend].motivo : "Confira os dados da nota.";
     }
     if (c === "teste") {
+      if (avisoTeste) return "Pode ligar · com um aviso do ambiente de testes do gov.br";
       if (est.teste === "ok") return "O gov.br aceitou a nota de teste" + (ps.teste.em ? " em " + fmtDiaMes(ps.teste.em) : "");
       if (prefeitura) return ps.prefeitura.motivo;
       return ps.teste.motivo;
@@ -684,6 +686,13 @@ export function ProntoParaEmitirNfse(p: Props) {
           <Text style={st.testeTxt}>Falando com o gov.br… leva uns segundos.</Text>
         </View>
       );
+    } else if (avisoTeste) {
+      resultadoBox = (
+        <Aviso tom="amber" icon="alert" testID="nfse-pronto-teste-ok-aviso">
+          <Text style={st.notaTxt}><Text style={st.forte}>Pode ligar a NFS-e.</Text></Text>
+          <Text style={[st.notaTxt, { marginTop: 6 }]}>{avisoTeste}</Text>
+        </Aviso>
+      );
     } else if (est.teste === "ok") {
       resultadoBox = (
         <Aviso tom="green" icon="check" testID="nfse-pronto-teste-ok">
@@ -722,7 +731,7 @@ export function ProntoParaEmitirNfse(p: Props) {
             {est.teste === "falta" ? <Text style={st.hint}>Sem valor fiscal · ninguém é cobrado</Text> : null}
           </View>
         )}
-        {codigoAviso && est.teste === "problema" && !testando ? (
+        {codigoAviso && (est.teste === "problema" || avisoTeste) && !testando ? (
           <Text style={st.codaviso} testID="nfse-pronto-codigo-aviso">
             {"Aviso do gov.br: " + codigoAviso + (quando ? " · teste de " + quando : "") + " · mostre este código ao contador ou ao suporte, se precisar"}
           </Text>
@@ -852,7 +861,7 @@ export function ProntoParaEmitirNfse(p: Props) {
             </View>
           ) : est.teste === "ok" && est.ligar !== "ok" && prontos === CARTOES.length - 1 ? (
             <View style={{ marginTop: 10 }}>
-              <Aviso tom="green" icon="check"><Text style={st.notaTxt}><Text style={st.forte}>A nota de teste passou. Falta só ligar.</Text></Text></Aviso>
+              <Aviso tom="green" icon="check"><Text style={st.notaTxt}><Text style={st.forte}>{avisoTeste ? "Tudo conferido. Falta só ligar." : "A nota de teste passou. Falta só ligar."}</Text></Text></Aviso>
             </View>
           ) : null}
         </View>
