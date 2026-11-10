@@ -90,6 +90,11 @@ import { useReajusteDisponivel } from "@/hooks/useReajusteDisponivel";
 // consolidado, sem reajuste e com backend antigo (404).
 import { UltimosReajustesModal } from "@/components/screens/estoque/reajuste/UltimosReajustesModal";
 import { useUltimosReajustes, ultimosReajustesQueryKey } from "@/hooks/useUltimosReajustes";
+// 10/11/2026 — NFS-e do serviço (docs/mockups/nfse-cadastro-servico.html,
+// tela 2): selo "Falta código da NFS-e" e filtro rápido, só para quem emite.
+import { useEmiteNfse } from "@/hooks/useEmiteNfse";
+import { faltaCodigoNfse } from "@/utils/nfseServico";
+import { avisoDoFiltroNfse, servicosSemCodigoNfse, SELO_FALTA_NFSE } from "@/components/screens/estoque/nfseNaLista";
 // import { EstoqueRightRail } from "@/components/screens/estoque/EstoqueRightRail"; // Phase 2 — right rail
 
 const IS_WIDE = (typeof window !== "undefined" ? window.innerWidth : Dimensions.get("window").width) > 768;
@@ -374,6 +379,8 @@ export default function EstoqueScreen() {
   // effectiveCats abaixo combina os dois.
   const [catFilter, setCatFilter] = useState("Todos");
   const [catsMulti, setCatsMulti] = useState<string[]>([]);
+  // 10/11/2026: filtro rápido "Falta código da NFS-e".
+  const [soFaltaNfse, setSoFaltaNfse] = useState(false);
   const [view, setView] = useState<"table" | "grid">("table");
   const [showRail, setShowRail] = useState(true);
   // 09/09/2026: os dois formulários viraram UM formulário aberto
@@ -489,21 +496,30 @@ export default function EstoqueScreen() {
   //   - busca por marca/cor/tamanho/categoria (campos não cobertos)
   // Agora normalizeText + tokenização AND + haystack consolidado resolvem
   // os três (mesma lógica que o PDV já usava e o Davi confirmou funcional).
+  // 10/11/2026 (NFS-e do serviço): a config de NFS-e só é lida quando há
+  // serviço na lista — loja só de produtos não faz requisição nova.
+  const temServico = useMemo(() => products.some((p) => p.unit === "srv"), [products]);
+  const emiteNfseEstoque = useEmiteNfse(temServico && !isDemo && !consulta);
+  const semCodigoNfse = useMemo(() => servicosSemCodigoNfse(products, emiteNfseEstoque), [products, emiteNfseEstoque]);
+  // Resolvidos todos, o filtro se desliga sozinho (o chip some junto).
+  const filtroNfseAtivo = soFaltaNfse && semCodigoNfse.length > 0;
+
   const filtered = useMemo(() => {
     const q = (search || "").trim();
     return products.filter(p => {
       const matchSearch = productMatchesSearch(p, q);
       const matchCat = effectiveCats.length === 0 || effectiveCats.includes(p.category);
-      return matchSearch && matchCat;
+      const matchNfse = !filtroNfseAtivo || faltaCodigoNfse(p, true);
+      return matchSearch && matchCat && matchNfse;
     });
-  }, [products, search, effectiveCats]);
+  }, [products, search, effectiveCats, filtroNfseAtivo]);
 
   const ordemVista = consulta ? ordemSemPreco(sortOrder, "recent") : sortOrder;
   const sorted = useMemo(() => ordenarProdutos(filtered, ordemVista), [filtered, ordemVista]);
 
   // Pagination key inclui catsMulti pra resetar página quando user
   // troca categorias no wide layout (multi-select dropdown).
-  const { paginated, page, totalPages, total: filteredTotal, goTo } = usePagination(sorted, PAGE_SIZE, search + catFilter + catsMulti.join(",") + sortOrder);
+  const { paginated, page, totalPages, total: filteredTotal, goTo } = usePagination(sorted, PAGE_SIZE, search + catFilter + catsMulti.join(",") + sortOrder + (filtroNfseAtivo ? "|nfse" : ""));
   const lowStock = products.filter(p => p.stock <= p.minStock && p.unit !== "srv");
   const valorEstoque = resumoValorEstoque(products);
   const totalItems = products.reduce((acc, p) => acc + p.stock, 0);
@@ -1003,6 +1019,38 @@ export default function EstoqueScreen() {
               </>
             )}
 
+            {/* 10/11/2026: filtro rápido da NFS-e — só para quem emite e tem serviço sem código */}
+            {semCodigoNfse.length > 0 && (
+              <View style={{ marginBottom: 12 } as any}>
+                <Pressable
+                  onPress={() => setSoFaltaNfse((v) => !v)}
+                  style={[s.nfseChip, filtroNfseAtivo && s.nfseChipOn]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: filtroNfseAtivo }}
+                  accessibilityLabel={SELO_FALTA_NFSE + ": " + semCodigoNfse.length}
+                  testID="estoque-filtro-nfse"
+                >
+                  <Icon name="receipt" size={12} color={filtroNfseAtivo ? "#fff" : Colors.amber} />
+                  <Text style={[s.nfseChipTxt, filtroNfseAtivo && { color: "#fff" }]}>{SELO_FALTA_NFSE}</Text>
+                  <View style={[s.nfseChipN, filtroNfseAtivo && { backgroundColor: "rgba(255,255,255,0.22)" }]}>
+                    <Text style={[s.nfseChipNTxt, filtroNfseAtivo && { color: "#fff" }]}>{String(semCodigoNfse.length)}</Text>
+                  </View>
+                </Pressable>
+                {filtroNfseAtivo && (() => {
+                  const av = avisoDoFiltroNfse(semCodigoNfse.length, semCodigoNfse.some((p) => p.isGroupShared));
+                  return (
+                    <View style={s.nfseAviso} testID="estoque-aviso-nfse">
+                      <Icon name="alert" size={15} color={Colors.amber} />
+                      <Text style={s.nfseAvisoTxt}>
+                        <Text style={{ fontWeight: "700", color: Colors.ink }}>{av.forte}</Text>
+                        {av.resto}
+                      </Text>
+                    </View>
+                  );
+                })()}
+              </View>
+            )}
+
             {/* 12/05/2026: barra de acoes em lote — visivel apenas quando bulkMode=true */}
             <BulkActionBar />
 
@@ -1022,6 +1070,7 @@ export default function EstoqueScreen() {
                     bulkSelected={bulkSelected}
                     onSelect={toggleBulkSelect}
                     canLink={canLinkProducts}
+                    emiteNfse={emiteNfseEstoque}
                   />
                 ) : (
                   <ProductGridWeb
@@ -1033,6 +1082,7 @@ export default function EstoqueScreen() {
                     bulkSelected={bulkSelected}
                     onSelect={toggleBulkSelect}
                     canLink={canLinkProducts}
+                    emiteNfse={emiteNfseEstoque}
                   />
                 )}
               </View>
@@ -1050,6 +1100,7 @@ export default function EstoqueScreen() {
                     onLink={canLinkProducts && !bulkMode ? (prod) => setLinkTarget(prod) : undefined}
                     isSelected={bulkSelected.has(p.id)}
                     onSelect={bulkMode ? toggleBulkSelect : undefined}
+                    emiteNfse={emiteNfseEstoque}
                   />
                 ))}
                 {filtered.length === 0 && <View style={{ alignItems: "center", paddingVertical: 40 }}><Text style={{ fontSize: 13, color: Colors.ink3 }}>Nenhum produto encontrado</Text></View>}
@@ -1198,6 +1249,14 @@ const s = StyleSheet.create({
   toolbar: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12, alignItems: "center" },
   catBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: Colors.border2 },
   catBtnText: { fontSize: 12, color: Colors.violet3, fontWeight: "600" },
+  // 10/11/2026: filtro rápido "Falta código da NFS-e" e o aviso dele.
+  nfseChip: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: Colors.amberD, borderWidth: 1, borderColor: "rgba(251,191,36,0.35)" },
+  nfseChipOn: { backgroundColor: Colors.amber, borderColor: Colors.amber },
+  nfseChipTxt: { fontSize: 12, fontWeight: "700", color: Colors.amber },
+  nfseChipN: { borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1, backgroundColor: "rgba(251,191,36,0.18)" },
+  nfseChipNTxt: { fontSize: 11, fontWeight: "700", color: Colors.amber },
+  nfseAviso: { flexDirection: "row", gap: 9, alignItems: "flex-start", marginTop: 10, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: Colors.amberD, borderWidth: 1, borderColor: "rgba(251,191,36,0.35)" },
+  nfseAvisoTxt: { flex: 1, fontSize: 12, color: Colors.ink2, lineHeight: 17 },
   // 12/05/2026: bulkBtn agora vive no header (junto com Servico/Lote/DANFE/Produto).
   // bulkBtnActive aplica quando bulkMode=true pra dar feedback visual.
   bulkBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: Colors.border2 },

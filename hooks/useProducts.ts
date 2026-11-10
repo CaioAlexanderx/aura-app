@@ -98,7 +98,47 @@ function mapApiProduct(p: any): Product {
     promoEndsAt: p.promo_ends_at || null,
     emPromocao: p.em_promocao === true,
     precoEfetivo: p.preco_efetivo === null || p.preco_efetivo === undefined ? null : (parseFloat(p.preco_efetivo) || null),
+    // 10/11/2026 (NFS-e do serviço, migration 437): ausente no backend
+    // antigo -> null (segue o padrão da empresa).
+    nfseCtribnac: textoOuNull(p.nfse_ctribnac),
+    nfseCnbs: textoOuNull(p.nfse_cnbs),
+    nfseCtribmun: textoOuNull(p.nfse_ctribmun),
+    nfseAliquotaIss: p.nfse_aliquota_iss === null || p.nfse_aliquota_iss === undefined || p.nfse_aliquota_iss === ""
+      ? null
+      : (Number.isFinite(parseFloat(p.nfse_aliquota_iss)) ? parseFloat(p.nfse_aliquota_iss) : null),
+    nfseDescricao: textoOuNull(p.nfse_descricao),
+    ibscbsCst: textoOuNull(p.ibscbs_cst),
+    ibscbsCclasstrib: textoOuNull(p.ibscbs_cclasstrib),
+    ibscbsCindop: textoOuNull(p.ibscbs_cindop),
+    isGroupShared: p.is_group_shared === true,
   };
+}
+
+function textoOuNull(v: any): string | null {
+  return v === null || v === undefined || v === "" ? null : String(v);
+}
+
+// Produto -> nomes snake_case das colunas da migration 437. Só entra a
+// chave que o cadastro preencheu (serviço); produto não manda nenhuma.
+const NFSE_NO_CORPO: Array<[keyof Product, string]> = [
+  ["nfseCtribnac", "nfse_ctribnac"],
+  ["nfseCnbs", "nfse_cnbs"],
+  ["nfseCtribmun", "nfse_ctribmun"],
+  ["nfseAliquotaIss", "nfse_aliquota_iss"],
+  ["nfseDescricao", "nfse_descricao"],
+  ["ibscbsCst", "ibscbs_cst"],
+  ["ibscbsCclasstrib", "ibscbs_cclasstrib"],
+  ["ibscbsCindop", "ibscbs_cindop"],
+];
+
+export function camposNfseDoCorpo(product: Product): Record<string, string | number | null> {
+  const out: Record<string, string | number | null> = {};
+  NFSE_NO_CORPO.forEach(([de, para]) => {
+    const v = (product as any)[de];
+    if (v === undefined) return;
+    out[para] = v === "" ? null : v;
+  });
+  return out;
 }
 
 export function useProducts() {
@@ -174,6 +214,11 @@ export function useProducts() {
       duration_minutes: product.unit === "srv"
         ? ((product as any).durationMinutes ?? null)
         : undefined,
+      // 10/11/2026 (NFS-e do serviço, migration 437). undefined = não vai
+      // no JSON (produto, ou a alíquota que não está na tela); null LIMPA
+      // (volta ao padrão da empresa). Por isso `=== undefined`, e não `??`:
+      // `null ?? undefined` daria undefined e o valor antigo ficaria preso.
+      ...camposNfseDoCorpo(product),
     };
   }
 

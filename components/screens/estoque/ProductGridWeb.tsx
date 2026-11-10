@@ -24,6 +24,9 @@ import { useValoresOcultos } from "@/stores/valoresOcultos";
 // imensa maioria, hoje) o texto sai idêntico: neutro fora do Matcon.
 // 23/09/2026 (QA final Matcon): "16 rolo" -> "16 rolos", "2 sc" -> "2 sacos".
 import { fmtQty, unidadeParaQuantidade, nomeDaUnidade } from "@/utils/matconUnits";
+// 10/11/2026 (NFS-e do serviço): selo "Falta código da NFS-e".
+import { faltaCodigoNfse } from "@/utils/nfseServico";
+import { DICA_FALTA_NFSE, SELO_FALTA_NFSE } from "./nfseNaLista";
 
 const fmtBRL = (n: number) =>
   "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -37,9 +40,11 @@ type Props = {
   bulkSelected: Set<string>;
   onSelect: (id: string) => void;
   canLink: boolean;
+  // 10/11/2026 — a loja emite NFS-e: serviço sem código ganha o selo.
+  emiteNfse?: boolean;
 };
 
-export function ProductGridWeb({ items, onEdit, onDelete, onLink, bulkMode, bulkSelected, onSelect, canLink }: Props) {
+export function ProductGridWeb({ items, onEdit, onDelete, onLink, bulkMode, bulkSelected, onSelect, canLink, emiteNfse }: Props) {
   const C = useColors();
   const { isDark } = useThemeStore();
   const { m } = useValoresOcultos();
@@ -175,6 +180,15 @@ export function ProductGridWeb({ items, onEdit, onDelete, onLink, bulkMode, bulk
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
               } as any}>{p.name}</div>
               <div style={{ fontSize: 10.5, color: C.ink3, fontFamily: Fonts.mono, marginTop: 2 } as any}>{sku}</div>
+              {faltaCodigoNfse(p, !!emiteNfse) && (
+                <span data-testid="selo-falta-nfse" title={DICA_FALTA_NFSE} style={{
+                  display: "inline-block", marginTop: 5,
+                  fontSize: 10, fontWeight: 700, color: isDark ? "#fbbf24" : "#b45309",
+                  padding: "2px 7px", borderRadius: 5,
+                  background: isDark ? "rgba(251,191,36,0.10)" : "rgba(251,191,36,0.12)",
+                  border: "1px solid rgba(251,191,36,0.35)",
+                } as any}>{SELO_FALTA_NFSE}</span>
+              )}
               <div style={{
                 display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 8,
               } as any}>

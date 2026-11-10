@@ -757,6 +757,8 @@ export type CamposDoCadastro = {
   estoque: string; descricao: string; sku: string; barcode: string; ncm: string; duracao: string;
   // 22/09/2026 (Matcon): linhas de lote com algo digitado.
   lotes?: number;
+  // 10/11/2026: serviço com algo na seção "Nota de serviço (NFS-e)".
+  nfse?: boolean;
 };
 
 /**
@@ -775,5 +777,6 @@ export function temProgressoAlemDoNome(c: CamposDoCadastro): boolean {
     || !!String(c.sku || "").trim()
     || !!String(c.barcode || "").trim()
     || !!String(c.ncm || "").trim()
-    || !!String(c.duracao || "").trim();
+    || !!String(c.duracao || "").trim()
+    || !!c.nfse;
 }

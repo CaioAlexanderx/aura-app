@@ -72,6 +72,13 @@ import { SecaoDescricao } from "./item-form/SecaoDescricao";
 import { SecaoFotos } from "./item-form/SecaoFotos";
 import { SecaoCodigos, SecaoNotaFiscal } from "./item-form/SecaoCodigos";
 import { SecaoEntrega } from "./item-form/SecaoEntrega";
+// 10/11/2026 — NFS-e no cadastro do serviço (docs/mockups/nfse-cadastro-servico.html).
+import { SecaoNfse, MOSTRAR_ALIQUOTA_ISS } from "./item-form/SecaoNfse";
+import { useEmiteNfse } from "@/hooks/useEmiteNfse";
+import {
+  NFSE_VAZIO, bloqueiosDaNfse, gravacaoDaNfse, nfseDoProduto, temAlgoNaNfse,
+  type CamposNfseDoForm,
+} from "@/utils/nfseServico";
 import { CategoriaSheet, useBreadcrumbLabel } from "./item-form/CategorySelector";
 import { useGaleriaDoProduto } from "./item-form/GaleriaDeFotos";
 import { PERFIL_PADRAO, perfilDoCadastro } from "./item-form/perfis";
@@ -208,6 +215,9 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   const [cest, setCest] = useState("");
   const [icmsStPaid, setIcmsStPaid] = useState<boolean | null>(null);
   const [origem, setOrigem] = useState<number | null>(null);
+  // 10/11/2026 (NFS-e do serviço, migration 437): só o serviço mostra e
+  // grava. Produto nunca manda nenhum destes campos (undefined some do JSON).
+  const [nfse, setNfse] = useState<CamposNfseDoForm>(NFSE_VAZIO);
   // 22/09/2026 (perfil Matcon): marca da ficha, peso por unidade (Entrega,
   // weight_kg) e as pilhas que já estão na prateleira (lotes do M4).
   const [marca, setMarca] = useState("");
@@ -303,6 +313,12 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     retry: 1,
   });
   const emiteNota = !!(nfceCfg as any)?.config?.is_active;
+  // ── e NFS-e? Só pergunta quando o item é um serviço ──────
+  // Decisão do dono (10/11/2026): a seção só existe para quem emite NFS-e
+  // (nfse_config ativa; no consolidado, ao menos uma loja). Para as outras
+  // some, e o Salvar não manda nem trava nada dela.
+  const emiteNfse = useEmiteNfse(visible && type === "service");
+  const comNfse = type === "service" && emiteNfse;
 
   // ── variações do item em edição ──────────────────────────
   const { data: variacoes } = useQuery({
@@ -421,6 +437,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     setCest(manter ? manter.cest : ((prod as any)?.cest || ""));
     setIcmsStPaid(manter ? manter.icmsStPaid : ((prod as any)?.icmsStPaid ?? null));
     setOrigem(manter ? manter.origem : ((prod as any)?.origem ?? null));
+    setNfse(t === "service" ? nfseDoProduto(prod) : { ...NFSE_VAZIO });
     setCores([]);
     setTamanhos([]);
     setCelulas({});
@@ -495,7 +512,10 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
 
   // ── o que impede salvar ──────────────────────────────────
   const precoNum = valorDaMascara(preco);
-  const bloqueios = motivosQueBloqueiam({ nome, preco: precoNum, ncm, isProduto });
+  // Serviço: código da NFS-e pela metade também trava (vazio não).
+  const bloqueios = comNfse
+    ? [...motivosQueBloqueiam({ nome, preco: precoNum, ncm, isProduto }), ...bloqueiosDaNfse(nfse, MOSTRAR_ALIQUOTA_ISS)]
+    : motivosQueBloqueiam({ nome, preco: precoNum, ncm, isProduto });
   const podeSalvar = bloqueios.length === 0 && !salvando;
 
   // ── montar o corpo do produto ────────────────────────────
@@ -579,6 +599,11 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
         ? (pesoTxt.trim() ? parseQtyInput(pesoTxt) : null)
         : undefined,
       marca: isProduto && perfil.descricao.ficha.some((l) => l.campo === "brand") ? marca.trim() : undefined,
+      // 10/11/2026 (NFS-e do serviço): vazio vira null (segue o padrão da
+      // empresa). Produto, ou loja que não emite NFS-e (seção fora da
+      // tela): nada — as chaves nem existem no objeto e o que estiver
+      // gravado fica como está.
+      ...(comNfse ? gravacaoDaNfse(nfse, MOSTRAR_ALIQUOTA_ISS) : {}),
     } as Product;
   }
 
@@ -794,6 +819,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       preco: precoNum, custo: valorDaMascara(custo), pendentes: pendentes.length,
       cores: cores.length, tamanhos: tamanhos.length, estoque: estoqueTxt,
       descricao, sku, barcode, ncm, duracao, cest,
+      nfse: comNfse && temAlgoNaNfse(nfse),
       lotes: stockMode === "lots" ? lotes.filter((l) => (l.codigo + l.qtd + l.tonalidade + l.bitola).trim()).length : 0,
     };
   }
@@ -1111,6 +1137,21 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     />
   ) : null;
 
+  // 10/11/2026 — Nota de serviço (NFS-e): só serviço, só para quem emite.
+  // No grupo (item compartilhado), a nota avisa que os códigos valem para
+  // todas as lojas.
+  const secNfse = comNfse ? (
+    <SecaoNfse
+      // Remonta a cada abertura/semente: a busca em andamento e a sanfona
+      // da reforma não passam de um item para o outro.
+      key={semente}
+      nome={nome}
+      grupo={!!alvo?.isGroupShared}
+      campos={nfse}
+      onCampos={(patch) => { setNfse((f) => ({ ...f, ...patch })); setSujo(true); }}
+    />
+  ) : null;
+
   // Perfil Matcon: "Nota fiscal" sai dos códigos e sobe para o topo da
   // coluna direita (no celular, logo depois da entrega). Com o M2, o CEST,
   // a pergunta do imposto e a origem moram só aqui.
@@ -1219,6 +1260,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
                 {secDescricao}
               </View>
               <View style={s.colDir}>
+                {secNfse}
                 {secFotos}
                 {secCodigos}
               </View>
@@ -1231,6 +1273,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
               {secEstoque}
               {secFotos}
               {secDescricao}
+              {secNfse}
               {secCodigos}
             </View>
           )}
