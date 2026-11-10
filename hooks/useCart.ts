@@ -157,8 +157,9 @@ export type SaleResult = {
   entrega?: Endereco | null;
   cpfNaNota?: string;       // CPF do consumidor (opcional, pra NFC-e)
   /** 10/11/2026 (NFS-e automática): CPF/CNPJ (válido) e nome de quem
-   *  contratou, quando o carrinho tinha serviço. A tela final leva à nota de
-   *  serviço (utils/entregarTomador). Ausente em venda só de produto. */
+   *  contratou, quando o carrinho tinha serviço. Vai no POST /pdv/sale
+   *  (nfse_tomador) e a tela final ainda o usa como rede de segurança
+   *  (utils/entregarTomador). Ausente em venda só de produto. */
   tomador?: { doc: string; nome?: string | null };
   // QA 23/09/2026 (Matcon): o `matcon` da resposta do POST /pdv/sale —
   // entrega criada pela venda de orçamento e pontos da indicação. Ausente
@@ -906,8 +907,9 @@ export function useCart(
     var effectiveSellerName = sellerName.trim() || selectedEmployeeName || null;
     var cleanCpf = cpfNaNota.replace(/\D/g, "");
     // 10/11/2026 (NFS-e automática): carrinho com serviço e documento válido
-    // = o tomador da nota de serviço. O POST /pdv/sale NÃO muda (o backend
-    // lê o tomador do cadastro do cliente ou do /completar).
+    // = o tomador da nota de serviço. Vai JUNTO com a venda (nfse_tomador,
+    // abaixo): o backend grava na própria venda e o documento digitado aqui
+    // vence o do cadastro do cliente. Venda só de produto: nada muda.
     var tomadorDaVenda = cart.some(ehServico) && docValido(cleanCpf)
       ? { doc: cleanCpf, nome: nomeNaNota.trim() || selectedCustomerName || null }
       : undefined;
@@ -1008,6 +1010,13 @@ export function useCart(
     if (paymentsSnapshot) saleData.payments = paymentsSnapshot;
     if (saleDate) saleData.sale_date = saleDate;
     if (couponApplied?.code) saleData.coupon_code = couponApplied.code;
+    // 10/11/2026: quem contratou o serviço vai no próprio POST da venda
+    // (Aura-backend, migration 440: sales.nfse_tomador). Assim o documento
+    // não se perde se a aba fechar antes da nota sair. Sem serviço ou sem
+    // documento válido o campo nem existe e o corpo é o de sempre.
+    if (tomadorDaVenda) {
+      saleData.nfse_tomador = { doc: tomadorDaVenda.doc, nome: tomadorDaVenda.nome || null };
+    }
 
     if (cartaoOn) {
       // O endpoint recebe a regra escolhida no seletor, não os campos legados
