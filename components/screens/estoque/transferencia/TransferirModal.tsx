@@ -19,6 +19,13 @@
 // outro, com o progresso no rodapé. ESTOQUE_INSUFICIENTE volta ao passo 1
 // com as linhas em vermelho e o disponível que o servidor mandou.
 //
+// Aura-backend#994: só variantes ativas aparecem (o backend recusa as
+// inativas); produto com variante ativa só manda linhas por variante (sem
+// variante ativa, vai pelo produto). GRADE_DIFERENTE, QUANTIDADE_INVALIDA
+// (serviço) e ITEM_NAO_ENCONTRADO marcam as linhas citadas; com
+// motivo 'informe_a_variante' a grade do produto abre. TENTE_DE_NOVO
+// (deadlock) tenta 1 vez de novo com o mesmo corpo; SCHEMA_PENDENTE avisa.
+//
 // Renderizado pelo Estoque dentro de WebPortal (overlay dentro do shell do
 // RNW fica preso no z-index do pai). Sem hover: tudo visível; alvos de 44 px;
 // abaixo de 640 px cada linha empilha.
@@ -31,8 +38,8 @@ import { companiesApi } from "@/services/api";
 import { rotuloDaVariante } from "@/components/screens/estoque/VariantesConsulta";
 import { estoqueTransferenciasApi, codigoDoErro } from "@/services/estoqueTransferenciasApi";
 import {
-  MAX_ITENS_POR_LOTE, chaveDaLinha, dividirEmLotes, itensSemEstoque, mensagemDoErro, plural, textoDoTudo,
-  textoDosNumeros, validar, type LinhaTransferencia,
+  MAX_ITENS_POR_LOTE, chaveDaLinha, dividirEmLotes, itensDoErro, itensSemEstoque, mensagemDoErro, plural,
+  problemaDaLinha, temMotivo, textoDoTudo, textoDosNumeros, validar, type LinhaTransferencia,
 } from "@/utils/transferenciaEstoque";
 import { productMatchesSearch } from "@/utils/productSearch";
 import { fmtQty } from "@/utils/matconUnits";
@@ -56,7 +63,8 @@ export type ProdutoParaTransferir = {
 
 export type LojaOpcao = { id: string; nome: string };
 
-export type VarianteDaOrigem = { id: string; rotulo: string; estoque: number };
+/** `ativa: false` = inativa (o backend recusa): fica fora do modal. */
+export type VarianteDaOrigem = { id: string; rotulo: string; estoque: number; ativa?: boolean };
 
 type Props = {
   origem: LojaOpcao;
@@ -72,7 +80,7 @@ type Props = {
   buscarVariantes?: (productId: string) => Promise<VarianteDaOrigem[]>;
 };
 
-type EstadoGrade = { estado: "carregando" | "ok" | "erro"; linhas: LinhaTransferencia[] };
+type EstadoGrade = { estado: "carregando" | "ok" | "erro"; linhas: LinhaTransferencia[]; inativas: number };
 
 type Passo = 1 | 2;
 var PASSOS: Array<[Passo, string]> = [[1, "Quantidades"], [2, "Conferir"]];
@@ -91,8 +99,10 @@ export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqu
     return companiesApi.variants(origem.id, productId).then(function (r: any) {
       var lista: any[] = Array.isArray(r && r.variants) ? r.variants : [];
       return lista
-        .filter(function (v) { return v && v.is_active !== false; })
-        .map(function (v) { return { id: String(v.id), rotulo: rotuloDaVariante(v), estoque: parseFloat(v.stock_qty) || 0 }; });
+        .filter(function (v) { return !!v; })
+        .map(function (v) {
+          return { id: String(v.id), rotulo: rotuloDaVariante(v), estoque: parseFloat(v.stock_qty) || 0, ativa: v.is_active !== false };
+        });
     });
   };
 
@@ -114,27 +124,36 @@ export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqu
   var [jaEnviados, setJaEnviados] = useState<Array<string | number>>([]);
   // Produtos que não estão mais na lista (já foram num lote anterior).
   var [enviadas, setEnviadas] = useState<Record<string, boolean>>({});
+  // Linhas que o backend recusou por outro motivo (grade diferente, serviço,
+  // não encontrado): chave → texto. Some quando a pessoa mexe na linha.
+  var [problemas, setProblemas] = useState<Record<string, string>>({});
+  // ITEM_NAO_ENCONTRADO/informe_a_variante: o produto tem grade mesmo sem
+  // has_variants na lista local; passa a ir por variante.
+  var [forcarGrade, setForcarGrade] = useState<Record<string, boolean>>({});
+  function emGrade(p: ProdutoParaTransferir): boolean { return !!p.has_variants || !!forcarGrade[p.id]; }
 
   var destino = destinos.find(function (d) { return d.id === destinoId; }) || null;
 
   var comGrade = useMemo(function () { return produtos.filter(function (p) { return !!p.has_variants; }); }, [produtos]);
 
   function carregarGrade(p: ProdutoParaTransferir): Promise<void> {
-    setGrades(function (g) { return { ...g, [p.id]: { estado: "carregando", linhas: g[p.id] ? g[p.id].linhas : [] } }; });
+    setGrades(function (g) { return { ...g, [p.id]: { estado: "carregando", linhas: g[p.id] ? g[p.id].linhas : [], inativas: g[p.id] ? g[p.id].inativas : 0 } }; });
     return buscar(p.id)
-      .then(function (vs) {
+      .then(function (todas) {
         if (!vivo.current) return;
+        var vs = todas.filter(function (v) { return v.ativa !== false; });
+        var inativas = todas.length - vs.length;
         var linhas: LinhaTransferencia[] = vs.map(function (v) {
           return {
             chave: chaveDaLinha(p.id, v.id), product_id: p.id, variant_id: v.id, nome: p.name,
             rotulo: v.rotulo, disponivel: v.estoque, unidade: unidadeDe(p),
           };
         });
-        setGrades(function (g) { return { ...g, [p.id]: { estado: "ok", linhas: linhas } }; });
+        setGrades(function (g) { return { ...g, [p.id]: { estado: "ok", linhas: linhas, inativas: inativas } }; });
       })
       .catch(function () {
         if (!vivo.current) return;
-        setGrades(function (g) { return { ...g, [p.id]: { estado: "erro", linhas: [] } }; });
+        setGrades(function (g) { return { ...g, [p.id]: { estado: "erro", linhas: [], inativas: 0 } }; });
       });
   }
 
@@ -172,12 +191,18 @@ export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqu
     Promise.all([proximo(), proximo(), proximo(), proximo()]).finally(function () { if (vivo.current) setAbrindoTodos(false); });
   }
 
+  function semVarianteAtiva(g: EstadoGrade | undefined): boolean {
+    return !!g && g.estado === "ok" && g.linhas.length === 0;
+  }
+
   // Todas as linhas que valem: produto simples + variantes carregadas.
   var linhas = useMemo(function () {
     var out: LinhaTransferencia[] = [];
     produtos.forEach(function (p) {
-      if (p.has_variants) {
-        var g = grades[p.id];
+      var g = grades[p.id];
+      // Produto com grade só manda linhas por variante; enquanto a grade não
+      // carrega, ele não manda nada. Sem variante ativa, vai pelo produto.
+      if (emGrade(p) && !semVarianteAtiva(g)) {
         if (g) g.linhas.forEach(function (l) { if (!enviadas[l.chave]) out.push(l); });
       } else {
         var chave = chaveDaLinha(p.id, null);
@@ -191,7 +216,7 @@ export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqu
       var d = dispServidor[l.chave];
       return d != null ? { ...l, disponivel: d } : l;
     });
-  }, [produtos, grades, enviadas, dispServidor]);
+  }, [produtos, grades, enviadas, dispServidor, forcarGrade]);
 
   var validacao = useMemo(function () { return validar(linhas, quantidades); }, [linhas, quantidades]);
   var nItens = validacao.itens.length;
@@ -199,6 +224,7 @@ export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqu
   var lotes = Math.max(1, Math.ceil(nItens / MAX_ITENS_POR_LOTE));
 
   function erroDaLinha(chave: string): string | null {
+    if (problemas[chave] && !validacao.erros[chave]) return problemas[chave];
     if (semEstoque[chave] !== undefined && !validacao.erros[chave]) {
       // Linha que o servidor recusou: segue marcada até a pessoa mexer.
       var d = semEstoque[chave];
@@ -212,6 +238,9 @@ export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqu
     setQuantidades(function (q) { return { ...q, [chave]: v }; });
     if (semEstoque[chave] !== undefined) {
       setSemEstoque(function (m) { var n = { ...m }; delete n[chave]; return n; });
+    }
+    if (problemas[chave]) {
+      setProblemas(function (m) { var n = { ...m }; delete n[chave]; return n; });
     }
     setErroEnvio(null);
   }
@@ -239,17 +268,31 @@ export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqu
     if (!destino || nItens === 0 || enviando) return;
     var partes = dividirEmLotes(validacao.itens, MAX_ITENS_POR_LOTE);
     var numeros: Array<string | number> = [];
-    var pecasTotal = validacao.pecas;
+    var pecasTotal = 0;
     var obs = observacao.trim() || null;
     setErroEnvio(null);
     setJaEnviados([]);
+    setProblemas({});
+
+    // TENTE_DE_NOVO (deadlock no banco): 1 tentativa a mais, mesmo corpo.
+    function criar(i: number, tentativa: number): Promise<any> {
+      var corpo = { destino_company_id: destino!.id, itens: partes[i], observacao: obs };
+      return estoqueTransferenciasApi.criar(origem.id, corpo).catch(function (e: any) {
+        if (tentativa === 0 && codigoDoErro(e) === "TENTE_DE_NOVO") return criar(i, 1);
+        throw e;
+      });
+    }
 
     function enviar(i: number): Promise<void> {
       if (i >= partes.length) return Promise.resolve();
       if (vivo.current) setEnviando({ lote: i + 1, de: partes.length });
-      return estoqueTransferenciasApi.criar(origem.id, { destino_company_id: destino!.id, itens: partes[i], observacao: obs })
+      return criar(i, 0)
         .then(function (r) {
-          numeros.push(r && r.transferencia ? r.transferencia.numero : "?");
+          var t = r && r.transferencia;
+          numeros.push(t ? t.numero : "?");
+          // Peças: o que o servidor gravou (total_pecas); sem ele, o que foi pedido.
+          var pedidas = partes[i].reduce(function (a, it) { return a + it.quantidade; }, 0);
+          pecasTotal += t && t.total_pecas != null && !isNaN(Number(t.total_pecas)) ? Number(t.total_pecas) : pedidas;
           // O lote entrou: tira as linhas dele da tela (não vão de novo).
           var feitas: Record<string, boolean> = {};
           partes[i].forEach(function (it) { feitas[chaveDaLinha(it.product_id, it.variant_id)] = true; });
@@ -264,7 +307,7 @@ export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqu
     enviar(0)
       .then(function () {
         if (onEstoqueMudou) onEstoqueMudou();
-        if (onConcluido) onConcluido(numeros, pecasTotal, destino!);
+        if (onConcluido) onConcluido(numeros, Math.round(pecasTotal * 1000) / 1000, destino!);
       })
       .catch(function (e: any) {
         if (numeros.length > 0 && onEstoqueMudou) onEstoqueMudou();
@@ -281,8 +324,28 @@ export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqu
           Object.keys(falta).forEach(function (k) { if (k.indexOf("v:") === 0) a[k.split(":")[1]] = true; });
           setAbertos(function (x) { return { ...x, ...a }; });
           setPasso(1);
+        } else if (code === "GRADE_DIFERENTE" || code === "QUANTIDADE_INVALIDA" || code === "ITEM_NAO_ENCONTRADO") {
+          var citados = itensDoErro(e);
+          var motivoGeral = e && e.data && e.data.motivo ? String(e.data.motivo) : null;
+          var marcas: Record<string, string> = {};
+          var abrirP: Record<string, boolean> = {};
+          var gradeNova: Record<string, boolean> = {};
+          citados.forEach(function (it) {
+            var motivo = it.motivo || motivoGeral;
+            var txt = problemaDaLinha(code, motivo, destino!.nome);
+            if (txt) marcas[it.chave] = txt;
+            abrirP[it.product_id] = true;
+            if (motivo === "informe_a_variante") gradeNova[it.product_id] = true;
+          });
+          setProblemas(marcas);
+          setAbertos(function (x) { return { ...x, ...abrirP }; });
+          if (Object.keys(gradeNova).length > 0) {
+            setForcarGrade(function (x) { return { ...x, ...gradeNova }; });
+            produtos.forEach(function (p) { if (gradeNova[p.id]) carregarGrade(p); });
+          }
+          if (citados.length > 0 || temMotivo(e, "informe_a_variante")) setPasso(1);
         }
-        setErroEnvio(mensagemDoErro(code, e));
+        setErroEnvio(mensagemDoErro(code, e, destino!.nome));
       })
       .finally(function () { if (vivo.current) setEnviando(null); });
   }
@@ -291,7 +354,7 @@ export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqu
   var filtrados = useMemo(function () {
     var q = busca.trim();
     var base = produtos.filter(function (p) {
-      if (p.has_variants) {
+      if (emGrade(p) && !semVarianteAtiva(grades[p.id])) {
         var g = grades[p.id];
         // Grade carregada e toda enviada: some.
         return !(g && g.estado === "ok" && g.linhas.length > 0 && g.linhas.every(function (l) { return enviadas[l.chave]; }));
@@ -302,7 +365,7 @@ export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqu
     return base.filter(function (p) {
       return productMatchesSearch({ name: p.name, barcode: p.barcode || "", sku: p.sku || "", code: p.code || "", category: p.category || "" } as any, q);
     });
-  }, [produtos, busca, grades, enviadas]);
+  }, [produtos, busca, grades, enviadas, forcarGrade]);
   var visiveis = filtrados.slice(0, limite);
 
   var ocupado = !!enviando;
@@ -365,17 +428,18 @@ export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqu
 
   function produto(p: ProdutoParaTransferir) {
     var codigo = p.sku || p.code || p.barcode || null;
-    if (!p.has_variants) {
+    var g = grades[p.id];
+    if (!emGrade(p) || semVarianteAtiva(g)) {
       var chave = chaveDaLinha(p.id, null);
       var l = linhas.find(function (x) { return x.chave === chave; });
-      return l ? campo(l, p.name, codigo) : null;
+      var nota = semVarianteAtiva(g) ? "Sem tamanhos e cores ativos: vai pelo produto" : null;
+      return l ? campo(l, p.name, nota ? (codigo ? codigo + " · " : "") + nota : codigo) : null;
     }
-    var g = grades[p.id];
     var aberto = !!abertos[p.id];
     var linhasDaGrade = linhas.filter(function (x) { return x.product_id === p.id; });
     var naGrade = g && g.estado === "ok" ? linhasDaGrade.reduce(function (a, x) { return a + x.disponivel; }, 0) : Number(p.stock) || 0;
     return (
-      <View key={p.id} style={s.grade} testID={"transferir-produto-" + p.id}>
+      <View key={p.id} style={[s.grade, !!problemas[chaveDaLinha(p.id, null)] && s.linhaErro]} testID={"transferir-produto-" + p.id}>
         <Pressable onPress={function () { abrir(p); }} style={s.gradeHead} accessibilityRole="button"
           accessibilityState={{ expanded: aberto }} testID={"transferir-abrir-" + p.id}>
           <View style={{ flex: 1, minWidth: 0 }}>
@@ -384,6 +448,9 @@ export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqu
           </View>
           <Text style={s.gradeToggle}>{aberto ? "Fechar" : "Tamanhos e cores"}</Text>
         </Pressable>
+        {problemas[chaveDaLinha(p.id, null)] ? (
+          <Text style={[s.linhaErroTxt, { paddingHorizontal: 12 }]} testID={"transferir-erro-produto-" + p.id}>{problemas[chaveDaLinha(p.id, null)]}</Text>
+        ) : null}
         {aberto && g && g.estado === "carregando" && (
           <View style={s.gradeAviso}><ActivityIndicator size="small" color={Colors.violet3} /><Text style={s.linhaSub}>Carregando tamanhos e cores…</Text></View>
         )}
@@ -402,6 +469,11 @@ export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqu
               </Pressable>
             )}
             {linhasDaGrade.map(function (x) { return campo(x, x.rotulo || "Variante", null); })}
+            {g.inativas > 0 && (
+              <Text style={[s.linhaSub, { paddingHorizontal: 12 }]} testID={"transferir-inativas-" + p.id}>
+                {plural(g.inativas, "tamanho/cor inativo não aparece", "tamanhos/cores inativos não aparecem") + " (não dá para transferir)."}
+              </Text>
+            )}
           </View>
         )}
       </View>

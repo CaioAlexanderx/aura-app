@@ -314,6 +314,17 @@ describe("histórico de transferências", () => {
     expect(porTestID(tree, "transferencias-detalhe")).toHaveLength(0);
   });
 
+  it("usa o sentido do backend (#994) para Saiu/Chegou", async () => {
+    let tree!: renderer.ReactTestRenderer;
+    // Mesma origem, mas o backend diz que para esta loja foi entrada.
+    mockHistorico.mockResolvedValueOnce({ transferencias: [{ ...T, sentido: "entrada" }, { ...T, id: "t3", origem_company_id: "c2", sentido: "saida" }], total: 2 });
+    await act(async () => {
+      tree = renderer.create(<TransferenciasModal companyId="c1" nomes={{ c1: "Centro", c2: "Shopping" }} onFechar={jest.fn()} />);
+    });
+    expect(textoDe(tree, "transferencias-item-t1")).toContain("Chegou");
+    expect(textoDe(tree, "transferencias-item-t3")).toContain("Saiu");
+  });
+
   it("vazio e erro em texto gentil", async () => {
     let tree!: renderer.ReactTestRenderer;
     mockHistorico.mockResolvedValueOnce({ transferencias: [], total: 0 });

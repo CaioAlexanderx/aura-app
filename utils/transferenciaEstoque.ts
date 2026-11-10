@@ -80,39 +80,120 @@ export function dividirEmLotes<T>(itens: T[], tamanho: number = MAX_ITENS_POR_LO
   return lotes;
 }
 
+/** Um item citado no erro do backend ({ error, code, itens? }). */
+export type ItemDoErro = {
+  chave: string;
+  product_id: string;
+  variant_id: string | null;
+  disponivel: number | null;
+  nome: string | null;
+  rotulo: string | null;
+  motivo: string | null;
+};
+
 /**
- * ESTOQUE_INSUFICIENTE traz os itens que não cabem e o disponível de cada um.
- * O formato exato pode variar (itens/items, disponivel/available/estoque):
- * lemos o que vier e devolvemos chave → disponível (null quando não veio).
+ * Lê `itens` do corpo do erro (aceita também `items`/`detalhes`, e
+ * `available`/`estoque` no lugar de `disponivel`). Aura-backend#994 manda
+ * `nome`, `quantidade` e, em alguns códigos, `motivo` em cada item.
  */
-export function itensSemEstoque(err: any): Record<string, number | null> {
+export function itensDoErro(err: any): ItemDoErro[] {
   var data = (err && err.data) || {};
   var lista: any[] = Array.isArray(data.itens) ? data.itens
     : Array.isArray(data.items) ? data.items
     : Array.isArray(data.detalhes) ? data.detalhes
     : [];
-  var out: Record<string, number | null> = {};
+  var out: ItemDoErro[] = [];
   lista.forEach(function (it) {
     if (!it || !it.product_id) return;
     var d = it.disponivel != null ? it.disponivel : it.available != null ? it.available : it.estoque;
     var n = d == null ? null : Number(d);
-    out[chaveDaLinha(it.product_id, it.variant_id)] = n == null || isNaN(n) ? null : n;
+    out.push({
+      chave: chaveDaLinha(it.product_id, it.variant_id),
+      product_id: String(it.product_id),
+      variant_id: it.variant_id ? String(it.variant_id) : null,
+      disponivel: n == null || isNaN(n) ? null : n,
+      nome: it.nome ? String(it.nome) : null,
+      rotulo: it.rotulo ? String(it.rotulo) : null,
+      motivo: it.motivo ? String(it.motivo) : null,
+    });
   });
   return out;
 }
 
-export function mensagemDoErro(code: string | null, err: any): string {
+/** ESTOQUE_INSUFICIENTE: chave → disponível (null quando não veio). */
+export function itensSemEstoque(err: any): Record<string, number | null> {
+  var out: Record<string, number | null> = {};
+  itensDoErro(err).forEach(function (it) { out[it.chave] = it.disponivel; });
+  return out;
+}
+
+/** O backend mandou `motivo` no corpo ou em algum item. */
+export function temMotivo(err: any, motivo: string): boolean {
+  var data = (err && err.data) || {};
+  if (data.motivo === motivo) return true;
+  return itensDoErro(err).some(function (it) { return it.motivo === motivo; });
+}
+
+/** "Vestido midi, Bolsa e mais 2" — para achar a linha mesmo fora da página. */
+export function nomesDoErro(err: any, max: number = 3): string {
+  var nomes: string[] = [];
+  itensDoErro(err).forEach(function (it) {
+    if (!it.nome) return;
+    var n = it.nome + (it.rotulo ? " (" + it.rotulo + ")" : "");
+    if (nomes.indexOf(n) < 0) nomes.push(n);
+  });
+  if (nomes.length === 0) return "";
+  if (nomes.length <= max) return nomes.join(", ");
+  return nomes.slice(0, max).join(", ") + " e mais " + (nomes.length - max);
+}
+
+/** Texto da marca vermelha na linha, por código (null = o código não marca linha). */
+export function problemaDaLinha(code: string | null, motivo: string | null, destino: string): string | null {
+  switch (code) {
+    case "GRADE_DIFERENTE":
+      return "Cores e tamanhos diferentes na " + destino + ". Confira o cadastro deste produto nas duas lojas.";
+    case "QUANTIDADE_INVALIDA":
+      return motivo === "servico" ? "Serviço não tem estoque: deixe vazio." : "Quantidade não aceita. Confira o número.";
+    case "ITEM_NAO_ENCONTRADO":
+      return motivo === "informe_a_variante"
+        ? "Este produto tem tamanhos e cores: informe a quantidade em cada um."
+        : "Não encontramos este produto nesta loja (pode ter sido excluído).";
+    default:
+      return null;
+  }
+}
+
+export var MSG_TENTE_DE_NOVO = "Muita gente mexendo no estoque ao mesmo tempo. Tente de novo em instantes.";
+export var MSG_SCHEMA_PENDENTE = "A transferência fica disponível em alguns minutos. Nada foi mudado; tente daqui a pouco.";
+
+export function mensagemDoErro(code: string | null, err: any, destino?: string): string {
+  var loja = destino || "outra loja";
+  var nomes = nomesDoErro(err);
+  var confira = nomes ? " Confira: " + nomes + "." : "";
+  var msgBackend = err && err.data && typeof err.data.error === "string" ? err.data.error : null;
   switch (code) {
     case "ESTOQUE_INSUFICIENTE":
-      return "Alguns itens não têm essa quantidade na loja agora (pode ter vendido no meio do caminho). Marcamos as linhas em vermelho: ajuste e confirme de novo.";
+      return "Alguns itens não têm essa quantidade na loja agora (pode ter vendido no meio do caminho). Marcamos as linhas em vermelho: ajuste e confirme de novo." + confira;
+    case "GRADE_DIFERENTE":
+      return "Alguns produtos têm cores e tamanhos diferentes na " + loja + ". Marcamos em vermelho: confira o cadastro deles nas duas lojas e tente de novo." + confira;
     case "QUANTIDADE_INVALIDA":
-      return "Alguma quantidade não está certa. Use números maiores que zero e confira as linhas.";
+      if (temMotivo(err, "servico")) {
+        return (msgBackend || "Serviço não tem estoque para transferir.") + " Deixe vazio o que é serviço e confirme de novo.";
+      }
+      return "Alguma quantidade não está certa. Use números maiores que zero e confira as linhas." + confira;
     case "MESMA_LOJA":
       return "A loja de destino é a mesma de origem. Escolha outra loja.";
     case "NAO_E_DO_GRUPO":
-      return "Essa loja não faz parte do mesmo grupo. Escolha uma das lojas da lista.";
+      return "Essa loja não é do mesmo grupo, ou você não tem acesso para mexer no estoque dela. Escolha outra loja ou peça acesso ao dono.";
     case "ITEM_NAO_ENCONTRADO":
-      return "Um dos produtos não foi encontrado nesta loja (pode ter sido excluído). Feche, atualize o Estoque e tente de novo.";
+      if (temMotivo(err, "informe_a_variante")) {
+        return "Um produto tem tamanhos e cores: abrimos a grade dele. Informe a quantidade em cada tamanho e cor e confirme de novo." + confira;
+      }
+      return "Um dos produtos não foi encontrado nesta loja (pode ter sido excluído). Feche, atualize o Estoque e tente de novo." + confira;
+    case "TENTE_DE_NOVO":
+      return MSG_TENTE_DE_NOVO;
+    case "SCHEMA_PENDENTE":
+      return MSG_SCHEMA_PENDENTE;
     default:
       if (err && err.isNetworkError) return "A conexão caiu antes da resposta. Confira em Transferências se ela entrou antes de tentar de novo.";
       return "Não conseguimos transferir agora. Tente de novo em instantes.";

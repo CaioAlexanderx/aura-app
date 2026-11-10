@@ -79,7 +79,8 @@ export function TransferenciasModal({ companyId, nomes, onFechar }: Props) {
   } : null;
 
   function linha(t: Transferencia) {
-    var saiu = t.origem_company_id === companyId;
+    // `sentido` vem do backend (#994); sem ele, compara a origem com a loja.
+    var saiu = t.sentido ? t.sentido === "saida" : t.origem_company_id === companyId;
     var pecas = pecasDa(t);
     var nItens = t.total_itens != null ? Number(t.total_itens) : (t.itens ? t.itens.length : null);
     return (

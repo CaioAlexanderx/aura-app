@@ -8,6 +8,9 @@
 //   4. Validação (texto, acima do disponível, peça inteira, sem destino).
 //   5. Corpo do POST.
 //   6. ESTOQUE_INSUFICIENTE destaca a linha com o disponível do servidor.
+//   8. Aura-backend#994: GRADE_DIFERENTE, informe_a_variante, TENTE_DE_NOVO
+//      (1 nova tentativa), SCHEMA_PENDENTE, serviço, nomes no
+//      ESTOQUE_INSUFICIENTE, só variantes ativas, total_pecas do POST.
 //   7. Lotes de 1.000: regra aqui; o envio em partes, com progresso, em
 //      TransferirLotes.test.tsx (lote reduzido para a lista caber no teste).
 //
@@ -237,7 +240,7 @@ describe("modal sem variantes", () => {
     await tocar(tree, "transferir-revisar");
     mockCriar.mockRejectedValueOnce(erroApi(403, { error: "x", code: "NAO_E_DO_GRUPO" }));
     await tocar(tree, "transferir-confirmar");
-    expect(textoDe(tree, "transferir-erro-envio")).toBe("Essa loja não faz parte do mesmo grupo. Escolha uma das lojas da lista.");
+    expect(textoDe(tree, "transferir-erro-envio")).toBe("Essa loja não é do mesmo grupo, ou você não tem acesso para mexer no estoque dela. Escolha outra loja ou peça acesso ao dono.");
     expect(porTestID(tree, "transferir-resumo")).toHaveLength(1);
   });
 
@@ -314,6 +317,133 @@ describe("modal com variantes", () => {
     await tocar(tree, "transferir-abrir-todos");
     expect(mockVariantes).toHaveBeenCalledTimes(6);
     expect(porTestID(tree, "transferir-linha-v:g5:a")).toHaveLength(1);
+  });
+});
+
+describe("códigos do Aura-backend#994", () => {
+  async function ateConferir(produtos: ProdutoParaTransferir[], qtds: Record<string, string>) {
+    const r = await montar(produtos);
+    for (const k of Object.keys(qtds)) await digitar(r.tree, "transferir-qtd-" + k, qtds[k]);
+    await tocar(r.tree, "transferir-revisar");
+    return r;
+  }
+
+  it("GRADE_DIFERENTE destaca a linha e sugere conferir o cadastro", async () => {
+    const { tree } = await ateConferir(SIMPLES, { "p:p1": "2", "p:p2": "1" });
+    mockCriar.mockRejectedValueOnce(erroApi(409, { code: "GRADE_DIFERENTE", itens: [{ product_id: "p1", variant_id: null, nome: "Cinto de couro" }] }));
+    await tocar(tree, "transferir-confirmar");
+    expect(porTestID(tree, "transferir-resumo")).toHaveLength(0);
+    expect(textoDe(tree, "transferir-erro-envio")).toContain("cores e tamanhos diferentes na Loja Shopping");
+    expect(textoDe(tree, "transferir-erro-envio")).toContain("Confira: Cinto de couro.");
+    expect(textoDe(tree, "transferir-erro-p:p1")).toBe("Cores e tamanhos diferentes na Loja Shopping. Confira o cadastro deste produto nas duas lojas.");
+    expect(estilo(um(tree, "transferir-linha-p:p1")).borderColor).toBe("red");
+    expect(porTestID(tree, "transferir-erro-p:p2")).toHaveLength(0);
+  });
+
+  it("GRADE_DIFERENTE num produto com grade marca o produto inteiro", async () => {
+    mockVariantes.mockResolvedValueOnce({ variants: [{ id: "v1", rotulo: "P", stock_qty: 2 }] });
+    const { tree } = await ateConferir([VESTIDO], { "v:p9:v1": "1" });
+    mockCriar.mockRejectedValueOnce(erroApi(409, { code: "GRADE_DIFERENTE", itens: [{ product_id: "p9", variant_id: null }] }));
+    await tocar(tree, "transferir-confirmar");
+    expect(textoDe(tree, "transferir-erro-produto-p9")).toContain("Confira o cadastro");
+    expect(estilo(um(tree, "transferir-produto-p9")).borderColor).toBe("red");
+  });
+
+  it("informe_a_variante abre a grade e o próximo envio vai só por variante", async () => {
+    const semFlag: ProdutoParaTransferir = { id: "p7", name: "Saia plissada", stock: 4, unit: "un" };
+    const { tree, onConcluido } = await ateConferir([semFlag], { "p:p7": "2" });
+    mockCriar.mockRejectedValueOnce(erroApi(404, { code: "ITEM_NAO_ENCONTRADO", motivo: "informe_a_variante", itens: [{ product_id: "p7", variant_id: null, motivo: "informe_a_variante" }] }));
+    mockVariantes.mockResolvedValueOnce({ variants: [{ id: "a", rotulo: "P", stock_qty: 3 }, { id: "b", rotulo: "M", stock_qty: 1 }] });
+    await tocar(tree, "transferir-confirmar");
+    expect(mockVariantes).toHaveBeenCalledWith("c1", "p7");
+    expect(textoDe(tree, "transferir-erro-envio")).toContain("Informe a quantidade em cada tamanho e cor");
+    expect(porTestID(tree, "transferir-linha-p:p7")).toHaveLength(0);
+    expect(porTestID(tree, "transferir-linha-v:p7:a")).toHaveLength(1);
+    await digitar(tree, "transferir-qtd-v:p7:a", "2");
+    await tocar(tree, "transferir-revisar");
+    mockCriar.mockResolvedValueOnce({ transferencia: { numero: 5, total_pecas: 2 } });
+    await tocar(tree, "transferir-confirmar");
+    expect(mockCriar.mock.calls[1][1].itens).toEqual([{ product_id: "p7", variant_id: "a", quantidade: 2 }]);
+    expect(onConcluido).toHaveBeenCalledWith([5], 2, DESTINOS[0]);
+  });
+
+  it("produto com grade nunca manda linha sem variante; sem variante ativa vai pelo produto", async () => {
+    mockVariantes.mockResolvedValueOnce({ variants: [{ id: "x", rotulo: "Velha", stock_qty: 9, is_active: false }] });
+    const { tree } = await montar([VESTIDO]);
+    expect(porTestID(tree, "transferir-linha-v:p9:x")).toHaveLength(0);
+    expect(porTestID(tree, "transferir-linha-p:p9")).toHaveLength(1);
+    expect(textoDe(tree, "transferir-linha-p:p9")).toContain("Sem tamanhos e cores ativos: vai pelo produto");
+  });
+
+  it("só variantes ativas aparecem, com aviso das inativas", async () => {
+    mockVariantes.mockResolvedValueOnce({ variants: [
+      { id: "v1", rotulo: "Azul · P", stock_qty: 4 },
+      { id: "v2", rotulo: "Velha 1", stock_qty: 9, is_active: false },
+      { id: "v3", rotulo: "Velha 2", stock_qty: 9, is_active: false },
+    ] });
+    const { tree } = await montar([VESTIDO]);
+    expect(porTestID(tree, "transferir-linha-v:p9:v1")).toHaveLength(1);
+    expect(porTestID(tree, "transferir-linha-v:p9:v2")).toHaveLength(0);
+    expect(porTestID(tree, "transferir-linha-p:p9")).toHaveLength(0);
+    expect(textoDe(tree, "transferir-inativas-p9")).toBe("2 tamanhos/cores inativos não aparecem (não dá para transferir).");
+  });
+
+  it("TENTE_DE_NOVO tenta uma vez de novo com o mesmo corpo", async () => {
+    const { tree, onConcluido } = await ateConferir(SIMPLES, { "p:p1": "2" });
+    mockCriar
+      .mockRejectedValueOnce(erroApi(409, { code: "TENTE_DE_NOVO" }))
+      .mockResolvedValueOnce({ transferencia: { numero: 8, total_pecas: 2 } });
+    await tocar(tree, "transferir-confirmar");
+    expect(mockCriar).toHaveBeenCalledTimes(2);
+    expect(mockCriar.mock.calls[1]).toEqual(mockCriar.mock.calls[0]);
+    expect(onConcluido).toHaveBeenCalledWith([8], 2, DESTINOS[0]);
+  });
+
+  it("TENTE_DE_NOVO duas vezes: para e pede para tentar em instantes", async () => {
+    const { tree, onConcluido } = await ateConferir(SIMPLES, { "p:p1": "2" });
+    mockCriar.mockRejectedValue(erroApi(409, { code: "TENTE_DE_NOVO" }));
+    await tocar(tree, "transferir-confirmar");
+    expect(mockCriar).toHaveBeenCalledTimes(2);
+    expect(onConcluido).not.toHaveBeenCalled();
+    expect(textoDe(tree, "transferir-erro-envio")).toContain("Tente de novo em instantes");
+    expect(porTestID(tree, "transferir-resumo")).toHaveLength(1);
+  });
+
+  it("SCHEMA_PENDENTE avisa que fica disponível em alguns minutos", async () => {
+    const { tree } = await ateConferir(SIMPLES, { "p:p1": "2" });
+    mockCriar.mockRejectedValueOnce(erroApi(503, { code: "SCHEMA_PENDENTE" }));
+    await tocar(tree, "transferir-confirmar");
+    expect(mockCriar).toHaveBeenCalledTimes(1);
+    expect(textoDe(tree, "transferir-erro-envio")).toContain("A transferência fica disponível em alguns minutos");
+  });
+
+  it("QUANTIDADE_INVALIDA de serviço mostra a mensagem do backend e marca a linha", async () => {
+    const { tree } = await ateConferir(SIMPLES, { "p:p2": "1" });
+    mockCriar.mockRejectedValueOnce(erroApi(400, {
+      error: "Serviço não tem estoque.", code: "QUANTIDADE_INVALIDA",
+      itens: [{ product_id: "p2", variant_id: null, motivo: "servico" }],
+    }));
+    await tocar(tree, "transferir-confirmar");
+    expect(textoDe(tree, "transferir-erro-envio")).toBe("Serviço não tem estoque. Deixe vazio o que é serviço e confirme de novo.");
+    expect(textoDe(tree, "transferir-erro-p:p2")).toBe("Serviço não tem estoque: deixe vazio.");
+  });
+
+  it("ESTOQUE_INSUFICIENTE cita os nomes e usa o disponível", async () => {
+    const { tree } = await ateConferir(SIMPLES, { "p:p2": "3" });
+    mockCriar.mockRejectedValueOnce(erroApi(409, {
+      code: "ESTOQUE_INSUFICIENTE",
+      itens: [{ product_id: "p2", variant_id: null, disponivel: 1, nome: "Lenço de seda", quantidade: 3 }],
+    }));
+    await tocar(tree, "transferir-confirmar");
+    expect(textoDe(tree, "transferir-erro-envio")).toContain("Confira: Lenço de seda.");
+    expect(textoDe(tree, "transferir-erro-p:p2")).toBe("Só tem 1 nesta loja.");
+  });
+
+  it("peças do toast vêm do total_pecas do POST", async () => {
+    const { tree, onConcluido } = await ateConferir(SIMPLES, { "p:p1": "5" });
+    mockCriar.mockResolvedValueOnce({ transferencia: { numero: 3, total_itens: 1, total_pecas: 4 } });
+    await tocar(tree, "transferir-confirmar");
+    expect(onConcluido).toHaveBeenCalledWith([3], 4, DESTINOS[0]);
   });
 });
 

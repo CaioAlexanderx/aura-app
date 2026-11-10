@@ -52,17 +52,23 @@ export type Transferencia = {
   total_itens?: number | null;
   observacao?: string | null;
   usuario_nome?: string | null;
+  criada_por?: string | null;
+  /** Só no GET (Aura-backend#994): sentido do ponto de vista da loja consultada. */
+  sentido?: "saida" | "entrada" | null;
 };
 
 export type RespostaTransferencia = { transferencia: Transferencia };
-export type RespostaHistorico = { transferencias: Transferencia[]; total?: number };
+export type RespostaHistorico = { transferencias: Transferencia[]; total?: number; limit?: number; offset?: number };
 
 export type CodigoErroTransferencia =
   | "NAO_E_DO_GRUPO"
   | "ESTOQUE_INSUFICIENTE"
   | "QUANTIDADE_INVALIDA"
   | "MESMA_LOJA"
-  | "ITEM_NAO_ENCONTRADO";
+  | "ITEM_NAO_ENCONTRADO"
+  | "GRADE_DIFERENTE"
+  | "TENTE_DE_NOVO"
+  | "SCHEMA_PENDENTE";
 
 // ── Estoque por loja ───────────────────────────────────────
 
