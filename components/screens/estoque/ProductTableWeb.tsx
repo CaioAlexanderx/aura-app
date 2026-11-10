@@ -24,6 +24,9 @@ import { resumoDeLotes } from "@/utils/matconLots";
 // 23/09/2026 (QA producao, item 9): margem 100% em produto sem custo.
 import { computeMargin, DICA_MARGEM_SEM_CUSTO } from "@/utils/productMargin";
 import { VariantesConsulta } from "./VariantesConsulta";
+// 10/11/2026 (NFS-e do serviço): selo "Falta código da NFS-e".
+import { faltaCodigoNfse } from "@/utils/nfseServico";
+import { DICA_FALTA_NFSE, SELO_FALTA_NFSE } from "./nfseNaLista";
 
 const fmtBRL = (n: number) =>
   "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -44,9 +47,11 @@ type Props = {
   semCusto?: boolean;
   // 03/11/2026 — "↓ Entrada" sempre visível (sem hover-reveal: armadilha 7).
   onEntrada?: (product: any) => void;
+  // 10/11/2026 — a loja emite NFS-e: serviço sem código ganha o selo.
+  emiteNfse?: boolean;
 };
 
-export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bulkSelected, onSelect, canLink, consulta, semCusto, onEntrada }: Props) {
+export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bulkSelected, onSelect, canLink, consulta, semCusto, onEntrada, emiteNfse }: Props) {
   const C = useColors();
   const { isDark } = useThemeStore();
   const { m } = useValoresOcultos();
@@ -160,6 +165,14 @@ export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bul
                             background: isDark ? "rgba(251,191,36,0.14)" : "rgba(251,191,36,0.18)",
                             letterSpacing: "0.06em", textTransform: "uppercase",
                           } as any}>baixo</span>
+                        )}
+                        {faltaCodigoNfse(p, !!emiteNfse) && (
+                          <span data-testid="selo-falta-nfse" title={DICA_FALTA_NFSE} style={{
+                            fontSize: 10, fontWeight: 700, color: isDark ? "#fbbf24" : "#b45309",
+                            padding: "2px 7px", borderRadius: 5, whiteSpace: "nowrap",
+                            background: isDark ? "rgba(251,191,36,0.10)" : "rgba(251,191,36,0.12)",
+                            border: "1px solid rgba(251,191,36,0.35)",
+                          } as any}>{SELO_FALTA_NFSE}</span>
                         )}
                       </div>
                       {p.brand && (
