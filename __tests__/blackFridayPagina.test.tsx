@@ -387,9 +387,15 @@ describe("vale-troca: espelho do mesmo estado (pdv_settings)", () => {
   it("usa o mesmo hook e o mesmo serviço do PdvSettingsCard", () => {
     const card = fs.readFileSync(path.join(RAIZ, "components/screens/configuracoes/PdvSettingsCard.tsx"), "utf8");
     const espelho = fs.readFileSync(path.join(RAIZ, "components/screens/blackfriday/ValeTrocaEspelho.tsx"), "utf8");
-    [card, espelho].forEach((f) => {
+    // 10/11/2026: o card grava pela fila do useSalvarPdvSettings, que lê o
+    // mesmo usePdvSettings e grava pelo mesmo pdvSettingsApi.save.
+    const fila = fs.readFileSync(path.join(RAIZ, "hooks/useSalvarPdvSettings.ts"), "utf8");
+    expect(card).toContain("useSalvarPdvSettings");
+    [fila, espelho].forEach((f) => {
       expect(f).toContain("usePdvSettings");
       expect(f).toContain("pdvSettingsApi.save(");
+    });
+    [card, espelho].forEach((f) => {
       expect(f).toContain("lerValeTrocaLigado(");
     });
   });

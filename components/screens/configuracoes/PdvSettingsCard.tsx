@@ -5,10 +5,9 @@ import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
-import { pdvSettingsApi, companiesApi, type PdvSettings } from "@/services/api";
-import { usePdvSettings } from "@/hooks/usePdvSettings";
+import { companiesApi, type PdvSettings } from "@/services/api";
+import { useSalvarPdvSettings } from "@/hooks/useSalvarPdvSettings";
 import { lerVendaSemEstoque } from "@/utils/vendaSemEstoque";
 import { lerComandaEnabled } from "@/utils/comanda";
 import { lerFreteEnabled } from "@/utils/frete";
@@ -86,13 +85,10 @@ export { nomeDaFrente };
 
 export function PdvSettingsCard() {
   const { company, isStaff } = useAuthStore();
-  const { settings: serverSettings, isLoading, invalidate } = usePdvSettings();
-  const [pendingSettings, setPendingSettings] = useState<PdvSettings | null>(null);
-  const [saving, setSaving] = useState(false);
+  // 10/11/2026: fila de saves (useSalvarPdvSettings) — nada que chega com
+  // outro PUT no ar é descartado, e a tela nunca volta ao cache velho.
+  const { display, salvar, saving, isLoading, invalidate } = useSalvarPdvSettings();
   const [feeInput, setFeeInput] = useState<string | null>(null);
-
-  // Usa pendingSettings durante save (optimistic), senao usa o do server
-  const display = pendingSettings || serverSettings;
   // 13/10/2026: vale-troca no cupom (padrão ligado), de pdv_settings.
   const valeTrocaLigado = lerValeTrocaLigado(company?.id, display);
   const isFoodVertical = (company as any)?.vertical_active === "food";
@@ -127,21 +123,9 @@ export function PdvSettingsCard() {
     : labelDesignPadrao(modeloDaLoja);
   const modeloAceitaDesenho = LABEL_DESIGN_SIZES.indexOf(modeloDaLoja) >= 0;
 
-  async function toggle(key: keyof PdvSettings, value: boolean | number | string) {
-    if (!company?.id || saving) return;
-    const next: PdvSettings = { ...display, [key]: value } as PdvSettings;
-    setPendingSettings(next);
-    setSaving(true);
-    try {
-      await pdvSettingsApi.save(company.id, next);
-      invalidate();
-      setPendingSettings(null);
-    } catch (err: any) {
-      setPendingSettings(null);
-      toast.error(err?.data?.error || "Erro ao salvar");
-    } finally {
-      setSaving(false);
-    }
+  function toggle(key: keyof PdvSettings, value: boolean | number | string) {
+    if (!company?.id) return;
+    salvar(key, value);
   }
 
   if (isLoading) {
