@@ -21,6 +21,7 @@
 // chega por hooks/useListaServicosNfse.ts, sob demanda.
 import type { LinhaDaLista } from "@/constants/nfseListaServicos";
 import { SINONIMOS_NFSE } from "@/constants/nfseSinonimos";
+import { vaiNaNfse, type NotaFiscal } from "@/utils/notaDoItem";
 
 /** A lista carregada: as linhas com código e o título de cada item. */
 export type ListaNfse = {
@@ -190,12 +191,15 @@ export function temAlgoNaNfse(f: CamposNfseDoForm): boolean {
 }
 
 // ── lista do Estoque ─────────────────────────────────────────
-/** Serviço sem o código de 6 números, numa loja que emite NFS-e. */
+/**
+ * Item que sai na NFS-e (serviço, ou produto com "Sai em: Nota de serviço")
+ * sem o código de 6 números, numa loja que emite NFS-e.
+ */
 export function faltaCodigoNfse(
-  p: { unit?: string | null; nfseCtribnac?: string | null },
+  p: { unit?: string | null; notaFiscal?: NotaFiscal | null; nfseCtribnac?: string | null },
   emiteNfse: boolean
 ): boolean {
-  if (!emiteNfse || p.unit !== "srv") return false;
+  if (!emiteNfse || !vaiNaNfse(p)) return false;
   return statusDoCodigo(p.nfseCtribnac) !== "ok";
 }
 

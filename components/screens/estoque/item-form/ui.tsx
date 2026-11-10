@@ -111,15 +111,16 @@ export function StoreNote({ texto, lojaOnline = true }: { texto: string; lojaOnl
 // Um cartão com bolinha. `descricao` (opcional) é a linha pequena de baixo.
 // Sempre um botão à vista: nada depende de hover.
 export function Radio({
-  ativo, titulo, descricao, onPress,
+  ativo, titulo, descricao, onPress, testID,
 }: {
   ativo: boolean;
   titulo: string;
   descricao?: string;
   onPress: () => void;
+  testID?: string;
 }) {
   return (
-    <Pressable onPress={onPress} style={[fr.rd, ativo && fr.rdAtivo]} accessibilityLabel={titulo}>
+    <Pressable onPress={onPress} style={[fr.rd, ativo && fr.rdAtivo]} accessibilityLabel={titulo} testID={testID}>
       <View style={[fr.rad, ativo && fr.radAtivo]}>{ativo ? <View style={fr.radDot} /> : null}</View>
       {descricao ? (
         <View style={{ flexShrink: 1 }}>

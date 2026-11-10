@@ -94,6 +94,7 @@ import { useUltimosReajustes, ultimosReajustesQueryKey } from "@/hooks/useUltimo
 // tela 2): selo "Falta código da NFS-e" e filtro rápido, só para quem emite.
 import { useEmiteNfse } from "@/hooks/useEmiteNfse";
 import { faltaCodigoNfse } from "@/utils/nfseServico";
+import { vaiNaNfse } from "@/utils/notaDoItem";
 import { avisoDoFiltroNfse, servicosSemCodigoNfse, SELO_FALTA_NFSE } from "@/components/screens/estoque/nfseNaLista";
 // import { EstoqueRightRail } from "@/components/screens/estoque/EstoqueRightRail"; // Phase 2 — right rail
 
@@ -498,7 +499,9 @@ export default function EstoqueScreen() {
   // os três (mesma lógica que o PDV já usava e o Davi confirmou funcional).
   // 10/11/2026 (NFS-e do serviço): a config de NFS-e só é lida quando há
   // serviço na lista — loja só de produtos não faz requisição nova.
-  const temServico = useMemo(() => products.some((p) => p.unit === "srv"), [products]);
+  // 10/11/2026 (migration 442): "serviço" aqui é item que sai na NFS-e —
+  // também o produto com "Sai em: Nota de serviço" (utils/notaDoItem).
+  const temServico = useMemo(() => products.some(vaiNaNfse), [products]);
   const emiteNfseEstoque = useEmiteNfse(temServico && !isDemo && !consulta);
   const semCodigoNfse = useMemo(() => servicosSemCodigoNfse(products, emiteNfseEstoque), [products, emiteNfseEstoque]);
   // Resolvidos todos, o filtro se desliga sozinho (o chip some junto).

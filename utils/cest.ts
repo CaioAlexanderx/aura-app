@@ -13,6 +13,8 @@
 // aparecem em texto de usuário — eles só existem no backend, na emissão.
 // ============================================================================
 
+import { vaiNaNfse, type NotaFiscal } from "@/utils/notaDoItem";
+
 export type CestFamilyRow = {
   /** Prefixo do NCM (sem pontuação) que identifica a família. */
   prefix: string;
@@ -117,6 +119,7 @@ type ProdutoParaGap = {
   id: string;
   name: string;
   unit: string;
+  notaFiscal?: NotaFiscal | null;
   ncm?: string | null;
   cest?: string | null;
 };
@@ -129,7 +132,9 @@ type ProdutoParaGap = {
 export function calcularFiscalGaps<T extends ProdutoParaGap>(products: T[] | null | undefined): T[] {
   if (!Array.isArray(products)) return [];
   return products.filter((p) => {
-    if (!p || p.unit === "srv") return false;
+    // CEST é da NFC-e: item que sai na NFS-e (serviço, ou "Sai em: Nota de
+    // serviço") não precisa dele. Regra única em utils/notaDoItem.
+    if (!p || vaiNaNfse(p)) return false;
     if (p.cest) return false;
     return !!suggestCest(p.ncm);
   });

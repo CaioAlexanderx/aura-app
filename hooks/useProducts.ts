@@ -4,6 +4,7 @@ import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 import type { Product } from "@/components/screens/estoque/types";
+import { lerNotaFiscal } from "@/utils/notaDoItem";
 
 async function deleteBatched(
   ids: string[],
@@ -110,6 +111,8 @@ function mapApiProduct(p: any): Product {
     ibscbsCst: textoOuNull(p.ibscbs_cst),
     ibscbsCclasstrib: textoOuNull(p.ibscbs_cclasstrib),
     ibscbsCindop: textoOuNull(p.ibscbs_cindop),
+    // 10/11/2026 (migration 442): "Sai em". Ausente/estranho -> null (segue o tipo).
+    notaFiscal: lerNotaFiscal(p.nota_fiscal),
     isGroupShared: p.is_group_shared === true,
   };
 }
@@ -219,6 +222,10 @@ export function useProducts() {
       // (volta ao padrão da empresa). Por isso `=== undefined`, e não `??`:
       // `null ?? undefined` daria undefined e o valor antigo ficaria preso.
       ...camposNfseDoCorpo(product),
+      // 10/11/2026 (migration 442): "Sai em". undefined = não vai no JSON
+      // (loja que não emite NFS-e, ou nada mudou); null LIMPA (volta a
+      // seguir o tipo). Por isso `=== undefined`, e não `??`.
+      ...(product.notaFiscal === undefined ? {} : { nota_fiscal: product.notaFiscal }),
     };
   }
 

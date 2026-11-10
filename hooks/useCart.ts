@@ -16,6 +16,7 @@ import { mensagemErroCarneDaVenda } from "@/utils/crediarioCarne";
 import { novaChaveDaVenda } from "@/utils/chaveDaVenda";
 import { promoDoItem } from "@/utils/precoEfetivo";
 import { docValido, ehServico } from "@/utils/nfseAutomatica";
+import type { NotaFiscal } from "@/utils/notaDoItem";
 import {
   CARTAO_DESLIGADO, contaComOServidor, ehCartao, editarPrecoNoDividido, editarPrecoProporcional, linhasNoMetodo, linhasRateadas,
   precoNoCartaoDoItem, r2, resolverDividido, statusDoDividido, totalComoNoServidor,
@@ -53,6 +54,9 @@ export type CartItem = {
   // cartão vai em `promoDeCard` (opção da loja ligada).
   promoDe?: number;
   promoDeCard?: number;
+  // 10/11/2026 (migration 442): "Sai em" do cadastro — decide se o item conta
+  // como da NFS-e no carrinho (utils/notaDoItem.vaiNaNfse). Só viaja.
+  notaFiscal?: NotaFiscal | null;
 };
 
 // Multi-pagamento: cada entrada vira uma `detPag` no SEFAZ NFC-e (tPag = method, vPag = value).
@@ -757,6 +761,8 @@ export function useCart(
       // 08/11/2026 (De/Por, p-87): campos do catálogo (useProducts) ou do
       // bipe. Sem eles (backend antigo) o preço é o de sempre.
       emPromocao?: boolean; precoEfetivo?: number | null;
+      // 10/11/2026 (migration 442): "Sai em" do cadastro (null = segue o tipo).
+      notaFiscal?: NotaFiscal | null;
     },
     variant?: { id: string; label: string; price?: number; promoDe?: number | null },
   ) {
@@ -784,6 +790,7 @@ export function useCart(
         unit: product.unit || undefined,
         purchaseUnit: product.purchaseUnit ?? undefined,
         purchaseFactor: product.purchaseFactor ?? undefined,
+        ...(product.notaFiscal ? { notaFiscal: product.notaFiscal } : {}),
         ...(cardPrice != null ? { cardPrice: cardPrice, cardListPrice: cardPrice } : {}),
         ...(promoDe != null ? { promoDe: promoDe } : {}),
         ...(promoDeCard != null ? { promoDeCard: promoDeCard } : {}),
