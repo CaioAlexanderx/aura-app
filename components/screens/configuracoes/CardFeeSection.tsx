@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, StyleSheet, Switch, TextInput } from "react-native";
 import type { PdvSettings } from "@/services/api";
 import { parsePercent, formatPercent } from "@/utils/parsePercent";
@@ -14,17 +14,30 @@ import { parsePercent, formatPercent } from "@/utils/parsePercent";
 // useStudioTokens no Studio) e seu próprio ciclo de save.
 //
 // O componente é presentacional: quem monta é dono do estado
-// (display/saving/onToggle). Isso preserva, no varejo, o `saving`
-// único que serializa os PUTs de todos os toggles do card — o
-// PUT /pdv-settings substitui o jsonb inteiro, então dois saves
-// concorrentes partindo do mesmo cache perderiam a mudança um
-// do outro.
+// (display/saving/onToggle). Os dois shells usam o
+// useSalvarPdvSettings, que serializa os PUTs numa fila e monta
+// cada corpo do último salvo + o pendente (10/11/2026).
 //
 // 09/11/2026: "Pix pela maquininha %" (card_fee_pix_pct), logo abaixo do
 // Débito. A venda não sabe se o Pix passou pela maquininha, então com o
 // campo > 0 toda venda Pix paga a taxa (backend). 0 ou vazio = Pix sem
 // taxa, igual a antes.
+//
+// 10/11/2026 (incidente: 14 lojas com a chave ligada e tudo em 0%): a
+// alíquota só era gravada no blur. No navegador, o blur não chega quando o
+// campo some sem clique (Esc, voltar do navegador ou do mouse, atalho que
+// troca de tela) — medido no Chrome: digitar e desmontar sem clique não
+// dispara o onBlur do React. Agora grava também ao digitar (com uma pausa
+// curta), no Enter e ao sair da tela. O campo não trava mais durante o save
+// (o que se digitava nesse meio-tempo sumia). Com a chave ligada e tudo em
+// 0%, um aviso diz que nada será lançado.
 // ============================================================
+
+type PctKey = "card_fee_credit_pct" | "card_fee_debit_pct" | "card_fee_pix_pct";
+const PCT_KEYS: PctKey[] = ["card_fee_credit_pct", "card_fee_debit_pct", "card_fee_pix_pct"];
+
+/** Espera depois da última tecla antes de gravar a alíquota digitada. */
+export const CARD_FEE_DEBOUNCE_MS = 700;
 
 export type CardFeePalette = {
   label: string;       // texto principal das linhas
@@ -48,21 +61,76 @@ type Props = {
 };
 
 export function CardFeeSection({ display, saving, onToggle, palette }: Props) {
-  // Crédito e débito têm alíquotas próprias, então cada campo guarda
-  // o texto em edição separadamente e só persiste no blur.
+  // Cada campo guarda o texto em edição separadamente.
   // null = campo intocado (mostra o valor salvo); "" = a lojista apagou.
   const [creditFeeInput, setCreditFeeInput] = useState<string | null>(null);
   const [debitFeeInput, setDebitFeeInput] = useState<string | null>(null);
   const [pixFeeInput, setPixFeeInput] = useState<string | null>(null);
   const s = useMemo(() => buildStyles(palette), [palette]);
 
-  function commitPct(raw: string | null, key: "card_fee_credit_pct" | "card_fee_debit_pct" | "card_fee_pix_pct") {
+  // Refs: o timer e a desmontagem precisam do texto e do display MAIS
+  // RECENTES, não dos que estavam no render em que o timer nasceu.
+  const rascunho = useRef<Record<PctKey, string | null>>({ card_fee_credit_pct: null, card_fee_debit_pct: null, card_fee_pix_pct: null });
+  const timers = useRef<Partial<Record<PctKey, ReturnType<typeof setTimeout>>>>({});
+  const atual = useRef({ display, onToggle });
+  atual.current = { display, onToggle };
+
+  const setters: Record<PctKey, (v: string | null) => void> = {
+    card_fee_credit_pct: setCreditFeeInput,
+    card_fee_debit_pct: setDebitFeeInput,
+    card_fee_pix_pct: setPixFeeInput,
+  };
+
+  function commitPct(key: PctKey) {
+    const t = timers.current[key];
+    if (t) { clearTimeout(t); delete timers.current[key]; }
+    const raw = rascunho.current[key];
     if (raw === null) return; // não mexeu no campo: nada a gravar
     // Vírgula e ponto valem como decimal ("11,52" = 11.52), até 2 casas.
     const n = parsePercent(raw, 100);
-    if (n !== Number(display[key] || 0)) {
-      onToggle(key, n);
-    }
+    const { display: d, onToggle: gravar } = atual.current;
+    if (n !== Number(d[key] || 0)) gravar(key, n);
+  }
+
+  function digitar(key: PctKey, texto: string) {
+    rascunho.current[key] = texto;
+    setters[key](texto);
+    const t = timers.current[key];
+    if (t) clearTimeout(t);
+    timers.current[key] = setTimeout(() => commitPct(key), CARD_FEE_DEBOUNCE_MS);
+  }
+
+  function sair(key: PctKey) {
+    commitPct(key);
+    rascunho.current[key] = null;
+    setters[key](null);
+  }
+
+  // Saiu da tela com algo digitado e ainda não gravado (a pausa não
+  // terminou e o blur não veio): grava agora.
+  useEffect(() => () => { PCT_KEYS.forEach(commitPct); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Vale o que está na tela: o digitado (se houver) ou o salvo.
+  const efetivo = (key: PctKey, input: string | null) => (input !== null ? parsePercent(input, 100) : Number(display[key] || 0));
+  const tudoZerado = efetivo("card_fee_credit_pct", creditFeeInput) <= 0
+    && efetivo("card_fee_debit_pct", debitFeeInput) <= 0
+    && efetivo("card_fee_pix_pct", pixFeeInput) <= 0;
+
+  function campo(key: PctKey, testID: string, input: string | null) {
+    return (
+      <TextInput
+        testID={testID}
+        value={input ?? formatPercent(display[key])}
+        onChangeText={(t) => digitar(key, t)}
+        onBlur={() => sair(key)}
+        onSubmitEditing={() => commitPct(key)}
+        returnKeyType="done"
+        keyboardType="decimal-pad"
+        placeholder="0"
+        placeholderTextColor={palette.hint}
+        style={s.feeInput}
+      />
+    );
   }
 
   return (
@@ -83,25 +151,17 @@ export function CardFeeSection({ display, saving, onToggle, palette }: Props) {
 
       {display.card_fee_enabled === true && (
         <View style={s.cardFeeBox}>
+          {tudoZerado && (
+            <Text style={s.avisoZero} testID="card-fee-aviso-zero">
+              Preencha a taxa do crédito, do débito ou do Pix. Com 0%, nada é lançado.
+            </Text>
+          )}
           <View style={s.cardFeeRow}>
             <View style={{ flex: 1 }}>
               <Text style={s.cardFeeLabel}>Crédito</Text>
               <Text style={s.cardFeeHint}>Quanto a adquirente retém no crédito</Text>
             </View>
-            <TextInput
-              testID="card-fee-credit"
-              value={creditFeeInput ??formatPercent(display.card_fee_credit_pct)}
-              onChangeText={setCreditFeeInput}
-              onBlur={() => {
-                commitPct(creditFeeInput, "card_fee_credit_pct");
-                setCreditFeeInput(null);
-              }}
-              keyboardType="decimal-pad"
-              placeholder="0"
-              placeholderTextColor={palette.hint}
-              style={s.feeInput}
-              editable={!saving}
-            />
+            {campo("card_fee_credit_pct", "card-fee-credit", creditFeeInput)}
             <Text style={s.pctSign}>%</Text>
           </View>
 
@@ -110,20 +170,7 @@ export function CardFeeSection({ display, saving, onToggle, palette }: Props) {
               <Text style={s.cardFeeLabel}>Débito</Text>
               <Text style={s.cardFeeHint}>Quanto a adquirente retém no débito</Text>
             </View>
-            <TextInput
-              testID="card-fee-debit"
-              value={debitFeeInput ??formatPercent(display.card_fee_debit_pct)}
-              onChangeText={setDebitFeeInput}
-              onBlur={() => {
-                commitPct(debitFeeInput, "card_fee_debit_pct");
-                setDebitFeeInput(null);
-              }}
-              keyboardType="decimal-pad"
-              placeholder="0"
-              placeholderTextColor={palette.hint}
-              style={s.feeInput}
-              editable={!saving}
-            />
+            {campo("card_fee_debit_pct", "card-fee-debit", debitFeeInput)}
             <Text style={s.pctSign}>%</Text>
           </View>
 
@@ -132,20 +179,7 @@ export function CardFeeSection({ display, saving, onToggle, palette }: Props) {
               <Text style={s.cardFeeLabel}>Pix pela maquininha</Text>
               <Text style={s.cardFeeHint}>Se o Pix cai direto na chave da loja, deixe 0.</Text>
             </View>
-            <TextInput
-              testID="card-fee-pix"
-              value={pixFeeInput ?? formatPercent(display.card_fee_pix_pct)}
-              onChangeText={setPixFeeInput}
-              onBlur={() => {
-                commitPct(pixFeeInput, "card_fee_pix_pct");
-                setPixFeeInput(null);
-              }}
-              keyboardType="decimal-pad"
-              placeholder="0"
-              placeholderTextColor={palette.hint}
-              style={s.feeInput}
-              editable={!saving}
-            />
+            {campo("card_fee_pix_pct", "card-fee-pix", pixFeeInput)}
             <Text style={s.pctSign}>%</Text>
           </View>
 
@@ -170,6 +204,7 @@ function buildStyles(p: CardFeePalette) {
     cardFeeLabel: { fontSize: 12, color: p.label, fontWeight: "600" },
     cardFeeHint:  { fontSize: 10, color: p.hint, marginTop: 1 },
     cardFeeFoot:  { fontSize: 10, color: p.hint, marginTop: 4, lineHeight: 14 },
+    avisoZero:    { fontSize: 11, color: p.label, fontWeight: "600", lineHeight: 15, paddingTop: 4, paddingBottom: 2 },
     feeInput: {
       backgroundColor: p.inputBg, color: p.inputText,
       paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6,

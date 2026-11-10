@@ -29,6 +29,7 @@ import { StudioScreen } from "@/components/studio/StudioScreen";
 import { studioApi, type StudioHealth } from "@/services/studioApi";
 import { pdvSettingsApi, type PdvSettings } from "@/services/api";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
+import { useSalvarPdvSettings } from "@/hooks/useSalvarPdvSettings";
 import { CardFeeSection, type CardFeePalette } from "@/components/screens/configuracoes/CardFeeSection";
 import { FrenteDaLoja, type FrenteDaLojaPaleta } from "@/components/screens/configuracoes/FrenteDaLoja";
 import { useQueryClient } from "@tanstack/react-query";
@@ -70,16 +71,13 @@ function EquipeGateStudio({ t }: { t: ReturnType<typeof useStudioTokens> }) {
 // guard do _layout e nunca viam o toggle do PdvSettingsCard.
 // Este card renderiza a CardFeeSection compartilhada com tokens
 // do Studio e o mesmo ciclo de save do varejo: PUT imediato do
-// pdv_settings COMPLETO (o backend substitui o jsonb inteiro,
-// então o payload parte sempre do GET com todas as chaves).
+// pdv_settings COMPLETO, montado do GET com todas as chaves.
+// 10/11/2026: o ciclo é o useSalvarPdvSettings (fila de saves, corpo
+// montado do último salvo + o pendente) — o crédito e o débito
+// digitados em seguida não se apagam mais.
 // ============================================================
 function CardFeeCardStudio({ t, s, celular = false }: { t: ReturnType<typeof useStudioTokens>; s: ReturnType<typeof buildStyles>; celular?: boolean }) {
-  const { company } = useAuthStore();
-  const { settings: serverSettings, isLoading, error, invalidate } = usePdvSettings();
-  const [pendingSettings, setPendingSettings] = useState<PdvSettings | null>(null);
-  const [feeSaving, setFeeSaving] = useState(false);
-
-  const display = pendingSettings || serverSettings;
+  const { display, salvar, saving: feeSaving, isLoading, error } = useSalvarPdvSettings();
 
   const palette: CardFeePalette = useMemo(() => ({
     label:       t.ink,
@@ -95,21 +93,8 @@ function CardFeeCardStudio({ t, s, celular = false }: { t: ReturnType<typeof use
     boxBorder:   t.ink5,
   }), [t]);
 
-  async function toggle(key: keyof PdvSettings, value: boolean | number) {
-    if (!company?.id || feeSaving) return;
-    const next: PdvSettings = { ...display, [key]: value } as PdvSettings;
-    setPendingSettings(next);
-    setFeeSaving(true);
-    try {
-      await pdvSettingsApi.save(company.id, next);
-      invalidate();
-      setPendingSettings(null);
-    } catch (err: any) {
-      setPendingSettings(null);
-      toast.error(err?.data?.error || "Erro ao salvar");
-    } finally {
-      setFeeSaving(false);
-    }
+  function toggle(key: keyof PdvSettings, value: boolean | number) {
+    salvar(key, value);
   }
 
   return (
