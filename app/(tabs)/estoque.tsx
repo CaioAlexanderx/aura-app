@@ -93,6 +93,14 @@ import { useUltimosReajustes, ultimosReajustesQueryKey } from "@/hooks/useUltimo
 // 10/11/2026 — NFS-e do serviço (docs/mockups/nfse-cadastro-servico.html,
 // tela 2): selo "Falta código da NFS-e" e filtro rápido, só para quem emite.
 import { useEmiteNfse } from "@/hooks/useEmiteNfse";
+// 10/11/2026: transferir entre lojas do grupo + estoque por loja no
+// consolidado. Abas e modais dentro do Estoque: reutilizam o mod "estoque"
+// (mesma tela, mesma permissão), sem rota nova.
+import { TransferirModal } from "@/components/screens/estoque/transferencia/TransferirModal";
+import { TransferenciasModal } from "@/components/screens/estoque/transferencia/TransferenciasModal";
+import { EstoquePorLoja } from "@/components/screens/estoque/transferencia/EstoquePorLoja";
+import { BotaoTransferir } from "@/components/screens/estoque/transferencia/BotaoTransferir";
+import { lojasDaTransferencia, plural as pluralQtd, textoDosNumeros } from "@/utils/transferenciaEstoque";
 import { faltaCodigoNfse } from "@/utils/nfseServico";
 import { vaiNaNfse } from "@/utils/notaDoItem";
 import { avisoDoFiltroNfse, servicosSemCodigoNfse, SELO_FALTA_NFSE } from "@/components/screens/estoque/nfseNaLista";
@@ -462,6 +470,15 @@ export default function EstoqueScreen() {
   const setSortOrder = (o: OrdemEstoque) => { setSortOrderState(o); salvarOrdem(o); };
   const hasMultipleCnpjs = (availableCompanies?.length || 0) >= 2;
   const canLinkProducts = hasMultipleCnpjs && !consolidatedView && !!company?.id && !consulta;
+  // 10/11/2026: transferir entre lojas — só numa loja específica (nunca no
+  // consolidado), com outra loja do grupo que o usuário acessa.
+  const lojasTransferencia = lojasDaTransferencia(availableCompanies, company?.id, {
+    consolidado: consolidatedView, consulta, demo: isDemo, nomeAtual: company?.name,
+  });
+  const podeTransferir = !!lojasTransferencia;
+  const [transferirAberto, setTransferirAberto] = useState(false);
+  const [transferenciasAberto, setTransferenciasAberto] = useState(false);
+  const [visaoConsolidado, setVisaoConsolidado] = useState<"somado" | "por_loja">("somado");
 
   const { data: dupGroupsData, refetch: refetchDupGroups } = useQuery({
     queryKey: ["duplicateGroups", company?.id],
@@ -651,13 +668,21 @@ export default function EstoqueScreen() {
 
   if (consolidatedView) {
     return (
-      <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={s.content}>
+      <ScrollView ref={scrollRef} style={s.screen} contentContainerStyle={visaoConsolidado === "por_loja" && isWebWide ? s.contentWide : s.content}>
         <View style={s.headerRow}>
           <View style={{ flex: 1 }}>
             <Text style={s.pageTitle}>Estoque consolidado</Text>
           </View>
         </View>
-        <AggregatedView />
+        <ScreenTabs
+          tabs={[
+            { key: "somado", label: "Somado", testID: "estoque-consolidado-somado" },
+            { key: "por_loja", label: "Por loja", testID: "estoque-consolidado-por-loja" },
+          ]}
+          active={visaoConsolidado}
+          onSelect={(k: string) => setVisaoConsolidado(k === "por_loja" ? "por_loja" : "somado")}
+        />
+        {visaoConsolidado === "por_loja" ? <EstoquePorLoja /> : <AggregatedView />}
       </ScrollView>
     );
   }
@@ -756,6 +781,7 @@ export default function EstoqueScreen() {
             <Text style={s.bulkActionText}>Definir fornecedor</Text>
           </Pressable>
         )}
+        <BotaoTransferir lojas={lojasTransferencia} selecionados={bulkSelected.size} onPress={() => setTransferirAberto(true)} />
         <Pressable
           onPress={() => { if (bulkSelected.size > 0) setShowBulkConfirm(true); }}
           disabled={bulkSelected.size === 0}
@@ -816,16 +842,31 @@ export default function EstoqueScreen() {
           </View>
         )}
 
-        {temUltimosReajustes && (
-          <Pressable
-            onPress={() => setUltimosAberto(true)}
-            style={s.ultimosLink}
-            testID="estoque-ultimos-reajustes"
-            accessibilityRole="button"
-          >
-            <Icon name="rotate_ccw" size={13} color={Colors.violet3} />
-            <Text style={s.ultimosLinkText}>Últimos reajustes</Text>
-          </Pressable>
+        {(temUltimosReajustes || podeTransferir) && (
+          <View style={s.linksTopo}>
+            {podeTransferir && (
+              <Pressable
+                onPress={() => setTransferenciasAberto(true)}
+                style={s.ultimosLink}
+                testID="estoque-transferencias"
+                accessibilityRole="button"
+              >
+                <Text style={{ color: Colors.violet3, fontSize: 13, fontWeight: "800" }}>⇄</Text>
+                <Text style={s.ultimosLinkText}>Transferências</Text>
+              </Pressable>
+            )}
+            {temUltimosReajustes && (
+              <Pressable
+                onPress={() => setUltimosAberto(true)}
+                style={s.ultimosLink}
+                testID="estoque-ultimos-reajustes"
+                accessibilityRole="button"
+              >
+                <Icon name="rotate_ccw" size={13} color={Colors.violet3} />
+                <Text style={s.ultimosLinkText}>Últimos reajustes</Text>
+              </Pressable>
+            )}
+          </View>
         )}
 
         {/* 19/10/2026 (tq-31): quem respondeu "planilha" no check-in chega
@@ -1169,6 +1210,30 @@ export default function EstoqueScreen() {
           }}
         />
       </WebPortal>
+      <WebPortal active={transferirAberto && !!lojasTransferencia}>
+        <TransferirModal
+          origem={lojasTransferencia?.origem || { id: "", nome: "" }}
+          destinos={lojasTransferencia?.destinos || []}
+          produtos={products.filter((p) => bulkSelected.has(p.id) && p.unit !== "srv")}
+          onFechar={() => setTransferirAberto(false)}
+          onEstoqueMudou={() => {
+            qc.invalidateQueries({ queryKey: ["products", company?.id] });
+            qc.invalidateQueries({ queryKey: ["productsAggregated"] });
+          }}
+          onConcluido={(numeros, pecas, destino) => {
+            toast.success((numeros.length > 1 ? "Transferências " : "Transferência ") + textoDosNumeros(numeros) + (numeros.length > 1 ? " feitas: " : " feita: ") + pluralQtd(pecas, "peça", "peças") + " para " + destino.nome);
+            setTransferirAberto(false);
+            exitBulkMode();
+          }}
+        />
+      </WebPortal>
+      <WebPortal active={transferenciasAberto && !!lojasTransferencia}>
+        <TransferenciasModal
+          companyId={company?.id || ""}
+          nomes={lojasTransferencia?.nomes || {}}
+          onFechar={() => setTransferenciasAberto(false)}
+        />
+      </WebPortal>
       <WebPortal active={importPlanilha.aberto}>
         <ImportPlanilhaModal
           fase={importPlanilha.fase}
@@ -1231,6 +1296,7 @@ const s = StyleSheet.create({
   pageTitle: { fontSize: 22, color: Colors.ink, fontWeight: "700" },
   headerActions: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   // Link de texto (ação secundária): sem cara de botão, alvo de 44 px.
+  linksTopo: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: 14 },
   ultimosLink: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-end", minHeight: 44, paddingHorizontal: 4, marginTop: -8, marginBottom: 4 },
   ultimosLinkText: { fontSize: 12.5, color: Colors.violet3, fontWeight: "600", textDecorationLine: "underline" },
   serviceBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: Colors.border2 },
