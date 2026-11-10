@@ -11,6 +11,10 @@
 //   3. Venda mista: NFC-e só dos produtos e NFS-e dos serviços.
 //   4. Serviço sem código: a venda fecha e a NFS-e fica "com problema", com
 //      atalho para o cadastro do serviço.
+//   5. (10/11/2026, botão "Emitir NFS-e") Loja que emite NFS-e SEM a
+//      automática: a venda com serviço mostra o botão, como o "Emitir
+//      NFC-e"; o CPF/CNPJ de quem contratou aparece no Caixa, OPCIONAL — se
+//      faltar, o botão pede na hora.
 //
 // "Serviço" aqui = item que sai na NFS-e: utils/notaDoItem.vaiNaNfse (o "Sai
 // em" do cadastro; sem escolha, unit 'srv') — a mesma regra do backend.
@@ -44,6 +48,28 @@ export function composicaoDaVenda(items: Array<NonNullable<ItemComNota>> | null 
 /** O Caixa só exige o tomador com serviço no carrinho E a emissão ligada. */
 export function exigeTomador(p: { temServico: boolean; nfseAtiva: boolean }): boolean {
   return !!p.temServico && !!p.nfseAtiva;
+}
+
+/**
+ * O Caixa mostra o "CPF ou CNPJ de quem contratou": serviço no carrinho e a
+ * loja emitindo NFS-e (automática ou só pelo botão). Obrigatório só com a
+ * automática (exigeTomador); pelo botão é opcional.
+ */
+export function pedeTomador(p: { temServico: boolean; nfseAtiva: boolean; nfseEmite: boolean }): boolean {
+  return !!p.temServico && (!!p.nfseAtiva || !!p.nfseEmite);
+}
+
+/**
+ * Como a NFS-e da venda concluída aparece:
+ *   'automatica' — a nota sai sozinha (o cartão acompanha);
+ *   'manual'     — a loja emite pelo botão "Emitir NFS-e";
+ *   'nenhuma'    — sem serviço ou loja que não emite: a tela de sempre.
+ */
+export type ModoDaNfse = "automatica" | "manual" | "nenhuma";
+export function modoDaNfseNaVenda(p: { temServico: boolean; nfseAtiva: boolean; nfseEmite: boolean }): ModoDaNfse {
+  if (!p.temServico) return "nenhuma";
+  if (p.nfseAtiva) return "automatica";
+  return p.nfseEmite ? "manual" : "nenhuma";
 }
 
 /** Aviso do carrinho sobre as notas que a venda gera (null = sem aviso). */
@@ -166,7 +192,8 @@ export function numerosDasNotas(s: SituacaoNfse | null | undefined): string {
  * O que a linha da NFS-e oferece nas telas de detalhe (OS, venda, cobrança).
  * Regra do dono: nota emitida → só a 2ª via; "Emitir NFS-e" só em falha ou
  * pendência; 'nenhuma' (sem serviço, anterior ao opt-in ou loja que não
- * emite) → nada, para a tela ficar como antes.
+ * emite) → nada, para a tela ficar como antes — salvo com pode_emitir
+ * (serviço + loja que emite, Aura-backend#989): aí "Emitir NFS-e".
  */
 export type BotaoDaNfse = "nada" | "aguardar" | "segunda_via" | "emitir" | "completar_e_emitir" | "cadastrar_codigo";
 
@@ -181,7 +208,9 @@ export function botaoDaNfse(s: SituacaoNfse | null | undefined): BotaoDaNfse {
     imprimir_2a_via: "segunda_via",
     cadastrar_codigo: "cadastrar_codigo",
   };
-  if (s.estado === "nenhuma") return "nada";
+  // 'nenhuma': o botão manual só quando o backend diz que cabe (serviço +
+  // loja que emite); sem isso a tela fica como antes.
+  if (s.estado === "nenhuma") return s.pode_emitir ? "emitir" : "nada";
   return mapa[s.acao] || "nada";
 }
 

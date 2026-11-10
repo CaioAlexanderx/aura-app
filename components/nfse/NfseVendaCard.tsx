@@ -16,6 +16,19 @@
 // /pdv/sale). utils/entregarTomador fica como rede de segurança para um
 // backend que ainda não lê esse campo (só age se a nota ficou pendente por
 // falta de tomador).
+//
+// 10/11/2026 — botão "Emitir NFS-e" (automatica=false: a loja emite NFS-e,
+// mas sem a emissão automática; Aura-backend#989). Sem nota ainda, o cartão
+// mostra o botão no mesmo padrão do "Emitir NFC-e" (largo, violeta, no topo
+// do cartão). Ao tocar:
+//   - com o CPF/CNPJ do Caixa (válido) → POST /emitir com ele;
+//   - sem documento e sem cliente na venda → abre o "Completar o cliente"
+//     aqui mesmo (CPF/CNPJ + nome) e emite em seguida (/completar);
+//   - sem documento mas com cliente → /emitir (o backend usa o cadastro);
+//     se voltar pendente por falta de quem contratou, o completar abre.
+// Depois segue igual: emitindo → emitida (Imprimir/WhatsApp) ou problema.
+// 'nenhuma' para o polling (nada vai sair sozinho) e a rede de segurança
+// do entregarTomador não roda (o documento vai no próprio toque).
 // ============================================================
 import { useEffect, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, Platform } from "react-native";
@@ -27,8 +40,9 @@ import { useAuthStore } from "@/stores/auth";
 import { useSituacaoNfse } from "@/hooks/useNfseAutomatica";
 import type { TomadorNfse } from "@/services/nfseAutomaticaApi";
 import {
-  faltaSoONome, faltaTomador, mensagemWhatsAppDaNfse, motivoDaSituacao, notasEmitidas, numerosDasNotas, semCodigo,
+  docValido, faltaSoONome, faltaTomador, mensagemWhatsAppDaNfse, motivoDaSituacao, notasEmitidas, numerosDasNotas, semCodigo,
 } from "@/utils/nfseAutomatica";
+import { onlyDigits } from "@/lib/validators";
 import { entregarTomadorDaVenda } from "@/utils/entregarTomador";
 import { abrirLink, abrirPdfDaNfse, linkWhatsApp } from "./nfseAcoes";
 import { CompletarTomador } from "./CompletarTomador";
@@ -47,16 +61,23 @@ type Props = {
   customerPhone?: string | null;
   /** Multi-CNPJ: "emitida pelo CNPJ da Loja Centro". */
   nomeDaLoja?: string | null;
+  /** true (padrão) = a nota sai sozinha; false = a loja emite pelo botão. */
+  automatica?: boolean;
+  /** Cliente da venda: com ele o backend pode achar o CPF/CNPJ no cadastro. */
+  customerId?: string | null;
 };
 
-export function NfseVendaCard({ companyId, saleId, servicos, totalServicos, tomador, customerPhone, nomeDaLoja }: Props) {
+export function NfseVendaCard({ companyId, saleId, servicos, totalServicos, tomador, customerPhone, nomeDaLoja, automatica = true, customerId }: Props) {
   const { token } = useAuthStore();
-  const { situacao, esgotou, atualizar, aplicar } = useSituacaoNfse({ companyId, tipo: "venda", id: saleId });
+  const { situacao, esgotou, atualizar, aplicar } = useSituacaoNfse({ companyId, tipo: "venda", id: saleId, nenhumaEhFinal: !automatica });
   const { emitir, emitindo } = useEmitirNfse(companyId, "venda", saleId, aplicar);
   const [completando, setCompletando] = useState(false);
+  // botão manual sem documento: o completar antes de existir registro
+  const [pedindoTomador, setPedindoTomador] = useState(false);
 
   // Leva o documento do Caixa à nota quando o cadastro do cliente não tem.
   useEffect(() => {
+    if (!automatica) return;
     if (!tomador || !tomador.doc) return;
     entregarTomadorDaVenda({ companyId, saleId, tomador }).then((s) => { if (s) aplicar(s); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -87,6 +108,48 @@ export function NfseVendaCard({ companyId, saleId, servicos, totalServicos, toma
     const wa = linkWhatsApp(customerPhone, mensagemWhatsAppDaNfse({ numero: numeros, total: totalServicos, chave: n ? n.chave_acesso : null }));
     if (wa) abrirLink(wa);
     else toast.error("Cliente sem telefone cadastrado. Selecione um cliente com telefone para enviar.");
+  }
+
+  // ── botão "Emitir NFS-e" (loja que emite sem a automática) ──
+  async function emitirAgora() {
+    const doc = tomador && tomador.doc ? onlyDigits(tomador.doc) : "";
+    const comDoc = docValido(doc);
+    if (!comDoc && !customerId) { setPedindoTomador(true); return; }
+    const r = await emitir(situacao, comDoc ? { doc, nome: (tomador && tomador.nome) || null } : null);
+    if (faltaTomador(r)) setCompletando(true);
+  }
+
+  if (!automatica && (!situacao || estado === "nenhuma")) {
+    return (
+      <View style={s.card} testID="nfse-venda-manual">
+        {cab(<View style={[s.selo, s.seloVai]}><Text style={[s.seloTxt, { color: Colors.ink3 }]}>Ainda não emitida</Text></View>)}
+        {pedindoTomador ? (
+          <>
+            <Text style={s.msg}>A prefeitura pede o CPF ou CNPJ e o nome de quem contratou o serviço. Pergunte ao cliente e emita.</Text>
+            <CompletarTomador
+              companyId={companyId}
+              tipo="venda"
+              id={saleId}
+              docInicial={tomador ? tomador.doc : null}
+              nomeInicial={tomador ? tomador.nome : null}
+              onFeito={(r) => { setPedindoTomador(false); aplicar(r); if (faltaTomador(r)) setCompletando(true); }}
+              onCancelar={() => setPedindoTomador(false)}
+            />
+          </>
+        ) : (
+          <Pressable
+            onPress={emitirAgora}
+            disabled={emitindo}
+            style={[s.btnEmitir, emitindo && { opacity: 0.6 }]}
+            accessibilityRole="button"
+            testID="nfse-venda-emitir"
+          >
+            {emitindo ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="file_text" size={16} color="#fff" />}
+            <Text style={s.btnEmitirTxt}>Emitir NFS-e</Text>
+          </Pressable>
+        )}
+      </View>
+    );
   }
 
   // ── emitida ──
@@ -204,6 +267,9 @@ const s = StyleSheet.create({
   btn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 38, paddingHorizontal: 14, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
   btnPri: { backgroundColor: Colors.violet, borderColor: Colors.violet },
   btnTxt: { fontSize: 12, color: Colors.violet3, fontWeight: "700" },
+  // o mesmo botão do "Emitir NFC-e" (NfceActions.nfcePrimaryBtn)
+  btnEmitir: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", paddingVertical: 14, borderRadius: 12, backgroundColor: Colors.violet },
+  btnEmitirTxt: { fontSize: 14, color: "#fff", fontWeight: "700" },
 });
 
 export default NfseVendaCard;

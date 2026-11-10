@@ -222,3 +222,74 @@ describe("loja sem a emissão automática", () => {
     expect(st.lastSale!.tomador).toBeUndefined();
   });
 });
+
+// 10/11/2026 (botão "Emitir NFS-e", Aura-backend#989): a loja emite NFS-e
+// (config.emite) mas sem a automática — o campo aparece, OPCIONAL.
+const SO_EMITE = { ligada_no_servidor: false, tem_config: true, provider: "nacional", emissao_automatica: false, emissao_automatica_desde: null, ativa: false, emite: true };
+
+describe("loja que emite NFS-e só pelo botão", () => {
+  test("serviço: o campo aparece opcional e a venda fecha sem documento", () => {
+    montar(SO_EMITE);
+    carrinho(SERVICO);
+    expect(st.cartProps.tomador).toMatchObject({ exigido: false, temProduto: false, mostrarNome: true });
+    expect(labels()).toEqual([]);
+    expect(st.cartProps.finalizeDisabled).toBe(false);
+    expect(st.cartProps.avisoNotas).toBeNull();
+    act(() => { st.handleFinalize(); });
+    expect(mockBodies).toHaveLength(1);
+    expect(corpo()).not.toHaveProperty("nfse_tomador");
+    expect(st.lastSale!.tomador).toBeUndefined();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  test("preenchido e válido: vai como nfse_tomador, como na automática", () => {
+    montar(SO_EMITE);
+    carrinho(PRODUTO, SERVICO);
+    act(() => { st.cartProps.onCpfNaNotaChange!("11.222.333/0001-81"); });
+    act(() => { st.cartProps.tomador!.onNome!("Studio Bela Ltda"); });
+    act(() => { st.handleFinalize(); });
+    expect(mockBodies).toHaveLength(1);
+    expect(corpo().nfse_tomador).toEqual({ doc: "11222333000181", nome: "Studio Bela Ltda" });
+    expect(st.lastSale!.tomador).toEqual({ doc: "11222333000181", nome: "Studio Bela Ltda" });
+  });
+
+  test("dígito errado não trava a venda (opcional) e não vai como nfse_tomador", () => {
+    montar(SO_EMITE);
+    carrinho(SERVICO);
+    act(() => { st.cartProps.onCpfNaNotaChange!("529.982.247-26"); });
+    expect(labels()).toEqual([]);
+    act(() => { st.handleFinalize(); });
+    expect(mockBodies).toHaveLength(1);
+    expect(corpo()).not.toHaveProperty("nfse_tomador");
+  });
+
+  test("com a automática ligada continua OBRIGATÓRIO", () => {
+    montar({ ...SO_EMITE, ativa: true, emissao_automatica: true, ligada_no_servidor: true });
+    carrinho(SERVICO);
+    expect(st.cartProps.tomador).toMatchObject({ exigido: true });
+    act(() => { st.handleFinalize(); });
+    expect(mockBodies).toHaveLength(0);
+  });
+
+  test("venda só de produto: corpo do POST idêntico ao da loja sem NFS-e", () => {
+    function vender(cfg: any) {
+      montar(cfg);
+      carrinho(PRODUTO);
+      act(() => { st.cartProps.onCpfNaNotaChange!("529.982.247-25"); });
+      expect(st.cartProps.tomador).toBeNull();
+      expect(st.cartProps.avisoNotas).toBeNull();
+      act(() => { st.handleFinalize(); });
+      const b = corpo();
+      const ls = st.lastSale!;
+      act(() => { tree.unmount(); });
+      return { b, ls };
+    }
+    const sem = vender(null);
+    mockBodies.length = 0;
+    const com = vender(SO_EMITE);
+    expect(com.b).toEqual(sem.b);
+    expect(com.b).not.toHaveProperty("nfse_tomador");
+    expect(com.ls).toEqual(sem.ls);
+    act(() => { tree = renderer.create(<Harness />); });
+  });
+});

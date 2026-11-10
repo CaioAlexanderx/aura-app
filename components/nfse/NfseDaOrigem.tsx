@@ -9,7 +9,12 @@
 //     ganha "Completar o cliente"; serviço sem código, "Ver o cadastro do
 //     serviço");
 //   - 'nenhuma' (venda só de produto, loja que não emite, venda anterior ao
-//     opt-in) → não renderiza nada: a tela fica como era.
+//     opt-in) → não renderiza nada: a tela fica como era;
+//   - 'nenhuma' com pode_emitir (10/11/2026, Aura-backend#989: serviço e a
+//     loja emite, com ou sem a automática) → "Esta venda ainda não tem
+//     NFS-e" + "Emitir NFS-e", como o "Emitir NFC-e" ao lado. Se a nota
+//     voltar pendente por falta de quem contratou, o "Completar o cliente"
+//     abre sozinho.
 //
 // Multi-CNPJ: companyId é o da VENDA/OS (a empresa que vendeu ou prestou).
 // ============================================================
@@ -21,9 +26,9 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { useSituacaoNfse } from "@/hooks/useNfseAutomatica";
-import { nfseAutomaticaApi, type OrigemNfse, type SituacaoNfse, type NotaDaOrigemNfse } from "@/services/nfseAutomaticaApi";
+import { nfseAutomaticaApi, type OrigemNfse, type SituacaoNfse, type NotaDaOrigemNfse, type TomadorNfse } from "@/services/nfseAutomaticaApi";
 import {
-  botaoDaNfse, motivoDaSituacao, notasEmitidas, rotaDoEmitir,
+  botaoDaNfse, faltaTomador, motivoDaSituacao, notasEmitidas, rotaDoEmitir,
 } from "@/utils/nfseAutomatica";
 import { abrirPdfDaNfse } from "./nfseAcoes";
 import { AjudaFiscal } from "./AjudaFiscal";
@@ -31,20 +36,25 @@ import { CompletarTomador } from "./CompletarTomador";
 
 export const ROTA_CADASTRO_DO_SERVICO = "/estoque";
 
-/** "Emitir NFS-e" / "Tentar de novo": a rota certa para o estado. */
+/** "Emitir NFS-e" / "Tentar de novo": a rota certa para o estado.
+ *  `tomador` (opcional) vai no corpo do /emitir — o CPF/CNPJ que o Caixa
+ *  pediu. Devolve a situação (null em erro) para quem chama decidir o
+ *  próximo passo (ex.: abrir o "Completar o cliente"). */
 export function useEmitirNfse(companyId: string | null | undefined, tipo: OrigemNfse, id: string | null | undefined, aplicar: (s: SituacaoNfse) => void) {
   const [emitindo, setEmitindo] = useState(false);
-  async function emitir(situacao: SituacaoNfse | null) {
-    if (!companyId || !id || emitindo) return;
+  async function emitir(situacao: SituacaoNfse | null, tomador?: TomadorNfse | null): Promise<SituacaoNfse | null> {
+    if (!companyId || !id || emitindo) return null;
     setEmitindo(true);
     try {
       const s = rotaDoEmitir(situacao) === "tentar_de_novo"
         ? await nfseAutomaticaApi.tentarDeNovo(companyId, tipo, id)
-        : await nfseAutomaticaApi.emitir(companyId, tipo, id);
+        : await nfseAutomaticaApi.emitir(companyId, tipo, id, tomador || null);
       if (s && s.aviso) toast.info(s.aviso);
       aplicar(s);
+      return s;
     } catch (e: any) {
       toast.error((e && e.data && e.data.error) || (e && e.message) || "Não deu para emitir a nota de serviço agora.");
+      return null;
     } finally {
       setEmitindo(false);
     }
@@ -120,6 +130,33 @@ export function NfseDaOrigem({ companyId, tipo, id, origem = tipo === "os" ? "os
         </View>
       </View>
     );
+  } else if (situacao.estado === "nenhuma") {
+    // Botão manual: serviço, loja que emite, ainda sem nota.
+    corpo = completando ? (
+      <CompletarTomador
+        companyId={companyId}
+        tipo={tipo}
+        id={id}
+        onFeito={(r) => { setCompletando(false); aplicar(r); }}
+        onCancelar={() => setCompletando(false)}
+      />
+    ) : (
+      <>
+        <Text style={s.none} testID={`${testID}-sem-nota`}>
+          {origem === "os" ? "Esta OS ainda não tem NFS-e." : "Esta venda ainda não tem NFS-e."}
+        </Text>
+        <Pressable
+          onPress={async () => { const r = await emitir(situacao); if (faltaTomador(r)) setCompletando(true); }}
+          disabled={emitindo}
+          style={[s.btn, s.btnPri, { alignSelf: "flex-start" }, emitindo && { opacity: 0.6 }]}
+          accessibilityRole="button"
+          testID={`${testID}-emitir`}
+        >
+          {emitindo ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="file_text" size={13} color="#fff" />}
+          <Text style={[s.btnTxt, { color: "#fff" }]}>Emitir NFS-e</Text>
+        </Pressable>
+      </>
+    );
   } else {
     const pendente = botao === "completar_e_emitir";
     const cancelada = situacao.estado === "cancelada";
@@ -186,6 +223,7 @@ const s = StyleSheet.create({
   okTxt: { fontSize: 12, color: Colors.green, fontWeight: "700" },
   vaiTxt: { fontSize: 12, color: Colors.violet3, fontWeight: "600", flexShrink: 1 },
   note: { fontSize: 11, color: Colors.ink3, lineHeight: 16 },
+  none: { fontSize: 12, color: Colors.ink3 },
   err: { flexDirection: "row", alignItems: "flex-start", gap: 8, padding: 10, borderRadius: 10, backgroundColor: Colors.redD, borderWidth: 1, borderColor: Colors.red + "44" },
   errTxt: { flex: 1, fontSize: 12, color: Colors.ink, lineHeight: 17 },
   btn: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 36, paddingHorizontal: 12, borderRadius: 9, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg3 },

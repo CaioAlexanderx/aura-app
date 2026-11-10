@@ -42,6 +42,12 @@
 // tira os serviços da nota, Aura-backend#983) e "Nota de serviço (NFS-e) —
 // serviços" (components/nfse/NfseVendaCard, polling leve da situação), mais
 // a ajuda fiscal. Venda só de produto ou loja sem o opt-in: tela igual.
+//
+// 10/11/2026 (botão "Emitir NFS-e", Aura-backend#989) — loja que EMITE NFS-e
+// (config.emite) mas sem a automática: venda com serviço ganha os mesmos
+// dois cartões, e o da NFS-e mostra o botão "Emitir NFS-e" no padrão do
+// "Emitir NFC-e" (pede o CPF/CNPJ na hora se faltar). Com a automática
+// ligada, nada muda. Venda só de produto ou loja que não emite: tela igual.
 // ============================================================
 import { useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
@@ -66,7 +72,7 @@ import { NOME_DO_FRETE } from "@/utils/frete";
 import type { ConfigDoVale } from "@/utils/valeTroca";
 import { resumoDoEndereco, type Endereco } from "@/components/endereco/endereco";
 import { useNfseAutomaticaConfig } from "@/hooks/useNfseAutomatica";
-import { composicaoDaVenda, ehServico, mascararDoc, rotuloDoDoc } from "@/utils/nfseAutomatica";
+import { composicaoDaVenda, ehServico, mascararDoc, modoDaNfseNaVenda, rotuloDoDoc } from "@/utils/nfseAutomatica";
 import { NfseVendaCard } from "@/components/nfse/NfseVendaCard";
 import { AjudaFiscal } from "@/components/nfse/AjudaFiscal";
 import {
@@ -149,9 +155,10 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
   const { company, token, companyCount } = useAuthStore();
   // NFS-e automática: opt-in da loja que vendeu (o Caixa é sempre de uma
   // loja — company.id é a empresa da venda, também no grupo multi-CNPJ).
-  const { ativa: nfseAtiva } = useNfseAutomaticaConfig(company?.id);
+  const { ativa: nfseAtiva, emite: nfseEmite } = useNfseAutomaticaConfig(company?.id);
   const composicao = composicaoDaVenda(sale.items);
-  const duasNotas = nfseAtiva && composicao.temServico;
+  const modoNfse = modoDaNfseNaVenda({ temServico: composicao.temServico, nfseAtiva, nfseEmite });
+  const duasNotas = modoNfse !== "nenhuma";
   const itensServico = sale.items.filter(ehServico);
   const itensProduto = sale.items.filter((i) => !ehServico(i));
   const nomes = (l: typeof sale.items) => l.map((i) => i.name).join(", ");
@@ -396,6 +403,8 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
               tomador={sale.tomador || null}
               customerPhone={sale.customerPhone}
               nomeDaLoja={nomeDaLoja}
+              automatica={modoNfse === "automatica"}
+              customerId={sale.customerId || null}
             />
             <AjudaFiscal />
           </View>

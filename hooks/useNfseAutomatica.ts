@@ -2,8 +2,9 @@
 // AURA. — NFS-e automática: opt-in da loja e situação de uma origem
 //
 // useNfseAutomaticaConfig: GET /nfse/automatica/config. `ativa` = liga do
-//   servidor E opt-in da empresa. Backend sem a rota (404) ou erro = false:
-//   a loja some do fluxo e o Caixa fica como sempre.
+//   servidor E opt-in da empresa. `emite` = a loja emite NFS-e pelo botão
+//   (independe da automática). Backend sem a rota (404) ou erro = false
+//   nos dois: a loja some do fluxo e o Caixa fica como sempre.
 //
 // useSituacaoNfse: GET /nfse/automatica/origem/:tipo/:id com polling LEVE
 //   (1,5 s → 12 s, ~2 min no total). Para ao chegar num estado final, ao
@@ -26,7 +27,12 @@ export function useNfseAutomaticaConfig(companyId: string | null | undefined, en
     staleTime: 5 * 60_000,
     retry: false,
   });
-  return { ativa: !!(q.data && q.data.ativa), config: q.data || null, carregando: !!q.isLoading };
+  return {
+    ativa: !!(q.data && q.data.ativa),
+    emite: !!(q.data && q.data.emite),
+    config: q.data || null,
+    carregando: !!q.isLoading,
+  };
 }
 
 type Opcoes = {
