@@ -13,6 +13,9 @@ import React from "react";
 import renderer, { act } from "react-test-renderer";
 
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
+// 10/11/2026: loja sem a NFS-e automática (a tela fica a de sempre).
+jest.mock("@/hooks/useNfseAutomatica", () => ({ useNfseAutomaticaConfig: () => ({ ativa: false, config: null, carregando: false }), useSituacaoNfse: () => ({ situacao: null }) }));
+jest.mock("@/components/nfse/NfseDaOrigem", () => ({ NfseDaOrigem: () => null }));
 jest.mock("@/components/Toast", () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() } }));
 jest.mock("@/components/crediario/DevolucaoModal", () => ({ DevolucaoModal: () => null }));
 jest.mock("@/services/pdvApi", () => ({ pdvApi: { getSale: jest.fn() } }));
