@@ -29,7 +29,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useSituacaoNfse } from "@/hooks/useNfseAutomatica";
 import { nfseAutomaticaApi, type OrigemNfse, type SituacaoNfse, type NotaDaOrigemNfse, type TomadorNfse } from "@/services/nfseAutomaticaApi";
 import {
-  botaoDaNfse, faltaTomador, motivoDaSituacao, notasEmitidas, rotaDoEmitir,
+  botaoDaNfse, faltaTomador, motivoDaSituacao, notasEmitidas, numeroJaUsado, rotaDoEmitir,
 } from "@/utils/nfseAutomatica";
 import { abrirPdfDaNfse } from "./nfseAcoes";
 import { AjudaFiscal } from "./AjudaFiscal";
@@ -161,8 +161,10 @@ export function NfseDaOrigem({ companyId, tipo, id, origem = tipo === "os" ? "os
   } else {
     const pendente = botao === "completar_e_emitir";
     const cancelada = situacao.estado === "cancelada";
+    // série/número já usados por outro emissor: só a mensagem do backend e "Tentar de novo"
+    const jaUsado = numeroJaUsado(situacao) && !!motivo;
     const titulo = cancelada ? "A nota de serviço desta " + (origem === "os" ? "OS" : origem === "cobranca" ? "cobrança" : "venda") + " foi cancelada." : "A nota de serviço não saiu sozinha.";
-    const detalhe = pendente
+    const detalhe = jaUsado ? String(motivo) : pendente
       ? (motivo || "Faltam dados de quem contratou: confira o CPF ou CNPJ e o nome de " + quem + ".") + " Complete o cliente e emita aqui."
       : (motivo ? motivo + " " : "") + (cancelada ? "Se precisar, emita uma nova." : "A " + (origem === "os" ? "OS" : origem === "cobranca" ? "cobrança" : "venda") + " está certinha; falta só a nota. Ela não sai duas vezes, pode emitir com tranquilidade.");
     corpo = (
@@ -199,7 +201,7 @@ export function NfseDaOrigem({ companyId, tipo, id, origem = tipo === "os" ? "os
               testID={`${testID}-emitir`}
             >
               {emitindo ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="receipt" size={13} color="#fff" />}
-              <Text style={[s.btnTxt, { color: "#fff" }]}>Emitir NFS-e</Text>
+              <Text style={[s.btnTxt, { color: "#fff" }]}>{jaUsado ? "Tentar de novo" : "Emitir NFS-e"}</Text>
             </Pressable>
           </View>
         )}

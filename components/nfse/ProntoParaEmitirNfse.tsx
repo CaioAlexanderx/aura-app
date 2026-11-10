@@ -7,7 +7,8 @@
 // em 4 cartões (direção do dono, 10/11/2026: self-service muito simples):
 //   1. Certificado digital A1 → leva à aba "Certificado A1" que já existe;
 //   2. Dados da nota → Situação perante o Simples Nacional, Código de
-//      Tributação Nacional, Série/Número da DPS (um formulário só);
+//      Tributação Nacional e "Já emite NFS-e por outro emissor?" (Série e
+//      Último Número da DPS de lá; Aura-backend#992) — um formulário só;
 //   3. Nota de teste → POST /nfse/teste, sempre em produção restrita. A
 //      explicação da prefeitura (Inscrição Municipal, CNC) só aparece quando
 //      o teste volta com E0084/E0116/E0120;
@@ -30,8 +31,8 @@ import { nfseConfigApi, useNfseConfig, type RespostaTeste } from "@/hooks/useNfs
 import { fmtNbs, soDigitos, statusDoCodigo } from "@/utils/nfseServico";
 import {
   CARTOES, TITULO_DO_CARTAO, aguardandoAura, avisoDoTeste, contarProntos, emitindo as estaEmitindo, estadosDosCartoes,
-  fmtCnpj, fmtDiaMes, fmtPercentual, lerPercentual, prefeituraVisivel, proximoCartao, serieENumero,
-  situacaoDe, textoParaPrefeitura,
+  fmtCnpj, fmtDiaMes, fmtPercentual, lerPercentual, prefeituraVisivel, proximoCartao,
+  situacaoDe, textoParaPrefeitura, camposDoOutroEmissor, conflitoDeNumeracao, textoDoConflito,
   type Cartao, type ConfigNfse, type EstadoPasso, type JaEmite, type ResultadoTeste, type SituacaoNfse,
 } from "@/utils/nfseProntoParaEmitir";
 
@@ -245,8 +246,6 @@ export function ProntoParaEmitirNfse(p: Props) {
   const [jaEmite, setJaEmite] = useState<JaEmite>("");
   const [serie, setSerie] = useState("");
   const [ultimo, setUltimo] = useState("");
-  const [continua, setContinua] = useState(false);
-  const [serieAura, setSerieAura] = useState("");
   const [conferi, setConferi] = useState(false);
   const [maisCampos, setMaisCampos] = useState(false);
   const [erros, setErros] = useState<Record<string, string>>({});
@@ -270,16 +269,31 @@ export function ProntoParaEmitirNfse(p: Props) {
     setCodigo(soDigitos(c.ctribnac_padrao || "", 6));
     setNbs(soDigitos(c.cnbs_padrao || "", 9));
     setIm(c.inscricao_municipal || "");
-    const prox = Number(c.next_dps_number || 1);
-    if (c.serie_confirmada_em || prox > 1) {
-      if (prox > 1) { setJaEmite("outro"); setSerie(String(c.serie || "1")); setUltimo(String(prox - 1)); }
-      else setJaEmite("nao");
-    }
+    // "Já emite NFS-e por outro emissor?" (migration 443): sem resposta, fica em branco
+    if (c.outro_emissor === true) {
+      setJaEmite("sim");
+      setSerie(c.outro_emissor_serie != null ? String(c.outro_emissor_serie) : "");
+      setUltimo(c.outro_emissor_ultimo_numero != null ? String(c.outro_emissor_ultimo_numero) : "");
+    } else if (c.outro_emissor === false) setJaEmite("nao");
     setPtot(fmtPercentual(c.p_tot_trib_sn));
     setRetem(c.cliente_retem_iss === true ? "sim" : c.cliente_retem_iss === false ? "nao" : "");
     setAliq(fmtPercentual(c.aliquota_iss_retencao_sn));
     setCnc((c.prefeitura_cadastro_confirmado as any) || "");
   }, [q.data]);
+
+  // Conflito de numeração (DPS_NUMERO_JA_USADO): abre "Dados da nota" para
+  // corrigir, já no "Sim" com a série que o outro emissor usou.
+  const conflito = conflitoDeNumeracao(sit);
+  const chaveConflito = conflito ? (conflito.serie || "") + "/" + (conflito.numero || "") : "";
+  const conflitoVisto = useRef("");
+  useEffect(() => {
+    if (!chaveConflito || conflitoVisto.current === chaveConflito) return;
+    conflitoVisto.current = chaveConflito;
+    setAberto("dados");
+    setJaEmite("sim");
+    setSerie((v) => v || (conflito && conflito.serie) || "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveConflito]);
 
   const [salvando, setSalvando] = useState<string>("");
   const [testando, setTestando] = useState(false);
@@ -311,15 +325,14 @@ export function ProntoParaEmitirNfse(p: Props) {
     if (statusDoCodigo(codigo) !== "ok") e.codigo = "Escolha um Código de Tributação Nacional de 6 números da lista.";
     if (nbs && nbs.length !== 9) e.nbs = "O Código NBS tem 9 números. Complete ou deixe em branco.";
     if (im.trim().length > 15) e.im = "A Inscrição Municipal tem até 15 caracteres.";
-    const sn = serieENumero(jaEmite, { serie, ultimo, continuaNoOutro: continua, serieDaAura: serieAura });
-    if ("erro" in sn) e.serie = sn.erro;
+    const oe = camposDoOutroEmissor(jaEmite, { serie, ultimo });
+    if ("erro" in oe) e.serie = oe.erro;
     if (!conferi) e.conferi = "Marque a confirmação para seguir.";
     setErros(e);
     if (Object.keys(e).length) {
       if (e.nbs || e.im) setMaisCampos(true);
       return;
     }
-    const s2 = sn as { serie: string; next_dps_number?: number };
     const body: Record<string, unknown> = {
       municipio_ibge: ibge,
       op_simp_nac: op,
@@ -327,10 +340,12 @@ export function ProntoParaEmitirNfse(p: Props) {
       ctribnac_padrao: codigo,
       cnbs_padrao: nbs || null,
       inscricao_municipal: im.trim() || null,
-      serie: s2.serie,
+      // a série da Aura fica a de hoje (padrão 1); na mesma série do outro
+      // emissor, o backend continua do número seguinte
+      serie: String(cfg.serie || "1"),
       serie_confirmada: true,
+      ...(oe as Record<string, unknown>),
     };
-    if (s2.next_dps_number) body.next_dps_number = s2.next_dps_number;
     const prox = est.certificado === "ok" ? "teste" : "certificado";
     salvar("dados", body, "Dados da nota salvos.", prox);
   }
@@ -542,44 +557,35 @@ export function ProntoParaEmitirNfse(p: Props) {
         ) : null}
         {erros.codigo ? <Text style={[st.hintErro, { marginTop: -6, marginBottom: 12 }]}>{erros.codigo}</Text> : null}
 
-        <Campo label="Já emite NFS-e pelo Emissor Nacional?">
+        {conflito ? (
+          <View style={{ marginBottom: 12 }}>
+            <Aviso tom="amber" icon="alert" testID="nfse-pronto-conflito-serie">
+              <Text style={st.notaTxt}><Text style={st.forte}>{textoDoConflito(conflito)}</Text></Text>
+            </Aviso>
+          </View>
+        ) : null}
+        <Campo label="Já emite NFS-e por outro emissor (site ou aplicativo do gov.br, outro sistema)?">
           <View style={st.opcoes}>
-            <Opcao titulo="Não, vai ser a primeira" ativo={jaEmite === "nao"} onPress={() => setJaEmite("nao")} testID="nfse-pronto-ja-nao" />
-            <Opcao titulo="Sim, pelo site ou app do gov.br" ativo={jaEmite === "gov"} onPress={() => setJaEmite("gov")} testID="nfse-pronto-ja-gov" />
-            <Opcao titulo="Sim, por outro sistema" sub="Um ERP ou programa que emite pela API" ativo={jaEmite === "outro"} onPress={() => setJaEmite("outro")} testID="nfse-pronto-ja-outro" />
+            <Opcao titulo="Sim" ativo={jaEmite === "sim"} onPress={() => { setJaEmite("sim"); setErros((x) => ({ ...x, serie: "" })); }} testID="nfse-pronto-ja-sim" />
+            <Opcao titulo="Não" sub="A NFS-e da empresa sai só pela Aura" ativo={jaEmite === "nao"} onPress={() => { setJaEmite("nao"); setErros((x) => ({ ...x, serie: "" })); }} testID="nfse-pronto-ja-nao" />
           </View>
         </Campo>
         {jaEmite === "nao" ? (
-          <Aviso tom="green" icon="check"><Text style={st.notaTxt}><Text style={st.forte}>Tudo certo: começamos na Série da DPS 1, Número da DPS 1.</Text> A Aura conta as próximas sozinha.</Text></Aviso>
-        ) : null}
-        {jaEmite === "gov" ? (
-          <Aviso icon="info" testID="nfse-pronto-serie-gov">
-            <Text style={st.notaTxt}>
-              <Text style={st.forte}>Pode continuar usando o site e o app do gov.br.</Text> Eles usam séries próprias (de 50000 a 89999) e a Aura usa a faixa de aplicativo próprio (1 a 49999), então os números nunca se encontram. A Aura começa na Série da DPS 1, Número da DPS 1.
-            </Text>
+          <Aviso tom="green" icon="check" testID="nfse-pronto-serie-padrao">
+            <Text style={st.notaTxt}><Text style={st.forte}>{"Tudo certo: a Aura emite na Série da DPS " + String(cfg.serie || "1") + "."}</Text> E conta os próximos números sozinha.</Text>
           </Aviso>
         ) : null}
-        {jaEmite === "outro" ? (
+        {jaEmite === "sim" ? (
           <View>
             <View style={st.l2}>
-              <Campo label="Série da DPS" style={{ flex: 1, minWidth: 140 }}>
-                <Entrada value={serie} onChangeText={(v: string) => setSerie(soDigitos(v, 5))} placeholder="1" keyboardType="number-pad" accessibilityLabel="Série da DPS" testID="nfse-pronto-serie" />
+              <Campo label="Série da DPS" optional="usada lá" style={{ flex: 1, minWidth: 140 }}>
+                <Entrada value={serie} onChangeText={(v: string) => setSerie(soDigitos(v, 5))} placeholder="Ex.: 1" keyboardType="number-pad" accessibilityLabel="Série da DPS usada no outro emissor" testID="nfse-pronto-serie" />
               </Campo>
-              <Campo label="Número da DPS" optional="o último emitido" style={{ flex: 1, minWidth: 160 }}>
-                <Entrada value={ultimo} onChangeText={(v: string) => setUltimo(soDigitos(v, 15))} placeholder="Ex.: 212" keyboardType="number-pad" accessibilityLabel="Número da DPS (o último emitido)" testID="nfse-pronto-ultimo" />
+              <Campo label="Último Número da DPS" optional="usado lá" style={{ flex: 1, minWidth: 160 }}>
+                <Entrada value={ultimo} onChangeText={(v: string) => setUltimo(soDigitos(v, 15))} placeholder="Ex.: 212" keyboardType="number-pad" accessibilityLabel="Último Número da DPS usado no outro emissor" testID="nfse-pronto-ultimo" />
               </Campo>
             </View>
-            <Text style={[st.hint, { marginTop: -6, marginBottom: 12 }]}>Estão no PDF ou no XML da última nota, nos campos "Série da DPS" e "Número da DPS". Se não achar, o seu contador ajuda.</Text>
-            <Caixa marcado={continua} onPress={() => setContinua((v) => !v)} testID="nfse-pronto-continua">
-              <Text style={st.notaTxt}><Text style={st.forte}>Vou continuar emitindo pelo outro sistema também</Text></Text>
-              <Text style={st.hint}>Então cada sistema fica com a sua série, para os números nunca se encontrarem.</Text>
-            </Caixa>
-            {continua ? (
-              <Campo label="Série da DPS da Aura" style={{ marginTop: 12 }}>
-                <Entrada value={serieAura} onChangeText={(v: string) => setSerieAura(soDigitos(v, 5))} placeholder="2" keyboardType="number-pad" accessibilityLabel="Série da DPS da Aura" testID="nfse-pronto-serie-aura" style={{ maxWidth: 160 }} />
-                <Text style={st.hint}>Use uma série que o outro sistema não usa, entre 1 e 49998.</Text>
-              </Campo>
-            ) : null}
+            <Text style={[st.hint, { marginTop: -6, marginBottom: 12 }]} testID="nfse-pronto-ajuda-outro-emissor">A Aura usa uma série diferente ou continua do número seguinte, para nunca repetir uma nota. Os dois estão no PDF ou no XML da última nota de lá, nos campos "Série da DPS" e "Número da DPS"; o seu contador também ajuda.</Text>
           </View>
         ) : null}
         {erros.serie ? <Text style={st.hintErro} testID="nfse-pronto-erro-serie">{erros.serie}</Text> : null}
