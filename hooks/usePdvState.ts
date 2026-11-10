@@ -115,7 +115,7 @@ import { useWarrantyDraft, diasValidos } from "@/stores/warrantyDraft";
 import { resumoDoEndereco } from "@/components/endereco/endereco";
 // 10/11/2026 (NFS-e automática, mockup nfse-cadastro-servico.html, tela 3).
 import { useNfseAutomaticaConfig } from "@/hooks/useNfseAutomatica";
-import { avisoDasNotas, composicaoDaVenda, exigeTomador, pendenciaDoDoc } from "@/utils/nfseAutomatica";
+import { avisoDasNotas, composicaoDaVenda, exigeTomador, pedeTomador, pendenciaDoDoc } from "@/utils/nfseAutomatica";
 import type { TextInput } from "react-native";
 
 const PAGE_SIZE = 12;
@@ -260,7 +260,9 @@ export function usePdvState() {
   // ── NFS-e automática (10/11/2026, Aura-backend#984) ───────────────────
   // Opt-in da loja (GET /nfse/automatica/config → ativa). Desligada, sem a
   // rota no servidor ou em erro: false, e o Caixa fica exatamente como antes.
-  const { ativa: nfseAtiva } = useNfseAutomaticaConfig(company?.id, !isDemo);
+  // 10/11/2026 (botão "Emitir NFS-e"): `emite` = a loja emite NFS-e pelo
+  // botão, sem a automática. Aí o campo de quem contratou aparece, opcional.
+  const { ativa: nfseAtiva, emite: nfseEmite } = useNfseAutomaticaConfig(company?.id, !isDemo);
 
   // ── Cart ──────────────────────────────────────────────────────────────
   // 14/10/2026: Caixa aberto com ?quote= monta o carrinho do orçamento — não
@@ -304,6 +306,10 @@ export function usePdvState() {
   // o opt-in: o "CPF na nota (opcional)" de sempre.
   const composicao = composicaoDaVenda(cart);
   const docExigido = exigeTomador({ temServico: composicao.temServico, nfseAtiva });
+  // Loja que emite só pelo botão: o mesmo campo, OPCIONAL (se faltar, o
+  // "Emitir NFS-e" da tela final pede na hora). Preenchido e válido, vai
+  // como nfse_tomador (useCart) — a mesma regra de sempre.
+  const docPedido = pedeTomador({ temServico: composicao.temServico, nfseAtiva, nfseEmite });
   const docPendente = docExigido ? pendenciaDoDoc(cpfNaNota) : null;
   const docTomadorRef = useRef<TextInput | null>(null);
   function focarDocTomador() {
@@ -1291,9 +1297,9 @@ export function usePdvState() {
     cpfNaNota,
     onCpfNaNotaChange: setCpfNaNota,
     // 10/11/2026 (NFS-e automática): null = campo de sempre.
-    tomador: docExigido
+    tomador: docPedido
       ? {
-          exigido: true,
+          exigido: docExigido,
           temProduto: composicao.temProduto,
           mostrarNome: !selectedCustomerId,
           nome: nomeNaNota,

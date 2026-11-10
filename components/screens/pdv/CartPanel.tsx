@@ -106,10 +106,11 @@ import { rotuloDaComanda } from "@/utils/comanda";
 import { estadoDoDoc, mascararDoc, mensagemDoDoc } from "@/utils/nfseAutomatica";
 
 /** 10/11/2026 (NFS-e automática, mockup nfse-cadastro-servico.html, tela 3).
- *  `exigido`: carrinho com serviço numa loja com a emissão automática
- *  ligada — o "CPF na nota" vira "CPF ou CNPJ de quem contratou",
- *  obrigatório, com dígito verificador. Sem a prop (ou exigido=false) o
- *  campo é o "CPF na nota (opcional)" de sempre. */
+ *  Carrinho com serviço numa loja que emite NFS-e: o "CPF na nota" vira
+ *  "CPF ou CNPJ de quem contratou", com dígito verificador.
+ *  `exigido`: true com a emissão automática (obrigatório); false quando a
+ *  loja emite só pelo botão "Emitir NFS-e" (opcional — o botão pede na hora
+ *  se faltar). Sem a prop o campo é o "CPF na nota (opcional)" de sempre. */
 export type TomadorDoCaixa = {
   exigido: boolean;
   temProduto: boolean;
@@ -715,7 +716,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
             </View>
           )}
 
-          {showCpfInput && tomador && tomador.exigido ? (
+          {showCpfInput && tomador ? (
             <DocDeQuemContratou
               valor={cpfNaNota || ""}
               onChange={(v) => onCpfNaNotaChange?.(v)}
@@ -1014,7 +1015,8 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
 
 // ── Linha do split: chips de método + input valor + remover ─────
 /** "CPF ou CNPJ de quem contratou" (tela 3 do mockup da NFS-e automática).
- *  Obrigatório: a prefeitura não aceita a nota de serviço sem ele. */
+ *  Obrigatório com a automática: a prefeitura não aceita a nota de serviço
+ *  sem ele. Opcional quando a loja emite pelo botão (exigido=false). */
 function DocDeQuemContratou({ valor, onChange, tomador }: {
   valor: string; onChange: (v: string) => void; tomador: TomadorDoCaixa;
 }) {
@@ -1030,10 +1032,17 @@ function DocDeQuemContratou({ valor, onChange, tomador }: {
     >
       <View style={s.docHead}>
         <Icon name="file_text" size={14} color={Colors.violet3} />
-        <Text style={s.docTitle}>CPF ou CNPJ de quem contratou <Text style={{ color: Colors.red }}>*</Text></Text>
+        <Text style={s.docTitle}>
+          CPF ou CNPJ de quem contratou{" "}
+          {tomador.exigido
+            ? <Text style={{ color: Colors.red }}>*</Text>
+            : <Text style={{ color: Colors.ink3, fontWeight: "500" }} testID="carrinho-doc-tomador-opcional">(opcional)</Text>}
+        </Text>
       </View>
       <Text style={s.docWhy}>
-        Serviço pede nota com o CPF ou CNPJ de quem contratou — sem ele, a prefeitura não aceita a nota de serviço. Pergunte ao cliente: "Qual CPF ou CNPJ vai na nota?"
+        {tomador.exigido
+          ? "Serviço pede nota com o CPF ou CNPJ de quem contratou — sem ele, a prefeitura não aceita a nota de serviço. Pergunte ao cliente: \"Qual CPF ou CNPJ vai na nota?\""
+          : "Vai na nota de serviço (NFS-e). Se não souber agora, pode deixar em branco: o \"Emitir NFS-e\" pede na hora de emitir."}
       </Text>
       <View style={[s.cpfRow, { marginTop: 8, borderColor: ok ? "rgba(34,197,94,0.55)" : bad ? "rgba(239,68,68,0.55)" : Glass.lineBorderCard }]}>
         <TextInput
