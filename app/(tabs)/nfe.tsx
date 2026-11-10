@@ -14,7 +14,9 @@ import { Icon } from "@/components/Icon";
 import { TABS, TAB_CERTIFICADO, STATUS_MAP, EmissionRow, fmt, ns, openDanfeTermica, isFailedStatus } from "@/components/screens/nfe/shared";
 import { TabCertificado, useFiscalCertificate } from "@/components/screens/nfe/TabCertificado";
 import { estadoDoCertificado, pontoDaAba } from "@/utils/certificadoA1";
-import { EmitNfseForm } from "@/components/screens/nfe/EmitNfseForm";
+import { AbaEmitirNfse } from "@/components/screens/nfe/AbaEmitirNfse";
+import { useNfseConfig } from "@/hooks/useNfseConfig";
+import { pontoDaAbaNfse, situacaoDe } from "@/utils/nfseProntoParaEmitir";
 import { EmitNfceForm, type NfcePrefill } from "@/components/screens/nfe/EmitNfceForm";
 import { RegimeFiscal } from "@/components/screens/nfe/TabConfig";
 import { RequireCompanyScope } from "@/components/RequireCompanyScope";
@@ -97,6 +99,13 @@ function NfeScreenInner({ embedded }: { embedded?: boolean }) {
   const certDot = certQuery.data
     ? { ok: Colors.green, aviso: Colors.amber, erro: Colors.red }[pontoDaAba(estadoDoCertificado(certQuery.data.cert))]
     : undefined;
+
+  // 10/11/2026: ponto da aba "Emitir NFS-e" (verde emitindo, vermelho com
+  // problema, âmbar faltando passo). Mesma chave de cache da aba.
+  const nfseCfg = useNfseConfig(!isDemo ? company?.id : null);
+  const pontoNfse = pontoDaAbaNfse(situacaoDe(nfseCfg.config.data || null));
+  const nfseDot = pontoNfse ? { ok: Colors.green, aviso: Colors.amber, erro: Colors.red }[pontoNfse] : undefined;
+  const TAB_NFSE = TABS.indexOf("Emitir NFS-e");
 
   // Atualiza flag hasProcessing quando emissions mudam
   useEffect(() => {
@@ -319,7 +328,7 @@ function NfeScreenInner({ embedded }: { embedded?: boolean }) {
       )}
 
       <ScreenTabs
-        tabs={TABS.map((t, i) => ({ key: t, label: t, dot: i === TAB_CERTIFICADO ? certDot : undefined }))}
+        tabs={TABS.map((t, i) => ({ key: t, label: t, dot: i === TAB_CERTIFICADO ? certDot : i === TAB_NFSE ? nfseDot : undefined }))}
         active={TABS[tab]}
         onSelect={(k) => setTab(TABS.indexOf(k))}
       />
@@ -393,7 +402,11 @@ function NfeScreenInner({ embedded }: { embedded?: boolean }) {
         </View>
       )}
 
-      {tab === 1 && company?.id && <EmitNfseForm companyId={company.id} />}
+      {/* 10/11/2026: "Pronto para emitir NFS-e?" (mockup nfse-configuracao-loja.html)
+          em cima; a emissão avulsa de hoje fica embaixo, travada até a loja emitir. */}
+      {tab === 1 && company?.id && (
+        <AbaEmitirNfse key={company.id} companyId={company.id} onIrParaCertificado={() => setTab(TAB_CERTIFICADO)} />
+      )}
       {tab === 2 && company?.id && matconEnabled && (
         <View style={s.regimeCard} testID="nfe-regime-card">
           <RegimeFiscal companyId={company.id} />
