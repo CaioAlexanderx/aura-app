@@ -682,7 +682,7 @@ export default function EstoqueScreen() {
           active={visaoConsolidado}
           onSelect={(k: string) => setVisaoConsolidado(k === "por_loja" ? "por_loja" : "somado")}
         />
-        {visaoConsolidado === "por_loja" ? <EstoquePorLoja /> : <AggregatedView />}
+        {visaoConsolidado === "por_loja" ? <EstoquePorLoja semPreco={consulta} mascarar={m} /> : <AggregatedView />}
       </ScrollView>
     );
   }

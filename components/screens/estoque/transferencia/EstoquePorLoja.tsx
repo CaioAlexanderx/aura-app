@@ -9,6 +9,11 @@
 // Largo (≥ 768 px): tabela com uma coluna por loja (rolagem lateral quando
 // são muitas). Estreito (375 px): cartões com chips "Loja A: 12 · Loja B: 3".
 // Sem hover-reveal: tudo visível, toque abre o detalhe. Só leitura.
+//
+// Aura-backend#995: produto do catálogo do grupo aparece como "compartilhado"
+// nas lojas que não são a dona (estoque null, nunca 0; o total do backend já
+// não soma). `preco` null (quem só consulta) esconde o preço. A chave vai ao
+// /variantes como veio (pode ter "#2"); 400/404 viram texto gentil.
 // ============================================================================
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput, ActivityIndicator, Platform, useWindowDimensions } from "react-native";
@@ -20,26 +25,63 @@ import {
   estoqueTransferenciasApi, type ItemPorLoja, type LojaDoGrupo, type RespostaPorLoja, type RespostaVariantesPorLoja,
 } from "@/services/estoqueTransferenciasApi";
 import { fmtQty } from "@/utils/matconUnits";
+import { fmt } from "@/components/screens/estoque/types";
 
 var IS_WEB = Platform.OS === "web";
-export var POR_PAGINA_POR_LOJA = 30;
+export var POR_PAGINA_POR_LOJA = 50; // padrão do backend (teto 200)
+export var TEXTO_COMPARTILHADO = "compartilhado";
 export var LARGURA_TABELA = 768;
 
 function qtd(n: number | null | undefined): string {
   return n == null ? "—" : fmtQty(Number(n) || 0);
 }
 
-function estoqueNa(porLoja: Array<{ company_id: string; estoque: number | null }>, lojaId: string): number | null {
-  var x = porLoja.find(function (p) { return p.company_id === lojaId; });
-  return x ? x.estoque : null;
+type Entrada = { company_id: string; estoque: number | null; compartilhado?: boolean; dona_company_id?: string | null };
+
+function entradaNa(porLoja: Entrada[], lojaId: string): Entrada | null {
+  return porLoja.find(function (p) { return p.company_id === lojaId; }) || null;
+}
+
+/** Texto da célula: número, "compartilhado" (estoque na loja dona) ou "—" (não existe na loja). */
+export function celula(e: Entrada | null): string {
+  if (e && e.compartilhado) return TEXTO_COMPARTILHADO;
+  return qtd(e ? e.estoque : null);
 }
 
 /** "Loja A: 12 · Loja B: 3" (chips no estreito). */
-export function chipsDasLojas(lojas: LojaDoGrupo[], porLoja: Array<{ company_id: string; estoque: number | null }>): string[] {
-  return lojas.map(function (l) { return l.nome + ": " + qtd(estoqueNa(porLoja, l.id)); });
+export function chipsDasLojas(lojas: LojaDoGrupo[], porLoja: Entrada[]): string[] {
+  return lojas.map(function (l) { return l.nome + ": " + celula(entradaNa(porLoja, l.id)); });
 }
 
-export function EstoquePorLoja() {
+/** Nome da loja dona do primeiro compartilhado da página (para a legenda). */
+function donaDosCompartilhados(lojas: LojaDoGrupo[], listas: Entrada[][]): string | null | undefined {
+  for (var i = 0; i < listas.length; i++) {
+    var e = listas[i].find(function (x) { return !!x.compartilhado; });
+    if (e) {
+      var dona = lojas.find(function (l) { return l.id === e!.dona_company_id; });
+      return dona ? dona.nome : null;
+    }
+  }
+  return undefined; // nenhum compartilhado
+}
+
+function Legenda({ dona, id }: { dona: string | null | undefined; id: string }) {
+  if (dona === undefined) return null;
+  return (
+    <Text style={s.legenda} testID={id}>
+      {"“Compartilhado”: o produto é do catálogo do grupo e o estoque fica " + (dona ? "na " + dona : "na loja dona do catálogo") + ". Por isso não entra no total."}
+    </Text>
+  );
+}
+
+type Props = {
+  /** Esconde o preço mesmo quando vem (modo consulta). */
+  semPreco?: boolean;
+  /** Olho dos valores (OlhoValores): mascara o preço. */
+  mascarar?: (texto: string) => string;
+};
+
+export function EstoquePorLoja({ semPreco, mascarar }: Props = {}) {
   var largura = useWindowDimensions().width;
   var largo = largura >= LARGURA_TABELA;
   var vivo = useRef(true);
@@ -79,6 +121,15 @@ export function EstoquePorLoja() {
   var total = (dados && dados.total_itens) || 0;
   var totalPaginas = Math.max(1, Math.ceil(total / POR_PAGINA_POR_LOJA));
 
+  // Preço só quando vem (null = quem só consulta) e fora do modo consulta.
+  function meta(it: ItemPorLoja): string {
+    var codigo = it.sku || it.barcode || "Sem código";
+    if (semPreco || it.preco == null) return codigo;
+    var preco = fmt(Number(it.preco) || 0);
+    return codigo + " · " + (mascarar ? mascarar(preco) : preco);
+  }
+  var dona = donaDosCompartilhados(lojas, itens.map(function (it) { return it.por_loja; }));
+
   function tabela() {
     return (
       <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: "100%" as any }}>
@@ -93,7 +144,7 @@ export function EstoquePorLoja() {
               <View key={it.chave} style={s.tr} testID={"por-loja-linha-" + it.chave}>
                 <View style={s.colNome}>
                   <Text style={s.nome} numberOfLines={2}>{it.nome}</Text>
-                  <Text style={s.sub} numberOfLines={1}>{it.sku || it.barcode || "Sem código"}</Text>
+                  <Text style={s.sub} numberOfLines={1} testID={"por-loja-meta-" + it.chave}>{meta(it)}</Text>
                   {it.tem_variantes && (
                     <Pressable onPress={function () { setAberto(it); }} style={s.verGrade} accessibilityRole="button" testID={"por-loja-variantes-" + it.chave}>
                       <Text style={s.verGradeTxt}>Ver tamanhos e cores</Text>
@@ -101,8 +152,8 @@ export function EstoquePorLoja() {
                   )}
                 </View>
                 {lojas.map(function (l) {
-                  var n = estoqueNa(it.por_loja, l.id);
-                  return <Text key={l.id} style={[s.td, s.colLoja, n == null && { color: Colors.ink3 }]} testID={"por-loja-celula-" + it.chave + "-" + l.id}>{qtd(n)}</Text>;
+                  var e = entradaNa(it.por_loja, l.id);
+                  return <Text key={l.id} style={[s.td, s.colLoja, (!e || e.estoque == null) && s.tdApagado, !!(e && e.compartilhado) && s.tdCompartilhado]} testID={"por-loja-celula-" + it.chave + "-" + l.id}>{celula(e)}</Text>;
                 })}
                 <Text style={[s.td, s.colLoja, s.total]} testID={"por-loja-total-" + it.chave}>{qtd(it.total)}</Text>
               </View>
@@ -122,7 +173,7 @@ export function EstoquePorLoja() {
               <View style={s.cardTop}>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={s.nome} numberOfLines={2}>{it.nome}</Text>
-                  <Text style={s.sub} numberOfLines={1}>{it.sku || it.barcode || "Sem código"}</Text>
+                  <Text style={s.sub} numberOfLines={1} testID={"por-loja-meta-" + it.chave}>{meta(it)}</Text>
                 </View>
                 <View style={{ alignItems: "flex-end" }}>
                   <Text style={s.cardTotal} testID={"por-loja-total-" + it.chave}>{qtd(it.total)}</Text>
@@ -172,6 +223,7 @@ export function EstoquePorLoja() {
           {largo ? tabela() : cartoes()}
         </View>
       )}
+      {!erro && itens.length > 0 && <Legenda dona={dona} id="por-loja-legenda" />}
       <Pagination page={pagina} totalPages={totalPaginas} total={total} pageSize={POR_PAGINA_POR_LOJA} onPage={setPagina} />
 
       <WebPortal active={!!aberto}>
@@ -181,22 +233,30 @@ export function EstoquePorLoja() {
   );
 }
 
+export function mensagemErroVariantes(status: number | null | undefined): string {
+  if (status === 404) return "Este produto não está mais nas suas lojas (pode ter sido excluído ou mudado). Feche e atualize a lista.";
+  if (status === 400) return "Não deu para abrir os tamanhos e cores deste produto. Feche e tente de novo pela lista.";
+  return "Não conseguimos carregar os tamanhos e cores agora. Tente de novo em instantes.";
+}
+
 export function VariantesPorLojaModal({ item, onFechar }: { item: ItemPorLoja; onFechar: () => void }) {
   var largura = useWindowDimensions().width;
   var largo = largura >= LARGURA_TABELA;
   var vivo = useRef(true);
   useEffect(function () { vivo.current = true; return function () { vivo.current = false; }; }, []);
   var [dados, setDados] = useState<RespostaVariantesPorLoja | null>(null);
-  var [erro, setErro] = useState(false);
+  var [erro, setErro] = useState<string | null>(null);
 
   useEffect(function () {
+    // A chave vai como veio ("k#2" inclusive): quem codifica é o serviço.
     estoqueTransferenciasApi.variantesPorLoja(item.chave)
       .then(function (r) { if (vivo.current) setDados(r); })
-      .catch(function () { if (vivo.current) setErro(true); });
+      .catch(function (e: any) { if (vivo.current) setErro(mensagemErroVariantes(e && e.status)); });
   }, [item.chave]);
 
   var lojas = (dados && dados.lojas) || [];
   var variantes = (dados && dados.variantes) || [];
+  var donaVar = donaDosCompartilhados(lojas, variantes.map(function (v) { return v.por_loja; }));
 
   var panelWeb = IS_WEB ? {
     background: IS_DARK_MODE ? "rgba(18,10,35,0.98)" : "rgba(255,255,255,0.98)",
@@ -218,7 +278,7 @@ export function VariantesPorLojaModal({ item, onFechar }: { item: ItemPorLoja; o
           </Pressable>
         </View>
         <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} contentContainerStyle={{ padding: 16 }}>
-          {erro ? <Text style={s.erro} testID="por-loja-variantes-erro">Não conseguimos carregar os tamanhos e cores agora.</Text>
+          {erro ? <Text style={s.erro} testID="por-loja-variantes-erro">{erro}</Text>
             : !dados ? <ActivityIndicator color={Colors.violet3} />
             : variantes.length === 0 ? <Text style={s.vazio}>Sem tamanhos e cores ativos.</Text>
             : largo ? (
@@ -237,8 +297,8 @@ export function VariantesPorLojaModal({ item, onFechar }: { item: ItemPorLoja; o
                           {v.sku || v.barcode ? <Text style={s.sub}>{v.sku || v.barcode}</Text> : null}
                         </View>
                         {lojas.map(function (l) {
-                          var n = estoqueNa(v.por_loja, l.id);
-                          return <Text key={l.id} style={[s.td, s.colLoja, n == null && { color: Colors.ink3 }]} testID={"por-loja-variante-" + i + "-" + l.id}>{qtd(n)}</Text>;
+                          var e = entradaNa(v.por_loja, l.id);
+                          return <Text key={l.id} style={[s.td, s.colLoja, (!e || e.estoque == null) && s.tdApagado, !!(e && e.compartilhado) && s.tdCompartilhado]} testID={"por-loja-variante-" + i + "-" + l.id}>{celula(e)}</Text>;
                         })}
                         <Text style={[s.td, s.colLoja, s.total]}>{qtd(v.total)}</Text>
                       </View>
@@ -265,6 +325,7 @@ export function VariantesPorLojaModal({ item, onFechar }: { item: ItemPorLoja; o
                 })}
               </View>
             )}
+          {!erro && variantes.length > 0 && <Legenda dona={donaVar} id="por-loja-variantes-legenda" />}
         </ScrollView>
       </View>
     </View>
@@ -281,6 +342,9 @@ var s = StyleSheet.create({
   thead: { backgroundColor: Colors.bg4 },
   th: { fontSize: 10.5, fontWeight: "700", color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.4 },
   td: { fontSize: 14, color: Colors.ink2, fontWeight: "600" },
+  tdApagado: { color: Colors.ink3 },
+  tdCompartilhado: { fontSize: 11.5, fontWeight: "600", fontStyle: "italic" },
+  legenda: { fontSize: 11.5, color: Colors.ink3, marginTop: 10, lineHeight: 16 },
   colNome: { flex: 1, minWidth: 200 },
   colLoja: { width: 100, textAlign: "right" },
   total: { color: Colors.ink, fontWeight: "800" },

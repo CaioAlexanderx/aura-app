@@ -7,6 +7,9 @@
 //      em tabela no largo e em cartões no estreito.
 //   4. Busca vai ao backend; paginação.
 //   5. Transferências: lista (data, origem → destino, peças) e detalhe.
+//   6. Aura-backend#995: "compartilhado" no lugar do número (estoque null,
+//      não vira 0 nem soma), preço null escondido, 400/404 do /variantes em
+//      texto gentil, chave "#2" repassada como veio.
 //
 // Mocks do padrão do repo (expo-font, FpktLogo); testID + deep:false.
 // ============================================================
@@ -109,7 +112,7 @@ beforeEach(() => {
 describe("por loja", () => {
   it("largo: uma coluna por loja e o total", async () => {
     const tree = await montar();
-    expect(mockPorLoja).toHaveBeenCalledWith({ q: undefined, limit: 30, offset: 0 });
+    expect(mockPorLoja).toHaveBeenCalledWith({ q: undefined, limit: 50, offset: 0 });
     expect(porTestID(tree, "por-loja-tabela")).toHaveLength(1);
     expect(porTestID(tree, "por-loja-cartoes")).toHaveLength(0);
     expect(textoDe(tree, "por-loja-col-c1")).toBe("Centro");
@@ -162,12 +165,12 @@ describe("por loja", () => {
     const tree = await montar();
     await act(async () => { um(tree, "por-loja-busca").props.onChangeText("vestido"); });
     await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
-    expect(mockPorLoja).toHaveBeenLastCalledWith({ q: "vestido", limit: 30, offset: 0 });
-    // 65 itens / 30 por página: "Proxima" pede o offset 30.
+    expect(mockPorLoja).toHaveBeenLastCalledWith({ q: "vestido", limit: 50, offset: 0 });
+    // 65 itens / 50 por página: "Proxima" pede o offset 50.
     const proxima = tree.root.findAll((n) => typeof n.props.onPress === "function" && flattenText(n.children).includes("Proxima"), { deep: false });
     expect(proxima).toHaveLength(1);
     await act(async () => { proxima[0].props.onPress(); });
-    expect(mockPorLoja).toHaveBeenLastCalledWith({ q: "vestido", limit: 30, offset: 30 });
+    expect(mockPorLoja).toHaveBeenLastCalledWith({ q: "vestido", limit: 50, offset: 50 });
   });
 
   it("erro em texto gentil", async () => {
@@ -175,6 +178,103 @@ describe("por loja", () => {
     mockPorLoja.mockRejectedValueOnce(Object.assign(new Error("x"), { status: 500 }));
     await act(async () => { tree = renderer.create(<EstoquePorLoja />); });
     expect(textoDe(tree, "por-loja-erro")).toBe("Não conseguimos carregar o estoque por loja agora.");
+  });
+});
+
+describe("compartilhado, preço e erros do /variantes (Aura-backend#995)", () => {
+  const COMPARTILHADO = {
+    lojas: LOJAS,
+    itens: [
+      {
+        chave: "k-bolsa", nome: "Bolsa do catálogo", sku: "BOL-1", barcode: null, imagem_url: null, preco: 129.9,
+        por_loja: [
+          { company_id: "c1", product_id: "p5", estoque: 6, compartilhado: false },
+          { company_id: "c2", product_id: "p5", estoque: null, compartilhado: true, dona_company_id: "c1" },
+        ],
+        total: 6, tem_variantes: true,
+      },
+      {
+        chave: "k-cinto#2", nome: "Cinto (segundo cadastro)", sku: "CIN", barcode: null, imagem_url: null, preco: null,
+        por_loja: [{ company_id: "c1", product_id: "p6", estoque: 0, compartilhado: false }],
+        total: 0, tem_variantes: true,
+      },
+    ],
+    total_itens: 2,
+  };
+  async function montarCompartilhado() {
+    let tree!: renderer.ReactTestRenderer;
+    mockPorLoja.mockResolvedValue(COMPARTILHADO);
+    await act(async () => { tree = renderer.create(<EstoquePorLoja />); });
+    return tree;
+  }
+
+  it("largo: compartilhado no lugar do número, sem virar 0 nem somar", async () => {
+    const tree = await montarCompartilhado();
+    expect(textoDe(tree, "por-loja-celula-k-bolsa-c1")).toBe("6");
+    expect(textoDe(tree, "por-loja-celula-k-bolsa-c2")).toBe("compartilhado");
+    expect(textoDe(tree, "por-loja-total-k-bolsa")).toBe("6");
+    // Zero de verdade continua zero.
+    expect(textoDe(tree, "por-loja-celula-k-cinto#2-c1")).toBe("0");
+    expect(textoDe(tree, "por-loja-legenda")).toContain("o estoque fica na Centro");
+    expect(textoDe(tree, "por-loja-legenda")).toContain("não entra no total");
+  });
+
+  it("375 px: chip com compartilhado", async () => {
+    mockLargura = 375;
+    const tree = await montarCompartilhado();
+    expect(textoDe(tree, "por-loja-chip-k-bolsa-0")).toBe("Centro: 6");
+    expect(textoDe(tree, "por-loja-chip-k-bolsa-1")).toBe("Shopping: compartilhado");
+    expect(textoDe(tree, "por-loja-total-k-bolsa")).toBe("6");
+  });
+
+  it("sem compartilhado na página, sem legenda", async () => {
+    const tree = await montar();
+    expect(porTestID(tree, "por-loja-legenda")).toHaveLength(0);
+  });
+
+  it("preço aparece quando vem e some quando vem null", async () => {
+    const tree = await montarCompartilhado();
+    expect(textoDe(tree, "por-loja-meta-k-bolsa")).toBe("BOL-1 · R$ 129,90");
+    expect(textoDe(tree, "por-loja-meta-k-cinto#2")).toBe("CIN");
+  });
+
+  it("modo consulta esconde o preço; o olho dos valores mascara", async () => {
+    let tree!: renderer.ReactTestRenderer;
+    mockPorLoja.mockResolvedValue(COMPARTILHADO);
+    await act(async () => { tree = renderer.create(<EstoquePorLoja semPreco />); });
+    expect(textoDe(tree, "por-loja-meta-k-bolsa")).toBe("BOL-1");
+    await act(async () => { tree = renderer.create(<EstoquePorLoja mascarar={() => "R$ ••••"} />); });
+    expect(textoDe(tree, "por-loja-meta-k-bolsa")).toBe("BOL-1 · R$ ••••");
+  });
+
+  it("variante compartilhada e chave com #2 repassada como veio", async () => {
+    const tree = await montarCompartilhado();
+    mockVariantes.mockResolvedValueOnce({
+      lojas: LOJAS,
+      variantes: [{
+        rotulo: "Preta", sku: null, barcode: null, total: 2,
+        por_loja: [
+          { company_id: "c1", variant_id: "v1", estoque: 2, compartilhado: false },
+          { company_id: "c2", variant_id: "v1", estoque: null, compartilhado: true, dona_company_id: "c1" },
+        ],
+      }],
+    });
+    await tocar(tree, "por-loja-variantes-k-bolsa");
+    expect(textoDe(tree, "por-loja-variante-0-c1")).toBe("2");
+    expect(textoDe(tree, "por-loja-variante-0-c2")).toBe("compartilhado");
+    expect(textoDe(tree, "por-loja-variantes-legenda")).toContain("Centro");
+    await tocar(tree, "por-loja-variantes-x");
+    mockVariantes.mockRejectedValueOnce(Object.assign(new Error("x"), { status: 404 }));
+    await tocar(tree, "por-loja-variantes-k-cinto#2");
+    expect(mockVariantes).toHaveBeenLastCalledWith("k-cinto#2");
+    expect(textoDe(tree, "por-loja-variantes-erro")).toContain("não está mais nas suas lojas");
+  });
+
+  it("400 do /variantes em texto gentil", async () => {
+    const tree = await montarCompartilhado();
+    mockVariantes.mockRejectedValueOnce(Object.assign(new Error("chave obrigatória"), { status: 400 }));
+    await tocar(tree, "por-loja-variantes-k-bolsa");
+    expect(textoDe(tree, "por-loja-variantes-erro")).toBe("Não deu para abrir os tamanhos e cores deste produto. Feche e tente de novo pela lista.");
   });
 });
 

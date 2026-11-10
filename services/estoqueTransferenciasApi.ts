@@ -68,7 +68,16 @@ export type CodigoErroTransferencia =
 
 export type LojaDoGrupo = { id: string; nome: string };
 
-export type EstoqueNaLoja = { company_id: string; product_id: string | null; estoque: number | null };
+// Aura-backend#995: produto do catálogo do grupo (is_group_shared) aparece na
+// loja dona com o estoque; nas outras lojas vem `compartilhado: true`,
+// `estoque: null` e `dona_company_id`. O total já vem só com estoque real.
+export type EstoqueNaLoja = {
+  company_id: string;
+  product_id: string | null;
+  estoque: number | null;
+  compartilhado?: boolean;
+  dona_company_id?: string | null;
+};
 
 export type ItemPorLoja = {
   chave: string;
@@ -76,6 +85,7 @@ export type ItemPorLoja = {
   sku: string | null;
   barcode: string | null;
   imagem_url: string | null;
+  /** null para quem só consulta o estoque (sem Caixa): o preço some. */
   preco: number | null;
   por_loja: EstoqueNaLoja[];
   total: number;
@@ -84,7 +94,13 @@ export type ItemPorLoja = {
 
 export type RespostaPorLoja = { lojas: LojaDoGrupo[]; itens: ItemPorLoja[]; total_itens: number };
 
-export type VarianteNaLoja = { company_id: string; variant_id: string | null; estoque: number | null };
+export type VarianteNaLoja = {
+  company_id: string;
+  variant_id: string | null;
+  estoque: number | null;
+  compartilhado?: boolean;
+  dona_company_id?: string | null;
+};
 
 export type VariantePorLoja = {
   rotulo: string;
@@ -96,6 +112,7 @@ export type VariantePorLoja = {
 
 export type RespostaVariantesPorLoja = { lojas: LojaDoGrupo[]; variantes: VariantePorLoja[] };
 
+/** limit: padrão 50, teto 200 no backend. */
 export type FiltroPorLoja = { q?: string; categoria?: string; limit?: number; offset?: number };
 
 function qs(params: Record<string, string | number | undefined | null>): string {
@@ -123,6 +140,7 @@ export const estoqueTransferenciasApi = {
       q: filtro.q, categoria: filtro.categoria, limit: filtro.limit, offset: filtro.offset,
     }), { timeout: 20000 });
   },
+  /** A chave vai como veio (pode terminar em "#2": cadastro repetido na mesma loja). */
   variantesPorLoja: function (chave: string) {
     return request<RespostaVariantesPorLoja>("/me/estoque/por-loja/variantes" + qs({ chave: chave }));
   },
