@@ -1,7 +1,7 @@
 // ============================================================
 // "Pronto para emitir NFS-e?" (10/11/2026)
 // Mockup aprovado: docs/mockups/nfse-configuracao-loja.html; contratos do
-// backend: PR "configuração da loja passo a passo" (migration 440).
+// backend: PR "configuração da loja passo a passo" (migration 441).
 //
 // O que estes testes seguram:
 //   1. regras: 7 passos do backend → 4 cartões; prefeitura só com aviso do

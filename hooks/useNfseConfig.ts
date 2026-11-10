@@ -2,7 +2,7 @@
 // AURA. — Configuração da NFS-e de UMA loja (10/11/2026)
 //
 // Contratos do backend (PR "configuração da loja passo a passo", migration
-// 440, src/routes/nfse.js e src/routes/nfseAutomatica.js):
+// 441, src/routes/nfse.js e src/routes/nfseAutomatica.js):
 //   GET  /companies/:id/nfse/config            → { config, has_config, nacional? }
 //   PUT  /companies/:id/nfse/config            → grava; is_active=true só com
 //        a nota de teste aceita (409 NAO_PODE_LIGAR) e com a produção

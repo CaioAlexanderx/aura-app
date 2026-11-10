@@ -3,7 +3,7 @@
 //
 // Mockup aprovado: docs/mockups/nfse-configuracao-loja.html. Os ESTADOS
 // vêm do backend (GET /companies/:id/nfse/config → nacional.passos, PR
-// Aura-backend "configuração da loja passo a passo", migration 440): o
+// Aura-backend "configuração da loja passo a passo", migration 441): o
 // app não recalcula regra fiscal, só agrupa e pinta.
 //
 // Direção do dono (10/11/2026): self-service muito simples. O backend
