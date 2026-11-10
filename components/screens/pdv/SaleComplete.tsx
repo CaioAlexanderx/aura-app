@@ -35,6 +35,13 @@
 // o botão vira "Imprimir cupom e entrega" e tudo sai numa janela só
 // (utils/entregaDaVenda.ts). Desmarcada, o cupom é pedido exatamente como
 // antes, na mesma rota.
+//
+// 10/11/2026 (NFS-e automática — mockup nfse-cadastro-servico.html, tela 4)
+// — loja com a emissão automática ligada e venda com serviço: dois cartões,
+// "Cupom fiscal (NFC-e) — produtos" (o NfceActions de sempre; o backend
+// tira os serviços da nota, Aura-backend#983) e "Nota de serviço (NFS-e) —
+// serviços" (components/nfse/NfseVendaCard, polling leve da situação), mais
+// a ajuda fiscal. Venda só de produto ou loja sem o opt-in: tela igual.
 // ============================================================
 import { useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
@@ -58,6 +65,10 @@ import { cupomComVale } from "@/utils/valeTrocaCupom";
 import { NOME_DO_FRETE } from "@/utils/frete";
 import type { ConfigDoVale } from "@/utils/valeTroca";
 import { resumoDoEndereco, type Endereco } from "@/components/endereco/endereco";
+import { useNfseAutomaticaConfig } from "@/hooks/useNfseAutomatica";
+import { composicaoDaVenda, ehServico, mascararDoc, rotuloDoDoc } from "@/utils/nfseAutomatica";
+import { NfseVendaCard } from "@/components/nfse/NfseVendaCard";
+import { AjudaFiscal } from "@/components/nfse/AjudaFiscal";
 import {
   caixinhaDaEntrega, encadearPapelA4, gravarFormatoDoPapel, lerFormatoDoPapel, rotaDoCupom, rotaDoPapelA4,
   type FormatoDoPapel,
@@ -135,7 +146,17 @@ type Props = {
 };
 
 export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, referralName, pdvSettings, enderecoDoCliente }: Props) {
-  const { company, token } = useAuthStore();
+  const { company, token, companyCount } = useAuthStore();
+  // NFS-e automática: opt-in da loja que vendeu (o Caixa é sempre de uma
+  // loja — company.id é a empresa da venda, também no grupo multi-CNPJ).
+  const { ativa: nfseAtiva } = useNfseAutomaticaConfig(company?.id);
+  const composicao = composicaoDaVenda(sale.items);
+  const duasNotas = nfseAtiva && composicao.temServico;
+  const itensServico = sale.items.filter(ehServico);
+  const itensProduto = sale.items.filter((i) => !ehServico(i));
+  const nomes = (l: typeof sale.items) => l.map((i) => i.name).join(", ");
+  const somar = (l: typeof sale.items) => Math.round(l.reduce((t, i) => t + i.price * i.qty, 0) * 100) / 100;
+  const nomeDaLoja = (companyCount || 0) > 1 ? (company?.trade_name || company?.name || null) : null;
   // Instante em que a tela final abriu = o da venda (o vale-troca do cupom
   // vale pelo dia da venda, não pelo da impressão).
   const vendaEm = useRef(new Date()).current;
@@ -282,12 +303,17 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
             <Text testID="venda-entrega" style={[s.meta, s.metaDireita]} numberOfLines={2}>{resumoDoEndereco(enderecoDaEntrega)}</Text>
           </View>
         )}
-        {sale.cpfNaNota && (
+        {duasNotas && sale.tomador ? (
+          <View style={s.row}>
+            <Text style={s.label}>{rotuloDoDoc(sale.tomador.doc)}</Text>
+            <Text testID="venda-doc-tomador" style={s.meta}>{mascararDoc(sale.tomador.doc)}</Text>
+          </View>
+        ) : sale.cpfNaNota ? (
           <View style={s.row}>
             <Text style={s.label}>CPF na nota</Text>
             <Text style={s.meta}>{sale.cpfNaNota}</Text>
           </View>
-        )}
+        ) : null}
         {sale.employeeName && (
           <View style={s.row}>
             <Text style={s.label}>Quem vendeu</Text>
@@ -319,7 +345,7 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
 
         <View style={s.divider} />
 
-        {company?.id && (
+        {company?.id && !duasNotas && (
           <NfceActions
             companyId={company.id}
             saleId={sale.id}
@@ -332,6 +358,47 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
             payments={payments}
             autoEmit={autoEmit}
           />
+        )}
+
+        {/* 10/11/2026 (tela 4): as duas notas da venda com serviço. A NFC-e
+            recebe a venda inteira (os pagamentos fecham com ela) e o backend
+            deixa os serviços de fora. */}
+        {company?.id && duasNotas && (
+          <View style={s.notas} testID="venda-duas-notas">
+            {composicao.temProduto && (
+              <View style={s.notaCard} testID="venda-nota-nfce">
+                <View style={s.notaHead}>
+                  <View style={s.notaIco}><Icon name="receipt" size={15} color={Colors.violet3} /></View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={s.notaT}>Cupom fiscal (NFC-e) — produtos</Text>
+                    <Text style={s.notaSub} numberOfLines={2}>{nomes(itensProduto)} · {fmt(somar(itensProduto))}</Text>
+                  </View>
+                </View>
+                <NfceActions
+                  companyId={company.id}
+                  saleId={sale.id}
+                  items={nfceItems}
+                  total={sale.total}
+                  customerName={sale.customerName}
+                  customerCpf={sale.cpfNaNota}
+                  customerPhone={sale.customerPhone}
+                  paymentMethod={sale.payment}
+                  payments={payments}
+                  autoEmit={autoEmit}
+                />
+              </View>
+            )}
+            <NfseVendaCard
+              companyId={company.id}
+              saleId={sale.id}
+              servicos={nomes(itensServico)}
+              totalServicos={somar(itensServico)}
+              tomador={sale.tomador || null}
+              customerPhone={sale.customerPhone}
+              nomeDaLoja={nomeDaLoja}
+            />
+            <AjudaFiscal />
+          </View>
         )}
 
         {/* 31/08/2026 (OS): fecha o ciclo da OS na tela de sucesso — lista
@@ -426,6 +493,13 @@ const s = StyleSheet.create({
   splitLine: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 2 },
   splitMethod: { fontSize: 12, color: Colors.ink2, fontWeight: "600" },
   splitValue: { fontSize: 12, color: Colors.ink, fontWeight: "700" },
+  // 10/11/2026 (NFS-e automática, tela 4): as duas notas.
+  notas: { width: "100%", gap: 10 },
+  notaCard: { width: "100%", gap: 10, padding: 12, borderRadius: 12, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border },
+  notaHead: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  notaIco: { width: 30, height: 30, borderRadius: 8, backgroundColor: Colors.violetD, alignItems: "center", justifyContent: "center" },
+  notaT: { fontSize: 13, color: Colors.ink, fontWeight: "800" },
+  notaSub: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
   // 09/11/2026: papel de entrega (mockup "Entrega no Caixa", F).
   metaDireita: { flex: 1, textAlign: "right", marginLeft: 12 },
   papel: { width: "100%", marginTop: 14, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg2, gap: 10 },

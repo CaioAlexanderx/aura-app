@@ -12,6 +12,8 @@
 // Mocks do padrão do repo (expo-font, FpktLogo); testID + deep:false.
 // ============================================================
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
+// 10/11/2026: loja sem a NFS-e automática (a tela fica a de sempre).
+jest.mock("@/hooks/useNfseAutomatica", () => ({ useNfseAutomaticaConfig: () => ({ ativa: false, config: null, carregando: false }), useSituacaoNfse: () => ({ situacao: null }) }));
 jest.mock("expo-font", () => ({ useFonts: () => [true, null], loadAsync: jest.fn(), isLoaded: () => true }));
 jest.mock("@/components/karate/FpktLogo", () => ({ FpktLogo: () => null, default: () => null }));
 jest.mock("@/stores/auth", () => ({

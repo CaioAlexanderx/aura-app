@@ -11,6 +11,12 @@
 //
 // 29/10/2026 (tq-39): item aceita `discount` (vDesc do item, em R$ no total
 // da linha). Só a Troca preenche; sem desconto o corpo do /emit sai igual.
+//
+// 10/11/2026 (Aura-backend#983): venda só de serviço volta 200 { skipped:
+// true, nfce: null } — antes caía em "authorized" sem número. Agora é o
+// estado "skipped", neutro: "Venda só de serviços: a nota de serviço sai
+// separada". Venda mista: a nota sai e uma linha diz que os serviços ficaram
+// de fora (servicos_fora_da_nfce).
 // ============================================================
 import { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform, ActivityIndicator } from "react-native";
@@ -24,6 +30,7 @@ import { Icon } from "@/components/Icon";
 import { QrCode } from "@/components/QrCode";
 import { openPrintWindow } from "@/services/printWindow";
 import { Linking } from "react-native";
+import { nfcePulada, textoServicosForaDaNfce, TEXTO_NFCE_SO_SERVICO } from "@/utils/nfseAutomatica";
 
 export type NfceActionsItem = {
   product_id: string;
@@ -52,7 +59,7 @@ export type NfceActionsProps = {
   onEmitted?: (result: EmitResponse) => void;
 };
 
-type EmitState = "idle" | "emitting" | "authorized" | "rejected" | "error";
+type EmitState = "idle" | "emitting" | "authorized" | "rejected" | "error" | "skipped";
 
 function formatAccessKey(k: string | null | undefined): string {
   if (!k) return "";
@@ -153,6 +160,9 @@ export function NfceActions({
     },
     onSuccess: (res) => {
       setEmitResult(res);
+      // Venda só de serviço: não há mercadoria para o cupom fiscal. Não é
+      // erro nem sucesso — e nada de "NFC-e #undefined autorizada".
+      if (nfcePulada(res)) { setEmitState("skipped"); return; }
       const status = res.nfce?.status;
       if (status === "autorizada") {
         setEmitState("authorized");
@@ -296,6 +306,14 @@ export function NfceActions({
       </Pressable>
     );
   }
+  if (emitState === "skipped") {
+    return (
+      <View style={s.nfceSkipped} testID="nfce-pulada">
+        <Icon name="info" size={14} color={Colors.ink3} />
+        <Text style={s.nfceSkippedText}>{TEXTO_NFCE_SO_SERVICO}</Text>
+      </View>
+    );
+  }
   if (emitState === "emitting") {
     return (
       <View style={s.nfceLoading}>
@@ -321,6 +339,9 @@ export function NfceActions({
           </Text>
         </View>
         {protocolo && <Text style={s.nfceProtocolo}>Protocolo {protocolo}</Text>}
+        {!!textoServicosForaDaNfce(emitResult) && (
+          <Text style={s.nfceProtocolo} testID="nfce-servicos-fora">{textoServicosForaDaNfce(emitResult)}</Text>
+        )}
         {pollAttempts > 0 && isProcessing && (
           <Text style={s.nfceProtocolo}>Aguardando SEFAZ confirmar... ({pollAttempts}/10)</Text>
         )}
@@ -419,6 +440,8 @@ const s = StyleSheet.create({
   nfceErrorField: { fontSize: 11, color: Colors.red, fontWeight: "700" },
   nfceRetryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, marginTop: 4 },
   nfceRetryText: { fontSize: 12, color: Colors.violet3, fontWeight: "700" },
+  nfceSkipped: { flexDirection: "row", alignItems: "center", gap: 8, width: "100%", padding: 12, borderRadius: 12, backgroundColor: Colors.bg4, borderWidth: 1, borderColor: Colors.border },
+  nfceSkippedText: { flex: 1, fontSize: 12, color: Colors.ink2, lineHeight: 17 },
 });
 
 export default NfceActions;

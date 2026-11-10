@@ -20,6 +20,7 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
+import { NfseDaOrigem } from "@/components/nfse/NfseDaOrigem";
 import {
   serviceOrdersApi, printOs, OS_STATUS_LABEL, OS_TRANSICOES,
   type OsStatus, type ServiceOrderItem,
@@ -269,6 +270,13 @@ export default function OsDetailScreen() {
           </Text>
         )}
       </View>
+
+      {/* 10/11/2026 (NFS-e automática, tela 5): a nota sai sozinha quando a
+          OS é entregue. Emitida: só a 2ª via. Falha/pendência: "Emitir
+          NFS-e". Sem nota (loja que não emite, OS só de peças): nada. */}
+      {os.status === "entregue" && (
+        <NfseDaOrigem companyId={company?.id} tipo="os" id={os.id} origem="os" comTitulo style={[st.card, { marginTop: 16 }]} testID="os-nfse" />
+      )}
 
       {/* Ações de status */}
       {transicoes.length > 0 && (

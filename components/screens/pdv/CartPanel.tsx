@@ -81,7 +81,7 @@
 //   · card do orçamento salvo com os dois totais.
 // Sem essas props o painel é byte a byte o de antes.
 // ============================================================
-import { Fragment, forwardRef, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, forwardRef, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, ActivityIndicator, TextInput } from "react-native";
 import { Colors, Glass, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -103,6 +103,22 @@ import { CalculadoraAmbiente } from "@/components/matcon/CalculadoraAmbiente";
 import { LoteDoItem } from "@/components/matcon/LotePicker";
 import type { LotAllocation } from "@/services/matconApi";
 import { rotuloDaComanda } from "@/utils/comanda";
+import { estadoDoDoc, mascararDoc, mensagemDoDoc } from "@/utils/nfseAutomatica";
+
+/** 10/11/2026 (NFS-e automática, mockup nfse-cadastro-servico.html, tela 3).
+ *  `exigido`: carrinho com serviço numa loja com a emissão automática
+ *  ligada — o "CPF na nota" vira "CPF ou CNPJ de quem contratou",
+ *  obrigatório, com dígito verificador. Sem a prop (ou exigido=false) o
+ *  campo é o "CPF na nota (opcional)" de sempre. */
+export type TomadorDoCaixa = {
+  exigido: boolean;
+  temProduto: boolean;
+  /** Nome de quem contratou (só sem cliente selecionado). */
+  mostrarNome?: boolean;
+  nome?: string;
+  onNome?: (v: string) => void;
+  inputRef?: Ref<TextInput>;
+};
 
 export type CartDisplayItem = {
   productId: string;
@@ -238,6 +254,10 @@ type Props = {
   // CPF na nota (NFC-e). Opcional — se passado, mostra o input.
   cpfNaNota?: string;
   onCpfNaNotaChange?: (v: string) => void;
+  /** 10/11/2026 (NFS-e automática): ver TomadorDoCaixa. */
+  tomador?: TomadorDoCaixa | null;
+  /** "Esta venda sai em duas notas…" (null = sem aviso). */
+  avisoNotas?: string | null;
 
   // Multi-pagamento (opcional). Se onToggleSplit não passar, modo split fica oculto.
   splitMode?: boolean;
@@ -269,7 +289,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     discountLabel, isProcessing, finalizeDisabled, requiredHints,
     discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
     emptyCta, headerSubtitle, compact, fill,
-    cpfNaNota, onCpfNaNotaChange,
+    cpfNaNota, onCpfNaNotaChange, tomador, avisoNotas,
     pricePair, subtotalLabel,
     splitMode, splitPayments, splitRemaining, splitIsBalanced,
     onToggleSplit, onAddSplitPayment, onUpdateSplitPayment, onRemoveSplitPayment,
@@ -688,7 +708,20 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
               FIX: paddingVertical movido do cpfRow pro cpfInput para que toda a
               área visual do row seja clicável (antes o padding ficava no View e
               clicks na borda não focavam o TextInput). */}
-          {showCpfInput && (
+          {!!avisoNotas && (
+            <View style={s.duasNotas} testID="carrinho-aviso-notas">
+              <Icon name="receipt" size={13} color={Colors.violet3} />
+              <Text style={s.duasNotasTxt}>{avisoNotas}</Text>
+            </View>
+          )}
+
+          {showCpfInput && tomador && tomador.exigido ? (
+            <DocDeQuemContratou
+              valor={cpfNaNota || ""}
+              onChange={(v) => onCpfNaNotaChange?.(v)}
+              tomador={tomador}
+            />
+          ) : showCpfInput && (
             <>
               <View style={[s.cpfRow, { borderColor: cpfBorderColor }]}>
                 <Icon name="file_text" size={14} color={Colors.ink3} />
@@ -980,6 +1013,75 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
 });
 
 // ── Linha do split: chips de método + input valor + remover ─────
+/** "CPF ou CNPJ de quem contratou" (tela 3 do mockup da NFS-e automática).
+ *  Obrigatório: a prefeitura não aceita a nota de serviço sem ele. */
+function DocDeQuemContratou({ valor, onChange, tomador }: {
+  valor: string; onChange: (v: string) => void; tomador: TomadorDoCaixa;
+}) {
+  const est = estadoDoDoc(valor);
+  const ok = est === "cpf" || est === "cnpj";
+  const bad = est === "invalido";
+  const msg = mensagemDoDoc(valor, { temProduto: tomador.temProduto });
+  const d = onlyDigits(valor);
+  return (
+    <View
+      testID="carrinho-doc-tomador"
+      style={[s.docBox, ok && { borderColor: "rgba(34,197,94,0.55)" }, bad && { borderColor: "rgba(239,68,68,0.55)" }]}
+    >
+      <View style={s.docHead}>
+        <Icon name="file_text" size={14} color={Colors.violet3} />
+        <Text style={s.docTitle}>CPF ou CNPJ de quem contratou <Text style={{ color: Colors.red }}>*</Text></Text>
+      </View>
+      <Text style={s.docWhy}>
+        Serviço pede nota com o CPF ou CNPJ de quem contratou — sem ele, a prefeitura não aceita a nota de serviço. Pergunte ao cliente: "Qual CPF ou CNPJ vai na nota?"
+      </Text>
+      <View style={[s.cpfRow, { marginTop: 8, borderColor: ok ? "rgba(34,197,94,0.55)" : bad ? "rgba(239,68,68,0.55)" : Glass.lineBorderCard }]}>
+        <TextInput
+          ref={tomador.inputRef as any}
+          style={[s.cpfInput, { textAlign: "left" }, IS_WEB && (webOnly({ cursor: "text" }) as any)]}
+          value={valor}
+          onChangeText={(v) => onChange(mascararDoc(v))}
+          placeholder={d.length > 11 ? "00.000.000/0000-00" : "000.000.000-00"}
+          placeholderTextColor={Colors.ink3}
+          keyboardType="number-pad"
+          maxLength={18}
+          accessibilityLabel="CPF ou CNPJ de quem contratou"
+          testID="carrinho-doc-tomador-input"
+        />
+        {ok && (
+          <View style={[s.cpfBadge, { backgroundColor: "rgba(34,197,94,0.18)" }]}>
+            <Icon name="check" size={12} color="#22c55e" />
+          </View>
+        )}
+        {bad && (
+          <View style={[s.cpfBadge, { backgroundColor: "rgba(239,68,68,0.18)" }]}>
+            <Icon name="x" size={12} color="#ef4444" />
+          </View>
+        )}
+      </View>
+      <Text
+        testID="carrinho-doc-tomador-msg"
+        style={[s.docMsg, msg.tom === "ok" && { color: "#22c55e" }, msg.tom === "erro" && { color: "#ef4444" }]}
+      >
+        {msg.tom === "ok" ? "✓ " + msg.texto : msg.texto}
+      </Text>
+      {tomador.mostrarNome && tomador.onNome && (
+        <View style={[s.cpfRow, { marginTop: 8, borderColor: Glass.lineBorderCard }]}>
+          <TextInput
+            style={[s.cpfInput, { textAlign: "left", fontFamily: undefined }, IS_WEB && (webOnly({ cursor: "text" }) as any)]}
+            value={tomador.nome || ""}
+            onChangeText={tomador.onNome}
+            placeholder="Nome de quem contratou (opcional)"
+            placeholderTextColor={Colors.ink3}
+            accessibilityLabel="Nome de quem contratou"
+            testID="carrinho-doc-tomador-nome"
+          />
+        </View>
+      )}
+    </View>
+  );
+}
+
 function SplitRow({
   entry, methods, onChangeMethod, onChangeValue, onRemove, canRemove,
 }: {
@@ -1694,6 +1796,22 @@ const s = StyleSheet.create({
     fontSize: 10, color: "#ef4444", fontWeight: "600",
     marginTop: 4, marginLeft: 4,
   },
+  // 10/11/2026 (NFS-e automática): aviso das duas notas e o documento de
+  // quem contratou (tela 3 do mockup).
+  duasNotas: {
+    flexDirection: "row", alignItems: "flex-start", gap: 8, marginTop: 10,
+    paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8,
+    backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2,
+  },
+  duasNotasTxt: { flex: 1, fontSize: 11, color: Colors.ink2, lineHeight: 16 },
+  docBox: {
+    marginTop: 10, padding: 10, borderRadius: 10, borderWidth: 1,
+    borderColor: Colors.border2, backgroundColor: Glass.lineFaint,
+  },
+  docHead: { flexDirection: "row", alignItems: "center", gap: 6 },
+  docTitle: { fontSize: 11, color: Colors.ink, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.4 },
+  docWhy: { fontSize: 11, color: Colors.ink3, lineHeight: 16, marginTop: 4 },
+  docMsg: { fontSize: 10, color: Colors.ink3, fontWeight: "600", marginTop: 4, marginLeft: 2 },
   hintsBox: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: Colors.amberD, borderRadius: 8, marginBottom: 10, borderWidth: 1, borderColor: "rgba(251,191,36,0.25)" },
   hintsList: { flex: 1, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 4 },
   hintsTxt: { fontSize: 10, color: Colors.amber, fontWeight: "600" },

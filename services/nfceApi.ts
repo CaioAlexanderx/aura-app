@@ -162,6 +162,13 @@ export type EmitResponse = {
   url_consulta: string | null;
   /** True quando idempotência por sale_id retornou nota existente. */
   idempotent?: boolean;
+  /** 10/11/2026 (Aura-backend#983): venda só de serviço — 200 sem nota
+   *  (`nfce` vem null, reason 'somente_servicos'). Ver utils/nfseAutomatica. */
+  skipped?: boolean;
+  reason?: string;
+  message?: string;
+  /** Venda mista: os serviços que ficaram fora do cupom fiscal. */
+  servicos_fora_da_nfce?: { itens: number; total: number };
 };
 
 export type EmitErrorPayload = {

@@ -28,6 +28,8 @@ import { carregarVendaParaDevolucao } from "./vendaParaDevolucao";
 import { DevolucaoModal, type DevolucaoSale } from "@/components/crediario/DevolucaoModal";
 import { gruposPorCarne, diaSP } from "@/utils/crediarioPagamento";
 import { EditarPagamentoModal, type PagamentoEmEdicao } from "./EditarPagamentoModal";
+import { NfseDaOrigem } from "@/components/nfse/NfseDaOrigem";
+import { useNfseAutomaticaConfig } from "@/hooks/useNfseAutomatica";
 
 export type TabHistoricoProps = {
   histEvents: CreditHistoryEvent[];
@@ -59,6 +61,10 @@ export function TabHistorico({
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
   const [editando, setEditando] = useState<PagamentoEmEdicao | null>(null);
+  // 10/11/2026 (NFS-e automática, tela 5): a compra no crediário com serviço
+  // mostra a nota de serviço da venda (o recebimento não é origem: a nota é
+  // a da venda). Só consulta com a emissão automática ligada na loja.
+  const { ativa: nfseAtiva } = useNfseAutomaticaConfig(companyId);
 
   function recarregar() {
     onRefresh();
@@ -238,6 +244,9 @@ export function TabHistorico({
                   </View>
                 ))}
               </View>
+            )}
+            {nfseAtiva && ev.type === "purchase" && !!ev.sale_id && (
+              <NfseDaOrigem companyId={companyId} tipo="venda" id={ev.sale_id} origem="cobranca" style={{ marginTop: 8 }} testID={`crediario-nfse-${ev.id}`} />
             )}
             {grupos.length > 0 && (
               <View style={lc.alocBox} testID={`crediario-pagamento-parcelas-${ev.id}`}>
