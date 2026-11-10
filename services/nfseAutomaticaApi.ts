@@ -42,7 +42,7 @@ export type AcaoDaOrigemNfse =
 
 /** Motivos que o backend grava (motivo_codigo). */
 export type MotivoNfse =
-  | "SEM_TOMADOR" | "TOMADOR_INVALIDO" | "SEM_NOME" | "SEM_CODIGO" | "INESPERADO" | string;
+  | "SEM_TOMADOR" | "TOMADOR_INVALIDO" | "SEM_NOME" | "SEM_CODIGO" | "INESPERADO" | "DPS_NUMERO_JA_USADO" | string;
 
 export type NotaDaOrigemNfse = {
   id: string;

@@ -39,6 +39,13 @@ export type PassoNfse = {
   /** passo "ok" com aviso (teste rejeitado só pelo ambiente de testes do gov.br) */
   aviso?: string;
   codigos?: string[];
+  /** passo "serie" (migration 443): "Já emite NFS-e por outro emissor?" */
+  outro_emissor?: boolean;
+  outro_emissor_serie?: string;
+  outro_emissor_ultimo_numero?: string;
+  /** passo "serie" em problema DPS_NUMERO_JA_USADO: o que o outro emissor já usou */
+  serie_usada?: string | null;
+  numero_usado?: string | null;
 };
 
 export type SugestaoDaEmpresa = {
@@ -81,6 +88,14 @@ export type ConfigNfse = {
   serie?: string | null;
   next_dps_number?: number | string | null;
   serie_confirmada_em?: string | null;
+  /** migration 443: já emite NFS-e por outro emissor? (null = sem resposta) */
+  outro_emissor?: boolean | null;
+  outro_emissor_serie?: string | null;
+  outro_emissor_ultimo_numero?: number | string | null;
+  /** conflito de numeração registrado pela emissão (DPS_NUMERO_JA_USADO) */
+  dps_conflito_em?: string | null;
+  dps_conflito_serie?: string | null;
+  dps_conflito_numero?: string | number | null;
   inscricao_municipal?: string | null;
   prefeitura_cadastro_confirmado?: "sim" | "nao" | "nao_sei" | null;
   cliente_retem_iss?: boolean | null;
@@ -194,6 +209,7 @@ export function resumoDaLoja(sit: SituacaoNfse | null, automatica = false): Resu
   if (p.certificado && p.certificado.estado === "problema") {
     return { tom: "erro", texto: p.certificado.cnpj_do_certificado ? "Certificado de outro CNPJ" : "Certificado com problema" };
   }
+  if (conflitoDeNumeracao(sit)) return { tom: "erro", texto: "Série e número já usados por outro emissor" };
   if (p.teste && p.teste.estado === "problema") return { tom: "erro", texto: "A nota de teste voltou com aviso" };
   const falta = CARTOES.length - contarProntos(estadosDosCartoes(sit));
   return { tom: "aviso", texto: falta === 1 ? "Falta 1 passo" : "Faltam " + falta + " passos" };
@@ -231,6 +247,10 @@ export function fmtPercentual(v: number | string | null | undefined): string {
  * serie): 1–49999 aplicativo próprio (a Aura); 50000–69999 Emissor Móvel;
  * 70000–79999 Emissor Web; 80000–89999 transcrição manual (Web). A 49999
  * fica reservada à nota de teste da Aura.
+ *
+ * As faixas NÃO garantem que a numeração não se repete: no incidente de
+ * 10/11/2026 outro emissor da loja usou a série 1, a mesma da Aura. Por isso
+ * o passo "série" pergunta se a loja já emite por outro emissor.
  */
 export function problemaDaSerie(serie: string): string | null {
   const d = String(serie || "").replace(/\D/g, "");
@@ -238,39 +258,60 @@ export function problemaDaSerie(serie: string): string | null {
   const n = parseInt(d, 10);
   if (!n) return "A Série da DPS começa em 1.";
   if (n >= 50000 && n <= 89999) {
-    return "Essa série é do site ou do app do gov.br (de 50000 a 89999). Pela Aura a Série da DPS fica entre 1 e 49998, então as notas nunca se encontram.";
+    return "Essa série é do site ou do app do gov.br (de 50000 a 89999). Pela Aura a Série da DPS fica entre 1 e 49998.";
   }
   if (n === 49999) return "A série 49999 é reservada para a nota de teste da Aura. Use outra.";
   if (n > 49999) return "A Série da DPS da Aura fica entre 1 e 49998.";
   return null;
 }
 
-export type JaEmite = "" | "nao" | "gov" | "outro";
+/** Resposta a "Já emite NFS-e por outro emissor?" ("" = ainda sem resposta). */
+export type JaEmite = "" | "sim" | "nao";
+
+export type CamposDoOutroEmissor = {
+  outro_emissor: boolean;
+  outro_emissor_serie: string | null;
+  outro_emissor_ultimo_numero: number | null;
+};
 
 /**
- * O que gravar de série e número a partir da resposta "Já emite NFS-e pelo
- * Emissor Nacional?". Quem emite pelo site/app do gov.br usa outra faixa de
- * série, então a Aura começa na série 1 sem saber o último número de lá.
+ * Campos do PUT /nfse/config a partir de "Já emite NFS-e por outro emissor
+ * (site ou aplicativo do gov.br, outro sistema)?" (Aura-backend#992,
+ * migration 443). Sim exige a Série da DPS e o Último Número da DPS usados
+ * lá; na mesma série da Aura, o backend continua do número seguinte. Não
+ * limpa os dois campos.
  */
-export function serieENumero(
+export function camposDoOutroEmissor(
   jaEmite: JaEmite,
-  campos: { serie: string; ultimo: string; continuaNoOutro: boolean; serieDaAura: string }
-): { serie: string; next_dps_number?: number } | { erro: string } {
-  if (!jaEmite) return { erro: "Conte se você já emite NFS-e pelo Emissor Nacional." };
-  if (jaEmite === "nao" || jaEmite === "gov") return { serie: "1" };
-  if (campos.continuaNoOutro) {
-    const p = problemaDaSerie(campos.serieDaAura);
-    if (p) return { erro: p };
-    const sa = String(parseInt(campos.serieDaAura.replace(/\D/g, ""), 10));
-    const so = String(parseInt(String(campos.serie).replace(/\D/g, ""), 10) || "");
-    if (sa === so) return { erro: "Use na Aura uma Série da DPS diferente da do outro sistema." };
-    return { serie: sa };
-  }
-  const p = problemaDaSerie(campos.serie);
-  if (p) return { erro: p };
+  campos: { serie: string; ultimo: string }
+): CamposDoOutroEmissor | { erro: string } {
+  if (!jaEmite) return { erro: "Conte se você já emite NFS-e por outro emissor." };
+  if (jaEmite === "nao") return { outro_emissor: false, outro_emissor_serie: null, outro_emissor_ultimo_numero: null };
+  const sd = String(campos.serie || "").replace(/\D/g, "");
+  const s = parseInt(sd, 10);
+  if (!sd || !s || s > 99999) return { erro: "Informe a Série da DPS usada no outro emissor (de 1 a 99999)." };
   const ult = parseInt(String(campos.ultimo || "").replace(/\D/g, ""), 10);
-  if (!ult) return { erro: "Informe o último Número da DPS emitido, para a Aura continuar sem repetir." };
-  return { serie: String(parseInt(campos.serie.replace(/\D/g, ""), 10)), next_dps_number: ult + 1 };
+  if (!ult) return { erro: "Informe o Último Número da DPS usado no outro emissor, para a Aura não repetir uma nota." };
+  return { outro_emissor: true, outro_emissor_serie: String(s), outro_emissor_ultimo_numero: ult };
+}
+
+/**
+ * Conflito de numeração (passo "serie" em problema DPS_NUMERO_JA_USADO): a
+ * emissão achou uma NFS-e de outro emissor com a mesma série e o mesmo
+ * número. null = sem conflito.
+ */
+export function conflitoDeNumeracao(sit: SituacaoNfse | null | undefined): { serie: string | null; numero: string | null } | null {
+  const p = sit && sit.passos && sit.passos.serie;
+  if (!p || p.estado !== "problema" || p.codigo !== "DPS_NUMERO_JA_USADO") return null;
+  return { serie: p.serie_usada != null ? String(p.serie_usada) : null, numero: p.numero_usado != null ? String(p.numero_usado) : null };
+}
+
+/** Aviso gentil do conflito, para o cartão "Dados da nota". */
+export function textoDoConflito(c: { serie: string | null; numero: string | null }): string {
+  const qual = c.serie && c.numero
+    ? "A série " + c.serie + " e o número " + c.numero + " já tinham sido usados por outro emissor."
+    : "A série e o número da última nota já tinham sido usados por outro emissor.";
+  return qual + " Confira a série e o último número e salve de novo.";
 }
 
 /** Texto pronto para pedir o cadastro à prefeitura (E0084/E0120). */

@@ -170,6 +170,15 @@ export function semCodigo(s: SituacaoNfse | null | undefined): boolean {
   return !!s && (s.acao === "cadastrar_codigo" || s.notas.some((n) => n.motivo_codigo === "SEM_CODIGO"));
 }
 
+/**
+ * A série e o número da DPS já tinham sido usados por outro emissor da
+ * empresa (Aura-backend#992). O motivo do backend já diz o que fazer; a tela
+ * mostra só ele e "Tentar de novo".
+ */
+export function numeroJaUsado(s: SituacaoNfse | null | undefined): boolean {
+  return !!s && s.estado === "erro" && s.notas.some((n) => n.motivo_codigo === "DPS_NUMERO_JA_USADO");
+}
+
 /** A primeira frase de problema das notas (o backend já escreve para a lojista). */
 export function motivoDaSituacao(s: SituacaoNfse | null | undefined): string | null {
   if (!s) return null;
