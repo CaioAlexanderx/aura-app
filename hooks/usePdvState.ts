@@ -113,6 +113,10 @@ import { apareceParaVender, lerVendaSemEstoque, produtoTemEstoque } from "@/util
 import { warrantiesApi } from "@/services/warrantiesApi";
 import { useWarrantyDraft, diasValidos } from "@/stores/warrantyDraft";
 import { resumoDoEndereco } from "@/components/endereco/endereco";
+// 10/11/2026 (NFS-e automática, mockup nfse-cadastro-servico.html, tela 3).
+import { useNfseAutomaticaConfig } from "@/hooks/useNfseAutomatica";
+import { avisoDasNotas, composicaoDaVenda, exigeTomador, pendenciaDoDoc } from "@/utils/nfseAutomatica";
+import type { TextInput } from "react-native";
 
 const PAGE_SIZE = 12;
 
@@ -253,6 +257,11 @@ export function usePdvState() {
   const autoEmitNfce =
     !!nfceConfigData?.config?.auto_emit_nfce && nfceConfigData?.config?.is_active;
 
+  // ── NFS-e automática (10/11/2026, Aura-backend#984) ───────────────────
+  // Opt-in da loja (GET /nfse/automatica/config → ativa). Desligada, sem a
+  // rota no servidor ou em erro: false, e o Caixa fica exatamente como antes.
+  const { ativa: nfseAtiva } = useNfseAutomaticaConfig(company?.id, !isDemo);
+
   // ── Cart ──────────────────────────────────────────────────────────────
   // 14/10/2026: Caixa aberto com ?quote= monta o carrinho do orçamento — não
   // restaura a venda guardada por cima (o useCart decide isso só na
@@ -276,6 +285,7 @@ export function usePdvState() {
     couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
     discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
     cpfNaNota, setCpfNaNota,
+    nomeNaNota, setNomeNaNota,
     splitMode, toggleSplitMode, dividirPagamento,
     splitPayments, addSplitPayment, updateSplitPayment, removeSplitPayment,
     splitRemaining, splitIsBalanced,
@@ -288,6 +298,17 @@ export function usePdvState() {
     // endereço que a lista mostrava. A próxima tentativa pergunta.
     aoFaltarEntrega: (id) => { if (id) setCadastroSemEndereco(id); },
   });
+
+  // Venda com serviço numa loja que emite NFS-e sozinha EXIGE o CPF ou CNPJ
+  // de quem contratou (dígito verificador). Venda só de produto, ou loja sem
+  // o opt-in: o "CPF na nota (opcional)" de sempre.
+  const composicao = composicaoDaVenda(cart);
+  const docExigido = exigeTomador({ temServico: composicao.temServico, nfseAtiva });
+  const docPendente = docExigido ? pendenciaDoDoc(cpfNaNota) : null;
+  const docTomadorRef = useRef<TextInput | null>(null);
+  function focarDocTomador() {
+    try { docTomadorRef.current?.focus(); } catch {}
+  }
 
   // ── Matcon M1 — editar orçamento (07/10/2026) ───────────────────────────
   // "Editar" em /matcon/orcamentos abre o Caixa com ?quote=<id>&edit=1. O
@@ -782,6 +803,15 @@ export function usePdvState() {
       setShowCaixaModal(true);
       return;
     }
+    // 10/11/2026 (NFS-e automática): sem o documento de quem contratou a
+    // prefeitura não aceita a nota de serviço.
+    if (docPendente) {
+      toast.error(docPendente === "Confira o CPF ou CNPJ do cliente"
+        ? "Esse CPF ou CNPJ não confere. Confira com o cliente antes de finalizar."
+        : "Informe o CPF ou CNPJ de quem contratou o serviço antes de finalizar.");
+      focarDocTomador();
+      return;
+    }
     const v = validateSaleAgainstSettings(pdvSettings, {
       customerId: selectedCustomerId,
       sellerId:   selectedEmployeeId,
@@ -1136,6 +1166,9 @@ export function usePdvState() {
   if (caixaEnabled && !isAberto) {
     requiredHints.push({ label: "Caixa fechado", onPress: () => setShowCaixaModal(true) });
   }
+  if (docPendente) {
+    requiredHints.push({ label: docPendente, onPress: focarDocTomador });
+  }
 
   const activeSellerValue = selectedEmployeeId
     ? { id: selectedEmployeeId, name: selectedEmployeeName || "Vendedora" }
@@ -1257,6 +1290,20 @@ export function usePdvState() {
     requiredHints,
     cpfNaNota,
     onCpfNaNotaChange: setCpfNaNota,
+    // 10/11/2026 (NFS-e automática): null = campo de sempre.
+    tomador: docExigido
+      ? {
+          exigido: true,
+          temProduto: composicao.temProduto,
+          mostrarNome: !selectedCustomerId,
+          nome: nomeNaNota,
+          onNome: setNomeNaNota,
+          inputRef: docTomadorRef,
+        }
+      : null,
+    avisoNotas: avisoDasNotas({
+      temServico: composicao.temServico, temProduto: composicao.temProduto, nfseAtiva, nfceAutomatica: !!autoEmitNfce,
+    }),
     // Preço no cartão (tela 3/5 do mockup): o par "dinheiro e PIX · cartão"
     // sempre à vista no topo. null com a opção desligada = topo de sempre.
     // 30/10/2026: o par mostra o total da venda, frete incluído (o mesmo nos

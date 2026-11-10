@@ -15,6 +15,7 @@ import { enderecoDoCliente, type Endereco } from "@/components/endereco/endereco
 import { mensagemErroCarneDaVenda } from "@/utils/crediarioCarne";
 import { novaChaveDaVenda } from "@/utils/chaveDaVenda";
 import { promoDoItem } from "@/utils/precoEfetivo";
+import { docValido, ehServico } from "@/utils/nfseAutomatica";
 import {
   CARTAO_DESLIGADO, contaComOServidor, ehCartao, editarPrecoNoDividido, editarPrecoProporcional, linhasNoMetodo, linhasRateadas,
   precoNoCartaoDoItem, r2, resolverDividido, statusDoDividido, totalComoNoServidor,
@@ -84,6 +85,8 @@ type VendaGuardada = {
   discountType: "%" | "R$";
   discountValue: string;
   cpfNaNota: string;
+  /** 10/11/2026 (NFS-e): nome de quem contratou o serviço. Ausente = vazio. */
+  nomeNaNota?: string;
   splitMode: boolean;
   splitPayments: PaymentEntry[];
   quoteId: string | null;
@@ -153,6 +156,10 @@ export type SaleResult = {
    *  cliente (venda sem frete). */
   entrega?: Endereco | null;
   cpfNaNota?: string;       // CPF do consumidor (opcional, pra NFC-e)
+  /** 10/11/2026 (NFS-e automática): CPF/CNPJ (válido) e nome de quem
+   *  contratou, quando o carrinho tinha serviço. A tela final leva à nota de
+   *  serviço (utils/entregarTomador). Ausente em venda só de produto. */
+  tomador?: { doc: string; nome?: string | null };
   // QA 23/09/2026 (Matcon): o `matcon` da resposta do POST /pdv/sale —
   // entrega criada pela venda de orçamento e pontos da indicação. Ausente
   // em loja sem Matcon/venda de balcão; a tela final só lê se vier.
@@ -317,6 +324,9 @@ export function useCart(
   // CPF na nota (NFC-e) — caixa digita ou cliente fala. Independente de
   // selectedCustomer, mas o front pode pre-preencher quando aplicavel.
   const [cpfNaNota, setCpfNaNota] = useState<string>("");
+  // 10/11/2026 (NFS-e automática): com serviço no carrinho o mesmo campo vira
+  // "CPF ou CNPJ de quem contratou" e ganha o nome (opcional) ao lado.
+  const [nomeNaNota, setNomeNaNota] = useState<string>("");
 
   // ── Multi-pagamento ─────────────────────────────────────────
   // splitMode=false → comportamento legado, único `payment` chip
@@ -344,6 +354,7 @@ export function useCart(
     selectedEmployeeId, selectedEmployeeName, sellerName,
     couponCode, couponApplied, couponRule,
     discountType, discountValue, cpfNaNota,
+    ...(nomeNaNota ? { nomeNaNota } : {}),
     splitMode, splitPayments,
     quoteId, comanda, lotAllocations,
     frete: freteValor,
@@ -403,7 +414,7 @@ export function useCart(
   }, [
     cart, payment, selectedCustomerId, selectedCustomerName, selectedCustomerPhone,
     selectedEmployeeId, selectedEmployeeName, sellerName, couponCode, couponApplied, couponRule,
-    discountType, discountValue, cpfNaNota, splitMode, splitPayments, quoteId, comanda, lotAllocations,
+    discountType, discountValue, cpfNaNota, nomeNaNota, splitMode, splitPayments, quoteId, comanda, lotAllocations,
     chaveDaVenda, isProcessing, companyId, usuarioId,
   ]);
 
@@ -454,6 +465,7 @@ export function useCart(
     setDiscountType(v.discountType === "R$" ? "R$" : "%");
     setDiscountValue(v.discountValue || "");
     setCpfNaNota(v.cpfNaNota || "");
+    setNomeNaNota(v.nomeNaNota || "");
     setSplitMode(!!v.splitMode);
     setSplitPayments(Array.isArray(v.splitPayments) ? v.splitPayments : []);
     setQuoteId(v.quoteId ?? null);
@@ -893,6 +905,12 @@ export function useCart(
     var cartSnapshot = [...cartView];
     var effectiveSellerName = sellerName.trim() || selectedEmployeeName || null;
     var cleanCpf = cpfNaNota.replace(/\D/g, "");
+    // 10/11/2026 (NFS-e automática): carrinho com serviço e documento válido
+    // = o tomador da nota de serviço. O POST /pdv/sale NÃO muda (o backend
+    // lê o tomador do cadastro do cliente ou do /completar).
+    var tomadorDaVenda = cart.some(ehServico) && docValido(cleanCpf)
+      ? { doc: cleanCpf, nome: nomeNaNota.trim() || selectedCustomerName || null }
+      : undefined;
 
     // Pagamento "primário" (o que vai no campo singular tanto na sale quanto no resumo)
     // Preço no cartão: os pagamentos são os RESOLVIDOS (a linha "o que
@@ -1097,7 +1115,10 @@ export function useCart(
         entrega: venda && venda.delivery_address
           ? enderecoDoCliente(venda.delivery_address)
           : (entregaDaVenda ? entregaDaVenda.endereco : undefined),
-        cpfNaNota: cleanCpf || undefined,
+        // CNPJ (14) só existe no campo do serviço: vai para a NFS-e, não para
+        // o "CPF na nota" do cupom fiscal. Venda só de produto: igual a antes.
+        cpfNaNota: cleanCpf && cleanCpf.length !== 14 ? cleanCpf : undefined,
+        tomador: tomadorDaVenda,
         matcon: matcon && typeof matcon === "object" ? (matcon as MatconDaVenda) : null,
       };
     }
@@ -1120,6 +1141,7 @@ export function useCart(
           setEntrega(null);
           setSellerName("");
           setCpfNaNota("");
+          setNomeNaNota("");
           // QA 23/09/2026 (decisão do Caio): a próxima venda começa limpa —
           // sem dividido e no PIX (antes herdava "0× SPLIT" e o método).
           voltarAoPagamentoInicial();
@@ -1185,6 +1207,7 @@ export function useCart(
     setSelectedEmployeeId(null); setSelectedEmployeeName(null);
     setSellerName("");
     setCpfNaNota("");
+    setNomeNaNota("");
     clearCoupon(); clearDiscount();
     // QA 23/09/2026: não herda mais o dividido nem o método da venda
     // anterior ("0× SPLIT" com carrinho vazio, preços no cartão).
@@ -1219,6 +1242,7 @@ export function useCart(
     couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
     discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
     cpfNaNota, setCpfNaNota,
+    nomeNaNota, setNomeNaNota,
     // Multi-pagamento
     splitMode, toggleSplitMode, dividirPagamento,
     splitPayments: splitPaymentsVista, addSplitPayment, updateSplitPayment, removeSplitPayment, clearSplitPayments,

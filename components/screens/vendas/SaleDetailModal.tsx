@@ -19,6 +19,8 @@ import { readMatconSettings } from "@/constants/matcon";
 import { matconApi } from "@/services/matconApi";
 import { textoDoErro } from "@/components/matcon/erroMatcon";
 import { EditarVendaModal } from "./EditarVendaModal";
+import { NfseDaOrigem } from "@/components/nfse/NfseDaOrigem";
+import { nfcePulada, textoServicosForaDaNfce, TEXTO_NFCE_SO_SERVICO } from "@/utils/nfseAutomatica";
 import {
   brl, fmtDataHora, rotuloDaForma, normalizarMetodo, rotuloDaEdicao, mascararTelefone, mesDaVenda, diaEmSaoPaulo,
 } from "./editarVendaUtils";
@@ -165,9 +167,12 @@ export function SaleDetailModal({
         };
         const r = await emitNfce({ body: body });
         const st = (r && r.nfce && r.nfce.status) || "";
-        if (st === "rejeitada") toast.error("NFC-e rejeitada: " + ((r && r.motivo) || "ver detalhe"));
+        // 10/11/2026 (Aura-backend#983): venda só de serviço volta 200 sem
+        // nota — não é sucesso de NFC-e (a nota de serviço sai separada).
+        if (nfcePulada(r)) toast.info(TEXTO_NFCE_SO_SERVICO);
+        else if (st === "rejeitada") toast.error("NFC-e rejeitada: " + ((r && r.motivo) || "ver detalhe"));
         else if (r && r.idempotent) toast.success("Esta venda já tinha NFC-e emitida.");
-        else toast.success("NFC-e emitida com sucesso.");
+        else toast.success("NFC-e emitida com sucesso." + (textoServicosForaDaNfce(r) ? " " + textoServicosForaDaNfce(r) : ""));
       }
     } catch (err: any) {
       toast.error(err?.data?.error || err?.message || "Erro ao emitir nota fiscal");
@@ -547,6 +552,12 @@ export function SaleDetailModal({
                     <Text style={s.fiscalConfigNote}>Emissão de nota fiscal não configurada. Ative em Configurações › Nota Fiscal.</Text>
                   )}
                 </>
+              )}
+              {/* 10/11/2026 (NFS-e automática, tela 5): a nota de serviço da
+                  venda. Some quando a venda não tem NFS-e (só produto, loja
+                  que não emite). companyId = o da venda (multi-CNPJ). */}
+              {!isTroca && (
+                <NfseDaOrigem companyId={effectiveCompanyId} tipo="venda" id={saleId} origem="venda" testID="venda-nfse" />
               )}
             </View>
           )}
