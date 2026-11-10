@@ -16,12 +16,20 @@
 // ligada (WHATSAPP_OBRIGATORIO_NO_CADASTRO).
 // ============================================================
 import { waAura } from "@/constants/suporteAura";
+import { normalizarTelefone, ERRO_TELEFONE_LONGO } from "@/utils/telefone";
 
 export const soDigitos = (v: string) => (v || "").replace(/\D/g, "");
 
-/** "11912345678" → "(11) 9 1234-5678", aos pedaços enquanto digita (maskZap do mockup). */
+/**
+ * "11912345678" → "(11) 9 1234-5678", aos pedaços enquanto digita (maskZap do mockup).
+ * 10/11/2026: normaliza antes (utils/telefone): "+55 (66) 99238-4539" vira
+ * "(66) 9 9238-4539". Antes o slice(0, 11) vinha primeiro e cortava o fim do
+ * número. Com dígitos a mais, mostra os dígitos sem máscara (nada some).
+ */
 export function mascaraDoZap(v: string): string {
-  const d = soDigitos(v).slice(0, 11);
+  const n = normalizarTelefone(v);
+  if (n.erro) return n.digitos;
+  const d = n.digitos;
   if (d.length <= 2) return d.length ? "(" + d : "";
   const ddd = "(" + d.slice(0, 2) + ") ";
   if (d.length <= 3) return ddd + d.slice(2);
@@ -29,10 +37,12 @@ export function mascaraDoZap(v: string): string {
   return ddd + d[2] + " " + d.slice(3, 7) + "-" + d.slice(7);
 }
 
-export type ConferenciaDoZap = { ok: boolean; tipo: "vazio" | "curto" | "fixo" | "sem9" | "ok" };
+export type ConferenciaDoZap = { ok: boolean; tipo: "vazio" | "curto" | "longo" | "fixo" | "sem9" | "ok" };
 
 export function conferirZap(digitos: string): ConferenciaDoZap {
-  const d = soDigitos(digitos);
+  const n = normalizarTelefone(digitos);
+  if (n.erro) return { ok: false, tipo: "longo" };
+  const d = n.digitos;
   if (!d) return { ok: false, tipo: "vazio" };
   if (d.length === 10) return { ok: false, tipo: "fixo" };
   if (d.length < 11) return { ok: false, tipo: "curto" };
@@ -49,6 +59,7 @@ export const DICAS_DO_ZAP = {
 } as const;
 
 export function dicaDoZap(c: ConferenciaDoZap): { kind?: "ok" | "err"; texto: string } {
+  if (c.tipo === "longo") return { kind: "err", texto: ERRO_TELEFONE_LONGO };
   if (c.tipo === "fixo") return { kind: "err", texto: DICAS_DO_ZAP.fixo };
   if (c.tipo === "sem9") return { kind: "err", texto: DICAS_DO_ZAP.sem9 };
   if (c.tipo === "ok") return { kind: "ok", texto: DICAS_DO_ZAP.ok };

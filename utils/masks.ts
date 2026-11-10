@@ -4,15 +4,17 @@
 // Todas trabalham com strings, retornam strings, e ignoram caracteres invalidos.
 // ============================================================
 
-/** Máscara de telefone celular ou fixo: (XX) XXXXX-XXXX ou (XX) XXXX-XXXX */
+import { formatarTelefone } from "./telefone";
+
+/**
+ * Máscara de telefone celular ou fixo: (XX) XXXXX-XXXX ou (XX) XXXX-XXXX.
+ * 10/11/2026: delega ao normalizador único (utils/telefone). Antes cortava em
+ * 11 dígitos ANTES de olhar o +55: "5566992384539" virava "(55) 66992-3845".
+ * Agora o 55 do país sai quando sobra dígito, e dígito a mais nunca some
+ * (a tela mostra ERRO_TELEFONE_LONGO).
+ */
 export function maskPhone(value: string): string {
-  const digits = (value || "").replace(/\D/g, "").slice(0, 11);
-  if (digits.length === 0) return "";
-  if (digits.length <= 2) return `(${digits}`;
-  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
-  // 11 dígitos: celular com 9
-  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  return formatarTelefone(value);
 }
 
 /** Máscara de CPF: 000.000.000-00 */

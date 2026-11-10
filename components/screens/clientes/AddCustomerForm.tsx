@@ -4,6 +4,7 @@ import { Colors } from "@/constants/colors";
 import { toast } from "@/components/Toast";
 import type { Customer } from "./types";
 import { maskPhone } from "@/utils/masks";
+import { erroDoTelefone, TELEFONE_MAX_CARACTERES } from "@/utils/telefone";
 import { DateInput } from "@/components/inputs/DateInput";
 // 09/11/2026 — "Endereço para entrega", recolhido (mockup aprovado, seção A).
 import { SecaoEndereco } from "@/components/endereco/SecaoEndereco";
@@ -35,6 +36,10 @@ export function AddCustomerForm({ onSave, onCancel, initialData }: Props) {
 
   function handleSave() {
     if (!name.trim()) { toast.error("Preencha o nome"); return; }
+    // 10/11/2026: dígito a mais no telefone não salva (nunca é cortado). O
+    // telefone antigo, reenviado sem mexer na edição, segue como está.
+    const erroTel = phone !== (initialData?.phone || "") ? erroDoTelefone(phone) : null;
+    if (erroTel) { toast.error(erroTel); return; }
     const erroEndereco = erroDoEndereco(endereco);
     if (erroEndereco) { toast.error(erroEndereco); return; }
     onSave({
@@ -70,7 +75,10 @@ export function AddCustomerForm({ onSave, onCancel, initialData }: Props) {
       <View style={s.row2}>
         <View style={{ flex: 1 }}>
           <Text style={s.label}>Telefone / WhatsApp</Text>
-          <TextInput style={s.input} value={phone} onChangeText={v => setPhone(maskPhone(v))} placeholder="(12) 99999-0000" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} />
+          <TextInput style={s.input} value={phone} onChangeText={v => setPhone(maskPhone(v))} placeholder="(12) 99999-0000" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={TELEFONE_MAX_CARACTERES} testID="cliente-telefone" />
+          {phone !== (initialData?.phone || "") && erroDoTelefone(phone) && (
+            <Text style={{ color: Colors.red, fontSize: 12, marginTop: 4 }} testID="cliente-telefone-erro">{erroDoTelefone(phone)}</Text>
+          )}
           <View style={{ height: 16 }} />
         </View>
         <View style={{ flex: 1 }}>

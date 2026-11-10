@@ -31,6 +31,7 @@ import {
   type ManualEntryPayload, type CreditAccount, type UnifyPlan, type ManualEntryResult,
 } from "@/services/creditApi";
 import { toast } from "@/components/Toast";
+import { erroDoTelefone } from "@/utils/telefone";
 import { parseBrDate } from "@/components/inputs/DateInput";
 import { lancamentoPreenchido, type PadroesDoLancamento } from "@/utils/crediarioLancamento";
 import {
@@ -375,6 +376,8 @@ export function useLancamentoForm(opcoes: OpcoesDoLancamento = {}) {
     const s = stRef.current;
     if (!s.newName.trim())  { toast.error("Nome obrigatório"); return; }
     if (!s.newPhone.trim()) { toast.error("Telefone obrigatório"); return; }
+    const erroTel = erroDoTelefone(s.newPhone);
+    if (erroTel) { toast.error(erroTel); return; }
     dispatch({ type: "escolherCliente", cliente: null });
   }, []);
 

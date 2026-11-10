@@ -2,6 +2,7 @@
 // AURA. — Utilitarios de mascara de input
 // Masks manuais sem dependencia de lib externa.
 // ============================================================
+import { formatarTelefone } from "./telefone";
 
 // CPF: 000.000.000-00
 export function maskCpf(value: string): string {
@@ -21,17 +22,11 @@ export function maskCpf(value: string): string {
 // sobram digitos demais pra ser um numero nacional puro (10 ou 11); um DDD 55
 // legitimo (Santa Maria/RS) sempre chega aqui com 10-11 digitos no total e
 // continua intacto.
+//
+// 10/11/2026: a regra mora no normalizador único (utils/telefone), igual para
+// toda máscara de telefone do app. Dígito a mais não é mais cortado.
 export function maskPhone(value: string): string {
-  let raw = value.replace(/\D/g, "");
-  if ((raw.length === 12 || raw.length === 13) && raw.startsWith("55")) {
-    raw = raw.slice(2);
-  }
-  const digits = raw.slice(0, 11);
-  if (digits.length === 0) return "";
-  if (digits.length <= 2) return `(${digits}`;
-  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
-  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  return formatarTelefone(value);
 }
 
 // Data BR: DD/MM/AAAA

@@ -10,6 +10,7 @@
 // (em UTC-3 volta um dia). Parse/format sempre por split manual.
 // ============================================================
 import { KarateBelts, KarateColors, resolveBeltKey, BeltKey } from "@/constants/karateTheme";
+import { formatarTelefone } from "@/utils/telefone";
 
 export interface CommonBelt {
   label: string;
@@ -242,13 +243,9 @@ export function maskCep(raw: string | null | undefined): string {
  * já salvo (ex.: card do responsável vinculado), que hoje sai cru
  * ("91988887777") em vez de mascarado.
  */
+// 10/11/2026: normalizador único (utils/telefone); antes cortava em 11 antes do +55.
 export function formatPhone(raw: string | null | undefined): string {
-  const d = onlyDigits(raw).slice(0, 11);
-  if (!d) return "";
-  if (d.length <= 2) return `(${d}`;
-  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
-  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
-  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  return formatarTelefone(raw);
 }
 
 // ── E-mail ──────────────────────────────

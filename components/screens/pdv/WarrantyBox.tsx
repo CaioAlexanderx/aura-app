@@ -21,6 +21,7 @@ import { companiesApi } from "@/services/api";
 import { warrantiesApi, prazoLabel } from "@/services/warrantiesApi";
 import { useWarrantyDraft, diasValidos } from "@/stores/warrantyDraft";
 import { maskCpf, maskPhone } from "@/utils/masks";
+import { TELEFONE_MAX_CARACTERES } from "@/utils/telefone";
 
 export type WarrantyCartItem = { key: string; name: string; qty: number };
 
@@ -180,7 +181,7 @@ function WarrantyModal({ companyId, items, customerId, customerName, onPickCusto
               />
               <TextInput
                 style={[m.input, { flex: 1 }]} value={phone} onChangeText={(v) => setPhone(maskPhone(v))}
-                placeholder="Telefone" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={15} testID="warranty-phone"
+                placeholder="Telefone" placeholderTextColor={Colors.ink3} keyboardType="phone-pad" maxLength={TELEFONE_MAX_CARACTERES} testID="warranty-phone"
               />
             </View>
             <Pressable onPress={saveCustomer} disabled={saving} style={m.smallBtn} testID="warranty-save-customer">

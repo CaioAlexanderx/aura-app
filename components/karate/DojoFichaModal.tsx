@@ -69,6 +69,7 @@ import { ShojiPalette as P, KarateRadius as R, KarateFonts as F } from "@/consta
 import { karateApi, AffiliationModel, AnnuityFeePlan, AnnuityPlan, DojoInput, PractitionerListItem } from "@/services/karateApi";
 import { parseBrDate } from "@/components/inputs/DateInput";
 import { KARATE_REGIONS, KARATE_REGIONS_VALUES } from "@/constants/karateRegions";
+import { formatarTelefone } from "@/utils/telefone";
 
 interface Props {
   federationId: string;
@@ -133,13 +134,8 @@ function maskCEP(v: string) {
   const d = onlyD(v).slice(0, 8);
   return d.length > 5 ? d.replace(/(\d{5})(\d+)/, "$1-$2") : d;
 }
-function maskPhone(v: string) {
-  const d = onlyD(v).slice(0, 11);
-  if (d.length > 10) return d.replace(/(\d{2})(\d{5})(\d+)/, "($1) $2-$3");
-  if (d.length > 6) return d.replace(/(\d{2})(\d{4})(\d+)/, "($1) $2-$3");
-  if (d.length > 2) return d.replace(/(\d{2})(\d+)/, "($1) $2");
-  return d;
-}
+// 10/11/2026: normalizador único (utils/telefone); antes cortava em 11 antes do +55.
+const maskPhone = formatarTelefone;
 function cnpjValido(v: string) {
   const c = onlyD(v);
   if (c.length !== 14 || /^(\d)\1{13}$/.test(c)) return false;

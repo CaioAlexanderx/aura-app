@@ -76,6 +76,7 @@ import {
 } from "@/utils/whatsappDoCadastro";
 import { segurarNoVerso, soltarVerso } from "@/utils/versoDoCadastro";
 import { MSG_CNPJ_INDISPONIVEL } from "@/utils/mensagensDoApp";
+import { normalizarTelefone, TELEFONE_MAX_CARACTERES } from "@/utils/telefone";
 
 const API_BASE = "https://aura-backend-production-f805.up.railway.app/api/v1";
 // Versao dos Termos de Uso vigente — atualizar aqui quando publicar nova versao
@@ -984,12 +985,15 @@ export default function RegisterScreen() {
             ref={(r) => { firstRef.current[2] = r; }}
             style={[s.input, noOutline]} value={mascaraDoZap(zap)}
             onChangeText={(v: string) => {
-              const d = soDigitos(v).slice(0, 11);
+              // 10/11/2026: normaliza ANTES de limitar (utils/telefone). O
+              // slice(0, 11) daqui cortava "5566992384539" em "55669923845".
+              // Com dígitos a mais, guarda todos e a dica mostra o erro.
+              const d = normalizarTelefone(v).digitos;
               setZap(d); setZapErro(null);
               if (d.length >= 10 && d !== zap) orb(conferirZap(d).ok ? "happy" : "hmm");
             }}
             placeholder="(11) 9 1234-5678" placeholderTextColor={PH_COLOR}
-            keyboardType="phone-pad" maxLength={16} autoComplete="tel-national" accessibilityLabel="Seu WhatsApp"
+            keyboardType="phone-pad" maxLength={TELEFONE_MAX_CARACTERES} autoComplete="tel-national" accessibilityLabel="Seu WhatsApp"
             onSubmitEditing={() => { if (step2Valid && !isLoading) handleRegister(!isDojo); }}
             testID="cadastro-whatsapp"
           />

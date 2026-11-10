@@ -1,6 +1,7 @@
 import { View, Text, TextInput, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import { waAura } from "@/constants/suporteAura";
+import { normalizarTelefone } from "@/utils/telefone";
 
 export const PLANS: Record<string, { label: string; price: string }> = {
   essencial:     { label: "Essencial",     price: "R$ 89/mês"    },
@@ -37,8 +38,11 @@ export function validateEmail(v: string): string | null {
 
 export function validatePhone(v: string): string | null {
   if (!v.trim()) return null;
-  const nums = v.replace(/\D/g, "");
-  if (nums.length < 10 || nums.length > 11) return "Telefone inválido";
+  // 10/11/2026: normaliza antes de medir (utils/telefone): "+55 (66) 99238-4539"
+  // vale; dígito a mais ganha a mensagem gentil em vez de "inválido".
+  const n = normalizarTelefone(v);
+  if (n.erro) return n.erro;
+  if (n.digitos.length < 10) return "Telefone inválido";
   return null;
 }
 

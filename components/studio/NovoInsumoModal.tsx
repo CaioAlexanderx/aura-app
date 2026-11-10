@@ -23,6 +23,7 @@ import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { studioApi, type StudioInput } from "@/services/studioApi";
 import { toast } from "@/components/Toast";
+import { formatarTelefone } from "@/utils/telefone";
 
 type Unit = "un" | "g" | "kg" | "ml" | "L" | "folha" | "cm" | "m";
 
@@ -56,14 +57,8 @@ function parseDecimal(v: string): number {
   return isFinite(n) ? n : 0;
 }
 
-function maskPhone(v: string): string {
-  const d = v.replace(/\D/g, "").slice(0, 11);
-  if (d.length <= 2) return d;
-  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
-  if (d.length <= 10)
-    return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
-  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
-}
+// 10/11/2026: normalizador único (utils/telefone); antes cortava em 11 antes do +55.
+const maskPhone = formatarTelefone;
 
 export default function NovoInsumoModal({
   visible,

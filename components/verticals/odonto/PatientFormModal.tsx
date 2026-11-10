@@ -33,6 +33,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { request } from "@/services/api";
 import { maskCpf, maskPhone, maskDateBR, brDateToISO, onlyDigits, isValidCpf } from "@/utils/mask";
+import { TELEFONE_MAX_CARACTERES } from "@/utils/telefone";
 import { WebcamCapture } from "@/components/verticals/odonto/WebcamCapture";
 
 export interface PatientFormData {
@@ -454,7 +455,7 @@ export function PatientFormModal({ visible, onClose, onSaved, mode = "create", p
                   onChangeText={(v: string) => setPhone(maskPhone(v))}
                   keyboardType="phone-pad"
                   placeholder="(00) 00000-0000"
-                  maxLength={15}
+                  maxLength={TELEFONE_MAX_CARACTERES}
                   style={{ flex: 1 }}
                 />
                 <Field
@@ -463,7 +464,7 @@ export function PatientFormModal({ visible, onClose, onSaved, mode = "create", p
                   onChangeText={(v: string) => setPhoneSecondary(maskPhone(v))}
                   keyboardType="phone-pad"
                   placeholder="(00) 00000-0000"
-                  maxLength={15}
+                  maxLength={TELEFONE_MAX_CARACTERES}
                   style={{ flex: 1 }}
                 />
               </Row>
