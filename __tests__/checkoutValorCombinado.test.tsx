@@ -82,9 +82,9 @@ describe("Checkout — valor combinado", () => {
     const out = text(tree);
     expect(out).toContain("Valor combinado");
     expect(out).toContain("R$ 211,20 por mês");
-    expect(out).toContain("Gerar Pix - R$ 211,20");
+    expect(out).toContain("Gerar Pix de R$ 211,20");
     // O valor combinado já inclui os acessos extras e não mostra a tabela.
-    expect(out).not.toContain("R$ 19,00/mes");
+    expect(out).not.toContain("acesso extra de equipe");
     expect(out).not.toContain("159,83");
     expect(out).not.toContain("economia de");
     tree.unmount();
@@ -97,7 +97,7 @@ describe("Checkout — valor combinado", () => {
     await espera();
 
     expect(mockBilling.quote).toHaveBeenCalledWith("emp-1", "negocio", "annual", "CREDIT_CARD");
-    expect(text(tree)).toContain("Assinar Agora - R$ 211,20");
+    expect(text(tree)).toContain("Pagar R$ 211,20 no cartão");
     tree.unmount();
   });
 
@@ -107,8 +107,9 @@ describe("Checkout — valor combinado", () => {
 
     expect(byTestId(tree, "checkout-valor-combinado")).toHaveLength(0);
     const out = text(tree);
-    expect(out).toContain("Gerar Pix - R$ 159,83");
-    expect(out).toContain("R$ 19,00/mes");
+    expect(out).toContain("Gerar Pix de R$ 159,83");
+    expect(out).toContain("1 acesso extra de equipe");
+    expect(out).toContain("R$ 19,00");
     expect(mockToast.error).not.toHaveBeenCalled();
     tree.unmount();
   });
@@ -117,7 +118,7 @@ describe("Checkout — valor combinado", () => {
     const guardado = mockBilling.quote;
     mockBilling.quote = undefined;
     const tree = await mount();
-    expect(text(tree)).toContain("Gerar Pix - R$ 159,83");
+    expect(text(tree)).toContain("Gerar Pix de R$ 159,83");
     mockBilling.quote = guardado;
     tree.unmount();
   });
@@ -126,7 +127,7 @@ describe("Checkout — valor combinado", () => {
     mockBilling.quote.mockResolvedValue({ ...COTACAO, custom: false, value: 159.83 });
     const tree = await mount();
     expect(byTestId(tree, "checkout-valor-combinado")).toHaveLength(0);
-    expect(text(tree)).toContain("Gerar Pix - R$ 159,83");
+    expect(text(tree)).toContain("Gerar Pix de R$ 159,83");
     tree.unmount();
   });
 
@@ -137,13 +138,13 @@ describe("Checkout — valor combinado", () => {
       first_charge_value: 190.08, recurring_value: 211.2, first_charge_date: "2026-10-14",
     });
     const tree = await mount();
-    const campo = tree.root.findAll((n) => n.props.placeholder === "CUPOM OU CÓDIGO DE INDICAÇÃO" && typeof n.type !== "string")[0];
+    const campo = tree.root.findAll((n) => n.props.placeholder === "Digite o código" && typeof n.type !== "string")[0];
     await act(async () => { campo.props.onChangeText("DEZ"); });
     await press(tree, "checkout-cupom-aplicar");
 
     const out = text(tree);
-    expect(out).toContain("Gerar Pix - R$ 190,08");
-    expect(out).toContain("Mensalidades seguintes: R$ 211,20/mês");
+    expect(out).toContain("Gerar Pix de R$ 190,08");
+    expect(out).toContain("Depois, R$ 211,20 por mês. Desconto só na primeira mensalidade.");
     tree.unmount();
   });
 });

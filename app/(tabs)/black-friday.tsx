@@ -16,6 +16,9 @@
 // só decide com a sessão e as permissões carregadas (useVisibleModulesProntos)
 // e manda embora com <Redirect>, que espera a navegação estar pronta. Sem
 // sessão a tela fica vazia: o AuthGuard (app/_layout) leva ao login.
+//
+// 11/11/2026 (p-105): com a página montada, /black-friday#assento (ou
+// ?secao=assento) rola até o cartão do assento (hooks/useRolarAteASecao).
 // ============================================================
 import { ScrollView, StyleSheet, Dimensions } from "react-native";
 import { Redirect } from "expo-router";
@@ -23,6 +26,7 @@ import { PaginaBlackFriday } from "@/components/screens/blackfriday/PaginaBlackF
 import { useVisibleModules, useVisibleModulesProntos } from "@/hooks/useVisibleModules";
 import { BLACK_FRIDAY_MOD } from "@/constants/blackFriday";
 import { useBlackFridayLiberada } from "@/hooks/useBlackFridayLiberada";
+import { useRolarAteASecao } from "@/hooks/useRolarAteASecao";
 
 const IS_WIDE = Dimensions.get("window").width > 768;
 
@@ -31,6 +35,7 @@ export default function BlackFridayScreen() {
   const pronto = useVisibleModulesProntos();
   const liberada = useBlackFridayLiberada();
   const permitido = liberada && visible.has(BLACK_FRIDAY_MOD);
+  useRolarAteASecao(pronto && permitido);
 
   if (!pronto) return null;
   if (!permitido) return <Redirect href={"/" as any} />;

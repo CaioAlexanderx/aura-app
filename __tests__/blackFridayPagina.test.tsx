@@ -278,8 +278,26 @@ describe("PaginaBlackFriday", () => {
   it("reaproveita o cartão do assento, sem moldura, com a empresa e o dono", () => {
     montar(<PaginaBlackFriday />);
     expect(mockAssentoProps).toHaveBeenCalledWith(
-      expect.objectContaining({ companyId: CID, plano: "negocio", isOwner: true, semMoldura: true })
+      expect.objectContaining({ companyId: CID, isOwner: true, semMoldura: true, emAtraso: false })
     );
+  });
+
+  // p-105 (11/11/2026): /black-friday#assento rola até esta âncora.
+  it("a seção do assento tem a âncora 'assento' (nativeID vira id na web)", () => {
+    const r = montar(<PaginaBlackFriday />);
+    const secao = r.root.findAllByProps({ testID: "bf-secao-assento" }, { deep: false })[0];
+    expect(secao.props.nativeID).toBe("assento");
+    // Só o assento tem âncora.
+    expect(r.root.findAllByProps({ testID: "bf-secao-ruptura" }, { deep: false })[0].props.nativeID).toBeUndefined();
+  });
+
+  it("em atraso (cobrança vencida): o cartão do assento sabe e regulariza antes de contratar", () => {
+    mockAuth = { ...mockAuth, trialActive: false, company: { ...mockAuth.company, billing_status: "overdue" } };
+    montar(<PaginaBlackFriday />);
+    expect(mockAssentoProps).toHaveBeenLastCalledWith(expect.objectContaining({ emAtraso: true }));
+    mockAuth = { ...mockAuth, company: { ...mockAuth.company, billing_status: "active" } };
+    montar(<PaginaBlackFriday />);
+    expect(mockAssentoProps).toHaveBeenLastCalledWith(expect.objectContaining({ emAtraso: false }));
   });
 
   it("membro não-dono recebe isOwner=false; staff da Aura conta como dono", () => {
@@ -489,12 +507,12 @@ describe("quem vê a página (aberta para todos desde 09/11)", () => {
 describe("atalho em Configurações › Plano", () => {
   beforeEach(() => { mockAuth = { ...mockAuth, isStaff: true }; });
 
-  it("leva à página Black Friday", () => {
+  it("leva direto ao cartão do assento na página Black Friday (p-105)", () => {
     const r = montar(<AtalhoAssento />);
     const atalho = r.root.findAllByProps({ testID: "atalho-assento-black-friday" }, { deep: false })[0];
     expect(textoDe(atalho)).toContain("Ver na página Black Friday");
     act(() => { atalho.props.onPress(); });
-    expect(mockPush).toHaveBeenCalledWith("/black-friday");
+    expect(mockPush).toHaveBeenCalledWith("/black-friday#assento");
   });
 
   it("some junto com a página: sem o módulo, fora do período ou depois da janela do assento", () => {

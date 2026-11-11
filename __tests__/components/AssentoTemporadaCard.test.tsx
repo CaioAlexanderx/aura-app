@@ -20,7 +20,7 @@ jest.mock("@/stores/auth", () => ({
   useAuthStore: (sel: any) => sel({ refreshMe: mockRefreshMe }),
 }));
 jest.mock("@/services/billingApi", () => ({
-  billingApi: { seatPass: { estado: jest.fn(), contratar: jest.fn(), cancelar: jest.fn() } },
+  billingApi: { seatPass: { estado: jest.fn(), contratar: jest.fn(), cancelar: jest.fn() }, invoices: jest.fn() },
 }));
 
 import { AssentoTemporadaCard } from "@/components/screens/configuracoes/AssentoTemporadaCard";
@@ -29,6 +29,7 @@ import {
 } from "@/components/screens/configuracoes/assentoTemporada";
 import { billingApi } from "@/services/billingApi";
 import { toast } from "@/components/Toast";
+import { Linking } from "react-native";
 
 const api = (billingApi as any).seatPass as Record<string, jest.Mock>;
 const CID = "00000000-0000-0000-0000-0000000000c1";
@@ -91,13 +92,13 @@ async function flush(vezes = 4) {
   for (let i = 0; i < vezes; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 }
 
-async function mount(props: { isOwner?: boolean; plano?: string } = {}) {
+async function mount(props: { isOwner?: boolean; plano?: string; emAtraso?: boolean } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   let tree: renderer.ReactTestRenderer;
   await act(async () => {
     tree = renderer.create(
       <QueryClientProvider client={qc}>
-        <AssentoTemporadaCard companyId={CID} isOwner={props.isOwner !== false} plano={props.plano} />
+        <AssentoTemporadaCard companyId={CID} isOwner={props.isOwner !== false} plano={props.plano} emAtraso={props.emAtraso} />
       </QueryClientProvider>,
     );
   });
@@ -352,22 +353,67 @@ describe("cancelar", () => {
 });
 
 describe("sem como contratar", () => {
-  it("sem assinatura ativa: explica e leva ao checkout do plano atual", async () => {
+  // p-105 (11/11/2026): "Ver os planos" abre o checkout com o Negócio
+  // marcado, qualquer que seja o plano da conta — nunca a Expansão.
+  it.each(["essencial", "expansao", "personalizado", undefined])("sem assinatura ativa (plano %s): a frase e 'Ver os planos' no Negócio", async (plano) => {
     api.estado.mockImplementation(async () => ESTADO({ pode_contratar: false, motivo_bloqueio: "sem_assinatura" }));
-    const tree = await mount({ plano: "essencial" });
+    const tree = await mount({ plano: plano as any });
     expect(byTestId(tree, "assento-contratar")).toHaveLength(0);
     expect(byTestId(tree, "assento-sem-assinatura")).toHaveLength(1);
-    expect(text(tree)).toContain("precisa de uma assinatura ativa");
+    expect(text(tree)).toContain("Para contratar o assento, a loja precisa de uma assinatura ativa.");
+    expect(text(tree)).toContain("Ver os planos");
     await press(tree, "assento-ir-checkout");
-    expect(mockPush).toHaveBeenCalledWith("/(tabs)/checkout?plan=essencial");
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/checkout?plan=negocio");
     tree.unmount();
   });
 
-  it("valor combinado vigente: sem botão e com o motivo claro", async () => {
+  it("valor combinado vigente: sem contratar, com o motivo e 'Fale com a equipe' no WhatsApp de ajuda", async () => {
+    const abrir = jest.spyOn(Linking, "openURL").mockResolvedValue(true as any);
     api.estado.mockImplementation(async () => ESTADO({ pode_contratar: false, motivo_bloqueio: "valor_customizado" }));
     const tree = await mount();
     expect(byTestId(tree, "assento-contratar")).toHaveLength(0);
+    expect(byTestId(tree, "assento-ir-checkout")).toHaveLength(0);
     expect(text(tree)).toContain("Esta empresa tem valor combinado; fale com a equipe.");
+    await press(tree, "assento-falar-equipe");
+    expect(abrir).toHaveBeenCalledTimes(1);
+    expect(abrir.mock.calls[0][0]).toMatch(/^https:\/\/wa\.me\/5511956305269\?text=/);
+    expect(mockPush).not.toHaveBeenCalled();
+    abrir.mockRestore();
+    tree.unmount();
+  });
+
+  it("em atraso: no lugar de contratar, 'Regularize a mensalidade' e o link da cobrança em aberto", async () => {
+    const abrir = jest.fn();
+    const antes = window.open;
+    (window as any).open = abrir;
+    (billingApi as any).invoices.mockResolvedValue({ total: 2, invoices: [
+      { id: "p2", status: "RECEIVED", due_date: "2026-10-05", invoice_url: "https://asaas.test/i/p2" },
+      { id: "p1", status: "OVERDUE", due_date: "2026-11-05", invoice_url: "https://asaas.test/i/p1" },
+    ] });
+    const tree = await mount({ emAtraso: true });
+    expect(byTestId(tree, "assento-contratar")).toHaveLength(0);
+    expect(byTestId(tree, "assento-em-atraso")).toHaveLength(1);
+    expect(text(tree)).toContain("Regularize a mensalidade para contratar.");
+    await press(tree, "assento-pagar-mensalidade");
+    expect((billingApi as any).invoices).toHaveBeenCalledWith(CID);
+    expect(abrir).toHaveBeenCalledWith("https://asaas.test/i/p1", "_blank");
+    expect(mockPush).not.toHaveBeenCalled();
+    (window as any).open = antes;
+    tree.unmount();
+  });
+
+  it("em atraso sem cobrança em aberto encontrada: avisa, não abre nada", async () => {
+    (billingApi as any).invoices.mockResolvedValue({ total: 0, invoices: [] });
+    const tree = await mount({ emAtraso: true });
+    await press(tree, "assento-pagar-mensalidade");
+    expect(toast.error).toHaveBeenCalledWith("Não encontrei a mensalidade em aberto. Fale com a gente pelo WhatsApp.");
+    tree.unmount();
+  });
+
+  it("em atraso, membro (não dono): só o aviso de que o dono contrata", async () => {
+    const tree = await mount({ emAtraso: true, isOwner: false });
+    expect(byTestId(tree, "assento-em-atraso")).toHaveLength(0);
+    expect(byTestId(tree, "assento-so-dono")).toHaveLength(1);
     tree.unmount();
   });
 

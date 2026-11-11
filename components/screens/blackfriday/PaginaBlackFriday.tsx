@@ -19,6 +19,10 @@
 //
 // Seção que a loja não tem some; nada de cartão bloqueado ou isca.
 // O plano decide seções: a página relê /auth/me ao abrir (plano velho no JWT).
+//
+// 11/11/2026 (p-105): o cartão do assento tem a âncora `assento`
+// (/black-friday#assento ou ?secao=assento; a rota rola até ela) e sabe se a
+// mensalidade está em atraso (regulariza antes de contratar).
 // Mockup: docs/mockups/black-friday.html.
 // ============================================================
 import { useEffect } from "react";
@@ -41,12 +45,14 @@ import { usePromocoesDePor } from "@/hooks/usePromocoesDePor";
 import { useResumoVencimento } from "@/hooks/useResumoVencimento";
 import { hojeBrt } from "@/components/screens/configuracoes/assentoTemporada";
 import { EscolherEmpresaParaPromocao } from "./EscolherEmpresaParaPromocao";
+import { estadoDaLoja, faseDoAtraso } from "@/utils/muroDeAssinatura";
+import { SECAO_ASSENTO } from "@/utils/linkDoAssento";
 import { CrediarioParaJaneiro } from "./crediarioJaneiro/CrediarioParaJaneiro";
 import { faseCrediarioJaneiro, periodoDoJaneiro } from "./crediarioJaneiro/regrasCrediarioJaneiro";
 
 export function PaginaBlackFriday() {
   const visible = useVisibleModules();
-  const { company, consolidatedView, availableCompanies, isStaff, refreshMe } = useAuthStore() as any;
+  const { company, consolidatedView, availableCompanies, isStaff, refreshMe, user, trialActive, isDemo } = useAuthStore() as any;
   const consolidado = !!consolidatedView;
   const hoje = hojeBrt();
 
@@ -86,6 +92,8 @@ export function PaginaBlackFriday() {
     ? "Consolidado · " + pluralize((availableCompanies || []).length || 1, "empresa")
     : undefined;
   const isOwner = ((company && company.member_role) || "owner") === "owner" || !!isStaff;
+  // Em atraso: a cobrança venceu na Asaas (mesma leitura do muro de assinatura).
+  const emAtraso = faseDoAtraso(estadoDaLoja({ company, user, trialActive: !!trialActive, isDemo: !!isDemo, isStaff: !!isStaff })) !== null;
 
   return (
     <View testID="pagina-black-friday">
@@ -134,8 +142,8 @@ export function PaginaBlackFriday() {
       )}
 
       {tem("assento") && company?.id && (
-        <SecaoCard testID="bf-secao-assento" numero={numero("assento")} titulo={textos("assento").titulo} porQueAgora={textos("assento").porQueAgora}>
-          <AssentoTemporadaCard companyId={company.id} plano={company.plan} isOwner={isOwner} semMoldura />
+        <SecaoCard testID="bf-secao-assento" nativeID={SECAO_ASSENTO} numero={numero("assento")} titulo={textos("assento").titulo} porQueAgora={textos("assento").porQueAgora}>
+          <AssentoTemporadaCard companyId={company.id} isOwner={isOwner} emAtraso={emAtraso} semMoldura />
         </SecaoCard>
       )}
 
