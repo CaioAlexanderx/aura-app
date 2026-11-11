@@ -8,7 +8,7 @@ import type { ItemDiferenca } from "@/services/conferenciaEstoqueResultadoApi";
 function item(p: Partial<ItemDiferenca>): ItemDiferenca {
   return {
     item_id: "i", product_id: "p1", variant_id: null, nome: "Produto", variante: null, codigo: null,
-    contado: 0, estoque_no_bipe: 0, estoque_atual: 0, diferenca: 0, custo: null, valor: null, grupo: "batem", ...p,
+    contado: 0, estoque_no_bipe: 0, estoque_atual: 0, diferenca: 0, estoque_depois: null, custo: null, valor: null, grupo: "batem", ...p,
   };
 }
 
@@ -35,6 +35,12 @@ describe("prazo do desfazer", () => {
     expect(podeDesfazerAgora(c, new Date("2026-11-17T10:00:00.000Z"))).toBe(true);
     expect(podeDesfazerAgora(c, new Date("2026-11-18T10:00:01.000Z"))).toBe(false);
     expect(podeDesfazerAgora({ ...c, status: "desfeita" }, new Date("2026-11-12T10:00:00.000Z"))).toBe(false);
+  });
+  it("pode_desfazer do servidor vale mais que o relógio do aparelho", () => {
+    const c = { status: "aplicada" as const, pode_desfazer_ate: "2026-11-18T10:00:00.000Z", aplicada_em: null };
+    expect(podeDesfazerAgora({ ...c, pode_desfazer: false }, new Date("2026-11-12T10:00:00.000Z"))).toBe(false);
+    expect(podeDesfazerAgora({ ...c, pode_desfazer: true }, new Date("2026-11-30T10:00:00.000Z"))).toBe(true);
+    expect(podeDesfazerAgora({ ...c, status: "desfeita", pode_desfazer: true })).toBe(false);
   });
 });
 

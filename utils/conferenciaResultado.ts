@@ -54,8 +54,13 @@ export function desfazerAte(c: Pick<Conferencia, "pode_desfazer_ate" | "aplicada
   return new Date(a.getTime() + DIAS_PARA_DESFAZER * 24 * 3600 * 1000);
 }
 
-export function podeDesfazerAgora(c: Pick<Conferencia, "status" | "pode_desfazer_ate" | "aplicada_em">, agora: Date = new Date()): boolean {
+/**
+ * Aura-backend#1001 manda `pode_desfazer` pronto (o relógio do servidor
+ * decide). Sem o campo, calcula pelo prazo.
+ */
+export function podeDesfazerAgora(c: Pick<Conferencia, "status" | "pode_desfazer_ate" | "aplicada_em" | "pode_desfazer">, agora: Date = new Date()): boolean {
   if (c.status !== "aplicada") return false;
+  if (typeof c.pode_desfazer === "boolean") return c.pode_desfazer;
   var ate = desfazerAte(c);
   return !!ate && ate.getTime() > agora.getTime();
 }

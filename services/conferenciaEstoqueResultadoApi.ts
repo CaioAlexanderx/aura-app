@@ -37,6 +37,8 @@ export type Conferencia = {
   aplicada_em?: string | null;
   desfeita_em?: string | null;
   pode_desfazer_ate?: string | null;
+  /** Aura-backend#1001: pronto do servidor (aplicada e dentro dos 7 dias). */
+  pode_desfazer?: boolean;
   zerou_nao_contados?: boolean;
   criada_por_nome?: string | null;
   aplicada_por_nome?: string | null;
@@ -71,6 +73,8 @@ export type ItemDiferenca = {
   estoque_no_bipe: number;
   estoque_atual: number;
   diferenca: number;
+  /** Quanto fica depois do ajuste (estoque atual + diferença, piso 0). */
+  estoque_depois: number | null;
   custo: number | null;
   valor: number | null;
   grupo: GrupoDiferenca;
@@ -101,6 +105,8 @@ export type RespostaDiferencas = {
   resumo: ResumoDiferencas;
   itens: ItemDiferenca[];
   nao_contados: NaoContado[];
+  /** Quem não vê custo: custo/valor/valor_* chegam nulos. */
+  custos_ocultos: boolean;
 };
 
 export type ConferenciaNoHistorico = Conferencia & {
@@ -114,12 +120,32 @@ export type ConferenciaNoHistorico = Conferencia & {
 
 export type RespostaHistoricoConferencias = {
   conferencias: ConferenciaNoHistorico[];
-  /** Cursor da próxima página (quando o backend manda). */
-  proximo?: string | null;
+  /** Próxima página: `before` = criada_em do último item (null = acabou). */
+  proximo: string | null;
 };
 
-export type RespostaAplicar = { conferencia?: Conferencia; itens_ajustados?: number | null };
-export type RespostaDesfazer = { conferencia?: Conferencia; itens_revertidos?: number | null };
+export type PedidoAplicar = {
+  zerar_nao_contados: boolean;
+  /** Itens desmarcados na tela: ficam como estão. */
+  ignorar_item_ids?: string[];
+  /** Texto curto (até 200); vazio apaga o motivo gravado ao começar. */
+  motivo?: string | null;
+};
+
+export type RespostaAplicar = {
+  conferencia?: Conferencia;
+  ajustados?: number | null;
+  sem_mudanca?: number | null;
+  zerados?: number | null;
+  ignorados?: Array<{ item_id: string; motivo?: string | null }>;
+  movimentos?: number | null;
+  /** 409 JA_APLICADA (segundo clique, outro aparelho): tratado como sucesso. */
+  ja_aplicada?: boolean;
+};
+export type RespostaDesfazer = { conferencia?: Conferencia };
+
+/** Limite do motivo no backend (MOTIVO_MAX). */
+export var MOTIVO_MAX = 200;
 
 function base(companyId: string): string {
   return "/companies/" + encodeURIComponent(companyId) + "/estoque/conferencias";
@@ -176,6 +202,7 @@ export function normalizarDiferencas(r: any): RespostaDiferencas {
         estoque_no_bipe: num(it.estoque_no_bipe),
         estoque_atual: num(it.estoque_atual),
         diferenca: diferenca,
+        estoque_depois: numOuNull(it.estoque_depois),
         custo: numOuNull(it.custo),
         valor: numOuNull(it.valor),
         grupo: grupo,
@@ -192,6 +219,7 @@ export function normalizarDiferencas(r: any): RespostaDiferencas {
         custo: numOuNull(it.custo),
       };
     }),
+    custos_ocultos: !!(r && r.custos_ocultos),
   };
 }
 
@@ -204,10 +232,22 @@ export const conferenciaEstoqueResultadoApi = {
     return request<any>(base(companyId) + "/" + encodeURIComponent(countId) + "/diferencas", { retry: 1, timeout: 20000 })
       .then(normalizarDiferencas);
   },
-  /** Sem retry: o backend é idempotente, mas a tela não repete sozinha. */
-  aplicar: function (companyId: string, countId: string, opcoes: { zerar_nao_contados: boolean }) {
+  /**
+   * Sem retry: o backend é idempotente, mas a tela não repete sozinha.
+   * 409 JA_APLICADA com `conferencia` no corpo = já foi (clique duplo,
+   * outro aparelho): resolve como sucesso, com ja_aplicada.
+   */
+  aplicar: function (companyId: string, countId: string, pedido: PedidoAplicar) {
+    var corpo: Record<string, any> = { zerar_nao_contados: !!pedido.zerar_nao_contados };
+    if (pedido.ignorar_item_ids && pedido.ignorar_item_ids.length > 0) corpo.ignorar_item_ids = pedido.ignorar_item_ids.slice();
+    if (pedido.motivo !== undefined) corpo.motivo = pedido.motivo === null ? null : String(pedido.motivo).trim().slice(0, MOTIVO_MAX);
     return request<RespostaAplicar>(base(companyId) + "/" + encodeURIComponent(countId) + "/aplicar", {
-      method: "POST", body: { zerar_nao_contados: !!opcoes.zerar_nao_contados }, retry: 0, timeout: 60000,
+      method: "POST", body: corpo, retry: 0, timeout: 60000,
+    }).catch(function (e: any): RespostaAplicar {
+      if (e && e.status === 409 && codigoDaConferencia(e) === "JA_APLICADA" && e.data && e.data.conferencia) {
+        return { conferencia: e.data.conferencia, ja_aplicada: true };
+      }
+      throw e;
     });
   },
   desfazer: function (companyId: string, countId: string) {
@@ -215,12 +255,18 @@ export const conferenciaEstoqueResultadoApi = {
       method: "POST", retry: 0, timeout: 60000,
     });
   },
-  /** Mais recentes primeiro. `before` = cursor da página anterior. */
+  /**
+   * Mais recentes primeiro; o backend devolve um array puro. A próxima
+   * página vai com `before` = criada_em do último item; página com menos
+   * de `limit` itens é a última.
+   */
   historico: function (companyId: string, opcoes: { limit?: number; before?: string | null } = {}) {
     return request<any>(base(companyId) + qs({ limit: opcoes.limit, before: opcoes.before }), { retry: 1 })
       .then(function (r): RespostaHistoricoConferencias {
-        var lista: any[] = Array.isArray(r) ? r : Array.isArray(r && r.conferencias) ? r.conferencias : [];
-        return { conferencias: lista.filter(Boolean), proximo: (r && !Array.isArray(r) && (r.proximo || r.next_before)) || null };
+        var lista: any[] = (Array.isArray(r) ? r : Array.isArray(r && r.conferencias) ? r.conferencias : []).filter(Boolean);
+        var ultimo = lista[lista.length - 1];
+        var cheia = !opcoes.limit || lista.length >= opcoes.limit;
+        return { conferencias: lista, proximo: cheia && ultimo ? (ultimo.criada_em || ultimo.created_at || null) : null };
       });
   },
 };
@@ -252,6 +298,9 @@ export function mensagemDaConferencia(e: any, contexto: ContextoDoErro): string 
   if (status === 404) return contexto === "lista" ? MSG_CONFERENCIA_CHEGANDO : MSG_CONFERENCIA_NAO_ACHADA;
   if (status === 403) return MSG_SO_QUEM_EDITA;
   if (status === 409) {
+    if (code === "JA_DESFEITA") return "Esta conferência já foi desfeita. Atualizamos a tela.";
+    if (code === "NAO_APLICADA") return "Só dá para desfazer uma conferência que já ajustou o estoque. Atualizamos a tela.";
+    if (code === "PRAZO_ENCERRADO") return msgBackend || "O prazo de 7 dias para desfazer esta conferência terminou. Se algo ficou errado, faça uma nova conferência desses itens.";
     if (msgBackend) return msgBackend;
     return contexto === "desfazer"
       ? "Esta conferência não pode mais ser desfeita (passou o prazo ou já foi desfeita). Atualizamos a tela."

@@ -5,8 +5,11 @@
 //      e o aviso dos itens sem custo; custo some para quem não vê custo.
 //   2. Listas por grupo; "zerar não contados" começa desmarcado.
 //   3. Ajustar só para quem edita o estoque, pelo ConfirmDialog (texto das
-//      vendas mantidas), com zerar_nao_contados no corpo.
-//   4. Transferir só com 2+ lojas e para quem edita; sobras marcadas; o
+//      vendas mantidas e prévia do estoque depois); desmarcados vão em
+//      ignorar_item_ids; o motivo começa com o gravado e vai no corpo.
+//      JA_APLICADA (clique duplo) é sucesso.
+//   4. Transferir só com 2+ lojas e para quem edita, num modo à parte (botão
+//      "Transferir" na linha, não a caixa do ajuste); sobras escolhidas; o
 //      TransferirModal recebe itens pré-preenchidos e stock_count_id.
 //   5. 503 MIGRATION_PENDING: texto gentil.
 //
@@ -99,7 +102,7 @@ const CONF = { id: "k9", numero: 3, status: "rascunho", escopo: { tipo: "categor
 const DIF = {
   resumo: { faltam: 2, sobram: 1, batem: 1, nao_contados: 2, valor_faltam: 72, valor_sobram: 38, itens_sem_custo: 1 },
   itens: [
-    { item_id: "i1", product_id: "p1", variant_id: "v1", nome: "Camiseta Básica", variante: "Preta · G", codigo: null, contado: 3, estoque_no_bipe: 4, estoque_atual: 4, diferenca: -1, custo: 24, valor: -24, grupo: "faltam" },
+    { item_id: "i1", product_id: "p1", variant_id: "v1", nome: "Camiseta Básica", variante: "Preta · G", codigo: null, contado: 3, estoque_no_bipe: 4, estoque_atual: 4, diferenca: -1, estoque_depois: 3, custo: 24, valor: -24, grupo: "faltam" },
     { item_id: "i2", product_id: "p1", variant_id: "v2", nome: "Camiseta Básica", variante: "Branca · G", codigo: null, contado: 1, estoque_no_bipe: 3, estoque_atual: 2, diferenca: -2, custo: 24, valor: -48, grupo: "faltam" },
     { item_id: "i3", product_id: "p2", variant_id: null, nome: "Camiseta Flor", variante: null, codigo: "FL-1", contado: 3, estoque_no_bipe: 2, estoque_atual: 2, diferenca: 1, custo: null, valor: null, grupo: "sobram" },
     { item_id: "i4", product_id: "p3", variant_id: null, nome: "Regata", variante: null, codigo: null, contado: 5, estoque_no_bipe: 5, estoque_atual: 5, diferenca: 0, custo: 19, valor: 0, grupo: "batem" },
@@ -132,7 +135,7 @@ it("resumo, valor a custo e itens sem custo", async () => {
   expect(textoDe(tree, "dif-valor-faltam")).toBe("Falta a custo: R$ 72,00");
   expect(textoDe(tree, "dif-valor-sobram")).toBe("Sobra a custo: R$ 38,00");
   expect(textoDe(tree, "dif-sem-custo")).toBe("1 item sem custo cadastrado ficou fora desta conta.");
-  expect(textoDe(tree, "dif-nota-venda")).toMatch(/venda feita depois que você contou cada item é mantida/);
+  expect(textoDe(tree, "dif-nota-venda")).toBe("Desmarque o que você não quer ajustar. A venda feita depois que você contou cada item é mantida: a Aura só soma ou tira a diferença.");
   // listas por grupo; "batem" abre num toque
   expect(textoDe(tree, "dif-grupo-faltam")).toContain("Preta · G · sistema 4, contado 3");
   expect(textoDe(tree, "dif-num-v:p1:v1")).toBe("−1");
@@ -141,17 +144,27 @@ it("resumo, valor a custo e itens sem custo", async () => {
   expect(existe(tree, "dif-grupo-batem")).toBe(false);
   await tocar(tree, "dif-ver-batem");
   expect(textoDe(tree, "dif-grupo-batem")).toContain("Regata");
-  expect(textoDe(tree, "dif-motivo")).toContain("Inventário do mês");
+  // item que bate não tem caixa de ajustar
+  expect(existe(tree, "dif-ajustar-p:p3")).toBe(false);
+  // motivo começa com o gravado ao começar
+  expect(um(tree, "dif-motivo").props.value).toBe("Inventário do mês");
+  expect(um(tree, "dif-motivo").props.maxLength).toBe(200);
 });
 
-it("quem não vê custo não vê o valor", async () => {
+it("quem não vê custo não vê o valor (nem R$ 0)", async () => {
   mockCtx = contexto({ semCusto: true });
-  const tree = await montar();
+  let tree = await montar();
   expect(existe(tree, "dif-custo")).toBe(false);
+  // backend com custos_ocultos: valores nulos, cartão some mesmo com o contexto liberado
+  mockCtx = contexto();
+  mockDiferencas.mockResolvedValue({ ...DIF, custos_ocultos: true, resumo: { ...DIF.resumo, valor_faltam: null, valor_sobram: null } });
+  tree = await montar();
+  expect(existe(tree, "dif-custo")).toBe(false);
+  expect(textoDe(tree, "dif-tela")).not.toContain("R$");
 });
 
-it("ajustar: zerar começa desmarcado; confirmação gentil; corpo certo", async () => {
-  mockAplicar.mockResolvedValue({ conferencia: { ...CONF, status: "aplicada", aplicada_em: "2026-11-11T13:00:00.000Z", pode_desfazer_ate: "2026-11-18T13:00:00.000Z" }, itens_ajustados: 3 });
+it("ajustar: zerar desmarcado; confirmação gentil com prévia; corpo certo", async () => {
+  mockAplicar.mockResolvedValue({ conferencia: { ...CONF, status: "aplicada", aplicada_em: "2026-11-11T13:00:00.000Z", pode_desfazer_ate: "2026-11-18T13:00:00.000Z", pode_desfazer: true }, ajustados: 3, sem_mudanca: 0, zerados: 1, ignorados: [], movimentos: 4 });
   const tree = await montar();
   expect(um(tree, "dif-zerar").props.marcado).toBe(false);
   expect(textoDe(tree, "dif-ajustar")).toBe("Ajustar 3 itens");
@@ -163,16 +176,47 @@ it("ajustar: zerar começa desmarcado; confirmação gentil; corpo certo", async
   const dialogo = um(tree, "confirm");
   expect(dialogo.props.title).toBe("Ajustar o estoque?");
   expect(dialogo.props.message).toMatch(/As vendas feitas depois que você contou cada item ficam mantidas/);
+  expect(dialogo.props.message).toContain("Fica assim: Camiseta Básica · Preta · G: 4 → 3; Camiseta Básica · Branca · G: 2 → 0; Camiseta Flor: 2 → 3.");
   expect(dialogo.props.message).toMatch(/1 item não contado vai para 0/);
   expect(mockAplicar).not.toHaveBeenCalled();
-  mockObter.mockResolvedValue({ conferencia: { ...CONF, status: "aplicada", aplicada_em: "2026-11-11T13:00:00.000Z", pode_desfazer_ate: "2026-11-18T13:00:00.000Z" } });
+  mockObter.mockResolvedValue({ conferencia: { ...CONF, status: "aplicada", aplicada_em: "2026-11-11T13:00:00.000Z", pode_desfazer_ate: "2026-11-18T13:00:00.000Z", pode_desfazer: true } });
   await act(async () => { dialogo.props.onConfirm(); });
-  expect(mockAplicar).toHaveBeenCalledWith("c1", "k9", { zerar_nao_contados: true });
+  expect(mockAplicar).toHaveBeenCalledWith("c1", "k9", { zerar_nao_contados: true, ignorar_item_ids: [], motivo: "Inventário do mês" });
   expect(textoDe(tree, "dif-ajustado")).toMatch(/Estoque ajustado em 3 itens\./);
-  expect(textoDe(tree, "dif-ajustado")).toMatch(/“Conferência nº 3”.*desfazer tudo até 18\/11/);
+  expect(textoDe(tree, "dif-ajustado")).toMatch(/“Conferência nº 3 · Inventário do mês”.*desfazer tudo até 18\/11/);
   expect(existe(tree, "dif-ajustar")).toBe(false);
+  expect(existe(tree, "dif-motivo")).toBe(false);
   await tocar(tree, "dif-historico");
   expect(mockPush).toHaveBeenCalledWith("/conferencia-estoque/historico");
+});
+
+it("desmarcar para não ajustar: vai em ignorar_item_ids, com o motivo editado", async () => {
+  mockAplicar.mockResolvedValue({ conferencia: { ...CONF, status: "aplicada", aplicada_em: "2026-11-11T13:00:00.000Z", pode_desfazer: true }, ajustados: 2, ignorados: [{ item_id: "i1", motivo: "desmarcado" }] });
+  const tree = await montar();
+  expect(um(tree, "dif-ajustar-v:p1:v1").props.marcado).toBe(true);
+  await tocar(tree, "dif-ajustar-v:p1:v1");
+  expect(um(tree, "dif-ajustar-v:p1:v1").props.marcado).toBe(false);
+  expect(textoDe(tree, "dif-fora-v:p1:v1")).toBe("Fica como está: não será ajustado.");
+  expect(textoDe(tree, "dif-ajustar")).toBe("Ajustar 2 itens");
+  await act(async () => { um(tree, "dif-motivo").props.onChangeText("Contagem de novembro"); });
+  await tocar(tree, "dif-ajustar");
+  const dialogo = um(tree, "confirm");
+  expect(dialogo.props.message).toMatch(/1 item desmarcado fica como está/);
+  expect(dialogo.props.message).not.toContain("Preta · G");
+  mockObter.mockResolvedValue({ conferencia: { ...CONF, status: "aplicada", motivo: "Contagem de novembro", aplicada_em: "2026-11-11T13:00:00.000Z", pode_desfazer: true } });
+  await act(async () => { dialogo.props.onConfirm(); });
+  expect(mockAplicar).toHaveBeenCalledWith("c1", "k9", { zerar_nao_contados: false, ignorar_item_ids: ["i1"], motivo: "Contagem de novembro" });
+  expect(textoDe(tree, "dif-ajustado")).toMatch(/1 item desmarcado ficou como estava/);
+});
+
+it("segundo clique (JA_APLICADA) aparece como ajustada, sem erro", async () => {
+  mockAplicar.mockResolvedValue({ conferencia: { ...CONF, status: "aplicada", aplicada_em: "2026-11-11T13:00:00.000Z", pode_desfazer: true }, ja_aplicada: true });
+  const tree = await montar();
+  await tocar(tree, "dif-ajustar");
+  mockObter.mockResolvedValue({ conferencia: { ...CONF, status: "aplicada", aplicada_em: "2026-11-11T13:00:00.000Z", pode_desfazer: true } });
+  await act(async () => { um(tree, "confirm").props.onConfirm(); });
+  expect(textoDe(tree, "dif-ajustado")).toMatch(/já tinha ajustado o estoque/);
+  expect(existe(tree, "dif-erro-aplicar")).toBe(false);
 });
 
 it("cancelar a confirmação não aplica", async () => {
@@ -187,8 +231,11 @@ it("quem não edita o estoque não ajusta nem transfere", async () => {
   mockCtx = contexto({ podeEditar: false });
   const tree = await montar();
   expect(existe(tree, "dif-ajustar")).toBe(false);
+  expect(existe(tree, "dif-ajustar-v:p1:v1")).toBe(false);
   expect(existe(tree, "dif-zerar")).toBe(false);
   expect(existe(tree, "dif-transferir")).toBe(false);
+  expect(existe(tree, "dif-motivo")).toBe(false);
+  expect(textoDe(tree, "dif-motivo-lido")).toContain("Inventário do mês");
   expect(textoDe(tree, "dif-so-quem-edita")).toMatch(/Só quem pode editar o estoque/);
 });
 
@@ -198,11 +245,17 @@ it("uma loja só: sem transferir", async () => {
   expect(existe(tree, "dif-transferir")).toBe(false);
 });
 
-it("transferir: sobras marcadas, modal pré-preenchido com stock_count_id", async () => {
+it("transferir é um modo à parte: não mexe nas caixas do ajuste", async () => {
   const tree = await montar();
+  await tocar(tree, "dif-ajustar-v:p1:v2"); // desmarcado para o ajuste
   await tocar(tree, "dif-transferir");
-  expect(um(tree, "dif-escolher-p:p2").props.marcado).toBe(true);
-  expect(um(tree, "dif-escolher-v:p1:v1").props.marcado).toBe(false);
+  expect(textoDe(tree, "dif-modo-transferir")).toMatch(/Isso não muda o que será ajustado/);
+  // no modo transferir, as caixas do ajuste somem; cada linha tem o botão "Transferir"
+  expect(existe(tree, "dif-ajustar-v:p1:v1")).toBe(false);
+  expect(um(tree, "dif-escolher-p:p2").props.accessibilityState).toEqual({ checked: true });
+  expect(textoDe(tree, "dif-escolher-p:p2")).toBe("⇄ Vai para outra loja");
+  expect(um(tree, "dif-escolher-v:p1:v1").props.accessibilityState).toEqual({ checked: false });
+  expect(textoDe(tree, "dif-escolher-v:p1:v1")).toBe("⇄ Transferir");
   await tocar(tree, "dif-escolher-v:p1:v1");
   expect(textoDe(tree, "dif-abrir-transferir")).toBe("Transferir 2 itens");
   await tocar(tree, "dif-abrir-transferir");
@@ -211,13 +264,20 @@ it("transferir: sobras marcadas, modal pré-preenchido com stock_count_id", asyn
   expect(modal.props.stockCountId).toBe("k9");
   expect(modal.props.produtos.map((p: any) => [p.id, p.has_variants])).toEqual([["p1", true], ["p2", false]]);
   expect(modal.props.quantidadesIniciais).toEqual({ "p:p2": "1" });
+  // saiu do modo: o ajuste segue como estava
+  await tocar(tree, "dif-cancelar-escolha");
+  expect(um(tree, "dif-ajustar-v:p1:v2").props.marcado).toBe(false);
+  expect(um(tree, "dif-ajustar-v:p1:v1").props.marcado).toBe(true);
+  expect(textoDe(tree, "dif-ajustar")).toBe("Ajustar 2 itens");
 });
 
 it("transferir depois de ajustar também aparece", async () => {
-  mockObter.mockResolvedValue({ conferencia: { ...CONF, status: "aplicada", aplicada_em: "2026-11-11T13:00:00.000Z" }, transferencias: [{ id: "t1", numero: 12, destino_nome: "Loja Shopping", total_pecas: 2 }] });
+  mockObter.mockResolvedValue({ conferencia: { ...CONF, status: "aplicada", aplicada_em: "2026-11-11T13:00:00.000Z", pode_desfazer: false }, transferencias: [{ id: "t1", numero: 12, destino_nome: "Loja Shopping", total_pecas: 2 }] });
   const tree = await montar();
   expect(existe(tree, "dif-transferir")).toBe(true);
   expect(textoDe(tree, "dif-transferencias")).toBe("Transferências desta conferência: nº 12 para Loja Shopping (2 peças).");
+  // pode_desfazer: false (do servidor) = sem "desfazer até"
+  expect(textoDe(tree, "dif-ajustado")).not.toMatch(/desfazer tudo até/);
 });
 
 it("503 MIGRATION_PENDING: texto gentil e tentar de novo", async () => {

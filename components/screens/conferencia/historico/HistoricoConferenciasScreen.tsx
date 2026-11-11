@@ -65,11 +65,9 @@ export function HistoricoConferenciasScreen({ lojaDaRota, agora }: Props) {
     return conferenciaEstoqueResultadoApi.historico(companyId, { limit: POR_PAGINA })
       .then(function (r) {
         if (!vivo.current) return;
-        var visiveis = r.conferencias;
-        setLista(visiveis);
-        var ultimo = visiveis[visiveis.length - 1];
-        setCursor(r.proximo || (ultimo ? (ultimo.criada_em || ultimo.created_at || null) : null));
-        setTemMais(!!r.proximo || visiveis.length >= POR_PAGINA);
+        setLista(r.conferencias);
+        setCursor(r.proximo);
+        setTemMais(!!r.proximo);
       })
       .catch(function (e) {
         if (!vivo.current) return;
@@ -90,9 +88,8 @@ export function HistoricoConferenciasScreen({ lojaDaRota, agora }: Props) {
         lista.forEach(function (c) { ids[c.id] = true; });
         var novas = r.conferencias.filter(function (c) { return !ids[c.id]; });
         setLista(lista.concat(novas));
-        var ultimo = novas[novas.length - 1];
-        setCursor(r.proximo || (ultimo ? (ultimo.criada_em || ultimo.created_at || null) : null));
-        setTemMais(novas.length > 0 && (!!r.proximo || r.conferencias.length >= POR_PAGINA));
+        setCursor(r.proximo);
+        setTemMais(novas.length > 0 && !!r.proximo);
       })
       .catch(function (e) { if (vivo.current) toast.error(mensagemDaConferencia(e, "lista")); })
       .finally(function () { if (vivo.current) setCarregandoMais(false); });
@@ -129,6 +126,15 @@ export function HistoricoConferenciasScreen({ lojaDaRota, agora }: Props) {
 
   var hoje = agora ? agora() : new Date();
 
+  // Quem não vê custo recebe valor_* nulos: some o valor, nunca "R$ 0".
+  function textoDoValor(c: ConferenciaNoHistorico): string {
+    if (ctx.semCusto) return "";
+    var partes: string[] = [];
+    if (c.valor_faltam != null) partes.push(brl(c.valor_faltam) + " de falta");
+    if (c.valor_sobram != null) partes.push(brl(c.valor_sobram) + " de sobra");
+    return partes.length ? " · a custo: " + partes.join(", ") : "";
+  }
+
   function cartao(c: ConferenciaNoHistorico) {
     var ate = desfazerAte(c);
     var dentro = podeDesfazerAgora(c, hoje);
@@ -151,10 +157,7 @@ export function HistoricoConferenciasScreen({ lojaDaRota, agora }: Props) {
         {partes.length > 0 ? <Text style={[ui.nota, { marginTop: 4 }]} testID={"hist-resumo-" + c.id}>{partes.join(" · ")}</Text> : null}
         {(c.faltam != null || c.sobram != null) ? (
           <Text style={[ui.nota, { marginTop: 2 }]} testID={"hist-faltam-sobram-" + c.id}>
-            {"Faltaram " + qtd(Number(c.faltam) || 0) + " · sobraram " + qtd(Number(c.sobram) || 0)
-              + (!ctx.semCusto && (c.valor_faltam != null || c.valor_sobram != null)
-                ? " · a custo: " + brl(c.valor_faltam || 0) + " de falta, " + brl(c.valor_sobram || 0) + " de sobra"
-                : "")}
+            {"Faltaram " + qtd(Number(c.faltam) || 0) + " · sobraram " + qtd(Number(c.sobram) || 0) + textoDoValor(c)}
           </Text>
         ) : null}
         {c.motivo ? <Text style={[ui.nota, { marginTop: 2 }]}>{"Motivo: " + c.motivo}</Text> : null}

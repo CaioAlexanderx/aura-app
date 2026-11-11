@@ -6,23 +6,32 @@
 // (etapas 3 "Diferenças" e 4 "Ajustado").
 //
 //   · resumo: batem, faltam (peças), sobram (peças), não contados; falta e
-//     sobra a custo, e quantos itens ficaram fora por não ter custo (some
-//     para quem não vê custo, como no Estoque);
+//     sobra a custo, e quantos itens ficaram fora por não ter custo. Quem
+//     não vê custo (podeVerCusto, ou custos_ocultos do backend) não vê
+//     valor nenhum — nunca "R$ 0";
 //   · listas por grupo; "batem" e "não contados" abrem num toque;
+//   · NÃO AJUSTAR: cada falta/sobra tem a caixa "Ajustar" à esquerda,
+//     marcada; a desmarcada vai em ignorar_item_ids e fica como está
+//     (Aura-backend#1001);
 //   · "zerar não contados" só por escolha explícita, começa desmarcado;
+//   · motivo (opcional, até 200), começa com o gravado ao começar e vai no
+//     aplicar;
 //   · Ajustar: só quem edita o estoque, com o ConfirmDialog do app num
-//     WebPortal (nunca confirm()). A regra do backend soma ou tira só a
-//     diferença do que o sistema tinha no bipe, então a venda feita depois
-//     da contagem fica mantida — a confirmação diz isso;
-//   · Transferir (ajuste de escopo do Caio, 11/11): só com 2+ lojas
-//     (lojasDaTransferencia) e para quem edita o estoque. Escolhe os itens
-//     (as sobras já vêm marcadas) e abre o TransferirModal do Estoque
+//     WebPortal (nunca confirm()), com a prévia do estoque depois. A regra
+//     do backend soma ou tira só a diferença do que o sistema tinha no
+//     bipe, então a venda feita depois da contagem fica mantida. 409
+//     JA_APLICADA (clique duplo) conta como sucesso;
+//   · TRANSFERIR (ajuste de escopo do Caio, 11/11): só com 2+ lojas
+//     (lojasDaTransferencia) e para quem edita o estoque. É um modo à
+//     parte, com faixa própria e um botão "Transferir" à direita de cada
+//     linha (não a caixa do ajuste), para não confundir as duas escolhas.
+//     As sobras já vêm escolhidas; abre o TransferirModal do Estoque
 //     pré-preenchido, mandando stock_count_id. Antes ou depois de ajustar.
 //
 // Antes do backend no ar: 503 MIGRATION_PENDING / 404 viram texto gentil.
 // ============================================================
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator, TextInput } from "react-native";
 import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -30,8 +39,8 @@ import { WebPortal } from "@/components/WebPortal";
 import { toast } from "@/components/Toast";
 import { TransferirModal } from "@/components/screens/estoque/transferencia/TransferirModal";
 import {
-  conferenciaEstoqueResultadoApi, mensagemDaConferencia, MSG_SO_QUEM_EDITA,
-  type Conferencia, type ItemDiferenca, type RespostaDiferencas, type TransferenciaDaConferencia,
+  conferenciaEstoqueResultadoApi, mensagemDaConferencia, MSG_SO_QUEM_EDITA, MOTIVO_MAX,
+  type Conferencia, type ItemDiferenca, type RespostaAplicar, type RespostaDiferencas, type TransferenciaDaConferencia,
 } from "@/services/conferenciaEstoqueResultadoApi";
 import { useConferenciaContexto } from "@/hooks/useConferenciaResultado";
 import {
@@ -43,8 +52,14 @@ import { Aviso, Botao, Cartao, Marcar, Selo, ui } from "./ui";
 
 type Props = { countId: string; lojaDaRota?: string | null };
 
+var PREVIA_NA_CONFIRMACAO = 3;
+
 function sufixoLoja(loja: string | null | undefined): string {
   return loja ? "?loja=" + encodeURIComponent(loja) : "";
+}
+
+function depoisDoAjuste(it: ItemDiferenca): number {
+  return it.estoque_depois != null ? it.estoque_depois : Math.max(0, it.estoque_atual + it.diferenca);
 }
 
 export function DiferencasScreen({ countId, lojaDaRota }: Props) {
@@ -60,10 +75,14 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
   var [dif, setDif] = useState<RespostaDiferencas | null>(null);
 
   var [zerar, setZerar] = useState(false);
+  // item_id → true: desmarcado, não ajusta (vai em ignorar_item_ids).
+  var [naoAjustar, setNaoAjustar] = useState<Record<string, boolean>>({});
+  var [motivo, setMotivo] = useState("");
+  var motivoPronto = useRef(false);
   var [confirmar, setConfirmar] = useState(false);
   var [aplicando, setAplicando] = useState(false);
   var [erroAplicar, setErroAplicar] = useState<string | null>(null);
-  var [ajustadosAgora, setAjustadosAgora] = useState<number | null>(null);
+  var [resultado, setResultado] = useState<RespostaAplicar | null>(null);
 
   var [verBatem, setVerBatem] = useState(false);
   var [verNaoContados, setVerNaoContados] = useState(false);
@@ -83,7 +102,10 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
     ])
       .then(function (r) {
         if (!vivo.current) return;
-        setConf(r[0] && r[0].conferencia ? r[0].conferencia : null);
+        var c = r[0] && r[0].conferencia ? r[0].conferencia : null;
+        setConf(c);
+        // O motivo começa com o gravado ao começar; depois é da pessoa.
+        if (c && !motivoPronto.current) { motivoPronto.current = true; setMotivo(c.motivo || ""); }
         setTransferencias(Array.isArray(r[0] && r[0].transferencias) ? (r[0].transferencias as TransferenciaDaConferencia[]) : []);
         setDif(r[1]);
       })
@@ -106,11 +128,16 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
   var zeraveis = naoContados.filter(function (n) { return n.estoque_atual !== 0; });
   var status = conf ? conf.status : null;
   var rascunho = status === "rascunho";
-  var aAjustar = grupos.faltam.length + grupos.sobram.length + (zerar ? zeraveis.length : 0);
+  var podeAjustar = rascunho && ctx.podeEditar;
+
+  var comDiferenca = grupos.faltam.concat(grupos.sobram);
+  var paraAjustar = comDiferenca.filter(function (it) { return !naoAjustar[it.item_id]; });
+  var desmarcados = comDiferenca.filter(function (it) { return !!naoAjustar[it.item_id]; });
+  var aAjustar = paraAjustar.length + (zerar ? zeraveis.length : 0);
 
   var lojas = ctx.lojasTransferencia;
   var podeTransferir = !!lojas && ctx.podeEditar && (status === "rascunho" || status === "aplicada")
-    && (grupos.faltam.length + grupos.sobram.length + grupos.batem.length) > 0;
+    && (comDiferenca.length + grupos.batem.length) > 0;
 
   // ── Ajustar ──────────────────────────────────────────────────
   function aplicar() {
@@ -118,22 +145,27 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
     setConfirmar(false);
     setAplicando(true);
     setErroAplicar(null);
-    var esperado = aAjustar;
-    conferenciaEstoqueResultadoApi.aplicar(companyId, countId, { zerar_nao_contados: zerar })
+    conferenciaEstoqueResultadoApi.aplicar(companyId, countId, {
+      zerar_nao_contados: zerar,
+      ignorar_item_ids: desmarcados.map(function (it) { return it.item_id; }),
+      motivo: motivo,
+    })
       .then(function (r) {
         if (!vivo.current) return;
-        var n = r && r.itens_ajustados != null && isFinite(Number(r.itens_ajustados)) ? Number(r.itens_ajustados) : esperado;
-        setAjustadosAgora(n);
+        setResultado(r || {});
         if (r && r.conferencia) setConf(r.conferencia);
         return carregar(true);
       })
       .catch(function (e) {
         if (!vivo.current) return;
         setErroAplicar(mensagemDaConferencia(e, "aplicar"));
-        // 409: já foi ajustada (clique duplo, outro aparelho) — mostra o estado real.
         if (e && e.status === 409) carregar(true);
       })
       .finally(function () { if (vivo.current) setAplicando(false); });
+  }
+
+  function alternarAjuste(it: ItemDiferenca) {
+    setNaoAjustar(function (m) { var n = { ...m }; if (n[it.item_id]) delete n[it.item_id]; else n[it.item_id] = true; return n; });
   }
 
   // ── Transferir ───────────────────────────────────────────────
@@ -172,30 +204,40 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
     var k = chaveDoItem(it);
     var mudou = Math.abs(it.estoque_atual - it.estoque_no_bipe) > 1e-9;
     var cor = it.diferenca < 0 ? Colors.red : it.diferenca > 0 ? Colors.green : Colors.ink3;
-    var corpo = (
-      <View style={s.linhaCorpo}>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={s.nome} numberOfLines={2}>{it.nome}</Text>
-          <Text style={ui.nota} testID={"dif-sub-" + k}>
-            {(it.variante ? it.variante + " · " : "") + "sistema " + qtd(it.estoque_no_bipe) + ", contado " + qtd(it.contado)}
+    var ajustavel = podeAjustar && !escolhendo && it.diferenca !== 0;
+    var fora = !!naoAjustar[it.item_id] && rascunho && it.diferenca !== 0;
+    var vai = !!escolhidos[k];
+    var info = (
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={s.nome} numberOfLines={2}>{it.nome}</Text>
+        <Text style={ui.nota} testID={"dif-sub-" + k}>
+          {(it.variante ? it.variante + " · " : "") + "sistema " + qtd(it.estoque_no_bipe) + ", contado " + qtd(it.contado)}
+        </Text>
+        {mudou ? (
+          <Text style={ui.nota} testID={"dif-mudou-" + k}>
+            {"Agora tem " + qtd(it.estoque_atual) + ": mudou depois que você contou, e isso fica mantido."}
           </Text>
-          {mudou ? (
-            <Text style={ui.nota} testID={"dif-mudou-" + k}>
-              {"Agora tem " + qtd(it.estoque_atual) + ": mudou depois que você contou, e isso fica mantido."}
-            </Text>
-          ) : null}
-        </View>
-        <Text style={[s.num, { color: cor }]} testID={"dif-num-" + k}>{comSinal(it.diferenca)}</Text>
+        ) : null}
+        {fora ? <Text style={[ui.nota, { color: Colors.amber }]} testID={"dif-fora-" + k}>Fica como está: não será ajustado.</Text> : null}
       </View>
     );
     return (
-      <View key={k} style={s.linha} testID={"dif-item-" + k}>
+      <View key={k} style={[s.linha, fora && { opacity: 0.6 }]} testID={"dif-item-" + k}>
+        <View style={s.linhaCorpo}>
+          {ajustavel ? (
+            <Marcar marcado={!naoAjustar[it.item_id]} onPress={function () { alternarAjuste(it); }}
+              rotulo={"Ajustar " + it.nome + (it.variante ? " " + it.variante : "")} testID={"dif-ajustar-" + k} />
+          ) : null}
+          {info}
+          <Text style={[s.num, { color: cor }]} testID={"dif-num-" + k}>{comSinal(it.diferenca)}</Text>
+        </View>
         {escolhendo ? (
-          <Marcar marcado={!!escolhidos[k]} onPress={function () { alternar(it); }}
-            rotulo={"Transferir " + it.nome + (it.variante ? " " + it.variante : "")} testID={"dif-escolher-" + k}>
-            {corpo}
-          </Marcar>
-        ) : corpo}
+          <Pressable onPress={function () { alternar(it); }} style={[s.pill, vai && s.pillOn]}
+            accessibilityRole="switch" accessibilityState={{ checked: vai }}
+            accessibilityLabel={"Transferir " + it.nome + (it.variante ? " " + it.variante : "")} testID={"dif-escolher-" + k}>
+            <Text style={[s.pillTxt, vai && { color: "#fff" }]}>{vai ? "⇄ Vai para outra loja" : "⇄ Transferir"}</Text>
+          </Pressable>
+        ) : null}
       </View>
     );
   }
@@ -203,7 +245,7 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
   function grupo(titulo: string, lista: ItemDiferenca[], testID: string) {
     if (lista.length === 0) return null;
     return (
-      <Cartao style={{ paddingHorizontal: 4, paddingVertical: 4 }} testID={testID}>
+      <Cartao style={[{ paddingHorizontal: 4, paddingVertical: 4 }, escolhendo && s.cartaoTransferir]} testID={testID}>
         <Text style={[ui.h3, { paddingHorizontal: 10, paddingTop: 8 }]}>{titulo}</Text>
         {lista.map(linha)}
       </Cartao>
@@ -268,20 +310,39 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
   var pecasS = somaDasPecas(grupos.sobram);
   var ate = desfazerAte(conf);
   var aindaDesfaz = podeDesfazerAgora(conf);
+  var semValor = ctx.semCusto || dif.custos_ocultos;
+
+  var ajustadosTxt = resultado
+    ? resultado.ja_aplicada
+      ? "Esta conferência já tinha ajustado o estoque."
+      : "Estoque ajustado em " + nItens(resultado.ajustados != null ? Number(resultado.ajustados) : aAjustar) + "."
+    : "Esta conferência já ajustou o estoque.";
+  var ignoradosNoResultado = resultado && Array.isArray(resultado.ignorados)
+    ? resultado.ignorados.filter(function (x) { return !x || x.motivo !== "produto_indisponivel"; }).length : 0;
+
+  // Mensagem da confirmação: o que acontece, com a prévia do estoque depois.
+  var previa = paraAjustar.slice(0, PREVIA_NA_CONFIRMACAO).map(function (it) {
+    return it.nome + (it.variante ? " · " + it.variante : "") + ": " + qtd(it.estoque_atual) + " → " + qtd(depoisDoAjuste(it));
+  });
+  var resto = paraAjustar.length - previa.length;
+  var mensagemConfirmar = "Vamos ajustar " + nItens(aAjustar) + " pela sua contagem. As vendas feitas depois que você contou cada item ficam mantidas: a Aura só soma ou tira a diferença."
+    + (previa.length > 0 ? " Fica assim: " + previa.join("; ") + (resto > 0 ? " e mais " + qtd(resto) : "") + "." : "")
+    + (desmarcados.length > 0 ? " " + (desmarcados.length === 1 ? "1 item desmarcado fica" : qtd(desmarcados.length) + " itens desmarcados ficam") + " como está." : "")
+    + (zerar && zeraveis.length > 0 ? " " + (zeraveis.length === 1 ? "1 item não contado vai" : qtd(zeraveis.length) + " itens não contados vão") + " para 0." : "")
+    + " Cada ajuste vai para o histórico do produto, e dá para desfazer por " + DIAS_PARA_DESFAZER + " dias.";
 
   return (
     <View style={ui.tela}>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={[ui.conteudo, escolhendo && { paddingBottom: 120 }]} keyboardShouldPersistTaps="handled" testID="dif-tela">
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[ui.conteudo, escolhendo && { paddingBottom: 140 }]} keyboardShouldPersistTaps="handled" testID="dif-tela">
         {cabecalho}
 
         {/* Ajustado (agora ou antes) */}
         {status === "aplicada" ? (
           <Aviso tipo="ok" testID="dif-ajustado">
-            <Text style={[ui.avisoTxt, { fontWeight: "700" }]}>
-              {ajustadosAgora != null ? "Estoque ajustado em " + nItens(ajustadosAgora) + "." : "Esta conferência já ajustou o estoque."}
-            </Text>
+            <Text style={[ui.avisoTxt, { fontWeight: "700" }]}>{ajustadosTxt}</Text>
             <Text style={[ui.nota, { marginTop: 6 }]}>
-              {"Cada ajuste foi lançado no histórico do produto como “Conferência nº " + conf.numero + "”."
+              {"Cada ajuste foi lançado no histórico do produto como “Conferência nº " + conf.numero + (conf.motivo ? " · " + conf.motivo : "") + "”."
+                + (ignoradosNoResultado > 0 ? " " + (ignoradosNoResultado === 1 ? "1 item desmarcado ficou" : qtd(ignoradosNoResultado) + " itens desmarcados ficaram") + " como estava." : "")
                 + (aindaDesfaz && ate ? " Você pode desfazer tudo até " + dataEHora(ate.toISOString()) + ", no histórico." : "")}
             </Text>
           </Aviso>
@@ -300,11 +361,11 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
           <View style={s.resumoCel}><Text style={s.resumoNum} testID="dif-resumo-nao-contados">{qtd(r.nao_contados)}</Text><Text style={ui.nota}>não contados</Text></View>
         </View>
 
-        {!ctx.semCusto ? (
+        {!semValor && (r.valor_faltam != null || r.valor_sobram != null) ? (
           <Cartao testID="dif-custo">
             <View style={ui.linhaFlex}>
-              <Selo tipo="vermelho" testID="dif-valor-faltam">{"Falta a custo: " + brl(r.valor_faltam || 0)}</Selo>
-              <Selo tipo="verde" testID="dif-valor-sobram">{"Sobra a custo: " + brl(r.valor_sobram || 0)}</Selo>
+              {r.valor_faltam != null ? <Selo tipo="vermelho" testID="dif-valor-faltam">{"Falta a custo: " + brl(r.valor_faltam)}</Selo> : null}
+              {r.valor_sobram != null ? <Selo tipo="verde" testID="dif-valor-sobram">{"Sobra a custo: " + brl(r.valor_sobram)}</Selo> : null}
             </View>
             <Text style={[ui.nota, { marginTop: 8 }]} testID="dif-sem-custo">
               {r.itens_sem_custo > 0
@@ -318,9 +379,16 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
           <Aviso tipo="info" testID="dif-vazia">Nada foi contado nesta conferência ainda. Volte para a contagem e bipe ou busque os itens.</Aviso>
         ) : null}
 
-        {(grupos.faltam.length + grupos.sobram.length) > 0 ? (
+        {escolhendo ? (
+          <Aviso tipo="info" testID="dif-modo-transferir">
+            <Text style={[ui.avisoTxt, { fontWeight: "700" }]}>Escolhendo o que vai para outra loja</Text>
+            <Text style={[ui.nota, { marginTop: 4 }]}>
+              Toque em “Transferir” nos itens que vão. Isso não muda o que será ajustado: o ajuste segue as caixas “Ajustar” de antes.
+            </Text>
+          </Aviso>
+        ) : comDiferenca.length > 0 ? (
           <Text style={ui.nota} testID="dif-nota-venda">
-            A venda feita depois que você contou cada item é mantida: a Aura só soma ou tira a diferença.
+            {(podeAjustar ? "Desmarque o que você não quer ajustar. " : "") + "A venda feita depois que você contou cada item é mantida: a Aura só soma ou tira a diferença."}
           </Text>
         ) : null}
 
@@ -336,7 +404,7 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
         ) : null}
 
         {/* Zerar não contados: só por escolha, desmarcado */}
-        {rascunho && naoContados.length > 0 && ctx.podeEditar && !escolhendo ? (
+        {podeAjustar && naoContados.length > 0 && !escolhendo ? (
           <Cartao testID="dif-zerar-cartao">
             <Marcar marcado={zerar} onPress={function () { setZerar(!zerar); }} rotulo="Zerar o que não apareceu" testID="dif-zerar">
               <Text style={s.nome}>Contei tudo: zerar o que não apareceu</Text>
@@ -372,19 +440,35 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
           )
         ) : null}
 
-        {conf.motivo ? (
-          <Cartao testID="dif-motivo">
+        {/* Motivo: editável antes de ajustar; depois, só leitura */}
+        {podeAjustar && !escolhendo ? (
+          <Cartao testID="dif-motivo-cartao">
+            <Text style={[ui.nota, { marginBottom: 6 }]}>MOTIVO (OPCIONAL)</Text>
+            <TextInput
+              value={motivo}
+              onChangeText={setMotivo}
+              placeholder="Ex.: inventário do mês"
+              placeholderTextColor={Colors.ink3}
+              maxLength={MOTIVO_MAX}
+              editable={!aplicando}
+              style={s.motivo as any}
+              accessibilityLabel="Motivo"
+              testID="dif-motivo"
+            />
+          </Cartao>
+        ) : conf.motivo ? (
+          <Cartao testID="dif-motivo-lido">
             <Text style={ui.nota}>MOTIVO</Text>
             <Text style={[s.nome, { marginTop: 4 }]}>{conf.motivo}</Text>
           </Cartao>
         ) : null}
 
-        {/* Transferir entre lojas */}
+        {/* Transferir entre lojas: modo à parte */}
         {podeTransferir && !escolhendo ? (
           <Cartao testID="dif-transferir-cartao">
             <Text style={ui.h3}>Mandar para outra loja</Text>
             <Text style={ui.nota}>
-              Sobrou peça aqui e falta em outra loja do grupo? Escolha os itens e transfira sem sair da conferência. As sobras já vêm marcadas.
+              Sobrou peça aqui e falta em outra loja do grupo? Escolha os itens e transfira sem sair da conferência. As sobras já vêm escolhidas.
             </Text>
             <View style={{ marginTop: 10 }}>
               <Botao tipo="secundario" rotulo="Escolher itens para transferir" onPress={comecarEscolha} testID="dif-transferir" />
@@ -427,10 +511,10 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
       {escolhendo ? (
         <View style={s.barra} testID="dif-barra-transferir">
           <Text style={[ui.nota, { flexBasis: "100%" }]} testID="dif-barra-texto">
-            {listaEscolhida.length === 0 ? "Toque nos itens que vão para outra loja." : nItens(listaEscolhida.length) + " para transferir"}
+            {listaEscolhida.length === 0 ? "Toque em “Transferir” nos itens que vão para outra loja." : nItens(listaEscolhida.length) + " para transferir"}
           </Text>
           {grupos.sobram.length > 0 ? (
-            <Botao tipo="secundario" pequeno rotulo="Marcar as sobras" onPress={marcarSobras} testID="dif-marcar-sobras" />
+            <Botao tipo="secundario" pequeno rotulo="Escolher as sobras" onPress={marcarSobras} testID="dif-marcar-sobras" />
           ) : null}
           <View style={{ flex: 1 }} />
           <Botao tipo="secundario" pequeno rotulo="Cancelar" onPress={function () { setEscolhendo(false); setEscolhidos({}); }} testID="dif-cancelar-escolha" />
@@ -443,9 +527,7 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
         <ConfirmDialog
           visible={confirmar}
           title="Ajustar o estoque?"
-          message={"Vamos ajustar " + nItens(aAjustar) + " pela sua contagem. As vendas feitas depois que você contou cada item ficam mantidas: a Aura só soma ou tira a diferença."
-            + (zerar && zeraveis.length > 0 ? " " + (zeraveis.length === 1 ? "1 item não contado vai" : qtd(zeraveis.length) + " itens não contados vão") + " para 0." : "")
-            + " Cada ajuste vai para o histórico do produto, e dá para desfazer por " + DIAS_PARA_DESFAZER + " dias."}
+          message={mensagemConfirmar}
           confirmLabel="Ajustar"
           cancelLabel="Agora não"
           destructive={false}
@@ -481,10 +563,21 @@ var s = StyleSheet.create({
   resumo: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   resumoCel: { flexGrow: 1, flexBasis: 140, backgroundColor: Colors.bg4, borderRadius: 12, padding: 10, minWidth: 0 },
   resumoNum: { fontSize: 24, fontWeight: "700", color: Colors.ink },
-  linha: { borderTopWidth: 1, borderTopColor: Colors.border, paddingHorizontal: 10, paddingVertical: 8 },
+  linha: { borderTopWidth: 1, borderTopColor: Colors.border, paddingHorizontal: 10, paddingVertical: 8, gap: 8 },
   linhaCorpo: { flexDirection: "row", alignItems: "center", gap: 10 },
   nome: { fontSize: 14, fontWeight: "700", color: Colors.ink },
   num: { fontSize: 15, fontWeight: "700", textAlign: "right", minWidth: 44 },
+  cartaoTransferir: { borderColor: Colors.violet },
+  pill: {
+    alignSelf: "flex-end", minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center",
+    borderWidth: 1, borderColor: Colors.violet, backgroundColor: Colors.violetD,
+  },
+  pillOn: { backgroundColor: Colors.violet },
+  pillTxt: { color: Colors.violet3, fontSize: 13, fontWeight: "700" },
+  motivo: {
+    borderWidth: 1, borderColor: Colors.border2, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 15, color: Colors.ink, backgroundColor: Colors.bg2, minHeight: 44,
+  },
   barra: {
     position: "absolute" as any, left: 0, right: 0, bottom: 0,
     flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8,
