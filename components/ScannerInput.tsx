@@ -22,8 +22,13 @@
 // • cameraSoComDetector — sem BarcodeDetector (Safari, Firefox, app nativo)
 //   o botão da câmera nem aparece, em vez de abrir e avisar;
 // • testID — no campo de texto.
+//
+// 11/11/2026 (QA da conferência): ref opcional com limpar() e focar(), para
+// a tela esvaziar o campo e devolver o foco depois de escolher um produto da
+// busca pelo nome, como já acontece depois de um bipe. Quem não passa ref
+// (o Caixa) segue igual.
 // ============================================================
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
 import { View, Text, StyleSheet, Pressable, TextInput, Platform, useWindowDimensions } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -45,7 +50,15 @@ export function temLeitorDeCamera(): boolean {
 
 var isWeb = Platform.OS === 'web';
 
-export function ScannerInput({ onScan, placeholder, onChangeText, cameraSoComDetector, testID }: Props) {
+/** O que a tela pode pedir ao campo pela ref. */
+export type ScannerInputHandle = {
+  /** Esvazia o campo (e avisa pelo onChangeText, como depois de um bipe). */
+  limpar: () => void;
+  /** Devolve o foco ao campo, pronto para o próximo bipe. */
+  focar: () => void;
+};
+
+export const ScannerInput = forwardRef<ScannerInputHandle, Props>(function ScannerInput({ onScan, placeholder, onChangeText, cameraSoComDetector, testID }, ref) {
   const [inputValue, setInputValue] = useState('');
   const [cameraActive, setCameraActive] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
@@ -69,6 +82,14 @@ export function ScannerInput({ onScan, placeholder, onChangeText, cameraSoComDet
     if (onChangeText) onChangeText('');
     inputRef.current?.focus();
   }
+
+  useImperativeHandle(ref, () => ({
+    limpar: () => {
+      setInputValue('');
+      if (onChangeText) onChangeText('');
+    },
+    focar: () => { inputRef.current?.focus(); },
+  }), [onChangeText]);
 
   function scanFrame() {
     if (!videoRef.current || !canvasRef.current || !isScanningRef.current) return;
@@ -275,7 +296,7 @@ export function ScannerInput({ onScan, placeholder, onChangeText, cameraSoComDet
       )}
     </View>
   );
-}
+});
 
 const z = StyleSheet.create({
   container: { marginBottom: 14 },

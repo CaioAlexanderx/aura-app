@@ -46,4 +46,18 @@ describe("câmera do ScannerInput", () => {
     expect(onScan).toHaveBeenCalledWith({ code: "789100", source: "scanner" });
     expect(onChangeText).toHaveBeenLastCalledWith("");
   });
+
+  it("ref (conferência): limpar esvazia o campo e avisa; focar devolve o foco", () => {
+    const onChangeText = jest.fn();
+    const ref = React.createRef<any>();
+    let tree!: renderer.ReactTestRenderer;
+    act(() => { tree = renderer.create(<ScannerInput ref={ref} onScan={jest.fn()} onChangeText={onChangeText} testID="campo" />); });
+    const achar = () => tree.root.findAll((n) => n.props && n.props.testID === "campo" && typeof n.props.onSubmitEditing === "function", { deep: false })[0];
+    act(() => { achar().props.onChangeText("bon"); });
+    expect(achar().props.value).toBe("bon");
+    act(() => { ref.current.limpar(); });
+    expect(achar().props.value).toBe("");
+    expect(onChangeText).toHaveBeenLastCalledWith("");
+    expect(() => act(() => { ref.current.focar(); })).not.toThrow();
+  });
 });

@@ -75,6 +75,12 @@ export type ItemDiferenca = {
   diferenca: number;
   /** Quanto fica depois do ajuste (estoque atual + diferença, piso 0). */
   estoque_depois: number | null;
+  /**
+   * Depois de ajustada: quanto o ajuste mexeu de fato (com o piso 0). Nulo
+   * quando o item não foi ajustado (desmarcado) ou a conferência não foi
+   * aplicada.
+   */
+  diferenca_aplicada?: number | null;
   custo: number | null;
   valor: number | null;
   grupo: GrupoDiferenca;
@@ -203,6 +209,7 @@ export function normalizarDiferencas(r: any): RespostaDiferencas {
         estoque_atual: num(it.estoque_atual),
         diferenca: diferenca,
         estoque_depois: numOuNull(it.estoque_depois),
+        diferenca_aplicada: numOuNull(it.diferenca_aplicada),
         custo: numOuNull(it.custo),
         valor: numOuNull(it.valor),
         grupo: grupo,

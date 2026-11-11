@@ -1,7 +1,7 @@
 // p-108 (entrega C): regras sem React da tela de resultado da conferência.
 import {
   podeEditarEstoque, desfazerAte, podeDesfazerAgora, montarTransferencia, rotuloDoMovimentoDeEstoque,
-  rotuloDoEscopo, comSinal, somaDasPecas,
+  rotuloDoEscopo, comSinal, somaDasPecas, avisoDeEstoqueQueMudou,
 } from "@/utils/conferenciaResultado";
 import type { ItemDiferenca } from "@/services/conferenciaEstoqueResultadoApi";
 
@@ -79,5 +79,32 @@ describe("textos", () => {
     expect(comSinal(-3)).toBe("−3");
     expect(comSinal(0)).toBe("0");
     expect(somaDasPecas([item({ diferenca: -2 }), item({ diferenca: -1 })])).toBe(3);
+  });
+});
+
+// QA em produção (11/11): sistema 58, contado 56, nada vendido. Depois de
+// ajustar, o 56 é o próprio ajuste e não pode virar "mudou depois".
+describe("aviso de estoque que mudou depois da contagem", () => {
+  const base = item({ contado: 56, estoque_no_bipe: 58, diferenca: -2, grupo: "faltam" });
+  it("rascunho: compara com o que tinha no bipe", () => {
+    expect(avisoDeEstoqueQueMudou({ ...base, estoque_atual: 58 }, "rascunho")).toBeNull();
+    expect(avisoDeEstoqueQueMudou({ ...base, estoque_atual: 57 }, "rascunho"))
+      .toBe("Agora tem 57: mudou depois que você contou, e isso fica mantido.");
+  });
+  it("ajustada: compara com o do bipe mais o que o ajuste mexeu", () => {
+    expect(avisoDeEstoqueQueMudou({ ...base, estoque_atual: 56, diferenca_aplicada: -2 }, "aplicada")).toBeNull();
+    expect(avisoDeEstoqueQueMudou({ ...base, estoque_atual: 55, diferenca_aplicada: -2 }, "aplicada"))
+      .toBe("Agora tem 55: mudou depois que você contou, e isso ficou mantido.");
+    // piso 0: o ajuste efetivo é o gravado
+    expect(avisoDeEstoqueQueMudou(item({ estoque_no_bipe: 3, contado: 0, diferenca: -3, estoque_atual: 0, diferenca_aplicada: -1 }), "aplicada"))
+      .toBe("Agora tem 0: mudou depois que você contou, e isso ficou mantido.");
+    // desmarcado (sem diferenca_aplicada): fica como estava
+    expect(avisoDeEstoqueQueMudou({ ...base, estoque_atual: 58, diferenca_aplicada: null }, "aplicada")).toBeNull();
+    expect(avisoDeEstoqueQueMudou({ ...base, estoque_atual: 58 }, "aplicada")).toBeNull();
+  });
+  it("desfeita e descartada: nunca", () => {
+    expect(avisoDeEstoqueQueMudou({ ...base, estoque_atual: 50, diferenca_aplicada: -2 }, "desfeita")).toBeNull();
+    expect(avisoDeEstoqueQueMudou({ ...base, estoque_atual: 50 }, "descartada")).toBeNull();
+    expect(avisoDeEstoqueQueMudou({ ...base, estoque_atual: 50 }, null)).toBeNull();
   });
 });

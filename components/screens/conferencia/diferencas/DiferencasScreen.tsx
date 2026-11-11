@@ -44,7 +44,7 @@ import {
 } from "@/services/conferenciaEstoqueResultadoApi";
 import { useConferenciaContexto } from "@/hooks/useConferenciaResultado";
 import {
-  DIAS_PARA_DESFAZER, brl, chaveDoItem, comSinal, dataCurta, dataEHora, desfazerAte, itens as nItens,
+  DIAS_PARA_DESFAZER, avisoDeEstoqueQueMudou, brl, chaveDoItem, comSinal, dataCurta, dataEHora, desfazerAte, itens as nItens,
   montarTransferencia, pecas, podeDesfazerAgora, qtd, rotuloDoEscopo, somaDasPecas,
 } from "@/utils/conferenciaResultado";
 import { plural as pluralQtd, textoDosNumeros } from "@/utils/transferenciaEstoque";
@@ -202,7 +202,7 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
   // ── Render ───────────────────────────────────────────────────
   function linha(it: ItemDiferenca) {
     var k = chaveDoItem(it);
-    var mudou = Math.abs(it.estoque_atual - it.estoque_no_bipe) > 1e-9;
+    var mudou = avisoDeEstoqueQueMudou(it, status);
     var cor = it.diferenca < 0 ? Colors.red : it.diferenca > 0 ? Colors.green : Colors.ink3;
     var ajustavel = podeAjustar && !escolhendo && it.diferenca !== 0;
     var fora = !!naoAjustar[it.item_id] && rascunho && it.diferenca !== 0;
@@ -214,9 +214,7 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
           {(it.variante ? it.variante + " · " : "") + "sistema " + qtd(it.estoque_no_bipe) + ", contado " + qtd(it.contado)}
         </Text>
         {mudou ? (
-          <Text style={ui.nota} testID={"dif-mudou-" + k}>
-            {"Agora tem " + qtd(it.estoque_atual) + ": mudou depois que você contou, e isso fica mantido."}
-          </Text>
+          <Text style={ui.nota} testID={"dif-mudou-" + k}>{mudou}</Text>
         ) : null}
         {fora ? <Text style={[ui.nota, { color: Colors.amber }]} testID={"dif-fora-" + k}>Fica como está: não será ajustado.</Text> : null}
       </View>
@@ -329,7 +327,7 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
     + (previa.length > 0 ? " Fica assim: " + previa.join("; ") + (resto > 0 ? " e mais " + qtd(resto) : "") + "." : "")
     + (desmarcados.length > 0 ? " " + (desmarcados.length === 1 ? "1 item desmarcado fica" : qtd(desmarcados.length) + " itens desmarcados ficam") + " como está." : "")
     + (zerar && zeraveis.length > 0 ? " " + (zeraveis.length === 1 ? "1 item não contado vai" : qtd(zeraveis.length) + " itens não contados vão") + " para 0." : "")
-    + " Cada ajuste vai para o histórico do produto, e dá para desfazer por " + DIAS_PARA_DESFAZER + " dias.";
+    + " O ajuste fica registrado no histórico de conferências, e dá para desfazer por " + DIAS_PARA_DESFAZER + " dias, se precisar.";
 
   return (
     <View style={ui.tela}>
@@ -341,7 +339,7 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
           <Aviso tipo="ok" testID="dif-ajustado">
             <Text style={[ui.avisoTxt, { fontWeight: "700" }]}>{ajustadosTxt}</Text>
             <Text style={[ui.nota, { marginTop: 6 }]}>
-              {"Cada ajuste foi lançado no histórico do produto como “Conferência nº " + conf.numero + (conf.motivo ? " · " + conf.motivo : "") + "”."
+              {"Tudo ficou registrado no histórico de conferências, como “Conferência nº " + conf.numero + (conf.motivo ? " · " + conf.motivo : "") + "”."
                 + (ignoradosNoResultado > 0 ? " " + (ignoradosNoResultado === 1 ? "1 item desmarcado ficou" : qtd(ignoradosNoResultado) + " itens desmarcados ficaram") + " como estava." : "")
                 + (aindaDesfaz && ate ? " Você pode desfazer tudo até " + dataEHora(ate.toISOString()) + ", no histórico." : "")}
             </Text>
@@ -349,7 +347,7 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
         ) : null}
         {status === "desfeita" ? (
           <Aviso tipo="info" testID="dif-desfeita">
-            {"Conferência desfeita" + (conf.desfeita_em ? " em " + dataCurta(conf.desfeita_em) : "") + ". O estoque voltou ao que era; os lançamentos continuam no histórico do produto, marcados como desfeitos."}
+            {"Conferência desfeita" + (conf.desfeita_em ? " em " + dataCurta(conf.desfeita_em) : "") + ". O estoque voltou ao que era, e ela segue registrada no histórico de conferências, marcada como desfeita."}
           </Aviso>
         ) : null}
 

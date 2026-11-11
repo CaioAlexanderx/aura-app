@@ -177,7 +177,7 @@ export function HistoricoConferenciasScreen({ lojaDaRota, agora }: Props) {
               <Text style={ui.nota} testID={"hist-prazo-" + c.id}>{"Dá para desfazer até " + dataEHora(ate.toISOString()) + "."}</Text>
             ) : (
               <Text style={ui.nota} testID={"hist-prazo-acabou-" + c.id}>
-                {"O prazo de " + DIAS_PARA_DESFAZER + " dias para desfazer acabou" + (ate ? " em " + dataCurta(ate.toISOString()) : "") + ". Os ajustes ficam no histórico de cada produto."}
+                {"O prazo de " + DIAS_PARA_DESFAZER + " dias para desfazer acabou" + (ate ? " em " + dataCurta(ate.toISOString()) : "") + ". Os ajustes continuam valendo, e a conferência segue registrada aqui."}
               </Text>
             )}
             <View style={[ui.acoes, { justifyContent: "flex-start" }]}>
@@ -196,7 +196,7 @@ export function HistoricoConferenciasScreen({ lojaDaRota, agora }: Props) {
 
         {c.status === "desfeita" ? (
           <Text style={[ui.nota, { marginTop: 8 }]} testID={"hist-desfeita-" + c.id}>
-            {"Desfeita" + (c.desfeita_em ? " em " + dataCurta(c.desfeita_em) : "") + ". O estoque voltou ao que era; os lançamentos seguem no histórico do produto."}
+            {"Desfeita" + (c.desfeita_em ? " em " + dataCurta(c.desfeita_em) : "") + ". O estoque voltou ao que era, e a conferência segue registrada aqui."}
           </Text>
         ) : null}
 
@@ -215,8 +215,8 @@ export function HistoricoConferenciasScreen({ lojaDaRota, agora }: Props) {
           <Text style={ui.voltarTxt}>‹ Conferir estoque</Text>
         </Pressable>
         <Text style={ui.titulo}>Histórico de conferências</Text>
-        <Text style={ui.sub}>
-          {"Cada ajuste vira um lançamento no histórico do produto. A conferência inteira pode ser desfeita por " + DIAS_PARA_DESFAZER + " dias."}
+        <Text style={ui.sub} testID="hist-sub">
+          {"Cada conferência ajustada fica registrada aqui; em “Ver diferenças” você vê o que mudou em cada item. Se precisar, dá para desfazer a conferência inteira por " + DIAS_PARA_DESFAZER + " dias."}
         </Text>
 
         {!lojaDaRota && ctx.lojasParaEscolher.length > 0 ? (
@@ -270,7 +270,7 @@ export function HistoricoConferenciasScreen({ lojaDaRota, agora }: Props) {
           message={"Vamos devolver ao estoque a diferença que esta conferência ajustou, item por item"
             + (desfazerDe && (desfazerDe.faltam != null || desfazerDe.sobram != null)
               ? " (" + nItens((Number(desfazerDe.faltam) || 0) + (Number(desfazerDe.sobram) || 0)) + ")" : "")
-            + ". As vendas feitas desde então ficam mantidas. Os lançamentos continuam no histórico do produto, marcados como desfeitos. Só dá para desfazer uma vez."}
+            + ". As vendas feitas desde então ficam mantidas. A conferência continua registrada aqui, marcada como desfeita. Só dá para desfazer uma vez."}
           confirmLabel="Desfazer"
           cancelLabel="Manter o ajuste"
           destructive

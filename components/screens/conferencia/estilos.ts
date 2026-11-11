@@ -1,8 +1,18 @@
 // Estilos comuns das telas da conferência de estoque (p-108). Cores do tema
 // do app (Colors troca com claro/escuro); nada de hover: todo controle é um
 // toque, e cabe em 375 px (sem largura fixa maior que a tela).
-import { StyleSheet } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
+
+/**
+ * Fundo da pilha da conferência (app/(tabs)/conferencia-estoque/_layout.tsx):
+ * o mesmo do resto do app, nos dois temas. Na web, transparente — aparece o
+ * fundo das abas (Colors.bg com o degradê); no app nativo, Colors.bg, que é
+ * o que a casca das abas pinta. Nunca o cinza padrão do React Navigation.
+ */
+export function fundoDaPilhaDaConferencia(): string {
+  return Platform.OS === "web" ? "transparent" : Colors.bg;
+}
 
 export const ce = StyleSheet.create({
   tela: { flex: 1, backgroundColor: "transparent" },

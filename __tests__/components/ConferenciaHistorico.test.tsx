@@ -210,3 +210,16 @@ it("vazio: convite gentil", async () => {
   const tree = await montar();
   expect(textoDe(tree, "hist-vazio")).toMatch(/Nenhuma conferência nesta loja ainda/);
 });
+
+// QA em produção (11/11): nenhuma tela lista as movimentações do produto,
+// então nada de prometer "histórico do produto".
+it("textos verdadeiros: registro no histórico de conferências", async () => {
+  mockDesfazer.mockResolvedValue({ conferencia: { id: "a1", status: "desfeita", desfeita_em: "2026-11-11T15:00:00.000Z" } });
+  const tree = await montar();
+  expect(textoDe(tree, "hist-sub")).toBe("Cada conferência ajustada fica registrada aqui; em “Ver diferenças” você vê o que mudou em cada item. Se precisar, dá para desfazer a conferência inteira por 7 dias.");
+  expect(textoDe(tree, "hist-prazo-acabou-a2")).toMatch(/Os ajustes continuam valendo, e a conferência segue registrada aqui\.$/);
+  expect(textoDe(tree, "hist-desfeita-d1")).toMatch(/e a conferência segue registrada aqui\.$/);
+  await tocar(tree, "hist-desfazer-a1");
+  expect(um(tree, "confirm").props.message).toMatch(/A conferência continua registrada aqui, marcada como desfeita\./);
+  expect(flattenText(tree.toJSON()) + um(tree, "confirm").props.message).not.toMatch(/histórico (do|de cada) produto/);
+});
