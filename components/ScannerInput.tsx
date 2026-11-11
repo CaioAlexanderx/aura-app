@@ -15,6 +15,13 @@
 // • Em native (Expo mobile) onde BarcodeDetector não existe, o botão
 //   continua aparecendo mas mostra toast informativo dizendo pra usar
 //   scanner USB/teclado.
+//
+// 11/11/2026 (conferência de estoque, p-108): três props opcionais, sem
+// mudar nada para quem não as passa (o Caixa segue igual):
+// • onChangeText — a tela acompanha o texto (busca pelo nome no mesmo campo);
+// • cameraSoComDetector — sem BarcodeDetector (Safari, Firefox, app nativo)
+//   o botão da câmera nem aparece, em vez de abrir e avisar;
+// • testID — no campo de texto.
 // ============================================================
 import { useState, useRef, useEffect, useCallback } from "react";
 import { View, Text, StyleSheet, Pressable, TextInput, Platform, useWindowDimensions } from "react-native";
@@ -26,11 +33,19 @@ type ScanResult = { code: string; source: 'scanner' | 'camera' | 'manual' };
 type Props = {
   onScan: (result: ScanResult) => void;
   placeholder?: string;
+  onChangeText?: (text: string) => void;
+  cameraSoComDetector?: boolean;
+  testID?: string;
 };
+
+/** O navegador lê código pela câmera (Chrome e Edge; não Safari nem Firefox). */
+export function temLeitorDeCamera(): boolean {
+  return isWeb && typeof window !== 'undefined' && 'BarcodeDetector' in window;
+}
 
 var isWeb = Platform.OS === 'web';
 
-export function ScannerInput({ onScan, placeholder }: Props) {
+export function ScannerInput({ onScan, placeholder, onChangeText, cameraSoComDetector, testID }: Props) {
   const [inputValue, setInputValue] = useState('');
   const [cameraActive, setCameraActive] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
@@ -51,6 +66,7 @@ export function ScannerInput({ onScan, placeholder }: Props) {
     if (!code) return;
     onScan({ code, source: 'scanner' });
     setInputValue('');
+    if (onChangeText) onChangeText('');
     inputRef.current?.focus();
   }
 
@@ -213,7 +229,8 @@ export function ScannerInput({ onScan, placeholder }: Props) {
             ref={inputRef}
             style={z.input}
             value={inputValue}
-            onChangeText={setInputValue}
+            onChangeText={(t) => { setInputValue(t); if (onChangeText) onChangeText(t); }}
+            testID={testID}
             onSubmitEditing={handleSubmit}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
@@ -225,7 +242,7 @@ export function ScannerInput({ onScan, placeholder }: Props) {
         </View>
         {/* Botão da câmera: SEMPRE renderizado (web ativa de fato, native mostra toast).
             flexShrink:0 + width fixo garante que nunca é cortado em narrow viewport. */}
-        <Pressable
+        {(!cameraSoComDetector || temLeitorDeCamera()) && <Pressable
           onPress={cameraActive ? stopCamera : startCamera}
           style={[
             z.cameraBtn,
@@ -239,7 +256,7 @@ export function ScannerInput({ onScan, placeholder }: Props) {
             size={isNarrow ? 16 : 18}
             color={cameraActive ? '#fff' : Colors.violet3}
           />
-        </Pressable>
+        </Pressable>}
       </View>
 
       {cameraActive && isWeb && (

@@ -559,6 +559,7 @@ describe("Estoque", () => {
     expect(fs.existsSync(path.join(RAIZ, "app/(tabs)/estoque"))).toBe(false);
     expect(MODULE_PLAN_MAP["estoque.ruptura"]).toBeUndefined();
     expect(LAYOUT).not.toContain("estoque/ruptura");
-    expect(PERM_TO_MODULES["estoque"]).toEqual(["estoque", BLACK_FRIDAY_MOD, "fornecedores"]);
+    // 11/11/2026 (p-108): a conferência de estoque entrou na mesma permissão.
+    expect(PERM_TO_MODULES["estoque"]).toEqual(["estoque", BLACK_FRIDAY_MOD, "fornecedores", "conferencia_estoque"]);
   });
 });

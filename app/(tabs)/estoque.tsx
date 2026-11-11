@@ -355,7 +355,11 @@ export default function EstoqueScreen() {
   const router = useRouter();
   const { company, availableCompanies, consolidatedView } = useAuthStore();
   // 18/10/2026 (card p-36): "mudar" o desenho da etiqueta leva a Configurações.
-  const podeMudarDesenho = useVisibleModules().has("configuracoes");
+  const modulosVisiveis = useVisibleModules();
+  const podeMudarDesenho = modulosVisiveis.has("configuracoes");
+  // 11/11/2026 (p-108): "Conferir estoque" abre a conferência, que tem
+  // módulo próprio (conferencia_estoque). No consolidado ela pergunta a loja.
+  const podeConferir = modulosVisiveis.has("conferencia_estoque") && !isDemo;
   // 03/11/2026: semCusto = consulta OU funcionário sem retaguarda (custo,
   // margem e valor do estoque somem; preço e edição ficam).
   const { consulta, carregando: consultaCarregando, semCusto } = useEstoqueConsulta();
@@ -738,6 +742,13 @@ export default function EstoqueScreen() {
           {!isMobileNarrow && <Text style={[s.bulkBtnText, bulkMode && { color: "#fff" }]}>
             {bulkMode ? "Sair da seleção" : "Selecionar"}
           </Text>}
+        </Pressable>
+      )}
+      {podeConferir && products.length > 0 && (
+        <Pressable onPress={() => router.push("/conferencia-estoque" as any)} style={[s.batchBtn, isMobileNarrow && s.btnIconOnly]}
+          accessibilityRole="button" accessibilityLabel="Conferir estoque" testID="estoque-conferir">
+          <Icon name="clipboard" size={14} color={Colors.violet3} />
+          {!isMobileNarrow && <Text style={s.batchBtnText}>Conferir estoque</Text>}
         </Pressable>
       )}
       {/* Entrada é sempre de UMA loja: some no consolidado e no demo. */}
