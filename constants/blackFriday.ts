@@ -2,9 +2,8 @@
 // AURA. — Página "Black Friday" (13/10/2026): chave e período
 //
 // A página reúne as funções da temporada de fim de ano (o que vai faltar,
-// assento de temporada, vale-troca no cupom, placar do dia). Ela existe
-// só durante a temporada: o item do menu e a própria rota somem fora do
-// período. Esta é a ÚNICA constante de período — a do ano seguinte se muda
+// assento de temporada, vale-troca no cupom). Ela existe só durante a
+// temporada: o item do menu e a própria rota somem fora do período. Esta é a ÚNICA constante de período — a do ano seguinte se muda
 // aqui, junto com as datas das funções (assentoTemporada.ts, valeTroca.ts).
 //
 // Chave de módulo PRÓPRIA (regra 3 do CLAUDE.md): cadastrada em

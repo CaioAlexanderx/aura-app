@@ -55,7 +55,6 @@ jest.mock("@/components/screens/blackfriday/dePor/PromocaoEmLote", () => {
   return { PromocaoEmLote: () => R.createElement(View, { testID: "promo-secao-mock" }) };
 });
 jest.mock("@/components/screens/blackfriday/OQueVaiFaltar", () => ({ OQueVaiFaltar: () => null }));
-jest.mock("@/components/screens/blackfriday/PlacarDoDiaCard", () => ({ PlacarDoDiaCard: () => null }));
 jest.mock("@/components/screens/blackfriday/ValeTrocaEspelho", () => ({ ValeTrocaEspelho: () => null }));
 jest.mock("@/components/screens/configuracoes/AssentoTemporadaCard", () => ({ AssentoTemporadaCard: () => null }));
 // O lançamento em si tem os testes dele (CriarLancamentoPrimeiraParcela):
@@ -136,7 +135,7 @@ beforeEach(() => {
     company: { id: CID, plan: "negocio", member_role: "owner" }, consolidatedView: false,
     availableCompanies: [{ id: CID }], isStaff: false, user: { id: "u1" }, switchCompany: jest.fn().mockResolvedValue(undefined),
   };
-  mockVisible = new Set(["estoque", "crediario", "configuracoes", "whatsapp"]);
+  mockVisible = new Set(["estoque", "crediario", "configuracoes"]);
   mockConsulta = { consulta: false, carregando: false, semCusto: false };
   mockDePorDisponivel = true;
   respostaResumo = () => Promise.resolve(RESUMO);
@@ -220,16 +219,16 @@ describe("regras do crediário para janeiro", () => {
 // ── 2. Quais seções ──────────────────────────────────────────
 
 describe("secoesDaPagina", () => {
-  const tudo = new Set(["estoque", "crediario", "configuracoes", "whatsapp"]);
+  const tudo = new Set(["estoque", "crediario", "configuracoes"]);
   const chaves = (e: any) => secoesDaPagina(e).map((s) => s.chave);
 
   it("crediário para janeiro é a 2ª, logo depois da Promoção em lote", () => {
     expect(chaves({ visible: tudo, consolidatedView: false, hoje: "2026-11-20", dePorDisponivel: true, crediarioDisponivel: true }))
-      .toEqual(["de_por", "crediario_janeiro", "ruptura", "assento", "vale_troca", "placar"]);
+      .toEqual(["de_por", "crediario_janeiro", "ruptura", "assento", "vale_troca"]);
   });
 
   it("some sem o módulo do crediário (Essencial), sem o backend do resumo e fora de nov–jan", () => {
-    const sem = new Set(["estoque", "configuracoes", "whatsapp"]);
+    const sem = new Set(["estoque", "configuracoes"]);
     expect(chaves({ visible: sem, consolidatedView: false, hoje: "2026-11-20", crediarioDisponivel: true })).not.toContain("crediario_janeiro");
     expect(chaves({ visible: tudo, consolidatedView: false, hoje: "2026-11-20" })).not.toContain("crediario_janeiro");
     expect(chaves({ visible: tudo, consolidatedView: false, hoje: "2026-10-31", crediarioDisponivel: true })).not.toContain("crediario_janeiro");

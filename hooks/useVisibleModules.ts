@@ -17,7 +17,7 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   fornecedores: 'essencial',
   // 13/10/2026 -- pagina "Black Friday" (/black-friday): funcoes da temporada
   // de fim de ano reunidas (o que vai faltar, assento de temporada, vale-troca
-  // no cupom, placar do dia). Chave PROPRIA (regra 3), mesmo plano do Estoque
+  // no cupom). Chave PROPRIA (regra 3), mesmo plano do Estoque
   // (essencial). A pagina so existe de 13/10/2026 a 02/02/2027
   // (constants/blackFriday.ts) e cada secao some sozinha se a loja nao tem a
   // funcao (permissao, visao consolidada). O backend (services/modules.js)
