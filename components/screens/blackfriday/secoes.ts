@@ -36,9 +36,6 @@
 //   vale_troca  "Vale-troca no cupom"     módulo `configuracoes`, por
 //                                         empresa, só até o último dia de
 //                                         troca (31/01/2027)
-//   placar      "Placar do dia"           módulo `whatsapp` (Negócio+: o
-//                                         placar sai pelo WhatsApp da
-//                                         loja), por empresa
 //
 // A ORDEM do array é a ordem na tela.
 // ============================================================
@@ -46,7 +43,7 @@ import { assentoTemporadaVisivel, hojeBrt } from "@/components/screens/configura
 import { VALE_TROCA_PRAZO_ATE } from "@/utils/valeTroca";
 import { faseCrediarioJaneiro } from "./crediarioJaneiro/regrasCrediarioJaneiro";
 
-export type ChaveDaSecao = "de_por" | "crediario_janeiro" | "ruptura" | "assento" | "vale_troca" | "placar";
+export type ChaveDaSecao = "de_por" | "crediario_janeiro" | "ruptura" | "assento" | "vale_troca";
 
 export type SecaoDaPagina = {
   chave: ChaveDaSecao;
@@ -93,12 +90,6 @@ export const TEXTOS_DAS_SECOES: Record<ChaveDaSecao, SecaoDaPagina> = {
     porQueAgora:
       "Janeiro é o mês da troca de presente e quem ganhou raramente vem com o comprador: o cupom sai com um QR e a troca abre com a venda carregada.",
   },
-  placar: {
-    chave: "placar",
-    titulo: "Placar do dia",
-    porQueAgora:
-      "No movimento da temporada o dono quer saber quanto a loja vendeu sem abrir relatório: ao fim do dia o placar chega no WhatsApp.",
-  },
 };
 
 export type EntradaDasSecoes = {
@@ -141,7 +132,5 @@ export function secoesDaPagina(e: EntradaDasSecoes): SecaoDaPagina[] {
     if (assentoTemporadaVisivel(hoje)) out.push(TEXTOS_DAS_SECOES.assento);
     if (hoje <= VALE_TROCA_PRAZO_ATE) out.push(TEXTOS_DAS_SECOES.vale_troca);
   }
-  // O placar sai pelo WhatsApp: plano sem o módulo (Essencial) não vê a seção.
-  if (!e.consolidatedView && e.visible.has("whatsapp")) out.push(TEXTOS_DAS_SECOES.placar);
   return out;
 }

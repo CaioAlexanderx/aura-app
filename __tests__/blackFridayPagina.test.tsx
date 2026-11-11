@@ -72,11 +72,6 @@ jest.mock("@/components/screens/blackfriday/OQueVaiFaltar", () => {
   const R = jest.requireActual("react");
   return { OQueVaiFaltar: () => R.createElement(View, { testID: "ruptura-secao" }) };
 });
-jest.mock("@/components/screens/blackfriday/PlacarDoDiaCard", () => {
-  const { View } = jest.requireActual("react-native");
-  const R = jest.requireActual("react");
-  return { PlacarDoDiaCard: (p: any) => R.createElement(View, { testID: "placar-do-dia", companyId: p.companyId, isOwner: p.isOwner }) };
-});
 const mockAssentoProps = jest.fn();
 jest.mock("@/components/screens/configuracoes/AssentoTemporadaCard", () => {
   const { View } = jest.requireActual("react-native");
@@ -122,7 +117,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   fixarHoje("2026-10-13");
   mockAuth = { company: { id: CID, plan: "negocio", member_role: "owner" }, consolidatedView: false, availableCompanies: [{ id: CID }], isStaff: false, isDemo: false, user: { is_staff: false } };
-  mockVisible = new Set(["estoque", "configuracoes", "whatsapp", BLACK_FRIDAY_MOD]);
+  mockVisible = new Set(["estoque", "configuracoes", BLACK_FRIDAY_MOD]);
   mockProntos = true;
   mockPdv = { cash_tender_modal_enabled: true };
   mockSalvar.mockResolvedValue({});
@@ -224,16 +219,10 @@ describe("período (constante única)", () => {
 // ── 2. Quais seções ──────────────────────────────────────────
 
 describe("secoesDaPagina", () => {
-  const todos = new Set(["estoque", "configuracoes", "whatsapp", BLACK_FRIDAY_MOD]);
+  const todos = new Set(["estoque", "configuracoes", BLACK_FRIDAY_MOD]);
 
-  it("loja com tudo: ruptura, assento, vale-troca e placar, nessa ordem", () => {
+  it("loja com tudo: ruptura, assento e vale-troca, nessa ordem", () => {
     expect(secoesDaPagina({ visible: todos, consolidatedView: false, hoje: "2026-10-13" }).map((s) => s.chave))
-      .toEqual(["ruptura", "assento", "vale_troca", "placar"]);
-  });
-
-  it("plano sem WhatsApp (Essencial) não vê o placar — some, não bloqueia", () => {
-    const semWa = new Set(["estoque", "configuracoes", BLACK_FRIDAY_MOD]);
-    expect(secoesDaPagina({ visible: semWa, consolidatedView: false, hoje: "2026-10-13" }).map((s) => s.chave))
       .toEqual(["ruptura", "assento", "vale_troca"]);
   });
 
@@ -246,17 +235,18 @@ describe("secoesDaPagina", () => {
   it("sem o módulo da função a seção some", () => {
     expect(secoesDaPagina({ visible: new Set(["configuracoes"]), consolidatedView: false, hoje: "2026-10-13" }).map((s) => s.chave))
       .toEqual(["assento", "vale_troca"]);
+    // o módulo do WhatsApp não decide nenhuma seção da página
     expect(secoesDaPagina({ visible: new Set(["whatsapp"]), consolidatedView: false, hoje: "2026-10-13" }).map((s) => s.chave))
-      .toEqual(["placar"]);
+      .toEqual([]);
     expect(secoesDaPagina({ visible: new Set(["estoque"]), consolidatedView: false, hoje: "2026-10-13" }).map((s) => s.chave))
       .toEqual(["ruptura"]);
   });
 
-  it("depois do último dia de troca (31/01/2027) sobram a ruptura e o placar", () => {
+  it("depois do último dia de troca (31/01/2027) sobra a ruptura", () => {
     expect(secoesDaPagina({ visible: todos, consolidatedView: false, hoje: "2027-01-31" }).map((s) => s.chave))
-      .toEqual(["ruptura", "assento", "vale_troca", "placar"]);
+      .toEqual(["ruptura", "assento", "vale_troca"]);
     expect(secoesDaPagina({ visible: todos, consolidatedView: false, hoje: "2027-02-01" }).map((s) => s.chave))
-      .toEqual(["ruptura", "placar"]);
+      .toEqual(["ruptura"]);
   });
 
   it("cada seção traz a linha de 'por que agora'", () => {
@@ -268,10 +258,10 @@ describe("secoesDaPagina", () => {
 // ── 3. A página ──────────────────────────────────────────────
 
 describe("PaginaBlackFriday", () => {
-  it("renderiza as quatro seções, numeradas, cada uma com título e 'por que agora'", () => {
+  it("renderiza as três seções, numeradas, cada uma com título e 'por que agora'", () => {
     const r = montar(<PaginaBlackFriday />);
     expect(ids(r, "bf-secao-").filter((i) => !i.endsWith("-por-que"))).toEqual([
-      "bf-secao-ruptura", "bf-secao-assento", "bf-secao-vale-troca", "bf-secao-placar",
+      "bf-secao-ruptura", "bf-secao-assento", "bf-secao-vale-troca",
     ]);
     const ruptura = textoDe(r.root.findAllByProps({ testID: "bf-secao-ruptura" }, { deep: false })[0]);
     expect(ruptura).toContain("1");
@@ -283,10 +273,6 @@ describe("PaginaBlackFriday", () => {
     // o conteúdo de cada função está dentro do seu cartão
     expect(r.root.findAllByProps({ testID: "ruptura-secao" }, { deep: false })).toHaveLength(1);
     expect(r.root.findAllByProps({ testID: "assento-temporada" }, { deep: false })).toHaveLength(1);
-    const placar = r.root.findAllByProps({ testID: "placar-do-dia" }, { deep: false });
-    expect(placar).toHaveLength(1);
-    expect(placar[0].props.companyId).toBe(CID);
-    expect(placar[0].props.isOwner).toBe(true);
   });
 
   it("reaproveita o cartão do assento, sem moldura, com a empresa e o dono", () => {
@@ -324,19 +310,6 @@ describe("PaginaBlackFriday", () => {
     mockVisible = new Set([BLACK_FRIDAY_MOD]);
     const r = montar(<PaginaBlackFriday />);
     expect(r.root.findAllByProps({ testID: "black-friday-sem-secoes" }, { deep: false })).toHaveLength(1);
-  });
-
-  it("o placar é o PlacarDoDiaCard real (app#1060), sem slot comentado", () => {
-    const fonte = fs.readFileSync(path.join(RAIZ, "components/screens/blackfriday/PaginaBlackFriday.tsx"), "utf8");
-    expect(fonte).toContain('import { PlacarDoDiaCard } from "./PlacarDoDiaCard";');
-    expect(fs.existsSync(path.join(RAIZ, "components/screens/blackfriday/PlacarDoDiaCard.tsx"))).toBe(true);
-  });
-
-  it("sem WhatsApp no plano a seção do placar não existe na página", () => {
-    mockVisible = new Set(["estoque", "configuracoes", BLACK_FRIDAY_MOD]);
-    const r = montar(<PaginaBlackFriday />);
-    expect(r.root.findAllByProps({ testID: "bf-secao-placar" }, { deep: false })).toHaveLength(0);
-    expect(r.root.findAllByProps({ testID: "placar-do-dia" }, { deep: false })).toHaveLength(0);
   });
 });
 

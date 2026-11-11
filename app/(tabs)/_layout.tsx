@@ -74,7 +74,7 @@ const VERTICAL_NAV: Record<string, { label: string; icon: string }> = {
 
 const NAV: NavSection[] = [
   // 13/10/2026 — "Black Friday" logo abaixo de Painel: pagina da temporada de
-  // fim de ano (o que vai faltar, assento, vale-troca, placar). Chave PROPRIA
+  // fim de ano (o que vai faltar, assento, vale-troca). Chave PROPRIA
   // "black_friday" (regra 3, ja em MODULE_PLAN_MAP/PERM_TO_MODULES). `temporada`
   // esconde o item fora do periodo (constants/blackFriday.ts), como os toggles
   // escondem OS/Otica/Matcon — filtrado em buildRawNav.

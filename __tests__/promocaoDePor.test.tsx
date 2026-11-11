@@ -46,7 +46,6 @@ jest.mock("@/hooks/useVisibleModules", () => ({ useVisibleModules: () => mockVis
 let mockConsulta = { consulta: false, carregando: false, semCusto: false };
 jest.mock("@/hooks/useEstoqueConsulta", () => ({ useEstoqueConsulta: () => mockConsulta }));
 jest.mock("@/components/screens/blackfriday/OQueVaiFaltar", () => ({ OQueVaiFaltar: () => null }));
-jest.mock("@/components/screens/blackfriday/PlacarDoDiaCard", () => ({ PlacarDoDiaCard: () => null }));
 jest.mock("@/components/screens/blackfriday/ValeTrocaEspelho", () => ({ ValeTrocaEspelho: () => null }));
 jest.mock("@/components/screens/configuracoes/AssentoTemporadaCard", () => ({ AssentoTemporadaCard: () => null }));
 
@@ -79,7 +78,7 @@ beforeEach(() => {
   mockRequest.mockReset();
   fixarAgora("2026-11-08T15:00:00Z");
   mockAuth = { company: { id: CID, plan: "negocio", member_role: "owner" }, consolidatedView: false, availableCompanies: [{ id: CID }], isStaff: false };
-  mockVisible = new Set(["estoque", "configuracoes", "whatsapp"]);
+  mockVisible = new Set(["estoque", "configuracoes"]);
   mockConsulta = { consulta: false, carregando: false, semCusto: false };
   mockProdutos = [];
 });
@@ -247,10 +246,10 @@ describe("promocoesApi", () => {
 // ── 3. Seção na página ───────────────────────────────────────
 
 describe("secoesDaPagina com De/Por", () => {
-  const todos = new Set(["estoque", "configuracoes", "whatsapp"]);
+  const todos = new Set(["estoque", "configuracoes"]);
   it("com o backend novo, a promoção em lote é a primeira", () => {
     expect(secoesDaPagina({ visible: todos, consolidatedView: false, hoje: "2026-11-08", dePorDisponivel: true }).map((s) => s.chave))
-      .toEqual(["de_por", "ruptura", "assento", "vale_troca", "placar"]);
+      .toEqual(["de_por", "ruptura", "assento", "vale_troca"]);
   });
   it("sem o backend novo, ou sem o Estoque, some", () => {
     expect(secoesDaPagina({ visible: todos, consolidatedView: false, hoje: "2026-11-08" }).map((s) => s.chave)).not.toContain("de_por");

@@ -16,7 +16,6 @@
 //   O que vai faltar        (OQueVaiFaltar)
 //   Assento de temporada    (AssentoTemporadaCard, o mesmo de Configurações)
 //   Vale-troca no cupom     (espelho do toggle de Políticas do Caixa)
-//   Placar do dia           (PlacarDoDiaCard, app#1060)
 //
 // Seção que a loja não tem some; nada de cartão bloqueado ou isca.
 // O plano decide seções: a página relê /auth/me ao abrir (plano velho no JWT).
@@ -36,7 +35,6 @@ import { OQueVaiFaltar } from "./OQueVaiFaltar";
 import { SecaoCard } from "./SecaoCard";
 import { ValeTrocaEspelho } from "./ValeTrocaEspelho";
 import { secoesDaPagina } from "./secoes";
-import { PlacarDoDiaCard } from "./PlacarDoDiaCard";
 import { PromocaoEmLote } from "./dePor/PromocaoEmLote";
 import { useEstoqueConsulta } from "@/hooks/useEstoqueConsulta";
 import { usePromocoesDePor } from "@/hooks/usePromocoesDePor";
@@ -144,12 +142,6 @@ export function PaginaBlackFriday() {
       {tem("vale_troca") && (
         <SecaoCard testID="bf-secao-vale-troca" numero={numero("vale_troca")} titulo={textos("vale_troca").titulo} porQueAgora={textos("vale_troca").porQueAgora}>
           <ValeTrocaEspelho companyId={company?.id} />
-        </SecaoCard>
-      )}
-
-      {tem("placar") && company?.id && (
-        <SecaoCard testID="bf-secao-placar" numero={numero("placar")} titulo={textos("placar").titulo} porQueAgora={textos("placar").porQueAgora}>
-          <PlacarDoDiaCard companyId={company.id} isOwner={isOwner} />
         </SecaoCard>
       )}
     </View>
