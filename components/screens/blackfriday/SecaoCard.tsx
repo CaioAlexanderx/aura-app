@@ -5,6 +5,9 @@
 // que agora" e o conteúdo. A linha existe para o dono entender por que
 // aquilo está na página AGORA — não é descrição da função.
 // Mockup: docs/mockups/black-friday.html.
+//
+// `nativeID` (p-105, 11/11/2026): vira o id do elemento na web, a âncora
+// que o link /black-friday#<id> usa para rolar até a seção.
 // ============================================================
 import { View, Text, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -14,12 +17,13 @@ type Props = {
   titulo: string;
   porQueAgora: string;
   testID: string;
+  nativeID?: string;
   children: React.ReactNode;
 };
 
-export function SecaoCard({ numero, titulo, porQueAgora, testID, children }: Props) {
+export function SecaoCard({ numero, titulo, porQueAgora, testID, nativeID, children }: Props) {
   return (
-    <View style={s.card} testID={testID}>
+    <View style={s.card} testID={testID} nativeID={nativeID}>
       <View style={s.titulo}>
         <View style={s.numero}><Text style={s.numeroTxt}>{numero}</Text></View>
         <Text style={s.tituloTxt} accessibilityRole="header">{titulo}</Text>

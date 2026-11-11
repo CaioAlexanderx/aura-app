@@ -14,9 +14,17 @@
 //   · sem assinatura ativa a loja não compra (não há onde cobrar): o cartão
 //     explica e leva ao checkout;
 //   · 503 (migration pendente) vira "disponível em breve".
+//
+// 11/11/2026 (p-105, utils/linkDoAssento): cada caso tem a sua saída.
+//   · sem assinatura: "Ver os planos" abre o checkout com o Negócio marcado
+//     (antes, o plano da conta: a Expansão chegava marcada);
+//   · valor combinado: "Fale com a equipe", no WhatsApp de ajuda;
+//   · em atraso (a assinatura existe, então o backend deixaria contratar):
+//     "Regularize a mensalidade para contratar", com o link da cobrança em
+//     aberto, no lugar do botão de contratar.
 // ============================================================
 import { useState } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Linking, Platform } from "react-native";
 import { router } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
@@ -24,6 +32,11 @@ import { Icon } from "@/components/Icon";
 import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { billingApi } from "@/services/billingApi";
+import { pickOpenInvoice } from "@/components/billing/couponText";
+import { waAura } from "@/constants/suporteAura";
+import {
+  ROTA_PLANOS_DO_ASSENTO, TEXTO_ASSENTO_SEM_ASSINATURA, TEXTO_ASSENTO_EM_ATRASO, MENSAGEM_WHATSAPP_ASSENTO,
+} from "@/utils/linkDoAssento";
 import type { SeatPass, SeatPassEstado } from "@/services/billingApi";
 import { Card, SectionTitle } from "@/components/screens/configuracoes/shared";
 import {
@@ -62,7 +75,9 @@ function estiloDoPasse(p: SeatPass): string {
 // `semMoldura` (13/10/2026): na página Black Friday o cartão vem dentro de uma
 // seção que já tem título e moldura — só o conteúdo é renderizado. Em
 // Configurações a moldura (SectionTitle + Card) continua a de sempre.
-type AssentoProps = { companyId: string; isOwner: boolean; plano?: string; semMoldura?: boolean };
+// `emAtraso` (p-105): a mensalidade está vencida (billing_status 'overdue').
+// `plano` ficou só por compatibilidade: o checkout do assento abre no Negócio.
+type AssentoProps = { companyId: string; isOwner: boolean; plano?: string; semMoldura?: boolean; emAtraso?: boolean };
 
 export function AssentoTemporadaCard(props: AssentoProps) {
   if (!assentoTemporadaVisivel()) return null;
@@ -136,7 +151,29 @@ function AssentoTemporada(props: AssentoProps) {
   }
 
   function irAoCheckout() {
-    router.push(("/(tabs)/checkout?plan=" + (props.plano && props.plano !== "personalizado" ? props.plano : "negocio")) as any);
+    router.push(ROTA_PLANOS_DO_ASSENTO as any);
+  }
+
+  function falarComAEquipe() {
+    Linking.openURL(waAura(MENSAGEM_WHATSAPP_ASSENTO)).catch(function() { /* sem app de WhatsApp: nada a fazer */ });
+  }
+
+  // Em atraso: abre a cobrança em aberto na Asaas (mesmo caminho do checkout).
+  var [abrindoCobranca, setAbrindoCobranca] = useState(false);
+  async function pagarMensalidade() {
+    setAbrindoCobranca(true);
+    try {
+      var r = await billingApi.invoices(cid);
+      var aberta = pickOpenInvoice(r && r.invoices);
+      if (!aberta || !aberta.invoice_url) {
+        toast.error("Não encontrei a mensalidade em aberto. Fale com a gente pelo WhatsApp.");
+        return;
+      }
+      if (Platform.OS === "web" && typeof window !== "undefined") window.open(aberta.invoice_url, "_blank");
+      else await Linking.openURL(aberta.invoice_url);
+    } catch (e: any) {
+      toast.error(e && e.isNetworkError ? "Sem conexão com o servidor. Tente de novo." : "Não consegui abrir a mensalidade em aberto. Tente de novo.");
+    } finally { setAbrindoCobranca(false); }
   }
 
   // ── Estados sem dados ─────────────────────────────────────
@@ -240,8 +277,19 @@ function AssentoTemporada(props: AssentoProps) {
           </View>
         ) : null}
 
+        {/* Em atraso: regulariza antes de contratar (p-105). */}
+        {d.pode_contratar && props.isOwner && props.emAtraso ? (
+          <View testID="assento-em-atraso" style={s.painel}>
+            <Text style={s.nota}>{TEXTO_ASSENTO_EM_ATRASO}</Text>
+            <Pressable testID="assento-pagar-mensalidade" onPress={pagarMensalidade} disabled={abrindoCobranca} accessibilityRole="button" style={[s.btnPrimario, abrindoCobranca && { opacity: 0.6 }]}>
+              <Text style={s.btnPrimarioText}>{abrindoCobranca ? "Abrindo…" : "Pagar a mensalidade em aberto"}</Text>
+              <Icon name="chevron_right" size={14} color="#fff" />
+            </Pressable>
+          </View>
+        ) : null}
+
         {/* Contratar */}
-        {d.pode_contratar && props.isOwner && !contratando ? (
+        {d.pode_contratar && props.isOwner && !props.emAtraso && !contratando ? (
           <Pressable testID="assento-contratar" onPress={function() { setContratando(true); setErro(null); setSucesso(null); }} accessibilityRole="button" style={s.btnPrimario}>
             <Icon name="plus" size={14} color="#fff" />
             <Text style={s.btnPrimarioText}>Contratar assento</Text>
@@ -252,7 +300,7 @@ function AssentoTemporada(props: AssentoProps) {
           <Text testID="assento-so-dono" style={s.nota}>Só o dono da empresa contrata ou cancela o assento de temporada.</Text>
         ) : null}
 
-        {contratando ? (
+        {contratando && !props.emAtraso ? (
           <View testID="assento-contratar-painel" style={s.painel}>
             <Text style={s.confirmaTitulo}>Quantos assentos?</Text>
             <View style={s.stepper}>
@@ -303,16 +351,23 @@ function AssentoTemporada(props: AssentoProps) {
         {/* Sem como contratar */}
         {!d.pode_contratar && bloqueio === "sem_assinatura" ? (
           <View testID="assento-sem-assinatura" style={s.painel}>
-            <Text style={s.nota}>
-              Para contratar o assento de temporada a empresa precisa de uma assinatura ativa: o valor entra na mensalidade.
-            </Text>
+            <Text style={s.nota}>{TEXTO_ASSENTO_SEM_ASSINATURA}</Text>
             <Pressable testID="assento-ir-checkout" onPress={irAoCheckout} accessibilityRole="button" style={s.btnPrimario}>
-              <Text style={s.btnPrimarioText}>Assinar um plano</Text>
+              <Text style={s.btnPrimarioText}>Ver os planos</Text>
               <Icon name="chevron_right" size={14} color="#fff" />
             </Pressable>
           </View>
         ) : null}
-        {!d.pode_contratar && bloqueio && bloqueio !== "sem_assinatura" ? (
+        {!d.pode_contratar && bloqueio === "valor_customizado" ? (
+          <View testID="assento-valor-combinado" style={s.painel}>
+            <Text style={s.nota}>{MOTIVO_SEM_COMPRA.valor_customizado}</Text>
+            <Pressable testID="assento-falar-equipe" onPress={falarComAEquipe} accessibilityRole="link" style={s.btnPrimario}>
+              <Text style={s.btnPrimarioText}>Fale com a equipe</Text>
+              <Icon name="chevron_right" size={14} color="#fff" />
+            </Pressable>
+          </View>
+        ) : null}
+        {!d.pode_contratar && bloqueio && bloqueio !== "sem_assinatura" && bloqueio !== "valor_customizado" ? (
           <Text testID="assento-bloqueio" style={s.nota}>{MOTIVO_SEM_COMPRA[bloqueio] || "Não dá para contratar o assento de temporada agora."}</Text>
         ) : null}
       </>

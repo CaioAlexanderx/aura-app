@@ -108,7 +108,7 @@ describe("Checkout — sem a campanha", () => {
     expect(byTestId(tree, "checkout-promocao-resumo")).toHaveLength(0);
     const out = text(tree);
     for (const t of TEXTOS_DA_CAMPANHA) expect(out).not.toContain(t);
-    expect(out).toContain("Gerar Pix - R$ 169,00");
+    expect(out).toContain("Gerar Pix de R$ 169,00");
     expect(out).toContain("Total hoje");
     // O app nem pergunta: a rota da campanha deixou de ser chamada.
     expect(mockBilling.promocaoAtiva).not.toHaveBeenCalled();
@@ -138,12 +138,12 @@ describe("Checkout — cupom digitado", () => {
       first_charge_value: 152.1, recurring_value: 169, first_charge_date: "2026-10-19",
     });
     const tree = await mount();
-    await digita(tree, "CUPOM OU CÓDIGO DE INDICAÇÃO", "DEZ");
+    await digita(tree, "Digite o código", "DEZ");
     await press(tree, "checkout-cupom-aplicar");
 
     const out = text(tree);
-    expect(out).toContain("Gerar Pix - R$ 152,10");
-    expect(out).toContain("Mensalidades seguintes: R$ 169,00/mês");
+    expect(out).toContain("Gerar Pix de R$ 152,10");
+    expect(out).toContain("Depois, R$ 169,00 por mês. Desconto só na primeira mensalidade.");
     for (const t of TEXTOS_DA_CAMPANHA) expect(out).not.toContain(t);
     tree.unmount();
   });
@@ -159,7 +159,7 @@ describe("Checkout — cupom digitado", () => {
       message: "7 dias grátis ativados! A primeira mensalidade de R$ 169,00 será em 26/10/2026.",
     });
     const tree = await mount();
-    await digita(tree, "CUPOM OU CÓDIGO DE INDICAÇÃO", "INDICA7");
+    await digita(tree, "Digite o código", "INDICA7");
     await press(tree, "checkout-cupom-aplicar");
 
     const antes = text(tree);
@@ -181,7 +181,7 @@ describe("Checkout — cupom digitado", () => {
       first_charge_value: 0, recurring_value: 169, first_charge_date: "2026-12-01",
     });
     const tree = await mount();
-    await digita(tree, "CUPOM OU CÓDIGO DE INDICAÇÃO", "PRIMEIROMES");
+    await digita(tree, "Digite o código", "PRIMEIROMES");
     await press(tree, "checkout-cupom-aplicar");
 
     const out = text(tree);
@@ -212,7 +212,7 @@ describe("Checkout — cartão", () => {
     await digita(tree, "Rua...", "Praça da Sé");
     await espera();
 
-    expect(text(tree)).toContain("Assinar Agora - R$ 169,00");
+    expect(text(tree)).toContain("Pagar R$ 169,00 no cartão");
     await press(tree, "checkout-pagar-cartao");
 
     expect(mockBilling.tokenize).toHaveBeenCalledTimes(1);

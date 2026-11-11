@@ -5,13 +5,17 @@
 // Plano fica só este atalho — onde o dono já procurava, uma linha que leva
 // para onde a função está agora. Some com a página: fora do período, sem o
 // módulo ou depois da janela do assento (aí não há o que ver lá).
+//
+// 11/11/2026 (p-105): leva direto ao cartão do assento (/black-friday#assento),
+// não ao topo da página.
 // ============================================================
 import { Pressable, View, Text, StyleSheet } from "react-native";
 import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { useVisibleModules } from "@/hooks/useVisibleModules";
-import { BLACK_FRIDAY_MOD, BLACK_FRIDAY_ROTA } from "@/constants/blackFriday";
+import { BLACK_FRIDAY_MOD } from "@/constants/blackFriday";
+import { ROTA_DO_ASSENTO } from "@/utils/linkDoAssento";
 import { useBlackFridayLiberada } from "@/hooks/useBlackFridayLiberada";
 import { assentoTemporadaVisivel } from "@/components/screens/configuracoes/assentoTemporada";
 
@@ -21,7 +25,7 @@ export function AtalhoAssento() {
   if (!liberada || !assentoTemporadaVisivel() || !visible.has(BLACK_FRIDAY_MOD)) return null;
   return (
     <Pressable
-      onPress={() => router.push(BLACK_FRIDAY_ROTA as any)}
+      onPress={() => router.push(ROTA_DO_ASSENTO as any)}
       style={s.card}
       accessibilityRole="link"
       testID="atalho-assento-black-friday"

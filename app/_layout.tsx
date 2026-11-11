@@ -22,7 +22,8 @@ import { useRegistroDeTelas } from "@/hooks/useRegistroDeTelas";
 import { useRevalidarMe } from "@/hooks/useRevalidarMe";
 import { ehVitrinePublica } from "@/components/studio/storefront/rotasDaVitrine";
 import { mostrarCarregandoSessao } from "@/utils/carregandoSessao";
-import { semAssinatura, destinoSemAssinatura, caixaPausado, estadoDaLoja } from "@/utils/muroDeAssinatura";
+import { semAssinatura, destinoSemAssinatura, caixaPausado, estadoDaLoja, faseDoAtraso } from "@/utils/muroDeAssinatura";
+import { pedeOAssento, secaoDaBarraDeEndereco, destinoDoAssentoSemAssinatura } from "@/utils/linkDoAssento";
 import { guardarDestino, consumirDestino, limparDestino } from "@/utils/destinoDepoisDoLogin";
 import { versoDoCadastroAberto } from "@/utils/versoDoCadastro";
 import { useEmpresaPeloLink } from "@/hooks/useEmpresaPeloLink";
@@ -331,9 +332,18 @@ function AuthGuard() {
     //
     // 24/10/2026 (tq-86): no dia 14 de atraso o Caixa também pausa e o shell
     // Negócio vai ao checkout, como as outras verticais.
+    //
+    // 11/11/2026 (p-105): o link do assento (/black-friday#assento ou
+    // ?secao=assento) de quem não está em dia vai ao checkout com o motivo
+    // (?de=assento): sem assinatura, com o Negócio marcado (nunca a Expansão);
+    // em atraso, com o link da cobrança em aberto. Só o shell Negócio; Studio,
+    // Odonto e Food seguem como estão (utils/linkDoAssento).
     if (token && needsCheckout) {
-      const caixaVivo = !isOdonto && !isFood && !isStudio && !isKarate && !caixaPausado(estadoDoMuro);
-      const destino = destinoSemAssinatura(segments, { caixaVivo });
+      const varejo = !isOdonto && !isFood && !isStudio && !isKarate;
+      const caixaVivo = varejo && !caixaPausado(estadoDoMuro);
+      const destino = varejo && pedeOAssento(segments, secaoDaBarraDeEndereco())
+        ? destinoDoAssentoSemAssinatura({ emAtraso: faseDoAtraso(estadoDoMuro) !== null })
+        : destinoSemAssinatura(segments, { caixaVivo });
       if (destino) { router.replace(destino as any); return; }
     }
   }, [token, user, company, isHydrated, isDemo, isStaff, trialActive, segments]);
