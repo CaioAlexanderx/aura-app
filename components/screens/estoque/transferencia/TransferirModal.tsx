@@ -36,7 +36,7 @@ import { Colors, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { companiesApi } from "@/services/api";
 import { rotuloDaVariante } from "@/components/screens/estoque/VariantesConsulta";
-import { estoqueTransferenciasApi, codigoDoErro } from "@/services/estoqueTransferenciasApi";
+import { estoqueTransferenciasApi, codigoDoErro, type PedidoTransferencia } from "@/services/estoqueTransferenciasApi";
 import {
   MAX_ITENS_POR_LOTE, chaveDaLinha, dividirEmLotes, itensDoErro, itensSemEstoque, mensagemDoErro, plural,
   problemaDaLinha, temMotivo, textoDoTudo, textoDosNumeros, validar, type LinhaTransferencia,
@@ -78,6 +78,14 @@ type Props = {
   onConcluido?: (numeros: Array<string | number>, pecas: number, destino: LojaOpcao) => void;
   /** Injetável nos testes. Padrão: GET /companies/:origem/products/:id/variants. */
   buscarVariantes?: (productId: string) => Promise<VarianteDaOrigem[]>;
+  /**
+   * p-108 (conferência): quantidades já preenchidas, por chaveDaLinha
+   * ("p:<produto>" ou "v:<produto>:<variante>"). O produto com grade que
+   * tem variante preenchida abre sozinho. Sem a prop, nada muda.
+   */
+  quantidadesIniciais?: Record<string, string>;
+  /** p-108: liga a transferência à conferência (vai como stock_count_id). */
+  stockCountId?: string | null;
 };
 
 type EstadoGrade = { estado: "carregando" | "ok" | "erro"; linhas: LinhaTransferencia[]; inativas: number };
@@ -89,7 +97,7 @@ function unidadeDe(p: ProdutoParaTransferir): string {
   return String(p.unit || "un");
 }
 
-export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqueMudou, onConcluido, buscarVariantes }: Props) {
+export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqueMudou, onConcluido, buscarVariantes, quantidadesIniciais, stockCountId }: Props) {
   var largura = useWindowDimensions().width;
   var estreito = largura < 640;
   var vivo = useRef(true);
@@ -108,7 +116,7 @@ export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqu
 
   var [passo, setPasso] = useState<Passo>(1);
   var [destinoId, setDestinoId] = useState<string | null>(destinos.length === 1 ? destinos[0].id : null);
-  var [quantidades, setQuantidades] = useState<Record<string, string>>({});
+  var [quantidades, setQuantidades] = useState<Record<string, string>>(function () { return quantidadesIniciais ? { ...quantidadesIniciais } : {}; });
   var [grades, setGrades] = useState<Record<string, EstadoGrade>>({});
   var [abertos, setAbertos] = useState<Record<string, boolean>>({});
   var [busca, setBusca] = useState("");
@@ -164,11 +172,32 @@ export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqu
   }
 
   // Poucos produtos com grade: as variantes já abrem (é o caso comum).
+  // Muitos produtos com grade e quantidades já preenchidas (conferência):
+  // abrem só os que têm variante preenchida, 4 carregando por vez.
   useEffect(function () {
-    if (comGrade.length === 0 || comGrade.length > ABRIR_SOZINHO_ATE) return;
-    var a: Record<string, boolean> = {};
-    comGrade.forEach(function (p) { a[p.id] = true; carregarGrade(p); });
-    setAbertos(a);
+    if (comGrade.length === 0) return;
+    if (comGrade.length <= ABRIR_SOZINHO_ATE) {
+      var a: Record<string, boolean> = {};
+      comGrade.forEach(function (p) { a[p.id] = true; carregarGrade(p); });
+      setAbertos(a);
+      return;
+    }
+    if (!quantidadesIniciais) return;
+    var chaves = Object.keys(quantidadesIniciais);
+    var preenchidos = comGrade.filter(function (p) {
+      return chaves.some(function (k) { return k.indexOf("v:" + p.id + ":") === 0; });
+    });
+    if (preenchidos.length === 0) return;
+    var ab: Record<string, boolean> = {};
+    preenchidos.forEach(function (p) { ab[p.id] = true; });
+    setAbertos(ab);
+    var fila = preenchidos.slice();
+    function proximo(): Promise<void> {
+      var p = fila.shift();
+      if (!p || !vivo.current) return Promise.resolve();
+      return carregarGrade(p).then(proximo);
+    }
+    proximo(); proximo(); proximo(); proximo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -276,7 +305,8 @@ export function TransferirModal({ origem, destinos, produtos, onFechar, onEstoqu
 
     // TENTE_DE_NOVO (deadlock no banco): 1 tentativa a mais, mesmo corpo.
     function criar(i: number, tentativa: number): Promise<any> {
-      var corpo = { destino_company_id: destino!.id, itens: partes[i], observacao: obs };
+      var corpo: PedidoTransferencia = { destino_company_id: destino!.id, itens: partes[i], observacao: obs };
+      if (stockCountId) corpo.stock_count_id = stockCountId;
       return estoqueTransferenciasApi.criar(origem.id, corpo).catch(function (e: any) {
         if (tentativa === 0 && codigoDoErro(e) === "TENTE_DE_NOVO") return criar(i, 1);
         throw e;
