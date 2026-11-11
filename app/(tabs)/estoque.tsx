@@ -98,6 +98,9 @@ import { useEmiteNfse } from "@/hooks/useEmiteNfse";
 // (mesma tela, mesma permissão), sem rota nova.
 import { TransferirModal } from "@/components/screens/estoque/transferencia/TransferirModal";
 import { TransferenciasModal } from "@/components/screens/estoque/transferencia/TransferenciasModal";
+// 10/11/2026: "Organizar categorias" abre um modal dentro do Estoque, não
+// mais a rota /catalogo/organizar (que caía no Painel ao voltar).
+import { OrganizarCategoriasModal } from "@/components/screens/estoque/categorias/OrganizarCategoriasModal";
 import { EstoquePorLoja } from "@/components/screens/estoque/transferencia/EstoquePorLoja";
 import { BotaoTransferir } from "@/components/screens/estoque/transferencia/BotaoTransferir";
 import { lojasDaTransferencia, plural as pluralQtd, textoDosNumeros } from "@/utils/transferenciaEstoque";
@@ -478,6 +481,16 @@ export default function EstoqueScreen() {
   const podeTransferir = !!lojasTransferencia;
   const [transferirAberto, setTransferirAberto] = useState(false);
   const [transferenciasAberto, setTransferenciasAberto] = useState(false);
+  const [organizarAberto, setOrganizarAberto] = useState(false);
+  // As mutações da árvore já invalidam ["categories"] e ["products"]; os
+  // nomes do filtro (chips e dropdown) vêm de ["product-categories"], que
+  // elas não tocam. Ao fechar, recarrega tudo o que o filtro usa.
+  function fecharOrganizar() {
+    setOrganizarAberto(false);
+    qc.invalidateQueries({ queryKey: ["product-categories", company?.id] });
+    qc.invalidateQueries({ queryKey: ["categories", company?.id] });
+    qc.invalidateQueries({ queryKey: ["products", company?.id] });
+  }
   const [visaoConsolidado, setVisaoConsolidado] = useState<"somado" | "por_loja">("somado");
 
   const { data: dupGroupsData, refetch: refetchDupGroups } = useQuery({
@@ -1036,7 +1049,7 @@ export default function EstoqueScreen() {
                 <CategoryDropdownWeb categories={allCategories} selected={catsMulti} onChange={setCatsMulti} />
                 {!isDemo && !consulta && (
                   <Pressable
-                    onPress={() => router.push("/catalogo/organizar")}
+                    onPress={() => setOrganizarAberto(true)}
                     style={s.catBtn}
                     accessibilityRole="button"
                     testID="estoque-organizar-categorias"
@@ -1051,7 +1064,7 @@ export default function EstoqueScreen() {
                 <ScrollableChips items={filterCategories} active={catFilter} onSelect={setCatFilter} />
                 {!isDemo && !consulta && (
                   <Pressable
-                    onPress={() => router.push("/catalogo/organizar")}
+                    onPress={() => setOrganizarAberto(true)}
                     style={[s.catBtn, { alignSelf: "flex-start", marginBottom: 12 }]}
                     accessibilityRole="button"
                     testID="estoque-organizar-categorias"
@@ -1225,6 +1238,12 @@ export default function EstoqueScreen() {
             setTransferirAberto(false);
             exitBulkMode();
           }}
+        />
+      </WebPortal>
+      <WebPortal active={organizarAberto && !!company?.id}>
+        <OrganizarCategoriasModal
+          onFechar={fecharOrganizar}
+          onAbrirMigracao={() => { fecharOrganizar(); router.push("/catalogo/migracao?de=estoque"); }}
         />
       </WebPortal>
       <WebPortal active={transferenciasAberto && !!lojasTransferencia}>

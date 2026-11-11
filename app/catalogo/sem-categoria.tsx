@@ -29,7 +29,8 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useColors } from "@/constants/colors";
-import { useCategories } from "@/hooks/useCategories";
+import { useVoltarDoCatalogo } from "@/hooks/useVoltarDoCatalogo";
+import { useCategories, type FlatCategory } from "@/hooks/useCategories";
 import { useUnclassifiedProducts } from "@/hooks/useUnclassifiedProducts";
 import type { Category } from "@/services/categoriesApi";
 
@@ -38,6 +39,8 @@ const PAGINA = 60;
 export default function SemCategoriaScreen() {
   const C = useColors();
   const router = useRouter();
+  // Voltar com destino certo: ver utils/voltarDoCatalogo.ts.
+  const voltar = useVoltarDoCatalogo();
 
   const [busca, setBusca] = useState("");
   const [soComEstoque, setSoComEstoque] = useState(false);
@@ -53,15 +56,21 @@ export default function SemCategoriaScreen() {
     });
 
   const idsMarcados = useMemo(() => Object.keys(marcados), [marcados]);
+  // `flattened` é FlatCategory[] ({ category, breadcrumb }): a lista de
+  // destinos lia `c.id`/`c.name` direto no item e saía vazia de nome.
+  const categorias: Category[] = useMemo(
+    () => (flattened || []).map((f: FlatCategory) => f.category),
+    [flattened]
+  );
   const alvo = useMemo(
-    () => flattened.find((c: Category) => c.id === categoriaAlvo) || null,
-    [flattened, categoriaAlvo]
+    () => categorias.find((c: Category) => c.id === categoriaAlvo) || null,
+    [categorias, categoriaAlvo]
   );
 
   // Só folhas e nós que já são destino razoável. Manter os de nível 0
   // disponíveis é deliberado: numa árvore recém-criada, "Feminino" pode
   // ser o único destino que existe.
-  const destinos = flattened;
+  const destinos = categorias;
 
   function alternar(id: string) {
     setMarcados((m) => {
@@ -91,7 +100,7 @@ export default function SemCategoriaScreen() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={s.wrap}>
-      <Pressable onPress={() => router.back()} style={s.voltar} accessibilityRole="button">
+      <Pressable onPress={voltar} style={s.voltar} accessibilityRole="button" testID="catalogo-voltar">
         <Text style={{ color: C.ink3, fontSize: 13 }}>← Voltar</Text>
       </Pressable>
 

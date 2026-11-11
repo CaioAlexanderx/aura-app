@@ -32,7 +32,12 @@ jest.mock("@/constants/colors", () => ({
 // O prefixo `mock` e obrigatorio: jest.mock nao pode referenciar
 // variavel de fora do escopo sem ele.
 const mockPush = jest.fn();
-jest.mock("expo-router", () => ({ useRouter: () => ({ back: jest.fn(), push: mockPush }) }));
+// useVoltarDoCatalogo (o "Voltar" com destino certo) lê a pilha e o ?de=.
+jest.mock("expo-router", () => ({
+  useRouter: () => ({ back: jest.fn(), push: mockPush, replace: jest.fn(), canGoBack: () => false }),
+  useNavigation: () => ({ getState: () => ({ index: 0, routes: [] }) }),
+  useLocalSearchParams: () => ({}),
+}));
 
 jest.mock("@/hooks/useCategories", () => ({ useCategories: jest.fn() }));
 jest.mock("@/hooks/useUnclassifiedProducts", () => ({ useUnclassifiedProducts: jest.fn() }));
@@ -56,7 +61,8 @@ function montar(over: { categorias?: any[]; produtos?: any[] } = {}) {
   const atribuirEmLote = jest.fn().mockResolvedValue({ updated: 3 });
 
   mockCats.mockReturnValue({
-    flattened: over.categorias ?? [BOTAS],
+    // Forma real do hook: FlatCategory { category, breadcrumb }.
+    flattened: (over.categorias ?? [BOTAS]).map((category: any) => ({ category, breadcrumb: [] })),
     isLoading: false,
   });
   mockUnc.mockReturnValue({

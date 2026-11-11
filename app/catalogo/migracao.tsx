@@ -35,8 +35,8 @@ import { useMemo, useState } from "react";
 import {
   ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from "react-native";
-import { useRouter } from "expo-router";
 import { useColors } from "@/constants/colors";
+import { useVoltarDoCatalogo } from "@/hooks/useVoltarDoCatalogo";
 import { useCategoryMigration } from "@/hooks/useCategoryMigration";
 import type { MigrationKind, MigrationProposalItem } from "@/services/categoriesApi";
 
@@ -50,7 +50,8 @@ const KINDS: Array<{ key: MigrationKind; label: string; hint: string }> = [
 
 export default function MigracaoCategoriasScreen() {
   const C = useColors();
-  const router = useRouter();
+  // Voltar com destino certo: ver utils/voltarDoCatalogo.ts.
+  const voltar = useVoltarDoCatalogo();
   const {
     proposal, orphan, isLoadingProposal, status,
     analyze, isAnalyzing, patchItem, apply, isApplying,
@@ -92,7 +93,7 @@ export default function MigracaoCategoriasScreen() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={s.wrap}>
-      <Pressable onPress={() => router.back()} style={s.voltar} accessibilityRole="button">
+      <Pressable onPress={voltar} style={s.voltar} accessibilityRole="button" testID="catalogo-voltar">
         <Text style={{ color: C.ink3, fontSize: 13 }}>← Voltar</Text>
       </Pressable>
 

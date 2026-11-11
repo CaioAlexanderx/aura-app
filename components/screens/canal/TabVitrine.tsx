@@ -312,7 +312,7 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
           resolver. */}
       {semCategoria > 0 ? (
         <Pressable
-          onPress={() => router.push("/catalogo/sem-categoria")}
+          onPress={() => router.push("/catalogo/sem-categoria?de=canal")}
           style={[cs.card, { borderColor: Colors.amber }]}
           accessibilityRole="button"
         >
@@ -345,7 +345,7 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
         </Text>
 
         <Pressable
-          onPress={() => router.push("/catalogo/organizar")}
+          onPress={() => router.push("/catalogo/organizar?de=canal")}
           style={{ paddingVertical: 10, borderTopWidth: 1, borderColor: Colors.border, marginTop: 10 }}
           accessibilityRole="button"
         >
@@ -358,7 +358,7 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
         </Pressable>
 
         <Pressable
-          onPress={() => router.push("/catalogo/migracao")}
+          onPress={() => router.push("/catalogo/migracao?de=canal")}
           style={{ paddingVertical: 10, borderTopWidth: 1, borderColor: Colors.border }}
           accessibilityRole="button"
         >
@@ -371,7 +371,7 @@ export function TabVitrine({ config, saveConfig, isSaving }: Props) {
         </Pressable>
 
         <Pressable
-          onPress={() => router.push("/catalogo/sem-categoria")}
+          onPress={() => router.push("/catalogo/sem-categoria?de=canal")}
           style={{ paddingVertical: 10, borderTopWidth: 1, borderColor: Colors.border }}
           accessibilityRole="button"
         >

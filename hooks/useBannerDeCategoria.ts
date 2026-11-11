@@ -46,6 +46,11 @@ export function useBannerDeCategoria() {
       // apareceria no próximo carregamento da tela.
       qc.invalidateQueries({ queryKey: ["productCategories"] });
       qc.invalidateQueries({ queryKey: ["categoryTree"] });
+      // A árvore do Organizar categorias vive em ["categories", cid]
+      // (useCategories); as duas chaves acima não a alcançam, e o
+      // "Banner ✓" só mudava ao reabrir a tela.
+      qc.invalidateQueries({ queryKey: ["categories", cid] });
+      qc.invalidateQueries({ queryKey: ["product-categories", cid] });
       toast.success("Banner da categoria enviado");
     },
     onError: (e: any) => toast.error(e?.message || "Erro ao enviar o banner"),
@@ -60,6 +65,11 @@ export function useBannerDeCategoria() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["productCategories"] });
       qc.invalidateQueries({ queryKey: ["categoryTree"] });
+      // A árvore do Organizar categorias vive em ["categories", cid]
+      // (useCategories); as duas chaves acima não a alcançam, e o
+      // "Banner ✓" só mudava ao reabrir a tela.
+      qc.invalidateQueries({ queryKey: ["categories", cid] });
+      qc.invalidateQueries({ queryKey: ["product-categories", cid] });
       toast.success("Banner removido");
     },
     onError: (e: any) => toast.error(e?.message || "Erro ao remover"),
