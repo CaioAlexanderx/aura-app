@@ -17,9 +17,15 @@
 //   - SecaoCodigos com o perfil Matcon: "Códigos", só barras e o código
 //     interno, cujo exemplo nasce do nome (POR-001, não VES-001).
 //
-// Sem o perfil, SecaoCodigos é IDÊNTICA à de hoje ("Códigos e fiscal").
-// A pergunta do imposto e o CEST (Matcon M2) passaram a morar só na
-// SecaoNotaFiscal: o perfil Matcon é a única porta para eles.
+// 11/11/2026 — COMPLEMENTO FISCAL no perfil padrão ("Códigos e fiscal").
+// A auditoria das NFC-e mostrou todo item saindo como imposto normal,
+// sem CEST e como nacional, porque fora do Matcon não havia onde dizer.
+// Abaixo do NCM entram as mesmas respostas da SecaoNotaFiscal, que agora
+// o motor da nota usa (backend #1004): "o imposto já veio pago?" (ST →
+// a nota sai com o código de imposto antecipado), o CEST (só aparece
+// com "Sim" ou já preenchido) e a origem (nacional / importado). Só para
+// quem emite nota, ou para o item que já tem alguma resposta, para não
+// encher o cadastro de quem não emite.
 // ============================================================
 import { View, Text, Pressable } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -27,7 +33,7 @@ import { Icon } from "@/components/Icon";
 import { BarcodeQRSection } from "@/components/BarcodeQRSection";
 import { suggestNcm, formatNcmDisplay, ncmFamilyByCode, getNcmStatus } from "@/utils/ncm";
 import { suggestCest, getCestStatus, formatCestDisplay, cestFamilyByCode, isStLikely } from "@/utils/cest";
-import { Campo, Entrada, MiniBtn, Nota, Secao, s } from "./ui";
+import { Campo, Chip, Entrada, MiniBtn, Nota, Secao, s } from "./ui";
 import { gerarSku, nomeDoTipo, statusCodigos, type CorDoItem, type ItemType, type Selo } from "./types";
 import { PERFIL_PADRAO, exemploDeCodigo, type PerfilDoCadastro } from "./perfis";
 
@@ -43,6 +49,11 @@ type Props = {
   sku: string; onSku: (v: string) => void;
   barcode: string; onBarcode: (v: string) => void;
   ncm: string; onNcm: (v: string) => void;
+  // 11/11/2026: complemento fiscal do perfil padrão (ST, CEST e origem).
+  // Opcionais: sem eles o card fica como era.
+  cest?: string; onCest?: (v: string) => void;
+  icmsStPaid?: boolean | null; onIcmsStPaid?: (v: boolean | null) => void;
+  origem?: number | null; onOrigem?: (v: number | null) => void;
   // 22/09/2026 (perfil de cadastro): com `notaFiscalSeparada`, o card vira
   // "Códigos" (barras + interno) e o fiscal vai para SecaoNotaFiscal.
   perfil?: PerfilDoCadastro;
@@ -149,7 +160,117 @@ export function SecaoCodigos(p: Props) {
           {ncmStatus === "valid" && <Text style={{ color: Colors.green }}>{"✓ " + ncmFamilia}</Text>}
         </Text>
       </Campo>
+
+      {mostrarComplementoFiscal(p) && <ComplementoFiscal {...p} />}
     </Secao>
+  );
+}
+
+// ── complemento fiscal (perfil padrão) ───────────────────────
+
+/** O complemento aparece para quem emite nota, ou quando o item já tem
+ *  alguma resposta (para não esconder um valor gravado). */
+export function mostrarComplementoFiscal(p: {
+  emiteNota: boolean; onCest?: unknown; onIcmsStPaid?: unknown; onOrigem?: unknown;
+  cest?: string; icmsStPaid?: boolean | null; origem?: number | null;
+}): boolean {
+  if (!p.onCest || !p.onIcmsStPaid || !p.onOrigem) return false;
+  return p.emiteNota
+    || p.icmsStPaid === true || p.icmsStPaid === false
+    || !!(p.cest || "").trim()
+    || (p.origem != null && p.origem > 0);
+}
+
+/** Opções de origem da mercadoria (tabela A do CST). O lojista que revende
+ *  importado quase sempre comprou de um distribuidor no Brasil: código 2. */
+export const ORIGENS: { codigo: number; rotulo: string }[] = [
+  { codigo: 0, rotulo: "Nacional" },
+  { codigo: 2, rotulo: "Importado, comprei no Brasil" },
+  { codigo: 1, rotulo: "Importei direto" },
+];
+
+/** Aviso do CEST: com "Sim" na pergunta do imposto, a nota precisa dele. */
+export function faltaCest(icmsStPaid: boolean | null | undefined, cest: string | null | undefined): boolean {
+  return icmsStPaid === true && getCestStatus(cest || "") !== "valid";
+}
+
+function ComplementoFiscal(p: Props) {
+  const cestVal = p.cest || "";
+  const cestSug = suggestCest(p.ncm);
+  const cestStatus = getCestStatus(cestVal);
+  const cestBadge = cestStatus === "valid" ? "✓ OK" : cestStatus === "partial" ? cestVal.length + "/7" : "vazio";
+  const cestFamilia = (cestSug && cestVal === cestSug.cest) ? cestSug.family : (cestFamilyByCode(cestVal) || "código preenchido");
+  const mostrarCest = p.icmsStPaid === true || !!cestVal;
+  const origemAtual = p.origem == null ? 0 : p.origem;
+  const origemForaDaLista = !ORIGENS.some((o) => o.codigo === origemAtual);
+
+  return (
+    <View style={st.complemento} testID="complemento-fiscal">
+      <Campo label="O imposto (ICMS) deste produto já veio pago pelo fornecedor?" optional="substituição tributária">
+        <View style={st.chips}>
+          <Chip
+            label="Sim, já veio pago"
+            active={p.icmsStPaid === true}
+            onPress={() => p.onIcmsStPaid!(p.icmsStPaid === true ? null : true)}
+            accessibilityLabel="Sim, o imposto já veio pago"
+          />
+          <Chip
+            label="Não"
+            active={p.icmsStPaid === false}
+            onPress={() => p.onIcmsStPaid!(p.icmsStPaid === false ? null : false)}
+            accessibilityLabel="Não, o imposto não veio pago"
+          />
+        </View>
+        <Text style={s.hint}>
+          Na nota do fornecedor aparece como "ICMS ST" ou "ICMS retido". Bebida, biscoito, cosmético, pilha e peça de carro costumam vir assim. Na dúvida, pergunte ao seu contador.
+        </Text>
+      </Campo>
+
+      {mostrarCest && (
+        <Campo label="Código do imposto antecipado (CEST)" optional={p.icmsStPaid === true ? "necessário com \"Sim\"" : undefined}>
+          <View style={s.linha2}>
+            <View style={{ flex: 1, position: "relative" as any }}>
+              <Entrada
+                value={cestVal}
+                onChangeText={(v: string) => p.onCest!(v.replace(/\D/g, "").slice(0, 7))}
+                placeholder="0000000"
+                keyboardType="number-pad"
+                maxLength={7}
+                accessibilityLabel="Código do imposto antecipado (CEST)"
+                style={{ paddingRight: 52 }}
+              />
+              <Selinho status={cestStatus} texto={cestBadge} />
+            </View>
+            <MiniBtn label="Sugerir" disabled={!cestSug} onPress={() => { if (cestSug) p.onCest!(cestSug.cest); }} />
+          </View>
+          <Text style={s.hint}>
+            {cestStatus === "valid"
+              ? <Text style={{ color: Colors.green }}>{"✓ " + cestFamilia}</Text>
+              : faltaCest(p.icmsStPaid, cestVal)
+                ? <Text style={{ color: p.emiteNota ? Colors.red : Colors.amber }}>
+                    {cestStatus === "partial"
+                      ? "Faltam " + (7 - cestVal.length) + " número" + (7 - cestVal.length > 1 ? "s" : "") + "."
+                      : "7 números, na nota do fornecedor ao lado do NCM. Sem ele a nota deste produto pode ser recusada."}
+                  </Text>
+                : "7 números, na nota do fornecedor ao lado do NCM."}
+          </Text>
+        </Campo>
+      )}
+
+      <Campo label="Origem do produto" style={{ marginBottom: 0 }}>
+        <View style={st.chips}>
+          {ORIGENS.map((o) => (
+            <Chip
+              key={o.codigo}
+              label={o.rotulo}
+              active={origemAtual === o.codigo}
+              onPress={() => p.onOrigem!(o.codigo)}
+            />
+          ))}
+          {origemForaDaLista && <Chip label={"Outra (código " + origemAtual + ")"} active />}
+        </View>
+      </Campo>
+    </View>
   );
 }
 
@@ -382,6 +503,8 @@ const st = {
   ncmBadgeOk: { borderColor: "rgba(52,211,153,0.3)", backgroundColor: Colors.greenD },
   ncmBadgeTxt: { fontSize: 10, fontWeight: "700" as const, color: Colors.ink3 },
   destaque: { borderColor: Colors.violet },
+  complemento: { borderTopWidth: 1, borderTopColor: Colors.border, marginTop: 14, paddingTop: 14 },
+  chips: { flexDirection: "row" as const, flexWrap: "wrap" as const, gap: 6 },
   divider: { height: 1, backgroundColor: Colors.border, marginVertical: 12 },
   perg: { paddingBottom: 10 },
   pergSep: { borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 10 },

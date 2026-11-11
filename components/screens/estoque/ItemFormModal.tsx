@@ -1199,6 +1199,9 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       sku={sku} onSku={(v) => { setSku(v); setSujo(true); }}
       barcode={barcode} onBarcode={(v) => { setBarcode(v); setSujo(true); }}
       ncm={ncm} onNcm={(v) => { setNcm(v); setSujo(true); }}
+      cest={cest} onCest={(v) => { setCest(v); setSujo(true); }}
+      icmsStPaid={icmsStPaid} onIcmsStPaid={(v) => { setIcmsStPaid(v); setSujo(true); }}
+      origem={origem} onOrigem={(v) => { setOrigem(v); setSujo(true); }}
       perfil={perfil}
     />
   ) : null;
@@ -1228,7 +1231,8 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
 
   // Perfil Matcon: "Nota fiscal" sai dos códigos e sobe para o topo da
   // coluna direita (no celular, logo depois da entrega). Com o M2, o CEST,
-  // a pergunta do imposto e a origem moram só aqui.
+  // a pergunta do imposto e a origem moram aqui; fora do Matcon, desde
+  // 11/11/2026, no complemento fiscal do card "Códigos e fiscal".
   const secNotaFiscal = isProduto && perfil.notaFiscalSeparada ? (
     <SecaoNotaFiscal
       emiteNota={emiteNota}
