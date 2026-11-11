@@ -80,9 +80,9 @@ export const TEXTOS_DAS_SECOES: Record<ChaveDaSecao, SecaoDaPagina> = {
   },
   assento: {
     chave: "assento",
-    titulo: "Assento de temporada",
+    titulo: "Acesso de funcionário para a temporada",
     porQueAgora:
-      "A loja vende mais e precisa de mais gente no balcão: um acesso extra só para a equipe de fim de ano, que expira sozinho.",
+      "A loja vende mais e precisa de mais gente no balcão: um acesso de funcionário adicional só para a equipe de fim de ano, que expira sozinho.",
   },
   vale_troca: {
     chave: "vale_troca",

@@ -30,7 +30,7 @@ export const VOLTAR_AO_CAIXA = "Voltar ao Caixa";
 
 // p-105: quem chega ao checkout pelo link do assento sem assinatura em dia.
 export const AVISO_ASSENTO_SEM_ASSINATURA = TEXTO_ASSENTO_SEM_ASSINATURA;
-export const AVISO_ASSENTO_EM_ATRASO = "Regularize a mensalidade para contratar o assento.";
+export const AVISO_ASSENTO_EM_ATRASO = "Regularize a mensalidade para contratar o acesso de funcionário para a temporada.";
 
 function arredonda(v: number) { return Math.round(v * 100) / 100; }
 

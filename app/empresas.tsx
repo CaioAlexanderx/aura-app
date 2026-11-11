@@ -302,7 +302,7 @@ export default function MinhasEmpresasScreen() {
               {billing.current.extra_cnpjs > 0 && (
                 <Text style={{ fontSize: 11, color: C.ink3, marginTop: 8, lineHeight: 16 }}>
                   {formatBRL(billing.current.base_price)} (plano)
-                  {(billing.current.seats_value || 0) > 0 ? " + " + formatBRL(billing.current.seats_value) + " (acessos extras)" : ""}
+                  {(billing.current.seats_value || 0) > 0 ? " + " + formatBRL(billing.current.seats_value) + " (acessos de funcionário adicionais)" : ""}
                   {" + "}{billing.current.extra_cnpjs} × {formatBRL(billing.current.extra_unit_price)} = {formatBRL(billing.current.total_monthly)}
                 </Text>
               )}
