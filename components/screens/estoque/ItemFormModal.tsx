@@ -103,7 +103,7 @@ import {
   nomeDoTipo, ordenarFilaDeFotos, preservarValores, resumoDoItem, rotuloDoBotaoSalvar,
   rotuloDoProgresso, subtituloDoModal, textoDeEdicao, textoDoBloqueio, tituloDoModal,
   usaDuasColunas, valorDaMascara, novaLinhaDeLote, lotesParaGravar, totalDosLotes,
-  gravacaoDoPrecoNoCartao,
+  gravacaoDoPrecoNoCartao, removidasComEstoque, textoDaRemocaoComEstoque,
   type CorDoItem, type FotoPendente, type ItemType, type LinhaDeLote, type StockMode,
 } from "./item-form/types";
 
@@ -257,6 +257,14 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   const [confirmarSaida, setConfirmarSaida] = useState(false);
   // Duplicata escolhida com um cadastro em andamento: espera confirmação.
   const [dupPendente, setDupPendente] = useState<DuplicataRow | null>(null);
+  // 10/11/2026 (fix estoque preso): tirar da grade cor/tamanho que ainda
+  // tem peças pede confirmação antes de gravar qualquer coisa.
+  const [remocaoPendente, setRemocaoPendente] = useState<{ mensagem: string; cadastrarOutro: boolean } | null>(null);
+  const confirmouRemocaoRef = useRef(false);
+  // A matriz que a grade leu do servidor ao abrir (por produto). Vai no PUT
+  // como matrix_lida: célula igual a ela não foi mexida e o backend fica
+  // com o estoque do banco — venda feita com o editor aberto não volta.
+  const gradeLidaRef = useRef<{ pid: string; matriz: Record<string, number> } | null>(null);
 
   const modoEdicao = !!alvo;
 
@@ -361,6 +369,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     const cel: Record<string, string> = {};
     const matriz = normalizarMapaDaGrade<number>(variacoes.matrix);
     Object.keys(matriz).forEach((k) => { cel[k] = String(matriz[k] ?? 0); });
+    gradeLidaRef.current = { pid: String(alvo.id), matriz: { ...matriz } };
     const temVariacoes = cs.length > 0 || zs.length > 0;
     const m = mesclarPaiNaGrade({
       cores: cs, tamanhos: zs, celulas: cel,
@@ -630,27 +639,49 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   }
 
   // ── gravações ────────────────────────────────────────────
-  async function salvarVariacoes(id: string): Promise<boolean> {
+  // Nome da cor que a lojista conhece, mesmo depois de ela sair da tela.
+  function nomeDaCorDoServidor(hex: string): string {
+    const h = String(hex || "").toUpperCase();
+    const doServidor = ((variacoesRef.current?.colors || []) as Array<{ hex: string; name: string | null }>)
+      .find((c) => String(c.hex || "").toUpperCase() === h);
+    return (doServidor && doServidor.name) || hexToName(h) || h;
+  }
+
+  function matrizQueVaiNoPut(): MatrixMap {
+    const anterior = variacoesRef.current || {};
+    return matrizDaGrade(cores, tamanhos, celulas, normalizarMapaDaGrade<number>(anterior.matrix), matrixKey);
+  }
+
+  async function salvarVariacoes(id: string, confirmouRemocao = false): Promise<boolean> {
     if (!company?.id) return false;
     try {
       const anterior = variacoesRef.current || {};
-      const matriz: MatrixMap = matrizDaGrade(cores, tamanhos, celulas, normalizarMapaDaGrade<number>(anterior.matrix), matrixKey);
+      const matriz: MatrixMap = matrizQueVaiNoPut();
       const chaves = Object.keys(matriz);
       // Código de barras: o que está na tela vence; o que não está na
       // tela mas sobreviveu à mudança de cores/tamanhos é preservado.
       const guardados = preservarValores<string>(chaves, normalizarMapaDaGrade<string>(anterior.barcodes));
       const doForm: Record<string, string> = {};
       chaves.forEach((k) => { if ((barras[k] || "").trim()) doForm[k] = barras[k].trim(); });
+      const lida = gradeLidaRef.current && gradeLidaRef.current.pid === String(id) ? gradeLidaRef.current.matriz : null;
       await productsVariationsApi.save(company.id, id, {
         colors: cores.map((c) => ({ hex: c.hex, name: c.name || null })),
         sizes: tamanhos,
         matrix: matriz,
         barcodes: { ...guardados, ...doForm },
+        ...(lida ? { matrix_lida: lida } : {}),
+        ...(confirmouRemocao ? { confirmar_remocao_com_estoque: true } : {}),
       });
       qc.invalidateQueries({ queryKey: ["productVariations", company.id, id] });
       qc.invalidateQueries({ queryKey: ["products", company.id] });
       return true;
     } catch (e: any) {
+      // O servidor viu peças que a tela não via (chegou estoque com o
+      // editor aberto): a mesma pergunta, com o texto dele.
+      if (e?.status === 409 && e?.data?.code === "GRADE_REMOCAO_COM_ESTOQUE") {
+        setRemocaoPendente({ mensagem: e?.message || "", cadastrarOutro: false });
+        return false;
+      }
       toast.error(e?.message || "Erro ao salvar cores e tamanhos");
       return false;
     }
@@ -718,6 +749,9 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     if (!podeSalvar || salvandoRef.current) return;
     salvandoRef.current = true;
     setSalvando(true);
+    // A confirmação vale para ESTE Salvar só.
+    const confirmouRemocao = confirmouRemocaoRef.current;
+    confirmouRemocaoRef.current = false;
     try {
       if (modoEdicao) {
         // Grade gravada quando foi mexida (ou herdou cor/tamanho do pai) no
@@ -730,10 +764,19 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
           toast.error("As cores e tamanhos ainda estão carregando. Espere um instante e salve de novo.");
           return;
         }
+        // Cor/tamanho que sai da grade com peças: pergunta ANTES de gravar
+        // o produto (o backend recusa sem a confirmação).
+        if (gravarGrade && !confirmouRemocao) {
+          const lista = removidasComEstoque(variacoesRef.current?.matrix, matrizQueVaiNoPut(), nomeDaCorDoServidor);
+          if (lista.length > 0) {
+            setRemocaoPendente({ mensagem: textoDaRemocaoComEstoque(lista), cadastrarOutro });
+            return;
+          }
+        }
         const ok = await updateProduct(montarProduto(alvo!.id));
         if (!ok) return;
         if (gravarGrade) {
-          const okVar = await salvarVariacoes(alvo!.id);
+          const okVar = await salvarVariacoes(alvo!.id, confirmouRemocao);
           if (!okVar) return;
         }
         if (!(await salvarFornecedores(alvo!.id))) return;
@@ -869,7 +912,8 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     salvar,
     // Escape fecha uma camada por vez: a confirmação aberta antes do modal.
     fechar: () => {
-      if (dupPendente) setDupPendente(null);
+      if (remocaoPendente) setRemocaoPendente(null);
+      else if (dupPendente) setDupPendente(null);
       else if (confirmarSaida) setConfirmarSaida(false);
       else pedirFechar();
     },
@@ -1379,6 +1423,34 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
           />
         )}
       </View>
+
+      {remocaoPendente && (
+        <View style={s.exitOverlay} testID="confirmar-remocao-com-estoque">
+          <View style={s.exitCard}>
+            <Text style={s.exitTitle}>Tirar da grade com peças no estoque?</Text>
+            <Text style={s.exitMsg}>
+              {remocaoPendente.mensagem + " Se remover mesmo assim, essas peças deixam de contar no estoque deste produto."}
+            </Text>
+            <View style={s.exitActions}>
+              <Pressable style={s.exitStay} onPress={() => setRemocaoPendente(null)}>
+                <Text style={s.exitStayTxt}>Voltar e ajustar</Text>
+              </Pressable>
+              <Pressable
+                testID="confirmar-remocao-sim"
+                style={s.exitLeave}
+                onPress={() => {
+                  const c = remocaoPendente.cadastrarOutro;
+                  setRemocaoPendente(null);
+                  confirmouRemocaoRef.current = true;
+                  void salvar(c);
+                }}
+              >
+                <Text style={s.exitLeaveTxt}>Remover mesmo assim</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
 
       {(confirmarSaida || dupPendente) && (
         <View style={s.exitOverlay}>

@@ -646,6 +646,59 @@ export function normalizarMapaDaGrade<T>(mapa: Record<string, T> | null | undefi
   return out;
 }
 
+// ── tirar da grade o que ainda tem peças ─────────────────────
+//
+// 10/11/2026 (fix estoque preso): o backend passou a atualizar a grade no
+// lugar e recusa (409 GRADE_REMOCAO_COM_ESTOQUE) tirar da grade uma
+// cor/tamanho com estoque sem confirmação. O modal confere ANTES de
+// gravar qualquer coisa, para a pergunta vir antes do PATCH do produto.
+
+export type RemovidaComEstoque = { chave: string; rotulo: string; pecas: number };
+
+function pecasTxt(n: number): string {
+  return n === 1 ? "1 peça" : n + " peças";
+}
+
+/**
+ * Combinações que estão no servidor com estoque > 0 e não vão no PUT.
+ * `nomeDaCor` dá o nome que a lojista conhece (a cor já saiu da tela).
+ */
+export function removidasComEstoque(
+  doServidor: Record<string, number> | null | undefined,
+  vaiNoPut: Record<string, number> | null | undefined,
+  nomeDaCor: (hex: string) => string
+): RemovidaComEstoque[] {
+  const servidor = normalizarMapaDaGrade<number>(doServidor);
+  const novo = normalizarMapaDaGrade<number>(vaiNoPut);
+  const out: RemovidaComEstoque[] = [];
+  Object.keys(servidor).forEach((k) => {
+    const pecas = Number(servidor[k]) || 0;
+    if (pecas <= 0 || Object.prototype.hasOwnProperty.call(novo, k)) return;
+    const i = k.indexOf("|");
+    const hex = i < 0 ? k : k.slice(0, i);
+    const tam = i < 0 ? "" : k.slice(i + 1);
+    const partes: string[] = [];
+    if (hex) partes.push(nomeDaCor(hex) || hex);
+    if (tam) partes.push(tam);
+    out.push({ chave: k, rotulo: partes.join(" · ") || "Esta variação", pecas });
+  });
+  return out;
+}
+
+/** Mesmo texto do backend (services/gradeDeVariantes.mensagemDaRemocao). */
+export function textoDaRemocaoComEstoque(lista: RemovidaComEstoque[]): string {
+  if (!lista || lista.length === 0) return "";
+  if (lista.length === 1) {
+    return lista[0].rotulo + " ainda tem " + pecasTxt(lista[0].pecas)
+      + ". Zere o estoque ou transfira antes de remover.";
+  }
+  const total = lista.reduce((acc, r) => acc + r.pecas, 0);
+  const nomes = lista.slice(0, 4).map((r) => r.rotulo + " (" + pecasTxt(r.pecas) + ")");
+  const resto = lista.length > 4 ? " e mais " + (lista.length - 4) : "";
+  return "Estas cores/tamanhos ainda têm " + pecasTxt(total) + ": " + nomes.join(", ") + resto
+    + ". Zere o estoque ou transfira antes de remover.";
+}
+
 export function totalDaMatriz(m: Record<string, number> | null | undefined): number {
   return Object.keys(m || {}).reduce((acc, k) => acc + (Number((m as Record<string, number>)[k]) || 0), 0);
 }
