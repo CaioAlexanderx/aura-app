@@ -6,7 +6,10 @@
 // (/catalogo/organizar); o Estoque agora tem o atalho para la. Estes
 // testes leem o codigo-fonte (a tela inteira do Estoque e pesada demais
 // para renderizar aqui) e guardam:
-//   1. o atalho existe e leva a /catalogo/organizar, nas duas larguras;
+//   1. o atalho existe nas duas larguras e abre o modal do Estoque
+//      (10/11/2026; antes levava a /catalogo/organizar, que caía no
+//      Painel ao voltar — o render do modal está em
+//      __tests__/screens/EstoqueOrganizarCategoriasModal.test.tsx);
 //   2. o modal aposentado nao volta (arquivo, import, estado);
 //   3. o hook ficou so de leitura (sem create/update/remove);
 //   4. "Ver planos" do AddCompanyModal vai direto a /(tabs)/planos.
@@ -19,8 +22,10 @@ const raiz = (rel: string) => fs.readFileSync(path.join(__dirname, "..", rel), "
 describe("Estoque: atalho Organizar categorias", () => {
   const estoque = raiz("app/(tabs)/estoque.tsx");
 
-  test("o atalho leva a /catalogo/organizar", () => {
-    expect(estoque).toContain('router.push("/catalogo/organizar")');
+  test("o atalho abre o modal, não a rota /catalogo/organizar", () => {
+    expect(estoque).not.toContain('router.push("/catalogo/organizar")');
+    expect(estoque.split("onPress={() => setOrganizarAberto(true)}").length - 1).toBe(2);
+    expect(estoque).toContain("<WebPortal active={organizarAberto && !!company?.id}>");
     expect(estoque).toContain("Organizar categorias");
   });
 

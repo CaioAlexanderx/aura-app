@@ -45,7 +45,9 @@ describe("a medida mora num lugar só", () => {
   });
 
   test("a tela lê a spec, não repete a medida", () => {
-    const tela = raiz("app/catalogo/organizar.tsx");
+    // 10/11/2026: o conteúdo da tela mora no componente (modal do Estoque
+    // e rota /catalogo/organizar montam o mesmo).
+    const tela = raiz("components/screens/catalogo/OrganizarCategorias.tsx");
     expect(tela).toContain("SPECS.categoria.resumo");
     // Se "1600" aparecer solto na tela, alguém recriou a fonte.
     const semImports = tela.split("\n").filter((l) => !l.trim().startsWith("import")).join("\n");
@@ -64,7 +66,7 @@ describe("a medida mora num lugar só", () => {
 });
 
 describe("só o primeiro nível ganha o botão", () => {
-  const tela = raiz("app/catalogo/organizar.tsx");
+  const tela = raiz("components/screens/catalogo/OrganizarCategorias.tsx");
 
   test("o botão está atrás de nivel === 0", () => {
     const bloco = tela.slice(tela.indexOf("banner-${cat.id}") - 600, tela.indexOf("banner-${cat.id}"));
@@ -74,7 +76,7 @@ describe("só o primeiro nível ganha o botão", () => {
   test("o rótulo diz se já tem banner", () => {
     // "banner ✓" é o único jeito de ela saber, na árvore, quais das
     // quatro já subiu — sem abrir a loja.
-    expect(tela).toContain('cat.banner_url ? "banner ✓" : "banner"');
+    expect(tela).toContain('cat.banner_url ? "Banner ✓" : "Banner"');
   });
 });
 

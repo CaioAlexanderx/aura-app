@@ -31,7 +31,15 @@ jest.mock("@/constants/colors", () => ({
   useColors: () => ({ bg: "#060816", bg3: "#0e1228", ink: "#f0edff", ink3: "#aaa", border: "#222" }),
 }));
 
-jest.mock("expo-router", () => ({ useRouter: () => ({ back: jest.fn(), push: jest.fn() }) }));
+// Pilha e ?de= controlados pelo teste do "Voltar" (fim do arquivo).
+const mockRouter = { back: jest.fn(), push: jest.fn(), replace: jest.fn(), canGoBack: jest.fn(() => false) };
+let mockPilha: { index: number; routes: { name: string }[] } = { index: 0, routes: [] };
+let mockParams: Record<string, string> = {};
+jest.mock("expo-router", () => ({
+  useRouter: () => mockRouter,
+  useNavigation: () => ({ getState: () => mockPilha }),
+  useLocalSearchParams: () => mockParams,
+}));
 
 // requireActual de useCategories/useCategoryTree puxa stores/auth, que
 // importa expo-secure-store — e expo-modules-core não carrega sob Jest.
@@ -100,7 +108,9 @@ function montar(over: { remove?: jest.Mock } = {}) {
 
   mockCategories.mockReturnValue({
     tree: [FEMININO],
-    flattened: [FEMININO, CALCADOS, BOTAS],
+    // Forma real do hook: FlatCategory { category, breadcrumb }. O mock
+    // antigo devolvia Category[] e escondia que o "mover" quebrava.
+    flattened: [FEMININO, CALCADOS, BOTAS].map((category) => ({ category, breadcrumb: [] })),
     isLoading: false,
     create: jest.fn().mockResolvedValue(undefined),
     isCreating: false,
@@ -117,6 +127,10 @@ function montar(over: { remove?: jest.Mock } = {}) {
   let r: any;
   act(() => { r = TestRenderer.create(<OrganizarCatalogoScreen />); });
   return { r, remove, move };
+}
+
+function porTestID(r: any, id: string) {
+  return r.root.findAll((n: any) => n.props && n.props.testID === id, { deep: false });
 }
 
 // Coleta todo texto renderizado, para asserção independente de layout.
@@ -141,9 +155,10 @@ describe("C1 — Organizar catálogo", () => {
   test("nível 2 não oferece criar subcategoria", () => {
     const { r } = montar();
     const t = textos(r);
-    // Feminino (0) e Calçados (1) oferecem "+ sub"; Botas (2) não.
+    // Feminino (0) e Calçados (1) oferecem "+ Subcategoria"; Botas (2) não.
     // Com a árvore aberta nos três níveis, isso dá exatamente 2.
-    expect(t.filter((x) => x === "+ sub")).toHaveLength(2);
+    expect(t.filter((x) => x === "+ Subcategoria")).toHaveLength(2);
+    expect(porTestID(r, "organizar-sub-cat-botas")).toHaveLength(0);
   });
 
   test("excluir com produtos pergunta o destino em vez de apagar", async () => {
@@ -152,12 +167,7 @@ describe("C1 — Organizar catálogo", () => {
     const { r } = montar({ remove });
 
     // Dispara o handler do primeiro "excluir" da árvore.
-    const pressables = r.root.findAllByType("Pressable");
-    const alvo = pressables.find((p: any) => {
-      const kids = p.props.children;
-      const txt = kids?.props?.children;
-      return txt === "excluir";
-    });
+    const alvo = porTestID(r, "organizar-excluir-cat-feminino")[0];
     expect(alvo).toBeTruthy();
 
     await act(async () => { await alvo.props.onPress(); });
@@ -170,8 +180,7 @@ describe("C1 — Organizar catálogo", () => {
 
   test("mover não oferece a própria subárvore como destino", () => {
     const { r } = montar();
-    const pressables = r.root.findAllByType("Pressable");
-    const moverBtn = pressables.find((p: any) => p.props.children?.props?.children === "mover");
+    const moverBtn = porTestID(r, "organizar-mover-cat-feminino")[0];
     expect(moverBtn).toBeTruthy();
 
     act(() => { moverBtn.props.onPress(); });
@@ -220,10 +229,11 @@ describe("Organizar catálogo — banner só para quem tem o Canal Digital", () 
     comPlano("essencial");
     const { r } = montar();
     const t = textos(r);
-    expect(t).toContain("+ categoria principal");
-    expect(t).toContain("mover");
-    expect(t).toContain("excluir");
-    expect(t).toContain("+ sub");
+    expect(t).toContain("+ Categoria principal");
+    expect(t).toContain("Mover");
+    expect(t).toContain("Excluir");
+    expect(t).toContain("Renomear");
+    expect(t).toContain("+ Subcategoria");
   });
 
   test("Negócio: botão banner só na categoria principal, com a frase", () => {
@@ -259,6 +269,52 @@ describe("Organizar catálogo — banner só para quem tem o Canal Digital", () 
     comPlano("essencial");
     montar();
     expect(refreshMe).toHaveBeenCalled();
+  });
+});
+
+// 10/11/2026: o "Voltar" era router.back(), que caía no Painel — a raiz é
+// um <Slot />, o (tabs) desmonta ao abrir esta rota e perde o estado
+// aninhado. Agora: outra /catalogo/* antes na pilha → back(); senão,
+// replace para a origem (?de=canal → Canal; padrão → Estoque).
+describe("Organizar catálogo — Voltar com destino certo", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPilha = { index: 0, routes: [] };
+    mockParams = {};
+  });
+  afterAll(() => { mockPilha = { index: 0, routes: [] }; mockParams = {}; });
+
+  function voltar() {
+    const { r } = montar();
+    act(() => { porTestID(r, "organizar-voltar")[0].props.onPress(); });
+  }
+
+  test("sem histórico (link direto, recarga) leva ao /estoque", () => {
+    voltar();
+    expect(mockRouter.replace).toHaveBeenCalledWith("/estoque");
+    expect(mockRouter.back).not.toHaveBeenCalled();
+  });
+
+  test("vindo do grupo (tabs) também vai ao /estoque, não ao Painel", () => {
+    mockPilha = { index: 1, routes: [{ name: "(tabs)" }, { name: "catalogo/organizar" }] };
+    mockRouter.canGoBack.mockReturnValue(true);
+    voltar();
+    expect(mockRouter.replace).toHaveBeenCalledWith("/estoque");
+    expect(mockRouter.back).not.toHaveBeenCalled();
+  });
+
+  test("aberta pela Vitrine (?de=canal) volta ao Canal", () => {
+    mockParams = { de: "canal" };
+    voltar();
+    expect(mockRouter.replace).toHaveBeenCalledWith("/canal");
+  });
+
+  test("vindo de outra tela do catálogo, volta para ela", () => {
+    mockPilha = { index: 1, routes: [{ name: "catalogo/sem-categoria" }, { name: "catalogo/organizar" }] };
+    mockRouter.canGoBack.mockReturnValue(true);
+    voltar();
+    expect(mockRouter.back).toHaveBeenCalled();
+    expect(mockRouter.replace).not.toHaveBeenCalled();
   });
 });
 

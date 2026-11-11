@@ -32,7 +32,12 @@ jest.mock("@/constants/colors", () => ({
   }),
 }));
 
-jest.mock("expo-router", () => ({ useRouter: () => ({ back: jest.fn(), push: jest.fn() }) }));
+// useVoltarDoCatalogo (o "Voltar" com destino certo) lê a pilha e o ?de=.
+jest.mock("expo-router", () => ({
+  useRouter: () => ({ back: jest.fn(), push: jest.fn(), replace: jest.fn(), canGoBack: () => false }),
+  useNavigation: () => ({ getState: () => ({ index: 0, routes: [] }) }),
+  useLocalSearchParams: () => ({}),
+}));
 
 jest.mock("@/hooks/useCategoryMigration", () => ({ useCategoryMigration: jest.fn() }));
 
