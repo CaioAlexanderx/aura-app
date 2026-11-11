@@ -3,14 +3,15 @@
 //
 // Linhas claras, nesta ordem:
 //   Plano X (mensal | anual, cobrado por mês)          R$ x
-//   N acessos extras de equipe (só se a conta tem)     R$ y
+//   N acessos de funcionário adicionais (p-106)        R$ y
+//   N acessos de funcionário para a temporada (se há)  R$ s
 //   Cupom CÓDIGO · 1ª mensalidade                     − R$ z
 //   Total hoje                                  (serif 30) R$ t
 //   "Depois, R$ w por mês. Desconto só na primeira mensalidade."
 // Valor combinado pela equipe: o selo e só o valor combinado (nada de conta
 // de tabela nem de acessos extras, que já estão dentro dele).
-// p-106 (acessos de funcionário escolhidos no checkout) entra como mais uma
-// linha depois do plano — a mesma `linhaDosAcessos`.
+// p-106: `linhaDosAcessos` traz os acessos escolhidos no seletor (R$ 19 × N)
+// e `linhaDaTemporada` os de temporada ativos, que se somam por cima.
 // ============================================================
 import { View, Text, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
@@ -23,8 +24,10 @@ type Props = {
   rotuloDoPlano: string;
   valorDoPlano: number;
   combinado: boolean;
-  /** Linha dos acessos extras já liberados na conta (null = não mostra). */
+  /** Linha dos acessos de funcionário adicionais (null = não mostra). */
   linhaDosAcessos?: { rotulo: string; valor: number } | null;
+  /** Linha dos acessos de funcionário para a temporada ativos (null = não mostra). */
+  linhaDaTemporada?: { rotulo: string; valor: number } | null;
   linhaDoCupom?: { rotulo: string; valor: number } | null;
   rotuloDoTotal: string;
   total: number;
@@ -48,6 +51,12 @@ export function ResumoDoCheckout(p: Props) {
         <View testID="checkout-resumo-acessos" style={s.linha}>
           <Text style={s.rotulo}>{p.linhaDosAcessos.rotulo}</Text>
           <Text style={s.valor}>{fmtBRL(p.linhaDosAcessos.valor)}</Text>
+        </View>
+      ) : null}
+      {p.linhaDaTemporada ? (
+        <View testID="checkout-resumo-temporada" style={s.linha}>
+          <Text style={s.rotulo}>{p.linhaDaTemporada.rotulo}</Text>
+          <Text style={s.valor}>{fmtBRL(p.linhaDaTemporada.valor)}</Text>
         </View>
       ) : null}
       {p.linhaDoCupom ? (

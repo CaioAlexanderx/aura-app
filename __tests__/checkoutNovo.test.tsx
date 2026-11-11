@@ -174,8 +174,8 @@ describe("valores e resumo", () => {
     expect(out).toContain("Total hoje");
     expect(out).toContain("Gerar Pix de R$ 169,00");
     expect(out).toContain("Pagamento processado pela Asaas.");
-    expect(mockBilling.quote).toHaveBeenCalledWith("emp-1", "essencial", "monthly", "PIX");
-    expect(mockBilling.quote).toHaveBeenCalledWith("emp-1", "expansao", "monthly", "PIX");
+    expect(mockBilling.quote).toHaveBeenCalledWith("emp-1", "essencial", "monthly", "PIX", 0);
+    expect(mockBilling.quote).toHaveBeenCalledWith("emp-1", "expansao", "monthly", "PIX", 0);
     tree.unmount();
   });
 
@@ -207,7 +207,7 @@ describe("valores e resumo", () => {
     const tree = await mount();
     expect(byTestId(tree, "checkout-resumo-acessos")).toHaveLength(1);
     const out = text(tree);
-    expect(out).toContain("2 acessos extras de equipe");
+    expect(out).toContain("2 acessos de funcionário adicionais");
     expect(out).toContain("R$ 38,00");
     // O cartão do plano mostra só o plano.
     expect(out).toContain("R$ 169,00");
@@ -237,7 +237,7 @@ describe("cupom", () => {
     });
     const tree = await mount();
     await aplicaCupom(tree, "black50");
-    expect(mockBilling.validateCoupon).toHaveBeenCalledWith("emp-1", "BLACK50", "negocio", "monthly", "PIX");
+    expect(mockBilling.validateCoupon).toHaveBeenCalledWith("emp-1", "BLACK50", "negocio", "monthly", "PIX", undefined);
     const out = text(tree);
     expect(byTestId(tree, "checkout-cupom-ok")).toHaveLength(1);
     expect(out).toContain("BLACK50 aplicado: a primeira mensalidade sai pela metade.");
