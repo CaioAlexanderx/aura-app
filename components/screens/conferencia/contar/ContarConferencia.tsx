@@ -13,7 +13,7 @@
 // Às cegas: a tela nunca mostra o estoque do sistema (nem na escolha da
 // variante). Sem às cegas, mostra o que o sistema tinha ao bipar.
 // ============================================================
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator } from "react-native";
 import { router } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -22,7 +22,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useProducts } from "@/hooks/useProducts";
 import { useProductCategories } from "@/hooks/useProductCategories";
 import { useConferenciaEstoque } from "@/hooks/useConferenciaEstoque";
-import { ScannerInput } from "@/components/ScannerInput";
+import { ScannerInput, type ScannerInputHandle } from "@/components/ScannerInput";
 import { toast } from "@/components/Toast";
 import { companiesApi } from "@/services/api";
 import { pdvApi } from "@/services/pdvApi";
@@ -64,6 +64,8 @@ export function ContarConferencia({ countId }: { countId: string }) {
   const [pedindo, setPedindo] = useState<AlvoDaContagem | null>(null);
   const [qtdTexto, setQtdTexto] = useState("");
   const [nadaCom, setNadaCom] = useState<string | null>(null);
+  // O campo do bipe: esvazia e volta o foco depois de escolher da busca.
+  const campo = useRef<ScannerInputHandle>(null);
 
   const conf = c.conferencia;
   const asCegas = conf ? conf.as_cegas !== false : true;
@@ -106,11 +108,17 @@ export function ContarConferencia({ countId }: { countId: string }) {
       return;
     }
     c.contar(alvo, "somar", 1);
+    // Pronto para o próximo, como depois de um bipe. (No modo "digitar a
+    // quantidade" o foco fica no campo da quantidade.)
+    campo.current?.focar();
   }
 
   function escolherProduto(p: ProdutoContavel) {
     setSugestoesDe(null);
     setDigitado("");
+    // Escolheu da lista: o texto da busca ("bon") sai do campo, como depois
+    // de um bipe.
+    campo.current?.limpar();
     if (!p.has_variants) { contarAlvo(alvoDe(p, null)); return; }
     abrirVariantes(p, null);
   }
@@ -183,6 +191,7 @@ export function ContarConferencia({ countId }: { countId: string }) {
     c.contar(pedindo, "definir", n);
     setPedindo(null);
     setQtdTexto("");
+    campo.current?.focar();
   }
 
   // ── Estados de carga ──────────────────────────────────
@@ -297,6 +306,7 @@ export function ContarConferencia({ countId }: { countId: string }) {
       <View style={ce.card}>
         <Text style={ce.rotulo}>Bipe, digite o código ou busque pelo nome</Text>
         <ScannerInput
+          ref={campo}
           onScan={(r) => { tratarTexto(r.code); }}
           onChangeText={(t) => { setDigitado(t); if (t) setSugestoesDe(null); setNadaCom(null); }}
           placeholder="789… ou o nome do produto"

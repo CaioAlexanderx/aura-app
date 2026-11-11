@@ -87,15 +87,24 @@ jest.mock("@/services/conferenciaEstoqueApi", () => {
   return { ...actual, conferenciaEstoqueApi: api };
 });
 
-// O campo do bipe vira um TextInput simples: o que importa é o onScan.
+// O campo do bipe vira um TextInput simples: o que importa é o onScan, e a
+// ref (limpar/focar) que a tela usa depois de escolher da busca.
+const mockCampoLimpar = jest.fn();
+const mockCampoFocar = jest.fn();
 jest.mock("@/components/ScannerInput", () => {
   const R = jest.requireActual("react");
   const { TextInput } = jest.requireActual("react-native");
   return {
-    ScannerInput: (p: any) => R.createElement(TextInput, {
-      testID: p.testID,
-      onChangeText: p.onChangeText,
-      onSubmitEditing: (e: any) => p.onScan({ code: e.nativeEvent.text, source: "scanner" }),
+    ScannerInput: R.forwardRef((p: any, ref: any) => {
+      R.useImperativeHandle(ref, () => ({
+        limpar: () => { mockCampoLimpar(); if (p.onChangeText) p.onChangeText(""); },
+        focar: () => mockCampoFocar(),
+      }));
+      return R.createElement(TextInput, {
+        testID: p.testID,
+        onChangeText: p.onChangeText,
+        onSubmitEditing: (e: any) => p.onScan({ code: e.nativeEvent.text, source: "scanner" }),
+      });
     }),
   };
 });
@@ -317,6 +326,40 @@ describe("contar", () => {
     await esperar();
     expect(mockApi.registrarItem).toHaveBeenCalledWith(CID, "k1", { product_id: "p2", variant_id: "v1", quantidade: 1, modo: "definir" });
     expect(texto(tree)).toContain("sem código, achado pelo nome");
+  });
+
+  it("busca pelo nome: escolher da lista limpa o campo e devolve o foco, como depois de um bipe", async () => {
+    mockProdutos = [
+      ...mockProdutos,
+      { id: "p3", name: "Boné azul", code: "BON-1", barcode: "", category: "Acessórios", unit: "un", stock: 4 },
+      { id: "p4", name: "Boné preto", code: "BON-2", barcode: "", category: "Acessórios", unit: "un", stock: 5 },
+    ];
+    const tree = await montar(<ContarRota />);
+    await digitar(tree, "contar-campo", "bon");
+    expect(tem(tree, "sugestao-p3")).toBe(true);
+    expect(tem(tree, "sugestao-p4")).toBe(true);
+    await tocar(tree, "sugestao-p3");
+    await esperar();
+    expect(mockApi.registrarItem).toHaveBeenCalledWith(CID, "k1", { product_id: "p3", variant_id: null, quantidade: 1, modo: "definir" });
+    expect(mockCampoLimpar).toHaveBeenCalledTimes(1);
+    expect(mockCampoFocar).toHaveBeenCalled();
+    // a lista some: o campo ficou vazio
+    expect(tem(tree, "sugestoes")).toBe(false);
+  });
+
+  it("modo digitar: escolher da busca limpa o campo; o foco vai para a quantidade e volta depois", async () => {
+    const tree = await montar(<ContarRota />);
+    await tocar(tree, "modo-definir");
+    await digitar(tree, "contar-campo", "cinto");
+    await tocar(tree, "sugestao-p1");
+    await esperar();
+    expect(mockCampoLimpar).toHaveBeenCalledTimes(1);
+    expect(mockCampoFocar).not.toHaveBeenCalled();
+    expect(tem(tree, "pedir-quantidade")).toBe(true);
+    await digitar(tree, "quantidade-campo", "3");
+    await tocar(tree, "quantidade-ok");
+    await esperar();
+    expect(mockCampoFocar).toHaveBeenCalledTimes(1);
   });
 
   it("modo digitar a quantidade", async () => {

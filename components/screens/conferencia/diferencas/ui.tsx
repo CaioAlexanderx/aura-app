@@ -80,7 +80,9 @@ export function Marcar({ marcado, onPress, rotulo, testID, children }: {
 }
 
 export var ui = StyleSheet.create({
-  tela: { flex: 1, backgroundColor: Colors.bg },
+  // Transparente, como as telas de começar e contar: o fundo vem da pilha
+  // (fundoDaPilhaDaConferencia), igual ao resto do app nos dois temas.
+  tela: { flex: 1, backgroundColor: "transparent" },
   conteudo: { padding: 16, paddingBottom: 48, gap: 12, width: "100%", maxWidth: 760, alignSelf: "center" },
   voltar: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" },
   voltarTxt: { color: Colors.violet3, fontSize: 13.5, fontWeight: "700" },

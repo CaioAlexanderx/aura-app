@@ -20,7 +20,7 @@ describe("caminhos e corpos", () => {
     responder(200, {
       resumo: { faltam: "1", sobram: 1, batem: 0, nao_contados: 1, valor_faltam: "48.00", valor_sobram: null, itens_sem_custo: "1" },
       itens: [
-        { item_id: "i1", product_id: "p1", variant_id: "v1", nome: "Camiseta", variante: "Preta · G", codigo: "789", contado: "3", estoque_no_bipe: "4", estoque_atual: "3", diferenca: "-1", estoque_depois: "3", custo: "24", valor: "-24", grupo: "faltam" },
+        { item_id: "i1", product_id: "p1", variant_id: "v1", nome: "Camiseta", variante: "Preta · G", codigo: "789", contado: "3", estoque_no_bipe: "4", estoque_atual: "3", diferenca: "-1", estoque_depois: "3", custo: "24", valor: "-24", grupo: "faltam", diferenca_aplicada: "-1" },
         { item_id: "i2", product_id: "p2", variant_id: null, nome: "Cinto", contado: 2, estoque_no_bipe: 1, estoque_atual: 1, diferenca: 1, custo: null, valor: null },
       ],
       nao_contados: [{ product_id: "p3", variant_id: null, nome: "Lenço", estoque_atual: "2", custo: null }],
@@ -30,6 +30,9 @@ describe("caminhos e corpos", () => {
     expect(r.resumo).toEqual({ faltam: 1, sobram: 1, batem: 0, nao_contados: 1, valor_faltam: 48, valor_sobram: null, itens_sem_custo: 1 });
     expect(r.itens[0]).toMatchObject({ contado: 3, estoque_no_bipe: 4, diferenca: -1, custo: 24, grupo: "faltam", estoque_depois: 3 });
     expect(r.itens[1].estoque_depois).toBeNull();
+    // depois de ajustada: o que o ajuste mexeu (para o aviso "mudou depois")
+    expect(r.itens[0].diferenca_aplicada).toBe(-1);
+    expect(r.itens[1].diferenca_aplicada).toBeNull();
     expect(r.custos_ocultos).toBe(false);
     // sem `grupo`, sai pelo sinal da diferença
     expect(r.itens[1]).toMatchObject({ grupo: "sobram", custo: null, variant_id: null });

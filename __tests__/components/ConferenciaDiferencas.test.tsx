@@ -288,3 +288,77 @@ it("503 MIGRATION_PENDING: texto gentil e tentar de novo", async () => {
   await tocar(tree, "dif-tentar");
   expect(existe(tree, "dif-resumo")).toBe(true);
 });
+
+// ── QA em produção (11/11) ─────────────────────────────────────
+// Sistema 58, contado 56, nada vendido: depois de ajustar, o 56 é o próprio
+// ajuste — não pode aparecer "Agora tem 56; mudou depois que você contou".
+const ITEM_58 = { item_id: "i9", product_id: "p9", variant_id: null, nome: "Bombom", variante: null, codigo: null, contado: 56, estoque_no_bipe: 58, diferenca: -2, custo: 2, valor: -4, grupo: "faltam" };
+function difCom(item: any) {
+  return { resumo: { faltam: 1, sobram: 0, batem: 0, nao_contados: 0, valor_faltam: 4, valor_sobram: 0, itens_sem_custo: 0 }, itens: [item], nao_contados: [] };
+}
+const APLICADA = { ...CONF, status: "aplicada", aplicada_em: "2026-11-11T13:00:00.000Z", pode_desfazer_ate: "2026-11-18T13:00:00.000Z", pode_desfazer: true };
+
+describe("aviso 'mudou depois que você contou'", () => {
+  it("rascunho: só quando o atual difere do que tinha no bipe", async () => {
+    mockDiferencas.mockResolvedValue(difCom({ ...ITEM_58, estoque_atual: 58 }));
+    let tree = await montar();
+    expect(existe(tree, "dif-mudou-p:p9")).toBe(false);
+    mockDiferencas.mockResolvedValue(difCom({ ...ITEM_58, estoque_atual: 57 }));
+    tree = await montar();
+    expect(textoDe(tree, "dif-mudou-p:p9")).toBe("Agora tem 57: mudou depois que você contou, e isso fica mantido.");
+  });
+
+  it("depois de ajustar: o resultado do ajuste não vira aviso; venda depois, sim", async () => {
+    mockAplicar.mockResolvedValue({ conferencia: APLICADA, ajustados: 1, ignorados: [] });
+    mockDiferencas.mockResolvedValue(difCom({ ...ITEM_58, estoque_atual: 58 }));
+    const tree = await montar();
+    await tocar(tree, "dif-ajustar");
+    mockObter.mockResolvedValue({ conferencia: APLICADA });
+    mockDiferencas.mockResolvedValue(difCom({ ...ITEM_58, estoque_atual: 56, diferenca_aplicada: -2 }));
+    await act(async () => { um(tree, "confirm").props.onConfirm(); });
+    expect(existe(tree, "dif-ajustado")).toBe(true);
+    expect(existe(tree, "dif-mudou-p:p9")).toBe(false);
+
+    // vendeu 1 depois de ajustar: aí sim
+    mockDiferencas.mockResolvedValue(difCom({ ...ITEM_58, estoque_atual: 55, diferenca_aplicada: -2 }));
+    const outra = await montar();
+    expect(textoDe(outra, "dif-mudou-p:p9")).toBe("Agora tem 55: mudou depois que você contou, e isso ficou mantido.");
+  });
+
+  it("desfeita: nunca mostra", async () => {
+    mockObter.mockResolvedValue({ conferencia: { ...APLICADA, status: "desfeita", desfeita_em: "2026-11-12T10:00:00.000Z" } });
+    mockDiferencas.mockResolvedValue(difCom({ ...ITEM_58, estoque_atual: 50, diferenca_aplicada: -2 }));
+    const tree = await montar();
+    expect(existe(tree, "dif-desfeita")).toBe(true);
+    expect(existe(tree, "dif-mudou-p:p9")).toBe(false);
+  });
+});
+
+describe("textos verdadeiros: o registro fica no histórico de conferências", () => {
+  it("confirmação e aviso de sucesso não prometem o histórico do produto", async () => {
+    mockAplicar.mockResolvedValue({ conferencia: APLICADA, ajustados: 3, ignorados: [] });
+    const tree = await montar();
+    await tocar(tree, "dif-ajustar");
+    const msg = um(tree, "confirm").props.message;
+    expect(msg).toMatch(/O ajuste fica registrado no histórico de conferências, e dá para desfazer por 7 dias, se precisar\.$/);
+    expect(msg).not.toMatch(/histórico do produto/);
+    mockObter.mockResolvedValue({ conferencia: APLICADA });
+    await act(async () => { um(tree, "confirm").props.onConfirm(); });
+    expect(textoDe(tree, "dif-ajustado")).toMatch(/Tudo ficou registrado no histórico de conferências, como “Conferência nº 3 · Inventário do mês”\./);
+    expect(textoDe(tree, "dif-ajustado")).not.toMatch(/histórico do produto/);
+  });
+
+  it("desfeita também não promete", async () => {
+    mockObter.mockResolvedValue({ conferencia: { ...APLICADA, status: "desfeita", desfeita_em: "2026-11-12T10:00:00.000Z" } });
+    const tree = await montar();
+    expect(textoDe(tree, "dif-desfeita")).toMatch(/segue registrada no histórico de conferências/);
+    expect(textoDe(tree, "dif-desfeita")).not.toMatch(/histórico do produto/);
+  });
+
+  it("a raiz da tela não pinta fundo próprio (o fundo vem da pilha)", async () => {
+    const tree = await montar();
+    const raiz = tree.root.findAll((n) => n.props && n.props.testID === "dif-tela", { deep: false })[0];
+    const pai = raiz.parent as any;
+    expect([].concat(pai.props.style).filter(Boolean)).toContainEqual(expect.objectContaining({ backgroundColor: "transparent" }));
+  });
+});

@@ -1,8 +1,8 @@
 // ============================================================
 // AURA. — Conferência de estoque · regras da tela de resultado (p-108, C)
 //
-// Sem React: diferenças, histórico e o rótulo do lançamento no histórico do
-// produto usam estas funções, e o jest carrega este arquivo direto.
+// Sem React: diferenças, histórico e o rótulo do lançamento de estoque (o
+// movimento gravado pelo backend) usam estas funções, e o jest carrega este arquivo direto.
 // ============================================================
 import type {
   Conferencia, EscopoConferencia, ItemDiferenca, StatusConferencia,
@@ -110,6 +110,30 @@ export function comSinal(n: number): string {
 
 export function chaveDoItem(it: { product_id: string; variant_id: string | null }): string {
   return chaveDaLinha(it.product_id, it.variant_id);
+}
+
+/**
+ * Aviso "Agora tem N: mudou depois que você contou" (QA 11/11). Só quando o
+ * estoque de agora difere do que se espera dele:
+ *   · rascunho: o que o sistema tinha no bipe (estoque_no_bipe);
+ *   · ajustada: o do bipe mais o que o ajuste mexeu (diferenca_aplicada, o
+ *     efetivo, com o piso 0; item desmarcado não tem e conta como 0) — sem
+ *     isso, o próprio resultado do ajuste (58 → 56) virava "mudou depois";
+ *   · desfeita e descartada: nunca (não há o que manter).
+ * Retorna o texto, ou null para não mostrar nada.
+ */
+export function avisoDeEstoqueQueMudou(
+  it: Pick<ItemDiferenca, "estoque_atual" | "estoque_no_bipe" | "diferenca_aplicada">,
+  status: StatusConferencia | null | undefined,
+): string | null {
+  var esperado: number;
+  if (status === "rascunho") esperado = it.estoque_no_bipe;
+  else if (status === "aplicada") esperado = it.estoque_no_bipe + (it.diferenca_aplicada || 0);
+  else return null;
+  if (Math.abs(it.estoque_atual - esperado) <= 1e-9) return null;
+  return status === "aplicada"
+    ? "Agora tem " + qtd(it.estoque_atual) + ": mudou depois que você contou, e isso ficou mantido."
+    : "Agora tem " + qtd(it.estoque_atual) + ": mudou depois que você contou, e isso fica mantido.";
 }
 
 export function somaDasPecas(lista: ItemDiferenca[]): number {
