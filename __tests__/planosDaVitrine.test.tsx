@@ -116,6 +116,21 @@ describe("planos na vitrine", () => {
     expect(txt).not.toContain("WhatsApp oficial");
   });
 
+  // p-106 (11/11/2026): o titular conta como um acesso; o texto diz quantos
+  // de funcionário o plano inclui e o adicional tem o nome novo.
+  it("acessos: 'Só o seu acesso', 'mais 2 de funcionário' e o acesso de funcionário adicional", async () => {
+    const tree = await montar();
+    const essencial = textoDe(tree.root.findAllByProps({ testID: "plano-card-essencial" })[0]);
+    expect(essencial).toContain("Só o seu acesso");
+    expect(essencial).not.toContain("1 acesso de usuário");
+    const negocio = textoDe(tree.root.findAllByProps({ testID: "plano-card-negocio" })[0]);
+    expect(negocio).toContain("O seu acesso e mais 2 de funcionário");
+    expect(negocio).not.toContain("Até 3 usuários");
+    const tudo = textoDe(tree.toJSON());
+    expect(tudo).toContain("Acesso de funcionário adicional");
+    expect(tudo).not.toContain("Usuário adicional");
+  });
+
   it("o preço e o desconto anual continuam de pé", async () => {
     const tree = await montar();
     const txt = textoDe(tree.root.findAllByProps({ testID: "plano-card-negocio" })[0]);

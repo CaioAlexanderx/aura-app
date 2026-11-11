@@ -46,14 +46,14 @@ import {
 export function mensagemDoAssento(err: any, acao: string): string {
   var status = err && err.status;
   var code = err && err.data && err.data.code;
-  if (status === 503 || code === "MIGRATION_PENDING") return "O assento de temporada fica disponível em breve.";
-  if (code === "SEM_ASSINATURA") return "Para contratar o assento, a empresa precisa de uma assinatura ativa.";
+  if (status === 503 || code === "MIGRATION_PENDING") return "O acesso de funcionário para a temporada fica disponível em breve.";
+  if (code === "SEM_ASSINATURA") return "Para contratar o acesso de funcionário para a temporada, a empresa precisa de uma assinatura ativa.";
   if (code === "TEMPORADA_ENCERRADA") return "A temporada terminou: não dá mais para contratar.";
-  if (code === "LIMITE_DE_ASSENTOS") return "A empresa já está no limite de assentos de temporada.";
+  if (code === "LIMITE_DE_ASSENTOS") return "A empresa já está no limite de acessos de funcionário para a temporada.";
   // 14/10/2026 (Aura-backend#840): com valor combinado vigente a assinatura não
   // é reajustada sozinha, então o assento de temporada não se contrata pela tela.
   if (code === "VALOR_CUSTOMIZADO") return "Esta empresa tem valor combinado; fale com a equipe.";
-  if (status === 403) return "Só o dono da empresa pode contratar ou cancelar o assento de temporada.";
+  if (status === 403) return "Só o dono da empresa pode contratar ou cancelar o acesso de funcionário para a temporada.";
   if (status === 502 || code === "FALHA_ASAAS") return "Não consegui ajustar a assinatura agora. Nada foi concedido nem cobrado: tente de novo em instantes.";
   if (err && err.isNetworkError) return "Sem conexão com o servidor. Tente de novo.";
   if (err && err.message && status && status < 500) return err.message;
@@ -62,8 +62,8 @@ export function mensagemDoAssento(err: any, acao: string): string {
 
 var MOTIVO_SEM_COMPRA: Record<string, string> = {
   temporada_encerrada: "A temporada terminou: não dá mais para contratar.",
-  limite_de_assentos: "A empresa já contratou o máximo de assentos de temporada.",
-  plano_nao_suportado: "O plano atual não permite contratar assento de temporada pela tela. Fale com o suporte.",
+  limite_de_assentos: "A empresa já contratou o máximo de acessos de funcionário para a temporada.",
+  plano_nao_suportado: "O plano atual não permite contratar acesso de funcionário para a temporada pela tela. Fale com o suporte.",
   valor_customizado: "Esta empresa tem valor combinado; fale com a equipe.",
 };
 
@@ -125,13 +125,13 @@ function AssentoTemporada(props: AssentoProps) {
     setEnviando(true); setErro(null); setSucesso(null);
     try {
       var r = await billingApi.seatPass.contratar(cid, qtyEfetiva);
-      setSucesso(r.mensagem || (r.cobranca && r.cobranca.texto) || "Assento contratado.");
+      setSucesso(r.mensagem || (r.cobranca && r.cobranca.texto) || "Acesso de funcionário contratado.");
       setContratando(false);
       setQty(1);
-      toast.success(r.aplicado_agora ? "Assento de temporada ativo." : "Assento de temporada agendado.");
+      toast.success(r.aplicado_agora ? "Acesso de funcionário para a temporada ativo." : "Acesso de funcionário para a temporada agendado.");
       recarregar();
     } catch (e: any) {
-      setErro(mensagemDoAssento(e, "contratar o assento"));
+      setErro(mensagemDoAssento(e, "contratar o acesso"));
       // O estado pode ter mudado (limite, assinatura): confere.
       recarregar();
     } finally { setEnviando(false); }
@@ -142,10 +142,10 @@ function AssentoTemporada(props: AssentoProps) {
     try {
       await billingApi.seatPass.cancelar(cid, passId);
       setCancelandoId(null);
-      toast.success("Assento de temporada cancelado.");
+      toast.success("Acesso de funcionário para a temporada cancelado.");
       recarregar();
     } catch (e: any) {
-      setErro(mensagemDoAssento(e, "cancelar o assento"));
+      setErro(mensagemDoAssento(e, "cancelar o acesso"));
       recarregar();
     } finally { setEnviando(false); }
   }
@@ -183,11 +183,11 @@ function AssentoTemporada(props: AssentoProps) {
   if (q.isLoading) {
     corpo = <ActivityIndicator testID="assento-carregando" color={Colors.violet3} style={{ marginVertical: 12 }} />;
   } else if (emBreve) {
-    corpo = <Text testID="assento-em-breve" style={s.nota}>Assento de temporada: disponível em breve.</Text>;
+    corpo = <Text testID="assento-em-breve" style={s.nota}>Acesso de funcionário para a temporada: disponível em breve.</Text>;
   } else if (q.isError || !d) {
     corpo = (
       <View testID="assento-erro" style={{ gap: 8, alignItems: "flex-start" }}>
-        <Text style={s.nota}>Não consegui carregar o assento de temporada.</Text>
+        <Text style={s.nota}>Não consegui carregar o acesso de funcionário para a temporada.</Text>
         <Pressable testID="assento-tentar-de-novo" onPress={function() { q.refetch(); }} accessibilityRole="button" style={s.btn}>
           <Text style={s.btnText}>Tentar de novo</Text>
         </Pressable>
@@ -200,7 +200,7 @@ function AssentoTemporada(props: AssentoProps) {
     corpo = (
       <>
         <Text style={s.nota}>
-          Um acesso extra para a equipe de fim de ano, válido de {dataBr(d.temporada.starts_at)} a {dataBr(d.temporada.ends_at)}.
+          Um acesso de funcionário adicional para a equipe de fim de ano, válido de {dataBr(d.temporada.starts_at)} a {dataBr(d.temporada.ends_at)}.
           Ele expira sozinho no fim da validade.
         </Text>
 
@@ -210,7 +210,7 @@ function AssentoTemporada(props: AssentoProps) {
             <Text testID="assento-validade" style={s.valor}>{dataBr(d.temporada.starts_at)} a {dataBr(d.temporada.ends_at)}</Text>
           </View>
           <View style={s.linha}>
-            <Text style={s.rotulo}>Valor por assento</Text>
+            <Text style={s.rotulo}>Valor por acesso</Text>
             <Text testID="assento-preco" style={s.valor}>{reais(d.preco_assento_mensal)} por mensalidade</Text>
           </View>
           <View style={s.linha}>
@@ -220,7 +220,7 @@ function AssentoTemporada(props: AssentoProps) {
                 ? assentos(d.assentos_ativos) + " ativo" + (d.assentos_ativos === 1 ? "" : "s") + " · " + reais(d.valor_mensal_atual) + " por mês" + (d.valido_ate ? " · até " + dataBr(d.valido_ate) : "")
                 : d.assentos_agendados > 0
                   ? assentos(d.assentos_agendados) + " agendado" + (d.assentos_agendados === 1 ? "" : "s")
-                  : "Nenhum assento contratado"}
+                  : "Nenhum acesso contratado"}
             </Text>
           </View>
         </View>
@@ -245,9 +245,9 @@ function AssentoTemporada(props: AssentoProps) {
               </View>
               {confirmando ? (
                 <View testID={"assento-cancelar-confirmacao-" + p.id} style={s.confirma}>
-                  <Text style={s.confirmaTitulo}>Cancelar este assento?</Text>
+                  <Text style={s.confirmaTitulo}>Cancelar este acesso?</Text>
                   <Text style={s.nota}>
-                    O assento sai agora e o valor da assinatura volta ao normal nas próximas mensalidades.
+                    O acesso sai agora e o valor da assinatura volta ao normal nas próximas mensalidades.
                     O que já foi cobrado não é devolvido.
                   </Text>
                   <View style={s.acoes}>
@@ -255,7 +255,7 @@ function AssentoTemporada(props: AssentoProps) {
                       <Text style={s.btnText}>Manter</Text>
                     </Pressable>
                     <Pressable testID="assento-cancelar-confirmar" onPress={function() { cancelar(p.id); }} disabled={enviando} accessibilityRole="button" style={[s.btnVermelho, enviando && { opacity: 0.6 }]}>
-                      <Text style={s.btnPrimarioText}>{enviando ? "Cancelando…" : "Cancelar assento"}</Text>
+                      <Text style={s.btnPrimarioText}>{enviando ? "Cancelando…" : "Cancelar acesso"}</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -292,23 +292,23 @@ function AssentoTemporada(props: AssentoProps) {
         {d.pode_contratar && props.isOwner && !props.emAtraso && !contratando ? (
           <Pressable testID="assento-contratar" onPress={function() { setContratando(true); setErro(null); setSucesso(null); }} accessibilityRole="button" style={s.btnPrimario}>
             <Icon name="plus" size={14} color="#fff" />
-            <Text style={s.btnPrimarioText}>Contratar assento</Text>
+            <Text style={s.btnPrimarioText}>Contratar acesso</Text>
           </Pressable>
         ) : null}
 
         {d.pode_contratar && !props.isOwner ? (
-          <Text testID="assento-so-dono" style={s.nota}>Só o dono da empresa contrata ou cancela o assento de temporada.</Text>
+          <Text testID="assento-so-dono" style={s.nota}>Só o dono da empresa contrata ou cancela o acesso de funcionário para a temporada.</Text>
         ) : null}
 
         {contratando && !props.emAtraso ? (
           <View testID="assento-contratar-painel" style={s.painel}>
-            <Text style={s.confirmaTitulo}>Quantos assentos?</Text>
+            <Text style={s.confirmaTitulo}>Quantos acessos?</Text>
             <View style={s.stepper}>
-              <Pressable testID="assento-qty-menos" disabled={qtyEfetiva <= 1} onPress={function() { setQty(Math.max(1, qtyEfetiva - 1)); }} accessibilityRole="button" accessibilityLabel="Menos um assento" style={[s.passo, qtyEfetiva <= 1 && { opacity: 0.4 }]}>
+              <Pressable testID="assento-qty-menos" disabled={qtyEfetiva <= 1} onPress={function() { setQty(Math.max(1, qtyEfetiva - 1)); }} accessibilityRole="button" accessibilityLabel="Menos um acesso" style={[s.passo, qtyEfetiva <= 1 && { opacity: 0.4 }]}>
                 <Icon name="minus" size={14} color={Colors.ink} />
               </Pressable>
               <Text testID="assento-qty" style={s.qty}>{qtyEfetiva}</Text>
-              <Pressable testID="assento-qty-mais" disabled={qtyEfetiva >= teto} onPress={function() { setQty(Math.min(teto, qtyEfetiva + 1)); }} accessibilityRole="button" accessibilityLabel="Mais um assento" style={[s.passo, qtyEfetiva >= teto && { opacity: 0.4 }]}>
+              <Pressable testID="assento-qty-mais" disabled={qtyEfetiva >= teto} onPress={function() { setQty(Math.min(teto, qtyEfetiva + 1)); }} accessibilityRole="button" accessibilityLabel="Mais um acesso" style={[s.passo, qtyEfetiva >= teto && { opacity: 0.4 }]}>
                 <Icon name="plus" size={14} color={Colors.ink} />
               </Pressable>
               <Text style={s.nota}>de 1 a {teto}</Text>
@@ -368,7 +368,7 @@ function AssentoTemporada(props: AssentoProps) {
           </View>
         ) : null}
         {!d.pode_contratar && bloqueio && bloqueio !== "sem_assinatura" && bloqueio !== "valor_customizado" ? (
-          <Text testID="assento-bloqueio" style={s.nota}>{MOTIVO_SEM_COMPRA[bloqueio] || "Não dá para contratar o assento de temporada agora."}</Text>
+          <Text testID="assento-bloqueio" style={s.nota}>{MOTIVO_SEM_COMPRA[bloqueio] || "Não dá para contratar o acesso de funcionário para a temporada agora."}</Text>
         ) : null}
       </>
     );
@@ -379,7 +379,7 @@ function AssentoTemporada(props: AssentoProps) {
   }
   return (
     <View testID="assento-temporada">
-      <SectionTitle title="Assento de temporada" />
+      <SectionTitle title="Acesso de funcionário para a temporada" />
       <Card style={{ gap: 12, paddingBottom: 16 }}>{corpo}</Card>
     </View>
   );

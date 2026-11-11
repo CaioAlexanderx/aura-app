@@ -568,7 +568,7 @@ export function AddCompanyModal({ visible, onClose }: Props) {
                     />
                     {(created.billing_preview.seats_price || 0) > 0 && (
                       <Row
-                        label="Acessos extras"
+                        label="Acessos de funcionário adicionais"
                         value={formatBRL(created.billing_preview.seats_price)}
                         C={C}
                       />

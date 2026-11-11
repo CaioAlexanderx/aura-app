@@ -32,8 +32,8 @@ export function AtalhoAssento() {
     >
       <View style={s.icone}><Icon name="users" size={18} color={Colors.violet3} /></View>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={s.titulo}>Assento de temporada</Text>
-        <Text style={s.desc}>Um acesso extra para a equipe de fim de ano. Ver na página Black Friday.</Text>
+        <Text style={s.titulo}>Acesso de funcionário para a temporada</Text>
+        <Text style={s.desc}>Um acesso de funcionário adicional para a equipe de fim de ano. Ver na página Black Friday.</Text>
       </View>
       <Icon name="chevron_right" size={16} color={Colors.ink3} />
     </Pressable>

@@ -63,7 +63,7 @@ const PLANS = [
       "Apoio contábil guiado (MEI e Simples Nacional)",
       "Cálculo de DAS-MEI e guias fiscais",
       // Suporte
-      "1 acesso de usuário",
+      "Só o seu acesso",
       "Suporte via chat com Analista de Negócios",
     ],
   },
@@ -103,7 +103,7 @@ const PLANS = [
       // Verticais
       "Módulo Vertical incluso: Odonto, Beauty, Food ou Pet",
       // Acessos e gestao
-      "Até 3 usuários com login e permissões",
+      "O seu acesso e mais 2 de funcionário",
       "Gestão de equipe com perfis de acesso",
       // Financeiro avancado
       "Fluxo de caixa projetado",
@@ -118,7 +118,7 @@ const PLANS = [
       "Tudo do Negócio, e mais:",
       // Limites
       "Clientes e funcionarios ilimitados",
-      "Usuários com login ilimitados",
+      "O seu acesso e mais 4 de funcionário",
       // Multi-CNPJ
       "Multi-CNPJ: gerencie vários negócios",
       "Visão consolidada de todas as suas empresas",
@@ -160,7 +160,7 @@ const ADDONS = [
     price: "R$ 49",
     desc: "Pacote de 100 mensagens promocionais pelo WhatsApp oficial, para quando a cota do mês do plano Negócio acabar. Compra direto na aba WhatsApp",
   },
-  { name: "Usuário adicional", price: "R$ 19/mês", desc: "Para cada pessoa a mais com login no app, por mês" },
+  { name: "Acesso de funcionário adicional", price: "R$ 19/mês", desc: "Cada acesso de funcionário adicional custa R$ 19 por mês, em qualquer plano" },
   { name: "Módulo vertical extra", price: "R$ 39/mês", desc: "A partir do Negócio. Adicione um setor especializado (Odonto, Beauty, Food, Pet, etc.) além do incluso no seu plano" },
   { name: "Consultoria sob medida", price: "Sob consulta", desc: "Configuração, treinamento, automações e integrações personalizadas para o seu negócio", cta: true },
 ];

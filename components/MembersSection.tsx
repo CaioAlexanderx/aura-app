@@ -14,6 +14,7 @@ import { useMemberTemplates, type RoleTemplate } from "@/hooks/useMemberTemplate
 import { useAuthStore } from "@/stores/auth";
 import type { Member, SiblingCompany } from "@/hooks/useMembers";
 import { alternarPermissao, custosPorPadrao } from "@/utils/estoqueConsulta";
+import { ContratarAcessoBotao } from "@/components/ContratarAcessoBotao";
 
 // ============================================================
 // CONSTANTS
@@ -1146,15 +1147,20 @@ export function MembersSection() {
             seatsIncluded == null: backend antigo, fallback ao texto legacy.
           */}
           {seatsIncluded == null ? (
-            <Text style={s.billingText}>O titular não é cobrado. Cada membro adicional ativo: R$19/mês.</Text>
+            <Text style={s.billingText}>O titular não é cobrado. Cada acesso de funcionário adicional ativo: R$19/mês.</Text>
           ) : overLimit ? (
             <Text style={s.billingTextOver}>
-              {extraSeats} acesso{extraSeats !== 1 ? "s" : ""} acima do plano {planEffective} · +R${extraSeats * extraSeatPrice}/mês
+              {extraSeats} {extraSeats !== 1 ? "acessos de funcionário adicionais" : "acesso de funcionário adicional"} além do plano {planEffective} · +R${extraSeats * extraSeatPrice}/mês
             </Text>
           ) : atLimit ? (
-            <Text style={s.billingTextWarn}>
-              Limite de funcionários atingido. Contrate adicional para criar mais acessos (R${extraSeatPrice}/mês cada).
-            </Text>
+            <>
+              <Text style={s.billingTextWarn}>
+                Limite de funcionários atingido. Contrate adicional para criar mais acessos (R${extraSeatPrice}/mês cada).
+              </Text>
+              {/* p-106: leva ao seletor do checkout, ao acesso de funcionário
+                  para a temporada ou ao WhatsApp de ajuda (utils/contratarAcesso). */}
+              <ContratarAcessoBotao />
+            </>
           ) : (
             <Text style={s.billingText}>
               {seatsUsed} de {seatsIncluded >= 999 ? "ilimitado" : seatsIncluded} acesso{seatsIncluded !== 1 ? "s" : ""} inclusos no plano {planEffective}.

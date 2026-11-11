@@ -168,10 +168,10 @@ describe("estado", () => {
     expect(api.estado).toHaveBeenCalledWith(CID);
     expect(byTestId(tree, "assento-temporada")).toHaveLength(1);
     const out = text(tree);
-    expect(out).toContain("Assento de temporada");
+    expect(out).toContain("Acesso de funcionário para a temporada");
     expect(out).toContain("01/11/2026 a 31/01/2027");
     expect(out).toContain("R$ 19,00 por mensalidade");
-    expect(out).toContain("Nenhum assento contratado");
+    expect(out).toContain("Nenhum acesso contratado");
     expect(byTestId(tree, "assento-contratar")).toHaveLength(1);
     tree.unmount();
   });
@@ -183,7 +183,7 @@ describe("estado", () => {
     }));
     const tree = await mount();
     const out = text(tree);
-    expect(out).toContain("2 assentos ativos");
+    expect(out).toContain("2 acessos ativos");
     expect(out).toContain("R$ 38,00 por mês");
     expect(out).toContain("até 31/01/2027");
     expect(byTestId(tree, "assento-passe-" + PASSE)).toHaveLength(1);
@@ -194,7 +194,7 @@ describe("estado", () => {
   it("assento agendado aparece com a data de início", async () => {
     api.estado.mockImplementation(async () => ESTADO({ assentos_agendados: 2, passes: [PASSE_AGENDADO] }));
     const tree = await mount();
-    expect(text(tree)).toContain("2 assentos agendados");
+    expect(text(tree)).toContain("2 acessos agendados");
     expect(text(tree)).toContain("começa em 01/11/2026");
     tree.unmount();
   });
@@ -265,7 +265,7 @@ describe("contratar", () => {
     expect(byTestId(tree, "assento-sucesso")).toHaveLength(1);
     expect(text(tree)).toContain("Assento de temporada agendado: começa em 01/11/2026.");
     expect(byTestId(tree, "assento-contratar-painel")).toHaveLength(0);
-    expect(toast.success).toHaveBeenCalledWith("Assento de temporada agendado.");
+    expect(toast.success).toHaveBeenCalledWith("Acesso de funcionário para a temporada agendado.");
     // Recarrega o estado e pede ao /me os acessos novos.
     expect(api.estado.mock.calls.length).toBeGreaterThan(antes);
     expect(mockRefreshMe).toHaveBeenCalled();
@@ -326,7 +326,7 @@ describe("cancelar", () => {
     const tree = await mount();
     await press(tree, "assento-cancelar-" + PASSE);
     expect(byTestId(tree, "assento-cancelar-confirmacao-" + PASSE)).toHaveLength(1);
-    expect(text(tree)).toContain("Cancelar este assento?");
+    expect(text(tree)).toContain("Cancelar este acesso?");
     expect(api.cancelar).not.toHaveBeenCalled();
 
     await press(tree, "assento-cancelar-voltar");
@@ -336,7 +336,7 @@ describe("cancelar", () => {
     await press(tree, "assento-cancelar-" + PASSE);
     await press(tree, "assento-cancelar-confirmar");
     expect(api.cancelar).toHaveBeenCalledWith(CID, PASSE);
-    expect(toast.success).toHaveBeenCalledWith("Assento de temporada cancelado.");
+    expect(toast.success).toHaveBeenCalledWith("Acesso de funcionário para a temporada cancelado.");
     expect(mockRefreshMe).toHaveBeenCalled();
     tree.unmount();
   });
@@ -360,7 +360,7 @@ describe("sem como contratar", () => {
     const tree = await mount({ plano: plano as any });
     expect(byTestId(tree, "assento-contratar")).toHaveLength(0);
     expect(byTestId(tree, "assento-sem-assinatura")).toHaveLength(1);
-    expect(text(tree)).toContain("Para contratar o assento, a loja precisa de uma assinatura ativa.");
+    expect(text(tree)).toContain("Para contratar o acesso de funcionário para a temporada, a loja precisa de uma assinatura ativa.");
     expect(text(tree)).toContain("Ver os planos");
     await press(tree, "assento-ir-checkout");
     expect(mockPush).toHaveBeenCalledWith("/(tabs)/checkout?plan=negocio");
@@ -421,7 +421,7 @@ describe("sem como contratar", () => {
     api.estado.mockImplementation(async () => ESTADO({ pode_contratar: false, motivo_bloqueio: "limite_de_assentos", limite_restante: 0, assentos_ativos: 10 }));
     const tree = await mount();
     expect(byTestId(tree, "assento-contratar")).toHaveLength(0);
-    expect(text(tree)).toContain("máximo de assentos de temporada");
+    expect(text(tree)).toContain("máximo de acessos de funcionário para a temporada");
     tree.unmount();
   });
 });
@@ -434,7 +434,7 @@ describe("membro (não é o dono)", () => {
     }));
     const tree = await mount({ isOwner: false });
     const out = text(tree);
-    expect(out).toContain("2 assentos ativos");
+    expect(out).toContain("2 acessos ativos");
     expect(byTestId(tree, "assento-passe-" + PASSE)).toHaveLength(1);
     expect(byTestId(tree, "assento-contratar")).toHaveLength(0);
     expect(byTestId(tree, "assento-cancelar-" + PASSE)).toHaveLength(0);

@@ -28,9 +28,9 @@ export const ROTA_DO_ASSENTO_COM_LOGIN = "/black-friday?secao=" + SECAO_ASSENTO;
 /** "Ver os planos" do cartão do assento: o Negócio marcado. */
 export const ROTA_PLANOS_DO_ASSENTO = "/(tabs)/checkout?plan=negocio";
 
-export const TEXTO_ASSENTO_SEM_ASSINATURA = "Para contratar o assento, a loja precisa de uma assinatura ativa.";
+export const TEXTO_ASSENTO_SEM_ASSINATURA = "Para contratar o acesso de funcionário para a temporada, a loja precisa de uma assinatura ativa.";
 export const TEXTO_ASSENTO_EM_ATRASO = "Regularize a mensalidade para contratar.";
-export const MENSAGEM_WHATSAPP_ASSENTO = "Oi, Aura! Tenho valor combinado e quero contratar o assento de temporada para a minha loja.";
+export const MENSAGEM_WHATSAPP_ASSENTO = "Oi, Aura! Tenho valor combinado e quero contratar acesso de funcionário para a temporada na minha loja.";
 
 /** "#assento", "assento", ["assento"] → "assento"; o resto (lixo do router incluso) → null. */
 export function secaoDoLink(v: unknown): string | null {

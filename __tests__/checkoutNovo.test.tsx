@@ -296,7 +296,7 @@ describe("p-105 · checkout do assento (?de=assento)", () => {
     mockParams = { plan: "negocio", de: "assento" };
     const tree = await mount();
     expect(byTestId(tree, "checkout-aviso-assento")).toHaveLength(1);
-    expect(text(tree)).toContain("Para contratar o assento, a loja precisa de uma assinatura ativa.");
+    expect(text(tree)).toContain("Para contratar o acesso de funcionário para a temporada, a loja precisa de uma assinatura ativa.");
     expect(byTestId(tree, "checkout-aviso-assento-pagar")).toHaveLength(0);
     expect(marcado(tree)).toEqual(["negocio"]);
     tree.unmount();
@@ -311,7 +311,7 @@ describe("p-105 · checkout do assento (?de=assento)", () => {
     mockBilling.invoices.mockResolvedValue({ total: 1, invoices: [{ id: "p1", status: "OVERDUE", due_date: "2026-11-01", invoice_url: "https://asaas.test/i/p1" }] });
     mockParams = { de: "assento" };
     const tree = await mount();
-    expect(text(tree)).toContain("Regularize a mensalidade para contratar o assento.");
+    expect(text(tree)).toContain("Regularize a mensalidade para contratar o acesso de funcionário para a temporada.");
     // Em atraso o plano é o da conta: regulariza, não troca.
     expect(marcado(tree)).toEqual(["essencial"]);
     await press(tree, "checkout-aviso-assento-pagar");
