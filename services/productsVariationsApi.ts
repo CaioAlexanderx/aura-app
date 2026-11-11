@@ -62,6 +62,13 @@ export type SaveVariationsBody = {
   sizes: string[];
   matrix: MatrixMap;
   barcodes?: BarcodesMap;   // 21/05/2026: opcional (omitir = nao altera barcodes existentes nao)
+  // 10/11/2026 (fix estoque preso): a matriz que o editor leu ao abrir.
+  // Celula com o mesmo valor dela nao foi mexida e o backend mantem o
+  // estoque do banco (venda feita com o editor aberto nao volta).
+  matrix_lida?: MatrixMap;
+  // 10/11/2026: sem isto, tirar da grade cor/tamanho com estoque responde
+  // 409 GRADE_REMOCAO_COM_ESTOQUE.
+  confirmar_remocao_com_estoque?: boolean;
   // images NAO entra no PUT — sao gerenciadas via POST/DELETE /variant-image
   // separado e preservadas server-side no rewrite via lookup por (color, size).
 };
