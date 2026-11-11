@@ -24,6 +24,8 @@ export type PedidoTransferencia = {
   destino_company_id: string;
   itens: ItemParaTransferir[];
   observacao?: string | null;
+  /** p-108: transferência feita a partir de uma conferência da loja de origem. */
+  stock_count_id?: string | null;
 };
 
 export type ItemTransferido = {
