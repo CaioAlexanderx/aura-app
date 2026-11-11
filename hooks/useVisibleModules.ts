@@ -15,6 +15,13 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   // estoque: ninguem ganha nem perde acesso. O backend (services/modules.js)
   // ainda NAO conhece a chave (mesmo caso de "os" e "cupons").
   fornecedores: 'essencial',
+  // 11/11/2026 -- Conferencia de estoque (p-108): contar a prateleira,
+  // ver as diferencas e ajustar (app/(tabs)/conferencia-estoque/*). Chave
+  // PROPRIA (regra 3), nunca o "estoque". Essencial: o Essencial ve a funcao
+  // inteira (decisao do Caio), e o Negocio/Expansao herdam pelo nivel. O
+  // backend (services/modules.js) ainda NAO conhece a chave (mesmo caso de
+  // "fornecedores"), entao ela fica fora do catalogo do ClientsAdmin por ora.
+  conferencia_estoque: 'essencial',
   // 13/10/2026 -- pagina "Black Friday" (/black-friday): funcoes da temporada
   // de fim de ano reunidas (o que vai faltar, assento de temporada, vale-troca
   // no cupom). Chave PROPRIA (regra 3), mesmo plano do Estoque
@@ -184,7 +191,12 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   // (estoque) e quem monta a loja (configuracoes: assento e vale-troca).
   // Nao existe permissao propria no backend; cada secao da pagina checa o
   // modulo da propria funcao, entao quem tem so uma das duas ve so o que e seu.
-  estoque:       ['estoque', 'black_friday', 'fornecedores'],
+  // 11/11/2026 -- a conferencia de estoque (p-108) acompanha quem ve e
+  // edita o estoque: funcionario conta; aplicar/desfazer/transferir e
+  // conferido na propria tela e no backend (permissao de editar). Quem so
+  // consulta (estoque_consulta) nao entra: o backend nega /estoque a esse
+  // perfil (negarEmConsultaSemCustoNoResto) e a diferenca mostra custo.
+  estoque:       ['estoque', 'black_friday', 'fornecedores', 'conferencia_estoque'],
   // 30/10/2026 -- Estoque so consulta: mesma tela, mesmo modulo, sem mod novo
   // porque e variacao da tela (utils/estoqueConsulta.ts). So o modulo estoque:
   // Black Friday e Fornecedores mostram valores e nao entram.
