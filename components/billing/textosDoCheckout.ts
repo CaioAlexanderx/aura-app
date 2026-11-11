@@ -56,7 +56,10 @@ export function precoDoPlanoNaCotacao(q: QuoteResponse | null | undefined, plano
   var tabela = numero(q.table_value);
   if (tabela === null || tabela <= 0) return null;
   // Sem extra_seats não dá para separar o plano dos acessos: fica a tabela.
-  var extras = numero(q.extra_seats);
+  // p-106: com extra_seats na pergunta, o table_value já soma os acessos de
+  // temporada; os acessos do valor são os charged_extra_seats.
+  var cobrados = numero(q.charged_extra_seats);
+  var extras = cobrados !== null ? cobrados : numero(q.extra_seats);
   if (extras === null || extras < 0) return null;
   var plano_ = arredonda(tabela - extras * PRECO_DO_ACESSO_EXTRA);
   return plano_ > 0 ? plano_ : null;
@@ -75,9 +78,91 @@ export function rotuloDoPlanoNoResumo(label: string, anual: boolean): string {
   return "Plano " + label + " (" + (anual ? "anual, cobrado por mês" : "mensal") + ")";
 }
 
-/** Texto de hoje da linha dos acessos extras liberados. */
+/** "1 acesso de funcionário adicional" / "3 acessos de funcionário adicionais" (p-106). */
 export function rotuloDosAcessosExtras(n: number): string {
-  return n + " acesso" + (n > 1 ? "s" : "") + " extra" + (n > 1 ? "s" : "") + " de equipe";
+  return n > 1 ? n + " acessos de funcionário adicionais" : n + " acesso de funcionário adicional";
+}
+
+// ------------------------------------------------------------
+// p-106 (11/11/2026): seletor de acessos de funcionário no checkout
+// ------------------------------------------------------------
+
+/** Acessos que cada plano inclui, contando o titular (SEATS_PER_PLAN do backend). */
+export const ACESSOS_INCLUIDOS_NO_PLANO: Record<string, number> = { essencial: 1, negocio: 3, expansao: 5 };
+export const MAXIMO_DE_ACESSOS_ADICIONAIS = 10;
+
+export const AVISO_ACESSOS_DEPOIS_DE_ASSINAR = "Os acessos de funcionário liberam assim que o pagamento for confirmado.";
+export const TEXTO_ACESSOS_TRAVADOS =
+  "Sua assinatura já está ativa e em dia, então os acessos de funcionário não mudam por aqui. " +
+  "Para ajustar, fale com a equipe Aura pelo WhatsApp de ajuda.";
+export const MENSAGEM_WHATSAPP_ACESSOS = "Oi, Aura! Quero mudar a quantidade de acessos de funcionário da minha loja.";
+
+/** "1 acesso de funcionário para a temporada" / "2 acessos de funcionário para a temporada". */
+export function rotuloDosAcessosDaTemporada(n: number): string {
+  return n + (n > 1 ? " acessos" : " acesso") + " de funcionário para a temporada";
+}
+
+/** "só o seu acesso" | "o seu acesso e mais 2 de funcionário" | ... (incluídos conta o titular). */
+export function oQueOPlanoInclui(incluidos: number): string {
+  var funcionarios = Math.max(Math.floor(incluidos) - 1, 0);
+  return funcionarios === 0 ? "só o seu acesso" : "o seu acesso e mais " + funcionarios + " de funcionário";
+}
+
+/** A frase ao lado do seletor (frase da versão 6 do mock). */
+export function textoAoLadoDoSeletor(nomeDoPlano: string, incluidos: number, preco: number = PRECO_DO_ACESSO_EXTRA): string {
+  var reais = Number.isInteger(preco) ? "R$ " + preco : fmtBRL(preco);
+  return "O plano " + nomeDoPlano + " inclui " + oQueOPlanoInclui(incluidos) + ". Precisa de mais? " +
+    "Cada acesso de funcionário adicional custa " + reais + " por mês, em qualquer plano.";
+}
+
+export type SeletorDaCotacao = {
+  atuais: number;      // permanentes atuais da loja (valor inicial)
+  temporada: number;   // acessos de temporada ativos, somados por cima
+  maximo: number;      // 10
+  incluidos: number;   // do plano, contando o titular
+  preco: number;       // R$ por acesso (19)
+};
+
+/**
+ * O que o seletor precisa, lido da cotação pedida com extra_seats. null =
+ * sem seletor: cotação ausente, de outro plano/ciclo, de backend sem o p-106
+ * (sem current_extra_seats) ou valor combinado (custom / extra_seats_ignored).
+ * Sem seletor o checkout não manda extra_seats: a loja nunca perde acessos
+ * porque a tela não soube quantos ela tinha.
+ */
+export function seletorDaCotacao(q: QuoteResponse | null | undefined, plano: string, ciclo: string): SeletorDaCotacao | null {
+  if (!q || typeof q !== "object") return null;
+  if (!q.plan || String(q.plan).toLowerCase() !== plano) return null;
+  if (q.cycle && String(q.cycle).toLowerCase() !== ciclo) return null;
+  if (q.custom === true || q.extra_seats_ignored === true) return null;
+  var atuais = numero(q.current_extra_seats);
+  if (atuais === null || atuais < 0) return null;
+  var maximo = numero(q.max_extra_seats);
+  var incluidos = numero(q.plan_included_seats);
+  var preco = numero(q.seat_price);
+  var temporada = numero(q.season_extra_seats);
+  var max = maximo !== null && maximo >= 0 ? Math.floor(maximo) : MAXIMO_DE_ACESSOS_ADICIONAIS;
+  return {
+    atuais: Math.min(Math.floor(atuais), max),
+    temporada: temporada !== null && temporada > 0 ? Math.floor(temporada) : 0,
+    maximo: max,
+    incluidos: incluidos !== null && incluidos >= 1 ? Math.floor(incluidos) : (ACESSOS_INCLUIDOS_NO_PLANO[plano] || 1),
+    preco: preco !== null && preco > 0 ? preco : PRECO_DO_ACESSO_EXTRA,
+  };
+}
+
+/**
+ * Total por mês da cotação pedida com extra_seats = n (plano + acessos
+ * escolhidos + temporada), ou null se a cotação não é desta escolha
+ * (resposta atrasada de outro plano, ciclo ou quantidade).
+ */
+export function totalDaCotacaoComAcessos(q: QuoteResponse | null | undefined, plano: string, ciclo: string, n: number): number | null {
+  if (!q || typeof q !== "object") return null;
+  if (!q.plan || String(q.plan).toLowerCase() !== plano) return null;
+  if (q.cycle && String(q.cycle).toLowerCase() !== ciclo) return null;
+  if (numero(q.extra_seats) !== n) return null;
+  var v = numero(q.value);
+  return v !== null && v > 0 ? arredonda(v) : null;
 }
 
 export function textoDoBotaoDePagar(o: { metodo: "pix" | "card"; valor: number; diasGratis: number }): string {

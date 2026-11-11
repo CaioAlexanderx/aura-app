@@ -40,6 +40,15 @@ export type QuoteResponse = {
   value?: number | string | null;
   custom?: boolean;
   table_value?: number | string | null;
+  // p-106 (Aura-backend#999): só quando o app manda extra_seats.
+  season_extra_seats?: number;       // acessos de temporada ativos, somados por cima
+  charged_extra_seats?: number;      // acessos no valor (extra_seats + season_extra_seats)
+  seat_price?: number;               // 19
+  extra_seats_ignored?: boolean;     // valor combinado: a escolha não vale
+  current_extra_seats?: number;      // permanentes atuais da loja (valor inicial do seletor)
+  pending_extra_seats?: number | null;
+  max_extra_seats?: number;          // 10
+  plan_included_seats?: number;      // acessos do plano, contando o titular (1 / 3 / 5)
 };
 
 function paraNumero(v: unknown): number | null {

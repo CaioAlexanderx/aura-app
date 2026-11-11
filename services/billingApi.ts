@@ -29,6 +29,13 @@ export type SubscribeResponse = {
     discounted_value?: number | null; first_full_due_date?: string | null;
   } | null;
   message?: string;
+  // p-106 (Aura-backend#999): só quando o app manda extra_seats.
+  extra_seats?: number;
+  season_extra_seats?: number;
+  charged_extra_seats?: number;
+  custom?: boolean;
+  extra_seats_ignored?: boolean;
+  extra_seats_pending?: boolean;     // os acessos liberam quando o pagamento confirmar
 };
 
 // 13/07/2026 — POST /companies/:id/billing/validate-coupon
@@ -46,6 +53,12 @@ export type ValidateCouponResponse = {
   recurring_value?: number;      // quanto passa a pagar depois
   first_charge_date?: string;    // YYYY-MM-DD
   extra_seats?: number;
+  // p-106 (Aura-backend#999): só quando o app manda extra_seats.
+  season_extra_seats?: number;
+  charged_extra_seats?: number;
+  seat_price?: number;
+  custom?: boolean;
+  extra_seats_ignored?: boolean;
   // 11/09/2026 — cupom em reais (discount_value) e por varios meses
   // (discount_months > 1: "R$ 50 nas 3 primeiras mensalidades").
   discount_value?: number;
@@ -184,10 +197,15 @@ export var billingApi = {
     return request<TokenizeResponse>("/companies/" + companyId + "/billing/tokenize", { method: "POST", body: cardData, retry: 0, timeout: 15000 });
   },
   // 13/07/2026 — valida o cupom antes de assinar (mostra o valor real na tela).
-  validateCoupon: function(companyId: string, code: string, plan: string, cycle: string, billingType: string) {
+  // 11/11/2026 (p-106): extraSeats = acessos de funcionário adicionais
+  // escolhidos no checkout (0 a 10). Sem ele (undefined/null), o corpo é o de
+  // sempre e o backend usa os acessos da conta.
+  validateCoupon: function(companyId: string, code: string, plan: string, cycle: string, billingType: string, extraSeats?: number | null) {
+    var body: Record<string, any> = { code: code, plan: plan, cycle: cycle, billing_type: billingType };
+    if (typeof extraSeats === "number") body.extra_seats = extraSeats;
     return request<ValidateCouponResponse>("/companies/" + companyId + "/billing/validate-coupon", {
       method: "POST",
-      body: { code: code, plan: plan, cycle: cycle, billing_type: billingType },
+      body: body,
       retry: 0,
     });
   },
@@ -198,10 +216,15 @@ export var billingApi = {
     // 21/09/2026 — CPF/CNPJ de quem paga (só dígitos). O Asaas não gera
     // cobrança sem documento e a maioria das empresas não tem CNPJ cadastrado.
     cpfCnpj?: string;
+    // 11/11/2026 (p-106): acessos de funcionário adicionais escolhidos (0 a
+    // 10). Ausente = o de sempre. Os acessos só liberam no pagamento confirmado.
+    extraSeats?: number | null;
   }) {
+    var acessos = typeof opts?.extraSeats === "number" ? { extra_seats: opts.extraSeats } : {};
     return request<SubscribeResponse>("/companies/" + companyId + "/billing/subscribe", {
       method: "POST",
       body: {
+        ...acessos,
         plan: plan, billing_type: billingType || "PIX", cycle: cycle || "monthly",
         end_date: opts?.endDate, total_cycles: opts?.totalCycles,
         access_code: opts?.accessCode,
@@ -219,10 +242,14 @@ export var billingApi = {
   // 14/10/2026 — valor mensal da empresa para o plano/ciclo/forma escolhidos
   // (valor combinado pela equipe ou tabela). O checkout só usa a resposta com
   // custom:true; erro ou 404 (backend sem a rota) deixa o cálculo de tabela.
-  quote: function(companyId: string, plan: string, cycle: string, billingType: string) {
+  // 11/11/2026 (p-106): com extraSeats (0 a 10), a resposta traz o seletor de
+  // acessos de funcionário (current_extra_seats, plan_included_seats...). O
+  // checkout pede com 0 só para ler os acessos atuais.
+  quote: function(companyId: string, plan: string, cycle: string, billingType: string, extraSeats?: number | null) {
     return request<QuoteResponse>(
       "/companies/" + companyId + "/billing/quote?plan=" + encodeURIComponent(plan) +
-        "&cycle=" + encodeURIComponent(cycle) + "&billing_type=" + encodeURIComponent(billingType),
+        "&cycle=" + encodeURIComponent(cycle) + "&billing_type=" + encodeURIComponent(billingType) +
+        (typeof extraSeats === "number" ? "&extra_seats=" + encodeURIComponent(String(extraSeats)) : ""),
       { retry: 0, timeout: 8000 }
     );
   },

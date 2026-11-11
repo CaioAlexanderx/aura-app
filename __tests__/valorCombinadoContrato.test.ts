@@ -50,3 +50,32 @@ describe("billing › quote", () => {
       "/companies/emp-1/billing/quote?plan=essencial&cycle=monthly&billing_type=PIX");
   });
 });
+
+// p-106 (Aura-backend#999): extra_seats opcional, de 0 a 10. Ausente = o de sempre.
+describe("billing › extra_seats (acessos de funcionário)", () => {
+  it("quote: &extra_seats=N só quando vem um número (0 incluso)", async () => {
+    await billingApi.quote("emp-1", "negocio", "monthly", "PIX", 0);
+    expect(mockRequest.mock.calls[0][0]).toBe(
+      "/companies/emp-1/billing/quote?plan=negocio&cycle=monthly&billing_type=PIX&extra_seats=0");
+    await billingApi.quote("emp-1", "negocio", "monthly", "PIX", 3);
+    expect(mockRequest.mock.calls[1][0]).toMatch(/&extra_seats=3$/);
+    await billingApi.quote("emp-1", "negocio", "monthly", "PIX", null);
+    expect(mockRequest.mock.calls[2][0]).not.toContain("extra_seats");
+  });
+
+  it("validate-coupon: extra_seats no corpo só quando vem", async () => {
+    await billingApi.validateCoupon("emp-1", "BLACK50", "negocio", "monthly", "PIX", 2);
+    expect(mockRequest.mock.calls[0][1].body).toEqual({ code: "BLACK50", plan: "negocio", cycle: "monthly", billing_type: "PIX", extra_seats: 2 });
+    await billingApi.validateCoupon("emp-1", "BLACK50", "negocio", "monthly", "PIX");
+    expect(mockRequest.mock.calls[1][1].body).not.toHaveProperty("extra_seats");
+  });
+
+  it("subscribe: extra_seats no corpo só quando vem", async () => {
+    await billingApi.subscribe("emp-1", "negocio", "PIX", "monthly", { extraSeats: 0 });
+    expect(mockRequest.mock.calls[0][1].body.extra_seats).toBe(0);
+    await billingApi.subscribe("emp-1", "negocio", "CREDIT_CARD", "monthly", { creditCardToken: "tok", extraSeats: 4 });
+    expect(mockRequest.mock.calls[1][1].body.extra_seats).toBe(4);
+    await billingApi.subscribe("emp-1", "negocio", "PIX", "monthly", {});
+    expect(mockRequest.mock.calls[2][1].body).not.toHaveProperty("extra_seats");
+  });
+});

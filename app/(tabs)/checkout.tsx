@@ -11,6 +11,13 @@
 // p-105: quem chega pelo link do assento sem assinatura em dia vem com
 // ?de=assento e lê a frase do assento no topo (em atraso, com o link da
 // cobrança em aberto).
+//
+// p-106: seletor de acessos de funcionário adicionais (0 a 10) entre os planos
+// e a forma de pagamento. Abre com os acessos atuais da loja (quote com
+// extra_seats=0); quote, validate-coupon e subscribe mandam extra_seats; o
+// total vem do backend. Valor combinado: sem seletor. Loja ativa e em dia no
+// mesmo plano e ciclo (ou 409 ASSINATURA_ATIVA): travado no valor atual. Os
+// acessos só liberam com o pagamento confirmado (webhook da Asaas).
 // ============================================================
 import { useState, useEffect, useRef } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform, Image, ActivityIndicator, TextInput, Linking, useWindowDimensions } from "react-native";
@@ -34,7 +41,11 @@ import {
   AVISO_ASSENTO_EM_ATRASO, AVISO_ASSENTO_SEM_ASSINATURA,
   precoDeTabela, precoDoPlanoNaCotacao, acessosExtrasDaConta, rotuloDoPlanoNoResumo, rotuloDosAcessosExtras,
   textoDoBotaoDePagar, linhaDoCupomAplicado, rotuloDoCupomNoResumo, textoDepoisDoCupom, mensagemDoCupomRecusado,
+  seletorDaCotacao, totalDaCotacaoComAcessos, textoAoLadoDoSeletor, rotuloDosAcessosDaTemporada,
+  AVISO_ACESSOS_DEPOIS_DE_ASSINAR, TEXTO_ACESSOS_TRAVADOS, MENSAGEM_WHATSAPP_ACESSOS,
 } from "@/components/billing/textosDoCheckout";
+import { SeletorDeAcessos } from "@/components/billing/SeletorDeAcessos";
+import { waAura } from "@/constants/suporteAura";
 
 var isWeb = Platform.OS === "web";
 
@@ -247,6 +258,15 @@ export default function CheckoutScreen() {
   var isAnnual = cycle === "annual";
   var metodoDaApi = method === "card" ? "CREDIT_CARD" : "PIX";
 
+  // Status da cobrança (desconto em andamento, CPF/CNPJ e, no p-106, a loja
+  // ativa e em dia que trava o seletor de acessos).
+  var { data: billingStatusData } = useQuery({
+    queryKey: ["billing-status", company?.id],
+    queryFn: function () { return billingApi.status(company!.id); },
+    enabled: !!company?.id && !isDemo,
+    retry: 1, staleTime: 60000,
+  });
+
   // 14/10/2026 — valor combinado da empresa (Gestão Aura). O backend devolve o
   // valor mensal certo para o plano/ciclo/forma escolhidos; só vale com
   // custom:true. Sem a rota (backend antigo), erro ou resposta estranha, o
@@ -254,11 +274,14 @@ export default function CheckoutScreen() {
   // 11/11/2026 (p-104): uma cotação por plano visível, para o preço de cada
   // cartão vir do backend (table_value − acessos extras); a do plano marcado
   // é a mesma de sempre (mesma chave de cache).
+  // 11/11/2026 (p-106): as cotações dos cartões vão com extra_seats=0, só para
+  // ler os acessos atuais da loja (current_extra_seats) e o que o plano inclui;
+  // o preço do plano sai de table_value − charged_extra_seats × R$ 19.
   var cotacoes = useQueries({
     queries: visiblePlans.map(function (p) {
       return {
-        queryKey: ["billing-quote", company?.id, p.key, cycle, method],
-        queryFn: function () { return billingApi.quote(company!.id, p.key, cycle, metodoDaApi); },
+        queryKey: ["billing-quote", company?.id, p.key, cycle, method, 0],
+        queryFn: function () { return billingApi.quote(company!.id, p.key, cycle, metodoDaApi, 0); },
         enabled: !!company?.id && !isDemo,
         retry: false, staleTime: 30000,
       };
@@ -277,18 +300,62 @@ export default function CheckoutScreen() {
   // Sempre mostra mensalidade — o plano anual é cobrado mensalmente, não à vista.
   var price = precoDoPlano(plan);
 
+  // 11/11/2026 (p-106) — seletor de acessos de funcionário adicionais (0 a 10).
+  // Só existe quando a cotação diz quantos a loja tem hoje (backend com o
+  // p-106) e não é valor combinado. Sem seletor, o checkout não manda
+  // extra_seats e tudo segue como antes: a loja nunca perde acessos porque a
+  // tela não soube quantos ela tinha.
+  var seletor = seletorDaCotacao(cotacao, selectedPlan, cycle);
+  var [acessosEscolhidos, setAcessosEscolhidos] = useState<number | null>(null);
+  // 409 ASSINATURA_ATIVA do /subscribe: a mensagem do backend e o seletor
+  // travado no valor atual.
+  // Vale só para o plano e o ciclo em que veio (trocar de plano é permitido).
+  var [erroAssinaturaAtiva, setErroAssinaturaAtiva] = useState<{ mensagem: string; plano: string; ciclo: string } | null>(null);
+  var erro409DestaEscolha = !!erroAssinaturaAtiva && erroAssinaturaAtiva.plano === selectedPlan && erroAssinaturaAtiva.ciclo === cycle;
+  // Depois de assinar com acessos diferentes dos atuais: o aviso de que eles
+  // só liberam com o pagamento confirmado.
+  var [avisoAcessosPendentes, setAvisoAcessosPendentes] = useState(false);
+  // Loja ativa e em dia no mesmo plano e ciclo: os acessos não mudam pelo
+  // checkout (o backend recusa com 409); a tela nem deixa mudar. O status
+  // fresco do /billing/status vence o do /auth/me.
+  var statusDaConta = billingStatusData?.billing_status || billingStatus;
+  var mesmoPlanoECiclo = selectedPlan === String(company?.plan || "").toLowerCase() &&
+    cycle === (cycleFromCompany(company) || "monthly");
+  var acessosTravados = !!seletor && (erro409DestaEscolha || (statusDaConta === "active" && mesmoPlanoECiclo));
+  var acessosNoSeletor = seletor
+    ? (acessosTravados || acessosEscolhidos === null ? seletor.atuais : Math.min(acessosEscolhidos, seletor.maximo))
+    : null;
+  // O que vai em extra_seats no quote, no validate-coupon e no subscribe.
+  var extraSeatsParaEnviar: number | undefined = acessosNoSeletor === null ? undefined : acessosNoSeletor;
+
+  // Cotação da escolha (plano + N acessos + temporada): o total vem do backend.
+  // Com N = 0 é a mesma cotação do cartão (mesma chave de cache).
+  var { data: cotacaoDaEscolha } = useQuery({
+    queryKey: ["billing-quote", company?.id, selectedPlan, cycle, method, acessosNoSeletor],
+    queryFn: function () { return billingApi.quote(company!.id, selectedPlan, cycle, metodoDaApi, acessosNoSeletor); },
+    enabled: !!company?.id && !isDemo && acessosNoSeletor !== null && acessosNoSeletor > 0,
+    retry: false, staleTime: 30000,
+  });
+
   // 11/07/2026: acessos extras entram no valor cobrado por /billing/subscribe
   // (backend: getTotalValue = plano + 19 × seats). A tela mostrava só o plano e
   // cobrava plano + seats — cliente com acesso extra via "R$ 74,17" e era
   // debitado em "R$ 93,17". Agora o resumo e os botões exibem o total real.
   // 11/11/2026: o número vem do /billing/quote (extra_seats), senão da empresa.
-  var extraSeats = acessosExtrasDaConta(cotacao, company);
-  var seatsPrice = extraSeats * SEAT_PRICE_BRL;
-  var tabelaTotal = Math.round((price + seatsPrice) * 100) / 100;
+  // p-106: com o seletor, os acessos são os escolhidos + os de temporada.
+  var extraSeats = seletor ? (acessosNoSeletor as number) : acessosExtrasDaConta(cotacao, company);
+  var seatPrice = seletor ? seletor.preco : SEAT_PRICE_BRL;
+  var seatsPrice = Math.round(extraSeats * seatPrice * 100) / 100;
+  var acessosDaTemporada = seletor ? seletor.temporada : 0;
+  var temporadaPrice = Math.round(acessosDaTemporada * seatPrice * 100) / 100;
+  var tabelaTotal = Math.round((price + seatsPrice + temporadaPrice) * 100) / 100;
 
   var cotado = totalDoCheckout(tabelaTotal, cotacao, selectedPlan, cycle);
   var valorCombinado = cotado.combinado;
-  var totalPrice = cotado.total;
+  var totalDoBackend = seletor
+    ? totalDaCotacaoComAcessos(acessosNoSeletor === 0 ? cotacao : cotacaoDaEscolha, selectedPlan, cycle, acessosNoSeletor as number)
+    : null;
+  var totalPrice = totalDoBackend !== null ? totalDoBackend : cotado.total;
 
   // Com cupom, o backend e a fonte da verdade do valor (ele recalcula com o
   // plano/ciclo/seats reais da empresa). A tela so exibe o que ele devolveu.
@@ -298,18 +365,19 @@ export default function CheckoutScreen() {
   var couponTrialDays = couponApplied?.trial_days || 0;
   var chargedNow = couponView ? couponView.chargedNow : totalPrice;
   var isFreeTrialCoupon = couponTrialDays > 0;
+  // p-106: cupom validado com outra quantidade de acessos (a revalidação está
+  // a caminho). Enquanto isso, nada de pagar: o valor na tela é o antigo.
+  var cupomDeOutraQuantidade = !!couponApplied && typeof extraSeatsParaEnviar === "number" &&
+    typeof couponApplied.extra_seats === "number" && couponApplied.extra_seats !== extraSeatsParaEnviar;
+  var cupomDeOutraQuantidadeRef = useRef(false);
+  cupomDeOutraQuantidadeRef.current = cupomDeOutraQuantidade;
 
   // 11/09/2026 — desconto de varios meses EM ANDAMENTO. Assinar de novo aqui
   // (a unica forma de trocar plano/ciclo/pagamento no app) encerra o desconto;
   // o backend faz isso sozinho, a tela so nao deixa acontecer sem o cliente
   // saber. E, se ha mensalidade em aberto (Pix vencido, cartao recusado), o
   // caminho que MANTEM o desconto e pagar essa mensalidade, nao assinar de novo.
-  var { data: billingStatusData } = useQuery({
-    queryKey: ["billing-status", company?.id],
-    queryFn: function () { return billingApi.status(company!.id); },
-    enabled: !!company?.id && !isDemo,
-    retry: 1, staleTime: 60000,
-  });
+  // (a consulta do /billing/status fica mais acima: o seletor de acessos também a lê)
   var activeDiscount = billingStatusData?.discount || null;
   var billingNotActive = !!billingStatusData && billingStatusData.billing_status !== "active";
   var [discountLossAck, setDiscountLossAck] = useState(false);
@@ -344,7 +412,7 @@ export default function CheckoutScreen() {
     setCouponLoading(true);
     setCouponError(null);
     try {
-      var res = await billingApi.validateCoupon(company.id, code, selectedPlan, isAnnual ? "annual" : "monthly", method === "card" ? "CREDIT_CARD" : "PIX");
+      var res = await billingApi.validateCoupon(company.id, code, selectedPlan, isAnnual ? "annual" : "monthly", method === "card" ? "CREDIT_CARD" : "PIX", extraSeatsParaEnviar);
       if (res.valid) {
         setCouponApplied(res);
         setCouponError(null);
@@ -367,33 +435,59 @@ export default function CheckoutScreen() {
 
   // Trocar plano/ciclo muda o valor — o cupom aplicado foi calculado em cima do
   // valor antigo, entao revalida (nunca deixa na tela um total desatualizado).
+  // p-106: mudar a quantidade de acessos também revalida.
   useEffect(function () {
     if (!couponApplied || !company?.id) return;
     var code = couponApplied.code || couponInput;
     if (!code) return;
     var cancelled = false;
-    billingApi.validateCoupon(company.id, code, selectedPlan, isAnnual ? "annual" : "monthly", method === "card" ? "CREDIT_CARD" : "PIX")
+    billingApi.validateCoupon(company.id, code, selectedPlan, isAnnual ? "annual" : "monthly", method === "card" ? "CREDIT_CARD" : "PIX", extraSeatsParaEnviar)
       .then(function (res) {
         if (cancelled) return;
         if (res.valid) setCouponApplied(res);
         else { setCouponApplied(null); setCouponError(mensagemDoCupomRecusado(res.error)); }
       })
-      .catch(function () { });
+      .catch(function () {
+        // p-106: sem a resposta nova, o desconto na tela seria o da quantidade
+        // anterior; tira o cupom e pede para aplicar de novo.
+        if (cancelled || !cupomDeOutraQuantidadeRef.current) return;
+        setCouponApplied(null);
+        setCouponError("Não consegui conferir o código com a nova quantidade de acessos. Aplique de novo.");
+      });
     return function () { cancelled = true; };
-  }, [selectedPlan, cycle, method]);
+  }, [selectedPlan, cycle, method, extraSeatsParaEnviar]);
+
+  // p-106: o /subscribe diz que os acessos ficam pendentes até o pagamento.
+  // O aviso só aparece quando a quantidade muda de fato.
+  function marcaAcessosPendentes(res: any): boolean {
+    var muda = !!res?.extra_seats_pending && !!seletor && acessosNoSeletor !== seletor.atuais;
+    setAvisoAcessosPendentes(muda);
+    return muda;
+  }
+
+  // p-106: 409 ASSINATURA_ATIVA = loja ativa e em dia no mesmo plano e ciclo
+  // pedindo outros acessos. Mostra a mensagem do backend e trava o seletor no
+  // valor atual (o toast com a mesma mensagem sai no catch de quem chamou).
+  function trataErroDosAcessos(err: any) {
+    if (!(err instanceof ApiError) || err.data?.code !== "ASSINATURA_ATIVA") return;
+    setErroAssinaturaAtiva({ mensagem: err.message, plano: selectedPlan, ciclo: cycle });
+    var atuais = err.data?.current_extra_seats;
+    if (typeof atuais === "number") setAcessosEscolhidos(atuais);
+  }
 
   async function handlePixSubscribe() {
     if (!company?.id || blockedByTaxId) return;
     setLoading(true);
     try {
-      var res = await billingApi.subscribe(company.id, selectedPlan, "PIX", isAnnual ? "annual" : "monthly", { endDate: annualEndDate, totalCycles: isAnnual ? 12 : undefined, accessCode: couponApplied?.code, cpfCnpj: taxIdValid ? taxIdDigits : undefined });
+      var res = await billingApi.subscribe(company.id, selectedPlan, "PIX", isAnnual ? "annual" : "monthly", { endDate: annualEndDate, totalCycles: isAnnual ? 12 : undefined, accessCode: couponApplied?.code, cpfCnpj: taxIdValid ? taxIdDigits : undefined, extraSeats: extraSeatsParaEnviar });
+      var avisoDosAcessos = marcaAcessosPendentes(res);
       // Cupom de dias gratis no Pix: nao ha o que pagar hoje, entao nao vem QR.
       if (couponApplied?.trial_days) {
         setSuccessMessage(res.message || null);
         setSuccess(true);
         toast.success(res.message || couponApplied.trial_days + " dias grátis ativados!");
         await hydrate();
-        setTimeout(function () { router.replace("/(tabs)/" as any); }, res.message ? MENSAGEM_MS : 2000);
+        setTimeout(function () { router.replace("/(tabs)/" as any); }, res.message || avisoDosAcessos ? MENSAGEM_MS : 2000);
         return;
       }
       if (res.pix_qr_code) {
@@ -406,6 +500,7 @@ export default function CheckoutScreen() {
       // Faltou (ou o Asaas recusou) o CPF/CNPJ: abre o campo em vez de deixar
       // o cliente num erro sem saída.
       if (err instanceof ApiError && err.data?.stage === "cpf_cnpj") setTaxIdForced(true);
+      trataErroDosAcessos(err);
       toast.error(err instanceof ApiError ? err.message : "Erro ao gerar Pix");
     } finally { setLoading(false); }
   }
@@ -438,14 +533,17 @@ export default function CheckoutScreen() {
         holderPostalCode: cardPostalCode.replace(/\D/g, ""),
         holderAddressNumber: holderAddressNumberDigits,
         holderAddress: holderAddressStreet,
+        extraSeats: extraSeatsParaEnviar,
       });
 
+      var comAviso = marcaAcessosPendentes(subRes);
       setSuccessMessage(subRes?.message || null);
       setSuccess(true);
       toast.success(subRes?.message || "Assinatura ativada!");
       await hydrate();
-      setTimeout(function () { router.replace("/(tabs)/" as any); }, subRes?.message ? MENSAGEM_MS : 2000);
+      setTimeout(function () { router.replace("/(tabs)/" as any); }, subRes?.message || comAviso ? MENSAGEM_MS : 2000);
     } catch (err: any) {
+      trataErroDosAcessos(err);
       toast.error(err instanceof ApiError ? err.message : "Erro ao processar cartão");
     } finally { setTokenizing(false); }
   }
@@ -481,6 +579,8 @@ export default function CheckoutScreen() {
         if (st.billing_status === "active") {
           clearInterval(pollRef.current);
           setPolling(false);
+          // O mesmo webhook que ativa a conta libera os acessos: nada pendente.
+          setAvisoAcessosPendentes(false);
           setSuccess(true);
           toast.success("Pagamento confirmado!");
           await hydrate();
@@ -542,6 +642,12 @@ export default function CheckoutScreen() {
 
   function voltarAoCaixa() { router.replace(ROTA_CAIXA as any); }
 
+  function abrirWhatsAppDosAcessos() {
+    var url = waAura(MENSAGEM_WHATSAPP_ACESSOS);
+    if (isWeb && typeof window !== "undefined") window.open(url, "_blank");
+    else Linking.openURL(url).catch(function () { });
+  }
+
   var cnt = [z.cnt, { paddingHorizontal: largo ? 32 : 16, paddingTop: largo ? 36 : 24, maxWidth: largo ? 720 : 560 }];
 
   // 2026-06-18: gate para usuário multi-CNPJ em modo consolidado (company=null).
@@ -573,7 +679,8 @@ export default function CheckoutScreen() {
           <Text style={z.successTitle}>{successMessage ? "Assinatura ativada!" : "Pagamento confirmado!"}</Text>
           {successMessage && <Text testID="checkout-sucesso-mensagem" style={z.successMsg}>{successMessage}</Text>}
           <Text style={z.successSub}>Plano {plan.label} ativo. Redirecionando...</Text>
-          {successMessage && (
+          {avisoAcessosPendentes && <Text testID="checkout-acessos-pendentes" style={z.successMsg}>{AVISO_ACESSOS_DEPOIS_DE_ASSINAR}</Text>}
+          {(successMessage || avisoAcessosPendentes) && (
             <Pressable testID="checkout-sucesso-continuar" onPress={function () { router.replace("/(tabs)/" as any); }} style={[z.cta, { width: undefined, paddingHorizontal: 32 }]} {...marca("ck-cta")}>
               <Text style={z.ctaText}>Continuar</Text>
             </Pressable>
@@ -589,8 +696,8 @@ export default function CheckoutScreen() {
   var depoisDoCupom = couponApplied && couponView
     ? textoDepoisDoCupom(couponApplied, couponApplied.recurring_value ?? totalPrice)
     : null;
-  var bloqueadoPix = loading || blockedByDiscount || blockedByTaxId;
-  var bloqueadoCartao = tokenizing || !cardValid || blockedByDiscount;
+  var bloqueadoPix = loading || blockedByDiscount || blockedByTaxId || cupomDeOutraQuantidade;
+  var bloqueadoCartao = tokenizing || !cardValid || blockedByDiscount || cupomDeOutraQuantidade;
 
   return (
     <ScrollView testID="checkout" style={z.screen} contentContainerStyle={cnt} {...marca("ck-palco")}>
@@ -707,8 +814,23 @@ export default function CheckoutScreen() {
         })}
       </View>
 
-      {/* p-106: o seletor de acessos de funcionário entra aqui, entre os planos
-          e a forma de pagamento (depende de backend novo; nada por ora). */}
+      {/* p-106: acessos de funcionário adicionais, entre os planos e a forma de
+          pagamento. Sem seletor no valor combinado (e com backend sem o p-106). */}
+      {seletor && !valorCombinado && (
+        <>
+          <Text style={[z.mono, z.lbl]}>Acessos de funcionário</Text>
+          <SeletorDeAcessos
+            valor={acessosNoSeletor as number}
+            maximo={seletor.maximo}
+            texto={textoAoLadoDoSeletor(plan.label, seletor.incluidos, seletor.preco)}
+            /* Pix já gerado: a quantidade é a dele (sem nota). */
+            travado={acessosTravados || !!pixQr}
+            notaDoTravado={erro409DestaEscolha ? erroAssinaturaAtiva!.mensagem : acessosTravados ? TEXTO_ACESSOS_TRAVADOS : null}
+            onFalarComAEquipe={abrirWhatsAppDosAcessos}
+            onChange={function (n) { setAcessosEscolhidos(n); }}
+          />
+        </>
+      )}
 
       <Text style={[z.mono, z.lbl]}>Forma de pagamento</Text>
       <View style={z.pay} accessibilityRole="radiogroup" accessibilityLabel="Forma de pagamento">
@@ -782,6 +904,7 @@ export default function CheckoutScreen() {
         valorDoPlano={valorCombinado ? totalPrice : price}
         combinado={valorCombinado}
         linhaDosAcessos={extraSeats > 0 && !valorCombinado ? { rotulo: rotuloDosAcessosExtras(extraSeats), valor: seatsPrice } : null}
+        linhaDaTemporada={acessosDaTemporada > 0 && !valorCombinado ? { rotulo: rotuloDosAcessosDaTemporada(acessosDaTemporada), valor: temporadaPrice } : null}
         linhaDoCupom={linhaDoCupom}
         rotuloDoTotal={isFreeTrialCoupon ? "Você paga hoje" : "Total hoje"}
         total={isFreeTrialCoupon ? 0 : chargedNow}
@@ -820,6 +943,7 @@ export default function CheckoutScreen() {
         <View style={z.pixCard}>
           <Image source={{ uri: "data:image/png;base64," + pixQr }} style={z.pixQrImg} resizeMode="contain" />
           <Pressable onPress={copyPix} style={z.vidro} {...marca("ck-vidro")}><Text style={z.vidroText}>Copiar código Pix</Text></Pressable>
+          {avisoAcessosPendentes && <Text testID="checkout-acessos-pendentes" style={z.pixAviso}>{AVISO_ACESSOS_DEPOIS_DE_ASSINAR}</Text>}
           {polling && <ActivityIndicator color={Colors.violet3} style={{ marginTop: 12 }} />}
         </View>
       )}
@@ -940,6 +1064,7 @@ var z = StyleSheet.create({
   ackBoxOn: { backgroundColor: Colors.violet, borderColor: Colors.violet },
   ackText: { flex: 1, fontSize: 12.5, color: Colors.ink, fontWeight: "600" },
   pixCard: { marginTop: 14, backgroundColor: Colors.bg3, borderRadius: 18, padding: 24, borderWidth: 1, borderColor: Colors.border, alignItems: "center" },
+  pixAviso: { marginTop: 12, fontSize: 12.5, lineHeight: 18, color: Colors.ink2, textAlign: "center" },
   pixQrImg: { width: 200, height: 200, borderRadius: 12, marginBottom: 16, backgroundColor: "#fff" },
   cardField: { marginBottom: 12 },
   cardLabel: { fontFamily: Fonts.mono, fontSize: 10.5, letterSpacing: 0.9, textTransform: "uppercase" as any, color: Colors.ink3, marginBottom: 6 },

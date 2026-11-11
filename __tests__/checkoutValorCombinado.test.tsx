@@ -77,14 +77,14 @@ describe("Checkout — valor combinado", () => {
     mockBilling.quote.mockResolvedValue(COTACAO);
     const tree = await mount();
 
-    expect(mockBilling.quote).toHaveBeenCalledWith("emp-1", "negocio", "annual", "PIX");
+    expect(mockBilling.quote).toHaveBeenCalledWith("emp-1", "negocio", "annual", "PIX", 0);
     expect(byTestId(tree, "checkout-valor-combinado")).toHaveLength(1);
     const out = text(tree);
     expect(out).toContain("Valor combinado");
     expect(out).toContain("R$ 211,20 por mês");
     expect(out).toContain("Gerar Pix de R$ 211,20");
     // O valor combinado já inclui os acessos extras e não mostra a tabela.
-    expect(out).not.toContain("acesso extra de equipe");
+    expect(out).not.toContain("de funcionário adicional");
     expect(out).not.toContain("159,83");
     expect(out).not.toContain("economia de");
     tree.unmount();
@@ -96,7 +96,7 @@ describe("Checkout — valor combinado", () => {
     await press(tree, "checkout-metodo-cartao");
     await espera();
 
-    expect(mockBilling.quote).toHaveBeenCalledWith("emp-1", "negocio", "annual", "CREDIT_CARD");
+    expect(mockBilling.quote).toHaveBeenCalledWith("emp-1", "negocio", "annual", "CREDIT_CARD", 0);
     expect(text(tree)).toContain("Pagar R$ 211,20 no cartão");
     tree.unmount();
   });
@@ -108,7 +108,7 @@ describe("Checkout — valor combinado", () => {
     expect(byTestId(tree, "checkout-valor-combinado")).toHaveLength(0);
     const out = text(tree);
     expect(out).toContain("Gerar Pix de R$ 159,83");
-    expect(out).toContain("1 acesso extra de equipe");
+    expect(out).toContain("1 acesso de funcionário adicional");
     expect(out).toContain("R$ 19,00");
     expect(mockToast.error).not.toHaveBeenCalled();
     tree.unmount();
