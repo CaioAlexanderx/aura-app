@@ -78,6 +78,13 @@ const tudo = (tree: renderer.ReactTestRenderer) => textoDe(tree.toJSON());
 const campoDaBusca = (tree: renderer.ReactTestRenderer) =>
   tree.root.findAllByType(TextInput).filter((n) => String(n.props.placeholder || "").includes("Bipe o código de barras"));
 
+// Cada teste desmonta o que montou: uma Troca esquecida aberta de um teste
+// anterior não pode buscar vendas por baixo do seguinte.
+const montados: renderer.ReactTestRenderer[] = [];
+afterEach(() => {
+  act(() => { montados.splice(0).forEach((t) => t.unmount()); });
+});
+
 async function montar(props: any = {}) {
   let t!: renderer.ReactTestRenderer;
   await act(async () => {
@@ -86,6 +93,7 @@ async function montar(props: any = {}) {
     );
   });
   await act(async () => {});
+  montados.push(t);
   return t;
 }
 
