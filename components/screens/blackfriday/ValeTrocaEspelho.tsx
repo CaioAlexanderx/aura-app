@@ -9,8 +9,11 @@
 // pdvSettingsApi.save com o objeto inteiro para gravar, como o card faz.
 // Ligar aqui liga lá: as duas telas leem a mesma query ["pdv-settings", id].
 //
-// O texto é o do PdvSettingsCard. As datas vêm das constantes de
-// utils/valeTroca (campanha do ano seguinte = trocar lá).
+// O texto é o do PdvSettingsCard (TEXTO_DO_VALE_TROCA).
+//
+// 12/11/2026: o vale vale o ano todo e, ligado, mostra o MESMO campo de
+// prazo em dias (ValeTrocaPrazoCampo) — escolher aqui grava
+// vale_troca_prazo_dias pelo mesmo caminho do interruptor.
 // ============================================================
 import { useState } from "react";
 import { View, Text, Switch, StyleSheet, ActivityIndicator } from "react-native";
@@ -18,10 +21,8 @@ import { Colors } from "@/constants/colors";
 import { toast } from "@/components/Toast";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { pdvSettingsApi, type PdvSettings } from "@/services/api";
-import {
-  VALE_TROCA_PRAZO_ATE, VALE_TROCA_VENDAS_ATE, VALE_TROCA_VENDAS_DE,
-  formatarDiaBR, lerValeTrocaLigado,
-} from "@/utils/valeTroca";
+import { TEXTO_DO_VALE_TROCA, lerPrazoDoValeEmDias, lerValeTrocaLigado } from "@/utils/valeTroca";
+import { ValeTrocaPrazoCampo } from "@/components/screens/configuracoes/ValeTrocaPrazoCampo";
 
 export function ValeTrocaEspelho({ companyId }: { companyId: string | null | undefined }) {
   const { settings, isLoading, invalidate } = usePdvSettings();
@@ -32,9 +33,13 @@ export function ValeTrocaEspelho({ companyId }: { companyId: string | null | und
   const exibido = pendente || settings;
   const ligado = lerValeTrocaLigado(companyId, exibido);
 
-  async function alternar(v: boolean) {
+  function alternar(v: boolean) {
+    return gravar({ vale_troca_enabled: v });
+  }
+
+  async function gravar(mudanca: Partial<PdvSettings>) {
     if (!companyId || salvando) return;
-    const proximo = { ...exibido, vale_troca_enabled: v } as PdvSettings;
+    const proximo = { ...exibido, ...mudanca } as PdvSettings;
     setPendente(proximo);
     setSalvando(true);
     try {
@@ -54,20 +59,25 @@ export function ValeTrocaEspelho({ companyId }: { companyId: string | null | und
   }
 
   return (
-    <View style={s.linha}>
-      <Text style={s.texto} testID="vale-troca-texto">
-        {"Nas vendas de " + formatarDiaBR(VALE_TROCA_VENDAS_DE) + " a " + formatarDiaBR(VALE_TROCA_VENDAS_ATE) +
-          ", o cupom sai com um QR. Quem ganhou o presente troca até " + formatarDiaBR(VALE_TROCA_PRAZO_ATE) +
-          " sem o comprador: você bipa o QR no Caixa e a troca abre com a venda carregada. Vale para todos os computadores da loja."}
-      </Text>
-      <Switch
-        testID="toggle-vale-troca-bf"
-        value={ligado}
-        onValueChange={alternar}
-        trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
-        thumbColor={ligado ? Colors.violet : Colors.ink3}
-        disabled={salvando}
-      />
+    <View>
+      <View style={s.linha}>
+        <Text style={s.texto} testID="vale-troca-texto">{TEXTO_DO_VALE_TROCA}</Text>
+        <Switch
+          testID="toggle-vale-troca-bf"
+          value={ligado}
+          onValueChange={alternar}
+          trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
+          thumbColor={ligado ? Colors.violet : Colors.ink3}
+          disabled={salvando}
+        />
+      </View>
+      {ligado && (
+        <ValeTrocaPrazoCampo
+          dias={lerPrazoDoValeEmDias(exibido)}
+          onEscolher={(d) => { gravar({ vale_troca_prazo_dias: d }); }}
+          disabled={salvando}
+        />
+      )}
     </View>
   );
 }

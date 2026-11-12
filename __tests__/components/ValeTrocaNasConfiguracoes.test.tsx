@@ -107,6 +107,72 @@ describe("Configurações › Políticas do Caixa › Vale-troca", () => {
   });
 });
 
+describe("Políticas do Caixa › Vale-troca › prazo para troca (12/11/2026)", () => {
+  const prazo = (t: renderer.ReactTestRenderer) => porId(t, "vale-troca-prazo");
+  const textoDe = (n: any): string =>
+    n == null ? "" : typeof n === "string" ? n : Array.isArray(n) ? n.map(textoDe).join("") : textoDe(n.children);
+
+  it("desligado: sem o campo de prazo", async () => {
+    const tree = await montarCartao({ vale_troca_enabled: false, vale_troca_prazo_dias: 15 });
+    expect(prazo(tree)).toHaveLength(0);
+    tree.unmount();
+  });
+
+  it("ligado: atalhos 7/15/30/60/90 e o campo livre; sem escolha, 30 marcado", async () => {
+    const tree = await montarCartao({ vale_troca_enabled: true });
+    expect(prazo(tree)).toHaveLength(1);
+    [7, 15, 30, 60, 90].forEach((d) => expect(porId(tree, "vale-troca-prazo-atalho-" + d)).toHaveLength(1));
+    expect(porId(tree, "vale-troca-prazo-atalho-30")[0].props.accessibilityState.selected).toBe(true);
+    expect(porId(tree, "vale-troca-prazo-livre")).toHaveLength(1);
+    expect(textoDe(porId(tree, "vale-troca-prazo-efeito")[0])).toMatch(/^Quem comprar hoje troca até \d{2}\/\d{2}(\/\d{4})?$/);
+    tree.unmount();
+  });
+
+  it("o texto do efeito é hoje + o prazo escolhido", async () => {
+    jest.useFakeTimers({ now: new Date("2026-11-12T15:00:00Z"), doNotFake: ["nextTick", "setImmediate", "queueMicrotask", "setTimeout"] });
+    try {
+      const tree = await montarCartao({ vale_troca_enabled: true, vale_troca_prazo_dias: 15 });
+      expect(textoDe(porId(tree, "vale-troca-prazo-efeito")[0])).toBe("Quem comprar hoje troca até 27/11");
+      tree.unmount();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("atalho grava vale_troca_prazo_dias (merge com o resto)", async () => {
+    const tree = await montarCartao({ caixa_enabled: true, vale_troca_enabled: true });
+    await act(async () => { porId(tree, "vale-troca-prazo-atalho-90")[0].props.onPress(); });
+    await flush();
+    expect(api.save).toHaveBeenCalledTimes(1);
+    expect(api.save.mock.calls[0][1]).toMatchObject({ caixa_enabled: true, vale_troca_enabled: true, vale_troca_prazo_dias: 90 });
+    tree.unmount();
+  });
+
+  it("campo livre: 45 grava 45 ao sair do campo; prazo fora dos atalhos aparece no campo", async () => {
+    const tree = await montarCartao({ vale_troca_enabled: true });
+    const livre = () => porId(tree, "vale-troca-prazo-livre")[0];
+    await act(async () => { livre().props.onChangeText("45"); });
+    await act(async () => { livre().props.onBlur(); });
+    await flush();
+    expect(api.save.mock.calls[0][1]).toMatchObject({ vale_troca_prazo_dias: 45 });
+    expect(livre().props.value).toBe("45");
+    tree.unmount();
+  });
+
+  it("campo livre: 0 ou 400 não grava e avisa a faixa", async () => {
+    const tree = await montarCartao({ vale_troca_enabled: true });
+    const livre = () => porId(tree, "vale-troca-prazo-livre")[0];
+    for (const v of ["0", "400"]) {
+      await act(async () => { livre().props.onChangeText(v); });
+      await act(async () => { livre().props.onSubmitEditing(); });
+      await flush();
+      expect(textoDe(porId(tree, "vale-troca-prazo-erro")[0])).toBe("Use um número de 1 a 365 dias.");
+    }
+    expect(api.save).not.toHaveBeenCalled();
+    tree.unmount();
+  });
+});
+
 describe("quem imprime o cupom lê a preferência do servidor", () => {
   const ler = (rel: string) => fs.readFileSync(path.resolve(__dirname, "..", "..", rel), "utf8");
 
@@ -114,10 +180,14 @@ describe("quem imprime o cupom lê a preferência do servidor", () => {
     const final = ler("components/screens/pdv/SaleComplete.tsx");
     expect(final).toMatch(/cupomComVale\(await res\.text\(\), \{ companyId, saleId, vendaEm, config \}\)/);
     expect(ler("app/(tabs)/pdv.tsx")).toMatch(/pdvSettings=\{pdvSettingsGarantia\}/);
-    expect(ler("components/screens/vendas/SaleDetailModal.tsx")).toMatch(/config: pdvSettings,/);
+    // 12/11/2026: a 2ª via lê o pdv_settings da loja QUE VENDEU (consolidado).
+    const segunda = ler("components/screens/vendas/SaleDetailModal.tsx");
+    expect(segunda).toMatch(/usePdvSettings\(effectiveCompanyId\)/);
+    expect(segunda).toMatch(/config: pdvDaLojaDaVenda,/);
   });
 
-  it("o tipo PdvSettings conhece a chave", () => {
+  it("o tipo PdvSettings conhece as chaves", () => {
     expect(ler("services/authApi.ts")).toMatch(/vale_troca_enabled\?: boolean;/);
+    expect(ler("services/authApi.ts")).toMatch(/vale_troca_prazo_dias\?: number;/);
   });
 });

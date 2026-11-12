@@ -64,6 +64,10 @@
 //     avisa, não bloqueia. Venda inexistente/de fora do grupo: aviso claro e
 //     o Step 1 segue disponível para a busca de sempre.
 //   - O resto do fluxo (passos, payload, fiscal) não muda.
+//   - 12/11/2026: prazo = dia da venda + prazo da loja que vendeu (o
+//     sales-for-troca traz; sem o campo, o da loja ativa). Vencido, a faixa
+//     pergunta "Quer trocar mesmo assim?": "Trocar mesmo assim" só registra a
+//     resposta, "Não trocar" fecha a Troca. Nunca bloqueia.
 //
 // 27/10/2026 (troca de pedido da loja online — troca/pedidoOnline.ts):
 //   - Pedido da loja online selecionado no Step 1 força o contrato v2: os
@@ -100,6 +104,8 @@ import { Step4Confirm, inferFiscalStrategy, canConfirmStep4 } from "./troca/Step
 import { Step5Success } from "./troca/Step5Success";
 import { ValeTrocaBanner, type ValeNoWizard } from "./troca/ValeTrocaBanner";
 import { buscarVendaDoVale } from "./troca/valeTrocaBusca";
+import { usePdvSettings } from "@/hooks/usePdvSettings";
+import { VALE_TROCA_PRAZO_PADRAO_DIAS, lerPrazoDoValeEmDias } from "@/utils/valeTroca";
 import { isPedidoOnline, montarOrigensDaTroca } from "./troca/pedidoOnline";
 import {
   subtotalDosNovos, descontoManualDaTroca, camposDoDesconto, itemNovoDoPayload,
@@ -213,6 +219,11 @@ export function TrocaModal({
   // não monta a busca do passo 1 — seria uma consulta à toa por baixo da leitura.
   const [valeResolvido, setValeResolvido] = useState(false);
   const valeReq = useRef(0);
+  // Prazo da loja ativa: só vale quando o backend não manda o da venda.
+  const { settings: pdvDaLoja } = usePdvSettings();
+  // Em ref: as configurações chegando depois não podem reabrir o vale já lido.
+  const prazoDaLojaDias = useRef(VALE_TROCA_PRAZO_PADRAO_DIAS);
+  prazoDaLojaDias.current = lerPrazoDoValeEmDias(pdvDaLoja);
 
   const returnedValue = useMemo(
     () => returnEntries.reduce((s, e) => s + e.returnQty * effectiveUnitPrice(e.item), 0),
@@ -268,7 +279,7 @@ export function TrocaModal({
     const req = ++valeReq.current;
     setValeCarregando(true);
     setValeAviso(null);
-    const r = await buscarVendaDoVale(companyId, saleId);
+    const r = await buscarVendaDoVale(companyId, saleId, new Date(), prazoDaLojaDias.current);
     if (req !== valeReq.current) return;
     // Ordem importa: "carregando" só cai por último, com o passo já trocado —
     // sem lote automático de estado (teste/legado) o passo 1 não monta por um
@@ -594,7 +605,13 @@ export function TrocaModal({
         )}
 
         {step !== 5 && (
-          <ValeTrocaBanner carregando={lendoVale} aviso={valeAviso} vale={valeLido} />
+          <ValeTrocaBanner
+            carregando={lendoVale}
+            aviso={valeAviso}
+            vale={valeLido}
+            onTrocarMesmoAssim={() => setValeLido((v) => (v ? { ...v, aceitoForaDoPrazo: true } : v))}
+            onNaoTrocar={onClose}
+          />
         )}
 
         <ScrollView

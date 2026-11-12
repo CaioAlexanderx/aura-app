@@ -5,6 +5,8 @@
 //   2. A Troca abre com a venda carregada, direto no passo 2, sem a busca.
 //   3. Venda inexistente / de fora do grupo: aviso claro, passo 1 livre.
 //   4. Prazo vencido: avisa e deixa o lojista decidir (não trava).
+//      12/11/2026: prazo = dia da venda + prazo da loja que vendeu; vencido,
+//      pergunta "Quer trocar mesmo assim?" (Trocar mesmo assim / Não trocar).
 //   5. QR bipado no campo do passo 1 com o modal já aberto faz o mesmo.
 // Mocks do padrão do repo (Icon, toast); testID + deep:false.
 import React from "react";
@@ -17,7 +19,8 @@ jest.mock("expo-secure-store", () => ({ getItemAsync: jest.fn(), setItemAsync: j
 jest.mock("@/stores/auth", () => ({
   useAuthStore: Object.assign(() => ({ company: { id: "loja-1" }, token: "t" }), { getState: () => ({ token: "t", company: { id: "loja-1" } }) }),
 }));
-jest.mock("@/hooks/usePdvSettings", () => ({ usePdvSettings: () => ({ settings: {}, isLoading: false, invalidate: jest.fn() }) }));
+let mockPdvSettings: any = {};
+jest.mock("@/hooks/usePdvSettings", () => ({ usePdvSettings: () => ({ settings: mockPdvSettings, isLoading: false, invalidate: jest.fn() }) }));
 jest.mock("@/components/Toast", () => ({ toast: { error: jest.fn(), success: jest.fn(), info: jest.fn() } }));
 jest.mock("@/services/trocaApi", () => ({
   trocaApi: {
@@ -87,6 +90,7 @@ async function montar(props: any = {}) {
 }
 
 beforeEach(() => {
+  mockPdvSettings = {};
   mockBusca.mockReset();
   mockBusca.mockResolvedValue([]);
 });
@@ -159,7 +163,8 @@ describe("Troca aberta pelo vale", () => {
       const txt = textoDe(faixa[0].children);
       expect(txt).toContain("Lido pelo vale-troca");
       expect(txt).toContain("#3F2A9C1E");
-      expect(txt).toContain("Troca até 31/01/2027");
+      // venda de 12/12/2026 + 30 dias (padrão da loja que nunca escolheu)
+      expect(txt).toContain("Troca até 11/01/2027");
       expect(achar(t, "vale-troca-vencido")).toHaveLength(0);
       expect(achar(t, "vale-troca-aviso")).toHaveLength(0);
       // passo 2 ("Devolver"): o campo de busca do passo 1 não está mais na tela
@@ -200,7 +205,7 @@ describe("Troca aberta pelo vale", () => {
     expect(textoDe(achar(t, "vale-troca-aviso")[0].children)).toContain("Confira a conexão");
   });
 
-  it("prazo vencido: avisa, mostra a data e NÃO trava — segue no passo 2", async () => {
+  it("prazo vencido: pergunta com gentileza e NÃO trava — segue no passo 2", async () => {
     mockBusca.mockResolvedValue([venda()]);
     jest.useFakeTimers({ now: new Date("2027-02-05T15:00:00Z"), doNotFake: ["nextTick", "setImmediate", "queueMicrotask"] });
     try {
@@ -208,21 +213,83 @@ describe("Troca aberta pelo vale", () => {
       const faixa = achar(t, "vale-troca-vencido");
       expect(faixa).toHaveLength(1);
       const txt = textoDe(faixa[0].children);
-      expect(txt).toContain("terminou em 31/01/2027");
-      expect(txt).toContain("Você decide");
-      expect(tudo(t)).toContain("Marque o que o cliente esta devolvendo"); // passo 2
+      expect(txt).toContain("O prazo de troca desta compra terminou em 11/01. Quer trocar mesmo assim?");
+      expect(achar(t, "vale-troca-seguir")).toHaveLength(1);
+      expect(achar(t, "vale-troca-desistir")).toHaveLength(1);
+      expect(tudo(t)).toContain("Marque o que o cliente esta devolvendo"); // passo 2, sem bloqueio
       expect(tudo(t)).toContain("Vestido Midi Floral");
     } finally {
       jest.useRealTimers();
     }
   });
 
-  it("venda de fora da campanha: lê o vale, sem prazo do vale (vale o normal da loja)", async () => {
+  it("vencido: \"Trocar mesmo assim\" registra a decisão e o lojista segue", async () => {
+    mockBusca.mockResolvedValue([venda()]);
+    jest.useFakeTimers({ now: new Date("2027-02-05T15:00:00Z"), doNotFake: ["nextTick", "setImmediate", "queueMicrotask"] });
+    try {
+      const onClose = jest.fn();
+      const t = await montar({ vale: { saleId: VENDA_ID }, onClose });
+      await act(async () => { achar(t, "vale-troca-seguir")[0].props.onPress(); });
+      expect(achar(t, "vale-troca-vencido")).toHaveLength(0);
+      const aceito = achar(t, "vale-troca-vencido-aceito");
+      expect(aceito).toHaveLength(1);
+      expect(textoDe(aceito[0].children)).toContain("você decidiu trocar mesmo assim");
+      expect(onClose).not.toHaveBeenCalled();
+      expect(tudo(t)).toContain("Marque o que o cliente esta devolvendo");
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("vencido: \"Não trocar\" fecha a Troca", async () => {
+    mockBusca.mockResolvedValue([venda()]);
+    jest.useFakeTimers({ now: new Date("2027-02-05T15:00:00Z"), doNotFake: ["nextTick", "setImmediate", "queueMicrotask"] });
+    try {
+      const onClose = jest.fn();
+      const t = await montar({ vale: { saleId: VENDA_ID }, onClose });
+      await act(async () => { achar(t, "vale-troca-desistir")[0].props.onPress(); });
+      expect(onClose).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("o prazo é o da loja que vendeu (campo do backend), não o da loja ativa", async () => {
+    mockPdvSettings = { vale_troca_prazo_dias: 7 };
+    mockBusca.mockResolvedValue([venda({ vale_troca_prazo_dias: 90, is_cross_filial: true, company_name: "Filial Centro" })]);
+    jest.useFakeTimers({ now: new Date("2027-01-10T15:00:00Z"), doNotFake: ["nextTick", "setImmediate", "queueMicrotask"] });
+    try {
+      const t = await montar({ vale: { saleId: VENDA_ID } });
+      // 12/12/2026 + 90 dias
+      expect(textoDe(achar(t, "vale-troca-lido")[0].children)).toContain("Troca até 12/03/2027");
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("backend sem o campo: vale o prazo da loja ativa", async () => {
+    mockPdvSettings = { vale_troca_prazo_dias: 7 };
+    mockBusca.mockResolvedValue([venda()]);
+    jest.useFakeTimers({ now: new Date("2026-12-15T15:00:00Z"), doNotFake: ["nextTick", "setImmediate", "queueMicrotask"] });
+    try {
+      const t = await montar({ vale: { saleId: VENDA_ID } });
+      expect(textoDe(achar(t, "vale-troca-lido")[0].children)).toContain("Troca até 19/12/2026");
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("venda de setembro (antes fora da campanha): agora tem prazo, como qualquer venda", async () => {
     mockBusca.mockResolvedValue([venda({ created_at: "2026-09-20T15:00:00Z" })]);
-    const t = await montar({ vale: { saleId: VENDA_ID } });
-    const txt = textoDe(achar(t, "vale-troca-lido")[0].children);
-    expect(txt).toContain("prazo normal da loja");
-    expect(achar(t, "vale-troca-vencido")).toHaveLength(0);
+    jest.useFakeTimers({ now: new Date("2026-10-01T15:00:00Z"), doNotFake: ["nextTick", "setImmediate", "queueMicrotask"] });
+    try {
+      const t = await montar({ vale: { saleId: VENDA_ID } });
+      const txt = textoDe(achar(t, "vale-troca-lido")[0].children);
+      expect(txt).toContain("Troca até 20/10/2026");
+      expect(txt).not.toContain("prazo normal da loja");
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("sem vale (botão Trocar): nenhuma busca extra e nenhuma faixa", async () => {

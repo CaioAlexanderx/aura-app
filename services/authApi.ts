@@ -136,9 +136,13 @@ export type PdvSettings = {
   // 30/10/2026 (Frete no Caixa): liga o atalho "Frete" no carrinho — a loja
   // cobra a entrega na própria venda. Leitura só por utils/frete.lerFreteEnabled.
   frete_enabled?: boolean;
-  // 13/10/2026 (Aura-backend#813): vale-troca (QR) no cupom das vendas de
-  // nov/dez. Default false (08/11/2026). Leitura só por utils/valeTroca.lerValeTrocaLigado.
+  // 13/10/2026 (Aura-backend#813): vale-troca (QR) no cupom — desde 12/11/2026
+  // em qualquer venda, o ano todo. Default false (08/11/2026). Leitura só por utils/valeTroca.lerValeTrocaLigado.
   vale_troca_enabled?: boolean;
+  // 12/11/2026: prazo para troca do vale, em dias (1-365; ausente = 30). O cupom
+  // imprime "Troca até" = dia da venda + N. Leitura só por
+  // utils/valeTroca.lerPrazoDoValeEmDias.
+  vale_troca_prazo_dias?: number;
   // 18/05/2026 (Fase 0 Aura Food, migration 118)
   food_mode_enabled?: boolean;
   service_fee_pct?: number;

@@ -34,14 +34,22 @@
 //                                         consolidado) e só na janela do
 //                                         próprio assento
 //   vale_troca  "Vale-troca no cupom"     módulo `configuracoes`, por
-//                                         empresa, só até o último dia de
-//                                         troca (31/01/2027)
+//                                         empresa, até 31/01/2027 (fim da
+//                                         temporada de trocas de presente).
+//                                         Desde 12/11/2026 o vale é função
+//                                         permanente do Caixa (Políticas do
+//                                         Caixa); a data aqui é só da página.
 //
 // A ORDEM do array é a ordem na tela.
 // ============================================================
 import { assentoTemporadaVisivel, hojeBrt } from "@/components/screens/configuracoes/assentoTemporada";
-import { VALE_TROCA_PRAZO_ATE } from "@/utils/valeTroca";
 import { faseCrediarioJaneiro } from "./crediarioJaneiro/regrasCrediarioJaneiro";
+
+/** Último dia em que a seção do vale-troca aparece na página da temporada.
+ *  Era o prazo fixo da campanha (utils/valeTroca, até 12/11/2026); o vale
+ *  agora vale o ano todo, com o prazo da loja, e esta data só decide a
+ *  vitrine da página. */
+export const VALE_TROCA_NA_PAGINA_ATE = "2027-01-31";
 
 export type ChaveDaSecao = "de_por" | "crediario_janeiro" | "ruptura" | "assento" | "vale_troca";
 
@@ -130,7 +138,7 @@ export function secoesDaPagina(e: EntradaDasSecoes): SecaoDaPagina[] {
 
   if (!e.consolidatedView && e.visible.has("configuracoes")) {
     if (assentoTemporadaVisivel(hoje)) out.push(TEXTOS_DAS_SECOES.assento);
-    if (hoje <= VALE_TROCA_PRAZO_ATE) out.push(TEXTOS_DAS_SECOES.vale_troca);
+    if (hoje <= VALE_TROCA_NA_PAGINA_ATE) out.push(TEXTOS_DAS_SECOES.vale_troca);
   }
   return out;
 }
