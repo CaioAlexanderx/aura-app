@@ -27,6 +27,7 @@ import { pedeOAssento, secaoDaBarraDeEndereco, destinoDoAssentoSemAssinatura } f
 import { guardarDestino, consumirDestino, limparDestino } from "@/utils/destinoDepoisDoLogin";
 import { versoDoCadastroAberto } from "@/utils/versoDoCadastro";
 import { useEmpresaPeloLink } from "@/hooks/useEmpresaPeloLink";
+import { ehEquipeAura } from "@/utils/equipeAura";
 
 const queryClient = new QueryClient();
 
@@ -152,7 +153,8 @@ function AuthGuard() {
     const onCheckout = segments[1] === "checkout";
     const emailVerified = !!(user as any)?.email_verified;
 
-    const isInternalAura = ((user?.email || "") as string).toLowerCase().endsWith("@getaura.com.br");
+    // Equipe Aura: só o is_staff do backend (utils/equipeAura), nunca o domínio do e-mail.
+    const isInternalAura = ehEquipeAura(user);
 
     const onInvite       = segments[0] === "invite";
     const onPublicDental = segments[0] === "dental" && (segments[1] === "book" || segments[1] === "portal");
