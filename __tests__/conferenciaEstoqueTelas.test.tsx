@@ -87,6 +87,15 @@ jest.mock("@/services/conferenciaEstoqueApi", () => {
   return { ...actual, conferenciaEstoqueApi: api };
 });
 
+// 12/11: atalho "Produtos sem custo · Preencher custos" na tela de começar.
+const mockContagem = jest.fn();
+jest.mock("@/services/custoEmMassaApi", () => ({
+  ...jest.requireActual("@/services/custoEmMassaApi"),
+  custoEmMassaApi: { contagem: (...a: any[]) => mockContagem(...a) },
+}));
+let mockCtxCusto: any;
+jest.mock("@/hooks/useConferenciaResultado", () => ({ useConferenciaContexto: () => mockCtxCusto }));
+
 // O campo do bipe vira um TextInput simples: o que importa é o onScan, e a
 // ref (limpar/focar) que a tela usa depois de escolher da busca.
 const mockCampoLimpar = jest.fn();
@@ -171,6 +180,39 @@ beforeEach(() => {
   mockApi.obter.mockResolvedValue({ conferencia: RASCUNHO, itens: [], escopo_total: 8 });
   mockApi.registrarItem.mockImplementation(async (_c: string, _k: string, r: any) => ({ item: { id: "i-" + r.product_id + (r.variant_id || ""), contado: r.quantidade } }));
   mockScan.mockRejectedValue(new ApiError("Produto não encontrado", 404, { match: "none" }));
+  mockCtxCusto = { companyId: CID, podeEditar: true, semCusto: false, carregandoPermissao: false };
+  mockContagem.mockResolvedValue({ todos: 0, desta_conferencia: null, sem_preco: 0, produtos: 10 });
+});
+
+describe("atalho dos produtos sem custo (12/11)", () => {
+  it("N produtos sem custo: abre a tela de custos", async () => {
+    mockContagem.mockResolvedValue({ todos: 25, desta_conferencia: null, sem_preco: 2, produtos: 312 });
+    const tree = await montar(<ConferenciaRota />);
+    expect(mockContagem).toHaveBeenCalledWith(CID);
+    const t = flattenText(um(tree, "atalho-sem-custo").children);
+    expect(t).toContain("25");
+    expect(t).toContain("Produtos sem custo");
+    await tocar(tree, "preencher-custos");
+    expect(mockPush).toHaveBeenCalledWith("/conferencia-estoque/custos");
+  });
+
+  it("some com N = 0, com erro (antes da migration) e sem permissão", async () => {
+    let tree = await montar(<ConferenciaRota />);
+    expect(tem(tree, "atalho-sem-custo")).toBe(false);
+
+    mockContagem.mockRejectedValue(new ApiError("x", 503, { code: "MIGRATION_PENDING" }));
+    tree = await montar(<ConferenciaRota />);
+    expect(tem(tree, "atalho-sem-custo")).toBe(false);
+
+    mockContagem.mockReset().mockResolvedValue({ todos: 25, desta_conferencia: null, sem_preco: 0 });
+    mockCtxCusto = { companyId: CID, podeEditar: true, semCusto: true, carregandoPermissao: false };
+    tree = await montar(<ConferenciaRota />);
+    expect(tem(tree, "atalho-sem-custo")).toBe(false);
+    mockCtxCusto = { companyId: CID, podeEditar: false, semCusto: false, carregandoPermissao: false };
+    tree = await montar(<ConferenciaRota />);
+    expect(tem(tree, "atalho-sem-custo")).toBe(false);
+    expect(mockContagem).not.toHaveBeenCalled();
+  });
 });
 
 describe("módulo próprio", () => {

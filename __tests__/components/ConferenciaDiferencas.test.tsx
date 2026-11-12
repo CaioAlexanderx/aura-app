@@ -12,6 +12,8 @@
 //      "Transferir" na linha, não a caixa do ajuste); sobras escolhidas; o
 //      TransferirModal recebe itens pré-preenchidos e stock_count_id.
 //   5. 503 MIGRATION_PENDING: texto gentil.
+//   6. (12/11) "Preencher custos" no aviso dos itens sem custo, só no rascunho
+//      e para quem edita; ao voltar, as diferenças recarregam.
 //
 // Mocks do padrão do repo (expo-font, expo-secure-store, fontes, FpktLogo,
 // Modal); testID + deep:false.
@@ -37,7 +39,17 @@ jest.mock("@expo-google-fonts/dm-sans", () => ({}), { virtual: true });
 jest.mock("@/components/karate/FpktLogo", () => ({ FpktLogo: () => null, default: () => null }));
 jest.mock("@/constants/colors", () => ({ Colors: new Proxy({}, { get: (_t, k) => String(k) }), IS_DARK_MODE: false }));
 const mockPush = jest.fn();
-jest.mock("expo-router", () => ({ router: { push: (...a: any[]) => mockPush(...a) } }));
+// useFocusEffect: o primeiro foco é a abertura; mockFoco() simula voltar
+// para a tela (ex.: da tela de custos).
+let mockFoco: (() => void) | null = null;
+jest.mock("expo-router", () => ({
+  router: { push: (...a: any[]) => mockPush(...a) },
+  useFocusEffect: (cb: () => void) => {
+    const R = require("react");
+    R.useEffect(() => { mockFoco = cb; });
+    R.useEffect(() => { cb(); }, []);
+  },
+}));
 jest.mock("@/components/Toast", () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 jest.mock("@/components/WebPortal", () => ({ WebPortal: ({ active, children }: any) => (active ? children : null) }));
 jest.mock("@/components/ConfirmDialog", () => ({
@@ -360,5 +372,37 @@ describe("textos verdadeiros: o registro fica no histórico de conferências", (
     const raiz = tree.root.findAll((n) => n.props && n.props.testID === "dif-tela", { deep: false })[0];
     const pai = raiz.parent as any;
     expect([].concat(pai.props.style).filter(Boolean)).toContainEqual(expect.objectContaining({ backgroundColor: "transparent" }));
+  });
+});
+
+describe("preencher custos (12/11)", () => {
+  it("no rascunho, o aviso dos itens sem custo abre a tela de custos filtrada nesta conferência", async () => {
+    const tree = await montar();
+    await tocar(tree, "dif-preencher-custos");
+    expect(mockPush).toHaveBeenCalledWith("/conferencia-estoque/custos?conferencia=k9");
+  });
+
+  it("sem itens sem custo, sem editar ou já ajustada: nada de botão", async () => {
+    mockDiferencas.mockResolvedValue({ ...DIF, resumo: { ...DIF.resumo, itens_sem_custo: 0 } });
+    let tree = await montar();
+    expect(existe(tree, "dif-preencher-custos")).toBe(false);
+    mockDiferencas.mockResolvedValue(DIF);
+    mockCtx = contexto({ podeEditar: false });
+    tree = await montar();
+    expect(existe(tree, "dif-preencher-custos")).toBe(false);
+    mockCtx = contexto();
+    mockObter.mockResolvedValue({ conferencia: { ...CONF, status: "aplicada" }, transferencias: [] });
+    tree = await montar();
+    expect(existe(tree, "dif-preencher-custos")).toBe(false);
+  });
+
+  it("ao voltar para a tela, recarrega: o valor já conta o custo novo", async () => {
+    const tree = await montar();
+    expect(mockDiferencas).toHaveBeenCalledTimes(1);
+    mockDiferencas.mockResolvedValue({ ...DIF, resumo: { ...DIF.resumo, itens_sem_custo: 0, valor_sobram: 68 } });
+    await act(async () => { if (mockFoco) mockFoco(); });
+    expect(mockDiferencas).toHaveBeenCalledTimes(2);
+    expect(textoDe(tree, "dif-valor-sobram")).toBe("Sobra a custo: R$ 68,00");
+    expect(textoDe(tree, "dif-sem-custo")).toBe("Todos os itens têm custo cadastrado.");
   });
 });

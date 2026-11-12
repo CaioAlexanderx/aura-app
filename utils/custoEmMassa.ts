@@ -308,3 +308,62 @@ export function dataEHoraDoPrazo(iso: string | null | undefined): string {
   var hora = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
   return dia + ", às " + hora;
 }
+
+// ── Histórico: "Últimos preenchimentos de custo" (tela E) ─────────────
+type PreenchimentoParaTexto = {
+  criado_em: string; por: { nome: string | null } | null; atalho: { modo: ModoDoAtalho; percentual: number } | null;
+  produtos: number; digitados: number; sugeridos: number; mesmo: number;
+  desfazer_ate: string; pode_desfazer: boolean; desfeito_em: string | null;
+};
+
+function diaEHora(iso: string): { dia: string; hora: string; hoje: boolean } {
+  var d = new Date(iso);
+  var dia = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" });
+  var hora = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+  var hoje = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "America/Sao_Paulo" })
+    === d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "America/Sao_Paulo" });
+  return { dia: dia, hora: hora, hoje: hoje };
+}
+
+function diaCurto(iso: string | null | undefined): string {
+  if (!iso) return "";
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" });
+}
+
+/** "Hoje, 14:32 · Ana" ou "08/11, 10:05 · Bruno"; `curto`: "hoje, 14:32" (na pergunta do desfazer). */
+export function quandoDoPreenchimento(p: PreenchimentoParaTexto, curto?: boolean): string {
+  var d = new Date(p.criado_em);
+  if (isNaN(d.getTime())) return "";
+  var x = diaEHora(p.criado_em);
+  var quando = (x.hoje ? (curto ? "hoje" : "Hoje") : x.dia) + ", " + x.hora;
+  if (curto) return quando;
+  return quando + (p.por && p.por.nome ? " · " + p.por.nome : "");
+}
+
+export type SituacaoDoPreenchimento = "pode" | "desfeito" | "prazo_acabou";
+
+export function situacaoDoPreenchimento(p: PreenchimentoParaTexto): SituacaoDoPreenchimento {
+  if (p.desfeito_em) return "desfeito";
+  return p.pode_desfazer ? "pode" : "prazo_acabou";
+}
+
+/** "23 produtos · 20 pela sugestão de markup 100%, 3 digitados · dá para desfazer até 19/11". */
+export function resumoDoPreenchimento(p: PreenchimentoParaTexto): string {
+  var atalho = p.atalho
+    ? (p.atalho.modo === "markup" ? "markup " : "margem ") + String(p.atalho.percentual).replace(".", ",") + "%"
+    : null;
+  var origens: string[] = [];
+  var soUm = [p.sugeridos, p.digitados, p.mesmo].filter(function (n) { return n > 0; }).length === 1;
+  if (p.sugeridos > 0) origens.push((soUm ? "" : p.sugeridos.toLocaleString("pt-BR") + " ") + "pela sugestão" + (atalho ? " de " + atalho : ""));
+  if (p.mesmo > 0) origens.push(soUm ? "mesmo custo para todos" : p.mesmo.toLocaleString("pt-BR") + " com o mesmo custo");
+  if (p.digitados > 0) origens.push(soUm ? "digitados" : p.digitados.toLocaleString("pt-BR") + (p.digitados === 1 ? " digitado" : " digitados"));
+  var sit = situacaoDoPreenchimento(p);
+  var fim = sit === "desfeito"
+    ? "desfeito" + (p.desfeito_em ? " em " + diaCurto(p.desfeito_em) : "")
+    : sit === "pode"
+      ? "dá para desfazer até " + diaCurto(p.desfazer_ate)
+      : "o prazo para desfazer acabou em " + diaCurto(p.desfazer_ate);
+  return [plural(p.produtos, "produto", "produtos"), origens.join(", "), fim].filter(Boolean).join(" · ");
+}

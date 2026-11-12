@@ -28,11 +28,16 @@
 //     As sobras já vêm escolhidas; abre o TransferirModal do Estoque
 //     pré-preenchido, mandando stock_count_id. Antes ou depois de ajustar.
 //
+//   · 12/11/2026: no rascunho, o aviso "N itens sem custo" ganha o botão
+//     "Preencher custos" (quem edita o estoque e vê custo), que abre a tela
+//     de custos filtrada nesta conferência. Ao voltar (foco), as diferenças
+//     recarregam: o backend já pôs o custo novo nos itens sem custo no bipe.
+//
 // Antes do backend no ar: 503 MIGRATION_PENDING / 404 viram texto gentil.
 // ============================================================
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator, TextInput } from "react-native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { WebPortal } from "@/components/WebPortal";
@@ -117,6 +122,15 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
   }, [companyId, countId]);
 
   useEffect(function () { carregar(); }, [carregar]);
+
+  // Volta da tela de custos (ou de outra da pilha): recarrega em silêncio,
+  // para o valor de falta e sobra já contar o custo novo. O primeiro foco é
+  // o da abertura, que o efeito acima já carrega.
+  var primeiroFoco = useRef(true);
+  useFocusEffect(useCallback(function () {
+    if (primeiroFoco.current) { primeiroFoco.current = false; return; }
+    carregar(true);
+  }, [carregar]));
 
   var grupos = useMemo(function () {
     var out = { faltam: [] as ItemDiferenca[], sobram: [] as ItemDiferenca[], batem: [] as ItemDiferenca[] };
@@ -370,6 +384,13 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
                 ? (r.itens_sem_custo === 1 ? "1 item sem custo cadastrado ficou fora desta conta." : qtd(r.itens_sem_custo) + " itens sem custo cadastrado ficaram fora desta conta.")
                 : "Todos os itens têm custo cadastrado."}
             </Text>
+            {r.itens_sem_custo > 0 && rascunho && ctx.podeEditar ? (
+              <View style={{ marginTop: 8, flexDirection: "row" }}>
+                <Botao tipo="secundario" pequeno rotulo="Preencher custos"
+                  onPress={function () { irPara("/conferencia-estoque/custos?conferencia=" + encodeURIComponent(countId) + (lojaDaRota ? "&loja=" + encodeURIComponent(lojaDaRota) : "")); }}
+                  testID="dif-preencher-custos" />
+              </View>
+            ) : null}
           </Cartao>
         ) : null}
 
