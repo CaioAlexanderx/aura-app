@@ -13,8 +13,18 @@ import {
   type ProviderMode,
   type FiscalUpdateBody,
   type TestConexaoResponse,
+  type Requisito,
+  type NfseUpdateBody,
 } from "@/services/auraNotasApi";
 import { ApiError } from "@/services/api";
+import {
+  rotulosDaEmpresa,
+  ESTADO_REQUISITO,
+  precisaConfirmar,
+  textoConfirmacao,
+  textoRemover,
+  type TomRotulo,
+} from "./auraNotasRotulos";
 
 var isWeb = Platform.OS === "web";
 
@@ -42,6 +52,28 @@ function certLabel(days: number | undefined): { label: string; danger: boolean }
 }
 
 var AMBIENTE_LABEL: Record<string, string> = { homologacao: "Homologação", producao: "Produção" };
+
+// 12/11/2026: cor de cada tom de rótulo/requisito.
+function corDoTom(t: TomRotulo): string {
+  if (t === "ok") return Colors.green;
+  if (t === "aviso") return Colors.amber;
+  if (t === "perigo") return Colors.red;
+  return Colors.violet3;
+}
+function fundoDoTom(t: TomRotulo): string {
+  if (t === "ok") return Colors.greenD;
+  if (t === "aviso") return Colors.amberD;
+  if (t === "perigo") return Colors.redD;
+  return Colors.violetD;
+}
+
+// Regimes aceitos pelo backend (gestao.validateTaxRegime).
+var REGIME_OPTS: { key: string; label: string }[] = [
+  { key: "mei", label: "MEI" },
+  { key: "simples_nacional", label: "Simples Nacional" },
+  { key: "lucro_presumido", label: "Lucro Presumido" },
+  { key: "lucro_real", label: "Lucro Real" },
+];
 
 var PROVIDER_OPTS: { key: ProviderMode; label: string }[] = [
   { key: "auto", label: "AUTO (recomendado)" },
@@ -132,25 +164,55 @@ export function AuraNotasAdmin() {
           var cl = certLabel(c.cert?.days_left);
           var fallbackActive = c.breaker_open || (c.stats_30d?.fallbacks || 0) > 0;
           var isEngine = c.provider_efetivo === "sefaz_sp";
+          // 12/11/2026: empresa que entrou na lista só pelo certificado (sem NFC-e)
+          var semNfce = c.nfce_configurada === false;
+          var rotulos = rotulosDaEmpresa(c);
           return (
             <Pressable
               key={c.company_id}
+              testID={"aura-notas-card-" + c.company_id}
               onPress={function() { setSelectedId(c.company_id); }}
               style={[s.card, active && s.cardActive, isWeb && ({ cursor: "pointer" } as any)]}
             >
               <View style={s.ccTop}>
                 <View style={{ flex: 1 }}>
                   <Text style={s.ccName} numberOfLines={1}>{c.name}</Text>
-                  <Text style={s.ccCnpj}>{fmtCnpj(c.cnpj)}</Text>
+                  <Text style={s.ccCnpj}>{fmtCnpj(c.cnpj)}{c.uf ? " · " + (c.municipio ? c.municipio + "/" : "") + c.uf : ""}</Text>
                 </View>
-                <View style={[s.badge, isEngine ? s.badgeAura : s.badgeNuvem]}>
-                  <Text style={[s.badgeText, { color: isEngine ? Colors.violet3 : Colors.ink3 }]}>
-                    {isEngine ? "Aura Notas" : "Nuvem Fiscal"}
-                  </Text>
-                </View>
+                {semNfce ? (
+                  <View style={[s.badge, s.badgeNuvem]}>
+                    <Text style={[s.badgeText, { color: Colors.ink3 }]}>Sem NFC-e</Text>
+                  </View>
+                ) : (
+                  <View style={[s.badge, isEngine ? s.badgeAura : s.badgeNuvem]}>
+                    <Text style={[s.badgeText, { color: isEngine ? Colors.violet3 : Colors.ink3 }]}>
+                      {isEngine ? "Aura Notas" : "Nuvem Fiscal"}
+                    </Text>
+                  </View>
+                )}
               </View>
 
-              <View style={s.ccMeta}>
+              {rotulos.length > 0 && (
+                <View style={[s.ccMeta, { marginBottom: 6 }]}>
+                  {rotulos.map(function(r) {
+                    return (
+                      <View key={r.chave} testID={"aura-notas-rotulo-" + r.chave} style={[s.chip, { backgroundColor: fundoDoTom(r.tom) }]}>
+                        <Text style={[s.chipText, { color: corDoTom(r.tom), fontWeight: "700" }]}>{r.texto}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
+              {semNfce ? (
+                <Text style={s.ccLast}>
+                  {c.faltas && c.faltas.nfse === 0 && c.nfse_configurada
+                    ? "NFS-e em dia. Toque para configurar a NFC-e."
+                    : "Toque para ver o que falta e configurar."}
+                </Text>
+              ) : null}
+
+              {!semNfce && <View style={s.ccMeta}>
                 {fallbackActive && (
                   <View style={[s.chip, s.chipWarn]}>
                     <Icon name="alert" size={9} color={Colors.amber} />
@@ -167,9 +229,9 @@ export function AuraNotasAdmin() {
                 {c.serie_sefaz_sp != null && (
                   <View style={s.chip}><Text style={s.chipText}>série {c.serie_sefaz_sp}</Text></View>
                 )}
-              </View>
+              </View>}
 
-              <View style={s.ccStats}>
+              {!semNfce && <View style={s.ccStats}>
                 <View style={s.stat}>
                   <Text style={s.statVal}>{c.stats_30d?.total ?? 0}</Text>
                   <Text style={s.statLabel}>30d total</Text>
@@ -182,13 +244,19 @@ export function AuraNotasAdmin() {
                   <Text style={[s.statVal, { color: (c.stats_30d?.fallbacks || 0) > 0 ? Colors.amber : Colors.green }]}>{c.stats_30d?.fallbacks ?? 0}</Text>
                   <Text style={s.statLabel}>fallbacks</Text>
                 </View>
-              </View>
+              </View>}
 
-              <Text style={s.ccLast}>
+              {!semNfce && <Text style={s.ccLast}>
                 {c.last_emission
                   ? "Última: " + fmtDate(c.last_emission.at) + " · " + c.last_emission.provider_used + " · " + c.last_emission.status
                   : "Sem emissões nos últimos 30 dias"}
-              </Text>
+              </Text>}
+              {c.faltas && (
+                <Text style={s.ccLast} testID={"aura-notas-faltas-" + c.company_id}>
+                  {(c.faltas.nfce === 0 ? "NFC-e: tudo certo" : "NFC-e: " + c.faltas.nfce + (c.faltas.nfce === 1 ? " item falta" : " itens faltam"))
+                    + (c.nfse_configurada ? " · " + (c.faltas.nfse === 0 ? "NFS-e: tudo certo" : "NFS-e: " + c.faltas.nfse + (c.faltas.nfse === 1 ? " item falta" : " itens faltam")) : "")}
+                </Text>
+              )}
             </Pressable>
           );
         })}
@@ -377,8 +445,11 @@ function CompanyDetail({ companyId, onSaved, onRemoved }: { companyId: string; o
     queryFn: function() { return auraNotasApi.detail(companyId); },
   });
 
+  // 12/11/2026: o A1 é o mesmo da NFS-e. Quem usa NFS-e vê o aviso na
+  // confirmação e só então o backend apaga (apagarCertificado).
+  var usaNfse = !!(data && data.nfse_configurada && data.cert);
   var removeMut = useMutation({
-    mutationFn: function() { return auraNotasApi.removeFiscal(companyId); },
+    mutationFn: function() { return auraNotasApi.removeFiscal(companyId, { apagarCertificado: usaNfse }); },
     onSuccess: function() {
       toast.success("Configuração fiscal removida");
       setShowConfirmRemove(false);
@@ -446,21 +517,32 @@ function CompanyDetail({ companyId, onSaved, onRemoved }: { companyId: string; o
         <View style={s.newBanner}>
           <Icon name="info" size={14} color={Colors.violet3} />
           <Text style={s.newBannerText}>
-            Empresa ainda sem configuração fiscal no Aura Notas. Preencha e salve os dados fiscais abaixo
-            para criar a configuração desta empresa.
+            {data.cert
+              ? "Esta empresa já enviou o certificado A1, mas a NFC-e ainda não está configurada. Preencha e salve os dados fiscais abaixo para começar."
+              : "Empresa ainda sem configuração de NFC-e no Aura Notas. Preencha e salve os dados fiscais abaixo para criar a configuração desta empresa."}
           </Text>
         </View>
       )}
 
+      {data.requisitos && <RequisitosBlock requisitos={data.requisitos} />}
+
       <FiscalBlock companyId={companyId} detail={data} onSaved={invalidateAll} />
-      {hasConfig && <CscBlock companyId={companyId} detail={data} onSaved={invalidateAll} />}
-      {hasConfig && <CertificateBlock companyId={companyId} detail={data} onSaved={invalidateAll} />}
+      {hasConfig ? (
+        <CscBlock companyId={companyId} detail={data} onSaved={invalidateAll} />
+      ) : (
+        <View style={s.infoBox}>
+          <Icon name="info" size={12} color={Colors.violet3} />
+          <Text style={s.infoText}>O CSC fica disponível depois de salvar os dados fiscais da NFC-e.</Text>
+        </View>
+      )}
+      <CertificateBlock companyId={companyId} detail={data} onSaved={invalidateAll} />
+      {data.requisitos && <NfseBlock companyId={companyId} detail={data} onSaved={invalidateAll} />}
       {hasConfig && <StatusBlock companyId={companyId} detail={data} />}
 
       <ConfirmModal
         visible={showConfirmRemove}
-        title="Remover configuração fiscal?"
-        message={"Isso remove a configuração do Aura Notas (dados fiscais, CSC e certificado A1) de " + companyName + ". A empresa continua existindo normalmente — login, vendas etc. não são afetados. Essa ação não pode ser desfeita; será preciso reconfigurar do zero."}
+        title={usaNfse ? "Remover a NFC-e e o certificado?" : "Remover configuração fiscal?"}
+        message={textoRemover(companyName, usaNfse)}
         danger
         confirmLabel="Remover"
         loading={removeMut.isPending}
@@ -497,6 +579,7 @@ function FiscalBlock({ companyId, detail, onSaved }: { companyId: string; detail
       tax_regime: co.tax_regime || "",
       serie_nfce: cfg.serie_nfce,
       serie_sefaz_sp: cfg.serie_sefaz_sp,
+      next_number_sefaz_sp: cfg.next_number_sefaz_sp,
       ambiente: cfg.ambiente || undefined,
       uf: cfg.uf || co.address_state || "",
       provider: cfg.provider || undefined,
@@ -506,9 +589,21 @@ function FiscalBlock({ companyId, detail, onSaved }: { companyId: string; detail
 
   var mut = useMutation({
     mutationFn: function(body: FiscalUpdateBody) { return auraNotasApi.updateFiscal(companyId, body); },
-    onSuccess: function() { toast.success("Dados fiscais salvos"); onSaved(); },
-    onError: function(e: any) { toast.error(e?.message || "Erro ao salvar dados fiscais"); },
+    onSuccess: function() { setConfirmar(null); toast.success("Dados fiscais salvos"); onSaved(); },
+    onError: function(e: any) { setConfirmar(null); toast.error(e?.message || "Erro ao salvar dados fiscais"); },
   });
+
+  // 12/11/2026: produção e série/número pedem confirmação explícita.
+  var [confirmar, setConfirmar] = useState<{ producao: boolean; numeracao: boolean } | null>(null);
+  function salvar() {
+    var c = precisaConfirmar({
+      ambienteAntes: cfg.ambiente, ambienteDepois: form.ambiente,
+      serieAntes: cfg.serie_sefaz_sp, serieDepois: form.serie_sefaz_sp,
+      numeroAntes: cfg.next_number_sefaz_sp, numeroDepois: form.next_number_sefaz_sp,
+    });
+    if (c.producao || c.numeracao) { setConfirmar(c); return; }
+    mut.mutate(form);
+  }
 
   function set(k: keyof FiscalUpdateBody, v: any) { setForm(function(p) { var n: any = { ...p }; n[k] = v; return n; }); }
   function setNum(k: keyof FiscalUpdateBody, v: string) { set(k, v === "" ? null : Number(v.replace(/\D/g, "")) || null); }
@@ -531,7 +626,13 @@ function FiscalBlock({ companyId, detail, onSaved }: { companyId: string; detail
         <Field label="UF"><Inp value={form.address_state || ""} onChange={function(v) { set("address_state", v.toUpperCase().slice(0, 2)); }} /></Field>
         <Field label="CEP"><Inp value={form.address_zip || ""} onChange={function(v) { set("address_zip", v); }} /></Field>
         <Field label="Código IBGE do município"><Inp value={form.ibge_code || ""} onChange={function(v) { set("ibge_code", v); }} /></Field>
-        <Field label="Regime tributário"><Inp value={form.tax_regime || ""} onChange={function(v) { set("tax_regime", v); }} placeholder="Simples Nacional" /></Field>
+        <Field label="Regime tributário" full>
+          <Chips
+            options={REGIME_OPTS}
+            value={form.tax_regime === "simples" ? "simples_nacional" : (form.tax_regime || "")}
+            onChange={function(v) { set("tax_regime", v); }}
+          />
+        </Field>
       </View>
 
       <Text style={s.sectionCap}>Numeração &amp; roteamento</Text>
@@ -540,7 +641,7 @@ function FiscalBlock({ companyId, detail, onSaved }: { companyId: string; detail
         <Field label="Série SEFAZ-SP (engine)"><Inp value={form.serie_sefaz_sp != null ? String(form.serie_sefaz_sp) : ""} onChange={function(v) { setNum("serie_sefaz_sp", v); }} keyboard="numeric" /></Field>
         <Field label="UF de emissão"><Inp value={form.uf || ""} onChange={function(v) { set("uf", v.toUpperCase().slice(0, 2)); }} /></Field>
         <Field label="Próx. nº NFC-e"><Inp value={cfg.next_number != null ? String(cfg.next_number) : "—"} onChange={function() {}} disabled /></Field>
-        <Field label="Próx. nº SEFAZ-SP"><Inp value={cfg.next_number_sefaz_sp != null ? String(cfg.next_number_sefaz_sp) : "—"} onChange={function() {}} disabled /></Field>
+        <Field label="Próx. nº SEFAZ-SP (engine)"><Inp value={form.next_number_sefaz_sp != null ? String(form.next_number_sefaz_sp) : ""} onChange={function(v) { setNum("next_number_sefaz_sp", v); }} keyboard="numeric" placeholder="1" /></Field>
         <Field label="Ambiente">
           <Segmented
             options={[{ key: "homologacao", label: "Homolog." }, { key: "producao", label: "Produção" }]}
@@ -587,13 +688,28 @@ function FiscalBlock({ companyId, detail, onSaved }: { companyId: string; detail
 
       <View style={s.btnRow}>
         <Pressable
-          onPress={function() { mut.mutate(form); }}
+          onPress={salvar}
           disabled={mut.isPending}
+          testID="aura-notas-salvar-fiscal"
           style={[s.btnPrimary, mut.isPending && { opacity: 0.6 }, isWeb && ({ cursor: "pointer" } as any)]}
         >
           <Text style={s.btnPrimaryText}>{mut.isPending ? "Salvando..." : "Salvar dados fiscais"}</Text>
         </Pressable>
       </View>
+
+      <ConfirmModal
+        visible={!!confirmar}
+        title={confirmar && confirmar.producao ? "Colocar a NFC-e em produção?" : "Mudar a numeração da NFC-e?"}
+        message={confirmar ? textoConfirmacao("NFC-e", confirmar) : ""}
+        danger
+        confirmLabel="Confirmar e salvar"
+        loading={mut.isPending}
+        onConfirm={function() {
+          if (!confirmar) return;
+          mut.mutate({ ...form, confirmar_producao: confirmar.producao, confirmar_numeracao: confirmar.numeracao });
+        }}
+        onCancel={function() { setConfirmar(null); }}
+      />
     </View>
   );
 }
@@ -715,8 +831,15 @@ function CertificateBlock({ companyId, detail, onSaved }: { companyId: string; d
       ) : (
         <View style={s.certEmpty}>
           <Icon name="alert" size={14} color={Colors.amber} />
-          <Text style={s.certEmptyText}>Nenhum certificado A1 cadastrado — a emissão fiscal fica bloqueada.</Text>
+          <Text style={s.certEmptyText}>
+            {(detail.certificado_fontes || []).length
+              ? "Recebemos um certificado antigo desta empresa, de antes da emissão pela Aura. Para emitir, peça o A1 de novo e envie aqui."
+              : "Nenhum certificado A1 cadastrado — a emissão fiscal fica bloqueada."}
+          </Text>
         </View>
+      )}
+      {cert && detail.nfse_configurada && (
+        <Text style={[s.uploadHint, { marginBottom: 10 }]}>Este certificado vale para a NFC-e e para a NFS-e desta empresa.</Text>
       )}
 
       <Pressable onPress={pickFile} style={[s.uploadDrop, isWeb && ({ cursor: "pointer" } as any)]}>
@@ -737,6 +860,240 @@ function CertificateBlock({ companyId, detail, onSaved }: { companyId: string; d
           </View>
         </View>
       )}
+    </View>
+  );
+}
+
+// ─── Requisitos de emissão (12/11/2026) ─────────────────────────────────────────
+// O que está ok e o que falta para emitir NFC-e e NFS-e, item a item. A lista
+// vem pronta do backend (services/auraNotas/requisitos.js), que espelha o que
+// a emissão de cada documento exige.
+
+function RequisitosBlock({ requisitos }: { requisitos: NonNullable<AuraNotasDetail["requisitos"]> }) {
+  var nfce = requisitos.nfce;
+  var nfse = requisitos.nfse;
+  var faltas = function(itens: Requisito[]) { return itens.filter(function(i) { return i.estado === "falta" || i.estado === "problema"; }).length; };
+  var resumo = function(n: number, pronto: boolean, configurada: boolean) {
+    if (!configurada) return "ainda não configurada";
+    if (pronto && n === 0) return "pronta para emitir";
+    return n === 0 ? "quase lá" : (n === 1 ? "falta 1 item" : "faltam " + n + " itens");
+  };
+  return (
+    <View style={s.block} testID="aura-notas-requisitos">
+      <BlockHead icon="check" color={Colors.green} tint={Colors.greenD} title="O que falta para emitir" hint="Requisitos da NFC-e e da NFS-e, item a item" />
+      <ListaRequisitos doc="nfce" titulo={"NFC-e — " + resumo(faltas(nfce.itens), nfce.pronta, nfce.configurada)} itens={nfce.itens} />
+      <View style={{ height: 14 }} />
+      <ListaRequisitos doc="nfse" titulo={"NFS-e — " + resumo(faltas(nfse.itens), nfse.apta, nfse.configurada)} itens={nfse.itens} />
+    </View>
+  );
+}
+
+function ListaRequisitos({ doc, titulo, itens }: { doc: string; titulo: string; itens: Requisito[] }) {
+  return (
+    <View>
+      <Text style={s.sectionCapTop}>{titulo}</Text>
+      {itens.map(function(i) {
+        var e = ESTADO_REQUISITO[i.estado] || ESTADO_REQUISITO.falta;
+        var cor = corDoTom(e.tom);
+        return (
+          <View key={i.chave} style={s.reqRow} testID={"req-" + doc + "-" + i.chave}>
+            <View style={[s.reqDot, { backgroundColor: fundoDoTom(e.tom), borderColor: cor + "55" }]}>
+              <Text style={[s.reqDotText, { color: cor }]}>{e.simbolo}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.reqTitle}>{i.rotulo}</Text>
+              <Text style={s.reqDetail}>{i.detalhe}</Text>
+            </View>
+            <Text style={[s.reqState, { color: cor }]}>{e.texto}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+// ─── NFS-e (emissor nacional) pela equipe (12/11/2026) ──────────────────────────
+// Mesmas regras da tela da loja (o backend reaproveita a validação dela). Só
+// os campos alterados vão no PUT. Produção e série/número pedem confirmação.
+
+var OP_SIMP_OPTS = [
+  { key: "1", label: "Não optante" },
+  { key: "2", label: "MEI" },
+  { key: "3", label: "ME/EPP (Simples)" },
+];
+
+type NfseForm = {
+  ambiente: string; is_active: boolean; serie: string; next_dps_number: string;
+  municipio_ibge: string; inscricao_municipal: string; op_simp_nac: string; p_tot_trib_sn: string;
+  ctribnac_padrao: string; cnbs_padrao: string; outro_emissor: string;
+  outro_emissor_serie: string; outro_emissor_ultimo_numero: string;
+};
+
+function nfseFormInicial(detail: AuraNotasDetail): NfseForm {
+  var n = detail.nfse || null;
+  var txt = function(v: any) { return v == null ? "" : String(v); };
+  return {
+    ambiente: n && n.ambiente === "producao" ? "producao" : "producao_restrita",
+    is_active: !!(n && n.is_active && n.provider === "nacional"),
+    serie: txt(n && n.serie) || "1",
+    next_dps_number: txt(n && n.next_dps_number) || "1",
+    municipio_ibge: txt(n && n.municipio_ibge),
+    inscricao_municipal: txt(n && n.inscricao_municipal),
+    op_simp_nac: txt(n && n.op_simp_nac),
+    p_tot_trib_sn: txt(n && n.p_tot_trib_sn),
+    ctribnac_padrao: txt(n && n.ctribnac_padrao),
+    cnbs_padrao: txt(n && n.cnbs_padrao),
+    outro_emissor: n && n.outro_emissor === true ? "sim" : (n && n.outro_emissor === false ? "nao" : ""),
+    outro_emissor_serie: txt(n && n.outro_emissor_serie),
+    outro_emissor_ultimo_numero: txt(n && n.outro_emissor_ultimo_numero),
+  };
+}
+
+function numOuNull(v: string): number | null {
+  var t = String(v || "").trim().replace(",", ".");
+  if (!t) return null;
+  var n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Só o que mudou, já no formato do backend. */
+export function corpoNfse(antes: NfseForm, depois: NfseForm): NfseUpdateBody {
+  var b: NfseUpdateBody = {};
+  if (depois.ambiente !== antes.ambiente) b.ambiente = depois.ambiente as any;
+  if (depois.is_active !== antes.is_active) {
+    b.is_active = depois.is_active;
+    // ligar sem dizer o ambiente = produção no backend; aqui é sempre explícito
+    if (depois.is_active) b.ambiente = depois.ambiente as any;
+  }
+  if (depois.serie !== antes.serie) b.serie = depois.serie.trim();
+  if (depois.next_dps_number !== antes.next_dps_number) b.next_dps_number = Number(depois.next_dps_number.replace(/\D/g, "")) || 0;
+  if (depois.municipio_ibge !== antes.municipio_ibge) b.municipio_ibge = depois.municipio_ibge.trim();
+  if (depois.inscricao_municipal !== antes.inscricao_municipal) b.inscricao_municipal = depois.inscricao_municipal.trim() || null;
+  if (depois.op_simp_nac !== antes.op_simp_nac) b.op_simp_nac = depois.op_simp_nac ? Number(depois.op_simp_nac) : null;
+  if (depois.p_tot_trib_sn !== antes.p_tot_trib_sn) b.p_tot_trib_sn = numOuNull(depois.p_tot_trib_sn);
+  if (depois.ctribnac_padrao !== antes.ctribnac_padrao) b.ctribnac_padrao = depois.ctribnac_padrao.trim();
+  if (depois.cnbs_padrao !== antes.cnbs_padrao) b.cnbs_padrao = depois.cnbs_padrao.trim() || null;
+  if (depois.outro_emissor !== antes.outro_emissor) b.outro_emissor = depois.outro_emissor === "sim" ? true : (depois.outro_emissor === "nao" ? false : null);
+  if (depois.outro_emissor === "sim") {
+    if (depois.outro_emissor_serie !== antes.outro_emissor_serie) b.outro_emissor_serie = depois.outro_emissor_serie.trim() || null;
+    if (depois.outro_emissor_ultimo_numero !== antes.outro_emissor_ultimo_numero) b.outro_emissor_ultimo_numero = numOuNull(depois.outro_emissor_ultimo_numero.replace(/\D/g, ""));
+  }
+  return b;
+}
+
+function NfseBlock({ companyId, detail, onSaved }: { companyId: string; detail: AuraNotasDetail; onSaved: () => void }) {
+  var inicial = nfseFormInicial(detail);
+  var [form, setForm] = useState<NfseForm>(inicial);
+  var [confirmar, setConfirmar] = useState<{ producao: boolean; numeracao: boolean } | null>(null);
+  useEffect(function() { setForm(nfseFormInicial(detail)); }, [companyId, detail.nfse]);
+
+  var mut = useMutation({
+    mutationFn: function(body: NfseUpdateBody) { return auraNotasApi.updateNfse(companyId, body); },
+    onSuccess: function() { setConfirmar(null); toast.success("NFS-e salva"); onSaved(); },
+    onError: function(e: any) { setConfirmar(null); toast.error(e?.message || "Não deu para salvar a NFS-e agora. Tente de novo em instantes."); },
+  });
+
+  function set(k: keyof NfseForm, v: any) { setForm(function(p) { var n: any = { ...p }; n[k] = v; return n; }); }
+
+  function salvar() {
+    var body = corpoNfse(inicial, form);
+    if (!Object.keys(body).length) { toast.info("Nada mudou na NFS-e."); return; }
+    var c = precisaConfirmar({
+      ambienteAntes: detail.nfse ? inicial.ambiente : null, ambienteDepois: body.ambiente !== undefined ? body.ambiente : inicial.ambiente,
+      serieAntes: inicial.serie, serieDepois: body.serie,
+      numeroAntes: inicial.next_dps_number, numeroDepois: body.next_dps_number,
+    });
+    if (c.producao || c.numeracao) { setConfirmar(c); return; }
+    mut.mutate(body);
+  }
+
+  var n = detail.nfse;
+  return (
+    <View style={s.block} testID="aura-notas-nfse">
+      <BlockHead icon="file_text" color={Colors.violet3} tint={Colors.violetD} title="NFS-e — emissor nacional" hint="Mesmas regras da tela da loja · nota de serviço" />
+
+      {!n && (
+        <View style={[s.infoBox, { marginTop: 0, marginBottom: 12 }]}>
+          <Icon name="info" size={12} color={Colors.violet3} />
+          <Text style={s.infoText}>A NFS-e ainda não foi configurada nesta empresa. Ao salvar, ela começa em produção restrita (testes do gov.br).</Text>
+        </View>
+      )}
+      {n && n.ultimo_teste_status && n.ultimo_teste_status !== "ok" && n.ultimo_teste_mensagem ? (
+        <View style={[s.warnBox, { marginTop: 0, marginBottom: 12 }]}>
+          <Icon name="alert" size={13} color={Colors.amber} />
+          <Text style={s.warnText}>Última nota de teste: {n.ultimo_teste_mensagem}</Text>
+        </View>
+      ) : null}
+
+      <View style={s.grid2}>
+        <Field label="Município (código IBGE, 7 dígitos)"><Inp value={form.municipio_ibge} onChange={function(v) { set("municipio_ibge", v.replace(/\D/g, "").slice(0, 7)); }} keyboard="numeric" placeholder={detail.company.ibge_code || "3550308"} /></Field>
+        <Field label="Inscrição municipal (opcional)"><Inp value={form.inscricao_municipal} onChange={function(v) { set("inscricao_municipal", v.slice(0, 15)); }} /></Field>
+        <Field label="Código de tributação nacional (6 dígitos)"><Inp value={form.ctribnac_padrao} onChange={function(v) { set("ctribnac_padrao", v.replace(/\D/g, "").slice(0, 6)); }} keyboard="numeric" placeholder="010501" /></Field>
+        <Field label="NBS padrão (opcional, 9 dígitos)"><Inp value={form.cnbs_padrao} onChange={function(v) { set("cnbs_padrao", v.replace(/\D/g, "").slice(0, 9)); }} keyboard="numeric" /></Field>
+        <Field label="Situação no Simples Nacional" full>
+          <Chips options={OP_SIMP_OPTS} value={form.op_simp_nac} onChange={function(v) { set("op_simp_nac", v); }} />
+        </Field>
+        {form.op_simp_nac === "3" && (
+          <Field label="Percentual aproximado de tributos do Simples (%)"><Inp value={form.p_tot_trib_sn} onChange={function(v) { set("p_tot_trib_sn", v); }} keyboard="numeric" placeholder="6,00" /></Field>
+        )}
+      </View>
+
+      <Text style={s.sectionCap}>Numeração da DPS</Text>
+      <View style={s.grid2}>
+        <Field label="Série da DPS (1 a 49998)"><Inp value={form.serie} onChange={function(v) { set("serie", v.replace(/\D/g, "").slice(0, 5)); }} keyboard="numeric" /></Field>
+        <Field label="Próximo número da DPS"><Inp value={form.next_dps_number} onChange={function(v) { set("next_dps_number", v.replace(/\D/g, "")); }} keyboard="numeric" /></Field>
+        <Field label="Já emite NFS-e por outro emissor?" full>
+          <Chips options={[{ key: "nao", label: "Não" }, { key: "sim", label: "Sim" }]} value={form.outro_emissor} onChange={function(v) { set("outro_emissor", v); }} />
+        </Field>
+        {form.outro_emissor === "sim" && (
+          <Field label="Série usada no outro emissor"><Inp value={form.outro_emissor_serie} onChange={function(v) { set("outro_emissor_serie", v.replace(/\D/g, "").slice(0, 5)); }} keyboard="numeric" /></Field>
+        )}
+        {form.outro_emissor === "sim" && (
+          <Field label="Último número usado lá"><Inp value={form.outro_emissor_ultimo_numero} onChange={function(v) { set("outro_emissor_ultimo_numero", v.replace(/\D/g, "")); }} keyboard="numeric" /></Field>
+        )}
+      </View>
+      <View style={s.infoBox}>
+        <Icon name="info" size={12} color={Colors.violet3} />
+        <Text style={s.infoText}>O próximo número só anda para frente: número já usado nunca volta.</Text>
+      </View>
+
+      <Text style={s.sectionCap}>Ambiente</Text>
+      <Segmented
+        options={[{ key: "producao_restrita", label: "Testes (gov.br)" }, { key: "producao", label: "Produção" }]}
+        value={form.ambiente}
+        onChange={function(v) { set("ambiente", v); }}
+      />
+
+      <View style={s.activeRow}>
+        <Switch
+          value={form.is_active}
+          onValueChange={function(v) { set("is_active", v); }}
+          trackColor={{ true: Colors.violet, false: Colors.border }}
+          thumbColor="#fff"
+        />
+        <Text style={s.activeLabel}>NFS-e ligada nesta empresa</Text>
+      </View>
+      <Text style={[s.uploadHint, { marginTop: 6 }]}>Para ligar, a nota de teste precisa ter passado — a mesma regra da tela da loja.</Text>
+
+      <View style={s.btnRow}>
+        <Pressable onPress={salvar} disabled={mut.isPending} testID="aura-notas-salvar-nfse" style={[s.btnPrimary, mut.isPending && { opacity: 0.6 }, isWeb && ({ cursor: "pointer" } as any)]}>
+          <Text style={s.btnPrimaryText}>{mut.isPending ? "Salvando..." : "Salvar NFS-e"}</Text>
+        </Pressable>
+      </View>
+
+      <ConfirmModal
+        visible={!!confirmar}
+        title={confirmar && confirmar.producao ? "Colocar a NFS-e em produção?" : "Mudar a numeração da NFS-e?"}
+        message={confirmar ? textoConfirmacao("NFS-e", confirmar) : ""}
+        danger
+        confirmLabel="Confirmar e salvar"
+        loading={mut.isPending}
+        onConfirm={function() {
+          if (!confirmar) return;
+          mut.mutate({ ...corpoNfse(inicial, form), confirmar_producao: confirmar.producao, confirmar_numeracao: confirmar.numeracao });
+        }}
+        onCancel={function() { setConfirmar(null); }}
+      />
     </View>
   );
 }
@@ -852,6 +1209,22 @@ function Segmented({ options, value, onChange }: { options: { key: string; label
   );
 }
 
+// Escolha entre poucas opções, quebrando linha em tela estreita (375 px).
+function Chips({ options, value, onChange }: { options: { key: string; label: string }[]; value: string; onChange: (v: string) => void }) {
+  return (
+    <View style={s.chipsRow}>
+      {options.map(function(o) {
+        var sel = o.key === value;
+        return (
+          <Pressable key={o.key} onPress={function() { onChange(o.key); }} style={[s.chipOpt, sel && s.chipOptSel, isWeb && ({ cursor: "pointer" } as any)]}>
+            <Text style={[s.chipOptText, sel && { color: "#fff", fontWeight: "700" }]}>{o.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 function StatusCell({ value, label, color }: { value: number; label: string; color?: string }) {
   return (
     <View style={s.statusCell}>
@@ -957,6 +1330,19 @@ var s = StyleSheet.create({
 
   activeRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 14 },
   activeLabel: { fontSize: 13, color: Colors.ink2, fontWeight: "600" },
+
+  // 12/11/2026: requisitos e escolhas em chips
+  sectionCapTop: { fontSize: 11, textTransform: "uppercase", letterSpacing: 0.4, color: Colors.ink3, fontWeight: "700", marginBottom: 8 },
+  reqRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: Colors.border },
+  reqDot: { width: 22, height: 22, borderRadius: 11, borderWidth: 1, alignItems: "center", justifyContent: "center", marginTop: 1 },
+  reqDotText: { fontSize: 11, fontWeight: "800" },
+  reqTitle: { fontSize: 12, fontWeight: "700", color: Colors.ink },
+  reqDetail: { fontSize: 11, color: Colors.ink3, marginTop: 2, lineHeight: 16 },
+  reqState: { fontSize: 10, fontWeight: "700", marginTop: 3, maxWidth: 90, textAlign: "right" },
+  chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  chipOpt: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg },
+  chipOptSel: { backgroundColor: Colors.violet, borderColor: Colors.violet },
+  chipOptText: { fontSize: 12, color: Colors.ink2, fontWeight: "600" },
 
   segmented: { flexDirection: "row", backgroundColor: Colors.bg, borderWidth: 1, borderColor: Colors.border, borderRadius: 9, padding: 3, gap: 3 },
   segOpt: { flex: 1, paddingVertical: 7, borderRadius: 6, alignItems: "center" },
