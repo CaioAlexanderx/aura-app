@@ -89,7 +89,7 @@ describe("prazo do vale — bordas (dia civil de Brasília, UTC-3)", () => {
   });
 
   it("texto do cupom", () => {
-    expect(textoDoPrazoNoCupom("2027-01-11")).toBe("Troca até 11/01/2027 apresentando este cupom");
+    expect(textoDoPrazoNoCupom(60)).toBe("Troca em até 60 dias após a compra, apresentando este cupom");
   });
 });
 
@@ -148,7 +148,7 @@ describe("cupom impresso", () => {
     expect(html).not.toBe(CUPOM);
     expect(html).toContain(MARCA_DO_VALE);
     expect(html).toContain("VALE-TROCA");
-    expect(html).toContain("Troca até 11/01/2027 apresentando este cupom");
+    expect(html).toContain("Troca em até 30 dias após a compra, apresentando este cupom");
     expect(html).toMatch(/<svg[\s\S]*<\/svg>/);
     // o QR carrega o código do vale, uma vez só
     const chamadas = (require("qrcode-svg") as any).chamadas;
@@ -160,7 +160,7 @@ describe("cupom impresso", () => {
     // entra entre os totais e o rodapé, sem perder nada do cupom original
     expect(html.indexOf("TOTAL")).toBeLessThan(html.indexOf(MARCA_DO_VALE));
     expect(html.indexOf(MARCA_DO_VALE)).toBeLessThan(html.indexOf("Obrigado pela preferencia!"));
-    expect(html.replace(blocoDoVale(VENDA, "2027-01-11"), "")).toBe(CUPOM);
+    expect(html.replace(blocoDoVale(VENDA, 30), "")).toBe(CUPOM);
   });
 
   it("sem imagem remota: o QR é SVG inline", () => {
@@ -172,7 +172,7 @@ describe("cupom impresso", () => {
     const html = cupomComVale(CUPOM, {
       companyId: "loja-a", saleId: VENDA, vendaEm: "2026-10-31T17:00:00Z", hoje: new Date("2026-10-31T17:05:00Z"), config: ON,
     });
-    expect(html).toContain("Troca até 30/11/2026 apresentando este cupom");
+    expect(html).toContain("Troca em até 30 dias após a compra, apresentando este cupom");
   });
 
   it("loja que desligou o vale em pdv_settings: idêntico", () => {
@@ -218,6 +218,6 @@ describe("cupom impresso", () => {
   });
 
   it("o bloco existe com o texto do prazo informado", () => {
-    expect(blocoDoVale(VENDA, "2027-01-31")).toContain("Troca até 31/01/2027 apresentando este cupom");
+    expect(blocoDoVale(VENDA, 90)).toContain("Troca em até 90 dias após a compra, apresentando este cupom");
   });
 });

@@ -4,7 +4,7 @@
 // Aparece junto do interruptor "Vale-troca no cupom" quando ele está ligado
 // (Políticas do Caixa e o espelho da página Black Friday). Atalhos de 7, 15,
 // 30, 60 e 90 dias e um campo livre de 1 a 365; embaixo, o efeito em
-// palavras: "Quem comprar hoje troca até 12/12".
+// palavras: "No cupom: troca em até 30 dias após a compra".
 //
 // O campo é só a escolha — quem grava é a tela que o usa (cada uma tem o seu
 // caminho de save). Grava pdv_settings.vale_troca_prazo_dias (Aura-backend,

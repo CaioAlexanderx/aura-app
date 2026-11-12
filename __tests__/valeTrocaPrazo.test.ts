@@ -3,7 +3,7 @@
 //
 //   1. Cálculo: dia da venda (Brasília) + N dias, nas viradas de mês, de ano
 //      e no bissexto; leitura tolerante do pdv_settings (ausente = 30).
-//   2. Cupom: o bloco imprime "Troca até DD/MM/AAAA" com a data da venda + N.
+//   2. Cupom: o bloco imprime "Troca em até N dias após a compra" (prazo da loja da venda).
 //   3. 2ª via: a data é a da venda original + N, nunca hoje + N.
 //   4. REGRA DE CUPOM: loja com o vale DESLIGADO = HTML do backend byte a
 //      byte, com qualquer prazo salvo. Ligado, só o bloco do vale muda.
@@ -73,9 +73,10 @@ describe("cálculo do prazo", () => {
 
   it("textos: efeito do campo, cupom e aviso do Caixa", () => {
     const hoje = new Date("2026-11-12T15:00:00Z");
-    expect(textoDoEfeitoDoPrazo(30, hoje)).toBe("Quem comprar hoje troca até 12/12");
-    expect(textoDoEfeitoDoPrazo(60, hoje)).toBe("Quem comprar hoje troca até 11/01/2027");
-    expect(textoDoPrazoNoCupom("2026-12-12")).toBe("Troca até 12/12/2026 apresentando este cupom");
+    expect(textoDoEfeitoDoPrazo(30, hoje)).toBe("No cupom: troca em até 30 dias após a compra");
+    expect(textoDoEfeitoDoPrazo(60, hoje)).toBe("No cupom: troca em até 60 dias após a compra");
+    expect(textoDoEfeitoDoPrazo(1, hoje)).toBe("No cupom: troca em até 1 dia após a compra");
+    expect(textoDoPrazoNoCupom(30)).toBe("Troca em até 30 dias após a compra, apresentando este cupom");
     expect(textoDoValeVencido("2026-11-05", hoje))
       .toBe("O prazo de troca desta compra terminou em 05/11. Quer trocar mesmo assim?");
     expect(formatarDiaCurto("2025-12-20", hoje)).toBe("20/12/2025");
@@ -88,27 +89,27 @@ describe("bloco no cupom", () => {
   it("imprime a data da venda + o prazo da loja", () => {
     const vendaEm = new Date("2026-11-12T15:00:00Z");
     const html = cupomComVale(CUPOM, { companyId: "loja-a", saleId: VENDA, vendaEm, hoje: vendaEm, config: ligado(15) });
-    expect(html).toContain("Troca até 27/11/2026 apresentando este cupom");
+    expect(html).toContain("Troca em até 15 dias após a compra, apresentando este cupom");
     expect(html.split(MARCA_DO_VALE).length - 1).toBe(1);
   });
 
   it("sem prazo salvo (backend antigo ou loja que nunca escolheu): 30 dias", () => {
     const vendaEm = new Date("2026-11-12T15:00:00Z");
     const html = cupomComVale(CUPOM, { companyId: "loja-a", saleId: VENDA, vendaEm, hoje: vendaEm, config: ligado() });
-    expect(html).toContain("Troca até 12/12/2026 apresentando este cupom");
+    expect(html).toContain("Troca em até 30 dias após a compra, apresentando este cupom");
   });
 
   it("vale o ano todo: venda de março também leva o vale", () => {
     const vendaEm = new Date("2027-03-10T15:00:00Z");
     const html = cupomComVale(CUPOM, { companyId: "loja-a", saleId: VENDA, vendaEm, hoje: vendaEm, config: ligado(7) });
-    expect(html).toContain("Troca até 17/03/2027 apresentando este cupom");
+    expect(html).toContain("Troca em até 7 dias após a compra, apresentando este cupom");
   });
 
   it("2ª via: a data é a da venda original + N, não hoje + N", () => {
     const vendaEm = "2026-11-02T15:00:00Z";
     const hoje = new Date("2026-11-20T15:00:00Z");
     const html = cupomComVale(CUPOM, { companyId: "loja-a", saleId: VENDA, vendaEm, hoje, config: ligado(30) });
-    expect(html).toContain("Troca até 02/12/2026 apresentando este cupom");
+    expect(html).toContain("Troca em até 30 dias após a compra, apresentando este cupom");
     expect(html).not.toContain("20/12/2026");
   });
 
@@ -123,7 +124,7 @@ describe("bloco no cupom", () => {
   it("ligado, só o bloco do vale muda: tirar o bloco devolve o cupom do backend", () => {
     const vendaEm = new Date("2026-11-12T15:00:00Z");
     const html = cupomComVale(CUPOM, { companyId: "loja-a", saleId: VENDA, vendaEm, hoje: vendaEm, config: ligado(60) });
-    expect(html.replace(blocoDoVale(VENDA, "2027-01-11"), "")).toBe(CUPOM);
+    expect(html.replace(blocoDoVale(VENDA, 60), "")).toBe(CUPOM);
   });
 });
 

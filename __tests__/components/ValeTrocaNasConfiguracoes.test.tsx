@@ -124,7 +124,7 @@ describe("Políticas do Caixa › Vale-troca › prazo para troca (12/11/2026)",
     [7, 15, 30, 60, 90].forEach((d) => expect(porId(tree, "vale-troca-prazo-atalho-" + d)).toHaveLength(1));
     expect(porId(tree, "vale-troca-prazo-atalho-30")[0].props.accessibilityState.selected).toBe(true);
     expect(porId(tree, "vale-troca-prazo-livre")).toHaveLength(1);
-    expect(textoDe(porId(tree, "vale-troca-prazo-efeito")[0])).toMatch(/^Quem comprar hoje troca até \d{2}\/\d{2}(\/\d{4})?$/);
+    expect(textoDe(porId(tree, "vale-troca-prazo-efeito")[0])).toBe("No cupom: troca em até 30 dias após a compra");
     tree.unmount();
   });
 
@@ -132,7 +132,7 @@ describe("Políticas do Caixa › Vale-troca › prazo para troca (12/11/2026)",
     jest.useFakeTimers({ now: new Date("2026-11-12T15:00:00Z"), doNotFake: ["nextTick", "setImmediate", "queueMicrotask", "setTimeout"] });
     try {
       const tree = await montarCartao({ vale_troca_enabled: true, vale_troca_prazo_dias: 15 });
-      expect(textoDe(porId(tree, "vale-troca-prazo-efeito")[0])).toBe("Quem comprar hoje troca até 27/11");
+      expect(textoDe(porId(tree, "vale-troca-prazo-efeito")[0])).toBe("No cupom: troca em até 15 dias após a compra");
       tree.unmount();
     } finally {
       jest.useRealTimers();
