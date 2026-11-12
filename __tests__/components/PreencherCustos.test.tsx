@@ -48,11 +48,13 @@ jest.mock("@/hooks/useConferenciaResultado", () => ({ useConferenciaContexto: ()
 
 const mockPendentes = jest.fn();
 const mockGravar = jest.fn();
+const mockHistorico = jest.fn();
 jest.mock("@/services/custoEmMassaApi", () => ({
   ...jest.requireActual("@/services/custoEmMassaApi"),
   custoEmMassaApi: {
     pendentes: (...a: any[]) => mockPendentes(...a),
     gravar: (...a: any[]) => mockGravar(...a),
+    historico: (...a: any[]) => mockHistorico(...a),
   },
 }));
 
@@ -117,6 +119,7 @@ beforeEach(() => {
   mockCtx = contexto();
   mockPendentes.mockReset().mockResolvedValue(lista());
   mockGravar.mockReset();
+  mockHistorico.mockReset().mockResolvedValue({ preenchimentos: [], total: 0 });
   mockBack.mockReset();
 });
 
@@ -285,7 +288,9 @@ describe("gravar", () => {
     const ok = textoDe(tree, "custos-gravado");
     expect(ok).toContain("Custo gravado em 3 produtos.");
     expect(ok).toContain("Na conferência, o valor do que falta e do que sobra já conta com eles.");
-    expect(ok).toContain("Se precisar, dá para desfazer até 19/11, às 14:32.");
+    expect(ok).toContain("Se precisar, dá para desfazer até 19/11, às 14:32, aqui embaixo.");
+    // a lista "Últimos preenchimentos" recarrega depois de gravar
+    expect(mockHistorico).toHaveBeenCalledTimes(2);
     expect(existe(tree, "custo-linha-p1")).toBe(false);
     await tocar(tree, "custos-voltar-diferencas");
     expect(mockBack).toHaveBeenCalled();

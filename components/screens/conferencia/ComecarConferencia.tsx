@@ -23,6 +23,8 @@ import {
   type TipoDeEscopo,
 } from "@/services/conferenciaEstoqueApi";
 import { eContavel, plural, textoDoEscopo } from "@/utils/conferenciaContagem";
+import { useConferenciaContexto } from "@/hooks/useConferenciaResultado";
+import { custoEmMassaApi } from "@/services/custoEmMassaApi";
 import { ce } from "./estilos";
 
 export const ROTA_CONFERENCIA = "/conferencia-estoque";
@@ -81,6 +83,21 @@ export function ComecarConferencia() {
   const [motivo, setMotivo] = useState("");
   const [erroAoComecar, setErroAoComecar] = useState<string | null>(null);
   const [confirmarDescarte, setConfirmarDescarte] = useState<string | null>(null);
+
+  // 12/11/2026: atalho "Produtos sem custo · Preencher custos". Só para quem
+  // edita o estoque E vê custo; some com N = 0, antes da migration 448 ou
+  // se a contagem falhar (nada aparece desabilitado).
+  const ctxCusto = useConferenciaContexto(null);
+  const podePreencherCusto = !!companyId && ctxCusto.podeEditar && !ctxCusto.semCusto;
+  const semCusto = useQuery({
+    queryKey: ["custos-sem-custo", companyId],
+    queryFn: () => custoEmMassaApi.contagem(companyId!),
+    enabled: podePreencherCusto,
+    retry: false,
+    // Volta da tela de custos com o número de agora.
+    staleTime: 0,
+  });
+  const nSemCusto = podePreencherCusto && semCusto.data ? Number(semCusto.data.todos) || 0 : 0;
 
   const contaveis = useMemo(() => products.filter(eContavel), [products]);
   const comEstoque = useMemo(() => contaveis.filter((p) => (p.stock || 0) > 0).length, [contaveis]);
@@ -193,6 +210,20 @@ export function ComecarConferencia() {
           detalhe={(comEstoque ? plural(comEstoque, "item", "itens") + ". " : "") + "Deixa de fora o que está zerado. Quem aparecer a mais entra como sobra."}
           onPress={() => setTipo("com_estoque")}
         />
+
+        {nSemCusto > 0 && (
+          <View style={[ce.aviso, ce.linha, { flexWrap: "wrap" }]} testID="atalho-sem-custo">
+            <Text style={{ fontSize: 22, fontWeight: "800", color: Colors.amber }}>{nSemCusto.toLocaleString("pt-BR")}</Text>
+            <View style={[ce.espaco, { minWidth: 180 }]}>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: Colors.ink }}>{nSemCusto === 1 ? "Produto sem custo" : "Produtos sem custo"}</Text>
+              <Text style={ce.nota}>Sem o custo, a Aura não calcula quanto vale o que falta ou sobra. Preencha agora ou depois da contagem.</Text>
+            </View>
+            <Pressable onPress={() => router.push((ROTA_CONFERENCIA + "/custos") as any)} style={[ce.btnFantasma, ce.btnPequeno, { minHeight: 44 }]}
+              accessibilityRole="button" testID="preencher-custos">
+              <Text style={ce.btnFantasmaTexto}>Preencher custos</Text>
+            </Pressable>
+          </View>
+        )}
 
         <Pressable
           onPress={() => setAsCegas(!asCegas)}

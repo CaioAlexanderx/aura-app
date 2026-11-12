@@ -14,6 +14,7 @@
 //     (Markup como padrão, Margem num toque, a loja lembra o último) e mesmo
 //     custo para os marcados. Só preenchem campo vazio ou já sugerido, salvo
 //     "Trocar também o que eu digitei";
+//   · "Últimos preenchimentos de custo" embaixo, com Ver e Desfazer (7 dias);
 //   · barra "Revisar e gravar (N)" e confirmação no ConfirmDialog do app
 //     num WebPortal (nunca confirm()); nada grava sem confirmar;
 //   · quem não edita o estoque ou não vê custo nunca vê esta tela.
@@ -41,6 +42,7 @@ import {
   type LinhaDeCusto, type TomDaEtiqueta,
 } from "@/utils/custoEmMassa";
 import { Aviso, Botao, Cartao, ui } from "../diferencas/ui";
+import { UltimosPreenchimentos } from "./UltimosPreenchimentos";
 
 type Props = { countId?: string | null; lojaDaRota?: string | null };
 
@@ -160,6 +162,8 @@ export function PreencherCustosScreen({ countId, lojaDaRota }: Props) {
   // novo é seguro (quem já ganhou custo volta como "mudou no meio").
   var [erroGravar, setErroGravar] = useState<{ msg: string; talvezGravou: boolean } | null>(null);
   var [resultado, setResultado] = useState<RespostaGravar | null>(null);
+  // Sobe a cada gravação: "Últimos preenchimentos" recarrega.
+  var [versaoHist, setVersaoHist] = useState(0);
 
   // Busca com folga de 350 ms (não chama a cada letra).
   useEffect(function () {
@@ -282,6 +286,7 @@ export function PreencherCustosScreen({ countId, lojaDaRota }: Props) {
       .then(function (r) {
         if (!vivo.current) return;
         setResultado(r);
+        setVersaoHist(function (v) { return v + 1; });
         // Gravados e "mudou no meio" saem da lista: os dois já têm custo.
         var sai: Record<string, boolean> = {};
         (r && Array.isArray(r.itens) ? r.itens : []).forEach(function (i) {
@@ -377,7 +382,7 @@ export function PreencherCustosScreen({ countId, lojaDaRota }: Props) {
         ) : null}
         <Text style={[ui.nota, { marginTop: 6 }]}>
           {(countId && (r.itens_de_conferencia_atualizados || 0) > 0 ? "Na conferência, o valor do que falta e do que sobra já conta com eles. " : "")
-            + (ate ? "Se precisar, dá para desfazer até " + ate + "." : "Se precisar, dá para desfazer por 7 dias.")}
+            + (ate ? "Se precisar, dá para desfazer até " + ate + ", aqui embaixo." : "Se precisar, dá para desfazer por 7 dias, aqui embaixo.")}
         </Text>
         {countId ? (
           <View style={{ marginTop: 10, flexDirection: "row" }}>
@@ -404,6 +409,7 @@ export function PreencherCustosScreen({ countId, lojaDaRota }: Props) {
               + " custo cadastrado. A conta do que falta e do que sobra sai completa."}
           </Text>
         </Cartao>
+        <UltimosPreenchimentos companyId={companyId} versao={versaoHist} onCustosMudaram={function () { carregar(0); }} />
       </ScrollView>
     );
   }
@@ -554,6 +560,8 @@ export function PreencherCustosScreen({ countId, lojaDaRota }: Props) {
             ) : null}
           </View>
         )}
+
+        <UltimosPreenchimentos companyId={companyId} versao={versaoHist} onCustosMudaram={function () { carregar(0); }} />
       </ScrollView>
 
       {/* Barra: revisar e gravar */}
