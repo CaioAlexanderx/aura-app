@@ -107,12 +107,14 @@ describe("TermosRecebeNaAura", () => {
 });
 
 describe("nada aparece para lojista", () => {
-  it("nenhuma rota do app importa os termos do Recebe na Aura (entram no RA-06, atrás da flag)", () => {
+  // RA-06: as telas do Recebe na Aura (app/(tabs)/recebe/*) usam os canais e
+  // ficam atrás da flag (hooks/useRecebeNaAura.ts). Fora delas, nada.
+  it("só as telas do Recebe na Aura (atrás da flag) usam os termos e os canais", () => {
     const achados: string[] = [];
     function varrer(dir: string) {
       for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
         const p = path.join(dir, e.name);
-        if (e.isDirectory()) { varrer(p); continue; }
+        if (e.isDirectory()) { if (p !== path.join(RAIZ, "app", "(tabs)", "recebe")) varrer(p); continue; }
         if (!/\.tsx?$/.test(e.name)) continue;
         const t = fs.readFileSync(p, "utf8");
         if (/termosRecebeNaAura|TermosRecebeNaAura|CanaisAsaas/.test(t)) achados.push(path.relative(RAIZ, p));

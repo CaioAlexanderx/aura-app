@@ -172,6 +172,15 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   // backend (services/modules.js) ainda NAO conhece a chave (mesmo caso de
   // 'onboarding.checkin').
   'onboarding.trazer_produtos': 'essencial',
+  // 12/11/2026 -- Recebe na Aura, situacao da subconta (RA-06,
+  // app/(tabs)/recebe/status.tsx). Tela sem item de menu, chave PROPRIA
+  // (regra 3). O plano NAO libera nada: a tela so abre com a flag
+  // RECEBE_NA_AURA_ENABLED ligada no backend e para dono/admin (o backend
+  // responde 404/403 nos outros casos), ou para conta da equipe (is_staff
+  // gravado no usuario) em modo previa. A chave existe para poder esconder
+  // por empresa (module_overrides) e por permissao. O backend
+  // (services/modules.js) ainda NAO conhece a chave.
+  'recebe.status': 'essencial',
 };
 var PLAN_LEVEL: Record<string, number> = { essencial: 0, negocio: 1, expansao: 2 };
 
@@ -223,7 +232,9 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   // 19/10/2026 -- "Como voce quer trazer seus produtos?" (tq-34) e a
   // continuacao do check-in: acompanha quem monta a loja, como ele. A tela
   // ainda exige o modulo 'estoque' (os tres destinos sao do Estoque).
-  configuracoes: ['configuracoes', 'onboarding.primeiros_passos', 'onboarding.checkin', 'onboarding.configurar_juntos', 'black_friday', 'onboarding.trazer_produtos'],
+  // 12/11/2026 -- recebe.status (RA-06) acompanha quem configura a loja; o
+  // backend ainda exige dono/admin.
+  configuracoes: ['configuracoes', 'onboarding.primeiros_passos', 'onboarding.checkin', 'onboarding.configurar_juntos', 'black_friday', 'onboarding.trazer_produtos', 'recebe.status'],
   // 15/05/2026 -- agentes adicionado; sem isso nao-owners nunca veiam mesmo com plano Expansao.
   // 30/08/2026 -- hub_social entra na mesma permissao: quem atende (agentes)
   // ve o hub. Granularidade propria fica pra quando o produto pedir.
