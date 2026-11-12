@@ -78,7 +78,7 @@ function qrSvg(conteudo: string): { svg: string; larguraMm: number } | null {
 }
 
 /** O bloco em si (HTML), ou "" se não deu para gerar o QR. */
-export function blocoDoVale(saleId: string, prazoAte?: string): string {
+export function blocoDoVale(saleId: string, prazoDias?: number): string {
   const qr = qrSvg(montarCodigoDoVale(saleId));
   if (!qr) return "";
   return (
@@ -88,17 +88,17 @@ export function blocoDoVale(saleId: string, prazoAte?: string): string {
         // viewBox + width:100% — o SVG ocupa a largura em mm acima, sem px fixo.
         qr.svg.replace("<svg ", '<svg style="display:block;width:100%;height:auto" shape-rendering="crispEdges" ') +
       '</div>' +
-      (prazoAte ? '<div style="font-size:10px">' + textoDoPrazoNoCupom(prazoAte) + '</div>' : '') +
+      (prazoDias && prazoDias > 0 ? '<div style="font-size:10px">' + textoDoPrazoNoCupom(prazoDias) + '</div>' : '') +
       '<div style="border-top:1px dashed #000;margin:6px 0 0"></div>' +
     '</div>'
   );
 }
 
 /** Põe o bloco no HTML do cupom. Devolve o mesmo HTML se não for o caso. */
-export function injetarValeNoCupom(html: string, saleId: string, prazoAte?: string): string {
+export function injetarValeNoCupom(html: string, saleId: string, prazoDias?: number): string {
   if (!html || !saleId) return html;
   if (html.indexOf("data-vale-troca") >= 0) return html; // já tem
-  const bloco = blocoDoVale(saleId, prazoAte);
+  const bloco = blocoDoVale(saleId, prazoDias);
   if (!bloco) return html;
   const rodape = html.search(/<div[^>]*class=["'][^"']*\bfooter\b[^"']*["'][^>]*>/i);
   if (rodape >= 0) return html.slice(0, rodape) + bloco + html.slice(rodape);
@@ -129,7 +129,7 @@ export function cupomComVale(
     if (!ligado) return html;
     const prazoDias = lerPrazoDoValeEmDias(p.config);
     if (!deveImprimirVale({ vendaEm: p.vendaEm, hoje: p.hoje, ligado, prazoDias })) return html;
-    return injetarValeNoCupom(html, p.saleId, prazoDoVale(p.vendaEm, prazoDias) || undefined);
+    return injetarValeNoCupom(html, p.saleId, prazoDias);
   } catch {
     // O vale é acessório: nunca pode impedir a impressão do cupom.
     return html;

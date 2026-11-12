@@ -145,15 +145,19 @@ export function valeVencido(prazoAte: string, hoje: Date | string | number = new
   return !!dia && dia > prazoAte;
 }
 
-/** Texto do cupom: "Troca até 12/12/2026 apresentando este cupom". */
-export function textoDoPrazoNoCupom(prazoAte: string): string {
-  return "Troca até " + formatarDiaBR(prazoAte) + " apresentando este cupom";
+/** Texto do cupom (12/11, Caio: o prazo é em dias depois da compra, não uma
+ *  data): "Troca em até 30 dias após a compra, apresentando este cupom". */
+export function textoDoPrazoNoCupom(prazoDias: number): string {
+  const n = Math.round(Number(prazoDias));
+  return "Troca em até " + n + (n === 1 ? " dia" : " dias") + " após a compra, apresentando este cupom";
 }
 
-/** Linha de efeito do campo de prazo: "Quem comprar hoje troca até 12/12". */
+/** Linha de efeito do campo de prazo: o que o cupom imprime. */
 export function textoDoEfeitoDoPrazo(prazoDias: number, hoje: Date | string | number = new Date()): string {
   const prazo = prazoDoVale(hoje, prazoDias);
-  return prazo ? "Quem comprar hoje troca até " + formatarDiaCurto(prazo, hoje) : "";
+  if (!prazo) return "";
+  const n = Math.round(Number(prazoDias));
+  return "No cupom: troca em até " + n + (n === 1 ? " dia" : " dias") + " após a compra";
 }
 
 /** Aviso do Caixa ao bipar um vale vencido. A decisão é do lojista. */
