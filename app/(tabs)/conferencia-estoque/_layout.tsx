@@ -33,6 +33,7 @@ export default function ConferenciaEstoqueLayout() {
         <Stack.Screen name="[id]/index" />
         <Stack.Screen name="[id]/diferencas" />
         <Stack.Screen name="historico" />
+        <Stack.Screen name="custos" />
       </Stack>
     </ThemeProvider>
   );

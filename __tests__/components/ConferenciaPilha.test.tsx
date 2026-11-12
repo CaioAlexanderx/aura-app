@@ -60,7 +60,7 @@ describe("fundo da pilha da conferência", () => {
     const pilha = montar(DefaultTheme);
     expect(pilha.props.fundoDoTema).toBe("transparent");
     expect(pilha.props.contentStyle).toEqual({ backgroundColor: "transparent" });
-    expect(pilha.props.telas).toEqual(["index", "[id]/index", "[id]/diferencas", "historico"]);
+    expect(pilha.props.telas).toEqual(["index", "[id]/index", "[id]/diferencas", "historico", "custos"]);
   });
 
   it("tema escuro do navegador também não vaza", () => {
