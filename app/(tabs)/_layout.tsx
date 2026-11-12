@@ -92,11 +92,11 @@ const NAV: NavSection[] = [
   // 29/08/2026: o campo estatico `plan` saiu dos itens. Ele duplicava (e
   // contradizia) MODULE_PLAN_MAP e era o que fazia o selo aparecer pra quem
   // ja tinha o modulo liberado. O plano exigido agora vem de `mod`.
-  // 11/11/2026 (p-108): "Conferência" (de estoque) depois de Estoque e
-  // Fornecedores,
-  // com chave PROPRIA "conferencia_estoque" (regra 3); a tela de Estoque tem
-  // tambem o botao "Conferir estoque".
-  { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },{ r: "/vendas", l: "Vendas", ic: "receipt", mod: "vendas" },{ r: "/cupons", l: "Cupons", ic: "tag", mod: "cupons" },{ r: "/crediario", l: "Crediário", ic: "percent", mod: "crediario" },{ r: "/os", l: "Ordem de Serviço", ic: "tool", mod: "os", osToggle: true },{ r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" },{ r: "/fornecedores", l: "Fornecedores", ic: "truck", mod: "fornecedores" },{ r: "/conferencia-estoque", l: "Conferência", ic: "clipboard", mod: "conferencia_estoque" }]},
+  // 11/11/2026 (p-108): a conferencia de estoque tem chave PROPRIA
+  // "conferencia_estoque" (regra 3: MODULE_PLAN_MAP e PERM_TO_MODULES).
+  // 12/11/2026 (Caio): saiu do menu lateral; a entrada e o botao
+  // "Conferir estoque" da tela de Estoque.
+  { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },{ r: "/vendas", l: "Vendas", ic: "receipt", mod: "vendas" },{ r: "/cupons", l: "Cupons", ic: "tag", mod: "cupons" },{ r: "/crediario", l: "Crediário", ic: "percent", mod: "crediario" },{ r: "/os", l: "Ordem de Serviço", ic: "tool", mod: "os", osToggle: true },{ r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" },{ r: "/fornecedores", l: "Fornecedores", ic: "truck", mod: "fornecedores" }]},
   // ============================================================
   // 16/09/2026 — "Clientes e WhatsApp" sobe para a quarta posição.
   //

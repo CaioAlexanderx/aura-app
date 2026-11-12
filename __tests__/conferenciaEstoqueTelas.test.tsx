@@ -218,7 +218,10 @@ describe("atalho dos produtos sem custo (12/11)", () => {
 describe("módulo próprio", () => {
   it("NAV, plano e permissão com chave própria", () => {
     const layout = fs.readFileSync(path.join(__dirname, "..", "app/(tabs)/_layout.tsx"), "utf8");
-    expect(layout).toContain('{ r: "/conferencia-estoque", l: "Conferência", ic: "clipboard", mod: "conferencia_estoque" }');
+    // 12/11/2026 (Caio): fora do menu lateral; entra pelo botão da tela de Estoque.
+    expect(layout).not.toContain('r: "/conferencia-estoque"');
+    const estoque = fs.readFileSync(path.join(__dirname, "..", "app/(tabs)/estoque.tsx"), "utf8");
+    expect(estoque).toContain("Conferir estoque");
     expect(MODULE_PLAN_MAP.conferencia_estoque).toBe("essencial");
     expect(PERM_TO_MODULES.estoque).toContain("conferencia_estoque");
     expect(PERM_TO_MODULES.estoque_consulta).not.toContain("conferencia_estoque");
