@@ -38,17 +38,22 @@ const DEFAULT_SETTINGS: PdvSettings = {
   cash_tender_modal_enabled: true,
 };
 
-export function usePdvSettings() {
+// 12/11/2026 (vale-troca com prazo da loja): `companyId` opcional lê o
+// pdv_settings de OUTRA loja do grupo — a 2ª via no consolidado imprime o
+// vale com o prazo da loja que vendeu. Sem ele (ou igual à ativa), é a mesma
+// query de sempre (["pdv-settings", company.id]), sem requisição a mais.
+export function usePdvSettings(companyId?: string | null) {
   const { token, company } = useAuthStore();
   const qc = useQueryClient();
+  const id = companyId || company?.id;
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["pdv-settings", company?.id],
+    queryKey: ["pdv-settings", id],
     queryFn: function() {
-      if (!company?.id) throw new Error("no company");
-      return pdvSettingsApi.get(company.id);
+      if (!id) throw new Error("no company");
+      return pdvSettingsApi.get(id);
     },
-    enabled: !!token && !!company?.id,
+    enabled: !!token && !!id,
     staleTime: Infinity,
     retry: 1,
   });
@@ -59,7 +64,7 @@ export function usePdvSettings() {
     settings: loaded || DEFAULT_SETTINGS,
     isLoading: isLoading,
     error: error as Error | null,
-    invalidate: function() { qc.invalidateQueries({ queryKey: ["pdv-settings", company?.id] }); },
+    invalidate: function() { qc.invalidateQueries({ queryKey: ["pdv-settings", id] }); },
   };
 }
 

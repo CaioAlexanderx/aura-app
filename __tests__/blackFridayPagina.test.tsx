@@ -93,7 +93,7 @@ import BlackFridayRota from "@/app/(tabs)/black-friday";
 import { secoesDaPagina } from "@/components/screens/blackfriday/secoes";
 import { PaginaBlackFriday } from "@/components/screens/blackfriday/PaginaBlackFriday";
 import { AtalhoAssento } from "@/components/screens/blackfriday/AtalhoAssento";
-import { lerValeTrocaLigado } from "@/utils/valeTroca";
+import { lerValeTrocaLigado, TEXTO_DO_VALE_TROCA } from "@/utils/valeTroca";
 import { TABS } from "@/components/screens/estoque/types";
 
 const RAIZ = path.join(__dirname, "..");
@@ -367,12 +367,28 @@ describe("vale-troca: espelho do mesmo estado (pdv_settings)", () => {
     expect(chave(montar(<PaginaBlackFriday />)).props.value).toBe(false);
   });
 
-  it("o texto traz as datas da campanha", () => {
+  it("o texto é o do PdvSettingsCard, sem as datas da antiga campanha", () => {
     const r = montar(<PaginaBlackFriday />);
     const t = textoDe(r.root.findAllByProps({ testID: "vale-troca-texto" }, { deep: false })[0]);
-    expect(t).toContain("01/11/2026");
-    expect(t).toContain("31/12/2026");
-    expect(t).toContain("31/01/2027");
+    expect(t).toBe(TEXTO_DO_VALE_TROCA);
+    expect(t).not.toContain("31/01/2027");
+  });
+
+  it("desligado: sem o campo de prazo; ligado: o mesmo campo das Políticas do Caixa", () => {
+    expect(montar(<PaginaBlackFriday />).root.findAllByProps({ testID: "vale-troca-prazo" }, { deep: false })).toHaveLength(0);
+    mockPdv = { vale_troca_enabled: true, vale_troca_prazo_dias: 15 };
+    const r = montar(<PaginaBlackFriday />);
+    expect(r.root.findAllByProps({ testID: "vale-troca-prazo" }, { deep: false })).toHaveLength(1);
+    const on = r.root.findAllByProps({ testID: "vale-troca-prazo-atalho-15" }, { deep: false })[0];
+    expect(on.props.accessibilityState.selected).toBe(true);
+  });
+
+  it("escolher o prazo aqui grava vale_troca_prazo_dias com o objeto inteiro", async () => {
+    mockPdv = { cash_tender_modal_enabled: true, vale_troca_enabled: true };
+    const r = montar(<PaginaBlackFriday />);
+    const atalho = r.root.findAllByProps({ testID: "vale-troca-prazo-atalho-60" }, { deep: false })[0];
+    await act(async () => { await atalho.props.onPress(); });
+    expect(mockSalvar).toHaveBeenCalledWith(CID, { cash_tender_modal_enabled: true, vale_troca_enabled: true, vale_troca_prazo_dias: 60 });
   });
 
   it("usa o mesmo hook e o mesmo serviço do PdvSettingsCard", () => {

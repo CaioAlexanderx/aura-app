@@ -6,13 +6,17 @@
 // casa por trecho do UUID e `days` vai ao teto do backend (365) — a venda de
 // 1/11 trocada em 31/01 já passa dos 90 dias do Step 1.
 //
+// 12/11/2026: o prazo é dia da venda + prazo da loja QUE VENDEU
+// (`vale_troca_prazo_dias` de cada venda do sales-for-troca, Aura-backend).
+// Backend antigo, sem o campo: vale o prazo da loja ativa (`prazoDaLojaDias`).
+//
 // O backend só devolve venda desta loja ou das filiais do mesmo grupo e
 // nunca a cancelada. Venda de OUTRA empresa (QR de uma loja que não é do
 // grupo) e ID que não existe chegam iguais: lista sem a venda — a mensagem
 // diz as duas coisas, sem prometer qual.
 // ============================================================
 import { trocaApi, type SaleForTroca } from "@/services/trocaApi";
-import { prazoDoVale, valeVencido } from "@/utils/valeTroca";
+import { VALE_TROCA_PRAZO_PADRAO_DIAS, normalizarPrazoEmDias, prazoDoVale, valeVencido } from "@/utils/valeTroca";
 
 export type ValeResolvido =
   | { ok: true; venda: SaleForTroca; prazoAte: string | null; vencido: boolean }
@@ -28,6 +32,7 @@ export async function buscarVendaDoVale(
   companyId: string,
   saleId: string,
   hoje: Date = new Date(),
+  prazoDaLojaDias: number = VALE_TROCA_PRAZO_PADRAO_DIAS,
 ): Promise<ValeResolvido> {
   const id = String(saleId || "").trim().toLowerCase();
   if (!companyId || !id) return { ok: false, motivo: "nao-achou", mensagem: MSG_VALE_NAO_ACHOU };
@@ -40,6 +45,8 @@ export async function buscarVendaDoVale(
   // order_number casa por TRECHO: confere o ID inteiro.
   const venda = (Array.isArray(rows) ? rows : []).find((r) => String(r.id).toLowerCase() === id);
   if (!venda) return { ok: false, motivo: "nao-achou", mensagem: MSG_VALE_NAO_ACHOU };
-  const prazoAte = prazoDoVale(venda.created_at);
+  const doBackend = venda.vale_troca_prazo_dias;
+  const prazoDias = doBackend === undefined || doBackend === null ? prazoDaLojaDias : normalizarPrazoEmDias(doBackend);
+  const prazoAte = prazoDoVale(venda.created_at, prazoDias);
   return { ok: true, venda, prazoAte, vencido: prazoAte ? valeVencido(prazoAte, hoje) : false };
 }

@@ -91,6 +91,9 @@ export function SaleDetailModal({
   const effectiveCompanyId = companyId || company?.id;
   // 22/09/2026 (Matcon M1): selo "saldo a entregar" — só com o toggle ligado.
   const { settings: pdvSettings } = usePdvSettings();
+  // 12/11/2026: o vale-troca da 2ª via segue a loja QUE VENDEU (no consolidado
+  // pode ser outra): ligado/desligado e prazo em dias. Mesma loja = mesma query.
+  const { settings: pdvDaLojaDaVenda } = usePdvSettings(effectiveCompanyId);
   const matcon = readMatconSettings(pdvSettings);
   const [criandoEntrega, setCriandoEntrega] = useState(false);
   const [entregaCriadaDe, setEntregaCriadaDe] = useState<string | null>(null);
@@ -193,9 +196,10 @@ export function SaleDetailModal({
       const outcome = await openPrintWindow(async () => {
         const resp = await fetch(url, { headers: token ? { Authorization: "Bearer " + token } : {} });
         if (!resp.ok) return { ok: false as const, error: "Erro ao carregar recibo (" + resp.status + ")." };
-        // 13/10/2026: 2ª via de venda de nov/dez leva o vale-troca enquanto o prazo vale.
+        // 12/11/2026: 2ª via leva o vale-troca enquanto o prazo da venda vale —
+        // dia da venda original + prazo da loja que vendeu (nunca hoje + N).
         const html = cupomComVale(await resp.text(), {
-          companyId: effectiveCompanyId, saleId, vendaEm: (sale as any)?.created_at, config: pdvSettings,
+          companyId: effectiveCompanyId, saleId, vendaEm: (sale as any)?.created_at, config: pdvDaLojaDaVenda,
         });
         return { ok: true as const, html };
       });

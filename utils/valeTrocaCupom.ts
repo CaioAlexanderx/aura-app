@@ -15,9 +15,15 @@
 //
 // SVG: qrcode-svg já é dependência (components/QrCode.tsx). Se a lib não
 // carregar, o bloco NÃO sai — melhor cupom sem vale do que um vale sem QR.
+//
+// 12/11/2026: o prazo impresso é o da loja da venda — dia da venda +
+// pdv_settings.vale_troca_prazo_dias (utils/valeTroca.ts). Na 2ª via o dia é
+// o da venda original, nunca "hoje + N". Loja com o vale DESLIGADO: o HTML do
+// backend volta intacto, byte a byte (__tests__/valeTrocaPrazo.test.ts).
 // ============================================================
 import {
   deveImprimirVale,
+  lerPrazoDoValeEmDias,
   lerValeTrocaLigado,
   type ConfigDoVale,
   montarCodigoDoVale,
@@ -82,7 +88,7 @@ export function blocoDoVale(saleId: string, prazoAte?: string): string {
         // viewBox + width:100% — o SVG ocupa a largura em mm acima, sem px fixo.
         qr.svg.replace("<svg ", '<svg style="display:block;width:100%;height:auto" shape-rendering="crispEdges" ') +
       '</div>' +
-      '<div style="font-size:10px">' + textoDoPrazoNoCupom(prazoAte) + '</div>' +
+      (prazoAte ? '<div style="font-size:10px">' + textoDoPrazoNoCupom(prazoAte) + '</div>' : '') +
       '<div style="border-top:1px dashed #000;margin:6px 0 0"></div>' +
     '</div>'
   );
@@ -102,8 +108,9 @@ export function injetarValeNoCupom(html: string, saleId: string, prazoAte?: stri
 }
 
 /**
- * Passo único para quem busca o cupom: aplica a regra (loja ligou? venda da
- * campanha? prazo em dia?) e injeta. `vendaEm` é o instante da venda.
+ * Passo único para quem busca o cupom: aplica a regra (loja ligou? prazo da
+ * venda em dia?) e injeta. `vendaEm` é o instante da venda; `config` é o
+ * pdv_settings da loja QUE VENDEU (no consolidado, a da venda).
  */
 export function cupomComVale(
   html: string,
@@ -112,14 +119,17 @@ export function cupomComVale(
     saleId: string;
     vendaEm: Date | string | number | null | undefined;
     hoje?: Date;
-    /** pdv_settings da loja (vale_troca_enabled); sem ele vale o que o navegador guardou. */
+    /** pdv_settings da loja da venda (vale_troca_enabled, vale_troca_prazo_dias).
+     *  Sem ele, o vale não sai. */
     config?: ConfigDoVale;
   },
 ): string {
   try {
     const ligado = lerValeTrocaLigado(p.companyId, p.config);
-    if (!deveImprimirVale({ vendaEm: p.vendaEm, hoje: p.hoje, ligado })) return html;
-    return injetarValeNoCupom(html, p.saleId, prazoDoVale(p.vendaEm) || undefined);
+    if (!ligado) return html;
+    const prazoDias = lerPrazoDoValeEmDias(p.config);
+    if (!deveImprimirVale({ vendaEm: p.vendaEm, hoje: p.hoje, ligado, prazoDias })) return html;
+    return injetarValeNoCupom(html, p.saleId, prazoDoVale(p.vendaEm, prazoDias) || undefined);
   } catch {
     // O vale é acessório: nunca pode impedir a impressão do cupom.
     return html;

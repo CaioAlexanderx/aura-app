@@ -105,9 +105,9 @@ function openPrintReceipt(companyId: string, saleId: string, token: string | nul
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return { ok: false as const, error: "Erro ao gerar cupom" };
-    // 13/10/2026: vendas de nov/dez saem com o bloco "Vale-troca" (QR) — ver
-    // utils/valeTroca.ts. Fora do período, ou com a loja desligando, o HTML do
-    // backend segue intacto.
+    // 13/10/2026: bloco "Vale-troca" (QR) — ver utils/valeTroca.ts. 12/11/2026:
+    // qualquer venda com a opção ligada, com "Troca até" = hoje (a venda) +
+    // prazo da loja. Loja com a opção desligada: o HTML do backend segue intacto.
     let html = cupomComVale(await res.text(), { companyId, saleId, vendaEm, config });
     if (papel === "a4") {
       // O papel em A4 é buscado já, e a própria janela do cupom navega para

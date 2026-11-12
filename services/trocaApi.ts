@@ -193,6 +193,9 @@ export type SaleForTroca = {
   has_nfce?: boolean;
   item_count: number;
   items: SaleForTrocaItem[];
+  // 12/11/2026: prazo do vale-troca da loja DA VENDA, em dias (1-365; 30 se a
+  // loja nunca escolheu). undefined em backend antigo e em pedido online.
+  vale_troca_prazo_dias?: number;
   // 27/10/2026: undefined/"sale" = venda do Caixa; "digital_order" = pedido
   // da loja online (id = digital_orders.id). Os campos abaixo só vêm no pedido.
   origin_kind?: "sale" | "digital_order";

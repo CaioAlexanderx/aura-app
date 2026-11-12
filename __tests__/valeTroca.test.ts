@@ -1,6 +1,7 @@
 // 13/10/2026 — vale-troca por QR no cupom. Formato do código, leitura
-// tolerante, prazo nas bordas (dia civil de Brasília) e o bloco no cupom
-// com e sem a campanha.
+// tolerante, prazo nas bordas (dia civil de Brasília) e o bloco no cupom.
+// 12/11/2026: sem campanha — prazo = dia da venda + prazo da loja (padrão 30);
+// os casos do prazo configurável estão em valeTrocaPrazo.test.ts.
 import * as fs from "fs";
 import * as path from "path";
 
@@ -18,10 +19,9 @@ jest.mock("qrcode-svg", () => {
 });
 
 import {
-  VALE_TROCA_PRAZO_ATE, VALE_TROCA_VENDAS_ATE, VALE_TROCA_VENDAS_DE,
   deveImprimirVale, diaEmBrasilia, formatarDiaBR, lerCodigoDoVale,
   lerValeTrocaLigado, montarCodigoDoVale, prazoDoVale,
-  textoDoPrazoNoCupom, vendaCaiNoPeriodoDoVale, valeVencido,
+  textoDoPrazoNoCupom, valeVencido,
 } from "@/utils/valeTroca";
 import { blocoDoVale, cupomComVale, injetarValeNoCupom, MARCA_DO_VALE } from "@/utils/valeTrocaCupom";
 
@@ -64,30 +64,19 @@ describe("código do vale", () => {
 });
 
 describe("prazo do vale — bordas (dia civil de Brasília, UTC-3)", () => {
-  it("as datas da campanha ficam numa constante só", () => {
-    expect(VALE_TROCA_VENDAS_DE).toBe("2026-11-01");
-    expect(VALE_TROCA_VENDAS_ATE).toBe("2026-12-31");
-    expect(VALE_TROCA_PRAZO_ATE).toBe("2027-01-31");
-  });
-
-  it("venda de 31/10 às 23:59:59 fica fora; 01/11 às 00:00:00 entra", () => {
-    expect(vendaCaiNoPeriodoDoVale("2026-11-01T02:59:59Z")).toBe(false); // 31/10 23:59:59 BRT
-    expect(vendaCaiNoPeriodoDoVale("2026-11-01T03:00:00Z")).toBe(true);  // 01/11 00:00:00 BRT
-  });
-
-  it("venda de 31/12 às 23:59:59 entra; 01/01 às 00:00:00 fica fora", () => {
-    expect(vendaCaiNoPeriodoDoVale("2027-01-01T02:59:59Z")).toBe(true);  // 31/12 23:59:59 BRT
-    expect(vendaCaiNoPeriodoDoVale("2027-01-01T03:00:00Z")).toBe(false); // 01/01 00:00:00 BRT
-  });
-
-  it("venda no meio da campanha tem prazo até 31/01/2027; fora não tem prazo do vale", () => {
-    expect(prazoDoVale("2026-12-12T18:42:10Z")).toBe("2027-01-31");
-    expect(prazoDoVale("2026-03-10T12:00:00Z")).toBeNull();
+  it("sem prazo configurado: dia da venda + 30, em qualquer época do ano", () => {
+    expect(prazoDoVale("2026-12-12T18:42:10Z")).toBe("2027-01-11");
+    expect(prazoDoVale("2026-03-10T12:00:00Z")).toBe("2026-04-09");
     expect(prazoDoVale(null)).toBeNull();
     expect(prazoDoVale("lixo")).toBeNull();
   });
 
-  it("31/01 inteiro ainda vale; 01/02 às 00:00 BRT venceu", () => {
+  it("o dia da venda é o de Brasília: 23:59 de 31/10 conta como 31/10", () => {
+    expect(prazoDoVale("2026-11-01T02:59:59Z", 1)).toBe("2026-11-01"); // 31/10 23:59:59 BRT
+    expect(prazoDoVale("2026-11-01T03:00:00Z", 1)).toBe("2026-11-02"); // 01/11 00:00:00 BRT
+  });
+
+  it("o próprio dia do prazo ainda vale; o seguinte, às 00:00 BRT, venceu", () => {
     expect(valeVencido("2027-01-31", "2027-01-31T02:59:59Z")).toBe(false); // 30/01 23:59 BRT
     expect(valeVencido("2027-01-31", "2027-02-01T02:59:59Z")).toBe(false); // 31/01 23:59:59 BRT
     expect(valeVencido("2027-01-31", "2027-02-01T03:00:00Z")).toBe(true);  // 01/02 00:00:00 BRT
@@ -100,13 +89,13 @@ describe("prazo do vale — bordas (dia civil de Brasília, UTC-3)", () => {
   });
 
   it("texto do cupom", () => {
-    expect(textoDoPrazoNoCupom()).toBe("Troque até 31/01/2027 apresentando este cupom");
+    expect(textoDoPrazoNoCupom("2027-01-11")).toBe("Troca até 11/01/2027 apresentando este cupom");
   });
 });
 
 describe("deveImprimirVale", () => {
   const dentro = "2026-12-12T18:42:10Z";
-  it("venda da campanha, loja que ligou, prazo em dia: imprime", () => {
+  it("loja que ligou, prazo em dia: imprime", () => {
     expect(deveImprimirVale({ vendaEm: dentro, hoje: "2026-12-12T18:45:00Z", ligado: true })).toBe(true);
   });
   it("loja sem a opção ligada (padrão): não imprime", () => {
@@ -115,12 +104,12 @@ describe("deveImprimirVale", () => {
   it("loja desligou: não imprime", () => {
     expect(deveImprimirVale({ vendaEm: dentro, hoje: "2026-12-12T18:45:00Z", ligado: false })).toBe(false);
   });
-  it("venda fora da campanha: não imprime", () => {
-    expect(deveImprimirVale({ vendaEm: "2026-10-20T15:00:00Z", hoje: "2026-10-20T15:05:00Z", ligado: true })).toBe(false);
+  it("venda de outubro (antes era fora da campanha) agora imprime", () => {
+    expect(deveImprimirVale({ vendaEm: "2026-10-20T15:00:00Z", hoje: "2026-10-20T15:05:00Z", ligado: true })).toBe(true);
   });
   it("2ª via depois do prazo: não promete troca vencida", () => {
-    expect(deveImprimirVale({ vendaEm: dentro, hoje: "2027-02-03T15:00:00Z", ligado: true })).toBe(false);
-    expect(deveImprimirVale({ vendaEm: dentro, hoje: "2027-01-31T15:00:00Z", ligado: true })).toBe(true);
+    expect(deveImprimirVale({ vendaEm: dentro, hoje: "2027-01-12T15:00:00Z", ligado: true })).toBe(false);
+    expect(deveImprimirVale({ vendaEm: dentro, hoje: "2027-01-11T15:00:00Z", ligado: true })).toBe(true);
   });
 });
 
@@ -154,12 +143,12 @@ describe("cupom impresso", () => {
   const dez = "2026-12-12T18:42:10Z";
   const agora = new Date("2026-12-12T18:45:00Z");
 
-  it("com a campanha: bloco com QR, texto do prazo e ordem certa (antes do rodapé)", () => {
+  it("ligado: bloco com QR, texto do prazo e ordem certa (antes do rodapé)", () => {
     const html = cupomComVale(CUPOM, { companyId: "loja-a", saleId: VENDA, vendaEm: dez, hoje: agora, config: ON });
     expect(html).not.toBe(CUPOM);
     expect(html).toContain(MARCA_DO_VALE);
     expect(html).toContain("VALE-TROCA");
-    expect(html).toContain("Troque até 31/01/2027 apresentando este cupom");
+    expect(html).toContain("Troca até 11/01/2027 apresentando este cupom");
     expect(html).toMatch(/<svg[\s\S]*<\/svg>/);
     // o QR carrega o código do vale, uma vez só
     const chamadas = (require("qrcode-svg") as any).chamadas;
@@ -171,7 +160,7 @@ describe("cupom impresso", () => {
     // entra entre os totais e o rodapé, sem perder nada do cupom original
     expect(html.indexOf("TOTAL")).toBeLessThan(html.indexOf(MARCA_DO_VALE));
     expect(html.indexOf(MARCA_DO_VALE)).toBeLessThan(html.indexOf("Obrigado pela preferencia!"));
-    expect(html.replace(blocoDoVale(VENDA, "2027-01-31"), "")).toBe(CUPOM);
+    expect(html.replace(blocoDoVale(VENDA, "2027-01-11"), "")).toBe(CUPOM);
   });
 
   it("sem imagem remota: o QR é SVG inline", () => {
@@ -179,9 +168,11 @@ describe("cupom impresso", () => {
     expect(html).not.toMatch(/qrserver|<img/i);
   });
 
-  it("venda fora da campanha: o HTML do backend sai idêntico", () => {
-    const html = cupomComVale(CUPOM, { companyId: "loja-a", saleId: VENDA, vendaEm: "2026-10-31T17:00:00Z", hoje: agora, config: ON });
-    expect(html).toBe(CUPOM);
+  it("venda de outubro (antes fora da campanha): com a loja ligada, agora leva o vale", () => {
+    const html = cupomComVale(CUPOM, {
+      companyId: "loja-a", saleId: VENDA, vendaEm: "2026-10-31T17:00:00Z", hoje: new Date("2026-10-31T17:05:00Z"), config: ON,
+    });
+    expect(html).toContain("Troca até 30/11/2026 apresentando este cupom");
   });
 
   it("loja que desligou o vale em pdv_settings: idêntico", () => {
@@ -204,7 +195,7 @@ describe("cupom impresso", () => {
     expect(html).toBe(CUPOM);
   });
 
-  it("prazo vencido (2ª via em fevereiro): idêntico", () => {
+  it("prazo vencido (2ª via depois de 11/01): idêntico", () => {
     const html = cupomComVale(CUPOM, {
       companyId: "loja-a", saleId: VENDA, vendaEm: dez, hoje: new Date("2027-02-10T12:00:00Z"), config: ON,
     });
@@ -227,6 +218,6 @@ describe("cupom impresso", () => {
   });
 
   it("o bloco existe com o texto do prazo informado", () => {
-    expect(blocoDoVale(VENDA, "2027-01-31")).toContain("Troque até 31/01/2027 apresentando este cupom");
+    expect(blocoDoVale(VENDA, "2027-01-31")).toContain("Troca até 31/01/2027 apresentando este cupom");
   });
 });
