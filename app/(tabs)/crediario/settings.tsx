@@ -23,6 +23,18 @@ import { PreviaCrediarioModal } from "@/components/whatsapp/PreviaCrediarioModal
 //     nota explícita: só aviso, nunca bloqueia.
 //   - require_score_min removido da UI (campo deprecado; enviamos
 //     score_warn_min no PUT e omitimos require_score_min).
+// RA-12 (12/11/2026): require_score_min e auto_block_days saem de vez da
+//   tela. Nenhum código do backend usa os dois: o score só avisa (pelo
+//   score_warn_min) e o único bloqueio é o manual. A tela não lê, não
+//   mostra e não envia nenhum dos dois; as colunas ficam no banco, e o PUT
+//   mantém o valor gravado (COALESCE) quando o campo não vem.
+//   - O aviso de score lia require_score_min como "fallback". A coluna é
+//     NOT NULL DEFAULT 300, então loja sem score_warn_min via o aviso
+//     LIGADO em 300 pts, mas o backend não avisava nada (score.js só lê
+//     score_warn_min). Agora a tela mostra só o que o backend faz.
+//   - Desligar o aviso enviava null, e o COALESCE do PUT mantinha o valor
+//     antigo: o aviso continuava. Agora desligar envia 0, que o score.js
+//     já trata como "sem aviso".
 // Fase 2 FE (08/06/2026):
 //   - Seção "Encargos por atraso": toggle late_charges_enabled,
 //     multa (late_fee_rate, teto 2% CDC), mora/mês (exibe mensal,
@@ -169,9 +181,9 @@ export default function CrediarioSettingsScreen() {
     const md = Number(c.late_interest_daily || 0);
     setMoraOn(md > 0); if (md > 0) setMora(pctToStr(md));
 
-    // Fase 1: score_warn_min (preferência) ou require_score_min (legado) como fallback
-    const swm = c.score_warn_min != null ? c.score_warn_min
-      : (c.require_score_min ?? 0);
+    // RA-12: só score_warn_min. require_score_min não é lido pelo backend e
+    // vem 300 por padrão do banco — usá-lo mostrava um aviso que não existe.
+    const swm = Number(c.score_warn_min) || 0;
     setScoreWarnOn(swm > 0);
     if (swm > 0) setScoreWarnMin(String(swm));
 
@@ -278,8 +290,10 @@ export default function CrediarioSettingsScreen() {
         interest_rate: interestOn ? +(num(interestPct) / 100).toFixed(4) : 0,
         late_fee_rate: lateFeeRateValue,
         late_interest_daily: lateInterestDailyValue,
-        // Fase 1: envia score_warn_min; omite require_score_min (deprecado)
-        score_warn_min: scoreWarnOn ? Math.max(0, parseInt(scoreWarnMin, 10) || 0) : null,
+        // Fase 1: envia score_warn_min; omite require_score_min (deprecado).
+        // RA-12: auto_block_days também nunca vai (nada o usa). Desligado
+        // vai 0, não null: null cai no COALESCE do PUT e mantinha o aviso.
+        score_warn_min: scoreWarnOn ? Math.max(0, parseInt(scoreWarnMin, 10) || 0) : 0,
         period_unit: finalUnit,
         period_count: finalCount,
         // Fase 2: encargos por atraso
@@ -581,6 +595,7 @@ export default function CrediarioSettingsScreen() {
               value={scoreWarnMin}
               setValue={(v) => { setScoreWarnMin(v.replace(/\D/g, "")); touch(); }}
               intOnly
+              testID="crediario-score-aviso"
             />
             <View style={st.warnNote}>
               <Icon name="alert_triangle" size={13} color={Colors.amber} />
@@ -700,6 +715,7 @@ export default function CrediarioSettingsScreen() {
           </View>
 
           <Pressable onPress={() => saveMut.mutate()} disabled={!dirty || saveMut.isPending || hasCdcErrors}
+            testID="crediario-config-salvar"
             style={[st.saveBtn, (!dirty || saveMut.isPending || hasCdcErrors) && st.saveBtnDisabled]}>
             {saveMut.isPending ? <ActivityIndicator color="#fff" /> : <Text style={st.saveBtnText}>Salvar configurações</Text>}
           </Pressable>
@@ -722,9 +738,9 @@ export default function CrediarioSettingsScreen() {
 
 function ToggleRow(props: {
   label: string; sub: string; suffix: string; on: boolean; setOn: (v: boolean) => void;
-  value: string; setValue: (v: string) => void; intOnly?: boolean;
+  value: string; setValue: (v: string) => void; intOnly?: boolean; testID?: string;
 }) {
-  const { label, sub, suffix, on, setOn, value, setValue, intOnly } = props;
+  const { label, sub, suffix, on, setOn, value, setValue, intOnly, testID } = props;
   return (
     <View style={st.trow}>
       <View style={{ flex: 1 }}>
@@ -738,7 +754,8 @@ function ToggleRow(props: {
           <Text style={st.miniSuffix}>{suffix}</Text>
         </View>
       )}
-      <Switch value={on} onValueChange={setOn} trackColor={{ false: Colors.bg4 as any, true: Colors.violet }} thumbColor="#fff" />
+      <Switch value={on} onValueChange={setOn} trackColor={{ false: Colors.bg4 as any, true: Colors.violet }} thumbColor="#fff"
+        testID={testID ? `${testID}-switch` : undefined} />
     </View>
   );
 }

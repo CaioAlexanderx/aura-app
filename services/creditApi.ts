@@ -174,9 +174,13 @@ export type CreditPlanConfig = {
   company_id: string; max_installments: number;
   min_installment_value: number; interest_rate: number;
   late_fee_rate: number; late_interest_daily: number;
-  /** @deprecated use score_warn_min instead */
+  /** @deprecated nada no backend lê este campo; o aviso é score_warn_min.
+   *  RA-12: a tela de configurações não lê nem envia. */
   require_score_min?: number;
-  auto_block_days: number;
+  /** @deprecated nada no backend lê este campo: não existe bloqueio
+   *  automático por atraso, o único bloqueio é o manual. RA-12: a tela de
+   *  configurações não lê nem envia. A coluna continua no banco. */
+  auto_block_days?: number;
   period_unit?: PeriodUnit;
   period_count?: number;
   /** 13/10/2026 (Aura-backend#816): até quantos dias à frente a 1ª parcela
