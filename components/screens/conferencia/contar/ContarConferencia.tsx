@@ -41,6 +41,7 @@ import {
 import { ROTA_CONFERENCIA, rotaDaContagem } from "../ComecarConferencia";
 import { LinhaDaContagem } from "./LinhaDaContagem";
 import { ce } from "../estilos";
+import { NavDaConferencia, type VoltarDaConferencia } from "../NavDaConferencia";
 
 type Variante = { id: string; barcode?: string | null; stock_qty?: any; [k: string]: any };
 type Escolha = { produto: ProdutoContavel; variantes: Variante[] | null; erro: string | null };
@@ -68,6 +69,7 @@ export function ContarConferencia({ countId }: { countId: string }) {
   const campo = useRef<ScannerInputHandle>(null);
 
   const conf = c.conferencia;
+  const voltarDaContagem: VoltarDaConferencia = { rotulo: "Voltar às conferências", destino: ROTA_CONFERENCIA, testID: "contar-voltar" };
   const asCegas = conf ? conf.as_cegas !== false : true;
   const produtos = products as unknown as ProdutoContavel[];
 
@@ -205,6 +207,7 @@ export function ContarConferencia({ countId }: { countId: string }) {
   if (c.erro || !conf) {
     return (
       <ScrollView style={ce.tela} contentContainerStyle={ce.conteudo}>
+        <NavDaConferencia voltar={voltarDaContagem} testIDEstoque="contar-ir-estoque" />
         <Text style={ce.titulo}>Conferir estoque</Text>
         <View style={ce.aviso} testID="contar-erro">
           <Text style={ce.avisoTexto}>{c.erro ? c.erro.mensagem : "Não achei esta conferência."}</Text>
@@ -230,6 +233,7 @@ export function ContarConferencia({ countId }: { countId: string }) {
         : "Esta conferência foi descartada.";
     return (
       <ScrollView style={ce.tela} contentContainerStyle={ce.conteudo}>
+        <NavDaConferencia voltar={voltarDaContagem} testIDEstoque="contar-ir-estoque" />
         <Text style={ce.titulo}>{titulo}</Text>
         <View style={ce.card} testID="contar-encerrada">
           <Text style={ce.avisoTexto}>{texto} Para contar de novo, comece uma nova conferência.</Text>
@@ -261,9 +265,7 @@ export function ContarConferencia({ countId }: { countId: string }) {
 
   return (
     <ScrollView style={ce.tela} contentContainerStyle={ce.conteudo} keyboardShouldPersistTaps="handled">
-      <Pressable onPress={() => router.push(ROTA_CONFERENCIA as any)} accessibilityRole="link" style={{ alignSelf: "flex-start" }}>
-        <Text style={{ color: Colors.violet3, fontWeight: "700", fontSize: 13 }}>‹ Conferências</Text>
-      </Pressable>
+      <NavDaConferencia voltar={voltarDaContagem} testIDEstoque="contar-ir-estoque" />
       <View style={ce.linha}>
         <View style={ce.espaco}>
           <Text style={ce.titulo} numberOfLines={2}>{titulo}</Text>

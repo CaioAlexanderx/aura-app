@@ -11,6 +11,9 @@
 //   5. Estados: gravado (E), mudou no meio (G5), não gravou (G4: o que foi
 //      digitado fica), não carregou (G6), nada sem custo (G1), sem preço (G2).
 //   6. 375 px: o campo desce para baixo do nome.
+//   7. Topo (relato do Caio, 12/11): botão de voltar de verdade e "Ir para o
+//      Estoque" em todos os estados; voltar vai por router.push a um
+//      caminho fixo, nunca router.back() (não confiável na pilha da web).
 // ============================================================
 import React from "react";
 import renderer, { act } from "react-test-renderer";
@@ -32,10 +35,13 @@ jest.mock("expo-secure-store", () => ({ getItemAsync: jest.fn(), setItemAsync: j
 jest.mock("@expo-google-fonts/dm-sans", () => ({}), { virtual: true });
 jest.mock("@/components/karate/FpktLogo", () => ({ FpktLogo: () => null, default: () => null }));
 jest.mock("@/constants/colors", () => ({ Colors: new Proxy({}, { get: (_t, k) => String(k) }), IS_DARK_MODE: false }));
+jest.mock("@/components/Icon", () => ({ Icon: () => null }));
 const mockBack = jest.fn();
 const mockReplace = jest.fn();
+const mockPush = jest.fn();
+// canGoBack diz que sim de propósito: a tela não pode usar router.back().
 jest.mock("expo-router", () => ({
-  router: { push: jest.fn(), back: (...a: any[]) => mockBack(...a), replace: (...a: any[]) => mockReplace(...a), canGoBack: () => true },
+  router: { push: (...a: any[]) => mockPush(...a), back: (...a: any[]) => mockBack(...a), replace: (...a: any[]) => mockReplace(...a), canGoBack: () => true },
   Redirect: (p: any) => require("react").createElement("Redirect", { ...p, testID: "redirect" }),
 }));
 jest.mock("@/components/WebPortal", () => ({ WebPortal: ({ active, children }: any) => (active ? children : null) }));
@@ -121,6 +127,8 @@ beforeEach(() => {
   mockGravar.mockReset();
   mockHistorico.mockReset().mockResolvedValue({ preenchimentos: [], total: 0 });
   mockBack.mockReset();
+  mockReplace.mockReset();
+  mockPush.mockReset();
 });
 
 describe("quem vê", () => {
@@ -154,7 +162,7 @@ describe("lista", () => {
     expect(textoDe(tree, "custos-filtro-conferencia")).toBe("Desta conferência 2");
     await tocar(tree, "custos-filtro-todos");
     expect(mockPendentes).toHaveBeenLastCalledWith("c1", expect.objectContaining({ filtro: "todos", countId: "k9" }));
-    expect(textoDe(tree, "custos-voltar")).toBe("‹ Diferenças");
+    expect(textoDe(tree, "custos-voltar")).toBe("Voltar às diferenças");
   });
 
   test("G6: não carregou, nada foi alterado, tenta de novo", async () => {
@@ -293,7 +301,11 @@ describe("gravar", () => {
     expect(mockHistorico).toHaveBeenCalledTimes(2);
     expect(existe(tree, "custo-linha-p1")).toBe(false);
     await tocar(tree, "custos-voltar-diferencas");
-    expect(mockBack).toHaveBeenCalled();
+    expect(mockPush).toHaveBeenCalledWith("/conferencia-estoque/k9/diferencas");
+    expect(mockBack).not.toHaveBeenCalled();
+    // o topo continua lá depois de gravar
+    expect(existe(tree, "custos-voltar")).toBe(true);
+    expect(existe(tree, "custos-ir-estoque")).toBe(true);
   });
 
   test("G5: quem ganhou custo no meio do caminho fica com o custo da entrada", async () => {
@@ -323,5 +335,79 @@ describe("gravar", () => {
     mockGravar.mockResolvedValue({ dry_run: false, fill_id: "f1", resumo: { gravar: 3 }, itens: [] });
     await tocar(tree, "custos-tentar-gravar");
     expect(mockGravar).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("topo: voltar e Ir para o Estoque", () => {
+  function confereTopo(tree: renderer.ReactTestRenderer, rotulo: string) {
+    expect(textoDe(tree, "custos-voltar")).toBe(rotulo);
+    expect(textoDe(tree, "custos-ir-estoque")).toBe("Ir para o Estoque");
+    // botão de verdade, com área de toque de 44 px
+    const btn = um(tree, "custos-voltar");
+    expect(btn.props.accessibilityRole).toBe("button");
+    expect(JSON.stringify(btn.props.style)).toContain("\"minHeight\":44");
+    expect(JSON.stringify(um(tree, "custos-ir-estoque").props.style)).toContain("\"minHeight\":44");
+  }
+  async function tocaVoltar(tree: renderer.ReactTestRenderer, esperado: string) {
+    mockPush.mockReset();
+    await tocar(tree, "custos-voltar");
+    expect(mockPush).toHaveBeenCalledWith(esperado);
+    expect(mockBack).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
+    mockPush.mockReset();
+    await tocar(tree, "custos-ir-estoque");
+    expect(mockPush).toHaveBeenCalledWith("/estoque");
+  }
+
+  test("conferindo a permissão", async () => {
+    mockCtx = contexto({ carregandoPermissao: true });
+    const tree = await montar({ countId: "k9", lojaDaRota: "l2" });
+    expect(existe(tree, "custos-permissao")).toBe(true);
+    confereTopo(tree, "Voltar às diferenças");
+    await tocaVoltar(tree, "/conferencia-estoque/k9/diferencas?loja=l2");
+  });
+
+  test("consolidado sem loja", async () => {
+    mockCtx = contexto({ companyId: null });
+    const tree = await montar();
+    expect(existe(tree, "custos-sem-loja")).toBe(true);
+    confereTopo(tree, "Voltar à conferência");
+    await tocaVoltar(tree, "/conferencia-estoque");
+  });
+
+  test("carregando a lista", async () => {
+    mockPendentes.mockReset().mockReturnValue(new Promise(() => {}));
+    const tree = await montar({ lojaDaRota: "l2" });
+    expect(existe(tree, "custos-carregando")).toBe(true);
+    confereTopo(tree, "Voltar à conferência");
+    await tocaVoltar(tree, "/conferencia-estoque?loja=l2");
+  });
+
+  test("erro ao carregar", async () => {
+    mockPendentes.mockReset().mockRejectedValue({ isNetworkError: true, code: "network" });
+    const tree = await montar({ countId: "k9" });
+    expect(existe(tree, "custos-erro-lista")).toBe(true);
+    confereTopo(tree, "Voltar às diferenças");
+    await tocaVoltar(tree, "/conferencia-estoque/k9/diferencas");
+  });
+
+  test("nada sem custo (vazio)", async () => {
+    mockPendentes.mockResolvedValue(lista({ itens: [], total: 0, contagens: { todos: 0, desta_conferencia: null, sem_preco: 0, produtos: 312 } }));
+    const tree = await montar();
+    expect(existe(tree, "custos-vazio")).toBe(true);
+    confereTopo(tree, "Voltar à conferência");
+    await tocaVoltar(tree, "/conferencia-estoque");
+  });
+
+  test("lista com a barra fixa de baixo, em 375 px: o topo fica fora da rolagem", async () => {
+    mockLargura = 375;
+    const tree = await montar({ countId: "k 9", lojaDaRota: "l2" });
+    expect(existe(tree, "custos-lista")).toBe(true);
+    expect(existe(tree, "custos-barra")).toBe(true);
+    confereTopo(tree, "Voltar às diferenças");
+    // o topo não está dentro do ScrollView: não some quando a lista rola
+    const rolagem = tree.root.findAll((n: any) => n.type === "ScrollView")[0];
+    expect(rolagem.findAll((n: any) => n.props && n.props.testID === "custos-voltar").length).toBe(0);
+    await tocaVoltar(tree, "/conferencia-estoque/k%209/diferencas?loja=l2");
   });
 });

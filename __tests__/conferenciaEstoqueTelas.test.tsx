@@ -509,3 +509,22 @@ describe("contar", () => {
     expect(flattenText(um(tree, "contar-erro"))).toContain("quase pronta");
   });
 });
+
+// Relato do Caio (12/11): topo único da conferência, com voltar de verdade
+// (router.push a um caminho fixo) e "Ir para o Estoque".
+describe("topo da conferência", () => {
+  it("começar: Ir para o Estoque", async () => {
+    const tree = await montar(<ConferenciaRota />);
+    await tocar(tree, "comecar-ir-estoque");
+    expect(mockPush).toHaveBeenCalledWith("/estoque");
+  });
+
+  it("contar: Voltar às conferências e Ir para o Estoque", async () => {
+    const tree = await montar(<ContarRota />);
+    expect(flattenText(um(tree, "contar-voltar").children)).toBe("Voltar às conferências");
+    await tocar(tree, "contar-voltar");
+    expect(mockPush).toHaveBeenCalledWith("/conferencia-estoque");
+    await tocar(tree, "contar-ir-estoque");
+    expect(mockPush).toHaveBeenLastCalledWith("/estoque");
+  });
+});
