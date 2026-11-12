@@ -22,6 +22,7 @@ import { apagarTodasAsVendasGuardadas, apagarVendasDeOutrosUsuarios } from "@/ut
 import { marcarLogin, limparMarcaDeLogin } from "@/services/aberturaAposLogin";
 import { marcarSaidaVoluntaria } from "@/utils/destinoDepoisDoLogin";
 import { MSG_SESSAO_TERMINOU } from "@/utils/mensagensDoApp";
+import { ehEquipeAura } from "@/utils/equipeAura";
 
 const KEY = "aura_token";
 const REFRESH_KEY = "aura_refresh_token";
@@ -307,7 +308,7 @@ function estadoDoMe(meRes: any, companyCountAtual = 0) {
   return {
     user,
     company: consolidatedFromApi ? null : (company ?? null),
-    isStaff: !!(user?.is_staff || (user?.email || "").endsWith("@getaura.com.br")),
+    isStaff: ehEquipeAura(user),
     trialActive: !!(trialEnd && new Date(trialEnd) > new Date()),
     trialEndsAt: trialEnd || null,
     consolidatedView: consolidatedFromApi,
@@ -472,7 +473,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
         apagarVendasDeOutrosUsuarios(user?.id);
 
         const trialEnd = (company as any)?.trial_ends_at;
-        const staff = !!(user?.is_staff || (user?.email || "").endsWith("@getaura.com.br"));
+        const staff = ehEquipeAura(user);
 
         set({
           token,
@@ -521,7 +522,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
           company: consolidatedFromApi ? null : (company ?? null),
           isLoading: false,
           isDemo: false,
-          isStaff: !!(user?.is_staff || (user?.email || "").endsWith("@getaura.com.br")),
+          isStaff: ehEquipeAura(user),
           trialActive: !!(trialEnd && new Date(trialEnd) > new Date()),
           trialEndsAt: trialEnd || null,
           availableCompanies: [],
@@ -573,7 +574,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
         const companyCount = meRes.company_count || get().companyCount || 0;
         const trialEnd = (company as any)?.trial_ends_at;
         const trialActive = !!(trialEnd && new Date(trialEnd) > new Date());
-        const staff = !!(user?.is_staff || (user?.email || "").endsWith("@getaura.com.br"));
+        const staff = ehEquipeAura(user);
         // 14/10/2026 (t2-16): a revalidação agora roda em segundo plano
         // (useRevalidarMe), com a loja usando o app. Só grava o que mudou:
         // resposta igual não troca a referência de `company`/`user`, então

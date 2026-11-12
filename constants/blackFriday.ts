@@ -29,7 +29,7 @@ export function blackFridayAtivo(hoje?: string): boolean {
 // ── Quem vê ──────────────────────────────────────────────────
 //
 // Decisão do Caio (13/10): a página fica OCULTA por enquanto e só aparece
-// para quem testa — staff (is_staff ou conta @getaura.com.br) e empresa de
+// para quem testa — staff (is_staff do backend) e empresa de
 // teste (companies.is_sandbox). Quando `BLACK_FRIDAY_LIBERADA_PARA_TODOS`
 // virar true, a página abre para todo mundo, dentro do período e do plano.
 //
@@ -42,7 +42,7 @@ export function blackFridayAtivo(hoje?: string): boolean {
 export const BLACK_FRIDAY_LIBERADA_PARA_TODOS = true;
 
 export type ContaParaBlackFriday = {
-  /** isStaff do auth store (is_staff ou @getaura.com.br). */
+  /** isStaff do auth store (is_staff do backend). */
   isStaff?: boolean | null;
   /** Campo legado do auth store (hoje sempre false). */
   isDemo?: boolean | null;
