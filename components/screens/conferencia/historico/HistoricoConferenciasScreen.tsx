@@ -30,6 +30,7 @@ import {
   podeDesfazerAgora, qtd, rotuloDoEscopo,
 } from "@/utils/conferenciaResultado";
 import { Aviso, Botao, Cartao, Selo, ui } from "@/components/screens/conferencia/diferencas/ui";
+import { NavDaConferencia } from "@/components/screens/conferencia/NavDaConferencia";
 
 var POR_PAGINA = 20;
 
@@ -210,10 +211,10 @@ export function HistoricoConferenciasScreen({ lojaDaRota, agora }: Props) {
   return (
     <View style={ui.tela}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={ui.conteudo} testID="hist-tela">
-        <Pressable onPress={function () { irPara("/conferencia-estoque" + sufixoLoja(lojaDosLinks)); }} style={ui.voltar}
-          accessibilityRole="link" testID="hist-voltar">
-          <Text style={ui.voltarTxt}>‹ Conferir estoque</Text>
-        </Pressable>
+        <NavDaConferencia
+          voltar={{ rotulo: "Voltar à conferência", destino: "/conferencia-estoque" + sufixoLoja(lojaDosLinks), testID: "hist-voltar" }}
+          testIDEstoque="hist-ir-estoque"
+        />
         <Text style={ui.titulo}>Histórico de conferências</Text>
         <Text style={ui.sub} testID="hist-sub">
           {"Cada conferência ajustada fica registrada aqui; em “Ver diferenças” você vê o que mudou em cada item. Se precisar, dá para desfazer a conferência inteira por " + DIAS_PARA_DESFAZER + " dias."}

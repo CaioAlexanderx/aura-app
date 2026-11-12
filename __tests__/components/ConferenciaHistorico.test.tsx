@@ -29,6 +29,7 @@ jest.mock("expo-font", () => ({ useFonts: () => [true, null], loadAsync: jest.fn
 jest.mock("expo-secure-store", () => ({ getItemAsync: jest.fn(), setItemAsync: jest.fn(), deleteItemAsync: jest.fn() }));
 jest.mock("@expo-google-fonts/dm-sans", () => ({}), { virtual: true });
 jest.mock("@/components/karate/FpktLogo", () => ({ FpktLogo: () => null, default: () => null }));
+jest.mock("@/components/Icon", () => ({ Icon: () => null }));
 jest.mock("@/constants/colors", () => ({ Colors: new Proxy({}, { get: (_t, k) => String(k) }), IS_DARK_MODE: false }));
 const mockPush = jest.fn();
 jest.mock("expo-router", () => ({ router: { push: (...a: any[]) => mockPush(...a) } }));
@@ -222,4 +223,14 @@ it("textos verdadeiros: registro no histórico de conferências", async () => {
   await tocar(tree, "hist-desfazer-a1");
   expect(um(tree, "confirm").props.message).toMatch(/A conferência continua registrada aqui, marcada como desfeita\./);
   expect(flattenText(tree.toJSON()) + um(tree, "confirm").props.message).not.toMatch(/histórico (do|de cada) produto/);
+});
+
+// Relato do Caio (12/11): topo único da conferência.
+it("topo: Voltar à conferência e Ir para o Estoque", async () => {
+  const tree = await montar();
+  expect(textoDe(tree, "hist-voltar")).toBe("Voltar à conferência");
+  await tocar(tree, "hist-voltar");
+  expect(mockPush).toHaveBeenCalledWith("/conferencia-estoque");
+  await tocar(tree, "hist-ir-estoque");
+  expect(mockPush).toHaveBeenLastCalledWith("/estoque");
 });

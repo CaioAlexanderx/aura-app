@@ -42,6 +42,7 @@ import {
   type LinhaDeCusto, type TomDaEtiqueta,
 } from "@/utils/custoEmMassa";
 import { Aviso, Botao, Cartao, ui } from "../diferencas/ui";
+import { NavDaConferencia } from "../NavDaConferencia";
 import { UltimosPreenchimentos } from "./UltimosPreenchimentos";
 
 type Props = { countId?: string | null; lojaDaRota?: string | null };
@@ -308,20 +309,36 @@ export function PreencherCustosScreen({ countId, lojaDaRota }: Props) {
       .finally(function () { if (vivo.current) setGravando(false); });
   }
 
-  function voltar() {
-    var destino = countId
-      ? "/conferencia-estoque/" + encodeURIComponent(countId) + "/diferencas" + sufixoLoja(lojaDaRota)
-      : "/conferencia-estoque" + sufixoLoja(lojaDaRota);
-    if (router.canGoBack && router.canGoBack()) router.back();
-    else router.replace(destino as any);
-  }
-  var rotuloVoltar = countId ? "‹ Diferenças" : "‹ Conferir estoque";
+  // Voltar é sempre para um caminho fixo (router.push), como nas outras
+  // telas da conferência: router.back() na pilha aninhada nas abas da web
+  // não é confiável (relato do Caio em produção, 12/11).
+  var destinoVoltar = countId
+    ? "/conferencia-estoque/" + encodeURIComponent(countId) + "/diferencas" + sufixoLoja(lojaDaRota)
+    : "/conferencia-estoque" + sufixoLoja(lojaDaRota);
+  function voltar() { router.push(destinoVoltar as any); }
+  var rotuloVoltar = countId ? "Voltar às diferenças" : "Voltar à conferência";
+
+  // Topo fixo, fora da rolagem: o botão de voltar e "Ir para o Estoque"
+  // ficam à vista em todos os estados, mesmo com a lista longa e a barra
+  // fixa de baixo.
+  var nav = (
+    <View style={s.navFixa}>
+      <NavDaConferencia
+        voltar={{ rotulo: rotuloVoltar, destino: destinoVoltar, testID: "custos-voltar" }}
+        testIDEstoque="custos-ir-estoque"
+        testID="custos-nav"
+      />
+    </View>
+  );
 
   // ── Porta: só quem edita o estoque E vê custo ────────────────
   if (ctx.carregandoPermissao) {
     return (
-      <View style={[ui.tela, { alignItems: "center", justifyContent: "center", padding: 24 }]} testID="custos-permissao">
-        <ActivityIndicator color={Colors.violet3} />
+      <View style={ui.tela} testID="custos-permissao">
+        {nav}
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <ActivityIndicator color={Colors.violet3} />
+        </View>
       </View>
     );
   }
@@ -332,9 +349,6 @@ export function PreencherCustosScreen({ countId, lojaDaRota }: Props) {
 
   var cabecalho = (
     <View>
-      <Pressable onPress={voltar} style={ui.voltar} accessibilityRole="link" testID="custos-voltar">
-        <Text style={ui.voltarTxt}>{rotuloVoltar}</Text>
-      </Pressable>
       <Text style={ui.titulo}>Preencher custos</Text>
       {contagens && !semNada ? (
         <Text style={[ui.sub, { lineHeight: 19 }]} testID="custos-sub">
@@ -347,10 +361,13 @@ export function PreencherCustosScreen({ countId, lojaDaRota }: Props) {
 
   if (!companyId) {
     return (
-      <ScrollView style={ui.tela} contentContainerStyle={ui.conteudo} testID="custos-tela">
-        {cabecalho}
-        <Aviso tipo="info" testID="custos-sem-loja">Você está vendo todas as lojas juntas. Escolha uma loja para preencher os custos dela.</Aviso>
-      </ScrollView>
+      <View style={ui.tela} testID="custos-tela">
+        {nav}
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={ui.conteudo}>
+          {cabecalho}
+          <Aviso tipo="info" testID="custos-sem-loja">Você está vendo todas as lojas juntas. Escolha uma loja para preencher os custos dela.</Aviso>
+        </ScrollView>
+      </View>
     );
   }
 
@@ -396,21 +413,24 @@ export function PreencherCustosScreen({ countId, lojaDaRota }: Props) {
   // G1: nada sem custo na loja.
   if (!carregando && !erroLista && semNada) {
     return (
-      <ScrollView style={ui.tela} contentContainerStyle={ui.conteudo} testID="custos-tela">
-        {cabecalho}
-        {avisoResultado}
-        <Cartao testID="custos-vazio" style={{ alignItems: "center", paddingVertical: 28, gap: 6 }}>
-          <View style={s.okCirculo}><Text style={{ color: Colors.green, fontSize: 22, fontWeight: "800" }}>✓</Text></View>
-          <Text style={[ui.h3, { textAlign: "center" }]}>Tudo com custo por aqui</Text>
-          <Text style={[ui.nota, { textAlign: "center" }]}>
-            {(contagens && contagens.produtos
-              ? (contagens.produtos === 1 ? "O produto da " + nomeDaLoja + " tem" : "Os " + plural(contagens.produtos, "produto", "produtos") + " da " + nomeDaLoja + " têm")
-              : "Os produtos da " + nomeDaLoja + " têm")
-              + " custo cadastrado. A conta do que falta e do que sobra sai completa."}
-          </Text>
-        </Cartao>
-        <UltimosPreenchimentos companyId={companyId} versao={versaoHist} onCustosMudaram={function () { carregar(0); }} />
-      </ScrollView>
+      <View style={ui.tela} testID="custos-tela">
+        {nav}
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={ui.conteudo}>
+          {cabecalho}
+          {avisoResultado}
+          <Cartao testID="custos-vazio" style={{ alignItems: "center", paddingVertical: 28, gap: 6 }}>
+            <View style={s.okCirculo}><Text style={{ color: Colors.green, fontSize: 22, fontWeight: "800" }}>✓</Text></View>
+            <Text style={[ui.h3, { textAlign: "center" }]}>Tudo com custo por aqui</Text>
+            <Text style={[ui.nota, { textAlign: "center" }]}>
+              {(contagens && contagens.produtos
+                ? (contagens.produtos === 1 ? "O produto da " + nomeDaLoja + " tem" : "Os " + plural(contagens.produtos, "produto", "produtos") + " da " + nomeDaLoja + " têm")
+                : "Os produtos da " + nomeDaLoja + " têm")
+                + " custo cadastrado. A conta do que falta e do que sobra sai completa."}
+            </Text>
+          </Cartao>
+          <UltimosPreenchimentos companyId={companyId} versao={versaoHist} onCustosMudaram={function () { carregar(0); }} />
+        </ScrollView>
+      </View>
     );
   }
 
@@ -424,6 +444,7 @@ export function PreencherCustosScreen({ countId, lojaDaRota }: Props) {
 
   return (
     <View style={{ flex: 1 }} testID="custos-tela">
+      {nav}
       <ScrollView style={ui.tela} contentContainerStyle={[ui.conteudo, { paddingBottom: 120 }]} keyboardShouldPersistTaps="handled">
         {cabecalho}
         {avisoResultado}
@@ -592,6 +613,8 @@ export function PreencherCustosScreen({ countId, lojaDaRota }: Props) {
 }
 
 var s = StyleSheet.create({
+  // Mesma largura e respiro do conteúdo (ui.conteudo), fora da rolagem.
+  navFixa: { width: "100%", maxWidth: 760, alignSelf: "center", paddingHorizontal: 16, paddingTop: 12 },
   barraFiltros: { flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" },
   filtro: {
     minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: "center",

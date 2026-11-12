@@ -26,6 +26,7 @@ import { eContavel, plural, textoDoEscopo } from "@/utils/conferenciaContagem";
 import { useConferenciaContexto } from "@/hooks/useConferenciaResultado";
 import { custoEmMassaApi } from "@/services/custoEmMassaApi";
 import { ce } from "./estilos";
+import { NavDaConferencia } from "./NavDaConferencia";
 
 export const ROTA_CONFERENCIA = "/conferencia-estoque";
 export function rotaDaContagem(id: string): string { return ROTA_CONFERENCIA + "/" + encodeURIComponent(id); }
@@ -155,6 +156,7 @@ export function ComecarConferencia() {
 
   return (
     <ScrollView style={ce.tela} contentContainerStyle={ce.conteudo}>
+      <NavDaConferencia testIDEstoque="comecar-ir-estoque" />
       <Text style={ce.titulo}>Conferir estoque</Text>
       <Text style={ce.sub}>Conte o que está na prateleira. A Aura compara com o sistema e você decide o que ajustar.</Text>
 

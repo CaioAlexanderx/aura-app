@@ -37,6 +37,7 @@ jest.mock("expo-font", () => ({ useFonts: () => [true, null], loadAsync: jest.fn
 jest.mock("expo-secure-store", () => ({ getItemAsync: jest.fn(), setItemAsync: jest.fn(), deleteItemAsync: jest.fn() }));
 jest.mock("@expo-google-fonts/dm-sans", () => ({}), { virtual: true });
 jest.mock("@/components/karate/FpktLogo", () => ({ FpktLogo: () => null, default: () => null }));
+jest.mock("@/components/Icon", () => ({ Icon: () => null }));
 jest.mock("@/constants/colors", () => ({ Colors: new Proxy({}, { get: (_t, k) => String(k) }), IS_DARK_MODE: false }));
 const mockPush = jest.fn();
 // useFocusEffect: o primeiro foco é a abertura; mockFoco() simula voltar
@@ -405,4 +406,14 @@ describe("preencher custos (12/11)", () => {
     expect(textoDe(tree, "dif-valor-sobram")).toBe("Sobra a custo: R$ 68,00");
     expect(textoDe(tree, "dif-sem-custo")).toBe("Todos os itens têm custo cadastrado.");
   });
+});
+
+// Relato do Caio (12/11): topo único da conferência.
+it("topo: Voltar às conferências e Ir para o Estoque", async () => {
+  const tree = await montar();
+  expect(textoDe(tree, "dif-voltar-lista")).toBe("Voltar às conferências");
+  await tocar(tree, "dif-voltar-lista");
+  expect(mockPush).toHaveBeenCalledWith(expect.stringMatching(/^\/conferencia-estoque(\?loja=.+)?$/));
+  await tocar(tree, "dif-ir-estoque");
+  expect(mockPush).toHaveBeenLastCalledWith("/estoque");
 });

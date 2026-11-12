@@ -54,6 +54,7 @@ import {
 } from "@/utils/conferenciaResultado";
 import { plural as pluralQtd, textoDosNumeros } from "@/utils/transferenciaEstoque";
 import { Aviso, Botao, Cartao, Marcar, Selo, ui } from "./ui";
+import { NavDaConferencia } from "../NavDaConferencia";
 
 type Props = { countId: string; lojaDaRota?: string | null };
 
@@ -266,10 +267,11 @@ export function DiferencasScreen({ countId, lojaDaRota }: Props) {
 
   var cabecalho = (
     <View>
-      <Pressable onPress={function () { irPara("/conferencia-estoque" + sufixoLoja(lojaDaRota)); }} style={ui.voltar}
-        accessibilityRole="link" testID="dif-voltar-lista">
-        <Text style={ui.voltarTxt}>‹ Conferências</Text>
-      </Pressable>
+      <NavDaConferencia
+        voltar={{ rotulo: "Voltar às conferências", destino: "/conferencia-estoque" + sufixoLoja(lojaDaRota), testID: "dif-voltar-lista" }}
+        testIDEstoque="dif-ir-estoque"
+        style={{ marginBottom: 8 }}
+      />
       <View style={[ui.linhaFlex, { justifyContent: "space-between" }]}>
         <Text style={ui.titulo}>Diferenças</Text>
         {status === "aplicada" ? <Selo tipo="verde" testID="dif-status">Ajustada</Selo>
