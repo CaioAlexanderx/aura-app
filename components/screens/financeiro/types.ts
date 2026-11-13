@@ -82,12 +82,17 @@ export var PERIODS: { key: PeriodKey; label: string }[] = [
 // pras rotas novas. Ficam FORA da faixa de TABS de proposito: qualquer
 // `activeTab` com esses valores nao casa com nenhuma aba renderizada, entao um
 // redirect que falhe aparece como tela vazia em vez de aba errada silenciosa.
-export var TABS = ["Visão Geral", "Receitas", "Despesas", "Lançamentos"];
+//
+// 13/11/2026 (p-115a): quinta aba "Relatórios" (?tab=relatorios). Tem chave
+// de módulo própria ("financeiro.relatorios") e some para quem não a tem,
+// para "estoque só consulta" e na demonstração (app/(tabs)/financeiro.tsx).
+export var TABS = ["Visão Geral", "Receitas", "Despesas", "Lançamentos", "Relatórios"];
 export var TAB_INDEX = {
   visao: 0,
   receitas: 1,
   despesas: 2,
   lancamentos: 3,
+  relatorios: 4,
   // fora da faixa de TABS — so servem de alias pros deep-links antigos
   retirada: 90,
   cupons: 91,

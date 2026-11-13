@@ -35,6 +35,10 @@ import { pluralize } from "@/utils/plural";
 import { ResultadoImportacaoModal } from "@/components/screens/financeiro/ResultadoImportacaoModal";
 import { textoDaImportacao, TEXTO_ARQUIVO_VAZIO, COLUNAS_DO_MODELO, LINHAS_DO_MODELO, type TextoDaImportacao } from "@/utils/importacaoLancamentos";
 import { MSG_SESSAO_TERMINOU, MSG_ERRO_SEM_EXPLICACAO } from "@/utils/mensagensDoApp";
+import { TabRelatorios } from "@/components/screens/financeiro/relatorios/TabRelatorios";
+import { MOD_RELATORIOS } from "@/utils/relatorioProdutos";
+import { useVisibleModules, useVisibleModulesProntos } from "@/hooks/useVisibleModules";
+import { useEstoqueConsulta } from "@/hooks/useEstoqueConsulta";
 
 // 01/09/2026 (QA onda 2 — cabeçalho unificado): a tela abria com o kicker
 // pequeno "FINANCEIRO ·" da Topbar. Agora abre com o mesmo ScreenHero das
@@ -59,6 +63,7 @@ var TAB_KEY_TO_INDEX: Record<string, number> = {
   receitas: TAB_INDEX.receitas,
   despesas: TAB_INDEX.despesas,
   lancamentos: TAB_INDEX.lancamentos,
+  relatorios: TAB_INDEX.relatorios,
   // F6: nao sao mais abas, mas seguem aceitos como alias — o efeito de
   // redirect abaixo manda pras rotas novas antes de qualquer render.
   retirada: TAB_INDEX.retirada,
@@ -71,6 +76,7 @@ var TAB_INDEX_TO_KEY: Record<number, string> = {
   [TAB_INDEX.receitas]: "receitas",
   [TAB_INDEX.despesas]: "despesas",
   [TAB_INDEX.lancamentos]: "lancamentos",
+  [TAB_INDEX.relatorios]: "relatorios",
 };
 
 // FIX 24/08/2026 (feedback do Caio no app rodando): "os campos estao muito
@@ -248,6 +254,26 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
   // 08/11/2026 (p-82): Faturamento, Custos, Lucro bruto e Despesas da aba
   // Receitas. null = backend antigo ou sem custo visível: a aba fica como era.
   var resultado = useResultadoDoPeriodo(period, customStart, customEnd);
+  // 13/11/2026 (p-115a): aba Relatórios. Chave própria; some para quem não
+  // tem o módulo, para "estoque só consulta" (o backend nega) e na
+  // demonstração (o relatório lê a loja de verdade). Enquanto o módulo e a
+  // permissão não chegaram, a aba aberta por link espera em vez de decidir.
+  var visiveis = useVisibleModules();
+  var modulosProntos = useVisibleModulesProntos();
+  var { consulta: soConsulta } = useEstoqueConsulta();
+  var abaRelatorios = !isDemo && !soConsulta && visiveis.has(MOD_RELATORIOS);
+  var naAbaRelatorios = activeTab === TAB_INDEX.relatorios;
+  useEffect(function() {
+    if (naAbaRelatorios && modulosProntos && !abaRelatorios) setActiveTab(TAB_INDEX.visao);
+  }, [naAbaRelatorios, modulosProntos, abaRelatorios]);
+  // "Cadastrar custos": a conferência de custo em massa, se a pessoa a vê; senão o Estoque.
+  // No Studio a rota de (tabs) tiraria a pessoa do shell: sem link.
+  var hrefCustos = embedded ? null
+    : visiveis.has("conferencia_estoque") ? "/conferencia-estoque/custos"
+    : visiveis.has("estoque") ? "/(tabs)/estoque"
+    : null;
+  var abasVisiveis = TABS.filter(function(t, i) { return i !== TAB_INDEX.relatorios || abaRelatorios; });
+
   var [filtroLancamentos, setFiltroLancamentos] = useState<{ categoria: string; subcategoria?: string | null; tipo: "income" | "expense"; n: number } | null>(null);
   // O filtro vale só para a ida pelo atalho: saiu de Lançamentos, some.
   useEffect(function() {
@@ -513,7 +539,9 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
         {/* `embedded` na Topbar esconde só o kicker "FINANCEIRO ·". Agora ele
             some nos dois casos: fora do Studio porque o ScreenHero acima já é
             o título; dentro do Studio porque o wrapper de lá já tem o dele. */}
-        <FinanceiroTopbar
+        {/* Relatórios tem o próprio período (Hoje a Personalizado) no topo da
+            aba; a Topbar (período, Exportar, Novo lançamento) é dos lançamentos. */}
+        {!naAbaRelatorios && <FinanceiroTopbar
           companyName={company?.name || ""}
           consolidated={!!consolidatedView}
           companyCount={companyCount || 0}
@@ -522,9 +550,9 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
           onExport={function() { setShowExport(true); }}
           onNew={consolidatedView ? undefined : handleNewTransaction}
           embedded
-        />
+        />}
 
-        {consolidatedView && (
+        {consolidatedView && !naAbaRelatorios && (
           <View style={s.consolidatedBanner}>
             <Icon name="globe" size={14} color="#a78bfa" />
             <View style={{ flex: 1 }}>
@@ -540,7 +568,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
 
         {!consolidatedView && <AgentBanner context="financeiro" />}
 
-        {period === "custom" && (
+        {period === "custom" && !naAbaRelatorios && (
           <View>
             <View style={[s.customRow, IS_NARROW ? { flexDirection: "column", alignItems: "stretch" } : null]}>
               <View style={s.customField}>
@@ -564,7 +592,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
           </View>
         )}
 
-        {showMonthBanner && (
+        {showMonthBanner && !naAbaRelatorios && (
           <MonthExpensesBanner
             count={currentMonthExpenses.count}
             total={currentMonthExpenses.total}
@@ -579,7 +607,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
         {/* Tabs — 01/09/2026: pílula compartilhada (ScreenTabs), igual ao
             resto do app. Eram uma quarta reimplementação do mesmo desenho. */}
         <ScreenTabs
-          tabs={TABS.map(function(t: string) { return { key: t, label: t }; })}
+          tabs={abasVisiveis.map(function(t: string) { return { key: t, label: t }; })}
           active={TABS[activeTab]}
           onSelect={function(k: string) { handleTabSelect(TABS.indexOf(k)); }}
         />
@@ -609,7 +637,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
             renderizavam no primeiro load (heroes zerados sob o skeleton).
             FIX (QA pos-F7): o guard valia so pra Visao Geral; nas outras tres
             abas o skeleton seguia empilhado por cima dos KPIs zerados. */}
-        {isLoading && <ListSkeleton rows={4} showCards />}
+        {isLoading && !naAbaRelatorios && <ListSkeleton rows={4} showCards />}
 
         {/* FIX A3 (QA pos-F7): o estado de erro tinha sido ligado so na Visao
             Geral. Nas outras abas a falha de rede continuava virando lista
@@ -617,7 +645,7 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
             pra quem tem anos de historico, o bug exato que o F0 declarou
             corrigido. Como o erro e da MESMA query pras quatro abas, o lugar
             certo do estado e aqui, uma vez so. */}
-        {isError && !isLoading && !isDemo && (
+        {isError && !isLoading && !isDemo && !naAbaRelatorios && (
           <EmptyState
             icon="alert"
             iconColor={Colors.amber}
@@ -709,6 +737,9 @@ export default function FinanceiroScreen({ embedded }: { embedded?: boolean } = 
           />
           </ListaOuQuadro>
         )}
+
+        {/* 13/11/2026 (p-115a): não depende da query dos lançamentos. */}
+        {naAbaRelatorios && abaRelatorios && <TabRelatorios hrefCustos={hrefCustos} />}
 
         <ResultadoImportacaoModal
           visible={!!resultadoImport}

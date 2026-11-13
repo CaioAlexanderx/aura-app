@@ -7,8 +7,8 @@
 import { TABS, TAB_INDEX, getPeriodRange, getPreviousPeriodRange, parseDateLocal } from "@/components/screens/financeiro/types";
 
 describe("TABS / TAB_INDEX apos o F6", () => {
-  it("expõe exatamente as 4 abas do redesign", () => {
-    expect(TABS).toEqual(["Visão Geral", "Receitas", "Despesas", "Lançamentos"]);
+  it("expõe exatamente as 5 abas (Relatórios entrou no p-115a)", () => {
+    expect(TABS).toEqual(["Visão Geral", "Receitas", "Despesas", "Lançamentos", "Relatórios"]);
   });
 
   it("os índices das abas visíveis apontam pra posição certa de TABS", () => {
@@ -16,6 +16,7 @@ describe("TABS / TAB_INDEX apos o F6", () => {
     expect(TABS[TAB_INDEX.receitas]).toBe("Receitas");
     expect(TABS[TAB_INDEX.despesas]).toBe("Despesas");
     expect(TABS[TAB_INDEX.lancamentos]).toBe("Lançamentos");
+    expect(TABS[TAB_INDEX.relatorios]).toBe("Relatórios");
   });
 
   it("mantém retirada e cupons como alias FORA da faixa de abas", () => {
@@ -29,7 +30,7 @@ describe("TABS / TAB_INDEX apos o F6", () => {
   });
 
   it("não repete índice entre abas visíveis", () => {
-    var visiveis = [TAB_INDEX.visao, TAB_INDEX.receitas, TAB_INDEX.despesas, TAB_INDEX.lancamentos];
+    var visiveis = [TAB_INDEX.visao, TAB_INDEX.receitas, TAB_INDEX.despesas, TAB_INDEX.lancamentos, TAB_INDEX.relatorios];
     expect(new Set(visiveis).size).toBe(visiveis.length);
   });
 
