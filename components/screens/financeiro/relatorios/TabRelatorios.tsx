@@ -12,7 +12,8 @@
 //   da resposta, a regra podeVerCusto do app e o 403 RELATORIO_SEM_CUSTO).
 // - p-115b: o painel "Ajustar o relatório" (AjustarRelatorio.tsx: filtros,
 //   colunas, ordem, agrupar) e o último modelo lembrado por usuário/empresa.
-// - Fica para o p-116: Baixar PDF / Baixar planilha (lugar marcado abaixo).
+// - p-116: Baixar PDF / Baixar planilha (BaixarRelatorio.tsx), com todas
+//   as linhas do filtro (todas=1).
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView, TextInput, StyleSheet, useWindowDimensions } from "react-native";
@@ -26,6 +27,9 @@ import { ListSkeleton } from "@/components/ListSkeleton";
 import { ResultadoDoRelatorio } from "./ResultadoDoRelatorio";
 import { AjustarRelatorio, type CategoriaDoPainel } from "./AjustarRelatorio";
 import { useCategories } from "@/hooks/useCategories";
+import { useCompanyProfile } from "@/hooks/useCompanyProfile";
+import { BaixarRelatorio } from "./BaixarRelatorio";
+import { formatarCnpj, TETO_DO_ARQUIVO, type Empresa } from "@/utils/relatorioArquivo";
 import {
   MODELOS, PERIODOS, MODELO_INICIAL, modelosVisiveis, colunasVisiveis, ordemEfetiva, faixaDoPeriodo,
   fraseResposta, kpisDoModelo, avisoDeCobertura, hojeSP, textoDaFrase, chaveDoModeloLembrado,
@@ -124,6 +128,24 @@ export function TabRelatorios({ hrefCustos }: Props) {
       };
     });
   }, [categoriasFlat]);
+
+  // p-116: quem emite e de quem é o documento. No consolidado, o grupo.
+  var { profile } = useCompanyProfile();
+  var nomeDoUsuario = useAuthStore(function(a: any) { return (a.user && (a.user.name || a.user.email)) || ""; });
+  var nomeDaEmpresa = useAuthStore(function(a: any) { return (a.company && a.company.name) || ""; });
+  var companyCount = useAuthStore(function(a: any) { return a.companyCount || 0; });
+  var pf: any = profile || {};
+  var empresa: Empresa = consolidado
+    ? { razaoSocial: pf.trade_name || pf.legal_name || nomeDaEmpresa, cnpj: "", loja: "Todas as lojas" + (companyCount > 1 ? " (" + companyCount + ")" : ""), logoUrl: pf.logo_url || null }
+    : {
+      razaoSocial: pf.legal_name || pf.trade_name || nomeDaEmpresa,
+      cnpj: formatarCnpj(pf.cnpj),
+      loja: pf.trade_name && pf.trade_name !== pf.legal_name ? pf.trade_name : "",
+      logoUrl: pf.logo_url || null,
+    };
+  var nomeDaCategoria = estado.filtros.categoria
+    ? ((categorias.find(function(c) { return c.id === estado.filtros.categoria || c.nome === estado.filtros.categoria; }) || { caminho: estado.filtros.categoria } as any).caminho)
+    : null;
 
   var aviso = r.resposta ? avisoDeCobertura(cols, r.resposta.cobertura_custo, r.resposta.total_linhas, podeVerCusto) : null;
 
@@ -288,8 +310,26 @@ export function TabRelatorios({ hrefCustos }: Props) {
             />
           )}
 
-          {/* p-116: "Baixar PDF" e "Baixar planilha (.xlsx)" entram aqui,
-              abaixo da tabela. Sem botão falso até lá. */}
+          {r.resposta.total_linhas > 0 && (
+            <>
+              {r.resposta.total_linhas > TETO_DO_ARQUIVO && (
+                <Text style={s.dicaData} testID="relatorio-arquivo-teto">
+                  O arquivo leva as primeiras {TETO_DO_ARQUIVO.toLocaleString("pt-BR")} linhas de {r.resposta.total_linhas.toLocaleString("pt-BR")}.
+                </Text>
+              )}
+              <BaixarRelatorio
+                companyId={companyId}
+                estado={estado}
+                faixa={faixa}
+                podeVerCusto={podeVerCusto && r.resposta.pode_ver_custo !== false}
+                consolidado={consolidado}
+                empresa={empresa}
+                emitidoPor={nomeDoUsuario}
+                nomeDaCategoria={nomeDaCategoria}
+                hoje={r.resposta.periodo ? r.resposta.periodo.hoje : hoje}
+              />
+            </>
+          )}
         </>
       )}
     </View>
