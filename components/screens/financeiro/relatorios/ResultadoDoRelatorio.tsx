@@ -10,7 +10,7 @@
 import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
 import { Colors } from "@/constants/colors";
 import {
-  COLUNAS, celula, colunasDoCartao,
+  COLUNAS, celula, colunasDoCartao, textoDasVariantes,
   type ColunaId, type LinhaRelatorio, type OrdemApi, type Direcao, type Tom, type Agrupar,
 } from "@/utils/relatorioProdutos";
 
@@ -34,7 +34,8 @@ function corDoTom(t: Tom): string {
 function detalheDoNome(l: LinhaRelatorio, mostrarCodigo: boolean, agrupar: Agrupar): string {
   var partes: string[] = [];
   if (mostrarCodigo && (l.sku || l.codigo_barras)) partes.push(String(l.sku || l.codigo_barras));
-  if (agrupar === "produto" && (l.variantes || 0) > 1) partes.push(l.variantes + " variações");
+  var tamanhos = textoDasVariantes(l, agrupar);
+  if (tamanhos) partes.push(tamanhos);
   if (!l.ativo) partes.push("inativo");
   return partes.join(" · ");
 }

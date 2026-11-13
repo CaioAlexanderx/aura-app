@@ -453,9 +453,16 @@ export function celula(linha: LinhaRelatorio, coluna: ColunaId, hoje: string): C
     case "media_diaria": return linha.media_diaria === null ? c("sem giro", "apagado") : c(qtd(linha.media_diaria) + "/dia");
     case "dias_ate_acabar": {
       var d = linha.dias_ate_acabar;
+      var tomDe = function(n: number): Tom { return n <= 7 ? "vermelho" : n <= 15 ? "ambar" : "normal"; };
+      // Agrupado por produto: diz QUAL variante acaba primeiro ("M em 6 dias").
+      var pa = linha.primeiro_a_acabar;
+      if (pa && pa.rotulo && typeof pa.dias === "number") {
+        if (pa.dias <= 0) return c(pa.rotulo + " acabou", "vermelho");
+        return c(pa.rotulo + " em " + pa.dias + (pa.dias === 1 ? " dia" : " dias"), tomDe(pa.dias));
+      }
       if (linha.estoque <= 0) return c("acabou", "vermelho");
       if (d === null) return c("sem giro", "apagado");
-      return c(d + " d", d <= 7 ? "vermelho" : d <= 15 ? "ambar" : "normal");
+      return c(d + " d", tomDe(d));
     }
     case "comprar": { var s = sugestaoDeCompra(linha); return s > 0 ? c(qtd(s) + " un") : c("—", "apagado"); }
     case "valor_parado": return linha.valor_parado === null ? semCusto : c(brl(linha.valor_parado));
@@ -608,4 +615,150 @@ export function avisoDeCobertura(cols: ColunaId[], cobertura: CoberturaCusto | n
   var de = cobertura.sem_custo + " de " + total.toLocaleString("pt-BR");
   return de + (total === 1 ? " produto não tem" : cobertura.sem_custo === 1 ? " produtos não tem" : " produtos não têm")
     + " custo cadastrado e " + (cobertura.sem_custo === 1 ? "fica" : "ficam") + " fora das contas de custo, lucro e valor parado.";
+}
+
+// ── p-115b: painel "Ajustar o relatório" ───────────────────────────────
+// O painel só despacha as ações do reducer (`filtro`, `alternarColuna`,
+// `ordenar`, `agrupar`); qualquer ajuste passa o chip para Personalizado.
+// Cada escolha de um seletor vira a lista de `filtro` que ela pede.
+
+export var NUMERO_MIN = 1;
+export var NUMERO_MAX = 365;
+
+/** Os números do painel (N dias, N unidades) aceitam de 1 a 365. */
+export function limitarNumero(v: unknown, padrao: number): number {
+  var n = typeof v === "number" ? v : parseInt(String(v == null ? "" : v).replace(/\D/g, ""), 10);
+  if (!Number.isFinite(n)) return padrao;
+  return Math.min(NUMERO_MAX, Math.max(NUMERO_MIN, Math.round(n)));
+}
+
+export type ModoEstoque = "todos" | "acabando" | "zerado" | "abaixo";
+export type ModoVendas = "qualquer" | "vendeu" | "parado";
+export type ModoCusto = "todos" | "com" | "sem";
+
+// "Abaixo de N unidades" = estoque < N. O backend tem estoque_max inclusivo
+// (estoque <= max) e o estoque vem com 3 casas: N - 0,001 é exatamente < N.
+var EPS_ESTOQUE = 0.001;
+export function estoqueMaxDeAbaixo(n: number): number { return Math.round((n - EPS_ESTOQUE) * 1000) / 1000; }
+export function abaixoDeEstoqueMax(max: number): number { return Math.round(max + EPS_ESTOQUE); }
+
+export function modoEstoque(fl: FiltrosRelatorio): ModoEstoque {
+  if (fl.acaba_em_dias !== null) return "acabando";
+  if (fl.com_estoque === false) return "zerado";
+  if (fl.estoque_max !== null) return "abaixo";
+  return "todos";
+}
+export function modoVendas(fl: FiltrosRelatorio): ModoVendas {
+  if (fl.sem_vender_dias !== null) return "parado";
+  if (fl.vendeu === true) return "vendeu";
+  return "qualquer";
+}
+export function modoCusto(fl: FiltrosRelatorio): ModoCusto {
+  return fl.sem_custo === true ? "sem" : fl.sem_custo === false ? "com" : "todos";
+}
+
+export var ACABA_EM_PADRAO = 15;
+export var ABAIXO_DE_PADRAO = 5;
+export var PARADO_PADRAO = 30;
+
+export type AcaoFiltro = Extract<AcaoRelatorio, { type: "filtro" }>;
+function af(campo: keyof FiltrosRelatorio, valor: any): AcaoFiltro { return { type: "filtro", campo: campo, valor: valor }; }
+
+/** Ações para o Estoque ir para `modo` (com o número N, quando houver). */
+export function acoesDoEstoque(atual: FiltrosRelatorio, modo: ModoEstoque, n?: unknown): AcaoFiltro[] {
+  // "Sem vender há N dias" pede com estoque: no "Todos" e no "Abaixo", isso fica.
+  var comEstoqueDoParado = modoVendas(atual) === "parado" ? true : null;
+  switch (modo) {
+    case "todos": return [af("acaba_em_dias", null), af("estoque_max", null), af("estoque_min", null), af("com_estoque", comEstoqueDoParado)];
+    case "acabando": return [af("estoque_max", null), af("estoque_min", null), af("com_estoque", true), af("acaba_em_dias", limitarNumero(n, ACABA_EM_PADRAO))];
+    case "zerado": return [af("acaba_em_dias", null), af("estoque_max", null), af("estoque_min", null), af("com_estoque", false)];
+    case "abaixo": return [af("acaba_em_dias", null), af("estoque_min", null), af("com_estoque", comEstoqueDoParado), af("estoque_max", estoqueMaxDeAbaixo(limitarNumero(n, ABAIXO_DE_PADRAO)))];
+  }
+  return [];
+}
+
+export function acoesDasVendas(atual: FiltrosRelatorio, modo: ModoVendas, n?: unknown): AcaoFiltro[] {
+  var me = modoEstoque(atual);
+  // Saindo do "parado", o "com estoque" que ele pôs sai junto (se o Estoque não pede).
+  var comEstoque = me === "acabando" ? true : me === "zerado" ? false : null;
+  switch (modo) {
+    case "qualquer": return [af("vendeu", null), af("sem_vender_dias", null), af("com_estoque", comEstoque)];
+    case "vendeu": return [af("sem_vender_dias", null), af("com_estoque", comEstoque), af("vendeu", true)];
+    case "parado": return [af("vendeu", null), af("com_estoque", me === "zerado" ? false : true), af("sem_vender_dias", limitarNumero(n, PARADO_PADRAO))];
+  }
+  return [];
+}
+
+export function acoesDoCusto(modo: ModoCusto): AcaoFiltro[] {
+  // Margem só existe com custo: "Todos" e "Sem custo" tiram o teto de margem.
+  switch (modo) {
+    case "todos": return [af("margem_max", null), af("sem_custo", null)];
+    case "com": return [af("sem_custo", false)];
+    case "sem": return [af("margem_max", null), af("sem_custo", true)];
+  }
+  return [];
+}
+
+/** Colunas que o painel oferece (Loja entra sozinha no consolidado). */
+export function colunasDoPainel(podeVerCusto: boolean): ColunaId[] {
+  return (Object.keys(COLUNAS) as ColunaId[]).filter(function(c) { return c !== "loja" && (podeVerCusto || !COLUNAS[c].custo); });
+}
+
+/** Não deixa desmarcar a última coluna que aparece na tabela. */
+export function podeDesmarcar(coluna: ColunaId, visiveis: ColunaId[]): boolean {
+  var semLoja = visiveis.filter(function(c) { return c !== "loja"; });
+  return !(semLoja.length <= 1 && semLoja[0] === coluna);
+}
+
+/** "Ordenar por": Produto e as colunas visíveis que a API sabe ordenar. */
+export function ordensDoPainel(visiveis: ColunaId[]): { ordem: OrdemApi; rotulo: string }[] {
+  var out: { ordem: OrdemApi; rotulo: string }[] = [{ ordem: "nome", rotulo: "Produto" }];
+  visiveis.forEach(function(c) {
+    var o = COLUNAS[c].ordem;
+    if (o && !out.some(function(x) { return x.ordem === o; })) out.push({ ordem: o, rotulo: COLUNAS[c].rotulo });
+  });
+  return out;
+}
+
+/** "N tamanhos" quando agrupado por produto. */
+export function textoDasVariantes(linha: Pick<LinhaRelatorio, "variantes">, agrupar: Agrupar): string | null {
+  var n = linha.variantes || 0;
+  return agrupar === "produto" && n > 1 ? n + " tamanhos" : null;
+}
+
+// ── p-115b: o último modelo, por usuário e por empresa ─────────────────
+// Mesmo padrão do seletor do Comparativo (ComparativeSection): localStorage
+// com try/catch em toda leitura e escrita, chave com o id do usuário. Guarda
+// só o MODELO, nunca os filtros do Personalizado: só a escolha de um chip
+// grava, então quem saiu em Personalizado volta ao modelo de onde partiu.
+var PREFIXO_MODELO = "aura.financeiro.relatorios.modelo.";
+
+export function chaveDoModeloLembrado(userId: string | null | undefined, empresa: string | null | undefined): string | null {
+  if (!userId || !empresa) return null;
+  return PREFIXO_MODELO + userId + "." + empresa;
+}
+
+export type Armazem = { getItem: (k: string) => string | null; setItem: (k: string, v: string) => void };
+function armazemPadrao(): Armazem | null {
+  try { return typeof window !== "undefined" && window.localStorage ? window.localStorage : null; } catch (_) { return null; }
+}
+
+export function lerModeloLembrado(chave: string | null, armazem: Armazem | null = armazemPadrao()): ModeloId | null {
+  if (!chave || !armazem) return null;
+  try {
+    var v = armazem.getItem(chave);
+    return v && Object.prototype.hasOwnProperty.call(MODELOS, v) ? (v as ModeloId) : null;
+  } catch (_) { return null; }
+}
+
+export function guardarModeloLembrado(chave: string | null, modelo: ModeloId, armazem: Armazem | null = armazemPadrao()): void {
+  if (!chave || !armazem) return;
+  try { armazem.setItem(chave, modelo); } catch (_) { /* storage cheio ou bloqueado: segue sem lembrar */ }
+}
+
+/** Modelo de abertura: o lembrado, se a pessoa pode vê-lo; senão Mais vendidos. */
+export function modeloDeAbertura(lembrado: ModeloId | null, podeVerCusto: boolean): ModeloId {
+  if (!lembrado) return MODELO_INICIAL;
+  if (MODELOS[lembrado].custo && !podeVerCusto) return MODELO_INICIAL;
+  return lembrado;
 }

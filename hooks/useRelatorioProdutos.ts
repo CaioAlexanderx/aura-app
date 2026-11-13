@@ -11,21 +11,34 @@
 // Loja ou consolidado: no "Todas as lojas" (consolidatedView) vai
 // escopo=grupo, e o backend soma as lojas do grupo que a pessoa alcança.
 // ============================================================
-import { useMemo, useReducer, useState } from "react";
+import { useCallback, useMemo, useReducer, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { request, ApiError } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import {
-  estadoInicial, estadoReducer, parametrosDaQuery, queryString, limiteDaPagina,
-  PERIODO_INICIAL, type EstadoRelatorio, type PeriodoRelatorio, type RespostaRelatorio,
+  estadoInicial, estadoReducer, estadoDoModelo, parametrosDaQuery, queryString, limiteDaPagina,
+  lerModeloLembrado, guardarModeloLembrado,
+  PERIODO_INICIAL, type EstadoRelatorio, type ModeloId, type PeriodoRelatorio, type RespostaRelatorio,
 } from "@/utils/relatorioProdutos";
 
-export function useEstadoDoRelatorio() {
-  var [estado, despachar] = useReducer(estadoReducer, undefined, estadoInicial);
+// p-115b: abre no último modelo escolhido por esta pessoa nesta empresa (ou
+// no consolidado), lido uma vez na montagem. Só `escolherModelo` grava: o
+// Personalizado nunca é lembrado, e quem saiu nele volta ao modelo de onde
+// partiu. Modelo de custo para quem não vê custo cai em Mais vendidos (a
+// tela confere quando a permissão chega).
+export function useEstadoDoRelatorio(chaveLembrada?: string | null) {
+  var [estado, despachar] = useReducer(estadoReducer, chaveLembrada, function(chave: string | null | undefined) {
+    var lembrado = lerModeloLembrado(chave || null);
+    return lembrado ? estadoDoModelo(lembrado) : estadoInicial();
+  });
   var [periodo, setPeriodo] = useState<PeriodoRelatorio>(PERIODO_INICIAL);
   var [deBR, setDeBR] = useState("");
   var [ateBR, setAteBR] = useState("");
-  return { estado, despachar, periodo, setPeriodo, deBR, setDeBR, ateBR, setAteBR };
+  var escolherModelo = useCallback(function(m: ModeloId) {
+    despachar({ type: "modelo", modelo: m });
+    guardarModeloLembrado(chaveLembrada || null, m);
+  }, [chaveLembrada]);
+  return { estado, despachar, escolherModelo, periodo, setPeriodo, deBR, setDeBR, ateBR, setAteBR };
 }
 
 export type ErroDoRelatorio = {

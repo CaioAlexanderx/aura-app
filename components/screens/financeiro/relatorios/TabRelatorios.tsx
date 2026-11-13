@@ -10,8 +10,8 @@
 //   coluna Loja entra e o compartilhado aparece uma vez.
 // - Quem não vê custo: some os modelos e as colunas de custo (pode_ver_custo
 //   da resposta, a regra podeVerCusto do app e o 403 RELATORIO_SEM_CUSTO).
-// - Fica para o p-115b: o painel "Ajustar o relatório" (filtros, colunas,
-//   ordem, agrupar) — o estado já mora em useEstadoDoRelatorio.
+// - p-115b: o painel "Ajustar o relatório" (AjustarRelatorio.tsx: filtros,
+//   colunas, ordem, agrupar) e o último modelo lembrado por usuário/empresa.
 // - Fica para o p-116: Baixar PDF / Baixar planilha (lugar marcado abaixo).
 // ============================================================
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -24,9 +24,11 @@ import { useEstadoDoRelatorio, useRelatorioProdutos } from "@/hooks/useRelatorio
 import { maskDateBR, brDateToISO } from "@/utils/mask";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { ResultadoDoRelatorio } from "./ResultadoDoRelatorio";
+import { AjustarRelatorio, type CategoriaDoPainel } from "./AjustarRelatorio";
+import { useCategories } from "@/hooks/useCategories";
 import {
   MODELOS, PERIODOS, MODELO_INICIAL, modelosVisiveis, colunasVisiveis, ordemEfetiva, faixaDoPeriodo,
-  fraseResposta, kpisDoModelo, avisoDeCobertura, hojeSP, textoDaFrase,
+  fraseResposta, kpisDoModelo, avisoDeCobertura, hojeSP, textoDaFrase, chaveDoModeloLembrado,
   type PeriodoRelatorio,
 } from "@/utils/relatorioProdutos";
 
@@ -55,7 +57,12 @@ export function TabRelatorios({ hrefCustos }: Props) {
   var [modelosSemCusto, setModelosSemCusto] = useState<string[] | null>(null);
   var podeVerCusto = !semCustoPelaPermissao && !custoNegado;
 
-  var st = useEstadoDoRelatorio();
+  // p-115b: o último modelo, por usuário e por empresa (ou consolidado).
+  var userId = useAuthStore(function(a: any) { return a.user && a.user.id; });
+  var companyId = useAuthStore(function(a: any) { return a.company && a.company.id; });
+  var consolidatedView = useAuthStore(function(a: any) { return !!a.consolidatedView; });
+  var chaveLembrada = chaveDoModeloLembrado(userId, consolidatedView ? "todas" : companyId);
+  var st = useEstadoDoRelatorio(chaveLembrada);
   var estado = st.estado;
   var hoje = useMemo(function() { return hojeSP(); }, []);
 
@@ -79,12 +86,15 @@ export function TabRelatorios({ hrefCustos }: Props) {
   }, [r.erro]);
 
   var modelos = modelosVisiveis(podeVerCusto, modelosSemCusto);
-  // Escolhido um modelo de custo e o custo sumiu: volta ao de abertura.
+  // Escolhido (ou lembrado) um modelo de custo e a pessoa não vê custo: cai
+  // em Mais vendidos. Espera a permissão do membro chegar (enquanto carrega,
+  // semCusto é true por precaução) e não grava: a lembrança fica.
   useEffect(function() {
+    if (permissaoCarregando) return;
     if (estado.escolha !== "personalizado" && modelos.indexOf(estado.escolha) < 0) {
       st.despachar({ type: "modelo", modelo: MODELO_INICIAL });
     }
-  }, [estado.escolha, podeVerCusto, modelosSemCusto]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [estado.escolha, podeVerCusto, modelosSemCusto, permissaoCarregando]); // eslint-disable-line react-hooks/exhaustive-deps
 
   var consolidado = r.resposta ? r.resposta.escopo === "grupo" : r.consolidado;
   var cols = colunasVisiveis(estado, { podeVerCusto: podeVerCusto, consolidado: consolidado });
@@ -102,6 +112,19 @@ export function TabRelatorios({ hrefCustos }: Props) {
   } : null;
   var frase = ctx ? fraseResposta(ctx) : null;
   var kpis = ctx ? kpisDoModelo(ctx) : [];
+  // Categoria: a árvore de product_categories da loja ativa, com as subcategorias.
+  var { flattened: categoriasFlat } = useCategories();
+  var categorias: CategoriaDoPainel[] = useMemo(function() {
+    return (categoriasFlat || []).map(function(fc) {
+      return {
+        id: fc.category.id,
+        nome: fc.category.name,
+        nivel: Math.max(0, fc.breadcrumb.length - 1),
+        caminho: fc.breadcrumb.map(function(b) { return b.name; }).join(" › "),
+      };
+    });
+  }, [categoriasFlat]);
+
   var aviso = r.resposta ? avisoDeCobertura(cols, r.resposta.cobertura_custo, r.resposta.total_linhas, podeVerCusto) : null;
 
   var chips = (
@@ -112,7 +135,7 @@ export function TabRelatorios({ hrefCustos }: Props) {
           <Pressable
             key={m}
             testID={"relatorio-modelo-" + m}
-            onPress={function() { st.despachar({ type: "modelo", modelo: m }); }}
+            onPress={function() { st.escolherModelo(m); }}
             accessibilityRole="button"
             accessibilityState={{ selected: on }}
             style={[s.chip, on && s.chipOn]}
@@ -189,8 +212,17 @@ export function TabRelatorios({ hrefCustos }: Props) {
         )}
       </View>
 
-      {/* p-115b: o painel "Ajustar o relatório" (filtros, colunas, ordem e
-          "Agrupar por produto") entra aqui, despachando em st.despachar. */}
+      <AjustarRelatorio
+        estado={estado}
+        despachar={st.despachar}
+        colunasVisiveis={cols}
+        ordem={ordem}
+        podeVerCusto={podeVerCusto}
+        consolidado={consolidado}
+        categorias={categorias}
+        abertoNoInicio={!compacto}
+        compacto={compacto}
+      />
 
       {r.erro && !r.carregando && <ErroDoRelatorio erro={r.erro} onTentar={r.tentarDeNovo} />}
 

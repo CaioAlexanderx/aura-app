@@ -12,6 +12,7 @@ jest.mock("expo-font", () => ({ loadAsync: jest.fn(), isLoaded: () => true, useF
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
 jest.mock("@/components/ListSkeleton", () => ({ ListSkeleton: "ListSkeleton" }));
 jest.mock("expo-router", () => ({ router: { push: jest.fn() } }));
+jest.mock("@/hooks/useCategories", () => ({ useCategories: () => ({ flattened: [] }) }));
 
 var mockLargura = 1200;
 jest.mock("react-native", () => {
