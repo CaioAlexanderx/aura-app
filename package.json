@@ -30,6 +30,8 @@
     "expo-splash-screen": "~0.29.0",
     "expo-status-bar": "~2.0.0",
     "expo-web-browser": "~14.0.0",
+    "jspdf": "4.2.1",
+    "jspdf-autotable": "5.0.9",
     "jsqr": "^1.4.0",
     "mediabunny": "^1.60.0",
     "qrcode-svg": "^1.1.0",

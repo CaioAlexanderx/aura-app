@@ -181,6 +181,16 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   // por empresa (module_overrides) e por permissao. O backend
   // (services/modules.js) ainda NAO conhece a chave.
   'recebe.status': 'essencial',
+  // 13/11/2026 -- Financeiro > Relatorios (p-115a): quinta aba do Financeiro
+  // (?tab=relatorios), primeiro o relatorio de Produtos. Aba, nao item de
+  // menu (sem NAV, como 'crediario.config'), mas com chave PROPRIA (regra 3)
+  // para poder esconder por empresa (module_overrides) e por permissao.
+  // Essencial e Negocio iguais (decisao de 30/10 sobre lucro por produto):
+  // nenhum gate de plano novo. Quem e "estoque so consulta" nao ve a aba
+  // (o backend responde 403 ESTOQUE_SO_CONSULTA) -- filtrado na tela. O
+  // backend (services/modules.js) ainda NAO conhece a chave (mesmo caso de
+  // 'conferencia_estoque').
+  'financeiro.relatorios': 'essencial',
 };
 var PLAN_LEVEL: Record<string, number> = { essencial: 0, negocio: 1, expansao: 2 };
 
@@ -219,7 +229,10 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   // propria (ex.: atendente que ve o WhatsApp mas nao dispara marketing) fica
   // pra quando o produto pedir -- exige chave nova em MembersSection + backend.
   clientes:      ['clientes', 'whatsapp', 'clientes.reativacao', 'canal'],
-  financeiro:    ['financeiro', 'nfe'],
+  // 13/11/2026 -- a aba Relatorios do Financeiro (p-115a) acompanha quem ve
+  // o Financeiro. Quem nao ve custo continua vendo a aba, sem as colunas e
+  // os modelos de custo (a tela e o backend cortam).
+  financeiro:    ['financeiro', 'nfe', 'financeiro.relatorios'],
   relatorios:    ['contabilidade', 'suporte'],
   folha:         ['folha', 'agendamento'],
   // 05/10/2026 -- primeiros passos entram na permissao de configuracoes: quem
