@@ -93,3 +93,21 @@ export function nomeDaCorDaVariante(
   }
   return nomeProprioDaCor(v.sku_suffix, hex, tamanho) || hexToName(hex);
 }
+
+/**
+ * 13/11/2026 (etiqueta da Look das Patroas): nome da cor gravado pela
+ * lojista (product_variants.color_name) para a ETIQUETA, ou null para a
+ * etiqueta seguir como sempre (paleta por hex).
+ *
+ * Só vale nome de verdade: vazio, hex, e o MAIÚSCULO de 10+ letras (o corte
+ * de 10 do sku_suffix, ex. "AZUL ESCUR", gravado pelo preenchimento da 414)
+ * ficam de fora. Nome todo em maiúsculas sai em caixa de frase ("AMORA" →
+ * "Amora"), como a paleta já sai.
+ */
+export function nomeGravadoParaEtiqueta(colorName: string | null | undefined): string | null {
+  const t = typeof colorName === "string" ? colorName.trim() : "";
+  if (!t || HEX_SEM_CERQUILHA.test(t)) return null;
+  const tudoMaiusculo = t === t.toLocaleUpperCase("pt-BR") && t !== t.toLocaleLowerCase("pt-BR");
+  if (tudoMaiusculo && t.length >= 10) return null;
+  return tudoMaiusculo ? emCaixaDeFrase(t) : t;
+}

@@ -11,6 +11,7 @@ import { readMatconSettings } from "@/constants/matcon";
 import { ehIphoneInstalado } from "@/services/instalarApp";
 import { avisarImpressaoNoIphone } from "@/components/ImpressaoNoIphone";
 import { hexToName } from "@/utils/colorNames";
+import { nomeGravadoParaEtiqueta } from "@/utils/nomeDaCor";
 import {
   buildLabelHtml, buildLabelName, validateLabelItems, isValidEAN13, generateEAN13, LABEL_SIZE_PRESETS, LABEL_SIZE_KEYS, DEFAULT_LABEL_SIZE,
   buildLabelTestHtml, buildLabelPreviewHtml, labelPreviewGeometry, labelSupportsCalibration, buildCustomLabelTestHtml,
@@ -88,6 +89,13 @@ function variantSizeColor(v: any): { size: string; color: string } {
       size = bval;
       break;
     }
+  }
+  // 13/11/2026: cor em hex com nome gravado pela lojista (color_name, 414)
+  // sai com o nome dela na etiqueta ("Off White", não "Branco" da paleta).
+  // Sem nome gravado, segue o hex e a etiqueta fica como sempre.
+  if (color && /^#[0-9a-fA-F]{6}$/.test(color)) {
+    var gravado = nomeGravadoParaEtiqueta(v.color_name);
+    if (gravado) color = gravado;
   }
   return { size: size, color: color };
 }
