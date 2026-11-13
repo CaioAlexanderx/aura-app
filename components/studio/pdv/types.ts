@@ -81,6 +81,9 @@ export type SaleDone = {
   customer_phone: string | null;
   payment_method: string;
   payments?: { method: string; value: number }[];
+  /** 13/11/2026: desconto da venda gravado (sale.discount_amount). Vai para
+   *  o /nfce/emit só como conferência; o backend rateia pela venda gravada. */
+  discount_amount?: number;
   auto_emit: boolean;      // nfce_config.auto_emit_nfce && is_active
   fiscal_enabled: boolean; // nfce_config.is_active
   // 18/08/2026 (K3) — link público de acompanhamento da encomenda. Vai

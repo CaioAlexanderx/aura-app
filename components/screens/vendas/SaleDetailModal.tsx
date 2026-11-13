@@ -167,6 +167,9 @@ export function SaleDetailModal({
               discount: it.discount,
             };
           }),
+          // 13/11/2026: o desconto da venda (cupom + manual). O backend lê a
+          // venda gravada e rateia nos itens; este campo é só conferência.
+          ...(Number(sale.discount_amount) > 0 ? { discount_amount: Number(sale.discount_amount) } : {}),
         };
         const r = await emitNfce({ body: body });
         const st = (r && r.nfce && r.nfce.status) || "";

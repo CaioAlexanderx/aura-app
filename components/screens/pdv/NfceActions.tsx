@@ -17,6 +17,14 @@
 // estado "skipped", neutro: "Venda só de serviços: a nota de serviço sai
 // separada". Venda mista: a nota sai e uma linha diz que os serviços ficaram
 // de fora (servicos_fora_da_nfce).
+//
+// 13/11/2026: desconto da venda (cupom + manual) na nota. Quem vale é a
+// venda gravada: com sale_id, o backend lê sales.discount_amount e rateia o
+// desconto no vDesc de cada item (aura-backend
+// services/descontoDaVendaNaNfce.js). `saleDiscount` é o desconto que o
+// servidor gravou, mandado como `discount_amount` só para o backend ter com
+// o que conferir quando não há venda gravada a ler. O app não recalcula
+// total nenhum. Sem desconto, o corpo do /emit sai igual.
 // ============================================================
 import { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform, ActivityIndicator } from "react-native";
@@ -53,6 +61,10 @@ export type NfceActionsProps = {
   paymentMethod?: string;
   /** Multi-pagamento. Tem prioridade sobre paymentMethod quando preenchido. */
   payments?: NfcePaymentEntry[];
+  /** 13/11/2026: desconto da venda (cupom + manual) como o servidor gravou
+   *  (sales.discount_amount). Vai como `discount_amount`; o backend rateia
+   *  nos itens a partir da venda gravada. Não somar aqui o lápis do item. */
+  saleDiscount?: number | null;
   /** Se true, dispara nfceApi.emit() automaticamente no mount. */
   autoEmit?: boolean;
   /** Callback opcional após autorização (pode marcar venda como emitida no caller). */
@@ -115,7 +127,7 @@ function openPrintNfceTermica(companyId: string, nfceId: string, token: string |
 export function NfceActions({
   companyId, saleId, items, total,
   customerName, customerCpf, customerPhone,
-  paymentMethod, payments,
+  paymentMethod, payments, saleDiscount,
   autoEmit, onEmitted,
 }: NfceActionsProps) {
   const { token } = useAuthStore();
@@ -145,6 +157,7 @@ export function NfceActions({
         customer_cpf: customerCpf || undefined,
         customer_name: customerName || undefined,
         tipo: "nfce",
+        ...(saleDiscount && saleDiscount > 0 ? { discount_amount: saleDiscount } : {}),
       };
       if (payments && payments.length > 0) {
         body.payments = payments;

@@ -366,6 +366,8 @@ export function useStudioCheckout(cid: string | undefined) {
           customer_phone: phone.trim() || null,
           payment_method: signalMode ? signalMethod : primaryPayment,
           payments,
+          // 13/11/2026: o desconto que o servidor gravou (nada recalculado aqui).
+          discount_amount: parseFloat(saleRes?.sale?.discount_amount) || undefined,
           auto_emit: autoEmitNfce,
           fiscal_enabled: fiscalEnabled,
           // Vem do backend, que é quem calcula o saldo a partir do total real.

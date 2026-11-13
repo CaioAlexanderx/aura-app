@@ -107,6 +107,7 @@ export function StageDone({ t, done, onNewSale }: { t: StudioPalette; done: Sale
             customerPhone={done.customer_phone}
             paymentMethod={done.payment_method}
             payments={done.payments}
+            saleDiscount={done.discount_amount}
             autoEmit={done.auto_emit}
           />
         ) : null}

@@ -239,6 +239,9 @@ export type EmitNfceItem = {
 export type EmitNfceBody = {
   sale_id: string;
   items: EmitNfceItem[];
+  /** 13/11/2026: desconto da venda gravado (cupom + manual). O backend lê a
+   *  venda pelo sale_id e rateia nos itens; isto é só conferência. */
+  discount_amount?: number;
   tipo?: "nfce" | "nfe";
   payment_method?: string;
   customer_cpf?: string | null;
