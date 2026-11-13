@@ -22,6 +22,7 @@ import {
   precoNoCartaoDoItem, r2, resolverDividido, statusDoDividido, totalComoNoServidor,
   type ConfigDoCartao, type ContaDaVenda, type DescontosDaVenda, type LinhaDoPayload, type PrecosDaLinha, type RegraDoCupom,
 } from "@/utils/precoNoCartao";
+import { aoCentavo, mensagemDaConfirmacao, resolverDescontoManual, type DescontoManual } from "@/utils/descontoManual";
 
 // 22/09/2026 (Matcon M0): o item carrega a unidade de venda do produto e,
 // quando existe, a unidade de compra + o fator (caixa de 2,32 m²). Tudo
@@ -184,7 +185,9 @@ export const PAYMENTS = [
   { key: "crediario", label: "Crediário" },
 ];
 
-const MAX_DISCOUNT_PCT = 50;
+// 12/11/2026: o desconto manual vai até 100% do total, com confirmação
+// acima de 50% (utils/descontoManual). Antes havia aqui um teto silencioso
+// de 50% (MAX_DISCOUNT_PCT): R$ 80 numa peça de R$ 139,90 virava R$ 69,95.
 
 // FIX 06/05/2026: pid estava retornando cartKey inteiro (incluía __variantId),
 // causando "invalid input syntax for type uuid" no backend ao finalizar split.
@@ -325,6 +328,15 @@ export function useCart(
 
   const [discountType, setDiscountType] = useState<"%" | "R$">("%");
   const [discountValue, setDiscountValue] = useState("");
+  // 12/11/2026: desconto acima de 50% só vai na venda depois de confirmado
+  // ("Desconto de 80% (R$ 119,92). Confirma?"). A chave confirmada fica num
+  // ref porque o "Confirmar desconto" retoma o Finalizar de um render
+  // anterior; o state só redesenha a tela.
+  const [, setDescontoConfirmado] = useState<string | null>(null);
+  const descontoConfirmadoRef = useRef<string | null>(null);
+  const [perguntaDoDesconto, setPerguntaDoDesconto] = useState<DescontoManual | null>(null);
+  const continuarDepoisDoDescontoRef = useRef<null | (() => void)>(null);
+  const perguntadoAoDigitarRef = useRef<string | null>(null);
 
   // CPF na nota (NFC-e) — caixa digita ou cliente fala. Independente de
   // selectedCustomer, mas o front pode pre-preencher quando aplicavel.
@@ -531,20 +543,15 @@ export function useCart(
   const total = cartView.reduce((s, i) => s + i.price * i.qty, 0);
   const itemCount = cart.reduce((s, i) => s + i.qty, 0);
 
-  const parsedDiscount = parseFloat(discountValue.replace(",", ".")) || 0;
-  let manualDiscountAmount = 0;
-  if (parsedDiscount > 0 && total > 0) {
-    if (discountType === "%") {
-      const cappedPct = Math.min(parsedDiscount, MAX_DISCOUNT_PCT);
-      manualDiscountAmount = Math.round(total * cappedPct / 100 * 100) / 100;
-    } else {
-      const maxAbsolute = total * MAX_DISCOUNT_PCT / 100;
-      manualDiscountAmount = Math.min(parsedDiscount, maxAbsolute);
-    }
-  }
+  // 12/11/2026: até 100% do total, ao centavo como o backend (meio centavo
+  // para cima), R$ acima do total vira o total — e a tela diz isso
+  // (DiscountSection). Com preço no cartão, é o subtotal do método da vista.
+  const descontoManual = resolverDescontoManual(r2(total), discountType, discountValue);
+  let manualDiscountAmount = descontoManual.valor;
 
   let couponDiscount = couponApplied?.discount || 0;
-  let totalAfterCoupon = Math.max(0, total - manualDiscountAmount - couponDiscount);
+  // 12/11/2026: ao centavo — sem isso a tela final ficava com 29,980000000000004.
+  let totalAfterCoupon = Math.max(0, aoCentavo(total - manualDiscountAmount - couponDiscount));
   // Frete: fora de toda a conta dos produtos (subtotal, cupom, desconto,
   // preço no cartão). Entra só no total da venda e no que o dividido reparte.
   const frete = valorDoFrete(freteValor);
@@ -552,8 +559,8 @@ export function useCart(
   // Com a opção ligada, os dois totais (dinheiro e cartão) saem do MESMO
   // cálculo do POST /pdv/sale (totalComoNoServidor): o que a tela mostra é
   // o que o backend grava. Cupom e desconto em % valem sobre o preço do
-  // método; desconto em R$ tira o mesmo valor dos dois (teto de 50% pelo
-  // subtotal no dinheiro). O mínimo do cupom foi conferido pelo total no
+  // método; desconto em R$ tira o mesmo valor dos dois (teto no subtotal de
+  // cada um, 100%). O mínimo do cupom foi conferido pelo total no
   // dinheiro (usePdvState.handleValidateCoupon).
   const precosDasLinhas: PrecosDaLinha[] = cartaoOn
     ? cart.map(function(i) {
@@ -580,9 +587,9 @@ export function useCart(
           : { tipo: "fixed", valor: couponApplied.discount || 0 })
       : null;
     descontosDaVenda = { cupom: cupom };
-    if (parsedDiscount > 0 && subtotalD > 0) {
-      if (discountType === "%") descontosDaVenda.manualPct = Math.min(parsedDiscount, MAX_DISCOUNT_PCT);
-      else descontosDaVenda.manualValor = r2(Math.min(parsedDiscount, subtotalD * MAX_DISCOUNT_PCT / 100));
+    if (descontoManual.digitado > 0 && subtotalD > 0) {
+      if (discountType === "%") descontosDaVenda.manualPct = Math.min(descontoManual.digitado, 100);
+      else descontosDaVenda.manualValor = aoCentavo(descontoManual.digitado);
     }
     const simD = totalComoNoServidor(linhasD, descontosDaVenda);
     const simK = totalComoNoServidor(linhasK, descontosDaVenda);
@@ -874,7 +881,43 @@ export function useCart(
   }
   function selectEmployee(id: string | null, name: string | null) { setSelectedEmployeeId(id); setSelectedEmployeeName(name); }
   function clearCoupon() { setCouponCode(""); setCouponApplied(null); setCouponRule(null); }
-  function clearDiscount() { setDiscountValue(""); }
+  function clearDiscount() {
+    setDiscountValue("");
+    descontoConfirmadoRef.current = null;
+    perguntadoAoDigitarRef.current = null;
+    setDescontoConfirmado(null);
+  }
+
+  // ── Desconto acima de 50%: confirmação (12/11/2026) ─────────────
+  /** true = pode seguir. Acima de 50% e ainda não confirmado: abre a
+   *  pergunta e guarda `continuar` para depois do "Confirmar desconto". */
+  function pedirConfirmacaoDoDesconto(continuar?: () => void): boolean {
+    if (!descontoManual.precisaConfirmar || descontoConfirmadoRef.current === descontoManual.chave) return true;
+    continuarDepoisDoDescontoRef.current = continuar || null;
+    setPerguntaDoDesconto(descontoManual);
+    return false;
+  }
+  /** Saiu do campo: pergunta uma vez por valor (o Finalizar sempre confere). */
+  function aoTerminarDeDigitarDesconto() {
+    if (!descontoManual.precisaConfirmar || perguntadoAoDigitarRef.current === descontoManual.chave) return;
+    perguntadoAoDigitarRef.current = descontoManual.chave;
+    pedirConfirmacaoDoDesconto();
+  }
+  function confirmarDesconto() {
+    const pergunta = perguntaDoDesconto;
+    if (pergunta) {
+      descontoConfirmadoRef.current = pergunta.chave;
+      setDescontoConfirmado(pergunta.chave);
+    }
+    setPerguntaDoDesconto(null);
+    const continuar = continuarDepoisDoDescontoRef.current;
+    continuarDepoisDoDescontoRef.current = null;
+    if (continuar) continuar();
+  }
+  function voltarDoDesconto() {
+    continuarDepoisDoDescontoRef.current = null;
+    setPerguntaDoDesconto(null);
+  }
 
   /**
    * finalizeSale
@@ -891,6 +934,8 @@ export function useCart(
     crediario?: { installments: number; first_due_date: string; credit_account_id?: string },
   ) {
     if (cart.length === 0 || isProcessing) return;
+    // 12/11/2026: desconto acima de 50% sem confirmação não vai para a venda.
+    if (!pedirConfirmacaoDoDesconto(function() { finalizeSale(saleDate, crediario); })) return;
     // Bloqueio só quando split está ativo e não fecha
     if (splitMode && !splitIsBalanced) {
       toast.error(splitRemaining > 0
@@ -1036,11 +1081,9 @@ export function useCart(
         saleData.discount_type = "percent";
         saleData.discount_value = descontosDaVenda.manualPct;
       }
-    } else if (manualDiscountAmount > 0) {
-      saleData.discount_type = discountType === "%" ? "percent" : "fixed";
-      saleData.discount_value = discountType === "%"
-        ? Math.min(parsedDiscount, MAX_DISCOUNT_PCT)
-        : manualDiscountAmount;
+    } else if (descontoManual.campos.discount_type) {
+      saleData.discount_type = descontoManual.campos.discount_type;
+      saleData.discount_value = descontoManual.campos.discount_value;
     }
 
     // Crediário parcelado: adiciona installments no body da venda.
@@ -1257,6 +1300,19 @@ export function useCart(
     sellerName, setSellerName,
     couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
     discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
+    // 12/11/2026: desconto até 100%, com confirmação acima de 50%.
+    descontoManual: {
+      ...descontoManual,
+      pendente: descontoManual.precisaConfirmar && descontoConfirmadoRef.current !== descontoManual.chave,
+    },
+    confirmacaoDoDesconto: {
+      aberta: !!perguntaDoDesconto,
+      mensagem: perguntaDoDesconto ? mensagemDaConfirmacao(perguntaDoDesconto) : "",
+      confirmar: confirmarDesconto,
+      voltar: voltarDoDesconto,
+      aoTerminarDeDigitar: aoTerminarDeDigitarDesconto,
+    },
+    pedirConfirmacaoDoDesconto,
     cpfNaNota, setCpfNaNota,
     nomeNaNota, setNomeNaNota,
     // Multi-pagamento

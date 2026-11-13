@@ -97,7 +97,7 @@ import {
   fraseDoMilheiro,
 } from "./matconQty";
 import { rotuloDoLadoDinheiro, rotuloDoPagamento } from "./rotulosDoCaixa";
-import { DiscountSection } from "./DiscountSection";
+import { DiscountSection, type ConfirmacaoDoDesconto } from "./DiscountSection";
 import { FreteSection, type FreteProps } from "./FreteSection";
 import { CalculadoraAmbiente } from "@/components/matcon/CalculadoraAmbiente";
 import { LoteDoItem } from "@/components/matcon/LotePicker";
@@ -236,6 +236,10 @@ type Props = {
   setDiscountValue?: (value: string) => void;
   manualDiscountAmount?: number;
   clearDiscount?: () => void;
+  /** 12/11/2026: desconto acima de 50% pede confirmação (ConfirmDialog). */
+  discountConfirm?: ConfirmacaoDoDesconto;
+  /** Acima de 50% e ainda não confirmado. */
+  discountPending?: boolean;
   isProcessing?: boolean;
   /** Bloqueio "de requisito" (cliente/vendedora/caixa). Deixa o botão com
    *  aparência inativa mas AINDA clicável — ver comentário em finalizeInactive. */
@@ -289,6 +293,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     showOrcamento, onSaveQuote, savingQuote, savedQuote, editingQuote, comanda, frete,
     discountLabel, isProcessing, finalizeDisabled, requiredHints,
     discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
+    discountConfirm, discountPending,
     emptyCta, headerSubtitle, compact, fill,
     cpfNaNota, onCpfNaNotaChange, tomador, avisoNotas,
     pricePair, subtotalLabel,
@@ -667,6 +672,8 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
               setDiscountValue={setDiscountValue}
               manualDiscountAmount={manualDiscountAmount || 0}
               clearDiscount={clearDiscount}
+              confirmacao={discountConfirm}
+              pendente={discountPending}
             />
           ) : null}
           {frete && frete.open ? (

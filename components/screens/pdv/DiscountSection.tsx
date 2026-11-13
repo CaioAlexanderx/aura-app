@@ -1,9 +1,23 @@
 import { View, Text, StyleSheet, Pressable, TextInput } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { WebPortal } from "@/components/WebPortal";
+import {
+  LIMITE_SEM_CONFIRMACAO_PCT, avisoDoLimite, resolverDescontoManual, textoDoPct,
+} from "@/utils/descontoManual";
 
-const MAX_PCT = 50;
-const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+const fmt = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/** A pergunta do desconto acima de 50% (useCart.confirmacaoDoDesconto ou a troca). */
+export type ConfirmacaoDoDesconto = {
+  aberta: boolean;
+  mensagem: string;
+  confirmar: () => void;
+  voltar: () => void;
+  /** Saiu do campo: o dono decide se pergunta já. */
+  aoTerminarDeDigitar?: () => void;
+};
 
 type Props = {
   total: number;
@@ -13,16 +27,26 @@ type Props = {
   setDiscountValue: (v: string) => void;
   manualDiscountAmount: number;
   clearDiscount: () => void;
+  /** 12/11/2026: sem a prop, nada de pergunta (usos sem venda). */
+  confirmacao?: ConfirmacaoDoDesconto;
+  /** Acima de 50% e ainda não confirmado. */
+  pendente?: boolean;
 };
 
 /**
- * P1 #1: Manual discount section for PDV CartPanel
- * Toggle between % and R$, max 50%, shows computed discount
+ * P1 #1: Manual discount section for PDV CartPanel (e Step4 da troca).
+ * Toggle % / R$ e o desconto calculado.
+ *
+ * 12/11/2026: até 100% do total (antes, teto silencioso de 50%). Acima de
+ * 50% pede confirmação no ConfirmDialog (via WebPortal); digitado acima do
+ * total (R$) ou de 100% (%), a tela diz e vale o total.
  */
-export function DiscountSection({ total, discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount }: Props) {
-  const parsed = parseFloat(discountValue.replace(",", ".")) || 0;
-  const isOverMax = discountType === "%" && parsed > MAX_PCT;
-  const effectivePct = total > 0 ? Math.round(manualDiscountAmount / total * 100) : 0;
+export function DiscountSection({
+  total, discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
+  confirmacao, pendente,
+}: Props) {
+  const d = resolverDescontoManual(total, discountType, discountValue);
+  const aviso = avisoDoLimite(d);
 
   return (
     <View style={s.container}>
@@ -48,28 +72,51 @@ export function DiscountSection({ total, discountType, setDiscountType, discount
 
         {/* Value input */}
         <TextInput
-          style={[s.input, isOverMax && s.inputError]}
+          testID="desconto-campo"
+          style={[s.input, (aviso || pendente) && s.inputError]}
           value={discountValue}
           onChangeText={setDiscountValue}
+          onBlur={() => confirmacao?.aoTerminarDeDigitar?.()}
+          onSubmitEditing={() => confirmacao?.aoTerminarDeDigitar?.()}
           placeholder={discountType === "%" ? "0" : "0,00"}
           placeholderTextColor={Colors.ink3}
           keyboardType="decimal-pad"
-          maxLength={6}
+          maxLength={10}
         />
 
         {/* Computed result */}
         {manualDiscountAmount > 0 && (
           <View style={s.result}>
-            <Text style={s.resultText}>-{fmt(manualDiscountAmount)}</Text>
-            {discountType === "R$" && <Text style={s.resultPct}>({effectivePct}%)</Text>}
+            <Text testID="desconto-valor" style={s.resultText}>-{fmt(manualDiscountAmount)}</Text>
+            {discountType === "R$" && <Text style={s.resultPct}>({textoDoPct(d.pct)})</Text>}
           </View>
         )}
       </View>
 
-      {isOverMax && <Text style={s.warn}>Desconto limitado a {MAX_PCT}%</Text>}
-      {!isOverMax && parsed > 0 && discountType === "%" && (
-        <Text style={s.hint}>{parsed}% de {fmt(total)} = -{fmt(manualDiscountAmount)}</Text>
+      {aviso ? <Text testID="desconto-aviso-limite" style={s.warn}>{aviso}</Text> : null}
+      {!aviso && d.valor > 0 && discountType === "%" && (
+        <Text style={s.hint}>{textoDoPct(d.pct)} de {fmt(total)} = -{fmt(manualDiscountAmount)}</Text>
       )}
+      {pendente ? (
+        <Text testID="desconto-pendente" style={s.pend}>
+          Acima de {LIMITE_SEM_CONFIRMACAO_PCT}%: confirme o desconto antes de finalizar.
+        </Text>
+      ) : null}
+
+      {confirmacao ? (
+        <WebPortal active={confirmacao.aberta}>
+          <ConfirmDialog
+            visible={confirmacao.aberta}
+            title={`Desconto acima de ${LIMITE_SEM_CONFIRMACAO_PCT}%`}
+            message={confirmacao.mensagem}
+            confirmLabel="Confirmar desconto"
+            cancelLabel="Voltar"
+            destructive={false}
+            onConfirm={confirmacao.confirmar}
+            onCancel={confirmacao.voltar}
+          />
+        </WebPortal>
+      ) : null}
     </View>
   );
 }
@@ -86,11 +133,12 @@ const s = StyleSheet.create({
   toggleText: { fontSize: 12, color: Colors.ink3, fontWeight: "600" },
   toggleTextActive: { color: "#fff" },
   input: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, paddingVertical: 8, fontSize: 14, color: Colors.ink, fontWeight: "600", textAlign: "center" },
-  inputError: { borderColor: Colors.red },
+  inputError: { borderColor: Colors.amber },
   result: { alignItems: "flex-end", minWidth: 80 },
   resultText: { fontSize: 14, color: Colors.red, fontWeight: "700" },
   resultPct: { fontSize: 10, color: Colors.ink3 },
-  warn: { fontSize: 10, color: Colors.red, marginTop: 4 },
+  warn: { fontSize: 11, color: Colors.red, marginTop: 4 },
+  pend: { fontSize: 11, color: Colors.amber, marginTop: 4 },
   hint: { fontSize: 10, color: Colors.ink3, marginTop: 4, fontStyle: "italic" as any },
 });
 

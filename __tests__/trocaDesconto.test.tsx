@@ -14,6 +14,7 @@ import React from "react";
 import renderer, { act } from "react-test-renderer";
 import { Pressable, TextInput } from "react-native";
 
+jest.mock("@/components/WebPortal", () => ({ WebPortal: ({ active, children }: any) => (active ? children : null) }));
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
 jest.mock("expo-font", () => ({ useFonts: () => [true, null], loadAsync: jest.fn(), isLoaded: () => true }));
 jest.mock("expo-secure-store", () => ({ getItemAsync: jest.fn(), setItemAsync: jest.fn(), deleteItemAsync: jest.fn() }));
@@ -37,7 +38,7 @@ import { TrocaModal } from "@/components/screens/pdv/TrocaModal";
 import { trocaApi } from "@/services/trocaApi";
 import { toast } from "@/components/Toast";
 import {
-  MAX_DESCONTO_PCT, descontoManualDaTroca, camposDoDesconto, itemNovoDoPayload,
+  LIMITE_SEM_CONFIRMACAO_PCT, descontoDaTroca, descontoManualDaTroca, camposDoDesconto, itemNovoDoPayload,
   subtotalDosNovos, acertarSplits,
 } from "@/components/screens/pdv/troca/descontoDaTroca";
 
@@ -107,19 +108,25 @@ beforeEach(() => {
 });
 
 describe("descontoDaTroca — regras puras", () => {
-  it("desconto em % e em R$ com o mesmo teto de 50% do Caixa", () => {
-    expect(MAX_DESCONTO_PCT).toBe(50);
+  // 12/11/2026: a mesma regra do Caixa — até 100%, confirmação acima de 50%.
+  it("desconto em % e em R$ até 100%, como o Caixa", () => {
+    expect(LIMITE_SEM_CONFIRMACAO_PCT).toBe(50);
     expect(descontoManualDaTroca(200, "%", "10")).toBe(20);
-    expect(descontoManualDaTroca(200, "%", "80")).toBe(100);
+    expect(descontoManualDaTroca(200, "%", "80")).toBe(160);
     expect(descontoManualDaTroca(200, "R$", "15,50")).toBe(15.5);
-    expect(descontoManualDaTroca(200, "R$", "150")).toBe(100);
+    expect(descontoManualDaTroca(200, "R$", "150")).toBe(150);
+    expect(descontoManualDaTroca(200, "R$", "999")).toBe(200);
     expect(descontoManualDaTroca(0, "R$", "10")).toBe(0);
     expect(descontoManualDaTroca(200, "%", "")).toBe(0);
+    expect(descontoDaTroca(200, "%", "50").precisaConfirmar).toBe(false);
+    expect(descontoDaTroca(200, "%", "51").precisaConfirmar).toBe(true);
+    expect(descontoDaTroca(200, "R$", "999").limitadoAoTotal).toBe(true);
   });
 
   it("campos do corpo seguem o contrato do POST /pdv/sale", () => {
     expect(camposDoDesconto("%", "10", 20)).toEqual({ discount_type: "percent", discount_value: 10 });
-    expect(camposDoDesconto("%", "80", 100)).toEqual({ discount_type: "percent", discount_value: 50 });
+    expect(camposDoDesconto("%", "80", 160)).toEqual({ discount_type: "percent", discount_value: 80 });
+    expect(camposDoDesconto("%", "150", 200)).toEqual({ discount_type: "percent", discount_value: 100 });
     expect(camposDoDesconto("R$", "15,5", 15.5)).toEqual({ discount_type: "fixed", discount_value: 15.5 });
     expect(camposDoDesconto("R$", "", 0)).toEqual({});
   });
@@ -185,6 +192,32 @@ describe("TrocaModal — desconto e preço na troca", () => {
     expect(body.discount_type).toBe("percent");
     expect(body.discount_value).toBe(10);
     expect(body.new_items[0].item_discount).toBeUndefined();
+  });
+
+  it("desconto acima de 50%: pede confirmação antes de gravar; Voltar não grava", async () => {
+    const t = await irAteFinalizar();
+    const campoDesconto = t.root.findAllByType(TextInput).find((n) => n.props.placeholder === "0");
+    await act(async () => { campoDesconto!.props.onChangeText("60"); });
+    // 339,99 − 203,99 = 136,00; crédito de 189,90 → loja devolve 53,90
+    expect(tudo(t)).toContain("R$ 53,90");
+    expect(achar(t, "desconto-pendente")).toHaveLength(1);
+    await apertar(botao(t, "Pix"));
+
+    await apertar(botao(t, "Confirmar troca"));
+    expect(trocaApi.create).not.toHaveBeenCalled();
+    expect(tudo(t)).toContain("Desconto de 60% (R$ 203,99). Confirma?");
+    const voltar = t.root.findAllByType(Pressable).find((n) => textoDoNo(n) === "Voltar");
+    await apertar(voltar);
+    expect(trocaApi.create).not.toHaveBeenCalled();
+    expect(tudo(t)).not.toContain("Confirma?");
+
+    await apertar(botao(t, "Confirmar troca"));
+    await apertar(botao(t, "Confirmar desconto"));
+    expect(trocaApi.create).toHaveBeenCalledTimes(1);
+    const body = (trocaApi.create as jest.Mock).mock.calls[0][1];
+    expect(body.discount_type).toBe("percent");
+    expect(body.discount_value).toBe(60);
+    expect(achar(t, "desconto-pendente")).toHaveLength(0);
   });
 
   it("sem desconto e sem lápis: payload de sempre, sem campos de desconto", async () => {

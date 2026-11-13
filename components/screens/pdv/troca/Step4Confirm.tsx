@@ -29,8 +29,9 @@
 //     do botão âmbar "Não vai levar nada — devolver o valor" do Step3.
 //
 // 29/10/2026 (incidente Davi Calçados — desconto na troca):
-//   - Com itens novos, o mesmo DiscountSection do Caixa (R$ ou %, teto de
-//     50%) aparece antes da forma de pagamento. O TrocaModal guarda o estado
+//   - Com itens novos, o mesmo DiscountSection do Caixa (R$ ou %; desde
+//     12/11/2026 até 100%, com confirmação acima de 50%) aparece antes da
+//     forma de pagamento. O TrocaModal guarda o estado
 //     e recalcula o valor a pagar/devolver; o resumo mostra subtotal do
 //     carrinho, "− Desconto" e "− Crédito devolução".
 // ============================================================
@@ -41,7 +42,7 @@ import {
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { PaymentSplitForm, RefundSplitForm } from "./SplitForm";
-import { DiscountSection } from "../DiscountSection";
+import { DiscountSection, type ConfirmacaoDoDesconto } from "../DiscountSection";
 import type { TipoDesconto } from "./descontoDaTroca";
 import type {
   SelectedSaleRow, ReturnEntry, NewEntry,
@@ -68,12 +69,15 @@ type Props = {
   devolverValor?: boolean;
   /** 29/10/2026: subtotal dos itens novos (antes do desconto da troca). */
   newSubtotal?: number;
-  /** 29/10/2026: desconto R$/% da troca já calculado (teto de 50%). */
+  /** 29/10/2026: desconto R$/% da troca já calculado (12/11/2026: até 100%). */
   discountAmount?: number;
   discountType?: TipoDesconto;
   discountValue?: string;
   onChangeDiscountType?: (t: TipoDesconto) => void;
   onChangeDiscountValue?: (v: string) => void;
+  /** 12/11/2026: confirmação do desconto acima de 50% (TrocaModal). */
+  discountConfirm?: ConfirmacaoDoDesconto;
+  discountPending?: boolean;
 };
 
 // ─── Fiscal strategy inference (mantém contrato com shell) ─────
@@ -206,6 +210,7 @@ export function Step4Confirm({
   newSubtotal, discountAmount = 0,
   discountType = "%", discountValue = "",
   onChangeDiscountType, onChangeDiscountValue,
+  discountConfirm, discountPending,
 }: Props) {
   const subtotalCarrinho = newSubtotal ?? newValue;
   const { width } = useWindowDimensions();
@@ -286,6 +291,8 @@ export function Step4Confirm({
               setDiscountValue={onChangeDiscountValue}
               manualDiscountAmount={discountAmount}
               clearDiscount={() => onChangeDiscountValue("")}
+              confirmacao={discountConfirm}
+              pendente={discountPending}
             />
           </View>
         )}

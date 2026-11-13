@@ -7,23 +7,24 @@
 //   - lápis no preço do item novo (useCart.setUnitPrice): no envio,
 //     unit_price = preço de tabela e item_discount = diferença no total da
 //     linha; preço acima da tabela vai como unit_price, sem desconto;
-//   - desconto manual R$ ou % (DiscountSection), teto de 50% do subtotal
-//     (useCart MAX_DISCOUNT_PCT), contrato discount_type/discount_value do
-//     POST /pdv/sale — o backend recalcula com a mesma regra.
+//   - desconto manual R$ ou % (DiscountSection), contrato discount_type/
+//     discount_value do POST /pdv/sale — o backend recalcula com a mesma regra.
+// 12/11/2026: a mesma regra do Caixa (utils/descontoManual): até 100% do
+// subtotal dos itens novos, confirmação acima de 50% e arredondamento ao
+// centavo igual ao do backend. Antes, teto silencioso de 50%.
 // Funções puras: o TrocaModal monta os totais e o payload com elas.
 // ============================================================
 import type { NewEntry, PaymentSplit, RefundSplit } from "./types";
+import { lerDescontoDigitado, resolverDescontoManual, type DescontoManual } from "@/utils/descontoManual";
 
-/** Mesmo teto do Caixa (hooks/useCart.ts MAX_DISCOUNT_PCT e DiscountSection). */
-export const MAX_DESCONTO_PCT = 50;
+export { LIMITE_SEM_CONFIRMACAO_PCT } from "@/utils/descontoManual";
 
 export type TipoDesconto = "%" | "R$";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 export function lerValorDigitado(texto: string): number {
-  const n = parseFloat(String(texto || "").replace(",", "."));
-  return Number.isFinite(n) && n > 0 ? n : 0;
+  return lerDescontoDigitado(texto);
 }
 
 /** Subtotal dos itens novos com o preço que está na tela (já com o lápis). */
@@ -31,12 +32,14 @@ export function subtotalDosNovos(entries: NewEntry[]): number {
   return r2(entries.reduce((s, e) => s + e.quantity * e.unit_price, 0));
 }
 
-/** Valor do desconto manual, mesma conta do useCart (teto de 50%). */
+/** O desconto manual da troca inteiro (valor, limite, confirmação). */
+export function descontoDaTroca(subtotal: number, tipo: TipoDesconto, texto: string): DescontoManual {
+  return resolverDescontoManual(subtotal, tipo, texto);
+}
+
+/** Valor do desconto manual, mesma conta do useCart (até 100%). */
 export function descontoManualDaTroca(subtotal: number, tipo: TipoDesconto, texto: string): number {
-  const valor = lerValorDigitado(texto);
-  if (valor <= 0 || subtotal <= 0) return 0;
-  if (tipo === "%") return r2(subtotal * Math.min(valor, MAX_DESCONTO_PCT) / 100);
-  return r2(Math.min(valor, subtotal * MAX_DESCONTO_PCT / 100));
+  return resolverDescontoManual(subtotal, tipo, texto).valor;
 }
 
 /** Campos de desconto do corpo (contrato do POST /pdv/sale). Vazio sem desconto. */
@@ -44,7 +47,7 @@ export function camposDoDesconto(
   tipo: TipoDesconto, texto: string, valorCalculado: number,
 ): { discount_type?: "percent" | "fixed"; discount_value?: number } {
   if (!(valorCalculado > 0)) return {};
-  if (tipo === "%") return { discount_type: "percent", discount_value: Math.min(lerValorDigitado(texto), MAX_DESCONTO_PCT) };
+  if (tipo === "%") return { discount_type: "percent", discount_value: Math.min(lerValorDigitado(texto), 100) };
   return { discount_type: "fixed", discount_value: valorCalculado };
 }
 
