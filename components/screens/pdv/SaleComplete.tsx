@@ -211,6 +211,10 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
   // O frete foi uma linha da venda: vai na nota também, senão a soma dos
   // pagamentos não fecha com os itens.
   if (frete > 0) nfceItems.push({ product_id: "frete", product_name: NOME_DO_FRETE, quantity: 1, unit_price: frete });
+  // 13/11/2026: o desconto da venda (cupom + manual) não entra nos itens
+  // daqui. O backend lê a venda gravada (sale_id) e rateia o desconto no
+  // vDesc de cada item, frete fora; `desconto` é o que o servidor gravou
+  // (contaComOServidor) e vai junto só para conferência.
 
   // QA 23/09/2026: conta PRODUTOS (linhas) — somar quantidades misturava
   // unidades (10 m² + 500 tijolos = "510 produtos").
@@ -363,6 +367,7 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
             customerPhone={sale.customerPhone}
             paymentMethod={sale.payment}
             payments={payments}
+            saleDiscount={hasDiscount ? desconto : undefined}
             autoEmit={autoEmit}
           />
         )}
@@ -391,6 +396,7 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
                   customerPhone={sale.customerPhone}
                   paymentMethod={sale.payment}
                   payments={payments}
+                  saleDiscount={hasDiscount ? desconto : undefined}
                   autoEmit={autoEmit}
                 />
               </View>

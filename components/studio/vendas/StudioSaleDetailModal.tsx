@@ -121,11 +121,15 @@ export function StudioSaleDetailModal({
     }
   }
 
+  // 13/11/2026: unit_price gravado é o de tabela; o lápis do item vai no
+  // discount (vDesc), como na tela de Vendas. Sem ele a nota saía pelo bruto.
+  // O desconto da venda (cupom + manual) o backend rateia pela venda gravada.
   const nfceItems: NfceActionsItem[] = (detail?.items || []).map((i) => ({
     product_id: i.product_id || "",
     product_name: i.product_name,
     quantity: i.quantity,
     unit_price: i.unit_price,
+    ...(Number(i.discount) > 0 ? { discount: Number(i.discount) } : {}),
   }));
 
   const cardBase = { backgroundColor: t.paperCard, borderRadius: 12, borderWidth: 1, borderColor: t.ink5, padding: 14, marginBottom: 12 } as const;
@@ -228,6 +232,7 @@ export function StudioSaleDetailModal({
                     customerName={detail.customer?.name}
                     customerPhone={detail.customer?.phone}
                     paymentMethod={detail.sale.payment_method || undefined}
+                    saleDiscount={Number(detail.sale.discount_amount) || undefined}
                   />
                 </View>
               )}

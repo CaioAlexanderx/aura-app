@@ -131,6 +131,9 @@ export type EmitBody = {
   payment_method?: string;
   payment_change?: number;
   sale_id?: string;
+  /** 13/11/2026: desconto da venda (cupom + manual) gravado no servidor.
+   *  Com sale_id o backend usa a venda gravada; isto é só conferência. */
+  discount_amount?: number;
   transaction_id?: string;
   observacoes?: string;
   // 22/09/2026 (Matcon M2): NF-e emitida a partir de uma entrega. O backend
