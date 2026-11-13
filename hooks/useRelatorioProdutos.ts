@@ -11,7 +11,7 @@
 // Loja ou consolidado: no "Todas as lojas" (consolidatedView) vai
 // escopo=grupo, e o backend soma as lojas do grupo que a pessoa alcança.
 // ============================================================
-import { useCallback, useMemo, useReducer, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { request, ApiError } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
@@ -31,14 +31,32 @@ export function useEstadoDoRelatorio(chaveLembrada?: string | null) {
     var lembrado = lerModeloLembrado(chave || null);
     return lembrado ? estadoDoModelo(lembrado) : estadoInicial();
   });
+  // 13/11/2026 (QA em produção): no primeiro render o usuário e a empresa
+  // ainda não chegaram, a chave vem null e o init acima abre em Mais
+  // vendidos. Quando a chave aparece pela primeira vez, lê a lembrança uma
+  // vez — só se a pessoa ainda não mexeu em nada.
+  var chaveAplicada = useRef<string | null>(chaveLembrada || null);
+  var mexeu = useRef(false);
+  useEffect(function() {
+    if (!chaveLembrada || chaveAplicada.current) return;
+    chaveAplicada.current = chaveLembrada;
+    if (mexeu.current) return;
+    var lembrado = lerModeloLembrado(chaveLembrada);
+    if (lembrado) despachar({ type: "modelo", modelo: lembrado });
+  }, [chaveLembrada]);
+  var despacharDaPessoa = useCallback(function(acao: Parameters<typeof despachar>[0]) {
+    mexeu.current = true;
+    despachar(acao);
+  }, []);
   var [periodo, setPeriodo] = useState<PeriodoRelatorio>(PERIODO_INICIAL);
   var [deBR, setDeBR] = useState("");
   var [ateBR, setAteBR] = useState("");
   var escolherModelo = useCallback(function(m: ModeloId) {
+    mexeu.current = true;
     despachar({ type: "modelo", modelo: m });
     guardarModeloLembrado(chaveLembrada || null, m);
   }, [chaveLembrada]);
-  return { estado, despachar, escolherModelo, periodo, setPeriodo, deBR, setDeBR, ateBR, setAteBR };
+  return { estado, despachar: despacharDaPessoa, escolherModelo, periodo, setPeriodo, deBR, setDeBR, ateBR, setAteBR };
 }
 
 export type ErroDoRelatorio = {

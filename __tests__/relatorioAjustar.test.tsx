@@ -316,6 +316,25 @@ describe("TabRelatorios: painel e modelo lembrado", () => {
     expect(mockUrls[0]).toContain("modelo=parados_30");
   });
 
+  it("usuário chega depois do primeiro render (produção): abre no modelo lembrado", async () => {
+    window.localStorage.setItem(chaveDoModeloLembrado("u-1", "empresa-1")!, "estoque_acabando");
+    var original = mockAuth;
+    mockAuth = { ...original, user: null };
+    var qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    var el = () => <QueryClientProvider client={qc}><TabRelatorios hrefCustos={null} /></QueryClientProvider>;
+    var tree: any;
+    try {
+      await act(async () => { tree = renderer.create(el()); });
+      mockAuth = original;
+      await act(async () => { tree.update(el()); });
+      await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+      expect(porId(tree, "relatorio-modelo-estoque_acabando")[0].props.accessibilityState.selected).toBe(true);
+      expect(mockUrls[mockUrls.length - 1]).toContain("modelo=estoque_acabando");
+    } finally {
+      mockAuth = original;
+    }
+  });
+
   it("modelo de custo lembrado + quem não vê custo: abre em Mais vendidos", async () => {
     window.localStorage.setItem(chaveDoModeloLembrado("u-1", "empresa-1")!, "mais_lucrativos");
     mockConsulta = { consulta: false, carregando: false, semCusto: true };
