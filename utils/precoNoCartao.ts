@@ -34,6 +34,7 @@
 // a GF Amorim, ambas Matcon, usam.)
 // ============================================================
 import { promoDoItem } from "@/utils/precoEfetivo";
+import { descontoEmReais, descontoPercentual } from "@/utils/descontoManual";
 
 /** Chaves do Caixa que pagam o preço no cartão. */
 export const METODOS_NO_CARTAO = ["cartao", "debito"];
@@ -207,14 +208,18 @@ export function descontoDoCupom(cupom: RegraDoCupom | null | undefined, subtotal
 }
 
 /** Espelho do cálculo do POST /pdv/sale (aura-backend src/routes/pdv.js):
- *  cupom e desconto manual somam, com teto no subtotal. */
+ *  cupom e desconto manual somam, com teto no subtotal.
+ *  12/11/2026: o desconto manual sai de utils/descontoManual (o mesmo
+ *  arredondamento ao centavo do backend, services/descontoManual.js): em %
+ *  centavos inteiros com meio centavo para cima; em R$ ao centavo e com teto
+ *  no subtotal (100%). */
 export function totalComoNoServidor(linhas: { totalDaLinha: number }[], d: DescontosDaVenda) {
   let subtotal = 0;
   for (const l of linhas) subtotal += l.totalDaLinha;
   const cupom = descontoDoCupom(d.cupom, subtotal);
   let manual = 0;
-  if (d.manualValor && d.manualValor > 0) manual = d.manualValor;
-  else if (d.manualPct && d.manualPct > 0) manual = parseFloat(((subtotal * d.manualPct) / 100).toFixed(2));
+  if (d.manualValor && d.manualValor > 0) manual = descontoEmReais(subtotal, d.manualValor);
+  else if (d.manualPct && d.manualPct > 0) manual = descontoPercentual(subtotal, d.manualPct);
   const desconto = Math.min(parseFloat((cupom + manual).toFixed(2)), subtotal);
   const total = parseFloat((subtotal - desconto).toFixed(2));
   return { subtotal: r2(subtotal), cupom, manual, desconto, total: Math.max(0, total) };

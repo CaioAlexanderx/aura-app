@@ -108,9 +108,10 @@ import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { VALE_TROCA_PRAZO_PADRAO_DIAS, lerPrazoDoValeEmDias } from "@/utils/valeTroca";
 import { isPedidoOnline, montarOrigensDaTroca } from "./troca/pedidoOnline";
 import {
-  subtotalDosNovos, descontoManualDaTroca, camposDoDesconto, itemNovoDoPayload,
+  subtotalDosNovos, descontoDaTroca, camposDoDesconto, itemNovoDoPayload,
   acertarSplits, type TipoDesconto,
 } from "./troca/descontoDaTroca";
+import { mensagemDaConfirmacao, type DescontoManual } from "@/utils/descontoManual";
 
 import type {
   Step, SelectedSaleRow, ReturnEntry, NewEntry,
@@ -232,10 +233,55 @@ export function TrocaModal({
   // 29/10/2026: subtotal dos novos (preço da tela, já com o lápis) menos o
   // desconto da troca. newValue é o que a troca cobra pelos itens novos.
   const newSubtotal = useMemo(() => subtotalDosNovos(newEntries), [newEntries]);
-  const discountAmount = useMemo(
-    () => descontoManualDaTroca(newSubtotal, discountType, discountValue),
+  // 12/11/2026: até 100% (antes, teto silencioso de 50%), com confirmação
+  // acima de 50% — a mesma regra do Caixa (utils/descontoManual).
+  const descontoTroca = useMemo(
+    () => descontoDaTroca(newSubtotal, discountType, discountValue),
     [newSubtotal, discountType, discountValue]
   );
+  const discountAmount = descontoTroca.valor;
+  const descontoConfirmadoRef = useRef<string | null>(null);
+  const [, setDescontoConfirmado] = useState<string | null>(null);
+  const [perguntaDoDesconto, setPerguntaDoDesconto] = useState<DescontoManual | null>(null);
+  const perguntadoAoDigitarRef = useRef<string | null>(null);
+  const continuarDepoisDoDescontoRef = useRef<null | (() => void)>(null);
+  const descontoPendente = descontoTroca.precisaConfirmar && descontoConfirmadoRef.current !== descontoTroca.chave;
+  function pedirConfirmacaoDoDesconto(continuar?: () => void): boolean {
+    if (!descontoTroca.precisaConfirmar || descontoConfirmadoRef.current === descontoTroca.chave) return true;
+    continuarDepoisDoDescontoRef.current = continuar || null;
+    setPerguntaDoDesconto(descontoTroca);
+    return false;
+  }
+  function zerarConfirmacaoDoDesconto() {
+    descontoConfirmadoRef.current = null;
+    perguntadoAoDigitarRef.current = null;
+    continuarDepoisDoDescontoRef.current = null;
+    setDescontoConfirmado(null);
+    setPerguntaDoDesconto(null);
+  }
+  const confirmacaoDoDesconto = {
+    aberta: !!perguntaDoDesconto,
+    mensagem: perguntaDoDesconto ? mensagemDaConfirmacao(perguntaDoDesconto) : "",
+    confirmar: function () {
+      if (perguntaDoDesconto) {
+        descontoConfirmadoRef.current = perguntaDoDesconto.chave;
+        setDescontoConfirmado(perguntaDoDesconto.chave);
+      }
+      setPerguntaDoDesconto(null);
+      const continuar = continuarDepoisDoDescontoRef.current;
+      continuarDepoisDoDescontoRef.current = null;
+      if (continuar) continuar();
+    },
+    voltar: function () {
+      continuarDepoisDoDescontoRef.current = null;
+      setPerguntaDoDesconto(null);
+    },
+    aoTerminarDeDigitar: function () {
+      if (!descontoTroca.precisaConfirmar || perguntadoAoDigitarRef.current === descontoTroca.chave) return;
+      perguntadoAoDigitarRef.current = descontoTroca.chave;
+      pedirConfirmacaoDoDesconto();
+    },
+  };
   const newValue = useMemo(
     () => parseFloat((newSubtotal - discountAmount).toFixed(2)),
     [newSubtotal, discountAmount]
@@ -261,6 +307,7 @@ export function TrocaModal({
       setDevolverValor(false);
       setDiscountType("%");
       setDiscountValue("");
+      zerarConfirmacaoDoDesconto();
       valeReq.current++;
       setValeLido(null);
       setValeAviso(null);
@@ -392,6 +439,8 @@ export function TrocaModal({
       toast.error("Adicione ao menos um item devolvido ou novo");
       return;
     }
+    // 12/11/2026: desconto acima de 50% sem confirmação não vai para a troca.
+    if (!pedirConfirmacaoDoDesconto(function () { handleSubmit(); })) return;
 
     const fiscal = inferFiscalStrategy(selectedSales, returnEntries);
 
@@ -680,6 +729,8 @@ export function TrocaModal({
               discountValue={discountValue}
               onChangeDiscountType={setDiscountType}
               onChangeDiscountValue={setDiscountValue}
+              discountConfirm={confirmacaoDoDesconto}
+              discountPending={descontoPendente}
             />
           )}
           {step === 5 && successResult && (
@@ -703,6 +754,7 @@ export function TrocaModal({
                 setSuccessResult(null);
                 setDiscountType("%");
                 setDiscountValue("");
+                zerarConfirmacaoDoDesconto();
                 setValeLido(null);
                 setValeAviso(null);
               }}

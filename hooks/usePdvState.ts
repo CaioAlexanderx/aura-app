@@ -286,6 +286,7 @@ export function usePdvState() {
     sellerName, setSellerName,
     couponCode, setCouponCode, couponApplied, setCouponApplied, clearCoupon,
     discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
+    descontoManual, confirmacaoDoDesconto, pedirConfirmacaoDoDesconto,
     cpfNaNota, setCpfNaNota,
     nomeNaNota, setNomeNaNota,
     splitMode, toggleSplitMode, dividirPagamento,
@@ -816,6 +817,11 @@ export function usePdvState() {
       return;
     }
 
+    // 12/11/2026: desconto manual acima de 50% pede confirmação antes de
+    // qualquer outro passo (entrega, crediário, troco). "Confirmar desconto"
+    // retoma o Finalizar; "Voltar" para aqui e nada é vendido.
+    if (!pedirConfirmacaoDoDesconto(handleFinalize)) return;
+
     // 09/11/2026: venda com frete pergunta para onde vai, antes de cobrar.
     // 10/11/2026: só pergunta; "Seguir sem identificar" passa direto.
     const pedido = precisaPedirEntrega({ frete, customerId: selectedCustomerId, clienteTemEndereco, entrega, dispensada: entregaDispensada });
@@ -1273,6 +1279,9 @@ export function usePdvState() {
     setDiscountValue,
     manualDiscountAmount,
     clearDiscount,
+    // 12/11/2026: até 100%, com confirmação acima de 50% (DiscountSection).
+    discountConfirm: confirmacaoDoDesconto,
+    discountPending: descontoManual.pendente,
     isProcessing,
     // Bloqueio por requisito. O CartPanel usa isso só pra APARÊNCIA (opacidade
     // + sem brilho + aria-disabled) e mantém o Pressable ativo, porque é o
