@@ -266,6 +266,10 @@ describe("a seção", () => {
     expect(textoDe(porId(r, "bf-loja-selo"))).toBe("Campanha desligada");
     expect(textoDe(porId(r, "bf-loja-montar"))).toBe("Montar descontos");
     expect(porId(r, "bf-loja-chave").props.disabled).toBe(true);
+    // p-123b: os passos internos são "a" e "b" (o "2" é a posição da seção).
+    const passos = (id: string) => textoDe(porId(r, id));
+    expect(passos("bf-loja-passo-descontos")).toMatch(/^aDescontos/);
+    expect(passos("bf-loja-passo-faixa")).toMatch(/^bFaixa preta na loja/);
     expect(porId(r, "bf-loja-chave").props.accessibilityState).toMatchObject({ checked: false, disabled: true });
   });
 
