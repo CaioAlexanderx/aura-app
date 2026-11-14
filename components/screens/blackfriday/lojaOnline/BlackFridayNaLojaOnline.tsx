@@ -27,6 +27,7 @@ import { Aviso } from "@/components/screens/estoque/reajuste/Aviso";
 import { CriarPromocaoModal } from "@/components/screens/blackfriday/dePor/CriarPromocaoModal";
 import { studioStorefrontUrl } from "@/utils/storefrontUrl";
 import type { CampanhaDaLoja } from "@/hooks/useCampanhaDaLoja";
+import { TextoDaFaixa } from "./TextoDaFaixa";
 import type { TituloDaCampanha } from "@/services/campanhaLojaApi";
 import {
   avisoDeAgendada, mensagemErroCampanha, seloDaCampanha, textoDaChave, textoDaFaixa, textoDosDescontos,
@@ -108,7 +109,7 @@ export function BlackFridayNaLojaOnline({ companyId, campanha, onDescontosMudara
         </Pressable>
       </View>
 
-      <View style={[s.passo, estreito && s.passoCel]} testID="bf-loja-passo-faixa">
+      <View style={[s.passo, s.passoCel]} testID="bf-loja-passo-faixa">
         <View style={s.num}><Text style={s.numTxt}>2</Text></View>
         <View style={s.passoCorpo}>
           <Text style={s.passoTit}>Faixa preta na loja</Text>
@@ -130,6 +131,13 @@ export function BlackFridayNaLojaOnline({ companyId, campanha, onDescontosMudara
               );
             })}
           </View>
+          {/* p-122: o lojista escreve o título e a frase (opcionais). */}
+          <TextoDaFaixa
+            estado={e}
+            onSalvar={async function (mudanca) {
+              try { await campanha.salvar(mudanca); return null; } catch (err: any) { return mensagemErroCampanha(err); }
+            }}
+          />
         </View>
         {!!e.loja_online.slug && (
           <Pressable style={s.btn} onPress={verALoja} accessibilityRole="link" testID="bf-loja-ver">

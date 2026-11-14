@@ -34,9 +34,22 @@ export type EstadoDaCampanha = {
   };
   pode_ligar: boolean;
   periodo_padrao: { inicio: string; fim: string };
+  /** p-122 (migration 453): o texto escrito pela loja (null = a opção pronta
+   *  / o texto padrão), o título que a faixa mostra e os limites. Backend
+   *  antigo: ausentes. */
+  titulo_texto?: string | null;
+  frase_texto?: string | null;
+  titulo_final?: string;
+  limites?: { titulo: number; frase: number };
 };
 
-export type MudancaDaCampanha = { ativa?: boolean; titulo?: TituloDaCampanha };
+export type MudancaDaCampanha = {
+  ativa?: boolean;
+  titulo?: TituloDaCampanha;
+  /** p-122: null (ou vazio) volta à opção pronta. Inválido: 422 TEXTO_DA_FAIXA_INVALIDO. */
+  titulo_texto?: string | null;
+  frase_texto?: string | null;
+};
 
 export const campanhaLojaApi = {
   estado: (cid: string) => request<EstadoDaCampanha>(`/companies/${cid}/digital-channel/campanha`),

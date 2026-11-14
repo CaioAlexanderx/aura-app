@@ -63,6 +63,9 @@ import {
   avisoDeAgendada, diaMes, mensagemErroCampanha, seloDaCampanha, textoDaChave, textoDaFaixa, textoDosDescontos,
 } from "@/components/screens/blackfriday/lojaOnline/regrasCampanhaLoja";
 import type { EstadoDaCampanha } from "@/services/campanhaLojaApi";
+import {
+  contar, erroDoTexto, linhaDaFaixaFina, normalizar,
+} from "@/components/screens/blackfriday/lojaOnline/regrasTextoDaFaixa";
 
 const CID = "aaaaaaaa-0000-4000-8000-000000000001";
 jest.setTimeout(30000);
@@ -331,5 +334,72 @@ describe("Montar descontos", () => {
     expect(titulo.length).toBeGreaterThan(0);
     await tocar(r, "promo-continuar");
     expect(porId(r, "promo-prazo-bf").props.accessibilityState).toMatchObject({ checked: true });
+  });
+});
+
+// ── 7. O texto escrito pela loja (p-122, pedido do Caio) ─────
+
+describe("título e frase escritos pela loja (p-122)", () => {
+  const W28 = "W".repeat(28);
+
+  it("regras: normaliza, conta e recusa como o servidor", () => {
+    expect(normalizar("  Semana   da  Moda ")).toBe("Semana da Moda");
+    expect(contar("Ação")).toBe(4);
+    expect(erroDoTexto(W28, 28, "O título da faixa")).toBe(null);
+    expect(erroDoTexto(W28 + "W", 28, "O título da faixa")).toBe("O título da faixa cabe em até 28 caracteres (agora são 29).");
+    expect(erroDoTexto("Tudo 70% OFF", 28, "O título da faixa")).toMatch(/não pode ter “%” nem “R\$”/);
+    expect(erroDoTexto("por R$ 9", 28, "O título da faixa")).toMatch(/não pode ter/);
+    expect(erroDoTexto("um\ndois", 28, "O título da faixa")).toBe("O título da faixa vai numa linha só: tire a quebra de linha.");
+    expect(erroDoTexto("Black Friday 🔥", 28, "O título da faixa")).toMatch(/não aceita emoji/);
+    expect(erroDoTexto("   ", 28, "O título da faixa")).toBe(null);
+    expect(linhaDaFaixaFina("Semana Aurora", 30, "30/11")).toBe("SEMANA AURORA · ATÉ 30% OFF · ATÉ 30/11");
+    expect(linhaDaFaixaFina("Semana Aurora", 0, "30/11")).toBe("SEMANA AURORA · ATÉ N% OFF · ATÉ 30/11");
+  });
+
+  async function digitar(r: renderer.ReactTestRenderer, id: string, v: string) {
+    await act(async () => { porId(r, id).props.onChangeText(v); });
+  }
+
+  it("contador, prévia ao vivo e vazio volta à opção pronta", async () => {
+    const e = estado({ pode_ligar: true, promocoes: { no_ar: 2, ate_pct: 30, ate_data: "2026-11-30" } });
+    const r = await montar(<BlackFridayNaLojaOnline companyId={CID} campanha={campanhaCom(e)} />);
+    expect(textoDe(porId(r, "bf-loja-titulo-texto-contador"))).toBe("0/28");
+    expect(textoDe(porId(r, "bf-loja-previa-texto"))).toBe("BLACK FRIDAY  ·  ATÉ 30% OFF  ·  ATÉ 30/11");
+    expect(porId(r, "bf-loja-texto-salvar").props.disabled).toBe(true);
+    await digitar(r, "bf-loja-titulo-texto", "Semana   Aurora");
+    expect(textoDe(porId(r, "bf-loja-titulo-texto-contador"))).toBe("13/28");
+    expect(textoDe(porId(r, "bf-loja-previa-texto"))).toBe("SEMANA AURORA  ·  ATÉ 30% OFF  ·  ATÉ 30/11");
+    await digitar(r, "bf-loja-titulo-texto", "   ");
+    expect(textoDe(porId(r, "bf-loja-previa-texto"))).toBe("BLACK FRIDAY  ·  ATÉ 30% OFF  ·  ATÉ 30/11");
+  });
+
+  it("texto inválido: mensagem no campo, prévia com a opção pronta e sem salvar", async () => {
+    const r = await montar(<BlackFridayNaLojaOnline companyId={CID} campanha={campanhaCom(estado())} />);
+    await digitar(r, "bf-loja-titulo-texto", "Tudo 70% OFF");
+    expect(textoDe(porId(r, "bf-loja-titulo-texto-ajuda"))).toMatch(/não pode ter “%”/);
+    expect(textoDe(porId(r, "bf-loja-previa-texto"))).toMatch(/^BLACK FRIDAY/);
+    expect(porId(r, "bf-loja-texto-salvar").props.disabled).toBe(true);
+    await digitar(r, "bf-loja-frase-texto", "x".repeat(91));
+    expect(textoDe(porId(r, "bf-loja-frase-texto-contador"))).toBe("91/90");
+    expect(textoDe(porId(r, "bf-loja-frase-texto-ajuda"))).toBe("A frase da faixa grande cabe em até 90 caracteres (agora são 91).");
+  });
+
+  it("salvar grava o texto normalizado; vazio vai como null (opção pronta)", async () => {
+    const salvar = jest.fn(async () => estado());
+    const r = await montar(<BlackFridayNaLojaOnline companyId={CID} campanha={campanhaCom(estado(), salvar)} />);
+    await digitar(r, "bf-loja-titulo-texto", "  " + W28 + " ");
+    await tocar(r, "bf-loja-texto-salvar");
+    expect(salvar).toHaveBeenCalledWith({ titulo_texto: W28, frase_texto: null });
+  });
+
+  it("começa com o texto gravado; 422 do servidor aparece embaixo", async () => {
+    const salvar = jest.fn(async () => { throw new ApiError("x", 422, { code: "TEXTO_DA_FAIXA_INVALIDO", campo: "frase_texto", error: "A frase da faixa grande não aceita emoji: a faixa usa só letras, números e pontuação." }); });
+    const e = estado({ titulo_texto: "Semana Aurora", frase_texto: "Só até domingo." });
+    const r = await montar(<BlackFridayNaLojaOnline companyId={CID} campanha={campanhaCom(e, salvar)} />);
+    expect(porId(r, "bf-loja-titulo-texto").props.value).toBe("Semana Aurora");
+    expect(porId(r, "bf-loja-frase-texto").props.value).toBe("Só até domingo.");
+    await digitar(r, "bf-loja-frase-texto", "Só até segunda.");
+    await tocar(r, "bf-loja-texto-salvar");
+    expect(textoDe(porId(r, "bf-loja-texto-erro"))).toBe("A frase da faixa grande não aceita emoji: a faixa usa só letras, números e pontuação.");
   });
 });
