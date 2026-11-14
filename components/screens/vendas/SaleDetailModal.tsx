@@ -196,7 +196,7 @@ export function SaleDetailModal({
   // Cupom da venda via /print/receipt/:saleId/preview (fetch com Bearer).
   async function handlePrintReceipt() {
     if (!saleId || !effectiveCompanyId) {
-      toast.error("Recibo indisponível para esta venda");
+      toast.error("Cupom indisponível para esta venda");
       return;
     }
     if (typeof window === "undefined") return;
@@ -206,7 +206,7 @@ export function SaleDetailModal({
     try {
       const outcome = await openPrintWindow(async () => {
         const resp = await fetch(url, { headers: token ? { Authorization: "Bearer " + token } : {} });
-        if (!resp.ok) return { ok: false as const, error: "Erro ao carregar recibo (" + resp.status + ")." };
+        if (!resp.ok) return { ok: false as const, error: "Não deu para carregar o cupom (" + resp.status + ")." };
         // 12/11/2026: 2ª via leva o vale-troca enquanto o prazo da venda vale —
         // dia da venda original + prazo da loja que vendeu (nunca hoje + N).
         const html = cupomComVale(await resp.text(), {
@@ -214,7 +214,7 @@ export function SaleDetailModal({
         });
         return { ok: true as const, html };
       });
-      if (outcome === "blocked") toast.error("Permita pop-ups para imprimir o recibo.");
+      if (outcome === "blocked") toast.error("Permita pop-ups para imprimir o cupom.");
     } finally {
       setPrintingReceipt(false);
     }
@@ -291,7 +291,11 @@ export function SaleDetailModal({
     return (comEntrada && !cred ? "Entrada " : "") + nome + " · " + brl(p.amount);
   }
 
-  const showReceiptBtn = !isCancelled && temCrediario && !!saleId;
+  // 14/11/2026: a 2ª via do cupom não fiscal vale para toda venda (antes só
+  // aparecia no crediário e a lojista não tinha como reimprimir uma venda
+  // comum). Troca e devolução ficam de fora: o cupom de venda mostraria o
+  // valor do produto novo como se fosse uma venda.
+  const showReceiptBtn = !isCancelled && !isTroca && !isDevolucao && !!saleId;
   const showRefundBtn = !isCancelled && temCrediario && !isTroca && items.length > 0;
   const podeEditar = !!sale && !isCancelled && !isTroca && !isDevolucao;
 
@@ -318,7 +322,7 @@ export function SaleDetailModal({
   const cancelLabel = isTroca ? "Cancelar troca" : isDevolucao ? "Desfazer devolução" : "Cancelar venda";
 
   const secundarios: React.ReactNode[] = [];
-  if (showReceiptBtn) secundarios.push(<Button key="recibo" title="Recibo" icon="receipt" size="sm" variant="secondary" loading={printingReceipt} onPress={handlePrintReceipt} />);
+  if (showReceiptBtn) secundarios.push(<Button key="recibo" testID="venda-imprimir-cupom" title="Imprimir cupom" icon="receipt" size="sm" variant="secondary" loading={printingReceipt} onPress={handlePrintReceipt} />);
   if (showRefundBtn) secundarios.push(<Button key="devolver" title="Devolver" icon="rotate_ccw" size="sm" variant="secondary" onPress={function() { setShowDevolucao(true); }} />);
   if (showRefundBtn) secundarios.push(
     <Button key="trocar" testID="venda-trocar" title="Trocar" icon="repeat" size="sm" variant="secondary" onPress={function() { onClose(); router.push(ROTA_TROCA_PDV as any); }} />
