@@ -34,6 +34,9 @@ export type ColorEntry = {
   // Só no GET (14/11/2026): o pedaço da cor no sku_suffix ("AZUL ESCUR"),
   // quando name é null. Sugestão para mostrar; nunca vai de volta no PUT.
   name_sugerido?: string | null;
+  // Só no PUT (14/11/2026, CP4a): o nome foi escrito ou trocado pela lojista
+  // no editor. O backend grava mesmo que seja o nome da paleta numa cor antiga.
+  name_confirmado?: boolean;
 };
 
 // matrix eh objeto { "hex|size": stock }.

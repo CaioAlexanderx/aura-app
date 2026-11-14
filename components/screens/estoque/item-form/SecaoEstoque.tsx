@@ -27,15 +27,15 @@
 // grade de hoje, com outro nome). Sem lote ligado, a opção de lote nem
 // aparece. Sem o perfil, a seção é a de hoje.
 // ============================================================
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, ScrollView } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { hexToName } from "@/utils/colorNames";
 import { matrixKey } from "@/services/productsVariationsApi";
 import { UNITS } from "../types";
 import { Campo, Chip, Entrada, MiniBtn, Nota, Radio, Secao, IS_WEB, fr, s } from "./ui";
 import { novoCodigoDeBarras } from "./codigoDeBarras";
+import { EditorDeCor } from "./EditorDeCor";
 import {
   novaLinhaDeLote, statusEstoque, totalDosLotes, lotesParaGravar,
   type CorDoItem, type LinhaDeLote, type StockMode,
@@ -44,11 +44,6 @@ import { PERFIL_PADRAO, type PerfilDoCadastro } from "./perfis";
 import { estoqueEmDecimal, parseQtyInput, toPackages, rotuloEmbalagem, fmtQty, nomeDaUnidade } from "@/utils/matconUnits";
 import { dividirTamanhos, juntarTamanhos } from "@/utils/dividirTamanhos";
 
-const PRESET_COLORS = [
-  "#ef4444", "#f97316", "#eab308", "#22c55e",
-  "#06b6d4", "#3b82f6", "#8b5cf6", "#ec4899",
-  "#ffffff", "#1f2937", "#6b7280", "#92400e",
-];
 
 // RN Web transforma em data-enter-local="1" (ver cabeçalho).
 const ENTER_LOCAL = { enterLocal: "1" };
@@ -89,38 +84,12 @@ type Props = {
   lotes?: LinhaDeLote[]; onLotes?: (v: LinhaDeLote[]) => void;
 };
 
-// Check escuro em cor clara (branco, amarelo), claro no resto.
-function corClara(hex: string) {
-  const c = hex.replace("#", "");
-  const r = parseInt(c.slice(0, 2), 16), g = parseInt(c.slice(2, 4), 16), b = parseInt(c.slice(4, 6), 16);
-  return (r * 299 + g * 587 + b * 114) / 1000 > 160;
-}
-
 export function SecaoEstoque(p: Props) {
-  const [abrirCor, setAbrirCor] = useState(false);
-  const [corLivre, setCorLivre] = useState<string | null>(null);
   const [abrirTam, setAbrirTam] = useState(false);
   const [novoTam, setNovoTam] = useState("");
   const [abrirBarras, setAbrirBarras] = useState(false);
   const perfil = p.perfil || PERFIL_PADRAO;
 
-  function temCor(hex: string) {
-    const h = hex.toUpperCase();
-    return p.cores.some((c) => c.hex.toUpperCase() === h);
-  }
-  // Não fecha a paleta: quem cadastra grade adiciona várias cores seguidas.
-  // Quem fecha é o "Pronto". Dedupe por hex, então confirmar duas vezes
-  // (evento change + botão) não duplica.
-  function addCor(hex: string) {
-    const h = (hex || "").toUpperCase();
-    if (!/^#[0-9A-F]{6}$/.test(h)) return;
-    if (temCor(h)) return;
-    p.onCores([...p.cores, { hex: h, name: hexToName(h) || h }]);
-  }
-  function fecharPaleta() {
-    setAbrirCor(false);
-    setCorLivre(null);
-  }
   // 18/10/2026 (p-35): "P, M, G" vira três tamanhos (regra de divisão em
   // utils/dividirTamanhos), mesclados sem duplicar e na ordem PP, P, M,
   // G... O campo NÃO fecha: quem cadastra grade digita vários seguidos
@@ -164,28 +133,6 @@ export function SecaoEstoque(p: Props) {
     el.addEventListener("paste", ouvir);
     return () => el.removeEventListener("paste", ouvir);
   }, [abrirTam]);
-
-  // SELETOR NATIVO DE COR. O onChange do React num <input type="color">
-  // dispara a cada evento `input` — ou seja, a cada passo do arrasto. Antes
-  // ele adicionava a primeira cor intermediária e fechava a paleta,
-  // desmontando o input com o seletor do navegador ainda aberto (bug de
-  // lojista: "não consigo arrastar"). Agora o arrasto só mexe na prévia; a
-  // cor entra no `change` nativo, que só vem quando o seletor confirma.
-  // O listener é ligado pelo ref (o React não expõe esse `change`) e
-  // desligado quando o input desmonta (o React chama o ref com null).
-  const addCorRef = useRef(addCor);
-  addCorRef.current = addCor;
-  const inputCorRef = useRef<HTMLInputElement | null>(null);
-  const aoConfirmarCor = useRef((e: Event) => {
-    const v = String((e.target as HTMLInputElement).value || "").toUpperCase();
-    setCorLivre(v);
-    addCorRef.current(v);
-  }).current;
-  const refInputCor = useCallback((el: HTMLInputElement | null) => {
-    if (inputCorRef.current) inputCorRef.current.removeEventListener("change", aoConfirmarCor);
-    inputCorRef.current = el;
-    if (el) el.addEventListener("change", aoConfirmarCor);
-  }, [aoConfirmarCor]);
 
   const C = p.cores;
   const Z = p.tamanhos;
@@ -466,83 +413,9 @@ export function SecaoEstoque(p: Props) {
 
           <View style={[s.linha2, p.narrow && { flexDirection: "column", gap: 0 }]}>
             <Campo label="Cores" style={{ flex: 1 }}>
-              <View style={s.chips}>
-                {C.map((c) => (
-                  <Chip
-                    key={c.hex}
-                    label={c.name || c.hex}
-                    swatch={c.hex}
-                    onRemove={() => p.onCores(C.filter((x) => x.hex.toUpperCase() !== c.hex.toUpperCase()))}
-                    removeLabel={"Remover " + (c.name || c.hex)}
-                  />
-                ))}
-                <Chip label="+ Cor" dashed onPress={() => (abrirCor ? fecharPaleta() : setAbrirCor(true))} />
-              </View>
-              {abrirCor && (
-                <View style={st.paleta}>
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                    {PRESET_COLORS.map((c) => {
-                      // Já na lista: fica marcada e não entra de novo.
-                      const ja = temCor(c);
-                      return (
-                        <Pressable
-                          key={c}
-                          onPress={() => addCor(c)}
-                          disabled={ja}
-                          accessibilityLabel={(ja ? "Já adicionada: " : "Adicionar ") + (hexToName(c) || c)}
-                          accessibilityState={{ selected: ja, disabled: ja }}
-                          style={[st.paletaSwatch, { backgroundColor: c }, ja && st.paletaSwatchSel]}
-                        >
-                          {ja ? <Icon name="check" size={14} color={corClara(c) ? "#1f2937" : "#ffffff"} /> : null}
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                  {IS_WEB && (
-                    <View style={st.corLivre}>
-                      <Text style={st.corLivreTxt}>Outra cor…</Text>
-                      {/* input nativo do navegador: não bloqueia a thread como um modal.
-                          O onChange aqui é o `input` do arrasto: só atualiza a prévia. */}
-                      <input
-                        ref={refInputCor}
-                        type="color"
-                        defaultValue="#6D28D9"
-                        data-enter-local="1"
-                        onChange={(e: any) => setCorLivre(String(e.target.value || "").toUpperCase())}
-                        style={{
-                          position: "absolute", inset: 0, opacity: 0,
-                          width: "100%", height: "100%", border: "none", cursor: "pointer",
-                        } as any}
-                      />
-                    </View>
-                  )}
-                  {/* Prévia com botão explícito: garante a cor mesmo onde o
-                      `change` do navegador não chega. */}
-                  {IS_WEB && corLivre ? (
-                    <View style={st.previa}>
-                      <View style={[st.previaSw, { backgroundColor: corLivre }]} />
-                      <Text style={st.previaTxt} numberOfLines={1}>
-                        {(hexToName(corLivre) || corLivre) + " · " + corLivre}
-                      </Text>
-                      <Pressable
-                        onPress={() => addCor(corLivre)}
-                        disabled={temCor(corLivre)}
-                        accessibilityLabel={temCor(corLivre) ? "Cor já adicionada" : "Adicionar esta cor"}
-                        style={[st.previaBtn, temCor(corLivre) && st.previaBtnOff]}
-                      >
-                        <Text style={[st.previaBtnTxt, temCor(corLivre) && { color: Colors.ink3 }]}>
-                          {temCor(corLivre) ? "Já adicionada" : "Adicionar esta cor"}
-                        </Text>
-                      </Pressable>
-                    </View>
-                  ) : null}
-                  <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
-                    <Pressable onPress={fecharPaleta} style={st.pronto} accessibilityLabel="Fechar paleta de cores">
-                      <Text style={st.prontoTxt}>Pronto</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              )}
+              {/* 14/11/2026 (CP4a): paleta com nome e busca, nome próprio com
+                  amostra e renomear tocando na cor (EditorDeCor.tsx). */}
+              <EditorDeCor cores={C} onCores={p.onCores} narrow={p.narrow} />
             </Campo>
 
             <Campo label={perfil.estoque.rotuloDosTamanhos} style={{ flex: 1 }}>
@@ -792,38 +665,6 @@ const st = {
   barraComGerar: { flexDirection: "row" as const, alignItems: "stretch" as const, gap: 6 },
   barrasTit: { flex: 1, fontSize: 12.5, color: Colors.ink, fontWeight: "700" as const, paddingVertical: 4 },
   barrasConta: { color: Colors.ink3, fontWeight: "500" as const },
-  paleta: {
-    marginTop: 8, padding: 10, borderRadius: 10,
-    backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border, gap: 8,
-  },
-  paletaSwatch: {
-    width: 30, height: 30, borderRadius: 8, borderWidth: 1.5, borderColor: Colors.border,
-    alignItems: "center" as const, justifyContent: "center" as const,
-  },
-  paletaSwatchSel: { borderWidth: 2.5, borderColor: Colors.violet },
-  corLivre: {
-    position: "relative" as any, alignItems: "center" as const, justifyContent: "center" as const,
-    borderRadius: 8, borderWidth: 1, borderStyle: "dashed" as any, borderColor: Colors.border2,
-    paddingVertical: 8,
-  },
-  corLivreTxt: { fontSize: 12, color: Colors.violet3, fontWeight: "700" as const },
-  previa: {
-    flexDirection: "row" as const, flexWrap: "wrap" as const, alignItems: "center" as const, gap: 8,
-    borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 8, paddingVertical: 6,
-  },
-  previaSw: { width: 22, height: 22, borderRadius: 6, borderWidth: 1, borderColor: "rgba(0,0,0,0.15)" },
-  previaTxt: { flex: 1, minWidth: 90, fontSize: 12.5, color: Colors.ink },
-  previaBtn: {
-    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6,
-    backgroundColor: Colors.violet,
-  },
-  previaBtnOff: { backgroundColor: Colors.bg4 },
-  previaBtnTxt: { fontSize: 12, color: "#fff", fontWeight: "700" as const },
-  pronto: {
-    borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6,
-    backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2,
-  },
-  prontoTxt: { fontSize: 12, color: Colors.violet3, fontWeight: "700" as const },
   addBtn: {
     width: 40, borderRadius: 9, backgroundColor: Colors.violet,
     alignItems: "center" as const, justifyContent: "center" as const,

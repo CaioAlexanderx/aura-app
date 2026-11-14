@@ -23,7 +23,10 @@ export type StockMode = "single" | "variants" | "lots";
 // gravado (color_name NULL): o `name` dela é só o que a tela mostra (o pedaço
 // do sku_suffix, ou a paleta) e não vai de volta no Salvar — antes ia, e o
 // backend gravava "AZUL ESCUR" como nome da cor.
-export type CorDoItem = { hex: string; name: string; nomeSoParaMostrar?: boolean };
+// 14/11/2026 (CP4a): `nomeConfirmado` marca o nome que a lojista escreveu
+// ou trocou no editor; vai como name_confirmado no PUT e o backend grava
+// mesmo quando coincide com o nome da paleta (ver regrasDaCor.ts).
+export type CorDoItem = { hex: string; name: string; nomeSoParaMostrar?: boolean; nomeConfirmado?: boolean };
 
 /**
  * Cores da grade como o GET /variations devolve, prontas para a tela.

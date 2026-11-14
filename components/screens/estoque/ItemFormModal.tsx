@@ -666,7 +666,8 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       const lida = gradeLidaRef.current && gradeLidaRef.current.pid === String(id) ? gradeLidaRef.current.matriz : null;
       await productsVariationsApi.save(company.id, id, {
         // 14/11/2026: só o nome gravado ou escolhido; o que a tela só mostrava vai null.
-        colors: cores.map((c) => ({ hex: c.hex, name: nomeDaCorParaGravar(c) })),
+        // 14/11/2026 (CP4a): nome que ela escreveu ou trocou vai confirmado.
+        colors: cores.map((c) => ({ hex: c.hex, name: nomeDaCorParaGravar(c), ...(c.nomeConfirmado ? { name_confirmado: true } : {}) })),
         sizes: tamanhos,
         matrix: matriz,
         barcodes: { ...guardados, ...doForm },
