@@ -198,9 +198,20 @@ export var promocoesApi = {
 // GET /companies/:cid/products/promotions/vendidos?desde=&ate= (Aura-backend#968)
 // Só conta item gravado com em_promocao = true; cancelada e devolução fora.
 // A marcação começou no deploy de 09/11/2026: venda de antes não aparece.
+// p-123a (14/11/2026, Aura-backend migration 452): soma também os pedidos
+// CONFIRMADOS da loja online (`pedidos_loja_online` diz quantos;
+// `conta_loja_online` = o backend já conta a loja).
 
 export type ResumoDosVendidos = { itens_vendidos: number; faturamento: number; desconto_dado: number; vendas: number };
-export type VendidosNaPromocao = { desde: string | null; ate: string | null; resumo: ResumoDosVendidos };
+export type VendidosNaPromocao = {
+  desde: string | null;
+  ate: string | null;
+  resumo: ResumoDosVendidos;
+  /** Quantos dos `vendas` são pedidos da loja online. */
+  pedidosLojaOnline: number;
+  /** O backend já soma a loja online (sem isso, só o Caixa). */
+  contaLojaOnline: boolean;
+};
 
 /** Resposta do GET /vendidos, tolerante a número em texto e a campo ausente. */
 export function lerVendidos(r: any): VendidosNaPromocao {
@@ -214,6 +225,8 @@ export function lerVendidos(r: any): VendidosNaPromocao {
       desconto_dado: num(x.desconto_dado),
       vendas: num(x.vendas),
     },
+    pedidosLojaOnline: num(r && r.pedidos_loja_online),
+    contaLojaOnline: !!(r && r.conta_loja_online === true),
   };
 }
 
