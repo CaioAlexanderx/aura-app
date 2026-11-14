@@ -67,7 +67,7 @@ import type { EstadoDaCampanha } from "@/services/campanhaLojaApi";
 const CID = "aaaaaaaa-0000-4000-8000-000000000001";
 jest.setTimeout(30000);
 
-function estado(o: Partial<EstadoDaCampanha> & { promocoes?: Partial<EstadoDaCampanha["promocoes"]> } = {}): EstadoDaCampanha {
+function estado(o: Partial<Omit<EstadoDaCampanha, "promocoes">> & { promocoes?: Partial<EstadoDaCampanha["promocoes"]> } = {}): EstadoDaCampanha {
   const { promocoes, ...resto } = o;
   return {
     loja_online: { existe: true, publicada: true, slug: "boutique" },

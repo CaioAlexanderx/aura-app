@@ -53,8 +53,10 @@ export function textoDosDescontos(e: EstadoDaCampanha): string {
 
 /** A linha do passo "Faixa preta na loja". */
 export function textoDaFaixa(e: EstadoDaCampanha): string {
-  var pct = e.promocoes.ate_pct > 0 ? "O “Até " + e.promocoes.ate_pct + "% OFF”" : "O “Até N% OFF”";
-  return "Escolha o título da faixa. " + pct + " é calculado pelos seus descontos e não se edita.";
+  if (e.promocoes.ate_pct > 0) {
+    return "Escolha o título da faixa. O “Até " + e.promocoes.ate_pct + "% OFF” é calculado pelos seus descontos e não se edita.";
+  }
+  return "Escolha o título da faixa. O desconto que ela anuncia é calculado pelos descontos no ar e não se edita.";
 }
 
 /** A linha embaixo da chave. */

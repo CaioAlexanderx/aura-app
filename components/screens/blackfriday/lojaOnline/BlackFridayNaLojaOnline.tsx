@@ -19,7 +19,7 @@
 // "escolher empresa". Sem hover: tudo visível, alvos de 44 px.
 // ============================================================================
 import React, { useState } from "react";
-import { View, Text, Pressable, StyleSheet, ActivityIndicator, Linking, Platform } from "react-native";
+import { View, Text, Pressable, StyleSheet, ActivityIndicator, Linking, Platform, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { WebPortal } from "@/components/WebPortal";
@@ -43,6 +43,8 @@ export function BlackFridayNaLojaOnline({ companyId, campanha, onDescontosMudara
   var [aberto, setAberto] = useState(false);
   var [salvando, setSalvando] = useState<null | "chave" | TituloDaCampanha>(null);
   var [erro, setErro] = useState<string | null>(null);
+  // No celular o passo quebra em linhas: o número fica no topo, não no meio.
+  var estreito = useWindowDimensions().width < 640;
   var e = campanha.estado;
   if (!e) return null;
 
@@ -95,7 +97,7 @@ export function BlackFridayNaLojaOnline({ companyId, campanha, onDescontosMudara
         </Text>
       </View>
 
-      <View style={[s.passo, temDesconto && s.passoOk]} testID="bf-loja-passo-descontos">
+      <View style={[s.passo, estreito && s.passoCel]} testID="bf-loja-passo-descontos">
         <View style={[s.num, temDesconto && s.numOk]}><Text style={[s.numTxt, temDesconto && { color: "#fff" }]}>{temDesconto ? "✓" : "1"}</Text></View>
         <View style={s.passoCorpo}>
           <Text style={s.passoTit}>Descontos</Text>
@@ -106,7 +108,7 @@ export function BlackFridayNaLojaOnline({ companyId, campanha, onDescontosMudara
         </Pressable>
       </View>
 
-      <View style={s.passo} testID="bf-loja-passo-faixa">
+      <View style={[s.passo, estreito && s.passoCel]} testID="bf-loja-passo-faixa">
         <View style={s.num}><Text style={s.numTxt}>2</Text></View>
         <View style={s.passoCorpo}>
           <Text style={s.passoTit}>Faixa preta na loja</Text>
@@ -189,7 +191,7 @@ var s = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border2, borderRadius: 14, padding: 14, backgroundColor: Colors.bg2,
     flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12,
   },
-  passoOk: {},
+  passoCel: { alignItems: "flex-start" },
   passoCorpo: { flex: 1, minWidth: 200, gap: 2 },
   passoTit: { fontSize: 14.5, fontWeight: "700", color: Colors.ink },
   num: { width: 28, height: 28, borderRadius: 99, alignItems: "center", justifyContent: "center", backgroundColor: Colors.violetD },
