@@ -10,18 +10,13 @@ import { Colors } from "@/constants/colors";
 import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import { qtdComUnidade } from "@/utils/matconUnits";
+import { rotuloDaVariante as rotuloComNomeDaCor } from "@/utils/nomeDaCor";
 
-const HEX = /^#[0-9a-fA-F]{6}$/;
-
+// 14/11/2026 (CP2b da revisão de cores): o nome da cor é o mesmo do Caixa,
+// do cupom e da vitrine (utils/nomeDaCor.ts). Antes, a cor sem color_name
+// sumia do rótulo e o nome cortado ("AZUL ESCUR") aparecia como estava.
 export function rotuloDaVariante(v: any): string {
-  const attrs: any[] = Array.isArray(v?.attributes) ? v.attributes : [];
-  const partes = attrs
-    .map((a) => {
-      const valor = String(a?.value || "").trim();
-      return HEX.test(valor) ? String(v?.color_name || "").trim() : valor;
-    })
-    .filter(Boolean);
-  return partes.join(" · ") || String(v?.sku_suffix || "").trim() || "Variante";
+  return rotuloComNomeDaCor(v || {}, " · ") || "Variante";
 }
 
 export function VariantesConsulta({ productId, unit }: { productId: string; unit: string }) {

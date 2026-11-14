@@ -18,21 +18,19 @@ import { resumoDeLotes } from "@/utils/matconLots";
 // 23/09/2026 (QA producao, item 9): margem 100% em produto sem custo.
 import { computeMargin, DICA_MARGEM_SEM_CUSTO } from "@/utils/productMargin";
 import { VariantesConsulta } from "./VariantesConsulta";
+import { nomeDaCor } from "@/utils/nomeDaCor";
 // 10/11/2026 (NFS-e do serviço): selo "Falta código da NFS-e".
 import { faltaCodigoNfse } from "@/utils/nfseServico";
 import { SELO_FALTA_NFSE } from "./nfseNaLista";
 
-var COLOR_NAMES: Record<string, string> = {
-  '#000000':'Preto','#ffffff':'Branco','#ff0000':'Vermelho','#c0c0c0':'Prata',
-  '#808080':'Cinza','#0000ff':'Azul','#000080':'Marinho','#00ff00':'Verde',
-  '#008000':'Verde Esc.','#ffff00':'Amarelo','#ffa500':'Laranja','#ff00ff':'Pink',
-  '#ffc0cb':'Rosa','#800080':'Roxo','#a52a2a':'Marrom','#800000':'Vinho',
-  '#ffd700':'Dourado','#f5f5dc':'Bege','#ff6347':'Coral','#40e0d0':'Turquesa',
-  '#4b0082':'Indigo','#dc143c':'Carmesim','#2f4f4f':'Chumbo','#d2691e':'Caramelo',
-};
-function hexToName(hex: string) {
-  if (!hex) return '';
-  return COLOR_NAMES[hex.toLowerCase()] || hex;
+// 14/11/2026 (CP2b da revisão de cores): a tabela própria desta lista (24
+// hex exatos; o resto saía como o hex cru, "#C3B091") saiu. A cor do
+// produto usa a regra única (utils/nomeDaCor.ts): hex → o nome da paleta,
+// o mesmo da etiqueta; texto gravado ("Off White", da planilha) → o texto.
+function nomeDaCorDoProduto(cor: string): string {
+  const t = String(cor || "").trim();
+  if (!t) return "";
+  return /^#[0-9a-fA-F]{6}$/.test(t) ? (nomeDaCor({ hex: t }) || t) : t;
 }
 
 function isServiceProduct(p: Product) {
@@ -75,7 +73,7 @@ export function ProductRow({
   const marginValue = computeMargin(product.price, product.cost);
   const margin = marginValue === null ? "—" : marginValue.toFixed(0) + "%";
   const duracao = isService ? minutosParaRotulo(product.durationMinutes) : "";
-  const colorName = product.color ? hexToName(product.color) : "";
+  const colorName = product.color ? nomeDaCorDoProduto(product.color) : "";
   const hasVariant = !!(product.color || product.size);
   const hasImage = !!product.image_url;
 
