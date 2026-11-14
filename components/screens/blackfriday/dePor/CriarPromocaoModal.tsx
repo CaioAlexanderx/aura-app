@@ -57,6 +57,11 @@ type Props = {
   onAplicada?: () => void;
   /** "Repetir promoção": já abre no "um a um" com estes produtos marcados. */
   preSelecionados?: string[];
+  /** Prazo marcado ao abrir (p-120: a loja online abre na Black Friday). Sem
+   *  ele, o primeiro atalho disponível, como sempre. */
+  prazoInicial?: ChavePrazo;
+  /** Título do cabeçalho (padrão "Criar promoção"). */
+  titulo?: string;
 };
 
 export function mensagemErroPromo(e: any): string {
@@ -69,7 +74,7 @@ export function mensagemErroPromo(e: any): string {
   return (e && e.message) || "Não conseguimos fazer isso agora. Tente de novo em instantes.";
 }
 
-export function CriarPromocaoModal({ companyId, onFechar, onAplicada, preSelecionados }: Props) {
+export function CriarPromocaoModal({ companyId, onFechar, onAplicada, preSelecionados, prazoInicial, titulo }: Props) {
   var largura = useWindowDimensions().width;
   var estreito = largura < 640;
   var hoje = hojeBrt();
@@ -94,9 +99,10 @@ export function CriarPromocaoModal({ companyId, onFechar, onAplicada, preSelecio
   var [valorTxt, setValorTxt] = useState(VALOR_INICIAL_PROMO.percent);
   var [terminacao, setTerminacao] = useState<TerminacaoPromocao>("90");
   var prazos = useMemo(function () { return prazosDisponiveis(hoje); }, [hoje]);
-  var [prazo, setPrazo] = useState<ChavePrazo>(prazos[0] ? prazos[0].chave : "datas");
+  var prazoDeAbrir = (prazoInicial && prazos.find(function (p) { return p.chave === prazoInicial; })) || prazos[0];
+  var [prazo, setPrazo] = useState<ChavePrazo>(prazoDeAbrir ? prazoDeAbrir.chave : "datas");
   var [iniTxt, setIniTxt] = useState(formatIsoToBr(hoje));
-  var [fimTxt, setFimTxt] = useState(formatIsoToBr(prazos[0] ? prazos[0].fim : hoje));
+  var [fimTxt, setFimTxt] = useState(formatIsoToBr(prazoDeAbrir ? prazoDeAbrir.fim : hoje));
 
   var [carregando, setCarregando] = useState(false);
   var [erro, setErro] = useState<string | null>(null);
@@ -228,13 +234,13 @@ export function CriarPromocaoModal({ companyId, onFechar, onAplicada, preSelecio
   return (
     <View style={[s.overlay, estreito && { padding: 10 }]} testID="promo-modal">
       <Pressable style={s.backdrop} onPress={fechar} accessibilityLabel="Fechar" />
-      <View style={[s.panel, panelWeb ? (panelWeb as any) : { backgroundColor: Colors.bg3 }]} accessibilityViewIsModal accessibilityLabel="Criar promoção">
+      <View style={[s.panel, panelWeb ? (panelWeb as any) : { backgroundColor: Colors.bg3 }]} accessibilityViewIsModal accessibilityLabel={titulo || "Criar promoção"}>
 
         <View style={s.header}>
           <View style={s.headerLeft}>
             <View style={s.headerIco}><Icon name="tag" size={16} color="#a78bfa" /></View>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={s.headerTitle}>Criar promoção</Text>
+              <Text style={s.headerTitle}>{titulo || "Criar promoção"}</Text>
               <Text style={s.headerSub}>{sub}</Text>
             </View>
           </View>

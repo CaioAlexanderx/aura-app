@@ -17,6 +17,19 @@
 //                                         com o botão de trocar a empresa
 //                                         ativa), sem chamar as promoções.
 //                                         Perfil consulta não vê nenhuma.
+//   loja_online "Black Friday na loja      módulo `black_friday.loja_online`
+//               online"                   (Negócio+, regra 3), só quando o
+//                                         backend respondeu a campanha E a
+//                                         empresa tem loja online
+//                                         (`lojaOnlineDisponivel`: 404, 403
+//                                         do plano, 503 ou sem loja = some).
+//                                         Logo depois do De/Por: monta os
+//                                         descontos com o mesmo assistente e
+//                                         liga a faixa da loja (p-120,
+//                                         14/11/2026). No CONSOLIDADO a
+//                                         campanha é por empresa: variante
+//                                         "escolher_empresa", sem chamar a
+//                                         campanha. Perfil consulta não vê.
 //   crediario_janeiro                     módulo `crediario` (Negócio+), e
 //               "Crediário para janeiro"  só quando o backend respondeu o
 //                                         resumo (`crediarioDisponivel`:
@@ -51,7 +64,11 @@ import { faseCrediarioJaneiro } from "./crediarioJaneiro/regrasCrediarioJaneiro"
  *  vitrine da página. */
 export const VALE_TROCA_NA_PAGINA_ATE = "2027-01-31";
 
-export type ChaveDaSecao = "de_por" | "crediario_janeiro" | "ruptura" | "assento" | "vale_troca";
+export type ChaveDaSecao = "de_por" | "loja_online" | "crediario_janeiro" | "ruptura" | "assento" | "vale_troca";
+
+/** Chave de módulo PRÓPRIA da seção da loja online (regra 3): MODULE_PLAN_MAP
+ *  (Negócio) e PERM_TO_MODULES (quem cuida da loja online, como o Canal). */
+export const LOJA_ONLINE_BF_MOD = "black_friday.loja_online";
 
 export type SecaoDaPagina = {
   chave: ChaveDaSecao;
@@ -73,6 +90,12 @@ export const TEXTOS_DAS_SECOES: Record<ChaveDaSecao, SecaoDaPagina> = {
     titulo: "Promoção em lote",
     porQueAgora:
       "Na Black Friday o cliente procura o preço riscado: coloque vários produtos em promoção de uma vez, com começo e fim. No fim do prazo, os preços voltam sozinhos.",
+  },
+  loja_online: {
+    chave: "loja_online",
+    titulo: "Black Friday na loja online",
+    porQueAgora:
+      "Na Black Friday o cliente da loja online procura o preço riscado. Monte os descontos e ligue a campanha: a loja ganha uma faixa preta e o preço antigo riscado nos produtos em promoção.",
   },
   crediario_janeiro: {
     chave: "crediario_janeiro",
@@ -113,6 +136,8 @@ export type EntradaDasSecoes = {
   estoqueSoConsulta?: boolean;
   /** O backend respondeu o resumo do crediário (useResumoVencimento). */
   crediarioDisponivel?: boolean;
+  /** O backend respondeu a campanha e a empresa tem loja online (useCampanhaDaLoja). */
+  lojaOnlineDisponivel?: boolean;
 };
 
 export function secoesDaPagina(e: EntradaDasSecoes): SecaoDaPagina[] {
@@ -126,6 +151,11 @@ export function secoesDaPagina(e: EntradaDasSecoes): SecaoDaPagina[] {
     } else if (e.dePorDisponivel) {
       out.push(TEXTOS_DAS_SECOES.de_por);
     }
+  }
+
+  if (e.visible.has(LOJA_ONLINE_BF_MOD) && !e.estoqueSoConsulta) {
+    if (e.consolidatedView) out.push({ ...TEXTOS_DAS_SECOES.loja_online, variante: "escolher_empresa" });
+    else if (e.lojaOnlineDisponivel) out.push(TEXTOS_DAS_SECOES.loja_online);
   }
 
   if (e.crediarioDisponivel && e.visible.has("crediario")) {
