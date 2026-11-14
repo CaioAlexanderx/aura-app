@@ -90,6 +90,8 @@ function mapApiProduct(p: any): Product {
     image_url: p.image_url || "",
     has_variants: hasVariants,
     variant_barcodes: Array.isArray(p.variant_barcodes) ? p.variant_barcodes : [],
+    // 14/11/2026 (CP6): nomes de cor das variantes, para a busca achar pela cor.
+    variant_color_names: Array.isArray(p.variant_color_names) ? p.variant_color_names : [],
     ncm: p.ncm || "",
     // 23/09/2026 (QA producao): faltava mapear created_at — o sort "recent"
     // do Estoque (estoque.tsx) dependia dele e sempre recebia undefined.

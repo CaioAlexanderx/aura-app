@@ -56,6 +56,9 @@ export type Product = {
   // Backend GET /products devolve via ARRAY_AGG; usado pelo scanner local
   // do Estoque pra achar o pai bipando barcode de uma variante.
   variant_barcodes?: string[];
+  // 14/11/2026 (CP6 da revisão de cores): os nomes de cor das variantes
+  // ativas (o nome que a tela mostra e o gravado), para a busca.
+  variant_color_names?: string[];
   ncm?: string;
   // 23/09/2026 (QA producao, item 10 — "Ultimos adicionados" ordenava
   // alfabetico): GET /products ja devolvia created_at, mas mapApiProduct
