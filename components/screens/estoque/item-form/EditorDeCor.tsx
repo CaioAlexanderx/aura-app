@@ -20,6 +20,7 @@ import type { CorDoItem } from "./types";
 import {
   paletaFiltrada, jaTemCor, comCorDaPaleta, comNomeProprio, renomear,
   sugestoesParaAmostra, nomeMaisPerto, hexValido,
+  repeticoes, avisoDaCor, comoSai, type ComoSai,
 } from "./regrasDaCor";
 
 const AMOSTRA_INICIAL = "#C8B6A6";
@@ -31,10 +32,52 @@ function corClara(hex: string) {
   return (r * 299 + g * 587 + b * 114) / 1000 > 160;
 }
 
-export function EditorDeCor({ cores, onCores, narrow }: {
+// 14/11/2026 (CP4b, telas 2 e 3 do mockup): "como sai" no Caixa, na
+// etiqueta, na vitrine e na nota, e o aviso de nome ou amostra repetidos.
+// O aviso só avisa: nunca impede salvar.
+function PreviaComoSai({ agora, antes }: { agora: ComoSai; antes?: ComoSai | null }) {
+  const linhas: Array<[string, keyof ComoSai]> = [["Caixa", "caixa"], ["Etiqueta", "etiqueta"], ["Vitrine", "vitrine"], ["Nota", "nota"]];
+  return (
+    <View style={st.previa} testID="como-sai">
+      <Text style={st.previaTit}>Como sai</Text>
+      {linhas.map(([rotulo, campo]) => {
+        const valor = String(agora[campo]);
+        const velho = antes ? String(antes[campo]) : null;
+        return (
+          <View key={campo} style={st.previaLinha}>
+            <Text style={st.previaRot}>{rotulo}</Text>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={st.previaVal}>{valor}</Text>
+              {campo === "nota" ? <Text style={st.previaObs}>{agora.notaTamanho + " de 120 caracteres" + (agora.notaTamanho > 120 ? " — o fim é cortado" : "")}</Text> : null}
+              {velho !== null && velho !== valor ? <Text style={st.previaObs}>{"Hoje: " + velho}</Text> : null}
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function Aviso({ texto, children }: { texto: string; children?: any }) {
+  return (
+    <View style={st.aviso} testID="aviso-de-cor">
+      <Text style={st.avisoIc}>!</Text>
+      <View style={{ flex: 1, gap: 6 }}>
+        <Text style={st.avisoTxt}>{texto}</Text>
+        {children ? <View style={st.avisoAcoes}>{children}</View> : null}
+      </View>
+    </View>
+  );
+}
+
+export function EditorDeCor({ cores, onCores, narrow, produto, tamanhoExemplo }: {
   cores: CorDoItem[];
   onCores: (v: CorDoItem[]) => void;
   narrow?: boolean;
+  /** Nome do produto, para a prévia da nota (CP4b). */
+  produto?: string;
+  /** Um tamanho da grade, para a prévia (CP4b). */
+  tamanhoExemplo?: string | null;
 }) {
   const [abrir, setAbrir] = useState(false);
   const [busca, setBusca] = useState("");
@@ -43,6 +86,9 @@ export function EditorDeCor({ cores, onCores, narrow }: {
   const [amostraTxt, setAmostraTxt] = useState(AMOSTRA_INICIAL);
   const [renomeando, setRenomeando] = useState<string | null>(null);
   const [novoNome, setNovoNome] = useState("");
+  // Pares que ela marcou "são diferentes, manter" (só nesta abertura).
+  const [mantidos, setMantidos] = useState<Set<string>>(() => new Set());
+  const repetidas = repeticoes(cores, mantidos);
 
   const familias = paletaFiltrada(busca);
   const corEmEdicao = renomeando ? cores.find((c) => c.hex.toUpperCase() === renomeando) || null : null;
@@ -92,6 +138,26 @@ export function EditorDeCor({ cores, onCores, narrow }: {
         <Chip label="+ Cor" dashed onPress={() => (abrir ? fecharPaleta() : setAbrir(true))} />
       </View>
 
+      {repetidas.map((r) => (
+        <Aviso
+          key={r.chave}
+          texto={r.tipo === "nome"
+            ? "Duas cores com o nome \"" + r.primeira.name + "\". No Caixa, na etiqueta e na nota elas saem iguais."
+            : "\"" + r.primeira.name + "\" e \"" + r.segunda.name + "\" têm quase a mesma amostra. Na vitrine a cliente vê duas bolinhas iguais."}
+        >
+          <Pressable onPress={() => abrirRenomear(r.segunda)} style={st.avisoBtn} accessibilityLabel={"Renomear " + r.segunda.name}>
+            <Text style={st.avisoBtnTxt}>{"Renomear \"" + r.segunda.name + "\""}</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setMantidos((m) => new Set(m).add(r.chave))}
+            style={st.avisoBtn}
+            accessibilityLabel={"Manter " + r.primeira.name + " e " + r.segunda.name}
+          >
+            <Text style={st.avisoBtnTxt}>São diferentes, manter</Text>
+          </Pressable>
+        </Aviso>
+      ))}
+
       {corEmEdicao ? (
         <View style={st.painel} testID="renomear-cor">
           <View style={st.cabeca}>
@@ -115,6 +181,20 @@ export function EditorDeCor({ cores, onCores, narrow }: {
               onSubmitEditing={salvarNome}
             />
           </View>
+          {(() => {
+            const trocou = !!novoNome.trim() && novoNome.trim() !== String(corEmEdicao.name || "").trim();
+            const aviso = trocou ? avisoDaCor(cores, novoNome, corEmEdicao.hex, corEmEdicao.hex) : null;
+            const nomeHoje = corEmEdicao.nomeSoParaMostrar ? null : corEmEdicao.name;
+            const base = { hex: corEmEdicao.hex, nomeNaTela: corEmEdicao.name, produto, tamanho: tamanhoExemplo };
+            const hoje = comoSai({ ...base, nome: nomeHoje });
+            const depois = trocou ? comoSai({ ...base, nome: novoNome.trim() }) : hoje;
+            return (
+              <>
+                {aviso ? <Aviso texto={aviso} /> : null}
+                <PreviaComoSai agora={depois} antes={trocou ? hoje : null} />
+              </>
+            );
+          })()}
           <View style={st.sugestoes}>
             <Text style={st.dica}>Da paleta, para esta amostra:</Text>
             {sugestoesParaAmostra(corEmEdicao.hex).map((n) => (
@@ -221,6 +301,15 @@ export function EditorDeCor({ cores, onCores, narrow }: {
               {"A amostra é a bolinha do Caixa e da vitrine; o nome é o que você escrever." + (nomeMaisPerto(amostra) ? " Mais perto na paleta: " + nomeMaisPerto(amostra) + "." : "")}
               {jaTemCor(cores, amostra) ? " Esta amostra já está no produto." : ""}
             </Text>
+            {nomeProprio.trim() ? (() => {
+              const aviso = avisoDaCor(cores, nomeProprio, amostra);
+              return (
+                <>
+                  {aviso ? <Aviso texto={aviso} /> : null}
+                  <PreviaComoSai agora={comoSai({ hex: amostra, nome: nomeProprio.trim(), produto, tamanho: tamanhoExemplo })} />
+                </>
+              );
+            })() : null}
           </View>
 
           <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
@@ -294,6 +383,24 @@ const st = {
     backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2,
   },
   prontoTxt: { fontSize: 12, color: Colors.violet3, fontWeight: "700" as const },
+  aviso: {
+    flexDirection: "row" as const, gap: 8, marginTop: 8, padding: 10, borderRadius: 10,
+    backgroundColor: Colors.amberD, borderWidth: 1, borderColor: Colors.amber,
+  },
+  avisoIc: { width: 16, textAlign: "center" as const, color: Colors.amber, fontWeight: "800" as const },
+  avisoTxt: { fontSize: 12, color: Colors.ink, lineHeight: 17 },
+  avisoAcoes: { flexDirection: "row" as const, flexWrap: "wrap" as const, gap: 6 },
+  avisoBtn: {
+    minHeight: 32, paddingHorizontal: 10, justifyContent: "center" as const,
+    borderRadius: 8, borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg3,
+  },
+  avisoBtnTxt: { fontSize: 12, color: Colors.violet3, fontWeight: "700" as const },
+  previa: { gap: 6, padding: 10, borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg2 },
+  previaTit: { fontSize: 10.5, color: Colors.ink3, fontWeight: "700" as const, letterSpacing: 0.4, textTransform: "uppercase" as const },
+  previaLinha: { flexDirection: "row" as const, gap: 8, alignItems: "flex-start" as const },
+  previaRot: { width: 62, fontSize: 11.5, color: Colors.ink3, fontWeight: "600" as const },
+  previaVal: { fontSize: 12.5, color: Colors.ink, fontWeight: "600" as const },
+  previaObs: { fontSize: 11, color: Colors.ink3, marginTop: 1 },
 };
 
 export default EditorDeCor;

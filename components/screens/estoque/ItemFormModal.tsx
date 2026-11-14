@@ -1104,6 +1104,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   const secEstoque = isProduto ? (
     <SecaoEstoque
       narrow={narrow}
+      nomeDoProduto={nome}
       modoEdicao={modoEdicao}
       avisoDoPai={stockMode === "variants" ? avisoPai : null}
       unidade={unidade} onUnidade={mudarUnidade}

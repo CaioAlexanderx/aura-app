@@ -82,6 +82,8 @@ type Props = {
   // na config + m²/m³ — e só no cadastro.) Sem ela, a opção some.
   lotesDisponiveis?: boolean;
   lotes?: LinhaDeLote[]; onLotes?: (v: LinhaDeLote[]) => void;
+  // 14/11/2026 (CP4b): para a prévia "como sai" do editor de cor.
+  nomeDoProduto?: string;
 };
 
 export function SecaoEstoque(p: Props) {
@@ -415,7 +417,10 @@ export function SecaoEstoque(p: Props) {
             <Campo label="Cores" style={{ flex: 1 }}>
               {/* 14/11/2026 (CP4a): paleta com nome e busca, nome próprio com
                   amostra e renomear tocando na cor (EditorDeCor.tsx). */}
-              <EditorDeCor cores={C} onCores={p.onCores} narrow={p.narrow} />
+              <EditorDeCor
+                cores={C} onCores={p.onCores} narrow={p.narrow}
+                produto={p.nomeDoProduto} tamanhoExemplo={Z[0] || null}
+              />
             </Campo>
 
             <Campo label={perfil.estoque.rotuloDosTamanhos} style={{ flex: 1 }}>
