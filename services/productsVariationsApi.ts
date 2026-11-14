@@ -28,7 +28,12 @@ import { request } from "@/services/api";
 
 export type ColorEntry = {
   hex: string;         // "#FF0000"
-  name: string | null; // "Vermelho" (opcional, auto-detectado via colorNames)
+  // No GET: só o color_name gravado (14/11/2026), ou null. No PUT: o nome que
+  // a lojista tem ou escolheu; null mantém o que está gravado.
+  name: string | null;
+  // Só no GET (14/11/2026): o pedaço da cor no sku_suffix ("AZUL ESCUR"),
+  // quando name é null. Sugestão para mostrar; nunca vai de volta no PUT.
+  name_sugerido?: string | null;
 };
 
 // matrix eh objeto { "hex|size": stock }.

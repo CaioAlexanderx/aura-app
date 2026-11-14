@@ -104,6 +104,7 @@ import {
   rotuloDoProgresso, subtituloDoModal, textoDeEdicao, textoDoBloqueio, tituloDoModal,
   usaDuasColunas, valorDaMascara, novaLinhaDeLote, lotesParaGravar, totalDosLotes,
   gravacaoDoPrecoNoCartao, removidasComEstoque, textoDaRemocaoComEstoque,
+  coresDoServidor, nomeDaCorParaGravar,
   type CorDoItem, type FotoPendente, type ItemType, type LinhaDeLote, type StockMode,
 } from "./item-form/types";
 
@@ -361,10 +362,9 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     const doProduto = String((variacoes as any).product_id || "");
     if (doProduto && doProduto !== String(alvo.id)) return;
     if (gradeTocadaRef.current) return;
-    const cs: CorDoItem[] = (variacoes.colors || []).map((c) => ({
-      hex: (c.hex || "").toUpperCase(),
-      name: c.name || hexToName(c.hex) || c.hex,
-    }));
+    // 14/11/2026: cor sem nome gravado mostra o pedaço do sufixo (ou a
+    // paleta), mas esse nome não volta no Salvar (nomeDaCorParaGravar).
+    const cs: CorDoItem[] = coresDoServidor(variacoes.colors, (h) => hexToName(h));
     const zs = variacoes.sizes || [];
     const cel: Record<string, string> = {};
     const matriz = normalizarMapaDaGrade<number>(variacoes.matrix);
@@ -642,9 +642,9 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   // Nome da cor que a lojista conhece, mesmo depois de ela sair da tela.
   function nomeDaCorDoServidor(hex: string): string {
     const h = String(hex || "").toUpperCase();
-    const doServidor = ((variacoesRef.current?.colors || []) as Array<{ hex: string; name: string | null }>)
+    const doServidor = ((variacoesRef.current?.colors || []) as Array<{ hex: string; name: string | null; name_sugerido?: string | null }>)
       .find((c) => String(c.hex || "").toUpperCase() === h);
-    return (doServidor && doServidor.name) || hexToName(h) || h;
+    return (doServidor && (doServidor.name || doServidor.name_sugerido)) || hexToName(h) || h;
   }
 
   function matrizQueVaiNoPut(): MatrixMap {
@@ -665,7 +665,8 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       chaves.forEach((k) => { if ((barras[k] || "").trim()) doForm[k] = barras[k].trim(); });
       const lida = gradeLidaRef.current && gradeLidaRef.current.pid === String(id) ? gradeLidaRef.current.matriz : null;
       await productsVariationsApi.save(company.id, id, {
-        colors: cores.map((c) => ({ hex: c.hex, name: c.name || null })),
+        // 14/11/2026: só o nome gravado ou escolhido; o que a tela só mostrava vai null.
+        colors: cores.map((c) => ({ hex: c.hex, name: nomeDaCorParaGravar(c) })),
         sizes: tamanhos,
         matrix: matriz,
         barcodes: { ...guardados, ...doForm },

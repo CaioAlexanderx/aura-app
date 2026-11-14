@@ -19,7 +19,41 @@ import type { ProductImage } from "@/services/productImagesApi";
 export type ItemType = "product" | "service";
 // "lots" só existe no perfil Matcon, no cadastro de m²/m³ com lote ligado.
 export type StockMode = "single" | "variants" | "lots";
-export type CorDoItem = { hex: string; name: string };
+// 14/11/2026: `nomeSoParaMostrar` marca a cor que veio do servidor SEM nome
+// gravado (color_name NULL): o `name` dela é só o que a tela mostra (o pedaço
+// do sku_suffix, ou a paleta) e não vai de volta no Salvar — antes ia, e o
+// backend gravava "AZUL ESCUR" como nome da cor.
+export type CorDoItem = { hex: string; name: string; nomeSoParaMostrar?: boolean };
+
+/**
+ * Cores da grade como o GET /variations devolve, prontas para a tela.
+ * `name` é só o color_name gravado (ou null); sem ele, a tela mostra o
+ * `name_sugerido` (o pedaço do sku_suffix, como mostrava antes) ou o nome
+ * da paleta, e a cor fica marcada para não reenviar esse nome.
+ */
+export function coresDoServidor(
+  colors: Array<{ hex: string; name: string | null; name_sugerido?: string | null }> | null | undefined,
+  nomeDaPaleta: (hex: string) => string,
+): CorDoItem[] {
+  return (colors || []).map((c) => {
+    const hex = (c.hex || "").toUpperCase();
+    const gravado = typeof c.name === "string" ? c.name.trim() : "";
+    if (gravado) return { hex, name: gravado };
+    const sugerido = typeof c.name_sugerido === "string" ? c.name_sugerido.trim() : "";
+    return { hex, name: sugerido || nomeDaPaleta(c.hex) || c.hex, nomeSoParaMostrar: true };
+  });
+}
+
+/**
+ * O nome que vai no PUT /variations: o que a lojista tem gravado ou acabou
+ * de escolher. Cor sem nome gravado vai com null — o backend mantém o que
+ * está lá (e o sku_suffix) em vez de gravar o nome que só a tela mostrava.
+ */
+export function nomeDaCorParaGravar(c: CorDoItem): string | null {
+  if (c.nomeSoParaMostrar) return null;
+  const t = typeof c.name === "string" ? c.name.trim() : "";
+  return t || null;
+}
 
 // Os chips de duração, em MINUTOS. O rótulo é derivado (minutosParaRotulo)
 // pra que a tela e a coluna nunca discordem: "1h30" e 90 são a mesma coisa
