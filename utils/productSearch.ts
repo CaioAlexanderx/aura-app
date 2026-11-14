@@ -31,6 +31,19 @@
 // uma das suas variantes.
 
 import { hexToName } from "@/utils/colorNames";
+import { corPeloNome, chaveDoNome } from "@/utils/paletaDeCores";
+
+// 14/11/2026 (CP6 da revisão de cores): busca pelo nome da cor.
+//   - o haystack ganha os nomes de cor das variantes (variant_color_names,
+//     do backend: o nome que a tela mostra e o gravado) e, para cada cor
+//     que é da paleta única, uma marca "cor:<nome>" da cor da paleta;
+//   - um termo que é nome ou apelido de cor da paleta ("preta", "black")
+//     também casa com essa marca — então "preta" acha "Preto" e o
+//     contrário, sem acento e sem diferenciar maiúsculas.
+function marcaDaCor(nome: string | null | undefined): string | null {
+  const c = corPeloNome(nome);
+  return c ? "cor:" + chaveDoNome(c.nome).replace(/ /g, "_") : null;
+}
 
 export function normalizeText(s: any): string {
   return String(s ?? "")
@@ -50,6 +63,7 @@ export type SearchableProduct = {
   size?: string | null;
   brand?: string | null;
   variant_barcodes?: string[] | null;
+  variant_color_names?: string[] | null;
 };
 
 // Constrói uma string única (já normalizada) com todos os campos
@@ -69,6 +83,10 @@ export function buildProductHaystack(p: SearchableProduct | any): string {
   const colorRaw = p?.color ? String(p.color) : "";
   const colorTranslated = colorRaw ? hexToName(colorRaw) : "";
   const variantBcs = Array.isArray(p?.variant_barcodes) ? p.variant_barcodes.filter(Boolean).join(" ") : "";
+  const coresDasVariantes: string[] = Array.isArray(p?.variant_color_names) ? p.variant_color_names.filter(Boolean) : [];
+  const marcas = Array.from(new Set(
+    [colorRaw, colorTranslated, ...coresDasVariantes].map(marcaDaCor).filter(Boolean) as string[],
+  ));
   return normalizeText(
     [
       p?.name,
@@ -83,6 +101,8 @@ export function buildProductHaystack(p: SearchableProduct | any): string {
       p?.size,
       p?.brand,
       variantBcs || null,
+      coresDasVariantes.length ? coresDasVariantes.join(" ") : null,
+      marcas.length ? marcas.join(" ") : null,
     ]
       .filter(Boolean)
       .join(" ")
@@ -105,7 +125,11 @@ export function matchesQuery(haystack: string, query: string): boolean {
   const terms = normalizeText(query).split(/\s+/).filter(Boolean);
   if (terms.length === 0) return true;
   for (const t of terms) {
-    if (!haystack.includes(t)) return false;
+    if (haystack.includes(t)) continue;
+    // "preta" acha "Preto": a cor da paleta do termo (CP6).
+    const marca = marcaDaCor(t);
+    if (marca && haystack.includes(marca)) continue;
+    return false;
   }
   return true;
 }
