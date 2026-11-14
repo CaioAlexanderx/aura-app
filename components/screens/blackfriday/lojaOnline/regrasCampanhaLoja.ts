@@ -81,6 +81,8 @@ export function mensagemErroCampanha(err: any): string {
     return (err.data && err.data.error) || "Para ligar a campanha, monte antes pelo menos um desconto.";
   }
   if (codigo === "SEM_LOJA_ONLINE") return "Configure a loja online antes de ligar a campanha.";
+  // p-122: o servidor explica o que tem de errado no texto da faixa.
+  if (codigo === "TEXTO_DA_FAIXA_INVALIDO") return (err.data && err.data.error) || "Confira o texto da faixa.";
   if (codigo === "MIGRATION_PENDING" || (err instanceof ApiError && err.status === 503)) {
     return "Esta função ainda está sendo ligada na sua conta. Tente de novo daqui a pouco.";
   }
