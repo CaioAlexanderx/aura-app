@@ -37,34 +37,6 @@ import { useAuthStore } from "@/stores/auth";
 import { toast } from "@/components/Toast";
 
 // ============================================================
-// EQUIPE GATE — upsell para plano Essencial
-// Espelha o padrão do varejo (EquipeGate em app/(tabs)/configuracoes.tsx)
-// mas com tematização Studio (tokens navy/magenta).
-// ============================================================
-function EquipeGateStudio({ t }: { t: ReturnType<typeof useStudioTokens> }) {
-  const eg = useMemo(() => StyleSheet.create({
-    wrap:      { backgroundColor: t.bgSoft, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: t.ink5, gap: 10 },
-    row:       { flexDirection: "row" as const, alignItems: "flex-start" as const, gap: 10 },
-    label:     { fontSize: 13, color: t.ink3, flex: 1, lineHeight: 18 },
-    badge:     { flexDirection: "row" as const, alignItems: "center" as const, gap: 6, alignSelf: "flex-start" as const, backgroundColor: t.paperCardElev, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: t.ink5 },
-    badgeText: { fontSize: 11, color: t.ink3, fontWeight: "600" as const },
-  }), [t]);
-
-  return (
-    <View style={eg.wrap}>
-      <View style={eg.row}>
-        <Icon name="users" size={16} color={t.ink3} />
-        <Text style={eg.label}>Convide sua equipe e defina permissões de acesso por módulo.</Text>
-      </View>
-      <Pressable onPress={() => router.push("/(tabs)/planos")} style={eg.badge}>
-        <Icon name="lock" size={11} color={t.ink3} />
-        <Text style={eg.badgeText}>A partir do plano Negócio</Text>
-      </Pressable>
-    </View>
-  );
-}
-
-// ============================================================
 // TAXA DA MAQUININHA — 18/08/2026
 // A taxa vale pro shell Negocio E pro Studio (backend PR #501),
 // mas empresas studio são redirecionadas de /configuracoes pelo
@@ -496,18 +468,16 @@ export default function StudioConfiguracoes() {
       {/* Frente da loja — é por aqui que se sai do Studio */}
       <FrenteCardStudio t={t} s={s} />
 
-      {/* Equipe & acessos */}
-      <View style={s.card}>
+      {/* Equipe & acessos — 13/11/2026 (hotfix): sem capacidade de equipe
+          (Essencial sem acesso extra) o cartão some, sem cadeado de upgrade. */}
+      {hasTeamCapacity && <View style={s.card}>
         <View style={s.cardTitleRow}>
           <Text style={s.cardTitle}>Equipe & acessos</Text>
           {interrogacao("equipe", "Equipe e acessos")}
         </View>
         {dica("equipe", "Convide colaboradores, defina permissões por módulo e gerencie quem acessa o Studio.", s.cardSub)}
-        {hasTeamCapacity
-          ? <MembersSection />
-          : <EquipeGateStudio t={t} />
-        }
-      </View>
+        <MembersSection />
+      </View>}
 
       {/* Save */}
       <Pressable style={[s.saveBtn, saving && { opacity: 0.6 }]} onPress={save} disabled={saving}>

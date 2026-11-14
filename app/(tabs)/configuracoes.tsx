@@ -31,29 +31,6 @@ function openEmail() {
   else Linking.openURL(mailto);
 }
 
-function EquipeGate() {
-  return (
-    <View style={g.wrap}>
-      <View style={g.row}>
-        <Icon name="users" size={16} color={Colors.ink3} />
-        <Text style={g.label}>Convide sua equipe e defina permissões de acesso.</Text>
-      </View>
-      <Pressable onPress={() => router.push("/(tabs)/planos")} style={g.badge}>
-        <Icon name="lock" size={11} color={Colors.ink3} />
-        <Text style={g.badgeText}>A partir do plano Negócio</Text>
-      </Pressable>
-    </View>
-  );
-}
-
-const g = StyleSheet.create({
-  wrap:      { backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, marginBottom: 4, gap: 10 },
-  row:       { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  label:     { fontSize: 13, color: Colors.ink3, flex: 1, lineHeight: 18 },
-  badge:     { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", backgroundColor: Colors.bg4, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: Colors.border },
-  badgeText: { fontSize: 11, color: Colors.ink3, fontWeight: "600" },
-});
-
 // MULTICNPJ Onda 2.6: gate explicativo das secoes per-company quando user
 // esta em modo consolidado. Algumas configs sao especificas de uma empresa
 // (identidade, dados registrais, vendas, equipe) e nao fazem sentido agregadas.
@@ -395,10 +372,13 @@ export default function ConfiguracoesScreen() {
               12/05/2026: gate por CAPACIDADE (seats_included > 1) em vez de plano hardcoded.
               13/05/2026: fallback secundario via company.extra_seats_granted > 0 (caso Maria).
               15/06/2026: acesso extra pago sempre libera (independe de seats_included). */}
-          {!consolidatedView && (
+          {/* 13/11/2026 (hotfix, regra do Caio): no Essencial o que o plano não
+              tem some — nada de cadeado "A partir do plano Negócio". Sem
+              capacidade de equipe, a seção Equipe não aparece. */}
+          {!consolidatedView && hasTeamCapacity && (
             <>
               <SectionTitle title="Equipe" />
-              {hasTeamCapacity ? <MembersSection /> : <EquipeGate />}
+              <MembersSection />
             </>
           )}
 
