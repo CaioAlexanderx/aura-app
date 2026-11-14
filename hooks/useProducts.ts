@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { mensagemDoErroAoSalvar } from "@/utils/erroAoSalvarProduto";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
@@ -255,7 +256,9 @@ export function useProducts() {
       qc.invalidateQueries({ queryKey: ["products", companyId] });
       if (!vars?.silent) toast.success("Produto atualizado!");
     },
-    onError: () => toast.error("Erro ao atualizar produto"),
+    // 14/11/2026: erro com explicação (4xx, ex.: código de barras repetido)
+    // mostra o motivo; o resto segue com o texto de sempre.
+    onError: (err: any) => toast.error(mensagemDoErroAoSalvar(err, "Erro ao atualizar produto")),
   });
 
   const deleteMutation = useMutation({
