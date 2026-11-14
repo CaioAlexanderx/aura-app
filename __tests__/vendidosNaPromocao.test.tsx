@@ -86,9 +86,9 @@ function dados(over: any = {}) {
 function chamadasVendidos(): string[] {
   return mockRequest.mock.calls.map((c) => c[0] as string).filter((u) => u.indexOf("/vendidos") >= 0);
 }
-function responderVendidos(resumo: any) {
+function responderVendidos(resumo: any, extra: any = {}) {
   mockRequest.mockImplementation((url: string) => {
-    if (url.indexOf("/vendidos") >= 0) return Promise.resolve({ desde: "x", ate: "y", consolidado: false, lojas: 1, resumo, items: [] });
+    if (url.indexOf("/vendidos") >= 0) return Promise.resolve({ desde: "x", ate: "y", consolidado: false, lojas: 1, resumo, items: [], ...extra });
     return Promise.resolve({ items: [] });
   });
 }
@@ -258,5 +258,30 @@ describe("cartões 'vendidos na promoção'", () => {
     expect(tem(r, "promo-consolidado")).toBe(true);
     expect(chamadasVendidos()).toHaveLength(0);
     expect(tem(r, "promo-vendidos-ativa")).toBe(false);
+  });
+});
+
+// ── p-123a: a loja online no placar ─────────────────────────
+
+describe("vendidos: a loja online conta (p-123a)", () => {
+  it("lê pedidos_loja_online e conta_loja_online, tolerante a ausência", () => {
+    expect(lerVendidos({ resumo: {}, pedidos_loja_online: "2", conta_loja_online: true })).toMatchObject({ pedidosLojaOnline: 2, contaLojaOnline: true });
+    expect(lerVendidos(null)).toMatchObject({ pedidosLojaOnline: 0, contaLojaOnline: false });
+  });
+
+  it("com pedido da loja: diz quantos pedidos da loja online entraram", async () => {
+    responderVendidos({ itens_vendidos: 2, faturamento: 197.8, desconto_dado: 40, vendas: 1 }, { pedidos_loja_online: 1, conta_loja_online: true });
+    const r = await montar(comQuery(<PromocaoEmLote companyId={CID} consolidado={false} dados={dados({ ativa: [NO_AR] })} />));
+    expect(textoDe(porId(r, "promo-vendidos-loja-online-ativa"))).toBe("Inclui 1 pedido da loja online.");
+    expect(tem(r, "promo-vendidos-origem-ativa")).toBe(false);
+  });
+
+  it("zerado: diz o que conta (Caixa e loja online; ou só o Caixa no backend antigo)", async () => {
+    responderVendidos({ itens_vendidos: 0, faturamento: 0, desconto_dado: 0, vendas: 0 }, { pedidos_loja_online: 0, conta_loja_online: true });
+    let r = await montar(comQuery(<PromocaoEmLote companyId={CID} consolidado={false} dados={dados({ ativa: [NO_AR] })} />));
+    expect(textoDe(porId(r, "promo-vendidos-origem-ativa"))).toBe("Conta o Caixa e os pedidos confirmados da loja online.");
+    responderVendidos({ itens_vendidos: 0, faturamento: 0, desconto_dado: 0, vendas: 0 });
+    r = await montar(comQuery(<PromocaoEmLote companyId={CID} consolidado={false} dados={dados({ ativa: [NO_AR] })} />));
+    expect(textoDe(porId(r, "promo-vendidos-origem-ativa"))).toBe("Conta as vendas do Caixa.");
   });
 });

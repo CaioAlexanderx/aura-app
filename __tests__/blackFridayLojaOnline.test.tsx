@@ -60,7 +60,8 @@ import { secoesDaPagina, LOJA_ONLINE_BF_MOD } from "@/components/screens/blackfr
 import { PaginaBlackFriday } from "@/components/screens/blackfriday/PaginaBlackFriday";
 import { BlackFridayNaLojaOnline } from "@/components/screens/blackfriday/lojaOnline/BlackFridayNaLojaOnline";
 import {
-  avisoDeAgendada, diaMes, mensagemErroCampanha, seloDaCampanha, textoDaChave, textoDaFaixa, textoDosDescontos,
+  avisoDeAgendada, avisoDosEscolhidosForaDaLoja, avisoForaDaLoja, diaMes, mensagemErroCampanha, rotuloForaDaLoja,
+  seloDaCampanha, textoDaChave, textoDaFaixa, textoDosDescontos, ROTA_VITRINE_DA_LOJA,
 } from "@/components/screens/blackfriday/lojaOnline/regrasCampanhaLoja";
 import type { EstadoDaCampanha } from "@/services/campanhaLojaApi";
 
@@ -331,5 +332,52 @@ describe("Montar descontos", () => {
     expect(titulo.length).toBeGreaterThan(0);
     await tocar(r, "promo-continuar");
     expect(porId(r, "promo-prazo-bf").props.accessibilityState).toMatchObject({ checked: true });
+  });
+});
+
+// ── 6. Promoção fora da loja (p-123a, QA 14/11) ──────────────
+
+describe("promoção em peça que a loja não mostra (p-123a)", () => {
+  it("textos: nenhuma na loja, algumas fora, e a chave diz o que falta", () => {
+    expect(avisoForaDaLoja(estado())).toBe(null);
+    expect(avisoForaDaLoja(estado({ promocoes: { fora_da_loja: 3 } }))).toEqual({
+      nenhumaNaLoja: true,
+      texto: "Você tem 3 produtos em promoção, mas nenhum aparece na loja online (estão fora da vitrine ou sem foto).",
+    });
+    expect(avisoForaDaLoja(estado({ promocoes: { fora_da_loja: 1 } }))!.texto).toBe("Você tem 1 produto em promoção, mas ele não aparece na loja online (está fora da vitrine ou sem foto).");
+    expect(avisoForaDaLoja(estado({ promocoes: { no_ar: 2, fora_da_loja: 1 } }))!.texto).toBe("Mais 1 produto em promoção não aparece na loja online (está fora da vitrine ou sem foto).");
+    expect(textoDosDescontos(estado({ promocoes: { fora_da_loja: 3 } }))).toBe("Nenhum produto em promoção na loja online. O preço promocional vale no Caixa e na loja online.");
+    expect(textoDaChave(estado({ promocoes: { fora_da_loja: 3 } }))).toBe("Para ligar, pelo menos um produto em promoção precisa aparecer na loja online.");
+    expect(rotuloForaDaLoja("sem_foto")).toBe("não aparece na loja online · sem foto");
+    expect(avisoDosEscolhidosForaDaLoja(["a", "b"], { a: "fora_da_vitrine" })).toMatch(/^1 dos produtos escolhidos não aparece na loja online/);
+    expect(avisoDosEscolhidosForaDaLoja(["a"], { a: "sem_foto" })).toMatch(/^O produto escolhido não aparece/);
+    expect(avisoDosEscolhidosForaDaLoja(["a"], undefined)).toBe(null);
+  });
+
+  it("seção: o aviso com 'Mostrar na loja' leva à Vitrine do Canal Digital; a chave segue desligada", async () => {
+    const r = await montar(<BlackFridayNaLojaOnline companyId={CID} campanha={campanhaCom(estado({ promocoes: { fora_da_loja: 3 } }))} />);
+    expect(textoDe(porId(r, "bf-loja-fora-da-loja"))).toContain("Você tem 3 produtos em promoção, mas nenhum aparece na loja online");
+    expect(porId(r, "bf-loja-chave").props.disabled).toBe(true);
+    await tocar(r, "bf-loja-mostrar-na-loja");
+    expect(mockPush).toHaveBeenCalledWith(ROTA_VITRINE_DA_LOJA);
+    expect(ROTA_VITRINE_DA_LOJA).toBe("/canal?tab=vitrine");
+  });
+
+  it("assistente: as peças que a loja não mostra vêm marcadas, com o motivo", async () => {
+    mockProdutos = [
+      { id: "p1", name: "Vestido Midi", price: 139.9, stock: 4, stock_qty: 4, is_active: true },
+      { id: "p2", name: "Abraçadeira", price: 3.2, stock: 40, stock_qty: 40, is_active: true },
+    ];
+    mockRequest.mockImplementation(async (url: string) => {
+      if (url.endsWith("/campanha/fora-da-loja")) return { produtos: [{ id: "p2", motivo: "fora_da_vitrine" }] };
+      return {};
+    });
+    const r = await montar(<BlackFridayNaLojaOnline companyId={CID} campanha={campanhaCom(estado())} />);
+    await tocar(r, "bf-loja-montar");
+    await tocar(r, "promo-base-um");
+    expect(textoDe(porId(r, "promo-fora-da-loja-p2"))).toBe("não aparece na loja online · fora da vitrine");
+    expect(tem(r, "promo-fora-da-loja-p1")).toBe(false);
+    await tocar(r, "promo-marcar-p2");
+    expect(textoDe(porId(r, "promo-escolhidos-fora-da-loja"))).toMatch(/^O produto escolhido não aparece na loja online/);
   });
 });

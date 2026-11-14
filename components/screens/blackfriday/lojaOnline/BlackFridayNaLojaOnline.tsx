@@ -14,11 +14,16 @@
 //                  fica desligada (e o servidor recusa com 409, que vira o
 //                  texto gentil dele).
 // Loja online ainda não publicada: uma ação só, "Configurar a loja online".
+// p-123a (QA 14/11): os números contam SÓ o que a loja mostra. Promoção em
+// peça fora da vitrine (ou sem foto, sem estoque) vira um aviso com "Mostrar
+// na loja" (Canal Digital › Vitrine), e no assistente essas peças vêm
+// marcadas "não aparece na loja online".
 // Quem decide se a seção aparece é a página (secoes.ts + useCampanhaDaLoja):
 // some no Essencial, sem loja online e no perfil consulta; no consolidado,
 // "escolher empresa". Sem hover: tudo visível, alvos de 44 px.
 // ============================================================================
 import React, { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, Linking, Platform, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
 import { Colors } from "@/constants/colors";
@@ -27,9 +32,10 @@ import { Aviso } from "@/components/screens/estoque/reajuste/Aviso";
 import { CriarPromocaoModal } from "@/components/screens/blackfriday/dePor/CriarPromocaoModal";
 import { studioStorefrontUrl } from "@/utils/storefrontUrl";
 import type { CampanhaDaLoja } from "@/hooks/useCampanhaDaLoja";
-import type { TituloDaCampanha } from "@/services/campanhaLojaApi";
+import { campanhaLojaApi, type TituloDaCampanha } from "@/services/campanhaLojaApi";
 import {
-  avisoDeAgendada, mensagemErroCampanha, seloDaCampanha, textoDaChave, textoDaFaixa, textoDosDescontos,
+  ROTA_VITRINE_DA_LOJA, avisoDeAgendada, avisoForaDaLoja, mensagemErroCampanha, seloDaCampanha, textoDaChave,
+  textoDaFaixa, textoDosDescontos,
 } from "./regrasCampanhaLoja";
 
 type Props = {
@@ -45,6 +51,15 @@ export function BlackFridayNaLojaOnline({ companyId, campanha, onDescontosMudara
   var [erro, setErro] = useState<string | null>(null);
   // No celular o passo quebra em linhas: o número fica no topo, não no meio.
   var estreito = useWindowDimensions().width < 640;
+  // As peças que a loja não mostra, só quando o assistente abre. Falhou ou
+  // backend antigo: o assistente abre sem as marcas, como antes.
+  var fora = useQuery({
+    queryKey: ["campanha-loja-fora", companyId],
+    queryFn: function () { return campanhaLojaApi.foraDaLoja(companyId); },
+    enabled: aberto && !!companyId,
+    staleTime: 60000,
+    retry: false,
+  });
   var e = campanha.estado;
   if (!e) return null;
 
@@ -64,6 +79,7 @@ export function BlackFridayNaLojaOnline({ companyId, campanha, onDescontosMudara
   var selo = seloDaCampanha(e);
   var temDesconto = e.promocoes.no_ar + e.promocoes.agendadas > 0;
   var aviso = avisoDeAgendada(e);
+  var foraDaLoja = avisoForaDaLoja(e);
 
   async function salvar(qual: "chave" | TituloDaCampanha, mudanca: { ativa?: boolean; titulo?: TituloDaCampanha }) {
     if (salvando) return;
@@ -107,6 +123,15 @@ export function BlackFridayNaLojaOnline({ companyId, campanha, onDescontosMudara
           <Text style={temDesconto ? s.btnTxt : s.btnPTxt}>{temDesconto ? "Montar mais descontos" : "Montar descontos"}</Text>
         </Pressable>
       </View>
+
+      {!!foraDaLoja && (
+        <View style={s.fora} testID="bf-loja-fora-da-loja">
+          <Text style={[s.foraTxt, { flex: 1, minWidth: 200 }]}>{foraDaLoja.texto}</Text>
+          <Pressable style={s.btn} onPress={function () { router.push(ROTA_VITRINE_DA_LOJA as any); }} accessibilityRole="link" testID="bf-loja-mostrar-na-loja">
+            <Text style={s.btnTxt}>Mostrar na loja</Text>
+          </Pressable>
+        </View>
+      )}
 
       <View style={[s.passo, estreito && s.passoCel]} testID="bf-loja-passo-faixa">
         <View style={s.num}><Text style={s.numTxt}>2</Text></View>
@@ -168,6 +193,7 @@ export function BlackFridayNaLojaOnline({ companyId, campanha, onDescontosMudara
           companyId={companyId}
           prazoInicial="bf"
           titulo="Montar descontos da loja online"
+          foraDaLoja={fora.data}
           onFechar={function () { setAberto(false); }}
           onAplicada={function () { campanha.recarregar(); if (onDescontosMudaram) onDescontosMudaram(); }}
         />
@@ -192,6 +218,11 @@ var s = StyleSheet.create({
     flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12,
   },
   passoCel: { alignItems: "flex-start" },
+  fora: {
+    borderRadius: 12, padding: 12, backgroundColor: Colors.amberD, borderWidth: 1, borderColor: Colors.amber + "44",
+    flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 10,
+  },
+  foraTxt: { fontSize: 13, color: Colors.ink, lineHeight: 19 },
   passoCorpo: { flex: 1, minWidth: 200, gap: 2 },
   passoTit: { fontSize: 14.5, fontWeight: "700", color: Colors.ink },
   num: { width: 28, height: 28, borderRadius: 99, alignItems: "center", justifyContent: "center", backgroundColor: Colors.violetD },

@@ -7,7 +7,53 @@
 // datas. Aqui só se escolhe a frase.
 // ============================================================================
 import { ApiError } from "@/services/api";
-import type { EstadoDaCampanha } from "@/services/campanhaLojaApi";
+import type { EstadoDaCampanha, MotivoForaDaLoja } from "@/services/campanhaLojaApi";
+
+/** Onde se escolhe o que aparece na loja online: Canal Digital › Vitrine. */
+export const ROTA_VITRINE_DA_LOJA = "/canal?tab=vitrine";
+
+/** O selo da peça que a loja online não mostra (assistente da loja online). */
+export function rotuloForaDaLoja(motivo: MotivoForaDaLoja | undefined): string {
+  if (motivo === "sem_foto") return "não aparece na loja online · sem foto";
+  if (motivo === "sem_estoque") return "não aparece na loja online · sem estoque";
+  return "não aparece na loja online · fora da vitrine";
+}
+
+/** Quantos dos escolhidos a loja não mostra, em frase; null se nenhum. */
+export function avisoDosEscolhidosForaDaLoja(ids: string[], fora: Record<string, MotivoForaDaLoja> | undefined): string | null {
+  if (!fora) return null;
+  var n = ids.filter(function (id) { return !!fora[id]; }).length;
+  if (n <= 0) return null;
+  var todos = n === ids.length;
+  var quem = todos
+    ? (n === 1 ? "O produto escolhido não aparece" : "Nenhum dos " + n + " produtos escolhidos aparece")
+    : (n === 1 ? "1 dos produtos escolhidos não aparece" : n + " dos produtos escolhidos não aparecem");
+  return quem + " na loja online (fora da vitrine, sem foto ou sem estoque). O desconto vale no Caixa, mas a cliente da loja não vê.";
+}
+
+/**
+ * Promoção só em peça que a loja online não mostra (QA 14/11: a Promoção em
+ * lote dizia "3 itens no ar" e esta seção, "nenhum produto"). null quando
+ * não há o que avisar.
+ */
+export function avisoForaDaLoja(e: EstadoDaCampanha): { texto: string; nenhumaNaLoja: boolean } | null {
+  var n = Number(e.promocoes.fora_da_loja) || 0;
+  if (n <= 0) return null;
+  var motivo = n === 1 ? " (está fora da vitrine ou sem foto)." : " (estão fora da vitrine ou sem foto).";
+  var naLoja = e.promocoes.no_ar + e.promocoes.agendadas;
+  if (naLoja <= 0) {
+    return {
+      nenhumaNaLoja: true,
+      texto: "Você tem " + (n === 1 ? "1 produto em promoção, mas ele não aparece" : n + " produtos em promoção, mas nenhum aparece")
+        + " na loja online" + motivo,
+    };
+  }
+  return {
+    nenhumaNaLoja: false,
+    texto: (n === 1 ? "Mais 1 produto em promoção não aparece" : "Mais " + n + " produtos em promoção não aparecem")
+      + " na loja online" + motivo,
+  };
+}
 
 /** "AAAA-MM-DD" -> "DD/MM"; outro formato, "". */
 export function diaMes(iso: string | null | undefined): string {
@@ -47,7 +93,9 @@ export function textoDosDescontos(e: EstadoDaCampanha): string {
     partes.push(plural(p.agendadas, "produto com promoção agendada", "produtos com promoção agendada")
       + (comeca ? " · começa em " + comeca : ""));
   }
-  var base = partes.length ? partes.join("; ") + "." : "Nenhum produto em promoção ainda.";
+  // p-123a: promoção só em peça que a loja não mostra não é "nenhum ainda".
+  var vazio = (Number(p.fora_da_loja) || 0) > 0 ? "Nenhum produto em promoção na loja online." : "Nenhum produto em promoção ainda.";
+  var base = partes.length ? partes.join("; ") + "." : vazio;
   return base + " O preço promocional vale no Caixa e na loja online.";
 }
 
@@ -61,9 +109,11 @@ export function textoDaFaixa(e: EstadoDaCampanha): string {
 
 /** A linha embaixo da chave. */
 export function textoDaChave(e: EstadoDaCampanha): string {
-  return e.pode_ligar
-    ? "A faixa e o botão Ver ofertas aparecem enquanto houver promoção no ar."
-    : "Disponível depois de montar pelo menos um desconto.";
+  if (e.pode_ligar) return "A faixa e o botão Ver ofertas aparecem enquanto houver promoção no ar.";
+  if ((Number(e.promocoes.fora_da_loja) || 0) > 0) {
+    return "Para ligar, pelo menos um produto em promoção precisa aparecer na loja online.";
+  }
+  return "Disponível depois de montar pelo menos um desconto.";
 }
 
 /** O aviso da campanha ligada e agendada, ou null. */
