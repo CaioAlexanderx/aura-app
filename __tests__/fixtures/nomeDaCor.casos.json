@@ -1,0 +1,29 @@
+{
+  "_leia": "Casos do nome da cor (revisao de cores, 14/11/2026). O MESMO arquivo vive no app (__tests__/fixtures/nomeDaCor.casos.json) e no backend: as duas implementacoes (app utils/nomeDaCor.ts, backend src/services/nomeDaCor.js) passam pelos mesmos casos. Mudou um, copie para o outro.",
+  "nomeDaCor": [
+    { "caso": "nome gravado pela lojista", "entrada": { "hex": "#FAF9F6", "colorName": "Off White", "skuSuffix": "OFF WHITE-M", "tamanho": "M" }, "nome": "Off White" },
+    { "caso": "nome gravado curto", "entrada": { "hex": "#C3B091", "colorName": "Caqui", "skuSuffix": "CAQUI-M", "tamanho": "M" }, "nome": "Caqui" },
+    { "caso": "Preta fica Preta", "entrada": { "hex": "#000000", "colorName": "Preta", "skuSuffix": "PRETA-M", "tamanho": "M" }, "nome": "Preta" },
+    { "caso": "nome cortado nunca aparece: cai na paleta", "entrada": { "hex": "#1F2A44", "colorName": "AZUL ESCUR", "skuSuffix": "AZUL ESCUR-M", "tamanho": "M" }, "nome": "Cinza escuro" },
+    { "caso": "nome inteiro em maiusculas sai em caixa de frase", "entrada": { "hex": "#FAF9F6", "colorName": "OFF WHITE", "skuSuffix": "OFF WHITE-M", "tamanho": "M" }, "nome": "Off white" },
+    { "caso": "espaco nas pontas sai", "entrada": { "hex": "#4B5320", "colorName": "  Militar  " }, "nome": "Militar" },
+    { "caso": "sem nome gravado: o nome legivel do sufixo", "entrada": { "hex": "#C3B091", "colorName": null, "skuSuffix": "CAQUI-M", "tamanho": "M" }, "nome": "Caqui" },
+    { "caso": "sem nome gravado: sufixo igual a paleta sai como a paleta", "entrada": { "hex": "#000000", "colorName": null, "skuSuffix": "PRETO-M", "tamanho": "M" }, "nome": "Preto" },
+    { "caso": "sem nome gravado: sufixo cortado em 10 cai na paleta", "entrada": { "hex": "#1F2A44", "colorName": null, "skuSuffix": "AZUL ESCUR-M", "tamanho": "M" }, "nome": "Cinza escuro" },
+    { "caso": "sem nome gravado: sufixo de hex cai na paleta", "entrada": { "hex": "#1F2A44", "colorName": null, "skuSuffix": "1F2A44-M", "tamanho": "M" }, "nome": "Cinza escuro" },
+    { "caso": "sufixo de 5 digitos do lote antigo nao e nome", "entrada": { "hex": "#FFFFFF", "colorName": "FFFFF", "skuSuffix": "FFFFF-P", "tamanho": "P" }, "nome": "Branco" },
+    { "caso": "hex gravado como nome nao e nome", "entrada": { "hex": "#FFFFFF", "colorName": "#FFFFFF" }, "nome": "Branco" },
+    { "caso": "sufixo em outro formato nao e lido", "entrada": { "hex": "#C3B091", "colorName": null, "skuSuffix": "CAQUI-G", "tamanho": "M" }, "nome": "Prata" },
+    { "caso": "rotulo do Studio vale como nome", "entrada": { "hex": "#111111", "colorName": "Grafite fosco" }, "nome": "Grafite fosco" },
+    { "caso": "hex invalido e sem nome: null", "entrada": { "hex": "azul" }, "nome": null }
+  ],
+  "rotuloDaVariante": [
+    { "caso": "cor e tamanho", "variante": { "color_name": "Off White", "sku_suffix": "OFF WHITE-M", "attributes": [{ "attribute": "Cor", "value": "#FAF9F6" }, { "attribute": "Tamanho", "value": "M" }] }, "separador": " · ", "rotulo": "Off White · M" },
+    { "caso": "a cor vem primeiro", "variante": { "color_name": "Caqui", "sku_suffix": "CAQUI-G", "attributes": [{ "attribute": "Tamanho", "value": "G" }, { "attribute": "Cor", "value": "#C3B091" }] }, "separador": " / ", "rotulo": "Caqui / G" },
+    { "caso": "cor gravada como nome tira o hex entre parenteses", "variante": { "sku_suffix": "AZUL-M", "attributes": [{ "attribute": "Cor", "value": "Azul (#0000FF)" }, { "attribute": "Tamanho", "value": "M" }] }, "separador": " / ", "rotulo": "Azul / M" },
+    { "caso": "nome cortado vira a paleta", "variante": { "color_name": "AZUL ESCUR", "sku_suffix": "AZUL ESCUR-M", "attributes": [{ "attribute": "Cor", "value": "#1F2A44" }, { "attribute": "Tamanho", "value": "M" }] }, "separador": " · ", "rotulo": "Cinza escuro · M" },
+    { "caso": "so tamanho", "variante": { "sku_suffix": "M", "attributes": [{ "attribute": "Tamanho", "value": "M" }] }, "separador": " · ", "rotulo": "M" },
+    { "caso": "sem atributo: o sufixo", "variante": { "sku_suffix": "M-AZUL", "attributes": [] }, "separador": " · ", "rotulo": "M-AZUL" },
+    { "caso": "nada legivel: null", "variante": { "sku_suffix": null, "attributes": [] }, "separador": " · ", "rotulo": null }
+  ]
+}

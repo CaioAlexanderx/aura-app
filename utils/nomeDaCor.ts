@@ -72,26 +72,144 @@ export function nomeProprioDaCor(
   return emCaixaDeFrase(s);
 }
 
+// ============================================================
+// 14/11/2026 (CP2b da revisão de cores): UMA regra do nome da cor para
+// todas as telas — a gêmea de src/services/nomeDaCor.js do backend, que já
+// serve o cupom, o pedido online, a vitrine, os relatórios e o estoque. Os
+// casos em comum estão em __tests__/fixtures/nomeDaCor.casos.json (o mesmo
+// arquivo nos dois repositórios).
+//
+// Ordem:
+//   1. color_name como a lojista escreveu; todo maiúsculo em caixa de frase;
+//      o MAIÚSCULO de 10+ letras (o corte do sku_suffix, "AZUL ESCUR") nunca
+//      aparece — cai na paleta até a lojista confirmar o nome (decisão do
+//      Caio, 14/11); hex (5 ou 6 dígitos) não é nome;
+//   2. o nome legível do sku_suffix (nomeProprioDaCor, tq-55);
+//   3. a paleta do app (hexToName), a mesma da etiqueta.
+// A etiqueta continua com nomeGravadoParaEtiqueta (abaixo), intocada.
+// Funções puras: o Studio chama nomeDaCor({ hex, colorName }) com o rótulo
+// da amostra, sem mudança.
+// ============================================================
+
+/** Hex que não é nome: 6 dígitos, ou 5 (o lote antigo de variants.js). */
+const SO_HEX = /^#?[0-9a-fA-F]{5,6}$/;
+const ATRIBUTOS_DE_COR = new Set(["cor", "color", "colour", "cores"]);
+const ATRIBUTOS_DE_TAMANHO = new Set(["tamanho", "size", "tam", "tam.", "numero", "numeracao", "medida"]);
+
+type Atributo = {
+  attribute?: string | null;
+  attribute_name?: string | null;
+  name?: string | null;
+  a?: string | null;
+  value?: string | null;
+  v?: string | null;
+};
+type VarianteComCor = {
+  sku_suffix?: string | null;
+  color_name?: string | null;
+  attributes?: Atributo[] | null;
+};
+
+/** color_name que pode aparecer na tela, ou null (vazio, hex, cortado). */
+export function nomeGravadoQueAparece(colorName: string | null | undefined): string | null {
+  const t = typeof colorName === "string" ? colorName.trim() : "";
+  if (!t || SO_HEX.test(t)) return null;
+  const tudoMaiusculo = t === t.toLocaleUpperCase("pt-BR") && t !== t.toLocaleLowerCase("pt-BR");
+  if (tudoMaiusculo && t.length >= 10) return null;
+  return tudoMaiusculo ? emCaixaDeFrase(t) : t;
+}
+
 /**
- * Nome da cor para mostrar: o próprio quando existe, senão o da paleta.
- * `attrs` é o attributes da variante ([{attribute, value}]).
+ * O nome da cor para mostrar. null só quando o hex é inválido e não há nome.
  */
-export function nomeDaCorDaVariante(
-  v: {
-    sku_suffix?: string | null;
-    color_name?: string | null;
-    attributes?: Array<{ attribute?: string; name?: string; value?: string }> | null;
-  },
-  hex: string,
-): string {
-  const gravado = typeof v.color_name === "string" ? v.color_name.trim() : "";
-  if (gravado && !HEX_SEM_CERQUILHA.test(gravado)) return gravado;
+export function nomeDaCor(o: {
+  hex: string | null | undefined;
+  colorName?: string | null;
+  skuSuffix?: string | null;
+  tamanho?: string | null;
+}): string | null {
+  const paleta = o.hex && HEX.test(o.hex) ? hexToName(o.hex) : "";
+  return nomeGravadoQueAparece(o.colorName)
+    || nomeProprioDaCor(o.skuSuffix, o.hex, o.tamanho)
+    || paleta
+    || null;
+}
+
+function nomeDoAtributo(a: Atributo | null | undefined): string {
+  const n = a ? (a.attribute ?? a.attribute_name ?? a.name ?? a.a) : "";
+  return semAcento(String(n ?? ""));
+}
+function valorDoAtributo(a: Atributo | null | undefined): string {
+  const v = a ? (a.value ?? a.v) : "";
+  return v == null ? "" : String(v).trim();
+}
+function ehAtributoDeCor(a: Atributo): boolean {
+  return ATRIBUTOS_DE_COR.has(nomeDoAtributo(a)) || HEX.test(valorDoAtributo(a));
+}
+function ordemDoAtributo(a: Atributo): number {
+  if (ehAtributoDeCor(a)) return 0;
+  if (ATRIBUTOS_DE_TAMANHO.has(nomeDoAtributo(a))) return 1;
+  return 2;
+}
+
+/**
+ * Nome da cor de uma variante pelos atributos dela. Cor gravada como hex →
+ * nomeDaCor; como nome ("Marrom", "Azul (#0000FF)") → o nome, sem o hex.
+ * Sem atributo de cor → null.
+ */
+export function nomeDaCorPelosAtributos(v: VarianteComCor): string | null {
+  const attrs = Array.isArray(v && v.attributes) ? (v.attributes as Atributo[]) : [];
+  const cor = attrs.find((a) => ehAtributoDeCor(a) && valorDoAtributo(a));
+  if (!cor) return null;
+  const bruto = valorDoAtributo(cor);
+  if (HEX.test(bruto)) {
+    const tam = attrs.find((a) => ATRIBUTOS_DE_TAMANHO.has(nomeDoAtributo(a)));
+    return nomeDaCor({ hex: bruto, colorName: v.color_name, skuSuffix: v.sku_suffix, tamanho: tam ? valorDoAtributo(tam) : null });
+  }
+  const semHex = bruto.replace(/\(?\s*#[0-9a-fA-F]{6}\s*\)?/g, "").trim();
+  return semHex || bruto;
+}
+
+/**
+ * Rótulo da variante: a cor primeiro (pelo nome), depois o tamanho, depois o
+ * resto. Sem atributo, o sku_suffix. Nada legível → null.
+ */
+export function rotuloDaVariante(v: VarianteComCor, separador: string = " · "): string | null {
+  const attrs = (Array.isArray(v && v.attributes) ? (v.attributes as Atributo[]) : [])
+    .filter((a) => valorDoAtributo(a))
+    .map((a, i) => ({ a, i }))
+    .sort((x, y) => (ordemDoAtributo(x.a) - ordemDoAtributo(y.a)) || (x.i - y.i))
+    .map((x) => x.a);
+  if (!attrs.length) {
+    const s = v && v.sku_suffix != null ? String(v.sku_suffix).trim() : "";
+    return s || null;
+  }
+  let corFeita = false;
+  const partes: string[] = [];
+  for (const a of attrs) {
+    if (!corFeita && ehAtributoDeCor(a)) {
+      corFeita = true;
+      const n = nomeDaCorPelosAtributos({ ...v, attributes: attrs });
+      if (n) partes.push(n);
+      continue;
+    }
+    partes.push(valorDoAtributo(a));
+  }
+  return partes.length ? partes.join(separador) : null;
+}
+
+/**
+ * Nome da cor para mostrar no Caixa (seletor de variante → carrinho → nota).
+ * `attrs` é o attributes da variante ([{attribute, value}]).
+ * 14/11/2026: segue a regra única (nomeDaCor). Antes, o color_name saía
+ * cru — o cortado "AZUL ESCUR" ia para o carrinho e para o xProd da nota.
+ */
+export function nomeDaCorDaVariante(v: VarianteComCor, hex: string): string {
   let tamanho: string | null = null;
   for (const a of v.attributes || []) {
-    const nome = String((a && (a.attribute || a.name)) || "").trim().toLowerCase();
-    if ((nome === "tamanho" || nome === "size") && a.value) { tamanho = String(a.value); break; }
+    if (ATRIBUTOS_DE_TAMANHO.has(nomeDoAtributo(a)) && valorDoAtributo(a)) { tamanho = valorDoAtributo(a); break; }
   }
-  return nomeProprioDaCor(v.sku_suffix, hex, tamanho) || hexToName(hex);
+  return nomeDaCor({ hex, colorName: v.color_name, skuSuffix: v.sku_suffix, tamanho }) || hexToName(hex);
 }
 
 /**

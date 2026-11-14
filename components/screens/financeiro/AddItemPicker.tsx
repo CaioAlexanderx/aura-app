@@ -6,7 +6,8 @@ import { toast } from "@/components/Toast";
 import { useProducts } from "@/hooks/useProducts";
 import { useAuthStore } from "@/stores/auth";
 import { companiesApi } from "@/services/api";
-import { hexToName } from "@/utils/colorNames";
+// 14/11/2026: rótulo da variante com o nome da cor do Caixa (CP2b).
+import { rotuloDaVariante } from "@/utils/nomeDaCor";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { faltaEstoqueParaVender, lerVendaSemEstoque } from "@/utils/vendaSemEstoque";
 import { promoDoItem, precoDaVariante } from "@/utils/precoEfetivo";
@@ -99,10 +100,7 @@ export function AddItemPicker({
       return;
     }
 
-    const attrs = variant?.attributes || [];
-    const variantLabel = attrs
-      .map(function(a: any) { return /^#[0-9a-fA-F]{6}$/.test(a.value) ? hexToName(a.value) : a.value; })
-      .filter(Boolean).join(" \u00b7 ") || variant?.sku_suffix || "";
+    const variantLabel = variant ? (rotuloDaVariante(variant, " \u00b7 ") || "") : "";
 
     const displayName = variant ? product.name + " (" + variantLabel + ")" : product.name;
     // De/Por (p-87): em promoção vale o preço da promoção (backend antigo:
@@ -231,9 +229,7 @@ export function AddItemPicker({
           )}
           {!variantLoading && variantOptions.map(function(v: any) {
             const attrs = v.attributes || [];
-            const label = attrs
-              .map(function(a: any) { return /^#[0-9a-fA-F]{6}$/.test(a.value) ? hexToName(a.value) : a.value; })
-              .filter(Boolean).join(" \u00b7 ") || v.sku_suffix || "Variante";
+            const label = rotuloDaVariante(v, " \u00b7 ") || "Variante";
             const stock = parseFloat(v.stock_qty || 0);
             const lowStock = stock < parsedQty;
             const hex = attrs.find(function(a: any) { return /^#/.test(a.value); })?.value;

@@ -9,7 +9,8 @@ import { Icon } from "@/components/Icon";
 import { useProducts } from "@/hooks/useProducts";
 import { useAuthStore } from "@/stores/auth";
 import { pdvApi, companiesApi, employeesApi } from "@/services/api";
-import { hexToName } from "@/utils/colorNames";
+// 14/11/2026: rótulo da variante com o nome da cor do Caixa (CP2b).
+import { rotuloDaVariante } from "@/utils/nomeDaCor";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { PAYMENTS } from "@/hooks/useCart";
 import { CouponInput } from "./CouponInput";
@@ -479,7 +480,7 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
   function handleSelectVariant(v: any) {
     if (!variantPending) return;
     var attrs = v.attributes || [];
-    var label = attrs.map(function(a: any) { if (/^#[0-9a-fA-F]{6}$/.test(a.value)) return hexToName(a.value); return a.value; }).filter(Boolean).join(" · ") || v.sku_suffix || "Variante";
+    var label = rotuloDaVariante(v, " · ") || "Variante";
     var price = precoDaVariante(v, variantPending).price;
     addSaleItem(variantPending.id, v.id, variantPending.name + " (" + label + ")", price);
     setVariantPending(null); setVariantOptions([]); setSaleSearch("");
@@ -858,7 +859,7 @@ export function TransactionModal({ visible, onClose, onSave, onSaleCreated, edit
                 )}
               </View>
             )}
-            {variantPending && (<View style={s.variantBlock}><View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}><Text style={s.variantTitle}>Selecione a variante de "{variantPending.name}"</Text><Pressable onPress={function() { setVariantPending(null); setVariantOptions([]); }}><Text style={{ fontSize: 12, color: Colors.red }}>Cancelar</Text></Pressable></View>{variantLoading ? (<ActivityIndicator color={Colors.violet3} />) : variantOptions.length === 0 ? (<Text style={s.hint}>Nenhuma variante encontrada</Text>) : (<View style={{ gap: 6 }}>{variantOptions.map(function(v: any) { var attrs = v.attributes || []; var label = attrs.map(function(a: any) { return /^#[0-9a-fA-F]{6}$/.test(a.value) ? hexToName(a.value) : a.value; }).filter(Boolean).join(" · ") || v.sku_suffix; var stock = parseInt(v.stock_qty) || 0; var hex = attrs.find(function(a: any) { return /^#/.test(a.value); })?.value; return (<Pressable key={v.id} onPress={function() { handleSelectVariant(v); }} style={s.variantOption}>{hex && <View style={[s.srColor, { backgroundColor: hex, width: 20, height: 20 }]} />}<Text style={s.srName}>{label}</Text><Text style={s.srMeta}>{stock} un</Text></Pressable>); })}</View>)}</View>)}
+            {variantPending && (<View style={s.variantBlock}><View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}><Text style={s.variantTitle}>Selecione a variante de "{variantPending.name}"</Text><Pressable onPress={function() { setVariantPending(null); setVariantOptions([]); }}><Text style={{ fontSize: 12, color: Colors.red }}>Cancelar</Text></Pressable></View>{variantLoading ? (<ActivityIndicator color={Colors.violet3} />) : variantOptions.length === 0 ? (<Text style={s.hint}>Nenhuma variante encontrada</Text>) : (<View style={{ gap: 6 }}>{variantOptions.map(function(v: any) { var attrs = v.attributes || []; var label = rotuloDaVariante(v, " · ") || v.sku_suffix; var stock = parseInt(v.stock_qty) || 0; var hex = attrs.find(function(a: any) { return /^#/.test(a.value); })?.value; return (<Pressable key={v.id} onPress={function() { handleSelectVariant(v); }} style={s.variantOption}>{hex && <View style={[s.srColor, { backgroundColor: hex, width: 20, height: 20 }]} />}<Text style={s.srName}>{label}</Text><Text style={s.srMeta}>{stock} un</Text></Pressable>); })}</View>)}</View>)}
             {saleItems.length > 0 && (<View style={s.miniCart}><Text style={s.label}>Itens da venda</Text>{saleItems.map(function(item) { return (<View key={item.cartKey} style={s.miniCartRow}><View style={{ flex: 1 }}><Text style={s.srName} numberOfLines={1}>{item.name}</Text><Text style={s.srMeta}>{fmtPrice(item.price)} x {item.qty} = {fmtPrice(item.price * item.qty)}</Text></View><View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}><Pressable onPress={function() { updateSaleQty(item.cartKey, -1); }} style={s.qtyBtn}><Text style={s.qtyBtnText}>-</Text></Pressable><Text style={s.qtyText}>{item.qty}</Text><Pressable onPress={function() { updateSaleQty(item.cartKey, 1); }} style={s.qtyBtn}><Text style={s.qtyBtnText}>+</Text></Pressable><Pressable onPress={function() { removeSaleItem(item.cartKey); }} style={s.removeBtn}><Text style={s.removeText}>x</Text></Pressable></View></View>); })}<View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border }}><Text style={{ fontSize: 14, fontWeight: "600", color: Colors.ink }}>Total</Text><Text style={{ fontSize: 16, fontWeight: "800", color: Colors.green }}>{fmtPrice(saleTotal)}</Text></View></View>)}
             <CouponInput value={saleCoupon} onChange={setSaleCoupon} labelStyle={s.label} inputStyle={s.input} />
             <Pressable onPress={handleSaveSale} disabled={saleSaving || saleItems.length === 0} style={[s.saveBtn, { backgroundColor: Colors.violet, opacity: saleSaving || saleItems.length === 0 ? 0.5 : 1 }]}>{saleSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.saveBtnText}>Registrar venda retroativa</Text>}</Pressable>
