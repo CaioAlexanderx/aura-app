@@ -19,6 +19,7 @@ import { resumoDeLotes } from "@/utils/matconLots";
 import { computeMargin, DICA_MARGEM_SEM_CUSTO } from "@/utils/productMargin";
 import { VariantesConsulta } from "./VariantesConsulta";
 import { nomeDaCor } from "@/utils/nomeDaCor";
+import { nameToHex } from "@/utils/colorNames";
 // 10/11/2026 (NFS-e do serviço): selo "Falta código da NFS-e".
 import { faltaCodigoNfse } from "@/utils/nfseServico";
 import { SELO_FALTA_NFSE } from "./nfseNaLista";
@@ -74,6 +75,10 @@ export function ProductRow({
   const margin = marginValue === null ? "—" : marginValue.toFixed(0) + "%";
   const duracao = isService ? minutosParaRotulo(product.durationMinutes) : "";
   const colorName = product.color ? nomeDaCorDoProduto(product.color) : "";
+  // 14/11/2026 (CP3): cor gravada como nome ("Off White") ganha a amostra da
+  // paleta; nome desconhecido fica sem bolinha (antes, a bolinha recebia o
+  // texto como cor e saía vazia).
+  const colorHex = product.color ? nameToHex(product.color) : null;
   const hasVariant = !!(product.color || product.size);
   const hasImage = !!product.image_url;
 
@@ -108,7 +113,7 @@ export function ProductRow({
             <Image source={{ uri: product.image_url }} style={s.thumb} resizeMode="cover" />
           ) : product.color ? (
             <View style={s.colorGroup}>
-              <View style={[s.colorSwatch, { backgroundColor: product.color }]} />
+              {colorHex ? <View style={[s.colorSwatch, { backgroundColor: colorHex }]} /> : null}
               <Text style={s.colorName}>{colorName}</Text>
             </View>
           ) : null}
@@ -217,7 +222,7 @@ export function ProductRow({
                 <View style={s.variantItem}>
                   <Text style={s.detailLabel}>Cor</Text>
                   <View style={s.variantColorDisplay}>
-                    <View style={[s.variantDot, { backgroundColor: product.color }]} />
+                    {colorHex ? <View style={[s.variantDot, { backgroundColor: colorHex }]} /> : null}
                     <Text style={s.variantText}>{colorName}</Text>
                   </View>
                 </View>

@@ -6,7 +6,8 @@ import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { productsBatchApi, type BatchProductInput } from "@/services/productsBatchApi";
-import { nameToHex, hexToName } from "@/utils/colorNames";
+import { nameToHex } from "@/utils/colorNames";
+import { corDigitada } from "@/utils/corDigitada";
 
 // ============================================================
 // AURA. -- QuickBatchProductsModal (lote de produtos gerais)
@@ -385,7 +386,8 @@ export function QuickBatchProductsModal({ visible, onClose, allCategories }: Pro
           price: r.price,
           stock_qty: r.stock,
           size: r.size,
-          color: r.colorHex,
+          // 14/11/2026 (CP3): o nome da cor entra como ela escreveu (utils/corDigitada).
+          color: corDigitada(r.colorInput).gravar,
           category: r.categoryOverride || category || "Produtos",
         };
         if (r.cost > 0) item.cost_price = r.cost;
@@ -845,10 +847,11 @@ export function QuickBatchProductsModal({ visible, onClose, allCategories }: Pro
                               {r.colorHex ? (
                                 <View style={[s.colorDot, { backgroundColor: r.colorHex }]} />
                               ) : (
-                                <View style={[s.colorDot, { borderWidth: 1, borderColor: Colors.amber, borderStyle: "dashed" as any }]} />
+                                <View style={[s.colorDot, { borderWidth: 1, borderColor: Colors.border2, borderStyle: "dashed" as any }]} />
                               )}
-                              <Text style={[s.previewMeta, !r.colorHex && { color: Colors.amber }]}>
-                                {r.colorHex ? hexToName(r.colorHex) : r.colorInput + " (?)"}
+                              {/* 14/11/2026 (CP3): o nome que vai ser gravado; sem amostra, ele entra mesmo assim. */}
+                              <Text style={s.previewMeta}>
+                                {corDigitada(r.colorInput).nome + (r.colorHex ? "" : " · sem amostra")}
                               </Text>
                             </View>
                           )}

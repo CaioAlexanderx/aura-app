@@ -10,7 +10,7 @@ import { lerConfigDoCartao, precoNoCartaoDoItem } from "@/utils/precoNoCartao";
 import { readMatconSettings } from "@/constants/matcon";
 import { ehIphoneInstalado } from "@/services/instalarApp";
 import { avisarImpressaoNoIphone } from "@/components/ImpressaoNoIphone";
-import { hexToName } from "@/utils/colorNames";
+import { hexToName, nameToHex } from "@/utils/colorNames";
 import { nomeGravadoParaEtiqueta } from "@/utils/nomeDaCor";
 import {
   buildLabelHtml, buildLabelName, validateLabelItems, isValidEAN13, generateEAN13, LABEL_SIZE_PRESETS, LABEL_SIZE_KEYS, DEFAULT_LABEL_SIZE,
@@ -100,13 +100,6 @@ function variantSizeColor(v: any): { size: string; color: string } {
   return { size: size, color: color };
 }
 
-var COLOR_NAME_TO_HEX: Record<string, string> = {
-  preto: "#000000", branco: "#ffffff", vermelho: "#ef4444", azul: "#3b82f6",
-  verde: "#22c55e", amarelo: "#eab308", rosa: "#ec4899", roxo: "#8b5cf6",
-  laranja: "#f97316", marrom: "#92400e", bege: "#d4b896", cinza: "#6b7280",
-  prata: "#c0c0c0", dourado: "#d4a017", nude: "#e8c4a0", caramelo: "#c68e4e",
-  "bordo": "#800020", vinho: "#722f37", "azul escuro": "#1e3a5f", "verde agua": "#7fffd4",
-};
 
 // 22/10/2026: código interno (SKU) do produto, o mesmo que o Estoque mostra
 // na coluna de código. Só o desenho "tag vertical" imprime ("Cód: 221");
@@ -120,11 +113,14 @@ function numBr(n: number): string {
   return String(Math.round(Number(n) * 1000) / 1000).replace(".", ",");
 }
 
+// 14/11/2026 (CP3): bolinha da cor na LISTA desta tela (o HTML da etiqueta
+// não passa por aqui). A tabela própria saiu: nome → amostra pela regra de
+// sempre do app (nameToHex), que agora também lê a paleta única.
 function colorNameToHex(name: string): string | null {
   if (/^#[0-9a-fA-F]{6}$/.test(name)) return name;
   var hexMatch = name.match(/#[0-9a-fA-F]{6}/);
   if (hexMatch) return hexMatch[0];
-  return COLOR_NAME_TO_HEX[name.toLowerCase().trim()] || null;
+  return nameToHex(name);
 }
 
 var LABEL_SIZE_STORAGE_KEY = "aura_label_print_size";

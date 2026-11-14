@@ -780,7 +780,11 @@ export function mesclarPaiNaGrade(o: {
   const cores = [...(o.cores || [])];
   const tamanhos = [...(o.tamanhos || [])];
   const celulas = { ...(o.celulas || {}) };
-  const nomeCor = hex ? (o.hexParaNome(hex) || hex) : null;
+  // 14/11/2026 (CP3): cor gravada como NOME no produto ("Off White", da
+  // planilha ou do cadastro rápido) entra na grade com o nome que a lojista
+  // escreveu; cor gravada como hex segue com o nome da paleta, como antes.
+  const escreveuNome = !!corBruta && !/^#?[0-9A-Fa-f]{6}$/.test(corBruta);
+  const nomeCor = hex ? (escreveuNome ? corBruta : (o.hexParaNome(hex) || hex)) : null;
   let mesclou = false;
 
   if (hex && !cores.some((c) => String(c.hex).toUpperCase() === hex)) {
