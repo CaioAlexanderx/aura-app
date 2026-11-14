@@ -94,6 +94,8 @@ export type RespostaRelatorio = {
   filtros: Record<string, unknown>;
   paginacao: { limit: number; offset: number; todas: boolean };
   pode_ver_custo: boolean;
+  /** 14/11/2026: categorias que só existem como texto no produto (backend novo). */
+  categorias_texto?: string[];
 };
 
 // ── modelos, colunas e ordens ──────────────────────────────────────────

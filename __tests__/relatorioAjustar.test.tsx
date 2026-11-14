@@ -300,6 +300,19 @@ describe("TabRelatorios: painel e modelo lembrado", () => {
     mockConsulta = { consulta: false, carregando: false, semCusto: false };
   });
 
+  it("incidente 14/11: categoria só em texto aparece na lista e filtra pelo nome", async () => {
+    mockResposta = { ...resp, categorias_texto: ["Capinhas", "roupas"] };
+    var tree = await montarTab();
+    await act(async () => { porId(tree, "relatorio-categoria")[0].props.onPress(); });
+    // "roupas" já existe na árvore (Roupas): não repete.
+    expect(porId(tree, "relatorio-categoria-Capinhas")).toHaveLength(1);
+    expect(porId(tree, "relatorio-categoria-roupas")).toHaveLength(0);
+    mockUrls = [];
+    await act(async () => { porId(tree, "relatorio-categoria-Capinhas")[0].props.onPress(); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(mockUrls[mockUrls.length - 1]).toContain("categoria=Capinhas");
+  });
+
   it("primeira vez: Mais vendidos; escolher um modelo grava; ajuste não grava", async () => {
     var tree = await montarTab();
     expect(mockUrls[0]).toContain("modelo=mais_vendidos");

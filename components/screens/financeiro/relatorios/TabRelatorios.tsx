@@ -118,8 +118,17 @@ export function TabRelatorios({ hrefCustos }: Props) {
   var kpis = ctx ? kpisDoModelo(ctx) : [];
   // Categoria: a árvore de product_categories da loja ativa, com as subcategorias.
   var { flattened: categoriasFlat } = useCategories();
+  // 14/11/2026 (incidente): categorias que só existem como texto no produto
+  // (cadastro antigo/planilha, sem vínculo com a árvore) vêm do backend em
+  // `categorias_texto`. A última lista recebida fica guardada para não
+  // sumir enquanto o relatório recarrega.
+  var categoriasTextoRef = useRef<string[]>([]);
+  if (r.resposta && Array.isArray(r.resposta.categorias_texto)) {
+    categoriasTextoRef.current = r.resposta.categorias_texto;
+  }
+  var categoriasTexto = categoriasTextoRef.current;
   var categorias: CategoriaDoPainel[] = useMemo(function() {
-    return (categoriasFlat || []).map(function(fc) {
+    var daArvore: CategoriaDoPainel[] = (categoriasFlat || []).map(function(fc) {
       return {
         id: fc.category.id,
         nome: fc.category.name,
@@ -127,7 +136,14 @@ export function TabRelatorios({ hrefCustos }: Props) {
         caminho: fc.breadcrumb.map(function(b) { return b.name; }).join(" › "),
       };
     });
-  }, [categoriasFlat]);
+    var jaTem: Record<string, true> = {};
+    daArvore.forEach(function(c) { jaTem[c.nome.trim().toLowerCase()] = true; });
+    // Texto: o filtro vai pelo nome (o backend aceita categoria por texto).
+    var soTexto: CategoriaDoPainel[] = (categoriasTexto || [])
+      .filter(function(n) { return n && !jaTem[n.trim().toLowerCase()]; })
+      .map(function(n) { return { id: n, nome: n, nivel: 0, caminho: n }; });
+    return daArvore.concat(soTexto);
+  }, [categoriasFlat, categoriasTexto]);
 
   // p-116: quem emite e de quem é o documento. No consolidado, o grupo.
   var { profile } = useCompanyProfile();
