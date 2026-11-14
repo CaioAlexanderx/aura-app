@@ -404,3 +404,46 @@ export function textoSemCusto(m: MargemDaPrevia): string | null {
   if (!m.semCusto) return null;
   return plural(m.semCusto, "item sem custo cadastrado não entra", "itens sem custo cadastrado não entram") + " nessa conta.";
 }
+
+// ── O final (",90", ",99", ",00") muda o desconto (p-123b, QA 14/11) ─────
+//
+// Em item barato o final arredondado pesa: R$ 3,20 com 20% e final ,90 vira
+// R$ 2,90, que é 9%, não 20%. O assistente avisa quando o desconto de verdade
+// fica mais de LIMITE_DESVIO_DO_FINAL pontos longe do pedido, para a lojista
+// conferir ou escolher "Sem ajuste". O preço vem da prévia do servidor.
+
+export var LIMITE_DESVIO_DO_FINAL = 5;
+
+export type DesvioDoFinal = { chave: string; pedidoPct: number; realPct: number; de: number; por: number };
+
+/** Os itens da prévia em que o final mudou o desconto em mais de 5 pontos. */
+export function desviosDoFinal(
+  items: Array<{ product_id: string; variant_id?: string | null; preco_de: number; preco_por: number }>,
+  pedido: { modo: ModoPromocao; valor: number; terminacao?: TerminacaoPromocao } | null | undefined,
+): DesvioDoFinal[] {
+  if (!pedido || pedido.modo === "preco" || !pedido.terminacao || pedido.terminacao === "none") return [];
+  var v = Number(pedido.valor);
+  if (!(v > 0)) return [];
+  var out: DesvioDoFinal[] = [];
+  items.forEach(function (i) {
+    var de = Number(i.preco_de), por = Number(i.preco_por);
+    if (!(de > 0) || !(por >= 0)) return;
+    var alvo = pedido.modo === "percent" ? de * (1 - v / 100) : de - v;
+    var pedidoPct = (1 - alvo / de) * 100;
+    var realPct = (1 - por / de) * 100;
+    if (Math.abs(realPct - pedidoPct) > LIMITE_DESVIO_DO_FINAL) {
+      out.push({ chave: chaveDoItem(i), pedidoPct: Math.round(pedidoPct), realPct: Math.round(realPct), de: de, por: por });
+    }
+  });
+  return out;
+}
+
+/** A frase do aviso, com um exemplo; null sem desvio. */
+export function textoDoDesvioDoFinal(desvios: DesvioDoFinal[], terminacao: TerminacaoPromocao | undefined): string | null {
+  if (!desvios.length) return null;
+  var final = (TERMINACOES_PROMOCAO.find(function (t) { return t.valor === terminacao; }) || { rotulo: "" }).rotulo;
+  var ex = desvios[0];
+  return plural(desvios.length, "item fica", "itens ficam") + " com o desconto bem diferente do pedido por causa do final " + final
+    + ": " + brl(ex.de) + " → " + brl(ex.por) + " dá " + ex.realPct + "%, não " + ex.pedidoPct + "%."
+    + " Confira na lista ou volte e escolha \u201cSem ajuste\u201d.";
+}

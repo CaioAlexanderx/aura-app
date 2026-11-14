@@ -40,7 +40,7 @@ import {
   ATALHOS_PCT, MODOS_PROMOCAO, TERMINACOES_PROMOCAO, VALOR_INICIAL_PROMO, alvosQueEntram, brl, chaveDoItem, nomeDoItemPromo,
   descontoMedio, erroDasDatas, erroDoValorPromo, estaParado, instantesDoPrazo, itensQueEntram, margemDaPrevia, montarPedidoPromo, pctTxt,
   plural, prazosDisponiveis, promocaoVigenteOuAgendada, rotuloDoValorPromo, textoDaMargem, textoDeFora, textoDoPrazo, textoDoPronto,
-  textoSemCusto, type ChavePrazo,
+  textoSemCusto, desviosDoFinal, textoDoDesvioDoFinal, type ChavePrazo,
 } from "./regrasDePor";
 
 var IS_WEB = Platform.OS === "web";
@@ -185,6 +185,10 @@ export function CriarPromocaoModal({ companyId, onFechar, onAplicada, preSelecio
   // ── passo 3 ────────────────────────────────────────────────
   var entram = previa ? itensQueEntram(previa, tirados) : [];
   var jaEmPromo = entram.filter(function (i) { return i.ja_em_promocao; }).length;
+  // p-123b: o final ",90" que muda o desconto em mais de 5 pontos.
+  var desvios = desviosDoFinal(entram, pedido);
+  var desvioPorChave: Record<string, { realPct: number }> = {};
+  desvios.forEach(function (d) { desvioPorChave[d.chave] = d; });
   // Margem só para quem pode ver custo (o backend também tira o cost_price).
   var margem = !semCusto && previa ? margemDaPrevia(entram) : null;
   var agendada = !!ini && ini > hoje;
@@ -458,6 +462,9 @@ export function CriarPromocaoModal({ companyId, onFechar, onAplicada, preSelecio
                 <Text style={s.t} testID="promo-sem-custo">{textoSemCusto(margem)}</Text>
               )}
               <Aviso tipo="ok" testID="promo-prazo-conferir">{textoDoPrazo(ini!, fim!, hoje)}</Aviso>
+              {desvios.length > 0 && (
+                <Aviso tipo="aviso" testID="promo-desvio-do-final">{textoDoDesvioDoFinal(desvios, pedido ? pedido.terminacao : undefined)}</Aviso>
+              )}
               {jaEmPromo > 0 && (
                 <Aviso tipo="aviso" testID="promo-ja-em-promocao">
                   {plural(jaEmPromo, "item já está", "itens já estão")} em promoção. A promoção nova substitui a de agora: fica valendo só uma por produto.
@@ -479,6 +486,9 @@ export function CriarPromocaoModal({ companyId, onFechar, onAplicada, preSelecio
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <Text style={s.linhaNome} numberOfLines={2}>{nomeDoItemPromo(i)}</Text>
                         {i.ja_em_promocao && <Text style={s.tag}>já em promoção</Text>}
+                        {!!desvioPorChave[k] && (
+                          <Text style={s.tag} testID={"promo-item-desvio-" + k}>{"com o final, o desconto é " + desvioPorChave[k].realPct + "%"}</Text>
+                        )}
                       </View>
                       <View style={s.precos}>
                         <Text style={s.de}>{brl(i.preco_de)}</Text>
