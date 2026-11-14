@@ -24,6 +24,7 @@ import { PrintLabels } from "@/components/PrintLabels";
 import { Pagination } from "@/components/Pagination";
 import { ScrollableChips } from "@/components/ScrollableChips";
 import { MergeDuplicatesModal } from "@/components/MergeDuplicatesModal";
+import { ConferirNomesDeCor } from "@/components/screens/estoque/nomesDeCor/ConferirNomesDeCor";
 import { QuickBatchProductsModal } from "@/components/QuickBatchProductsModal";
 import { DanfeImportModal } from "@/components/screens/estoque/DanfeImportModal";
 import { LinkProductModal } from "@/components/LinkProductModal";
@@ -931,6 +932,11 @@ export default function EstoqueScreen() {
             </View>
           )
         )}
+
+        {/* 14/11/2026 (CP5 da revisão de cores): nomes de cor cortados ou em
+            maiúsculas, para a lojista confirmar. Some no consolidado, no demo
+            e no Estoque só consulta (o backend também responde 403). */}
+        <ConferirNomesDeCor companyId={company?.id} ativo={!isDemo && !consolidatedView && !consulta && !consultaCarregando} />
 
         {dupGroupsCount > 0 && !isDemo && !consulta && (
           <Pressable onPress={() => setShowMergeModal(true)} style={s.dupBanner}>
