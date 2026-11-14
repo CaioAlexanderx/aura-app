@@ -234,11 +234,11 @@ function CaixaScreenInner() {
         <View style={s.root}>
           <CaixaDesignStyle />
           <CaixaBackdrop />
-          <SaleComplete sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} matconEnabled={st.matconEnabled} matconDeliveryDays={st.matconDeliveryDays} referralName={st.referralName} pdvSettings={pdvSettingsGarantia} enderecoDoCliente={enderecoDoClienteDaVenda} />
+          <SaleComplete sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} notaAtiva={st.nfceAtiva} matconEnabled={st.matconEnabled} matconDeliveryDays={st.matconDeliveryDays} referralName={st.referralName} pdvSettings={pdvSettingsGarantia} enderecoDoCliente={enderecoDoClienteDaVenda} />
         </View>
       );
     }
-    return <SaleComplete sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} matconEnabled={st.matconEnabled} matconDeliveryDays={st.matconDeliveryDays} referralName={st.referralName} pdvSettings={pdvSettingsGarantia} enderecoDoCliente={enderecoDoClienteDaVenda} />;
+    return <SaleComplete sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} notaAtiva={st.nfceAtiva} matconEnabled={st.matconEnabled} matconDeliveryDays={st.matconDeliveryDays} referralName={st.referralName} pdvSettings={pdvSettingsGarantia} enderecoDoCliente={enderecoDoClienteDaVenda} />;
   }
 
   function StockToggle() {

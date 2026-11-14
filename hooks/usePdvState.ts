@@ -256,6 +256,9 @@ export function usePdvState() {
   });
   const autoEmitNfce =
     !!nfceConfigData?.config?.auto_emit_nfce && nfceConfigData?.config?.is_active;
+  // 14/11/2026 (NF-e 55, CP4b): nota fiscal ligada na loja? undefined enquanto
+  // a config não chegou (a tela final fica como sempre até saber).
+  const nfceAtiva: boolean | undefined = nfceConfigData ? !!nfceConfigData.config?.is_active : undefined;
 
   // ── NFS-e automática (10/11/2026, Aura-backend#984) ───────────────────
   // Opt-in da loja (GET /nfse/automatica/config → ativa). Desligada, sem a
@@ -1349,7 +1352,7 @@ export function usePdvState() {
     // Scanner
     lastScannedCode, scannerListening,
     // Employees / NFC-e
-    employees, autoEmitNfce,
+    employees, autoEmitNfce, nfceAtiva,
     // Comandas (modais em PdvModals)
     comandas,
     // Cart
