@@ -25,6 +25,10 @@
 // servidor gravou, mandado como `discount_amount` só para o backend ter com
 // o que conferir quando não há venda gravada a ler. O app não recalcula
 // total nenhum. Sem desconto, o corpo do /emit sai igual.
+//
+// 14/11/2026 (NF-e 55, CP4b): prop `notaAtiva` — loja com a nota fiscal
+// desligada vê o convite para ligar (ConviteNotaFiscal) em vez de um
+// "Emitir NFC-e" que falhava ao tocar; a automática não dispara.
 // ============================================================
 import { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform, ActivityIndicator } from "react-native";
@@ -39,6 +43,7 @@ import { QrCode } from "@/components/QrCode";
 import { openPrintWindow } from "@/services/printWindow";
 import { Linking } from "react-native";
 import { nfcePulada, textoServicosForaDaNfce, TEXTO_NFCE_SO_SERVICO } from "@/utils/nfseAutomatica";
+import { ConviteNotaFiscal } from "@/components/nfe55/ConviteNotaFiscal";
 
 export type NfceActionsItem = {
   product_id: string;
@@ -69,6 +74,10 @@ export type NfceActionsProps = {
   autoEmit?: boolean;
   /** Callback opcional após autorização (pode marcar venda como emitida no caller). */
   onEmitted?: (result: EmitResponse) => void;
+  /** 14/11/2026 (CP4b): nfce_config.is_active da loja. false = sem "Emitir
+   *  NFC-e" (tocar dava erro): aparece o convite para ligar a nota, nunca
+   *  bloqueio. undefined = não se sabe (Troca, telas antigas): como sempre. */
+  notaAtiva?: boolean;
 };
 
 type EmitState = "idle" | "emitting" | "authorized" | "rejected" | "error" | "skipped";
@@ -128,7 +137,7 @@ export function NfceActions({
   companyId, saleId, items, total,
   customerName, customerCpf, customerPhone,
   paymentMethod, payments, saleDiscount,
-  autoEmit, onEmitted,
+  autoEmit, onEmitted, notaAtiva,
 }: NfceActionsProps) {
   const { token } = useAuthStore();
 
@@ -201,6 +210,7 @@ export function NfceActions({
 
   useEffect(() => {
     if (!autoEmit) return;
+    if (notaAtiva === false) return; // loja sem nota ativa: não tenta emitir
     if (autoEmitFired.current) return;
     if (emitState !== "idle") return;
     autoEmitFired.current = true;
@@ -311,6 +321,9 @@ export function NfceActions({
   const hasConsulta = !!(emitResult?.url_consulta || emitResult?.nfce?.url_consulta);
   const canSendWhatsApp = !!customerPhone && (hasNfceId || hasPdf || hasConsulta);
 
+  if (emitState === "idle" && notaAtiva === false) {
+    return <ConviteNotaFiscal />;
+  }
   if (emitState === "idle") {
     return (
       <Pressable onPress={handleEmitNfce} style={s.nfcePrimaryBtn}>

@@ -60,7 +60,8 @@ import { copyText } from "@/utils/clipboard";
 import { pluralize } from "@/utils/plural";
 import type { SaleResult } from "@/hooks/useCart";
 import { PAYMENTS } from "@/hooks/useCart";
-import { NfceActions, type NfceActionsItem } from "./NfceActions";
+import { type NfceActionsItem } from "./NfceActions";
+import { NotaDeProdutosDaVenda } from "@/components/nfe55/NotaDeProdutosDaVenda";
 import { OsActions } from "./OsActions";
 import { WarrantySaleActions } from "./WarrantySaleActions";
 import { openPrintWindow } from "@/services/printWindow";
@@ -149,9 +150,12 @@ type Props = {
   /** 09/11/2026: endereço do cadastro do cliente da venda (venda sem
    *  retrato, ex.: sem frete). null = cliente sem endereço ou sem cliente. */
   enderecoDoCliente?: Endereco | null;
+  /** 14/11/2026 (NF-e 55, CP4b): nfce_config.is_active. false = convite para
+   *  ligar a nota no lugar do "Emitir NFC-e". undefined = como sempre. */
+  notaAtiva?: boolean;
 };
 
-export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, referralName, pdvSettings, enderecoDoCliente }: Props) {
+export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, referralName, pdvSettings, enderecoDoCliente, notaAtiva }: Props) {
   const { company, token, companyCount } = useAuthStore();
   // NFS-e automática: opt-in da loja que vendeu (o Caixa é sempre de uma
   // loja — company.id é a empresa da venda, também no grupo multi-CNPJ).
@@ -215,6 +219,10 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
   // daqui. O backend lê a venda gravada (sale_id) e rateia o desconto no
   // vDesc de cada item, frete fora; `desconto` é o que o servidor gravou
   // (contaComOServidor) e vai junto só para conferência.
+
+  // 14/11/2026 (NF-e 55, CP4b): o documento que a venda conhece — quem
+  // contratou (venda com serviço) ou o CPF/CNPJ na nota.
+  const documentoDoCliente = (sale.tomador && sale.tomador.doc) || sale.cpfNaNota || null;
 
   // QA 23/09/2026: conta PRODUTOS (linhas) — somar quantidades misturava
   // unidades (10 m² + 500 tijolos = "510 produtos").
@@ -356,10 +364,14 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
 
         <View style={s.divider} />
 
+        {/* 14/11/2026 (NF-e 55, CP4b): a nota dos produtos escolhe NFC-e ou
+            NF-e pelo documento do cliente (CNPJ → NF-e sugerida e a
+            automática da NFC-e espera). Loja sem nota ativa: convite. */}
         {company?.id && !duasNotas && (
-          <NfceActions
+          <NotaDeProdutosDaVenda
             companyId={company.id}
             saleId={sale.id}
+            saleNumber={hasSaleNumber ? sale.saleNumber! : null}
             items={nfceItems}
             total={sale.total}
             customerName={sale.customerName}
@@ -369,6 +381,8 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
             payments={payments}
             saleDiscount={hasDiscount ? desconto : undefined}
             autoEmit={autoEmit}
+            documentoDoCliente={documentoDoCliente}
+            notaAtiva={notaAtiva}
           />
         )}
 
@@ -386,9 +400,10 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
                     <Text style={s.notaSub} numberOfLines={2}>{nomes(itensProduto)} · {fmt(somar(itensProduto))}</Text>
                   </View>
                 </View>
-                <NfceActions
+                <NotaDeProdutosDaVenda
                   companyId={company.id}
                   saleId={sale.id}
+                  saleNumber={hasSaleNumber ? sale.saleNumber! : null}
                   items={nfceItems}
                   total={sale.total}
                   customerName={sale.customerName}
@@ -398,6 +413,8 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
                   payments={payments}
                   saleDiscount={hasDiscount ? desconto : undefined}
                   autoEmit={autoEmit}
+                  documentoDoCliente={documentoDoCliente}
+                  notaAtiva={notaAtiva}
                 />
               </View>
             )}
