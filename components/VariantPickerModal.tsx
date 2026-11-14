@@ -39,7 +39,7 @@ import { View, Text, Modal, Pressable, ScrollView, StyleSheet, ActivityIndicator
 import { Colors } from "@/constants/colors";
 import { companiesApi } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
-import { hexToName } from "@/utils/colorNames";
+import { hexToName, nameToHex } from "@/utils/colorNames";
 import { nomeDaCorDaVariante } from "@/utils/nomeDaCor";
 import { criarDetector, OCIOSO_MS, CONFIRMA_OCIOSO_MS } from "@/utils/leituraRapida";
 import { ordenarVariantes, type ChaveDeVariante } from "@/utils/ordemDeTamanhos";
@@ -61,18 +61,13 @@ export type VariantChoice = {
 
 var isWeb = Platform.OS === "web";
 
-var COLOR_NAME_TO_HEX: Record<string, string> = {
-  preto: "#000000", branco: "#ffffff", vermelho: "#ef4444", azul: "#3b82f6",
-  verde: "#22c55e", amarelo: "#eab308", rosa: "#ec4899", roxo: "#8b5cf6",
-  laranja: "#f97316", marrom: "#92400e", bege: "#d4b896", cinza: "#6b7280",
-  prata: "#c0c0c0", dourado: "#d4a017", nude: "#e8c4a0", caramelo: "#c68e4e",
-};
-
+// 14/11/2026 (CP3): a tabela própria de nome → amostra saiu; vale a regra
+// de sempre do app (nameToHex), que agora também lê a paleta única.
 function toHex(val: string): string | null {
   if (/^#[0-9a-fA-F]{6}$/.test(val)) return val;
   var m = val.match(/#[0-9a-fA-F]{6}/);
   if (m) return m[0];
-  return COLOR_NAME_TO_HEX[val.toLowerCase().trim()] || null;
+  return nameToHex(val);
 }
 
 function getLabel(v: any, parentColor?: string, parentSize?: string): string {

@@ -33,6 +33,8 @@ const NAMED_COLORS: Array<{ name: string; r: number; g: number; b: number }> = [
   { name: "Prata",      r: 192, g: 192, b: 192 },
 ];
 
+import { hexPeloNome } from "@/utils/paletaDeCores";
+
 // Versao normalizada (lowercase, sem acentos) -> hex
 // Construida uma vez em modulo load; O(1) lookup depois.
 function stripAccents(s: string): string {
@@ -104,7 +106,10 @@ export function nameToHex(input: string | null | undefined): string | null {
   if (/^#[0-9A-Fa-f]{6}$/.test(trimmed)) return trimmed;
   if (/^[0-9A-Fa-f]{6}$/.test(trimmed)) return "#" + trimmed;
 
-  // Busca pelo nome normalizado
+  // Busca pelo nome normalizado. 14/11/2026 (CP3): a tabela de sempre
+  // primeiro (o hex de quem já gravava "azul" não muda); depois a paleta
+  // única (utils/paletaDeCores.ts), com acentos e apelidos — "Caqui",
+  // "Preta", "Off White" antes davam null e a cor sumia.
   const key = norm(trimmed);
-  return NAME_TO_HEX_INDEX[key] || null;
+  return NAME_TO_HEX_INDEX[key] || hexPeloNome(trimmed) || null;
 }
