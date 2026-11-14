@@ -157,6 +157,18 @@ export type RespostaEmissao = {
   rejeicao_amigavel?: RejeicaoAmigavel;
 };
 
+export type CartaCorrecao = { seq: number; texto: string; protocolo: string | null; registrada_em: string | null };
+
+export type SituacaoEventos = {
+  status: string;
+  pode_cancelar: boolean;
+  cancelavel_ate: string | null;
+  prazo_horas: number;
+  cancelamento: { protocolo: string | null; registrado_em: string | null; justificativa: string | null } | null;
+  cartas: CartaCorrecao[];
+  pode_corrigir: boolean;
+};
+
 const base = (companyId: string) => "/companies/" + companyId + "/nfe55";
 
 export const nfe55Api = {
@@ -174,6 +186,25 @@ export const nfe55Api = {
       base(companyId) + "/" + emissaoId + "/enviar-email",
       { method: "POST", body: email ? { email } : {}, retry: 0, timeout: 30000 }
     ),
+
+  // ── CP5 (14/11/2026): cancelamento 110111 e carta de correção 110110 ──
+  eventos: (companyId: string, emissaoId: string) =>
+    request<SituacaoEventos>(base(companyId) + "/" + emissaoId + "/eventos", { retry: 1 }),
+
+  cancelar: (companyId: string, emissaoId: string, justificativa: string) =>
+    request<{ nfe: NotaNfe55; evento: { cStat?: string; protocolo?: string | null; registrado_em?: string | null; ja_cancelada?: boolean }; cancelavel_ate: string | null; idempotente?: boolean }>(
+      base(companyId) + "/" + emissaoId + "/cancelar",
+      { method: "POST", body: { justificativa }, retry: 0, timeout: 30000 }
+    ),
+
+  cartaCorrecao: (companyId: string, emissaoId: string, texto: string) =>
+    request<{ carta: CartaCorrecao; cartas: CartaCorrecao[] }>(
+      base(companyId) + "/" + emissaoId + "/carta-correcao",
+      { method: "POST", body: { texto }, retry: 0, timeout: 30000 }
+    ),
+
+  cartaXmlPath: (companyId: string, emissaoId: string, seq: number) =>
+    base(companyId) + "/" + emissaoId + "/carta-correcao/" + seq + "/xml",
 
   danfePath: (companyId: string, emissaoId: string) => base(companyId) + "/" + emissaoId + "/danfe.pdf",
   xmlPath: (companyId: string, emissaoId: string) => base(companyId) + "/" + emissaoId + "/xml",

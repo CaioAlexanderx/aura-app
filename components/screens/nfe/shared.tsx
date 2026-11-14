@@ -8,6 +8,7 @@ import type { NfceEmission, NfceStatus } from "@/services/nfceApi";
 import { useState } from "react";
 import { nfe55Api } from "@/services/nfe55Api";
 import { abrirDanfe, baixarXml } from "@/components/nfe55/nfe55Acoes";
+import { AcoesDeEventosNfe } from "@/components/nfe55/EventosNfe";
 import { toast } from "@/components/Toast";
 
 // Tipo legado mantido por componentes que ainda chamam nfeApi (a aba NFS-e vai
@@ -65,22 +66,26 @@ export function EmissionRow({
   onCancel,
   onView,
   onReemit,
+  onChanged,
 }: {
   emission: NfceEmission;
   onCancel: () => void;
   onView: () => void;
   onReemit?: () => void;
+  /** CP5: NF-e cancelada ou corrigida — quem lista recarrega. */
+  onChanged?: () => void;
 }) {
   const typeLabel = emission.tipo === "nfe" ? "NF-e" : "NFC-e";
   const dateStr = emission.authorized_at || emission.created_at;
   const recipient = emission.customer_name || (emission.customer_cpf ? "CPF " + emission.customer_cpf : "Consumidor");
   const isAuthorized = emission.status === "autorizada";
   const viewLabel = isAuthorized ? "2ª via" : "Ver";
-  // 14/11/2026 (NF-e 55, CP4): a NF-e tem DANFE A4, XML e e-mail. Cancelar e
-  // carta de correção da NF-e são do CP5 — sem botão até funcionarem. A
-  // NF-e que falhou se emite de novo pela venda (Vendas › detalhe).
+  // 14/11/2026 (NF-e 55, CP4/CP5): a NF-e tem DANFE A4, XML, e-mail e, no
+  // CP5, "Corrigir texto" (carta de correção) e "Cancelar" com o prazo de
+  // 24 h à vista (evento da 55, não o da NFC-e). A NF-e que falhou se emite
+  // de novo pela venda (Vendas › detalhe).
   const ehNfe = emission.tipo === "nfe";
-  if (ehNfe) return <NfeRow emission={emission} recipient={recipient} dateStr={dateStr} />;
+  if (ehNfe) return <NfeRow emission={emission} recipient={recipient} dateStr={dateStr} onChanged={onChanged} />;
 
   return (
     <View style={ns.docRow}>
@@ -122,7 +127,7 @@ export function EmissionRow({
   );
 }
 
-function NfeRow({ emission, recipient, dateStr }: { emission: NfceEmission; recipient: string; dateStr: string }) {
+function NfeRow({ emission, recipient, dateStr, onChanged }: { emission: NfceEmission; recipient: string; dateStr: string; onChanged?: () => void }) {
   const companyId = useAuthStore((st: any) => st.company && st.company.id);
   const [enviando, setEnviando] = useState(false);
   const autorizada = emission.status === "autorizada";
@@ -166,6 +171,12 @@ function NfeRow({ emission, recipient, dateStr }: { emission: NfceEmission; reci
             <Pressable onPress={enviar} style={ns.miniBtn} accessibilityLabel={`Enviar a NF-e ${emission.numero} por e-mail`} testID="nota-nfe-email">
               <Text style={ns.miniBtnText}>{enviando ? "Enviando…" : "E-mail"}</Text>
             </Pressable>
+          </View>
+        ) : null}
+        {/* CP5 (14/11/2026): prazo à vista, "Corrigir texto" e "Cancelar". */}
+        {autorizada && companyId ? (
+          <View style={{ marginTop: 4, alignItems: "flex-end" }}>
+            <AcoesDeEventosNfe companyId={companyId} nota={emission} onMudou={onChanged} compacto />
           </View>
         ) : null}
       </View>

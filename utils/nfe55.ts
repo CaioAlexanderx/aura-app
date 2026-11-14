@@ -290,3 +290,60 @@ export function rotuloDaIe(f: Pick<FormNfe55, "indIeDest" | "ie">): string {
   if (f.indIeDest === 2) return "Isenta";
   return "Não tem (não contribuinte)";
 }
+
+// ── CP5 (14/11/2026): prazo de cancelamento da NF-e 55 ───────
+// O backend é quem manda (NFE55_CANCEL_DEADLINE_H, padrão 24 h, e recusa
+// fora do prazo); a tela usa o mesmo padrão para mostrar o prazo à vista.
+
+export const PRAZO_CANCELAMENTO_NFE_H = 24;
+
+const DIA_MS = 24 * 3600e3;
+function diaSP(d: Date): string {
+  return d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+}
+function horaSP(d: Date): string {
+  return d.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
+}
+
+export type PrazoCancelamento = {
+  ate: Date | null;
+  vencido: boolean;
+  /** "até amanhã, 15:51" | "até hoje, 18:00" | "até 16/11, 15:51" */
+  ateTexto: string;
+  /** "faltam 23 h" | "faltam 40 min" */
+  faltaTexto: string;
+};
+
+/** Prazo para cancelar: autorização + horas (padrão 24 h). */
+export function prazoDoCancelamento(
+  autorizadaEm: string | null | undefined,
+  agora: number = Date.now(),
+  horas: number = PRAZO_CANCELAMENTO_NFE_H,
+  cancelavelAte?: string | null,
+): PrazoCancelamento {
+  const ate = cancelavelAte ? new Date(cancelavelAte) : autorizadaEm ? new Date(new Date(autorizadaEm).getTime() + horas * 3600e3) : null;
+  if (!ate || Number.isNaN(ate.getTime())) return { ate: null, vencido: false, ateTexto: "", faltaTexto: "" };
+  const vencido = agora > ate.getTime();
+  const hoje = diaSP(new Date(agora));
+  const amanha = diaSP(new Date(agora + DIA_MS));
+  const dia = diaSP(ate);
+  const quando = dia === hoje ? "hoje" : dia === amanha ? "amanhã" : dia.slice(0, 5);
+  const restanteMin = Math.max(0, Math.round((ate.getTime() - agora) / 60000));
+  const faltaTexto = vencido ? "" : restanteMin >= 60 ? `faltam ${Math.floor(restanteMin / 60)} h` : `faltam ${restanteMin} min`;
+  return { ate, vencido, ateTexto: `até ${quando}, ${horaSP(ate)}`, faltaTexto };
+}
+
+export const TEXTO_PRAZO_VENCIDO =
+  "O prazo de 24 h para cancelar já passou. Para desfazer, a saída é uma nota de devolução; seu contador orienta.";
+
+/** Justificativa do cancelamento: 15 a 255 letras (regra da SEFAZ). */
+export function justificativaValida(t: string): boolean {
+  const n = t.replace(/\s+/g, " ").trim().length;
+  return n >= 15 && n <= 255;
+}
+
+/** Texto da carta de correção: 15 a 1.000 letras. */
+export function textoDaCartaValido(t: string): boolean {
+  const n = t.replace(/\s+/g, " ").trim().length;
+  return n >= 15 && n <= 1000;
+}

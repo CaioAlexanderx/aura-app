@@ -25,6 +25,7 @@ import { nfcePulada, textoServicosForaDaNfce, TEXTO_NFCE_SO_SERVICO } from "@/ut
 import { Nfe55Wizard } from "@/components/nfe55/Nfe55Wizard";
 import { abrirDanfe, baixarXml } from "@/components/nfe55/nfe55Acoes";
 import { nfe55Api } from "@/services/nfe55Api";
+import { AcoesDeEventosNfe } from "@/components/nfe55/EventosNfe";
 import {
   brl, fmtDataHora, rotuloDaForma, normalizarMetodo, rotuloDaEdicao, mascararTelefone, mesDaVenda, diaEmSaoPaulo,
 } from "./editarVendaUtils";
@@ -544,6 +545,7 @@ export function SaleDetailModal({
                 )}
               </View>
               {authorizedEmission ? (
+                <>
                 <View style={s.fiscalRow}>
                   <View style={s.fiscalOkPill}>
                     <Icon name="check_circle" size={12} color={Colors.green} />
@@ -570,6 +572,12 @@ export function SaleDetailModal({
                       onPress={function() { handlePrint2Via(authorizedEmission.id); }} />
                   )}
                 </View>
+                {/* CP5 (14/11/2026): prazo à vista, carta de correção e cancelar da NF-e de venda. */}
+                {nfeDeVenda && effectiveCompanyId ? (
+                  <AcoesDeEventosNfe companyId={effectiveCompanyId} nota={authorizedEmission as any}
+                    onMudou={function() { if (saleDetail.refetch) saleDetail.refetch(); }} />
+                ) : null}
+                </>
               ) : (
                 <>
                   {latestFiscal && latestFiscal.status !== "autorizada" ? (
