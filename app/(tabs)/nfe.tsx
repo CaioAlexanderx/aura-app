@@ -377,6 +377,7 @@ function NfeScreenInner({ embedded }: { embedded?: boolean }) {
                     emission={e}
                     onCancel={() => { setCancelTarget(e); setCancelReason(""); }}
                     onView={() => handleViewEmission(e)}
+                    onChanged={() => qc.invalidateQueries({ queryKey: ["nfce-emissions", company?.id] })}
                     onReemit={
                       isFailedStatus(e.status)
                         ? () => { if (reemitLoadingId !== e.id) handleReemit(e); }
