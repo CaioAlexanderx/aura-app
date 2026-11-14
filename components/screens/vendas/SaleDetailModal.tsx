@@ -21,6 +21,10 @@ import { textoDoErro } from "@/components/matcon/erroMatcon";
 import { EditarVendaModal } from "./EditarVendaModal";
 import { NfseDaOrigem } from "@/components/nfse/NfseDaOrigem";
 import { nfcePulada, textoServicosForaDaNfce, TEXTO_NFCE_SO_SERVICO } from "@/utils/nfseAutomatica";
+// 14/11/2026 (NF-e 55, CP4): "Emitir NF-e" ao lado do "Emitir NFC-e".
+import { Nfe55Wizard } from "@/components/nfe55/Nfe55Wizard";
+import { abrirDanfe, baixarXml } from "@/components/nfe55/nfe55Acoes";
+import { nfe55Api } from "@/services/nfe55Api";
 import {
   brl, fmtDataHora, rotuloDaForma, normalizarMetodo, rotuloDaEdicao, mascararTelefone, mesDaVenda, diaEmSaoPaulo,
 } from "./editarVendaUtils";
@@ -83,7 +87,8 @@ export function SaleDetailModal({
 }) {
   const { width } = useWindowDimensions();
   const estreito = width < SHEET_NARROW_BP;
-  const { detail, isLoading, error } = useSaleDetail(visible ? saleId : null, companyId);
+  const saleDetail = useSaleDetail(visible ? saleId : null, companyId);
+  const { detail, isLoading, error } = saleDetail;
   const { cancelSale, isCancelling } = useCancelSale(companyId);
   const { emitNfce, isEmitting } = useEmitNfce(companyId);
   const { reemitTrocaFiscal, isReemitting } = useReemitTrocaFiscal(companyId);
@@ -104,6 +109,8 @@ export function SaleDetailModal({
   const [printingReceipt, setPrintingReceipt] = useState(false);
   const [showDevolucao, setShowDevolucao] = useState(false);
   const [print2via, setPrint2via] = useState(false);
+  const [nfeAberta, setNfeAberta] = useState(false);
+  const [enviandoNfe, setEnviandoNfe] = useState(false);
 
   // 02/06/2026 (c): config fiscal (lazy) — so quando o detalhe abriu.
   const { data: nfceCfg } = useQuery({
@@ -212,6 +219,20 @@ export function SaleDetailModal({
     }
   }
 
+  // 14/11/2026 (NF-e 55, CP4): envio unitário ao e-mail do destinatário.
+  async function handleEnviarNfe(emissaoId: string) {
+    if (!effectiveCompanyId || enviandoNfe) return;
+    setEnviandoNfe(true);
+    try {
+      const r = await nfe55Api.enviarEmail(effectiveCompanyId, emissaoId);
+      toast.success("NF-e enviada para " + r.para);
+    } catch (e: any) {
+      toast.error((e && e.data && e.data.error) || (e && e.message) || "Não deu para enviar agora.");
+    } finally {
+      setEnviandoNfe(false);
+    }
+  }
+
   async function handlePrint2Via(nfceId: string) {
     if (!effectiveCompanyId || !nfceId) { toast.error("Nota indisponível"); return; }
     if (typeof window === "undefined") return;
@@ -275,11 +296,14 @@ export function SaleDetailModal({
 
   // 02/06/2026 (b): estado fiscal — emissão relevante por tipo de venda.
   const fiscalList = detail?.fiscal || [];
-  const relTipos = isTroca ? ["nfe", "nfe_devolucao"] : ["nfce"];
+  // 14/11/2026 (NF-e 55, CP4): a venda comum mostra a nota de produtos que
+  // tiver — NFC-e ou NF-e de venda (uma só por venda, backend #1017).
+  const relTipos = isTroca ? ["nfe", "nfe_devolucao"] : ["nfce", "nfe"];
   const relevantFiscal = fiscalList.filter(function(f) { return relTipos.indexOf(f.tipo) >= 0; });
   const authorizedEmission = relevantFiscal.find(function(f) { return f.status === "autorizada"; }) || null;
   const latestFiscal = relevantFiscal.length ? relevantFiscal[0] : null;
-  const fiscalDocLabel = isTroca ? "NF-e de devolução" : "NFC-e";
+  const nfeDeVenda = !isTroca && !!authorizedEmission && authorizedEmission.tipo === "nfe";
+  const fiscalDocLabel = isTroca ? "NF-e de devolução" : (authorizedEmission && authorizedEmission.tipo === "nfe" ? "NF-e" : "NFC-e");
   const fiscalBusy = isEmitting || isReemitting;
   const fiscalEnabled = !!((nfceCfg as any)?.config?.is_active);
   const fiscalAmbiente = (nfceCfg as any)?.config?.ambiente || null;
@@ -527,7 +551,16 @@ export function SaleDetailModal({
                       {fiscalDocLabel}{authorizedEmission.numero ? (" nº " + authorizedEmission.numero) : ""} autorizada
                     </Text>
                   </View>
-                  {isTroca ? (
+                  {nfeDeVenda ? (
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                      <Button testID="venda-nfe-danfe" title="DANFE" icon="file_text" size="sm" variant="secondary"
+                        onPress={function() { if (effectiveCompanyId) abrirDanfe(effectiveCompanyId, authorizedEmission.id); }} />
+                      <Button testID="venda-nfe-xml" title="XML" icon="download" size="sm" variant="secondary"
+                        onPress={function() { if (effectiveCompanyId) baixarXml(effectiveCompanyId, authorizedEmission.id, authorizedEmission.chave_acesso); }} />
+                      <Button testID="venda-nfe-email" title="E-mail" icon="mail" size="sm" variant="secondary" loading={enviandoNfe}
+                        onPress={function() { handleEnviarNfe(authorizedEmission.id); }} />
+                    </View>
+                  ) : isTroca ? (
                     (authorizedEmission.pdf_url || authorizedEmission.url_consulta) ? (
                       <Button title={authorizedEmission.pdf_url ? "Ver DANFE" : "Consultar SEFAZ"} icon="external_link" size="sm" variant="secondary"
                         onPress={function() { openFiscalLink(authorizedEmission); }} />
@@ -549,12 +582,24 @@ export function SaleDetailModal({
                     </View>
                   ) : (
                     <Text style={s.fiscalNone}>
-                      {isTroca ? "A NF-e de devolução desta troca ainda não foi emitida." : "Esta venda ainda não tem NFC-e."}
+                      {isTroca ? "A NF-e de devolução desta troca ainda não foi emitida." : "Esta venda ainda não tem nota fiscal."}
                     </Text>
                   )}
                   {fiscalEnabled ? (
-                    <Button title={isTroca ? "Reprocessar NF-e de devolução" : "Emitir NFC-e"} icon="file_text" size="sm" variant="secondary"
-                      loading={fiscalBusy} onPress={handleEmitFiscal} style={{ alignSelf: "flex-start" }} />
+                    isTroca ? (
+                      <Button title="Reprocessar NF-e de devolução" icon="file_text" size="sm" variant="secondary"
+                        loading={fiscalBusy} onPress={handleEmitFiscal} style={{ alignSelf: "flex-start" }} />
+                    ) : (
+                      <View style={{ gap: 6 }}>
+                        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                          <Button testID="venda-emitir-nfe" title={latestFiscal && latestFiscal.tipo === "nfe" ? "Emitir NF-e de novo" : "Emitir NF-e (empresa / CNPJ)"}
+                            icon="file_text" size="sm" variant="secondary" onPress={function() { setNfeAberta(true); }} />
+                          <Button testID="venda-emitir-nfce" title="Emitir NFC-e" icon="file_text" size="sm" variant="secondary"
+                            loading={fiscalBusy} onPress={handleEmitFiscal} />
+                        </View>
+                        <Text style={s.fiscalConfigNote}>Uma venda tem uma nota de produtos só: NF-e ou NFC-e.</Text>
+                      </View>
+                    )
                   ) : (
                     <Text style={s.fiscalConfigNote}>Emissão de nota fiscal não configurada. Ative em Configurações › Nota Fiscal.</Text>
                   )}
@@ -658,6 +703,18 @@ export function SaleDetailModal({
           }}
           onClose={function() { setShowDevolucao(false); }}
           onDone={function() { /* C1-FE: não fechar aqui — o passo de resultado fica visível. */ }}
+        />
+      )}
+
+      {/* 14/11/2026 (NF-e 55, CP4): a NF-e sai da loja DA VENDA (multi-CNPJ). */}
+      {nfeAberta && saleId && (
+        <Nfe55Wizard
+          visible={nfeAberta}
+          companyId={effectiveCompanyId}
+          saleId={saleId}
+          saleNumber={sale?.sale_number || null}
+          onClose={function() { setNfeAberta(false); if (saleDetail.refetch) saleDetail.refetch(); }}
+          onEmitida={function() { if (saleDetail.refetch) saleDetail.refetch(); }}
         />
       )}
     </ResponsiveSheet>

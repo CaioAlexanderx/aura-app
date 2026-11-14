@@ -96,7 +96,7 @@ export function useSaleDetail(saleId: string | null | undefined, companyId?: str
   // MULTICNPJ Onda 2.4: em consolidated, caller passa companyId do sale.
   const targetCompanyId = companyId || company?.id;
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["sale-detail", targetCompanyId, saleId],
     queryFn: function() {
       if (!targetCompanyId || !saleId) throw new Error("missing");
@@ -111,6 +111,8 @@ export function useSaleDetail(saleId: string | null | undefined, companyId?: str
     detail: data as SaleDetailFull | undefined,
     isLoading: isLoading,
     error: error as Error | null,
+    // 14/11/2026 (NF-e 55, CP4): o assistente avisa quando a nota sai.
+    refetch: refetch,
   };
 }
 

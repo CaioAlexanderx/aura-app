@@ -5,6 +5,10 @@ import { Icon } from "@/components/Icon";
 import { BASE_URL } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 import type { NfceEmission, NfceStatus } from "@/services/nfceApi";
+import { useState } from "react";
+import { nfe55Api } from "@/services/nfe55Api";
+import { abrirDanfe, baixarXml } from "@/components/nfe55/nfe55Acoes";
+import { toast } from "@/components/Toast";
 
 // Tipo legado mantido por componentes que ainda chamam nfeApi (a aba NFS-e vai
 // ser repointada num PR separado). Para a aba Documentos usamos NfceEmission.
@@ -72,6 +76,11 @@ export function EmissionRow({
   const recipient = emission.customer_name || (emission.customer_cpf ? "CPF " + emission.customer_cpf : "Consumidor");
   const isAuthorized = emission.status === "autorizada";
   const viewLabel = isAuthorized ? "2ª via" : "Ver";
+  // 14/11/2026 (NF-e 55, CP4): a NF-e tem DANFE A4, XML e e-mail. Cancelar e
+  // carta de correção da NF-e são do CP5 — sem botão até funcionarem. A
+  // NF-e que falhou se emite de novo pela venda (Vendas › detalhe).
+  const ehNfe = emission.tipo === "nfe";
+  if (ehNfe) return <NfeRow emission={emission} recipient={recipient} dateStr={dateStr} />;
 
   return (
     <View style={ns.docRow}>
@@ -108,6 +117,57 @@ export function EmissionRow({
             </Pressable>
           )}
         </View>
+      </View>
+    </View>
+  );
+}
+
+function NfeRow({ emission, recipient, dateStr }: { emission: NfceEmission; recipient: string; dateStr: string }) {
+  const companyId = useAuthStore((st: any) => st.company && st.company.id);
+  const [enviando, setEnviando] = useState(false);
+  const autorizada = emission.status === "autorizada";
+  async function enviar() {
+    if (!companyId || enviando) return;
+    setEnviando(true);
+    try {
+      const r = await nfe55Api.enviarEmail(companyId, emission.id);
+      toast.success("NF-e enviada para " + r.para);
+    } catch (e: any) {
+      toast.error((e && e.data && e.data.error) || (e && e.message) || "Não deu para enviar agora.");
+    } finally {
+      setEnviando(false);
+    }
+  }
+  return (
+    <View style={ns.docRow} testID={"nota-nfe-" + emission.id}>
+      <View style={ns.docIcon}><Text style={{ fontSize: 11, fontWeight: "800", color: Colors.violet3 }}>55</Text></View>
+      <View style={ns.docInfo}>
+        <Text style={ns.docNumber}>#{emission.numero || "—"} · NF-e · S{emission.serie}</Text>
+        <Text style={ns.docRecipient} numberOfLines={1}>{recipient}</Text>
+        <Text style={ns.docDate}>{new Date(dateStr).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</Text>
+        {emission.error_message && !autorizada ? (
+          <Text style={[ns.docDate, { color: Colors.red }]} numberOfLines={2}>{emission.error_message}</Text>
+        ) : null}
+        {isFailedStatus(emission.status) ? (
+          <Text style={ns.docDate}>Para emitir de novo, abra a venda em Vendas › Nota fiscal.</Text>
+        ) : null}
+      </View>
+      <View style={ns.docRight}>
+        <Text style={ns.docAmount}>{fmt(emission.total_nfce)}</Text>
+        <StatusBadge status={emission.status} />
+        {autorizada && companyId ? (
+          <View style={{ flexDirection: "row", gap: 4, marginTop: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <Pressable onPress={() => abrirDanfe(companyId, emission.id)} style={ns.miniBtn} accessibilityLabel={`DANFE da NF-e ${emission.numero}`} testID="nota-nfe-danfe">
+              <Text style={ns.miniBtnText}>DANFE</Text>
+            </Pressable>
+            <Pressable onPress={() => baixarXml(companyId, emission.id, emission.chave_acesso)} style={ns.miniBtn} accessibilityLabel={`XML da NF-e ${emission.numero}`} testID="nota-nfe-xml">
+              <Text style={ns.miniBtnText}>XML</Text>
+            </Pressable>
+            <Pressable onPress={enviar} style={ns.miniBtn} accessibilityLabel={`Enviar a NF-e ${emission.numero} por e-mail`} testID="nota-nfe-email">
+              <Text style={ns.miniBtnText}>{enviando ? "Enviando…" : "E-mail"}</Text>
+            </Pressable>
+          </View>
+        ) : null}
       </View>
     </View>
   );
