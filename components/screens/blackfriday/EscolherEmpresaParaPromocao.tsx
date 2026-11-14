@@ -16,7 +16,15 @@ import { CompanyPickerModal } from "@/components/CompanyPickerModal";
 
 export var TEXTO_PROMOCAO_POR_EMPRESA = "A promoção é feita por empresa. Escolha a empresa para criar ou ver a promoção.";
 
-export function EscolherEmpresaParaPromocao() {
+type Props = {
+  /** p-120: a mesma porta serve à campanha da loja online, com o texto dela. */
+  texto?: string;
+  acao?: string;
+  testID?: string;
+};
+
+export function EscolherEmpresaParaPromocao({ texto, acao, testID }: Props = {}) {
+  var base = testID || "promo-escolher-empresa";
   var { switchCompany, switching } = useAuthStore() as any;
   var [aberto, setAberto] = useState(false);
 
@@ -33,13 +41,13 @@ export function EscolherEmpresaParaPromocao() {
   }
 
   return (
-    <View style={s.cartao} testID="promo-escolher-empresa">
-      <Text style={s.txt}>{TEXTO_PROMOCAO_POR_EMPRESA}</Text>
+    <View style={s.cartao} testID={base}>
+      <Text style={s.txt}>{texto || TEXTO_PROMOCAO_POR_EMPRESA}</Text>
       <Pressable
         style={[s.btn, switching && { opacity: 0.6 }]}
         onPress={function () { setAberto(true); }}
         disabled={!!switching}
-        testID="promo-escolher-empresa-btn"
+        testID={base + "-btn"}
         accessibilityRole="button"
       >
         <Text style={s.btnTxt}>{switching ? "Trocando..." : "Escolher empresa"}</Text>
@@ -47,7 +55,7 @@ export function EscolherEmpresaParaPromocao() {
       <CompanyPickerModal
         visible={aberto}
         context="black-friday-promocao"
-        actionLabel="criar ou ver a promoção"
+        actionLabel={acao || "criar ou ver a promoção"}
         onPick={trocar}
         onCancel={function () { setAberto(false); }}
       />

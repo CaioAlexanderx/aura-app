@@ -64,6 +64,10 @@ jest.mock("@/hooks/usePromocoesDePor", () => ({
 jest.mock("@/hooks/useResumoVencimento", () => ({
   useResumoVencimento: () => ({ disponivel: false, carregando: false, dados: undefined, recarregar: () => {} }),
 }));
+// Black Friday na loja online (p-120): testes em blackFridayLojaOnline.test.tsx.
+jest.mock("@/hooks/useCampanhaDaLoja", () => ({
+  useCampanhaDaLoja: () => ({ disponivel: false, carregando: false, estado: undefined, salvar: async () => ({}), recarregar: () => {} }),
+}));
 jest.mock("@/components/CompanyPickerModal", () => ({ CompanyPickerModal: () => null }));
 
 // Os filhos pesados viram casca: o que importa aqui é a MONTAGEM da página.

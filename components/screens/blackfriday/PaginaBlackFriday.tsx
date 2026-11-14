@@ -11,6 +11,10 @@
 //   Promoção em lote        (PromocaoEmLote, De/Por, p-86 de 08/11/2026):
 //      só com o backend novo (rota de promoções) e fora do perfil consulta;
 //      no consolidado, o cartão "escolha a empresa" (EscolherEmpresaParaPromocao)
+//   Black Friday na loja online (BlackFridayNaLojaOnline, p-120 de 14/11/2026):
+//      Negócio com loja online; descontos pelo mesmo assistente do De/Por, título
+//      da faixa e a chave da campanha (backend p-118); no consolidado, "escolha
+//      a empresa"
 //   Crediário para janeiro  (CrediarioParaJaneiro, p-91 de 09/11/2026):
 //      só com o crediário (módulo + Políticas do Caixa) e o backend do resumo
 //   O que vai faltar        (OQueVaiFaltar)
@@ -38,7 +42,7 @@ import { AssentoTemporadaCard } from "@/components/screens/configuracoes/Assento
 import { OQueVaiFaltar } from "./OQueVaiFaltar";
 import { SecaoCard } from "./SecaoCard";
 import { ValeTrocaEspelho } from "./ValeTrocaEspelho";
-import { secoesDaPagina } from "./secoes";
+import { secoesDaPagina, LOJA_ONLINE_BF_MOD } from "./secoes";
 import { PromocaoEmLote } from "./dePor/PromocaoEmLote";
 import { useEstoqueConsulta } from "@/hooks/useEstoqueConsulta";
 import { usePromocoesDePor } from "@/hooks/usePromocoesDePor";
@@ -48,6 +52,8 @@ import { EscolherEmpresaParaPromocao } from "./EscolherEmpresaParaPromocao";
 import { estadoDaLoja, faseDoAtraso } from "@/utils/muroDeAssinatura";
 import { SECAO_ASSENTO } from "@/utils/linkDoAssento";
 import { CrediarioParaJaneiro } from "./crediarioJaneiro/CrediarioParaJaneiro";
+import { BlackFridayNaLojaOnline } from "./lojaOnline/BlackFridayNaLojaOnline";
+import { useCampanhaDaLoja } from "@/hooks/useCampanhaDaLoja";
 import { faseCrediarioJaneiro, periodoDoJaneiro } from "./crediarioJaneiro/regrasCrediarioJaneiro";
 
 export function PaginaBlackFriday() {
@@ -67,6 +73,13 @@ export function PaginaBlackFriday() {
   const { consulta, carregando: consultaCarregando } = useEstoqueConsulta();
   const promocoes = usePromocoesDePor(company?.id, !consolidado && visible.has("estoque") && !consulta && !consultaCarregando);
 
+  // Loja online (p-120): Negócio, fora do consolidado e do perfil consulta;
+  // 403/404/503 da campanha ou empresa sem loja online = some.
+  const campanhaLoja = useCampanhaDaLoja(
+    company?.id,
+    !consolidado && visible.has(LOJA_ONLINE_BF_MOD) && !consulta && !consultaCarregando,
+  );
+
   // Crediário para janeiro: só nov–jan, com o módulo; 403/404 do resumo = some.
   const faseCrediario = faseCrediarioJaneiro(hoje);
   const resumoJaneiro = useResumoVencimento({
@@ -83,6 +96,7 @@ export function PaginaBlackFriday() {
     dePorDisponivel: promocoes.disponivel,
     estoqueSoConsulta: consulta || consultaCarregando,
     crediarioDisponivel: resumoJaneiro.disponivel,
+    lojaOnlineDisponivel: campanhaLoja.disponivel,
   });
   const tem = (chave: string) => secoes.some((x) => x.chave === chave);
   const numero = (chave: string) => secoes.findIndex((x) => x.chave === chave) + 1;
@@ -115,6 +129,20 @@ export function PaginaBlackFriday() {
           {textos("de_por").variante === "escolher_empresa"
             ? <EscolherEmpresaParaPromocao />
             : <PromocaoEmLote companyId={company?.id} consolidado={consolidado} dados={promocoes} />}
+        </SecaoCard>
+      )}
+
+      {tem("loja_online") && (
+        <SecaoCard testID="bf-secao-loja-online" numero={numero("loja_online")} titulo={textos("loja_online").titulo} porQueAgora={textos("loja_online").porQueAgora}>
+          {textos("loja_online").variante === "escolher_empresa" || !company?.id
+            ? (
+              <EscolherEmpresaParaPromocao
+                testID="bf-loja-escolher-empresa"
+                texto="A campanha da loja online é de cada empresa. Escolha a empresa para montar os descontos e ligar a faixa."
+                acao="montar a Black Friday da loja online"
+              />
+            )
+            : <BlackFridayNaLojaOnline companyId={company.id} campanha={campanhaLoja} onDescontosMudaram={promocoes.recarregar} />}
         </SecaoCard>
       )}
 

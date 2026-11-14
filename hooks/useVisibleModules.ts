@@ -31,6 +31,14 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   // ainda NAO conhece a chave: PUT de override com "black_friday" volta 400,
   // entao ela fica fora do catalogo do ClientsAdmin por ora.
   black_friday: 'essencial',
+  // 14/11/2026 -- secao "Black Friday na loja online" da pagina Black Friday
+  // (p-120): monta os descontos e liga a faixa da loja online. Chave PROPRIA
+  // (regra 3), nunca o black_friday nem o canal. Negocio, como o Canal
+  // Digital (a loja online): no Essencial a secao some. O backend
+  // (services/modules.js) ainda NAO conhece a chave, entao ela fica fora do
+  // catalogo do ClientsAdmin por ora; a rota da campanha tem o proprio
+  // requirePlan('negocio','expansao').
+  'black_friday.loja_online': 'negocio',
   // 11/05/2026 -- Clientes basico movido pro Essencial (gate de plano
   // removido em private.js do backend). Limite 1000 registros; CRM
   // avancado (ranking, retencao, aniversariantes, crediario) continua
@@ -228,7 +236,10 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   // cliente e quem dispara a reativacao e a mesma pessoa. Granularidade
   // propria (ex.: atendente que ve o WhatsApp mas nao dispara marketing) fica
   // pra quando o produto pedir -- exige chave nova em MembersSection + backend.
-  clientes:      ['clientes', 'whatsapp', 'clientes.reativacao', 'canal'],
+  // 14/11/2026 -- a secao da loja online na pagina Black Friday (p-120)
+  // acompanha quem cuida do Canal Digital. A pagina em si exige estoque ou
+  // configuracoes (black_friday); quem tem so uma das duas nao ve a secao.
+  clientes:      ['clientes', 'whatsapp', 'clientes.reativacao', 'canal', 'black_friday.loja_online'],
   // 13/11/2026 -- a aba Relatorios do Financeiro (p-115a) acompanha quem ve
   // o Financeiro. Quem nao ve custo continua vendo a aba, sem as colunas e
   // os modelos de custo (a tela e o backend cortam).
