@@ -86,12 +86,14 @@ type Props = {
   onSuccess?: () => void;
 };
 
+// "Você" no seletor de responsável: abre em nome de quem está logado.
+const VOCE_ID = "__voce__";
+
 export function OpenCloseCashModal({
   visible, companyId, companyName, companyCnpj,
   sessaoAtiva, onClose, onSuccess,
 }: Props) {
-  const { user, isStaff, company: authCompany } = useAuthStore();
-  const isOwner = isStaff || authCompany?.member_role === "owner";
+  const { user } = useAuthStore();
 
   const [openStep, setOpenStep] = useState<OpenStep>(1);
   const [selectedEmployee, setSelectedEmployee] = useState<{ id: string; name: string; role?: string | null } | null>(null);
@@ -127,16 +129,21 @@ export function OpenCloseCashModal({
     if (sessaoAtiva) setSessaoSnapshot(sessaoAtiva);
   }, [sessaoAtiva]);
 
+  // 14/11/2026 (pedido do Caio): quem abre o caixa escolhe o responsável
+  // entre "Você" e as pessoas cadastradas (inclusive a vendedora criada no
+  // Caixa pelo F2, que não tem login). Antes: dono via só a lista de
+  // funcionários (sem ninguém cadastrado, travava com "Cadastre em Equipe",
+  // tela que o Essencial nem tem) e funcionário logado só abria em nome
+  // próprio. "Você" vai como responsável null (o backend grava quem está
+  // logado); pessoa da lista vai como responsavel_employee_id.
   useEffect(() => {
-    if (!visible || isOwner) return;
-    if (user) {
-      setSelectedEmployee({
-        id: user.id,
-        name: (user as any).name || (user as any).email || "Eu",
-        role: null,
-      });
-    }
-  }, [visible, isOwner, user]);
+    if (!visible || !user) return;
+    setSelectedEmployee((atual) => atual || {
+      id: VOCE_ID,
+      name: (user as any).name || (user as any).email || "Você",
+      role: null,
+    });
+  }, [visible, user]);
 
   const isAberto = !!sessaoAtiva;
   const mode: "abrir" | "fechar" = (closeResult || isAberto) ? "fechar" : "abrir";
@@ -145,16 +152,19 @@ export function OpenCloseCashModal({
   const { data: empData, isFetching: loadingEmployees } = useQuery({
     queryKey: ["employees", companyId],
     queryFn: () => employeesApi.list(companyId),
-    enabled: !!companyId && visible && mode === "abrir" && isOwner,
+    enabled: !!companyId && visible && mode === "abrir",
     staleTime: 60_000,
   });
   const employees = useMemo(() => {
-    return ((empData?.employees || []) as any[]).map((e) => ({
-      id: e.id as string,
-      name: (e.name || "") as string,
-      role: (e.role || null) as string | null,
-    }));
-  }, [empData]);
+    // A ficha ligada a quem está logado já é o "Você" do topo da lista.
+    return ((empData?.employees || []) as any[])
+      .filter((e) => !(user && e.user_id && e.user_id === user.id))
+      .map((e) => ({
+        id: e.id as string,
+        name: (e.name || "") as string,
+        role: (e.role || null) as string | null,
+      }));
+  }, [empData, user]);
 
   // 30/10/2026 — as movimentações da sessão aberta. Backend antigo (rota
   // inexistente): a consulta falha, fica undefined e tudo abaixo cai nos
@@ -192,7 +202,7 @@ export function OpenCloseCashModal({
     if (troco < 0) { toast.error("Troco inválido"); return; }
     setSubmittingOpen(true);
     try {
-      await caixaApi.abrir(companyId, troco, isOwner ? selectedEmployee.id : null);
+      await caixaApi.abrir(companyId, troco, selectedEmployee.id === VOCE_ID ? null : selectedEmployee.id);
       toast.success("Caixa aberto!");
       onSuccess?.(); onClose();
     } catch (err: any) {
@@ -323,47 +333,47 @@ export function OpenCloseCashModal({
     bodyNode = (
       <>
         <Text style={s.sectionTitle}>Quem esta abrindo o caixa?</Text>
-        {!isOwner ? (
-          <View style={[s.pickerItem, s.pickerItemSelected, { borderStyle: "solid" as any }]}>
+        <View style={{ gap: 4 }}>
+          <Pressable style={[s.pickerItem, selectedEmployee?.id === VOCE_ID && s.pickerItemSelected]}
+            testID="caixa-abrir-voce"
+            onPress={() => user && setSelectedEmployee({ id: VOCE_ID, name: (user as any).name || (user as any).email || "Você", role: null })}>
             <View style={[s.avatar, IS_WEB && webOnly({ background: avatarColor(0) } as any)]}>
               <Text style={s.avatarTxt}>{initials((user as any)?.name || "")}</Text>
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={s.pickerName} numberOfLines={1}>{(user as any)?.name || "Você"}</Text>
-              <Text style={s.pickerRole}>Abertura registrada em seu nome</Text>
+              <Text style={s.pickerRole}>Abertura em seu nome</Text>
             </View>
             <View style={[s.permTag, { backgroundColor: "rgba(52,211,153,0.10)", borderColor: "rgba(52,211,153,0.35)" }]}>
               <Text style={[s.permTagTxt, { color: "#34d399" }]}>VOCÊ</Text>
             </View>
-          </View>
-        ) : loadingEmployees ? (
+          </Pressable>
+        </View>
+        {loadingEmployees ? (
           <View style={s.centered}><ActivityIndicator color={Colors.violet} /></View>
-        ) : employees.length === 0 ? (
-          <Text style={s.emptyTxt}>Nenhum funcionario cadastrado. Cadastre em Equipe.</Text>
-        ) : (
-          <View style={{ gap: 4 }}>
+        ) : employees.length === 0 ? null : (
+          <View style={{ gap: 4, marginTop: 4 }}>
             {employees.map((e, idx) => {
               const sel = selectedEmployee?.id === e.id;
               return (
                 <Pressable key={e.id} style={[s.pickerItem, sel && s.pickerItemSelected]}
+                  testID={"caixa-abrir-pessoa-" + e.id}
                   onPress={() => setSelectedEmployee(e)}>
-                  <View style={[s.avatar, IS_WEB && webOnly({ background: avatarColor(idx) } as any)]}>
+                  <View style={[s.avatar, IS_WEB && webOnly({ background: avatarColor(idx + 1) } as any)]}>
                     <Text style={s.avatarTxt}>{initials(e.name)}</Text>
                   </View>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={s.pickerName} numberOfLines={1}>{e.name || "Sem nome"}</Text>
                     {e.role && <Text style={s.pickerRole} numberOfLines={1}>{e.role}</Text>}
                   </View>
-                  <View style={s.permTag}><Text style={s.permTagTxt}>ACESSO PDV</Text></View>
+                  <View style={s.permTag}><Text style={s.permTagTxt}>EQUIPE</Text></View>
                 </Pressable>
               );
             })}
           </View>
         )}
         <Text style={s.helpTxt}>
-          {isOwner
-            ? "Lista filtrada por permissão de acessar o PDV (plano Negócio+)."
-            : "Funcionarios abrem o caixa apenas em nome próprio. Proprietarios podem abrir como qualquer operador."}
+          Escolha quem fica responsável pelo caixa. Quem você cadastra como vendedora no Caixa (F2) aparece aqui.
         </Text>
       </>
     );
