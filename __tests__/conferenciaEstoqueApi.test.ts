@@ -7,6 +7,9 @@
 //      texto gentil; 409 traz o texto do servidor; rede é "rede".
 // ============================================================
 import { setTokenGetter, ApiError } from "@/services/api";
+// 14/11/2026: o teste de "sem rede" anota uma falha de conexão; sem zerar,
+// o próximo teste veria o envio dessa telemetria como a última chamada.
+import { __reiniciarFalhasDeConexao } from "@/services/falhasDeConexao";
 import {
   conferenciaEstoqueApi,
   lerErroDaConferencia,
@@ -25,7 +28,7 @@ function responder(status: number, corpo: any) {
   }) as any;
 }
 
-beforeEach(() => { chamadas = []; setTokenGetter(() => "tk"); });
+beforeEach(() => { chamadas = []; setTokenGetter(() => "tk"); __reiniciarFalhasDeConexao(); });
 afterEach(() => { global.fetch = originalFetch; });
 
 function ultima() { return chamadas[chamadas.length - 1]; }

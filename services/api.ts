@@ -11,6 +11,7 @@ import { empresaParaORefresh, contextoMudou, type EmpresaDoRefresh } from "@/uti
 import {
   MSG_SEM_CONEXAO, MSG_SEM_CONEXAO_NA_SESSAO, MSG_SESSAO_TERMINOU, MSG_ERRO_NOSSO, MSG_DEMOROU_DEMAIS, MSG_ERRO_SEM_EXPLICACAO,
 } from "@/utils/mensagensDoApp";
+import { anotarFalhaDeConexao, enviarFalhasPendentes, type FalhaDeConexao } from "@/services/falhasDeConexao";
 
 var BASE_URL =
   (typeof process !== "undefined" && process.env?.EXPO_PUBLIC_API_URL) ||
@@ -172,6 +173,29 @@ export function encerrarSessaoNoServidor(refreshToken: string | null | undefined
   } catch { /* melhor esforço */ }
 }
 
+// 14/11/2026: falhas de conexão anotadas (services/falhasDeConexao) seguem
+// para o servidor por um fetch próprio — nunca pelo request(), para uma
+// falha no envio não virar outra falha anotada. Sem token, fica na fila.
+function enviarLoteDeFalhas(falhas: FalhaDeConexao[]): Promise<boolean> {
+  var token = _getToken?.() || null;
+  if (!token || typeof fetch === "undefined") return Promise.resolve(false);
+  return fetch(BASE_URL + "/usage/connection-failures", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+    body: JSON.stringify({ failures: falhas }),
+  }).then(function(r) { return r.ok; }).catch(function() { return false; });
+}
+
+function mandarFalhasPendentes(): void {
+  enviarFalhasPendentes(enviarLoteDeFalhas).catch(function() { /* telemetria */ });
+}
+
+try {
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    window.addEventListener("online", mandarFalhasPendentes);
+  }
+} catch { /* sem window */ }
+
 export async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   var { method = "GET", body, retry = 2, timeout = 10000 } = opts;
   var explicitToken = opts.token !== undefined;
@@ -249,6 +273,8 @@ export async function request<T>(path: string, opts: RequestOpts = {}): Promise<
         if (!(data as any).error) console.warn("[api] resposta " + res.status + " sem texto em " + path);
         throw new ApiError((data as any).error || MSG_ERRO_SEM_EXPLICACAO, res.status, data);
       }
+      // Voltou a responder: manda as falhas anotadas (segundo plano).
+      mandarFalhasPendentes();
       return data as T;
     } catch (err: any) {
       lastError = err;
@@ -262,6 +288,7 @@ export async function request<T>(path: string, opts: RequestOpts = {}): Promise<
       // Por isso a mensagem não incentiva repetir sem checar antes —
       // especialmente crítico em ações sem desfazer pela tela.
       if (err && err.name === "AbortError") {
+        anotarFalhaDeConexao({ method: method, path: path, code: "timeout", attempts: attempt + 1 });
         throw new ApiError(MSG_DEMOROU_DEMAIS, 0, null, true, "timeout");
       }
       if (attempt < retry) { await new Promise(function(r) { setTimeout(r, 800 * (attempt + 1)); }); continue; }
@@ -273,6 +300,7 @@ export async function request<T>(path: string, opts: RequestOpts = {}): Promise<
   // "E-mail ou senha incorretos." para um cliente cuja requisição nem chegou
   // ao backend (17/09/2026). Sai sempre como ApiError de rede.
   if (lastError instanceof ApiError) throw lastError;
+  anotarFalhaDeConexao({ method: method, path: path, code: "network", attempts: retry + 1 });
   throw new ApiError(MSG_SEM_CONEXAO, 0, null, true, "network");
 }
 
