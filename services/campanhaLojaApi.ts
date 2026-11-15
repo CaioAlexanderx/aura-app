@@ -31,15 +31,43 @@ export type EstadoDaCampanha = {
     ate_data: string | null;
     /** "AAAA-MM-DD" da primeira agendada, em Brasília. */
     comeca_em: string | null;
+    /** p-123a: peças com promoção (no ar ou agendada) que a loja online NÃO
+     *  mostra (fora da vitrine, sem foto, sem estoque). Os números acima
+     *  contam só o que a loja mostra. Backend antigo: ausente. */
+    fora_da_loja?: number;
   };
   pode_ligar: boolean;
   periodo_padrao: { inicio: string; fim: string };
+  /** p-122 (migration 453): o texto escrito pela loja (null = a opção pronta
+   *  / o texto padrão), o título que a faixa mostra e os limites. Backend
+   *  antigo: ausentes. */
+  titulo_texto?: string | null;
+  frase_texto?: string | null;
+  titulo_final?: string;
+  limites?: { titulo: number; frase: number };
 };
 
-export type MudancaDaCampanha = { ativa?: boolean; titulo?: TituloDaCampanha };
+export type MudancaDaCampanha = {
+  ativa?: boolean;
+  titulo?: TituloDaCampanha;
+  /** p-122: null (ou vazio) volta à opção pronta. Inválido: 422 TEXTO_DA_FAIXA_INVALIDO. */
+  titulo_texto?: string | null;
+  frase_texto?: string | null;
+};
+
+/** Por que a peça não aparece na loja online (GET /campanha/fora-da-loja). */
+export type MotivoForaDaLoja = "fora_da_vitrine" | "sem_foto" | "sem_estoque";
 
 export const campanhaLojaApi = {
   estado: (cid: string) => request<EstadoDaCampanha>(`/companies/${cid}/digital-channel/campanha`),
   salvar: (cid: string, body: MudancaDaCampanha) =>
     request<EstadoDaCampanha>(`/companies/${cid}/digital-channel/campanha`, { method: "PUT", body }),
+  /** As peças que a loja online não mostra, com o motivo (p-123a). */
+  foraDaLoja: (cid: string) =>
+    request<{ produtos: Array<{ id: string; motivo: MotivoForaDaLoja }> }>(`/companies/${cid}/digital-channel/campanha/fora-da-loja`)
+      .then(function (r) {
+        var mapa: Record<string, MotivoForaDaLoja> = {};
+        ((r && r.produtos) || []).forEach(function (p) { if (p && p.id) mapa[String(p.id)] = p.motivo; });
+        return mapa;
+      }),
 };
