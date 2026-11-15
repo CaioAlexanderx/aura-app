@@ -33,6 +33,8 @@ import { useProducts } from "@/hooks/useProducts";
 import { useVendidosRecentes } from "@/hooks/useVendidosRecentes";
 import { useEstoqueConsulta } from "@/hooks/useEstoqueConsulta";
 import { ApiError } from "@/services/api";
+import type { MotivoForaDaLoja } from "@/services/campanhaLojaApi";
+import { avisoDosEscolhidosForaDaLoja, rotuloForaDaLoja } from "@/components/screens/blackfriday/lojaOnline/regrasCampanhaLoja";
 import {
   promocoesApi, type ModoPromocao, type RespostaPromocao, type TerminacaoPromocao, type PedidoPromocao,
 } from "@/services/promocoesApi";
@@ -62,6 +64,9 @@ type Props = {
   prazoInicial?: ChavePrazo;
   /** Título do cabeçalho (padrão "Criar promoção"). */
   titulo?: string;
+  /** p-123a: aberto pela seção da loja online, as peças que a loja NÃO
+   *  mostra (id → motivo) vêm marcadas. Sem ele, nada muda. */
+  foraDaLoja?: Record<string, MotivoForaDaLoja>;
 };
 
 export function mensagemErroPromo(e: any): string {
@@ -74,7 +79,7 @@ export function mensagemErroPromo(e: any): string {
   return (e && e.message) || "Não conseguimos fazer isso agora. Tente de novo em instantes.";
 }
 
-export function CriarPromocaoModal({ companyId, onFechar, onAplicada, preSelecionados, prazoInicial, titulo }: Props) {
+export function CriarPromocaoModal({ companyId, onFechar, onAplicada, preSelecionados, prazoInicial, titulo, foraDaLoja }: Props) {
   var largura = useWindowDimensions().width;
   var estreito = largura < 640;
   var hoje = hojeBrt();
@@ -332,13 +337,22 @@ export function CriarPromocaoModal({ companyId, onFechar, onAplicada, preSelecio
                         <Pressable key={p.id} onPress={function () { var n = { ...marcados }; n[p.id] = !on; setMarcados(n); }}
                           style={s.linhaSel} accessibilityRole="checkbox" accessibilityState={{ checked: on }} testID={"promo-marcar-" + p.id}>
                           <View style={[s.caixa, on && s.caixaOn]}>{on && <Icon name="check" size={12} color="#fff" />}</View>
-                          <Text style={s.linhaNome} numberOfLines={2}>{p.name}</Text>
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={s.linhaNome} numberOfLines={2}>{p.name}</Text>
+                            {!!foraDaLoja && !!foraDaLoja[p.id] && (
+                              <Text style={s.tag} testID={"promo-fora-da-loja-" + p.id}>{rotuloForaDaLoja(foraDaLoja[p.id])}</Text>
+                            )}
+                          </View>
                           <Text style={s.t}>{brl(p.price)}</Text>
                         </Pressable>
                       );
                     })}
                   </View>
                 </View>
+              )}
+
+              {!!avisoDosEscolhidosForaDaLoja(selecionados, foraDaLoja) && (
+                <Aviso tipo="aviso" testID="promo-escolhidos-fora-da-loja">{avisoDosEscolhidosForaDaLoja(selecionados, foraDaLoja)}</Aviso>
               )}
 
               <Pressable onPress={function () { setDeixarDeFora(!deixarDeFora); }} style={s.linhaCheck}
@@ -479,6 +493,9 @@ export function CriarPromocaoModal({ companyId, onFechar, onAplicada, preSelecio
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <Text style={s.linhaNome} numberOfLines={2}>{nomeDoItemPromo(i)}</Text>
                         {i.ja_em_promocao && <Text style={s.tag}>já em promoção</Text>}
+                        {!!foraDaLoja && !!foraDaLoja[i.product_id] && (
+                          <Text style={s.tag} testID={"promo-item-fora-da-loja-" + k}>{rotuloForaDaLoja(foraDaLoja[i.product_id])}</Text>
+                        )}
                       </View>
                       <View style={s.precos}>
                         <Text style={s.de}>{brl(i.preco_de)}</Text>
