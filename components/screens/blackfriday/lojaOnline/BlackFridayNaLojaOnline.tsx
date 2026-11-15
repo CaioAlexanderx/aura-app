@@ -4,11 +4,11 @@
 // Mockup aprovado pelo Caio (14/11/2026): https://claude.ai/artifact/2vZuoRKQpbpYfjxShbqTtL
 //
 // Logo depois de "Promoção em lote". Dois passos e uma chave:
-//   1 Descontos  — quantos produtos estão em promoção (no ar e agendados) e
+//   a Descontos  — quantos produtos estão em promoção (no ar e agendados) e
 //                  "Montar descontos": o MESMO assistente da Promoção em lote
 //                  (CriarPromocaoModal), já no prazo da Black Friday (27/11
 //                  a 30/11). O preço promocional vale no Caixa e na loja.
-//   2 Faixa      — o título da faixa entre três opções; o "até N% OFF" é
+//   b Faixa      — o título da faixa entre três opções; o "até N% OFF" é
 //                  calculado no servidor e não se edita. "Ver a loja".
 //   Chave        — "Mostrar a campanha na loja online". Sem desconto montado
 //                  fica desligada (e o servidor recusa com 409, que vira o
@@ -18,6 +18,8 @@
 // peça fora da vitrine (ou sem foto, sem estoque) vira um aviso com "Mostrar
 // na loja" (Canal Digital › Vitrine), e no assistente essas peças vêm
 // marcadas "não aparece na loja online".
+// p-123b (QA 14/11): os passos internos são "a" e "b" — o "2" do título
+// da seção (a posição na página) colidia com os passos "1" e "2".
 // Quem decide se a seção aparece é a página (secoes.ts + useCampanhaDaLoja):
 // some no Essencial, sem loja online e no perfil consulta; no consolidado,
 // "escolher empresa". Sem hover: tudo visível, alvos de 44 px.
@@ -115,7 +117,7 @@ export function BlackFridayNaLojaOnline({ companyId, campanha, onDescontosMudara
       </View>
 
       <View style={[s.passo, estreito && s.passoCel]} testID="bf-loja-passo-descontos">
-        <View style={[s.num, temDesconto && s.numOk]}><Text style={[s.numTxt, temDesconto && { color: "#fff" }]}>{temDesconto ? "✓" : "1"}</Text></View>
+        <View style={[s.num, temDesconto && s.numOk]}><Text style={[s.numTxt, temDesconto && { color: "#fff" }]}>{temDesconto ? "✓" : "a"}</Text></View>
         <View style={s.passoCorpo}>
           <Text style={s.passoTit}>Descontos</Text>
           <Text style={s.t} testID="bf-loja-descontos">{textoDosDescontos(e)}</Text>
@@ -135,7 +137,7 @@ export function BlackFridayNaLojaOnline({ companyId, campanha, onDescontosMudara
       )}
 
       <View style={[s.passo, s.passoCel]} testID="bf-loja-passo-faixa">
-        <View style={s.num}><Text style={s.numTxt}>2</Text></View>
+        <View style={s.num}><Text style={s.numTxt}>b</Text></View>
         <View style={s.passoCorpo}>
           <Text style={s.passoTit}>Faixa preta na loja</Text>
           <Text style={s.t}>{textoDaFaixa(e)}</Text>

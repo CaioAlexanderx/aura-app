@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { promocoesApi, type ItemDaLista, type StatusPromocao } from "@/services/promocoesApi";
+import { CHAVE_CAMPANHA_LOJA } from "@/hooks/useCampanhaDaLoja";
 
 // ============================================================
 // AURA. — Promoções De/Por da empresa ativa (p-86, 08/11/2026)
@@ -47,6 +48,10 @@ export function usePromocoesDePor(companyId: string | undefined, ligado: boolean
       qc.invalidateQueries({ queryKey: [CHAVE_PROMOCOES, companyId] });
       // O preço que vale mudou: Estoque e Caixa releem os produtos.
       qc.invalidateQueries({ queryKey: ["products", companyId] });
+      // p-123b (QA 14/11): a seção "Black Friday na loja online" conta as
+      // mesmas promoções; sem isto ela seguia "3 produtos em promoção" depois
+      // do "Encerrar agora" até recarregar a página.
+      qc.invalidateQueries({ queryKey: [CHAVE_CAMPANHA_LOJA, companyId] });
     },
   };
 }

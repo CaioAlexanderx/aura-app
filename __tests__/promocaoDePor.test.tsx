@@ -54,6 +54,7 @@ import { promocoesApi, emLotes, lerLista } from "@/services/promocoesApi";
 import {
   blackFridayDoAno, prazosDisponiveis, instantesDoPrazo, erroDasDatas, erroDoValorPromo, textoDoPrazo,
   avisoDePromocaoNoCadastro, descontoMedio, textoDeFora, resumoDaLista, textoDoPronto, horaBrtDe,
+  desviosDoFinal, textoDoDesvioDoFinal,
 } from "@/components/screens/blackfriday/dePor/regrasDePor";
 import { secoesDaPagina } from "@/components/screens/blackfriday/secoes";
 import { PromocaoEmLote } from "@/components/screens/blackfriday/dePor/PromocaoEmLote";
@@ -469,5 +470,63 @@ describe("aviso no cadastro de produto em promoção", () => {
     const src = fs.readFileSync(path.join(__dirname, "..", "components/screens/estoque/ItemFormModal.tsx"), "utf8");
     expect(src).toContain("avisoDePromocaoNoCadastro(alvo)");
     expect(src).toContain('testID="item-aviso-promocao"');
+  });
+});
+
+// ── 7. O final ",90" que muda o desconto (p-123b, QA 14/11) ──
+
+describe("o final ,90 que muda o desconto (p-123b)", () => {
+  const barato = { product_id: "a", variant_id: null, preco_de: 3.2, preco_por: 2.9 };
+  const caro = { product_id: "b", variant_id: null, preco_de: 139.9, preco_por: 111.9 };
+
+  it("regras: só passa de 5 pontos; sem ajuste e preço único não avisam", () => {
+    expect(desviosDoFinal([barato, caro], { modo: "percent", valor: 20, terminacao: "90" }))
+      .toEqual([{ chave: "a:", pedidoPct: 20, realPct: 9, de: 3.2, por: 2.9 }]);
+    expect(desviosDoFinal([barato], { modo: "percent", valor: 20, terminacao: "none" })).toEqual([]);
+    expect(desviosDoFinal([barato], { modo: "preco", valor: 2.9, terminacao: "none" })).toEqual([]);
+    // R$ 1 de desconto em R$ 3,20 (31%) com final ,90 vira R$ 1,90 (41%): avisa.
+    expect(desviosDoFinal([{ ...barato, preco_por: 1.9 }], { modo: "fixed", valor: 1, terminacao: "90" })[0])
+      .toMatchObject({ pedidoPct: 31, realPct: 41 });
+    expect(textoDoDesvioDoFinal(desviosDoFinal([barato], { modo: "percent", valor: 20, terminacao: "90" }), "90"))
+      .toBe("1 item fica com o desconto bem diferente do pedido por causa do final ,90: R$ 3,20 → R$ 2,90 dá 9%, não 20%. Confira na lista ou volte e escolha “Sem ajuste”.");
+    expect(textoDoDesvioDoFinal([], "90")).toBe(null);
+  });
+
+  it("assistente: o aviso na conferência e a marca no item", async () => {
+    mockProdutos = [
+      { id: "p1", name: "Vestido midi", price: 139.9, stock: 3, category: "Vestidos", code: "", barcode: "" },
+      { id: "p2", name: "Abraçadeira", price: 3.2, stock: 40, category: "Ferragens", code: "", barcode: "" },
+    ];
+    const r = await montar(comQuery(<CriarPromocaoModal companyId={CID} onFechar={jest.fn()} />));
+    await tocar(r, "promo-continuar");
+    await tocar(r, "promo-pct-20");
+    mockRequest.mockResolvedValueOnce({
+      dry_run: true,
+      items: [
+        { product_id: "p1", variant_id: null, nome: "Vestido midi", preco_de: 139.9, preco_por: 111.9, ja_em_promocao: false, abaixo_do_custo: false },
+        { product_id: "p2", variant_id: null, nome: "Abraçadeira", preco_de: 3.2, preco_por: 2.9, ja_em_promocao: false, abaixo_do_custo: false },
+      ],
+      fora: [],
+    });
+    await tocar(r, "promo-ver");
+    expect(textoDe(porId(r, "promo-desvio-do-final"))).toContain("R$ 3,20 → R$ 2,90 dá 9%, não 20%");
+    expect(textoDe(porId(r, "promo-item-desvio-p2:"))).toBe("com o final, o desconto é 9%");
+    expect(tem(r, "promo-item-desvio-p1:")).toBe(false);
+  });
+});
+
+// ── 8. "Encerrar agora" relê a seção da loja online (p-123b) ──
+
+describe("recarregar as promoções relê a campanha da loja online (p-123b)", () => {
+  it("invalida a mesma chave que a seção usa", async () => {
+    const { usePromocoesDePor } = jest.requireActual("@/hooks/usePromocoesDePor");
+    const { CHAVE_CAMPANHA_LOJA } = require("@/hooks/useCampanhaDaLoja");
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const espiao = jest.spyOn(qc, "invalidateQueries");
+    let api: any;
+    function Sonda() { api = usePromocoesDePor(CID, false); return null; }
+    await act(async () => { renderer.create(<QueryClientProvider client={qc}><Sonda /></QueryClientProvider>); });
+    act(() => { api.recarregar(); });
+    expect(espiao).toHaveBeenCalledWith({ queryKey: [CHAVE_CAMPANHA_LOJA, CID] });
   });
 });
