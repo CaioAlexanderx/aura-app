@@ -199,6 +199,25 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   // backend (services/modules.js) ainda NAO conhece a chave (mesmo caso de
   // 'conferencia_estoque').
   'financeiro.relatorios': 'essencial',
+  // 16/11/2026 -- Personalizados (p-128): a frente Studio dentro do shell
+  // Negocio. Mesmo desenho da Otica e do Matcon (sem shell proprio, opt-in
+  // por toggle filtrado no _layout), com uma diferenca: plano NEGOCIO, o
+  // mesmo requirePlan das rotas /companies/:id/studio/* do backend. No
+  // Essencial os itens SOMEM, sem cadeado nem convite de upgrade. Cada tela
+  // com chave PROPRIA (regra 3). O opt-in e pdv_settings.studio_enabled em
+  // empresa sem vertical_active (utils/personalizados.ts). O backend
+  // (services/modules.js, backend#1038) conhece as mesmas chaves.
+  //   producao, orcamentos, insumos, galeria -> itens do menu
+  //   pedido (detalhe do pedido), ficha (ficha tecnica do produto),
+  //   loja (estilo dos personalizaveis na loja online) e config -> subtelas
+  'personalizados.producao':   'negocio',
+  'personalizados.orcamentos': 'negocio',
+  'personalizados.insumos':    'negocio',
+  'personalizados.galeria':    'negocio',
+  'personalizados.pedido':     'negocio',
+  'personalizados.ficha':      'negocio',
+  'personalizados.loja':       'negocio',
+  'personalizados.config':     'negocio',
 };
 var PLAN_LEVEL: Record<string, number> = { essencial: 0, negocio: 1, expansao: 2 };
 
@@ -283,6 +302,11 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   // o produto pedir granularidade (ex.: entregador so ve Entregas), separar
   // as chaves aqui e em components/MembersSection.tsx.
   'matcon.access': ['matcon.orcamentos','matcon.entregas','matcon.profissionais','matcon.compras','matcon.config'],
+  // 16/11/2026 (Personalizados, p-128): mesma umbrella. O backend grava e
+  // devolve "personalizados.access" em company_members.permissions
+  // (backend#1038). Granularidade (ex.: quem produz nao ve Orcamentos) fica
+  // para quando o produto pedir: separar aqui e em MembersSection.
+  'personalizados.access': ['personalizados.producao','personalizados.orcamentos','personalizados.insumos','personalizados.galeria','personalizados.pedido','personalizados.ficha','personalizados.loja','personalizados.config'],
 };
 
 // Fallback TRANSITORIO de override: quando o modulo nao tem override proprio,

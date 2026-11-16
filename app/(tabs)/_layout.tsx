@@ -16,13 +16,14 @@ import { useVisibleModules, MODULE_PLAN_MAP, PLAN_LEVEL } from "@/hooks/useVisib
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { useSidebarLayout, applyLayoutToNav } from "@/hooks/useSidebarLayout";
 import { moduloEstaOculto } from "@/constants/modulosOcultos";
+import { personalizadosAtivo } from "@/utils/personalizados";
 import { useBlackFridayLiberada } from "@/hooks/useBlackFridayLiberada";
 import { SidebarEditor } from "@/components/SidebarEditor";
 import { CompanySwitcher } from "@/components/CompanySwitcher"; // M1-06: Multi-CNPJ switcher
 import { NotificationBell } from "@/components/NotificationBell";
 
 const LOGO_SVG="https://cdn.jsdelivr.net/gh/CaioAlexanderx/aura-app@main/assets/Icon.png";
-type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string; mod?: string; staff?: boolean; osToggle?: boolean; oticaToggle?: boolean; matconToggle?: boolean; temporada?: boolean };
+type NavItem = { r: string; l: string; ic: string; soon?: boolean; plan?: string; mod?: string; staff?: boolean; osToggle?: boolean; oticaToggle?: boolean; matconToggle?: boolean; personalizadosToggle?: boolean; temporada?: boolean };
 type NavSection = { s: string; i: NavItem[] };
 
 // ============================================================
@@ -140,6 +141,17 @@ const NAV: NavSection[] = [
   // existem, docs/CONTRACT_MATCON.md §M4). Mesmo desenho: mod PROPRIO
   // (matcon.compras, ja em MODULE_PLAN_MAP/PERM_TO_MODULES) e matconToggle.
   { s: "Matcon", i: [{ r: "/matcon/orcamentos", l: "Orçamentos", ic: "clipboard", mod: "matcon.orcamentos", matconToggle: true },{ r: "/matcon/entregas", l: "Entregas", ic: "truck", mod: "matcon.entregas", matconToggle: true },{ r: "/matcon/profissionais", l: "Profissionais Parceiros", ic: "building", mod: "matcon.profissionais", matconToggle: true }]},
+  // 16/11/2026 (p-128) — Personalizados: a frente Studio dentro do shell
+  // Negocio (decisao do Caio de 16/11: deixam de nascer empresas no /studio).
+  // Mesmo desenho da Otica e do Matcon: sem shell proprio, cada item com `mod`
+  // PROPRIO (regra 3), em MODULE_PLAN_MAP (Negocio: no Essencial os itens
+  // somem, sem cadeado) e em PERM_TO_MODULES sob personalizados.access. O
+  // opt-in e `personalizadosToggle`, filtrado em buildRawNav: a secao so
+  // existe para empresa com pdv_settings.studio_enabled E sem vertical_active
+  // (utils/personalizados.ts). Quem tem vertical_active='studio' continua no
+  // shell /studio e nao ve nada disto. Item cuja tela ainda nao nasceu no
+  // shell Negocio fica em constants/modulosOcultos.ts ate nascer.
+  { s: "Personalizados", i: [{ r: "/personalizados/producao", l: "Produção", ic: "layers", mod: "personalizados.producao", personalizadosToggle: true },{ r: "/personalizados/orcamentos", l: "Orçamentos 3D", ic: "clipboard", mod: "personalizados.orcamentos", personalizadosToggle: true },{ r: "/personalizados/insumos", l: "Insumos", ic: "package", mod: "personalizados.insumos", personalizadosToggle: true },{ r: "/personalizados/galeria", l: "Galeria", ic: "image", mod: "personalizados.galeria", personalizadosToggle: true }]},
   { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", mod: "folha" },{ r: "/agendamento", l: "Agenda", ic: "calendar", mod: "agendamento" }]},
   { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", mod: "agentes" }]},
   { s: "Admin", i: [{ r: "/gestao-aura", l: "Gestão Aura", ic: "shield", staff: true }]},
@@ -147,7 +159,10 @@ const NAV: NavSection[] = [
 
 // Rotas hasteadas pro topo do menu "Mais" no mobile, nesta ordem. Ver
 // comentario em MBar.filteredMore.
-const MORE_PRIORIDADE = ["/clientes", "/whatsapp", "/clientes/reativacao"];
+// 16/11/2026 (p-128) — a Producao dos Personalizados vem primeiro: e a tela
+// que a loja de personalizados abre o dia inteiro no celular. O hasteamento
+// respeita o filteredNav, entao quem nao tem a frente nao ve diferenca.
+const MORE_PRIORIDADE = ["/personalizados/producao", "/clientes", "/whatsapp", "/clientes/reativacao"];
 
 
 function useWebFonts() {
@@ -263,7 +278,7 @@ function isA(p: string, r: string) {
 // Usado tanto na renderizacao (depois aplica layout) quanto pra
 // passar como baseNav pro SidebarEditor (cliente ve TUDO no editor).
 // ============================================================
-function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical: string | null | undefined, osEnabled?: boolean, oticaEnabled?: boolean, matconEnabled?: boolean, blackFridayOn?: boolean): NavSection[] {
+function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical: string | null | undefined, osEnabled?: boolean, oticaEnabled?: boolean, matconEnabled?: boolean, blackFridayOn?: boolean, personalizadosOn?: boolean): NavSection[] {
   const base = NAV.map(section => ({
     ...section,
     i: section.i.filter(item => {
@@ -280,6 +295,9 @@ function buildRawNav(visibleMods: Set<string>, isStaff: boolean, activeVertical:
       // os dois itens marcados `matconToggle: true`: loja sem o toggle nao
       // ve secao nenhuma.
       if (item.matconToggle && matconEnabled !== true) return false;
+      // 16/11/2026 (p-128) — Personalizados: studio_enabled ligado E empresa
+      // sem vertical_active (a conta decidida em utils/personalizados.ts).
+      if (item.personalizadosToggle && personalizadosOn !== true) return false;
       // 13/10/2026 — pagina de temporada: some fora do periodo (de 13/10/2026
       // ate 02/02/2027) e, por enquanto, para quem nao e conta de teste
       // (BLACK_FRIDAY_LIBERADA_PARA_TODOS, constants/blackFriday.ts).
@@ -540,12 +558,13 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
   const matconEnabled = pdvSettingsNav.matcon_enabled === true;
   const blackFridayOn = useBlackFridayLiberada();
   const activeVertical = (co as any)?.vertical_active as string | null | undefined;
+  const personalizadosOn = personalizadosAtivo(pdvSettingsNav, activeVertical);
 
   // rawFilteredNav: NAV cru (so plano/staff/vertical), passado pro editor pra
   // cliente ver TUDO disponivel.
   const rawFilteredNav = useMemo(
-    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn),
-    [visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn]
+    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn, personalizadosOn),
+    [visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn, personalizadosOn]
   );
 
   // filteredNav: rawFilteredNav + customizacoes do cliente aplicadas.
@@ -811,6 +830,7 @@ function MBar() {
   const matconEnabled = pdvSettingsNav.matcon_enabled === true;
   const blackFridayOn = useBlackFridayLiberada();
   const activeVertical = (co as any)?.vertical_active as string | null | undefined;
+  const personalizadosOn = personalizadosAtivo(pdvSettingsNav, activeVertical);
 
   // 4 tabs fixas no rodape (nao editaveis pelo cliente).
   const MTABS = [
@@ -823,8 +843,8 @@ function MBar() {
 
   // rawFilteredNav: mesma logica do desktop, base unica de items disponiveis.
   const rawFilteredNav = useMemo(
-    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn),
-    [visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn]
+    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn, personalizadosOn),
+    [visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn, personalizadosOn]
   );
 
   // filteredNav: aplica layout custom do cliente.

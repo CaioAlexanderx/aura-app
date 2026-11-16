@@ -166,6 +166,8 @@ describe("NAV: o grupo sobe e leva as telas certas", () => {
       "Ótica",
       // 22/09/2026 — semi-vertical Matcon entra logo depois da Ótica (M1).
       "Matcon",
+      // 16/11/2026 (p-128) — Personalizados entra depois do Matcon.
+      "Personalizados",
       "Equipe",
       "Crescimento",
       "Admin",
@@ -197,6 +199,8 @@ describe("NAV: o grupo sobe e leva as telas certas", () => {
     const m = LAYOUT.match(/const MORE_PRIORIDADE = \[([^\]]+)\]/);
     expect(m).not.toBeNull();
     const rotas = Array.from((m as RegExpMatchArray)[1].matchAll(/"([^"]+)"/g)).map((x) => x[1]);
-    expect(rotas).toEqual(["/clientes", "/whatsapp", "/clientes/reativacao"]);
+    // 16/11/2026 (p-128): a Produção dos Personalizados vem antes, e só
+    // existe para quem tem a frente. Para os demais a ordem é a de sempre.
+    expect(rotas.filter((r) => !r.startsWith("/personalizados"))).toEqual(["/clientes", "/whatsapp", "/clientes/reativacao"]);
   });
 });

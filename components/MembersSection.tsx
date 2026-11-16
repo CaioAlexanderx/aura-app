@@ -14,6 +14,7 @@ import { useMemberTemplates, type RoleTemplate } from "@/hooks/useMemberTemplate
 import { useAuthStore } from "@/stores/auth";
 import type { Member, SiblingCompany } from "@/hooks/useMembers";
 import { alternarPermissao, custosPorPadrao } from "@/utils/estoqueConsulta";
+import { personalizadosAtivo } from "@/utils/personalizados";
 import { ContratarAcessoBotao } from "@/components/ContratarAcessoBotao";
 
 // ============================================================
@@ -40,6 +41,11 @@ const MODULE_GROUPS = [
       // aparece com o módulo ligado na loja (mesmo filtro de onlyWhen que a
       // Ótica usa, generalizado abaixo em ModuleGroupSelector).
       { key: "matcon.access", label: "Matcon",    hint: "Orçamentos, entregas, profissionais parceiros e compras", onlyWhen: "matcon" as const },
+      // 16/11/2026 (p-128) — umbrella dos Personalizados (useVisibleModules:
+      // personalizados.access -> produção, orçamentos, insumos, galeria e
+      // subtelas). Só aparece na loja com a frente ligada no shell Negócio
+      // (utils/personalizados.ts: studio_enabled e sem vertical_active).
+      { key: "personalizados.access", label: "Personalizados", hint: "Produção, orçamentos, insumos e galeria dos personalizados", onlyWhen: "personalizados" as const },
     ],
   },
   {
@@ -234,7 +240,10 @@ function ModuleGroupSelector({ value, onChange }: {
   // chaves sem quebrar o comportamento atual (nenhuma outra onlyWhen
   // existe hoje, então isto é neutro pra quem não é otica nem matcon).
   const matconOn = pdvSettings.matcon_enabled === true;
-  const TOGGLE_ON: Record<string, boolean> = { otica: oticaOn, matcon: matconOn };
+  // 16/11/2026 (p-128) — Personalizados: a mesma conta do menu.
+  const verticalAtiva = useAuthStore((st) => (st.company as any)?.vertical_active as string | null | undefined);
+  const personalizadosOn = personalizadosAtivo(pdvSettings, verticalAtiva);
+  const TOGGLE_ON: Record<string, boolean> = { otica: oticaOn, matcon: matconOn, personalizados: personalizadosOn };
   return (
     <View style={{ gap: 12 }}>
       {MODULE_GROUPS.map(group => (

@@ -59,8 +59,12 @@ function corpoDoBuildRawNav(): string {
 }
 
 describe("WhatsApp e Reativação voltaram ao menu (t3-06)", () => {
-  test("a lista de ocultos está vazia", () => {
-    expect(Array.from(MODULOS_OCULTOS)).toEqual([]);
+  test("a lista de ocultos não tem nada além dos Personalizados sem tela", () => {
+    // 16/11/2026 (p-128): a seção Personalizados foi declarada no NAV antes
+    // das telas. Cada item sai da lista no PR que criar a tela dele
+    // (__tests__/personalizadosNoMenu.test.tsx confere item a item).
+    const fora = Array.from(MODULOS_OCULTOS).filter((m) => !m.startsWith("personalizados."));
+    expect(fora).toEqual([]);
   });
 
   test("as duas chaves religadas não estão na lista", () => {

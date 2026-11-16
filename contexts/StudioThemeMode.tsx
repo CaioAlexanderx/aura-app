@@ -66,6 +66,21 @@ export function StudioThemeProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// 16/11/2026 (p-128) — Personalizados no shell Negócio. As telas do Studio
+// leem as cores por useStudioTokens()/useStudioSemantic(); dentro do Negócio
+// quem entrega a paleta é components/personalizados/TemaDoNegocio.tsx, por
+// este override. O modo salvo do Studio (aura_studio_theme_mode) não muda:
+// setMode aqui não faz nada, porque no Negócio o tema é o do app.
+export function StudioThemeOverride({
+  tokens, semantic, isDark, children,
+}: { tokens: StudioPalette; semantic: StudioSemanticPalette; isDark: boolean; children: ReactNode }) {
+  const value = useMemo<ContextValue>(
+    () => ({ mode: isDark ? "dark" : "light", isDark, tokens, semantic, setMode: () => {} }),
+    [tokens, semantic, isDark]
+  );
+  return <StudioThemeContext.Provider value={value}>{children}</StudioThemeContext.Provider>;
+}
+
 export function useStudioTokens(): StudioPalette {
   return useContext(StudioThemeContext).tokens;
 }
