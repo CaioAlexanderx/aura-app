@@ -22,10 +22,20 @@
 
 type ComStudioEnabled = { studio_enabled?: unknown } | null | undefined;
 
+// 16/11/2026 (Caio): nada de Personalizados aparece na tela de ninguém até a
+// migração completa do Studio para o shell Negócio. Antes de ligar, o Caio
+// fala com as clientes. Enquanto isto for false, a seção do menu, a linha de
+// permissão em Membros e a tela /personalizados/producao não existem para
+// nenhuma empresa, com ou sem studio_enabled. Ligar é trocar para true num
+// PR próprio, com o OK do Caio.
+export const PERSONALIZADOS_LIBERADO = false;
+
 export function personalizadosAtivo(
   settings: ComStudioEnabled,
   verticalActive: string | null | undefined,
+  liberado: boolean = PERSONALIZADOS_LIBERADO,
 ): boolean {
+  if (!liberado) return false;
   if (!settings || settings.studio_enabled !== true) return false;
   return verticalActive == null || verticalActive === "";
 }
