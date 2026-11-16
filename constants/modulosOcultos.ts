@@ -18,6 +18,8 @@
 //               de propósito: o mecanismo (e o filtro em buildRawNav) continua
 //               aqui para a próxima feature que precise ficar fora do menu
 //               sem apagar o item do NAV.
+//   16/11/2026  Entram os três itens da seção Personalizados (p-128): o
+//               menu foi declarado antes das telas. Ver a lista abaixo.
 //
 // POR QUE ESTE MECANISMO, e não apagando o item do NAV:
 //
@@ -40,7 +42,14 @@
 // ============================================================
 
 export const MODULOS_OCULTOS: ReadonlySet<string> = new Set<string>([
-  // (vazio desde 14/10/2026 — ver histórico acima)
+  // 16/11/2026 (p-128) — Personalizados no shell Negócio. Os três itens já
+  // estão declarados no NAV, com plano e permissão, mas a tela de cada um
+  // ainda não nasceu em app/(tabs)/personalizados. Item sem tela não vai ao
+  // menu: cada linha sai daqui no PR que criar a tela dela (a Produção é a
+  // primeira, no p-129).
+  'personalizados.producao',
+  'personalizados.orcamentos',
+  'personalizados.insumos',
 ]);
 
 // ============================================================

@@ -137,7 +137,11 @@ describe("o filtro do toggle continua no único caminho comum", () => {
     expect(corpo).toContain("if (item.matconToggle && matconEnabled !== true) return false;");
   });
 
-  test("MORE_PRIORIDADE não muda: no celular o Matcon vai para o 'Mais'", () => {
-    expect(LAYOUT).toContain('const MORE_PRIORIDADE = ["/clientes", "/whatsapp", "/clientes/reativacao"];');
+  test("MORE_PRIORIDADE não ganha rota do Matcon: no celular ele vai para o 'Mais'", () => {
+    // 16/11/2026 (p-128): a Produção dos Personalizados entrou na frente da
+    // lista. O que este teste segura continua igual: nenhuma rota do Matcon.
+    const m = LAYOUT.match(/const MORE_PRIORIDADE = \[([^\]]+)\]/);
+    expect(m).not.toBeNull();
+    expect((m as RegExpMatchArray)[1]).not.toContain("/matcon");
   });
 });

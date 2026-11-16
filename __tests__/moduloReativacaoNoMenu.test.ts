@@ -162,6 +162,10 @@ describe("NAV: o grupo sobe e leva as telas certas", () => {
       "Principal",
       "Contábil",
       "Vendas",
+      // 16/11/2026 (p-128, mockup p-131) — Personalizados entra logo depois
+      // de Vendas. Só existe para quem tem a frente; para os demais o grupo
+      // Clientes e WhatsApp continua na mesma posição visível.
+      "Personalizados",
       "Clientes e WhatsApp",
       "Ótica",
       // 22/09/2026 — semi-vertical Matcon entra logo depois da Ótica (M1).
@@ -197,6 +201,8 @@ describe("NAV: o grupo sobe e leva as telas certas", () => {
     const m = LAYOUT.match(/const MORE_PRIORIDADE = \[([^\]]+)\]/);
     expect(m).not.toBeNull();
     const rotas = Array.from((m as RegExpMatchArray)[1].matchAll(/"([^"]+)"/g)).map((x) => x[1]);
-    expect(rotas).toEqual(["/clientes", "/whatsapp", "/clientes/reativacao"]);
+    // 16/11/2026 (p-128): a Produção dos Personalizados vem antes, e só
+    // existe para quem tem a frente. Para os demais a ordem é a de sempre.
+    expect(rotas.filter((r) => !r.startsWith("/personalizados"))).toEqual(["/clientes", "/whatsapp", "/clientes/reativacao"]);
   });
 });
