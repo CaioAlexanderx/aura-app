@@ -31,7 +31,7 @@ jest.mock("@/components/karate/FpktLogo", () => ({ FpktLogo: "FpktLogo" }));
 
 import { View } from "react-native";
 import { computeVisibleModules, MODULE_PLAN_MAP, PERM_TO_MODULES } from "@/hooks/useVisibleModules";
-import { personalizadosAtivo, MODS_PERSONALIZADOS } from "@/utils/personalizados";
+import { personalizadosAtivo, MODS_PERSONALIZADOS, PERSONALIZADOS_LIBERADO } from "@/utils/personalizados";
 import { MODULOS_OCULTOS } from "@/constants/modulosOcultos";
 import { tokensDoNegocio } from "@/constants/personalizados-tokens";
 import { LightPalette, DarkPalette, useThemeStore } from "@/constants/colors";
@@ -70,29 +70,40 @@ function corpoDoBuildRawNav(): string {
   return LAYOUT.slice(i, LAYOUT.indexOf("\n}", i));
 }
 
+describe("trava geral: nada aparece até a migração completa (Caio, 16/11)", () => {
+  test("a trava está desligada no código", () => {
+    expect(PERSONALIZADOS_LIBERADO).toBe(false);
+  });
+
+  test("sem passar a trava, ninguém vê, nem com studio_enabled e sem vertical", () => {
+    expect(personalizadosAtivo({ studio_enabled: true }, null)).toBe(false);
+    expect(personalizadosAtivo({ studio_enabled: true }, undefined)).toBe(false);
+  });
+});
+
 describe("quem vê a seção", () => {
   test("studio_enabled ligado e sem vertical_active: vê", () => {
-    expect(personalizadosAtivo({ studio_enabled: true }, null)).toBe(true);
-    expect(personalizadosAtivo({ studio_enabled: true }, undefined)).toBe(true);
-    expect(personalizadosAtivo({ studio_enabled: true }, "")).toBe(true);
+    expect(personalizadosAtivo({ studio_enabled: true }, null, true)).toBe(true);
+    expect(personalizadosAtivo({ studio_enabled: true }, undefined, true)).toBe(true);
+    expect(personalizadosAtivo({ studio_enabled: true }, "", true)).toBe(true);
   });
 
   test("quem está no shell /studio (vertical_active = studio) não vê", () => {
-    expect(personalizadosAtivo({ studio_enabled: true }, "studio")).toBe(false);
+    expect(personalizadosAtivo({ studio_enabled: true }, "studio", true)).toBe(false);
   });
 
   test("outra vertical também não vê", () => {
     for (const v of ["food", "odonto", "karate_dojo", "karate_federation"]) {
-      expect(personalizadosAtivo({ studio_enabled: true }, v)).toBe(false);
+      expect(personalizadosAtivo({ studio_enabled: true }, v, true)).toBe(false);
     }
   });
 
   test("sem o interruptor ligado ninguém vê", () => {
-    expect(personalizadosAtivo({}, null)).toBe(false);
-    expect(personalizadosAtivo({ studio_enabled: false }, null)).toBe(false);
-    expect(personalizadosAtivo({ studio_enabled: "true" }, null)).toBe(false);
-    expect(personalizadosAtivo(null, null)).toBe(false);
-    expect(personalizadosAtivo(undefined, null)).toBe(false);
+    expect(personalizadosAtivo({}, null, true)).toBe(false);
+    expect(personalizadosAtivo({ studio_enabled: false }, null, true)).toBe(false);
+    expect(personalizadosAtivo({ studio_enabled: "true" }, null, true)).toBe(false);
+    expect(personalizadosAtivo(null, null, true)).toBe(false);
+    expect(personalizadosAtivo(undefined, null, true)).toBe(false);
   });
 });
 
