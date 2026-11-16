@@ -1,0 +1,225 @@
+<title>Fechamento com trocas</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+:root{--bg:#f4f2fa;--fg:#1d1a2e;--muted:#5f5880;--line:#ddd7ee;--chip:#ffffff;--chip-on:#6d28d9;--chip-on-fg:#fff;--note-bg:#fff8e6;--note-line:#f2d48a;--note-fg:#5a4410}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15131f;--fg:#ece9f7;--muted:#a59fc4;--line:#2e2a42;--chip:#1f1c2e;--chip-on:#8b5cf6;--chip-on-fg:#fff;--note-bg:#2a2414;--note-line:#5a4a1e;--note-fg:#f1dfae;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#15131f;--fg:#ece9f7;--muted:#a59fc4;--line:#2e2a42;--chip:#1f1c2e;--chip-on:#8b5cf6;--chip-on-fg:#fff;--note-bg:#2a2414;--note-line:#5a4a1e;--note-fg:#f1dfae;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding-block:24px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1.top{font-size:20px;margin:0;text-wrap:balance}
+.lead{margin:0;color:var(--muted);font-size:14px;line-height:1.55;max-width:68ch}
+.tabs{display:flex;flex-wrap:wrap;gap:8px}
+.tabs button{border:1px solid var(--line);background:var(--chip);color:var(--fg);padding:8px 14px;border-radius:999px;font-size:13px;font-weight:600;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--chip-on);color:var(--chip-on-fg);border-color:var(--chip-on)}
+.note{background:var(--note-bg);border:1px solid var(--note-line);color:var(--note-fg);border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.55}
+.note b{font-weight:700}
+.note ul{margin:6px 0 0;padding-left:18px}
+
+/* ---------- papel (igual ao cashClosePdf.ts) ---------- */
+.paper{background:#fff;color:#18172b;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(20,10,60,.12),0 8px 30px rgba(20,10,60,.10)}
+.head{padding:24px 28px;background:linear-gradient(135deg,#6d28d9 0%,#4f5bd5 100%);color:#fff;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.head .logo{width:46px;height:46px;border-radius:11px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.28);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;flex-shrink:0}
+.head h1{font-size:17px;font-weight:700;margin:0}
+.head .sub{margin-top:3px;font-size:11px;opacity:.82;letter-spacing:.4px;text-transform:uppercase}
+.head .meta{margin-left:auto;text-align:right;font-size:10px;opacity:.85;line-height:1.5;font-family:ui-monospace,Menlo,monospace}
+.pbody{padding:26px 28px}
+.s-title{font-size:11px;color:#6a608e;text-transform:uppercase;letter-spacing:.7px;font-weight:700;margin:22px 0 12px}
+.s-title:first-child{margin-top:0}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.kpi{background:#faf9fd;border:1px solid rgba(109,40,217,.16);border-radius:8px;padding:12px 14px;min-width:0}
+.kpi .l{font-size:10px;color:#6a608e;text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.kpi .v{font-size:19px;font-weight:700;color:#1a1730;margin-top:4px}
+.kpi .v.violet{color:#6d28d9}
+.small{font-size:10px;color:#6a608e;margin-top:8px;line-height:1.5}
+.summary{background:#faf9fd;border-radius:8px;padding:14px 18px;border:1px solid rgba(109,40,217,.10)}
+.row{display:flex;justify-content:space-between;gap:12px;padding:6px 0;font-size:12px;border-bottom:1px solid rgba(109,40,217,.08)}
+.row:last-child{border-bottom:none}
+.row .lab{color:#4a4366}
+.row .val{color:#18172b;font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+.pay-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid rgba(109,40,217,.08)}
+.pay-name{font-size:12px;width:110px;color:#4a4366;font-weight:500}
+.bar-wrap{flex:1;height:8px;background:#f0eef7;border-radius:4px;overflow:hidden}
+.bar{height:100%;background:linear-gradient(90deg,#6d28d9,#8b5cf6)}
+.pay-pct{font-size:11px;color:#6a608e;width:56px;text-align:right;font-family:ui-monospace,monospace}
+.pay-val{font-size:11px;width:96px;text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.foot{padding:14px 28px;border-top:1px solid #ece8f5;background:#faf9fd;font-size:10px;color:#6a608e;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.foot .brand{color:#6d28d9;font-weight:700}
+
+/* ---------- NOVO ---------- */
+.new{position:relative;outline:2px dashed #f59e0b;outline-offset:6px;border-radius:6px}
+.new::before{content:"NOVO";position:absolute;top:-16px;right:0;background:#f59e0b;color:#3b2600;font-size:9px;font-weight:800;letter-spacing:.8px;padding:2px 6px;border-radius:4px}
+.conta{background:#f5f1ff;border:1px solid rgba(109,40,217,.22);border-radius:8px;padding:12px 16px;font-size:12px;margin-top:10px}
+.conta .row{border-bottom:1px dashed rgba(109,40,217,.15)}
+.conta .row.tot{border-bottom:none;border-top:1px solid rgba(109,40,217,.35);margin-top:2px;padding-top:8px}
+.conta .row.tot .lab,.conta .row.tot .val{font-weight:700;color:#4c1d95}
+.troca{border:1px solid rgba(109,40,217,.16);border-radius:8px;padding:12px 14px;margin-bottom:10px;background:#fff}
+.troca-h{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap;font-size:12px;margin-bottom:8px}
+.troca-h .k{font-weight:700;color:#4c1d95}
+.troca-h .t{font-family:ui-monospace,monospace;color:#6a608e;font-size:11px}
+.cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.col h4{margin:0 0 4px;font-size:10px;color:#6a608e;text-transform:uppercase;letter-spacing:.5px}
+.it{display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:2px 0}
+.it span:first-child{min-width:0;color:#2d2850}
+.it span:last-child{font-variant-numeric:tabular-nums;white-space:nowrap}
+.it.sub{border-top:1px solid rgba(109,40,217,.10);margin-top:3px;padding-top:4px;font-weight:600}
+.dif{margin-top:8px;font-size:12px;padding:7px 10px;border-radius:6px;background:#faf9fd;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.dif b{font-variant-numeric:tabular-nums}
+.dif.in b{color:#047857}
+.dif.out b{color:#b91c1c}
+.dif.zero b{color:#4a4366}
+.tot-trocas{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:4px}
+.tot-trocas div{background:#faf9fd;border-radius:6px;padding:8px 10px;font-size:10px;color:#6a608e;text-transform:uppercase;letter-spacing:.4px;font-weight:600;min-width:0}
+.tot-trocas div b{display:block;font-size:14px;color:#18172b;text-transform:none;letter-spacing:0;margin-top:2px}
+@media (max-width:620px){
+ .kpi-grid,.tot-trocas{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .cols{grid-template-columns:minmax(0,1fr)}
+ .pbody{padding:20px 16px}.head{padding:20px 16px}.foot{padding:12px 16px}
+ .pay-name{width:70px}.pay-pct{display:none}
+}
+</style>
+
+<div class="wrap">
+  <h1 class="top">Fechamento de caixa com as trocas da sessão</h1>
+  <p class="lead">Mesmo relatório de hoje, com duas peças novas (marcadas em laranja). A primeira é a conta que liga "Vendas do período" a "Entradas no caixa". A segunda é a lista das trocas e devoluções da sessão. A aba "14/11" usa o fechamento real da loja que relatou o problema, com os números já corrigidos pelo #1039.</p>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-v="real">14/11 · 1 troca (caso real)</button>
+    <button role="tab" aria-selected="false" data-v="tipos">Os outros tipos de troca</button>
+    <button role="tab" aria-selected="false" data-v="sem">Sessão sem troca</button>
+  </div>
+
+  <div class="note" id="nota"></div>
+
+  <div class="paper">
+    <div class="head">
+      <div class="logo">L</div>
+      <div><h1>Fechamento de caixa</h1><div class="sub">Loja de Moda</div></div>
+      <div class="meta"><div><b>#00412</b></div><div id="m-dia">14/11/2026</div><div id="m-hora">09:02 -&gt; 19:10</div></div>
+    </div>
+    <div class="pbody">
+      <div class="s-title">Resumo do dia</div>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="l">Vendas</div><div class="v violet" id="k-n">43</div></div>
+        <div class="kpi"><div class="l">Vendas do periodo</div><div class="v" id="k-v">R$ 10.525,08</div></div>
+        <div class="kpi"><div class="l">Entradas no caixa</div><div class="v violet" id="k-e">R$ 10.584,98</div></div>
+        <div class="kpi"><div class="l">Ticket medio</div><div class="v" id="k-t">R$ 244,77</div></div>
+      </div>
+
+      <div id="conta-wrap"></div>
+      <div class="small" id="rodape-kpi"></div>
+
+      <div class="s-title">Conferencia de caixa</div>
+      <div class="summary">
+        <div class="row"><span class="lab">Operador</span><span class="val">Caixa 1</span></div>
+        <div class="row"><span class="lab">Clientes novos</span><span class="val">4</span></div>
+        <div class="row"><span class="lab">Troco de abertura</span><span class="val">R$ 150,00</span></div>
+        <div class="row"><span class="lab">Dinheiro (liquido na sessao)</span><span class="val">R$ 1.212,40</span></div>
+        <div class="row"><span class="lab">Esperado em caixa</span><span class="val">R$ 1.362,40</span></div>
+        <div class="row"><span class="lab">Contado em caixa</span><span class="val">R$ 1.362,40</span></div>
+        <div class="row"><span class="lab">Diferenca</span><span class="val" style="color:#059669">Exato</span></div>
+      </div>
+
+      <div class="s-title">Entradas no caixa por forma de pagamento</div>
+      <div id="mix"></div>
+
+      <div id="trocas-wrap"></div>
+    </div>
+    <div class="foot"><span>Gerado por <span class="brand">Aura</span> - getaura.com.br</span><span id="f-data">14/11/2026 19:10 - sessão #00412</span></div>
+  </div>
+</div>
+
+<script>
+const fmt = n => "R$ " + n.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+const CENARIOS = {
+  real: {
+    nota: "<b>O que a loja vê:</b> Entradas R$ 59,90 acima das Vendas. A conta em laranja mostra de onde vem a diferença: é o que a cliente pagou a mais na troca das 12:33. Fora as duas partes novas, o relatório fica igual ao de hoje. As formas de pagamento e o resumo da conferência abaixo são ilustrativos; os totais e a troca são reais.",
+    kpi: {n:43, v:10525.08, e:10584.98},
+    mix: [["Crédito",4630.10],["Pix",2988.38],["Débito",1754.10],["Dinheiro",1212.40]],
+    conta: [["Vendas do período", 10525.08, ""], ["+ Diferença paga em trocas", 59.90, "1 troca"]],
+    trocas: [
+      {h:"12:33", tipo:"Troca", dev:[["Conjunto Linho MAITE (Azul · M)",139.90]], lev:[["Blusa GLAMOUR Detalhe Strass",79.90],["Blusa Casual BELNA",119.90]], dif:{k:"in", txt:"Cliente pagou a diferença no débito", v:59.90}}
+    ]
+  },
+  tipos: {
+    nota: "<b>Os outros jeitos que uma troca fecha:</b> devolução em dinheiro ao cliente (sai da gaveta e entra na conta com sinal de menos), troca sem diferença, crédito na carteira (não sai dinheiro, mas fica registrado) e devolução sem levar peça. As três primeiras trocas são reais, de 15 e 16/11; a última é ilustrativa. KPIs ilustrativos.",
+    kpi: {n:28, v:4890.50, e:4880.40},
+    mix: [["Crédito",2410.00],["Pix",1320.40],["Débito",820.00],["Dinheiro",330.00]],
+    conta: [["Vendas do período", 4890.50, ""], ["+ Diferença paga em trocas", 0, "nenhuma"], ["− Devolvido ao cliente", -10.10, "2 trocas"]],
+    trocas: [
+      {h:"11:06", tipo:"Troca", dev:[["Blusa Casual BELNA (Branca · P)",119.90]], lev:[["Blusa Decote Quadrado ANA",59.90],["Blusa Decote Quadrado ANA",59.90]], dif:{k:"out", txt:"Devolvido ao cliente em dinheiro", v:-0.10}},
+      {h:"11:42", tipo:"Troca", dev:[["Cropped Regata DAFNE (Azul)",49.90]], lev:[["Cropped Regata DAFNE",49.90]], dif:{k:"zero", txt:"Sem diferença", v:0}},
+      {h:"15:20", tipo:"Troca", dev:[["Vestido Longo Estampado LUARA",129.90]], lev:[["Blusa Casual BELNA",119.90]], dif:{k:"zero", txt:"R$ 10,00 em crédito na carteira do cliente (não saiu da gaveta)", v:null}},
+      {h:"17:05", tipo:"Devolução", dev:[["Short Jeans Cós Virado (42)",119.90]], lev:[], dif:{k:"out", txt:"Devolvido ao cliente no Pix", v:-10.00, nota:"ilustrativo"}}
+    ]
+  },
+  sem: {
+    nota: "<b>Sessão sem troca:</b> o relatório sai idêntico ao de hoje, byte a byte. Não aparece a conta nem a seção de trocas, porque não há nada a explicar: Vendas e Entradas só diferem por crediário, que segue explicado no rodapé como hoje.",
+    kpi: {n:31, v:5210.70, e:5210.70},
+    mix: [["Crédito",2480.00],["Pix",1530.70],["Débito",800.00],["Dinheiro",400.00]],
+    conta: null, trocas: []
+  }
+};
+
+function render(key){
+  const c = CENARIOS[key];
+  document.querySelectorAll(".tabs button").forEach(b=>b.setAttribute("aria-selected", b.dataset.v===key ? "true":"false"));
+  document.getElementById("nota").innerHTML = c.nota;
+  document.getElementById("k-n").textContent = c.kpi.n;
+  document.getElementById("k-v").textContent = fmt(c.kpi.v);
+  document.getElementById("k-e").textContent = fmt(c.kpi.e);
+  document.getElementById("k-t").textContent = fmt(c.kpi.v / c.kpi.n);
+
+  // conta
+  const cw = document.getElementById("conta-wrap");
+  if (c.conta){
+    const linhas = c.conta.map(([l,v,obs]) =>
+      `<div class="row"><span class="lab">${l}${obs?` <span style="color:#8a83a8">· ${obs}</span>`:""}</span><span class="val">${v<0?"− "+fmt(-v):fmt(v)}</span></div>`).join("");
+    cw.innerHTML = `<div class="new" style="margin-top:14px"><div class="conta">${linhas}<div class="row tot"><span class="lab">= Entradas no caixa</span><span class="val">${fmt(c.kpi.e)}</span></div></div></div>`;
+  } else cw.innerHTML = "";
+
+  document.getElementById("rodape-kpi").textContent = c.conta
+    ? "Vendas do periodo = valor vendido (mesmo numero da tela de Vendas). A troca não entra em Vendas: a peça devolvida já tinha sido vendida antes. Crediário também faz os dois números diferirem — isso não e falta no caixa."
+    : "Vendas do periodo = valor vendido (mesmo numero da tela de Vendas). Entradas no caixa = o que entrou por forma de pagamento nesta sessao. Trocas e crediário fazem os dois números diferirem — isso não e falta no caixa.";
+
+  // mix
+  const tot = c.mix.reduce((a,[,v])=>a+v,0);
+  document.getElementById("mix").innerHTML = c.mix.map(([l,v]) =>
+    `<div class="pay-row"><span class="pay-name">${l}</span><div class="bar-wrap"><div class="bar" style="width:${(v/tot*100).toFixed(1)}%"></div></div><span class="pay-pct">${(v/tot*100).toFixed(1).replace(".",",")}%</span><span class="pay-val">${fmt(v)}</span></div>`).join("") +
+    `<div class="pay-row" style="border-top:1px solid rgba(109,40,217,.16)"><span class="pay-name" style="font-weight:700">Total de entradas</span><div class="bar-wrap" style="background:transparent"></div><span class="pay-pct"></span><span class="pay-val" style="font-weight:700">${fmt(c.kpi.e)}</span></div>`;
+
+  // trocas
+  const tw = document.getElementById("trocas-wrap");
+  if (!c.trocas.length){ tw.innerHTML = ""; return; }
+  const soma = a => a.reduce((s,[,v])=>s+v,0);
+  let devT=0, levT=0, rec=0, saiu=0;
+  const cards = c.trocas.map(t => {
+    const d = soma(t.dev), l = soma(t.lev); devT+=d; levT+=l;
+    if (t.dif.v>0) rec+=t.dif.v; if (t.dif.v<0) saiu+=-t.dif.v;
+    const lista = arr => arr.map(([n,v])=>`<div class="it"><span>${n}</span><span>${fmt(v)}</span></div>`).join("");
+    const val = t.dif.v==null ? "" : t.dif.v===0 ? "R$ 0,00" : (t.dif.v>0?"+ ":"− ")+fmt(Math.abs(t.dif.v));
+    return `<div class="troca">
+      <div class="troca-h"><span class="k">${t.tipo}${t.dif.nota?` <span style="font-weight:500;color:#b45309">(${t.dif.nota})</span>`:""}</span><span class="t">${t.h}</span></div>
+      <div class="cols">
+        <div class="col"><h4>Devolveu</h4>${lista(t.dev)}${t.dev.length>1?`<div class="it sub"><span>Total</span><span>${fmt(d)}</span></div>`:""}</div>
+        <div class="col"><h4>Levou</h4>${t.lev.length?lista(t.lev):`<div class="it"><span style="color:#8a83a8">Nada</span><span></span></div>`}${t.lev.length>1?`<div class="it sub"><span>Total</span><span>${fmt(l)}</span></div>`:""}</div>
+      </div>
+      <div class="dif ${t.dif.k}"><span>${t.dif.txt}</span><b>${val}</b></div>
+    </div>`;
+  }).join("");
+  const n = c.trocas.length;
+  tw.innerHTML = `<div class="new" style="margin-top:28px">
+    <div class="s-title" style="margin-top:0">Trocas e devoluções da sessão (${n})</div>
+    ${cards}
+    <div class="tot-trocas">
+      <div>Peças devolvidas<b>${fmt(devT)}</b></div>
+      <div>Peças levadas<b>${fmt(levT)}</b></div>
+      <div>Diferença recebida<b>${fmt(rec)}</b></div>
+      <div>Devolvido ao cliente<b>${fmt(saiu)}</b></div>
+    </div></div>`;
+}
+
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => render(b.dataset.v)));
+render("real");
+</script>

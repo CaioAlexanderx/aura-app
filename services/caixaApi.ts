@@ -87,6 +87,43 @@ export type CaixaFechamentoFull = {
    *  os considera. Ausentes = backend antigo. */
   total_sangrias?:      number;
   total_suprimentos?:   number;
+  /** 16/11/2026: trocas e devoluções da sessão, para o relatório e a tela
+   *  explicarem a diferença entre Vendas e Entradas. Vazio sem troca;
+   *  ausente = backend antigo. Não fazem parte do snapshot. */
+  trocas?:              CaixaTrocaDaSessao[];
+  trocas_resumo?:       CaixaTrocasResumo;
+};
+
+/** Valor por forma de pagamento (method cru do backend: pix, debito,
+ *  cartao, dinheiro, cartao_estorno, vale...). */
+export type CaixaValorPorMetodo = {
+  total:   number;
+  metodos: { method: string; amount: number }[];
+};
+
+export type CaixaTrocaDaSessao = {
+  id:         string;
+  created_at: string;
+  /** 'troca' levou alguma peça; 'devolucao' não levou nada. */
+  tipo:       "troca" | "devolucao";
+  devolvidos: { product_name_snapshot: string; quantity: number; unit_price: number }[];
+  /** product_name já vem com a variante, como no cupom ("Blusa (Azul · M)"). */
+  levados:    { product_name: string; quantity: number; unit_price: number; total_price: number }[];
+  /** O que o cliente pagou de diferença (entrou no caixa). */
+  recebido:          CaixaValorPorMetodo;
+  /** O que voltou ao cliente e saiu do caixa (sem o crédito na carteira). */
+  devolvido_cliente: CaixaValorPorMetodo;
+  /** Crédito na carteira do cliente: não saiu da gaveta. */
+  credito_carteira:  number;
+};
+
+export type CaixaTrocasResumo = {
+  quantidade:         number;
+  /** Em R$, como os totais do relatório. */
+  pecas_devolvidas:   number;
+  pecas_levadas:      number;
+  diferenca_recebida: number;
+  devolvido_cliente:  number;
 };
 
 /** GET /caixa/movimentos — sem caixa aberto, sessao_id vem null. */
