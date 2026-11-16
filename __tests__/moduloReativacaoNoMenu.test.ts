@@ -162,12 +162,14 @@ describe("NAV: o grupo sobe e leva as telas certas", () => {
       "Principal",
       "Contábil",
       "Vendas",
+      // 16/11/2026 (p-128, mockup p-131) — Personalizados entra logo depois
+      // de Vendas. Só existe para quem tem a frente; para os demais o grupo
+      // Clientes e WhatsApp continua na mesma posição visível.
+      "Personalizados",
       "Clientes e WhatsApp",
       "Ótica",
       // 22/09/2026 — semi-vertical Matcon entra logo depois da Ótica (M1).
       "Matcon",
-      // 16/11/2026 (p-128) — Personalizados entra depois do Matcon.
-      "Personalizados",
       "Equipe",
       "Crescimento",
       "Admin",

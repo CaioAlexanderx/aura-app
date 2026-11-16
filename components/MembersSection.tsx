@@ -42,10 +42,11 @@ const MODULE_GROUPS = [
       // Ótica usa, generalizado abaixo em ModuleGroupSelector).
       { key: "matcon.access", label: "Matcon",    hint: "Orçamentos, entregas, profissionais parceiros e compras", onlyWhen: "matcon" as const },
       // 16/11/2026 (p-128) — umbrella dos Personalizados (useVisibleModules:
-      // personalizados.access -> produção, orçamentos, insumos, galeria e
+      // personalizados.access -> orçamentos 3D, produção, insumos e
       // subtelas). Só aparece na loja com a frente ligada no shell Negócio
       // (utils/personalizados.ts: studio_enabled e sem vertical_active).
-      { key: "personalizados.access", label: "Personalizados", hint: "Produção, orçamentos, insumos e galeria dos personalizados", onlyWhen: "personalizados" as const },
+      // Rótulo e descrição do mockup p-131.
+      { key: "personalizados.access", label: "Personalizados", hint: "Orçamentos 3D, Produção e Insumos", onlyWhen: "personalizados" as const },
     ],
   },
   {

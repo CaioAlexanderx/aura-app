@@ -98,6 +98,20 @@ const NAV: NavSection[] = [
   // 12/11/2026 (Caio): saiu do menu lateral; a entrada e o botao
   // "Conferir estoque" da tela de Estoque.
   { s: "Vendas", i: [{ r: "/pdv", l: "Caixa", ic: "cart", mod: "pdv" },{ r: "/vendas", l: "Vendas", ic: "receipt", mod: "vendas" },{ r: "/cupons", l: "Cupons", ic: "tag", mod: "cupons" },{ r: "/crediario", l: "Crediário", ic: "percent", mod: "crediario" },{ r: "/os", l: "Ordem de Serviço", ic: "tool", mod: "os", osToggle: true },{ r: "/estoque", l: "Estoque", ic: "package", mod: "estoque" },{ r: "/fornecedores", l: "Fornecedores", ic: "truck", mod: "fornecedores" }]},
+  // 16/11/2026 (p-128) — Personalizados: a frente Studio dentro do shell
+  // Negocio (decisao do Caio de 16/11: deixam de nascer empresas no /studio).
+  // Desenho: mockup p-131 aprovado (secao logo depois de Vendas, com
+  // Orcamentos 3D, Producao e Insumos, nessa ordem). Mesmo modelo da Otica e
+  // do Matcon: sem shell proprio, cada item com `mod` PROPRIO (regra 3), em
+  // MODULE_PLAN_MAP (Negocio: no Essencial os itens somem, sem cadeado) e em
+  // PERM_TO_MODULES sob personalizados.access. O opt-in e
+  // `personalizadosToggle`, filtrado em buildRawNav: a secao so existe para
+  // empresa com pdv_settings.studio_enabled E sem vertical_active
+  // (utils/personalizados.ts). Quem tem vertical_active='studio' continua no
+  // shell /studio e nao ve nada disto. Item cuja tela ainda nao nasceu no
+  // shell Negocio fica em constants/modulosOcultos.ts ate nascer. "Orcamentos
+  // 3D" porque "Orcamentos" ja e do Matcon.
+  { s: "Personalizados", i: [{ r: "/personalizados/orcamentos", l: "Orçamentos 3D", ic: "clipboard", mod: "personalizados.orcamentos", personalizadosToggle: true },{ r: "/personalizados/producao", l: "Produção", ic: "layers", mod: "personalizados.producao", personalizadosToggle: true },{ r: "/personalizados/insumos", l: "Insumos", ic: "package", mod: "personalizados.insumos", personalizadosToggle: true }]},
   // ============================================================
   // 16/09/2026 — "Clientes e WhatsApp" sobe para a quarta posição.
   //
@@ -141,17 +155,6 @@ const NAV: NavSection[] = [
   // existem, docs/CONTRACT_MATCON.md §M4). Mesmo desenho: mod PROPRIO
   // (matcon.compras, ja em MODULE_PLAN_MAP/PERM_TO_MODULES) e matconToggle.
   { s: "Matcon", i: [{ r: "/matcon/orcamentos", l: "Orçamentos", ic: "clipboard", mod: "matcon.orcamentos", matconToggle: true },{ r: "/matcon/entregas", l: "Entregas", ic: "truck", mod: "matcon.entregas", matconToggle: true },{ r: "/matcon/profissionais", l: "Profissionais Parceiros", ic: "building", mod: "matcon.profissionais", matconToggle: true }]},
-  // 16/11/2026 (p-128) — Personalizados: a frente Studio dentro do shell
-  // Negocio (decisao do Caio de 16/11: deixam de nascer empresas no /studio).
-  // Mesmo desenho da Otica e do Matcon: sem shell proprio, cada item com `mod`
-  // PROPRIO (regra 3), em MODULE_PLAN_MAP (Negocio: no Essencial os itens
-  // somem, sem cadeado) e em PERM_TO_MODULES sob personalizados.access. O
-  // opt-in e `personalizadosToggle`, filtrado em buildRawNav: a secao so
-  // existe para empresa com pdv_settings.studio_enabled E sem vertical_active
-  // (utils/personalizados.ts). Quem tem vertical_active='studio' continua no
-  // shell /studio e nao ve nada disto. Item cuja tela ainda nao nasceu no
-  // shell Negocio fica em constants/modulosOcultos.ts ate nascer.
-  { s: "Personalizados", i: [{ r: "/personalizados/producao", l: "Produção", ic: "layers", mod: "personalizados.producao", personalizadosToggle: true },{ r: "/personalizados/orcamentos", l: "Orçamentos 3D", ic: "clipboard", mod: "personalizados.orcamentos", personalizadosToggle: true },{ r: "/personalizados/insumos", l: "Insumos", ic: "package", mod: "personalizados.insumos", personalizadosToggle: true },{ r: "/personalizados/galeria", l: "Galeria", ic: "image", mod: "personalizados.galeria", personalizadosToggle: true }]},
   { s: "Equipe", i: [{ r: "/folha", l: "Folha", ic: "payroll", mod: "folha" },{ r: "/agendamento", l: "Agenda", ic: "calendar", mod: "agendamento" }]},
   { s: "Crescimento", i: [{ r: "/agentes", l: "Agentes", ic: "brain", mod: "agentes" }]},
   { s: "Admin", i: [{ r: "/gestao-aura", l: "Gestão Aura", ic: "shield", staff: true }]},
