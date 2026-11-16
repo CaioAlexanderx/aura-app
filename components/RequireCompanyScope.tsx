@@ -26,12 +26,21 @@ import { Icon } from "./Icon";
 export function RequireCompanyScope({
   context,
   actionLabel,
+  titulo,
+  descricao,
+  rotuloDoBotao,
   children,
 }: {
   /** identificador unico do contexto (ex: "pdv", "nfe", "folha", "config") */
   context: string;
   /** string visivel no picker (ex: "abrir o caixa", "emitir nota fiscal") */
   actionLabel: string;
+  /** 16/11/2026 (p-129): título, texto e botão do recado, para a tela que
+   *  tem desenho próprio (mockup p-131, "Escolha uma loja"). Sem eles, o
+   *  texto de sempre. */
+  titulo?: string;
+  descricao?: string;
+  rotuloDoBotao?: string;
   children: React.ReactNode;
 }) {
   const { consolidatedView, company, switchCompany, user } = useAuthStore();
@@ -87,12 +96,12 @@ export function RequireCompanyScope({
       <View style={s.iconCircle}>
         <Icon name="bag" size={28} color="#7c3aed" />
       </View>
-      <Text style={s.title}>Esta tela é por empresa</Text>
+      <Text style={s.title}>{titulo || "Esta tela é por empresa"}</Text>
       <Text style={s.desc}>
-        Você está em modo consolidado (todas as empresas). Para {actionLabel}, é preciso escolher uma empresa específica.
+        {descricao || `Você está em modo consolidado (todas as empresas). Para ${actionLabel}, é preciso escolher uma empresa específica.`}
       </Text>
       <Pressable onPress={() => setPickerOpen(true)} style={s.cta}>
-        <Text style={s.ctaText}>Escolher empresa</Text>
+        <Text style={s.ctaText}>{rotuloDoBotao || "Escolher empresa"}</Text>
       </Pressable>
       <CompanyPickerModal
         visible={pickerOpen}

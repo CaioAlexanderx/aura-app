@@ -1,0 +1,404 @@
+// ============================================================
+// AURA. — Personalizados: Fila de produção no shell Negócio (p-129)
+//
+// Porte do quadro do Studio (app/studio/(estudio)/producao.tsx) para dentro
+// do Negócio, no desenho do mockup p-131 (aprovado em 16/11/2026). Mesmos
+// dados e mesmas rotas; o que muda é a casca:
+//
+//   - AÇÕES SEMPRE VISÍVEIS. Nada aparece só no hover (regra 7 do
+//     CLAUDE.md): o botão da etapa seguinte fica no cartão o tempo todo, no
+//     mouse e no toque.
+//   - SEM ARRASTAR. O cartão anda pelo botão. "O arrastar só funciona bem no
+//     computador" (mockup), e o arraste do Studio já deu defeito no
+//     react-native-web.
+//   - NO CELULAR, UMA ETAPA POR VEZ. Abaixo de 768 px o quadro vira uma
+//     lista da etapa escolhida nos botões do alto.
+//   - OVERLAY POR WebPortal. O pedido de aprovação da arte abre por
+//     WebPortal: dentro do shell o z-index:0 do react-native-web prende
+//     qualquer position:fixed.
+//   - CORES DO NEGÓCIO. A tela lê useStudioTokens(), e quem monta a rota
+//     envolve o quadro em <TemaDoNegocio>.
+//
+// O que o mockup desenha e ainda NÃO está aqui (cards próprios):
+//   - a folha "Recolher a arte e o texto" da etapa Aguardando personalização
+//     (hoje o botão dessa etapa só envia o pedido para a arte);
+//   - a loja de origem em cada cartão e o filtro de loja no cabeçalho (vêm
+//     com a visão de todas as lojas);
+//   - abrir o pedido (detalhe). Por isso o cartão não é clicável.
+//
+// Regras sem tela: components/personalizados/regrasDaProducao.ts.
+// ============================================================
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { View, Text, ScrollView, Pressable, StyleSheet, useWindowDimensions } from "react-native";
+import { toast } from "@/components/Toast";
+import { WebPortal } from "@/components/WebPortal";
+import { confirmAlert } from "@/utils/webAlert";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
+import type { StudioPalette } from "@/constants/studio-tokens";
+import { studioApi, type StudioOrder, type StudioProductionStatus } from "@/services/studioApi";
+import { ApprovalRequestModal } from "@/components/studio/ApprovalRequestModal";
+import { RegistrarPagamentoSheet } from "@/components/studio/RegistrarPagamentoSheet";
+import { useCobrarSaldo } from "@/components/studio/useCobrarSaldo";
+import { useRegistrarPagamento } from "@/components/studio/useRegistrarPagamento";
+import { comEtapaDoPedido } from "@/components/studio/etapaDoPedido";
+import { numeroDoPedido, situacaoDoPixNoCartao, reais } from "@/components/studio/pagamentoDoPedido";
+import { rotuloDeItens } from "@/components/studio/rotuloDeItens";
+import {
+  ETAPAS, PROXIMA_ETAPA, LARGURA_DO_CELULAR, agruparPorEtapa, etapaDe, etapaInicialNoCelular, fraseDoResumo,
+  origemDoPedido, prazoDoCartao, resumoDaFila, semAntigosDaAtivacao, type Etapa,
+} from "@/components/personalizados/regrasDaProducao";
+
+type Props = {
+  companyId: string;
+  /** pdv_settings.personalizados_ativado_em (ISO) ou null. Ver regrasDaProducao.ts. */
+  ativadoEm: string | null;
+};
+
+export function QuadroDeProducao({ companyId, ativadoEm }: Props) {
+  const t = useStudioTokens();
+  const s = useMemo(() => estilos(t), [t]);
+  const { width } = useWindowDimensions();
+  const celular = width < LARGURA_DO_CELULAR;
+
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
+  const [pedidos, setPedidos] = useState<StudioOrder[]>([]);
+  const [aprovacaoDe, setAprovacaoDe] = useState<StudioOrder | null>(null);
+  const [etapaNoCelular, setEtapaNoCelular] = useState<StudioProductionStatus | null>(null);
+
+  const carregar = useCallback(async () => {
+    setCarregando(true);
+    try {
+      const r = await studioApi.listOrders(companyId, { days: 60, limit: 300 });
+      setPedidos((r.orders || []).map(comEtapaDoPedido));
+      setErro(null);
+    } catch (e: any) {
+      setErro(e?.message || "Não deu para carregar os pedidos.");
+    } finally {
+      setCarregando(false);
+    }
+  }, [companyId]);
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const naFila = useMemo(() => semAntigosDaAtivacao(pedidos, ativadoEm), [pedidos, ativadoEm]);
+  const grupos = useMemo(() => agruparPorEtapa(naFila), [naFila]);
+  const resumo = useMemo(() => resumoDaFila(naFila), [naFila]);
+  const etapaAberta = etapaNoCelular || etapaInicialNoCelular(grupos);
+
+  const mover = useCallback(async (pedido: StudioOrder, destino: StudioProductionStatus, forcar?: boolean) => {
+    const atual = etapaDe(pedido);
+    setPedidos((antes) => antes.map((o) => (o.id === pedido.id ? { ...o, studio_production_status: destino } : o)));
+    try {
+      await studioApi.updateProductionStatus(companyId, pedido.id, destino, forcar);
+      const etapa = ETAPAS.find((e) => e.key === destino);
+      toast.success(etapa ? `Movido para ${etapa.label}` : "Pedido entregue");
+    } catch (e: any) {
+      setPedidos((antes) => antes.map((o) => (o.id === pedido.id ? { ...o, studio_production_status: atual } : o)));
+      const semSinal = (e?.status === 409 || e?.code === 409)
+        && (e?.data?.error === "deposit_required" || e?.error === "deposit_required");
+      if (semSinal) {
+        confirmAlert(
+          "Sinal não recebido",
+          e?.data?.message || "O sinal deste pedido ainda não foi confirmado. Quer iniciar a produção mesmo assim?",
+          "Iniciar mesmo assim",
+          () => mover(pedido, destino, true),
+          { destructive: true },
+        );
+        return;
+      }
+      toast.error(e?.message || "Não deu para mover o pedido. Tente de novo.");
+      carregar();
+    }
+  }, [companyId, carregar]);
+
+  const avancar = useCallback((pedido: StudioOrder) => {
+    const proxima = PROXIMA_ETAPA[etapaDe(pedido)];
+    if (proxima) mover(pedido, proxima);
+  }, [mover]);
+
+  const { cobrar, cobrandoId } = useCobrarSaldo(companyId);
+  const baixa = useRegistrarPagamento(companyId, { onSucesso: carregar });
+
+  const cartao = (o: StudioOrder, etapa: Etapa) => (
+    <Cartao
+      key={o.id}
+      o={o}
+      etapa={etapa}
+      t={t}
+      s={s}
+      onAvancar={avancar}
+      onAprovacao={setAprovacaoDe}
+      cobrando={cobrandoId === o.balance_installment_id}
+      onCobrar={() => o.balance_installment_id && cobrar({
+        orderId: o.id, installmentId: o.balance_installment_id, phone: o.customer_phone,
+        customerName: o.customer_name, dueDate: o.balance_due_date, status: o.balance_status,
+      })}
+      onRecebi={() => o.balance_installment_id && o.balance_amount != null && baixa.abrir({
+        orderId: o.id, installmentId: o.balance_installment_id, customerName: o.customer_name,
+        amount: Number(o.balance_amount) || 0, dueDate: o.balance_due_date, status: o.balance_status,
+      })}
+    />
+  );
+
+  let corpo: React.ReactNode;
+  if (carregando && pedidos.length === 0) {
+    corpo = <View style={s.aviso} testID="producao-carregando"><Text style={s.avisoTxt}>Carregando os pedidos…</Text></View>;
+  } else if (erro && pedidos.length === 0) {
+    corpo = (
+      <View style={s.aviso} testID="producao-erro">
+        <Text style={s.avisoTitulo}>Não deu para carregar a Fila</Text>
+        <Text style={s.avisoTxt}>{erro}</Text>
+        <Pressable style={s.botaoNeutro} onPress={carregar} accessibilityRole="button" testID="producao-tentar-de-novo">
+          <Text style={s.botaoNeutroTxt}>Tentar de novo</Text>
+        </Pressable>
+      </View>
+    );
+  } else if (resumo.ativos === 0) {
+    corpo = (
+      <View style={s.aviso} testID="producao-vazia">
+        <Text style={s.avisoTitulo}>Nenhum pedido na Fila</Text>
+        <Text style={s.avisoTxt}>Quando entrar um pedido de peça personalizada, ele aparece aqui.</Text>
+      </View>
+    );
+  } else if (celular) {
+    const etapa = ETAPAS.find((e) => e.key === etapaAberta) || ETAPAS[0];
+    const lista = grupos[etapa.key];
+    corpo = (
+      <View style={{ flex: 1 }} testID="producao-uma-etapa">
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.seletor} contentContainerStyle={s.seletorDentro}>
+          {ETAPAS.map((e) => {
+            const ativa = e.key === etapa.key;
+            const n = grupos[e.key].length;
+            return (
+              <Pressable
+                key={e.key}
+                testID={`producao-etapa-${e.key}`}
+                onPress={() => setEtapaNoCelular(e.key)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: ativa }}
+                accessibilityLabel={`${e.label}, ${n} ${n === 1 ? "pedido" : "pedidos"}`}
+                style={[s.chip, ativa && s.chipAtivo]}
+              >
+                <Text style={[s.chipTxt, ativa && s.chipTxtAtivo]}>{e.curto} {n}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={s.listaDoCelular}>
+          {lista.length === 0
+            ? <Text style={s.etapaVazia} testID="producao-etapa-sem-pedido">Nenhum pedido em {etapa.label}.</Text>
+            : lista.map((o) => cartao(o, etapa))}
+        </ScrollView>
+      </View>
+    );
+  } else {
+    corpo = (
+      <ScrollView horizontal style={{ flex: 1 }} contentContainerStyle={s.quadro} testID="producao-colunas">
+        {ETAPAS.map((e) => (
+          <View key={e.key} style={s.coluna} testID={`producao-coluna-${e.key}`}>
+            <View style={s.colunaTopo}>
+              <Text style={s.colunaTitulo} numberOfLines={2}>{e.label}</Text>
+              <Text style={s.colunaConta}>{grupos[e.key].length}</Text>
+            </View>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={s.colunaDentro}>
+              {grupos[e.key].map((o) => cartao(o, e))}
+            </ScrollView>
+          </View>
+        ))}
+      </ScrollView>
+    );
+  }
+
+  return (
+    <View style={s.tela} testID="producao-quadro">
+      <View style={s.barra}>
+        <Text style={s.resumo} testID="producao-resumo">
+          {carregando && pedidos.length === 0 ? " " : fraseDoResumo(resumo, (v) => reais(v))}
+        </Text>
+        <Pressable style={s.botaoNeutro} onPress={carregar} disabled={carregando} accessibilityRole="button" testID="producao-atualizar">
+          <Text style={s.botaoNeutroTxt}>{carregando ? "Atualizando…" : "Atualizar"}</Text>
+        </Pressable>
+      </View>
+
+      {corpo}
+
+      {/* Pedido de aprovação da arte: por WebPortal, fora da árvore do shell. */}
+      <WebPortal active={!!aprovacaoDe}>
+        <View style={s.overlay} testID="producao-overlay-aprovacao">
+          {aprovacaoDe ? (
+            <ApprovalRequestModal
+              order={aprovacaoDe}
+              onClose={() => setAprovacaoDe(null)}
+              onSent={() => { setAprovacaoDe(null); carregar(); }}
+            />
+          ) : null}
+        </View>
+      </WebPortal>
+
+      {/* Baixa do saldo: o sheet abre pelo Modal do react-native-web, que já
+          monta em document.body. */}
+      <RegistrarPagamentoSheet controller={baixa} />
+    </View>
+  );
+}
+
+function Cartao({
+  o, etapa, t, s, onAvancar, onAprovacao, onCobrar, onRecebi, cobrando,
+}: {
+  o: StudioOrder;
+  etapa: Etapa;
+  t: StudioPalette;
+  s: ReturnType<typeof estilos>;
+  onAvancar: (o: StudioOrder) => void;
+  onAprovacao: (o: StudioOrder) => void;
+  onCobrar: () => void;
+  onRecebi: () => void;
+  cobrando: boolean;
+}) {
+  const nome = o.customer_name || o.display_name || "Sem cadastro";
+  const prazo = prazoDoCartao(o);
+  const pix = situacaoDoPixNoCartao(o as any);
+  const origem = origemDoPedido(o);
+  const temSaldo = !!o.balance_installment_id && o.balance_amount != null;
+  const naArte = etapa.key === "pending_art";
+
+  return (
+    <View style={s.cartao} testID={`producao-cartao-${o.id}`}>
+      <View style={s.linha}>
+        <Text style={s.numero}>{numeroDoPedido(o as any)}</Text>
+        {origem ? <View style={[s.selo, s.seloMarca]}><Text style={[s.seloTxt, s.seloMarcaTxt]}>{origem}</Text></View> : null}
+      </View>
+      <Text style={s.nome} numberOfLines={1}>{nome}</Text>
+      <Text style={s.meta}>{rotuloDeItens(o.item_count)} · {reais(o.total_amount)}</Text>
+
+      <View style={s.selos}>
+        <View style={[s.selo, prazo.tom === "atencao" && { backgroundColor: t.warningSoft }, prazo.tom === "atrasado" && { backgroundColor: t.dangerSoft }]}>
+          <Text style={[s.seloTxt, prazo.tom === "atencao" && { color: t.warningInk }, prazo.tom === "atrasado" && { color: t.dangerInk }]}>{prazo.texto}</Text>
+        </View>
+        {pix ? (
+          <View style={[s.selo, { backgroundColor: pix.tom === "sucesso" ? t.successSoft : t.warningSoft }]}>
+            <Text style={[s.seloTxt, { color: pix.tom === "sucesso" ? t.successInk : t.warningInk }]}>
+              {pix.tom === "sucesso" ? "Pago" : pix.rotulo}
+            </Text>
+          </View>
+        ) : null}
+        {o.pending_approval_url ? (
+          <View style={[s.selo, { backgroundColor: t.infoSoft }]}>
+            <Text style={[s.seloTxt, { color: t.infoInk }]}>Aprovação enviada</Text>
+          </View>
+        ) : null}
+      </View>
+
+      {temSaldo ? (
+        <Text style={s.meta} testID={`producao-saldo-${o.id}`}>
+          Saldo <Text style={s.saldoValor}>{reais(o.balance_amount)}</Text>
+          {o.balance_status === "overdue" ? " · vencido" : ""}
+        </Text>
+      ) : null}
+
+      {/* Ações: sempre na tela, sem hover. */}
+      <View style={s.acoes} testID={`producao-acoes-${o.id}`}>
+        {naArte ? (
+          <Pressable
+            style={s.botaoDaEtapa}
+            onPress={() => onAprovacao(o)}
+            accessibilityRole="button"
+            accessibilityLabel={`Pedir aprovação da arte de ${nome} pelo WhatsApp`}
+            testID={`producao-aprovacao-${o.id}`}
+          >
+            <Text style={s.botaoDaEtapaTxt}>Pedir aprovação da arte</Text>
+          </Pressable>
+        ) : null}
+        <Pressable
+          style={naArte ? s.botaoNeutro : s.botaoDaEtapa}
+          onPress={() => onAvancar(o)}
+          accessibilityRole="button"
+          accessibilityLabel={`${etapa.avancar}: pedido de ${nome}`}
+          testID={`producao-avancar-${o.id}`}
+        >
+          <Text style={naArte ? s.botaoNeutroTxt : s.botaoDaEtapaTxt}>{etapa.avancar}</Text>
+        </Pressable>
+        {temSaldo ? (
+          <View style={s.acoesLado}>
+            <Pressable
+              style={[s.botaoNeutro, s.cresce]}
+              onPress={onCobrar}
+              disabled={cobrando}
+              accessibilityRole="button"
+              accessibilityLabel={`Cobrar o saldo de ${nome} pelo WhatsApp`}
+              testID={`producao-cobrar-${o.id}`}
+            >
+              <Text style={s.botaoNeutroTxt}>{cobrando ? "Abrindo…" : "Cobrar saldo"}</Text>
+            </Pressable>
+            <Pressable
+              style={[s.botaoNeutro, s.cresce]}
+              onPress={onRecebi}
+              accessibilityRole="button"
+              accessibilityLabel={`Registrar o recebimento de ${nome}`}
+              testID={`producao-recebi-${o.id}`}
+            >
+              <Text style={[s.botaoNeutroTxt, { color: t.successInk }]}>Recebi</Text>
+            </Pressable>
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function estilos(t: StudioPalette) {
+  return StyleSheet.create({
+    tela: { flex: 1, minHeight: 420 },
+    barra: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingBottom: 14, flexWrap: "wrap" },
+    resumo: { fontSize: 12.5, color: t.ink3, flexShrink: 1 },
+
+    aviso: { alignItems: "center", justifyContent: "center", paddingVertical: 56, paddingHorizontal: 24, gap: 10, borderRadius: 14, borderWidth: 1, borderStyle: "dashed", borderColor: t.primaryBorder, backgroundColor: t.bgSoft },
+    avisoTitulo: { fontSize: 18, fontWeight: "700", color: t.ink, textAlign: "center" },
+    avisoTxt: { fontSize: 13, color: t.ink3, textAlign: "center", maxWidth: 420, lineHeight: 20 },
+
+    quadro: { gap: 10, paddingBottom: 16 },
+    coluna: { width: 232, backgroundColor: t.bgSoft, borderRadius: 12, borderWidth: 1, borderColor: t.ink5, overflow: "hidden", maxHeight: 760 },
+    colunaTopo: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6, paddingHorizontal: 11, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: t.ink5 },
+    colunaTitulo: { flex: 1, fontSize: 12, fontWeight: "700", color: t.ink },
+    colunaConta: { fontSize: 11.5, color: t.ink3, fontVariant: ["tabular-nums"] },
+    colunaDentro: { padding: 8, gap: 8 },
+    etapaVazia: { fontSize: 13, color: t.ink3, paddingVertical: 24, textAlign: "center" },
+
+    seletor: { flexGrow: 0, marginBottom: 10 },
+    seletorDentro: { gap: 6, paddingRight: 8 },
+    // 44 px de altura: alvo de toque confortável no celular.
+    chip: { justifyContent: "center", minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: t.primaryBorder, backgroundColor: "transparent" },
+    chipAtivo: { backgroundColor: t.primary, borderColor: t.primary },
+    chipTxt: { fontSize: 12.5, fontWeight: "600", color: t.ink2 },
+    chipTxtAtivo: { color: "#fff" },
+    listaDoCelular: { gap: 10, paddingBottom: 24 },
+
+    cartao: { backgroundColor: t.paperCard, borderRadius: 11, borderWidth: 1, borderColor: t.ink5, padding: 10, gap: 6 },
+    linha: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6 },
+    numero: { fontSize: 11.5, fontWeight: "700", color: t.accentInk, fontVariant: ["tabular-nums"] },
+    nome: { fontSize: 13, fontWeight: "700", color: t.ink },
+    meta: { fontSize: 12, color: t.ink3 },
+    saldoValor: { fontWeight: "700", color: t.ink, fontVariant: ["tabular-nums"] },
+    selos: { flexDirection: "row", flexWrap: "wrap", gap: 5 },
+    selo: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: t.bgSoft },
+    seloTxt: { fontSize: 10.5, fontWeight: "700", color: t.ink3 },
+    seloMarca: { backgroundColor: t.primaryGhost },
+    seloMarcaTxt: { color: t.accentInk },
+
+    acoes: { gap: 6, marginTop: 2 },
+    acoesLado: { flexDirection: "row", gap: 6 },
+    cresce: { flex: 1 },
+    // O botão da etapa seguinte, como no mockup: fundo violeta suave e borda.
+    botaoDaEtapa: { alignItems: "center", justifyContent: "center", minHeight: 40, paddingHorizontal: 8, borderRadius: 8, borderWidth: 1, borderColor: t.primaryBorder, backgroundColor: t.primaryGhost },
+    botaoDaEtapaTxt: { fontSize: 12, fontWeight: "700", color: t.ink, textAlign: "center" },
+    botaoNeutro: { alignItems: "center", justifyContent: "center", minHeight: 40, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: t.primaryBorder, backgroundColor: t.paperCard },
+    botaoNeutroTxt: { fontSize: 12, fontWeight: "600", color: t.ink2 },
+
+    // O contêiner do WebPortal é um <div> fixo, sem flex: o overlay se
+    // estica por conta própria.
+    overlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: t.bg },
+  });
+}
+
+export default QuadroDeProducao;
