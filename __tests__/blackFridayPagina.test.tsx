@@ -157,7 +157,10 @@ describe("item do menu", () => {
   it("é filtrado por período e por quem vê (hook), no Sidebar e no MBar", () => {
     expect(LAYOUT).toContain("if (item.temporada && blackFridayOn !== true) return false;");
     expect(Array.from(LAYOUT.matchAll(/const blackFridayOn = useBlackFridayLiberada\(\);/g))).toHaveLength(2);
-    expect(Array.from(LAYOUT.matchAll(/matconEnabled, blackFridayOn\)/g))).toHaveLength(2);
+    // 16/11/2026 (p-128): o buildRawNav ganhou um argumento depois deste
+    // (personalizadosOn). O que se confere aqui é o mesmo: o filtro da
+    // temporada chega ao buildRawNav nas duas chamadas.
+    expect(Array.from(LAYOUT.matchAll(/buildRawNav\([^)]*matconEnabled, blackFridayOn\b/g))).toHaveLength(2);
   });
 
   it("nenhum outro item do NAV herda a chave", () => {
