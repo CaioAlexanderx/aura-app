@@ -103,6 +103,7 @@ import { CalculadoraAmbiente } from "@/components/matcon/CalculadoraAmbiente";
 import { LoteDoItem } from "@/components/matcon/LotePicker";
 import type { LotAllocation } from "@/services/matconApi";
 import { rotuloDaComanda } from "@/utils/comanda";
+import { contarProdutosDoCarrinho } from "@/utils/contarProdutosDoCarrinho";
 import { estadoDoDoc, mascararDoc, mensagemDoDoc } from "@/utils/nfseAutomatica";
 
 /** 10/11/2026 (NFS-e automática, mockup nfse-cadastro-servico.html, tela 3).
@@ -451,10 +452,12 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
         <View style={s.meta}>
           <View>
             <Text style={s.metaK}>Produtos</Text>
-            {/* QA 23/09/2026: conta as LINHAS do carrinho. Somar
-                quantidades misturava unidades (10 m² de piso + 500 tijolos
-                = "510"). */}
-            <Text testID="carrinho-produtos" style={s.metaV}>{items.length}</Text>
+            {/* QA 23/09/2026: somar tudo misturava unidades (10 m² de piso
+                + 500 tijolos = "510"). 16/11/2026 (pedido do Caio): conta
+                peças. Item sem unidade ou em "un" (qty inteira) soma a
+                quantidade; m², kg, milheiro, fracionário etc. contam 1 por
+                linha. Regra em contarProdutosDoCarrinho. */}
+            <Text testID="carrinho-produtos" style={s.metaV}>{contarProdutosDoCarrinho(items)}</Text>
           </View>
           <View>
             <Text style={s.metaK}>Desconto</Text>

@@ -70,6 +70,25 @@ function montar(extra: Record<string, any> = {}) {
 beforeEach(() => { mockPdvSettings = {}; });
 
 describe("Produtos no topo", () => {
+  test("peças: 3 unidades de uma blusa + 2 de outra (sem unidade) = 5", () => {
+    const blusa1: CartDisplayItem = { productId: "b1", productBaseId: "b1", name: "Blusa A", price: 50, qty: 3, listPrice: 50 };
+    const blusa2: CartDisplayItem = { productId: "b2", productBaseId: "b2", name: "Blusa B", price: 60, qty: 2, listPrice: 60 };
+    const tree = montar({ items: [blusa1, blusa2] });
+    expect(textoDe(tree, "carrinho-produtos")).toBe("5");
+    tree.unmount();
+  });
+  test("2 blusas sem unidade + piso em m² = 3", () => {
+    const blusa1: CartDisplayItem = { productId: "b1", productBaseId: "b1", name: "Blusa A", price: 50, qty: 1, listPrice: 50 };
+    const blusa2: CartDisplayItem = { productId: "b2", productBaseId: "b2", name: "Blusa B", price: 60, qty: 1, listPrice: 60 };
+    const tree = montar({ items: [blusa1, blusa2, PISO] });
+    expect(textoDe(tree, "carrinho-produtos")).toBe("3");
+    tree.unmount();
+  });
+  test("carrinho vazio mostra 0", () => {
+    const tree = montar({ items: [] });
+    expect(textoDe(tree, "carrinho-produtos")).toBe("0");
+    tree.unmount();
+  });
   test("10 m² de piso + 500 tijolos = 2 produtos (não 510), com ou sem Matcon", () => {
     for (const cfg of [{}, { matcon_enabled: true }]) {
       mockPdvSettings = cfg;
