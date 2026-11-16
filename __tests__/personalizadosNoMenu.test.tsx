@@ -45,11 +45,11 @@ const ler = (rel: string) => fs.readFileSync(path.join(raiz, rel), "utf8");
 const LAYOUT = ler("app/(tabs)/_layout.tsx");
 const MEMBROS = ler("components/MembersSection.tsx");
 
+// Mockup p-131 (aprovado em 16/11): Orçamentos 3D, Produção e Insumos.
 const DO_MENU = [
-  { r: "/personalizados/producao", mod: "personalizados.producao" },
   { r: "/personalizados/orcamentos", mod: "personalizados.orcamentos" },
+  { r: "/personalizados/producao", mod: "personalizados.producao" },
   { r: "/personalizados/insumos", mod: "personalizados.insumos" },
-  { r: "/personalizados/galeria", mod: "personalizados.galeria" },
 ];
 const TODAS = [...MODS_PERSONALIZADOS];
 
@@ -97,7 +97,7 @@ describe("quem vê a seção", () => {
 });
 
 describe("NAV: seção Personalizados, um mod por item", () => {
-  test("os quatro itens, com rota, mod próprio e o toggle", () => {
+  test("os três itens do mockup, na ordem, com rota, mod próprio e o toggle", () => {
     expect(itensDoGrupo("Personalizados")).toEqual(DO_MENU.map((i) => ({ ...i, toggle: true })));
   });
 
@@ -108,6 +108,18 @@ describe("NAV: seção Personalizados, um mod por item", () => {
       .filter((l) => /^\s*\{ s: "/.test(l) && !l.includes('{ s: "Personalizados"'))
       .join("\n");
     mods.forEach((m) => expect(outros).not.toContain(`mod: "${m}"`));
+  });
+
+  test("a seção vem logo depois de Vendas, antes de Clientes e WhatsApp", () => {
+    const grupos = Array.from(LAYOUT.matchAll(/^\s*\{ s: "([^"]+)"/gm)).map((m) => m[1]);
+    const i = grupos.indexOf("Personalizados");
+    expect(grupos[i - 1]).toBe("Vendas");
+    expect(grupos[i + 1]).toBe("Clientes e WhatsApp");
+  });
+
+  test("os rótulos são os do mockup", () => {
+    const rotulos = Array.from(linhaDoGrupo("Personalizados").matchAll(/l: "([^"]+)"/g)).map((m) => m[1]);
+    expect(rotulos).toEqual(["Orçamentos 3D", "Produção", "Insumos"]);
   });
 
   test("o rótulo não colide com o Orçamentos do Matcon", () => {
@@ -207,7 +219,7 @@ describe("permissão do membro", () => {
   });
 
   test("MembersSection: a linha existe e só aparece com a frente ligada", () => {
-    expect(MEMBROS).toMatch(/\{ key: "personalizados\.access", label: "Personalizados",[^}]*onlyWhen: "personalizados" as const \}/);
+    expect(MEMBROS).toMatch(/\{ key: "personalizados\.access", label: "Personalizados", hint: "Orçamentos 3D, Produção e Insumos", onlyWhen: "personalizados" as const \}/);
     expect(MEMBROS).toContain("const personalizadosOn = personalizadosAtivo(pdvSettings, verticalAtiva);");
     expect(MEMBROS).toContain("personalizados: personalizadosOn }");
   });

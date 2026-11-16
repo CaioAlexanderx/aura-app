@@ -207,8 +207,8 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   // com chave PROPRIA (regra 3). O opt-in e pdv_settings.studio_enabled em
   // empresa sem vertical_active (utils/personalizados.ts). O backend
   // (services/modules.js, backend#1038) conhece as mesmas chaves.
-  //   producao, orcamentos, insumos, galeria -> itens do menu
-  //   pedido (detalhe do pedido), ficha (ficha tecnica do produto),
+  //   orcamentos, producao, insumos -> itens do menu (mockup p-131)
+  //   galeria, pedido (detalhe do pedido), ficha (ficha tecnica do produto),
   //   loja (estilo dos personalizaveis na loja online) e config -> subtelas
   'personalizados.producao':   'negocio',
   'personalizados.orcamentos': 'negocio',

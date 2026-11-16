@@ -32,8 +32,8 @@ export function personalizadosAtivo(
 
 /** As chaves de módulo da frente: primeiro os itens do menu, depois as subtelas. */
 export const MODS_PERSONALIZADOS = [
-  "personalizados.producao",
   "personalizados.orcamentos",
+  "personalizados.producao",
   "personalizados.insumos",
   "personalizados.galeria",
   "personalizados.pedido",
