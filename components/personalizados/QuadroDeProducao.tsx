@@ -1,50 +1,51 @@
 // ============================================================
-// AURA. — Personalizados: quadro de Produção no shell Negócio (p-129)
+// AURA. — Personalizados: Fila de produção no shell Negócio (p-129)
 //
 // Porte do quadro do Studio (app/studio/(estudio)/producao.tsx) para dentro
-// do Negócio. Mesmos dados e mesmas rotas; o que muda é a casca:
+// do Negócio, no desenho do mockup p-131 (aprovado em 16/11/2026). Mesmos
+// dados e mesmas rotas; o que muda é a casca:
 //
 //   - AÇÕES SEMPRE VISÍVEIS. Nada aparece só no hover (regra 7 do
-//     CLAUDE.md): cada cartão mostra os botões o tempo todo, no mouse e no
-//     toque.
-//   - SEM ARRASTAR. O cartão anda pelo botão da próxima etapa. O arraste do
-//     Studio é só do mouse e já deu defeito no react-native-web.
-//   - NO CELULAR, UMA ETAPA POR VEZ. Abaixo de 768 px o quadro vira um
-//     seletor de etapas com a contagem e a lista da etapa escolhida.
+//     CLAUDE.md): o botão da etapa seguinte fica no cartão o tempo todo, no
+//     mouse e no toque.
+//   - SEM ARRASTAR. O cartão anda pelo botão. "O arrastar só funciona bem no
+//     computador" (mockup), e o arraste do Studio já deu defeito no
+//     react-native-web.
+//   - NO CELULAR, UMA ETAPA POR VEZ. Abaixo de 768 px o quadro vira uma
+//     lista da etapa escolhida nos botões do alto.
 //   - OVERLAY POR WebPortal. O pedido de aprovação da arte abre por
 //     WebPortal: dentro do shell o z-index:0 do react-native-web prende
 //     qualquer position:fixed.
 //   - CORES DO NEGÓCIO. A tela lê useStudioTokens(), e quem monta a rota
 //     envolve o quadro em <TemaDoNegocio>.
 //
-// O que ainda NÃO está aqui (fica para os próximos cards): abrir o pedido
-// (detalhe), coletar a personalização de pedido de marketplace e o modo
-// vitrine. Por isso o cartão não é clicável.
+// O que o mockup desenha e ainda NÃO está aqui (cards próprios):
+//   - a folha "Recolher a arte e o texto" da etapa Aguardando personalização
+//     (hoje o botão dessa etapa só envia o pedido para a arte);
+//   - a loja de origem em cada cartão e o filtro de loja no cabeçalho (vêm
+//     com a visão de todas as lojas);
+//   - abrir o pedido (detalhe). Por isso o cartão não é clicável.
 //
 // Regras sem tela: components/personalizados/regrasDaProducao.ts.
 // ============================================================
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, Image, useWindowDimensions } from "react-native";
-import { Icon } from "@/components/Icon";
+import { View, Text, ScrollView, Pressable, StyleSheet, useWindowDimensions } from "react-native";
 import { toast } from "@/components/Toast";
 import { WebPortal } from "@/components/WebPortal";
 import { confirmAlert } from "@/utils/webAlert";
-import { useStudioTokens, useStudioSemantic, useStudioTheme } from "@/contexts/StudioThemeMode";
+import { useStudioTokens } from "@/contexts/StudioThemeMode";
 import type { StudioPalette } from "@/constants/studio-tokens";
 import { studioApi, type StudioOrder, type StudioProductionStatus } from "@/services/studioApi";
 import { ApprovalRequestModal } from "@/components/studio/ApprovalRequestModal";
 import { RegistrarPagamentoSheet } from "@/components/studio/RegistrarPagamentoSheet";
 import { useCobrarSaldo } from "@/components/studio/useCobrarSaldo";
 import { useRegistrarPagamento } from "@/components/studio/useRegistrarPagamento";
-import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
-import { capaDoCartao } from "@/components/studio/capaDoCartao";
 import { comEtapaDoPedido } from "@/components/studio/etapaDoPedido";
-import { riscoDoCard } from "@/components/studio/fluxoDoQuadro";
 import { numeroDoPedido, situacaoDoPixNoCartao, reais } from "@/components/studio/pagamentoDoPedido";
 import { rotuloDeItens } from "@/components/studio/rotuloDeItens";
 import {
-  ETAPAS, PROXIMA_ETAPA, LARGURA_DO_CELULAR, agruparPorEtapa, emAberto, etapaDe, etapaInicialNoCelular,
-  etapasVisiveis, prazoDoCartao, semAntigosDaAtivacao, type Etapa,
+  ETAPAS, PROXIMA_ETAPA, LARGURA_DO_CELULAR, agruparPorEtapa, etapaDe, etapaInicialNoCelular, fraseDoResumo,
+  origemDoPedido, prazoDoCartao, resumoDaFila, semAntigosDaAtivacao, type Etapa,
 } from "@/components/personalizados/regrasDaProducao";
 
 type Props = {
@@ -53,16 +54,8 @@ type Props = {
   ativadoEm: string | null;
 };
 
-function diaEMes(iso?: string | null) {
-  if (!iso) return "";
-  const [, m, d] = String(iso).slice(0, 10).split("-");
-  return d && m ? `${d}/${m}` : String(iso);
-}
-
 export function QuadroDeProducao({ companyId, ativadoEm }: Props) {
   const t = useStudioTokens();
-  const sem = useStudioSemantic();
-  const { isDark } = useStudioTheme();
   const s = useMemo(() => estilos(t), [t]);
   const { width } = useWindowDimensions();
   const celular = width < LARGURA_DO_CELULAR;
@@ -88,12 +81,10 @@ export function QuadroDeProducao({ companyId, ativadoEm }: Props) {
 
   useEffect(() => { carregar(); }, [carregar]);
 
-  const noQuadro = useMemo(() => semAntigosDaAtivacao(pedidos, ativadoEm), [pedidos, ativadoEm]);
-  const grupos = useMemo(() => agruparPorEtapa(noQuadro), [noQuadro]);
-  const etapas = useMemo(() => etapasVisiveis(grupos), [grupos]);
-  const etapaAberta = etapaNoCelular && etapas.some((e) => e.key === etapaNoCelular)
-    ? etapaNoCelular
-    : etapaInicialNoCelular(grupos);
+  const naFila = useMemo(() => semAntigosDaAtivacao(pedidos, ativadoEm), [pedidos, ativadoEm]);
+  const grupos = useMemo(() => agruparPorEtapa(naFila), [naFila]);
+  const resumo = useMemo(() => resumoDaFila(naFila), [naFila]);
+  const etapaAberta = etapaNoCelular || etapaInicialNoCelular(grupos);
 
   const mover = useCallback(async (pedido: StudioOrder, destino: StudioProductionStatus, forcar?: boolean) => {
     const atual = etapaDe(pedido);
@@ -101,7 +92,7 @@ export function QuadroDeProducao({ companyId, ativadoEm }: Props) {
     try {
       await studioApi.updateProductionStatus(companyId, pedido.id, destino, forcar);
       const etapa = ETAPAS.find((e) => e.key === destino);
-      toast.success(`Movido para ${etapa ? etapa.label : "a próxima etapa"}`);
+      toast.success(etapa ? `Movido para ${etapa.label}` : "Pedido entregue");
     } catch (e: any) {
       setPedidos((antes) => antes.map((o) => (o.id === pedido.id ? { ...o, studio_production_status: atual } : o)));
       const semSinal = (e?.status === 409 || e?.code === 409)
@@ -136,9 +127,6 @@ export function QuadroDeProducao({ companyId, ativadoEm }: Props) {
       etapa={etapa}
       t={t}
       s={s}
-      corDaEtapa={sem[etapa.intent].base}
-      // No tema escuro a cor da etapa é clara: texto escuro por cima.
-      corSobreAEtapa={isDark ? "#0b0f1a" : "#ffffff"}
       onAvancar={avancar}
       onAprovacao={setAprovacaoDe}
       cobrando={cobrandoId === o.balance_installment_id}
@@ -159,29 +147,29 @@ export function QuadroDeProducao({ companyId, ativadoEm }: Props) {
   } else if (erro && pedidos.length === 0) {
     corpo = (
       <View style={s.aviso} testID="producao-erro">
-        <Text style={s.avisoTitulo}>Não deu para carregar a produção</Text>
+        <Text style={s.avisoTitulo}>Não deu para carregar a Fila</Text>
         <Text style={s.avisoTxt}>{erro}</Text>
         <Pressable style={s.botaoNeutro} onPress={carregar} accessibilityRole="button" testID="producao-tentar-de-novo">
           <Text style={s.botaoNeutroTxt}>Tentar de novo</Text>
         </Pressable>
       </View>
     );
-  } else if (noQuadro.length === 0) {
+  } else if (resumo.ativos === 0) {
     corpo = (
       <View style={s.aviso} testID="producao-vazia">
-        <Text style={s.avisoTitulo}>Nenhum pedido na produção</Text>
-        <Text style={s.avisoTxt}>Quando entrar um pedido de produto personalizado, ele aparece aqui.</Text>
+        <Text style={s.avisoTitulo}>Nenhum pedido na Fila</Text>
+        <Text style={s.avisoTxt}>Quando entrar um pedido de peça personalizada, ele aparece aqui.</Text>
       </View>
     );
   } else if (celular) {
-    const etapa = etapas.find((e) => e.key === etapaAberta) || etapas[0];
+    const etapa = ETAPAS.find((e) => e.key === etapaAberta) || ETAPAS[0];
     const lista = grupos[etapa.key];
     corpo = (
       <View style={{ flex: 1 }} testID="producao-uma-etapa">
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.seletor} contentContainerStyle={s.seletorDentro}>
-          {etapas.map((e) => {
+          {ETAPAS.map((e) => {
             const ativa = e.key === etapa.key;
-            const cor = sem[e.intent];
+            const n = grupos[e.key].length;
             return (
               <Pressable
                 key={e.key}
@@ -189,19 +177,17 @@ export function QuadroDeProducao({ companyId, ativadoEm }: Props) {
                 onPress={() => setEtapaNoCelular(e.key)}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: ativa }}
-                accessibilityLabel={`${e.label}, ${grupos[e.key].length} ${grupos[e.key].length === 1 ? "pedido" : "pedidos"}`}
-                style={[s.chip, ativa && { backgroundColor: cor.soft, borderColor: cor.base }]}
+                accessibilityLabel={`${e.label}, ${n} ${n === 1 ? "pedido" : "pedidos"}`}
+                style={[s.chip, ativa && s.chipAtivo]}
               >
-                <Text style={[s.chipTxt, ativa && { color: cor.ink }]}>{e.curto}</Text>
-                <Text style={[s.chipConta, ativa && { color: cor.ink }]}>{grupos[e.key].length}</Text>
+                <Text style={[s.chipTxt, ativa && s.chipTxtAtivo]}>{e.curto} {n}</Text>
               </Pressable>
             );
           })}
         </ScrollView>
         <ScrollView style={{ flex: 1 }} contentContainerStyle={s.listaDoCelular}>
-          <Text style={s.tituloDaEtapa} testID="producao-etapa-aberta">{etapa.label}</Text>
           {lista.length === 0
-            ? <Text style={s.etapaVazia}>Nenhum pedido nesta etapa.</Text>
+            ? <Text style={s.etapaVazia} testID="producao-etapa-sem-pedido">Nenhum pedido em {etapa.label}.</Text>
             : lista.map((o) => cartao(o, etapa))}
         </ScrollView>
       </View>
@@ -209,23 +195,17 @@ export function QuadroDeProducao({ companyId, ativadoEm }: Props) {
   } else {
     corpo = (
       <ScrollView horizontal style={{ flex: 1 }} contentContainerStyle={s.quadro} testID="producao-colunas">
-        {etapas.map((e) => {
-          const cor = sem[e.intent];
-          return (
-            <View key={e.key} style={s.coluna} testID={`producao-coluna-${e.key}`}>
-              <View style={[s.colunaTopo, { backgroundColor: cor.soft }]}>
-                <Icon name={e.icon as any} size={13} color={cor.base} />
-                <Text style={[s.colunaTitulo, { color: cor.ink }]}>{e.label}</Text>
-                <Text style={[s.colunaConta, { color: cor.ink }]}>{grupos[e.key].length}</Text>
-              </View>
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={s.colunaDentro}>
-                {grupos[e.key].length === 0
-                  ? <Text style={s.etapaVazia}>Nenhum pedido.</Text>
-                  : grupos[e.key].map((o) => cartao(o, e))}
-              </ScrollView>
+        {ETAPAS.map((e) => (
+          <View key={e.key} style={s.coluna} testID={`producao-coluna-${e.key}`}>
+            <View style={s.colunaTopo}>
+              <Text style={s.colunaTitulo} numberOfLines={2}>{e.label}</Text>
+              <Text style={s.colunaConta}>{grupos[e.key].length}</Text>
             </View>
-          );
-        })}
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={s.colunaDentro}>
+              {grupos[e.key].map((o) => cartao(o, e))}
+            </ScrollView>
+          </View>
+        ))}
       </ScrollView>
     );
   }
@@ -234,12 +214,9 @@ export function QuadroDeProducao({ companyId, ativadoEm }: Props) {
     <View style={s.tela} testID="producao-quadro">
       <View style={s.barra}>
         <Text style={s.resumo} testID="producao-resumo">
-          {noQuadro.length === 0
-            ? "Sem pedidos em aberto"
-            : `${emAberto(grupos)} em aberto · ${grupos.delivered.length} ${grupos.delivered.length === 1 ? "entregue" : "entregues"} nos últimos 60 dias`}
+          {carregando && pedidos.length === 0 ? " " : fraseDoResumo(resumo, (v) => reais(v))}
         </Text>
         <Pressable style={s.botaoNeutro} onPress={carregar} disabled={carregando} accessibilityRole="button" testID="producao-atualizar">
-          <Icon name="refresh-cw" size={13} color={t.ink2} />
           <Text style={s.botaoNeutroTxt}>{carregando ? "Atualizando…" : "Atualizar"}</Text>
         </Pressable>
       </View>
@@ -267,87 +244,81 @@ export function QuadroDeProducao({ companyId, ativadoEm }: Props) {
 }
 
 function Cartao({
-  o, etapa, t, s, corDaEtapa, corSobreAEtapa, onAvancar, onAprovacao, onCobrar, onRecebi, cobrando,
+  o, etapa, t, s, onAvancar, onAprovacao, onCobrar, onRecebi, cobrando,
 }: {
   o: StudioOrder;
   etapa: Etapa;
   t: StudioPalette;
   s: ReturnType<typeof estilos>;
-  corDaEtapa: string;
-  corSobreAEtapa: string;
   onAvancar: (o: StudioOrder) => void;
   onAprovacao: (o: StudioOrder) => void;
   onCobrar: () => void;
   onRecebi: () => void;
   cobrando: boolean;
 }) {
-  const [imgFalhou, setImgFalhou] = useState(false);
-  const [alturaPrevia, setAlturaPrevia] = useState(0);
-  const capaBase = capaDoCartao(o);
-  const capa = imgFalhou && (capaBase.tipo === "arte" || capaBase.tipo === "foto")
-    ? ({ tipo: "monograma" } as const)
-    : capaBase;
   const nome = o.customer_name || o.display_name || "Sem cadastro";
-  const inicial = nome.trim().charAt(0).toUpperCase() || "?";
-  const prazo = prazoDoCartao(o as any);
-  const risco = riscoDoCard(o as any);
+  const prazo = prazoDoCartao(o);
   const pix = situacaoDoPixNoCartao(o as any);
+  const origem = origemDoPedido(o);
   const temSaldo = !!o.balance_installment_id && o.balance_amount != null;
-  const vencido = o.balance_status === "overdue";
+  const naArte = etapa.key === "pending_art";
 
   return (
     <View style={s.cartao} testID={`producao-cartao-${o.id}`}>
-      {capa.tipo === "arte" || capa.tipo === "foto" ? (
-        <Image source={{ uri: capa.url }} style={s.capa} resizeMode="cover" onError={() => setImgFalhou(true)} accessibilityLabel={`Arte de ${nome}`} />
-      ) : capa.tipo === "previa" ? (
-        <View
-          style={[s.capa, s.capaCentro]}
-          onLayout={(e) => {
-            const h = Math.round(e.nativeEvent.layout.height);
-            if (h > 0 && h !== alturaPrevia) setAlturaPrevia(h);
-          }}
-          accessibilityLabel={`Prévia da personalização de ${nome}`}
-        >
-          {alturaPrevia > 0 ? (
-            <PersonalizationPreview config={capa.config} values={capa.values} side={capa.side} size={alturaPrevia} showLabel={false} />
-          ) : null}
-        </View>
-      ) : (
-        <View style={[s.capa, s.capaCentro]}><Text style={s.capaInicial}>{inicial}</Text></View>
-      )}
-
       <View style={s.linha}>
         <Text style={s.numero}>{numeroDoPedido(o as any)}</Text>
-        <View style={[s.selo, prazo.tom === "atencao" && { backgroundColor: t.warningSoft }, prazo.tom === "atrasado" && { backgroundColor: t.dangerSoft }]}>
-          <Text style={[s.seloTxt, prazo.tom === "atencao" && { color: t.warningInk }, prazo.tom === "atrasado" && { color: t.dangerInk }]}>{prazo.texto}</Text>
-        </View>
+        {origem ? <View style={[s.selo, s.seloMarca]}><Text style={[s.seloTxt, s.seloMarcaTxt]}>{origem}</Text></View> : null}
       </View>
       <Text style={s.nome} numberOfLines={1}>{nome}</Text>
       <Text style={s.meta}>{rotuloDeItens(o.item_count)} · {reais(o.total_amount)}</Text>
 
-      {pix ? (
-        <View style={[s.selo, s.seloSolto, { backgroundColor: pix.tom === "sucesso" ? t.successSoft : t.warningSoft }]}>
-          <Text style={[s.seloTxt, { color: pix.tom === "sucesso" ? t.successInk : t.warningInk }]}>{pix.rotulo}</Text>
+      <View style={s.selos}>
+        <View style={[s.selo, prazo.tom === "atencao" && { backgroundColor: t.warningSoft }, prazo.tom === "atrasado" && { backgroundColor: t.dangerSoft }]}>
+          <Text style={[s.seloTxt, prazo.tom === "atencao" && { color: t.warningInk }, prazo.tom === "atrasado" && { color: t.dangerInk }]}>{prazo.texto}</Text>
         </View>
-      ) : null}
-      {o.pending_approval_url ? (
-        <View style={[s.selo, s.seloSolto, { backgroundColor: t.infoSoft }]}>
-          <Text style={[s.seloTxt, { color: t.infoInk }]}>Aprovação enviada</Text>
-        </View>
-      ) : null}
+        {pix ? (
+          <View style={[s.selo, { backgroundColor: pix.tom === "sucesso" ? t.successSoft : t.warningSoft }]}>
+            <Text style={[s.seloTxt, { color: pix.tom === "sucesso" ? t.successInk : t.warningInk }]}>
+              {pix.tom === "sucesso" ? "Pago" : pix.rotulo}
+            </Text>
+          </View>
+        ) : null}
+        {o.pending_approval_url ? (
+          <View style={[s.selo, { backgroundColor: t.infoSoft }]}>
+            <Text style={[s.seloTxt, { color: t.infoInk }]}>Aprovação enviada</Text>
+          </View>
+        ) : null}
+      </View>
+
       {temSaldo ? (
-        <View style={[s.selo, s.seloSolto, { backgroundColor: vencido ? t.dangerSoft : t.warningSoft }]}>
-          <Text style={[s.seloTxt, { color: vencido ? t.dangerInk : t.warningInk }]}>
-            Saldo {reais(o.balance_amount)} · {vencido ? "venceu" : "vence"} {diaEMes(o.balance_due_date)}
-          </Text>
-        </View>
-      ) : null}
-      {risco === "apertado" ? (
-        <Text style={[s.meta, { color: t.warningInk }]}>Entrega chegando e ainda não foi para a produção</Text>
+        <Text style={s.meta} testID={`producao-saldo-${o.id}`}>
+          Saldo <Text style={s.saldoValor}>{reais(o.balance_amount)}</Text>
+          {o.balance_status === "overdue" ? " · vencido" : ""}
+        </Text>
       ) : null}
 
       {/* Ações: sempre na tela, sem hover. */}
       <View style={s.acoes} testID={`producao-acoes-${o.id}`}>
+        {naArte ? (
+          <Pressable
+            style={s.botaoDaEtapa}
+            onPress={() => onAprovacao(o)}
+            accessibilityRole="button"
+            accessibilityLabel={`Pedir aprovação da arte de ${nome} pelo WhatsApp`}
+            testID={`producao-aprovacao-${o.id}`}
+          >
+            <Text style={s.botaoDaEtapaTxt}>Pedir aprovação da arte</Text>
+          </Pressable>
+        ) : null}
+        <Pressable
+          style={naArte ? s.botaoNeutro : s.botaoDaEtapa}
+          onPress={() => onAvancar(o)}
+          accessibilityRole="button"
+          accessibilityLabel={`${etapa.avancar}: pedido de ${nome}`}
+          testID={`producao-avancar-${o.id}`}
+        >
+          <Text style={naArte ? s.botaoNeutroTxt : s.botaoDaEtapaTxt}>{etapa.avancar}</Text>
+        </Pressable>
         {temSaldo ? (
           <View style={s.acoesLado}>
             <Pressable
@@ -361,7 +332,7 @@ function Cartao({
               <Text style={s.botaoNeutroTxt}>{cobrando ? "Abrindo…" : "Cobrar saldo"}</Text>
             </Pressable>
             <Pressable
-              style={[s.botaoNeutro, s.cresce, { borderColor: t.success }]}
+              style={[s.botaoNeutro, s.cresce]}
               onPress={onRecebi}
               accessibilityRole="button"
               accessibilityLabel={`Registrar o recebimento de ${nome}`}
@@ -371,29 +342,6 @@ function Cartao({
             </Pressable>
           </View>
         ) : null}
-        {etapa.key === "pending_art" ? (
-          <Pressable
-            style={s.botaoNeutro}
-            onPress={() => onAprovacao(o)}
-            accessibilityRole="button"
-            accessibilityLabel={`Pedir a aprovação da arte de ${nome} pelo WhatsApp`}
-            testID={`producao-aprovacao-${o.id}`}
-          >
-            <Icon name="whatsapp" size={13} color={t.ink2} />
-            <Text style={s.botaoNeutroTxt}>Pedir aprovação da arte</Text>
-          </Pressable>
-        ) : null}
-        {etapa.avancar ? (
-          <Pressable
-            style={[s.botaoCheio, { backgroundColor: corDaEtapa }]}
-            onPress={() => onAvancar(o)}
-            accessibilityRole="button"
-            accessibilityLabel={`${etapa.avancar}: pedido de ${nome}`}
-            testID={`producao-avancar-${o.id}`}
-          >
-            <Text style={[s.botaoCheioTxt, { color: corSobreAEtapa }]}>{etapa.avancar}</Text>
-          </Pressable>
-        ) : null}
       </View>
     </View>
   );
@@ -402,49 +350,50 @@ function Cartao({
 function estilos(t: StudioPalette) {
   return StyleSheet.create({
     tela: { flex: 1, minHeight: 420 },
-    barra: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingBottom: 12, flexWrap: "wrap" },
-    resumo: { fontSize: 13, color: t.ink3, flexShrink: 1 },
+    barra: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingBottom: 14, flexWrap: "wrap" },
+    resumo: { fontSize: 12.5, color: t.ink3, flexShrink: 1 },
 
-    aviso: { alignItems: "center", justifyContent: "center", paddingVertical: 56, paddingHorizontal: 24, gap: 10 },
-    avisoTitulo: { fontSize: 16, fontWeight: "700", color: t.ink, textAlign: "center" },
-    avisoTxt: { fontSize: 13, color: t.ink3, textAlign: "center", maxWidth: 380, lineHeight: 19 },
+    aviso: { alignItems: "center", justifyContent: "center", paddingVertical: 56, paddingHorizontal: 24, gap: 10, borderRadius: 14, borderWidth: 1, borderStyle: "dashed", borderColor: t.primaryBorder, backgroundColor: t.bgSoft },
+    avisoTitulo: { fontSize: 18, fontWeight: "700", color: t.ink, textAlign: "center" },
+    avisoTxt: { fontSize: 13, color: t.ink3, textAlign: "center", maxWidth: 420, lineHeight: 20 },
 
-    quadro: { gap: 12, paddingBottom: 16 },
-    coluna: { width: 288, backgroundColor: t.bgSoft, borderRadius: 14, borderWidth: 1, borderColor: t.ink5, overflow: "hidden", maxHeight: 760 },
-    colunaTopo: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
-    colunaTitulo: { flex: 1, fontSize: 13, fontWeight: "700" },
-    colunaConta: { fontSize: 13, fontWeight: "700" },
-    colunaDentro: { padding: 10, gap: 10 },
-    etapaVazia: { fontSize: 12.5, color: t.ink3, paddingVertical: 14, textAlign: "center" },
+    quadro: { gap: 10, paddingBottom: 16 },
+    coluna: { width: 232, backgroundColor: t.bgSoft, borderRadius: 12, borderWidth: 1, borderColor: t.ink5, overflow: "hidden", maxHeight: 760 },
+    colunaTopo: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6, paddingHorizontal: 11, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: t.ink5 },
+    colunaTitulo: { flex: 1, fontSize: 12, fontWeight: "700", color: t.ink },
+    colunaConta: { fontSize: 11.5, color: t.ink3, fontVariant: ["tabular-nums"] },
+    colunaDentro: { padding: 8, gap: 8 },
+    etapaVazia: { fontSize: 13, color: t.ink3, paddingVertical: 24, textAlign: "center" },
 
-    seletor: { flexGrow: 0, marginBottom: 12 },
-    seletorDentro: { gap: 8, paddingRight: 8 },
+    seletor: { flexGrow: 0, marginBottom: 10 },
+    seletorDentro: { gap: 6, paddingRight: 8 },
     // 44 px de altura: alvo de toque confortável no celular.
-    chip: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: t.ink5, backgroundColor: t.paperCard },
-    chipTxt: { fontSize: 13, fontWeight: "600", color: t.ink2 },
-    chipConta: { fontSize: 13, fontWeight: "700", color: t.ink3 },
-    listaDoCelular: { gap: 12, paddingBottom: 24 },
-    tituloDaEtapa: { fontSize: 15, fontWeight: "700", color: t.ink },
+    chip: { justifyContent: "center", minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: t.primaryBorder, backgroundColor: "transparent" },
+    chipAtivo: { backgroundColor: t.primary, borderColor: t.primary },
+    chipTxt: { fontSize: 12.5, fontWeight: "600", color: t.ink2 },
+    chipTxtAtivo: { color: "#fff" },
+    listaDoCelular: { gap: 10, paddingBottom: 24 },
 
-    cartao: { backgroundColor: t.paperCard, borderRadius: 12, borderWidth: 1, borderColor: t.ink5, padding: 12, gap: 6 },
-    capa: { width: "100%", height: 120, borderRadius: 8, backgroundColor: t.bgSoft, marginBottom: 4 },
-    capaCentro: { alignItems: "center", justifyContent: "center", overflow: "hidden" },
-    capaInicial: { fontSize: 34, fontWeight: "700", color: t.ink4 },
-    linha: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-    numero: { fontSize: 12, fontWeight: "700", color: t.ink3 },
-    nome: { fontSize: 14.5, fontWeight: "700", color: t.ink },
-    meta: { fontSize: 12.5, color: t.ink3 },
+    cartao: { backgroundColor: t.paperCard, borderRadius: 11, borderWidth: 1, borderColor: t.ink5, padding: 10, gap: 6 },
+    linha: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6 },
+    numero: { fontSize: 11.5, fontWeight: "700", color: t.accentInk, fontVariant: ["tabular-nums"] },
+    nome: { fontSize: 13, fontWeight: "700", color: t.ink },
+    meta: { fontSize: 12, color: t.ink3 },
+    saldoValor: { fontWeight: "700", color: t.ink, fontVariant: ["tabular-nums"] },
+    selos: { flexDirection: "row", flexWrap: "wrap", gap: 5 },
     selo: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: t.bgSoft },
-    seloSolto: { alignSelf: "flex-start" },
-    seloTxt: { fontSize: 11.5, fontWeight: "600", color: t.ink3 },
+    seloTxt: { fontSize: 10.5, fontWeight: "700", color: t.ink3 },
+    seloMarca: { backgroundColor: t.primaryGhost },
+    seloMarcaTxt: { color: t.accentInk },
 
-    acoes: { gap: 8, marginTop: 6 },
-    acoesLado: { flexDirection: "row", gap: 8 },
+    acoes: { gap: 6, marginTop: 2 },
+    acoesLado: { flexDirection: "row", gap: 6 },
     cresce: { flex: 1 },
-    botaoNeutro: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 40, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1.5, borderColor: t.ink5, backgroundColor: t.paperCardElev },
-    botaoNeutroTxt: { fontSize: 12.5, fontWeight: "600", color: t.ink2 },
-    botaoCheio: { alignItems: "center", justifyContent: "center", minHeight: 42, paddingHorizontal: 12, borderRadius: 10 },
-    botaoCheioTxt: { fontSize: 13, fontWeight: "700", color: "#fff" },
+    // O botão da etapa seguinte, como no mockup: fundo violeta suave e borda.
+    botaoDaEtapa: { alignItems: "center", justifyContent: "center", minHeight: 40, paddingHorizontal: 8, borderRadius: 8, borderWidth: 1, borderColor: t.primaryBorder, backgroundColor: t.primaryGhost },
+    botaoDaEtapaTxt: { fontSize: 12, fontWeight: "700", color: t.ink, textAlign: "center" },
+    botaoNeutro: { alignItems: "center", justifyContent: "center", minHeight: 40, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: t.primaryBorder, backgroundColor: t.paperCard },
+    botaoNeutroTxt: { fontSize: 12, fontWeight: "600", color: t.ink2 },
 
     // O contêiner do WebPortal é um <div> fixo, sem flex: o overlay se
     // estica por conta própria.

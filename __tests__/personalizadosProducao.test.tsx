@@ -2,8 +2,8 @@
 // Personalizados › Produção no shell Negócio (p-129, 16/11/2026).
 //
 // O que este teste segura:
-//   1. regras do quadro: etapas, próxima etapa, colunas que só existem com
-//      pedido, etapa que o celular abre e o prazo do cartão;
+//   1. regras da Fila (mockup p-131): as cinco etapas, próxima etapa, o
+//      resumo do cabeçalho, a origem, a etapa que o celular abre e o prazo;
 //   2. o corte pela data de ativação: venda antiga do Caixa parada em
 //      "Aguardando arte" não nasce no quadro; sem data, nada é escondido;
 //   3. render do quadro: ações sempre visíveis, sem arrastar, uma etapa por
@@ -96,8 +96,8 @@ jest.mock("@/components/CompanyPickerModal", () => ({
 }));
 
 import {
-  ETAPAS, PROXIMA_ETAPA, agruparPorEtapa, dataDeAtivacao, ehAntigoDaAtivacao, emAberto,
-  etapaInicialNoCelular, etapasVisiveis, prazoDoCartao, semAntigosDaAtivacao,
+  ETAPAS, PROXIMA_ETAPA, agruparPorEtapa, dataDeAtivacao, ehAntigoDaAtivacao, etapaInicialNoCelular,
+  fraseDoResumo, origemDoPedido, prazoDoCartao, resumoDaFila, semAntigosDaAtivacao,
 } from "@/components/personalizados/regrasDaProducao";
 import { QuadroDeProducao } from "@/components/personalizados/QuadroDeProducao";
 import { TemaDoNegocio } from "@/components/personalizados/TemaDoNegocio";
@@ -117,59 +117,74 @@ const pedido = (id: string, extra: Record<string, any> = {}): any => ({
   ...extra,
 });
 
-describe("regras do quadro", () => {
-  test("sete etapas, cada uma com a próxima certa e fim em Entregue e Cancelados", () => {
-    expect(ETAPAS.map((e) => e.key)).toEqual([
-      "awaiting_customization", "pending_art", "approved", "in_production", "ready", "delivered", "cancelled",
-    ]);
+describe("regras da Fila", () => {
+  test("cinco etapas no quadro, na ordem do mockup; entregue e cancelado ficam fora", () => {
+    expect(ETAPAS.map((e) => e.key)).toEqual(["awaiting_customization", "pending_art", "approved", "in_production", "ready"]);
+    expect(ETAPAS.map((e) => e.label)).toEqual(["Aguardando personalização", "Aguardando arte", "Aprovado", "Em produção", "Pronto"]);
+    expect(ETAPAS.map((e) => e.curto)).toEqual(["Personalização", "Arte", "Aprovado", "Produção", "Pronto"]);
     expect(PROXIMA_ETAPA).toEqual({
       awaiting_customization: "pending_art", pending_art: "approved", approved: "in_production",
       in_production: "ready", ready: "delivered", delivered: null, cancelled: null,
     });
-    ETAPAS.forEach((e) => expect(!!e.avancar).toBe(PROXIMA_ETAPA[e.key] !== null));
   });
 
-  test("pedido sem etapa conta como Aguardando arte; etapa desconhecida fica fora", () => {
-    const g = agruparPorEtapa([pedido("a", { studio_production_status: null }), pedido("b", { studio_production_status: "inventada" })]);
+  test("os botões de etapa têm o texto do mockup", () => {
+    const texto = Object.fromEntries(ETAPAS.map((e) => [e.key, e.avancar]));
+    expect(texto.approved).toBe("Iniciar produção");
+    expect(texto.in_production).toBe("Marcar como pronto");
+    expect(texto.ready).toBe("Marcar como entregue");
+  });
+
+  test("pedido sem etapa conta como Aguardando arte; entregue, cancelado e desconhecida ficam fora", () => {
+    const g = agruparPorEtapa([
+      pedido("a", { studio_production_status: null }), pedido("b", { studio_production_status: "inventada" }),
+      pedido("c", { studio_production_status: "delivered" }), pedido("d", { studio_production_status: "cancelled" }),
+    ]);
     expect(g.pending_art.map((o) => o.id)).toEqual(["a"]);
     expect(Object.values(g).flat()).toHaveLength(1);
   });
 
-  test("Personalização e Cancelados só viram coluna com pedido", () => {
-    const sem = etapasVisiveis(agruparPorEtapa([pedido("a")])).map((e) => e.key);
-    expect(sem).toEqual(["pending_art", "approved", "in_production", "ready", "delivered"]);
-    const com = etapasVisiveis(agruparPorEtapa([
-      pedido("a", { studio_production_status: "awaiting_customization" }),
-      pedido("b", { studio_production_status: "cancelled" }),
-    ])).map((e) => e.key);
-    expect(com).toContain("awaiting_customization");
-    expect(com).toContain("cancelled");
-  });
-
-  test("o celular abre a primeira etapa com trabalho; sem trabalho, Aguardando arte", () => {
+  test("o celular abre a primeira etapa com pedido; sem pedido, Aguardando arte", () => {
     expect(etapaInicialNoCelular(agruparPorEtapa([pedido("a", { studio_production_status: "in_production" })]))).toBe("in_production");
     expect(etapaInicialNoCelular(agruparPorEtapa([pedido("a", { studio_production_status: "delivered" })]))).toBe("pending_art");
     expect(etapaInicialNoCelular(agruparPorEtapa([]))).toBe("pending_art");
   });
 
-  test("em aberto não conta entregue nem cancelado", () => {
-    const g = agruparPorEtapa([
-      pedido("a"), pedido("b", { studio_production_status: "ready" }),
-      pedido("c", { studio_production_status: "delivered" }), pedido("d", { studio_production_status: "cancelled" }),
+  test("resumo do cabeçalho: ativos, atrasados e a receber, só dos pedidos ativos", () => {
+    const r = resumoDaFila([
+      pedido("a", { promised_date: "2020-01-01", balance_amount: 620 }),
+      pedido("b", { studio_production_status: "ready", balance_amount: "380.50" }),
+      pedido("c", { studio_production_status: "delivered", promised_date: "2020-01-01", balance_amount: 999 }),
+      pedido("d", { studio_production_status: "cancelled" }),
     ]);
-    expect(emAberto(g)).toBe(2);
+    expect(r).toEqual({ ativos: 2, atrasados: 1, aReceber: 1000.5 });
+    const reais = (v: number) => `R$ ${v.toFixed(2).replace(".", ",")}`;
+    expect(fraseDoResumo(r, reais)).toBe("2 pedidos ativos · 1 atrasado · R$ 1000,50 a receber");
+    expect(fraseDoResumo({ ativos: 1, atrasados: 0, aReceber: 0 }, reais)).toBe("1 pedido ativo");
+    expect(fraseDoResumo({ ativos: 0, atrasados: 0, aReceber: 0 }, reais)).toBe("Nenhum pedido ativo");
   });
 
-  test("prazo: a data prometida manda; sem ela, a idade do pedido", () => {
+  test("origem do pedido para o selo do cartão", () => {
+    expect(origemDoPedido({ source: "pdv" })).toBe("Caixa");
+    expect(origemDoPedido({ source: "digital" })).toBe("Loja online");
+    expect(origemDoPedido({ source: "marketplace", marketplace_platform: "shopee" })).toBe("Shopee");
+    expect(origemDoPedido({ source: "marketplace", marketplace_platform: "mercado_livre" })).toBe("Mercado Livre");
+    expect(origemDoPedido({})).toBeNull();
+  });
+
+  test("prazo: a data prometida manda, com o texto do mockup; sem ela, a idade do pedido", () => {
     const agora = Date.parse("2026-11-16T15:00:00.000Z");
-    expect(prazoDoCartao({ created_at: "2026-11-16T10:00:00.000Z" }, agora)).toEqual({ texto: "há 5h", tom: "tranquilo" });
-    expect(prazoDoCartao({ created_at: "2026-11-14T15:00:00.000Z" }, agora)).toEqual({ texto: "há 2d", tom: "atencao" });
-    expect(prazoDoCartao({ created_at: "2026-11-06T15:00:00.000Z" }, agora)).toEqual({ texto: "há 10d", tom: "atrasado" });
+    expect(prazoDoCartao({ created_at: "2026-11-16T10:00:00.000Z" }, agora)).toEqual({ texto: "Chegou hoje", tom: "tranquilo" });
+    expect(prazoDoCartao({ created_at: "2026-11-14T15:00:00.000Z" }, agora)).toEqual({ texto: "Há 2 dias", tom: "tranquilo" });
+    expect(prazoDoCartao({ created_at: "2026-11-06T15:00:00.000Z" }, agora)).toEqual({ texto: "Há 10 dias", tom: "atencao" });
     const hoje = new Date();
     const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    expect(prazoDoCartao({ created_at: "2026-11-01T00:00:00Z", promised_date: iso(hoje) })).toEqual({ texto: "entrega hoje", tom: "atrasado" });
-    const ontem = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 1);
-    expect(prazoDoCartao({ created_at: "2026-11-01T00:00:00Z", promised_date: iso(ontem) })).toEqual({ texto: "atrasou 1d", tom: "atrasado" });
+    const dia = (n: number) => iso(new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + n));
+    expect(prazoDoCartao({ created_at: "2026-11-01T00:00:00Z", promised_date: dia(0) })).toEqual({ texto: "Entrega hoje", tom: "atencao" });
+    expect(prazoDoCartao({ created_at: "2026-11-01T00:00:00Z", promised_date: dia(-1) })).toEqual({ texto: "Atrasou 1 dia", tom: "atrasado" });
+    expect(prazoDoCartao({ created_at: "2026-11-01T00:00:00Z", promised_date: dia(-3) })).toEqual({ texto: "Atrasou 3 dias", tom: "atrasado" });
+    expect(prazoDoCartao({ created_at: "2026-11-01T00:00:00Z", promised_date: dia(6) })).toEqual({ texto: "Entrega em 6 dias", tom: "tranquilo" });
+    expect(prazoDoCartao({ created_at: "2026-11-01T00:00:00Z", promised_date: dia(3) })).toEqual({ texto: "Entrega em 3 dias", tom: "atencao" });
   });
 });
 
@@ -184,7 +199,7 @@ describe("corte pela data de ativação", () => {
   });
 
   test("fica o que alguém já moveu de etapa, mesmo antigo", () => {
-    for (const etapa of ["approved", "in_production", "ready", "delivered", "cancelled"]) {
+    for (const etapa of ["approved", "in_production", "ready"]) {
       expect(ehAntigoDaAtivacao({ ...antigo, studio_production_status: etapa }, ATIVADO)).toBe(false);
     }
   });
@@ -249,15 +264,40 @@ describe("render do quadro", () => {
     arvore.unmount();
   });
 
-  test("desktop: colunas lado a lado, sem Personalização nem Cancelados vazios", async () => {
+  test("desktop: as cinco colunas do mockup, lado a lado; entregue não é coluna", async () => {
     const arvore = await montarQuadro(TRES);
     expect(tem(arvore, "producao-colunas")).toBe(true);
     expect(tem(arvore, "producao-uma-etapa")).toBe(false);
-    for (const k of ["pending_art", "approved", "in_production", "ready", "delivered"]) {
+    for (const k of ["awaiting_customization", "pending_art", "approved", "in_production", "ready"]) {
       expect(tem(arvore, `producao-coluna-${k}`)).toBe(true);
     }
-    expect(tem(arvore, "producao-coluna-awaiting_customization")).toBe(false);
+    expect(tem(arvore, "producao-coluna-delivered")).toBe(false);
     expect(tem(arvore, "producao-coluna-cancelled")).toBe(false);
+    // O pedido entregue saiu da Fila.
+    expect(tem(arvore, "producao-cartao-c1")).toBe(false);
+    arvore.unmount();
+  });
+
+  test("cabeçalho: pedidos ativos, atrasados e quanto falta receber", async () => {
+    const arvore = await montarQuadro([
+      pedido("x1", { promised_date: "2020-01-01", balance_installment_id: "p1", balance_amount: 620 }),
+      pedido("x2", { studio_production_status: "ready" }),
+    ]);
+    const texto = JSON.stringify(arvore.toJSON());
+    expect(texto).toContain("2 pedidos ativos");
+    expect(texto).toContain("1 atrasado");
+    expect(texto).toContain("a receber");
+    arvore.unmount();
+  });
+
+  test("cartão: origem, prazo e saldo, como no mockup", async () => {
+    const arvore = await montarQuadro([
+      pedido("x1", { promised_date: "2020-01-01", balance_installment_id: "p1", balance_amount: 620, source: "digital" }),
+    ]);
+    const texto = JSON.stringify(arvore.toJSON());
+    expect(texto).toContain("Loja online");
+    expect(texto).toContain("Atrasou");
+    expect(tem(arvore, "producao-saldo-x1")).toBe(true);
     arvore.unmount();
   });
 
@@ -266,9 +306,11 @@ describe("render do quadro", () => {
     expect(tem(arvore, "producao-avancar-a1")).toBe(true);
     expect(tem(arvore, "producao-aprovacao-a1")).toBe(true);
     expect(tem(arvore, "producao-avancar-b1")).toBe(true);
-    // Entregue é o fim: sem botão de avançar, e sem pedir arte fora da etapa.
-    expect(tem(arvore, "producao-avancar-c1")).toBe(false);
+    // Pedir a arte é só da etapa Aguardando arte.
     expect(tem(arvore, "producao-aprovacao-b1")).toBe(false);
+    const texto = JSON.stringify(arvore.toJSON());
+    expect(texto).toContain("Pedir aprovação da arte");
+    expect(texto).toContain("Marcar como pronto");
     arvore.unmount();
   });
 
@@ -357,6 +399,14 @@ describe("render do quadro", () => {
     arvore.unmount();
   });
 
+  test("pronto vai para entregue e o cartão sai da Fila", async () => {
+    const arvore = await montarQuadro([pedido("r1", { studio_production_status: "ready" }), pedido("a1")]);
+    await act(async () => { achar(arvore, "producao-avancar-r1")[0].props.onPress(); });
+    expect(mockUpdateStatus).toHaveBeenCalledWith("loja-1", "r1", "delivered", undefined);
+    expect(tem(arvore, "producao-cartao-r1")).toBe(false);
+    arvore.unmount();
+  });
+
   test("só pedido antigo: o quadro nasce vazio, com o recado de vazio", async () => {
     const arvore = await montarQuadro([pedido("velho", { created_at: "2026-08-01T12:00:00.000Z" })], { ativadoEm: "2026-11-12T00:00:00.000Z" });
     expect(tem(arvore, "producao-vazia")).toBe(true);
@@ -402,14 +452,15 @@ describe("a rota /personalizados/producao", () => {
     expect(FONTE_ROTA).toContain('const MOD_DA_TELA = "personalizados.producao";');
     expect(MODULE_PLAN_MAP["personalizados.producao"]).toBe("negocio");
     expect(MODULOS_OCULTOS.has("personalizados.producao")).toBe(false);
-    // As outras três telas ainda não nasceram: continuam ocultas.
-    for (const m of ["personalizados.orcamentos", "personalizados.insumos", "personalizados.galeria"]) {
+    // As outras duas telas do menu ainda não nasceram: continuam ocultas.
+    for (const m of ["personalizados.orcamentos", "personalizados.insumos"]) {
       expect(MODULOS_OCULTOS.has(m)).toBe(true);
     }
   });
 
-  test("loja com a frente ligada: abre o quadro e refaz /auth/me", async () => {
+  test("loja com a frente ligada: abre a Fila de produção e refaz /auth/me", async () => {
     const arvore = await montarRota();
+    expect(achar(arvore, "hero")[0].props.accessibilityLabel).toBe("Fila de produção");
     expect(tem(arvore, "personalizados-producao")).toBe(true);
     expect(tem(arvore, "producao-quadro")).toBe(true);
     expect(tem(arvore, "redirect")).toBe(false);
@@ -423,6 +474,7 @@ describe("a rota /personalizados/producao", () => {
     const arvore = await montarRota();
     const textos = JSON.stringify(arvore.toJSON());
     expect(textos).toContain("Escolha uma loja");
+    expect(textos).toContain("A Produção mostra uma loja por vez.");
     expect(textos).toContain("Escolher loja");
     expect(tem(arvore, "personalizados-producao")).toBe(false);
     expect(mockListOrders).not.toHaveBeenCalled();

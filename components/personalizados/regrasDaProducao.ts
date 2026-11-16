@@ -1,17 +1,17 @@
 // ============================================================
-// AURA. — Personalizados: regras do quadro de Produção (p-129)
+// AURA. — Personalizados: regras da Fila de produção (p-129)
 //
-// O quadro de Produção do shell Negócio (/personalizados/producao). Lê a
-// mesma rota do quadro do Studio (GET /companies/:id/studio/orders, sobre a
-// view studio_orders) e grava pela mesma rota (PATCH production-status).
-// Aqui ficam só as regras, sem tela: etapas, próxima etapa, agrupamento, o
-// corte pela data de ativação e a etapa que o celular abre.
+// A Fila de produção do shell Negócio (/personalizados/producao). Lê a mesma
+// rota do quadro do Studio (GET /companies/:id/studio/orders, sobre a view
+// studio_orders) e grava pela mesma rota (PATCH production-status). Aqui
+// ficam só as regras, sem tela.
 //
-// Diferenças de propósito para o quadro do Studio:
-//   - sem arrastar: no Negócio o cartão anda por botão, sempre visível;
+// Desenho: mockup p-131, aprovado em 16/11/2026.
+//   - cinco etapas no quadro: Aguardando personalização, Aguardando arte,
+//     Aprovado, Em produção e Pronto. Entregue e cancelado saem da Fila;
+//   - sem arrastar: o cartão anda pelo botão, sempre visível;
 //   - no celular, uma etapa por vez;
-//   - "Aguardando personalização" (pedido de marketplace) e "Cancelados" só
-//     aparecem quando têm pedido. Loja sem marketplace não vê coluna vazia.
+//   - cabeçalho com pedidos ativos, atrasados e quanto falta receber.
 // ============================================================
 import type { StudioOrder, StudioProductionStatus } from "@/services/studioApi";
 import type { StudioIntent } from "@/constants/studio-semantic";
@@ -22,20 +22,18 @@ export type Etapa = {
   label: string;
   /** Rótulo curto para o seletor de etapa do celular. */
   curto: string;
-  icon: string;
   intent: StudioIntent;
-  /** Texto do botão que leva o cartão para a próxima etapa ("" = fim). */
+  /** Texto do botão que leva o cartão para a próxima etapa. */
   avancar: string;
 };
 
+/** As etapas do quadro, na ordem do mockup. */
 export const ETAPAS: Etapa[] = [
-  { key: "awaiting_customization", label: "Aguardando personalização", curto: "Personalização", icon: "message-circle", intent: "waiting",    avancar: "Enviar para a arte" },
-  { key: "pending_art",            label: "Aguardando arte",           curto: "Arte",           icon: "alert-circle",   intent: "art",        avancar: "Marcar como aprovado" },
-  { key: "approved",               label: "Aprovado",                  curto: "Aprovado",       icon: "check",          intent: "approved",   avancar: "Iniciar produção" },
-  { key: "in_production",          label: "Em produção",               curto: "Produção",       icon: "clock",          intent: "production", avancar: "Marcar como pronto" },
-  { key: "ready",                  label: "Pronto",                    curto: "Pronto",         icon: "package",        intent: "ready",      avancar: "Marcar como entregue" },
-  { key: "delivered",              label: "Entregue",                  curto: "Entregue",       icon: "check-circle",   intent: "delivered",  avancar: "" },
-  { key: "cancelled",              label: "Cancelados",                curto: "Cancelados",     icon: "x-circle",       intent: "danger",     avancar: "" },
+  { key: "awaiting_customization", label: "Aguardando personalização", curto: "Personalização", intent: "waiting",    avancar: "Enviar para a arte" },
+  { key: "pending_art",            label: "Aguardando arte",           curto: "Arte",           intent: "art",        avancar: "Marcar como aprovado" },
+  { key: "approved",               label: "Aprovado",                  curto: "Aprovado",       intent: "approved",   avancar: "Iniciar produção" },
+  { key: "in_production",          label: "Em produção",               curto: "Produção",       intent: "production", avancar: "Marcar como pronto" },
+  { key: "ready",                  label: "Pronto",                    curto: "Pronto",         intent: "ready",      avancar: "Marcar como entregue" },
 ];
 
 export const PROXIMA_ETAPA: Record<StudioProductionStatus, StudioProductionStatus | null> = {
@@ -48,23 +46,22 @@ export const PROXIMA_ETAPA: Record<StudioProductionStatus, StudioProductionStatu
   cancelled: null,
 };
 
-/** Etapas que só entram no quadro quando têm pedido. */
-const SO_COM_PEDIDO: ReadonlySet<StudioProductionStatus> = new Set<StudioProductionStatus>([
-  "awaiting_customization",
-  "cancelled",
-]);
-
-/** Etapas que contam como trabalho em aberto. */
-const EM_ABERTO: StudioProductionStatus[] = ["awaiting_customization", "pending_art", "approved", "in_production", "ready"];
+const DO_QUADRO = new Set<string>(ETAPAS.map((e) => e.key));
 
 export function etapaDe(o: Pick<StudioOrder, "studio_production_status">): StudioProductionStatus {
   return (o.studio_production_status || "pending_art") as StudioProductionStatus;
 }
 
-export type PorEtapa = Record<StudioProductionStatus, StudioOrder[]>;
+/** Pedido ativo = está numa das cinco etapas do quadro. */
+export function ehAtivo(o: Pick<StudioOrder, "studio_production_status">): boolean {
+  return DO_QUADRO.has(etapaDe(o));
+}
 
+export type PorEtapa = Record<string, StudioOrder[]>;
+
+/** Agrupa só os pedidos ativos. Entregue, cancelado e etapa desconhecida ficam fora. */
 export function agruparPorEtapa(pedidos: StudioOrder[]): PorEtapa {
-  const grupos = {} as PorEtapa;
+  const grupos: PorEtapa = {};
   for (const e of ETAPAS) grupos[e.key] = [];
   for (const o of pedidos) {
     const k = etapaDe(o);
@@ -73,21 +70,57 @@ export function agruparPorEtapa(pedidos: StudioOrder[]): PorEtapa {
   return grupos;
 }
 
-export function etapasVisiveis(grupos: PorEtapa): Etapa[] {
-  return ETAPAS.filter((e) => !SO_COM_PEDIDO.has(e.key) || grupos[e.key].length > 0);
-}
-
-export function emAberto(grupos: PorEtapa): number {
-  return EM_ABERTO.reduce((soma, k) => soma + grupos[k].length, 0);
-}
-
 /**
- * A etapa que o celular abre: a primeira com trabalho em aberto. Sem nada
- * em aberto, "Aguardando arte" (é onde o próximo pedido vai chegar).
+ * A etapa que o celular abre: a primeira com pedido. Sem pedido nenhum,
+ * "Aguardando arte" (é onde o próximo pedido vai chegar).
  */
 export function etapaInicialNoCelular(grupos: PorEtapa): StudioProductionStatus {
-  const comPedido = EM_ABERTO.find((k) => grupos[k].length > 0);
-  return comPedido || "pending_art";
+  const comPedido = ETAPAS.find((e) => grupos[e.key].length > 0);
+  return comPedido ? comPedido.key : "pending_art";
+}
+
+// ── Cabeçalho ────────────────────────────────────────────────────────────
+
+export type ResumoDaFila = { ativos: number; atrasados: number; aReceber: number };
+
+export function resumoDaFila(pedidos: StudioOrder[]): ResumoDaFila {
+  let ativos = 0;
+  let atrasados = 0;
+  let aReceber = 0;
+  for (const o of pedidos) {
+    if (!ehAtivo(o)) continue;
+    ativos += 1;
+    const dias = diasAtePrazo(o.promised_date);
+    if (dias !== null && dias < 0) atrasados += 1;
+    const saldo = Number(o.balance_amount);
+    if (o.balance_amount != null && Number.isFinite(saldo) && saldo > 0) aReceber += saldo;
+  }
+  return { ativos, atrasados, aReceber: Math.round(aReceber * 100) / 100 };
+}
+
+const plural = (n: number, um: string, varios: string) => (n === 1 ? um : varios);
+
+/** "12 pedidos ativos · 2 atrasados · R$ 1.980,00 a receber" */
+export function fraseDoResumo(r: ResumoDaFila, reais: (v: number) => string): string {
+  if (r.ativos === 0) return "Nenhum pedido ativo";
+  const partes = [`${r.ativos} ${plural(r.ativos, "pedido ativo", "pedidos ativos")}`];
+  if (r.atrasados > 0) partes.push(`${r.atrasados} ${plural(r.atrasados, "atrasado", "atrasados")}`);
+  if (r.aReceber > 0) partes.push(`${reais(r.aReceber)} a receber`);
+  return partes.join(" · ");
+}
+
+// ── Origem do pedido ─────────────────────────────────────────────────────
+
+/** De onde o pedido veio, para o selo do cartão. */
+export function origemDoPedido(o: Pick<StudioOrder, "source" | "marketplace_platform">): string | null {
+  if (o.source === "pdv") return "Caixa";
+  if (o.source === "digital") return "Loja online";
+  if (o.source === "marketplace") {
+    if (o.marketplace_platform === "mercado_livre") return "Mercado Livre";
+    if (o.marketplace_platform === "shopee") return "Shopee";
+    return "Marketplace";
+  }
+  return null;
 }
 
 // ── Corte pela data de ativação ──────────────────────────────────────────
@@ -95,11 +128,12 @@ export function etapaInicialNoCelular(grupos: PorEtapa): StudioProductionStatus 
 // O trigger trg_sales_studio_status marca studio_production_status =
 // 'pending_art' em QUALQUER venda do Caixa com produto personalizável, em
 // qualquer empresa, com a frente ligada ou não. Uma loja que já vendia
-// personalizável pelo Caixa e liga a frente abriria o quadro com meses de
+// personalizável pelo Caixa e liga a frente abriria a Fila com meses de
 // vendas antigas paradas em "Aguardando arte", todas já entregues na vida
-// real.
+// real. O mockup: "Pedidos antigos de antes de ligar a frente não entram na
+// Fila."
 //
-// Regra: sai do quadro o pedido que é do Caixa (source 'pdv'), está em
+// Regra: sai da Fila o pedido que é do Caixa (source 'pdv'), está em
 // "Aguardando arte" e foi criado ANTES da ativação. Fica tudo o que alguém
 // já moveu de etapa (prova de que é trabalho de verdade), tudo o que veio da
 // loja online ou de marketplace, e tudo o que foi criado depois.
@@ -136,14 +170,10 @@ export function semAntigosDaAtivacao(pedidos: StudioOrder[], ativadoEm: string |
 
 export type TomDoPrazo = "tranquilo" | "atencao" | "atrasado";
 
-function diaEMes(iso: string): string {
-  const [, m, d] = String(iso).slice(0, 10).split("-");
-  return d && m ? `${d}/${m}` : String(iso);
-}
-
 /**
- * O prazo vem da data prometida. Sem data combinada, cai na idade do pedido.
- * Mesma leitura do quadro do Studio (app/studio/(estudio)/producao.tsx).
+ * O prazo vem da data prometida, com o texto do mockup ("Atrasou 1 dia",
+ * "Entrega hoje", "Entrega em 6 dias"). Sem data combinada, a idade do
+ * pedido.
  */
 export function prazoDoCartao(
   o: Pick<StudioOrder, "created_at"> & { promised_date?: string | null },
@@ -151,16 +181,15 @@ export function prazoDoCartao(
 ): { texto: string; tom: TomDoPrazo } {
   const dias = diasAtePrazo(o.promised_date);
   if (dias !== null && o.promised_date) {
-    if (dias < 0) return { texto: `atrasou ${Math.abs(dias)}d`, tom: "atrasado" };
-    if (dias === 0) return { texto: "entrega hoje", tom: "atrasado" };
-    if (dias === 1) return { texto: "entrega amanhã", tom: "atencao" };
-    return { texto: `entrega ${diaEMes(o.promised_date)}`, tom: dias <= 3 ? "atencao" : "tranquilo" };
+    if (dias < 0) return { texto: `Atrasou ${Math.abs(dias)} ${plural(Math.abs(dias), "dia", "dias")}`, tom: "atrasado" };
+    if (dias === 0) return { texto: "Entrega hoje", tom: "atencao" };
+    if (dias === 1) return { texto: "Entrega amanhã", tom: "atencao" };
+    return { texto: `Entrega em ${dias} dias`, tom: dias <= 3 ? "atencao" : "tranquilo" };
   }
   const horas = (agora - Date.parse(o.created_at)) / 3600000;
-  if (!Number.isFinite(horas) || horas < 0) return { texto: "agora", tom: "tranquilo" };
-  if (horas < 24) return { texto: `há ${Math.round(horas)}h`, tom: "tranquilo" };
+  if (!Number.isFinite(horas) || horas < 24) return { texto: "Chegou hoje", tom: "tranquilo" };
   const d = Math.round(horas / 24);
-  return { texto: `há ${d}d`, tom: horas < 72 ? "atencao" : "atrasado" };
+  return { texto: `Há ${d} ${plural(d, "dia", "dias")}`, tom: horas < 72 ? "tranquilo" : "atencao" };
 }
 
 /** Largura abaixo da qual o quadro mostra uma etapa por vez. */

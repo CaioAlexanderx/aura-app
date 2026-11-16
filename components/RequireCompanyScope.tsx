@@ -27,6 +27,7 @@ export function RequireCompanyScope({
   context,
   actionLabel,
   titulo,
+  descricao,
   rotuloDoBotao,
   children,
 }: {
@@ -34,9 +35,11 @@ export function RequireCompanyScope({
   context: string;
   /** string visivel no picker (ex: "abrir o caixa", "emitir nota fiscal") */
   actionLabel: string;
-  /** 16/11/2026 (p-129): título e botão do recado, para a tela que fala em
-   *  "loja". Sem eles, o texto de sempre. */
+  /** 16/11/2026 (p-129): título, texto e botão do recado, para a tela que
+   *  tem desenho próprio (mockup p-131, "Escolha uma loja"). Sem eles, o
+   *  texto de sempre. */
   titulo?: string;
+  descricao?: string;
   rotuloDoBotao?: string;
   children: React.ReactNode;
 }) {
@@ -95,7 +98,7 @@ export function RequireCompanyScope({
       </View>
       <Text style={s.title}>{titulo || "Esta tela é por empresa"}</Text>
       <Text style={s.desc}>
-        Você está em modo consolidado (todas as empresas). Para {actionLabel}, é preciso escolher uma empresa específica.
+        {descricao || `Você está em modo consolidado (todas as empresas). Para ${actionLabel}, é preciso escolher uma empresa específica.`}
       </Text>
       <Pressable onPress={() => setPickerOpen(true)} style={s.cta}>
         <Text style={s.ctaText}>{rotuloDoBotao || "Escolher empresa"}</Text>
