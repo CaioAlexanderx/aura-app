@@ -77,6 +77,14 @@ jest.mock("@/stores/auth", () => ({
   useAuthStore: (sel?: any) => (typeof sel === "function" ? sel(mockAuth.estado) : mockAuth.estado),
 }));
 jest.mock("@/hooks/usePdvSettings", () => ({ usePdvSettings: () => ({ settings: mockPdv.settings, isLoading: mockPdv.isLoading }) }));
+// A trava geral (PERSONALIZADOS_LIBERADO, Caio 16/11) fica desligada no
+// código. Aqui ela é ligada de propósito para testar a tela; o teste "trava
+// desligada" prova que, como está no código, ninguém chega à Fila.
+const mockTrava = { liberado: true };
+jest.mock("@/utils/personalizados", () => {
+  const real = jest.requireActual("@/utils/personalizados");
+  return { ...real, personalizadosAtivo: (s: any, v: any) => real.personalizadosAtivo(s, v, mockTrava.liberado) };
+});
 jest.mock("@/services/api", () => ({ request: jest.fn() }));
 jest.mock("@tanstack/react-query", () => ({ useQuery: jest.fn() }));
 jest.mock("@/hooks/useVisibleModules", () => ({
@@ -439,6 +447,7 @@ describe("a rota /personalizados/producao", () => {
     mockVisiveis.prontos = true;
     mockPdv.settings = { studio_enabled: true };
     mockPdv.isLoading = false;
+    mockTrava.liberado = true;
   });
 
   async function montarRota() {
@@ -490,6 +499,15 @@ describe("a rota /personalizados/producao", () => {
     // Sem cadeado nem convite de upgrade no que a tela desenha (comentários fora).
     const semComentario = FONTE_ROTA.split(/\r?\n/).filter((l) => !l.trim().startsWith("//")).join(" ");
     expect(semComentario).not.toMatch(/upgrade|cadeado|"lock"|Assine|\/planos/i);
+    arvore.unmount();
+  });
+
+  test("trava desligada (como está no código): ninguém chega à Fila, mesmo com tudo ligado", async () => {
+    mockTrava.liberado = false;
+    const arvore = await montarRota();
+    expect(achar(arvore, "redirect")[0].props.accessibilityLabel).toBe("/");
+    expect(tem(arvore, "producao-quadro")).toBe(false);
+    expect(mockListOrders).not.toHaveBeenCalled();
     arvore.unmount();
   });
 
