@@ -877,6 +877,7 @@ export function TrocaModal({
               newValue={newValue}
               netAmount={netAmount}
               paymentSplits={paymentSplits}
+              pdvSettings={pdvDaLoja as any}
               onClose={onClose}
               onNew={() => {
                 setStep(1);
