@@ -66,6 +66,9 @@ export type OrcamentoModalProps = {
   lojas: LojaDoOrcamento[];
   consolidado?: boolean;
   logoDaLoja?: string | null;
+  /** 17/11/2026 (p-175): destino do "Ver pedido". Sem ele: /studio/pedidos/<id>.
+   *  No shell Negócio o pedido abre na Fila de produção. */
+  rotaDoPedido?: (orderId: string) => string;
   onClose: () => void;
   /** O orçamento mudou (criado, salvo, enviado, aprovado): a lista recarrega. */
   onMudou?: (q: StudioQuote) => void;
@@ -124,7 +127,7 @@ export function OrcamentoModal(props: OrcamentoModalProps) {
   );
 }
 
-function Painel({ cid: cidInicial, quoteId, lojas, consolidado, logoDaLoja, onClose, onMudou }: OrcamentoModalProps) {
+function Painel({ cid: cidInicial, quoteId, lojas, consolidado, logoDaLoja, rotaDoPedido, onClose, onMudou }: OrcamentoModalProps) {
   const router = useRouter();
   const { tokens: t, isDark } = useStudioTheme();
   const { width } = useWindowDimensions();
@@ -360,7 +363,7 @@ function Painel({ cid: cidInicial, quoteId, lojas, consolidado, logoDaLoja, onCl
       case "enviar": enviar(); return;
       case "ajuste": setAjusteAberto(true); return;
       case "ver_pedido":
-        if (quote?.order_id) { onClose(); router.push(`/studio/pedidos/${quote.order_id}` as any); }
+        if (quote?.order_id) { onClose(); router.push((rotaDoPedido ? rotaDoPedido(quote.order_id) : `/studio/pedidos/${quote.order_id}`) as any); }
         return;
       case "aprovar":
         setConfirmacao({

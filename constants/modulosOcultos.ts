@@ -47,8 +47,8 @@ export const MODULOS_OCULTOS: ReadonlySet<string> = new Set<string>([
   // estão declarados no NAV, com plano e permissão, mas a tela de cada um
   // ainda não nasceu em app/(tabs)/personalizados. Item sem tela não vai ao
   // menu: cada linha sai daqui no PR que criar a tela dela. A Produção saiu
-  // no p-129 (app/(tabs)/personalizados/producao.tsx).
-  'personalizados.orcamentos',
+  // no p-129 (app/(tabs)/personalizados/producao.tsx) e os Orçamentos 3D no
+  // p-175 (app/(tabs)/personalizados/orcamentos.tsx).
   'personalizados.insumos',
 ]);
 
