@@ -3,6 +3,8 @@
 // A1: shell no padrão TrocaModal, passo 1 (fornecedor), Esc, chave criada
 //     uma vez ao abrir, atalho "Tem o arquivo da nota?".
 // A2: "Novo fornecedor" dentro do passo (FornecedorFormSheet com noPasso).
+// A3: passo 2 com as três origens e os avisos (arquivo errado, PDF, nota de
+//     outro CNPJ, nota repetida).
 // ============================================================
 import React from "react";
 import renderer, { act } from "react-test-renderer";
@@ -59,7 +61,7 @@ import { TEXTOS_CHEGOU as T } from "@/components/screens/estoque/chegou/textosCh
 import { XML_ALFA } from "./fixtures/chegouNotas";
 
 const ALFA = {
-  id: "f-alfa", company_id: "c1", name: "Distribuidora Alfa", cnpj: "12345678000190", contact_name: "Marcos",
+  id: "f-alfa", company_id: "c1", name: "Distribuidora Alfa", cnpj: "11222333000181", contact_name: "Marcos",
   phone: null, email: null, notes: null, is_active: true, product_count: 38, last_delivery_at: "2026-11-12T15:00:00Z",
 };
 const BRAS = {
@@ -282,5 +284,139 @@ describe("A2 · novo fornecedor dentro do passo", () => {
     await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); });
     expect(tem(tree, "fornecedor-form-no-passo")).toBe(false);
     expect(tem(tree, "chegou-passo-1")).toBe(true);
+  });
+});
+
+describe("A3 · passo 2", () => {
+  async function irAoPasso2(tree: any, fornecedorId: string | null) {
+    if (fornecedorId) {
+      await tocar(tree, "chegou-fornecedor-" + fornecedorId);
+      await tocar(tree, "chegou-continuar");
+    } else {
+      await tocar(tree, "chegou-sem-fornecedor");
+    }
+  }
+
+  test("as três origens; só a nota funciona por enquanto; rodapé do PDF", async () => {
+    const { tree } = await montar();
+    await irAoPasso2(tree, "f-alfa");
+    const t = texto(tree);
+    expect(t).toContain(T.pergunta2);
+    expect(t).toContain(T.origemNotaTitulo);
+    expect(t).toContain(T.origemPlanilhaTitulo);
+    expect(t).toContain(T.origemDigitarTitulo);
+    expect(desabilitado(tree, "chegou-origem-nota-botao")).toBe(false);
+    expect(desabilitado(tree, "chegou-origem-planilha-botao")).toBe(true);
+    expect(desabilitado(tree, "chegou-origem-digitar-botao")).toBe(true);
+    expect(rodape(tree)).toContain(T.rodapePdf);
+    expect(desabilitado(tree, "chegou-continuar")).toBe(true);
+  });
+
+  test("nota do mesmo fornecedor: lida, sem pergunta, Continuar livre", async () => {
+    mockArquivo = { name: "nota.xml", conteudo: XML_ALFA };
+    const { tree } = await montar();
+    await irAoPasso2(tree, "f-alfa");
+    await tocar(tree, "chegou-origem-nota-botao");
+    expect(texto(tree)).toContain(T.notaLida("004512", "Distribuidora Alfa", 3));
+    expect(tem(tree, "chegou-outro-cnpj")).toBe(false);
+    expect(desabilitado(tree, "chegou-continuar")).toBe(false);
+    await tocar(tree, "chegou-continuar");
+    expect(texto(tree)).toContain(T.passoFeitoNota("004512"));
+  });
+
+  test("nota de outro CNPJ: pergunta e nunca troca sozinho; 'Manter' segue com o escolhido", async () => {
+    mockArquivo = { name: "nota.xml", conteudo: XML_ALFA };
+    const { tree } = await montar();
+    await irAoPasso2(tree, "f-bras");
+    await tocar(tree, "chegou-origem-nota-botao");
+    const t = texto(tree);
+    expect(t).toContain(T.outroCnpjTitulo("Distribuidora Alfa", "Distribuidora Brás"));
+    expect(t).toContain(T.outroCnpjDetalhe("11.222.333/0001-81", "004512", 3));
+    expect(t).toContain(T.usarEmitente("Distribuidora Alfa"));
+    expect(t).toContain(T.manterFornecedor("Distribuidora Brás"));
+    expect(desabilitado(tree, "chegou-continuar")).toBe(true);
+    await tocar(tree, "chegou-manter-fornecedor");
+    expect(tem(tree, "chegou-outro-cnpj")).toBe(false);
+    expect(desabilitado(tree, "chegou-continuar")).toBe(false);
+    expect(texto(tree)).toContain(T.passoFeitoFornecedor("Distribuidora Brás"));
+    // Voltou e trocou o fornecedor: a pergunta volta para a nova escolha.
+    await tocar(tree, "chegou-voltar");
+    await tocar(tree, "chegou-sem-fornecedor");
+    expect(tem(tree, "chegou-outro-cnpj")).toBe(true);
+    expect(texto(tree)).toContain(T.semFornecedorLigar("Distribuidora Alfa"));
+  });
+
+  test("nota de outro CNPJ: 'Usar [emitente]' troca só com o clique", async () => {
+    mockArquivo = { name: "nota.xml", conteudo: XML_ALFA };
+    const { tree } = await montar();
+    await irAoPasso2(tree, "f-bras");
+    await tocar(tree, "chegou-origem-nota-botao");
+    await tocar(tree, "chegou-usar-emitente");
+    expect(tem(tree, "chegou-outro-cnpj")).toBe(false);
+    expect(texto(tree)).toContain(T.passoFeitoFornecedor("Distribuidora Alfa"));
+  });
+
+  test("sem fornecedor e emitente sem cadastro: 'Cadastrar [emitente]' abre o novo já preenchido", async () => {
+    mockQueries = { suppliers: { data: { suppliers: [BRAS], total: 1 }, isLoading: false, isError: false } };
+    mockArquivo = { name: "nota.xml", conteudo: XML_ALFA };
+    mockCreate.mockResolvedValue({ ...ALFA, id: "f-nova-alfa" });
+    const { tree } = await montar();
+    await irAoPasso2(tree, null);
+    await tocar(tree, "chegou-origem-nota-botao");
+    expect(texto(tree)).toContain(T.semFornecedorLigar("Distribuidora Alfa"));
+    expect(texto(tree)).toContain(T.cadastrarEmitente("Distribuidora Alfa"));
+    await tocar(tree, "chegou-cadastrar-emitente");
+    expect(porId(tree, "fornecedor-form-nome")[0].props.value).toBe("Distribuidora Alfa");
+    expect(porId(tree, "fornecedor-form-cnpj")[0].props.value).toBe("11.222.333/0001-81");
+    await tocar(tree, "fornecedor-form-salvar");
+    expect(tem(tree, "chegou-passo-2")).toBe(true);
+    expect(tem(tree, "chegou-outro-cnpj")).toBe(false);
+    expect(desabilitado(tree, "chegou-continuar")).toBe(false);
+  });
+
+  test("PDF ou arquivo errado: aviso gentil e Continuar travado", async () => {
+    mockArquivo = { name: "danfe.pdf", conteudo: "%PDF-1.7" };
+    const { tree } = await montar();
+    await irAoPasso2(tree, "f-alfa");
+    await tocar(tree, "chegou-origem-nota-botao");
+    const t = texto(tree);
+    expect(t).toContain(T.arquivoErradoTitulo);
+    expect(t).toContain(T.arquivoErradoTexto);
+    expect(desabilitado(tree, "chegou-continuar")).toBe(true);
+    // Escolher outro arquivo, agora o certo.
+    mockArquivo = { name: "nota.xml", conteudo: XML_ALFA };
+    await tocar(tree, "chegou-outro-arquivo");
+    expect(tem(tree, "chegou-arquivo-errado")).toBe(false);
+    expect(desabilitado(tree, "chegou-continuar")).toBe(false);
+  });
+
+  test("nota repetida: avisa, mostra aquela entrada e só segue com 'Seguir mesmo assim'", async () => {
+    mockQueries["stock-receipts-nota"] = {
+      data: {
+        receipts: [{ id: "r1", created_at: "2026-11-14T17:30:00Z", invoice_number: "4512", nfe_key: null, origin: "nota", supplier_id: "f-alfa", supplier_name: "Distribuidora Alfa", lines: 18 }],
+        legacy: [],
+      },
+      isLoading: false,
+    };
+    mockArquivo = { name: "nota.xml", conteudo: XML_ALFA };
+    const { tree } = await montar();
+    await irAoPasso2(tree, "f-alfa");
+    await tocar(tree, "chegou-origem-nota-botao");
+    expect(texto(tree)).toContain(T.repetidaTitulo("004512", "Distribuidora Alfa", "14/11"));
+    expect(desabilitado(tree, "chegou-continuar")).toBe(true);
+    await tocar(tree, "chegou-ver-entrada");
+    expect(texto(tree)).toContain(T.repetidaDetalhe("14/11", "14:30", 18));
+    await tocar(tree, "chegou-seguir-mesmo-assim");
+    expect(tem(tree, "chegou-nota-repetida")).toBe(false);
+    expect(desabilitado(tree, "chegou-continuar")).toBe(false);
+  });
+
+  test("consulta da nota repetida que falhou não trava", async () => {
+    mockQueries["stock-receipts-nota"] = { data: undefined, isLoading: false, isError: true };
+    mockArquivo = { name: "nota.xml", conteudo: XML_ALFA };
+    const { tree } = await montar();
+    await irAoPasso2(tree, "f-alfa");
+    await tocar(tree, "chegou-origem-nota-botao");
+    expect(desabilitado(tree, "chegou-continuar")).toBe(false);
   });
 });
