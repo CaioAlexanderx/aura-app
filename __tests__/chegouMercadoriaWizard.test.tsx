@@ -9,6 +9,7 @@
 //      enquanto falta decidir (pendência 5).
 // A4b: painéis da linha (produto novo, ligar, trocar, grade) e a margem dos novos.
 // A7: gravar (corpo, chave, erros do servidor), Pronto e o desvio do Matcon.
+// A5: origem "Digitar os itens".
 // ============================================================
 import React from "react";
 import renderer, { act } from "react-test-renderer";
@@ -318,7 +319,7 @@ describe("A3 · passo 2", () => {
     }
   }
 
-  test("as três origens; só a nota funciona por enquanto; rodapé do PDF", async () => {
+  test("as três origens; nota e digitar funcionam; rodapé do PDF", async () => {
     const { tree } = await montar();
     await irAoPasso2(tree, "f-alfa");
     const t = texto(tree);
@@ -328,7 +329,7 @@ describe("A3 · passo 2", () => {
     expect(t).toContain(T.origemDigitarTitulo);
     expect(desabilitado(tree, "chegou-origem-nota-botao")).toBe(false);
     expect(desabilitado(tree, "chegou-origem-planilha-botao")).toBe(true);
-    expect(desabilitado(tree, "chegou-origem-digitar-botao")).toBe(true);
+    expect(desabilitado(tree, "chegou-origem-digitar-botao")).toBe(false);
     expect(rodape(tree)).toContain(T.rodapePdf);
     expect(desabilitado(tree, "chegou-continuar")).toBe(true);
   });
@@ -773,5 +774,81 @@ describe("A7 · parte não entrou (Passo4Pronto)", () => {
     await tocar(tree, "chegou-falha-baixar");
     expect(onRepetir).toHaveBeenCalled();
     expect(onBaixar).toHaveBeenCalled();
+  });
+});
+
+describe("A5 · digitar os itens", () => {
+  async function irAoDigitar(props: Record<string, unknown> = {}) {
+    const r = await montar({ products: PRODUTOS_CONFERENCIA, ...props });
+    await tocar(r.tree, "chegou-fornecedor-f-alfa");
+    await tocar(r.tree, "chegou-continuar");
+    await tocar(r.tree, "chegou-origem-digitar-botao");
+    return r;
+  }
+  const travado = (tree: any) => !!porId(tree, "chegou-dar-entrada")[0].props.accessibilityState.disabled;
+  async function digitar(tree: any, id: string, v: string) {
+    await act(async () => { porId(tree, id)[0].props.onChangeText(v); });
+  }
+
+  test("busca, adiciona, diz quantos e grava com origem 'digitar'", async () => {
+    mockDarEntrada.mockResolvedValue({
+      supplier: { id: "f-alfa", name: "Distribuidora Alfa", created: false },
+      lines: [{ index: 0, product_id: "p-acetona", name: "Acetona", quantity: 5 }, { index: 1, product_id: "p-n", name: "Esponja", quantity: 2, created: true }],
+      totals: { lines: 2, products: 2, quantity: 7, total_cost: 21.5 },
+    });
+    const { tree } = await irAoDigitar();
+    expect(tem(tree, "chegou-passo-3-digitar")).toBe(true);
+    expect(texto(tree)).toContain(T.passoFeitoDigitar);
+    expect(travado(tree)).toBe(true);
+
+    await digitar(tree, "chegou-digitar-busca", "acet");
+    await tocar(tree, "chegou-digitar-produto-p-acetona");
+    expect(rodape(tree)).toContain(T.digitarFaltam(1));
+    expect(porId(tree, "chegou-digitar-linha-1-custo")[0].props.value).toBe("3,10");
+    await digitar(tree, "chegou-digitar-linha-1-quantidade", "5");
+    expect(rodape(tree)).toContain(T.digitarRodape(1, "R$ 15,50"));
+    expect(travado(tree)).toBe(false);
+
+    await digitar(tree, "chegou-digitar-busca", "esponja de maquiagem");
+    expect(texto(tree)).toContain(T.ligarVazio);
+    expect(texto(tree)).toContain(JSON.stringify(T.cadastrarComoNovo("esponja de maquiagem")).slice(1, -1));
+    await tocar(tree, "chegou-digitar-novo");
+    expect(porId(tree, "chegou-digitar-linha-2-nome")[0].props.value).toBe("esponja de maquiagem");
+    expect(travado(tree)).toBe(true);
+    await digitar(tree, "chegou-digitar-linha-2-preco", "990");
+    await digitar(tree, "chegou-digitar-linha-2-quantidade", "2");
+    await digitar(tree, "chegou-digitar-linha-2-custo", "300");
+    await digitar(tree, "chegou-digitar-nota", "88");
+    expect(travado(tree)).toBe(false);
+    expect(texto(tree)).toContain(T.darEntrada(2));
+
+    await tocar(tree, "chegou-dar-entrada");
+    const corpo = mockDarEntrada.mock.calls[0][1];
+    expect(corpo).toEqual({
+      idempotency_key: mockChaves[0], origin: "digitar", update_cost: true, supplier_id: "f-alfa", invoice_number: "88",
+      items: [
+        { product_id: "p-acetona", quantity: 5, unit_cost: 3.1 },
+        { new_product: { name: "esponja de maquiagem", price: 9.9 }, quantity: 2, unit_cost: 3 },
+      ],
+    });
+    expect(tem(tree, "chegou-pronto")).toBe(true);
+    expect(texto(tree)).toContain(T.prontoNota("88", "Distribuidora Alfa", "R$ 21,50"));
+  });
+
+  test("tirar uma linha da lista", async () => {
+    const { tree } = await irAoDigitar();
+    await digitar(tree, "chegou-digitar-busca", "acet");
+    await tocar(tree, "chegou-digitar-produto-p-acetona");
+    await tocar(tree, "chegou-digitar-linha-1-tirar");
+    expect(tem(tree, "chegou-digitar-linha-1")).toBe(false);
+  });
+
+  test("quem não vê custo: sem campo de custo nem total", async () => {
+    const { tree } = await irAoDigitar({ semCusto: true });
+    await digitar(tree, "chegou-digitar-busca", "acet");
+    await tocar(tree, "chegou-digitar-produto-p-acetona");
+    expect(tem(tree, "chegou-digitar-linha-1-custo")).toBe(false);
+    await digitar(tree, "chegou-digitar-linha-1-quantidade", "5");
+    expect(rodape(tree)).toContain(T.digitarRodape(1, null));
   });
 });

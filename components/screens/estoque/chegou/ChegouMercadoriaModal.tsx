@@ -19,7 +19,8 @@
 // (A1–A4a) o wizard existe no código e não tem porta: ninguém o vê.
 //
 // Cards: A1 (shell + passo 1), A2 (novo fornecedor dentro do passo),
-// A3 (passo 2), A4a e A4b (passo 3, conferência), A7 (gravar e Pronto).
+// A3 (passo 2), A4a e A4b (passo 3, conferência), A5 (passo 3, digitar),
+// A7 (gravar e Pronto).
 //
 // A7: "Dar entrada" grava pelo POST /products/stock-receipts com a chave
 // desta abertura (gravarEntrada.ts): divide acima de 300 linhas, repete com a
@@ -49,6 +50,8 @@ import { Passo1Fornecedor } from "./Passo1Fornecedor";
 import { Passo2Origem, type PerguntaDoCnpj } from "./Passo2Origem";
 import { Passo3Conferir } from "./Passo3Conferir";
 import { Passo4Pronto } from "./Passo4Pronto";
+import { Passo3Digitar } from "./Passo3Digitar";
+import { conferirDigitadas, type LinhaDigitada } from "./digitarRegras";
 import {
   itensDaConferencia, resolverVariantes, montarCorpos, gravarEntrada, errosPorLinha, deveRepetir,
   resumoDoPronto, csvDosQueFaltam, type RespostaDaEntrada, type ItemDaEntrada,
@@ -130,6 +133,10 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
   const [falha, setFalha] = useState<{ feitos: number; total: number } | null>(null);
   const [pendentes, setPendentes] = useState<ItemDaEntrada[]>([]);
   const [danfeMatcon, setDanfeMatcon] = useState(false);
+  // A5: de onde vêm os itens (a nota lida ou a lista digitada).
+  const [origem, setOrigem] = useState<"nota" | "digitar">("nota");
+  const [digitadas, setDigitadas] = useState<LinhaDigitada[]>([]);
+  const [numeroDigitado, setNumeroDigitado] = useState("");
 
   // Zera tudo ao fechar; a chave nasce ao abrir.
   useEffect(() => {
@@ -152,6 +159,9 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
       setFalha(null);
       setPendentes([]);
       setDanfeMatcon(false);
+      setOrigem("nota");
+      setDigitadas([]);
+      setNumeroDigitado("");
     } else {
       setChave(novaChaveDaEntrada());
     }
@@ -188,6 +198,7 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
       } else {
         setArquivoErrado(false);
         setNota(r.nota);
+        setOrigem("nota");
         // Sem escolha ainda (atalho): a Aura ACHA pelo CNPJ. Com escolha, nunca
         // troca sozinha: o passo 2 pergunta (pendência 2).
         setEscolha((atual) => {
@@ -275,6 +286,11 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
   );
   const resumo = useMemo(() => resumirConferencia(linhas, nota ? nota.totalDosProdutos : null), [linhas, nota]);
   const motivo = motivoDoRodape(linhas, resumo);
+  // A5: a lista digitada.
+  const ehDigitar = origem === "digitar";
+  const digitada = useMemo(() => conferirDigitadas(digitadas, indice.porId, semCusto), [digitadas, indice, semCusto]);
+  const podeDarEntrada = ehDigitar ? digitada.podeDarEntrada : resumo.podeDarEntrada;
+  const quantasEntram = ehDigitar ? digitada.itens.length : resumo.entram;
 
   function decidir(n: number, d: DecisaoDaLinha | null) {
     setDecisoes((atual) => {
@@ -308,9 +324,9 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
   }
 
   async function darEntrada() {
-    if (!resumo.podeDarEntrada || gravando) return;
+    if (!podeDarEntrada || gravando) return;
     setErrosDasLinhas({});
-    let itens = itensDaConferencia(linhas, semCusto);
+    let itens = ehDigitar ? digitada.itens : itensDaConferencia(linhas, semCusto);
     if (!itens.length) return;
     setGravando({ feitos: 0, total: itens.length });
     const rv = await resolverVariantes(itens, (pid) => companiesApi.variants(companyId, pid));
@@ -328,10 +344,10 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
     itens = rv.itens;
     const partes = montarCorpos(itens, {
       chave,
-      origem: "nota",
+      origem: ehDigitar ? "digitar" : "nota",
       fornecedorId,
-      numeroDaNota: nota ? nota.numero || null : null,
-      chaveDaNota: nota ? nota.chave : null,
+      numeroDaNota: ehDigitar ? numeroDigitado.trim() || null : nota ? nota.numero || null : null,
+      chaveDaNota: ehDigitar ? null : nota ? nota.chave : null,
       usarMedio,
     });
     const total = itens.length;
@@ -467,6 +483,7 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
   const nomeFornecedor = nomeDaEscolha(escolha);
   function rotuloDoPasso(n: Passo): string {
     if (passo > n && n === 1 && nomeFornecedor) return T.passoFeitoFornecedor(nomeFornecedor);
+    if (passo > n && n === 2 && ehDigitar) return T.passoFeitoDigitar;
     if (passo > n && n === 2 && nota && nota.numero) return T.passoFeitoNota(nota.numero);
     return T.passos[n];
   }
@@ -479,6 +496,10 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
       : escolha.tipo === "sem" ? T.rodapeSemFornecedor : T.rodapeFornecedor(escolha.fornecedor.name);
   } else if (passo === 2) {
     rodapeInfo = T.rodapePdf;
+  } else if (passo === 3 && ehDigitar) {
+    rodapeInfo = digitada.faltam > 0
+      ? T.digitarFaltam(digitada.faltam)
+      : T.digitarRodape(digitada.itens.length, semCusto || !digitada.total ? null : "R$ " + digitada.total.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
   } else if (passo === 3) {
     rodapeInfo =
       motivo.tipo === "faltam" ? (estreito ? T.rodapeFaltaCelular(motivo.n) : T.rodapeFaltam(motivo.n))
@@ -487,12 +508,12 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
             : motivo.tipo === "nada" ? T.rodapeNada
               : nota ? T.resumoNota(nota.numero || "—", diaMes(nota.emitidaEm)) : "";
   }
-  const rodapeTravado = passo === 3 && resumo.falta > 0;
+  const rodapeTravado = passo === 3 && (ehDigitar ? digitada.faltam > 0 : resumo.falta > 0);
   const pronto = respostas ? resumoDoPronto(respostas) : null;
   if (passo === 4) rodapeInfo = falha ? "" : T.prontoSemDobro;
   if (gravando) rodapeInfo = T.gravandoTitulo;
   const idsNovos = (respostas || []).flatMap((r) => (r.lines || []).filter((l) => l.created).map((l) => l.product_id));
-  const fora = linhas
+  const fora = ehDigitar ? [] : linhas
     .filter((l) => l.estado === "fora" || l.estado === "erro")
     .map((l) => ({ nome: l.item.descricao, motivo: l.estado === "erro" ? T.motivoQtdZero : T.motivoFora }));
 
@@ -610,7 +631,7 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
               <Passo4Pronto
                 estreito={estreito}
                 semCusto={semCusto}
-                numeroDaNota={nota ? nota.numero || null : null}
+                numeroDaNota={ehDigitar ? numeroDigitado.trim() || null : nota ? nota.numero || null : null}
                 resumo={pronto}
                 fora={fora}
                 falha={falha}
@@ -618,7 +639,21 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
                 onBaixar={IS_WEB ? baixarPendentes : undefined}
               />
             )}
-            {passo === 3 && nota && !gravando && (
+            {passo === 3 && ehDigitar && !gravando && (
+              <Passo3Digitar
+                estreito={estreito}
+                semCusto={semCusto}
+                companyId={companyId}
+                produtos={products}
+                porId={indice.porId}
+                linhas={digitadas}
+                onMudar={(ls) => { setDigitadas(ls); setErrosDasLinhas({}); }}
+                numeroDaNota={numeroDigitado}
+                onNumeroDaNota={setNumeroDigitado}
+                errosDasLinhas={errosDasLinhas}
+              />
+            )}
+            {passo === 3 && !ehDigitar && nota && !gravando && (
               <Passo3Conferir
                 estreito={estreito}
                 semCusto={semCusto}
@@ -655,6 +690,7 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
                 onCadastrarEmitente={cadastrarEmitente}
                 onManter={manterFornecedor}
                 onSeguirMesmoAssim={() => setRepetidaVista(respostaAtual)}
+                onDigitar={() => { setOrigem("digitar"); setPasso(3); }}
               />
             )}
           </ScrollView>
@@ -692,14 +728,14 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
                 )}
                 {passo === 3 && (
                   <Pressable
-                    style={[s.btnConfirmar, (!resumo.podeDarEntrada || !!gravando) && { opacity: 0.45 }]}
-                    onPress={resumo.podeDarEntrada && !gravando ? darEntrada : undefined}
-                    disabled={!resumo.podeDarEntrada || !!gravando}
-                    accessibilityState={{ disabled: !resumo.podeDarEntrada || !!gravando }}
+                    style={[s.btnConfirmar, (!podeDarEntrada || !!gravando) && { opacity: 0.45 }]}
+                    onPress={podeDarEntrada && !gravando ? darEntrada : undefined}
+                    disabled={!podeDarEntrada || !!gravando}
+                    accessibilityState={{ disabled: !podeDarEntrada || !!gravando }}
                     testID="chegou-dar-entrada"
                   >
                     {gravando ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="check" size={14} color="#fff" />}
-                    <Text style={s.btnPriTxt}>{estreito ? T.darEntradaCelular : T.darEntrada(resumo.entram)}</Text>
+                    <Text style={s.btnPriTxt}>{estreito ? T.darEntradaCelular : T.darEntrada(quantasEntram)}</Text>
                   </Pressable>
                 )}
                 {passo === 4 && pronto && !falha && idsNovos.length > 0 && onVerNovos ? (
