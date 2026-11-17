@@ -135,15 +135,15 @@ export function useCancelSale(companyId?: string) {
   }
 
   const mutation = useMutation({
-    mutationFn: function(args: { saleId: string; reason?: string }) {
+    mutationFn: function(args: { saleId: string; reason?: string; cancelarNota?: boolean }) {
       if (!targetCompanyId) throw new Error("no company");
-      return salesApi.cancel(targetCompanyId, args.saleId, args.reason);
+      return salesApi.cancel(targetCompanyId, args.saleId, args.reason, { cancelarNota: args.cancelarNota });
     },
     onSuccess: invalidateAll,
   });
 
   return {
-    cancelSale: function(args: { saleId: string; reason?: string }) { return mutation.mutateAsync(args); },
+    cancelSale: function(args: { saleId: string; reason?: string; cancelarNota?: boolean }) { return mutation.mutateAsync(args); },
     isCancelling: mutation.isPending,
     error: mutation.error as Error | null,
   };
