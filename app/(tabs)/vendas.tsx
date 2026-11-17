@@ -24,6 +24,11 @@ import {
 import { ScreenHero, ScreenTabs, type ScreenTabItem } from "@/components/ScreenHero";
 // 29/08/2026: a listagem mostrava "1 item(s)" e "1 cancelada(s)".
 import { pluralize } from "@/utils/plural";
+// 17/11/2026 (A5a): aba Pedidos, atras da trava PEDIDO_LIBERADO e do modulo
+// vendas.pedidos. Sem os dois, a tela e a de antes, aba por aba.
+import { useAbaPedidos, usePedidos } from "@/hooks/usePedidos";
+import { AbaPedidos } from "@/components/screens/vendas/pedidos/AbaPedidos";
+import { TEXTOS_DOS_PEDIDOS } from "@/components/screens/vendas/pedidos/regrasDosPedidos";
 
 // ============================================================
 // AURA. — Tela de Vendas (Item 3 Eryca)
@@ -147,9 +152,14 @@ export default function VendasScreen() {
   // folha — e assim o plano Essencial (que nao tem folha) tambem enxerga.
   const params = useLocalSearchParams<{ tab?: string }>();
   const paramTab = typeof params.tab === "string" ? params.tab : undefined;
-  const [activeTab, setActiveTab] = useState<"vendas" | "ranking" | "fechamentos">(
-    paramTab === "ranking" || paramTab === "fechamentos" ? paramTab : "vendas"
+  const [activeTab, setActiveTab] = useState<"vendas" | "pedidos" | "ranking" | "fechamentos">(
+    paramTab === "ranking" || paramTab === "fechamentos" || paramTab === "pedidos" ? paramTab : "vendas"
   );
+  // 17/11/2026 (A5a): a aba Pedidos so existe com a trava e o modulo. O numero
+  // da aba e o dos abertos (mesma consulta da aba, entao o cache e um so).
+  const { visivel: comPedidos } = useAbaPedidos();
+  const pedidosDaAba = usePedidos("abertos", "", { enabled: comPedidos });
+  const abaAtiva = activeTab === "pedidos" && !comPedidos ? "vendas" : activeTab;
 
   const range = useMemo(
     function() { return periodToRange(period, customFromIso, customToIso, monthAnchor); },
@@ -227,6 +237,12 @@ export default function VendasScreen() {
 
   const TABS_VENDAS: ScreenTabItem[] = [
     { key: "vendas", label: "Vendas" },
+    // Mockup (parte 3): "Pedidos" entre Vendas e Ranking, com o numero dos abertos.
+    ...(comPedidos ? [{
+      key: "pedidos",
+      label: TEXTOS_DOS_PEDIDOS.aba + (pedidosDaAba.numeros && pedidosDaAba.numeros.abertos > 0 ? " " + pedidosDaAba.numeros.abertos : ""),
+      testID: "aba-vendas-pedidos",
+    }] : []),
     { key: "ranking", label: "Ranking" },
     { key: "fechamentos", label: "Fechamentos de caixa" },
   ];
@@ -234,14 +250,16 @@ export default function VendasScreen() {
   // Linha de metricas do cabecalho. Na aba Vendas ela carrega o numero e ja
   // diz o escopo dele ("receita de vendas"), pra nao repetir a palavra solta
   // "receita" que o Painel usa pra outra conta.
-  const heroSub = activeTab === "vendas"
+  const heroSub = abaAtiva === "pedidos"
+    ? TEXTOS_DOS_PEDIDOS.subtitulo
+    : abaAtiva === "vendas"
     ? (stats ? (
         <>
           {pluralize(stats.total_sales, "venda", "vendas")} em {periodoLabel} ·{" "}
           <Text style={s.heroStrong}>{fmt(stats.revenue)}</Text> de receita de vendas · ticket médio de {fmt(stats.avg_ticket)}
         </>
       ) : "Conferência das vendas do Caixa: detalhe, lançamento financeiro e cancelamento.")
-    : activeTab === "ranking"
+    : abaAtiva === "ranking"
     ? "Quem vendeu mais no período: pódio, receita, ticket médio e evolução por vendedor."
     : "Fechamentos de caixa: totais do mês, filtros por empresa e por divergência, detalhe no drawer.";
 
@@ -251,11 +269,11 @@ export default function VendasScreen() {
       <ScreenHero
         eyebrow="Conferência do caixa"
         title="Vendas"
-        live={activeTab === "vendas"}
+        live={abaAtiva === "vendas"}
         subtitle={heroSub}
         actions={
-          <Pressable onPress={function() { refetch(); }} style={s.refreshBtn} disabled={isFetching}>
-            {isFetching ? (
+          <Pressable onPress={function() { if (abaAtiva === "pedidos") pedidosDaAba.refetch(); else refetch(); }} style={s.refreshBtn} disabled={abaAtiva === "pedidos" ? pedidosDaAba.isFetching : isFetching}>
+            {(abaAtiva === "pedidos" ? pedidosDaAba.isFetching : isFetching) ? (
               <ActivityIndicator size="small" color={Colors.violet3} />
             ) : (
               <>
@@ -272,15 +290,17 @@ export default function VendasScreen() {
           29/08/2026: sublinhado -> pilula (ScreenTabs), igual /clientes e /estoque */}
       <ScreenTabs
         tabs={TABS_VENDAS}
-        active={activeTab}
-        onSelect={function(k: string) { setActiveTab(k as "vendas" | "ranking" | "fechamentos"); }}
+        active={abaAtiva}
+        onSelect={function(k: string) { setActiveTab(k as "vendas" | "pedidos" | "ranking" | "fechamentos"); }}
       />
+
+      {abaAtiva === "pedidos" && <AbaPedidos />}
 
       {/* Ranking depende de um CNPJ especifico (o endpoint e
           /companies/:id/employees/ranking e o vinculo vendedor->empresa e por
           CNPJ). Em modo consolidado nao ha company.id — avisa em vez de
           renderizar um ranking vazio que parece "nenhuma venda". */}
-      {activeTab === "ranking" && (consolidatedView || !company?.id ? (
+      {abaAtiva === "ranking" && (consolidatedView || !company?.id ? (
         <View style={s.consolidatedBanner}>
           <Icon name="cart" size={14} color="#a78bfa" />
           <View style={{ flex: 1 }}>
@@ -292,9 +312,9 @@ export default function VendasScreen() {
         </View>
       ) : <SalesRanking />)}
 
-      {activeTab === "fechamentos" && <FechamentosTab />}
+      {abaAtiva === "fechamentos" && <FechamentosTab />}
 
-      {activeTab === "vendas" && (<>
+      {abaAtiva === "vendas" && (<>
 
       {/* MULTICNPJ Onda 2.4: banner consolidado */}
       {showCompanyBadge && (

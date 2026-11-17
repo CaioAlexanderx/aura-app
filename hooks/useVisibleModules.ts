@@ -53,6 +53,12 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   // Antes herdavam visibilidade de pdv (quem via Caixa via Vendas automaticamente).
   // Agora cada um tem sua chave de permissao independente.
   vendas: 'essencial',
+  // 17/11/2026 -- Pedido separado de venda (p-63e/f): aba "Pedidos" em
+  // Vendas. Aba, nao item de menu (sem NAV, como 'financeiro.relatorios'),
+  // com chave PROPRIA (regra 3). Essencial (pendencia 1 do mockup). O
+  // backend conhece a chave (Aura-backend#1073). Atras da trava
+  // PEDIDO_LIBERADO (utils/pedidoLiberado.ts).
+  'vendas.pedidos': 'essencial',
   // 14/09/2026 -- Ordem de Servico ganha modulo proprio. Antes o item /os do
   // NAV usava mod "pdv" emprestado. Mesmo plano minimo do pdv (essencial) pra
   // ninguem ganhar nem perder acesso; o opt-in continua sendo o toggle
@@ -242,7 +248,8 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   pdv:           ['pdv', 'os', 'cupons', 'vendas.pedidos'],
   // 15/05/2026 -- chave "vendas" controla /vendas + /crediario (nao herda mais do pdv).
   // 10/10/2026 -- crediario.config acompanha o crediario (mesma pessoa).
-  vendas:        ['vendas', 'crediario', 'crediario.config'],
+  // 17/11/2026 -- a aba Pedidos (vendas.pedidos) acompanha quem ve Vendas.
+  vendas:        ['vendas', 'crediario', 'crediario.config', 'vendas.pedidos'],
   // 13/10/2026 -- a pagina Black Friday acompanha quem decide a compra
   // (estoque) e quem monta a loja (configuracoes: assento e vale-troca).
   // Nao existe permissao propria no backend; cada secao da pagina checa o
