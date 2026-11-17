@@ -13,6 +13,8 @@ import { lerComandaEnabled } from "@/utils/comanda";
 import { lerFreteEnabled } from "@/utils/frete";
 import { lerValeTrocaLigado, lerPrazoDoValeEmDias, TEXTO_DO_VALE_TROCA } from "@/utils/valeTroca";
 import { ValeTrocaPrazoCampo } from "@/components/screens/configuracoes/ValeTrocaPrazoCampo";
+import { ImpressaoNesteAparelho } from "@/components/screens/configuracoes/ImpressaoNesteAparelho";
+import { lerImpressaoAutomaticaLigada, TEXTOS_DA_IMPRESSAO } from "@/utils/impressaoAutomatica";
 import { Card } from "@/components/screens/configuracoes/shared";
 import { CardFeeSection, type CardFeePalette } from "@/components/screens/configuracoes/CardFeeSection";
 import { CardPriceSection } from "@/components/screens/configuracoes/CardPriceSection";
@@ -224,6 +226,26 @@ export function PdvSettingsCard() {
           disabled={saving}
         />
       </View>
+
+      <View style={s.divider} />
+
+      {/* 17/11/2026 (p-159): impressão automática do cupom não fiscal. A loja
+          liga aqui; cada aparelho escolhe se imprime (fica no navegador). */}
+      <View style={s.row}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.rowLabel}>{TEXTOS_DA_IMPRESSAO.opcao}</Text>
+          <Text style={s.rowDesc}>{TEXTOS_DA_IMPRESSAO.apoio}</Text>
+        </View>
+        <Switch
+          testID="toggle-imprimir-cupom-auto"
+          value={lerImpressaoAutomaticaLigada(display)}
+          onValueChange={function(v) { toggle("auto_print_receipt", v); }}
+          trackColor={{ false: Colors.bg4, true: Colors.violet + "66" }}
+          thumbColor={lerImpressaoAutomaticaLigada(display) ? Colors.violet : Colors.ink3}
+          disabled={saving}
+        />
+      </View>
+      {lerImpressaoAutomaticaLigada(display) && <ImpressaoNesteAparelho companyId={company?.id} />}
 
       <View style={s.divider} />
 
