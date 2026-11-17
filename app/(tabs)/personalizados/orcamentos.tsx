@@ -12,10 +12,10 @@
 // a rota passa são todas opcionais; sem elas o /studio continua igual.
 //
 // Quem chega aqui, na ordem (o mesmo caminho da Produção, p-129):
-//   1. CONSOLIDADO (multi-CNPJ, "Todas as empresas"): uma loja por vez. A
-//      tela mostra "Escolha uma loja" (RequireCompanyScope) e volta para cá
-//      já com a loja escolhida. A visão de todas as lojas juntas, só para
-//      ler, é o card p-187.
+//   1. CONSOLIDADO (multi-CNPJ, "Todas as empresas"): com a trava ligada, os
+//      orçamentos de todas as lojas, só para ler (p-187,
+//      OrcamentosConsolidados), com "Abrir na loja" em cada um. Com a trava
+//      desligada, como antes: "Escolha uma loja" (RequireCompanyScope).
 //   2. PLANO E PERMISSÃO: sem a chave personalizados.orcamentos visível
 //      (Essencial sem override, ou membro sem personalizados.access) a tela
 //      não existe para a pessoa: volta para o Painel. Sem cadeado e sem
@@ -29,18 +29,23 @@
 //
 // Aprovar: o mesmo POST /studio/quotes/:qid/aprovar do /studio. Lançar no
 // Financeiro e virar venda ficam no p-185.
+//
+// ?orcamento=<id> (p-187): o "Abrir na loja" do consolidado troca de
+// empresa e volta para cá; a lista abre já com o modal desse orçamento.
 // ============================================================
 import { useEffect } from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { Redirect } from "expo-router";
+import { Redirect, useLocalSearchParams } from "expo-router";
 import { useColors } from "@/constants/colors";
 import { RequireCompanyScope } from "@/components/RequireCompanyScope";
 import { useAuthStore } from "@/stores/auth";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { useVisibleModules, useVisibleModulesProntos } from "@/hooks/useVisibleModules";
-import { personalizadosAtivo } from "@/utils/personalizados";
+import { personalizadosAtivo, personalizadosLiberado } from "@/utils/personalizados";
 import { TemaDoNegocio } from "@/components/personalizados/TemaDoNegocio";
 import { ListaDeOrcamentos } from "@/components/studio/orcamentoModal/ListaDeOrcamentos";
+import { PARAM_DO_ORCAMENTO, idDaRota } from "@/components/personalizados/regrasDoConsolidado";
+import { OrcamentosConsolidados } from "@/components/personalizados/consolidado/OrcamentosConsolidados";
 
 const MOD_DA_TELA = "personalizados.orcamentos";
 
@@ -55,6 +60,15 @@ const CABECALHO_DOS_ORCAMENTOS_3D = {
 const ROTA_DO_PEDIDO = (_orderId: string) => "/personalizados/producao";
 
 export default function PersonalizadosOrcamentos() {
+  const consolidado = useAuthStore((st) => st.consolidatedView);
+  // p-187: todas as lojas, só leitura. Atrás da mesma trava da frente.
+  if (consolidado && personalizadosLiberado()) {
+    return (
+      <TemaDoNegocio>
+        <OrcamentosConsolidados />
+      </TemaDoNegocio>
+    );
+  }
   return (
     <RequireCompanyScope
       context="personalizados"
@@ -75,6 +89,8 @@ function Tela() {
   const visiveis = useVisibleModules();
   const prontos = useVisibleModulesProntos();
   const { settings, isLoading } = usePdvSettings();
+  const params = useLocalSearchParams<Record<string, string | string[]>>();
+  const abrirId = idDaRota(params?.[PARAM_DO_ORCAMENTO]) || undefined;
 
   // Armadilha 1: plano e module_overrides do JWT não se revalidam sozinhos.
   useEffect(() => {
@@ -98,6 +114,7 @@ function Tela() {
     <View style={st.tela} testID="personalizados-orcamentos">
       <TemaDoNegocio>
         <ListaDeOrcamentos
+          abrirId={abrirId}
           cabecalho={CABECALHO_DOS_ORCAMENTOS_3D}
           semFlutuante
           rotaDaLista="/personalizados/orcamentos"

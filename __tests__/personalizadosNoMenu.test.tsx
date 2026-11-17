@@ -147,7 +147,10 @@ describe("NAV: seção Personalizados, um mod por item", () => {
   test("Sidebar e MBar fazem a mesma conta e passam para o buildRawNav", () => {
     const contas = LAYOUT.match(/const personalizadosOn = personalizadosAtivo\(pdvSettingsNav, activeVertical\);/g) || [];
     expect(contas.length).toBe(2);
-    const chamadas = LAYOUT.match(/buildRawNav\(visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn, personalizadosOn\)/g) || [];
+    // p-187: no consolidado, a seção aparece quando alguma loja do grupo tem a frente.
+    const noMenu = LAYOUT.match(/const personalizadosNoMenu = personalizadosOn \|\| lojasComPersonalizados\.ligadas\.size > 0;/g) || [];
+    expect(noMenu.length).toBe(2);
+    const chamadas = LAYOUT.match(/buildRawNav\(visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn, personalizadosNoMenu\)/g) || [];
     expect(chamadas.length).toBe(2);
   });
 

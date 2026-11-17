@@ -22,13 +22,20 @@
 // O que o mockup desenha e ainda NÃO está aqui (cards próprios):
 //   - a folha "Recolher a arte e o texto" da etapa Aguardando personalização
 //     (hoje o botão dessa etapa só envia o pedido para a arte);
-//   - a loja de origem em cada cartão e o filtro de loja no cabeçalho (vêm
-//     com a visão de todas as lojas);
+//   - a loja de origem em cada cartão e o filtro de loja no cabeçalho: no
+//     consolidado eles vivem na lista de todas as lojas (p-187,
+//     components/personalizados/consolidado/ProducaoConsolidada.tsx). Daqui
+//     o quadro é sempre de uma loja só;
 //   - abrir o pedido (detalhe). Por isso o cartão não é clicável.
+//
+// 17/11/2026 (p-187): `destacarId` vem do "Abrir na loja" da lista de todas
+// as lojas (?pedido=<id>). O cartão ganha borda de destaque e, no celular,
+// a etapa dele abre primeiro. Pedido que já saiu da Fila (entregue,
+// cancelado) avisa por toast.
 //
 // Regras sem tela: components/personalizados/regrasDaProducao.ts.
 // ============================================================
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, ScrollView, Pressable, StyleSheet, useWindowDimensions } from "react-native";
 import { toast } from "@/components/Toast";
 import { WebPortal } from "@/components/WebPortal";
@@ -44,7 +51,7 @@ import { comEtapaDoPedido } from "@/components/studio/etapaDoPedido";
 import { numeroDoPedido, situacaoDoPixNoCartao, reais } from "@/components/studio/pagamentoDoPedido";
 import { rotuloDeItens } from "@/components/studio/rotuloDeItens";
 import {
-  ETAPAS, PROXIMA_ETAPA, LARGURA_DO_CELULAR, agruparPorEtapa, etapaDe, etapaInicialNoCelular, fraseDoResumo,
+  ETAPAS, PROXIMA_ETAPA, LARGURA_DO_CELULAR, agruparPorEtapa, ehAtivo, etapaDe, etapaInicialNoCelular, fraseDoResumo,
   origemDoPedido, prazoDoCartao, resumoDaFila, semAntigosDaAtivacao, type Etapa,
 } from "@/components/personalizados/regrasDaProducao";
 
@@ -52,9 +59,11 @@ type Props = {
   companyId: string;
   /** pdv_settings.personalizados_ativado_em (ISO) ou null. Ver regrasDaProducao.ts. */
   ativadoEm: string | null;
+  /** Pedido vindo do "Abrir na loja" do consolidado (p-187): fica em destaque. */
+  destacarId?: string | null;
 };
 
-export function QuadroDeProducao({ companyId, ativadoEm }: Props) {
+export function QuadroDeProducao({ companyId, ativadoEm, destacarId = null }: Props) {
   const t = useStudioTokens();
   const s = useMemo(() => estilos(t), [t]);
   const { width } = useWindowDimensions();
@@ -85,6 +94,16 @@ export function QuadroDeProducao({ companyId, ativadoEm }: Props) {
   const grupos = useMemo(() => agruparPorEtapa(naFila), [naFila]);
   const resumo = useMemo(() => resumoDaFila(naFila), [naFila]);
   const etapaAberta = etapaNoCelular || etapaInicialNoCelular(grupos);
+
+  // "Abrir na loja" (p-187): uma vez, quando a lista chega.
+  const destaqueVisto = useRef(false);
+  useEffect(() => {
+    if (!destacarId || destaqueVisto.current || carregando || erro) return;
+    destaqueVisto.current = true;
+    const alvo = naFila.find((o) => o.id === destacarId);
+    if (alvo && ehAtivo(alvo)) setEtapaNoCelular(etapaDe(alvo));
+    else toast.info("Esse pedido não está mais na Fila: já foi entregue ou cancelado.");
+  }, [destacarId, carregando, erro, naFila]);
 
   const mover = useCallback(async (pedido: StudioOrder, destino: StudioProductionStatus, forcar?: boolean) => {
     const atual = etapaDe(pedido);
@@ -127,6 +146,7 @@ export function QuadroDeProducao({ companyId, ativadoEm }: Props) {
       etapa={etapa}
       t={t}
       s={s}
+      destacado={!!destacarId && o.id === destacarId}
       onAvancar={avancar}
       onAprovacao={setAprovacaoDe}
       cobrando={cobrandoId === o.balance_installment_id}
@@ -244,12 +264,13 @@ export function QuadroDeProducao({ companyId, ativadoEm }: Props) {
 }
 
 function Cartao({
-  o, etapa, t, s, onAvancar, onAprovacao, onCobrar, onRecebi, cobrando,
+  o, etapa, t, s, destacado, onAvancar, onAprovacao, onCobrar, onRecebi, cobrando,
 }: {
   o: StudioOrder;
   etapa: Etapa;
   t: StudioPalette;
   s: ReturnType<typeof estilos>;
+  destacado?: boolean;
   onAvancar: (o: StudioOrder) => void;
   onAprovacao: (o: StudioOrder) => void;
   onCobrar: () => void;
@@ -264,7 +285,7 @@ function Cartao({
   const naArte = etapa.key === "pending_art";
 
   return (
-    <View style={s.cartao} testID={`producao-cartao-${o.id}`}>
+    <View style={[s.cartao, destacado && s.cartaoDestacado]} testID={`producao-cartao-${o.id}`}>
       <View style={s.linha}>
         <Text style={s.numero}>{numeroDoPedido(o as any)}</Text>
         {origem ? <View style={[s.selo, s.seloMarca]}><Text style={[s.seloTxt, s.seloMarcaTxt]}>{origem}</Text></View> : null}
@@ -375,6 +396,7 @@ function estilos(t: StudioPalette) {
     listaDoCelular: { gap: 10, paddingBottom: 24 },
 
     cartao: { backgroundColor: t.paperCard, borderRadius: 11, borderWidth: 1, borderColor: t.ink5, padding: 10, gap: 6 },
+    cartaoDestacado: { borderWidth: 2, borderColor: t.primary },
     linha: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6 },
     numero: { fontSize: 11.5, fontWeight: "700", color: t.accentInk, fontVariant: ["tabular-nums"] },
     nome: { fontSize: 13, fontWeight: "700", color: t.ink },

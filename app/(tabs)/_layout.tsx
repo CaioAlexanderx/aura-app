@@ -17,6 +17,7 @@ import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { useSidebarLayout, applyLayoutToNav } from "@/hooks/useSidebarLayout";
 import { moduloEstaOculto } from "@/constants/modulosOcultos";
 import { personalizadosAtivo } from "@/utils/personalizados";
+import { useLojasComPersonalizados } from "@/hooks/useLojasComPersonalizados";
 import { useBlackFridayLiberada } from "@/hooks/useBlackFridayLiberada";
 import { SidebarEditor } from "@/components/SidebarEditor";
 import { CompanySwitcher } from "@/components/CompanySwitcher"; // M1-06: Multi-CNPJ switcher
@@ -562,12 +563,17 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
   const blackFridayOn = useBlackFridayLiberada();
   const activeVertical = (co as any)?.vertical_active as string | null | undefined;
   const personalizadosOn = personalizadosAtivo(pdvSettingsNav, activeVertical);
+  // 17/11/2026 (p-187): no consolidado não há loja ativa para ler o
+  // interruptor; a seção aparece quando alguma loja do grupo tem a frente
+  // (hooks/useLojasComPersonalizados.ts). Com a trava desligada, vazio.
+  const lojasComPersonalizados = useLojasComPersonalizados();
+  const personalizadosNoMenu = personalizadosOn || lojasComPersonalizados.ligadas.size > 0;
 
   // rawFilteredNav: NAV cru (so plano/staff/vertical), passado pro editor pra
   // cliente ver TUDO disponivel.
   const rawFilteredNav = useMemo(
-    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn, personalizadosOn),
-    [visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn, personalizadosOn]
+    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn, personalizadosNoMenu),
+    [visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn, personalizadosNoMenu]
   );
 
   // filteredNav: rawFilteredNav + customizacoes do cliente aplicadas.
@@ -834,6 +840,11 @@ function MBar() {
   const blackFridayOn = useBlackFridayLiberada();
   const activeVertical = (co as any)?.vertical_active as string | null | undefined;
   const personalizadosOn = personalizadosAtivo(pdvSettingsNav, activeVertical);
+  // 17/11/2026 (p-187): no consolidado não há loja ativa para ler o
+  // interruptor; a seção aparece quando alguma loja do grupo tem a frente
+  // (hooks/useLojasComPersonalizados.ts). Com a trava desligada, vazio.
+  const lojasComPersonalizados = useLojasComPersonalizados();
+  const personalizadosNoMenu = personalizadosOn || lojasComPersonalizados.ligadas.size > 0;
 
   // 4 tabs fixas no rodape (nao editaveis pelo cliente).
   const MTABS = [
@@ -846,8 +857,8 @@ function MBar() {
 
   // rawFilteredNav: mesma logica do desktop, base unica de items disponiveis.
   const rawFilteredNav = useMemo(
-    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn, personalizadosOn),
-    [visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn, personalizadosOn]
+    () => buildRawNav(visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn, personalizadosNoMenu),
+    [visibleMods, isStaff, activeVertical, osEnabled, oticaEnabled, matconEnabled, blackFridayOn, personalizadosNoMenu]
   );
 
   // filteredNav: aplica layout custom do cliente.
