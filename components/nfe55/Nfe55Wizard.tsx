@@ -16,12 +16,19 @@
 // A NF-e sai da loja DA VENDA (multi-CNPJ): quem abre passa o company_id
 // da venda. Ao abrir, /auth/me é revalidado (plano stale no JWT).
 // Web: WebPortal (overlay fixo dentro do shell fica preso no z-index).
+// 17/11/2026 (incidente): aberto por cima de outra janela (Modal do RN, como
+// o detalhe da venda em Vendas, que é um ResponsiveSheet), o WebPortal ficava
+// FORA da armadilha de foco do Modal do react-native-web: cada clique num
+// campo do assistente devolvia o foco para a janela de baixo e não dava para
+// digitar. Agora o assistente abre num Modal próprio (transparente), que
+// também sai em portal no body e entra na pilha de Modais: a armadilha de foco
+// fica com ele, a janela de cima.
 // ============================================================
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
+import { JanelaEmpilhada } from "@/components/JanelaEmpilhada";
 import { Colors, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
-import { WebPortal } from "@/components/WebPortal";
 import { toast } from "@/components/Toast";
 import { useAuthStore } from "@/stores/auth";
 import { nfe55Api, type Faltante, type Previa, type RespostaEmissao } from "@/services/nfe55Api";
@@ -306,7 +313,7 @@ export function Nfe55Wizard({ visible, companyId, saleId, saleNumber, onClose, o
     </View>
   );
 
-  return <WebPortal active>{corpo}</WebPortal>;
+  return <JanelaEmpilhada onRequestClose={fechar}>{corpo}</JanelaEmpilhada>;
 }
 
 function panelWeb(): any {
