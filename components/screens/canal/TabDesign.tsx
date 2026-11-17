@@ -30,6 +30,7 @@ import { MiniLoja, type ProdutoDemo } from "./MiniLoja";
 import { PreviewCartao } from "./PreviewCartao";
 import { BASE_URL } from "@/services/api";
 import { ChecklistDaLoja } from "./ChecklistDaLoja";
+import { SecaoBannerPersonalizados } from "./SecaoBannerPersonalizados";
 import { SPECS, bannersDeFabrica, temConteudo } from "./specsDeImagem";
 import {
   enderecoDaPrevia, pecaAutomatica, pecasParaODestaque, selosDeFabrica,
@@ -862,6 +863,11 @@ export function TabDesign({
         </View>
         );
       })}
+
+      {/* p-193: o banner de personalizados (mockup p-132, versão A). Só na
+          loja comum, e a seção some sozinha com a trava
+          PERSONALIZADOS_LIBERADO em false: a aba fica como sempre foi. */}
+      {ehStudio ? null : <SecaoBannerPersonalizados corDaLoja={primary} />}
 
       {ehStudio ? (
         <>

@@ -106,6 +106,39 @@ export type CompositionSummary = {
   image_url?: string | null;
 };
 
+// ─── Folha "Recolher a arte e o texto" (p-176, backend#1051) ───────────────
+export type ItemDaPersonalizacao = {
+  id: string;
+  product_id: string | null;
+  product_name: string | null;
+  quantity: number | null;
+  is_personalizable: boolean;
+  customization_config: CustomizationConfig | null;
+  customization: Record<string, any> | null;
+  tem_personalizacao: boolean;
+};
+export type PersonalizacaoDoPedido = {
+  order: {
+    id: string;
+    source: StudioOrderSource;
+    studio_production_status: StudioProductionStatus | null;
+    customer_name: string | null;
+    display_name: string | null;
+  };
+  itens: ItemDaPersonalizacao[];
+  /** ids dos itens personalizáveis ainda sem arte nem texto. */
+  faltam: string[];
+};
+export type PersonalizacaoSalva = {
+  ok: boolean;
+  order_id: string;
+  source: StudioOrderSource;
+  studio_production_status: StudioProductionStatus | null;
+  avancou: boolean;
+  itens: ItemDaPersonalizacao[];
+  faltam: string[];
+};
+
 // ─── F4 KDS Orders ──────────────────────────────────────────────────────────────────
 export type StudioProductionStatus =
   | "awaiting_customization"
@@ -178,6 +211,13 @@ export type StudioOrder = {
   payment_method?: "pix" | "card" | "on_delivery" | string | null;
   payment_status?: string | null;
   has_payment_proof?: boolean;
+  // 17/11/2026 (p-177, backend#1051): o item que o cartão da Fila mostra
+  // ("2 × Caneca com nome") e de onde o pedido veio. Só somados; ausentes
+  // no backend de antes, e null quando a consulta não achou.
+  item_name?: string | null;
+  item_quantity?: number | null;
+  origin?: "caixa" | "orcamento" | "loja_online" | "lote" | "marketplace" | null;
+  origin_label?: string | null;
 };
 
 // K3 — o que a página pública recebe. Espelha exatamente o que a rota
@@ -956,6 +996,16 @@ export const studioApi = {
   },
   getOrder: (cid: string, oid: string) =>
     request<StudioOrderDetail>(base(cid) + "/orders/" + oid, { method: "GET", retry: 1, timeout: 8000 }),
+  // 17/11/2026 (p-176, backend#1051): a folha "Recolher a arte e o texto"
+  // da Fila do Negócio. O GET traz os itens com os campos do produto; o
+  // POST grava a arte e o texto de cada item e, com avancar, leva o pedido
+  // para "Aguardando arte" numa transação só. 422 FALTA_PERSONALIZACAO
+  // devolve em `faltam` os itens sem nada e não grava nada.
+  // retry: 0 no POST: grava dado da cliente.
+  getPersonalizacaoDoPedido: (cid: string, oid: string) =>
+    request<PersonalizacaoDoPedido>(base(cid) + "/orders/" + oid + "/personalizacao", { method: "GET", retry: 1, timeout: 8000 }),
+  salvarPersonalizacaoDoPedido: (cid: string, oid: string, body: { itens: Array<{ id: string; customization: Record<string, any> }>; avancar?: boolean }) =>
+    request<PersonalizacaoSalva>(base(cid) + "/orders/" + oid + "/personalizacao", { method: "POST", body, retry: 0, timeout: 12000 }),
   // 17/08/2026 — cobrança do saldo da encomenda. Endpoint do próprio Studio,
   // fora do gate de crediário: o mercado de personalizados não tem fiado, e
   // exigir o toggle deixaria a lojista sem como receber o que já vendeu.

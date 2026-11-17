@@ -85,7 +85,8 @@ describe("10 · ficha de producao e arte com nome", () => {
     expect(f).toContain("size: A5 portrait");
     expect(f).toContain("window.print()");
     expect(f).toContain('side="back"');
-    expect(le("app/studio/(estudio)/pedidos/[id].tsx")).toContain("/studio/pedidos/ficha/${order.id}");
+    // 17/11/2026 (p-176): o detalhe mora em components/studio/DetalheDoPedido.tsx.
+    expect(le("components/studio/DetalheDoPedido.tsx")).toContain("/studio/pedidos/ficha/${orderId}");
   });
 });
 
