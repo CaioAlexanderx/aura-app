@@ -287,6 +287,51 @@ export const TEXTOS_CHEGOU = {
   erroSemResposta: "Não tivemos resposta da Aura. Tente de novo: nada entra em dobro.",
   erroVariante: "Não achamos a cor e o tamanho pelo código de barras. Diga de qual chegou.",
   erroGenerico: "Não conseguimos dar entrada. Nada foi gravado; tente de novo.",
+
+  // ── Fase 4 · Fornecedores (F1 e F2) ────────────────────────
+  // Só aparecem com FORNECEDORES_ABREM_O_CHEGOU ligada (portaDoChegou.ts),
+  // que o A8 liga junto com a porta do wizard no Estoque.
+  darEntrada4: "Dar entrada",
+  importarLista: "Importar a lista deste fornecedor",
+  fichaProdutoLigado: (q: string, ddmm: string | null) => q + " un" + (ddmm ? " · última entrada " + ddmm : ""),
+  // NOVO (fora do mockup): dica no cartão da planilha quando a pessoa veio de
+  // "Importar a lista deste fornecedor".
+  planilhaDaListaDica: (fornecedor: string) =>
+    "Sem a coluna de quantidade, a Aura só liga os produtos à " + fornecedor + ", com o custo de cada um. O estoque não muda.",
+
+  // F2 · planilha sem quantidade (pendência 7).
+  soLigarFaixa: (fornecedor: string) =>
+    "A planilha não tem quantidade. Os produtos ficam ligados à " + fornecedor + " com o custo dela; o estoque não muda.",
+  soLigarAchados: "achados na sua loja",
+  soLigarCadastrar: "para cadastrar",
+  soLigarFalta: "falta decidir",
+  soLigarProblema: "linha com problema",
+  ligarN: (n: number, fornecedor: string) => "Ligar " + n + " " + plural(n, "produto", "produtos") + " à " + fornecedor,
+  // NOVO (fora do mockup): o botão no celular.
+  ligarNCelular: (n: number) => "Ligar " + n + " " + plural(n, "produto", "produtos"),
+  // NOVO (fora do mockup): colunas da conferência sem quantidade.
+  colItemDaLista: "Item da lista → produto da loja",
+  colCustoDoFornecedor: "Custo do fornecedor",
+  // NOVO (fora do mockup): o quadro vivo do "Cadastrar novo" sem quantidade.
+  vivoNovoSoLigar: (custo: string | null) =>
+    "Vai ser cadastrado como produto novo, com estoque zero" + (custo ? " e custo " + custo : "") + ".",
+  // NOVO (fora do mockup): o mesmo produto em duas linhas da lista.
+  soLigarRepetida: (n: number) => "Este produto já está na linha " + n + " da lista. Vale a primeira; esta fica de fora.",
+  // NOVO (fora do mockup): o "Fica de fora" sem entrada.
+  vivoForaSoLigar: "Fica de fora. O produto não é ligado ao fornecedor.",
+  // NOVO (fora do mockup): gravando e Pronto do modo só ligar.
+  ligandoTitulo: "Ligando os produtos…",
+  ligandoTexto: (n: number) => n + " " + plural(n, "produto", "produtos") + ". Pode deixar esta tela aberta.",
+  ligadosTitulo: (fornecedor: string) => "Os produtos ficaram ligados à " + fornecedor,
+  ligadosDetalhe: (x: number, y: number) =>
+    x + " que você já tinha" + (y ? " e " + y + " " + plural(y, "cadastrado", "cadastrados") + " agora" : ""),
+  ligadosComCusto: "Cada um com o custo desta lista. O estoque não mudou.",
+  ligadosSemCusto: "O estoque não mudou.",
+  ligadosNaoAchados: (n: number) =>
+    n + " " + plural(n, "produto não foi ligado", "produtos não foram ligados") + ": não estão mais na sua loja.",
+  ligadosRodape: "Ligar a mesma lista de novo só troca o custo; nada fica em dobro.",
+  erroLigarCadastrar: "Não conseguimos cadastrar os produtos novos. Nada foi ligado; tente de novo.",
+  erroLigar: "Não conseguimos ligar os produtos. Os novos já cadastrados ficam guardados; tente de novo.",
 } as const;
 
 export type TextosChegou = typeof TEXTOS_CHEGOU;

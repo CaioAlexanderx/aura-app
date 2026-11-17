@@ -27,6 +27,15 @@
 // MESMA chave quando a resposta não chega, e a parte que já entrou não soma
 // em dobro ao tentar de novo. Desvio do Matcon (pendência 4): com
 // matcon_enabled, a nota abre o DanfeImportModal de hoje, sem mudança.
+//
+// Fase 4 (F1, F2): a tela de Fornecedores abre o wizard já no passo 2 com o
+// fornecedor escolhido (`inicio`), e "Importar a lista deste fornecedor"
+// chega com a Planilha marcada. Fornecedor que só existe na nota abre o
+// passo 1 com "Novo fornecedor" preenchido. A planilha SEM a coluna de
+// quantidade, com fornecedor, entra no modo só ligar (pendência 7): liga os
+// produtos ao fornecedor com o custo dela e não mexe no estoque
+// (ligarAoFornecedor.ts). Essas portas ficam atrás de
+// FORNECEDORES_ABREM_O_CHEGOU (portaDoChegou.ts), desligada até o A8.
 // ============================================================
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, Dimensions, ActivityIndicator } from "react-native";
@@ -49,7 +58,9 @@ import { TEXTOS_CHEGOU as T } from "./textosChegou";
 import { Passo1Fornecedor } from "./Passo1Fornecedor";
 import { Passo2Origem, type PerguntaDoCnpj } from "./Passo2Origem";
 import { Passo3Conferir } from "./Passo3Conferir";
-import { Passo4Pronto } from "./Passo4Pronto";
+import { Passo4Pronto, ProntoDaLista } from "./Passo4Pronto";
+import { ligarListaAoFornecedor } from "./ligarAoFornecedor";
+import { productsBatchApi } from "@/services/productsBatchApi";
 import { Passo3Digitar } from "./Passo3Digitar";
 import { conferirDigitadas, type LinhaDigitada } from "./digitarRegras";
 import { itensDaPlanilha, baixarModeloDeEntrada } from "./origemPlanilha";
@@ -63,11 +74,22 @@ import { escolherArquivo, lerTextoDoArquivo, ACEITA_NOTA } from "./escolherArqui
 import {
   novaChaveDaEntrada, conferirEmitente, nomeDaEscolha, consultaDaNota, entradaAnteriorDaNota,
   indexarProdutos, conferirLinha, resumirConferencia, motivoDoRodape, decisaoDeNovo, diaMes,
-  aplicarMargemAosNovos, MARGEM_PADRAO_DOS_NOVOS,
+  aplicarMargemAosNovos, MARGEM_PADRAO_DOS_NOVOS, marcarRepetidasDaLista, itensParaLigar,
   type EscolhaDoFornecedor, type FornecedorDaLista, type DecisaoDaLinha, type AjusteDaLinha, type ItemParaConferir,
 } from "./chegouRegras";
 
 type Passo = 1 | 2 | 3 | 4;
+
+/**
+ * F1/F2: de onde a tela de Fornecedores abre o wizard.
+ * - fornecedor: passo 2 com ele escolhido; `planilha` marca a Planilha
+ *   ("Importar a lista deste fornecedor");
+ * - novo_fornecedor: fornecedor que só existe na nota; passo 1 com o
+ *   "Novo fornecedor" já preenchido (CNPJ, nome, telefone).
+ */
+export type InicioDoChegou =
+  | { tipo: "fornecedor"; fornecedor: FornecedorDaLista; planilha?: boolean }
+  | { tipo: "novo_fornecedor"; inicial: FormFornecedor };
 
 type Props = {
   visible: boolean;
@@ -83,6 +105,8 @@ type Props = {
   onFeito?: (respostas: RespostaDaEntrada[]) => void;
   /** A7: "Ver os produtos novos" (ids cadastrados agora). Sem a prop, o botão some. */
   onVerNovos?: (ids: string[]) => void;
+  /** F1/F2: abrir já com o fornecedor (vale a cada abertura). */
+  inicio?: InicioDoChegou | null;
 };
 
 const IS_WEB = Platform.OS === "web";
@@ -102,7 +126,7 @@ function useLarguraDaJanela(): number {
   return w;
 }
 
-export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, semCusto, onClose, onFeito, onVerNovos }: Props) {
+export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, semCusto, onClose, onFeito, onVerNovos, inicio }: Props) {
   const estreito = useLarguraDaJanela() < 640;
   const qc = useQueryClient();
 
@@ -138,10 +162,19 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
   // A5: de onde vêm os itens (a nota lida ou a lista digitada).
   const [origem, setOrigem] = useState<"nota" | "digitar" | "planilha">("nota");
   // A6: a planilha lida (ou a que não deu para ler).
-  const [planilha, setPlanilha] = useState<{ nome: string; itens: ItemParaConferir[] } | null>(null);
+  const [planilha, setPlanilha] = useState<{ nome: string; itens: ItemParaConferir[]; semQuantidade: boolean } | null>(null);
   const [planilhaIlegivel, setPlanilhaIlegivel] = useState(false);
   const [digitadas, setDigitadas] = useState<LinhaDigitada[]>([]);
   const [numeroDigitado, setNumeroDigitado] = useState("");
+  // F2: "Importar a lista deste fornecedor" (Planilha marcada), os produtos
+  // novos já cadastrados (não cadastra em dobro ao tentar de novo), ligando e
+  // o Pronto da lista.
+  const [planilhaMarcada, setPlanilhaMarcada] = useState(false);
+  const [criadosDaLista, setCriadosDaLista] = useState<Record<number, string>>({});
+  const [ligando, setLigando] = useState<number | null>(null);
+  const [prontoDaLista, setProntoDaLista] = useState<{ jaTinha: number; cadastrados: number; naoAchados: number } | null>(null);
+  const inicioRef = useRef(inicio);
+  inicioRef.current = inicio;
 
   // Zera tudo ao fechar; a chave nasce ao abrir.
   useEffect(() => {
@@ -169,8 +202,21 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
       setPlanilhaIlegivel(false);
       setDigitadas([]);
       setNumeroDigitado("");
+      setPlanilhaMarcada(false);
+      setCriadosDaLista({});
+      setLigando(null);
+      setProntoDaLista(null);
     } else {
       setChave(novaChaveDaEntrada());
+      // F1/F2: a tela de Fornecedores já sabe quem mandou.
+      const ini = inicioRef.current;
+      if (ini && ini.tipo === "fornecedor") {
+        setEscolha({ tipo: "existente", fornecedor: ini.fornecedor });
+        setPlanilhaMarcada(!!ini.planilha);
+        setPasso(2);
+      } else if (ini && ini.tipo === "novo_fornecedor") {
+        setNovoFornecedor({ inicial: ini.inicial });
+      }
     }
   }, [visible]);
 
@@ -233,7 +279,7 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
       const leitura = await lerArquivoPlanilha(arquivo);
       const r = itensDaPlanilha(leitura.matrix);
       if (!r.ok) throw new Error("ilegivel");
-      setPlanilha({ nome: arquivo.name, itens: r.itens });
+      setPlanilha({ nome: arquivo.name, itens: r.itens, semQuantidade: r.semQuantidade });
       setPlanilhaIlegivel(false);
       setNota(null);
       setArquivoErrado(false);
@@ -297,8 +343,11 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
     setDecisoes({});
     setAjustes({});
     setMostrarTodas(false);
+    setCriadosDaLista({});
   }, [chaveDaFonte]);
   const fornecedorId = escolha && escolha.tipo === "existente" ? escolha.fornecedor.id : null;
+  // F2 (pendência 7): planilha sem quantidade + fornecedor = só ligar.
+  const soLigar = ehPlanilha && !!planilha!.semQuantidade && !!fornecedorId;
   const { data: dadosCodigos, isLoading: carregandoCodigos } = useQuery({
     queryKey: ["supplier-codes", companyId, fornecedorId],
     queryFn: () => estoqueEntradasApi.codigosDoFornecedor(companyId, fornecedorId!),
@@ -311,11 +360,12 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
   const linhas = useMemo(
     () => {
       const itens = ehPlanilha ? planilha!.itens : nota ? nota.itens : [];
-      return itens.map((item) => conferirLinha(item, {
-        indice, codigos, decisao: decisoes[item.n], ajuste: ajustes[item.n], semCusto,
+      const conferidas = itens.map((item) => conferirLinha(item, {
+        indice, codigos, decisao: decisoes[item.n], ajuste: ajustes[item.n], semCusto, soLigar,
       }));
+      return soLigar ? marcarRepetidasDaLista(conferidas) : conferidas;
     },
-    [nota, planilha, ehPlanilha, indice, codigos, decisoes, ajustes, semCusto],
+    [nota, planilha, ehPlanilha, indice, codigos, decisoes, ajustes, semCusto, soLigar],
   );
   const resumo = useMemo(() => resumirConferencia(linhas, !ehPlanilha && nota ? nota.totalDosProdutos : null), [linhas, nota, ehPlanilha]);
   const motivo = motivoDoRodape(linhas, resumo);
@@ -425,6 +475,37 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
     }
   }
 
+  // ── F2 · ligar a lista ao fornecedor (só ligar, sem estoque) ──
+  async function ligarLista() {
+    if (!soLigar || !fornecedorId || !resumo.podeDarEntrada || ligando !== null) return;
+    const { existentes, novos } = itensParaLigar(linhas, semCusto);
+    const total = existentes.length + novos.length;
+    if (!total) return;
+    setLigando(total);
+    const r = await ligarListaAoFornecedor(
+      { existentes, novos, criadosAntes: criadosDaLista },
+      {
+        criar: (produtos) => productsBatchApi.batchCreate(companyId, produtos as any),
+        ligar: (items) => suppliersApi.linkItems(companyId, fornecedorId, items, false),
+      },
+    );
+    setLigando(null);
+    setCriadosDaLista(r.criados);
+    if (Object.keys(r.criados).length) qc.invalidateQueries({ queryKey: ["products"] });
+    if (r.ok) {
+      setProntoDaLista({ jaTinha: r.jaTinha, cadastrados: r.cadastrados, naoAchados: r.naoAchados.length });
+      setPasso(4);
+      for (const k of ["products", "productsAggregated", "supplier-codes", "product-suppliers", "supplier"]) {
+        qc.invalidateQueries({ queryKey: [k] });
+      }
+      qc.invalidateQueries({ queryKey: ["suppliers", companyId] });
+      return;
+    }
+    const e: any = r.erro;
+    if (r.etapa === "cadastrar" && e && e.status === 403 && e.data && e.data.limit) toast.error(T.erroLimite(Number(e.data.limit) || 0));
+    else toast.error(r.etapa === "cadastrar" ? T.erroLigarCadastrar : T.erroLigar);
+  }
+
   function baixarPendentes() {
     if (typeof document === "undefined" || !pendentes.length) return;
     try {
@@ -472,7 +553,7 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
 
   const temProgresso = passo < 4 && (!!nota || !!planilha || passo >= 3);
   const pedirFechar = () => {
-    if (gravando) return;
+    if (gravando || ligando !== null) return;
     if (temProgresso) setPerguntaSair(true);
     else onClose();
   };
@@ -545,9 +626,12 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
   }
   const rodapeTravado = passo === 3 && (ehDigitar ? digitada.faltam > 0 : resumo.falta > 0);
   const pronto = respostas ? resumoDoPronto(respostas) : null;
-  if (passo === 4) rodapeInfo = falha ? "" : T.prontoSemDobro;
+  if (passo === 4) rodapeInfo = prontoDaLista ? T.ligadosRodape : falha ? "" : T.prontoSemDobro;
   if (gravando) rodapeInfo = T.gravandoTitulo;
-  const idsNovos = (respostas || []).flatMap((r) => (r.lines || []).filter((l) => l.created).map((l) => l.product_id));
+  if (ligando !== null) rodapeInfo = T.ligandoTitulo;
+  const idsNovos = prontoDaLista
+    ? Object.values(criadosDaLista)
+    : (respostas || []).flatMap((r) => (r.lines || []).filter((l) => l.created).map((l) => l.product_id));
   const fora = ehDigitar ? [] : linhas
     .filter((l) => l.estado === "fora" || l.estado === "erro")
     .map((l) => ({ nome: l.item.descricao, motivo: l.estado === "erro" ? T.motivoQtdZero : T.motivoFora }));
@@ -662,6 +746,22 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
                 <Text style={s.gravandoTexto}>{T.gravandoTexto(gravando.feitos, gravando.total)}</Text>
               </View>
             ) : null}
+            {ligando !== null ? (
+              <View style={s.gravando} testID="chegou-ligando">
+                <ActivityIndicator size="small" color={Colors.violet3} />
+                <Text style={s.gravandoTitulo}>{T.ligandoTitulo}</Text>
+                <Text style={s.gravandoTexto}>{T.ligandoTexto(ligando)}</Text>
+              </View>
+            ) : null}
+            {passo === 4 && prontoDaLista && ligando === null && (
+              <ProntoDaLista
+                fornecedor={nomeFornecedor || ""}
+                semCusto={semCusto}
+                jaTinha={prontoDaLista.jaTinha}
+                cadastrados={prontoDaLista.cadastrados}
+                naoAchados={prontoDaLista.naoAchados}
+              />
+            )}
             {passo === 4 && pronto && !gravando && (
               <Passo4Pronto
                 estreito={estreito}
@@ -688,7 +788,7 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
                 errosDasLinhas={errosDasLinhas}
               />
             )}
-            {passo === 3 && !ehDigitar && (ehPlanilha || nota) && !gravando && (
+            {passo === 3 && !ehDigitar && (ehPlanilha || nota) && !gravando && ligando === null && (
               <Passo3Conferir
                 estreito={estreito}
                 semCusto={semCusto}
@@ -711,6 +811,7 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
                 onAjustar={ajustar}
                 errosDasLinhas={errosDasLinhas}
                 novoPara={(l) => decisaoDeNovo({ ...l.item, custoUnitario: l.custo }, semCusto, margemDosNovos)}
+                soLigar={soLigar ? { fornecedor: nomeFornecedor || "" } : null}
               />
             )}
             {passo === 2 && (
@@ -731,6 +832,7 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
                 planilhaIlegivel={planilhaIlegivel}
                 onPlanilha={abrirPlanilha}
                 onBaixarModelo={IS_WEB ? baixarModeloDeEntrada : undefined}
+                destaquePlanilha={planilhaMarcada && nomeFornecedor ? { dica: T.planilhaDaListaDica(nomeFornecedor) } : null}
               />
             )}
           </ScrollView>
@@ -766,7 +868,19 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
                     <Text style={s.btnPriTxt}>{T.continuar}</Text>
                   </Pressable>
                 )}
-                {passo === 3 && (
+                {passo === 3 && soLigar && (
+                  <Pressable
+                    style={[s.btnConfirmar, (!podeDarEntrada || ligando !== null) && { opacity: 0.45 }]}
+                    onPress={podeDarEntrada && ligando === null ? ligarLista : undefined}
+                    disabled={!podeDarEntrada || ligando !== null}
+                    accessibilityState={{ disabled: !podeDarEntrada || ligando !== null }}
+                    testID="chegou-ligar-lista"
+                  >
+                    {ligando !== null ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="link" size={14} color="#fff" />}
+                    <Text style={s.btnPriTxt}>{estreito ? T.ligarNCelular(quantasEntram) : T.ligarN(quantasEntram, nomeFornecedor || "")}</Text>
+                  </Pressable>
+                )}
+                {passo === 3 && !soLigar && (
                   <Pressable
                     style={[s.btnConfirmar, (!podeDarEntrada || !!gravando) && { opacity: 0.45 }]}
                     onPress={podeDarEntrada && !gravando ? darEntrada : undefined}
@@ -778,7 +892,7 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
                     <Text style={s.btnPriTxt}>{estreito ? T.darEntradaCelular : T.darEntrada(quantasEntram)}</Text>
                   </Pressable>
                 )}
-                {passo === 4 && pronto && !falha && idsNovos.length > 0 && onVerNovos ? (
+                {passo === 4 && (pronto || prontoDaLista) && !falha && idsNovos.length > 0 && onVerNovos ? (
                   <Pressable style={s.btnSec} onPress={() => onVerNovos(idsNovos)} testID="chegou-ver-novos">
                     <Text style={s.btnSecTxt}>{estreito ? T.verNovosCelular : T.verNovos}</Text>
                   </Pressable>

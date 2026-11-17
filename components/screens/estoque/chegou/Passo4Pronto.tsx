@@ -103,6 +103,34 @@ export function Passo4Pronto({ estreito, semCusto, numeroDaNota, resumo, fora, f
   );
 }
 
+// ── F2 · Pronto da lista sem quantidade (só ligar) ───────────
+export function ProntoDaLista({ fornecedor, semCusto, jaTinha, cadastrados, naoAchados }: {
+  fornecedor: string;
+  semCusto: boolean;
+  jaTinha: number;
+  cadastrados: number;
+  naoAchados: number;
+}) {
+  return (
+    <View style={{ gap: 14 }} testID="chegou-pronto-lista">
+      <View style={[s.caixa, s.caixaVerde]}>
+        <View style={s.selo}><Icon name="check" size={18} color="#fff" /></View>
+        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+          <Text style={s.titulo}>{T.ligadosTitulo(fornecedor)}</Text>
+          <Text style={s.texto}>{T.ligadosDetalhe(jaTinha, cadastrados)}</Text>
+          <Text style={s.apoio}>{semCusto ? T.ligadosSemCusto : T.ligadosComCusto}</Text>
+        </View>
+      </View>
+      {naoAchados > 0 ? (
+        <View style={[s.caixa, s.caixaAmbar]} testID="chegou-pronto-lista-nao-achados">
+          <Icon name="alert_circle" size={16} color={Colors.amber} />
+          <Text style={[s.texto, { flex: 1 }]}>{T.ligadosNaoAchados(naoAchados)}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 const s = StyleSheet.create({
   caixa: { flexDirection: "row", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1, alignItems: "flex-start" },
   caixaVerde: { borderColor: Colors.green, backgroundColor: Colors.greenD },
