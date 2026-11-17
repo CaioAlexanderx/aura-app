@@ -71,6 +71,7 @@ import { ehIphoneInstalado } from "@/services/instalarApp";
 import type { NfcePaymentEntry } from "@/services/nfceApi";
 import { router } from "expo-router";
 import { frasesMatconDaVenda } from "./matconDaVenda";
+import { EtiquetaDeTecla } from "./EtiquetaDeTecla";
 import { cupomComVale } from "@/utils/valeTrocaCupom";
 import { NOME_DO_FRETE } from "@/utils/frete";
 import type { ConfigDoVale } from "@/utils/valeTroca";
@@ -531,9 +532,12 @@ export const SaleComplete = forwardRef<SaleCompleteHandle, Props>(function SaleC
         <View style={[s.actions, { marginTop: 14 }, imprimirPapel && estreito && s.actionsCol]}>
           <Pressable onPress={handlePrint} style={[s.secondaryBtn, imprimirPapel && estreito && s.btnCheio]} testID="venda-imprimir">
             <Text style={s.secondaryText}>{imprimirPapel ? "Imprimir cupom e entrega" : "Imprimir cupom"}</Text>
+            {/* 17/11/2026 (p-155): Ctrl+P (⌘P no Mac). */}
+            <EtiquetaDeTecla acao="imprimir" />
           </Pressable>
           <Pressable onPress={onNewSale} style={[s.primaryBtn, imprimirPapel && estreito && s.btnCheio]}>
             <Text style={s.primaryText}>Nova venda</Text>
+            <EtiquetaDeTecla acao="novaVenda" inv />
           </Pressable>
         </View>
       </View>
@@ -563,9 +567,9 @@ const s = StyleSheet.create({
   matconTexto: { flex: 1, fontSize: 13, color: Colors.ink, fontWeight: "600", lineHeight: 18 },
   divider: { height: 1, backgroundColor: Colors.border, width: "100%", marginVertical: 16 },
   actions: { flexDirection: "row", gap: 10, width: "100%" },
-  secondaryBtn: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 12, paddingVertical: 13, alignItems: "center", borderWidth: 1, borderColor: Colors.border },
+  secondaryBtn: { flex: 1, backgroundColor: Colors.bg4, borderRadius: 12, paddingVertical: 13, alignItems: "center", borderWidth: 1, borderColor: Colors.border, flexDirection: "row", justifyContent: "center", gap: 8, flexWrap: "wrap" },
   secondaryText: { fontSize: 13, color: Colors.ink, fontWeight: "700" },
-  primaryBtn: { flex: 1, backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 13, alignItems: "center" },
+  primaryBtn: { flex: 1, backgroundColor: Colors.violet, borderRadius: 12, paddingVertical: 13, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8 },
   primaryText: { fontSize: 14, color: "#fff", fontWeight: "700" },
   splitBox: { width: "100%", paddingVertical: 8, gap: 4 },
   splitTitle: { fontSize: 11, color: Colors.ink3, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 },

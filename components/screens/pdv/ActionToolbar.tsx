@@ -34,12 +34,19 @@
 //   - O leitor de código sai da barra: o estado virou chip na linha da busca
 //     (ScannerStatusChip) e sobra aqui só o acesso discreto à digitação manual.
 //   - Mobile: Cliente, Vendedora e "Mais…" — Cupom e Troca moram no Mais.
+//
+// 17/11/2026 (p-155 / A3): a etiqueta da tecla (F1–F5) vem do mapa único
+// (utils/atalhosDoCaixa) pelo EtiquetaDeTecla: 11 px, no Mac ⌥ (a tecla F
+// pede fn lá), e só com mouse e teclado — no toque some, inclusive as
+// F1–F5 que apareciam antes.
 // ============================================================
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle, Fragment } from "react";
 import { View, Text, Pressable, StyleSheet, Platform, TextInput, ActivityIndicator } from "react-native";
 import { Colors, Glass, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { IS_WEB, webOnly } from "./types";
+import { EtiquetaDeTecla } from "./EtiquetaDeTecla";
+import type { AcaoDoCaixa } from "@/utils/atalhosDoCaixa";
 
 // ─── Rótulos ─────────────────────────────────────────────────
 // `curto` é o que aparece escrito no botão (largura natural, nunca trunca);
@@ -68,13 +75,15 @@ export function a11yDoBotao(longo: string, atalho?: string | null, valor?: strin
 
 // ─── Shell do botão de texto ─────────────────────────────────
 function ActBtn({
-  rotulo, valor, pendente, atalho, onClick, disabled, a11y, ativo, discreto,
+  rotulo, valor, pendente, acao, onClick, disabled, a11y, ativo, discreto,
 }: {
   rotulo: string;
   valor?: string | null;
   /** Obrigatório pela política do Caixa e ainda vazio → ponto âmbar. */
   pendente?: boolean;
-  atalho?: string | null;
+  /** 17/11/2026 (p-155): a etiqueta de tecla vem do mapa (utils/atalhosDoCaixa),
+   *  no sistema do aparelho, e só com mouse e teclado (EtiquetaDeTecla). */
+  acao?: AcaoDoCaixa | null;
   onClick?: () => void;
   disabled?: boolean;
   a11y: string;
@@ -127,7 +136,7 @@ function ActBtn({
       {temValor && (
         <Text numberOfLines={1} style={s.valor}>{String(valor).trim()}</Text>
       )}
-      {atalho ? <Text style={s.atalho}>{atalho}</Text> : null}
+      {acao ? <EtiquetaDeTecla acao={acao} /> : null}
     </Pressable>
   );
 }
@@ -218,7 +227,7 @@ export const ActBarcode = forwardRef<AlternarHandle, {
     <View style={wrapStyle}>
       <ActBtn
         rotulo={ACT_LABELS.leitor.curto}
-        atalho="F1"
+        acao="codigoManual"
         discreto
         ativo={open}
         onClick={() => setOpen(o => !o)}
@@ -342,7 +351,7 @@ export const ActPerson = forwardRef<PersonPickerHandle, ActPersonProps>(function
         rotulo={rot.curto}
         valor={valorNoBotao}
         pendente={!!required && !value && !disabled}
-        atalho={shortcut}
+        acao={kind}
         ativo={open}
         disabled={!!disabled}
         onClick={() => { if (disabled) return; setOpen(o => !o); }}
@@ -543,7 +552,7 @@ export const ActCoupon = forwardRef<AlternarHandle, CupomProps>(function ActCoup
       <ActBtn
         rotulo={ACT_LABELS.cupom.curto}
         valor={value ? value.code : null}
-        atalho="F4"
+        acao="cupom"
         ativo={open}
         onClick={() => setOpen(o => !o)}
         a11y={a11yDoBotao(ACT_LABELS.cupom.longo, "F4", value ? value.code : null)}
@@ -564,7 +573,7 @@ export function ActTroca({ onOpen }: { onOpen: () => void }) {
   return (
     <ActBtn
       rotulo={ACT_LABELS.troca.curto}
-      atalho="F5"
+      acao="troca"
       onClick={onOpen}
       a11y={a11yDoBotao(ACT_LABELS.troca.longo, "F5")}
     />
@@ -634,11 +643,11 @@ export const ActMais = forwardRef<MaisHandle, {
             accessibilityLabel={a11yDoBotao(ACT_LABELS.troca.longo, "F5")}
           >
             <Text style={popS.maisTxt}>{ACT_LABELS.troca.curto}</Text>
-            <Text style={s.atalho}>F5</Text>
+            <EtiquetaDeTecla acao="troca" />
           </Pressable>
           <View style={popS.maisRow}>
             <Text style={popS.maisTxt}>{ACT_LABELS.leitor.curto}</Text>
-            <Text style={s.atalho}>F1</Text>
+            <EtiquetaDeTecla acao="codigoManual" />
           </View>
           <CodigoManualForm onScan={onScan} listening={listening} lastCode={lastCode}
             autoFocus={false} onDone={() => setOpen(false)} />
@@ -684,12 +693,6 @@ const s = StyleSheet.create({
   rotuloComValor: { color: Colors.ink3, fontWeight: "500" },
   rotuloDiscreto: { color: Colors.ink3, fontWeight: "500", fontSize: 12 },
   valor: { fontSize: 13, color: Colors.ink, fontWeight: "700", maxWidth: 180 },
-  atalho: {
-    fontFamily: Platform.OS === "web" ? ("ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" as any) : "monospace",
-    fontSize: 9, paddingHorizontal: 5, paddingVertical: 2,
-    borderRadius: 4, backgroundColor: Glass.lineSoft, color: Colors.ink3,
-    letterSpacing: 0.4, flexShrink: 0,
-  },
 });
 
 const popS = StyleSheet.create({

@@ -85,6 +85,8 @@ import { EntregaModal } from "@/components/screens/pdv/EntregaModal";
 import { AvisoVendaRecuperada } from "@/components/screens/pdv/AvisoVendaRecuperada";
 // 04/11/2026: convite para ligar os avisos no celular (uma vez por aparelho).
 import { ConviteDeAvisos } from "@/components/ConviteDeAvisos";
+// 17/11/2026 (p-155): botão "Atalhos", dica da busca e a legenda.
+import { BotaoDosAtalhos, DicaDaBusca, LegendaDosAtalhos } from "@/components/screens/pdv/LegendaDosAtalhos";
 import { semAssinatura, avisoDeAtraso, estadoDaLoja, temCaixaVivo } from "@/utils/muroDeAssinatura";
 
 const PAGE_SIZE = 12;
@@ -174,6 +176,9 @@ function CaixaScreenInner() {
   // valem nas duas (na final o F5 não recarrega mais a página). Só um layout
   // (largo ou estreito) monta por vez; o ref do que não está na tela é null.
   const buscaRef = useRef<SearchBoxHandle | null>(null);
+  // 17/11/2026 (p-155): a legenda "Atalhos", ancorada na linha da busca.
+  const linhaDaBuscaRef = useRef<any>(null);
+  const [legendaAberta, setLegendaAberta] = useState(false);
   const codigoManualRef = useRef<AlternarHandle | null>(null);
   const cupomRef = useRef<AlternarHandle | null>(null);
   const maisRef = useRef<MaisHandle | null>(null);
@@ -183,6 +188,8 @@ function CaixaScreenInner() {
   const telaFinalDesde = useRef<number | null>(null);
   const idDaTelaFinal = st.lastSale ? st.lastSale.id : null;
   useEffect(() => { telaFinalDesde.current = idDaTelaFinal ? Date.now() : null; }, [idDaTelaFinal]);
+  // p-155: a legenda não volta aberta depois da tela final.
+  useEffect(() => { if (idDaTelaFinal) setLegendaAberta(false); }, [idDaTelaFinal]);
   // F8 / Alt+X: duas vezes em 2 s tiram o último item (como a lixeira).
   const doisToques = useRef(criarDoisToques(2000)).current;
   const [remocaoArmada, setRemocaoArmada] = useState<string | null>(null);
@@ -207,6 +214,8 @@ function CaixaScreenInner() {
       telaFinalDesde: telaFinalDesde.current,
     }),
     executar: (acao) => {
+      // p-155: qualquer outra tecla do mapa fecha a legenda (ela não segura o Caixa).
+      if (acao !== "legenda" && acao !== "fechar" && legendaAberta) setLegendaAberta(false);
       switch (acao) {
         case "codigoManual":
           // Estreito: o código manual mora no "Mais…".
@@ -224,6 +233,7 @@ function CaixaScreenInner() {
           st.openTroca();
           return true;
         case "busca": buscaRef.current?.focar(); return true;
+        case "legenda": setLegendaAberta(v => !v); return true;
         case "desconto": {
           // O campo do desconto do carrinho (DiscountSection, testID).
           const el: any = typeof document !== "undefined" ? document.querySelector('[data-testid="desconto-campo"]') : null;
@@ -271,6 +281,8 @@ function CaixaScreenInner() {
           return true;
         }
         case "fechar": {
+          // p-155: a legenda fecha primeiro.
+          if (legendaAberta) { setLegendaAberta(false); return true; }
           // Cadastro rápido não fecha sozinho no Esc; a pergunta do desconto
           // volta. As outras janelas cuidam do próprio Esc (Modal, Troca,
           // abrir/fechar caixa, comandas).
@@ -451,10 +463,12 @@ function CaixaScreenInner() {
 
               {/* Busca + estado do leitor: o lojista já está olhando pra cá
                   quando vai bipar, então o status mora aqui. */}
-              <View style={s.searchRow}>
+              <View style={s.searchRow} ref={linhaDaBuscaRef}>
                 <SearchBox ref={buscaRef} value={query} onChange={setQuery} onSubmit={handleSearchSubmit} onScan={handleScan} onMoverDestaque={st.moverDestaqueDaBusca} maxWidth={560} />
+                <BotaoDosAtalhos aberta={legendaAberta} onPress={() => setLegendaAberta(v => !v)} />
                 <ScannerStatusChip listening={scannerListening} lastCode={lastScannedCode} />
               </View>
+              <DicaDaBusca visivel={!!query.trim() && paginated.length > 0} />
 
               {/* Barra de ações — botões de TEXTO com largura natural. Nada de
                   grid de colunas iguais (era o que truncava os rótulos). */}
@@ -530,6 +544,7 @@ function CaixaScreenInner() {
         </View>
 
         {modals}
+        <LegendaDosAtalhos aberta={legendaAberta} onFechar={() => setLegendaAberta(false)} ancora={linhaDaBuscaRef} />
       </View>
     );
   }
@@ -575,10 +590,12 @@ function CaixaScreenInner() {
           </View>
         )}
 
-        <View style={s.searchRow}>
+        <View style={s.searchRow} ref={linhaDaBuscaRef}>
           <SearchBox ref={buscaRef} value={query} onChange={setQuery} onSubmit={handleSearchSubmit} onScan={handleScan} onMoverDestaque={st.moverDestaqueDaBusca} />
+          <BotaoDosAtalhos aberta={legendaAberta} onPress={() => setLegendaAberta(v => !v)} />
           <ScannerStatusChip listening={scannerListening} lastCode={lastScannedCode} compact />
         </View>
+        <DicaDaBusca visivel={!!query.trim() && paginated.length > 0} />
 
         {/* Mobile: Cliente, Vendedora e "Mais…". Cupom, troca e digitação
             manual do código moram dentro do Mais — escritos, não em ícones. */}
@@ -642,6 +659,7 @@ function CaixaScreenInner() {
       </ScrollView>
 
       {modals}
+      <LegendaDosAtalhos aberta={legendaAberta} onFechar={() => setLegendaAberta(false)} ancora={linhaDaBuscaRef} />
     </View>
   );
 }

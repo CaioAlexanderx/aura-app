@@ -8,6 +8,7 @@ import { Colors, Glass } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { IS_WEB, webOnly } from "./types";
 import { criarDetector, criarLeitorDeCampo, OCIOSO_MS } from "@/utils/leituraRapida";
+import { EtiquetaDeTecla } from "./EtiquetaDeTecla";
 
 type Props = {
   value: string;
@@ -164,7 +165,10 @@ export const SearchBox = forwardRef<SearchBoxHandle, Props>(function SearchBox({
         placeholder={placeholder || "Buscar produto ou código…"}
         placeholderTextColor={Colors.ink3}
       />
-      {IS_WEB && <Text style={s.kbd}>⌘K</Text>}
+      {/* 17/11/2026 (p-155): era "⌘K" fixo (aparecia no Windows e no toque).
+          Agora a tecla do mapa, no sistema do aparelho: F6 no Windows, ⌘K
+          no Mac; só com mouse e teclado. */}
+      <EtiquetaDeTecla acao="busca" />
     </View>
   );
 });
@@ -188,15 +192,6 @@ const s = StyleSheet.create({
     outlineStyle: "none",
     borderWidth: 0 as any,
   } as any,
-  kbd: {
-    fontFamily: Platform.OS === "web" ? ("ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" as any) : "monospace",
-    fontSize: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    backgroundColor: Glass.lineFaint,
-    color: Colors.ink3,
-  },
 });
 
 export default SearchBox;

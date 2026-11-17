@@ -4,6 +4,7 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { criarDetector } from "@/utils/leituraRapida";
 import { focoEmBotao } from "@/utils/atalhosDoCaixa";
+import { EtiquetaDeTecla } from "./EtiquetaDeTecla";
 
 /** 17/11/2026 (p-154): Enter confirma o troco só depois disto (o Enter ou o
  *  F9 que abriu o troco não confirma sozinho). Mesma guarda do seletor de
@@ -207,6 +208,8 @@ export function CashChangeModal(props: Props) {
               <Text style={[s.btnPrimaryText, !ready && { color: "rgba(255,255,255,0.55)" }]}>
                 Confirmar venda
               </Text>
+              {/* 17/11/2026 (p-155): o Enter confirma (TROCO_ENTER_LIBERADO_MS). */}
+              <EtiquetaDeTecla campo="confirmarTroco" inv />
             </Pressable>
           </View>
         </View>
@@ -303,6 +306,7 @@ const s = StyleSheet.create({
   btnPrimary: {
     flex: 1, paddingVertical: 12, borderRadius: 10,
     backgroundColor: Colors.violet, alignItems: "center",
+    flexDirection: "row", justifyContent: "center", gap: 8,
   },
   btnPrimaryDisabled: { backgroundColor: Colors.violetD },
   btnPrimaryText: { fontSize: 13, fontWeight: "600", color: "#fff" },
