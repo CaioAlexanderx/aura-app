@@ -47,6 +47,12 @@ export type AcaoDaBarra = {
   onComprar: () => void;
   onAtualizar: () => void;
   onOrcamento: () => void;
+  /**
+   * p-181 (personalizador no quadro da loja comum): um botão só, o de
+   * levar a peça para a sacola DA LOJA. Sem "Comprar agora": a sacola e
+   * o checkout são os da página mãe. Ausente = a barra de sempre.
+   */
+  unico?: { rotulo: string; ocupado?: boolean };
 };
 
 function Falta({ a, pequena }: { a: AcaoDaBarra; pequena?: boolean }) {
@@ -85,6 +91,21 @@ function Falta({ a, pequena }: { a: AcaoDaBarra; pequena?: boolean }) {
 const LARGURA_EMPILHA = 375;
 
 function Acoes({ a, desktop, estreita }: { a: AcaoDaBarra; desktop: boolean; estreita?: boolean }) {
+  if (a.unico && a.aceita) {
+    const u = a.unico;
+    return (
+      <Botao
+        tipo={a.adicionado ? "feito" : "primario"}
+        rotulo={a.adicionado ? "Adicionado" : u.ocupado ? "Conferindo o preço…" : u.rotulo}
+        rotuloAcessivel={a.adicionado ? "Adicionado à sacola" : u.rotulo}
+        icone={a.adicionado ? "check" : desktop ? "shopping_bag" : undefined}
+        onPress={() => { if (!u.ocupado) (a.editando ? a.onAtualizar : a.onAdicionar)(); }}
+        estilo={{ width: "100%" }}
+        testID="botao-adicionar"
+        pequeno={estreita}
+      />
+    );
+  }
   if (a.editando) {
     return <Botao rotulo={`Atualizar item · ${dinheiro(a.total)}`} rotuloAcessivel={`Atualizar item por ${dinheiro(a.total)}`} onPress={a.onAtualizar} />;
   }

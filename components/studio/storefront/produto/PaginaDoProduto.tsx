@@ -101,7 +101,36 @@ function noDom(r: any): any {
   return null;
 }
 
-export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: string }) {
+/**
+ * p-181 — a mesma página dentro do quadro (iframe) da loja comum
+ * (components/studio/storefront/quadro/PersonalizadorNoQuadro.tsx).
+ *
+ * Fica SÓ o personalizador: palco (com o 3D), preço, cor, arte e
+ * quantidade. Saem o cabeçalho da loja, a trilha, o compartilhar, a faixa
+ * da temporada, o orçamento em lote, a entrega, os detalhes, "Da mesma
+ * categoria", o rodapé e a barra de cookies — a página mãe já tem a loja
+ * em volta. A barra de compra fica com um botão só, que não grava na
+ * sacola daqui: chama `onConfirmar`, e quem cota e avisa a loja é o quadro.
+ *
+ * Sem esta prop a página é exatamente a da vitrine Studio.
+ */
+export type ModoQuadro = {
+  /** No lugar do cabeçalho da loja ("Personalizar · <peça>" e o fechar). */
+  cabecalho: ReactNode;
+  /** A peça passou pelo que falta; o quadro valida, cota e avisa a loja. */
+  onConfirmar: () => void;
+  /** Reaberta pela loja para editar um item da sacola: "Atualizar item". */
+  editando?: boolean;
+  /** A cotação do servidor em curso. */
+  ocupado?: boolean;
+  /** "Adicionado" no botão, depois que a loja recebeu a peça. */
+  confirmado?: boolean;
+};
+
+/** O `testID` do palco no quadro: a miniatura é lida dos canvas dele. */
+export const PALCO_DO_QUADRO = "palco-do-quadro";
+
+export function PaginaDoProduto({ sf, slug, quadro }: { sf: StorefrontState; slug: string; quadro?: ModoQuadro }) {
   const t = useTemaDaVitrine();
   const reduzir = useReduzirMovimento();
   const { width, height } = useWindowDimensions();
@@ -113,7 +142,7 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
   const values = sf.editingValues;
   const store: any = sf.store;
   const modo = modoDaVitrine(store);
-  const editando = !!sf._editingLineId;
+  const editando = quadro ? !!quadro.editando : !!sf._editingLineId;
   const grupo = produto ? categoriaDaPeca(sf, produto) : null;
   const peca = nomeDaPeca(grupo?.categoria?.name || produto?.category);
 
@@ -301,6 +330,8 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
   }
   function adicionar() {
     if (falta || ladoEnviando) { irParaFalta(); return; }
+    // No quadro a peça não entra na sacola daqui: vai para a da loja.
+    if (quadro) { quadro.onConfirmar(); return; }
     // Fase 2: a peça fica na tela com o que foi preenchido, o hook marca
     // `adicionado` e a gaveta mostra "Adicionado à sacola · Ver sacola"
     // (SacolaEmGaveta, montada pelo ConteudoDaVitrine em volta desta
@@ -316,6 +347,7 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
   }
   function atualizar() {
     if (falta || ladoEnviando) { irParaFalta(); return; }
+    if (quadro) { quadro.onConfirmar(); return; }
     sf.commitConfigure();
   }
   function trocarModelo(p: StudioStoreProduct) {
@@ -548,13 +580,14 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
         precoDeTabela={precoDeTabela}
         adicionalPorUnidade={adicionalPorUnidade}
         prazoDaLoja={prazoDaLoja}
-        onLote={() => sf.goTo("lote")}
+        onLote={quadro ? undefined : () => sf.goTo("lote")}
       />
     </>
   )));
 
   const entrega = store?.delivery;
-  if (!entrega || entrega.pickup_enabled !== false || entrega.delivery_enabled || entrega.courier_pickup_enabled) {
+  // No quadro a entrega é a da loja comum, no checkout dela.
+  if (!quadro && (!entrega || entrega.pickup_enabled !== false || entrega.delivery_enabled || entrega.courier_pickup_enabled)) {
     passo += 1;
     secoes.push(secao("entrega", (
       <>
@@ -625,14 +658,16 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
       prazo={prazo}
       store={store}
       desktop={desktop}
+      noQuadro={!!quadro}
     />
   );
 
   const acao: AcaoDaBarra = {
     total: totalDaLinha, unitario, qtd, arte: arteDaLinha,
     totalNoPix: temPix ? noPix(totalDaLinha) : null,
-    falta: fraseDaFalta, cutucada, adicionado, editando, aceita: modo.aceita, store,
+    falta: fraseDaFalta, cutucada, adicionado: quadro ? !!quadro.confirmado : adicionado, editando, aceita: modo.aceita, store,
     onFalta: irParaFalta, onAdicionar: adicionar, onComprar: comprarAgora, onAtualizar: atualizar, onOrcamento: pedirOrcamento,
+    ...(quadro ? { unico: { rotulo: editando ? `Atualizar item · ${dinheiro(totalDaLinha)}` : "Adicionar à sacola", ocupado: !!quadro.ocupado } } : null),
   };
 
   const detalhes = (
@@ -691,7 +726,7 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
     const fimDoPalco = 44 + alturaDoPalco;
     return (
       <View style={{ flex: 1, backgroundColor: t.bg }} testID="pagina-do-produto">
-        <CabecalhoDaLoja sf={sf} desktop={false} onVoltar={() => { sf.setError(null); sf.goTo("list"); }} linhaEmbaixo={dock} />
+        {quadro ? quadro.cabecalho : <CabecalhoDaLoja sf={sf} desktop={false} onVoltar={() => { sf.setError(null); sf.goTo("list"); }} linhaEmbaixo={dock} />}
         <View style={{ flex: 1, position: "relative" }}>
           <ScrollView
             ref={rolagem}
@@ -700,13 +735,13 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
             onScroll={(e) => { const y = e.nativeEvent.contentOffset.y; const d = y > fimDoPalco; if (d !== dock) setDock(d); }}
             contentContainerStyle={{ paddingBottom: 24 }}
           >
-            {trilha}
-            <View style={{ paddingHorizontal: 16 }}>{palco}</View>
+            {quadro ? null : trilha}
+            <View style={{ paddingHorizontal: 16 }} testID={quadro ? PALCO_DO_QUADRO : undefined}>{palco}</View>
             {info}
             {secoes}
-            {detalhes}
-            {mesma}
-            {rodape}
+            {quadro ? null : detalhes}
+            {quadro ? null : mesma}
+            {quadro ? null : rodape}
           </ScrollView>
           <Doca
             visivel={dock}
@@ -717,7 +752,7 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
             onPress={() => rolagem.current?.scrollTo?.({ y: 0, animated: !reduzir })}
           />
         </View>
-        <BarraDeCookies />
+        {quadro ? null : <BarraDeCookies />}
         <BarraDeCompraCelular a={acao} />
         {sobreposicoes}
       </View>
@@ -726,12 +761,12 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }} testID="pagina-do-produto">
-      <CabecalhoDaLoja sf={sf} desktop onVoltar={() => sf.goTo("list")} categoriaAtiva={grupo ? String(grupo.categoria?.slug || grupo.categoria?.id || "") : null} />
+      {quadro ? quadro.cabecalho : <CabecalhoDaLoja sf={sf} desktop onVoltar={() => sf.goTo("list")} categoriaAtiva={grupo ? String(grupo.categoria?.slug || grupo.categoria?.id || "") : null} />}
       <ScrollView ref={rolagem} style={[{ flex: 1 }, ROLAGEM_ESTAVEL]} contentContainerStyle={{ paddingBottom: 24 }}>
         <View style={{ width: "100%", maxWidth: LARGURA_MAX, alignSelf: "center", paddingHorizontal: 40 }}>
-          <View style={{ paddingVertical: 8 }}>{trilha}</View>
+          {quadro ? <View style={{ height: 16 }} /> : <View style={{ paddingVertical: 8 }}>{trilha}</View>}
           <View style={{ flexDirection: "row", gap: 56, alignItems: "flex-start" }}>
-            <View style={[{ width: larguraDaGaleria }, Platform.OS === "web" ? ({ position: "sticky", top: 16 } as any) : null]}>
+            <View testID={quadro ? PALCO_DO_QUADRO : undefined} style={[{ width: larguraDaGaleria }, Platform.OS === "web" ? ({ position: "sticky", top: 16 } as any) : null]}>
               {palco}
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
@@ -739,12 +774,12 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
               {secoes}
             </View>
           </View>
-          <View style={{ marginTop: 56 }}>{detalhes}</View>
-          {mesma}
+          {quadro ? null : <View style={{ marginTop: 56 }}>{detalhes}</View>}
+          {quadro ? null : mesma}
         </View>
-        {rodape}
+        {quadro ? null : rodape}
       </ScrollView>
-      <BarraDeCookies />
+      {quadro ? null : <BarraDeCookies />}
       {/* O bloco de compra numa faixa PRÓPRIA, fora da rolagem: alinhado à
           coluna direita como no mockup, mas sem cobrir nada — no mockup
           ele flutuava por cima e, numa tela de 820 px, escondia a seção
@@ -764,7 +799,7 @@ export function PaginaDoProduto({ sf, slug }: { sf: StorefrontState; slug: strin
 
 /** Nome, preço ao vivo, parcelas, Pix e o bloco calmo do prazo (Tela 1). */
 function InfoDoTopo({
-  nome, produto, unitario, qtd, parcelas, pix, inclui, prazo, store, desktop,
+  nome, produto, unitario, qtd, parcelas, pix, inclui, prazo, store, desktop, noQuadro,
 }: {
   nome: string;
   produto: StudioStoreProduct;
@@ -776,6 +811,8 @@ function InfoDoTopo({
   prazo: number | null;
   store: any;
   desktop: boolean;
+  /** p-181: sem compartilhar (o link seria o da vitrine Studio) e sem a faixa da temporada. */
+  noQuadro?: boolean;
 }) {
   const t = useTemaDaVitrine();
   const tipo = useTipografia();
@@ -787,7 +824,7 @@ function InfoDoTopo({
         <Texto accessibilityRole="header" style={[{ flex: 1, fontFamily: tipo.display, fontSize: desktop ? 32 : 27, lineHeight: desktop ? 36 : 31, color: t.ink, paddingTop: 4, letterSpacing: -0.3 }, TITULO_EQUILIBRADO]}>
           {nome}
         </Texto>
-        <BotaoCompartilhar produto={produto} />
+        {noQuadro ? null : <BotaoCompartilhar produto={produto} />}
       </View>
       <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8, marginTop: desktop ? 10 : 6 }}>
         <Numero accessibilityLiveRegion="polite" testID="preco-unitario" style={{ fontSize: desktop ? 30 : 28, fontWeight: "700", letterSpacing: -0.7, color: t.ink }}>{dinheiro(preco)}</Numero>
@@ -815,7 +852,7 @@ function InfoDoTopo({
           <Texto style={{ fontSize: 14, color: t.ink2, flex: 1 }}>Você aprova o mockup antes de produzir</Texto>
         </View>
       </View>
-      {modoDaVitrine(store).aceita ? <View style={{ marginTop: 10 }}><FaixaDaTemporada store={store} lugar="junto" /></View> : null}
+      {!noQuadro && modoDaVitrine(store).aceita ? <View style={{ marginTop: 10 }}><FaixaDaTemporada store={store} lugar="junto" /></View> : null}
     </View>
   );
 }
