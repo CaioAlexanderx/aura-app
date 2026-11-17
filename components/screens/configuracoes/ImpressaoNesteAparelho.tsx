@@ -15,6 +15,8 @@ import {
   type EscolhaDoAparelho, ehCelular, lerEscolhaDoAparelho, gravarEscolhaDoAparelho,
   textoDaEscolha, TEXTOS_DA_IMPRESSAO,
 } from "@/utils/impressaoAutomatica";
+import { AjudaImprimirSemJanela } from "@/components/screens/configuracoes/AjudaImprimirSemJanela";
+import { TEXTOS_DA_AJUDA } from "@/components/screens/configuracoes/textosDaAjudaSemJanela";
 
 type Props = {
   companyId: string | null | undefined;
@@ -25,6 +27,7 @@ type Props = {
 export function ImpressaoNesteAparelho({ companyId, celular }: Props) {
   const [ehCel] = useState(() => (typeof celular === "boolean" ? celular : ehCelular()));
   const [escolha, setEscolha] = useState<EscolhaDoAparelho>(() => lerEscolhaDoAparelho(companyId, ehCel));
+  const [ajuda, setAjuda] = useState(false);
 
   function escolher(e: EscolhaDoAparelho) {
     setEscolha(e);
@@ -57,6 +60,13 @@ export function ImpressaoNesteAparelho({ companyId, celular }: Props) {
         })}
       </View>
       <Text testID="impressao-aparelho-texto" style={s.efeito}>{textoDaEscolha(escolha, ehCel)}</Text>
+      {/* p-161 (17/11/2026): só no computador que imprime. */}
+      {!ehCel && escolha === "imprimir" && (
+        <Pressable testID="impressao-ajuda-sem-janela" accessibilityRole="link" onPress={() => setAjuda(true)} style={s.ajuda}>
+          <Text style={s.ajudaTxt}>{TEXTOS_DA_AJUDA.link}</Text>
+        </Pressable>
+      )}
+      {ajuda && <AjudaImprimirSemJanela visivel={ajuda} onFechar={() => setAjuda(false)} />}
     </View>
   );
 }
@@ -70,4 +80,6 @@ const s = StyleSheet.create({
   chipTxt:   { fontSize: 12, color: Colors.ink, fontWeight: "600" },
   chipTxtOn: { color: Colors.violet3 },
   efeito:    { fontSize: 11, color: Colors.ink3, marginTop: 8, lineHeight: 15 },
+  ajuda:     { alignSelf: "flex-start", marginTop: 6, paddingVertical: 2 },
+  ajudaTxt:  { fontSize: 12, color: Colors.violet3, fontWeight: "600", textDecorationLine: "underline" },
 });

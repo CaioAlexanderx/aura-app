@@ -65,3 +65,51 @@ describe("ImpressaoNesteAparelho", () => {
     await act(async () => { root.unmount(); });
   });
 });
+
+describe("ajuda: imprimir sem a janela (p-161)", () => {
+  const A = require("@/components/screens/configuracoes/textosDaAjudaSemJanela");
+
+  test("os endereços levam a impressão direta e o app", () => {
+    for (const c of [A.COMANDO_CHROME_WINDOWS, A.COMANDO_EDGE_WINDOWS, A.COMANDO_CHROME_MAC]) {
+      expect(c).toContain("--kiosk-printing https://app.getaura.com.br");
+    }
+    const barra = String.fromCharCode(92);
+    expect(A.COMANDO_CHROME_WINDOWS.startsWith('"C:' + barra + "Program Files" + barra + "Google" + barra + "Chrome" + barra + "Application" + barra + 'chrome.exe"')).toBe(true);
+  });
+
+  test("Mac só no Mac (iPad fica de fora)", () => {
+    expect(A.ehMac({ platform: "MacIntel", userAgent: "Mozilla/5.0 (Macintosh)" })).toBe(true);
+    expect(A.ehMac({ platform: "Win32", userAgent: "Mozilla/5.0 (Windows NT 10.0)" })).toBe(false);
+    expect(A.ehMac({ platform: "MacIntel", userAgent: "Mozilla/5.0 (iPad)" })).toBe(false);
+  });
+
+  async function montar(props: any) {
+    const { ImpressaoNesteAparelho } = require("@/components/screens/configuracoes/ImpressaoNesteAparelho");
+    const div = document.createElement("div");
+    document.body.appendChild(div);
+    const root = createRoot(div);
+    await act(async () => { root.render(React.createElement(ImpressaoNesteAparelho, props)); });
+    return { div, root };
+  }
+
+  test("computador que imprime: o link aparece e abre o passo a passo", async () => {
+    const { div, root } = await montar({ companyId: "co-7", celular: false });
+    const link = div.querySelector('[data-testid="impressao-ajuda-sem-janela"]') as HTMLElement;
+    expect(link).toBeTruthy();
+    expect(link.textContent).toBe(A.TEXTOS_DA_AJUDA.link);
+    await act(async () => { link.click(); });
+    expect(document.body.textContent).toContain(A.TEXTOS_DA_AJUDA.passo1Titulo);
+    expect(document.body.textContent).toContain(A.TEXTOS_DA_AJUDA.aviso);
+    await act(async () => { root.unmount(); });
+  });
+
+  test("Neste aparelho não, ou no celular: sem link", async () => {
+    gravarEscolhaDoAparelho("co-8", "nao");
+    const a = await montar({ companyId: "co-8", celular: false });
+    expect(a.div.querySelector('[data-testid="impressao-ajuda-sem-janela"]')).toBeNull();
+    await act(async () => { a.root.unmount(); });
+    const b = await montar({ companyId: "co-9", celular: true });
+    expect(b.div.querySelector('[data-testid="impressao-ajuda-sem-janela"]')).toBeNull();
+    await act(async () => { b.root.unmount(); });
+  });
+});
