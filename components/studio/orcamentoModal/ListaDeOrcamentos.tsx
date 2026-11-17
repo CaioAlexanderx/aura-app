@@ -83,7 +83,35 @@ const pill = StyleSheet.create({
 // ─── Componente principal ────────────────────────────────────
 type Aberto = { cid: string | null; id: string };
 
-export function ListaDeOrcamentos({ abrirId }: { abrirId?: string }) {
+// 17/11/2026 (p-175): a mesma lista abre no shell Negócio, em
+// /personalizados/orcamentos ("Orçamentos 3D"). As props abaixo são todas
+// opcionais e, sem elas, a tela é a do /studio de sempre.
+export type ListaDeOrcamentosProps = {
+  abrirId?: string;
+  /** Cabeçalho da tela. Sem ele: "GESTÃO · ORÇAMENTOS" / "Orçamentos". */
+  cabecalho?: { eyebrow: string; title: string; subtitle?: string };
+  /** Fora do shell /studio não existe o botão flutuante: no celular o
+   *  "Novo orçamento" fica no cabeçalho. */
+  semFlutuante?: boolean;
+  /** Para onde volta ao fechar o orçamento aberto pela rota. */
+  rotaDaLista?: string;
+  /** Destino do "Ver pedido" do orçamento aprovado. Sem ele: /studio/pedidos/<id>. */
+  rotaDoPedido?: (orderId: string) => string;
+};
+
+const CABECALHO_DO_STUDIO = {
+  eyebrow: "GESTÃO · ORÇAMENTOS",
+  title: "Orçamentos",
+  subtitle: "Crie, envie pelo WhatsApp e acompanhe. Aprovado vira pedido na Produção.",
+};
+
+export function ListaDeOrcamentos({
+  abrirId,
+  cabecalho = CABECALHO_DO_STUDIO,
+  semFlutuante = false,
+  rotaDaLista = "/studio/gestao/orcamentos",
+  rotaDoPedido,
+}: ListaDeOrcamentosProps) {
   const router        = useRouter();
   const { companyId, company } = useAuth();
   const consolidadoNaConta = useAuthStore((st) => st.consolidatedView);
@@ -166,7 +194,7 @@ export function ListaDeOrcamentos({ abrirId }: { abrirId?: string }) {
 
   function fecharModal() {
     setAberto(null);
-    if (abrirId) router.replace("/studio/gestao/orcamentos" as any);
+    if (abrirId) router.replace(rotaDaLista as any);
   }
 
   const fmtCurrency = (v: number) =>
@@ -191,10 +219,10 @@ export function ListaDeOrcamentos({ abrirId }: { abrirId?: string }) {
     <StudioScreen variant="reading">
       {/* Header */}
       <StudioPageHeader
-        eyebrow="GESTÃO · ORÇAMENTOS"
-        title="Orçamentos"
-        subtitle="Crie, envie pelo WhatsApp e acompanhe. Aprovado vira pedido na Produção."
-        mobileActions={null}
+        eyebrow={cabecalho.eyebrow}
+        title={cabecalho.title}
+        subtitle={cabecalho.subtitle}
+        mobileActions={semFlutuante ? undefined : null}
         rightSlot={
           <Pressable
             style={s.btnNew}
@@ -315,6 +343,7 @@ export function ListaDeOrcamentos({ abrirId }: { abrirId?: string }) {
           lojas={lojas}
           consolidado={consolidado && lojas.length > 1}
           logoDaLoja={companyId ? logoDaLoja : null}
+          rotaDoPedido={rotaDoPedido}
           onClose={fecharModal}
           onMudou={() => { load(); }}
         />
