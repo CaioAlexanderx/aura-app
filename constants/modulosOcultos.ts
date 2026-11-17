@@ -21,6 +21,7 @@
 //   16/11/2026  Entram os três itens da seção Personalizados (p-128): o
 //               menu foi declarado antes das telas. Ver a lista abaixo.
 //   16/11/2026  A Produção sai da lista (p-129): a tela nasceu.
+//   17/11/2026  Os Insumos saem da lista (p-178): a tela nasceu.
 //
 // POR QUE ESTE MECANISMO, e não apagando o item do NAV:
 //
@@ -47,9 +48,9 @@ export const MODULOS_OCULTOS: ReadonlySet<string> = new Set<string>([
   // estão declarados no NAV, com plano e permissão, mas a tela de cada um
   // ainda não nasceu em app/(tabs)/personalizados. Item sem tela não vai ao
   // menu: cada linha sai daqui no PR que criar a tela dela. A Produção saiu
-  // no p-129 (app/(tabs)/personalizados/producao.tsx).
+  // no p-129 (app/(tabs)/personalizados/producao.tsx) e os Insumos no p-178
+  // (app/(tabs)/personalizados/insumos.tsx).
   'personalizados.orcamentos',
-  'personalizados.insumos',
 ]);
 
 // ============================================================

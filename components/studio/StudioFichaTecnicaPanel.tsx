@@ -81,6 +81,11 @@ type Props = {
   customizationConfig?: CustomizationConfig;
   onSaved?: (summary: Summary) => void;
   onChanged?: () => void;
+  /**
+   * p-178 (17/11/2026): para onde vão os atalhos "Ir pra Insumos". Padrão:
+   * /studio/insumos (o /studio de sempre). O shell Negócio passa o seu.
+   */
+  aoIrParaInsumos?: () => void;
 };
 
 function getMarginTone(margin: number | null, t: StudioPalette) {
@@ -150,9 +155,14 @@ export default function StudioFichaTecnicaPanel({
   customizationConfig,
   onSaved,
   onChanged,
+  aoIrParaInsumos,
 }: Props) {
   const t = useStudioTokens();
   const router = useRouter();
+  const irParaInsumos = () => {
+    if (aoIrParaInsumos) aoIrParaInsumos();
+    else router.push("/studio/insumos");
+  };
   const styles = useMemo(() => buildStyles(t), [t]);
 
   const variants = useMemo<ProductVariant[]>(
@@ -444,7 +454,7 @@ export default function StudioFichaTecnicaPanel({
           desc="Você precisa ter pelo menos 1 insumo na lista pra montar a ficha técnica."
           primaryCta={{
             label: "Ir pra Insumos",
-            onPress: () => router.push("/studio/insumos"),
+            onPress: irParaInsumos,
           }}
         />
         <NovoInsumoModal
@@ -858,7 +868,7 @@ export default function StudioFichaTecnicaPanel({
 
         {inputs.length === 0 ? (
           <Pressable
-            onPress={() => router.push("/studio/insumos")}
+            onPress={irParaInsumos}
             style={styles.hintBox}
           >
             <Icon name="info" size={14} color={t.infoInk} />

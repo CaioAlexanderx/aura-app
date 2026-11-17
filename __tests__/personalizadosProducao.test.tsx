@@ -461,10 +461,9 @@ describe("a rota /personalizados/producao", () => {
     expect(FONTE_ROTA).toContain('const MOD_DA_TELA = "personalizados.producao";');
     expect(MODULE_PLAN_MAP["personalizados.producao"]).toBe("negocio");
     expect(MODULOS_OCULTOS.has("personalizados.producao")).toBe(false);
-    // As outras duas telas do menu ainda não nasceram: continuam ocultas.
-    for (const m of ["personalizados.orcamentos", "personalizados.insumos"]) {
-      expect(MODULOS_OCULTOS.has(m)).toBe(true);
-    }
+    // Orçamentos 3D ainda não nasceu: continua oculto. Os Insumos saíram no
+    // p-178 (__tests__/personalizadosInsumos.test.tsx).
+    expect(MODULOS_OCULTOS.has("personalizados.orcamentos")).toBe(true);
   });
 
   test("loja com a frente ligada: abre a Fila de produção e refaz /auth/me", async () => {

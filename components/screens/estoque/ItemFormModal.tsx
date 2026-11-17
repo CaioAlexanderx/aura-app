@@ -101,6 +101,8 @@ import { Aviso } from "./reajuste/Aviso";
 // PERSONALIZADOS_LIBERADO + studio_enabled + sem vertical_active).
 import { personalizadosAtivo } from "@/utils/personalizados";
 import { SecaoPersonalizacao } from "./item-form/SecaoPersonalizacao";
+// 17/11/2026 (p-178): a ficha técnica (composição) do Studio, mesma trava.
+import { SecaoComposicao } from "./item-form/SecaoComposicao";
 import { avisoDePromocaoNoCadastro } from "@/components/screens/blackfriday/dePor/regrasDePor";
 import {
   capaDa, chaveDaCor, duracaoParaMinutos, gerarCodigoServico,
@@ -263,6 +265,8 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   const [confirmarSaida, setConfirmarSaida] = useState(false);
   // p-173: o editor de personalização aberto por cima do cadastro.
   const [fichaAberta, setFichaAberta] = useState(false);
+  // p-178: a ficha técnica (composição) aberta por cima do cadastro.
+  const [composicaoAberta, setComposicaoAberta] = useState(false);
   // Duplicata escolhida com um cadastro em andamento: espera confirmação.
   const [dupPendente, setDupPendente] = useState<DuplicataRow | null>(null);
   // 10/11/2026 (fix estoque preso): tirar da grade cor/tamanho que ainda
@@ -420,6 +424,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     const t: ItemType = prod ? (prod.unit === "srv" ? "service" : "product") : tipo;
     setAlvo(prod);
     setFichaAberta(false);
+    setComposicaoAberta(false);
     setType(t);
     setFornLinhas([]);
     setFornSujos(false);
@@ -928,7 +933,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       else pedirFechar();
     },
     fecharSheet: () => setCatSheet(false),
-    edicao: modoEdicao, pode: podeSalvar, sheet: catSheet, ficha: fichaAberta,
+    edicao: modoEdicao, pode: podeSalvar, sheet: catSheet, ficha: fichaAberta || composicaoAberta,
   };
   useEffect(() => {
     if (!visible || !IS_WEB || typeof document === "undefined") return;
@@ -1278,6 +1283,23 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     />
   ) : null;
 
+  // 17/11/2026 (p-178): Ficha técnica (composição). Mesma trava da
+  // Personalização: com PERSONALIZADOS_LIBERADO em false (ou a frente
+  // desligada) nem monta. O resto (módulo personalizados.insumos,
+  // consolidado, item do grupo) é components/personalizados/regrasDosInsumos.ts.
+  const secComposicao = isProduto && modoEdicao && personalizadosAtivo(pdvSettings, (company as any)?.vertical_active) ? (
+    <SecaoComposicao
+      produtoId={productId}
+      nome={alvo?.name || nome}
+      preco={alvo?.price ?? precoNum}
+      isProduto={isProduto}
+      ownerCompanyId={alvo?.ownerCompanyId ?? null}
+      aberta={composicaoAberta}
+      onAbrir={() => setComposicaoAberta(true)}
+      onFechar={() => setComposicaoAberta(false)}
+    />
+  ) : null;
+
   return (
     <View style={[s.overlay, narrow && s.overlayNarrow]}>
       <Pressable style={s.backdrop} onPress={pedirFechar} />
@@ -1348,6 +1370,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
                   {secCodigos}
                   {secFotos}
                   {secPersonalizacao}
+                  {secComposicao}
                 </View>
               </View>
             ) : (
@@ -1363,6 +1386,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
                 {secCodigos}
                 {secFotos}
                 {secPersonalizacao}
+                {secComposicao}
                 {secDescricao}
               </View>
             )
@@ -1380,6 +1404,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
                 {secNfse}
                 {secFotos}
                 {secPersonalizacao}
+                {secComposicao}
                 {secCodigos}
               </View>
             </View>
@@ -1391,6 +1416,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
               {secEstoque}
               {secFotos}
               {secPersonalizacao}
+              {secComposicao}
               {secDescricao}
               {secSaiEm}
               {secNfse}
