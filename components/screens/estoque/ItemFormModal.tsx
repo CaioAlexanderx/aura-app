@@ -96,6 +96,11 @@ import { fornecedoresDoProdutoApi } from "@/services/suppliersApi";
 import { corpoDosFornecedores, type LinhaDeFornecedor } from "@/utils/entradaDeMercadoria";
 import { matconApi } from "@/services/matconApi";
 import { Aviso } from "./reajuste/Aviso";
+// 17/11/2026 (p-173): a ficha de personalização do Studio no cadastro do
+// Negócio. Só monta com a frente Personalizados ligada (trava geral
+// PERSONALIZADOS_LIBERADO + studio_enabled + sem vertical_active).
+import { personalizadosAtivo } from "@/utils/personalizados";
+import { SecaoPersonalizacao } from "./item-form/SecaoPersonalizacao";
 import { avisoDePromocaoNoCadastro } from "@/components/screens/blackfriday/dePor/regrasDePor";
 import {
   capaDa, chaveDaCor, duracaoParaMinutos, gerarCodigoServico,
@@ -256,6 +261,8 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   const [pendentes, setPendentes] = useState<FotoPendente[]>([]);
   const [progresso, setProgresso] = useState<{ feitas: number; total: number } | null>(null);
   const [confirmarSaida, setConfirmarSaida] = useState(false);
+  // p-173: o editor de personalização aberto por cima do cadastro.
+  const [fichaAberta, setFichaAberta] = useState(false);
   // Duplicata escolhida com um cadastro em andamento: espera confirmação.
   const [dupPendente, setDupPendente] = useState<DuplicataRow | null>(null);
   // 10/11/2026 (fix estoque preso): tirar da grade cor/tamanho que ainda
@@ -412,6 +419,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   const semear = useCallback((prod: Product | null, tipo: ItemType, manter?: Manter | null, herdar?: CategoriaHerdada | null) => {
     const t: ItemType = prod ? (prod.unit === "srv" ? "service" : "product") : tipo;
     setAlvo(prod);
+    setFichaAberta(false);
     setType(t);
     setFornLinhas([]);
     setFornSujos(false);
@@ -908,7 +916,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   // mais. Escape pede pra fechar (com confirmação se houver o que perder).
   const acoesRef = useRef({
     salvar: (_o: boolean) => {}, fechar: () => {}, fecharSheet: () => {},
-    edicao: false, pode: false, sheet: false,
+    edicao: false, pode: false, sheet: false, ficha: false,
   });
   acoesRef.current = {
     salvar,
@@ -920,12 +928,15 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
       else pedirFechar();
     },
     fecharSheet: () => setCatSheet(false),
-    edicao: modoEdicao, pode: podeSalvar, sheet: catSheet,
+    edicao: modoEdicao, pode: podeSalvar, sheet: catSheet, ficha: fichaAberta,
   };
   useEffect(() => {
     if (!visible || !IS_WEB || typeof document === "undefined") return;
     function onKey(e: any) {
       const painel = panelRef.current;
+      // p-173: com a personalização aberta por cima, as teclas são dela
+      // (o painel e as folhas dele). O Escape não fecha o cadastro embaixo.
+      if (acoesRef.current.ficha) return;
       if (e.key === "Escape") {
         e.preventDefault();
         // A folha de categoria fecha primeiro: Escape fecha uma camada
@@ -1249,6 +1260,24 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     />
   ) : null;
 
+  // 17/11/2026 (p-173): Personalização. Com a trava PERSONALIZADOS_LIBERADO
+  // em false (ou a frente desligada na empresa) nem monta: o cadastro é o
+  // de sempre. Quem decide o resto (plano, permissão, consolidado, item do
+  // grupo) é components/personalizados/regrasDaFicha.ts.
+  const secPersonalizacao = isProduto && modoEdicao && personalizadosAtivo(pdvSettings, (company as any)?.vertical_active) ? (
+    <SecaoPersonalizacao
+      produtoId={productId}
+      nome={alvo?.name || nome}
+      preco={alvo?.price ?? precoNum}
+      isProduto={isProduto}
+      ownerCompanyId={alvo?.ownerCompanyId ?? null}
+      fotos={[capaDoServidor, ...galeria.principal.map((f) => f.url)].filter(Boolean) as string[]}
+      aberta={fichaAberta}
+      onAbrir={() => setFichaAberta(true)}
+      onFechar={() => setFichaAberta(false)}
+    />
+  ) : null;
+
   return (
     <View style={[s.overlay, narrow && s.overlayNarrow]}>
       <Pressable style={s.backdrop} onPress={pedirFechar} />
@@ -1318,6 +1347,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
                   {secNotaFiscal}
                   {secCodigos}
                   {secFotos}
+                  {secPersonalizacao}
                 </View>
               </View>
             ) : (
@@ -1332,6 +1362,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
                 {secNotaFiscal}
                 {secCodigos}
                 {secFotos}
+                {secPersonalizacao}
                 {secDescricao}
               </View>
             )
@@ -1348,6 +1379,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
                 {secSaiEm}
                 {secNfse}
                 {secFotos}
+                {secPersonalizacao}
                 {secCodigos}
               </View>
             </View>
@@ -1358,6 +1390,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
               {secFornecedores}
               {secEstoque}
               {secFotos}
+              {secPersonalizacao}
               {secDescricao}
               {secSaiEm}
               {secNfse}

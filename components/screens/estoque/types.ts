@@ -92,6 +92,10 @@ export type Product = {
   notaFiscal?: NotaFiscal | null;
   // Multi-CNPJ: item do dono do grupo visível nas outras lojas.
   isGroupShared?: boolean;
+  // 17/11/2026 (p-173): products.company_id, a loja dona do item. A ficha de
+  // personalização só grava no produto da própria empresa. null = backend
+  // não mandou.
+  ownerCompanyId?: string | null;
 };
 
 export const UNITS = ["un", "pct", "cx", "kg", "g", "ml", "L", "par", "kit"];
