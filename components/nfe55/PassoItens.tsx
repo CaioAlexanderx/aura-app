@@ -23,6 +23,9 @@ export function PassoItens({ form, set, falta, faltantes, previa, estreito }: Pr
   const semNcm = faltantesDosItens(faltantes);
   const cfops = [...new Set(itens.map((i) => i.cfop))];
   const interestadual = previa?.operacao?.id_dest === 2;
+  // 17/11/2026: cliente de outro estado que não é contribuinte do ICMS (sem
+  // inscrição estadual ou isento) sai em 6108 (backend, taxEngine.cfopVenda55).
+  const naoContribuinte = interestadual && Number(previa?.operacao?.ind_ie_dest) !== 1;
   return (
     <View testID="nfe55-passo-itens">
       {semNcm.length ? (
@@ -60,7 +63,11 @@ export function PassoItens({ form, set, falta, faltantes, previa, estreito }: Pr
           <Text style={[p.lab, { marginTop: 8 }]}>Código da operação (CFOP)</Text>
           <Text style={{ fontSize: 13.5, fontWeight: "700", color: Colors.ink }} testID="nfe55-cfops">{cfops.join(" / ") || "—"}</Text>
           <Text style={p.hint}>
-            {interestadual ? "Cliente de outro estado: 6102 (ou 6404 se o imposto já veio pago na compra)." : "Mesmo estado: 5102 (ou 5405 se o imposto já veio pago na compra)."}
+            {naoContribuinte
+              ? "Cliente de outro estado sem inscrição estadual: 6108 (no MEI, 6102)."
+              : interestadual
+                ? "Cliente de outro estado: 6102 (ou 6404 se o imposto já veio pago na compra)."
+                : "Mesmo estado: 5102 (ou 5405 se o imposto já veio pago na compra)."}
             {" "}É o mesmo cálculo da NFC-e, pelo cadastro do produto.
           </Text>
         </Cartao>
