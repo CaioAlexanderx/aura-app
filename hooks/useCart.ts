@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { pdvApi } from "@/services/api";
+import { baixarEstoqueNoCache, produtosComVarianteVendida, FOLGA_MS } from "@/utils/estoqueAposVenda";
+import { esquecerVariacoes } from "@/utils/cacheDeVariacoes";
 import type { PdvSaleResponse } from "@/services/salesApi";
 import type { MatconDaVenda } from "@/components/screens/pdv/matconDaVenda";
 import type { LotAllocation } from "@/services/matconApi";
@@ -511,10 +513,36 @@ export function useCart(
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cart.length]);
 
+  // 17/11/2026 (p-149): o catálogo é conferido com o servidor uma vez,
+  // FOLGA_MS depois da última venda (utils/estoqueAposVenda.ts).
+  const recargaDoCatalogo = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    // Saindo do Caixa com recarga marcada: confere já (a próxima tela vê o
+    // estoque do servidor).
+    if (recargaDoCatalogo.current) {
+      clearTimeout(recargaDoCatalogo.current);
+      recargaDoCatalogo.current = null;
+      qc.invalidateQueries({ queryKey: ["products", companyId] });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId]);
+
   const saleMutation = useMutation({
     mutationFn: (body: any) => pdvApi.createSale(companyId!, body, { idempotencyKey: chaveDaVendaRef.current }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["products", companyId] });
+    onSuccess: (_res: any, body: any) => {
+      // 17/11/2026 (p-149): antes o catálogo inteiro descia de novo a cada
+      // venda. Agora o estoque dos itens vendidos baixa no cache na hora e a
+      // conferência com o servidor vem uma vez, depois da última venda.
+      var itensVendidos = Array.isArray(body?.items) ? body.items : [];
+      if (typeof qc.setQueriesData === "function") {
+        qc.setQueriesData({ queryKey: ["products", companyId] }, function(old: any) { return baixarEstoqueNoCache(old, itensVendidos); });
+      }
+      produtosComVarianteVendida(itensVendidos).forEach(function(pid) { esquecerVariacoes(companyId, pid); });
+      if (recargaDoCatalogo.current) clearTimeout(recargaDoCatalogo.current);
+      recargaDoCatalogo.current = setTimeout(function() {
+        recargaDoCatalogo.current = null;
+        qc.invalidateQueries({ queryKey: ["products", companyId] });
+      }, FOLGA_MS);
       qc.invalidateQueries({ queryKey: ["dashboard", companyId] });
       qc.invalidateQueries({ queryKey: ["transactions", companyId] });
       // 01/09/2026: invalida o prefixo inteiro (nao so ["customers", companyId]).
