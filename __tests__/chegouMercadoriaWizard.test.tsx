@@ -5,6 +5,8 @@
 // A2: "Novo fornecedor" dentro do passo (FornecedorFormSheet com noPasso).
 // A3: passo 2 com as três origens e os avisos (arquivo errado, PDF, nota de
 //     outro CNPJ, nota repetida).
+// A4a: passo 3, conferência: estados da linha, resumo e rodapé travado
+//      enquanto falta decidir (pendência 5).
 // ============================================================
 import React from "react";
 import renderer, { act } from "react-test-renderer";
@@ -58,7 +60,7 @@ jest.mock("@/components/screens/estoque/chegou/chegouRegras", () => {
 
 import { ChegouMercadoriaModal } from "@/components/screens/estoque/chegou/ChegouMercadoriaModal";
 import { TEXTOS_CHEGOU as T } from "@/components/screens/estoque/chegou/textosChegou";
-import { XML_ALFA } from "./fixtures/chegouNotas";
+import { XML_ALFA, XML_CONFERENCIA, PRODUTOS_CONFERENCIA } from "./fixtures/chegouNotas";
 
 const ALFA = {
   id: "f-alfa", company_id: "c1", name: "Distribuidora Alfa", cnpj: "11222333000181", contact_name: "Marcos",
@@ -418,5 +420,123 @@ describe("A3 · passo 2", () => {
     await irAoPasso2(tree, "f-alfa");
     await tocar(tree, "chegou-origem-nota-botao");
     expect(desabilitado(tree, "chegou-continuar")).toBe(false);
+  });
+});
+
+describe("A4a · passo 3, conferência", () => {
+  async function irAoPasso3(props: Record<string, unknown> = {}) {
+    mockQueries["supplier-codes"] = { data: { supplier_id: "f-alfa", items: [], map: { "AL-0391": "p-acetona" } }, isLoading: false };
+    mockArquivo = { name: "nota.xml", conteudo: XML_CONFERENCIA };
+    const r = await montar({ products: PRODUTOS_CONFERENCIA, ...props });
+    await tocar(r.tree, "chegou-cartao-nota-botao");
+    await tocar(r.tree, "chegou-continuar");
+    return r;
+  }
+  const textoDe = (no: any): string =>
+    typeof no === "string" ? no : (no.children || []).map(textoDe).join(" ");
+  const valor = (tree: any, id: string) => textoDe(porId(tree, "chegou-resumo-" + id)[0]);
+  const travado = (tree: any) => !!porId(tree, "chegou-dar-entrada")[0].props.accessibilityState.disabled;
+
+  test("casa as linhas e mostra como achou cada uma", async () => {
+    const { tree } = await irAoPasso3();
+    expect(tem(tree, "chegou-passo-3")).toBe(true);
+    const t = texto(tree);
+    expect(t).toContain("Esmalte Cremoso Vermelho 8 ml");
+    expect(t).toContain(T.achadoPor.codigo_barras);
+    expect(t).toContain(T.achadoPor.codigo_fornecedor);
+    expect(t).toContain(T.previaEstoque("12", "36", "un"));
+    expect(t).toContain(T.semParTitulo);
+    expect(t).toContain(T.erroQtdZero);
+    expect(t).toContain(T.confere("R$ 48,00", "R$ 4,80"));
+    expect(t).toContain(T.totalBate("R$ 795,60"));
+  });
+
+  test("resumo e rodapé travado enquanto falta decidir", async () => {
+    const { tree } = await irAoPasso3();
+    expect(valor(tree, "itens")).toContain("5");
+    expect(valor(tree, "prontos")).toContain("3");
+    expect(valor(tree, "falta")).toContain("1");
+    expect(valor(tree, "fora")).toContain("1");
+    expect(tem(tree, "chegou-rodape-travado")).toBe(true);
+    expect(rodape(tree)).toContain(T.rodapeFaltam(1));
+    expect(travado(tree)).toBe(true);
+    expect(texto(tree)).toContain(T.darEntrada(3));
+  });
+
+  test("'Cadastrar novo' (preço sugerido) destrava; 'Ligar' trava com o nome; 'Deixar de fora' destrava", async () => {
+    const { tree } = await irAoPasso3();
+    await tocar(tree, "chegou-linha-4-novo");
+    expect(texto(tree)).toContain(T.vivoNovo("18", "R$ 7,40"));
+    expect(valor(tree, "novos")).toContain("1");
+    expect(tem(tree, "chegou-rodape-travado")).toBe(false);
+    expect(travado(tree)).toBe(false);
+    expect(texto(tree)).toContain(T.darEntrada(4));
+
+    await tocar(tree, "chegou-linha-4-ligar");
+    expect(texto(tree)).toContain(T.vivoLigar);
+    expect(rodape(tree)).toContain(T.rodapeFaltaLigar("BASE FORTALECEDORA 10ML"));
+    expect(travado(tree)).toBe(true);
+
+    await tocar(tree, "chegou-linha-4-fora");
+    expect(texto(tree)).toContain(T.vivoFora);
+    expect(valor(tree, "fora")).toContain("2");
+    expect(travado(tree)).toBe(false);
+    expect(texto(tree)).toContain(T.darEntrada(3));
+
+    // Tocar de novo na escolha desfaz.
+    await tocar(tree, "chegou-linha-4-fora");
+    expect(travado(tree)).toBe(true);
+  });
+
+  test("'Confere?' não trava; 'Está certo' tira o aviso", async () => {
+    const { tree } = await irAoPasso3();
+    expect(tem(tree, "chegou-linha-3-confere")).toBe(true);
+    await tocar(tree, "chegou-linha-3-esta-certo");
+    expect(tem(tree, "chegou-linha-3-confere")).toBe(false);
+  });
+
+  test("'Corrigir o custo' muda o custo da linha", async () => {
+    const { tree } = await irAoPasso3();
+    await tocar(tree, "chegou-linha-3-corrigir");
+    await act(async () => { porId(tree, "chegou-linha-3-custo")[0].props.onChangeText("480"); });
+    expect(tem(tree, "chegou-linha-3-confere")).toBe(false);
+    expect(texto(tree)).toContain("R$ 4,80");
+  });
+
+  test("quantidade zero: 'Dizer quantos' traz a linha de volta", async () => {
+    const { tree } = await irAoPasso3();
+    await tocar(tree, "chegou-linha-5-dizer-quantos");
+    await act(async () => { porId(tree, "chegou-linha-5-quantos")[0].props.onChangeText("6"); });
+    expect(tem(tree, "chegou-linha-5-erro")).toBe(false);
+    // Removedor não está na loja: vira linha sem par, que trava.
+    expect(valor(tree, "falta")).toContain("2");
+  });
+
+  test("quem não vê custo: sem coluna de custo, sem total e o novo pede o preço", async () => {
+    const { tree } = await irAoPasso3({ semCusto: true });
+    const t = texto(tree);
+    expect(t).not.toContain(T.colCusto);
+    expect(tem(tree, "chegou-resumo-total")).toBe(false);
+    expect(tem(tree, "chegou-usar-medio")).toBe(false);
+    expect(t).not.toContain("R$ 48,00");
+    await tocar(tree, "chegou-linha-4-novo");
+    // Sem preço sugerido, o novo ainda falta (o painel do preço é o A4b).
+    expect(travado(tree)).toBe(true);
+  });
+
+  test("códigos do fornecedor chegando: a conferência espera", async () => {
+    const { tree } = await irAoPasso3();
+    mockQueries["supplier-codes"] = { data: undefined, isLoading: true };
+    await act(async () => { porId(tree, "chegou-usar-medio")[0].props.onPress(); });
+    expect(tem(tree, "chegou-conferindo")).toBe(true);
+    expect(texto(tree)).toContain(T.lendoTitulo);
+  });
+
+  test("no celular: rodapé curto e 'Dar entrada'", async () => {
+    (global as any).innerWidth = 375;
+    const { tree } = await irAoPasso3();
+    expect(rodape(tree)).toContain(T.rodapeFaltaCelular(1));
+    expect(texto(tree)).toContain(T.darEntradaCelular);
+    expect(texto(tree)).toContain(T.passoCelular(3, T.passos[3]));
   });
 });
