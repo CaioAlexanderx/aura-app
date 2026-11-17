@@ -14,6 +14,7 @@ import renderer, { act } from "react-test-renderer";
 jest.mock("@/components/Icon", () => ({ Icon: () => null }));
 jest.mock("@/components/Toast", () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() } }));
 jest.mock("@/components/WebPortal", () => ({ WebPortal: ({ children }: any) => children }));
+jest.mock("@/components/JanelaEmpilhada", () => ({ JanelaEmpilhada: ({ children }: any) => children }));
 const mockRefreshMe = jest.fn(() => Promise.resolve());
 jest.mock("@/stores/auth", () => ({ useAuthStore: Object.assign(() => ({}), { getState: () => ({ refreshMe: mockRefreshMe, token: "t" }) }) }));
 jest.mock("@/services/api", () => ({ request: jest.fn(), BASE_URL: "http://x" }));
