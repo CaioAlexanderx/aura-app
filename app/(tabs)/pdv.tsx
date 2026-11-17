@@ -411,6 +411,9 @@ function CaixaScreenInner() {
       cartItemCount={cartProps.items.length}
       cartTotal={cartProps.subtotal}
       pedido={st.pedidoModal}
+      avisoReserva={st.avisoReserva}
+      onNaoVenderReservado={st.naoVenderReservado}
+      onVenderReservado={st.venderReservado}
     />
     </>
   );
@@ -444,6 +447,8 @@ function CaixaScreenInner() {
     cardPriceFor: st.cardPriceOn ? (p => st.gridCardPrice(p as Product)) : undefined,
     page, totalPages, filteredTotal, goTo,
     destaqueId: st.destaqueId ?? null,
+    // 17/11/2026 (Pedido, A4): trava do Pedido; desligada, o cartão de sempre.
+    reservaLiberada: st.reservaLiberada,
   };
   const alternarZerados = () => setShowOutOfStock(v => !v);
 
@@ -750,6 +755,8 @@ type PropsDaGrade = {
   filteredTotal: number;
   goTo: (p: number) => void;
   destaqueId?: string | null;
+  /** 17/11/2026 (Pedido, A4): selo "N reservado" no cartão. */
+  reservaLiberada?: boolean;
 };
 
 function ProductSection({ columns, minCard, dense, ...g }: PropsDaGrade & { columns: number; minCard?: number; dense?: boolean }) {
@@ -783,6 +790,7 @@ function ProductSection({ columns, minCard, dense, ...g }: PropsDaGrade & { colu
         matconEnabled={g.matconEnabled}
         cardPriceFor={g.cardPriceFor}
         destaqueId={g.destaqueId}
+        reservaLiberada={g.reservaLiberada}
       />
       <Pagination page={g.page} totalPages={g.totalPages} total={g.filteredTotal}
         pageSize={PAGE_SIZE} onPage={g.goTo} />

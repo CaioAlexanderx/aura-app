@@ -23,6 +23,8 @@ import { nameToHex } from "@/utils/colorNames";
 // 10/11/2026 (NFS-e do serviço): selo "Falta código da NFS-e".
 import { faltaCodigoNfse } from "@/utils/nfseServico";
 import { SELO_FALTA_NFSE } from "./nfseNaLista";
+import { ReservaNaLinha } from "./ReservaNaLinha";
+import { reservadoDoProduto } from "@/utils/reservaDoPedido";
 
 // 14/11/2026 (CP2b da revisão de cores): a tabela própria desta lista (24
 // hex exatos; o resto saía como o hex cru, "#C3B091") saiu. A cor do
@@ -42,7 +44,7 @@ function isServiceProduct(p: Product) {
 
 export function ProductRow({
   product, onDelete, onEdit, onLink,
-  isSelected, onSelect, consulta, semCusto, onEntrada, emiteNfse,
+  isSelected, onSelect, consulta, semCusto, onEntrada, emiteNfse, reservaLiberada = false,
 }: {
   product: Product;
   onDelete?: (id: string) => void;
@@ -60,6 +62,8 @@ export function ProductRow({
   onEntrada?: (product: Product) => void;
   // 10/11/2026 — a loja emite NFS-e: serviço sem código ganha o selo.
   emiteNfse?: boolean;
+  // 17/11/2026 (Pedido, A4): trava do Pedido. Sem ela, a linha de sempre.
+  reservaLiberada?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -154,6 +158,7 @@ export function ProductRow({
                   <Text style={s.lotesChipSeta}>{lotesAbertos ? "▴" : "▾"}</Text>
                 </Pressable>
               ) : null}
+              <ReservaNaLinha estoque={product.stock} reservado={reservadoDoProduto(product, reservaLiberada)} testID={"estoque-reservado-" + product.id} />
             </View>
           )}
           {!consulta && <Text style={s.price}>{m(fmt(product.price))}</Text>}

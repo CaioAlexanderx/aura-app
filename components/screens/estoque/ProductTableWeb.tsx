@@ -27,6 +27,8 @@ import { VariantesConsulta } from "./VariantesConsulta";
 // 10/11/2026 (NFS-e do serviço): selo "Falta código da NFS-e".
 import { faltaCodigoNfse } from "@/utils/nfseServico";
 import { DICA_FALTA_NFSE, SELO_FALTA_NFSE } from "./nfseNaLista";
+import { ReservaNaLinha } from "./ReservaNaLinha";
+import { reservadoDoProduto } from "@/utils/reservaDoPedido";
 
 const fmtBRL = (n: number) =>
   "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -49,9 +51,11 @@ type Props = {
   onEntrada?: (product: any) => void;
   // 10/11/2026 — a loja emite NFS-e: serviço sem código ganha o selo.
   emiteNfse?: boolean;
+  // 17/11/2026 (Pedido, A4): trava do Pedido. Sem ela, a coluna de sempre.
+  reservaLiberada?: boolean;
 };
 
-export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bulkSelected, onSelect, canLink, consulta, semCusto, onEntrada, emiteNfse }: Props) {
+export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bulkSelected, onSelect, canLink, consulta, semCusto, onEntrada, emiteNfse, reservaLiberada = false }: Props) {
   const C = useColors();
   const { isDark } = useThemeStore();
   const { m } = useValoresOcultos();
@@ -202,6 +206,7 @@ export function ProductTableWeb({ items, onEdit, onDelete, onLink, bulkMode, bul
                     color: low ? (isDark ? "#f87171" : "#dc2626") : C.ink,
                     fontVariantNumeric: "tabular-nums",
                   } as any}>{fmtQty(p.stock)}{" "}<span style={{ fontFamily: Fonts.body, fontSize: 11, fontWeight: 400, opacity: 0.7 } as any}>{unidadeParaQuantidade(p.stock, p.unit || "un")}</span></span>
+                  <ReservaNaLinha estoque={p.stock} reservado={reservadoDoProduto(p, reservaLiberada)} testID={"estoque-reservado-" + p.id} />
                   {lotes && (
                     <div>
                       <button
