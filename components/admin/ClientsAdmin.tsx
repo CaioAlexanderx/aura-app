@@ -28,6 +28,7 @@ import { ResyncSubscriptionButton } from "./ResyncSubscriptionButton";
 import { ValorCombinadoSection } from "./ValorCombinadoSection";
 import { RegistrarContatoModal } from "./painel/RegistrarContatoModal";
 import { FrenteSection, STUDIO_PLAN_MSG, isStudioPlanError } from "./FrenteSection";
+import { CasaNegocioSection } from "./CasaNegocioSection";
 import { textoDoDocumento } from "@/utils/documentoEmpresa";
 import { MODULE_PLAN_MAP, PLAN_LEVEL } from "@/hooks/useVisibleModules";
 import {
@@ -686,6 +687,10 @@ export function ClientsAdmin({ initialId }: { initialId?: string | null } = {}) 
 
         {/* 05/10/2026: Frente da empresa (cadastro por frente). */}
         <FrenteSection companyId={sc.id} />
+
+        {/* 17/11/2026 (p-189): casa no Negócio (virada do Studio). Só com a
+            trava PERSONALIZADOS_LIBERADO e só para a equipe; sem ela, nada. */}
+        <CasaNegocioSection companyId={sc.id} />
 
         {/* Seletor de modulo vertical */}
         <View style={s.section}>

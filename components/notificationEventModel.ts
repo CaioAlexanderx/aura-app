@@ -238,7 +238,8 @@ export function ordersToEvents(orders: OrderNotification[]): StoreEvent[] {
     severity:     'info' as NotificationSeverity,
     entity_id:    'pedido:' + o.id,
     entity_label: 'Pedido #' + o.order_number,
-    cta_route:    SOURCE_ROUTE[o.source] || '/canal',
+    // p-194: o servidor manda a rota própria só para a frente Personalizados
+    cta_route:    (typeof o.cta_route === 'string' && o.cta_route.startsWith('/') ? o.cta_route : '') || SOURCE_ROUTE[o.source] || '/canal',
     created_at:   o.created_at,
     read_at:      null,
   }));

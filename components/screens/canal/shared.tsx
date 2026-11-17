@@ -138,7 +138,7 @@ export function ServiceIconPreview({ icon, size = 18, color }: { icon: string; s
   }
 }
 
-export function Field({ label, value, onChange, placeholder, multiline, onBlur, testID, inputMode, keyboardType, autoCapitalize }: {
+export function Field({ label, value, onChange, placeholder, multiline, onBlur, testID, inputMode, keyboardType, autoCapitalize, maxLength }: {
   label: string; value: string; onChange: (v: string) => void; placeholder?: string; multiline?: boolean;
   // onBlur: pra normalizar o que a pessoa colou SEM corrigir a cada tecla
   // (completar "loja.com" pra "https://loja.com" no meio da digitacao
@@ -148,6 +148,8 @@ export function Field({ label, value, onChange, placeholder, multiline, onBlur, 
   inputMode?: "text" | "decimal" | "numeric" | "email" | "tel" | "url" | "search" | "none";
   keyboardType?: any;
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
+  /** Limite do campo (ex.: os LIMITES do banner de personalizados). */
+  maxLength?: number;
 }) {
   const cs = useChannelStyles();
   const p = usePaletaDoCanal();
@@ -156,7 +158,7 @@ export function Field({ label, value, onChange, placeholder, multiline, onBlur, 
       <Text style={cs.fieldLabel}>{label}</Text>
       <TextInput style={[cs.input, multiline && cs.textarea]} value={value} onChangeText={onChange}
         onBlur={onBlur} testID={testID}
-        inputMode={inputMode} keyboardType={keyboardType} autoCapitalize={autoCapitalize}
+        inputMode={inputMode} keyboardType={keyboardType} autoCapitalize={autoCapitalize} maxLength={maxLength}
         placeholder={placeholder} placeholderTextColor={p.ink3} multiline={multiline} numberOfLines={multiline ? 3 : 1} />
     </View>
   );

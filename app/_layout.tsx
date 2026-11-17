@@ -14,6 +14,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LGPDConsent } from "@/components/LGPDConsent";
 import { startAutoSync } from "@/services/offlineSync";
 import { StudioThemeProvider } from "@/contexts/StudioThemeMode";
+import { vaiParaOStudio } from "@/utils/personalizados";
 import { UpdateBanner } from "@/components/UpdateBanner";
 import { GlobalOverlays } from "@/components/GlobalOverlays";
 import { KarateLoginTransition } from "@/components/karate/KarateLoginTransition";
@@ -237,7 +238,10 @@ function AuthGuard() {
 
     const isOdonto = (company as any)?.vertical_active === "odonto";
     const isFood   = (company as any)?.vertical_active === "food";
-    const isStudio = (company as any)?.vertical_active === "studio";
+    // 17/11/2026 (p-189): a casa no Negócio (utils/personalizados) leva ao
+    // shell Negócio mesmo quem foi Studio. Trava PERSONALIZADOS_LIBERADO
+    // em false: igual a antes (só vertical_active === "studio").
+    const isStudio = vaiParaOStudio(company as any);
     const isKarate = ["karate_federation", "karate_dojo"]
   .includes(((company as any)?.vertical_active ?? (company as any)?.vertical) as string);
     // 2026-07-17 (hotfix FPKT): federação de karatê tem checkout próprio

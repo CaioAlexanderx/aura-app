@@ -172,6 +172,36 @@ function AvisoDaVitrine({ aviso }: { aviso: AvisoNaTela | null }) {
 }
 
 /**
+ * O link das fontes da loja (o par escolhido + as fontes de arte), uma vez
+ * na página. `pronto` = a loja chegou ou falhou (sem ela, o par padrão).
+ * Saiu de dentro da CascaDaVitrine sem mudar nada (p-181): o personalizador
+ * no quadro da loja comum carrega as mesmas fontes.
+ */
+export function useFontesDaVitrine(parEscolhido: string | null, pronto: boolean) {
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof document === "undefined") return;
+    if (!pronto) return;
+    const href = cssDaVitrineStudio(parEscolhido);
+    const existente = document.getElementById("aura-storefront-fonts") as HTMLLinkElement | null;
+    if (existente) {
+      if (existente.getAttribute("href") !== href) existente.setAttribute("href", href);
+      return;
+    }
+    const pre1 = document.createElement("link");
+    pre1.rel = "preconnect"; pre1.href = "https://fonts.googleapis.com";
+    const pre2 = document.createElement("link");
+    pre2.rel = "preconnect"; pre2.href = "https://fonts.gstatic.com"; pre2.crossOrigin = "";
+    const link = document.createElement("link");
+    link.id = "aura-storefront-fonts";
+    link.rel = "stylesheet";
+    link.href = href;
+    document.head.appendChild(pre1);
+    document.head.appendChild(pre2);
+    document.head.appendChild(link);
+  }, [pronto, parEscolhido]);
+}
+
+/**
  * A casca da vitrine: carrega a loja, poe fonte, tema e consentimento em
  * volta de tudo e desenha o esqueleto ou o erro enquanto nao ha loja.
  *
@@ -205,31 +235,10 @@ export function CascaDaVitrine({
   // link das fontes e o par da tela têm de ser o mesmo.
   const parEscolhido = chaveDaTipografia((sf.store as any)?.site?.font_family) || null;
   const falhou = !!sf.erroDeCarga && !sf.store;
-
-  useEffect(() => {
-    if (Platform.OS !== "web" || typeof document === "undefined") return;
-    // A tela de erro tambem fala com a voz do Studio: sem a loja, carrega o
-    // par padrao; se a loja chegar depois (o "Tentar de novo" deu certo),
-    // o link troca para o par que a lojista escolheu.
-    if (!sf.store && !falhou) return;
-    const href = cssDaVitrineStudio(parEscolhido);
-    const existente = document.getElementById("aura-storefront-fonts") as HTMLLinkElement | null;
-    if (existente) {
-      if (existente.getAttribute("href") !== href) existente.setAttribute("href", href);
-      return;
-    }
-    const pre1 = document.createElement("link");
-    pre1.rel = "preconnect"; pre1.href = "https://fonts.googleapis.com";
-    const pre2 = document.createElement("link");
-    pre2.rel = "preconnect"; pre2.href = "https://fonts.gstatic.com"; pre2.crossOrigin = "";
-    const link = document.createElement("link");
-    link.id = "aura-storefront-fonts";
-    link.rel = "stylesheet";
-    link.href = href;
-    document.head.appendChild(pre1);
-    document.head.appendChild(pre2);
-    document.head.appendChild(link);
-  }, [sf.store, falhou, parEscolhido]);
+  // A tela de erro tambem fala com a voz do Studio: sem a loja, carrega o
+  // par padrao; se a loja chegar depois (o "Tentar de novo" deu certo),
+  // o link troca para o par que a lojista escolheu.
+  useFontesDaVitrine(parEscolhido, !!sf.store || falhou);
 
   const [aviso, setAviso] = useState<AvisoNaTela | null>(null);
   const relogio = useRef<ReturnType<typeof setTimeout> | null>(null);
