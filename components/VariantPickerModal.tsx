@@ -44,6 +44,7 @@ import { nomeDaCorDaVariante } from "@/utils/nomeDaCor";
 import { criarDetector, OCIOSO_MS, CONFIRMA_OCIOSO_MS } from "@/utils/leituraRapida";
 import { ordenarVariantes, type ChaveDeVariante } from "@/utils/ordemDeTamanhos";
 import { precoDaVariante } from "@/utils/precoEfetivo";
+import { variacoesEmCache, guardarVariacoes, mesmasVariacoes } from "@/utils/cacheDeVariacoes";
 
 /** Tempo em que o Enter e ignorado logo depois de o seletor marcar o tamanho
  *  bipado: leitor que manda Enter duas vezes (CR+LF) nao confirma sozinho. */
@@ -147,14 +148,43 @@ export function VariantPickerModal({
   var posicoes = useRef<Record<string, number>>({});
   var vivo = useRef<any>({});
 
+  // 17/11/2026 (p-150): "carga" muda quando chega a primeira lista deste
+  // produto (do cache ou do servidor). A busca de trás, com o cache já na
+  // tela, atualiza preço e estoque sem mexer no tamanho marcado.
+  var [carga, setCarga] = useState(0);
   useEffect(function() {
     if (!visible || !product || !company?.id) { setVariants([]); return; }
-    setLoading(true);
-    setVariants([]); // bipe em sequência troca o produto com o seletor aberto
-    companiesApi.variants(company.id, product.id)
-      .then(function(res) { setVariants(res.variants || []); })
-      .catch(function() { setVariants([]); })
-      .finally(function() { setLoading(false); });
+    var companyId = company.id;
+    var productId = product.id;
+    var ativo = true;
+    var doCache = variacoesEmCache(companyId, productId);
+    if (doCache) {
+      setVariants(doCache);
+      setLoading(false);
+      setCarga(function(n) { return n + 1; });
+    } else {
+      setLoading(true);
+      setVariants([]); // bipe em sequência troca o produto com o seletor aberto
+    }
+    companiesApi.variants(companyId, productId)
+      .then(function(res) {
+        var lista = res.variants || [];
+        guardarVariacoes(companyId, productId, lista);
+        if (!ativo) return;
+        if (doCache) {
+          if (!mesmasVariacoes(doCache, lista)) setVariants(lista);
+        } else {
+          setVariants(lista);
+          setCarga(function(n) { return n + 1; });
+        }
+      })
+      .catch(function() {
+        if (!ativo || doCache) return; // sem rede: fica o que veio do cache
+        setVariants([]);
+        setCarga(function(n) { return n + 1; });
+      })
+      .finally(function() { if (ativo) setLoading(false); });
+    return function() { ativo = false; };
   }, [visible, product?.id, company?.id]);
 
   var activeVariants = ordenarVariantes(
@@ -183,7 +213,10 @@ export function VariantPickerModal({
     setSelId(alvo ? alvo.id : null);
     setBipadoId(alvo ? alvo.id : null);
     enterLiberadoEm.current = Date.now() + ENTER_LIBERADO_APOS_MS;
-  }, [visible, variants, preselectVariantId, preselectBarcode, product?.id]);
+    // 17/11/2026 (p-150): "carga" no lugar de "variants" — a atualização de
+    // trás (cache já na tela) não desmarca o tamanho escolhido nas setas.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, carga, preselectVariantId, preselectBarcode, product?.id]);
 
   // A variante marcada fica a vista (lista longa de tamanhos).
   useEffect(function() {
