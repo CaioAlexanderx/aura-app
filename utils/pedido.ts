@@ -1,40 +1,29 @@
 // ============================================================
-// AURA. — Pedido separado de venda: trava e regra de quem vê (A1, p-63a)
+// AURA. — Pedido separado de venda: quem vê o "Guardar > Pedido" no Caixa
+// (A1, p-63a, 17/11/2026)
 //
 // O Caixa guarda a venda como PEDIDO: as peças ficam reservadas para a
 // cliente buscar depois (mockup aprovado pelo Caio em 17/11/2026). Pedido
 // não é venda: não baixa estoque nem mexe no caixa até concluir.
 //
-// Trava geral PEDIDO_LIBERADO = false: nada do Pedido aparece na tela de
-// ninguém. O recurso só liga com o sinal (A3), a conclusão (A6a/A6b) e o
-// cancelamento (A7) no ar e conferidos pela Célia; sem eles a lojista
-// guardaria um pedido que não consegue concluir nem cancelar. Ligar é trocar
-// para true num PR próprio, com o OK do Caio, junto da variável de mesmo
-// nome no backend (Aura-backend, services/pedidoBalcao.js).
+// A trava é a MESMA da aba Pedidos (utils/pedidoLiberado.ts, aura-app#1320):
+// PEDIDO_LIBERADO = false, e com ela desligada só a equipe Aura (is_staff do
+// backend) vê, para QA em produção, como as rotas do backend. Nenhum lojista
+// vê nada até o Caio ligar a trava com o sinal (A3), a conclusão (A6) e o
+// cancelamento (A7) no ar.
 //
-// Módulo próprio "vendas.pedidos" (regra 3 do CLAUDE.md), Essencial pela
-// pendência 1 do mockup: em hooks/useVisibleModules.ts (MODULE_PLAN_MAP e
-// PERM_TO_MODULES) e em services/modules.js do backend (Aura-backend#1073).
+// Módulo: a mesma chave "vendas.pedidos" (MODULO_PEDIDOS), Essencial, em
+// hooks/useVisibleModules.ts. No Caixa ela vem pela permissão pdv.
 //
 // Multi-CNPJ: o pedido é de UMA loja. Guardar no consolidado não existe (o
 // Caixa já exige uma loja, RequireCompanyScope); a leitura consolidada é da
-// aba Pedidos (A5a, GET /me/pedidos).
-//
-// Função pura, sem hook: o Caixa (hooks/usePdvState.ts) e os testes leem a
-// MESMA conta.
+// aba Pedidos (GET /me/pedidos).
 // ============================================================
-
-export const PEDIDO_LIBERADO = false;
-
-/** A trava geral, lida por função (os testes ligam pelo parâmetro). */
-export function pedidoLiberado(liberado: boolean = PEDIDO_LIBERADO): boolean {
-  return liberado === true;
-}
-
-/** O módulo próprio do Pedido. Nunca herdar o de outra tela. */
-export const MODULO_PEDIDO = "vendas.pedidos";
+import { pedidoLiberado, MODULO_PEDIDOS } from "@/utils/pedidoLiberado";
 
 type Contexto = {
+  /** Usuário da sessão (o is_staff vem do backend). */
+  user: unknown;
   /** Conjunto de useVisibleModules (plano + override + permissão do membro). */
   modulos: Set<string> | null | undefined;
   /** Empresa ativa do Caixa (null no consolidado). */
@@ -42,12 +31,13 @@ type Contexto = {
   consolidado?: boolean;
   /** Conta de demonstração: o servidor não guarda pedido de mentira. */
   isDemo?: boolean;
+  /** Para os testes: a trava ligada. */
   liberado?: boolean;
 };
 
 /** O "Guardar > Pedido" aparece no Caixa? Desligado = o rodapé de sempre. */
-export function pedidoNoCaixa({ modulos, companyId, consolidado, isDemo, liberado = PEDIDO_LIBERADO }: Contexto): boolean {
-  if (!pedidoLiberado(liberado)) return false;
+export function pedidoNoCaixa({ user, modulos, companyId, consolidado, isDemo, liberado }: Contexto): boolean {
+  if (!pedidoLiberado(user, liberado)) return false;
   if (!companyId || consolidado || isDemo) return false;
-  return !!modulos && modulos.has(MODULO_PEDIDO);
+  return !!modulos && modulos.has(MODULO_PEDIDOS);
 }
