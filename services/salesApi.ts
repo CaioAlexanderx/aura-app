@@ -161,6 +161,26 @@ export type SaleFiscalEmission = {
   error_message: string | null;
   created_at: string;
   authorized_at: string | null;
+  // 17/11/2026 (b-troca-prazo-nfce): prazo de cancelamento da nota autorizada
+  // (por UF: 30 min na NFC-e de SP, AP, RJ e MG; 24 h na NF-e). null nas
+  // outras; ausente em backend antigo (utils/prazoNfce.ts calcula).
+  cancelamento?: { uf?: string; prazo_minutos: number; ate: string | null; dentro: boolean } | null;
+};
+
+// 17/11/2026 (b-troca-prazo-nfce): o que aconteceu com a nota da venda no
+// cancelamento (POST /sales/:id/cancel). Nada é emitido sozinho.
+export type CancelSaleNota = {
+  id: string;
+  tipo: string;
+  numero: number | null;
+  rotulo?: string;
+  uf?: string;
+  prazo_minutos?: number;
+  cancelavel_ate?: string | null;
+  situacao: "cancelada" | "nao_cancelada" | "mantida" | "fora_do_prazo";
+  caminho?: "devolucao";
+  mensagem: string;
+  erro?: string | null;
 };
 
 export type SaleDetailFull = {
@@ -221,6 +241,8 @@ export type CancelSaleResult = {
   troca_tx_removed?: number;
   payouts_reversed?: number;
   fiscal_warnings?: string[];
+  // 17/11/2026: a nota autorizada da venda comum (null sem nota / backend antigo).
+  nota?: CancelSaleNota | null;
   // 16/09/2026: resumo do que o cancelamento da devolução desfez.
   devolucao_undo?: { credit_removed?: number; stock_removed?: { quantity?: number }[] } | null;
 };
@@ -421,10 +443,15 @@ export var salesApi = {
   get: function(companyId: string, saleId: string) {
     return request<SaleDetailFull>("/companies/" + companyId + "/sales/" + saleId, { retry: 1 });
   },
-  cancel: function(companyId: string, saleId: string, reason?: string) {
+  // 17/11/2026 (b-troca-prazo-nfce): cancelarNota = a lojista marcou "Cancelar
+  // a nota junto" (só vai quando true; o backend confere o prazo da UF).
+  cancel: function(companyId: string, saleId: string, reason?: string, opts?: { cancelarNota?: boolean }) {
+    var body: { reason: string; cancelar_nota?: boolean } = { reason: reason || "" };
+    if (opts && opts.cancelarNota) body.cancelar_nota = true;
     return request<CancelSaleResult>(
       "/companies/" + companyId + "/sales/" + saleId + "/cancel",
-      { method: "POST", body: { reason: reason || "" }, retry: 0, timeout: 15000 }
+      // 17/11/2026: a nota sai na SEFAZ na mesma ida — mais folga.
+      { method: "POST", body: body, retry: 0, timeout: body.cancelar_nota ? 30000 : 15000 }
     );
   },
   // 10/11/2026 — Excluir da lista a venda CANCELADA (Aura-backend#985,
