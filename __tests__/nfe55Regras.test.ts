@@ -116,7 +116,7 @@ describe("resposta e erro da emissão → tela", () => {
   it("422 de bloqueio com título humano por código; 503 aguardando; rede aguardando; 502 erro", () => {
     expect(lerErroDaEmissao({ status: 422, data: { code: "NFE_REGIME_NORMAL_FORA_DO_V1", error: "Ainda não emitimos..." } }))
       .toMatchObject({ tipo: "bloqueio", titulo: "Ainda não emitimos NF-e para o regime normal", texto: "Ainda não emitimos..." });
-    expect((lerErroDaEmissao({ status: 422, data: { code: "NFE_DIFAL_FORA_DO_V1", error: "x" } }) as any).titulo).toMatch(/cálculo que ainda não fazemos/);
+    expect((lerErroDaEmissao({ status: 422, data: { code: "NFE_DIFAL_FORA_DO_V1", error: "x" } }) as any).titulo).toMatch(/Para o MEI, esta venda para outro estado/);
     expect((lerErroDaEmissao({ status: 422, data: { code: "OUTRO", error: "x" } }) as any).titulo).toBe("Não dá para emitir esta NF-e");
     expect(lerErroDaEmissao({ status: 503, data: { code: "NFE_SEFAZ_SEM_RESPOSTA", error: "Ainda sem resposta" } }).tipo).toBe("aguardando");
     expect(lerErroDaEmissao({ status: 0, isNetworkError: true }).tipo).toBe("aguardando");
