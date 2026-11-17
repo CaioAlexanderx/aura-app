@@ -1081,6 +1081,24 @@ export function usePdvState() {
     !comandas.showPainel;
   useGlobalBarcodeScanner({ onScan: handleScan, enabled: scannerListening });
 
+  // ── Janela por cima do Caixa (17/11/2026, p-153) ────────────────────────
+  // Com qualquer uma aberta os atalhos (hooks/useAtalhosDoCaixa) seguram a
+  // tecla F e não fazem nada: antes F2/F3/F4 abriam o seletor POR BAIXO da
+  // Troca e levavam o foco para um campo escondido.
+  const janelaAberta =
+    !!pendingProduct ||
+    showCaixaModal ||
+    showTroca ||
+    showChangeModal ||
+    showNewCustomer ||
+    showCrediario ||
+    novaVendedora !== null ||
+    !!pedidoDeEntrega ||
+    !!confirmacaoDoDesconto?.aberta ||
+    !!comandas.showAdicionar ||
+    !!comandas.showFechar ||
+    !!comandas.showPainel;
+
   // ── Dados derivados para renderização ────────────────────────────────────────────
   // 22/09/2026 (Matcon M0): unit/purchaseUnit/purchaseFactor descem pro
   // CartPanel, que decide entre campo decimal e stepper pela unidade do
@@ -1351,6 +1369,8 @@ export function usePdvState() {
     closeCrediario: () => setShowCrediario(false),
     // Scanner
     lastScannedCode, scannerListening,
+    // Atalhos do Caixa: alguma janela aberta por cima (p-153).
+    janelaAberta,
     // Employees / NFC-e
     employees, autoEmitNfce, nfceAtiva,
     // Comandas (modais em PdvModals)

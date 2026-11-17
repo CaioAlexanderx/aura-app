@@ -42,7 +42,7 @@
 //     antes 610px até a grade (entrava meio par de produtos);
 //     agora 272px, e os cards `dense` deixam dois pares inteiros na dobra.
 // ============================================================
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable, Platform,
 } from "react-native";
@@ -56,11 +56,12 @@ import { EmptyState } from "@/components/EmptyState";
 import { SaleComplete } from "@/components/screens/pdv/SaleComplete";
 import { CaixaBackdrop } from "@/components/screens/pdv/CaixaBackdrop";
 import { CaixaDesignStyle, IS_WEB } from "@/components/screens/pdv/types";
-import { SearchBox } from "@/components/screens/pdv/SearchBox";
+import { SearchBox, type SearchBoxHandle } from "@/components/screens/pdv/SearchBox";
 import { MerchantLogo } from "@/components/screens/pdv/MerchantLogo";
 import { ScannerStatusChip } from "@/components/screens/pdv/ScannerStatusChip";
 import {
   ActBarcode, ActPerson, ActCoupon, ActTroca, ActMais,
+  type AlternarHandle, type MaisHandle,
 } from "@/components/screens/pdv/ActionToolbar";
 import { CategoryChips } from "@/components/screens/pdv/CategoryChips";
 import { ProductGrid } from "@/components/screens/pdv/ProductGrid";
@@ -72,6 +73,7 @@ import { PdvModals } from "@/components/screens/pdv/PdvModals";
 import { IndicadoPorChip, IndicadoPorPontos } from "@/components/matcon/IndicadoPorChip";
 
 import { usePdvState } from "@/hooks/usePdvState";
+import { useAtalhosDoCaixa } from "@/hooks/useAtalhosDoCaixa";
 import { querAbrirTroca } from "@/utils/devolucaoOuTroca";
 import { productMinCardFor } from "@/hooks/useViewport";
 import type { Product } from "@/components/screens/estoque/types";
@@ -164,6 +166,39 @@ function CaixaScreenInner() {
     ? st.customers.find((c: any) => c.id === st.lastSale!.customerId)
     : null;
   const enderecoDoClienteDaVenda = clienteDaUltimaVenda?.hasAddress ? clienteDaUltimaVenda.endereco : null;
+
+  // ── Atalhos do Caixa (17/11/2026, p-153) ───────────────────────────────
+  // Um listener só para a tela inteira (utils/atalhosDoCaixa), montado ANTES
+  // de escolher entre o Caixa e a tela de venda concluída: as teclas do mapa
+  // valem nas duas (na final o F5 não recarrega mais a página). Só um layout
+  // (largo ou estreito) monta por vez; o ref do que não está na tela é null.
+  const buscaRef = useRef<SearchBoxHandle | null>(null);
+  const codigoManualRef = useRef<AlternarHandle | null>(null);
+  const cupomRef = useRef<AlternarHandle | null>(null);
+  const maisRef = useRef<MaisHandle | null>(null);
+  useAtalhosDoCaixa({
+    estado: { telaFinal: !!st.lastSale, janelaAberta: st.janelaAberta },
+    executar: (acao) => {
+      switch (acao) {
+        case "codigoManual":
+          // Estreito: o código manual mora no "Mais…".
+          if (codigoManualRef.current) codigoManualRef.current.alternar();
+          else maisRef.current?.abrir();
+          return;
+        case "vendedora": sellerPickerRef.current?.alternar(); return;
+        case "cliente":   customerPickerRef.current?.alternar(); return;
+        case "cupom":
+          if (cupomRef.current) cupomRef.current.alternar();
+          else maisRef.current?.abrir();
+          return;
+        case "troca":
+          maisRef.current?.fechar();
+          st.openTroca();
+          return;
+        case "busca": buscaRef.current?.focar(); return;
+      }
+    },
+  });
 
   const modals = (
     <>
@@ -363,7 +398,7 @@ function CaixaScreenInner() {
               {/* Busca + estado do leitor: o lojista já está olhando pra cá
                   quando vai bipar, então o status mora aqui. */}
               <View style={s.searchRow}>
-                <SearchBox value={query} onChange={setQuery} onSubmit={handleSearchSubmit} onScan={handleScan} maxWidth={560} />
+                <SearchBox ref={buscaRef} value={query} onChange={setQuery} onSubmit={handleSearchSubmit} onScan={handleScan} maxWidth={560} />
                 <ScannerStatusChip listening={scannerListening} lastCode={lastScannedCode} />
               </View>
 
@@ -401,13 +436,14 @@ function CaixaScreenInner() {
                 />
                 <IndicadoPorChip referral={referral} saleTotal={totalFinal} matconOn={referral.active} />
                 <ActCoupon
+                  ref={cupomRef}
                   value={couponApplied}
                   onChange={v => { if (v) setCouponApplied(v); else clearCoupon(); }}
                   onValidate={handleValidateCoupon}
                 />
                 <ActTroca onOpen={st.openTroca} />
                 <View style={{ flex: 1, minWidth: 8 }} />
-                <ActBarcode onScan={handleScan} listening={scannerListening} lastCode={lastScannedCode} />
+                <ActBarcode ref={codigoManualRef} onScan={handleScan} listening={scannerListening} lastCode={lastScannedCode} />
               </View>
               {/* A frase dos pontos da indicação mora abaixo da barra, numa
                   linha própria — dentro dela desalinhava os chips (QA 23/09). */}
@@ -486,7 +522,7 @@ function CaixaScreenInner() {
         )}
 
         <View style={s.searchRow}>
-          <SearchBox value={query} onChange={setQuery} onSubmit={handleSearchSubmit} onScan={handleScan} />
+          <SearchBox ref={buscaRef} value={query} onChange={setQuery} onSubmit={handleSearchSubmit} onScan={handleScan} />
           <ScannerStatusChip listening={scannerListening} lastCode={lastScannedCode} compact />
         </View>
 
@@ -525,6 +561,7 @@ function CaixaScreenInner() {
           <IndicadoPorChip referral={referral} saleTotal={totalFinal} matconOn={referral.active} />
           <View style={{ flex: 1, minWidth: 4 }} />
           <ActMais
+            ref={maisRef}
             coupon={couponApplied}
             onCouponChange={v => { if (v) setCouponApplied(v); else clearCoupon(); }}
             onValidateCoupon={handleValidateCoupon}

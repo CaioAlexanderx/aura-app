@@ -189,23 +189,19 @@ function CodigoManualForm({
 // O leitor USB/Bluetooth é global e continua escutando sozinho; o estado dele
 // virou chip na linha da busca. Aqui fica só o acesso discreto à digitação
 // manual, com o F1 de sempre.
-export function ActBarcode({
-  onScan, listening = true, lastCode = null,
-}: {
+// 17/11/2026 (p-153): a tecla F1 saiu daqui. Quem escuta é o listener único
+// da tela (hooks/useAtalhosDoCaixa), que chama `alternar()` pelo ref.
+export type AlternarHandle = { alternar: () => void };
+
+export const ActBarcode = forwardRef<AlternarHandle, {
   onScan: (code: string) => void;
   listening?: boolean;
   lastCode?: string | null;
-}) {
+}>(function ActBarcode({
+  onScan, listening = true, lastCode = null,
+}, handleRef) {
   const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (!IS_WEB) return;
-    function handler(e: KeyboardEvent) {
-      if (e.key === "F1") { e.preventDefault(); setOpen(o => !o); }
-    }
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
+  useImperativeHandle(handleRef, () => ({ alternar: () => setOpen(o => !o) }), []);
 
   const wrapStyle: any = { position: "relative", zIndex: open ? 500 : 1 };
 
@@ -233,13 +229,17 @@ export function ActBarcode({
       )}
     </View>
   );
-}
+});
 
 // ═══════════ 2) Person picker (vendedora OR cliente) ═══════════
 type PersonKind = "vendedora" | "cliente";
 
 /** Handle imperativo mínimo — só o que o rodapé do carrinho precisa. */
-export type PersonPickerHandle = { open: () => void };
+export type PersonPickerHandle = {
+  open: () => void;
+  /** 17/11/2026 (p-153): F2/F3 abrem e fecham (listener único da tela). */
+  alternar: () => void;
+};
 
 type ActPersonProps = {
   kind: PersonKind;
@@ -284,6 +284,10 @@ export const ActPerson = forwardRef<PersonPickerHandle, ActPersonProps>(function
         el.scrollIntoView({ behavior: "smooth", block: "center" });
       }
     },
+    alternar: () => {
+      if (disabled) return;
+      setOpen(o => !o);
+    },
   }), [disabled]);
 
   useEffect(() => {
@@ -295,18 +299,8 @@ export const ActPerson = forwardRef<PersonPickerHandle, ActPersonProps>(function
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
-  useEffect(() => {
-    if (!IS_WEB) return;
-    function handler(e: KeyboardEvent) {
-      if (e.key === shortcut) {
-        if (disabled) return;
-        e.preventDefault();
-        setOpen(o => !o);
-      }
-    }
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [shortcut, disabled]);
+  // 17/11/2026 (p-153): a tecla (F2/F3) saiu daqui. O listener único da tela
+  // chama `alternar()` pelo ref; `shortcut` segue sendo a etiqueta do botão.
 
   // 29/08/2026: com busca vazia a lista NÃO é alfabética — o pai manda os
   // recentes primeiro (01/09/2026: agora ordenados pelo servidor, ?sort=recent).
@@ -508,9 +502,11 @@ function CupomForm({ value, onChange, onValidate, loading, onDone }: CupomProps)
 }
 
 // ═══════════ 3) Cupom ═══════════
-export function ActCoupon({ value, onChange, onValidate, loading }: CupomProps) {
+export const ActCoupon = forwardRef<AlternarHandle, CupomProps>(function ActCoupon({ value, onChange, onValidate, loading }, handleRef) {
   const [open, setOpen] = useState(false);
   const ref = useRef<any>(null);
+  // 17/11/2026 (p-153): F4 vem do listener único da tela.
+  useImperativeHandle(handleRef, () => ({ alternar: () => setOpen(o => !o) }), []);
 
   useEffect(() => {
     if (!IS_WEB) return;
@@ -519,15 +515,6 @@ export function ActCoupon({ value, onChange, onValidate, loading }: CupomProps) 
     }
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
-
-  useEffect(() => {
-    if (!IS_WEB) return;
-    function handler(e: KeyboardEvent) {
-      if (e.key === "F4") { e.preventDefault(); setOpen(o => !o); }
-    }
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
   }, []);
 
   const wrapStyle: any = { position: "relative", zIndex: open ? 500 : 1 };
@@ -550,19 +537,11 @@ export function ActCoupon({ value, onChange, onValidate, loading }: CupomProps) 
       )}
     </View>
   );
-}
+});
 
 // ═══════════ 4) Troca / Devolução ═══════════
+// 17/11/2026 (p-153): F5 vem do listener único da tela (abre a Troca direto).
 export function ActTroca({ onOpen }: { onOpen: () => void }) {
-  useEffect(() => {
-    if (!IS_WEB) return;
-    function handler(e: KeyboardEvent) {
-      if (e.key === "F5") { e.preventDefault(); onOpen(); }
-    }
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onOpen]);
-
   return (
     <ActBtn
       rotulo={ACT_LABELS.troca.curto}
@@ -576,9 +555,12 @@ export function ActTroca({ onOpen }: { onOpen: () => void }) {
 // ═══════════ 6) "Mais…" — overflow do mobile ═══════════
 // Cupom e Troca não cabem escritos numa tela de 390px junto com Cliente e
 // Vendedora. Em vez de voltar pros ícones indistinguíveis, eles entram aqui.
-export function ActMais({
-  coupon, onCouponChange, onValidateCoupon, onTroca, onScan, listening, lastCode,
-}: {
+// 17/11/2026 (p-153): no layout estreito F1 e F4 abrem o "Mais…" (é onde
+// moram o código manual e o cupom) e F5 fecha antes de abrir a Troca. As
+// teclas vêm do listener único da tela, pelo ref.
+export type MaisHandle = { abrir: () => void; fechar: () => void };
+
+export const ActMais = forwardRef<MaisHandle, {
   coupon: { code: string; discount: number } | null;
   onCouponChange: (v: { code: string; discount: number } | null) => void;
   onValidateCoupon: CupomProps["onValidate"];
@@ -586,9 +568,12 @@ export function ActMais({
   onScan: (code: string) => void;
   listening?: boolean;
   lastCode?: string | null;
-}) {
+}>(function ActMais({
+  coupon, onCouponChange, onValidateCoupon, onTroca, onScan, listening, lastCode,
+}, handleRef) {
   const [open, setOpen] = useState(false);
   const ref = useRef<any>(null);
+  useImperativeHandle(handleRef, () => ({ abrir: () => setOpen(true), fechar: () => setOpen(false) }), []);
 
   useEffect(() => {
     if (!IS_WEB) return;
@@ -600,16 +585,6 @@ export function ActMais({
   }, []);
 
   // Os atalhos continuam valendo mesmo com as ações dentro do "Mais".
-  useEffect(() => {
-    if (!IS_WEB) return;
-    function handler(e: KeyboardEvent) {
-      if (e.key === "F4") { e.preventDefault(); setOpen(true); }
-      if (e.key === "F5") { e.preventDefault(); setOpen(false); onTroca(); }
-    }
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onTroca]);
-
   const wrapStyle: any = { position: "relative", zIndex: open ? 500 : 1 };
 
   return (
@@ -643,7 +618,7 @@ export function ActMais({
       )}
     </View>
   );
-}
+});
 
 // ─── Popover container ───────────────────────────────────────
 function PopShell({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) {

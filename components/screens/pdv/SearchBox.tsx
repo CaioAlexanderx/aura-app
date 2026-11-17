@@ -1,7 +1,7 @@
 // ============================================================
 // AURA. -- PDV/Caixa · Glass search box with ⌘K shortcut
 // ============================================================
-import { useEffect, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { tourTarget } from "@/utils/tourTarget";
 import { View, Text, TextInput, StyleSheet, Platform } from "react-native";
 import { Colors, Glass } from "@/constants/colors";
@@ -34,8 +34,18 @@ type Props = {
   onScan?: (code: string) => void;
 };
 
-export function SearchBox({ value, onChange, placeholder, maxWidth, onSubmit, onScan }: Props) {
+/** 17/11/2026 (p-153): o Ctrl/⌘+K (e o F6, depois) vem do listener único da
+ *  tela do Caixa (hooks/useAtalhosDoCaixa), que chama `focar()` pelo ref. */
+export type SearchBoxHandle = { focar: () => void };
+
+export const SearchBox = forwardRef<SearchBoxHandle, Props>(function SearchBox({ value, onChange, placeholder, maxWidth, onSubmit, onScan }, handleRef) {
   const ref = useRef<TextInput | null>(null);
+  useImperativeHandle(handleRef, () => ({
+    focar: () => {
+      const el: any = ref.current;
+      if (el && typeof el.focus === "function") el.focus();
+    },
+  }), []);
   const detector = useRef(criarDetector()).current;
   const ultimoValor = useRef(value);
   const antesDaRajada = useRef(value);
@@ -104,22 +114,6 @@ export function SearchBox({ value, onChange, placeholder, maxWidth, onSubmit, on
     onSubmit?.(e?.nativeEvent?.text ?? value);
   }
 
-  // Web keyboard shortcut: ⌘K / Ctrl+K focuses the input.
-  useEffect(() => {
-    if (!IS_WEB) return;
-    function handler(e: KeyboardEvent) {
-      const isK = e.key === "k" || e.key === "K";
-      if (!isK) return;
-      if (e.metaKey || e.ctrlKey) {
-        e.preventDefault();
-        const el: any = ref.current;
-        if (el && typeof el.focus === "function") el.focus();
-      }
-    }
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
-
   const webBox = webOnly({
     background: Glass.card,
     backdropFilter: "blur(12px)",
@@ -145,7 +139,7 @@ export function SearchBox({ value, onChange, placeholder, maxWidth, onSubmit, on
       {IS_WEB && <Text style={s.kbd}>⌘K</Text>}
     </View>
   );
-}
+});
 
 const s = StyleSheet.create({
   box: {
