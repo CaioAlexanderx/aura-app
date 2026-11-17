@@ -26,6 +26,8 @@ import { Nfe55Wizard } from "@/components/nfe55/Nfe55Wizard";
 import { abrirDanfe, baixarXml } from "@/components/nfe55/nfe55Acoes";
 import { nfe55Api } from "@/services/nfe55Api";
 import { AcoesDeEventosNfe } from "@/components/nfe55/EventosNfe";
+// 17/11/2026: "Trocar por NF-e" na venda com NFC-e autorizada.
+import { TrocarPorNfe } from "@/components/nfe55/TrocarPorNfe";
 import {
   brl, fmtDataHora, rotuloDaForma, normalizarMetodo, rotuloDaEdicao, mascararTelefone, mesDaVenda, diaEmSaoPaulo,
 } from "./editarVendaUtils";
@@ -58,6 +60,11 @@ import {
 //   - sem cor fixa: o laranja #fb923c e o #fbbf24 viraram Colors.amber;
 //   - ícones de verdade: fechar é Icon x; recibo, nota e 2ª via têm ícone
 //     próprio (antes tudo era "info").
+//
+// 17/11/2026 — "Trocar por NF-e" (card aprovado pelo Caio): abaixo da NFC-e
+// autorizada da venda comum, dentro do prazo de cancelamento, cancela a
+// NFC-e (com confirmação) e abre o assistente da NF-e da mesma venda, na
+// loja da venda. Fora do prazo, uma explicação gentil. Ver TrocarPorNfe.tsx.
 // ============================================================
 
 const FISCAL_STATUS_LABELS: Record<string, string> = {
@@ -576,6 +583,11 @@ export function SaleDetailModal({
                       onPress={function() { handlePrint2Via(authorizedEmission.id); }} />
                   )}
                 </View>
+                {/* 17/11/2026: "Trocar por NF-e" (NFC-e da venda comum; o backend diz se pode). */}
+                {!isTroca && authorizedEmission.tipo === "nfce" && fiscalEnabled && effectiveCompanyId && saleId ? (
+                  <TrocarPorNfe companyId={effectiveCompanyId} saleId={saleId} nfceId={authorizedEmission.id}
+                    onCancelada={function() { setNfeAberta(true); if (saleDetail.refetch) saleDetail.refetch(); }} />
+                ) : null}
                 {/* CP5 (14/11/2026): prazo à vista, carta de correção e cancelar da NF-e de venda. */}
                 {nfeDeVenda && effectiveCompanyId ? (
                   <AcoesDeEventosNfe companyId={effectiveCompanyId} nota={authorizedEmission as any}
