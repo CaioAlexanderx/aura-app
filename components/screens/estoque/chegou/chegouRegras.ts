@@ -315,6 +315,8 @@ export type AjusteDaLinha = {
   quantidade?: number;
   /** A4b: grade escolhida (variant_id -> quantidade) para produto de cores e tamanhos. */
   variantes?: Record<string, number>;
+  /** A7: o código de barras da variante não achou a variante; pede a grade. */
+  forcarGrade?: boolean;
 };
 
 /** Soma da grade escolhida (0 sem grade). */
@@ -439,7 +441,7 @@ export function conferirLinha(
   if (produto.has_variants) {
     const soma = somaDaGrade(ajuste.variantes);
     if (soma > 0) return linhaComProduto({ ...base, par, quantidade: soma }, produto, ctx.semCusto, ajuste);
-    if (!(par && par.daVariante)) return { ...base, par, produto, estado: "grade", falta: true, entra: false };
+    if (!(par && par.daVariante) || ajuste.forcarGrade) return { ...base, par, produto, estado: "grade", falta: true, entra: false };
   }
   return linhaComProduto({ ...base, par }, produto, ctx.semCusto, ajuste);
 }

@@ -14,6 +14,7 @@
 //     código do fornecedor (cProd) -> product_id, só produtos visíveis.
 // ============================================================
 import { request } from "@/services/api";
+import type { RespostaDaEntrada } from "@/components/screens/estoque/chegou/gravarEntrada";
 
 export type EntradaJaLancada = {
   id: string;
@@ -65,6 +66,13 @@ export const estoqueEntradasApi = {
       daLoja(cid) + "/products/stock-receipts" + consulta({ nfe_key: q.nfe_key, invoice_number: q.invoice_number, supplier_id: q.supplier_id }),
       { retry: 1 },
     ),
+  /** A7: entrada de vários itens. Sem retry aqui: quem repete, com a MESMA
+   *  chave, é o gravarEntrada (resposta que não chega não pode virar duas). */
+  darEntrada: (cid: string, corpo: Record<string, unknown>) =>
+    request<RespostaDaEntrada>(daLoja(cid) + "/products/stock-receipts", {
+      method: "POST", body: corpo, retry: 0, timeout: 60000,
+      headers: corpo.idempotency_key ? { "Idempotency-Key": String(corpo.idempotency_key) } : undefined,
+    }),
   codigosDoFornecedor: (cid: string, sid: string) =>
     request<CodigosDoFornecedor>(daLoja(cid) + "/suppliers/" + sid + "/codes", { retry: 1 }),
 };

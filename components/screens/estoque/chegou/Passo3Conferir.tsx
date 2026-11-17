@@ -71,6 +71,8 @@ type Props = {
   onAjustar: (n: number, a: Partial<AjusteDaLinha>) => void;
   /** "Cadastrar novo" já preenchido (nome da nota, preço sugerido). */
   novoPara: (l: LinhaConferida) => DecisaoDaLinha;
+  /** A7: o que o servidor recusou em cada linha (n -> motivo). */
+  errosDasLinhas?: Record<number, string>;
 };
 
 export function Passo3Conferir(p: Props) {
@@ -194,8 +196,8 @@ function LinhaDaConferencia(props: Props & { l: LinhaConferida }) {
   const semDecisao = l.estado === "sem_par" || l.estado === "novo" || l.estado === "ligar"
     || (l.estado === "fora" && decisaoTipo === "fora");
   // Grade: produto de cores e tamanhos que não casou pelo código de UMA variante.
-  const usaGrade = !!l.produto && !!l.produto.has_variants && !(l.par && l.par.daVariante)
-    && (l.estado === "grade" || l.estado === "pronta" || l.estado === "confere");
+  const usaGrade = !!l.produto && !!l.produto.has_variants
+    && (l.estado === "grade" || ((l.estado === "pronta" || l.estado === "confere") && !(l.par && l.par.daVariante && !l.variantes)));
   const ligarAberto = trocando || (l.estado === "ligar");
 
   let titulo = l.item.descricao;
@@ -285,6 +287,10 @@ function LinhaDaConferencia(props: Props & { l: LinhaConferida }) {
           ) : null}
         </View>
       </View>
+
+      {props.errosDasLinhas && props.errosDasLinhas[n] ? (
+        <Text style={[s.avisoTxt, { color: Colors.red }]} testID={"chegou-linha-" + n + "-erro-servidor"}>{props.errosDasLinhas[n]}</Text>
+      ) : null}
 
       {l.estado === "confere" && !semCusto ? (
         <View style={s.acaoBloco} testID={"chegou-linha-" + n + "-confere"}>

@@ -19,10 +19,16 @@
 // (A1–A4a) o wizard existe no código e não tem porta: ninguém o vê.
 //
 // Cards: A1 (shell + passo 1), A2 (novo fornecedor dentro do passo),
-// A3 (passo 2), A4a (passo 3, conferência).
+// A3 (passo 2), A4a e A4b (passo 3, conferência), A7 (gravar e Pronto).
+//
+// A7: "Dar entrada" grava pelo POST /products/stock-receipts com a chave
+// desta abertura (gravarEntrada.ts): divide acima de 300 linhas, repete com a
+// MESMA chave quando a resposta não chega, e a parte que já entrou não soma
+// em dobro ao tentar de novo. Desvio do Matcon (pendência 4): com
+// matcon_enabled, a nota abre o DanfeImportModal de hoje, sem mudança.
 // ============================================================
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, Pressable, StyleSheet, ScrollView, Platform, Dimensions } from "react-native";
+import { View, Text, Pressable, StyleSheet, ScrollView, Platform, Dimensions, ActivityIndicator } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Colors, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -32,11 +38,21 @@ import { suppliersApi, type Supplier } from "@/services/suppliersApi";
 import { dialogoAbertoNaTela } from "@/hooks/useAtalhosDoCaixa";
 import { FORM_VAZIO, type FormFornecedor } from "@/utils/fornecedoresUtil";
 import { estoqueEntradasApi } from "@/services/estoqueEntradasApi";
+import { companiesApi } from "@/services/api";
+import { toast } from "@/components/Toast";
+import { usePdvSettings } from "@/hooks/usePdvSettings";
+import { readMatconSettings } from "@/constants/matcon";
+import { DanfeImportModal } from "@/components/screens/estoque/DanfeImportModal";
 import type { Product } from "@/components/screens/estoque/types";
 import { TEXTOS_CHEGOU as T } from "./textosChegou";
 import { Passo1Fornecedor } from "./Passo1Fornecedor";
 import { Passo2Origem, type PerguntaDoCnpj } from "./Passo2Origem";
 import { Passo3Conferir } from "./Passo3Conferir";
+import { Passo4Pronto } from "./Passo4Pronto";
+import {
+  itensDaConferencia, resolverVariantes, montarCorpos, gravarEntrada, errosPorLinha, deveRepetir,
+  resumoDoPronto, csvDosQueFaltam, type RespostaDaEntrada, type ItemDaEntrada,
+} from "./gravarEntrada";
 import { lerNota, type NotaLida } from "./lerNota";
 import { escolherArquivo, lerTextoDoArquivo, ACEITA_NOTA } from "./escolherArquivo";
 import {
@@ -58,6 +74,10 @@ type Props = {
   /** Quem não vê custo dá entrada sem custo (o backend também corta). */
   semCusto: boolean;
   onClose: () => void;
+  /** A7: a entrada gravou (inteira ou em parte). */
+  onFeito?: (respostas: RespostaDaEntrada[]) => void;
+  /** A7: "Ver os produtos novos" (ids cadastrados agora). Sem a prop, o botão some. */
+  onVerNovos?: (ids: string[]) => void;
 };
 
 const IS_WEB = Platform.OS === "web";
@@ -77,7 +97,7 @@ function useLarguraDaJanela(): number {
   return w;
 }
 
-export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, semCusto, onClose }: Props) {
+export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, semCusto, onClose, onFeito, onVerNovos }: Props) {
   const estreito = useLarguraDaJanela() < 640;
   const qc = useQueryClient();
 
@@ -102,6 +122,14 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
   const [mostrarTodas, setMostrarTodas] = useState(false);
   // A4b: margem do lote para o preço sugerido dos produtos novos.
   const [margemDosNovos, setMargemDosNovos] = useState(MARGEM_PADRAO_DOS_NOVOS);
+  // A7: gravando, o que o servidor recusou por linha, as respostas, a parte
+  // que não entrou e o desvio do Matcon.
+  const [gravando, setGravando] = useState<{ feitos: number; total: number } | null>(null);
+  const [errosDasLinhas, setErrosDasLinhas] = useState<Record<number, string>>({});
+  const [respostas, setRespostas] = useState<RespostaDaEntrada[] | null>(null);
+  const [falha, setFalha] = useState<{ feitos: number; total: number } | null>(null);
+  const [pendentes, setPendentes] = useState<ItemDaEntrada[]>([]);
+  const [danfeMatcon, setDanfeMatcon] = useState(false);
 
   // Zera tudo ao fechar; a chave nasce ao abrir.
   useEffect(() => {
@@ -118,6 +146,12 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
       setRepetidaVista(null);
       setUsarMedio(true);
       setMargemDosNovos(MARGEM_PADRAO_DOS_NOVOS);
+      setGravando(null);
+      setErrosDasLinhas({});
+      setRespostas(null);
+      setFalha(null);
+      setPendentes([]);
+      setDanfeMatcon(false);
     } else {
       setChave(novaChaveDaEntrada());
     }
@@ -133,8 +167,15 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
   const fornecedoresRef = useRef(fornecedores);
   fornecedoresRef.current = fornecedores;
 
+  // Pendência 4: no Matcon a nota segue pelo DanfeImportModal (custo da nota).
+  const { settings: pdvDaLoja } = usePdvSettings();
+  const matcon = readMatconSettings(pdvDaLoja as any).matcon_enabled;
+  const matconRef = useRef(matcon);
+  matconRef.current = matcon;
+
   // ── Arquivo da nota (atalho do passo 1 e origem "Nota" do passo 2) ──
   const abrirNota = useCallback(async () => {
+    if (matconRef.current) { setDanfeMatcon(true); return; }
     const arquivo = await escolherArquivo(ACEITA_NOTA);
     if (!arquivo) return;
     setLendoNota(true);
@@ -234,9 +275,6 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
   );
   const resumo = useMemo(() => resumirConferencia(linhas, nota ? nota.totalDosProdutos : null), [linhas, nota]);
   const motivo = motivoDoRodape(linhas, resumo);
-  // A7 grava (POST /products/stock-receipts com a `chave`). Até lá o botão
-  // mostra a regra (travado enquanto falta decidir) e não faz nada.
-  const darEntrada: (() => void) | undefined = undefined;
 
   function decidir(n: number, d: DecisaoDaLinha | null) {
     setDecisoes((atual) => {
@@ -253,6 +291,104 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
   }
   function ajustar(n: number, a: Partial<AjusteDaLinha>) {
     setAjustes((atual) => ({ ...atual, [n]: { ...(atual[n] || {}), ...a } }));
+    setErrosDasLinhas((atual) => {
+      if (!atual[n]) return atual;
+      const b = { ...atual };
+      delete b[n];
+      return b;
+    });
+  }
+
+  // ── A7 · gravar ──
+  function invalidarDepoisDaEntrada() {
+    for (const k of ["products", "productsAggregated", "stock-receipts-nota", "supplier-codes", "product-suppliers", "product-purchases", "estoque-consulta-variantes"]) {
+      qc.invalidateQueries({ queryKey: [k] });
+    }
+    qc.invalidateQueries({ queryKey: ["suppliers", companyId] });
+  }
+
+  async function darEntrada() {
+    if (!resumo.podeDarEntrada || gravando) return;
+    setErrosDasLinhas({});
+    let itens = itensDaConferencia(linhas, semCusto);
+    if (!itens.length) return;
+    setGravando({ feitos: 0, total: itens.length });
+    const rv = await resolverVariantes(itens, (pid) => companiesApi.variants(companyId, pid));
+    if (rv.semVariante.length) {
+      setGravando(null);
+      setAjustes((atual) => {
+        const b = { ...atual };
+        for (const n of rv.semVariante) b[n] = { ...(b[n] || {}), forcarGrade: true };
+        return b;
+      });
+      setErrosDasLinhas(Object.fromEntries(rv.semVariante.map((n) => [n, T.erroVariante])));
+      toast.error(T.erroVariante);
+      return;
+    }
+    itens = rv.itens;
+    const partes = montarCorpos(itens, {
+      chave,
+      origem: "nota",
+      fornecedorId,
+      numeroDaNota: nota ? nota.numero || null : null,
+      chaveDaNota: nota ? nota.chave : null,
+      usarMedio,
+    });
+    const total = itens.length;
+    const r = await gravarEntrada(
+      partes,
+      (corpo) => estoqueEntradasApi.darEntrada(companyId, corpo),
+      (feitos) => setGravando({ feitos, total }),
+    );
+    setGravando(null);
+    if (r.ok) {
+      setRespostas(r.respostas);
+      setFalha(null);
+      setPendentes([]);
+      setPasso(4);
+      invalidarDepoisDaEntrada();
+      onFeito?.(r.respostas);
+      return;
+    }
+    if (r.itensFeitos > 0) {
+      // Parte entrou: o que entrou fica; o resto espera "Dar entrada nos y".
+      setRespostas(r.respostas);
+      setFalha({ feitos: r.itensFeitos, total });
+      setPendentes(itens.slice(r.itensFeitos));
+      setPasso(4);
+      invalidarDepoisDaEntrada();
+      onFeito?.(r.respostas);
+      return;
+    }
+    const e: any = r.erro;
+    const code = e && e.data && e.data.code;
+    if (e && e.status === 400 && code === "LINHAS_COM_ERRO") {
+      setErrosDasLinhas(errosPorLinha(e, r.parteComErro));
+      toast.error(T.erroLinhas);
+    } else if (e && e.status === 403 && code === "LIMITE_DO_PLANO") {
+      toast.error(T.erroLimite(Number(e.data.limit) || 0));
+    } else if (e && e.status === 503) {
+      toast.error(T.erroIndisponivel);
+    } else if (deveRepetir(e)) {
+      toast.error(T.erroSemResposta);
+    } else {
+      toast.error((e && e.message) || T.erroGenerico);
+    }
+  }
+
+  function baixarPendentes() {
+    if (typeof document === "undefined" || !pendentes.length) return;
+    try {
+      const blob = new Blob(["\uFEFF" + csvDosQueFaltam(pendentes)], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "chegou-mercadoria-faltam.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {}
   }
 
   function usarAchado(f: FornecedorDaLista) {
@@ -287,6 +423,7 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
 
   const temProgresso = passo < 4 && (!!nota || passo >= 3);
   const pedirFechar = () => {
+    if (gravando) return;
     if (temProgresso) setPerguntaSair(true);
     else onClose();
   };
@@ -311,6 +448,20 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
   }, [visible]);
 
   if (!visible) return null;
+
+  // Pendência 4: Matcon segue pelo modal de hoje, sem mudança.
+  if (danfeMatcon) {
+    return (
+      <WebPortal active={visible}>
+        <DanfeImportModal
+          visible
+          companyId={companyId}
+          onClose={() => { setDanfeMatcon(false); onClose(); }}
+          onSuccess={() => { qc.invalidateQueries({ queryKey: ["products"] }); }}
+        />
+      </WebPortal>
+    );
+  }
 
   // ── Barra de passos ──
   const nomeFornecedor = nomeDaEscolha(escolha);
@@ -337,6 +488,13 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
               : nota ? T.resumoNota(nota.numero || "—", diaMes(nota.emitidaEm)) : "";
   }
   const rodapeTravado = passo === 3 && resumo.falta > 0;
+  const pronto = respostas ? resumoDoPronto(respostas) : null;
+  if (passo === 4) rodapeInfo = falha ? "" : T.prontoSemDobro;
+  if (gravando) rodapeInfo = T.gravandoTitulo;
+  const idsNovos = (respostas || []).flatMap((r) => (r.lines || []).filter((l) => l.created).map((l) => l.product_id));
+  const fora = linhas
+    .filter((l) => l.estado === "fora" || l.estado === "erro")
+    .map((l) => ({ nome: l.item.descricao, motivo: l.estado === "erro" ? T.motivoQtdZero : T.motivoFora }));
 
   const painelWeb = IS_WEB ? {
     background: IS_DARK_MODE ? "rgba(18,10,35,0.98)" : "rgba(255,255,255,0.98)",
@@ -441,7 +599,26 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
                 onTenhoANota={abrirNota}
               />
             )}
-            {passo === 3 && nota && (
+            {gravando ? (
+              <View style={s.gravando} testID="chegou-gravando">
+                <ActivityIndicator size="small" color={Colors.violet3} />
+                <Text style={s.gravandoTitulo}>{T.gravandoTitulo}</Text>
+                <Text style={s.gravandoTexto}>{T.gravandoTexto(gravando.feitos, gravando.total)}</Text>
+              </View>
+            ) : null}
+            {passo === 4 && pronto && !gravando && (
+              <Passo4Pronto
+                estreito={estreito}
+                semCusto={semCusto}
+                numeroDaNota={nota ? nota.numero || null : null}
+                resumo={pronto}
+                fora={fora}
+                falha={falha}
+                onRepetir={darEntrada}
+                onBaixar={IS_WEB ? baixarPendentes : undefined}
+              />
+            )}
+            {passo === 3 && nota && !gravando && (
               <Passo3Conferir
                 estreito={estreito}
                 semCusto={semCusto}
@@ -461,6 +638,7 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
                 onUsarMedio={setUsarMedio}
                 onDecidir={decidir}
                 onAjustar={ajustar}
+                errosDasLinhas={errosDasLinhas}
                 novoPara={(l) => decisaoDeNovo({ ...l.item, custoUnitario: l.custo }, semCusto, margemDosNovos)}
               />
             )}
@@ -514,14 +692,24 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
                 )}
                 {passo === 3 && (
                   <Pressable
-                    style={[s.btnConfirmar, (!resumo.podeDarEntrada || !darEntrada) && { opacity: 0.45 }]}
-                    onPress={resumo.podeDarEntrada ? darEntrada : undefined}
-                    disabled={!resumo.podeDarEntrada || !darEntrada}
-                    accessibilityState={{ disabled: !resumo.podeDarEntrada }}
+                    style={[s.btnConfirmar, (!resumo.podeDarEntrada || !!gravando) && { opacity: 0.45 }]}
+                    onPress={resumo.podeDarEntrada && !gravando ? darEntrada : undefined}
+                    disabled={!resumo.podeDarEntrada || !!gravando}
+                    accessibilityState={{ disabled: !resumo.podeDarEntrada || !!gravando }}
                     testID="chegou-dar-entrada"
                   >
-                    <Icon name="check" size={14} color="#fff" />
+                    {gravando ? <ActivityIndicator size="small" color="#fff" /> : <Icon name="check" size={14} color="#fff" />}
                     <Text style={s.btnPriTxt}>{estreito ? T.darEntradaCelular : T.darEntrada(resumo.entram)}</Text>
+                  </Pressable>
+                )}
+                {passo === 4 && pronto && !falha && idsNovos.length > 0 && onVerNovos ? (
+                  <Pressable style={s.btnSec} onPress={() => onVerNovos(idsNovos)} testID="chegou-ver-novos">
+                    <Text style={s.btnSecTxt}>{estreito ? T.verNovosCelular : T.verNovos}</Text>
+                  </Pressable>
+                ) : null}
+                {passo === 4 && (
+                  <Pressable style={s.btnPri} onPress={onClose} disabled={!!gravando} testID="chegou-fechar-pronto">
+                    <Text style={s.btnPriTxt}>{T.fechar}</Text>
                   </Pressable>
                 )}
               </View>
@@ -595,6 +783,9 @@ const s = StyleSheet.create({
   passoRotulo: { color: Colors.ink3, fontSize: 12.5, fontWeight: "500", flexShrink: 1 },
   separador: { width: 24, height: 1.5, backgroundColor: Colors.border2, marginHorizontal: 4 },
   corpo: { flex: 1 },
+  gravando: { alignItems: "center", gap: 8, paddingVertical: 32, paddingHorizontal: 12 },
+  gravandoTitulo: { fontSize: 15, fontWeight: "700", color: Colors.ink },
+  gravandoTexto: { fontSize: 12.5, color: Colors.ink2, lineHeight: 18, textAlign: "center", maxWidth: 460 },
   escondido: { display: "none" },
   corpoConteudo: { padding: 22, paddingBottom: 12 },
   voltarLista: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 44, alignSelf: "flex-start" },
