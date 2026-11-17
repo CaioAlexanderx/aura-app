@@ -155,6 +155,34 @@ export const TEXTOS_CHEGOU = {
   // NOVO (fora do mockup): a grade na conferência não foi desenhada. O item
   // casou com um produto que tem cores e tamanhos, mas a nota não diz qual.
   gradeTexto: "Este produto tem cores e tamanhos. Diga de qual chegou antes de dar entrada.",
+  // A4b: a grade reaproveita o "Quantas chegaram de cada?" da Entrada de hoje.
+  gradeTitulo: "Quantas chegaram de cada?",
+  gradeCarregando: "Carregando cores e tamanhos…",
+  // NOVO (fora do mockup): a nota diz um total e a grade outro.
+  gradeSomaDiferente: (grade: string, nota: string) => "A grade soma " + grade + "; a nota diz " + nota + ".",
+
+  // ── Passo 3 · painéis da linha sem par (A4b) ───────────────
+  novoNome: "Nome na sua loja",
+  novoPreco: "Preço de venda *",
+  novoCategoria: "Categoria",
+  // NOVO (fora do mockup): exemplo dentro do campo de categoria.
+  novoCategoriaExemplo: "Ex.: Esmaltes",
+  novoMargem: (pct: number) => "Margem de " + pct + "% sobre o custo da nota",
+  novoNcm: (ncm: string) => "NCM da nota: " + ncm,
+  novoCelularApoio: "Fotos, cor e o resto você completa no produto depois.",
+  // NOVO (fora do mockup): preço vazio de quem não vê custo.
+  novoPrecoFalta: "Diga o preço de venda para cadastrar.",
+  ligarEscolha: "Escolha o produto abaixo",
+  // Texto de hoje da Entrada de mercadoria.
+  ligarBusca: "Buscar produto…",
+  ligarVazio: "Nenhum produto com esse nome.",
+  ligarLinha: (estoque: string, un: string, medio: string | null) =>
+    estoque + " " + un + (medio ? " · custo médio " + medio : ""),
+  ligarCodigo: (cod: string) => "Ligando, a Aura guarda o código " + cod + " deste fornecedor e acha sozinha na próxima nota.",
+  trocarProduto: "Trocar produto",
+  margemTitulo: "Preço dos produtos novos",
+  margemRotulo: "Margem sobre o custo",
+  margemAplicar: "Aplicar",
 
   mostrarOutros: (n: number) => "Mostrar os outros " + n + " " + plural(n, "item", "itens") + ", já " + plural(n, "pronto", "prontos"),
 

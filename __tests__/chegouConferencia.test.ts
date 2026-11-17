@@ -8,7 +8,7 @@
 // ============================================================
 import {
   indexarProdutos, acharProduto, conferirLinha, resumirConferencia, linhasVisiveis, motivoDoRodape,
-  precoSugerido, decisaoDeNovo, normalizarBarras, normalizarNome,
+  precoSugerido, decisaoDeNovo, normalizarBarras, normalizarNome, aplicarMargemAosNovos, margemSobreCusto, somaDaGrade,
   type ItemParaConferir, type ProdutoDaLoja, type LinhaConferida,
 } from "@/components/screens/estoque/chegou/chegouRegras";
 import { lerNota } from "@/components/screens/estoque/chegou/lerNota";
@@ -105,12 +105,12 @@ describe("estados da linha", () => {
   test("produto novo: entra só com nome e preço (pendência 6)", () => {
     const it = item(2, { descricao: "BASE 10ML", custoUnitario: 7.4 });
     const novo = decisaoDeNovo(it, false);
-    expect(novo).toEqual({ tipo: "novo", nome: "BASE 10ML", preco: 14.8 });
+    expect(novo).toEqual({ tipo: "novo", nome: "BASE 10ML", preco: 14.8, categoria: null });
     expect(conferirLinha(it, { ...ctx, decisao: novo })).toMatchObject({ estado: "novo", falta: false, entra: true });
     expect(conferirLinha(it, { ...ctx, decisao: { tipo: "novo", nome: "BASE", preco: null } })).toMatchObject({ estado: "novo", falta: true });
     expect(conferirLinha(it, { ...ctx, decisao: { tipo: "novo", nome: "  ", preco: 10 } })).toMatchObject({ estado: "novo", falta: true });
     // Quem não vê custo não recebe preço sugerido (entregaria o custo).
-    expect(decisaoDeNovo(it, true)).toEqual({ tipo: "novo", nome: "BASE 10ML", preco: null });
+    expect(decisaoDeNovo(it, true)).toEqual({ tipo: "novo", nome: "BASE 10ML", preco: null, categoria: null });
   });
 
   test("ligar: trava até dizer a qual produto; ligado vira pronta", () => {
@@ -196,4 +196,36 @@ test("preço sugerido pela margem", () => {
   expect(precoSugerido(1.95)).toBe(3.9);
   expect(precoSugerido(10, 50)).toBe(15);
   expect(precoSugerido(0)).toBeNull();
+});
+
+describe("A4b · margem dos novos e grade", () => {
+  test("aplicar a margem refaz o preço só dos novos", () => {
+    const d = aplicarMargemAosNovos(
+      { 1: { tipo: "novo", nome: "A", preco: 3.9 }, 2: { tipo: "fora" }, 3: { tipo: "novo", nome: "B", preco: null } },
+      { 1: 1.95, 2: 5, 3: 10 },
+      50,
+    );
+    expect(d[1]).toEqual({ tipo: "novo", nome: "A", preco: 2.93 });
+    expect(d[2]).toEqual({ tipo: "fora" });
+    expect(d[3]).toEqual({ tipo: "novo", nome: "B", preco: 15 });
+    expect(decisaoDeNovo({ descricao: "X", custoUnitario: 10 }, false, 50)).toMatchObject({ preco: 15 });
+  });
+
+  test("margem sobre o custo", () => {
+    expect(margemSobreCusto(3.9, 1.95)).toBe(100);
+    expect(margemSobreCusto(10, null)).toBeNull();
+  });
+
+  test("grade escolhida destrava e manda na quantidade; ligar a produto de grade pede a grade", () => {
+    const G = prod("g", { name: "Camiseta", has_variants: true, stock: 5, cost: 20, price: 49.9 });
+    const indice = indexarProdutos([G]);
+    const it = item(1, { descricao: "Camiseta", quantidade: 6, custoUnitario: 21 });
+    const ctx = { indice, codigos: null, semCusto: false };
+    expect(conferirLinha(it, ctx).estado).toBe("grade");
+    const comGrade = conferirLinha(it, { ...ctx, ajuste: { variantes: { v1: 2, v2: 3 } } });
+    expect(comGrade).toMatchObject({ estado: "pronta", quantidade: 5, entra: true, variantes: { v1: 2, v2: 3 } });
+    const ligada = conferirLinha(item(2, { descricao: "X", custoUnitario: 21 }), { ...ctx, decisao: { tipo: "ligar", produtoId: "g" } });
+    expect(ligada.estado).toBe("grade");
+    expect(somaDaGrade({ a: 1.5, b: 0, c: -1 })).toBe(1.5);
+  });
 });

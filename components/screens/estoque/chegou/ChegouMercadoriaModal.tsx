@@ -42,6 +42,7 @@ import { escolherArquivo, lerTextoDoArquivo, ACEITA_NOTA } from "./escolherArqui
 import {
   novaChaveDaEntrada, conferirEmitente, nomeDaEscolha, consultaDaNota, entradaAnteriorDaNota,
   indexarProdutos, conferirLinha, resumirConferencia, motivoDoRodape, decisaoDeNovo, diaMes,
+  aplicarMargemAosNovos, MARGEM_PADRAO_DOS_NOVOS,
   type EscolhaDoFornecedor, type FornecedorDaLista, type DecisaoDaLinha, type AjusteDaLinha,
 } from "./chegouRegras";
 
@@ -99,6 +100,8 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
   const [ajustes, setAjustes] = useState<Record<number, AjusteDaLinha>>({});
   const [usarMedio, setUsarMedio] = useState(true);
   const [mostrarTodas, setMostrarTodas] = useState(false);
+  // A4b: margem do lote para o preço sugerido dos produtos novos.
+  const [margemDosNovos, setMargemDosNovos] = useState(MARGEM_PADRAO_DOS_NOVOS);
 
   // Zera tudo ao fechar; a chave nasce ao abrir.
   useEffect(() => {
@@ -114,6 +117,7 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
       setCnpjRespondido(null);
       setRepetidaVista(null);
       setUsarMedio(true);
+      setMargemDosNovos(MARGEM_PADRAO_DOS_NOVOS);
     } else {
       setChave(novaChaveDaEntrada());
     }
@@ -240,6 +244,12 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
       if (d) novo[n] = d; else delete novo[n];
       return novo;
     });
+  }
+  function aplicarMargem(pct: number) {
+    setMargemDosNovos(pct);
+    const custos: Record<number, number> = {};
+    for (const l of linhas) custos[l.item.n] = l.custo;
+    setDecisoes((atual) => aplicarMargemAosNovos(atual, custos, pct));
   }
   function ajustar(n: number, a: Partial<AjusteDaLinha>) {
     setAjustes((atual) => ({ ...atual, [n]: { ...(atual[n] || {}), ...a } }));
@@ -435,7 +445,13 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
               <Passo3Conferir
                 estreito={estreito}
                 semCusto={semCusto}
-                nota={nota}
+                companyId={companyId}
+                titulo={T.resumoNota(nota.numero || "—", diaMes(nota.emitidaEm))}
+                totalEsperado={nota.totalDosProdutos}
+                produtos={products}
+                comFornecedor={!!fornecedorId}
+                margemDosNovos={margemDosNovos}
+                onAplicarMargem={aplicarMargem}
                 linhas={linhas}
                 resumo={resumo}
                 carregando={!!fornecedorId && carregandoCodigos}
@@ -445,7 +461,7 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
                 onUsarMedio={setUsarMedio}
                 onDecidir={decidir}
                 onAjustar={ajustar}
-                novoPara={(l) => decisaoDeNovo(l.item, semCusto)}
+                novoPara={(l) => decisaoDeNovo({ ...l.item, custoUnitario: l.custo }, semCusto, margemDosNovos)}
               />
             )}
             {passo === 2 && (

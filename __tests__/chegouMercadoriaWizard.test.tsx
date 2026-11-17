@@ -7,6 +7,7 @@
 //     outro CNPJ, nota repetida).
 // A4a: passo 3, conferência: estados da linha, resumo e rodapé travado
 //      enquanto falta decidir (pendência 5).
+// A4b: painéis da linha (produto novo, ligar, trocar, grade) e a margem dos novos.
 // ============================================================
 import React from "react";
 import renderer, { act } from "react-test-renderer";
@@ -538,5 +539,103 @@ describe("A4a · passo 3, conferência", () => {
     expect(rodape(tree)).toContain(T.rodapeFaltaCelular(1));
     expect(texto(tree)).toContain(T.darEntradaCelular);
     expect(texto(tree)).toContain(T.passoCelular(3, T.passos[3]));
+  });
+});
+
+describe("A4b · painéis da linha", () => {
+  async function irAoPasso3(props: Record<string, unknown> = {}) {
+    mockQueries["supplier-codes"] = { data: { supplier_id: "f-alfa", items: [], map: { "AL-0391": "p-acetona" } }, isLoading: false };
+    mockArquivo = { name: "nota.xml", conteudo: XML_CONFERENCIA };
+    const r = await montar({ products: PRODUTOS_CONFERENCIA, ...props });
+    await tocar(r.tree, "chegou-cartao-nota-botao");
+    await tocar(r.tree, "chegou-continuar");
+    return r;
+  }
+  const travado = (tree: any) => !!porId(tree, "chegou-dar-entrada")[0].props.accessibilityState.disabled;
+  const campo = (tree: any, id: string) => porId(tree, id)[0];
+  async function digitar(tree: any, id: string, v: string) {
+    await act(async () => { campo(tree, id).props.onChangeText(v); });
+  }
+
+  test("produto novo: nome da nota, preço sugerido e editável; sem preço trava", async () => {
+    const { tree } = await irAoPasso3();
+    await tocar(tree, "chegou-linha-4-novo");
+    expect(tem(tree, "chegou-linha-4-painel-novo")).toBe(true);
+    expect(campo(tree, "chegou-linha-4-novo-nome").props.value).toBe("BASE FORTALECEDORA 10ML");
+    expect(campo(tree, "chegou-linha-4-novo-preco").props.value).toBe("14,80");
+    expect(texto(tree)).toContain(T.novoMargem(100));
+    expect(texto(tree)).toContain(T.novoNcm("33043000"));
+    await digitar(tree, "chegou-linha-4-novo-nome", "Base fortalecedora 10 ml");
+    await digitar(tree, "chegou-linha-4-novo-categoria", "Esmaltes");
+    expect(travado(tree)).toBe(false);
+    await digitar(tree, "chegou-linha-4-novo-preco", "");
+    expect(travado(tree)).toBe(true);
+    expect(texto(tree)).toContain(T.novoPrecoFalta);
+    await digitar(tree, "chegou-linha-4-novo-preco", "1590");
+    expect(campo(tree, "chegou-linha-4-novo-preco").props.value).toBe("15,90");
+    expect(travado(tree)).toBe(false);
+  });
+
+  test("quem não vê custo digita o preço, sem sugestão", async () => {
+    const { tree } = await irAoPasso3({ semCusto: true });
+    await tocar(tree, "chegou-linha-4-novo");
+    expect(campo(tree, "chegou-linha-4-novo-preco").props.value).toBe("");
+    expect(texto(tree)).not.toContain(T.novoMargem(100));
+    expect(travado(tree)).toBe(true);
+    await digitar(tree, "chegou-linha-4-novo-preco", "1490");
+    expect(travado(tree)).toBe(false);
+  });
+
+  test("margem do lote: 'Aplicar' refaz o preço dos novos", async () => {
+    const { tree } = await irAoPasso3();
+    await tocar(tree, "chegou-linha-4-novo");
+    await digitar(tree, "chegou-margem-campo", "50");
+    await tocar(tree, "chegou-margem-aplicar");
+    expect(campo(tree, "chegou-linha-4-novo-preco").props.value).toBe("11,10");
+  });
+
+  test("ligar: busca, escolhe e a linha fica pronta; avisa que guarda o código", async () => {
+    const { tree } = await irAoPasso3();
+    await tocar(tree, "chegou-linha-4-ligar");
+    expect(texto(tree)).toContain(T.ligarCodigo("AL-1120"));
+    await digitar(tree, "chegou-linha-4-ligar-busca", "algod");
+    expect(texto(tree)).toContain("Algodão em disco 50 un");
+    await tocar(tree, "chegou-linha-4-ligar-p-algodao");
+    expect(tem(tree, "chegou-linha-4-painel-ligar")).toBe(false);
+    expect(travado(tree)).toBe(false);
+    expect(texto(tree)).toContain(T.previaEstoque("8", "26", "un"));
+  });
+
+  test("ligar sem achar: 'Nenhum produto com esse nome.'", async () => {
+    const { tree } = await irAoPasso3();
+    await tocar(tree, "chegou-linha-4-ligar");
+    await digitar(tree, "chegou-linha-4-ligar-busca", "xyz");
+    expect(texto(tree)).toContain(T.ligarVazio);
+  });
+
+  test("'Trocar produto' numa linha pronta liga a outro", async () => {
+    const { tree } = await irAoPasso3();
+    await tocar(tree, "chegou-linha-1-trocar");
+    await digitar(tree, "chegou-linha-1-ligar-busca", "acetona");
+    await tocar(tree, "chegou-linha-1-ligar-p-acetona");
+    expect(tem(tree, "chegou-linha-1-achado")).toBe(false);
+    expect(texto(tree)).toContain(T.previaEstoque("4", "28", "un"));
+  });
+
+  test("grade: 'Quantas chegaram de cada?' destrava a linha", async () => {
+    const comGrade = PRODUTOS_CONFERENCIA.map((p: any) => (p.id === "p-lixa" ? { ...p, has_variants: true } : p));
+    mockQueries["estoque-consulta-variantes"] = {
+      data: { variants: [{ id: "v-p", size: "P", stock_qty: 1 }, { id: "v-m", size: "M", stock_qty: 2 }] }, isLoading: false,
+    };
+    const { tree } = await irAoPasso3({ products: comGrade });
+    expect(texto(tree)).toContain(T.gradeTexto);
+    expect(texto(tree)).toContain(T.gradeTitulo);
+    // A base (linha 4) também falta: deixa de fora para olhar só a grade.
+    await tocar(tree, "chegou-linha-4-fora");
+    expect(travado(tree)).toBe(true);
+    expect(rodape(tree)).toContain(T.rodapeFaltaGrade("Lixa de unha (pacote com 12)"));
+    await digitar(tree, "chegou-linha-3-grade-v-p", "4");
+    await digitar(tree, "chegou-linha-3-grade-v-m", "6");
+    expect(travado(tree)).toBe(false);
   });
 });
