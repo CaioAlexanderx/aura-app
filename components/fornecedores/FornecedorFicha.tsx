@@ -25,6 +25,8 @@ import { openWhatsApp } from "@/utils/whatsapp";
 import { fraseDaSugestao, fraseJaPedido, progressoDoPedido } from "@/components/matcon/comprasUtil";
 import { fmtDiaMesDeTimestamp } from "@/components/matcon/quotesUtil";
 import { normalizarNome, type LinhaFornecedor } from "@/utils/fornecedoresUtil";
+import { TEXTOS_CHEGOU } from "@/components/screens/estoque/chegou/textosChegou";
+import { diaMesLocal } from "@/components/screens/estoque/chegou/chegouRegras";
 
 const fmtMoney = (n: number | string | null | undefined) => `R$ ${Math.round(Number(n || 0)).toLocaleString("pt-BR")}`;
 const MAX_NA_BUSCA = 60;
@@ -41,9 +43,20 @@ type Props = {
   onMontarPedido: (l: LinhaFornecedor) => void;
   onAbrirPedido: (o: PurchaseOrder, l: LinhaFornecedor) => void;
   onMudou: () => void;
+  /**
+   * Fase 4 (F1, F2): só chegam com FORNECEDORES_ABREM_O_CHEGOU ligada
+   * (portaDoChegou.ts). Sem eles, a ficha é a de sempre.
+   */
+  onDarEntrada?: (l: LinhaFornecedor) => void;
+  onImportarLista?: (l: LinhaFornecedor) => void;
+  /** Produtos ligados com "[q] un · última entrada [dd/mm]" (B3). */
+  comUltimaEntrada?: boolean;
 };
 
-export function FornecedorFicha({ linha, companyId, matcon, jaPedidos, montando, onClose, onEditar, onCadastrar, onMontarPedido, onAbrirPedido, onMudou }: Props) {
+export function FornecedorFicha({
+  linha, companyId, matcon, jaPedidos, montando, onClose, onEditar, onCadastrar, onMontarPedido, onAbrirPedido, onMudou,
+  onDarEntrada, onImportarLista, comUltimaEntrada,
+}: Props) {
   const qc = useQueryClient();
   const sid = linha?.supplier?.id || null;
   const [vinculando, setVinculando] = useState(false);
@@ -138,7 +151,10 @@ export function FornecedorFicha({ linha, companyId, matcon, jaPedidos, montando,
   const rep = linha.reposicao;
   const pedidos = [...linha.rascunhos, ...linha.enviados, ...linha.recebidos];
   const tudoJaPedido = !!rep && rep.items.length > 0 && rep.items.every((it) => !!jaPedidos[it.product_id]);
-  const vinculados = detalhe.data?.products || [];
+  // B3: com a última entrada, a lista vem de linked_products (principal ou não).
+  const ligadosB3 = comUltimaEntrada ? detalhe.data?.linked_products : undefined;
+  const vinculados: Array<{ id: string; name: string; stock_qty: number | string | null; last_purchase_at?: string | null }> =
+    ligadosB3 || detalhe.data?.products || [];
 
   return (
     <ResponsiveSheet visible={!!linha} onClose={onClose} maxWidth={620}>
@@ -157,6 +173,22 @@ export function FornecedorFicha({ linha, companyId, matcon, jaPedidos, montando,
         </View>
 
         <ScrollView style={st.body} keyboardShouldPersistTaps="handled">
+          {linha.origem !== "sem" && (onDarEntrada || (onImportarLista && linha.supplier)) ? (
+            <View style={st.portas} testID="fornecedor-ficha-portas">
+              {onDarEntrada ? (
+                <Pressable onPress={() => onDarEntrada(linha)} style={[st.btn, st.btnEntrada]} testID="fornecedor-ficha-dar-entrada">
+                  <Icon name="inbox" size={15} color="#fff" />
+                  <Text style={[st.btnTexto, { color: "#fff" }]}>{TEXTOS_CHEGOU.darEntrada4}</Text>
+                </Pressable>
+              ) : null}
+              {onImportarLista && linha.supplier ? (
+                <Pressable onPress={() => onImportarLista(linha)} style={st.btn} testID="fornecedor-ficha-importar-lista">
+                  <Icon name="grid" size={14} color={Colors.ink} />
+                  <Text style={st.btnTexto}>{TEXTOS_CHEGOU.importarLista}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
           {linha.origem !== "sem" && (
             <View style={st.acoes}>
               {!!linha.telefone && (
@@ -275,7 +307,11 @@ export function FornecedorFicha({ linha, companyId, matcon, jaPedidos, montando,
               ) : vinculados.map((p) => (
                 <View key={p.id} style={st.vinc}>
                   <Text style={st.candNome} numberOfLines={1}>{p.name}</Text>
-                  <Text style={st.meta}>{Number(p.stock_qty) || 0} em estoque</Text>
+                  {ligadosB3 ? (
+                    <Text style={st.meta}>{TEXTOS_CHEGOU.fichaProdutoLigado(String(Number(p.stock_qty) || 0), diaMesLocal(p.last_purchase_at))}</Text>
+                  ) : (
+                    <Text style={st.meta}>{Number(p.stock_qty) || 0} em estoque</Text>
+                  )}
                   <Pressable onPress={() => tirar(p.id)} style={st.tirar} testID={`fornecedor-ficha-tirar-${p.id}`} accessibilityLabel={`Tirar ${p.name} deste fornecedor`}>
                     <Icon name="x" size={12} color={Colors.ink3} />
                   </Pressable>
@@ -304,6 +340,8 @@ const st = StyleSheet.create({
   close: { width: 30, height: 30, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: Colors.bg2 },
   body: { paddingHorizontal: 18, paddingVertical: 12 },
   acoes: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 6 },
+  portas: { gap: 8, marginBottom: 8 },
+  btnEntrada: { backgroundColor: "#059669", borderColor: "#059669", minHeight: 44 },
   nota: { fontSize: 12, color: Colors.ink3, marginBottom: 6, lineHeight: 17 },
   secao: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border2, gap: 6 },
   secaoTopo: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },

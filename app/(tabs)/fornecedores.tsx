@@ -14,6 +14,12 @@
 //     /matcon/compras redireciona para cá.
 // O casamento cadastro × nota × pedido e a ordem da lista ficam em
 // utils/fornecedoresUtil.ts (testável sem o Icon).
+//
+// 17/11/2026 (Estoque, Fase 4: F1 e F2): "Dar entrada" no cartão e na ficha
+// e "Importar a lista deste fornecedor" na ficha abrem o "Chegou mercadoria"
+// já no passo 2 com o fornecedor. Atrás de FORNECEDORES_ABREM_O_CHEGOU
+// (components/screens/estoque/chegou/portaDoChegou.ts), desligada até o A8:
+// com ela em false esta tela é idêntica à de antes e o wizard nem é montado.
 // ============================================================
 import { useMemo, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, TextInput } from "react-native";
@@ -40,6 +46,11 @@ import { FornecedorFicha } from "@/components/fornecedores/FornecedorFicha";
 import {
   montarLinhas, filtrarLinhas, formDaLinha, type LinhaFornecedor, type FormFornecedor,
 } from "@/utils/fornecedoresUtil";
+import { FORNECEDORES_ABREM_O_CHEGOU } from "@/components/screens/estoque/chegou/portaDoChegou";
+import { ChegouMercadoriaModal, type InicioDoChegou } from "@/components/screens/estoque/chegou/ChegouMercadoriaModal";
+import { TEXTOS_CHEGOU } from "@/components/screens/estoque/chegou/textosChegou";
+import { useProducts } from "@/hooks/useProducts";
+import { useEstoqueConsulta } from "@/hooks/useEstoqueConsulta";
 
 const fmtMoney = (n: number | string | null | undefined) => `R$ ${Math.round(Number(n || 0)).toLocaleString("pt-BR")}`;
 const ITENS_VISIVEIS = 2;
@@ -52,6 +63,39 @@ export default function FornecedoresRoute() {
     <RequireCompanyScope context="fornecedores" actionLabel="ver os fornecedores">
       <FornecedoresScreen />
     </RequireCompanyScope>
+  );
+}
+
+/**
+ * F1/F2: o que abre o wizard a partir de uma linha. Fornecedor cadastrado:
+ * passo 2 com ele (a lista marca a Planilha). Fornecedor só da nota: passo
+ * 1 com "Novo fornecedor" preenchido pelo CNPJ da nota. "Sem fornecedor": nada.
+ */
+export function inicioDaLinha(l: LinhaFornecedor, planilha = false): InicioDoChegou | null {
+  if (l.supplier) return { tipo: "fornecedor", fornecedor: l.supplier, planilha };
+  if (l.origem === "nota" && !planilha) return { tipo: "novo_fornecedor", inicial: formDaLinha(l) };
+  return null;
+}
+
+/**
+ * O wizard dentro de Fornecedores, montado só enquanto está aberto (a lista
+ * de produtos e as permissões só são lidas aí).
+ */
+function ChegouDosFornecedores({ inicio, onClose }: { inicio: InicioDoChegou; onClose: () => void }) {
+  const { company } = useAuthStore();
+  const { products } = useProducts();
+  const { semCusto } = useEstoqueConsulta();
+  if (!company?.id) return null;
+  return (
+    <ChegouMercadoriaModal
+      visible
+      companyId={company.id}
+      lojaNome={company.name || null}
+      products={products}
+      semCusto={semCusto}
+      inicio={inicio}
+      onClose={onClose}
+    />
   );
 }
 
@@ -70,6 +114,15 @@ function FornecedoresScreen() {
   const [fichaKey, setFichaKey] = useState<string | null>(null);
   const [pedido, setPedido] = useState<{ order: PurchaseOrder; telefone: string | null } | null>(null);
   const [montandoKey, setMontandoKey] = useState<string | null>(null);
+  // F1/F2: o wizard aberto daqui (só com a trava ligada).
+  const [chegou, setChegou] = useState<InicioDoChegou | null>(null);
+  const portas = PortasDoChegou();
+  function abrirChegou(l: LinhaFornecedor, planilha = false) {
+    const ini = inicioDaLinha(l, planilha);
+    if (!ini) return;
+    setFichaKey(null);
+    setChegou(ini);
+  }
 
   const suppliersQ = useQuery({
     queryKey: ["suppliers", cid],
@@ -234,6 +287,7 @@ function FornecedoresScreen() {
               onCadastrar={() => setForm({ supplier: null, inicial: formDaLinha(l) })}
               onMontarPedido={() => montarPedido(l)}
               onContinuarPedido={(o) => setPedido({ order: o, telefone: l.telefone })}
+              onDarEntrada={portas && inicioDaLinha(l) ? () => abrirChegou(l) : undefined}
             />
           ))}
         </View>
@@ -261,7 +315,16 @@ function FornecedoresScreen() {
         onMontarPedido={(l) => montarPedido(l)}
         onAbrirPedido={(o, l) => setPedido({ order: o, telefone: l.telefone })}
         onMudou={invalidar}
+        {...(portas ? {
+          onDarEntrada: (l: LinhaFornecedor) => abrirChegou(l),
+          onImportarLista: (l: LinhaFornecedor) => abrirChegou(l, true),
+          comUltimaEntrada: true,
+        } : {})}
       />
+
+      {portas && chegou ? (
+        <ChegouDosFornecedores inicio={chegou} onClose={() => { setChegou(null); invalidar(); }} />
+      ) : null}
 
       <PedidoCompraSheet
         order={pedido?.order || null}
@@ -275,7 +338,21 @@ function FornecedoresScreen() {
   );
 }
 
-function LinhaCard({ linha: l, matcon, jaPedidos, montando, onAbrir, onCadastrar, onMontarPedido, onContinuarPedido }: {
+/**
+ * A trava das portas da Fase 4, mais o que já esconde ações de escrita no
+ * Estoque: demo e perfil só consulta não dão entrada. É um hook (lê a
+ * permissão) só quando a trava está ligada; com ela desligada, não lê nada.
+ */
+function PortasDoChegou(): boolean {
+  if (!FORNECEDORES_ABREM_O_CHEGOU) return false;
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const { isDemo } = useAuthStore();
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const { consulta, carregando } = useEstoqueConsulta();
+  return !isDemo && !consulta && !carregando;
+}
+
+function LinhaCard({ linha: l, matcon, jaPedidos, montando, onAbrir, onCadastrar, onMontarPedido, onContinuarPedido, onDarEntrada }: {
   linha: LinhaFornecedor;
   matcon: boolean;
   jaPedidos: Record<string, string>;
@@ -284,6 +361,8 @@ function LinhaCard({ linha: l, matcon, jaPedidos, montando, onAbrir, onCadastrar
   onCadastrar: () => void;
   onMontarPedido: () => void;
   onContinuarPedido: (o: PurchaseOrder) => void;
+  /** F1: só chega com a trava ligada. */
+  onDarEntrada?: () => void;
 }) {
   const rep = matcon ? l.reposicao : null;
   const itens = rep ? rep.items.slice(0, ITENS_VISIVEIS) : [];
@@ -360,6 +439,13 @@ function LinhaCard({ linha: l, matcon, jaPedidos, montando, onAbrir, onCadastrar
                 <Text style={[st.miniBtnText, { color: "#fff" }]}>{tudoJaPedido ? "Pedir de novo mesmo assim" : "Montar pedido"}</Text>
               </>
             )}
+          </Pressable>
+        ) : null}
+        {/* F1: secundário no cartão, para não competir com WhatsApp e "Montar pedido". */}
+        {onDarEntrada ? (
+          <Pressable onPress={onDarEntrada} style={st.miniBtn} testID={`fornecedor-dar-entrada-${l.key}`}>
+            <Icon name="inbox" size={13} color={Colors.ink} />
+            <Text style={st.miniBtnText}>{TEXTOS_CHEGOU.darEntrada4}</Text>
           </Pressable>
         ) : null}
       </View>
