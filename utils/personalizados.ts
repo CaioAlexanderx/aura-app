@@ -16,8 +16,10 @@
 // app/(tabs)/personalizados leem a MESMA conta.
 //
 // Multi-CNPJ: no consolidado ("Todas as empresas") não existe uma loja só
-// para ler o interruptor. As telas da frente mostram "escolha uma loja"
-// (regra da casa: mutação só por CNPJ).
+// para ler o interruptor. A conta vale loja por loja
+// (hooks/useLojasComPersonalizados.ts): a Produção e os Orçamentos 3D
+// mostram, só para ler, as lojas com a frente ligada (p-187). Mutação só
+// por CNPJ: cada item tem "Abrir na loja".
 // ============================================================
 
 type ComStudioEnabled = { studio_enabled?: unknown } | null | undefined;
@@ -29,6 +31,11 @@ type ComStudioEnabled = { studio_enabled?: unknown } | null | undefined;
 // nenhuma empresa, com ou sem studio_enabled. Ligar é trocar para true num
 // PR próprio, com o OK do Caio.
 export const PERSONALIZADOS_LIBERADO = false;
+
+/** A trava geral, lida por função (os testes ligam por mock, como personalizadosAtivo). */
+export function personalizadosLiberado(liberado: boolean = PERSONALIZADOS_LIBERADO): boolean {
+  return liberado === true;
+}
 
 export function personalizadosAtivo(
   settings: ComStudioEnabled,

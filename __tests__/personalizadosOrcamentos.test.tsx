@@ -95,8 +95,20 @@ jest.mock("@/hooks/usePdvSettings", () => ({ usePdvSettings: () => ({ settings: 
 const mockTrava = { liberado: true };
 jest.mock("@/utils/personalizados", () => {
   const real = jest.requireActual("@/utils/personalizados");
-  return { ...real, personalizadosAtivo: (s: any, v: any) => real.personalizadosAtivo(s, v, mockTrava.liberado) };
+  return {
+    ...real,
+    personalizadosAtivo: (s: any, v: any) => real.personalizadosAtivo(s, v, mockTrava.liberado),
+    personalizadosLiberado: () => real.personalizadosLiberado(mockTrava.liberado),
+  };
 });
+// A visão de todas as lojas (p-187) tem teste próprio
+// (__tests__/personalizadosConsolidado.test.tsx); aqui só o marcador.
+jest.mock("@/components/personalizados/consolidado/OrcamentosConsolidados", () => ({
+  OrcamentosConsolidados: () => {
+    const { View } = jest.requireActual("react-native");
+    return <View testID="orcamentos-consolidados-marcador" />;
+  },
+}));
 jest.mock("@/services/api", () => ({ request: jest.fn() }));
 jest.mock("@tanstack/react-query", () => ({ useQuery: jest.fn() }));
 jest.mock("@/hooks/useVisibleModules", () => ({
@@ -244,8 +256,9 @@ describe("a rota /personalizados/orcamentos", () => {
     arvore.unmount();
   });
 
-  test("consolidado multi-CNPJ: pede para escolher uma loja e não carrega orçamento", async () => {
+  test("consolidado com a trava desligada: como antes, pede para escolher uma loja e não carrega orçamento", async () => {
     mockAuth.estado = { ...mockAuth.estado, consolidatedView: true, company: null };
+    mockTrava.liberado = false;
     const arvore = await montarRota();
     const textos = textoDe(arvore);
     expect(textos).toContain("Escolha uma loja");
@@ -253,6 +266,14 @@ describe("a rota /personalizados/orcamentos", () => {
     expect(textos).toContain("Escolher loja");
     expect(tem(arvore, "personalizados-orcamentos")).toBe(false);
     expect(mockListQuotes).not.toHaveBeenCalled();
+    arvore.unmount();
+  });
+
+  test("consolidado com a trava ligada: a lista de todas as lojas, só leitura (p-187)", async () => {
+    mockAuth.estado = { ...mockAuth.estado, consolidatedView: true, company: null };
+    const arvore = await montarRota();
+    expect(tem(arvore, "orcamentos-consolidados-marcador")).toBe(true);
+    expect(JSON.stringify(arvore.toJSON())).not.toContain("Escolha uma loja");
     arvore.unmount();
   });
 
