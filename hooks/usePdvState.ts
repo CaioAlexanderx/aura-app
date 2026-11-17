@@ -54,6 +54,7 @@
 //     pra não recarregar de novo num refresh/voltar. Sem `?quote`, nada
 //     muda — é só mais um useEffect que nunca dispara.
 // ============================================================
+import { decisaoDoEnter, indiceDoDestaque, moverDestaque } from "@/utils/destaqueDaBusca";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams } from "expo-router";
@@ -640,6 +641,16 @@ export function usePdvState() {
   const { paginated, page, totalPages, total: filteredTotal, goTo } =
     usePagination(filtered, PAGE_SIZE, query + cat + (showOutOfStock ? "1" : "0"));
 
+  // 17/11/2026 (p-156): com texto na busca, o primeiro resultado da página
+  // fica destacado; ↑ ↓ trocam; Enter coloca ele na venda.
+  const [destaque, setDestaque] = useState(0);
+  useEffect(() => { setDestaque(0); }, [query, cat, page, showOutOfStock]);
+  const idxDestaque = query.trim() ? indiceDoDestaque(destaque, paginated.length) : -1;
+  const destaqueId = idxDestaque >= 0 ? paginated[idxDestaque]?.id ?? null : null;
+  function moverDestaqueDaBusca(passo: number) {
+    setDestaque(function(i) { return moverDestaque(i, passo, paginated.length); });
+  }
+
   const qtyById = useMemo(() => {
     const m: Record<string, number> = {};
     for (const it of cart) {
@@ -772,6 +783,13 @@ export function usePdvState() {
   async function handleSearchSubmit(text: string) {
     const cleaned = (text || "").trim();
     if (!cleaned) return;
+    // 17/11/2026 (p-156): nome com resultado na grade = o destacado entra.
+    if (decisaoDoEnter(cleaned, query, paginated.length) === "adicionar" && idxDestaque >= 0) {
+      const escolhido = paginated[idxDestaque];
+      setQuery("");
+      if (escolhido) handleAddProduct(escolhido as Product);
+      return;
+    }
     setQuery("");
     const lancou = await handleScan(cleaned, "busca");
     if (lancou && !lerCodigoDoVale(cleaned)) flashScanFeedback(cleaned);
@@ -1397,6 +1415,8 @@ export function usePdvState() {
     // Produtos / busca
     products, query, setQuery, cat, setCat, showOutOfStock, setShowOutOfStock,
     categories, outOfStockCount, paginated, page, totalPages, filteredTotal, goTo, qtyById,
+    // 17/11/2026 (p-156): destaque da busca.
+    destaqueId, moverDestaqueDaBusca,
     // Modais (openers/closers nomeados)
     pendingProduct, pendingBipe,
     closePendingProduct: () => { setPendingProduct(null); setPendingBipe(null); },

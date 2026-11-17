@@ -23,7 +23,7 @@
 // mínima de antes (2 linhas de nome): sem marca o card fica igual, e nome
 // de uma linha + marca também não cresce.
 // ============================================================
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet, Platform, Image } from "react-native";
 import { Colors, Glass } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -77,6 +77,8 @@ export type GridProduct = {
 
 type Props = {
   products: GridProduct[];
+  /** 17/11/2026 (p-156): produto destacado pela busca (Enter coloca na venda). */
+  destaqueId?: string | null;
   qtyById: Record<string, number>;
   onAdd: (p: GridProduct, evt?: { x: number; y: number; accent: string; letter: string }) => void;
   /** Fallback de colunas fixas (nativo / quando minCard não é passado). */
@@ -103,7 +105,16 @@ let gradeJaEntrou = false;
 /** Só para testes: a próxima grade montada volta a animar. */
 export function __reiniciarEntradaDaGrade() { gradeJaEntrou = false; }
 
-export function ProductGrid({ products, qtyById, onAdd, columns = 4, minCard, compact = false, dense = false, matconEnabled = false, cardPriceFor }: Props) {
+// O anel do destaque só aparece com mouse e teclado (no toque não há Enter).
+function comTeclado(): boolean {
+  try {
+    return IS_WEB && typeof window !== "undefined" && typeof window.matchMedia === "function"
+      && window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+  } catch { return false; }
+}
+
+export function ProductGrid({ products, qtyById, onAdd, columns = 4, minCard, compact = false, dense = false, matconEnabled = false, cardPriceFor, destaqueId = null }: Props) {
+  const [teclado] = useState(comTeclado);
   // true só no primeiro render da primeira grade; o cartão guarda o valor de
   // quando montou (ProdCard), então a cascata da entrada termina inteira.
   const naEntrada = useRef(!gradeJaEntrou);
@@ -133,13 +144,14 @@ export function ProductGrid({ products, qtyById, onAdd, columns = 4, minCard, co
           dense={dense}
           matconEnabled={matconEnabled}
           cardPrice={cardPriceFor ? cardPriceFor(p) : null}
+          destacado={teclado && !!destaqueId && destaqueId === p.id}
         />
       ))}
     </View>
   );
 }
 
-function ProdCard({ product, qty, index, animar = false, onAdd, compact = false, dense = false, matconEnabled = false, cardPrice = null }: { product: GridProduct; qty: number; index: number; animar?: boolean; onAdd: Props["onAdd"]; compact?: boolean; dense?: boolean; matconEnabled?: boolean; cardPrice?: number | null }) {
+function ProdCard({ product, qty, index, animar = false, onAdd, compact = false, dense = false, matconEnabled = false, cardPrice = null, destacado = false }: { product: GridProduct; qty: number; index: number; animar?: boolean; onAdd: Props["onAdd"]; compact?: boolean; dense?: boolean; matconEnabled?: boolean; cardPrice?: number | null; destacado?: boolean }) {
   // Decidido na montagem: o cartão da entrada anima até o fim mesmo que a
   // grade redesenhe no meio; o que monta depois não anima.
   const animarAoEntrar = useRef(animar).current;
@@ -183,6 +195,8 @@ function ProdCard({ product, qty, index, animar = false, onAdd, compact = false,
     cursor: "pointer",
     transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)",
     minWidth: 0,
+    // 17/11/2026 (p-156): anel violeta no produto que o Enter coloca na venda.
+    ...(destacado ? { boxShadow: "0 0 0 2px #7c3aed" } : {}),
   });
 
   const imgBg = webOnly({

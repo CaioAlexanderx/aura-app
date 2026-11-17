@@ -22,6 +22,8 @@ type Props = {
    *  "ou código") via o código parado aqui e tinha de apagar antes do próximo
    *  bipe. Com isso o Enter do leitor lança o item e o pai limpa o campo. */
   onSubmit?: (v: string) => void;
+  /** 17/11/2026 (p-156): ↑ ↓ trocam o produto destacado na grade. */
+  onMoverDestaque?: (passo: number) => void;
   /** 29/09/2026: leitura do leitor de código DENTRO da busca, com ou sem
    *  Enter. Uma rajada rápida (ver utils/leituraRapida) vira bipe: o campo
    *  volta ao texto de antes e o código vai para onScan. Sem isso, leitor
@@ -38,7 +40,7 @@ type Props = {
  *  tela do Caixa (hooks/useAtalhosDoCaixa), que chama `focar()` pelo ref. */
 export type SearchBoxHandle = { focar: () => void };
 
-export const SearchBox = forwardRef<SearchBoxHandle, Props>(function SearchBox({ value, onChange, placeholder, maxWidth, onSubmit, onScan }, handleRef) {
+export const SearchBox = forwardRef<SearchBoxHandle, Props>(function SearchBox({ value, onChange, placeholder, maxWidth, onSubmit, onScan, onMoverDestaque }, handleRef) {
   const ref = useRef<TextInput | null>(null);
   useImperativeHandle(handleRef, () => ({
     focar: () => {
@@ -77,6 +79,32 @@ export const SearchBox = forwardRef<SearchBoxHandle, Props>(function SearchBox({
       leitor.cancelar();
     };
   }, [temLeitor]);
+
+  // 17/11/2026 (p-156): ↑ ↓ trocam o produto destacado; Esc limpa a busca.
+  // Fase normal (depois do leitor, que ouve em captura).
+  const valorRef = useRef(value);
+  valorRef.current = value;
+  const moverRef = useRef(onMoverDestaque);
+  moverRef.current = onMoverDestaque;
+  useEffect(() => {
+    const el: any = ref.current;
+    if (!IS_WEB || !el || typeof el.addEventListener !== "function") return;
+    const aoTecla = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey) return;
+      const temTexto = String(valorRef.current || "").trim() !== "";
+      if (!temTexto) return;
+      if ((e.key === "ArrowDown" || e.key === "ArrowUp") && moverRef.current) {
+        e.preventDefault();
+        moverRef.current(e.key === "ArrowDown" ? 1 : -1);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        ultimoValor.current = "";
+        onChangeRef.current("");
+      }
+    };
+    el.addEventListener("keydown", aoTecla);
+    return () => el.removeEventListener("keydown", aoTecla);
+  }, []);
 
   // Fecha a rajada: se foi leitura, desfaz o texto que ela digitou e lança o código.
   function fecharRajada(): boolean {
