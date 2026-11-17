@@ -340,7 +340,13 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   allCategories: string[];
+  /** 17/11/2026 (E2): veio do "Cadastrar vários" — mostra "← Voltar" para a escolha da origem. */
+  onVoltar?: () => void;
 };
+
+// 17/11/2026 (E2, textos aprovados pelo Caio): o título repete as palavras
+// da escolha "Cadastrar vários" (antes, "Adicionar produtos em lote").
+export const TITULO_DA_LISTA = "Digitar ou colar uma lista";
 
 const MAX_ROWS = 200;
 const EXAMPLE_POSITIONAL = "Camiseta Branca | 49,90 | P | Branca | 15\nCamiseta Branca | 49,90 | M | Branca | 10\nTenis Esportivo | 199,90 | 38 | Preto | 5\nBone Aba Reta | 39,90 |  | Preto | 20";
@@ -348,7 +354,7 @@ const EXAMPLE_EXPANSION = "Camiseta basica | 49,90 | {P,M,G,GG} | preto | 5\nBer
 const EXAMPLE_SECTIONS = "[Camisetas]\nCamiseta Branca | 49,90 | M | branca | 10\nCamiseta Preta | 49,90 | M | preto | 8\n\n[Bermudas]\nBermuda slim | 79,90 | M | preto | 5";
 const EXAMPLE_MARKUP = "Camiseta basica | 25,00 | M | preto | 10\nBermuda slim | 35,00 | M | cinza | 5\nTenis casual | 95,00 | 40 | preto | 3";
 
-export function QuickBatchProductsModal({ visible, onClose, allCategories }: Props) {
+export function QuickBatchProductsModal({ visible, onClose, allCategories, onVoltar }: Props) {
   const { company } = useAuthStore();
   const qc = useQueryClient();
   const [text, setText] = useState("");
@@ -418,6 +424,16 @@ export function QuickBatchProductsModal({ visible, onClose, allCategories }: Pro
     setMarkupInput("");
     setEditingLine(null);
     onClose();
+  }
+
+  // "← Voltar": o mesmo que fechar (a lista não é gravada), mas devolve
+  // para a escolha da origem em vez de para o Estoque.
+  function handleVoltar() {
+    if (mut.isPending || !onVoltar) return;
+    setText("");
+    setMarkupInput("");
+    setEditingLine(null);
+    onVoltar();
   }
 
   function handleSubmit() {
@@ -526,7 +542,7 @@ export function QuickBatchProductsModal({ visible, onClose, allCategories }: Pro
           {/* Header */}
           <View style={s.header}>
             <View style={{ flex: 1 }}>
-              <Text style={s.title}>Adicionar produtos em lote</Text>
+              <Text style={s.title}>{TITULO_DA_LISTA}</Text>
               <Text style={s.subtitle}>Cole ou digite vários produtos de uma vez</Text>
             </View>
             <Pressable onPress={handleClose} style={s.closeBtn} hitSlop={8}>
@@ -535,6 +551,12 @@ export function QuickBatchProductsModal({ visible, onClose, allCategories }: Pro
           </View>
 
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }} showsVerticalScrollIndicator={false}>
+            {onVoltar && (
+              <Pressable onPress={handleVoltar} style={s.voltarBtn} accessibilityRole="button" testID="lista-voltar">
+                <Icon name="chevron_left" size={15} color={Colors.violet3} />
+                <Text style={s.voltarTxt}>Voltar</Text>
+              </Pressable>
+            )}
             {/* Help tabs */}
             <View style={s.helpTabs}>
               <Pressable onPress={function() { setActiveHelp('basic'); }}
@@ -911,6 +933,8 @@ const s = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "flex-start", padding: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: Colors.border },
   title: { fontSize: 17, fontWeight: "800", color: Colors.ink, letterSpacing: -0.3 },
   subtitle: { fontSize: 12, color: Colors.ink3, marginTop: 3 },
+  voltarBtn: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start" as any, minHeight: 44, paddingRight: 8, marginTop: -8, marginBottom: 4 },
+  voltarTxt: { fontSize: 13, fontWeight: "600", color: Colors.violet3 },
   closeBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.bg3, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border },
 
   helpTabs: { flexDirection: "row", gap: 6, marginBottom: 8, flexWrap: "wrap" },

@@ -426,6 +426,10 @@ export default function EstoqueScreen() {
 
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [showBatchModal, setShowBatchModal] = useState(false);
+  // E2 (17/11/2026): a lista aberta pelo "Cadastrar vários" do "+ Produto"
+  // ganha "← Voltar" para a escolha; voltar reabre o cadastro já nela.
+  const [listaComVoltar, setListaComVoltar] = useState(false);
+  const [formEmVarios, setFormEmVarios] = useState(false);
   const [showDanfeModal, setShowDanfeModal] = useState(false);
   // 22/09/2026: botão "Importar planilha" na barra de ações — antes o
   // ServerImport só aparecia no estado vazio (0 produtos), então quem já
@@ -585,8 +589,9 @@ export default function EstoqueScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.novo, consultaCarregando]);
 
-  function abrirCadastro(tipo: "product" | "service", prod?: Product | null) {
+  function abrirCadastro(tipo: "product" | "service", prod?: Product | null, naEscolhaDeVarios = false) {
     if (consulta) return;
+    setFormEmVarios(naEscolhaDeVarios && !prod && tipo === "product");
     setEditProduct(prod || null);
     setFormType(prod ? (prod.unit === "srv" ? "service" : "product") : tipo);
     setFormOpen(true);
@@ -605,6 +610,37 @@ export default function EstoqueScreen() {
     }
     if (irAoCaixa) router.push(ROTA_CAIXA as any);
   }
+
+  // ── E2: "Cadastrar vários" (faixa do "+ Produto") ────────
+  function abrirLista(comVoltar: boolean) {
+    setListaComVoltar(comVoltar);
+    setShowBatchModal(true);
+  }
+  function listaPeloCadastro() {
+    fecharCadastro();
+    abrirLista(true);
+  }
+  function voltarDaLista() {
+    setShowBatchModal(false);
+    setListaComVoltar(false);
+    abrirCadastro("product", null, true);
+  }
+  // A planilha abre o seletor de arquivo de hoje. O cadastro só fecha quando
+  // a importação abre de fato (arquivo escolhido): cancelar o seletor deixa
+  // a pessoa na escolha, onde estava.
+  const planilhaPeloCadastroRef = useRef(false);
+  useEffect(() => {
+    if (!importPlanilha.aberto) return;
+    if (planilhaPeloCadastroRef.current && formOpen) fecharCadastro();
+    planilhaPeloCadastroRef.current = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [importPlanilha.aberto]);
+  const acoesCadastrarVarios = !isDemo && !consolidatedView && !consulta ? {
+    onPlanilha: () => { planilhaPeloCadastroRef.current = true; importPlanilha.escolherArquivo(); },
+    onLista: listaPeloCadastro,
+    planilhaOcupada: importPlanilha.ocupado,
+    abrirNaEscolha: formEmVarios,
+  } : undefined;
 
   function aposSalvarItem() {
     salvouRef.current = true;
@@ -713,16 +749,10 @@ export default function EstoqueScreen() {
   const ActionButtons = () => (
     <>
       <OlhoValores variant="botao" />
-      <Pressable onPress={() => abrirCadastro("service")} style={[s.serviceBtn, isMobileNarrow && s.btnIconOnly]}>
-        <Icon name="star" size={14} color={Colors.violet3} />
-        {!isMobileNarrow && <Text style={s.serviceBtnText}>+ Serviço</Text>}
-      </Pressable>
-      {!isDemo && (
-        <Pressable onPress={() => setShowBatchModal(true)} style={[s.batchBtn, isMobileNarrow && s.btnIconOnly]}>
-          <Icon name="layers" size={14} color={Colors.violet3} />
-          {!isMobileNarrow && <Text style={s.batchBtnText}>+ Em lote</Text>}
-        </Pressable>
-      )}
+      {/* 17/11/2026 (E1, estoque-portas-mockup-17-11.html, parte 1): saíram
+          "+ Serviço" e "+ Em lote". O serviço é a escolha Produto · Serviço
+          dentro do "+ Produto"; o lote virou "Cadastrar vários", a faixa do
+          cadastro novo de produto (E2). A barra foi de 8 para 6 botões. */}
       {/* 23/09/2026 (QA): "Importar DANFE" + "Importar planilha" viraram
           um botão só, com menu explicando cada origem. Mesmo gate (!isDemo). */}
       {!isDemo && (
@@ -760,7 +790,7 @@ export default function EstoqueScreen() {
           {!isMobileNarrow && <Text style={s.batchBtnText}>Entrada de mercadoria</Text>}
         </Pressable>
       )}
-      <Pressable onPress={() => abrirCadastro("product")} style={s.addBtn} {...tourTarget("estoque.novo_produto")}>
+      <Pressable onPress={() => abrirCadastro("product")} style={s.addBtn} testID="estoque-novo-produto" {...tourTarget("estoque.novo_produto")}>
         <Icon name="package" size={14} color="#fff" />
         <Text style={s.addBtnText}>+ Produto</Text>
       </Pressable>
@@ -968,7 +998,7 @@ export default function EstoqueScreen() {
             <View style={s.emptyImport}>
               <View style={s.emptyImportIcon}><Icon name="layers" size={18} color={Colors.violet3} /></View>
               <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Adicionar em lote</Text><Text style={s.emptyImportDesc}>Cole vários produtos de uma vez e cadastre em segundos</Text></View>
-              <Pressable onPress={() => setShowBatchModal(true)} style={s.batchBtnSmall}>
+              <Pressable onPress={() => abrirLista(false)} style={s.batchBtnSmall}>
                 <Text style={s.batchBtnSmallText}>Abrir</Text>
               </Pressable>
             </View>
@@ -1203,7 +1233,12 @@ export default function EstoqueScreen() {
       <ConfirmDialog visible={!!deleteTarget} title="Excluir produto?" message="Esta ação não pode ser desfeita." confirmLabel="Excluir" destructive onConfirm={() => { if (deleteTarget) { deleteProduct(deleteTarget); setDeleteTarget(null); refetchDupGroups(); } }} onCancel={() => setDeleteTarget(null)} />
       <ConfirmDialog visible={showBulkConfirm} title={`Excluir ${bulkSelected.size} produto${bulkSelected.size > 1 ? "s" : ""}`} message="Esta ação não pode ser desfeita. Todos os produtos selecionados serão removidos permanentemente." confirmLabel="Excluir todos" destructive onConfirm={() => { setShowBulkConfirm(false); handleBulkDelete(); }} onCancel={() => setShowBulkConfirm(false)} />
       <MergeDuplicatesModal visible={showMergeModal} onClose={() => { setShowMergeModal(false); clearMergeSuggestion(); }} onComplete={() => { qc.invalidateQueries({ queryKey: ["products", company?.id] }); refetchDupGroups(); clearMergeSuggestion(); }} />
-      <QuickBatchProductsModal visible={showBatchModal} onClose={() => setShowBatchModal(false)} allCategories={allCategories} />
+      <QuickBatchProductsModal
+        visible={showBatchModal}
+        onClose={() => { setShowBatchModal(false); setListaComVoltar(false); }}
+        onVoltar={listaComVoltar ? voltarDaLista : undefined}
+        allCategories={allCategories}
+      />
       {company?.id && (
         <DanfeImportModal
           visible={showDanfeModal}
@@ -1317,6 +1352,7 @@ export default function EstoqueScreen() {
         initialType={formType}
         editProduct={editProduct}
         onSaved={aposSalvarItem}
+        cadastrarVarios={acoesCadastrarVarios}
       />
     </View>
   );
@@ -1335,8 +1371,6 @@ const s = StyleSheet.create({
   linksTopo: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: 14 },
   ultimosLink: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-end", minHeight: 44, paddingHorizontal: 4, marginTop: -8, marginBottom: 4 },
   ultimosLinkText: { fontSize: 12.5, color: Colors.violet3, fontWeight: "600", textDecorationLine: "underline" },
-  serviceBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: Colors.border2 },
-  serviceBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
   batchBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: Colors.border2 },
   batchBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
   danfeBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(124,58,237,0.18)", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: "rgba(167,139,250,0.35)", borderStyle: "dashed" as any },
