@@ -42,6 +42,9 @@ type Props = {
   onCadastrarEmitente: () => void;
   onManter: () => void;
   onSeguirMesmoAssim: () => void;
+  /** A6: a planilha lida, ou a que não deu para ler. */
+  planilha?: { nome: string; itens: number } | null;
+  planilhaIlegivel?: boolean;
   /** A6 (planilha) e A5 (digitar): sem a prop, o botão fica desligado. */
   onPlanilha?: () => void;
   onBaixarModelo?: () => void;
@@ -76,6 +79,20 @@ export function Passo2Origem(p: Props) {
       </View>
     </View>
   ) : null;
+
+  if (p.planilha) {
+    return (
+      <View style={{ gap: 12 }} testID="chegou-passo-2">
+        <View style={s.notaLida} testID="chegou-planilha-lida">
+          <Icon name="grid" size={16} color={Colors.green} />
+          <Text style={s.notaLidaTxt}>{T.planilhaLida(p.planilha.nome, p.planilha.itens)}</Text>
+          <Pressable onPress={p.onPlanilha} style={s.btnSec} accessibilityRole="button" testID="chegou-outra-planilha">
+            <Text style={s.btnSecTxt}>{T.escolherOutroArquivo}</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   if (nota && !p.arquivoErrado) {
     const emitente = nota.emitente.nome || cnpjComMascara(nota.emitente.cnpj) || "?";
@@ -174,9 +191,30 @@ export function Passo2Origem(p: Props) {
     </View>
   );
 
+  const avisoPlanilha = p.planilhaIlegivel ? (
+    <View style={[s.aviso, s.avisoVermelho]} testID="chegou-planilha-ilegivel">
+      <Icon name="alert" size={16} color={Colors.red} />
+      <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+        <Text style={s.avisoTitulo}>{T.planilhaIlegivelTitulo}</Text>
+        <Text style={s.apoio}>{T.planilhaIlegivelTexto}</Text>
+        <View style={s.acoes}>
+          <Pressable onPress={p.onPlanilha} style={s.btnSec} accessibilityRole="button" testID="chegou-planilha-de-novo">
+            <Text style={s.btnSecTxt}>{T.escolherDeNovo}</Text>
+          </Pressable>
+          {p.onBaixarModelo ? (
+            <Pressable onPress={p.onBaixarModelo} style={s.btnSec} accessibilityRole="button" testID="chegou-planilha-modelo-aviso">
+              <Text style={s.btnSecTxt}>{T.origemPlanilhaModelo}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+    </View>
+  ) : null;
+
   return (
     <View style={{ gap: 12 }} testID="chegou-passo-2">
       {avisoArquivo}
+      {avisoPlanilha}
       <Text style={s.pergunta}>{T.pergunta2}</Text>
       <View style={[s.origens, p.estreito && { flexDirection: "column" }]}>
         {cartao("nota", "file_text", Colors.violet, T.origemNotaTitulo, T.origemNotaApoio, T.origemNotaFormato, [

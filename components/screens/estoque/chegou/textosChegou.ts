@@ -230,6 +230,16 @@ export const TEXTOS_CHEGOU = {
   // NOVO (fora do mockup): leitor de tela do "x" da linha.
   digitarTirar: "Tirar da lista",
 
+  // ── Passo 2 e 3 · origem "Planilha" (A6) ───────────────────
+  passoFeitoPlanilha: "Planilha",
+  planilhaIlegivelTitulo: "Não conseguimos ler esta planilha.",
+  planilhaIlegivelTexto: "Salve como Excel (.xlsx) ou CSV e tente de novo. Se preferir, use o nosso modelo.",
+  escolherDeNovo: "Escolher de novo",
+  // NOVO (fora do mockup): a planilha escolhida, já lida, no passo 2.
+  planilhaLida: (nome: string, itens: number) => "Planilha " + nome + " · " + itens + " " + plural(itens, "item", "itens"),
+  // NOVO (fora do mockup): a linha da planilha sem quantidade.
+  erroQtdZeroPlanilha: "A planilha traz este item sem quantidade. Ele fica de fora; se chegou, diga quantos.",
+
   // ── Gravando e Pronto (A7) ─────────────────────────────────
   gravandoTitulo: "Dando entrada…",
   gravandoTexto: (x: number, n: number) =>
