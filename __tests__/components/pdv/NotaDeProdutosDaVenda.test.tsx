@@ -8,6 +8,7 @@
 import React from "react";
 import renderer, { act } from "react-test-renderer";
 
+jest.mock("@/components/JanelaEmpilhada", () => ({ JanelaEmpilhada: ({ children }: any) => children }));
 jest.mock("@/components/Icon", () => ({ Icon: () => null }));
 jest.mock("expo-font", () => ({ useFonts: () => [true, null], loadAsync: jest.fn(), isLoaded: () => true }));
 jest.mock("@/components/karate/FpktLogo", () => ({ FpktLogo: () => null, default: () => null }));
