@@ -44,7 +44,8 @@ export type AcaoDoCaixa =
   | "pagamento1" | "pagamento2" | "pagamento3" | "pagamento4" | "pagamento5"
   | "fechar"
   | "novaVenda"
-  | "imprimir";
+  | "imprimir"
+  | "imprimirAnterior";
 
 /** Uma combinação de teclas. `code` é o KeyboardEvent.code. */
 export type Combinacao =
@@ -71,12 +72,22 @@ export type AtalhoDoCaixa = {
   comItens?: boolean;
   /** Vale também com janela aberta por cima do Caixa (o Esc que fecha). */
   comJanela?: boolean;
+  /** Só com a faixa da venda anterior na tela (p-147). Sem ela, a tecla é
+   *  do navegador. */
+  comVendaAnterior?: boolean;
 };
 
 const F = (code: string): Combinacao => ({ tipo: "funcao", code });
 const ALT = (code: string): Combinacao => ({ tipo: "alt", code });
 const CMD = (code: string): Combinacao => ({ tipo: "ctrlOuCmd", code });
 const SOLTA = (code: string): Combinacao => ({ tipo: "solta", code });
+
+/**
+ * 17/11/2026 (p-147): Ctrl/⌘+P com a faixa da venda anterior na tela imprime
+ * o cupom dela. É pendência do mockup (decisão 12, pendência 3): para
+ * desligar, false aqui — a tecla volta a ser do navegador no Caixa.
+ */
+export const CTRL_P_IMPRIME_VENDA_ANTERIOR = true;
 
 /** Mapa de teclas do Caixa (tabela 1.4 do mapa de 17/11). */
 export const ATALHOS_DO_CAIXA: AtalhoDoCaixa[] = [
@@ -98,6 +109,9 @@ export const ATALHOS_DO_CAIXA: AtalhoDoCaixa[] = [
   { acao: "fechar",       onde: "caixa", comJanela: true, teclas: [SOLTA("Escape")], texto: "Fechar" },
   { acao: "novaVenda",    onde: "telaFinal", teclas: [SOLTA("Enter"), SOLTA("NumpadEnter"), SOLTA("Escape"), F("F9")], texto: "Começar a próxima venda" },
   { acao: "imprimir",     onde: "telaFinal", teclas: [CMD("KeyP")], texto: "Imprimir o cupom" },
+  ...(CTRL_P_IMPRIME_VENDA_ANTERIOR
+    ? [{ acao: "imprimirAnterior" as const, onde: "caixa" as const, comVendaAnterior: true, teclas: [CMD("KeyP")], texto: "Imprimir o cupom da venda anterior" }]
+    : []),
 ];
 
 /** A ordem das formas de pagamento no Alt+1…5. */
@@ -120,6 +134,8 @@ export type EstadoDosAtalhos = {
   temItens?: boolean;
   /** Quando a tela final apareceu (ms, mesmo relógio de `agora`). */
   telaFinalDesde?: number | null;
+  /** A faixa da venda anterior está na tela (p-147). */
+  temVendaAnterior?: boolean;
 };
 
 /** O pedaço do KeyboardEvent que importa (dá para testar sem DOM). */
@@ -254,6 +270,7 @@ export function resolverAtalho(
   }
 
   if (estado.janelaAberta && !atalho.comJanela) return funcao ? { acao: null, segurar: true } : NADA;
+  if (atalho.comVendaAnterior && !estado.temVendaAnterior) return funcao ? { acao: null, segurar: true } : NADA;
   if (atalho.comItens && estado.temItens === false) return funcao ? { acao: null, segurar: true } : NADA;
   if (t.repeat) return { acao: null, segurar: funcao || !solta };
   return { acao: atalho.acao, segurar: !solta };

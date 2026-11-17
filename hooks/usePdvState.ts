@@ -117,6 +117,7 @@ import { resumoDoEndereco } from "@/components/endereco/endereco";
 // 10/11/2026 (NFS-e automática, mockup nfse-cadastro-servico.html, tela 3).
 import { useNfseAutomaticaConfig } from "@/hooks/useNfseAutomatica";
 import { avisoDasNotas, composicaoDaVenda, pedeTomador } from "@/utils/nfseAutomatica";
+import { dialogoAbertoNaTela } from "@/hooks/useAtalhosDoCaixa";
 import type { TextInput } from "react-native";
 
 const PAGE_SIZE = 12;
@@ -299,6 +300,7 @@ export function usePdvState() {
     precoNoCartao, couponDiscount: cartCouponDiscount, setCouponRule,
     splitStatus,
     vendaRecuperada, dispensarVendaRecuperada,
+    itensDaProximaVenda,
   } = useCart(cardCfg, {
     recuperar: !quoteRouteParams.quote,
     // 09/11/2026: 422 DELIVERY_ADDRESS_REQUIRED — o cadastro não tinha o
@@ -403,7 +405,13 @@ export function usePdvState() {
   // era o profissional exibido no chip).
   // QA 23/09/2026: a busca também recomeça vazia (o "Tijolo" da venda
   // anterior grudava no "Piso" da próxima: "TijoloPiso").
+  // 17/11/2026 (p-147): a venda concluída na frente, lida na hora (o bipe e
+  // o Enter da tela final chegam no mesmo tique; quem começar a venda nova
+  // primeiro zera isto, e o outro não começa outra por cima).
+  const lastSaleRef = useRef(lastSale);
+  lastSaleRef.current = lastSale;
   function newSale() {
+    lastSaleRef.current = null;
     matconReferral.clear();
     rawNewSale();
     setQuery("");
@@ -687,11 +695,16 @@ export function usePdvState() {
   async function handleScan(code: string, origem: "leitor" | "busca" = "leitor"): Promise<boolean> {
     const cleaned = (code || "").trim();
     if (!cleaned) return false;
+    // 17/11/2026 (p-147): bipe com a tela de venda concluída na frente. A
+    // venda nova começa só quando o código lança algo (produto, seletor de
+    // tamanho, vale-troca); código que não existe avisa e a tela fica.
+    const abrirVendaNova = () => { if (lastSaleRef.current) newSale(); };
     // 13/10/2026: QR do vale-troca (AURA-TROCA:<venda>) — vale em qualquer
     // entrada do Caixa (leitor global, busca, código manual). Abre a Troca com
     // a venda carregada; nunca é produto nem texto de busca.
     const vale = lerCodigoDoVale(cleaned);
     if (vale) {
+      abrirVendaNova();
       setValeTroca({ saleId: vale.saleId });
       setShowTroca(true);
       return true;
@@ -712,6 +725,7 @@ export function usePdvState() {
     const localProduct = products.find(p => p.barcode === cleaned)
       || products.find(p => Array.isArray((p as any).variant_barcodes) && (p as any).variant_barcodes.includes(cleaned));
     if (localProduct) {
+      abrirVendaNova();
       if (localProduct.has_variants) { setPendingBipe({ code: cleaned }); setPendingProduct(localProduct); }
       else handleAddProduct(localProduct);
       return true;
@@ -736,13 +750,14 @@ export function usePdvState() {
           ...(promoPai ? { emPromocao: true, precoEfetivo: promoPai.por } : {}),
         };
         // Não lança direto: o seletor abre com este tamanho marcado.
+        abrirVendaNova();
         setPendingBipe({ code: cleaned, variantId: result.variant_id });
         setPendingProduct(parent);
         return true;
       }
       if (result.match === "exact" && result.product) {
         const full = products.find(p => p.id === result.product.id);
-        if (full) { handleAddProduct(full); return true; }
+        if (full) { abrirVendaNova(); handleAddProduct(full); return true; }
         // De/Por (p-87): com `preco_efetivo` no bipe, o preço normal fica em
         // `price` e o addToCart usa o da promoção (e mostra "de/por").
         // Backend antigo: o bp é o de sempre.
@@ -760,10 +775,12 @@ export function usePdvState() {
         // Abre o seletor como no bipe local: o código vai como preselect
         // (tamanho com esse código vem marcado; código só do pai, nada).
         if (await temVarianteAtiva(company.id, result.product)) {
+          abrirVendaNova();
           setPendingBipe({ code: cleaned });
           setPendingProduct(bp);
           return true;
         }
+        abrirVendaNova();
         addToCart(bp);
         toast.success(bp.name);
         return true;
@@ -1084,8 +1101,10 @@ export function usePdvState() {
   }
 
   // ── Scanner gate ──────────────────────────────────────────────────────────
+  // 17/11/2026 (p-147): o leitor fica ligado também na tela de venda
+  // concluída — bipar ali começa a venda nova com o item (handleScan). Com
+  // uma janela aberta por cima dela (assistente da NF-e…), o bipe é ignorado.
   const scannerListening =
-    !lastSale &&
     !pendingProduct &&
     !showCaixaModal &&
     !showTroca &&
@@ -1097,7 +1116,13 @@ export function usePdvState() {
     !comandas.showFechar &&
     // Busca do painel das abertas também é digitada.
     !comandas.showPainel;
-  useGlobalBarcodeScanner({ onScan: handleScan, enabled: scannerListening });
+  useGlobalBarcodeScanner({
+    onScan: (code: string) => {
+      if (lastSaleRef.current && dialogoAbertoNaTela()) return;
+      handleScan(code);
+    },
+    enabled: scannerListening,
+  });
 
   // ── Janela por cima do Caixa (17/11/2026, p-153) ────────────────────────
   // Com qualquer uma aberta os atalhos (hooks/useAtalhosDoCaixa) seguram a
@@ -1278,6 +1303,8 @@ export function usePdvState() {
     onFinalize:        handleFinalize,
     // 17/11/2026 (p-157): bipe com o cursor num campo do carrinho.
     onScan:            (code: string) => { handleScan(code); },
+    // 17/11/2026 (p-147): o que espera a próxima venda, no aviso "Finalizando".
+    proximaVenda:      itensDaProximaVenda,
     onGenerateQuote:   () => handleGenerateQuote(),
     showOrcamento:     true,
     onSaveQuote:       matconQuote.saveQuote,
@@ -1397,6 +1424,8 @@ export function usePdvState() {
     comandas,
     // Cart
     payment, setPayment, lastSale, newSale, isProcessing,
+    // 17/11/2026 (p-147): "N produtos já estão esperando" na tela final.
+    itensDaProximaVenda,
     // Faixa "Venda recuperada (N itens)" — null = nada a mostrar.
     vendaRecuperada: avisoVendaRecuperada,
     limparVendaRecuperada: newSale,

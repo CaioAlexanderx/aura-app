@@ -26,23 +26,28 @@
 // o que conferir quando não há venda gravada a ler. O app não recalcula
 // total nenhum. Sem desconto, o corpo do /emit sai igual.
 //
+// 17/11/2026 (p-147): o pedido e a consulta à SEFAZ saíram daqui para
+// services/emissaoDaNfce (com a prop `chave`, sobrevivem à tela final).
+// Este componente só desenha o estado. Telas iguais.
+//
 // 14/11/2026 (NF-e 55, CP4b): prop `notaAtiva` — loja com a nota fiscal
 // desligada vê o convite para ligar (ConviteNotaFiscal) em vez de um
 // "Emitir NFC-e" que falhava ao tocar; a automática não dispara.
 // ============================================================
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Pressable, Platform, ActivityIndicator } from "react-native";
-import { useMutation } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
 import { BASE_URL } from "@/services/api";
-import { nfceApi, type EmitResponse, type NfcePaymentEntry } from "@/services/nfceApi";
+import { type EmitResponse, type NfcePaymentEntry } from "@/services/nfceApi";
+import { emitirNota, esquecerNota, estadoDaNota } from "@/services/emissaoDaNfce";
+import { useEmissaoDaNfce } from "@/hooks/useEmissaoDaNfce";
 import { toast } from "@/components/Toast";
 import { Icon } from "@/components/Icon";
 import { QrCode } from "@/components/QrCode";
 import { openPrintWindow } from "@/services/printWindow";
 import { Linking } from "react-native";
-import { nfcePulada, textoServicosForaDaNfce, TEXTO_NFCE_SO_SERVICO } from "@/utils/nfseAutomatica";
+import { textoServicosForaDaNfce, TEXTO_NFCE_SO_SERVICO } from "@/utils/nfseAutomatica";
 import { ConviteNotaFiscal } from "@/components/nfe55/ConviteNotaFiscal";
 
 export type NfceActionsItem = {
@@ -78,9 +83,12 @@ export type NfceActionsProps = {
    *  NFC-e" (tocar dava erro): aparece o convite para ligar a nota, nunca
    *  bloqueio. undefined = não se sabe (Troca, telas antigas): como sempre. */
   notaAtiva?: boolean;
+  /** 17/11/2026 (p-147): chave da nota em services/emissaoDaNfce. A venda do
+   *  Caixa passa `chaveDaNotaDaVenda(id)`: a emissão continua depois que a
+   *  tela final sai e a faixa da venda anterior mostra o resultado. Sem
+   *  chave: o estado é deste componente, como sempre. */
+  chave?: string;
 };
-
-type EmitState = "idle" | "emitting" | "authorized" | "rejected" | "error" | "skipped";
 
 function formatAccessKey(k: string | null | undefined): string {
   if (!k) return "";
@@ -137,154 +145,72 @@ export function NfceActions({
   companyId, saleId, items, total,
   customerName, customerCpf, customerPhone,
   paymentMethod, payments, saleDiscount,
-  autoEmit, onEmitted, notaAtiva,
+  autoEmit, onEmitted, notaAtiva, chave,
 }: NfceActionsProps) {
   const { token } = useAuthStore();
 
-  const [emitState, setEmitState] = useState<EmitState>("idle");
-  const [emitResult, setEmitResult] = useState<EmitResponse | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [errorPayload, setErrorPayload] = useState<any>(null);
-  const [pollAttempts, setPollAttempts] = useState(0);
-  const pollTimer = useRef<any>(null);
+  // 17/11/2026 (p-147): o estado mora em services/emissaoDaNfce. Com `chave`
+  // (a venda do Caixa) ele sobrevive à tela final; sem ela, a chave é só
+  // deste componente e é esquecida ao desmontar, como antes.
+  const chaveSo = useRef("nfce-tela:" + Math.random().toString(36).slice(2)).current;
+  const chaveDaNota = chave || chaveSo;
+  const nota = useEmissaoDaNfce(chaveDaNota);
+  const emitState = nota.fase;
+  const emitResult = nota.resultado;
+  const errorMsg = nota.erro;
+  const errorPayload = nota.payloadDoErro;
+  const pollAttempts = nota.tentativas;
   const autoEmitFired = useRef(false);
 
-  useEffect(() => () => { if (pollTimer.current) clearTimeout(pollTimer.current); }, []);
+  useEffect(() => () => { if (!chave) esquecerNota(chaveSo); },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  []);
 
-  const emitMut = useMutation({
-    mutationFn: () => {
-      if (!companyId) throw new Error("Empresa não identificada");
-      const body: any = {
-        items: items.map(i => ({
-          product_id: String(i.product_id).split("__")[0],
-          product_name: i.product_name,
-          quantity: i.quantity,
-          unit_price: i.unit_price,
-          ...(i.discount && i.discount > 0 ? { discount: i.discount } : {}),
-        })),
-        sale_id: saleId,
-        customer_cpf: customerCpf || undefined,
-        customer_name: customerName || undefined,
-        tipo: "nfce",
-        ...(saleDiscount && saleDiscount > 0 ? { discount_amount: saleDiscount } : {}),
-      };
-      if (payments && payments.length > 0) {
-        body.payments = payments;
-      } else if (paymentMethod) {
-        body.payment_method = paymentMethod;
-      }
-      return nfceApi.emit(companyId, body);
-    },
-    onMutate: () => {
-      setEmitState("emitting");
-      setErrorMsg(null); setErrorPayload(null);
-      setPollAttempts(0);
-    },
-    onSuccess: (res) => {
-      setEmitResult(res);
-      // Venda só de serviço: não há mercadoria para o cupom fiscal. Não é
-      // erro nem sucesso — e nada de "NFC-e #undefined autorizada".
-      if (nfcePulada(res)) { setEmitState("skipped"); return; }
-      const status = res.nfce?.status;
-      if (status === "autorizada") {
-        setEmitState("authorized");
-        toast.success(`NFC-e #${res.nfce.numero} autorizada!`);
-        onEmitted?.(res);
-        if (!res.pdf_url && !res.nfce.pdf_url) startPollingForPdf(res.nfce.id);
-      } else if (status === "rejeitada") {
-        setEmitState("rejected");
-        setErrorMsg(res.nfce.error_message || "Nota rejeitada pela SEFAZ");
-      } else if (status === "processando") {
-        setEmitState("authorized");
-        startPollingForAuthorization(res.nfce.id);
-      } else {
-        setEmitState("authorized");
-      }
-    },
-    onError: (err: any) => {
-      setEmitState("error");
-      setErrorMsg(err?.message || "Erro ao emitir NFC-e");
-      setErrorPayload(err?.data?.payload || null);
-    },
-  });
+  // onEmitted a cada autorização (na hora ou depois da consulta à SEFAZ).
+  const onEmittedRef = useRef(onEmitted);
+  onEmittedRef.current = onEmitted;
+  const autorizacoesVistas = useRef(0);
+  useEffect(() => {
+    if (nota.autorizacoes > autorizacoesVistas.current) {
+      autorizacoesVistas.current = nota.autorizacoes;
+      if (nota.resultado) onEmittedRef.current?.(nota.resultado);
+    }
+  }, [nota.autorizacoes, nota.resultado]);
+
+  function emitir() {
+    const body: any = {
+      items: items.map(i => ({
+        product_id: String(i.product_id).split("__")[0],
+        product_name: i.product_name,
+        quantity: i.quantity,
+        unit_price: i.unit_price,
+        ...(i.discount && i.discount > 0 ? { discount: i.discount } : {}),
+      })),
+      sale_id: saleId,
+      customer_cpf: customerCpf || undefined,
+      customer_name: customerName || undefined,
+      tipo: "nfce",
+      ...(saleDiscount && saleDiscount > 0 ? { discount_amount: saleDiscount } : {}),
+    };
+    if (payments && payments.length > 0) {
+      body.payments = payments;
+    } else if (paymentMethod) {
+      body.payment_method = paymentMethod;
+    }
+    emitirNota(chaveDaNota, companyId, body);
+  }
 
   useEffect(() => {
     if (!autoEmit) return;
     if (notaAtiva === false) return; // loja sem nota ativa: não tenta emitir
     if (autoEmitFired.current) return;
-    if (emitState !== "idle") return;
+    if (estadoDaNota(chaveDaNota).fase !== "idle") return;
     autoEmitFired.current = true;
-    emitMut.mutate();
+    emitir();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoEmit]);
 
-  function startPollingForAuthorization(emissionId: string) {
-    if (!companyId || pollTimer.current) return;
-    let attempt = 0;
-    const maxAttempts = 10;
-    const tick = async () => {
-      attempt++;
-      setPollAttempts(attempt);
-      try {
-        const { emission } = await nfceApi.get(companyId, emissionId);
-        if (emission.status === "autorizada") {
-          setEmitResult(prev => ({
-            ...(prev as EmitResponse),
-            nfce: emission,
-            pdf_url: emission.pdf_url,
-            xml_url: emission.xml_url,
-            qr_code: emission.qr_code,
-            url_consulta: emission.url_consulta,
-          }));
-          toast.success(`NFC-e #${emission.numero} autorizada!`);
-          pollTimer.current = null;
-          onEmitted?.({ ...(emitResult as any), nfce: emission });
-          return;
-        }
-        if (emission.status === "rejeitada" || emission.status === "erro") {
-          setEmitState("rejected");
-          setErrorMsg(emission.error_message || "Nota rejeitada");
-          pollTimer.current = null;
-          return;
-        }
-        if (attempt >= maxAttempts) {
-          pollTimer.current = null;
-          toast.info("SEFAZ ainda processando a nota — acompanhe na aba Notas.");
-          return;
-        }
-        pollTimer.current = setTimeout(tick, 3000);
-      } catch { pollTimer.current = null; }
-    };
-    pollTimer.current = setTimeout(tick, 3000);
-  }
-
-  function startPollingForPdf(emissionId: string) {
-    if (!companyId || pollTimer.current) return;
-    let attempt = 0;
-    const tick = async () => {
-      attempt++;
-      try {
-        const { emission } = await nfceApi.get(companyId, emissionId);
-        if (emission.pdf_url) {
-          setEmitResult(prev => ({
-            ...(prev as EmitResponse),
-            nfce: emission,
-            pdf_url: emission.pdf_url,
-            xml_url: emission.xml_url,
-            qr_code: emission.qr_code,
-            url_consulta: emission.url_consulta,
-          }));
-          pollTimer.current = null;
-          return;
-        }
-        if (attempt >= 5) { pollTimer.current = null; return; }
-        pollTimer.current = setTimeout(tick, 2000);
-      } catch { pollTimer.current = null; }
-    };
-    pollTimer.current = setTimeout(tick, 2000);
-  }
-
-  function handleEmitNfce() { emitMut.mutate(); }
+  function handleEmitNfce() { emitir(); }
   function handlePrintNfce() {
     if (!companyId) return;
     const nfceId = emitResult?.nfce?.id;
