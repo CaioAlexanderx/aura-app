@@ -160,3 +160,46 @@ export function conferirEmitente(
   // Escolhido sem CNPJ cadastrado: só pergunta se OUTRO fornecedor tem o CNPJ da nota.
   return achado && achado.id !== escolha.fornecedor.id ? { tipo: "perguntar", atual: escolha, achado } : { tipo: "ok" };
 }
+
+// ── Passo 2 · nota já lançada (A3) ───────────────────────────
+export type EntradaAnterior = {
+  /** ISO de quando entrou. */
+  quando: string;
+  fornecedor: string | null;
+  /** Linhas (entrada nova) ou produtos (entrada antiga de um produto). */
+  itens: number | null;
+};
+
+/**
+ * A entrada anterior mais recente desta nota (GET /products/stock-receipts),
+ * juntando as entradas novas e as antigas. null = nenhuma (ou a consulta
+ * falhou: na dúvida, não trava a pessoa).
+ */
+export function entradaAnteriorDaNota(
+  r: { receipts?: Array<{ created_at: string; supplier_name: string | null; lines?: number | null }>; legacy?: Array<{ created_at: string; supplier_name: string | null; products?: number | null }> } | null | undefined,
+): EntradaAnterior | null {
+  if (!r) return null;
+  const todas: EntradaAnterior[] = [
+    ...(r.receipts || []).map((x) => ({ quando: x.created_at, fornecedor: x.supplier_name || null, itens: x.lines ?? null })),
+    ...(r.legacy || []).map((x) => ({ quando: x.created_at, fornecedor: x.supplier_name || null, itens: x.products ?? null })),
+  ].filter((x) => x.quando && Number.isFinite(Date.parse(x.quando)));
+  if (!todas.length) return null;
+  todas.sort((a, b) => Date.parse(b.quando) - Date.parse(a.quando));
+  return todas[0];
+}
+
+/** O que mandar para "nota já lançada?". null = nada para procurar. */
+export function consultaDaNota(
+  nota: { numero: string; chave: string | null } | null,
+  escolha: EscolhaDoFornecedor,
+): { nfe_key: string | null; invoice_number: string | null; supplier_id: string | null } | null {
+  if (!nota) return null;
+  const chave = nota.chave && nota.chave.length === 44 ? nota.chave : null;
+  const numero = nota.numero ? nota.numero.trim() : "";
+  if (!chave && !numero) return null;
+  return {
+    nfe_key: chave,
+    invoice_number: numero || null,
+    supplier_id: escolha && escolha.tipo === "existente" ? escolha.fornecedor.id : null,
+  };
+}

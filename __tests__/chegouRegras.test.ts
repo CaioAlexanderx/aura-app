@@ -9,7 +9,8 @@
 // ============================================================
 import {
   novaChaveDaEntrada, CHAVE_VALIDA, fornecedoresDoPasso1, conferirEmitente,
-  fornecedorPeloCnpj, iniciais, diaMes, cnpjComMascara, type FornecedorDaLista,
+  fornecedorPeloCnpj, iniciais, diaMes, cnpjComMascara, entradaAnteriorDaNota, consultaDaNota,
+  type FornecedorDaLista,
 } from "@/components/screens/estoque/chegou/chegouRegras";
 
 function forn(id: string, name: string, extra: Partial<FornecedorDaLista> = {}): FornecedorDaLista {
@@ -123,5 +124,30 @@ describe("pedaços de texto", () => {
     expect(diaMes("2026-11-14T10:00:00-03:00")).toBe("14/11");
     expect(diaMes(null)).toBeNull();
     expect(cnpjComMascara("12345678000190")).toBe("12.345.678/0001-90");
+  });
+});
+
+describe("nota já lançada (A3)", () => {
+  test("a mais recente entre as entradas novas e as antigas", () => {
+    const r = entradaAnteriorDaNota({
+      receipts: [{ created_at: "2026-11-10T12:00:00Z", supplier_name: "Alfa", lines: 18 }],
+      legacy: [{ created_at: "2026-11-14T12:00:00Z", supplier_name: null, products: 3 }],
+    });
+    expect(r).toEqual({ quando: "2026-11-14T12:00:00Z", fornecedor: null, itens: 3 });
+  });
+
+  test("nada encontrado ou sem resposta: null", () => {
+    expect(entradaAnteriorDaNota({ receipts: [], legacy: [] })).toBeNull();
+    expect(entradaAnteriorDaNota(undefined)).toBeNull();
+  });
+
+  test("consulta: chave de 44, número e fornecedor quando há", () => {
+    const chave = "3".repeat(44);
+    expect(consultaDaNota({ numero: "004512", chave }, { tipo: "existente", fornecedor: ALFA }))
+      .toEqual({ nfe_key: chave, invoice_number: "004512", supplier_id: "f-alfa" });
+    expect(consultaDaNota({ numero: "77", chave: null }, { tipo: "sem" }))
+      .toEqual({ nfe_key: null, invoice_number: "77", supplier_id: null });
+    expect(consultaDaNota({ numero: "", chave: null }, { tipo: "sem" })).toBeNull();
+    expect(consultaDaNota(null, { tipo: "sem" })).toBeNull();
   });
 });

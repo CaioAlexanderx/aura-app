@@ -30,14 +30,16 @@ import { WebPortal } from "@/components/WebPortal";
 import { FornecedorFormSheet } from "@/components/fornecedores/FornecedorFormSheet";
 import { suppliersApi, type Supplier } from "@/services/suppliersApi";
 import { dialogoAbertoNaTela } from "@/hooks/useAtalhosDoCaixa";
-import type { FormFornecedor } from "@/utils/fornecedoresUtil";
+import { FORM_VAZIO, type FormFornecedor } from "@/utils/fornecedoresUtil";
+import { estoqueEntradasApi } from "@/services/estoqueEntradasApi";
 import type { Product } from "@/components/screens/estoque/types";
 import { TEXTOS_CHEGOU as T } from "./textosChegou";
 import { Passo1Fornecedor } from "./Passo1Fornecedor";
+import { Passo2Origem, type PerguntaDoCnpj } from "./Passo2Origem";
 import { lerNota, type NotaLida } from "./lerNota";
 import { escolherArquivo, lerTextoDoArquivo, ACEITA_NOTA } from "./escolherArquivo";
 import {
-  novaChaveDaEntrada, conferirEmitente, nomeDaEscolha,
+  novaChaveDaEntrada, conferirEmitente, nomeDaEscolha, consultaDaNota, entradaAnteriorDaNota,
   type EscolhaDoFornecedor, type FornecedorDaLista,
 } from "./chegouRegras";
 
@@ -85,6 +87,10 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
   const [arquivoErrado, setArquivoErrado] = useState(false);
   const [lendoNota, setLendoNota] = useState(false);
   const [perguntaSair, setPerguntaSair] = useState(false);
+  // Respostas do passo 2, presas à nota e ao fornecedor da hora: trocou um
+  // dos dois, a pergunta volta.
+  const [cnpjRespondido, setCnpjRespondido] = useState<string | null>(null);
+  const [repetidaVista, setRepetidaVista] = useState<string | null>(null);
 
   // Zera tudo ao fechar; a chave nasce ao abrir.
   useEffect(() => {
@@ -97,6 +103,8 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
       setArquivoErrado(false);
       setLendoNota(false);
       setPerguntaSair(false);
+      setCnpjRespondido(null);
+      setRepetidaVista(null);
     } else {
       setChave(novaChaveDaEntrada());
     }
@@ -161,8 +169,54 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
     if (passo === 1) setPasso(2);
   }
 
+  // ── Passo 2 · nota de outro CNPJ (pendência 2) e nota repetida (B3) ──
+  const chaveDaNota = nota ? (nota.chave || nota.numero + "|" + (nota.emitente.cnpj || "")) : "";
+  const chaveDaEscolha = escolha === null ? "nada" : escolha.tipo === "sem" ? "sem" : escolha.fornecedor.id;
+  const respostaAtual = chaveDaNota + "|" + chaveDaEscolha;
+  const conferencia = nota && !arquivoErrado ? conferirEmitente(nota.emitente, escolha, fornecedores) : { tipo: "ok" as const };
+  // A lista chegou depois da nota (atalho do passo 1): a Aura acha pelo CNPJ.
+  const achouId = conferencia.tipo === "achou" ? conferencia.fornecedor.id : null;
+  useEffect(() => {
+    if (conferencia.tipo === "achou") setEscolha({ tipo: "existente", fornecedor: conferencia.fornecedor });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [achouId]);
+  const pergunta: PerguntaDoCnpj | null = conferencia.tipo === "perguntar" && cnpjRespondido !== respostaAtual
+    ? { atual: conferencia.atual, achado: conferencia.achado }
+    : null;
+
+  const consultaNota = passo === 2 && escolha !== null && !pergunta ? consultaDaNota(nota, escolha) : null;
+  const { data: dadosRepetida, isLoading: procurandoRepetida } = useQuery({
+    queryKey: ["stock-receipts-nota", companyId, consultaNota?.nfe_key, consultaNota?.invoice_number, consultaNota?.supplier_id],
+    queryFn: () => estoqueEntradasApi.notaJaLancada(companyId, consultaNota!),
+    enabled: visible && !!consultaNota,
+    staleTime: 30_000,
+    retry: false,
+  });
+  // Consulta que falhou não trava ninguém: sem resposta, sem aviso.
+  const anterior = consultaNota ? entradaAnteriorDaNota(dadosRepetida) : null;
+  const repetidaPendente = !!anterior && repetidaVista !== respostaAtual;
+
+  function usarAchado(f: FornecedorDaLista) {
+    setEscolha({ tipo: "existente", fornecedor: f });
+  }
+  function manterFornecedor() {
+    const mantida: EscolhaDoFornecedor = escolha ?? { tipo: "sem" };
+    setEscolha(mantida);
+    setCnpjRespondido(chaveDaNota + "|" + (mantida.tipo === "sem" ? "sem" : mantida.fornecedor.id));
+  }
+  function cadastrarEmitente() {
+    if (!nota) return;
+    setNovoFornecedor({
+      inicial: { ...FORM_VAZIO, name: nota.emitente.nome || "", cnpj: nota.emitente.cnpj || "", phone: nota.emitente.telefone || "" },
+    });
+  }
+
   // ── Navegação ──
-  const podeContinuar = passo === 1 ? escolha !== null : false;
+  const podeContinuar = passo === 1
+    ? escolha !== null
+    : passo === 2
+      ? !!nota && !arquivoErrado && !lendoNota && escolha !== null && !pergunta && !repetidaPendente && !(consultaNota && procurandoRepetida)
+      : false;
 
   function continuar() {
     if (!podeContinuar) return;
@@ -213,6 +267,8 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
     rodapeInfo = escolha === null
       ? T.rodapeSemEscolha
       : escolha.tipo === "sem" ? T.rodapeSemFornecedor : T.rodapeFornecedor(escolha.fornecedor.name);
+  } else if (passo === 2) {
+    rodapeInfo = T.rodapePdf;
   }
 
   const painelWeb = IS_WEB ? {
@@ -318,7 +374,21 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
                 onTenhoANota={abrirNota}
               />
             )}
-            {passo === 2 && <View testID="chegou-passo-2" />}
+            {passo === 2 && (
+              <Passo2Origem
+                estreito={estreito}
+                nota={nota}
+                arquivoErrado={arquivoErrado}
+                lendoNota={lendoNota}
+                pergunta={pergunta}
+                anterior={repetidaPendente ? anterior : null}
+                onNota={abrirNota}
+                onUsarAchado={usarAchado}
+                onCadastrarEmitente={cadastrarEmitente}
+                onManter={manterFornecedor}
+                onSeguirMesmoAssim={() => setRepetidaVista(respostaAtual)}
+              />
+            )}
           </ScrollView>
 
           {!novoAberto && (

@@ -16,7 +16,7 @@ describe("lerNota", () => {
     expect(n.serie).toBe("1");
     expect(n.chave).toBe("35261112345678000190550010000045121000045120");
     expect(n.emitidaEm).toBe("2026-11-14");
-    expect(n.emitente).toEqual({ nome: "Distribuidora Alfa", cnpj: "12345678000190", telefone: "1133334444" });
+    expect(n.emitente).toEqual({ nome: "Distribuidora Alfa", cnpj: "11222333000181", telefone: "1133334444" });
     expect(n.totalDosProdutos).toBe(182.4);
     expect(n.totalDaNota).toBe(190);
     expect(n.itens).toHaveLength(3);
