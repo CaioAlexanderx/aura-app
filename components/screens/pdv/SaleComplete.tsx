@@ -49,7 +49,7 @@
 // "Emitir NFC-e" (pede o CPF/CNPJ na hora se faltar). Com a automática
 // ligada, nada muda. Venda só de produto ou loja que não emite: tela igual.
 // ============================================================
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
@@ -65,6 +65,9 @@ import { NotaDeProdutosDaVenda } from "@/components/nfe55/NotaDeProdutosDaVenda"
 import { OsActions } from "./OsActions";
 import { WarrantySaleActions } from "./WarrantySaleActions";
 import { openPrintWindow } from "@/services/printWindow";
+import { imprimirNoQuadro, jaImprimiuSozinho, marcarImpressaSozinha, ehVendaDoServidor } from "@/services/impressaoNoQuadro";
+import { imprimeNesteAparelho } from "@/utils/impressaoAutomatica";
+import { ehIphoneInstalado } from "@/services/instalarApp";
 import type { NfcePaymentEntry } from "@/services/nfceApi";
 import { router } from "expo-router";
 import { frasesMatconDaVenda } from "./matconDaVenda";
@@ -145,8 +148,9 @@ type Props = {
   matconDeliveryDays?: number;
   /** Nome de quem indicou (a resposta da venda não traz). */
   referralName?: string | null;
-  /** pdv_settings da loja: o vale-troca do cupom lê vale_troca_enabled daqui. */
-  pdvSettings?: ConfigDoVale;
+  /** pdv_settings da loja: o vale-troca do cupom lê vale_troca_enabled daqui;
+   *  a impressão automática (p-160), auto_print_receipt. */
+  pdvSettings?: (NonNullable<ConfigDoVale> & { auto_print_receipt?: boolean | null }) | null;
   /** 09/11/2026: endereço do cadastro do cliente da venda (venda sem
    *  retrato, ex.: sem frete). null = cliente sem endereço ou sem cliente. */
   enderecoDoCliente?: Endereco | null;
@@ -255,6 +259,43 @@ export const SaleComplete = forwardRef<SaleCompleteHandle, Props>(function SaleC
   const imprimirRef = useRef(handlePrint);
   imprimirRef.current = handlePrint;
   useImperativeHandle(handleRef, () => ({ imprimir: () => imprimirRef.current() }), []);
+
+  // 17/11/2026 (p-160): impressão automática do cupom não fiscal. A loja liga
+  // em Políticas do Caixa (auto_print_receipt) e este aparelho não disse
+  // "Neste aparelho não" (utils/impressaoAutomatica). Uma vez por venda, ao
+  // abrir a tela final; por quadro oculto, porque o pop-up do botão só abre
+  // dentro do clique. Mesmo HTML do botão, com o vale-troca; papel de entrega
+  // em bobina junto quando a caixinha nasce marcada (A4 continua no botão).
+  // A nota fiscal nunca sai sozinha (decisão do Caio). O botão "Imprimir
+  // cupom" continua igual, de reserva.
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+    const companyId = company?.id;
+    if (!companyId || !token || !ehVendaDoServidor(sale.id)) return;
+    if (jaImprimiuSozinho(sale.id)) return;
+    if (!imprimeNesteAparelho(pdvSettings as any, companyId)) return;
+    if (ehIphoneInstalado()) return;
+    marcarImpressaSozinha(sale.id);
+    const comBobina = imprimirPapel && formatoDoPapel === "bobina";
+    let vivo = true;
+    (async () => {
+      try {
+        const res = await fetch(rotaDoCupom(BASE_URL, companyId, sale.id, comBobina), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!vivo) return;
+        if (!res.ok) { toast.error("O cupom não saiu sozinho. Toque em Imprimir cupom."); return; }
+        const html = cupomComVale(await res.text(), { companyId, saleId: sale.id, vendaEm, config: pdvSettings });
+        if (!vivo) return;
+        if (imprimirNoQuadro(html) !== "ok") toast.error("O cupom não saiu sozinho. Toque em Imprimir cupom.");
+      } catch {
+        if (vivo) toast.error("O cupom não saiu sozinho. Toque em Imprimir cupom.");
+      }
+    })();
+    return () => { vivo = false; };
+  // Só na abertura da tela final de cada venda.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sale.id]);
 
   return (
     <View style={s.container}>
