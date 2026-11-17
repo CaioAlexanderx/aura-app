@@ -12,6 +12,7 @@ import {
   MSG_SEM_CONEXAO, MSG_SEM_CONEXAO_NA_SESSAO, MSG_SESSAO_TERMINOU, MSG_ERRO_NOSSO, MSG_DEMOROU_DEMAIS, MSG_ERRO_SEM_EXPLICACAO,
 } from "@/utils/mensagensDoApp";
 import { anotarFalhaDeConexao, enviarFalhasPendentes, type FalhaDeConexao } from "@/services/falhasDeConexao";
+import { definirEnvioDosTempos, type TempoDaVenda } from "@/services/temposDaVenda";
 
 var BASE_URL =
   (typeof process !== "undefined" && process.env?.EXPO_PUBLIC_API_URL) ||
@@ -185,6 +186,21 @@ function enviarLoteDeFalhas(falhas: FalhaDeConexao[]): Promise<boolean> {
     body: JSON.stringify({ failures: falhas }),
   }).then(function(r) { return r.ok; }).catch(function() { return false; });
 }
+
+// 17/11/2026 (p-152): tempos da venda do Caixa (services/temposDaVenda) —
+// mesmo jeito das falhas: fetch próprio, melhor esforço, sem token não manda.
+definirEnvioDosTempos(function(lista: TempoDaVenda[]) {
+  try {
+    var token = _getToken?.() || null;
+    if (!token || typeof fetch === "undefined" || !lista.length) return;
+    fetch(BASE_URL + "/usage/pdv-timing", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ timings: lista }),
+      keepalive: true,
+    } as RequestInit).catch(function() { /* telemetria */ });
+  } catch { /* telemetria */ }
+});
 
 function mandarFalhasPendentes(): void {
   enviarFalhasPendentes(enviarLoteDeFalhas).catch(function() { /* telemetria */ });

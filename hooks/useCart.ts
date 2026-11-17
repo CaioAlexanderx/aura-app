@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { pdvApi } from "@/services/api";
+import * as tempos from "@/services/temposDaVenda";
 import { baixarEstoqueNoCache, produtosComVarianteVendida, FOLGA_MS } from "@/utils/estoqueAposVenda";
 import { esquecerVariacoes } from "@/utils/cacheDeVariacoes";
 import type { PdvSaleResponse } from "@/services/salesApi";
@@ -852,6 +853,8 @@ export function useCart(
 
     setLastSale(null);
     setCart(juntar);
+    // 17/11/2026 (p-152): o primeiro item marca o começo do atendimento.
+    tempos.aoAdicionarItem();
     if (couponApplied) setCouponApplied(null);
   }
 
@@ -994,6 +997,8 @@ export function useCart(
     }
 
     setIsProcessing(true);
+    // 17/11/2026 (p-152): Finalizar (fim do atendimento, começo da espera).
+    if (companyId && !isDemo) tempos.aoFinalizar(cart.length);
     // 14/10/2026: a venda sai do carrinho guardado ANTES do POST. Se o
     // lojista trocar de página com a venda em voo (o callback do mutate não
     // roda depois do unmount) o servidor registra e a guarda já não existe —
@@ -1240,6 +1245,7 @@ export function useCart(
           // recibo cai no UUID encurtado nesse caso.
           var saleNumber = typeof res?.sale?.sale_number === "number" ? res.sale.sale_number : null;
           setLastSale(buildLastSale(String(saleId), saleNumber, res?.sale, res?.matcon));
+          tempos.aoResponder(true, res?.sale?.id || (res as any)?.id || null);
           // tq-15: venda concluída — a próxima é outra venda, com outra chave.
           setChaveDaVenda(novaChaveDaVenda());
           finalizandoRef.current = false;
@@ -1255,6 +1261,7 @@ export function useCart(
           voltarAoPagamentoInicial();
         },
         onError: function(err: any) {
+          tempos.aoResponder(false, null);
           // F3-3A (29/05/2026): trata 422 CREDIARIO_REQUIRES_CUSTOMER com mensagem acionavel.
           // ApiError.data contem o body JSON do backend; .code eh o codigo do erro.
           const errCode = err?.data?.code || err?.code;
@@ -1312,6 +1319,8 @@ export function useCart(
     // anterior abre a venda nova (sem nada esperando, é o carrinho vazio de
     // sempre). Com itens, o efeito de guarda grava esse carrinho novo.
     var daEspera = proximaVendaRef.current;
+    // 17/11/2026 (p-152): fim do tempo parado na tela final.
+    tempos.aoNovaVenda(daEspera.length > 0);
     if (daEspera.length > 0) guardarParaAProximaVenda([]);
     setLastSale(null); setCart(daEspera); setQuoteId(null); setComanda(null); setReferredProfessionalId(null); clearLotAllocations(); setIsProcessing(false);
     setFreteValor("");

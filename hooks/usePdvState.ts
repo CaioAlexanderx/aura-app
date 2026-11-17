@@ -55,6 +55,7 @@
 //     muda — é só mais um useEffect que nunca dispara.
 // ============================================================
 import { decisaoDoEnter, indiceDoDestaque, moverDestaque } from "@/utils/destaqueDaBusca";
+import { marcarEntrada } from "@/services/temposDaVenda";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams } from "expo-router";
@@ -687,6 +688,7 @@ export function usePdvState() {
   async function handleScan(code: string, origem: "leitor" | "busca" = "leitor"): Promise<boolean> {
     const cleaned = (code || "").trim();
     if (!cleaned) return false;
+    marcarEntrada(origem); // p-152
     // 13/10/2026: QR do vale-troca (AURA-TROCA:<venda>) — vale em qualquer
     // entrada do Caixa (leitor global, busca, código manual). Abre a Troca com
     // a venda carregada; nunca é produto nem texto de busca.
@@ -787,7 +789,7 @@ export function usePdvState() {
     if (decisaoDoEnter(cleaned, query, paginated.length) === "adicionar" && idxDestaque >= 0) {
       const escolhido = paginated[idxDestaque];
       setQuery("");
-      if (escolhido) handleAddProduct(escolhido as Product);
+      if (escolhido) handleAddProduct(escolhido as Product, undefined, "busca");
       return;
     }
     setQuery("");
@@ -798,7 +800,9 @@ export function usePdvState() {
   function handleAddProduct(
     p: Product,
     evt?: { x: number; y: number; accent: string; letter: string },
+    origem: "grade" | "busca" = "grade",
   ) {
+    marcarEntrada(origem); // p-152
     if (p.has_variants) { setPendingBipe(null); setPendingProduct(p); return; }
     addToCart(p);
     if (evt && cartHeadRef.current && IS_WEB) {
