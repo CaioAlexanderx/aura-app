@@ -33,7 +33,7 @@ import { numeroPositivo } from "@/utils/entradaDeMercadoria";
 import { GradeDaEntrada } from "@/components/screens/estoque/GradeDaEntrada";
 import { TEXTOS_CHEGOU as T } from "./textosChegou";
 import {
-  linhasVisiveis, margemSobreCusto, normalizarNome, normalizarBarras, somaDaGrade,
+  linhasVisiveis, margemSobreCusto, somaDaGrade, buscarProdutos,
   type LinhaConferida, type ResumoDaConferencia, type DecisaoDaLinha, type AjusteDaLinha, type ProdutoDaLoja,
 } from "./chegouRegras";
 
@@ -476,16 +476,7 @@ function PainelLigar({ l, produtos, semCusto, comFornecedor, onEscolher, onCance
 }) {
   const n = l.item.n;
   const [busca, setBusca] = useState("");
-  const achados = useMemo(() => {
-    const q = normalizarNome(busca);
-    const b = normalizarBarras(busca);
-    if (!q) return [];
-    return produtos.filter((p) =>
-      normalizarNome(p.name).includes(q)
-      || (p.code && normalizarNome(p.code).includes(q))
-      || (!!b && (normalizarBarras(p.barcode) === b || (p.variant_barcodes || []).some((v) => normalizarBarras(v) === b))),
-    ).slice(0, 6);
-  }, [busca, produtos]);
+  const achados = useMemo(() => buscarProdutos(produtos, busca), [busca, produtos]);
   return (
     <View style={s.painel} testID={"chegou-linha-" + n + "-painel-ligar"}>
       <Text style={s.rotulo}>{T.ligarEscolha}</Text>

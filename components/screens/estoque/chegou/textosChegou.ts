@@ -212,6 +212,24 @@ export const TEXTOS_CHEGOU = {
   darEntrada: (n: number) => "Dar entrada em " + n + " " + plural(n, "item", "itens"),
   darEntradaCelular: "Dar entrada",
 
+  // ── Passo 3 · origem "Digitar os itens" (A5) ───────────────
+  passoFeitoDigitar: "Digitar",
+  // Textos de hoje da Entrada de mercadoria.
+  digitarPergunta: "Qual produto chegou?",
+  digitarQuantidade: "Quantidade que chegou",
+  digitarCusto: "Custo de cada unidade",
+  notaNumero: "Nº da nota (opcional)",
+  notaExemplo: "Ex.: 004512",
+  cadastrarComoNovo: (busca: string) => "Cadastrar \"" + busca + "\" como produto novo",
+  digitarNovoApoio: "Só nome e preço; o resto depois",
+  digitarRodape: (n: number, total: string | null) => n + " " + plural(n, "item", "itens") + (total ? " · total " + total : ""),
+  // NOVO (fora do mockup): linha sem quantidade (ou novo sem nome e preço).
+  digitarFaltam: (n: number) =>
+    n === 1 ? "Falta completar 1 item: quantos chegaram, ou o nome e o preço do novo"
+      : "Faltam completar " + n + " itens: quantos chegaram, ou o nome e o preço do novo",
+  // NOVO (fora do mockup): leitor de tela do "x" da linha.
+  digitarTirar: "Tirar da lista",
+
   // ── Gravando e Pronto (A7) ─────────────────────────────────
   gravandoTitulo: "Dando entrada…",
   gravandoTexto: (x: number, n: number) =>

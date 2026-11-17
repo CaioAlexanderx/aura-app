@@ -531,3 +531,15 @@ export function motivoDoRodape(linhas: LinhaConferida[], resumo: ResumoDaConfere
   if (resumo.entram === 0) return { tipo: "nada" };
   return { tipo: "pronto", n: resumo.entram };
 }
+
+/** Busca de produto da loja (ligar, trocar e digitar): nome, código ou código de barras. */
+export function buscarProdutos(produtos: ProdutoDaLoja[], busca: string, max = 6): ProdutoDaLoja[] {
+  const q = normalizarNome(busca);
+  const b = normalizarBarras(busca);
+  if (!q) return [];
+  return produtos.filter((p) =>
+    normalizarNome(p.name).includes(q)
+    || (!!p.code && normalizarNome(p.code).includes(q))
+    || (!!b && (normalizarBarras(p.barcode) === b || (p.variant_barcodes || []).some((v) => normalizarBarras(v) === b))),
+  ).slice(0, max);
+}
