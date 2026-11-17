@@ -64,7 +64,7 @@ export function PassoItens({ form, set, falta, faltantes, previa, estreito }: Pr
           <Text style={{ fontSize: 13.5, fontWeight: "700", color: Colors.ink }} testID="nfe55-cfops">{cfops.join(" / ") || "—"}</Text>
           <Text style={p.hint}>
             {naoContribuinte
-              ? "Cliente de outro estado sem inscrição estadual: 6108."
+              ? "Cliente de outro estado sem inscrição estadual: 6108 (no MEI, 6102)."
               : interestadual
                 ? "Cliente de outro estado: 6102 (ou 6404 se o imposto já veio pago na compra)."
                 : "Mesmo estado: 5102 (ou 5405 se o imposto já veio pago na compra)."}

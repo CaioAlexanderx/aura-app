@@ -178,7 +178,7 @@ export type ResultadoDaTela =
 
 const TITULO_BLOQUEIO: Record<string, string> = {
   NFE_REGIME_NORMAL_FORA_DO_V1: "Ainda não emitimos NF-e para o regime normal",
-  NFE_DIFAL_FORA_DO_V1: "Para o MEI, esta venda para outro estado ainda não sai como NF-e",
+  NFE_DIFAL_FORA_DO_V1: "Esta venda pede um cálculo que ainda não fazemos",
   NFE55_UF_NAO_HABILITADA: "NF-e ainda não liberada para o seu estado",
   NFE_CERTIFICADO: "Falta o certificado digital",
   NFE_NAO_CONFIGURADA: "A nota fiscal da loja ainda não está ligada",
