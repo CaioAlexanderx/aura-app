@@ -23,7 +23,7 @@
 // mínima de antes (2 linhas de nome): sem marca o card fica igual, e nome
 // de uma linha + marca também não cresce.
 // ============================================================
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { View, Text, Pressable, StyleSheet, Platform, Image } from "react-native";
 import { Colors, Glass } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
@@ -95,7 +95,20 @@ type Props = {
   cardPriceFor?: (p: GridProduct) => number | null;
 };
 
+// 17/11/2026 (p-148): a cascata de entrada (0,5 s por cartão, 40 ms de
+// atraso por posição: o 12º só termina em ~1 s) roda só na primeira vez que
+// a grade aparece na sessão. Antes ela se repetia a cada tecla da busca, a
+// cada item lançado e a cada página — cartão que entra depois aparece direto.
+let gradeJaEntrou = false;
+/** Só para testes: a próxima grade montada volta a animar. */
+export function __reiniciarEntradaDaGrade() { gradeJaEntrou = false; }
+
 export function ProductGrid({ products, qtyById, onAdd, columns = 4, minCard, compact = false, dense = false, matconEnabled = false, cardPriceFor }: Props) {
+  // true só no primeiro render da primeira grade; o cartão guarda o valor de
+  // quando montou (ProdCard), então a cascata da entrada termina inteira.
+  const naEntrada = useRef(!gradeJaEntrou);
+  useEffect(() => { gradeJaEntrou = true; naEntrada.current = false; }, []);
+  const animar = naEntrada.current;
   const gap = dense ? 12 : compact ? 10 : 14;
   const webGrid = IS_WEB
     ? (minCard
@@ -114,6 +127,7 @@ export function ProductGrid({ products, qtyById, onAdd, columns = 4, minCard, co
           product={p}
           qty={qtyById[p.id] || 0}
           index={i}
+          animar={animar}
           onAdd={onAdd}
           compact={compact}
           dense={dense}
@@ -125,7 +139,10 @@ export function ProductGrid({ products, qtyById, onAdd, columns = 4, minCard, co
   );
 }
 
-function ProdCard({ product, qty, index, onAdd, compact = false, dense = false, matconEnabled = false, cardPrice = null }: { product: GridProduct; qty: number; index: number; onAdd: Props["onAdd"]; compact?: boolean; dense?: boolean; matconEnabled?: boolean; cardPrice?: number | null }) {
+function ProdCard({ product, qty, index, animar = false, onAdd, compact = false, dense = false, matconEnabled = false, cardPrice = null }: { product: GridProduct; qty: number; index: number; animar?: boolean; onAdd: Props["onAdd"]; compact?: boolean; dense?: boolean; matconEnabled?: boolean; cardPrice?: number | null }) {
+  // Decidido na montagem: o cartão da entrada anima até o fim mesmo que a
+  // grade redesenhe no meio; o que monta depois não anima.
+  const animarAoEntrar = useRef(animar).current;
   const accent = accentForProduct(product.id);
   const letter = productLetter(product.name);
   const inCart = qty > 0;
@@ -159,8 +176,10 @@ function ProdCard({ product, qty, index, onAdd, compact = false, dense = false, 
     WebkitBackdropFilter: "blur(12px)",
     border: "1px solid " + Glass.lineBorderCard,
     overflow: "hidden",
-    animation: "caixaFadeUp 0.5s cubic-bezier(0.4,0,0.2,1) both",
-    animationDelay: 0.05 + index * 0.04 + "s",
+    ...(animarAoEntrar ? {
+      animation: "caixaFadeUp 0.5s cubic-bezier(0.4,0,0.2,1) both",
+      animationDelay: 0.05 + index * 0.04 + "s",
+    } : {}),
     cursor: "pointer",
     transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)",
     minWidth: 0,
