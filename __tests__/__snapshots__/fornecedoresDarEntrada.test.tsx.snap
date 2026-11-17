@@ -1,0 +1,697 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`trava desligada: a tela de Fornecedores fica igual a ficha aberta 1`] = `
+<div
+  className="css-view-175oi2r r-WebkitOverflowScrolling-150rngu r-flexDirection-eqz5dr r-flexGrow-16y2uox r-flexShrink-1wbh5a2 r-overflowX-11yh6sk r-overflowY-1rnoaur r-transform-agouwx r-backgroundColor-1ymc3js r-flex-13awgt0"
+  dir={null}
+  onScroll={[Function]}
+  onTouchEnd={[Function]}
+  onTouchMove={[Function]}
+  onTouchStart={[Function]}
+  onWheel={[Function]}
+>
+  <div
+    className="css-view-175oi2r r-alignSelf-1kihuf0 r-maxWidth-1wngk81 r-padding-1pcd2l5 r-paddingBottom-1q2s4rl r-width-13qz1uu"
+    dir={null}
+  >
+    <ScreenHero
+      title="Fornecedores"
+    >
+      <div
+        className="css-text-146c3p1"
+        dir="auto"
+      >
+        2
+         
+        fornecedores cadastrados
+      </div>
+      <div
+        className="css-view-175oi2r r-cursor-1loqt21 r-touchAction-1otgn73 r-alignItems-1awozwy r-backgroundColor-99b2gy r-borderRadius-1dzdj1l r-flexDirection-18u37iz r-gap-ojf8lh r-paddingBlock-ytbthy r-paddingInline-gu64tb"
+        data-testid="fornecedores-novo"
+        dir={null}
+        onBlur={[Function]}
+        onClick={[Function]}
+        onContextMenu={[Function]}
+        onFocus={[Function]}
+        onKeyDown={[Function]}
+        tabIndex={0}
+      >
+        <Icon
+          color="#fff"
+          name="plus"
+          size={14}
+        />
+        <div
+          className="css-text-146c3p1 r-color-jwli3a r-fontSize-n6v787 r-fontWeight-b88u0q"
+          dir="auto"
+        >
+          Novo fornecedor
+        </div>
+      </div>
+    </ScreenHero>
+    <div
+      className="css-view-175oi2r r-alignItems-1awozwy r-backgroundColor-9r1uk6 r-borderColor-1lj8mqb r-borderRadius-1dzdj1l r-borderWidth-rs99b7 r-flexDirection-18u37iz r-gap-1cmwbt1 r-marginBottom-6gpygo r-paddingInline-3o4zer"
+      dir={null}
+    >
+      <Icon
+        color="rgba(170,160,235,0.65)"
+        name="search"
+        size={14}
+      />
+      <input
+        autoCapitalize="sentences"
+        autoComplete="on"
+        autoCorrect="on"
+        className="css-textinput-11aywtz r-placeholderTextColor-6taxm2 r-color-1gph3n4 r-flex-13awgt0 r-fontSize-1b43r93 r-paddingBlock-ytbthy"
+        data-testid="fornecedores-busca"
+        dir="auto"
+        onBlur={[Function]}
+        onChange={[Function]}
+        onFocus={[Function]}
+        onKeyDown={[Function]}
+        onSelect={[Function]}
+        placeholder="Buscar por nome, CNPJ, vendedor ou telefone"
+        readOnly={false}
+        rows={1}
+        spellCheck={true}
+        style={
+          {
+            "--placeholderTextColor": "rgba(170,160,235,0.65)",
+          }
+        }
+        value=""
+        virtualkeyboardpolicy="auto"
+      />
+    </div>
+    <div
+      className="css-view-175oi2r"
+      data-testid="fornecedores-lista"
+      dir={null}
+      style={
+        {
+          "gap": "8px",
+        }
+      }
+    >
+      <div
+        className="css-view-175oi2r r-backgroundColor-9r1uk6 r-borderColor-1lj8mqb r-borderRadius-t23y2h r-borderWidth-rs99b7 r-padding-1slz7xr"
+        data-testid="fornecedor-f-beta"
+        dir={null}
+      >
+        <div
+          className="css-view-175oi2r r-cursor-1loqt21 r-touchAction-1otgn73 r-alignItems-1awozwy r-flexDirection-18u37iz r-gap-uaa2di"
+          data-testid="fornecedor-abrir-f-beta"
+          dir={null}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onContextMenu={[Function]}
+          onFocus={[Function]}
+          onKeyDown={[Function]}
+          tabIndex={0}
+        >
+          <div
+            className="css-view-175oi2r"
+            dir={null}
+            style={
+              {
+                "flex": 1,
+                "minWidth": "0px",
+              }
+            }
+          >
+            <div
+              className="css-view-175oi2r r-alignItems-1awozwy r-flexDirection-18u37iz r-flexWrap-1w6e6rj r-gap-1cmwbt1"
+              dir={null}
+            >
+              <div
+                className="css-text-146c3p1 r-maxWidth-dnmrzs r-overflow-1udh08x r-textOverflow-1udbk01 r-whiteSpace-3s2u2q r-wordWrap-1iln25a r-color-1gph3n4 r-flexShrink-1wbh5a2 r-fontSize-a023e6 r-fontWeight-b88u0q"
+                dir="auto"
+              >
+                Beta Cosméticos
+              </div>
+            </div>
+            <div
+              className="css-text-146c3p1 r-maxWidth-dnmrzs r-overflow-1udh08x r-textOverflow-1udbk01 r-whiteSpace-3s2u2q r-wordWrap-1iln25a r-color-1jnamx5 r-fontSize-1enofrn r-marginTop-19qrga8"
+              dir="auto"
+            >
+              0 produtos
+            </div>
+          </div>
+          <Icon
+            color="rgba(170,160,235,0.65)"
+            name="chevron_right"
+            size={14}
+          />
+        </div>
+        <div
+          className="css-view-175oi2r r-flexDirection-18u37iz r-flexWrap-1w6e6rj r-gap-1cmwbt1 r-marginTop-156q2ks"
+          dir={null}
+        />
+      </div>
+      <div
+        className="css-view-175oi2r r-backgroundColor-9r1uk6 r-borderColor-1lj8mqb r-borderRadius-t23y2h r-borderWidth-rs99b7 r-padding-1slz7xr"
+        data-testid="fornecedor-f-alfa"
+        dir={null}
+      >
+        <div
+          className="css-view-175oi2r r-cursor-1loqt21 r-touchAction-1otgn73 r-alignItems-1awozwy r-flexDirection-18u37iz r-gap-uaa2di"
+          data-testid="fornecedor-abrir-f-alfa"
+          dir={null}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onContextMenu={[Function]}
+          onFocus={[Function]}
+          onKeyDown={[Function]}
+          tabIndex={0}
+        >
+          <div
+            className="css-view-175oi2r"
+            dir={null}
+            style={
+              {
+                "flex": 1,
+                "minWidth": "0px",
+              }
+            }
+          >
+            <div
+              className="css-view-175oi2r r-alignItems-1awozwy r-flexDirection-18u37iz r-flexWrap-1w6e6rj r-gap-1cmwbt1"
+              dir={null}
+            >
+              <div
+                className="css-text-146c3p1 r-maxWidth-dnmrzs r-overflow-1udh08x r-textOverflow-1udbk01 r-whiteSpace-3s2u2q r-wordWrap-1iln25a r-color-1gph3n4 r-flexShrink-1wbh5a2 r-fontSize-a023e6 r-fontWeight-b88u0q"
+                dir="auto"
+              >
+                Distribuidora Alfa
+              </div>
+            </div>
+            <div
+              className="css-text-146c3p1 r-maxWidth-dnmrzs r-overflow-1udh08x r-textOverflow-1udbk01 r-whiteSpace-3s2u2q r-wordWrap-1iln25a r-color-1jnamx5 r-fontSize-1enofrn r-marginTop-19qrga8"
+              dir="auto"
+            >
+              Marcos · (11) 98888-1234 · 38 produtos
+            </div>
+          </div>
+          <Icon
+            color="rgba(170,160,235,0.65)"
+            name="chevron_right"
+            size={14}
+          />
+        </div>
+        <div
+          className="css-view-175oi2r r-flexDirection-18u37iz r-flexWrap-1w6e6rj r-gap-1cmwbt1 r-marginTop-156q2ks"
+          dir={null}
+        >
+          <div
+            className="css-view-175oi2r r-cursor-1loqt21 r-touchAction-1otgn73 r-alignItems-1awozwy r-borderRadius-1xfd6ze r-borderWidth-rs99b7 r-flexDirection-18u37iz r-gap-ojf8lh r-paddingBlock-1yd117h r-paddingInline-1ubuhtd r-backgroundColor-9r1uk6 r-borderColor-1mnuhn4"
+            data-testid="fornecedor-whatsapp-f-alfa"
+            dir={null}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onContextMenu={[Function]}
+            onFocus={[Function]}
+            onKeyDown={[Function]}
+            tabIndex={0}
+          >
+            <Icon
+              color="#34d399"
+              name="whatsapp"
+              size={13}
+            />
+            <div
+              className="css-text-146c3p1 r-fontSize-1enofrn r-fontWeight-b88u0q"
+              dir="auto"
+              style={
+                {
+                  "color": "rgba(52,211,153,1.00)",
+                }
+              }
+            >
+              WhatsApp
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div
+      className="css-view-175oi2r r-alignItems-1habvwh r-borderBottomColor-14xbbpc r-borderBottomWidth-qklmqi r-flexDirection-18u37iz r-gap-uaa2di r-padding-whuqzp"
+      dir={null}
+    >
+      <div
+        className="css-view-175oi2r"
+        dir={null}
+        style={
+          {
+            "flex": 1,
+            "minWidth": "0px",
+          }
+        }
+      >
+        <div
+          className="css-text-146c3p1 r-WebkitBoxOrient-8akbws r-display-krxsd3 r-maxWidth-dnmrzs r-overflow-1udh08x r-textOverflow-1udbk01 r-color-1gph3n4 r-fontSize-1inkyih r-fontWeight-b88u0q"
+          dir="auto"
+          style={
+            {
+              "WebkitLineClamp": 2,
+            }
+          }
+        >
+          Distribuidora Alfa
+        </div>
+        <div
+          className="css-text-146c3p1 r-WebkitBoxOrient-8akbws r-display-krxsd3 r-maxWidth-dnmrzs r-overflow-1udh08x r-textOverflow-1udbk01 r-color-1jnamx5 r-fontSize-1enofrn r-lineHeight-5fcqz0 r-marginTop-19qrga8"
+          dir="auto"
+          style={
+            {
+              "WebkitLineClamp": 2,
+            }
+          }
+        >
+          11.222.333/0001-81 · Marcos · (11) 98888-1234
+        </div>
+      </div>
+      <div
+        aria-label="Fechar"
+        className="css-view-175oi2r r-cursor-1loqt21 r-touchAction-1otgn73 r-alignItems-1awozwy r-backgroundColor-h4oams r-borderRadius-1xfd6ze r-height-1g7fiml r-justifyContent-1777fci r-width-199wky7"
+        data-testid="fornecedor-ficha-fechar"
+        dir={null}
+        onBlur={[Function]}
+        onClick={[Function]}
+        onContextMenu={[Function]}
+        onFocus={[Function]}
+        onKeyDown={[Function]}
+        tabIndex={0}
+      >
+        <Icon
+          color="rgba(170,160,235,0.65)"
+          name="x"
+          size={16}
+        />
+      </div>
+    </div>
+    <div
+      className="css-view-175oi2r r-WebkitOverflowScrolling-150rngu r-flexDirection-eqz5dr r-flexGrow-16y2uox r-flexShrink-1wbh5a2 r-overflowX-11yh6sk r-overflowY-1rnoaur r-transform-agouwx r-paddingBlock-1mmae3n r-paddingInline-284m6k"
+      dir={null}
+      onScroll={[Function]}
+      onTouchEnd={[Function]}
+      onTouchMove={[Function]}
+      onTouchStart={[Function]}
+      onWheel={[Function]}
+    >
+      <div
+        className="css-view-175oi2r"
+        dir={null}
+      >
+        <div
+          className="css-view-175oi2r r-flexDirection-18u37iz r-flexWrap-1w6e6rj r-gap-1cmwbt1 r-marginBottom-f1odvy"
+          dir={null}
+        >
+          <div
+            className="css-view-175oi2r r-cursor-1loqt21 r-touchAction-1otgn73 r-alignItems-1awozwy r-borderRadius-1dzdj1l r-borderWidth-rs99b7 r-flexDirection-18u37iz r-gap-ojf8lh r-justifyContent-1777fci r-paddingBlock-1s5swlz r-paddingInline-gu64tb r-backgroundColor-9r1uk6 r-borderColor-1mnuhn4"
+            data-testid="fornecedor-ficha-whatsapp"
+            dir={null}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onContextMenu={[Function]}
+            onFocus={[Function]}
+            onKeyDown={[Function]}
+            tabIndex={0}
+          >
+            <Icon
+              color="#34d399"
+              name="whatsapp"
+              size={14}
+            />
+            <div
+              className="css-text-146c3p1 r-fontSize-n6v787 r-fontWeight-b88u0q"
+              dir="auto"
+              style={
+                {
+                  "color": "rgba(52,211,153,1.00)",
+                }
+              }
+            >
+              WhatsApp
+            </div>
+          </div>
+          <div
+            className="css-view-175oi2r r-cursor-1loqt21 r-touchAction-1otgn73 r-alignItems-1awozwy r-backgroundColor-1q4w6l6 r-borderColor-1lj8mqb r-borderRadius-1dzdj1l r-borderWidth-rs99b7 r-flexDirection-18u37iz r-gap-ojf8lh r-justifyContent-1777fci r-paddingBlock-1s5swlz r-paddingInline-gu64tb"
+            data-testid="fornecedor-ficha-editar"
+            dir={null}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onContextMenu={[Function]}
+            onFocus={[Function]}
+            onKeyDown={[Function]}
+            tabIndex={0}
+          >
+            <Icon
+              color="#f0edff"
+              name="edit"
+              size={14}
+            />
+            <div
+              className="css-text-146c3p1 r-color-1gph3n4 r-fontSize-n6v787 r-fontWeight-b88u0q"
+              dir="auto"
+            >
+              Editar
+            </div>
+          </div>
+        </div>
+        <div
+          className="css-view-175oi2r r-borderTopColor-1t5vbcj r-borderTopWidth-5kkj8d r-gap-ojf8lh r-marginTop-l71dzp r-paddingTop-ttdzmv"
+          data-testid="fornecedor-ficha-produtos"
+          dir={null}
+        >
+          <div
+            className="css-view-175oi2r r-alignItems-1awozwy r-flexDirection-18u37iz r-gap-uaa2di r-justifyContent-1wtj0ep"
+            dir={null}
+          >
+            <div
+              className="css-text-146c3p1 r-color-1gph3n4 r-fontSize-n6v787 r-fontWeight-b88u0q"
+              dir="auto"
+            >
+              Produtos deste fornecedor
+               · 1
+            </div>
+            <div
+              className="css-view-175oi2r r-cursor-1loqt21 r-touchAction-1otgn73 r-alignItems-1awozwy r-backgroundColor-1q4w6l6 r-borderColor-1lj8mqb r-borderRadius-1xfd6ze r-borderWidth-rs99b7 r-flexDirection-18u37iz r-gap-ojf8lh r-paddingBlock-vuvdlw r-paddingInline-1ubuhtd"
+              data-testid="fornecedor-ficha-vincular"
+              dir={null}
+              onBlur={[Function]}
+              onClick={[Function]}
+              onContextMenu={[Function]}
+              onFocus={[Function]}
+              onKeyDown={[Function]}
+              tabIndex={0}
+            >
+              <Icon
+                color="#f0edff"
+                name="plus"
+                size={12}
+              />
+              <div
+                className="css-text-146c3p1 r-color-1gph3n4 r-fontSize-1enofrn r-fontWeight-b88u0q"
+                dir="auto"
+              >
+                Vincular produtos
+              </div>
+            </div>
+          </div>
+          <div
+            className="css-view-175oi2r r-alignItems-1awozwy r-borderBottomColor-14xbbpc r-borderBottomWidth-qklmqi r-flexDirection-18u37iz r-gap-uaa2di r-paddingBlock-1yd117h"
+            dir={null}
+          >
+            <div
+              className="css-text-146c3p1 r-maxWidth-dnmrzs r-overflow-1udh08x r-textOverflow-1udbk01 r-whiteSpace-3s2u2q r-wordWrap-1iln25a r-color-1gph3n4 r-flex-13awgt0 r-fontSize-n6v787"
+              dir="auto"
+            >
+              Esmalte Cremoso Vermelho 8 ml
+            </div>
+            <div
+              className="css-text-146c3p1 r-color-1jnamx5 r-fontSize-1enofrn r-marginTop-1bymd8e"
+              dir="auto"
+            >
+              36
+               em estoque
+            </div>
+            <div
+              aria-label="Tirar Esmalte Cremoso Vermelho 8 ml deste fornecedor"
+              className="css-view-175oi2r r-cursor-1loqt21 r-touchAction-1otgn73 r-alignItems-1awozwy r-backgroundColor-1q4w6l6 r-borderRadius-1px6drs r-height-1k25im9 r-justifyContent-1777fci r-width-19tjxh9"
+              data-testid="fornecedor-ficha-tirar-p1"
+              dir={null}
+              onBlur={[Function]}
+              onClick={[Function]}
+              onContextMenu={[Function]}
+              onFocus={[Function]}
+              onKeyDown={[Function]}
+              tabIndex={0}
+            >
+              <Icon
+                color="rgba(170,160,235,0.65)"
+                name="x"
+                size={12}
+              />
+            </div>
+          </div>
+        </div>
+        <div
+          className="css-view-175oi2r r-cursor-1loqt21 r-touchAction-1otgn73 r-alignSelf-1kihuf0 r-marginBottom-15d164r r-marginTop-1d7gupr r-paddingBlock-11f147o r-paddingInline-3o4zer"
+          data-testid="fornecedor-ficha-desativar"
+          dir={null}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onContextMenu={[Function]}
+          onFocus={[Function]}
+          onKeyDown={[Function]}
+          tabIndex={0}
+        >
+          <div
+            className="css-text-146c3p1 r-color-1jnamx5 r-fontSize-1enofrn r-fontWeight-1kfrs79"
+            dir="auto"
+          >
+            Remover da lista de fornecedores
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`trava desligada: a tela de Fornecedores fica igual a lista 1`] = `
+<div
+  className="css-view-175oi2r r-WebkitOverflowScrolling-150rngu r-flexDirection-eqz5dr r-flexGrow-16y2uox r-flexShrink-1wbh5a2 r-overflowX-11yh6sk r-overflowY-1rnoaur r-transform-agouwx r-backgroundColor-1ymc3js r-flex-13awgt0"
+  dir={null}
+  onScroll={[Function]}
+  onTouchEnd={[Function]}
+  onTouchMove={[Function]}
+  onTouchStart={[Function]}
+  onWheel={[Function]}
+>
+  <div
+    className="css-view-175oi2r r-alignSelf-1kihuf0 r-maxWidth-1wngk81 r-padding-1pcd2l5 r-paddingBottom-1q2s4rl r-width-13qz1uu"
+    dir={null}
+  >
+    <ScreenHero
+      title="Fornecedores"
+    >
+      <div
+        className="css-text-146c3p1"
+        dir="auto"
+      >
+        2
+         
+        fornecedores cadastrados
+      </div>
+      <div
+        className="css-view-175oi2r r-cursor-1loqt21 r-touchAction-1otgn73 r-alignItems-1awozwy r-backgroundColor-99b2gy r-borderRadius-1dzdj1l r-flexDirection-18u37iz r-gap-ojf8lh r-paddingBlock-ytbthy r-paddingInline-gu64tb"
+        data-testid="fornecedores-novo"
+        dir={null}
+        onBlur={[Function]}
+        onClick={[Function]}
+        onContextMenu={[Function]}
+        onFocus={[Function]}
+        onKeyDown={[Function]}
+        tabIndex={0}
+      >
+        <Icon
+          color="#fff"
+          name="plus"
+          size={14}
+        />
+        <div
+          className="css-text-146c3p1 r-color-jwli3a r-fontSize-n6v787 r-fontWeight-b88u0q"
+          dir="auto"
+        >
+          Novo fornecedor
+        </div>
+      </div>
+    </ScreenHero>
+    <div
+      className="css-view-175oi2r r-alignItems-1awozwy r-backgroundColor-9r1uk6 r-borderColor-1lj8mqb r-borderRadius-1dzdj1l r-borderWidth-rs99b7 r-flexDirection-18u37iz r-gap-1cmwbt1 r-marginBottom-6gpygo r-paddingInline-3o4zer"
+      dir={null}
+    >
+      <Icon
+        color="rgba(170,160,235,0.65)"
+        name="search"
+        size={14}
+      />
+      <input
+        autoCapitalize="sentences"
+        autoComplete="on"
+        autoCorrect="on"
+        className="css-textinput-11aywtz r-placeholderTextColor-6taxm2 r-color-1gph3n4 r-flex-13awgt0 r-fontSize-1b43r93 r-paddingBlock-ytbthy"
+        data-testid="fornecedores-busca"
+        dir="auto"
+        onBlur={[Function]}
+        onChange={[Function]}
+        onFocus={[Function]}
+        onKeyDown={[Function]}
+        onSelect={[Function]}
+        placeholder="Buscar por nome, CNPJ, vendedor ou telefone"
+        readOnly={false}
+        rows={1}
+        spellCheck={true}
+        style={
+          {
+            "--placeholderTextColor": "rgba(170,160,235,0.65)",
+          }
+        }
+        value=""
+        virtualkeyboardpolicy="auto"
+      />
+    </div>
+    <div
+      className="css-view-175oi2r"
+      data-testid="fornecedores-lista"
+      dir={null}
+      style={
+        {
+          "gap": "8px",
+        }
+      }
+    >
+      <div
+        className="css-view-175oi2r r-backgroundColor-9r1uk6 r-borderColor-1lj8mqb r-borderRadius-t23y2h r-borderWidth-rs99b7 r-padding-1slz7xr"
+        data-testid="fornecedor-f-beta"
+        dir={null}
+      >
+        <div
+          className="css-view-175oi2r r-cursor-1loqt21 r-touchAction-1otgn73 r-alignItems-1awozwy r-flexDirection-18u37iz r-gap-uaa2di"
+          data-testid="fornecedor-abrir-f-beta"
+          dir={null}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onContextMenu={[Function]}
+          onFocus={[Function]}
+          onKeyDown={[Function]}
+          tabIndex={0}
+        >
+          <div
+            className="css-view-175oi2r"
+            dir={null}
+            style={
+              {
+                "flex": 1,
+                "minWidth": "0px",
+              }
+            }
+          >
+            <div
+              className="css-view-175oi2r r-alignItems-1awozwy r-flexDirection-18u37iz r-flexWrap-1w6e6rj r-gap-1cmwbt1"
+              dir={null}
+            >
+              <div
+                className="css-text-146c3p1 r-maxWidth-dnmrzs r-overflow-1udh08x r-textOverflow-1udbk01 r-whiteSpace-3s2u2q r-wordWrap-1iln25a r-color-1gph3n4 r-flexShrink-1wbh5a2 r-fontSize-a023e6 r-fontWeight-b88u0q"
+                dir="auto"
+              >
+                Beta Cosméticos
+              </div>
+            </div>
+            <div
+              className="css-text-146c3p1 r-maxWidth-dnmrzs r-overflow-1udh08x r-textOverflow-1udbk01 r-whiteSpace-3s2u2q r-wordWrap-1iln25a r-color-1jnamx5 r-fontSize-1enofrn r-marginTop-19qrga8"
+              dir="auto"
+            >
+              0 produtos
+            </div>
+          </div>
+          <Icon
+            color="rgba(170,160,235,0.65)"
+            name="chevron_right"
+            size={14}
+          />
+        </div>
+        <div
+          className="css-view-175oi2r r-flexDirection-18u37iz r-flexWrap-1w6e6rj r-gap-1cmwbt1 r-marginTop-156q2ks"
+          dir={null}
+        />
+      </div>
+      <div
+        className="css-view-175oi2r r-backgroundColor-9r1uk6 r-borderColor-1lj8mqb r-borderRadius-t23y2h r-borderWidth-rs99b7 r-padding-1slz7xr"
+        data-testid="fornecedor-f-alfa"
+        dir={null}
+      >
+        <div
+          className="css-view-175oi2r r-cursor-1loqt21 r-touchAction-1otgn73 r-alignItems-1awozwy r-flexDirection-18u37iz r-gap-uaa2di"
+          data-testid="fornecedor-abrir-f-alfa"
+          dir={null}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onContextMenu={[Function]}
+          onFocus={[Function]}
+          onKeyDown={[Function]}
+          tabIndex={0}
+        >
+          <div
+            className="css-view-175oi2r"
+            dir={null}
+            style={
+              {
+                "flex": 1,
+                "minWidth": "0px",
+              }
+            }
+          >
+            <div
+              className="css-view-175oi2r r-alignItems-1awozwy r-flexDirection-18u37iz r-flexWrap-1w6e6rj r-gap-1cmwbt1"
+              dir={null}
+            >
+              <div
+                className="css-text-146c3p1 r-maxWidth-dnmrzs r-overflow-1udh08x r-textOverflow-1udbk01 r-whiteSpace-3s2u2q r-wordWrap-1iln25a r-color-1gph3n4 r-flexShrink-1wbh5a2 r-fontSize-a023e6 r-fontWeight-b88u0q"
+                dir="auto"
+              >
+                Distribuidora Alfa
+              </div>
+            </div>
+            <div
+              className="css-text-146c3p1 r-maxWidth-dnmrzs r-overflow-1udh08x r-textOverflow-1udbk01 r-whiteSpace-3s2u2q r-wordWrap-1iln25a r-color-1jnamx5 r-fontSize-1enofrn r-marginTop-19qrga8"
+              dir="auto"
+            >
+              Marcos · (11) 98888-1234 · 38 produtos
+            </div>
+          </div>
+          <Icon
+            color="rgba(170,160,235,0.65)"
+            name="chevron_right"
+            size={14}
+          />
+        </div>
+        <div
+          className="css-view-175oi2r r-flexDirection-18u37iz r-flexWrap-1w6e6rj r-gap-1cmwbt1 r-marginTop-156q2ks"
+          dir={null}
+        >
+          <div
+            className="css-view-175oi2r r-cursor-1loqt21 r-touchAction-1otgn73 r-alignItems-1awozwy r-borderRadius-1xfd6ze r-borderWidth-rs99b7 r-flexDirection-18u37iz r-gap-ojf8lh r-paddingBlock-1yd117h r-paddingInline-1ubuhtd r-backgroundColor-9r1uk6 r-borderColor-1mnuhn4"
+            data-testid="fornecedor-whatsapp-f-alfa"
+            dir={null}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onContextMenu={[Function]}
+            onFocus={[Function]}
+            onKeyDown={[Function]}
+            tabIndex={0}
+          >
+            <Icon
+              color="#34d399"
+              name="whatsapp"
+              size={13}
+            />
+            <div
+              className="css-text-146c3p1 r-fontSize-1enofrn r-fontWeight-b88u0q"
+              dir="auto"
+              style={
+                {
+                  "color": "rgba(52,211,153,1.00)",
+                }
+              }
+            >
+              WhatsApp
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;

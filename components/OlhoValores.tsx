@@ -9,8 +9,9 @@ import { useValoresOcultos } from "@/stores/valoresOcultos";
 //
 // variant="icone": ícone solto (herói do Painel).
 // variant="botao": mesmo formato dos botões de ação do ScreenHero.
-export function OlhoValores({ variant = "icone", color = Colors.ink3, size = 18 }: {
-  variant?: "icone" | "botao"; color?: string; size?: number;
+// alvo44: no celular, o botão ganha 44 × 44 (barra do Estoque, A8).
+export function OlhoValores({ variant = "icone", color = Colors.ink3, size = 18, alvo44 = false }: {
+  variant?: "icone" | "botao"; color?: string; size?: number; alvo44?: boolean;
 }) {
   const { ocultos, alternar } = useValoresOcultos();
   const rotulo = ocultos ? "Mostrar valores" : "Ocultar valores";
@@ -24,7 +25,7 @@ export function OlhoValores({ variant = "icone", color = Colors.ink3, size = 18 
         variant="secondary"
         accessibilityLabel={rotulo}
         onPress={alternar}
-        style={{ paddingHorizontal: 13, gap: 0 } as any}
+        style={(alvo44 ? { paddingHorizontal: 13, gap: 0, minWidth: 44, minHeight: 44 } : { paddingHorizontal: 13, gap: 0 }) as any}
       />
     );
   }

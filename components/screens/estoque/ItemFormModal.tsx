@@ -1349,6 +1349,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
             onPlanilha={cadastrarVarios.onPlanilha}
             onLista={cadastrarVarios.onLista}
             planilhaOcupada={cadastrarVarios.planilhaOcupada}
+            onChegou={cadastrarVarios.onChegou}
           />
         )}
         {/* cabeçalho — escondido (não desmontado) na escolha "Cadastrar vários" */}
