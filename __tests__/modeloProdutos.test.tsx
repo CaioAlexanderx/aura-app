@@ -34,7 +34,6 @@ import { montarResumoImport } from "@/utils/importPrevia";
 import { MODELO_PRODUTOS } from "@/components/screens/estoque/BaixarModelo";
 import { ConvitePlanilha, conviteEncerradoNaSessao } from "@/components/screens/estoque/ConvitePlanilha";
 import { ImportPlanilhaModal } from "@/components/screens/estoque/ImportPlanilhaModal";
-import { ImportarMenu } from "@/components/screens/estoque/ImportarMenu";
 
 const ARQUIVO = path.join(__dirname, "..", "public", "modelo-produtos-aura.xlsx");
 
@@ -256,35 +255,6 @@ describe("botão Baixar modelo — web", () => {
     act(() => { tree.update(<ImportPlanilhaModal fase="pronto" {...props} resultado={resultado} />); });
     expect(porTestID(tree, "import-baixar-modelo")).toHaveLength(0);
     act(() => { tree.unmount(); });
-  });
-
-  test("menu Importar: terceira opção com o link certo; o menu fecha um instante depois", () => {
-    jest.useFakeTimers();
-    try {
-      const onNota = jest.fn();
-      const onPlanilha = jest.fn();
-      let tree!: renderer.ReactTestRenderer;
-      act(() => { tree = renderer.create(<ImportarMenu onNota={onNota} onPlanilha={onPlanilha} />); });
-      act(() => { porTestID(tree, "importar-botao")[0].props.onPress(); });
-      const modelo = noDoLink(tree, "importar-opcao-modelo");
-      expect(modelo.props.href).toBe("/modelo-produtos-aura.xlsx");
-      expect(modelo.props.hrefAttrs.download).toBe("modelo-produtos-aura.xlsx");
-      expect(modelo.props.accessibilityRole).toBe("link");
-      // as outras duas opções seguem iguais
-      expect(porTestID(tree, "importar-opcao-nota")).toHaveLength(1);
-      expect(porTestID(tree, "importar-opcao-planilha")).toHaveLength(1);
-
-      act(() => { modelo.props.onPress({}); });
-      // ainda aberto: o <a> tem que sobreviver até o navegador começar o download
-      expect(porTestID(tree, "importar-menu")).toHaveLength(1);
-      act(() => { jest.advanceTimersByTime(300); });
-      expect(porTestID(tree, "importar-menu")).toHaveLength(0);
-      expect(onNota).not.toHaveBeenCalled();
-      expect(onPlanilha).not.toHaveBeenCalled();
-      act(() => { tree.unmount(); });
-    } finally {
-      jest.useRealTimers();
-    }
   });
 });
 

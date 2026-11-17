@@ -2,7 +2,8 @@
 // Estoque, Fase 4 (F1, F2): as portas do "Chegou mercadoria" na tela de
 // Fornecedores.
 //
-// 1. Trava desligada (FORNECEDORES_ABREM_O_CHEGOU = false, o valor de hoje):
+// 0. A8 (17/11/2026): a trava está LIGADA no código (o valor de hoje).
+// 1. Trava desligada (FORNECEDORES_ABREM_O_CHEGOU = false, para voltar atrás):
 //    a tela e a ficha ficam IDÊNTICAS às de antes. O snapshot foi gravado
 //    rodando este arquivo contra app/(tabs)/fornecedores.tsx e
 //    components/fornecedores/FornecedorFicha.tsx de feat/chegou-mercadoria-a6
@@ -111,6 +112,12 @@ beforeEach(() => {
     supplier: { data: DETALHE, isLoading: false, isError: false },
   };
   (global as any).innerWidth = 1280;
+});
+
+describe("A8: o valor de hoje", () => {
+  test("a trava está ligada (\"Dar entrada\" e \"Importar a lista\" aparecem)", () => {
+    expect(jest.requireActual("@/components/screens/estoque/chegou/portaDoChegou").FORNECEDORES_ABREM_O_CHEGOU).toBe(true);
+  });
 });
 
 describe("trava desligada: a tela de Fornecedores fica igual", () => {
