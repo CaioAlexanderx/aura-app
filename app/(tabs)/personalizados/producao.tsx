@@ -7,10 +7,10 @@
 // tela é "Fila de produção").
 //
 // Quem chega aqui, na ordem:
-//   1. CONSOLIDADO (multi-CNPJ, "Todas as empresas"): a Produção mostra uma
-//      loja por vez. A tela mostra "Escolha uma loja" (RequireCompanyScope) e
-//      volta para cá já com a loja escolhida. A visão de todas as lojas
-//      juntas, só para ler, vem numa entrega à parte.
+//   1. CONSOLIDADO (multi-CNPJ, "Todas as empresas"): com a trava ligada, a
+//      Fila de todas as lojas, só para ler (p-187, ProducaoConsolidada), com
+//      "Abrir na loja" em cada pedido. Com a trava desligada, como antes:
+//      "Escolha uma loja" (RequireCompanyScope).
 //   2. PLANO E PERMISSÃO: sem a chave personalizados.producao visível
 //      (Essencial sem override, ou membro sem personalizados.access) a tela
 //      não existe para a pessoa: volta para o Painel. Sem cadeado e sem
@@ -22,26 +22,42 @@
 // O plano vem do JWT e fica velho (armadilha 1 do CLAUDE.md): a tela refaz
 // /auth/me ao montar, antes de decidir.
 //
+// O cartão abre o detalhe do pedido em /personalizados/pedido/[id] (p-176).
+//
 // As cores: <TemaDoNegocio> entrega a paleta do Negócio aos componentes do
 // Studio que o quadro reusa.
+//
+// ?pedido=<id> (p-187): o "Abrir na loja" do consolidado troca de empresa e
+// volta para cá com o pedido; o quadro deixa o cartão em destaque.
 // ============================================================
 import { useEffect } from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { Redirect } from "expo-router";
+import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useColors } from "@/constants/colors";
 import { ScreenHero } from "@/components/ScreenHero";
 import { RequireCompanyScope } from "@/components/RequireCompanyScope";
 import { useAuthStore } from "@/stores/auth";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
 import { useVisibleModules, useVisibleModulesProntos } from "@/hooks/useVisibleModules";
-import { personalizadosAtivo } from "@/utils/personalizados";
+import { personalizadosAtivo, personalizadosLiberado } from "@/utils/personalizados";
 import { TemaDoNegocio } from "@/components/personalizados/TemaDoNegocio";
 import { QuadroDeProducao } from "@/components/personalizados/QuadroDeProducao";
 import { dataDeAtivacao } from "@/components/personalizados/regrasDaProducao";
+import { PARAM_DO_PEDIDO, idDaRota } from "@/components/personalizados/regrasDoConsolidado";
+import { ProducaoConsolidada } from "@/components/personalizados/consolidado/ProducaoConsolidada";
 
 const MOD_DA_TELA = "personalizados.producao";
 
 export default function PersonalizadosProducao() {
+  const consolidado = useAuthStore((st) => st.consolidatedView);
+  // p-187: todas as lojas, só leitura. Atrás da mesma trava da frente.
+  if (consolidado && personalizadosLiberado()) {
+    return (
+      <TemaDoNegocio>
+        <ProducaoConsolidada />
+      </TemaDoNegocio>
+    );
+  }
   return (
     <RequireCompanyScope
       context="personalizados"
@@ -57,11 +73,14 @@ export default function PersonalizadosProducao() {
 
 function Tela() {
   const C = useColors();
+  const router = useRouter();
   const company = useAuthStore((st) => st.company);
   const refreshMe = useAuthStore((st) => st.refreshMe);
   const visiveis = useVisibleModules();
   const prontos = useVisibleModulesProntos();
   const { settings, isLoading } = usePdvSettings();
+  const params = useLocalSearchParams<Record<string, string | string[]>>();
+  const destacarId = idDaRota(params?.[PARAM_DO_PEDIDO]);
 
   // Armadilha 1: plano e module_overrides do JWT não se revalidam sozinhos.
   useEffect(() => {
@@ -85,7 +104,12 @@ function Tela() {
     <View style={st.tela} testID="personalizados-producao">
       <ScreenHero eyebrow="Personalizados" title="Fila de produção" />
       <TemaDoNegocio>
-        <QuadroDeProducao companyId={company.id} ativadoEm={dataDeAtivacao(settings)} />
+        <QuadroDeProducao
+          companyId={company.id}
+          ativadoEm={dataDeAtivacao(settings)}
+          destacarId={destacarId}
+          onAbrirPedido={(id) => router.push(`/personalizados/pedido/${id}` as any)}
+        />
       </TemaDoNegocio>
     </View>
   );

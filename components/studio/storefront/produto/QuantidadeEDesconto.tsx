@@ -36,7 +36,8 @@ export function QuantidadeEDesconto({
   precoDeTabela: number;
   adicionalPorUnidade: number;
   prazoDaLoja: number | null;
-  onLote: () => void;
+  /** Sem ele (o personalizador no quadro da loja comum, p-181), o cartão do orçamento em lote sai. */
+  onLote?: () => void;
   destacarPrazo?: boolean;
 }) {
   const t = useTemaDaVitrine();
@@ -178,7 +179,7 @@ export function QuantidadeEDesconto({
         </View>
       ) : null}
 
-      <Pressable
+      {onLote ? <Pressable
         onPress={onLote}
         accessibilityRole="link"
         accessibilityLabel="Comprando para evento ou empresa? Peça um orçamento em lote"
@@ -192,7 +193,7 @@ export function QuantidadeEDesconto({
           <Texto style={{ fontSize: 12.5, lineHeight: 18, color: t.ink3 }}>Peça um orçamento em lote: mande a lista de nomes e a loja responde com o preço.</Texto>
         </View>
         <Icon name="chevron_right" size={20} color={t.ink3} />
-      </Pressable>
+      </Pressable> : null}
     </View>
   );
 }

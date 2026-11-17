@@ -8,9 +8,12 @@
 // Onda 2.2: /me/transactions
 // Onda 2.3: /me/customers — lista UNICA owner-scoped
 // Onda 2.4: /me/sales — listagem agregada com breakdown
-// Onda 2.6 (atual): /me/sales/analytics — reabilita SalesAnalyticsCard no Painel
+// Onda 2.6: /me/sales/analytics — reabilita SalesAnalyticsCard no Painel
+// 17/11/2026 (p-187): /me/studio/orders e /me/studio/quotes — Produção e
+//   Orçamentos 3D de todas as lojas, só leitura (Aura-backend#1052, p-186)
 // ============================================================
 import { request } from "@/services/api";
+import type { StudioOrder, StudioProductionStatus, StudioQuote, StudioQuoteStatus } from "@/services/studioApi";
 
 // ──────────────────────────────────────────────────────────
 // /me/dashboard — Onda 2.1
@@ -287,6 +290,74 @@ export type SalesAnalyticsConsolidatedResponse = {
   filtered_company_id: string | null;
 };
 
+// ──────────────────────────────────────────────────────────
+// /me/studio/orders e /me/studio/quotes — p-187 (backend p-186, #1052)
+//
+// Só leitura. Entram as lojas do usuário com plano Negócio para cima e onde
+// ele vê Personalizados. `breakdown` traz todas essas lojas, com a contagem
+// sob os mesmos filtros, mesmo com `company_id` (serve para o seletor).
+// No pedido, `card_customization` vem sempre null: o cartão usa
+// `card_image_url` e o detalhe abre na loja.
+// ──────────────────────────────────────────────────────────
+export type StudioConsolidadoBreakdown = {
+  company_id: string;
+  company_name: string;
+  is_primary: boolean;
+  total: number;
+};
+
+export type StudioOrdersConsolidadoFiltros = {
+  company_id?: string | null;
+  status?: StudioProductionStatus | null;
+  days?: number;
+  limit?: number;
+  offset?: number;
+};
+
+export type StudioOrderConsolidado = StudioOrder & { company_id: string; company_name: string };
+
+export type StudioOrdersConsolidadoResponse = {
+  orders: StudioOrderConsolidado[];
+  total: number;
+  limit: number;
+  offset: number;
+  filtered_company_id: string | null;
+  breakdown: StudioConsolidadoBreakdown[];
+  company_count: number;
+  /** "slim": a lista veio sem saldo, capa e prazo (o backend caiu no plano B). */
+  degraded?: string | null;
+};
+
+export type StudioQuotesConsolidadoFiltros = {
+  company_id?: string | null;
+  status?: StudioQuoteStatus | null;
+  days?: number;
+  limit?: number;
+  offset?: number;
+};
+
+export type StudioQuoteConsolidado = StudioQuote & { company_name: string };
+
+export type StudioQuotesConsolidadoResponse = {
+  quotes: StudioQuoteConsolidado[];
+  total: number;
+  limit: number;
+  offset: number;
+  filtered_company_id: string | null;
+  breakdown: StudioConsolidadoBreakdown[];
+  company_count: number;
+};
+
+function filtrosDoStudio(f?: { company_id?: string | null; status?: string | null; days?: number; limit?: number; offset?: number }): string {
+  var qs: string[] = [];
+  if (f?.company_id) qs.push("company_id=" + encodeURIComponent(f.company_id));
+  if (f?.status) qs.push("status=" + encodeURIComponent(f.status));
+  if (f?.days) qs.push("days=" + f.days);
+  if (f?.limit) qs.push("limit=" + f.limit);
+  if (f?.offset) qs.push("offset=" + f.offset);
+  return qs.length ? "?" + qs.join("&") : "";
+}
+
 export var meAggregatesApi = {
   // GET /me/dashboard — KPIs consolidados de todas as empresas do user.
   dashboard: function () {
@@ -345,5 +416,15 @@ export var meAggregatesApi = {
     if (filters?.company_id) qs.push("company_id=" + encodeURIComponent(filters.company_id));
     var suffix = qs.length ? "?" + qs.join("&") : "";
     return request<SalesAnalyticsConsolidatedResponse>("/me/sales/analytics" + suffix, { retry: 1 });
+  },
+
+  // GET /me/studio/orders — Produção de todas as lojas, só leitura (p-187).
+  studioOrders: function (filters?: StudioOrdersConsolidadoFiltros) {
+    return request<StudioOrdersConsolidadoResponse>("/me/studio/orders" + filtrosDoStudio(filters), { retry: 1 });
+  },
+
+  // GET /me/studio/quotes — Orçamentos 3D de todas as lojas, só leitura (p-187).
+  studioQuotes: function (filters?: StudioQuotesConsolidadoFiltros) {
+    return request<StudioQuotesConsolidadoResponse>("/me/studio/quotes" + filtrosDoStudio(filters), { retry: 1 });
   },
 };
