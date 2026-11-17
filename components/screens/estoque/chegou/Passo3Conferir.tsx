@@ -71,6 +71,8 @@ type Props = {
   onAjustar: (n: number, a: Partial<AjusteDaLinha>) => void;
   /** "Cadastrar novo" já preenchido (nome da nota, preço sugerido). */
   novoPara: (l: LinhaConferida) => DecisaoDaLinha;
+  /** A6: de onde vieram as linhas (muda o texto da quantidade zero). */
+  fonte?: "nota" | "planilha";
   /** A7: o que o servidor recusou em cada linha (n -> motivo). */
   errosDasLinhas?: Record<number, string>;
 };
@@ -358,7 +360,7 @@ function LinhaDaConferencia(props: Props & { l: LinhaConferida }) {
 
       {l.estado === "erro" ? (
         <View style={s.acaoBloco} testID={"chegou-linha-" + n + "-erro"}>
-          <Text style={[s.avisoTxt, { color: Colors.red }]}>{T.erroQtdZero}</Text>
+          <Text style={[s.avisoTxt, { color: Colors.red }]}>{props.fonte === "planilha" ? T.erroQtdZeroPlanilha : T.erroQtdZero}</Text>
           {dizendo ? (
             <TextInput
               value={qtdTxt}

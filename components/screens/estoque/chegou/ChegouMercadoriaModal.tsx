@@ -20,7 +20,7 @@
 //
 // Cards: A1 (shell + passo 1), A2 (novo fornecedor dentro do passo),
 // A3 (passo 2), A4a e A4b (passo 3, conferência), A5 (passo 3, digitar),
-// A7 (gravar e Pronto).
+// A6 (planilha, que cai na mesma conferência) e A7 (gravar e Pronto).
 //
 // A7: "Dar entrada" grava pelo POST /products/stock-receipts com a chave
 // desta abertura (gravarEntrada.ts): divide acima de 300 linhas, repete com a
@@ -52,6 +52,8 @@ import { Passo3Conferir } from "./Passo3Conferir";
 import { Passo4Pronto } from "./Passo4Pronto";
 import { Passo3Digitar } from "./Passo3Digitar";
 import { conferirDigitadas, type LinhaDigitada } from "./digitarRegras";
+import { itensDaPlanilha, baixarModeloDeEntrada } from "./origemPlanilha";
+import { lerArquivoPlanilha } from "@/hooks/useServerImport";
 import {
   itensDaConferencia, resolverVariantes, montarCorpos, gravarEntrada, errosPorLinha, deveRepetir,
   resumoDoPronto, csvDosQueFaltam, type RespostaDaEntrada, type ItemDaEntrada,
@@ -62,7 +64,7 @@ import {
   novaChaveDaEntrada, conferirEmitente, nomeDaEscolha, consultaDaNota, entradaAnteriorDaNota,
   indexarProdutos, conferirLinha, resumirConferencia, motivoDoRodape, decisaoDeNovo, diaMes,
   aplicarMargemAosNovos, MARGEM_PADRAO_DOS_NOVOS,
-  type EscolhaDoFornecedor, type FornecedorDaLista, type DecisaoDaLinha, type AjusteDaLinha,
+  type EscolhaDoFornecedor, type FornecedorDaLista, type DecisaoDaLinha, type AjusteDaLinha, type ItemParaConferir,
 } from "./chegouRegras";
 
 type Passo = 1 | 2 | 3 | 4;
@@ -134,7 +136,10 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
   const [pendentes, setPendentes] = useState<ItemDaEntrada[]>([]);
   const [danfeMatcon, setDanfeMatcon] = useState(false);
   // A5: de onde vêm os itens (a nota lida ou a lista digitada).
-  const [origem, setOrigem] = useState<"nota" | "digitar">("nota");
+  const [origem, setOrigem] = useState<"nota" | "digitar" | "planilha">("nota");
+  // A6: a planilha lida (ou a que não deu para ler).
+  const [planilha, setPlanilha] = useState<{ nome: string; itens: ItemParaConferir[] } | null>(null);
+  const [planilhaIlegivel, setPlanilhaIlegivel] = useState(false);
   const [digitadas, setDigitadas] = useState<LinhaDigitada[]>([]);
   const [numeroDigitado, setNumeroDigitado] = useState("");
 
@@ -160,6 +165,8 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
       setPendentes([]);
       setDanfeMatcon(false);
       setOrigem("nota");
+      setPlanilha(null);
+      setPlanilhaIlegivel(false);
       setDigitadas([]);
       setNumeroDigitado("");
     } else {
@@ -199,6 +206,8 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
         setArquivoErrado(false);
         setNota(r.nota);
         setOrigem("nota");
+        setPlanilha(null);
+        setPlanilhaIlegivel(false);
         // Sem escolha ainda (atalho): a Aura ACHA pelo CNPJ. Com escolha, nunca
         // troca sozinha: o passo 2 pergunta (pendência 2).
         setEscolha((atual) => {
@@ -215,6 +224,25 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
       setPasso((p) => (p < 2 ? 2 : p));
     }
   }, []);
+
+  // ── A6 · planilha ──
+  async function abrirPlanilha() {
+    const arquivo = await escolherArquivo(".xlsx,.xls,.csv,.tsv,.txt");
+    if (!arquivo) return;
+    try {
+      const leitura = await lerArquivoPlanilha(arquivo);
+      const r = itensDaPlanilha(leitura.matrix);
+      if (!r.ok) throw new Error("ilegivel");
+      setPlanilha({ nome: arquivo.name, itens: r.itens });
+      setPlanilhaIlegivel(false);
+      setNota(null);
+      setArquivoErrado(false);
+      setOrigem("planilha");
+    } catch {
+      setPlanilha(null);
+      setPlanilhaIlegivel(true);
+    }
+  }
 
   function escolherFornecedor(f: FornecedorDaLista) {
     setEscolha({ tipo: "existente", fornecedor: f });
@@ -236,6 +264,8 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
 
   // ── Passo 2 · nota de outro CNPJ (pendência 2) e nota repetida (B3) ──
   const chaveDaNota = nota ? (nota.chave || nota.numero + "|" + (nota.emitente.cnpj || "")) : "";
+  const ehPlanilha = origem === "planilha" && !!planilha;
+  const chaveDaFonte = ehPlanilha ? "planilha|" + planilha!.nome + "|" + planilha!.itens.length : chaveDaNota;
   const chaveDaEscolha = escolha === null ? "nada" : escolha.tipo === "sem" ? "sem" : escolha.fornecedor.id;
   const respostaAtual = chaveDaNota + "|" + chaveDaEscolha;
   const conferencia = nota && !arquivoErrado ? conferirEmitente(nota.emitente, escolha, fornecedores) : { tipo: "ok" as const };
@@ -267,7 +297,7 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
     setDecisoes({});
     setAjustes({});
     setMostrarTodas(false);
-  }, [chaveDaNota]);
+  }, [chaveDaFonte]);
   const fornecedorId = escolha && escolha.tipo === "existente" ? escolha.fornecedor.id : null;
   const { data: dadosCodigos, isLoading: carregandoCodigos } = useQuery({
     queryKey: ["supplier-codes", companyId, fornecedorId],
@@ -279,12 +309,15 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
   const codigos = fornecedorId ? (dadosCodigos?.map || null) : null;
   const indice = useMemo(() => indexarProdutos(products), [products]);
   const linhas = useMemo(
-    () => (nota ? nota.itens.map((item) => conferirLinha(item, {
-      indice, codigos, decisao: decisoes[item.n], ajuste: ajustes[item.n], semCusto,
-    })) : []),
-    [nota, indice, codigos, decisoes, ajustes, semCusto],
+    () => {
+      const itens = ehPlanilha ? planilha!.itens : nota ? nota.itens : [];
+      return itens.map((item) => conferirLinha(item, {
+        indice, codigos, decisao: decisoes[item.n], ajuste: ajustes[item.n], semCusto,
+      }));
+    },
+    [nota, planilha, ehPlanilha, indice, codigos, decisoes, ajustes, semCusto],
   );
-  const resumo = useMemo(() => resumirConferencia(linhas, nota ? nota.totalDosProdutos : null), [linhas, nota]);
+  const resumo = useMemo(() => resumirConferencia(linhas, !ehPlanilha && nota ? nota.totalDosProdutos : null), [linhas, nota, ehPlanilha]);
   const motivo = motivoDoRodape(linhas, resumo);
   // A5: a lista digitada.
   const ehDigitar = origem === "digitar";
@@ -344,10 +377,10 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
     itens = rv.itens;
     const partes = montarCorpos(itens, {
       chave,
-      origem: ehDigitar ? "digitar" : "nota",
+      origem: ehDigitar ? "digitar" : ehPlanilha ? "planilha" : "nota",
       fornecedorId,
-      numeroDaNota: ehDigitar ? numeroDigitado.trim() || null : nota ? nota.numero || null : null,
-      chaveDaNota: ehDigitar ? null : nota ? nota.chave : null,
+      numeroDaNota: ehDigitar ? numeroDigitado.trim() || null : !ehPlanilha && nota ? nota.numero || null : null,
+      chaveDaNota: ehDigitar || ehPlanilha ? null : nota ? nota.chave : null,
       usarMedio,
     });
     const total = itens.length;
@@ -426,7 +459,7 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
   const podeContinuar = passo === 1
     ? escolha !== null
     : passo === 2
-      ? !!nota && !arquivoErrado && !lendoNota && escolha !== null && !pergunta && !repetidaPendente && !(consultaNota && procurandoRepetida)
+      ? ehPlanilha || !!nota && !arquivoErrado && !lendoNota && escolha !== null && !pergunta && !repetidaPendente && !(consultaNota && procurandoRepetida)
       : false;
 
   function continuar() {
@@ -437,7 +470,7 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
     setPasso((p) => (Math.max(1, p - 1) as Passo));
   }
 
-  const temProgresso = passo < 4 && (!!nota || passo >= 3);
+  const temProgresso = passo < 4 && (!!nota || !!planilha || passo >= 3);
   const pedirFechar = () => {
     if (gravando) return;
     if (temProgresso) setPerguntaSair(true);
@@ -484,6 +517,7 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
   function rotuloDoPasso(n: Passo): string {
     if (passo > n && n === 1 && nomeFornecedor) return T.passoFeitoFornecedor(nomeFornecedor);
     if (passo > n && n === 2 && ehDigitar) return T.passoFeitoDigitar;
+    if (passo > n && n === 2 && ehPlanilha) return T.passoFeitoPlanilha;
     if (passo > n && n === 2 && nota && nota.numero) return T.passoFeitoNota(nota.numero);
     return T.passos[n];
   }
@@ -506,7 +540,8 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
         : motivo.tipo === "falta_ligar" ? (estreito ? T.rodapeFaltaCelular(1) : T.rodapeFaltaLigar(motivo.nome))
           : motivo.tipo === "falta_grade" ? (estreito ? T.rodapeFaltaCelular(1) : T.rodapeFaltaGrade(motivo.nome))
             : motivo.tipo === "nada" ? T.rodapeNada
-              : nota ? T.resumoNota(nota.numero || "—", diaMes(nota.emitidaEm)) : "";
+              : ehPlanilha ? T.planilhaLida(planilha!.nome, planilha!.itens.length)
+                : nota ? T.resumoNota(nota.numero || "—", diaMes(nota.emitidaEm)) : "";
   }
   const rodapeTravado = passo === 3 && (ehDigitar ? digitada.faltam > 0 : resumo.falta > 0);
   const pronto = respostas ? resumoDoPronto(respostas) : null;
@@ -631,7 +666,7 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
               <Passo4Pronto
                 estreito={estreito}
                 semCusto={semCusto}
-                numeroDaNota={ehDigitar ? numeroDigitado.trim() || null : nota ? nota.numero || null : null}
+                numeroDaNota={ehDigitar ? numeroDigitado.trim() || null : !ehPlanilha && nota ? nota.numero || null : null}
                 resumo={pronto}
                 fora={fora}
                 falha={falha}
@@ -653,13 +688,14 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
                 errosDasLinhas={errosDasLinhas}
               />
             )}
-            {passo === 3 && !ehDigitar && nota && !gravando && (
+            {passo === 3 && !ehDigitar && (ehPlanilha || nota) && !gravando && (
               <Passo3Conferir
                 estreito={estreito}
                 semCusto={semCusto}
                 companyId={companyId}
-                titulo={T.resumoNota(nota.numero || "—", diaMes(nota.emitidaEm))}
-                totalEsperado={nota.totalDosProdutos}
+                titulo={ehPlanilha ? T.planilhaLida(planilha!.nome, planilha!.itens.length) : T.resumoNota(nota!.numero || "—", diaMes(nota!.emitidaEm))}
+                totalEsperado={ehPlanilha ? null : nota!.totalDosProdutos}
+                fonte={ehPlanilha ? "planilha" : "nota"}
                 produtos={products}
                 comFornecedor={!!fornecedorId}
                 margemDosNovos={margemDosNovos}
@@ -691,6 +727,10 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
                 onManter={manterFornecedor}
                 onSeguirMesmoAssim={() => setRepetidaVista(respostaAtual)}
                 onDigitar={() => { setOrigem("digitar"); setPasso(3); }}
+                planilha={ehPlanilha ? { nome: planilha!.nome, itens: planilha!.itens.length } : null}
+                planilhaIlegivel={planilhaIlegivel}
+                onPlanilha={abrirPlanilha}
+                onBaixarModelo={IS_WEB ? baixarModeloDeEntrada : undefined}
               />
             )}
           </ScrollView>

@@ -10,6 +10,7 @@
 // A4b: painéis da linha (produto novo, ligar, trocar, grade) e a margem dos novos.
 // A7: gravar (corpo, chave, erros do servidor), Pronto e o desvio do Matcon.
 // A5: origem "Digitar os itens".
+// A6: origem "Planilha".
 // ============================================================
 import React from "react";
 import renderer, { act } from "react-test-renderer";
@@ -30,6 +31,13 @@ jest.mock("@/components/screens/estoque/DanfeImportModal", () => ({
   DanfeImportModal: (p: any) => (p.visible ? require("react").createElement("DanfeImportModal", { testID: "danfe-matcon", onClose: p.onClose }) : null),
 }));
 const mockDarEntrada = jest.fn();
+let mockMatriz: unknown[][] | Error = [];
+jest.mock("@/hooks/useServerImport", () => ({
+  lerArquivoPlanilha: jest.fn(async () => {
+    if (mockMatriz instanceof Error) throw mockMatriz;
+    return { matrix: mockMatriz, linhaDoArquivo: (i: number) => i + 1 };
+  }),
+}));
 jest.mock("@/services/estoqueEntradasApi", () => ({
   estoqueEntradasApi: {
     darEntrada: (...a: any[]) => mockDarEntrada(...a),
@@ -319,7 +327,7 @@ describe("A3 · passo 2", () => {
     }
   }
 
-  test("as três origens; nota e digitar funcionam; rodapé do PDF", async () => {
+  test("as três origens funcionam; rodapé do PDF", async () => {
     const { tree } = await montar();
     await irAoPasso2(tree, "f-alfa");
     const t = texto(tree);
@@ -328,7 +336,7 @@ describe("A3 · passo 2", () => {
     expect(t).toContain(T.origemPlanilhaTitulo);
     expect(t).toContain(T.origemDigitarTitulo);
     expect(desabilitado(tree, "chegou-origem-nota-botao")).toBe(false);
-    expect(desabilitado(tree, "chegou-origem-planilha-botao")).toBe(true);
+    expect(desabilitado(tree, "chegou-origem-planilha-botao")).toBe(false);
     expect(desabilitado(tree, "chegou-origem-digitar-botao")).toBe(false);
     expect(rodape(tree)).toContain(T.rodapePdf);
     expect(desabilitado(tree, "chegou-continuar")).toBe(true);
@@ -850,5 +858,67 @@ describe("A5 · digitar os itens", () => {
     expect(tem(tree, "chegou-digitar-linha-1-custo")).toBe(false);
     await digitar(tree, "chegou-digitar-linha-1-quantidade", "5");
     expect(rodape(tree)).toContain(T.digitarRodape(1, null));
+  });
+});
+
+describe("A6 · planilha", () => {
+  const MATRIZ = [
+    ["Nome", "Código", "Código de barras", "Quantidade", "Custo"],
+    ["Esmalte vermelho", "X-1", "7891234567895", "24", "6,00"],
+    ["Acetona 100 ml", "AL-0391", "", "12", "3,20"],
+    ["Pincel novo", "X-9", "", "0", "2"],
+  ];
+  async function irAPlanilha(props: Record<string, unknown> = {}) {
+    mockQueries["supplier-codes"] = { data: { supplier_id: "f-alfa", items: [], map: { "AL-0391": "p-acetona" } }, isLoading: false };
+    const r = await montar({ products: PRODUTOS_CONFERENCIA, ...props });
+    await tocar(r.tree, "chegou-fornecedor-f-alfa");
+    await tocar(r.tree, "chegou-continuar");
+    mockArquivo = { name: "pedido-alfa.xlsx", conteudo: "" };
+    await tocar(r.tree, "chegou-origem-planilha-botao");
+    return r;
+  }
+
+  test("lê a planilha, cai na mesma conferência e grava com origem 'planilha'", async () => {
+    mockMatriz = MATRIZ;
+    mockDarEntrada.mockResolvedValue({ supplier: null, lines: [], totals: { lines: 2, products: 2, quantity: 36 } });
+    const { tree } = await irAPlanilha();
+    expect(texto(tree)).toContain(T.planilhaLida("pedido-alfa.xlsx", 3));
+    expect(desabilitado(tree, "chegou-continuar")).toBe(false);
+    await tocar(tree, "chegou-continuar");
+    const t = texto(tree);
+    expect(tem(tree, "chegou-passo-3")).toBe(true);
+    expect(t).toContain(T.passoFeitoPlanilha);
+    expect(t).toContain(T.achadoPor.codigo_barras);
+    expect(t).toContain(T.achadoPor.codigo_fornecedor);
+    expect(t).toContain(T.erroQtdZeroPlanilha);
+    expect(tem(tree, "chegou-total-bate")).toBe(false);
+    await tocar(tree, "chegou-dar-entrada");
+    const corpo = mockDarEntrada.mock.calls[0][1];
+    expect(corpo.origin).toBe("planilha");
+    expect(corpo.invoice_number).toBeUndefined();
+    expect(corpo.items).toEqual([
+      { product_id: "p-esmalte", quantity: 24, unit_cost: 6, supplier_code: "X-1" },
+      { product_id: "p-acetona", quantity: 12, unit_cost: 3.2, supplier_code: "AL-0391" },
+    ]);
+  });
+
+  test("planilha ilegível: aviso gentil, 'Escolher de novo' e 'Baixar modelo'", async () => {
+    mockMatriz = [["foo"], ["bar"]];
+    const { tree } = await irAPlanilha();
+    const t = texto(tree);
+    expect(t).toContain(T.planilhaIlegivelTitulo);
+    expect(t).toContain(T.planilhaIlegivelTexto);
+    expect(tem(tree, "chegou-planilha-modelo-aviso")).toBe(true);
+    expect(desabilitado(tree, "chegou-continuar")).toBe(true);
+    mockMatriz = MATRIZ;
+    await tocar(tree, "chegou-planilha-de-novo");
+    expect(tem(tree, "chegou-planilha-ilegivel")).toBe(false);
+    expect(tem(tree, "chegou-planilha-lida")).toBe(true);
+  });
+
+  test("arquivo que o leitor recusa também é ilegível", async () => {
+    mockMatriz = new Error("quebrado");
+    const { tree } = await irAPlanilha();
+    expect(tem(tree, "chegou-planilha-ilegivel")).toBe(true);
   });
 });
