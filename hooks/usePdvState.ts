@@ -159,6 +159,8 @@ export const PAY_METHODS: PayChip[] = PAYMENTS.map(p => ({
 
 export function usePdvState() {
   const { company, isDemo, token, consolidatedView } = useAuthStore();
+  // 17/11/2026 (Pedido): o is_staff do backend libera o Pedido para a equipe Aura.
+  const user = useAuthStore(s => (s as any).user);
   const qc = useQueryClient();
   const companyLogo = useAuthStore(s => s.companyLogo);
   const perfilDaEmpresa = useCompanyProfile();
@@ -246,13 +248,15 @@ export function usePdvState() {
     retry: 1,
   });
   // ── Pedido separado de venda (17/11/2026, A1) ───────────────────────────
-  // "Guardar > Pedido" no rodapé. Só com a trava PEDIDO_LIBERADO ligada, o
+  // "Guardar > Pedido" no rodapé. Só com a trava PEDIDO_LIBERADO ligada (ou a
+  // equipe Aura, a mesma regra da aba Pedidos, utils/pedidoLiberado.ts), o
   // módulo próprio vendas.pedidos (plano, override e permissão do membro, a
   // mesma conta do menu, com a mesma permData acima), uma loja escolhida e
   // fora da demonstração (utils/pedido.ts). Desligado: cartProps.pedido =
   // null e o rodapé é o de sempre. O Essencial tem o módulo, então o plano
   // guardado no JWT não muda a resposta (sem refetch de /auth/me aqui).
   const pedidoAtivo = pedidoNoCaixa({
+    user,
     modulos: computeVisibleModules(company?.plan, moduleOverrides, permData),
     companyId: company?.id,
     consolidado: !!consolidatedView,

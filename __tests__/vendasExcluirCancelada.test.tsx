@@ -24,6 +24,12 @@ jest.mock("@/components/screens/vendas/FechamentosTab", () => ({ FechamentosTab:
 jest.mock("@/components/screens/vendas/SalesRanking", () => ({ SalesRanking: "SalesRanking" }));
 jest.mock("@/components/screens/vendas/VendasFiltros", () => ({ VendasFiltros: "VendasFiltros" }));
 jest.mock("@/components/ScreenHero", () => ({ ScreenHero: "ScreenHero", ScreenTabs: "ScreenTabs" }));
+// 17/11/2026 (A5a): a aba Pedidos fica fora (trava desligada), sem consulta.
+jest.mock("@/hooks/usePedidos", () => ({
+  useAbaPedidos: () => ({ visivel: false }),
+  usePedidos: () => ({ numeros: null, isFetching: false, refetch: jest.fn() }),
+}));
+jest.mock("@/components/screens/vendas/pedidos/AbaPedidos", () => ({ AbaPedidos: "AbaPedidos" }));
 jest.mock("expo-router", () => ({ useLocalSearchParams: () => ({}), router: { push: jest.fn() } }));
 jest.mock("@/stores/auth", () => ({
   useAuthStore: () => ({ company: { id: "comp-1" }, consolidatedView: true }),

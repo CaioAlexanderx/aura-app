@@ -53,6 +53,12 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   // Antes herdavam visibilidade de pdv (quem via Caixa via Vendas automaticamente).
   // Agora cada um tem sua chave de permissao independente.
   vendas: 'essencial',
+  // 17/11/2026 -- Pedido separado de venda (p-63e/f): aba "Pedidos" em
+  // Vendas. Aba, nao item de menu (sem NAV, como 'financeiro.relatorios'),
+  // com chave PROPRIA (regra 3). Essencial (pendencia 1 do mockup). O
+  // backend conhece a chave (Aura-backend#1073). Atras da trava
+  // PEDIDO_LIBERADO (utils/pedidoLiberado.ts).
+  'vendas.pedidos': 'essencial',
   // 14/09/2026 -- Ordem de Servico ganha modulo proprio. Antes o item /os do
   // NAV usava mod "pdv" emprestado. Mesmo plano minimo do pdv (essencial) pra
   // ninguem ganhar nem perder acesso; o opt-in continua sendo o toggle
@@ -218,13 +224,6 @@ var MODULE_PLAN_MAP: Record<string, string> = {
   'personalizados.ficha':      'negocio',
   'personalizados.loja':       'negocio',
   'personalizados.config':     'negocio',
-  // 17/11/2026 -- Pedido separado de venda (A1, p-63a): o "Guardar > Pedido"
-  // do Caixa e, depois (A5a), a aba Pedidos em Vendas. Chave PROPRIA (regra
-  // 3), nunca a do pdv nem a de vendas. Essencial, pela pendencia 1 do
-  // mockup aprovado em 17/11: e o "deixa separado" de toda loja. Nada
-  // aparece enquanto a trava PEDIDO_LIBERADO (utils/pedido.ts) for false. O
-  // backend (services/modules.js, Aura-backend#1073) conhece a mesma chave.
-  'vendas.pedidos': 'essencial',
 };
 var PLAN_LEVEL: Record<string, number> = { essencial: 0, negocio: 1, expansao: 2 };
 
@@ -236,13 +235,11 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   // quando ela usava mod "pdv". Permissao granular propria fica pra quando o
   // produto pedir (e exige chave nova em MembersSection + backend).
   // 14/09/2026 -- "cupons" entra pelo mesmo motivo (usava mod "pdv").
-  // 17/11/2026 -- "vendas.pedidos" (A1) entra na permissao pdv: quem guarda
-  // o pedido e quem esta no Caixa. Mesma regra de /me/pedidos no backend
-  // (permissions.pdv ou permissions['vendas.pedidos']).
-  pdv:           ['pdv', 'os', 'cupons', 'vendas.pedidos'],
+  pdv:           ['pdv', 'os', 'cupons'],
   // 15/05/2026 -- chave "vendas" controla /vendas + /crediario (nao herda mais do pdv).
   // 10/10/2026 -- crediario.config acompanha o crediario (mesma pessoa).
-  vendas:        ['vendas', 'crediario', 'crediario.config'],
+  // 17/11/2026 -- a aba Pedidos (vendas.pedidos) acompanha quem ve Vendas.
+  vendas:        ['vendas', 'crediario', 'crediario.config', 'vendas.pedidos'],
   // 13/10/2026 -- a pagina Black Friday acompanha quem decide a compra
   // (estoque) e quem monta a loja (configuracoes: assento e vale-troca).
   // Nao existe permissao propria no backend; cada secao da pagina checa o
@@ -317,11 +314,6 @@ var PERM_TO_MODULES: Record<string, string[]> = {
   // (backend#1038). Granularidade (ex.: quem produz nao ve Orcamentos) fica
   // para quando o produto pedir: separar aqui e em MembersSection.
   'personalizados.access': ['personalizados.producao','personalizados.orcamentos','personalizados.insumos','personalizados.galeria','personalizados.pedido','personalizados.ficha','personalizados.loja','personalizados.config'],
-  // 17/11/2026 (Pedido, A1): chave de permissao propria do membro, gravada
-  // em company_members.permissions['vendas.pedidos'] e lida pelo backend
-  // (Aura-backend#1073, /me/pedidos). Ainda sem linha em MembersSection: por
-  // ora quem tem o pdv ve o Pedido.
-  'vendas.pedidos': ['vendas.pedidos'],
 };
 
 // Fallback TRANSITORIO de override: quando o modulo nao tem override proprio,
