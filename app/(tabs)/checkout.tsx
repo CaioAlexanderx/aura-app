@@ -163,7 +163,14 @@ function cycleFromCompany(company: any): Cycle | null {
 var VERTICAL_MIN_PLANS: Record<string, string[]> = {
   studio: ["negocio", "expansao"],
 };
-function allowedPlanKeys(company: any): string[] {
+// p-197: a fonte é o allowed_plans do /billing/status (regra do backend: vertical
+// Studio ou studio_enabled só assina Negócio/Expansão). Sem o campo (backend
+// antigo), vale a regra da vertical de antes. Chaves desconhecidas são ignoradas.
+function allowedPlanKeys(company: any, doBackend?: string[] | null): string[] {
+  if (Array.isArray(doBackend)) {
+    var daApi = PLANS.map(function (p) { return p.key; }).filter(function (k) { return doBackend.indexOf(k) >= 0; });
+    if (daApi.length > 0) return daApi;
+  }
   var v = String(company?.vertical_active || "").toLowerCase();
   return VERTICAL_MIN_PLANS[v] || PLANS.map(function (p) { return p.key; });
 }
@@ -182,7 +189,18 @@ export default function CheckoutScreen() {
   // 17/10/2026 (t2-04): conta a abertura da tela (degrau "viu checkout" do
   // painel). Demo e staff não contam; uma vez por abertura, mesmo com re-render.
   useCheckoutViewed(isDemo || isStaff ? null : company?.id);
-  var allowedPlans = allowedPlanKeys(company);
+  // p-197: o status vem antes dos planos, porque o backend (allowed_plans) decide
+  // quais planos a empresa pode assinar.
+  // Status da cobrança (desconto em andamento, CPF/CNPJ e, no p-106, a loja
+  // ativa e em dia que trava o seletor de acessos).
+  var { data: billingStatusData } = useQuery({
+    queryKey: ["billing-status", company?.id],
+    queryFn: function () { return billingApi.status(company!.id); },
+    enabled: !!company?.id && !isDemo,
+    retry: 1, staleTime: 60000,
+  });
+
+  var allowedPlans = allowedPlanKeys(company, billingStatusData?.allowed_plans);
   var visiblePlans = PLANS.filter(function (p) { return allowedPlans.indexOf(p.key) >= 0; });
   var restrictedByVertical = visiblePlans.length < PLANS.length;
   var planoDaUrl = planoValido(params.plan);
@@ -257,15 +275,6 @@ export default function CheckoutScreen() {
   var plan = PLANS.find(function (p) { return p.key === selectedPlan; }) || PLANS[1];  // PLANS[1] = negocio
   var isAnnual = cycle === "annual";
   var metodoDaApi = method === "card" ? "CREDIT_CARD" : "PIX";
-
-  // Status da cobrança (desconto em andamento, CPF/CNPJ e, no p-106, a loja
-  // ativa e em dia que trava o seletor de acessos).
-  var { data: billingStatusData } = useQuery({
-    queryKey: ["billing-status", company?.id],
-    queryFn: function () { return billingApi.status(company!.id); },
-    enabled: !!company?.id && !isDemo,
-    retry: 1, staleTime: 60000,
-  });
 
   // 14/10/2026 — valor combinado da empresa (Gestão Aura). O backend devolve o
   // valor mensal certo para o plano/ciclo/forma escolhidos; só vale com
@@ -609,7 +618,7 @@ export default function CheckoutScreen() {
   // nunca deixa o cliente clicar em "assinar" num plano que o backend vai recusar.
   useEffect(function () {
     if (allowedPlans.indexOf(selectedPlan) < 0) setSelectedPlan(planoPermitido(selectedPlan, allowedPlans));
-  }, [selectedPlan, (company as any)?.vertical_active]);
+  }, [selectedPlan, (company as any)?.vertical_active, allowedPlans.join(",")]);
 
   useEffect(function () {
     var cepDigits = cardPostalCode.replace(/\D/g, "");
@@ -791,7 +800,7 @@ export default function CheckoutScreen() {
       {/* Planos */}
       {restrictedByVertical && (
         <Text style={z.verticalNote}>
-          O Aura Studio exige o plano Negócio ou superior: o Essencial não inclui o Studio.
+          Os personalizados e o Studio exigem o plano Negócio ou superior.
         </Text>
       )}
       <Text style={[z.mono, z.lbl]}>Plano</Text>

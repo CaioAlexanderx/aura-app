@@ -18,10 +18,19 @@ export type Supplier = {
   is_active: boolean;
   product_count?: number;
   created_at?: string;
+  /** 17/11/2026 (Aura-backend#1056, B3): última entrada de mercadoria deste
+   *  fornecedor NESTA loja. Backend antigo não manda -> undefined. */
+  last_delivery_at?: string | null;
 };
 
 export type SupplierDetail = Supplier & {
   products: Array<{ id: string; name: string; sku: string | null; stock_qty: number | string; price: number | string; is_active: boolean }>;
+  /** 17/11/2026 (Aura-backend#1056, B3): todos os ligados por product_suppliers
+   *  (principal ou não), com a última compra. Backend antigo não manda. */
+  linked_products?: Array<{
+    id: string; name: string; sku: string | null; stock_qty: number | string | null; is_active: boolean;
+    supplier_code: string | null; is_main: boolean; last_purchase_at: string | null;
+  }>;
 };
 
 export type SupplierBody = {
@@ -62,6 +71,16 @@ export const suppliersApi = {
   linkProducts: (cid: string, sid: string, productIds: string[], unlink = false) =>
     request<{ updated: number; unlink: boolean }>(base(cid) + "/" + sid + "/products", {
       method: "POST", body: { product_ids: productIds, unlink }, retry: 0, timeout: 20000,
+    }),
+  /**
+   * 17/11/2026 (Aura-backend B4): liga em lote com o custo e o código de
+   * CADA produto, sem mexer no estoque. `is_main: false` = entra como mais um
+   * fornecedor; só vira principal no produto que não tinha nenhum.
+   * Até 1.000 itens por chamada. `not_found`: produtos que a loja não enxerga.
+   */
+  linkItems: (cid: string, sid: string, items: Array<{ product_id: string; cost?: number; supplier_code?: string }>, isMain = false) =>
+    request<{ updated: number; unlink: boolean; is_main: boolean; linked: number | null; not_found: string[] }>(base(cid) + "/" + sid + "/products", {
+      method: "POST", body: { items, is_main: isMain }, retry: 0, timeout: 30000,
     }),
 };
 

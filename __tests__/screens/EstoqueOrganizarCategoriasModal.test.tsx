@@ -108,10 +108,7 @@ jest.mock("@/components/screens/estoque/useEstoquePremiumStyles", () => ({ useEs
 
 // ── Componentes pesados da tela: stubs ─────────────────────────
 jest.mock("@/components/screens/estoque/ImportPlanilhaModal", () => ({ ImportPlanilhaModal: () => null }));
-jest.mock("@/components/screens/estoque/ImportarMenu", () => ({
-  ImportarMenu: () => null,
-  OPCOES_IMPORTAR: { nota: { texto: "" }, planilha: { texto: "" } },
-}));
+
 jest.mock("@/components/screens/estoque/ItemFormModal", () => ({ ItemFormModal: () => null }));
 jest.mock("@/components/screens/estoque/ProductRow", () => ({ ProductRow: () => null }));
 jest.mock("@/components/screens/estoque/AlertsList", () => ({ AlertsList: () => null }));
