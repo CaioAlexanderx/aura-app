@@ -134,6 +134,8 @@ export const TEXTOS_CHEGOU = {
   previaMargem: (antes: number | null, depois: number) => "Margem " + (antes !== null ? antes + "% → " : "") + depois + "%",
 
   semParTitulo: "Este item não está na sua loja",
+  produtoNovo: "Produto novo",
+  entraCom: (q: string, custo: string | null) => "Entra com " + q + " un" + (custo ? " e custo " + custo : ""),
   semParTexto: "Escolha: cadastrar como produto novo ou ligar a um que você já tem.",
   cadastrarNovo: "Cadastrar novo",
   ligarProduto: "Ligar a um produto",

@@ -21,7 +21,7 @@
 // Cards: A1 (shell + passo 1), A2 (novo fornecedor dentro do passo),
 // A3 (passo 2), A4a (passo 3, conferência).
 // ============================================================
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, Dimensions } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Colors, IS_DARK_MODE } from "@/constants/colors";
@@ -36,11 +36,13 @@ import type { Product } from "@/components/screens/estoque/types";
 import { TEXTOS_CHEGOU as T } from "./textosChegou";
 import { Passo1Fornecedor } from "./Passo1Fornecedor";
 import { Passo2Origem, type PerguntaDoCnpj } from "./Passo2Origem";
+import { Passo3Conferir } from "./Passo3Conferir";
 import { lerNota, type NotaLida } from "./lerNota";
 import { escolherArquivo, lerTextoDoArquivo, ACEITA_NOTA } from "./escolherArquivo";
 import {
   novaChaveDaEntrada, conferirEmitente, nomeDaEscolha, consultaDaNota, entradaAnteriorDaNota,
-  type EscolhaDoFornecedor, type FornecedorDaLista,
+  indexarProdutos, conferirLinha, resumirConferencia, motivoDoRodape, decisaoDeNovo, diaMes,
+  type EscolhaDoFornecedor, type FornecedorDaLista, type DecisaoDaLinha, type AjusteDaLinha,
 } from "./chegouRegras";
 
 type Passo = 1 | 2 | 3 | 4;
@@ -91,6 +93,12 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
   // dos dois, a pergunta volta.
   const [cnpjRespondido, setCnpjRespondido] = useState<string | null>(null);
   const [repetidaVista, setRepetidaVista] = useState<string | null>(null);
+  // Passo 3: decisões e ajustes por linha (n do item), "Usar o custo médio"
+  // e "Mostrar os outros n".
+  const [decisoes, setDecisoes] = useState<Record<number, DecisaoDaLinha>>({});
+  const [ajustes, setAjustes] = useState<Record<number, AjusteDaLinha>>({});
+  const [usarMedio, setUsarMedio] = useState(true);
+  const [mostrarTodas, setMostrarTodas] = useState(false);
 
   // Zera tudo ao fechar; a chave nasce ao abrir.
   useEffect(() => {
@@ -105,6 +113,7 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
       setPerguntaSair(false);
       setCnpjRespondido(null);
       setRepetidaVista(null);
+      setUsarMedio(true);
     } else {
       setChave(novaChaveDaEntrada());
     }
@@ -196,6 +205,46 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
   const anterior = consultaNota ? entradaAnteriorDaNota(dadosRepetida) : null;
   const repetidaPendente = !!anterior && repetidaVista !== respostaAtual;
 
+  // ── Passo 3 · conferência (A4a) ──
+  // Outra nota: decisões e ajustes da anterior não valem mais.
+  useEffect(() => {
+    setDecisoes({});
+    setAjustes({});
+    setMostrarTodas(false);
+  }, [chaveDaNota]);
+  const fornecedorId = escolha && escolha.tipo === "existente" ? escolha.fornecedor.id : null;
+  const { data: dadosCodigos, isLoading: carregandoCodigos } = useQuery({
+    queryKey: ["supplier-codes", companyId, fornecedorId],
+    queryFn: () => estoqueEntradasApi.codigosDoFornecedor(companyId, fornecedorId!),
+    enabled: visible && passo === 3 && !!fornecedorId,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const codigos = fornecedorId ? (dadosCodigos?.map || null) : null;
+  const indice = useMemo(() => indexarProdutos(products), [products]);
+  const linhas = useMemo(
+    () => (nota ? nota.itens.map((item) => conferirLinha(item, {
+      indice, codigos, decisao: decisoes[item.n], ajuste: ajustes[item.n], semCusto,
+    })) : []),
+    [nota, indice, codigos, decisoes, ajustes, semCusto],
+  );
+  const resumo = useMemo(() => resumirConferencia(linhas, nota ? nota.totalDosProdutos : null), [linhas, nota]);
+  const motivo = motivoDoRodape(linhas, resumo);
+  // A7 grava (POST /products/stock-receipts com a `chave`). Até lá o botão
+  // mostra a regra (travado enquanto falta decidir) e não faz nada.
+  const darEntrada: (() => void) | undefined = undefined;
+
+  function decidir(n: number, d: DecisaoDaLinha | null) {
+    setDecisoes((atual) => {
+      const novo = { ...atual };
+      if (d) novo[n] = d; else delete novo[n];
+      return novo;
+    });
+  }
+  function ajustar(n: number, a: Partial<AjusteDaLinha>) {
+    setAjustes((atual) => ({ ...atual, [n]: { ...(atual[n] || {}), ...a } }));
+  }
+
   function usarAchado(f: FornecedorDaLista) {
     setEscolha({ tipo: "existente", fornecedor: f });
   }
@@ -269,7 +318,15 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
       : escolha.tipo === "sem" ? T.rodapeSemFornecedor : T.rodapeFornecedor(escolha.fornecedor.name);
   } else if (passo === 2) {
     rodapeInfo = T.rodapePdf;
+  } else if (passo === 3) {
+    rodapeInfo =
+      motivo.tipo === "faltam" ? (estreito ? T.rodapeFaltaCelular(motivo.n) : T.rodapeFaltam(motivo.n))
+        : motivo.tipo === "falta_ligar" ? (estreito ? T.rodapeFaltaCelular(1) : T.rodapeFaltaLigar(motivo.nome))
+          : motivo.tipo === "falta_grade" ? (estreito ? T.rodapeFaltaCelular(1) : T.rodapeFaltaGrade(motivo.nome))
+            : motivo.tipo === "nada" ? T.rodapeNada
+              : nota ? T.resumoNota(nota.numero || "—", diaMes(nota.emitidaEm)) : "";
   }
+  const rodapeTravado = passo === 3 && resumo.falta > 0;
 
   const painelWeb = IS_WEB ? {
     background: IS_DARK_MODE ? "rgba(18,10,35,0.98)" : "rgba(255,255,255,0.98)",
@@ -374,6 +431,23 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
                 onTenhoANota={abrirNota}
               />
             )}
+            {passo === 3 && nota && (
+              <Passo3Conferir
+                estreito={estreito}
+                semCusto={semCusto}
+                nota={nota}
+                linhas={linhas}
+                resumo={resumo}
+                carregando={!!fornecedorId && carregandoCodigos}
+                mostrarTodas={mostrarTodas}
+                onMostrarTodas={() => setMostrarTodas(true)}
+                usarMedio={usarMedio}
+                onUsarMedio={setUsarMedio}
+                onDecidir={decidir}
+                onAjustar={ajustar}
+                novoPara={(l) => decisaoDeNovo(l.item, semCusto)}
+              />
+            )}
             {passo === 2 && (
               <Passo2Origem
                 estreito={estreito}
@@ -393,7 +467,14 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
 
           {!novoAberto && (
             <View style={[s.rodape, estreito && s.rodapeEstreito]}>
-              <Text style={s.rodapeInfo} numberOfLines={2} testID="chegou-rodape-info">{rodapeInfo}</Text>
+              {rodapeTravado ? (
+                <View style={s.rodapeTravado} testID="chegou-rodape-travado">
+                  <Icon name="alert" size={15} color={Colors.amber} />
+                  <Text style={s.rodapeTravadoTxt} numberOfLines={2} testID="chegou-rodape-info">{rodapeInfo}</Text>
+                </View>
+              ) : (
+                <Text style={s.rodapeInfo} numberOfLines={2} testID="chegou-rodape-info">{rodapeInfo}</Text>
+              )}
               <View style={s.rodapeAcoes}>
                 {passo === 1 ? (
                   <Pressable style={s.btnSec} onPress={pedirFechar} testID="chegou-cancelar">
@@ -413,6 +494,18 @@ export function ChegouMercadoriaModal({ visible, companyId, lojaNome, products, 
                     testID="chegou-continuar"
                   >
                     <Text style={s.btnPriTxt}>{T.continuar}</Text>
+                  </Pressable>
+                )}
+                {passo === 3 && (
+                  <Pressable
+                    style={[s.btnConfirmar, (!resumo.podeDarEntrada || !darEntrada) && { opacity: 0.45 }]}
+                    onPress={resumo.podeDarEntrada ? darEntrada : undefined}
+                    disabled={!resumo.podeDarEntrada || !darEntrada}
+                    accessibilityState={{ disabled: !resumo.podeDarEntrada }}
+                    testID="chegou-dar-entrada"
+                  >
+                    <Icon name="check" size={14} color="#fff" />
+                    <Text style={s.btnPriTxt}>{estreito ? T.darEntradaCelular : T.darEntrada(resumo.entram)}</Text>
                   </Pressable>
                 )}
               </View>
@@ -499,6 +592,12 @@ const s = StyleSheet.create({
   rodapeEstreito: { paddingHorizontal: 16, flexWrap: "wrap" },
   rodapeInfo: { flex: 1, minWidth: 160, fontSize: 12.5, color: Colors.ink2, fontWeight: "500" },
   rodapeAcoes: { flexDirection: "row", gap: 8, flexShrink: 0 },
+  rodapeTravado: { flex: 1, minWidth: 160, flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  rodapeTravadoTxt: { flex: 1, fontSize: 13, color: Colors.amber, fontWeight: "700", lineHeight: 18 },
+  btnConfirmar: {
+    backgroundColor: "#059669", minHeight: 44, paddingHorizontal: 20, borderRadius: 10,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+  },
   btnPri: {
     backgroundColor: Colors.violet, minHeight: 44, paddingHorizontal: 20, borderRadius: 10,
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
