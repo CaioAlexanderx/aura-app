@@ -24,3 +24,18 @@ test("sem chave (Studio, Ótica, Financeiro): sem cabeçalho", async () => {
   await pdvApi.createSale("empresa-1", { items: [] }, { idempotencyKey: null });
   expect(req.mock.calls[1][1].headers).toBeUndefined();
 });
+
+// 17/11/2026 (p-145): a venda espera 30 s; as outras chamadas do Caixa não mudam.
+test("a venda espera até 30 s pela resposta", async () => {
+  await pdvApi.createSale("empresa-1", { items: [] });
+  expect(req.mock.calls[0][1].timeout).toBe(30000);
+});
+
+test("só a venda: scan segue em 5 s e getSale no padrão", async () => {
+  await pdvApi.scan("empresa-1", "789");
+  expect(req.mock.calls[0][1].timeout).toBe(5000);
+  await pdvApi.getSale("empresa-1", "venda-1");
+  expect(req.mock.calls[1][1]).toBeUndefined();
+  await pdvApi.createSaleComSinal("empresa-1", { items: [] });
+  expect(req.mock.calls[2][1].timeout).toBeUndefined();
+});

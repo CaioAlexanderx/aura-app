@@ -39,9 +39,17 @@ function cabecalhoDaChave(idempotencyKey?: string | null): Record<string, string
   return idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined;
 }
 
+// 17/11/2026 (p-145): a venda espera até 30 s pela resposta, e não os 10 s
+// padrão do request(). Uma venda com vários itens, vendedora, cliente e
+// crediário leva de 5 a 6 s no servidor, e o p99 de uma loja já encostou em
+// 10 s: a pessoa via "demorou demais" com a venda gravada. O tempo limite não
+// gera nova tentativa (AbortError sai direto), e a chave de idempotência cobre
+// o segundo clique. Só nesta chamada: o resto do app segue com 10 s.
+var TEMPO_LIMITE_DA_VENDA_MS = 30000;
+
 export var pdvApi = {
   createSale: function(companyId: string, body: any, opts?: { idempotencyKey?: string | null }) {
-    return request<any>("/companies/" + companyId + "/pdv/sale", { method: "POST", body: body, headers: cabecalhoDaChave(opts?.idempotencyKey) });
+    return request<any>("/companies/" + companyId + "/pdv/sale", { method: "POST", body: body, headers: cabecalhoDaChave(opts?.idempotencyKey), timeout: TEMPO_LIMITE_DA_VENDA_MS });
   },
   // 17/08/2026 (F3) — venda com sinal: recebe parte agora, saldo numa data
   // combinada. Endpoint próprio, e não /pdv/sale com payments[]: o saldo é
