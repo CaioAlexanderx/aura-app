@@ -480,6 +480,19 @@ export type OfxImportacao = {
   pendentes?: number;
 };
 
+export type EstadoDaCasa = {
+  company_id: string;
+  casa_negocio: boolean;
+  casa_negocio_em: string | null;
+  vertical_active: string | null;
+  studio_enabled: boolean;
+  personalizados_ativado_em: string | null;
+  pode_ligar: boolean;
+  motivo_ligar: string | null;
+  pode_desligar: boolean;
+  motivo_desligar: string | null;
+};
+
 export var adminApi = {
   dashboard: function() { return request<any>("/admin/dashboard"); },
   clients: function() { return request<any>("/admin/clients"); },
@@ -503,6 +516,17 @@ export var adminApi = {
   setSegment: function(companyId: string, body: SetSegmentBody) {
     return request<SetSegmentResponse>(
       "/admin/clients/" + companyId + "/segment", { method: "PATCH", body: body, retry: 0 }
+    );
+  },
+  // 17/11/2026 (p-189) — Casa no Negócio de UMA empresa (virada do Studio).
+  // Aura-backend: GET/PATCH /admin/clients/:cid/casa-negocio, só equipe.
+  // Ligar tira a empresa do /studio sem mexer em studio_enabled; desligar volta.
+  casaNegocio: function(companyId: string) {
+    return request<EstadoDaCasa>("/admin/clients/" + companyId + "/casa-negocio");
+  },
+  setCasaNegocio: function(companyId: string, ligada: boolean) {
+    return request<{ changed: boolean; estado: EstadoDaCasa; data_original?: any }>(
+      "/admin/clients/" + companyId + "/casa-negocio", { method: "PATCH", body: { ligada: ligada }, retry: 0 }
     );
   },
   // 19/05/2026 — Sub-vertical (Fase B1 do benchmark de mercado)

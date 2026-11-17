@@ -47,6 +47,27 @@ export function personalizadosAtivo(
   return verticalActive == null || verticalActive === "";
 }
 
+// ── Casa no Negócio (p-189, 17/11/2026) ─────────────────────────────────
+// A virada do /studio para o shell Negócio é por empresa, pela equipe:
+// company.casa_negocio === true (vem do /auth/me; Aura-backend,
+// services/casaNegocio.js). Ao ligar, o backend já tira o vertical_active;
+// o app respeita a casa também com um vertical_active = 'studio' ainda
+// guardado (sessão aberta antes da troca, último /me do aparelho).
+// Com a trava PERSONALIZADOS_LIBERADO em false nada disto conta: o app
+// decide como sempre, só por vertical_active.
+type ComCasa = { casa_negocio?: unknown; vertical_active?: unknown } | null | undefined;
+
+export function casaNoNegocio(company: ComCasa, liberado: boolean = PERSONALIZADOS_LIBERADO): boolean {
+  if (!liberado) return false;
+  return !!company && company.casa_negocio === true;
+}
+
+/** A empresa abre no shell /studio? (vertical Studio e casa no Negócio desligada). */
+export function vaiParaOStudio(company: ComCasa, liberado: boolean = PERSONALIZADOS_LIBERADO): boolean {
+  if (!company || company.vertical_active !== "studio") return false;
+  return !casaNoNegocio(company, liberado);
+}
+
 /** As chaves de módulo da frente: primeiro os itens do menu, depois as subtelas. */
 export const MODS_PERSONALIZADOS = [
   "personalizados.orcamentos",
