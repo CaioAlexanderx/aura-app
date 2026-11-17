@@ -1258,6 +1258,8 @@ export function usePdvState() {
     onRemove:          removeItem,
     onClear:           () => { cart.forEach(i => removeItem(i.productId)); clearCoupon(); },
     onFinalize:        handleFinalize,
+    // 17/11/2026 (p-157): bipe com o cursor num campo do carrinho.
+    onScan:            (code: string) => { handleScan(code); },
     onGenerateQuote:   () => handleGenerateQuote(),
     showOrcamento:     true,
     onSaveQuote:       matconQuote.saveQuote,

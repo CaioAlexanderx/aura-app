@@ -105,6 +105,7 @@ import type { LotAllocation } from "@/services/matconApi";
 import { rotuloDaComanda } from "@/utils/comanda";
 import { contarProdutosDoCarrinho } from "@/utils/contarProdutosDoCarrinho";
 import { estadoDoDoc, mascararDoc, mensagemDoDoc } from "@/utils/nfseAutomatica";
+import { useLeitorNoCampo } from "@/hooks/useLeitorNoCampo";
 
 /** 10/11/2026 (NFS-e automática, mockup nfse-cadastro-servico.html, tela 3).
  *  Carrinho com serviço numa loja que emite NFS-e: o "CPF na nota" vira
@@ -190,6 +191,10 @@ type Props = {
   onDec: (id: string) => void;
   onSetQty?: (id: string, qty: number) => void;
   onPriceChange?: (id: string, price: number) => void;
+  /** 17/11/2026 (p-157): o leitor de código nos campos de quantidade, preço e
+   *  desconto. Bipe com o cursor num deles vai para o carrinho (o mesmo
+   *  caminho do bipe fora de campo) em vez de ser digitado no campo. */
+  onScan?: (code: string) => void;
   onRemove: (id: string) => void;
   onClear: () => void;
   onFinalize: () => void;
@@ -291,6 +296,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     payMethods, activePay, onPay, warrantySlot,
     onInc, onDec, onSetQty, onPriceChange, onRemove, onClear, onFinalize, onGenerateQuote,
     onLotAllocations,
+    onScan,
     showOrcamento, onSaveQuote, savingQuote, savedQuote, editingQuote, comanda, frete,
     discountLabel, isProcessing, finalizeDisabled, requiredHints,
     discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
@@ -505,6 +511,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
               onRemove={() => onRemove(it.productId)}
               onQtySet={qty => onSetQty?.(it.productId, qty)}
               onPriceChange={onPriceChange ? (price => onPriceChange(it.productId, price)) : undefined}
+              onScan={onScan}
               matconEnabled={matcon.matcon_enabled}
               roundToPackage={matcon.matcon_round_to_package}
               defaultWastePct={matcon.matcon_default_waste_pct}
@@ -675,6 +682,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
               setDiscountValue={setDiscountValue}
               manualDiscountAmount={manualDiscountAmount || 0}
               clearDiscount={clearDiscount}
+              onScan={onScan}
               confirmacao={discountConfirm}
               pendente={discountPending}
             />
@@ -1199,7 +1207,7 @@ function parseCurrencyInput(raw: string): number | null {
 }
 
 function CartItem({
-  item, onInc, onDec, onRemove, onQtySet, onPriceChange,
+  item, onInc, onDec, onRemove, onQtySet, onPriceChange, onScan,
   matconEnabled, roundToPackage, defaultWastePct, lotsEnabled, onLotAllocations,
 }: {
   item: CartDisplayItem;
@@ -1208,6 +1216,8 @@ function CartItem({
   onRemove: () => void;
   onQtySet: (qty: number) => void;
   onPriceChange?: (price: number) => void;
+  /** 17/11/2026 (p-157): bipe com o cursor na quantidade ou no preço. */
+  onScan?: (code: string) => void;
   /** 22/09/2026 (Matcon M0). Opcionais com default = comportamento de hoje:
    *  quem renderiza o CartItem sem passar nada continua no stepper. */
   matconEnabled?: boolean;
@@ -1260,6 +1270,17 @@ function CartItem({
   // Lixeira: 2 cliques (1o vira vermelho/alerta, 2o deleta dentro de 2s)
   const [confirmDelete, setConfirmDelete] = useState(false);
   const confirmTimer = useRef<any>(null);
+
+  // 17/11/2026 (p-157): o leitor de código também nos campos da linha. A
+  // rajada do bipe volta o campo ao que era e o código vai para o carrinho.
+  const ligarLeitorNaQtd = useLeitorNoCampo({
+    escrever: v => setInputVal(v.replace(/[^\d.,]/g, "")),
+    onLeitura: onScan,
+  });
+  const ligarLeitorNoPreco = useLeitorNoCampo({
+    escrever: v => handlePriceChangeText(v),
+    onLeitura: onScan,
+  });
 
   function handleFocus() {
     // No campo decimal o buffer abre já em pt-BR ("12,5"), que é o que o
@@ -1379,6 +1400,7 @@ function CartItem({
           <View style={s.priceEditRow}>
             <Text style={s.priceEditPrefix}>R$</Text>
             <TextInput
+              ref={ligarLeitorNoPreco}
               style={s.priceEditInput}
               value={priceBuf!}
               onChangeText={handlePriceChangeText}
@@ -1430,6 +1452,7 @@ function CartItem({
              com o sufixo da unidade em fonte menor ao lado (mockup .dec). */
           <View style={s.decCtrl}>
             <TextInput
+              ref={ligarLeitorNaQtd}
               testID={"carrinho-qty-" + item.productId}
               style={[
                 s.decVal,
@@ -1452,6 +1475,7 @@ function CartItem({
              tijolos clicando; o número se digita, como no campo decimal. */
           <View style={s.decCtrl}>
             <TextInput
+              ref={ligarLeitorNaQtd}
               testID={"carrinho-qty-" + item.productId}
               accessibilityLabel={"Quantas peças de " + item.name}
               style={[
@@ -1475,6 +1499,7 @@ function CartItem({
               <Text style={s.qtyBtnTxt}>−</Text>
             </Pressable>
             <TextInput
+              ref={ligarLeitorNaQtd}
               testID={"carrinho-qty-" + item.productId}
               style={[
                 s.qtyVal,

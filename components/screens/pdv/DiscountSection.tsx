@@ -3,6 +3,7 @@ import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { WebPortal } from "@/components/WebPortal";
+import { useLeitorNoCampo } from "@/hooks/useLeitorNoCampo";
 import {
   LIMITE_SEM_CONFIRMACAO_PCT, avisoDoLimite, resolverDescontoManual, textoDoPct,
 } from "@/utils/descontoManual";
@@ -31,6 +32,9 @@ type Props = {
   confirmacao?: ConfirmacaoDoDesconto;
   /** Acima de 50% e ainda não confirmado. */
   pendente?: boolean;
+  /** 17/11/2026 (p-157): bipe com o cursor no desconto vai para o carrinho.
+   *  Sem a prop (a troca), o campo é o de sempre. */
+  onScan?: (code: string) => void;
 };
 
 /**
@@ -43,9 +47,10 @@ type Props = {
  */
 export function DiscountSection({
   total, discountType, setDiscountType, discountValue, setDiscountValue, manualDiscountAmount, clearDiscount,
-  confirmacao, pendente,
+  confirmacao, pendente, onScan,
 }: Props) {
   const d = resolverDescontoManual(total, discountType, discountValue);
+  const ligarLeitor = useLeitorNoCampo({ escrever: setDiscountValue, onLeitura: onScan });
   const aviso = avisoDoLimite(d);
 
   return (
@@ -72,6 +77,7 @@ export function DiscountSection({
 
         {/* Value input */}
         <TextInput
+          ref={ligarLeitor}
           testID="desconto-campo"
           style={[s.input, (aviso || pendente) && s.inputError]}
           value={discountValue}
