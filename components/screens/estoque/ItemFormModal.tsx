@@ -104,6 +104,10 @@ import { SecaoPersonalizacao } from "./item-form/SecaoPersonalizacao";
 // 17/11/2026 (p-178): a ficha técnica (composição) do Studio, mesma trava.
 import { SecaoComposicao } from "./item-form/SecaoComposicao";
 import { avisoDePromocaoNoCadastro } from "@/components/screens/blackfriday/dePor/regrasDePor";
+// 17/11/2026 (E2, estoque-portas-mockup-17-11.html, partes 2 e 3): a faixa
+// "Cadastrar vários" no cadastro novo de produto. Só existe quando o pai
+// passa `cadastrarVarios` (hoje, só o Estoque).
+import { CadastrarVariosEscolha, FaixaCadastrarVarios, type AcoesCadastrarVarios } from "./CadastrarVarios";
 import {
   capaDa, chaveDaCor, duracaoParaMinutos, gerarCodigoServico,
   lerDuracaoDoServico, mascaraDeValor, matrizDaGrade, gravacaoDaDuracao, mesclarPaiNaGrade, motivosQueBloqueiam, normalizarMapaDaGrade, temProgressoAlemDoNome, totalDaMatriz,
@@ -161,15 +165,17 @@ type Props = {
   initialType?: ItemType;
   editProduct?: Product | null;
   onSaved?: () => void;
+  /** E2: com isto, o cadastro novo de produto ganha a faixa "Cadastrar vários". */
+  cadastrarVarios?: AcoesCadastrarVarios;
 };
 
-export function ItemFormModal({ visible, onClose, initialType = "product", editProduct, onSaved }: Props) {
+export function ItemFormModal({ visible, onClose, initialType = "product", editProduct, onSaved, cadastrarVarios }: Props) {
   const largura = useLarguraDaJanela();
   const duasColunas = usaDuasColunas(largura, IS_WEB);
   const narrow = !duasColunas;
 
   const qc = useQueryClient();
-  const { company, consolidatedView } = useAuthStore();
+  const { company, consolidatedView, isDemo } = useAuthStore();
   const { products, addProduct, updateProduct } = useProducts();
   const { byId: categoriaPorId, assignProductCategories } = useCategories();
   const breadcrumbLabel = useBreadcrumbLabel();
@@ -265,6 +271,10 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   const [confirmarSaida, setConfirmarSaida] = useState(false);
   // p-173: o editor de personalização aberto por cima do cadastro.
   const [fichaAberta, setFichaAberta] = useState(false);
+  // E2: o miolo do modal trocado pela escolha "Cadastrar vários". E, com
+  // algo digitado, a confirmação de saída leva para lá em vez de fechar.
+  const [varios, setVarios] = useState(false);
+  const [saidaParaVarios, setSaidaParaVarios] = useState(false);
   // p-178: a ficha técnica (composição) aberta por cima do cadastro.
   const [composicaoAberta, setComposicaoAberta] = useState(false);
   // Duplicata escolhida com um cadastro em andamento: espera confirmação.
@@ -507,6 +517,8 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
   useEffect(() => {
     if (!visible) return;
     semear(editProduct || null, initialType);
+    setSaidaParaVarios(false);
+    setVarios(!!cadastrarVarios?.abrirNaEscolha && !editProduct && initialType === "product");
     // Semeia UMA vez por abertura: o modal é dono do próprio estado
     // depois disso (salvar invalida a lista de produtos, e a prop
     // editProduct chegaria de volta sobrescrevendo o que está na tela).
@@ -910,8 +922,26 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     : (!!nome.trim() || temProgressoAlemDoNome(camposDoCadastro()));
 
   function pedirFechar() {
+    if (varios) { onClose(); return; }
+    setSaidaParaVarios(false);
     if (temProgresso) setConfirmarSaida(true);
     else onClose();
+  }
+
+  // ── E2: "Cadastrar vários" ───────────────────────────────
+  // Só no cadastro novo de produto, fora do demo e do consolidado (onde o
+  // Estoque nem tem barra), e só quando o pai entrega as ações.
+  const mostraFaixaVarios = !!cadastrarVarios && !modoEdicao && type === "product" && !isDemo && !consolidatedView;
+  function irParaVarios() {
+    // O que já foi digitado se perde na troca: pergunta antes, com o mesmo
+    // aviso do fechar.
+    if (temProgresso) { setSaidaParaVarios(true); setConfirmarSaida(true); return; }
+    entrarEmVarios();
+  }
+  function entrarEmVarios() {
+    semear(null, "product");
+    setSaidaParaVarios(false);
+    setVarios(true);
   }
 
   // Teclado (web): no cadastro, Enter em qualquer campo de uma linha
@@ -929,7 +959,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
     fechar: () => {
       if (remocaoPendente) setRemocaoPendente(null);
       else if (dupPendente) setDupPendente(null);
-      else if (confirmarSaida) setConfirmarSaida(false);
+      else if (confirmarSaida) { setConfirmarSaida(false); setSaidaParaVarios(false); }
       else pedirFechar();
     },
     fecharSheet: () => setCatSheet(false),
@@ -1311,8 +1341,18 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
           IS_WEB ? (painelWeb as any) : { backgroundColor: Colors.bg3 },
         ]}
       >
-        {/* cabeçalho */}
-        <View style={[s.header, narrow && { flexWrap: "wrap" }]}>
+        {varios && cadastrarVarios && (
+          <CadastrarVariosEscolha
+            narrow={narrow}
+            onVoltar={() => setVarios(false)}
+            onFechar={onClose}
+            onPlanilha={cadastrarVarios.onPlanilha}
+            onLista={cadastrarVarios.onLista}
+            planilhaOcupada={cadastrarVarios.planilhaOcupada}
+          />
+        )}
+        {/* cabeçalho — escondido (não desmontado) na escolha "Cadastrar vários" */}
+        <View style={[s.header, narrow && { flexWrap: "wrap" }, varios && s.oculto]}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
             <View style={s.headerIco}>
               <Icon name={isProduto ? "package" : "star"} size={16} color={Colors.violet3} />
@@ -1350,7 +1390,8 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
         </View>
 
         {/* corpo — as seções nunca desmontam; a ScrollView é uma só */}
-        <ScrollView style={s.body} contentContainerStyle={s.bodyContent} keyboardShouldPersistTaps="handled">
+        <ScrollView style={[s.body, varios && s.oculto]} contentContainerStyle={s.bodyContent} keyboardShouldPersistTaps="handled">
+          {mostraFaixaVarios ? <FaixaCadastrarVarios narrow={narrow} onPress={irParaVarios} /> : null}
           {perfil.notaFiscalSeparada ? (
             // Perfil Matcon: o que é do balcão vem antes do que é da vitrine.
             duasColunas ? (
@@ -1426,7 +1467,7 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
         </ScrollView>
 
         {/* rodapé */}
-        <View style={[s.footer, narrow && s.footerNarrow]}>
+        <View style={[s.footer, narrow && s.footerNarrow, varios && s.oculto]}>
           <View style={s.footerInfoBox}>
             {!!bloqueioTxt && !progressoTxt && <Icon name="alert" size={13} color={Colors.amber} />}
             <Text
@@ -1536,14 +1577,16 @@ export function ItemFormModal({ visible, onClose, initialType = "product", editP
                   : "Você começou a cadastrar um " + nomeDoTipo(type) + ". Se sair agora, o que preencheu será perdido."}
             </Text>
             <View style={s.exitActions}>
-              <Pressable style={s.exitStay} onPress={() => { setConfirmarSaida(false); setDupPendente(null); }}>
+              <Pressable testID="confirmar-saida-ficar" style={s.exitStay} onPress={() => { setConfirmarSaida(false); setDupPendente(null); setSaidaParaVarios(false); }}>
                 <Text style={s.exitStayTxt}>{dupPendente ? "Continuar aqui" : "Continuar"}</Text>
               </Pressable>
               <Pressable
+                testID="confirmar-saida-sair"
                 style={s.exitLeave}
                 onPress={() => {
                   if (dupPendente) { const d = dupPendente; setDupPendente(null); executarDuplicata(d); return; }
                   setConfirmarSaida(false);
+                  if (saidaParaVarios) { entrarEmVarios(); return; }
                   onClose();
                 }}
               >
@@ -1608,6 +1651,7 @@ const s = StyleSheet.create({
   tipoBtnAtivo: { backgroundColor: Colors.violet },
   tipoTxt: { fontSize: 12.5, fontWeight: "600", color: Colors.ink3 },
   body: { flex: 1 },
+  oculto: { display: "none" },
   bodyContent: { paddingHorizontal: 22, paddingTop: 16, paddingBottom: 12 },
   cols: { flexDirection: "row", alignItems: "flex-start", gap: 16 },
   colEsq: { flex: 1.35, gap: 14, minWidth: 0 },
