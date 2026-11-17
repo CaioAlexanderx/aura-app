@@ -121,7 +121,7 @@ export function LayoutDaVitrine() {
   // loja despublicada — quem já comprou continua vendo o próprio pedido —
   // e não levam cabeçalho de loja, sacola nem busca (mockup da Fase 4).
   const segmentos = useSegments() as string[];
-  const posCompra = ehPaginaDoPosCompra(segmentos);
+  const semCasca = ehPaginaSemCasca(segmentos);
 
   const navegar = useCallback((tela: TelaDaVitrine, modo: ModoDeNavegar) => {
     const href = caminhoDaTela(slugDoCaminho, tela) as any;
@@ -134,7 +134,7 @@ export function LayoutDaVitrine() {
 
   return (
     <ProvedorDaRota navegar={navegar}>
-      {posCompra ? (
+      {semCasca ? (
         <Slot />
       ) : (
         <CascaDaVitrine slug={slug} navegar={navegar}>
@@ -153,6 +153,19 @@ export function LayoutDaVitrine() {
 export function ehPaginaDoPosCompra(segmentos: readonly string[] | null | undefined): boolean {
   if (!segmentos || segmentos[0] !== "[slug]") return false;
   return segmentos[1] === "aprovacao" || segmentos[1] === "acompanhar";
+}
+
+/**
+ * `/<slug>/personalizar/<id>` (p-181): o personalizador no quadro da loja
+ * comum. Também sem a casca — a página mãe é a loja.
+ */
+export function ehPaginaDoQuadro(segmentos: readonly string[] | null | undefined): boolean {
+  return !!segmentos && segmentos[0] === "[slug]" && segmentos[1] === "personalizar";
+}
+
+/** As páginas no endereço da loja que o layout desenha sem a casca. */
+export function ehPaginaSemCasca(segmentos: readonly string[] | null | undefined): boolean {
+  return ehPaginaDoPosCompra(segmentos) || ehPaginaDoQuadro(segmentos);
 }
 
 /**

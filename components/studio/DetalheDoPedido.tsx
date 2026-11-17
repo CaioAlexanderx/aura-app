@@ -1,0 +1,871 @@
+// ============================================================
+// AURA STUDIO · Detalhe de pedido
+//
+// Camada 1 Fase C: PaymentCard + gate de produção por sinal.
+// P1 (30/05): gate movido do frontend pro backend.
+// advance() chama doAdvance() diretamente; doAdvance() trata
+// 409 deposit_required do backend — fonte da verdade é o servidor.
+// force: true enviado no retry quando lojista confirma fora do gate.
+//
+// 17/11/2026 (p-176): a tela saiu de app/studio/(estudio)/pedidos/[id].tsx
+// para cá, sem mudar o que ela faz, para o shell Negócio montar o mesmo
+// detalhe em /personalizados/pedido/[id]. As props são todas opcionais: sem
+// nenhuma (a rota do /studio), o detalhe é o de sempre.
+// ============================================================
+import { useEffect, useState, useCallback, useMemo, type ReactNode } from "react";
+import {
+  View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Linking,
+  Modal, TextInput, Image,
+} from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
+import { confirmAlert, notify } from "@/utils/webAlert";
+import { Icon } from "@/components/Icon";
+import type { StudioPalette } from "@/constants/studio-tokens";
+import { useStudioTokens, useStudioTheme, useStudioSemantic } from "@/contexts/StudioThemeMode";
+import { StudioScreen } from "@/components/studio/StudioScreen";
+import { StudioPageHeader } from "@/components/studio/StudioPageHeader";
+import { StudioLoading } from "@/components/studio/StudioLoading";
+import { StudioEmpty } from "@/components/studio/StudioEmpty";
+import { useAuthStore } from "@/stores/auth";
+import { studioApi, type StudioOrderDetail, type StudioProductionStatus, type StudioPayment, type StudioPaymentKind, type CustomizationConfig, type CustomizationField } from "@/services/studioApi";
+import { labelStudioStatus, colorStudioStatus } from "@/constants/studio-status";
+import { StudioBreadcrumb } from "@/components/studio/StudioBreadcrumb";
+import { PersonalizationPreview } from "@/components/studio/PersonalizationPreview";
+// A prévia do pedido desenha a arte pelo mesmo layout da vitrine (28/09/2026).
+import { arteDoLado } from "@/components/studio/storefront/valoresDoMotor";
+import { rotuloDaChave, valorDaChave, chaveLateralVisivel, ladoComConteudo } from "@/components/studio/customizationConfig";
+import { BlocoPagamentoDoPedido } from "@/components/studio/BlocoPagamentoDoPedido";
+import { ApprovalRequestModal } from "@/components/studio/ApprovalRequestModal";
+import { temBlocoDePagamento, situacaoDoPagamento, reais, numeroDoPedido, comprovanteEhPdf } from "@/components/studio/pagamentoDoPedido";
+import { separarReferencia } from "@/components/studio/referenciaDoAjuste";
+import { ART_SERVICE_FIELD_ID, labelForArtServiceValue } from "@/components/studio/artService";
+import { nomeDaCor } from "@/components/studio/nomeDaCor";
+import { etapaDoPedido } from "@/components/studio/etapaDoPedido";
+import { botaoDoRodape, folhaDeBaixo, useModalNoCelular } from "@/components/studio/modalNoCelular";
+
+const fmtMoeda = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Partial: "Aguardando personalização" e "Cancelado" não avançam por aqui.
+const NEXT: Partial<Record<StudioProductionStatus, StudioProductionStatus | null>> = {
+  pending_art: "approved",
+  approved: "in_production",
+  in_production: "ready",
+  ready: "delivered",
+  delivered: null,
+};
+
+function isHexColor(v: any): boolean {
+  return typeof v === "string" && /^#[0-9a-fA-F]{3,8}$/.test(v);
+}
+
+// FIX (bug #17 QA): "Vencimento" era um TextInput livre pra AAAA-MM-DD sem
+// máscara nem validação. Máscara simples (só dígitos, dash automático) +
+// atalhos relativos evitam formato errado.
+function maskDateInput(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 8);
+  const y = digits.slice(0, 4);
+  const m = digits.slice(4, 6);
+  const d = digits.slice(6, 8);
+  return [y, m, d].filter(Boolean).join("-");
+}
+
+function addDaysISO(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function isUrlDeArquivo(v: any): boolean {
+  return typeof v === "string" && /^https?:\/\//i.test(v.trim());
+}
+
+// ── ItemCustomization ─────────────────────────────────────────────────────────────────────
+// FIX (bug #6 QA): personalização era exibida como JSON cru em fonte
+// monoespaçada. Agora renderiza PersonalizationPreview (mesmo componente
+// usado em CollectCustomizationModal) + lista rótulo/valor legível, com
+// swatch quando o valor é uma cor hex. JSON cru fica atrás de um toggle
+// "ver dados brutos".
+function ItemCustomization({
+  customization, config, t, s,
+}: {
+  customization: Record<string, any>;
+  config: CustomizationConfig | null | undefined;
+  t: StudioPalette;
+  s: ReturnType<typeof buildStyles>;
+}) {
+  const [showRaw, setShowRaw] = useState(false);
+  const fieldsById: Record<string, CustomizationField> = {};
+  for (const f of config?.fields || []) fieldsById[f.id] = f;
+  const entries = Object.entries(customization || {}).filter(([key, value]) =>
+    chaveLateralVisivel(key, value, config)
+  );
+  const ladoPreview = ladoComConteudo(config, customization || {});
+
+  return (
+    <View style={s.custBox}>
+      <Text style={s.custTitle}>Personalização</Text>
+      {config ? (
+        <View style={{ alignItems: "center", marginVertical: 8 }}>
+          <PersonalizationPreview config={config} values={customization} size={160} showLabel={false} side={ladoPreview} arte={arteDoLado(config, customization, ladoPreview)} />
+        </View>
+      ) : null}
+      <View style={{ gap: 6, marginTop: 4 }}>
+        {entries.length === 0 ? (
+          <Text style={s.custRowValue}>—</Text>
+        ) : entries.map(([key, value]) => {
+          const label = rotuloDaChave(key, fieldsById, value);
+          const campo = fieldsById[key];
+
+          // FIX (achado 2e do QA): o serviço de arte gravava o valor cru
+          // (`designer`, `adjust`) — a lojista lia código, não o caminho
+          // que a cliente escolheu.
+          if (key === ART_SERVICE_FIELD_ID) {
+            return (
+              <View key={key} style={s.custRow}>
+                <Text style={s.custRowLabel}>{label}</Text>
+                <Text style={s.custRowValue} numberOfLines={2}>{labelForArtServiceValue(value)}</Text>
+              </View>
+            );
+          }
+
+          // FIX (achado 2d do QA): "Cor: #000000" — bolinha + nome em
+          // português (ou o rótulo que a lojista cadastrou pro swatch),
+          // com o hex ainda visível (menor) pra quem confere na prensa.
+          if (isHexColor(value)) {
+            const rotuloCadastrado = (campo?.config as any)?.choices?.find(
+              (c: any) => c?.value === value
+            )?.label;
+            return (
+              <View key={key} style={s.custRow}>
+                <Text style={s.custRowLabel}>{label}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 }}>
+                  <View style={[s.custSwatch, { backgroundColor: value }]} />
+                  <Text style={s.custRowValue} numberOfLines={1}>{nomeDaCor(value, rotuloCadastrado)}</Text>
+                  <Text style={s.custRowHex}>{String(value).toUpperCase()}</Text>
+                </View>
+              </View>
+            );
+          }
+
+          // FIX (achado 2c do QA): a foto/arquivo que a cliente mandou
+          // mostrava a URL crua inteira. Miniatura de 80px pra imagem
+          // (com link pra abrir o arquivo original); PDF vira só o link.
+          if (isUrlDeArquivo(value)) {
+            const ehPdf = comprovanteEhPdf(value);
+            return (
+              <View key={key} style={[s.custRow, { alignItems: "flex-start" }]}>
+                <Text style={s.custRowLabel}>{label}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  {!ehPdf ? (
+                    <Image source={{ uri: value }} style={s.custThumb} resizeMode="cover" />
+                  ) : null}
+                  <Pressable
+                    onPress={() => Linking.openURL(value)}
+                    accessibilityRole="link"
+                    accessibilityLabel={`Abrir ${label} em outra aba`}
+                    hitSlop={6}
+                  >
+                    <Text style={s.custFileLink}>Abrir arquivo</Text>
+                  </Pressable>
+                </View>
+              </View>
+            );
+          }
+
+          return (
+            <View key={key} style={s.custRow}>
+              <Text style={s.custRowLabel}>{label}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 }}>
+                <Text style={s.custRowValue} numberOfLines={2}>{valorDaChave(value)}</Text>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+      <Pressable onPress={() => setShowRaw((v) => !v)} style={s.custRawToggle}>
+        <Icon name={showRaw ? "chevron-up" : "chevron-down"} size={12} color={t.ink3} />
+        <Text style={s.custRawToggleTxt}>{showRaw ? "Ocultar dados brutos" : "Ver dados brutos"}</Text>
+      </Pressable>
+      {showRaw ? <Text style={s.custBody}>{safeJson(customization)}</Text> : null}
+    </View>
+  );
+}
+
+// ── PaymentCard ───────────────────────────────────────────────────────────────────────────
+type PaymentCardProps = {
+  orderId: string;
+  companyId: string;
+  depositRequired: number | null | undefined;
+  depositPaid: boolean | undefined;
+  onDepositReleased: () => void;
+};
+
+function PaymentCard({ orderId, companyId, depositRequired, depositPaid, onDepositReleased }: PaymentCardProps) {
+  const tk = useStudioTokens();
+  const { isDark } = useStudioTheme();
+  const sem = useStudioSemantic();
+  const ps = useMemo(() => buildPs(tk), [tk]);
+  // Etapa 4 (05/10): no celular as confirmações são folha de baixo, com dois botões de 44 px.
+  const celular = useModalNoCelular();
+  const folha = folhaDeBaixo(celular);
+  const btnFolha = botaoDoRodape(celular);
+  const [payments, setPayments] = useState<StudioPayment[]>([]);
+  const [loadingPay, setLoadingPay] = useState(true);
+  // FIX (bug #13 QA): erro no fetch de pagamentos não dava toast nenhum —
+  // ficava um card silenciosamente "sem pagamentos". Agora avisa + oferece
+  // retry.
+  const [payError, setPayError] = useState<string | null>(null);
+  const [acting, setActing] = useState(false);
+  const [markModal, setMarkModal] = useState(false);
+  const [markTarget, setMarkTarget] = useState<StudioPayment | null>(null);
+  const [addModal, setAddModal] = useState(false);
+  const [addKind, setAddKind] = useState<StudioPaymentKind>("deposit");
+  const [addAmount, setAddAmount] = useState("");
+  const [addDueAt, setAddDueAt] = useState("");
+  const [chargeInfo, setChargeInfo] = useState<{ instructions: string; pix_code: string | null } | null>(null);
+  const [chargeModal, setChargeModal] = useState(false);
+
+  const loadPayments = useCallback(async () => {
+    setLoadingPay(true);
+    try {
+      const res = await studioApi.listOrderPayments(companyId, orderId);
+      setPayments(res.payments || []);
+      setPayError(null);
+    } catch (e: any) {
+      setPayments([]);
+      const msg = e?.message || "Não foi possível carregar os pagamentos.";
+      setPayError(msg);
+      notify("Erro", msg);
+    }
+    finally { setLoadingPay(false); }
+  }, [companyId, orderId]);
+
+  useEffect(() => { loadPayments(); }, [loadPayments]);
+
+  const hasDeposit = (depositRequired ?? 0) > 0;
+  const showCard = hasDeposit || payments.length > 0;
+  if (!showCard) return null;
+
+  const handleMarkPaid = async () => {
+    if (!markTarget) return;
+    setActing(true);
+    try {
+      const res = await studioApi.markPaymentPaid(companyId, markTarget.id, { method: "pix" });
+      setMarkModal(false);
+      setMarkTarget(null);
+      await loadPayments();
+      if (res.deposit_released) onDepositReleased();
+    } catch { notify("Erro", "Não foi possível confirmar o pagamento."); }
+    finally { setActing(false); }
+  };
+
+  const handleChargeLink = async (payment: StudioPayment) => {
+    setActing(true);
+    try {
+      const res = await studioApi.createChargeLink(companyId, payment.id);
+      setChargeInfo({ instructions: (res as any).instructions || "", pix_code: res.pix_code });
+      setChargeModal(true);
+    } catch { notify("Erro", "Não foi possível gerar informações de cobrança."); }
+    finally { setActing(false); }
+  };
+
+  const handleAddMarco = async () => {
+    const amt = parseFloat(addAmount.replace(",", "."));
+    if (!amt || amt <= 0) { notify("Valor inválido", "Informe um valor maior que zero."); return; }
+    setActing(true);
+    try {
+      await studioApi.createOrderPayment(companyId, orderId, { kind: addKind, amount: amt, due_at: addDueAt || null, method: undefined });
+      setAddModal(false);
+      setAddAmount(""); setAddDueAt(""); setAddKind("deposit");
+      await loadPayments();
+    } catch { notify("Erro", "Não foi possível criar o marco de pagamento."); }
+    finally { setActing(false); }
+  };
+
+  const kindLabel: Record<StudioPaymentKind, string> = { deposit: "Sinal", balance: "Saldo", full: "Total" };
+  const statusPillStyle = (status: StudioPayment["status"]) => {
+    if (status === "paid")      return { bg: sem.approved.soft, fg: sem.approved.ink };
+    if (status === "cancelled") return { bg: sem.neutral.soft,  fg: sem.neutral.ink };
+    return { bg: sem.waiting.soft, fg: sem.waiting.ink };
+  };
+
+  return (
+    <View style={[ps.section]}>
+      <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 10, gap: 8 }}>
+        {/* 26/09/2026: era "PAGAMENTOS". O Pix da vitrine ganhou o bloco
+            "Pagamento" próprio; este card é o dos marcos (sinal e saldo) da
+            encomenda, e o nome igual confundia os dois (LJ-33). */}
+        <Text style={ps.eyebrow}>SINAL E SALDO</Text>
+        {hasDeposit && (
+          <View style={[ps.pill, depositPaid ? { backgroundColor: sem.approved.soft } : { backgroundColor: sem.waiting.soft }]}>
+            <Text style={[ps.pillTxt, depositPaid ? { color: sem.approved.ink } : { color: sem.waiting.ink }]}>
+              {depositPaid ? "✓ Sinal recebido — produção liberada" : `⚠ Sinal pendente — R$ ${Number(depositRequired).toFixed(2)}`}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {loadingPay ? <ActivityIndicator size="small" color={tk.primary} /> : payError ? (
+        // FIX (bug #13 QA): erro dedicado com retry em vez de "sumir" os
+        // pagamentos silenciosamente.
+        <View style={ps.payErrorBox}>
+          <Icon name="alert-circle" size={14} color={sem.danger.ink} />
+          <Text style={ps.payErrorTxt}>{payError}</Text>
+          <Pressable onPress={loadPayments} style={ps.payRetryBtn}>
+            <Text style={ps.payRetryTxt}>Tentar de novo</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <>
+          {payments.map((p) => {
+            const col = statusPillStyle(p.status);
+            return (
+              <View key={p.id} style={ps.payRow}>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <Text style={ps.payLabel}>{kindLabel[p.kind as StudioPaymentKind] || p.kind}</Text>
+                    <Text style={ps.payAmount}>R$ {Number(p.amount).toFixed(2)}</Text>
+                    <View style={[ps.pill, { backgroundColor: col.bg }]}>
+                      <Text style={[ps.pillTxt, { color: col.fg }]}>
+                        {p.status === "paid" ? "Pago" : p.status === "cancelled" ? "Cancelado" : "Pendente"}
+                      </Text>
+                    </View>
+                  </View>
+                  {p.due_at ? <Text style={ps.paySub}>Vence: {new Date(p.due_at).toLocaleDateString("pt-BR")}</Text> : null}
+                  {p.paid_at ? <Text style={ps.paySub}>Pago em: {new Date(p.paid_at).toLocaleDateString("pt-BR")}</Text> : null}
+                </View>
+                {p.status === "pending" && (
+                  <View style={{ flexDirection: "row", gap: 6 }}>
+                    <Pressable style={[ps.actionBtn, { backgroundColor: tk.success }]} disabled={acting} onPress={() => { setMarkTarget(p); setMarkModal(true); }}>
+                      <Text style={ps.actionBtnTxt}>Registrar Pix recebido</Text>
+                    </Pressable>
+                    <Pressable style={[ps.actionBtn, { backgroundColor: tk.primary }]} disabled={acting} onPress={() => handleChargeLink(p)}>
+                      <Text style={ps.actionBtnTxt}>Cobrar via loja</Text>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            );
+          })}
+          <Pressable style={[ps.actionBtn, { backgroundColor: tk.accent, alignSelf: "flex-start", marginTop: 10 }]} onPress={() => setAddModal(true)}>
+            <Text style={ps.actionBtnTxt}>+ Adicionar marco</Text>
+          </Pressable>
+        </>
+      )}
+
+      <Modal visible={markModal} transparent animationType="fade">
+        <View style={[ps.modalOverlay, folha.fundo]}><View style={[ps.modalBox, folha.caixa]} testID="folha-do-marco">
+          <Text style={ps.modalTitle}>Confirmar recebimento</Text>
+          <Text style={ps.modalBody}>Marcar {markTarget ? `R$ ${Number(markTarget.amount).toFixed(2)}` : ""} como recebido via Pix?</Text>
+          <View style={{ flexDirection: "row", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+            <Pressable style={[ps.modalBtn, { backgroundColor: tk.bgSoft }, btnFolha]} onPress={() => { setMarkModal(false); setMarkTarget(null); }}><Text style={{ color: tk.ink2, fontWeight: "600" }}>Cancelar</Text></Pressable>
+            <Pressable style={[ps.modalBtn, { backgroundColor: tk.success }, btnFolha]} disabled={acting} onPress={handleMarkPaid}><Text style={{ color: "#fff", fontWeight: "700" }}>{acting ? "Salvando..." : "Confirmar"}</Text></Pressable>
+          </View>
+        </View></View>
+      </Modal>
+
+      <Modal visible={chargeModal} transparent animationType="fade">
+        <View style={[ps.modalOverlay, folha.fundo]}><View style={[ps.modalBox, folha.caixa]} testID="folha-do-marco">
+          <Text style={ps.modalTitle}>Informações de pagamento</Text>
+          {chargeInfo?.pix_code ? <View style={ps.pixBox}><Text style={ps.pixLabel}>Chave Pix</Text><Text style={ps.pixCode}>{chargeInfo.pix_code}</Text></View> : null}
+          {chargeInfo?.instructions ? <Text style={[ps.modalBody, { marginTop: 10 }]}>{chargeInfo.instructions}</Text> : null}
+          <Pressable style={[ps.modalBtn, { backgroundColor: tk.primary, marginTop: 16, alignSelf: "flex-end" }, celular && { alignSelf: "stretch", minHeight: 44, alignItems: "center", justifyContent: "center" }]} onPress={() => setChargeModal(false)}><Text style={{ color: "#fff", fontWeight: "700" }}>Fechar</Text></Pressable>
+        </View></View>
+      </Modal>
+
+      <Modal visible={addModal} transparent animationType="fade">
+        <View style={[ps.modalOverlay, folha.fundo]}><View style={[ps.modalBox, folha.caixa]} testID="folha-do-marco">
+          <Text style={ps.modalTitle}>Adicionar marco de pagamento</Text>
+          <Text style={ps.inputLabel}>Tipo</Text>
+          <View style={{ flexDirection: "row", gap: 6, marginBottom: 12 }}>
+            {(["deposit", "balance", "full"] as StudioPaymentKind[]).map((k) => (
+              <Pressable key={k} style={[ps.kindPill, addKind === k && { backgroundColor: tk.primary, borderColor: tk.primary }]} onPress={() => setAddKind(k)}>
+                <Text style={[ps.kindPillTxt, addKind === k && { color: "#fff" }]}>{kindLabel[k]}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={ps.inputLabel}>Valor (R$)</Text>
+          <TextInput style={ps.input} keyboardType="decimal-pad" placeholder="0,00" value={addAmount} onChangeText={setAddAmount} />
+          <Text style={ps.inputLabel}>Vencimento (opcional, AAAA-MM-DD)</Text>
+          <TextInput
+            style={ps.input}
+            placeholder="2026-06-30"
+            value={addDueAt}
+            onChangeText={(v) => setAddDueAt(maskDateInput(v))}
+            keyboardType="number-pad"
+            maxLength={10}
+          />
+          <View style={ps.dateShortcuts}>
+            {[{ label: "Hoje", days: 0 }, { label: "+7d", days: 7 }, { label: "+15d", days: 15 }].map((sc) => (
+              <Pressable key={sc.label} style={ps.dateChip} onPress={() => setAddDueAt(addDaysISO(sc.days))}>
+                <Text style={ps.dateChipTxt}>{sc.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <View style={{ flexDirection: "row", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+            <Pressable style={[ps.modalBtn, { backgroundColor: tk.bgSoft }, btnFolha]} onPress={() => { setAddModal(false); setAddAmount(""); setAddDueAt(""); }}><Text style={{ color: tk.ink2, fontWeight: "600" }}>Cancelar</Text></Pressable>
+            <Pressable style={[ps.modalBtn, { backgroundColor: tk.primary }, btnFolha]} disabled={acting} onPress={handleAddMarco}><Text style={{ color: "#fff", fontWeight: "700" }}>{acting ? "Salvando..." : "Criar marco"}</Text></Pressable>
+          </View>
+        </View></View>
+      </Modal>
+    </View>
+  );
+}
+
+// ── Tela principal ─────────────────────────────────────────────────────────────────────────────
+type ItemDaTrilha = { label: string; href?: string };
+
+export type DetalheDoPedidoProps = {
+  /** Trilha do alto. Padrão: Estúdio › Pedidos › Pedido N (o /studio). */
+  trilha?: (numeroDoPedido: string) => ItemDaTrilha[];
+  /** Sobretítulo do cabeçalho. Padrão: "PEDIDOS". */
+  eyebrow?: string;
+  /** Rota da ficha de produção. Padrão: a do /studio. `null` tira o botão. */
+  rotaDaFicha?: ((orderId: string) => string) | null;
+  /**
+   * Botões a mais no começo da linha de ações, com o pedido carregado e a
+   * etapa já corrigida (cancelado conta como cancelado). Sem a prop, nada.
+   */
+  acoesDaEtapa?: (ctx: {
+    order: StudioOrderDetail["order"];
+    status: StudioProductionStatus | null;
+    recarregar: () => void;
+  }) => ReactNode;
+};
+
+const TRILHA_DO_STUDIO = (numero: string): ItemDaTrilha[] => [
+  { label: "Estúdio", href: "/studio" },
+  { label: "Pedidos", href: "/studio/pedidos" },
+  { label: numero },
+];
+const FICHA_DO_STUDIO = (orderId: string) => `/studio/pedidos/ficha/${orderId}`;
+
+export function DetalheDoPedido({
+  trilha = TRILHA_DO_STUDIO,
+  eyebrow = "PEDIDOS",
+  rotaDaFicha = FICHA_DO_STUDIO,
+  acoesDaEtapa,
+}: DetalheDoPedidoProps = {}) {
+  const router = useRouter();
+  const params = useLocalSearchParams();
+  const oid = String(params?.id || "");
+  const { company } = useAuthStore();
+  const tk = useStudioTokens();
+  const { isDark } = useStudioTheme();
+  const s = useMemo(() => buildStyles(tk), [tk]);
+
+  const [data, setData] = useState<StudioOrderDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  // FIX (bug #13 QA): distingue "erro ao carregar" (com retry) de
+  // "pedido não encontrado" — antes os dois casos caíam no mesmo texto
+  // genérico e sem toast nenhum.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [acting, setActing] = useState(false);
+  // FIX (achado do QA, 28/09/2026): "Solicitar aprovação" no detalhe só
+  // levava pra Produção (deep-link ?intent=approval); a lojista tinha
+  // que achar o cartão do MESMO pedido lá pra abrir o modal de verdade.
+  // Mesmo padrão de app/studio/(estudio)/producao.tsx: Modal + estado local.
+  const [aprovacaoAberta, setAprovacaoAberta] = useState(false);
+  // FIX (bug #6 QA): customization_config por product_id, pra renderizar
+  // PersonalizationPreview + rótulos legíveis em vez de JSON cru.
+  const [configByProduct, setConfigByProduct] = useState<Record<string, CustomizationConfig | null>>({});
+
+  const load = useCallback(async () => {
+    // FIX (bug #14 QA): return antes do setLoading(false) deixava o
+    // spinner girando pra sempre quando company ainda não tinha carregado.
+    if (!company?.id || !oid) { setLoading(false); return; }
+    setLoading(true);
+    try {
+      const d = await studioApi.getOrder(company.id, oid);
+      setData(d);
+      setLoadError(null);
+    } catch (e: any) {
+      console.warn("[studio order detail]", e);
+      setData(null);
+      const msg = e?.message || "Erro ao carregar pedido";
+      setLoadError(msg);
+      notify("Erro", msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [company?.id, oid]);
+
+  // FIX (bug #15 QA): dados não recarregavam ao voltar pra essa tela —
+  // avançar status e voltar podia mostrar dado stale. useFocusEffect cobre
+  // mount inicial + toda vez que a tela ganha foco de novo.
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // Carrega customization_config de cada produto personalizado no pedido
+  // (mesmo endpoint usado em CollectCustomizationModal) pra dar nome/tipo
+  // aos campos crus de customization e alimentar o PersonalizationPreview.
+  useEffect(() => {
+    if (!company?.id || !data) return;
+    const cid = company.id;
+    const toFetch = (data.items || []).filter(
+      (it) => it.customization && it.product_id && !(it.product_id in configByProduct)
+    );
+    if (toFetch.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      toFetch.map((it) =>
+        studioApi.getCustomizationConfig(cid, it.product_id)
+          .then((res) => [it.product_id, res.config] as const)
+          .catch(() => [it.product_id, null] as const)
+      )
+    ).then((pairs) => {
+      if (cancelled) return;
+      setConfigByProduct((prev) => {
+        const next = { ...prev };
+        for (const [pid, cfg] of pairs) next[pid] = cfg;
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [company?.id, data, configByProduct]);
+
+  // P1: gate configurável — backend é a fonte da verdade.
+  // Se require_deposit_for_production estiver ON e sinal pendente,
+  // o backend retorna 409 deposit_required e doAdvance exibe Alert.
+  // force: true enviado no retry quando lojista confirma.
+  const doAdvance = async (next: StudioProductionStatus, force = false) => {
+    if (!data || !company?.id) return;
+    setActing(true);
+    try {
+      await studioApi.updateProductionStatus(company.id, oid, next, force || undefined);
+      await load();
+    } catch (e: any) {
+      const errCode = e?.data?.error ?? e?.error ?? '';
+      const is409 = (e?.status ?? e?.statusCode) === 409 || errCode === 'deposit_required';
+      if (next === 'in_production' && is409) {
+        const msg = e?.data?.message ?? 'Sinal não recebido. Iniciar produção mesmo assim?';
+        // FIX (bug #4 QA): Alert.alert é no-op no react-native-web.
+        confirmAlert(
+          'Sinal não recebido',
+          msg,
+          'Iniciar mesmo assim',
+          () => doAdvance(next, true),
+          { destructive: true }
+        );
+      } else {
+        // Sem toast, o botão "Avançar" simplesmente não fazia nada visível
+        // quando o backend recusava por outro motivo.
+        console.error('[advance production]', {
+          status: e?.status, code: e?.code, message: e?.message, data: e?.data,
+        });
+        const status = e?.status ? `[${e.status}] ` : '';
+        notify('Não foi possível avançar o pedido', `${status}${e?.data?.error || e?.message || ''}`.trim());
+      }
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const advance = () => {
+    if (!data || !company?.id) return;
+    const cur = etapaDoPedido(data.order) as StudioProductionStatus | null;
+    if (!cur) return;
+    const next = NEXT[cur];
+    if (!next) return;
+    // Gate removido do FE — backend decide (P1). doAdvance trata 409.
+    doAdvance(next);
+  };
+
+  // FIX (bug #19 QA): loading/empty fora do padrão — migrados pra
+  // StudioScreen + StudioLoading/StudioEmpty (mesmo padrão do resto do app).
+  if (loading) {
+    return (
+      <StudioScreen variant="reading">
+        <StudioLoading variant="skeleton-list" rows={5} />
+      </StudioScreen>
+    );
+  }
+
+  if (!data) {
+    // FIX (bug #13 QA): erro de carregamento (com retry) é distinto de
+    // "pedido não existe" — antes os dois casos mostravam o mesmo texto.
+    return (
+      <StudioScreen variant="reading">
+        <StudioEmpty
+          tone={loadError ? "warning" : "default"}
+          icon={loadError ? "alert-circle" : "search"}
+          title={loadError ? "Não deu para carregar o pedido" : "Pedido não encontrado"}
+          desc={loadError || undefined}
+          primaryCta={loadError ? { label: "Tentar de novo", onPress: load } : undefined}
+          secondaryCta={{ label: "Voltar", onPress: () => router.back() }}
+        />
+      </StudioScreen>
+    );
+  }
+
+  const { order, items, approvals } = data;
+  // LJ-33 (QA final 28/09/2026): pedido cancelado é "Cancelado" no selo e
+  // perde avançar/solicitar aprovação, mesmo com backend antigo (que
+  // mandava a etapa em que o pedido parou).
+  const status = etapaDoPedido(order) as StudioProductionStatus | null;
+  const statusCol = status ? colorStudioStatus(status, isDark) : { bg: tk.bgSoft, fg: tk.ink3 };
+  const next = status ? NEXT[status] : null;
+  const lastApproval = approvals?.[0] || null;
+
+  // 26/09/2026 (A1 do QA da lojista, P0): pagamento do pedido da vitrine.
+  // Enquanto pede ação (Pix a confirmar, comprovante a conferir), o bloco
+  // sobe para o topo em âmbar; depois de pago, desce para depois do cliente.
+  const mostraPagamento = temBlocoDePagamento(order);
+  const pagamentoNoTopo = mostraPagamento && situacaoDoPagamento(order).precisaAgir;
+  const blocoPagamento = mostraPagamento ? (
+    <BlocoPagamentoDoPedido pedido={order} companyIdDaSessao={company?.id} onAtualizado={load} />
+  ) : null;
+
+  return (
+    <StudioScreen variant="reading">
+      <StudioBreadcrumb items={trilha(numeroDoPedido(order))} />
+      <View style={s.container}>
+        {/* FIX (bug #19 QA): <Text style={s.h1}> fora do padrão — migrado
+            pra StudioPageHeader (mesmo componente usado no resto do app).
+            FIX (achado 2h do QA, 26/09/2026): o mesmo pedido mostrava três
+            identificadores diferentes (o "00001" cru do título, o uuid
+            fatiado da trilha, o uuid em caixa alta do cartão da Produção).
+            numeroDoPedido() é a fonte única — "Pedido 00001" em todo canto;
+            o uuid interno só existe pra debug (nenhuma tela mostra mais). */}
+        <StudioPageHeader
+          eyebrow={eyebrow}
+          title={numeroDoPedido(order)}
+          subtitle={`Criado em ${new Date(order.created_at).toLocaleString("pt-BR")} · ${items.length} ${items.length === 1 ? "item" : "itens"} · ${reais(order.total_amount || 0)}`}
+          rightSlot={
+            <View style={[s.statusPill, { backgroundColor: statusCol.bg }]}>
+              <Text style={[s.statusTxt, { color: statusCol.fg }]}>{labelStudioStatus(status)}</Text>
+            </View>
+          }
+        />
+
+        <View style={s.actionRow}>
+          {acoesDaEtapa ? acoesDaEtapa({ order, status, recarregar: load }) : null}
+          {next && (
+            <Pressable onPress={advance} disabled={acting} style={[s.actionBtn, { backgroundColor: tk.primary }]}>
+              <Icon name="arrow-right" size={16} color="#fff" />
+              <Text style={s.actionBtnTxt}>Avançar para "{labelStudioStatus(next)}"</Text>
+            </Pressable>
+          )}
+          {status === "pending_art" && (
+            <Pressable
+              onPress={() => setAprovacaoAberta(true)}
+              style={[s.actionBtn, { backgroundColor: tk.accent }]}
+              accessibilityLabel="Solicitar aprovação de arte pelo WhatsApp"
+            >
+              <Icon name="whatsapp" size={16} color="#fff" />
+              <Text style={s.actionBtnTxt}>Solicitar aprovação</Text>
+            </Pressable>
+          )}
+          {lastApproval?.mockup_url ? (
+            <Pressable onPress={() => Linking.openURL(lastApproval.mockup_url!)} style={[s.actionBtn, { backgroundColor: tk.paperCardElev, borderWidth: 1, borderColor: tk.ink4 }]}>
+              <Icon name="image" size={16} color={tk.ink2} />
+              <Text style={[s.actionBtnTxt, { color: tk.ink2 }]}>Ver mockup</Text>
+            </Pressable>
+          ) : null}
+          {/* 05/09/2026 (decisao do Caio): a ficha de producao em A5 — o
+              que vai pra bancada junto com a peca. Ver pedidos/ficha/[id]. */}
+          {rotaDaFicha ? (
+            <Pressable
+              testID="btn-ficha-de-producao"
+              onPress={() => router.push(rotaDaFicha(order.id) as any)}
+              style={[s.actionBtn, { backgroundColor: tk.paperCardElev, borderWidth: 1, borderColor: tk.ink4 }]}
+            >
+              <Icon name="file-text" size={16} color={tk.ink2} />
+              <Text style={[s.actionBtnTxt, { color: tk.ink2 }]}>Ficha de produção</Text>
+            </Pressable>
+          ) : null}
+        </View>
+
+        {pagamentoNoTopo ? blocoPagamento : null}
+
+        <View style={s.section}>
+          <Text style={s.sectionEyebrow}>CLIENTE</Text>
+          <Text style={s.sectionTitle}>{order.customer_name || "—"}</Text>
+          {order.customer_phone ? (
+            <Pressable onPress={() => Linking.openURL(`https://wa.me/${(order.customer_phone || "").replace(/\D/g, "")}`)} style={s.linkRow}>
+              <Icon name="message-circle" size={14} color={tk.primary} />
+              <Text style={s.link}>{order.customer_phone}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+
+        {!pagamentoNoTopo ? blocoPagamento : null}
+
+        <View style={s.section}>
+          <Text style={s.sectionEyebrow}>ITENS DO PEDIDO</Text>
+          {items.map((it) => {
+            const cfgDoItem = it.product_id ? configByProduct[it.product_id] : undefined;
+            // FIX (achado 2b do QA): o adicional do serviço de arte é
+            // cobrado UMA VEZ por linha (não multiplica pela quantidade —
+            // mesma regra de components/studio/storefront/precoDaSacola.ts).
+            // Sem ele, "1 × R$ 39,90" escondia o "+ R$ 10,00" que o total
+            // do pedido já cobrava.
+            const campoDeArte = (cfgDoItem?.fields || []).find((f) => f.id === ART_SERVICE_FIELD_ID);
+            const valorDeArte = campoDeArte ? it.customization?.[ART_SERVICE_FIELD_ID] : null;
+            const escolhaDeArte = (campoDeArte?.config as any)?.choices?.find((c: any) => c.value === valorDeArte);
+            const adicionalDeArte = Number(escolhaDeArte?.price_delta) || 0;
+            const totalDaLinha = Number(it.unit_price || 0) * Number(it.quantity || 0) + adicionalDeArte;
+            return (
+              <View key={it.id} style={s.itemCard}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.itemTitle}>{it.product_name}</Text>
+                  <Text style={s.itemSub}>
+                    {it.quantity} × R$ {fmtMoeda.format(Number(it.unit_price || 0))}
+                    {adicionalDeArte > 0 ? ` + R$ ${fmtMoeda.format(adicionalDeArte)} (${escolhaDeArte?.label || "serviço de arte"})` : ""}
+                    {adicionalDeArte > 0 ? ` · Total do item: R$ ${fmtMoeda.format(totalDaLinha)}` : ""}
+                  </Text>
+                  {it.customization ? (
+                    <ItemCustomization
+                      customization={it.customization}
+                      config={cfgDoItem}
+                      t={tk}
+                      s={s}
+                    />
+                  ) : null}
+                </View>
+              </View>
+            );
+          })}
+        </View>
+
+        {approvals?.length ? (
+          <View style={s.section}>
+            <Text style={s.sectionEyebrow}>HISTÓRICO DE APROVAÇÃO</Text>
+            {approvals.map((a) => {
+              const col = colorStudioStatus(a.status, isDark);
+              // A referência que a cliente anexou ao pedir ajuste vem na
+              // última linha da nota; aqui ela vira link (achado A4 do QA).
+              const nota = separarReferencia(a.response_note);
+              return (
+                <View key={a.id} style={s.approvalRow}>
+                  <View style={[s.approvalDot, { backgroundColor: col.fg }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.approvalTitle}>{labelStudioStatus(a.status)}</Text>
+                    <Text style={s.approvalSub}>
+                      {new Date(a.created_at).toLocaleString("pt-BR")}
+                      {nota.texto ? ` · "${nota.texto}"` : ""}
+                    </Text>
+                    {nota.referencia ? (
+                      <Pressable
+                        onPress={() => Linking.openURL(nota.referencia!)}
+                        accessibilityRole="link"
+                        accessibilityLabel="Abrir a referência que a cliente enviou"
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                        style={s.referenciaRow}
+                      >
+                        <Icon name="external_link" size={13} color={tk.primary} />
+                        <Text style={s.referenciaTxt}>Abrir referência da cliente</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
+
+        {company?.id ? (
+          <PaymentCard
+            orderId={oid}
+            companyId={company.id}
+            depositRequired={order.deposit_required}
+            depositPaid={order.deposit_paid}
+            onDepositReleased={load}
+          />
+        ) : null}
+      </View>
+
+      <Modal
+        visible={aprovacaoAberta}
+        animationType="slide"
+        onRequestClose={() => setAprovacaoAberta(false)}
+      >
+        {aprovacaoAberta && (
+          <ApprovalRequestModal
+            order={order as any}
+            onClose={() => setAprovacaoAberta(false)}
+            onSent={() => { setAprovacaoAberta(false); load(); }}
+          />
+        )}
+      </Modal>
+    </StudioScreen>
+  );
+}
+
+function safeJson(v: any): string {
+  try { return JSON.stringify(v, null, 2); } catch { return String(v); }
+}
+
+function buildStyles(t: StudioPalette) {
+  return StyleSheet.create({
+  container: { width: "100%" },
+  statusPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
+  statusTxt: { fontWeight: "800", fontSize: 12 },
+  actionRow: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginBottom: 18 },
+  actionBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
+  actionBtnTxt: { color: "#fff", fontWeight: "700", fontSize: 13 },
+  section: { backgroundColor: t.paperCard, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: t.ink5, marginBottom: 14 },
+  sectionEyebrow: { fontSize: 10, fontWeight: "800", color: t.ink3, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 8 },
+  sectionTitle: { fontSize: 15, fontWeight: "700", color: t.ink },
+  itemCard: { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: t.ink5 },
+  itemTitle: { fontWeight: "700", color: t.ink, fontSize: 13 },
+  itemSub: { color: t.ink3, fontSize: 12, marginTop: 2 },
+  custBox: { marginTop: 8, padding: 10, backgroundColor: t.bg, borderRadius: 10, borderWidth: 1, borderColor: t.ink5 },
+  custTitle: { fontSize: 10, fontWeight: "800", color: t.ink3, letterSpacing: 0.6 },
+  custBody: { fontSize: 11, color: t.ink2, marginTop: 4, fontFamily: "monospace" },
+  custRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8, paddingVertical: 4 },
+  custRowLabel: { fontSize: 11.5, color: t.ink3, fontWeight: "600" },
+  custRowValue: { fontSize: 12, color: t.ink, fontWeight: "600", textAlign: "right" },
+  custSwatch: { width: 14, height: 14, borderRadius: 7, borderWidth: 1, borderColor: t.ink5 },
+  custRowHex: { fontSize: 10.5, color: t.ink3, fontWeight: "600" },
+  custThumb: { width: 80, height: 80, borderRadius: 8, backgroundColor: t.bg, borderWidth: 1, borderColor: t.ink5 },
+  custFileLink: { color: t.primary, fontWeight: "700", fontSize: 12.5, textDecorationLine: "underline" },
+  custRawToggle: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 8, alignSelf: "flex-start" },
+  custRawToggleTxt: { fontSize: 11, color: t.ink3, fontWeight: "700" },
+  approvalRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: t.ink5 },
+  approvalDot: { width: 8, height: 8, borderRadius: 4 },
+  approvalTitle: { fontWeight: "700", color: t.ink, fontSize: 13 },
+  approvalSub: { color: t.ink3, fontSize: 11, marginTop: 2 },
+  referenciaRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 6, alignSelf: "flex-start", minHeight: 24 },
+  referenciaTxt: { color: t.primary, fontSize: 12, fontWeight: "700", textDecorationLine: "underline" },
+  linkRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 },
+  link: { color: t.primary, fontWeight: "600", fontSize: 12 },
+  });
+}
+
+function buildPs(t: StudioPalette) {
+  return StyleSheet.create({
+  section: { backgroundColor: t.paperCard, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: t.ink5, marginBottom: 14 },
+  eyebrow: { fontSize: 10, fontWeight: "800", color: t.ink3, letterSpacing: 0.8, textTransform: "uppercase" },
+  pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
+  pillTxt: { fontSize: 11, fontWeight: "700" },
+  payRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: t.ink5, flexWrap: "wrap" },
+  payLabel: { fontWeight: "700", color: t.ink, fontSize: 13 },
+  payAmount: { color: t.ink2, fontSize: 13 },
+  paySub: { color: t.ink3, fontSize: 11, marginTop: 2 },
+  payErrorBox: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  payErrorTxt: { color: t.ink2, fontSize: 12.5, flex: 1, minWidth: 140 },
+  payRetryBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: t.ink5 },
+  payRetryTxt: { color: t.ink2, fontSize: 12, fontWeight: "700" },
+  actionBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  actionBtnTxt: { color: "#fff", fontWeight: "700", fontSize: 12 },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center", padding: 24 },
+  modalBox: { backgroundColor: t.paperCardElev, borderRadius: 20, padding: 24, width: "100%", maxWidth: 420 },
+  modalTitle: { fontSize: 16, fontWeight: "800", color: t.ink, marginBottom: 8 },
+  modalBody: { fontSize: 13, color: t.ink2, lineHeight: 20 },
+  modalBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 },
+  pixBox: { backgroundColor: t.bg, borderRadius: 12, padding: 14, marginTop: 10, borderWidth: 1, borderColor: t.ink5 },
+  pixLabel: { fontSize: 10, fontWeight: "800", color: t.ink3, letterSpacing: 0.6 },
+  pixCode: { fontSize: 15, fontWeight: "700", color: t.primary, marginTop: 4 },
+  inputLabel: { fontSize: 11, fontWeight: "700", color: t.ink3, marginBottom: 4, marginTop: 10 },
+  input: { borderWidth: 1, borderColor: t.ink5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: t.ink, backgroundColor: t.bg },
+  dateShortcuts: { flexDirection: "row", gap: 6, marginTop: 6 },
+  dateChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: t.paperCardElev, borderWidth: 1, borderColor: t.ink5 },
+  dateChipTxt: { fontSize: 11, color: t.ink2, fontWeight: "700" },
+  kindPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: t.ink4, backgroundColor: t.paperCardElev },
+  kindPillTxt: { fontWeight: "700", fontSize: 12, color: t.ink2 },
+  });
+}

@@ -225,6 +225,56 @@ export function validateRequiredFields(
   return null;
 }
 
+/**
+ * A linha que "Adicionar a sacola" grava para a peca aberta: a validacao
+ * dos campos obrigatorios (a mesma config que a pagina mostra,
+ * camposDaVitrine) e a limpeza do lado que a cliente nao escolheu.
+ *
+ * Saiu de dentro do commitConfigure (p-181, 17/11/2026) sem mudar nada:
+ * o personalizador no quadro da loja comum precisa da MESMA linha, e
+ * uma copia seria a quinta regra que diverge entre as duas lojas.
+ * Devolve a mensagem do primeiro campo que falta, ou a linha sem o
+ * `lineId` (quem guarda decide o id).
+ */
+export function linhaDaPeca({
+  produto, values, qty, addBack, addMiddle,
+}: {
+  produto: StudioStoreProduct;
+  values: Record<string, any>;
+  qty: number;
+  addBack: boolean;
+  addMiddle: boolean;
+}): { erro: string } | { linha: Omit<CartLine, "lineId"> } {
+  // A MESMA config que a página mostra (camposDaVitrine): a galeria
+  // vazia vira envio de arquivo, e validar a config crua barrava a
+  // peça pedindo arte num campo que a cliente nem vê (QA 28/09).
+  const cfg = configDisponivel(produto.customization_config, produto.templates);
+  const backActive = versoEfetivo(cfg, addBack);
+  const middleActive = meioEfetivo(cfg, addMiddle);
+  const faltou = validateRequiredFields(cfg, values, backActive, middleActive);
+  if (faltou) return { erro: faltou };
+  // has_middle_selected nao e campo, e bandeira -- guardamos ela dentro
+  // do proprio `values` (ver nota em lineUnitPrice) pra sobreviver ate
+  // o carrinho/checkout, ja que CartLine nao tem um slot dedicado tipo
+  // hasBackSelected pro meio.
+  let valuesToCommit: Record<string, any> = { ...values, has_middle_selected: addMiddle };
+  if (cfg?.has_back === true && !backActive && cfg.fields) {
+    const cleaned: Record<string, any> = { ...valuesToCommit };
+    for (const f of cfg.fields) {
+      if (sideOf(f) === "back") delete cleaned[f.id];
+    }
+    valuesToCommit = cleaned;
+  }
+  if (cfg?.has_middle === true && !middleActive && cfg.fields) {
+    const cleaned: Record<string, any> = { ...valuesToCommit };
+    for (const f of cfg.fields) {
+      if (sideOf(f) === "middle") delete cleaned[f.id];
+    }
+    valuesToCommit = cleaned;
+  }
+  return { linha: { product: produto, qty, values: valuesToCommit, hasBackSelected: addBack } };
+}
+
 // S6 — a faixa de quantidade incide sobre o preco de tabela; os deltas de
 // personalizacao somam DEPOIS; o servico de arte entra uma vez por linha.
 // E a mesma ordem do backend (services/precoDoStudio.js): se os dois
@@ -743,6 +793,15 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
     navegarRef.current?.({ tipo: "produto", id: String(product.id) }, "trocar");
   }
 
+  /** A linha da peca aberta (linhaDaPeca), ou null sem peca aberta. */
+  function linhaDaPecaAberta() {
+    if (!activeProduct) return null;
+    return linhaDaPeca({
+      produto: activeProduct, values: editingValues, qty: editingQty,
+      addBack: editingAddBack, addMiddle: editingAddMiddle,
+    });
+  }
+
   /**
    * @param opcoes.direto "Comprar agora" — pula a lista e vai pro
    *   checkout. Quem clica ali ja decidiu; devolver pra vitrine faz a
@@ -751,37 +810,14 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
    */
   function commitConfigure(opcoes?: { direto?: boolean }) {
     if (!activeProduct) return;
-    // A MESMA config que a página mostra (camposDaVitrine): a galeria
-    // vazia vira envio de arquivo, e validar a config crua barrava a
-    // peça pedindo arte num campo que a cliente nem vê (QA 28/09).
-    const cfg = configDisponivel(activeProduct.customization_config, activeProduct.templates);
-    const backActive = effectiveBackSelected(cfg, editingAddBack);
-    const middleActive = effectiveMiddleSelected(cfg, editingAddMiddle);
-    const faltou = validateRequiredFields(cfg, editingValues, backActive, middleActive);
-    if (faltou) {
-      setError(faltou);
+    const r = linhaDaPecaAberta();
+    if (!r) return;
+    if ("erro" in r) {
+      setError(r.erro);
       return;
     }
     setError(null);
-    // has_middle_selected nao e campo, e bandeira -- guardamos ela dentro
-    // do proprio `values` (ver nota em lineUnitPrice) pra sobreviver ate
-    // o carrinho/checkout, ja que CartLine nao tem um slot dedicado tipo
-    // hasBackSelected pro meio.
-    let valuesToCommit: Record<string, any> = { ...editingValues, has_middle_selected: editingAddMiddle };
-    if (cfg?.has_back === true && !backActive && cfg.fields) {
-      const cleaned: Record<string, any> = { ...valuesToCommit };
-      for (const f of cfg.fields) {
-        if (sideOf(f) === "back") delete cleaned[f.id];
-      }
-      valuesToCommit = cleaned;
-    }
-    if (cfg?.has_middle === true && !middleActive && cfg.fields) {
-      const cleaned: Record<string, any> = { ...valuesToCommit };
-      for (const f of cfg.fields) {
-        if (sideOf(f) === "middle") delete cleaned[f.id];
-      }
-      valuesToCommit = cleaned;
-    }
+    const valuesToCommit = r.linha.values;
     if (editingLineId) {
       setCart((prev) =>
         prev.map((l) =>
@@ -1197,6 +1233,8 @@ export function useStorefront(slug: string, opcoes?: { navegar?: NavegarNaVitrin
     // Fase 2: o total da linha (servico de arte uma vez por linha).
     configuringLineTotal, configuringArtDelta,
     openConfigure, editCartLine, commitConfigure,
+    // p-181: a linha que o commit gravaria, para o quadro da loja comum.
+    linhaDaPecaAberta,
     activeSiblings, switchModel,
     vitrine,
     // Pedir outro igual (Fase 4)

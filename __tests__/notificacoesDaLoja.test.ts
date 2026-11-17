@@ -214,6 +214,29 @@ describe("ordersToEvents — o feed antigo continua funcionando", () => {
     expect(e.title).toContain("Caixa");
     expect(e.cta_route).toBe("/vendas");
   });
+
+  test("card do Studio com cta_route (frente Personalizados) navega para ela", () => {
+    const [e] = ordersToEvents([{
+      id: "5", order_number: 42, total: 10, status: "x", created_at: h(1),
+      source: "studio", cta_route: "/personalizados/pedido/5", personalizados_no_negocio: true,
+    }]);
+    expect(e.cta_route).toBe("/personalizados/pedido/5");
+  });
+
+  test("card do Studio sem cta_route fica igual a hoje", () => {
+    const [e] = ordersToEvents([{
+      id: "5", order_number: 42, total: 10, status: "x", created_at: h(1), source: "studio",
+    }]);
+    expect(e.cta_route).toBe("/canal");
+  });
+
+  test("cta_route que não é rota interna é ignorada", () => {
+    const [e] = ordersToEvents([{
+      id: "5", order_number: 42, total: 10, status: "x", created_at: h(1),
+      source: "studio", cta_route: "https://fora.example",
+    }]);
+    expect(e.cta_route).toBe("/canal");
+  });
 });
 
 describe("preferências", () => {
