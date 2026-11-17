@@ -53,7 +53,7 @@ jest.mock("@/services/api", () => {
 });
 
 import { ApiError } from "@/services/api";
-import { montarOrigem, codigoDoLink, hostDeFora } from "@/utils/origemDoCadastro";
+import { montarOrigem, codigoDoLink, hostDeFora, _zerarOrigemEmMemoria } from "@/utils/origemDoCadastro";
 import { gravarLeadSemTravar, linhaDoCarimbo } from "@/utils/leadDoCadastro";
 import RegisterScreen from "@/app/(auth)/register";
 
@@ -121,6 +121,9 @@ beforeEach(() => {
   largura(1280);
   jest.clearAllMocks();
   mockParams = {};
+  // b-mk-33: a origem fica guardada no aparelho; cada teste começa sem nada.
+  window.localStorage.clear();
+  _zerarOrigemEmMemoria();
   mockLead.mockImplementation(async () => { throw new Error("rota ausente"); });
   mockFeds.mockResolvedValue([]);
   (global as any).open = jest.fn();
@@ -320,6 +323,7 @@ describe("lead parcial", () => {
   });
 
   test("lead que não responde não trava a navegação nem o cadastro (sem token)", async () => {
+    window.history.pushState({}, "", "/register");
     receitaOk();
     mockLead.mockImplementation(() => new Promise(() => {})); // nunca responde
     mockRegister.mockResolvedValueOnce({});
@@ -333,7 +337,11 @@ describe("lead parcial", () => {
     await tocar(t, "cadastro-criar");
     expect(mockRegister).toHaveBeenCalledTimes(1);
     expect(mockRegister.mock.calls[0][0]).not.toHaveProperty("lead_token");
-    expect(mockRegister.mock.calls[0][0]).not.toHaveProperty("origem");
+    // b-mk-33 B: cadastro aberto direto, sem utm nem site de origem, leva a
+    // visita direta (só a página de entrada e a data).
+    const o = mockRegister.mock.calls[0][0].origem;
+    expect(Object.keys(o).sort()).toEqual(["first_seen_at", "landing_page"]);
+    expect(o.landing_page).toBe("/register");
     expect(mockToastError).not.toHaveBeenCalled();
   });
 
