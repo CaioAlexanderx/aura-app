@@ -8,6 +8,12 @@
 //   · Só o nome é obrigatório (regra do backend e de utils/fornecedoresUtil).
 //   · "Salvar e cadastrar outro" limpa o formulário e volta o foco ao CNPJ.
 // O que a Receita preencheu nunca apaga o que a lojista já digitou.
+//
+// 17/11/2026 (A2 do "Chegou mercadoria", estimativa p-171): prop opcional
+// `noPasso`. Com ela o formulário vira o miolo de um passo do wizard, sem
+// folha própria: "Voltar" e "Salvar e continuar" no lugar de "Salvar e
+// cadastrar outro" e "Salvar", e o aviso de CNPJ já cadastrado oferece
+// "Usar [nome]" no lugar de "Abrir". Sem a prop, nada muda (/fornecedores).
 // ============================================================
 import { useEffect, useRef, useState } from "react";
 import { View, Text, TextInput, StyleSheet, Pressable, ScrollView, ActivityIndicator } from "react-native";
@@ -22,6 +28,21 @@ import {
   FORM_VAZIO, cnpjValido, validarFornecedor, type FormFornecedor,
 } from "@/utils/fornecedoresUtil";
 
+/** O formulário dentro de um passo de wizard (Chegou mercadoria). */
+export type FormNoPasso = {
+  /** Botão de salvar ("Salvar e continuar"). */
+  rotuloSalvar: string;
+  rotuloVoltar: string;
+  /** Botão do aviso de CNPJ já cadastrado ("Usar [nome]"). */
+  rotuloUsar: (nome: string) => string;
+  /** Frase à esquerda dos botões. */
+  rodape: string;
+  /** Frase à esquerda dos botões quando o CNPJ já está cadastrado. */
+  rodapeExistente: string;
+  onVoltar: () => void;
+  onUsarExistente: (existente: { id: string; name: string }) => void;
+};
+
 type Props = {
   visible: boolean;
   companyId: string | null;
@@ -32,11 +53,13 @@ type Props = {
   onClose: () => void;
   onSalvo: (s: Supplier) => void;
   onAbrirExistente: (id: string) => void;
+  /** Formulário dentro de um passo de wizard, sem folha própria. */
+  noPasso?: FormNoPasso;
 };
 
 type Receita = { texto: string; alerta?: string } | null;
 
-export function FornecedorFormSheet({ visible, companyId, supplier, inicial, onClose, onSalvo, onAbrirExistente }: Props) {
+export function FornecedorFormSheet({ visible, companyId, supplier, inicial, onClose, onSalvo, onAbrirExistente, noPasso }: Props) {
   const [form, setForm] = useState<FormFornecedor>(FORM_VAZIO);
   const [erro, setErro] = useState<{ campo: keyof FormFornecedor; texto: string } | null>(null);
   const [saving, setSaving] = useState(false);
@@ -105,7 +128,9 @@ export function FornecedorFormSheet({ visible, companyId, supplier, inicial, onC
         : await suppliersApi.create(companyId, v.body);
       toast.success(supplier ? "Fornecedor atualizado" : `${salvo.name} cadastrado`);
       onSalvo(salvo);
-      if (outro && !supplier) {
+      if (noPasso) {
+        // No passo, quem decide o que vem depois é o wizard.
+      } else if (outro && !supplier) {
         setForm(FORM_VAZIO); setReceita(null); setExistente(null); consultado.current = "";
         setTimeout(() => cnpjRef.current?.focus(), 50);
       } else {
@@ -124,20 +149,21 @@ export function FornecedorFormSheet({ visible, companyId, supplier, inicial, onC
 
   const erroDe = (c: keyof FormFornecedor) => (erro?.campo === c ? <Text style={st.erro}>{erro.texto}</Text> : null);
 
-  return (
-    <ResponsiveSheet visible={visible} onClose={onClose} maxWidth={520}>
+  const conteudo = (
       <>
-        <View style={st.header}>
+        <View style={[st.header, noPasso && st.headerNoPasso]}>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={st.title}>{supplier ? "Editar fornecedor" : "Novo fornecedor"}</Text>
             <Text style={st.sub}>Só o nome é obrigatório. Com o CNPJ, o resto se preenche sozinho.</Text>
           </View>
-          <Pressable onPress={onClose} style={st.close} testID="fornecedor-form-fechar" accessibilityLabel="Fechar">
-            <Icon name="x" size={16} color={Colors.ink3} />
-          </Pressable>
+          {!noPasso && (
+            <Pressable onPress={onClose} style={st.close} testID="fornecedor-form-fechar" accessibilityLabel="Fechar">
+              <Icon name="x" size={16} color={Colors.ink3} />
+            </Pressable>
+          )}
         </View>
 
-        <ScrollView style={st.body} keyboardShouldPersistTaps="handled">
+        <ScrollView style={[st.body, noPasso && st.bodyNoPasso]} keyboardShouldPersistTaps="handled">
           <Text style={st.label}>CNPJ</Text>
           <View style={st.cnpjRow}>
             <TextInput
@@ -158,9 +184,15 @@ export function FornecedorFormSheet({ visible, companyId, supplier, inicial, onC
           {existente && (
             <View style={st.aviso} testID="fornecedor-form-existente">
               <Text style={st.avisoTexto}>Este CNPJ já está cadastrado como <Text style={{ fontWeight: "700" }}>{existente.name}</Text>.</Text>
-              <Pressable onPress={() => onAbrirExistente(existente.id)} style={st.avisoBtn} testID="fornecedor-form-abrir-existente">
-                <Text style={st.avisoBtnTexto}>Abrir</Text>
-              </Pressable>
+              {noPasso ? (
+                <Pressable onPress={() => noPasso.onUsarExistente(existente)} style={st.avisoBtn} testID="fornecedor-form-usar-existente">
+                  <Text style={st.avisoBtnTexto}>{noPasso.rotuloUsar(existente.name)}</Text>
+                </Pressable>
+              ) : (
+                <Pressable onPress={() => onAbrirExistente(existente.id)} style={st.avisoBtn} testID="fornecedor-form-abrir-existente">
+                  <Text style={st.avisoBtnTexto}>Abrir</Text>
+                </Pressable>
+              )}
             </View>
           )}
           {receita && (
@@ -198,6 +230,23 @@ export function FornecedorFormSheet({ visible, companyId, supplier, inicial, onC
           <TextInput style={[st.input, st.textarea]} value={form.notes} onChangeText={(v) => set("notes", v)}
             placeholder="Prazo de entrega, pedido mínimo, forma de pagamento…" placeholderTextColor={Colors.ink3} multiline maxLength={2000} testID="fornecedor-form-obs" />
 
+          {noPasso ? (
+            <View style={st.actsNoPasso}>
+              <Text style={st.rodapeNoPasso} testID="fornecedor-form-rodape">
+                {existente ? noPasso.rodapeExistente : noPasso.rodape}
+              </Text>
+              <View style={st.actsBotoes}>
+                <Pressable onPress={noPasso.onVoltar} style={st.btn} testID="fornecedor-form-voltar">
+                  <Text style={st.btnTexto}>{noPasso.rotuloVoltar}</Text>
+                </Pressable>
+                {!existente && (
+                  <Pressable onPress={() => salvar(false)} disabled={saving} style={[st.btn, st.btnPrimario, saving && { opacity: 0.6 }]} testID="fornecedor-form-salvar">
+                    {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={[st.btnTexto, { color: "#fff" }]}>{noPasso.rotuloSalvar}</Text>}
+                  </Pressable>
+                )}
+              </View>
+            </View>
+          ) : (
           <View style={st.acts}>
             {!supplier && (
               <Pressable onPress={() => salvar(true)} disabled={saving} style={[st.btn, saving && { opacity: 0.6 }]} testID="fornecedor-form-salvar-outro">
@@ -208,8 +257,15 @@ export function FornecedorFormSheet({ visible, companyId, supplier, inicial, onC
               {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={[st.btnTexto, { color: "#fff" }]}>{supplier ? "Salvar alterações" : "Salvar"}</Text>}
             </Pressable>
           </View>
+          )}
         </ScrollView>
       </>
+  );
+
+  if (noPasso) return visible ? <View testID="fornecedor-form-no-passo">{conteudo}</View> : null;
+  return (
+    <ResponsiveSheet visible={visible} onClose={onClose} maxWidth={520}>
+      {conteudo}
     </ResponsiveSheet>
   );
 }
@@ -237,4 +293,9 @@ const st = StyleSheet.create({
   btn: { paddingHorizontal: 16, paddingVertical: 11, borderRadius: 10, borderWidth: 1, borderColor: Colors.border2, backgroundColor: Colors.bg4, alignItems: "center", justifyContent: "center" },
   btnPrimario: { backgroundColor: Colors.violet, borderColor: Colors.violet, minWidth: 110 },
   btnTexto: { fontSize: 13, fontWeight: "700", color: Colors.ink },
+  headerNoPasso: { paddingHorizontal: 0, paddingTop: 4, borderBottomWidth: 0 },
+  bodyNoPasso: { paddingHorizontal: 0 },
+  actsNoPasso: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 18, marginBottom: 12 },
+  rodapeNoPasso: { flex: 1, minWidth: 180, fontSize: 12, color: Colors.ink3 },
+  actsBotoes: { flexDirection: "row", gap: 8 },
 });

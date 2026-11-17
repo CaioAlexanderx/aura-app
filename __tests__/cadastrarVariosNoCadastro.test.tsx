@@ -288,3 +288,41 @@ describe("com algo digitado, pergunta antes", () => {
     expect(tem(tree, "cadastrar-varios")).toBe(false);
   });
 });
+
+// A8 (17/11/2026): a nota saiu do "Importar" e virou origem do "Chegou
+// mercadoria". Na escolha do "Cadastrar vários", o aviso leva até lá.
+describe("A8: aviso \"Chegou com a nota do fornecedor?\"", () => {
+  test("computador: texto aprovado e o botão chama onChegou", async () => {
+    const a = acoes({ onChegou: jest.fn() });
+    const tree = await montar(<ItemFormModal visible onClose={jest.fn()} cadastrarVarios={a} />);
+    await act(async () => { porId(tree, "faixa-cadastrar-varios-botao")[0].props.onPress(); });
+    expect(tem(tree, "cadastrar-varios-aviso-nota")).toBe(true);
+    const t = texto(tree);
+    expect(t).toContain("Chegou com a nota do fornecedor?");
+    expect(t).toContain(": ele cadastra o que faltar e já dá entrada no estoque, com o custo da nota.");
+    expect(t).toContain("Ir para Chegou mercadoria");
+    await act(async () => { porId(tree, "cadastrar-varios-ir-chegou")[0].props.onPress(); });
+    expect((a as any).onChegou).toHaveBeenCalledTimes(1);
+  });
+
+  test("375 px: \"Use Chegou mercadoria.\" e o link \"Ir para lá\" (alvo de 44 px)", async () => {
+    (global as any).innerWidth = 375;
+    const a = acoes({ onChegou: jest.fn() });
+    const tree = await montar(<ItemFormModal visible onClose={jest.fn()} cadastrarVarios={a} />);
+    await act(async () => { porId(tree, "faixa-cadastrar-varios")[0].props.onPress(); });
+    const t = texto(tree);
+    expect(t).toContain("Use Chegou mercadoria.");
+    expect(t).toContain("Ir para lá");
+    const link = porId(tree, "cadastrar-varios-ir-chegou")[0];
+    const estilo = ([] as any[]).concat(link.props.style).flat(Infinity).filter(Boolean);
+    expect(estilo.some((st: any) => st.minHeight === 44)).toBe(true);
+    await act(async () => { link.props.onPress(); });
+    expect((a as any).onChegou).toHaveBeenCalledTimes(1);
+  });
+
+  test("sem onChegou o aviso não aparece", async () => {
+    const tree = await montar(<ItemFormModal visible onClose={jest.fn()} cadastrarVarios={acoes()} />);
+    await act(async () => { porId(tree, "faixa-cadastrar-varios-botao")[0].props.onPress(); });
+    expect(tem(tree, "cadastrar-varios-aviso-nota")).toBe(false);
+  });
+});

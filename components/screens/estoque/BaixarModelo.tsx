@@ -3,8 +3,10 @@
 //
 // O arquivo é estático, public/modelo-produtos-aura.xlsx (gerado por
 // scripts/gerar-modelo-produtos.js), e aparece em três lugares: no convite
-// "Importar sua planilha" do check-in, na conferência da importação e no
-// menu Importar do Estoque. Nada disso toca na importação em si.
+// "Importar sua planilha" do check-in, na conferência da importação, no
+// "Cadastrar vários" do + Produto e na loja vazia do Estoque (o menu
+// Importar da barra saiu no A8, 17/11/2026). Nada disso toca na importação
+// em si.
 //
 //   · Web: o botão é um <a href download> de verdade (o Pressable do
 //     react-native-web vira <a> quando tem href). O download é do

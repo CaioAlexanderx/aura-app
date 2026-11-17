@@ -6,8 +6,8 @@
 // acha pelo seletor. Nada de ref global nem de registro em store: a tela
 // alvo só marca o botão, e quem puxa o tour só conhece a chave.
 //
-//   <Pressable {...tourTarget("estoque.importar")} ...>
-//   tourSelector("estoque.importar") → '[data-tour="estoque.importar"]'
+//   <Pressable {...tourTarget("estoque.novo_produto")} ...>
+//   tourSelector("estoque.novo_produto") → '[data-tour="estoque.novo_produto"]'
 //
 // Em native o dataSet é ignorado (o SpotlightTour é web-only).
 // ============================================================

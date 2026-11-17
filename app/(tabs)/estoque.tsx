@@ -15,7 +15,12 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ImportExportBar } from "@/components/ImportExportBar";
 import { useImportProdutos } from "@/hooks/useImportProdutos";
 import { ImportPlanilhaModal } from "@/components/screens/estoque/ImportPlanilhaModal";
-import { ImportarMenu, OPCOES_IMPORTAR } from "@/components/screens/estoque/ImportarMenu";
+// 17/11/2026 (A8): o menu "Importar" saiu da barra. A nota virou origem do
+// "Chegou mercadoria" e a planilha, do "Cadastrar vários" (+ Produto) e da
+// loja vazia. O componente ImportarMenu foi aposentado.
+import { ChegouMercadoriaModal } from "@/components/screens/estoque/chegou/ChegouMercadoriaModal";
+import { TEXTOS_CHEGOU } from "@/components/screens/estoque/chegou/textosChegou";
+import { BaixarModelo } from "@/components/screens/estoque/BaixarModelo";
 import { WebPortal } from "@/components/WebPortal";
 import { ItemFormModal } from "@/components/screens/estoque/ItemFormModal";
 import { ProductRow } from "@/components/screens/estoque/ProductRow";
@@ -26,7 +31,6 @@ import { ScrollableChips } from "@/components/ScrollableChips";
 import { MergeDuplicatesModal } from "@/components/MergeDuplicatesModal";
 import { ConferirNomesDeCor } from "@/components/screens/estoque/nomesDeCor/ConferirNomesDeCor";
 import { QuickBatchProductsModal } from "@/components/QuickBatchProductsModal";
-import { DanfeImportModal } from "@/components/screens/estoque/DanfeImportModal";
 import { LinkProductModal } from "@/components/LinkProductModal";
 import { usePagination } from "@/hooks/usePagination";
 import { TABS, DEFAULT_CATEGORIES, fmt } from "@/components/screens/estoque/types";
@@ -410,7 +414,7 @@ export default function EstoqueScreen() {
   const [labelSelection, setLabelSelection] = useState<string[]>([]);
 
   const [bulkMode, setBulkMode] = useState(false);
-  // Entrada de mercadoria: produto da linha, ou "escolher" (botão do topo).
+  // Entrada de mercadoria de UM produto (o "Entrada" da linha, pendência 9).
   const [entrada, setEntrada] = useState<{ produto: ProdutoDaEntrada | null } | null>(null);
   const [definirFornecedor, setDefinirFornecedor] = useState(false);
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
@@ -430,7 +434,9 @@ export default function EstoqueScreen() {
   // ganha "← Voltar" para a escolha; voltar reabre o cadastro já nela.
   const [listaComVoltar, setListaComVoltar] = useState(false);
   const [formEmVarios, setFormEmVarios] = useState(false);
-  const [showDanfeModal, setShowDanfeModal] = useState(false);
+  // A8 (17/11/2026): o "Chegou mercadoria" (wizard da Fase 3). Montado só
+  // enquanto aberto: cada abertura nasce com a sua idempotency_key.
+  const [chegouAberto, setChegouAberto] = useState(false);
   // 22/09/2026: botão "Importar planilha" na barra de ações — antes o
   // ServerImport só aparecia no estado vazio (0 produtos), então quem já
   // tinha itens cadastrados não achava como importar mais. Mesmo fluxo do
@@ -635,11 +641,41 @@ export default function EstoqueScreen() {
     planilhaPeloCadastroRef.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [importPlanilha.aberto]);
+  // ── A8: "Chegou mercadoria" ──────────────────────────────
+  // A entrada é sempre de UMA loja: some no consolidado (que nem tem barra),
+  // no demo e no Estoque só consulta. Aparece também com a loja vazia: com a
+  // nota, o wizard cadastra o que faltar.
+  const podeChegou = !isDemo && !consolidatedView && !consulta && !!company?.id;
+  function abrirChegou() {
+    if (!podeChegou) return;
+    setChegouAberto(true);
+  }
+  function chegouPeloCadastro() {
+    fecharCadastro();
+    abrirChegou();
+  }
+  function aposChegou() {
+    qc.invalidateQueries({ queryKey: temProdutoQueryKey(company?.id) });
+    setTimeout(() => refetchDupGroups(), 500);
+  }
+  // "Ver os produtos novos" do Pronto: a lista volta ao começo, sem busca nem
+  // filtro, em "Últimos adicionados" (sem trocar a ordem salva da pessoa).
+  function verNovosDoChegou() {
+    setChegouAberto(false);
+    setSearch("");
+    setCatFilter("Todos");
+    setCatsMulti([]);
+    setSoFaltaNfse(false);
+    setSortOrderState("recent");
+    handleTabSelect(0);
+  }
+
   const acoesCadastrarVarios = !isDemo && !consolidatedView && !consulta ? {
     onPlanilha: () => { planilhaPeloCadastroRef.current = true; importPlanilha.escolherArquivo(); },
     onLista: listaPeloCadastro,
     planilhaOcupada: importPlanilha.ocupado,
     abrirNaEscolha: formEmVarios,
+    onChegou: podeChegou ? chegouPeloCadastro : undefined,
   } : undefined;
 
   function aposSalvarItem() {
@@ -745,31 +781,31 @@ export default function EstoqueScreen() {
   // 12/05/2026: "Selecionar" volta como toggle do bulkMode (Eryca).
   // 23/09/2026: chamado como função ({ActionButtons()}), não como
   // <ActionButtons />: como componente, cada render da tela criava um tipo
-  // novo e remontava os botões — o menu "Importar" fechava sozinho.
-  const ActionButtons = () => (
+  // novo e remontava os botões.
+  //
+  // 17/11/2026 (E1 e A8, estoque-portas-mockup-17-11.html, partes 1 e 6):
+  // a barra ficou com cinco botões: olho, Selecionar, Conferir estoque,
+  // "Chegou mercadoria" e "+ Produto" (sempre na ponta). Saíram "+ Serviço"
+  // (escolha Produto · Serviço dentro do "+ Produto"), "+ Em lote" e o menu
+  // "Importar" ("Cadastrar vários" no "+ Produto" e origens do wizard).
+  // Demo: só o olho e "+ Produto".
+  //
+  // No celular (web < 500 px), as três ações de apoio ficam como ícone ao
+  // lado do título, com nome para leitor de tela, e as duas portas ganham
+  // uma linha só delas, com nome escrito (pendência 10).
+  const AcoesDeApoio = () => (
     <>
-      <OlhoValores variant="botao" />
-      {/* 17/11/2026 (E1, estoque-portas-mockup-17-11.html, parte 1): saíram
-          "+ Serviço" e "+ Em lote". O serviço é a escolha Produto · Serviço
-          dentro do "+ Produto"; o lote virou "Cadastrar vários", a faixa do
-          cadastro novo de produto (E2). A barra foi de 8 para 6 botões. */}
-      {/* 23/09/2026 (QA): "Importar DANFE" + "Importar planilha" viraram
-          um botão só, com menu explicando cada origem. Mesmo gate (!isDemo). */}
-      {!isDemo && (
-        <ImportarMenu
-          onNota={() => setShowDanfeModal(true)}
-          onPlanilha={importPlanilha.escolherArquivo}
-          ocupado={importPlanilha.ocupado}
-          compacto={isMobileNarrow}
-        />
-      )}
+      <OlhoValores variant="botao" alvo44={isMobileNarrow} />
       {/* 12/05/2026: botao Selecionar — toggle bulk mode. So aparece se ja tem produto e usuario nao e demo. */}
       {!isDemo && products.length > 0 && (
         <Pressable
           onPress={() => { if (bulkMode) { exitBulkMode(); } else { setBulkMode(true); } }}
           style={[s.bulkBtn, bulkMode && s.bulkBtnActive, isMobileNarrow && s.btnIconOnly]}
+          accessibilityRole="button"
+          accessibilityLabel={bulkMode ? TEXTOS_CHEGOU.rotuloSairDaSelecao : TEXTOS_CHEGOU.rotuloSelecionar}
+          testID="estoque-selecionar"
         >
-          <Icon name="check" size={14} color={bulkMode ? "#fff" : Colors.violet3} />
+          <Icon name="check" size={isMobileNarrow ? 16 : 14} color={bulkMode ? "#fff" : Colors.violet3} />
           {!isMobileNarrow && <Text style={[s.bulkBtnText, bulkMode && { color: "#fff" }]}>
             {bulkMode ? "Sair da seleção" : "Selecionar"}
           </Text>}
@@ -777,23 +813,32 @@ export default function EstoqueScreen() {
       )}
       {podeConferir && products.length > 0 && (
         <Pressable onPress={() => router.push("/conferencia-estoque" as any)} style={[s.batchBtn, isMobileNarrow && s.btnIconOnly]}
-          accessibilityRole="button" accessibilityLabel="Conferir estoque" testID="estoque-conferir">
-          <Icon name="clipboard" size={14} color={Colors.violet3} />
+          accessibilityRole="button" accessibilityLabel={TEXTOS_CHEGOU.rotuloConferir} testID="estoque-conferir">
+          <Icon name="clipboard" size={isMobileNarrow ? 16 : 14} color={Colors.violet3} />
           {!isMobileNarrow && <Text style={s.batchBtnText}>Conferir estoque</Text>}
         </Pressable>
       )}
-      {/* Entrada é sempre de UMA loja: some no consolidado e no demo. */}
-      {!isDemo && !consolidatedView && products.length > 0 && (
-        <Pressable onPress={() => setEntrada({ produto: null })} style={[s.batchBtn, isMobileNarrow && s.btnIconOnly]}
-          accessibilityLabel="Entrada de mercadoria" testID="estoque-entrada-topo">
-          <Text style={{ color: Colors.violet3, fontWeight: "800" }}>↓</Text>
-          {!isMobileNarrow && <Text style={s.batchBtnText}>Entrada de mercadoria</Text>}
-        </Pressable>
-      )}
-      <Pressable onPress={() => abrirCadastro("product")} style={s.addBtn} testID="estoque-novo-produto" {...tourTarget("estoque.novo_produto")}>
-        <Icon name="package" size={14} color="#fff" />
-        <Text style={s.addBtnText}>+ Produto</Text>
-      </Pressable>
+    </>
+  );
+  const BotaoChegou = () => (
+    <Pressable onPress={abrirChegou} style={[s.batchBtn, isMobileNarrow && s.chegouCelular]}
+      accessibilityRole="button" accessibilityLabel={TEXTOS_CHEGOU.titulo} testID="estoque-chegou-mercadoria">
+      <Icon name="inbox" size={isMobileNarrow ? 16 : 15} color={Colors.violet3} />
+      <Text style={[s.batchBtnText, isMobileNarrow && s.chegouCelularTxt]}>{TEXTOS_CHEGOU.titulo}</Text>
+    </Pressable>
+  );
+  const BotaoProduto = () => (
+    <Pressable onPress={() => abrirCadastro("product")} style={[s.addBtn, isMobileNarrow && s.produtoCelular]}
+      accessibilityRole="button" testID="estoque-novo-produto" {...tourTarget("estoque.novo_produto")}>
+      <Icon name={isMobileNarrow ? "plus" : "package"} size={14} color="#fff" />
+      <Text style={s.addBtnText}>{isMobileNarrow ? TEXTOS_CHEGOU.produtoCelular : "+ Produto"}</Text>
+    </Pressable>
+  );
+  const ActionButtons = () => (
+    <>
+      {AcoesDeApoio()}
+      {podeChegou && BotaoChegou()}
+      {BotaoProduto()}
     </>
   );
 
@@ -884,6 +929,19 @@ export default function EstoqueScreen() {
               </View>
             )}
           </>
+        ) : isMobileNarrow ? (
+          <View style={s.celTopo}>
+            <View style={s.celTitulo}>
+              <Text style={[s.pageTitle, { flex: 1, minWidth: 0 }]}>Estoque</Text>
+              {!consulta && AcoesDeApoio()}
+            </View>
+            {!consulta && (
+              <View style={s.celPortas} testID="estoque-portas-celular">
+                {podeChegou && BotaoChegou()}
+                {BotaoProduto()}
+              </View>
+            )}
+          </View>
         ) : (
           <View style={s.headerRow}>
             <View style={{ flex: 1 }}>
@@ -992,29 +1050,59 @@ export default function EstoqueScreen() {
           <EmptyState icon="package" iconColor={Colors.amber} title="Nenhum produto cadastrado" subtitle="Quando a loja cadastrar produtos, eles aparecem aqui." />
         )}
 
+        {/* 17/11/2026 (A8, mockup parte 6): a loja vazia mostra as duas
+            portas. A nota vai pelo "Chegou mercadoria" (cadastra e dá
+            entrada); a planilha e o cadastro à mão, como hoje. */}
         {!isLoading && products.length === 0 && !isDemo && !consulta && (
-          <View>
-            <EmptyState icon="package" iconColor={Colors.amber} title="Nenhum produto cadastrado" subtitle="Cadastre seu primeiro produto ou serviço, ou importe de uma planilha." actionLabel="+ Adicionar produto" onAction={() => abrirCadastro("product")} />
-            <View style={s.emptyImport}>
-              <View style={s.emptyImportIcon}><Icon name="layers" size={18} color={Colors.violet3} /></View>
-              <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Adicionar em lote</Text><Text style={s.emptyImportDesc}>Cole vários produtos de uma vez e cadastre em segundos</Text></View>
-              <Pressable onPress={() => abrirLista(false)} style={s.batchBtnSmall}>
-                <Text style={s.batchBtnSmallText}>Abrir</Text>
-              </Pressable>
+          <View testID="estoque-vazio">
+            <View style={s.vazio}>
+              <View style={s.vazioIco}><Icon name="package" size={isMobileNarrow ? 24 : 26} color={Colors.amber} /></View>
+              <Text style={s.vazioTitulo}>{TEXTOS_CHEGOU.vazioTitulo}</Text>
+              <Text style={s.vazioApoio}>{isMobileNarrow ? TEXTOS_CHEGOU.vazioApoioCelular : TEXTOS_CHEGOU.vazioApoio}</Text>
             </View>
-            <View style={s.emptyImport}>
-              <View style={s.emptyImportIcon}><Icon name="file_text" size={18} color={Colors.violet3} /></View>
-              <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Importar nota do fornecedor</Text><Text style={s.emptyImportDesc}>{OPCOES_IMPORTAR.nota.texto} (o arquivo XML que o fornecedor manda junto com a nota)</Text></View>
-              <Pressable onPress={() => setShowDanfeModal(true)} style={s.batchBtnSmall}>
-                <Text style={s.batchBtnSmallText}>Abrir</Text>
-              </Pressable>
-            </View>
-            <View style={s.emptyImport}>
-              <View style={s.emptyImportIcon}><Icon name="upload" size={18} color={Colors.violet3} /></View>
-              <View style={{ flex: 1 }}><Text style={s.emptyImportTitle}>Importar planilha</Text><Text style={s.emptyImportDesc}>{OPCOES_IMPORTAR.planilha.texto}, a partir de uma planilha do Excel ou CSV. Você confere tudo antes de gravar.</Text></View>
-              <Pressable onPress={importPlanilha.escolherArquivo} disabled={importPlanilha.ocupado} style={[s.batchBtnSmall, importPlanilha.ocupado && { opacity: 0.6 }]} testID="estoque-vazio-planilha">
-                <Text style={s.batchBtnSmallText}>Escolher planilha</Text>
-              </Pressable>
+            <View style={[s.vazioOrigens, isMobileNarrow && { flexDirection: "column" }]}>
+              {podeChegou && (
+                <View style={[s.vazioOrigem, isMobileNarrow && s.vazioOrigemCelular]} testID="estoque-vazio-nota">
+                  <View style={s.vazioOrigemIco}><Icon name="file_text" size={20} color={Colors.violet3} /></View>
+                  <View style={isMobileNarrow ? { flex: 1, minWidth: 0 } : null}>
+                    <Text style={s.vazioOrigemTitulo}>{TEXTOS_CHEGOU.vazioNotaTitulo}</Text>
+                    <Text style={s.vazioOrigemTxt}>{isMobileNarrow ? TEXTOS_CHEGOU.vazioNotaApoioCelular : TEXTOS_CHEGOU.vazioNotaApoio}</Text>
+                  </View>
+                  <View style={[s.vazioAcoes, isMobileNarrow && { width: "100%" }]}>
+                    <Pressable onPress={abrirChegou} style={[s.vazioBtnPri, isMobileNarrow && s.vazioBtnCelular]} accessibilityRole="button" testID="estoque-vazio-chegou">
+                      <Text style={s.vazioBtnPriTxt}>{TEXTOS_CHEGOU.titulo}</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
+              <View style={[s.vazioOrigem, isMobileNarrow && s.vazioOrigemCelular]} testID="estoque-vazio-planilha-cartao">
+                <View style={s.vazioOrigemIco}><Icon name="grid" size={20} color={Colors.violet3} /></View>
+                <View style={isMobileNarrow ? { flex: 1, minWidth: 0 } : null}>
+                  <Text style={s.vazioOrigemTitulo}>{TEXTOS_CHEGOU.vazioPlanilhaTitulo}</Text>
+                  <Text style={s.vazioOrigemTxt}>{isMobileNarrow ? TEXTOS_CHEGOU.vazioPlanilhaApoioCelular : TEXTOS_CHEGOU.vazioPlanilhaApoio}</Text>
+                </View>
+                <View style={[s.vazioAcoes, isMobileNarrow && { width: "100%" }]}>
+                  <Pressable onPress={importPlanilha.escolherArquivo} disabled={importPlanilha.ocupado} style={[s.vazioBtnSec, isMobileNarrow && s.vazioBtnCelular, importPlanilha.ocupado && { opacity: 0.6 }]} accessibilityRole="button" testID="estoque-vazio-planilha">
+                    <Text style={s.vazioBtnSecTxt}>{TEXTOS_CHEGOU.vazioPlanilhaBotao}</Text>
+                  </Pressable>
+                  <BaixarModelo testID="estoque-vazio-modelo" />
+                </View>
+              </View>
+              <View style={[s.vazioOrigem, isMobileNarrow && s.vazioOrigemCelular]} testID="estoque-vazio-mao">
+                <View style={s.vazioOrigemIco}><Icon name="plus" size={20} color={Colors.violet3} /></View>
+                <View style={isMobileNarrow ? { flex: 1, minWidth: 0 } : null}>
+                  <Text style={s.vazioOrigemTitulo}>{TEXTOS_CHEGOU.vazioMaoTitulo}</Text>
+                  <Text style={s.vazioOrigemTxt}>{TEXTOS_CHEGOU.vazioMaoApoio}</Text>
+                </View>
+                <View style={[s.vazioAcoes, isMobileNarrow && { width: "100%" }]}>
+                  <Pressable onPress={() => abrirCadastro("product")} style={[s.vazioBtnSec, isMobileNarrow && s.vazioBtnCelular]} accessibilityRole="button" testID="estoque-vazio-produto">
+                    <Text style={s.vazioBtnSecTxt}>{TEXTOS_CHEGOU.vazioMaoProduto}</Text>
+                  </Pressable>
+                  <Pressable onPress={() => abrirLista(false)} style={[s.vazioBtnSec, isMobileNarrow && s.vazioBtnCelular]} accessibilityRole="button" testID="estoque-vazio-lista">
+                    <Text style={s.vazioBtnSecTxt}>{TEXTOS_CHEGOU.vazioMaoLista}</Text>
+                  </Pressable>
+                </View>
+              </View>
             </View>
           </View>
         )}
@@ -1239,12 +1327,16 @@ export default function EstoqueScreen() {
         onVoltar={listaComVoltar ? voltarDaLista : undefined}
         allCategories={allCategories}
       />
-      {company?.id && (
-        <DanfeImportModal
-          visible={showDanfeModal}
+      {chegouAberto && podeChegou && company?.id && (
+        <ChegouMercadoriaModal
+          visible
           companyId={company.id}
-          onClose={() => setShowDanfeModal(false)}
-          onSuccess={() => handleImportComplete()}
+          lojaNome={company.name || null}
+          products={products}
+          semCusto={semCusto}
+          onClose={() => setChegouAberto(false)}
+          onFeito={aposChegou}
+          onVerNovos={verNovosDoChegou}
         />
       )}
       <WebPortal active={reajusteAberto && !!company?.id}>
@@ -1335,7 +1427,6 @@ export default function EstoqueScreen() {
       <EntradaMercadoriaModal
         visible={!!entrada}
         produto={entrada?.produto || null}
-        produtos={entrada && !entrada.produto ? products.filter((p) => p.unit !== "srv").map(paraEntrada) : undefined}
         semCusto={semCusto}
         onClose={() => setEntrada(null)}
       />
@@ -1375,9 +1466,14 @@ const s = StyleSheet.create({
   batchBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
   danfeBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(124,58,237,0.18)", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: "rgba(167,139,250,0.35)", borderStyle: "dashed" as any },
   danfeBtnText: { fontSize: 13, color: Colors.violet3, fontWeight: "700" },
-  batchBtnSmall: { backgroundColor: Colors.violet, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 },
-  batchBtnSmallText: { fontSize: 12, color: "#fff", fontWeight: "700" },
-  btnIconOnly: { paddingHorizontal: 10, gap: 0 },
+  btnIconOnly: { paddingHorizontal: 10, gap: 0, minWidth: 44, minHeight: 44, justifyContent: "center" },
+  // A8: topo do celular (título + três ícones; linha das duas portas).
+  celTopo: { marginBottom: 20, gap: 12 },
+  celTitulo: { flexDirection: "row", alignItems: "center", gap: 8 },
+  celPortas: { flexDirection: "row", alignItems: "stretch", gap: 8 },
+  chegouCelular: { flex: 1, minWidth: 0, minHeight: 44, paddingHorizontal: 12 },
+  chegouCelularTxt: { flexShrink: 1, lineHeight: 16 },
+  produtoCelular: { minHeight: 44, flexShrink: 0 },
   addBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: Colors.violet, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 },
   addBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   summaryRow: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4, marginBottom: 20 },
@@ -1453,9 +1549,23 @@ const s = StyleSheet.create({
     lineHeight: 14,
   },
   listCard: { backgroundColor: Colors.bg3, borderRadius: 16, padding: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
-  emptyImport: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.bg3, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, marginTop: 12 },  emptyImportIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, alignItems: "center", justifyContent: "center" },
-  emptyImportTitle: { fontSize: 13, color: Colors.ink, fontWeight: "600" },
-  emptyImportDesc: { fontSize: 11, color: Colors.ink3, marginTop: 2 },
+  // A8: loja vazia (mockup parte 6).
+  vazio: { alignItems: "center", paddingVertical: 28, paddingHorizontal: 18 },
+  vazioIco: { width: 56, height: 56, borderRadius: 16, backgroundColor: Colors.amberD, alignItems: "center", justifyContent: "center", marginBottom: 10 },
+  vazioTitulo: { fontSize: 17, fontWeight: "700", color: Colors.ink, textAlign: "center" },
+  vazioApoio: { fontSize: 13, color: Colors.ink3, marginTop: 4, textAlign: "center", lineHeight: 19 },
+  vazioOrigens: { flexDirection: "row", gap: 12, alignItems: "stretch" },
+  vazioOrigem: { flex: 1, minWidth: 0, gap: 8, padding: 16, borderRadius: 14, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border },
+  vazioOrigemCelular: { flex: undefined as any, flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", gap: 12, padding: 14 },
+  vazioOrigemIco: { width: 44, height: 44, borderRadius: 12, backgroundColor: Colors.violetD, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  vazioOrigemTitulo: { fontSize: 15, fontWeight: "700", color: Colors.ink },
+  vazioOrigemTxt: { fontSize: 12.5, color: Colors.ink2, lineHeight: 18, marginTop: 2 },
+  vazioAcoes: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: "auto" as any, paddingTop: 6 },
+  vazioBtnPri: { minHeight: 40, justifyContent: "center", alignItems: "center", backgroundColor: Colors.violet, borderRadius: 10, paddingHorizontal: 14 },
+  vazioBtnPriTxt: { color: "#fff", fontSize: 13, fontWeight: "700" },
+  vazioBtnSec: { minHeight: 40, justifyContent: "center", alignItems: "center", backgroundColor: Colors.violetD, borderRadius: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: Colors.border2 },
+  vazioBtnSecTxt: { color: Colors.violet3, fontSize: 13, fontWeight: "600" },
+  vazioBtnCelular: { minHeight: 44, flexGrow: 1 },
   demoBanner: { alignSelf: "center", backgroundColor: Colors.violetD, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },
   demoText: { fontSize: 11, color: Colors.violet3, fontWeight: "500" },
   dupBanner: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "#fef3c7", borderRadius: 14, padding: 14, borderWidth: 1, borderColor: "rgba(245,158,11,0.3)", marginBottom: 16 },

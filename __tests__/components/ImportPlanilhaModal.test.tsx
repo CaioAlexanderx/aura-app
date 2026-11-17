@@ -11,8 +11,8 @@
 //   4. Relatório: quantos entraram, fica aberto até Fechar, e oferece
 //      "Baixar lista de problemas".
 //   5. Lista longa: rolagem própria e "Mostrando 50 de N".
-//   6. Barra do Estoque: um botão "Importar" com as duas origens
-//      explicadas; toque abre e fecha (sem hover).
+//   (O item 6, o botão "Importar" da barra do Estoque, saiu com o A8 em
+//   17/11/2026: o componente ImportarMenu foi aposentado.)
 //
 // Mocks do padrão do repo (expo-font, FpktLogo); testID + deep:false.
 // ============================================================
@@ -27,7 +27,6 @@ jest.mock("@/components/WebPortal", () => ({
 import React from "react";
 import renderer, { act } from "react-test-renderer";
 import { ImportPlanilhaModal } from "@/components/screens/estoque/ImportPlanilhaModal";
-import { ImportarMenu, TRAVA_DO_FUNDO_MS } from "@/components/screens/estoque/ImportarMenu";
 import type { ResumoImport, ResultadoImport, LinhaForaDaImportacao } from "@/utils/importPrevia";
 
 function flattenText(node: any): string {
@@ -218,53 +217,6 @@ describe("lista longa (planilha de 2.000 linhas)", () => {
     act(() => { porTestID(tree, "import-problemas-mais")[0].props.onPress(); });
     expect(textoDe(tree, "import-problemas-conta")).toBe("Mostrando 100 de 312");
     expect(textoDe(tree, "import-problemas")).toContain("Produto 99");
-    tree.unmount();
-  });
-});
-
-describe("barra do Estoque — botão Importar", () => {
-  test("um botão, menu com as duas origens explicadas; toque abre, escolhe e fecha", () => {
-    const onNota = jest.fn();
-    const onPlanilha = jest.fn();
-    let tree!: renderer.ReactTestRenderer;
-    act(() => { tree = renderer.create(<ImportarMenu onNota={onNota} onPlanilha={onPlanilha} />); });
-    expect(textoDe(tree, "importar-botao")).toBe("Importar");
-    expect(porTestID(tree, "importar-menu")).toHaveLength(0);
-
-    act(() => { porTestID(tree, "importar-botao")[0].props.onPress(); });
-    const nota = textoDe(tree, "importar-opcao-nota");
-    expect(nota).toContain("Nota do fornecedor (XML/DANFE)");
-    expect(nota).toContain("Cadastra e dá entrada no estoque a partir da nota");
-    const planilha = textoDe(tree, "importar-opcao-planilha");
-    expect(planilha).toContain("Planilha (Excel ou CSV)");
-    expect(planilha).toContain("Cadastra vários produtos de uma vez");
-
-    act(() => { porTestID(tree, "importar-opcao-planilha")[0].props.onPress(); });
-    expect(onPlanilha).toHaveBeenCalledTimes(1);
-    expect(porTestID(tree, "importar-menu")).toHaveLength(0);
-
-    // Tocar fora fecha sem escolher — mas só depois da trava contra
-    // clique duplo (o fundo ignora toques nos primeiros TRAVA_DO_FUNDO_MS).
-    jest.useFakeTimers();
-    act(() => { porTestID(tree, "importar-botao")[0].props.onPress(); });
-    act(() => { porTestID(tree, "importar-menu-fundo")[0].props.onPress(); });
-    expect(porTestID(tree, "importar-menu")).toHaveLength(1);
-    act(() => { jest.advanceTimersByTime(TRAVA_DO_FUNDO_MS); });
-    act(() => { porTestID(tree, "importar-menu-fundo")[0].props.onPress(); });
-    expect(porTestID(tree, "importar-menu")).toHaveLength(0);
-    jest.useRealTimers();
-
-    act(() => { porTestID(tree, "importar-botao")[0].props.onPress(); });
-    act(() => { porTestID(tree, "importar-opcao-nota")[0].props.onPress(); });
-    expect(onNota).toHaveBeenCalledTimes(1);
-    expect(onPlanilha).toHaveBeenCalledTimes(1);
-    tree.unmount();
-  });
-
-  test("tela estreita: só o ícone", () => {
-    let tree!: renderer.ReactTestRenderer;
-    act(() => { tree = renderer.create(<ImportarMenu onNota={jest.fn()} onPlanilha={jest.fn()} compacto />); });
-    expect(textoDe(tree, "importar-botao")).toBe("");
     tree.unmount();
   });
 });

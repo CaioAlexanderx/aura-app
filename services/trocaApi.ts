@@ -196,6 +196,14 @@ export type SaleForTroca = {
   // 12/11/2026: prazo do vale-troca da loja DA VENDA, em dias (1-365; 30 se a
   // loja nunca escolheu). undefined em backend antigo e em pedido online.
   vale_troca_prazo_dias?: number;
+  // 17/11/2026 (b-troca-prazo-nfce): prévia fiscal da troca calculada pelo
+  // backend com o prazo de cancelamento da UF (30 min em SP, AP, RJ e MG).
+  // undefined em backend antigo e em pedido online (utils/prazoNfce.ts).
+  nfce_troca_estrategia?: "cancel_reissue" | "devolucao_55" | "none";
+  nfce_cancelavel_ate?: string | null;
+  nfce_prazo_minutos?: number | null;
+  nfce_uf?: string | null;
+  nfce_authorized_at?: string | null;
   // 27/10/2026: undefined/"sale" = venda do Caixa; "digital_order" = pedido
   // da loja online (id = digital_orders.id). Os campos abaixo só vêm no pedido.
   origin_kind?: "sale" | "digital_order";
