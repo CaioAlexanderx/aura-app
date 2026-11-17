@@ -9,6 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { maskPhone } from "@/utils/masks";
 import { erroDoTelefone, TELEFONE_MAX_CARACTERES } from "@/utils/telefone";
 import { validarCadastroRapido, nomeValido } from "@/utils/cadastroRapidoCliente";
+import { acharClienteRepetido, type ClienteRepetido } from "@/utils/clienteRepetido";
 // 09/11/2026 — endereço opcional, recolhido (mockup "Entrega no Caixa").
 import { SecaoEndereco } from "@/components/endereco/SecaoEndereco";
 import {
@@ -61,29 +62,13 @@ export function QuickCustomerModal({ visible, onClose, onCustomerCreated }: Prop
   const dateValid = birthDate.replace(/\D/g, '').length === 8;
   const canSave = nameValid;
 
-  /** Detecta duplicata no cache local. Retorna o cliente se encontrado. */
-  function findDuplicate(): { id: string; name: string; phone: string } | null {
+  /** Detecta duplicata no cache local. Retorna o cliente se encontrado.
+   *  17/11/2026 (p-168): le todas as listas ['customers', ...] em cache
+   *  (a chave do useCustomers leva o sort no fim). */
+  function findDuplicate(): ClienteRepetido | null {
     if (!company?.id) return null;
-    const cached = qc.getQueryData<any>(['customers', company.id]);
-    const arr: any[] = cached?.customers || cached?.rows || (Array.isArray(cached) ? cached : []);
-    if (arr.length === 0) return null;
-
-    const cleanPhone = phone.replace(/\D/g, '');
-    const normName   = name.trim().toLowerCase();
-
-    // 1. Por telefone (mais forte)
-    if (cleanPhone.length >= 10) {
-      const byPhone = arr.find(c => (c.phone || '').replace(/\D/g, '') === cleanPhone);
-      if (byPhone) return { id: byPhone.id, name: byPhone.name, phone: byPhone.phone || '' };
-    }
-
-    // 2. Por nome exato (fallback)
-    if (normName.length >= 2) {
-      const byName = arr.find(c => (c.name || '').trim().toLowerCase() === normName);
-      if (byName) return { id: byName.id, name: byName.name, phone: byName.phone || '' };
-    }
-
-    return null;
+    const listas = qc.getQueriesData<any>({ queryKey: ['customers'] }).map(([, data]) => data);
+    return acharClienteRepetido(listas, name, phone);
   }
 
   /** Executa o POST para criar o cliente (sem checagem de duplicata). */
