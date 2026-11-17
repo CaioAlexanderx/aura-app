@@ -38,6 +38,7 @@ export type AcaoDoCaixa =
   | "cupom"
   | "troca"
   | "busca"
+  | "legenda"
   | "desconto"
   | "removerUltimo"
   | "finalizar"
@@ -97,6 +98,8 @@ export const ATALHOS_DO_CAIXA: AtalhoDoCaixa[] = [
   { acao: "cupom",        onde: "caixa", teclas: [F("F4"), ALT("KeyU")], texto: "Cupom de desconto" },
   { acao: "troca",        onde: "caixa", teclas: [F("F5"), ALT("KeyT")], texto: "Troca ou devolução" },
   { acao: "busca",        onde: "caixa", teclas: [F("F6"), CMD("KeyK")], texto: "Buscar produto" },
+  // 17/11/2026 (p-155): a legenda "Atalhos" (abre e fecha; o Esc também fecha).
+  { acao: "legenda",      onde: "caixa", teclas: [ALT("KeyA")], texto: "Abrir e fechar esta legenda" },
   { acao: "desconto",     onde: "caixa", comItens: true, teclas: [F("F7"), ALT("KeyS")], texto: "Desconto" },
   { acao: "removerUltimo", onde: "caixa", comItens: true, teclas: [F("F8"), ALT("KeyX")], texto: "Tirar o último item (duas vezes)" },
   { acao: "finalizar",    onde: "caixa", comItens: true, teclas: [F("F9"), CMD("Enter"), CMD("NumpadEnter")], texto: "Finalizar a venda" },
@@ -313,4 +316,97 @@ export function criarDoisToques(janelaMs = 2000) {
     desarmar() { armado = null; },
     armadoEm(): string | null { return armado ? armado.id : null; },
   };
+}
+
+// ─── Etiquetas e legenda (17/11/2026, p-155 / A3) ─────────────────────────
+// As etiquetas dos botões e a legenda "Atalhos" leem a tecla daqui. Decisão
+// 4 do mockup (pendência): no Windows a etiqueta mostra a tecla F; no Mac, a
+// que funciona de primeira (⌘ ou ⌥), porque lá a tecla F pede fn. A tecla F
+// continua valendo nos dois e aparece na legenda.
+
+export type SistemaDoTeclado = "windows" | "mac";
+
+/** Mac (⌘/⌥) ou o resto (Ctrl/Alt), pelo navegador. */
+export function sistemaDoTeclado(nav: any = typeof navigator !== "undefined" ? navigator : null): SistemaDoTeclado {
+  try {
+    const p = String((nav && ((nav.userAgentData && nav.userAgentData.platform) || nav.platform)) || "");
+    return /mac|iphone|ipad|ipod/i.test(p) ? "mac" : "windows";
+  } catch { return "windows"; }
+}
+
+/** Teclas que os campos tratam sozinhos (busca, troco). Não passam pelo
+ *  listener do Caixa (resolverAtalho); estão aqui só para a legenda e as
+ *  etiquetas lerem do mesmo lugar. */
+export type TeclaDeCampo = "adicionarDestacado" | "trocarDestaque" | "limparBusca" | "confirmarTroco";
+export const TECLAS_DE_CAMPO: Record<TeclaDeCampo, Combinacao[]> = {
+  // SearchBox (p-156): Enter coloca o destacado; ↑ ↓ trocam; Esc limpa.
+  adicionarDestacado: [SOLTA("Enter")],
+  trocarDestaque: [SOLTA("ArrowUp"), SOLTA("ArrowDown")],
+  limparBusca: [SOLTA("Escape")],
+  // CashChangeModal (p-154): Enter confirma o troco.
+  confirmarTroco: [SOLTA("Enter")],
+};
+
+function nomeDaTecla(code: string, so: SistemaDoTeclado, comModificador: boolean): string {
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3);
+  if (/^(Digit|Numpad)[0-9]$/.test(code)) return code.slice(-1);
+  if (code === "Enter" || code === "NumpadEnter") return comModificador && so === "mac" ? "↵" : "Enter";
+  if (code === "Escape") return "Esc";
+  if (code === "ArrowUp") return "↑";
+  if (code === "ArrowDown") return "↓";
+  return code;
+}
+
+/** O texto de uma combinação: "F3", "Alt+C" / "⌥C", "Ctrl+K" / "⌘K", "Enter". */
+export function textoDaCombinacao(c: Combinacao, so: SistemaDoTeclado): string {
+  if (c.tipo === "funcao" || c.tipo === "solta") return nomeDaTecla(c.code, so, false);
+  const tecla = nomeDaTecla(c.code, so, true);
+  if (c.tipo === "alt") return so === "mac" ? "⌥" + tecla : "Alt+" + tecla;
+  return so === "mac" ? "⌘" + tecla : "Ctrl+" + tecla;
+}
+
+/** A combinação que a etiqueta do botão mostra (decisão 4 do mockup): a
+ *  principal; no Mac, se a principal é tecla F, a primeira alternativa. */
+export function combinacaoDaEtiqueta(teclas: Combinacao[], so: SistemaDoTeclado): Combinacao | null {
+  if (!teclas.length) return null;
+  if (so === "mac" && teclas[0].tipo === "funcao") return teclas.find(c => c.tipo !== "funcao") || teclas[0];
+  return teclas[0];
+}
+
+/** A etiqueta do botão da ação, no sistema do aparelho. */
+export function etiquetaDoAtalho(
+  acao: AcaoDoCaixa, so: SistemaDoTeclado, mapa: AtalhoDoCaixa[] = ATALHOS_DO_CAIXA,
+): string | null {
+  const a = mapa.find(x => x.acao === acao);
+  const c = a ? combinacaoDaEtiqueta(a.teclas, so) : null;
+  return c ? textoDaCombinacao(c, so) : null;
+}
+
+/** A etiqueta de uma tecla de campo (Enter do troco, Enter da busca). */
+export function etiquetaDaTeclaDeCampo(t: TeclaDeCampo, so: SistemaDoTeclado): string {
+  return textoDaCombinacao(TECLAS_DE_CAMPO[t][0], so);
+}
+
+/** Todas as teclas da ação para a legenda, principal primeiro, sem as
+ *  repetidas do teclado numérico ("Enter" e "Enter do numérico" são uma só). */
+export function teclasDaLegenda(
+  acao: AcaoDoCaixa, so: SistemaDoTeclado, mapa: AtalhoDoCaixa[] = ATALHOS_DO_CAIXA,
+): string[] {
+  const a = mapa.find(x => x.acao === acao);
+  if (!a) return [];
+  const out: string[] = [];
+  for (const c of a.teclas) {
+    if (/^Numpad/.test(c.code)) continue;
+    const t = textoDaCombinacao(c, so);
+    if (!out.includes(t)) out.push(t);
+  }
+  return out;
+}
+
+/** A forma de pagamento (chave de PAYMENTS) e o seu Alt+1…5. */
+const ORDEM_DOS_PAGAMENTOS = ["dinheiro", "pix", "debito", "cartao", "crediario"];
+export function acaoDoPagamento(key: string): AcaoDoCaixa | null {
+  const i = ORDEM_DOS_PAGAMENTOS.indexOf(key);
+  if (i < 0) return null;
+  return (["pagamento1", "pagamento2", "pagamento3", "pagamento4", "pagamento5"] as AcaoDoCaixa[])[i];
 }

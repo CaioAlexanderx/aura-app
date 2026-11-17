@@ -4,6 +4,7 @@ import { Icon } from "@/components/Icon";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { WebPortal } from "@/components/WebPortal";
 import { useLeitorNoCampo } from "@/hooks/useLeitorNoCampo";
+import { EtiquetaDeTecla } from "./EtiquetaDeTecla";
 import {
   LIMITE_SEM_CONFIRMACAO_PCT, avisoDoLimite, resolverDescontoManual, textoDoPct,
 } from "@/utils/descontoManual";
@@ -56,7 +57,11 @@ export function DiscountSection({
   return (
     <View style={s.container}>
       <View style={s.header}>
-        <Text style={s.label}>Desconto manual</Text>
+        <View style={s.labelRow}>
+          <Text style={s.label}>Desconto manual</Text>
+          {/* 17/11/2026 (p-155): F7 (⌥S no Mac) leva o cursor para o campo. */}
+          <EtiquetaDeTecla acao="desconto" />
+        </View>
         {manualDiscountAmount > 0 && (
           <Pressable onPress={clearDiscount} style={s.clearBtn}>
             <Icon name="x" size={10} color={Colors.red} />
@@ -130,6 +135,7 @@ export function DiscountSection({
 const s = StyleSheet.create({
   container: { marginTop: 2, marginBottom: 4 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
+  labelRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   label: { fontSize: 11, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.8 },
   clearBtn: { width: 22, height: 22, borderRadius: 6, backgroundColor: Colors.redD, alignItems: "center", justifyContent: "center" },
   row: { flexDirection: "row", alignItems: "center", gap: 8 },

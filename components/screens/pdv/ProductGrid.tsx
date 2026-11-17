@@ -31,6 +31,9 @@ import { IS_WEB, webOnly, accentForProduct, productLetter, fmtCurrency } from ".
 import { usaPecasNoMilheiro, milheiroParaUnidades } from "./matconQty";
 import { fmtQty, qtdComUnidade } from "@/utils/matconUnits";
 import { promoDoItem } from "@/utils/precoEfetivo";
+import { useTemTeclado } from "@/hooks/useTemTeclado";
+import { EtiquetaDeTecla } from "./EtiquetaDeTecla";
+import { TEXTOS_DOS_ATALHOS } from "./textosDosAtalhos";
 
 // "EST. 11 UN" era abreviação de sistema: o `Est.` vinha do código e o
 // uppercase do estilo. Vira frase — "11 em estoque" — e a unidade só aparece
@@ -106,15 +109,10 @@ let gradeJaEntrou = false;
 export function __reiniciarEntradaDaGrade() { gradeJaEntrou = false; }
 
 // O anel do destaque só aparece com mouse e teclado (no toque não há Enter).
-function comTeclado(): boolean {
-  try {
-    return IS_WEB && typeof window !== "undefined" && typeof window.matchMedia === "function"
-      && window.matchMedia("(hover: hover) and (pointer: fine)").matches;
-  } catch { return false; }
-}
+// 17/11/2026 (p-155): a mesma leitura das etiquetas (hooks/useTemTeclado).
 
 export function ProductGrid({ products, qtyById, onAdd, columns = 4, minCard, compact = false, dense = false, matconEnabled = false, cardPriceFor, destaqueId = null }: Props) {
-  const [teclado] = useState(comTeclado);
+  const teclado = useTemTeclado();
   // true só no primeiro render da primeira grade; o cartão guarda o valor de
   // quando montou (ProdCard), então a cascata da entrada termina inteira.
   const naEntrada = useRef(!gradeJaEntrou);
@@ -245,6 +243,14 @@ function ProdCard({ product, qty, index, animar = false, onAdd, compact = false,
         />
       )}
 
+      {/* 17/11/2026 (p-155): o produto que o Enter coloca na venda. */}
+      {destacado && (
+        <View style={s.enterAdiciona} testID="grade-enter-adiciona">
+          <EtiquetaDeTecla campo="adicionarDestacado" />
+          <Text style={s.enterAdicionaTxt}>{TEXTOS_DOS_ATALHOS.adiciona}</Text>
+        </View>
+      )}
+
       {qty > 0 && (
         <View style={[s.badge, IS_WEB && ({ animation: "caixaBadgePop 0.35s cubic-bezier(0.4,0,0.2,1)" } as any)]}>
           {/* Milheiro no carrinho aparece em peças: ×500, não ×0.5. */}
@@ -330,6 +336,14 @@ const s = StyleSheet.create({
     flex: 1 as any,
     minWidth: 150,
   },
+  enterAdiciona: {
+    position: "absolute", top: 8, left: 8, zIndex: 3,
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingVertical: 3, paddingLeft: 4, paddingRight: 7,
+    borderRadius: 8, borderWidth: 1, borderColor: "rgba(124,58,237,0.48)",
+    backgroundColor: Platform.OS === "web" ? (Glass.pop as any) : Colors.bg3,
+  },
+  enterAdicionaTxt: { fontSize: 11, fontWeight: "700", color: Colors.ink },
   badge: {
     position: "absolute",
     top: 10,

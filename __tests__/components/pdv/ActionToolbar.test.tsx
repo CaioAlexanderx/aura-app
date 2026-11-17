@@ -67,11 +67,29 @@ describe("ActionToolbar — rótulos escritos", () => {
   });
 });
 
+// 17/11/2026 (p-155): a etiqueta da tecla só aparece com mouse e teclado
+// (hooks/useTemTeclado lê `(hover: hover) and (pointer: fine)`).
+function aparelho(comTeclado: boolean) {
+  (window as any).matchMedia = (q: string) => ({
+    matches: comTeclado && q === "(hover: hover) and (pointer: fine)", media: q,
+    addEventListener: () => {}, removeEventListener: () => {},
+  });
+}
+afterEach(() => { delete (window as any).matchMedia; });
+
 describe("ActTroca — botão de texto simples", () => {
   it("renderiza o rótulo por extenso e o atalho F5, sem ícone como identidade", () => {
+    aparelho(true);
     const { text } = renderText(<ActTroca onOpen={jest.fn()} />);
     expect(text).toContain("Troca ou devolução");
     expect(text).toContain("F5");
+  });
+
+  it("no toque a etiqueta some (o rótulo fica)", () => {
+    aparelho(false);
+    const { text } = renderText(<ActTroca onOpen={jest.fn()} />);
+    expect(text).toContain("Troca ou devolução");
+    expect(text).not.toContain("F5");
   });
 
   it("accessibilityLabel carrega a frase inteira, não o rótulo curto", () => {

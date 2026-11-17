@@ -106,6 +106,8 @@ import { rotuloDaComanda } from "@/utils/comanda";
 import { contarProdutosDoCarrinho } from "@/utils/contarProdutosDoCarrinho";
 import { estadoDoDoc, mascararDoc, mensagemDoDoc } from "@/utils/nfseAutomatica";
 import { useLeitorNoCampo } from "@/hooks/useLeitorNoCampo";
+import { EtiquetaDeTecla } from "./EtiquetaDeTecla";
+import { acaoDoPagamento } from "@/utils/atalhosDoCaixa";
 import { TEXTOS_DA_TELA_FINAL as TF } from "./textosDaTelaFinal";
 
 /** 10/11/2026 (NFS-e automática, mockup nfse-cadastro-servico.html, tela 3).
@@ -584,6 +586,8 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
                   >
                     <Icon name={m.icon as any} size={15} color={isActive ? (IS_DARK_MODE ? "#fff" : Colors.violet) : Colors.ink2} />
                     <Text style={[s.payLabel, isActive && { color: IS_DARK_MODE ? "#fff" : Colors.ink }]}>{m.label}</Text>
+                    {/* 17/11/2026 (p-155): Alt+1…5 numa terceira linha (decisão 3). */}
+                    {acaoDoPagamento(m.key) ? <EtiquetaDeTecla acao={acaoDoPagamento(m.key)!} /> : null}
                   </Pressable>
                 );
               })}
@@ -1034,6 +1038,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
                 <>
                   <Icon name="check" size={16} color="#fff" />
                   <Text style={s.ctaPriTxt} numberOfLines={1}>Finalizar venda</Text>
+                  <EtiquetaDeTecla acao="finalizar" inv />
                 </>
               )}
             </Pressable>
