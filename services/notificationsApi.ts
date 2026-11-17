@@ -42,6 +42,9 @@ export interface OrderNotification {
   status: string;
   created_at: string;
   source: 'canal_digital' | 'studio';
+  /** p-194: só vem com a frente Personalizados no Negócio (ex.: /personalizados/pedido/<id>). */
+  cta_route?: string;
+  personalizados_no_negocio?: boolean;
 }
 
 export type NotificationSeverity = 'info' | 'atencao' | 'critico';
