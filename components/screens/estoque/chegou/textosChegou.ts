@@ -1,9 +1,9 @@
 // ============================================================
 // AURA. — Estoque · "Chegou mercadoria": TEXTOS DA TELA (Fase 3)
 //
-// Arquivo separado para a revisão do Caio. As palavras da Fase 3 precisam
-// do OK dele ANTES do A8 colocar o botão "Chegou mercadoria" na barra.
-// Até lá o wizard existe no código e ninguém o vê.
+// Arquivo separado para a revisão do Caio. As palavras das Fases 3 e 4
+// foram aprovadas por ele em 17/11; o A8 colocou o botão "Chegou
+// mercadoria" na barra do Estoque e ligou as portas de Fornecedores.
 //
 // Origem: estoque-portas-mockup-17-11.html (parte 4 e estados) e a seção
 // (b) das notas do mockup. Quando um texto NÃO está no mockup, o
@@ -287,6 +287,39 @@ export const TEXTOS_CHEGOU = {
   erroSemResposta: "Não tivemos resposta da Aura. Tente de novo: nada entra em dobro.",
   erroVariante: "Não achamos a cor e o tamanho pelo código de barras. Diga de qual chegou.",
   erroGenerico: "Não conseguimos dar entrada. Nada foi gravado; tente de novo.",
+
+  // ── Fase 3 · As portas no Estoque (A8) ─────────────────────
+  // Seção (b) das notas do mockup, "Barra e Estoque" e "+ Produto e
+  // Cadastrar vários". O botão da barra usa `titulo` ("Chegou mercadoria").
+  // "+ Produto" no celular: ícone de mais e a palavra.
+  produtoCelular: "Produto",
+  // Leitor de tela dos ícones do celular (o olho já diz "Mostrar valores" /
+  // "Ocultar valores" pelo OlhoValores).
+  rotuloSelecionar: "Selecionar",
+  rotuloSairDaSelecao: "Sair da seleção",
+  rotuloConferir: "Conferir estoque",
+  // Loja vazia.
+  vazioTitulo: "Sua loja ainda não tem produtos",
+  vazioApoio: "Comece do jeito que for mais fácil para você. Dá para trocar de ideia depois.",
+  vazioApoioCelular: "Comece do jeito que for mais fácil para você.",
+  vazioNotaTitulo: "Tenho a nota do fornecedor",
+  vazioNotaApoio: "A Aura cadastra os produtos da nota e já dá entrada no estoque, com o custo.",
+  vazioNotaApoioCelular: "Cadastra e já dá entrada.",
+  vazioPlanilhaTitulo: "Tenho uma planilha",
+  vazioPlanilhaApoio: "Excel ou CSV com os seus produtos. Você confere antes de gravar.",
+  vazioPlanilhaApoioCelular: "Você confere antes de gravar.",
+  vazioPlanilhaBotao: "Escolher planilha",
+  vazioMaoTitulo: "Vou cadastrar à mão",
+  vazioMaoApoio: "Um de cada vez, ou cole uma lista com vários.",
+  vazioMaoProduto: "+ Produto",
+  vazioMaoLista: "Colar uma lista",
+  // Aviso dentro do "Cadastrar vários" (o "+ Produto").
+  avisoNotaTitulo: "Chegou com a nota do fornecedor?",
+  avisoNotaAntes: "Use ",
+  avisoNotaDepois: ": ele cadastra o que faltar e já dá entrada no estoque, com o custo da nota.",
+  avisoNotaBotao: "Ir para Chegou mercadoria",
+  avisoNotaCelular: "Use Chegou mercadoria.",
+  avisoNotaBotaoCelular: "Ir para lá",
 
   // ── Fase 4 · Fornecedores (F1 e F2) ────────────────────────
   // Só aparecem com FORNECEDORES_ABREM_O_CHEGOU ligada (portaDoChegou.ts),

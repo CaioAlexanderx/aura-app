@@ -47,7 +47,9 @@ const VAREJO_PASSOS: Record<string, PassoConfig> = {
     path: "/estoque",
     mod: "estoque",
     targets: [t("estoque.novo_produto")],
-    tip: { title: "Seu primeiro produto", body: "Toque em + Produto. Se já tem tudo numa planilha, use o Importar ao lado." },
+    // 17/11/2026 (A8): o "Importar" saiu da barra; a planilha está no
+    // "Cadastrar vários", dentro do + Produto.
+    tip: { title: "Seu primeiro produto", body: "Toque em + Produto. Se já tem tudo numa planilha, use o Cadastrar vários, logo no topo dele." },
   },
   primeira_venda: {
     title: "Faça a primeira venda",
@@ -109,8 +111,11 @@ export const FRENTES: Record<Segmento, FrenteConfig> = {
         desc: "Planilha ou XML do fornecedor, com unidade (m², kg, saco).",
         path: "/estoque",
         mod: "estoque",
-        targets: [t("estoque.importar"), t("estoque.novo_produto")],
-        tip: { title: "Seus produtos", body: "Toque em Importar e escolha a planilha ou o XML da nota do fornecedor. Você confere tudo antes de gravar." },
+        // 17/11/2026 (A8): sem o "Importar" na barra, o passo aponta para o
+        // + Produto (planilha no "Cadastrar vários"); a nota vai pelo
+        // "Chegou mercadoria", ao lado.
+        targets: [t("estoque.novo_produto")],
+        tip: { title: "Seus produtos", body: "Toque em + Produto e use o Cadastrar vários para mandar a planilha. Se tem o XML da nota do fornecedor, use o Chegou mercadoria, ao lado. Você confere tudo antes de gravar." },
       },
       primeiro_orcamento: {
         title: "Faça o primeiro orçamento",

@@ -17,11 +17,16 @@
 // Aqui só há tela. Quem decide o que cada origem faz é o pai
 // (ItemFormModal → app/(tabs)/estoque.tsx). A faixa só aparece no cadastro
 // novo de produto, fora do demo e do consolidado (o ItemFormModal decide).
+//
+// A8 (17/11/2026): abaixo das duas origens, o aviso "Chegou com a nota do
+// fornecedor?" leva ao "Chegou mercadoria" (a nota saiu do "Importar" e
+// virou origem do wizard). Só aparece quando o pai entrega `onChegou`.
 // ============================================================
 import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator } from "react-native";
 import { Colors, IS_DARK_MODE } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { BaixarModelo } from "./BaixarModelo";
+import { TEXTOS_CHEGOU } from "./chegou/textosChegou";
 
 export const TEXTOS_CADASTRAR_VARIOS = {
   faixaTitulo: "Tem muitos para cadastrar?",
@@ -52,6 +57,8 @@ export type AcoesCadastrarVarios = {
   planilhaOcupada?: boolean;
   /** Abrir o modal já na escolha da origem (o "← Voltar" da lista). */
   abrirNaEscolha?: boolean;
+  /** A8: "Ir para Chegou mercadoria" (fecha o cadastro e abre o wizard). Sem ela, o aviso some. */
+  onChegou?: () => void;
 };
 
 // ── Faixa no formulário ──────────────────────────────────────
@@ -103,9 +110,10 @@ type EscolhaProps = {
   onPlanilha: () => void;
   onLista: () => void;
   planilhaOcupada?: boolean;
+  onChegou?: () => void;
 };
 
-export function CadastrarVariosEscolha({ narrow, onVoltar, onFechar, onPlanilha, onLista, planilhaOcupada }: EscolhaProps) {
+export function CadastrarVariosEscolha({ narrow, onVoltar, onFechar, onPlanilha, onLista, planilhaOcupada, onChegou }: EscolhaProps) {
   const T = TEXTOS_CADASTRAR_VARIOS;
   return (
     <>
@@ -163,10 +171,50 @@ export function CadastrarVariosEscolha({ narrow, onVoltar, onFechar, onPlanilha,
             </View>
           </View>
         </View>
+
+        {onChegou ? <AvisoDaNota narrow={narrow} onChegou={onChegou} /> : null}
       </ScrollView>
     </>
   );
 }
+
+// ── A8: "Chegou com a nota do fornecedor?" ───────────────────
+function AvisoDaNota({ narrow, onChegou }: { narrow: boolean; onChegou: () => void }) {
+  const T = TEXTOS_CHEGOU;
+  if (narrow) {
+    return (
+      <View style={s.aviso} testID="cadastrar-varios-aviso-nota">
+        <Icon name="info" size={16} color={AZUL} />
+        <View style={{ flex: 1, minWidth: 0, flexDirection: "row", flexWrap: "wrap", alignItems: "center" }}>
+          <Text style={s.avisoTxt}>
+            <Text style={s.avisoForte}>{T.avisoNotaTitulo}</Text>
+            {" " + T.avisoNotaCelular + " "}
+          </Text>
+          <Pressable onPress={onChegou} style={s.avisoLink} accessibilityRole="button" testID="cadastrar-varios-ir-chegou">
+            <Text style={s.avisoLinkTxt}>{T.avisoNotaBotaoCelular}</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+  return (
+    <View style={s.aviso} testID="cadastrar-varios-aviso-nota">
+      <Icon name="info" size={16} color={AZUL} />
+      <Text style={[s.avisoTxt, { flex: 1, minWidth: 0 }]}>
+        <Text style={s.avisoForte}>{T.avisoNotaTitulo}</Text>
+        {" " + T.avisoNotaAntes}
+        <Text style={s.avisoForte}>{T.titulo}</Text>
+        {T.avisoNotaDepois}
+      </Text>
+      <Pressable onPress={onChegou} style={s.avisoBotao} accessibilityRole="button" testID="cadastrar-varios-ir-chegou">
+        <Text style={s.avisoBotaoTxt}>{T.avisoNotaBotao}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+// Azul do aviso (tokens --blue/--blueD do mockup): o app não tem azul nas cores.
+const AZUL = IS_DARK_MODE ? "#93c5fd" : "#1d4ed8";
 
 // Sem hover: tudo é toque/clique (CLAUDE.md, armadilha 7).
 const s = StyleSheet.create({
@@ -230,4 +278,20 @@ const s = StyleSheet.create({
   },
   btnCelular: { minHeight: 44 },
   btnPriTxt: { color: "#fff", fontSize: 12.5, fontWeight: "700" },
+
+  aviso: {
+    flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap",
+    marginTop: 14, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10,
+    backgroundColor: IS_DARK_MODE ? "rgba(37,99,235,0.16)" : "rgba(37,99,235,0.08)",
+  },
+  avisoTxt: { fontSize: 13, color: Colors.ink2, lineHeight: 19 },
+  avisoForte: { fontWeight: "700", color: Colors.ink },
+  avisoBotao: {
+    minHeight: 36, justifyContent: "center", paddingHorizontal: 14, borderRadius: 9,
+    backgroundColor: IS_DARK_MODE ? "rgba(124,58,237,0.18)" : "#f3efff",
+    borderWidth: 1, borderColor: Colors.border2,
+  },
+  avisoBotaoTxt: { fontSize: 13, fontWeight: "600", color: Colors.violet3 },
+  avisoLink: { minHeight: 44, justifyContent: "center", paddingHorizontal: 4 },
+  avisoLinkTxt: { fontSize: 13, fontWeight: "700", color: Colors.violet3 },
 });
