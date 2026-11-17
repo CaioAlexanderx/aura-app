@@ -391,6 +391,17 @@ export function useCart(
   // depois do unmount) deixaria o carrinho guardado de uma venda que o
   // servidor já registrou — e voltar ao Caixa a refaria.
   const finalizandoRef = useRef(false);
+  // 17/11/2026 (p-146): o que foi bipado ou clicado com a venda em voo. Não
+  // entra no carrinho que está sendo gravado (nem na tela, nem na venda, nem
+  // no carrinho que volta se o servidor recusar): espera aqui e vira o
+  // carrinho da próxima venda (newSale). O ref é o que addToCart lê (dois
+  // bipes no mesmo render); o state só redesenha quem quiser mostrar.
+  const proximaVendaRef = useRef<CartItem[]>([]);
+  const [itensDaProximaVenda, setItensDaProximaVenda] = useState<CartItem[]>([]);
+  function guardarParaAProximaVenda(itens: CartItem[]) {
+    proximaVendaRef.current = itens;
+    setItensDaProximaVenda(itens);
+  }
   // Esta tela já teve itens: carrinho que VOLTA a ficar vazio apaga a guarda.
   // (Vazio na abertura não apaga: é quando a guarda ainda vai ser restaurada.)
   const jaTeveItens = useRef(false);
@@ -773,7 +784,6 @@ export function useCart(
     },
     variant?: { id: string; label: string; price?: number; promoDe?: number | null },
   ) {
-    setLastSale(null);
     var cartKey = variant ? product.id + "__" + variant.id : product.id;
     var displayName = variant ? product.name + " (" + variant.label + ")" : product.name;
     // De/Por: produto sem variante em promoção entra pelo preço da promoção;
@@ -789,7 +799,7 @@ export function useCart(
       : null;
     var promoDeCard = cartaoOn && promoDe != null ? precoNoCartaoDoItem(promoDe, refCartao, cardCfg) : null;
 
-    setCart(function(prev) {
+    function juntar(prev: CartItem[]): CartItem[] {
       var existing = prev.find(function(i) { return i.productId === cartKey; });
       if (existing) return prev.map(function(i) { return i.productId === cartKey ? { ...i, qty: i.qty + 1 } : i; });
       return [...prev, {
@@ -802,7 +812,18 @@ export function useCart(
         ...(promoDe != null ? { promoDe: promoDe } : {}),
         ...(promoDeCard != null ? { promoDeCard: promoDeCard } : {}),
       }];
-    });
+    }
+
+    // 17/11/2026 (p-146): venda em voo. Antes o item entrava no carrinho que
+    // estava sendo gravado e sumia quando a resposta esvaziava o carrinho.
+    // Agora espera a próxima venda; o cupom da venda em voo fica como está.
+    if (finalizandoRef.current) {
+      guardarParaAProximaVenda(juntar(proximaVendaRef.current));
+      return;
+    }
+
+    setLastSale(null);
+    setCart(juntar);
     if (couponApplied) setCouponApplied(null);
   }
 
@@ -1259,7 +1280,12 @@ export function useCart(
     finalizandoRef.current = false;
     apagarGuarda();
     setRecuperada(null);
-    setLastSale(null); setCart([]); setQuoteId(null); setComanda(null); setReferredProfessionalId(null); clearLotAllocations(); setIsProcessing(false);
+    // 17/11/2026 (p-146): o que foi lançado durante a espera da venda
+    // anterior abre a venda nova (sem nada esperando, é o carrinho vazio de
+    // sempre). Com itens, o efeito de guarda grava esse carrinho novo.
+    var daEspera = proximaVendaRef.current;
+    if (daEspera.length > 0) guardarParaAProximaVenda([]);
+    setLastSale(null); setCart(daEspera); setQuoteId(null); setComanda(null); setReferredProfessionalId(null); clearLotAllocations(); setIsProcessing(false);
     setFreteValor("");
     setEntrega(null);
     setSelectedCustomerId(null); setSelectedCustomerName(null); setSelectedCustomerPhone(null);
@@ -1295,6 +1321,9 @@ export function useCart(
     // desconto efetivo do cupom no método e a regra do cupom.
     precoNoCartao, couponDiscount, setCouponRule,
     addToCart, setQty, updateQty, setUnitPrice, removeItem, finalizeSale, newSale,
+    // 17/11/2026 (p-146): itens lançados durante a espera da venda, que abrem
+    // a próxima (newSale). A tela ainda não mostra; o aviso vem em outro card.
+    itensDaProximaVenda,
     selectedCustomerId, selectedCustomerName, selectedCustomerPhone, selectCustomer,
     selectedEmployeeId, selectedEmployeeName, selectEmployee,
     sellerName, setSellerName,
