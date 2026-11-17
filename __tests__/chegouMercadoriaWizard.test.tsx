@@ -8,6 +8,7 @@
 // A4a: passo 3, conferência: estados da linha, resumo e rodapé travado
 //      enquanto falta decidir (pendência 5).
 // A4b: painéis da linha (produto novo, ligar, trocar, grade) e a margem dos novos.
+// A7: gravar (corpo, chave, erros do servidor), Pronto e o desvio do Matcon.
 // ============================================================
 import React from "react";
 import renderer, { act } from "react-test-renderer";
@@ -20,6 +21,21 @@ jest.mock("@/components/Toast", () => ({ toast: { success: jest.fn(), error: jes
 jest.mock("@/components/WebPortal", () => ({ WebPortal: ({ children, active }: any) => (active ? children : null) }));
 jest.mock("@/components/ResponsiveSheet", () => ({ ResponsiveSheet: ({ children, visible }: any) => (visible ? children : null) }));
 jest.mock("@/hooks/useAtalhosDoCaixa", () => ({ dialogoAbertoNaTela: () => false }));
+let mockPdv: any = {};
+jest.mock("@/hooks/usePdvSettings", () => ({
+  usePdvSettings: () => ({ settings: mockPdv, isLoading: false, error: null, invalidate: jest.fn() }),
+}));
+jest.mock("@/components/screens/estoque/DanfeImportModal", () => ({
+  DanfeImportModal: (p: any) => (p.visible ? require("react").createElement("DanfeImportModal", { testID: "danfe-matcon", onClose: p.onClose }) : null),
+}));
+const mockDarEntrada = jest.fn();
+jest.mock("@/services/estoqueEntradasApi", () => ({
+  estoqueEntradasApi: {
+    darEntrada: (...a: any[]) => mockDarEntrada(...a),
+    notaJaLancada: jest.fn(),
+    codigosDoFornecedor: jest.fn(),
+  },
+}));
 
 let mockQueries: Record<string, any> = {};
 const mockInvalidate = jest.fn();
@@ -104,6 +120,8 @@ beforeEach(() => {
   mockLookup.mockReset();
   mockCreate.mockReset();
   mockInvalidate.mockReset();
+  mockDarEntrada.mockReset();
+  mockPdv = {};
   (global as any).innerWidth = 1280;
 });
 
@@ -637,5 +655,123 @@ describe("A4b · painéis da linha", () => {
     await digitar(tree, "chegou-linha-3-grade-v-p", "4");
     await digitar(tree, "chegou-linha-3-grade-v-m", "6");
     expect(travado(tree)).toBe(false);
+  });
+});
+
+describe("A7 · gravar e Pronto", () => {
+  const { toast } = require("@/components/Toast");
+  async function irAoPasso3(props: Record<string, unknown> = {}) {
+    mockQueries["supplier-codes"] = { data: { supplier_id: "f-alfa", items: [], map: { "AL-0391": "p-acetona" } }, isLoading: false };
+    mockArquivo = { name: "nota.xml", conteudo: XML_CONFERENCIA };
+    const r = await montar({ products: PRODUTOS_CONFERENCIA, ...props });
+    await tocar(r.tree, "chegou-cartao-nota-botao");
+    await tocar(r.tree, "chegou-continuar");
+    return r;
+  }
+  const RESPOSTA = {
+    receipt: { id: "r-1" },
+    supplier: { id: "f-alfa", name: "Distribuidora Alfa", created: false },
+    lines: [
+      { index: 0, product_id: "p-esmalte", name: "Esmalte", quantity: 24 },
+      { index: 1, product_id: "p-acetona", name: "Acetona", quantity: 12 },
+      { index: 2, product_id: "p-lixa", name: "Lixa", quantity: 10 },
+      { index: 3, product_id: "p-novo", name: "Base", quantity: 18, created: true },
+    ],
+    totals: { lines: 4, products: 4, created_products: 1, quantity: 64, total_cost: 795.6 },
+  };
+
+  test("'Dar entrada' manda a nota com a chave desta abertura e mostra o Pronto", async () => {
+    mockDarEntrada.mockResolvedValue(RESPOSTA);
+    const onFeito = jest.fn();
+    const onVerNovos = jest.fn();
+    const onClose = jest.fn();
+    const { tree } = await irAoPasso3({ onFeito, onVerNovos, onClose });
+    await tocar(tree, "chegou-linha-4-novo");
+    await tocar(tree, "chegou-dar-entrada");
+    expect(mockDarEntrada).toHaveBeenCalledTimes(1);
+    const [cid, corpo] = mockDarEntrada.mock.calls[0];
+    expect(cid).toBe("c1");
+    expect(corpo).toMatchObject({
+      idempotency_key: mockChaves[0], origin: "nota", supplier_id: "f-alfa", invoice_number: "7731",
+      nfe_key: "35261111222333000181550010000077311000077310", update_cost: true,
+    });
+    expect(corpo.items).toHaveLength(4);
+    expect(corpo.items[1]).toEqual({ product_id: "p-acetona", quantity: 12, unit_cost: 3.2, supplier_code: "AL-0391" });
+    expect(corpo.items[3]).toMatchObject({ new_product: { name: "BASE FORTALECEDORA 10ML", price: 14.8 }, quantity: 18 });
+
+    expect(tem(tree, "chegou-pronto")).toBe(true);
+    const t = texto(tree);
+    expect(t).toContain(T.prontoTitulo);
+    expect(t).toContain(T.prontoComEntrada(4));
+    expect(t).toContain(T.prontoComEntradaDetalhe(3, 1));
+    expect(t).toContain(T.prontoLigados(4, "Distribuidora Alfa", true));
+    expect(t).toContain(T.prontoForaUm("REMOV CUTICULA 60ML", T.motivoQtdZero));
+    expect(t).toContain(T.prontoSemDobro);
+    expect(onFeito).toHaveBeenCalledWith([RESPOSTA]);
+    expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ["products"] });
+    await tocar(tree, "chegou-ver-novos");
+    expect(onVerNovos).toHaveBeenCalledWith(["p-novo"]);
+    await tocar(tree, "chegou-fechar-pronto");
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  test("linha recusada pelo servidor: fica no passo 3, com o motivo na linha", async () => {
+    mockDarEntrada.mockRejectedValue({ status: 400, data: { code: "LINHAS_COM_ERRO", lines: [{ index: 3, error: "Este código de barras já é do produto \"X\". Ligue o item a ele." }] } });
+    const { tree } = await irAoPasso3();
+    await tocar(tree, "chegou-linha-4-novo");
+    await tocar(tree, "chegou-dar-entrada");
+    expect(tem(tree, "chegou-passo-3")).toBe(true);
+    expect(tem(tree, "chegou-linha-4-erro-servidor")).toBe(true);
+    expect(toast.error).toHaveBeenCalledWith(T.erroLinhas);
+  });
+
+  test("limite do plano e recurso indisponível: mensagens próprias, nada muda", async () => {
+    mockDarEntrada.mockRejectedValueOnce({ status: 403, data: { code: "LIMITE_DO_PLANO", limit: 2000 } });
+    const { tree } = await irAoPasso3();
+    await tocar(tree, "chegou-linha-4-fora");
+    await tocar(tree, "chegou-dar-entrada");
+    expect(toast.error).toHaveBeenCalledWith(T.erroLimite(2000));
+    mockDarEntrada.mockRejectedValueOnce({ status: 503, data: { code: "SCHEMA_PENDENTE" } });
+    await tocar(tree, "chegou-dar-entrada");
+    expect(toast.error).toHaveBeenCalledWith(T.erroIndisponivel);
+    expect(tem(tree, "chegou-passo-3")).toBe(true);
+    // A chave é a mesma nas duas tentativas.
+    expect(mockDarEntrada.mock.calls[0][1].idempotency_key).toBe(mockDarEntrada.mock.calls[1][1].idempotency_key);
+  });
+
+  test("Matcon: a nota abre o DanfeImportModal de hoje (pendência 4)", async () => {
+    mockPdv = { matcon_enabled: true };
+    mockArquivo = { name: "nota.xml", conteudo: XML_CONFERENCIA };
+    const onClose = jest.fn();
+    const { tree } = await montar({ onClose });
+    await tocar(tree, "chegou-cartao-nota-botao");
+    expect(tem(tree, "danfe-matcon")).toBe(true);
+    expect(tem(tree, "chegou-passo-1")).toBe(false);
+    await act(async () => { porId(tree, "danfe-matcon")[0].props.onClose(); });
+    expect(onClose).toHaveBeenCalled();
+  });
+});
+
+describe("A7 · parte não entrou (Passo4Pronto)", () => {
+  const { Passo4Pronto } = require("@/components/screens/estoque/chegou/Passo4Pronto");
+  test("diz quantos entraram e oferece repetir e baixar a lista", async () => {
+    const onRepetir = jest.fn();
+    const onBaixar = jest.fn();
+    let tree: any;
+    await act(async () => {
+      tree = renderer.create(
+        <Passo4Pronto estreito={false} semCusto={false} numeroDaNota="7731" fora={[]}
+          resumo={{ comEntrada: 300, jaTinha: 300, cadastrados: 0, fornecedor: null, totalDaCompra: null }}
+          falha={{ feitos: 300, total: 650 }} onRepetir={onRepetir} onBaixar={onBaixar} />,
+      );
+    });
+    const t = texto(tree);
+    expect(t).toContain(T.falhaTitulo(300, 650));
+    expect(t).toContain(T.falhaTexto(300, 350));
+    expect(t).toContain(T.falhaSemDobro(300));
+    await tocar(tree, "chegou-falha-repetir");
+    await tocar(tree, "chegou-falha-baixar");
+    expect(onRepetir).toHaveBeenCalled();
+    expect(onBaixar).toHaveBeenCalled();
   });
 });

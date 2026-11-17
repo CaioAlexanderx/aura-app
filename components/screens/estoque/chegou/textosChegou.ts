@@ -211,6 +211,54 @@ export const TEXTOS_CHEGOU = {
   rodapeNada: "Nenhum item para dar entrada",
   darEntrada: (n: number) => "Dar entrada em " + n + " " + plural(n, "item", "itens"),
   darEntradaCelular: "Dar entrada",
+
+  // ── Gravando e Pronto (A7) ─────────────────────────────────
+  gravandoTitulo: "Dando entrada…",
+  gravandoTexto: (x: number, n: number) =>
+    x + " de " + n + " " + plural(n, "item", "itens") + ". Pode deixar esta tela aberta. Se ela fechar, o que já entrou fica gravado e nada entra em dobro.",
+  prontoTitulo: "A mercadoria entrou no estoque",
+  prontoTituloCelular: "Entrou no estoque",
+  prontoNota: (numero: string, fornecedor: string | null, total: string | null) =>
+    "Nota " + numero + (fornecedor ? " da " + fornecedor : "") + (total ? " · " + total : ""),
+  // NOVO (fora do mockup): cabeçalho do Pronto quando não veio de nota.
+  prontoSemNota: (fornecedor: string | null, total: string | null) =>
+    [fornecedor, total].filter(Boolean).join(" · "),
+  prontoComEntrada: (n: number) => n + " " + plural(n, "produto", "produtos") + " com entrada",
+  prontoComEntradaDetalhe: (x: number, y: number) => x + " que você já tinha e " + y + " " + plural(y, "cadastrado", "cadastrados") + " agora",
+  prontoComEntradaCelular: (n: number, x: number, y: number) =>
+    n + " " + plural(n, "produto", "produtos") + " com entrada (" + x + " já " + plural(x, "existia", "existiam") + ", " + y + " " + plural(y, "novo", "novos") + ")",
+  prontoCadastrados: (n: number) => n + " " + plural(n, "produto cadastrado", "produtos cadastrados"),
+  prontoLigados: (n: number, fornecedor: string, comCusto: boolean) =>
+    n + " " + plural(n, "produto ligado", "produtos ligados") + " à " + fornecedor + (comCusto ? ", com o custo desta nota" : ""),
+  prontoLigadosCelular: (fornecedor: string) => "ligados à " + fornecedor,
+  prontoForaUm: (nome: string, motivo: string) =>
+    "1 item ficou de fora: " + nome + " (" + motivo + "). Se ele chegou, dê entrada pela linha dele no Estoque.",
+  // NOVO (fora do mockup): mais de um item de fora.
+  prontoForaVarios: (n: number) => n + " itens ficaram de fora. Se algum chegou, dê entrada pela linha dele no Estoque.",
+  prontoForaCelular: (n: number) => n + " " + plural(n, "ficou", "ficaram") + " de fora",
+  // NOVO (fora do mockup): os motivos entre parênteses.
+  motivoFora: "você deixou de fora",
+  motivoQtdZero: "veio com quantidade zero",
+  prontoNovosApoio: (n: number) =>
+    (n === 1 ? "O produto novo está" : "Os " + n + " produtos novos estão") + " com nome, preço, custo e estoque. Fotos e cor você completa quando quiser.",
+  prontoSemDobro: "Nada entra em dobro se você abrir esta nota de novo",
+  verNovos: "Ver os produtos novos",
+  verNovosCelular: "Ver os novos",
+  falhaTitulo: (x: number, n: number) => "Entraram " + x + " dos " + n + " itens.",
+  falhaTexto: (x: number, y: number) =>
+    "A conexão caiu antes do fim. Os " + x + " já estão no estoque; os outros " + y + " estão guardados aqui.",
+  falhaRepetir: (y: number) => "Dar entrada nos " + y + " que faltam",
+  falhaBaixar: (y: number) => "Baixar a lista dos " + y,
+  falhaSemDobro: (x: number) => "Tentar de novo não soma em dobro os " + x + " que já entraram.",
+
+  // NOVO (fora do mockup): erros ao gravar. Nada foi gravado em nenhum deles.
+  erroLinhas: "Alguns itens voltaram com problema. Nada foi gravado: confira as linhas marcadas e dê entrada de novo.",
+  erroLimite: (limite: number) =>
+    "A loja chegou ao limite de " + limite + " produtos do plano. Nada foi gravado. Ligue os itens a produtos que você já tem ou deixe alguns de fora.",
+  erroIndisponivel: "A entrada de vários itens ainda não está disponível. Tente de novo em alguns minutos.",
+  erroSemResposta: "Não tivemos resposta da Aura. Tente de novo: nada entra em dobro.",
+  erroVariante: "Não achamos a cor e o tamanho pelo código de barras. Diga de qual chegou.",
+  erroGenerico: "Não conseguimos dar entrada. Nada foi gravado; tente de novo.",
 } as const;
 
 export type TextosChegou = typeof TEXTOS_CHEGOU;
