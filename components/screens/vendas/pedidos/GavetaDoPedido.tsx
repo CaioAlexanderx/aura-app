@@ -9,15 +9,16 @@
 //   · Situação e "Vem buscar sexta, 20/11".
 //   · Peças reservadas, Pagamento (total, sinal, falta na retirada) e
 //     "O que aconteceu".
-//   · Rodapé: Avisar / Lembrar a cliente, Separar ou Pronto.
+//   · Rodapé: Avisar / Lembrar a cliente, Separar ou Pronto, Nova data.
 //
 // O detalhe vem de GET /companies/:id/pedidos/:oid (Aura-backend#1073), na
 // loja DONA do pedido (consolidado incluso). O backend ainda não devolve a
 // forma nem o dia do sinal (B4a) nem o nome de quem guardou: a gaveta mostra
 // "Sinal" sem a forma, e o cabeçalho sem "por [vendedora]".
 //
-// Sem campo de texto e sem nada abrindo por cima: ResponsiveSheet basta
-// (a exceção da JanelaEmpilhada não se aplica).
+// A gaveta em si não tem campo de texto: ResponsiveSheet basta. O diálogo
+// "Nova data" (com o campo da data) abre POR CIMA dela e por isso usa a
+// JanelaEmpilhada (NovaDataDoPedido.tsx), nunca WebPortal.
 // ============================================================
 import React from "react";
 import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator } from "react-native";

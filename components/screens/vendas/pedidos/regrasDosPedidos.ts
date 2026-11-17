@@ -58,6 +58,16 @@ export const TEXTOS_DOS_PEDIDOS = {
   concluirFuturo: "Concluir: vira venda e baixa o estoque",
   vemBuscar: "Vem buscar",
   fechar: "Fechar o pedido",
+  // Nova data (mockup, partes 2 e 7: o botão do pedido atrasado e as
+  // escolhas de "Quando ela vem buscar" do Novo pedido).
+  novaData: "Nova data",
+  quandoVemBuscar: "Quando ela vem buscar",
+  amanha: "Amanhã",
+  sexta: "Sexta",
+  em7Dias: "Em 7 dias",
+  outraData: "Outra data",
+  prometidoPara: "Prometido para",
+  cancelar: "Cancelar",
 } as const;
 
 // ── Fora do mockup (para o Caio aprovar) ─────────────────────────────
@@ -72,6 +82,14 @@ export const TEXTOS_FORA_DO_MOCKUP = {
   semResultadoNaBusca: "Nenhum pedido com essa busca.",
   /** Carregando a gaveta. */
   carregando: "Carregando o pedido…",
+  /** Nova data: o botão de gravar (o mockup não desenhou o diálogo). */
+  salvarData: "Salvar",
+  /** Nova data: a data digitada já passou (a mesma frase do backend, B1). */
+  dataPassou: "A data em que ela vem buscar já passou. Escolha hoje ou um dia depois.",
+  /** Nova data: data digitada que não existe (a mesma frase do backend, B1). */
+  dataInvalida: "A data em que ela vem buscar está inválida.",
+  /** Nova data: erro sem frase do servidor (a mesma frase do backend). */
+  erroAoMudarData: "Não conseguimos mudar a data do pedido agora. Nada foi alterado. Tente de novo em instantes.",
 } as const;
 
 export type Chip = { key: ChipDosPedidos; label: string; contagem?: number; vermelho?: boolean };
@@ -149,6 +167,46 @@ export function diasEntre(de: string, ate: string): number | null {
   const b = partes(ate);
   if (!a || !b) return null;
   return Math.round((b.d.getTime() - a.d.getTime()) / 86400000);
+}
+
+/** `dia` + n dias, 'YYYY-MM-DD'. */
+export function somarDias(dia: string, n: number): string {
+  const p = partes(dia);
+  if (!p) return dia;
+  const d = new Date(p.d.getTime());
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+/** "20/11" */
+export function diaEMes(dia: string | null | undefined): string {
+  const p = partes(dia);
+  return p ? p.dd + "/" + p.mm : "";
+}
+
+export type OpcaoDeData = { key: "amanha" | "sexta" | "em7"; label: string; dia: string; detalhe: string };
+
+/**
+ * As escolhas rápidas de "Quando ela vem buscar" (mockup, parte 2):
+ * "Amanhã qua, 18/11", "Sexta 20/11", "Em 7 dias 24/11". A sexta é a próxima
+ * que não cai em amanhã nem em 7 dias (aí ela já está nas outras duas).
+ */
+export function opcoesDeData(hoje: string): OpcaoDeData[] {
+  const amanha = somarDias(hoje, 1);
+  const em7 = somarDias(hoje, 7);
+  const p = partes(hoje);
+  const out: OpcaoDeData[] = [
+    { key: "amanha", label: TEXTOS_DOS_PEDIDOS.amanha, dia: amanha, detalhe: dataCurta(amanha) },
+  ];
+  if (p) {
+    const ateSexta = (5 - p.d.getUTCDay() + 7) % 7;
+    if (ateSexta >= 2 && ateSexta <= 6) {
+      const sexta = somarDias(hoje, ateSexta);
+      out.push({ key: "sexta", label: TEXTOS_DOS_PEDIDOS.sexta, dia: sexta, detalhe: diaEMes(sexta) });
+    }
+  }
+  out.push({ key: "em7", label: TEXTOS_DOS_PEDIDOS.em7Dias, dia: em7, detalhe: diaEMes(em7) });
+  return out;
 }
 
 /** Pedido aberto com a data prometida antes de hoje (mesma regra do backend). */
