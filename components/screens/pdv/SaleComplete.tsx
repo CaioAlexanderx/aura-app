@@ -49,7 +49,7 @@
 // "Emitir NFC-e" (pede o CPF/CNPJ na hora se faltar). Com a automática
 // ligada, nada muda. Venda só de produto ou loja que não emite: tela igual.
 // ============================================================
-import { useRef, useState } from "react";
+import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { useAuthStore } from "@/stores/auth";
@@ -155,7 +155,11 @@ type Props = {
   notaAtiva?: boolean;
 };
 
-export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, referralName, pdvSettings, enderecoDoCliente, notaAtiva }: Props) {
+/** 17/11/2026 (p-154): Ctrl/⌘+P na tela final imprime o cupom. A tecla vem
+ *  do listener único da tela do Caixa (hooks/useAtalhosDoCaixa), pelo ref. */
+export type SaleCompleteHandle = { imprimir: () => void };
+
+export const SaleComplete = forwardRef<SaleCompleteHandle, Props>(function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, referralName, pdvSettings, enderecoDoCliente, notaAtiva }, handleRef) {
   const { company, token, companyCount } = useAuthStore();
   // NFS-e automática: opt-in da loja que vendeu (o Caixa é sempre de uma
   // loja — company.id é a empresa da venda, também no grupo multi-CNPJ).
@@ -248,6 +252,9 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
     if (!company?.id) return;
     openPrintReceipt(company.id, sale.id, token, vendaEm, pdvSettings, imprimirPapel ? formatoDoPapel : null);
   }
+  const imprimirRef = useRef(handlePrint);
+  imprimirRef.current = handlePrint;
+  useImperativeHandle(handleRef, () => ({ imprimir: () => imprimirRef.current() }), []);
 
   return (
     <View style={s.container}>
@@ -491,7 +498,7 @@ export function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, re
       </View>
     </View>
   );
-}
+});
 
 const s = StyleSheet.create({
   container: { flex: 1, justifyContent: "center", alignItems: "center", padding: 20 },

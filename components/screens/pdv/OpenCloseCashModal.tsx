@@ -28,7 +28,7 @@
 // Entradas no caixa e a lista das trocas, a mesma do relatório. Sem troca
 // (ou backend sem `trocas`), a tela é a de sempre.
 // ============================================================
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   View, Text, Pressable, StyleSheet, TextInput,
   ActivityIndicator, ScrollView,
@@ -203,6 +203,24 @@ export function OpenCloseCashModal({
     if (closeResult || mode === "abrir") onSuccess?.();
     onClose();
   }
+
+  // 17/11/2026 (p-154): Esc fecha pelo mesmo caminho do X (atualiza o caixa
+  // quando já abriu ou fechou). Gravando (abrir, fechar, sangria): espera.
+  const escRef = useRef(handleCloseModal);
+  escRef.current = handleCloseModal;
+  const gravandoRef = useRef(false);
+  gravandoRef.current = !!(submittingOpen || submittingClose || submittingMov);
+  useEffect(() => {
+    if (!visible || !IS_WEB || typeof window === "undefined") return;
+    function aoTecla(e: KeyboardEvent) {
+      if (e.key !== "Escape" || e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey) return;
+      if (gravandoRef.current) return;
+      e.preventDefault();
+      escRef.current();
+    }
+    window.addEventListener("keydown", aoTecla);
+    return () => window.removeEventListener("keydown", aoTecla);
+  }, [visible]);
 
   async function handleAbrir() {
     if (submittingOpen) return;

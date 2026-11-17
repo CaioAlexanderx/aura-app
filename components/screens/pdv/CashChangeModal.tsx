@@ -2,6 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Modal, View, Text, StyleSheet, Pressable, TextInput, Platform, ScrollView } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
+import { criarDetector } from "@/utils/leituraRapida";
+import { focoEmBotao } from "@/utils/atalhosDoCaixa";
+
+/** 17/11/2026 (p-154): Enter confirma o troco só depois disto (o Enter ou o
+ *  F9 que abriu o troco não confirma sozinho). Mesma guarda do seletor de
+ *  tamanho (VariantPickerModal). */
+export const TROCO_ENTER_LIBERADO_MS = 250;
 
 // ============================================================
 // AURA. — CashChangeModal
@@ -86,6 +93,36 @@ export function CashChangeModal(props: Props) {
     if (!ready) return;
     onConfirm();
   }
+
+  // 17/11/2026 (p-154): Enter confirma o troco (web). Guardas, iguais às do
+  // seletor de tamanho: nada nos primeiros 250 ms depois de abrir, nada com
+  // a tecla segurada (repeat) e nada no fim de uma rajada do leitor de
+  // código — o leitor está desligado aqui e o bipe cairia no campo do valor
+  // com um Enter no fim. Sem valor que cubra o total, o Enter não faz nada.
+  const abertoEm = useRef(0);
+  const vivo = useRef({ handleConfirm });
+  vivo.current = { handleConfirm };
+  useEffect(function() {
+    if (Platform.OS !== "web" || !visible || typeof window === "undefined") return;
+    abertoEm.current = Date.now();
+    var det = criarDetector();
+    function aoTecla(e: KeyboardEvent) {
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      if (e.key === "Enter") {
+        // Foco num botão (Cancelar, um valor pronto): o Enter aperta o botão.
+        if (focoEmBotao(e.target)) { det.reset(); return; }
+        var foiBipe = !!det.leitura();
+        det.reset();
+        e.preventDefault();
+        if (e.repeat || foiBipe || Date.now() - abertoEm.current < TROCO_ENTER_LIBERADO_MS) return;
+        vivo.current.handleConfirm();
+        return;
+      }
+      if (e.key && e.key.length === 1) det.tecla(e.key, e.timeStamp || Date.now());
+    }
+    window.addEventListener("keydown", aoTecla, true);
+    return function() { window.removeEventListener("keydown", aoTecla, true); };
+  }, [visible]);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>

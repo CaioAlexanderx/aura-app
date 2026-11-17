@@ -191,7 +191,11 @@ function CodigoManualForm({
 // manual, com o F1 de sempre.
 // 17/11/2026 (p-153): a tecla F1 saiu daqui. Quem escuta é o listener único
 // da tela (hooks/useAtalhosDoCaixa), que chama `alternar()` pelo ref.
-export type AlternarHandle = { alternar: () => void };
+export type AlternarHandle = {
+  alternar: () => void;
+  /** 17/11/2026 (p-154): Esc. Devolve true se estava aberto (fechou algo). */
+  fechar: () => boolean;
+};
 
 export const ActBarcode = forwardRef<AlternarHandle, {
   onScan: (code: string) => void;
@@ -201,7 +205,12 @@ export const ActBarcode = forwardRef<AlternarHandle, {
   onScan, listening = true, lastCode = null,
 }, handleRef) {
   const [open, setOpen] = useState(false);
-  useImperativeHandle(handleRef, () => ({ alternar: () => setOpen(o => !o) }), []);
+  const abertoRef = useRef(open);
+  abertoRef.current = open;
+  useImperativeHandle(handleRef, () => ({
+    alternar: () => setOpen(o => !o),
+    fechar: () => { const estava = abertoRef.current; setOpen(false); return estava; },
+  }), []);
 
   const wrapStyle: any = { position: "relative", zIndex: open ? 500 : 1 };
 
@@ -239,6 +248,8 @@ export type PersonPickerHandle = {
   open: () => void;
   /** 17/11/2026 (p-153): F2/F3 abrem e fecham (listener único da tela). */
   alternar: () => void;
+  /** 17/11/2026 (p-154): Esc. Devolve true se estava aberto (fechou algo). */
+  fechar: () => boolean;
 };
 
 type ActPersonProps = {
@@ -270,6 +281,8 @@ export const ActPerson = forwardRef<PersonPickerHandle, ActPersonProps>(function
   const [query, setQuery] = useState("");
   const [freeText, setFreeText] = useState("");
   const wrapRef = useRef<any>(null);
+  const abertoRef = useRef(open);
+  abertoRef.current = open;
   const rot = kind === "vendedora" ? ACT_LABELS.vendedora : ACT_LABELS.cliente;
 
   // Mesma porta que o atalho de teclado já usava — só exposta pra fora.
@@ -288,6 +301,7 @@ export const ActPerson = forwardRef<PersonPickerHandle, ActPersonProps>(function
       if (disabled) return;
       setOpen(o => !o);
     },
+    fechar: () => { const estava = abertoRef.current; setOpen(false); return estava; },
   }), [disabled]);
 
   useEffect(() => {
@@ -505,8 +519,13 @@ function CupomForm({ value, onChange, onValidate, loading, onDone }: CupomProps)
 export const ActCoupon = forwardRef<AlternarHandle, CupomProps>(function ActCoupon({ value, onChange, onValidate, loading }, handleRef) {
   const [open, setOpen] = useState(false);
   const ref = useRef<any>(null);
-  // 17/11/2026 (p-153): F4 vem do listener único da tela.
-  useImperativeHandle(handleRef, () => ({ alternar: () => setOpen(o => !o) }), []);
+  // 17/11/2026 (p-153): F4 vem do listener único da tela; o Esc (p-154) fecha.
+  const abertoRef = useRef(open);
+  abertoRef.current = open;
+  useImperativeHandle(handleRef, () => ({
+    alternar: () => setOpen(o => !o),
+    fechar: () => { const estava = abertoRef.current; setOpen(false); return estava; },
+  }), []);
 
   useEffect(() => {
     if (!IS_WEB) return;
@@ -558,7 +577,11 @@ export function ActTroca({ onOpen }: { onOpen: () => void }) {
 // 17/11/2026 (p-153): no layout estreito F1 e F4 abrem o "Mais…" (é onde
 // moram o código manual e o cupom) e F5 fecha antes de abrir a Troca. As
 // teclas vêm do listener único da tela, pelo ref.
-export type MaisHandle = { abrir: () => void; fechar: () => void };
+export type MaisHandle = {
+  abrir: () => void;
+  /** Devolve true se estava aberto (o Esc só segura a tecla se fechou algo). */
+  fechar: () => boolean;
+};
 
 export const ActMais = forwardRef<MaisHandle, {
   coupon: { code: string; discount: number } | null;
@@ -573,7 +596,12 @@ export const ActMais = forwardRef<MaisHandle, {
 }, handleRef) {
   const [open, setOpen] = useState(false);
   const ref = useRef<any>(null);
-  useImperativeHandle(handleRef, () => ({ abrir: () => setOpen(true), fechar: () => setOpen(false) }), []);
+  const abertoRef = useRef(open);
+  abertoRef.current = open;
+  useImperativeHandle(handleRef, () => ({
+    abrir: () => setOpen(true),
+    fechar: () => { const estava = abertoRef.current; setOpen(false); return estava; },
+  }), []);
 
   useEffect(() => {
     if (!IS_WEB) return;

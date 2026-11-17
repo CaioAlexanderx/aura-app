@@ -1,5 +1,7 @@
 // ============================================================
 // 17/11/2026 (p-153 / A1): atalhos do Caixa num mapa só.
+// 17/11/2026 (p-154 / A2): F6–F9, Alt+1…5, Esc, Enter/Esc/F9 e Ctrl/⌘+P na
+// tela final, F8 em dois toques.
 //
 // O que este arquivo trava:
 //   1. o mapa: F1–F5 e Ctrl/⌘+K de sempre, cada um com a alternativa em Alt
@@ -20,7 +22,8 @@ import renderer, { act } from "react-test-renderer";
 jest.mock("@/components/Icon", () => ({ Icon: "Icon" }));
 
 import {
-  ATALHOS_DO_CAIXA, resolverAtalho, atalhoDaTecla, focoEmCampo,
+  ATALHOS_DO_CAIXA, resolverAtalho, atalhoDaTecla, focoEmCampo, focoEmBotao,
+  criarDoisToques, PAGAMENTO_DO_ATALHO,
   type TeclaDoCaixa, type EstadoDosAtalhos,
 } from "@/utils/atalhosDoCaixa";
 import { useAtalhosDoCaixa } from "@/hooks/useAtalhosDoCaixa";
@@ -58,10 +61,10 @@ describe("mapa de atalhos do Caixa", () => {
     expect(acao(tecla({ key: "k", code: "KeyK", ctrlKey: true, emCampo: true }))).toBe("busca");
   });
 
-  test("cada tecla aparece uma vez só no mapa", () => {
+  test("cada tecla aparece uma vez só em cada tela", () => {
     const vistas = new Set<string>();
     for (const a of ATALHOS_DO_CAIXA) for (const c of a.teclas) {
-      const k = c.tipo + ":" + c.code;
+      const k = a.onde + ":" + c.tipo + ":" + c.code;
       expect(vistas.has(k)).toBe(false);
       vistas.add(k);
     }
@@ -87,11 +90,14 @@ describe("mapa de atalhos do Caixa", () => {
     expect(atalhoDaTecla(tecla({ key: "F4", code: "F4", altKey: true }))).toBeNull();  // Alt+F4
   });
 
-  test("nunca tecla solta, nunca Enter, nunca Tab", () => {
-    for (const k of ["c", "v", "m", "k", "1", "+", "Enter", "Tab", "Escape", " ", "ArrowDown"]) {
-      const d = resolverAtalho(tecla({ key: k }), LIVRE);
+  test("nunca tecla solta, nunca Enter sozinho, nunca Tab no Caixa", () => {
+    for (const k of ["c", "v", "m", "k", "1", "+", "Enter", "Tab", " ", "ArrowDown"]) {
+      const d = resolverAtalho(tecla({ key: k, code: k === "Enter" ? "Enter" : undefined }), LIVRE);
       expect(d).toEqual({ acao: null, segurar: false });
     }
+    // Enter do teclado numérico e Shift+Enter também não finalizam
+    expect(acao(tecla({ key: "Enter", code: "NumpadEnter" }))).toBeNull();
+    expect(acao(tecla({ key: "Enter", code: "Enter", shiftKey: true }))).toBeNull();
   });
 
   test("janela aberta: a tecla F é segurada e não faz nada; Alt e Ctrl ficam com a janela", () => {
@@ -126,6 +132,137 @@ describe("mapa de atalhos do Caixa", () => {
   });
 });
 
+// ─── Teclas novas (p-154 / A2) ─────────────────────────────────────
+describe("teclas novas do Caixa", () => {
+  const COM: EstadoDosAtalhos = { telaFinal: false, janelaAberta: false, temItens: true };
+  const VAZIO: EstadoDosAtalhos = { telaFinal: false, janelaAberta: false, temItens: false };
+
+  test("F6 busca (além do Ctrl/⌘+K), também com o foco num campo", () => {
+    expect(acao(tecla({ key: "F6", code: "F6" }))).toBe("busca");
+    expect(acao(tecla({ key: "F6", code: "F6", emCampo: true }))).toBe("busca");
+  });
+
+  test("F7/Alt+S desconto e F8/Alt+X remover só com item no carrinho", () => {
+    expect(acao(tecla({ key: "F7", code: "F7" }), COM)).toBe("desconto");
+    expect(acao(tecla({ key: "s", code: "KeyS", altKey: true }), COM)).toBe("desconto");
+    expect(acao(tecla({ key: "F8", code: "F8" }), COM)).toBe("removerUltimo");
+    expect(acao(tecla({ key: "x", code: "KeyX", altKey: true }), COM)).toBe("removerUltimo");
+    // carrinho vazio: a tecla F é segurada e nada acontece; o Alt segue
+    expect(resolverAtalho(tecla({ key: "F7", code: "F7" }), VAZIO)).toEqual({ acao: null, segurar: true });
+    expect(resolverAtalho(tecla({ key: "x", code: "KeyX", altKey: true }), VAZIO)).toEqual({ acao: null, segurar: false });
+  });
+
+  test("finalizar: F9 e Ctrl/⌘+Enter (também o Enter do teclado numérico), nunca Enter sozinho", () => {
+    expect(acao(tecla({ key: "F9", code: "F9" }), COM)).toBe("finalizar");
+    expect(acao(tecla({ key: "Enter", code: "Enter", ctrlKey: true }), COM)).toBe("finalizar");
+    expect(acao(tecla({ key: "Enter", code: "Enter", metaKey: true }), COM)).toBe("finalizar");
+    expect(acao(tecla({ key: "Enter", code: "NumpadEnter", ctrlKey: true }), COM)).toBe("finalizar");
+    // com o foco num campo (quantidade, desconto) também
+    expect(acao(tecla({ key: "Enter", code: "Enter", ctrlKey: true, emCampo: true }), COM)).toBe("finalizar");
+    expect(acao(tecla({ key: "Enter", code: "Enter" }), COM)).toBeNull();
+    // Ctrl+Alt+Enter (AltGr) não
+    expect(acao(tecla({ key: "Enter", code: "Enter", ctrlKey: true, altKey: true }), COM)).toBeNull();
+    // janela aberta (o troco, por exemplo): F9 é segurado e não finaliza de novo
+    expect(resolverAtalho(tecla({ key: "F9", code: "F9" }), { ...COM, janelaAberta: true })).toEqual({ acao: null, segurar: true });
+  });
+
+  test("Alt+1…5: Dinheiro, PIX, Débito, Crédito, Crediário", () => {
+    const esperado = ["pagamento1", "pagamento2", "pagamento3", "pagamento4", "pagamento5"];
+    for (let i = 1; i <= 5; i++) {
+      expect(acao(tecla({ key: String(i), code: "Digit" + i, altKey: true }), COM)).toBe(esperado[i - 1]);
+      expect(acao(tecla({ key: String(i), code: "Numpad" + i, altKey: true }), COM)).toBe(esperado[i - 1]);
+    }
+    expect(PAGAMENTO_DO_ATALHO.pagamento1).toBe(0);
+    expect(PAGAMENTO_DO_ATALHO.pagamento5).toBe(4);
+    // Alt+6 não é nada; número solto também não
+    expect(acao(tecla({ key: "6", code: "Digit6", altKey: true }), COM)).toBeNull();
+    expect(acao(tecla({ key: "1", code: "Digit1" }), COM)).toBeNull();
+    // Mac: ⌥1 num campo escreve "¡" — fica com o campo
+    expect(acao(tecla({ key: "¡", code: "Digit1", altKey: true, emCampo: true }), COM)).toBeNull();
+    expect(acao(tecla({ key: "¡", code: "Digit1", altKey: true }), COM)).toBe("pagamento1");
+  });
+
+  test("Esc vai para 'fechar' e quem executa decide se segura (só se fechou algo)", () => {
+    expect(resolverAtalho(tecla({ key: "Escape", code: "Escape" }), COM)).toEqual({ acao: "fechar", segurar: false });
+    // com janela aberta também (o cadastro rápido não fecha sozinho)
+    expect(resolverAtalho(tecla({ key: "Escape", code: "Escape" }), { ...COM, janelaAberta: true })).toEqual({ acao: "fechar", segurar: false });
+    expect(acao(tecla({ key: "Esc" }), COM)).toBe("fechar");
+  });
+
+  describe("tela de venda concluída", () => {
+    const AGORA = 1_000_000;
+    const FIM: EstadoDosAtalhos = { telaFinal: true, janelaAberta: false, temItens: false, telaFinalDesde: AGORA - 1000 };
+    const r = (t: TeclaDoCaixa, e: EstadoDosAtalhos = FIM) => resolverAtalho(t, e, AGORA);
+
+    test("Enter, Esc e F9 começam a próxima venda", () => {
+      expect(r(tecla({ key: "Enter", code: "Enter" }))).toEqual({ acao: "novaVenda", segurar: true });
+      expect(r(tecla({ key: "Enter", code: "NumpadEnter" }))).toEqual({ acao: "novaVenda", segurar: true });
+      expect(r(tecla({ key: "Escape", code: "Escape" }))).toEqual({ acao: "novaVenda", segurar: true });
+      expect(r(tecla({ key: "F9", code: "F9" }))).toEqual({ acao: "novaVenda", segurar: true });
+    });
+
+    test("nos primeiros 250 ms nada pula a tela (o Enter do troco, o F9 segurado)", () => {
+      const recem = { ...FIM, telaFinalDesde: AGORA - 100 };
+      expect(r(tecla({ key: "Enter", code: "Enter" }), recem)).toEqual({ acao: null, segurar: true });
+      expect(r(tecla({ key: "F9", code: "F9" }), recem)).toEqual({ acao: null, segurar: true });
+      expect(r(tecla({ key: "Enter", code: "Enter", repeat: true }))).toEqual({ acao: null, segurar: true });
+    });
+
+    test("Enter num campo ou num botão é deles; Esc num botão começa a venda", () => {
+      expect(r(tecla({ key: "Enter", code: "Enter", emCampo: true }))).toEqual({ acao: null, segurar: false });
+      expect(r(tecla({ key: "Enter", code: "Enter", emBotao: true }))).toEqual({ acao: null, segurar: false });
+      expect(r(tecla({ key: "Escape", code: "Escape", emCampo: true }))).toEqual({ acao: null, segurar: false });
+      expect(r(tecla({ key: "Escape", code: "Escape", emBotao: true })).acao).toBe("novaVenda");
+    });
+
+    test("Ctrl/⌘+P imprime o cupom; as outras teclas F só são seguradas", () => {
+      expect(r(tecla({ key: "p", code: "KeyP", ctrlKey: true }))).toEqual({ acao: "imprimir", segurar: true });
+      expect(r(tecla({ key: "p", code: "KeyP", metaKey: true }))).toEqual({ acao: "imprimir", segurar: true });
+      for (const f of ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8"]) {
+        expect(r(tecla({ key: f, code: f }))).toEqual({ acao: null, segurar: true });
+      }
+      // no Caixa o Ctrl+P é do navegador
+      expect(resolverAtalho(tecla({ key: "p", code: "KeyP", ctrlKey: true }), COM)).toEqual({ acao: null, segurar: false });
+    });
+
+    test("janela aberta por cima da tela final: nada", () => {
+      const comJanela = { ...FIM, janelaAberta: true };
+      expect(r(tecla({ key: "Enter", code: "Enter" }), comJanela)).toEqual({ acao: null, segurar: false });
+      expect(r(tecla({ key: "Escape", code: "Escape" }), comJanela)).toEqual({ acao: null, segurar: false });
+      expect(r(tecla({ key: "F9", code: "F9" }), comJanela)).toEqual({ acao: null, segurar: true });
+    });
+
+    test("letra e número soltos também não (o leitor manda o código antes do Enter)", () => {
+      for (const k of ["7", "8", "a", "Tab"]) expect(r(tecla({ key: k }))).toEqual({ acao: null, segurar: false });
+    });
+  });
+
+  test("dois toques: o segundo em até 2 s confirma; outro item ou depois de 2 s arma de novo", () => {
+    const d = criarDoisToques(2000);
+    expect(d.tocar("a", 1000)).toBe("armou");
+    expect(d.armadoEm()).toBe("a");
+    expect(d.tocar("a", 2500)).toBe("confirmou");
+    expect(d.armadoEm()).toBeNull();
+    expect(d.tocar("a", 5000)).toBe("armou");
+    expect(d.tocar("a", 7100)).toBe("armou");
+    expect(d.tocar("b", 7200)).toBe("armou");
+    expect(d.tocar("a", 7300)).toBe("armou");
+    d.desarmar();
+    expect(d.tocar("a", 7400)).toBe("armou");
+  });
+
+  test("focoEmBotao", () => {
+    const b = document.createElement("button");
+    const div = document.createElement("div");
+    const fake = document.createElement("div");
+    fake.setAttribute("role", "button");
+    expect(focoEmBotao(b)).toBe(true);
+    expect(focoEmBotao(fake)).toBe(true);
+    expect(focoEmBotao(div)).toBe(false);
+    expect(focoEmBotao(document.createElement("a"))).toBe(true);
+  });
+});
+
 // ─── O listener único ─────────────────────────────────────────────
 let agora = 1_000_000;
 function disparar(init: KeyboardEventInit, alvo: EventTarget = window): KeyboardEvent {
@@ -135,7 +272,7 @@ function disparar(init: KeyboardEventInit, alvo: EventTarget = window): Keyboard
   return ev;
 }
 
-function Tela({ estado, executar, onScan }: { estado: EstadoDosAtalhos; executar: (a: any) => void; onScan?: (c: string) => void }) {
+function Tela({ estado, executar, onScan }: { estado: EstadoDosAtalhos | (() => EstadoDosAtalhos); executar: (a: any) => any; onScan?: (c: string) => void }) {
   useGlobalBarcodeScanner({ onScan: onScan || (() => {}), enabled: !!onScan });
   useAtalhosDoCaixa({ estado, executar });
   return null;
@@ -178,6 +315,33 @@ describe("useAtalhosDoCaixa", () => {
     act(() => { t = renderer.create(<Tela estado={FINAL} executar={executar} />); });
     expect(disparar({ key: "F5", code: "F5" }).defaultPrevented).toBe(true);
     expect(executar).not.toHaveBeenCalled();
+    act(() => { t.unmount(); });
+  });
+
+  test("Esc só é segurado quando quem executa fechou algo", () => {
+    let fechou = false;
+    const executar = jest.fn(() => fechou);
+    let t!: renderer.ReactTestRenderer;
+    act(() => { t = renderer.create(<Tela estado={LIVRE} executar={executar} />); });
+    expect(disparar({ key: "Escape", code: "Escape" }).defaultPrevented).toBe(false);
+    fechou = true;
+    expect(disparar({ key: "Escape", code: "Escape" }).defaultPrevented).toBe(true);
+    expect(executar).toHaveBeenCalledWith("fechar");
+    act(() => { t.unmount(); });
+  });
+
+  test("estado como função: lido na hora da tecla", () => {
+    const executar = jest.fn();
+    let final = false;
+    let t!: renderer.ReactTestRenderer;
+    act(() => {
+      t = renderer.create(<Tela estado={(() => ({ telaFinal: final, janelaAberta: false, telaFinalDesde: 0 })) as any} executar={executar} />);
+    });
+    disparar({ key: "Enter", code: "Enter" });
+    expect(executar).not.toHaveBeenCalled();
+    final = true;
+    disparar({ key: "Enter", code: "Enter" });
+    expect(executar).toHaveBeenCalledWith("novaVenda");
     act(() => { t.unmount(); });
   });
 
