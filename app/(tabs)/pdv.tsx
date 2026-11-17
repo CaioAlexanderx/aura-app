@@ -63,7 +63,7 @@ import {
   ActBarcode, ActPerson, ActCoupon, ActTroca, ActMais,
 } from "@/components/screens/pdv/ActionToolbar";
 import { CategoryChips } from "@/components/screens/pdv/CategoryChips";
-import { ProductGrid } from "@/components/screens/pdv/ProductGrid";
+import { ProductGrid, type GridProduct } from "@/components/screens/pdv/ProductGrid";
 import { CartPanel } from "@/components/screens/pdv/CartPanel";
 import { WarrantyBox } from "@/components/screens/pdv/WarrantyBox";
 import { usePdvSettings } from "@/hooks/usePdvSettings";
@@ -241,60 +241,23 @@ function CaixaScreenInner() {
     return <SaleComplete sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} notaAtiva={st.nfceAtiva} matconEnabled={st.matconEnabled} matconDeliveryDays={st.matconDeliveryDays} referralName={st.referralName} pdvSettings={pdvSettingsGarantia} enderecoDoCliente={enderecoDoClienteDaVenda} />;
   }
 
-  function StockToggle() {
-    if (outOfStockCount === 0) return null;
-    return (
-      <Pressable
-        onPress={() => setShowOutOfStock(v => !v)}
-        style={[stkStyles.btn, showOutOfStock && stkStyles.btnActive]}
-      >
-        <Text style={[stkStyles.txt, showOutOfStock && stkStyles.txtActive]}>
-          {showOutOfStock
-            ? "Ocultar zerados (" + outOfStockCount + ")"
-            : "Mostrar zerados (" + outOfStockCount + ")"}
-        </Text>
-      </Pressable>
-    );
-  }
-
-  function ProductSection({ columns, minCard, dense }: { columns: number; minCard?: number; dense?: boolean }) {
-    if (st.products.length === 0)
-      return (
-        <EmptyState icon="package" iconColor={Colors.amber}
-          title="Nenhum produto cadastrado"
-          subtitle="Cadastre produtos no Estoque para eles aparecerem aqui no Caixa."
-        />
-      );
-    if (paginated.length === 0)
-      return (
-        <View style={{ alignItems: "center", paddingVertical: 40 }}>
-          <Text style={{ fontSize: 13, color: Colors.ink3 }}>
-            {!showOutOfStock && outOfStockCount > 0
-              ? "Nenhum produto encontrado com estoque. Tente \"Mostrar zerados\" acima."
-              : "Nenhum produto encontrado"}
-          </Text>
-        </View>
-      );
-    return (
-      <>
-        <ProductGrid
-          products={paginated}
-          qtyById={qtyById}
-          onAdd={(p, e) => handleAddProduct(p as Product, e)}
-          columns={columns}
-          minCard={minCard}
-          compact={vp.compact}
-          dense={dense}
-          matconEnabled={st.matconEnabled}
-          // 22/09/2026 (preço no cartão): "cartão R$ X" embaixo do preço —
-          // só com a opção da loja ligada; desligada o card é o de sempre.
-          cardPriceFor={st.cardPriceOn ? (p => st.gridCardPrice(p as Product)) : undefined}
-        />
-        <Pagination page={page} totalPages={totalPages} total={filteredTotal}
-          pageSize={PAGE_SIZE} onPage={goTo} />
-      </>
-    );
-  }
+  // 17/11/2026 (p-148): a grade e o "Mostrar zerados" são componentes de
+  // FORA da tela (logo abaixo). Declarados aqui dentro, cada render da tela
+  // criava um tipo novo e o React remontava a grade inteira a cada tecla da
+  // busca e a cada item lançado, repetindo a cascata de entrada de 1 s.
+  const gradeProps: PropsDaGrade = {
+    temProdutos: st.products.length > 0,
+    paginated, qtyById,
+    showOutOfStock, outOfStockCount,
+    onAdd: handleAddProduct,
+    compact: vp.compact,
+    matconEnabled: st.matconEnabled,
+    // 22/09/2026 (preço no cartão): "cartão R$ X" embaixo do preço —
+    // só com a opção da loja ligada; desligada o card é o de sempre.
+    cardPriceFor: st.cardPriceOn ? (p => st.gridCardPrice(p as Product)) : undefined,
+    page, totalPages, filteredTotal, goTo,
+  };
+  const alternarZerados = () => setShowOutOfStock(v => !v);
 
   // ── Layout wide (desktop) ─────────────────────────────────────
   if (wide) {
@@ -417,10 +380,10 @@ function CaixaScreenInner() {
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <CategoryChips items={categories} active={cat} onSelect={setCat} />
                 </View>
-                <StockToggle />
+                <StockToggle count={outOfStockCount} mostrando={showOutOfStock} onAlternar={alternarZerados} />
               </View>
 
-              <ProductSection columns={st.productCols} minCard={productMinCard} />
+              <ProductSection {...gradeProps} columns={st.productCols} minCard={productMinCard} />
 
               {isDemo && (
                 <View style={s.demoBanner}>
@@ -540,10 +503,10 @@ function CaixaScreenInner() {
           <View style={{ flex: 1, minWidth: 0 }}>
             <CategoryChips items={categories} active={cat} onSelect={setCat} />
           </View>
-          <StockToggle />
+          <StockToggle count={outOfStockCount} mostrando={showOutOfStock} onAlternar={alternarZerados} />
         </View>
 
-        <ProductSection columns={2} dense />
+        <ProductSection {...gradeProps} columns={2} dense />
 
         <View style={{ marginTop: 20 }}>
           <CartPanel ref={cartHeadRef} {...cartProps} payMethods={pdvPayMethods} warrantySlot={warrantySlot} compact={vp.compact} />
@@ -552,6 +515,78 @@ function CaixaScreenInner() {
 
       {modals}
     </View>
+  );
+}
+
+// ── Grade do Caixa e "Mostrar zerados" (17/11/2026, p-148) ───────────────
+// Fora de CaixaScreenInner de propósito: o tipo do componente fica o mesmo
+// entre renders e a grade não remonta (ver gradeProps).
+function StockToggle({ count, mostrando, onAlternar }: { count: number; mostrando: boolean; onAlternar: () => void }) {
+  if (count === 0) return null;
+  return (
+    <Pressable
+      onPress={onAlternar}
+      style={[stkStyles.btn, mostrando && stkStyles.btnActive]}
+    >
+      <Text style={[stkStyles.txt, mostrando && stkStyles.txtActive]}>
+        {mostrando
+          ? "Ocultar zerados (" + count + ")"
+          : "Mostrar zerados (" + count + ")"}
+      </Text>
+    </Pressable>
+  );
+}
+
+type PropsDaGrade = {
+  temProdutos: boolean;
+  paginated: Product[];
+  qtyById: Record<string, number>;
+  showOutOfStock: boolean;
+  outOfStockCount: number;
+  onAdd: (p: Product, evt?: { x: number; y: number; accent: string; letter: string }) => void;
+  compact?: boolean;
+  matconEnabled?: boolean;
+  cardPriceFor?: (p: GridProduct) => number | null;
+  page: number;
+  totalPages: number;
+  filteredTotal: number;
+  goTo: (p: number) => void;
+};
+
+function ProductSection({ columns, minCard, dense, ...g }: PropsDaGrade & { columns: number; minCard?: number; dense?: boolean }) {
+  if (!g.temProdutos)
+    return (
+      <EmptyState icon="package" iconColor={Colors.amber}
+        title="Nenhum produto cadastrado"
+        subtitle="Cadastre produtos no Estoque para eles aparecerem aqui no Caixa."
+      />
+    );
+  if (g.paginated.length === 0)
+    return (
+      <View style={{ alignItems: "center", paddingVertical: 40 }}>
+        <Text style={{ fontSize: 13, color: Colors.ink3 }}>
+          {!g.showOutOfStock && g.outOfStockCount > 0
+            ? "Nenhum produto encontrado com estoque. Tente \"Mostrar zerados\" acima."
+            : "Nenhum produto encontrado"}
+        </Text>
+      </View>
+    );
+  return (
+    <>
+      <ProductGrid
+        products={g.paginated}
+        qtyById={g.qtyById}
+        onAdd={(p, e) => g.onAdd(p as Product, e)}
+        columns={columns}
+        minCard={minCard}
+        compact={g.compact}
+        dense={dense}
+        matconEnabled={g.matconEnabled}
+        cardPriceFor={g.cardPriceFor}
+      />
+      <Pagination page={g.page} totalPages={g.totalPages} total={g.filteredTotal}
+        pageSize={PAGE_SIZE} onPage={g.goTo} />
+    </>
   );
 }
 
