@@ -381,6 +381,7 @@ function CaixaScreenInner() {
     // só com a opção da loja ligada; desligada o card é o de sempre.
     cardPriceFor: st.cardPriceOn ? (p => st.gridCardPrice(p as Product)) : undefined,
     page, totalPages, filteredTotal, goTo,
+    destaqueId: st.destaqueId ?? null,
   };
   const alternarZerados = () => setShowOutOfStock(v => !v);
 
@@ -451,7 +452,7 @@ function CaixaScreenInner() {
               {/* Busca + estado do leitor: o lojista já está olhando pra cá
                   quando vai bipar, então o status mora aqui. */}
               <View style={s.searchRow}>
-                <SearchBox ref={buscaRef} value={query} onChange={setQuery} onSubmit={handleSearchSubmit} onScan={handleScan} maxWidth={560} />
+                <SearchBox ref={buscaRef} value={query} onChange={setQuery} onSubmit={handleSearchSubmit} onScan={handleScan} onMoverDestaque={st.moverDestaqueDaBusca} maxWidth={560} />
                 <ScannerStatusChip listening={scannerListening} lastCode={lastScannedCode} />
               </View>
 
@@ -575,7 +576,7 @@ function CaixaScreenInner() {
         )}
 
         <View style={s.searchRow}>
-          <SearchBox ref={buscaRef} value={query} onChange={setQuery} onSubmit={handleSearchSubmit} onScan={handleScan} />
+          <SearchBox ref={buscaRef} value={query} onChange={setQuery} onSubmit={handleSearchSubmit} onScan={handleScan} onMoverDestaque={st.moverDestaqueDaBusca} />
           <ScannerStatusChip listening={scannerListening} lastCode={lastScannedCode} compact />
         </View>
 
@@ -678,6 +679,7 @@ type PropsDaGrade = {
   totalPages: number;
   filteredTotal: number;
   goTo: (p: number) => void;
+  destaqueId?: string | null;
 };
 
 function ProductSection({ columns, minCard, dense, ...g }: PropsDaGrade & { columns: number; minCard?: number; dense?: boolean }) {
@@ -710,6 +712,7 @@ function ProductSection({ columns, minCard, dense, ...g }: PropsDaGrade & { colu
         dense={dense}
         matconEnabled={g.matconEnabled}
         cardPriceFor={g.cardPriceFor}
+        destaqueId={g.destaqueId}
       />
       <Pagination page={g.page} totalPages={g.totalPages} total={g.filteredTotal}
         pageSize={PAGE_SIZE} onPage={g.goTo} />
