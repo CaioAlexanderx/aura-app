@@ -1133,6 +1133,8 @@ export function usePdvState() {
     !showChangeModal &&
     !showNewCustomer &&
     !showCrediario &&
+    // 17/11/2026 (Pedido, A2): a busca de cliente do Novo pedido é digitada.
+    !showPedido &&
     // Número de comanda é digitado: o leitor não pode engolir as teclas.
     !comandas.showAdicionar &&
     !comandas.showFechar &&
@@ -1492,6 +1494,21 @@ export function usePdvState() {
     // Pedido separado de venda (A1): o Novo pedido abre pelo Guardar.
     pedidoAtivo, showPedido,
     closePedido: () => setShowPedido(false),
+    // A2: o que o Novo pedido recebe (PdvModals). null = nada montado.
+    pedidoModal: pedidoAtivo
+      ? {
+          visible: showPedido,
+          itens: cart,
+          // Mesmo desconto do orçamento do Matcon: cupom + manual, no preço do dinheiro.
+          desconto: matconQuoteDiscount,
+          clienteDoCarrinho: selectedCustomerId
+            ? { id: selectedCustomerId, name: selectedCustomerName || "", phone: selectedCustomerPhone || null }
+            : null,
+          // O servidor guardou: o carrinho volta vazio para a próxima venda. Só aqui.
+          onGuardado: () => { newSale(); },
+          onClose: () => setShowPedido(false),
+        }
+      : null,
     // Handlers
     handleScan, handleSearchSubmit, handleAddProduct, handleVariantSelected, handleFinalize,
     handleValidateCoupon, handleGenerateQuote,

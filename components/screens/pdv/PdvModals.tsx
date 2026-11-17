@@ -25,6 +25,9 @@ import { CashChangeModal } from "@/components/screens/pdv/CashChangeModal";
 import { CreditInstallmentModal } from "@/components/screens/pdv/CreditInstallmentModal";
 import { AdicionarAComandaModal, FecharComandaModal } from "@/components/screens/pdv/ComandaModals";
 import { ComandasAbertasPanel } from "@/components/screens/pdv/ComandasAbertasPanel";
+import { PedidoModal } from "@/components/screens/pdv/pedido/PedidoModal";
+import type { LinhaDoCarrinho } from "@/components/screens/pdv/pedido/corpoDoPedido";
+import type { PedidoGuardado } from "@/services/pedidosApi";
 import type { Comanda } from "@/utils/comanda";
 import type { Product } from "@/components/screens/estoque/types";
 
@@ -92,6 +95,16 @@ export interface PdvModalsProps {
   };
   cartItemCount?: number;
   cartTotal?: number;
+  // ── Pedido separado de venda (17/11/2026, A2). Ausente = trava desligada,
+  //    sem o módulo: nada é montado.
+  pedido?: {
+    visible: boolean;
+    itens: LinhaDoCarrinho[];
+    desconto: number;
+    clienteDoCarrinho: { id: string; name: string; phone: string | null } | null;
+    onGuardado: (p: PedidoGuardado) => void;
+    onClose: () => void;
+  } | null;
 }
 
 export function PdvModals({
@@ -101,7 +114,7 @@ export function PdvModals({
   showCaixaModal, companyName, companyCnpj, sessaoAtiva, onCloseCaixa, onCaixaSuccess,
   showChangeModal, cashModalAmount, cashModalIsSplit, onCancelChange, onConfirmChange,
   showCrediario, customerId, customerName, saleTotal, onCrediarioConfirm, onCrediarioClose,
-  comandas, cartItemCount, cartTotal,
+  comandas, cartItemCount, cartTotal, pedido,
 }: PdvModalsProps) {
   return (
     <>
@@ -120,6 +133,17 @@ export function PdvModals({
         preselectBarcode={pendingBipe?.code || null}
         onScanAgain={onScanAgain}
       />
+      {pedido && (
+        <PedidoModal
+          visible={pedido.visible}
+          companyId={companyId}
+          itens={pedido.itens}
+          desconto={pedido.desconto}
+          clienteDoCarrinho={pedido.clienteDoCarrinho}
+          onGuardado={pedido.onGuardado}
+          onClose={pedido.onClose}
+        />
+      )}
       <TrocaModal
         visible={showTroca}
         companyId={companyId}

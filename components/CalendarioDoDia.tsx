@@ -25,11 +25,13 @@ LocaleConfig.defaultLocale = "pt-br";
 
 type Marca = { marked?: boolean; dotColor?: string; selected?: boolean; selectedColor?: string };
 
-export function CalendarioDoDia({ value, maxDate, marcas, legenda, onEscolher, onLimpar, testID }: {
+export function CalendarioDoDia({ value, maxDate, minDate, marcas, legenda, onEscolher, onLimpar, testID }: {
   /** AAAA-MM-DD ou null. */
   value: string | null;
   /** AAAA-MM-DD — dias depois deste ficam desabilitados. */
   maxDate?: string;
+  /** 17/11/2026 (Novo pedido): AAAA-MM-DD — dias antes deste ficam desabilitados. */
+  minDate?: string;
   marcas: Record<string, Marca>;
   /** Texto curto sob o calendário (ex.: o que o ponto significa). */
   legenda?: string;
@@ -40,8 +42,9 @@ export function CalendarioDoDia({ value, maxDate, marcas, legenda, onEscolher, o
   return (
     <View style={st.painel} testID={testID}>
       <Calendar
-        current={value || maxDate}
+        current={value || maxDate || minDate}
         maxDate={maxDate}
+        minDate={minDate}
         markedDates={marcas}
         onDayPress={(d: { dateString: string }) => onEscolher(d.dateString)}
         firstDay={0}
