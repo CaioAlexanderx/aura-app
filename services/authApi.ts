@@ -143,6 +143,9 @@ export type PdvSettings = {
   // imprime "Troca até" = dia da venda + N. Leitura só por
   // utils/valeTroca.lerPrazoDoValeEmDias.
   vale_troca_prazo_dias?: number;
+  // 17/11/2026 (p-158/p-159): imprime o cupom não fiscal ao registrar a venda.
+  // Default false. Leitura só por utils/impressaoAutomatica.
+  auto_print_receipt?: boolean;
   // 18/05/2026 (Fase 0 Aura Food, migration 118)
   food_mode_enabled?: boolean;
   service_fee_pct?: number;
