@@ -85,6 +85,10 @@ import { EntregaModal } from "@/components/screens/pdv/EntregaModal";
 import { AvisoVendaRecuperada } from "@/components/screens/pdv/AvisoVendaRecuperada";
 // 04/11/2026: convite para ligar os avisos no celular (uma vez por aparelho).
 import { ConviteDeAvisos } from "@/components/ConviteDeAvisos";
+// 17/11/2026 (p-147): a faixa da venda anterior.
+import { FaixaDaVendaAnterior, imprimirCupomDaFaixa } from "@/components/screens/pdv/FaixaDaVendaAnterior";
+import { useVendaAnterior, guardarVendaAnterior, aoRegistrarVenda, notaPrende } from "@/stores/vendaAnterior";
+import { faixasVisiveis, rotuloDaVenda } from "@/utils/faixaDaVendaAnterior";
 import { semAssinatura, avisoDeAtraso, estadoDaLoja, temCaixaVivo } from "@/utils/muroDeAssinatura";
 
 const PAGE_SIZE = 12;
@@ -183,6 +187,46 @@ function CaixaScreenInner() {
   const telaFinalDesde = useRef<number | null>(null);
   const idDaTelaFinal = st.lastSale ? st.lastSale.id : null;
   useEffect(() => { telaFinalDesde.current = idDaTelaFinal ? Date.now() : null; }, [idDaTelaFinal]);
+  // ── Faixa da venda anterior (17/11/2026, p-147) ──────────────────────
+  // A tela final saiu (Enter, Esc, F9, "Nova venda" ou o bipe do próximo
+  // produto): a venda vai para a faixa no topo do catálogo. Venda nova
+  // registrada: as faixas antigas saem, menos a de nota ainda sendo enviada
+  // ou recusada sem ninguém ter visto (stores/vendaAnterior).
+  const vendaNaTela = useRef<{ sale: NonNullable<typeof st.lastSale>; desde: number } | null>(null);
+  useEffect(() => {
+    const anterior = vendaNaTela.current;
+    if (st.lastSale) {
+      vendaNaTela.current = { sale: st.lastSale, desde: Date.now() };
+      aoRegistrarVenda();
+      return;
+    }
+    vendaNaTela.current = null;
+    if (anterior && company?.id) {
+      guardarVendaAnterior({
+        companyId: company.id,
+        saleId: anterior.sale.id,
+        rotulo: rotuloDaVenda(anterior.sale),
+        total: anterior.sale.total,
+        vendaEm: anterior.desde,
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idDaTelaFinal]);
+  const todasAsFaixas = useVendaAnterior(s => s.faixas);
+  // As faixas que ficam dependem da nota (lida na hora); cada faixa assina a
+  // própria nota e o Caixa redesenha com o carrinho, a busca, a próxima venda.
+  const faixas = faixasVisiveis(todasAsFaixas, company?.id, notaPrende);
+  const faixaDaFrente = faixas[0] || null;
+  // O vale-troca do cupom lê as políticas do Caixa (as mesmas da tela final).
+  const configDoVale = pdvSettingsGarantia as any;
+  const blocoDasFaixas = faixas.length > 0 ? (
+    <View testID="faixas-venda-anterior">
+      {faixas.map((f, i) => (
+        <FaixaDaVendaAnterior key={f.saleId} faixa={f} antiga={i > 0} compact={!wide} token={auth.token} config={configDoVale} />
+      ))}
+    </View>
+  ) : null;
+
   // F8 / Alt+X: duas vezes em 2 s tiram o último item (como a lixeira).
   const doisToques = useRef(criarDoisToques(2000)).current;
   const [remocaoArmada, setRemocaoArmada] = useState<string | null>(null);
@@ -205,6 +249,7 @@ function CaixaScreenInner() {
       janelaAberta: st.lastSale ? dialogoAbertoNaTela() : st.janelaAberta,
       temItens: cartProps.items.length > 0,
       telaFinalDesde: telaFinalDesde.current,
+      temVendaAnterior: !!faixaDaFrente,
     }),
     executar: (acao) => {
       switch (acao) {
@@ -285,6 +330,10 @@ function CaixaScreenInner() {
         }
         case "novaVenda": st.newSale(); return true;
         case "imprimir": telaFinalRef.current?.imprimir(); return true;
+        // p-147: Ctrl/⌘+P com a faixa na tela (CTRL_P_IMPRIME_VENDA_ANTERIOR).
+        case "imprimirAnterior":
+          if (faixaDaFrente) imprimirCupomDaFaixa(faixaDaFrente, auth.token, configDoVale);
+          return true;
       }
       return false;
     },
@@ -359,11 +408,11 @@ function CaixaScreenInner() {
         <View style={s.root}>
           <CaixaDesignStyle />
           <CaixaBackdrop />
-          <SaleComplete ref={telaFinalRef} sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} notaAtiva={st.nfceAtiva} matconEnabled={st.matconEnabled} matconDeliveryDays={st.matconDeliveryDays} referralName={st.referralName} pdvSettings={pdvSettingsGarantia} enderecoDoCliente={enderecoDoClienteDaVenda} />
+          <SaleComplete ref={telaFinalRef} sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} notaAtiva={st.nfceAtiva} matconEnabled={st.matconEnabled} matconDeliveryDays={st.matconDeliveryDays} referralName={st.referralName} pdvSettings={pdvSettingsGarantia} enderecoDoCliente={enderecoDoClienteDaVenda} itensEsperando={st.itensDaProximaVenda.length} />
         </View>
       );
     }
-    return <SaleComplete ref={telaFinalRef} sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} notaAtiva={st.nfceAtiva} matconEnabled={st.matconEnabled} matconDeliveryDays={st.matconDeliveryDays} referralName={st.referralName} pdvSettings={pdvSettingsGarantia} enderecoDoCliente={enderecoDoClienteDaVenda} />;
+    return <SaleComplete ref={telaFinalRef} sale={st.lastSale} onNewSale={st.newSale} autoEmit={autoEmitNfce} notaAtiva={st.nfceAtiva} matconEnabled={st.matconEnabled} matconDeliveryDays={st.matconDeliveryDays} referralName={st.referralName} pdvSettings={pdvSettingsGarantia} enderecoDoCliente={enderecoDoClienteDaVenda} itensEsperando={st.itensDaProximaVenda.length} />;
   }
 
   // 17/11/2026 (p-148): a grade e o "Mostrar zerados" são componentes de
@@ -410,6 +459,7 @@ function CaixaScreenInner() {
                 />
               )}
               {!auth.isDemo && <ConviteDeAvisos />}
+              {blocoDasFaixas}
 
               {/* Cabeçalho: a logo do lojista abre a tela, em 48px. Sem logo
                   (ou plano sem direito a ela) entra o tile violeta com a
@@ -553,6 +603,7 @@ function CaixaScreenInner() {
             onDispensar={st.dispensarVendaRecuperada}
           />
         )}
+        {blocoDasFaixas}
         <View style={s.topRowMobile}>
           <MerchantLogo size={44} />
           <View style={{ flex: 1, minWidth: 0 }}>

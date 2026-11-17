@@ -369,6 +369,46 @@ describe("useAtalhosDoCaixa", () => {
     expect(executar).toHaveBeenCalledWith("cupom");
     act(() => { t.unmount(); });
   });
+
+  // 17/11/2026 (p-147): o leitor fica ligado na tela de venda concluída.
+  test("tela final com o leitor ligado: o bipe chega inteiro e o Enter dele não é 'Nova venda'", () => {
+    const executar = jest.fn();
+    const onScan = jest.fn();
+    let t!: renderer.ReactTestRenderer;
+    act(() => { t = renderer.create(<Tela estado={FINAL} executar={executar} onScan={onScan} />); });
+    for (const ch of "7890000000028") { disparar({ key: ch }); agora += 8; }
+    const ev = disparar({ key: "Enter", code: "Enter" });
+    expect(onScan).toHaveBeenCalledTimes(1);
+    expect(onScan).toHaveBeenCalledWith("7890000000028");
+    expect(ev.defaultPrevented).toBe(true);
+    expect(executar).not.toHaveBeenCalled();
+    // Enter sozinho, sem rajada, continua sendo "Nova venda"
+    agora += 1000;
+    disparar({ key: "Enter", code: "Enter" });
+    expect(executar).toHaveBeenCalledWith("novaVenda");
+    expect(onScan).toHaveBeenCalledTimes(1);
+    act(() => { t.unmount(); });
+  });
+
+  test("tela final, listener do leitor religado depois do dos atalhos: os dois ouvem o Enter do bipe", () => {
+    // O leitor religa quando uma janela fecha (o troco). Aí os atalhos ouvem
+    // primeiro e "Nova venda" sai junto com o bipe; quem garante uma venda
+    // nova só é o usePdvState (lastSaleRef, ver __tests__/bipeNaTelaFinal).
+    const executar = jest.fn();
+    const onScan = jest.fn();
+    function TelaInvertida() {
+      useAtalhosDoCaixa({ estado: FINAL, executar });
+      useGlobalBarcodeScanner({ onScan, enabled: true });
+      return null;
+    }
+    let t!: renderer.ReactTestRenderer;
+    act(() => { t = renderer.create(<TelaInvertida />); });
+    for (const ch of "7890000000028") { disparar({ key: ch }); agora += 8; }
+    disparar({ key: "Enter", code: "Enter" });
+    expect(onScan).toHaveBeenCalledWith("7890000000028");
+    expect(executar).toHaveBeenCalledWith("novaVenda");
+    act(() => { t.unmount(); });
+  });
 });
 
 // ─── Os botões não escutam mais o teclado ───────────────────────────

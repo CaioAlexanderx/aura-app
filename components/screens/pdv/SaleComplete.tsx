@@ -48,6 +48,14 @@
 // dois cartões, e o da NFS-e mostra o botão "Emitir NFS-e" no padrão do
 // "Emitir NFC-e" (pede o CPF/CNPJ na hora se faltar). Com a automática
 // ligada, nada muda. Venda só de produto ou loja que não emite: tela igual.
+//
+// 17/11/2026 (p-147, mockup "Caixa e Troca" Parte 2) — a tela final não
+// segura a próxima venda. A nota da venda é pedida com a chave da venda
+// (services/emissaoDaNfce): sair da tela não interrompe a emissão, e a
+// faixa da venda anterior mostra o resultado. Enquanto a nota é enviada,
+// uma linha avisa isso; embaixo dos botões, que dá para bipar o próximo
+// produto (ou quantos já esperam a próxima venda). O cupom impresso aqui
+// (botão ou automático) fica marcado para a faixa.
 // ============================================================
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
@@ -64,7 +72,7 @@ import { type NfceActionsItem } from "./NfceActions";
 import { NotaDeProdutosDaVenda } from "@/components/nfe55/NotaDeProdutosDaVenda";
 import { OsActions } from "./OsActions";
 import { WarrantySaleActions } from "./WarrantySaleActions";
-import { openPrintWindow } from "@/services/printWindow";
+import { openPrintWindow, type PrintOutcome } from "@/services/printWindow";
 import { imprimirNoQuadro, jaImprimiuSozinho, marcarImpressaSozinha, ehVendaDoServidor } from "@/services/impressaoNoQuadro";
 import { imprimeNesteAparelho } from "@/utils/impressaoAutomatica";
 import { ehIphoneInstalado } from "@/services/instalarApp";
@@ -78,6 +86,11 @@ import { resumoDoEndereco, type Endereco } from "@/components/endereco/endereco"
 import { useNfseAutomaticaConfig } from "@/hooks/useNfseAutomatica";
 import { composicaoDaVenda, ehServico, mascararDoc, modoDaNfseNaVenda, rotuloDoDoc } from "@/utils/nfseAutomatica";
 import { NfseVendaCard } from "@/components/nfse/NfseVendaCard";
+import { chaveDaNotaDaVenda } from "@/services/emissaoDaNfce";
+import { useEmissaoDaNfce } from "@/hooks/useEmissaoDaNfce";
+import { notaNaFaixa } from "@/utils/faixaDaVendaAnterior";
+import { marcarCupom } from "@/stores/vendaAnterior";
+import { TEXTOS_DA_TELA_FINAL as TF } from "./textosDaTelaFinal";
 import { AjudaFiscal } from "@/components/nfse/AjudaFiscal";
 import {
   caixinhaDaEntrega, encadearPapelA4, gravarFormatoDoPapel, lerFormatoDoPapel, rotaDoCupom, rotaDoPapelA4,
@@ -95,16 +108,16 @@ function paymentLabel(key: string): string {
  * do cupom, no mesmo documento. "a4" = o cupom e, quando a impressão dele
  * fecha, o papel em A4 na MESMA janela. Um pop-up só nos três casos.
  */
-function openPrintReceipt(companyId: string, saleId: string, token: string | null, vendaEm: Date, config?: ConfigDoVale, papel: FormatoDoPapel | null = null) {
-  if (!token || !companyId) { toast.error("Sessão expirada"); return; }
+function openPrintReceipt(companyId: string, saleId: string, token: string | null, vendaEm: Date, config?: ConfigDoVale, papel: FormatoDoPapel | null = null): Promise<PrintOutcome> {
+  if (!token || !companyId) { toast.error("Sessão expirada"); return Promise.resolve("error"); }
   if (Platform.OS !== "web" || typeof window === "undefined") {
     toast.info("Impressão disponível apenas na versão web");
-    return;
+    return Promise.resolve("error");
   }
   // Fix 10/07 (relato Davi): janela abre SINCRONA no clique (printWindow) —
   // window.open depois do await perdia a user activation e o Chrome
   // bloqueava o pop-up de forma intermitente ("nem sempre imprime").
-  openPrintWindow(async () => {
+  return openPrintWindow(async () => {
     const res = await fetch(rotaDoCupom(BASE_URL, companyId, saleId, papel === "bobina"), {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -132,7 +145,14 @@ function openPrintReceipt(companyId: string, saleId: string, token: string | nul
     return { ok: true as const, html };
   }).then((r) => {
     if (r === "blocked") toast.error("Pop-up bloqueado. Permita pop-ups para imprimir.");
+    return r;
   });
+}
+
+/** 17/11/2026 (p-147): o cupom da venda, só o cupom (a faixa da venda
+ *  anterior e o Ctrl/⌘+P com ela na tela). Chamar dentro do clique/tecla. */
+export function imprimirCupomDaVenda(companyId: string, saleId: string, token: string | null, vendaEm: Date, config?: ConfigDoVale): Promise<PrintOutcome> {
+  return openPrintReceipt(companyId, saleId, token, vendaEm, config, null);
 }
 
 type Props = {
@@ -157,13 +177,16 @@ type Props = {
   /** 14/11/2026 (NF-e 55, CP4b): nfce_config.is_active. false = convite para
    *  ligar a nota no lugar do "Emitir NFC-e". undefined = como sempre. */
   notaAtiva?: boolean;
+  /** 17/11/2026 (p-147): produtos lançados durante a espera da venda, que
+   *  abrem a próxima (useCart.itensDaProximaVenda). */
+  itensEsperando?: number;
 };
 
 /** 17/11/2026 (p-154): Ctrl/⌘+P na tela final imprime o cupom. A tecla vem
  *  do listener único da tela do Caixa (hooks/useAtalhosDoCaixa), pelo ref. */
 export type SaleCompleteHandle = { imprimir: () => void };
 
-export const SaleComplete = forwardRef<SaleCompleteHandle, Props>(function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, referralName, pdvSettings, enderecoDoCliente, notaAtiva }, handleRef) {
+export const SaleComplete = forwardRef<SaleCompleteHandle, Props>(function SaleComplete({ sale, onNewSale, autoEmit, matconDeliveryDays, referralName, pdvSettings, enderecoDoCliente, notaAtiva, itensEsperando }, handleRef) {
   const { company, token, companyCount } = useAuthStore();
   // NFS-e automática: opt-in da loja que vendeu (o Caixa é sempre de uma
   // loja — company.id é a empresa da venda, também no grupo multi-CNPJ).
@@ -254,8 +277,14 @@ export const SaleComplete = forwardRef<SaleCompleteHandle, Props>(function SaleC
 
   function handlePrint() {
     if (!company?.id) return;
-    openPrintReceipt(company.id, sale.id, token, vendaEm, pdvSettings, imprimirPapel ? formatoDoPapel : null);
+    const id = sale.id;
+    openPrintReceipt(company.id, id, token, vendaEm, pdvSettings, imprimirPapel ? formatoDoPapel : null)
+      .then((r) => { if (r === "ok") marcarCupom(id, "impresso"); });
   }
+  // 17/11/2026 (p-147): a nota desta venda mora fora da tela (a faixa da
+  // venda anterior lê o mesmo estado depois que esta tela sai).
+  const chaveDaNota = chaveDaNotaDaVenda(sale.id);
+  const notaEnviando = notaNaFaixa(useEmissaoDaNfce(chaveDaNota)) === "enviando";
   const imprimirRef = useRef(handlePrint);
   imprimirRef.current = handlePrint;
   useImperativeHandle(handleRef, () => ({ imprimir: () => imprimirRef.current() }), []);
@@ -288,6 +317,7 @@ export const SaleComplete = forwardRef<SaleCompleteHandle, Props>(function SaleC
         const html = cupomComVale(await res.text(), { companyId, saleId: sale.id, vendaEm, config: pdvSettings });
         if (!vivo) return;
         if (imprimirNoQuadro(html) !== "ok") toast.error("O cupom não saiu sozinho. Toque em Imprimir cupom.");
+        else marcarCupom(sale.id, "impresso");
       } catch {
         if (vivo) toast.error("O cupom não saiu sozinho. Toque em Imprimir cupom.");
       }
@@ -431,6 +461,7 @@ export const SaleComplete = forwardRef<SaleCompleteHandle, Props>(function SaleC
             autoEmit={autoEmit}
             documentoDoCliente={documentoDoCliente}
             notaAtiva={notaAtiva}
+            chave={chaveDaNota}
           />
         )}
 
@@ -463,6 +494,7 @@ export const SaleComplete = forwardRef<SaleCompleteHandle, Props>(function SaleC
                   autoEmit={autoEmit}
                   documentoDoCliente={documentoDoCliente}
                   notaAtiva={notaAtiva}
+                  chave={chaveDaNota}
                 />
               </View>
             )}
@@ -478,6 +510,10 @@ export const SaleComplete = forwardRef<SaleCompleteHandle, Props>(function SaleC
             />
             <AjudaFiscal />
           </View>
+        )}
+
+        {company?.id && notaEnviando && (
+          <Text style={s.notaContinua} testID="venda-nota-continua">{TF.notaContinua}</Text>
         )}
 
         {/* 31/08/2026 (OS): fecha o ciclo da OS na tela de sucesso — lista
@@ -536,6 +572,11 @@ export const SaleComplete = forwardRef<SaleCompleteHandle, Props>(function SaleC
             <Text style={s.primaryText}>Nova venda</Text>
           </Pressable>
         </View>
+        {/* 17/11/2026 (p-147): bipar aqui começa a venda nova com o item. */}
+        <View style={s.bipe} testID="venda-pode-bipar">
+          <View style={s.bipePonto} />
+          <Text style={s.bipeTxt}>{itensEsperando && itensEsperando > 0 ? TF.esperando(itensEsperando) : TF.podeBipar}</Text>
+        </View>
       </View>
     </View>
   );
@@ -593,6 +634,11 @@ const s = StyleSheet.create({
   segTxt: { fontSize: 12, color: Colors.ink2, fontWeight: "700" },
   segTxtOn: { color: "#fff" },
   actionsCol: { flexDirection: "column" },
+  // 17/11/2026 (p-147)
+  notaContinua: { width: "100%", fontSize: 12, color: Colors.ink2, marginTop: 6, lineHeight: 17 },
+  bipe: { flexDirection: "row", alignItems: "center", gap: 8, width: "100%", marginTop: 12 },
+  bipePonto: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.green },
+  bipeTxt: { flex: 1, fontSize: 12.5, color: Colors.ink2, lineHeight: 17 },
   btnCheio: { flex: 0, width: "100%" },
 });
 
