@@ -16,6 +16,7 @@
 import type { StudioOrder, StudioProductionStatus } from "@/services/studioApi";
 import type { StudioIntent } from "@/constants/studio-semantic";
 import { diasAtePrazo } from "@/components/studio/fluxoDoQuadro";
+import { rotuloDeItens } from "@/components/studio/rotuloDeItens";
 
 export type Etapa = {
   key: StudioProductionStatus;
@@ -111,8 +112,15 @@ export function fraseDoResumo(r: ResumoDaFila, reais: (v: number) => string): st
 
 // ── Origem do pedido ─────────────────────────────────────────────────────
 
-/** De onde o pedido veio, para o selo do cartão. */
-export function origemDoPedido(o: Pick<StudioOrder, "source" | "marketplace_platform">): string | null {
+/**
+ * De onde o pedido veio, para o selo do cartão. 17/11/2026 (p-176): o
+ * backend#1051 manda `origin_label` ("Orçamento", "Caixa", "Loja online",
+ * "Pedido em lote", a plataforma). Ele manda; sem ele (backend de antes),
+ * a conta pela `source`, como no p-129.
+ */
+export function origemDoPedido(o: Pick<StudioOrder, "source" | "marketplace_platform" | "origin_label">): string | null {
+  const rotulo = typeof o.origin_label === "string" ? o.origin_label.trim() : "";
+  if (rotulo) return rotulo;
   if (o.source === "pdv") return "Caixa";
   if (o.source === "digital") return "Loja online";
   if (o.source === "marketplace") {
@@ -121,6 +129,42 @@ export function origemDoPedido(o: Pick<StudioOrder, "source" | "marketplace_plat
     return "Marketplace";
   }
   return null;
+}
+
+// ── O item no cartão (p-176) ─────────────────────────────────────────────
+
+/**
+ * "2 × Caneca com nome · R$ 96,00", como no mockup. Com mais de uma linha no
+ * pedido, "+ 1 item". Sem `item_name` (backend de antes do #1051), a
+ * contagem de itens do p-129.
+ */
+export function itemDoCartao(
+  o: Pick<StudioOrder, "item_name" | "item_quantity" | "item_count">,
+): string {
+  const nome = typeof o.item_name === "string" ? o.item_name.trim() : "";
+  if (!nome) return rotuloDeItens(o.item_count);
+  const q = Number(o.item_quantity);
+  const qtd = Number.isFinite(q) && q > 0 ? `${Number.isInteger(q) ? q : String(q).replace(".", ",")} × ` : "";
+  const linhas = Math.round(Number(o.item_count) || 0);
+  const resto = linhas > 1 ? ` + ${rotuloDeItens(linhas - 1)}` : "";
+  return `${qtd}${nome}${resto}`;
+}
+
+// ── Saíram da Fila: entregues e cancelados (p-176) ──────────────────────
+
+export type Saidos = { delivered: StudioOrder[]; cancelled: StudioOrder[] };
+
+/** Os pedidos que saíram da Fila, do mais novo para o mais antigo. */
+export function saidosDaFila(pedidos: StudioOrder[]): Saidos {
+  const saidos: Saidos = { delivered: [], cancelled: [] };
+  for (const o of pedidos) {
+    const k = etapaDe(o);
+    if (k === "delivered" || k === "cancelled") saidos[k].push(o);
+  }
+  const maisNovo = (a: StudioOrder, b: StudioOrder) => (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0);
+  saidos.delivered.sort(maisNovo);
+  saidos.cancelled.sort(maisNovo);
+  return saidos;
 }
 
 // ── Corte pela data de ativação ──────────────────────────────────────────

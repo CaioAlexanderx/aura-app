@@ -50,9 +50,9 @@ const CABECALHO_DOS_ORCAMENTOS_3D = {
   subtitle: "Crie, envie pelo WhatsApp e acompanhe. Aprovado vira pedido na Produção.",
 };
 
-// O pedido do orçamento aprovado vive na Fila de produção. O detalhe do
-// pedido no Negócio (personalizados.pedido) ainda não existe.
-const ROTA_DO_PEDIDO = (_orderId: string) => "/personalizados/producao";
+// "Ver pedido" do orçamento aprovado abre o detalhe do pedido no Negócio
+// (personalizados.pedido, p-176).
+const ROTA_DO_PEDIDO = (orderId: string) => `/personalizados/pedido/${orderId}`;
 
 export default function PersonalizadosOrcamentos() {
   return (

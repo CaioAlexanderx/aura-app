@@ -19,12 +19,18 @@
 //   - CORES DO NEGÓCIO. A tela lê useStudioTokens(), e quem monta a rota
 //     envolve o quadro em <TemaDoNegocio>.
 //
-// O que o mockup desenha e ainda NÃO está aqui (cards próprios):
-//   - a folha "Recolher a arte e o texto" da etapa Aguardando personalização
-//     (hoje o botão dessa etapa só envia o pedido para a arte);
-//   - a loja de origem em cada cartão e o filtro de loja no cabeçalho (vêm
-//     com a visão de todas as lojas);
-//   - abrir o pedido (detalhe). Por isso o cartão não é clicável.
+// 17/11/2026 (p-176):
+//   - "Recolher a arte e o texto" no cartão de Aguardando personalização abre
+//     a FolhaDeRecolher. "Enviar para a arte" fica ao lado, mais discreto,
+//     como o "Marcar como aprovado" de Aguardando arte;
+//   - o cartão mostra o item ("2 × Caneca com nome") e a origem
+//     (origin_label: Orçamento, Caixa, Loja online);
+//   - o número e o nome do cartão abrem o detalhe do pedido;
+//   - "Entregues e cancelados": a segunda vista, com o que saiu da Fila.
+//
+// O que o mockup desenha e ainda NÃO está aqui (cards próprios): a loja de
+// origem em cada cartão e o filtro de loja no cabeçalho (vêm com a visão de
+// todas as lojas).
 //
 // Regras sem tela: components/personalizados/regrasDaProducao.ts.
 // ============================================================
@@ -42,19 +48,25 @@ import { useCobrarSaldo } from "@/components/studio/useCobrarSaldo";
 import { useRegistrarPagamento } from "@/components/studio/useRegistrarPagamento";
 import { comEtapaDoPedido } from "@/components/studio/etapaDoPedido";
 import { numeroDoPedido, situacaoDoPixNoCartao, reais } from "@/components/studio/pagamentoDoPedido";
-import { rotuloDeItens } from "@/components/studio/rotuloDeItens";
+import { labelStudioStatus } from "@/constants/studio-status";
 import {
   ETAPAS, PROXIMA_ETAPA, LARGURA_DO_CELULAR, agruparPorEtapa, etapaDe, etapaInicialNoCelular, fraseDoResumo,
-  origemDoPedido, prazoDoCartao, resumoDaFila, semAntigosDaAtivacao, type Etapa,
+  itemDoCartao, origemDoPedido, prazoDoCartao, resumoDaFila, saidosDaFila, semAntigosDaAtivacao, type Etapa,
 } from "@/components/personalizados/regrasDaProducao";
+import { FolhaDeRecolher } from "@/components/personalizados/FolhaDeRecolher";
 
 type Props = {
   companyId: string;
   /** pdv_settings.personalizados_ativado_em (ISO) ou null. Ver regrasDaProducao.ts. */
   ativadoEm: string | null;
+  /** Abre o detalhe do pedido. Sem ela, o cartão não abre nada (como no p-129). */
+  onAbrirPedido?: (orderId: string) => void;
 };
 
-export function QuadroDeProducao({ companyId, ativadoEm }: Props) {
+type Vista = "fila" | "saidos";
+type Saida = "delivered" | "cancelled";
+
+export function QuadroDeProducao({ companyId, ativadoEm, onAbrirPedido }: Props) {
   const t = useStudioTokens();
   const s = useMemo(() => estilos(t), [t]);
   const { width } = useWindowDimensions();
@@ -65,6 +77,9 @@ export function QuadroDeProducao({ companyId, ativadoEm }: Props) {
   const [pedidos, setPedidos] = useState<StudioOrder[]>([]);
   const [aprovacaoDe, setAprovacaoDe] = useState<StudioOrder | null>(null);
   const [etapaNoCelular, setEtapaNoCelular] = useState<StudioProductionStatus | null>(null);
+  const [recolherDe, setRecolherDe] = useState<string | null>(null);
+  const [vista, setVista] = useState<Vista>("fila");
+  const [saida, setSaida] = useState<Saida>("delivered");
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -84,6 +99,7 @@ export function QuadroDeProducao({ companyId, ativadoEm }: Props) {
   const naFila = useMemo(() => semAntigosDaAtivacao(pedidos, ativadoEm), [pedidos, ativadoEm]);
   const grupos = useMemo(() => agruparPorEtapa(naFila), [naFila]);
   const resumo = useMemo(() => resumoDaFila(naFila), [naFila]);
+  const saidos = useMemo(() => saidosDaFila(pedidos), [pedidos]);
   const etapaAberta = etapaNoCelular || etapaInicialNoCelular(grupos);
 
   const mover = useCallback(async (pedido: StudioOrder, destino: StudioProductionStatus, forcar?: boolean) => {
@@ -129,6 +145,8 @@ export function QuadroDeProducao({ companyId, ativadoEm }: Props) {
       s={s}
       onAvancar={avancar}
       onAprovacao={setAprovacaoDe}
+      onRecolher={(p) => setRecolherDe(p.id)}
+      onAbrir={onAbrirPedido}
       cobrando={cobrandoId === o.balance_installment_id}
       onCobrar={() => o.balance_installment_id && cobrar({
         orderId: o.id, installmentId: o.balance_installment_id, phone: o.customer_phone,
@@ -142,7 +160,42 @@ export function QuadroDeProducao({ companyId, ativadoEm }: Props) {
   );
 
   let corpo: React.ReactNode;
-  if (carregando && pedidos.length === 0) {
+  const semDados = (carregando || !!erro) && pedidos.length === 0;
+  if (vista === "saidos" && !semDados) {
+    const lista = saidos[saida];
+    corpo = (
+      <View style={{ flex: 1 }} testID="producao-saidos">
+        <View style={s.chipsDosSaidos}>
+          {(["delivered", "cancelled"] as Saida[]).map((k) => {
+            const ativa = k === saida;
+            const n = saidos[k].length;
+            const rotulo = k === "delivered" ? "Entregues" : "Cancelados";
+            return (
+              <Pressable
+                key={k}
+                testID={`producao-saida-${k}`}
+                onPress={() => setSaida(k)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: ativa }}
+                accessibilityLabel={`${rotulo}, ${n} ${n === 1 ? "pedido" : "pedidos"}`}
+                style={[s.chip, ativa && s.chipAtivo]}
+              >
+                <Text style={[s.chipTxt, ativa && s.chipTxtAtivo]}>{rotulo} {n}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Text style={s.notaDosSaidos}>Pedidos dos últimos 60 dias.</Text>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={s.listaDoCelular}>
+          {lista.length === 0 ? (
+            <Text style={s.etapaVazia} testID="producao-saidos-vazio">
+              {saida === "delivered" ? "Nenhum pedido entregue nos últimos 60 dias." : "Nenhum pedido cancelado nos últimos 60 dias."}
+            </Text>
+          ) : lista.map((o) => <LinhaSaida key={o.id} o={o} t={t} s={s} onAbrir={onAbrirPedido} />)}
+        </ScrollView>
+      </View>
+    );
+  } else if (carregando && pedidos.length === 0) {
     corpo = <View style={s.aviso} testID="producao-carregando"><Text style={s.avisoTxt}>Carregando os pedidos…</Text></View>;
   } else if (erro && pedidos.length === 0) {
     corpo = (
@@ -216,9 +269,28 @@ export function QuadroDeProducao({ companyId, ativadoEm }: Props) {
         <Text style={s.resumo} testID="producao-resumo">
           {carregando && pedidos.length === 0 ? " " : fraseDoResumo(resumo, (v) => reais(v))}
         </Text>
-        <Pressable style={s.botaoNeutro} onPress={carregar} disabled={carregando} accessibilityRole="button" testID="producao-atualizar">
-          <Text style={s.botaoNeutroTxt}>{carregando ? "Atualizando…" : "Atualizar"}</Text>
-        </Pressable>
+        <View style={s.barraLado}>
+          <View style={s.vistas} accessibilityRole="tablist">
+            {([["fila", "Na Fila"], ["saidos", "Entregues e cancelados"]] as Array<[Vista, string]>).map(([k, rotulo]) => {
+              const ativa = vista === k;
+              return (
+                <Pressable
+                  key={k}
+                  testID={`producao-vista-${k}`}
+                  onPress={() => setVista(k)}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: ativa }}
+                  style={[s.vista, ativa && s.vistaAtiva]}
+                >
+                  <Text style={[s.vistaTxt, ativa && s.vistaTxtAtiva]}>{rotulo}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Pressable style={s.botaoNeutro} onPress={carregar} disabled={carregando} accessibilityRole="button" testID="producao-atualizar">
+            <Text style={s.botaoNeutroTxt}>{carregando ? "Atualizando…" : "Atualizar"}</Text>
+          </Pressable>
+        </View>
       </View>
 
       {corpo}
@@ -239,12 +311,69 @@ export function QuadroDeProducao({ companyId, ativadoEm }: Props) {
       {/* Baixa do saldo: o sheet abre pelo Modal do react-native-web, que já
           monta em document.body. */}
       <RegistrarPagamentoSheet controller={baixa} />
+
+      {/* Arte e texto das peças: ResponsiveSheet (Modal, em document.body). */}
+      <FolhaDeRecolher
+        companyId={companyId}
+        pedidoId={recolherDe}
+        onFechar={() => setRecolherDe(null)}
+        onSalvo={() => carregar()}
+      />
+    </View>
+  );
+}
+
+/** O número e o nome do cartão: abrem o detalhe quando há para onde ir. */
+function Cabeca({
+  o, nome, origem, s, onAbrir,
+}: { o: StudioOrder; nome: string; origem: string | null; s: ReturnType<typeof estilos>; onAbrir?: (id: string) => void }) {
+  const dentro = (
+    <>
+      <View style={s.linha}>
+        <Text style={s.numero}>{numeroDoPedido(o as any)}</Text>
+        {origem ? <View style={[s.selo, s.seloMarca]}><Text style={[s.seloTxt, s.seloMarcaTxt]}>{origem}</Text></View> : null}
+      </View>
+      <Text style={s.nome} numberOfLines={1}>{nome}</Text>
+    </>
+  );
+  if (!onAbrir) return dentro;
+  return (
+    <Pressable
+      onPress={() => onAbrir(o.id)}
+      accessibilityRole="link"
+      accessibilityLabel={`Abrir o pedido de ${nome}`}
+      style={s.cabecaQueAbre}
+      testID={`producao-abrir-${o.id}`}
+    >
+      {dentro}
+    </Pressable>
+  );
+}
+
+/** Um pedido entregue ou cancelado, na vista "Entregues e cancelados". */
+function LinhaSaida({
+  o, t, s, onAbrir,
+}: { o: StudioOrder; t: StudioPalette; s: ReturnType<typeof estilos>; onAbrir?: (id: string) => void }) {
+  const nome = o.customer_name || o.display_name || "Sem cadastro";
+  const etapa = etapaDe(o);
+  const cancelado = etapa === "cancelled";
+  const quando = Number.isNaN(Date.parse(o.created_at)) ? "" : new Date(o.created_at).toLocaleDateString("pt-BR");
+  return (
+    <View style={s.cartao} testID={`producao-saido-${o.id}`}>
+      <Cabeca o={o} nome={nome} origem={origemDoPedido(o)} s={s} onAbrir={onAbrir} />
+      <Text style={s.meta}>{itemDoCartao(o)} · {reais(o.total_amount)}</Text>
+      <View style={s.selos}>
+        <View style={[s.selo, { backgroundColor: cancelado ? t.dangerSoft : t.successSoft }]}>
+          <Text style={[s.seloTxt, { color: cancelado ? t.dangerInk : t.successInk }]}>{labelStudioStatus(etapa)}</Text>
+        </View>
+        {quando ? <View style={s.selo}><Text style={s.seloTxt}>Pedido de {quando}</Text></View> : null}
+      </View>
     </View>
   );
 }
 
 function Cartao({
-  o, etapa, t, s, onAvancar, onAprovacao, onCobrar, onRecebi, cobrando,
+  o, etapa, t, s, onAvancar, onAprovacao, onRecolher, onAbrir, onCobrar, onRecebi, cobrando,
 }: {
   o: StudioOrder;
   etapa: Etapa;
@@ -252,6 +381,8 @@ function Cartao({
   s: ReturnType<typeof estilos>;
   onAvancar: (o: StudioOrder) => void;
   onAprovacao: (o: StudioOrder) => void;
+  onRecolher: (o: StudioOrder) => void;
+  onAbrir?: (id: string) => void;
   onCobrar: () => void;
   onRecebi: () => void;
   cobrando: boolean;
@@ -262,15 +393,14 @@ function Cartao({
   const origem = origemDoPedido(o);
   const temSaldo = !!o.balance_installment_id && o.balance_amount != null;
   const naArte = etapa.key === "pending_art";
+  const naPersonalizacao = etapa.key === "awaiting_customization";
+  // Duas ações na etapa: a principal é a da etapa, e o avançar fica discreto.
+  const duasAcoes = naArte || naPersonalizacao;
 
   return (
     <View style={s.cartao} testID={`producao-cartao-${o.id}`}>
-      <View style={s.linha}>
-        <Text style={s.numero}>{numeroDoPedido(o as any)}</Text>
-        {origem ? <View style={[s.selo, s.seloMarca]}><Text style={[s.seloTxt, s.seloMarcaTxt]}>{origem}</Text></View> : null}
-      </View>
-      <Text style={s.nome} numberOfLines={1}>{nome}</Text>
-      <Text style={s.meta}>{rotuloDeItens(o.item_count)} · {reais(o.total_amount)}</Text>
+      <Cabeca o={o} nome={nome} origem={origem} s={s} onAbrir={onAbrir} />
+      <Text style={s.meta} testID={`producao-item-${o.id}`}>{itemDoCartao(o)} · {reais(o.total_amount)}</Text>
 
       <View style={s.selos}>
         <View style={[s.selo, prazo.tom === "atencao" && { backgroundColor: t.warningSoft }, prazo.tom === "atrasado" && { backgroundColor: t.dangerSoft }]}>
@@ -299,6 +429,17 @@ function Cartao({
 
       {/* Ações: sempre na tela, sem hover. */}
       <View style={s.acoes} testID={`producao-acoes-${o.id}`}>
+        {naPersonalizacao ? (
+          <Pressable
+            style={s.botaoDaEtapa}
+            onPress={() => onRecolher(o)}
+            accessibilityRole="button"
+            accessibilityLabel={`Recolher a arte e o texto do pedido de ${nome}`}
+            testID={`producao-recolher-${o.id}`}
+          >
+            <Text style={s.botaoDaEtapaTxt}>Recolher a arte e o texto</Text>
+          </Pressable>
+        ) : null}
         {naArte ? (
           <Pressable
             style={s.botaoDaEtapa}
@@ -311,13 +452,13 @@ function Cartao({
           </Pressable>
         ) : null}
         <Pressable
-          style={naArte ? s.botaoNeutro : s.botaoDaEtapa}
+          style={duasAcoes ? s.botaoNeutro : s.botaoDaEtapa}
           onPress={() => onAvancar(o)}
           accessibilityRole="button"
           accessibilityLabel={`${etapa.avancar}: pedido de ${nome}`}
           testID={`producao-avancar-${o.id}`}
         >
-          <Text style={naArte ? s.botaoNeutroTxt : s.botaoDaEtapaTxt}>{etapa.avancar}</Text>
+          <Text style={duasAcoes ? s.botaoNeutroTxt : s.botaoDaEtapaTxt}>{etapa.avancar}</Text>
         </Pressable>
         {temSaldo ? (
           <View style={s.acoesLado}>
@@ -352,6 +493,16 @@ function estilos(t: StudioPalette) {
     tela: { flex: 1, minHeight: 420 },
     barra: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingBottom: 14, flexWrap: "wrap" },
     resumo: { fontSize: 12.5, color: t.ink3, flexShrink: 1 },
+    barraLado: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+    vistas: { flexDirection: "row", borderRadius: 10, borderWidth: 1, borderColor: t.primaryBorder, overflow: "hidden" },
+    // 40 px de altura, como os outros botões da barra.
+    vista: { minHeight: 40, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", backgroundColor: t.paperCard },
+    vistaAtiva: { backgroundColor: t.primaryGhost },
+    vistaTxt: { fontSize: 12, fontWeight: "600", color: t.ink2 },
+    vistaTxtAtiva: { color: t.ink, fontWeight: "700" },
+    chipsDosSaidos: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+    notaDosSaidos: { fontSize: 12, color: t.ink3, marginTop: 8, marginBottom: 8 },
+    cabecaQueAbre: { gap: 6 },
 
     aviso: { alignItems: "center", justifyContent: "center", paddingVertical: 56, paddingHorizontal: 24, gap: 10, borderRadius: 14, borderWidth: 1, borderStyle: "dashed", borderColor: t.primaryBorder, backgroundColor: t.bgSoft },
     avisoTitulo: { fontSize: 18, fontWeight: "700", color: t.ink, textAlign: "center" },

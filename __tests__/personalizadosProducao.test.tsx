@@ -38,6 +38,8 @@ jest.mock("expo-router", () => ({
     const { View } = jest.requireActual("react-native");
     return <View testID="redirect" accessibilityLabel={String(href)} />;
   },
+  // p-176: o cartão abre o detalhe do pedido.
+  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
 }));
 jest.mock("react-native", () => {
   const RN = jest.requireActual("react-native");

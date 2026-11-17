@@ -215,7 +215,7 @@ describe("a rota /personalizados/orcamentos", () => {
     arvore.unmount();
   });
 
-  test("a linha abre o modal do Studio com a loja e o orçamento; Ver pedido vai para a Fila de produção", async () => {
+  test("a linha abre o modal do Studio com a loja e o orçamento; Ver pedido abre o detalhe do pedido no Negócio (p-176)", async () => {
     const arvore = await montarRota();
     expect(tem(arvore, "modal-do-orcamento")).toBe(false);
     await act(async () => { achar(arvore, "linha-q1")[0].props.onPress(); });
@@ -223,7 +223,7 @@ describe("a rota /personalizados/orcamentos", () => {
     expect(modal.cid).toBe("loja-1");
     expect(modal.quoteId).toBe("q1");
     expect(modal.consolidado).toBe(false);
-    expect(modal.rotaDoPedido("pedido-9")).toBe("/personalizados/producao");
+    expect(modal.rotaDoPedido("pedido-9")).toBe("/personalizados/pedido/pedido-9");
     arvore.unmount();
   });
 
