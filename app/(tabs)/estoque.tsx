@@ -795,7 +795,7 @@ export default function EstoqueScreen() {
   // uma linha só delas, com nome escrito (pendência 10).
   const AcoesDeApoio = () => (
     <>
-      <OlhoValores variant="botao" />
+      <OlhoValores variant="botao" alvo44={isMobileNarrow} />
       {/* 12/05/2026: botao Selecionar — toggle bulk mode. So aparece se ja tem produto e usuario nao e demo. */}
       {!isDemo && products.length > 0 && (
         <Pressable
