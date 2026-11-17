@@ -12,6 +12,7 @@ import renderer, { act } from "react-test-renderer";
 jest.mock("@/components/Icon", () => ({ Icon: () => null }));
 jest.mock("@/components/Toast", () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() } }));
 jest.mock("@/components/WebPortal", () => ({ WebPortal: ({ children }: any) => children }));
+jest.mock("@/components/JanelaEmpilhada", () => ({ JanelaEmpilhada: ({ children }: any) => children }));
 const mockCancelar = jest.fn();
 const mockCarta = jest.fn();
 jest.mock("@/services/nfe55Api", () => ({
