@@ -108,6 +108,7 @@ import { estadoDoDoc, mascararDoc, mensagemDoDoc } from "@/utils/nfseAutomatica"
 import { useLeitorNoCampo } from "@/hooks/useLeitorNoCampo";
 import { EtiquetaDeTecla } from "./EtiquetaDeTecla";
 import { acaoDoPagamento } from "@/utils/atalhosDoCaixa";
+import { TEXTOS_DA_TELA_FINAL as TF } from "./textosDaTelaFinal";
 
 /** 10/11/2026 (NFS-e automática, mockup nfse-cadastro-servico.html, tela 3).
  *  Carrinho com serviço numa loja que emite NFS-e: o "CPF na nota" vira
@@ -288,6 +289,10 @@ type Props = {
   /** 17/11/2026 (p-154): F8 / Alt+X armou a remoção deste item (productId).
    *  A lixeira dele fica no estado de confirmação, como no primeiro clique. */
   remocaoArmada?: string | null;
+  /** 17/11/2026 (p-147): o que foi lançado com a venda em voo e espera a
+   *  próxima (useCart.itensDaProximaVenda). Aparece no aviso "Finalizando a
+   *  venda…" em cima dos itens. */
+  proximaVenda?: { name: string; qty: number }[];
 };
 
 const HEAD_INK = "#ffffff";
@@ -308,7 +313,7 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
     discountConfirm, discountPending,
     emptyCta, headerSubtitle, compact, fill,
     cpfNaNota, onCpfNaNotaChange, tomador, avisoNotas,
-    pricePair, subtotalLabel, remocaoArmada,
+    pricePair, subtotalLabel, remocaoArmada, proximaVenda,
     splitMode, splitPayments, splitRemaining, splitIsBalanced,
     onToggleSplit, onAddSplitPayment, onUpdateSplitPayment, onRemoveSplitPayment,
     splitNote, splitStatusText,
@@ -493,6 +498,26 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
           resumo + CPF. O "Finalizar venda" fica fixo no FOOT, sempre visível.
           Só ancora o checkout no fundo (espaçador) quando fill (desktop). */}
       <ScrollView ref={bodyRef} style={s.body} contentContainerStyle={fill ? { padding: 14, paddingHorizontal: 16, flexGrow: 1 } : { padding: 14, paddingHorizontal: 16 }}>
+        {/* 17/11/2026 (p-147): a venda está sendo registrada. O que for
+            bipado agora espera a próxima venda (useCart, p-146) e aparece
+            aqui, para a pessoa saber que não sumiu. */}
+        {isProcessing ? (
+          <View style={s.finalizando} testID="carrinho-finalizando" accessibilityLiveRegion="polite">
+            <ActivityIndicator color={Colors.violet3} size="small" style={{ marginTop: 1 }} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={s.finalizandoT}>{TF.avisoFinalizandoTitulo}</Text>
+              <Text style={s.finalizandoTxt}>{TF.avisoFinalizando}</Text>
+              {proximaVenda && proximaVenda.length > 0 ? (
+                <View style={s.guardado} testID="carrinho-guardado">
+                  <Icon name="check" size={14} color={Colors.green} />
+                  <Text style={s.guardadoTxt}>
+                    {TF.guardado(proximaVenda.map(i => (i.qty > 1 ? `${i.name} (${String(i.qty).replace(".", ",")})` : i.name)).join(", "))}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
         {items.length === 0 ? (
           <View style={s.empty}>
             {/* 16/09/2026 (Fase 0 · I0.3): é aqui que a marca da loja fica em
@@ -1005,7 +1030,10 @@ export const CartPanel = forwardRef<any, Props>(function CartPanel(props, headRe
                 />
               )}
               {isProcessing ? (
-                <ActivityIndicator color="#fff" size="small" />
+                <>
+                  <ActivityIndicator color="#fff" size="small" />
+                  <Text style={s.ctaPriTxt} numberOfLines={1}>{TF.botaoFinalizando}</Text>
+                </>
               ) : (
                 <>
                   <Icon name="check" size={16} color="#fff" />
@@ -1614,6 +1642,12 @@ const ITEM_AVATAR = 32;
 const ITEM_AVATAR_GAP = 8;
 
 const s = StyleSheet.create({
+  // 17/11/2026 (p-147): "Finalizando a venda…" em cima dos itens.
+  finalizando: { flexDirection: "row", alignItems: "flex-start", gap: 10, padding: 10, paddingHorizontal: 12, borderRadius: 10, backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2, marginBottom: 10 },
+  finalizandoT: { fontSize: 13, fontWeight: "700", color: Colors.ink },
+  finalizandoTxt: { fontSize: 12.5, color: Colors.ink2, lineHeight: 18 },
+  guardado: { flexDirection: "row", alignItems: "flex-start", gap: 6, marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: Colors.border2 },
+  guardadoTxt: { flex: 1, fontSize: 12.5, color: Colors.green, fontWeight: "600", lineHeight: 18 },
   cart: { flex: 1, flexDirection: "column", overflow: "hidden" },
   head: { flexShrink: 0, padding: 18, paddingHorizontal: 20, position: "relative", overflow: "hidden" },
   headRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },

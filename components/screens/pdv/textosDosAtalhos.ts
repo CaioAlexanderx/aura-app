@@ -9,6 +9,7 @@
 // existem no Caixa. Entram aqui quando entrarem em ATALHOS_DO_CAIXA.
 // ============================================================
 import type { AcaoDoCaixa, TeclaDeCampo } from "@/utils/atalhosDoCaixa";
+import { CTRL_P_IMPRIME_VENDA_ANTERIOR } from "@/utils/atalhosDoCaixa";
 
 export type LinhaDaLegenda = {
   texto: string;
@@ -74,6 +75,9 @@ export const LEGENDA_DOS_ATALHOS: GrupoDaLegenda[] = [
     numero: "4", titulo: "Depois da venda", linhas: [
       { texto: "Começar a próxima venda", acoes: ["novaVenda"] },
       { texto: "Imprimir o cupom", acoes: ["imprimir"] },
+      // p-147: Ctrl/⌘+P com a faixa da venda anterior na tela (só com a
+      // constante CTRL_P_IMPRIME_VENDA_ANTERIOR ligada).
+      ...(CTRL_P_IMPRIME_VENDA_ANTERIOR ? [{ texto: "Imprimir o cupom da venda anterior", acoes: ["imprimirAnterior" as AcaoDoCaixa] }] : []),
       { texto: "Abrir e fechar esta legenda", acoes: ["legenda"] },
     ],
   },
