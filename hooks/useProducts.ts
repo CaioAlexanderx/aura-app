@@ -117,6 +117,8 @@ function mapApiProduct(p: any): Product {
     // 10/11/2026 (migration 442): "Sai em". Ausente/estranho -> null (segue o tipo).
     notaFiscal: lerNotaFiscal(p.nota_fiscal),
     isGroupShared: p.is_group_shared === true,
+    // 17/11/2026 (p-173): a loja dona do item (products.company_id).
+    ownerCompanyId: p.company_id ? String(p.company_id) : null,
   };
 }
 
