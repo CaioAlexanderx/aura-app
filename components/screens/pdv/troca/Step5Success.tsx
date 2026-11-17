@@ -41,12 +41,16 @@
 //   - fiscalCompanyId: `(Array.isArray(x) && x[0]) ?? companyId` devolvia
 //     false sem origin_company_ids e nao caia em companyId. Corrigido.
 // ============================================================
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { View, Text, Pressable, StyleSheet, Linking, Platform } from "react-native";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
 import { openPrintWindow } from "@/services/printWindow";
+import { toast } from "@/components/Toast";
+import { imprimirNoQuadro, jaImprimiuSozinho, marcarImpressaSozinha, ehVendaDoServidor } from "@/services/impressaoNoQuadro";
+import { imprimeNesteAparelho } from "@/utils/impressaoAutomatica";
+import { ehIphoneInstalado } from "@/services/instalarApp";
 import { useAuthStore } from "@/stores/auth";
 import { NfceActions, type NfceActionsItem } from "../NfceActions";
 import type { SelectedSaleRow, PaymentSplit } from "./types";
@@ -66,6 +70,9 @@ type Props = {
   paymentSplits?: PaymentSplit[];
   onClose: () => void;
   onNew: () => void;
+  /** 17/11/2026 (p-164): pdv_settings da loja — auto_print_receipt liga o
+   *  cupom da troca saindo sozinho, como o da venda (p-160). */
+  pdvSettings?: { auto_print_receipt?: boolean | null } | null;
 };
 
 // Retorna label + cor para cada item de fiscal.per_origin.
@@ -93,7 +100,7 @@ export function Step5Success({
   companyId, result, selectedSales,
   returnedValue, newValue, netAmount,
   paymentSplits,
-  onClose, onNew,
+  onClose, onNew, pdvSettings,
 }: Props) {
   const { token, isDemo } = useAuthStore();
 
@@ -225,6 +232,38 @@ export function Step5Success({
       if (r === "blocked") window.alert("Pop-up bloqueado. Permita pop-ups para imprimir o cupom.");
     });
   }
+
+  // 17/11/2026 (p-164): o cupom da troca sai sozinho com a mesma opção da
+  // venda ("Imprimir o cupom ao finalizar a venda", por loja, e "Neste
+  // aparelho não" por aparelho). Uma vez por troca, por quadro oculto
+  // (services/impressaoNoQuadro), mesmo HTML do botão. A nota fiscal nunca
+  // sai sozinha. O botão "Imprimir cupom" continua de reserva.
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+    if (isDemo || !token || !companyId || !receiptUrl || !ehVendaDoServidor(trocaSaleId)) return;
+    if (jaImprimiuSozinho(trocaSaleId)) return;
+    if (!imprimeNesteAparelho(pdvSettings as any, companyId)) return;
+    if (ehIphoneInstalado()) return;
+    marcarImpressaSozinha(trocaSaleId);
+    const baseFull = receiptUrl.startsWith("http") ? receiptUrl : `${getApiBase()}${receiptUrl}`;
+    const previewUrl = baseFull.includes("/preview") ? baseFull : `${baseFull.replace(/\/$/, "")}/preview`;
+    let vivo = true;
+    (async () => {
+      try {
+        const resp = await fetch(previewUrl, { headers: { Authorization: `Bearer ${token}` } });
+        if (!vivo) return;
+        if (!resp.ok) { toast.error("O cupom da troca não saiu sozinho. Toque em Imprimir cupom."); return; }
+        const html = await resp.text();
+        if (!vivo) return;
+        if (imprimirNoQuadro(html) !== "ok") toast.error("O cupom da troca não saiu sozinho. Toque em Imprimir cupom.");
+      } catch {
+        if (vivo) toast.error("O cupom da troca não saiu sozinho. Toque em Imprimir cupom.");
+      }
+    })();
+    return () => { vivo = false; };
+  // Só na chegada ao passo final de cada troca.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trocaSaleId]);
 
   // 29/05/2026: DANFE da NF-e 55 de devolucao. A rota exige auth, entao
   // baixamos via fetch com Authorization + blob e abrimos em nova aba
