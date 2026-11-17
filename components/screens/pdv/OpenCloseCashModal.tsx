@@ -22,6 +22,11 @@
 // passo 1 com o esperado já atualizado. A retirada não passa do que o
 // sistema diz estar na gaveta. Backend antigo (sem a rota): as linhas
 // novas não aparecem e o esperado é o de sempre.
+//
+// 16/11/2026 (mockup docs/mockups/fechamento-trocas.html): com troca na
+// sessão, a tela de resultado mostra a conta de Vendas do período até
+// Entradas no caixa e a lista das trocas, a mesma do relatório. Sem troca
+// (ou backend sem `trocas`), a tela é a de sempre.
 // ============================================================
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
@@ -38,6 +43,10 @@ import { toast } from "@/components/Toast";
 import { IS_WEB, webOnly } from "./types";
 import { openCashClosePdf, type CashClosePaymentRow } from "@/utils/cashClosePdf";
 import { esperadoNaGaveta, podeRetirar, rotuloDoMovimento, type TipoDeMovimento } from "@/utils/caixaMovimentos";
+import {
+  contaDoFechamento, linhasDaDiferenca, nomeComQuantidade, resumoDasTrocas, temTrocas,
+  valorDaDiferenca, valorDaLinhaDaConta, valorDoDevolvido, valorDoLevado,
+} from "@/utils/trocasDoFechamento";
 
 function toNum(v: unknown): number {
   if (v == null) return 0;
@@ -290,6 +299,9 @@ export function OpenCloseCashModal({
       diferenca: closeResult.diferenca != null ? toNum(closeResult.diferenca) : diferenca,
       observacao: closeResult.observacao || obsInput.trim() || null,
       paymentMix,
+      // 16/11/2026: só viram conta e seção no papel quando há troca.
+      trocas: closeResult.trocas,
+      trocasResumo: closeResult.trocas_resumo,
     });
   }
 
@@ -322,6 +334,9 @@ export function OpenCloseCashModal({
     ? (closeResult.total_vendas != null ? toNum(closeResult.total_vendas) : toNum(closeResult.total_geral))
     : 0;
   const resultSales     = closeResult ? toNum(closeResult.sales_count) : 0;
+  // 16/11/2026: trocas da sessão (backend novo). Sem troca: null, e a tela
+  // de resultado fica como sempre.
+  const resultTrocas    = closeResult && temTrocas(closeResult.trocas) ? closeResult.trocas : null;
   // Clientes novos saiu do KPI grid (deu lugar a Vendas do período ×
   // Entradas no caixa) mas segue no PDF via new_customers_count.
 
@@ -643,6 +658,14 @@ export function OpenCloseCashModal({
             </Text>
           </View>
         </View>
+        {resultTrocas && (
+          <TrocasDoFechamento
+            vendas={resultVendas}
+            entradas={resultGeral}
+            trocas={resultTrocas}
+            resumo={closeResult.trocas_resumo}
+          />
+        )}
       </>
     );
     footerNode = (
@@ -755,6 +778,94 @@ export function OpenCloseCashModal({
         )}
       </View>
     </View>
+  );
+}
+
+// 16/11/2026 — a conta Vendas → Entradas e as trocas da sessão, na tela de
+// resultado do fechamento. Mesmo texto e mesmas contas do relatório
+// (utils/trocasDoFechamento.ts).
+function TrocasDoFechamento({ vendas, entradas, trocas, resumo }: {
+  vendas: number;
+  entradas: number;
+  trocas: NonNullable<CaixaFechamentoFull["trocas"]>;
+  resumo?: CaixaFechamentoFull["trocas_resumo"];
+}) {
+  const conta = contaDoFechamento({ vendas, entradas, trocas, resumo });
+  const tot = resumoDasTrocas(trocas, resumo);
+  const corDaDif = (k: string) => (k === "in" ? Colors.green : k === "out" ? Colors.red : Colors.ink2);
+  return (
+    <>
+      <View style={s.contaBox} testID="fechamento-conta">
+        {conta.linhas.map((l) => (
+          <View key={l.chave} style={s.contaRow}>
+            <Text style={s.contaLab}>
+              {l.rotulo}
+              {l.obs ? <Text style={s.contaObs}>{" · " + l.obs}</Text> : null}
+            </Text>
+            <Text style={s.contaVal}>{valorDaLinhaDaConta(l, fmt)}</Text>
+          </View>
+        ))}
+        <View style={[s.contaRow, s.contaTot]}>
+          <Text style={[s.contaLab, s.contaTotTxt]}>= Entradas no caixa</Text>
+          <Text style={[s.contaVal, s.contaTotTxt]}>{fmt(conta.entradas)}</Text>
+        </View>
+      </View>
+      <Text style={s.helpTxt}>
+        A troca não entra em Vendas: a peça devolvida já tinha sido vendida antes. Crediário também faz os dois números diferirem — isso não é falta no caixa.
+      </Text>
+
+      <Text style={[s.sectionTitle, { marginTop: 12 }]} testID="fechamento-trocas">
+        {"Trocas e devoluções da sessão (" + trocas.length + ")"}
+      </Text>
+      {trocas.map((t) => {
+        const dev = t.devolvidos || [];
+        const lev = t.levados || [];
+        return (
+          <View key={t.id} style={s.trocaCard} testID={"fechamento-troca-" + t.id}>
+            <View style={s.trocaHead}>
+              <Text style={s.trocaTipo}>{t.tipo === "devolucao" ? "Devolução" : "Troca"}</Text>
+              <Text style={s.trocaHora}>
+                {new Date(t.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+              </Text>
+            </View>
+            <View style={s.trocaCols}>
+              <View style={s.trocaCol}>
+                <Text style={s.trocaColTit}>Devolveu</Text>
+                {dev.map((d, i) => (
+                  <View key={i} style={s.trocaItem}>
+                    <Text style={s.trocaItemNome}>{nomeComQuantidade(d.product_name_snapshot || "Produto", d.quantity)}</Text>
+                    <Text style={s.trocaItemVal}>{fmt(valorDoDevolvido(d))}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={s.trocaCol}>
+                <Text style={s.trocaColTit}>Levou</Text>
+                {lev.length ? lev.map((l, i) => (
+                  <View key={i} style={s.trocaItem}>
+                    <Text style={s.trocaItemNome}>{nomeComQuantidade(l.product_name || "Produto", l.quantity)}</Text>
+                    <Text style={s.trocaItemVal}>{fmt(valorDoLevado(l))}</Text>
+                  </View>
+                )) : (
+                  <Text style={[s.trocaItemNome, { color: Colors.ink3 }]}>Nada</Text>
+                )}
+              </View>
+            </View>
+            {linhasDaDiferenca(t, fmt).map((d, i) => (
+              <View key={i} style={s.trocaDif}>
+                <Text style={s.trocaDifTxt}>{d.texto}</Text>
+                <Text style={[s.trocaDifVal, { color: corDaDif(d.kind) }]}>{valorDaDiferenca(d.valor, fmt)}</Text>
+              </View>
+            ))}
+          </View>
+        );
+      })}
+      <View style={s.kpiGrid}>
+        <View style={s.kpi}><Text style={s.kpiL}>Peças devolvidas</Text><Text style={s.trocaTotV}>{fmt(tot.pecas_devolvidas)}</Text></View>
+        <View style={s.kpi}><Text style={s.kpiL}>Peças levadas</Text><Text style={s.trocaTotV}>{fmt(tot.pecas_levadas)}</Text></View>
+        <View style={s.kpi}><Text style={s.kpiL}>Diferença recebida</Text><Text style={s.trocaTotV}>{fmt(tot.diferenca_recebida)}</Text></View>
+        <View style={s.kpi}><Text style={s.kpiL}>Devolvido ao cliente</Text><Text style={s.trocaTotV}>{fmt(tot.devolvido_cliente)}</Text></View>
+      </View>
+    </>
   );
 }
 
@@ -952,6 +1063,40 @@ const s = StyleSheet.create({
   },
   kpiL: { fontSize: 10, color: Colors.ink3, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5 },
   kpiV: { fontSize: 17, fontWeight: "700", color: Colors.ink, marginTop: 4, letterSpacing: -0.3 },
+  // 16/11/2026 — conta Vendas → Entradas e trocas da sessão
+  contaBox: {
+    backgroundColor: "rgba(124,58,237,0.07)", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6,
+    borderWidth: 1, borderColor: "rgba(124,58,237,0.22)",
+  },
+  contaRow: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10,
+    paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: "rgba(124,58,237,0.12)", borderStyle: "dashed",
+  },
+  contaTot: { borderBottomWidth: 0, borderTopWidth: 1, borderTopColor: "rgba(124,58,237,0.35)", borderStyle: "solid", marginTop: 2, paddingTop: 7 },
+  contaLab: { flex: 1, fontSize: 12, color: Colors.ink2 },
+  contaObs: { fontSize: 11, color: Colors.ink3 },
+  contaVal: { fontSize: 12, color: Colors.ink, fontWeight: "600" },
+  contaTotTxt: { fontWeight: "700", color: "#a78bfa" },
+  trocaCard: {
+    backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 10, padding: 10, gap: 6,
+    borderWidth: 1, borderColor: "rgba(124,58,237,0.16)",
+  },
+  trocaHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
+  trocaTipo: { fontSize: 12, fontWeight: "700", color: "#a78bfa" },
+  trocaHora: { fontSize: 11, color: Colors.ink3 },
+  trocaCols: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  trocaCol: { flexBasis: 200, flexGrow: 1, minWidth: 0 },
+  trocaColTit: { fontSize: 10, fontWeight: "700", color: Colors.ink3, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 },
+  trocaItem: { flexDirection: "row", justifyContent: "space-between", gap: 8, paddingVertical: 1 },
+  trocaItemNome: { flex: 1, fontSize: 12, color: Colors.ink2 },
+  trocaItemVal: { fontSize: 12, color: Colors.ink, fontWeight: "600" },
+  trocaDif: {
+    flexDirection: "row", justifyContent: "space-between", flexWrap: "wrap", gap: 8,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: "rgba(124,58,237,0.06)",
+  },
+  trocaDifTxt: { flex: 1, fontSize: 12, color: Colors.ink2 },
+  trocaDifVal: { fontSize: 12, fontWeight: "700" },
+  trocaTotV: { fontSize: 14, fontWeight: "700", color: Colors.ink, marginTop: 4 },
 });
 
 export default OpenCloseCashModal;

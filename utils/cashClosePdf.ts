@@ -1,5 +1,10 @@
 import { Platform } from "react-native";
 import { CSS_ESCONDE_NA_IMPRESSAO, ONCLICK_IMPRIMIR, SCRIPT_IMPRIMIR_SEM_BARRA } from "@/utils/printBar";
+import {
+  contaDoFechamento, linhasDaDiferenca, nomeComQuantidade, resumoDasTrocas, temTrocas,
+  valorDaDiferenca, valorDaLinhaDaConta, valorDoDevolvido, valorDoLevado,
+  type ResumoDasTrocas, type TrocaDoFechamento,
+} from "@/utils/trocasDoFechamento";
 
 // ============================================================
 // AURA. — Cash Close PDF generator
@@ -16,7 +21,14 @@ import { CSS_ESCONDE_NA_IMPRESSAO, ONCLICK_IMPRIMIR, SCRIPT_IMPRIMIR_SEM_BARRA }
 //   - 4 KPIs do dia (vendas, vendas do periodo, entradas, ticket médio)
 //   - Conferência de caixa (esperado vs contado vs diferença)
 //   - Entradas no caixa por forma de pagamento (barras horizontais)
+//   - Trocas e devoluções da sessão (16/11/2026, só quando houve troca)
 //   - Footer com identidade Aura
+//
+// 16/11/2026 (mockup docs/mockups/fechamento-trocas.html): com troca na
+// sessão, o relatório ganha a conta de Vendas do período até Entradas no
+// caixa (logo abaixo dos KPIs) e a lista das trocas. SEM troca o HTML sai
+// igual ao de antes, byte a byte (__tests__/cashClosePdfTrocas.test.ts):
+// o CSS novo só entra quando há troca.
 // ============================================================
 
 export type CashClosePaymentRow = {
@@ -75,7 +87,43 @@ export type CashCloseData = {
 
   // Distribuição
   paymentMix: CashClosePaymentRow[];
+
+  /** 16/11/2026: trocas e devoluções da sessão (fechar() do backend).
+   *  Ausente ou vazio = relatório de sempre. */
+  trocas?: TrocaDoFechamento[];
+  trocasResumo?: ResumoDasTrocas | null;
 };
+
+// Só entra no <style> quando a sessão teve troca. Cabe na térmica de 80 mm:
+// abaixo de 620 px, Devolveu/Levou empilham e os totais vão para 2 colunas.
+const CSS_TROCAS =
+  ".conta { background: #f5f1ff; border: 1px solid rgba(109,40,217,0.22); border-radius: 8px; padding: 12px 16px; margin-top: 14px; }" +
+  ".conta .row { border-bottom: 1px dashed rgba(109,40,217,0.15); gap: 12px; }" +
+  ".conta .row .val { text-align: right; white-space: nowrap; }" +
+  ".conta .row .obs { color: #8a83a8; }" +
+  ".conta .row.tot { border-bottom: none; border-top: 1px solid rgba(109,40,217,0.35); margin-top: 2px; padding-top: 8px; }" +
+  ".conta .row.tot .lab, .conta .row.tot .val { font-weight: 700; color: #4c1d95; }" +
+  ".trocas-sec { margin-top: 22px; }" +
+  ".troca { border: 1px solid rgba(109,40,217,0.16); border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; background: #fff; page-break-inside: avoid; break-inside: avoid; }" +
+  ".troca-h { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; flex-wrap: wrap; font-size: 12px; margin-bottom: 8px; }" +
+  ".troca-h .k { font-weight: 700; color: #4c1d95; }" +
+  ".troca-h .t { font-family: ui-monospace, monospace; color: #6a608e; font-size: 11px; }" +
+  ".cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }" +
+  ".col h4 { margin: 0 0 4px; font-size: 10px; color: #6a608e; text-transform: uppercase; letter-spacing: 0.5px; }" +
+  ".it { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; padding: 2px 0; }" +
+  ".it span:first-child { min-width: 0; color: #2d2850; overflow-wrap: anywhere; }" +
+  ".it span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }" +
+  ".it.sub { border-top: 1px solid rgba(109,40,217,0.10); margin-top: 3px; padding-top: 4px; font-weight: 600; }" +
+  ".it.nada span:first-child { color: #8a83a8; }" +
+  ".dif { margin-top: 8px; font-size: 12px; padding: 7px 10px; border-radius: 6px; background: #faf9fd; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }" +
+  ".dif b { font-variant-numeric: tabular-nums; }" +
+  ".dif.in b { color: #047857; }" +
+  ".dif.out b { color: #b91c1c; }" +
+  ".dif.zero b { color: #4a4366; }" +
+  ".tot-trocas { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 4px; }" +
+  ".tot-trocas div { background: #faf9fd; border-radius: 6px; padding: 8px 10px; font-size: 10px; color: #6a608e; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600; min-width: 0; }" +
+  ".tot-trocas div b { display: block; font-size: 14px; color: #18172b; text-transform: none; letter-spacing: 0; margin-top: 2px; }" +
+  "@media (max-width: 620px) { .cols { grid-template-columns: minmax(0, 1fr); } .tot-trocas { grid-template-columns: repeat(2, minmax(0, 1fr)); } }";
 
 function fmt(n: number): string {
   return "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -103,10 +151,78 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#39;");
 }
 
+/** A conta de Vendas do período até Entradas no caixa (só com troca). */
+function contaHtml(vendas: number, entradas: number, trocas: TrocaDoFechamento[], resumo?: ResumoDasTrocas | null): string {
+  const conta = contaDoFechamento({ vendas, entradas, trocas, resumo });
+  return (
+    '<div class="conta">' +
+    conta.linhas
+      .map((l) =>
+        '<div class="row"><span class="lab">' + escapeHtml(l.rotulo) +
+        (l.obs ? ' <span class="obs">· ' + escapeHtml(l.obs) + "</span>" : "") +
+        '</span><span class="val">' + valorDaLinhaDaConta(l, fmt) + "</span></div>"
+      )
+      .join("") +
+    '<div class="row tot"><span class="lab">= Entradas no caixa</span><span class="val">' + fmt(conta.entradas) + "</span></div>" +
+    "</div>"
+  );
+}
+
+function itemHtml(nome: string, valor: number): string {
+  return '<div class="it"><span>' + escapeHtml(nome) + "</span><span>" + fmt(valor) + "</span></div>";
+}
+
+/** A seção "Trocas e devoluções da sessão (N)": um bloco por troca e os 4 totais. */
+function trocasHtml(trocas: TrocaDoFechamento[], resumo?: ResumoDasTrocas | null): string {
+  const tot = resumoDasTrocas(trocas, resumo);
+  const blocos = trocas
+    .map((t) => {
+      const dev = t.devolvidos || [];
+      const lev = t.levados || [];
+      const somaDev = dev.reduce((a, d) => a + valorDoDevolvido(d), 0);
+      const somaLev = lev.reduce((a, l) => a + valorDoLevado(l), 0);
+      return (
+        '<div class="troca">' +
+        '<div class="troca-h"><span class="k">' + (t.tipo === "devolucao" ? "Devolução" : "Troca") + '</span><span class="t">' + fmtTime(t.created_at) + "</span></div>" +
+        '<div class="cols">' +
+        '<div class="col"><h4>Devolveu</h4>' +
+        dev.map((d) => itemHtml(nomeComQuantidade(d.product_name_snapshot || "Produto", d.quantity), valorDoDevolvido(d))).join("") +
+        (dev.length > 1 ? '<div class="it sub"><span>Total</span><span>' + fmt(somaDev) + "</span></div>" : "") +
+        "</div>" +
+        '<div class="col"><h4>Levou</h4>' +
+        (lev.length
+          ? lev.map((l) => itemHtml(nomeComQuantidade(l.product_name || "Produto", l.quantity), valorDoLevado(l))).join("")
+          : '<div class="it nada"><span>Nada</span><span></span></div>') +
+        (lev.length > 1 ? '<div class="it sub"><span>Total</span><span>' + fmt(somaLev) + "</span></div>" : "") +
+        "</div>" +
+        "</div>" +
+        linhasDaDiferenca(t, fmt)
+          .map((d) => '<div class="dif ' + d.kind + '"><span>' + escapeHtml(d.texto) + "</span><b>" + valorDaDiferenca(d.valor, fmt) + "</b></div>")
+          .join("") +
+        "</div>"
+      );
+    })
+    .join("");
+  return (
+    '<div class="trocas-sec">' +
+    '<div class="s-title">Trocas e devoluções da sessão (' + trocas.length + ")</div>" +
+    blocos +
+    '<div class="tot-trocas">' +
+    "<div>Peças devolvidas<b>" + fmt(tot.pecas_devolvidas) + "</b></div>" +
+    "<div>Peças levadas<b>" + fmt(tot.pecas_levadas) + "</b></div>" +
+    "<div>Diferença recebida<b>" + fmt(tot.diferenca_recebida) + "</b></div>" +
+    "<div>Devolvido ao cliente<b>" + fmt(tot.devolvido_cliente) + "</b></div>" +
+    "</div>" +
+    "</div>"
+  );
+}
+
 export function buildCashClosePdfHtml(data: CashCloseData): string {
   const mixSum = data.paymentMix.reduce((acc, p) => acc + p.amount, 0);
   const total = Math.max(1, mixSum);
   const entradas = data.entradasTotal != null ? data.entradasTotal : mixSum;
+  // 16/11/2026: sem troca, nada abaixo muda (nem o CSS).
+  const trocas = temTrocas(data.trocas) ? data.trocas : null;
   const ticket =
     data.averageTicket != null
       ? data.averageTicket
@@ -175,6 +291,7 @@ export function buildCashClosePdfHtml(data: CashCloseData): string {
     ".pay-val { font-size: 11px; color: #18172b; width: 96px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }" +
     ".foot { padding: 14px 28px; border-top: 1px solid #ece8f5; background: #faf9fd; font-size: 10px; color: #6a608e; display: flex; justify-content: space-between; gap: 16px; align-items: center; }" +
     ".foot .brand { color: #6d28d9; font-weight: 700; }" +
+    (trocas ? CSS_TROCAS : "") +
     // 07/10/2026: a barra só tem aparência na tela; na impressão, some
     // (ver utils/printBar.ts — no orçamento, `.actions { display: flex }`
     // declarado depois do @media print fazia o botão sair no papel).
@@ -209,12 +326,15 @@ export function buildCashClosePdfHtml(data: CashCloseData): string {
     '<div class="kpi"><div class="l">Entradas no caixa</div><div class="v violet">' + fmt(entradas) + "</div></div>" +
     '<div class="kpi"><div class="l">Ticket medio</div><div class="v">' + fmt(ticket) + "</div></div>" +
     "</div>" +
+    (trocas ? contaHtml(data.grossRevenue, entradas, trocas, data.trocasResumo) : "") +
     '<div style="font-size:10px; color:#6a608e; margin-top:8px; line-height:1.5;">' +
-    "Vendas do periodo = valor vendido (mesmo numero da tela de Vendas). Entradas no caixa = o que entrou por forma de pagamento nesta sessao" +
-    (data.devolucoes && data.devolucoes > 0
-      ? ", ja descontados " + fmt(data.devolucoes) + " devolvidos ao cliente em trocas"
-      : "") +
-    ". Trocas e crediário fazem os dois números diferirem — isso não e falta no caixa." +
+    (trocas
+      ? "Vendas do periodo = valor vendido (mesmo numero da tela de Vendas). A troca não entra em Vendas: a peça devolvida já tinha sido vendida antes. Crediário também faz os dois números diferirem — isso não e falta no caixa."
+      : "Vendas do periodo = valor vendido (mesmo numero da tela de Vendas). Entradas no caixa = o que entrou por forma de pagamento nesta sessao" +
+        (data.devolucoes && data.devolucoes > 0
+          ? ", ja descontados " + fmt(data.devolucoes) + " devolvidos ao cliente em trocas"
+          : "") +
+        ". Trocas e crediário fazem os dois números diferirem — isso não e falta no caixa.") +
     "</div>" +
     '<div class="s-title">Conferencia de caixa</div>' +
     '<div class="summary">' +
@@ -246,6 +366,7 @@ export function buildCashClosePdfHtml(data: CashCloseData): string {
         '<span class="pay-val" style="font-weight:700;">' + fmt(entradas) + "</span>" +
         "</div>"
       : "") +
+    (trocas ? trocasHtml(trocas, data.trocasResumo) : "") +
     "</div>" +
     '<div class="foot">' +
     '<span>Gerado por <span class="brand">Aura</span> - getaura.com.br</span>' +
