@@ -103,6 +103,8 @@ import { IS_WEB } from "@/components/screens/pdv/types";
 // 03/11/2026 — cadastrar vendedora pelo Caixa (utils/vendedoraNoCaixa.ts).
 import { podeCadastrarVendedora } from "@/utils/vendedoraNoCaixa";
 import { permissionsQueryKey } from "@/utils/permissionsQueryKey";
+import { computeVisibleModules } from "@/hooks/useVisibleModules";
+import { pedidoNoCaixa } from "@/utils/pedido";
 import type { CartDisplayItem, PayChip, RequiredHint } from "@/components/screens/pdv/CartPanel";
 import type { PersonPickerHandle } from "@/components/screens/pdv/ActionToolbar";
 import type { Product } from "@/components/screens/estoque/types";
@@ -243,6 +245,22 @@ export function usePdvState() {
     staleTime: 5 * 60_000,
     retry: 1,
   });
+  // ── Pedido separado de venda (17/11/2026, A1) ───────────────────────────
+  // "Guardar > Pedido" no rodapé. Só com a trava PEDIDO_LIBERADO ligada, o
+  // módulo próprio vendas.pedidos (plano, override e permissão do membro, a
+  // mesma conta do menu, com a mesma permData acima), uma loja escolhida e
+  // fora da demonstração (utils/pedido.ts). Desligado: cartProps.pedido =
+  // null e o rodapé é o de sempre. O Essencial tem o módulo, então o plano
+  // guardado no JWT não muda a resposta (sem refetch de /auth/me aqui).
+  const pedidoAtivo = pedidoNoCaixa({
+    modulos: computeVisibleModules(company?.plan, moduleOverrides, permData),
+    companyId: company?.id,
+    consolidado: !!consolidatedView,
+    isDemo,
+  });
+  const [showPedido, setShowPedido] = useState(false);
+  useEffect(() => { if (!pedidoAtivo && showPedido) setShowPedido(false); }, [pedidoAtivo, showPedido]);
+
   const employees = useMemo(
     () => ((empData?.employees || []) as any[]).map(e => ({
       id: e.id, name: e.name || "", subtitle: e.role || undefined,
@@ -1144,7 +1162,8 @@ export function usePdvState() {
     !!confirmacaoDoDesconto?.aberta ||
     !!comandas.showAdicionar ||
     !!comandas.showFechar ||
-    !!comandas.showPainel;
+    !!comandas.showPainel ||
+    showPedido;
 
   // ── Dados derivados para renderização ────────────────────────────────────────────
   // 22/09/2026 (Matcon M0): unit/purchaseUnit/purchaseFactor descem pro
@@ -1333,6 +1352,8 @@ export function usePdvState() {
           faltaEndereco: !!selectedCustomerId && !clienteTemEndereco && !entregaValeParaACliente(entrega, selectedCustomerId),
         }
       : null,
+    // Pedido (A1): null com a trava desligada ou sem o módulo = rodapé de sempre.
+    pedido: pedidoAtivo ? { onNovoPedido: () => setShowPedido(true) } : null,
     // Comandas: null com a chave desligada = rodapé de sempre.
     comanda: comandaEnabled
       ? {
@@ -1468,6 +1489,9 @@ export function usePdvState() {
     valeTroca,
     openTroca:  () => { setValeTroca(null); setShowTroca(true); },
     closeTroca: () => { setShowTroca(false); setValeTroca(null); },
+    // Pedido separado de venda (A1): o Novo pedido abre pelo Guardar.
+    pedidoAtivo, showPedido,
+    closePedido: () => setShowPedido(false),
     // Handlers
     handleScan, handleSearchSubmit, handleAddProduct, handleVariantSelected, handleFinalize,
     handleValidateCoupon, handleGenerateQuote,
