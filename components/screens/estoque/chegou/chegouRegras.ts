@@ -302,7 +302,7 @@ export function acharProduto(
 
 /** Decisão da pessoa numa linha. Sem decisão = o que a Aura achou. */
 export type DecisaoDaLinha =
-  | { tipo: "novo"; nome: string; preco: number | null }
+  | { tipo: "novo"; nome: string; preco: number | null; categoria?: string | null }
   | { tipo: "ligar"; produtoId: string | null }
   | { tipo: "fora" };
 
@@ -313,7 +313,15 @@ export type AjusteDaLinha = {
   custoConferido?: boolean;
   /** "Dizer quantos" na linha com quantidade zero. */
   quantidade?: number;
+  /** A4b: grade escolhida (variant_id -> quantidade) para produto de cores e tamanhos. */
+  variantes?: Record<string, number>;
 };
+
+/** Soma da grade escolhida (0 sem grade). */
+export function somaDaGrade(v: Record<string, number> | null | undefined): number {
+  if (!v) return 0;
+  return Math.round(Object.values(v).reduce((t, q) => t + (Number(q) > 0 ? Number(q) : 0), 0) * 1000) / 1000;
+}
 
 export type EstadoDaLinha =
   | "pronta"   // achou o produto (ou foi ligada): entra
@@ -340,6 +348,8 @@ export type LinhaConferida = {
   custo: number;
   previa: PreviaDaEntrada | null;
   decisao: DecisaoDaLinha | null;
+  /** Grade escolhida (A4b): variant_id -> quantidade. */
+  variantes: Record<string, number> | null;
 };
 
 export const MARGEM_PADRAO_DOS_NOVOS = 100;
@@ -355,8 +365,39 @@ export function precoSugerido(custo: number | null | undefined, margemPct: numbe
  * Decisão "Cadastrar novo" já preenchida: nome da nota e preço pela margem.
  * Quem não vê custo não recebe sugestão (o preço entregaria o custo).
  */
-export function decisaoDeNovo(item: Pick<ItemParaConferir, "descricao" | "custoUnitario">, semCusto: boolean): DecisaoDaLinha {
-  return { tipo: "novo", nome: item.descricao.trim(), preco: semCusto ? null : precoSugerido(item.custoUnitario) };
+export function decisaoDeNovo(
+  item: Pick<ItemParaConferir, "descricao" | "custoUnitario">,
+  semCusto: boolean,
+  margemPct: number = MARGEM_PADRAO_DOS_NOVOS,
+): DecisaoDaLinha {
+  return { tipo: "novo", nome: item.descricao.trim(), preco: semCusto ? null : precoSugerido(item.custoUnitario, margemPct), categoria: null };
+}
+
+/**
+ * "Preço dos produtos novos · Margem sobre o custo · Aplicar" (A4b): refaz o
+ * preço de todos os novos pela margem, sobre o custo de cada linha.
+ */
+export function aplicarMargemAosNovos(
+  decisoes: Record<number, DecisaoDaLinha>,
+  custoPorLinha: Record<number, number>,
+  margemPct: number,
+): Record<number, DecisaoDaLinha> {
+  const novo: Record<number, DecisaoDaLinha> = {};
+  for (const k of Object.keys(decisoes)) {
+    const n = Number(k);
+    const d = decisoes[n];
+    if (d.tipo !== "novo") { novo[n] = d; continue; }
+    const p = precoSugerido(custoPorLinha[n], margemPct);
+    novo[n] = p ? { ...d, preco: p } : d;
+  }
+  return novo;
+}
+
+/** Margem de um preço sobre o custo (100 = o dobro do custo). null sem custo. */
+export function margemSobreCusto(preco: number | null | undefined, custo: number | null | undefined): number | null {
+  const p = Number(preco), c = Number(custo);
+  if (!(p > 0) || !(c > 0)) return null;
+  return Math.round(((p - c) / c) * 100);
 }
 
 export function conferirLinha(
@@ -373,7 +414,8 @@ export function conferirLinha(
   const decisao = ctx.decisao || null;
   const quantidade = ajuste.quantidade !== undefined ? ajuste.quantidade : item.quantidade;
   const custo = ajuste.custo !== undefined ? ajuste.custo : item.custoUnitario;
-  const base = { item, quantidade, custo, decisao, par: null as ParDaLinha | null, produto: null as ProdutoDaLoja | null, previa: null as PreviaDaEntrada | null };
+  const variantes = ajuste.variantes && somaDaGrade(ajuste.variantes) > 0 ? ajuste.variantes : null;
+  const base = { item, quantidade, custo, decisao, variantes, par: null as ParDaLinha | null, produto: null as ProdutoDaLoja | null, previa: null as PreviaDaEntrada | null };
 
   if (!(quantidade > 0)) return { ...base, estado: "erro", falta: false, entra: false };
   if (decisao && decisao.tipo === "fora") return { ...base, estado: "fora", falta: false, entra: false };
@@ -381,17 +423,25 @@ export function conferirLinha(
     const completo = !!decisao.nome.trim() && Number(decisao.preco) > 0;
     return { ...base, estado: "novo", falta: !completo, entra: completo };
   }
+  let produto: ProdutoDaLoja | undefined;
+  let par: ParDaLinha | null = null;
   if (decisao && decisao.tipo === "ligar") {
-    const p = decisao.produtoId ? ctx.indice.porId.get(decisao.produtoId) : undefined;
-    if (!p) return { ...base, estado: "ligar", falta: true, entra: false };
-    return linhaComProduto(base, p, ctx.semCusto, ajuste);
+    produto = decisao.produtoId ? ctx.indice.porId.get(decisao.produtoId) : undefined;
+    if (!produto) return { ...base, estado: "ligar", falta: true, entra: false };
+  } else {
+    par = acharProduto(item, ctx.indice, ctx.codigos);
+    if (!par) return { ...base, estado: "sem_par", falta: true, entra: false };
+    produto = par.produto;
   }
-  const par = acharProduto(item, ctx.indice, ctx.codigos);
-  if (!par) return { ...base, estado: "sem_par", falta: true, entra: false };
-  if (par.produto.has_variants && par.daVariante === false) {
-    return { ...base, par, produto: par.produto, estado: "grade", falta: true, entra: false };
+  // Produto de cores e tamanhos: a grade escolhida manda na quantidade. Sem
+  // ela, só segue quem casou pelo código de barras de UMA variante (o A7 acha
+  // o variant_id por esse código).
+  if (produto.has_variants) {
+    const soma = somaDaGrade(ajuste.variantes);
+    if (soma > 0) return linhaComProduto({ ...base, par, quantidade: soma }, produto, ctx.semCusto, ajuste);
+    if (!(par && par.daVariante)) return { ...base, par, produto, estado: "grade", falta: true, entra: false };
   }
-  return linhaComProduto({ ...base, par }, par.produto, ctx.semCusto, ajuste);
+  return linhaComProduto({ ...base, par }, produto, ctx.semCusto, ajuste);
 }
 
 function linhaComProduto(

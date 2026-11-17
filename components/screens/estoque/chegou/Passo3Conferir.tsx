@@ -1,31 +1,40 @@
 // ============================================================
-// AURA. — "Chegou mercadoria" · Passo 3: conferir linha a linha (A4a)
+// AURA. — "Chegou mercadoria" · Passo 3: conferir linha a linha (A4a, A4b)
 //
 // Mockup estoque-portas-mockup-17-11.html, parte 4 ("Passo 3 · Conferir
 // linha a linha" e "no celular"). As contas e os estados vêm prontos do
 // chegouRegras (conferirLinha, resumirConferencia, linhasVisiveis); aqui só
 // há tela.
 //
-// Estados da linha: pronta (com "achado pelo …"), "Confere?" (custo bem
-// acima do de costume: pergunta e não trava), sem par (cadastrar novo,
+// A4a: estados da linha: pronta (com "achado pelo …"), "Confere?" (custo
+// bem acima do de costume: pergunta e não trava), sem par (cadastrar novo,
 // ligar a um produto ou deixar de fora), quantidade zero (fica de fora
 // sozinha, "Dizer quantos") e grade (produto de cores e tamanhos).
 //
-// Fica para o A4b: os painéis "Produto novo" (nome, preço, categoria) e
-// "Ligar a um produto" (busca), "Trocar produto" e a margem dos novos.
+// A4b: os painéis da linha:
+//   - "Produto novo": nome, preço de venda (obrigatório; sugerido pela
+//     margem, e digitado sem sugestão por quem não vê custo), categoria,
+//     margem e NCM da nota;
+//   - "Ligar a um produto": busca; ao ligar, o backend guarda o código do
+//     fornecedor; "Trocar produto" usa a mesma busca;
+//   - grade: "Quantas chegaram de cada?" (GradeDaEntrada, a mesma escolha
+//     da Entrada de mercadoria de hoje);
+//   - "Preço dos produtos novos": margem do lote.
 // ============================================================
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator } from "react-native";
+import { useQuery } from "@tanstack/react-query";
 import { Colors } from "@/constants/colors";
 import { Icon } from "@/components/Icon";
+import { companiesApi } from "@/services/api";
 import { maskCurrency } from "@/utils/masks";
 import { fmtQty } from "@/utils/matconUnits";
 import { numeroPositivo } from "@/utils/entradaDeMercadoria";
+import { GradeDaEntrada } from "@/components/screens/estoque/GradeDaEntrada";
 import { TEXTOS_CHEGOU as T } from "./textosChegou";
-import type { NotaLida } from "./lerNota";
 import {
-  diaMes, linhasVisiveis,
-  type LinhaConferida, type ResumoDaConferencia, type DecisaoDaLinha, type AjusteDaLinha,
+  linhasVisiveis, margemSobreCusto, normalizarNome, normalizarBarras, somaDaGrade,
+  type LinhaConferida, type ResumoDaConferencia, type DecisaoDaLinha, type AjusteDaLinha, type ProdutoDaLoja,
 } from "./chegouRegras";
 
 const brl = (n: number | null | undefined) =>
@@ -33,18 +42,30 @@ const brl = (n: number | null | undefined) =>
     ? "—"
     : "R$ " + Number(n).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/** "12,50" a partir de 12.5, para o campo com máscara. */
+const paraCampo = (n: number | null | undefined) => (Number(n) > 0 ? maskCurrency(String(Math.round(Number(n) * 100))) : "");
+
 type Props = {
   estreito: boolean;
   semCusto: boolean;
-  nota: NotaLida;
+  companyId: string;
+  /** "Nota 004512 · 14/11" ou o nome da planilha. */
+  titulo: string;
+  /** Total que o arquivo diz ter (nota); null = não compara. */
+  totalEsperado: number | null;
   linhas: LinhaConferida[];
   resumo: ResumoDaConferencia;
+  produtos: ProdutoDaLoja[];
+  /** Há fornecedor: ligar guarda o código dele. */
+  comFornecedor: boolean;
   /** Códigos do fornecedor ainda chegando: a conferência espera. */
   carregando: boolean;
   mostrarTodas: boolean;
   onMostrarTodas: () => void;
   usarMedio: boolean;
   onUsarMedio: (v: boolean) => void;
+  margemDosNovos: number;
+  onAplicarMargem: (pct: number) => void;
   /** Decisão da linha (n do item); null desfaz. */
   onDecidir: (n: number, d: DecisaoDaLinha | null) => void;
   onAjustar: (n: number, a: Partial<AjusteDaLinha>) => void;
@@ -53,6 +74,7 @@ type Props = {
 };
 
 export function Passo3Conferir(p: Props) {
+  const [margemTxt, setMargemTxt] = useState(String(p.margemDosNovos));
   if (p.carregando) {
     return (
       <View style={s.lendo} testID="chegou-conferindo">
@@ -75,7 +97,7 @@ export function Passo3Conferir(p: Props) {
   return (
     <View style={{ gap: 12 }} testID="chegou-passo-3">
       <View style={s.resumo}>
-        <Text style={s.resumoNota}>{T.resumoNota(p.nota.numero || "—", diaMes(p.nota.emitidaEm))}</Text>
+        <Text style={s.resumoNota}>{p.titulo}</Text>
         <View style={s.tiles}>
           {tile(T.resumoItens, String(r.itens), "itens")}
           {tile(T.resumoProntos, String(r.prontos), "prontos", Colors.green)}
@@ -84,10 +106,37 @@ export function Passo3Conferir(p: Props) {
           {tile(T.resumoFora, String(r.fora), "fora")}
           {!p.semCusto && tile(T.resumoTotal, brl(r.totalDosItens), "total")}
         </View>
-        {!p.semCusto && r.bate !== null ? (
+        {!p.semCusto && p.totalEsperado !== null && r.bate !== null ? (
           <Text style={[s.bate, !r.bate && { color: Colors.amber }]} testID="chegou-total-bate">
-            {r.bate ? T.totalBate(brl(p.nota.totalDosProdutos)) : T.totalNaoBate(brl(r.totalDosItens), brl(p.nota.totalDosProdutos))}
+            {r.bate ? T.totalBate(brl(p.totalEsperado)) : T.totalNaoBate(brl(r.totalDosItens), brl(p.totalEsperado))}
           </Text>
+        ) : null}
+        {!p.semCusto && r.novos > 0 ? (
+          <View style={s.margem} testID="chegou-margem-dos-novos">
+            <View style={{ flex: 1, minWidth: 160 }}>
+              <Text style={s.checkTxt}>{T.margemTitulo}</Text>
+              <Text style={s.apoioPeq}>{T.margemRotulo}</Text>
+            </View>
+            <View style={s.comSufixo}>
+              <TextInput
+                value={margemTxt}
+                onChangeText={(t) => setMargemTxt(t.replace(/[^\d]/g, "").slice(0, 4))}
+                keyboardType="number-pad"
+                style={[s.input, { width: 80 }] as any}
+                accessibilityLabel={T.margemRotulo}
+                testID="chegou-margem-campo"
+              />
+              <Text style={s.apoio}>%</Text>
+            </View>
+            <Pressable
+              onPress={() => p.onAplicarMargem(Number(margemTxt) || 0)}
+              style={s.btnSec}
+              accessibilityRole="button"
+              testID="chegou-margem-aplicar"
+            >
+              <Text style={s.btnSecTxt}>{T.margemAplicar}</Text>
+            </Pressable>
+          </View>
         ) : null}
         {!p.semCusto ? (
           <Pressable
@@ -131,16 +180,23 @@ export function Passo3Conferir(p: Props) {
   );
 }
 
-function LinhaDaConferencia({ l, estreito, semCusto, onDecidir, onAjustar, novoPara }: Props & { l: LinhaConferida }) {
+function LinhaDaConferencia(props: Props & { l: LinhaConferida }) {
+  const { l, estreito, semCusto, onDecidir, onAjustar, novoPara } = props;
   const [corrigindo, setCorrigindo] = useState(false);
   const [custoTxt, setCustoTxt] = useState("");
   const [dizendo, setDizendo] = useState(false);
   const [qtdTxt, setQtdTxt] = useState("");
+  const [trocando, setTrocando] = useState(false);
   const n = l.item.n;
   const un = l.produto && l.produto.unit && l.produto.unit !== "un" ? l.produto.unit : "un";
   const cod = l.item.codigoFornecedor ? " · " + T.codigoDoItem(l.item.codigoFornecedor) : "";
   const decisaoTipo = l.decisao ? l.decisao.tipo : null;
-  const semDecisao = l.estado === "sem_par" || l.estado === "novo" || l.estado === "ligar" || (l.estado === "fora" && decisaoTipo === "fora");
+  const semDecisao = l.estado === "sem_par" || l.estado === "novo" || l.estado === "ligar"
+    || (l.estado === "fora" && decisaoTipo === "fora");
+  // Grade: produto de cores e tamanhos que não casou pelo código de UMA variante.
+  const usaGrade = !!l.produto && !!l.produto.has_variants && !(l.par && l.par.daVariante)
+    && (l.estado === "grade" || l.estado === "pronta" || l.estado === "confere");
+  const ligarAberto = trocando || (l.estado === "ligar");
 
   let titulo = l.item.descricao;
   if (l.produto) titulo = l.produto.name;
@@ -220,7 +276,14 @@ function LinhaDaConferencia({ l, estreito, semCusto, onDecidir, onAjustar, novoP
             {l.quantidade > 0 ? <Text style={s.previaPeq}>{brl(Math.round(l.quantidade * l.custo * 100) / 100)}</Text> : null}
           </View>
         )}
-        <View style={[s.col4, estreito && s.colEstreita]}>{direita}</View>
+        <View style={[s.col4, estreito && s.colEstreita]}>
+          {direita}
+          {(l.estado === "pronta" || l.estado === "confere" || l.estado === "grade") && !trocando ? (
+            <Pressable onPress={() => setTrocando(true)} style={[s.btnSec, s.btnPeq]} accessibilityRole="button" testID={"chegou-linha-" + n + "-trocar"}>
+              <Text style={s.btnSecTxt}>{T.trocarProduto}</Text>
+            </Pressable>
+          ) : null}
+        </View>
       </View>
 
       {l.estado === "confere" && !semCusto ? (
@@ -268,10 +331,23 @@ function LinhaDaConferencia({ l, estreito, semCusto, onDecidir, onAjustar, novoP
         </View>
       ) : null}
 
-      {l.estado === "grade" ? (
-        <View style={s.acaoBloco}>
-          <Text style={s.avisoTxt}>{T.gradeTexto}</Text>
-        </View>
+      {l.estado === "novo" && l.decisao && l.decisao.tipo === "novo" ? (
+        <PainelNovo l={l} decisao={l.decisao} semCusto={semCusto} estreito={estreito} onDecidir={onDecidir} />
+      ) : null}
+
+      {ligarAberto ? (
+        <PainelLigar
+          l={l}
+          produtos={props.produtos}
+          semCusto={semCusto}
+          comFornecedor={props.comFornecedor}
+          onEscolher={(id) => { onDecidir(n, { tipo: "ligar", produtoId: id }); setTrocando(false); }}
+          onCancelar={trocando ? () => setTrocando(false) : undefined}
+        />
+      ) : null}
+
+      {usaGrade && l.produto ? (
+        <PainelGrade l={l} companyId={props.companyId} produtoId={l.produto.id} onAjustar={onAjustar} />
       ) : null}
 
       {l.estado === "erro" ? (
@@ -307,6 +383,195 @@ function LinhaDaConferencia({ l, estreito, semCusto, onDecidir, onAjustar, novoP
   );
 }
 
+// ── Produto novo ─────────────────────────────────────────────
+function PainelNovo({ l, decisao, semCusto, estreito, onDecidir }: {
+  l: LinhaConferida;
+  decisao: Extract<DecisaoDaLinha, { tipo: "novo" }>;
+  semCusto: boolean;
+  estreito: boolean;
+  onDecidir: (n: number, d: DecisaoDaLinha | null) => void;
+}) {
+  const n = l.item.n;
+  // O campo guarda o que foi digitado; a decisão guarda o número.
+  const [precoTxt, setPrecoTxt] = useState(paraCampo(decisao.preco));
+  const [ultimoPreco, setUltimoPreco] = useState(decisao.preco);
+  if (decisao.preco !== ultimoPreco) {
+    // "Aplicar" a margem trocou o preço por fora.
+    setUltimoPreco(decisao.preco);
+    setPrecoTxt(paraCampo(decisao.preco));
+  }
+  const margem = semCusto ? null : margemSobreCusto(decisao.preco, l.custo);
+  const mudar = (d: Partial<Extract<DecisaoDaLinha, { tipo: "novo" }>>) => onDecidir(n, { ...decisao, ...d });
+  return (
+    <View style={s.painel} testID={"chegou-linha-" + n + "-painel-novo"}>
+      <View style={[s.campos, estreito && { flexDirection: "column" }]}>
+        <View style={{ flex: 2, minWidth: 0 }}>
+          <Text style={s.rotulo}>{T.novoNome}</Text>
+          <TextInput
+            value={decisao.nome}
+            onChangeText={(t) => mudar({ nome: t })}
+            style={s.input as any}
+            accessibilityLabel={T.novoNome}
+            testID={"chegou-linha-" + n + "-novo-nome"}
+          />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={s.rotulo}>{T.novoPreco}</Text>
+          <TextInput
+            value={precoTxt}
+            onChangeText={(t) => {
+              const m = maskCurrency(t);
+              setPrecoTxt(m);
+              const v = numeroPositivo(m);
+              setUltimoPreco(v);
+              mudar({ preco: v });
+            }}
+            placeholder="0,00"
+            placeholderTextColor={Colors.ink3}
+            keyboardType="number-pad"
+            style={[s.input, !(Number(decisao.preco) > 0) && s.inputFalta] as any}
+            accessibilityLabel={T.novoPreco}
+            testID={"chegou-linha-" + n + "-novo-preco"}
+          />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={s.rotulo}>{T.novoCategoria}</Text>
+          <TextInput
+            value={decisao.categoria || ""}
+            onChangeText={(t) => mudar({ categoria: t })}
+            placeholder={T.novoCategoriaExemplo}
+            placeholderTextColor={Colors.ink3}
+            style={s.input as any}
+            accessibilityLabel={T.novoCategoria}
+            testID={"chegou-linha-" + n + "-novo-categoria"}
+          />
+        </View>
+      </View>
+      {!(Number(decisao.preco) > 0) ? <Text style={s.avisoTxt}>{T.novoPrecoFalta}</Text> : null}
+      <Text style={s.apoioPeq}>
+        {[
+          margem !== null ? T.novoMargem(margem) : null,
+          l.item.ncm ? T.novoNcm(l.item.ncm) : null,
+          estreito ? T.novoCelularApoio : null,
+        ].filter(Boolean).join(" · ")}
+      </Text>
+    </View>
+  );
+}
+
+// ── Ligar a um produto (e "Trocar produto") ──────────────────
+function PainelLigar({ l, produtos, semCusto, comFornecedor, onEscolher, onCancelar }: {
+  l: LinhaConferida;
+  produtos: ProdutoDaLoja[];
+  semCusto: boolean;
+  comFornecedor: boolean;
+  onEscolher: (produtoId: string) => void;
+  onCancelar?: () => void;
+}) {
+  const n = l.item.n;
+  const [busca, setBusca] = useState("");
+  const achados = useMemo(() => {
+    const q = normalizarNome(busca);
+    const b = normalizarBarras(busca);
+    if (!q) return [];
+    return produtos.filter((p) =>
+      normalizarNome(p.name).includes(q)
+      || (p.code && normalizarNome(p.code).includes(q))
+      || (!!b && (normalizarBarras(p.barcode) === b || (p.variant_barcodes || []).some((v) => normalizarBarras(v) === b))),
+    ).slice(0, 6);
+  }, [busca, produtos]);
+  return (
+    <View style={s.painel} testID={"chegou-linha-" + n + "-painel-ligar"}>
+      <Text style={s.rotulo}>{T.ligarEscolha}</Text>
+      <View style={s.buscaBox}>
+        <Icon name="search" size={14} color={Colors.ink3} />
+        <TextInput
+          value={busca}
+          onChangeText={setBusca}
+          autoFocus
+          placeholder={T.ligarBusca}
+          placeholderTextColor={Colors.ink3}
+          style={s.buscaInput as any}
+          accessibilityLabel={T.ligarBusca}
+          testID={"chegou-linha-" + n + "-ligar-busca"}
+        />
+        {onCancelar ? (
+          <Pressable onPress={onCancelar} accessibilityLabel={T.fechar} testID={"chegou-linha-" + n + "-ligar-fechar"} style={s.fecharPeq}>
+            <Icon name="x" size={14} color={Colors.ink3} />
+          </Pressable>
+        ) : null}
+      </View>
+      {busca.trim() && achados.length === 0 ? <Text style={s.apoio}>{T.ligarVazio}</Text> : null}
+      {achados.map((p) => (
+        <Pressable
+          key={p.id}
+          onPress={() => onEscolher(p.id)}
+          style={s.achadoLinha}
+          accessibilityRole="button"
+          testID={"chegou-linha-" + n + "-ligar-" + p.id}
+        >
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={s.titulo} numberOfLines={1}>{p.name}</Text>
+            <Text style={s.previaPeq}>
+              {T.ligarLinha(fmtQty(Number(p.stock) || 0), p.unit && p.unit !== "un" ? p.unit : "un", semCusto || !(Number(p.cost) > 0) ? null : brl(p.cost))}
+            </Text>
+          </View>
+          <Text style={s.previa}>{brl(p.price)}</Text>
+        </Pressable>
+      ))}
+      {comFornecedor && l.item.codigoFornecedor ? <Text style={s.apoioPeq}>{T.ligarCodigo(l.item.codigoFornecedor)}</Text> : null}
+    </View>
+  );
+}
+
+// ── Grade (cores e tamanhos) ─────────────────────────────────
+function PainelGrade({ l, companyId, produtoId, onAjustar }: {
+  l: LinhaConferida;
+  companyId: string;
+  produtoId: string;
+  onAjustar: (n: number, a: Partial<AjusteDaLinha>) => void;
+}) {
+  const n = l.item.n;
+  // Mesma chave do EntradaMercadoriaModal: o cache é o mesmo.
+  const { data, isLoading } = useQuery({
+    queryKey: ["estoque-consulta-variantes", companyId, produtoId],
+    queryFn: () => companiesApi.variants(companyId, produtoId),
+    enabled: !!companyId && !!produtoId,
+    staleTime: 30_000,
+  });
+  const variantes: any[] = Array.isArray((data as any)?.variants) ? (data as any).variants : [];
+  const [grade, setGrade] = useState<Record<string, string>>(() => {
+    const g: Record<string, string> = {};
+    for (const [k, q] of Object.entries(l.variantes || {})) g[k] = fmtQty(q);
+    return g;
+  });
+  const soma = somaDaGrade(Object.fromEntries(Object.entries(grade).map(([k, v]) => [k, numeroPositivo(v) || 0])));
+  return (
+    <View style={s.painel} testID={"chegou-linha-" + n + "-painel-grade"}>
+      {l.estado === "grade" ? <Text style={s.avisoTxt}>{T.gradeTexto}</Text> : null}
+      <Text style={s.rotulo}>{T.gradeTitulo}</Text>
+      {isLoading ? (
+        <Text style={s.apoio}>{T.gradeCarregando}</Text>
+      ) : (
+        <GradeDaEntrada
+          variantes={variantes}
+          grade={grade}
+          testIDPrefixo={"chegou-linha-" + n + "-grade-"}
+          onChange={(g) => {
+            setGrade(g);
+            const v: Record<string, number> = {};
+            for (const k of Object.keys(g)) { const q = numeroPositivo(g[k]); if (q) v[k] = q; }
+            onAjustar(n, { variantes: v });
+          }}
+        />
+      )}
+      {soma > 0 && l.item.quantidade > 0 && Math.abs(soma - l.item.quantidade) > 0.0005 ? (
+        <Text style={s.apoioPeq}>{T.gradeSomaDiferente(fmtQty(soma), fmtQty(l.item.quantidade))}</Text>
+      ) : null}
+    </View>
+  );
+}
+
 const s = StyleSheet.create({
   lendo: { alignItems: "center", gap: 8, paddingVertical: 32, paddingHorizontal: 12 },
   lendoTitulo: { fontSize: 15, fontWeight: "700", color: Colors.ink },
@@ -320,6 +585,8 @@ const s = StyleSheet.create({
   tileRotulo: { fontSize: 11, fontWeight: "600", color: Colors.ink3 },
   tileValor: { fontSize: 16, fontWeight: "800", color: Colors.ink },
   bate: { fontSize: 12.5, color: Colors.green, fontWeight: "600" },
+  margem: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 10 },
+  comSufixo: { flexDirection: "row", alignItems: "center", gap: 6 },
   check: { flexDirection: "row", gap: 10, alignItems: "flex-start", minHeight: 44 },
   caixa: { width: 18, height: 18, borderRadius: 5, backgroundColor: Colors.violet, alignItems: "center", justifyContent: "center", marginTop: 1 },
   caixaDesligada: { backgroundColor: "transparent", borderWidth: 1, borderColor: Colors.border2 },
@@ -329,8 +596,8 @@ const s = StyleSheet.create({
   col1: { flex: 2.4, minWidth: 0 },
   col2: { width: 80 },
   col3: { width: 110 },
-  col4: { flex: 1.6, minWidth: 0 },
-  colEstreita: { width: "100%", flex: undefined, flexDirection: "row", gap: 8, alignItems: "baseline" },
+  col4: { flex: 1.6, minWidth: 0, gap: 6 },
+  colEstreita: { width: "100%", flex: undefined, flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "baseline" },
   linha: { padding: 14, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg2, gap: 10 },
   linhaEstreita: { padding: 12 },
   linhaAmbar: { borderColor: Colors.amber, backgroundColor: Colors.amberD },
@@ -352,11 +619,26 @@ const s = StyleSheet.create({
     minHeight: 44, paddingHorizontal: 14, borderRadius: 10, alignItems: "center", justifyContent: "center",
     backgroundColor: Colors.violetD, borderWidth: 1, borderColor: Colors.border2,
   },
+  btnPeq: { alignSelf: "flex-start" },
   btnOn: { backgroundColor: Colors.violet, borderColor: Colors.violet },
   btnSecTxt: { color: Colors.ink, fontSize: 13, fontWeight: "600" },
   input: {
     borderWidth: 1, borderColor: Colors.border2, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
-    fontSize: 14, color: Colors.ink, backgroundColor: Colors.bg3, minHeight: 44, maxWidth: 200,
+    fontSize: 14, color: Colors.ink, backgroundColor: Colors.bg3, minHeight: 44,
+  },
+  inputFalta: { borderColor: Colors.amber },
+  painel: { gap: 8, padding: 12, borderRadius: 10, backgroundColor: Colors.bg3, borderWidth: 1, borderColor: Colors.border2 },
+  campos: { flexDirection: "row", gap: 10 },
+  rotulo: { fontSize: 11.5, fontWeight: "600", color: Colors.ink2, marginBottom: 4 },
+  buscaBox: {
+    flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44,
+    borderWidth: 1, borderColor: Colors.border2, borderRadius: 10, paddingHorizontal: 12, backgroundColor: Colors.bg2,
+  },
+  buscaInput: { flex: 1, fontSize: 14, color: Colors.ink, paddingVertical: 10, outlineStyle: "none" } as any,
+  fecharPeq: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
+  achadoLinha: {
+    flexDirection: "row", alignItems: "center", gap: 10, minHeight: 48, paddingHorizontal: 10, paddingVertical: 8,
+    borderRadius: 10, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bg2,
   },
   mostrar: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, alignSelf: "center", paddingHorizontal: 12 },
   mostrarTxt: { fontSize: 13, fontWeight: "600", color: Colors.violet3 },

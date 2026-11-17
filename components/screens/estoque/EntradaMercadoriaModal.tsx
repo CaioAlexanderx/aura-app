@@ -14,6 +14,8 @@
 // Multi-CNPJ: sempre a empresa selecionada (company.id). O Estoque não
 // oferece o botão no consolidado.
 // Contas puras em utils/entradaDeMercadoria.ts (mesma regra do backend).
+// 17/11/2026: a grade ("Quantas chegaram de cada?") saiu para GradeDaEntrada,
+// que o "Chegou mercadoria" também usa. Mesma tela.
 // ============================================================
 import { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, Pressable, TextInput, Modal, ScrollView, ActivityIndicator, useWindowDimensions } from "react-native";
@@ -26,7 +28,7 @@ import { companiesApi } from "@/services/api";
 import { suppliersApi, fornecedoresDoProdutoApi, type Supplier } from "@/services/suppliersApi";
 import { maskCurrency, maskPhone } from "@/utils/masks";
 import { fmtQty } from "@/utils/matconUnits";
-import { rotuloDaVariante } from "./VariantesConsulta";
+import { GradeDaEntrada } from "./GradeDaEntrada";
 import {
   previaDaEntrada, custoMuitoAcima, corpoDaEntrada, numeroPositivo,
   type FornecedorDaEntrada,
@@ -273,17 +275,7 @@ export function EntradaMercadoriaModal({ visible, produto: produtoInicial, produ
             ) : temGrade ? (
               <>
                 <Text style={s.label}>Quantas chegaram de cada?</Text>
-                <View style={s.grade}>
-                  {variantes.map((v) => (
-                    <View key={v.id} style={s.gradeLinha}>
-                      <Text style={s.gradeNome} numberOfLines={1}>{rotuloDaVariante(v)}</Text>
-                      <Text style={s.gradeTem}>tem {fmtQty(parseFloat(v.stock_qty) || 0)}</Text>
-                      <TextInput value={grade[v.id] || ""} onChangeText={(t) => setGrade({ ...grade, [v.id]: t.replace(/[^\d,]/g, "") })}
-                        placeholder="0" placeholderTextColor={Colors.ink3} keyboardType="number-pad"
-                        style={[s.input, s.gradeInput, numeroPositivo(grade[v.id]) ? s.gradeOn : null] as any} />
-                    </View>
-                  ))}
-                </View>
+                <GradeDaEntrada variantes={variantes} grade={grade} onChange={setGrade} />
               </>
             ) : null}
 
@@ -398,12 +390,6 @@ const s = StyleSheet.create({
   comSufixo: { flexDirection: "row", alignItems: "center", gap: 8, position: "relative" },
   sufixo: { color: Colors.ink3, fontSize: 13 },
   prefixo: { position: "absolute", left: 12, zIndex: 1, color: Colors.ink3, fontSize: 14 },
-  grade: { gap: 6 },
-  gradeLinha: { flexDirection: "row", alignItems: "center", gap: 10 },
-  gradeNome: { flex: 1, minWidth: 0, color: Colors.ink, fontWeight: "600", fontSize: 13 },
-  gradeTem: { color: Colors.ink3, fontSize: 11.5, width: 56, textAlign: "right" },
-  gradeInput: { width: 70, textAlign: "center", paddingHorizontal: 6 },
-  gradeOn: { borderColor: Colors.violet, backgroundColor: Colors.violetD },
   aviso: { marginTop: 8, fontSize: 12.5, color: Colors.amber, backgroundColor: Colors.amberD, borderRadius: 10, padding: 10 },
   resumo: { marginTop: 14, backgroundColor: Colors.bg4, borderRadius: 12, padding: 12, flexDirection: "row", flexWrap: "wrap", rowGap: 6 },
   rk: { width: "55%", color: Colors.ink3, fontSize: 13 },
